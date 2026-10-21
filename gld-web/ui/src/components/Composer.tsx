@@ -205,7 +205,12 @@ function CloseSession({ id }: { id: string }) {
 // le chiffre ; une liste à sélection (« ❯ option » suivie des autres, sans numéro) : le bouton déplace la sélection puis valide.
 type Opt = { label: string; keys: string[] }
 function parsePrompt(screen: string): { question: string; options: Opt[] } | null {
-  const lines = screen.split("\n")
+  // Un vrai dialogue du terminal porte une ligne d'aide en bas (« Esc to cancel », « Enter to confirm »…) ; le texte de Claude, lui, peut
+  // contenir des listes numérotées ou un « ❯ » sans que rien n'attende de réponse. On ne regarde que le bas de l'écran.
+  const all = screen.split("\n").filter((l) => l.trim())
+  const tail = all.slice(-16)
+  if (!/(esc|escape) to (cancel|exit|go back|interrupt)|enter to (select|confirm)|to navigate|Esc to cancel/i.test(tail.slice(-3).join("\n"))) return null
+  const lines = tail
   const nums: { n: string; label: string; at: number }[] = []
   lines.forEach((l, i) => {
     const m = /^\s*(?:[❯>›]\s*)?([1-9])[.)]\s+(\S.*)$/.exec(l)
