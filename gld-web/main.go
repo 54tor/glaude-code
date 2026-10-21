@@ -495,7 +495,15 @@ func withPath(c *exec.Cmd) *exec.Cmd {
 		return c
 	}
 	home, _ := os.UserHomeDir()
-	c.Env = append(os.Environ(), "PATH="+filepath.Join(home, ".local/bin")+":"+os.Getenv("PATH"))
+	local := filepath.Join(home, ".local/bin")
+	c.Env = append(os.Environ(), "PATH="+local+":"+os.Getenv("PATH"))
+	// exec.Command a déjà cherché le programme dans le PATH du serveur, où ~/.local/bin peut manquer
+	// (service, lanceur de bureau) : on le reprend ici, avec la même priorité que le PATH ci-dessus.
+	if name := c.Args[0]; !strings.ContainsRune(name, '/') {
+		if fi, err := os.Stat(filepath.Join(local, name)); err == nil && fi.Mode().IsRegular() && fi.Mode()&0o111 != 0 {
+			c.Path, c.Err = filepath.Join(local, name), nil
+		}
+	}
 	return c
 }
 
