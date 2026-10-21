@@ -30,7 +30,8 @@ export type Actions = {
   groupActs: GroupActions
   picked: Set<string> // ids sélectionnés
   selected: Row[]
-  pick: (id: string) => void
+  pick: (id: string, range?: boolean) => void // range : Maj+clic, de la dernière case cochée à celle-ci
+  hotLeft: (s: Session) => number | null // minutes de cache chaud restantes, null si froid
   read: (s: Session) => void
   open: (body: { dir: string; id?: string }) => void
   resumeWith: (r: Row) => void // reprendre en envoyant un message

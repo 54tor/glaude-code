@@ -70,8 +70,10 @@ etiquette_deduite() {
 }
 
 # IDs des sessions actuellement vivantes (interactives comme background).
+# Échoue (code 1) si la liste est indéterminée : l'appelant doit alors refuser d'agir.
 sessions_vivantes() {
-  claude agents --json 2>/dev/null | jq -r '.[].sessionId' 2>/dev/null || true
+  _sv=$(claude agents --json 2>/dev/null) || return 1
+  printf '%s' "$_sv" | jq -r '.[].sessionId' 2>/dev/null
 }
 
 # Résout le projet cible ($1 ou $PWD) et pose PROJET / TRANSCRIPTS.
@@ -197,9 +199,16 @@ elaguer_history() {
   h="$GLD_ROOT/history.jsonl"
   [ -s "$1" ] && [ -s "$h" ] || { echo 0; return; }
   avant=$(wc -l < "$h" | tr -d ' ')
+  taille0=$(taille "$h")
   tmp="$h.cc.$$"
   grep -F -v -f "$1" "$h" > "$tmp" 2>/dev/null
   [ $? -le 1 ] || { rm -f "$tmp"; echo 0; return; }
+  # Une session ouverte a pu ajouter une ligne pendant la réécriture : on abandonne plutôt que de la perdre.
+  [ "$(taille "$h")" = "$taille0" ] || {
+    rm -f "$tmp"
+    echo "  history.jsonl   : modifié pendant l'opération, lignes de prompt non retirées (réessaie)" >&2
+    echo 0; return
+  }
   apres=$(wc -l < "$tmp" | tr -d ' ')
   mv -f "$tmp" "$h" 2>/dev/null || { rm -f "$tmp"; echo 0; return; }
   echo $((avant - apres))

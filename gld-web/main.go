@@ -435,8 +435,13 @@ func checkPrompt(id, prompt string) error {
 		return errors.New("un message ne s'envoie qu'à une session précise")
 	case len(prompt) > 32<<10 || !utf8.ValidString(prompt) || strings.ContainsRune(prompt, 0):
 		return errors.New("message trop long ou invalide")
-	case liveSessions()[id]:
-		return errors.New("session déjà ouverte : écris le message dans son onglet")
+	}
+	live, err := liveCheck()
+	if err != nil {
+		return err
+	}
+	if live[id] {
+		return errOpen
 	}
 	return nil
 }
@@ -494,10 +499,13 @@ func withPath(c *exec.Cmd) *exec.Cmd {
 	return c
 }
 
+// alive : ids des sessions ouvertes, ou nil si `claude agents --json` a échoué (on ne sait pas).
 func alive() map[string]bool {
-	out, _ := withPath(exec.Command("claude", "agents", "--json")).Output()
+	out, err := withPath(exec.Command("claude", "agents", "--json")).Output()
 	var a []struct{ SessionId string }
-	json.Unmarshal(out, &a)
+	if err != nil || json.Unmarshal(out, &a) != nil {
+		return nil // inconnu : liveCheck fait refuser les actions qui en dépendent
+	}
 	m := map[string]bool{}
 	for _, x := range a {
 		m[x.SessionId] = true
@@ -591,7 +599,10 @@ func reassign(items []item, to string) (int, error) {
 		return 0, errors.New("le dossier cible n'existe pas : " + to)
 	}
 	dst := filepath.Join(root, nonAlnum.ReplaceAllString(to, "-"))
-	live := alive()
+	live, err := liveCheck()
+	if err != nil {
+		return 0, err
+	}
 	for _, it := range items {
 		if live[it.ID] {
 			return 0, errors.New("session vivante, ferme-la d'abord : " + it.ID[:8])
@@ -657,7 +668,7 @@ func main() {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(index)
 	}
-	for _, p := range []string{"GET /{$}", "GET /toutes", "GET /dossier/", "GET /groupe/", "GET /snippets", "GET /snippets/", "GET /memoire", "GET /memoire/", "GET /onglets"} {
+	for _, p := range []string{"GET /{$}", "GET /toutes", "GET /en-cours", "GET /dossier/", "GET /groupe/", "GET /snippets", "GET /snippets/", "GET /memoire", "GET /memoire/", "GET /onglets"} {
 		mux.HandleFunc(p, page)
 	}
 	mux.Handle("GET /assets/", files)
@@ -803,7 +814,12 @@ func main() {
 			return
 		}
 		// Une session ouverte réécrit son propre titre : le nôtre serait écrasé.
-		if liveSessions()[req.ID] {
+		live, lerr := liveCheck()
+		if lerr != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": lerr.Error()})
+			return
+		}
+		if live[req.ID] {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": "session ouverte : renomme-la avec /rename dans Claude, ou ferme-la d'abord"})
 			return
 		}
@@ -1096,8 +1112,15 @@ func main() {
 		writeJSON(w, 200, map[string]any{"ok": true, "out": "Restauré : " + t.Path, "key": t.Key})
 	})
 	mux.HandleFunc("POST /trash-purge", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ ID string }
+		var req struct {
+			ID  string
+			All bool // vider toute la corbeille : jamais implicite
+		}
 		json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req)
+		if req.ID == "" && !req.All {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "précise un élément, ou all: true pour tout vider"})
+			return
+		}
 		err := trashPurge(req.ID)
 		journal("trash-purge %q : %v", req.ID, errOr(err))
 		if err != nil {
@@ -1193,7 +1216,7 @@ func main() {
 	guarded := http.NewCrossOriginProtection().Handler(mux)
 	srv := &http.Server{Addr: "127.0.0.1:" + port, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !hosts[r.Host] {
-			http.Error(w, "forbidden", 403)
+			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
 		guarded.ServeHTTP(w, r)

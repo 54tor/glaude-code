@@ -271,7 +271,7 @@ export type SidebarProps = {
   searching: boolean
   route: Route
   go: (r: Route) => void
-  counts: { recent: number; all: number }
+  counts: { recent: number; all: number; active: number }
   favRows: Row[] // sessions favorites
   favGroups: { vg: VGroup; key: string }[] // groupes favoris, avec la clé de leur dossier
   groupCount: (vg: VGroup) => number
@@ -342,6 +342,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             active={r.kind === "recent"}
             onClick={() => p.go({ kind: "recent" })}
           />
+          <NavItem icon={Flame} label="En cours et cache chaud" n={p.counts.active} active={r.kind === "active"} onClick={() => p.go({ kind: "active" })} />
           <NavItem icon={Inbox} label="Toutes les sessions" n={p.counts.all} active={r.kind === "all"} onClick={() => p.go({ kind: "all" })} />
           <NavItem icon={History} label="Sessions sauvegardées" active={r.kind === "tabs"} onClick={() => p.go({ kind: "tabs" })} />
           <NavItem icon={Brain} label="Mémoire" active={r.kind === "memory"} onClick={() => p.go({ kind: "memory", key: "" })} />

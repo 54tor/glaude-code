@@ -9,6 +9,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -21,8 +22,21 @@ import (
 
 var snapRe = regexp.MustCompile(`snapshot-[a-zA-Z]+-[0-9]+-[a-zA-Z0-9]+\.sh`)
 
-// liveSessions : ids des sessions vivantes (remplaçable dans les tests).
+// liveSessions : ids des sessions vivantes, nil si indéterminé (remplaçable dans les tests).
 var liveSessions = alive
+
+var (
+	errOpen = errors.New("session déjà ouverte : écris le message dans son onglet")
+	errLive = errors.New("impossible de savoir quelles sessions sont ouvertes (`claude agents --json` a échoué) : action refusée par prudence")
+)
+
+// liveCheck : les sessions vivantes, ou errLive. À utiliser avant toute action qui écrit ou supprime dans une session.
+func liveCheck() (map[string]bool, error) {
+	if m := liveSessions(); m != nil {
+		return m, nil
+	}
+	return nil, errLive
+}
 
 // cfgDir : racine de la configuration Claude (le parent de projects/). Rien n'est effacé hors d'ici.
 func cfgDir() string { return filepath.Dir(root) }
@@ -154,7 +168,10 @@ func lineHashes(b []byte) []string {
 // purgeSessions supprime transcript, sous-agents et satellites des sessions, puis solde les restes
 // partagés. Les sessions vivantes sont épargnées. Renvoie les comptes et un compte rendu.
 func purgeSessions(items []item) (n, spared int, notes []string, err error) {
-	live := liveSessions()
+	live, err := liveCheck()
+	if err != nil {
+		return 0, 0, nil, err
+	}
 	var deleted []string
 	snaps := map[string]bool{}
 	var fails []string
@@ -201,6 +218,7 @@ func solder(deleted []string, snaps map[string]bool) []string {
 		pats[i] = []byte(`"sessionId":"` + id + `"`)
 	}
 	removed := 0
+	st0, _ := os.Stat(hist) // pour détecter une session ouverte qui y ajouterait une ligne pendant la réécriture
 	if b, e := os.ReadFile(hist); e == nil && len(b) > 0 {
 		for _, ln := range bytes.SplitAfter(b, []byte("\n")) {
 			drop := false
@@ -226,7 +244,12 @@ func solder(deleted []string, snaps map[string]bool) []string {
 				mode = st.Mode()
 			}
 			if e := os.WriteFile(tmp, bytes.Join(kept, nil), mode); e == nil {
-				if e := os.Rename(tmp, hist); e != nil {
+				if st1, e := os.Stat(hist); e != nil || st0 == nil || st1.Size() != st0.Size() || !st1.ModTime().Equal(st0.ModTime()) {
+					// ponytail: fenêtre résiduelle entre ce contrôle et le renommage ; Claude Code n'offre aucun verrou
+					os.Remove(tmp)
+					removed = 0
+					notes = append(notes, "  history.jsonl   : modifié pendant l'opération, lignes de prompt non retirées (réessaie)")
+				} else if e := os.Rename(tmp, hist); e != nil {
 					os.Remove(tmp)
 					removed = 0
 				}

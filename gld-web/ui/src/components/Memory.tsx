@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState } from "react"
+import { useLocal } from "@/hooks/useLocal"
 import {
+  ALargeSmall,
   ArchiveRestore,
+  ArrowDownWideNarrow,
+  ArrowUpNarrowWide,
   BookOpen,
   Brain,
   CheckSquare,
+  Clock,
   ClipboardCopy,
   Copy,
   FileStack,
   FileText,
   FolderInput,
+  HardDrive,
   Globe,
   Link,
   Merge,
@@ -22,6 +28,7 @@ import {
 import { toast } from "sonner"
 import { api, type MemFile, type MemProject, type MemTarget, type Trashed } from "@/lib/api"
 import { ago, size, tilde } from "@/lib/format"
+import { withChoice } from "@/lib/models"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -49,6 +56,21 @@ import { Skeleton } from "@/components/ui/skeleton"
 import type { Ask } from "./Confirm"
 import { Markdown } from "./Conversation"
 import { MemoryWriter, type WriteTarget } from "./MemoryWriter"
+
+// Tri des fichiers de mémoire : critère et sens propres à chaque dossier (section), retenus dans le navigateur.
+const SORTS = [
+  ["date", "date de modification", Clock],
+  ["name", "nom", ALargeSmall],
+  ["size", "taille", HardDrive],
+] as const
+const byName = (a: string, b: string) => a.localeCompare(b, "fr", { numeric: true })
+// Comparateur de fichiers ; à égalité (la taille est en Ko arrondis), le nom départage.
+const cmpFiles = (by: string, dir: string) => (a: MemFile, b: MemFile) => {
+  const d = (by === "name" ? byName(a.name, b.name) : by === "size" ? a.kb - b.kb : a.mtime - b.mtime) || byName(a.name, b.name)
+  return dir === "asc" ? d : -d
+}
+type Sort = { by: string; dir: string }
+const DEFAULT_SORT: Sort = { by: "date", dir: "desc" }
 
 type List = { global: MemFile[]; projects: MemProject[]; targets: MemTarget[] }
 
@@ -80,6 +102,8 @@ function Section({
   onWrite,
   onConsolidate,
   menu,
+  sort,
+  onSort,
 }: {
   icon: typeof Globe
   title: string
@@ -92,13 +116,38 @@ function Section({
   onWrite?: () => void // nouvelle entrée rédigée par un modèle (absent : section sans mémoire de projet)
   onConsolidate?: () => void // consolider dans le CLAUDE.md correspondant
   menu: (f: MemFile) => React.ReactNode
+  sort: Sort
+  onSort: (s: Sort) => void
 }) {
+  const [, label, SortIcon] = SORTS.find((s) => s[0] === sort.by) ?? SORTS[0]
+  const sortBtn = "size-5 md:opacity-0 md:group-hover/sec:opacity-100 md:focus-visible:opacity-100"
   return (
-    <section className="mb-3">
+    <section className="group/sec mb-3">
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <p className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-muted-foreground" title={title}>
-            <Icon className="size-3.5 shrink-0" /> <span className="truncate">{title}</span>
+            <Icon className="size-3.5 shrink-0" /> <span className="flex-1 truncate">{title}</span>
+            {/* Deux icônes : le critère (un clic passe au suivant) et le sens, pour ce dossier. */}
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className={sortBtn}
+              onClick={() => onSort({ ...sort, by: SORTS[(SORTS.findIndex((s) => s[0] === sort.by) + 1) % SORTS.length][0] })}
+              title={`Tri par ${label} (cliquer pour changer)`}
+              aria-label={`Trier par : ${label}`}
+            >
+              <SortIcon />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className={sortBtn}
+              onClick={() => onSort({ ...sort, dir: sort.dir === "asc" ? "desc" : "asc" })}
+              title={sort.dir === "asc" ? "Croissant (cliquer pour inverser)" : "Décroissant (cliquer pour inverser)"}
+              aria-label={sort.dir === "asc" ? "Ordre croissant" : "Ordre décroissant"}
+            >
+              {sort.dir === "asc" ? <ArrowUpNarrowWide /> : <ArrowDownWideNarrow />}
+            </Button>
           </p>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-60">
@@ -169,6 +218,15 @@ export function Memory({
   args: string
 }) {
   const [picked, setPicked] = useState(() => new Set<string>())
+  const [sortsRaw, setSortsRaw] = useLocal("ccMemSorts", "{}") // { <dossier>: { by, dir } }
+  const sorts: Record<string, Sort> = (() => {
+    try {
+      return JSON.parse(sortsRaw) ?? {}
+    } catch {
+      return {}
+    }
+  })()
+  const sortOf = (key: string): Sort => ({ ...DEFAULT_SORT, ...sorts[key] })
   const toggle = (k: string) =>
     setPicked((p) => {
       const n = new Set(p)
@@ -176,9 +234,9 @@ export function Memory({
       else n.add(k)
       return n
     })
-  // Fusion par Claude : le serveur rédige le prompt ; on le copie, ou on l'ouvre dans une nouvelle session.
+  // Fusion par Claude : le serveur rédige le prompt ; on le copie, ou on l'ouvre dans une nouvelle session (Haiku : tâche mécanique).
   const merge = async (launch: boolean) => {
-    const r = (await api.post("/memory-merge", { keys: [...picked], launch, args })) as { ok: boolean; out: string; prompt?: string }
+    const r = (await api.post("/memory-merge", { keys: [...picked], launch, args: withChoice(args, { model: "haiku", effort: "" }) })) as { ok: boolean; out: string; prompt?: string }
     if (!launch && r.ok && r.prompt) return void copy(r.prompt, "Prompt de fusion")
     ;(r.ok ? toast.success : toast.error)(r.out.trim() || (r.ok ? "Session lancée" : "Échec"))
     if (r.ok) setPicked(new Set())
@@ -359,7 +417,7 @@ export function Memory({
       key={key}
       icon={icon}
       title={title}
-      files={files}
+      files={[...files].sort(cmpFiles(sortOf(key).by, sortOf(key).dir))}
       sel={sel}
       onPick={onPick}
       picked={picked}
@@ -368,6 +426,8 @@ export function Memory({
       onWrite={onWrite}
       onConsolidate={onConsolidate}
       menu={menu}
+      sort={sortOf(key)}
+      onSort={(s) => setSortsRaw(JSON.stringify({ ...sorts, [key]: s }))}
     />
   )
 
@@ -386,7 +446,7 @@ export function Memory({
       body: "Cette fois, c'est définitif.",
       confirm: t ? "Supprimer" : "Vider",
       run: async () => {
-        const r = await api.post("/trash-purge", { id: t?.id ?? "" })
+        const r = await api.post("/trash-purge", t ? { id: t.id } : { all: true })
         ;(r.ok ? toast.success : toast.error)(r.out)
         if (r.ok) {
           if (!t || t.id === inTrash) onPick("")

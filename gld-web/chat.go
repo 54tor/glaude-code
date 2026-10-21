@@ -215,8 +215,8 @@ func newSessionHandler(w http.ResponseWriter, r *http.Request) {
 		err = errors.New("prompt vide")
 	default:
 		err = checkResumePrompt(req.ID, req.Prompt)
-		if err != nil && strings.Contains(err.Error(), "ouverte") {
-			err = nil // une session ouverte n'empêche pas d'en démarrer une nouvelle à côté
+		if errors.Is(err, errOpen) || errors.Is(err, errLive) {
+			err = nil // une session ouverte n'empêche pas d'en démarrer une nouvelle à côté (même sans savoir lesquelles le sont)
 		}
 	}
 	if err != nil {

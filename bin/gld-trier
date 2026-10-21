@@ -91,7 +91,8 @@ inventaire() {
   CATS="file-history session-env tasks teams jobs uploads debug paste-cache shell-snapshots projets-vides divers"
   find "$GLD_ROOT/projects" -maxdepth 2 -name '*.jsonl' 2>/dev/null \
     | sed 's|.*/||; s|\.jsonl$||' | sort -u > "$GLD_TMP/connues"
-  sessions_vivantes 2>/dev/null | grep -v '^$' >> "$GLD_TMP/connues"
+  vivantes=$(sessions_vivantes) || { echo "${0##*/}: impossible de savoir quelles sessions sont ouvertes (claude agents --json a échoué) : action refusée par prudence" >&2; exit 1; }
+  printf '%s\n' "$vivantes" | grep -v '^$' >> "$GLD_TMP/connues"
   sort -u -o "$GLD_TMP/connues" "$GLD_TMP/connues"
   cut -c1-8 "$GLD_TMP/connues" | sort -u > "$GLD_TMP/courtes"
 
@@ -272,7 +273,7 @@ supprimer_lot() {
 }
 
 LSOPT="-tr"; [ "$ORDRE" = "recent" ] && LSOPT="-t"
-VIVANTES=$(sessions_vivantes)
+VIVANTES=$(sessions_vivantes) || { echo "${0##*/}: impossible de savoir quelles sessions sont ouvertes (claude agents --json a échoué) : action refusée par prudence" >&2; exit 1; }
 cc_tmp
 : > "$GLD_TMP/supprimees"; : > "$GLD_TMP/snapshots"; : > "$GLD_TMP/lot"
 

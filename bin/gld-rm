@@ -50,7 +50,7 @@ resoudre_projet "$CIBLE"
 echo "projet : $PROJET"
 echo
 
-VIVANTES=$(sessions_vivantes)
+VIVANTES=$(sessions_vivantes) || { echo "${0##*/}: impossible de savoir quelles sessions sont ouvertes (claude agents --json a échoué) : action refusée par prudence" >&2; exit 1; }
 
 # Une session est «vide» si Claude n'y voit pas de conversation : en pratique
 # un transcript minuscule, sans titre ni prompt exploitable. Vérifié : sur un

@@ -42,7 +42,7 @@ echo "projet : $PROJET"
 [ "$DRY" = 1 ] && echo "(dry-run : rien ne sera écrit)"
 echo
 
-VIVANTES=$(sessions_vivantes)
+VIVANTES=$(sessions_vivantes) || { echo "${0##*/}: impossible de savoir quelles sessions sont ouvertes (claude agents --json a échoué) : action refusée par prudence" >&2; exit 1; }
 
 RECENTS=$(find "$TRANSCRIPTS" -maxdepth 1 -name '*.jsonl' -mtime -"$AGE_MAX" 2>/dev/null)
 [ -n "$RECENTS" ] || { echo "aucune session de moins de $AGE_MAX jours."; exit 0; }
