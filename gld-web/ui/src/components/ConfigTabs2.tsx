@@ -30,6 +30,8 @@ const KINDS = [
 ] as const
 const RULE_KINDS = KINDS.slice(0, 3) // catégories entre lesquelles une règle de permission peut passer
 const DIRS = "additionalDirectories"
+// Affichage trié (le fichier garde son ordre) : par outil (Bash, Edit, Read…), puis alphabétique, sans tenir compte de la casse.
+export const byRule = (a: string, b: string) => a.localeCompare(b, "fr", { sensitivity: "base", numeric: true })
 
 export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTransfer, added, moveRule }: { added: (file: string, kind: string) => string[]; moveRule: (file: string, from: string, rule: string, to: string, text: string) => Promise<void>; onTransfer: (file: string, kind: string, rule: string, move: boolean) => void; gone: (file: string, kind: string, rule: string) => boolean; file: string; label: string; doc: Doc; propose: Propose; proposePerms: (file: string, text: string, mode: string) => Promise<string | null> }) {
   const a = useActions()
@@ -60,7 +62,7 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTran
       <PermIOButtons file={file} label={label} doc={doc} onImport={() => setImporting(true)} />
       <PermImportDialog open={importing} file={file} label={label} propose={proposePerms} onClose={() => setImporting(false)} />
       {KINDS.map(([kind, label, hint]) => {
-        const rules = [...list(at(doc, "permissions", kind)), ...added(file, kind)].filter((r, i, all) => all.indexOf(r) === i && !gone(file, kind, r))
+        const rules = [...list(at(doc, "permissions", kind)), ...added(file, kind)].filter((r, i, all) => all.indexOf(r) === i && !gone(file, kind, r)).sort(byRule)
         return (
           <section key={kind}>
             <h3 className="text-sm font-medium">
