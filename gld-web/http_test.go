@@ -132,6 +132,10 @@ func TestHTTPGardes(t *testing.T) {
 	if w.Code != 403 {
 		t.Fatal("POST d'une autre origine accepté :", w.Code)
 	}
+	// L'interface compilée (ui/dist) n'est pas versionnée : sans elle, on ne vérifie pas la page servie.
+	if _, err := uiFS.ReadFile("ui/dist/index.html"); err != nil {
+		return
+	}
 	for _, p := range []string{"/", "/en-cours", "/memoire/x"} {
 		code, _, raw := call(t, h, "GET", p, "")
 		r := httptest.NewRecorder()
