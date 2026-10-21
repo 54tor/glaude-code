@@ -146,10 +146,11 @@ func runTab(file string) int {
 		err = os.Chdir(s.Cwd)
 	}
 	if err == nil {
-		var path string
-		if path, err = exec.LookPath("claude"); err == nil {
-			c := withPath(exec.Command(path, s.Args...))
+		// withPath cherche aussi dans ~/.local/bin, absent du PATH d'un onglet ouvert depuis un lanceur de bureau ou un service.
+		if c := withPath(exec.Command("claude", s.Args...)); c.Err == nil {
 			return execClaude(c)
+		} else {
+			err = c.Err
 		}
 	}
 	// L'onglet se refermerait aussitôt : on laisse lire l'erreur.
