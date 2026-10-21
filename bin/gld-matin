@@ -127,12 +127,14 @@ dispo() {
     tmux)      [ -n "${TMUX:-}" ] && command -v tmux >/dev/null ;;
     kitty)     [ -n "${KITTY_LISTEN_ON:-}" ] && command -v kitty >/dev/null ;;
     wezterm)   [ -n "${WEZTERM_PANE:-}" ] && command -v wezterm >/dev/null ;;
+    wt)        [ -n "${WSL_DISTRO_NAME:-}" ] && command -v wt.exe >/dev/null ;;
     *)         command -v "$1" >/dev/null ;;
   esac
 }
 
 # Ordre de préférence : le multiplexeur courant d'abord, puis les émulateurs.
-LANCEURS="tmux kitty wezterm terminator gnome-terminal konsole xfce4-terminal tilix"
+# « wt » : Windows Terminal, depuis WSL.
+LANCEURS="tmux kitty wezterm wt terminator gnome-terminal konsole xfce4-terminal tilix"
 
 ouvrir() {
   titre="$1"; cmd="$2"
@@ -140,6 +142,11 @@ ouvrir() {
     tmux)           tmux new-window -n "$titre" "$cmd" ;;
     kitty)          kitty @ launch --type=tab --tab-title "$titre" sh -c "$cmd" >/dev/null ;;
     wezterm)        wezterm cli spawn -- sh -c "$cmd" >/dev/null ;;
+    wt)             # La commande passe par un script temporaire : wt.exe coupe ses arguments sur « ; » et l'interop
+                    # WSL réécrit les guillemets, donc ni prompt ni chemin ne doivent transiter par sa ligne de commande.
+                    f=$(mktemp "${TMPDIR:-/tmp}/gld-XXXXXX.sh") || return 1
+                    printf '%s\n' 'rm -f -- "$0"' "$cmd" > "$f"
+                    wt.exe -w 0 new-tab --title "$(printf '%s' "$titre" | tr -d ';"\\' | cut -c1-40)" wsl.exe -d "$WSL_DISTRO_NAME" -- sh "$f" >/dev/null 2>&1 ;;
     terminator)     terminator --new-tab -T "$titre" -e "sh -c $(shq "$cmd")" >/dev/null 2>&1 & ;;
     gnome-terminal) gnome-terminal --tab --title="$titre" -- sh -c "$cmd" >/dev/null 2>&1 ;;
     konsole)        konsole --new-tab -p "tabtitle=$titre" -e sh -c "$cmd" >/dev/null 2>&1 & ;;
