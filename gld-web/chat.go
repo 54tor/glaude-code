@@ -234,7 +234,7 @@ func newSessionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
-	out, err := withPath(exec.CommandContext(ctx, "gld-matin", append(args, "--prompt", req.Prompt, cwd)...)).CombinedOutput()
+	out, err := matin(ctx, append(args, "--prompt", req.Prompt, cwd)...)
 	journal("new-session dans %s (%d caractères) : %v", cwd, len(req.Prompt), errOr(err))
-	writeJSON(w, 200, map[string]any{"ok": err == nil, "out": string(out)})
+	writeJSON(w, 200, map[string]any{"ok": err == nil, "out": out})
 }

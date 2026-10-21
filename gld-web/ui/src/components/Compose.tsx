@@ -32,7 +32,7 @@ export type ComposeAsk = {
   send: string // libellé du bouton
   choice: Choice // modèle et effort proposés par défaut (Réglages)
   targets?: Target[] // plusieurs : un menu pour choisir le dossier (le premier par défaut)
-  run: (text: string, choice: Choice, target?: Target) => void
+  run: (text: string, choice: Choice, target?: Target) => Promise<boolean> // false : la fenêtre reste ouverte, le texte n'est pas perdu
 }
 
 // Saisie d'un message, éventuellement composé à partir de snippets et d'entrées de mémoire.
@@ -65,10 +65,14 @@ function Form({ ask, snippets, onClose }: { ask: ComposeAsk; snippets: Snippet[]
   const own = mem?.projects.filter((p) => p.project === project) ?? []
   const others = mem?.projects.filter((p) => p.project !== project) ?? []
 
-  const send = () => {
-    if (!ok) return
-    onClose()
-    ask.run(text.trim(), choice, tgt)
+  const [busy, setBusy] = useState(false)
+  // Fermée seulement si l'envoi réussit : en cas d'échec, le texte reste là pour réessayer ou le copier.
+  const send = async () => {
+    if (!ok || busy) return
+    setBusy(true)
+    const done = await ask.run(text.trim(), choice, tgt)
+    setBusy(false)
+    if (done) onClose()
   }
   // Insère à la position du curseur (ou à la place de la sélection), puis y replace le curseur.
   const put = (t: string) => {
@@ -202,7 +206,7 @@ function Form({ ask, snippets, onClose }: { ask: ComposeAsk; snippets: Snippet[]
           <Button variant="outline" onClick={onClose}>
             Annuler
           </Button>
-          <Button onClick={send} disabled={!ok} title="Ctrl+Entrée">
+          <Button onClick={send} disabled={!ok || busy} title="Ctrl+Entrée">
             <Send /> {ask.send}
           </Button>
         </div>
