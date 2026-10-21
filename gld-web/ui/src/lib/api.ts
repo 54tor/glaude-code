@@ -46,6 +46,20 @@ export type Skill = {
 }
 export type SkillFile = { rel: string; kb: number }
 
+// Ce que chaque projet configure en propre (configproj.go)
+export type ProjectCfg = {
+  dir: string
+  project: string
+  files: { id: string; label: string; rows: { path: string; value: string }[] }[]
+  perms: Record<string, { rule: string; scope: string }[]>
+  hooks: HookInfo[]
+  mcp: McpServer[]
+  rules: { name: string; paths?: string[]; warn?: string }[]
+  skills: string[]
+  docs: string[]
+  specific: number
+}
+
 // Configuration de Claude Code (config*.go)
 export type ConfigFile = { id: string; scope: "user" | "project" | "local"; dir?: string; label: string; path: string; exists: boolean; error?: string; data?: unknown }
 export type HookInfo = { scope: string; file: string; event: string; matcher?: string; type: string; command: string; missing?: string }
@@ -102,6 +116,7 @@ export const api = {
   configRaw: (file: string) => get<{ ok: boolean; text?: string; out?: string }>(`/config-raw?file=${enc(file)}`),
   skills: () => get<{ skills: Skill[]; projects: { dir: string; project: string }[] }>("/skills-list"),
   skill: (key: string) => get<{ text?: string; files?: SkillFile[]; error?: string }>(`/skill?key=${enc(key)}`),
+  configProjects: () => get<{ projects: ProjectCfg[] }>("/config-projects"),
   config: () => get<CfgOverview>("/config"),
   configEffective: (dir: string) => get<{ rows: EffRow[] }>(`/config-effective?dir=${enc(dir)}`),
   configMcp: () => get<{ servers: McpServer[] }>("/config-mcp"),

@@ -33,6 +33,9 @@ func routesConfig(mux *http.ServeMux) {
 			"plugins": nz(plugins), "projects": nz(ps),
 		})
 	})
+	mux.HandleFunc("GET /config-projects", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"projects": projectConfigs()})
+	})
 	mux.HandleFunc("GET /config-effective", func(w http.ResponseWriter, r *http.Request) {
 		dir := r.URL.Query().Get("dir")
 		if dir != "" && !safeDir(dir) {

@@ -8,6 +8,7 @@ import { useActions } from "./actions"
 import { Choose } from "./Choose"
 import { useConfigEdit } from "./configEdit"
 import { HealthTab, HooksTab, McpTab, PrecedenceTab } from "./ConfigTabs1"
+import { ProjectsTab } from "./ConfigProjects"
 import { RawTab } from "./ConfigRaw"
 import { BackupsTab, PermsTab, SettingsTab } from "./ConfigTabs2"
 
@@ -16,6 +17,7 @@ import { BackupsTab, PermsTab, SettingsTab } from "./ConfigTabs2"
 export function Config({ home }: { home: string }) {
   const [ov, setOv] = useState<CfgOverview | null>(null)
   const [fileId, setFileId] = useState("u") // fichier édité dans « Permissions » et « Réglages »
+  const [tab, setTab] = useState("sante")
   const reload = useCallback(() => api.config().then(setOv), [])
   useEffect(() => {
     reload()
@@ -47,9 +49,10 @@ export function Config({ home }: { home: string }) {
   return (
     <ScrollArea className="min-h-0 flex-1">
       <div className="mx-auto max-w-5xl px-6 py-6">
-        <Tabs defaultValue="sante">
+        <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="mb-4 flex-wrap">
             <TabsTrigger value="sante">Santé{ov.issues.length > 0 && ` (${ov.issues.length})`}</TabsTrigger>
+            <TabsTrigger value="projets">Projets</TabsTrigger>
             <TabsTrigger value="precedence">Précédence</TabsTrigger>
             <TabsTrigger value="hooks">Hooks ({ov.hooks.length})</TabsTrigger>
             <TabsTrigger value="mcp">MCP</TabsTrigger>
@@ -60,6 +63,15 @@ export function Config({ home }: { home: string }) {
           </TabsList>
           <TabsContent value="sante">
             <HealthTab issues={ov.issues} home={home} projects={ov.projects} />
+          </TabsContent>
+          <TabsContent value="projets">
+            <ProjectsTab
+              home={home}
+              onEdit={(file, t) => {
+                setFileId(file)
+                setTab(t)
+              }}
+            />
           </TabsContent>
           <TabsContent value="precedence">
             <PrecedenceTab projects={ov.projects} home={home} />
