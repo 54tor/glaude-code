@@ -49,6 +49,7 @@ export type Actions = {
   ungroup: (ids: string[], vg?: VGroup) => void // vg : par défaut le groupe affiché
   // after : appelé quand la suppression est confirmée (ex. fermer le lecteur de la session supprimée)
   remove: (items: Item[], what: string, after?: () => void) => void
+  stop: (ids: string[]) => void // ferme les sessions ouvertes (SIGTERM) puis met la liste à jour
 }
 
 export const ActionsCtx = createContext<Actions | null>(null)
