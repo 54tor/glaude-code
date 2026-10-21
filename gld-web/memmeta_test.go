@@ -184,3 +184,17 @@ func TestDocumentationDuProjet(t *testing.T) {
 		}
 	}
 }
+
+func TestKeepHeader(t *testing.T) {
+	orig := "---\nname: a\ndescription: d\nmetadata:\n  type: user\n---\n\ncorps\n"
+	if got := keepHeader(orig, "texte condensé\n"); got != "---\nname: a\ndescription: d\nmetadata:\n  type: user\n---\n\ntexte condensé\n" {
+		t.Fatalf("%q", got)
+	}
+	avec := "---\nname: autre\n---\n\nx\n"
+	if keepHeader(orig, avec) != avec {
+		t.Fatal("un en-tête existant ne doit pas être remplacé")
+	}
+	if keepHeader("sans en-tête\n", "x\n") != "x\n" {
+		t.Fatal("rien à restaurer sans en-tête d'origine")
+	}
+}

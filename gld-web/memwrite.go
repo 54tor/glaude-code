@@ -156,7 +156,27 @@ func memWriteDraft(model, instruction, key string, refs []string) (string, float
 			system = docSystem
 		}
 	}
-	return memDraft(model, system, prompt)
+	text, cost, err := memDraft(model, system, prompt)
+	if err == nil && system == memSystem {
+		if orig, rerr := memRead(key); rerr == nil {
+			text = keepHeader(orig, text)
+		}
+	}
+	return text, cost, err
+}
+
+// keepHeader : un modèle qui « condense » une entrée de mémoire oublie parfois son en-tête YAML (name, description, type),
+// et le fichier perd alors son nom, sa description et sa ligne d'index. Si l'original en avait un et pas le brouillon,
+// on remet l'original en tête.
+func keepHeader(orig, draft string) string {
+	y, _, ok := frontMatter(orig)
+	if !ok {
+		return draft
+	}
+	if _, _, has := frontMatter(draft); has {
+		return draft
+	}
+	return "---\n" + y + "\n---\n\n" + strings.TrimLeft(draft, "\n")
 }
 
 var nameRe = regexp.MustCompile(`(?m)^name:\s*["']?([^"'\n]+?)["']?\s*$`)
