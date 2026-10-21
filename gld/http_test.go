@@ -552,3 +552,26 @@ func TestSlashCommands(t *testing.T) {
 		t.Fatalf("commandes : %v", got)
 	}
 }
+
+func TestTerminalDesactiveParDefaut(t *testing.T) {
+	t.Setenv("GLD_WEB_TERMINAL", "")
+	h, _, _ := web(t)
+	if r := getRaw(h, "/term-info"); !strings.Contains(r.Body.String(), `"enabled":false`) {
+		t.Fatalf("term-info : %s", r.Body.String())
+	}
+	if r := getRaw(h, "/term-ws?t=x"); r.Code != 404 {
+		t.Fatalf("term-ws actif sans réglage : %d", r.Code)
+	}
+	req := httptest.NewRequest("POST", "/term-open", strings.NewReader(`{"id":"`+id1+`"}`))
+	req.Host = testHost
+	req.Header.Set("Origin", "http://"+testHost)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != 403 {
+		t.Fatalf("term-open actif sans réglage : %d %s", rec.Code, rec.Body.String())
+	}
+	t.Setenv("GLD_WEB_TERMINAL", "1")
+	if r := getRaw(h, "/term-ws?t=x"); r.Code != 403 { // sans Origin
+		t.Fatalf("term-ws sans Origin : %d", r.Code)
+	}
+}

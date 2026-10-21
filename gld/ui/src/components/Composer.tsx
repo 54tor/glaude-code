@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { lazy, Suspense, useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import { LiveAgents, type Live } from "./LiveStatus"
 import { toast } from "sonner"
@@ -145,11 +145,14 @@ function LiveSend({ id, onSent, liveState }: { id: string; onSent: () => void; l
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
   const [sel, setSel] = useState(0)
+  const [term, setTerm] = useState<boolean | null>(null) // null : réglage inconnu ; true : GLD_WEB_TERMINAL=1 ; ouvert : fenêtre
+  const [termOpen, setTermOpen] = useState(false)
   const [extra, setExtra] = useState<(readonly [string, string])[]>([])
   const pics = useImages()
   useEffect(() => {
     let live = true
     api.sendInfo().then((r) => live && setInfo(r), () => {})
+    api.termInfo().then((r) => live && setTerm(r.enabled), () => {})
     api.slashCommands().then((r) => live && setExtra(r.commands.map((c) => [c.cmd, c.desc] as const)), () => {})
     return () => {
       live = false
@@ -182,6 +185,11 @@ function LiveSend({ id, onSent, liveState }: { id: string; onSent: () => void; l
   }
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
+      {termOpen && (
+        <Suspense fallback={null}>
+          <FullTerminal id={id} onClose={() => setTermOpen(false)} />
+        </Suspense>
+      )}
       <div className="mx-auto max-w-7xl space-y-2">
         <TerminalPanel id={id} />
         {sugg.length > 0 && (
@@ -227,6 +235,11 @@ function LiveSend({ id, onSent, liveState }: { id: string; onSent: () => void; l
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           Le texte est collé dans le terminal de la session, puis validé : si Claude répond déjà, il le prend à la suite.
           <span className="ml-auto" />
+          {term && (
+            <Button size="sm" variant="ghost" onClick={() => setTermOpen(true)} title="Terminal complet de la session (lecture seule tant qu'on ne prend pas la main)">
+              <SquareTerminal /> Terminal
+            </Button>
+          )}
           <LiveAgents live={liveState} />
           <SlashMenu id={id} text={text} onSent={onSent} />
           <CloseSession id={id} />
@@ -370,6 +383,8 @@ function TerminalPanel({ id }: { id: string }) {
 
 // Commandes de Claude Code envoyées telles quelles à la session (elles s'exécutent dans son terminal). /compact accepte des consignes :
 // ce qui est écrit dans le champ s'y ajoute (« /compact garde les décisions d'architecture »).
+const FullTerminal = lazy(() => import("./FullTerminal")) // xterm n'est chargé qu'à l'ouverture du terminal
+
 const SLASH = [
   ["/compact", "Compacter le contexte", "Résume la conversation pour libérer du contexte ; le texte du champ sert de consigne au résumé"],
   ["/context", "Voir le contexte", "Répartition du contexte (instructions, mémoire, outils, messages)"],
