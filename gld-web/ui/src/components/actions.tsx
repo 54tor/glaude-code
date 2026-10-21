@@ -22,6 +22,7 @@ export type Actions = {
   home: string
   q: string
   live: Set<string>
+  waiting: Set<string> // ouvertes, en attente de votre message
   hit: (id: string) => Hit | undefined
   vgroups: VGroup[]
   favs: Set<string> // sessions favorites
