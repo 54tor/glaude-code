@@ -1,5 +1,5 @@
 // gld-web — sessions Claude groupées par dossier de projet, dans le navigateur.
-// Suppression via gld-lib.sh (même séquence que gld-rm, qui refuse les sessions vivantes).
+// Suppression native (purge.go), sans bash : fonctionne aussi sous Windows.
 package main
 
 import (
@@ -18,6 +18,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"syscall"
@@ -34,22 +35,6 @@ var style []byte
 //
 //go:embed vendor/marked.js vendor/purify.js
 var vendor embed.FS
-
-// Même séquence que gld-rm, sans resoudre_projet (qui exige que le cwd existe encore).
-// Arguments : des chemins « <dossier de transcripts>/<id> ». Un seul solder pour tout le lot.
-// Les sessions vivantes sont épargnées.
-const rmScript = `. "$HOME/.local/bin/gld-lib.sh"; cc_tmp
-viv=$(sessions_vivantes); n=0; k=0
-: > "$GLD_TMP/snapshots"; : > "$GLD_TMP/supprimees"
-for a in "$@"; do
-  d="${a%/*}"; id="${a##*/}"
-  if printf '%s\n' "$viv" | grep -Fq -- "$id"; then k=$((k+1)); continue; fi
-  snapshots_cites "$d/$id.jsonl" "$d/$id" >> "$GLD_TMP/snapshots"
-  purger_session "$d" "$id" >/dev/null; echo "$id" >> "$GLD_TMP/supprimees"; n=$((n+1))
-done
-[ "$n" -gt 0 ] && solder "$GLD_TMP/supprimees" "$GLD_TMP/snapshots"
-echo "$n supprimée(s), $k vivante(s) épargnée(s)"
-[ "$n" -gt 0 ] || [ "$k" = 0 ] || exit 1`
 
 var (
 	root  string
@@ -194,6 +179,16 @@ func decodeDir(name string) string {
 			}
 			if strings.HasPrefix(rest, enc+"-") {
 				if r := walk(next, rest[len(enc)+1:]); r != "" {
+					return r
+				}
+			}
+		}
+		return ""
+	}
+	if runtime.GOOS == "windows" { // « C:\Users\moi » s'encode « C--Users-moi » : lecteur, puis « : » et « \ » → « -- »
+		for c := 'A'; c <= 'Z'; c++ {
+			if prefix := string(c) + "--"; strings.HasPrefix(name, prefix) {
+				if r := walk(string(c)+`:\`, strings.TrimPrefix(name, prefix)); r != "" {
 					return r
 				}
 			}
@@ -431,6 +426,9 @@ var flagRe = regexp.MustCompile(`^--?[a-zA-Z][a-zA-Z0-9-]*(=[A-Za-z0-9._:/-]+)?$
 var nonAlnum = regexp.MustCompile(`[^a-zA-Z0-9]`)
 
 func withPath(c *exec.Cmd) *exec.Cmd {
+	if runtime.GOOS == "windows" {
+		return c
+	}
 	home, _ := os.UserHomeDir()
 	c.Env = append(os.Environ(), "PATH="+filepath.Join(home, ".local/bin")+":"+os.Getenv("PATH"))
 	return c
@@ -450,7 +448,7 @@ func alive() map[string]bool {
 // rewriteCwd remplace le cwd (et ses sous-dossiers) dans un transcript, en gardant la date de modification.
 func rewriteCwd(path, old, nw string) error {
 	q := func(s string) string { b, _ := json.Marshal(s); return string(b) }
-	pre := func(s string) string { return strings.TrimSuffix(q(s+"/"), `"`) }
+	pre := func(s string) string { return strings.TrimSuffix(q(s+string(filepath.Separator)), `"`) }
 	reps := [][2][]byte{
 		{[]byte(`"cwd":` + q(old)), []byte(`"cwd":` + q(nw))},
 		{[]byte(`"cwd":` + pre(old)), []byte(`"cwd":` + pre(nw))},
@@ -591,16 +589,31 @@ func main() {
 		if p == "" {
 			p = home
 		}
+		sep := string(filepath.Separator)
+		if p == "::drives" && runtime.GOOS == "windows" { // liste des lecteurs
+			drives := []string{}
+			for c := 'A'; c <= 'Z'; c++ {
+				if _, err := os.Stat(string(c) + `:\`); err == nil {
+					drives = append(drives, string(c)+`:\`)
+				}
+			}
+			writeJSON(w, 200, map[string]any{"path": "", "parent": "", "dirs": drives, "sep": sep})
+			return
+		}
 		if !filepath.IsAbs(p) {
 			writeJSON(w, 400, map[string]any{"error": "chemin absolu requis"})
 			return
 		}
 		p = filepath.Clean(p)
-		for p != "/" {
+		for {
 			if fi, err := os.Stat(p); err == nil && fi.IsDir() {
 				break
 			}
-			p = filepath.Dir(p)
+			up := filepath.Dir(p)
+			if up == p {
+				break
+			}
+			p = up
 		}
 		ents, err := os.ReadDir(p)
 		if err != nil {
@@ -619,11 +632,14 @@ func main() {
 			}
 		}
 		sort.Strings(dirs)
-		parent := ""
-		if p != "/" {
-			parent = filepath.Dir(p)
+		parent := filepath.Dir(p)
+		if parent == p { // racine : sous Windows on remonte à la liste des lecteurs
+			parent = ""
+			if runtime.GOOS == "windows" {
+				parent = "::drives"
+			}
 		}
-		writeJSON(w, 200, map[string]any{"path": p, "parent": parent, "dirs": dirs})
+		writeJSON(w, 200, map[string]any{"path": p, "parent": parent, "dirs": dirs, "sep": sep})
 	})
 	mux.HandleFunc("GET /conv", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := transcript(r.URL.Query().Get("dir"), r.URL.Query().Get("id"))
@@ -646,16 +662,17 @@ func main() {
 		if !ok {
 			return
 		}
-		args := []string{"-c", rmScript, "gld-web"}
-		for _, it := range items {
-			args = append(args, filepath.Join(root, it.Dir, it.ID))
-		}
-		// Contexte détaché de la requête : un navigateur qui se déconnecte ne doit pas
+		// Pas de contexte lié à la requête : un navigateur qui se déconnecte ne doit pas
 		// interrompre une suppression en cours (sessions à moitié purgées).
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
-		defer cancel()
-		out, err := exec.CommandContext(ctx, "bash", args...).CombinedOutput()
-		writeJSON(w, 200, map[string]any{"ok": err == nil, "out": strings.TrimSpace(string(out))})
+		n, spared, notes, err := purgeSessions(items)
+		msg := fmt.Sprintf("%d supprimée(s), %d vivante(s) épargnée(s)", n, spared)
+		if len(notes) > 0 {
+			msg += "\n" + strings.Join(notes, "\n")
+		}
+		if err != nil {
+			msg += "\n" + err.Error()
+		}
+		writeJSON(w, 200, map[string]any{"ok": err == nil && (n > 0 || spared == 0), "out": msg})
 	})
 	mux.HandleFunc("POST /reassign", func(w http.ResponseWriter, r *http.Request) {
 		items, to, ok := readItems(w, r)
@@ -712,28 +729,37 @@ func main() {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": "dossier du projet introuvable : " + cwd})
 			return
 		}
+		if runtime.GOOS == "windows" {
+			var ss []Session
+			if req.ID != "" {
+				ss = []Session{info(p, st)}
+			} else {
+				ss = recentSessions(filepath.Dir(p), 7, 50000)
+			}
+			n := 0
+			for _, s := range ss {
+				if openTerminal(cwd, s.Title, s.ID, strings.Fields(req.Args)) == nil {
+					n++
+				}
+			}
+			writeJSON(w, 200, map[string]any{"ok": n > 0, "out": fmt.Sprintf("%d onglet(s) lancé(s).", n)})
+			return
+		}
 		ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 		defer cancel()
 		out, err := withPath(exec.CommandContext(ctx, "gld-matin", append(args, cwd)...)).CombinedOutput()
 		writeJSON(w, 200, map[string]any{"ok": err == nil, "out": string(out)})
 	})
 
-	// Anti DNS-rebinding : seul le Host local est servi.
+	// Anti DNS-rebinding : seul le Host local est servi. Anti CSRF : http.CrossOriginProtection
+	// (bibliothèque standard) refuse toute requête modifiante venue d'une autre origine.
+	guarded := http.NewCrossOriginProtection().Handler(mux)
 	srv := &http.Server{Addr: "127.0.0.1:" + port, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !hosts[r.Host] {
 			http.Error(w, "forbidden", 403)
 			return
 		}
-		// Anti CSRF : un POST doit être du JSON (déclenche un preflight CORS, jamais accordé)
-		// et, s'il porte un Origin, venir de notre propre page.
-		if r.Method == http.MethodPost {
-			if r.Header.Get("Content-Type") != "application/json" ||
-				(r.Header.Get("Origin") != "" && !hosts[strings.TrimPrefix(r.Header.Get("Origin"), "http://")]) {
-				http.Error(w, "forbidden", 403)
-				return
-			}
-		}
-		mux.ServeHTTP(w, r)
+		guarded.ServeHTTP(w, r)
 	})}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
