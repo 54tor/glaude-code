@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { Send, Square } from "lucide-react"
+import { Power, Send, Square } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
 import { withChoice, type Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
@@ -142,10 +142,13 @@ function LiveSend({ id, onSent }: { id: string; onSent: () => void }) {
   const ok = info?.ids.includes(id)
   if (!ok)
     return (
-      <p className="border-t px-6 py-3 text-center text-xs text-muted-foreground">
-        Session ouverte dans un terminal : écris-y directement (deux processus ne peuvent pas écrire le même transcript).
-        {info && " Lancée dans tmux, elle accepterait un message d'ici" + (info.why ? ` (tmux : ${info.why})` : "") + "."}
-      </p>
+      <div className="flex items-center gap-3 border-t px-6 py-3 text-xs text-muted-foreground">
+        <p className="min-w-0 flex-1 text-center">
+          Session ouverte dans un terminal : écris-y directement (deux processus ne peuvent pas écrire le même transcript).
+          {info && " Lancée dans tmux, elle accepterait un message d'ici" + (info.why ? ` (tmux : ${info.why})` : "") + "."}
+        </p>
+        <CloseSession id={id} />
+      </div>
     )
   const send = async () => {
     if (!text.trim() || busy) return
@@ -175,11 +178,33 @@ function LiveSend({ id, onSent }: { id: string; onSent: () => void }) {
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           Le texte est collé dans le terminal de la session, puis validé : si Claude répond déjà, il le prend à la suite.
           <span className="ml-auto" />
+          <CloseSession id={id} />
           <Button size="sm" onClick={send} disabled={!text.trim() || busy}>
             <Send /> Envoyer à la session
           </Button>
         </div>
       </div>
     </div>
+  )
+}
+
+// Ferme la session ouverte (le processus claude reçoit SIGTERM) ; deux clics, le second confirme.
+function CloseSession({ id }: { id: string }) {
+  const [sure, setSure] = useState(false)
+  useEffect(() => {
+    if (!sure) return
+    const t = setTimeout(() => setSure(false), 4000)
+    return () => clearTimeout(t)
+  }, [sure])
+  const close = async () => {
+    if (!sure) return setSure(true)
+    setSure(false)
+    const r = await api.post("/session-close", { id })
+    ;(r.ok ? toast.success : toast.error)(r.out)
+  }
+  return (
+    <Button size="sm" variant={sure ? "destructive" : "ghost"} onClick={close} title="Termine le processus claude de cette session ; la conversation reste reprenable">
+      <Power /> {sure ? "Confirmer la fermeture" : "Fermer la session"}
+    </Button>
   )
 }

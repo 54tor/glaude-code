@@ -52,6 +52,20 @@ func routesSessions(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"idle": idle})
 	})
+	mux.HandleFunc("POST /session-close", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ ID string }
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		err := closeSession(req.ID)
+		journal("session-close %s : %v", req.ID, errOr(err))
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": "Session fermée"})
+	})
 	mux.HandleFunc("POST /session-send", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ ID, Text string }
 		if json.NewDecoder(io.LimitReader(r.Body, sendMax+1<<10)).Decode(&req) != nil {
