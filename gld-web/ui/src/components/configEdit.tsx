@@ -30,11 +30,14 @@ type Reply = { ok: boolean; out: string; before: string; after: string; warnings
 export function useConfigEdit(onDone: () => void, sessions = 0): { propose: (e: CfgEdit) => Promise<void>; proposeRaw: (file: string, text: string) => Promise<string | null>; proposePerms: (file: string, text: string, mode: string, then?: () => void) => Promise<string | null>; dialog: ReactNode } {
   const [pv, setPv] = useState<Preview | null>(null)
   const [busy, setBusy] = useState(false)
+  // Modification simple (une règle, un réglage, une variable) : appliquée tout de suite, sans fenêtre de confirmation. Le serveur
+  // fait une sauvegarde avant d'écrire (onglet Sauvegardes) ; le toast dit ce que les sessions ouvertes en voient.
   const propose = async (edit: CfgEdit) => {
-    const r = (await api.post("/config-edit", { ...edit, dry: true })) as Reply
+    const r = (await api.post("/config-edit", edit)) as Reply
     if (!r.ok) return void toast.error(r.out)
     if (r.before === r.after) return void toast.info("Aucun changement")
-    setPv({ edit, before: r.before, after: r.after, warnings: r.warnings ?? [] })
+    toast.success(r.out, { description: liveNotice(r.before, r.after, sessions), duration: 6000 })
+    onDone()
   }
   // JSON brut : renvoie le message d'erreur (avec ligne et colonne) ou null si l'aperçu s'ouvre.
   const proposeRaw = async (file: string, text: string) => {
