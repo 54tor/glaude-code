@@ -7,7 +7,7 @@ INDEX := gld-web/ui/dist/index.html
 
 # L'interface n'est reconstruite que si son code ou ses dépendances ont changé.
 $(INDEX): $(shell find gld-web/ui/src gld-web/ui/public -type f 2>/dev/null) gld-web/ui/package-lock.json gld-web/ui/index.html gld-web/ui/vite.config.ts
-	cd gld-web/ui && { [ -d node_modules ] || npm ci; } && npm run build
+	cd gld-web/ui && { [ -d node_modules ] || npm ci; } && npm run build && touch dist/.gitkeep
 
 ui: $(INDEX)
 
