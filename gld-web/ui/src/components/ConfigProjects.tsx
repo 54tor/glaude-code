@@ -25,14 +25,14 @@ const Badge = ({ n, label }: { n: number; label: string }) =>
 
 // Ce que chaque projet configure en propre, en plus des réglages de l'utilisateur : réglages (projet et local), règles de
 // permission, hooks, serveurs MCP, règles .claude/rules, skills et documentation. onEdit ouvre l'onglet qui permet de les modifier.
-export function ProjectsTab({ home, onEdit, onTransfer, onRemove }: { home: string; onEdit: (file: string, tab: string) => void; onRemove: (file: string, kind: string, rule: string) => void; onTransfer: (file: string, kind: string, rule: string, move: boolean) => void }) {
+export function ProjectsTab({ home, version, onEdit, onTransfer, onRemove }: { home: string; version: number; onEdit: (file: string, tab: string) => void; onRemove: (file: string, kind: string, rule: string) => void; onTransfer: (file: string, kind: string, rule: string, move: boolean) => void }) {
   const [list, setList] = useState<ProjectCfg[] | null>(null)
   const [all, setAll] = useState(false)
   const [q, setQ] = useState("")
   const [open, setOpen] = useState<Set<string>>(new Set())
   useEffect(() => {
     api.configProjects().then((r) => setList(r.projects))
-  }, [])
+  }, [version])
   if (!list) return <p className="py-8 text-sm text-muted-foreground">Chargement…</p>
   const f = q.toLowerCase()
   const shown = list.filter((p) => (all || p.specific > 0) && (!f || p.project.toLowerCase().includes(f)))

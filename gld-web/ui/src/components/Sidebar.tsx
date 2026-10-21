@@ -164,7 +164,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           <NavItem icon={Inbox} label="Toutes les sessions" n={p.counts.all} active={r.kind === "all"} onClick={() => p.go({ kind: "all" })} />
           <NavItem icon={History} label="Sessions sauvegardées" active={r.kind === "tabs"} onClick={() => p.go({ kind: "tabs" })} />
           <NavItem icon={Zap} label="Skills" active={r.kind === "skills"} onClick={() => p.go({ kind: "skills", key: "" })} />
-          <NavItem icon={SlidersHorizontal} label="Configuration" active={r.kind === "config"} onClick={() => p.go({ kind: "config" })} />
+          <NavItem icon={SlidersHorizontal} label="Configuration" active={r.kind === "config"} onClick={() => p.go({ kind: "config", tab: "" })} />
           <NavItem icon={Brain} label="Mémoire" active={r.kind === "memory"} onClick={() => p.go({ kind: "memory", key: "" })} />
           {p.snippets !== null && (
             <NavItem
