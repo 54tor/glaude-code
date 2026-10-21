@@ -59,7 +59,11 @@ export default function App() {
   const reading = params.get("s")
 
   const [data, setData] = useState<Data | null>(null)
-  const [snips, setSnips] = useState<{ dir: string; files: Snippet[]; scopes: SnipScope[] } | null>(null)
+  const [snips, setSnips] = useState<{
+    dir: string
+    files: Snippet[]
+    scopes: SnipScope[]
+  } | null>(null)
   const [hits, setHits] = useState<{ q: string; m: Map<string, Hit> } | null>(null)
   const [picked, setPicked] = useState(() => new Set<string>())
   const [args, setArgs] = useLocal("ccArgs", "")
@@ -135,6 +139,8 @@ export default function App() {
   const hitMap = qt.length >= 2 && hits?.q === qt ? hits.m : null
   const searching = qt.length >= 2 && !hitMap && route.kind !== "snippets" && route.kind !== "memory" && route.kind !== "tabs"
 
+  const tags = useMemo(() => data?.tags ?? {}, [data])
+
   // Sessions affichées (hors revues automatiques, selon la recherche) et revues automatiques masquées.
   const view = (() => {
     const f = qt.toLowerCase()
@@ -151,7 +157,12 @@ export default function App() {
         } else vis.push(s)
       }
       total += vis.length
-      const ss = vis.filter((s) => !f || g.project.toLowerCase().includes(f) || s.title.toLowerCase().includes(f) || hitMap?.has(s.id))
+      const tag = f.startsWith("#") ? f.slice(1) : null // « #prod » : sessions étiquetées
+      const ss = vis.filter((s) =>
+        tag !== null
+          ? tags[s.id]?.some((t) => t.toLowerCase().includes(tag))
+          : !f || g.project.toLowerCase().includes(f) || s.title.toLowerCase().includes(f) || hitMap?.has(s.id)
+      )
       if (ss.length) entries.push({ g, ss })
     }
     const rows = entries.flatMap(({ g, ss }) => ss.map((s) => ({ s, g }))).sort(byDate)
@@ -178,13 +189,36 @@ export default function App() {
   const waiting = useMemo(() => new Set(data?.waiting), [data])
   const vgroups = useMemo(() => data?.vgroups ?? [], [data])
   const favs = useMemo(() => new Set(data?.favs), [data])
+
+  // Notification du navigateur quand une session se met à attendre (onglet en arrière-plan) ; permission demandée au premier clic.
+  const wasWaiting = useRef<Set<string> | null>(null)
+  useEffect(() => {
+    if (!("Notification" in window) || Notification.permission !== "default") return
+    const ask = () => void Notification.requestPermission()
+    window.addEventListener("pointerdown", ask, { once: true })
+    return () => window.removeEventListener("pointerdown", ask)
+  }, [])
+  useEffect(() => {
+    const prev = wasWaiting.current
+    wasWaiting.current = waiting
+    if (!prev || !document.hidden || !("Notification" in window) || Notification.permission !== "granted") return
+    for (const id of waiting)
+      if (!prev.has(id))
+        new Notification("Claude attend", {
+          body: everyId.get(id)?.s.title ?? id,
+          tag: id,
+        })
+  }, [waiting, everyId])
+  const cut = (t: string, n: number) => (t.length > n ? t.slice(0, n) + "…" : t)
   const gkey = (vg: VGroup) => segs(vg.project, home).join("/") // clé du dossier du groupe dans l'arbre et l'URL
   const recent = view.rows.filter((r) => now - r.s.mtime < WEEK)
   const hot = (data?.groups ?? [])
     .flatMap((g) => g.sessions.filter((s) => now - s.mtime < HOT && !AUTO.some((p) => s.title.includes(p))).map((s) => ({ s, g })))
     .sort(byDate)
   // Ouvertes d'abord, puis au cache chaud (récentes d'abord) ; la recherche s'applique comme ailleurs.
-  const active = view.rows.filter((r) => live.has(r.s.id) || now - r.s.mtime < HOT).sort((a, b) => +live.has(b.s.id) - +live.has(a.s.id) || b.s.mtime - a.s.mtime)
+  const active = view.rows
+    .filter((r) => live.has(r.s.id) || now - r.s.mtime < HOT)
+    .sort((a, b) => +live.has(b.s.id) - +live.has(a.s.id) || b.s.mtime - a.s.mtime)
   const selected = [...picked].map((id) => view.byId.get(id)).filter((r): r is Row => !!r)
 
   const node = route.kind === "dir" ? find(tree, route.key) : null
@@ -241,9 +275,13 @@ export default function App() {
     )
 
   // Groupes virtuels et favoris : mise à jour immédiate de l'affichage, puis enregistrement côté serveur.
-  const saveStore = async (groups: VGroup[], favList: string[]) => {
-    setData((d) => d && { ...d, vgroups: groups, favs: favList })
-    const r = await api.post("/vgroups", { groups, favs: favList })
+  const saveStore = async (groups: VGroup[], favList: string[], tagMap = tags) => {
+    setData((d) => d && { ...d, vgroups: groups, favs: favList, tags: tagMap })
+    const r = await api.post("/vgroups", {
+      groups,
+      favs: favList,
+      tags: tagMap,
+    })
     if (!r.ok) {
       toast.error(r.out)
       await reload()
@@ -259,7 +297,10 @@ export default function App() {
     saveGroups(exists ? vgroups.map((g) => (same(g, vg) ? { ...g, ids: [...new Set([...g.ids, ...ids])] } : g)) : [...vgroups, vg])
     if (ids.length)
       toast.success(`${plural(ids.length)} dans « ${name} »`, {
-        action: { label: "Voir", onClick: () => go({ kind: "group", name, key: gkey(vg) }) },
+        action: {
+          label: "Voir",
+          onClick: () => go({ kind: "group", name, key: gkey(vg) }),
+        },
       })
   }
   const newGroup = (ids: string[], project: string) =>
@@ -268,9 +309,17 @@ export default function App() {
   const targets = (): Target[] =>
     (data?.groups ?? [])
       .filter((x) => !x.missing && x.sessions.length)
-      .map((x) => ({ x, s: [...x.sessions].sort((p, q) => q.mtime - p.mtime)[0] }))
+      .map((x) => ({
+        x,
+        s: [...x.sessions].sort((p, q) => q.mtime - p.mtime)[0],
+      }))
       .sort((p, q) => q.s.mtime - p.s.mtime)
-      .map(({ x, s }) => ({ label: tilde(x.project, home), project: x.project, dir: s.dir, id: s.id }))
+      .map(({ x, s }) => ({
+        label: tilde(x.project, home),
+        project: x.project,
+        dir: s.dir,
+        id: s.id,
+      }))
   const newSession = (title: string, subtitle: string, ts: Target[], initial = "") =>
     ts.length &&
     setCompose({
@@ -301,7 +350,10 @@ export default function App() {
     open: (x) => openMany(groupRows(x).filter((r) => !r.g.missing && !live.has(r.s.id))),
     refs: (x) =>
       navigator.clipboard.writeText(refs(x)).then(
-        () => toast.success("Références copiées", { description: `${plural(groupRows(x).length)} du groupe « ${x.name} »` }),
+        () =>
+          toast.success("Références copiées", {
+            description: `${plural(groupRows(x).length)} du groupe « ${x.name} »`,
+          }),
         () => toast.error("Copie impossible")
       ),
     prompt: (x) => {
@@ -315,12 +367,26 @@ export default function App() {
         initial: refs(x) + "\n\n",
         send: "Lancer la session",
         choice,
-        run: (prompt, c) => act("/new-session", { dir: first.s.dir, id: first.s.id, prompt, args: withChoice(args, c) }, "Nouvelle session…", "last"),
+        run: (prompt, c) =>
+          act(
+            "/new-session",
+            {
+              dir: first.s.dir,
+              id: first.s.id,
+              prompt,
+              args: withChoice(args, c),
+            },
+            "Nouvelle session…",
+            "last"
+          ),
       })
     },
     export: (x) =>
       exportMarkdown(
-        groupRows(x).map((r) => ({ s: r.s, project: tilde(r.g.project, home) })),
+        groupRows(x).map((r) => ({
+          s: r.s,
+          project: tilde(r.g.project, home),
+        })),
         `Groupe ${x.name}`
       ).catch(() => toast.error("Export impossible")),
     select: (x) => setPicked((p) => new Set([...p, ...groupRows(x).map((r) => r.s.id)])),
@@ -380,6 +446,23 @@ export default function App() {
     hit: (id) => hitMap?.get(id),
     vgroups,
     favs,
+    tags,
+    filterTag: (t) => setQ("#" + t),
+    editTags: (s) =>
+      named(`Étiquettes de « ${cut(s.title, 40)} » (séparées par des virgules)`, (tags[s.id] ?? []).join(", "), "Enregistrer", (v) => {
+        const list = [
+          ...new Set(
+            v
+              .split(",")
+              .map((t) => t.trim())
+              .filter(Boolean)
+          ),
+        ]
+        const next = { ...tags }
+        if (list.length) next[s.id] = list
+        else delete next[s.id]
+        saveStore(vgroups, [...favs], next)
+      }),
     toggleFav: (ids) => {
       const add = ids.some((id) => !favs.has(id))
       saveStore(vgroups, add ? [...new Set([...favs, ...ids])] : [...favs].filter((id) => !ids.includes(id)))
@@ -419,7 +502,18 @@ export default function App() {
             project: r.g.project,
             send: "Reprendre et envoyer",
             choice,
-            run: (text, c) => act("/open", { dir: r.s.dir, id: r.s.id, args: withChoice(args, c), prompt: text }, "Reprise avec le message…", "last"),
+            run: (text, c) =>
+              act(
+                "/open",
+                {
+                  dir: r.s.dir,
+                  id: r.s.id,
+                  args: withChoice(args, c),
+                  prompt: text,
+                },
+                "Reprise avec le message…",
+                "last"
+              ),
           }),
     copy: (s) =>
       navigator.clipboard.writeText(`claude --resume ${s.id}`).then(
@@ -533,15 +627,15 @@ export default function App() {
         ? `${plural(active.filter((r) => live.has(r.s.id)).length, "ouverte")} · ${plural(active.filter((r) => !live.has(r.s.id)).length, "au cache chaud")}`
         : route.kind === "snippets"
           ? (snips?.dir ?? "")
-        : route.kind === "memory"
-          ? "CLAUDE.md, AGENTS.md, règles et mémoire de chaque projet"
-          : route.kind === "tabs"
-            ? "Les sessions ouvertes, pour les rouvrir d'un coup"
-            : route.kind === "group"
-              ? `Groupe de ${vg ? tilde(vg.project, home) : "?"} · ${plural(rows.length)}`
-              : g
-                ? `${tilde(g.project, home)} · ${plural(rows.length)}`
-                : plural(rows.length)
+          : route.kind === "memory"
+            ? "CLAUDE.md, AGENTS.md, règles et mémoire de chaque projet"
+            : route.kind === "tabs"
+              ? "Les sessions ouvertes, pour les rouvrir d'un coup"
+              : route.kind === "group"
+                ? `Groupe de ${vg ? tilde(vg.project, home) : "?"} · ${plural(rows.length)}`
+                : g
+                  ? `${tilde(g.project, home)} · ${plural(rows.length)}`
+                  : plural(rows.length)
 
   return (
     <ActionsCtx.Provider value={actions}>
@@ -555,7 +649,11 @@ export default function App() {
           searching={searching}
           route={route}
           go={go}
-          counts={{ recent: recent.length, all: view.rows.length, active: active.length }}
+          counts={{
+            recent: recent.length,
+            all: view.rows.length,
+            active: active.length,
+          }}
           favRows={favRows}
           favGroups={favGroups}
           groupCount={(x) => groupRows(x).length}
@@ -734,7 +832,12 @@ export default function App() {
                 )}
 
                 {data && route.kind !== "recent" && rows.length > 0 && (
-                  <SessionList items={rows} showProject={route.kind !== "dir" && route.kind !== "group"} showCache={route.kind === "active"} flat={route.kind === "active"} />
+                  <SessionList
+                    items={rows}
+                    showProject={route.kind !== "dir" && route.kind !== "group"}
+                    showCache={route.kind === "active"}
+                    flat={route.kind === "active"}
+                  />
                 )}
 
                 {data && subs.length > 0 && (
@@ -764,7 +867,7 @@ export default function App() {
                             ? "Aucune session ouverte ni active depuis moins d'une heure."
                             : route.kind === "recent"
                               ? "Aucune session ces 7 derniers jours."
-                            : "Rien à afficher ici."
+                              : "Rien à afficher ici."
                     }
                   >
                     {qt && (

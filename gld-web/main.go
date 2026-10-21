@@ -58,9 +58,24 @@ type line struct {
 	GitBranch   string `json:"gitBranch"`
 	Timestamp   string `json:"timestamp"`
 	Message     struct {
+		ID      string          `json:"id"`
 		Model   string          `json:"model"`
 		Content json.RawMessage `json:"content"`
+		Usage   *struct {
+			In  int64 `json:"input_tokens"`
+			Out int64 `json:"output_tokens"`
+			CR  int64 `json:"cache_read_input_tokens"`
+			CW  int64 `json:"cache_creation_input_tokens"`
+		} `json:"usage"`
 	} `json:"message"`
+}
+
+// Tokens : consommation d'une session (entrée neuve, sortie, cache lu, cache écrit).
+type Tokens struct {
+	In  int64 `json:"in"`
+	Out int64 `json:"out"`
+	CR  int64 `json:"cr"`
+	CW  int64 `json:"cw"`
 }
 
 // promptOf : ce que l'utilisateur a tapé (hors bruit d'amorçage et résultats d'outils).
@@ -123,6 +138,7 @@ type Session struct {
 	Cwd   string  `json:"cwd"`
 	Mtime float64 `json:"mtime"`
 	KB    int64   `json:"kb"`
+	Tok   Tokens  `json:"tok"`
 }
 
 // infoState : ce qu'on sait d'un transcript, et jusqu'où on l'a lu. Un transcript ne fait que grandir : à chaque
@@ -132,6 +148,9 @@ type infoState struct {
 	mtime             time.Time
 	off               int64 // octets déjà lus, toujours en fin de ligne complète
 	title, cwd, first string
+	tok               Tokens // total de la session
+	lastID            string // un même message s'écrit sur plusieurs lignes qui répètent son usage : seul le dernier compte
+	last              Tokens
 }
 
 var (
@@ -174,7 +193,8 @@ func (c *infoState) visit(b []byte) {
 	wantTitle := bytes.Contains(b, []byte(`"custom-title"`))
 	wantCwd := c.cwd == "" && bytes.Contains(b, []byte(`"cwd"`))
 	wantFirst := c.first == "" && bytes.Contains(b, []byte(`"type":"user"`))
-	if !wantTitle && !wantCwd && !wantFirst {
+	wantUsage := bytes.Contains(b, []byte(`"usage"`)) && bytes.Contains(b, []byte(`"type":"assistant"`))
+	if !wantTitle && !wantCwd && !wantFirst && !wantUsage {
 		return
 	}
 	var l line
@@ -189,6 +209,14 @@ func (c *infoState) visit(b []byte) {
 	}
 	if wantFirst && l.Type == "user" {
 		c.first = promptOf(&l)
+	}
+	if u := l.Message.Usage; wantUsage && l.Type == "assistant" && u != nil {
+		if l.Message.ID != "" && l.Message.ID == c.lastID {
+			c.tok = Tokens{c.tok.In - c.last.In, c.tok.Out - c.last.Out, c.tok.CR - c.last.CR, c.tok.CW - c.last.CW}
+		}
+		c.last = Tokens{u.In, u.Out, u.CR, u.CW}
+		c.lastID = l.Message.ID
+		c.tok = Tokens{c.tok.In + u.In, c.tok.Out + u.Out, c.tok.CR + u.CR, c.tok.CW + u.CW}
 	}
 }
 
@@ -211,7 +239,7 @@ func info(path string, st os.FileInfo) Session {
 	}
 	title, cwd, first := c.title, c.cwd, c.first
 	s := Session{ID: strings.TrimSuffix(filepath.Base(path), ".jsonl"), Dir: filepath.Base(filepath.Dir(path)),
-		Named: title != "", Cwd: cwd, Mtime: float64(st.ModTime().UnixNano()) / 1e9, KB: st.Size() / 1024}
+		Named: title != "", Cwd: cwd, Mtime: float64(st.ModTime().UnixNano()) / 1e9, KB: st.Size() / 1024, Tok: c.tok}
 	if s.Title = title; title == "" {
 		if s.Title = cut(first, 100); first == "" {
 			s.Title = "(sans titre)"
@@ -853,6 +881,8 @@ func main() {
 	}()
 	migrateData()
 	go autosaveTabs(2 * time.Minute)
+	go watchWaiting(20 * time.Second)
+	go func() { _ = syncIndex() }() // index de recherche prêt avant la première requête
 	if local {
 		fmt.Fprintln(os.Stderr, "http://"+net.JoinHostPort(*listen, port))
 	} else {
@@ -894,6 +924,7 @@ func handler() http.Handler {
 	mux.Handle("GET /favicon.ico", files)
 	mux.Handle("GET /manifest.webmanifest", files)
 	mux.HandleFunc("GET /api", func(w http.ResponseWriter, r *http.Request) {
+		lastAPI.Store(time.Now().UnixNano())
 		live := []string{}
 		for id := range liveSessions() {
 			live = append(live, id)
@@ -901,7 +932,7 @@ func handler() http.Handler {
 		groupsMu.Lock()
 		st := loadStore()
 		groupsMu.Unlock()
-		writeJSON(w, 200, map[string]any{"home": home, "root": root, "groups": sessions(), "live": live, "waiting": waiting(), "vgroups": st.Groups, "favs": st.Favs})
+		writeJSON(w, 200, map[string]any{"home": home, "root": root, "groups": sessions(), "live": live, "waiting": waiting(), "vgroups": st.Groups, "favs": st.Favs, "tags": st.Tags})
 	})
 	// Explorateur de dossiers pour « Réassigner » / « Déplacer » : sous-dossiers d'un chemin.
 	// Un chemin disparu remonte au plus proche parent qui existe.
@@ -1027,7 +1058,7 @@ func handler() http.Handler {
 			writeJSON(w, 400, map[string]any{"hits": []Hit{}})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"hits": search(q)})
+		writeJSON(w, 200, map[string]any{"hits": searchAll(q)})
 	})
 	mux.HandleFunc("POST /rename", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Dir, ID, Title string }
@@ -1459,6 +1490,9 @@ func handler() http.Handler {
 			return
 		}
 		groupsMu.Lock()
+		if st.Tags == nil { // un client qui ne connaît pas les étiquettes ne les efface pas
+			st.Tags = loadStore().Tags
+		}
 		err := saveStore(st)
 		groupsMu.Unlock()
 		journal("vgroups %d groupe(s), %d favori(s) : %v", len(st.Groups), len(st.Favs), errOr(err))

@@ -45,3 +45,12 @@ export function bucket(sec: number): string {
   if (sec >= t0 - 29 * 86400) return "Ce mois-ci"
   return "Plus ancien"
 }
+
+// Tokens traités par la session : entrée neuve + sortie + cache écrit (le cache lu, relu à chaque tour, est compté à part).
+export const tokTotal = (t: { in: number; out: number; cw: number }) => t.in + t.out + t.cw
+export const compact = (n: number) =>
+  n < 1000
+    ? String(n)
+    : n < 1e6
+      ? `${(n / 1e3).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} k`
+      : `${(n / 1e6).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} M`

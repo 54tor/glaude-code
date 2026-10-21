@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -48,3 +49,25 @@ func TestInfoIncremental(t *testing.T) {
 		t.Fatalf("après troncature : %+v", s)
 	}
 }
+
+// Les lignes d'un même message répètent son usage : il n'est compté qu'une fois, même relu après une ligne inachevée.
+func TestInfoTokens(t *testing.T) {
+	p := filepath.Join(t.TempDir(), id1+".jsonl")
+	a := func(id string, in, out int) string {
+		return `{"type":"assistant","message":{"id":"` + id + `","content":[],"usage":{"input_tokens":` + itoa(in) +
+			`,"output_tokens":` + itoa(out) + `,"cache_read_input_tokens":100,"cache_creation_input_tokens":10}}}`
+	}
+	// m1 sur deux lignes (usage final 5/20), m2 une ligne sans « \n » final
+	if err := os.WriteFile(p, []byte(a("m1", 5, 3)+"\n"+a("m1", 5, 20)+"\n"+a("m2", 1, 4)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := os.Stat(p)
+	got := info(p, st).Tok
+	st, _ = os.Stat(p)
+	again := info(p, st).Tok // même contenu : pas de double compte
+	if want := (Tokens{In: 6, Out: 24, CR: 200, CW: 20}); got != want || again != want {
+		t.Fatalf("tokens = %+v puis %+v, attendu %+v", got, again, want)
+	}
+}
+
+func itoa(n int) string { return strconv.Itoa(n) }

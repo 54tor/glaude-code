@@ -58,6 +58,13 @@ func fixture(t *testing.T) string {
 
 func use(cfg string) {
 	root = filepath.Join(cfg, "projects")
+	idxMu.Lock() // chaque test a son propre index de recherche
+	if idxDB != nil {
+		idxDB.Close()
+		idxDB = nil
+	}
+	idxFile = func() string { return filepath.Join(cfg, "search.db") }
+	idxMu.Unlock()
 	liveSessions = func() map[string]bool { return map[string]bool{} }
 }
 

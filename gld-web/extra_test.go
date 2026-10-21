@@ -490,3 +490,21 @@ func TestGlobalClaudeNotAProjectFile(t *testing.T) {
 		t.Fatal("CLAUDE.md global touché")
 	}
 }
+
+func TestTags(t *testing.T) {
+	use(t.TempDir())
+	st := Store{Groups: []VGroup{}, Favs: []string{}, Tags: map[string][]string{id1: {"  prod ", "caddy"}}}
+	if err := saveStore(st); err != nil {
+		t.Fatal(err)
+	}
+	if got := loadStore().Tags[id1]; len(got) != 2 || got[0] != "prod" {
+		t.Fatalf("tags = %v", got)
+	}
+	for _, bad := range []map[string][]string{
+		{id1: {"a", "A"}}, {id1: {""}}, {id1: {strings.Repeat("é", maxTagLen+1)}}, {"../x": {"a"}},
+	} {
+		if saveStore(Store{Groups: []VGroup{}, Favs: []string{}, Tags: bad}) == nil {
+			t.Errorf("étiquettes %v acceptées", bad)
+		}
+	}
+}
