@@ -94,7 +94,7 @@ export function Conversation({ session, onClose, onDelete }: { session: Session 
 
   return (
     <Dialog open={!!session} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="flex h-[88vh] max-w-4xl flex-col gap-3 sm:max-w-4xl">
+      <DialogContent className="flex h-[94vh] w-[96vw] max-w-none flex-col gap-3 sm:max-w-none">
         <DialogHeader className="pr-8">
           <DialogTitle className="truncate">{session?.title}</DialogTitle>
           <DialogDescription className="sr-only">Conversation complète de la session</DialogDescription>
