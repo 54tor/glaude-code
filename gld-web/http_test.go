@@ -273,6 +273,12 @@ func TestHTTPLancements(t *testing.T) {
 	t.Setenv("FAKE_AGENTS", "illisible")
 	ok(t, h, "/new-session", `{"dir":"-p","id":"`+id1+`","prompt":"suite"}`, true, "gld-matin")
 	t.Setenv("FAKE_AGENTS", "[]")
+	// gld-matin introuvable : l'échec dit pourquoi au lieu d'un message vide.
+	matinBin := filepath.Join(os.Getenv("HOME"), ".local", "bin", "gld-matin")
+	os.Rename(matinBin, matinBin+".absent")
+	ok(t, h, "/new-session", `{"dir":"-p","id":"`+id1+`","prompt":"suite"}`, false, "gld-matin : exec")
+	ok(t, h, "/open", `{"dir":"-p"}`, false, "gld-matin : exec")
+	os.Rename(matinBin+".absent", matinBin)
 
 	// Fusion de mémoire : prompt seul, ou lancé dans une nouvelle session.
 	put(t, filepath.Join(cfg, "projects", "-p", "memory", "a.md"), "a", old)

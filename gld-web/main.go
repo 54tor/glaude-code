@@ -507,6 +507,15 @@ func withPath(c *exec.Cmd) *exec.Cmd {
 	return c
 }
 
+// matin lance gld-matin et renvoie sa sortie ; sans sortie (introuvable, tué…), l'erreur elle-même, pour qu'un échec dise pourquoi.
+func matin(ctx context.Context, args ...string) (string, error) {
+	out, err := withPath(exec.CommandContext(ctx, "gld-matin", args...)).CombinedOutput()
+	if err != nil && strings.TrimSpace(string(out)) == "" {
+		return "gld-matin : " + err.Error(), err
+	}
+	return string(out), err
+}
+
 // alive : ids des sessions ouvertes, ou nil si `claude agents --json` a échoué (on ne sait pas).
 func alive() map[string]bool {
 	out, err := withPath(exec.Command("claude", "agents", "--json")).Output()
@@ -1128,8 +1137,8 @@ func handler() http.Handler {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
-		out, err := withPath(exec.CommandContext(ctx, "gld-matin", append(args, "--prompt", prompt, cwd)...)).CombinedOutput()
-		writeJSON(w, 200, map[string]any{"ok": err == nil, "out": string(out), "prompt": prompt})
+		out, err := matin(ctx, append(args, "--prompt", prompt, cwd)...)
+		writeJSON(w, 200, map[string]any{"ok": err == nil, "out": out, "prompt": prompt})
 	})
 	// Conversation dans le navigateur (chat.go).
 	mux.HandleFunc("POST /chat", chatHandler)
@@ -1254,8 +1263,8 @@ func handler() http.Handler {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 		defer cancel()
-		out, err := withPath(exec.CommandContext(ctx, "gld-matin", append(args, cwd)...)).CombinedOutput()
-		writeJSON(w, 200, map[string]any{"ok": err == nil, "out": string(out)})
+		out, err := matin(ctx, append(args, cwd)...)
+		writeJSON(w, 200, map[string]any{"ok": err == nil, "out": out})
 	})
 
 	// Anti DNS-rebinding : seul le Host local est servi. Anti CSRF : http.CrossOriginProtection
