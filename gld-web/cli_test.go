@@ -237,3 +237,15 @@ func TestAliasDeProjet(t *testing.T) {
 		t.Fatalf("%+v %v", p, err)
 	}
 }
+
+func TestLanceurTerminatorTmux(t *testing.T) {
+	c, err := launcherCmd("terminator-tmux", "Mon #(x) titre", []string{"/bin/gld", "_run", "/tmp/a b.json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := c.Args[len(c.Args)-1]
+	want := `tmux new-session -n 'Mon ##(x) titre' ''\''/bin/gld'\'' '\''_run'\'' '\''/tmp/a b.json'\'''`
+	if e != want {
+		t.Errorf("\n%s\n%s", e, want)
+	}
+}

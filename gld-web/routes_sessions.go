@@ -43,6 +43,15 @@ func routesSessions(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"ids": keys, "why": why})
 	})
+	// État d'une session ouverte : attend-elle votre message (idle) ou travaille-t-elle ?
+	mux.HandleFunc("GET /session-state", func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Query().Get("id")
+		idle := false
+		for _, x := range waiting() {
+			idle = idle || x == id
+		}
+		writeJSON(w, 200, map[string]any{"idle": idle})
+	})
 	mux.HandleFunc("POST /session-send", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ ID, Text string }
 		if json.NewDecoder(io.LimitReader(r.Body, sendMax+1<<10)).Decode(&req) != nil {
