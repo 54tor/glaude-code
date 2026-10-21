@@ -130,3 +130,17 @@ func TestMessagesEnAttente(t *testing.T) {
 		t.Fatalf("file d'attente : %v", q)
 	}
 }
+
+func TestVerbesDeReflexion(t *testing.T) {
+	seen := map[string]bool{}
+	for _, v := range thinkingVerbs {
+		if v == "" || len(v) > 60 || seen[v] {
+			t.Fatalf("verbe vide, trop long ou en double : %q", v)
+		}
+		seen[v] = true
+	}
+	if len(thinkingVerbs) < 100 {
+		t.Fatalf("%d verbes", len(thinkingVerbs))
+	}
+	t.Logf("%d verbes", len(thinkingVerbs))
+}
