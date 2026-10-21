@@ -46,7 +46,11 @@ export function LiveStatus({ dir, id, open, tok }: { dir: string; id: string; op
       ) : (
         <span className="text-muted-foreground">Session fermée</span>
       )}
-      <Button size="xs" variant="ghost" className="ml-auto" onClick={() => setStats(true)} title="Tokens consommés, contexte et sous-agents">
+      <span className="ml-auto flex items-center gap-x-3 text-muted-foreground tabular-nums">
+        {st.context > 0 && <span title="Contexte envoyé au dernier appel">ctx {compact(st.context)}</span>}
+        <span title="Tokens traités (hors cache lu)">{compact(tokTotal(tok))} tok</span>
+      </span>
+      <Button size="xs" variant="ghost" onClick={() => setStats(true)} title="Tokens consommés, contexte et sous-agents">
         <BarChart3 /> Stats
         {st.subs.length > 0 && (
           <span className="flex items-center gap-1 text-muted-foreground">
