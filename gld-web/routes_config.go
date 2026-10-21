@@ -1,0 +1,127 @@
+package main
+
+import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"sort"
+)
+
+// routesConfig : la configuration de Claude Code (config*.go) : lecture, analyses, modifications permises, sauvegardes.
+func routesConfig(mux *http.ServeMux) {
+	mux.HandleFunc("GET /config", func(w http.ResponseWriter, r *http.Request) {
+		files, raw := allConfigs()
+		type plugin struct {
+			ID        string `json:"id"`
+			Enabled   bool   `json:"enabled"`
+			Installed bool   `json:"installed"`
+		}
+		var plugins []plugin
+		inst := installedPlugins()
+		if v, ok := lookup(raw["u"], "enabledPlugins"); ok {
+			if o := asMap(v); o != nil {
+				for _, k := range o.keys {
+					on, _ := o.m[k].(bool)
+					plugins = append(plugins, plugin{k, on, inst[k]})
+				}
+			}
+		}
+		sort.Slice(plugins, func(i, j int) bool { return plugins[i].ID < plugins[j].ID })
+		_, projects, _ := memList()
+		type proj struct {
+			Dir     string `json:"dir"`
+			Project string `json:"project"`
+		}
+		var ps []proj
+		for _, p := range projects {
+			if !p.Missing {
+				ps = append(ps, proj{p.Dir, p.Project})
+			}
+		}
+		writeJSON(w, 200, map[string]any{
+			"files": nz(files), "hooks": nz(hooksOf(raw)), "issues": nz(configHealth(files, raw)), "backups": listBackups(),
+			"plugins": nz(plugins), "projects": nz(ps),
+		})
+	})
+	mux.HandleFunc("GET /config-effective", func(w http.ResponseWriter, r *http.Request) {
+		dir := r.URL.Query().Get("dir")
+		if dir != "" && !safeDir(dir) {
+			writeJSON(w, 400, map[string]any{})
+			return
+		}
+		_, raw := allConfigs()
+		writeJSON(w, 200, map[string]any{"rows": nz(effective(raw, dir))})
+	})
+	mux.HandleFunc("GET /config-mcp", func(w http.ResponseWriter, r *http.Request) {
+		s := mcpServers()
+		if s == nil {
+			s = []McpServer{}
+		}
+		writeJSON(w, 200, map[string]any{"servers": s})
+	})
+	mux.HandleFunc("POST /config-mcp-status", func(w http.ResponseWriter, r *http.Request) {
+		st, err := mcpStatus()
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": "claude mcp list : " + err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "status": st})
+	})
+	mux.HandleFunc("GET /config-perm-suggest", func(w http.ResponseWriter, r *http.Request) {
+		_, raw := allConfigs()
+		var have []string
+		for _, doc := range raw {
+			v, _ := lookup(doc, "permissions", "allow")
+			have = append(have, strList(v)...)
+		}
+		s := permSuggestions(have)
+		if s == nil {
+			s = []PermSuggest{}
+		}
+		writeJSON(w, 200, map[string]any{"suggestions": s})
+	})
+	mux.HandleFunc("POST /config-edit", func(w http.ResponseWriter, r *http.Request) {
+		var e CfgEdit
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<14)).Decode(&e) != nil || len(e.Path) == 0 {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		before, after, err := configEdit(e)
+		if !e.Dry {
+			journal("config-edit %s %s %v : %v", e.File, e.Op, e.Path, errOr(err)) // jamais la valeur : elle peut être un secret
+		}
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		out := "Enregistré (sauvegarde faite)"
+		if e.Dry {
+			out = "Aperçu"
+		} else if before == after {
+			out = "Aucun changement"
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": out, "before": before, "after": after})
+	})
+	mux.HandleFunc("POST /config-restore", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Name string }
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		err := restoreBackup(req.Name)
+		journal("config-restore %s : %v", req.Name, errOr(err))
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": "Sauvegarde restaurée"})
+	})
+}
+
+// nz : une liste vide s'écrit « [] » en JSON, jamais « null » (le navigateur ne la parcourrait plus).
+func nz[T any](s []T) []T {
+	if s == nil {
+		return []T{}
+	}
+	return s
+}

@@ -30,16 +30,18 @@ export function lineDiff(a: string, b: string): Row[] {
   return out
 }
 
-// old : version de la corbeille ; cur : version actuelle du fichier.
-export function DiffView({ old, cur }: { old: string; cur: string }) {
+// old : version de la corbeille ; cur : version actuelle du fichier. compact : sans titre ni marges (dans une boîte de dialogue).
+export function DiffView({ old, cur, compact }: { old: string; cur: string; compact?: boolean }) {
   const rows = useMemo(() => lineDiff(old, cur), [old, cur])
   const same = rows.every((r) => r.op === " ")
   return (
-    <div className="session-text mx-auto max-w-7xl px-6 py-6">
-      <p className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground">
-        Version de la corbeille <ArrowRight className="size-3" /> version actuelle {same && "· identiques"}
-      </p>
-      <pre className="whitespace-pre-wrap">
+    <div className={compact ? "p-2 text-xs" : "session-text mx-auto max-w-7xl px-6 py-6"}>
+      {!compact && (
+        <p className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+          Version de la corbeille <ArrowRight className="size-3" /> version actuelle {same && "· identiques"}
+        </p>
+      )}
+      <pre className="font-mono whitespace-pre-wrap">
         {rows.map((r, i) => (
           <div
             key={i}

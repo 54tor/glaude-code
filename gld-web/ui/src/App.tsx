@@ -25,6 +25,7 @@ import { SessionSelectionBar } from "@/components/SessionSelectionBar"
 import { SessionsPane } from "@/components/SessionsPane"
 import { Sidebar } from "@/components/Sidebar"
 import { Snippets } from "@/components/Snippets"
+import { Config } from "@/components/Config"
 import { Memory } from "@/components/Memory"
 import { Tabs } from "@/components/Tabs"
 import { Compose, type ComposeAsk } from "@/components/Compose"
@@ -73,7 +74,7 @@ export default function App() {
 
   const qt = q.trim()
   const hitMap = useSearchHits(qt)
-  const searching = qt.length >= 2 && !hitMap && route.kind !== "snippets" && route.kind !== "memory" && route.kind !== "tabs"
+  const searching = qt.length >= 2 && !hitMap && route.kind !== "snippets" && route.kind !== "memory" && route.kind !== "tabs" && route.kind !== "config"
 
   const tags = useMemo(() => data?.tags ?? {}, [data])
   const view = buildView(data, qt, tags, hitMap)
@@ -189,6 +190,7 @@ export default function App() {
     group: route.kind === "group" ? route.name : "",
     snippets: "Snippets",
     memory: "Mémoire",
+    config: "Configuration",
     tabs: "Sessions sauvegardées",
     dir: node?.name ?? "Dossier",
   }[route.kind]
@@ -197,8 +199,10 @@ export default function App() {
       ? `7 derniers jours · ${plural(recent.length)} dans ${plural(byProject.size, "projet")}`
       : route.kind === "active"
         ? `${plural(active.filter((r) => live.has(r.s.id)).length, "ouverte")} · ${plural(active.filter((r) => !live.has(r.s.id)).length, "au cache chaud")}`
-        : route.kind === "snippets"
-          ? (snips?.dir ?? "")
+        : route.kind === "config"
+          ? "Réglages, permissions, hooks et serveurs MCP de Claude Code"
+          : route.kind === "snippets"
+            ? (snips?.dir ?? "")
           : route.kind === "memory"
             ? "CLAUDE.md, AGENTS.md, règles et mémoire de chaque projet"
             : route.kind === "tabs"
@@ -262,6 +266,8 @@ export default function App() {
 
           {route.kind === "tabs" ? (
             <Tabs args={args} onAsk={setAsk} onPrompt={setPrompt} />
+          ) : route.kind === "config" ? (
+            <Config home={home} />
           ) : route.kind === "memory" ? (
             <Memory sel={route.key} home={home} q={qt} onPick={(key) => go({ kind: "memory", key })} onAsk={setAsk} args={args} />
           ) : route.kind === "snippets" ? (

@@ -1,0 +1,320 @@
+package main
+
+// Écriture des réglages : un petit ensemble de modifications permises (réglages simples, variables d'environnement,
+// plugins activés, règles de permission), appliquées sans réordonner ni reformater le fichier, avec aperçu des
+// différences et sauvegarde horodatée avant toute écriture.
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+	"time"
+)
+
+type CfgEdit struct {
+	File  string   `json:"file"`
+	Op    string   `json:"op"` // set, delete, add, remove
+	Path  []string `json:"path"`
+	Value any      `json:"value"`
+	Dry   bool     `json:"dry"`
+}
+
+// Réglages simples modifiables : clé -> type de valeur.
+var simpleKeys = map[string]string{
+	"model": "string", "effortLevel": "string", "theme": "string", "language": "string", "editorMode": "string",
+	"preferredNotifChannel": "string", "teammateMode": "string", "dialogExpiry": "string", "feedbackDrafts": "string",
+	"crossSessionInbound": "string", "cleanupPeriodDays": "number",
+	"autoCompactEnabled": "bool", "promptSuggestionEnabled": "bool", "awaySummaryEnabled": "bool", "idleCompaction": "bool",
+	"fileCheckpointingEnabled": "bool", "remoteControlAtStartup": "bool", "skipDangerousModePermissionPrompt": "bool",
+	"switchModelsOnFlag": "bool", "inputNeededNotifEnabled": "bool", "agentPushNotifEnabled": "bool",
+	"useAutoModeDuringPlan": "bool", "workflowKeywordTriggerEnabled": "bool", "skipWorkflowUsageWarning": "bool",
+}
+
+var (
+	envName  = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,99}$`)
+	pluginID = regexp.MustCompile(`^[\w.-]{1,100}@[\w.-]{1,100}$`)
+	wordRe   = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,40}$`)
+)
+
+// validate vérifie que la modification fait partie de celles permises, et normalise sa valeur.
+func (e *CfgEdit) validate() error {
+	p := e.Path
+	switch {
+	case len(p) == 1 && simpleKeys[p[0]] != "":
+		if e.Op == "delete" {
+			return nil
+		}
+		if e.Op != "set" {
+			return errors.New("opération refusée")
+		}
+		switch simpleKeys[p[0]] {
+		case "bool":
+			if _, ok := e.Value.(bool); !ok {
+				return errors.New(p[0] + " : un booléen est attendu")
+			}
+		case "number":
+			f, ok := e.Value.(float64)
+			if !ok || f < 0 || f > 1e9 || f != float64(int64(f)) {
+				return errors.New(p[0] + " : un entier positif est attendu")
+			}
+			e.Value = json.Number(fmt.Sprint(int64(f)))
+		default:
+			s, ok := e.Value.(string)
+			if !ok || s == "" || len(s) > 100 || strings.ContainsAny(s, "\n\r") {
+				return errors.New(p[0] + " : un texte court est attendu")
+			}
+		}
+	case len(p) == 2 && p[0] == "env" && envName.MatchString(p[1]):
+		if e.Op == "delete" {
+			return nil
+		}
+		s, ok := e.Value.(string)
+		if e.Op != "set" || !ok || len(s) > 2000 || strings.ContainsAny(s, "\n\r") {
+			return errors.New("variable d'environnement : un texte sur une ligne est attendu")
+		}
+	case len(p) == 2 && p[0] == "enabledPlugins" && pluginID.MatchString(p[1]):
+		if e.Op == "delete" {
+			return nil
+		}
+		if _, ok := e.Value.(bool); !ok || e.Op != "set" {
+			return errors.New("plugin : un booléen est attendu")
+		}
+	case len(p) == 2 && p[0] == "permissions" && (p[1] == "allow" || p[1] == "deny" || p[1] == "ask"):
+		s, ok := e.Value.(string)
+		if (e.Op != "add" && e.Op != "remove") || !ok || strings.TrimSpace(s) == "" || len(s) > 300 || strings.ContainsAny(s, "\n\r") {
+			return errors.New("règle de permission : un texte sur une ligne est attendu")
+		}
+		e.Value = strings.TrimSpace(s)
+	case len(p) == 2 && p[0] == "permissions" && p[1] == "defaultMode":
+		if e.Op == "delete" {
+			return nil
+		}
+		if s, ok := e.Value.(string); e.Op != "set" || !ok || !wordRe.MatchString(s) {
+			return errors.New("mode par défaut : un mot est attendu")
+		}
+	default:
+		return errors.New("cette modification n'est pas permise ici : " + strings.Join(p, "."))
+	}
+	return nil
+}
+
+// parent descend jusqu'à l'objet qui contient la dernière clé (en le créant au besoin).
+func (o *omap) parent(path []string, create bool) *omap {
+	cur := o
+	for _, k := range path[:len(path)-1] {
+		next, ok := cur.get(k)
+		n := asMap(next)
+		if !ok || n == nil {
+			if !create {
+				return nil
+			}
+			n = newOmap()
+			cur.set(k, n)
+		}
+		cur = n
+	}
+	return cur
+}
+
+func (e *CfgEdit) apply(doc *omap) error {
+	last := e.Path[len(e.Path)-1]
+	par := doc.parent(e.Path, e.Op != "delete" && e.Op != "remove")
+	switch e.Op {
+	case "set":
+		par.set(last, e.Value)
+	case "delete":
+		if par == nil {
+			return nil
+		}
+		par.del(last)
+		if len(e.Path) == 2 { // un conteneur devenu vide disparaît
+			if c := asMap(doc.m[e.Path[0]]); c != nil && len(c.keys) == 0 {
+				doc.del(e.Path[0])
+			}
+		}
+	case "add", "remove":
+		var list []any
+		if par != nil {
+			list, _ = par.m[last].([]any)
+		}
+		idx := -1
+		for i, x := range list {
+			if s, _ := x.(string); s == e.Value {
+				idx = i
+			}
+		}
+		if e.Op == "add" {
+			if idx >= 0 {
+				return errors.New("cette règle existe déjà")
+			}
+			par.set(last, append(list, e.Value))
+		} else {
+			if idx < 0 {
+				return errors.New("cette règle n'existe pas")
+			}
+			list = append(list[:idx], list[idx+1:]...)
+			if len(list) == 0 {
+				par.del(last)
+				if c := asMap(doc.m[e.Path[0]]); c != nil && len(c.keys) == 0 {
+					doc.del(e.Path[0])
+				}
+			} else {
+				par.set(last, list)
+			}
+		}
+	}
+	return nil
+}
+
+func backupsDir() string { return filepath.Join(cfgDir(), "gld-web-config-backups") }
+
+func backupName(id string) string {
+	return time.Now().Format("20060102-150405.000000") + "__" + strings.ReplaceAll(id, "/", "~") + ".json"
+}
+
+var backupRe = regexp.MustCompile(`^(\d{8}-\d{6}\.\d{6})__([\w~.-]+)\.json$`)
+
+func saveBackup(id string, content []byte) error {
+	if err := os.MkdirAll(backupsDir(), 0o700); err != nil {
+		return err
+	}
+	for {
+		f, err := os.OpenFile(filepath.Join(backupsDir(), backupName(id)), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if os.IsExist(err) { // même microseconde : on recommence, jamais d'écrasement d'une sauvegarde
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		_, werr := f.Write(content)
+		if cerr := f.Close(); werr != nil || cerr != nil {
+			return errors.Join(werr, cerr)
+		}
+		break
+	}
+	ents, _ := os.ReadDir(backupsDir()) // les 100 dernières seulement
+	if len(ents) > 100 {
+		sort.Slice(ents, func(i, j int) bool { return ents[i].Name() < ents[j].Name() })
+		for _, e := range ents[:len(ents)-100] {
+			os.Remove(filepath.Join(backupsDir(), e.Name()))
+		}
+	}
+	return nil
+}
+
+// writeConfig remplace le fichier de façon atomique, droits conservés (0600 par défaut).
+func writeConfig(path string, content []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	mode := os.FileMode(0o600)
+	if st, err := os.Stat(path); err == nil {
+		mode = st.Mode().Perm()
+	}
+	tmp := path + ".gld-web.tmp"
+	if err := os.WriteFile(tmp, content, mode); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
+// configEdit applique une modification : renvoie le texte avant et après ; n'écrit que si e.Dry est faux.
+func configEdit(e CfgEdit) (before, after string, err error) {
+	if err = e.validate(); err != nil {
+		return
+	}
+	path, err := configPath(e.File)
+	if err != nil {
+		return
+	}
+	orig, rerr := os.ReadFile(path)
+	exists := rerr == nil
+	text := string(orig)
+	if !exists || strings.TrimSpace(text) == "" {
+		text = "{}\n"
+	}
+	v, err := parseOrdered([]byte(text))
+	if err != nil {
+		return "", "", errors.New("fichier illisible : " + err.Error())
+	}
+	doc := asMap(v)
+	if doc == nil {
+		return "", "", errors.New("le fichier doit contenir un objet JSON")
+	}
+	if formatOrdered(doc) != strings.TrimRight(text, "\n") {
+		return "", "", errors.New("mise en forme particulière du fichier : modification refusée pour ne pas le reformater, éditez-le à la main")
+	}
+	before = text
+	if err = e.apply(doc); err != nil {
+		return "", "", err
+	}
+	after = formatOrdered(doc) + "\n"
+	if e.Dry || after == before {
+		return before, after, nil
+	}
+	if exists {
+		if err = saveBackup(e.File, orig); err != nil {
+			return "", "", errors.New("sauvegarde impossible : " + err.Error())
+		}
+	}
+	return before, after, writeConfig(path, []byte(after))
+}
+
+type BackupInfo struct {
+	Name string `json:"name"`
+	At   string `json:"at"`
+	File string `json:"file"` // identifiant du fichier de réglages
+	KB   int64  `json:"kb"`
+}
+
+func listBackups() []BackupInfo {
+	out := []BackupInfo{}
+	ents, _ := os.ReadDir(backupsDir())
+	for _, e := range ents {
+		if m := backupRe.FindStringSubmatch(e.Name()); m != nil {
+			st, _ := e.Info()
+			var kb int64
+			if st != nil {
+				kb = st.Size() / 1024
+			}
+			out = append(out, BackupInfo{e.Name(), m[1], strings.ReplaceAll(m[2], "~", "/"), kb})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name > out[j].Name })
+	return out
+}
+
+// restoreBackup remet une sauvegarde en place (l'état actuel est sauvegardé à son tour).
+func restoreBackup(name string) error {
+	m := backupRe.FindStringSubmatch(name)
+	if m == nil {
+		return errors.New("sauvegarde invalide")
+	}
+	id := strings.ReplaceAll(m[2], "~", "/")
+	path, err := configPath(id)
+	if err != nil {
+		return err
+	}
+	b, err := os.ReadFile(filepath.Join(backupsDir(), name))
+	if err != nil {
+		return err
+	}
+	if _, err := parseOrdered(b); err != nil {
+		return errors.New("la sauvegarde n'est pas un JSON valide")
+	}
+	if cur, err := os.ReadFile(path); err == nil {
+		if err := saveBackup(id, cur); err != nil {
+			return err
+		}
+	}
+	return writeConfig(path, b)
+}
