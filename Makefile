@@ -1,10 +1,17 @@
-# make css     : régénère gld-web/style.css (Tailwind 3.4.17 épinglé, embarqué dans le binaire)
 # make install : compile gld-web et relie tout dans ~/.local/bin (remplace les copies existantes)
+# make ui      : recompile l'interface React/shadcn (node requis) vers gld-web/ui/dist, qui est versionné
+# make windows : gld-web.exe pour Windows 64 bits (sans node, sans bash)
 BIN ?= $(HOME)/.local/bin
-
-css:
-	cd gld-web && npx --yes tailwindcss@3.4.17 -c tailwind.config.js -i input.css -o style.css --minify
 
 install:
 	cd gld-web && go build -ldflags '-s -w' -o gld-web .
 	ln -sf $(CURDIR)/bin/* $(CURDIR)/gld-web/gld-web $(BIN)/
+
+ui:
+	cd gld-web/ui && npm ci && npm run build
+
+windows:
+	cd gld-web && GOOS=windows GOARCH=amd64 go build -ldflags '-s -w' -o gld-web.exe .
+
+test:
+	cd gld-web && go test -count=1 .

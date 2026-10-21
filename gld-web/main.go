@@ -7,11 +7,12 @@ import (
 	"bytes"
 	"context"
 	"embed"
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"mime"
 	"net/http"
 	"os"
 	"os/exec"
@@ -25,16 +26,10 @@ import (
 	"time"
 )
 
-//go:embed page.html
-var page []byte
-
-//go:embed style.css
-var style []byte
-
-// Bibliothèques servies depuis le binaire (la CSP interdit tout CDN). Licences dans vendor/.
+// Interface React/shadcn compilée (ui/dist, versionnée : `go build` n'a pas besoin de node).
 //
-//go:embed vendor/marked.js vendor/purify.js
-var vendor embed.FS
+//go:embed all:ui/dist
+var uiFS embed.FS
 
 var (
 	root  string
@@ -561,24 +556,17 @@ func main() {
 	hosts["127.0.0.1:"+port], hosts["localhost:"+port] = true, true
 
 	mux := http.NewServeMux()
+	// Sous Windows le registre peut associer .js à text/plain, ce qui casse les modules : on fixe les types.
+	for ext, typ := range map[string]string{".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".woff2": "font/woff2", ".svg": "image/svg+xml"} {
+		mime.AddExtensionType(ext, typ)
+	}
+	dist, _ := fs.Sub(uiFS, "ui/dist")
+	files := http.FileServerFS(dist)
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self'; frame-ancestors 'none'")
-		w.Write(page)
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'")
+		files.ServeHTTP(w, r)
 	})
-	mux.HandleFunc("GET /vendor/{f}", func(w http.ResponseWriter, r *http.Request) {
-		b, err := vendor.ReadFile("vendor/" + r.PathValue("f")) // embed.FS : jamais hors de vendor/
-		if err != nil || !strings.HasSuffix(r.PathValue("f"), ".js") {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
-		w.Write(b)
-	})
-	mux.HandleFunc("GET /style.css", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/css; charset=utf-8")
-		w.Write(style)
-	})
+	mux.Handle("GET /assets/", files)
 	mux.HandleFunc("GET /api", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"home": home, "groups": sessions()})
 	})
