@@ -17,7 +17,7 @@ func routesStatic(mux *http.ServeMux) {
 	// La page de l'interface, servie aussi pour ses chemins (routage côté navigateur).
 	index, _ := fs.ReadFile(dist, "index.html")
 	page := func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-ancestors 'none'")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(index)
 	}

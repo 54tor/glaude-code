@@ -207,7 +207,7 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
               </div>
             )}
             {msgs?.map((m, i) => (
-              <Message key={m.o === undefined ? i : `${m.o}.${m.n ?? 0}`} m={m} />
+              <Message key={m.o === undefined ? i : `${m.o}.${m.n ?? 0}`} m={m} conv={{ dir, id }} />
             ))}
             {msgs?.length === 0 && !turn && <p className="text-center text-muted-foreground">Aucun message dans cette session.</p>}
             {turn?.msgs

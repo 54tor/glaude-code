@@ -55,8 +55,19 @@ function UserText({ t }: { t: string }) {
   return <>{parts}</>
 }
 
-export function Message({ m }: { m: Msg }) {
+export function Message({ m, conv }: { m: Msg; conv?: { dir: string; id: string } }) {
   const title = m.ts ? new Date(m.ts).toLocaleString("fr-FR") : undefined
+  // Image de la conversation : relue à la demande dans le transcript (GET /conv-image), jamais embarquée dans la liste des messages.
+  if (m.img && conv) {
+    const src = `/conv-image?dir=${encodeURIComponent(conv.dir)}&id=${encodeURIComponent(conv.id)}&o=${m.o ?? 0}&k=${m.k ?? 0}`
+    return (
+      <div title={title} className={`msg flex ${m.r === "user" ? "justify-end" : ""}`}>
+        <a href={src} target="_blank" rel="noopener noreferrer" title="Ouvrir l'image en grand">
+          <img src={src} loading="lazy" alt="Image de la conversation" className="max-h-80 max-w-full rounded-xl border bg-muted/30 object-contain" />
+        </a>
+      </div>
+    )
+  }
   if (m.r === "user" && isTagged(m.t))
     return (
       <div title={title} className="msg ml-auto max-w-[85%]">

@@ -112,7 +112,7 @@ export type Account = {
   statsAt?: string
   models: { model: string; in: number; out: number; cacheRead: number; cacheWrite: number }[]
 }
-export type Msg = { r: "user" | "assistant" | "tool"; t: string; ts?: string; o?: number; n?: number }
+export type Msg = { r: "user" | "assistant" | "tool"; t: string; ts?: string; o?: number; n?: number; img?: string; k?: number }
 export type Ls = { path: string; parent: string; dirs: string[]; sep: string; error?: string }
 export type Result = { ok: boolean; out: string }
 

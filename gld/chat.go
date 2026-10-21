@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -53,6 +54,10 @@ func chatArgs(flags []string, id, mode, prompt string) []string {
 	a := append(slices.Clone(flags), "-p", "--resume", id, "--output-format", "stream-json", "--verbose")
 	if mode != "" {
 		a = append(a, "--permission-mode", mode)
+	}
+	// Une image déposée par l'interface se lit avec @chemin : son dossier est ajouté (avant « -- », car l'option prend des listes).
+	if strings.Contains(prompt, imagesDir()+string(filepath.Separator)) {
+		a = append(a, "--add-dir", imagesDir())
 	}
 	return append(a, "--", prompt)
 }
