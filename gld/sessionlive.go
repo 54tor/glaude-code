@@ -35,6 +35,36 @@ type LiveState struct {
 	Out      int       `json:"out"`      // tokens produits au dernier tour
 	Model    string    `json:"model"`
 	Subs     []SubLive `json:"subs"`
+	Verbs    []string  `json:"verbs"` // verbes affichés à tour de rôle pendant la réflexion
+}
+
+var thinkingVerbs = []string{"réfléchit", "cogite", "médite", "mijote", "rumine", "planche", "phosphore", "gamberge", "se concentre", "décortique", "jongle avec les idées", "pèse le pour et le contre", "fait chauffer les neurones", "creuse la question", "tisse sa réponse", "cherche le bon angle", "démêle l'écheveau", "met de l'ordre dans ses idées", "ourdit un plan", "contemple le problème"}
+
+// spinnerVerbs : la liste par défaut, ou celle du réglage « spinnerVerbs » de Claude Code (mode « replace » : seulement la vôtre ;
+// « append » : à la suite de la liste par défaut).
+func spinnerVerbs() []string {
+	var d struct {
+		SpinnerVerbs struct {
+			Mode  string   `json:"mode"`
+			Verbs []string `json:"verbs"`
+		} `json:"spinnerVerbs"`
+	}
+	if b, err := os.ReadFile(filepath.Join(cfgDir(), "settings.json")); err != nil || json.Unmarshal(b, &d) != nil || len(d.SpinnerVerbs.Verbs) == 0 {
+		return thinkingVerbs
+	}
+	var mine []string
+	for _, v := range d.SpinnerVerbs.Verbs {
+		if v = strings.TrimSpace(v); v != "" && len(v) <= 60 {
+			mine = append(mine, v)
+		}
+	}
+	if len(mine) == 0 {
+		return thinkingVerbs
+	}
+	if d.SpinnerVerbs.Mode == "replace" {
+		return mine
+	}
+	return append(append([]string{}, thinkingVerbs...), mine...)
 }
 
 // sessionStatus : le statut d'une session ouverte d'après ~/.claude/sessions/*.json (processus encore vivant).
@@ -173,7 +203,7 @@ func readActivity(path string) (activity string, thinking bool, since float64, u
 }
 
 func sessionLive(dir, id string) LiveState {
-	st := LiveState{Subs: []SubLive{}}
+	st := LiveState{Subs: []SubLive{}, Verbs: spinnerVerbs()}
 	st.Status, st.Open = sessionStatus(id)
 	p, ok := transcript(dir, id)
 	if !ok {

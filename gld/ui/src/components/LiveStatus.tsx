@@ -37,9 +37,18 @@ export function useLive(dir: string, id: string, open: boolean): Live {
   return { st, now, open }
 }
 
+// Les états génériques (réflexion, travail) changent de verbe toutes les 6 s, l'un après l'autre, décalés d'une session à l'autre ;
+// un outil en cours ou une attente se lisent tels quels.
+const GENERIC = new Set(["", "réfléchit", "travaille", "réfléchit au résultat", "lit votre message et réfléchit"])
+function label(st: LiveState, id: string, now: number) {
+  if (!st.thinking || !GENERIC.has(st.activity) || !st.verbs?.length) return st.activity || (st.thinking ? "travaille" : "ouverte")
+  const seed = [...id].reduce((n, c) => n + c.charCodeAt(0), 0)
+  return st.verbs[(Math.floor(now / 6) + seed) % st.verbs.length] + "…"
+}
+
 // Ce que Claude fait en ce moment. `open` (la liste des sessions ouvertes, mise à jour dès la fermeture) prime sur le relevé :
 // le processus met un instant à finir après SIGTERM.
-export function LiveBar({ live: { st, now, open } }: { live: Live }) {
+export function LiveBar({ live: { st, now, open }, id }: { live: Live; id: string }) {
   if (!st) return null
   if (!(open && st.open)) return null // fermée : « Session fermée » est dans la barre d'outils (LiveStats), sans bande
   const isOpen = true
@@ -49,7 +58,7 @@ export function LiveBar({ live: { st, now, open } }: { live: Live }) {
         <span className={cn("flex min-w-0 items-center gap-1.5 font-medium", st.thinking ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>
           {st.thinking ? <Loader2 className="size-3.5 shrink-0 animate-spin" /> : <span className="size-1.5 shrink-0 rounded-full bg-current" />}
           <span className="truncate" title={st.activity}>
-            {st.activity || (st.thinking ? "travaille" : "ouverte")}
+            {label(st, id, now)}
           </span>
           {st.since > 0 && st.thinking && <span className="shrink-0 font-normal text-muted-foreground">depuis {secs(now - st.since)}</span>}
         </span>

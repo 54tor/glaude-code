@@ -229,7 +229,7 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
             {turn?.error && <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive">{turn.error}</p>}
           </div>
         </ScrollArea>
-        {session && <LiveBar live={live} />}
+        {session && <LiveBar live={live} id={id} />}
         {session && (
           <Composer
             dir={dir}
