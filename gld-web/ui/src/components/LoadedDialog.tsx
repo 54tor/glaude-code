@@ -32,7 +32,7 @@ export function LoadedDialog({ id, home, open, onClose }: { id: string; home: st
   }, [open, id])
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Instructions chargées</DialogTitle>
           <DialogDescription>Fichiers que Claude a lus dans cette session : CLAUDE.md, règles, imports.</DialogDescription>

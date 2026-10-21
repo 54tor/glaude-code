@@ -2,6 +2,7 @@ import { useState } from "react"
 import { Plus, RotateCcw, Trash2, X } from "lucide-react"
 import type { BackupInfo, CfgEdit, CfgOverview, PermSuggest } from "@/lib/api"
 import { api } from "@/lib/api"
+import { describeKey } from "@/lib/configKeys"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -140,7 +141,10 @@ function Row({ f, value, file, propose }: { f: Field; value: unknown; file: stri
   const set = (v: unknown) => propose({ file, op: "set", path: [f.key], value: v })
   return (
     <li className="flex flex-wrap items-center gap-2 py-1 text-sm">
-      <span className="min-w-56 flex-1">{f.label}</span>
+      <span className="min-w-56 flex-1">
+        {f.label}
+        {describeKey(f.key) && <span className="block text-[11px] leading-snug text-muted-foreground">{describeKey(f.key)}</span>}
+      </span>
       {f.kind === "bool" ? (
         <Checkbox checked={value === true} onCheckedChange={(c) => set(c === true)} aria-label={f.label} />
       ) : (
