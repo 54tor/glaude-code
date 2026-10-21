@@ -237,6 +237,7 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
             args={args}
             defaultChoice={choice}
             live={a.live.has(id)}
+            liveState={live}
             onSent={() => setSentAt({ id, at: Date.now() })}
             turn={turn}
             setTurn={(f) => setChat((c) => f(c?.id === id ? c : null))}
