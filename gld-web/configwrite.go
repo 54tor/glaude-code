@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -258,7 +259,12 @@ func writeConfig(path string, content []byte) error {
 }
 
 // configEdit applique une modification : renvoie le texte avant et après ; n'écrit que si e.Dry est faux.
+// cfgMu sérialise les lecture-modification-écriture des réglages : deux requêtes simultanées perdraient une modification.
+var cfgMu sync.Mutex
+
 func configEdit(e CfgEdit) (before, after string, err error) {
+	cfgMu.Lock()
+	defer cfgMu.Unlock()
 	if err = e.validate(); err != nil {
 		return
 	}
@@ -328,6 +334,8 @@ func listBackups() []BackupInfo {
 
 // restoreBackup remet une sauvegarde en place (l'état actuel est sauvegardé à son tour).
 func restoreBackup(name string) error {
+	cfgMu.Lock()
+	defer cfgMu.Unlock()
 	m := backupRe.FindStringSubmatch(name)
 	if m == nil {
 		return errors.New("sauvegarde invalide")

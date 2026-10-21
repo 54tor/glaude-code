@@ -22,7 +22,7 @@ var journalMu sync.Mutex
 func journal(format string, a ...any) {
 	journalMu.Lock()
 	defer journalMu.Unlock()
-	f, err := os.OpenFile(filepath.Join(cfgDir(), "gld-web.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(filepath.Join(cfgDir(), "gld-web.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return
 	}

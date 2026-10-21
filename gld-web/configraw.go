@@ -137,6 +137,8 @@ func commitDoc(id, path string, orig []byte, exists bool, origDoc, nv any, dry b
 // configRawEdit valide et enregistre un fichier de réglages saisi en JSON brut. Renvoie les textes avant et après (secrets
 // masqués, pour l'aperçu) et les avertissements de santé du nouveau contenu ; n'écrit rien si dry.
 func configRawEdit(id, text string, dry bool) (before, after string, warns []CfgIssue, err error) {
+	cfgMu.Lock()
+	defer cfgMu.Unlock()
 	path, orig, exists, origDoc, err := loadDoc(id)
 	if err != nil {
 		return
