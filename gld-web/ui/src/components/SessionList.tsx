@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Flame, MoreHorizontal, SquareTerminal, Star, Tag } from "lucide-react"
-import { ago, bucket, full, size, tilde } from "@/lib/format"
+import { ago, bucket, compact, full, size, tilde, tokTotal } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -12,24 +12,39 @@ import { CM, SessionDropdown, SessionItems } from "./SessionMenu"
 // Point vert : la session tourne en ce moment dans un terminal.
 export function Live({ className, waiting }: { className?: string; waiting?: boolean }) {
   return (
-    <span className={cn("inline-flex shrink-0 items-center gap-1 font-medium", waiting ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400", className)}>
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 font-medium",
+        waiting ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400",
+        className
+      )}
+    >
       <span className={cn("size-1.5 rounded-full bg-current", !waiting && "animate-pulse")} /> {waiting ? "attend" : "en cours"}
     </span>
   )
 }
 
 // Extrait de conversation, termes recherchés surlignés.
-function Snip({ text, q }: { text: string; q: string }) {
-  const parts = text.split(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "ig"))
+// Extrait du serveur : les correspondances sont entourées de \u0002…\u0003.
+function Snip({ text }: { text: string }) {
+  const parts = text.split("\u0003").flatMap((seg) => {
+    const [pre, hit] = seg.split("\u0002")
+    return hit === undefined
+      ? [{ t: pre, m: false }]
+      : [
+          { t: pre, m: false },
+          { t: hit, m: true },
+        ]
+  })
   return (
     <span className="mt-1 line-clamp-2 text-xs text-muted-foreground">
       {parts.map((p, i) =>
-        i % 2 ? (
+        p.m ? (
           <mark key={i} className="rounded-sm bg-amber-200/70 px-0.5 text-foreground dark:bg-amber-500/30">
-            {p}
+            {p.t}
           </mark>
         ) : (
-          p
+          p.t
         )
       )}
     </span>
@@ -43,6 +58,7 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
   const left = showCache ? a.hotLeft(s) : null
   const picked = a.picked.has(s.id)
   const hit = a.hit(s.id)
+  const tags = a.tags[s.id] ?? []
   // Une session peut appartenir à plusieurs groupes de son dossier.
   const groups = a.vgroups.filter((x) => x.project === g.project && x.ids.includes(s.id) && x.name !== a.inGroup?.name).map((x) => x.name)
   return (
@@ -83,7 +99,12 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
               )}
               {left !== null && (
                 <>
-                  <span className={cn("inline-flex shrink-0 items-center gap-1", left <= 10 ? "font-medium text-amber-600 dark:text-amber-400" : "text-orange-500")}>
+                  <span
+                    className={cn(
+                      "inline-flex shrink-0 items-center gap-1",
+                      left <= 10 ? "font-medium text-amber-600 dark:text-amber-400" : "text-orange-500"
+                    )}
+                  >
                     <Flame className="size-3.5" aria-hidden /> cache {left} min
                   </span>
                   <span aria-hidden>·</span>
@@ -94,11 +115,22 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
               </span>
               <span aria-hidden>·</span>
               <span className="shrink-0 tabular-nums">{size(s.kb)}</span>
+              {tokTotal(s.tok) > 0 && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span
+                    className="shrink-0 tabular-nums"
+                    title={`Entrée ${s.tok.in.toLocaleString("fr-FR")} · sortie ${s.tok.out.toLocaleString("fr-FR")} · cache écrit ${s.tok.cw.toLocaleString("fr-FR")} · cache lu ${s.tok.cr.toLocaleString("fr-FR")}`}
+                  >
+                    {compact(tokTotal(s.tok))} tokens
+                  </span>
+                </>
+              )}
               {hit && (
                 <>
                   <span aria-hidden>·</span>
                   <span className="shrink-0">
-                    {hit.n} occurrence{hit.n > 1 ? "s" : ""}
+                    {hit.n} message{hit.n > 1 ? "s" : ""}
                   </span>
                 </>
               )}
@@ -108,6 +140,16 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
                   <span className="truncate">{tilde(g.project, a.home)}</span>
                 </>
               )}
+              {tags.map((t) => (
+                <button
+                  key={t}
+                  className="relative z-10 shrink-0 rounded-full bg-sky-500/15 px-1.5 text-sky-700 hover:bg-sky-500/25 dark:text-sky-300"
+                  onClick={() => a.filterTag(t)}
+                  title={`Filtrer sur #${t}`}
+                >
+                  #{t}
+                </button>
+              ))}
               {groups.length > 0 && (
                 <span className="flex min-w-0 items-center gap-1 text-violet-600 dark:text-violet-400" title={`Groupes : ${groups.join(", ")}`}>
                   <span aria-hidden className="text-muted-foreground">
@@ -118,7 +160,7 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
                 </span>
               )}
             </span>
-            {hit && <Snip text={hit.snip} q={a.q.trim()} />}
+            {hit && <Snip text={hit.snip} />}
           </button>
           {/* Actions au-dessus du bouton étiré : visibles au survol, au focus clavier, ou menu ouvert. */}
           <div className="relative z-10 flex items-center gap-1 transition-opacity md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100 md:has-[[data-state=open]]:opacity-100">
@@ -156,7 +198,9 @@ function More({ onMore }: { onMore: () => void }) {
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    const io = new IntersectionObserver(([e]) => e.isIntersecting && onMore(), { rootMargin: "800px" })
+    const io = new IntersectionObserver(([e]) => e.isIntersecting && onMore(), {
+      rootMargin: "800px",
+    })
     io.observe(el)
     return () => io.disconnect()
   }, [onMore])

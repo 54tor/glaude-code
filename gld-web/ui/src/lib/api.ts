@@ -1,9 +1,10 @@
 // Accès aux routes du serveur Go (gld-web/main.go).
 
-export type Session = { id: string; dir: string; title: string; named: boolean; cwd: string; mtime: number; kb: number }
+export type Session = { id: string; dir: string; title: string; named: boolean; cwd: string; mtime: number; kb: number; tok: Tokens }
+export type Tokens = { in: number; out: number; cr: number; cw: number }
 export type Group = { project: string; missing: boolean; sessions: Session[] }
 export type VGroup = { name: string; project: string; ids: string[]; fav?: boolean }
-export type Data = { home: string; root: string; groups: Group[]; live: string[]; waiting: string[]; vgroups: VGroup[]; favs: string[] }
+export type Data = { home: string; root: string; groups: Group[]; live: string[]; waiting: string[]; vgroups: VGroup[]; favs: string[]; tags: Record<string, string[]> }
 // Snippet = commande Claude Code. key : u/<chemin> (personnelle) ou p/<dossier>/<chemin> (d'un projet).
 export type Snippet = { key: string; scope: string; project: string; path: string; command: string; description: string; kb: number; mtime: number }
 export type SnipScope = { dir: string; project: string }
