@@ -17,6 +17,23 @@ import { Markdown } from "./Message"
 import { SkillWriter } from "./SkillWriter"
 import { split } from "./memoryLib"
 
+// Origine d'un skill : badge court et explication.
+const ORIGINS = {
+  store: ["Store", "Synchronisé depuis votre compte claude.ai", "bg-violet-500/15 text-violet-700 dark:text-violet-300"],
+  plugin: ["Plugin", "Fourni par un plugin", "bg-sky-500/15 text-sky-700 dark:text-sky-300"],
+  install: ["Installé", "Installé depuis un dépôt ou un outil (npx skills…)", "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"],
+  custom: ["Custom", "Écrit à la main", "bg-muted text-muted-foreground"],
+} as const
+
+function OriginBadge({ s }: { s: Skill }) {
+  const [label, what, cls] = ORIGINS[s.origin] ?? ORIGINS.custom
+  return (
+    <span className={cn("shrink-0 rounded px-1.5 py-px text-[10px] font-medium", cls)} title={s.source ? `${what} : ${s.source}` : what}>
+      {label}
+    </span>
+  )
+}
+
 const NAME_OK = /^[a-z0-9][a-z0-9-]{0,63}$/
 
 // Skills de Claude Code : personnels (~/.claude/skills), de projet (.claude/skills) et de plugins (lecture seule).
@@ -26,6 +43,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
   const [loaded, setLoaded] = useState<{ key: string; text: string; files: SkillFile[]; error?: string } | null>(null)
   const [draft, setDraft] = useState<{ key: string; text: string } | null>(null)
   const [creating, setCreating] = useState(false)
+  const [origin, setOrigin] = useState("all") // filtre sur l'origine
   const [writer, setWriter] = useState("") // clé du skill que le modèle rédige ; vide = fermé
   const reload = useCallback(() => api.skills().then(setData), [])
   useEffect(() => {
@@ -41,15 +59,15 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
   }, [sel, data])
 
   const f = q.toLowerCase()
-  const skills = useMemo(() => (data?.skills ?? []).filter((s) => !f || (s.name + " " + s.description + " " + s.project + " " + s.plugin).toLowerCase().includes(f)), [data, f])
+  const skills = useMemo(() => (data?.skills ?? []).filter((s) => (origin === "all" || s.origin === origin) && (!f || (s.name + " " + s.description + " " + s.project + " " + s.plugin).toLowerCase().includes(f))), [data, f, origin])
   const skill = data?.skills.find((s) => s.key === sel)
   const cur = loaded?.key === sel ? loaded : null
   const editing = draft?.key === sel ? draft : null
   const groups = useMemo(() => {
     const g = new Map<string, { title: string; items: Skill[] }>()
     for (const s of skills) {
-      const k = s.scope === "user" ? "u" : s.scope === "project" ? "p:" + s.project : "x:" + s.plugin
-      const title = s.scope === "user" ? "Personnels" : s.scope === "project" ? tilde(s.project ?? "", home) : "Plugin " + s.plugin
+      const k = s.scope === "user" ? "u" : s.scope === "project" ? "p:" + s.project : s.scope === "store" ? "s" : "x:" + s.plugin
+      const title = s.scope === "user" ? "Personnels" : s.scope === "project" ? tilde(s.project ?? "", home) : s.scope === "store" ? "Store (compte claude.ai)" : "Plugin " + s.plugin
       if (!g.has(k)) g.set(k, { title, items: [] })
       g.get(k)!.items.push(s)
     }
@@ -108,6 +126,13 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
             <Button size="xs" variant="outline" onClick={() => setCreating(true)}>
               <Plus /> Nouveau skill
             </Button>
+            <Choose
+              value={origin}
+              onChange={setOrigin}
+              options={[["all", "Toutes origines"], ...Object.entries(ORIGINS).map(([k, v]) => [k, v[0]] as const)]}
+              label="Origine"
+              className="min-w-0"
+            />
             {data && (
               <span className="text-[11px] text-muted-foreground" title="Les descriptions des skills que Claude peut lancer seul sont toujours dans son contexte (1 536 caractères au plus chacune)">
                 ≈ {budget.toLocaleString("fr-FR")} car. de descriptions en contexte
@@ -132,6 +157,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
                             <span className="flex items-center gap-1.5">
                               <Zap className="size-3.5 shrink-0 text-amber-500" />
                               <span className="min-w-0 flex-1 truncate font-medium">{s.name}</span>
+                        <OriginBadge s={s} />
                               {s.manual && <Hand className="size-3.5 shrink-0 text-muted-foreground" aria-label="lancé à la main seulement" />}
                               {s.hidden && <EyeOff className="size-3.5 shrink-0 text-muted-foreground" aria-label="invisible dans le menu /" />}
                               {s.warn && <AlertTriangle className="size-3.5 shrink-0 text-amber-500" aria-label="à vérifier" />}
@@ -203,7 +229,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
           <>
             <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 border-b px-6 py-2">
               <code className="min-w-40 flex-1 truncate text-xs text-muted-foreground" title={skill.path}>
-                /{skill.dir} · {skill.scope === "plugin" ? `plugin ${skill.plugin} · lecture seule` : skill.scope === "project" ? tilde(skill.project ?? "", home) : "personnel"} · {skill.files} fichier{skill.files > 1 ? "s" : ""} · {ago(skill.mtime)}
+                /{skill.dir} · {skill.scope === "plugin" ? `plugin ${skill.plugin} · lecture seule` : skill.scope === "store" ? "store · lecture seule" : skill.scope === "project" ? tilde(skill.project ?? "", home) : "personnel"} · {skill.files} fichier{skill.files > 1 ? "s" : ""} · {ago(skill.mtime)}
               </code>
               {editing ? (
                 <>
@@ -249,6 +275,10 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
                 </>
               )}
             </div>
+            <p className="flex items-center gap-2 border-b px-6 py-1.5 text-xs text-muted-foreground">
+              <OriginBadge s={skill} /> {skill.source || ORIGINS[skill.origin]?.[1]}
+              {skill.readOnly && " · lecture seule : « Copier vers… » en fait une version modifiable"}
+            </p>
             {skill.warn && !editing && (
               <p className="flex items-start gap-2 border-b bg-amber-500/10 px-6 py-2 text-xs">
                 <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-500" /> {skill.warn}

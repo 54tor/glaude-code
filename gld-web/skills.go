@@ -1,7 +1,9 @@
 package main
 
 // Skills de Claude Code : un dossier par skill, avec un SKILL.md (front matter YAML puis instructions) et, au besoin, des
-// fichiers d'appui. Trois origines : personnels (~/.claude/skills), de projet (.claude/skills) et de plugins (lecture seule).
+// fichiers d'appui. Quatre emplacements : personnels (~/.claude/skills), de projet (.claude/skills), de plugins et du store
+// (skills/synced, synchronisés depuis le compte claude.ai) ; les deux derniers sont en lecture seule. Chaque skill a aussi une
+// origine : store, plugin, installé (dépôt, npx skills…) ou custom (écrit à la main).
 // Seul SKILL.md se modifie ici ; les autres fichiers du dossier sont listés.
 
 import (
@@ -19,10 +21,12 @@ import (
 )
 
 type Skill struct {
-	Key         string  `json:"key"` // u/<nom>, p/<dossier>/<nom>, x/<plugin>/<nom>
+	Key         string  `json:"key"` // u/<nom>, p/<dossier>/<nom>, x/<plugin>/<nom>, s/<lot>/<nom>
 	Name        string  `json:"name"`
-	Dir         string  `json:"dir"`   // nom du dossier
-	Scope       string  `json:"scope"` // user, project, plugin
+	Dir         string  `json:"dir"`              // nom du dossier
+	Scope       string  `json:"scope"`            // user, project, plugin, store
+	Origin      string  `json:"origin"`           // store, plugin, install, custom
+	Source      string  `json:"source,omitempty"` // d'où il vient : plugin, dépôt, page d'accueil indiquée dans le front matter
 	Project     string  `json:"project,omitempty"`
 	Plugin      string  `json:"plugin,omitempty"`
 	ReadOnly    bool    `json:"readOnly,omitempty"`
@@ -53,6 +57,7 @@ var (
 	skillName  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`) // un dossier existant
 	skillNew   = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)         // un nouveau skill : minuscules, chiffres, tirets
 	pluginIDRe = regexp.MustCompile(`^[\w.-]{1,100}@[\w.-]{1,100}$`)
+	bucketRe   = regexp.MustCompile(`^[\w-]{1,100}$`) // un lot de skills synchronisés
 )
 
 const skillLateYAML = "le front matter doit commencer à la toute première ligne, sinon tout le fichier est pris pour du contenu"
@@ -70,6 +75,8 @@ func skillBase(key string) (base, name string, readonly bool, err error) {
 			return "", "", false, errors.New("dossier du projet introuvable")
 		}
 		return filepath.Join(cwd, ".claude", "skills"), parts[2], false, nilIf(skillName.MatchString(parts[2]), bad)
+	case len(parts) == 3 && parts[0] == "s" && bucketRe.MatchString(parts[1]):
+		return filepath.Join(cfgDir(), "skills", "synced", parts[1]), parts[2], true, nilIf(skillName.MatchString(parts[2]), bad)
 	case len(parts) == 3 && parts[0] == "x" && pluginIDRe.MatchString(parts[1]):
 		for _, p := range pluginSkillRoots() {
 			if p.id == parts[1] {
@@ -183,6 +190,48 @@ func describeSkill(s *Skill, text string) {
 	}
 }
 
+// lockSources : les skills installés par `npx skills` (skills-lock.json d'un projet, ~/.agents/.skill-lock.json en personnel),
+// avec leur dépôt d'origine.
+func lockSources(path string) map[string]string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var d struct {
+		Skills map[string]struct {
+			Source     string `json:"source"`
+			SourceType string `json:"sourceType"`
+		} `json:"skills"`
+	}
+	if json.Unmarshal(b, &d) != nil {
+		return nil
+	}
+	out := map[string]string{}
+	for n, s := range d.Skills {
+		src := strings.TrimSpace(s.Source)
+		if s.SourceType != "" && src != "" {
+			src = s.SourceType + " : " + src
+		}
+		out[n] = cut(src, 200)
+	}
+	return out
+}
+
+// installedFrom : la source d'un skill installé, d'après le fichier de verrouillage, sinon d'après le front matter (homepage,
+// repository ou source, ou un bloc metadata d'un outil d'installation). Vide pour un skill écrit à la main.
+func installedFrom(name string, locks map[string]string, text string) string {
+	if src, ok := locks[name]; ok {
+		return src
+	}
+	m, _ := parseMeta(text)
+	for _, k := range []string{"homepage", "repository", "source"} {
+		if v := textField(m, k); v != "" {
+			return cut(v, 200)
+		}
+	}
+	return ""
+}
+
 func countSkillFiles(dir string) (n int, kb int64) {
 	filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err == nil && d.Type().IsRegular() {
@@ -196,7 +245,7 @@ func countSkillFiles(dir string) (n int, kb int64) {
 	return
 }
 
-func scanSkills(base, scope, project, plugin string, readonly bool, keyOf func(name string) string) []Skill {
+func scanSkills(base, scope, project, plugin string, readonly bool, locks map[string]string, keyOf func(name string) string) []Skill {
 	var out []Skill
 	ents, err := os.ReadDir(base)
 	if err != nil {
@@ -212,9 +261,23 @@ func scanSkills(base, scope, project, plugin string, readonly bool, keyOf func(n
 			continue
 		}
 		s := Skill{Key: keyOf(e.Name()), Dir: e.Name(), Scope: scope, Project: project, Plugin: plugin, ReadOnly: readonly, Mtime: float64(st.ModTime().UnixNano()) / 1e9, Path: p}
+		var text string
 		if st.Size() <= skillMaxBytes {
 			if b, err := os.ReadFile(p); err == nil {
-				describeSkill(&s, string(b))
+				text = string(b)
+				describeSkill(&s, text)
+			}
+		}
+		switch scope {
+		case "store":
+			s.Origin, s.Source = "store", "synchronisé depuis votre compte claude.ai"
+		case "plugin":
+			s.Origin, s.Source = "plugin", plugin
+		default:
+			if src := installedFrom(e.Name(), locks, text); src != "" {
+				s.Origin, s.Source = "install", src
+			} else {
+				s.Origin = "custom"
 			}
 		}
 		if s.Name == "" {
@@ -228,14 +291,23 @@ func scanSkills(base, scope, project, plugin string, readonly bool, keyOf func(n
 
 // listSkills : tous les skills connus, personnels d'abord, puis de projet, puis de plugins.
 func listSkills() []Skill {
-	out := scanSkills(filepath.Join(cfgDir(), "skills"), "user", "", "", false, func(n string) string { return "u/" + n })
+	home, _ := os.UserHomeDir()
+	out := scanSkills(filepath.Join(cfgDir(), "skills"), "user", "", "", false, lockSources(filepath.Join(home, ".agents", ".skill-lock.json")), func(n string) string { return "u/" + n })
 	for _, p := range liveProjects() {
 		dir := p.Dir
-		out = append(out, scanSkills(filepath.Join(p.Project, ".claude", "skills"), "project", p.Project, "", false, func(n string) string { return "p/" + dir + "/" + n })...)
+		out = append(out, scanSkills(filepath.Join(p.Project, ".claude", "skills"), "project", p.Project, "", false, lockSources(filepath.Join(p.Project, "skills-lock.json")), func(n string) string { return "p/" + dir + "/" + n })...)
 	}
 	for _, pr := range pluginSkillRoots() {
 		id := pr.id
-		out = append(out, scanSkills(pr.base, "plugin", "", id, true, func(n string) string { return "x/" + id + "/" + n })...)
+		out = append(out, scanSkills(pr.base, "plugin", "", id, true, nil, func(n string) string { return "x/" + id + "/" + n })...)
+	}
+	if buckets, err := os.ReadDir(filepath.Join(cfgDir(), "skills", "synced")); err == nil {
+		for _, b := range buckets {
+			if b.IsDir() && bucketRe.MatchString(b.Name()) {
+				id := b.Name()
+				out = append(out, scanSkills(filepath.Join(cfgDir(), "skills", "synced", id), "store", "", "", true, nil, func(n string) string { return "s/" + id + "/" + n })...)
+			}
+		}
 	}
 	if out == nil {
 		out = []Skill{}
