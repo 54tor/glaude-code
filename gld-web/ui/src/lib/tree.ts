@@ -37,3 +37,18 @@ export function buildTree(entries: Entry[], home: string): Node[] {
   root.kids.forEach(squash)
   return sorted(root)
 }
+
+export function find(nodes: Node[], key: string): Node | null {
+  for (const n of nodes) {
+    if (n.key === key) return n
+    const k = find([...n.kids.values()], key)
+    if (k) return k
+  }
+  return null
+}
+
+// Toutes les sessions d'un dossier et de ses sous-dossiers, avec leur projet.
+export function under(n: Node): { s: Session; g: Group }[] {
+  const own = n.g ? n.ss.map((s) => ({ s, g: n.g! })) : []
+  return [...own, ...[...n.kids.values()].flatMap(under)]
+}

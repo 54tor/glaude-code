@@ -1,13 +1,12 @@
 import { createContext, useContext } from "react"
 import type { Group, Item, Session } from "@/lib/api"
 
-// Actions et état d'affichage partagés par tout l'arbre (évite de les faire descendre à la main).
+// Actions partagées par la liste et le lecteur (évite de les faire descendre à la main).
 export type Actions = {
-  filtering: boolean
-  opened: Set<string>
-  toggle: (key: string) => void
+  home: string
   read: (s: Session) => void
   open: (body: { dir: string; id?: string }) => void
+  copy: (s: Session) => void
   move: (s: Session) => void
   moveGroup: (g: Group, items: Item[]) => void
   // after : appelé quand la suppression est confirmée (ex. fermer le lecteur de la session supprimée)
