@@ -35,6 +35,12 @@ func dispatchCLI(argv []string) (code int, ok bool) {
 		if name == "_run" && len(args) == 1 {
 			return runTab(args[0]), true
 		}
+		if name == "_loaded" { // hook InstructionsLoaded de Claude Code (loaded.go)
+			return runLoaded(os.Stdin), true
+		}
+		if strings.HasPrefix(name, "_") && cliCommands[name] == nil { // sous-commande interne inconnue : jamais de serveur lancé par un hook
+			return 2, true
+		}
 	}
 	fn := cliCommands[name]
 	if fn == nil {

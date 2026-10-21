@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { api, type Issue, type Trashed } from "@/lib/api"
+import { api, type FileLoads, type Issue, type Trashed } from "@/lib/api"
 import type { List } from "./memoryLib"
 
 // Liste de la mémoire, corbeille et santé. La mémoire change hors de l'interface (une session qui écrit, un éditeur) :
@@ -9,8 +9,9 @@ export function useMemoryData(onTick: () => void) {
   const [list, setList] = useState<List | null>(null)
   const [trash, setTrash] = useState<Trashed[]>([])
   const [issues, setIssues] = useState<Issue[]>([])
+  const [loads, setLoads] = useState<{ hook: boolean; files: Record<string, FileLoads> }>({ hook: false, files: {} }) // chargements réels (hook InstructionsLoaded)
   const refresh = useCallback(
-    () => Promise.all([api.memory().then(setList), api.trash().then((r) => setTrash(r.items)), api.memoryHealth().then((r) => setIssues(r.issues))]),
+    () => Promise.all([api.memory().then(setList), api.trash().then((r) => setTrash(r.items)), api.memoryHealth().then((r) => setIssues(r.issues)), api.memoryLoaded().then(setLoads)]),
     []
   )
   const tick = useRef(onTick)
@@ -31,5 +32,5 @@ export function useMemoryData(onTick: () => void) {
       document.removeEventListener("visibilitychange", run)
     }
   }, [refresh])
-  return { list, trash, issues, refresh }
+  return { list, trash, issues, loads, refresh }
 }

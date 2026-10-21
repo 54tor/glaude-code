@@ -22,6 +22,8 @@ export type MemFile = {
   off?: boolean // règle désactivée (.md.off)
   warn?: string // front matter invalide
 }
+export type LoadEvent = { at: number; session: string; file: string; type?: string; reason?: string; globs?: string[]; trigger?: string }
+export type FileLoads = { sessions: number; last: number }
 export type Finding = { kind: string; keys: string[]; why: string }
 export type Issue = { key: string; kind: string; msg: string; dir?: string }
 export type MemProject = { dir: string; project: string; missing: boolean; files: MemFile[] }
@@ -56,6 +58,8 @@ export const api = {
   snippet: (key: string) => get<{ text?: string; error?: string; missing?: boolean }>(`/snippet?key=${enc(key)}`),
   memory: () => get<{ global: MemFile[]; projects: MemProject[]; targets: MemTarget[] }>("/memory-list"),
   memoryFile: (key: string) => get<{ text?: string; error?: string }>(`/memory-file?key=${enc(key)}`),
+  memoryLoaded: () => get<{ hook: boolean; files: Record<string, FileLoads> }>("/memory-loaded"),
+  sessionLoaded: (id: string) => get<{ files: LoadEvent[] }>(`/session-loaded?id=${id}`),
   memoryHealth: () => get<{ issues: Issue[] }>("/memory-health"),
   memoryMatches: (key: string, dir: string) => get<{ files?: string[]; total?: number; truncated?: boolean; error?: string }>(`/memory-matches?key=${enc(key)}&dir=${enc(dir)}`),
   memorySearch: (q: string) => get<{ hits: Record<string, string> }>(`/memory-search?q=${enc(q)}`),

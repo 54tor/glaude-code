@@ -1,6 +1,6 @@
 import { Brain, Eye, EyeOff, FolderInput, Globe, Pencil, Save, Sparkles, Trash2, X } from "lucide-react"
 import type { MemFile, MemTarget } from "@/lib/api"
-import { size, tilde } from "@/lib/format"
+import { ago, size, tilde } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -31,6 +31,7 @@ export function FileBar({
   onToggleRule,
   onRemove,
   onRewrite,
+  loads,
 }: {
   sel: string
   file: MemFile | undefined
@@ -47,11 +48,13 @@ export function FileBar({
   onToggleRule: () => void
   onRemove: () => void
   onRewrite: () => void
+  loads?: { sessions: number; last: number } // chargements réels, si le suivi est installé
 }) {
   return (
     <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 border-b px-6 py-2">
       <code className="min-w-40 flex-1 truncate text-xs text-muted-foreground" title={file?.path}>
         {file ? `${file.name} · ${size(file.kb)}` : sel}
+        {file && loads && (loads.sessions ? ` · chargée dans ${loads.sessions} session${loads.sessions > 1 ? "s" : ""}, dernière ${ago(loads.last)}` : " · jamais chargée depuis l'activation du suivi")}
       </code>
       {editing ? (
         <>
