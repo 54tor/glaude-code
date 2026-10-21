@@ -25,7 +25,7 @@ gld-matin — rouvre chaque sujet Claude d'un projet dans un onglet de terminal.
   gld-matin --nommees            ignore les sessions sans nom explicite
   gld-matin --id <uuid> [projet] rouvre cette seule session (sans filtre d'âge ni de taille)
   gld-matin --args "..."         options ajoutées à claude (défaut : aucune, ou $GLD_MATIN_ARGS)
-  gld-matin --resume [nom]       rouvre les sessions de la dernière sauvegarde de gld-web
+  gld-matin --resume [nom]       rouvre les sessions de la dernière sauvegarde de gld
                                  (ou de la sauvegarde manuelle de ce nom), ex. après un redémarrage
   gld-matin --prompt "..." [projet]  ouvre une NOUVELLE session claude avec ce prompt
                                  (avec --id : reprend cette session en lui envoyant ce message)
@@ -94,7 +94,7 @@ func cliMatin(ctx context.Context, args []string, out io.Writer) error {
 	return matinRun(ctx, o, out)
 }
 
-// matinResume rouvre les sessions d'une sauvegarde de gld-web : chacune par un appel avec --id, donc mêmes règles
+// matinResume rouvre les sessions d'une sauvegarde de gld : chacune par un appel avec --id, donc mêmes règles
 // (sessions déjà ouvertes épargnées, -n respecté).
 func matinResume(ctx context.Context, o matinOpts, name string, out io.Writer) error {
 	saves := loadTabs()
@@ -147,7 +147,7 @@ func matinRun(ctx context.Context, o matinOpts, out io.Writer) error {
 		launcher = detectLauncher()
 	}
 
-	// Nouvelle session avec un prompt (ex. fusion de mémoires depuis gld-web).
+	// Nouvelle session avec un prompt (ex. fusion de mémoires depuis gld).
 	if o.prompt != "" && o.id == "" {
 		dir, err := absDir(o.project)
 		if err != nil {

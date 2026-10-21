@@ -1,6 +1,6 @@
 package main
 
-// Ce que Claude a réellement chargé : le hook InstructionsLoaded de Claude Code appelle `gld-web _loaded` à chaque
+// Ce que Claude a réellement chargé : le hook InstructionsLoaded de Claude Code appelle `gld _loaded` à chaque
 // chargement d'un CLAUDE.md, d'une règle ou d'un fichier importé, et on en garde la trace (une ligne JSON par
 // chargement). On sait alors dans combien de sessions une règle est entrée, et quels fichiers une session a reçus.
 

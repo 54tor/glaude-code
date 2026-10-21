@@ -1,4 +1,4 @@
-module gld-web
+module gld
 
 go 1.26.0
 

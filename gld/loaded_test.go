@@ -52,7 +52,7 @@ func TestHookLoaded(t *testing.T) {
 
 // Un hook ne doit jamais lancer un serveur : une sous-commande interne inconnue s'arrête avec un code d'erreur.
 func TestSousCommandeInterneInconnue(t *testing.T) {
-	if code, ok := dispatchCLI([]string{"gld-web", "_nope"}); !ok || code != 2 {
+	if code, ok := dispatchCLI([]string{"gld", "_nope"}); !ok || code != 2 {
 		t.Fatal(code, ok)
 	}
 }

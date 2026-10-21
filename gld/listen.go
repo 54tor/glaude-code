@@ -2,7 +2,7 @@ package main
 
 // Écoute hors de localhost (option --listen / GLD_WEB_LISTEN) : l'interface peut lire, supprimer et lancer des
 // commandes (claude) pour le compte de l'utilisateur. Sur une adresse non locale, un jeton est donc exigé pour
-// toute requête ; sans option, gld-web n'écoute que 127.0.0.1 et ne demande rien.
+// toute requête ; sans option, gld n'écoute que 127.0.0.1 et ne demande rien.
 
 import (
 	"crypto/rand"
@@ -63,7 +63,7 @@ func withToken(token string, next http.Handler) http.Handler {
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
-		http.Error(w, "Jeton requis : ouvrez l'adresse affichée au démarrage de gld-web (…/?token=…).", http.StatusUnauthorized)
+		http.Error(w, "Jeton requis : ouvrez l'adresse affichée au démarrage de gld (…/?token=…).", http.StatusUnauthorized)
 	})
 }
 

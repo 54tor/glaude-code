@@ -14,7 +14,7 @@ const REASONS: Record<string, string> = {
 
 export const HOOK_SNIPPET = `"hooks": {
   "InstructionsLoaded": [
-    { "hooks": [{ "type": "command", "command": "[ -x \\"$HOME/.local/bin/gld-web\\" ] && \\"$HOME/.local/bin/gld-web\\" _loaded; exit 0" }] }
+    { "hooks": [{ "type": "command", "command": "[ -x \\"$HOME/.local/bin/gld\\" ] && \\"$HOME/.local/bin/gld\\" _loaded; exit 0" }] }
   ]
 }`
 
@@ -41,7 +41,7 @@ export function LoadedDialog({ id, home, open, onClose }: { id: string; home: st
           <div className="space-y-2 text-sm">
             <p>Rien d'enregistré pour cette session : le suivi n'est pas installé, ou la session est antérieure.</p>
             <p className="text-muted-foreground">
-              Pour l'activer, ajoutez ceci aux réglages de Claude Code (<code>~/.claude/settings.json</code>) et lancez <code>make install</code> pour avoir <code>gld-web</code> dans <code>~/.local/bin</code> :
+              Pour l'activer, ajoutez ceci aux réglages de Claude Code (<code>~/.claude/settings.json</code>) et lancez <code>make install</code> pour avoir <code>gld</code> dans <code>~/.local/bin</code> :
             </p>
             <pre className="overflow-x-auto rounded-lg border bg-muted/40 p-2 text-xs">{HOOK_SNIPPET}</pre>
           </div>

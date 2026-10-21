@@ -11,7 +11,7 @@ import (
 // execClaude remplace ce processus par claude : l'onglet se ferme avec lui, sans processus intermédiaire.
 func execClaude(c *exec.Cmd) int {
 	err := syscall.Exec(c.Path, c.Args, c.Env)
-	os.Stderr.WriteString("gld-web : " + err.Error() + "\n")
+	os.Stderr.WriteString("gld : " + err.Error() + "\n")
 	return 1
 }
 

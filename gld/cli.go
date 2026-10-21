@@ -2,7 +2,7 @@ package main
 
 // Commandes en ligne de commande (anciens scripts bin/gld-*), dans le même binaire que le serveur :
 //
-//	gld-web matin …     ou le binaire appelé gld-matin (lien)
+//	gld matin …     ou le binaire appelé gld-matin (lien)
 //
 // Sans bash, jq ni coreutils : elles tournent telles quelles sous Windows.
 
