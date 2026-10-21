@@ -1,7 +1,7 @@
 package main
 
 // Ouverture d'un onglet de terminal qui lance claude. Aucun shell n'est jamais construit pour transporter un
-// prompt ou un chemin : ils passent par un fichier JSON temporaire que « gld-web _run » relit dans l'onglet.
+// prompt ou un chemin : ils passent par un fichier JSON temporaire que « gld _run » relit dans l'onglet.
 // Ainsi wt.exe (qui coupe ses arguments sur « ; »), cmd.exe et l'interopérabilité WSL n'y touchent pas.
 
 import (
@@ -115,7 +115,7 @@ var openTab = func(launcher, title string, spec tabSpec) error {
 		return err
 	}
 	if strings.Contains(self, ";") {
-		return errors.New("« ; » interdit dans le chemin de gld-web")
+		return errors.New("« ; » interdit dans le chemin de gld")
 	}
 	f, err := os.CreateTemp("", "gld-*.json")
 	if err != nil {
@@ -139,7 +139,7 @@ var openTab = func(launcher, title string, spec tabSpec) error {
 	return nil
 }
 
-// runTab : le corps de « gld-web _run <fichier> », exécuté dans l'onglet. Il se place dans le dossier du projet et
+// runTab : le corps de « gld _run <fichier> », exécuté dans l'onglet. Il se place dans le dossier du projet et
 // lance claude à la place de ce processus (Unix) ou comme enfant (Windows).
 func runTab(file string) int {
 	b, err := os.ReadFile(file)
@@ -160,7 +160,7 @@ func runTab(file string) int {
 		}
 	}
 	// L'onglet se refermerait aussitôt : on laisse lire l'erreur.
-	fmt.Fprintln(os.Stderr, "gld-web :", err)
+	fmt.Fprintln(os.Stderr, "gld :", err)
 	fmt.Fprint(os.Stderr, "[Entrée pour fermer] ")
 	bufio.NewReader(os.Stdin).ReadString('\n')
 	return 1

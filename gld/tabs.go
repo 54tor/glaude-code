@@ -155,7 +155,7 @@ func removeTabs(at string) error {
 	return writeTabs(next)
 }
 
-// autosaveTabs sauvegarde les sessions ouvertes au lancement puis régulièrement, tant que gld-web tourne.
+// autosaveTabs sauvegarde les sessions ouvertes au lancement puis régulièrement, tant que gld tourne.
 // Sans session ouverte (juste après un redémarrage), rien n'est écrit : la dernière sauvegarde reste intacte.
 func autosaveTabs(every time.Duration) {
 	saveTabs("", true)

@@ -48,12 +48,12 @@ func contains(t *testing.T, got string, want ...string) {
 }
 
 func TestDispatch(t *testing.T) {
-	for _, argv := range [][]string{{"gld-web"}, {"gld-web", "inconnu"}, {"/bin/gld-web.exe", "--listen", "x"}} {
+	for _, argv := range [][]string{{"gld"}, {"gld-web"}, {"/usr/bin/gld-web.exe"}, {"gld", "inconnu"}, {"/bin/gld.exe", "--listen", "x"}} {
 		if _, ok := dispatchCLI(argv); ok {
 			t.Errorf("%v ne doit pas être une commande", argv)
 		}
 	}
-	for argv, want := range map[string]int{"gld-matin --bogus": 1, "gld-web matin --bogus": 1, "/usr/bin/gld-matin.exe -h": 0} {
+	for argv, want := range map[string]int{"gld-matin --bogus": 1, "gld matin --bogus": 1, "gld-web matin --bogus": 1, "/usr/bin/gld-matin.exe -h": 0} {
 		if code, ok := dispatchCLI(strings.Fields(argv)); !ok || code != want {
 			t.Errorf("%q : code %d (ok=%v), attendu %d", argv, code, ok, want)
 		}
@@ -165,14 +165,14 @@ func TestMatinResume(t *testing.T) {
 }
 
 func TestLauncherCmd(t *testing.T) {
-	argv := []string{"/b/gld-web", "_run", "/tmp/x it's.json"}
+	argv := []string{"/b/gld", "_run", "/tmp/x it's.json"}
 	cases := map[string]string{
-		"tmux":           `tmux new-window -n T '/b/gld-web' '_run' '/tmp/x it'\''s.json'`,
-		"kitty":          "kitty @ launch --type=tab --tab-title T /b/gld-web _run /tmp/x it's.json",
-		"wezterm":        "wezterm cli spawn -- /b/gld-web _run /tmp/x it's.json",
-		"gnome-terminal": "gnome-terminal --tab --title=T -- /b/gld-web _run /tmp/x it's.json",
-		"konsole":        "konsole --new-tab -p tabtitle=T -e /b/gld-web _run /tmp/x it's.json",
-		"terminator":     `terminator --new-tab -T T -e '/b/gld-web' '_run' '/tmp/x it'\''s.json'`,
+		"tmux":           `tmux new-window -n T '/b/gld' '_run' '/tmp/x it'\''s.json'`,
+		"kitty":          "kitty @ launch --type=tab --tab-title T /b/gld _run /tmp/x it's.json",
+		"wezterm":        "wezterm cli spawn -- /b/gld _run /tmp/x it's.json",
+		"gnome-terminal": "gnome-terminal --tab --title=T -- /b/gld _run /tmp/x it's.json",
+		"konsole":        "konsole --new-tab -p tabtitle=T -e /b/gld _run /tmp/x it's.json",
+		"terminator":     `terminator --new-tab -T T -e '/b/gld' '_run' '/tmp/x it'\''s.json'`,
 	}
 	for name, want := range cases {
 		c, err := launcherCmd(name, "T", argv)
@@ -185,7 +185,7 @@ func TestLauncherCmd(t *testing.T) {
 	}
 	t.Setenv("WSL_DISTRO_NAME", "Ubuntu")
 	c, _ := launcherCmd("wt", "a;b\"c", argv)
-	if got := strings.Join(c.Args, " "); !strings.HasPrefix(got, "wt.exe -w 0 new-tab --title a b c wsl.exe -d Ubuntu -- /b/gld-web _run") {
+	if got := strings.Join(c.Args, " "); !strings.HasPrefix(got, "wt.exe -w 0 new-tab --title a b c wsl.exe -d Ubuntu -- /b/gld _run") {
 		t.Errorf("wt : %q", got)
 	}
 	if _, err := launcherCmd("inconnu", "T", argv); err == nil {

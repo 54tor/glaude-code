@@ -73,7 +73,7 @@ export function Tabs({ args, onAsk, onPrompt }: { args: string; onAsk: (a: Ask) 
               {a.live.size ? `${plural(a.live.size)} ouverte${a.live.size > 1 ? "s" : ""} en ce moment` : "Aucune session ouverte"}
             </p>
             <p className="text-xs text-muted-foreground">
-              Sauvegarde automatique toutes les 2 minutes tant que gld-web tourne, gardée une heure (la plus récente toujours). Après un redémarrage :{" "}
+              Sauvegarde automatique toutes les 2 minutes tant que gld tourne, gardée une heure (la plus récente toujours). Après un redémarrage :{" "}
               <code className="rounded bg-muted px-1">gld-matin --resume</code>
             </p>
           </div>

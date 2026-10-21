@@ -12,7 +12,7 @@ export default defineConfig({
     },
   },
   build: {
-    // Jamais de data: dans la CSS (petites polices) : la CSP de gld-web n'autorise que les fichiers servis.
+    // Jamais de data: dans la CSS (petites polices) : la CSP de gld n'autorise que les fichiers servis.
     assetsInlineLimit: 0,
     // Noms stables : dist/ est versionné (le binaire Go l'embarque), autant éviter le bruit dans l'historique.
     rolldownOptions: {

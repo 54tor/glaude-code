@@ -42,6 +42,9 @@ func main() {
 	if code, ok := dispatchCLI(os.Args); ok { // gld-matin, gld-trier, gld-rm, gld-nommer : ni serveur ni port
 		os.Exit(code)
 	}
+	if len(os.Args) > 1 && os.Args[1] == "web" { // « gld web » : le serveur, nommé explicitement (sans argument, c'est déjà lui)
+		os.Args = append(os.Args[:1], os.Args[2:]...)
+	}
 	listen := flag.String("listen", env("GLD_WEB_LISTEN", "127.0.0.1"), "adresse d'écoute (défaut 127.0.0.1 ; 0.0.0.0 pour tout le réseau, avec un jeton)")
 	flag.Parse()
 	hosts["127.0.0.1:"+port], hosts["localhost:"+port] = true, true
@@ -78,7 +81,7 @@ func main() {
 	if local {
 		fmt.Fprintln(os.Stderr, "http://"+net.JoinHostPort(*listen, port))
 	} else {
-		fmt.Fprintln(os.Stderr, "⚠ gld-web écoute sur "+net.JoinHostPort(*listen, port)+" : accès protégé par un jeton, mais en HTTP clair.")
+		fmt.Fprintln(os.Stderr, "⚠ gld écoute sur "+net.JoinHostPort(*listen, port)+" : accès protégé par un jeton, mais en HTTP clair.")
 		fmt.Fprintln(os.Stderr, "  Préférez un tunnel (SSH, Tailscale) ou un proxy TLS ; ne l'exposez pas sur Internet.")
 		for _, u := range urlsFor(*listen, port, token) {
 			fmt.Fprintln(os.Stderr, "  "+u)

@@ -1,8 +1,8 @@
-gld-web/gld-web
-gld-web/gld-web.exe
+gld/gld
+gld/gld.exe
 .playwright-mcp/
 todo.local.md
 
 # L'interface compilée n'est pas versionnée (make install la construit) ; le dossier reste pour que go:embed compile
-gld-web/ui/dist/*
-!gld-web/ui/dist/.gitkeep
+gld/ui/dist/*
+!gld/ui/dist/.gitkeep

@@ -19,7 +19,7 @@ func execClaude(c *exec.Cmd) int {
 		if errors.As(err, &ee) {
 			return ee.ExitCode()
 		}
-		os.Stderr.WriteString("gld-web : " + err.Error() + "\n")
+		os.Stderr.WriteString("gld : " + err.Error() + "\n")
 		return 1
 	}
 	return 0

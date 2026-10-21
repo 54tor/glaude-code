@@ -1,6 +1,6 @@
 # Dépendances — 2026-10-21 (2e passage)
 
-## Go (`gld-web/go.mod`, `go 1.26.0`, toolchain 1.27.1)
+## Go (`gld/go.mod`, `go 1.26.0`, toolchain 1.27.1)
 Directes : `doublestar/v4` 4.10.3, `yaml.v3` 3.0.1, `modernc.org/sqlite`. `govulncheck ./...` : aucune vulnérabilité (avant et après).
 
 | Module | Avant | Après | Décision |
@@ -12,7 +12,7 @@ Directes : `doublestar/v4` 4.10.3, `yaml.v3` 3.0.1, `modernc.org/sqlite`. `govul
 
 `go mod tidy` a aussi ajouté ~30 lignes à `go.sum` (graphe des tests des dépendances) : sans effet sur le binaire.
 
-## npm (`gld-web/ui`)
+## npm (`gld/ui`)
 | Paquet | Avant | Après | Décision |
 |---|---|---|---|
 | vite | 8.3.4 | **8.3.5** | D-006, appliqué (la contrainte `^8` ne change pas) |

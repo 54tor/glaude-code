@@ -1,4 +1,4 @@
-// Accès aux routes du serveur Go (gld-web/main.go).
+// Accès aux routes du serveur Go (gld/main.go).
 
 export type Session = { id: string; dir: string; title: string; named: boolean; cwd: string; mtime: number; kb: number; tok: Tokens }
 export type Tokens = { in: number; out: number; cr: number; cw: number }

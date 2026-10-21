@@ -20,7 +20,7 @@ func newWaiting(prev map[string]bool, cur []string) (out []string) {
 	return
 }
 
-var notifySend = func(title, body string) { _ = exec.Command("notify-send", "-a", "gld-web", title, body).Run() }
+var notifySend = func(title, body string) { _ = exec.Command("notify-send", "-a", "gld", title, body).Run() }
 
 // watchWaiting : toutes les every, notifie les sessions qui viennent de passer à « attend » si aucun onglet n'est ouvert.
 func watchWaiting(every time.Duration) {
