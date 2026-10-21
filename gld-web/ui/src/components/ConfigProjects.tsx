@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { ChevronRight, Globe } from "lucide-react"
+import { ChevronRight, Globe, X } from "lucide-react"
 import { Link } from "wouter"
 import { api, type ProjectCfg } from "@/lib/api"
 import { describeKey } from "@/lib/configKeys"
@@ -25,7 +25,7 @@ const Badge = ({ n, label }: { n: number; label: string }) =>
 
 // Ce que chaque projet configure en propre, en plus des réglages de l'utilisateur : réglages (projet et local), règles de
 // permission, hooks, serveurs MCP, règles .claude/rules, skills et documentation. onEdit ouvre l'onglet qui permet de les modifier.
-export function ProjectsTab({ home, onEdit, onTransfer }: { home: string; onEdit: (file: string, tab: string) => void; onTransfer: (file: string, kind: string, rule: string, move: boolean) => void }) {
+export function ProjectsTab({ home, onEdit, onTransfer, onRemove }: { home: string; onEdit: (file: string, tab: string) => void; onRemove: (file: string, kind: string, rule: string) => void; onTransfer: (file: string, kind: string, rule: string, move: boolean) => void }) {
   const [list, setList] = useState<ProjectCfg[] | null>(null)
   const [all, setAll] = useState(false)
   const [q, setQ] = useState("")
@@ -106,6 +106,9 @@ export function ProjectsTab({ home, onEdit, onTransfer }: { home: string; onEdit
                                     <DropdownMenuItem onSelect={() => onTransfer(`${r.scope}/${p.dir}`, k, r.rule, true)}>Déplacer (retirer du projet)</DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
+                                <Button size="icon-xs" variant="ghost" aria-label={`Supprimer ${r.rule}`} title="Supprimer cette règle" onClick={() => onRemove(`${r.scope}/${p.dir}`, k, r.rule)}>
+                                  <X />
+                                </Button>
                               </li>
                             ))}
                           </ul>
