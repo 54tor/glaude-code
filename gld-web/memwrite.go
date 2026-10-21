@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"regexp"
 	"slices"
 	"strings"
@@ -55,10 +54,17 @@ func snippetDraft(model, instruction, text string) (string, float64, error) {
 	return memDraft(model, cmdSystem, prompt)
 }
 
-// isClaudeMd : la clé désigne un fichier d'instructions (CLAUDE.md ou AGENTS.md), pas une entrée de mémoire.
+// isClaudeMd : la clé désigne un fichier du projet ou global (CLAUDE.md, AGENTS.md, README.md, PLAN.md…), pas une entrée de mémoire :
+// du Markdown libre, sans en-tête YAML.
 func isClaudeMd(key string) bool {
-	return key == "g/CLAUDE.md" || (strings.HasPrefix(key, "p/") && (strings.HasSuffix(key, "CLAUDE.md") || strings.HasSuffix(key, "AGENTS.md")))
+	return key == "g/CLAUDE.md" || strings.HasPrefix(key, "p/")
 }
+
+// docSystem : pour la documentation d'un projet (README, plan, conventions, outillage), ni instructions de Claude ni mémoire.
+const docSystem = `Tu rédiges ou révises un document Markdown de projet logiciel (README, plan, conventions, outillage).
+Markdown clair et concis : titres, listes, exemples de commandes ; pas d'en-tête YAML, pas de remplissage.
+Garde ce que contient déjà le fichier existant (sauf s'il contredit les références, auquel cas les références l'emportent) et la langue des sources.
+Réponds uniquement avec le contenu complet du fichier, sans bloc de code englobant ni commentaire.`
 
 // memWritePrompt : la consigne, le fichier à réécrire (s'il y en a un) et les références, toutes des clés validées.
 func memWritePrompt(instruction, key string, refs []string) (string, error) {
@@ -108,11 +114,8 @@ var fenceRe = regexp.MustCompile("(?s)^```[a-z]*\n(.*)\n```$")
 var memDraft = func(model, system, prompt string) (string, float64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	cmd := withPath(exec.CommandContext(ctx, "claude", "-p", "--model", model, "--tools", "", "--disable-slash-commands",
-		"--strict-mcp-config", "--setting-sources", "", "--no-session-persistence", "--system-prompt", system,
-		"--output-format", "json"))
+	cmd := helperCmd(ctx, model, system)
 	cmd.Stdin = strings.NewReader(prompt) // sur stdin : un argument est limité à 128 Kio (MAX_ARG_STRLEN), un brouillon peut citer 20 Mio
-	cmd.Dir = workDir()                   // aucun CLAUDE.md de projet, et un dossier que personne d'autre n'écrit
 	out, err := cmd.Output()
 	var r struct {
 		Result  string
@@ -146,8 +149,11 @@ func memWriteDraft(model, instruction, key string, refs []string) (string, float
 	system := memSystem
 	if isClaudeMd(key) {
 		system = claudeSystem
-		if strings.HasSuffix(key, "AGENTS.md") {
+		switch {
+		case strings.HasSuffix(key, "AGENTS.md"):
 			system = agentsSystem
+		case !isClaudeFile(key):
+			system = docSystem
 		}
 	}
 	return memDraft(model, system, prompt)

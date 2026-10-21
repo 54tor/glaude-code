@@ -204,7 +204,7 @@ export default function App() {
           : route.kind === "snippets"
             ? (snips?.dir ?? "")
           : route.kind === "memory"
-            ? "CLAUDE.md, AGENTS.md, règles et mémoire de chaque projet"
+            ? "CLAUDE.md, AGENTS.md, README, PLAN, CONVENTIONS, TOOLING, règles et mémoire de chaque projet"
             : route.kind === "tabs"
               ? "Les sessions ouvertes, pour les rouvrir d'un coup"
               : route.kind === "group"

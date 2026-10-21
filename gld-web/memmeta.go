@@ -112,6 +112,11 @@ func splitGlobs(s string) []string {
 	return out
 }
 
+// isClaudeFile : un CLAUDE.md (celui que Claude Code charge), par opposition aux autres fichiers de documentation du projet.
+func isClaudeFile(key string) bool {
+	return strings.HasSuffix(key, "CLAUDE.md") || strings.HasSuffix(key, "CLAUDE.local.md")
+}
+
 // annotate complète un MemFile : type, portée, budget de contexte, chargement à chaque session, avertissement.
 func annotate(f *MemFile) {
 	f.Off = strings.HasSuffix(f.Name, ".off")
@@ -154,7 +159,7 @@ func annotate(f *MemFile) {
 	}
 	switch {
 	case f.Off:
-	case f.Key == "g/CLAUDE.md", strings.HasPrefix(f.Key, "p/") && !strings.HasSuffix(f.Key, "AGENTS.md"):
+	case f.Key == "g/CLAUDE.md", strings.HasPrefix(f.Key, "p/") && isClaudeFile(f.Key):
 		f.Always = true
 	case rule:
 		f.Always = f.Paths == nil
@@ -233,7 +238,7 @@ func memHealth() []Issue {
 		var entries []MemFile
 		for _, f := range p.Files {
 			check(f)
-			if strings.HasPrefix(f.Key, "p/") {
+			if strings.HasPrefix(f.Key, "p/") && isClaudeFile(f.Key) { // les @mentions d'un README ne sont pas des imports
 				imports(f)
 			}
 			if strings.HasPrefix(f.Key, "m/") {

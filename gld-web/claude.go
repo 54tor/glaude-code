@@ -90,6 +90,16 @@ func removeWorkDir() {
 	}
 }
 
+// helperCmd : un appel d'aide de gld-web à claude (brouillon, comptage de tokens, analyse) : sans outils, sans réglages ni MCP,
+// dans le dossier privé de workDir, et surtout SANS session enregistrée (--no-session-persistence) : ces appels ne doivent
+// jamais apparaître dans la liste de vos sessions. La demande se passe sur stdin.
+func helperCmd(ctx context.Context, model, system string) *exec.Cmd {
+	cmd := withPath(exec.CommandContext(ctx, "claude", "-p", "--model", model, "--tools", "", "--disable-slash-commands",
+		"--strict-mcp-config", "--setting-sources", "", "--no-session-persistence", "--system-prompt", system, "--output-format", "json"))
+	cmd.Dir = workDir()
+	return cmd
+}
+
 func withPath(c *exec.Cmd) *exec.Cmd {
 	if runtime.GOOS == "windows" {
 		return c

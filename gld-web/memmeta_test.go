@@ -149,3 +149,38 @@ func TestMemoryMeta(t *testing.T) {
 		t.Fatal("l'original a disparu :", err)
 	}
 }
+
+// La documentation du projet (README, PLAN…) est listée et lisible, mais n'est pas « chargée à chaque session » et ses
+// @mentions ne sont pas des imports cassés.
+func TestDocumentationDuProjet(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	proj := t.TempDir()
+	put(t, filepath.Join(cfg, "projects", "-p", id1+".jsonl"), `{"cwd":"`+proj+`"}`+"\n", old)
+	put(t, filepath.Join(proj, "CLAUDE.md"), "règles\n", old)
+	for _, n := range []string{"CONVENTIONS.md", "PLAN.md", "TOOLING.md", "README.md", "AGENTS.md"} {
+		put(t, filepath.Join(proj, n), "voir @quelquun et @inexistant.md\n", old)
+	}
+	_, ps, _ := memList()
+	got := map[string]MemFile{}
+	for _, f := range ps[0].Files {
+		got[f.Name] = f
+	}
+	for _, n := range []string{"CONVENTIONS.md", "PLAN.md", "TOOLING.md", "README.md", "AGENTS.md"} {
+		f, ok := got[n]
+		if !ok || f.Always {
+			t.Errorf("%s : listé=%v chargé=%v", n, ok, f.Always)
+		}
+		if s, err := memRead("p/-p/" + n); err != nil || s == "" {
+			t.Errorf("%s illisible : %v", n, err)
+		}
+	}
+	if !got["CLAUDE.md"].Always {
+		t.Error("CLAUDE.md doit rester chargé")
+	}
+	for _, i := range memHealth() {
+		if i.Kind == "import" && !strings.HasSuffix(i.Key, "CLAUDE.md") {
+			t.Errorf("faux import signalé : %+v", i)
+		}
+	}
+}
