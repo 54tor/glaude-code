@@ -8,6 +8,9 @@
 #   gld-matin --term list          liste les lanceurs disponibles ici
 #   gld-matin --age 40 --min 0     élargit la fenêtre (jours) et le seuil (octets)
 #   gld-matin --nommees            ignore les sessions sans nom explicite
+#   gld-matin --id <uuid> [projet] rouvre cette seule session (sans filtre d'âge ni de taille)
+#   gld-matin --args "..."          options ajoutées à `claude` (défaut : aucune, ou $GLD_MATIN_ARGS)
+#                                 ex. --args --dangerously-skip-permissions
 #
 # Un sujet = une session Claude. On le désigne par son nom quand vous en avez
 # donné un, sinon (marqué «~») par son premier prompt. On résout ce libellé
@@ -22,17 +25,20 @@ export LC_ALL=C   # rend le tri et le sed d'encodage indépendants de la locale
 AGE_MAX=${GLD_MATIN_AGE:-7}          # jours : ne rouvre que le chantier courant
 TAILLE_MIN=${GLD_MATIN_MIN:-50000}   # octets : écarte les sessions nommées mais vides
 PAUSE=${GLD_MATIN_PAUSE:-0.7}        # respiration entre deux onglets
+ARGS=${GLD_MATIN_ARGS:-}           # options passées à claude ; vide par défaut
 EXCLURE=${GLD_MATIN_EXCLURE:-}       # noms à ignorer, séparés par ':'
 
-DRY=0; PROJET=""; TERMCHOIX="${GLD_MATIN_TERM:-}"; NOMMEES_SEULES=0
+DRY=0; ID=""; PROJET=""; TERMCHOIX="${GLD_MATIN_TERM:-}"; NOMMEES_SEULES=0
 while [ $# -gt 0 ]; do
   case "$1" in
     -n|--dry-run) DRY=1 ;;
     --nommees)    NOMMEES_SEULES=1 ;;
+    --id)         ID="${2:-}"; shift ;;
+    --args)       ARGS="${2:-}"; shift ;;
     --term)       TERMCHOIX="${2:-}"; shift ;;
     --age)        AGE_MAX="${2:-}"; shift ;;
     --min)        TAILLE_MIN="${2:-}"; shift ;;
-    -h|--help)    sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)    sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)           echo "gld-matin: option inconnue: $1" >&2; exit 2 ;;
     *)            PROJET="$1" ;;
   esac
@@ -125,6 +131,8 @@ else
   for l in $LANCEURS; do dispo "$l" && { TERM_UTILISE="$l"; break; }; done
 fi
 
+[ -z "$ID" ] || { AGE_MAX=36500; TAILLE_MIN=0; }
+
 # --- localisation du projet et de ses transcripts ----------------------------
 
 command -v jq >/dev/null || { echo "gld-matin: jq requis" >&2; exit 1; }
@@ -169,6 +177,7 @@ n=0
 
 for f in $(ls -t $RECENTS); do
   [ -s "$f" ] || continue
+  [ -z "$ID" ] || [ "$(basename "$f" .jsonl)" = "$ID" ] || continue
   [ "$(taille "$f")" -ge "$TAILLE_MIN" ] || continue
 
   marque=' '
@@ -184,7 +193,7 @@ for f in $(ls -t $RECENTS); do
   [ -n "$titre" ] || continue
 
   # Premier vu = plus récent : les homonymes plus anciens sont ignorés.
-  printf '%s\n' "$VUS" | grep -Fxq -- "$titre" && continue
+  [ -z "$ID" ] && printf '%s\n' "$VUS" | grep -Fxq -- "$titre" && continue
   VUS="$VUS
 $titre"
 
@@ -200,7 +209,7 @@ $titre"
     printf '  ouvrirait    %s %-45s %s  (%s)\n' "$marque" "$titre" "$(printf '%.8s' "$id")" "$(mdate "$f")"
   else
     printf '  ouvre        %s %-45s %s\n' "$marque" "$titre" "$(printf '%.8s' "$id")"
-    ouvrir "$titre" "cd $(shq "$PROJET") && exec env PATH="$HOME/.local/bin:$PATH" claude --dangerously-skip-permissions --resume $id" || true
+    ouvrir "$titre" "cd $(shq "$PROJET") && exec env PATH="$HOME/.local/bin:$PATH" claude ${ARGS:+$ARGS }--resume $id" || true
     sleep "$PAUSE"
   fi
   n=$((n + 1))
