@@ -87,7 +87,9 @@ func launcherCmd(name, title string, argv []string) (*exec.Cmd, error) {
 		}
 		return with("wt.exe", "-w", "0", "new-tab", "--title", t), nil
 	case "terminator-tmux":
-		return exec.Command("terminator", "--new-tab", "-T", title, "-e", "tmux new-session -n "+shq(strings.ReplaceAll(title, "#", "##"))+" "+shq(shJoin(argv))), nil
+		return exec.Command("terminator", "--new-tab", "-T", title, "-e", "tmux new-session -n "+shq(strings.ReplaceAll(title, "#", "##"))+" "+shq(shJoin(argv))+
+			// le titre que Claude Code émet (OSC) devient celui de l'onglet Terminator
+			` \; set-option set-titles on \; set-option set-titles-string '#T'`), nil
 	case "terminator":
 		return exec.Command("terminator", "--new-tab", "-T", title, "-e", shJoin(argv)), nil
 	case "gnome-terminal":

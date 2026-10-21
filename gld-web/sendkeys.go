@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 	"unicode/utf8"
 )
@@ -144,6 +145,26 @@ func checkSendText(text string) error {
 }
 
 var sendIdRe = regexp.MustCompile(`^[0-9a-f-]{36}$`)
+
+// closeSession termine le processus claude d'une session interactive ouverte (SIGTERM : il quitte proprement, le transcript est déjà
+// écrit au fil de l'eau). Le pid vient d'un relevé frais de `claude agents --json`, jamais du navigateur.
+func closeSession(id string) error {
+	if !sendIdRe.MatchString(id) {
+		return errors.New("session invalide")
+	}
+	pid, ok := sessionPIDs()[id]
+	if !ok {
+		return errors.New("session introuvable parmi les sessions ouvertes (déjà fermée ?)")
+	}
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		return err
+	}
+	if err := p.Signal(syscall.SIGTERM); err != nil {
+		return fmt.Errorf("fermeture impossible : %w", err)
+	}
+	return nil
+}
 
 // sendToSession colle le texte dans le panneau tmux de la session, puis valide.
 func sendToSession(id, text string) error {

@@ -103,3 +103,30 @@ func TestEnvoiTmuxReel(t *testing.T) {
 		t.Fatalf("reçu : %q", b)
 	}
 }
+
+func TestFermerSession(t *testing.T) {
+	cmd := exec.Command("sleep", "60")
+	if err := cmd.Start(); err != nil {
+		t.Skip(err)
+	}
+	defer cmd.Process.Kill()
+	old := sessionPIDs
+	defer func() { sessionPIDs = old }()
+	sessionPIDs = func() map[string]int { return map[string]int{sid: cmd.Process.Pid} }
+	if err := closeSession(sid); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("le processus a fini normalement : il aurait dû être interrompu")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("processus encore vivant")
+	}
+	if closeSession("99999999-2222-3333-4444-555555555555") == nil || closeSession("../x") == nil {
+		t.Fatal("session inconnue ou invalide acceptée")
+	}
+}

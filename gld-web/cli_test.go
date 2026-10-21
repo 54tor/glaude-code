@@ -244,7 +244,7 @@ func TestLanceurTerminatorTmux(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := c.Args[len(c.Args)-1]
-	want := `tmux new-session -n 'Mon ##(x) titre' ''\''/bin/gld'\'' '\''_run'\'' '\''/tmp/a b.json'\'''`
+	want := `tmux new-session -n 'Mon ##(x) titre' ''\''/bin/gld'\'' '\''_run'\'' '\''/tmp/a b.json'\''' \; set-option set-titles on \; set-option set-titles-string '#T'`
 	if e != want {
 		t.Errorf("\n%s\n%s", e, want)
 	}
