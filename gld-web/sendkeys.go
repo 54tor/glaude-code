@@ -195,3 +195,58 @@ func sendToSession(id, text string) error {
 	}
 	return nil
 }
+
+// Interaction avec l'écran du terminal d'une session tmux : voir ce qu'elle affiche (une question de permission, un choix…) et
+// répondre par des touches. Seules des touches de navigation et de réponse sont permises : jamais de texte libre par cette voie
+// (le texte passe par sendToSession).
+var allowedKeys = map[string]string{
+	"Enter": "Enter", "Escape": "Escape", "Up": "Up", "Down": "Down", "Left": "Left", "Right": "Right",
+	"Tab": "Tab", "ShiftTab": "BTab", "Space": "Space", "CtrlC": "C-c",
+	"1": "1", "2": "2", "3": "3", "4": "4", "5": "5", "6": "6", "7": "7", "8": "8", "9": "9", "y": "y", "n": "n",
+}
+
+func paneFor(id string) (string, error) {
+	if !sendIdRe.MatchString(id) {
+		return "", errors.New("session invalide")
+	}
+	ids, err := sendable()
+	if err != nil {
+		return "", fmt.Errorf("tmux inutilisable (%w)", err)
+	}
+	p, ok := ids[id]
+	if !ok {
+		return "", errors.New("cette session n'est pas dans tmux (ou n'est pas ouverte)")
+	}
+	return p, nil
+}
+
+// sessionScreen : le texte affiché dans le panneau de la session (écran visible, sans couleurs), espaces de fin retirés.
+func sessionScreen(id string) (string, error) {
+	p, err := paneFor(id)
+	if err != nil {
+		return "", err
+	}
+	out, err := tmuxRun("", "capture-pane", "-p", "-t", p)
+	if err != nil {
+		return "", err
+	}
+	lines := strings.Split(out, "\n")
+	for i := range lines {
+		lines[i] = strings.TrimRight(lines[i], " ")
+	}
+	return strings.TrimRight(strings.Join(lines, "\n"), "\n"), nil
+}
+
+// sendKey envoie une touche de la liste permise au panneau de la session.
+func sendKey(id, key string) error {
+	k, ok := allowedKeys[key]
+	if !ok {
+		return errors.New("touche non permise")
+	}
+	p, err := paneFor(id)
+	if err != nil {
+		return err
+	}
+	_, err = tmuxRun("", "send-keys", "-t", p, k)
+	return err
+}

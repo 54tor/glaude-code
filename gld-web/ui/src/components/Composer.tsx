@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { Power, Send, Square } from "lucide-react"
+import { Power, Send, Square, SquareTerminal } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
 import { withChoice, type Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
@@ -165,6 +165,7 @@ function LiveSend({ id, onSent }: { id: string; onSent: () => void }) {
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-7xl space-y-2">
+        <TerminalPanel id={id} />
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -197,5 +198,116 @@ function CloseSession({ id }: { id: string }) {
     <Button size="sm" variant="ghost" onClick={close} title="Termine le processus claude de cette session ; la conversation reste reprenable">
       <Power /> Fermer la session
     </Button>
+  )
+}
+
+// Questions du terminal. Deux formes : une liste numérotée sous une phrase (autorisation d'un outil, choix d'un plan) : le bouton envoie
+// le chiffre ; une liste à sélection (« ❯ option » suivie des autres, sans numéro) : le bouton déplace la sélection puis valide.
+type Opt = { label: string; keys: string[] }
+function parsePrompt(screen: string): { question: string; options: Opt[] } | null {
+  const lines = screen.split("\n")
+  const nums: { n: string; label: string; at: number }[] = []
+  lines.forEach((l, i) => {
+    const m = /^\s*(?:[❯>›]\s*)?([1-9])[.)]\s+(\S.*)$/.exec(l)
+    if (m) nums.push({ n: m[1], label: m[2].trim(), at: i })
+  })
+  const above = (at: number) => {
+    let q = ""
+    for (let i = at - 1; i >= 0 && i >= at - 6; i--) {
+      const t = lines[i].trim()
+      if (t) {
+        q = t
+        if (/[?:]$/.test(t)) break
+      }
+    }
+    return q
+  }
+  if (nums.length >= 2 && nums[0].n === "1") return { question: above(nums[0].at), options: nums.map((o) => ({ label: `${o.n}. ${o.label}`, keys: [o.n] })) }
+  const sel = lines.findIndex((l) => /^\s{0,3}❯ \S/.test(l))
+  if (sel < 0) return null
+  // Le texte des options est aligné sur celui de la ligne sélectionnée ; les autres lignes du dialogue ne le sont pas.
+  const col = lines[sel].indexOf("❯") + 2
+  const item = (l: string) => l.length > col && l.slice(0, col).trim() === "" && l[col] !== " " && !/^[─━│┌└╭╰]/.test(l[col])
+  let from = sel
+  while (from > 0 && item(lines[from - 1])) from--
+  let to = sel
+  while (to + 1 < lines.length && item(lines[to + 1])) to++
+  if (to - from < 1 || to - from > 8) return null
+  const options: Opt[] = []
+  for (let i = from; i <= to; i++) {
+    const d = i - sel
+    options.push({ label: lines[i].slice(col).trim(), keys: [...Array(Math.abs(d)).fill(d < 0 ? "Up" : "Down"), "Enter"] })
+  }
+  return { question: above(from), options }
+}
+
+const KEYS = [
+  ["Up", "↑"],
+  ["Down", "↓"],
+  ["Enter", "Entrée"],
+  ["Escape", "Échap"],
+  ["Tab", "Tab"],
+  ["ShiftTab", "Maj+Tab"],
+  ["CtrlC", "Ctrl+C"],
+] as const
+
+// L'écran du terminal de la session (tmux) relu toutes les 1,5 s, et de quoi y répondre : options détectées, touches de navigation.
+function TerminalPanel({ id }: { id: string }) {
+  const [screen, setScreen] = useState("")
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    let live = true
+    const load = () => api.screen(id).then((r) => live && r.ok && setScreen(r.text ?? ""), () => {})
+    load()
+    const t = setInterval(() => document.visibilityState === "visible" && load(), 1500)
+    return () => {
+      live = false
+      clearInterval(t)
+    }
+  }, [id])
+  // Une ou plusieurs touches, l'une après l'autre (déplacer la sélection puis valider).
+  const press = async (...keys: string[]) => {
+    for (const key of keys) {
+      const r = await api.post("/session-key", { id, key })
+      if (!r.ok) return void toast.error(r.out)
+      await new Promise((x) => setTimeout(x, 80))
+    }
+    api.screen(id).then((s) => s.ok && setScreen(s.text ?? ""))
+  }
+  const prompt = parsePrompt(screen)
+  return (
+    <div className="space-y-2">
+      {prompt && (
+        <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm">
+          <p className="mb-1.5 font-medium">Claude attend une réponse dans le terminal{prompt.question ? ` : ${prompt.question}` : ""}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {prompt.options.map((o) => (
+              <Button key={o.label} size="sm" variant="outline" onClick={() => press(...o.keys)} title={`Touches : ${o.keys.join(", ")}`}>
+                {o.label.length > 60 ? o.label.slice(0, 59) + "…" : o.label}
+              </Button>
+            ))}
+            <Button size="sm" variant="ghost" onClick={() => press("Escape")}>
+              Échap
+            </Button>
+          </div>
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-1 text-xs">
+        <Button size="xs" variant={open ? "secondary" : "ghost"} onClick={() => setOpen(!open)} aria-pressed={open} title="Écran du terminal de la session">
+          <SquareTerminal /> Terminal
+        </Button>
+        {open &&
+          KEYS.map(([k, l]) => (
+            <Button key={k} size="xs" variant="outline" onClick={() => press(k)}>
+              {l}
+            </Button>
+          ))}
+      </div>
+      {open && (
+        <pre className="max-h-72 overflow-auto rounded-lg border bg-background px-3 py-2 font-mono text-[11px] leading-snug whitespace-pre" aria-label="Écran du terminal">
+          {screen || "(écran vide)"}
+        </pre>
+      )}
+    </div>
   )
 }
