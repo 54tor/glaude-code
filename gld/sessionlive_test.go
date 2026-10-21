@@ -115,3 +115,18 @@ func TestRafraichirLesLimites(t *testing.T) {
 		t.Fatal("refresh forcé ignoré")
 	}
 }
+
+func TestMessagesEnAttente(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	ev := `{"type":"queue-operation","operation":"enqueue","timestamp":"t1","content":"premier"}
+{"type":"queue-operation","operation":"enqueue","timestamp":"t2","content":"deuxième"}
+{"type":"queue-operation","operation":"dequeue","timestamp":"t3"}
+{"type":"queue-operation","operation":"enqueue","timestamp":"t4","content":"repris"}
+{"type":"queue-operation","operation":"remove","timestamp":"t5","content":"repris"}
+{"type":"queue-operation","operation":"enqueue","timestamp":"t6","content":"<task-notification>x</task-notification>"}
+`
+	os.WriteFile(p, []byte(ev), 0o600)
+	if q := pendingQueue(p); len(q) != 1 || q[0].T != "deuxième" {
+		t.Fatalf("file d'attente : %v", q)
+	}
+}
