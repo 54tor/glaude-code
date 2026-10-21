@@ -1,10 +1,11 @@
 import { useState } from "react"
-import { Check, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react"
+import { Check, ClipboardCopy, Globe, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react"
 import type { BackupInfo, CfgEdit, CfgOverview, PermSuggest } from "@/lib/api"
 import { api } from "@/lib/api"
 import { describeKey } from "@/lib/configKeys"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { Checkbox } from "@/components/ui/checkbox"
 import { PermImportDialog, PermIOButtons } from "./ConfigPermIO"
 import { Input } from "@/components/ui/input"
@@ -26,7 +27,7 @@ const KINDS = [
   ["deny", "Refusées", "Jamais lancées ; l'emportent sur les autres."],
 ] as const
 
-export function PermsTab({ file, label, doc, propose, proposePerms, gone }: { gone: (file: string, kind: string, rule: string) => boolean; file: string; label: string; doc: Doc; propose: Propose; proposePerms: (file: string, text: string, mode: string) => Promise<string | null> }) {
+export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTransfer, added, moveRule }: { added: (file: string, kind: string) => string[]; moveRule: (file: string, from: string, rule: string, to: string, text: string) => Promise<void>; onTransfer: (file: string, kind: string, rule: string, move: boolean) => void; gone: (file: string, kind: string, rule: string) => boolean; file: string; label: string; doc: Doc; propose: Propose; proposePerms: (file: string, text: string, mode: string) => Promise<string | null> }) {
   const [importing, setImporting] = useState(false)
   const [draft, setDraft] = useState<Record<string, string>>({})
   const [sug, setSug] = useState<PermSuggest[] | null>(null)
@@ -44,9 +45,8 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone }: { go
     const text = edit.text.trim()
     const same = text === edit.rule && edit.to === edit.kind
     if (!text || same) return setEdit(null)
-    await propose({ file, op: "add", path: ["permissions", edit.to], value: text })
-    await propose({ file, op: "remove", path: ["permissions", edit.kind], value: edit.rule })
     setEdit(null)
+    await moveRule(file, edit.kind, edit.rule, edit.to, text)
   }
   const add = (kind: string, rule: string) => propose({ file, op: "add", path: ["permissions", kind], value: rule })
   return (
@@ -54,7 +54,7 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone }: { go
       <PermIOButtons file={file} label={label} doc={doc} onImport={() => setImporting(true)} />
       <PermImportDialog open={importing} file={file} label={label} propose={proposePerms} onClose={() => setImporting(false)} />
       {KINDS.map(([kind, label, hint]) => {
-        const rules = list(at(doc, "permissions", kind)).filter((r) => !gone(file, kind, r))
+        const rules = [...list(at(doc, "permissions", kind)), ...added(file, kind)].filter((r, i, all) => all.indexOf(r) === i && !gone(file, kind, r))
         return (
           <section key={kind}>
             <h3 className="text-sm font-medium">
@@ -82,7 +82,9 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone }: { go
                     </form>
                   </li>
                 ) : (
-                <li key={r} className="group flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted" onDoubleClick={() => setEdit({ kind, rule: r, text: r, to: kind })}>
+                <ContextMenu key={r}>
+                <ContextMenuTrigger asChild>
+                <li className="group flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted" onDoubleClick={() => setEdit({ kind, rule: r, text: r, to: kind })}>
                   <code className="min-w-0 flex-1 text-xs break-all">{r}</code>
                   <Button variant="ghost" size="icon-xs" aria-label={`Modifier ${r}`} title="Modifier (ou double-clic)" onClick={() => setEdit({ kind, rule: r, text: r, to: kind })}>
                     <Pencil />
@@ -91,6 +93,44 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone }: { go
                     <X />
                   </Button>
                 </li>
+                </ContextMenuTrigger>
+                <ContextMenuContent className="w-64">
+                  <ContextMenuItem onSelect={() => setEdit({ kind, rule: r, text: r, to: kind })}>
+                    <Pencil /> Modifier
+                  </ContextMenuItem>
+                  <ContextMenuItem onSelect={() => navigator.clipboard.writeText(r).then(() => toast.success("Règle copiée"), () => toast.error("Copie impossible"))}>
+                    <ClipboardCopy /> Copier la règle
+                  </ContextMenuItem>
+                  <ContextMenuSub>
+                    <ContextMenuSubTrigger>Changer de catégorie</ContextMenuSubTrigger>
+                    <ContextMenuSubContent>
+                      {KINDS.filter(([k]) => k !== kind).map(([k, l]) => (
+                        <ContextMenuItem
+                          key={k}
+                          onSelect={() => moveRule(file, kind, r, k, r)}
+                        >
+                          {l}
+                        </ContextMenuItem>
+                      ))}
+                    </ContextMenuSubContent>
+                  </ContextMenuSub>
+                  {file !== "u" && (
+                    <>
+                      <ContextMenuSeparator />
+                      <ContextMenuItem onSelect={() => onTransfer(file, kind, r, false)}>
+                        <Globe /> Copier vers le global
+                      </ContextMenuItem>
+                      <ContextMenuItem onSelect={() => onTransfer(file, kind, r, true)}>
+                        <Globe /> Déplacer vers le global
+                      </ContextMenuItem>
+                    </>
+                  )}
+                  <ContextMenuSeparator />
+                  <ContextMenuItem variant="destructive" onSelect={() => propose({ file, op: "remove", path: ["permissions", kind], value: r })}>
+                    <X /> Supprimer
+                  </ContextMenuItem>
+                </ContextMenuContent>
+                </ContextMenu>
                 )
               )}
               {rules.length === 0 && <li className="px-2 py-1 text-xs text-muted-foreground">Aucune.</li>}
