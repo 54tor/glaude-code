@@ -10,6 +10,7 @@ import { buildTree, find, under, type Entry } from "@/lib/tree"
 import { size, tilde } from "@/lib/format"
 import { useLocal } from "@/hooks/useLocal"
 import { applyFont } from "@/lib/fonts"
+import { withChoice, type Choice } from "@/lib/models"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -60,6 +61,14 @@ export default function App() {
   const [hits, setHits] = useState<{ q: string; m: Map<string, Hit> } | null>(null)
   const [picked, setPicked] = useState(() => new Set<string>())
   const [args, setArgs] = useLocal("ccArgs", "")
+  // Modèle et effort par défaut des nouveaux prompts (Réglages), modifiables à chaque prompt.
+  const [model, setModel] = useLocal("ccModel", "")
+  const [effort, setEffort] = useLocal("ccEffort", "")
+  const choice: Choice = { model, effort }
+  const setChoice = (c: Choice) => {
+    setModel(c.model)
+    setEffort(c.effort)
+  }
   const [font, setFont] = useLocal("ccFont", "geist")
   const [fontSize, setFontSize] = useLocal("ccFontSize", "15")
   useEffect(() => applyFont(font, fontSize), [font, fontSize])
@@ -273,7 +282,8 @@ export default function App() {
         project: x.project,
         initial: refs(x) + "\n\n",
         send: "Lancer la session",
-        run: (prompt) => act("/new-session", { dir: first.s.dir, id: first.s.id, prompt, args }, "Nouvelle session…", "last"),
+        choice,
+        run: (prompt, c) => act("/new-session", { dir: first.s.dir, id: first.s.id, prompt, args: withChoice(args, c) }, "Nouvelle session…", "last"),
       })
     },
     export: (x) =>
@@ -363,7 +373,8 @@ export default function App() {
             subtitle: r.s.title,
             project: r.g.project,
             send: "Reprendre et envoyer",
-            run: (text) => act("/open", { dir: r.s.dir, id: r.s.id, args, prompt: text }, "Reprise avec le message…", "last"),
+            choice,
+            run: (text, c) => act("/open", { dir: r.s.dir, id: r.s.id, args: withChoice(args, c), prompt: text }, "Reprise avec le message…", "last"),
           }),
     copy: (s) =>
       navigator.clipboard.writeText(`claude --resume ${s.id}`).then(
@@ -509,6 +520,8 @@ export default function App() {
           auto={{ n: view.autoItems.length, kb: view.akb, purge: purgeAuto }}
           args={args}
           setArgs={setArgs}
+          choice={choice}
+          setChoice={setChoice}
           font={font}
           setFont={setFont}
           fontSize={fontSize}
@@ -602,7 +615,7 @@ export default function App() {
             )
           ) : (
             <ScrollArea className="min-h-0 flex-1">
-              <div className="mx-auto max-w-4xl px-3 py-4 pb-24 md:px-6">
+              <div className="mx-auto max-w-7xl px-3 py-4 pb-24 md:px-6">
                 {data === null && (
                   <div className="space-y-3 px-3">
                     {[0, 1, 2, 3, 4].map((i) => (
@@ -725,7 +738,7 @@ export default function App() {
         </main>
       </div>
 
-      <Conversation row={reader} onClose={closeReader} args={args} />
+      <Conversation row={reader} onClose={closeReader} args={args} choice={choice} />
       <DirPicker pick={picker} home={home} />
       <Confirm ask={ask} onClose={() => setAsk(null)} />
       <Prompt ask={prompt} onClose={() => setPrompt(null)} />

@@ -4,6 +4,8 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { ArrowDownToLine, ArrowUpToLine, Loader2, MoreHorizontal, Send, Square, SquareTerminal, Wrench } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
+import { withChoice, type Choice } from "@/lib/models"
+import { ModelPicker } from "./ModelPicker"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
 import { full, size, tilde } from "@/lib/format"
 import { Button } from "@/components/ui/button"
@@ -131,6 +133,7 @@ function Composer({
   dir,
   id,
   args,
+  defaultChoice,
   live,
   turn,
   setTurn,
@@ -139,6 +142,7 @@ function Composer({
   dir: string
   id: string
   args: string
+  defaultChoice: Choice
   live: boolean
   turn: Turn | null
   setTurn: (f: (t: Turn | null) => Turn | null) => void
@@ -146,6 +150,7 @@ function Composer({
 }) {
   const [text, setText] = useState("")
   const [mode, setMode] = useLocal("ccChatMode", "")
+  const [choice, setChoice] = useState(defaultChoice)
   const running = !!turn?.running
   const send = async () => {
     const prompt = text.trim()
@@ -158,7 +163,7 @@ function Composer({
       res = await fetch("/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dir, id, prompt, args, mode }),
+        body: JSON.stringify({ dir, id, prompt, args: withChoice(args, choice), mode }),
       })
     } catch (e) {
       return fail(e instanceof Error ? e.message : String(e))
@@ -202,7 +207,7 @@ function Composer({
     )
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
-      <div className="mx-auto max-w-4xl space-y-2">
+      <div className="mx-auto max-w-7xl space-y-2">
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -228,6 +233,7 @@ function Composer({
               </option>
             ))}
           </select>
+          <ModelPicker value={choice} onChange={setChoice} disabled={running} />
           {turn?.cost ? <span className="text-muted-foreground">coût indiqué par claude : {turn.cost.toFixed(2)} $</span> : null}
           <span className="ml-auto" />
           {running ? (
@@ -245,7 +251,7 @@ function Composer({
   )
 }
 
-export function Conversation({ row, onClose, args }: { row: Row | null; onClose: () => void; args: string }) {
+export function Conversation({ row, onClose, args, choice }: { row: Row | null; onClose: () => void; args: string; choice: Choice }) {
   const a = useActions()
   const session = row?.s ?? null
   // Les effets dépendent des identifiants, pas de l'objet : le rafraîchissement périodique de la liste
@@ -342,7 +348,7 @@ export function Conversation({ row, onClose, args }: { row: Row | null; onClose:
           </div>
         </div>
         <ScrollArea ref={area} className="min-h-0 flex-1">
-          <div className="session-text mx-auto max-w-4xl space-y-5 px-6 py-6">
+          <div className="session-text mx-auto max-w-7xl space-y-5 px-6 py-6">
             {msgs === null && (
               <>
                 <Skeleton className="ml-auto h-10 w-2/3" />
@@ -372,6 +378,7 @@ export function Conversation({ row, onClose, args }: { row: Row | null; onClose:
             dir={dir}
             id={id}
             args={args}
+            defaultChoice={choice}
             live={a.live.has(id)}
             turn={turn}
             setTurn={(f) => setChat((c) => f(c?.id === id ? c : null))}

@@ -422,7 +422,7 @@ export function Memory({
               )}
             </div>
             <ScrollArea className="min-h-0 flex-1">
-              <pre className="session-text mx-auto max-w-3xl px-6 py-6 whitespace-pre-wrap">{text ?? ""}</pre>
+              <pre className="session-text mx-auto max-w-7xl px-6 py-6 whitespace-pre-wrap">{text ?? ""}</pre>
             </ScrollArea>
           </>
         ) : !sel ? (
@@ -498,7 +498,7 @@ export function Memory({
               />
             ) : (
               <ScrollArea className="min-h-0 flex-1">
-                <div className="mx-auto max-w-3xl px-6 py-6 text-sm leading-relaxed">
+                <div className="mx-auto max-w-7xl px-6 py-6 text-sm leading-relaxed">
                   {text === null ? (
                     <Skeleton className="h-32 w-full" />
                   ) : (

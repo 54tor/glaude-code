@@ -20,6 +20,8 @@ import {
 } from "lucide-react"
 import { size } from "@/lib/format"
 import { FONTS, SIZES } from "@/lib/fonts"
+import type { Choice } from "@/lib/models"
+import { ModelPicker } from "./ModelPicker"
 import type { Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
 import { cn } from "@/lib/utils"
@@ -101,7 +103,13 @@ function FontPicker({ font, setFont, fontSize, setFontSize }: Fonts) {
   )
 }
 
-function Settings({ args, setArgs, ...fonts }: { args: string; setArgs: (v: string) => void } & Fonts) {
+function Settings({
+  args,
+  setArgs,
+  choice,
+  setChoice,
+  ...fonts
+}: { args: string; setArgs: (v: string) => void; choice: Choice; setChoice: (c: Choice) => void } & Fonts) {
   const { theme, setTheme } = useTheme()
   return (
     <Popover>
@@ -140,6 +148,13 @@ function Settings({ args, setArgs, ...fonts }: { args: string; setArgs: (v: stri
               </button>
             ))}
           </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Modèle et effort des nouveaux prompts</Label>
+          <ModelPicker value={choice} onChange={setChoice} />
+          <p className="text-xs text-muted-foreground">
+            Proposé par défaut pour reprendre avec un message, une nouvelle session ou le chat ; modifiable à chaque prompt.
+          </p>
         </div>
         <FontPicker {...fonts} />
         <div className="space-y-1.5">
@@ -246,6 +261,8 @@ export type SidebarProps = {
   auto: { n: number; kb: number; purge: () => void }
   args: string
   setArgs: (v: string) => void
+  choice: Choice
+  setChoice: (c: Choice) => void
 } & Fonts
 
 export function Sidebar({ searchRef, ...p }: SidebarProps) {
@@ -387,7 +404,16 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           </div>
         )}
         <div className="flex items-center gap-2">
-          <Settings args={p.args} setArgs={p.setArgs} font={p.font} setFont={p.setFont} fontSize={p.fontSize} setFontSize={p.setFontSize} />
+          <Settings
+            args={p.args}
+            setArgs={p.setArgs}
+            choice={p.choice}
+            setChoice={p.setChoice}
+            font={p.font}
+            setFont={p.setFont}
+            fontSize={p.fontSize}
+            setFontSize={p.setFontSize}
+          />
           {p.args && (
             <code className="truncate text-xs text-muted-foreground" title="options ajoutées à claude">
               {p.args}

@@ -14,6 +14,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useActions } from "./actions"
+import type { Choice } from "@/lib/models"
+import { ModelPicker } from "./ModelPicker"
 
 // Ce que la fenêtre de saisie envoie : un message de reprise, ou le prompt d'une nouvelle session.
 export type ComposeAsk = {
@@ -23,7 +25,8 @@ export type ComposeAsk = {
   project: string // pour proposer d'abord la mémoire de ce projet
   initial?: string
   send: string // libellé du bouton
-  run: (text: string) => void
+  choice: Choice // modèle et effort proposés par défaut (Réglages)
+  run: (text: string, choice: Choice) => void
 }
 
 // Saisie d'un message, éventuellement composé à partir de snippets et d'entrées de mémoire.
@@ -38,6 +41,7 @@ export function Compose({ ask, snippets, onClose }: { ask: ComposeAsk | null; sn
 function Form({ ask, snippets, onClose }: { ask: ComposeAsk; snippets: Snippet[]; onClose: () => void }) {
   const a = useActions()
   const [text, setText] = useState(ask.initial ?? "")
+  const [choice, setChoice] = useState(ask.choice)
   const [mem, setMem] = useState<{ global: MemFile[]; projects: MemProject[] } | null>(null)
   const area = useRef<HTMLTextAreaElement>(null)
   const ok = text.trim() !== ""
@@ -55,7 +59,7 @@ function Form({ ask, snippets, onClose }: { ask: ComposeAsk; snippets: Snippet[]
   const send = () => {
     if (!ok) return
     onClose()
-    ask.run(text.trim())
+    ask.run(text.trim(), choice)
   }
   // Insère à la position du curseur (ou à la place de la sélection), puis y replace le curseur.
   const put = (t: string) => {
@@ -89,7 +93,7 @@ function Form({ ask, snippets, onClose }: { ask: ComposeAsk; snippets: Snippet[]
     ))
 
   return (
-    <div className="grid gap-4">
+    <div className="grid min-w-0 gap-4">
       <DialogHeader>
         <DialogTitle>{ask.title}</DialogTitle>
         <DialogDescription className="truncate">{ask.subtitle}</DialogDescription>
@@ -107,8 +111,8 @@ function Form({ ask, snippets, onClose }: { ask: ComposeAsk; snippets: Snippet[]
         className="session-text w-full resize-y rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         aria-label="Message"
       />
-      <DialogFooter className="items-center sm:justify-between">
-        <div className="flex gap-2">
+      <DialogFooter className="flex-wrap items-center gap-2 sm:justify-between">
+        <div className="flex flex-wrap gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" disabled={!mem}>
@@ -159,7 +163,8 @@ function Form({ ask, snippets, onClose }: { ask: ComposeAsk; snippets: Snippet[]
             </DropdownMenu>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <ModelPicker value={choice} onChange={setChoice} className="max-w-80" />
           <Button variant="outline" onClick={onClose}>
             Annuler
           </Button>

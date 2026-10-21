@@ -66,7 +66,7 @@ export function Tabs({ args, onAsk, onPrompt }: { args: string; onAsk: (a: Ask) 
 
   return (
     <ScrollArea className="min-h-0 flex-1">
-      <div className="mx-auto max-w-4xl space-y-4 px-3 py-4 pb-24 md:px-6">
+      <div className="mx-auto max-w-7xl space-y-4 px-3 py-4 pb-24 md:px-6">
         <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-muted/30 px-4 py-3 text-sm">
           <div className="min-w-0 flex-1">
             <p className="font-medium">
