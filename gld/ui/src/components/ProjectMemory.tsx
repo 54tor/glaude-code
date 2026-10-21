@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
-import { BookOpen, Brain, ChevronRight, ClipboardCopy, Copy, FileText, Globe, Link as LinkIcon, Pencil, ScrollText, Tag, Trash2 } from "lucide-react"
-import { Link, useLocation } from "wouter"
+import { BookOpen, Brain, ChevronRight, ClipboardCopy, Copy, FileText, Globe, Link as LinkIcon, ExternalLink, Pencil, ScrollText, Tag, Trash2 } from "lucide-react"
+import { useLocation } from "wouter"
 import { toast } from "sonner"
 import { api, type MemFile } from "@/lib/api"
 import { href } from "@/lib/route"
@@ -77,7 +77,7 @@ function EditDialog({ file, onClose, onSaved }: { file: MemFile; onClose: () => 
 }
 
 // La mémoire locale d'un projet ouvert dans la liste des sessions : entrées de mémoire, règles .claude/rules, CLAUDE.md, AGENTS.md…
-// Un clic ouvre le fichier dans la page Mémoire ; un clic droit (ou le crayon) permet de le modifier sur place, de changer son type,
+// Un clic ouvre le fichier dans une fenêtre d'édition (la page Mémoire reste à un clic : flèche ou menu) ; un clic droit permet aussi de changer son type,
 // de le copier ou déplacer vers les règles globales, ou de le supprimer. Relue au retour sur l'onglet.
 export function ProjectMemory({ dir }: { dir: string }) {
   const [files, setFiles] = useState<MemFile[] | null>(null)
@@ -136,15 +136,15 @@ export function ProjectMemory({ dir }: { dir: string }) {
                 <ContextMenu>
                   <ContextMenuTrigger asChild>
                     <div className="group/row flex items-center rounded-md hover:bg-muted">
-                      <Link href={href({ kind: "memory", key: f.key })} className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-sm" title={f.path}>
+                      <button onClick={() => setEditing(f)} className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-sm" title={f.path}>
                         <Icon className="size-3.5 shrink-0 text-muted-foreground" />
                         <span className={cn("min-w-0 flex-1 truncate", f.off && "line-through opacity-60")}>{f.name}</span>
                         {f.type && <span className="shrink-0 rounded bg-muted px-1.5 text-[10px] text-muted-foreground">{f.type}</span>}
                         {f.paths && <span className="shrink-0 text-[10px] text-muted-foreground">scopée</span>}
                         <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{f.always ? `${f.tokens} tok.` : "à la demande"}</span>
-                      </Link>
-                      <Button size="icon-xs" variant="ghost" className="mr-1 shrink-0 opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100" onClick={() => setEditing(f)} aria-label={`Modifier ${f.name}`} title="Modifier ici">
-                        <Pencil />
+                      </button>
+                      <Button size="icon-xs" variant="ghost" className="mr-1 shrink-0 opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100" onClick={() => go(href({ kind: "memory", key: f.key }))} aria-label={`Ouvrir ${f.name} dans la page Mémoire`} title="Ouvrir dans la page Mémoire">
+                        <ExternalLink />
                       </Button>
                     </div>
                   </ContextMenuTrigger>
