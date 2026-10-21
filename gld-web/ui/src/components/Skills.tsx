@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { AlertTriangle, BookOpen, ClipboardCopy, Copy, EyeOff, FileText, FolderInput, Hand, Pencil, Plus, Save, Sparkles, Trash2, X, Zap } from "lucide-react"
+import { AlertTriangle, BookOpen, Bot, ClipboardCopy, Copy, EyeOff, FileText, FolderInput, Hand, Pencil, Plus, Save, Sparkles, Trash2, X, Zap } from "lucide-react"
 import { toast } from "sonner"
 import { api, type Skill, type SkillFile } from "@/lib/api"
 import { ago, tilde } from "@/lib/format"
@@ -265,7 +265,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
                         <Trash2 /> Supprimer
                       </Button>
                       <Button variant="ghost" size="sm" onClick={() => setWriter(sel)}>
-                        <Sparkles /> Haiku…
+                        <Bot /> Améliorer…
                       </Button>
                       <Button size="sm" onClick={() => cur && setDraft({ key: sel, text: cur.text })} disabled={!cur}>
                         <Pencil /> Modifier

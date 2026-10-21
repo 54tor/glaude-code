@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { Check, Copy, Download, Loader2, MessageSquarePlus, Pencil, Plus, Save, Sparkles, Terminal, Trash2, Undo2, Upload, X } from "lucide-react"
+import { Bot, Check, Copy, Download, Loader2, MessageSquarePlus, Pencil, Plus, Save, Sparkles, Terminal, Trash2, Undo2, Upload, X } from "lucide-react"
 import { toast } from "sonner"
 import { api, type SnipScope, type Snippet } from "@/lib/api"
 import { ago, size, tilde } from "@/lib/format"
@@ -244,7 +244,7 @@ export function Snippets({
                     </Button>
                   )}
                   <Button variant="outline" size="sm" onClick={() => setHaiku(true)}>
-                    <Sparkles /> Haiku…
+                    <Bot /> Améliorer…
                   </Button>
                   <Button size="sm" onClick={save} disabled={editing.text === text}>
                     <Save /> Enregistrer
@@ -258,8 +258,8 @@ export function Snippets({
                   <Button variant="ghost" size="sm" onClick={() => text !== null && setDraft({ key: sel, text })} disabled={text === null}>
                     <Pencil /> Modifier
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setHaiku(true)} disabled={text === null} title="Mettre en forme avec Haiku">
-                    <Sparkles /> Haiku…
+                  <Button variant="ghost" size="sm" onClick={() => setHaiku(true)} disabled={text === null} title="Améliorer avec un modèle (mise en forme)">
+                    <Bot /> Améliorer…
                   </Button>
                   <Button variant="outline" size="sm" onClick={copy} disabled={text === null}>
                     {copied ? <Check /> : <Copy />} {copied ? "Copié" : "Copier"}
