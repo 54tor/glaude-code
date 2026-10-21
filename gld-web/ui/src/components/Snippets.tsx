@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Choose } from "./Choose"
 import type { Ask } from "./Confirm"
-import { Markdown } from "./Conversation"
+import { Markdown } from "./Message"
 import type { Ask as PromptAsk } from "./Prompt"
 
 // Snippets = commandes Claude Code (/nom) : personnelles (~/.claude/commands) et de chaque projet (.claude/commands).

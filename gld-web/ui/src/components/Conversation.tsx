@@ -1,12 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { toast } from "sonner"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
-import { ArrowDownToLine, ArrowUpToLine, CornerDownRight, Loader2, MoreHorizontal, Send, Square, SquareTerminal, Wrench } from "lucide-react"
-import { useLocal } from "@/hooks/useLocal"
-import { withChoice, type Choice } from "@/lib/models"
-import { ModelPicker } from "./ModelPicker"
-import { Choose } from "./Choose"
+import { ArrowDownToLine, ArrowUpToLine, Loader2, MoreHorizontal, SquareTerminal, Wrench } from "lucide-react"
+import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
 import { full, size, tilde } from "@/lib/format"
 import { Button } from "@/components/ui/button"
@@ -17,95 +11,11 @@ import { useActions } from "./actions"
 import { SessionDropdown } from "./SessionMenu"
 import { Live } from "./SessionList"
 import type { Row } from "./actions"
-import { isTagged, Tagged } from "./Tagged"
+import { Message } from "./Message"
+import { Composer, type Turn } from "./Composer"
 
-// Messages de Claude : Markdown (tableaux GFM compris). react-markdown n'interprète jamais de HTML brut
-// et filtre les URL dangereuses (javascript:) : rien de ce qui est affiché ne peut s'exécuter.
-// onLink : intercepte un lien relatif (ex. une autre entrée de mémoire) ; renvoie false pour le laisser faire.
-export function Markdown({ t, onLink }: { t: string; onLink?: (href: string) => boolean }) {
-  return (
-    <div className="md">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          // URL filtrée (javascript:…) : plus de href, donc du texte simple plutôt qu'un lien qui rouvrirait la page.
-          a: ({ href, children }) =>
-            href ? (
-              <a href={href} target="_blank" rel="noopener noreferrer" onClick={(e) => onLink?.(href) && e.preventDefault()}>
-                {children}
-              </a>
-            ) : (
-              <span>{children}</span>
-            ),
-        }}
-      >
-        {t}
-      </ReactMarkdown>
-    </div>
-  )
-}
-
-// Texte collé dans Claude Code (<pasted_content id="…">…</pasted_content id="…">) : un bloc repliable.
 // Messages chargés d'un coup (par la fin) : une session de plusieurs Go compte des milliers de messages.
 const PAGE = 200
-
-const PASTED = /<pasted_content id="[^"]*">\n?([\s\S]*?)\n?<\/pasted_content(?: id="[^"]*")?>/g
-
-function UserText({ t }: { t: string }) {
-  const parts: React.ReactNode[] = []
-  let at = 0
-  for (const m of t.matchAll(PASTED)) {
-    const before = t.slice(at, m.index).trim()
-    if (before) parts.push(<span key={`t${at}`}>{before}</span>)
-    const lines = m[1].split("\n").length
-    parts.push(
-      <details key={m.index} className="group/paste my-1 rounded-lg border bg-background/60">
-        <summary className="cursor-pointer list-none px-3 py-1.5 text-xs text-muted-foreground select-none hover:text-foreground">
-          Texte collé · {lines} ligne{lines > 1 ? "s" : ""}
-        </summary>
-        <pre className="max-h-96 overflow-auto border-t px-3 py-2 text-xs whitespace-pre-wrap">{m[1]}</pre>
-      </details>
-    )
-    at = m.index + m[0].length
-  }
-  const rest = t.slice(at).trim()
-  if (rest) parts.push(<span key="rest">{rest}</span>)
-  return <>{parts}</>
-}
-
-function Message({ m }: { m: Msg }) {
-  const title = m.ts ? new Date(m.ts).toLocaleString("fr-FR") : undefined
-  if (m.r === "user" && isTagged(m.t))
-    return (
-      <div title={title} className="msg ml-auto max-w-[85%]">
-        <Tagged t={m.t} />
-      </div>
-    )
-  if (m.r === "user")
-    return (
-      <div title={title} className="msg flex justify-end">
-        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-primary/[0.07] px-4 py-2.5 break-words whitespace-pre-wrap dark:bg-primary/10">
-          <UserText t={m.t} />
-        </div>
-      </div>
-    )
-  if (m.r === "tool") {
-    // « ↳ … » : résultat d'un appel ; sinon l'appel lui-même (« Outil  argument »).
-    const result = m.t.startsWith("↳")
-    const Icon = result ? CornerDownRight : Wrench
-    return (
-      <div title={title} className="msg flex gap-2 border-l-2 py-0.5 pl-3 text-muted-foreground">
-        <Icon className="mt-0.5 size-3.5 shrink-0" aria-label={result ? "résultat d'outil" : "appel d'outil"} />
-        <span className="min-w-0 break-words whitespace-pre-wrap">{result ? m.t.slice(1).trimStart() : m.t}</span>
-      </div>
-    )
-  }
-  return (
-    <div title={title} className="msg leading-relaxed break-words">
-      <Markdown t={m.t} />
-    </div>
-  )
-}
 
 function Meta({ s, d }: { s: Session; d: Detail | null }) {
   const a = useActions()
@@ -124,127 +34,6 @@ function Meta({ s, d }: { s: Session; d: Detail | null }) {
       {live && <Live waiting={a.waiting.has(s.id)} />}
       <span className="truncate">{(live ? "· " : "") + bits.join(" · ")}</span>
     </p>
-  )
-}
-
-// Modes d'autorisation de claude -p : sans terminal, Claude ne peut pas demander la permission.
-const MODES = [
-  ["", "Lecture seule : écrire et lancer des commandes est refusé"],
-  ["plan", "Plan : propose sans rien modifier"],
-  ["acceptEdits", "Accepter les modifications de fichiers"],
-  ["auto", "Auto : Claude décide de ce qu'il peut faire"],
-] as const
-
-type Turn = { id: string; msgs: Msg[]; running: boolean; error?: string; cost?: number }
-
-// Écrire dans la session depuis le navigateur : claude -p --resume, réponse relayée au fil de l'eau (NDJSON).
-function Composer({
-  dir,
-  id,
-  args,
-  defaultChoice,
-  live,
-  turn,
-  setTurn,
-  onDone,
-}: {
-  dir: string
-  id: string
-  args: string
-  defaultChoice: Choice
-  live: boolean
-  turn: Turn | null
-  setTurn: (f: (t: Turn | null) => Turn | null) => void
-  onDone: () => void
-}) {
-  const [text, setText] = useState("")
-  const [mode, setMode] = useLocal("ccChatMode", "")
-  const [choice, setChoice] = useState(defaultChoice)
-  const running = !!turn?.running
-  const send = async () => {
-    const prompt = text.trim()
-    if (!prompt || running) return
-    setText("")
-    setTurn(() => ({ id, msgs: [{ r: "user", t: prompt }], running: true }))
-    const fail = (error: string) => setTurn((t) => t && { ...t, running: false, error })
-    let res: Response
-    try {
-      res = await fetch("/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dir, id, prompt, args: withChoice(args, choice), mode }),
-      })
-    } catch (e) {
-      return fail(e instanceof Error ? e.message : String(e))
-    }
-    if (!res.ok || !res.body) return fail(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `HTTP ${res.status}`)
-    const reader = res.body.getReader()
-    const dec = new TextDecoder()
-    let buf = ""
-    for (;;) {
-      const { value, done } = await reader.read()
-      buf += dec.decode(value, { stream: !done })
-      const lines = buf.split("\n")
-      buf = lines.pop() ?? ""
-      for (const l of lines) {
-        if (!l.trim()) continue
-        const e = JSON.parse(l) as { msgs?: Msg[]; done?: boolean; ok?: boolean; error?: string; cost?: number; note?: string }
-        if (e.note) toast.info(e.note)
-        setTurn(
-          (t) =>
-            t && {
-              ...t,
-              msgs: e.msgs ? [...t.msgs, ...e.msgs] : t.msgs,
-              running: e.done ? false : t.running,
-              error: e.done && !e.ok ? e.error || "Échec" : t.error,
-              cost: e.cost ?? t.cost,
-            }
-        )
-      }
-      if (done) break
-    }
-    setTurn((t) => t && { ...t, running: false })
-    onDone()
-  }
-  const stop = () => api.post("/chat-stop", { id })
-
-  if (live)
-    return (
-      <p className="border-t px-6 py-3 text-center text-xs text-muted-foreground">
-        Session ouverte dans un terminal : écris-y directement (deux processus ne peuvent pas écrire le même transcript).
-      </p>
-    )
-  return (
-    <div className="border-t bg-muted/20 px-4 py-3">
-      <div className="mx-auto max-w-7xl space-y-2">
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "Enter" && (e.preventDefault(), send())}
-          placeholder={running ? "Claude répond…" : "Écrire à Claude dans cette session… (Ctrl+Entrée pour envoyer)"}
-          disabled={running}
-          rows={2}
-          maxLength={32000}
-          className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
-          aria-label="Message à Claude"
-        />
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <Choose value={mode} onChange={setMode} options={MODES} label="Autorisations accordées à Claude" disabled={running} />
-          <ModelPicker value={choice} onChange={setChoice} disabled={running} />
-          {turn?.cost ? <span className="text-muted-foreground">coût indiqué par claude : {turn.cost.toFixed(2)} $</span> : null}
-          <span className="ml-auto" />
-          {running ? (
-            <Button size="sm" variant="outline" onClick={stop}>
-              <Square /> Arrêter
-            </Button>
-          ) : (
-            <Button size="sm" onClick={send} disabled={!text.trim()}>
-              <Send /> Envoyer
-            </Button>
-          )}
-        </div>
-      </div>
-    </div>
   )
 }
 
