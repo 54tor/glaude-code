@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { ChevronRight, ClipboardCopy, Globe, X } from "lucide-react"
+import { ChevronRight, ClipboardCopy, FolderPlus, Globe, X } from "lucide-react"
 import { Link } from "wouter"
 import { api, type ProjectCfg } from "@/lib/api"
 import { describeKey } from "@/lib/configKeys"
@@ -29,7 +29,7 @@ const Badge = ({ n, label }: { n: number; label: string }) =>
 
 // Ce que chaque projet configure en propre, en plus des réglages de l'utilisateur : réglages (projet et local), règles de
 // permission, hooks, serveurs MCP, règles .claude/rules, skills et documentation. onEdit ouvre l'onglet qui permet de les modifier.
-export function ProjectsTab({ home, version, gone, onEdit, onTransfer, onRemove }: { home: string; version: number; gone: (file: string, kind: string, rule: string) => boolean; onEdit: (file: string, tab: string) => void; onRemove: (file: string, kind: string, rule: string) => void; onTransfer: (file: string, kind: string, rule: string, move: boolean) => void }) {
+export function ProjectsTab({ home, version, gone, onAddDir, onEdit, onTransfer, onRemove }: { home: string; version: number; onAddDir: (file: string, project: string) => void; gone: (file: string, kind: string, rule: string) => boolean; onEdit: (file: string, tab: string) => void; onRemove: (file: string, kind: string, rule: string) => void; onTransfer: (file: string, kind: string, rule: string, move: boolean) => void }) {
   const [list, setList] = useState<ProjectCfg[] | null>(null)
   const [all, setAll] = useState(false)
   const [q, setQ] = useState("")
@@ -87,6 +87,9 @@ export function ProjectsTab({ home, version, gone, onEdit, onTransfer, onRemove 
                       <h3 className="text-xs font-medium text-muted-foreground">Règles de permission</h3>
                       <Button size="xs" variant="ghost" onClick={() => onEdit(p.files.find((x) => x.id[0] === "p")?.id ?? "p/" + p.dir, "permissions")}>
                         Gérer…
+                      </Button>
+                      <Button size="xs" variant="ghost" title="Ajoute un dossier accessible à Claude dans ce projet (réglages locaux, non versionnés)" onClick={() => onAddDir("l/" + p.dir, p.project)}>
+                        <FolderPlus /> Ajouter un dossier…
                       </Button>
                     </div>
                     {nRules === 0 ? (
