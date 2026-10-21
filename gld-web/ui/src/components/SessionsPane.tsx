@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Actions, Row } from "./actions"
+import { ProjectMemory } from "./ProjectMemory"
 import { Live, SessionList } from "./SessionList"
 
 function Empty({ title, text, children }: { title: string; text: string; children?: React.ReactNode }) {
@@ -31,6 +32,7 @@ export function SessionsPane({
   qt,
   vg,
   dirMissing,
+  projectDir,
   home,
   live,
   waiting,
@@ -46,6 +48,7 @@ export function SessionsPane({
   qt: string
   vg: VGroup | undefined
   dirMissing: boolean // le dossier demandé n'existe pas dans l'arbre
+  projectDir?: string // dossier de transcripts du projet affiché : sa mémoire locale s'affiche en tête
   home: string
   live: Set<string>
   waiting: Set<string>
@@ -63,6 +66,8 @@ export function SessionsPane({
             ))}
           </div>
         )}
+
+        {!loading && projectDir && (route.kind === "dir" || route.kind === "group") && <ProjectMemory key={projectDir} dir={projectDir} />}
 
         {!loading && route.kind === "recent" && (
           <div className="space-y-6">

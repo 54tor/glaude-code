@@ -1,4 +1,4 @@
-import { BookOpen, Brain, ClipboardCopy, Copy, Eye, EyeOff, FolderInput, Globe, Link, Merge, Pencil, Sparkles, Trash2 } from "lucide-react"
+import { BookOpen, Brain, ClipboardCopy, ScrollText, Copy, Eye, EyeOff, FolderInput, Globe, Link, Merge, Pencil, Sparkles, Trash2 } from "lucide-react"
 import type { MemFile, MemTarget } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import {
@@ -9,7 +9,7 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
 } from "@/components/ui/context-menu"
-import { copy, home, movable } from "./memoryLib"
+import { copy, home, movable, toMemory, toRules } from "./memoryLib"
 
 export type FileActions = {
   open: (key: string) => void
@@ -39,11 +39,21 @@ function Destinations({ x, targets, homeDir, label, onChoose }: { x: MemFile; ta
             <ContextMenuSeparator />
           </>
         )}
-        {targets.map((t) => (
-          <ContextMenuItem key={t.dir} onSelect={() => onChoose(t.dir)}>
-            <Brain /> <span className="truncate">{tilde(t.project, homeDir)}</span>
-          </ContextMenuItem>
-        ))}
+        {toRules(x.key) && <ContextMenuLabel>Règles du projet</ContextMenuLabel>}
+        {toRules(x.key) &&
+          targets.map((t) => (
+            <ContextMenuItem key={"r" + t.dir} onSelect={() => onChoose("r:" + t.dir)}>
+              <ScrollText /> <span className="truncate">{tilde(t.project, homeDir)}</span>
+            </ContextMenuItem>
+          ))}
+        {toRules(x.key) && toMemory(x.key) && <ContextMenuSeparator />}
+        {toMemory(x.key) && <ContextMenuLabel>Mémoire du projet</ContextMenuLabel>}
+        {toMemory(x.key) &&
+          targets.map((t) => (
+            <ContextMenuItem key={t.dir} onSelect={() => onChoose(t.dir)}>
+              <Brain /> <span className="truncate">{tilde(t.project, homeDir)}</span>
+            </ContextMenuItem>
+          ))}
       </ContextMenuSubContent>
     </ContextMenuSub>
   )

@@ -91,6 +91,11 @@ func memResolve(key string) (string, string, error) {
 		if d, n, ok := strings.Cut(key[2:], "/"); ok && safeDir(d) && mdName.MatchString(n) {
 			return filepath.Join(root, d, "memory"), n, nil
 		}
+	case strings.HasPrefix(key, "r/"): // règle d'un projet : <dossier du projet>/.claude/rules/<nom>
+		if d, n, ok := strings.Cut(key[2:], "/"); ok && safeDir(d) && ruleName.MatchString(n) {
+			base, err := projectRulesDir(projectCwd(d))
+			return base, n, err
+		}
 	case strings.HasPrefix(key, "p/"):
 		if d, f, ok := strings.Cut(key[2:], "/"); ok && safeDir(d) {
 			for _, a := range projectFiles {
@@ -108,6 +113,24 @@ func memResolve(key string) (string, string, error) {
 		}
 	}
 	return "", "", bad
+}
+
+// projectRulesDir : le dossier .claude/rules d'un projet ; refuse un projet absent, un lien symbolique et le dossier des règles
+// globales (un projet lancé depuis ~).
+func projectRulesDir(cwd string) (string, error) {
+	if fi, err := os.Stat(cwd); cwd == "" || err != nil || !fi.IsDir() {
+		return "", errors.New("dossier du projet introuvable")
+	}
+	rules := filepath.Join(cwd, ".claude", "rules")
+	if rules == filepath.Join(cfgDir(), "rules") {
+		return "", errors.New("ce sont les règles globales : elles se gèrent dans la section Globale")
+	}
+	for _, p := range []string{filepath.Join(cwd, ".claude"), rules} {
+		if fi, err := os.Lstat(p); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+			return "", errors.New(".claude est un lien symbolique : refusé")
+		}
+	}
+	return rules, nil
 }
 
 func memFile(key, path string) (MemFile, bool) {
@@ -178,6 +201,15 @@ func memList() ([]MemFile, []MemProject, []MemTarget) {
 				} else if f, ok := memFile("p/"+d.Name()+"/"+a, path); ok {
 					f.Name = a
 					mp.Files = append(mp.Files, f)
+				}
+			}
+			if rdir, err := projectRulesDir(mp.Project); err == nil {
+				rules, _ := filepath.Glob(filepath.Join(rdir, "*.md*"))
+				for _, p := range rules {
+					if f, ok := memFile("r/"+d.Name()+"/"+filepath.Base(p), p); ok && ruleName.MatchString(f.Name) {
+						f.Name = "rules/" + f.Name
+						mp.Files = append(mp.Files, f)
+					}
 				}
 			}
 		}
@@ -341,7 +373,7 @@ func memMove(key, to string) (string, error) { return memTransfer(key, to, false
 
 // memTransfer : déplace une entrée ou une règle vers un projet (ou « global »), ou la copie si keep.
 func memTransfer(key, to string, keep bool) (string, error) {
-	if !strings.HasPrefix(key, "m/") && !strings.HasPrefix(key, "g/rules/") {
+	if !strings.HasPrefix(key, "m/") && !strings.HasPrefix(key, "g/rules/") && !strings.HasPrefix(key, "r/") {
 		return "", errors.New("seules les entrées de mémoire et les règles se déplacent")
 	}
 	_, rel, err := memResolve(key)
@@ -349,7 +381,19 @@ func memTransfer(key, to string, keep bool) (string, error) {
 		return "", err
 	}
 	dst := "g/rules/" + rel
-	if to != "global" {
+	switch {
+	case to == "global":
+	case strings.HasPrefix(to, "r:"): // règles d'un projet (to = « r:<dossier> »)
+		if !safeDir(to[2:]) {
+			return "", errors.New("destination invalide")
+		}
+		dst = "r/" + to[2:] + "/" + rel
+		if _, _, err := memResolve(dst); err != nil {
+			return "", err
+		}
+	case strings.HasPrefix(key, "r/"):
+		return "", errors.New("une règle de projet va vers les règles globales ou celles d'un autre projet")
+	default:
 		if !safeDir(to) {
 			return "", errors.New("destination invalide")
 		}
