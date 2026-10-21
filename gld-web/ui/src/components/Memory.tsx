@@ -6,6 +6,7 @@ import {
   CheckSquare,
   ClipboardCopy,
   Copy,
+  FileStack,
   FileText,
   FolderInput,
   Globe,
@@ -13,6 +14,7 @@ import {
   Merge,
   Pencil,
   Save,
+  Sparkles,
   Trash,
   Trash2,
   X,
@@ -46,6 +48,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Ask } from "./Confirm"
 import { Markdown } from "./Conversation"
+import { MemoryWriter, type WriteTarget } from "./MemoryWriter"
 
 type List = { global: MemFile[]; projects: MemProject[]; targets: MemTarget[] }
 
@@ -74,6 +77,8 @@ function Section({
   picked,
   onToggle,
   onPickAll,
+  onWrite,
+  onConsolidate,
   menu,
 }: {
   icon: typeof Globe
@@ -84,6 +89,8 @@ function Section({
   picked: Set<string>
   onToggle: (k: string) => void
   onPickAll: (keys: string[]) => void
+  onWrite?: () => void // nouvelle entrée rédigée par un modèle (absent : section sans mémoire de projet)
+  onConsolidate?: () => void // consolider dans le CLAUDE.md correspondant
   menu: (f: MemFile) => React.ReactNode
 }) {
   return (
@@ -95,6 +102,16 @@ function Section({
           </p>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-60">
+          {onWrite && (
+            <ContextMenuItem onSelect={onWrite}>
+              <Sparkles /> Nouvelle entrée avec Haiku…
+            </ContextMenuItem>
+          )}
+          {onConsolidate && (
+            <ContextMenuItem onSelect={onConsolidate}>
+              <FileStack /> Consolider dans CLAUDE.md (Haiku)…
+            </ContextMenuItem>
+          )}
           <ContextMenuItem onSelect={() => onPickAll(files.map((f) => f.key))}>
             <CheckSquare /> Tout sélectionner pour une fusion
           </ContextMenuItem>
@@ -207,13 +224,50 @@ export function Memory({
 
   const save = async () => {
     if (!editing) return
-    const r = await api.post("/memory-save", { key: sel, text: editing.text })
+    const r = await api.post("/memory-save", { key: sel, text: editing.text, index: !file })
     ;(r.ok ? toast.success : toast.error)(r.out)
     if (r.ok) {
       setLoaded({ key: sel, text: editing.text })
       setDraft(null)
       refresh()
     }
+  }
+  const [writer, setWriter] = useState<WriteTarget | null>(null)
+  // Références proposées : la sélection, plus le fichier affiché.
+  const writeRefs = writer?.refs ? all.filter((x) => writer.refs!.includes(x.key)) : all.filter((x) => picked.has(x.key) || x.key === sel)
+  // Consolidation dans un CLAUDE.md : les règles globales dans ~/.claude/CLAUDE.md, la mémoire d'un projet dans le sien.
+  const consolidate = (scope: string, label: string) => {
+    const refs =
+      scope === "global" ? (list?.global ?? []).filter((x) => x.key.startsWith("g/rules/")) : all.filter((x) => x.key.startsWith(`m/${scope}/`))
+    setWriter({
+      kind: "rewrite",
+      key: scope === "global" ? "g/CLAUDE.md" : `p/${scope}/CLAUDE.md`,
+      name: scope === "global" ? "~/.claude/CLAUDE.md" : `CLAUDE.md de ${label}`,
+      refs: refs.map((x) => x.key),
+      instruction:
+        scope === "global"
+          ? "Consolide ces règles globales dans ce CLAUDE.md : garde les consignes durables, regroupe-les par thème, retire les doublons. Conserve telles quelles les lignes d'import existantes (« @fichier »)."
+          : "Consolide ces entrées de mémoire dans le CLAUDE.md du projet : garde les règles durables, utiles à chaque session, regroupe-les par thème, retire les doublons et ce qui est périmé.",
+    })
+  }
+  const onDraft = (t: WriteTarget, text: string) => {
+    let key = ""
+    if (t.kind === "rewrite") key = t.key
+    else {
+      const name = /^name:\s*["']?([^"'\n]+)/m.exec(text)?.[1] ?? "entree"
+      const slug =
+        name
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "") || "entree"
+      const base = t.scope === "global" ? "g/rules/" : `m/${t.scope}/`
+      key = base + slug + ".md"
+      for (let i = 2; all.some((x) => x.key === key); i++) key = `${base}${slug}-${i}.md`
+    }
+    setDraft({ key, text })
+    onPick(key)
   }
   const edit = (key: string) => {
     if (key === sel && text !== null) return setDraft({ key, text })
@@ -259,6 +313,9 @@ export function Memory({
       <ContextMenuItem onSelect={() => edit(x.key)}>
         <Pencil /> Modifier
       </ContextMenuItem>
+      <ContextMenuItem onSelect={() => setWriter({ kind: "rewrite", key: x.key, name: x.name })}>
+        <Sparkles /> Réécrire avec Haiku…
+      </ContextMenuItem>
       <ContextMenuItem onSelect={() => copyContent(x)}>
         <ClipboardCopy /> Copier le contenu
       </ContextMenuItem>
@@ -297,7 +354,7 @@ export function Memory({
       </ContextMenuItem>
     </>
   )
-  const section = (key: string, icon: typeof Globe, title: string, files: MemFile[]) => (
+  const section = (key: string, icon: typeof Globe, title: string, files: MemFile[], onWrite?: () => void, onConsolidate?: () => void) => (
     <Section
       key={key}
       icon={icon}
@@ -308,6 +365,8 @@ export function Memory({
       picked={picked}
       onToggle={toggle}
       onPickAll={(keys) => setPicked((p) => new Set([...p, ...keys]))}
+      onWrite={onWrite}
+      onConsolidate={onConsolidate}
       menu={menu}
     />
   )
@@ -349,11 +408,24 @@ export function Memory({
               "global",
               Globe,
               "Globale",
-              list.global.filter((x) => match(x, "globale"))
+              list.global.filter((x) => match(x, "globale")),
+              () => setWriter({ kind: "new", scope: "global", label: "règles globales" }),
+              () => consolidate("global", "")
             )}
           {list?.projects.map((p) => {
             const files = p.files.filter((x) => match(x, p.project))
-            return files.length ? section(p.dir, Brain, tilde(p.project, homeDir) + (p.missing ? " (introuvable)" : ""), files) : null
+            const label = tilde(p.project, homeDir)
+            return files.length
+              ? section(
+                  p.dir,
+                  Brain,
+                  label + (p.missing ? " (introuvable)" : ""),
+                  files,
+                  () => setWriter({ kind: "new", scope: p.dir, label }),
+                  // un CLAUDE.md de projet s'écrit dans son dossier : impossible s'il a disparu, inutile sans mémoire
+                  !p.missing && p.files.some((x) => x.key.startsWith("m/")) ? () => consolidate(p.dir, label) : undefined
+                )
+              : null
           })}
           {trash.length > 0 && (
             <section className="mt-4 border-t pt-2">
@@ -394,6 +466,23 @@ export function Memory({
           </span>
           <Button variant="ghost" size="xs" onClick={() => merge(false)} disabled={picked.size < 2} title="Copier le prompt de fusion">
             <Copy /> Prompt
+          </Button>
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => {
+              const m = [...picked].find((k) => k.startsWith("m/"))
+              const dir = m?.split("/")[1]
+              const p = list?.projects.find((x) => x.dir === dir)
+              setWriter(
+                dir
+                  ? { kind: "new", scope: dir, label: tilde(p?.project ?? dir, homeDir) }
+                  : { kind: "new", scope: "global", label: "règles globales" }
+              )
+            }}
+            title="Nouvelle entrée rédigée par Haiku à partir de ces fichiers"
+          >
+            <Sparkles /> Haiku
           </Button>
           <Button size="xs" onClick={() => merge(true)} disabled={picked.size < 2} title="Nouvelle session Claude qui fusionne ces fichiers">
             <Merge /> Fusionner avec Claude
@@ -480,6 +569,11 @@ export function Memory({
                   >
                     <Trash2 /> Supprimer
                   </Button>
+                  {file && (
+                    <Button variant="ghost" size="sm" onClick={() => setWriter({ kind: "rewrite", key: file.key, name: file.name })}>
+                      <Sparkles /> Haiku…
+                    </Button>
+                  )}
                   <Button size="sm" onClick={() => edit(sel)} disabled={text === null}>
                     <Pencil /> Modifier
                   </Button>
@@ -515,6 +609,7 @@ export function Memory({
           </>
         )}
       </div>
+      <MemoryWriter target={writer} refs={writeRefs} onClose={() => setWriter(null)} onDraft={onDraft} />
     </div>
   )
 }

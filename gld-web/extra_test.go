@@ -337,3 +337,68 @@ func TestTrash(t *testing.T) {
 		t.Fatalf("journal : %q", b)
 	}
 }
+
+func TestMemoryDraft(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	put(t, filepath.Join(cfg, "projects", "-p", "memory", "MEMORY.md"), "- [A](a.md) — a", old)
+	put(t, filepath.Join(cfg, "projects", "-p", "memory", "a.md"), "contenu A", old)
+	var got, sys string
+	memDraft = func(model, system, prompt string) (string, float64, error) {
+		got, sys = prompt, system
+		return "---\nname: b\n---\nB\n", 0.001, nil
+	}
+
+	text, _, err := memWriteDraft("haiku", "fusionne", "", []string{"m/-p/a.md"})
+	if err != nil || !strings.Contains(got, "Consigne : fusionne") || !strings.Contains(got, "contenu A") || text == "" {
+		t.Fatal(err, got)
+	}
+	for _, c := range [][2]string{{"gpt", "x"}, {"haiku", ""}} {
+		if _, _, err := memWriteDraft(c[0], c[1], "", nil); err == nil {
+			t.Fatal("accepté :", c)
+		}
+	}
+	if _, _, err := memWriteDraft("haiku", "x", "", []string{"m/../a.md"}); err == nil {
+		t.Fatal("référence invalide acceptée")
+	}
+	if sys != memSystem {
+		t.Fatal("une entrée de mémoire se rédige au format mémoire")
+	}
+	// Conversion en CLAUDE.md global (absent ici) : format CLAUDE.md, fichier à créer.
+	if _, _, err := memWriteDraft("haiku", "convertis", "g/CLAUDE.md", []string{"m/-p/a.md"}); err != nil || sys != claudeSystem || !strings.Contains(got, "n'existe pas encore") {
+		t.Fatal(err, got)
+	}
+	// Nouvelle entrée : sa ligne s'ajoute à l'index, une seule fois.
+	text = "---\nname: Entrée B\ndescription: ce que dit B\nmetadata:\n  type: project\n---\nB\n"
+	if memSave("m/-p/b.md", text) != nil || memIndex("m/-p/b.md", text) != nil || memIndex("m/-p/b.md", text) != nil {
+		t.Fatal("enregistrement")
+	}
+	if s, _ := memRead("m/-p/MEMORY.md"); s != "- [A](a.md) — a\n- [Entrée B](b.md) — ce que dit B\n" {
+		t.Fatalf("index : %q", s)
+	}
+}
+
+// Le projet « ~ » a pour .claude/CLAUDE.md le CLAUDE.md global : il ne doit apparaître (et se supprimer) qu'une fois.
+func TestGlobalClaudeNotAProjectFile(t *testing.T) {
+	home := t.TempDir()
+	cfg := filepath.Join(home, ".claude")
+	use(cfg)
+	put(t, filepath.Join(cfg, "CLAUDE.md"), "@RTK.md\n", old)
+	put(t, filepath.Join(cfg, "projects", "-h", id1+".jsonl"), `{"cwd":"`+home+`"}`+"\n", old)
+	put(t, filepath.Join(cfg, "projects", "-h", "memory", "a.md"), "a", old)
+	g, ps, _ := memList()
+	if len(g) != 1 || len(ps) != 1 {
+		t.Fatalf("%+v %+v", g, ps)
+	}
+	for _, f := range ps[0].Files {
+		if strings.HasSuffix(f.Key, "CLAUDE.md") {
+			t.Fatal("CLAUDE.md global listé comme fichier du projet :", f.Key)
+		}
+	}
+	if memRemove("p/-h/.claude/CLAUDE.md") == nil {
+		t.Fatal("suppression du CLAUDE.md global via le projet acceptée")
+	}
+	if s, _ := memRead("g/CLAUDE.md"); s != "@RTK.md\n" {
+		t.Fatal("CLAUDE.md global touché")
+	}
+}

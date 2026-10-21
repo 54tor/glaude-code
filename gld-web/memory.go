@@ -34,6 +34,18 @@ var (
 	projectFiles = []string{"CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md"}
 )
 
+// globalClaude : ce chemin est le CLAUDE.md global (~/.claude/CLAUDE.md), même atteint comme fichier d'un projet
+// (le projet « ~ » a pour .claude/CLAUDE.md… le fichier global). Il n'est alors géré que dans la section Globale.
+func globalClaude(path string) bool {
+	g := filepath.Join(cfgDir(), "CLAUDE.md")
+	if filepath.Clean(path) == filepath.Clean(g) {
+		return true
+	}
+	a, err1 := os.Stat(path)
+	b, err2 := os.Stat(g)
+	return err1 == nil && err2 == nil && os.SameFile(a, b)
+}
+
 func safeDir(d string) bool { return d != "" && d != ".." && !strings.ContainsAny(d, `/\`) }
 
 // projectCwd : le dossier de travail d'un dossier de transcripts (sa session la plus récente, sinon son nom décodé).
@@ -75,6 +87,9 @@ func memResolve(key string) (string, string, error) {
 					c := projectCwd(d)
 					if fi, err := os.Stat(c); c == "" || err != nil || !fi.IsDir() {
 						return "", "", errors.New("dossier du projet introuvable")
+					}
+					if globalClaude(filepath.Join(c, filepath.FromSlash(f))) {
+						return "", "", errors.New("c'est le CLAUDE.md global : il se gère dans la section Globale")
 					}
 					return c, filepath.FromSlash(f), nil
 				}
@@ -132,7 +147,9 @@ func memList() ([]MemFile, []MemProject, []MemTarget) {
 			}
 		} else {
 			for _, a := range projectFiles {
-				if f, ok := memFile("p/"+d.Name()+"/"+a, filepath.Join(mp.Project, filepath.FromSlash(a))); ok {
+				if path := filepath.Join(mp.Project, filepath.FromSlash(a)); globalClaude(path) {
+					continue // déjà listé dans la section Globale
+				} else if f, ok := memFile("p/"+d.Name()+"/"+a, path); ok {
 					f.Name = a
 					mp.Files = append(mp.Files, f)
 				}

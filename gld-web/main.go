@@ -835,6 +835,10 @@ func main() {
 	})
 	mux.HandleFunc("GET /memory-file", func(w http.ResponseWriter, r *http.Request) {
 		t, err := memRead(r.URL.Query().Get("key"))
+		if errors.Is(err, os.ErrNotExist) { // nouvelle entrée pas encore enregistrée : pas une erreur
+			writeJSON(w, 200, map[string]any{"text": "", "missing": true})
+			return
+		}
 		if err != nil {
 			writeJSON(w, 404, map[string]any{"error": err.Error()})
 			return
@@ -842,12 +846,18 @@ func main() {
 		writeJSON(w, 200, map[string]any{"text": t})
 	})
 	mux.HandleFunc("POST /memory-save", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Key, Text string }
+		var req struct {
+			Key, Text string
+			Index     bool // nouvelle entrée : l'ajouter aussi à MEMORY.md
+		}
 		if json.NewDecoder(io.LimitReader(r.Body, memMax+1<<10)).Decode(&req) != nil {
 			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
 			return
 		}
 		err := memSave(req.Key, req.Text)
+		if err == nil && req.Index {
+			err = memIndex(req.Key, req.Text)
+		}
 		journal("memory-save %s (%d octets) : %v", req.Key, len(req.Text), errOr(err))
 		if err != nil {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
@@ -868,6 +878,24 @@ func main() {
 			return
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "out": "Déplacé", "key": dst})
+	})
+	// Brouillon rédigé par un petit modèle (memwrite.go) : rien n'est enregistré, l'éditeur s'ouvre avec le texte.
+	mux.HandleFunc("POST /memory-draft", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Model, Instruction, Key string
+			Refs                    []string
+		}
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		text, cost, err := memWriteDraft(req.Model, req.Instruction, req.Key, req.Refs)
+		journal("memory-draft %s %q réf=%v : %v (%.4f $)", req.Model, req.Key, req.Refs, errOr(err), cost)
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": "Brouillon prêt", "text": text, "cost": cost})
 	})
 	mux.HandleFunc("POST /memory-rm", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Key string }
