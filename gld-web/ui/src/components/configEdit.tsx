@@ -53,6 +53,7 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
     const neu = ruleKey(file, to, text)
     hide(old, true)
     setPending((p) => [...p, neu])
+    hide(neu, false) // une règle retirée plus tôt puis remise doit s'afficher
     const undo = () => {
       hide(old, false)
       setPending((p) => p.filter((k) => k !== neu))
@@ -60,22 +61,25 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
     const a = (await api.post("/config-edit", { file, op: "add", path: ["permissions", to], value: text })) as Reply
     if (!a.ok) return void (undo(), toast.error(a.out))
     const r = (await api.post("/config-edit", { file, op: "remove", path: ["permissions", from], value: rule })) as Reply
-    if (!r.ok) toast.error(r.out)
-    else toast.success("Règle modifiée", { description: liveNotice(a.before, r.after, sessions), duration: 6000 })
+    if (!r.ok) {
+      hide(old, false) // l'ancienne règle existe toujours
+      toast.error(r.out)
+    } else toast.success("Règle modifiée", { description: liveNotice(a.before, r.after, sessions), duration: 6000 })
     await onDone()
-    undo()
+    // L'ancienne place reste masquée : d'autres vues (onglet Projets) se relisent à part et la montreraient encore un instant.
+    setPending((p) => p.filter((k) => k !== neu))
   }
   const propose = async (edit: CfgEdit) => {
     const rule = edit.op === "remove" && edit.path[0] === "permissions" && typeof edit.value === "string" ? ruleKey(edit.file, edit.path[1], edit.value) : ""
     if (rule) hide(rule, true)
+    if (edit.op === "add" && edit.path[0] === "permissions" && typeof edit.value === "string") hide(ruleKey(edit.file, edit.path[1], edit.value), false)
     const r = (await api.post("/config-edit", edit)) as Reply
     if (!r.ok || r.before === r.after) {
       if (rule) hide(rule, false)
       return void (r.ok ? toast.info("Aucun changement") : toast.error(r.out))
     }
     toast.success(r.out, { description: liveNotice(r.before, r.after, sessions), duration: 6000 })
-    await onDone() // la liste relue ne contient plus la règle : on peut cesser de la masquer
-    if (rule) hide(rule, false)
+    await onDone() // la règle reste masquée : les vues qui se relisent à part la montreraient encore un instant
   }
   // JSON brut : renvoie le message d'erreur (avec ligne et colonne) ou null si l'aperçu s'ouvre.
   const proposeRaw = async (file: string, text: string) => {
