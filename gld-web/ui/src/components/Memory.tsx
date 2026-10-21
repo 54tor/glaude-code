@@ -19,6 +19,7 @@ import {
   Link,
   Merge,
   Pencil,
+  Plus,
   Save,
   Sparkles,
   Trash,
@@ -99,6 +100,7 @@ function Section({
   picked,
   onToggle,
   onPickAll,
+  onNew,
   onWrite,
   onConsolidate,
   menu,
@@ -113,6 +115,7 @@ function Section({
   picked: Set<string>
   onToggle: (k: string) => void
   onPickAll: (keys: string[]) => void
+  onNew: () => void // nouvelle entrée écrite à la main
   onWrite?: () => void // nouvelle entrée rédigée par un modèle (absent : section sans mémoire de projet)
   onConsolidate?: () => void // consolider dans le CLAUDE.md correspondant
   menu: (f: MemFile) => React.ReactNode
@@ -127,6 +130,9 @@ function Section({
         <ContextMenuTrigger asChild>
           <p className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-muted-foreground" title={title}>
             <Icon className="size-3.5 shrink-0" /> <span className="flex-1 truncate">{title}</span>
+            <Button variant="ghost" size="icon-xs" className={sortBtn} onClick={onNew} title="Nouvelle entrée" aria-label="Nouvelle entrée">
+              <Plus />
+            </Button>
             {/* Deux icônes : le critère (un clic passe au suivant) et le sens, pour ce dossier. */}
             <Button
               variant="ghost"
@@ -151,6 +157,9 @@ function Section({
           </p>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-60">
+          <ContextMenuItem onSelect={onNew}>
+            <Plus /> Nouvelle entrée…
+          </ContextMenuItem>
           {onWrite && (
             <ContextMenuItem onSelect={onWrite}>
               <Sparkles /> Nouvelle entrée avec Haiku…
@@ -282,11 +291,15 @@ export function Memory({
 
   const save = async () => {
     if (!editing) return
-    const r = await api.post("/memory-save", { key: sel, text: editing.text, index: !file })
+    // Nouvelle entrée de mémoire de projet ou de règle globale : le nom saisi fixe le fichier.
+    const m = /^(m\/[^/]+|g\/rules)\/[^/]+$/.exec(sel)
+    const key = !file && m ? newKey(m[1] === "g/rules" ? "global" : m[1].slice(2), editing.text) : sel
+    const r = await api.post("/memory-save", { key, text: editing.text, index: !file })
     ;(r.ok ? toast.success : toast.error)(r.out)
     if (r.ok) {
-      setLoaded({ key: sel, text: editing.text })
+      setLoaded({ key, text: editing.text })
       setDraft(null)
+      if (key !== sel) onPick(key)
       refresh()
     }
   }
@@ -308,25 +321,28 @@ export function Memory({
           : "Consolide ces entrées de mémoire dans le CLAUDE.md du projet : garde les règles durables, utiles à chaque session, regroupe-les par thème, retire les doublons et ce qui est périmé.",
     })
   }
+  // Clé d'une nouvelle entrée : le nom du front matter (ou le premier titre), simplifié en nom de fichier, sans écraser un fichier existant.
+  const newKey = (scope: string, text: string) => {
+    const name = /^name:\s*["']?([^"'\n]+)/m.exec(text)?.[1] ?? /^#\s+(.+)$/m.exec(text)?.[1] ?? "entree"
+    const slug =
+      name
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "") || "entree"
+    const base = scope === "global" ? "g/rules/" : `m/${scope}/`
+    let key = base + slug + ".md"
+    for (let i = 2; all.some((x) => x.key === key); i++) key = `${base}${slug}-${i}.md`
+    return key
+  }
   const onDraft = (t: WriteTarget, text: string) => {
-    let key = ""
-    if (t.kind === "rewrite") key = t.key
-    else {
-      const name = /^name:\s*["']?([^"'\n]+)/m.exec(text)?.[1] ?? "entree"
-      const slug =
-        name
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, "") || "entree"
-      const base = t.scope === "global" ? "g/rules/" : `m/${t.scope}/`
-      key = base + slug + ".md"
-      for (let i = 2; all.some((x) => x.key === key); i++) key = `${base}${slug}-${i}.md`
-    }
+    const key = t.kind === "rewrite" ? t.key : newKey(t.scope, text)
     setDraft({ key, text })
     onPick(key)
   }
+  // Entrée écrite à la main : un modèle prérempli, la clé se fixe à l'enregistrement d'après le nom.
+  const blank = (scope: string) => onDraft({ kind: "new", scope, label: "" }, scope === "global" ? "# Nouvelle règle\n\n" : "---\nname: nouvelle-entree\ndescription: \nmetadata:\n  type: project\n---\n\n")
   const edit = (key: string) => {
     if (key === sel && text !== null) return setDraft({ key, text })
     editNext.current = key
@@ -423,6 +439,7 @@ export function Memory({
       picked={picked}
       onToggle={toggle}
       onPickAll={(keys) => setPicked((p) => new Set([...p, ...keys]))}
+      onNew={() => blank(key)}
       onWrite={onWrite}
       onConsolidate={onConsolidate}
       menu={menu}

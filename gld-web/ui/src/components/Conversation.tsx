@@ -118,7 +118,7 @@ function Meta({ s, d }: { s: Session; d: Detail | null }) {
   ].filter(Boolean)
   return (
     <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-      {live && <Live />}
+      {live && <Live waiting={a.waiting.has(s.id)} />}
       <span className="truncate">{(live ? "· " : "") + bits.join(" · ")}</span>
     </p>
   )

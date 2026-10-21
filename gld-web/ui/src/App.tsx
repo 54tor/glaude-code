@@ -175,6 +175,7 @@ export default function App() {
   const home = data?.home ?? ""
   const tree = useMemo(() => buildTree(view.entries, home), [view.entries, home])
   const live = useMemo(() => new Set(data?.live), [data])
+  const waiting = useMemo(() => new Set(data?.waiting), [data])
   const vgroups = useMemo(() => data?.vgroups ?? [], [data])
   const favs = useMemo(() => new Set(data?.favs), [data])
   const gkey = (vg: VGroup) => segs(vg.project, home).join("/") // clé du dossier du groupe dans l'arbre et l'URL
@@ -375,6 +376,7 @@ export default function App() {
     home,
     q,
     live,
+    waiting,
     hit: (id) => hitMap?.get(id),
     vgroups,
     favs,
@@ -712,7 +714,7 @@ export default function App() {
                             {tilde(project, home)}
                           </button>
                           <span className="shrink-0 text-xs text-muted-foreground">{plural(rs.length)}</span>
-                          {rs.some((r) => live.has(r.s.id)) && <Live className="text-xs" />}
+                          {rs.some((r) => live.has(r.s.id)) && <Live className="text-xs" waiting={rs.some((r) => waiting.has(r.s.id))} />}
                           {!rs[0].g.missing && (
                             <Button
                               variant="ghost"

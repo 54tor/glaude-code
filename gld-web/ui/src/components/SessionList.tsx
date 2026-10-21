@@ -9,10 +9,10 @@ import { useActions, type Row as R } from "./actions"
 import { CM, SessionDropdown, SessionItems } from "./SessionMenu"
 
 // Point vert : la session tourne en ce moment dans un terminal.
-export function Live({ className }: { className?: string }) {
+export function Live({ className, waiting }: { className?: string; waiting?: boolean }) {
   return (
-    <span className={cn("inline-flex shrink-0 items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400", className)}>
-      <span className="size-1.5 animate-pulse rounded-full bg-current" /> en cours
+    <span className={cn("inline-flex shrink-0 items-center gap-1 font-medium", waiting ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400", className)}>
+      <span className={cn("size-1.5 rounded-full bg-current", !waiting && "animate-pulse")} /> {waiting ? "attend" : "en cours"}
     </span>
   )
 }
@@ -76,7 +76,7 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
             <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
               {live && (
                 <>
-                  <Live />
+                  <Live waiting={a.waiting.has(s.id)} />
                   <span aria-hidden>·</span>
                 </>
               )}

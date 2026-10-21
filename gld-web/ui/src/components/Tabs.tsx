@@ -113,7 +113,7 @@ export function Tabs({ args, onAsk, onPrompt }: { args: string; onAsk: (a: Ask) 
               {s.sessions.map((t) => (
                 <li key={t.id} className="flex items-center gap-2 px-4 py-1.5">
                   <span className="min-w-0 flex-1 truncate">{t.title}</span>
-                  {a.live.has(t.id) && <Live className="text-xs" />}
+                  {a.live.has(t.id) && <Live className="text-xs" waiting={a.waiting.has(t.id)} />}
                   <span className="hidden shrink-0 truncate text-xs text-muted-foreground sm:block">{tilde(t.project, a.home)}</span>
                 </li>
               ))}
