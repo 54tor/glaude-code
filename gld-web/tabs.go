@@ -29,7 +29,9 @@ type TabSave struct {
 	Sessions []TabSession `json:"sessions"`
 }
 
-const keepAuto = 10 // sauvegardes automatiques conservées ; les manuelles restent toutes
+// Sauvegardes automatiques conservées : celles de la dernière heure d'activité, comptée depuis la plus récente
+// (pas depuis maintenant : après une nuit ordinateur éteint, l'état d'avant l'arrêt doit rester). Les manuelles restent toutes.
+const keepAuto = time.Hour
 
 var tabsMu sync.Mutex
 
@@ -89,7 +91,7 @@ func sameIDs(a, b []TabSession) bool {
 }
 
 // saveTabs enregistre les sessions ouvertes. Une sauvegarde automatique est sautée si rien n'a changé
-// depuis la précédente ; seules les keepAuto plus récentes sont gardées.
+// depuis la précédente ; seules celles de la dernière heure (keepAuto) sont gardées.
 func saveTabs(name string, auto bool) (TabSave, bool, error) {
 	name = strings.TrimSpace(spaceRe.ReplaceAllString(name, " "))
 	if utf8.RuneCountInString(name) > 80 {
@@ -113,20 +115,29 @@ func saveTabs(name string, auto bool) (TabSave, bool, error) {
 		}
 	}
 	s := TabSave{name, auto, time.Now().Format(time.RFC3339Nano), ss}
-	next := []TabSave{s}
-	n := 0 // sauvegardes automatiques gardées, la nouvelle comprise
-	if auto {
-		n = 1
+	err := writeTabs(pruneAuto(append([]TabSave{s}, all...)))
+	if !auto {
+		journal("tabs-save « %s » %d session(s) : %v", name, len(ss), errOr(err))
 	}
-	for _, t := range all {
+	return s, true, err
+}
+
+// pruneAuto retire les sauvegardes automatiques de plus d'une heure avant la plus récente (liste du plus récent au plus ancien).
+func pruneAuto(l []TabSave) []TabSave {
+	var newest time.Time
+	out := []TabSave{}
+	for _, t := range l {
 		if t.Auto {
-			if n++; n > keepAuto {
+			at, err := time.Parse(time.RFC3339Nano, t.At)
+			if newest.IsZero() {
+				newest = at
+			} else if err != nil || newest.Sub(at) > keepAuto {
 				continue
 			}
 		}
-		next = append(next, t)
+		out = append(out, t)
 	}
-	return s, true, writeTabs(next)
+	return out
 }
 
 func removeTabs(at string) error {
@@ -137,6 +148,7 @@ func removeTabs(at string) error {
 	if len(next) == len(all) {
 		return errors.New("sauvegarde introuvable")
 	}
+	journal("tabs-rm %s", at)
 	return writeTabs(next)
 }
 

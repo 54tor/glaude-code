@@ -6,7 +6,7 @@ const BLOCK = /<([a-z][a-z-]*)>([\s\S]*?)<\/\1>/g
 const NAMES: Record<string, string> = { "task-notification": "Notification de tâche" }
 const FIELDS: Record<string, string> = { "task-id": "tâche", "tool-use-id": "appel", "output-file": "sortie", "task-type": "type", note: "note" }
 
-export const isTagged = (t: string) => /^\s*<[a-z][a-z-]*>/.test(t)
+export const isTagged = (t: string) => /^\s*<[a-z][a-z-]*>/.test(t) && !/^\s*<pasted_content/.test(t)
 
 function Card({ tag, body }: { tag: string; body: string }) {
   const fields = [...body.matchAll(BLOCK)].map(([, k, v]) => [k, v.trim()] as const)

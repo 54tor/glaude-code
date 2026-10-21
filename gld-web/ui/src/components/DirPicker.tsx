@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
-import { ArrowUp, Folder, Home } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { ArrowUp, Folder, Home, Search } from "lucide-react"
 import { toast } from "sonner"
 import { api, type Ls } from "@/lib/api"
 import { join } from "@/lib/paths"
@@ -21,6 +21,8 @@ export function DirPicker({ pick, home }: { pick: Pick | null; home: string }) {
   const [sep, setSep] = useState("/")
   const [hidden, setHidden] = useState(false)
   const [typed, setTyped] = useState("")
+  const [filter, setFilter] = useState("") // filtre des sous-dossiers du dossier affiché
+  const filterRef = useRef<HTMLInputElement>(null)
 
   const show = (r: Ls) => {
     if (r.error) {
@@ -29,6 +31,8 @@ export function DirPicker({ pick, home }: { pick: Pick | null; home: string }) {
     }
     setCur(r.path)
     setTyped(r.path)
+    setFilter("")
+    filterRef.current?.focus() // on tape aussitôt pour filtrer le nouveau dossier
     setDirs(r.dirs)
     setParent(r.parent)
     setSep(r.sep)
@@ -43,7 +47,8 @@ export function DirPicker({ pick, home }: { pick: Pick | null; home: string }) {
     }
   }, [pick, home])
 
-  const shown = dirs.filter((d) => hidden || !d.startsWith("."))
+  const f = filter.toLowerCase()
+  const shown = dirs.filter((d) => (hidden || !d.startsWith(".") || (f && d.toLowerCase().startsWith(f))) && d.toLowerCase().includes(f))
   const isDrives = cur === ""
   const close = (path: string | null) => pick?.done(path)
 
@@ -76,9 +81,30 @@ export function DirPicker({ pick, home }: { pick: Pick | null; home: string }) {
             afficher les dossiers cachés
           </Label>
         </div>
+        <div className="relative">
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            ref={filterRef}
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && shown[0]) go(join(cur, shown[0], sep))
+              if (e.key === "Escape" && filter) {
+                e.preventDefault()
+                setFilter("")
+              }
+            }}
+            placeholder="Filtrer les dossiers…"
+            className="pl-8"
+            aria-label="Filtrer les sous-dossiers"
+            autoFocus
+          />
+        </div>
         <ScrollArea className="h-72 rounded-md border">
           <ul className="p-1">
-            {shown.length === 0 && <li className="px-3 py-2 text-xs text-muted-foreground">(aucun sous-dossier)</li>}
+            {shown.length === 0 && (
+              <li className="px-3 py-2 text-xs text-muted-foreground">{filter ? "(aucun dossier ne correspond)" : "(aucun sous-dossier)"}</li>
+            )}
             {shown.map((d) => (
               <li key={d}>
                 <button

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { ArrowDownToLine, ArrowUpToLine, MoreHorizontal, SquareTerminal, Wrench } from "lucide-react"
+import { ArrowDownToLine, ArrowUpToLine, Loader2, MoreHorizontal, Send, Square, SquareTerminal, Wrench } from "lucide-react"
+import { useLocal } from "@/hooks/useLocal"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
 import { full, size, tilde } from "@/lib/format"
 import { Button } from "@/components/ui/button"
@@ -40,6 +42,31 @@ export function Markdown({ t, onLink }: { t: string; onLink?: (href: string) => 
   )
 }
 
+// Texte collé dans Claude Code (<pasted_content id="…">…</pasted_content id="…">) : un bloc repliable.
+const PASTED = /<pasted_content id="[^"]*">\n?([\s\S]*?)\n?<\/pasted_content(?: id="[^"]*")?>/g
+
+function UserText({ t }: { t: string }) {
+  const parts: React.ReactNode[] = []
+  let at = 0
+  for (const m of t.matchAll(PASTED)) {
+    const before = t.slice(at, m.index).trim()
+    if (before) parts.push(<span key={`t${at}`}>{before}</span>)
+    const lines = m[1].split("\n").length
+    parts.push(
+      <details key={m.index} className="group/paste my-1 rounded-lg border bg-background/60">
+        <summary className="cursor-pointer list-none px-3 py-1.5 text-xs text-muted-foreground select-none hover:text-foreground">
+          Texte collé · {lines} ligne{lines > 1 ? "s" : ""}
+        </summary>
+        <pre className="max-h-96 overflow-auto border-t px-3 py-2 text-xs whitespace-pre-wrap">{m[1]}</pre>
+      </details>
+    )
+    at = m.index + m[0].length
+  }
+  const rest = t.slice(at).trim()
+  if (rest) parts.push(<span key="rest">{rest}</span>)
+  return <>{parts}</>
+}
+
 function Message({ m }: { m: Msg }) {
   const title = m.ts ? new Date(m.ts).toLocaleString("fr-FR") : undefined
   if (m.r === "user" && isTagged(m.t))
@@ -52,7 +79,7 @@ function Message({ m }: { m: Msg }) {
     return (
       <div title={title} className="msg flex justify-end">
         <div className="max-w-[85%] rounded-2xl rounded-br-md bg-primary/[0.07] px-4 py-2.5 break-words whitespace-pre-wrap dark:bg-primary/10">
-          {m.t}
+          <UserText t={m.t} />
         </div>
       </div>
     )
@@ -89,7 +116,136 @@ function Meta({ s, d }: { s: Session; d: Detail | null }) {
   )
 }
 
-export function Conversation({ row, onClose }: { row: Row | null; onClose: () => void }) {
+// Modes d'autorisation de claude -p : sans terminal, Claude ne peut pas demander la permission.
+const MODES = [
+  ["", "Lecture seule : écrire et lancer des commandes est refusé"],
+  ["plan", "Plan : propose sans rien modifier"],
+  ["acceptEdits", "Accepter les modifications de fichiers"],
+  ["auto", "Auto : Claude décide de ce qu'il peut faire"],
+] as const
+
+type Turn = { id: string; msgs: Msg[]; running: boolean; error?: string; cost?: number }
+
+// Écrire dans la session depuis le navigateur : claude -p --resume, réponse relayée au fil de l'eau (NDJSON).
+function Composer({
+  dir,
+  id,
+  args,
+  live,
+  turn,
+  setTurn,
+  onDone,
+}: {
+  dir: string
+  id: string
+  args: string
+  live: boolean
+  turn: Turn | null
+  setTurn: (f: (t: Turn | null) => Turn | null) => void
+  onDone: () => void
+}) {
+  const [text, setText] = useState("")
+  const [mode, setMode] = useLocal("ccChatMode", "")
+  const running = !!turn?.running
+  const send = async () => {
+    const prompt = text.trim()
+    if (!prompt || running) return
+    setText("")
+    setTurn(() => ({ id, msgs: [{ r: "user", t: prompt }], running: true }))
+    const fail = (error: string) => setTurn((t) => t && { ...t, running: false, error })
+    let res: Response
+    try {
+      res = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dir, id, prompt, args, mode }),
+      })
+    } catch (e) {
+      return fail(e instanceof Error ? e.message : String(e))
+    }
+    if (!res.ok || !res.body) return fail(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `HTTP ${res.status}`)
+    const reader = res.body.getReader()
+    const dec = new TextDecoder()
+    let buf = ""
+    for (;;) {
+      const { value, done } = await reader.read()
+      buf += dec.decode(value, { stream: !done })
+      const lines = buf.split("\n")
+      buf = lines.pop() ?? ""
+      for (const l of lines) {
+        if (!l.trim()) continue
+        const e = JSON.parse(l) as { msgs?: Msg[]; done?: boolean; ok?: boolean; error?: string; cost?: number; note?: string }
+        if (e.note) toast.info(e.note)
+        setTurn(
+          (t) =>
+            t && {
+              ...t,
+              msgs: e.msgs ? [...t.msgs, ...e.msgs] : t.msgs,
+              running: e.done ? false : t.running,
+              error: e.done && !e.ok ? e.error || "Échec" : t.error,
+              cost: e.cost ?? t.cost,
+            }
+        )
+      }
+      if (done) break
+    }
+    setTurn((t) => t && { ...t, running: false })
+    onDone()
+  }
+  const stop = () => api.post("/chat-stop", { id })
+
+  if (live)
+    return (
+      <p className="border-t px-6 py-3 text-center text-xs text-muted-foreground">
+        Session ouverte dans un terminal : écris-y directement (deux processus ne peuvent pas écrire le même transcript).
+      </p>
+    )
+  return (
+    <div className="border-t bg-muted/20 px-4 py-3">
+      <div className="mx-auto max-w-4xl space-y-2">
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "Enter" && (e.preventDefault(), send())}
+          placeholder={running ? "Claude répond…" : "Écrire à Claude dans cette session… (Ctrl+Entrée pour envoyer)"}
+          disabled={running}
+          rows={2}
+          maxLength={32000}
+          className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+          aria-label="Message à Claude"
+        />
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <select
+            value={mode}
+            onChange={(e) => setMode(e.target.value)}
+            disabled={running}
+            className="h-7 max-w-full rounded-md border bg-background px-2 text-xs"
+            aria-label="Autorisations accordées à Claude"
+          >
+            {MODES.map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+          {turn?.cost ? <span className="text-muted-foreground">coût indiqué par claude : {turn.cost.toFixed(2)} $</span> : null}
+          <span className="ml-auto" />
+          {running ? (
+            <Button size="sm" variant="outline" onClick={stop}>
+              <Square /> Arrêter
+            </Button>
+          ) : (
+            <Button size="sm" onClick={send} disabled={!text.trim()}>
+              <Send /> Envoyer
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function Conversation({ row, onClose, args }: { row: Row | null; onClose: () => void; args: string }) {
   const a = useActions()
   const session = row?.s ?? null
   // Les effets dépendent des identifiants, pas de l'objet : le rafraîchissement périodique de la liste
@@ -105,6 +261,10 @@ export function Conversation({ row, onClose }: { row: Row | null; onClose: () =>
   const key = id ? `${dir}/${id}/${tools}` : ""
   const msgs = loaded?.key === key ? loaded.msgs : null
   const detail = info && info.id === id ? info.d : null
+  // Tour en cours (ou dernier tour) écrit depuis le navigateur, affiché à la suite de la conversation.
+  const [chat, setChat] = useState<Turn | null>(null)
+  const turn = chat?.id === id ? chat : null
+  const reload = () => api.conv({ dir, id }, tools).then((r) => setLoaded({ key, msgs: r.msgs }))
 
   useEffect(() => {
     if (!id) return
@@ -143,6 +303,10 @@ export function Conversation({ row, onClose }: { row: Row | null; onClose: () =>
   useEffect(() => {
     if (msgs) toEnd()
   }, [msgs])
+  const shown = turn?.msgs.length ?? 0
+  useEffect(() => {
+    if (shown) toEnd()
+  }, [shown])
 
   return (
     <Dialog open={!!session} onOpenChange={(o) => !o && onClose()}>
@@ -189,9 +353,34 @@ export function Conversation({ row, onClose }: { row: Row | null; onClose: () =>
             {msgs?.map((m, i) => (
               <Message key={i} m={m} />
             ))}
-            {msgs?.length === 0 && <p className="text-center text-muted-foreground">Aucun message dans cette session.</p>}
+            {msgs?.length === 0 && !turn && <p className="text-center text-muted-foreground">Aucun message dans cette session.</p>}
+            {turn?.msgs
+              .filter((m) => tools || m.r !== "tool")
+              .map((m, i) => (
+                <Message key={`t${i}`} m={m} />
+              ))}
+            {turn?.running && (
+              <p className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" /> Claude répond…
+              </p>
+            )}
+            {turn?.error && <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive">{turn.error}</p>}
           </div>
         </ScrollArea>
+        {session && (
+          <Composer
+            dir={dir}
+            id={id}
+            args={args}
+            live={a.live.has(id)}
+            turn={turn}
+            setTurn={(f) => setChat((c) => f(c?.id === id ? c : null))}
+            onDone={() => {
+              // Le transcript contient maintenant le tour : on le relit, et le tour affiché à part disparaît (sauf erreur).
+              reload().then(() => setChat((c) => (c?.id === id && !c.error ? { ...c, msgs: [] } : c)))
+            }}
+          />
+        )}
       </DialogContent>
     </Dialog>
   )

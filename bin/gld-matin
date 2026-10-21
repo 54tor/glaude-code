@@ -14,6 +14,7 @@
 #   gld-matin --resume [nom]       rouvre les sessions de la dernière sauvegarde de gld-web
 #                                 (ou de la sauvegarde manuelle de ce nom), ex. après un redémarrage
 #   gld-matin --prompt "..." [projet]  ouvre une NOUVELLE session claude avec ce prompt
+#                                 (avec --id : reprend cette session en lui envoyant ce message)
 #
 # Un sujet = une session Claude. On le désigne par son nom quand vous en avez
 # donné un, sinon (marqué «~») par son premier prompt. On résout ce libellé
@@ -44,7 +45,7 @@ while [ $# -gt 0 ]; do
     --term)       TERMCHOIX="${2:-}"; shift ;;
     --age)        AGE_MAX="${2:-}"; shift ;;
     --min)        TAILLE_MIN="${2:-}"; shift ;;
-    -h|--help)    sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)    sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)           echo "gld-matin: option inconnue: $1" >&2; exit 2 ;;
     *)            PROJET="$1" ;;
   esac
@@ -161,7 +162,7 @@ else
 fi
 
 # --- nouvelle session avec un prompt (ex. fusion de mémoires depuis gld-web) ------
-if [ -n "$PROMPT" ]; then
+if [ -n "$PROMPT" ] && [ -z "$ID" ]; then
   PROJET="$(cd "${PROJET:-$PWD}" 2>/dev/null && pwd)" \
     || { echo "gld-matin: projet introuvable" >&2; exit 1; }
   cmd="cd $(shq "$PROJET") && exec env PATH="$HOME/.local/bin:$PATH" claude ${ARGS:+$ARGS }$(shq "$PROMPT")"
@@ -252,7 +253,7 @@ $titre"
     printf '  ouvrirait    %s %-45s %s  (%s)\n' "$marque" "$titre" "$(printf '%.8s' "$id")" "$(mdate "$f")"
   else
     printf '  ouvre        %s %-45s %s\n' "$marque" "$titre" "$(printf '%.8s' "$id")"
-    ouvrir "$titre" "cd $(shq "$PROJET") && exec env PATH="$HOME/.local/bin:$PATH" claude ${ARGS:+$ARGS }--resume $id" || true
+    ouvrir "$titre" "cd $(shq "$PROJET") && exec env PATH="$HOME/.local/bin:$PATH" claude ${ARGS:+$ARGS }--resume $id${PROMPT:+ $(shq "$PROMPT")}" || true
     sleep "$PAUSE"
   fi
   n=$((n + 1))

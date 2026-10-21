@@ -70,12 +70,16 @@ func promptOf(l *line) string {
 		}
 		s = strings.Join(t, " ")
 	}
-	s = strings.TrimSpace(s)
-	if strings.HasPrefix(s, "<") || strings.HasPrefix(strings.ToLower(s), "caveat:") {
+	// Texte collé dans Claude Code : remplacé par une mention, un prompt fait seulement d'un collage ne sert pas de titre.
+	s = strings.TrimSpace(pastedRe.ReplaceAllString(s, " [texte collé] "))
+	if s == "[texte collé]" || strings.HasPrefix(s, "<") || strings.HasPrefix(strings.ToLower(s), "caveat:") {
 		return ""
 	}
-	return s
+	return spaceRe.ReplaceAllString(s, " ")
 }
+
+// pastedRe : un bloc collé, fermé ou non (un titre tronqué peut le couper).
+var pastedRe = regexp.MustCompile(`(?s)<pasted_content id="[^"]*">.*?(</pasted_content(?: id="[^"]*")?>|$)`)
 
 // scan appelle fn pour chaque ligne du transcript (les lignes peuvent être énormes).
 func scan(path string, fn func([]byte)) error {
@@ -422,6 +426,46 @@ func readItems(w http.ResponseWriter, r *http.Request) ([]item, string, bool) {
 	return req.Items, req.To, true
 }
 
+// checkPrompt : un message vise une seule session, fermée (sinon deux processus écriraient le même transcript).
+func checkPrompt(id, prompt string) error {
+	switch {
+	case prompt == "":
+		return nil
+	case id == "":
+		return errors.New("un message ne s'envoie qu'à une session précise")
+	case len(prompt) > 32<<10 || !utf8.ValidString(prompt) || strings.ContainsRune(prompt, 0):
+		return errors.New("message trop long ou invalide")
+	case liveSessions()[id]:
+		return errors.New("session déjà ouverte : écris le message dans son onglet")
+	}
+	return nil
+}
+
+// checkResumePrompt : comme checkPrompt, et jamais sous Windows, où le message passerait par cmd.exe
+// (qui ne sait pas l'échapper sûrement).
+func checkResumePrompt(id, prompt string) error {
+	if prompt != "" && runtime.GOOS == "windows" {
+		return errors.New("reprise avec un message non prise en charge sous Windows")
+	}
+	return checkPrompt(id, prompt)
+}
+
+// ids : les identifiants courts de sessions, pour le journal.
+func ids(items []item) []string {
+	out := make([]string, len(items))
+	for i, it := range items {
+		out[i] = it.ID[:8]
+	}
+	return out
+}
+
+func errOr(err error) string {
+	if err != nil {
+		return "échec : " + err.Error()
+	}
+	return "ok"
+}
+
 // claudeArgs valide les options de claude (seulement des drapeaux simples : --x, -x, --x=valeur, jamais du shell)
 // et les traduit en arguments de gld-matin.
 func claudeArgs(raw string) ([]string, error) {
@@ -622,7 +666,10 @@ func main() {
 		for id := range liveSessions() {
 			live = append(live, id)
 		}
-		writeJSON(w, 200, map[string]any{"home": home, "groups": sessions(), "live": live, "vgroups": loadGroups()})
+		groupsMu.Lock()
+		st := loadStore()
+		groupsMu.Unlock()
+		writeJSON(w, 200, map[string]any{"home": home, "root": root, "groups": sessions(), "live": live, "vgroups": st.Groups, "favs": st.Favs})
 	})
 	// Explorateur de dossiers pour « Réassigner » / « Déplacer » : sous-dossiers d'un chemin.
 	// Un chemin disparu remonte au plus proche parent qui existe.
@@ -707,6 +754,7 @@ func main() {
 		// Pas de contexte lié à la requête : un navigateur qui se déconnecte ne doit pas
 		// interrompre une suppression en cours (sessions à moitié purgées).
 		n, spared, notes, err := purgeSessions(items)
+		journal("rm %d session(s) : %d supprimée(s), %d épargnée(s) %v", len(items), n, spared, ids(items))
 		msg := fmt.Sprintf("%d supprimée(s), %d vivante(s) épargnée(s)", n, spared)
 		if len(notes) > 0 {
 			msg += "\n" + strings.Join(notes, "\n")
@@ -722,6 +770,7 @@ func main() {
 			return
 		}
 		n, err := reassign(items, to)
+		journal("reassign %v vers %s : %v", ids(items), to, errOr(err))
 		if err != nil {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
@@ -754,7 +803,9 @@ func main() {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": "session ouverte : renomme-la avec /rename dans Claude, ou ferme-la d'abord"})
 			return
 		}
-		if err := setTitle(p, req.ID, title); err != nil {
+		err := setTitle(p, req.ID, title)
+		journal("rename %s « %s » : %v", req.ID, title, errOr(err))
+		if err != nil {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
@@ -796,7 +847,9 @@ func main() {
 			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
 			return
 		}
-		if err := memSave(req.Key, req.Text); err != nil {
+		err := memSave(req.Key, req.Text)
+		journal("memory-save %s (%d octets) : %v", req.Key, len(req.Text), errOr(err))
+		if err != nil {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
@@ -809,6 +862,7 @@ func main() {
 			return
 		}
 		dst, err := memMove(req.Key, req.To)
+		journal("memory-move %s vers %s : %v", req.Key, dst, errOr(err))
 		if err != nil {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
@@ -821,7 +875,9 @@ func main() {
 			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
 			return
 		}
-		if err := memRemove(req.Key); err != nil {
+		err := memRemove(req.Key)
+		journal("memory-rm %s (copie à la corbeille) : %v", req.Key, errOr(err))
+		if err != nil {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
@@ -884,16 +940,55 @@ func main() {
 		out, err := withPath(exec.CommandContext(ctx, "gld-matin", append(args, "--prompt", prompt, cwd)...)).CombinedOutput()
 		writeJSON(w, 200, map[string]any{"ok": err == nil, "out": string(out), "prompt": prompt})
 	})
-	// Groupes virtuels : le navigateur envoie la liste complète, le serveur la valide et la remplace.
+	// Conversation dans le navigateur (chat.go).
+	mux.HandleFunc("POST /chat", chatHandler)
+	mux.HandleFunc("POST /chat-stop", chatStopHandler)
+	mux.HandleFunc("POST /new-session", newSessionHandler)
+	// Corbeille de la zone Mémoire (trash.go).
+	mux.HandleFunc("GET /trash", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"items": trashList()})
+	})
+	mux.HandleFunc("GET /trash-file", func(w http.ResponseWriter, r *http.Request) {
+		_, text, err := trashItem(r.URL.Query().Get("id"))
+		if err != nil {
+			writeJSON(w, 404, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"text": text})
+	})
+	mux.HandleFunc("POST /trash-restore", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ ID string }
+		json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req)
+		t, err := trashRestore(req.ID)
+		journal("trash-restore %s → %s : %v", req.ID, t.Key, errOr(err))
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": "Restauré : " + t.Path, "key": t.Key})
+	})
+	mux.HandleFunc("POST /trash-purge", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ ID string }
+		json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req)
+		err := trashPurge(req.ID)
+		journal("trash-purge %q : %v", req.ID, errOr(err))
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": "Corbeille vidée"})
+	})
+	// Groupes virtuels et favoris : le navigateur envoie l'ensemble, le serveur le valide et le remplace.
 	mux.HandleFunc("POST /vgroups", func(w http.ResponseWriter, r *http.Request) {
-		var g []VGroup
-		if json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&g) != nil || g == nil {
+		var st Store
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&st) != nil || st.Groups == nil || st.Favs == nil {
 			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
 			return
 		}
 		groupsMu.Lock()
-		err := saveGroups(g)
+		err := saveStore(st)
 		groupsMu.Unlock()
+		journal("vgroups %d groupe(s), %d favori(s) : %v", len(st.Groups), len(st.Favs), errOr(err))
 		if err != nil {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
@@ -903,13 +998,16 @@ func main() {
 	// Rouvre dans un onglet de terminal via gld-matin : une session (id) ou les récentes du projet.
 	// Le cwd vient du transcript côté serveur, jamais du navigateur.
 	mux.HandleFunc("POST /open", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Dir, ID, Args string }
+		var req struct{ Dir, ID, Args, Prompt string }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil {
 			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
 			return
 		}
 		var p string
 		args, err := claudeArgs(req.Args)
+		if err == nil {
+			err = checkResumePrompt(req.ID, req.Prompt)
+		}
 		if err != nil {
 			writeJSON(w, 400, map[string]any{"ok": false, "out": err.Error()})
 			return
@@ -921,6 +1019,9 @@ func main() {
 				return
 			}
 			args = append(args, "--id", req.ID)
+			if req.Prompt != "" { // reprise avec un message : transmis tel quel, gld-matin l'échappe pour le shell
+				args = append(args, "--prompt", req.Prompt)
+			}
 		} else if strings.ContainsAny(req.Dir, "/\\") || req.Dir == "" || req.Dir == ".." {
 			writeJSON(w, 400, map[string]any{"ok": false, "out": "dossier invalide"})
 			return

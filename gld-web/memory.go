@@ -17,6 +17,7 @@ type MemFile struct {
 	Name  string  `json:"name"`
 	KB    int64   `json:"kb"`
 	Mtime float64 `json:"mtime"`
+	Path  string  `json:"path"` // chemin complet, pour le copier
 }
 
 type MemProject struct {
@@ -88,7 +89,7 @@ func memFile(key, path string) (MemFile, bool) {
 	if err != nil || !fi.Mode().IsRegular() {
 		return MemFile{}, false
 	}
-	return MemFile{key, filepath.Base(path), fi.Size() / 1024, float64(fi.ModTime().UnixNano()) / 1e9}, true
+	return MemFile{key, filepath.Base(path), fi.Size() / 1024, float64(fi.ModTime().UnixNano()) / 1e9, path}, true
 }
 
 // MemTarget : un projet vers la mémoire duquel une entrée peut être déplacée.
@@ -164,14 +165,24 @@ func memRead(key string) (string, error) {
 	return string(b), err
 }
 
-// memSave remplace le fichier (écriture atomique, droits conservés) ou le crée.
-func memSave(key, text string) error {
+// memSave remplace le fichier (écriture atomique, droits conservés) ou le crée ; la version remplacée va à la corbeille.
+func memSave(key, text string) error { return memWrite(key, text, true) }
+
+// memWrite : keep met d'abord la version actuelle à la corbeille (pas pour les mises à jour d'index, dérivées).
+func memWrite(key, text string, keep bool) error {
 	if len(text) > memMax || !utf8.ValidString(text) {
 		return errors.New("texte trop long ou invalide")
 	}
 	base, rel, err := memResolve(key)
 	if err != nil {
 		return err
+	}
+	if keep {
+		if old, err := memRead(key); err == nil && old != text {
+			if err := toTrash(key, "remplacé"); err != nil {
+				return err
+			}
+		}
 	}
 	if err := os.MkdirAll(base, 0o755); err != nil {
 		return err
@@ -201,11 +212,19 @@ func memSave(key, text string) error {
 	return nil
 }
 
-// memRemove supprime le fichier ; pour une entrée de mémoire de projet, sa ligne d'index dans MEMORY.md part aussi.
-func memRemove(key string) error {
+// memRemove met le fichier à la corbeille puis le supprime ; pour une entrée de mémoire de projet,
+// sa ligne d'index dans MEMORY.md part aussi.
+func memRemove(key string) error { return memDelete(key, true) }
+
+func memDelete(key string, trash bool) error {
 	base, rel, err := memResolve(key)
 	if err != nil {
 		return err
+	}
+	if trash {
+		if err := toTrash(key, "supprimé"); err != nil {
+			return err
+		}
 	}
 	r, err := os.OpenRoot(base)
 	if err != nil {
@@ -229,7 +248,7 @@ func memRemove(key string) error {
 		}
 	}
 	if out := strings.Join(keep, ""); out != string(idx) {
-		return memSave(strings.TrimSuffix(key, rel)+"MEMORY.md", out)
+		return memWrite(strings.TrimSuffix(key, rel)+"MEMORY.md", out, false)
 	}
 	return nil
 }
@@ -317,7 +336,7 @@ func memMove(key, to string) (string, error) {
 	if err := memSave(dst, text); err != nil {
 		return "", err
 	}
-	if err := memRemove(key); err != nil {
+	if err := memDelete(key, false); err != nil { // déplacé, pas supprimé : rien à mettre à la corbeille
 		return "", err
 	}
 	if strings.HasPrefix(dst, "m/") && rel != "MEMORY.md" {
@@ -326,7 +345,7 @@ func memMove(key, to string) (string, error) {
 		if idx != "" && !strings.HasSuffix(idx, "\n") {
 			idx += "\n"
 		}
-		if err := memSave(ik, idx+line); err != nil {
+		if err := memWrite(ik, idx+line, false); err != nil {
 			return "", err
 		}
 	}

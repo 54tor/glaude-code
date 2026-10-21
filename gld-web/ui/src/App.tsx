@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useSearchParams } from "wouter"
 import { toast } from "sonner"
-import { ChevronRight, FolderInput, MoreHorizontal, Pencil, Search, SquareTerminal, Trash2, TriangleAlert, X } from "lucide-react"
+import { ChevronRight, FolderInput, MessageSquarePlus, MoreHorizontal, Search, SquareTerminal, Trash2, TriangleAlert, X } from "lucide-react"
 import { api, type Data, type Group, type Hit, type Item, type Session, type Snippet, type VGroup } from "@/lib/api"
 import { exportMarkdown } from "@/lib/export"
 import { segs } from "@/lib/paths"
@@ -9,27 +9,30 @@ import { href, parse, type Route } from "@/lib/route"
 import { buildTree, find, under, type Entry } from "@/lib/tree"
 import { size, tilde } from "@/lib/format"
 import { useLocal } from "@/hooks/useLocal"
+import { applyFont } from "@/lib/fonts"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { ActionsCtx, type Actions, type Row } from "@/components/actions"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { ActionsCtx, type Actions, type GroupActions, type Row } from "@/components/actions"
 import { Confirm, type Ask } from "@/components/Confirm"
 import { Conversation } from "@/components/Conversation"
 import { DirPicker, type Pick } from "@/components/DirPicker"
 import { Prompt, type Ask as PromptAsk } from "@/components/Prompt"
 import { Live, SessionList } from "@/components/SessionList"
-import { DD, SessionItems } from "@/components/SessionMenu"
+import { DD, GroupItems, SessionItems } from "@/components/SessionMenu"
 import { Sidebar } from "@/components/Sidebar"
 import { Snippets } from "@/components/Snippets"
 import { Memory } from "@/components/Memory"
 import { Tabs } from "@/components/Tabs"
+import { Compose, type ComposeAsk } from "@/components/Compose"
 
 // Sessions lancées automatiquement (revues de sécurité) : leur titre est leur premier prompt. Elles sont masquées
 // de l'arbre, comptées dans la barre latérale, et se suppriment d'un coup avec le bouton dédié.
 const AUTO = ["Review this change for security vulnerabilities", "You previously flagged these candidate"]
 const WEEK = 7 * 86400
 const REFRESH = 15_000 // rafraîchissement de la liste, onglet visible seulement
+const HOT = 3600 // durée du cache des prompts : une session active depuis moins longtemps reprend à moindre coût
 
 const byDate = (a: Row, b: Row) => b.s.mtime - a.s.mtime
 const plural = (n: number, w = "session") => `${n} ${w}${n > 1 ? "s" : ""}`
@@ -57,9 +60,13 @@ export default function App() {
   const [hits, setHits] = useState<{ q: string; m: Map<string, Hit> } | null>(null)
   const [picked, setPicked] = useState(() => new Set<string>())
   const [args, setArgs] = useLocal("ccArgs", "")
+  const [font, setFont] = useLocal("ccFont", "geist")
+  const [fontSize, setFontSize] = useLocal("ccFontSize", "15")
+  useEffect(() => applyFont(font, fontSize), [font, fontSize])
   const [picker, setPicker] = useState<Pick | null>(null)
   const [ask, setAsk] = useState<Ask | null>(null)
   const [prompt, setPrompt] = useState<PromptAsk | null>(null)
+  const [compose, setCompose] = useState<ComposeAsk | null>(null)
   const search = useRef<HTMLInputElement>(null)
 
   const setQ = (v: string) =>
@@ -116,7 +123,7 @@ export default function App() {
   const searching = qt.length >= 2 && !hitMap && route.kind !== "snippets" && route.kind !== "memory" && route.kind !== "tabs"
 
   // Sessions affichées (hors revues automatiques, selon la recherche) et revues automatiques masquées.
-  const view = useMemo(() => {
+  const view = (() => {
     const f = qt.toLowerCase()
     const entries: Entry[] = []
     const autoItems: Item[] = []
@@ -143,7 +150,7 @@ export default function App() {
       akb,
       total,
     }
-  }, [data, qt, hitMap])
+  })()
 
   // Toutes les sessions, même filtrées : le lecteur reste ouvert quand la recherche change.
   const everyId = useMemo(() => {
@@ -156,11 +163,16 @@ export default function App() {
   const tree = useMemo(() => buildTree(view.entries, home), [view.entries, home])
   const live = useMemo(() => new Set(data?.live), [data])
   const vgroups = useMemo(() => data?.vgroups ?? [], [data])
+  const favs = useMemo(() => new Set(data?.favs), [data])
+  const gkey = (vg: VGroup) => segs(vg.project, home).join("/") // clé du dossier du groupe dans l'arbre et l'URL
   const recent = view.rows.filter((r) => now - r.s.mtime < WEEK)
+  const hot = (data?.groups ?? [])
+    .flatMap((g) => g.sessions.filter((s) => now - s.mtime < HOT && !AUTO.some((p) => s.title.includes(p))).map((s) => ({ s, g })))
+    .sort(byDate)
   const selected = [...picked].map((id) => view.byId.get(id)).filter((r): r is Row => !!r)
 
   const node = route.kind === "dir" ? find(tree, route.key) : null
-  const vg = route.kind === "group" ? vgroups.find((g) => g.name === route.name) : undefined
+  const vg = route.kind === "group" ? vgroups.find((g) => g.name === route.name && gkey(g) === route.key) : undefined
   const rows: Row[] =
     route.kind === "recent"
       ? recent
@@ -207,42 +219,88 @@ export default function App() {
       })
     )
 
-  // Groupes virtuels : mise à jour immédiate de l'affichage, puis enregistrement côté serveur.
-  const saveGroups = async (next: VGroup[]) => {
-    setData((d) => d && { ...d, vgroups: next })
-    const r = await api.post("/vgroups", next)
+  // Groupes virtuels et favoris : mise à jour immédiate de l'affichage, puis enregistrement côté serveur.
+  const saveStore = async (groups: VGroup[], favList: string[]) => {
+    setData((d) => d && { ...d, vgroups: groups, favs: favList })
+    const r = await api.post("/vgroups", { groups, favs: favList })
     if (!r.ok) {
       toast.error(r.out)
       await reload()
     }
   }
+  const saveGroups = (groups: VGroup[]) => saveStore(groups, [...favs])
+  const same = (x: VGroup, y: VGroup) => x.name === y.name && x.project === y.project
   const named = (title: string, value: string, confirm: string, run: (v: string) => void) => setPrompt({ title, value, confirm, run })
-  const addTo = (ids: string[], name: string) => {
-    const exists = vgroups.some((g) => g.name === name)
-    saveGroups(exists ? vgroups.map((g) => (g.name === name ? { ...g, ids: [...new Set([...g.ids, ...ids])] } : g)) : [...vgroups, { name, ids }])
+  // Un groupe est un sous-dossier virtuel : il ne contient que des sessions de son dossier de travail.
+  const addTo = (ids: string[], project: string, name: string) => {
+    const vg = { name, project, ids }
+    const exists = vgroups.some((g) => same(g, vg))
+    saveGroups(exists ? vgroups.map((g) => (same(g, vg) ? { ...g, ids: [...new Set([...g.ids, ...ids])] } : g)) : [...vgroups, vg])
     if (ids.length)
       toast.success(`${plural(ids.length)} dans « ${name} »`, {
-        action: { label: "Voir", onClick: () => go({ kind: "group", name }) },
+        action: { label: "Voir", onClick: () => go({ kind: "group", name, key: gkey(vg) }) },
       })
   }
-  const newGroup = (ids: string[]) => named("Nouveau groupe", "", "Créer", (n) => addTo(ids, n))
-  const renameGroup = (name: string) =>
-    named(`Renommer le groupe « ${name} »`, name, "Renommer", (n) => {
-      if (n === name) return
-      if (vgroups.some((g) => g.name === n)) return void toast.error(`Le groupe « ${n} » existe déjà`)
-      saveGroups(vgroups.map((g) => (g.name === name ? { ...g, name: n } : g)))
-      if (vg?.name === name) go({ kind: "group", name: n })
-    })
-  const deleteGroup = (name: string) =>
-    setAsk({
-      title: `Supprimer le groupe « ${name} » ?`,
-      body: "Seul le regroupement disparaît : les sessions restent intactes.",
-      confirm: "Supprimer le groupe",
-      run: () => {
-        saveGroups(vgroups.filter((g) => g.name !== name))
-        if (vg?.name === name) go({ kind: "recent" })
-      },
-    })
+  const newGroup = (ids: string[], project: string) =>
+    named(`Nouveau groupe dans ${tilde(project, home)}`, "", "Créer", (n) => addTo(ids, project, n))
+  const groupRows = (x: VGroup) =>
+    x.ids
+      .map((id) => everyId.get(id))
+      .filter((r): r is Row => !!r)
+      .sort(byDate)
+  // Références des sessions d'un groupe, à coller dans un nouveau prompt.
+  const refs = (x: VGroup) =>
+    `Sessions Claude du groupe « ${x.name} » (dossier ${tilde(x.project, home)}) :\n` +
+    groupRows(x)
+      .map((r) => `- ${r.s.title} — claude --resume ${r.s.id} — transcript : ${data?.root ?? "~/.claude/projects"}/${r.s.dir}/${r.s.id}.jsonl`)
+      .join("\n")
+  const groupActs: GroupActions = {
+    rows: groupRows,
+    show: (x) => go({ kind: "group", name: x.name, key: gkey(x) }),
+    open: (x) => openMany(groupRows(x).filter((r) => !r.g.missing && !live.has(r.s.id))),
+    refs: (x) =>
+      navigator.clipboard.writeText(refs(x)).then(
+        () => toast.success("Références copiées", { description: `${plural(groupRows(x).length)} du groupe « ${x.name} »` }),
+        () => toast.error("Copie impossible")
+      ),
+    prompt: (x) => {
+      const first = groupRows(x)[0]
+      if (!first) return
+      setCompose({
+        id: "g:" + x.project + x.name,
+        title: "Nouvelle session avec ces références",
+        subtitle: `Groupe « ${x.name} » · ${tilde(x.project, home)}`,
+        project: x.project,
+        initial: refs(x) + "\n\n",
+        send: "Lancer la session",
+        run: (prompt) => act("/new-session", { dir: first.s.dir, id: first.s.id, prompt, args }, "Nouvelle session…", "last"),
+      })
+    },
+    export: (x) =>
+      exportMarkdown(
+        groupRows(x).map((r) => ({ s: r.s, project: tilde(r.g.project, home) })),
+        `Groupe ${x.name}`
+      ).catch(() => toast.error("Export impossible")),
+    select: (x) => setPicked((p) => new Set([...p, ...groupRows(x).map((r) => r.s.id)])),
+    fav: (x) => saveGroups(vgroups.map((g) => (same(g, x) ? { ...g, fav: !g.fav } : g))),
+    rename: (x) =>
+      named(`Renommer le groupe « ${x.name} »`, x.name, "Renommer", (n) => {
+        if (n === x.name) return
+        if (vgroups.some((g) => g.project === x.project && g.name === n)) return void toast.error(`Le groupe « ${n} » existe déjà dans ce dossier`)
+        saveGroups(vgroups.map((g) => (same(g, x) ? { ...g, name: n } : g)))
+        if (vg && same(vg, x)) go({ kind: "group", name: n, key: gkey(x) })
+      }),
+    remove: (x) =>
+      setAsk({
+        title: `Supprimer le groupe « ${x.name} » ?`,
+        body: "Seul le regroupement disparaît : les sessions restent intactes.",
+        confirm: "Supprimer le groupe",
+        run: () => {
+          saveGroups(vgroups.filter((g) => !same(g, x)))
+          if (vg && same(vg, x)) go({ kind: "dir", key: gkey(x) })
+        },
+      }),
+  }
 
   // Plusieurs sessions dans des onglets de terminal, l'une après l'autre.
   const openMany = async (rs: Row[]) => {
@@ -278,7 +336,13 @@ export default function App() {
     live,
     hit: (id) => hitMap?.get(id),
     vgroups,
-    inGroup: vg?.name ?? null,
+    favs,
+    toggleFav: (ids) => {
+      const add = ids.some((id) => !favs.has(id))
+      saveStore(vgroups, add ? [...new Set([...favs, ...ids])] : [...favs].filter((id) => !ids.includes(id)))
+    },
+    inGroup: vg ?? null,
+    groupActs,
     picked,
     selected,
     pick: (id) =>
@@ -290,6 +354,17 @@ export default function App() {
       }),
     read,
     open: (b) => act("/open", { ...b, args }, "Ouverture du terminal…", "last"),
+    resumeWith: (r) =>
+      live.has(r.s.id)
+        ? void toast.info("Session déjà ouverte : écris le message dans son onglet")
+        : setCompose({
+            id: r.s.id,
+            title: "Reprendre avec un message",
+            subtitle: r.s.title,
+            project: r.g.project,
+            send: "Reprendre et envoyer",
+            run: (text) => act("/open", { dir: r.s.dir, id: r.s.id, args, prompt: text }, "Reprise avec le message…", "last"),
+          }),
     copy: (s) =>
       navigator.clipboard.writeText(`claude --resume ${s.id}`).then(
         () =>
@@ -300,7 +375,7 @@ export default function App() {
       ),
     rename: (s) =>
       named("Renommer la session", s.named ? s.title : "", "Renommer", (title) => act("/rename", { dir: s.dir, id: s.id, title }, "Renommage…")),
-    exportMd: (r) => exportMarkdown(r.s, tilde(r.g.project, home)).catch(() => toast.error("Export impossible")),
+    exportMd: (r) => exportMarkdown([{ s: r.s, project: tilde(r.g.project, home) }]).catch(() => toast.error("Export impossible")),
     move: async (rs) => {
       const to = await pickDir(rs.length > 1 ? `Déplacer ${plural(rs.length)} vers…` : `Déplacer « ${rs[0].s.title} » vers…`, rs[0].s.cwd)
       const items = rs.filter((r) => r.s.cwd !== to).map((r) => ({ dir: r.s.dir, id: r.s.id }))
@@ -310,9 +385,9 @@ export default function App() {
       const to = await pickDir(`Réassigner ${plural(items.length)} vers…`, g.project)
       if (to) act("/reassign", { items, to }, "Réassignation…")
     },
-    group: (ids, name) => (name === null ? newGroup(ids) : addTo(ids, name)),
-    ungroup: (ids, name = vg?.name) => {
-      if (name) saveGroups(vgroups.map((g) => (g.name === name ? { ...g, ids: g.ids.filter((i) => !ids.includes(i)) } : g)))
+    group: (ids, project, name) => (name === null ? newGroup(ids, project) : addTo(ids, project, name)),
+    ungroup: (ids, x = vg) => {
+      if (x) saveGroups(vgroups.map((g) => (same(g, x) ? { ...g, ids: g.ids.filter((i) => !ids.includes(i)) } : g)))
     },
     remove: (items, what, after) =>
       setAsk({
@@ -363,6 +438,7 @@ export default function App() {
       if (!r) return
       const one = { dir: r.s.dir, id: r.s.id }
       if (e.key === "t") actions.open(one)
+      else if (e.key === "m") actions.resumeWith(r)
       else if (e.key === "r") actions.rename(r.s)
       else if (e.key === "x") actions.pick(r.s.id)
       else if (e.key === "e") actions.exportMd(r)
@@ -377,10 +453,8 @@ export default function App() {
   const g = node?.g ?? null
   const own = g ? node!.ss.map((s) => ({ dir: s.dir, id: s.id })) : []
   const reader = reading ? (everyId.get(reading) ?? null) : null
-  const groupCounts = vgroups.map((x) => ({
-    name: x.name,
-    n: x.ids.filter((id) => view.byId.has(id)).length,
-  }))
+  const favRows = [...favs].map((id) => everyId.get(id)).filter((r): r is Row => !!r)
+  const favGroups = vgroups.filter((x) => x.fav).map((x) => ({ vg: x, key: gkey(x) }))
 
   // Récentes : regroupées par projet, chaque projet pouvant être repris d'un coup.
   const byProject = new Map<string, Row[]>()
@@ -405,7 +479,7 @@ export default function App() {
           : route.kind === "tabs"
             ? "Les sessions ouvertes, pour les rouvrir d'un coup"
             : route.kind === "group"
-              ? `Groupe · ${plural(rows.length)}`
+              ? `Groupe de ${vg ? tilde(vg.project, home) : "?"} · ${plural(rows.length)}`
               : g
                 ? `${tilde(g.project, home)} · ${plural(rows.length)}`
                 : plural(rows.length)
@@ -423,15 +497,22 @@ export default function App() {
           route={route}
           go={go}
           counts={{ recent: recent.length, all: view.rows.length }}
-          groups={groupCounts}
-          newGroup={() => newGroup([])}
-          renameGroup={renameGroup}
-          deleteGroup={deleteGroup}
+          favRows={favRows}
+          favGroups={favGroups}
+          groupCount={(x) => groupRows(x).length}
+          read={read}
           tree={tree}
+          hot={hot}
+          now={now}
+          ttl={HOT}
           snippets={snips?.dir ? snips.files.length : null}
           auto={{ n: view.autoItems.length, kb: view.akb, purge: purgeAuto }}
           args={args}
           setArgs={setArgs}
+          font={font}
+          setFont={setFont}
+          fontSize={fontSize}
+          setFontSize={setFontSize}
         />
 
         <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
@@ -456,9 +537,19 @@ export default function App() {
               </Button>
             )}
             {vg && rows.length > 0 && (
-              <Button variant="outline" size="sm" onClick={() => openMany(rows.filter((r) => !r.g.missing))}>
-                <SquareTerminal /> Tout reprendre
-              </Button>
+              <>
+                <Button variant="outline" size="sm" onClick={() => groupActs.prompt(vg)} title="Nouvelle session avec les références de ces sessions">
+                  <MessageSquarePlus /> Nouvelle session
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => groupActs.open(vg)}
+                  title="Un onglet de terminal par session (hors sessions déjà ouvertes)"
+                >
+                  <SquareTerminal /> Tout reprendre
+                </Button>
+              </>
             )}
             {(g || vg) && (
               <DropdownMenu>
@@ -478,17 +569,7 @@ export default function App() {
                       </DropdownMenuItem>
                     </>
                   )}
-                  {vg && (
-                    <>
-                      <DropdownMenuItem onSelect={() => renameGroup(vg.name)}>
-                        <Pencil /> Renommer le groupe…
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem variant="destructive" onSelect={() => deleteGroup(vg.name)}>
-                        <Trash2 /> Supprimer le groupe
-                      </DropdownMenuItem>
-                    </>
-                  )}
+                  {vg && <GroupItems M={DD} vg={vg} page />}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -567,7 +648,9 @@ export default function App() {
                   </div>
                 )}
 
-                {data && route.kind !== "recent" && rows.length > 0 && <SessionList items={rows} showProject={route.kind !== "dir"} />}
+                {data && route.kind !== "recent" && rows.length > 0 && (
+                  <SessionList items={rows} showProject={route.kind !== "dir" && route.kind !== "group"} />
+                )}
 
                 {data && subs.length > 0 && (
                   <details open={rows.length === 0} className="group/subs mt-8 border-t pt-4">
@@ -642,10 +725,11 @@ export default function App() {
         </main>
       </div>
 
-      <Conversation row={reader} onClose={closeReader} />
+      <Conversation row={reader} onClose={closeReader} args={args} />
       <DirPicker pick={picker} home={home} />
       <Confirm ask={ask} onClose={() => setAsk(null)} />
       <Prompt ask={prompt} onClose={() => setPrompt(null)} />
+      <Compose ask={compose} snippets={snips?.files ?? []} onClose={() => setCompose(null)} />
     </ActionsCtx.Provider>
   )
 }

@@ -1,4 +1,23 @@
-import { BookOpen, Check, CheckSquare, Copy, Download, FolderInput, Pencil, Plus, SquareTerminal, Tag, Trash2, X } from "lucide-react"
+import {
+  BookOpen,
+  Check,
+  CheckSquare,
+  ClipboardList,
+  Copy,
+  Download,
+  FolderInput,
+  MessageSquarePlus,
+  MessageSquareReply,
+  Pencil,
+  Plus,
+  SquareTerminal,
+  Star,
+  StarOff,
+  Tag,
+  Trash2,
+  X,
+} from "lucide-react"
+import type { VGroup } from "@/lib/api"
 import {
   ContextMenuItem,
   ContextMenuLabel,
@@ -48,29 +67,50 @@ export const CM: Kit = {
 
 const plural = (n: number) => `${n} session${n > 1 ? "s" : ""}`
 
-// Sous-menu des groupes virtuels : un groupe coché contient déjà toutes les sessions visées.
-function Groups({ M, ids }: { M: Kit; ids: string[] }) {
+// Sous-menu des groupes du dossier de travail (un groupe ne mélange jamais plusieurs dossiers).
+// Un groupe coché contient déjà toutes les sessions visées.
+function Groups({ M, rows }: { M: Kit; rows: Row[] }) {
   const a = useActions()
+  const projects = new Set(rows.map((r) => r.g.project))
+  if (projects.size > 1)
+    return (
+      <M.Item disabled>
+        <Tag /> Groupe : sessions de plusieurs dossiers
+      </M.Item>
+    )
+  const project = rows[0].g.project
+  const ids = rows.map((r) => r.s.id)
+  const mine = a.vgroups.filter((g) => g.project === project)
   return (
     <M.Sub>
       <M.SubTrigger>
         <Tag /> Groupe
       </M.SubTrigger>
       <M.SubContent className="w-56">
-        {a.vgroups.map((g) => {
+        {mine.map((g) => {
           const all = ids.every((id) => g.ids.includes(id))
           return (
-            <M.Item key={g.name} onSelect={() => (all ? a.ungroup(ids, g.name) : a.group(ids, g.name))}>
+            <M.Item key={g.name} onSelect={() => (all ? a.ungroup(ids, g) : a.group(ids, project, g.name))}>
               <Check className={all ? "" : "invisible"} /> <span className="truncate">{g.name}</span>
             </M.Item>
           )
         })}
-        {a.vgroups.length > 0 && <M.Sep />}
-        <M.Item onSelect={() => a.group(ids, null)}>
+        {mine.length > 0 && <M.Sep />}
+        <M.Item onSelect={() => a.group(ids, project, null)}>
           <Plus /> Nouveau groupe…
         </M.Item>
       </M.SubContent>
     </M.Sub>
+  )
+}
+
+function Fav({ M, ids }: { M: Kit; ids: string[] }) {
+  const a = useActions()
+  const all = ids.every((id) => a.favs.has(id))
+  return (
+    <M.Item onSelect={() => a.toggleFav(ids)}>
+      {all ? <StarOff /> : <Star />} {all ? "Retirer des favoris" : "Ajouter aux favoris"}
+    </M.Item>
   )
 }
 
@@ -86,7 +126,8 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
     return (
       <>
         <M.Label>{plural(rows.length)} sélectionnées</M.Label>
-        <Groups M={M} ids={ids} />
+        <Fav M={M} ids={ids} />
+        <Groups M={M} rows={rows} />
         {a.inGroup && (
           <M.Item onSelect={() => a.ungroup(ids)}>
             <X /> Retirer du groupe
@@ -122,7 +163,13 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
           <SquareTerminal /> Reprendre dans un terminal
         </M.Item>
       )}
+      {!g.missing && (
+        <M.Item onSelect={() => a.resumeWith(row)}>
+          <MessageSquareReply /> Reprendre avec un message…
+        </M.Item>
+      )}
       {full && <M.Sep />}
+      <Fav M={M} ids={[s.id]} />
       <M.Item onSelect={() => a.rename(s)}>
         <Pencil /> Renommer…
       </M.Item>
@@ -132,7 +179,7 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
       <M.Item onSelect={() => a.exportMd(row)}>
         <Download /> Exporter en Markdown
       </M.Item>
-      <Groups M={M} ids={[s.id]} />
+      <Groups M={M} rows={[row]} />
       {a.inGroup && (
         <M.Item onSelect={() => a.ungroup([s.id])}>
           <X /> Retirer du groupe
@@ -149,6 +196,48 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
       <M.Sep />
       <M.Item variant="destructive" onSelect={() => a.remove([{ dir: s.dir, id: s.id }], `« ${s.title} »`, after)}>
         <Trash2 /> Supprimer
+      </M.Item>
+    </>
+  )
+}
+
+// Entrées d'un groupe virtuel (clic droit dans l'arbre, menu « ⋯ » de sa page).
+export function GroupItems({ M, vg, page }: { M: Kit; vg: VGroup; page?: boolean }) {
+  const a = useActions()
+  const n = a.groupActs.rows(vg).length
+  const ga = a.groupActs
+  return (
+    <>
+      <M.Label className="truncate">{vg.name}</M.Label>
+      {!page && (
+        <M.Item onSelect={() => ga.show(vg)}>
+          <BookOpen /> Afficher
+        </M.Item>
+      )}
+      <M.Item onSelect={() => ga.open(vg)} disabled={!n}>
+        <SquareTerminal /> Reprendre les {plural(n)}
+      </M.Item>
+      <M.Item onSelect={() => ga.prompt(vg)} disabled={!n}>
+        <MessageSquarePlus /> Nouvelle session avec ces références…
+      </M.Item>
+      <M.Item onSelect={() => ga.refs(vg)} disabled={!n}>
+        <ClipboardList /> Copier les références
+      </M.Item>
+      <M.Item onSelect={() => ga.export(vg)} disabled={!n}>
+        <Download /> Exporter en Markdown
+      </M.Item>
+      <M.Item onSelect={() => ga.select(vg)} disabled={!n}>
+        <CheckSquare /> Sélectionner ses sessions
+      </M.Item>
+      <M.Sep />
+      <M.Item onSelect={() => ga.fav(vg)}>
+        {vg.fav ? <StarOff /> : <Star />} {vg.fav ? "Retirer des favoris" : "Ajouter aux favoris"}
+      </M.Item>
+      <M.Item onSelect={() => ga.rename(vg)}>
+        <Pencil /> Renommer…
+      </M.Item>
+      <M.Item variant="destructive" onSelect={() => ga.remove(vg)}>
+        <Trash2 /> Supprimer le groupe
       </M.Item>
     </>
   )

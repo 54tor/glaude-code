@@ -2,6 +2,12 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+/* Polices proposées pour les conversations (Réglages), toutes avec le latin et le cyrillique. */
+@import "@fontsource-variable/geist-mono";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+@import "@fontsource-variable/ibm-plex-sans";
+@import "@fontsource-variable/fira-code";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -140,9 +146,9 @@
   contain-intrinsic-size: auto 4rem;
 }
 
-/* Contenu des conversations : la police du terminal de CachyOS (Adwaita Mono, 14 px dans le navigateur), système en repli. */
-.session-text { font-family: "Adwaita Mono", ui-monospace, monospace; font-size: 14px; line-height: 1.6; }
-.session-text .md code { font-family: inherit; font-size: 1em; }
+/* Contenu des conversations : police et taille choisies dans Réglages (variables posées par App). */
+.session-text { font-family: var(--reader-font, "Geist Variable", sans-serif); font-size: var(--reader-size, 15px); line-height: 1.65; }
+.session-text .md code, .session-text .md pre { font-family: var(--reader-mono, "Geist Mono Variable", monospace); font-size: 0.92em; }
 
 /* Rendu Markdown des réponses de Claude (tableaux, listes, code…). */
 .md > :first-child { margin-top: 0; }

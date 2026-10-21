@@ -1,4 +1,4 @@
-import { MoreHorizontal, SquareTerminal } from "lucide-react"
+import { MoreHorizontal, SquareTerminal, Star } from "lucide-react"
 import { ago, bucket, full, size, tilde } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -65,7 +65,10 @@ function Row({ row, showProject }: { row: R; showProject: boolean }) {
             className="min-w-0 flex-1 text-left outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring/50"
             onClick={() => a.read(s)}
           >
-            <span className={cn("line-clamp-1 text-sm", s.named ? "font-medium" : "text-foreground/80")}>{s.title}</span>
+            <span className={cn("line-clamp-1 text-sm", s.named ? "font-medium" : "text-foreground/80")}>
+              {a.favs.has(s.id) && <Star className="mr-1 inline size-3.5 -translate-y-px fill-amber-400 text-amber-400" aria-label="favori" />}
+              {s.title}
+            </span>
             <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
               {live && (
                 <>

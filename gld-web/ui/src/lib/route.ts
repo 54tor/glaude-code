@@ -3,7 +3,7 @@
 export type Route =
   | { kind: "recent" }
   | { kind: "all" }
-  | { kind: "group"; name: string }
+  | { kind: "group"; name: string; key: string } // groupe virtuel du dossier de clé key
   | { kind: "dir"; key: string } // clé d'un nœud de l'arbre, ex. « ~/Projets/caddy »
   | { kind: "snippets"; path: string }
   | { kind: "tabs" }
@@ -15,7 +15,11 @@ const enc = (p: string) => p.split("/").map(encodeURIComponent).join("/")
 export function parse(loc: string): Route {
   try {
     if (loc === "/toutes") return { kind: "all" }
-    if (loc.startsWith("/groupe/")) return { kind: "group", name: decodeURIComponent(loc.slice(8)) }
+    if (loc.startsWith("/groupe/")) {
+      const rest = loc.slice(8)
+      const i = rest.indexOf("/")
+      if (i > 0) return { kind: "group", name: decodeURIComponent(rest.slice(0, i)), key: dec(rest.slice(i + 1)) }
+    }
     if (loc.startsWith("/dossier/")) return { kind: "dir", key: dec(loc.slice(9)) }
     if (loc === "/onglets") return { kind: "tabs" }
     if (loc === "/memoire" || loc.startsWith("/memoire/")) return { kind: "memory", key: dec(loc.slice(9)) }
@@ -31,7 +35,7 @@ export function href(r: Route): string {
     case "all":
       return "/toutes"
     case "group":
-      return "/groupe/" + encodeURIComponent(r.name)
+      return "/groupe/" + encodeURIComponent(r.name) + "/" + enc(r.key)
     case "dir":
       return "/dossier/" + enc(r.key)
     case "tabs":

@@ -2,14 +2,15 @@
 
 export type Session = { id: string; dir: string; title: string; named: boolean; cwd: string; mtime: number; kb: number }
 export type Group = { project: string; missing: boolean; sessions: Session[] }
-export type VGroup = { name: string; ids: string[] }
-export type Data = { home: string; groups: Group[]; live: string[]; vgroups: VGroup[] }
+export type VGroup = { name: string; project: string; ids: string[]; fav?: boolean }
+export type Data = { home: string; root: string; groups: Group[]; live: string[]; vgroups: VGroup[]; favs: string[] }
 export type Snippet = { path: string; kb: number; mtime: number }
-export type MemFile = { key: string; name: string; kb: number; mtime: number }
+export type MemFile = { key: string; name: string; kb: number; mtime: number; path: string }
 export type MemProject = { dir: string; project: string; missing: boolean; files: MemFile[] }
 export type TabSession = { id: string; dir: string; project: string; title: string }
 export type TabSave = { name: string; auto: boolean; at: string; sessions: TabSession[] }
 export type MemTarget = { dir: string; project: string }
+export type Trashed = { id: string; key: string; path: string; reason: string; at: number; kb: number }
 export type Hit = { dir: string; id: string; n: number; snip: string }
 export type Item = { dir: string; id: string }
 export type Detail = { prompts: string[]; n: number; branch: string; models: string[]; t0: string; t1: string; subagents: number }
@@ -34,6 +35,8 @@ export const api = {
   memory: () => get<{ global: MemFile[]; projects: MemProject[]; targets: MemTarget[] }>("/memory-list"),
   memoryFile: (key: string) => get<{ text?: string; error?: string }>(`/memory-file?key=${enc(key)}`),
   tabs: () => get<{ saves: TabSave[] }>("/tabs"),
+  trash: () => get<{ items: Trashed[] }>("/trash"),
+  trashFile: (id: string) => get<{ text?: string; error?: string }>(`/trash-file?id=${enc(id)}`),
   search: (q: string) => get<{ hits: Hit[] }>(`/search?q=${enc(q)}`),
   // Une action ne lève jamais : toute erreur (réseau, HTTP) devient un Result visible.
   async post(url: string, body: unknown): Promise<Result> {

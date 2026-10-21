@@ -159,42 +159,97 @@ func setTitle(path, id, title string) error {
 	return err
 }
 
-// --- groupes virtuels : quelques sessions rassemblées sous un nom, quel que soit leur dossier ---
-
+// --- groupes virtuels et favoris ---
+// Un groupe est un sous-dossier virtuel d'un dossier de travail : il ne rassemble que des sessions de ce projet.
 // Les sessions sont désignées par leur id seul : il ne change pas quand on les déplace de dossier.
+
 type VGroup struct {
-	Name string   `json:"name"`
-	IDs  []string `json:"ids"`
+	Name    string   `json:"name"`
+	Project string   `json:"project"` // dossier de travail (clé de groupe de sessions())
+	IDs     []string `json:"ids"`
+	Fav     bool     `json:"fav,omitempty"`
+}
+
+// Store : contenu de ~/.claude/gld-web-groups.json.
+type Store struct {
+	Groups []VGroup `json:"groups"`
+	Favs   []string `json:"favs"` // sessions favorites
 }
 
 var groupsMu sync.Mutex
 
 func groupsFile() string { return filepath.Join(cfgDir(), "gld-web-groups.json") }
 
-func loadGroups() []VGroup {
-	g := []VGroup{}
-	if b, err := os.ReadFile(groupsFile()); err == nil {
-		json.Unmarshal(b, &g)
+func loadStore() Store {
+	st := Store{Groups: []VGroup{}, Favs: []string{}}
+	b, err := os.ReadFile(groupsFile())
+	if err != nil {
+		return st
 	}
-	return g
+	if json.Unmarshal(b, &st) == nil {
+		if st.Groups == nil {
+			st.Groups = []VGroup{}
+		}
+		if st.Favs == nil {
+			st.Favs = []string{}
+		}
+		return st
+	}
+	// Ancien format : une liste de groupes sans projet. Chaque groupe est réparti par dossier de travail.
+	var old []VGroup
+	if json.Unmarshal(b, &old) != nil {
+		return st
+	}
+	project := map[string]string{}
+	for _, g := range sessions() {
+		for _, s := range g.Sessions {
+			project[s.ID] = g.Project
+		}
+	}
+	for _, g := range old {
+		by := map[string][]string{}
+		var order []string
+		for _, id := range g.IDs {
+			p := project[id]
+			if p == "" {
+				continue // session disparue
+			}
+			if by[p] == nil {
+				order = append(order, p)
+			}
+			by[p] = append(by[p], id)
+		}
+		for _, p := range order {
+			st.Groups = append(st.Groups, VGroup{Name: g.Name, Project: p, IDs: by[p]})
+		}
+	}
+	saveStore(st)
+	return st
 }
 
-// saveGroups valide puis remplace le fichier en entier (écriture atomique).
-func saveGroups(g []VGroup) error {
-	seen := map[string]bool{}
-	for i := range g {
-		g[i].Name = strings.TrimSpace(spaceRe.ReplaceAllString(g[i].Name, " "))
-		if g[i].Name == "" || utf8.RuneCountInString(g[i].Name) > 80 || seen[g[i].Name] {
-			return errors.New("nom de groupe vide, trop long ou en double")
+// saveStore valide puis remplace le fichier en entier (écriture atomique).
+func saveStore(st Store) error {
+	seen := map[[2]string]bool{}
+	for i := range st.Groups {
+		g := &st.Groups[i]
+		g.Name = strings.TrimSpace(spaceRe.ReplaceAllString(g.Name, " "))
+		k := [2]string{g.Project, g.Name}
+		if g.Name == "" || utf8.RuneCountInString(g.Name) > 80 || g.Project == "" || seen[k] {
+			return errors.New("groupe sans nom ni projet, nom trop long, ou en double dans ce projet")
 		}
-		seen[g[i].Name] = true
-		for _, id := range g[i].IDs {
+		seen[k] = true
+		for _, id := range g.IDs {
 			if !idRe.MatchString(id) {
 				return errors.New("session invalide")
 			}
 		}
 	}
-	b, _ := json.MarshalIndent(g, "", "  ")
+	for _, id := range st.Favs {
+		if !idRe.MatchString(id) {
+			return errors.New("favori invalide")
+		}
+	}
+	b, _ := json.MarshalIndent(st, "", "  ")
 	tmp := groupsFile() + ".tmp"
 	if err := os.WriteFile(tmp, b, 0o644); err != nil {
 		return err

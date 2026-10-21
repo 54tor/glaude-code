@@ -1,11 +1,39 @@
-import { useEffect, useState } from "react"
-import { Brain, Copy, FileText, FolderInput, Globe, Merge, Pencil, Save, Trash2, X } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import {
+  ArchiveRestore,
+  BookOpen,
+  Brain,
+  CheckSquare,
+  ClipboardCopy,
+  Copy,
+  FileText,
+  FolderInput,
+  Globe,
+  Link,
+  Merge,
+  Pencil,
+  Save,
+  Trash,
+  Trash2,
+  X,
+} from "lucide-react"
 import { toast } from "sonner"
-import { api, type MemFile, type MemProject, type MemTarget } from "@/lib/api"
+import { api, type MemFile, type MemProject, type MemTarget, type Trashed } from "@/lib/api"
 import { ago, size, tilde } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +55,16 @@ function split(t: string): [string, string] {
   return m ? [m[1], t.slice(m[0].length)] : ["", t]
 }
 
+// Seules les entrées de mémoire de projet et les règles globales changent de place (pas les CLAUDE.md).
+const movable = (key: string) => key.startsWith("m/") || key.startsWith("g/rules/")
+const home = (key: string) => (key.startsWith("m/") ? key.split("/")[1] : "global")
+
+const copy = (text: string, what: string) =>
+  navigator.clipboard.writeText(text).then(
+    () => toast.success(`${what} copié`),
+    () => toast.error("Copie impossible")
+  )
+
 function Section({
   icon: Icon,
   title,
@@ -35,6 +73,8 @@ function Section({
   onPick,
   picked,
   onToggle,
+  onPickAll,
+  menu,
 }: {
   icon: typeof Globe
   title: string
@@ -43,33 +83,52 @@ function Section({
   onPick: (k: string) => void
   picked: Set<string>
   onToggle: (k: string) => void
+  onPickAll: (keys: string[]) => void
+  menu: (f: MemFile) => React.ReactNode
 }) {
   return (
     <section className="mb-3">
-      <p className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-muted-foreground" title={title}>
-        <Icon className="size-3.5 shrink-0" /> <span className="truncate">{title}</span>
-      </p>
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <p className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-muted-foreground" title={title}>
+            <Icon className="size-3.5 shrink-0" /> <span className="truncate">{title}</span>
+          </p>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-60">
+          <ContextMenuItem onSelect={() => onPickAll(files.map((f) => f.key))}>
+            <CheckSquare /> Tout sélectionner pour une fusion
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
       <ul className="space-y-px">
         {files.map((f) => (
-          <li key={f.key} className="group flex items-center gap-1.5">
-            <Checkbox
-              checked={picked.has(f.key)}
-              onCheckedChange={() => onToggle(f.key)}
-              aria-label={`Sélectionner ${f.name} pour une fusion`}
-              className={cn("ml-1 transition-opacity", picked.size === 0 && "md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100")}
-            />
-            <button
-              onClick={() => onPick(f.key)}
-              className={cn(
-                "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors",
-                f.key === sel ? "bg-accent font-medium" : "hover:bg-muted"
-              )}
-            >
-              <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 flex-1 truncate">{f.name}</span>
-              <span className="shrink-0 text-xs font-normal text-muted-foreground">{ago(f.mtime)}</span>
-            </button>
-          </li>
+          <ContextMenu key={f.key}>
+            <ContextMenuTrigger asChild>
+              <li className="group flex items-center gap-1.5 rounded-md data-[state=open]:bg-muted">
+                <Checkbox
+                  checked={picked.has(f.key)}
+                  onCheckedChange={() => onToggle(f.key)}
+                  aria-label={`Sélectionner ${f.name} pour une fusion`}
+                  className={cn(
+                    "ml-1 transition-opacity",
+                    picked.size === 0 && "md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+                  )}
+                />
+                <button
+                  onClick={() => onPick(f.key)}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors",
+                    f.key === sel ? "bg-accent font-medium" : "hover:bg-muted"
+                  )}
+                >
+                  <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate">{f.name}</span>
+                  <span className="shrink-0 text-xs font-normal text-muted-foreground">{ago(f.mtime)}</span>
+                </button>
+              </li>
+            </ContextMenuTrigger>
+            <ContextMenuContent className="w-64">{menu(f)}</ContextMenuContent>
+          </ContextMenu>
         ))}
       </ul>
     </section>
@@ -79,7 +138,7 @@ function Section({
 // Mémoire de Claude : globale (CLAUDE.md, rules/) et par projet (memory/, CLAUDE.md du projet), lecture et édition.
 export function Memory({
   sel,
-  home,
+  home: homeDir,
   q,
   onPick,
   onAsk,
@@ -102,33 +161,25 @@ export function Memory({
     })
   // Fusion par Claude : le serveur rédige le prompt ; on le copie, ou on l'ouvre dans une nouvelle session.
   const merge = async (launch: boolean) => {
-    const r = (await api.post("/memory-merge", {
-      keys: [...picked],
-      launch,
-      args,
-    })) as { ok: boolean; out: string; prompt?: string }
-    if (!launch && r.ok && r.prompt) {
-      await navigator.clipboard.writeText(r.prompt).then(
-        () =>
-          toast.success("Prompt de fusion copié", {
-            description: "Colle-le dans une session Claude.",
-          }),
-        () => toast.error("Copie impossible")
-      )
-      return
-    }
+    const r = (await api.post("/memory-merge", { keys: [...picked], launch, args })) as { ok: boolean; out: string; prompt?: string }
+    if (!launch && r.ok && r.prompt) return void copy(r.prompt, "Prompt de fusion")
     ;(r.ok ? toast.success : toast.error)(r.out.trim() || (r.ok ? "Session lancée" : "Échec"))
     if (r.ok) setPicked(new Set())
   }
   const [list, setList] = useState<List | null>(null)
   const [loaded, setLoaded] = useState<{ key: string; text: string } | null>(null)
   const [draft, setDraft] = useState<{ key: string; text: string } | null>(null)
+  const editNext = useRef("") // « Modifier » depuis le clic droit : passe en édition dès le chargement
   const text = loaded?.key === sel ? loaded.text : null
   const editing = draft?.key === sel ? draft : null
 
-  const refresh = () => api.memory().then(setList)
+  // Corbeille : les versions supprimées ou remplacées ; sel vaut « corbeille/<id> » pour en afficher une.
+  const [trash, setTrash] = useState<Trashed[]>([])
+  const inTrash = sel.startsWith("corbeille/") ? sel.slice(10) : ""
+  const refresh = () => Promise.all([api.memory().then(setList), api.trash().then((r) => setTrash(r.items))])
   useEffect(() => {
     let live = true
+    api.trash().then((r) => live && setTrash(r.items))
     api.memory().then((l) => live && setList(l))
     return () => {
       live = false
@@ -137,11 +188,17 @@ export function Memory({
   useEffect(() => {
     if (!sel) return
     let live = true
-    api.memoryFile(sel).then((r) => live && setLoaded({ key: sel, text: r.text ?? r.error ?? "" }))
+    const get = inTrash ? api.trashFile(inTrash) : api.memoryFile(sel)
+    get.then((r) => {
+      if (!live) return
+      setLoaded({ key: sel, text: r.text ?? r.error ?? "" })
+      if (editNext.current === sel && r.text !== undefined) setDraft({ key: sel, text: r.text })
+      editNext.current = ""
+    })
     return () => {
       live = false
     }
-  }, [sel])
+  }, [sel, inTrash])
 
   const all = list ? [...list.global, ...list.projects.flatMap((p) => p.files)] : []
   const file = all.find((f) => f.key === sel)
@@ -158,31 +215,127 @@ export function Memory({
       refresh()
     }
   }
-  // Une entrée de mémoire de projet ou une règle globale peut changer de projet (ou devenir une règle globale).
-  const movable = sel.startsWith("m/") || sel.startsWith("g/rules/")
-  const here = sel.startsWith("m/") ? sel.split("/")[1] : "global"
-  const move = async (to: string) => {
-    const r = (await api.post("/memory-move", { key: sel, to })) as { ok: boolean; out: string; key?: string }
+  const edit = (key: string) => {
+    if (key === sel && text !== null) return setDraft({ key, text })
+    editNext.current = key
+    onPick(key)
+  }
+  const move = async (key: string, to: string) => {
+    const r = (await api.post("/memory-move", { key, to })) as { ok: boolean; out: string; key?: string }
     ;(r.ok ? toast.success : toast.error)(r.out)
     if (r.ok && r.key) {
       refresh()
-      onPick(r.key)
+      if (key === sel) onPick(r.key)
     }
   }
-  const remove = () =>
+  const remove = (x: MemFile) =>
     onAsk({
-      title: `Supprimer ${file?.name ?? "ce fichier"} ?`,
-      body: sel.startsWith("m/") ? "Suppression définitive. Sa ligne dans MEMORY.md est retirée aussi." : "Suppression définitive.",
+      title: `Supprimer ${x.name} ?`,
+      body: x.key.startsWith("m/") ? "Suppression définitive. Sa ligne dans MEMORY.md est retirée aussi." : "Suppression définitive.",
       confirm: "Supprimer",
       run: async () => {
-        const r = await api.post("/memory-rm", { key: sel })
+        const r = await api.post("/memory-rm", { key: x.key })
         ;(r.ok ? toast.success : toast.error)(r.out)
         if (r.ok) {
-          onPick("")
+          if (x.key === sel) onPick("")
           refresh()
         }
       },
     })
+  const copyContent = async (x: MemFile) => {
+    const r = await api.memoryFile(x.key)
+    if (r.text === undefined) return void toast.error(r.error ?? "Fichier illisible")
+    copy(r.text, "Contenu")
+  }
+  const targets = (key: string) => (list?.targets ?? []).filter((t) => t.dir !== home(key))
+
+  // Clic droit sur un fichier de mémoire.
+  const menu = (x: MemFile) => (
+    <>
+      <ContextMenuLabel className="truncate">{x.name}</ContextMenuLabel>
+      <ContextMenuItem onSelect={() => onPick(x.key)}>
+        <BookOpen /> Ouvrir
+      </ContextMenuItem>
+      <ContextMenuItem onSelect={() => edit(x.key)}>
+        <Pencil /> Modifier
+      </ContextMenuItem>
+      <ContextMenuItem onSelect={() => copyContent(x)}>
+        <ClipboardCopy /> Copier le contenu
+      </ContextMenuItem>
+      <ContextMenuItem onSelect={() => copy(x.path, "Chemin")}>
+        <Link /> Copier le chemin
+      </ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem onSelect={() => toggle(x.key)}>
+        <Merge /> {picked.has(x.key) ? "Retirer de la fusion" : "Sélectionner pour une fusion"}
+      </ContextMenuItem>
+      {movable(x.key) && (
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>
+            <FolderInput /> Déplacer vers
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent className="max-h-80 w-72 overflow-y-auto">
+            {home(x.key) !== "global" && (
+              <>
+                <ContextMenuItem onSelect={() => move(x.key, "global")}>
+                  <Globe /> Règles globales (rules/)
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+              </>
+            )}
+            {targets(x.key).map((t) => (
+              <ContextMenuItem key={t.dir} onSelect={() => move(x.key, t.dir)}>
+                <Brain /> <span className="truncate">{tilde(t.project, homeDir)}</span>
+              </ContextMenuItem>
+            ))}
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+      )}
+      <ContextMenuSeparator />
+      <ContextMenuItem variant="destructive" onSelect={() => remove(x)}>
+        <Trash2 /> Supprimer
+      </ContextMenuItem>
+    </>
+  )
+  const section = (key: string, icon: typeof Globe, title: string, files: MemFile[]) => (
+    <Section
+      key={key}
+      icon={icon}
+      title={title}
+      files={files}
+      sel={sel}
+      onPick={onPick}
+      picked={picked}
+      onToggle={toggle}
+      onPickAll={(keys) => setPicked((p) => new Set([...p, ...keys]))}
+      menu={menu}
+    />
+  )
+
+  const trashed = trash.find((t) => t.id === inTrash)
+  const restore = async (t: Trashed) => {
+    const r = (await api.post("/trash-restore", { id: t.id })) as { ok: boolean; out: string; key?: string }
+    ;(r.ok ? toast.success : toast.error)(r.out)
+    if (r.ok) {
+      await refresh()
+      if (r.key) onPick(r.key)
+    }
+  }
+  const purge = (t?: Trashed) =>
+    onAsk({
+      title: t ? "Supprimer définitivement cette version ?" : `Vider la corbeille (${trash.length}) ?`,
+      body: "Cette fois, c'est définitif.",
+      confirm: t ? "Supprimer" : "Vider",
+      run: async () => {
+        const r = await api.post("/trash-purge", { id: t?.id ?? "" })
+        ;(r.ok ? toast.success : toast.error)(r.out)
+        if (r.ok) {
+          if (!t || t.id === inTrash) onPick("")
+          refresh()
+        }
+      },
+    })
+  const shortPath = (p: string) => (homeDir && p.startsWith(homeDir) ? "~" + p.slice(homeDir.length) : p)
 
   const [fm, body] = split(text ?? "")
   return (
@@ -190,32 +343,48 @@ export function Memory({
       <ScrollArea className="max-h-64 shrink-0 border-b md:max-h-none md:w-80 md:border-r md:border-b-0">
         <nav className="p-2">
           {!list && <Skeleton className="m-2 h-24" />}
-          {list && list.global.some((x) => match(x, "globale")) && (
-            <Section
-              icon={Globe}
-              title="Globale"
-              files={list.global.filter((x) => match(x, "globale"))}
-              sel={sel}
-              onPick={onPick}
-              picked={picked}
-              onToggle={toggle}
-            />
-          )}
+          {list &&
+            list.global.some((x) => match(x, "globale")) &&
+            section(
+              "global",
+              Globe,
+              "Globale",
+              list.global.filter((x) => match(x, "globale"))
+            )}
           {list?.projects.map((p) => {
             const files = p.files.filter((x) => match(x, p.project))
-            return files.length ? (
-              <Section
-                key={p.dir}
-                icon={Brain}
-                title={tilde(p.project, home) + (p.missing ? " (introuvable)" : "")}
-                files={files}
-                sel={sel}
-                onPick={onPick}
-                picked={picked}
-                onToggle={toggle}
-              />
-            ) : null
+            return files.length ? section(p.dir, Brain, tilde(p.project, homeDir) + (p.missing ? " (introuvable)" : ""), files) : null
           })}
+          {trash.length > 0 && (
+            <section className="mt-4 border-t pt-2">
+              <div className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-muted-foreground">
+                <Trash className="size-3.5" /> <span className="flex-1">Corbeille</span>
+                <Button variant="ghost" size="xs" className="h-5 px-1.5 text-xs" onClick={() => purge()}>
+                  Vider
+                </Button>
+              </div>
+              <ul className="space-y-px">
+                {trash.map((t) => (
+                  <li key={t.id}>
+                    <button
+                      onClick={() => onPick("corbeille/" + t.id)}
+                      title={t.path}
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors",
+                        t.id === inTrash ? "bg-accent font-medium" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      )}
+                    >
+                      <FileText className="size-3.5 shrink-0" />
+                      <span className="min-w-0 flex-1 truncate">{t.path.split(/[\\/]/).pop()}</span>
+                      <span className="shrink-0 text-xs font-normal">
+                        {t.reason} {ago(t.at)}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
         </nav>
       </ScrollArea>
       {picked.size > 0 && (
@@ -235,12 +404,37 @@ export function Memory({
         </div>
       )}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {!sel ? (
-          <p className="px-6 py-20 text-center text-sm text-muted-foreground">Choisis un fichier de mémoire à afficher.</p>
+        {inTrash ? (
+          <>
+            <div className="flex items-center gap-2 border-b px-6 py-2">
+              <code className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={trashed?.path}>
+                {trashed ? `${shortPath(trashed.path)} · ${trashed.reason} ${ago(trashed.at)}` : "Introuvable dans la corbeille"}
+              </code>
+              {trashed && (
+                <>
+                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => purge(trashed)}>
+                    <Trash2 /> Supprimer définitivement
+                  </Button>
+                  <Button size="sm" onClick={() => restore(trashed)}>
+                    <ArchiveRestore /> Restaurer
+                  </Button>
+                </>
+              )}
+            </div>
+            <ScrollArea className="min-h-0 flex-1">
+              <pre className="session-text mx-auto max-w-3xl px-6 py-6 whitespace-pre-wrap">{text ?? ""}</pre>
+            </ScrollArea>
+          </>
+        ) : !sel ? (
+          <p className="px-6 py-20 text-center text-sm text-muted-foreground">
+            Choisis un fichier de mémoire à afficher. Clic droit pour ses actions.
+          </p>
         ) : (
           <>
             <div className="flex items-center gap-2 border-b px-6 py-2">
-              <code className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{file ? `${file.name} · ${size(file.kb)}` : sel}</code>
+              <code className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={file?.path}>
+                {file ? `${file.name} · ${size(file.kb)}` : sel}
+              </code>
               {editing ? (
                 <>
                   <Button variant="ghost" size="sm" onClick={() => setDraft(null)}>
@@ -252,37 +446,41 @@ export function Memory({
                 </>
               ) : (
                 <>
-                  {movable && list && (
+                  {movable(sel) && list && file && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" disabled={!file}>
+                        <Button variant="ghost" size="sm">
                           <FolderInput /> Déplacer vers…
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="max-h-80 w-72 overflow-y-auto">
-                        {here !== "global" && (
+                        {home(sel) !== "global" && (
                           <>
-                            <DropdownMenuItem onSelect={() => move("global")}>
+                            <DropdownMenuItem onSelect={() => move(sel, "global")}>
                               <Globe /> Règles globales (rules/)
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                           </>
                         )}
                         <DropdownMenuLabel>Mémoire du projet</DropdownMenuLabel>
-                        {list.targets
-                          .filter((t) => t.dir !== here)
-                          .map((t) => (
-                            <DropdownMenuItem key={t.dir} onSelect={() => move(t.dir)}>
-                              <Brain /> <span className="truncate">{tilde(t.project, home)}</span>
-                            </DropdownMenuItem>
-                          ))}
+                        {targets(sel).map((t) => (
+                          <DropdownMenuItem key={t.dir} onSelect={() => move(sel, t.dir)}>
+                            <Brain /> <span className="truncate">{tilde(t.project, homeDir)}</span>
+                          </DropdownMenuItem>
+                        ))}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
-                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={remove} disabled={!file}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => file && remove(file)}
+                    disabled={!file}
+                  >
                     <Trash2 /> Supprimer
                   </Button>
-                  <Button size="sm" onClick={() => text !== null && setDraft({ key: sel, text })} disabled={text === null}>
+                  <Button size="sm" onClick={() => edit(sel)} disabled={text === null}>
                     <Pencil /> Modifier
                   </Button>
                 </>
