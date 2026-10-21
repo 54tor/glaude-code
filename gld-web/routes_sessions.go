@@ -31,6 +31,13 @@ func routesSessions(mux *http.ServeMux) {
 		writeJSON(w, 200, map[string]any{"home": home, "root": root, "groups": sessions(), "live": live, "waiting": waiting(), "vgroups": st.Groups, "favs": st.Favs, "tags": st.Tags})
 	})
 	// Envoi d'un message à une session ouverte dans tmux (sendkeys.go) : lesquelles le permettent, puis l'envoi.
+	// État en direct d'une session (sessionlive.go) et informations du compte (account.go).
+	mux.HandleFunc("GET /session-live", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, sessionLive(r.URL.Query().Get("dir"), r.URL.Query().Get("id")))
+	})
+	mux.HandleFunc("GET /account", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, accountInfo())
+	})
 	mux.HandleFunc("GET /session-send-info", func(w http.ResponseWriter, r *http.Request) {
 		ids, err := sendable()
 		why := ""
@@ -65,6 +72,28 @@ func routesSessions(mux *http.ServeMux) {
 			return
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "out": "Session fermée"})
+	})
+	mux.HandleFunc("GET /session-screen", func(w http.ResponseWriter, r *http.Request) {
+		text, err := sessionScreen(r.URL.Query().Get("id"))
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "text": text})
+	})
+	mux.HandleFunc("POST /session-key", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ ID, Key string }
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		err := sendKey(req.ID, req.Key)
+		journal("session-key %s %s : %v", req.ID, req.Key, errOr(err))
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": "Touche envoyée"})
 	})
 	mux.HandleFunc("POST /session-send", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ ID, Text string }

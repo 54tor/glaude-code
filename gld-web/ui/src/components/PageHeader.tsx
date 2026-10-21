@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import type { Actions, GroupActions } from "./actions"
+import { AccountButton } from "./AccountDialog"
 import { DD, GroupItems } from "./SessionMenu"
 
 // En-tête de la page : titre, sous-titre, actions du dossier ou du groupe affiché, et avertissement d'un dossier disparu.
@@ -98,6 +99,7 @@ export function PageHeader({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
+        <AccountButton />
       </header>
 
       {g?.missing && (

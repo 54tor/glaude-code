@@ -130,3 +130,32 @@ func TestFermerSession(t *testing.T) {
 		t.Fatal("session inconnue ou invalide acceptée")
 	}
 }
+
+func TestEcranEtTouches(t *testing.T) {
+	calls := fakeTmux(t, "%3 100\n")
+	oldRun := tmuxRun
+	tmuxRun = func(stdin string, args ...string) (string, error) {
+		if args[0] == "capture-pane" {
+			return "Do you want to proceed?   \n❯ 1. Yes\n  2. No\n\n\n", nil
+		}
+		return oldRun(stdin, args...)
+	}
+	if s, err := sessionScreen(sid); err != nil || s != "Do you want to proceed?\n❯ 1. Yes\n  2. No" {
+		t.Fatalf("écran : %q %v", s, err)
+	}
+	if err := sendKey(sid, "2"); err != nil {
+		t.Fatal(err)
+	}
+	last := (*calls)[len(*calls)-1]
+	if last[1] != "send-keys" || last[len(last)-1] != "2" || last[len(last)-2] != "%3" {
+		t.Fatalf("touche : %v", last)
+	}
+	for _, k := range []string{"rm -rf", "C-d", "a", "Enter; ls", ""} {
+		if sendKey(sid, k) == nil {
+			t.Errorf("touche acceptée : %q", k)
+		}
+	}
+	if sendKey("../x", "Enter") == nil {
+		t.Error("session invalide acceptée")
+	}
+}

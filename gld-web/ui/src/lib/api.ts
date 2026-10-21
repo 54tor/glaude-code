@@ -89,6 +89,28 @@ export type Trashed = { id: string; key: string; path: string; reason: string; a
 export type Hit = { dir: string; id: string; n: number; snip: string }
 export type Item = { dir: string; id: string }
 export type Detail = { prompts: string[]; n: number; branch: string; models: string[]; t0: string; t1: string; subagents: number }
+export type SubLive = { id: string; desc: string; type: string; running: boolean; activity: string; context: number; out: number; mtime: number }
+export type LiveState = { open: boolean; status: string; activity: string; thinking: boolean; since: number; context: number; out: number; model: string; subs: SubLive[] }
+export type UsageLimit = { key: string; label: string; percent: number; resetsAt?: string; limitDollars?: number; usedDollars?: number; lockedWhy?: string }
+export type Account = {
+  email: string
+  name?: string
+  org?: string
+  orgType?: string
+  tier?: string
+  billing?: string
+  extraUsage: boolean
+  extraWhy?: string
+  since?: string
+  limits: UsageLimit[]
+  limitsAt?: number
+  totalSessions: number
+  totalMessages: number
+  firstSession?: string
+  days: { date: string; messages: number; sessions: number; tools: number; tokens?: Record<string, number> }[]
+  statsAt?: string
+  models: { model: string; in: number; out: number; cacheRead: number; cacheWrite: number }[]
+}
 export type Msg = { r: "user" | "assistant" | "tool"; t: string; ts?: string; o?: number; n?: number }
 export type Ls = { path: string; parent: string; dirs: string[]; sep: string; error?: string }
 export type Result = { ok: boolean; out: string }
@@ -120,6 +142,9 @@ export const api = {
   skill: (key: string) => get<{ text?: string; files?: SkillFile[]; error?: string }>(`/skill?key=${enc(key)}`),
   configProjects: () => get<{ projects: ProjectCfg[] }>("/config-projects"),
   sessionIdle: (id: string) => get<{ idle: boolean }>(`/session-state?id=${enc(id)}`),
+  sessionLive: (dir: string, id: string) => get<LiveState>(`/session-live?dir=${enc(dir)}&id=${enc(id)}`),
+  account: () => get<Account>("/account"),
+  screen: (id: string) => get<{ ok: boolean; out?: string; text?: string }>(`/session-screen?id=${enc(id)}`),
   sendInfo: () => get<{ ids: string[]; why: string }>("/session-send-info"),
   config: () => get<CfgOverview>("/config"),
   configEffective: (dir: string) => get<{ rows: EffRow[] }>(`/config-effective?dir=${enc(dir)}`),

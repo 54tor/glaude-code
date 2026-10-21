@@ -13,6 +13,7 @@ import { Live } from "./SessionList"
 import type { Row } from "./actions"
 import { Message } from "./Message"
 import { Composer, type Turn } from "./Composer"
+import { LiveStatus } from "./LiveStatus"
 import { LoadedDialog } from "./LoadedDialog"
 
 // Messages chargés d'un coup (par la fin) : une session de plusieurs Go compte des milliers de messages.
@@ -188,6 +189,7 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
             )}
           </div>
         </div>
+        {session && <LiveStatus dir={dir} id={id} open={a.live.has(id)} tok={session.tok} />}
         <ScrollArea ref={area} className="min-h-0 flex-1">
           <div className="session-text mx-auto max-w-7xl space-y-5 px-6 py-6">
             {msgs === null && (
