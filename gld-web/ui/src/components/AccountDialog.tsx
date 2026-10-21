@@ -59,7 +59,7 @@ export function AccountButton() {
         <DialogContent className="flex max-h-[90vh] flex-col gap-0 p-0 sm:max-w-3xl">
           <DialogHeader className="border-b px-6 py-4">
             <DialogTitle>Compte</DialogTitle>
-            <DialogDescription>Lu dans les fichiers locaux de Claude Code ; rien n'est demandé au serveur d'Anthropic.</DialogDescription>
+            <DialogDescription className="sr-only">Plan, limites d'usage, activité et tokens par modèle</DialogDescription>
           </DialogHeader>
           <ScrollArea className="min-h-0 flex-1">
             {a ? <Body a={a} /> : <p className="p-6 text-sm text-muted-foreground">Chargement…</p>}
