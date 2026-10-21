@@ -221,15 +221,15 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
                 <Loader2 className="size-4 animate-spin" /> Claude répond…
               </p>
             )}
-            {working && (
+            {working && !(live.open && live.st?.open) && (
               <p className="flex items-center gap-2 text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" /> Claude réfléchit…
               </p>
             )}
+            <LiveBar live={live} id={id} />
             {turn?.error && <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive">{turn.error}</p>}
           </div>
         </ScrollArea>
-        {session && <LiveBar live={live} id={id} />}
         {session && (
           <Composer
             dir={dir}
