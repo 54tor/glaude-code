@@ -372,11 +372,7 @@ func mcpServers() []McpServer {
 			}
 		}
 	}
-	_, projects, _ := memList()
-	for _, p := range projects {
-		if p.Missing {
-			continue
-		}
+	for _, p := range liveProjects() {
 		if b, err := os.ReadFile(filepath.Join(p.Project, ".mcp.json")); err == nil {
 			if v, err := parseOrdered(b); err == nil {
 				if s, ok := lookup(v, "mcpServers"); ok {

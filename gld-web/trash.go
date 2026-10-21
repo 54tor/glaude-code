@@ -116,6 +116,8 @@ func trashRestore(id string) (Trashed, error) {
 	}
 	if strings.HasPrefix(t.Key, "s/") { // un snippet
 		err = saveSnippet(t.Key[2:], text, false)
+	} else if strings.HasPrefix(t.Key, "k/") { // un skill
+		err = saveSkill(t.Key[2:], text, false)
 	} else {
 		err = memSave(t.Key, text) // memSave met la version remplacée à la corbeille
 	}

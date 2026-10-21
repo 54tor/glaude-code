@@ -24,6 +24,28 @@ export type MemFile = {
 }
 export type LoadEvent = { at: number; session: string; file: string; type?: string; reason?: string; globs?: string[]; trigger?: string }
 export type FileLoads = { sessions: number; last: number }
+// Skills (skills.go)
+export type Skill = {
+  key: string
+  name: string
+  dir: string
+  scope: "user" | "project" | "plugin"
+  project?: string
+  plugin?: string
+  readOnly?: boolean
+  description: string
+  chars: number
+  manual?: boolean
+  hidden?: boolean
+  tools?: string
+  files: number
+  kb: number
+  mtime: number
+  path: string
+  warn?: string
+}
+export type SkillFile = { rel: string; kb: number }
+
 // Configuration de Claude Code (config*.go)
 export type ConfigFile = { id: string; scope: "user" | "project" | "local"; dir?: string; label: string; path: string; exists: boolean; error?: string; data?: unknown }
 export type HookInfo = { scope: string; file: string; event: string; matcher?: string; type: string; command: string; missing?: string }
@@ -78,6 +100,8 @@ export const api = {
   memoryLoaded: () => get<{ hook: boolean; files: Record<string, FileLoads> }>("/memory-loaded"),
   sessionLoaded: (id: string) => get<{ files: LoadEvent[] }>(`/session-loaded?id=${id}`),
   configRaw: (file: string) => get<{ ok: boolean; text?: string; out?: string }>(`/config-raw?file=${enc(file)}`),
+  skills: () => get<{ skills: Skill[]; projects: { dir: string; project: string }[] }>("/skills-list"),
+  skill: (key: string) => get<{ text?: string; files?: SkillFile[]; error?: string }>(`/skill?key=${enc(key)}`),
   config: () => get<CfgOverview>("/config"),
   configEffective: (dir: string) => get<{ rows: EffRow[] }>(`/config-effective?dir=${enc(dir)}`),
   configMcp: () => get<{ servers: McpServer[] }>("/config-mcp"),

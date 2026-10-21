@@ -1,4 +1,4 @@
-import { AlarmClock, Star, Brain, SlidersHorizontal, Flame, History, Clock, FileText, Inbox, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
+import { AlarmClock, Star, Brain, SlidersHorizontal, Zap, Flame, History, Clock, FileText, Inbox, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
 import { size } from "@/lib/format"
 import type { Choice } from "@/lib/models"
 import type { Route } from "@/lib/route"
@@ -163,6 +163,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           <NavItem icon={Flame} label="En cours et cache chaud" n={p.counts.active} active={r.kind === "active"} onClick={() => p.go({ kind: "active" })} />
           <NavItem icon={Inbox} label="Toutes les sessions" n={p.counts.all} active={r.kind === "all"} onClick={() => p.go({ kind: "all" })} />
           <NavItem icon={History} label="Sessions sauvegardées" active={r.kind === "tabs"} onClick={() => p.go({ kind: "tabs" })} />
+          <NavItem icon={Zap} label="Skills" active={r.kind === "skills"} onClick={() => p.go({ kind: "skills", key: "" })} />
           <NavItem icon={SlidersHorizontal} label="Configuration" active={r.kind === "config"} onClick={() => p.go({ kind: "config" })} />
           <NavItem icon={Brain} label="Mémoire" active={r.kind === "memory"} onClick={() => p.go({ kind: "memory", key: "" })} />
           {p.snippets !== null && (
