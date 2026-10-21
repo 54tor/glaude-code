@@ -191,7 +191,6 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
             )}
           </div>
         </div>
-        {session && <LiveBar live={live} />}
         <ScrollArea ref={area} className="min-h-0 flex-1">
           <div className="session-text mx-auto max-w-7xl space-y-5 px-3 py-4 md:px-6 md:py-6">
             {msgs === null && (
@@ -230,6 +229,7 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
             {turn?.error && <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive">{turn.error}</p>}
           </div>
         </ScrollArea>
+        {session && <LiveBar live={live} />}
         {session && (
           <Composer
             dir={dir}
