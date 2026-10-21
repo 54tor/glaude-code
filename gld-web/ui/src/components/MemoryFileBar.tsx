@@ -1,4 +1,4 @@
-import { Brain, Eye, EyeOff, FolderInput, Globe, Pencil, Save, Sparkles, Trash2, X } from "lucide-react"
+import { Brain, Eye, EyeOff, FolderInput, Globe, Pencil, Save, ScrollText, Sparkles, Trash2, X } from "lucide-react"
 import type { MemFile, MemTarget } from "@/lib/api"
 import { ago, size, tilde } from "@/lib/format"
 import { Button } from "@/components/ui/button"
@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Choose } from "./Choose"
-import { home, movable } from "./memoryLib"
+import { home, movable, toMemory, toRules } from "./memoryLib"
 import { TYPES } from "./MemoryTypes"
 
 // Barre d'actions au-dessus du fichier affiché : édition (annuler, enregistrer) ou déplacer, type, désactiver, supprimer, Haiku, modifier.
@@ -84,12 +84,21 @@ export function FileBar({
                     <DropdownMenuSeparator />
                   </>
                 )}
-                <DropdownMenuLabel>Mémoire du projet</DropdownMenuLabel>
-                {targets.map((t) => (
-                  <DropdownMenuItem key={t.dir} onSelect={() => onMove(t.dir)}>
-                    <Brain /> <span className="truncate">{tilde(t.project, homeDir)}</span>
-                  </DropdownMenuItem>
-                ))}
+                {toRules(sel) && <DropdownMenuLabel>Règles du projet</DropdownMenuLabel>}
+                {toRules(sel) &&
+                  targets.map((t) => (
+                    <DropdownMenuItem key={"r" + t.dir} onSelect={() => onMove("r:" + t.dir)}>
+                      <ScrollText /> <span className="truncate">{tilde(t.project, homeDir)}</span>
+                    </DropdownMenuItem>
+                  ))}
+                {toRules(sel) && toMemory(sel) && <DropdownMenuSeparator />}
+                {toMemory(sel) && <DropdownMenuLabel>Mémoire du projet</DropdownMenuLabel>}
+                {toMemory(sel) &&
+                  targets.map((t) => (
+                    <DropdownMenuItem key={t.dir} onSelect={() => onMove(t.dir)}>
+                      <Brain /> <span className="truncate">{tilde(t.project, homeDir)}</span>
+                    </DropdownMenuItem>
+                  ))}
               </DropdownMenuContent>
             </DropdownMenu>
           )}

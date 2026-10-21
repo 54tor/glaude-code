@@ -120,8 +120,9 @@ export function Memory({
   const save = async () => {
     if (!editing) return void toast.error("Aucun brouillon à enregistrer")
     // Nouvelle entrée de mémoire de projet ou de règle globale : le nom saisi fixe le fichier.
-    const m = /^(m\/[^/]+|g\/rules)\/[^/]+$/.exec(sel)
-    const key = !file && m ? newKey(all, m[1] === "g/rules" ? "global" : m[1].slice(2), editing.text) : sel
+    const m = /^(m\/[^/]+|r\/[^/]+|g\/rules)\/[^/]+$/.exec(sel)
+    const scopeOf = (p: string) => (p === "g/rules" ? "global" : p[0] === "r" ? "r:" + p.slice(2) : p.slice(2))
+    const key = !file && m ? newKey(all, scopeOf(m[1]), editing.text) : sel
     if (report(await api.post("/memory-save", { key, text: editing.text, index: !file }))) {
       setLoaded({ key, text: editing.text })
       setDraft(null)
@@ -157,7 +158,7 @@ export function Memory({
     onPick(key)
   }
   // Entrée écrite à la main : un modèle prérempli, la clé se fixe à l'enregistrement d'après le nom.
-  const blank = (scope: string) => onDraft({ kind: "new", scope, label: "" }, scope === "global" ? BLANK_RULE : BLANK_ENTRY)
+  const blank = (scope: string) => onDraft({ kind: "new", scope, label: "" }, scope === "global" || scope.startsWith("r:") ? BLANK_RULE : BLANK_ENTRY)
   const edit = (key: string) => {
     if (key === sel && text !== null) return setDraft({ key, text })
     editNext.current = key
@@ -191,7 +192,7 @@ export function Memory({
   const remove = (x: MemFile) =>
     onAsk({
       title: `Supprimer ${x.name} ?`,
-      body: x.key.startsWith("m/") ? "Suppression définitive. Sa ligne dans MEMORY.md est retirée aussi." : "Suppression définitive.",
+      body: x.key.startsWith("m/") ? "Suppression définitive. Sa ligne dans MEMORY.md est retirée aussi." : "Suppression définitive (une copie reste dans la corbeille).",
       confirm: "Supprimer",
       run: async () => {
         if (report(await api.post("/memory-rm", { key: x.key }))) {
@@ -289,7 +290,7 @@ export function Memory({
       a={{ open: onPick, edit, rewrite: (y) => setWriter({ kind: "rewrite", key: y.key, name: y.name }), copyContent, toggle, move, toggleRule, remove }}
     />
   )
-  const section = (key: string, icon: typeof Globe, title: string, files: MemFile[], onWrite?: () => void, onConsolidate?: (file: string) => void) => (
+  const section = (key: string, icon: typeof Globe, title: string, files: MemFile[], onWrite?: () => void, onConsolidate?: (file: string) => void, onNewRule?: () => void) => (
     <Section
       key={key}
       icon={icon}
@@ -301,6 +302,7 @@ export function Memory({
       onToggle={toggle}
       onPickAll={(keys) => setPicked((p) => new Set([...p, ...keys]))}
       onNew={() => blank(key)}
+      onNewRule={onNewRule}
       onWrite={onWrite}
       onConsolidate={onConsolidate}
       agents={key !== "global"}
@@ -354,7 +356,8 @@ export function Memory({
                   files,
                   () => setWriter({ kind: "new", scope: p.dir, label }),
                   // un CLAUDE.md de projet s'écrit dans son dossier : impossible s'il a disparu, inutile sans mémoire
-                  !p.missing && p.files.some((x) => x.key.startsWith("m/")) ? (target) => consolidate(p.dir, label, target) : undefined
+                  !p.missing && p.files.some((x) => x.key.startsWith("m/")) ? (target) => consolidate(p.dir, label, target) : undefined,
+                  !p.missing ? () => blank("r:" + p.dir) : undefined
                 )
               : null
           })}

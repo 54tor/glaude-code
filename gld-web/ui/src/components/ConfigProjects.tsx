@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react"
 import { ChevronRight } from "lucide-react"
+import { Link } from "wouter"
 import { api, type ProjectCfg } from "@/lib/api"
 import { describeKey } from "@/lib/configKeys"
+import { href } from "@/lib/route"
 import { tilde } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -164,12 +166,17 @@ export function ProjectsTab({ home, onEdit }: { home: string; onEdit: (file: str
                   {p.rules.length > 0 && (
                     <section>
                       <h3 className="mb-1 text-xs font-medium text-muted-foreground">
-                        Règles du projet · <code>.claude/rules</code>
+                        Règles du projet · <code>.claude/rules</code> ·{" "}
+                        <Link className="underline" href={href({ kind: "memory", key: `r/${p.dir}/${p.rules[0].name}` })}>
+                          gérer, modifier, transférer vers le global
+                        </Link>
                       </h3>
                       <ul className="space-y-1">
                         {p.rules.map((r) => (
                           <li key={r.name} className="text-xs">
-                            <code className="font-medium">{r.name}</code>{" "}
+                            <Link className="font-medium underline-offset-2 hover:underline" href={href({ kind: "memory", key: `r/${p.dir}/${r.name}` })}>
+                              <code>{r.name}</code>
+                            </Link>{" "}
                             <span className="text-muted-foreground">{r.paths?.length ? `chargée seulement pour ${r.paths.join(", ")}` : "chargée à chaque session"}</span>
                             {r.warn && <span className="ml-1 text-amber-600 dark:text-amber-400">{r.warn}</span>}
                           </li>

@@ -1,4 +1,4 @@
-import { type LucideIcon, AlertTriangle, Calculator, ArrowDownWideNarrow, ArrowUpNarrowWide, CheckSquare, EyeOff, Filter, FileStack, FileText, Plus, Sparkles, Trash2 } from "lucide-react"
+import { type LucideIcon, AlertTriangle, Calculator, ArrowDownWideNarrow, ArrowUpNarrowWide, CheckSquare, EyeOff, Filter, FileStack, FileText, Plus, ScrollText, Sparkles, Trash2 } from "lucide-react"
 import type { MemFile } from "@/lib/api"
 import { ago } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -18,6 +18,7 @@ export function Section({
   onToggle,
   onPickAll,
   onNew,
+  onNewRule,
   onWrite,
   onConsolidate,
   agents,
@@ -39,6 +40,7 @@ export function Section({
   onToggle: (k: string) => void
   onPickAll: (keys: string[]) => void
   onNew: () => void // nouvelle entrée écrite à la main
+  onNewRule?: () => void // nouvelle règle du projet (.claude/rules), sections de projet existantes seulement
   onWrite?: () => void // nouvelle entrée rédigée par un modèle (absent : section sans mémoire de projet)
   onConsolidate?: (file: string) => void // consolider dans le CLAUDE.md (ou l'AGENTS.md, projets seulement) correspondant
   agents?: boolean // propose aussi AGENTS.md
@@ -98,6 +100,11 @@ export function Section({
           <ContextMenuItem onSelect={onNew}>
             <Plus /> Nouvelle entrée…
           </ContextMenuItem>
+          {onNewRule && (
+            <ContextMenuItem onSelect={onNewRule}>
+              <ScrollText /> Nouvelle règle du projet…
+            </ContextMenuItem>
+          )}
           {onWrite && (
             <ContextMenuItem onSelect={onWrite}>
               <Sparkles /> Nouvelle entrée avec Haiku…
