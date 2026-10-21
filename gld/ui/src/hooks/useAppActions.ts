@@ -61,6 +61,13 @@ export function useAppActions(c: {
       description: rest || undefined,
     })
     await reload()
+    // Une session lancée met un instant à créer son transcript : on relit jusqu'à ce qu'elle apparaisse.
+    if (r.ok && (url === "/new-session" || url === "/open")) {
+      for (let i = 0; i < 8; i++) {
+        await new Promise((res) => setTimeout(res, 700))
+        await reload()
+      }
+    }
     return r.ok
   }
 
@@ -351,12 +358,12 @@ export function useAppActions(c: {
     remove: (items, what, after) =>
       setAsk({
         title: "Supprimer définitivement ?",
-        body: `${what}\n\nSuppression définitive : transcript, sous-agents et fichiers associés.`,
+        body: `${what}${items.some((x) => live.has(x.id)) ? "\n\nLes sessions ouvertes seront d'abord fermées." : ""}\n\nSuppression définitive : transcript, sous-agents et fichiers associés.`,
         confirm: "Supprimer",
         run: () => {
           after?.()
           unpick(items)
-          act("/rm", { items }, "Suppression en cours…")
+          act("/rm?close=1", { items }, "Suppression en cours…")
         },
       }),
   }

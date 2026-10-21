@@ -1,4 +1,5 @@
-import { FolderInput, Menu, MessageSquarePlus, MoreHorizontal, SquareTerminal, Trash2, TriangleAlert } from "lucide-react"
+import { FolderInput, Menu, MessageSquarePlus, MoreHorizontal, Settings, SquareTerminal, Trash2, TriangleAlert } from "lucide-react"
+import { Link } from "wouter"
 import type { Group, Item, VGroup } from "@/lib/api"
 import { plural } from "@/lib/sessionsView"
 import type { Route } from "@/lib/route"
@@ -61,6 +62,13 @@ export function PageHeader({
             <Checkbox checked={!!hideGrouped} onCheckedChange={(c) => setHideGrouped(c === true ? "1" : "")} />
             Masquer les sessions groupées ({nGrouped})
           </label>
+        )}
+        {g && (
+          <Button variant="ghost" size="sm" asChild>
+            <Link href={`/configuration/projets?projet=${encodeURIComponent(g.project)}`} title="Réglages, permissions, hooks et MCP propres à ce projet">
+              <Settings /> Réglages
+            </Link>
+          </Button>
         )}
         {g && !g.missing && (
           <Button variant="outline" size="sm" onClick={() => actions.newSession(g.project)} title="Nouvelle session Claude dans ce dossier">
