@@ -1,4 +1,4 @@
-import { MoreHorizontal, SquareTerminal, Star, Tag } from "lucide-react"
+import { Flame, MoreHorizontal, SquareTerminal, Star, Tag } from "lucide-react"
 import { ago, bucket, full, size, tilde } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -35,10 +35,11 @@ function Snip({ text, q }: { text: string; q: string }) {
   )
 }
 
-function Row({ row, showProject }: { row: R; showProject: boolean }) {
+function Row({ row, showProject, showCache }: { row: R; showProject: boolean; showCache?: boolean }) {
   const a = useActions()
   const { s, g } = row
   const live = a.live.has(s.id)
+  const left = showCache ? a.hotLeft(s) : null
   const picked = a.picked.has(s.id)
   const hit = a.hit(s.id)
   // Une session peut appartenir à plusieurs groupes de son dossier.
@@ -54,7 +55,8 @@ function Row({ row, showProject }: { row: R; showProject: boolean }) {
         >
           <Checkbox
             checked={picked}
-            onCheckedChange={() => a.pick(s.id)}
+            onClick={(e) => a.pick(s.id, e.shiftKey)}
+            onMouseDown={(e) => e.shiftKey && e.preventDefault()}
             aria-label="Sélectionner"
             className={cn(
               "relative z-10 transition-opacity",
@@ -75,6 +77,14 @@ function Row({ row, showProject }: { row: R; showProject: boolean }) {
               {live && (
                 <>
                   <Live />
+                  <span aria-hidden>·</span>
+                </>
+              )}
+              {left !== null && (
+                <>
+                  <span className={cn("inline-flex shrink-0 items-center gap-1", left <= 10 ? "font-medium text-amber-600 dark:text-amber-400" : "text-orange-500")}>
+                    <Flame className="size-3.5" aria-hidden /> cache {left} min
+                  </span>
                   <span aria-hidden>·</span>
                 </>
               )}
@@ -137,12 +147,12 @@ function Row({ row, showProject }: { row: R; showProject: boolean }) {
 }
 
 // Sessions triées de la plus récente à la plus ancienne, regroupées par période (sauf flat).
-export function SessionList({ items, showProject, flat }: { items: R[]; showProject: boolean; flat?: boolean }) {
+export function SessionList({ items, showProject, flat, showCache }: { items: R[]; showProject: boolean; flat?: boolean; showCache?: boolean }) {
   if (flat)
     return (
       <ul className="space-y-px">
         {items.map((r) => (
-          <Row key={r.s.id} row={r} showProject={showProject} />
+          <Row key={r.s.id} row={r} showProject={showProject} showCache={showCache} />
         ))}
       </ul>
     )
@@ -159,7 +169,7 @@ export function SessionList({ items, showProject, flat }: { items: R[]; showProj
           <h3 className="sticky top-0 z-20 bg-background/95 px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur">{b}</h3>
           <ul className="space-y-px">
             {list.map((r) => (
-              <Row key={r.s.id} row={r} showProject={showProject} />
+              <Row key={r.s.id} row={r} showProject={showProject} showCache={showCache} />
             ))}
           </ul>
         </section>

@@ -80,6 +80,7 @@ export default function App() {
   const [prompt, setPrompt] = useState<PromptAsk | null>(null)
   const [compose, setCompose] = useState<ComposeAsk | null>(null)
   const search = useRef<HTMLInputElement>(null)
+  const lastPick = useRef<string | null>(null) // dernière case cochée, début d'une sélection de plage
 
   const setQ = (v: string) =>
     setParams(
@@ -181,6 +182,8 @@ export default function App() {
   const hot = (data?.groups ?? [])
     .flatMap((g) => g.sessions.filter((s) => now - s.mtime < HOT && !AUTO.some((p) => s.title.includes(p))).map((s) => ({ s, g })))
     .sort(byDate)
+  // Ouvertes d'abord, puis au cache chaud (récentes d'abord) ; la recherche s'applique comme ailleurs.
+  const active = view.rows.filter((r) => live.has(r.s.id) || now - r.s.mtime < HOT).sort((a, b) => +live.has(b.s.id) - +live.has(a.s.id) || b.s.mtime - a.s.mtime)
   const selected = [...picked].map((id) => view.byId.get(id)).filter((r): r is Row => !!r)
 
   const node = route.kind === "dir" ? find(tree, route.key) : null
@@ -200,7 +203,9 @@ export default function App() {
           ? (node?.ss ?? []).filter((s) => !(hideGrouped && grouped.has(s.id))).map((s) => ({ s, g: node!.g! }))
           : route.kind === "all"
             ? view.rows
-            : []
+            : route.kind === "active"
+              ? active
+              : []
   // Sessions des sous-dossiers : affichées à part, sous la liste du dossier sélectionné.
   const subs = node ? [...node.kids.values()].flatMap(under).sort(byDate) : []
 
@@ -381,13 +386,21 @@ export default function App() {
     groupActs,
     picked,
     selected,
-    pick: (id) =>
+    pick: (id, range) => {
+      const from = lastPick.current
+      lastPick.current = id
       setPicked((p) => {
         const n = new Set(p)
-        if (n.has(id)) n.delete(id)
+        const ids = [...document.querySelectorAll<HTMLElement>("main [data-row]")].map((e) => e.dataset.id ?? "")
+        const a = from ? ids.indexOf(from) : -1
+        const b = ids.indexOf(id)
+        if (range && a >= 0 && b >= 0) for (const x of ids.slice(Math.min(a, b), Math.max(a, b) + 1)) n.add(x)
+        else if (n.has(id)) n.delete(id)
         else n.add(id)
         return n
-      }),
+      })
+    },
+    hotLeft: (s) => (now && now - s.mtime < HOT ? Math.max(1, Math.ceil((HOT - (now - s.mtime)) / 60)) : null),
     read,
     open: (b) => act("/open", { ...b, args }, "Ouverture du terminal…", "last"),
     newSession: (project, initial) => {
@@ -504,6 +517,7 @@ export default function App() {
   const title = {
     recent: "Récentes",
     all: "Toutes les sessions",
+    active: "En cours et cache chaud",
     group: route.kind === "group" ? route.name : "",
     snippets: "Snippets",
     memory: "Mémoire",
@@ -513,8 +527,10 @@ export default function App() {
   const sub =
     route.kind === "recent"
       ? `7 derniers jours · ${plural(recent.length)} dans ${plural(byProject.size, "projet")}`
-      : route.kind === "snippets"
-        ? (snips?.dir ?? "")
+      : route.kind === "active"
+        ? `${plural(active.filter((r) => live.has(r.s.id)).length, "ouverte")} · ${plural(active.filter((r) => !live.has(r.s.id)).length, "au cache chaud")}`
+        : route.kind === "snippets"
+          ? (snips?.dir ?? "")
         : route.kind === "memory"
           ? "CLAUDE.md, règles et mémoire de chaque projet"
           : route.kind === "tabs"
@@ -537,7 +553,7 @@ export default function App() {
           searching={searching}
           route={route}
           go={go}
-          counts={{ recent: recent.length, all: view.rows.length }}
+          counts={{ recent: recent.length, all: view.rows.length, active: active.length }}
           favRows={favRows}
           favGroups={favGroups}
           groupCount={(x) => groupRows(x).length}
@@ -565,7 +581,7 @@ export default function App() {
               <p className="truncate text-xs text-muted-foreground">
                 {sub}
                 {qt &&
-                  (route.kind === "recent" || route.kind === "all" || route.kind === "group" || route.kind === "dir") &&
+                  (route.kind === "recent" || route.kind === "all" || route.kind === "active" || route.kind === "group" || route.kind === "dir") &&
                   ` · recherche « ${qt} »`}
               </p>
             </div>
@@ -716,7 +732,7 @@ export default function App() {
                 )}
 
                 {data && route.kind !== "recent" && rows.length > 0 && (
-                  <SessionList items={rows} showProject={route.kind !== "dir" && route.kind !== "group"} />
+                  <SessionList items={rows} showProject={route.kind !== "dir" && route.kind !== "group"} showCache={route.kind === "active"} flat={route.kind === "active"} />
                 )}
 
                 {data && subs.length > 0 && (
@@ -742,8 +758,10 @@ export default function App() {
                         ? "Aucun titre, projet ni message ne correspond à cette recherche."
                         : route.kind === "group"
                           ? "Ajoute des sessions à ce groupe : clic droit sur une session › Groupe."
-                          : route.kind === "recent"
-                            ? "Aucune session ces 7 derniers jours."
+                          : route.kind === "active"
+                            ? "Aucune session ouverte ni active depuis moins d'une heure."
+                            : route.kind === "recent"
+                              ? "Aucune session ces 7 derniers jours."
                             : "Rien à afficher ici."
                     }
                   >

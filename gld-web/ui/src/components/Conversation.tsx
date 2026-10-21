@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { ArrowDownToLine, ArrowUpToLine, Loader2, MoreHorizontal, Send, Square, SquareTerminal, Wrench } from "lucide-react"
+import { ArrowDownToLine, ArrowUpToLine, CornerDownRight, Loader2, MoreHorizontal, Send, Square, SquareTerminal, Wrench } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
 import { withChoice, type Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
@@ -86,12 +86,17 @@ function Message({ m }: { m: Msg }) {
         </div>
       </div>
     )
-  if (m.r === "tool")
+  if (m.r === "tool") {
+    // « ↳ … » : résultat d'un appel ; sinon l'appel lui-même (« Outil  argument »).
+    const result = m.t.startsWith("↳")
+    const Icon = result ? CornerDownRight : Wrench
     return (
-      <div title={title} className="msg border-l-2 py-0.5 pl-3 break-words whitespace-pre-wrap text-muted-foreground">
-        {m.t}
+      <div title={title} className="msg flex gap-2 border-l-2 py-0.5 pl-3 text-muted-foreground">
+        <Icon className="mt-0.5 size-3.5 shrink-0" aria-label={result ? "résultat d'outil" : "appel d'outil"} />
+        <span className="min-w-0 break-words whitespace-pre-wrap">{result ? m.t.slice(1).trimStart() : m.t}</span>
       </div>
     )
+  }
   return (
     <div title={title} className="msg leading-relaxed break-words">
       <Markdown t={m.t} />
@@ -279,9 +284,9 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
     }
   }, [dir, id])
 
-  const viewport = () => area.current?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')
+  const viewport = useCallback(() => area.current?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]'), [])
   // content-visibility affine les hauteurs en cours de rendu : on recolle à la fin sur quelques images.
-  const toEnd = () => {
+  const toEnd = useCallback(() => {
     const vp = viewport()
     if (!vp) return
     const go = () => (vp.scrollTop = vp.scrollHeight)
@@ -293,15 +298,15 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
         setTimeout(go, 120)
       })
     })
-  }
+  }, [viewport])
   const toTop = () => viewport()?.scrollTo({ top: 0 })
   useEffect(() => {
     if (msgs) toEnd()
-  }, [msgs])
+  }, [msgs, toEnd])
   const shown = turn?.msgs.length ?? 0
   useEffect(() => {
     if (shown) toEnd()
-  }, [shown])
+  }, [shown, toEnd])
 
   return (
     <Dialog open={!!session} onOpenChange={(o) => !o && onClose()}>

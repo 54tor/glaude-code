@@ -166,7 +166,7 @@ fi
 if [ -n "$PROMPT" ] && [ -z "$ID" ]; then
   PROJET="$(cd "${PROJET:-$PWD}" 2>/dev/null && pwd)" \
     || { echo "gld-matin: projet introuvable" >&2; exit 1; }
-  cmd="cd $(shq "$PROJET") && exec env PATH="$HOME/.local/bin:$PATH" claude ${ARGS:+$ARGS }$(shq "$PROMPT")"
+  cmd="cd $(shq "$PROJET") && exec env PATH=$(shq "$HOME/.local/bin:$PATH") claude ${ARGS:+$ARGS }-- $(shq "$PROMPT")"
   if [ "$DRY" = 1 ]; then
     echo "ouvrirait une nouvelle session dans $PROJET"
   else
@@ -254,7 +254,7 @@ $titre"
     printf '  ouvrirait    %s %-45s %s  (%s)\n' "$marque" "$titre" "$(printf '%.8s' "$id")" "$(mdate "$f")"
   else
     printf '  ouvre        %s %-45s %s\n' "$marque" "$titre" "$(printf '%.8s' "$id")"
-    ouvrir "$titre" "cd $(shq "$PROJET") && exec env PATH="$HOME/.local/bin:$PATH" claude ${ARGS:+$ARGS }--resume $id${PROMPT:+ $(shq "$PROMPT")}" || true
+    ouvrir "$titre" "cd $(shq "$PROJET") && exec env PATH=$(shq "$HOME/.local/bin:$PATH") claude ${ARGS:+$ARGS }--resume $id${PROMPT:+ -- $(shq "$PROMPT")}" || true
     sleep "$PAUSE"
   fi
   n=$((n + 1))

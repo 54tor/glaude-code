@@ -3,6 +3,7 @@
 export type Route =
   | { kind: "recent" }
   | { kind: "all" }
+  | { kind: "active" } // sessions ouvertes ou au cache chaud
   | { kind: "group"; name: string; key: string } // groupe virtuel du dossier de clé key
   | { kind: "dir"; key: string } // clé d'un nœud de l'arbre, ex. « ~/Projets/caddy »
   | { kind: "snippets"; path: string }
@@ -15,6 +16,7 @@ const enc = (p: string) => p.split("/").map(encodeURIComponent).join("/")
 export function parse(loc: string): Route {
   try {
     if (loc === "/toutes") return { kind: "all" }
+    if (loc === "/en-cours") return { kind: "active" }
     if (loc.startsWith("/groupe/")) {
       const rest = loc.slice(8)
       const i = rest.indexOf("/")
@@ -34,6 +36,8 @@ export function href(r: Route): string {
   switch (r.kind) {
     case "all":
       return "/toutes"
+    case "active":
+      return "/en-cours"
     case "group":
       return "/groupe/" + encodeURIComponent(r.name) + "/" + enc(r.key)
     case "dir":
