@@ -9,10 +9,12 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"io/fs"
 	"mime"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -21,7 +23,9 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unicode/utf8"
@@ -33,10 +37,11 @@ import (
 var uiFS embed.FS
 
 var (
-	root  string
-	port  = env("GLD_WEB_PORT", env("CC_WEB_PORT", "8799")) // CC_* : anciens noms, encore lus
-	idRe  = regexp.MustCompile(`^[0-9a-f-]{36}$`)
-	hosts = map[string]bool{}
+	root      string
+	port      = env("GLD_WEB_PORT", env("CC_WEB_PORT", "8799")) // CC_* : anciens noms, encore lus
+	idRe      = regexp.MustCompile(`^[0-9a-f-]{36}$`)
+	hosts     = map[string]bool{}
+	openHosts bool // écoute hors localhost (listen.go) : le jeton remplace la garde sur le Host
 )
 
 func env(k, d string) string {
@@ -120,29 +125,91 @@ type Session struct {
 	KB    int64   `json:"kb"`
 }
 
+// infoState : ce qu'on sait d'un transcript, et jusqu'où on l'a lu. Un transcript ne fait que grandir : à chaque
+// rafraîchissement (toutes les 15 s) on ne relit que ce qui a été ajouté, au lieu de plusieurs Go.
+type infoState struct {
+	size              int64
+	mtime             time.Time
+	off               int64 // octets déjà lus, toujours en fin de ligne complète
+	title, cwd, first string
+}
+
+var (
+	infoMu    sync.Mutex
+	infoCache = map[string]infoState{}
+)
+
+// forgetInfo : à appeler quand un transcript est réécrit sur place (le début a pu changer).
+func forgetInfo(path string) {
+	infoMu.Lock()
+	delete(infoCache, path)
+	infoMu.Unlock()
+}
+
+func scanInfo(path string, c infoState) infoState {
+	f, err := os.Open(path)
+	if err != nil {
+		return c
+	}
+	defer f.Close()
+	if _, err := f.Seek(c.off, io.SeekStart); err != nil {
+		return c
+	}
+	r := bufio.NewReaderSize(f, 1<<20)
+	for {
+		b, err := r.ReadBytes('\n')
+		if len(b) > 0 {
+			c.visit(b)
+			if err == nil { // une dernière ligne sans « \n » est peut-être inachevée : on la relira
+				c.off += int64(len(b))
+			}
+		}
+		if err != nil {
+			return c
+		}
+	}
+}
+
+func (c *infoState) visit(b []byte) {
+	wantTitle := bytes.Contains(b, []byte(`"custom-title"`))
+	wantCwd := c.cwd == "" && bytes.Contains(b, []byte(`"cwd"`))
+	wantFirst := c.first == "" && bytes.Contains(b, []byte(`"type":"user"`))
+	if !wantTitle && !wantCwd && !wantFirst {
+		return
+	}
+	var l line
+	if json.Unmarshal(b, &l) != nil {
+		return
+	}
+	if wantTitle && l.CustomTitle != "" {
+		c.title = l.CustomTitle
+	}
+	if wantCwd {
+		c.cwd = l.Cwd
+	}
+	if wantFirst && l.Type == "user" {
+		c.first = promptOf(&l)
+	}
+}
+
 func info(path string, st os.FileInfo) Session {
-	var title, cwd, first string
-	_ = scan(path, func(b []byte) {
-		wantTitle := bytes.Contains(b, []byte(`"custom-title"`))
-		wantCwd := cwd == "" && bytes.Contains(b, []byte(`"cwd"`))
-		wantFirst := first == "" && bytes.Contains(b, []byte(`"type":"user"`))
-		if !wantTitle && !wantCwd && !wantFirst {
-			return
+	infoMu.Lock()
+	c, ok := infoCache[path]
+	infoMu.Unlock()
+	if !ok || st.Size() < c.off || (c.size == st.Size() && !c.mtime.Equal(st.ModTime())) {
+		c = infoState{} // inconnu, tronqué ou réécrit à taille égale : lecture complète
+	}
+	if c.size != st.Size() || !c.mtime.Equal(st.ModTime()) {
+		c = scanInfo(path, c)
+		c.size, c.mtime = st.Size(), st.ModTime()
+		infoMu.Lock()
+		if len(infoCache) > 5000 {
+			clear(infoCache)
 		}
-		var l line
-		if json.Unmarshal(b, &l) != nil {
-			return
-		}
-		if wantTitle && l.CustomTitle != "" {
-			title = l.CustomTitle
-		}
-		if wantCwd {
-			cwd = l.Cwd
-		}
-		if wantFirst && l.Type == "user" {
-			first = promptOf(&l)
-		}
-	})
+		infoCache[path] = c
+		infoMu.Unlock()
+	}
+	title, cwd, first := c.title, c.cwd, c.first
 	s := Session{ID: strings.TrimSuffix(filepath.Base(path), ".jsonl"), Dir: filepath.Base(filepath.Dir(path)),
 		Named: title != "", Cwd: cwd, Mtime: float64(st.ModTime().UnixNano()) / 1e9, KB: st.Size() / 1024}
 	if s.Title = title; title == "" {
@@ -249,10 +316,57 @@ type Detail struct {
 	Subagents int      `json:"subagents"`
 }
 
+// detailCache : le détail d'un transcript ne se recalcule que s'il a changé (un transcript peut peser plusieurs Go).
+var (
+	detailMu    sync.Mutex
+	detailCache = map[string]struct {
+		size  int64
+		mtime time.Time
+		d     Detail
+	}{}
+)
+
 func detail(path string) Detail {
+	st, err := os.Stat(path)
+	if err != nil {
+		return Detail{Prompts: []string{}, Models: []string{}}
+	}
+	detailMu.Lock()
+	c, ok := detailCache[path]
+	detailMu.Unlock()
+	if ok && c.size == st.Size() && c.mtime.Equal(st.ModTime()) {
+		return c.d
+	}
+	d := computeDetail(path)
+	detailMu.Lock()
+	if len(detailCache) > 64 {
+		clear(detailCache)
+	}
+	detailCache[path] = struct {
+		size  int64
+		mtime time.Time
+		d     Detail
+	}{st.Size(), st.ModTime(), d}
+	detailMu.Unlock()
+	return d
+}
+
+var (
+	userTag      = []byte(`"type":"user"`)
+	assistantTag = []byte(`"type":"assistant"`)
+	toolResTag   = []byte(`"tool_use_id"`)
+	textTag      = []byte(`"type":"text"`)
+)
+
+func computeDetail(path string) Detail {
 	d := Detail{Prompts: []string{}, Models: []string{}}
 	models := map[string]bool{}
 	_ = scan(path, func(b []byte) {
+		// Seules les lignes d'échange comptent ; un résultat d'outil (souvent énorme) n'est pas un prompt : on ne le décode pas.
+		isU := bytes.Contains(b, userTag)
+		if !isU && !bytes.Contains(b, assistantTag) || isU && bytes.Contains(b, toolResTag) && !bytes.Contains(b, textTag) {
+			return
+		}
 		var l line
 		if json.Unmarshal(b, &l) != nil {
 			return
@@ -298,6 +412,10 @@ type Msg struct {
 	R  string `json:"r"` // user | assistant | tool
 	T  string `json:"t"`
 	Ts string `json:"ts,omitempty"`
+	// O/N : décalage de la ligne du transcript et rang du message dans cette ligne. Clé stable : quand on
+	// charge des messages plus anciens, ceux déjà affichés gardent la leur (pas de réutilisation de nœuds).
+	O int64 `json:"o,omitempty"`
+	N int   `json:"n,omitempty"`
 }
 
 type blk struct {
@@ -368,24 +486,36 @@ func lineMsgs(b []byte, tools bool) []Msg {
 			if t == "" || strings.HasPrefix(t, "<command-") || strings.HasPrefix(t, "<local-command") || strings.HasPrefix(strings.ToLower(t), "caveat:") {
 				continue
 			}
-			out = append(out, Msg{l.Type, t, l.Timestamp})
+			out = append(out, Msg{R: l.Type, T: t, Ts: l.Timestamp})
 		case "tool_use":
 			if tools {
-				out = append(out, Msg{"tool", x.Name + "  " + toolArg(x.Input), l.Timestamp})
+				out = append(out, Msg{R: "tool", T: x.Name + "  " + toolArg(x.Input), Ts: l.Timestamp})
 			}
 		case "tool_result":
 			if tools {
-				out = append(out, Msg{"tool", "↳ " + cut(strings.TrimSpace(flat(x.Content)), 1500), l.Timestamp})
+				out = append(out, Msg{R: "tool", T: "↳ " + cut(strings.TrimSpace(flat(x.Content)), 1500), Ts: l.Timestamp})
 			}
 		}
 	}
 	return out
 }
 
+// withOffset numérote les messages d'une ligne (voir Msg.O / Msg.N).
+func withOffset(ms []Msg, off int64) []Msg {
+	for i := range ms {
+		ms[i].O, ms[i].N = off, i
+	}
+	return ms
+}
+
 // conv : toute la conversation d'un transcript.
 func conv(path string, tools bool) []Msg {
 	out := []Msg{}
-	_ = scan(path, func(b []byte) { out = append(out, lineMsgs(b, tools)...) })
+	var off int64
+	_ = scan(path, func(b []byte) {
+		out = append(out, withOffset(lineMsgs(b, tools), off)...)
+		off += int64(len(b))
+	})
 	return out
 }
 
@@ -617,6 +747,7 @@ func rewriteCwd(path, old, nw string, sub bool) error {
 		return err
 	}
 	if err = os.Rename(tmp, path); err == nil {
+		forgetInfo(path)
 		err = os.Chtimes(path, st.ModTime(), st.ModTime())
 	}
 	return err
@@ -686,9 +817,26 @@ func reassign(items []item, to string) (int, error) {
 func main() {
 	home, _ := os.UserHomeDir()
 	root = filepath.Join(env("CLAUDE_CONFIG_DIR", filepath.Join(home, ".claude")), "projects")
+	listen := flag.String("listen", env("GLD_WEB_LISTEN", "127.0.0.1"), "adresse d'écoute (défaut 127.0.0.1 ; 0.0.0.0 pour tout le réseau, avec un jeton)")
+	flag.Parse()
 	hosts["127.0.0.1:"+port], hosts["localhost:"+port] = true, true
 
-	srv := &http.Server{Addr: "127.0.0.1:" + port, Handler: handler()}
+	h := handler()
+	local := isLoopback(*listen)
+	token := ""
+	if !local {
+		// Hors localhost : jeton obligatoire, et le Host n'est plus limité à l'adresse locale (le jeton remplace la garde).
+		token = os.Getenv("GLD_WEB_TOKEN")
+		if token == "" {
+			token = newToken()
+		} else if err := checkToken(token); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		openHosts = true
+		h = withToken(token, h)
+	}
+	srv := &http.Server{Addr: net.JoinHostPort(*listen, port), Handler: h}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go func() {
@@ -700,7 +848,15 @@ func main() {
 	}()
 	migrateData()
 	go autosaveTabs(2 * time.Minute)
-	fmt.Fprintln(os.Stderr, "http://127.0.0.1:"+port)
+	if local {
+		fmt.Fprintln(os.Stderr, "http://"+net.JoinHostPort(*listen, port))
+	} else {
+		fmt.Fprintln(os.Stderr, "⚠ gld-web écoute sur "+net.JoinHostPort(*listen, port)+" : accès protégé par un jeton, mais en HTTP clair.")
+		fmt.Fprintln(os.Stderr, "  Préférez un tunnel (SSH, Tailscale) ou un proxy TLS ; ne l'exposez pas sur Internet.")
+		for _, u := range urlsFor(*listen, port, token) {
+			fmt.Fprintln(os.Stderr, "  "+u)
+		}
+	}
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -807,7 +963,18 @@ func handler() http.Handler {
 			writeJSON(w, 404, map[string]any{})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"msgs": conv(p, r.URL.Query().Get("tools") == "1")})
+		q := r.URL.Query()
+		if lim, _ := strconv.Atoi(q.Get("limit")); lim > 0 { // par la fin : « before » est le décalage rendu par la page suivante
+			before, _ := strconv.ParseInt(q.Get("before"), 10, 64)
+			msgs, start, more, err := convPage(p, q.Get("tools") == "1", before, min(lim, 5000))
+			if err != nil {
+				writeJSON(w, 500, map[string]any{})
+				return
+			}
+			writeJSON(w, 200, map[string]any{"msgs": msgs, "start": start, "more": more})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"msgs": conv(p, q.Get("tools") == "1")})
 	})
 	mux.HandleFunc("GET /info", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := transcript(r.URL.Query().Get("dir"), r.URL.Query().Get("id"))
@@ -1038,18 +1205,25 @@ func handler() http.Handler {
 		writeJSON(w, 200, map[string]any{"ok": true, "out": "Enregistré"})
 	})
 	mux.HandleFunc("POST /memory-move", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Key, To string }
+		var req struct {
+			Key, To string
+			Copy    bool
+		}
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req) != nil {
 			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
 			return
 		}
-		dst, err := memMove(req.Key, req.To)
-		journal("memory-move %s vers %s : %v", req.Key, dst, errOr(err))
+		dst, err := memTransfer(req.Key, req.To, req.Copy)
+		journal("memory-move %s vers %s (copie=%v) : %v", req.Key, dst, req.Copy, errOr(err))
 		if err != nil {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Déplacé", "key": dst})
+		out := "Déplacé"
+		if req.Copy {
+			out = "Copié"
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": out, "key": dst})
 	})
 	// Brouillon rédigé par un petit modèle (memwrite.go) : rien n'est enregistré, l'éditeur s'ouvre avec le texte.
 	mux.HandleFunc("POST /memory-draft", func(w http.ResponseWriter, r *http.Request) {
@@ -1068,6 +1242,96 @@ func handler() http.Handler {
 			return
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "out": "Brouillon prêt", "text": text, "cost": cost})
+	})
+	// Santé, portée des règles, recherche plein texte, désactivation (memmeta.go).
+	mux.HandleFunc("GET /memory-health", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"issues": memHealth()})
+	})
+	mux.HandleFunc("POST /memory-repair", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Dir string }
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		rm, add, err := memRepairIndex(req.Dir)
+		journal("memory-repair %s : -%d +%d : %v", req.Dir, rm, add, errOr(err))
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": fmt.Sprintf("Index réparé : %d ligne(s) retirée(s), %d ajoutée(s)", rm, add)})
+	})
+	mux.HandleFunc("GET /memory-matches", func(w http.ResponseWriter, r *http.Request) {
+		files, total, trunc, err := memMatches(r.URL.Query().Get("key"), r.URL.Query().Get("dir"))
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"files": files, "total": total, "truncated": trunc})
+	})
+	mux.HandleFunc("POST /memory-paths", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Key   string
+			Paths []string
+		}
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<14)).Decode(&req) != nil || !strings.HasPrefix(req.Key, "g/rules/") {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		text, err := memRead(req.Key)
+		if err == nil {
+			var out string
+			if out, err = setPaths(text, req.Paths); err == nil && out != text {
+				err = memSave(req.Key, out)
+			}
+		}
+		journal("memory-paths %s %v : %v", req.Key, req.Paths, errOr(err))
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": "Portée enregistrée"})
+	})
+	mux.HandleFunc("POST /memory-type", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Key, Type string }
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil || !(strings.HasPrefix(req.Key, "m/") || strings.HasPrefix(req.Key, "g/rules/")) {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		text, err := memRead(req.Key)
+		if err == nil {
+			var out string
+			if out, err = setType(text, req.Type); err == nil && out != text {
+				err = memSave(req.Key, out)
+			}
+		}
+		journal("memory-type %s %q : %v", req.Key, req.Type, errOr(err))
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": "Type enregistré"})
+	})
+	mux.HandleFunc("GET /memory-search", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"hits": memSearch(r.URL.Query().Get("q"))})
+	})
+	mux.HandleFunc("POST /memory-toggle", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Key string }
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		dst, err := memToggle(req.Key)
+		journal("memory-toggle %s : %v", req.Key, errOr(err))
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		out := "Règle désactivée"
+		if !strings.HasSuffix(dst, ".off") {
+			out = "Règle réactivée"
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": out, "key": dst})
 	})
 	mux.HandleFunc("POST /memory-rm", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Key string }
@@ -1271,7 +1535,7 @@ func handler() http.Handler {
 	// (bibliothèque standard) refuse toute requête modifiante venue d'une autre origine.
 	guarded := http.NewCrossOriginProtection().Handler(mux)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !hosts[r.Host] {
+		if !openHosts && !hosts[r.Host] {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}

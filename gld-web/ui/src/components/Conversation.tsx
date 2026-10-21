@@ -46,6 +46,9 @@ export function Markdown({ t, onLink }: { t: string; onLink?: (href: string) => 
 }
 
 // Texte collé dans Claude Code (<pasted_content id="…">…</pasted_content id="…">) : un bloc repliable.
+// Messages chargés d'un coup (par la fin) : une session de plusieurs Go compte des milliers de messages.
+const PAGE = 200
+
 const PASTED = /<pasted_content id="[^"]*">\n?([\s\S]*?)\n?<\/pasted_content(?: id="[^"]*")?>/g
 
 function UserText({ t }: { t: string }) {
@@ -255,7 +258,10 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
   const [tools, setTools] = useState(false)
   // Les messages sont rangés avec la clé (session, outils) qui les a produits : tant qu'elle ne correspond
   // pas à la demande courante, on affiche le chargement, sans remise à zéro synchrone dans un effet.
-  const [loaded, setLoaded] = useState<{ key: string; msgs: Msg[] } | null>(null)
+  // start/more : décalage de la première ligne lue et existence de messages plus anciens (lecture par la fin).
+  const [loaded, setLoaded] = useState<{ key: string; msgs: Msg[]; start: number; more: boolean } | null>(null)
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  const keepScroll = useRef(false) // le chargement de messages plus anciens ne doit pas ramener à la fin
   const [info, setInfo] = useState<{ id: string; d: Detail } | null>(null)
   const area = useRef<HTMLDivElement>(null)
   const key = id ? `${dir}/${id}/${tools}` : ""
@@ -264,12 +270,26 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
   // Tour en cours (ou dernier tour) écrit depuis le navigateur, affiché à la suite de la conversation.
   const [chat, setChat] = useState<Turn | null>(null)
   const turn = chat?.id === id ? chat : null
-  const reload = () => api.conv({ dir, id }, tools).then((r) => setLoaded({ key, msgs: r.msgs }))
+  const viewport = useCallback(() => area.current?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]'), [])
+  const loadedNow = loaded?.key === key ? loaded : null
+  // Relecture (après un tour) : au moins la page de base, plus de quoi garder ce qui est déjà affiché.
+  const reload = () =>
+    api.conv({ dir, id }, tools, { limit: Math.max(PAGE, (loadedNow?.msgs.length ?? 0) + 50) }).then((r) => setLoaded({ key, msgs: r.msgs, start: r.start ?? 0, more: !!r.more }))
+  const older = useCallback(async () => {
+    if (!loadedNow || loadingOlder) return
+    setLoadingOlder(true)
+    const r = await api.conv({ dir, id }, tools, { limit: PAGE, before: loadedNow.start })
+    keepScroll.current = true
+    setLoaded({ key, msgs: [...r.msgs, ...loadedNow.msgs], start: r.start ?? 0, more: !!r.more })
+    setLoadingOlder(false)
+    // Pas de correction manuelle du défilement : le navigateur garde tout seul l'ancrage sur le message affiché
+    // (une correction à la main s'ajoutait à la sienne et faisait sauter la vue).
+  }, [loadedNow, loadingOlder, dir, id, tools, key])
 
   useEffect(() => {
     if (!id) return
     let live = true
-    api.conv({ dir, id }, tools).then((r) => live && setLoaded({ key, msgs: r.msgs }))
+    api.conv({ dir, id }, tools, { limit: PAGE }).then((r) => live && setLoaded({ key, msgs: r.msgs, start: r.start ?? 0, more: !!r.more }))
     return () => {
       live = false
     }
@@ -284,7 +304,6 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
     }
   }, [dir, id])
 
-  const viewport = useCallback(() => area.current?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]'), [])
   // content-visibility affine les hauteurs en cours de rendu : on recolle à la fin sur quelques images.
   const toEnd = useCallback(() => {
     const vp = viewport()
@@ -299,9 +318,21 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
       })
     })
   }, [viewport])
+  // Chargement paresseux : les messages plus anciens arrivent d'eux-mêmes quand on remonte près du début.
+  const top = useRef<HTMLDivElement>(null)
+  const more = !!loadedNow?.more
+  useEffect(() => {
+    const el = top.current
+    const vp = viewport()
+    if (!el || !vp || !more) return
+    const io = new IntersectionObserver(([e]) => e.isIntersecting && older(), { root: vp, rootMargin: "600px 0px 0px 0px" })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [more, older, viewport])
   const toTop = () => viewport()?.scrollTo({ top: 0 })
   useEffect(() => {
-    if (msgs) toEnd()
+    if (keepScroll.current) keepScroll.current = false
+    else if (msgs) toEnd()
   }, [msgs, toEnd])
   const shown = turn?.msgs.length ?? 0
   useEffect(() => {
@@ -350,8 +381,15 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
                 <Skeleton className="ml-auto h-10 w-1/2" />
               </>
             )}
+            {loadedNow?.more && (
+              <div ref={top} className="text-center">
+                <Button variant="outline" size="sm" onClick={older} disabled={loadingOlder}>
+                  {loadingOlder ? <Loader2 className="animate-spin" /> : <ArrowUpToLine />} Charger les messages plus anciens
+                </Button>
+              </div>
+            )}
             {msgs?.map((m, i) => (
-              <Message key={i} m={m} />
+              <Message key={m.o === undefined ? i : `${m.o}.${m.n ?? 0}`} m={m} />
             ))}
             {msgs?.length === 0 && !turn && <p className="text-center text-muted-foreground">Aucun message dans cette session.</p>}
             {turn?.msgs
