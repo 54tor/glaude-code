@@ -25,9 +25,10 @@ var (
 	neverSuggest = map[string]bool{"rm": true, "sudo": true, "dd": true, "mkfs": true, "chmod": true, "chown": true, "curl": true, "wget": true, "ssh": true, "scp": true, "rsync": true,
 		"eval": true, "sh": true, "bash": true, "zsh": true, "python": true, "python3": true, "node": true, "perl": true, "ruby": true, "xargs": true, "kill": true, "pkill": true, "mv": true, "cp": true, "docker": true, "kubectl": true,
 		"env": true, "nice": true, "timeout": true, "nohup": true, "time": true, "command": true, "exec": true, "awk": true, "sed": true, "find": true, "tee": true, "source": true, "watch": true, "ionice": true, "setsid": true, "stdbuf": true, "script": true}
-	// a priori en lecture seule, quelles que soient les options (les autres sont « à vérifier » : tests, builds et scripts exécutent du code)
-	readOnlyCmds = map[string]bool{"ls": true, "cat": true, "head": true, "tail": true, "wc": true, "grep": true, "pwd": true, "stat": true, "file": true, "diff": true, "date": true, "which": true,
-		"git status": true, "git diff": true, "git log": true, "git show": true}
+	// en lecture seule quelles que soient les options, car une règle « cmd:* » les autorise toutes. Pas de « git diff », « git log »
+	// ni « git show » (--output écrit un fichier, --ext-diff et --textconv lancent un programme), ni « file » (-C écrit), ni « date » (-s),
+	// ni les tests, builds et scripts (ils exécutent du code) : ceux-là sont « à vérifier ».
+	readOnlyCmds = map[string]bool{"ls": true, "cat": true, "head": true, "tail": true, "wc": true, "grep": true, "pwd": true, "stat": true, "diff": true, "which": true, "git status": true}
 	twoWords = map[string]bool{"git": true, "go": true, "npm": true, "make": true, "cargo": true, "gh": true, "systemctl": true, "npx": true, "pnpm": true, "yarn": true}
 )
 
