@@ -143,19 +143,3 @@ func TestSafeRemove(t *testing.T) {
 		}
 	}
 }
-
-// tree : chemin relatif → contenu (« d » pour un dossier), pour comparer deux arborescences.
-func tree(t *testing.T, dir string) map[string]string {
-	m := map[string]string{}
-	filepath.WalkDir(dir, func(p string, e os.DirEntry, err error) error {
-		rel, _ := filepath.Rel(dir, p)
-		if e.IsDir() {
-			m[rel] = "d"
-		} else {
-			b, _ := os.ReadFile(p)
-			m[rel] = string(b)
-		}
-		return nil
-	})
-	return m
-}
