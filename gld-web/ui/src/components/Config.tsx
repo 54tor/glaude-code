@@ -68,6 +68,7 @@ export function Config({ home }: { home: string }) {
             <ProjectsTab
               key={ov.backups.length} // chaque écriture ajoute une sauvegarde : la vue se recharge
               home={home}
+              onRemove={(file, kind, rule) => propose({ file, op: "remove", path: ["permissions", kind], value: rule })}
               onTransfer={(file, kind, rule, move) =>
                 proposePerms("u", JSON.stringify({ permissions: { [kind]: [rule] } }), "merge", move ? () => propose({ file, op: "remove", path: ["permissions", kind], value: rule }) : undefined)
               }
