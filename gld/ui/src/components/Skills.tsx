@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { AlertTriangle, BookOpen, Bot, ClipboardCopy, Copy, EyeOff, FileText, FolderInput, Hand, Pencil, Plus, Save, Sparkles, Trash2, X, Zap } from "lucide-react"
+import { AlertTriangle, ArrowLeft, BookOpen, Bot, ClipboardCopy, Copy, EyeOff, FileText, FolderInput, Hand, Pencil, Plus, Save, Sparkles, Trash2, X, Zap } from "lucide-react"
 import { toast } from "sonner"
 import { api, type Skill, type SkillFile } from "@/lib/api"
 import { ago, tilde } from "@/lib/format"
@@ -120,7 +120,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
 
   return (
     <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-      <ScrollArea className="max-h-64 shrink-0 border-b md:max-h-none md:w-96 md:border-r md:border-b-0">
+      <ScrollArea className={cn("shrink-0 border-b md:block md:max-h-none md:w-96 md:flex-none md:border-r md:border-b-0", sel ? "hidden" : "min-h-0 flex-1")}>
         <nav className="p-2">
           <div className="mb-2 flex items-center gap-2 px-1">
             <Button size="xs" variant="outline" onClick={() => setCreating(true)}>
@@ -220,7 +220,15 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
         </nav>
       </ScrollArea>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className={cn("min-h-0 min-w-0 flex-1 flex-col md:flex", sel ? "flex" : "hidden")}>
+        {sel && (
+          <div className="border-b px-2 py-1.5 md:hidden">
+            <Button variant="ghost" size="sm" onClick={() => onPick("")}>
+              <ArrowLeft /> Liste
+            </Button>
+          </div>
+        )}
+
         {!sel ? (
           <p className="px-6 py-20 text-center text-sm text-muted-foreground">Choisis un skill à afficher. Un skill est un dossier avec un SKILL.md : Claude le charge quand sa description correspond à la demande, ou quand tu tapes /nom.</p>
         ) : !skill ? (

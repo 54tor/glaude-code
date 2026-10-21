@@ -1,4 +1,4 @@
-import { FolderInput, MessageSquarePlus, MoreHorizontal, SquareTerminal, Trash2, TriangleAlert } from "lucide-react"
+import { FolderInput, Menu, MessageSquarePlus, MoreHorizontal, SquareTerminal, Trash2, TriangleAlert } from "lucide-react"
 import type { Group, Item, VGroup } from "@/lib/api"
 import { plural } from "@/lib/sessionsView"
 import type { Route } from "@/lib/route"
@@ -11,6 +11,7 @@ import { DD, GroupItems } from "./SessionMenu"
 
 // En-tête de la page : titre, sous-titre, actions du dossier ou du groupe affiché, et avertissement d'un dossier disparu.
 export function PageHeader({
+  onMenu,
   title,
   sub,
   qt,
@@ -26,6 +27,7 @@ export function PageHeader({
   actions,
   groupActs,
 }: {
+  onMenu: () => void // mobile : ouvre le menu
   title: string
   sub: string
   qt: string
@@ -43,7 +45,10 @@ export function PageHeader({
 }) {
   return (
     <>
-      <header className="flex flex-wrap items-center gap-3 border-b px-6 py-4">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-3 py-3 md:px-6 md:py-4">
+        <Button variant="ghost" size="icon-sm" className="md:hidden" onClick={onMenu} aria-label="Ouvrir le menu" aria-controls="menu">
+          <Menu />
+        </Button>
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-lg font-semibold tracking-tight">{title}</h2>
           <p className="truncate text-xs text-muted-foreground">

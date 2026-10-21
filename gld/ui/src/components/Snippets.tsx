@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { Bot, Check, Copy, Download, Loader2, MessageSquarePlus, Pencil, Plus, Save, Sparkles, Terminal, Trash2, Undo2, Upload, X } from "lucide-react"
+import { ArrowLeft, Bot, Check, Copy, Download, Loader2, MessageSquarePlus, Pencil, Plus, Save, Sparkles, Terminal, Trash2, Undo2, Upload, X } from "lucide-react"
 import { toast } from "sonner"
 import { api, type SnipScope, type Snippet } from "@/lib/api"
 import { ago, size, tilde } from "@/lib/format"
@@ -141,7 +141,7 @@ export function Snippets({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-      <div className="flex max-h-72 shrink-0 flex-col border-b md:max-h-none md:w-80 md:border-r md:border-b-0">
+      <div className={cn("shrink-0 flex-col border-b md:flex md:max-h-none md:w-80 md:flex-none md:border-r md:border-b-0", sel ? "hidden" : "flex min-h-0 flex-1")}>
         <div className="space-y-2 border-b px-3 py-2">
           <Choose
             value={scope}
@@ -206,7 +206,15 @@ export function Snippets({
           </nav>
         </ScrollArea>
       </div>
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className={cn("min-h-0 min-w-0 flex-1 flex-col md:flex", sel ? "flex" : "hidden")}>
+        {sel && (
+          <div className="border-b px-2 py-1.5 md:hidden">
+            <Button variant="ghost" size="sm" onClick={() => onPick("")}>
+              <ArrowLeft /> Liste
+            </Button>
+          </div>
+        )}
+
         {!sel ? (
           <p className="px-6 py-20 text-center text-sm text-muted-foreground">
             Choisis une commande, ou crée-en une. Elle est aussi utilisable en <code>/nom</code> dans Claude Code.

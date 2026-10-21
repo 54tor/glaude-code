@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react"
-import { Brain, Globe } from "lucide-react"
+import { ArrowLeft, Brain, Globe } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { useLocal } from "@/hooks/useLocal"
 import { api, type Finding, type MemFile, type Trashed } from "@/lib/api"
@@ -320,7 +322,7 @@ export function Memory({
   const [fm, body] = split(text ?? "")
   return (
     <div className="relative flex min-h-0 flex-1 flex-col md:flex-row">
-      <ScrollArea className="max-h-64 shrink-0 border-b md:max-h-none md:w-[28rem] md:border-r md:border-b-0">
+      <ScrollArea className={cn("shrink-0 border-b md:block md:max-h-none md:w-[28rem] md:flex-none md:border-r md:border-b-0", sel ? "hidden" : "min-h-0 flex-1")}>
         <nav className="p-2">
           {!list && <Skeleton className="m-2 h-24" />}
           {list && (
@@ -374,7 +376,15 @@ export function Memory({
           onClear={() => setPicked(new Set())}
         />
       )}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className={cn("min-h-0 min-w-0 flex-1 flex-col md:flex", sel ? "flex" : "hidden")}>
+        {sel && (
+          <div className="border-b px-2 py-1.5 md:hidden">
+            <Button variant="ghost" size="sm" onClick={() => onPick("")}>
+              <ArrowLeft /> Liste
+            </Button>
+          </div>
+        )}
+
         {inTrash ? (
           <TrashViewer
             trashed={trashed}
