@@ -312,3 +312,35 @@ func TestImportPermissions(t *testing.T) {
 		t.Fatal("projet inconnu accepté")
 	}
 }
+
+func TestDossiersSupplementaires(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	ok := t.TempDir()
+	e := CfgEdit{File: "u", Op: "add", Path: []string{"permissions", "additionalDirectories"}, Value: ok}
+	if _, after, err := configEdit(e); err != nil || !strings.Contains(after, "additionalDirectories") || !strings.Contains(after, ok) {
+		t.Fatal(after, err)
+	}
+	e = CfgEdit{File: "u", Op: "add", Path: []string{"permissions", "additionalDirectories"}, Value: "~/inexistant-gld"}
+	if _, _, err := configEdit(e); err != nil {
+		t.Fatal(err)
+	}
+	files, raw := allConfigs()
+	var found string
+	for _, i := range configHealth(files, raw) {
+		if i.Kind == "dossier" {
+			found += i.Msg
+		}
+	}
+	if !strings.Contains(found, "~/inexistant-gld") || strings.Contains(found, ok) {
+		t.Fatalf("santé : %q", found)
+	}
+	for _, v := range []any{"", "a\nb", 3.0} {
+		if _, _, err := configEdit(CfgEdit{File: "u", Op: "add", Path: []string{"permissions", "additionalDirectories"}, Value: v}); err == nil {
+			t.Errorf("valeur acceptée : %v", v)
+		}
+	}
+	if _, after, err := configEdit(CfgEdit{File: "u", Op: "remove", Path: []string{"permissions", "additionalDirectories"}, Value: ok}); err != nil || strings.Contains(after, ok) {
+		t.Fatal(after, err)
+	}
+}

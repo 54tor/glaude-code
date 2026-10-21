@@ -26,6 +26,12 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
   const { gone, added, moveRule, propose, proposeRaw, proposePerms, dialog } = useConfigEdit(reload, sessions)
   // Direct, sans fenêtre : la règle rejoint vos réglages, puis (déplacement) quitte son fichier d'origine.
   const transfer = async (file: string, kind: string, rule: string, move: boolean) => {
+    if (kind === "additionalDirectories") {
+      // l'import de règles ignore les dossiers : ajout direct
+      await propose({ file: "u", op: "add", path: ["permissions", kind], value: rule })
+      if (move) await propose({ file, op: "remove", path: ["permissions", kind], value: rule })
+      return
+    }
     const r = (await api.post("/config-perm-import", { file: "u", text: JSON.stringify({ permissions: { [kind]: [rule] } }), mode: "merge", dry: false })) as { ok: boolean; out: string }
     if (!r.ok) return void toast.error(r.out)
     if (move) await propose({ file, op: "remove", path: ["permissions", kind], value: rule })

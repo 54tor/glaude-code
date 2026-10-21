@@ -16,6 +16,7 @@ const KINDS = [
   ["allow", "Autorisées"],
   ["ask", "À confirmer"],
   ["deny", "Refusées"],
+  ["additionalDirectories", "Dossiers supplémentaires"],
 ] as const
 
 const Badge = ({ n, label }: { n: number; label: string }) =>

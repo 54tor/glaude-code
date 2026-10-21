@@ -49,6 +49,7 @@ export type Actions = {
   ungroup: (ids: string[], vg?: VGroup) => void // vg : par défaut le groupe affiché
   // after : appelé quand la suppression est confirmée (ex. fermer le lecteur de la session supprimée)
   remove: (items: Item[], what: string, after?: () => void) => void
+  pickDir: (title: string, start: string) => Promise<string | null> // explorateur de dossiers
   stop: (ids: string[]) => void // ferme les sessions ouvertes (SIGTERM) puis met la liste à jour
 }
 

@@ -329,6 +329,7 @@ export function useAppActions(c: {
     ungroup: (ids, x = vg) => {
       if (x) saveGroups(vgroups.map((g) => (same(g, x) ? { ...g, ids: g.ids.filter((i) => !ids.includes(i)) } : g)))
     },
+    pickDir,
     stop: (ids) =>
       setAsk({
         title: ids.length > 1 ? `Fermer ${ids.length} sessions ouvertes ?` : "Fermer la session ouverte ?",

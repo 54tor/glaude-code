@@ -268,6 +268,15 @@ func configHealth(files []ConfigFile, raw map[string]any) []CfgIssue {
 				}
 			}
 		}
+		if v, ok := lookup(doc, "permissions", "additionalDirectories"); ok {
+			for _, dir := range strList(v) {
+				if p := expandDir(dir, id); p != "" {
+					if fi, err := os.Stat(p); err != nil || !fi.IsDir() {
+						issues = append(issues, CfgIssue{id, "dossier", "dossier supplémentaire introuvable : " + dir})
+					}
+				}
+			}
+		}
 		a, _ := lookup(doc, "permissions", "allow")
 		d, _ := lookup(doc, "permissions", "deny")
 		deny := map[string]bool{}
@@ -403,4 +412,21 @@ var mcpStatus = func() (map[string]string, error) {
 		}
 	}
 	return res, nil
+}
+
+// expandDir : le chemin réel d'un dossier supplémentaire (« ~/ » = dossier personnel ; un chemin relatif se lit depuis le projet du
+// fichier de réglages, id « p/<dossier> » ou « l/<dossier> »). Vide si on ne peut pas le savoir (relatif dans les réglages utilisateur).
+func expandDir(dir, fileID string) string {
+	switch {
+	case dir == "~" || strings.HasPrefix(dir, "~/"):
+		h, _ := os.UserHomeDir()
+		return filepath.Join(h, strings.TrimPrefix(dir, "~"))
+	case filepath.IsAbs(dir):
+		return dir
+	case strings.HasPrefix(fileID, "p/") || strings.HasPrefix(fileID, "l/"):
+		if c := projectCwd(fileID[2:]); c != "" {
+			return filepath.Join(c, dir)
+		}
+	}
+	return ""
 }
