@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight, Globe } from "lucide-react"
 import { Link } from "wouter"
 import { api, type ProjectCfg } from "@/lib/api"
 import { describeKey } from "@/lib/configKeys"
@@ -7,6 +7,7 @@ import { href } from "@/lib/route"
 import { tilde } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 
 const KINDS = [
@@ -24,7 +25,7 @@ const Badge = ({ n, label }: { n: number; label: string }) =>
 
 // Ce que chaque projet configure en propre, en plus des réglages de l'utilisateur : réglages (projet et local), règles de
 // permission, hooks, serveurs MCP, règles .claude/rules, skills et documentation. onEdit ouvre l'onglet qui permet de les modifier.
-export function ProjectsTab({ home, onEdit }: { home: string; onEdit: (file: string, tab: string) => void }) {
+export function ProjectsTab({ home, onEdit, onTransfer }: { home: string; onEdit: (file: string, tab: string) => void; onTransfer: (file: string, kind: string, rule: string, move: boolean) => void }) {
   const [list, setList] = useState<ProjectCfg[] | null>(null)
   const [all, setAll] = useState(false)
   const [q, setQ] = useState("")
@@ -94,6 +95,17 @@ export function ProjectsTab({ home, onEdit }: { home: string; onEdit: (file: str
                               <li key={k + i} className="flex items-center gap-2">
                                 <code className="min-w-0 flex-1 text-xs break-all">{r.rule}</code>
                                 <span className="shrink-0 text-[11px] text-muted-foreground">{r.scope === "p" ? "projet" : "local"}</span>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button size="xs" variant="ghost">
+                                      <Globe /> Vers le global
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onSelect={() => onTransfer(`${r.scope}/${p.dir}`, k, r.rule, false)}>Copier dans vos réglages</DropdownMenuItem>
+                                    <DropdownMenuItem onSelect={() => onTransfer(`${r.scope}/${p.dir}`, k, r.rule, true)}>Déplacer (retirer du projet)</DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               </li>
                             ))}
                           </ul>
