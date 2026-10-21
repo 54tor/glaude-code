@@ -72,7 +72,8 @@ func launcherCmd(name, title string, argv []string) (*exec.Cmd, error) {
 	}
 	switch name {
 	case "tmux":
-		return exec.Command("tmux", "new-window", "-n", title, shJoin(argv)), nil
+		// -n passe par l'expansion de formats de tmux : « #(commande) » d'un titre s'exécuterait. « ## » est un « # » littéral.
+		return exec.Command("tmux", "new-window", "-n", strings.ReplaceAll(title, "#", "##"), shJoin(argv)), nil
 	case "kitty":
 		return with("kitty", "@", "launch", "--type=tab", "--tab-title", title), nil
 	case "wezterm":
