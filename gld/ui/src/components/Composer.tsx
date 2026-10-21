@@ -258,7 +258,9 @@ function parsePrompt(screen: string): { question: string; options: Opt[] } | nul
   // contenir des listes numérotées ou un « ❯ » sans que rien n'attende de réponse. On ne regarde que le bas de l'écran.
   const all = screen.split("\n").filter((l) => l.trim())
   const tail = all.slice(-16)
-  if (!/(esc|escape) to (cancel|exit|go back|interrupt)|enter to (select|confirm)|to navigate|Esc to cancel/i.test(tail.slice(-3).join("\n"))) return null
+  // « esc to interrupt » est la ligne d'état de Claude en pleine réflexion : rien n'attend alors de réponse.
+  if (/esc to interrupt/i.test(tail.slice(-6).join("\n"))) return null
+  if (!/(esc|escape) to (cancel|exit|go back)|enter to (select|confirm)|to navigate/i.test(tail.slice(-3).join("\n"))) return null
   const lines = tail
   const nums: { n: string; label: string; at: number }[] = []
   lines.forEach((l, i) => {
