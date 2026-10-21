@@ -25,12 +25,13 @@ var (
 const testHost = "gld.test"
 
 // Faux claude : `agents --json` renvoie $FAKE_AGENTS ; un chat (stream-json) renvoie $FAKE_CHAT et $FAKE_ERR,
-// code $FAKE_RC ; sinon (brouillon, --output-format json) $FAKE_DRAFT. Faux gld-matin : répète ses arguments.
+// code $FAKE_RC ; sinon (brouillon, --output-format json) $FAKE_DRAFT, ou la 1re ligne de stdin si FAKE_DRAFT=stdin. Faux gld-matin : répète ses arguments.
 const fakeClaude = `#!/bin/sh
 case "$1" in agents) printf '%s\n' "$FAKE_AGENTS"; exit 0;; esac
 for a; do
 	if [ "$a" = stream-json ]; then printf '%s\n' "$FAKE_CHAT"; printf '%s' "$FAKE_ERR" >&2; exit ${FAKE_RC:-0}; fi
 done
+if [ "$FAKE_DRAFT" = stdin ]; then IFS= read -r l; printf '{"result":"%s"}\n' "$l"; exit 0; fi
 printf '%s\n' "$FAKE_DRAFT"
 `
 const fakeMatin = `#!/bin/sh
@@ -81,7 +82,7 @@ func ok(t *testing.T, h http.Handler, path, body string, wantOK bool, want strin
 	t.Helper()
 	code, m, raw := call(t, h, "POST", path, body)
 	if code != 200 || m["ok"] != wantOK || !strings.Contains(raw, want) {
-		t.Fatalf("%s %s : %d %s", path, body, code, raw)
+		t.Fatalf("%s %s : %d %s", path, cut(body, 200), code, cut(raw, 300))
 	}
 	return m
 }
@@ -91,7 +92,7 @@ func status(t *testing.T, h http.Handler, method, path, body string, want int) m
 	t.Helper()
 	code, m, raw := call(t, h, method, path, body)
 	if code != want {
-		t.Fatalf("%s %s %s : %d au lieu de %d %s", method, path, body, code, want, raw)
+		t.Fatalf("%s %s %s : %d au lieu de %d %s", method, path, cut(body, 200), code, want, cut(raw, 300))
 	}
 	return m
 }
