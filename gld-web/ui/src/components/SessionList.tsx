@@ -1,82 +1,138 @@
-import { Copy, FolderInput, MoreHorizontal, SquareTerminal, Trash2 } from "lucide-react"
-import type { Group, Session } from "@/lib/api"
+import { MoreHorizontal, SquareTerminal } from "lucide-react"
 import { ago, bucket, full, size, tilde } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Checkbox } from "@/components/ui/checkbox"
+import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { useActions } from "./actions"
+import { useActions, type Row as R } from "./actions"
+import { CM, SessionDropdown, SessionItems } from "./SessionMenu"
 
-// Menu des actions secondaires d'une session (aussi utilisé par le lecteur).
-export function SessionMenu({ s, after, children }: { s: Session; after?: () => void; children: React.ReactNode }) {
-  const a = useActions()
+// Point vert : la session tourne en ce moment dans un terminal.
+export function Live({ className }: { className?: string }) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60">
-        <DropdownMenuItem onSelect={() => a.copy(s)}>
-          <Copy /> Copier « claude --resume »
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => a.move(s)}>
-          <FolderInput /> Déplacer vers un autre dossier…
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onSelect={() => a.remove([{ dir: s.dir, id: s.id }], `« ${s.title} »`, after)}>
-          <Trash2 /> Supprimer
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <span className={cn("inline-flex shrink-0 items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400", className)}>
+      <span className="size-1.5 animate-pulse rounded-full bg-current" /> en cours
+    </span>
   )
 }
 
-function Row({ s, g, showProject }: { s: Session; g: Group; showProject: boolean }) {
-  const a = useActions()
+// Extrait de conversation, termes recherchés surlignés.
+function Snip({ text, q }: { text: string; q: string }) {
+  const parts = text.split(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "ig"))
   return (
-    <li className="group relative flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/60 has-[[data-state=open]]:bg-muted/60">
-      <button
-        className="min-w-0 flex-1 text-left outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring/50"
-        onClick={() => a.read(s)}
-      >
-        <span className={cn("line-clamp-1 text-sm", s.named ? "font-medium" : "text-foreground/80")}>{s.title}</span>
-        <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-          <span title={full(s.mtime)} className="shrink-0">
-            {ago(s.mtime)}
-          </span>
-          <span aria-hidden>·</span>
-          <span className="shrink-0 tabular-nums">{size(s.kb)}</span>
-          {showProject && (
-            <>
-              <span aria-hidden>·</span>
-              <span className="truncate">{tilde(g.project, a.home)}</span>
-            </>
+    <span className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+      {parts.map((p, i) =>
+        i % 2 ? (
+          <mark key={i} className="rounded-sm bg-amber-200/70 px-0.5 text-foreground dark:bg-amber-500/30">
+            {p}
+          </mark>
+        ) : (
+          p
+        )
+      )}
+    </span>
+  )
+}
+
+function Row({ row, showProject }: { row: R; showProject: boolean }) {
+  const a = useActions()
+  const { s, g } = row
+  const live = a.live.has(s.id)
+  const picked = a.picked.has(s.id)
+  const hit = a.hit(s.id)
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <li
+          className={cn(
+            "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/60 has-[[data-state=open]]:bg-muted/60 data-[state=open]:bg-muted/60",
+            picked && "bg-accent hover:bg-accent"
           )}
-        </span>
-      </button>
-      {/* Actions au-dessus du bouton étiré : visibles au survol, au focus clavier, ou menu ouvert. */}
-      <div className="relative flex items-center gap-1 transition-opacity md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100 md:has-[[data-state=open]]:opacity-100">
-        {!g.missing && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" onClick={() => a.open({ dir: s.dir, id: s.id })} aria-label="Reprendre dans un terminal">
-                <SquareTerminal />
+        >
+          <Checkbox
+            checked={picked}
+            onCheckedChange={() => a.pick(s.id)}
+            aria-label="Sélectionner"
+            className={cn(
+              "relative z-10 transition-opacity",
+              !picked && a.selected.length === 0 && "md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+            )}
+          />
+          <button
+            data-row
+            data-id={s.id}
+            className="min-w-0 flex-1 text-left outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring/50"
+            onClick={() => a.read(s)}
+          >
+            <span className={cn("line-clamp-1 text-sm", s.named ? "font-medium" : "text-foreground/80")}>{s.title}</span>
+            <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+              {live && (
+                <>
+                  <Live />
+                  <span aria-hidden>·</span>
+                </>
+              )}
+              <span title={full(s.mtime)} className="shrink-0">
+                {ago(s.mtime)}
+              </span>
+              <span aria-hidden>·</span>
+              <span className="shrink-0 tabular-nums">{size(s.kb)}</span>
+              {hit && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span className="shrink-0">
+                    {hit.n} occurrence{hit.n > 1 ? "s" : ""}
+                  </span>
+                </>
+              )}
+              {showProject && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span className="truncate">{tilde(g.project, a.home)}</span>
+                </>
+              )}
+            </span>
+            {hit && <Snip text={hit.snip} q={a.q.trim()} />}
+          </button>
+          {/* Actions au-dessus du bouton étiré : visibles au survol, au focus clavier, ou menu ouvert. */}
+          <div className="relative z-10 flex items-center gap-1 transition-opacity md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100 md:has-[[data-state=open]]:opacity-100">
+            {!g.missing && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" onClick={() => a.open({ dir: s.dir, id: s.id })} aria-label="Reprendre dans un terminal">
+                    <SquareTerminal />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{live ? "Déjà ouverte : reprendre quand même" : "Reprendre dans un terminal"}</TooltipContent>
+              </Tooltip>
+            )}
+            <SessionDropdown row={row}>
+              <Button variant="ghost" size="icon-sm" aria-label="Plus d'actions">
+                <MoreHorizontal />
               </Button>
-            </TooltipTrigger>
-            <TooltipContent>Reprendre dans un terminal</TooltipContent>
-          </Tooltip>
-        )}
-        <SessionMenu s={s}>
-          <Button variant="ghost" size="icon-sm" aria-label="Plus d'actions">
-            <MoreHorizontal />
-          </Button>
-        </SessionMenu>
-      </div>
-    </li>
+            </SessionDropdown>
+          </div>
+        </li>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-64">
+        <SessionItems M={CM} row={row} full />
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }
 
-// Sessions triées de la plus récente à la plus ancienne, regroupées par période.
-export function SessionList({ items, showProject }: { items: { s: Session; g: Group }[]; showProject: boolean }) {
-  const groups: [string, typeof items][] = []
+// Sessions triées de la plus récente à la plus ancienne, regroupées par période (sauf flat).
+export function SessionList({ items, showProject, flat }: { items: R[]; showProject: boolean; flat?: boolean }) {
+  if (flat)
+    return (
+      <ul className="space-y-px">
+        {items.map((r) => (
+          <Row key={r.s.id} row={r} showProject={showProject} />
+        ))}
+      </ul>
+    )
+  const groups: [string, R[]][] = []
   for (const it of items) {
     const b = bucket(it.s.mtime)
     if (groups.at(-1)?.[0] !== b) groups.push([b, []])
@@ -86,10 +142,10 @@ export function SessionList({ items, showProject }: { items: { s: Session; g: Gr
     <div className="space-y-6">
       {groups.map(([b, list]) => (
         <section key={b}>
-          <h3 className="sticky top-0 z-10 bg-background/95 px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur">{b}</h3>
+          <h3 className="sticky top-0 z-20 bg-background/95 px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur">{b}</h3>
           <ul className="space-y-px">
-            {list.map(({ s, g }) => (
-              <Row key={s.id} s={s} g={g} showProject={showProject} />
+            {list.map((r) => (
+              <Row key={r.s.id} row={r} showProject={showProject} />
             ))}
           </ul>
         </section>

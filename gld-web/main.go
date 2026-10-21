@@ -24,6 +24,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode/utf8"
 )
 
 // Interface React/shadcn compilée (ui/dist, versionnée : `go build` n'a pas besoin de node).
@@ -334,48 +335,53 @@ func flat(c json.RawMessage) string {
 	return strings.Join(t, "\n")
 }
 
-// conv extrait la conversation : texte des échanges, plus (tools) les appels d'outils et leurs résultats tronqués.
-func conv(path string, tools bool) []Msg {
-	out := []Msg{}
-	_ = scan(path, func(b []byte) {
-		isU := bytes.Contains(b, []byte(`"type":"user"`))
-		if !isU && !bytes.Contains(b, []byte(`"type":"assistant"`)) {
-			return
-		}
-		var l struct {
-			Type      string
-			Timestamp string
-			Message   struct{ Content json.RawMessage }
-		}
-		if json.Unmarshal(b, &l) != nil || (l.Type != "user" && l.Type != "assistant") {
-			return
-		}
-		var bs []blk
-		var s string
-		if json.Unmarshal(l.Message.Content, &s) == nil {
-			bs = []blk{{Type: "text", Text: s}}
-		} else if json.Unmarshal(l.Message.Content, &bs) != nil {
-			return
-		}
-		for _, x := range bs {
-			switch x.Type {
-			case "text":
-				t := strings.TrimSpace(reminder.ReplaceAllString(x.Text, ""))
-				if t == "" || strings.HasPrefix(t, "<command-") || strings.HasPrefix(t, "<local-command") || strings.HasPrefix(strings.ToLower(t), "caveat:") {
-					continue
-				}
-				out = append(out, Msg{l.Type, t, l.Timestamp})
-			case "tool_use":
-				if tools {
-					out = append(out, Msg{"tool", x.Name + "  " + toolArg(x.Input), l.Timestamp})
-				}
-			case "tool_result":
-				if tools {
-					out = append(out, Msg{"tool", "↳ " + cut(strings.TrimSpace(flat(x.Content)), 1500), l.Timestamp})
-				}
+// lineMsgs extrait d'une ligne de transcript le texte des échanges, plus (tools) les appels d'outils et leurs résultats tronqués.
+func lineMsgs(b []byte, tools bool) []Msg {
+	isU := bytes.Contains(b, []byte(`"type":"user"`))
+	if !isU && !bytes.Contains(b, []byte(`"type":"assistant"`)) {
+		return nil
+	}
+	var l struct {
+		Type      string
+		Timestamp string
+		Message   struct{ Content json.RawMessage }
+	}
+	if json.Unmarshal(b, &l) != nil || (l.Type != "user" && l.Type != "assistant") {
+		return nil
+	}
+	var bs []blk
+	var s string
+	if json.Unmarshal(l.Message.Content, &s) == nil {
+		bs = []blk{{Type: "text", Text: s}}
+	} else if json.Unmarshal(l.Message.Content, &bs) != nil {
+		return nil
+	}
+	var out []Msg
+	for _, x := range bs {
+		switch x.Type {
+		case "text":
+			t := strings.TrimSpace(reminder.ReplaceAllString(x.Text, ""))
+			if t == "" || strings.HasPrefix(t, "<command-") || strings.HasPrefix(t, "<local-command") || strings.HasPrefix(strings.ToLower(t), "caveat:") {
+				continue
+			}
+			out = append(out, Msg{l.Type, t, l.Timestamp})
+		case "tool_use":
+			if tools {
+				out = append(out, Msg{"tool", x.Name + "  " + toolArg(x.Input), l.Timestamp})
+			}
+		case "tool_result":
+			if tools {
+				out = append(out, Msg{"tool", "↳ " + cut(strings.TrimSpace(flat(x.Content)), 1500), l.Timestamp})
 			}
 		}
-	})
+	}
+	return out
+}
+
+// conv : toute la conversation d'un transcript.
+func conv(path string, tools bool) []Msg {
+	out := []Msg{}
+	_ = scan(path, func(b []byte) { out = append(out, lineMsgs(b, tools)...) })
 	return out
 }
 
@@ -416,6 +422,21 @@ func readItems(w http.ResponseWriter, r *http.Request) ([]item, string, bool) {
 	return req.Items, req.To, true
 }
 
+// claudeArgs valide les options de claude (seulement des drapeaux simples : --x, -x, --x=valeur, jamais du shell)
+// et les traduit en arguments de gld-matin.
+func claudeArgs(raw string) ([]string, error) {
+	fs := strings.Fields(raw)
+	for _, f := range fs {
+		if !flagRe.MatchString(f) {
+			return nil, errors.New("option refusée : " + f)
+		}
+	}
+	if len(fs) == 0 {
+		return nil, nil
+	}
+	return []string{"--args", strings.Join(fs, " ")}, nil
+}
+
 var flagRe = regexp.MustCompile(`^--?[a-zA-Z][a-zA-Z0-9-]*(=[A-Za-z0-9._:/-]+)?$`)
 
 var nonAlnum = regexp.MustCompile(`[^a-zA-Z0-9]`)
@@ -440,13 +461,35 @@ func alive() map[string]bool {
 	return m
 }
 
-// rewriteCwd remplace le cwd (et ses sous-dossiers) dans un transcript, en gardant la date de modification.
-func rewriteCwd(path, old, nw string) error {
-	q := func(s string) string { b, _ := json.Marshal(s); return string(b) }
-	pre := func(s string) string { return strings.TrimSuffix(q(s+string(filepath.Separator)), `"`) }
-	reps := [][2][]byte{
-		{[]byte(`"cwd":` + q(old)), []byte(`"cwd":` + q(nw))},
-		{[]byte(`"cwd":` + pre(old)), []byte(`"cwd":` + pre(nw))},
+var cwdRe = regexp.MustCompile(`"cwd":("(?:[^"\\]|\\.)*")`)
+
+// remapCwd : old devient nw. Ses sous-dossiers ne suivent que si sub (l'ancien dossier a disparu : projet
+// renommé ou déplacé) et s'ils ne sont pas déjà dans nw — sinon ce sont de vrais chemins, laissés tels quels.
+func remapCwd(v, old, nw string, sub bool) string {
+	sep := string(filepath.Separator)
+	if v == old {
+		return nw
+	}
+	if sub && strings.HasPrefix(v, old+sep) && v != nw && !strings.HasPrefix(v, nw+sep) {
+		return nw + v[len(old):]
+	}
+	return v
+}
+
+// rewriteCwd remplace le cwd (voir remapCwd) dans un transcript, en gardant la date de modification.
+func rewriteCwd(path, old, nw string, sub bool) error {
+	cwdKey := []byte(`"cwd":`)
+	remap := func(m []byte) []byte {
+		var v string
+		if json.Unmarshal(m[len(cwdKey):], &v) != nil {
+			return m
+		}
+		nv := remapCwd(v, old, nw, sub)
+		if nv == v {
+			return m
+		}
+		q, _ := json.Marshal(nv)
+		return append(append([]byte{}, cwdKey...), q...)
 	}
 	st, err := os.Stat(path)
 	if err != nil {
@@ -466,8 +509,8 @@ func rewriteCwd(path, old, nw string) error {
 	r := bufio.NewReaderSize(in, 1<<20)
 	for {
 		b, rerr := r.ReadBytes('\n')
-		for _, p := range reps {
-			b = bytes.ReplaceAll(b, p[0], p[1])
+		if bytes.Contains(b, cwdKey) {
+			b = cwdRe.ReplaceAllFunc(b, remap)
 		}
 		w.Write(b)
 		if rerr != nil {
@@ -526,6 +569,7 @@ func reassign(items []item, to string) (int, error) {
 		jl := filepath.Join(src, it.ID+".jsonl")
 		if st, err := os.Stat(jl); err == nil {
 			if old := info(jl, st).Cwd; old != "" && old != to {
+				_, gone := os.Stat(old)
 				files := []string{jl}
 				filepath.WalkDir(filepath.Join(src, it.ID), func(p string, e os.DirEntry, err error) error {
 					if err == nil && !e.IsDir() && strings.HasSuffix(p, ".jsonl") {
@@ -534,7 +578,7 @@ func reassign(items []item, to string) (int, error) {
 					return nil
 				})
 				for _, f := range files {
-					if err := rewriteCwd(f, old, to); err != nil {
+					if err := rewriteCwd(f, old, to, gone != nil); err != nil {
 						return 0, err
 					}
 				}
@@ -562,13 +606,23 @@ func main() {
 	}
 	dist, _ := fs.Sub(uiFS, "ui/dist")
 	files := http.FileServerFS(dist)
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+	// La page de l'interface, servie aussi pour ses chemins (routage côté navigateur).
+	index, _ := fs.ReadFile(dist, "index.html")
+	page := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'")
-		files.ServeHTTP(w, r)
-	})
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(index)
+	}
+	for _, p := range []string{"GET /{$}", "GET /toutes", "GET /dossier/", "GET /groupe/", "GET /snippets", "GET /snippets/", "GET /memoire", "GET /memoire/", "GET /onglets"} {
+		mux.HandleFunc(p, page)
+	}
 	mux.Handle("GET /assets/", files)
 	mux.HandleFunc("GET /api", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"home": home, "groups": sessions()})
+		live := []string{}
+		for id := range liveSessions() {
+			live = append(live, id)
+		}
+		writeJSON(w, 200, map[string]any{"home": home, "groups": sessions(), "live": live, "vgroups": loadGroups()})
 	})
 	// Explorateur de dossiers pour « Réassigner » / « Déplacer » : sous-dossiers d'un chemin.
 	// Un chemin disparu remonte au plus proche parent qui existe.
@@ -674,6 +728,178 @@ func main() {
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "out": fmt.Sprintf("%d session(s) réassignée(s) vers %s", n, to)})
 	})
+	// Recherche dans le texte des conversations (au moins 2 caractères).
+	mux.HandleFunc("GET /search", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query().Get("q")
+		if n := utf8.RuneCountInString(strings.TrimSpace(q)); n < 2 || n > 200 {
+			writeJSON(w, 400, map[string]any{"hits": []Hit{}})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"hits": search(q)})
+	})
+	mux.HandleFunc("POST /rename", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Dir, ID, Title string }
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		p, ok := transcript(req.Dir, req.ID)
+		title := strings.TrimSpace(spaceRe.ReplaceAllString(req.Title, " "))
+		if !ok || title == "" || utf8.RuneCountInString(title) > 200 {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "titre ou session invalide"})
+			return
+		}
+		// Une session ouverte réécrit son propre titre : le nôtre serait écrasé.
+		if liveSessions()[req.ID] {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": "session ouverte : renomme-la avec /rename dans Claude, ou ferme-la d'abord"})
+			return
+		}
+		if err := setTitle(p, req.ID, title); err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": "Renommée : " + title})
+	})
+	// Snippets : désactivés si GLD_WEB_SNIPPETS n'est pas défini.
+	snipDir := os.Getenv("GLD_WEB_SNIPPETS")
+	mux.HandleFunc("GET /snippet-list", func(w http.ResponseWriter, r *http.Request) {
+		if snipDir == "" {
+			writeJSON(w, 200, map[string]any{"dir": "", "files": []Snippet{}})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"dir": snipDir, "files": snippets(snipDir)})
+	})
+	mux.HandleFunc("GET /snippet", func(w http.ResponseWriter, r *http.Request) {
+		t, err := readSnippet(snipDir, r.URL.Query().Get("path"))
+		if snipDir == "" || err != nil {
+			writeJSON(w, 404, map[string]any{"error": "snippet introuvable"})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"text": t})
+	})
+	// Mémoire : liste, lecture, enregistrement et suppression des seuls fichiers reconnus (memory.go).
+	mux.HandleFunc("GET /memory-list", func(w http.ResponseWriter, r *http.Request) {
+		g, p, t := memList()
+		writeJSON(w, 200, map[string]any{"global": g, "projects": p, "targets": t})
+	})
+	mux.HandleFunc("GET /memory-file", func(w http.ResponseWriter, r *http.Request) {
+		t, err := memRead(r.URL.Query().Get("key"))
+		if err != nil {
+			writeJSON(w, 404, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"text": t})
+	})
+	mux.HandleFunc("POST /memory-save", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Key, Text string }
+		if json.NewDecoder(io.LimitReader(r.Body, memMax+1<<10)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		if err := memSave(req.Key, req.Text); err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": "Enregistré"})
+	})
+	mux.HandleFunc("POST /memory-move", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Key, To string }
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		dst, err := memMove(req.Key, req.To)
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": "Déplacé", "key": dst})
+	})
+	mux.HandleFunc("POST /memory-rm", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Key string }
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		if err := memRemove(req.Key); err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": "Supprimé"})
+	})
+	// Sessions ouvertes sauvegardées (tabs.go) : liste, sauvegarde manuelle (nom facultatif), suppression.
+	mux.HandleFunc("GET /tabs", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"saves": loadTabs()})
+	})
+	mux.HandleFunc("POST /tabs-save", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Name string }
+		json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req)
+		s, _, err := saveTabs(req.Name, false)
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": fmt.Sprintf("%d session(s) sauvegardée(s)", len(s.Sessions))})
+	})
+	mux.HandleFunc("POST /tabs-rm", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ At string }
+		json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req)
+		if err := removeTabs(req.At); err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": "Sauvegarde supprimée"})
+	})
+	// Fusion de fichiers de mémoire par Claude : le prompt est construit ici, à partir des seules clés validées ;
+	// launch l'ouvre dans une nouvelle session (gld-matin --prompt), sinon il est seulement renvoyé pour être copié.
+	mux.HandleFunc("POST /memory-merge", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Keys   []string
+			Launch bool
+			Args   string
+		}
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		prompt, cwd, err := mergePrompt(req.Keys)
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		if !req.Launch {
+			writeJSON(w, 200, map[string]any{"ok": true, "out": "Prompt copié", "prompt": prompt})
+			return
+		}
+		args, err := claudeArgs(req.Args)
+		if err == nil && runtime.GOOS == "windows" {
+			err = errors.New("lancement non pris en charge sous Windows : copie le prompt")
+		}
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error(), "prompt": prompt})
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		out, err := withPath(exec.CommandContext(ctx, "gld-matin", append(args, "--prompt", prompt, cwd)...)).CombinedOutput()
+		writeJSON(w, 200, map[string]any{"ok": err == nil, "out": string(out), "prompt": prompt})
+	})
+	// Groupes virtuels : le navigateur envoie la liste complète, le serveur la valide et la remplace.
+	mux.HandleFunc("POST /vgroups", func(w http.ResponseWriter, r *http.Request) {
+		var g []VGroup
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&g) != nil || g == nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		groupsMu.Lock()
+		err := saveGroups(g)
+		groupsMu.Unlock()
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": "Groupes enregistrés"})
+	})
 	// Rouvre dans un onglet de terminal via gld-matin : une session (id) ou les récentes du projet.
 	// Le cwd vient du transcript côté serveur, jamais du navigateur.
 	mux.HandleFunc("POST /open", func(w http.ResponseWriter, r *http.Request) {
@@ -682,17 +908,11 @@ func main() {
 			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
 			return
 		}
-		var args []string
 		var p string
-		// Options de claude : seulement des drapeaux simples (--x, -x, --x=valeur), jamais du shell.
-		for _, f := range strings.Fields(req.Args) {
-			if !flagRe.MatchString(f) {
-				writeJSON(w, 400, map[string]any{"ok": false, "out": "option refusée : " + f})
-				return
-			}
-		}
-		if a := strings.Join(strings.Fields(req.Args), " "); a != "" {
-			args = append(args, "--args", a)
+		args, err := claudeArgs(req.Args)
+		if err != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": err.Error()})
+			return
 		}
 		if req.ID != "" {
 			var ok bool
@@ -759,6 +979,7 @@ func main() {
 		defer cancel()
 		srv.Shutdown(c)
 	}()
+	go autosaveTabs(2 * time.Minute)
 	fmt.Fprintln(os.Stderr, "http://127.0.0.1:"+port)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		fmt.Fprintln(os.Stderr, err)

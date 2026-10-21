@@ -140,14 +140,18 @@
   contain-intrinsic-size: auto 4rem;
 }
 
+/* Contenu des conversations : la police du terminal de CachyOS (Adwaita Mono, 14 px dans le navigateur), système en repli. */
+.session-text { font-family: "Adwaita Mono", ui-monospace, monospace; font-size: 14px; line-height: 1.6; }
+.session-text .md code { font-family: inherit; font-size: 1em; }
+
 /* Rendu Markdown des réponses de Claude (tableaux, listes, code…). */
 .md > :first-child { margin-top: 0; }
 .md > :last-child { margin-bottom: 0; }
 .md p, .md ul, .md ol, .md table, .md pre, .md blockquote { margin: 0.5rem 0; }
 .md h1, .md h2, .md h3, .md h4, .md h5, .md h6 { font-weight: 600; margin: 0.9rem 0 0.35rem; }
-.md h1 { font-size: 1.25rem; }
-.md h2 { font-size: 1.1rem; }
-.md h3 { font-size: 1rem; }
+.md h1 { font-size: 1.35em; }
+.md h2 { font-size: 1.2em; }
+.md h3 { font-size: 1.05em; }
 .md ul { list-style: disc; padding-left: 1.4rem; }
 .md ol { list-style: decimal; padding-left: 1.4rem; }
 .md li > ul, .md li > ol { margin: 0.15rem 0; }
@@ -156,10 +160,20 @@
 .md th { background: var(--muted); font-weight: 600; }
 .md [align="center"] { text-align: center; }
 .md [align="right"] { text-align: right; }
-.md code { font-family: ui-monospace, monospace; font-size: 0.85em; background: var(--muted); padding: 0.08rem 0.3rem; border-radius: 0.25rem; }
+.md code { font-family: ui-monospace, monospace; font-size: 0.9em; background: var(--muted); padding: 0.08rem 0.3rem; border-radius: 0.25rem; }
 .md pre { background: var(--muted); padding: 0.6rem 0.8rem; border-radius: 0.5rem; overflow-x: auto; white-space: pre; }
 .md pre code { background: none; padding: 0; }
 .md blockquote { border-left: 3px solid var(--border); padding-left: 0.75rem; color: var(--muted-foreground); }
 .md a { text-decoration: underline; }
 .md hr { border: 0; border-top: 1px solid var(--border); margin: 0.75rem 0; }
 .md input[type="checkbox"] { margin-right: 0.35rem; }
+
+/* Barres de défilement natives (code, tableaux, textes qui débordent) au style du ScrollArea shadcn :
+   fines, arrondies, discrètes, plus marquées au survol de la zone. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+*:hover {
+  scrollbar-color: var(--border) transparent;
+}

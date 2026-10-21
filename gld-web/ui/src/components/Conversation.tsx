@@ -9,11 +9,15 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useActions } from "./actions"
-import { SessionMenu } from "./SessionList"
+import { SessionDropdown } from "./SessionMenu"
+import { Live } from "./SessionList"
+import type { Row } from "./actions"
+import { isTagged, Tagged } from "./Tagged"
 
 // Messages de Claude : Markdown (tableaux GFM compris). react-markdown n'interprète jamais de HTML brut
 // et filtre les URL dangereuses (javascript:) : rien de ce qui est affiché ne peut s'exécuter.
-function Assistant({ t }: { t: string }) {
+// onLink : intercepte un lien relatif (ex. une autre entrée de mémoire) ; renvoie false pour le laisser faire.
+export function Markdown({ t, onLink }: { t: string; onLink?: (href: string) => boolean }) {
   return (
     <div className="md">
       <ReactMarkdown
@@ -22,7 +26,7 @@ function Assistant({ t }: { t: string }) {
           // URL filtrée (javascript:…) : plus de href, donc du texte simple plutôt qu'un lien qui rouvrirait la page.
           a: ({ href, children }) =>
             href ? (
-              <a href={href} target="_blank" rel="noopener noreferrer">
+              <a href={href} target="_blank" rel="noopener noreferrer" onClick={(e) => onLink?.(href) && e.preventDefault()}>
                 {children}
               </a>
             ) : (
@@ -38,6 +42,12 @@ function Assistant({ t }: { t: string }) {
 
 function Message({ m }: { m: Msg }) {
   const title = m.ts ? new Date(m.ts).toLocaleString("fr-FR") : undefined
+  if (m.r === "user" && isTagged(m.t))
+    return (
+      <div title={title} className="msg ml-auto max-w-[85%]">
+        <Tagged t={m.t} />
+      </div>
+    )
   if (m.r === "user")
     return (
       <div title={title} className="msg flex justify-end">
@@ -48,19 +58,20 @@ function Message({ m }: { m: Msg }) {
     )
   if (m.r === "tool")
     return (
-      <div title={title} className="msg border-l-2 py-0.5 pl-3 font-mono text-xs break-words whitespace-pre-wrap text-muted-foreground">
+      <div title={title} className="msg border-l-2 py-0.5 pl-3 break-words whitespace-pre-wrap text-muted-foreground">
         {m.t}
       </div>
     )
   return (
     <div title={title} className="msg leading-relaxed break-words">
-      <Assistant t={m.t} />
+      <Markdown t={m.t} />
     </div>
   )
 }
 
 function Meta({ s, d }: { s: Session; d: Detail | null }) {
   const a = useActions()
+  const live = a.live.has(s.id)
   const bits = [
     tilde(s.cwd, a.home),
     full(s.mtime),
@@ -70,38 +81,48 @@ function Meta({ s, d }: { s: Session; d: Detail | null }) {
     d?.branch && `branche ${d.branch}`,
     d?.models.filter((m) => !m.startsWith("<")).join(", "),
   ].filter(Boolean)
-  return <p className="truncate text-xs text-muted-foreground">{bits.join(" · ")}</p>
+  return (
+    <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+      {live && <Live />}
+      <span className="truncate">{(live ? "· " : "") + bits.join(" · ")}</span>
+    </p>
+  )
 }
 
-export function Conversation({ session, onClose }: { session: Session | null; onClose: () => void }) {
+export function Conversation({ row, onClose }: { row: Row | null; onClose: () => void }) {
   const a = useActions()
+  const session = row?.s ?? null
+  // Les effets dépendent des identifiants, pas de l'objet : le rafraîchissement périodique de la liste
+  // recrée les sessions sans que la conversation affichée doive être rechargée.
+  const dir = session?.dir ?? ""
+  const id = session?.id ?? ""
   const [tools, setTools] = useState(false)
   // Les messages sont rangés avec la clé (session, outils) qui les a produits : tant qu'elle ne correspond
   // pas à la demande courante, on affiche le chargement, sans remise à zéro synchrone dans un effet.
   const [loaded, setLoaded] = useState<{ key: string; msgs: Msg[] } | null>(null)
   const [info, setInfo] = useState<{ id: string; d: Detail } | null>(null)
   const area = useRef<HTMLDivElement>(null)
-  const key = session ? `${session.dir}/${session.id}/${tools}` : ""
+  const key = id ? `${dir}/${id}/${tools}` : ""
   const msgs = loaded?.key === key ? loaded.msgs : null
-  const detail = info && info.id === session?.id ? info.d : null
+  const detail = info && info.id === id ? info.d : null
 
   useEffect(() => {
-    if (!session) return
+    if (!id) return
     let live = true
-    api.conv(session, tools).then((r) => live && setLoaded({ key, msgs: r.msgs }))
+    api.conv({ dir, id }, tools).then((r) => live && setLoaded({ key, msgs: r.msgs }))
     return () => {
       live = false
     }
-  }, [session, tools, key])
+  }, [dir, id, tools, key])
 
   useEffect(() => {
-    if (!session) return
+    if (!id) return
     let live = true
-    api.info(session).then((d) => live && setInfo({ id: session.id, d }))
+    api.info({ dir, id }).then((d) => live && setInfo({ id, d }))
     return () => {
       live = false
     }
-  }, [session])
+  }, [dir, id])
 
   const viewport = () => area.current?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')
   // content-visibility affine les hauteurs en cours de rendu : on recolle à la fin sur quelques images.
@@ -147,17 +168,17 @@ export function Conversation({ session, onClose }: { session: Session | null; on
                 <SquareTerminal /> Reprendre dans un terminal
               </Button>
             )}
-            {session && (
-              <SessionMenu s={session} after={onClose}>
+            {row && (
+              <SessionDropdown row={row} after={onClose}>
                 <Button variant="ghost" size="icon-sm" aria-label="Plus d'actions">
                   <MoreHorizontal />
                 </Button>
-              </SessionMenu>
+              </SessionDropdown>
             )}
           </div>
         </div>
         <ScrollArea ref={area} className="min-h-0 flex-1">
-          <div className="mx-auto max-w-3xl space-y-5 px-6 py-6 text-sm">
+          <div className="session-text mx-auto max-w-4xl space-y-5 px-6 py-6">
             {msgs === null && (
               <>
                 <Skeleton className="ml-auto h-10 w-2/3" />

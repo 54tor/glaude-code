@@ -11,6 +11,9 @@
 #   gld-matin --id <uuid> [projet] rouvre cette seule session (sans filtre d'âge ni de taille)
 #   gld-matin --args "..."          options ajoutées à `claude` (défaut : aucune, ou $GLD_MATIN_ARGS)
 #                                 ex. --args --dangerously-skip-permissions
+#   gld-matin --resume [nom]       rouvre les sessions de la dernière sauvegarde de gld-web
+#                                 (ou de la sauvegarde manuelle de ce nom), ex. après un redémarrage
+#   gld-matin --prompt "..." [projet]  ouvre une NOUVELLE session claude avec ce prompt
 #
 # Un sujet = une session Claude. On le désigne par son nom quand vous en avez
 # donné un, sinon (marqué «~») par son premier prompt. On résout ce libellé
@@ -28,22 +31,48 @@ PAUSE=${GLD_MATIN_PAUSE:-0.7}        # respiration entre deux onglets
 ARGS=${GLD_MATIN_ARGS:-}           # options passées à claude ; vide par défaut
 EXCLURE=${GLD_MATIN_EXCLURE:-}       # noms à ignorer, séparés par ':'
 
-DRY=0; ID=""; PROJET=""; TERMCHOIX="${GLD_MATIN_TERM:-}"; NOMMEES_SEULES=0
+DRY=0; ID=""; PROJET=""; RESUME=0; RESUME_NOM=""; PROMPT=""; TERMCHOIX="${GLD_MATIN_TERM:-}"; NOMMEES_SEULES=0
 while [ $# -gt 0 ]; do
   case "$1" in
     -n|--dry-run) DRY=1 ;;
     --nommees)    NOMMEES_SEULES=1 ;;
     --id)         ID="${2:-}"; shift ;;
     --args)       ARGS="${2:-}"; shift ;;
+    --prompt)     PROMPT="${2:-}"; shift ;;
+    --resume)     RESUME=1
+                  case "${2:-}" in ''|-*) ;; *) RESUME_NOM="$2"; shift ;; esac ;;
     --term)       TERMCHOIX="${2:-}"; shift ;;
     --age)        AGE_MAX="${2:-}"; shift ;;
     --min)        TAILLE_MIN="${2:-}"; shift ;;
-    -h|--help)    sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)    sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)           echo "gld-matin: option inconnue: $1" >&2; exit 2 ;;
     *)            PROJET="$1" ;;
   esac
   shift
 done
+
+# --- reprise d'une sauvegarde de gld-web (~/.claude/gld-web-tabs.json) -------------
+# Chaque session est rouverte par un appel à soi-même avec --id : même lanceur, mêmes règles
+# (sessions déjà ouvertes épargnées, -n respecté).
+if [ "$RESUME" = 1 ]; then
+  command -v jq >/dev/null || { echo "gld-matin: jq requis" >&2; exit 1; }
+  FICHIER="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/gld-web-tabs.json"
+  [ -s "$FICHIER" ] || { echo "gld-matin: aucune sauvegarde ($FICHIER)" >&2; exit 1; }
+  if [ -n "$RESUME_NOM" ]; then CHOIX='[.[] | select(.name == $n)][0]'; else CHOIX='.[0]'; fi
+  SAUVE=$(jq -c --arg n "$RESUME_NOM" "$CHOIX // empty" "$FICHIER")
+  [ -n "$SAUVE" ] || { echo "gld-matin: sauvegarde introuvable : $RESUME_NOM" >&2; exit 1; }
+  printf '%s' "$SAUVE" | jq -r '"sauvegarde : \(if .name != "" then .name else "automatique" end) du \(.at[0:16] | sub("T"; " ")), \(.sessions | length) session(s)"'
+  OPTS=()
+  [ "$DRY" = 1 ] && OPTS+=(-n)
+  [ -n "$TERMCHOIX" ] && OPTS+=(--term "$TERMCHOIX")
+  [ -n "$ARGS" ] && OPTS+=(--args "$ARGS")
+  printf '%s' "$SAUVE" | jq -r '.sessions[] | [.id, .project] | @tsv' \
+    | while IFS="$(printf '\t')" read -r id proj; do
+        echo
+        "$0" ${OPTS[@]+"${OPTS[@]}"} --id "$id" "$proj"
+      done
+  exit 0
+fi
 
 # --- helpers portables -------------------------------------------------------
 
@@ -129,6 +158,20 @@ if [ -n "$TERMCHOIX" ]; then
   TERM_UTILISE="$TERMCHOIX"
 else
   for l in $LANCEURS; do dispo "$l" && { TERM_UTILISE="$l"; break; }; done
+fi
+
+# --- nouvelle session avec un prompt (ex. fusion de mémoires depuis gld-web) ------
+if [ -n "$PROMPT" ]; then
+  PROJET="$(cd "${PROJET:-$PWD}" 2>/dev/null && pwd)" \
+    || { echo "gld-matin: projet introuvable" >&2; exit 1; }
+  cmd="cd $(shq "$PROJET") && exec env PATH="$HOME/.local/bin:$PATH" claude ${ARGS:+$ARGS }$(shq "$PROMPT")"
+  if [ "$DRY" = 1 ]; then
+    echo "ouvrirait une nouvelle session dans $PROJET"
+  else
+    [ -n "$TERM_UTILISE" ] || { echo "gld-matin: aucun terminal supporté détecté (--term list)" >&2; exit 1; }
+    ouvrir "claude" "$cmd" && echo "1 onglet lancé : nouvelle session dans $PROJET."
+  fi
+  exit 0
 fi
 
 [ -z "$ID" ] || { AGE_MAX=36500; TAILLE_MIN=0; }

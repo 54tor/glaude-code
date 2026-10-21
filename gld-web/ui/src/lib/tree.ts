@@ -46,7 +46,6 @@ export function find(nodes: Node[], key: string): Node | null {
   return null
 }
 
-
 // Toutes les sessions d'un dossier et de ses sous-dossiers, avec leur projet.
 export function under(n: Node): { s: Session; g: Group }[] {
   const own = n.g ? n.ss.map((s) => ({ s, g: n.g! })) : []
