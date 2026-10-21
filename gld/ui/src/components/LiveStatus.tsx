@@ -46,14 +46,14 @@ function label(st: LiveState, id: string, now: number) {
   return st.verbs[(Math.floor(now / 6) + seed) % st.verbs.length] + "…"
 }
 
-// Ce que Claude fait en ce moment. `open` (la liste des sessions ouvertes, mise à jour dès la fermeture) prime sur le relevé :
+// Ce que Claude fait en ce moment, en dernière ligne de la transcription. `open` (la liste des sessions ouvertes, mise à jour dès la fermeture) prime sur le relevé :
 // le processus met un instant à finir après SIGTERM.
 export function LiveBar({ live: { st, now, open }, id }: { live: Live; id: string }) {
   if (!st) return null
   if (!(open && st.open)) return null // fermée : « Session fermée » est dans la barre d'outils (LiveStats), sans bande
   const isOpen = true
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b bg-muted/20 px-3 py-1.5 text-xs md:px-6">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
       {isOpen && (
         <span className={cn("flex min-w-0 items-center gap-1.5 font-medium", st.thinking ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>
           {st.thinking ? <Loader2 className="size-3.5 shrink-0 animate-spin" /> : <span className="size-1.5 shrink-0 rounded-full bg-current" />}
