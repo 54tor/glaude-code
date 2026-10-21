@@ -23,7 +23,7 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
     reload()
   }, [reload])
   const sessions = useActions().live.size // sessions ouvertes : elles rechargent seules les réglages modifiés
-  const { propose, proposeRaw, proposePerms, dialog } = useConfigEdit(reload, sessions)
+  const { gone, propose, proposeRaw, proposePerms, dialog } = useConfigEdit(reload, sessions)
   if (!ov) return <Skeleton className="m-6 h-40" />
 
   const label = (id: string) =>
@@ -68,6 +68,7 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
             <ProjectsTab
               version={ov.backups.length} // chaque écriture ajoute une sauvegarde : la vue se relit, sans perdre ce qui est déplié
               home={home}
+              gone={gone}
               onRemove={(file, kind, rule) => propose({ file, op: "remove", path: ["permissions", kind], value: rule })}
               onTransfer={async (file, kind, rule, move) => {
                 // Direct, sans fenêtre : la règle rejoint vos réglages, puis (déplacement) quitte son fichier d'origine.
@@ -96,7 +97,7 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
           </TabsContent>
           <TabsContent value="permissions">
             {fileSelect}
-            <PermsTab file={fileId} label={label(fileId)} doc={doc} propose={propose} proposePerms={proposePerms} />
+            <PermsTab gone={gone} file={fileId} label={label(fileId)} doc={doc} propose={propose} proposePerms={proposePerms} />
           </TabsContent>
           <TabsContent value="reglages">
             {fileSelect}

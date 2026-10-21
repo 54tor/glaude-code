@@ -27,17 +27,33 @@ type Reply = { ok: boolean; out: string; before: string; after: string; warnings
 
 // Toute modification d'un fichier de réglages passe par ici : aperçu des différences, confirmation, puis écriture
 // (le serveur fait une sauvegarde avant). Renvoie propose() et le dialogue à afficher.
-export function useConfigEdit(onDone: () => void, sessions = 0): { propose: (e: CfgEdit) => Promise<void>; proposeRaw: (file: string, text: string) => Promise<string | null>; proposePerms: (file: string, text: string, mode: string, then?: () => void) => Promise<string | null>; dialog: ReactNode } {
+export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 0): { gone: (file: string, kind: string, rule: string) => boolean; propose: (e: CfgEdit) => Promise<void>; proposeRaw: (file: string, text: string) => Promise<string | null>; proposePerms: (file: string, text: string, mode: string, then?: () => void) => Promise<string | null>; dialog: ReactNode } {
   const [pv, setPv] = useState<Preview | null>(null)
   const [busy, setBusy] = useState(false)
   // Modification simple (une règle, un réglage, une variable) : appliquée tout de suite, sans fenêtre de confirmation. Le serveur
   // fait une sauvegarde avant d'écrire (onglet Sauvegardes) ; le toast dit ce que les sessions ouvertes en voient.
+  // Retrait d'une règle : la ligne disparaît tout de suite (gone) et ne revient qu'en cas d'échec.
+  const [hidden, setHidden] = useState<Set<string>>(new Set())
+  const hide = (k: string, on: boolean) =>
+    setHidden((s) => {
+      const n = new Set(s)
+      if (on) n.add(k)
+      else n.delete(k)
+      return n
+    })
+  const ruleKey = (file: string, kind: string, rule: string) => JSON.stringify([file, kind, rule])
+  const gone = (file: string, kind: string, rule: string) => hidden.has(ruleKey(file, kind, rule))
   const propose = async (edit: CfgEdit) => {
+    const rule = edit.op === "remove" && edit.path[0] === "permissions" && typeof edit.value === "string" ? ruleKey(edit.file, edit.path[1], edit.value) : ""
+    if (rule) hide(rule, true)
     const r = (await api.post("/config-edit", edit)) as Reply
-    if (!r.ok) return void toast.error(r.out)
-    if (r.before === r.after) return void toast.info("Aucun changement")
+    if (!r.ok || r.before === r.after) {
+      if (rule) hide(rule, false)
+      return void (r.ok ? toast.info("Aucun changement") : toast.error(r.out))
+    }
     toast.success(r.out, { description: liveNotice(r.before, r.after, sessions), duration: 6000 })
-    onDone()
+    await onDone() // la liste relue ne contient plus la règle : on peut cesser de la masquer
+    if (rule) hide(rule, false)
   }
   // JSON brut : renvoie le message d'erreur (avec ligne et colonne) ou null si l'aperçu s'ouvre.
   const proposeRaw = async (file: string, text: string) => {
@@ -103,5 +119,5 @@ export function useConfigEdit(onDone: () => void, sessions = 0): { propose: (e: 
       </DialogContent>
     </Dialog>
   )
-  return { propose, proposeRaw, proposePerms, dialog }
+  return { gone, propose, proposeRaw, proposePerms, dialog }
 }
