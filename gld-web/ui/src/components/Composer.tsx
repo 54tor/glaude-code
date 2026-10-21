@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { Power, Send, Square, SquareTerminal } from "lucide-react"
+import { Minimize2, Power, Send, Square, SquareTerminal } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
 import { withChoice, type Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
@@ -8,6 +8,7 @@ import { Choose } from "./Choose"
 import { api, type Msg } from "@/lib/api"
 import { useActions } from "./actions"
 import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 // Modes d'autorisation de claude -p : sans terminal, Claude ne peut pas demander la permission.
 const MODES = [
@@ -180,6 +181,7 @@ function LiveSend({ id, onSent }: { id: string; onSent: () => void }) {
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           Le texte est collé dans le terminal de la session, puis validé : si Claude répond déjà, il le prend à la suite.
           <span className="ml-auto" />
+          <SlashMenu id={id} text={text} onSent={onSent} />
           <CloseSession id={id} />
           <Button size="sm" onClick={send} disabled={!text.trim() || busy}>
             <Send /> Envoyer à la session
@@ -314,5 +316,43 @@ function TerminalPanel({ id }: { id: string }) {
         </pre>
       )}
     </div>
+  )
+}
+
+// Commandes de Claude Code envoyées telles quelles à la session (elles s'exécutent dans son terminal). /compact accepte des consignes :
+// ce qui est écrit dans le champ s'y ajoute (« /compact garde les décisions d'architecture »).
+const SLASH = [
+  ["/compact", "Compacter le contexte", "Résume la conversation pour libérer du contexte ; le texte du champ sert de consigne au résumé"],
+  ["/context", "Voir le contexte", "Répartition du contexte (instructions, mémoire, outils, messages)"],
+  ["/cost", "Voir le coût", "Coût et durée de la session"],
+  ["/usage", "Voir les limites d'usage", "Met à jour le relevé des limites du compte"],
+  ["/clear", "Effacer la conversation", "Vide le contexte (la conversation reste dans le transcript)"],
+] as const
+
+function SlashMenu({ id, text, onSent }: { id: string; text: string; onSent: () => void }) {
+  const run = async (cmd: string) => {
+    const full = cmd === "/compact" && text.trim() ? `${cmd} ${text.trim().replace(/\s+/g, " ")}` : cmd
+    const r = await api.post("/session-send", { id, text: full })
+    ;(r.ok ? toast.success : toast.error)(r.ok ? `${full} envoyé` : r.out)
+    if (r.ok) onSent()
+  }
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="sm" variant="ghost" title="Commandes de Claude Code">
+          <Minimize2 /> Commandes
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-72">
+        {SLASH.map(([cmd, label, hint]) => (
+          <DropdownMenuItem key={cmd} onSelect={() => run(cmd)} className="flex-col items-start gap-0">
+            <span>
+              {label} <code className="text-xs text-muted-foreground">{cmd}</code>
+            </span>
+            <span className="text-xs text-muted-foreground">{hint}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
