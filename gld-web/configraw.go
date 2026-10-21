@@ -91,41 +91,29 @@ func configRawRead(id string) (string, error) {
 	return formatOrdered(maskSecrets(v, "")) + "\n", nil
 }
 
-// configRawEdit valide et enregistre un fichier de réglages saisi en JSON brut. Renvoie les textes avant et après (secrets
-// masqués, pour l'aperçu) et les avertissements de santé du nouveau contenu ; n'écrit rien si dry.
-func configRawEdit(id, text string, dry bool) (before, after string, warns []CfgIssue, err error) {
-	path, err := configPath(id)
-	if err != nil {
+// loadDoc lit le fichier de réglages actuel (absent : document vide) après avoir refusé un lien symbolique.
+func loadDoc(id string) (path string, orig []byte, exists bool, doc any, err error) {
+	if path, err = configPath(id); err != nil {
 		return
 	}
 	if err = notSymlink(path); err != nil {
 		return
 	}
-	if len(text) > 1<<20 {
-		err = errors.New("fichier trop gros")
-		return
-	}
-	orig, rerr := os.ReadFile(path)
-	exists := rerr == nil
-	var origDoc any = newOmap()
+	var rerr error
+	orig, rerr = os.ReadFile(path)
+	exists = rerr == nil
+	doc = newOmap()
 	if exists && strings.TrimSpace(string(orig)) != "" {
-		if origDoc, err = parseOrdered(orig); err != nil {
+		if doc, err = parseOrdered(orig); err != nil {
 			err = errors.New("le fichier actuel est illisible : " + err.Error() + " (restaurez une sauvegarde ou corrigez-le à la main)")
-			return
 		}
 	}
-	nv, perr := parseOrdered([]byte(text))
-	if perr != nil {
-		err = syntaxError(text, perr)
-		return
-	}
-	if asMap(nv) == nil {
-		err = errors.New("le fichier doit contenir un objet JSON ({ … })")
-		return
-	}
-	if nv, err = restoreMasked(nv, origDoc, ""); err != nil {
-		return
-	}
+	return
+}
+
+// commitDoc compare le document actuel et le nouveau, renvoie leurs textes (secrets masqués, pour l'aperçu) et les
+// avertissements de santé du nouveau ; sauf si dry, sauvegarde l'ancien fichier puis écrit le nouveau.
+func commitDoc(id, path string, orig []byte, exists bool, origDoc, nv any, dry bool) (before, after string, warns []CfgIssue, err error) {
 	before = formatOrdered(maskSecrets(origDoc, "")) + "\n"
 	after = formatOrdered(maskSecrets(nv, "")) + "\n"
 	warns = configHealth(nil, map[string]any{id: nv})
@@ -144,4 +132,30 @@ func configRawEdit(id, text string, dry bool) (before, after string, warns []Cfg
 	}
 	err = writeConfig(path, []byte(content))
 	return
+}
+
+// configRawEdit valide et enregistre un fichier de réglages saisi en JSON brut. Renvoie les textes avant et après (secrets
+// masqués, pour l'aperçu) et les avertissements de santé du nouveau contenu ; n'écrit rien si dry.
+func configRawEdit(id, text string, dry bool) (before, after string, warns []CfgIssue, err error) {
+	path, orig, exists, origDoc, err := loadDoc(id)
+	if err != nil {
+		return
+	}
+	if len(text) > 1<<20 {
+		err = errors.New("fichier trop gros")
+		return
+	}
+	nv, perr := parseOrdered([]byte(text))
+	if perr != nil {
+		err = syntaxError(text, perr)
+		return
+	}
+	if asMap(nv) == nil {
+		err = errors.New("le fichier doit contenir un objet JSON ({ … })")
+		return
+	}
+	if nv, err = restoreMasked(nv, origDoc, ""); err != nil {
+		return
+	}
+	return commitDoc(id, path, orig, exists, origDoc, nv, dry)
 }

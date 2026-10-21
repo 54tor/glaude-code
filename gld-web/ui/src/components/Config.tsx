@@ -4,6 +4,7 @@ import { tilde } from "@/lib/format"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useActions } from "./actions"
 import { Choose } from "./Choose"
 import { useConfigEdit } from "./configEdit"
 import { HealthTab, HooksTab, McpTab, PrecedenceTab } from "./ConfigTabs1"
@@ -19,7 +20,8 @@ export function Config({ home }: { home: string }) {
   useEffect(() => {
     reload()
   }, [reload])
-  const { propose, proposeRaw, dialog } = useConfigEdit(reload)
+  const sessions = useActions().live.size // sessions ouvertes : elles rechargent seules les réglages modifiés
+  const { propose, proposeRaw, proposePerms, dialog } = useConfigEdit(reload, sessions)
   if (!ov) return <Skeleton className="m-6 h-40" />
 
   const label = (id: string) =>
@@ -38,7 +40,7 @@ export function Config({ home }: { home: string }) {
     <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
       Fichier modifié :
       <Choose value={fileId} onChange={setFileId} options={options} label="Fichier de réglages" className="min-w-0 max-w-xl" />
-      <span className="text-xs text-muted-foreground">Chaque modification montre ses différences et fait une sauvegarde.</span>
+      <span className="text-xs text-muted-foreground">Chaque modification montre ses différences et fait une sauvegarde. Les sessions ouvertes rechargent seules les réglages (sauf model, effort et plugins : /model, /effort, /reload-plugins).</span>
     </div>
   )
 
@@ -70,7 +72,7 @@ export function Config({ home }: { home: string }) {
           </TabsContent>
           <TabsContent value="permissions">
             {fileSelect}
-            <PermsTab file={fileId} doc={doc} propose={propose} />
+            <PermsTab file={fileId} label={label(fileId)} doc={doc} propose={propose} proposePerms={proposePerms} />
           </TabsContent>
           <TabsContent value="reglages">
             {fileSelect}

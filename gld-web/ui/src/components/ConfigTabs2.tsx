@@ -6,7 +6,9 @@ import { describeKey } from "@/lib/configKeys"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { PermImportDialog, PermIOButtons } from "./ConfigPermIO"
 import { Input } from "@/components/ui/input"
+import { Choose } from "./Choose"
 import { toast } from "sonner"
 import { useEffect } from "react"
 
@@ -24,7 +26,8 @@ const KINDS = [
   ["deny", "Refusées", "Jamais lancées ; l'emportent sur les autres."],
 ] as const
 
-export function PermsTab({ file, doc, propose }: { file: string; doc: Doc; propose: Propose }) {
+export function PermsTab({ file, label, doc, propose, proposePerms }: { file: string; label: string; doc: Doc; propose: Propose; proposePerms: (file: string, text: string, mode: string) => Promise<string | null> }) {
+  const [importing, setImporting] = useState(false)
   const [draft, setDraft] = useState<Record<string, string>>({})
   const [sug, setSug] = useState<PermSuggest[] | null>(null)
   useEffect(() => {
@@ -37,6 +40,8 @@ export function PermsTab({ file, doc, propose }: { file: string; doc: Doc; propo
   const add = (kind: string, rule: string) => propose({ file, op: "add", path: ["permissions", kind], value: rule })
   return (
     <div className="space-y-5">
+      <PermIOButtons file={file} label={label} doc={doc} onImport={() => setImporting(true)} />
+      <PermImportDialog open={importing} file={file} label={label} propose={proposePerms} onClose={() => setImporting(false)} />
       {KINDS.map(([kind, label, hint]) => {
         const rules = list(at(doc, "permissions", kind))
         return (
@@ -96,14 +101,34 @@ export function PermsTab({ file, doc, propose }: { file: string; doc: Doc; propo
 
 // --- réglages simples ----------------------------------------------------------------------------------------
 
-type Field = { key: string; label: string; kind: "bool" | "string" | "number"; options?: string[] }
+type Opt = readonly [string, string] // valeur, libellé
+type Field = { key: string; path?: string[]; label: string; kind: "bool" | "number" | "enum"; options?: Opt[] }
+
+// Valeurs connues d'après la documentation de Claude Code. Une valeur déjà présente dans le fichier mais inconnue d'ici
+// reste affichée et choisie (voir Row) ; « (par défaut) » retire le réglage.
+const MODELS: Opt[] = [
+  ["fable", "fable : le plus capable, tâches longues"],
+  ["opus", "opus : raisonnement complexe"],
+  ["sonnet", "sonnet : codage courant"],
+  ["haiku", "haiku : rapide, tâches simples"],
+  ["best", "best : le plus capable disponible"],
+  ["opusplan", "opusplan : opus en plan, sonnet à l'exécution"],
+  ["opus[1m]", "opus avec 1 M de contexte"],
+  ["sonnet[1m]", "sonnet avec 1 M de contexte"],
+]
+const EFFORTS: Opt[] = [["low", "low : rapide"], ["medium", "medium"], ["high", "high"], ["xhigh", "xhigh"], ["max", "max : le plus poussé"]]
+const LANGUAGES: Opt[] = ["French", "English", "Spanish", "German", "Italian", "Portuguese", "Dutch", "Japanese", "Chinese", "Korean"].map((l) => [l, l] as const)
+const THEMES: Opt[] = [["auto", "auto : suit le terminal"], ["dark", "sombre"], ["light", "clair"], ["dark-daltonized", "sombre, daltonien"], ["light-daltonized", "clair, daltonien"], ["dark-ansi", "sombre, couleurs ANSI"], ["light-ansi", "clair, couleurs ANSI"]]
+const NOTIF: Opt[] = [["auto", "auto"], ["terminal_bell", "sonnerie du terminal"], ["iterm2", "iTerm2"], ["iterm2_with_bell", "iTerm2 et sonnerie"], ["kitty", "kitty"], ["ghostty", "Ghostty"], ["notifications_disabled", "aucune notification"]]
+const MODES: Opt[] = [["default", "default : demande"], ["acceptEdits", "acceptEdits : accepte les modifications de fichiers"], ["plan", "plan : propose sans modifier"], ["auto", "auto : le classificateur décide"], ["bypassPermissions", "bypassPermissions : tout sans demander (risqué)"]]
+
 const FIELDS: { title: string; fields: Field[] }[] = [
   {
     title: "Modèle et comportement",
     fields: [
-      { key: "model", label: "Modèle par défaut", kind: "string", options: ["opus", "sonnet", "haiku", "fable"] },
-      { key: "effortLevel", label: "Effort", kind: "string", options: ["low", "medium", "high", "xhigh", "max"] },
-      { key: "language", label: "Langue des réponses", kind: "string", options: ["French", "English"] },
+      { key: "model", label: "Modèle par défaut", kind: "enum", options: MODELS },
+      { key: "effortLevel", label: "Effort", kind: "enum", options: EFFORTS },
+      { key: "language", label: "Langue des réponses", kind: "enum", options: LANGUAGES },
       { key: "autoCompactEnabled", label: "Compactage automatique", kind: "bool" },
       { key: "idleCompaction", label: "Compactage à l'inactivité", kind: "bool" },
       { key: "fileCheckpointingEnabled", label: "Points de contrôle des fichiers", kind: "bool" },
@@ -114,19 +139,23 @@ const FIELDS: { title: string; fields: Field[] }[] = [
   {
     title: "Interface",
     fields: [
-      { key: "theme", label: "Thème", kind: "string", options: ["dark", "light", "dark-daltonized", "light-daltonized", "dark-ansi", "light-ansi"] },
-      { key: "editorMode", label: "Mode d'édition", kind: "string", options: ["normal", "vim"] },
+      { key: "theme", label: "Thème", kind: "enum", options: THEMES },
+      { key: "editorMode", label: "Mode d'édition", kind: "enum", options: [["normal", "normal"], ["vim", "vim"]] },
       { key: "promptSuggestionEnabled", label: "Suggestions de prompt", kind: "bool" },
       { key: "awaySummaryEnabled", label: "Résumé au retour", kind: "bool" },
-      { key: "preferredNotifChannel", label: "Canal de notification", kind: "string", options: ["auto", "terminal", "off"] },
+      { key: "preferredNotifChannel", label: "Canal de notification", kind: "enum", options: NOTIF },
       { key: "inputNeededNotifEnabled", label: "Notifier quand une saisie est attendue", kind: "bool" },
       { key: "agentPushNotifEnabled", label: "Notifications push des agents", kind: "bool" },
-      { key: "teammateMode", label: "Mode des coéquipiers", kind: "string", options: ["auto", "in-process", "tmux"] },
+      { key: "teammateMode", label: "Mode des coéquipiers", kind: "enum", options: [["auto", "auto"], ["in-process", "dans le terminal principal"], ["tmux", "volets tmux"]] },
+      { key: "feedbackDrafts", label: "Brouillons de retour", kind: "enum", options: [["notify", "notify : avec notification"], ["quiet", "quiet : sans notification"], ["off", "off : désactivés"]] },
     ],
   },
   {
-    title: "Sécurité et avertissements",
+    title: "Permissions et sécurité",
     fields: [
+      { key: "permissions.defaultMode", path: ["permissions", "defaultMode"], label: "Mode de permissions au démarrage", kind: "enum", options: MODES },
+      { key: "crossSessionInbound", label: "Messages venant d'autres sessions", kind: "enum", options: [["accept", "accept : les accepter"], ["hold", "hold : attendre votre accord"], ["refuse", "refuse : les refuser"]] },
+      { key: "dialogExpiry", label: "Délai des approbations à distance", kind: "enum", options: [["1m", "1 minute"], ["5m", "5 minutes"], ["10m", "10 minutes"], ["30m", "30 minutes"], ["1h", "1 heure"]] },
       { key: "skipDangerousModePermissionPrompt", label: "Ne pas avertir du mode sans permission", kind: "bool" },
       { key: "skipWorkflowUsageWarning", label: "Ne pas avertir de l'usage des workflows", kind: "bool" },
       { key: "workflowKeywordTriggerEnabled", label: "Déclenchement des workflows par mot-clé", kind: "bool" },
@@ -138,7 +167,11 @@ const FIELDS: { title: string; fields: Field[] }[] = [
 
 function Row({ f, value, file, propose }: { f: Field; value: unknown; file: string; propose: Propose }) {
   const [text, setText] = useState(value === undefined ? "" : String(value))
-  const set = (v: unknown) => propose({ file, op: "set", path: [f.key], value: v })
+  const path = f.path ?? [f.key]
+  const set = (v: unknown) => propose({ file, op: "set", path, value: v })
+  const current = value === undefined ? "" : String(value)
+  // une valeur déjà là mais inconnue d'ici reste proposée, pour qu'elle s'affiche et ne soit pas perdue
+  const options: Opt[] = f.kind === "enum" ? [["", "(par défaut)"], ...(f.options ?? []), ...(current && !f.options?.some((o) => o[0] === current) ? [[current, `${current} (valeur actuelle)`] as const] : [])] : []
   return (
     <li className="flex flex-wrap items-center gap-2 py-1 text-sm">
       <span className="min-w-56 flex-1">
@@ -147,32 +180,26 @@ function Row({ f, value, file, propose }: { f: Field; value: unknown; file: stri
       </span>
       {f.kind === "bool" ? (
         <Checkbox checked={value === true} onCheckedChange={(c) => set(c === true)} aria-label={f.label} />
+      ) : f.kind === "enum" ? (
+        <Choose value={current} onChange={(v) => (v === "" ? propose({ file, op: "delete", path }) : v !== current && set(v))} options={options} label={f.label} className="w-72" />
       ) : (
         <>
           <Input
-            list={f.options ? `opt-${f.key}` : undefined}
-            type={f.kind === "number" ? "number" : "text"}
+            type="number"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && text.trim() && set(f.kind === "number" ? Number(text) : text.trim())}
+            onKeyDown={(e) => e.key === "Enter" && text.trim() && set(Number(text))}
             placeholder="(par défaut)"
             className="h-8 w-56 text-xs"
             aria-label={f.label}
           />
-          {f.options && (
-            <datalist id={`opt-${f.key}`}>
-              {f.options.map((o) => (
-                <option key={o} value={o} />
-              ))}
-            </datalist>
-          )}
-          <Button size="xs" variant="outline" disabled={!text.trim() || text === String(value ?? "")} onClick={() => set(f.kind === "number" ? Number(text) : text.trim())}>
+          <Button size="xs" variant="outline" disabled={!text.trim() || text === current} onClick={() => set(Number(text))}>
             Appliquer
           </Button>
         </>
       )}
-      {value !== undefined && (
-        <Button size="icon-xs" variant="ghost" title="Retirer le réglage (valeur par défaut)" aria-label={`Retirer ${f.label}`} onClick={() => propose({ file, op: "delete", path: [f.key] })}>
+      {value !== undefined && f.kind !== "enum" && (
+        <Button size="icon-xs" variant="ghost" title="Retirer le réglage (valeur par défaut)" aria-label={`Retirer ${f.label}`} onClick={() => propose({ file, op: "delete", path })}>
           <RotateCcw />
         </Button>
       )}
@@ -192,7 +219,7 @@ export function SettingsTab({ file, doc, plugins, propose }: { file: string; doc
           <h3 className="text-sm font-medium">{g.title}</h3>
           <ul className="mt-1 divide-y">
             {g.fields.map((f) => (
-              <Row key={f.key + String(at(doc, f.key))} f={f} value={at(doc, f.key)} file={file} propose={propose} />
+              <Row key={f.key + String(at(doc, ...(f.path ?? [f.key])))} f={f} value={at(doc, ...(f.path ?? [f.key]))} file={file} propose={propose} />
             ))}
           </ul>
         </section>

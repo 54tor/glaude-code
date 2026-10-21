@@ -4,14 +4,30 @@ import { api, type CfgEdit, type CfgIssue } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { DiffView } from "./MemoryDiff"
+import { DiffView, lineDiff } from "./MemoryDiff"
 
-type Preview = { edit?: CfgEdit; raw?: { file: string; text: string }; before: string; after: string; warnings: CfgIssue[] }
+// Après une écriture : ce que les sessions ouvertes en voient. Claude Code surveille ses fichiers de réglages et les recharge
+// seul (permissions, hooks, variables d'environnement…) : rien à pousser. Quelques clés ne sont lues qu'au démarrage d'une
+// session ou passent par une commande : on dit lesquelles, d'après les lignes qui ont changé.
+export function liveNotice(before: string, after: string, sessions: number): string {
+  const changed = lineDiff(before, after)
+    .filter((r) => r.op !== " ")
+    .map((r) => r.t)
+    .join("\n")
+  const todo: string[] = []
+  if (/"model"\s*:/.test(changed)) todo.push("model : dans une session ouverte, tapez /model")
+  if (/"(effortLevel|modelSettings)"\s*:/.test(changed)) todo.push("effort : tapez /effort dans la session")
+  if (/"enabledPlugins"|"pluginConfigs"|"[\w.-]+@[\w.-]+"\s*:/.test(changed)) todo.push("plugins : tapez /reload-plugins dans la session")
+  const live = sessions ? `Les ${sessions} session${sessions > 1 ? "s" : ""} ouverte${sessions > 1 ? "s" : ""} rechargent les réglages toutes seules.` : "Les sessions ouvertes rechargent les réglages toutes seules."
+  return todo.length ? `${live} À faire à la main — ${todo.join(" ; ")}.` : live
+}
+
+type Preview = { edit?: CfgEdit; raw?: { file: string; text: string }; perm?: { file: string; text: string; mode: string }; summary?: string; before: string; after: string; warnings: CfgIssue[] }
 type Reply = { ok: boolean; out: string; before: string; after: string; warnings?: CfgIssue[] }
 
 // Toute modification d'un fichier de réglages passe par ici : aperçu des différences, confirmation, puis écriture
 // (le serveur fait une sauvegarde avant). Renvoie propose() et le dialogue à afficher.
-export function useConfigEdit(onDone: () => void): { propose: (e: CfgEdit) => Promise<void>; proposeRaw: (file: string, text: string) => Promise<string | null>; dialog: ReactNode } {
+export function useConfigEdit(onDone: () => void, sessions = 0): { propose: (e: CfgEdit) => Promise<void>; proposeRaw: (file: string, text: string) => Promise<string | null>; proposePerms: (file: string, text: string, mode: string) => Promise<string | null>; dialog: ReactNode } {
   const [pv, setPv] = useState<Preview | null>(null)
   const [busy, setBusy] = useState(false)
   const propose = async (edit: CfgEdit) => {
@@ -31,12 +47,24 @@ export function useConfigEdit(onDone: () => void): { propose: (e: CfgEdit) => Pr
     setPv({ raw: { file, text }, before: r.before, after: r.after, warnings: r.warnings ?? [] })
     return null
   }
+  // Import de règles de permission : renvoie le message d'erreur, ou null si l'aperçu s'ouvre.
+  const proposePerms = async (file: string, text: string, mode: string) => {
+    const r = (await api.post("/config-perm-import", { file, text, mode, dry: true })) as Reply
+    if (!r.ok) return r.out
+    if (r.before === r.after) {
+      toast.info("Aucun changement : ces règles sont déjà là")
+      return null
+    }
+    setPv({ perm: { file, text, mode }, summary: r.out, before: r.before, after: r.after, warnings: r.warnings ?? [] })
+    return null
+  }
   const apply = async () => {
     if (!pv) return
     setBusy(true)
-    const r = (pv.raw ? await api.post("/config-raw", { ...pv.raw, dry: false }) : await api.post("/config-edit", pv.edit)) as Reply
+    const r = (pv.perm ? await api.post("/config-perm-import", { ...pv.perm, dry: false }) : pv.raw ? await api.post("/config-raw", { ...pv.raw, dry: false }) : await api.post("/config-edit", pv.edit)) as Reply
     setBusy(false)
-    ;(r.ok ? toast.success : toast.error)(r.out)
+    if (r.ok) toast.success(r.out, { description: liveNotice(r.before, r.after, sessions), duration: 9000 })
+    else toast.error(r.out)
     if (r.ok) {
       setPv(null)
       onDone()
@@ -48,7 +76,7 @@ export function useConfigEdit(onDone: () => void): { propose: (e: CfgEdit) => Pr
         <DialogHeader>
           <DialogTitle>Enregistrer cette modification ?</DialogTitle>
           <DialogDescription>
-            {(pv?.edit?.file ?? pv?.raw?.file) === "u" ? "~/.claude/settings.json" : (pv?.edit?.file ?? pv?.raw?.file)} — une sauvegarde de l'état actuel est faite avant l'écriture.
+            {(pv?.edit?.file ?? pv?.raw?.file ?? pv?.perm?.file) === "u" ? "~/.claude/settings.json" : (pv?.edit?.file ?? pv?.raw?.file ?? pv?.perm?.file)}{pv?.summary ? ` — ${pv.summary}` : ""} — une sauvegarde de l'état actuel est faite avant l'écriture.
           </DialogDescription>
         </DialogHeader>
         {!!pv?.warnings.length && (
@@ -70,5 +98,5 @@ export function useConfigEdit(onDone: () => void): { propose: (e: CfgEdit) => Pr
       </DialogContent>
     </Dialog>
   )
-  return { propose, proposeRaw, dialog }
+  return { propose, proposeRaw, proposePerms, dialog }
 }

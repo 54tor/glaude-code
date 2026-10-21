@@ -126,6 +126,33 @@ func nz[T any](s []T) []T {
 	return s
 }
 
+// routesConfigPerm : import des règles de permission (configperm_io.go) ; l'export se fait côté navigateur, à partir des réglages affichés.
+func routesConfigPerm(mux *http.ServeMux) {
+	mux.HandleFunc("POST /config-perm-import", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			File, Text, Mode string
+			Dry              bool
+		}
+		if json.NewDecoder(io.LimitReader(r.Body, 2<<20)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		before, after, warns, summary, err := permImport(req.File, req.Text, req.Mode, req.Dry)
+		if !req.Dry {
+			journal("config-perm-import %s %s : %s : %v", req.File, req.Mode, summary, errOr(err))
+		}
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		out := summary
+		if !req.Dry {
+			out = "Importé (" + summary + ", sauvegarde faite)"
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": out, "before": before, "after": after, "warnings": nz(warns)})
+	})
+}
+
 // routesConfigRaw : édition du JSON brut d'un fichier de réglages (configraw.go).
 func routesConfigRaw(mux *http.ServeMux) {
 	mux.HandleFunc("GET /config-raw", func(w http.ResponseWriter, r *http.Request) {
