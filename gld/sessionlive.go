@@ -162,6 +162,16 @@ func toolBrief(name string, in map[string]any) string {
 	return name
 }
 
+// toolFull : l'appel d'outil en entier (commande complète, plusieurs lignes comprises), pour l'affichage du dernier outil.
+func toolFull(name string, in map[string]any) string {
+	for _, k := range []string{"command", "description", "file_path", "path", "pattern", "url", "query", "prompt", "subject"} {
+		if s, ok := in[k].(string); ok && strings.TrimSpace(s) != "" {
+			return name + " : " + cut(strings.TrimSpace(s), 4000)
+		}
+	}
+	return name
+}
+
 // readActivity lit la fin d'un transcript : ce que Claude fait d'après le dernier événement utile.
 func readActivity(path string) (activity string, thinking bool, since float64, u usage, model string, tool string, toolRunning bool) {
 	lines := tailLines(path, 512<<10)
@@ -211,7 +221,7 @@ func readActivity(path string) (activity string, thinking bool, since float64, u
 				switch b.Type {
 				case "tool_use":
 					pendingTool[b.ID] = toolBrief(b.Name, b.Input)
-					tool, toolRunning = pendingTool[b.ID], true
+					tool, toolRunning = toolFull(b.Name, b.Input), true
 					order = append(order, b.ID)
 					last = "tool"
 				case "thinking":
