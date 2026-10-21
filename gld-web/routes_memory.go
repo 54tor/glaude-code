@@ -183,6 +183,21 @@ func routesMemory(mux *http.ServeMux) {
 		journal("memory-tokens %d fichier(s) : %.4f $", len(req.Keys), total)
 		writeJSON(w, 200, map[string]any{"ok": len(errs) == 0, "counts": counts, "errors": errs, "cost": total})
 	})
+	// Analyse par Haiku des doublons, contradictions et entrées périmées (memlint.go) : rien n'est modifié.
+	mux.HandleFunc("POST /memory-lint", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Scope string }
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil || req.Scope == "" {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		findings, cost, err := memLint(req.Scope)
+		journal("memory-lint %s : %d constat(s) (%.4f $) : %v", req.Scope, len(findings), cost, errOr(err))
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error(), "cost": cost})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "findings": findings, "cost": cost})
+	})
 	mux.HandleFunc("GET /memory-search", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"hits": memSearch(r.URL.Query().Get("q"))})
 	})

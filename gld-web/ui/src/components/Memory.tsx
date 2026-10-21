@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { Brain, Globe } from "lucide-react"
 import { toast } from "sonner"
 import { useLocal } from "@/hooks/useLocal"
-import { api, type MemFile, type Trashed } from "@/lib/api"
+import { api, type Finding, type MemFile, type Trashed } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { withChoice } from "@/lib/models"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -442,7 +442,18 @@ export function Memory({
         )}
       </div>
       <TypeHelp open={typeHelp} onClose={() => setTypeHelp(false)} />
-      <HealthDialog open={healthOpen} issues={issues} onClose={() => setHealthOpen(false)} onOpenKey={onPick} onRepair={repair} />
+      <HealthDialog
+        open={healthOpen}
+        issues={issues}
+        onClose={() => setHealthOpen(false)}
+        onOpenKey={onPick}
+        onRepair={repair}
+        scopes={[["global", "Règles globales et CLAUDE.md"], ...(list?.projects ?? []).filter((p) => p.files.some((x) => x.key.startsWith("m/"))).map((p) => [p.dir, tilde(p.project, homeDir)] as const)]}
+        onLint={async (scope) => {
+          const r = (await api.post("/memory-lint", { scope })) as { ok: boolean; out?: string; findings?: Finding[]; cost?: number }
+          return r.ok ? { findings: r.findings, cost: r.cost } : { error: r.out, cost: r.cost }
+        }}
+      />
       <MemoryWriter target={writer} refs={writeRefs} onClose={() => setWriter(null)} onDraft={onDraft} />
     </div>
   )

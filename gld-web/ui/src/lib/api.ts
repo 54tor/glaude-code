@@ -22,6 +22,7 @@ export type MemFile = {
   off?: boolean // règle désactivée (.md.off)
   warn?: string // front matter invalide
 }
+export type Finding = { kind: string; keys: string[]; why: string }
 export type Issue = { key: string; kind: string; msg: string; dir?: string }
 export type MemProject = { dir: string; project: string; missing: boolean; files: MemFile[] }
 export type TabSession = { id: string; dir: string; project: string; title: string }
