@@ -75,7 +75,7 @@ export function LiveBar({ live: { st, now, open }, id }: { live: Live; id: strin
         {isOpen && st.tool && (
           <span className="msg flex min-w-0 basis-full gap-2 border-l-2 py-0.5 pl-3 text-xs text-muted-foreground" title={st.tool}>
             <Wrench className="mt-0.5 size-3.5 shrink-0" aria-label={st.toolRunning ? "outil en cours" : "dernier outil"} />
-            <span className="min-w-0 break-words whitespace-pre-wrap">{st.tool}</span>
+            <span className="max-h-60 min-w-0 overflow-y-auto break-words whitespace-pre-wrap">{st.tool}</span>
           </span>
         )}
       </div>
