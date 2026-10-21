@@ -74,6 +74,10 @@ func (u usage) context() int { return u.In + u.CacheRead + u.CacheWrite }
 func toolBrief(name string, in map[string]any) string {
 	for _, k := range []string{"description", "command", "file_path", "path", "pattern", "url", "query", "prompt", "subject"} {
 		if s, ok := in[k].(string); ok && strings.TrimSpace(s) != "" {
+			if k == "command" { // un script multiligne (heredoc) : sa première ligne dit déjà de quoi il s'agit
+				s = strings.TrimSpace(s)
+				s, _, _ = strings.Cut(s, "\n")
+			}
 			return name + " : " + cut(strings.Join(strings.Fields(s), " "), 90)
 		}
 	}
