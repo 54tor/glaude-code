@@ -104,6 +104,7 @@ export type Account = {
   since?: string
   limits: UsageLimit[]
   limitsAt?: number
+  refreshing?: boolean
   totalSessions: number
   totalMessages: number
   firstSession?: string
@@ -143,7 +144,7 @@ export const api = {
   configProjects: () => get<{ projects: ProjectCfg[] }>("/config-projects"),
   sessionIdle: (id: string) => get<{ idle: boolean }>(`/session-state?id=${enc(id)}`),
   sessionLive: (dir: string, id: string) => get<LiveState>(`/session-live?dir=${enc(dir)}&id=${enc(id)}`),
-  account: () => get<Account>("/account"),
+  account: (refresh = false) => get<Account>(refresh ? "/account?refresh=1" : "/account"),
   screen: (id: string) => get<{ ok: boolean; out?: string; text?: string }>(`/session-screen?id=${enc(id)}`),
   sendInfo: () => get<{ ids: string[]; why: string }>("/session-send-info"),
   config: () => get<CfgOverview>("/config"),
