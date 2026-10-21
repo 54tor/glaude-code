@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -213,6 +214,8 @@ func newSessionHandler(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 	case strings.TrimSpace(req.Prompt) == "":
 		err = errors.New("prompt vide")
+	case runtime.GOOS == "windows": // gld-matin est un script bash ; wt.exe couperait le prompt à chaque « ; »
+		err = errors.New("lancement non pris en charge sous Windows : copie le prompt dans une session claude")
 	default:
 		err = checkResumePrompt(req.ID, req.Prompt)
 		if errors.Is(err, errOpen) || errors.Is(err, errLive) {
