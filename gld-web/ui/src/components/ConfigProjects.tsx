@@ -11,6 +11,7 @@ import { toast } from "sonner"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import { byRule } from "./ConfigTabs2"
 
 const KINDS = [
   ["allow", "Autorisées"],
@@ -61,7 +62,7 @@ export function ProjectsTab({ home, version, gone, onEdit, onTransfer, onRemove 
       <ul className="space-y-2">
         {shown.map((p) => {
           const isOpen = open.has(p.dir)
-          const perms = Object.fromEntries(Object.entries(p.perms).map(([k, l]) => [k, l.filter((r) => !gone(`${r.scope}/${p.dir}`, k, r.rule))]))
+          const perms = Object.fromEntries(Object.entries(p.perms).map(([k, l]) => [k, l.filter((r) => !gone(`${r.scope}/${p.dir}`, k, r.rule)).sort((x, y) => byRule(x.rule, y.rule))]))
           const nRules = Object.values(perms).reduce((n, l) => n + l.length, 0)
           const nSettings = p.files.reduce((n, x) => n + x.rows.filter((r) => !r.path.startsWith("permissions.") && r.path !== "hooks").length, 0)
           return (
