@@ -411,6 +411,9 @@ type Msg struct {
 	// charge des messages plus anciens, ceux déjà affichés gardent la leur (pas de réutilisation de nœuds).
 	O int64 `json:"o,omitempty"`
 	N int   `json:"n,omitempty"`
+	// Img : type d'une image du message (le texte est alors vide) ; K : rang du bloc dans le message, pour la relire (GET /conv-image).
+	Img string `json:"img,omitempty"`
+	K   int    `json:"k,omitempty"`
 }
 
 type blk struct {
@@ -419,6 +422,9 @@ type blk struct {
 	Name    string          `json:"name"`
 	Input   json.RawMessage `json:"input"`
 	Content json.RawMessage `json:"content"`
+	Source  struct {
+		MediaType string `json:"media_type"` // image : le contenu (data) n'est jamais chargé ici
+	} `json:"source"`
 }
 
 var reminder = regexp.MustCompile(`(?s)<system-reminder>.*?</system-reminder>`)
@@ -474,8 +480,12 @@ func lineMsgs(b []byte, tools bool) []Msg {
 		return nil
 	}
 	var out []Msg
-	for _, x := range bs {
+	for i, x := range bs {
 		switch x.Type {
+		case "image":
+			if x.Source.MediaType != "" {
+				out = append(out, Msg{R: l.Type, Img: x.Source.MediaType, K: i, Ts: l.Timestamp})
+			}
 		case "text":
 			t := strings.TrimSpace(reminder.ReplaceAllString(x.Text, ""))
 			if t == "" || strings.HasPrefix(t, "<command-") || strings.HasPrefix(t, "<local-command") || strings.HasPrefix(strings.ToLower(t), "caveat:") {

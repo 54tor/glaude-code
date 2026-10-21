@@ -7,6 +7,7 @@ import { ModelPicker } from "./ModelPicker"
 import { Choose } from "./Choose"
 import { api, type Msg } from "@/lib/api"
 import { useActions } from "./actions"
+import { ImageChips, useImages } from "@/hooks/useImages"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
@@ -46,10 +47,12 @@ export function Composer({
   const [mode, setMode] = useLocal("ccChatMode", "")
   const [choice, setChoice] = useState(defaultChoice)
   const running = !!turn?.running
+  const pics = useImages()
   const send = async () => {
-    const prompt = text.trim()
+    const prompt = [text.trim(), pics.suffix()].filter(Boolean).join("\n\n")
     if (!prompt || running) return
     setText("")
+    pics.clear()
     setTurn(() => ({ id, msgs: [{ r: "user", t: prompt }], running: true }))
     const fail = (error: string) => setTurn((t) => t && { ...t, running: false, error })
     let res: Response
@@ -101,13 +104,16 @@ export function Composer({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "Enter" && (e.preventDefault(), send())}
-          placeholder={running ? "Claude répond…" : "Écrire à Claude dans cette session… (Ctrl+Entrée pour envoyer)"}
+          onPaste={pics.onPaste}
+          onDrop={pics.onDrop}
+          placeholder={running ? "Claude répond…" : "Écrire à Claude dans cette session… (Ctrl+Entrée pour envoyer ; une image se colle ou se dépose ici)"}
           disabled={running}
           rows={2}
           maxLength={32000}
           className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
           aria-label="Message à Claude"
         />
+        <ImageChips images={pics.images} busy={pics.busy} onRemove={pics.remove} />
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <Choose value={mode} onChange={setMode} options={MODES} label="Autorisations accordées à Claude" disabled={running} className="max-w-full min-w-0" />
           <ModelPicker value={choice} onChange={setChoice} disabled={running} />
@@ -118,7 +124,7 @@ export function Composer({
               <Square /> Arrêter
             </Button>
           ) : (
-            <Button size="sm" onClick={send} disabled={!text.trim()}>
+            <Button size="sm" onClick={send} disabled={!text.trim() && !pics.images.length}>
               <Send /> Envoyer
             </Button>
           )}
@@ -134,6 +140,7 @@ function LiveSend({ id, onSent }: { id: string; onSent: () => void }) {
   const [info, setInfo] = useState<{ ids: string[]; why: string } | null>(null)
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
+  const pics = useImages()
   useEffect(() => {
     let live = true
     api.sendInfo().then((r) => live && setInfo(r), () => {})
@@ -153,13 +160,15 @@ function LiveSend({ id, onSent }: { id: string; onSent: () => void }) {
       </div>
     )
   const send = async () => {
-    if (!text.trim() || busy) return
+    const full = [text.trim(), pics.suffix()].filter(Boolean).join("\n")
+    if (!full || busy) return
     setBusy(true)
-    const r = await api.post("/session-send", { id, text })
+    const r = await api.post("/session-send", { id, text: full })
     setBusy(false)
     ;(r.ok ? toast.success : toast.error)(r.out)
     if (r.ok) {
       setText("")
+      pics.clear()
       onSent()
     }
   }
@@ -171,19 +180,22 @@ function LiveSend({ id, onSent }: { id: string; onSent: () => void }) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "Enter" && (e.preventDefault(), send())}
-          placeholder="Écrire dans la session ouverte (tmux)… (Ctrl+Entrée pour envoyer)"
+          onPaste={pics.onPaste}
+          onDrop={pics.onDrop}
+          placeholder="Écrire dans la session ouverte (tmux)… (Ctrl+Entrée pour envoyer ; une image se colle ou se dépose ici)"
           rows={2}
           maxLength={32000}
           disabled={busy}
           className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
           aria-label="Message à la session ouverte"
         />
+        <ImageChips images={pics.images} busy={pics.busy} onRemove={pics.remove} />
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           Le texte est collé dans le terminal de la session, puis validé : si Claude répond déjà, il le prend à la suite.
           <span className="ml-auto" />
           <SlashMenu id={id} text={text} onSent={onSent} />
           <CloseSession id={id} />
-          <Button size="sm" onClick={send} disabled={!text.trim() || busy}>
+          <Button size="sm" onClick={send} disabled={(!text.trim() && !pics.images.length) || busy}>
             <Send /> Envoyer à la session
           </Button>
         </div>
