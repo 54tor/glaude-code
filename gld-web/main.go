@@ -637,13 +637,15 @@ func withPath(c *exec.Cmd) *exec.Cmd {
 	return c
 }
 
-// matin lance gld-matin et renvoie sa sortie ; sans sortie (introuvable, tué…), l'erreur elle-même, pour qu'un échec dise pourquoi.
-func matin(ctx context.Context, args ...string) (string, error) {
-	out, err := withPath(exec.CommandContext(ctx, "gld-matin", args...)).CombinedOutput()
-	if err != nil && strings.TrimSpace(string(out)) == "" {
-		return "gld-matin : " + err.Error(), err
+// matin exécute gld-matin (cli) en direct et renvoie sa sortie ; l'erreur s'y ajoute, pour qu'un échec dise pourquoi
+// (remplaçable dans les tests).
+var matin = func(ctx context.Context, args ...string) (string, error) {
+	var buf strings.Builder
+	err := cliMatin(ctx, args, &buf)
+	if err != nil {
+		buf.WriteString("gld-matin : " + err.Error() + "\n")
 	}
-	return string(out), err
+	return buf.String(), err
 }
 
 // alive : ids des sessions ouvertes, ou nil si `claude agents --json` a échoué (on ne sait pas).
@@ -817,6 +819,9 @@ func reassign(items []item, to string) (int, error) {
 func main() {
 	home, _ := os.UserHomeDir()
 	root = filepath.Join(env("CLAUDE_CONFIG_DIR", filepath.Join(home, ".claude")), "projects")
+	if code, ok := dispatchCLI(os.Args); ok { // gld-matin, gld-trier, gld-rm, gld-nommer : ni serveur ni port
+		os.Exit(code)
+	}
 	listen := flag.String("listen", env("GLD_WEB_LISTEN", "127.0.0.1"), "adresse d'écoute (défaut 127.0.0.1 ; 0.0.0.0 pour tout le réseau, avec un jeton)")
 	flag.Parse()
 	hosts["127.0.0.1:"+port], hosts["localhost:"+port] = true, true
@@ -1392,9 +1397,6 @@ func handler() http.Handler {
 			return
 		}
 		args, err := claudeArgs(req.Args)
-		if err == nil && runtime.GOOS == "windows" {
-			err = errors.New("lancement non pris en charge sous Windows : copie le prompt")
-		}
 		if err != nil {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error(), "prompt": prompt})
 			return
@@ -1507,22 +1509,6 @@ func handler() http.Handler {
 		cwd := info(p, st).Cwd
 		if fi, err := os.Stat(cwd); cwd == "" || err != nil || !fi.IsDir() {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": "dossier du projet introuvable : " + cwd})
-			return
-		}
-		if runtime.GOOS == "windows" {
-			var ss []Session
-			if req.ID != "" {
-				ss = []Session{info(p, st)}
-			} else {
-				ss = recentSessions(filepath.Dir(p), 7, 50000)
-			}
-			n := 0
-			for _, s := range ss {
-				if openTerminal(cwd, s.Title, s.ID, strings.Fields(req.Args)) == nil {
-					n++
-				}
-			}
-			writeJSON(w, 200, map[string]any{"ok": n > 0, "out": fmt.Sprintf("%d onglet(s) lancé(s).", n)})
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)

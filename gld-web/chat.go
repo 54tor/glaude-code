@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -199,7 +198,7 @@ func chatStopHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // newSessionHandler ouvre une nouvelle session claude, dans le dossier de travail d'une session existante (dir/id),
-// avec un prompt (ex. les références des sessions d'un groupe). Via gld-matin, qui échappe le prompt pour le shell.
+// avec un prompt (ex. les références des sessions d'un groupe). Via gld-matin (matin.go), qui passe le prompt par un fichier temporaire.
 func newSessionHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct{ Dir, ID, Prompt, Args string }
 	if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil {
@@ -214,8 +213,6 @@ func newSessionHandler(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 	case strings.TrimSpace(req.Prompt) == "":
 		err = errors.New("prompt vide")
-	case runtime.GOOS == "windows": // gld-matin est un script bash ; wt.exe couperait le prompt à chaque « ; »
-		err = errors.New("lancement non pris en charge sous Windows : copie le prompt dans une session claude")
 	default:
 		err = checkResumePrompt(req.ID, req.Prompt)
 		if errors.Is(err, errOpen) || errors.Is(err, errLive) {

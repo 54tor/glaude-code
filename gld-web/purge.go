@@ -1,7 +1,7 @@
 package main
 
-// Suppression complète d'une session, en Go : même logique que purger_session + solder de
-// bin/gld-lib.sh, sans bash, jq ni coreutils (donc utilisable sous Windows).
+// Suppression complète d'une session, en Go, sans bash, jq ni coreutils (donc utilisable sous Windows).
+// Sert à l'interface comme aux commandes gld-rm et gld-trier (trier.go, rm.go).
 //
 // Un transcript n'est que la partie visible : Claude écrit aussi dans file-history/, session-env/,
 // tasks/, teams/, jobs/, uploads/, debug/, paste-cache/, shell-snapshots/ et history.jsonl.
@@ -165,6 +165,25 @@ func lineHashes(b []byte) []string {
 	return out
 }
 
+// purgeOne efface le transcript, les sous-agents et les satellites d'une session (sans vérifier qu'elle est
+// vivante : c'est à l'appelant), et relève dans snaps les instantanés de shell qu'elle citait. Renvoie le nombre
+// d'emplacements effacés et les échecs.
+func purgeOne(dir, id string, snaps map[string]bool) (n int, fails []string) {
+	snapshotsCited(dir, id, snaps)
+	targets := append([]string{filepath.Join(dir, id+".jsonl"), filepath.Join(dir, id)}, satellites(id)...)
+	for _, p := range targets {
+		if _, e := os.Lstat(p); e != nil {
+			continue
+		}
+		if e := safeRemove(p); e != nil {
+			fails = append(fails, e.Error())
+		} else {
+			n++
+		}
+	}
+	return
+}
+
 // purgeSessions supprime transcript, sous-agents et satellites des sessions, puis solde les restes
 // partagés. Les sessions vivantes sont épargnées. Renvoie les comptes et un compte rendu.
 func purgeSessions(items []item) (n, spared int, notes []string, err error) {
@@ -180,17 +199,8 @@ func purgeSessions(items []item) (n, spared int, notes []string, err error) {
 			spared++
 			continue
 		}
-		dir := filepath.Join(root, it.Dir)
-		snapshotsCited(dir, it.ID, snaps)
-		targets := append([]string{filepath.Join(dir, it.ID+".jsonl"), filepath.Join(dir, it.ID)}, satellites(it.ID)...)
-		for _, p := range targets {
-			if _, e := os.Lstat(p); e != nil {
-				continue
-			}
-			if e := safeRemove(p); e != nil {
-				fails = append(fails, e.Error())
-			}
-		}
+		_, f := purgeOne(filepath.Join(root, it.Dir), it.ID, snaps)
+		fails = append(fails, f...)
 		deleted = append(deleted, it.ID)
 		n++
 	}
@@ -203,21 +213,17 @@ func purgeSessions(items []item) (n, spared int, notes []string, err error) {
 	return
 }
 
-// solder : lignes d'history.jsonl, collages et instantanés de shell des sessions effacées. Un collage ou
-// un instantané ne part que si plus rien ne le cite (deux sessions peuvent partager le même contenu)
-// et s'il n'est pas tout frais.
-func solder(deleted []string, snaps map[string]bool) []string {
+// pruneHistory retire d'history.jsonl les lignes de ces sessions. Renvoie leur nombre, les hachages de collage
+// qu'elles citaient, les lignes conservées et d'éventuelles remarques.
+func pruneHistory(deleted []string) (removed int, hashes map[string]bool, kept [][]byte, notes []string) {
 	cfg := cfgDir()
-	var notes []string
 	hist := filepath.Join(cfg, "history.jsonl")
-	hashes := map[string]bool{}
-	var kept [][]byte // lignes d'history.jsonl restantes
+	hashes = map[string]bool{}
 
 	pats := make([][]byte, len(deleted))
 	for i, id := range deleted {
 		pats[i] = []byte(`"sessionId":"` + id + `"`)
 	}
-	removed := 0
 	st0, _ := os.Stat(hist) // pour détecter une session ouverte qui y ajouterait une ligne pendant la réécriture
 	if b, e := os.ReadFile(hist); e == nil && len(b) > 0 {
 		for _, ln := range bytes.SplitAfter(b, []byte("\n")) {
@@ -258,6 +264,15 @@ func solder(deleted []string, snaps map[string]bool) []string {
 			}
 		}
 	}
+	return
+}
+
+// solder : lignes d'history.jsonl, collages et instantanés de shell des sessions effacées. Un collage ou
+// un instantané ne part que si plus rien ne le cite (deux sessions peuvent partager le même contenu)
+// et s'il n'est pas tout frais.
+func solder(deleted []string, snaps map[string]bool) []string {
+	cfg := cfgDir()
+	removed, hashes, kept, notes := pruneHistory(deleted)
 	if removed > 0 {
 		notes = append(notes, fmt.Sprintf("  history.jsonl   : %d ligne(s) de prompt retirée(s)", removed))
 	}

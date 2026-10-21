@@ -1,8 +1,6 @@
 package main
 
-// Réouverture de sessions dans un terminal.
-// Unix : on délègue à bin/gld-matin (qui sait détecter tmux, kitty, gnome-terminal…).
-// Windows : voir open_windows.go (claude est lancé directement, jamais via cmd.exe).
+// Sessions à rouvrir dans un terminal (les onglets eux-mêmes : term.go, matin.go).
 
 import (
 	"os"

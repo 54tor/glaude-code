@@ -70,10 +70,13 @@ func liveTabs() []TabSession {
 }
 
 func loadTabs() []TabSave {
+	b, _ := os.ReadFile(tabsFile())
+	return readTabs(b)
+}
+
+func readTabs(b []byte) []TabSave {
 	t := []TabSave{}
-	if b, err := os.ReadFile(tabsFile()); err == nil {
-		json.Unmarshal(b, &t)
-	}
+	json.Unmarshal(b, &t)
 	return t
 }
 

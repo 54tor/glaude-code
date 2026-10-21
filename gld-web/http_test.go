@@ -3,7 +3,9 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -25,7 +27,7 @@ var (
 const testHost = "gld.test"
 
 // Faux claude : `agents --json` renvoie $FAKE_AGENTS ; un chat (stream-json) renvoie $FAKE_CHAT et $FAKE_ERR,
-// code $FAKE_RC ; sinon (brouillon, --output-format json) $FAKE_DRAFT, ou la 1re ligne de stdin si FAKE_DRAFT=stdin. Faux gld-matin : répète ses arguments.
+// code $FAKE_RC ; sinon (brouillon, --output-format json) $FAKE_DRAFT, ou la 1re ligne de stdin si FAKE_DRAFT=stdin.
 const fakeClaude = `#!/bin/sh
 case "$1" in agents) printf '%s\n' "$FAKE_AGENTS"; exit 0;; esac
 for a; do
@@ -34,10 +36,15 @@ done
 if [ "$FAKE_DRAFT" = stdin ]; then IFS= read -r l; printf '{"result":"%s"}\n' "$l"; exit 0; fi
 printf '%s\n' "$FAKE_DRAFT"
 `
-const fakeMatin = `#!/bin/sh
-echo "gld-matin $*"
-exit ${FAKE_MATIN_RC:-0}
-`
+
+// fakeMatin remplace cliMatin : répète ses arguments, échoue si $FAKE_MATIN_RC n'est pas 0.
+func fakeMatin(ctx context.Context, args ...string) (string, error) {
+	var err error
+	if rc := os.Getenv("FAKE_MATIN_RC"); rc != "" && rc != "0" {
+		err = errors.New("code " + rc)
+	}
+	return "gld-matin " + strings.Join(args, " ") + "\n", err
+}
 
 // web : une config Claude avec une session (id1) dans un projet qui existe, les vrais appels à claude
 // (vers les faux ci-dessus) et le serveur complet derrière ses gardes.
@@ -48,7 +55,9 @@ func web(t *testing.T) (h http.Handler, cfg, proj string) {
 	bin := filepath.Join(home, ".local", "bin")
 	os.MkdirAll(bin, 0o755)
 	os.WriteFile(filepath.Join(bin, "claude"), []byte(fakeClaude), 0o755)
-	os.WriteFile(filepath.Join(bin, "gld-matin"), []byte(fakeMatin), 0o755)
+	realMatin := matin
+	matin = fakeMatin
+	t.Cleanup(func() { matin = realMatin })
 	t.Setenv("PATH", t.TempDir())
 	t.Setenv("FAKE_AGENTS", "[]")
 	t.Setenv("GLD_WEB_SNIPPETS", "")
@@ -273,13 +282,6 @@ func TestHTTPLancements(t *testing.T) {
 	t.Setenv("FAKE_AGENTS", "illisible")
 	ok(t, h, "/new-session", `{"dir":"-p","id":"`+id1+`","prompt":"suite"}`, true, "gld-matin")
 	t.Setenv("FAKE_AGENTS", "[]")
-	// gld-matin introuvable : l'échec dit pourquoi au lieu d'un message vide.
-	matinBin := filepath.Join(os.Getenv("HOME"), ".local", "bin", "gld-matin")
-	os.Rename(matinBin, matinBin+".absent")
-	ok(t, h, "/new-session", `{"dir":"-p","id":"`+id1+`","prompt":"suite"}`, false, "gld-matin : exec")
-	ok(t, h, "/open", `{"dir":"-p"}`, false, "gld-matin : exec")
-	os.Rename(matinBin+".absent", matinBin)
-
 	// Fusion de mémoire : prompt seul, ou lancé dans une nouvelle session.
 	put(t, filepath.Join(cfg, "projects", "-p", "memory", "a.md"), "a", old)
 	put(t, filepath.Join(cfg, "projects", "-p", "memory", "b.md"), "b", old)
