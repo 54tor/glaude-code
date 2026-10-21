@@ -349,13 +349,13 @@ function TerminalPanel({ id }: { id: string }) {
       {prompt && (
         <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm">
           <p className="mb-1.5 font-medium">Claude attend une réponse dans le terminal{prompt.question ? ` : ${prompt.question}` : ""}</p>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-col items-stretch gap-1.5">
             {prompt.options.map((o) => (
-              <Button key={o.label} size="sm" variant="outline" onClick={() => press(...o.keys)} title={`Touches : ${o.keys.join(", ")}`}>
-                {o.label.length > 60 ? o.label.slice(0, 59) + "…" : o.label}
+              <Button key={o.label} size="sm" variant="outline" className="h-auto min-h-8 justify-start py-1.5 text-left whitespace-normal" onClick={() => press(...o.keys)} title={`Touches : ${o.keys.join(", ")}`}>
+                {o.label}
               </Button>
             ))}
-            <Button size="sm" variant="ghost" onClick={() => press("Escape")}>
+            <Button size="sm" variant="ghost" className="justify-start" onClick={() => press("Escape")}>
               Échap
             </Button>
           </div>
