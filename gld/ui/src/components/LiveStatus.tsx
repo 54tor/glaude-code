@@ -8,14 +8,17 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 
 const secs = (n: number) => (n < 60 ? `${Math.max(0, Math.round(n))} s` : n < 3600 ? `${Math.floor(n / 60)} min ${Math.round(n % 60)} s` : `${Math.floor(n / 3600)} h ${Math.floor((n % 3600) / 60)} min`)
 
-// Bande d'état de la session affichée : ce que Claude fait en ce moment (réflexion, outil, attente) et un bouton « Stats » qui ouvre
+// État de la session affichée (relu toutes les 2 s tant qu'elle est ouverte) : useLive le lit, LiveBar montre ce que Claude fait,
+// LiveStats (dans la barre d'outils) le contexte, les tokens et le bouton « Stats ». Ancien résumé : : ce que Claude fait en ce moment (réflexion, outil, attente) et un bouton « Stats » qui ouvre
 // la consommation de tokens et les sous-agents dans une fenêtre. Relu toutes les 2 s tant que la session est ouverte (fichiers
 // locaux seulement), une seule fois sinon.
-export function LiveStatus({ dir, id, open, tok }: { dir: string; id: string; open: boolean; tok: Tokens }) {
+export type Live = { st: LiveState | null; now: number; open: boolean }
+
+export function useLive(dir: string, id: string, open: boolean): Live {
   const [st, setSt] = useState<LiveState | null>(null)
   const [now, setNow] = useState(() => Date.now() / 1000)
-  const [stats, setStats] = useState(false)
   useEffect(() => {
+    if (!id) return
     let live = true
     const load = () => api.sessionLive(dir, id).then((r) => live && (setSt(r), setNow(Date.now() / 1000)), () => {})
     load()
@@ -31,11 +34,17 @@ export function LiveStatus({ dir, id, open, tok }: { dir: string; id: string; op
     const t = setInterval(() => setNow(Date.now() / 1000), 1000) // le chrono avance entre deux relevés
     return () => clearInterval(t)
   }, [open])
+  return { st, now, open }
+}
+
+// Ce que Claude fait en ce moment. `open` (la liste des sessions ouvertes, mise à jour dès la fermeture) prime sur le relevé :
+// le processus met un instant à finir après SIGTERM.
+export function LiveBar({ live: { st, now, open } }: { live: Live }) {
   if (!st) return null
-  const running = st.subs.filter((s) => s.running).length
+  const isOpen = open && st.open
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b bg-muted/20 px-3 py-1.5 text-xs md:px-6">
-      {st.open ? (
+      {isOpen ? (
         <span className={cn("flex min-w-0 items-center gap-1.5 font-medium", st.thinking ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>
           {st.thinking ? <Loader2 className="size-3.5 shrink-0 animate-spin" /> : <span className="size-1.5 shrink-0 rounded-full bg-current" />}
           <span className="truncate" title={st.activity}>
@@ -46,11 +55,22 @@ export function LiveStatus({ dir, id, open, tok }: { dir: string; id: string; op
       ) : (
         <span className="text-muted-foreground">Session fermée</span>
       )}
-      <span className="ml-auto flex items-center gap-x-3 text-muted-foreground tabular-nums">
+    </div>
+  )
+}
+
+// Contexte, tokens et sous-agents sur une ligne, le détail dans une fenêtre.
+export function LiveStats({ live: { st }, tok }: { live: Live; tok: Tokens }) {
+  const [stats, setStats] = useState(false)
+  if (!st) return null
+  const running = st.subs.filter((s) => s.running).length
+  return (
+    <>
+      <span className="ml-auto flex items-center gap-x-3 px-1 text-xs text-muted-foreground tabular-nums">
         {st.context > 0 && <span title="Contexte envoyé au dernier appel">ctx {compact(st.context)}</span>}
         <span title="Tokens traités (hors cache lu)">{compact(tokTotal(tok))} tok</span>
       </span>
-      <Button size="xs" variant="ghost" onClick={() => setStats(true)} title="Tokens consommés, contexte et sous-agents">
+      <Button size="sm" variant="ghost" onClick={() => setStats(true)} title="Tokens consommés, contexte et sous-agents">
         <BarChart3 /> Stats
         {st.subs.length > 0 && (
           <span className="flex items-center gap-1 text-muted-foreground">
@@ -120,6 +140,6 @@ export function LiveStatus({ dir, id, open, tok }: { dir: string; id: string; op
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   )
 }
