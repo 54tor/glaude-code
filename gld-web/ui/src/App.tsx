@@ -273,7 +273,7 @@ export default function App() {
           ) : route.kind === "skills" ? (
             <Skills sel={route.key} home={home} q={qt} onPick={(key) => go({ kind: "skills", key })} onAsk={setAsk} />
           ) : route.kind === "config" ? (
-            <Config home={home} />
+            <Config home={home} tab={route.tab} onTab={(tab) => go({ kind: "config", tab })} />
           ) : route.kind === "memory" ? (
             <Memory sel={route.key} home={home} q={qt} onPick={(key) => go({ kind: "memory", key })} onAsk={setAsk} args={args} />
           ) : route.kind === "snippets" ? (
