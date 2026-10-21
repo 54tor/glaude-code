@@ -1,8 +1,12 @@
 package main
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 const sid = "11111111-2222-3333-4444-555555555555"
@@ -62,5 +66,40 @@ func TestEnvoiRefuse(t *testing.T) {
 	}
 	if err := sendToSession("99999999-2222-3333-4444-555555555555", "salut"); err == nil {
 		t.Error("session inconnue acceptée")
+	}
+}
+
+// Essai réel avec tmux (ignoré s'il est absent) : un panneau qui écrit son entrée dans un fichier ; la session « claude » est
+// simulée par un processus fils du panneau.
+func TestEnvoiTmuxReel(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux absent")
+	}
+	dir := t.TempDir()
+	t.Setenv("TMUX_TMPDIR", dir)
+	t.Setenv("TMUX", "")
+	out := filepath.Join(dir, "recu.txt")
+	if b, err := exec.Command("tmux", "new-session", "-d", "-s", "t", "-x", "200", "-y", "50", "sh -c 'cat > "+out+"'").CombinedOutput(); err != nil {
+		t.Skip("tmux inutilisable ici : ", string(b))
+	}
+	defer exec.Command("tmux", "kill-server").Run()
+	panes, err := tmuxPanes()
+	if err != nil || len(panes) != 1 {
+		t.Fatal(panes, err)
+	}
+	var panePid int
+	for p := range panes {
+		panePid = p
+	}
+	oldPid := sessionPIDs
+	defer func() { sessionPIDs = oldPid }()
+	sessionPIDs = func() map[string]int { return map[string]int{sid: panePid} }
+	if err := sendToSession(sid, "bonjour\nsuite avec accents é"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	b, _ := os.ReadFile(out)
+	if !strings.Contains(string(b), "bonjour") || !strings.Contains(string(b), "suite avec accents é") {
+		t.Fatalf("reçu : %q", b)
 	}
 }
