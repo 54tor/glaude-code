@@ -133,7 +133,7 @@ func TestSuggestionsPermissions(t *testing.T) {
 	var b strings.Builder
 	for i := 0; i < 4; i++ {
 		b.WriteString(line("git status") + line("ls -la /tmp") + line("rm -rf x") + line("go test ./...") + line("cat a | grep b"))
-		b.WriteString(line("sed -n 1,5p f") + line("find . -name x") + line("env A=1 ls") + line("git -c core.pager=x log") + line("go build ./..."))
+		b.WriteString(line("git log --oneline") + line("sed -n 1,5p f") + line("find . -name x") + line("env A=1 ls") + line("git -c core.pager=x log") + line("go build ./..."))
 	}
 	b.WriteString(line("git status") + line("make build"))
 	put(t, filepath.Join(cfg, "projects", "-p", id1+".jsonl"), b.String(), old)
@@ -146,6 +146,10 @@ func TestSuggestionsPermissions(t *testing.T) {
 	}
 	if s := got["Bash(ls:*)"]; s.Count != 4 || !s.ReadOnly {
 		t.Fatalf("ls : %+v", got)
+	}
+	// « git log » peut lancer un programme (--ext-diff, --textconv) : proposée, mais pas « lecture seule »
+	if s := got["Bash(git log:*)"]; s.Count != 4 || s.ReadOnly {
+		t.Fatalf("git log : %+v", s)
 	}
 	// « go build » exécute du code (cgo, générateurs) : proposée, mais pas « lecture seule »
 	if s := got["Bash(go build:*)"]; s.Count != 4 || s.ReadOnly {
