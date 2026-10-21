@@ -29,7 +29,7 @@ var (
 	// ni « git show » (--output écrit un fichier, --ext-diff et --textconv lancent un programme), ni « file » (-C écrit), ni « date » (-s),
 	// ni les tests, builds et scripts (ils exécutent du code) : ceux-là sont « à vérifier ».
 	readOnlyCmds = map[string]bool{"ls": true, "cat": true, "head": true, "tail": true, "wc": true, "grep": true, "pwd": true, "stat": true, "diff": true, "which": true, "git status": true}
-	twoWords = map[string]bool{"git": true, "go": true, "npm": true, "make": true, "cargo": true, "gh": true, "systemctl": true, "npx": true, "pnpm": true, "yarn": true}
+	twoWords     = map[string]bool{"git": true, "go": true, "npm": true, "make": true, "cargo": true, "gh": true, "systemctl": true, "npx": true, "pnpm": true, "yarn": true}
 )
 
 // bashPrefix : le préfixe sur lequel bâtir une règle pour une commande simple ; "" si elle est composée (&&, |, redirection…).
