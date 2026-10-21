@@ -255,3 +255,60 @@ func TestEditionJSONBrut(t *testing.T) {
 		t.Fatalf("%q", b)
 	}
 }
+
+func TestImportPermissions(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	p := filepath.Join(cfg, "settings.json")
+	orig := "{\n  \"model\": \"opus\",\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls:*)\"\n    ],\n    \"defaultMode\": \"auto\"\n  }\n}\n"
+	put(t, p, orig, old)
+	frag := `{"permissions":{"allow":["Bash(ls:*)","Bash(git status:*)"," Bash(git status:*) "],"deny":["Bash(rm:*)"],"defaultMode":"bypassPermissions"}}`
+
+	// fusion : ce qui manque est ajouté, le reste (autre clé, defaultMode) ne bouge pas, defaultMode importé est ignoré
+	_, after, _, sum, err := permImport("u", frag, "merge", true)
+	if err != nil || sum != "2 règle(s) ajoutée(s), 0 retirée(s)" {
+		t.Fatal(sum, err)
+	}
+	for _, want := range []string{`"Bash(git status:*)"`, `"deny"`, `"Bash(rm:*)"`, `"defaultMode": "auto"`, `"model": "opus"`} {
+		if !strings.Contains(after, want) {
+			t.Errorf("manque %s dans :\n%s", want, after)
+		}
+	}
+	if strings.Contains(after, "bypassPermissions") {
+		t.Fatal("defaultMode importé")
+	}
+	if b, _ := os.ReadFile(p); string(b) != orig {
+		t.Fatal("l'aperçu a écrit")
+	}
+	if _, _, _, _, err := permImport("u", frag, "merge", false); err != nil {
+		t.Fatal(err)
+	}
+	if len(listBackups()) != 1 {
+		t.Fatal("pas de sauvegarde")
+	}
+	// remplacement : les listes présentes dans le fragment sont remplacées, les autres gardées
+	_, _, _, sum, err = permImport("u", `{"allow":["Bash(cat:*)"]}`, "replace", false)
+	if err != nil || sum != "1 règle(s) ajoutée(s), 2 retirée(s)" {
+		t.Fatal(sum, err)
+	}
+	if b, _ := os.ReadFile(p); strings.Contains(string(b), "git status") || !strings.Contains(string(b), "Bash(cat:*)") || !strings.Contains(string(b), "Bash(rm:*)") {
+		t.Fatalf("remplacement :\n%s", b)
+	}
+	// une liste importée vide retire la catégorie ; un avertissement de santé accompagne une règle trop large
+	_, _, warns, _, err := permImport("u", `{"allow":["Bash"],"deny":[]}`, "replace", true)
+	if err != nil || len(warns) == 0 {
+		t.Fatalf("avertissement attendu : %+v %v", warns, err)
+	}
+	// refus
+	for _, bad := range []string{``, `[1]`, `{"permissions":1}`, `{"autre":1}`, `{"allow":"x"}`, `{"allow":[1]}`, `{"allow":["a\nb"]}`, `{"allow":[""]}`, `pas du json`} {
+		if _, _, _, _, err := permImport("u", bad, "merge", true); err == nil {
+			t.Errorf("import accepté : %q", bad)
+		}
+	}
+	if _, _, _, _, err := permImport("u", frag, "autre", true); err == nil {
+		t.Fatal("mode inconnu accepté")
+	}
+	if _, _, _, _, err := permImport("p/-inconnu", frag, "merge", true); err == nil {
+		t.Fatal("projet inconnu accepté")
+	}
+}

@@ -101,6 +101,7 @@ func handler() http.Handler {
 	routesTabs(mux)
 	routesConfig(mux)
 	routesConfigRaw(mux)
+	routesConfigPerm(mux)
 	// Conversation dans le navigateur (chat.go).
 	mux.HandleFunc("POST /chat", chatHandler)
 	mux.HandleFunc("POST /chat-stop", chatStopHandler)
