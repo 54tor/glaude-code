@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Choose } from "./Choose"
 import { useConfigEdit } from "./configEdit"
 import { HealthTab, HooksTab, McpTab, PrecedenceTab } from "./ConfigTabs1"
+import { RawTab } from "./ConfigRaw"
 import { BackupsTab, PermsTab, SettingsTab } from "./ConfigTabs2"
 
 // Configuration de Claude Code : réglages utilisateur, de projet et locaux. Lecture (précédence, santé, hooks, MCP) et
@@ -18,7 +19,7 @@ export function Config({ home }: { home: string }) {
   useEffect(() => {
     reload()
   }, [reload])
-  const { propose, dialog } = useConfigEdit(reload)
+  const { propose, proposeRaw, dialog } = useConfigEdit(reload)
   if (!ov) return <Skeleton className="m-6 h-40" />
 
   const label = (id: string) =>
@@ -52,6 +53,7 @@ export function Config({ home }: { home: string }) {
             <TabsTrigger value="mcp">MCP</TabsTrigger>
             <TabsTrigger value="permissions">Permissions</TabsTrigger>
             <TabsTrigger value="reglages">Réglages</TabsTrigger>
+            <TabsTrigger value="json">JSON</TabsTrigger>
             <TabsTrigger value="sauvegardes">Sauvegardes ({ov.backups.length})</TabsTrigger>
           </TabsList>
           <TabsContent value="sante">
@@ -73,6 +75,10 @@ export function Config({ home }: { home: string }) {
           <TabsContent value="reglages">
             {fileSelect}
             <SettingsTab file={fileId} doc={doc} plugins={ov.plugins} propose={propose} />
+          </TabsContent>
+          <TabsContent value="json">
+            {fileSelect}
+            <RawTab file={fileId} version={ov.backups.length} proposeRaw={proposeRaw} />
           </TabsContent>
           <TabsContent value="sauvegardes">
             <BackupsTab backups={ov.backups} onRestored={reload} label={label} />
