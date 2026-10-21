@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useSearchParams } from "wouter"
 import { type Group, type Session, type VGroup } from "@/lib/api"
 import { body } from "@/lib/commands"
@@ -17,19 +17,21 @@ import { AUTO, buildView, byDate, groupKey, HOT, plural, WEEK } from "@/lib/sess
 import { Skeleton } from "@/components/ui/skeleton"
 import { ActionsCtx, type Row } from "@/components/actions"
 import { Confirm, type Ask } from "@/components/Confirm"
-import { Conversation } from "@/components/Conversation"
 import { DirPicker, type Pick } from "@/components/DirPicker"
 import { PageHeader } from "@/components/PageHeader"
 import { Prompt, type Ask as PromptAsk } from "@/components/Prompt"
 import { SessionSelectionBar } from "@/components/SessionSelectionBar"
 import { SessionsPane } from "@/components/SessionsPane"
 import { Sidebar } from "@/components/Sidebar"
-import { Snippets } from "@/components/Snippets"
-import { Config } from "@/components/Config"
-import { Skills } from "@/components/Skills"
-import { Memory } from "@/components/Memory"
-import { Tabs } from "@/components/Tabs"
 import { Compose, type ComposeAsk } from "@/components/Compose"
+
+// Les grandes vues se chargent à la demande : le premier chargement ne porte que la liste des sessions.
+const Conversation = lazy(() => import("@/components/Conversation").then((m) => ({ default: m.Conversation })))
+const Snippets = lazy(() => import("@/components/Snippets").then((m) => ({ default: m.Snippets })))
+const Config = lazy(() => import("@/components/Config").then((m) => ({ default: m.Config })))
+const Skills = lazy(() => import("@/components/Skills").then((m) => ({ default: m.Skills })))
+const Memory = lazy(() => import("@/components/Memory").then((m) => ({ default: m.Memory })))
+const Tabs = lazy(() => import("@/components/Tabs").then((m) => ({ default: m.Tabs })))
 
 // Application : état de navigation (route, recherche, sélection, réglages) et assemblage. Les données viennent de
 // useAppData, les actions de useAppActions, les raccourcis de useShortcuts.
@@ -268,6 +270,7 @@ export default function App() {
             groupActs={groupActs}
           />
 
+          <Suspense fallback={<Skeleton className="m-6 h-32" />}>
           {route.kind === "tabs" ? (
             <Tabs args={args} onAsk={setAsk} onPrompt={setPrompt} />
           ) : route.kind === "skills" ? (
@@ -318,6 +321,8 @@ export default function App() {
             />
           )}
 
+          </Suspense>
+
           {selected.length > 0 && (
             <SessionSelectionBar
               selected={selected}
@@ -328,7 +333,9 @@ export default function App() {
         </main>
       </div>
 
-      <Conversation row={reader} onClose={closeReader} args={args} choice={choice} />
+      <Suspense fallback={null}>
+        <Conversation row={reader} onClose={closeReader} args={args} choice={choice} />
+      </Suspense>
       <DirPicker pick={picker} home={home} />
       <Confirm ask={ask} onClose={() => setAsk(null)} />
       <Prompt ask={prompt} onClose={() => setPrompt(null)} />

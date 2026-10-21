@@ -123,7 +123,7 @@ function Body({ a, updating, onRefresh }: { a: Account; updating: boolean; onRef
           </ul>
         )}
         <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          {a.limitsAt ? `Relevé ${delay(a.limitsAt - now)}` : "Aucun relevé"} · mis à jour automatiquement (commande /usage, sans coût)
+          {a.limitsAt ? `Relevé ${delay(a.limitsAt - now)}` : "Aucun relevé"}
           <Button size="xs" variant="outline" onClick={onRefresh} disabled={updating}>
             {updating ? "Mise à jour…" : "Actualiser"}
           </Button>
