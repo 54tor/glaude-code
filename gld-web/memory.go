@@ -38,9 +38,11 @@ type MemProject struct {
 const memMax = 1 << 20
 
 var (
-	mdName       = regexp.MustCompile(`^[^./\\][^/\\]*\.md$`)
-	ruleName     = regexp.MustCompile(`^[^./\\][^/\\]*\.md(\.off)?$`) // une règle désactivée garde son nom + « .off »
-	projectFiles = []string{"CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md", "AGENTS.md"}
+	mdName   = regexp.MustCompile(`^[^./\\][^/\\]*\.md$`)
+	ruleName = regexp.MustCompile(`^[^./\\][^/\\]*\.md(\.off)?$`) // une règle désactivée garde son nom + « .off »
+	// Fichiers du dossier de travail d'un projet affichés dans la zone Mémoire. Seuls les CLAUDE.md sont chargés par Claude Code ;
+	// les autres (AGENTS.md, CONVENTIONS.md, PLAN.md, TOOLING.md, README.md) sont de la documentation du projet, qu'on lit et édite ici.
+	projectFiles = []string{"CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md", "AGENTS.md", "CONVENTIONS.md", "PLAN.md", "TOOLING.md", "README.md"}
 )
 
 // globalClaude : ce chemin est le CLAUDE.md global (~/.claude/CLAUDE.md), même atteint comme fichier d'un projet

@@ -180,9 +180,12 @@ func TestMemory(t *testing.T) {
 	put(t, filepath.Join(cfg, "projects", "-p", "memory", "a.md"), "entrée a", old)
 	put(t, filepath.Join(proj, "CLAUDE.md"), "projet", old)
 	put(t, filepath.Join(proj, "AGENTS.md"), "agents", old)
+	for _, n := range []string{"CONVENTIONS.md", "PLAN.md", "TOOLING.md", "README.md"} {
+		put(t, filepath.Join(proj, n), "@quelquun et @fichier-inexistant.md\n", old)
+	}
 
 	g, ps, _ := memList()
-	if len(g) != 2 || len(ps) != 1 || len(ps[0].Files) != 4 || ps[0].Project != proj {
+	if len(g) != 2 || len(ps) != 1 || len(ps[0].Files) != 8 || ps[0].Project != proj {
 		t.Fatalf("liste : %+v %+v", g, ps)
 	}
 	if s, err := memRead("p/-p/CLAUDE.md"); err != nil || s != "projet" {

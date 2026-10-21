@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -88,10 +87,8 @@ func knownTokens(text string) (int, bool) {
 var tokenRun = func(text string) (int, string, float64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	cmd := withPath(exec.CommandContext(ctx, "claude", "-p", "--model", "haiku", "--tools", "", "--disable-slash-commands",
-		"--strict-mcp-config", "--setting-sources", "", "--no-session-persistence", "--system-prompt", tokenSystem, "--output-format", "json"))
+	cmd := helperCmd(ctx, "haiku", tokenSystem)
 	cmd.Stdin = strings.NewReader(text)
-	cmd.Dir = workDir()
 	out, err := cmd.Output()
 	var r struct {
 		IsError    bool                       `json:"is_error"`

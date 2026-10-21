@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -53,5 +54,20 @@ func TestHookLoaded(t *testing.T) {
 func TestSousCommandeInterneInconnue(t *testing.T) {
 	if code, ok := dispatchCLI([]string{"gld-web", "_nope"}); !ok || code != 2 {
 		t.Fatal(code, ok)
+	}
+}
+
+// Les appels d'aide à claude (brouillons, tokens, analyses) n'enregistrent jamais de session, n'ont aucun outil
+// ni réglage, et tournent dans un dossier privé : un oubli ferait apparaître des sessions parasites dans la liste.
+func TestAppelsAideSansSession(t *testing.T) {
+	cmd := helperCmd(context.Background(), "haiku", "ok")
+	args := strings.Join(cmd.Args, " ")
+	for _, want := range []string{"-p", "--no-session-persistence", "--strict-mcp-config", "--disable-slash-commands", "--tools "} {
+		if !strings.Contains(args, want) {
+			t.Errorf("option manquante %q dans : %s", want, args)
+		}
+	}
+	if cmd.Dir != workDir() || cmd.Dir == os.TempDir() {
+		t.Fatalf("dossier de travail : %q", cmd.Dir)
 	}
 }
