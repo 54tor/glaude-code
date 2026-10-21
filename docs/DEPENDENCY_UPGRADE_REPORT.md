@@ -1,6 +1,6 @@
 # Dépendances — 2026-10-21 (2e passage)
 
-## Go (`gld/go.mod`, `go 1.26.0`, toolchain 1.27.1)
+## Go (le module Go, `go 1.26.0`, toolchain 1.27.1)
 Directes : `doublestar/v4` 4.10.3, `yaml.v3` 3.0.1, `modernc.org/sqlite`. `govulncheck ./...` : aucune vulnérabilité (avant et après).
 
 | Module | Avant | Après | Décision |
@@ -10,9 +10,9 @@ Directes : `doublestar/v4` 4.10.3, `yaml.v3` 3.0.1, `modernc.org/sqlite`. `govul
 | go-humanize, ncruces/go-strftime, x/sys | 1.0.1, 1.0.0, 0.48.0 | 1.1.0, 1.1.0, 0.49.0 | tirés par sqlite |
 | autres lignes de `go list -m -u all` (x/tools, x/mod, x/sync, pprof, check.v1, modernc cc/ccgo/gc) | — | — | NO-CHANGE : dépendances d'outils, pas du binaire |
 
-`go mod tidy` a aussi ajouté ~30 lignes à `go.sum` (graphe des tests des dépendances) : sans effet sur le binaire.
+`go mod tidy` a aussi ajouté ~30 lignes au module Go (graphe des tests des dépendances) : sans effet sur le binaire.
 
-## npm (`gld/ui`)
+## npm
 | Paquet | Avant | Après | Décision |
 |---|---|---|---|
 | vite | 8.3.4 | **8.3.5** | D-006, appliqué (la contrainte `^8` ne change pas) |
@@ -24,7 +24,7 @@ Directes : `doublestar/v4` 4.10.3, `yaml.v3` 3.0.1, `modernc.org/sqlite`. `govul
 `npm audit --omit=dev` : 0 vulnérabilité. Aucune note de version de sqlite/vite/lucide n'a pu être obtenue via Context7 : la validation repose sur les tests, pas sur le changelog.
 
 ## Commandes réellement exécutées
-`go list -m -u all`, `go mod tidy -diff`, `go get modernc.org/sqlite@v1.61.0` puis `go mod tidy` (sur une copie isolée, `go.mod` et `go.sum` recopiés ensuite), `govulncheck ./...`, `staticcheck ./...` (linux, windows), `go vet` (linux, windows), `go test -race -count=1`, `npm outdated`, `npm audit --omit=dev`, `npm install vite@8.3.5 lucide-react@1.61.0`, `tsc --noEmit`, `eslint .`, `npm run build`.
+`go list -m -u all`, `go mod tidy -diff`, `go get modernc.org/sqlite@v1.61.0` puis `go mod tidy` (sur une copie isolée, le module Go et le module Go recopiés ensuite), `govulncheck ./...`, `staticcheck ./...` (linux, windows), `go vet` (linux, windows), `go test -race -count=1`, `npm outdated`, `npm audit --omit=dev`, `npm install vite@8.3.5 lucide-react@1.61.0`, `tsc --noEmit`, `eslint .`, `npm run build`.
 
 ## Résultats
 Tous verts après la montée (Go sur copie isolée à `HEAD` plus mes fichiers, à cause des fichiers en cours d'une autre session ; front dans le dépôt). Reste à valider côté utilisateur : `make install`, puis un tour dans le navigateur (la recherche utilise SQLite).
