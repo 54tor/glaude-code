@@ -36,7 +36,10 @@ func routesSessions(mux *http.ServeMux) {
 		writeJSON(w, 200, sessionLive(r.URL.Query().Get("dir"), r.URL.Query().Get("id")))
 	})
 	mux.HandleFunc("GET /account", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, accountInfo())
+		a := accountInfo()
+		// Relevé trop vieux : on le rafraîchit en arrière-plan (la page relit toutes les minutes) ; refresh=1 le force.
+		a.Refreshing = refreshUsage(a.LimitsAt, r.URL.Query().Get("refresh") == "1")
+		writeJSON(w, 200, a)
 	})
 	mux.HandleFunc("GET /session-send-info", func(w http.ResponseWriter, r *http.Request) {
 		ids, err := sendable()

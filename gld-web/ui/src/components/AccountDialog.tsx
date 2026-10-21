@@ -5,7 +5,6 @@ import { compact } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { ScrollArea } from "@/components/ui/scroll-area"
 
 const TIERS: Record<string, string> = {
   default_claude_max_20x: "Max 20x",
@@ -34,6 +33,7 @@ const Row = ({ k, children }: { k: string; children: React.ReactNode }) => (
 export function AccountButton() {
   const [a, setA] = useState<Account | null>(null)
   const [open, setOpen] = useState(false)
+  const [updating, setUpdating] = useState(false)
   useEffect(() => {
     let live = true
     const load = () => api.account().then((r) => live && setA(r), () => {})
@@ -44,6 +44,16 @@ export function AccountButton() {
       clearInterval(t)
     }
   }, [])
+  // Actualiser : le serveur lance « claude -p /usage » (local, sans coût) ; le relevé arrive quelques secondes plus tard.
+  const refresh = async () => {
+    setUpdating(true)
+    setA(await api.account(true))
+    for (const wait of [5000, 6000, 8000]) {
+      await new Promise((r) => setTimeout(r, wait))
+      setA(await api.account())
+    }
+    setUpdating(false)
+  }
   const top = a?.limits.filter((l) => l.key === "five_hour" || l.key === "seven_day").sort((x, y) => y.percent - x.percent)[0]
   return (
     <>
@@ -56,24 +66,23 @@ export function AccountButton() {
         )}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="flex max-h-[90vh] flex-col gap-0 p-0 sm:max-w-3xl">
+        <DialogContent className="flex max-h-[90vh] min-w-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
           <DialogHeader className="border-b px-6 py-4">
             <DialogTitle>Compte</DialogTitle>
             <DialogDescription className="sr-only">Plan, limites d'usage, activité et tokens par modèle</DialogDescription>
           </DialogHeader>
-          <ScrollArea className="min-h-0 flex-1">
-            {a ? <Body a={a} /> : <p className="p-6 text-sm text-muted-foreground">Chargement…</p>}
-          </ScrollArea>
+          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+            {a ? <Body a={a} updating={updating || !!a.refreshing} onRefresh={refresh} /> : <p className="p-6 text-sm text-muted-foreground">Chargement…</p>}
+          </div>
         </DialogContent>
       </Dialog>
     </>
   )
 }
 
-function Body({ a }: { a: Account }) {
+function Body({ a, updating, onRefresh }: { a: Account; updating: boolean; onRefresh: () => void }) {
   const [now] = useState(() => Date.now() / 1000) // l'heure de l'ouverture : la fenêtre ne bouge pas toute seule
-  const days = [...a.days].reverse()
-  const dayTok = (t?: Record<string, number>) => Object.values(t ?? {}).reduce((n, v) => n + v, 0)
+  const days = a.days
   return (
     <div className="space-y-6 px-6 py-5">
       <section>
@@ -90,7 +99,7 @@ function Body({ a }: { a: Account }) {
       <section>
         <h3 className="mb-1 text-sm font-medium">Limites d'usage</h3>
         {a.limits.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Aucun relevé : Claude Code ne l'a pas encore enregistré. Tapez /usage dans une session.</p>
+          <p className="text-sm text-muted-foreground">Aucun relevé pour l'instant : il est demandé à Claude Code (un instant).</p>
         ) : (
           <ul className="space-y-2">
             {a.limits.map((l) => (
@@ -113,44 +122,27 @@ function Body({ a }: { a: Account }) {
             ))}
           </ul>
         )}
-        {a.limitsAt ? <p className="mt-2 text-xs text-muted-foreground">Dernier relevé de Claude Code {delay(a.limitsAt - now)} : il se met à jour quand une session le demande (/usage).</p> : null}
+        <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {a.limitsAt ? `Relevé ${delay(a.limitsAt - now)}` : "Aucun relevé"} · mis à jour automatiquement (commande /usage, sans coût)
+          <Button size="xs" variant="outline" onClick={onRefresh} disabled={updating}>
+            {updating ? "Mise à jour…" : "Actualiser"}
+          </Button>
+        </p>
       </section>
 
       <section>
         <h3 className="mb-1 text-sm font-medium">Activité</h3>
         <Row k="Sessions">{a.totalSessions.toLocaleString("fr-FR")}{a.firstSession ? ` depuis le ${new Date(a.firstSession).toLocaleDateString("fr-FR", { dateStyle: "long" })}` : ""}</Row>
         <Row k="Messages">{a.totalMessages.toLocaleString("fr-FR")}</Row>
-        {days.length > 0 && (
-          <table className="mt-2 w-full text-xs">
-            <thead className="text-left text-muted-foreground">
-              <tr>
-                <th className="py-1 font-normal">Jour</th>
-                <th className="font-normal">Messages</th>
-                <th className="font-normal">Sessions</th>
-                <th className="font-normal">Outils</th>
-                <th className="font-normal">Tokens</th>
-              </tr>
-            </thead>
-            <tbody>
-              {days.map((d) => (
-                <tr key={d.date} className="border-t">
-                  <td className="py-1">{new Date(d.date).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })}</td>
-                  <td className="tabular-nums">{d.messages.toLocaleString("fr-FR")}</td>
-                  <td className="tabular-nums">{d.sessions}</td>
-                  <td className="tabular-nums">{d.tools.toLocaleString("fr-FR")}</td>
-                  <td className="tabular-nums">{dayTok(d.tokens) ? compact(dayTok(d.tokens)) : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        {days.length > 0 && <DayChart days={a.days} />}
         {a.statsAt && <p className="mt-1 text-xs text-muted-foreground">Statistiques calculées par Claude Code jusqu'au {new Date(a.statsAt).toLocaleDateString("fr-FR", { dateStyle: "long" })}.</p>}
       </section>
 
       {a.models.length > 0 && (
         <section>
           <h3 className="mb-1 text-sm font-medium">Tokens par modèle (depuis le début)</h3>
-          <table className="w-full text-xs">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[28rem] text-xs">
             <thead className="text-left text-muted-foreground">
               <tr>
                 <th className="py-1 font-normal">Modèle</th>
@@ -172,8 +164,61 @@ function Body({ a }: { a: Account }) {
               ))}
             </tbody>
           </table>
+          </div>
         </section>
       )}
+    </div>
+  )
+}
+
+const dayTok = (t?: Record<string, number>) => Object.values(t ?? {}).reduce((n, v) => n + v, 0)
+const METRICS = [
+  ["messages", "Messages", (d: Account["days"][number]) => d.messages],
+  ["tokens", "Tokens", (d: Account["days"][number]) => dayTok(d.tokens)],
+  ["tools", "Appels d'outils", (d: Account["days"][number]) => d.tools],
+  ["sessions", "Sessions", (d: Account["days"][number]) => d.sessions],
+] as const
+
+// Activité des derniers jours : une barre par jour, au choix messages, tokens, outils ou sessions ; le détail du jour au survol.
+function DayChart({ days }: { days: Account["days"] }) {
+  const [metric, setMetric] = useState<(typeof METRICS)[number][0]>("messages")
+  const [, label, value] = METRICS.find((m) => m[0] === metric)!
+  const max = Math.max(1, ...days.map(value))
+  return (
+    <div className="mt-2">
+      <div className="mb-1 flex flex-wrap items-center gap-1">
+        {METRICS.map(([k, l]) => (
+          <Button key={k} size="xs" variant={metric === k ? "secondary" : "ghost"} onClick={() => setMetric(k)} aria-pressed={metric === k}>
+            {l}
+          </Button>
+        ))}
+        <span className="ml-auto text-xs text-muted-foreground">
+          {days.length} derniers jours actifs · max {compact(max)}
+        </span>
+      </div>
+      <div className="flex h-32 items-end gap-1 border-b" role="img" aria-label={`${label} par jour`}>
+        {days.map((d) => {
+          const v = value(d)
+          const date = new Date(d.date)
+          return (
+            <div
+              key={d.date}
+              className="group relative flex h-full min-w-0 flex-1 flex-col justify-end"
+              title={`${date.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })} : ${d.messages.toLocaleString("fr-FR")} messages, ${d.sessions} sessions, ${d.tools.toLocaleString("fr-FR")} outils${dayTok(d.tokens) ? `, ${compact(dayTok(d.tokens))} tokens` : ""}`}
+            >
+              <span className="mb-0.5 text-center text-[10px] tabular-nums text-muted-foreground">{v ? compact(v) : ""}</span>
+              <div className="w-full rounded-t bg-primary/70 transition-colors group-hover:bg-primary" style={{ height: `${Math.max(v ? 2 : 0, (v / max) * 100)}%` }} />
+            </div>
+          )
+        })}
+      </div>
+      <div className="flex gap-1 pt-1">
+        {days.map((d) => (
+          <span key={d.date} className="min-w-0 flex-1 truncate text-center text-[10px] text-muted-foreground">
+            {new Date(d.date).getDate()}
+          </span>
+        ))}
+      </div>
     </div>
   )
 }

@@ -82,3 +82,36 @@ func TestCompte(t *testing.T) {
 }
 
 func jsonOf(v any) (string, error) { b, err := json.Marshal(v); return string(b), err }
+
+func TestRafraichirLesLimites(t *testing.T) {
+	reset := func() {
+		usageMu.Lock()
+		usageLast, usageBusy = time.Time{}, false
+		usageMu.Unlock()
+	}
+	old := usageStart
+	defer func() { usageStart = old; reset() }()
+	calls := make(chan struct{}, 4)
+	usageStart = func() error { calls <- struct{}{}; return nil }
+	reset()
+	fresh := float64(time.Now().Unix())
+	if refreshUsage(fresh, false) {
+		t.Fatal("relevé récent : rien à faire")
+	}
+	if !refreshUsage(fresh-3600, false) {
+		t.Fatal("relevé vieux d'une heure : doit partir")
+	}
+	select {
+	case <-calls:
+	case <-time.After(2 * time.Second):
+		t.Fatal("la commande n'a pas été lancée")
+	}
+	time.Sleep(50 * time.Millisecond) // la goroutine rend la main
+	if refreshUsage(fresh-3600, false) {
+		t.Fatal("deux lancements à moins d'une minute")
+	}
+	reset()
+	if !refreshUsage(fresh, true) {
+		t.Fatal("refresh forcé ignoré")
+	}
+}

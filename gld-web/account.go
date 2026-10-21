@@ -4,10 +4,14 @@ package main
 // des limites d'usage) et ~/.claude/stats-cache.json (activité). Aucun jeton ni identifiant interne n'est renvoyé.
 
 import (
+	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
+	"sync"
+	"time"
 )
 
 type UsageLimit struct {
@@ -39,7 +43,8 @@ type Account struct {
 	ExtraWhy     string       `json:"extraWhy,omitempty"`
 	Since        string       `json:"since,omitempty"`
 	Limits       []UsageLimit `json:"limits"`
-	LimitsAt     float64      `json:"limitsAt,omitempty"` // relevé des limites : secondes epoch
+	LimitsAt     float64      `json:"limitsAt,omitempty"`   // relevé des limites : secondes epoch
+	Refreshing   bool         `json:"refreshing,omitempty"` // une mise à jour du relevé vient de partir
 	TotalSess    int          `json:"totalSessions"`
 	TotalMsgs    int          `json:"totalMessages"`
 	FirstSession string       `json:"firstSession,omitempty"`
@@ -184,4 +189,47 @@ func limitRank(k string) int {
 		}
 	}
 	return 99
+}
+
+// Le relevé des limites d'usage ne se met à jour que lorsqu'une session de Claude Code le demande. `claude -p "/usage"` s'exécute
+// en local (aucun tour, aucun coût, aucune session enregistrée) et rafraîchit ce relevé : on le lance de temps en temps, quand
+// le relevé a plus de usageMaxAge, au plus une fois par usageEvery, sans jamais faire attendre la réponse de /account.
+const (
+	usageMaxAge = 4 * time.Minute
+	usageEvery  = time.Minute
+)
+
+var (
+	usageMu    sync.Mutex
+	usageLast  time.Time
+	usageBusy  bool
+	usageStart = func() error { // remplaçable dans les tests
+		ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+		defer cancel()
+		cmd := withPath(exec.CommandContext(ctx, "claude", "-p", "/usage", "--no-session-persistence", "--output-format", "json"))
+		cmd.Dir = workDir()
+		return cmd.Run() // stdin nul : rien à lire
+	}
+)
+
+// refreshUsage lance la mise à jour en arrière-plan si le relevé est trop vieux (ou si force) ; vrai si elle part.
+func refreshUsage(at float64, force bool) bool {
+	usageMu.Lock()
+	defer usageMu.Unlock()
+	if usageBusy || time.Since(usageLast) < usageEvery {
+		return false
+	}
+	if !force && at > 0 && time.Since(time.Unix(int64(at), 0)) < usageMaxAge {
+		return false
+	}
+	usageBusy, usageLast = true, time.Now()
+	start := usageStart // lu ici, sous le verrou : la goroutine n'y touche plus
+	go func() {
+		err := start()
+		journal("usage : relevé des limites rafraîchi : %v", errOr(err))
+		usageMu.Lock()
+		usageBusy = false
+		usageMu.Unlock()
+	}()
+	return true
 }
