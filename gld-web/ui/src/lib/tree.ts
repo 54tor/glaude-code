@@ -1,10 +1,10 @@
 import type { Group, Session } from "./api"
 import { segs } from "./paths"
 
-export type Node = { name: string; key: string; kids: Map<string, Node>; g: Group | null; ss: Session[]; count: number }
+export type Node = { name: string; key: string; kids: Map<string, Node>; g: Group | null; ss: Session[] }
 export type Entry = { g: Group; ss: Session[] }
 
-const blank = (name: string, key: string): Node => ({ name, key, kids: new Map(), g: null, ss: [], count: 0 })
+const blank = (name: string, key: string): Node => ({ name, key, kids: new Map(), g: null, ss: [] })
 
 export const sorted = (n: Node): Node[] => [...n.kids.values()].sort((a, b) => a.name.localeCompare(b.name))
 
@@ -32,7 +32,6 @@ export function buildTree(entries: Entry[], home: string): Node[] {
       n.kids = c.kids
     }
     n.kids.forEach(squash)
-    n.count = n.ss.length + [...n.kids.values()].reduce((a, c) => a + c.count, 0)
   }
   root.kids.forEach(squash)
   return sorted(root)
@@ -46,6 +45,7 @@ export function find(nodes: Node[], key: string): Node | null {
   }
   return null
 }
+
 
 // Toutes les sessions d'un dossier et de ses sous-dossiers, avec leur projet.
 export function under(n: Node): { s: Session; g: Group }[] {

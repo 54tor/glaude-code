@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import {
+  ChevronRight,
   FolderInput,
   Inbox,
   Layers,
@@ -149,10 +150,13 @@ export default function App() {
   const tree = useMemo(() => buildTree(view.entries, data?.home ?? ""), [view.entries, data?.home])
   // Un dossier qui disparaît (filtre, suppression) ramène à « toutes les sessions ».
   const node = sel ? find(tree, sel) : null
+  const byDate = (a: { s: Session }, b: { s: Session }) => b.s.mtime - a.s.mtime
   const items = useMemo(
-    () => (node ? under(node) : view.entries.flatMap(({ g, ss }) => ss.map((s) => ({ s, g })))).sort((a, b) => b.s.mtime - a.s.mtime),
+    () => (node ? node.ss.map((s) => ({ s, g: node.g! })) : view.entries.flatMap(({ g, ss }) => ss.map((s) => ({ s, g })))).sort(byDate),
     [node, view.entries]
   )
+  // Sessions des sous-dossiers : affichées à part, sous la liste du dossier sélectionné.
+  const subs = useMemo(() => (node ? [...node.kids.values()].flatMap(under).sort(byDate) : []), [node])
   const multi = new Set(items.map((i) => i.g.project)).size > 1
 
   // Une action : toast de progression puis de résultat, erreurs jamais muettes, liste rechargée.
@@ -328,7 +332,7 @@ export default function App() {
             <div className="min-w-0 flex-1">
               <h2 className="truncate text-lg font-semibold tracking-tight">{node ? node.name : q ? "Résultats" : "Toutes les sessions"}</h2>
               <p className="truncate text-xs text-muted-foreground">
-                {g ? tilde(g.project, home) : node ? "Dossier contenant plusieurs projets" : q ? `pour « ${q} »` : "Les plus récentes en premier"}
+                {g ? tilde(g.project, home) : q ? `pour « ${q} »` : "Les plus récentes en premier"}
                 {data && ` · ${items.length} session${items.length > 1 ? "s" : ""}`}
               </p>
             </div>
@@ -383,7 +387,19 @@ export default function App() {
                 </div>
               )}
               {data && items.length > 0 && <SessionList items={items} showProject={multi} />}
-              {data && items.length === 0 && (
+              {data && subs.length > 0 && (
+                <details open={items.length === 0} className="group/subs mt-8 border-t pt-4">
+                  <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
+                    <ChevronRight className="size-4 transition-transform group-open/subs:rotate-90" />
+                    Sessions des sous-dossiers
+                    <span className="text-xs font-normal tabular-nums">{subs.length}</span>
+                  </summary>
+                  <div className="mt-2">
+                    <SessionList items={subs} showProject />
+                  </div>
+                </details>
+              )}
+              {data && items.length === 0 && subs.length === 0 && (
                 <div className="flex flex-col items-center gap-2 py-20 text-center">
                   <Search className="size-8 text-muted-foreground/50" />
                   <p className="font-medium">Aucune session</p>
