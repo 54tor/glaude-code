@@ -2,20 +2,26 @@ import { useEffect, useRef, useState } from "react"
 import { useLocal } from "@/hooks/useLocal"
 import {
   ALargeSmall,
+  AlertTriangle,
   ArchiveRestore,
   ArrowDownWideNarrow,
   ArrowUpNarrowWide,
   BookOpen,
   Brain,
   CheckSquare,
+  CircleHelp,
   Clock,
   ClipboardCopy,
   Copy,
+  Eye,
+  EyeOff,
+  Filter,
   FileStack,
   FileText,
   FolderInput,
   HardDrive,
   Globe,
+  HeartPulse,
   Link,
   Merge,
   Pencil,
@@ -27,12 +33,13 @@ import {
   X,
 } from "lucide-react"
 import { toast } from "sonner"
-import { api, type MemFile, type MemProject, type MemTarget, type Trashed } from "@/lib/api"
+import { api, type Issue, type MemFile, type MemProject, type MemTarget, type Trashed } from "@/lib/api"
 import { ago, size, tilde } from "@/lib/format"
 import { withChoice } from "@/lib/models"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Choose } from "./Choose"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -57,6 +64,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import type { Ask } from "./Confirm"
 import { Markdown } from "./Conversation"
 import { MemoryWriter, type WriteTarget } from "./MemoryWriter"
+import { DiffView, HealthDialog, ScopeBar, TypeHelp, TYPES, typeOf } from "./MemoryTools"
 
 // Tri des fichiers de mémoire : critère et sens propres à chaque dossier (section), retenus dans le navigateur.
 const SORTS = [
@@ -108,6 +116,8 @@ function Section({
   menu,
   sort,
   onSort,
+  budget,
+  issues,
 }: {
   icon: typeof Globe
   title: string
@@ -125,6 +135,8 @@ function Section({
   menu: (f: MemFile) => React.ReactNode
   sort: Sort
   onSort: (s: Sort) => void
+  budget: number // tokens estimés chargés à chaque session par cette section
+  issues: Map<string, number> // problèmes de santé par clé
 }) {
   const [, label, SortIcon] = SORTS.find((s) => s[0] === sort.by) ?? SORTS[0]
   const sortBtn = "size-5 md:opacity-0 md:group-hover/sec:opacity-100 md:focus-visible:opacity-100"
@@ -134,6 +146,11 @@ function Section({
         <ContextMenuTrigger asChild>
           <p className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-muted-foreground" title={title}>
             <Icon className="size-3.5 shrink-0" /> <span className="flex-1 truncate">{title}</span>
+            {budget > 0 && (
+              <span className="shrink-0 text-[10px] font-normal" title="Estimation (octets / 4) de ce que cette section charge à chaque session">
+                ≈ {budget >= 1000 ? `${(budget / 1000).toFixed(1)} k` : budget} tokens
+              </span>
+            )}
             <Button variant="ghost" size="icon-xs" className={sortBtn} onClick={onNew} title="Nouvelle entrée" aria-label="Nouvelle entrée">
               <Plus />
             </Button>
@@ -208,8 +225,22 @@ function Section({
                     f.key === sel ? "bg-accent font-medium" : "hover:bg-muted"
                   )}
                 >
-                  <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate">{f.name}</span>
+                  {typeOf(f.type) ? (
+                    (() => {
+                      const T = typeOf(f.type)!
+                      return <T.icon className={cn("size-3.5 shrink-0", T.color)} aria-label={`type ${T.key}`} />
+                    })()
+                  ) : (
+                    <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+                  )}
+                  <span className={cn("min-w-0 flex-1 truncate", f.off && "text-muted-foreground line-through")}>{f.name}</span>
+                  {f.off && <EyeOff className="size-3.5 shrink-0 text-muted-foreground" aria-label="règle désactivée" />}
+                  {f.paths && (
+                    <Filter className="size-3.5 shrink-0 text-sky-500" aria-label="règle scopée" />
+                  )}
+                  {(f.warn || issues.has(f.key)) && (
+                    <AlertTriangle className="size-3.5 shrink-0 text-amber-500" aria-label="à vérifier" />
+                  )}
                   <span className="shrink-0 text-xs font-normal text-muted-foreground">{ago(f.mtime)}</span>
                 </button>
               </li>
@@ -272,15 +303,42 @@ export function Memory({
   // Corbeille : les versions supprimées ou remplacées ; sel vaut « corbeille/<id> » pour en afficher une.
   const [trash, setTrash] = useState<Trashed[]>([])
   const inTrash = sel.startsWith("corbeille/") ? sel.slice(10) : ""
-  const refresh = () => Promise.all([api.memory().then(setList), api.trash().then((r) => setTrash(r.items))])
+  const [issues, setIssues] = useState<Issue[]>([])
+  const [healthOpen, setHealthOpen] = useState(false)
+  const [typeFilter, setTypeFilter] = useState("")
+  const [typeHelp, setTypeHelp] = useState(false)
+  const [hits, setHits] = useState<{ q: string; keys: Set<string> }>({ q: "", keys: new Set() })
+  const refresh = () => Promise.all([api.memory().then(setList), api.trash().then((r) => setTrash(r.items)), api.memoryHealth().then((r) => setIssues(r.issues))])
   useEffect(() => {
     let live = true
     api.trash().then((r) => live && setTrash(r.items))
     api.memory().then((l) => live && setList(l))
+    api.memoryHealth().then((r) => live && setIssues(r.issues))
     return () => {
       live = false
     }
   }, [])
+  // La mémoire change hors de l'interface (une session qui écrit, un éditeur) : on relit la liste et le fichier ouvert
+  // toutes les 15 s tant que l'onglet est visible, et au retour sur l'onglet.
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState !== "visible") return
+      api.memory().then(setList, () => {})
+      api.trash().then((r) => setTrash(r.items), () => {})
+      api.memoryHealth().then((r) => setIssues(r.issues), () => {})
+      if (sel && !inTrash)
+        api.memoryFile(sel).then(
+          (r) => r.text !== undefined && setLoaded((l) => (l?.key === sel && l.text === r.text ? l : { key: sel, text: r.text! })),
+          () => {}
+        )
+    }
+    const t = setInterval(tick, 15_000)
+    document.addEventListener("visibilitychange", tick)
+    return () => {
+      clearInterval(t)
+      document.removeEventListener("visibilitychange", tick)
+    }
+  }, [sel, inTrash])
   useEffect(() => {
     if (!sel) return
     let live = true
@@ -299,7 +357,23 @@ export function Memory({
   const all = list ? [...list.global, ...list.projects.flatMap((p) => p.files)] : []
   const file = all.find((f) => f.key === sel)
   const f = q.toLowerCase()
-  const match = (x: MemFile, scope = "") => !f || x.name.toLowerCase().includes(f) || scope.toLowerCase().includes(f)
+  // Recherche aussi dans le contenu des fichiers (côté serveur, après une courte pause de frappe).
+  useEffect(() => {
+    const t = q.trim()
+    if (t.length < 2) return
+    let live = true
+    const h = setTimeout(() => api.memorySearch(t).then((r) => live && setHits({ q: t, keys: new Set(Object.keys(r.hits)) })), 250)
+    return () => {
+      live = false
+      clearTimeout(h)
+    }
+  }, [q])
+  const hitKeys = hits.q === q.trim() ? hits.keys : null
+  const match = (x: MemFile, scope = "") =>
+    (!typeFilter || x.type === typeFilter) &&
+    (!f || x.name.toLowerCase().includes(f) || scope.toLowerCase().includes(f) || !!hitKeys?.has(x.key))
+  const issueKeys = new Map<string, number>()
+  for (const i of issues) issueKeys.set(i.key, (issueKeys.get(i.key) ?? 0) + 1)
 
   const save = async () => {
     if (!editing) return
@@ -360,13 +434,35 @@ export function Memory({
     editNext.current = key
     onPick(key)
   }
-  const move = async (key: string, to: string) => {
-    const r = (await api.post("/memory-move", { key, to })) as { ok: boolean; out: string; key?: string }
+  const move = async (key: string, to: string, copyIt = false) => {
+    const r = (await api.post("/memory-move", { key, to, copy: copyIt })) as { ok: boolean; out: string; key?: string }
+    ;(r.ok ? toast.success : toast.error)(r.out)
+    if (r.ok && r.key) {
+      refresh()
+      if (key === sel && !copyIt) onPick(r.key)
+    }
+  }
+  // Règle globale désactivée : fichier renommé en .md.off, Claude ne la charge plus.
+  const toggleRule = async (key: string) => {
+    const r = (await api.post("/memory-toggle", { key })) as { ok: boolean; out: string; key?: string }
     ;(r.ok ? toast.success : toast.error)(r.out)
     if (r.ok && r.key) {
       refresh()
       if (key === sel) onPick(r.key)
     }
+  }
+  const setType = async (key: string, type: string) => {
+    const r = await api.post("/memory-type", { key, type })
+    ;(r.ok ? toast.success : toast.error)(r.out)
+    if (r.ok) {
+      await refresh()
+      setLoaded({ key, text: (await api.memoryFile(key)).text ?? "" })
+    }
+  }
+  const repair = async (dir: string) => {
+    const r = await api.post("/memory-repair", { dir })
+    ;(r.ok ? toast.success : toast.error)(r.out)
+    refresh()
   }
   const remove = (x: MemFile) =>
     onAsk({
@@ -459,6 +555,33 @@ export function Memory({
           </ContextMenuSubContent>
         </ContextMenuSub>
       )}
+      {movable(x.key) && (
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>
+            <Copy /> Copier vers
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent className="max-h-80 w-72 overflow-y-auto">
+            {home(x.key) !== "global" && (
+              <>
+                <ContextMenuItem onSelect={() => move(x.key, "global", true)}>
+                  <Globe /> Règles globales (rules/)
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+              </>
+            )}
+            {targets(x.key).map((t) => (
+              <ContextMenuItem key={t.dir} onSelect={() => move(x.key, t.dir, true)}>
+                <Brain /> <span className="truncate">{tilde(t.project, homeDir)}</span>
+              </ContextMenuItem>
+            ))}
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+      )}
+      {x.key.startsWith("g/rules/") && (
+        <ContextMenuItem onSelect={() => toggleRule(x.key)}>
+          {x.off ? <Eye /> : <EyeOff />} {x.off ? "Réactiver la règle" : "Désactiver la règle"}
+        </ContextMenuItem>
+      )}
       <ContextMenuSeparator />
       <ContextMenuItem variant="destructive" onSelect={() => remove(x)}>
         <Trash2 /> Supprimer
@@ -484,10 +607,23 @@ export function Memory({
       menu={menu}
       sort={sortOf(key)}
       onSort={(s) => setSortsRaw(JSON.stringify({ ...sorts, [key]: s }))}
+      budget={files.filter((x) => x.always).reduce((n, x) => n + x.tokens, 0)}
+      issues={issueKeys}
     />
   )
 
   const trashed = trash.find((t) => t.id === inTrash)
+  // Comparaison de la version de la corbeille avec le fichier actuel (s'il existe encore).
+  const [diff, setDiff] = useState(false)
+  const [current, setCurrent] = useState<string | null>(null)
+  useEffect(() => {
+    if (!diff || !trashed) return
+    let live = true
+    api.memoryFile(trashed.key).then((r) => live && setCurrent(r.text ?? ""))
+    return () => {
+      live = false
+    }
+  }, [diff, trashed])
   const restore = async (t: Trashed) => {
     const r = (await api.post("/trash-restore", { id: t.id })) as { ok: boolean; out: string; key?: string }
     ;(r.ok ? toast.success : toast.error)(r.out)
@@ -515,9 +651,36 @@ export function Memory({
   const [fm, body] = split(text ?? "")
   return (
     <div className="relative flex min-h-0 flex-1 flex-col md:flex-row">
-      <ScrollArea className="max-h-64 shrink-0 border-b md:max-h-none md:w-80 md:border-r md:border-b-0">
+      <ScrollArea className="max-h-64 shrink-0 border-b md:max-h-none md:w-[28rem] md:border-r md:border-b-0">
         <nav className="p-2">
           {!list && <Skeleton className="m-2 h-24" />}
+          {list && (
+            <div className="mb-2 flex flex-wrap items-center gap-1 px-1">
+              <Button
+                variant={issues.length ? "outline" : "ghost"}
+                size="xs"
+                onClick={() => setHealthOpen(true)}
+                title="Index MEMORY.md, imports et liens cassés, front matter, entrées anciennes"
+              >
+                <HeartPulse className={issues.length ? "text-amber-500" : ""} /> Santé{issues.length > 0 && ` (${issues.length})`}
+              </Button>
+              {TYPES.map((t) => (
+                <Button
+                  key={t.key}
+                  variant={typeFilter === t.key ? "secondary" : "ghost"}
+                  size="xs"
+                  onClick={() => setTypeFilter(typeFilter === t.key ? "" : t.key)}
+                  aria-pressed={typeFilter === t.key}
+                  title={`Seulement les entrées de type ${t.key} (${t.label})`}
+                >
+                  <t.icon className={t.color} /> {all.filter((x) => x.type === t.key).length}
+                </Button>
+              ))}
+              <Button variant="ghost" size="icon-xs" onClick={() => setTypeHelp(true)} title="À quoi servent les types de mémoire ?" aria-label="Aide sur les types">
+                <CircleHelp />
+              </Button>
+            </div>
+          )}
           {orphans.length > 0 && (
             <Button
               variant="outline"
@@ -631,6 +794,11 @@ export function Memory({
               </code>
               {trashed && (
                 <>
+                  {all.some((x) => x.key === trashed.key) && (
+                    <Button variant={diff ? "secondary" : "ghost"} size="sm" onClick={() => setDiff(!diff)} aria-pressed={diff}>
+                      Comparer à l'actuelle
+                    </Button>
+                  )}
                   <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => purge(trashed)}>
                     <Trash2 /> Supprimer définitivement
                   </Button>
@@ -641,7 +809,11 @@ export function Memory({
               )}
             </div>
             <ScrollArea className="min-h-0 flex-1">
-              <pre className="session-text mx-auto max-w-7xl px-6 py-6 whitespace-pre-wrap">{text ?? ""}</pre>
+              {diff && current !== null ? (
+                <DiffView old={text ?? ""} cur={current} />
+              ) : (
+                <pre className="session-text mx-auto max-w-7xl px-6 py-6 whitespace-pre-wrap">{text ?? ""}</pre>
+              )}
             </ScrollArea>
           </>
         ) : !sel ? (
@@ -650,8 +822,8 @@ export function Memory({
           </p>
         ) : (
           <>
-            <div className="flex items-center gap-2 border-b px-6 py-2">
-              <code className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={file?.path}>
+            <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 border-b px-6 py-2">
+              <code className="min-w-40 flex-1 truncate text-xs text-muted-foreground" title={file?.path}>
                 {file ? `${file.name} · ${size(file.kb)}` : sel}
               </code>
               {editing ? (
@@ -690,6 +862,20 @@ export function Memory({
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
+                  {file && (sel.startsWith("m/") || sel.startsWith("g/rules/")) && !sel.endsWith("/MEMORY.md") && (
+                    <Choose
+                      value={file.type ?? ""}
+                      onChange={(t) => setType(file.key, t)}
+                      options={[["", "Sans type"], ...TYPES.map((t) => [t.key, `${t.key} (${t.label})`] as const)]}
+                      label="Type de l'entrée"
+                      className="w-44"
+                    />
+                  )}
+                  {file && sel.startsWith("g/rules/") && (
+                    <Button variant="ghost" size="sm" onClick={() => toggleRule(file.key)}>
+                      {file.off ? <Eye /> : <EyeOff />} {file.off ? "Réactiver" : "Désactiver"}
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -710,6 +896,17 @@ export function Memory({
                 </>
               )}
             </div>
+            {file && !editing && sel.startsWith("g/rules/") && !file.off && list && (
+              <ScopeBar key={file.key + (file.paths ?? []).join("|")} file={file} projects={list.projects} home={homeDir} onSaved={async () => (await refresh(), setLoaded({ key: sel, text: (await api.memoryFile(sel)).text ?? "" }))} />
+            )}
+            {file?.off && sel.startsWith("g/rules/") && (
+              <p className="border-b bg-muted/30 px-6 py-2 text-xs text-muted-foreground">
+                Règle désactivée : Claude ne la charge plus.{" "}
+                <button className="underline" onClick={() => toggleRule(file.key)}>
+                  Réactiver
+                </button>
+              </p>
+            )}
             {editing ? (
               <textarea
                 value={editing.text}
@@ -739,6 +936,8 @@ export function Memory({
           </>
         )}
       </div>
+      <TypeHelp open={typeHelp} onClose={() => setTypeHelp(false)} />
+      <HealthDialog open={healthOpen} issues={issues} onClose={() => setHealthOpen(false)} onOpenKey={onPick} onRepair={repair} />
       <MemoryWriter target={writer} refs={writeRefs} onClose={() => setWriter(null)} onDraft={onDraft} />
     </div>
   )

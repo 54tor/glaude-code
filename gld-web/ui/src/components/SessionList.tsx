@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Flame, MoreHorizontal, SquareTerminal, Star, Tag } from "lucide-react"
 import { ago, bucket, full, size, tilde } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -147,13 +148,34 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
 }
 
 // Sessions triées de la plus récente à la plus ancienne, regroupées par période (sauf flat).
-export function SessionList({ items, showProject, flat, showCache }: { items: R[]; showProject: boolean; flat?: boolean; showCache?: boolean }) {
+const STEP = 100 // lignes rendues d'un coup ; la suite arrive en faisant défiler
+
+// Fin de liste : quand elle approche de l'écran, on demande la suite.
+function More({ onMore }: { onMore: () => void }) {
+  const ref = useRef<HTMLLIElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const io = new IntersectionObserver(([e]) => e.isIntersecting && onMore(), { rootMargin: "800px" })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [onMore])
+  return <li ref={ref} aria-hidden className="h-px" />
+}
+
+export function SessionList({ items: all, showProject, flat, showCache }: { items: R[]; showProject: boolean; flat?: boolean; showCache?: boolean }) {
+  // Chargement paresseux : seules les premières lignes sont rendues (milliers de sessions possibles).
+  const [limit, setLimit] = useState(STEP)
+  const more = useCallback(() => setLimit((n) => n + STEP), [])
+  const items = all.slice(0, limit)
+  const rest = all.length > limit
   if (flat)
     return (
       <ul className="space-y-px">
         {items.map((r) => (
           <Row key={r.s.id} row={r} showProject={showProject} showCache={showCache} />
         ))}
+        {rest && <More onMore={more} />}
       </ul>
     )
   const groups: [string, R[]][] = []
@@ -174,6 +196,11 @@ export function SessionList({ items, showProject, flat, showCache }: { items: R[
           </ul>
         </section>
       ))}
+      {rest && (
+        <ul>
+          <More onMore={more} />
+        </ul>
+      )}
     </div>
   )
 }

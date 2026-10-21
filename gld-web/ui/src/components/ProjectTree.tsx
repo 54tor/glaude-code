@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { ChevronRight, Folder, FolderInput, FolderOpen, MessageSquarePlus, SquareTerminal, Star, Tag, Trash2, TriangleAlert } from "lucide-react"
 import type { VGroup } from "@/lib/api"
 import { CM, GroupItems } from "./SessionMenu"
@@ -40,7 +40,7 @@ type Props = {
   onSel: (key: string) => void
   selGroup: string // « clé du dossier \0 nom » du groupe affiché
   onGroup: (vg: VGroup, key: string) => void
-  closed: Set<string>
+  isOpen: (n: Node, depth: number) => boolean
   toggle: (k: string) => void
 }
 
@@ -82,7 +82,7 @@ function Item({
   selGroup,
   onGroup,
   depth,
-  closed,
+  isOpen,
   toggle,
   label,
   leaf,
@@ -90,7 +90,7 @@ function Item({
   const a = useActions()
   const groups = n.g ? a.vgroups.filter((vg) => vg.project === n.g!.project) : []
   const kids = (!leaf && n.kids.size > 0) || groups.length > 0
-  const open = !closed.has(n.key)
+  const open = isOpen(n, depth)
   const active = sel === n.key
   const Icon = active ? FolderOpen : Folder
   return (
@@ -146,7 +146,7 @@ function Item({
                 selGroup={selGroup}
                 onGroup={onGroup}
                 depth={depth + 1}
-                closed={closed}
+                isOpen={isOpen}
                 toggle={toggle}
               />
             ))}
@@ -169,6 +169,9 @@ function lift(nodes: Node[]): { n: Node; label?: string; leaf?: boolean }[] {
   return [...top, ...nodes.map((n) => ({ n }))]
 }
 
+const BIG_TREE = 80 // au-delà de ce nombre de dossiers, l'arbre démarre replié
+const count = (nodes: Node[]): number => nodes.reduce((t, n) => t + 1 + count([...n.kids.values()]), 0)
+
 export function ProjectTree({
   nodes,
   sel,
@@ -182,9 +185,17 @@ export function ProjectTree({
   selGroup: string
   onGroup: Props["onGroup"]
 }) {
-  const [closed, setClosed] = useState(() => new Set<string>())
+  // Chargement paresseux : un grand arbre démarre replié (premier niveau seul, plus le chemin du dossier choisi) ;
+  // les sous-dossiers d'un nœud replié ne sont pas rendus. Un petit arbre reste déplié. « toggled » : nœuds que
+  // l'utilisateur a inversés par rapport à ce défaut.
+  const [toggled, setToggled] = useState(() => new Set<string>())
+  const big = useMemo(() => count(nodes) > BIG_TREE, [nodes])
+  const isOpen = (n: Node, depth: number) => {
+    const byDefault = !big || depth === 0 || sel.startsWith(n.key + "/") || sel === n.key
+    return toggled.has(n.key) ? !byDefault : byDefault
+  }
   const toggle = (k: string) =>
-    setClosed((c) => {
+    setToggled((c) => {
       const n = new Set(c)
       if (n.has(k)) n.delete(k)
       else n.add(k)
@@ -203,7 +214,7 @@ export function ProjectTree({
           selGroup={selGroup}
           onGroup={onGroup}
           depth={0}
-          closed={closed}
+          isOpen={isOpen}
           toggle={toggle}
         />
       ))}

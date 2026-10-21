@@ -18,6 +18,13 @@ type MemFile struct {
 	KB    int64   `json:"kb"`
 	Mtime float64 `json:"mtime"`
 	Path  string  `json:"path"` // chemin complet, pour le copier
+
+	Type   string   `json:"type,omitempty"`   // metadata.type du front matter (entrées de mémoire)
+	Paths  []string `json:"paths,omitempty"`  // règle scopée : globs du front matter `paths:`
+	Tokens int      `json:"tokens"`           // estimation grossière (octets / 4)
+	Always bool     `json:"always,omitempty"` // chargé à chaque session
+	Off    bool     `json:"off,omitempty"`    // règle désactivée (fichier .md.off)
+	Warn   string   `json:"warn,omitempty"`   // front matter invalide
 }
 
 type MemProject struct {
@@ -31,6 +38,7 @@ const memMax = 1 << 20
 
 var (
 	mdName       = regexp.MustCompile(`^[^./\\][^/\\]*\.md$`)
+	ruleName     = regexp.MustCompile(`^[^./\\][^/\\]*\.md(\.off)?$`) // une règle désactivée garde son nom + « .off »
 	projectFiles = []string{"CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md", "AGENTS.md"}
 )
 
@@ -73,7 +81,7 @@ func memResolve(key string) (string, string, error) {
 	case key == "g/CLAUDE.md":
 		return cfgDir(), "CLAUDE.md", nil
 	case strings.HasPrefix(key, "g/rules/"):
-		if n := key[8:]; mdName.MatchString(n) {
+		if n := key[8:]; ruleName.MatchString(n) {
 			return filepath.Join(cfgDir(), "rules"), n, nil
 		}
 	case strings.HasPrefix(key, "m/"):
@@ -104,7 +112,9 @@ func memFile(key, path string) (MemFile, bool) {
 	if err != nil || !fi.Mode().IsRegular() {
 		return MemFile{}, false
 	}
-	return MemFile{key, filepath.Base(path), fi.Size() / 1024, float64(fi.ModTime().UnixNano()) / 1e9, path}, true
+	f := MemFile{Key: key, Name: filepath.Base(path), KB: fi.Size() / 1024, Mtime: float64(fi.ModTime().UnixNano()) / 1e9, Path: path}
+	annotate(&f)
+	return f, true
 }
 
 // MemTarget : un projet vers la mémoire duquel une entrée peut être déplacée.
@@ -118,9 +128,9 @@ func memList() ([]MemFile, []MemProject, []MemTarget) {
 	if f, ok := memFile("g/CLAUDE.md", filepath.Join(cfgDir(), "CLAUDE.md")); ok {
 		global = append(global, f)
 	}
-	rules, _ := filepath.Glob(filepath.Join(cfgDir(), "rules", "*.md"))
+	rules, _ := filepath.Glob(filepath.Join(cfgDir(), "rules", "*.md*"))
 	for _, p := range rules {
-		if f, ok := memFile("g/rules/"+filepath.Base(p), p); ok && mdName.MatchString(f.Name) {
+		if f, ok := memFile("g/rules/"+filepath.Base(p), p); ok && ruleName.MatchString(f.Name) {
 			f.Name = "rules/" + f.Name
 			global = append(global, f)
 		}
@@ -311,7 +321,10 @@ func mergePrompt(keys []string) (string, string, error) {
 
 // memMove déplace une entrée de mémoire de projet ou une règle globale vers la mémoire d'un autre projet
 // (to = son dossier de transcripts) ou vers les règles globales (to = "global"). Sans écraser ; l'index suit.
-func memMove(key, to string) (string, error) {
+func memMove(key, to string) (string, error) { return memTransfer(key, to, false) }
+
+// memTransfer : déplace une entrée ou une règle vers un projet (ou « global »), ou la copie si keep.
+func memTransfer(key, to string, keep bool) (string, error) {
 	if !strings.HasPrefix(key, "m/") && !strings.HasPrefix(key, "g/rules/") {
 		return "", errors.New("seules les entrées de mémoire et les règles se déplacent")
 	}
@@ -353,8 +366,10 @@ func memMove(key, to string) (string, error) {
 	if err := memSave(dst, text); err != nil {
 		return "", err
 	}
-	if err := memDelete(key, false); err != nil { // déplacé, pas supprimé : rien à mettre à la corbeille
-		return "", err
+	if !keep {
+		if err := memDelete(key, false); err != nil { // déplacé, pas supprimé : rien à mettre à la corbeille
+			return "", err
+		}
 	}
 	if strings.HasPrefix(dst, "m/") && rel != "MEMORY.md" {
 		ik := dst[:strings.LastIndex(dst, "/")+1] + "MEMORY.md"
