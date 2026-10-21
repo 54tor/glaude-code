@@ -460,9 +460,9 @@ func setType(text, typ string) (string, error) {
 		}
 		return "---\nmetadata:\n  type: " + typ + "\n---\n\n" + text, nil
 	}
-	if _, err := parseMeta(text); err != nil {
-		return "", err
-	}
+	// Un en-tête déjà invalide pour un lecteur YAML strict (description avec « : » non guillemetée, très courant) se modifie quand même :
+	// la modification est textuelle, et on ne refuse que de rendre invalide un en-tête qui ne l'était pas.
+	_, origErr := parseMeta(text)
 	y = strings.TrimRight(y, "\n") + "\n"
 	switch {
 	case typ == "":
@@ -486,8 +486,10 @@ func setType(text, typ string) (string, error) {
 	}
 	y = regexp.MustCompile(`\n{2,}`).ReplaceAllString(y, "\n")
 	out := "---\n" + y + "---\n" + body
-	if _, err := parseMeta(out); err != nil {
-		return "", err
+	if origErr == nil {
+		if _, err := parseMeta(out); err != nil {
+			return "", err
+		}
 	}
 	return out, nil
 }

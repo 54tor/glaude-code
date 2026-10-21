@@ -198,3 +198,14 @@ func TestKeepHeader(t *testing.T) {
 		t.Fatal("rien à restaurer sans en-tête d'origine")
 	}
 }
+
+func TestSetTypeEnteteDejaInvalide(t *testing.T) {
+	in := "---\nname: x\ndescription: Politique projet : aucune rétrocompatibilité\ntype: feedback\n---\n\ncorps\n"
+	if _, err := parseMeta(in); err == nil {
+		t.Fatal("le cas de test devait être un en-tête invalide")
+	}
+	got, err := setType(in, "project")
+	if err != nil || !strings.Contains(got, "\ntype: project\n") || !strings.Contains(got, "description: Politique projet : aucune") {
+		t.Fatalf("setType sur un en-tête invalide : %q, %v", got, err)
+	}
+}
