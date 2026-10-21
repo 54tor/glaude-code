@@ -1,0 +1,173 @@
+package main
+
+// Envoyer un message à une session ouverte dans un terminal. Seule voie fiable : tmux. Le processus claude de la session est
+// retrouvé dans l'arbre des processus d'un panneau tmux, et le texte y est collé (collage « bracketed », donc sans que les
+// retours à la ligne soient pris pour des validations) avant une touche Entrée. Rien ne marche pour une session qui n'est pas
+// dans tmux, ni hors Linux (l'arbre des processus vient de /proc).
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+	"unicode/utf8"
+)
+
+const sendMax = 32 << 10
+
+var paneRe = regexp.MustCompile(`^%[0-9]+$`)
+
+// tmuxRun lance tmux, avec stdin si non vide (remplaçable dans les tests).
+var tmuxRun = func(stdin string, args ...string) (string, error) {
+	cmd := exec.Command("tmux", args...)
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
+	var out, errb bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &errb
+	err := cmd.Run()
+	if err != nil && strings.TrimSpace(errb.String()) != "" {
+		err = errors.New(strings.TrimSpace(errb.String()))
+	}
+	return out.String(), err
+}
+
+// sessionPIDs : pid des sessions interactives ouvertes, par id de session (remplaçable dans les tests).
+var sessionPIDs = func() map[string]int {
+	out, err := withPath(exec.Command("claude", "agents", "--json")).Output()
+	var a []struct {
+		SessionId, Kind string
+		Pid             int
+	}
+	m := map[string]int{}
+	if err != nil || json.Unmarshal(out, &a) != nil {
+		return m
+	}
+	for _, x := range a {
+		if x.SessionId != "" && x.Pid > 0 && x.Kind == "interactive" {
+			m[x.SessionId] = x.Pid
+		}
+	}
+	return m
+}
+
+// parentOf : le processus parent (lecture de /proc/<pid>/stat), 0 si inconnu (remplaçable dans les tests).
+var parentOf = func(pid int) int {
+	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+	if err != nil {
+		return 0
+	}
+	s := string(b)
+	i := strings.LastIndex(s, ")") // le nom du processus peut contenir des espaces et des parenthèses
+	if i < 0 {
+		return 0
+	}
+	f := strings.Fields(s[i+1:])
+	if len(f) < 2 {
+		return 0
+	}
+	n, _ := strconv.Atoi(f[1])
+	return n
+}
+
+// tmuxPanes : panneau tmux (« %12 ») par pid du processus racine du panneau.
+func tmuxPanes() (map[int]string, error) {
+	out, err := tmuxRun("", "list-panes", "-a", "-F", "#{pane_id} #{pane_pid}")
+	if err != nil {
+		return nil, err
+	}
+	m := map[int]string{}
+	for _, l := range strings.Split(out, "\n") {
+		id, pid, ok := strings.Cut(strings.TrimSpace(l), " ")
+		if n, e := strconv.Atoi(pid); ok && e == nil && paneRe.MatchString(id) {
+			m[n] = id
+		}
+	}
+	return m, nil
+}
+
+// paneOf : le panneau qui porte le processus pid (lui-même ou un de ses ancêtres).
+func paneOf(panes map[int]string, pid int) string {
+	for i := 0; i < 64 && pid > 1; i++ {
+		if p, ok := panes[pid]; ok {
+			return p
+		}
+		pid = parentOf(pid)
+	}
+	return ""
+}
+
+// sendable : les sessions ouvertes auxquelles on peut écrire, avec leur panneau tmux ; l'erreur dit pourquoi tmux est inutilisable
+// (absent, sans serveur).
+func sendable() (map[string]string, error) {
+	out := map[string]string{}
+	pids := sessionPIDs()
+	if len(pids) == 0 {
+		return out, nil
+	}
+	panes, err := tmuxPanes()
+	if err != nil {
+		return out, err
+	}
+	for id, pid := range pids {
+		if p := paneOf(panes, pid); p != "" {
+			out[id] = p
+		}
+	}
+	return out, nil
+}
+
+// checkSendText : du texte brut, sans caractère de contrôle : un ESC pourrait refermer le collage et faire exécuter la suite
+// comme des frappes.
+func checkSendText(text string) error {
+	switch {
+	case strings.TrimSpace(text) == "":
+		return errors.New("message vide")
+	case len(text) > sendMax || !utf8.ValidString(text):
+		return errors.New("message trop long ou invalide")
+	}
+	for _, r := range text {
+		if r < 0x20 && r != '\n' && r != '\t' || r == 0x7f || r >= 0x80 && r < 0xa0 {
+			return errors.New("le message contient un caractère de contrôle")
+		}
+	}
+	return nil
+}
+
+var sendIdRe = regexp.MustCompile(`^[0-9a-f-]{36}$`)
+
+// sendToSession colle le texte dans le panneau tmux de la session, puis valide.
+func sendToSession(id, text string) error {
+	if !sendIdRe.MatchString(id) {
+		return errors.New("session invalide")
+	}
+	if err := checkSendText(text); err != nil {
+		return err
+	}
+	ids, err := sendable()
+	if err != nil {
+		return fmt.Errorf("tmux inutilisable (%w) : lance les sessions dans tmux", err)
+	}
+	pane, ok := ids[id]
+	if !ok {
+		return errors.New("cette session n'est pas dans tmux (ou n'est pas ouverte) : écris dans son terminal")
+	}
+	buf := "gld-send-" + strconv.Itoa(os.Getpid())
+	if _, err := tmuxRun(text, "load-buffer", "-b", buf, "-"); err != nil {
+		return fmt.Errorf("tmux load-buffer : %w", err)
+	}
+	if _, err := tmuxRun("", "paste-buffer", "-p", "-d", "-b", buf, "-t", pane); err != nil {
+		return fmt.Errorf("tmux paste-buffer : %w", err)
+	}
+	time.Sleep(200 * time.Millisecond) // laisse la TUI traiter le collage avant la validation
+	if _, err := tmuxRun("", "send-keys", "-t", pane, "Enter"); err != nil {
+		return fmt.Errorf("tmux send-keys : %w", err)
+	}
+	return nil
+}

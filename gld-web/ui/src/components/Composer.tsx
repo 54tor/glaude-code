@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Send, Square } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
@@ -89,12 +89,7 @@ export function Composer({
   }
   const stop = () => api.post("/chat-stop", { id })
 
-  if (live)
-    return (
-      <p className="border-t px-6 py-3 text-center text-xs text-muted-foreground">
-        Session ouverte dans un terminal : écris-y directement (deux processus ne peuvent pas écrire le même transcript).
-      </p>
-    )
+  if (live) return <LiveSend id={id} onDone={onDone} />
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-7xl space-y-2">
@@ -123,6 +118,64 @@ export function Composer({
               <Send /> Envoyer
             </Button>
           )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Session ouverte dans un terminal : deux processus ne peuvent pas écrire le même transcript, donc pas de claude -p ici. Si la session
+// tourne dans tmux, le message y est collé puis validé ; sinon on l'explique.
+function LiveSend({ id, onDone }: { id: string; onDone: () => void }) {
+  const [info, setInfo] = useState<{ ids: string[]; why: string } | null>(null)
+  const [text, setText] = useState("")
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    let live = true
+    api.sendInfo().then((r) => live && setInfo(r), () => {})
+    return () => {
+      live = false
+    }
+  }, [id])
+  const ok = info?.ids.includes(id)
+  if (!ok)
+    return (
+      <p className="border-t px-6 py-3 text-center text-xs text-muted-foreground">
+        Session ouverte dans un terminal : écris-y directement (deux processus ne peuvent pas écrire le même transcript).
+        {info && " Lancée dans tmux, elle accepterait un message d'ici" + (info.why ? ` (tmux : ${info.why})` : "") + "."}
+      </p>
+    )
+  const send = async () => {
+    if (!text.trim() || busy) return
+    setBusy(true)
+    const r = await api.post("/session-send", { id, text })
+    setBusy(false)
+    ;(r.ok ? toast.success : toast.error)(r.out)
+    if (r.ok) {
+      setText("")
+      setTimeout(onDone, 1500)
+    }
+  }
+  return (
+    <div className="border-t bg-muted/20 px-4 py-3">
+      <div className="mx-auto max-w-7xl space-y-2">
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "Enter" && (e.preventDefault(), send())}
+          placeholder="Écrire dans la session ouverte (tmux)… (Ctrl+Entrée pour envoyer)"
+          rows={2}
+          maxLength={32000}
+          disabled={busy}
+          className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+          aria-label="Message à la session ouverte"
+        />
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          Le texte est collé dans le terminal de la session, puis validé : si Claude répond déjà, il le prend à la suite.
+          <span className="ml-auto" />
+          <Button size="sm" onClick={send} disabled={!text.trim() || busy}>
+            <Send /> Envoyer à la session
+          </Button>
         </div>
       </div>
     </div>
