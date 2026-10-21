@@ -65,7 +65,6 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
   const turn = chat?.id === id ? chat : null
   // Message envoyé à une session ouverte (tmux) : on relit son transcript tant qu'elle travaille, pour montrer la réponse au fil de l'eau.
   const [sentAt, setSentAt] = useState<{ id: string; at: number } | null>(null)
-  const working = sentAt?.id === id
   const viewport = useCallback(() => area.current?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]'), [])
   const loadedNow = loaded?.key === key ? loaded : null
   // Relecture (après un tour) : au moins la page de base, plus de quoi garder ce qui est déjà affiché.
@@ -219,11 +218,6 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
             {turn?.running && (
               <p className="flex items-center gap-2 text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" /> Claude répond…
-              </p>
-            )}
-            {working && !(live.open && live.st?.open) && (
-              <p className="flex items-center gap-2 text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" /> Claude réfléchit…
               </p>
             )}
             <LiveBar live={live} id={id} />
