@@ -126,6 +126,19 @@ type MemTarget struct {
 	Project string `json:"project"`
 }
 
+// liveProjects : les projets dont le dossier de travail existe encore, avec ou sans fichier de mémoire. Les réglages, skills et
+// .mcp.json d'un projet vivent dans son dossier, pas dans ~/.claude.
+func liveProjects() []MemTarget {
+	_, _, targets := memList()
+	out := []MemTarget{}
+	for _, t := range targets {
+		if fi, err := os.Stat(t.Project); t.Project != "" && err == nil && fi.IsDir() {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
 func memList() ([]MemFile, []MemProject, []MemTarget) {
 	global := []MemFile{}
 	if f, ok := memFile("g/CLAUDE.md", filepath.Join(cfgDir(), "CLAUDE.md")); ok {

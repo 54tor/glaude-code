@@ -252,11 +252,7 @@ func allConfigs() (files []ConfigFile, raw map[string]any) {
 		files = append(files, f)
 	}
 	add("u", false)
-	_, projects, _ := memList()
-	for _, p := range projects {
-		if p.Missing {
-			continue
-		}
+	for _, p := range liveProjects() {
 		add("p/"+p.Dir, true)
 		add("l/"+p.Dir, true)
 	}

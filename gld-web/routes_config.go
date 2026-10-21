@@ -27,17 +27,7 @@ func routesConfig(mux *http.ServeMux) {
 			}
 		}
 		sort.Slice(plugins, func(i, j int) bool { return plugins[i].ID < plugins[j].ID })
-		_, projects, _ := memList()
-		type proj struct {
-			Dir     string `json:"dir"`
-			Project string `json:"project"`
-		}
-		var ps []proj
-		for _, p := range projects {
-			if !p.Missing {
-				ps = append(ps, proj{p.Dir, p.Project})
-			}
-		}
+		ps := liveProjects()
 		writeJSON(w, 200, map[string]any{
 			"files": nz(files), "hooks": nz(hooksOf(raw)), "issues": nz(configHealth(files, raw)), "backups": listBackups(),
 			"plugins": nz(plugins), "projects": nz(ps),

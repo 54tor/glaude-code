@@ -8,6 +8,7 @@ export type Route =
   | { kind: "dir"; key: string } // clé d'un nœud de l'arbre, ex. « ~/Projets/caddy »
   | { kind: "snippets"; path: string }
   | { kind: "tabs" }
+  | { kind: "skills"; key: string } // clé de skills.go, ex. « u/revue » ou « p/-home-moi-Projets-x/deploy »
   | { kind: "config" } // configuration de Claude Code (réglages, hooks, permissions, MCP)
   | { kind: "memory"; key: string } // clé de memory.go, ex. « m/-home-moi-Projets-x/MEMORY.md »
 
@@ -26,6 +27,7 @@ export function parse(loc: string): Route {
     if (loc.startsWith("/dossier/")) return { kind: "dir", key: dec(loc.slice(9)) }
     if (loc === "/onglets") return { kind: "tabs" }
     if (loc === "/configuration") return { kind: "config" }
+    if (loc === "/skills" || loc.startsWith("/skills/")) return { kind: "skills", key: dec(loc.slice(8)) }
     if (loc === "/memoire" || loc.startsWith("/memoire/")) return { kind: "memory", key: dec(loc.slice(9)) }
     if (loc === "/snippets" || loc.startsWith("/snippets/")) return { kind: "snippets", path: dec(loc.slice(10)) }
   } catch {
@@ -48,6 +50,8 @@ export function href(r: Route): string {
       return "/onglets"
     case "config":
       return "/configuration"
+    case "skills":
+      return "/skills" + (r.key ? "/" + enc(r.key) : "")
     case "memory":
       return "/memoire" + (r.key ? "/" + enc(r.key) : "")
     case "snippets":
