@@ -18,6 +18,7 @@ import (
 
 // routesSessions : liste, lecture, suppression, réassignation, recherche et réouverture des sessions.
 func routesSessions(mux *http.ServeMux) {
+	routesTerm(mux)
 	home, _ := os.UserHomeDir()
 	mux.HandleFunc("GET /api", func(w http.ResponseWriter, r *http.Request) {
 		lastAPI.Store(time.Now().UnixNano())

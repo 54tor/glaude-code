@@ -147,6 +147,7 @@ export const api = {
   sessionLive: (dir: string, id: string) => get<LiveState>(`/session-live?dir=${enc(dir)}&id=${enc(id)}`),
   account: (refresh = false) => get<Account>(refresh ? "/account?refresh=1" : "/account"),
   screen: (id: string) => get<{ ok: boolean; out?: string; text?: string }>(`/session-screen?id=${enc(id)}`),
+  termInfo: () => get<{ enabled: boolean }>("/term-info"),
   sendInfo: () => get<{ ids: string[]; why: string }>("/session-send-info"),
   config: () => get<CfgOverview>("/config"),
   configEffective: (dir: string) => get<{ rows: EffRow[] }>(`/config-effective?dir=${enc(dir)}`),
