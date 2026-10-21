@@ -22,12 +22,12 @@ export function liveNotice(before: string, after: string, sessions: number): str
   return todo.length ? `${live} À faire à la main — ${todo.join(" ; ")}.` : live
 }
 
-type Preview = { edit?: CfgEdit; raw?: { file: string; text: string }; perm?: { file: string; text: string; mode: string }; summary?: string; before: string; after: string; warnings: CfgIssue[] }
+type Preview = { then?: () => void; edit?: CfgEdit; raw?: { file: string; text: string }; perm?: { file: string; text: string; mode: string }; summary?: string; before: string; after: string; warnings: CfgIssue[] }
 type Reply = { ok: boolean; out: string; before: string; after: string; warnings?: CfgIssue[] }
 
 // Toute modification d'un fichier de réglages passe par ici : aperçu des différences, confirmation, puis écriture
 // (le serveur fait une sauvegarde avant). Renvoie propose() et le dialogue à afficher.
-export function useConfigEdit(onDone: () => void, sessions = 0): { propose: (e: CfgEdit) => Promise<void>; proposeRaw: (file: string, text: string) => Promise<string | null>; proposePerms: (file: string, text: string, mode: string) => Promise<string | null>; dialog: ReactNode } {
+export function useConfigEdit(onDone: () => void, sessions = 0): { propose: (e: CfgEdit) => Promise<void>; proposeRaw: (file: string, text: string) => Promise<string | null>; proposePerms: (file: string, text: string, mode: string, then?: () => void) => Promise<string | null>; dialog: ReactNode } {
   const [pv, setPv] = useState<Preview | null>(null)
   const [busy, setBusy] = useState(false)
   const propose = async (edit: CfgEdit) => {
@@ -48,14 +48,15 @@ export function useConfigEdit(onDone: () => void, sessions = 0): { propose: (e: 
     return null
   }
   // Import de règles de permission : renvoie le message d'erreur, ou null si l'aperçu s'ouvre.
-  const proposePerms = async (file: string, text: string, mode: string) => {
+  // then : lancé après l'enregistrement réussi (abandonné si on annule), par exemple pour retirer la règle de son fichier d'origine.
+  const proposePerms = async (file: string, text: string, mode: string, then?: () => void) => {
     const r = (await api.post("/config-perm-import", { file, text, mode, dry: true })) as Reply
     if (!r.ok) return r.out
     if (r.before === r.after) {
       toast.info("Aucun changement : ces règles sont déjà là")
       return null
     }
-    setPv({ perm: { file, text, mode }, summary: r.out, before: r.before, after: r.after, warnings: r.warnings ?? [] })
+    setPv({ then, perm: { file, text, mode }, summary: r.out, before: r.before, after: r.after, warnings: r.warnings ?? [] })
     return null
   }
   const apply = async () => {
@@ -68,6 +69,7 @@ export function useConfigEdit(onDone: () => void, sessions = 0): { propose: (e: 
     if (r.ok) {
       setPv(null)
       onDone()
+      pv.then?.()
     }
   }
   const dialog = (
