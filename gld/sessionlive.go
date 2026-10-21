@@ -86,7 +86,35 @@ func pendingQueue(path string) []Queued {
 	return out
 }
 
-var thinkingVerbs = []string{"réfléchit", "cogite", "médite", "mijote", "rumine", "planche", "phosphore", "gamberge", "se concentre", "décortique", "jongle avec les idées", "pèse le pour et le contre", "fait chauffer les neurones", "creuse la question", "tisse sa réponse", "cherche le bon angle", "démêle l'écheveau", "met de l'ordre dans ses idées", "ourdit un plan", "contemple le problème"}
+var thinkingVerbs = []string{"réfléchit", "cogite", "médite", "mijote", "rumine", "planche", "phosphore", "gamberge", "se concentre", "décortique", "jongle avec les idées", "pèse le pour et le contre", "fait chauffer les neurones", "creuse la question", "tisse sa réponse", "cherche le bon angle", "démêle l'écheveau", "met de l'ordre dans ses idées", "ourdit un plan", "contemple le problème",
+	// drôles et improbables
+	"négocie avec ses neurones", "consulte l'oracle des octets", "dresse les hamsters du serveur", "démonte le problème à la petite cuillère",
+	"réveille le gobelin du cache", "fait sa gymnastique mentale", "attend que le café fasse effet", "plaide sa cause auprès du compilateur",
+	"compte les moutons électriques", "épluche les octets", "fait mariner la question", "bat le rappel des idées",
+	"cherche ses lunettes dans le contexte", "jongle avec trois tokens", "écoute le murmure des pointeurs", "dépoussière sa boule de cristal",
+	"fait un câlin au compilateur", "remonte ses manches virtuelles", "invoque l'esprit du grep", "danse la gigue des octets",
+	"tricote une réponse", "mouline à plein régime", "fait la sieste active", "confie le problème à un pigeon voyageur",
+	"réchauffe ses circuits au bain-marie", "chasse le bug sauvage", "interroge les astres du code", "ouvre un œil sur la RAM",
+	"fait claquer ses transistors", "gratte la surface du problème", "déplie sa carte du royaume", "taille une plume numérique",
+	"marmonne en binaire", "mâchouille le prompt", "convoque le conseil des sages", "teste sa théorie sur un canard en plastique",
+	"affûte son meilleur argument", "fait le tour du propriétaire", "secoue le sac à idées", "souffle sur les braises de l'inspiration",
+	"s'étire les neurones", "range ses pensées par ordre alphabétique", "triture le problème", "fait bouillir la marmite à tokens",
+	"navigue à vue dans le brouillard", "ausculte le code", "fait passer le message de bouche à oreille", "cherche une aiguille dans la botte de foin",
+	"lustre ses algorithmes", "tire les ficelles", "lit dans le marc de café", "fouille dans le grenier de la mémoire",
+	"prend son élan", "dialogue avec le rubber duck", "remue le cambouis", "mène l'enquête en imperméable",
+	"colle des post-it mentaux", "affronte le dragon des dépendances", "improvise un solo de clavier", "plie le problème en origami",
+	"fait des étincelles", "tâtonne dans le noir avec panache", "pousse un grand soupir numérique", "met son chapeau de détective",
+	"réchauffe la soupe de bits", "pétrit la pâte à réponses", "se gratte la tête avec élégance", "tisse sa toile de raisonnement",
+	"sonde les abysses du dépôt", "fait du lèche-vitrine dans les fichiers", "affine sa stratégie de ninja", "mitonne un petit plat de logique",
+	"pèse ses mots au microgramme", "compte jusqu'à dix en hexadécimal", "ressort la boîte à outils", "verse un peu d'huile dans les rouages",
+	"gonfle ses voiles", "joue à cache-cache avec le bug", "s'entraîne devant le miroir", "cuisine à feu doux",
+	"déchiffre les hiéroglyphes du legacy", "fait des claquettes sur le clavier", "visse et dévisse ses hypothèses", "plonge en apnée dans le code",
+	"cherche la clé sous le paillasson", "organise un brainstorm avec lui-même", "enfile ses bottes de sept lieues", "polit le cristal de la logique",
+	"mélange les cartes", "met le nez dans les logs", "fait tourner la roue du hamster", "dépiste l'erreur à la trace",
+	"échafaude une théorie bancale mais courageuse", "ratisse large", "sort la loupe de Sherlock", "peaufine sa botte secrète",
+	"dompte le chaos", "carbure au café imaginaire", "fait chanter les variables", "avale un dictionnaire de travers",
+	"reprend son souffle au bord du stack", "s'en remet au hasard bien organisé", "attrape les idées au vol", "fait du rangement dans ses pointeurs",
+}
 
 // spinnerVerbs : la liste par défaut, ou celle du réglage « spinnerVerbs » de Claude Code (mode « replace » : seulement la vôtre ;
 // « append » : à la suite de la liste par défaut).
