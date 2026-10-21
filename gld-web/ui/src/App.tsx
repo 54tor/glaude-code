@@ -5,12 +5,17 @@ import { buildTree, type Entry } from "@/lib/tree"
 import { useLocal } from "@/hooks/useLocal"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ActionsCtx, type Actions } from "@/components/actions"
 import { Confirm, type Ask } from "@/components/Confirm"
 import { Conversation } from "@/components/Conversation"
 import { DirPicker, type Pick } from "@/components/DirPicker"
 import { NodeView } from "@/components/NodeView"
+
+// Sessions lancées automatiquement (revues de sécurité) : leur titre est leur premier prompt. Elles sont masquées
+// de l'arbre, comptées en tête de page, et se suppriment d'un coup avec le bouton dédié.
+const AUTO = ["Review this change for security vulnerabilities", "You previously flagged these candidate"]
 
 export default function App() {
   const [data, setData] = useState<Data | null>(null)
@@ -30,19 +35,28 @@ export default function App() {
     }
   }, [])
 
-  // Sessions retenues par le filtre (projet ou titre).
+  // Sessions affichées (hors revues automatiques, selon le filtre) et revues automatiques masquées.
   const view = useMemo(() => {
     const f = q.toLowerCase()
     const entries: Entry[] = []
+    const autoItems: Item[] = []
     let ns = 0
+    let akb = 0
     for (const g of data?.groups ?? []) {
-      const ss = g.sessions.filter((s) => !f || g.project.toLowerCase().includes(f) || s.title.toLowerCase().includes(f))
+      const vis: Session[] = []
+      for (const s of g.sessions) {
+        if (AUTO.some((p) => s.title.includes(p))) {
+          autoItems.push({ dir: s.dir, id: s.id })
+          akb += s.kb
+        } else vis.push(s)
+      }
+      const ss = vis.filter((s) => !f || g.project.toLowerCase().includes(f) || s.title.toLowerCase().includes(f))
       if (ss.length) {
         entries.push({ g, ss })
         ns += ss.length
       }
     }
-    return { entries, ns, np: entries.length }
+    return { entries, autoItems, akb, ns, np: entries.length }
   }, [data, q])
 
   const tree = useMemo(() => buildTree(view.entries, data?.home ?? ""), [view.entries, data?.home])
@@ -95,6 +109,16 @@ export default function App() {
       }),
   }
 
+  const purgeAuto = () => {
+    const n = view.autoItems.length
+    setAsk({
+      title: `Supprimer les ${n} revues de sécurité ?`,
+      body: `Environ ${Math.round(view.akb / 1024)} Mo : sessions automatiques dont le titre contient « Review this change for security vulnerabilities » ou « You previously flagged these candidate ».\n\nLes sessions vivantes sont épargnées. Suppression définitive.`,
+      confirm: `Supprimer ${n} sessions`,
+      run: () => act("/rm", { items: view.autoItems }, `Suppression de ${n} sessions…`),
+    })
+  }
+
   return (
     <ActionsCtx.Provider value={actions}>
       <main className="mx-auto max-w-4xl px-4 py-8">
@@ -103,12 +127,17 @@ export default function App() {
             <h1 className="text-2xl font-semibold tracking-tight">Sessions Claude</h1>
             <p className="text-sm text-muted-foreground">
               {data ? (
-                `${view.ns} session(s) dans ${view.np} projet(s)`
+                `${view.ns} session(s) dans ${view.np} projet(s)${view.autoItems.length ? ` · ${view.autoItems.length} revue(s) de sécurité masquée(s)` : ""}`
               ) : (
                 <Skeleton className="mt-1 h-4 w-56" />
               )}
             </p>
           </div>
+          {view.autoItems.length > 0 && (
+            <Button variant="destructive" onClick={purgeAuto}>
+              Supprimer les {view.autoItems.length} revues de sécurité
+            </Button>
+          )}
         </header>
 
         <div className="mb-4 space-y-3">
