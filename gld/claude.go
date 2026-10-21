@@ -118,9 +118,13 @@ func withPath(c *exec.Cmd) *exec.Cmd {
 }
 
 // matin exécute gld-matin (cli) en direct et renvoie sa sortie ; l'erreur s'y ajoute, pour qu'un échec dise pourquoi
-// (remplaçable dans les tests).
+// (remplaçable dans les tests). Appelé depuis le web : la session s'ouvre dans un terminal de la machine, avec tmux
+// dedans (le tmux courant de gld, invisible pour l'utilisateur, ne convient pas).
 var matin = func(ctx context.Context, args ...string) (string, error) {
 	var buf strings.Builder
+	if launcherAvailable("terminator-tmux") {
+		args = append([]string{"--term", "terminator-tmux"}, args...)
+	}
 	err := cliMatin(ctx, args, &buf)
 	if err != nil {
 		buf.WriteString("gld-matin : " + err.Error() + "\n")
