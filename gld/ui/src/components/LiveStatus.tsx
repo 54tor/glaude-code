@@ -67,16 +67,15 @@ export function LiveBar({ live: { st, now, open }, id }: { live: Live; id: strin
           <span className={cn("flex min-w-0 items-center gap-1.5 font-medium", st.thinking ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>
             {st.thinking ? <Loader2 className="size-3.5 shrink-0 animate-spin" /> : <span className="size-1.5 shrink-0 rounded-full bg-current" />}
             <span className="truncate" title={st.activity}>
-              {label(st, id, now)}
+              {st.tool && st.activity.startsWith("exécute ") ? "exécute un outil…" : label(st, id, now)}
             </span>
             {st.since > 0 && st.thinking && <span className="shrink-0 font-normal text-muted-foreground">depuis {secs(now - st.since)}</span>}
           </span>
         )}
-        {isOpen && st.tool && !st.activity.startsWith("exécute") && (
-          <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground" title={st.tool}>
-            <Wrench className="size-3 shrink-0" />
-            <span className="shrink-0">{st.toolRunning ? "outil en cours" : "dernier outil"} :</span>
-            <span className="truncate font-mono">{st.tool}</span>
+        {isOpen && st.tool && (
+          <span className="msg flex min-w-0 basis-full gap-2 border-l-2 py-0.5 pl-3 text-xs text-muted-foreground" title={st.tool}>
+            <Wrench className="mt-0.5 size-3.5 shrink-0" aria-label={st.toolRunning ? "outil en cours" : "dernier outil"} />
+            <span className="min-w-0 break-words whitespace-pre-wrap">{st.tool}</span>
           </span>
         )}
       </div>
