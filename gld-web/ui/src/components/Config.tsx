@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
+import { toast } from "sonner"
 import { api, type CfgOverview } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -68,9 +69,16 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
               version={ov.backups.length} // chaque écriture ajoute une sauvegarde : la vue se relit, sans perdre ce qui est déplié
               home={home}
               onRemove={(file, kind, rule) => propose({ file, op: "remove", path: ["permissions", kind], value: rule })}
-              onTransfer={(file, kind, rule, move) =>
-                proposePerms("u", JSON.stringify({ permissions: { [kind]: [rule] } }), "merge", move ? () => propose({ file, op: "remove", path: ["permissions", kind], value: rule }) : undefined)
-              }
+              onTransfer={async (file, kind, rule, move) => {
+                // Direct, sans fenêtre : la règle rejoint vos réglages, puis (déplacement) quitte son fichier d'origine.
+                const r = (await api.post("/config-perm-import", { file: "u", text: JSON.stringify({ permissions: { [kind]: [rule] } }), mode: "merge", dry: false })) as { ok: boolean; out: string }
+                if (!r.ok) return void toast.error(r.out)
+                if (move) await propose({ file, op: "remove", path: ["permissions", kind], value: rule })
+                else {
+                  toast.success("Règle copiée dans vos réglages")
+                  reload()
+                }
+              }}
               onEdit={(file, t) => {
                 setFileId(file)
                 onTab(t)
