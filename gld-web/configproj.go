@@ -105,7 +105,7 @@ func projectConfigs() []ProjectCfg {
 			}
 			sort.Slice(pf.Rows, func(i, j int) bool { return pf.Rows[i].Path < pf.Rows[j].Path })
 			pc.Files = append(pc.Files, pf)
-			for _, kind := range permKinds {
+			for _, kind := range append(append([]string{}, permKinds...), "additionalDirectories") {
 				v, _ := lookup(doc, "permissions", kind)
 				for _, r := range strList(v) {
 					pc.Perms[kind] = append(pc.Perms[kind], ProjRule{r, scope})

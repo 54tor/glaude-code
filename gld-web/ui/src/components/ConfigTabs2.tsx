@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Check, ClipboardCopy, Globe, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react"
+import { Check, ClipboardCopy, FolderOpen, Globe, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react"
 import type { BackupInfo, CfgEdit, CfgOverview, PermSuggest } from "@/lib/api"
 import { api } from "@/lib/api"
 import { describeKey } from "@/lib/configKeys"
@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { PermImportDialog, PermIOButtons } from "./ConfigPermIO"
 import { Input } from "@/components/ui/input"
 import { Choose } from "./Choose"
+import { useActions } from "./actions"
 import { toast } from "sonner"
 import { useEffect } from "react"
 
@@ -25,9 +26,14 @@ const KINDS = [
   ["allow", "Autorisées", "Lancées sans demander."],
   ["ask", "À confirmer", "Demandent toujours."],
   ["deny", "Refusées", "Jamais lancées ; l'emportent sur les autres."],
+  ["additionalDirectories", "Dossiers supplémentaires", "Claude peut y lire et y travailler en plus du dossier de la session (~/ et chemins relatifs au projet acceptés)."],
 ] as const
+const RULE_KINDS = KINDS.slice(0, 3) // catégories entre lesquelles une règle de permission peut passer
+const DIRS = "additionalDirectories"
 
 export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTransfer, added, moveRule }: { added: (file: string, kind: string) => string[]; moveRule: (file: string, from: string, rule: string, to: string, text: string) => Promise<void>; onTransfer: (file: string, kind: string, rule: string, move: boolean) => void; gone: (file: string, kind: string, rule: string) => boolean; file: string; label: string; doc: Doc; propose: Propose; proposePerms: (file: string, text: string, mode: string) => Promise<string | null> }) {
+  const a = useActions()
+  const home = a.home
   const [importing, setImporting] = useState(false)
   const [draft, setDraft] = useState<Record<string, string>>({})
   const [sug, setSug] = useState<PermSuggest[] | null>(null)
@@ -72,7 +78,7 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTran
                       }}
                     >
                       <Input value={edit.text} onChange={(e) => setEdit({ ...edit, text: e.target.value })} onKeyDown={(e) => e.key === "Escape" && setEdit(null)} autoFocus className="h-8 flex-1 font-mono text-xs" aria-label={`Modifier ${r}`} />
-                      <Choose value={edit.to} onChange={(to) => setEdit({ ...edit, to })} options={KINDS.map(([k, l]) => [k, l] as const)} label="Catégorie" className="w-36" />
+                      {kind !== DIRS && <Choose value={edit.to} onChange={(to) => setEdit({ ...edit, to })} options={RULE_KINDS.map(([k, l]) => [k, l] as const)} label="Catégorie" className="w-36" />}
                       <Button size="icon-xs" variant="ghost" type="submit" aria-label="Enregistrer la règle">
                         <Check />
                       </Button>
@@ -101,10 +107,11 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTran
                   <ContextMenuItem onSelect={() => navigator.clipboard.writeText(r).then(() => toast.success("Règle copiée"), () => toast.error("Copie impossible"))}>
                     <ClipboardCopy /> Copier la règle
                   </ContextMenuItem>
+                  {kind !== DIRS && (
                   <ContextMenuSub>
                     <ContextMenuSubTrigger>Changer de catégorie</ContextMenuSubTrigger>
                     <ContextMenuSubContent>
-                      {KINDS.filter(([k]) => k !== kind).map(([k, l]) => (
+                      {RULE_KINDS.filter(([k]) => k !== kind).map(([k, l]) => (
                         <ContextMenuItem
                           key={k}
                           onSelect={() => moveRule(file, kind, r, k, r)}
@@ -114,7 +121,8 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTran
                       ))}
                     </ContextMenuSubContent>
                   </ContextMenuSub>
-                  {file !== "u" && (
+                  )}
+                  {file !== "u" && kind !== DIRS && (
                     <>
                       <ContextMenuSeparator />
                       <ContextMenuItem onSelect={() => onTransfer(file, kind, r, false)}>
@@ -142,7 +150,20 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTran
                 if (draft[kind]?.trim()) add(kind, draft[kind]).then(() => setDraft({ ...draft, [kind]: "" }))
               }}
             >
-              <Input value={draft[kind] ?? ""} onChange={(e) => setDraft({ ...draft, [kind]: e.target.value })} placeholder="Bash(git status:*)" className="h-8 font-mono text-xs" aria-label={`Nouvelle règle ${label}`} />
+              <Input value={draft[kind] ?? ""} onChange={(e) => setDraft({ ...draft, [kind]: e.target.value })} placeholder={kind === DIRS ? "/chemin/du/dossier" : "Bash(git status:*)"} className="h-8 font-mono text-xs" aria-label={`Nouvelle règle ${label}`} />
+              {kind === DIRS && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  type="button"
+                  onClick={async () => {
+                    const p = await a.pickDir("Ajouter un dossier supplémentaire", draft[kind] || home)
+                    if (p) add(kind, p)
+                  }}
+                >
+                  <FolderOpen /> Parcourir…
+                </Button>
+              )}
               <Button size="sm" variant="outline" type="submit">
                 <Plus /> Ajouter
               </Button>

@@ -90,6 +90,14 @@ func (e *CfgEdit) validate() error {
 			return errors.New("règle de permission : un texte sur une ligne est attendu")
 		}
 		e.Value = strings.TrimSpace(s)
+	case len(p) == 2 && p[0] == "permissions" && p[1] == "additionalDirectories":
+		// dossiers accessibles en plus du dossier de travail : un chemin sur une ligne (absolu, « ~/… » ou relatif au projet)
+		s, ok := e.Value.(string)
+		s = strings.TrimSpace(s)
+		if (e.Op != "add" && e.Op != "remove") || !ok || s == "" || len(s) > 500 || strings.ContainsAny(s, "\n\r\x00") {
+			return errors.New("dossier supplémentaire : un chemin sur une ligne est attendu")
+		}
+		e.Value = s
 	case len(p) == 2 && p[0] == "permissions" && p[1] == "defaultMode":
 		if e.Op == "delete" {
 			return nil
