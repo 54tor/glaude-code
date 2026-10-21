@@ -91,7 +91,7 @@ var tokenRun = func(text string) (int, string, float64, error) {
 	cmd := withPath(exec.CommandContext(ctx, "claude", "-p", "--model", "haiku", "--tools", "", "--disable-slash-commands",
 		"--strict-mcp-config", "--setting-sources", "", "--no-session-persistence", "--system-prompt", tokenSystem, "--output-format", "json"))
 	cmd.Stdin = strings.NewReader(text)
-	cmd.Dir = os.TempDir()
+	cmd.Dir = workDir()
 	out, err := cmd.Output()
 	var r struct {
 		IsError    bool                       `json:"is_error"`

@@ -84,6 +84,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "  "+u)
 		}
 	}
+	defer removeWorkDir()
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

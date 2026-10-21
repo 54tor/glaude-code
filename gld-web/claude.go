@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"unicode/utf8"
 )
 
@@ -62,6 +63,32 @@ func claudeArgs(raw string) ([]string, error) {
 var flagRe = regexp.MustCompile(`^--?[a-zA-Z][a-zA-Z0-9-]*(=[A-Za-z0-9._:/-]+)?$`)
 
 var nonAlnum = regexp.MustCompile(`[^a-zA-Z0-9]`)
+
+var (
+	workOnce sync.Once
+	workPath string
+)
+
+// workDir : dossier de travail des appels à claude qui ne doivent voir aucun projet (brouillons, comptes de tokens,
+// état MCP). Un dossier neuf et privé (0700), jamais /tmp lui-même : n'importe qui peut y déposer un CLAUDE.md, un
+// .mcp.json ou un .claude/settings.json que claude lirait et exécuterait avec vos droits.
+func workDir() string {
+	workOnce.Do(func() {
+		d, err := os.MkdirTemp("", "gld-web-")
+		if err != nil {
+			d = cfgDir() // à défaut, le dossier de configuration de l'utilisateur (privé lui aussi)
+		}
+		workPath = d
+	})
+	return workPath
+}
+
+// removeWorkDir : à l'arrêt, retire le dossier de travail s'il a été créé ici.
+func removeWorkDir() {
+	if workPath != "" && workPath != cfgDir() {
+		os.RemoveAll(workPath)
+	}
+}
 
 func withPath(c *exec.Cmd) *exec.Cmd {
 	if runtime.GOOS == "windows" {

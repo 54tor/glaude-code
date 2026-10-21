@@ -395,7 +395,7 @@ var mcpStatus = func() (map[string]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	cmd := withPath(exec.CommandContext(ctx, "claude", "mcp", "list"))
-	cmd.Dir = os.TempDir()
+	cmd.Dir = workDir()
 	out, err := cmd.Output()
 	if err != nil && len(out) == 0 {
 		return nil, err

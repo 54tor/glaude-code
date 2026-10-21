@@ -71,7 +71,7 @@ export function PermsTab({ file, doc, propose }: { file: string; doc: Doc; propo
       })}
       <section>
         <h3 className="text-sm font-medium">
-          Proposées <span className="text-xs font-normal text-muted-foreground">· commandes Bash simples revenues au moins 3 fois dans vos 40 dernières sessions, pas encore autorisées</span>
+          Proposées <span className="text-xs font-normal text-muted-foreground">· commandes Bash simples revenues au moins 3 fois dans vos 40 dernières sessions, pas encore autorisées. Une règle Bash(cmd:*) autorise toutes les options de cmd ; « lecture seule » ne vaut que pour une courte liste de commandes sûres.</span>
         </h3>
         <ul className="mt-1 space-y-px">
           {(sug ?? []).map((s) => (
