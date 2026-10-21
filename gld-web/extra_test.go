@@ -445,6 +445,13 @@ func TestMemoryDraft(t *testing.T) {
 	if _, _, err := memWriteDraft("haiku", "convertis", "g/CLAUDE.md", []string{"m/-p/a.md"}); err != nil || sys != claudeSystem || !strings.Contains(got, "n'existe pas encore") {
 		t.Fatal(err, got)
 	}
+	// Mise en forme d'une commande : format commande, texte transmis, consigne par défaut.
+	if _, _, err := snippetDraft("haiku", "", "fais une revue de code"); err != nil || sys != cmdSystem || !strings.Contains(got, "fais une revue de code") || !strings.Contains(got, "Mets ce texte en forme") {
+		t.Fatal(err, got)
+	}
+	if _, _, err := snippetDraft("haiku", "", " "); err == nil {
+		t.Fatal("rien à mettre en forme : accepté")
+	}
 	// Nouvelle entrée : sa ligne s'ajoute à l'index, une seule fois.
 	text = "---\nname: Entrée B\ndescription: ce que dit B\nmetadata:\n  type: project\n---\nB\n"
 	if memSave("m/-p/b.md", text) != nil || memIndex("m/-p/b.md", text) != nil || memIndex("m/-p/b.md", text) != nil {

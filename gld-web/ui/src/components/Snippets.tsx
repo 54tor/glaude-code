@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { Check, Copy, Download, MessageSquarePlus, Pencil, Plus, Save, Terminal, Trash2, Upload, X } from "lucide-react"
+import { Check, Copy, Download, Loader2, MessageSquarePlus, Pencil, Plus, Save, Sparkles, Terminal, Trash2, Undo2, Upload, X } from "lucide-react"
 import { toast } from "sonner"
 import { api, type SnipScope, type Snippet } from "@/lib/api"
 import { ago, size, tilde } from "@/lib/format"
@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Choose } from "./Choose"
 import type { Ask } from "./Confirm"
 import { Markdown } from "./Conversation"
@@ -46,6 +47,8 @@ export function Snippets({
   const [creating, setCreating] = useState("") // nouveau snippet pas encore enregistré
   const [scope, setScope] = useState("") // emplacement de Nouveau / Importer / Exporter ("" : personnelles)
   const [copied, setCopied] = useState(false)
+  const [haiku, setHaiku] = useState(false) // fenêtre de mise en forme ouverte
+  const [before, setBefore] = useState<{ key: string; text: string } | null>(null) // texte d'avant la mise en forme
   const upload = useRef<HTMLInputElement>(null)
   const text = loaded?.key === sel ? loaded.text : null
   const editing = draft?.key === sel ? draft : null
@@ -62,6 +65,12 @@ export function Snippets({
 
   const label = (sc: string) => (sc ? tilde(scopes.find((x) => x.dir === sc)?.project ?? sc, home) : "Personnelles")
   const prefix = (sc: string) => (sc ? `p/${sc}/` : "u/")
+
+  const formatted = (t: string) => {
+    const cur = editing?.text ?? text ?? ""
+    setBefore({ key: sel, text: cur })
+    setDraft({ key: sel, text: t })
+  }
 
   const copy = () =>
     text !== null &&
@@ -224,6 +233,19 @@ export function Snippets({
                   >
                     <X /> Annuler
                   </Button>
+                  {before?.key === sel && before.text !== editing.text && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => (setDraft({ key: sel, text: before.text }), setBefore(null))}
+                      title="Revenir au texte d'avant la mise en forme"
+                    >
+                      <Undo2 /> Texte d'avant
+                    </Button>
+                  )}
+                  <Button variant="outline" size="sm" onClick={() => setHaiku(true)}>
+                    <Sparkles /> Haiku…
+                  </Button>
                   <Button size="sm" onClick={save} disabled={editing.text === text}>
                     <Save /> Enregistrer
                   </Button>
@@ -235,6 +257,9 @@ export function Snippets({
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => text !== null && setDraft({ key: sel, text })} disabled={text === null}>
                     <Pencil /> Modifier
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setHaiku(true)} disabled={text === null} title="Mettre en forme avec Haiku">
+                    <Sparkles /> Haiku…
                   </Button>
                   <Button variant="outline" size="sm" onClick={copy} disabled={text === null}>
                     {copied ? <Check /> : <Copy />} {copied ? "Copié" : "Copier"}
@@ -265,6 +290,7 @@ export function Snippets({
           </>
         )}
       </div>
+      <HaikuFormat open={haiku} text={editing?.text ?? text ?? ""} onClose={() => setHaiku(false)} onDone={formatted} />
     </div>
   )
 }
@@ -277,5 +303,64 @@ function CommandView({ text }: { text: string }) {
       {m && <pre className="mb-4 rounded-lg border bg-muted/40 px-3 py-2 text-xs whitespace-pre-wrap text-muted-foreground">{m[1]}</pre>}
       <Markdown t={m ? text.slice(m[0].length) : text} />
     </>
+  )
+}
+
+const MODELS = [
+  ["haiku", "Haiku (rapide, quelques dixièmes de centime)"],
+  ["sonnet", "Sonnet"],
+  ["opus", "Opus"],
+] as const
+
+// Mise en forme d'une commande par un petit modèle : le résultat remplace le texte de l'éditeur, sans être enregistré.
+function HaikuFormat({ open, text, onClose, onDone }: { open: boolean; text: string; onClose: () => void; onDone: (t: string) => void }) {
+  const [instruction, setInstruction] = useState("")
+  const [model, setModel] = useState("haiku")
+  const [busy, setBusy] = useState(false)
+  const run = async () => {
+    setBusy(true)
+    const r = (await api.post("/snippet-draft", { model, instruction, text })) as { ok: boolean; out: string; text?: string; cost?: number }
+    setBusy(false)
+    if (!r.ok || !r.text) return void toast.error(r.out)
+    toast.success("Mise en forme prête : relis-la puis enregistre", { description: r.cost ? `coût : ${r.cost.toFixed(4)} $` : undefined })
+    setInstruction("")
+    onClose()
+    onDone(r.text)
+  }
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && !busy && onClose()}>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Mettre en forme avec Haiku</DialogTitle>
+          <DialogDescription>
+            En-tête description et argument-hint, prompt clair, $ARGUMENTS à sa place. Le résultat s'ouvre dans l'éditeur, sans être enregistré.
+          </DialogDescription>
+        </DialogHeader>
+        <textarea
+          value={instruction}
+          onChange={(e) => setInstruction(e.target.value)}
+          onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "Enter" && (e.preventDefault(), run())}
+          placeholder={
+            text.trim() ? "Consigne facultative : ajoute un format de sortie, prends un fichier en argument…" : "Décris la commande à rédiger…"
+          }
+          autoFocus
+          rows={3}
+          disabled={busy}
+          className="w-full resize-y rounded-lg border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          aria-label="Consigne"
+        />
+        <DialogFooter className="flex-wrap items-center gap-2 sm:justify-between">
+          <Choose value={model} onChange={setModel} options={MODELS} label="Modèle" size="default" />
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose} disabled={busy}>
+              Annuler
+            </Button>
+            <Button onClick={run} disabled={busy || (!text.trim() && !instruction.trim())} title="Ctrl+Entrée">
+              {busy ? <Loader2 className="animate-spin" /> : <Sparkles />} Mettre en forme
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

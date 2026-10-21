@@ -850,6 +850,20 @@ func main() {
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "out": "Snippet enregistré"})
 	})
+	mux.HandleFunc("POST /snippet-draft", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Model, Instruction, Text string }
+		if json.NewDecoder(io.LimitReader(r.Body, snippetMax+16<<10)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		text, cost, err := snippetDraft(req.Model, req.Instruction, req.Text)
+		journal("snippet-draft %s (%d caractères) : %v (%.4f $)", req.Model, len(req.Text), errOr(err), cost)
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": "Mise en forme prête", "text": text, "cost": cost})
+	})
 	mux.HandleFunc("POST /snippet-rm", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Key string }
 		json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req)

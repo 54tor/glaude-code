@@ -26,6 +26,32 @@ Markdown concis : quelques titres, des listes de règles courtes et actionnables
 Garde ce que contient déjà le fichier existant (sauf s'il contredit les références, auquel cas les références l'emportent) et la langue des sources.
 Réponds uniquement avec le contenu complet du fichier, sans bloc de code ni commentaire.`
 
+// cmdSystem : mise en forme d'une commande personnalisée de Claude Code (un snippet).
+const cmdSystem = `Tu mets en forme une commande personnalisée de Claude Code : un fichier Markdown de prompt, invoqué par /nom.
+Format : un en-tête YAML entre deux lignes « --- » avec description (une ligne : ce que fait la commande) et, seulement si la commande prend des arguments, argument-hint (ex. [fichier] [niveau]) ; puis le prompt lui-même, clair et à l'impératif, structuré si c'est utile (étapes, contraintes, format de sortie attendu). Mets $ARGUMENTS (ou $1, $2…) là où l'utilisateur donne ses arguments.
+N'invente aucune exigence absente de la consigne ou du texte d'origine. Garde la langue de la source. Réponds uniquement avec le contenu complet du fichier, sans bloc de code ni commentaire.`
+
+// snippetDraft : la commande mise en forme (ou rédigée) par le modèle, à partir du texte de l'éditeur et d'une consigne.
+func snippetDraft(model, instruction, text string) (string, float64, error) {
+	instruction, text = strings.TrimSpace(instruction), strings.TrimSpace(text)
+	switch {
+	case !slices.Contains(writeModels, model):
+		return "", 0, errors.New("modèle inconnu")
+	case instruction == "" && text == "":
+		return "", 0, errors.New("rien à mettre en forme")
+	case len(instruction) > 8<<10 || len(text) > snippetMax:
+		return "", 0, errors.New("consigne ou texte trop long")
+	}
+	if instruction == "" {
+		instruction = "Mets ce texte en forme comme une commande Claude Code."
+	}
+	prompt := "Consigne : " + instruction + "\n"
+	if text != "" {
+		prompt += "\nTexte actuel de la commande :\n~~~~\n" + text + "\n~~~~\n"
+	}
+	return memDraft(model, cmdSystem, prompt)
+}
+
 // isClaudeMd : la clé désigne un CLAUDE.md (global ou de projet), pas une entrée de mémoire.
 func isClaudeMd(key string) bool {
 	return key == "g/CLAUDE.md" || (strings.HasPrefix(key, "p/") && strings.HasSuffix(key, "CLAUDE.md"))
