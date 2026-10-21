@@ -43,11 +43,12 @@ exit ${FAKE_MATIN_RC:-0}
 func web(t *testing.T) (h http.Handler, cfg, proj string) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	bin := filepath.Join(home, "bin")
+	// Les faux binaires ne sont trouvés que via ~/.local/bin, que withPath ajoute au PATH.
+	bin := filepath.Join(home, ".local", "bin")
 	os.MkdirAll(bin, 0o755)
 	os.WriteFile(filepath.Join(bin, "claude"), []byte(fakeClaude), 0o755)
 	os.WriteFile(filepath.Join(bin, "gld-matin"), []byte(fakeMatin), 0o755)
-	t.Setenv("PATH", bin)
+	t.Setenv("PATH", t.TempDir())
 	t.Setenv("FAKE_AGENTS", "[]")
 	t.Setenv("GLD_WEB_SNIPPETS", "")
 	cfg = filepath.Join(home, ".claude")
