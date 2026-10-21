@@ -2,11 +2,10 @@ package main
 
 // Réouverture de sessions dans un terminal.
 // Unix : on délègue à bin/gld-matin (qui sait détecter tmux, kitty, gnome-terminal…).
-// Windows : Windows Terminal (wt.exe) si présent, sinon une fenêtre cmd.
+// Windows : voir open_windows.go (claude est lancé directement, jamais via cmd.exe).
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -14,27 +13,12 @@ import (
 	"time"
 )
 
-// safeTitle : un titre passé à wt.exe ne doit contenir ni « ; » (séparateur de commandes de wt)
-// ni caractère de contrôle.
-func safeTitle(s string) string {
-	s = strings.Map(func(r rune) rune {
-		if r < 32 || r == ';' {
-			return ' '
-		}
-		return r
-	}, s)
-	return strings.TrimSpace(cut(s, 40))
-}
+var unsafeTitle = regexp.MustCompile(`[^\p{L}\p{N} ._-]+`)
 
-// openTerminal ouvre `claude [options] --resume id` dans un nouvel onglet (Windows).
-func openTerminal(cwd, title, id string, flags []string) error {
-	cl := append(append([]string{"claude"}, flags...), "--resume", id)
-	if wt, err := exec.LookPath("wt.exe"); err == nil {
-		a := append([]string{"-w", "0", "new-tab", "--title", safeTitle(title), "-d", cwd, "cmd", "/k"}, cl...)
-		return exec.Command(wt, a...).Start()
-	}
-	a := append([]string{"/c", "start", safeTitle(title), "/D", cwd, "cmd", "/k"}, cl...)
-	return exec.Command("cmd", a...).Start()
+// safeTitle : titre d'onglet restreint à des lettres, chiffres, espaces et « . _ - ». Il ne passe jamais par
+// un interpréteur, mais « ; » est le séparateur de commandes de wt.exe : on n'en laisse rien passer.
+func safeTitle(s string) string {
+	return strings.TrimSpace(cut(unsafeTitle.ReplaceAllString(s, " "), 40))
 }
 
 var spaceRe = regexp.MustCompile(`\s+`)
