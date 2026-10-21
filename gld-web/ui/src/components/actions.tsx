@@ -34,6 +34,7 @@ export type Actions = {
   read: (s: Session) => void
   open: (body: { dir: string; id?: string }) => void
   resumeWith: (r: Row) => void // reprendre en envoyant un message
+  newSession: (project: string, initial?: string) => void // nouvelle session dans ce dossier de travail
   copy: (s: Session) => void
   rename: (s: Session) => void
   exportMd: (r: Row) => void

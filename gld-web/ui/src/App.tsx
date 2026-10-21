@@ -12,6 +12,7 @@ import { useLocal } from "@/hooks/useLocal"
 import { applyFont } from "@/lib/fonts"
 import { withChoice, type Choice } from "@/lib/models"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -26,7 +27,7 @@ import { Sidebar } from "@/components/Sidebar"
 import { Snippets } from "@/components/Snippets"
 import { Memory } from "@/components/Memory"
 import { Tabs } from "@/components/Tabs"
-import { Compose, type ComposeAsk } from "@/components/Compose"
+import { Compose, type ComposeAsk, type Target } from "@/components/Compose"
 
 // Sessions lancées automatiquement (revues de sécurité) : leur titre est leur premier prompt. Elles sont masquées
 // de l'arbre, comptées dans la barre latérale, et se suppriment d'un coup avec le bouton dédié.
@@ -61,6 +62,7 @@ export default function App() {
   const [hits, setHits] = useState<{ q: string; m: Map<string, Hit> } | null>(null)
   const [picked, setPicked] = useState(() => new Set<string>())
   const [args, setArgs] = useLocal("ccArgs", "")
+  const [hideGrouped, setHideGrouped] = useLocal("ccHideGrouped", "") // vue d'un dossier : masquer les sessions déjà groupées
   // Modèle et effort par défaut des nouveaux prompts (Réglages), modifiables à chaque prompt.
   const [model, setModel] = useLocal("ccModel", "")
   const [effort, setEffort] = useLocal("ccEffort", "")
@@ -181,6 +183,9 @@ export default function App() {
   const selected = [...picked].map((id) => view.byId.get(id)).filter((r): r is Row => !!r)
 
   const node = route.kind === "dir" ? find(tree, route.key) : null
+  // Sessions du dossier affiché qui appartiennent déjà à au moins un de ses groupes.
+  const grouped = new Set(node?.g ? vgroups.filter((x) => x.project === node.g!.project).flatMap((x) => x.ids) : [])
+  const nGrouped = node?.ss.filter((s) => grouped.has(s.id)).length ?? 0
   const vg = route.kind === "group" ? vgroups.find((g) => g.name === route.name && gkey(g) === route.key) : undefined
   const rows: Row[] =
     route.kind === "recent"
@@ -191,7 +196,7 @@ export default function App() {
             .filter((r): r is Row => !!r)
             .sort(byDate)
         : route.kind === "dir"
-          ? (node?.ss ?? []).map((s) => ({ s, g: node!.g! }))
+          ? (node?.ss ?? []).filter((s) => !(hideGrouped && grouped.has(s.id))).map((s) => ({ s, g: node!.g! }))
           : route.kind === "all"
             ? view.rows
             : []
@@ -252,6 +257,26 @@ export default function App() {
   }
   const newGroup = (ids: string[], project: string) =>
     named(`Nouveau groupe dans ${tilde(project, home)}`, "", "Créer", (n) => addTo(ids, project, n))
+  // Dossiers où lancer une nouvelle session : ceux qui existent encore, le plus récemment utilisé d'abord.
+  const targets = (): Target[] =>
+    (data?.groups ?? [])
+      .filter((x) => !x.missing && x.sessions.length)
+      .map((x) => ({ x, s: [...x.sessions].sort((p, q) => q.mtime - p.mtime)[0] }))
+      .sort((p, q) => q.s.mtime - p.s.mtime)
+      .map(({ x, s }) => ({ label: tilde(x.project, home), project: x.project, dir: s.dir, id: s.id }))
+  const newSession = (title: string, subtitle: string, ts: Target[], initial = "") =>
+    ts.length &&
+    setCompose({
+      id: "new:" + ts[0].project + title,
+      title,
+      subtitle,
+      project: ts[0].project,
+      initial,
+      send: "Lancer la session",
+      choice,
+      targets: ts,
+      run: (prompt, c, t = ts[0]) => act("/new-session", { dir: t.dir, id: t.id, prompt, args: withChoice(args, c) }, "Nouvelle session…", "last"),
+    })
   const groupRows = (x: VGroup) =>
     x.ids
       .map((id) => everyId.get(id))
@@ -364,6 +389,10 @@ export default function App() {
       }),
     read,
     open: (b) => act("/open", { ...b, args }, "Ouverture du terminal…", "last"),
+    newSession: (project, initial) => {
+      const t = targets().filter((x) => x.project === project)
+      if (t.length) newSession("Nouvelle session", t[0].label, t, initial)
+    },
     resumeWith: (r) =>
       live.has(r.s.id)
         ? void toast.info("Session déjà ouverte : écris le message dans son onglet")
@@ -539,6 +568,17 @@ export default function App() {
                   ` · recherche « ${qt} »`}
               </p>
             </div>
+            {g && nGrouped > 0 && (
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground select-none hover:text-foreground">
+                <Checkbox checked={!!hideGrouped} onCheckedChange={(c) => setHideGrouped(c === true ? "1" : "")} />
+                Masquer les sessions groupées ({nGrouped})
+              </label>
+            )}
+            {g && !g.missing && (
+              <Button variant="outline" size="sm" onClick={() => actions.newSession(g.project)} title="Nouvelle session Claude dans ce dossier">
+                <MessageSquarePlus /> Nouvelle session
+              </Button>
+            )}
             {g && !g.missing && (
               <Button
                 variant="outline"
@@ -606,7 +646,14 @@ export default function App() {
             <Memory sel={route.key} home={home} q={qt} onPick={(key) => go({ kind: "memory", key })} onAsk={setAsk} args={args} />
           ) : route.kind === "snippets" ? (
             snips?.dir ? (
-              <Snippets files={snips.files} dir={snips.dir} path={route.path} q={qt} onPick={(path) => go({ kind: "snippets", path })} />
+              <Snippets
+                files={snips.files}
+                dir={snips.dir}
+                path={route.path}
+                q={qt}
+                onPick={(path) => go({ kind: "snippets", path })}
+                onLaunch={(path, text) => newSession("Nouvelle session avec ce snippet", path, targets(), text + "\n\n")}
+              />
             ) : (
               <Empty
                 title="Bibliothèque non configurée"

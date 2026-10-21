@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Check, Copy, FileText } from "lucide-react"
+import { Check, Copy, FileText, MessageSquarePlus } from "lucide-react"
 import { toast } from "sonner"
 import { api, type Snippet } from "@/lib/api"
 import { ago, size } from "@/lib/format"
@@ -10,7 +10,21 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Markdown } from "./Conversation"
 
 // Bibliothèque de snippets (dossier GLD_WEB_SNIPPETS) : liste à gauche, contenu à droite, copie en un clic.
-export function Snippets({ files, dir, path, q, onPick }: { files: Snippet[]; dir: string; path: string; q: string; onPick: (p: string) => void }) {
+export function Snippets({
+  files,
+  dir,
+  path,
+  q,
+  onPick,
+  onLaunch,
+}: {
+  files: Snippet[]
+  dir: string
+  path: string
+  q: string
+  onPick: (p: string) => void
+  onLaunch: (path: string, text: string) => void
+}) {
   const f = q.toLowerCase()
   const shown = files.filter((s) => !f || s.path.toLowerCase().includes(f))
   const [loaded, setLoaded] = useState<{ path: string; text: string } | null>(null)
@@ -75,8 +89,11 @@ export function Snippets({ files, dir, path, q, onPick }: { files: Snippet[]; di
           <>
             <div className="flex items-center gap-2 border-b px-6 py-2">
               <code className="flex-1 truncate text-xs text-muted-foreground">{path}</code>
-              <Button size="sm" onClick={copy} disabled={text === null}>
+              <Button variant="outline" size="sm" onClick={copy} disabled={text === null}>
                 {copied ? <Check /> : <Copy />} {copied ? "Copié" : "Copier"}
+              </Button>
+              <Button size="sm" onClick={() => text !== null && onLaunch(path, text)} disabled={text === null}>
+                <MessageSquarePlus /> Nouvelle session avec ce snippet
               </Button>
             </div>
             <ScrollArea className="min-h-0 flex-1">

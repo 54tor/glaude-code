@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { ChevronRight, Folder, FolderInput, FolderOpen, SquareTerminal, Star, Tag, Trash2, TriangleAlert } from "lucide-react"
+import { ChevronRight, Folder, FolderInput, FolderOpen, MessageSquarePlus, SquareTerminal, Star, Tag, Trash2, TriangleAlert } from "lucide-react"
 import type { VGroup } from "@/lib/api"
 import { CM, GroupItems } from "./SessionMenu"
 import { cn } from "@/lib/utils"
@@ -17,6 +17,11 @@ function ProjectItems({ n }: { n: Node }) {
       {!g.missing && (
         <ContextMenuItem onSelect={() => a.open({ dir: n.ss[0].dir })}>
           <SquareTerminal /> Reprendre les récentes
+        </ContextMenuItem>
+      )}
+      {!g.missing && (
+        <ContextMenuItem onSelect={() => a.newSession(g.project)}>
+          <MessageSquarePlus /> Nouvelle session…
         </ContextMenuItem>
       )}
       <ContextMenuItem onSelect={() => a.moveGroup(g, own)}>

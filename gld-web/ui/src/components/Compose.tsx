@@ -16,6 +16,10 @@ import {
 import { useActions } from "./actions"
 import type { Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
+import { Choose } from "./Choose"
+
+// Dossier où lancer une nouvelle session : celui d'une de ses sessions (le serveur en tire le dossier de travail).
+export type Target = { label: string; project: string; dir: string; id: string }
 
 // Ce que la fenêtre de saisie envoie : un message de reprise, ou le prompt d'une nouvelle session.
 export type ComposeAsk = {
@@ -26,7 +30,8 @@ export type ComposeAsk = {
   initial?: string
   send: string // libellé du bouton
   choice: Choice // modèle et effort proposés par défaut (Réglages)
-  run: (text: string, choice: Choice) => void
+  targets?: Target[] // plusieurs : un menu pour choisir le dossier (le premier par défaut)
+  run: (text: string, choice: Choice, target?: Target) => void
 }
 
 // Saisie d'un message, éventuellement composé à partir de snippets et d'entrées de mémoire.
@@ -42,6 +47,9 @@ function Form({ ask, snippets, onClose }: { ask: ComposeAsk; snippets: Snippet[]
   const a = useActions()
   const [text, setText] = useState(ask.initial ?? "")
   const [choice, setChoice] = useState(ask.choice)
+  const [target, setTarget] = useState(0)
+  const tgt = ask.targets?.[target]
+  const project = tgt?.project ?? ask.project
   const [mem, setMem] = useState<{ global: MemFile[]; projects: MemProject[] } | null>(null)
   const area = useRef<HTMLTextAreaElement>(null)
   const ok = text.trim() !== ""
@@ -53,13 +61,13 @@ function Form({ ask, snippets, onClose }: { ask: ComposeAsk; snippets: Snippet[]
     }
   }, [])
   // La mémoire du projet d'abord, puis la globale, puis les autres projets.
-  const own = mem?.projects.filter((p) => p.project === ask.project) ?? []
-  const others = mem?.projects.filter((p) => p.project !== ask.project) ?? []
+  const own = mem?.projects.filter((p) => p.project === project) ?? []
+  const others = mem?.projects.filter((p) => p.project !== project) ?? []
 
   const send = () => {
     if (!ok) return
     onClose()
-    ask.run(text.trim(), choice)
+    ask.run(text.trim(), choice, tgt)
   }
   // Insère à la position du curseur (ou à la place de la sélection), puis y replace le curseur.
   const put = (t: string) => {
@@ -98,6 +106,19 @@ function Form({ ask, snippets, onClose }: { ask: ComposeAsk; snippets: Snippet[]
         <DialogTitle>{ask.title}</DialogTitle>
         <DialogDescription className="truncate">{ask.subtitle}</DialogDescription>
       </DialogHeader>
+      {ask.targets && ask.targets.length > 1 && (
+        <div className="flex items-center gap-2 text-sm">
+          <span className="shrink-0 text-muted-foreground">Dossier</span>
+          <Choose
+            value={String(target)}
+            onChange={(v) => setTarget(Number(v))}
+            options={ask.targets.map((t, i) => [String(i), t.label] as const)}
+            label="Dossier de la nouvelle session"
+            size="default"
+            className="min-w-0 flex-1"
+          />
+        </div>
+      )}
       <textarea
         ref={area}
         value={text}

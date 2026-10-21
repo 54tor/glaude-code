@@ -6,6 +6,7 @@ import { ArrowDownToLine, ArrowUpToLine, Loader2, MoreHorizontal, Send, Square, 
 import { useLocal } from "@/hooks/useLocal"
 import { withChoice, type Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
+import { Choose } from "./Choose"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
 import { full, size, tilde } from "@/lib/format"
 import { Button } from "@/components/ui/button"
@@ -220,19 +221,7 @@ function Composer({
           aria-label="Message à Claude"
         />
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <select
-            value={mode}
-            onChange={(e) => setMode(e.target.value)}
-            disabled={running}
-            className="h-7 max-w-full rounded-md border bg-background px-2 text-xs"
-            aria-label="Autorisations accordées à Claude"
-          >
-            {MODES.map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
-          </select>
+          <Choose value={mode} onChange={setMode} options={MODES} label="Autorisations accordées à Claude" disabled={running} />
           <ModelPicker value={choice} onChange={setChoice} disabled={running} />
           {turn?.cost ? <span className="text-muted-foreground">coût indiqué par claude : {turn.cost.toFixed(2)} $</span> : null}
           <span className="ml-auto" />

@@ -1,4 +1,4 @@
-import { MoreHorizontal, SquareTerminal, Star } from "lucide-react"
+import { MoreHorizontal, SquareTerminal, Star, Tag } from "lucide-react"
 import { ago, bucket, full, size, tilde } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -41,6 +41,8 @@ function Row({ row, showProject }: { row: R; showProject: boolean }) {
   const live = a.live.has(s.id)
   const picked = a.picked.has(s.id)
   const hit = a.hit(s.id)
+  // Une session peut appartenir à plusieurs groupes de son dossier.
+  const groups = a.vgroups.filter((x) => x.project === g.project && x.ids.includes(s.id) && x.name !== a.inGroup?.name).map((x) => x.name)
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -94,6 +96,15 @@ function Row({ row, showProject }: { row: R; showProject: boolean }) {
                   <span aria-hidden>·</span>
                   <span className="truncate">{tilde(g.project, a.home)}</span>
                 </>
+              )}
+              {groups.length > 0 && (
+                <span className="flex min-w-0 items-center gap-1 text-violet-600 dark:text-violet-400" title={`Groupes : ${groups.join(", ")}`}>
+                  <span aria-hidden className="text-muted-foreground">
+                    ·
+                  </span>
+                  <Tag className="size-3 shrink-0" />
+                  <span className="truncate">{groups.join(", ")}</span>
+                </span>
               )}
             </span>
             {hit && <Snip text={hit.snip} q={a.q.trim()} />}

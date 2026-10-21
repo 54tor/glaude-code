@@ -30,7 +30,8 @@ import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ProjectTree } from "./ProjectTree"
@@ -65,7 +66,7 @@ function FontPicker({ font, setFont, fontSize, setFontSize }: Fonts) {
   return (
     <div className="space-y-1.5">
       <Label>Police des conversations</Label>
-      <div className="space-y-1" role="radiogroup" aria-label="Police des conversations">
+      <div className="grid gap-1 sm:grid-cols-2" role="radiogroup" aria-label="Police des conversations">
         {Object.entries(FONTS).map(([id, f]) => (
           <button
             key={id}
@@ -84,7 +85,7 @@ function FontPicker({ font, setFont, fontSize, setFontSize }: Fonts) {
           </button>
         ))}
       </div>
-      <div className="grid grid-cols-5 gap-1 rounded-lg bg-muted p-1">
+      <div className="grid max-w-sm grid-cols-5 gap-1 rounded-lg bg-muted p-1">
         {SIZES.map((v) => (
           <button
             key={v}
@@ -111,67 +112,90 @@ function Settings({
   ...fonts
 }: { args: string; setArgs: (v: string) => void; choice: Choice; setChoice: (c: Choice) => void } & Fonts) {
   const { theme, setTheme } = useTheme()
+  const section = (title: string, hint: string, body: React.ReactNode) => (
+    <div className="space-y-1.5">
+      <Label>{title}</Label>
+      {body}
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  )
   return (
-    <Popover>
-      <PopoverTrigger asChild>
+    <Dialog>
+      <DialogTrigger asChild>
         <Button variant="ghost" size="sm" className="text-muted-foreground">
           <Settings2 /> Réglages
         </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" side="top" className="w-80 space-y-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="args">Options ajoutées à claude</Label>
-          <Input
-            id="args"
-            value={args}
-            onChange={(e) => setArgs(e.target.value)}
-            placeholder="ex. --dangerously-skip-permissions"
-            className="font-mono text-xs"
-            spellCheck={false}
-          />
-          <p className="text-xs text-muted-foreground">Utilisées à chaque reprise dans un terminal. Vide par défaut.</p>
-        </div>
-        <div className="space-y-1.5">
-          <Label>Thème</Label>
-          <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted p-1">
-            {THEMES.map(({ v, label, Icon }) => (
-              <button
-                key={v}
-                onClick={() => setTheme(v)}
-                aria-pressed={theme === v}
-                className={cn(
-                  "flex items-center justify-center gap-1.5 rounded-md py-1 text-xs transition-colors",
-                  theme === v ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Icon className="size-3.5" /> {label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="space-y-1.5">
-          <Label>Modèle et effort des nouveaux prompts</Label>
-          <ModelPicker value={choice} onChange={setChoice} />
-          <p className="text-xs text-muted-foreground">
-            Proposé par défaut pour reprendre avec un message, une nouvelle session ou le chat ; modifiable à chaque prompt.
-          </p>
-        </div>
-        <FontPicker {...fonts} />
-        <div className="space-y-1.5">
-          <Label>Raccourcis clavier</Label>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-            {KEYS.map(([k, v]) => (
-              <div key={k} className="contents">
-                <dt>
-                  <kbd className="rounded border bg-muted px-1.5 font-mono text-[10px]">{k}</kbd>
-                </dt>
-                <dd className="text-muted-foreground">{v}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </PopoverContent>
-    </Popover>
+      </DialogTrigger>
+      <DialogContent className="flex h-[min(85vh,560px)] flex-col gap-4 sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Réglages</DialogTitle>
+          <DialogDescription>Enregistrés dans ce navigateur.</DialogDescription>
+        </DialogHeader>
+        <Tabs defaultValue="claude" className="min-h-0 flex-1">
+          <TabsList>
+            <TabsTrigger value="claude">Claude</TabsTrigger>
+            <TabsTrigger value="look">Apparence</TabsTrigger>
+            <TabsTrigger value="keys">Raccourcis</TabsTrigger>
+          </TabsList>
+          <ScrollArea className="mt-2 min-h-0 flex-1 pr-3">
+            <TabsContent value="claude" className="space-y-5">
+              {section(
+                "Options ajoutées à claude",
+                "Utilisées à chaque reprise dans un terminal. Le chat du lecteur n'en garde que --model, --fallback-model et --effort. Vide par défaut.",
+                <Input
+                  id="args"
+                  value={args}
+                  onChange={(e) => setArgs(e.target.value)}
+                  placeholder="ex. --dangerously-skip-permissions"
+                  className="font-mono text-xs"
+                  spellCheck={false}
+                  aria-label="Options ajoutées à claude"
+                />
+              )}
+              {section(
+                "Modèle et effort des nouveaux prompts",
+                "Proposés par défaut pour reprendre avec un message, une nouvelle session ou le chat ; modifiables à chaque prompt.",
+                <ModelPicker value={choice} onChange={setChoice} />
+              )}
+            </TabsContent>
+            <TabsContent value="look" className="space-y-5">
+              {section(
+                "Thème",
+                "",
+                <div className="grid max-w-sm grid-cols-3 gap-1 rounded-lg bg-muted p-1">
+                  {THEMES.map(({ v, label, Icon }) => (
+                    <button
+                      key={v}
+                      onClick={() => setTheme(v)}
+                      aria-pressed={theme === v}
+                      className={cn(
+                        "flex items-center justify-center gap-1.5 rounded-md py-1 text-xs transition-colors",
+                        theme === v ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      <Icon className="size-3.5" /> {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <FontPicker {...fonts} />
+            </TabsContent>
+            <TabsContent value="keys">
+              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+                {KEYS.map(([k, v]) => (
+                  <div key={k} className="contents">
+                    <dt>
+                      <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-xs">{k}</kbd>
+                    </dt>
+                    <dd className="text-muted-foreground">{v}</dd>
+                  </div>
+                ))}
+              </dl>
+            </TabsContent>
+          </ScrollArea>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
   )
 }
 
