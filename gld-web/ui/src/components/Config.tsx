@@ -22,7 +22,8 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
   useEffect(() => {
     reload()
   }, [reload])
-  const sessions = useActions().live.size // sessions ouvertes : elles rechargent seules les réglages modifiés
+  const a = useActions()
+  const sessions = a.live.size // sessions ouvertes : elles rechargent seules les réglages modifiés
   const { gone, added, moveRule, propose, proposeRaw, proposePerms, dialog } = useConfigEdit(reload, sessions)
   // Direct, sans fenêtre : la règle rejoint vos réglages, puis (déplacement) quitte son fichier d'origine.
   const transfer = async (file: string, kind: string, rule: string, move: boolean) => {
@@ -85,6 +86,10 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
               version={ov.backups.length} // chaque écriture ajoute une sauvegarde : la vue se relit, sans perdre ce qui est déplié
               home={home}
               gone={gone}
+              onAddDir={async (file, project) => {
+                const p = await a.pickDir("Ajouter un dossier à " + tilde(project, home), project)
+                if (p) await propose({ file, op: "add", path: ["permissions", "additionalDirectories"], value: p })
+              }}
               onRemove={(file, kind, rule) => propose({ file, op: "remove", path: ["permissions", kind], value: rule })}
               onTransfer={transfer}
               onEdit={(file, t) => {
