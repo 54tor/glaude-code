@@ -1,4 +1,4 @@
-import { type LucideIcon, AlertTriangle, ArrowDownWideNarrow, ArrowUpNarrowWide, CheckSquare, EyeOff, Filter, FileStack, FileText, Plus, Sparkles, Trash2 } from "lucide-react"
+import { type LucideIcon, AlertTriangle, Calculator, ArrowDownWideNarrow, ArrowUpNarrowWide, CheckSquare, EyeOff, Filter, FileStack, FileText, Plus, Sparkles, Trash2 } from "lucide-react"
 import type { MemFile } from "@/lib/api"
 import { ago } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -26,6 +26,8 @@ export function Section({
   sort,
   onSort,
   budget,
+  exact,
+  onCount,
   issues,
 }: {
   icon: LucideIcon
@@ -44,7 +46,9 @@ export function Section({
   menu: (f: MemFile) => React.ReactNode
   sort: Sort
   onSort: (s: Sort) => void
-  budget: number // tokens estimés chargés à chaque session par cette section
+  budget: number // tokens chargés à chaque session par cette section
+  exact: boolean // tous les fichiers comptés l'ont été réellement (sinon estimation)
+  onCount: () => void // décompte réel des tokens de la section
   issues: Map<string, number> // problèmes de santé par clé
 }) {
   const [, label, SortIcon] = SORTS.find((s) => s[0] === sort.by) ?? SORTS[0]
@@ -56,8 +60,12 @@ export function Section({
           <p className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-muted-foreground" title={title}>
             <Icon className="size-3.5 shrink-0" /> <span className="flex-1 truncate">{title}</span>
             {budget > 0 && (
-              <span className="shrink-0 text-[10px] font-normal" title="Estimation (octets / 4) de ce que cette section charge à chaque session">
-                ≈ {budget >= 1000 ? `${(budget / 1000).toFixed(1)} k` : budget} tokens
+              <span
+                className="shrink-0 text-[10px] font-normal"
+                title={exact ? "Compte réel (tokenizer du modèle) de ce que cette section charge à chaque session" : "Estimation de ce que cette section charge à chaque session ; clic droit › Compter les tokens"}
+              >
+                {exact ? "" : "≈ "}
+                {budget >= 1000 ? `${(budget / 1000).toFixed(1)} k` : budget} tokens
               </span>
             )}
             <Button variant="ghost" size="icon-xs" className={sortBtn} onClick={onNew} title="Nouvelle entrée" aria-label="Nouvelle entrée">
@@ -105,6 +113,9 @@ export function Section({
               <FileStack /> Consolider dans AGENTS.md (Haiku)…
             </ContextMenuItem>
           )}
+          <ContextMenuItem onSelect={onCount}>
+            <Calculator /> Compter les tokens (Haiku)
+          </ContextMenuItem>
           <ContextMenuItem onSelect={() => onPickAll(files.map((f) => f.key))}>
             <CheckSquare /> Tout sélectionner pour une fusion
           </ContextMenuItem>

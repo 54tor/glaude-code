@@ -228,6 +228,20 @@ export function Memory({
     ;(r.ok ? toast.success : toast.error)(r.out.trim() || (r.ok ? "Session lancée" : "Échec"))
     if (r.ok) setPicked(new Set())
   }
+  // Décompte réel des tokens par Haiku (tokens.go), quelques fichiers à la fois ; la liste se rafraîchit à chaque lot.
+  const countTokens = async (keys: string[]) => {
+    if (!keys.length) return void toast.info("Tout est déjà compté")
+    const id = toast.loading(`Décompte de ${keys.length} fichier${keys.length > 1 ? "s" : ""}…`)
+    let cost = 0
+    let failed = ""
+    for (let i = 0; i < keys.length; i += 4) {
+      const r = (await api.post("/memory-tokens", { keys: keys.slice(i, i + 4) })) as { out?: string; cost?: number; errors?: Record<string, string> }
+      cost += r.cost ?? 0
+      failed ||= Object.values(r.errors ?? {})[0] ?? r.out ?? ""
+      await refresh()
+    }
+    ;(failed ? toast.error : toast.success)(failed ? `Décompte incomplet : ${failed}` : `Tokens comptés (${cost.toFixed(4)} $)`, { id })
+  }
   const haikuFromSelection = () => {
     const dir = [...picked].find((k) => k.startsWith("m/"))?.split("/")[1]
     const p = list?.projects.find((x) => x.dir === dir)
@@ -290,6 +304,8 @@ export function Memory({
       sort={sortOf(key)}
       onSort={(s) => setSortsRaw(JSON.stringify({ ...sorts, [key]: s }))}
       budget={files.filter((x) => x.always).reduce((n, x) => n + x.tokens, 0)}
+      exact={files.filter((x) => x.always).every((x) => x.exact)}
+      onCount={() => countTokens(files.filter((x) => x.always && !x.exact).map((x) => x.key))}
       issues={issueKeys}
     />
   )

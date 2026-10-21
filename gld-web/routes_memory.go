@@ -158,6 +158,31 @@ func routesMemory(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "out": "Type enregistré"})
 	})
+	// Décompte réel des tokens (tokens.go) : quelques fichiers par appel, le navigateur boucle.
+	mux.HandleFunc("POST /memory-tokens", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Keys []string }
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<14)).Decode(&req) != nil || len(req.Keys) == 0 || len(req.Keys) > 6 {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		counts, errs, total := map[string]int{}, map[string]string{}, 0.0
+		for _, k := range req.Keys {
+			text, err := loadedText(k)
+			if err == nil {
+				var n int
+				var c float64
+				if n, c, _, err = countTokens(text); err == nil {
+					counts[k] = n
+					total += c
+				}
+			}
+			if err != nil {
+				errs[k] = err.Error()
+			}
+		}
+		journal("memory-tokens %d fichier(s) : %.4f $", len(req.Keys), total)
+		writeJSON(w, 200, map[string]any{"ok": len(errs) == 0, "counts": counts, "errors": errs, "cost": total})
+	})
 	mux.HandleFunc("GET /memory-search", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"hits": memSearch(r.URL.Query().Get("q"))})
 	})
