@@ -13,7 +13,7 @@ import { Live } from "./SessionList"
 import type { Row } from "./actions"
 import { Message } from "./Message"
 import { Composer, type Turn } from "./Composer"
-import { LiveStatus } from "./LiveStatus"
+import { LiveBar, LiveStats, useLive } from "./LiveStatus"
 import { LoadedDialog } from "./LoadedDialog"
 
 // Messages chargés d'un coup (par la fin) : une session de plusieurs Go compte des milliers de messages.
@@ -46,6 +46,7 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
   // recrée les sessions sans que la conversation affichée doive être rechargée.
   const dir = session?.dir ?? ""
   const id = session?.id ?? ""
+  const live = useLive(dir, id, a.live.has(id))
   const [tools, setTools] = useState(false)
   const [loadedOpen, setLoadedOpen] = useState(false) // instructions réellement chargées (hook InstructionsLoaded)
   // Les messages sont rangés avec la clé (session, outils) qui les a produits : tant qu'elle ne correspond
@@ -174,7 +175,8 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
           <Button variant="ghost" size="icon-sm" onClick={toEnd} aria-label="Aller à la fin" title="Aller à la fin">
             <ArrowDownToLine />
           </Button>
-          <div className="ml-auto flex items-center gap-1">
+          {session && <LiveStats live={live} tok={session.tok} />}
+          <div className="flex items-center gap-1">
             {session && (
               <Button size="sm" onClick={() => a.open({ dir: session.dir, id: session.id })}>
                 <SquareTerminal /> Reprendre dans un terminal
@@ -189,7 +191,7 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
             )}
           </div>
         </div>
-        {session && <LiveStatus dir={dir} id={id} open={a.live.has(id)} tok={session.tok} />}
+        {session && <LiveBar live={live} />}
         <ScrollArea ref={area} className="min-h-0 flex-1">
           <div className="session-text mx-auto max-w-7xl space-y-5 px-3 py-4 md:px-6 md:py-6">
             {msgs === null && (
