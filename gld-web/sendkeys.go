@@ -80,6 +80,9 @@ var parentOf = func(pid int) int {
 func tmuxPanes() (map[int]string, error) {
 	out, err := tmuxRun("", "list-panes", "-a", "-F", "#{pane_id} #{pane_pid}")
 	if err != nil {
+		if strings.Contains(err.Error(), "error connecting") || strings.Contains(err.Error(), "no server") {
+			err = errors.New("aucune session n'a été lancée dans tmux")
+		}
 		return nil, err
 	}
 	m := map[int]string{}
