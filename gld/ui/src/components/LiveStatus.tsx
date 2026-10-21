@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { BarChart3, Bot, Loader2 } from "lucide-react"
+import { BarChart3, Bot, Loader2, Wrench } from "lucide-react"
 import { api, type LiveState, type Tokens } from "@/lib/api"
 import { compact, tokTotal } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -70,6 +70,13 @@ export function LiveBar({ live: { st, now, open }, id }: { live: Live; id: strin
               {label(st, id, now)}
             </span>
             {st.since > 0 && st.thinking && <span className="shrink-0 font-normal text-muted-foreground">depuis {secs(now - st.since)}</span>}
+          </span>
+        )}
+        {isOpen && st.tool && !st.activity.startsWith("exécute") && (
+          <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground" title={st.tool}>
+            <Wrench className="size-3 shrink-0" />
+            <span className="shrink-0">{st.toolRunning ? "outil en cours" : "dernier outil"} :</span>
+            <span className="truncate font-mono">{st.tool}</span>
           </span>
         )}
       </div>

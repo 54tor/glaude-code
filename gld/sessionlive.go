@@ -27,17 +27,19 @@ type SubLive struct {
 }
 
 type LiveState struct {
-	Open     bool      `json:"open"`
-	Status   string    `json:"status"`   // busy, idle, "" (inconnu)
-	Activity string    `json:"activity"` // en une phrase
-	Thinking bool      `json:"thinking"` // Claude travaille (réflexion ou outil)
-	Since    float64   `json:"since"`    // dernier événement du transcript (secondes epoch)
-	Context  int       `json:"context"`  // tokens du dernier appel : entrée + cache lu + cache écrit
-	Out      int       `json:"out"`      // tokens produits au dernier tour
-	Model    string    `json:"model"`
-	Subs     []SubLive `json:"subs"`
-	Verbs    []string  `json:"verbs"` // verbes affichés à tour de rôle pendant la réflexion
-	Queue    []Queued  `json:"queue"` // messages envoyés pendant que Claude travaillait, pas encore lus par la session
+	Open        bool      `json:"open"`
+	Status      string    `json:"status"`   // busy, idle, "" (inconnu)
+	Activity    string    `json:"activity"` // en une phrase
+	Thinking    bool      `json:"thinking"` // Claude travaille (réflexion ou outil)
+	Since       float64   `json:"since"`    // dernier événement du transcript (secondes epoch)
+	Context     int       `json:"context"`  // tokens du dernier appel : entrée + cache lu + cache écrit
+	Out         int       `json:"out"`      // tokens produits au dernier tour
+	Model       string    `json:"model"`
+	Tool        string    `json:"tool"`        // dernier outil appelé (« Bash : go test »)
+	ToolRunning bool      `json:"toolRunning"` // son résultat n'est pas encore arrivé
+	Subs        []SubLive `json:"subs"`
+	Verbs       []string  `json:"verbs"` // verbes affichés à tour de rôle pendant la réflexion
+	Queue       []Queued  `json:"queue"` // messages envoyés pendant que Claude travaillait, pas encore lus par la session
 }
 
 type Queued struct {
@@ -161,7 +163,7 @@ func toolBrief(name string, in map[string]any) string {
 }
 
 // readActivity lit la fin d'un transcript : ce que Claude fait d'après le dernier événement utile.
-func readActivity(path string) (activity string, thinking bool, since float64, u usage, model string) {
+func readActivity(path string) (activity string, thinking bool, since float64, u usage, model string, tool string, toolRunning bool) {
 	lines := tailLines(path, 512<<10)
 	pendingTool := map[string]string{} // tool_use_id -> résumé, tant qu'aucun résultat n'est arrivé
 	var order []string
@@ -209,6 +211,7 @@ func readActivity(path string) (activity string, thinking bool, since float64, u
 				switch b.Type {
 				case "tool_use":
 					pendingTool[b.ID] = toolBrief(b.Name, b.Input)
+					tool, toolRunning = pendingTool[b.ID], true
 					order = append(order, b.ID)
 					last = "tool"
 				case "thinking":
@@ -229,6 +232,9 @@ func readActivity(path string) (activity string, thinking bool, since float64, u
 			isResult := false
 			for _, b := range blocks {
 				if b.Type == "tool_result" {
+					if len(order) > 0 && order[len(order)-1] == b.ToolUseID {
+						toolRunning = false
+					}
 					delete(pendingTool, b.ToolUseID)
 					isResult = true
 				}
@@ -242,10 +248,10 @@ func readActivity(path string) (activity string, thinking bool, since float64, u
 	}
 	for i := len(order) - 1; i >= 0; i-- { // l'appel d'outil le plus récent encore sans résultat
 		if s, ok := pendingTool[order[i]]; ok {
-			return "exécute " + s, true, since, u, model
+			return "exécute " + s, true, since, u, model, tool, toolRunning
 		}
 	}
-	return activity, thinking, since, u, model
+	return activity, thinking, since, u, model, tool, toolRunning
 }
 
 func sessionLive(dir, id string) LiveState {
@@ -257,7 +263,7 @@ func sessionLive(dir, id string) LiveState {
 	}
 	st.Activity, st.Thinking, st.Since, _, st.Model = "", false, 0, usage{}, ""
 	var u usage
-	st.Activity, st.Thinking, st.Since, u, st.Model = readActivity(p)
+	st.Activity, st.Thinking, st.Since, u, st.Model, st.Tool, st.ToolRunning = readActivity(p)
 	st.Context, st.Out = u.context(), u.Out
 	if st.Open && st.Status == "idle" {
 		st.Activity, st.Thinking = "attend votre message", false
@@ -296,7 +302,7 @@ func subLives(dir string) []SubLive {
 		if err != nil {
 			continue
 		}
-		act, thinking, _, u, _ := readActivity(tp)
+		act, thinking, _, u, _, _, _ := readActivity(tp)
 		s := SubLive{ID: id, Desc: meta.Description, Type: meta.AgentType, Activity: act, Context: u.context(), Out: u.Out, Mtime: float64(fi.ModTime().UnixNano()) / 1e9}
 		// Un sous-agent « fini » d'après son fichier meta ne travaille plus ; sans cette marque, il travaille s'il a écrit récemment.
 		s.Running = !meta.Finished && thinking && time.Since(fi.ModTime()) < 10*time.Minute
