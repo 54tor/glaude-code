@@ -156,12 +156,12 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
   return (
     <Dialog open={!!session} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="flex h-[94vh] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none">
-        <DialogHeader className="gap-1 border-b px-6 pt-5 pr-14 pb-4">
+        <DialogHeader className="gap-1 border-b px-4 pt-4 pr-12 pb-3 md:px-6 md:pt-5 md:pr-14 md:pb-4">
           <DialogTitle className="truncate text-base">{session?.title}</DialogTitle>
           <DialogDescription className="sr-only">Conversation complète de la session</DialogDescription>
           {session && <Meta s={session} d={detail} />}
         </DialogHeader>
-        <div className="flex items-center gap-1 border-b bg-muted/30 px-4 py-2">
+        <div className="flex flex-wrap items-center gap-1 border-b bg-muted/30 px-2 py-2 md:px-4">
           <Button variant={tools ? "secondary" : "ghost"} size="sm" onClick={() => setTools(!tools)} aria-pressed={tools}>
             <Wrench /> Outils {tools ? "affichés" : "masqués"}
           </Button>
@@ -191,7 +191,7 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
         </div>
         {session && <LiveStatus dir={dir} id={id} open={a.live.has(id)} tok={session.tok} />}
         <ScrollArea ref={area} className="min-h-0 flex-1">
-          <div className="session-text mx-auto max-w-7xl space-y-5 px-6 py-6">
+          <div className="session-text mx-auto max-w-7xl space-y-5 px-3 py-4 md:px-6 md:py-6">
             {msgs === null && (
               <>
                 <Skeleton className="ml-auto h-10 w-2/3" />

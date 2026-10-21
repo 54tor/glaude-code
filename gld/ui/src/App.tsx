@@ -58,6 +58,7 @@ export default function App() {
   const [fontSize, setFontSize] = useLocal("ccFontSize", "15")
   useEffect(() => applyFont(font, fontSize), [font, fontSize])
   const [picker, setPicker] = useState<Pick | null>(null)
+  const [navOpen, setNavOpen] = useState(false) // mobile : tiroir du menu
   const [ask, setAsk] = useState<Ask | null>(null)
   const [prompt, setPrompt] = useState<PromptAsk | null>(null)
   const [compose, setCompose] = useState<ComposeAsk | null>(null)
@@ -223,6 +224,8 @@ export default function App() {
     <ActionsCtx.Provider value={actions}>
       <div className="flex h-dvh flex-col md:flex-row">
         <Sidebar
+          open={navOpen}
+          onClose={() => setNavOpen(false)}
           loading={data === null}
           total={view.total}
           q={q}
@@ -230,12 +233,12 @@ export default function App() {
           searchRef={search}
           searching={searching}
           route={route}
-          go={go}
+          go={(r) => (setNavOpen(false), go(r))}
           counts={{ recent: recent.length, all: view.rows.length, active: active.length }}
           favRows={favRows}
           favGroups={favGroups}
           groupCount={(x) => groupRows(x).length}
-          read={read}
+          read={(s) => (setNavOpen(false), read(s))}
           tree={tree}
           hot={hot}
           now={now}
@@ -254,6 +257,7 @@ export default function App() {
 
         <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           <PageHeader
+            onMenu={() => setNavOpen(true)}
             title={title}
             sub={sub}
             qt={qt}

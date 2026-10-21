@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { AlarmClock, Star, Brain, SlidersHorizontal, Zap, Flame, History, Clock, FileText, Inbox, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
 import { size } from "@/lib/format"
 import type { Choice } from "@/lib/models"
@@ -81,6 +82,8 @@ function Hot({ rows, now, ttl }: { rows: Row[]; now: number; ttl: number }) {
 }
 
 export type SidebarProps = {
+  open: boolean // mobile : le tiroir est ouvert
+  onClose: () => void
   loading: boolean
   total: number
   q: string
@@ -108,8 +111,25 @@ export type SidebarProps = {
 
 export function Sidebar({ searchRef, ...p }: SidebarProps) {
   const r = p.route
+  const { open, onClose } = p
+  useEffect(() => {
+    if (!open) return
+    const on = (e: KeyboardEvent) => e.key === "Escape" && onClose()
+    window.addEventListener("keydown", on)
+    return () => window.removeEventListener("keydown", on)
+  }, [open, onClose])
   return (
-    <aside className="flex max-h-[45dvh] shrink-0 flex-col border-b bg-sidebar md:max-h-none md:w-72 md:border-r md:border-b-0 lg:w-80">
+    <>
+      {/* Mobile : le menu est un tiroir par-dessus la page ; sur grand écran il reste une colonne fixe. */}
+      <div className={cn("fixed inset-0 z-30 bg-black/40 transition-opacity md:hidden", p.open ? "opacity-100" : "pointer-events-none opacity-0")} onClick={p.onClose} aria-hidden="true" />
+      <aside
+        id="menu"
+        aria-label="Menu"
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 flex w-[85vw] max-w-sm shrink-0 flex-col border-r bg-sidebar transition-transform duration-200 md:static md:z-auto md:w-72 md:translate-x-0 md:transition-none lg:w-80",
+          p.open ? "translate-x-0 shadow-xl" : "invisible -translate-x-full md:visible"
+        )}
+      >
       <div className="space-y-3 p-3">
         <div className="flex items-center gap-2 px-1 pt-1">
           <img src="/icons/icon-192.png" alt="" className="size-14 shrink-0" />
@@ -263,6 +283,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           )}
         </div>
       </div>
-    </aside>
+      </aside>
+    </>
   )
 }

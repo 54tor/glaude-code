@@ -109,7 +109,7 @@ export function Composer({
           aria-label="Message à Claude"
         />
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <Choose value={mode} onChange={setMode} options={MODES} label="Autorisations accordées à Claude" disabled={running} />
+          <Choose value={mode} onChange={setMode} options={MODES} label="Autorisations accordées à Claude" disabled={running} className="max-w-full min-w-0" />
           <ModelPicker value={choice} onChange={setChoice} disabled={running} />
           {turn?.cost ? <span className="text-muted-foreground">coût indiqué par claude : {turn.cost.toFixed(2)} $</span> : null}
           <span className="ml-auto" />

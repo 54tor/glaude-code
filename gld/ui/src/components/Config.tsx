@@ -67,7 +67,7 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
     <ScrollArea className="min-h-0 flex-1">
       <div className="mx-auto max-w-5xl px-6 py-6">
         <Tabs value={tab || "sante"} onValueChange={onTab}>
-          <TabsList className="mb-4 flex-wrap">
+          <TabsList className="mb-4 max-w-full justify-start overflow-x-auto md:flex-wrap">
             <TabsTrigger value="sante">Santé{ov.issues.length > 0 && ` (${ov.issues.length})`}</TabsTrigger>
             <TabsTrigger value="projets">Projets</TabsTrigger>
             <TabsTrigger value="precedence">Précédence</TabsTrigger>

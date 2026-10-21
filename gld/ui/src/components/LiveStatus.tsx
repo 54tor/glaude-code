@@ -32,7 +32,7 @@ export function LiveStatus({ dir, id, open, tok }: { dir: string; id: string; op
   const running = st.subs.filter((s) => s.running)
   if (!st.open && st.subs.length === 0) return null
   return (
-    <div className="border-b bg-muted/20 px-6 py-2 text-xs">
+    <div className="border-b bg-muted/20 px-3 py-2 text-xs md:px-6">
       {st.open && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
           <span className={cn("flex items-center gap-1.5 font-medium", st.thinking ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>
