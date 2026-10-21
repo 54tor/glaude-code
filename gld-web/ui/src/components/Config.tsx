@@ -42,7 +42,7 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
     <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
       Fichier modifié :
       <Choose value={fileId} onChange={setFileId} options={options} label="Fichier de réglages" className="min-w-0 max-w-xl" />
-      <span className="text-xs text-muted-foreground">Chaque modification montre ses différences et fait une sauvegarde. Les sessions ouvertes rechargent seules les réglages (sauf model, effort et plugins : /model, /effort, /reload-plugins).</span>
+      <span className="text-xs text-muted-foreground">Chaque modification est appliquée tout de suite, après une sauvegarde (onglet Sauvegardes). Les sessions ouvertes rechargent seules les réglages (sauf model, effort et plugins : /model, /effort, /reload-plugins).</span>
     </div>
   )
 

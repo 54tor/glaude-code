@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Plus, RotateCcw, Trash2, X } from "lucide-react"
+import { Check, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react"
 import type { BackupInfo, CfgEdit, CfgOverview, PermSuggest } from "@/lib/api"
 import { api } from "@/lib/api"
 import { describeKey } from "@/lib/configKeys"
@@ -37,6 +37,17 @@ export function PermsTab({ file, label, doc, propose, proposePerms }: { file: st
       live = false
     }
   }, [doc])
+  const [edit, setEdit] = useState<{ kind: string; rule: string; text: string; to: string } | null>(null)
+  // Modifier une règle : texte et catégorie. La nouvelle est ajoutée avant que l'ancienne soit retirée, pour ne jamais tout perdre.
+  const saveEdit = async () => {
+    if (!edit) return
+    const text = edit.text.trim()
+    const same = text === edit.rule && edit.to === edit.kind
+    if (!text || same) return setEdit(null)
+    await propose({ file, op: "add", path: ["permissions", edit.to], value: text })
+    await propose({ file, op: "remove", path: ["permissions", edit.kind], value: edit.rule })
+    setEdit(null)
+  }
   const add = (kind: string, rule: string) => propose({ file, op: "add", path: ["permissions", kind], value: rule })
   return (
     <div className="space-y-5">
@@ -50,14 +61,38 @@ export function PermsTab({ file, label, doc, propose, proposePerms }: { file: st
               {label} <span className="text-xs font-normal text-muted-foreground">· {hint}</span>
             </h3>
             <ul className="mt-1 space-y-px">
-              {rules.map((r) => (
-                <li key={r} className="group flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted">
+              {rules.map((r) =>
+                edit?.kind === kind && edit.rule === r ? (
+                  <li key={r}>
+                    <form
+                      className="flex items-center gap-2 px-2 py-1"
+                      onSubmit={(e) => {
+                        e.preventDefault()
+                        saveEdit()
+                      }}
+                    >
+                      <Input value={edit.text} onChange={(e) => setEdit({ ...edit, text: e.target.value })} onKeyDown={(e) => e.key === "Escape" && setEdit(null)} autoFocus className="h-8 flex-1 font-mono text-xs" aria-label={`Modifier ${r}`} />
+                      <Choose value={edit.to} onChange={(to) => setEdit({ ...edit, to })} options={KINDS.map(([k, l]) => [k, l] as const)} label="Catégorie" className="w-36" />
+                      <Button size="icon-xs" variant="ghost" type="submit" aria-label="Enregistrer la règle">
+                        <Check />
+                      </Button>
+                      <Button size="icon-xs" variant="ghost" type="button" aria-label="Annuler" onClick={() => setEdit(null)}>
+                        <X />
+                      </Button>
+                    </form>
+                  </li>
+                ) : (
+                <li key={r} className="group flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted" onDoubleClick={() => setEdit({ kind, rule: r, text: r, to: kind })}>
                   <code className="min-w-0 flex-1 text-xs break-all">{r}</code>
+                  <Button variant="ghost" size="icon-xs" aria-label={`Modifier ${r}`} title="Modifier (ou double-clic)" onClick={() => setEdit({ kind, rule: r, text: r, to: kind })}>
+                    <Pencil />
+                  </Button>
                   <Button variant="ghost" size="icon-xs" aria-label={`Retirer ${r}`} onClick={() => propose({ file, op: "remove", path: ["permissions", kind], value: r })}>
                     <X />
                   </Button>
                 </li>
-              ))}
+                )
+              )}
               {rules.length === 0 && <li className="px-2 py-1 text-xs text-muted-foreground">Aucune.</li>}
             </ul>
             <form
