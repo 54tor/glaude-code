@@ -23,7 +23,17 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
     reload()
   }, [reload])
   const sessions = useActions().live.size // sessions ouvertes : elles rechargent seules les réglages modifiés
-  const { gone, propose, proposeRaw, proposePerms, dialog } = useConfigEdit(reload, sessions)
+  const { gone, added, moveRule, propose, proposeRaw, proposePerms, dialog } = useConfigEdit(reload, sessions)
+  // Direct, sans fenêtre : la règle rejoint vos réglages, puis (déplacement) quitte son fichier d'origine.
+  const transfer = async (file: string, kind: string, rule: string, move: boolean) => {
+    const r = (await api.post("/config-perm-import", { file: "u", text: JSON.stringify({ permissions: { [kind]: [rule] } }), mode: "merge", dry: false })) as { ok: boolean; out: string }
+    if (!r.ok) return void toast.error(r.out)
+    if (move) await propose({ file, op: "remove", path: ["permissions", kind], value: rule })
+    else {
+      toast.success("Règle copiée dans vos réglages")
+      reload()
+    }
+  }
   if (!ov) return <Skeleton className="m-6 h-40" />
 
   const label = (id: string) =>
@@ -70,16 +80,7 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
               home={home}
               gone={gone}
               onRemove={(file, kind, rule) => propose({ file, op: "remove", path: ["permissions", kind], value: rule })}
-              onTransfer={async (file, kind, rule, move) => {
-                // Direct, sans fenêtre : la règle rejoint vos réglages, puis (déplacement) quitte son fichier d'origine.
-                const r = (await api.post("/config-perm-import", { file: "u", text: JSON.stringify({ permissions: { [kind]: [rule] } }), mode: "merge", dry: false })) as { ok: boolean; out: string }
-                if (!r.ok) return void toast.error(r.out)
-                if (move) await propose({ file, op: "remove", path: ["permissions", kind], value: rule })
-                else {
-                  toast.success("Règle copiée dans vos réglages")
-                  reload()
-                }
-              }}
+              onTransfer={transfer}
               onEdit={(file, t) => {
                 setFileId(file)
                 onTab(t)
@@ -97,7 +98,7 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
           </TabsContent>
           <TabsContent value="permissions">
             {fileSelect}
-            <PermsTab gone={gone} file={fileId} label={label(fileId)} doc={doc} propose={propose} proposePerms={proposePerms} />
+            <PermsTab added={added} moveRule={moveRule} gone={gone} onTransfer={transfer} file={fileId} label={label(fileId)} doc={doc} propose={propose} proposePerms={proposePerms} />
           </TabsContent>
           <TabsContent value="reglages">
             {fileSelect}

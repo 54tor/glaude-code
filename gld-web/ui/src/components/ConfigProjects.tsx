@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { ChevronRight, Globe, X } from "lucide-react"
+import { ChevronRight, ClipboardCopy, Globe, X } from "lucide-react"
 import { Link } from "wouter"
 import { api, type ProjectCfg } from "@/lib/api"
 import { describeKey } from "@/lib/configKeys"
@@ -7,6 +7,8 @@ import { href } from "@/lib/route"
 import { tilde } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { toast } from "sonner"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 
@@ -93,7 +95,9 @@ export function ProjectsTab({ home, version, gone, onEdit, onTransfer, onRemove 
                           <p className="text-xs text-muted-foreground">{label}</p>
                           <ul className="space-y-px">
                             {perms[k].map((r, i) => (
-                              <li key={k + i} className="flex items-center gap-2">
+                              <ContextMenu key={k + i}>
+                              <ContextMenuTrigger asChild>
+                              <li className="flex items-center gap-2">
                                 <code className="min-w-0 flex-1 text-xs break-all">{r.rule}</code>
                                 <span className="shrink-0 text-[11px] text-muted-foreground">{r.scope === "p" ? "projet" : "local"}</span>
                                 <DropdownMenu>
@@ -111,6 +115,23 @@ export function ProjectsTab({ home, version, gone, onEdit, onTransfer, onRemove 
                                   <X />
                                 </Button>
                               </li>
+                              </ContextMenuTrigger>
+                              <ContextMenuContent className="w-60">
+                                <ContextMenuItem onSelect={() => navigator.clipboard.writeText(r.rule).then(() => toast.success("Règle copiée"), () => toast.error("Copie impossible"))}>
+                                  <ClipboardCopy /> Copier la règle
+                                </ContextMenuItem>
+                                <ContextMenuItem onSelect={() => onTransfer(`${r.scope}/${p.dir}`, k, r.rule, false)}>
+                                  <Globe /> Copier vers le global
+                                </ContextMenuItem>
+                                <ContextMenuItem onSelect={() => onTransfer(`${r.scope}/${p.dir}`, k, r.rule, true)}>
+                                  <Globe /> Déplacer vers le global
+                                </ContextMenuItem>
+                                <ContextMenuSeparator />
+                                <ContextMenuItem variant="destructive" onSelect={() => onRemove(`${r.scope}/${p.dir}`, k, r.rule)}>
+                                  <X /> Supprimer
+                                </ContextMenuItem>
+                              </ContextMenuContent>
+                              </ContextMenu>
                             ))}
                           </ul>
                         </div>

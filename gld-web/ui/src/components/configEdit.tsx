@@ -27,7 +27,7 @@ type Reply = { ok: boolean; out: string; before: string; after: string; warnings
 
 // Toute modification d'un fichier de réglages passe par ici : aperçu des différences, confirmation, puis écriture
 // (le serveur fait une sauvegarde avant). Renvoie propose() et le dialogue à afficher.
-export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 0): { gone: (file: string, kind: string, rule: string) => boolean; propose: (e: CfgEdit) => Promise<void>; proposeRaw: (file: string, text: string) => Promise<string | null>; proposePerms: (file: string, text: string, mode: string, then?: () => void) => Promise<string | null>; dialog: ReactNode } {
+export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 0): { gone: (file: string, kind: string, rule: string) => boolean; added: (file: string, kind: string) => string[]; moveRule: (file: string, from: string, rule: string, to: string, text: string) => Promise<void>; propose: (e: CfgEdit) => Promise<void>; proposeRaw: (file: string, text: string) => Promise<string | null>; proposePerms: (file: string, text: string, mode: string, then?: () => void) => Promise<string | null>; dialog: ReactNode } {
   const [pv, setPv] = useState<Preview | null>(null)
   const [busy, setBusy] = useState(false)
   // Modification simple (une règle, un réglage, une variable) : appliquée tout de suite, sans fenêtre de confirmation. Le serveur
@@ -43,6 +43,28 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
     })
   const ruleKey = (file: string, kind: string, rule: string) => JSON.stringify([file, kind, rule])
   const gone = (file: string, kind: string, rule: string) => hidden.has(ruleKey(file, kind, rule))
+  // Règles ajoutées en attente d'écriture : affichées tout de suite.
+  const [pending, setPending] = useState<string[]>([])
+  const added = (file: string, kind: string) => pending.filter((k) => (JSON.parse(k) as string[])[0] === file && (JSON.parse(k) as string[])[1] === kind).map((k) => (JSON.parse(k) as string[])[2])
+  // Changer une règle de catégorie ou de texte : elle passe d'un coup de l'ancienne place à la nouvelle (ajout puis retrait côté
+  // serveur, une seule relecture à la fin : pas de passage par un état où elle serait aux deux endroits).
+  const moveRule = async (file: string, from: string, rule: string, to: string, text: string) => {
+    const old = ruleKey(file, from, rule)
+    const neu = ruleKey(file, to, text)
+    hide(old, true)
+    setPending((p) => [...p, neu])
+    const undo = () => {
+      hide(old, false)
+      setPending((p) => p.filter((k) => k !== neu))
+    }
+    const a = (await api.post("/config-edit", { file, op: "add", path: ["permissions", to], value: text })) as Reply
+    if (!a.ok) return void (undo(), toast.error(a.out))
+    const r = (await api.post("/config-edit", { file, op: "remove", path: ["permissions", from], value: rule })) as Reply
+    if (!r.ok) toast.error(r.out)
+    else toast.success("Règle modifiée", { description: liveNotice(a.before, r.after, sessions), duration: 6000 })
+    await onDone()
+    undo()
+  }
   const propose = async (edit: CfgEdit) => {
     const rule = edit.op === "remove" && edit.path[0] === "permissions" && typeof edit.value === "string" ? ruleKey(edit.file, edit.path[1], edit.value) : ""
     if (rule) hide(rule, true)
@@ -119,5 +141,5 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
       </DialogContent>
     </Dialog>
   )
-  return { gone, propose, proposeRaw, proposePerms, dialog }
+  return { gone, added, moveRule, propose, proposeRaw, proposePerms, dialog }
 }
