@@ -1,25 +1,30 @@
-# Dépendances — 2026-10-21
+# Dépendances — 2026-10-21 (2e passage)
 
-## Go
-`go.mod` : `go 1.25`, **aucune dépendance**. Toolchain locale 1.27.1. `govulncheck ./...` (toolchain 1.27.1) : aucune vulnérabilité. Les API utilisées exigent Go ≥ 1.25 (`http.CrossOriginProtection`) et ≥ 1.24 (`os.OpenRoot`) : cohérent avec `go.mod`.
+## Go (`gld-web/go.mod`, `go 1.26.0`, toolchain 1.27.1)
+Directes : `doublestar/v4` 4.10.3, `yaml.v3` 3.0.1, `modernc.org/sqlite`. `govulncheck ./...` : aucune vulnérabilité (avant et après).
 
-## npm (`gld-web/ui`, versions résolues par `package-lock.json`)
+| Module | Avant | Après | Décision |
+|---|---|---|---|
+| modernc.org/sqlite | 1.60.1 (marqué `// indirect` à tort → DEP-001) | **1.61.0**, désormais direct | D-006, appliqué |
+| modernc.org/libc | 1.77.1 | 1.79.0 | tiré par sqlite |
+| go-humanize, ncruces/go-strftime, x/sys | 1.0.1, 1.0.0, 0.48.0 | 1.1.0, 1.1.0, 0.49.0 | tirés par sqlite |
+| autres lignes de `go list -m -u all` (x/tools, x/mod, x/sync, pprof, check.v1, modernc cc/ccgo/gc) | — | — | NO-CHANGE : dépendances d'outils, pas du binaire |
 
-| Paquet | Résolue | Dernière | Décision | Raison |
-|---|---|---|---|---|
-| vite | 8.3.4 | 8.3.5 | NO-CHANGE (différé) | correctif ; aucun besoin démontré, notes de version non obtenues ; changerait `dist/` |
-| lucide-react | 1.60.0 | 1.61.0 | NO-CHANGE (différé) | idem |
-| typescript | 6.0.3 | 7.0.2 | **rejeté pour l'instant** | `typescript-eslint` 8.72 déclare `typescript >=4.8.4 <6.1.0` et lève une erreur sous TS ≥ 7 (Context7, source du parseur) ; `tsc -b` est dans le build |
-| @types/node | 24.19.2 | 26.6.5 | NO-CHANGE | majeure sans besoin ; sert seulement à la config Vite |
-| shadcn | 4.22.1 | — | **D-004** | porteur des 7 alertes |
+`go mod tidy` a aussi ajouté ~30 lignes à `go.sum` (graphe des tests des dépendances) : sans effet sur le binaire.
 
-### `npm audit` : 7 « high », une seule cause
-`shadcn` (direct) → `@shadcn/registry`, `ts-morph` → `@ts-morph/common` → `fast-glob` → `micromatch` → `braces`
-(GHSA-vfj7-8cjw-p6xm : déni de service par épuisement de pile sur des motifs glob très imbriqués).
+## npm (`gld-web/ui`)
+| Paquet | Avant | Après | Décision |
+|---|---|---|---|
+| vite | 8.3.4 | **8.3.5** | D-006, appliqué (la contrainte `^8` ne change pas) |
+| lucide-react | 1.60.0 | **1.61.0** | D-006, appliqué |
+| typescript | 6.0.3 | — (7.0.2 existe) | rejeté : `typescript-eslint` 8.x exige `<6.1.0` |
+| @types/node | 24.19.2 | — (26.6.5) | NO-CHANGE : majeure sans besoin |
+| shadcn | 4.22.1 | — | en `devDependencies` (D-004) ; `npm audit` complet garde ses alertes d'outil de build |
 
-- **Applicabilité** : `shadcn` n'est utilisé que pour `@import "shadcn/tailwind.css"` (`src/index.css:3`), à la compilation. Le bundle servi (`dist/`) n'embarque aucun de ces paquets et le serveur Go ne les charge pas. Seul le poste de build est exposé, via un motif glob qu'un attaquant devrait contrôler : pas de vecteur réaliste.
-- **`npm audit fix --force` rejeté** : il propose `shadcn@1.0.0`, soit une rétrogradation de 4.22.1 vers 1.0.0 (majeure) qui casserait `tailwind.css`.
-- **Décision D-004 (A) appliquée** : `shadcn` déplacé en `devDependencies` ; `npm audit --omit=dev` → 0 vulnérabilité ; `npm audit` complet garde 7 alertes (outil de build, non exploitables ici).
+`npm audit --omit=dev` : 0 vulnérabilité. Aucune note de version de sqlite/vite/lucide n'a pu être obtenue via Context7 : la validation repose sur les tests, pas sur le changelog.
 
-## Commandes exécutées
-`npm audit`, `npm audit --json`, `npm outdated`, `npm ls shadcn typescript-eslint`, `npm view typescript-eslint peerDependencies`, `npx tsc --noEmit`, `npx eslint .`, `npx vite build` (vers un dossier jetable, puis `npm run build`). **Aucune montée de version** ; seul `shadcn` change de section (D-004) dans `package.json` et `package-lock.json` (drapeaux `dev` recalculés par script, validé sur le lockfile d'origine : 0 écart ; npm ne pouvait pas régénérer hors réseau).
+## Commandes réellement exécutées
+`go list -m -u all`, `go mod tidy -diff`, `go get modernc.org/sqlite@v1.61.0` puis `go mod tidy` (sur une copie isolée, `go.mod` et `go.sum` recopiés ensuite), `govulncheck ./...`, `staticcheck ./...` (linux, windows), `go vet` (linux, windows), `go test -race -count=1`, `npm outdated`, `npm audit --omit=dev`, `npm install vite@8.3.5 lucide-react@1.61.0`, `tsc --noEmit`, `eslint .`, `npm run build`.
+
+## Résultats
+Tous verts après la montée (Go sur copie isolée à `HEAD` plus mes fichiers, à cause des fichiers en cours d'une autre session ; front dans le dépôt). Reste à valider côté utilisateur : `make install`, puis un tour dans le navigateur (la recherche utilise SQLite).
