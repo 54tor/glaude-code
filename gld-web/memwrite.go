@@ -26,6 +26,9 @@ Markdown concis : quelques titres, des listes de règles courtes et actionnables
 Garde ce que contient déjà le fichier existant (sauf s'il contredit les références, auquel cas les références l'emportent) et la langue des sources.
 Réponds uniquement avec le contenu complet du fichier, sans bloc de code ni commentaire.`
 
+// agentsSystem : même consigne pour un AGENTS.md, lu par les agents de code en général.
+var agentsSystem = strings.NewReplacer("CLAUDE.md", "AGENTS.md", "que Claude Code lit", "que les agents de code lisent").Replace(claudeSystem)
+
 // cmdSystem : mise en forme d'une commande personnalisée de Claude Code (un snippet).
 const cmdSystem = `Tu mets en forme une commande personnalisée de Claude Code : un fichier Markdown de prompt, invoqué par /nom.
 Format : un en-tête YAML entre deux lignes « --- » avec description (une ligne : ce que fait la commande) et, seulement si la commande prend des arguments, argument-hint (ex. [fichier] [niveau]) ; puis le prompt lui-même, clair et à l'impératif, structuré si c'est utile (étapes, contraintes, format de sortie attendu). Mets $ARGUMENTS (ou $1, $2…) là où l'utilisateur donne ses arguments.
@@ -52,9 +55,9 @@ func snippetDraft(model, instruction, text string) (string, float64, error) {
 	return memDraft(model, cmdSystem, prompt)
 }
 
-// isClaudeMd : la clé désigne un CLAUDE.md (global ou de projet), pas une entrée de mémoire.
+// isClaudeMd : la clé désigne un fichier d'instructions (CLAUDE.md ou AGENTS.md), pas une entrée de mémoire.
 func isClaudeMd(key string) bool {
-	return key == "g/CLAUDE.md" || (strings.HasPrefix(key, "p/") && strings.HasSuffix(key, "CLAUDE.md"))
+	return key == "g/CLAUDE.md" || (strings.HasPrefix(key, "p/") && (strings.HasSuffix(key, "CLAUDE.md") || strings.HasSuffix(key, "AGENTS.md")))
 }
 
 // memWritePrompt : la consigne, le fichier à réécrire (s'il y en a un) et les références, toutes des clés validées.
@@ -143,6 +146,9 @@ func memWriteDraft(model, instruction, key string, refs []string) (string, float
 	system := memSystem
 	if isClaudeMd(key) {
 		system = claudeSystem
+		if strings.HasSuffix(key, "AGENTS.md") {
+			system = agentsSystem
+		}
 	}
 	return memDraft(model, system, prompt)
 }

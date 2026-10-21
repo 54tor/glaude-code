@@ -103,6 +103,8 @@ function Section({
   onNew,
   onWrite,
   onConsolidate,
+  agents,
+  onRemoveAll,
   menu,
   sort,
   onSort,
@@ -117,7 +119,9 @@ function Section({
   onPickAll: (keys: string[]) => void
   onNew: () => void // nouvelle entrée écrite à la main
   onWrite?: () => void // nouvelle entrée rédigée par un modèle (absent : section sans mémoire de projet)
-  onConsolidate?: () => void // consolider dans le CLAUDE.md correspondant
+  onConsolidate?: (file: string) => void // consolider dans le CLAUDE.md (ou l'AGENTS.md, projets seulement) correspondant
+  agents?: boolean // propose aussi AGENTS.md
+  onRemoveAll: (keys: string[]) => void
   menu: (f: MemFile) => React.ReactNode
   sort: Sort
   onSort: (s: Sort) => void
@@ -166,12 +170,20 @@ function Section({
             </ContextMenuItem>
           )}
           {onConsolidate && (
-            <ContextMenuItem onSelect={onConsolidate}>
+            <ContextMenuItem onSelect={() => onConsolidate("CLAUDE.md")}>
               <FileStack /> Consolider dans CLAUDE.md (Haiku)…
+            </ContextMenuItem>
+          )}
+          {onConsolidate && agents && (
+            <ContextMenuItem onSelect={() => onConsolidate("AGENTS.md")}>
+              <FileStack /> Consolider dans AGENTS.md (Haiku)…
             </ContextMenuItem>
           )}
           <ContextMenuItem onSelect={() => onPickAll(files.map((f) => f.key))}>
             <CheckSquare /> Tout sélectionner pour une fusion
+          </ContextMenuItem>
+          <ContextMenuItem variant="destructive" onSelect={() => onRemoveAll(files.map((f) => f.key))}>
+            <Trash2 /> Supprimer tous les fichiers…
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -210,7 +222,7 @@ function Section({
   )
 }
 
-// Mémoire de Claude : globale (CLAUDE.md, rules/) et par projet (memory/, CLAUDE.md du projet), lecture et édition.
+// Mémoire de Claude : globale (CLAUDE.md, rules/) et par projet (memory/, CLAUDE.md et AGENTS.md du projet), lecture et édition.
 export function Memory({
   sel,
   home: homeDir,
@@ -307,18 +319,18 @@ export function Memory({
   // Références proposées : la sélection, plus le fichier affiché.
   const writeRefs = writer?.refs ? all.filter((x) => writer.refs!.includes(x.key)) : all.filter((x) => picked.has(x.key) || x.key === sel)
   // Consolidation dans un CLAUDE.md : les règles globales dans ~/.claude/CLAUDE.md, la mémoire d'un projet dans le sien.
-  const consolidate = (scope: string, label: string) => {
+  const consolidate = (scope: string, label: string, file = "CLAUDE.md") => {
     const refs =
       scope === "global" ? (list?.global ?? []).filter((x) => x.key.startsWith("g/rules/")) : all.filter((x) => x.key.startsWith(`m/${scope}/`))
     setWriter({
       kind: "rewrite",
-      key: scope === "global" ? "g/CLAUDE.md" : `p/${scope}/CLAUDE.md`,
-      name: scope === "global" ? "~/.claude/CLAUDE.md" : `CLAUDE.md de ${label}`,
+      key: scope === "global" ? "g/CLAUDE.md" : `p/${scope}/${file}`,
+      name: scope === "global" ? "~/.claude/CLAUDE.md" : `${file} de ${label}`,
       refs: refs.map((x) => x.key),
       instruction:
         scope === "global"
           ? "Consolide ces règles globales dans ce CLAUDE.md : garde les consignes durables, regroupe-les par thème, retire les doublons. Conserve telles quelles les lignes d'import existantes (« @fichier »)."
-          : "Consolide ces entrées de mémoire dans le CLAUDE.md du projet : garde les règles durables, utiles à chaque session, regroupe-les par thème, retire les doublons et ce qui est périmé.",
+          : `Consolide ces entrées de mémoire dans le ${file} du projet : garde les règles durables, utiles à chaque session, regroupe-les par thème, retire les doublons et ce qui est périmé.`,
     })
   }
   // Clé d'une nouvelle entrée : le nom du front matter (ou le premier titre), simplifié en nom de fichier, sans écraser un fichier existant.
@@ -370,6 +382,31 @@ export function Memory({
         }
       },
     })
+  // Suppression d'un groupe : chaque fichier va à la corbeille (restaurable), un à un, avec un bilan.
+  const removeMany = (keys: string[], what: string) =>
+    onAsk({
+      title: `Supprimer ${what} (${keys.length} fichier${keys.length > 1 ? "s" : ""}) ?`,
+      body: "Chaque fichier est copié à la corbeille avant d'être supprimé ; les lignes de MEMORY.md sont retirées aussi.",
+      confirm: "Tout supprimer",
+      run: async () => {
+        let ok = 0
+        const fails: string[] = []
+        for (const key of keys) {
+          const r = await api.post("/memory-rm", { key })
+          if (r.ok) ok++
+          else fails.push(r.out)
+        }
+        if (fails.length) toast.error(`${ok} supprimé${ok > 1 ? "s" : ""}, ${fails.length} échec${fails.length > 1 ? "s" : ""} : ${fails[0]}`)
+        else toast.success(`${ok} fichier${ok > 1 ? "s" : ""} à la corbeille`)
+        setPicked(new Set())
+        if (keys.includes(sel)) onPick("")
+        refresh()
+      },
+    })
+  // Projets dont le dossier a disparu : leur mémoire n'est plus utilisée par personne.
+  const gone = list?.projects.filter((p) => p.missing) ?? []
+  const orphans = gone.flatMap((p) => p.files.map((x) => x.key))
+  const orphanProjects = gone.length
   const copyContent = async (x: MemFile) => {
     const r = await api.memoryFile(x.key)
     if (r.text === undefined) return void toast.error(r.error ?? "Fichier illisible")
@@ -428,7 +465,7 @@ export function Memory({
       </ContextMenuItem>
     </>
   )
-  const section = (key: string, icon: typeof Globe, title: string, files: MemFile[], onWrite?: () => void, onConsolidate?: () => void) => (
+  const section = (key: string, icon: typeof Globe, title: string, files: MemFile[], onWrite?: () => void, onConsolidate?: (file: string) => void) => (
     <Section
       key={key}
       icon={icon}
@@ -442,6 +479,8 @@ export function Memory({
       onNew={() => blank(key)}
       onWrite={onWrite}
       onConsolidate={onConsolidate}
+      agents={key !== "global"}
+      onRemoveAll={(keys) => removeMany(keys, `la section « ${title} »`)}
       menu={menu}
       sort={sortOf(key)}
       onSort={(s) => setSortsRaw(JSON.stringify({ ...sorts, [key]: s }))}
@@ -479,6 +518,17 @@ export function Memory({
       <ScrollArea className="max-h-64 shrink-0 border-b md:max-h-none md:w-80 md:border-r md:border-b-0">
         <nav className="p-2">
           {!list && <Skeleton className="m-2 h-24" />}
+          {orphans.length > 0 && (
+            <Button
+              variant="outline"
+              size="xs"
+              className="mb-2 w-full"
+              onClick={() => removeMany(orphans, `les mémoires de ${orphanProjects} projet${orphanProjects > 1 ? "s" : ""} introuvable${orphanProjects > 1 ? "s" : ""}`)}
+              title="Dossiers de projet disparus : leurs fichiers de mémoire vont à la corbeille"
+            >
+              <Trash2 /> Nettoyer les projets introuvables ({orphanProjects})
+            </Button>
+          )}
           {list &&
             list.global.some((x) => match(x, "globale")) &&
             section(
@@ -500,7 +550,7 @@ export function Memory({
                   files,
                   () => setWriter({ kind: "new", scope: p.dir, label }),
                   // un CLAUDE.md de projet s'écrit dans son dossier : impossible s'il a disparu, inutile sans mémoire
-                  !p.missing && p.files.some((x) => x.key.startsWith("m/")) ? () => consolidate(p.dir, label) : undefined
+                  !p.missing && p.files.some((x) => x.key.startsWith("m/")) ? (file) => consolidate(p.dir, label, file) : undefined
                 )
               : null
           })}
@@ -560,6 +610,9 @@ export function Memory({
             title="Nouvelle entrée rédigée par Haiku à partir de ces fichiers"
           >
             <Sparkles /> Haiku
+          </Button>
+          <Button variant="ghost" size="xs" onClick={() => removeMany([...picked], "la sélection")} title="Mettre ces fichiers à la corbeille">
+            <Trash2 /> Supprimer
           </Button>
           <Button size="xs" onClick={() => merge(true)} disabled={picked.size < 2} title="Nouvelle session Claude qui fusionne ces fichiers">
             <Merge /> Fusionner avec Claude
