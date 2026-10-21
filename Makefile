@@ -2,6 +2,7 @@
 # make ui      : reconstruit l'interface React/shadcn vers gld-web/ui/dist (non versionné : embarqué dans le binaire par go:embed)
 # make windows : gld-web.exe pour Windows 64 bits (sans bash, sans jq ; l'interface est construite avant)
 # make test    : tests Go (le dossier dist peut être vide : seul l'interface en dépend)
+# make check   : go vet + tests Go + tsc + eslint (rien n'est modifié)
 BIN ?= $(HOME)/.local/bin
 INDEX := gld-web/ui/dist/index.html
 
@@ -22,4 +23,8 @@ windows: ui
 test:
 	cd gld-web && go test -count=1 .
 
-.PHONY: ui install windows test
+check:
+	cd gld-web && go vet ./... && go test -count=1 .
+	cd gld-web/ui && { [ -d node_modules ] || npm ci; } && npx tsc --noEmit && npx eslint .
+
+.PHONY: ui install windows test check

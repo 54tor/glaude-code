@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-// Interface React/shadcn compilée (ui/dist, versionnée : `go build` n'a pas besoin de node).
+// Interface React/shadcn compilée (ui/dist, non versionnée : `make install` la construit, le dossier garde un .gitkeep pour que go:embed compile).
 //
 //go:embed all:ui/dist
 var uiFS embed.FS

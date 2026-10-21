@@ -74,6 +74,8 @@ func parsePermImport(text string) (map[string][]string, error) {
 // permImport applique un fragment aux permissions d'un fichier de réglages. mode « merge » : ajoute les règles qui manquent ;
 // « replace » : remplace les listes présentes dans le fragment (les autres listes ne bougent pas).
 func permImport(id, text, mode string, dry bool) (before, after string, warns []CfgIssue, summary string, err error) {
+	cfgMu.Lock()
+	defer cfgMu.Unlock()
 	if mode != "merge" && mode != "replace" {
 		err = errors.New("mode d'import inconnu")
 		return

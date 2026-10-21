@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -342,5 +344,26 @@ func TestDossiersSupplementaires(t *testing.T) {
 	}
 	if _, after, err := configEdit(CfgEdit{File: "u", Op: "remove", Path: []string{"permissions", "additionalDirectories"}, Value: ok}); err != nil || strings.Contains(after, ok) {
 		t.Fatal(after, err)
+	}
+}
+
+// Deux requêtes simultanées ne doivent pas se marcher dessus : toutes les règles ajoutées doivent rester (sans verrou, des ajouts se perdent).
+func TestEcritureConfigConcurrente(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	p := filepath.Join(cfg, "settings.json")
+	put(t, p, "{\n  \"theme\": \"dark\"\n}\n", old)
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			configEdit(CfgEdit{File: "u", Op: "add", Path: []string{"permissions", "allow"}, Value: fmt.Sprintf("Bash(cmd%d:*)", i)})
+		}()
+	}
+	wg.Wait()
+	b, _ := os.ReadFile(p)
+	if n := strings.Count(string(b), "Bash(cmd"); n != 20 {
+		t.Fatalf("%d règles sur 20 : %s", n, b)
 	}
 }
