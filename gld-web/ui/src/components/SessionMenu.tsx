@@ -11,6 +11,7 @@ import {
   MessageSquareReply,
   Pencil,
   Plus,
+  Power,
   SquareTerminal,
   Star,
   StarOff,
@@ -137,6 +138,11 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
         <M.Item onSelect={() => a.move(rows)}>
           <FolderInput /> Déplacer vers un autre dossier…
         </M.Item>
+        {rows.some((r) => a.live.has(r.s.id)) && (
+          <M.Item onSelect={() => a.stop(rows.filter((r) => a.live.has(r.s.id)).map((r) => r.s.id))}>
+            <Power /> Fermer les sessions ouvertes
+          </M.Item>
+        )}
         <M.Sep />
         <M.Item
           variant="destructive"
@@ -197,6 +203,11 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
       <M.Item onSelect={() => a.move([row])}>
         <FolderInput /> Déplacer vers un autre dossier…
       </M.Item>
+      {a.live.has(s.id) && (
+        <M.Item onSelect={() => a.stop([s.id])}>
+          <Power /> Fermer la session
+        </M.Item>
+      )}
       <M.Sep />
       <M.Item variant="destructive" onSelect={() => a.remove([{ dir: s.dir, id: s.id }], `« ${s.title} »`, after)}>
         <Trash2 /> Supprimer

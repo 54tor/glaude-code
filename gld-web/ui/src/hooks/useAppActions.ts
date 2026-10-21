@@ -329,6 +329,24 @@ export function useAppActions(c: {
     ungroup: (ids, x = vg) => {
       if (x) saveGroups(vgroups.map((g) => (same(g, x) ? { ...g, ids: g.ids.filter((i) => !ids.includes(i)) } : g)))
     },
+    stop: (ids) =>
+      setAsk({
+        title: ids.length > 1 ? `Fermer ${ids.length} sessions ouvertes ?` : "Fermer la session ouverte ?",
+        body: "Le processus claude reçoit SIGTERM ; la conversation reste reprenable.",
+        confirm: "Fermer",
+        run: async () => {
+          const rs = await Promise.all(ids.map((id) => api.post("/session-close", { id })))
+          const bad = rs.find((r) => !r.ok)
+          ;(bad ? toast.error : toast.success)(bad ? bad.out : ids.length > 1 ? "Sessions fermées" : "Session fermée")
+          // Le processus met un instant à finir : on retire les sessions tout de suite, puis on relit jusqu'à confirmation.
+          const done = new Set(ids.filter((_, i) => rs[i].ok))
+          setData((d) => d && { ...d, live: d.live.filter((x) => !done.has(x)), waiting: d.waiting.filter((x) => !done.has(x)) })
+          for (let i = 0; i < 4; i++) {
+            await new Promise((r) => setTimeout(r, 1000))
+            await reload()
+          }
+        },
+      }),
     remove: (items, what, after) =>
       setAsk({
         title: "Supprimer définitivement ?",

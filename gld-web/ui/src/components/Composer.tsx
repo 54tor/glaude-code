@@ -6,6 +6,7 @@ import { withChoice, type Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
 import { Choose } from "./Choose"
 import { api, type Msg } from "@/lib/api"
+import { useActions } from "./actions"
 import { Button } from "@/components/ui/button"
 
 // Modes d'autorisation de claude -p : sans terminal, Claude ne peut pas demander la permission.
@@ -188,23 +189,13 @@ function LiveSend({ id, onSent }: { id: string; onSent: () => void }) {
   )
 }
 
-// Ferme la session ouverte (le processus claude reçoit SIGTERM) ; deux clics, le second confirme.
+// Ferme la session ouverte (le processus claude reçoit SIGTERM), après confirmation.
 function CloseSession({ id }: { id: string }) {
-  const [sure, setSure] = useState(false)
-  useEffect(() => {
-    if (!sure) return
-    const t = setTimeout(() => setSure(false), 4000)
-    return () => clearTimeout(t)
-  }, [sure])
-  const close = async () => {
-    if (!sure) return setSure(true)
-    setSure(false)
-    const r = await api.post("/session-close", { id })
-    ;(r.ok ? toast.success : toast.error)(r.out)
-  }
+  const a = useActions()
+  const close = () => a.stop([id]) // confirme dans la fenêtre commune, puis met la liste à jour
   return (
-    <Button size="sm" variant={sure ? "destructive" : "ghost"} onClick={close} title="Termine le processus claude de cette session ; la conversation reste reprenable">
-      <Power /> {sure ? "Confirmer la fermeture" : "Fermer la session"}
+    <Button size="sm" variant="ghost" onClick={close} title="Termine le processus claude de cette session ; la conversation reste reprenable">
+      <Power /> Fermer la session
     </Button>
   )
 }
