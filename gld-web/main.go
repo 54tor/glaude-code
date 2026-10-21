@@ -513,6 +513,23 @@ func alive() map[string]bool {
 	return m
 }
 
+// waiting : ids des sessions ouvertes qui attendent (interactive « idle », en arrière-plan « blocked »).
+// Une demande d'autorisation en cours n'est pas distinguée d'un tour terminé.
+var waiting = func() []string {
+	out, err := withPath(exec.Command("claude", "agents", "--json")).Output()
+	var a []struct{ SessionId, Status, State string }
+	ids := []string{}
+	if err != nil || json.Unmarshal(out, &a) != nil {
+		return ids
+	}
+	for _, x := range a {
+		if x.Status == "idle" || x.State == "blocked" {
+			ids = append(ids, x.SessionId)
+		}
+	}
+	return ids
+}
+
 var cwdRe = regexp.MustCompile(`"cwd":("(?:[^"\\]|\\.)*")`)
 
 // remapCwd : old devient nw. Ses sous-dossiers ne suivent que si sub (l'ancien dossier a disparu : projet
@@ -654,6 +671,28 @@ func main() {
 	root = filepath.Join(env("CLAUDE_CONFIG_DIR", filepath.Join(home, ".claude")), "projects")
 	hosts["127.0.0.1:"+port], hosts["localhost:"+port] = true, true
 
+	srv := &http.Server{Addr: "127.0.0.1:" + port, Handler: handler()}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go func() {
+		<-ctx.Done()
+		fmt.Fprintln(os.Stderr, "\narrêt.")
+		c, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		srv.Shutdown(c)
+	}()
+	migrateData()
+	go autosaveTabs(2 * time.Minute)
+	fmt.Fprintln(os.Stderr, "http://127.0.0.1:"+port)
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+// handler : toutes les routes, derrière les gardes Host et CSRF.
+func handler() http.Handler {
+	home, _ := os.UserHomeDir()
 	mux := http.NewServeMux()
 	// Sous Windows le registre peut associer .js à text/plain, ce qui casse les modules : on fixe les types.
 	for ext, typ := range map[string]string{".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".woff2": "font/woff2", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".webmanifest": "application/manifest+json"} {
@@ -684,7 +723,7 @@ func main() {
 		groupsMu.Lock()
 		st := loadStore()
 		groupsMu.Unlock()
-		writeJSON(w, 200, map[string]any{"home": home, "root": root, "groups": sessions(), "live": live, "vgroups": st.Groups, "favs": st.Favs})
+		writeJSON(w, 200, map[string]any{"home": home, "root": root, "groups": sessions(), "live": live, "waiting": waiting(), "vgroups": st.Groups, "favs": st.Favs})
 	})
 	// Explorateur de dossiers pour « Réassigner » / « Déplacer » : sous-dossiers d'un chemin.
 	// Un chemin disparu remonte au plus proche parent qui existe.
@@ -1214,28 +1253,11 @@ func main() {
 	// Anti DNS-rebinding : seul le Host local est servi. Anti CSRF : http.CrossOriginProtection
 	// (bibliothèque standard) refuse toute requête modifiante venue d'une autre origine.
 	guarded := http.NewCrossOriginProtection().Handler(mux)
-	srv := &http.Server{Addr: "127.0.0.1:" + port, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !hosts[r.Host] {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
 		guarded.ServeHTTP(w, r)
-	})}
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	go func() {
-		<-ctx.Done()
-		fmt.Fprintln(os.Stderr, "\narrêt.")
-		c, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		srv.Shutdown(c)
-	}()
-	migrateData()
-	go autosaveTabs(2 * time.Minute)
-	fmt.Fprintln(os.Stderr, "http://127.0.0.1:"+port)
-	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
+	})
 }
