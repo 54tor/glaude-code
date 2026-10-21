@@ -20,11 +20,14 @@ type PermSuggest struct {
 }
 
 var (
-	// jamais proposées : elles exécutent ou modifient beaucoup trop de choses pour une règle générale
+	// jamais proposées : elles exécutent ou modifient beaucoup trop de choses pour une règle générale (une règle
+	// Bash(cmd:*) autorise TOUTES les options de cmd), ou lancent une autre commande (env, find -exec, xargs…).
 	neverSuggest = map[string]bool{"rm": true, "sudo": true, "dd": true, "mkfs": true, "chmod": true, "chown": true, "curl": true, "wget": true, "ssh": true, "scp": true, "rsync": true,
-		"eval": true, "sh": true, "bash": true, "zsh": true, "python": true, "python3": true, "node": true, "perl": true, "ruby": true, "xargs": true, "kill": true, "pkill": true, "mv": true, "cp": true, "docker": true, "kubectl": true}
-	readOnlyCmds = map[string]bool{"ls": true, "cat": true, "head": true, "tail": true, "wc": true, "grep": true, "rg": true, "find": true, "pwd": true, "echo": true, "stat": true, "file": true, "diff": true, "sort": true, "uniq": true,
-		"git status": true, "git diff": true, "git log": true, "git show": true, "git branch": true, "go vet": true, "go test": true, "go build": true, "npm run": true, "make test": true, "date": true, "which": true}
+		"eval": true, "sh": true, "bash": true, "zsh": true, "python": true, "python3": true, "node": true, "perl": true, "ruby": true, "xargs": true, "kill": true, "pkill": true, "mv": true, "cp": true, "docker": true, "kubectl": true,
+		"env": true, "nice": true, "timeout": true, "nohup": true, "time": true, "command": true, "exec": true, "awk": true, "sed": true, "find": true, "tee": true, "source": true, "watch": true, "ionice": true, "setsid": true, "stdbuf": true, "script": true}
+	// a priori en lecture seule, quelles que soient les options (les autres sont « à vérifier » : tests, builds et scripts exécutent du code)
+	readOnlyCmds = map[string]bool{"ls": true, "cat": true, "head": true, "tail": true, "wc": true, "grep": true, "pwd": true, "stat": true, "file": true, "diff": true, "date": true, "which": true,
+		"git status": true, "git diff": true, "git log": true, "git show": true}
 	twoWords = map[string]bool{"git": true, "go": true, "npm": true, "make": true, "cargo": true, "gh": true, "systemctl": true, "npx": true, "pnpm": true, "yarn": true}
 )
 
@@ -39,7 +42,10 @@ func bashPrefix(cmd string) string {
 		return ""
 	}
 	first := filepath.Base(f[0])
-	if twoWords[first] && len(f) > 1 && !strings.HasPrefix(f[1], "-") {
+	if twoWords[first] {
+		if len(f) < 2 || strings.HasPrefix(f[1], "-") { // « git -c x=y … » : une règle sur « git » seul autoriserait tout git
+			return ""
+		}
 		return first + " " + f[1]
 	}
 	return first
@@ -129,7 +135,7 @@ func permSuggestions(existing []string) []PermSuggest {
 		if n < 3 || neverSuggest[first] || have[rule] || have["Bash("+first+":*)"] || have["Bash"] {
 			continue
 		}
-		out = append(out, PermSuggest{Rule: rule, Count: n, ReadOnly: readOnlyCmds[p] || readOnlyCmds[first], Example: example[p]})
+		out = append(out, PermSuggest{Rule: rule, Count: n, ReadOnly: readOnlyCmds[p], Example: example[p]})
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Count != out[j].Count {

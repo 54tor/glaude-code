@@ -133,6 +133,7 @@ func TestSuggestionsPermissions(t *testing.T) {
 	var b strings.Builder
 	for i := 0; i < 4; i++ {
 		b.WriteString(line("git status") + line("ls -la /tmp") + line("rm -rf x") + line("go test ./...") + line("cat a | grep b"))
+		b.WriteString(line("sed -n 1,5p f") + line("find . -name x") + line("env A=1 ls") + line("git -c core.pager=x log") + line("go build ./..."))
 	}
 	b.WriteString(line("git status") + line("make build"))
 	put(t, filepath.Join(cfg, "projects", "-p", id1+".jsonl"), b.String(), old)
@@ -146,9 +147,52 @@ func TestSuggestionsPermissions(t *testing.T) {
 	if s := got["Bash(ls:*)"]; s.Count != 4 || !s.ReadOnly {
 		t.Fatalf("ls : %+v", got)
 	}
-	for _, no := range []string{"Bash(rm:*)", "Bash(go test:*)", "Bash(cat:*)", "Bash(make build:*)"} {
+	// « go build » exécute du code (cgo, générateurs) : proposée, mais pas « lecture seule »
+	if s := got["Bash(go build:*)"]; s.Count != 4 || s.ReadOnly {
+		t.Fatalf("go build : %+v", s)
+	}
+	for _, no := range []string{"Bash(rm:*)", "Bash(go test:*)", "Bash(cat:*)", "Bash(make build:*)", "Bash(sed:*)", "Bash(find:*)", "Bash(env:*)", "Bash(git:*)"} {
 		if _, ok := got[no]; ok {
 			t.Errorf("règle proposée à tort : %s", no)
 		}
+	}
+}
+
+// Un fichier de réglages (ou son dossier) qui est un lien symbolique n'est jamais écrit.
+func TestEcritureRefuseLesLiens(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	cible := filepath.Join(t.TempDir(), "cible.json")
+	put(t, cible, "{\n  \"model\": \"opus\"\n}\n", old)
+	if err := os.Symlink(cible, filepath.Join(cfg, "settings.json")); err != nil {
+		t.Skip("liens symboliques indisponibles")
+	}
+	if _, _, err := configEdit(CfgEdit{File: "u", Op: "set", Path: []string{"model"}, Value: "x"}); err == nil || !strings.Contains(err.Error(), "lien symbolique") {
+		t.Fatal("écriture à travers un lien :", err)
+	}
+	if b, _ := os.ReadFile(cible); !strings.Contains(string(b), "opus") {
+		t.Fatal("la cible du lien a été modifiée")
+	}
+	// un fichier temporaire prévisible ne peut plus détourner l'écriture
+	cfg2 := t.TempDir()
+	use(cfg2)
+	put(t, filepath.Join(cfg2, "settings.json"), "{\n  \"model\": \"opus\"\n}\n", old)
+	os.Symlink(cible, filepath.Join(cfg2, "settings.json.gld-web.tmp"))
+	if _, _, err := configEdit(CfgEdit{File: "u", Op: "set", Path: []string{"model"}, Value: "sonnet"}); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(cible); !strings.Contains(string(b), "opus") {
+		t.Fatal("la cible d'un faux fichier temporaire a été écrasée")
+	}
+}
+
+// Les appels à claude sans projet se font dans un dossier neuf et privé, pas dans /tmp.
+func TestDossierDeTravailPrive(t *testing.T) {
+	d := workDir()
+	if d == os.TempDir() || d == "" {
+		t.Fatal("dossier partagé :", d)
+	}
+	if st, err := os.Stat(d); err != nil || st.Mode().Perm()&0o077 != 0 {
+		t.Fatalf("dossier non privé : %v %v", st, err)
 	}
 }

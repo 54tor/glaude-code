@@ -112,7 +112,7 @@ var memDraft = func(model, system, prompt string) (string, float64, error) {
 		"--strict-mcp-config", "--setting-sources", "", "--no-session-persistence", "--system-prompt", system,
 		"--output-format", "json"))
 	cmd.Stdin = strings.NewReader(prompt) // sur stdin : un argument est limité à 128 Kio (MAX_ARG_STRLEN), un brouillon peut citer 20 Mio
-	cmd.Dir = os.TempDir()                // aucun CLAUDE.md de projet
+	cmd.Dir = workDir()                   // aucun CLAUDE.md de projet, et un dossier que personne d'autre n'écrit
 	out, err := cmd.Output()
 	var r struct {
 		Result  string

@@ -207,8 +207,23 @@ func saveBackup(id string, content []byte) error {
 	return nil
 }
 
-// writeConfig remplace le fichier de façon atomique, droits conservés (0600 par défaut).
+// notSymlink refuse un fichier de réglages (ou son dossier) qui est un lien symbolique : l'écriture le remplacerait,
+// ou suivrait le lien vers un fichier qu'on n'a pas voulu toucher.
+func notSymlink(path string) error {
+	for _, p := range []string{filepath.Dir(path), path} {
+		if st, err := os.Lstat(p); err == nil && st.Mode()&os.ModeSymlink != 0 {
+			return errors.New(p + " est un lien symbolique : modification refusée, éditez sa cible à la main")
+		}
+	}
+	return nil
+}
+
+// writeConfig remplace le fichier de façon atomique, droits conservés (0600 par défaut). Le fichier temporaire a un nom
+// aléatoire et est créé en exclusivité : un lien déposé à sa place ne peut pas détourner l'écriture.
 func writeConfig(path string, content []byte) error {
+	if err := notSymlink(path); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
@@ -216,8 +231,15 @@ func writeConfig(path string, content []byte) error {
 	if st, err := os.Stat(path); err == nil {
 		mode = st.Mode().Perm()
 	}
-	tmp := path + ".gld-web.tmp"
-	if err := os.WriteFile(tmp, content, mode); err != nil {
+	f, err := os.CreateTemp(filepath.Dir(path), ".gld-web-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	_, werr := f.Write(content)
+	cerr := f.Close()
+	if err := errors.Join(werr, cerr, os.Chmod(tmp, mode)); err != nil {
+		os.Remove(tmp)
 		return err
 	}
 	if err := os.Rename(tmp, path); err != nil {
@@ -234,6 +256,9 @@ func configEdit(e CfgEdit) (before, after string, err error) {
 	}
 	path, err := configPath(e.File)
 	if err != nil {
+		return
+	}
+	if err = notSymlink(path); err != nil {
 		return
 	}
 	orig, rerr := os.ReadFile(path)
