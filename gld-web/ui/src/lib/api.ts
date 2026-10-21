@@ -119,6 +119,7 @@ export const api = {
   skills: () => get<{ skills: Skill[]; projects: { dir: string; project: string }[] }>("/skills-list"),
   skill: (key: string) => get<{ text?: string; files?: SkillFile[]; error?: string }>(`/skill?key=${enc(key)}`),
   configProjects: () => get<{ projects: ProjectCfg[] }>("/config-projects"),
+  sendInfo: () => get<{ ids: string[]; why: string }>("/session-send-info"),
   config: () => get<CfgOverview>("/config"),
   configEffective: (dir: string) => get<{ rows: EffRow[] }>(`/config-effective?dir=${enc(dir)}`),
   configMcp: () => get<{ servers: McpServer[] }>("/config-mcp"),

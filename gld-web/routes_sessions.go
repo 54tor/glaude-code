@@ -30,6 +30,33 @@ func routesSessions(mux *http.ServeMux) {
 		groupsMu.Unlock()
 		writeJSON(w, 200, map[string]any{"home": home, "root": root, "groups": sessions(), "live": live, "waiting": waiting(), "vgroups": st.Groups, "favs": st.Favs, "tags": st.Tags})
 	})
+	// Envoi d'un message à une session ouverte dans tmux (sendkeys.go) : lesquelles le permettent, puis l'envoi.
+	mux.HandleFunc("GET /session-send-info", func(w http.ResponseWriter, r *http.Request) {
+		ids, err := sendable()
+		why := ""
+		if err != nil {
+			why = err.Error()
+		}
+		keys := []string{}
+		for id := range ids {
+			keys = append(keys, id)
+		}
+		writeJSON(w, 200, map[string]any{"ids": keys, "why": why})
+	})
+	mux.HandleFunc("POST /session-send", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ ID, Text string }
+		if json.NewDecoder(io.LimitReader(r.Body, sendMax+1<<10)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		err := sendToSession(req.ID, req.Text)
+		journal("session-send %s (%d caractères) : %v", req.ID, len(req.Text), errOr(err)) // jamais le texte
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": "Message envoyé à la session"})
+	})
 	// Explorateur de dossiers pour « Réassigner » / « Déplacer » : sous-dossiers d'un chemin.
 	// Un chemin disparu remonte au plus proche parent qui existe.
 	mux.HandleFunc("GET /ls", func(w http.ResponseWriter, r *http.Request) {
