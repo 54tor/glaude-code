@@ -25,7 +25,7 @@ const Badge = ({ n, label }: { n: number; label: string }) =>
 
 // Ce que chaque projet configure en propre, en plus des réglages de l'utilisateur : réglages (projet et local), règles de
 // permission, hooks, serveurs MCP, règles .claude/rules, skills et documentation. onEdit ouvre l'onglet qui permet de les modifier.
-export function ProjectsTab({ home, version, onEdit, onTransfer, onRemove }: { home: string; version: number; onEdit: (file: string, tab: string) => void; onRemove: (file: string, kind: string, rule: string) => void; onTransfer: (file: string, kind: string, rule: string, move: boolean) => void }) {
+export function ProjectsTab({ home, version, gone, onEdit, onTransfer, onRemove }: { home: string; version: number; gone: (file: string, kind: string, rule: string) => boolean; onEdit: (file: string, tab: string) => void; onRemove: (file: string, kind: string, rule: string) => void; onTransfer: (file: string, kind: string, rule: string, move: boolean) => void }) {
   const [list, setList] = useState<ProjectCfg[] | null>(null)
   const [all, setAll] = useState(false)
   const [q, setQ] = useState("")
@@ -58,7 +58,8 @@ export function ProjectsTab({ home, version, onEdit, onTransfer, onRemove }: { h
       <ul className="space-y-2">
         {shown.map((p) => {
           const isOpen = open.has(p.dir)
-          const nRules = Object.values(p.perms).reduce((n, l) => n + l.length, 0)
+          const perms = Object.fromEntries(Object.entries(p.perms).map(([k, l]) => [k, l.filter((r) => !gone(`${r.scope}/${p.dir}`, k, r.rule))]))
+          const nRules = Object.values(perms).reduce((n, l) => n + l.length, 0)
           const nSettings = p.files.reduce((n, x) => n + x.rows.filter((r) => !r.path.startsWith("permissions.") && r.path !== "hooks").length, 0)
           return (
             <li key={p.dir} className="rounded-lg border">
@@ -87,11 +88,11 @@ export function ProjectsTab({ home, version, onEdit, onTransfer, onRemove }: { h
                     {nRules === 0 ? (
                       <p className="text-xs text-muted-foreground">Aucune : ce projet suit vos règles personnelles.</p>
                     ) : (
-                      KINDS.filter(([k]) => p.perms[k]?.length).map(([k, label]) => (
+                      KINDS.filter(([k]) => perms[k]?.length).map(([k, label]) => (
                         <div key={k} className="mb-2">
                           <p className="text-xs text-muted-foreground">{label}</p>
                           <ul className="space-y-px">
-                            {p.perms[k].map((r, i) => (
+                            {perms[k].map((r, i) => (
                               <li key={k + i} className="flex items-center gap-2">
                                 <code className="min-w-0 flex-1 text-xs break-all">{r.rule}</code>
                                 <span className="shrink-0 text-[11px] text-muted-foreground">{r.scope === "p" ? "projet" : "local"}</span>

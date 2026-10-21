@@ -26,7 +26,7 @@ const KINDS = [
   ["deny", "Refusées", "Jamais lancées ; l'emportent sur les autres."],
 ] as const
 
-export function PermsTab({ file, label, doc, propose, proposePerms }: { file: string; label: string; doc: Doc; propose: Propose; proposePerms: (file: string, text: string, mode: string) => Promise<string | null> }) {
+export function PermsTab({ file, label, doc, propose, proposePerms, gone }: { gone: (file: string, kind: string, rule: string) => boolean; file: string; label: string; doc: Doc; propose: Propose; proposePerms: (file: string, text: string, mode: string) => Promise<string | null> }) {
   const [importing, setImporting] = useState(false)
   const [draft, setDraft] = useState<Record<string, string>>({})
   const [sug, setSug] = useState<PermSuggest[] | null>(null)
@@ -54,7 +54,7 @@ export function PermsTab({ file, label, doc, propose, proposePerms }: { file: st
       <PermIOButtons file={file} label={label} doc={doc} onImport={() => setImporting(true)} />
       <PermImportDialog open={importing} file={file} label={label} propose={proposePerms} onClose={() => setImporting(false)} />
       {KINDS.map(([kind, label, hint]) => {
-        const rules = list(at(doc, "permissions", kind))
+        const rules = list(at(doc, "permissions", kind)).filter((r) => !gone(file, kind, r))
         return (
           <section key={kind}>
             <h3 className="text-sm font-medium">
