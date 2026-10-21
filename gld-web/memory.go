@@ -31,7 +31,7 @@ const memMax = 1 << 20
 
 var (
 	mdName       = regexp.MustCompile(`^[^./\\][^/\\]*\.md$`)
-	projectFiles = []string{"CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md"}
+	projectFiles = []string{"CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md", "AGENTS.md"}
 )
 
 // globalClaude : ce chemin est le CLAUDE.md global (~/.claude/CLAUDE.md), même atteint comme fichier d'un projet
