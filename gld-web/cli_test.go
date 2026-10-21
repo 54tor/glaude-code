@@ -180,6 +180,9 @@ func TestLauncherCmd(t *testing.T) {
 			t.Errorf("%s : %v %q", name, err, strings.Join(c.Args, " "))
 		}
 	}
+	if c, _ := launcherCmd("tmux", "x #(touch /tmp/pwn) #{a}", argv); c.Args[3] != "x ##(touch /tmp/pwn) ##{a}" {
+		t.Errorf("tmux : titre non neutralisé : %q", c.Args[3])
+	}
 	t.Setenv("WSL_DISTRO_NAME", "Ubuntu")
 	c, _ := launcherCmd("wt", "a;b\"c", argv)
 	if got := strings.Join(c.Args, " "); !strings.HasPrefix(got, "wt.exe -w 0 new-tab --title a b c wsl.exe -d Ubuntu -- /b/gld-web _run") {
