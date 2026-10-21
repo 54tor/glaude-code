@@ -10,15 +10,17 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { TYPES } from "./MemoryTypes"
-import { copy, movable } from "./memoryLib"
+import { Markdown } from "./Message"
+import { copy, movable, split } from "./memoryLib"
 
 const icon = (key: string) => (key.startsWith("m/") ? Brain : key.startsWith("r/") ? ScrollText : FileText)
 
 const report = (r: { ok: boolean; out: string }) => (r.ok ? toast.success(r.out) : toast.error(r.out), r.ok)
 
 // Édition d'un fichier sur place : le texte brut, enregistré tel quel (comme dans la page Mémoire).
-function EditDialog({ file, onClose, onSaved }: { file: MemFile; onClose: () => void; onSaved: () => void }) {
+function EditDialog({ file, edit, onClose, onSaved }: { file: MemFile; edit: boolean; onClose: () => void; onSaved: () => void }) {
   const [text, setText] = useState<string | null>(null)
+  const [editing, setEditing] = useState(edit) // d'abord l'aperçu mis en forme ; « Modifier » passe au texte brut
   const [busy, setBusy] = useState(false)
   const close = useRef(onClose) // le parent recrée onClose à chaque rendu : l'effet de lecture ne doit pas repartir (il écraserait la frappe)
   useEffect(() => {
@@ -44,9 +46,10 @@ function EditDialog({ file, onClose, onSaved }: { file: MemFile; onClose: () => 
     setBusy(false)
     if (ok) {
       onSaved()
-      onClose()
+      setEditing(false)
     }
   }
+  const [fm, body] = split(text ?? "")
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="flex max-h-[90vh] flex-col gap-3 sm:max-w-3xl">
@@ -54,22 +57,49 @@ function EditDialog({ file, onClose, onSaved }: { file: MemFile; onClose: () => 
           <DialogTitle className="truncate">{file.name}</DialogTitle>
           <DialogDescription className="truncate font-mono text-xs">{file.path}</DialogDescription>
         </DialogHeader>
-        <textarea
-          value={text ?? ""}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "Enter" && (e.preventDefault(), save())}
-          disabled={text === null || busy}
-          spellCheck={false}
-          aria-label={`Contenu de ${file.name}`}
-          className="field-sizing-content min-h-64 w-full flex-1 resize-none overflow-y-auto rounded-lg border bg-background px-3 py-2 font-mono text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-        />
+        {editing ? (
+          <textarea
+            value={text ?? ""}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "Enter" && (e.preventDefault(), save())}
+            disabled={text === null || busy}
+            spellCheck={false}
+            autoFocus
+            aria-label={`Contenu de ${file.name}`}
+            className="field-sizing-content min-h-64 w-full flex-1 resize-none overflow-y-auto rounded-lg border bg-background px-3 py-2 font-mono text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          />
+        ) : (
+          <div className="min-h-32 flex-1 overflow-y-auto rounded-lg border px-4 py-3 text-sm leading-relaxed">
+            {text === null ? (
+              <p className="text-muted-foreground">Chargement…</p>
+            ) : (
+              <>
+                {fm && <pre className="mb-3 rounded-lg border bg-muted/40 px-3 py-2 text-xs whitespace-pre-wrap text-muted-foreground">{fm}</pre>}
+                <Markdown t={body} />
+              </>
+            )}
+          </div>
+        )}
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
-            Annuler
-          </Button>
-          <Button onClick={save} disabled={text === null || busy} title="Ctrl+Entrée">
-            Enregistrer
-          </Button>
+          {editing ? (
+            <>
+              <Button variant="ghost" onClick={() => setEditing(false)}>
+                Aperçu
+              </Button>
+              <Button onClick={save} disabled={text === null || busy} title="Ctrl+Entrée">
+                Enregistrer
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" onClick={onClose}>
+                Fermer
+              </Button>
+              <Button onClick={() => setEditing(true)} disabled={text === null}>
+                <Pencil /> Modifier
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -82,7 +112,7 @@ function EditDialog({ file, onClose, onSaved }: { file: MemFile; onClose: () => 
 export function ProjectMemory({ dir }: { dir: string }) {
   const [files, setFiles] = useState<MemFile[] | null>(null)
   const [open, setOpen] = useState(true)
-  const [editing, setEditing] = useState<MemFile | null>(null)
+  const [shown, setShown] = useState<{ f: MemFile; edit: boolean } | null>(null)
   const [removing, setRemoving] = useState<MemFile | null>(null)
   const [, go] = useLocation()
   const [tick, setTick] = useState(0)
@@ -136,7 +166,7 @@ export function ProjectMemory({ dir }: { dir: string }) {
                 <ContextMenu>
                   <ContextMenuTrigger asChild>
                     <div className="group/row flex items-center rounded-md hover:bg-muted">
-                      <button onClick={() => setEditing(f)} className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-sm" title={f.path}>
+                      <button onClick={() => setShown({ f, edit: false })} className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-sm" title={f.path}>
                         <Icon className="size-3.5 shrink-0 text-muted-foreground" />
                         <span className={cn("min-w-0 flex-1 truncate", f.off && "line-through opacity-60")}>{f.name}</span>
                         {f.type && <span className="shrink-0 rounded bg-muted px-1.5 text-[10px] text-muted-foreground">{f.type}</span>}
@@ -150,10 +180,13 @@ export function ProjectMemory({ dir }: { dir: string }) {
                   </ContextMenuTrigger>
                   <ContextMenuContent className="w-60">
                     <ContextMenuLabel className="truncate">{f.name}</ContextMenuLabel>
-                    <ContextMenuItem onSelect={() => go(href({ kind: "memory", key: f.key }))}>
-                      <BookOpen /> Ouvrir dans la page Mémoire
+                    <ContextMenuItem onSelect={() => setShown({ f, edit: false })}>
+                      <BookOpen /> Afficher
                     </ContextMenuItem>
-                    <ContextMenuItem onSelect={() => setEditing(f)}>
+                    <ContextMenuItem onSelect={() => go(href({ kind: "memory", key: f.key }))}>
+                      <ExternalLink /> Ouvrir dans la page Mémoire
+                    </ContextMenuItem>
+                    <ContextMenuItem onSelect={() => setShown({ f, edit: true })}>
                       <Pencil /> Modifier ici
                     </ContextMenuItem>
                     {canType(f) && (
@@ -200,7 +233,7 @@ export function ProjectMemory({ dir }: { dir: string }) {
           })}
         </ul>
       )}
-      {editing && <EditDialog file={editing} onClose={() => setEditing(null)} onSaved={refresh} />}
+      {shown && <EditDialog key={shown.f.key} file={shown.f} edit={shown.edit} onClose={() => setShown(null)} onSaved={refresh} />}
       <AlertDialog open={!!removing} onOpenChange={(o) => !o && setRemoving(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
