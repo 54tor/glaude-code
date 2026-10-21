@@ -47,7 +47,7 @@ export function HealthDialog({
   const repairable = [...new Set(issues.filter((i) => i.dir && (i.kind === "index-ligne" || i.kind === "index-absent")).map((i) => i.dir!))]
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Santé de la mémoire</DialogTitle>
           <DialogDescription>

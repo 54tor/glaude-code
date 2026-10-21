@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 import { api, type CfgIssue, type EffRow, type HookInfo, type McpServer } from "@/lib/api"
+import { describeKey } from "@/lib/configKeys"
 import { tilde } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -105,7 +106,10 @@ export function PrecedenceTab({ projects, home }: { projects: { dir: string; pro
           <tbody>
             {shown.map((r) => (
               <tr key={r.path} className="border-t align-top">
-                <td className="px-3 py-1.5 font-mono text-xs break-all">{r.path}</td>
+                <td className="px-3 py-1.5">
+                  <span className="font-mono text-xs break-all">{r.path}</span>
+                  {describeKey(r.path) && <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">{describeKey(r.path)}</span>}
+                </td>
                 {(["u", "p", "l"] as const).map((lv) => (
                   <td key={lv} title={r.values[lv]} className={cn("px-3 py-1.5 text-xs break-words", r.values[lv] !== undefined && (r.merged || r.winner === lv) ? "font-medium" : "text-muted-foreground line-through decoration-muted-foreground/40")}>
                     <span className="line-clamp-3">{r.values[lv] ?? ""}</span>

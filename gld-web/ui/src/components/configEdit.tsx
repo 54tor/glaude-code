@@ -44,7 +44,7 @@ export function useConfigEdit(onDone: () => void): { propose: (e: CfgEdit) => Pr
   }
   const dialog = (
     <Dialog open={!!pv} onOpenChange={(o) => !o && setPv(null)}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Enregistrer cette modification ?</DialogTitle>
           <DialogDescription>

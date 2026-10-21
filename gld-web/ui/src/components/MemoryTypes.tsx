@@ -45,7 +45,7 @@ export const typeOf = (t?: string) => TYPES.find((x) => x.key === t)
 export function TypeHelp({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Les quatre types de mémoire</DialogTitle>
           <DialogDescription>
