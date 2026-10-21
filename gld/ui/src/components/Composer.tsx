@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
+import { LiveAgents, type Live } from "./LiveStatus"
 import { toast } from "sonner"
 import { Minimize2, Power, Send, Square, SquareTerminal } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
@@ -29,6 +30,7 @@ export function Composer({
   args,
   defaultChoice,
   live,
+  liveState,
   onSent,
   turn,
   setTurn,
@@ -39,6 +41,7 @@ export function Composer({
   args: string
   defaultChoice: Choice
   live: boolean
+  liveState: Live
   onSent: () => void // message envoyé à la session ouverte
   turn: Turn | null
   setTurn: (f: (t: Turn | null) => Turn | null) => void
@@ -97,7 +100,7 @@ export function Composer({
   }
   const stop = () => api.post("/chat-stop", { id })
 
-  if (live) return <LiveSend id={id} onSent={onSent} />
+  if (live) return <LiveSend id={id} onSent={onSent} liveState={liveState} />
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-7xl space-y-2">
@@ -137,7 +140,7 @@ export function Composer({
 
 // Session ouverte dans un terminal : deux processus ne peuvent pas écrire le même transcript, donc pas de claude -p ici. Si la session
 // tourne dans tmux, le message y est collé puis validé ; sinon on l'explique.
-function LiveSend({ id, onSent }: { id: string; onSent: () => void }) {
+function LiveSend({ id, onSent, liveState }: { id: string; onSent: () => void; liveState: Live }) {
   const [info, setInfo] = useState<{ ids: string[]; why: string } | null>(null)
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
@@ -224,6 +227,7 @@ function LiveSend({ id, onSent }: { id: string; onSent: () => void }) {
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           Le texte est collé dans le terminal de la session, puis validé : si Claude répond déjà, il le prend à la suite.
           <span className="ml-auto" />
+          <LiveAgents live={liveState} />
           <SlashMenu id={id} text={text} onSent={onSent} />
           <CloseSession id={id} />
           <Button size="sm" onClick={send} disabled={(!text.trim() && !pics.images.length) || busy}>

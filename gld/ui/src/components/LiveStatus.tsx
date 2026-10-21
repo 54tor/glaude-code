@@ -62,7 +62,6 @@ export function LiveBar({ live: { st, now, open } }: { live: Live }) {
 export function LiveStats({ live: { st, open }, tok }: { live: Live; tok: Tokens }) {
   const [stats, setStats] = useState(false)
   if (!st) return null
-  const running = st.subs.filter((s) => s.running).length
   return (
     <>
       <span className="ml-auto flex items-center gap-x-3 px-1 text-xs text-muted-foreground tabular-nums">
@@ -70,20 +69,14 @@ export function LiveStats({ live: { st, open }, tok }: { live: Live; tok: Tokens
         {st.context > 0 && <span title="Contexte envoyé au dernier appel">ctx {compact(st.context)}</span>}
         <span title="Tokens traités (hors cache lu)">{compact(tokTotal(tok))} tok</span>
       </span>
-      <Button size="sm" variant="ghost" onClick={() => setStats(true)} title="Tokens consommés, contexte et sous-agents">
+      <Button size="sm" variant="ghost" onClick={() => setStats(true)} title="Tokens consommés et dernier appel">
         <BarChart3 /> Stats
-        {st.subs.length > 0 && (
-          <span className="flex items-center gap-1 text-muted-foreground">
-            · <Bot className="size-3" /> {st.subs.length}
-            {running > 0 && ` (${running} en cours)`}
-          </span>
-        )}
       </Button>
       <Dialog open={stats} onOpenChange={setStats}>
         <DialogContent className="flex max-h-[85vh] min-w-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
           <DialogHeader className="border-b px-6 py-4">
             <DialogTitle>Statistiques de la session</DialogTitle>
-            <DialogDescription className="sr-only">Tokens, contexte et sous-agents de la session</DialogDescription>
+            <DialogDescription className="sr-only">Tokens et contexte de la session</DialogDescription>
           </DialogHeader>
           <div className="min-h-0 flex-1 space-y-5 overflow-x-hidden overflow-y-auto px-6 py-5 text-sm">
             <section>
@@ -114,29 +107,47 @@ export function LiveStats({ live: { st, open }, tok }: { live: Live; tok: Tokens
                 {st.out > 0 && <p>Tokens produits : {compact(st.out)}</p>}
               </section>
             )}
-            <section>
-              <h3 className="mb-1 flex items-center gap-1.5 font-medium">
-                <Bot className="size-4" /> Sous-agents ({st.subs.length}
-                {running > 0 && `, ${running} en cours`})
-              </h3>
-              {st.subs.length === 0 ? (
-                <p className="text-muted-foreground">Aucun sous-agent dans cette session.</p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {st.subs.map((s) => (
-                    <li key={s.id} className="flex flex-wrap items-center gap-x-2">
-                      {s.running ? <Loader2 className="size-3.5 animate-spin text-emerald-600 dark:text-emerald-400" /> : <span className="size-1.5 rounded-full bg-muted-foreground/50" />}
-                      <span className="font-medium">{s.desc || s.type}</span>
-                      <span className="text-xs text-muted-foreground">{s.type}</span>
-                      <span className="min-w-0 truncate text-xs text-muted-foreground" title={s.activity}>
-                        {s.activity}
-                      </span>
-                      {s.context > 0 && <span className="text-xs text-muted-foreground">· contexte {compact(s.context)}</span>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+// Sous-agents de la session : un bouton (nombre et agents en cours) qui ouvre la liste, à côté des commandes de la session.
+export function LiveAgents({ live: { st } }: { live: Live }) {
+  const [shown, setShown] = useState(false)
+  if (!st || st.subs.length === 0) return null
+  const running = st.subs.filter((s) => s.running).length
+  return (
+    <>
+      <Button size="sm" variant="ghost" onClick={() => setShown(true)} title="Sous-agents de la session">
+        <Bot /> Sous-agents · {st.subs.length}
+        {running > 0 && <span className="text-emerald-600 dark:text-emerald-400">({running} en cours)</span>}
+      </Button>
+      <Dialog open={shown} onOpenChange={setShown}>
+        <DialogContent className="flex max-h-[85vh] min-w-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+          <DialogHeader className="border-b px-6 py-4">
+            <DialogTitle>
+              Sous-agents ({st.subs.length}
+              {running > 0 && `, ${running} en cours`})
+            </DialogTitle>
+            <DialogDescription className="sr-only">Sous-agents lancés par la session</DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-6 py-5 text-sm">
+            <ul className="space-y-1.5">
+              {st.subs.map((s) => (
+                <li key={s.id} className="flex flex-wrap items-center gap-x-2">
+                  {s.running ? <Loader2 className="size-3.5 animate-spin text-emerald-600 dark:text-emerald-400" /> : <span className="size-1.5 rounded-full bg-muted-foreground/50" />}
+                  <span className="font-medium">{s.desc || s.type}</span>
+                  <span className="text-xs text-muted-foreground">{s.type}</span>
+                  <span className="min-w-0 truncate text-xs text-muted-foreground" title={s.activity}>
+                    {s.activity}
+                  </span>
+                  {s.context > 0 && <span className="text-xs text-muted-foreground">· contexte {compact(s.context)}</span>}
+                </li>
+              ))}
+            </ul>
           </div>
         </DialogContent>
       </Dialog>
