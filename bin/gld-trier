@@ -30,7 +30,7 @@
 set -uo pipefail
 . "$(dirname "$0")/gld-lib.sh"
 
-AGE_MAX=${GLD_AGE:-3650}
+AGE_MAX=${GLD_AGE:-${CC_AGE:-3650}}
 TAILLE_MIN=0
 DRY=0; FORCE=0; ORPHELINS=0; TOUT=0; PARTOUT=0; ORDRE="ancien"; CIBLE=""
 
@@ -54,7 +54,7 @@ done
 # Lit une réponse au clavier. En temps normal : le terminal (/dev/tty), pour ne
 # pas confondre avec un éventuel pipe. GLD_TRIER_STDIN=1 force stdin (tests).
 lire() {
-  if [ "${GLD_TRIER_STDIN:-0}" = 1 ]; then read -r REP || REP=q
+  if [ "${GLD_TRIER_STDIN:-${CC_TRIER_STDIN:-0}}" = 1 ]; then read -r REP || REP=q
   elif [ -c /dev/tty ]; then read -r REP < /dev/tty || REP=q
   else echo "gld-trier: pas de terminal interactif (essayez GLD_TRIER_STDIN=1)" >&2; exit 1
   fi

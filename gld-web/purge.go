@@ -29,7 +29,7 @@ func cfgDir() string { return filepath.Dir(root) }
 
 // grace : un fichier touché depuis moins de GLD_GRACE minutes (60 par défaut) n'est jamais un reste.
 func grace() time.Duration {
-	n, err := strconv.Atoi(os.Getenv("GLD_GRACE"))
+	n, err := strconv.Atoi(env("GLD_GRACE", os.Getenv("CC_GRACE")))
 	if err != nil || n < 0 {
 		n = 60
 	}

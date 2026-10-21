@@ -7,7 +7,6 @@ import {
   Clock,
   FileText,
   Inbox,
-  Layers,
   Loader2,
   Monitor,
   Moon,
@@ -295,11 +294,9 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
     <aside className="flex max-h-[45dvh] shrink-0 flex-col border-b bg-sidebar md:max-h-none md:w-72 md:border-r md:border-b-0 lg:w-80">
       <div className="space-y-3 p-3">
         <div className="flex items-center gap-2 px-1 pt-1">
-          <div className="grid size-7 place-items-center rounded-md bg-primary text-primary-foreground">
-            <Layers className="size-4" />
-          </div>
+          <img src="/icons/icon-192.png" alt="" className="size-8 shrink-0" />
           <div className="leading-tight">
-            <h1 className="text-sm font-semibold">Sessions Claude</h1>
+            <h1 className="text-sm font-semibold">Glaude Code</h1>
             <p className="text-xs text-muted-foreground">{p.loading ? "Chargement…" : `${p.total} sessions`}</p>
           </div>
         </div>

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"archive/zip"
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -66,22 +68,82 @@ func TestSearchRenameGroups(t *testing.T) {
 	}
 }
 
-func TestSnippets(t *testing.T) {
-	d := t.TempDir()
-	put(t, filepath.Join(d, "revue.md"), "Fais une revue", 0)
-	put(t, filepath.Join(d, "go", "tests.md"), "Écris les tests", 0)
-	put(t, filepath.Join(d, ".git", "HEAD"), "x", 0)
-	put(t, filepath.Join(t.TempDir(), "secret"), "s", 0)
-	if l := snippets(d); len(l) != 2 || l[0].Path != "go/tests.md" || l[1].Path != "revue.md" {
-		t.Fatalf("snippets = %+v", l)
+func TestCommands(t *testing.T) {
+	home := t.TempDir()
+	cfg := filepath.Join(home, ".claude")
+	use(cfg)
+	proj := filepath.Join(home, "p")
+	put(t, filepath.Join(cfg, "projects", "-p", id1+".jsonl"), `{"cwd":"`+proj+`"}`+"\n", old)
+	put(t, filepath.Join(cfg, "projects", "-h", id2+".jsonl"), `{"cwd":"`+home+`"}`+"\n", old) // projet « ~ »
+	put(t, filepath.Join(cfg, "commands", "revue.md"), "---\ndescription: Revue de code\n---\nFais une revue de $ARGUMENTS", old)
+	put(t, filepath.Join(proj, ".claude", "commands", "go", "tests.md"), "Écris les tests", old)
+	put(t, filepath.Join(cfg, "commands", ".cache", "x.md"), "caché", old)
+	put(t, filepath.Join(cfg, "commands", "notes.txt"), "pas une commande", old)
+
+	l, scopes := listSnippets()
+	if len(l) != 2 || l[0].Key != "u/revue.md" || l[0].Command != "/revue" || l[0].Description != "Revue de code" ||
+		l[1].Key != "p/-p/go/tests.md" || l[1].Command != "/go:tests" || len(scopes) != 1 || scopes[0].Project != proj {
+		t.Fatalf("liste : %+v %+v", l, scopes)
 	}
-	if s, err := readSnippet(d, "go/tests.md"); err != nil || s != "Écris les tests" {
-		t.Fatal(s, err)
+
+	// Création, refus de recréer, modification (l'ancienne version à la corbeille), restauration, suppression.
+	if err := saveSnippet("p/-p/deploy.md", "v1", true); err != nil {
+		t.Fatal(err)
 	}
-	for _, bad := range []string{"../secret", "/etc/passwd", "go/../../x"} {
-		if _, err := readSnippet(d, bad); err == nil {
-			t.Fatal("chemin accepté : " + bad)
+	if saveSnippet("p/-p/deploy.md", "v1", true) == nil || saveSnippet("p/-p/deploy.md", "v2", false) != nil {
+		t.Fatal("création / modification")
+	}
+	tr := trashList()
+	if len(tr) != 1 || tr[0].Key != "s/p/-p/deploy.md" || tr[0].Reason != "remplacé" {
+		t.Fatalf("corbeille : %+v", tr)
+	}
+	if _, err := trashRestore(tr[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := readSnippet("p/-p/deploy.md"); s != "v1" {
+		t.Fatal("restauration :", s)
+	}
+	if removeSnippet("p/-p/deploy.md") != nil {
+		t.Fatal("suppression")
+	}
+	if _, err := os.Stat(filepath.Join(proj, ".claude", "commands", "deploy.md")); err == nil {
+		t.Fatal("toujours là")
+	}
+
+	// Export puis import dans les commandes personnelles : l'existant est gardé sans overwrite.
+	z, n, err := exportSnippets("-p")
+	if err != nil || n != 1 {
+		t.Fatal(n, err)
+	}
+	done, skipped, err := importSnippets("", []ImportFile{{"lot.zip", z}, {"revue.md", []byte("autre")}, {"nouveau.md", []byte("n")}}, false)
+	if err != nil || len(done) != 2 || len(skipped) != 1 {
+		t.Fatal(done, skipped, err)
+	}
+	if s, _ := readSnippet("u/go/tests.md"); s != "Écris les tests" {
+		t.Fatal("import :", s)
+	}
+	if s, _ := readSnippet("u/revue.md"); !strings.Contains(s, "$ARGUMENTS") {
+		t.Fatal("un snippet existant a été écrasé")
+	}
+
+	outside := filepath.Join(home, "dehors.md")
+	for _, bad := range []string{"u/../dehors.md", "u/" + outside, "u/.cache/x.md", "u/notes.txt", "p/-h/x.md", "p/../x.md", "x/y.md"} {
+		if saveSnippet(bad, "x", true) == nil {
+			t.Fatal("clé acceptée : " + bad)
 		}
+	}
+	if _, err := os.Stat(outside); err == nil {
+		t.Fatal("écrit hors du dossier")
+	}
+	// Une archive ne peut rien écrire hors du dossier non plus.
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	w, _ := zw.Create("../../dehors.md")
+	w.Write([]byte("x"))
+	zw.Close()
+	importSnippets("", []ImportFile{{"piege.zip", buf.Bytes()}}, true)
+	if _, err := os.Stat(outside); err == nil {
+		t.Fatal("archive : écrit hors du dossier")
 	}
 }
 
@@ -298,6 +360,21 @@ func TestChat(t *testing.T) {
 	}
 	if len(evs) != 3 || evs[0].Msgs[0].T != "Bonjour" || evs[0].Msgs[1].R != "tool" || !strings.Contains(evs[1].Msgs[0].T, "a.txt") || !evs[2].Done || !evs[2].OK {
 		t.Fatalf("%+v", evs)
+	}
+}
+
+func TestMigrateData(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	put(t, filepath.Join(cfg, "cc-web-groups.json"), "ancien", old)
+	put(t, filepath.Join(cfg, "cc-web.log"), "ancien", old)
+	put(t, filepath.Join(cfg, "gld-web.log"), "nouveau", old)
+	migrateData()
+	if b, _ := os.ReadFile(filepath.Join(cfg, "gld-web-groups.json")); string(b) != "ancien" {
+		t.Fatal("groupes non migrés")
+	}
+	if b, _ := os.ReadFile(filepath.Join(cfg, "gld-web.log")); string(b) != "nouveau" {
+		t.Fatal("un fichier déjà au nouveau nom a été écrasé")
 	}
 }
 

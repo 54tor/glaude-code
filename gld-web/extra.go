@@ -4,7 +4,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -255,54 +254,4 @@ func saveStore(st Store) error {
 		return err
 	}
 	return os.Rename(tmp, groupsFile())
-}
-
-// --- bibliothèque de snippets : fichiers texte d'un dossier (GLD_WEB_SNIPPETS), en lecture seule ---
-
-type Snippet struct {
-	Path  string  `json:"path"` // relatif au dossier, séparateur « / »
-	KB    int64   `json:"kb"`
-	Mtime float64 `json:"mtime"`
-}
-
-const snippetMax = 256 << 10
-
-func snippets(dir string) []Snippet {
-	out := []Snippet{}
-	filepath.WalkDir(dir, func(p string, e os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if strings.HasPrefix(e.Name(), ".") && p != dir {
-			if e.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if fi, err := e.Info(); err == nil && fi.Mode().IsRegular() && fi.Size() <= snippetMax {
-			rel, _ := filepath.Rel(dir, p)
-			out = append(out, Snippet{filepath.ToSlash(rel), fi.Size() / 1024, float64(fi.ModTime().UnixNano()) / 1e9})
-		}
-		return nil
-	})
-	return out
-}
-
-// readSnippet lit un fichier du dossier ; os.Root refuse tout chemin (.., lien) qui en sortirait.
-func readSnippet(dir, rel string) (string, error) {
-	r, err := os.OpenRoot(dir)
-	if err != nil {
-		return "", err
-	}
-	defer r.Close()
-	f, err := r.Open(filepath.FromSlash(rel))
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	b, err := io.ReadAll(io.LimitReader(f, snippetMax+1))
-	if err == nil && (len(b) > snippetMax || !utf8.Valid(b)) {
-		err = errors.New("fichier trop gros ou pas du texte")
-	}
-	return string(b), err
 }

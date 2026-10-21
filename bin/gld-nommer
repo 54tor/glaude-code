@@ -20,8 +20,8 @@
 set -uo pipefail
 . "$(dirname "$0")/gld-lib.sh"
 
-AGE_MAX=${GLD_AGE:-40}
-TAILLE_MIN=${GLD_MIN:-50000}
+AGE_MAX=${GLD_AGE:-${CC_AGE:-40}}
+TAILLE_MIN=${GLD_MIN:-${CC_MIN:-50000}}
 DRY=0; LLM=0; CIBLE=""
 
 while [ $# -gt 0 ]; do

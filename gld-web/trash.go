@@ -42,6 +42,19 @@ type Trashed struct {
 
 func trashDir() string { return filepath.Join(cfgDir(), "gld-web-trash") }
 
+// migrateData renomme les fichiers de données de l'ancien nom (cc-web) quand le nouveau n'existe pas encore.
+func migrateData() {
+	for _, n := range []string{"-groups.json", "-tabs.json", "-trash", ".log"} {
+		old, nw := filepath.Join(cfgDir(), "cc-web"+n), filepath.Join(cfgDir(), "gld-web"+n)
+		if _, err := os.Stat(nw); err == nil {
+			continue
+		}
+		if _, err := os.Stat(old); err == nil {
+			os.Rename(old, nw)
+		}
+	}
+}
+
 // toTrash copie le contenu actuel d'un fichier de mémoire dans la corbeille, avant sa suppression ou son remplacement.
 func toTrash(key, reason string) error {
 	text, err := memRead(key)
@@ -52,9 +65,14 @@ func toTrash(key, reason string) error {
 		return err
 	}
 	base, rel, _ := memResolve(key)
+	return saveTrash(key, filepath.Join(base, rel), reason, text)
+}
+
+// saveTrash range un contenu dans la corbeille ; key dit comment le restaurer (clé de mémoire, ou « s/<chemin> » d'un snippet).
+func saveTrash(key, path, reason, text string) error {
 	b := make([]byte, 4)
 	rand.Read(b)
-	t := Trashed{time.Now().Format("20060102-150405") + "-" + hex.EncodeToString(b), key, filepath.Join(base, rel), reason,
+	t := Trashed{time.Now().Format("20060102-150405") + "-" + hex.EncodeToString(b), key, path, reason,
 		float64(time.Now().UnixNano()) / 1e9, int64(len(text)) / 1024}
 	d := filepath.Join(trashDir(), t.ID)
 	if err := os.MkdirAll(d, 0o700); err != nil {
@@ -96,7 +114,12 @@ func trashRestore(id string) (Trashed, error) {
 	if err != nil {
 		return t, err
 	}
-	if err := memSave(t.Key, text); err != nil { // memSave met la version remplacée à la corbeille
+	if strings.HasPrefix(t.Key, "s/") { // un snippet
+		err = saveSnippet(t.Key[2:], text, false)
+	} else {
+		err = memSave(t.Key, text) // memSave met la version remplacée à la corbeille
+	}
+	if err != nil {
 		return t, err
 	}
 	return t, os.RemoveAll(filepath.Join(trashDir(), id))

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useSearchParams } from "wouter"
 import { toast } from "sonner"
 import { ChevronRight, FolderInput, MessageSquarePlus, MoreHorizontal, Search, SquareTerminal, Trash2, TriangleAlert, X } from "lucide-react"
-import { api, type Data, type Group, type Hit, type Item, type Session, type Snippet, type VGroup } from "@/lib/api"
+import { api, type Data, type Group, type Hit, type Item, type Session, type SnipScope, type Snippet, type VGroup } from "@/lib/api"
+import { body } from "@/lib/commands"
 import { exportMarkdown } from "@/lib/export"
 import { segs } from "@/lib/paths"
 import { href, parse, type Route } from "@/lib/route"
@@ -58,7 +59,7 @@ export default function App() {
   const reading = params.get("s")
 
   const [data, setData] = useState<Data | null>(null)
-  const [snips, setSnips] = useState<{ dir: string; files: Snippet[] } | null>(null)
+  const [snips, setSnips] = useState<{ dir: string; files: Snippet[]; scopes: SnipScope[] } | null>(null)
   const [hits, setHits] = useState<{ q: string; m: Map<string, Hit> } | null>(null)
   const [picked, setPicked] = useState(() => new Set<string>())
   const [args, setArgs] = useLocal("ccArgs", "")
@@ -545,7 +546,7 @@ export default function App() {
           hot={hot}
           now={now}
           ttl={HOT}
-          snippets={snips?.dir ? snips.files.length : null}
+          snippets={snips ? snips.files.length : null}
           auto={{ n: view.autoItems.length, kb: view.akb, purge: purgeAuto }}
           args={args}
           setArgs={setArgs}
@@ -645,20 +646,26 @@ export default function App() {
           ) : route.kind === "memory" ? (
             <Memory sel={route.key} home={home} q={qt} onPick={(key) => go({ kind: "memory", key })} onAsk={setAsk} args={args} />
           ) : route.kind === "snippets" ? (
-            snips?.dir ? (
+            snips ? (
               <Snippets
                 files={snips.files}
+                scopes={snips.scopes}
                 dir={snips.dir}
-                path={route.path}
+                sel={route.path}
                 q={qt}
-                onPick={(path) => go({ kind: "snippets", path })}
-                onLaunch={(path, text) => newSession("Nouvelle session avec ce snippet", path, targets(), text + "\n\n")}
+                home={home}
+                onPick={(key) => go({ kind: "snippets", path: key })}
+                onLaunch={(s, text) => {
+                  // Le dossier du projet de la commande d'abord, sinon le plus récent.
+                  const ts = targets().sort((x, y) => Number(y.project === s.project) - Number(x.project === s.project))
+                  newSession("Nouvelle session avec ce snippet", s.command, ts, body(text) + "\n\n")
+                }}
+                onChanged={reload}
+                onAsk={setAsk}
+                onPrompt={setPrompt}
               />
             ) : (
-              <Empty
-                title="Bibliothèque non configurée"
-                text="Définis GLD_WEB_SNIPPETS (un dossier de fichiers texte ou Markdown) avant de lancer gld-web."
-              />
+              <Skeleton className="m-6 h-32" />
             )
           ) : (
             <ScrollArea className="min-h-0 flex-1">

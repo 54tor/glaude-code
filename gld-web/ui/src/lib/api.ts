@@ -4,7 +4,9 @@ export type Session = { id: string; dir: string; title: string; named: boolean; 
 export type Group = { project: string; missing: boolean; sessions: Session[] }
 export type VGroup = { name: string; project: string; ids: string[]; fav?: boolean }
 export type Data = { home: string; root: string; groups: Group[]; live: string[]; vgroups: VGroup[]; favs: string[] }
-export type Snippet = { path: string; kb: number; mtime: number }
+// Snippet = commande Claude Code. key : u/<chemin> (personnelle) ou p/<dossier>/<chemin> (d'un projet).
+export type Snippet = { key: string; scope: string; project: string; path: string; command: string; description: string; kb: number; mtime: number }
+export type SnipScope = { dir: string; project: string }
 export type MemFile = { key: string; name: string; kb: number; mtime: number; path: string }
 export type MemProject = { dir: string; project: string; missing: boolean; files: MemFile[] }
 export type TabSession = { id: string; dir: string; project: string; title: string }
@@ -30,8 +32,8 @@ export const api = {
   info: (s: Item) => get<Detail>(`/info?dir=${enc(s.dir)}&id=${s.id}`),
   conv: (s: Item, tools: boolean) => get<{ msgs: Msg[] }>(`/conv?dir=${enc(s.dir)}&id=${s.id}${tools ? "&tools=1" : ""}`),
   ls: (path: string) => get<Ls>(`/ls?path=${enc(path)}`),
-  snippets: () => get<{ dir: string; files: Snippet[] }>("/snippet-list"),
-  snippet: (path: string) => get<{ text?: string; error?: string }>(`/snippet?path=${enc(path)}`),
+  snippets: () => get<{ dir: string; files: Snippet[]; scopes: SnipScope[] }>("/snippet-list"),
+  snippet: (key: string) => get<{ text?: string; error?: string; missing?: boolean }>(`/snippet?key=${enc(key)}`),
   memory: () => get<{ global: MemFile[]; projects: MemProject[]; targets: MemTarget[] }>("/memory-list"),
   memoryFile: (key: string) => get<{ text?: string; error?: string }>(`/memory-file?key=${enc(key)}`),
   tabs: () => get<{ saves: TabSave[] }>("/tabs"),

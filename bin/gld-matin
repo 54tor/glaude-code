@@ -26,13 +26,13 @@
 set -uo pipefail
 export LC_ALL=C   # rend le tri et le sed d'encodage indépendants de la locale
 
-AGE_MAX=${GLD_MATIN_AGE:-7}          # jours : ne rouvre que le chantier courant
-TAILLE_MIN=${GLD_MATIN_MIN:-50000}   # octets : écarte les sessions nommées mais vides
-PAUSE=${GLD_MATIN_PAUSE:-0.7}        # respiration entre deux onglets
-ARGS=${GLD_MATIN_ARGS:-}           # options passées à claude ; vide par défaut
-EXCLURE=${GLD_MATIN_EXCLURE:-}       # noms à ignorer, séparés par ':'
+AGE_MAX=${GLD_MATIN_AGE:-${CC_MATIN_AGE:-7}}          # jours : ne rouvre que le chantier courant
+TAILLE_MIN=${GLD_MATIN_MIN:-${CC_MATIN_MIN:-50000}}   # octets : écarte les sessions nommées mais vides
+PAUSE=${GLD_MATIN_PAUSE:-${CC_MATIN_PAUSE:-0.7}}        # respiration entre deux onglets
+ARGS=${GLD_MATIN_ARGS:-${CC_MATIN_ARGS:-}}           # options passées à claude ; vide par défaut
+EXCLURE=${GLD_MATIN_EXCLURE:-${CC_MATIN_EXCLURE:-}}       # noms à ignorer, séparés par ':'
 
-DRY=0; ID=""; PROJET=""; RESUME=0; RESUME_NOM=""; PROMPT=""; TERMCHOIX="${GLD_MATIN_TERM:-}"; NOMMEES_SEULES=0
+DRY=0; ID=""; PROJET=""; RESUME=0; RESUME_NOM=""; PROMPT=""; TERMCHOIX="${GLD_MATIN_TERM:-${CC_MATIN_TERM:-}}"; NOMMEES_SEULES=0
 while [ $# -gt 0 ]; do
   case "$1" in
     -n|--dry-run) DRY=1 ;;
@@ -58,6 +58,7 @@ done
 if [ "$RESUME" = 1 ]; then
   command -v jq >/dev/null || { echo "gld-matin: jq requis" >&2; exit 1; }
   FICHIER="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/gld-web-tabs.json"
+  [ -s "$FICHIER" ] || FICHIER="${FICHIER%/*}/cc-web-tabs.json"   # ancien nom, avant la première migration
   [ -s "$FICHIER" ] || { echo "gld-matin: aucune sauvegarde ($FICHIER)" >&2; exit 1; }
   if [ -n "$RESUME_NOM" ]; then CHOIX='[.[] | select(.name == $n)][0]'; else CHOIX='.[0]'; fi
   SAUVE=$(jq -c --arg n "$RESUME_NOM" "$CHOIX // empty" "$FICHIER")

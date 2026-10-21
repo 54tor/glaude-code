@@ -8,7 +8,7 @@ GLD_ROOT="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 
 # Minutes d'immunité d'un fichier tout frais : une session qui vient de naître
 # n'a pas encore écrit son transcript, ses fichiers ne sont pas des restes.
-GLD_GRACE_MIN=${GLD_GRACE:-60}
+GLD_GRACE_MIN=${GLD_GRACE:-${CC_GRACE:-60}}
 
 # Répertoire de travail temporaire, créé à la demande, effacé à la sortie.
 # À appeler depuis le shell principal : dans un sous-shell, GLD_TMP serait perdu.

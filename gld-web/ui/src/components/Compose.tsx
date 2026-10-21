@@ -3,6 +3,7 @@ import { Brain, FileText, Globe, Send } from "lucide-react"
 import { toast } from "sonner"
 import { api, type MemFile, type MemProject, type Snippet } from "@/lib/api"
 import { tilde } from "@/lib/format"
+import { argAt, body } from "@/lib/commands"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
@@ -80,10 +81,16 @@ function Form({ ask, snippets, onClose }: { ask: ComposeAsk; snippets: Snippet[]
       el?.setSelectionRange(i + t.length, i + t.length)
     })
   }
-  const insert = async (path: string) => {
-    const r = await api.snippet(path)
+  // Une commande : son corps, sans en-tête ; son premier $ARGUMENTS est sélectionné pour être remplacé en tapant.
+  const insert = async (key: string) => {
+    const r = await api.snippet(key)
     if (r.text === undefined) return void toast.error(r.error ?? "Snippet illisible")
-    put(r.text)
+    const t = body(r.text)
+    const el = area.current
+    const i = el?.selectionStart ?? text.length
+    put(t)
+    const arg = argAt(t)
+    if (arg) requestAnimationFrame(() => requestAnimationFrame(() => el?.setSelectionRange(i + arg.at, i + arg.at + arg.len)))
   }
   // Une entrée de mémoire, citée telle quelle ; il reste à écrire la demande à la suite.
   const insertMemory = async (f: MemFile, scope: string) => {
@@ -126,7 +133,12 @@ function Form({ ask, snippets, onClose }: { ask: ComposeAsk; snippets: Snippet[]
         onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "Enter" && (e.preventDefault(), send())}
         placeholder="Message envoyé à Claude…"
         autoFocus
-        onFocus={(e) => e.target.setSelectionRange(e.target.value.length, e.target.value.length)}
+        onFocus={(e) => {
+          // Texte prérempli d'une commande : son $ARGUMENTS sélectionné ; sinon le curseur à la fin.
+          const arg = argAt(e.target.value)
+          if (arg) e.target.setSelectionRange(arg.at, arg.at + arg.len)
+          else e.target.setSelectionRange(e.target.value.length, e.target.value.length)
+        }}
         rows={8}
         maxLength={32000}
         className="session-text w-full resize-y rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -176,8 +188,9 @@ function Form({ ask, snippets, onClose }: { ask: ComposeAsk; snippets: Snippet[]
               </DropdownMenuTrigger>
               <DropdownMenuContent onCloseAutoFocus={(e) => e.preventDefault()} align="start" className="max-h-72 w-72 overflow-y-auto">
                 {snippets.map((s) => (
-                  <DropdownMenuItem key={s.path} onSelect={() => insert(s.path)}>
-                    <FileText /> <span className="truncate">{s.path}</span>
+                  <DropdownMenuItem key={s.key} onSelect={() => insert(s.key)} title={s.description || s.path}>
+                    <FileText /> <span className="truncate">{s.command}</span>
+                    {s.scope && <span className="ml-auto truncate text-xs text-muted-foreground">{tilde(s.project, a.home)}</span>}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
