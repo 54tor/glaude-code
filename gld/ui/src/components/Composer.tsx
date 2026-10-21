@@ -173,7 +173,7 @@ function LiveSend({ id, onSent, liveState }: { id: string; onSent: () => void; l
     setBusy(true)
     const r = await api.post("/session-send", { id, text: full })
     setBusy(false)
-    ;(r.ok ? toast.success : toast.error)(r.out)
+    if (!r.ok) toast.error(r.out) // le succès se voit dans la session : pas de notification
     if (r.ok) {
       setText("")
       pics.clear()
@@ -392,8 +392,8 @@ function SlashMenu({ id, text, onSent }: { id: string; text: string; onSent: () 
   const run = async (cmd: string) => {
     const full = cmd === "/compact" && text.trim() ? `${cmd} ${text.trim().replace(/\s+/g, " ")}` : cmd
     const r = await api.post("/session-send", { id, text: full })
-    ;(r.ok ? toast.success : toast.error)(r.ok ? `${full} envoyé` : r.out)
-    if (r.ok) onSent()
+    if (!r.ok) toast.error(r.out)
+    else onSent()
   }
   return (
     <DropdownMenu>
