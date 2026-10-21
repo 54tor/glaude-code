@@ -16,7 +16,8 @@ export type MemFile = {
   path: string
   type?: string // metadata.type du front matter
   paths?: string[] // règle scopée : globs du champ paths:
-  tokens: number // estimation grossière (octets / 4)
+  tokens: number // estimation calibrée, ou compte réel si exact
+  exact?: boolean // tokens est un compte réel (Haiku)
   always?: boolean // chargé à chaque session
   off?: boolean // règle désactivée (.md.off)
   warn?: string // front matter invalide

@@ -112,7 +112,7 @@ func splitGlobs(s string) []string {
 	return out
 }
 
-// annotate complète un MemFile : type, portée, budget (octets / 4), chargement à chaque session, avertissement.
+// annotate complète un MemFile : type, portée, budget de contexte, chargement à chaque session, avertissement.
 func annotate(f *MemFile) {
 	f.Off = strings.HasSuffix(f.Name, ".off")
 	text, err := memRead(f.Key)
@@ -126,7 +126,10 @@ func annotate(f *MemFile) {
 			n = len(strings.Join(lines[:indexLines], ""))
 		}
 	}
-	f.Tokens = (n + 3) / 4
+	f.Tokens = estimateTokens(n)
+	if k, ok := knownTokens(text[:n]); ok {
+		f.Tokens, f.Exact = k, true
+	}
 	m, err := parseMeta(text)
 	if err != nil {
 		f.Warn = err.Error()

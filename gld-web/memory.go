@@ -21,7 +21,8 @@ type MemFile struct {
 
 	Type   string   `json:"type,omitempty"`   // metadata.type du front matter (entrées de mémoire)
 	Paths  []string `json:"paths,omitempty"`  // règle scopée : globs du front matter `paths:`
-	Tokens int      `json:"tokens"`           // estimation grossière (octets / 4)
+	Tokens int      `json:"tokens"`           // estimation (calibrée sur les comptes réels), ou compte réel si Exact
+	Exact  bool     `json:"exact,omitempty"`  // Tokens est un compte réel (voir tokens.go)
 	Always bool     `json:"always,omitempty"` // chargé à chaque session
 	Off    bool     `json:"off,omitempty"`    // règle désactivée (fichier .md.off)
 	Warn   string   `json:"warn,omitempty"`   // front matter invalide
