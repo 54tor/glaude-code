@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { AlertTriangle, Copy, EyeOff, FileText, Hand, Pencil, Plus, Save, Sparkles, Trash2, X, Zap } from "lucide-react"
+import { AlertTriangle, BookOpen, ClipboardCopy, Copy, EyeOff, FileText, FolderInput, Hand, Pencil, Plus, Save, Sparkles, Trash2, X, Zap } from "lucide-react"
 import { toast } from "sonner"
 import { api, type Skill, type SkillFile } from "@/lib/api"
 import { ago, tilde } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -25,7 +26,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
   const [loaded, setLoaded] = useState<{ key: string; text: string; files: SkillFile[]; error?: string } | null>(null)
   const [draft, setDraft] = useState<{ key: string; text: string } | null>(null)
   const [creating, setCreating] = useState(false)
-  const [writer, setWriter] = useState(false)
+  const [writer, setWriter] = useState("") // clé du skill que le modèle rédige ; vide = fermé
   const reload = useCallback(() => api.skills().then(setData), [])
   useEffect(() => {
     reload()
@@ -65,8 +66,9 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
       reload()
     }
   }
-  const remove = () =>
+  const remove = (skill: Skill | undefined = data?.skills.find((s) => s.key === sel)) =>
     skill &&
+    !skill.readOnly &&
     onAsk({
       title: `Supprimer le skill ${skill.name} ?`,
       body: "Une copie de SKILL.md est gardée dans la corbeille de la zone Mémoire.",
@@ -75,19 +77,27 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
         const r = await api.post("/skill-rm", { key: skill.key })
         ;(r.ok ? toast.success : toast.error)(r.out)
         if (r.ok) {
-          onPick("")
+          if (skill.key === sel) onPick("")
           reload()
         }
       },
     })
-  const copyTo = async (to: string) => {
-    const r = (await api.post("/skill-copy", { key: sel, to })) as { ok: boolean; out: string; key?: string }
+  const copyTo = async (to: string, key = sel) => {
+    const r = (await api.post("/skill-copy", { key, to })) as { ok: boolean; out: string; key?: string }
     ;(r.ok ? toast.success : toast.error)(r.out)
     if (r.ok && r.key) {
       await reload()
       onPick(r.key)
     }
   }
+  // Modifier depuis le menu : ouvre le skill, charge son texte et passe en édition.
+  const edit = async (key: string) => {
+    const r = await api.skill(key)
+    if (r.error || r.text === undefined) return void toast.error(r.error ?? "Lecture impossible")
+    onPick(key)
+    setDraft({ key, text: r.text })
+  }
+  const copyName = (s: Skill) => navigator.clipboard.writeText("/" + s.dir).then(() => toast.success(`/${s.dir} copié`), () => toast.error("Copie impossible"))
   const [fm, body] = split(cur?.text ?? "")
 
   return (
@@ -113,19 +123,68 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
               <ul className="space-y-px">
                 {g.items.map((s) => (
                   <li key={s.key}>
-                    <button
-                      onClick={() => onPick(s.key)}
-                      className={cn("flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors", s.key === sel ? "bg-accent" : "hover:bg-muted")}
-                    >
-                      <span className="flex items-center gap-1.5">
-                        <Zap className="size-3.5 shrink-0 text-amber-500" />
-                        <span className="min-w-0 flex-1 truncate font-medium">{s.name}</span>
-                        {s.manual && <Hand className="size-3.5 shrink-0 text-muted-foreground" aria-label="lancé à la main seulement" />}
-                        {s.hidden && <EyeOff className="size-3.5 shrink-0 text-muted-foreground" aria-label="invisible dans le menu /" />}
-                        {s.warn && <AlertTriangle className="size-3.5 shrink-0 text-amber-500" aria-label="à vérifier" />}
-                      </span>
-                      <span className="line-clamp-2 text-xs text-muted-foreground">{s.description || "(sans description)"}</span>
-                    </button>
+                    <ContextMenu>
+                      <ContextMenuTrigger asChild>
+                          <button
+                            onClick={() => onPick(s.key)}
+                            className={cn("flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors", s.key === sel ? "bg-accent" : "hover:bg-muted")}
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <Zap className="size-3.5 shrink-0 text-amber-500" />
+                              <span className="min-w-0 flex-1 truncate font-medium">{s.name}</span>
+                              {s.manual && <Hand className="size-3.5 shrink-0 text-muted-foreground" aria-label="lancé à la main seulement" />}
+                              {s.hidden && <EyeOff className="size-3.5 shrink-0 text-muted-foreground" aria-label="invisible dans le menu /" />}
+                              {s.warn && <AlertTriangle className="size-3.5 shrink-0 text-amber-500" aria-label="à vérifier" />}
+                            </span>
+                            <span className="line-clamp-2 text-xs text-muted-foreground">{s.description || "(sans description)"}</span>
+                          </button>
+                      </ContextMenuTrigger>
+                      <ContextMenuContent className="w-60">
+                        <ContextMenuLabel className="truncate">{s.name}</ContextMenuLabel>
+                        <ContextMenuItem onSelect={() => onPick(s.key)}>
+                          <BookOpen /> Ouvrir
+                        </ContextMenuItem>
+                        {!s.readOnly && (
+                          <>
+                            <ContextMenuItem onSelect={() => edit(s.key)}>
+                              <Pencil /> Modifier
+                            </ContextMenuItem>
+                            <ContextMenuItem onSelect={() => (onPick(s.key), setWriter(s.key))}>
+                              <Sparkles /> Rédiger avec un modèle…
+                            </ContextMenuItem>
+                          </>
+                        )}
+                        <ContextMenuItem onSelect={() => copyName(s)}>
+                          <ClipboardCopy /> Copier le nom (/{s.dir})
+                        </ContextMenuItem>
+                        <ContextMenuSub>
+                          <ContextMenuSubTrigger>
+                            <FolderInput /> Copier vers
+                          </ContextMenuSubTrigger>
+                          <ContextMenuSubContent className="max-h-80 w-72 overflow-y-auto">
+                            {s.scope !== "user" && (
+                              <>
+                                <ContextMenuItem onSelect={() => copyTo("u", s.key)}>Mes skills personnels</ContextMenuItem>
+                                <ContextMenuSeparator />
+                              </>
+                            )}
+                            {(data?.projects ?? []).map((p) => (
+                              <ContextMenuItem key={p.dir} onSelect={() => copyTo("p/" + p.dir, s.key)}>
+                                <span className="truncate">{tilde(p.project, home)}</span>
+                              </ContextMenuItem>
+                            ))}
+                          </ContextMenuSubContent>
+                        </ContextMenuSub>
+                        {!s.readOnly && (
+                          <>
+                            <ContextMenuSeparator />
+                            <ContextMenuItem variant="destructive" onSelect={() => remove(s)}>
+                              <Trash2 /> Supprimer
+                            </ContextMenuItem>
+                          </>
+                        )}
+                      </ContextMenuContent>
+                    </ContextMenu>
                   </li>
                 ))}
               </ul>
@@ -176,10 +235,10 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
                   </DropdownMenu>
                   {!skill.readOnly && (
                     <>
-                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={remove}>
+                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => remove()}>
                         <Trash2 /> Supprimer
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setWriter(true)}>
+                      <Button variant="ghost" size="sm" onClick={() => setWriter(sel)}>
                         <Sparkles /> Haiku…
                       </Button>
                       <Button size="sm" onClick={() => cur && setDraft({ key: sel, text: cur.text })} disabled={!cur}>
@@ -244,7 +303,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
           </>
         )}
       </div>
-      <SkillWriter open={writer} skillKey={sel} name={skill?.name ?? ""} onClose={() => setWriter(false)} onDraft={(text) => setDraft({ key: sel, text })} />
+      <SkillWriter open={!!writer} skillKey={writer} name={data?.skills.find((s) => s.key === writer)?.name ?? ""} onClose={() => setWriter("")} onDraft={(text) => setDraft({ key: writer, text })} />
       <NewSkill open={creating} projects={data?.projects ?? []} home={home} onClose={() => setCreating(false)} onCreated={async (key) => (await reload(), onPick(key))} />
     </div>
   )
