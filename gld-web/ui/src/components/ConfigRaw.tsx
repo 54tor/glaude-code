@@ -1,0 +1,47 @@
+import { useEffect, useState } from "react"
+import { api } from "@/lib/api"
+import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
+
+// Le fichier de réglages en JSON brut : tout est modifiable (hooks, MCP du projet…), avec validation de la syntaxe, aperçu des
+// différences et sauvegarde. Les secrets sont affichés masqués ; laissés tels quels, ils sont conservés à l'enregistrement.
+export function RawTab({ file, version, proposeRaw }: { file: string; version: number; proposeRaw: (file: string, text: string) => Promise<string | null> }) {
+  const [loaded, setLoaded] = useState<{ key: string; text: string; err?: string } | null>(null)
+  const [draft, setDraft] = useState<{ key: string; text: string } | null>(null)
+  const [error, setError] = useState("")
+  const key = `${file}#${version}`
+  useEffect(() => {
+    let live = true
+    api.configRaw(file).then((r) => live && setLoaded({ key, text: r.text ?? "", err: r.ok ? undefined : r.out }))
+    return () => {
+      live = false
+    }
+  }, [file, key])
+  if (loaded?.key !== key) return <Skeleton className="h-64 w-full" />
+  const text = draft?.key === key ? draft.text : loaded.text
+  const dirty = text !== loaded.text
+  const save = async () => setError((await proposeRaw(file, text)) ?? "")
+  return (
+    <div className="space-y-2">
+      {loaded.err && <p className="text-sm text-destructive">{loaded.err}</p>}
+      <textarea
+        value={text}
+        onChange={(e) => (setDraft({ key, text: e.target.value }), setError(""))}
+        onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "s" && (e.preventDefault(), dirty && save())}
+        spellCheck={false}
+        aria-label="JSON du fichier de réglages"
+        className="h-[28rem] w-full resize-y rounded-md border bg-background p-3 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      />
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <div className="flex items-center gap-2">
+        <Button size="sm" onClick={save} disabled={!dirty}>
+          Aperçu et enregistrer
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => (setDraft(null), setError(""))} disabled={!dirty}>
+          Annuler les modifications
+        </Button>
+        <span className="text-xs text-muted-foreground">Les valeurs masquées (••••••••) sont conservées si vous ne les touchez pas. Ctrl+S : aperçu.</span>
+      </div>
+    </div>
+  )
+}

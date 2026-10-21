@@ -200,3 +200,58 @@ func TestDossierDeTravailPrive(t *testing.T) {
 		t.Fatalf("dossier non privé : %v %v", st, err)
 	}
 }
+
+func TestEditionJSONBrut(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	p := filepath.Join(cfg, "settings.json")
+	orig := "{\n  \"model\": \"opus\",\n  \"env\": {\n    \"API_KEY\": \"secret-xyz\",\n    \"X\": \"1\"\n  }\n}\n"
+	put(t, p, orig, old)
+
+	text, err := configRawRead("u")
+	if err != nil || strings.Contains(text, "secret-xyz") || !strings.Contains(text, maskText) {
+		t.Fatalf("lecture : %q %v", text, err)
+	}
+	// modification en laissant le masque : le secret d'origine est conservé
+	edited := strings.Replace(text, `"opus"`, `"sonnet"`, 1)
+	before, after, _, err := configRawEdit("u", edited, true)
+	if err != nil || before == after || strings.Contains(after, "secret-xyz") {
+		t.Fatal(before, after, err)
+	}
+	if b, _ := os.ReadFile(p); string(b) != orig {
+		t.Fatal("l'aperçu a écrit")
+	}
+	if _, _, _, err := configRawEdit("u", edited, false); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(p); !strings.Contains(string(b), `"sonnet"`) || !strings.Contains(string(b), "secret-xyz") || strings.Contains(string(b), maskText) {
+		t.Fatalf("secret perdu ou masque écrit : %s", b)
+	}
+	if len(listBackups()) != 1 {
+		t.Fatal("pas de sauvegarde")
+	}
+	// erreurs : syntaxe (avec position), racine non objet, masque sans original, texte vide
+	_, _, _, err = configRawEdit("u", "{\n  \"a\": 1,\n  \"b\": \n}", true)
+	if err == nil || !strings.Contains(err.Error(), "ligne 4") {
+		t.Fatalf("position de l'erreur : %v", err)
+	}
+	for _, bad := range []string{`[1,2]`, `{"nouveau": "` + maskText + `"}`, ``, `{"a":1} x`} {
+		if _, _, _, err := configRawEdit("u", bad, true); err == nil {
+			t.Errorf("texte accepté : %q", bad)
+		}
+	}
+	// avertissements de santé sur le nouveau contenu
+	_, _, warns, err := configRawEdit("u", `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"programme-introuvable-xyz"}]}]}}`, true)
+	if err != nil || len(warns) == 0 || warns[0].Kind != "hook" {
+		t.Fatalf("avertissements : %+v %v", warns, err)
+	}
+	// un fichier absent peut être créé
+	cfg2 := t.TempDir()
+	use(cfg2)
+	if _, _, _, err := configRawEdit("u", `{"theme":"dark"}`, false); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(cfg2, "settings.json")); string(b) != "{\n  \"theme\": \"dark\"\n}\n" {
+		t.Fatalf("%q", b)
+	}
+}

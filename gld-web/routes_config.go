@@ -125,3 +125,40 @@ func nz[T any](s []T) []T {
 	}
 	return s
 }
+
+// routesConfigRaw : édition du JSON brut d'un fichier de réglages (configraw.go).
+func routesConfigRaw(mux *http.ServeMux) {
+	mux.HandleFunc("GET /config-raw", func(w http.ResponseWriter, r *http.Request) {
+		text, err := configRawRead(r.URL.Query().Get("file"))
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "text": text})
+	})
+	mux.HandleFunc("POST /config-raw", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			File, Text string
+			Dry        bool
+		}
+		if json.NewDecoder(io.LimitReader(r.Body, 2<<20)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		before, after, warns, err := configRawEdit(req.File, req.Text, req.Dry)
+		if !req.Dry {
+			journal("config-raw %s (%d octets) : %v", req.File, len(req.Text), errOr(err)) // jamais le contenu : il peut contenir des secrets
+		}
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		out := "Enregistré (sauvegarde faite)"
+		if req.Dry {
+			out = "Aperçu"
+		} else if before == after {
+			out = "Aucun changement"
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": out, "before": before, "after": after, "warnings": nz(warns)})
+	})
+}
