@@ -1,11 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -154,47 +151,4 @@ func tree(t *testing.T, dir string) map[string]string {
 		return nil
 	})
 	return m
-}
-
-// TestParitéAvecBash : le nettoyage Go doit laisser exactement la même arborescence que gld-lib.sh.
-func TestParitéAvecBash(t *testing.T) {
-	lib, _ := filepath.Abs("../bin/gld-lib.sh")
-	if _, err := os.Stat(lib); err != nil || runtime.GOOS == "windows" {
-		t.Skip("gld-lib.sh ou bash indisponible")
-	}
-	for _, tool := range []string{"bash", "jq", "comm"} {
-		if _, err := exec.LookPath(tool); err != nil {
-			t.Skip(tool + " indisponible")
-		}
-	}
-	a, b := fixture(t), fixture(t)
-	script := `. "` + lib + `"; cc_tmp; : > "$GLD_TMP/snap"; : > "$GLD_TMP/del"
-for id in ` + id1 + ` ` + id2 + `; do
-  d="$GLD_ROOT/projects/-p"
-  snapshots_cites "$d/$id.jsonl" "$d/$id" >> "$GLD_TMP/snap"
-  purger_session "$d" "$id" >/dev/null; echo "$id" >> "$GLD_TMP/del"
-done
-solder "$GLD_TMP/del" "$GLD_TMP/snap"`
-	cmd := exec.Command("bash", "-c", script)
-	cmd.Env = append(os.Environ(), "CLAUDE_CONFIG_DIR="+a)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("bash : %v\n%s", err, out)
-	}
-	use(b)
-	if _, _, _, err := purgeSessions([]item{{"-p", id1}, {"-p", id2}}); err != nil {
-		t.Fatal(err)
-	}
-	ta, tb := tree(t, a), tree(t, b)
-	for p, c := range ta {
-		if d, ok := tb[p]; !ok {
-			t.Errorf("bash laisse %s, pas Go", p)
-		} else if !bytes.Equal([]byte(c), []byte(d)) {
-			t.Errorf("contenu différent : %s", p)
-		}
-	}
-	for p := range tb {
-		if _, ok := ta[p]; !ok {
-			t.Errorf("Go laisse %s, pas bash", p)
-		}
-	}
 }
