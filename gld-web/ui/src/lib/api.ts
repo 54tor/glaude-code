@@ -24,6 +24,23 @@ export type MemFile = {
 }
 export type LoadEvent = { at: number; session: string; file: string; type?: string; reason?: string; globs?: string[]; trigger?: string }
 export type FileLoads = { sessions: number; last: number }
+// Configuration de Claude Code (config*.go)
+export type ConfigFile = { id: string; scope: "user" | "project" | "local"; dir?: string; label: string; path: string; exists: boolean; error?: string; data?: unknown }
+export type HookInfo = { scope: string; file: string; event: string; matcher?: string; type: string; command: string; missing?: string }
+export type CfgIssue = { file: string; kind: string; msg: string }
+export type EffRow = { path: string; values: Record<string, string>; winner: string; merged?: boolean }
+export type McpServer = { name: string; scope: string; project?: string; type: string; command?: string; url?: string; envKeys?: string[] }
+export type PermSuggest = { rule: string; count: number; readOnly: boolean; example: string }
+export type BackupInfo = { name: string; at: string; file: string; kb: number }
+export type CfgOverview = {
+  files: ConfigFile[]
+  hooks: HookInfo[]
+  issues: CfgIssue[]
+  backups: BackupInfo[]
+  plugins: { id: string; enabled: boolean; installed: boolean }[]
+  projects: { dir: string; project: string }[]
+}
+export type CfgEdit = { file: string; op: "set" | "delete" | "add" | "remove"; path: string[]; value?: unknown }
 export type Finding = { kind: string; keys: string[]; why: string }
 export type Issue = { key: string; kind: string; msg: string; dir?: string }
 export type MemProject = { dir: string; project: string; missing: boolean; files: MemFile[] }
@@ -60,6 +77,10 @@ export const api = {
   memoryFile: (key: string) => get<{ text?: string; error?: string }>(`/memory-file?key=${enc(key)}`),
   memoryLoaded: () => get<{ hook: boolean; files: Record<string, FileLoads> }>("/memory-loaded"),
   sessionLoaded: (id: string) => get<{ files: LoadEvent[] }>(`/session-loaded?id=${id}`),
+  config: () => get<CfgOverview>("/config"),
+  configEffective: (dir: string) => get<{ rows: EffRow[] }>(`/config-effective?dir=${enc(dir)}`),
+  configMcp: () => get<{ servers: McpServer[] }>("/config-mcp"),
+  configPermSuggest: () => get<{ suggestions: PermSuggest[] }>("/config-perm-suggest"),
   memoryHealth: () => get<{ issues: Issue[] }>("/memory-health"),
   memoryMatches: (key: string, dir: string) => get<{ files?: string[]; total?: number; truncated?: boolean; error?: string }>(`/memory-matches?key=${enc(key)}&dir=${enc(dir)}`),
   memorySearch: (q: string) => get<{ hits: Record<string, string> }>(`/memory-search?q=${enc(q)}`),
