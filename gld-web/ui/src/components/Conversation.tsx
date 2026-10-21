@@ -61,11 +61,18 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
   // Tour en cours (ou dernier tour) écrit depuis le navigateur, affiché à la suite de la conversation.
   const [chat, setChat] = useState<Turn | null>(null)
   const turn = chat?.id === id ? chat : null
+  // Message envoyé à une session ouverte (tmux) : on relit son transcript tant qu'elle travaille, pour montrer la réponse au fil de l'eau.
+  const [sentAt, setSentAt] = useState<{ id: string; at: number } | null>(null)
+  const working = sentAt?.id === id
   const viewport = useCallback(() => area.current?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]'), [])
   const loadedNow = loaded?.key === key ? loaded : null
   // Relecture (après un tour) : au moins la page de base, plus de quoi garder ce qui est déjà affiché.
   const reload = () =>
     api.conv({ dir, id }, tools, { limit: Math.max(PAGE, (loadedNow?.msgs.length ?? 0) + 50) }).then((r) => setLoaded({ key, msgs: r.msgs, start: r.start ?? 0, more: !!r.more }))
+  const reloadRef = useRef(reload)
+  useEffect(() => {
+    reloadRef.current = reload
+  })
   const older = useCallback(async () => {
     if (!loadedNow || loadingOlder) return
     setLoadingOlder(true)
@@ -94,6 +101,21 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
       live = false
     }
   }, [dir, id])
+
+  useEffect(() => {
+    if (!sentAt || sentAt.id !== id) return
+    let live = true
+    const t = setInterval(async () => {
+      if (Date.now() - sentAt.at > 15 * 60_000) return setSentAt(null)
+      const [, st] = await Promise.all([reloadRef.current(), api.sessionIdle(id)])
+      // Le premier relevé suit de près l'envoi : la session n'a pas encore commencé, on laisse quelques secondes.
+      if (live && st.idle && Date.now() - sentAt.at > 4000) setSentAt(null)
+    }, 2000)
+    return () => {
+      live = false
+      clearInterval(t)
+    }
+  }, [sentAt, id])
 
   // content-visibility affine les hauteurs en cours de rendu : on recolle à la fin sur quelques images.
   const toEnd = useCallback(() => {
@@ -196,6 +218,11 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
                 <Loader2 className="size-4 animate-spin" /> Claude répond…
               </p>
             )}
+            {working && (
+              <p className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" /> Claude réfléchit…
+              </p>
+            )}
             {turn?.error && <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive">{turn.error}</p>}
           </div>
         </ScrollArea>
@@ -206,6 +233,7 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
             args={args}
             defaultChoice={choice}
             live={a.live.has(id)}
+            onSent={() => setSentAt({ id, at: Date.now() })}
             turn={turn}
             setTurn={(f) => setChat((c) => f(c?.id === id ? c : null))}
             onDone={() => {

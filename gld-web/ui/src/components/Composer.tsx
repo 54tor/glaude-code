@@ -25,6 +25,7 @@ export function Composer({
   args,
   defaultChoice,
   live,
+  onSent,
   turn,
   setTurn,
   onDone,
@@ -34,6 +35,7 @@ export function Composer({
   args: string
   defaultChoice: Choice
   live: boolean
+  onSent: () => void // message envoyé à la session ouverte
   turn: Turn | null
   setTurn: (f: (t: Turn | null) => Turn | null) => void
   onDone: () => void
@@ -89,7 +91,7 @@ export function Composer({
   }
   const stop = () => api.post("/chat-stop", { id })
 
-  if (live) return <LiveSend id={id} onDone={onDone} />
+  if (live) return <LiveSend id={id} onSent={onSent} />
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-7xl space-y-2">
@@ -126,7 +128,7 @@ export function Composer({
 
 // Session ouverte dans un terminal : deux processus ne peuvent pas écrire le même transcript, donc pas de claude -p ici. Si la session
 // tourne dans tmux, le message y est collé puis validé ; sinon on l'explique.
-function LiveSend({ id, onDone }: { id: string; onDone: () => void }) {
+function LiveSend({ id, onSent }: { id: string; onSent: () => void }) {
   const [info, setInfo] = useState<{ ids: string[]; why: string } | null>(null)
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
@@ -153,7 +155,7 @@ function LiveSend({ id, onDone }: { id: string; onDone: () => void }) {
     ;(r.ok ? toast.success : toast.error)(r.out)
     if (r.ok) {
       setText("")
-      setTimeout(onDone, 1500)
+      onSent()
     }
   }
   return (

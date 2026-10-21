@@ -23,7 +23,7 @@ type tabSpec struct {
 
 // launchers : ordre de préférence, le multiplexeur courant d'abord, puis les émulateurs. « wt » est Windows Terminal
 // (natif ou depuis WSL), « console » la fenêtre de repli de Windows.
-var launchers = []string{"tmux", "kitty", "wezterm", "wt", "terminator", "gnome-terminal", "konsole", "xfce4-terminal", "tilix", "console"}
+var launchers = []string{"tmux", "kitty", "wezterm", "wt", "terminator-tmux", "terminator", "gnome-terminal", "konsole", "xfce4-terminal", "tilix", "console"}
 
 func onPath(name string) bool { _, err := exec.LookPath(name); return err == nil }
 
@@ -35,6 +35,8 @@ func launcherAvailable(name string) bool {
 		return os.Getenv("KITTY_LISTEN_ON") != "" && onPath("kitty")
 	case "wezterm":
 		return os.Getenv("WEZTERM_PANE") != "" && onPath("wezterm")
+	case "terminator-tmux": // un onglet Terminator qui lance la session dans tmux : joignable par « Envoyer à la session »
+		return onPath("terminator") && onPath("tmux")
 	case "wt":
 		return (os.Getenv("WSL_DISTRO_NAME") != "" || runtime.GOOS == "windows") && onPath("wt.exe")
 	case "console":
@@ -84,6 +86,8 @@ func launcherCmd(name, title string, argv []string) (*exec.Cmd, error) {
 			return with("wt.exe", "-w", "0", "new-tab", "--title", t, "wsl.exe", "-d", d, "--"), nil
 		}
 		return with("wt.exe", "-w", "0", "new-tab", "--title", t), nil
+	case "terminator-tmux":
+		return exec.Command("terminator", "--new-tab", "-T", title, "-e", "tmux new-session -n "+shq(strings.ReplaceAll(title, "#", "##"))+" "+shq(shJoin(argv))), nil
 	case "terminator":
 		return exec.Command("terminator", "--new-tab", "-T", title, "-e", shJoin(argv)), nil
 	case "gnome-terminal":
