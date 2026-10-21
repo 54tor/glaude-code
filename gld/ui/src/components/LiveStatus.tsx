@@ -53,16 +53,26 @@ export function LiveBar({ live: { st, now, open }, id }: { live: Live; id: strin
   if (!(open && st.open)) return null // fermée : « Session fermée » est dans la barre d'outils (LiveStats), sans bande
   const isOpen = true
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-      {isOpen && (
-        <span className={cn("flex min-w-0 items-center gap-1.5 font-medium", st.thinking ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>
-          {st.thinking ? <Loader2 className="size-3.5 shrink-0 animate-spin" /> : <span className="size-1.5 shrink-0 rounded-full bg-current" />}
-          <span className="truncate" title={st.activity}>
-            {label(st, id, now)}
+    <div className="space-y-2">
+      {st.queue?.map((m) => (
+        <div key={m.ts + m.t} className="flex justify-end" title={new Date(m.ts).toLocaleString("fr-FR")}>
+          <div className="max-w-[85%] rounded-2xl rounded-br-md border border-dashed bg-muted/30 px-4 py-2.5 break-words whitespace-pre-wrap text-muted-foreground">
+            <p className="mb-0.5 text-[11px] font-medium tracking-wide uppercase">En attente de lecture par la session</p>
+            {m.t}
+          </div>
+        </div>
+      ))}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+        {isOpen && (
+          <span className={cn("flex min-w-0 items-center gap-1.5 font-medium", st.thinking ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>
+            {st.thinking ? <Loader2 className="size-3.5 shrink-0 animate-spin" /> : <span className="size-1.5 shrink-0 rounded-full bg-current" />}
+            <span className="truncate" title={st.activity}>
+              {label(st, id, now)}
+            </span>
+            {st.since > 0 && st.thinking && <span className="shrink-0 font-normal text-muted-foreground">depuis {secs(now - st.since)}</span>}
           </span>
-          {st.since > 0 && st.thinking && <span className="shrink-0 font-normal text-muted-foreground">depuis {secs(now - st.since)}</span>}
-        </span>
-      )}
+        )}
+      </div>
     </div>
   )
 }

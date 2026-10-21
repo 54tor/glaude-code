@@ -5,6 +5,7 @@ package main
 // transcript et les fichiers du dossier subagents/. Rien n'est envoyé à Claude.
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -36,6 +37,51 @@ type LiveState struct {
 	Model    string    `json:"model"`
 	Subs     []SubLive `json:"subs"`
 	Verbs    []string  `json:"verbs"` // verbes affichés à tour de rôle pendant la réflexion
+	Queue    []Queued  `json:"queue"` // messages envoyés pendant que Claude travaillait, pas encore lus par la session
+}
+
+type Queued struct {
+	T  string `json:"t"`
+	Ts string `json:"ts"`
+}
+
+// pendingQueue : les messages mis en file d'attente par Claude Code (« queue-operation » du transcript) et pas encore pris
+// en charge. « dequeue » retire le plus ancien ; « remove » (l'utilisateur reprend son message) retire celui du même texte.
+func pendingQueue(path string) []Queued {
+	var q []Queued
+	for _, l := range tailLines(path, 512<<10) {
+		if !bytes.Contains(l, []byte(`"queue-operation"`)) {
+			continue
+		}
+		var o struct {
+			Type, Operation, Timestamp, Content string
+		}
+		if json.Unmarshal(l, &o) != nil || o.Type != "queue-operation" {
+			continue
+		}
+		switch o.Operation {
+		case "enqueue":
+			q = append(q, Queued{T: o.Content, Ts: o.Timestamp})
+		case "dequeue":
+			if len(q) > 0 {
+				q = q[1:]
+			}
+		case "remove":
+			for i := len(q) - 1; i >= 0; i-- {
+				if o.Content == "" || q[i].T == o.Content {
+					q = append(q[:i], q[i+1:]...)
+					break
+				}
+			}
+		}
+	}
+	out := []Queued{}
+	for _, m := range q {
+		if t := strings.TrimSpace(m.T); t != "" && !strings.HasPrefix(t, "<task-notification") { // les notifications de tâche ne sont pas des messages
+			out = append(out, Queued{cut(t, 400), m.Ts})
+		}
+	}
+	return out
 }
 
 var thinkingVerbs = []string{"réfléchit", "cogite", "médite", "mijote", "rumine", "planche", "phosphore", "gamberge", "se concentre", "décortique", "jongle avec les idées", "pèse le pour et le contre", "fait chauffer les neurones", "creuse la question", "tisse sa réponse", "cherche le bon angle", "démêle l'écheveau", "met de l'ordre dans ses idées", "ourdit un plan", "contemple le problème"}
@@ -203,7 +249,7 @@ func readActivity(path string) (activity string, thinking bool, since float64, u
 }
 
 func sessionLive(dir, id string) LiveState {
-	st := LiveState{Subs: []SubLive{}, Verbs: spinnerVerbs()}
+	st := LiveState{Subs: []SubLive{}, Verbs: spinnerVerbs(), Queue: []Queued{}}
 	st.Status, st.Open = sessionStatus(id)
 	p, ok := transcript(dir, id)
 	if !ok {
@@ -223,6 +269,9 @@ func sessionLive(dir, id string) LiveState {
 	}
 	if !st.Open {
 		st.Thinking = false
+	}
+	if st.Open {
+		st.Queue = pendingQueue(p)
 	}
 	st.Subs = subLives(filepath.Join(filepath.Dir(p), id, "subagents"))
 	return st

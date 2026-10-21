@@ -90,7 +90,7 @@ export type Hit = { dir: string; id: string; n: number; snip: string }
 export type Item = { dir: string; id: string }
 export type Detail = { prompts: string[]; n: number; branch: string; models: string[]; t0: string; t1: string; subagents: number }
 export type SubLive = { id: string; desc: string; type: string; running: boolean; activity: string; context: number; out: number; mtime: number }
-export type LiveState = { open: boolean; status: string; activity: string; thinking: boolean; since: number; context: number; out: number; model: string; subs: SubLive[]; verbs?: string[] }
+export type LiveState = { open: boolean; status: string; activity: string; thinking: boolean; since: number; context: number; out: number; model: string; subs: SubLive[]; verbs?: string[]; queue?: { t: string; ts: string }[] }
 export type UsageLimit = { key: string; label: string; percent: number; resetsAt?: string; limitDollars?: number; usedDollars?: number; lockedWhy?: string }
 export type Account = {
   email: string
