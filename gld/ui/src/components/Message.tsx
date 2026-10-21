@@ -2,7 +2,7 @@ import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { CornerDownRight, Wrench } from "lucide-react"
 import { type Msg } from "@/lib/api"
-import { isTagged, Tagged } from "./Tagged"
+import { CompactSummary, isCompactSummary, isTagged, Tagged } from "./Tagged"
 
 // Messages de Claude : Markdown (tableaux GFM compris). react-markdown n'interprète jamais de HTML brut
 // et filtre les URL dangereuses (javascript:) : rien de ce qui est affiché ne peut s'exécuter.
@@ -68,6 +68,12 @@ export function Message({ m, conv }: { m: Msg; conv?: { dir: string; id: string 
       </div>
     )
   }
+  if (m.r === "user" && isCompactSummary(m.t))
+    return (
+      <div title={title} className="msg mx-auto max-w-3xl">
+        <CompactSummary t={m.t} md={(t) => <Markdown t={t} />} />
+      </div>
+    )
   if (m.r === "user" && isTagged(m.t))
     return (
       <div title={title} className="msg ml-auto max-w-[85%]">
