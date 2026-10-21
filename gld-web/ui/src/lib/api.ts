@@ -29,7 +29,9 @@ export type Skill = {
   key: string
   name: string
   dir: string
-  scope: "user" | "project" | "plugin"
+  scope: "user" | "project" | "plugin" | "store"
+  origin: "store" | "plugin" | "install" | "custom" // d'où vient le skill
+  source?: string
   project?: string
   plugin?: string
   readOnly?: boolean

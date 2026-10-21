@@ -145,3 +145,40 @@ func TestBrouillonSkill(t *testing.T) {
 		t.Fatal("consigne vide acceptée")
 	}
 }
+
+func TestOrigineDesSkills(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	proj := t.TempDir()
+	put(t, filepath.Join(cfg, "projects", "-p", id1+".jsonl"), `{"cwd":"`+proj+`"}`+"\n", old)
+	put(t, filepath.Join(cfg, "skills", "maison", "SKILL.md"), "---\ndescription: x\n---\nx\n", old)
+	put(t, filepath.Join(cfg, "skills", "avec-page", "SKILL.md"), "---\ndescription: x\nhomepage: https://github.com/a/b\n---\nx\n", old)
+	put(t, filepath.Join(cfg, "skills", "npx", "SKILL.md"), "---\ndescription: x\n---\nx\n", old)
+	put(t, filepath.Join(home, ".agents", ".skill-lock.json"), `{"skills":{"npx":{"source":"o/r","sourceType":"github"}}}`, old)
+	put(t, filepath.Join(proj, ".claude", "skills", "verrou", "SKILL.md"), "---\ndescription: x\n---\nx\n", old)
+	put(t, filepath.Join(proj, "skills-lock.json"), `{"skills":{"verrou":{"source":"x/y","sourceType":"github"}}}`, old)
+	bucket := "aaaaaaaa-0000-0000-0000-000000000000_bbbbbbbb-0000-0000-0000-000000000000"
+	put(t, filepath.Join(cfg, "skills", "synced", bucket, "docs", "SKILL.md"), "---\ndescription: x\n---\nx\n", old)
+	put(t, filepath.Join(cfg, "skills", "synced", bucket, "manifest.json"), "{}", old)
+
+	by := map[string]Skill{}
+	for _, s := range listSkills() {
+		by[s.Key] = s
+	}
+	for k, want := range map[string]string{"u/maison": "custom", "u/avec-page": "install", "u/npx": "install", "p/-p/verrou": "install", "s/" + bucket + "/docs": "store"} {
+		if by[k].Origin != want {
+			t.Errorf("%s : origine %q, attendu %q", k, by[k].Origin, want)
+		}
+	}
+	if by["u/npx"].Source != "github : o/r" || by["u/avec-page"].Source != "https://github.com/a/b" {
+		t.Errorf("sources : %+v %+v", by["u/npx"], by["u/avec-page"])
+	}
+	if s := by["s/"+bucket+"/docs"]; !s.ReadOnly || s.Scope != "store" {
+		t.Errorf("store : %+v", s)
+	}
+	if len(by) != 5 || saveSkill("s/"+bucket+"/docs", "x\n", false) == nil {
+		t.Errorf("le store doit être en lecture seule (%d skills)", len(by))
+	}
+}
