@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { ArrowDownToLine, ArrowUpToLine, FileText, Loader2, MoreHorizontal, SquareTerminal, Wrench } from "lucide-react"
+import { ArrowDownToLine, ArrowUpToLine, FileText, Loader2, MessageSquarePlus, MoreHorizontal, SquareTerminal, Wrench } from "lucide-react"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
 import { full, size, tilde } from "@/lib/format"
@@ -176,6 +176,11 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
           </Button>
           {session && <LiveStats live={live} tok={session.tok} />}
           <div className="flex items-center gap-1">
+            {row && !row.g.missing && (
+              <Button variant="outline" size="sm" onClick={() => a.newSession(row.g.project)} title="Nouvelle session Claude dans le même dossier">
+                <MessageSquarePlus /> Nouvelle session
+              </Button>
+            )}
             {session && (
               <Button size="sm" onClick={() => a.open({ dir: session.dir, id: session.id })}>
                 <SquareTerminal /> Reprendre dans un terminal

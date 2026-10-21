@@ -175,6 +175,11 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
           <MessageSquareReply /> Reprendre avec un message…
         </M.Item>
       )}
+      {!g.missing && (
+        <M.Item onSelect={() => a.newSession(g.project)}>
+          <MessageSquarePlus /> Nouvelle session dans ce projet…
+        </M.Item>
+      )}
       {full && <M.Sep />}
       <Fav M={M} ids={[s.id]} />
       <M.Item onSelect={() => a.editTags(s)}>
