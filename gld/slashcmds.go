@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -24,13 +25,30 @@ func scanCommands(base, prefix, origin string) []slashCmd {
 			continue
 		}
 		var s Skill
-		if b, err := os.ReadFile(filepath.Join(base, e.Name())); err == nil && len(b) <= skillMaxBytes {
+		if b := readSmall(filepath.Join(base, e.Name())); b != nil {
 			s.Dir = n
 			describeSkill(&s, string(b))
 		}
 		out = append(out, slashCmd{"/" + prefix + n, cut(s.Description, 200), origin})
 	}
 	return out
+}
+
+// readSmall : le contenu d'un fichier régulier d'au plus skillMaxBytes (ni lien, ni tube, ni gros fichier), nil sinon.
+func readSmall(p string) []byte {
+	f, err := os.Open(p)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	if st, err := f.Stat(); err != nil || !st.Mode().IsRegular() || st.Size() > skillMaxBytes {
+		return nil
+	}
+	b, _ := io.ReadAll(io.LimitReader(f, skillMaxBytes+1))
+	if len(b) > skillMaxBytes {
+		return nil
+	}
+	return b
 }
 
 // slashCommands : les « / » que l'utilisateur a en plus de ceux de Claude Code, personnels, de projet et de plugins.
