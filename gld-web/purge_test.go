@@ -69,9 +69,14 @@ func exists(p string) bool { _, err := os.Lstat(p); return err == nil }
 func TestPurge(t *testing.T) {
 	cfg := fixture(t)
 	use(cfg)
-	n, spared, _, err := purgeSessions([]item{{"-p", id1}, {"-p", id2}})
+	n, spared, notes, err := purgeSessions([]item{{"-p", id1}, {"-p", id2}})
 	if err != nil || n != 2 || spared != 0 {
 		t.Fatalf("n=%d spared=%d err=%v", n, spared, err)
+	}
+	// Le compte rendu dit exactement ce qui a été effacé.
+	if got := strings.Join(notes, "\n"); !strings.Contains(got, "2 ligne(s) de prompt") ||
+		!strings.Contains(got, "1 collage(s)") || !strings.Contains(got, "1 instantané(s)") {
+		t.Errorf("notes :\n%s", got)
 	}
 	gone := []string{"projects/-p/" + id1 + ".jsonl", "projects/-p/" + id1, "projects/-p/" + id2 + ".jsonl",
 		"file-history/" + id1, "session-env/" + id1, "uploads/" + id1, "debug/" + id1 + ".txt",
@@ -96,6 +101,21 @@ func TestPurge(t *testing.T) {
 	h, _ := os.ReadFile(filepath.Join(cfg, "history.jsonl"))
 	if strings.Count(string(h), "\n") != 1 || !strings.Contains(string(h), id3) {
 		t.Errorf("history.jsonl : il ne devrait rester que la ligne de la session 3 :\n%s", h)
+	}
+}
+
+// Un hachage encore cité doit être reconnu quels que soient ses chiffres : sinon son collage serait effacé.
+func TestHexTokens(t *testing.T) {
+	got := map[string]bool{}
+	hexTokens([]byte(`x 0123456789abcdef "fedcba98765432100000000000000009" 0123456789ABCDEF 123456789abcdef 9999999999999999`), got)
+	want := []string{"0123456789abcdef", "fedcba9876543210", "0000000000000009", "9999999999999999"}
+	for _, w := range want {
+		if !got[w] {
+			t.Errorf("jeton manquant : %s", w)
+		}
+	}
+	if len(got) != len(want) { // ni majuscules, ni jeton de 15 caractères
+		t.Errorf("jetons : %v", got)
 	}
 }
 
