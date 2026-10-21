@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { ArrowDownToLine, ArrowUpToLine, FileText, Loader2, MessageSquarePlus, MoreHorizontal, SquareTerminal, Wrench } from "lucide-react"
+import { ArrowDown, ArrowDownToLine, ArrowUpToLine, FileText, Loader2, MessageSquarePlus, MoreHorizontal, SquareTerminal, Wrench } from "lucide-react"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
 import { full, size, tilde } from "@/lib/format"
@@ -144,13 +144,36 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
     return () => io.disconnect()
   }, [more, older, viewport])
   const toTop = () => viewport()?.scrollTo({ top: 0 })
+  // On ne ramène à la fin que si on y était déjà (ou à l'ouverture de la session) : lire plus haut ne doit pas être interrompu par
+  // l'arrivée de messages ; le bouton « Aller à la fin » prend le relais.
+  const stuck = useRef(true)
+  const opened = useRef("") // session déjà amenée à la fin une fois
+  const [away, setAway] = useState(false)
+  const ready = !!session && msgs !== null
   useEffect(() => {
-    if (keepScroll.current) keepScroll.current = false
-    else if (msgs) toEnd()
-  }, [msgs, toEnd])
+    const vp = viewport()
+    if (!vp) return
+    const on = () => {
+      const near = vp.scrollHeight - vp.scrollTop - vp.clientHeight < 80
+      stuck.current = near
+      setAway(!near)
+    }
+    vp.addEventListener("scroll", on, { passive: true })
+    return () => vp.removeEventListener("scroll", on)
+  }, [viewport, ready])
+  useEffect(() => {
+    if (!id) opened.current = ""
+    if (keepScroll.current) return void (keepScroll.current = false)
+    if (!msgs) return
+    if (opened.current !== id) {
+      opened.current = id
+      stuck.current = true
+      toEnd()
+    } else if (stuck.current) toEnd()
+  }, [msgs, toEnd, id])
   const shown = turn?.msgs.length ?? 0
   useEffect(() => {
-    if (shown) toEnd()
+    if (shown && stuck.current) toEnd()
   }, [shown, toEnd])
 
   return (
@@ -195,6 +218,7 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
             )}
           </div>
         </div>
+        <div className="relative flex min-h-0 flex-1 flex-col">
         <ScrollArea ref={area} className="min-h-0 flex-1">
           <div className="session-text mx-auto max-w-7xl space-y-5 px-3 py-4 md:px-6 md:py-6">
             {msgs === null && (
@@ -229,6 +253,12 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
             {turn?.error && <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive">{turn.error}</p>}
           </div>
         </ScrollArea>
+        {away && (
+          <Button size="sm" variant="secondary" className="absolute right-4 bottom-3 rounded-full shadow-md" onClick={toEnd} aria-label="Aller à la fin de la conversation">
+            <ArrowDown /> Aller à la fin
+          </Button>
+        )}
+        </div>
         {session && (
           <Composer
             dir={dir}
