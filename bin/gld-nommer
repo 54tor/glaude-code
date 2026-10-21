@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# gld-nommer — donne un nom aux sessions Claude qui n'en ont pas.
+#
+#   gld-nommer -n              dry-run : montre les noms proposés, n'écrit rien
+#   gld-nommer                 applique
+#   gld-nommer --llm           fait rédiger un titre court par Claude
+#   gld-nommer ~/Projets/x     cible un autre projet
+#   gld-nommer --age 40        élargit la fenêtre (jours)
+#
+# Le nom proposé vient du premier prompt de la session, tronqué. Avec --llm,
+# Claude rédige un titre de 3-4 mots à partir de ce prompt.
+#
+# Comment : `claude --resume <id> --name <nom> -p …`, la seule voie supportée.
+# COÛT : un tour de conversation par session (appel API + échange ajouté au
+# transcript). Éditer le transcript l'éviterait, mais je n'ai pas pu vérifier
+# que Claude relit bien le titre depuis le fichier — donc non.
+#
+# Portable bash 3.2+, GNU/BSD/macOS. Dépend de jq et claude.
+
+set -uo pipefail
+. "$(dirname "$0")/gld-lib.sh"
+
+AGE_MAX=${GLD_AGE:-40}
+TAILLE_MIN=${GLD_MIN:-50000}
+DRY=0; LLM=0; CIBLE=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -n|--dry-run) DRY=1 ;;
+    --llm)        LLM=1 ;;
+    --age)        AGE_MAX="${2:-}"; shift ;;
+    --min)        TAILLE_MIN="${2:-}"; shift ;;
+    -h|--help)    sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -*)           echo "gld-nommer: option inconnue: $1" >&2; exit 2 ;;
+    *)            CIBLE="$1" ;;
+  esac
+  shift
+done
+
+resoudre_projet "$CIBLE"
+echo "projet : $PROJET"
+[ "$DRY" = 1 ] && echo "(dry-run : rien ne sera écrit)"
+echo
+
+VIVANTES=$(sessions_vivantes)
+
+RECENTS=$(find "$TRANSCRIPTS" -maxdepth 1 -name '*.jsonl' -mtime -"$AGE_MAX" 2>/dev/null)
+[ -n "$RECENTS" ] || { echo "aucune session de moins de $AGE_MAX jours."; exit 0; }
+
+n=0; faits=0
+for f in $(ls -t $RECENTS); do
+  [ -s "$f" ] || continue
+  [ "$(taille "$f")" -ge "$TAILLE_MIN" ] || continue
+  [ -n "$(titre_explicite "$f")" ] && continue   # déjà nommée : on n'y touche pas
+
+  id=$(basename "$f" .jsonl)
+  court=$(printf '%.8s' "$id")
+
+  # Une session vivante a le fichier ouvert : la reprendre créerait un doublon.
+  if printf '%s\n' "$VIVANTES" | grep -Fq -- "$id"; then
+    printf '  ignorée (vivante)  %s\n' "$court"
+    continue
+  fi
+
+  prompt=$(etiquette_deduite "$f")
+  [ -n "$prompt" ] || { printf '  ignorée (vide)     %s\n' "$court"; continue; }
+
+  nom="$prompt"
+  if [ "$LLM" = 1 ] && [ "$DRY" = 0 ]; then
+    suggere=$(claude -p "Titre de 3 à 4 mots, en français, sans guillemets ni
+ponctuation finale, résumant ce sujet de travail : $prompt" < /dev/null 2>/dev/null \
+      | head -1 | tr -d '"' | cut -c1-40)
+    [ -n "$suggere" ] && nom="$suggere"
+  fi
+
+  n=$((n + 1))
+  if [ "$DRY" = 1 ]; then
+    printf '  nommerait  %s  ->  %s\n' "$court" "$nom"
+    continue
+  fi
+
+  printf '  nomme      %s  ->  %s ... ' "$court" "$nom"
+  if (cd "$PROJET" && claude --resume "$id" --name "$nom" \
+        -p "Réponds uniquement: OK" < /dev/null >/dev/null 2>&1); then
+    verif=$(titre_explicite "$f")
+    if [ "$verif" = "$nom" ]; then echo "ok"; faits=$((faits + 1)); else echo "ÉCHEC (titre non écrit)"; fi
+  else
+    echo "ÉCHEC (resume refusé)"
+  fi
+done
+
+echo
+if [ "$DRY" = 1 ]; then
+  echo "$n session(s) seraient nommées. Lancez sans -n pour appliquer."
+  echo "Chacune coûtera un tour de conversation."
+else
+  echo "$faits/$n session(s) nommées."
+fi
