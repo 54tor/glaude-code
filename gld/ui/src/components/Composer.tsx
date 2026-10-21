@@ -142,10 +142,12 @@ function LiveSend({ id, onSent }: { id: string; onSent: () => void }) {
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
   const [sel, setSel] = useState(0)
+  const [extra, setExtra] = useState<(readonly [string, string])[]>([])
   const pics = useImages()
   useEffect(() => {
     let live = true
     api.sendInfo().then((r) => live && setInfo(r), () => {})
+    api.slashCommands().then((r) => live && setExtra(r.commands.map((c) => [c.cmd, c.desc] as const)), () => {})
     return () => {
       live = false
     }
@@ -161,7 +163,7 @@ function LiveSend({ id, onSent }: { id: string; onSent: () => void }) {
         <CloseSession id={id} />
       </div>
     )
-  const sugg = /^\/\S*$/.test(text) ? SLASH.filter(([c]) => c.startsWith(text) && c !== text) : []
+  const sugg = /^\/\S*$/.test(text) ? [...SLASH.map(([c, l]) => [c, l] as const), ...extra].filter(([c]) => c.startsWith(text) && c !== text) : []
   const send = async () => {
     const full = [text.trim(), pics.suffix()].filter(Boolean).join("\n")
     if (!full || busy) return

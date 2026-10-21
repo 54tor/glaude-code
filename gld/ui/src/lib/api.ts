@@ -139,6 +139,7 @@ export const api = {
   memoryLoaded: () => get<{ hook: boolean; files: Record<string, FileLoads> }>("/memory-loaded"),
   sessionLoaded: (id: string) => get<{ files: LoadEvent[] }>(`/session-loaded?id=${id}`),
   configRaw: (file: string) => get<{ ok: boolean; text?: string; out?: string }>(`/config-raw?file=${enc(file)}`),
+  slashCommands: () => get<{ commands: { cmd: string; desc: string; origin: string }[] }>("/slash-commands"),
   skills: () => get<{ skills: Skill[]; projects: { dir: string; project: string }[] }>("/skills-list"),
   skill: (key: string) => get<{ text?: string; files?: SkillFile[]; error?: string }>(`/skill?key=${enc(key)}`),
   configProjects: () => get<{ projects: ProjectCfg[] }>("/config-projects"),

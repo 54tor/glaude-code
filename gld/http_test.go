@@ -534,3 +534,21 @@ func TestHTTPOngletsGroupes(t *testing.T) {
 		t.Fatal(m)
 	}
 }
+
+func TestSlashCommands(t *testing.T) {
+	cfg := t.TempDir()
+	old := root
+	t.Cleanup(func() { root = old })
+	root = filepath.Join(cfg, "projects")
+	os.MkdirAll(filepath.Join(cfg, "commands"), 0o755)
+	os.WriteFile(filepath.Join(cfg, "commands", "audit.md"), []byte("---\ndescription: Audit du dépôt\n---\ncorps\n"), 0o644)
+	os.MkdirAll(filepath.Join(cfg, "skills", "mienne"), 0o755)
+	os.WriteFile(filepath.Join(cfg, "skills", "mienne", "SKILL.md"), []byte("---\nname: mienne\ndescription: Ma skill\n---\nx\n"), 0o644)
+	got := map[string]string{}
+	for _, c := range slashCommands() {
+		got[c.Cmd] = c.Desc
+	}
+	if got["/audit"] != "Audit du dépôt" || got["/mienne"] != "Ma skill" {
+		t.Fatalf("commandes : %v", got)
+	}
+}
