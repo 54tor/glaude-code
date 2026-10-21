@@ -1,4 +1,4 @@
-import { Brain, Eye, EyeOff, FolderInput, Globe, Pencil, Save, ScrollText, Sparkles, Trash2, X } from "lucide-react"
+import { Bot, Brain, Eye, EyeOff, FolderInput, Globe, Pencil, Save, ScrollText, Trash2, X } from "lucide-react"
 import type { MemFile, MemTarget } from "@/lib/api"
 import { ago, size, tilde } from "@/lib/format"
 import { Button } from "@/components/ui/button"
@@ -121,7 +121,7 @@ export function FileBar({
           </Button>
           {file && (
             <Button variant="ghost" size="sm" onClick={onRewrite}>
-              <Sparkles /> Haiku…
+              <Bot /> Améliorer…
             </Button>
           )}
           <Button size="sm" onClick={onEdit} disabled={!textReady}>

@@ -1,4 +1,4 @@
-import { BookOpen, Brain, ClipboardCopy, ScrollText, Copy, Eye, EyeOff, FolderInput, Globe, Link, Merge, Pencil, Sparkles, Trash2 } from "lucide-react"
+import { BookOpen, Bot, Brain, ClipboardCopy, Copy, Eye, EyeOff, FolderInput, Globe, Link, Merge, Pencil, ScrollText, Trash2 } from "lucide-react"
 import type { MemFile, MemTarget } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import {
@@ -71,7 +71,7 @@ export function FileMenu({ x, picked, targets, homeDir, a }: { x: MemFile; picke
         <Pencil /> Modifier
       </ContextMenuItem>
       <ContextMenuItem onSelect={() => a.rewrite(x)}>
-        <Sparkles /> Réécrire avec Haiku…
+        <Bot /> Améliorer avec un modèle…
       </ContextMenuItem>
       <ContextMenuItem onSelect={() => a.copyContent(x)}>
         <ClipboardCopy /> Copier le contenu

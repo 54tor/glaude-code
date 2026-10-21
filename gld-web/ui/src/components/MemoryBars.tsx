@@ -1,4 +1,4 @@
-import { CircleHelp, Copy, HeartPulse, Merge, Sparkles, Trash2, X } from "lucide-react"
+import { Bot, CircleHelp, Copy, HeartPulse, Merge, Trash2, X } from "lucide-react"
 import type { MemFile } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { TYPES } from "./MemoryTypes"
@@ -90,7 +90,7 @@ export function SelectionBar({
         <Copy /> Prompt
       </Button>
       <Button variant="ghost" size="xs" onClick={onHaiku} title="Nouvelle entrée rédigée par Haiku à partir de ces fichiers">
-        <Sparkles /> Haiku
+        <Bot /> Rédiger
       </Button>
       <Button variant="ghost" size="xs" onClick={onRemove} title="Mettre ces fichiers à la corbeille">
         <Trash2 /> Supprimer
