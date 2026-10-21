@@ -61,6 +61,7 @@ export function FileBar({
           <Button variant="ghost" size="sm" onClick={onCancel}>
             <X /> Annuler
           </Button>
+          {!dirty && <span className="text-xs text-muted-foreground">identique au fichier : rien à enregistrer</span>}
           <Button size="sm" onClick={onSave} disabled={!dirty}>
             <Save /> Enregistrer
           </Button>

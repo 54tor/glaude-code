@@ -118,7 +118,7 @@ export function Memory({
     return r.ok
   }
   const save = async () => {
-    if (!editing) return
+    if (!editing) return void toast.error("Aucun brouillon à enregistrer")
     // Nouvelle entrée de mémoire de projet ou de règle globale : le nom saisi fixe le fichier.
     const m = /^(m\/[^/]+|g\/rules)\/[^/]+$/.exec(sel)
     const key = !file && m ? newKey(all, m[1] === "g/rules" ? "global" : m[1].slice(2), editing.text) : sel
@@ -146,8 +146,13 @@ export function Memory({
           : `Consolide ces entrées de mémoire dans le ${target} du projet : garde les règles durables, utiles à chaque session, regroupe-les par thème, retire les doublons et ce qui est périmé.`,
     })
   }
-  const onDraft = (t: WriteTarget, body: string) => {
+  const onDraft = async (t: WriteTarget, body: string) => {
     const key = t.kind === "rewrite" ? t.key : newKey(all, t.scope, body)
+    if (t.kind === "rewrite") {
+      // Un brouillon identique au fichier n'a rien à enregistrer : on le dit plutôt que d'ouvrir un éditeur sans changement.
+      const cur = (await api.memoryFile(key)).text
+      if (cur !== undefined && cur.trimEnd() === body.trimEnd()) return void toast.info("Haiku n'a rien changé : le texte est identique au fichier")
+    }
     setDraft({ key, text: body })
     onPick(key)
   }
