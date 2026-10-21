@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { Minimize2, Power, Send, Square, SquareTerminal } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
@@ -140,6 +141,7 @@ function LiveSend({ id, onSent }: { id: string; onSent: () => void }) {
   const [info, setInfo] = useState<{ ids: string[]; why: string } | null>(null)
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
+  const [sel, setSel] = useState(0)
   const pics = useImages()
   useEffect(() => {
     let live = true
@@ -159,6 +161,7 @@ function LiveSend({ id, onSent }: { id: string; onSent: () => void }) {
         <CloseSession id={id} />
       </div>
     )
+  const sugg = /^\/\S*$/.test(text) ? SLASH.filter(([c]) => c.startsWith(text) && c !== text) : []
   const send = async () => {
     const full = [text.trim(), pics.suffix()].filter(Boolean).join("\n")
     if (!full || busy) return
@@ -176,10 +179,36 @@ function LiveSend({ id, onSent }: { id: string; onSent: () => void }) {
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-7xl space-y-2">
         <TerminalPanel id={id} />
+        {sugg.length > 0 && (
+          <ul className="max-h-48 overflow-y-auto rounded-lg border bg-popover p-1 text-sm shadow-md" role="listbox" aria-label="Commandes">
+            {sugg.map(([cmd, label], i) => (
+              <li
+                key={cmd}
+                role="option"
+                aria-selected={i === sel % sugg.length}
+                onMouseDown={(e) => (e.preventDefault(), setText(cmd + " "))}
+                className={cn("flex cursor-pointer items-baseline gap-2 rounded px-2 py-1", i === sel % sugg.length && "bg-accent")}
+              >
+                <code className="text-xs">{cmd}</code>
+                <span className="text-muted-foreground">{label}</span>
+              </li>
+            ))}
+          </ul>
+        )}
         <textarea
           value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "Enter" && (e.preventDefault(), send())}
+          onChange={(e) => (setText(e.target.value), setSel(0))}
+          onKeyDown={(e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === "Enter") return e.preventDefault(), send()
+            if (!sugg.length) return
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault()
+              setSel((i) => (i + (e.key === "ArrowDown" ? 1 : sugg.length - 1)) % sugg.length)
+            } else if (e.key === "Tab" || e.key === "Enter") {
+              e.preventDefault()
+              setText(sugg[sel % sugg.length][0] + " ")
+            }
+          }}
           onPaste={pics.onPaste}
           onDrop={pics.onDrop}
           placeholder="Écrire dans la session ouverte (tmux)… (Ctrl+Entrée pour envoyer ; une image se colle ou se dépose ici)"
@@ -339,6 +368,16 @@ const SLASH = [
   ["/cost", "Voir le coût", "Coût et durée de la session"],
   ["/usage", "Voir les limites d'usage", "Met à jour le relevé des limites du compte"],
   ["/clear", "Effacer la conversation", "Vide le contexte (la conversation reste dans le transcript)"],
+  ["/model", "Changer de modèle", "Ouvre le choix du modèle : réponds avec les touches du bandeau Terminal"],
+  ["/mcp", "Serveurs MCP", "État des serveurs MCP"],
+  ["/status", "État de Claude Code", "Version, compte, modèle, connexion"],
+  ["/memory", "Mémoire", "Fichiers CLAUDE.md chargés"],
+  ["/permissions", "Permissions", "Règles d'autorisation en vigueur"],
+  ["/agents", "Sous-agents", "Liste des agents disponibles"],
+  ["/rewind", "Revenir en arrière", "Rétablit la conversation ou le code à un point précédent"],
+  ["/export", "Exporter", "Exporte la conversation"],
+  ["/doctor", "Diagnostic", "Vérifie l'installation"],
+  ["/help", "Aide", "Liste des commandes"],
 ] as const
 
 function SlashMenu({ id, text, onSent }: { id: string; text: string; onSent: () => void }) {
