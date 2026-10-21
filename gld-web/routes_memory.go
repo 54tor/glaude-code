@@ -198,6 +198,23 @@ func routesMemory(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "findings": findings, "cost": cost})
 	})
+	// Ce que Claude a réellement chargé (loaded.go), d'après le hook InstructionsLoaded : par fichier, et par session.
+	mux.HandleFunc("GET /memory-loaded", func(w http.ResponseWriter, r *http.Request) {
+		ev := readLoaded()
+		writeJSON(w, 200, map[string]any{"hook": len(ev) > 0, "files": loadsByFile(ev)})
+	})
+	mux.HandleFunc("GET /session-loaded", func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Query().Get("id")
+		if !idRe.MatchString(id) {
+			writeJSON(w, 400, map[string]any{})
+			return
+		}
+		ev := loadsOfSession(readLoaded(), id)
+		if ev == nil {
+			ev = []loadEvent{}
+		}
+		writeJSON(w, 200, map[string]any{"files": ev})
+	})
 	mux.HandleFunc("GET /memory-search", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"hits": memSearch(r.URL.Query().Get("q"))})
 	})

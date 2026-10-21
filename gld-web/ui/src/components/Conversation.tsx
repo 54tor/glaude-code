@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { ArrowDownToLine, ArrowUpToLine, Loader2, MoreHorizontal, SquareTerminal, Wrench } from "lucide-react"
+import { ArrowDownToLine, ArrowUpToLine, FileText, Loader2, MoreHorizontal, SquareTerminal, Wrench } from "lucide-react"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
 import { full, size, tilde } from "@/lib/format"
@@ -13,6 +13,7 @@ import { Live } from "./SessionList"
 import type { Row } from "./actions"
 import { Message } from "./Message"
 import { Composer, type Turn } from "./Composer"
+import { LoadedDialog } from "./LoadedDialog"
 
 // Messages chargés d'un coup (par la fin) : une session de plusieurs Go compte des milliers de messages.
 const PAGE = 200
@@ -45,6 +46,7 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
   const dir = session?.dir ?? ""
   const id = session?.id ?? ""
   const [tools, setTools] = useState(false)
+  const [loadedOpen, setLoadedOpen] = useState(false) // instructions réellement chargées (hook InstructionsLoaded)
   // Les messages sont rangés avec la clé (session, outils) qui les a produits : tant qu'elle ne correspond
   // pas à la demande courante, on affiche le chargement, sans remise à zéro synchrone dans un effet.
   // start/more : décalage de la première ligne lue et existence de messages plus anciens (lecture par la fin).
@@ -140,6 +142,9 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
           <Button variant={tools ? "secondary" : "ghost"} size="sm" onClick={() => setTools(!tools)} aria-pressed={tools}>
             <Wrench /> Outils {tools ? "affichés" : "masqués"}
           </Button>
+          <Button variant="ghost" size="sm" onClick={() => setLoadedOpen(true)} title="Fichiers d'instructions que Claude a réellement chargés dans cette session">
+            <FileText /> Instructions
+          </Button>
           <Button variant="ghost" size="icon-sm" onClick={toTop} aria-label="Aller au début" title="Aller au début">
             <ArrowUpToLine />
           </Button>
@@ -209,6 +214,7 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
             }}
           />
         )}
+        <LoadedDialog id={id} home={a.home} open={loadedOpen} onClose={() => setLoadedOpen(false)} />
       </DialogContent>
     </Dialog>
   )

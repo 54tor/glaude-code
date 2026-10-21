@@ -64,7 +64,7 @@ export function Memory({
   const inTrash = sel.startsWith("corbeille/") ? sel.slice(10) : ""
 
   // Liste, corbeille et santé, relues en continu ; le fichier ouvert l'est aussi (sauf une version de la corbeille).
-  const { list, trash, issues, refresh } = useMemoryData(() => {
+  const { list, trash, issues, loads, refresh } = useMemoryData(() => {
     if (sel && !inTrash)
       api.memoryFile(sel).then(
         (r) => r.text !== undefined && setLoaded((l) => (l?.key === sel && l.text === r.text ? l : { key: sel, text: r.text! })),
@@ -395,6 +395,7 @@ export function Memory({
               onType={(t) => file && setType(file.key, t)}
               onToggleRule={() => file && toggleRule(file.key)}
               onRemove={() => file && remove(file)}
+              loads={loads.hook ? (loads.files[file?.path ?? ""] ?? { sessions: 0, last: 0 }) : undefined}
               onRewrite={() => file && setWriter({ kind: "rewrite", key: file.key, name: file.name })}
             />
             {file && !editing && sel.startsWith("g/rules/") && !file.off && list && (
