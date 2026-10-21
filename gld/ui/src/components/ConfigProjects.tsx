@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { ChevronRight, ClipboardCopy, FolderPlus, Globe, X } from "lucide-react"
-import { Link } from "wouter"
+import { Link, useSearchParams } from "wouter"
 import { api, type ProjectCfg } from "@/lib/api"
 import { describeKey } from "@/lib/configKeys"
 import { href } from "@/lib/route"
@@ -34,12 +34,18 @@ export function ProjectsTab({ home, version, gone, onAddDir, onEdit, onTransfer,
   const [all, setAll] = useState(false)
   const [q, setQ] = useState("")
   const [open, setOpen] = useState<Set<string>>(new Set())
+  const [params] = useSearchParams()
+  const focus = params.get("projet") // arrivée depuis la page d'un dossier : ce projet s'ouvre et s'affiche même sans réglage propre
   useEffect(() => {
     api.configProjects().then((r) => setList(r.projects))
   }, [version])
+  const target = list?.find((p) => p.project === focus)?.dir
+  useEffect(() => {
+    if (target) setTimeout(() => document.getElementById("cfg-" + target)?.scrollIntoView({ block: "start" }), 50)
+  }, [target])
   if (!list) return <p className="py-8 text-sm text-muted-foreground">Chargement…</p>
   const f = q.toLowerCase()
-  const shown = list.filter((p) => (all || p.specific > 0) && (!f || p.project.toLowerCase().includes(f)))
+  const shown = list.filter((p) => (all || p.dir === target || p.specific > 0) && (!f || p.project.toLowerCase().includes(f)))
   const hidden = list.filter((p) => p.specific === 0).length
   const toggle = (d: string) =>
     setOpen((o) => {
@@ -61,12 +67,12 @@ export function ProjectsTab({ home, version, gone, onAddDir, onEdit, onTransfer,
       </div>
       <ul className="space-y-2">
         {shown.map((p) => {
-          const isOpen = open.has(p.dir)
+          const isOpen = open.has(p.dir) !== (p.dir === target) // le projet visé s'ouvre de lui-même ; un clic le referme
           const perms = Object.fromEntries(Object.entries(p.perms).map(([k, l]) => [k, l.filter((r) => !gone(`${r.scope}/${p.dir}`, k, r.rule)).sort((x, y) => byRule(x.rule, y.rule))]))
           const nRules = Object.values(perms).reduce((n, l) => n + l.length, 0)
           const nSettings = p.files.reduce((n, x) => n + x.rows.filter((r) => !r.path.startsWith("permissions.") && r.path !== "hooks").length, 0)
           return (
-            <li key={p.dir} className="rounded-lg border">
+            <li key={p.dir} id={"cfg-" + p.dir} className="scroll-mt-4 rounded-lg border">
               <button onClick={() => toggle(p.dir)} className="flex w-full flex-wrap items-center gap-2 px-3 py-2 text-left" aria-expanded={isOpen}>
                 <ChevronRight className={cn("size-4 shrink-0 transition-transform", isOpen && "rotate-90")} />
                 <span className="min-w-0 flex-1 truncate text-sm font-medium" title={p.project}>

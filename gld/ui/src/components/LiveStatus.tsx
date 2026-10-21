@@ -41,10 +41,11 @@ export function useLive(dir: string, id: string, open: boolean): Live {
 // le processus met un instant à finir après SIGTERM.
 export function LiveBar({ live: { st, now, open } }: { live: Live }) {
   if (!st) return null
-  const isOpen = open && st.open
+  if (!(open && st.open)) return null // fermée : « Session fermée » est dans la barre d'outils (LiveStats), sans bande
+  const isOpen = true
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b bg-muted/20 px-3 py-1.5 text-xs md:px-6">
-      {isOpen ? (
+      {isOpen && (
         <span className={cn("flex min-w-0 items-center gap-1.5 font-medium", st.thinking ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>
           {st.thinking ? <Loader2 className="size-3.5 shrink-0 animate-spin" /> : <span className="size-1.5 shrink-0 rounded-full bg-current" />}
           <span className="truncate" title={st.activity}>
@@ -52,21 +53,20 @@ export function LiveBar({ live: { st, now, open } }: { live: Live }) {
           </span>
           {st.since > 0 && st.thinking && <span className="shrink-0 font-normal text-muted-foreground">depuis {secs(now - st.since)}</span>}
         </span>
-      ) : (
-        <span className="text-muted-foreground">Session fermée</span>
       )}
     </div>
   )
 }
 
 // Contexte, tokens et sous-agents sur une ligne, le détail dans une fenêtre.
-export function LiveStats({ live: { st }, tok }: { live: Live; tok: Tokens }) {
+export function LiveStats({ live: { st, open }, tok }: { live: Live; tok: Tokens }) {
   const [stats, setStats] = useState(false)
   if (!st) return null
   const running = st.subs.filter((s) => s.running).length
   return (
     <>
       <span className="ml-auto flex items-center gap-x-3 px-1 text-xs text-muted-foreground tabular-nums">
+        {!(open && st.open) && <span className="font-medium">Session fermée</span>}
         {st.context > 0 && <span title="Contexte envoyé au dernier appel">ctx {compact(st.context)}</span>}
         <span title="Tokens traités (hors cache lu)">{compact(tokTotal(tok))} tok</span>
       </span>

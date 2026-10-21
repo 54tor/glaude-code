@@ -203,6 +203,9 @@ func routesSessions(mux *http.ServeMux) {
 		if !ok {
 			return
 		}
+		if r.URL.Query().Get("close") == "1" { // suppression voulue d'une session ouverte : on la ferme d'abord
+			closeAndWait(items)
+		}
 		// Pas de contexte lié à la requête : un navigateur qui se déconnecte ne doit pas
 		// interrompre une suppression en cours (sessions à moitié purgées).
 		n, spared, notes, err := purgeSessions(items)

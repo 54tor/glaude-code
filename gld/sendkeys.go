@@ -166,6 +166,26 @@ func closeSession(id string) error {
 	return nil
 }
 
+// closeAndWait ferme celles de ces sessions qui sont ouvertes, puis attend (6 s au plus) que leur processus ait fini : tant
+// qu'il tourne, purgeSessions épargnerait la session.
+func closeAndWait(items []item) {
+	open := map[string]bool{}
+	for _, it := range items {
+		if _, ok := sessionPIDs()[it.ID]; ok && closeSession(it.ID) == nil {
+			open[it.ID] = true
+		}
+	}
+	for i := 0; i < 30 && len(open) > 0; i++ {
+		time.Sleep(200 * time.Millisecond)
+		live := liveSessions()
+		for id := range open {
+			if !live[id] {
+				delete(open, id)
+			}
+		}
+	}
+}
+
 // sendToSession colle le texte dans le panneau tmux de la session, puis valide.
 func sendToSession(id, text string) error {
 	if !sendIdRe.MatchString(id) {
