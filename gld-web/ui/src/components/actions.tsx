@@ -10,7 +10,8 @@ export type Actions = {
   open: (body: { dir: string; id?: string }) => void
   move: (s: Session) => void
   moveGroup: (g: Group, items: Item[]) => void
-  remove: (items: Item[], what: string) => void
+  // after : appelé quand la suppression est confirmée (ex. fermer le lecteur de la session supprimée)
+  remove: (items: Item[], what: string, after?: () => void) => void
 }
 
 export const ActionsCtx = createContext<Actions | null>(null)

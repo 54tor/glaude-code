@@ -55,7 +55,7 @@ function Message({ m }: { m: Msg }) {
   )
 }
 
-export function Conversation({ session, onClose }: { session: Session | null; onClose: () => void }) {
+export function Conversation({ session, onClose, onDelete }: { session: Session | null; onClose: () => void; onDelete: (s: Session) => void }) {
   const [tools, setTools] = useState(false)
   // Les messages sont rangés avec la clé (session, outils) qui les a produits : tant qu'elle ne correspond
   // pas à la demande courante, on affiche le chargement, sans remise à zéro synchrone dans un effet.
@@ -112,6 +112,9 @@ export function Conversation({ session, onClose }: { session: Session | null; on
             </Button>
             <Button variant="outline" size="xs" onClick={toEnd}>
               ↓ fin
+            </Button>
+            <Button variant="destructive" size="xs" onClick={() => session && onDelete(session)}>
+              Supprimer
             </Button>
           </div>
         </div>

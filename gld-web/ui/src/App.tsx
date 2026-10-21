@@ -83,12 +83,15 @@ export default function App() {
       const to = await pickDir(`Réassigner ${items.length} session(s) vers…`, g.project)
       if (to) act("/reassign", { items, to }, "Réassignation…")
     },
-    remove: (items, what) =>
+    remove: (items, what, after) =>
       setAsk({
         title: "Supprimer définitivement ?",
         body: `${what}\n\nSuppression définitive : transcript, sous-agents et fichiers associés.`,
         confirm: "Supprimer",
-        run: () => act("/rm", { items }, "Suppression en cours…"),
+        run: () => {
+          after?.()
+          act("/rm", { items }, "Suppression en cours…")
+        },
       }),
   }
 
@@ -132,7 +135,11 @@ export default function App() {
         </div>
       </main>
 
-      <Conversation session={reading} onClose={() => setReading(null)} />
+      <Conversation
+        session={reading}
+        onClose={() => setReading(null)}
+        onDelete={(s) => actions.remove([{ dir: s.dir, id: s.id }], `« ${s.title} »`, () => setReading(null))}
+      />
       <DirPicker pick={picker} home={data?.home ?? ""} />
       <Confirm ask={ask} onClose={() => setAsk(null)} />
     </ActionsCtx.Provider>
