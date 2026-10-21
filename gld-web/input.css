@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root{--background:0 0% 100%;--foreground:240 10% 3.9%;--card:0 0% 100%;--muted:240 4.8% 95.9%;--muted-foreground:240 3.8% 46.1%;--border:240 5.9% 90%;--accent:240 4.8% 95.9%;--destructive:0 72% 51%;--ring:240 5.9% 10%}
+@media(prefers-color-scheme:dark){:root{--background:240 10% 3.9%;--foreground:0 0% 98%;--card:240 10% 3.9%;--muted:240 3.7% 15.9%;--muted-foreground:240 5% 64.9%;--border:240 3.7% 15.9%;--accent:240 3.7% 15.9%;--destructive:0 72% 60%;--ring:240 4.9% 83.9%}}
+summary::-webkit-details-marker{display:none}
+details>summary>svg{transition:transform .15s}
+details[open]>summary>svg{transform:rotate(90deg)}
+details[open]>summary{border-bottom-left-radius:0;border-bottom-right-radius:0}
+.msg{content-visibility:auto;contain-intrinsic-size:auto 4rem}
+
+/* rendu Markdown de la conversation */
+.md>:first-child{margin-top:0}.md>:last-child{margin-bottom:0}
+.md p,.md ul,.md ol,.md table,.md pre,.md blockquote{margin:.5rem 0}
+.md h1,.md h2,.md h3,.md h4,.md h5,.md h6{font-weight:600;margin:.9rem 0 .35rem}
+.md h1{font-size:1.25rem}.md h2{font-size:1.1rem}.md h3{font-size:1rem}
+.md ul{list-style:disc;padding-left:1.4rem}.md ol{list-style:decimal;padding-left:1.4rem}
+.md li.l1{margin-left:1.2rem}.md li.l2{margin-left:2.4rem}.md li.l3{margin-left:3.6rem}
+.md table{border-collapse:collapse;display:block;max-width:100%;overflow-x:auto}
+.md th,.md td{border:1px solid hsl(var(--border));padding:.25rem .65rem;text-align:left;vertical-align:top}
+.md th{background:hsl(var(--muted));font-weight:600}
+.md [align=center]{text-align:center}.md [align=right]{text-align:right}
+.md code{font-family:ui-monospace,monospace;font-size:.85em;background:hsl(var(--muted));padding:.08rem .3rem;border-radius:.25rem}
+.md pre{background:hsl(var(--muted));padding:.6rem .8rem;border-radius:.375rem;overflow-x:auto;white-space:pre}
+.md pre code{background:none;padding:0}
+.md blockquote{border-left:3px solid hsl(var(--border));padding-left:.75rem;color:hsl(var(--muted-foreground))}
+.md a{text-decoration:underline}.md hr{border:0;border-top:1px solid hsl(var(--border));margin:.75rem 0}

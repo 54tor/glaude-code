@@ -1,42 +1,143 @@
 <!doctype html><html lang=fr><meta charset=utf-8><title>gld-web</title>
 <meta name=viewport content="width=device-width,initial-scale=1">
-<script src="https://cdn.tailwindcss.com/3.4.17"></script>
-<script>
-tailwind.config={darkMode:'media',theme:{extend:{colors:Object.fromEntries(
- ['background','foreground','card','muted','muted-foreground','border','accent','destructive','ring'].map(k=>[k,`hsl(var(--${k}))`]))}}}
-</script>
-<style>
-:root{--background:0 0% 100%;--foreground:240 10% 3.9%;--card:0 0% 100%;--muted:240 4.8% 95.9%;--muted-foreground:240 3.8% 46.1%;--border:240 5.9% 90%;--accent:240 4.8% 95.9%;--destructive:0 72% 51%;--ring:240 5.9% 10%}
-@media(prefers-color-scheme:dark){:root{--background:240 10% 3.9%;--foreground:0 0% 98%;--card:240 10% 3.9%;--muted:240 3.7% 15.9%;--muted-foreground:240 5% 64.9%;--border:240 3.7% 15.9%;--accent:240 3.7% 15.9%;--destructive:0 72% 60%;--ring:240 4.9% 83.9%}}
-summary::-webkit-details-marker{display:none}
-</style>
+<link rel=stylesheet href=/style.css>
+<script src=/vendor/marked.js></script>
+<script src=/vendor/purify.js></script>
 <body class="bg-background text-foreground antialiased font-sans text-sm">
 <main class="mx-auto max-w-4xl px-4 py-8">
   <header class="mb-6 flex items-end justify-between gap-4">
     <div><h1 class="text-2xl font-semibold tracking-tight">Sessions Claude</h1>
-      <p id=stats class="text-muted-foreground"></p></div>
+      <p id=stats class="text-muted-foreground"></p>
+      <p id=msg class="mt-1 text-xs"></p></div>
+    <button id=purge hidden class="inline-flex h-9 shrink-0 items-center rounded-md border border-destructive px-3 text-xs font-medium text-destructive transition-colors hover:bg-destructive hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"></button>
   </header>
+  <label class="mb-2 block text-xs text-muted-foreground" for=args>Options ajoutées à <code>claude</code> lors d'une réouverture (vide par défaut)</label>
+  <input id=args placeholder="ex. --dangerously-skip-permissions"
+    class="mb-4 flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 font-mono text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+  <input id=hide aria-label="Masquer les sessions dont le titre contient" placeholder="Masquer : motif|motif…"
+    class="mb-4 flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 font-mono text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
   <input id=q autofocus placeholder="Filtrer par projet ou titre…"
     class="mb-4 flex h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
   <div id=l class="space-y-3"></div>
 </main>
+<dialog id=cv class="m-auto h-[88vh] w-[min(60rem,96vw)] rounded-lg border border-border bg-background p-0 text-foreground shadow-lg backdrop:bg-black/50">
+  <div class="flex h-full flex-col">
+    <div class="flex items-center gap-3 border-b border-border px-4 py-3">
+      <h2 id=cvT class="flex-1 truncate font-semibold"></h2>
+      <label class="flex shrink-0 items-center gap-2 text-xs text-muted-foreground"><input type=checkbox id=cvTools> outils</label>
+      <button type=button id=cvTop title="début" class="inline-flex h-8 items-center rounded-md border border-border px-3 text-xs hover:bg-accent">↑ début</button>
+      <button type=button id=cvEnd title="fin" class="inline-flex h-8 items-center rounded-md border border-border px-3 text-xs hover:bg-accent">↓ fin</button>
+      <button type=button id=cvX class="inline-flex h-8 items-center rounded-md border border-border px-3 text-xs hover:bg-accent">Fermer</button>
+    </div>
+    <div id=cvBody class="flex-1 space-y-3 overflow-y-auto p-4 text-sm"></div>
+  </div>
+</dialog>
+<dialog id=dlg class="m-auto w-[min(40rem,92vw)] rounded-lg border border-border bg-background p-0 text-foreground shadow-lg backdrop:bg-black/50">
+  <div class="flex max-h-[80vh] flex-col">
+    <div class="space-y-3 border-b border-border p-4">
+      <h2 id=dlgT class="font-semibold"></h2>
+      <div class="flex gap-2">
+        <button type=button id=dUp title="dossier parent" class="inline-flex h-9 items-center rounded-md border border-border px-3 hover:bg-accent disabled:opacity-40">↑</button>
+        <button type=button id=dHome title="dossier personnel" class="inline-flex h-9 items-center rounded-md border border-border px-3 hover:bg-accent">~</button>
+        <input id=dPath spellcheck=false class="flex h-9 w-full rounded-md border border-border bg-background px-3 font-mono text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      </div>
+      <label class="flex items-center gap-2 text-xs text-muted-foreground"><input type=checkbox id=dHid> afficher les dossiers cachés</label>
+    </div>
+    <ul id=dList class="min-h-40 flex-1 overflow-y-auto p-2"></ul>
+    <div class="flex items-center justify-between gap-2 border-t border-border p-4">
+      <span id=dSel class="truncate font-mono text-xs text-muted-foreground"></span>
+      <div class="flex shrink-0 gap-2">
+        <button type=button id=dNo class="inline-flex h-9 items-center rounded-md border border-border px-4 hover:bg-accent">Annuler</button>
+        <button type=button id=dOk class="inline-flex h-9 items-center rounded-md bg-foreground px-4 font-medium text-background hover:opacity-90">Choisir ce dossier</button>
+      </div>
+    </div>
+  </div>
+</dialog>
 <script>
-let D=[];const l=document.getElementById('l'),q=document.getElementById('q'),st=document.getElementById('stats');
+let D=[];const opened=new Set(['~']);const l=document.getElementById('l'),q=document.getElementById('q'),st=document.getElementById('stats');
 const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
 const badge=x=>el('span','inline-flex items-center rounded-full border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground whitespace-nowrap',x);
 const btn='inline-flex h-8 items-center rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ';
-const chevron='<svg class="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>';
+const chevron='<svg class="size-4 shrink-0 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>';
 const fmt=(x,o)=>x?new Date(x).toLocaleString('fr-FR',o):'?';
-function draw(){
-  const f=q.value.toLowerCase();l.replaceChildren();let np=0,ns=0;
-  for(const g of D){
-    const ss=g.sessions.filter(s=>!f||g.project.toLowerCase().includes(f)||s.title.toLowerCase().includes(f));
-    if(!ss.length)continue;np++;ns+=ss.length;
-    const d=el('details','group rounded-lg border border-border bg-card shadow-sm');d.open=!!f;
-    const sm=el('summary','flex cursor-pointer select-none items-center gap-2 px-4 py-3 hover:bg-accent rounded-lg group-open:rounded-b-none');
-    sm.insertAdjacentHTML('beforeend',chevron);
-    sm.append(el('span','flex-1 truncate font-medium',g.project),badge(ss.length+' session'+(ss.length>1?'s':'')));
-    d.append(sm);const body=el('div','border-t border-border');
+// Rendu Markdown : marked (GFM, tableaux…) puis DOMPurify, qui retire tout ce qui pourrait s'exécuter.
+marked.setOptions({gfm:true,breaks:true});
+DOMPurify.addHook('afterSanitizeAttributes',n=>{if(n.tagName==='A'){n.setAttribute('target','_blank');n.setAttribute('rel','noopener noreferrer')}});
+const md=t=>DOMPurify.sanitize(marked.parse(t));
+// Lecteur de conversation : texte des échanges, outils en option, ouvert sur la fin.
+const cv=document.getElementById('cv'),cvBody=document.getElementById('cvBody'),cvTools=document.getElementById('cvTools');
+let cvSess=null;
+async function cvLoad(){
+  cvBody.replaceChildren(el('p','text-muted-foreground','Chargement…'));
+  const r=await(await fetch('/conv?dir='+encodeURIComponent(cvSess.dir)+'&id='+cvSess.id+(cvTools.checked?'&tools=1':''))).json();
+  const frag=document.createDocumentFragment();
+  for(const m of r.msgs){
+    const d=el('div','msg break-words '+(m.r==='user'?'whitespace-pre-wrap ml-8 rounded-lg bg-muted px-3 py-2':m.r==='tool'?'whitespace-pre-wrap font-mono text-xs text-muted-foreground border-l-2 border-border pl-2':'md mr-8'),m.r==='assistant'?null:m.t);
+    if(m.r==='assistant')d.innerHTML=md(m.t);
+    if(m.ts)d.title=fmt(m.ts);frag.append(d)}
+  cvBody.replaceChildren(frag);
+  if(!r.msgs.length)cvBody.append(el('p','text-muted-foreground','(aucun message)'));
+  toEnd();}
+// content-visibility affine les hauteurs en cours de rendu : on recolle à la fin sur quelques images.
+function toEnd(){const go=()=>{cvBody.scrollTop=cvBody.scrollHeight};go();requestAnimationFrame(()=>{go();requestAnimationFrame(()=>{go();setTimeout(go,120)})})}
+function readConv(s){cvSess=s;document.getElementById('cvT').textContent=s.title;cvTools.checked=false;cvLoad();cv.showModal()}
+cvTools.onchange=cvLoad;
+document.getElementById('cvX').onclick=()=>cv.close();
+document.getElementById('cvTop').onclick=()=>cvBody.scrollTo({top:0});
+document.getElementById('cvEnd').onclick=toEnd;
+let HOME='',hiddenItems=[],hiddenKB=0;
+// Explorateur de dossiers : pickDir(départ, titre) -> chemin choisi, ou null si annulé.
+const dlg=document.getElementById('dlg'),dPath=document.getElementById('dPath'),dList=document.getElementById('dList'),
+  dUp=document.getElementById('dUp'),dHid=document.getElementById('dHid'),dSel=document.getElementById('dSel');
+let dCur='',dDirs=[],dParent='';
+async function dGo(p){
+  const r=await fetch('/ls?path='+encodeURIComponent(p));const j=await r.json();
+  if(!r.ok){say(j.error||'dossier illisible',false);return}
+  dCur=j.path;dDirs=j.dirs;dParent=j.parent;dPath.value=dCur;dSel.textContent='';dUp.disabled=!dParent;dRender();}
+function dRender(){
+  dList.replaceChildren();
+  const vis=dDirs.filter(n=>dHid.checked||!n.startsWith('.'));
+  if(!vis.length)dList.append(el('li','px-3 py-2 text-xs text-muted-foreground','(aucun sous-dossier)'));
+  for(const n of vis){
+    const li=el('li'),b=el('button','flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left hover:bg-accent');
+    b.insertAdjacentHTML('beforeend','<svg class="size-4 shrink-0 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>');
+    b.append(el('span','truncate',n));b.onclick=()=>dGo((dCur==='/'?'':dCur)+'/'+n);li.append(b);dList.append(li);}}
+dUp.onclick=()=>dParent&&dGo(dParent);
+document.getElementById('dHome').onclick=()=>dGo(HOME);
+dHid.onchange=dRender;
+dPath.onkeydown=e=>{if(e.key==='Enter')dGo(dPath.value.trim())};
+function pickDir(start,title){
+  return new Promise(res=>{
+    document.getElementById('dlgT').textContent=title;dlg.returnValue='';
+    dlg.onclose=()=>res(dlg.returnValue==='ok'?dCur:null);
+    document.getElementById('dOk').onclick=()=>dlg.close('ok');
+    document.getElementById('dNo').onclick=()=>dlg.close('no');
+    dGo(start||HOME).then(()=>dlg.showModal());});}
+// Chemin -> segments : ~ pour le home, / pour le reste, ? pour un dossier au cwd inconnu.
+function segs(p){
+  if(!p.startsWith('/'))return ['?',p];
+  if(p===HOME)return ['~'];
+  if(p.startsWith(HOME+'/'))return ['~',...p.slice(HOME.length+1).split('/')];
+  return ['/',...p.split('/').filter(Boolean)];
+}
+function buildTree(items){
+  const root={name:'',key:'',kids:new Map(),g:null,ss:null};
+  for(const x of items){
+    let n=root;const sg=segs(x.g.project);
+    sg.forEach((name,i)=>{
+      if(!n.kids.has(name))n.kids.set(name,{name,key:sg.slice(0,i+1).join('/'),kids:new Map(),g:null,ss:null});
+      n=n.kids.get(name)});
+    n.g=x.g;n.ss=x.ss;}
+  // une chaîne de dossiers sans projet et à enfant unique devient un seul niveau (a/b/c)
+  const squash=n=>{
+    while(!n.g&&n.kids.size===1){const c=[...n.kids.values()][0];
+      n.name=(n.name==='/'?'':n.name+'/')+c.name;n.key=c.key;n.g=c.g;n.ss=c.ss;n.kids=c.kids}
+    n.kids.forEach(squash);
+    n.count=(n.ss?n.ss.length:0)+[...n.kids.values()].reduce((a,c)=>a+c.count,0)};
+  root.kids.forEach(squash);return root;
+}
+function rowsFor(ss){
+  const body=el('div','border-t border-border');
     for(const s of ss){
       const r=el('div','flex items-center gap-3 px-4 py-2 border-b border-border last:border-0 hover:bg-accent/50');
       const t=el('button','flex-1 truncate text-left '+(s.named?'font-medium':'italic text-muted-foreground'),s.title);t.title=s.title;
@@ -52,15 +153,93 @@ function draw(){
         i.prompts.forEach(p=>dt.append(el('div','mt-1 border-l-2 border-border pl-2 text-muted-foreground whitespace-pre-wrap',p)));};
       const id=el('button',btn+'font-mono text-muted-foreground hover:bg-accent',s.id.slice(0,8));
       id.title='copier « claude --resume »';id.onclick=()=>{navigator.clipboard.writeText('claude --resume '+s.id);id.textContent='copié ✓';setTimeout(()=>id.textContent=s.id.slice(0,8),1200)};
+      const rd=el('button',btn+'border border-border hover:bg-accent','Lire');
+      rd.title='afficher toute la conversation';rd.onclick=()=>readConv(s);
+      const op=el('button',btn+'border border-border hover:bg-accent','Ouvrir');
+      op.title='claude --resume dans un nouvel onglet de terminal';op.onclick=()=>open_({dir:s.dir,id:s.id});
+      const mv=el('button',btn+'border border-border hover:bg-accent','Déplacer…');
+      mv.title='déplacer cette session vers un autre dossier';
+      mv.onclick=async()=>{const to=await pickDir(s.cwd,'Déplacer « '+s.title+' » vers…');
+        if(to&&to!==s.cwd)post('/reassign',{items:[{dir:s.dir,id:s.id}],to},'Déplacement…');};
       const b=el('button',btn+'text-destructive hover:bg-destructive hover:text-white','Supprimer');
-      b.onclick=async()=>{
-        if(!confirm('Supprimer DÉFINITIVEMENT « '+s.title+' » ?'))return;
-        const j=await(await fetch('/rm',{method:'POST',body:JSON.stringify({dir:s.dir,id:s.id})})).json();
-        if(!j.ok)alert(j.out);load();};
+      b.onclick=()=>rm_([{dir:s.dir,id:s.id}],'« '+s.title+' »');
       r.append(t,el('span','hidden sm:block text-xs text-muted-foreground whitespace-nowrap',fmt(s.mtime*1000,{dateStyle:'short',timeStyle:'short'})),
-               badge(s.kb+' Ko'),id,b);body.append(r,dt);}
-    d.append(body);l.append(d);}
-  st.textContent=ns+' session(s) dans '+np+' projet(s)';}
-async function load(){D=await(await fetch('/api')).json();draw()}
+               badge(s.kb+' Ko'),id,rd,op,mv,b);body.append(r,dt);}
+  return body;
+}
+function nodeEl(n,f,depth){
+  const d=el('details','group rounded-lg border border-border bg-card'+(depth?'':' shadow-sm'));
+  d.open=!!f||opened.has(n.key);
+  d.ontoggle=()=>{if(f)return;d.open?opened.add(n.key):opened.delete(n.key)};
+  const sm=el('summary','flex cursor-pointer select-none items-center gap-2 px-4 py-2.5 hover:bg-accent rounded-lg');
+  sm.insertAdjacentHTML('beforeend',chevron);
+  const nm=el('span','flex-1 truncate '+(n.g?'font-medium':'text-muted-foreground'),n.name);
+  nm.title=n.g?n.g.project:n.name;sm.append(nm);
+  if(n.g){
+    const g=n.g,ss=n.ss,all=ss.map(s=>({dir:s.dir,id:s.id}));
+    if(g.missing){
+      sm.append(el('span','rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive whitespace-nowrap','dossier introuvable'));
+      const re=el('button',btn+'border border-border hover:bg-accent','Réassigner…');
+      re.title='déplacer ces sessions vers un dossier qui existe';
+      re.onclick=async e=>{e.preventDefault();const to=await pickDir(g.project,'Réassigner '+all.length+' session(s) vers…');
+        if(to)post('/reassign',{items:all,to});};
+      sm.append(re);
+    }else{
+      const ro=el('button',btn+'border border-border hover:bg-accent','Rouvrir (7 j)');
+      ro.title='gld-matin : un onglet de terminal par session récente';
+      ro.onclick=e=>{e.preventDefault();open_({dir:ss[0].dir})};
+      sm.append(ro);}
+    const del=el('button',btn+'text-destructive hover:bg-destructive hover:text-white','Tout supprimer');
+    del.onclick=e=>{e.preventDefault();rm_(all,'les '+all.length+' session(s) de '+g.project)};
+    sm.append(del);}
+  sm.append(badge(n.count+' session'+(n.count>1?'s':'')));
+  d.append(sm);
+  if(n.g)d.append(rowsFor(n.ss));
+  if(n.kids.size){
+    const k=el('div','space-y-2 border-t border-border p-2');
+    [...n.kids.values()].sort((a,b)=>a.name.localeCompare(b.name)).forEach(c=>k.append(nodeEl(c,f,depth+1)));
+    d.append(k);}
+  return d;
+}
+function draw(){
+  const f=q.value.toLowerCase();l.replaceChildren();let np=0,ns=0,nh=0,hkb=0;const items=[];hiddenItems=[];
+  const hid=hideEl.value.toLowerCase().split('|').map(x=>x.trim()).filter(Boolean);
+  const hidden=s=>hid.some(h=>s.title.toLowerCase().includes(h));
+  for(const g of D){
+    const vis=g.sessions.filter(s=>{if(!hidden(s))return true;hiddenItems.push({dir:s.dir,id:s.id});hkb+=s.kb;return false});nh+=g.sessions.length-vis.length;
+    const ss=vis.filter(s=>!f||g.project.toLowerCase().includes(f)||s.title.toLowerCase().includes(f));
+    if(ss.length){items.push({g,ss});np++;ns+=ss.length}}
+  const root=buildTree(items);
+  [...root.kids.values()].sort((a,b)=>a.name.localeCompare(b.name)).forEach(n=>l.append(nodeEl(n,f,0)));
+  st.textContent=ns+' session(s) dans '+np+' projet(s)'+(nh?' · '+nh+' masquée(s)':'');
+  hiddenKB=hkb;purge.hidden=!nh;purge.textContent='Supprimer les '+nh+' masquées';}
+const msg=document.getElementById('msg');
+function say(t,ok){msg.textContent=t;msg.className='mt-1 text-xs '+(ok===false?'text-destructive':'text-muted-foreground')}
+// Appel d'action : retour immédiat (liste grisée), résultat affiché, erreurs jamais muettes.
+async function post(u,b,busy){
+  say(busy||'En cours…');l.classList.add('opacity-50','pointer-events-none');
+  try{
+    const x=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+    const j=await x.json().catch(()=>({ok:false,out:'réponse invalide (HTTP '+x.status+')'}));
+    say(j.out.trim(),j.ok);
+  }catch(e){say('Erreur réseau : '+e.message,false)}
+  l.classList.remove('opacity-50','pointer-events-none');load();}
+function rm_(items,what){if(confirm('Supprimer DÉFINITIVEMENT '+what+' ?'))post('/rm',{items},'Suppression en cours…');}
+const hideEl=document.getElementById('hide');
+// Par défaut : les revues de sécurité automatiques (leur titre est leur premier prompt).
+try{const v=localStorage.getItem('ccHide');hideEl.value=v===null?'Review this change for security vulnerabilities|You previously flagged these candidate':v}catch(e){}
+hideEl.oninput=()=>{try{localStorage.setItem('ccHide',hideEl.value)}catch(e){}draw()};
+const purge=document.getElementById('purge');
+// Suppression en bloc des sessions masquées : il faut retaper leur nombre (un motif trop large viderait tout).
+purge.onclick=()=>{
+  const n=hiddenItems.length,mo=Math.round(hiddenKB/1024);
+  const r=prompt('Supprimer DÉFINITIVEMENT les '+n+' sessions masquées (~'+mo+' Mo)\ndont le titre contient : '+hideEl.value+'\n\nLes sessions vivantes sont épargnées.\nTape '+n+' pour confirmer :');
+  if(r!==null&&r.trim()===String(n))post('/rm',{items:hiddenItems.slice()},'Suppression de '+n+' sessions…');
+  else if(r!==null)say('Annulé : le nombre saisi ne correspond pas.',false)};
+const argsEl=document.getElementById('args');
+try{argsEl.value=localStorage.getItem('ccArgs')||''}catch(e){}
+argsEl.oninput=()=>{try{localStorage.setItem('ccArgs',argsEl.value)}catch(e){}};
+function open_(b){b.args=argsEl.value;post('/open',b,'Ouverture du terminal…')}
+async function load(){const r=await(await fetch('/api')).json();HOME=r.home;D=r.groups;draw()}
 q.oninput=draw;load();
 </script>
