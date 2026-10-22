@@ -1,5 +1,5 @@
 import { useRef, useState } from "react"
-import { Send } from "lucide-react"
+import { Send, ShieldCheck } from "lucide-react"
 import { argAt } from "@/lib/commands"
 import { tilde } from "@/lib/format"
 import { isSend } from "@/lib/utils"
@@ -88,6 +88,9 @@ export function ProjectHead({ project, missing }: { project: string; missing: bo
           />
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <SnippetMenu onInsert={insert} />
+            <Button size="sm" variant="outline" onClick={() => a.openPerms(project)} title="Règles d'autorisation de ce dossier (réglages du projet)">
+              <ShieldCheck /> Permissions
+            </Button>
             <ModelPicker value={choice} onChange={setPicked} disabled={busy} />
             <Button size="sm" className="ml-auto" onClick={send} disabled={!text.trim() || busy}>
               <Send /> Lancer la session

@@ -33,6 +33,7 @@ export type Actions = {
   live: Set<string>
   waiting: Set<string> // ouvertes, en attente de votre message
   hit: (id: string) => Hit | undefined
+  openPerms: (project: string) => void // onglet Permissions de Configuration, sur les réglages de ce dossier
   folder: (project: string) => Group | undefined // dossier de travail et ses sessions
   vgroups: VGroup[]
   projects: Project[]

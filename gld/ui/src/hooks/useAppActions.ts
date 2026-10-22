@@ -1,6 +1,7 @@
 import { useRef, type Dispatch, type SetStateAction } from "react"
 import { toast } from "sonner"
 import { watchTrust } from "@/lib/trust"
+import { wantConfigFile } from "@/lib/wantConfigFile"
 import { api, type Caps, type Data, type Group, type Hit, type Item, type Project, type Session, type Snippet, type VGroup } from "@/lib/api"
 import { exportMarkdown } from "@/lib/export"
 import { size, tilde } from "@/lib/format"
@@ -292,6 +293,11 @@ export function useAppActions(c: {
     live,
     waiting,
     hit: (id) => hitMap?.get(id),
+    openPerms: (project) => {
+      const dir = data?.groups.find((g) => g.project === project)?.sessions[0]?.dir
+      if (dir) wantConfigFile.id = "p/" + dir
+      go({ kind: "config", tab: "permissions" })
+    },
     folder: (project) => data?.groups.find((g) => g.project === project),
     vgroups,
     projects,

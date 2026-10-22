@@ -13,12 +13,13 @@ import { ProjectsTab } from "./ConfigProjects"
 import { RawTab } from "./ConfigRaw"
 import { BackupsTab, PermsTab, SettingsTab } from "./ConfigTabs2"
 import { SyncTab } from "./ConfigSync"
+import { takeConfigFile } from "@/lib/wantConfigFile"
 
 // Configuration de Claude Code : réglages utilisateur, de projet et locaux. Lecture (précédence, santé, hooks, MCP) et
 // modifications limitées aux réglages simples, variables d'environnement, plugins et permissions, avec aperçu et sauvegarde.
 export function Config({ home, tab, onTab }: { home: string; tab: string; onTab: (t: string) => void }) {
   const [ov, setOv] = useState<CfgOverview | null>(null)
-  const [fileId, setFileId] = useState("u") // fichier édité dans « Permissions » et « Réglages »
+  const [fileId, setFileId] = useState(() => takeConfigFile() || "u") // fichier édité dans « Permissions » et « Réglages »
   const reload = useCallback(() => api.config().then(setOv), [])
   useEffect(() => {
     reload()
