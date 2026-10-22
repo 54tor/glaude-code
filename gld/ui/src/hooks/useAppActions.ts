@@ -292,6 +292,7 @@ export function useAppActions(c: {
     live,
     waiting,
     hit: (id) => hitMap?.get(id),
+    folder: (project) => data?.groups.find((g) => g.project === project),
     vgroups,
     projects,
     projectActs,

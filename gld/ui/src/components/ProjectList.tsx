@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { useActions } from "./actions"
 import { GitMini } from "./GitBadge"
+import { ProjectItems } from "./ProjectTree"
 import { useGit } from "@/hooks/useGit"
 
 // Projets : ensembles nommés de dossiers de travail, affichés au-dessus de l'arbre des dossiers.
@@ -82,11 +83,15 @@ export function ProjectList({ route, go }: { route: Route; go: (r: Route) => voi
                             <GitMini states={[git.status[d]]} />
                           </button>
                         </ContextMenuTrigger>
-                        <ContextMenuContent className="w-56">
-                          <ContextMenuItem onSelect={() => a.projectActs.remove(d, p.name)}>
-                            <X /> Retirer du projet
-                          </ContextMenuItem>
-                        </ContextMenuContent>
+                        {a.folder(d) ? (
+                          <ProjectItems g={a.folder(d)!} />
+                        ) : (
+                          <ContextMenuContent className="w-56">
+                            <ContextMenuItem onSelect={() => a.projectActs.remove(d, p.name)}>
+                              <X /> Retirer du projet
+                            </ContextMenuItem>
+                          </ContextMenuContent>
+                        )}
                       </ContextMenu>
                     </li>
                   )
