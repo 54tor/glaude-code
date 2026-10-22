@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import { LiveAgents, type Live } from "./LiveStatus"
 import { toast } from "sonner"
-import { Minimize2, Power, Send, Square, SquareTerminal } from "lucide-react"
+import { Minimize2, Power, Send, Square } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
 import { withChoice, type Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
@@ -297,20 +297,9 @@ function parsePrompt(screen: string): { question: string; options: Opt[] } | nul
   return { question: above(from), options }
 }
 
-const KEYS = [
-  ["Up", "↑"],
-  ["Down", "↓"],
-  ["Enter", "Entrée"],
-  ["Escape", "Échap"],
-  ["Tab", "Tab"],
-  ["ShiftTab", "Maj+Tab"],
-  ["CtrlC", "Ctrl+C"],
-] as const
-
-// L'écran du terminal de la session (tmux) relu toutes les 1,5 s, et de quoi y répondre : options détectées, touches de navigation.
+// L'écran du terminal de la session (tmux) relu toutes les 1,5 s, pour proposer en boutons les options détectées.
 function TerminalPanel({ id }: { id: string }) {
   const [screen, setScreen] = useState("")
-  const [open, setOpen] = useState(false)
   useEffect(() => {
     let live = true
     const load = () => api.screen(id).then((r) => live && r.ok && setScreen(r.text ?? ""), () => {})
@@ -348,22 +337,6 @@ function TerminalPanel({ id }: { id: string }) {
           </div>
         </div>
       )}
-      <div className="flex flex-wrap items-center gap-1 text-xs">
-        <Button size="xs" variant={open ? "secondary" : "ghost"} onClick={() => setOpen(!open)} aria-pressed={open} title="Écran du terminal de la session">
-          <SquareTerminal /> Terminal
-        </Button>
-        {open &&
-          KEYS.map(([k, l]) => (
-            <Button key={k} size="xs" variant="outline" onClick={() => press(k)}>
-              {l}
-            </Button>
-          ))}
-      </div>
-      {open && (
-        <pre className="max-h-72 overflow-auto rounded-lg border bg-background px-3 py-2 font-mono text-[11px] leading-snug whitespace-pre" aria-label="Écran du terminal">
-          {screen || "(écran vide)"}
-        </pre>
-      )}
     </div>
   )
 }
@@ -377,7 +350,7 @@ const SLASH = [
   ["/cost", "Voir le coût", "Coût et durée de la session"],
   ["/usage", "Voir les limites d'usage", "Met à jour le relevé des limites du compte"],
   ["/clear", "Effacer la conversation", "Vide le contexte (la conversation reste dans le transcript)"],
-  ["/model", "Changer de modèle", "Ouvre le choix du modèle : réponds avec les touches du bandeau Terminal"],
+  ["/model", "Changer de modèle", "Ouvre le choix du modèle : réponds avec les boutons qui apparaissent au-dessus du champ"],
   ["/mcp", "Serveurs MCP", "État des serveurs MCP"],
   ["/status", "État de Claude Code", "Version, compte, modèle, connexion"],
   ["/memory", "Mémoire", "Fichiers CLAUDE.md chargés"],
