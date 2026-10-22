@@ -1,6 +1,6 @@
 import { useRef, type Dispatch, type SetStateAction } from "react"
 import { toast } from "sonner"
-import { api, type Caps, type Data, type Group, type Hit, type Item, type Project, type Session, type VGroup } from "@/lib/api"
+import { api, type Caps, type Data, type Group, type Hit, type Item, type Project, type Session, type Snippet, type VGroup } from "@/lib/api"
 import { exportMarkdown } from "@/lib/export"
 import { size, tilde } from "@/lib/format"
 import { withChoice, type Choice } from "@/lib/models"
@@ -40,12 +40,13 @@ export function useAppActions(c: {
   view: View
   args: string
   choice: Choice
+  snippets: Snippet[]
   setAsk: (a: Ask | null) => void
   setPrompt: (a: PromptAsk | null) => void
   setCompose: (a: ComposeAsk | null) => void
   setPicker: (p: Pick | null) => void
 }) {
-  const { data, setData, reload, home, q, setQ, go, read, now, live, waiting, hitMap, tags, vgroups, favs, vg, picked, setPicked, selected, everyId, view, args, choice, setAsk, setPrompt, setCompose, setPicker } = c
+  const { data, setData, reload, home, q, setQ, go, read, now, live, waiting, hitMap, tags, vgroups, favs, vg, picked, setPicked, selected, everyId, view, args, choice, snippets, setAsk, setPrompt, setCompose, setPicker } = c
   const lastPick = useRef<string | null>(null) // dernière case cochée, début d'une sélection de plage
   const gkey = (x: VGroup) => groupKey(x, home)
   // Une action : toast de progression puis de résultat, erreurs jamais muettes, liste rechargée.
@@ -337,6 +338,7 @@ export function useAppActions(c: {
     // Un fournisseur inconnu ou une réponse ancienne : aucune fonction optionnelle (l'interface reste sobre plutôt que fausse).
     caps: (s) => data?.providers?.find((p) => p.id === (s.provider ?? "claude"))?.caps ?? NO_CAPS,
     defaultChoice: choice,
+    snippets,
     startSession: async (project, prompt, c) => {
       const t = targets().find((x) => x.project === project)
       if (!t) return false

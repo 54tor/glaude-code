@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react"
 import { Brain, FileText, FolderSearch, Globe, Send } from "lucide-react"
 import { toast } from "sonner"
-import { api, type MemFile, type MemProject, type Snippet } from "@/lib/api"
+import { api, type MemFile, type MemProject } from "@/lib/api"
 import { tilde } from "@/lib/format"
-import { argAt, body } from "@/lib/commands"
+import { argAt } from "@/lib/commands"
 import { isSend } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -19,6 +19,7 @@ import { useActions } from "./actions"
 import type { Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
 import { Choose } from "./Choose"
+import { SnippetMenu } from "./SnippetMenu"
 
 // Dossier où lancer une nouvelle session : celui d'une de ses sessions (le serveur en tire le dossier de travail).
 export type Target = { label: string; project: string; dir: string; id: string; cwd?: string } // cwd : dossier choisi à la main (sans session existante)
@@ -37,15 +38,15 @@ export type ComposeAsk = {
 }
 
 // Saisie d'un message, éventuellement composé à partir de snippets et d'entrées de mémoire.
-export function Compose({ ask, snippets, onClose }: { ask: ComposeAsk | null; snippets: Snippet[]; onClose: () => void }) {
+export function Compose({ ask, onClose }: { ask: ComposeAsk | null; onClose: () => void }) {
   return (
     <Dialog open={!!ask} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-2xl">{ask && <Form key={ask.id} ask={ask} snippets={snippets} onClose={onClose} />}</DialogContent>
+      <DialogContent className="sm:max-w-2xl">{ask && <Form key={ask.id} ask={ask} onClose={onClose} />}</DialogContent>
     </Dialog>
   )
 }
 
-function Form({ ask, snippets, onClose }: { ask: ComposeAsk; snippets: Snippet[]; onClose: () => void }) {
+function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
   const a = useActions()
   const [text, setText] = useState(ask.initial ?? "")
   const [choice, setChoice] = useState(ask.choice)
@@ -88,10 +89,7 @@ function Form({ ask, snippets, onClose }: { ask: ComposeAsk; snippets: Snippet[]
     })
   }
   // Une commande : son corps, sans en-tête ; son premier $ARGUMENTS est sélectionné pour être remplacé en tapant.
-  const insert = async (key: string) => {
-    const r = await api.snippet(key)
-    if (r.text === undefined) return void toast.error(r.error ?? "Snippet illisible")
-    const t = body(r.text)
+  const insert = (t: string) => {
     const el = area.current
     const i = el?.selectionStart ?? text.length
     put(t)
@@ -195,23 +193,7 @@ function Form({ ask, snippets, onClose }: { ask: ComposeAsk; snippets: Snippet[]
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          {snippets.length > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <FileText /> Insérer un snippet
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent onCloseAutoFocus={(e) => e.preventDefault()} align="start" className="max-h-72 w-72 overflow-y-auto">
-                {snippets.map((s) => (
-                  <DropdownMenuItem key={s.key} onSelect={() => insert(s.key)} title={s.description || s.path}>
-                    <FileText /> <span className="truncate">{s.command}</span>
-                    {s.scope && <span className="ml-auto truncate text-xs text-muted-foreground">{tilde(s.project, a.home)}</span>}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          <SnippetMenu onInsert={insert} />
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <ModelPicker value={choice} onChange={setChoice} className="max-w-80" />

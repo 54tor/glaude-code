@@ -173,6 +173,7 @@ export default function App() {
     view,
     args,
     choice,
+    snippets: snips?.files ?? [],
     setAsk,
     setPrompt,
     setCompose,
@@ -350,7 +351,7 @@ export default function App() {
       <DirPicker pick={picker} home={home} />
       <Confirm ask={ask} onClose={() => setAsk(null)} />
       <Prompt ask={prompt} onClose={() => setPrompt(null)} />
-      <Compose ask={compose} snippets={snips?.files ?? []} onClose={() => setCompose(null)} />
+      <Compose ask={compose} onClose={() => setCompose(null)} />
     </ActionsCtx.Provider>
   )
 }
