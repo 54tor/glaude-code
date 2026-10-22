@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -39,7 +38,7 @@ func tabsFile() string { return filepath.Join(cfgDir(), "gld-web-tabs.json") }
 
 // openSessions : les sessions interactives ouvertes (`claude agents`), hors tâches de fond (remplaçable dans les tests).
 var openSessions = func() []string {
-	out, _ := withPath(exec.Command("claude", "agents", "--json")).Output()
+	out, _ := claudeAgents()
 	var a []struct{ SessionId, Kind string }
 	json.Unmarshal(out, &a)
 	var ids []string
