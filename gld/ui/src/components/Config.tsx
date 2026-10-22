@@ -12,6 +12,7 @@ import { HealthTab, HooksTab, McpTab, PrecedenceTab } from "./ConfigTabs1"
 import { ProjectsTab } from "./ConfigProjects"
 import { RawTab } from "./ConfigRaw"
 import { BackupsTab, PermsTab, SettingsTab } from "./ConfigTabs2"
+import { SyncTab } from "./ConfigSync"
 
 // Configuration de Claude Code : réglages utilisateur, de projet et locaux. Lecture (précédence, santé, hooks, MCP) et
 // modifications limitées aux réglages simples, variables d'environnement, plugins et permissions, avec aperçu et sauvegarde.
@@ -80,6 +81,7 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
                 <TabsTrigger value="reglages">Réglages</TabsTrigger>
                 <TabsTrigger value="json">JSON</TabsTrigger>
                 <TabsTrigger value="sauvegardes">Sauvegardes ({ov.backups.length})</TabsTrigger>
+                <TabsTrigger value="sync">Synchroniser</TabsTrigger>
               </TabsList>
             </div>
             <ScrollBar orientation="horizontal" />
@@ -130,6 +132,9 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
           <TabsContent value="json">
             {fileSelect}
             <RawTab file={fileId} version={ov.backups.length} proposeRaw={proposeRaw} />
+          </TabsContent>
+          <TabsContent value="sync">
+            <SyncTab />
           </TabsContent>
           <TabsContent value="sauvegardes">
             <BackupsTab backups={ov.backups} onRestored={reload} label={label} />
