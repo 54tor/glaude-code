@@ -3,7 +3,8 @@
 # make windows : gld.exe pour Windows 64 bits (sans bash, sans jq ; l'interface est construite avant)
 # make macos   : gld-darwin-arm64 pour macOS Apple Silicon (M1 et suivants ; l'interface est construite avant, sans cgo)
 # make test    : tests Go (le dossier dist peut être vide : seul l'interface en dépend)
-# make check   : go vet + tests Go + tsc + eslint + tests de l'interface (rien n'est modifié)
+# make check   : go vet + tests Go (-race) + tsc + eslint + tests de l'interface (rien n'est modifié)
+# make cover   : tests Go sous -race avec couverture ; échoue sous COVER_MIN % (relevé : 80,7 % le 2026-10-22)
 # make fuzz    : chaque cible de fuzzing de gld pendant FUZZTIME (60s par défaut) ; corpus dans le cache de go
 BIN ?= $(HOME)/.local/bin
 INDEX := gld/ui/dist/index.html
@@ -31,12 +32,17 @@ macos: ui
 test:
 	cd gld && go test -count=1 .
 
+COVER_MIN ?= 80
+cover:
+	cd gld && go test -race -count=1 -covermode=atomic -coverprofile=cover.out . | tee cover.txt
+	@awk -v min=$(COVER_MIN) 'match($$0, /coverage: [0-9.]+%/) { c = substr($$0, RSTART + 10, RLENGTH - 11) } END { print "couverture : " c " % (plancher " min " %)"; exit (c == "" || c + 0 < min + 0) }' gld/cover.txt
+
 FUZZTIME ?= 60s
 fuzz:
 	cd gld && for f in $$(go test -list '^Fuzz' . | grep '^Fuzz'); do go test -run '^$$' -fuzz "^$$f$$" -fuzztime $(FUZZTIME) -parallel 4 . || exit 1; done
 
 check:
-	cd gld && go vet ./... && go test -count=1 .
+	cd gld && go vet ./... && go test -race -count=1 .
 	cd gld/ui && { [ -d node_modules ] || npm ci; } && npx tsc --noEmit && npx eslint . && npm test
 
-.PHONY: ui install windows macos test check fuzz
+.PHONY: ui install windows macos test check fuzz cover

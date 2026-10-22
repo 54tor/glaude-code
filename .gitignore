@@ -5,3 +5,6 @@ gld/gld-darwin-arm64
 # L'interface compilée n'est pas versionnée (make install la construit) ; le dossier reste pour que go:embed compile
 gld/ui/dist/*
 !gld/ui/dist/.gitkeep
+gld/cover.out
+gld/cover.txt
+gld/ui/coverage/
