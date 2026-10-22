@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { Brain, FileText, Globe, Send } from "lucide-react"
+import { Brain, FileText, FolderSearch, Globe, Send } from "lucide-react"
 import { toast } from "sonner"
 import { api, type MemFile, type MemProject, type Snippet } from "@/lib/api"
 import { tilde } from "@/lib/format"
@@ -20,7 +20,7 @@ import { ModelPicker } from "./ModelPicker"
 import { Choose } from "./Choose"
 
 // Dossier où lancer une nouvelle session : celui d'une de ses sessions (le serveur en tire le dossier de travail).
-export type Target = { label: string; project: string; dir: string; id: string }
+export type Target = { label: string; project: string; dir: string; id: string; cwd?: string } // cwd : dossier choisi à la main (sans session existante)
 
 // Ce que la fenêtre de saisie envoie : un message de reprise, ou le prompt d'une nouvelle session.
 export type ComposeAsk = {
@@ -49,7 +49,8 @@ function Form({ ask, snippets, onClose }: { ask: ComposeAsk; snippets: Snippet[]
   const [text, setText] = useState(ask.initial ?? "")
   const [choice, setChoice] = useState(ask.choice)
   const [target, setTarget] = useState(0)
-  const tgt = ask.targets?.[target]
+  const [custom, setCustom] = useState<Target | null>(null) // dossier choisi dans l'explorateur
+  const tgt = custom ?? ask.targets?.[target]
   const project = tgt?.project ?? ask.project
   const [mem, setMem] = useState<{ global: MemFile[]; projects: MemProject[] } | null>(null)
   const area = useRef<HTMLTextAreaElement>(null)
@@ -117,17 +118,27 @@ function Form({ ask, snippets, onClose }: { ask: ComposeAsk; snippets: Snippet[]
         <DialogTitle>{ask.title}</DialogTitle>
         <DialogDescription className="truncate">{ask.subtitle}</DialogDescription>
       </DialogHeader>
-      {ask.targets && ask.targets.length > 1 && (
+      {ask.targets && (
         <div className="flex items-center gap-2 text-sm">
           <span className="shrink-0 text-muted-foreground">Dossier</span>
           <Choose
-            value={String(target)}
-            onChange={(v) => setTarget(Number(v))}
-            options={ask.targets.map((t, i) => [String(i), t.label] as const)}
+            value={custom ? "custom" : String(target)}
+            onChange={(v) => (v === "custom" ? null : (setCustom(null), setTarget(Number(v))))}
+            options={[...ask.targets.map((t, i) => [String(i), t.label] as const), ...(custom ? [["custom", custom.label] as const] : [])]}
             label="Dossier de la nouvelle session"
             size="default"
             className="min-w-0 flex-1"
           />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={async () => {
+              const p = await a.pickDir("Dossier de la nouvelle session", tgt?.project ?? a.home)
+              if (p) setCustom({ label: tilde(p, a.home), project: p, dir: "", id: "", cwd: p })
+            }}
+          >
+            <FolderSearch /> Autre dossier…
+          </Button>
         </div>
       )}
       <textarea

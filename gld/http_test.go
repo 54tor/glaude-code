@@ -278,6 +278,8 @@ func TestHTTPLancements(t *testing.T) {
 	status(t, h, "POST", "/new-session", "{", 400)
 	ok(t, h, "/new-session", `{"dir":"-p","id":"../x","prompt":"p"}`, false, "session invalide")
 	ok(t, h, "/new-session", `{"dir":"-p","id":"`+id1+`","prompt":"p","args":"a;b"}`, false, "option refusée")
+	ok(t, h, "/new-session", `{"cwd":"relatif","prompt":"p"}`, false, "dossier invalide")
+	ok(t, h, "/new-session", `{"cwd":"/n/existe/pas/xyz","prompt":"p"}`, false, "dossier du projet introuvable")
 	ok(t, h, "/new-session", `{"dir":"-p","id":"`+id1+`","prompt":" "}`, false, "prompt vide")
 	ok(t, h, "/new-session", `{"dir":"-p","id":"`+id1+`","prompt":"`+strings.Repeat("x", 33<<10)+`"}`, false, "trop long")
 	ok(t, h, "/new-session", `{"dir":"-q","id":"`+id2+`","prompt":"p"}`, false, "introuvable")
