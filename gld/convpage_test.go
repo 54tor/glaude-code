@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // Pagination par la fin : quels que soient la taille des blocs lus et celle des pages, les pages mises bout à bout
@@ -53,5 +54,44 @@ func TestConvPage(t *testing.T) {
 				t.Fatalf("chunk %d limit %d : %d messages au lieu de %d", chunk, limit, len(got), len(want))
 			}
 		}
+	}
+}
+
+// Message démesuré : la page n'en donne que le début, et les morceaux de /conv-text mis bout à bout redonnent le texte
+// exact, sans couper un caractère multioctet.
+func TestConvTextChunks(t *testing.T) {
+	defer func(old int) { msgCap = old }(msgCap)
+	msgCap = 10
+	text := "début " + strings.Repeat("é€x", 20) + " fin"
+	line := fmt.Sprintf(`{"type":"assistant","message":{"content":%q}}`+"\n", text)
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	if err := os.WriteFile(p, []byte(`{"type":"user","message":{"content":"q"}}`+"\n"+line), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ms, _, _, err := convPage(p, false, 0, 10)
+	if err != nil || len(ms) != 2 {
+		t.Fatalf("page : %v %d", err, len(ms))
+	}
+	capMsgs(ms)
+	m := ms[1]
+	if m.Len != len(text) || m.Cut == 0 || len(m.T) > msgCap || m.T+text[m.Cut:] != text {
+		t.Fatalf("coupe : len=%d cut=%d t=%q", m.Len, m.Cut, m.T)
+	}
+	got, from := m.T, m.Cut
+	for steps := 0; from != 0; steps++ {
+		part, next, err := convText(p, m.O, m.N, false, from)
+		if err != nil || steps > 100 || !utf8.ValidString(part) || part == "" {
+			t.Fatalf("morceau à %d : %v %q", from, err, part)
+		}
+		got, from = got+part, next
+	}
+	if got != text {
+		t.Fatalf("recollé : %q", got)
+	}
+	if ms[0].Cut != 0 || ms[0].Len != 0 {
+		t.Fatalf("message court coupé : %+v", ms[0])
+	}
+	if _, _, err := convText(p, m.O, 9, false, 0); err == nil {
+		t.Fatal("rang hors ligne accepté")
 	}
 }

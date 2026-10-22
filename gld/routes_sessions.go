@@ -186,10 +186,28 @@ func routesSessions(mux *http.ServeMux) {
 				writeJSON(w, 500, map[string]any{})
 				return
 			}
+			capMsgs(msgs)
 			writeJSON(w, 200, map[string]any{"msgs": msgs, "start": start, "more": more})
 			return
 		}
 		writeJSON(w, 200, map[string]any{"msgs": conv(p, q.Get("tools") == "1")})
+	})
+	mux.HandleFunc("GET /conv-text", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		p, ok := transcript(q.Get("dir"), q.Get("id"))
+		o, e1 := strconv.ParseInt(q.Get("o"), 10, 64)
+		n, e2 := strconv.Atoi(q.Get("n"))
+		from, e3 := strconv.Atoi(q.Get("from"))
+		if !ok || e1 != nil || e2 != nil || e3 != nil {
+			writeJSON(w, 404, map[string]any{})
+			return
+		}
+		t, next, err := convText(p, o, n, q.Get("tools") == "1", from)
+		if err != nil {
+			writeJSON(w, 404, map[string]any{})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"t": t, "cut": next})
 	})
 	mux.HandleFunc("GET /info", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := transcript(r.URL.Query().Get("dir"), r.URL.Query().Get("id"))

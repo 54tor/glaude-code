@@ -1,8 +1,11 @@
-import { memo } from "react"
+import { memo, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { CornerDownRight, Wrench } from "lucide-react"
-import { type Msg } from "@/lib/api"
+import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
+import { api, type Msg } from "@/lib/api"
+import { size } from "@/lib/format"
 import { CompactSummary, isCompactSummary, isTagged, Tagged } from "./Tagged"
 
 // Messages de Claude : Markdown (tableaux GFM compris). react-markdown n'interprète jamais de HTML brut
@@ -57,7 +60,9 @@ function UserText({ t }: { t: string }) {
 }
 
 // Mémoïsé (voir plus bas) : la conversation se redessine pour l'état de la session, pas pour chacun de ses messages.
-function MessageView({ m, conv }: { m: Msg; conv?: { dir: string; id: string } }) {
+type Conv = { dir: string; id: string; tools?: boolean }
+
+function MessageView({ m, conv }: { m: Msg; conv?: Conv }) {
   const title = m.ts ? new Date(m.ts).toLocaleString("fr-FR") : undefined
   // Image de la conversation : relue à la demande dans le transcript (GET /conv-image), jamais embarquée dans la liste des messages.
   if (m.img && conv) {
@@ -108,4 +113,39 @@ function MessageView({ m, conv }: { m: Msg; conv?: { dir: string; id: string } }
   )
 }
 
-export const Message = memo(MessageView, (a, b) => a.m === b.m && a.conv?.dir === b.conv?.dir && a.conv?.id === b.conv?.id)
+// Message démesuré (coupé par le serveur) : affiché par morceaux, chacun à la demande.
+function CutMessage({ m, conv }: { m: Msg; conv?: Conv }) {
+  const [more, setMore] = useState({ t: "", cut: m.cut ?? 0 })
+  const [busy, setBusy] = useState(false)
+  const next = async () => {
+    if (!conv) return
+    setBusy(true)
+    try {
+      const r = await api.convText(conv, !!conv.tools, m, more.cut)
+      setMore((p) => ({ t: p.t + r.t, cut: r.cut }))
+    } catch {
+      toast.error("Suite du message illisible")
+    } finally {
+      setBusy(false)
+    }
+  }
+  const left = Math.max(1, Math.round(((m.len ?? 0) - more.cut) / 1024))
+  return (
+    <>
+      <MessageView m={more.t ? { ...m, t: m.t + more.t } : m} conv={conv} />
+      {more.cut > 0 && conv && (
+        <div className={m.r === "user" ? "flex justify-end" : ""}>
+          <Button variant="outline" size="sm" disabled={busy} onClick={next}>
+            Afficher la suite · {size(left)} restants
+          </Button>
+        </div>
+      )}
+    </>
+  )
+}
+
+function MessageOrCut(p: { m: Msg; conv?: Conv }) {
+  return p.m.cut ? <CutMessage {...p} /> : <MessageView {...p} />
+}
+
+export const Message = memo(MessageOrCut, (a, b) => a.m === b.m && a.conv?.dir === b.conv?.dir && a.conv?.id === b.conv?.id && a.conv?.tools === b.conv?.tools)
