@@ -582,7 +582,17 @@ func TestTerminalDesactiveParDefaut(t *testing.T) {
 		t.Fatalf("term-open actif sans réglage : %d %s", rec.Code, rec.Body.String())
 	}
 	t.Setenv("GLD_WEB_TERMINAL", "1")
-	if r := getRaw(h, "/term-ws?t=x"); r.Code != 403 { // sans Origin
-		t.Fatalf("term-ws sans Origin : %d", r.Code)
+	if r := getRaw(h, "/term-ws?t=x"); r.Code != 403 || !strings.Contains(r.Body.String(), "forbidden") { // sans Origin
+		t.Fatalf("term-ws sans Origin : %d %s", r.Code, r.Body.String())
+	}
+	// Derrière la passerelle, l'Origin a été vérifié puis retiré : seul le jeton du terminal compte encore.
+	t.Setenv(childTokenEnv, "secret")
+	req = httptest.NewRequest("GET", "/term-ws?t=x", nil)
+	req.Host = testHost
+	req.Header.Set(childHeader, "secret")
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != 403 || !strings.Contains(rec.Body.String(), "jeton") {
+		t.Fatalf("term-ws derrière la passerelle : %d %s", rec.Code, rec.Body.String())
 	}
 }
