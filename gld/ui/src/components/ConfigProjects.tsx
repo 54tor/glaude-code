@@ -29,7 +29,7 @@ const Badge = ({ n, label }: { n: number; label: string }) =>
 
 // Ce que chaque projet configure en propre, en plus des réglages de l'utilisateur : réglages (projet et local), règles de
 // permission, hooks, serveurs MCP, règles .claude/rules, skills et documentation. onEdit ouvre l'onglet qui permet de les modifier.
-export function ProjectsTab({ home, version, gone, onAddDir, onEdit, onTransfer, onRemove }: { home: string; version: number; onAddDir: (file: string, project: string) => void; gone: (file: string, kind: string, rule: string) => boolean; onEdit: (file: string, tab: string) => void; onRemove: (file: string, kind: string, rule: string) => void; onTransfer: (file: string, kind: string, rule: string, move: boolean) => void }) {
+export function ProjectsTab({ home, version, gone, onAddDir, suggest, onEdit, onTransfer, onRemove }: { home: string; version: number; onAddDir: (file: string, project: string, dir?: string) => void; suggest: (project: string, taken: string[]) => string[]; gone: (file: string, kind: string, rule: string) => boolean; onEdit: (file: string, tab: string) => void; onRemove: (file: string, kind: string, rule: string) => void; onTransfer: (file: string, kind: string, rule: string, move: boolean) => void }) {
   const [list, setList] = useState<ProjectCfg[] | null>(null)
   const [all, setAll] = useState(false)
   const [q, setQ] = useState("")
@@ -94,9 +94,21 @@ export function ProjectsTab({ home, version, gone, onAddDir, onEdit, onTransfer,
                       <Button size="xs" variant="ghost" onClick={() => onEdit(p.files.find((x) => x.id[0] === "p")?.id ?? "p/" + p.dir, "permissions")}>
                         Gérer…
                       </Button>
-                      <Button size="xs" variant="ghost" title="Ajoute un dossier accessible à Claude dans ce projet (réglages locaux, non versionnés)" onClick={() => onAddDir("l/" + p.dir, p.project)}>
-                        <FolderPlus /> Ajouter un dossier…
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="xs" variant="ghost" title="Ajoute un dossier accessible à Claude dans ce projet (réglages locaux, non versionnés)">
+                            <FolderPlus /> Ajouter un dossier…
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-72">
+                          {suggest(p.project, (p.perms.additionalDirectories ?? []).map((r) => r.rule)).map((d) => (
+                            <DropdownMenuItem key={d} onSelect={() => onAddDir("l/" + p.dir, p.project, d)}>
+                              <FolderPlus /> <span className="truncate">{tilde(d, home)}</span>
+                            </DropdownMenuItem>
+                          ))}
+                          <DropdownMenuItem onSelect={() => onAddDir("l/" + p.dir, p.project)}>Choisir un dossier…</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                     {nRules === 0 ? (
                       <p className="text-xs text-muted-foreground">Aucune : ce projet suit vos règles personnelles.</p>

@@ -86,9 +86,15 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
               version={ov.backups.length} // chaque écriture ajoute une sauvegarde : la vue se relit, sans perdre ce qui est déplié
               home={home}
               gone={gone}
-              onAddDir={async (file, project) => {
-                const p = await a.pickDir("Ajouter un dossier à " + tilde(project, home), project)
+              onAddDir={async (file, project, dir) => {
+                const p = dir ?? (await a.pickDir("Ajouter un dossier à " + tilde(project, home), project))
                 if (p) await propose({ file, op: "add", path: ["permissions", "additionalDirectories"], value: p })
+              }}
+              // Autres dossiers des projets auxquels appartient ce dossier, sans ceux déjà autorisés (~/ et chemins absolus).
+              suggest={(project, taken) => {
+                const abs = (r: string) => (r.startsWith("~/") ? home + r.slice(1) : r).replace(/\/$/, "")
+                const have = new Set(taken.map(abs))
+                return [...new Set(a.projects.filter((x) => x.dirs.includes(project)).flatMap((x) => x.dirs))].filter((d) => d !== project && !have.has(d))
               }}
               onRemove={(file, kind, rule) => propose({ file, op: "remove", path: ["permissions", kind], value: rule })}
               onTransfer={transfer}

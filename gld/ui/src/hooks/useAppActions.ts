@@ -1,12 +1,12 @@
 import { useRef, type Dispatch, type SetStateAction } from "react"
 import { toast } from "sonner"
-import { api, type Data, type Group, type Hit, type Item, type Session, type VGroup } from "@/lib/api"
+import { api, type Data, type Group, type Hit, type Item, type Project, type Session, type VGroup } from "@/lib/api"
 import { exportMarkdown } from "@/lib/export"
 import { size, tilde } from "@/lib/format"
 import { withChoice, type Choice } from "@/lib/models"
 import { byDate, cut, groupKey, HOT, plural, type View } from "@/lib/sessionsView"
 import type { Route } from "@/lib/route"
-import type { Actions, GroupActions, Row } from "@/components/actions"
+import type { Actions, GroupActions, ProjectActions, Row } from "@/components/actions"
 import type { Ask } from "@/components/Confirm"
 import type { ComposeAsk, Target } from "@/components/Compose"
 import type { Pick } from "@/components/DirPicker"
@@ -97,6 +97,51 @@ export function useAppActions(c: {
     }
   }
   const saveGroups = (groups: VGroup[]) => saveStore(groups, [...favs])
+  // Projets : ensembles nommés de dossiers de travail (un dossier peut appartenir à plusieurs).
+  const projects = data?.projects ?? []
+  const saveProjects = async (next: Project[]) => {
+    setData((d) => d && { ...d, projects: next })
+    const r = await api.post("/vgroups", { groups: vgroups, favs: [...favs], tags, projects: next })
+    if (!r.ok) {
+      toast.error(r.out)
+      await reload()
+    }
+  }
+  const projectActs: ProjectActions = {
+    add: (dir, name) => {
+      const put = (n: string) => {
+        const has = projects.some((p) => p.name === n)
+        saveProjects(has ? projects.map((p) => (p.name === n && !p.dirs.includes(dir) ? { ...p, dirs: [...p.dirs, dir] } : p)) : [...projects, { name: n, dirs: [dir] }])
+        toast.success(`${tilde(dir, home)} dans « ${n} »`)
+      }
+      if (name !== null) put(name)
+      else
+        named("Nouveau projet", "", "Créer", (n) => {
+          const t = n.trim()
+          if (projects.some((p) => p.name === t)) toast.error(`Le projet « ${t} » existe déjà`)
+          else put(t)
+        })
+    },
+    remove: (dir, name) => saveProjects(projects.map((p) => (p.name === name ? { ...p, dirs: p.dirs.filter((d) => d !== dir) } : p))),
+    rename: (p) =>
+      named(`Renommer le projet « ${p.name} »`, p.name, "Renommer", (n) => {
+        const t = n.trim()
+        if (t === p.name) return
+        if (projects.some((x) => x.name === t)) return void toast.error(`Le projet « ${t} » existe déjà`)
+        saveProjects(projects.map((x) => (x.name === p.name ? { ...x, name: t } : x)))
+        go({ kind: "project", name: t })
+      }),
+    delete: (p) =>
+      setAsk({
+        title: `Supprimer le projet « ${p.name} » ?`,
+        body: "Seul le regroupement disparaît : les dossiers et leurs sessions restent.",
+        confirm: "Supprimer",
+        run: async () => {
+          await saveProjects(projects.filter((x) => x.name !== p.name))
+          go({ kind: "recent" })
+        },
+      }),
+  }
   const same = (x: VGroup, y: VGroup) => x.name === y.name && x.project === y.project
   const named = (title: string, value: string, confirm: string, run: (v: string) => void, auto?: PromptAsk["auto"]) => setPrompt({ title, value, confirm, run, auto })
   // Un groupe est un sous-dossier virtuel : il ne contient que des sessions de son dossier de travail.
@@ -242,6 +287,8 @@ export function useAppActions(c: {
     waiting,
     hit: (id) => hitMap?.get(id),
     vgroups,
+    projects,
+    projectActs,
     favs,
     tags,
     filterTag: (t) => setQ("#" + t),
