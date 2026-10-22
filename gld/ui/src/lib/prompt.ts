@@ -139,6 +139,7 @@ function multiSelect(lines: string[], above: (at: number) => string): Prompt | n
   if (lines.some((l) => /do you want to|would you like to|proceed\?|tab to amend|bash command/i.test(l))) return null
   const head = lines.findIndex((l) => /^\s*←.*Submit.*→\s*$/.test(l))
   if (head < 0 || !/enter to select/i.test(lines.slice(-3).join("\n"))) return null
+  const off = head // `above` indexe les lignes d'origine
   lines = lines.slice(head)
   type Row = { at: number; kind: "box" | "submit" | "other"; n?: string; label: string; checked?: boolean }
   const rows: Row[] = []
@@ -170,5 +171,5 @@ function multiSelect(lines: string[], above: (at: number) => string): Prompt | n
         ? [{ label: `${r.n}. ${r.label}`, keys: [r.n!, "Enter"], text: FREE.test(r.label), chat: CHAT.test(r.label) }]
         : []
   )
-  return { question: above(boxes[0].at), options, submit: [...reach(submit), "Enter"] }
+  return { question: above(boxes[0].at + off), options, submit: [...reach(submit), "Enter"] }
 }
