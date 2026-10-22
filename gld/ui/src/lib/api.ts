@@ -116,6 +116,8 @@ export type Account = {
 export type Msg = { r: "user" | "assistant" | "tool"; t: string; ts?: string; o?: number; n?: number; img?: string; k?: number }
 export type Ls = { path: string; parent: string; dirs: string[]; sep: string; error?: string }
 export type Result = { ok: boolean; out: string }
+// Dossiers de configuration Claude (homes.go) : current "" = celui du processus principal (main).
+export type HomesInfo = { current: string; main: string; homes: { name: string; dir: string; running: boolean }[] }
 
 const enc = encodeURIComponent
 
@@ -133,6 +135,7 @@ export const api = {
       `/conv?dir=${enc(s.dir)}&id=${s.id}${tools ? "&tools=1" : ""}${page ? `&limit=${page.limit}&before=${page.before ?? 0}` : ""}`
     ),
   ls: (path: string) => get<Ls>(`/ls?path=${enc(path)}`),
+  homes: () => get<HomesInfo>("/homes"),
   snippets: () => get<{ dir: string; files: Snippet[]; scopes: SnipScope[] }>("/snippet-list"),
   snippet: (key: string) => get<{ text?: string; error?: string; missing?: boolean }>(`/snippet?key=${enc(key)}`),
   memory: () => get<{ global: MemFile[]; projects: MemProject[]; targets: MemTarget[] }>("/memory-list"),
