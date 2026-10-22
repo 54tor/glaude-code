@@ -54,27 +54,34 @@ function Hot({ rows, now, ttl }: { rows: Row[]; now: number; ttl: number }) {
           Cache chaud
         </span>
       </Heading>
-      {rows.slice(0, 5).map(({ s }) => {
+      {rows.slice(0, 5).map((row) => {
+        const { s } = row
         const left = Math.max(1, Math.ceil((ttl - (now - s.mtime)) / 60))
         const warn = left <= 10
         return (
-          <button
-            key={s.id}
-            onClick={() => a.read(s)}
-            title={`${s.title}\nCache encore environ ${left} min`}
-            className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm text-foreground/80 transition-colors hover:bg-muted hover:text-foreground"
-          >
-            {warn ? (
-              <AlarmClock className="size-4 shrink-0 text-amber-500" aria-label="cache bientôt expiré" />
-            ) : (
-              <Flame className="size-4 shrink-0 text-orange-500" aria-hidden />
-            )}
-            {a.live.has(s.id) && <span className="size-1.5 shrink-0 rounded-full bg-emerald-500" aria-label="ouverte" />}
-            <span className="flex-1 truncate text-left">{s.title}</span>
-            <span className={cn("shrink-0 text-xs tabular-nums", warn ? "font-medium text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>
-              {left} min
-            </span>
-          </button>
+          <ContextMenu key={s.id}>
+            <ContextMenuTrigger asChild>
+              <button
+                onClick={() => a.read(s)}
+                title={`${s.title}\nCache encore environ ${left} min`}
+                className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm text-foreground/80 transition-colors hover:bg-muted hover:text-foreground"
+              >
+                {warn ? (
+                  <AlarmClock className="size-4 shrink-0 text-amber-500" aria-label="cache bientôt expiré" />
+                ) : (
+                  <Flame className="size-4 shrink-0 text-orange-500" aria-hidden />
+                )}
+                {a.live.has(s.id) && <span className="size-1.5 shrink-0 rounded-full bg-emerald-500" aria-label="ouverte" />}
+                <span className="flex-1 truncate text-left">{s.title}</span>
+                <span className={cn("shrink-0 text-xs tabular-nums", warn ? "font-medium text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>
+                  {left} min
+                </span>
+              </button>
+            </ContextMenuTrigger>
+            <ContextMenuContent className="w-64">
+              <SessionItems M={CM} row={row} full />
+            </ContextMenuContent>
+          </ContextMenu>
         )
       })}
     </>
