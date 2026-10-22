@@ -42,7 +42,7 @@ var tmuxRun = func(stdin string, args ...string) (string, error) {
 
 // sessionPIDs : pid des sessions interactives ouvertes, par id de session (remplaçable dans les tests).
 var sessionPIDs = func() map[string]int {
-	out, err := withPath(exec.Command("claude", "agents", "--json")).Output()
+	out, err := claudeAgents()
 	var a []struct {
 		SessionId, Kind string
 		Pid             int

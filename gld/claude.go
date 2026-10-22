@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 )
 
@@ -148,9 +149,21 @@ func tmuxLauncher() string {
 	return ""
 }
 
+var agentsTimeout = 10 * time.Second // ~130 ms en temps normal
+
+// claudeAgents : la sortie de `claude agents --json`, bornée dans le temps : un claude bloqué (mise à jour, invite) ne fige ni
+// /api ni les boucles de fond, et n'empile pas un processus par rafraîchissement. Une erreur vaut « on ne sait pas ».
+func claudeAgents() ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), agentsTimeout)
+	defer cancel()
+	c := withPath(exec.CommandContext(ctx, "claude", "agents", "--json"))
+	c.WaitDelay = time.Second // un petit-enfant qui garde la sortie ouverte ne bloque pas non plus
+	return c.Output()
+}
+
 // alive : ids des sessions ouvertes, ou nil si `claude agents --json` a échoué (on ne sait pas).
 func alive() map[string]bool {
-	out, err := withPath(exec.Command("claude", "agents", "--json")).Output()
+	out, err := claudeAgents()
 	var a []struct{ SessionId string }
 	if err != nil || json.Unmarshal(out, &a) != nil {
 		return nil // inconnu : liveCheck fait refuser les actions qui en dépendent
@@ -165,7 +178,7 @@ func alive() map[string]bool {
 // waiting : ids des sessions ouvertes qui attendent (interactive « idle », en arrière-plan « blocked »).
 // Une demande d'autorisation en cours n'est pas distinguée d'un tour terminé.
 var waiting = func() []string {
-	out, err := withPath(exec.Command("claude", "agents", "--json")).Output()
+	out, err := claudeAgents()
 	var a []struct{ SessionId, Status, State string }
 	ids := []string{}
 	if err != nil || json.Unmarshal(out, &a) != nil {
