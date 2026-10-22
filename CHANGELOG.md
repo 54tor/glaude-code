@@ -4,6 +4,18 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+### Ajouté
+- Terminal intégré à la session, ajusté à la zone et répercuté sur tmux, saisie active par défaut ; le mode visuel ou terminal est mémorisé dans le navigateur.
+- « Renommer auto » au clic droit d'une session, et titre automatique proposé dans la fenêtre de renommage.
+- Mémoire : changement du type d'une entrée au clic droit, correction automatique d'un front matter invalide depuis la santé de la mémoire.
+- La fusion de mémoire passe par la fenêtre de saisie du prompt.
+
+### Corrigé
+- Confirmations risquées détectées ; réponse libre aux options « Type something » et « Chat about this ».
+- La vue ne défile plus d'elle-même quand Claude attend une réponse.
+- La fusion de mémoire globale démarre dans `~/.claude` et non dans `~`.
+- La fenêtre des instructions chargées ne déborde plus.
+
 ## [0.1.1] - 2026-10-22
 
 ### Ajouté
