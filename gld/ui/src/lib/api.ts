@@ -122,7 +122,7 @@ export type Result = { ok: boolean; out: string }
 // État git d'un dossier (gitstatus.go)
 export type GitState = { branch: string; detached?: boolean; upstream: boolean; ahead: number; behind: number; changed: number; untracked: number }
 // Maintien au chaud d'une session (keepwarm.go) : pings automatiques, comptés et plafonnés.
-export type WarmState = { dir: string; on: boolean; pings: number; max: number; cost: number; lastPing: number; note?: string }
+export type WarmState = { dir: string; on: boolean; pings: number; max: number; lastPing: number; note?: string }
 export type GitRemote = { name: string; url: string }
 export type GitChange = { path: string; status: string; from?: string } // status : « XY » comme git status --short
 // Dossiers de configuration Claude (homes.go) : current "" = celui du processus principal (main).

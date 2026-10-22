@@ -26,6 +26,12 @@ export function KeepWarmButton({ s }: { s: Session }) {
         <Coins /> Maintien actif : arrêter
       </Button>
     )
+  if (!a.live.has(s.id))
+    return (
+      <Button variant="ghost" size="sm" disabled title="Session fermée : seul un ping dans son terminal réchauffe son cache. Rouvrez-la pour la maintenir au chaud.">
+        <Flame /> Maintenir au chaud
+      </Button>
+    )
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -34,7 +40,7 @@ export function KeepWarmButton({ s }: { s: Session }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-80">
-        <DropdownMenuLabel className="whitespace-normal">Dès qu'il reste moins de 5 min de cache, gld envoie un court message à la session. Chaque ping est un tour facturé et apparaît dans la conversation.</DropdownMenuLabel>
+        <DropdownMenuLabel className="whitespace-normal">Dès qu'il reste moins de 5 min de cache, gld envoie un court message dans le terminal de la session. Chaque ping est un tour facturé et apparaît dans la conversation. Le maintien s'arrête si la session est fermée.</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {[3, 6, 12, 24].map((n) => (
           <DropdownMenuItem key={n} onSelect={() => set(s, true, n)}>
@@ -59,7 +65,6 @@ export function KeepWarmBanner({ s }: { s: Session }) {
           <span className="font-medium">Maintien au chaud actif — ça coûte de l'argent.</span>
           <span className="tabular-nums">
             {warm.pings}/{warm.max} ping{warm.pings > 1 ? "s" : ""}
-            {warm.cost > 0 && ` · ${warm.cost.toFixed(3)} $ déjà dépensés`}
           </span>
           <span>un ping part quand il reste moins de 5 min de cache</span>
         </>

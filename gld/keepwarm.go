@@ -2,20 +2,18 @@ package main
 
 // « Maintenir au chaud » : le cache des prompts d'une session expire une heure après son dernier appel (HOT côté interface). Quand il
 // reste moins de 5 minutes, gld envoie lui-même un court message à la session, sans action de l'utilisateur : lire le cache coûte
-// une fraction de ce que coûte le reconstruire. Chaque ping est un vrai tour (il apparaît dans la conversation) : le nombre et le
-// coût en sont comptés, et le maintien s'arrête seul après `Max` pings, ou dès que la session est froide.
+// une fraction de ce que coûte le reconstruire. Chaque ping est un vrai tour (il apparaît dans la conversation) : il est compté, et
+// le maintien s'arrête seul après `Max` pings, dès que la session est froide, ou dès qu'elle est fermée.
+//
+// Seule une session ouverte dans tmux est pinguée : `claude -p --resume` n'a ni les mêmes outils ni le même prompt système que le
+// mode interactif, et ne relit pas son cache (mesuré : 0 token lu, 268 709 réécrits, 102 s après un tour -p).
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"regexp"
-	"strings"
 	"sync"
 	"time"
 )
@@ -29,20 +27,19 @@ const (
 )
 
 type WarmState struct {
-	Dir      string  `json:"dir"`
-	On       bool    `json:"on"`
-	Pings    int     `json:"pings"`    // depuis l'activation
-	Max      int     `json:"max"`      // arrêt automatique après ce nombre de pings
-	Cost     float64 `json:"cost"`     // coût indiqué par claude pour les pings (hors sessions ouvertes dans tmux, non mesuré)
-	LastPing int64   `json:"lastPing"` // secondes Unix
-	Note     string  `json:"note,omitempty"`
+	Dir      string `json:"dir"`
+	On       bool   `json:"on"`
+	Pings    int    `json:"pings"`    // depuis l'activation
+	Max      int    `json:"max"`      // arrêt automatique après ce nombre de pings
+	LastPing int64  `json:"lastPing"` // secondes Unix
+	Note     string `json:"note,omitempty"`
 }
 
 var (
 	warmMu    sync.Mutex
 	warmState = map[string]*WarmState{}
 	warmOnce  sync.Once
-	warmPing  = doPing // remplaçable dans les tests
+	warmPing  = func(id string) error { return sendToSession(id, pingPrompt) } // remplaçable dans les tests
 )
 
 func warmFile() string { return filepath.Join(cfgDir(), "gld-web-keepwarm.json") }
@@ -71,71 +68,7 @@ func warmSave() {
 	}
 }
 
-var modelRe = regexp.MustCompile(`^[\w.\[\]-]{1,80}$`)
-
-// lastModel : le modèle du dernier message de Claude. Le cache dépend du modèle : un ping avec un autre ne réchaufferait rien.
-func lastModel(path string) string {
-	lines := tailLines(path, 1<<20)
-	for i := len(lines) - 1; i >= 0; i-- {
-		if !strings.Contains(string(lines[i]), `"type":"assistant"`) {
-			continue
-		}
-		var l line
-		if json.Unmarshal(lines[i], &l) == nil && l.Message.Model != "" && !strings.HasPrefix(l.Message.Model, "<") && modelRe.MatchString(l.Message.Model) {
-			return l.Message.Model
-		}
-	}
-	return ""
-}
-
-// doPing envoie le ping : par tmux si la session est ouverte dans un terminal, sinon par `claude -p --resume`.
-func doPing(id, path, cwd string, open bool) (cost float64, err error) {
-	if open {
-		return 0, sendToSession(id, pingPrompt)
-	}
-	model := lastModel(path)
-	if model == "" {
-		return 0, errors.New("modèle de la session inconnu")
-	}
-	chatMu.Lock()
-	if chatRun[id] != nil {
-		chatMu.Unlock()
-		return 0, errors.New("Claude répond déjà")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-	cmd := withPath(exec.CommandContext(ctx, "claude", chatArgs([]string{"--model=" + model}, id, "", pingPrompt)...))
-	cmd.Dir = cwd
-	out, _ := cmd.StdoutPipe()
-	if err = cmd.Start(); err != nil {
-		chatMu.Unlock()
-		return 0, err
-	}
-	chatRun[id] = cmd
-	chatMu.Unlock()
-	defer func() {
-		chatMu.Lock()
-		delete(chatRun, id)
-		chatMu.Unlock()
-	}()
-	var failed string
-	saw := relay(out, func(e chatEvent) {
-		if e.Done {
-			cost, failed = e.Cost, e.Error
-		}
-	})
-	werr := cmd.Wait()
-	switch {
-	case failed != "":
-		return cost, errors.New(failed)
-	case !saw:
-		if werr == nil {
-			werr = errors.New("aucun résultat")
-		}
-		return cost, werr
-	}
-	return cost, nil
-}
+const closedNote = "session fermée : un ping hors du terminal ne réchaufferait pas son cache, maintien arrêté"
 
 // warmTick : un passage sur les sessions maintenues. now est injecté pour les tests.
 func warmTick(now time.Time) {
@@ -150,10 +83,10 @@ func warmTick(now time.Time) {
 	if len(ids) == 0 {
 		return
 	}
-	mt, cwd := map[string]float64{}, map[string]string{}
+	mt := map[string]float64{}
 	for _, g := range sessions() {
 		for _, s := range g.Sessions {
-			mt[s.ID], cwd[s.ID] = s.Mtime, s.Cwd
+			mt[s.ID] = s.Mtime
 		}
 	}
 	open := liveSessions() // nil : on ne sait pas, on ne pingue pas une session peut-être ouverte
@@ -191,28 +124,25 @@ func warmTick(now time.Time) {
 		if open == nil {
 			continue
 		}
-		isOpen := open[id]
-		if isOpen && !idle[id] {
+		if !open[id] {
+			stop(closedNote)
+			continue
+		}
+		if !idle[id] {
 			continue // elle travaille : son activité garde le cache chaud
 		}
 		if s.Pings >= s.Max {
 			stop("limite de pings atteinte : maintien arrêté")
 			continue
 		}
-		p, ok := transcript(s.Dir, id)
-		if !ok {
-			stop("transcript introuvable : maintien arrêté")
-			continue
-		}
-		cost, err := warmPing(id, p, cwd[id], isOpen)
-		journal("keepwarm %s ouverte=%v : %v", id, isOpen, errOr(err))
+		err := warmPing(id)
+		journal("keepwarm %s : %v", id, errOr(err))
 		warmMu.Lock()
 		s.LastPing = now.Unix()
 		if err != nil {
 			s.Note = "ping en échec : " + cut(err.Error(), 200)
 		} else {
 			s.Pings++
-			s.Cost += cost
 			s.Note = ""
 		}
 		warmSave()
@@ -250,6 +180,12 @@ func routesKeepWarm(mux *http.ServeMux) {
 		if _, ok := transcript(req.Dir, req.ID); !ok {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": "session invalide"})
 			return
+		}
+		if req.On { // hors verrou : `claude agents` prend du temps
+			if open := liveSessions(); open != nil && !open[req.ID] {
+				writeJSON(w, 200, map[string]any{"ok": false, "out": "session fermée : rouvrez-la dans un terminal pour la maintenir au chaud"})
+				return
+			}
 		}
 		warmMu.Lock()
 		defer warmMu.Unlock()
