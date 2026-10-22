@@ -116,7 +116,8 @@ export type Account = {
   statsAt?: string
   models: { model: string; in: number; out: number; cacheRead: number; cacheWrite: number }[]
 }
-export type Msg = { r: "user" | "assistant" | "tool"; t: string; ts?: string; o?: number; n?: number; img?: string; k?: number }
+// cut/len : texte coupé à l'octet cut d'un texte de len octets (message démesuré) ; la suite vient de api.convText.
+export type Msg = { r: "user" | "assistant" | "tool"; t: string; ts?: string; o?: number; n?: number; img?: string; k?: number; cut?: number; len?: number }
 export type Ls = { path: string; parent: string; dirs: string[]; sep: string; error?: string }
 export type Result = { ok: boolean; out: string }
 // État git d'un dossier (gitstatus.go)
@@ -143,6 +144,9 @@ export const api = {
     get<{ msgs: Msg[]; start?: number; more?: boolean }>(
       `/conv?dir=${enc(s.dir)}&id=${s.id}${tools ? "&tools=1" : ""}${page ? `&limit=${page.limit}&before=${page.before ?? 0}` : ""}`
     ),
+  // Suite d'un message coupé, à partir de l'octet from ; cut = 0 : fin du texte.
+  convText: (s: Item, tools: boolean, m: Msg, from: number) =>
+    get<{ t: string; cut: number }>(`/conv-text?dir=${enc(s.dir)}&id=${s.id}&o=${m.o ?? 0}&n=${m.n ?? 0}&from=${from}${tools ? "&tools=1" : ""}`),
   ls: (path: string) => get<Ls>(`/ls?path=${enc(path)}`),
   homes: () => get<HomesInfo>("/homes"),
   keepWarm: () => get<{ items: Record<string, WarmState>; ttl: number; below: number }>("/keepwarm"),

@@ -427,6 +427,9 @@ type Msg struct {
 	// Img : type d'une image du message (le texte est alors vide) ; K : rang du bloc dans le message, pour la relire (GET /conv-image).
 	Img string `json:"img,omitempty"`
 	K   int    `json:"k,omitempty"`
+	// Cut/Len : texte coupé à l'octet Cut d'un texte de Len octets ; la suite se lit par morceaux (GET /conv-text).
+	Cut int `json:"cut,omitempty"`
+	Len int `json:"len,omitempty"`
 }
 
 type blk struct {

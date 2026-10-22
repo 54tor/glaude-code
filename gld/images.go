@@ -81,22 +81,34 @@ func saveImage(b []byte) (string, error) {
 	return p, nil
 }
 
-// convImage extrait le k-ième bloc d'une ligne de transcript (décalage o) si c'est une image encodée en base64.
-func convImage(path string, o int64, k int) ([]byte, string, error) {
-	bad := errors.New("image introuvable")
+// lineAt lit la ligne de transcript qui commence à l'octet o (au plus imgLine octets).
+func lineAt(path string, o int64) ([]byte, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	defer f.Close()
-	if o < 0 || k < 0 || k > 1000 {
-		return nil, "", bad
+	if o < 0 {
+		return nil, errors.New("décalage négatif")
 	}
 	if _, err := f.Seek(o, io.SeekStart); err != nil {
-		return nil, "", bad
+		return nil, err
 	}
 	line, err := bufio.NewReaderSize(io.LimitReader(f, imgLine), 1<<20).ReadBytes('\n')
 	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, err
+	}
+	return line, nil
+}
+
+// convImage extrait le k-ième bloc d'une ligne de transcript (décalage o) si c'est une image encodée en base64.
+func convImage(path string, o int64, k int) ([]byte, string, error) {
+	bad := errors.New("image introuvable")
+	if k < 0 || k > 1000 {
+		return nil, "", bad
+	}
+	line, err := lineAt(path, o)
+	if err != nil {
 		return nil, "", bad
 	}
 	var l struct {

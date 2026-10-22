@@ -6,8 +6,10 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
+	"unicode/utf8"
 )
 
 var convChunk int64 = 4 << 20 // variable pour que les tests puissent la réduire
@@ -78,4 +80,48 @@ func convPage(path string, tools bool, before int64, limit int) (msgs []Msg, sta
 		msgs = append(msgs, groups[i]...)
 	}
 	return msgs, start, start > 0, nil
+}
+
+// msgCap : texte d'un message rendu d'un coup. Au-delà (un message de plusieurs dizaines de Mo), le navigateur se fige
+// à le mettre en page : la page n'en donne que le début et la suite vient à la demande.
+var msgCap = 64 << 10
+
+// capText rend au plus msgCap octets de t à partir de from, coupés sur un début de caractère, et l'octet où reprendre
+// (0 : fin du texte).
+func capText(t string, from int) (string, int) {
+	if from < 0 || from >= len(t) {
+		return "", 0
+	}
+	end := from + msgCap
+	if end >= len(t) {
+		return t[from:], 0
+	}
+	for end > from+1 && !utf8.RuneStart(t[end]) {
+		end--
+	}
+	return t[from:end], end
+}
+
+// capMsgs coupe les textes trop longs d'une page de messages.
+func capMsgs(ms []Msg) {
+	for i := range ms {
+		if n := len(ms[i].T); n > msgCap {
+			ms[i].T, ms[i].Cut = capText(ms[i].T, 0)
+			ms[i].Len = n
+		}
+	}
+}
+
+// convText rend la suite (à partir de l'octet from) du n-ième message de la ligne qui commence à l'octet o.
+func convText(path string, o int64, n int, tools bool, from int) (string, int, error) {
+	line, err := lineAt(path, o)
+	if err != nil {
+		return "", 0, err
+	}
+	ms := lineMsgs(line, tools)
+	if n < 0 || n >= len(ms) {
+		return "", 0, errors.New("message introuvable")
+	}
+	t, next := capText(ms[n].T, from)
+	return t, next, nil
 }
