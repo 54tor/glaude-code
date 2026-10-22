@@ -14,6 +14,10 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - **Maintenir au chaud** ne concerne plus que les sessions ouvertes dans un terminal : un ping `claude -p` ne relit pas le cache du mode interactif (mesuré : 0 token lu, tout le contexte réécrit). Le bouton est grisé sur une session fermée, et le maintien s'arrête si la session est fermée. Le coût cumulé n'est plus affiché (non mesurable par le terminal).
 
 ### Corrigé
+- Un message démesuré (plusieurs dizaines de Mo) ne fige plus le lecteur : la page n'en donne que les 64 premiers Ko, et « Afficher la suite » charge les morceaux suivants (`GET /conv-text`).
+- Écran étroit : le menu ⋯ du lecteur reste accessible à 375 px, Mémoire, Skills et Snippets n'affichent leurs deux panneaux qu'à partir de 1024 px (plus de défilement horizontal à 768 px), dates et compteurs ne débordent plus des lignes, les onglets de Configuration signalent qu'ils défilent.
+- Fermer le lecteur rend le focus clavier à la ligne de la session ; les animations respectent `prefers-reduced-motion` ; sur écran tactile, cases à cocher et petits boutons d'icône reçoivent le doigt sur 24 px.
+- Les entrées de la navigation latérale sont de vrais liens : clic du milieu ou Ctrl+clic ouvrent la vue dans un autre onglet.
 - La recherche ne bloque plus une minute sur un mot fréquent dans un gros transcript : l'extrait n'est calculé que pour le meilleur message de chaque session.
 - Au plus 2 appels à Claude d'aide (brouillons de mémoire, explication des permissions, titres, comptage de tokens) tournent à la fois : une rafale ne lance plus autant de processus et d'appels facturés que de clics.
 - Enregistrer ou copier une mémoire vers un dossier de projet absent (ou « . ») est refusé, au lieu de créer un dossier parasite dans `projects/`.
