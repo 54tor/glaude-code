@@ -1,9 +1,10 @@
 import { useState } from "react"
+import { Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 
-export type Ask = { title: string; value: string; placeholder?: string; optional?: boolean; confirm: string; run: (v: string) => void }
+export type Ask = { title: string; value: string; placeholder?: string; optional?: boolean; confirm: string; run: (v: string) => void; auto?: { label: string; hint: string; run: () => void } }
 
 // Saisie d'un nom (renommer une session, créer ou renommer un groupe).
 export function Prompt({ ask, onClose }: { ask: Ask | null; onClose: () => void }) {
@@ -37,7 +38,21 @@ function Form({ ask, onClose }: { ask: Ask; onClose: () => void }) {
         onFocus={(e) => e.target.select()}
         maxLength={200}
       />
-      <DialogFooter>
+      <DialogFooter className="sm:items-center">
+        {ask.auto && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="sm:mr-auto"
+            title={ask.auto.hint}
+            onClick={() => {
+              onClose()
+              ask.auto!.run()
+            }}
+          >
+            <Sparkles /> {ask.auto.label}
+          </Button>
+        )}
         <Button type="button" variant="outline" onClick={onClose}>
           Annuler
         </Button>

@@ -12,7 +12,6 @@ import {
   Pencil,
   Plus,
   Power,
-  Sparkles,
   SquareTerminal,
   Star,
   StarOff,
@@ -188,9 +187,6 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
       </M.Item>
       <M.Item onSelect={() => a.rename(s)}>
         <Pencil /> Renommer…
-      </M.Item>
-      <M.Item onSelect={() => a.renameAuto(s)}>
-        <Sparkles /> Renommer auto
       </M.Item>
       <M.Item onSelect={() => a.copy(s)}>
         <Copy /> Copier « claude --resume »
