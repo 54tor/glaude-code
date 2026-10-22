@@ -36,4 +36,6 @@ function subscribe(f: () => void) {
   }
 }
 
+export const refreshGit = () => void load()
+
 export const useGit = (): Git => useSyncExternalStore(subscribe, () => state)

@@ -4,6 +4,10 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+### Ajouté
+- **Pousser** : dans la vue dossier, bouton « Pousser » (commits en avance ou branche sans amont) qui propose les remotes du dépôt ; jamais de `--force`, mot de passe des URL masqué, amont posé à la première poussée.
+- **Snippets** dans le champ de nouvelle session de la vue dossier, comme dans la fenêtre de saisie.
+
 ## [0.2.0] - 2026-10-22
 
 ### Ajouté
