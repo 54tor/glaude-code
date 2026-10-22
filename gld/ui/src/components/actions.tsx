@@ -49,6 +49,7 @@ export type Actions = {
   read: (s: Session) => void
   open: (body: { dir: string; id?: string }) => void
   resumeWith: (r: Row) => void // reprendre en envoyant un message
+  startSession: (project: string, prompt: string) => Promise<boolean> // lance tout de suite, avec le modèle et les options par défaut
   newSession: (project: string, initial?: string) => void // nouvelle session dans ce dossier de travail
   copy: (s: Session) => void
   rename: (s: Session) => void

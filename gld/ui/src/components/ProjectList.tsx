@@ -6,7 +6,7 @@ import { segs } from "@/lib/paths"
 import { cn } from "@/lib/utils"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { useActions } from "./actions"
-import { GitBadge } from "./GitBadge"
+import { GitMini } from "./GitBadge"
 import { useGit } from "@/hooks/useGit"
 
 // Projets : ensembles nommés de dossiers de travail, affichés au-dessus de l'arbre des dossiers.
@@ -85,7 +85,7 @@ export function ProjectList({ route, go }: { route: Route; go: (r: Route) => voi
                           >
                             <Folder className="size-4 shrink-0 text-muted-foreground" />
                             <span className="min-w-0 flex-1 truncate">{tilde(d, a.home)}</span>
-                            <GitBadge st={git.status[d]} />
+                            <GitMini states={[git.status[d]]} />
                           </button>
                         </ContextMenuTrigger>
                         <ContextMenuContent className="w-56">

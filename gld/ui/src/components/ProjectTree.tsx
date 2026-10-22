@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { Check, ChevronRight, Folder, GitBranch, FolderInput, FolderOpen, Layers, MessageSquarePlus, Plus, SquareTerminal, Star, Tag, Trash2, TriangleAlert } from "lucide-react"
+import { Check, ChevronRight, FolderInput, Layers, MessageSquarePlus, Plus, SquareTerminal, Star, Tag, Trash2, TriangleAlert } from "lucide-react"
 import type { GitState, VGroup } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { CM, GroupItems } from "./SessionMenu"
@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { sorted, type Node } from "@/lib/tree"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { useActions } from "./actions"
-import { GitBadge } from "./GitBadge"
+import { GitMini, SessionCount } from "./GitBadge"
 import { useGit } from "@/hooks/useGit"
 
 // Clic droit sur un dossier de projet : actions sur ses propres sessions.
@@ -101,7 +101,6 @@ function GroupRow({ vg, n, depth, active, onGroup }: { vg: VGroup; n: Node; dept
 // dont la ligne résume l'état (fichiers modifiés au total) ; cliquer l'ouvre.
 function RepoRows({ repos, status, depth, home }: { repos: string[]; status: Record<string, GitState>; depth: number; home: string }) {
   const [open, setOpen] = useState(false)
-  const dirty = repos.reduce((n, d) => n + (status[d] ? status[d].changed + status[d].untracked : 0), 0)
   const pad = (depth + 1) * 12 + 4
   return (
     <li>
@@ -113,16 +112,16 @@ function RepoRows({ repos, status, depth, home }: { repos: string[]; status: Rec
         style={{ paddingLeft: pad }}
       >
         <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-90")} />
-        <GitBranch className="size-3.5 shrink-0" />
-        <span className="truncate">{repos.length} dépôts git</span>
-        {dirty > 0 && <span className="ml-auto font-medium text-amber-600 tabular-nums dark:text-amber-400">●{dirty}</span>}
+        <span className="truncate">{repos.length} dépôts</span>
+        <span className="ml-auto" />
+        <GitMini states={repos.map((d) => status[d])} />
       </button>
       {open && (
         <ul>
           {repos.map((d) => (
             <li key={d} className="flex h-7 items-center gap-2 pr-2 text-xs text-foreground/80" style={{ paddingLeft: pad + 20 }} title={tilde(d, home)}>
               <span className="min-w-0 flex-1 truncate">{d.split("/").pop()}</span>
-              <GitBadge st={status[d]} />
+              <GitMini states={[status[d]]} />
             </li>
           ))}
         </ul>
@@ -150,7 +149,7 @@ function Item({
   const kids = (!leaf && n.kids.size > 0) || groups.length > 0 || repos.length > 0
   const open = isOpen(n, depth)
   const active = sel === n.key
-  const Icon = active ? FolderOpen : Folder
+  const sessionsOpen = n.g ? n.ss.some((s) => a.live.has(s.id)) : false
   return (
     <li>
       <ContextMenu>
@@ -180,12 +179,11 @@ function Item({
               title={n.g?.project ?? label ?? n.name}
               aria-current={active}
             >
-              <Icon className={cn("size-4 shrink-0", n.g ? "text-muted-foreground" : "text-muted-foreground/50")} />
               <span className="truncate">{label ?? n.name}</span>
               {n.g?.missing && <TriangleAlert className="size-3.5 shrink-0 text-amber-500" aria-label="dossier introuvable" />}
             </button>
-            {n.g && <GitBadge st={git.status[n.g.project]} />}
-            {n.g && <span className="text-xs text-muted-foreground tabular-nums">{n.ss.length}</span>}
+            {n.g && <GitMini states={[git.status[n.g.project], ...repos.map((d) => git.status[d])]} />}
+            {n.g && <SessionCount n={n.ss.length} active={sessionsOpen} />}
           </div>
         </ContextMenuTrigger>
         {n.g && <ProjectItems n={n} />}
