@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { cn } from "@/lib/utils"
+import { cn, isSend } from "@/lib/utils"
 import { LiveAgents, type Live } from "./LiveStatus"
 import { toast } from "sonner"
 import { Bug, Copy, Minimize2, Power, Send, Square } from "lucide-react"
@@ -109,10 +109,10 @@ export function Composer({
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "Enter" && (e.preventDefault(), send())}
+          onKeyDown={(e) => isSend(e) && (e.preventDefault(), send())}
           onPaste={pics.onPaste}
           onDrop={pics.onDrop}
-          placeholder={running ? "Claude répond…" : "Écrire à Claude dans cette session… (Ctrl+Entrée pour envoyer ; une image se colle ou se dépose ici)"}
+          placeholder={running ? "Claude répond…" : "Écrire à Claude dans cette session… (Entrée pour envoyer, Maj+Entrée pour un saut de ligne ; une image se colle ou se dépose ici)"}
           disabled={running}
           rows={2}
           maxLength={32000}
@@ -206,8 +206,7 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
           value={text}
           onChange={(e) => (setText(e.target.value), setSel(0))}
           onKeyDown={(e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === "Enter") return e.preventDefault(), send()
-            if (!sugg.length) return
+            if (!sugg.length) return isSend(e) ? (e.preventDefault(), void send()) : undefined
             if (e.key === "ArrowDown" || e.key === "ArrowUp") {
               e.preventDefault()
               setSel((i) => (i + (e.key === "ArrowDown" ? 1 : sugg.length - 1)) % sugg.length)
@@ -218,7 +217,7 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
           }}
           onPaste={pics.onPaste}
           onDrop={pics.onDrop}
-          placeholder="Écrire dans la session ouverte (tmux)… (Ctrl+Entrée pour envoyer ; une image se colle ou se dépose ici)"
+          placeholder="Écrire dans la session ouverte (tmux)… (Entrée pour envoyer, Maj+Entrée pour un saut de ligne ; une image se colle ou se dépose ici)"
           rows={2}
           maxLength={32000}
           disabled={busy}
