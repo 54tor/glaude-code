@@ -361,8 +361,12 @@ func mergePrompt(keys []string) (string, string, error) {
 		"- écris le résultat dans le premier fichier, puis supprime les autres ;\n" +
 		"- mets à jour MEMORY.md (une ligne par entrée) s'il référence ces fichiers ;\n" +
 		"- montre-moi le résultat et attends mon accord avant d'écrire ou de supprimer quoi que ce soit.\n")
-	if cwd == "" {
-		cwd = home
+	if cwd == "" { // règles globales : le dossier de configuration, plutôt que ~ tout entier (autre dossier à approuver)
+		if c := filepath.Join(home, ".claude"); isDirPath(c) {
+			cwd = c
+		} else {
+			cwd = home
+		}
 	}
 	return b.String(), cwd, nil
 }
@@ -442,4 +446,9 @@ func memTransfer(key, to string, keep bool) (string, error) {
 		}
 	}
 	return dst, nil
+}
+
+func isDirPath(p string) bool {
+	fi, err := os.Stat(p)
+	return err == nil && fi.IsDir()
 }
