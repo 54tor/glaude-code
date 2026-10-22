@@ -10,6 +10,7 @@ import { withChoice } from "@/lib/models"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Ask } from "./Confirm"
+import type { ComposeAsk } from "./Compose"
 import { Markdown } from "./Message"
 import { BLANK_ENTRY, BLANK_RULE, cmpFiles, copy, DEFAULT_SORT, home, newKey, split, type Sort } from "./memoryLib"
 import { Toolbar, SelectionBar } from "./MemoryBars"
@@ -30,6 +31,7 @@ export function Memory({
   q,
   onPick,
   onAsk,
+  onCompose,
   args,
 }: {
   sel: string
@@ -37,6 +39,7 @@ export function Memory({
   q: string
   onPick: (k: string) => void
   onAsk: (a: Ask) => void
+  onCompose: (a: ComposeAsk) => void
   args: string
 }) {
   const [picked, setPicked] = useState(() => new Set<string>())
@@ -229,12 +232,27 @@ export function Memory({
     if (r.text === undefined) return void toast.error(r.error ?? "Fichier illisible")
     copy(r.text, "Contenu")
   }
-  // Fusion par Claude : le serveur rédige le prompt ; on le copie, ou on l'ouvre dans une nouvelle session (Haiku : tâche mécanique).
+  // Fusion par Claude : le serveur rédige le prompt ; on le copie, ou on l'ouvre dans la fenêtre de saisie (relecture, modèle) avant de lancer la session.
   const merge = async (launch: boolean) => {
-    const r = (await api.post("/memory-merge", { keys: [...picked], launch, args: withChoice(args, { model: "haiku", effort: "" }) })) as { ok: boolean; out: string; prompt?: string }
-    if (!launch && r.ok && r.prompt) return void copy(r.prompt, "Prompt de fusion")
-    ;(r.ok ? toast.success : toast.error)(r.out.trim() || (r.ok ? "Session lancée" : "Échec"))
-    if (r.ok) setPicked(new Set())
+    const keys = [...picked]
+    const r = (await api.post("/memory-merge", { keys, launch: false })) as { ok: boolean; out: string; prompt?: string }
+    if (!r.ok || !r.prompt) return void toast.error(r.out.trim() || "Échec")
+    if (!launch) return void copy(r.prompt, "Prompt de fusion")
+    onCompose({
+      id: "merge:" + keys.join(","),
+      title: "Fusionner la mémoire",
+      subtitle: `${keys.length} fichiers · la session est interactive : tu valideras avant toute écriture`,
+      project: "",
+      initial: r.prompt,
+      send: "Lancer la fusion",
+      choice: { model: "haiku", effort: "" }, // tâche mécanique
+      run: async (text, c) => {
+        const m = (await api.post("/memory-merge", { keys, launch: true, prompt: text, args: withChoice(args, c) })) as { ok: boolean; out: string }
+        ;(m.ok ? toast.success : toast.error)(m.out.trim() || (m.ok ? "Session lancée" : "Échec"))
+        if (m.ok) setPicked(new Set())
+        return m.ok
+      },
+    })
   }
   // Décompte réel des tokens par Haiku (tokens.go), quelques fichiers à la fois ; la liste se rafraîchit à chaque lot.
   const countTokens = async (keys: string[]) => {

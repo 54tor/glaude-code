@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // routesMemory : la zone Mémoire et sa corbeille.
@@ -256,6 +257,7 @@ func routesMemory(mux *http.ServeMux) {
 			Keys   []string
 			Launch bool
 			Args   string
+			Prompt string // texte relu et modifié dans la fenêtre de saisie : remplace celui du serveur
 		}
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil {
 			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
@@ -265,6 +267,13 @@ func routesMemory(mux *http.ServeMux) {
 		if err != nil {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
+		}
+		if req.Prompt != "" {
+			if len(req.Prompt) > 32<<10 || !utf8.ValidString(req.Prompt) || strings.ContainsRune(req.Prompt, 0) {
+				writeJSON(w, 200, map[string]any{"ok": false, "out": "prompt trop long ou invalide"})
+				return
+			}
+			prompt = req.Prompt
 		}
 		if !req.Launch {
 			writeJSON(w, 200, map[string]any{"ok": true, "out": "Prompt copié", "prompt": prompt})
