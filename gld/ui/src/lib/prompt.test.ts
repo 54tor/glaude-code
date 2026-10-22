@@ -5,7 +5,7 @@ import { parsePrompt } from "./prompt"
 const real = {
   // Captures d'une vraie session Claude Code 2.1.307 (tmux), 2026-10-22.
   permission: `
-  ⎿  · Quelle couleur préfères-tu ? → turquoise
+  ⎿  · Quelle couleur préfères-tu ? → turquoise
 ● Tu as répondu « turquoise », une option hors liste. Je lance maintenant la commande demandée.
   Supprime le chemin de test /tmp/gldprobe-inexistant
   ⎿  $ rm -rf /tmp/gldprobe-inexistant
@@ -62,7 +62,7 @@ Quelle couleur préfères-tu ?
   5. Chat about this
 Enter to select · ↑/↓ to navigate · Esc to cancel`,
   plan: `
-  ⎿  /plan to preview
+  ⎿  /plan to preview
 ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
   ────────────────────────────────────────
    Ready to code?
@@ -259,6 +259,24 @@ describe("parsePrompt", () => {
     expect(p.question).toBe("Do you want to proceed?")
     expect(p.options.map((o) => o.keys)).toEqual([["1"], ["2"], ["3"]])
     expect(p.options[2].text).toBe(true)
+  })
+  it("une question longue repliée sur plusieurs lignes est lue en entier", () => {
+    const screen = [
+      "│ CODE-A4-1 (High) — À chaque item servi, Torznab fait tourner le jeton de téléchargement (ApiKeySnatchAuthorizer.php:37,58 :",
+      "│ rotate). Tout lien déjà émis répond donc 404 dès qu'une autre recherche ressert le même torrent sur la même clé (Sonarr +",
+      "│ Prowlarr, grab différé). Le même chemin coûte un SELECT et un flush par item (PERF-A4-1). Quelle correction ?",
+      "",
+      "❯ 1. Jeton déterministe HMAC (Recommandé)",
+      "     Le clair dérive de HMAC(secret, id du jeton).",
+      "  2. Plusieurs jetons par triplet",
+      "  3. Laisser",
+      "",
+      "Enter to select · ↑/↓ to navigate · Esc to cancel",
+    ].join("\n")
+    const p = parsePrompt(screen)!
+    expect(p.question).toContain("CODE-A4-1")
+    expect(p.question).toContain("rotate). Tout lien")
+    expect(p.question).toMatch(/Quelle correction \?$/)
   })
   it("dialogue encadré", () => {
     const p = parsePrompt(screens.boxed)!
