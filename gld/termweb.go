@@ -28,7 +28,7 @@ import (
 
 func termEnabled() bool { return os.Getenv("GLD_WEB_TERMINAL") == "1" }
 
-const termIdle = 30 * time.Minute
+const termIdle = 70 * time.Minute // au-delà du cache de prompt (1 h) : une session laissée ouverte garde son cache
 
 var (
 	termMu   sync.Mutex
