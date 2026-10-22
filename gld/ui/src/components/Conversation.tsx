@@ -141,6 +141,24 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
       })
     })
   }, [viewport])
+  // À l'ouverture : la vue reste collée à la fin pendant que la hauteur du contenu se précise (rendu paresseux, images, code), jusqu'à ce
+  // que l'utilisateur prenne la main (molette, toucher, clavier, clic) ou au bout de 3 s.
+  const pinEnd = useCallback(() => {
+    const vp = viewport()
+    if (!vp) return
+    const go = () => (vp.scrollTop = vp.scrollHeight)
+    go()
+    const ro = new ResizeObserver(go)
+    if (vp.firstElementChild) ro.observe(vp.firstElementChild)
+    const evs = ["wheel", "touchstart", "keydown", "pointerdown"]
+    const stop = () => {
+      clearTimeout(t)
+      ro.disconnect()
+      evs.forEach((e) => vp.removeEventListener(e, stop))
+    }
+    const t = setTimeout(stop, 3000)
+    evs.forEach((e) => vp.addEventListener(e, stop, { passive: true }))
+  }, [viewport])
   // Chargement paresseux : les messages plus anciens arrivent d'eux-mêmes quand on remonte près du début.
   const top = useRef<HTMLDivElement>(null)
   const more = !!loadedNow?.more
@@ -171,11 +189,11 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
     if (!id) opened.current = ""
     if (keepScroll.current) return void (keepScroll.current = false)
     if (!msgs) return
-    if (opened.current !== id) {
+    if (opened.current !== id && viewport()) {
       opened.current = id
-      toEnd()
+      pinEnd()
     }
-  }, [msgs, toEnd, id])
+  }, [msgs, pinEnd, viewport, id, ready])
   const inTerm = termOn && view === "terminal" && !!id && a.live.has(id)
   // Envoi d'un message : on descend pour voir la réponse arriver, puis une seconde fois quand le transcript relu contient le message.
   const sentDown = useCallback(() => {
