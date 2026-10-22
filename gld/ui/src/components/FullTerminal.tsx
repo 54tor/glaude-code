@@ -1,35 +1,48 @@
 import { useEffect, useRef, useState } from "react"
 import { Terminal } from "@xterm/xterm"
+import { FitAddon } from "@xterm/addon-fit"
 import "@xterm/xterm/css/xterm.css"
 import { Eye, Pencil } from "lucide-react"
 import { api } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 
 // Terminal complet de la session (tmux) : lecture seule tant qu'on ne « prend pas la main » ; le serveur ignore toute frappe avant.
-// La taille est celle de la fenêtre tmux de l'hôte (le terminal de l'hôte n'est pas redimensionné) ; la zone défile si elle est plus grande.
+// Le terminal épouse la zone d'affichage et la taille est répercutée sur la fenêtre tmux de l'hôte. La main est prise dès l'ouverture.
 export default function FullTerminal({ id }: { id: string }) {
   const box = useRef<HTMLDivElement>(null)
   const ws = useRef<WebSocket | null>(null)
   const term = useRef<Terminal | null>(null)
   const [state, setState] = useState<"connexion" | "ouvert" | "fermé">("connexion")
   const [error, setError] = useState("")
-  const [writable, setWritable] = useState(false)
-  const writableRef = useRef(false)
+  const [writable, setWritable] = useState(true)
+  const writableRef = useRef(true)
 
   useEffect(() => {
     let dead = false
     let t: Terminal | null = null
+    let ro: ResizeObserver | null = null
     api.post("/term-open", { id }).then((r) => {
-      const o = r as unknown as { ok: boolean; out: string; token?: string; cols?: number; rows?: number }
+      const o = r as unknown as { ok: boolean; out: string; token?: string }
       if (dead) return
       if (!o.ok || !o.token || !box.current) return setError(o.out || "ouverture impossible")
-      t = new Terminal({ cols: o.cols, rows: o.rows, fontSize: 13, cursorBlink: true, scrollback: 0, convertEol: false })
+      t = new Terminal({ fontSize: 13, cursorBlink: true, scrollback: 0, convertEol: false })
+      const fit = new FitAddon()
+      t.loadAddon(fit)
       term.current = t
       t.open(box.current)
+      fit.fit()
+      const sendSize = () => ws.current?.readyState === WebSocket.OPEN && t && ws.current.send(JSON.stringify({ resize: { cols: t.cols, rows: t.rows } }))
+      ro = new ResizeObserver(() => (fit.fit(), sendSize()))
+      ro.observe(box.current)
       const sock = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/term-ws?t=${o.token}`)
       sock.binaryType = "arraybuffer"
       ws.current = sock
-      sock.onopen = () => setState("ouvert")
+      sock.onopen = () => {
+        setState("ouvert")
+        sendSize()
+        sock.send(JSON.stringify({ write: true }))
+        t?.focus()
+      }
       sock.onmessage = (e) => t?.write(new Uint8Array(e.data as ArrayBuffer))
       sock.onclose = () => !dead && setState("fermé")
       const enc = new TextEncoder()
@@ -37,6 +50,7 @@ export default function FullTerminal({ id }: { id: string }) {
     })
     return () => {
       dead = true
+      ro?.disconnect()
       ws.current?.close()
       t?.dispose()
     }
@@ -62,8 +76,8 @@ export default function FullTerminal({ id }: { id: string }) {
         {state === "fermé" && <span className="text-xs text-muted-foreground">Connexion fermée</span>}
       </div>
       {error && <p className="px-4 py-6 text-sm text-destructive">{error}</p>}
-      <div className="min-h-0 flex-1 overflow-auto bg-black p-2">
-        <div ref={box} />
+      <div className="min-h-0 flex-1 overflow-hidden bg-black p-2">
+        <div ref={box} className="h-full w-full" />
       </div>
     </div>
   )

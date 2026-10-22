@@ -144,8 +144,11 @@ func termWS(w http.ResponseWriter, r *http.Request) {
 	defer c.CloseNow()
 	c.SetReadLimit(1 << 16)
 
+	// La fenêtre prend la taille du dernier client actif (le navigateur), puis reprend son réglage à la fermeture.
+	tmuxRun("", "set-option", "-w", "-t", t.win, "window-size", "latest")
+	defer tmuxRun("", "set-option", "-wu", "-t", t.win, "window-size")
 	name := "gld-web-" + termToken()[:8]
-	cmd := exec.Command("tmux", "new-session", "-t", t.sess, "-s", name, "-f", "ignore-size", ";",
+	cmd := exec.Command("tmux", "new-session", "-t", t.sess, "-s", name, ";",
 		"set-option", "destroy-unattached", "on", ";", "select-window", "-t", t.win, ";", "select-pane", "-t", t.pane)
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
 	f, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: uint16(t.rows), Cols: uint16(t.cols)})
@@ -188,7 +191,15 @@ func termWS(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if typ == websocket.MessageText {
-			var m struct{ Write *bool }
+			var m struct {
+				Write  *bool
+				Resize *struct{ Cols, Rows int }
+			}
+			if json.Unmarshal(data, &m) == nil && m.Resize != nil {
+				if z := m.Resize; z.Cols >= 20 && z.Cols <= 500 && z.Rows >= 5 && z.Rows <= 300 {
+					pty.Setsize(f, &pty.Winsize{Rows: uint16(z.Rows), Cols: uint16(z.Cols)})
+				}
+			}
 			if json.Unmarshal(data, &m) == nil && m.Write != nil {
 				writable = *m.Write
 				journal("terminal %s : %s", t.id[:8], map[bool]string{true: "main prise", false: "lecture seule"}[writable])
