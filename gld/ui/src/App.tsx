@@ -92,6 +92,12 @@ export default function App() {
 
   const home = data?.home ?? ""
   const tree = useMemo(() => buildTree(view.entries, home), [view.entries, home])
+  // « Sessions locales » : seulement les dossiers qui ne sont dans aucun projet (ils ont leur place sous « Projets »).
+  const projects = data?.projects
+  const localTree = useMemo(() => {
+    const inProject = new Set(projects?.flatMap((p) => p.dirs))
+    return inProject.size ? buildTree(view.entries.filter((e) => !inProject.has(e.g.project)), home) : tree
+  }, [projects, view.entries, home, tree])
   const live = useMemo(() => new Set(data?.live), [data])
   const waiting = useMemo(() => new Set(data?.waiting), [data])
   const vgroups = useMemo(() => data?.vgroups ?? [], [data])
@@ -246,7 +252,7 @@ export default function App() {
           favGroups={favGroups}
           groupCount={(x) => groupRows(x).length}
           read={(s) => (setNavOpen(false), read(s))}
-          tree={tree}
+          tree={localTree}
           hot={hot}
           now={now}
           ttl={HOT}
