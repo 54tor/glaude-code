@@ -10,7 +10,8 @@
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "coverage": "vitest run --coverage --coverage.include='src/**' --coverage.reporter=text-summary --coverage.thresholds.lines=8 --coverage.thresholds.branches=7"
   },
   "dependencies": {
     "@fontsource-variable/fira-code": "^5.3.0",
