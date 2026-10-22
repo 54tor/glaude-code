@@ -89,6 +89,7 @@ func TestRafraichirLesLimites(t *testing.T) {
 		usageLast, usageBusy = time.Time{}, false
 		usageMu.Unlock()
 	}
+	use(t.TempDir()) // le journal du rafraîchissement ne doit pas tomber dans le dossier du paquet
 	old := usageStart
 	defer func() { usageStart = old; reset() }()
 	calls := make(chan struct{}, 4)
