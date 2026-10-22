@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils"
 import { sorted, type Node } from "@/lib/tree"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { useActions } from "./actions"
+import { GitBadge } from "./GitBadge"
+import { useGit } from "@/hooks/useGit"
 
 // Clic droit sur un dossier de projet : actions sur ses propres sessions.
 function ProjectItems({ n }: { n: Node }) {
@@ -107,6 +109,7 @@ function Item({
   leaf,
 }: Props & { n: Node; depth: number; label?: string; leaf?: boolean }) {
   const a = useActions()
+  const git = useGit()
   const groups = n.g ? a.vgroups.filter((vg) => vg.project === n.g!.project) : []
   const kids = (!leaf && n.kids.size > 0) || groups.length > 0
   const open = isOpen(n, depth)
@@ -145,6 +148,7 @@ function Item({
               <span className="truncate">{label ?? n.name}</span>
               {n.g?.missing && <TriangleAlert className="size-3.5 shrink-0 text-amber-500" aria-label="dossier introuvable" />}
             </button>
+            {n.g && <GitBadge st={git[n.g.project]} />}
             {n.g && <span className="text-xs text-muted-foreground tabular-nums">{n.ss.length}</span>}
           </div>
         </ContextMenuTrigger>

@@ -6,11 +6,14 @@ import { segs } from "@/lib/paths"
 import { cn } from "@/lib/utils"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { useActions } from "./actions"
+import { GitBadge } from "./GitBadge"
+import { useGit } from "@/hooks/useGit"
 
 // Projets : ensembles nommés de dossiers de travail, affichés au-dessus de l'arbre des dossiers.
 // Un clic sur un projet affiche les sessions de tous ses dossiers ; ses dossiers se déplient dessous.
 export function ProjectList({ route, go }: { route: Route; go: (r: Route) => void }) {
   const a = useActions()
+  const git = useGit()
   const [open, setOpen] = useState(() => new Set<string>())
   const toggle = (name: string) =>
     setOpen((o) => {
@@ -81,7 +84,8 @@ export function ProjectList({ route, go }: { route: Route; go: (r: Route) => voi
                             )}
                           >
                             <Folder className="size-4 shrink-0 text-muted-foreground" />
-                            <span className="truncate">{tilde(d, a.home)}</span>
+                            <span className="min-w-0 flex-1 truncate">{tilde(d, a.home)}</span>
+                            <GitBadge st={git[d]} />
                           </button>
                         </ContextMenuTrigger>
                         <ContextMenuContent className="w-56">
