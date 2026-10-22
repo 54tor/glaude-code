@@ -197,6 +197,10 @@ describe("parsePrompt : captures réelles", () => {
     expect(p.submit).toEqual(["Down", "Down", "Down", "Down", "Enter"])
     expect(p.options.at(-1)).toMatchObject({ chat: true, keys: ["5", "Enter"] })
   })
+  it("choix multiples : du texte avant l'en-tête ne remplace pas la question", () => {
+    const p = parsePrompt("Récapitulatif de Claude :\n- UI-04 : focus ;\n" + real.multi)!
+    expect(p.question).toBe("Quelles couleurs veux-tu sélectionner ?")
+  })
   it("choix multiples : la description de chaque case est conservée", () => {
     const o = parsePrompt(real.multi)!.options
     expect(o[0].detail).toBe("Couleur chaude, forte visibilité.")
