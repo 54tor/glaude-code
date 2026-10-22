@@ -69,7 +69,8 @@ func TestHomesAiguillage(t *testing.T) {
 		t.Fatal("sans cookie")
 	}
 	enc := url.QueryEscape("Pro perso")
-	if get("/data", enc) != "enfant" || get("/data", enc) != "enfant" || starts != 1 {
+	first, second := get("/data", enc), get("/data", enc)
+	if first != "enfant" || second != "enfant" || starts != 1 {
 		t.Fatalf("le processus enfant doit répondre et n'être lancé qu'une fois (%d)", starts)
 	}
 	if get("/homes", enc) != "principal" {
