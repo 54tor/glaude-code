@@ -354,7 +354,7 @@ function TerminalPanel({ id, onAsk }: { id: string; onAsk?: (asking: boolean) =>
               </div>
             ))}
             {prompt.submit && (
-              <Button size="sm" disabled={pressing} onClick={() => press(...prompt.submit!)} title="Valide les cases cochées">
+              <Button size="sm" disabled={pressing} onClick={() => press(...prompt.submit!)} title={`Valide les cases cochées. Touches envoyées : ${prompt.submit.join(", ")}`}>
                 <Send /> Valider
               </Button>
             )}
