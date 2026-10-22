@@ -236,6 +236,19 @@ func readConfig(id string) (ConfigFile, any) {
 	return f, v
 }
 
+// configProjects : les projets qui ont leurs propres réglages. ~/.claude (le dossier de configuration lui-même) et ~ n'en sont pas :
+// les réglages « de projet » de ~ sont ~/.claude/settings.json, donc le fichier utilisateur, déjà affiché à part.
+func configProjects() []MemTarget {
+	home, _ := os.UserHomeDir()
+	out := []MemTarget{}
+	for _, p := range liveProjects() {
+		if p.Project != cfgDir() && (home == "" || p.Project != home) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // allConfigs : le fichier utilisateur, puis, pour chaque projet dont le dossier existe, ses fichiers de projet et local
 // quand ils existent. raw garde les secrets (pour les analyses), data les masque (pour l'affichage).
 func allConfigs() (files []ConfigFile, raw map[string]any) {
@@ -252,7 +265,7 @@ func allConfigs() (files []ConfigFile, raw map[string]any) {
 		files = append(files, f)
 	}
 	add("u", false)
-	for _, p := range liveProjects() {
+	for _, p := range configProjects() {
 		add("p/"+p.Dir, true)
 		add("l/"+p.Dir, true)
 	}

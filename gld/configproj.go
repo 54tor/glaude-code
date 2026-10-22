@@ -85,7 +85,7 @@ func projectConfigs() []ProjectCfg {
 		}
 	}
 	out := []ProjectCfg{}
-	for _, lp := range liveProjects() {
+	for _, lp := range configProjects() {
 		pc := ProjectCfg{Dir: lp.Dir, Project: lp.Project, Perms: map[string][]ProjRule{}, Files: []ProjFile{}, Hooks: []HookInfo{}, MCP: []McpServer{}, Skills: []string{}, Docs: docs[lp.Dir]}
 		for _, scope := range []string{"p", "l"} {
 			id := scope + "/" + lp.Dir
