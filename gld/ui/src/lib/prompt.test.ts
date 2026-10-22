@@ -197,6 +197,11 @@ describe("parsePrompt : captures réelles", () => {
     expect(p.submit).toEqual(["Down", "Down", "Down", "Down", "Enter"])
     expect(p.options.at(-1)).toMatchObject({ chat: true, keys: ["5", "Enter"] })
   })
+  it("choix multiples : la description de chaque case est conservée", () => {
+    const o = parsePrompt(real.multi)!.options
+    expect(o[0].detail).toBe("Couleur chaude, forte visibilité.")
+    expect(o[3].detail).toBeUndefined()
+  })
   it("choix multiples : curseur au milieu, cases cochées", () => {
     const p = parsePrompt(real.multiMid)!
     expect(p.options.slice(0, 2).map((o) => o.checked)).toEqual([true, true])

@@ -156,9 +156,16 @@ function multiSelect(lines: string[], above: (at: number) => string): Prompt | n
   const submit = rows.findIndex((r) => r.kind === "submit")
   if (boxes.length < 2 || submit < 0 || cursor < 0) return null
   const reach = (i: number) => Array<string>(Math.abs(i - cursor)).fill(i < cursor ? "Up" : "Down")
+  // Description d'une case : les lignes indentées jusqu'à la ligne suivante (autre case, Submit).
+  const detail = (i: number) =>
+    lines
+      .slice(rows[i].at + 1, rows[i + 1]?.at ?? lines.length)
+      .filter((l) => /^\s{3,}\S/.test(l) && !/^\s*[─━╌▔]/.test(l) && !/enter to select|esc to cancel/i.test(l))
+      .map((l) => l.trim())
+      .join(" ")
   const options: Opt[] = rows.flatMap((r, i): Opt[] =>
     r.kind === "box"
-      ? [{ label: r.label, checked: r.checked, keys: [r.n!], reach: reach(i), text: FREE.test(r.label) }]
+      ? [{ label: r.label, detail: detail(i) || undefined, checked: r.checked, keys: [r.n!], reach: reach(i), text: FREE.test(r.label) }]
       : r.kind === "other"
         ? [{ label: `${r.n}. ${r.label}`, keys: [r.n!, "Enter"], text: FREE.test(r.label), chat: CHAT.test(r.label) }]
         : []
