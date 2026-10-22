@@ -153,21 +153,16 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
     return () => io.disconnect()
   }, [more, older, viewport])
   const toTop = () => viewport()?.scrollTo({ top: 0 })
-  // On ne ramène à la fin que si on y était déjà (ou à l'ouverture de la session) : lire plus haut ne doit pas être interrompu par
-  // l'arrivée de messages ; le bouton « Aller à la fin » prend le relais.
-  const stuck = useRef(true)
+  // La vue ne descend que dans deux cas : à l'ouverture de la session, et quand l'utilisateur envoie un message. Elle ne suit jamais
+  // l'arrivée de messages ou une mise à jour : lire plus haut ne doit pas être interrompu ; le bouton « Aller à la fin » prend le relais.
   const opened = useRef("") // session déjà amenée à la fin une fois
-  const asking = useRef(false) // une réponse est attendue : la vue ne bouge plus d'elle-même
-  const onAsk = useCallback((v: boolean) => void (asking.current = v), [])
   const [away, setAway] = useState(false)
   const ready = !!session && msgs !== null
   useEffect(() => {
     const vp = viewport()
     if (!vp) return
     const on = () => {
-      const near = vp.scrollHeight - vp.scrollTop - vp.clientHeight < 80
-      stuck.current = near
-      setAway(!near)
+      setAway(vp.scrollHeight - vp.scrollTop - vp.clientHeight >= 80)
     }
     vp.addEventListener("scroll", on, { passive: true })
     return () => vp.removeEventListener("scroll", on)
@@ -178,15 +173,15 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
     if (!msgs) return
     if (opened.current !== id) {
       opened.current = id
-      stuck.current = true
       toEnd()
-    } else if (stuck.current && !asking.current) toEnd()
+    }
   }, [msgs, toEnd, id])
   const inTerm = termOn && view === "terminal" && !!id && a.live.has(id)
-  const shown = turn?.msgs.length ?? 0
-  useEffect(() => {
-    if (shown && stuck.current && !asking.current) toEnd()
-  }, [shown, toEnd])
+  // Envoi d'un message : on descend pour voir la réponse arriver, puis une seconde fois quand le transcript relu contient le message.
+  const sentDown = useCallback(() => {
+    toEnd()
+    setTimeout(toEnd, 2500)
+  }, [toEnd])
 
   return (
     <Dialog open={!!session} onOpenChange={(o) => !o && onClose()}>
@@ -296,8 +291,8 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
             defaultChoice={choice}
             live={a.live.has(id)}
             liveState={live}
-            onAsk={onAsk}
-            onSent={() => setSentAt({ id, at: Date.now() })}
+            onSent={() => (setSentAt({ id, at: Date.now() }), sentDown())}
+            onWrite={sentDown}
             turn={turn}
             setTurn={(f) => setChat((c) => f(c?.id === id ? c : null))}
             // Le transcript contient maintenant le tour : on le relit, et le tour affiché à part disparaît (sauf erreur).
