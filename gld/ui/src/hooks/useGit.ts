@@ -4,8 +4,8 @@ import { api } from "@/lib/api"
 
 // État git des dossiers de projet, partagé par tous les composants qui l'affichent : une seule relecture périodique (30 s, onglet
 // visible, et au retour sur l'onglet) tant qu'au moins un composant l'utilise.
-type Map = Record<string, GitState>
-let state: Map = {}
+export type Git = { status: Record<string, GitState>; repos: Record<string, string[]> } // repos : dossier de sessions → ses dépôts
+let state: Git = { status: {}, repos: {} }
 const subs = new Set<() => void>()
 let timer: ReturnType<typeof setInterval> | undefined
 
@@ -13,8 +13,8 @@ const load = () =>
   document.visibilityState === "visible" &&
   api.gitStatus().then(
     (r) => {
-      if (JSON.stringify(r.status) === JSON.stringify(state)) return // inchangé : pas de rendu
-      state = r.status
+      if (JSON.stringify(r) === JSON.stringify(state)) return // inchangé : pas de rendu
+      state = r
       subs.forEach((f) => f())
     },
     () => {}
@@ -36,4 +36,4 @@ function subscribe(f: () => void) {
   }
 }
 
-export const useGit = (): Map => useSyncExternalStore(subscribe, () => state)
+export const useGit = (): Git => useSyncExternalStore(subscribe, () => state)

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Check, Plus, Settings2, X } from "lucide-react"
+import { Check, FolderCog, Plus, X } from "lucide-react"
 import { toast } from "sonner"
 import { api, type HomesInfo } from "@/lib/api"
 import { tilde } from "@/lib/format"
@@ -58,12 +58,11 @@ export function HomeSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="max-w-40 justify-start gap-1.5" title={`Dossier de configuration : ${label}`}>
-          <Settings2 className="size-4 shrink-0" />
-          <span className="truncate text-xs">{label}</span>
+        <Button variant="ghost" size="icon" className="size-9 text-muted-foreground" aria-label="Dossier de configuration Claude" title={`Dossier de configuration Claude : ${label}`}>
+          <FolderCog className="size-6" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-72">
+      <DropdownMenuContent align="end" className="w-72">
         <DropdownMenuLabel>Dossier de configuration Claude</DropdownMenuLabel>
         <DropdownMenuItem onSelect={() => select("")}>
           <Check className={info.current === "" ? "" : "invisible"} /> <span className="truncate">{tilde(info.main, a.home)}</span>
