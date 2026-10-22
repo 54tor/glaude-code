@@ -200,6 +200,7 @@ describe("parsePrompt : captures réelles", () => {
   it("choix multiples : du texte avant l'en-tête ne remplace pas la question", () => {
     const p = parsePrompt("Récapitulatif de Claude :\n- UI-04 : focus ;\n" + real.multi)!
     expect(p.question).toBe("Quelles couleurs veux-tu sélectionner ?")
+    expect(p.context).toBe("Récapitulatif de Claude :\n- UI-04 : focus ;")
   })
   it("choix multiples : la description de chaque case est conservée", () => {
     const o = parsePrompt(real.multi)!.options
