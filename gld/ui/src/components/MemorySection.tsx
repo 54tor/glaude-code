@@ -148,7 +148,7 @@ export function Section({
                 <button
                   onClick={() => onPick(f.key)}
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors",
+                    "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors",
                     f.key === sel ? "bg-accent font-medium" : "hover:bg-muted"
                   )}
                 >

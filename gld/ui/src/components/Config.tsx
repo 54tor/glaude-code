@@ -70,7 +70,8 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
       <div className="mx-auto max-w-5xl px-6 py-6">
         <Tabs value={tab || "sante"} onValueChange={onTab}>
           {/* Le soulignement de l'onglet actif (::after, 5 px sous le bouton, même invisible) déborde de la liste : sans ce bas de marge il crée un défilement vertical. */}
-          <ScrollArea className="mb-2 w-full">
+          {/* ponytail: fondu fixe, même une fois au bout du défilement ; un vrai indicateur demanderait d'écouter le scroll. */}
+          <ScrollArea className="mb-2 w-full [mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)]">
             <div className="pb-2">
               <TabsList className="w-max justify-start">
                 <TabsTrigger value="sante">Santé{ov.issues.length > 0 && ` (${ov.issues.length})`}</TabsTrigger>
