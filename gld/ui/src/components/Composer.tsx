@@ -5,6 +5,7 @@ import { LiveAgents, type Live } from "./LiveStatus"
 import { toast } from "sonner"
 import { Bug, Copy, Minimize2, Power, Send, Square, SquareCheck, X } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
+import { draftOf, setDraft, useDraft } from "@/hooks/useDraft"
 import { withChoice, type Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
 import { Choose } from "./Choose"
@@ -50,7 +51,8 @@ export function Composer({
   onDone: () => void | Promise<void>
   onAsk?: (asking: boolean) => void // Claude attend une réponse dans le terminal
 }) {
-  const [text, setText] = useState("")
+  const { text, queue } = useDraft(id)
+  const setText = (t: string) => setDraft(id, { text: t })
   const [mode, setMode] = useLocal("ccChatMode", "")
   const [choice, setChoice] = useState(defaultChoice)
   const running = !!turn?.running
@@ -59,15 +61,15 @@ export function Composer({
   const [own, setOwn] = useState(false)
   const pics = useImages()
   // File d'attente : les messages écrits pendant que Claude répond partent l'un après l'autre à la fin du tour (sauf échec ou arrêt).
-  const [queue, setQueue] = useState<string[]>([])
-  const queueRef = useRef<string[]>([])
-  const setQ = (q: string[]) => ((queueRef.current = q), setQueue(q))
+  // Brouillon et file vivent dans un magasin par session (useDraft) : fermer la fenêtre ne les perd pas, et l'envoi des messages
+  // en file continue même fenêtre fermée.
+  const setQ = (q: string[]) => setDraft(id, { queue: q })
   const send = () => {
     const prompt = [text.trim(), pics.suffix()].filter(Boolean).join("\n\n")
     if (!prompt) return
     setText("")
     pics.clear()
-    if (running) setQ([...queueRef.current, prompt])
+    if (running) setQ([...draftOf(id).queue, prompt])
     else submit(prompt)
   }
   const submit = async (prompt: string) => {
@@ -115,9 +117,9 @@ export function Composer({
     setTurn((t) => t && { ...t, running: false })
     await onDone() // le transcript est relu avant le tour suivant, qui efface sinon son propre affichage
     setTimeout(() => setOwn(false), 30_000)
-    const next = queueRef.current[0]
+    const next = draftOf(id).queue[0]
     if (next !== undefined && !failed) {
-      setQ(queueRef.current.slice(1))
+      setQ(draftOf(id).queue.slice(1))
       submit(next)
     }
   }
