@@ -230,7 +230,6 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
         />
         <ImageChips images={pics.images} busy={pics.busy} onRemove={pics.remove} />
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          Le texte est collé dans le terminal de la session, puis validé : si Claude répond déjà, il le prend à la suite.
           <span className="ml-auto" />
           <LiveAgents live={liveState} />
           <SlashMenu id={id} text={text} onSent={onSent} />
