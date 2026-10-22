@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -167,20 +168,16 @@ func syncRelOK(rel string) bool {
 
 func listText(l []string) string { return strings.Join(l, "\n") }
 
+// sameSet : mêmes éléments des deux côtés, sans égard à l'ordre ni aux doublons.
 func sameSet(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	m := map[string]bool{}
-	for _, x := range a {
-		m[x] = true
-	}
-	for _, x := range b {
-		if !m[x] {
-			return false
+	set := func(l []string) map[string]bool {
+		m := map[string]bool{}
+		for _, x := range l {
+			m[x] = true
 		}
+		return m
 	}
-	return true
+	return maps.Equal(set(a), set(b))
 }
 
 func skillText(files map[string]string) string {
