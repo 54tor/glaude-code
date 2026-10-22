@@ -1,6 +1,9 @@
 package main
 
 import (
+	"errors"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -100,5 +103,29 @@ func TestPanneEcritureReglages(t *testing.T) {
 	}
 	if left, _ := filepath.Glob(filepath.Join(cfg, ".gld-web-*.tmp")); len(left) != 0 {
 		t.Fatalf("temporaires restés : %v", left)
+	}
+}
+
+// Un client qui n'achève jamais ses en-têtes est déconnecté au bout de readHeaderTimeout.
+func TestEnTetesAuCompteGouttes(t *testing.T) {
+	old := readHeaderTimeout
+	readHeaderTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { readHeaderTimeout = old })
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Skip(err)
+	}
+	srv := newServer("", http.NotFoundHandler())
+	go srv.Serve(ln)
+	t.Cleanup(func() { srv.Close() })
+	c, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	c.Write([]byte("GET / HTTP/1.1\r\nHost: x\r\n"))
+	c.SetReadDeadline(time.Now().Add(3 * time.Second))
+	if _, err := c.Read(make([]byte, 512)); err == nil || errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatalf("connexion toujours ouverte : %v", err)
 	}
 }
