@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"os/exec"
+	"sync/atomic"
 	"testing"
 )
 
@@ -25,9 +26,9 @@ func TestGitStatesCache(t *testing.T) {
 	gitMu.Lock()
 	clear(gitCache)
 	gitMu.Unlock()
-	calls := 0
+	var calls atomic.Int32 // gitStates relit les dossiers en parallèle
 	gitRun = func(dir string) (string, error) {
-		calls++
+		calls.Add(1)
 		if dir == "/pas-un-depot" {
 			return "", errors.New("not a git repository")
 		}
@@ -39,8 +40,8 @@ func TestGitStatesCache(t *testing.T) {
 			t.Fatalf("%+v", got)
 		}
 	}
-	if calls != 2 {
-		t.Fatalf("relu malgré le cache : %d appels", calls)
+	if n := calls.Load(); n != 2 {
+		t.Fatalf("relu malgré le cache : %d appels", n)
 	}
 }
 
