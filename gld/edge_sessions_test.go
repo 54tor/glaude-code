@@ -44,7 +44,9 @@ func TestSessionsEtDetail(t *testing.T) {
 		os.MkdirAll(d, 0o755)
 	}
 	pp := filepath.Join(cfg, "projects")
-	put(t, filepath.Join(pp, "-p", id1+".jsonl"), `{"cwd":"`+proj+`"}`+"\n"+strings.Repeat(" ", 3000)+"\n", 3*time.Hour)
+	head := `{"cwd":"` + proj + `"}` + "\n"
+	// 2 500 octets en tout, quelle que soit la longueur du dossier temporaire (TMPDIR) : 2 Ko attendus
+	put(t, filepath.Join(pp, "-p", id1+".jsonl"), head+strings.Repeat(" ", 2500-len(head)-1)+"\n", 3*time.Hour)
 	put(t, filepath.Join(pp, "-p", id2+".jsonl"), `{"type":"user","message":{"content":"sans cwd"}}`+"\n", time.Hour) // rangée avec sa voisine
 	put(t, filepath.Join(pp, "-p", id3+".jsonl"), `{"cwd":"`+proj2+`"}`+"\n", 2*time.Hour)
 	enc := nonAlnum.ReplaceAllString(cache, "-")
