@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Actions, Row } from "./actions"
 import { ProjectHead } from "./ProjectHead"
+import { Notes } from "./Notes"
 import { ProjectMemory } from "./ProjectMemory"
 import { Live, SessionList } from "./SessionList"
 
@@ -71,6 +72,10 @@ export function SessionsPane({
         )}
 
         {!loading && route.kind === "dir" && project && <ProjectHead key={project} project={project} missing={dirMissing} />}
+        {!loading && route.kind === "dir" && project && <Notes key={project} noteKey={"d/" + project} folder={dirMissing ? undefined : project} rows={rows} />}
+        {!loading && route.kind === "project" && (
+          <Notes key={route.name} noteKey={"p/" + route.name} folder={actions.projects.find((p) => p.name === route.name)?.dirs[0]} rows={rows} />
+        )}
 
         {!loading && projectDir && (route.kind === "dir" || route.kind === "group") && <ProjectMemory key={projectDir} dir={projectDir} />}
 

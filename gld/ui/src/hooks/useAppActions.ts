@@ -134,6 +134,7 @@ export function useAppActions(c: {
         if (t === p.name) return
         if (projects.some((x) => x.name === t)) return void toast.error(`Le projet « ${t} » existe déjà`)
         saveProjects(projects.map((x) => (x.name === p.name ? { ...x, name: t } : x)))
+        void api.post("/notes", { key: "p/" + p.name, to: "p/" + t }) // la note suit le projet
         go({ kind: "project", name: t })
       }),
     delete: (p) =>
