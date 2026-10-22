@@ -147,7 +147,8 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             <h1 className="text-base font-semibold">Glaude Code</h1>
             <p className="text-xs text-muted-foreground">{p.loading ? "Chargement…" : `${p.total} sessions`}</p>
           </div>
-          <div className="ml-auto self-start">
+          <div className="ml-auto flex items-center gap-0.5">
+            <HomeSwitcher />
             <Settings
               args={p.args}
               setArgs={p.setArgs}
@@ -295,7 +296,6 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           </div>
         )}
         <div className="flex items-center gap-2">
-          <HomeSwitcher />
           {p.args && (
             <code className="truncate text-xs text-muted-foreground" title="options ajoutées à claude">
               {p.args}

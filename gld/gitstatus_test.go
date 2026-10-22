@@ -62,3 +62,15 @@ func TestRunGitStatusReel(t *testing.T) {
 		t.Fatalf("%+v\n%s", s, out)
 	}
 }
+
+// Les sous-dossiers qui contiennent un .git sont listés (pas les cachés, ni node_modules ni vendor).
+func TestSubRepos(t *testing.T) {
+	d := t.TempDir()
+	for _, n := range []string{"8.2/.git", "8.1/.git", "docs", ".cache/.git", "node_modules/.git", "vendor/.git"} {
+		put(t, d+"/"+n+"/x", "x\n", old)
+	}
+	got := subRepos(d)
+	if len(got) != 2 || got[0] != d+"/8.1" || got[1] != d+"/8.2" {
+		t.Fatalf("%v", got)
+	}
+}

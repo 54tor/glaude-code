@@ -138,7 +138,7 @@ export const api = {
     ),
   ls: (path: string) => get<Ls>(`/ls?path=${enc(path)}`),
   homes: () => get<HomesInfo>("/homes"),
-  gitStatus: () => get<{ status: Record<string, GitState> }>("/git-status"),
+  gitStatus: () => get<{ status: Record<string, GitState>; repos: Record<string, string[]> }>("/git-status"),
   snippets: () => get<{ dir: string; files: Snippet[]; scopes: SnipScope[] }>("/snippet-list"),
   snippet: (key: string) => get<{ text?: string; error?: string; missing?: boolean }>(`/snippet?key=${enc(key)}`),
   memory: () => get<{ global: MemFile[]; projects: MemProject[]; targets: MemTarget[] }>("/memory-list"),

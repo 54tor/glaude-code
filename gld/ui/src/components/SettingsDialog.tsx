@@ -94,8 +94,8 @@ export function Settings({
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label="Réglages" title="Réglages">
-          <Cog />
+        <Button variant="ghost" size="icon" className="size-9 text-muted-foreground" aria-label="Réglages" title="Réglages">
+          <Cog className="size-6" />
         </Button>
       </DialogTrigger>
       <DialogContent className="flex h-[min(85vh,560px)] flex-col gap-4 sm:max-w-2xl">

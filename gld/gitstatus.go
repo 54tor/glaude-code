@@ -7,7 +7,10 @@ package main
 import (
 	"context"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -126,14 +129,63 @@ func gitStates(dirs []string) map[string]GitState {
 	return out
 }
 
+// subRepos : les sous-dossiers directs de dir qui sont des dépôts git (un « .git » dedans). Cas courant : les sessions vivent
+// dans ~/php, les dépôts dans ~/php/8.1, ~/php/8.2… Résultat gardé une minute.
+var (
+	reposMu    sync.Mutex
+	reposCache = map[string]reposEntry{}
+)
+
+type reposEntry struct {
+	dirs []string
+	at   time.Time
+}
+
+func subRepos(dir string) []string {
+	reposMu.Lock()
+	e, ok := reposCache[dir]
+	reposMu.Unlock()
+	if ok && time.Since(e.at) < time.Minute {
+		return e.dirs
+	}
+	var out []string
+	ents, _ := os.ReadDir(dir)
+	for _, d := range ents {
+		n := d.Name()
+		if !d.IsDir() || strings.HasPrefix(n, ".") || n == "node_modules" || n == "vendor" {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(dir, n, ".git")); err == nil {
+			out = append(out, filepath.Join(dir, n))
+		}
+		if len(out) >= 40 {
+			break
+		}
+	}
+	sort.Strings(out)
+	reposMu.Lock()
+	if len(reposCache) > 2000 {
+		clear(reposCache)
+	}
+	reposCache[dir] = reposEntry{out, time.Now()}
+	reposMu.Unlock()
+	return out
+}
+
 func routesGit(mux *http.ServeMux) {
 	mux.HandleFunc("GET /git-status", func(w http.ResponseWriter, r *http.Request) {
 		var dirs []string
+		repos := map[string][]string{}
 		for _, g := range sessions() {
-			if !g.Missing && g.Project != "" {
-				dirs = append(dirs, g.Project)
+			if g.Missing || g.Project == "" {
+				continue
+			}
+			dirs = append(dirs, g.Project)
+			if sub := subRepos(g.Project); len(sub) > 0 {
+				repos[g.Project] = sub
+				dirs = append(dirs, sub...)
 			}
 		}
-		writeJSON(w, 200, map[string]any{"status": gitStates(dirs)})
+		writeJSON(w, 200, map[string]any{"status": gitStates(dirs), "repos": repos})
 	})
 }
