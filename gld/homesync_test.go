@@ -156,3 +156,22 @@ func TestSyncSkillRemplace(t *testing.T) {
 		t.Error("skill encore différent après remplacement")
 	}
 }
+
+// Égalité d'ensembles : l'ordre et les doublons ne comptent pas, mais un élément d'un côté absent de l'autre, si.
+func TestSameSet(t *testing.T) {
+	for _, c := range []struct {
+		a, b []string
+		want bool
+	}{
+		{[]string{"x", "y"}, []string{"y", "x"}, true},
+		{[]string{"x", "y"}, []string{"x", "x"}, false},
+		{[]string{"x", "x"}, []string{"x", "y"}, false},
+		{[]string{"x", "x"}, []string{"x"}, true},
+		{nil, []string{}, true},
+		{[]string{"x"}, nil, false},
+	} {
+		if got := sameSet(c.a, c.b); got != c.want {
+			t.Errorf("sameSet(%q, %q) = %v", c.a, c.b, got)
+		}
+	}
+}
