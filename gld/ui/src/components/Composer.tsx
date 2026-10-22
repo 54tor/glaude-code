@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { LiveAgents, type Live } from "./LiveStatus"
 import { toast } from "sonner"
-import { Minimize2, Power, Send, Square } from "lucide-react"
+import { Bug, Copy, Minimize2, Power, Send, Square } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
 import { withChoice, type Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
@@ -326,6 +326,7 @@ function TerminalPanel({ id, onAsk }: { id: string; onAsk?: (asking: boolean) =>
   // Une ou plusieurs touches, l'une après l'autre (déplacer la sélection puis valider). Les boutons restent bloqués tant que l'écran
   // n'a pas changé (ou 4 s) : cliquer sur une question déjà quittée désynchroniserait la sélection.
   const [pressing, setPressing] = useState(false)
+  const [debug, setDebug] = useState(false)
   const press = async (...keys: string[]) => {
     if (busy.current) return
     busy.current = true
@@ -406,6 +407,24 @@ function TerminalPanel({ id, onAsk }: { id: string; onAsk?: (asking: boolean) =>
               Échap
             </Button>
           </div>
+        </div>
+      )}
+      <div className="flex justify-end">
+        <Button size="xs" variant="ghost" className="text-muted-foreground" onClick={() => setDebug(!debug)} aria-pressed={debug} title="Écran du terminal tel que gld le lit, et ce que le détecteur en tire">
+          <Bug /> Écran brut
+        </Button>
+      </div>
+      {debug && (
+        <div className="space-y-1.5 text-[11px]">
+          <pre className="max-h-72 overflow-auto rounded-lg border bg-background px-3 py-2 font-mono leading-snug whitespace-pre" aria-label="Écran du terminal">
+            {screen || "(écran vide)"}
+          </pre>
+          <pre className="max-h-40 overflow-auto rounded-lg border bg-muted/40 px-3 py-2 font-mono leading-snug whitespace-pre-wrap" aria-label="Résultat du détecteur">
+            {prompt ? JSON.stringify(prompt, null, 1) : "détecteur : aucune question reconnue"}
+          </pre>
+          <Button size="xs" variant="outline" onClick={() => navigator.clipboard.writeText(screen).then(() => toast.success("Écran copié"), () => toast.error("Copie impossible"))}>
+            <Copy /> Copier l'écran
+          </Button>
         </div>
       )}
     </div>
