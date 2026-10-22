@@ -11,10 +11,21 @@ export function parsePrompt(screen: string): Prompt | null {
   // Un vrai dialogue du terminal porte une ligne d'aide en bas (« Esc to cancel », « Enter to confirm »…) ; le texte de Claude, lui, peut
   // contenir des listes numérotées ou un « ❯ » sans que rien n'attende de réponse. On ne regarde que le bas de l'écran.
   // Les dialogues d'autorisation peuvent être encadrés (« │ ❯ 1. Yes │ ») : on retire le cadre avant d'analyser.
-  const all = screen
-    .split("\n")
-    .map((l) => l.replace(/^(\s*)[│┃]\s?/, "$1").replace(/\s*[│┃]\s*$/, ""))
-    .filter((l) => l.trim())
+  // gap : la ligne suit une ligne vide, donc commence un paragraphe (une question longue est repliée sur plusieurs lignes).
+  const gap = new Set<string>()
+  let blank = false
+  const all: string[] = []
+  for (const raw of screen.split("\n")) {
+    const l = raw.replace(/^(\s*)[│┃]\s?/, "$1").replace(/\s*[│┃]\s*$/, "")
+    if (!l.trim()) {
+      blank = true
+      continue
+    }
+    if (blank) gap.add(String(all.length))
+    blank = false
+    all.push(l)
+  }
+  const tailStart = Math.max(0, all.length - 32)
   const tail = all.slice(-32)
   // « esc to interrupt » est la ligne d'état de Claude en pleine réflexion : rien n'attend alors de réponse.
   if (/esc to interrupt/i.test(tail.slice(-6).join("\n"))) return null
@@ -31,15 +42,27 @@ export function parsePrompt(screen: string): Prompt | null {
   // Un plan ou une liste de Claude, affichés au-dessus du dialogue, sont numérotés aussi : on ne garde que la dernière suite 1, 2, 3…
   const last1 = nums.map((o) => o.n).lastIndexOf("1")
   if (last1 > 0) nums = nums.slice(last1)
+  // La question au-dessus de l'option `at` : ses lignes repliées jusqu'au début du paragraphe (ou de la phrase précédente).
+  const width = Math.max(...lines.map((l) => l.trim().length))
   const above = (at: number) => {
     let q = ""
+    let from = -1
     for (let i = at - 1; i >= 0 && i >= at - 6; i--) {
       const t = lines[i].trim()
       if (t) {
         q = t
+        from = i
         if (/[?:]$/.test(t)) break
       }
     }
+    // Une question longue est repliée par le terminal : les lignes pleines qui la précèdent, sans fin de phrase ni en-tête, en font partie.
+    if (from > 0 && /[?:]$/.test(q))
+      for (let i = from - 1; i >= 0 && i >= from - 8; i--) {
+        const t = lines[i].trim()
+        if (t.length < width * 0.6 || /[←→☐☒✔─━]/.test(t) || gap.has(String(tailStart + i + 1))) break
+        q = t + " " + q
+        if (gap.has(String(tailStart + i))) break
+      }
     return q
   }
   const multi = multiSelect(lines, above)
