@@ -2,7 +2,7 @@
 // le chiffre ; une liste à sélection (« ❯ option » suivie des autres, sans numéro) : le bouton déplace la sélection puis valide.
 // checked : case d'une question à choix multiples (la touche chiffre la coche ou la décoche sans bouger le curseur) ; reach : touches
 // pour amener le curseur sur l'option sans la valider (nécessaire avant d'écrire dans une option « Type something »).
-export type Opt = { label: string; keys: string[]; text?: boolean; chat?: boolean; checked?: boolean; reach?: string[] }
+export type Opt = { label: string; keys: string[]; detail?: string; text?: boolean; chat?: boolean; checked?: boolean; reach?: string[] }
 export type Prompt = { question: string; options: Opt[]; submit?: string[] }
 // Options qui attendent une réponse libre (« Type something. », « Chat about this », « No, and tell Claude what to do differently »…).
 const CHAT = /chat about this/i
@@ -23,11 +23,14 @@ export function parsePrompt(screen: string): Prompt | null {
   const foot = tail.slice(-8).join("\n")
   if (!/(esc|escape) to (cancel|exit|go back)|enter to (select|confirm)|to navigate|tab to amend|ready to submit|submit your answers|do you want to|would you like to|proceed\?/i.test(foot)) return null
   const lines = tail
-  const nums: { n: string; label: string; at: number }[] = []
+  let nums: { n: string; label: string; at: number }[] = []
   lines.forEach((l, i) => {
     const m = /^\s*(?:[❯>›]\s*)?([1-9])[.)]\s+(\S.*)$/.exec(l)
     if (m) nums.push({ n: m[1], label: m[2].trim(), at: i })
   })
+  // Un plan ou une liste de Claude, affichés au-dessus du dialogue, sont numérotés aussi : on ne garde que la dernière suite 1, 2, 3…
+  const last1 = nums.map((o) => o.n).lastIndexOf("1")
+  if (last1 > 0) nums = nums.slice(last1)
   const above = (at: number) => {
     let q = ""
     for (let i = at - 1; i >= 0 && i >= at - 6; i--) {
@@ -41,7 +44,16 @@ export function parsePrompt(screen: string): Prompt | null {
   }
   const multi = multiSelect(lines, above)
   if (multi) return multi
-  if (nums.length >= 2 && nums[0].n === "1") return { question: above(nums[0].at), options: nums.map((o) => ({ label: `${o.n}. ${o.label}`, keys: [o.n], text: FREE.test(o.label), chat: CHAT.test(o.label), ...(CHAT.test(o.label) && { keys: [o.n, "Enter"] }) })) }
+  // Lignes suivant une option, avant la prochaine : suite d'un libellé trop long, ou description (pas le pied ni les séparateurs).
+  const detail = (i: number) => {
+    const next = nums[i + 1]?.at ?? lines.length
+    return lines
+      .slice(nums[i].at + 1, next)
+      .filter((l) => /^\s{3,}\S/.test(l) && !/^\s*[─━╌▔]/.test(l) && !/(esc|enter|ctrl\+|shift\+|tab)\b.*(cancel|select|navigate|edit|approve|amend)/i.test(l))
+      .map((l) => l.trim())
+      .join(" ")
+  }
+  if (nums.length >= 2 && nums[0].n === "1") return { question: above(nums[0].at), options: nums.map((o, i) => ({ label: `${o.n}. ${o.label}`, detail: detail(i) || undefined, keys: [o.n], text: FREE.test(o.label), chat: CHAT.test(o.label), ...(CHAT.test(o.label) && { keys: [o.n, "Enter"] }) })) }
   const sel = lines.findIndex((l) => /^\s{0,3}❯ \S/.test(l))
   if (sel < 0) return null
   // Le texte des options est aligné sur celui de la ligne sélectionnée ; les autres lignes du dialogue ne le sont pas.

@@ -331,7 +331,10 @@ function TerminalPanel({ id, onAsk }: { id: string; onAsk?: (asking: boolean) =>
               <div key={o.label} className="contents">
                 <Button size="sm" disabled={pressing} variant={typing === o.label ? "secondary" : "outline"} className="h-auto min-h-8 justify-start gap-2 py-1.5 text-left whitespace-normal" onClick={() => choose(o)} title={`Touches : ${o.keys.join(", ")}`}>
                   {o.checked !== undefined && (o.checked ? <SquareCheck className="text-emerald-600" /> : <Square />)}
-                  {o.label}
+                  <span className="min-w-0">
+                    {o.label}
+                    {o.detail && <span className="block text-xs font-normal text-muted-foreground">{o.detail}</span>}
+                  </span>
                 </Button>
                 {typing === o.label && (
                   <div className="flex items-end gap-1.5">
