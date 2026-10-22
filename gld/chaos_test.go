@@ -78,3 +78,27 @@ func TestPanneGitBloque(t *testing.T) {
 		t.Fatalf("/git-remotes : %v %s", d, raw)
 	}
 }
+
+// Écriture impossible (dossier en lecture seule, disque plein) : l'erreur remonte, le fichier d'origine reste intact et
+// aucun fichier temporaire ne traîne.
+func TestPanneEcritureReglages(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignore les droits")
+	}
+	_, cfg, _ := web(t)
+	p := filepath.Join(cfg, "settings.json")
+	orig := "{\n  \"model\": \"opus\"\n}\n"
+	os.WriteFile(p, []byte(orig), 0o600)
+	os.Chmod(cfg, 0o500)
+	t.Cleanup(func() { os.Chmod(cfg, 0o755) })
+	if _, _, err := configEdit(CfgEdit{File: "u", Op: "set", Path: []string{"model"}, Value: "sonnet"}); err == nil {
+		t.Fatal("écriture dans un dossier en lecture seule acceptée")
+	}
+	os.Chmod(cfg, 0o755)
+	if b, _ := os.ReadFile(p); string(b) != orig {
+		t.Fatalf("original modifié : %q", b)
+	}
+	if left, _ := filepath.Glob(filepath.Join(cfg, ".gld-web-*.tmp")); len(left) != 0 {
+		t.Fatalf("temporaires restés : %v", left)
+	}
+}

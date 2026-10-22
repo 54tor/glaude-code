@@ -249,7 +249,7 @@ func pruneHistory(deleted []string) (removed int, hashes map[string]bool, kept [
 			if st, e := os.Stat(hist); e == nil {
 				mode = st.Mode()
 			}
-			if e := os.WriteFile(tmp, bytes.Join(kept, nil), mode); e == nil {
+			if e := writeSynced(tmp, bytes.Join(kept, nil), mode); e == nil {
 				if st1, e := os.Stat(hist); e != nil || st0 == nil || st1.Size() != st0.Size() || !st1.ModTime().Equal(st0.ModTime()) {
 					// ponytail: fenêtre résiduelle entre ce contrôle et le renommage ; Claude Code n'offre aucun verrou
 					os.Remove(tmp)

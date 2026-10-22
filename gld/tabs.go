@@ -82,7 +82,7 @@ func readTabs(b []byte) []TabSave {
 func writeTabs(t []TabSave) error {
 	b, _ := json.MarshalIndent(t, "", "  ")
 	tmp := tabsFile() + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+	if err := writeSynced(tmp, b, 0o600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, tabsFile())

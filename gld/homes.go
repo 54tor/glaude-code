@@ -95,7 +95,7 @@ func saveHomes(hs []Home) error {
 	}
 	b, _ := json.MarshalIndent(map[string]any{"homes": hs}, "", "  ")
 	tmp := homesFile() + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+	if err := writeSynced(tmp, b, 0o600); err != nil {
 		return err
 	}
 	return os.Rename(tmp, homesFile())
