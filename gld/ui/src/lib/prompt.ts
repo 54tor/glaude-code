@@ -64,6 +64,13 @@ export function parsePrompt(screen: string): Prompt | null {
 // Question à choix multiples : « N. [ ] option » (ou [✔]), une ligne « Submit » sans numéro, puis « Chat about this » sous un séparateur.
 // Le curseur (❯) se déplace aux flèches ; la touche chiffre coche sans déplacer le curseur ; Entrée sur « Submit » valide.
 function multiSelect(lines: string[], above: (at: number) => string): Prompt | null {
+  // Signature stricte : les touches envoyées sont aveugles (Bas…Entrée), donc un texte qui imiterait des cases ne doit pas passer pour la vraie
+  // question. Il faut l'en-tête « ← … Submit → », le pied « Enter to select » dans les 3 dernières lignes, et aucune demande d'autorisation
+  // (qu'un « Valider » mal placé pourrait approuver) sur l'écran.
+  if (lines.some((l) => /do you want to|would you like to|proceed\?|tab to amend|bash command/i.test(l))) return null
+  const head = lines.findIndex((l) => /^\s*←.*Submit.*→\s*$/.test(l))
+  if (head < 0 || !/enter to select/i.test(lines.slice(-3).join("\n"))) return null
+  lines = lines.slice(head)
   type Row = { at: number; kind: "box" | "submit" | "other"; n?: string; label: string; checked?: boolean }
   const rows: Row[] = []
   let cursor = -1

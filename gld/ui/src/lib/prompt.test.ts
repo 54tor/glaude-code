@@ -171,6 +171,22 @@ describe("parsePrompt : captures réelles", () => {
   })
 })
 
+describe("parsePrompt : faux dialogues", () => {
+  it("des cases imitées dans du texte, au-dessus d'une permission, ne donnent pas de « Valider »", () => {
+    const fake = `Voici une liste :
+1. [ ] a
+2. [ ] b
+   Submit
+${real.permission}`
+    const p = parsePrompt(fake)
+    expect(p?.submit).toBeUndefined()
+  })
+  it("des cases sans l'en-tête de la vraie question sont ignorées", () => {
+    const noHead = real.multi.split("\n").filter((l) => !l.includes("←")).join("\n")
+    expect(parsePrompt(noHead)?.submit).toBeUndefined()
+  })
+})
+
 describe("parsePrompt", () => {
   it("permission : question et trois options numérotées, la dernière à réponse libre", () => {
     const p = parsePrompt(screens.permission)!
