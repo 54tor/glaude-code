@@ -19,9 +19,9 @@ func TestPanneClaudeBloque(t *testing.T) {
 	home, _ := os.UserHomeDir()
 	// sleep lancé en fils (pas exec) : il garde la sortie ouverte après la mort du shell, comme un petit-enfant de claude
 	os.WriteFile(filepath.Join(home, ".local", "bin", "claude"), []byte("#!/bin/sh\n"+sleep+" 30\n"), 0o755)
-	old := agentsTimeout
-	agentsTimeout = 300 * time.Millisecond
-	t.Cleanup(func() { agentsTimeout = old })
+	old := cmdTimeout
+	cmdTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { cmdTimeout = old })
 
 	t0 := time.Now()
 	_, m, _ := call(t, h, "GET", "/api", "")
@@ -34,5 +34,27 @@ func TestPanneClaudeBloque(t *testing.T) {
 	ok(t, h, "/rm", `{"items":[{"dir":"-p","id":"`+id1+`"}]}`, false, "action refusée")
 	if !exists(filepath.Join(cfg, "projects", "-p", id1+".jsonl")) {
 		t.Fatal("session supprimée sans savoir si elle était ouverte")
+	}
+}
+
+// Un serveur tmux figé : les routes interrogées en boucle par l'interface répondent quand même, sans panneau.
+func TestPanneTmuxBloque(t *testing.T) {
+	sleep, err := exec.LookPath("sleep")
+	if err != nil {
+		t.Skip("pas de sleep")
+	}
+	h, _, _ := web(t)
+	bin := t.TempDir()
+	os.WriteFile(filepath.Join(bin, "tmux"), []byte("#!/bin/sh\n"+sleep+" 30\n"), 0o755)
+	t.Setenv("PATH", bin)
+	old := cmdTimeout
+	cmdTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { cmdTimeout = old })
+	for _, p := range []string{"/trust-pending", "/session-send-info"} {
+		t0 := time.Now()
+		code, _, raw := call(t, h, "GET", p, "")
+		if d := time.Since(t0); code != 200 || d > 4*time.Second {
+			t.Fatalf("%s : %d en %v %s", p, code, d, raw)
+		}
 	}
 }

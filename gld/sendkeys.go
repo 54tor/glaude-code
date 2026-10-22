@@ -7,6 +7,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,9 +26,13 @@ const sendMax = 32 << 10
 
 var paneRe = regexp.MustCompile(`^%[0-9]+$`)
 
-// tmuxRun lance tmux, avec stdin si non vide (remplaçable dans les tests).
+// tmuxRun lance tmux, avec stdin si non vide (remplaçable dans les tests). Borné comme claudeAgents : un serveur tmux figé
+// ne bloque pas les routes que l'interface interroge en boucle.
 var tmuxRun = func(stdin string, args ...string) (string, error) {
-	cmd := exec.Command("tmux", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), cmdTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "tmux", args...)
+	cmd.WaitDelay = time.Second
 	if stdin != "" {
 		cmd.Stdin = strings.NewReader(stdin)
 	}
