@@ -155,7 +155,9 @@ func subRepos(dir string) []string {
 		if !d.IsDir() || strings.HasPrefix(n, ".") || n == "node_modules" || n == "vendor" {
 			continue
 		}
-		if _, err := os.Stat(filepath.Join(dir, n, ".git")); err == nil {
+		// Un vrai dépôt : « .git » est un dossier (pas un fichier qui renverrait ailleurs) et appartient à l'utilisateur de gld ;
+		// un dépôt découvert au hasard d'un dossier n'est pas interrogé s'il vient de quelqu'un d'autre.
+		if fi, err := os.Lstat(filepath.Join(dir, n, ".git")); err == nil && fi.IsDir() && ownedByMe(fi) {
 			out = append(out, filepath.Join(dir, n))
 		}
 		if len(out) >= 40 {
