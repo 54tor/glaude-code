@@ -383,3 +383,18 @@ func TestEcritureConfigConcurrente(t *testing.T) {
 		t.Fatalf("%d règles sur 20 : %s", n, b)
 	}
 }
+
+func TestImportDossiersSupplementaires(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	frag := `{"permissions":{"allow":["Bash(ls:*)"],"additionalDirectories":["~/a"," ~/a ","../b"]}}`
+	if _, after, _, _, err := permImport("u", frag, "replace", false); err != nil || !strings.Contains(after, `"~/a"`) || !strings.Contains(after, `"../b"`) {
+		t.Fatal(after, err)
+	}
+	if _, after, _, _, err := permImport("u", `{"permissions":{"additionalDirectories":[]}}`, "replace", false); err != nil || strings.Contains(after, "additionalDirectories") {
+		t.Fatal(after, err)
+	}
+	if _, _, _, _, err := permImport("u", `{"permissions":{"additionalDirectories":["a\nb"]}}`, "replace", true); err == nil {
+		t.Fatal("chemin sur deux lignes accepté")
+	}
+}

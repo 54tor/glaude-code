@@ -1,7 +1,8 @@
-// Édition en texte des règles de permission : une règle par ligne sous [allow], [ask] ou [deny], « # » pour un commentaire.
+// Édition en texte des règles de permission : une règle par ligne sous [allow], [ask] ou [deny], un chemin par ligne sous
+// [additionalDirectories], « # » pour un commentaire.
 // parseRaw lit le texte et le vérifie ligne à ligne : une erreur bloque l'enregistrement, un avertissement non.
 
-export const KINDS = ["allow", "ask", "deny"] as const
+export const KINDS = ["allow", "ask", "deny", "additionalDirectories"] as const
 export type Kind = (typeof KINDS)[number]
 export type RawPerms = Record<Kind, string[]>
 export type Lint = { line: number; level: "error" | "warn"; msg: string }
@@ -14,7 +15,7 @@ export function formatRaw(p: RawPerms): string {
 }
 
 export function parseRaw(text: string): { perms: RawPerms; lint: Lint[] } {
-  const perms: RawPerms = { allow: [], ask: [], deny: [] }
+  const perms: RawPerms = { allow: [], ask: [], deny: [], additionalDirectories: [] }
   const lint: Lint[] = []
   const at = new Map<string, { kind: Kind; line: number }[]>()
   let kind: Kind | null = null
@@ -25,12 +26,18 @@ export function parseRaw(text: string): { perms: RawPerms; lint: Lint[] } {
     const head = /^\[(.*)\]$/.exec(s)
     if (head) {
       kind = (KINDS as readonly string[]).includes(head[1]) ? (head[1] as Kind) : null
-      if (!kind) lint.push({ line, level: "error", msg: `Section inconnue « ${head[1]} » : allow, ask ou deny` })
+      if (!kind) lint.push({ line, level: "error", msg: `Section inconnue « ${head[1]} » : allow, ask, deny ou additionalDirectories` })
       return
     }
-    if (!kind) return void lint.push({ line, level: "error", msg: "Règle hors d'une section ([allow], [ask] ou [deny])" })
+    if (!kind) return void lint.push({ line, level: "error", msg: "Règle hors d'une section ([allow], [ask], [deny] ou [additionalDirectories])" })
     const err = (msg: string) => lint.push({ line, level: "error", msg })
     const warn = (msg: string) => lint.push({ line, level: "warn", msg })
+    if (kind === "additionalDirectories") {
+      if (s.length > 500) return err("Chemin de plus de 500 caractères")
+      if (perms[kind].includes(s)) return warn("Dossier en double")
+      perms[kind].push(s)
+      return
+    }
     if (s.length > 300) return err("Règle de plus de 300 caractères")
     const m = RULE.exec(s)
     if (!m) return err("Syntaxe attendue : Outil ou Outil(motif)")
