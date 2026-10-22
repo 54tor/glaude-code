@@ -216,7 +216,7 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
     const full = [text.trim(), pics.suffix()].filter(Boolean).join("\n")
     if (!full || busy) return
     setBusy(true)
-    const r = await api.post("/session-send", { id, text: full })
+    const r = await api.post("/session-send", { id, text: full }, 20_000)
     setBusy(false)
     if (!r.ok) toast.error(r.out) // le succès se voit dans la session : pas de notification
     if (r.ok) {
@@ -266,8 +266,7 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
           placeholder="Écrire à la session… (Entrée envoie, Maj+Entrée : saut de ligne)"
           rows={2}
           maxLength={32000}
-          disabled={busy}
-          className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+          className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           aria-label="Message à la session ouverte"
         />
         <ImageChips images={pics.images} busy={pics.busy} onRemove={pics.remove} />

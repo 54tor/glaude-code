@@ -168,9 +168,10 @@ export const api = {
   trashFile: (id: string) => get<{ text?: string; error?: string }>(`/trash-file?id=${enc(id)}`),
   search: (q: string) => get<{ hits: Hit[] }>(`/search?q=${enc(q)}`),
   // Une action ne lève jamais : toute erreur (réseau, HTTP) devient un Result visible.
-  async post(url: string, body: unknown): Promise<Result> {
+  // timeoutMs : abandonne la requête au bout de ce délai (sinon elle attend le serveur indéfiniment).
+  async post(url: string, body: unknown, timeoutMs?: number): Promise<Result> {
     try {
-      const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined })
       return (await r.json()) as Result
     } catch (e) {
       return { ok: false, out: `Erreur : ${e instanceof Error ? e.message : String(e)}` }
