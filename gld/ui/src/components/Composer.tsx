@@ -271,7 +271,7 @@ function parsePrompt(screen: string): { question: string; options: Opt[] } | nul
   // Les confirmations d'opération risquée n'ont pas toujours cette ligne d'aide tout en bas : on la cherche sur les dernières lignes,
   // ou on reconnaît la question elle-même (« Do you want to proceed? »).
   const foot = tail.slice(-8).join("\n")
-  if (!/(esc|escape) to (cancel|exit|go back)|enter to (select|confirm)|to navigate|tab to amend|do you want to|would you like to|proceed\?/i.test(foot)) return null
+  if (!/(esc|escape) to (cancel|exit|go back)|enter to (select|confirm)|to navigate|tab to amend|ready to submit|submit your answers|do you want to|would you like to|proceed\?/i.test(foot)) return null
   const lines = tail
   const nums: { n: string; label: string; at: number }[] = []
   lines.forEach((l, i) => {
