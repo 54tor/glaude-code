@@ -183,3 +183,19 @@
 *:hover {
   scrollbar-color: var(--border) transparent;
 }
+
+/* Animations réduites à la demande du système (dialogues, tiroir, spinners). */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Écran tactile : cases à cocher (16 px) et petits boutons d'icône (20 px) gardent leur dessin mais reçoivent le doigt sur 24 px au moins. */
+@media (pointer: coarse) {
+  [data-slot="checkbox"], [data-slot="button"][data-size="icon-xs"] { position: relative; }
+  [data-slot="checkbox"]::after, [data-slot="button"][data-size="icon-xs"]::after { content: ""; position: absolute; inset: -4px; }
+}

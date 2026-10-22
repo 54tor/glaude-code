@@ -2,7 +2,7 @@ import { useEffect } from "react"
 import { AlarmClock, Coins, Star, Brain, SlidersHorizontal, Zap, Flame, History, Clock, FileText, Inbox, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
 import { size } from "@/lib/format"
 import type { Choice } from "@/lib/models"
-import type { Route } from "@/lib/route"
+import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -20,19 +20,37 @@ import { useActions, type Row } from "./actions"
 import { Settings, type Fonts } from "./SettingsDialog"
 
 
-function NavItem({ icon: Icon, label, n, active, onClick }: { icon: typeof Inbox; label: string; n?: number; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      aria-current={active}
-      className={cn(
-        "flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm transition-colors",
-        active ? "bg-accent font-medium" : "text-foreground/80 hover:bg-muted hover:text-foreground"
-      )}
-    >
+// Avec `to`, un vrai lien : clic du milieu ou Ctrl+clic ouvrent la vue dans un autre onglet.
+function NavItem({ icon: Icon, label, n, active, onClick, to }: { icon: typeof Inbox; label: string; n?: number; active: boolean; onClick: () => void; to?: Route }) {
+  const cls = cn(
+    "flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm transition-colors",
+    active ? "bg-accent font-medium" : "text-foreground/80 hover:bg-muted hover:text-foreground"
+  )
+  const body = (
+    <>
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <span className="flex-1 truncate text-left">{label}</span>
       {n !== undefined && <span className="text-xs text-muted-foreground tabular-nums">{n}</span>}
+    </>
+  )
+  if (to)
+    return (
+      <a
+        href={href(to)}
+        aria-current={active ? "page" : undefined}
+        className={cls}
+        onClick={(e) => {
+          if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+          e.preventDefault()
+          onClick()
+        }}
+      >
+        {body}
+      </a>
+    )
+  return (
+    <button onClick={onClick} aria-current={active} className={cls}>
+      {body}
     </button>
   )
 }
@@ -123,6 +141,7 @@ export type SidebarProps = {
 
 export function Sidebar({ searchRef, ...p }: SidebarProps) {
   const r = p.route
+  const link = (to: Route) => ({ to, onClick: () => p.go(to) })
   const a = useActions()
   const { open, onClose } = p
   useEffect(() => {
@@ -204,21 +223,21 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             label="Récentes (7 jours)"
             n={p.counts.recent}
             active={r.kind === "recent"}
-            onClick={() => p.go({ kind: "recent" })}
+            {...link({ kind: "recent" })}
           />
-          <NavItem icon={Flame} label="En cours et cache chaud" n={p.counts.active} active={r.kind === "active"} onClick={() => p.go({ kind: "active" })} />
-          <NavItem icon={Inbox} label="Toutes les sessions" n={p.counts.all} active={r.kind === "all"} onClick={() => p.go({ kind: "all" })} />
-          <NavItem icon={History} label="Sessions sauvegardées" active={r.kind === "tabs"} onClick={() => p.go({ kind: "tabs" })} />
-          <NavItem icon={Zap} label="Skills" active={r.kind === "skills"} onClick={() => p.go({ kind: "skills", key: "" })} />
-          <NavItem icon={SlidersHorizontal} label="Configuration" active={r.kind === "config"} onClick={() => p.go({ kind: "config", tab: "" })} />
-          <NavItem icon={Brain} label="Mémoire" active={r.kind === "memory"} onClick={() => p.go({ kind: "memory", key: "" })} />
+          <NavItem icon={Flame} label="En cours et cache chaud" n={p.counts.active} active={r.kind === "active"} {...link({ kind: "active" })} />
+          <NavItem icon={Inbox} label="Toutes les sessions" n={p.counts.all} active={r.kind === "all"} {...link({ kind: "all" })} />
+          <NavItem icon={History} label="Sessions sauvegardées" active={r.kind === "tabs"} {...link({ kind: "tabs" })} />
+          <NavItem icon={Zap} label="Skills" active={r.kind === "skills"} {...link({ kind: "skills", key: "" })} />
+          <NavItem icon={SlidersHorizontal} label="Configuration" active={r.kind === "config"} {...link({ kind: "config", tab: "" })} />
+          <NavItem icon={Brain} label="Mémoire" active={r.kind === "memory"} {...link({ kind: "memory", key: "" })} />
           {p.snippets !== null && (
             <NavItem
               icon={FileText}
               label="Snippets"
               n={p.snippets}
               active={r.kind === "snippets"}
-              onClick={() => p.go({ kind: "snippets", path: "" })}
+              {...link({ kind: "snippets", path: "" })}
             />
           )}
 
@@ -236,7 +255,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
                         label={vg.name}
                         n={p.groupCount(vg)}
                         active={r.kind === "group" && r.name === vg.name && r.key === key}
-                        onClick={() => p.go({ kind: "group", name: vg.name, key })}
+                        {...link({ kind: "group", name: vg.name, key })}
                       />
                     </div>
                   </ContextMenuTrigger>

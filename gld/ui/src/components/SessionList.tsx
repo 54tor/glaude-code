@@ -90,7 +90,7 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
               {a.favs.has(s.id) && <Star className="mr-1 inline size-3.5 -translate-y-px fill-amber-400 text-amber-400" aria-label="favori" />}
               {s.title}
             </span>
-            <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
               {live && (
                 <>
                   <Live waiting={a.waiting.has(s.id)} />

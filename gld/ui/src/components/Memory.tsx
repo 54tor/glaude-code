@@ -351,8 +351,8 @@ export function Memory({
 
   const [fm, body] = split(text ?? "")
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col md:flex-row">
-      <ScrollArea className={cn("shrink-0 border-b md:block md:max-h-none md:w-[28rem] md:flex-none md:border-r md:border-b-0", sel ? "hidden" : "min-h-0 flex-1")}>
+    <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
+      <ScrollArea className={cn("shrink-0 border-b lg:block lg:max-h-none lg:w-[28rem] lg:flex-none lg:border-r lg:border-b-0", sel ? "hidden" : "min-h-0 flex-1")}>
         <nav className="p-2">
           {!list && <Skeleton className="m-2 h-24" />}
           {list && (
@@ -406,9 +406,9 @@ export function Memory({
           onClear={() => setPicked(new Set())}
         />
       )}
-      <div className={cn("min-h-0 min-w-0 flex-1 flex-col md:flex", sel ? "flex" : "hidden")}>
+      <div className={cn("min-h-0 min-w-0 flex-1 flex-col lg:flex", sel ? "flex" : "hidden")}>
         {sel && (
-          <div className="border-b px-2 py-1.5 md:hidden">
+          <div className="border-b px-2 py-1.5 lg:hidden">
             <Button variant="ghost" size="sm" onClick={() => onPick("")}>
               <ArrowLeft /> Liste
             </Button>

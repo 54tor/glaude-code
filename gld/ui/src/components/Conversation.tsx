@@ -51,6 +51,10 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
   const dir = session?.dir ?? ""
   const id = session?.id ?? ""
   const live = useLive(dir, id, a.live.has(id))
+  const lastId = useRef("") // à la fermeture, session vaut déjà null : le focus revient à la ligne de cette session
+  useEffect(() => {
+    if (id) lastId.current = id
+  }, [id])
   const [tools, setTools] = useState(false)
   const [view, setView] = useLocal("gld.session-view", "visuel") // choix gardé dans ce navigateur
   const [termOn, setTermOn] = useState(false) // GLD_WEB_TERMINAL=1 côté serveur
@@ -203,7 +207,16 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
 
   return (
     <Dialog open={!!session} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="flex h-[94vh] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none">
+      <DialogContent
+        className="flex h-[94vh] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
+        onCloseAutoFocus={(e) => {
+          const b = lastId.current && document.querySelector<HTMLElement>(`[data-row][data-id="${CSS.escape(lastId.current)}"]`)
+          if (b) {
+            e.preventDefault()
+            b.focus()
+          }
+        }}
+      >
         <DialogHeader className="gap-1 border-b px-4 pt-4 pr-12 pb-3 md:px-6 md:pt-5 md:pr-14 md:pb-4">
           <div className="flex items-start gap-4">
             <div className="min-w-0 flex-1 space-y-1">
@@ -235,7 +248,7 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
           </Button>
           {session && <KeepWarmButton s={session} />}
           {session && <LiveStats live={live} tok={session.tok} />}
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1">
             {row && !row.g.missing && (
               <Button variant="outline" size="sm" onClick={() => a.newSession(row.g.project)} title="Nouvelle session Claude dans le même dossier">
                 <MessageSquarePlus /> Nouvelle session
