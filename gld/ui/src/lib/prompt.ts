@@ -45,6 +45,17 @@ export function parsePrompt(screen: string): Prompt | null {
   // La question au-dessus de l'option `at` : ses lignes repliées jusqu'au début du paragraphe (ou de la phrase précédente).
   const width = Math.max(...lines.map((l) => l.trim().length))
   const above = (at: number) => {
+    // Une ligne vide sépare la question des options : la question est le paragraphe entier au-dessus, replié ou non par le terminal.
+    if (gap.has(String(tailStart + at))) {
+      const parts: string[] = []
+      for (let i = at - 1; i >= 0 && i >= at - 14; i--) {
+        const t = lines[i].trim()
+        if (/[←→☐☒✔]|^[─━╌▔]/.test(t)) break
+        parts.unshift(t)
+        if (gap.has(String(tailStart + i))) break
+      }
+      if (parts.length) return parts.join(" ")
+    }
     let q = ""
     let from = -1
     for (let i = at - 1; i >= 0 && i >= at - 6; i--) {
