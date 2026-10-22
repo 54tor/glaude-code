@@ -105,6 +105,15 @@ func TestMatin(t *testing.T) {
 		t.Fatalf("%v %+v", err, tabs)
 	}
 
+	// Une session précise déjà ouverte : un échec explicite, pas « 0 onglet lancé ».
+	tabs = nil
+	if out, err = run(t, cliMatin, "--term", "tmux", "--id", live4, proj); err == nil || !strings.Contains(err.Error(), "déjà ouverte") || len(tabs) != 0 {
+		t.Fatalf("session ouverte : %v %q %+v", err, out, tabs)
+	}
+	if _, err = run(t, cliMatin, "--term", "tmux", "--id", "99999999-9999-9999-9999-999999999999", proj); err == nil || !strings.Contains(err.Error(), "introuvable") {
+		t.Fatalf("id inconnu : %v", err)
+	}
+
 	// Nouvelle session : le prompt passe tel quel, sans shell.
 	tabs = nil
 	out, err = run(t, cliMatin, "--term", "kitty", "--prompt", "fusionne", proj)

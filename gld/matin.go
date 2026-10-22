@@ -204,12 +204,16 @@ func matinRun(ctx context.Context, o matinOpts, out io.Writer) error {
 
 	seen := map[string]bool{}
 	n := 0
+	opened := false // la session demandée est déjà ouverte dans un terminal
 	for _, t := range recent {
 		if o.id != "" && t.S.ID != o.id || t.Info.Size() < o.min {
 			continue
 		}
 		title, mark := t.label()
-		if mark == "~" && o.nommees || title == "" {
+		if o.id != "" && title == "" {
+			title = short(t.S.ID) // une session demandée par son id s'ouvre même sans titre
+		}
+		if mark == "~" && o.nommees && o.id == "" || title == "" {
 			continue
 		}
 		if o.id == "" { // premier vu = plus récent : les homonymes plus anciens sont ignorés
@@ -223,6 +227,7 @@ func matinRun(ctx context.Context, o matinOpts, out io.Writer) error {
 		}
 		if live[t.S.ID] {
 			fmt.Fprintf(out, "  déjà ouverte %s %s %s\n", mark, pad(trunc(title, 45), 45), short(t.S.ID))
+			opened = true
 			continue
 		}
 		if o.dry {
@@ -241,6 +246,12 @@ func matinRun(ctx context.Context, o matinOpts, out io.Writer) error {
 		n++
 	}
 	fmt.Fprintln(out)
+	if o.id != "" && n == 0 { // une session précise : ne rien ouvrir est un échec à dire clairement, pas « 0 onglet »
+		if opened {
+			return fmt.Errorf("cette session est déjà ouverte dans un terminal : rien à lancer (le terminal qui la porte est déjà là)")
+		}
+		return fmt.Errorf("session %s introuvable dans ce projet", short(o.id))
+	}
 	if o.dry {
 		fmt.Fprintf(out, "%d sujet(s) seraient rouverts. Lancez sans -n pour ouvrir.\n", n)
 	} else {
