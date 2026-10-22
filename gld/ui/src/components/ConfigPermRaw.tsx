@@ -11,10 +11,10 @@ const rulesOf = (doc: Doc, k: string): string[] => {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []
 }
 
-// Édition de toutes les règles (allow, ask, deny) d'un fichier en texte brut, vérifiée à la frappe. L'enregistrement passe par
+// Édition de toutes les règles (allow, ask, deny) et des dossiers supplémentaires d'un fichier en texte brut, vérifiée à la frappe. L'enregistrement passe par
 // l'import en mode « remplacer » : aperçu des différences, sauvegarde, puis écriture.
 function Editor({ file, label, doc, propose, onClose }: { file: string; label: string; doc: Doc; propose: (file: string, text: string, mode: string) => Promise<string | null>; onClose: () => void }) {
-  const [text, setText] = useState(() => formatRaw({ allow: rulesOf(doc, "allow"), ask: rulesOf(doc, "ask"), deny: rulesOf(doc, "deny") } as RawPerms))
+  const [text, setText] = useState(() => formatRaw({ allow: rulesOf(doc, "allow"), ask: rulesOf(doc, "ask"), deny: rulesOf(doc, "deny"), additionalDirectories: rulesOf(doc, "additionalDirectories") } as RawPerms))
   const [error, setError] = useState("")
   const { perms, lint } = useMemo(() => parseRaw(text), [text])
   const errors = lint.filter((l) => l.level === "error").length
@@ -28,7 +28,7 @@ function Editor({ file, label, doc, propose, onClose }: { file: string; label: s
       <DialogHeader>
         <DialogTitle>Éditer les permissions en texte</DialogTitle>
         <DialogDescription>
-          {label} : une règle par ligne sous [allow], [ask] ou [deny], « # » pour un commentaire (non conservé). Les dossiers supplémentaires et le mode par défaut ne sont pas touchés.
+          {label} : une règle par ligne sous [allow], [ask] ou [deny], un chemin par ligne sous [additionalDirectories], « # » pour un commentaire (non conservé). Le mode par défaut n'est pas touché.
         </DialogDescription>
       </DialogHeader>
       <textarea
@@ -45,7 +45,7 @@ function Editor({ file, label, doc, propose, onClose }: { file: string; label: s
             <span className="tabular-nums">Ligne {l.line}</span> {l.msg}
           </li>
         ))}
-        {lint.length === 0 && <li className="text-muted-foreground">Rien à signaler : {perms.allow.length + perms.ask.length + perms.deny.length} règle(s).</li>}
+        {lint.length === 0 && <li className="text-muted-foreground">Rien à signaler : {perms.allow.length + perms.ask.length + perms.deny.length} règle(s), {perms.additionalDirectories.length} dossier(s).</li>}
       </ul>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <DialogFooter>

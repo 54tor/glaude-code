@@ -5,10 +5,15 @@ const msgs = (t: string, level?: string) => parseRaw(t).lint.filter((l) => !leve
 
 describe("permLint", () => {
   it("aller-retour texte", () => {
-    const p = { allow: ["Bash(git status:*)", "mcp__x"], ask: [], deny: ["Bash(rm:*)"] }
+    const p = { allow: ["Bash(git status:*)", "mcp__x"], ask: [], deny: ["Bash(rm:*)"], additionalDirectories: ["~/Projets/x", "../autre"] }
     const r = parseRaw(formatRaw(p))
     expect(r.perms).toEqual(p)
     expect(r.lint).toEqual([])
+  })
+  it("dossiers supplémentaires : chemins libres, doublon signalé", () => {
+    expect(parseRaw("[additionalDirectories]\n~/a b/c\n../x\n").perms.additionalDirectories).toEqual(["~/a b/c", "../x"])
+    expect(msgs("[additionalDirectories]\n~/a\n~/a", "warn")).toEqual(["3:warn"])
+    expect(msgs("[additionalDirectories]\n" + "a".repeat(501), "error")).toEqual(["2:error"])
   })
   it("ignore commentaires et lignes vides", () => {
     expect(parseRaw("# note\n\n[allow]\n  Read(~/x/**)  \n").perms.allow).toEqual(["Read(~/x/**)"])

@@ -11,6 +11,9 @@ import (
 
 var permKinds = []string{"allow", "ask", "deny"}
 
+// importKinds : les listes qu'un fragment peut porter. Les dossiers supplémentaires sont des chemins, pas des règles.
+var importKinds = append(append([]string{}, permKinds...), "additionalDirectories")
+
 const permMax = 2000 // règles acceptées par import
 
 // parsePermImport lit un fragment exporté : soit {"permissions": {allow, ask, deny}}, soit directement {allow, ask, deny}.
@@ -36,11 +39,11 @@ func parsePermImport(text string) (map[string][]string, error) {
 	total := 0
 	for _, k := range root.keys {
 		known := false
-		for _, pk := range permKinds {
+		for _, pk := range importKinds {
 			known = known || pk == k
 		}
 		if !known {
-			continue // defaultMode, additionalDirectories… : ignorés
+			continue // defaultMode… : ignoré
 		}
 		list, ok := root.m[k].([]any)
 		if !ok {
@@ -51,8 +54,12 @@ func parsePermImport(text string) (map[string][]string, error) {
 		for i, e := range list {
 			s, ok := e.(string)
 			s = strings.TrimSpace(s)
-			if !ok || s == "" || len(s) > 300 || strings.ContainsAny(s, "\n\r") {
-				return nil, fmt.Errorf("« %s » : la règle n° %d n'est pas un texte d'une ligne", k, i+1)
+			max := 300
+			if k == "additionalDirectories" {
+				max = 500
+			}
+			if !ok || s == "" || len(s) > max || strings.ContainsAny(s, "\n\r\x00") {
+				return nil, fmt.Errorf("« %s » : l'entrée n° %d n'est pas un texte d'une ligne", k, i+1)
 			}
 			if !seen[s] {
 				seen[s] = true
@@ -63,7 +70,7 @@ func parsePermImport(text string) (map[string][]string, error) {
 		out[k] = rules
 	}
 	if len(out) == 0 {
-		return nil, errors.New("aucune liste allow, ask ou deny dans ce fichier")
+		return nil, errors.New("aucune liste allow, ask, deny ou additionalDirectories dans ce fichier")
 	}
 	if total > permMax {
 		return nil, fmt.Errorf("trop de règles (%d, au plus %d)", total, permMax)
@@ -96,7 +103,7 @@ func permImport(id, text, mode string, dry bool) (before, after string, warns []
 	}
 	doc := asMap(cur)
 	added, removed := 0, 0
-	for _, kind := range permKinds {
+	for _, kind := range importKinds {
 		rules, has := imp[kind]
 		if !has {
 			continue
