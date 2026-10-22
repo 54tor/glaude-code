@@ -98,7 +98,7 @@ export function useAppActions(c: {
   }
   const saveGroups = (groups: VGroup[]) => saveStore(groups, [...favs])
   const same = (x: VGroup, y: VGroup) => x.name === y.name && x.project === y.project
-  const named = (title: string, value: string, confirm: string, run: (v: string) => void) => setPrompt({ title, value, confirm, run })
+  const named = (title: string, value: string, confirm: string, run: (v: string) => void, auto?: PromptAsk["auto"]) => setPrompt({ title, value, confirm, run, auto })
   // Un groupe est un sous-dossier virtuel : il ne contient que des sessions de son dossier de travail.
   const addTo = (ids: string[], project: string, name: string) => {
     const vg = { name, project, ids }
@@ -321,8 +321,13 @@ export function useAppActions(c: {
         () => toast.error("Copie impossible")
       ),
     rename: (s) =>
-      named("Renommer la session", s.named ? s.title : "", "Renommer", (title) => act("/rename", { dir: s.dir, id: s.id, title }, "Renommage…")),
-    renameAuto: (s) => act("/rename", { dir: s.dir, id: s.id, auto: true }, "Titre automatique…"),
+      named(
+        "Renommer la session",
+        s.named ? s.title : "",
+        "Renommer",
+        (title) => act("/rename", { dir: s.dir, id: s.id, title }, "Renommage…"),
+        { label: "Titre automatique", hint: "Un modèle rédige le titre d'après la conversation", run: () => act("/rename", { dir: s.dir, id: s.id, auto: true }, "Titre automatique…") }
+      ),
     exportMd: (r) => exportMarkdown([{ s: r.s, project: tilde(r.g.project, home) }]).catch(() => toast.error("Export impossible")),
     move: async (rs) => {
       const to = await pickDir(rs.length > 1 ? `Déplacer ${plural(rs.length)} vers…` : `Déplacer « ${rs[0].s.title} » vers…`, rs[0].s.cwd)
