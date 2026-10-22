@@ -116,9 +116,9 @@ type infoState struct {
 	mtime             time.Time
 	off               int64 // octets déjà lus, toujours en fin de ligne complète
 	title, cwd, first string
-	tok               Tokens // total de la session
+	tok               Tokens    // total de la session
 	lastMsg           time.Time // horodatage du dernier message user/assistant : le mtime bouge aussi pour un titre ou un résumé
-	lastID            string // un même message s'écrit sur plusieurs lignes qui répètent son usage : seul le dernier compte
+	lastID            string    // un même message s'écrit sur plusieurs lignes qui répètent son usage : seul le dernier compte
 	last              Tokens
 }
 
