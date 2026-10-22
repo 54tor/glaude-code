@@ -75,6 +75,8 @@ func main() {
 	srv := &http.Server{Addr: net.JoinHostPort(*listen, port), Handler: h}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	homeCtx = ctx
+	defer stopHomes()
 	go func() {
 		<-ctx.Done()
 		fmt.Fprintln(os.Stderr, "\narrêt.")
@@ -114,6 +116,7 @@ func handler() http.Handler {
 	routesConfigRaw(mux)
 	routesConfigPerm(mux)
 	routesPermHelp(mux)
+	routesHomes(mux)
 	routesSkills(mux)
 	routesSlash(mux)
 	routesImages(mux)
@@ -123,7 +126,7 @@ func handler() http.Handler {
 	mux.HandleFunc("POST /new-session", newSessionHandler)
 	// Anti DNS-rebinding : seul le Host local est servi (sauf écoute hors localhost, où le jeton le remplace).
 	// Anti CSRF : http.CrossOriginProtection (bibliothèque standard) refuse toute requête modifiante venue d'une autre origine.
-	guarded := http.NewCrossOriginProtection().Handler(mux)
+	guarded := withHomes(http.NewCrossOriginProtection().Handler(mux))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !openHosts && !hosts[r.Host] {
 			http.Error(w, "forbidden", http.StatusForbidden)
