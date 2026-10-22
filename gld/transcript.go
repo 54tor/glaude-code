@@ -21,6 +21,7 @@ import (
 type line struct {
 	Type        string `json:"type"`
 	CustomTitle string `json:"customTitle"`
+	IsMeta      bool   `json:"isMeta"` // texte injecté par Claude Code (contenu d'un skill…), jamais tapé par l'utilisateur
 	Cwd         string `json:"cwd"`
 	GitBranch   string `json:"gitBranch"`
 	Timestamp   string `json:"timestamp"`
@@ -174,7 +175,7 @@ func (c *infoState) visit(b []byte) {
 	if wantCwd {
 		c.cwd = l.Cwd
 	}
-	if wantFirst && l.Type == "user" {
+	if wantFirst && l.Type == "user" && !l.IsMeta {
 		c.first = promptOf(&l)
 	}
 	if u := l.Message.Usage; wantUsage && l.Type == "assistant" && u != nil {
@@ -460,6 +461,9 @@ func flat(c json.RawMessage) string {
 
 // lineMsgs extrait d'une ligne de transcript le texte des échanges, plus (tools) les appels d'outils et leurs résultats tronqués.
 func lineMsgs(b []byte, tools bool) []Msg {
+	if bytes.Contains(b, []byte(`"isMeta":true`)) {
+		return nil
+	}
 	isU := bytes.Contains(b, []byte(`"type":"user"`))
 	if !isU && !bytes.Contains(b, []byte(`"type":"assistant"`)) {
 		return nil
