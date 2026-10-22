@@ -6,13 +6,12 @@ const dirtyOf = (st: GitState | undefined) => (st ? st.changed + st.untracked : 
 
 // Navigation : « <changements en attente> [git] » ; rien pour un dossier qui n'est pas un dépôt.
 export function GitMini({ states }: { states: (GitState | undefined)[] }) {
-  const known = states.filter((s): s is GitState => !!s)
-  if (known.length === 0) return null
-  const dirty = known.reduce((n, s) => n + dirtyOf(s), 0)
+  const dirty = states.reduce((n, s) => n + dirtyOf(s), 0)
+  if (dirty === 0) return null // rien en attente : ni nombre ni icône
   return (
-    <span className="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground" title={dirty ? `${dirty} changement(s) en attente` : "Aucun changement en attente"}>
-      {dirty > 0 && <span className="font-medium text-amber-600 tabular-nums dark:text-amber-400">{dirty}</span>}
-      <GitBranch className={cn("size-3.5", dirty > 0 && "text-amber-600 dark:text-amber-400")} aria-label="dépôt git" />
+    <span className="flex shrink-0 items-center gap-0.5 text-xs text-amber-600 dark:text-amber-400" title={`${dirty} changement(s) en attente`}>
+      <span className="font-medium tabular-nums">{dirty}</span>
+      <GitBranch className="size-3.5" aria-label="dépôt git" />
     </span>
   )
 }
