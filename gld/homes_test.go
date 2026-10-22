@@ -80,6 +80,23 @@ func TestHomesAiguillage(t *testing.T) {
 	}
 }
 
+func TestEnfantExigeLeJetonDeLaPasserelle(t *testing.T) {
+	req := func(tok string) *http.Request {
+		r := httptest.NewRequest("GET", "/api", nil)
+		if tok != "" {
+			r.Header.Set(childHeader, tok)
+		}
+		return r
+	}
+	if !childAuthorized(req("")) { // processus principal : pas de jeton attendu
+		t.Fatal("le processus principal doit tout accepter")
+	}
+	t.Setenv(childTokenEnv, "secret")
+	if childAuthorized(req("")) || childAuthorized(req("autre")) || !childAuthorized(req("secret")) {
+		t.Fatal("un enfant n'accepte que le jeton de sa passerelle")
+	}
+}
+
 func TestHomesRoutes(t *testing.T) {
 	cfg := t.TempDir()
 	use(cfg)

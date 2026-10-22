@@ -10,6 +10,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/component
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
+import { HomeSwitcher } from "./HomeSwitcher"
 import { ProjectList } from "./ProjectList"
 import { ProjectTree } from "./ProjectTree"
 import { CM, GroupItems, SessionItems } from "./SessionMenu"
@@ -282,6 +283,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           </div>
         )}
         <div className="flex items-center gap-2">
+          <HomeSwitcher />
           <Settings
             args={p.args}
             setArgs={p.setArgs}

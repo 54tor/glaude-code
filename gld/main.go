@@ -126,9 +126,14 @@ func handler() http.Handler {
 	mux.HandleFunc("POST /new-session", newSessionHandler)
 	// Anti DNS-rebinding : seul le Host local est servi (sauf écoute hors localhost, où le jeton le remplace).
 	// Anti CSRF : http.CrossOriginProtection (bibliothèque standard) refuse toute requête modifiante venue d'une autre origine.
-	guarded := withHomes(http.NewCrossOriginProtection().Handler(mux))
+	// Le choix de dossier de configuration (homes.go) vient après ces gardes : la passerelle juge la requête d'origine avant de la transmettre.
+	guarded := http.NewCrossOriginProtection().Handler(withHomes(mux))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !openHosts && !hosts[r.Host] {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if !childAuthorized(r) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}

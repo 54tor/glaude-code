@@ -25,7 +25,17 @@ import (
 	"unicode/utf8"
 )
 
-const homeCookie = "gld_home"
+const (
+	homeCookie    = "gld_home"
+	childHeader   = "X-Gld-Child"
+	childTokenEnv = "GLD_WEB_CHILD_TOKEN"
+)
+
+// childAuthorized : un gld enfant (lancé avec un jeton) n'accepte que les requêtes de sa passerelle ; le processus principal accepte tout.
+func childAuthorized(r *http.Request) bool {
+	t := os.Getenv(childTokenEnv)
+	return t == "" || sameToken(r.Header.Get(childHeader), t)
+}
 
 type Home struct {
 	Name string `json:"name"`
@@ -120,8 +130,9 @@ func startHomeProc(h Home) (*homeProc, error) {
 	if err != nil {
 		return nil, err
 	}
+	token := newToken()
 	cmd := exec.CommandContext(homeCtx, self, "web")
-	cmd.Env = append(childEnv(), "CLAUDE_CONFIG_DIR="+h.Dir, "GLD_WEB_PORT="+port, "GLD_WEB_LISTEN=127.0.0.1")
+	cmd.Env = append(childEnv(), "CLAUDE_CONFIG_DIR="+h.Dir, "GLD_WEB_PORT="+port, "GLD_WEB_LISTEN=127.0.0.1", childTokenEnv+"="+token)
 	cmd.Stderr, cmd.Stdout = io.Discard, io.Discard
 	if err := cmd.Start(); err != nil {
 		return nil, err
@@ -132,10 +143,16 @@ func startHomeProc(h Home) (*homeProc, error) {
 	p.proxy = &httputil.ReverseProxy{
 		Rewrite: func(r *httputil.ProxyRequest) {
 			r.SetURL(target) // le Host devient celui de l'enfant, que sa garde anti DNS-rebinding accepte
-			if r.Out.Header.Get("Origin") != "" {
-				r.Out.Header.Set("Origin", target.String())
+			// La passerelle a déjà jugé l'origine de la requête (anti CSRF) : l'enfant ne reçoit ni Origin ni Sec-Fetch-*, qu'il
+			// ne pourrait comparer qu'à sa propre adresse, ni le cookie (jeton, choix de dossier). Il exige le jeton de la passerelle.
+			for k := range r.Out.Header {
+				if strings.HasPrefix(strings.ToLower(k), "sec-fetch-") {
+					r.Out.Header.Del(k)
+				}
 			}
-			r.Out.Header.Del("Cookie") // ni jeton ni choix de dossier pour l'enfant
+			r.Out.Header.Del("Origin")
+			r.Out.Header.Del("Cookie")
+			r.Out.Header.Set(childHeader, token)
 		},
 	}
 	for i := 0; i < 100; i++ {
@@ -159,7 +176,7 @@ func childEnv() []string {
 	var out []string
 	for _, e := range os.Environ() {
 		k, _, _ := strings.Cut(e, "=")
-		if k == "GLD_WEB_TOKEN" || k == "GLD_WEB_PORT" || k == "GLD_WEB_LISTEN" || k == "CLAUDE_CONFIG_DIR" || k == "CC_WEB_PORT" {
+		if k == "GLD_WEB_TOKEN" || k == "GLD_WEB_PORT" || k == "GLD_WEB_LISTEN" || k == "CLAUDE_CONFIG_DIR" || k == "CC_WEB_PORT" || k == childTokenEnv {
 			continue
 		}
 		out = append(out, e)
