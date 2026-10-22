@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 import { api, type CfgOverview } from "@/lib/api"
 import { tilde } from "@/lib/format"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useActions } from "./actions"
@@ -67,17 +67,20 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
     <ScrollArea className="min-h-0 flex-1">
       <div className="mx-auto max-w-5xl px-6 py-6">
         <Tabs value={tab || "sante"} onValueChange={onTab}>
-          <TabsList className="mb-4 max-w-full justify-start overflow-x-auto md:flex-wrap">
-            <TabsTrigger value="sante">Santé{ov.issues.length > 0 && ` (${ov.issues.length})`}</TabsTrigger>
-            <TabsTrigger value="projets">Projets</TabsTrigger>
-            <TabsTrigger value="precedence">Précédence</TabsTrigger>
-            <TabsTrigger value="hooks">Hooks ({ov.hooks.length})</TabsTrigger>
-            <TabsTrigger value="mcp">MCP</TabsTrigger>
-            <TabsTrigger value="permissions">Permissions</TabsTrigger>
-            <TabsTrigger value="reglages">Réglages</TabsTrigger>
-            <TabsTrigger value="json">JSON</TabsTrigger>
-            <TabsTrigger value="sauvegardes">Sauvegardes ({ov.backups.length})</TabsTrigger>
-          </TabsList>
+          <ScrollArea className="mb-4 w-full">
+            <TabsList className="w-max justify-start">
+              <TabsTrigger value="sante">Santé{ov.issues.length > 0 && ` (${ov.issues.length})`}</TabsTrigger>
+              <TabsTrigger value="projets">Projets</TabsTrigger>
+              <TabsTrigger value="precedence">Précédence</TabsTrigger>
+              <TabsTrigger value="hooks">Hooks ({ov.hooks.length})</TabsTrigger>
+              <TabsTrigger value="mcp">MCP</TabsTrigger>
+              <TabsTrigger value="permissions">Permissions</TabsTrigger>
+              <TabsTrigger value="reglages">Réglages</TabsTrigger>
+              <TabsTrigger value="json">JSON</TabsTrigger>
+              <TabsTrigger value="sauvegardes">Sauvegardes ({ov.backups.length})</TabsTrigger>
+            </TabsList>
+            <ScrollBar orientation="horizontal" />
+          </ScrollArea>
           <TabsContent value="sante">
             <HealthTab issues={ov.issues} home={home} projects={ov.projects} />
           </TabsContent>
