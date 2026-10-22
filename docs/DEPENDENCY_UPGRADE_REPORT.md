@@ -28,3 +28,6 @@ Directes : `doublestar/v4` 4.10.3, `yaml.v3` 3.0.1, `modernc.org/sqlite`. `govul
 
 ## Résultats
 Tous verts après la montée (Go sur copie isolée à `HEAD` plus mes fichiers, à cause des fichiers en cours d'une autre session ; front dans le dépôt). Reste à valider côté utilisateur : `make install`, puis un tour dans le navigateur (la recherche utilise SQLite).
+
+## 3e passage (2026-10-22)
+Dépendances inchangées depuis le 2e passage. `govulncheck` : aucune vulnérabilité ; `npm audit --omit=dev` : 0. En retard : `modernc.org/ccgo/v4` (indirecte, non liée au binaire), TypeScript 7.0.2 (bloqué par typescript-eslint) et @types/node 26.6.5 : différés. Aucune montée appliquée.
