@@ -328,11 +328,12 @@ func syncApply(from, to string, picks []SyncPick) (string, error) {
 	if torig != nil && strings.TrimSpace(string(torig)) != "" && formatOrdered(ts)+"\n" != string(torig) {
 		return "", errors.New("le settings.json de la cible a une mise en forme particulière : il n'est pas réécrit (ouvre-le dans gld pour le normaliser)")
 	}
-	sf, ss := syncFiles(fd), syncSkills(fd)
+	sf, ss, tsk := syncFiles(fd), syncSkills(fd), syncSkills(td)
 	stamp := time.Now().Format("20060102-150405")
 	settingsTouched, n := false, 0
 	type fileOut struct{ rel, content string }
 	var writes []fileOut
+	var removes []string // fichiers d'un skill remplacé absents de la source
 	for _, p := range picks {
 		it, ok := byID[p.ID]
 		if !ok || it.Status == "same" {
@@ -381,6 +382,11 @@ func syncApply(from, to string, picks []SyncPick) (string, error) {
 			for rel, c := range ss[name] {
 				writes = append(writes, fileOut{filepath.Join("skills", name, rel), c})
 			}
+			for rel := range tsk[name] {
+				if _, keep := ss[name][rel]; !keep {
+					removes = append(removes, filepath.Join("skills", name, rel))
+				}
+			}
 		default:
 			continue
 		}
@@ -405,6 +411,17 @@ func syncApply(from, to string, picks []SyncPick) (string, error) {
 			return "", errors.New("sauvegarde impossible : " + err.Error())
 		}
 		if err := writeConfig(filepath.Join(td, w.rel), []byte(w.content)); err != nil {
+			return "", err
+		}
+	}
+	for _, rel := range removes {
+		if !syncRelOK(rel) {
+			return "", errors.New("chemin refusé : " + rel)
+		}
+		if err := syncBackup(td, stamp, rel); err != nil {
+			return "", errors.New("sauvegarde impossible : " + err.Error())
+		}
+		if err := os.Remove(filepath.Join(td, rel)); err != nil {
 			return "", err
 		}
 	}
