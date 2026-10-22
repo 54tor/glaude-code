@@ -1,6 +1,6 @@
 import { useRef, type Dispatch, type SetStateAction } from "react"
 import { toast } from "sonner"
-import { api, type Data, type Group, type Hit, type Item, type Project, type Session, type VGroup } from "@/lib/api"
+import { api, type Caps, type Data, type Group, type Hit, type Item, type Project, type Session, type VGroup } from "@/lib/api"
 import { exportMarkdown } from "@/lib/export"
 import { size, tilde } from "@/lib/format"
 import { withChoice, type Choice } from "@/lib/models"
@@ -11,6 +11,8 @@ import type { Ask } from "@/components/Confirm"
 import type { ComposeAsk, Target } from "@/components/Compose"
 import type { Pick } from "@/components/DirPicker"
 import type { Ask as PromptAsk } from "@/components/Prompt"
+
+const NO_CAPS: Caps = { hotCache: false, keepWarm: false, config: false, memory: false, tuiPrompts: false, resume: false }
 
 // Tout ce que l'application sait faire d'une session ou d'un groupe (ouvrir, reprendre, renommer, déplacer, grouper,
 // étiqueter, supprimer…), regroupé dans l'objet Actions que les composants lisent par contexte.
@@ -332,6 +334,8 @@ export function useAppActions(c: {
     hotLeft: (s) => (now && now - s.mtime < HOT ? Math.max(1, Math.ceil((HOT - (now - s.mtime)) / 60)) : null),
     read,
     open: (b) => act("/open", { ...b, args }, "Ouverture du terminal…", "last"),
+    // Un fournisseur inconnu ou une réponse ancienne : aucune fonction optionnelle (l'interface reste sobre plutôt que fausse).
+    caps: (s) => data?.providers?.find((p) => p.id === (s.provider ?? "claude"))?.caps ?? NO_CAPS,
     defaultChoice: choice,
     startSession: async (project, prompt, c) => {
       const t = targets().find((x) => x.project === project)

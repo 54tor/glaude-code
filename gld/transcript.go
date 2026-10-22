@@ -99,14 +99,15 @@ func cut(s string, n int) string {
 }
 
 type Session struct {
-	ID    string  `json:"id"`
-	Dir   string  `json:"dir"`
-	Title string  `json:"title"`
-	Named bool    `json:"named"`
-	Cwd   string  `json:"cwd"`
-	Mtime float64 `json:"mtime"`
-	KB    int64   `json:"kb"`
-	Tok   Tokens  `json:"tok"`
+	Provider string  `json:"provider"` // fournisseur de la session (providers.go) ; les identifiants restent propres à chacun
+	ID       string  `json:"id"`
+	Dir      string  `json:"dir"`
+	Title    string  `json:"title"`
+	Named    bool    `json:"named"`
+	Cwd      string  `json:"cwd"`
+	Mtime    float64 `json:"mtime"`
+	KB       int64   `json:"kb"`
+	Tok      Tokens  `json:"tok"`
 }
 
 // infoState : ce qu'on sait d'un transcript, et jusqu'où on l'a lu. Un transcript ne fait que grandir : à chaque
@@ -217,7 +218,7 @@ func info(path string, st os.FileInfo) Session {
 	if !c.lastMsg.IsZero() && c.lastMsg.Before(mt) {
 		mt = c.lastMsg
 	}
-	s := Session{ID: strings.TrimSuffix(filepath.Base(path), ".jsonl"), Dir: filepath.Base(filepath.Dir(path)),
+	s := Session{Provider: claudeID, ID: strings.TrimSuffix(filepath.Base(path), ".jsonl"), Dir: filepath.Base(filepath.Dir(path)),
 		Named: title != "", Cwd: cwd, Mtime: float64(mt.UnixNano()) / 1e9, KB: st.Size() / 1024, Tok: c.tok}
 	if s.Title = title; title == "" {
 		if s.Title = cut(first, 100); first == "" {

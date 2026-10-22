@@ -1,11 +1,14 @@
 // Accès aux routes du serveur Go (gld/main.go).
 
-export type Session = { id: string; dir: string; title: string; named: boolean; cwd: string; mtime: number; kb: number; tok: Tokens }
+// Fournisseurs d'agents de code (provider.go) : ce que chacun sait faire ; l'interface masque le reste.
+export type Caps = { hotCache: boolean; keepWarm: boolean; config: boolean; memory: boolean; tuiPrompts: boolean; resume: boolean }
+export type ProviderInfo = { id: string; name: string; caps: Caps }
+export type Session = { provider?: string; id: string; dir: string; title: string; named: boolean; cwd: string; mtime: number; kb: number; tok: Tokens }
 export type Tokens = { in: number; out: number; cr: number; cw: number }
 export type Group = { project: string; missing: boolean; sessions: Session[] }
 export type Project = { name: string; dirs: string[] } // ensemble nommé de dossiers de travail
 export type VGroup = { name: string; project: string; ids: string[]; fav?: boolean }
-export type Data = { home: string; root: string; groups: Group[]; live: string[]; waiting: string[]; vgroups: VGroup[]; favs: string[]; tags: Record<string, string[]>; projects: Project[] }
+export type Data = { home: string; root: string; groups: Group[]; live: string[]; waiting: string[]; vgroups: VGroup[]; favs: string[]; tags: Record<string, string[]>; projects: Project[]; providers: ProviderInfo[] }
 // Snippet = commande Claude Code. key : u/<chemin> (personnelle) ou p/<dossier>/<chemin> (d'un projet).
 export type Snippet = { key: string; scope: string; project: string; path: string; command: string; description: string; kb: number; mtime: number }
 export type SnipScope = { dir: string; project: string }

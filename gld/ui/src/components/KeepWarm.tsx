@@ -17,7 +17,9 @@ const set = async (s: Session, on: boolean, max?: number) => {
 
 // Bouton de la barre d'outils : active ou arrête le maintien. L'activation se fait par un menu qui dit ce que ça coûte.
 export function KeepWarmButton({ s }: { s: Session }) {
+  const a = useActions()
   const warm = useKeepWarm()[s.id]
+  if (!a.caps(s).keepWarm) return null // fonction propre à certains fournisseurs
   if (warm?.on)
     return (
       <Button variant="outline" size="sm" className="border-amber-500/60 text-amber-600 dark:text-amber-400" onClick={() => set(s, false)} title="Arrêter le maintien au chaud">
@@ -46,8 +48,9 @@ export function KeepWarmButton({ s }: { s: Session }) {
 
 // Bandeau toujours visible tant que le maintien est actif : c'est de l'argent dépensé sans action de l'utilisateur.
 export function KeepWarmBanner({ s }: { s: Session }) {
+  const a = useActions()
   const warm = useKeepWarm()[s.id]
-  if (!warm?.on && !warm?.note) return null
+  if (!a.caps(s).keepWarm || (!warm?.on && !warm?.note)) return null
   return (
     <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-1.5 text-xs md:px-6", warm.on ? "border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300" : "bg-muted/40 text-muted-foreground")}>
       <Coins className="size-4 shrink-0" />
@@ -80,11 +83,13 @@ export function SessionStat({ s, live }: { s: Session; live: Live }) {
   const left = a.hotLeft(s)
   return (
     <div className="flex shrink-0 flex-col items-end gap-0.5 text-xs text-muted-foreground tabular-nums" aria-label="Statistiques de la session">
-      <span className={cn("flex items-center gap-1 font-medium", left === null ? "" : left <= 5 ? "text-amber-600 dark:text-amber-400" : "text-orange-500")} title="Le cache des prompts dure une heure après le dernier message">
-        {left === null ? <Snowflake className="size-3.5" /> : <Flame className="size-3.5" />}
-        {left === null ? "cache froid" : `cache ${left} min`}
-        {warm?.on && <Coins className="size-3.5 text-amber-500" aria-label="maintien au chaud actif" />}
-      </span>
+      {a.caps(s).hotCache && (
+        <span className={cn("flex items-center gap-1 font-medium", left === null ? "" : left <= 5 ? "text-amber-600 dark:text-amber-400" : "text-orange-500")} title="Le cache des prompts dure une heure après le dernier message">
+          {left === null ? <Snowflake className="size-3.5" /> : <Flame className="size-3.5" />}
+          {left === null ? "cache froid" : `cache ${left} min`}
+          {warm?.on && <Coins className="size-3.5 text-amber-500" aria-label="maintien au chaud actif" />}
+        </span>
+      )}
       <span title="Tokens traités (hors cache lu)">
         {live.st && live.st.context > 0 && <>ctx {compact(live.st.context)} · </>}
         {compact(tokTotal(s.tok as Tokens))} tok
