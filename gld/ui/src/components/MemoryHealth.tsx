@@ -25,6 +25,7 @@ export function HealthDialog({
   onClose,
   onOpenKey,
   onRepair,
+  onFix,
   scopes,
   onLint,
 }: {
@@ -33,6 +34,7 @@ export function HealthDialog({
   onClose: () => void
   onOpenKey: (key: string) => void
   onRepair: (dir: string) => void
+  onFix: (keys: string[]) => void // met entre guillemets les valeurs YAML qui cassent le front matter
   scopes: readonly (readonly [string, string])[] // portées de l'analyse : « global », puis les projets
   onLint: (scope: string) => Promise<{ findings?: Finding[]; error?: string; cost?: number }>
 }) {
@@ -44,6 +46,7 @@ export function HealthDialog({
     setLint({ scope, ...(await onLint(scope)) })
     setBusy(false)
   }
+  const fixable = [...new Set(issues.filter((i) => i.kind === "front-matter").map((i) => i.key))]
   const repairable = [...new Set(issues.filter((i) => i.dir && (i.kind === "index-ligne" || i.kind === "index-absent")).map((i) => i.dir!))]
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -54,8 +57,13 @@ export function HealthDialog({
             {issues.length ? `${issues.length} point${issues.length > 1 ? "s" : ""} à vérifier. Rien n'est modifié sans votre clic.` : "Rien à signaler."}
           </DialogDescription>
         </DialogHeader>
-        {repairable.length > 0 && (
+        {(repairable.length > 0 || fixable.length > 0) && (
           <div className="flex flex-wrap gap-2">
+            {fixable.length > 1 && (
+              <Button size="xs" variant="outline" onClick={() => onFix(fixable)} title="Met entre guillemets les valeurs qui rendent le YAML invalide">
+                <Wrench /> Corriger les {fixable.length} front matters
+              </Button>
+            )}
             {repairable.map((d) => (
               <Button key={d} size="xs" variant="outline" onClick={() => onRepair(d)} title="Retire les lignes mortes et ajoute les entrées manquantes de MEMORY.md">
                 <Wrench /> Réparer l'index de {d}
@@ -97,8 +105,8 @@ export function HealthDialog({
         <ScrollArea className="max-h-96">
           <ul className="space-y-1 pr-3">
             {issues.map((i, n) => (
-              <li key={n}>
-                <button onClick={() => (onOpenKey(i.key), onClose())} className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted">
+              <li key={n} className="flex items-start gap-1">
+                <button onClick={() => (onOpenKey(i.key), onClose())} className="flex min-w-0 flex-1 items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted">
                   <AlertTriangle className={cn("mt-0.5 size-3.5 shrink-0", i.kind === "perime" ? "text-muted-foreground" : "text-amber-500")} />
                   <span className="min-w-0">
                     <span className="block text-xs font-medium text-muted-foreground">
@@ -107,6 +115,11 @@ export function HealthDialog({
                     <span className="break-words">{i.msg}</span>
                   </span>
                 </button>
+                {i.kind === "front-matter" && (
+                  <Button size="xs" variant="outline" className="mt-1 shrink-0" onClick={() => onFix([i.key])} title="Met entre guillemets les valeurs qui rendent le YAML invalide">
+                    <Wrench /> Corriger
+                  </Button>
+                )}
               </li>
             ))}
           </ul>

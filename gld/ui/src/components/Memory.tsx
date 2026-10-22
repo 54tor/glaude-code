@@ -190,6 +190,18 @@ export function Memory({
       if (key === sel) setLoaded({ key, text: (await api.memoryFile(key)).text ?? "" })
     }
   }
+  const fix = async (keys: string[]) => {
+    let ok = 0
+    const fails: string[] = []
+    for (const key of keys) {
+      const r = (await api.post("/memory-fix", { key })) as { ok: boolean; out: string }
+      if (r.ok) ok++
+      else fails.push(`${key} : ${r.out}`)
+    }
+    if (fails.length) toast.error(`${ok} corrigé${ok > 1 ? "s" : ""}, ${fails.length} échec${fails.length > 1 ? "s" : ""} : ${fails[0]}`)
+    else toast.success(`${ok} front matter${ok > 1 ? "s" : ""} corrigé${ok > 1 ? "s" : ""}`)
+    refresh()
+  }
   const repair = async (dir: string) => {
     report(await api.post("/memory-repair", { dir }))
     refresh()
@@ -485,6 +497,7 @@ export function Memory({
         onClose={() => setHealthOpen(false)}
         onOpenKey={onPick}
         onRepair={repair}
+        onFix={fix}
         scopes={[["global", "Règles globales et CLAUDE.md"], ...(list?.projects ?? []).filter((p) => p.files.some((x) => x.key.startsWith("m/"))).map((p) => [p.dir, tilde(p.project, homeDir)] as const)]}
         onLint={async (scope) => {
           const r = (await api.post("/memory-lint", { scope })) as { ok: boolean; out?: string; findings?: Finding[]; cost?: number }

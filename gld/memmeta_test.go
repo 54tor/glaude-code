@@ -209,3 +209,14 @@ func TestSetTypeEnteteDejaInvalide(t *testing.T) {
 		t.Fatalf("setType sur un en-tête invalide : %q, %v", got, err)
 	}
 }
+
+func TestFixFrontMatter(t *testing.T) {
+	in := "---\nname: x\ndescription: Règles : tags :latest # ok\nmetadata:\n  type: user\n---\n\ncorps\n"
+	out, err := fixFrontMatter(in)
+	if err != nil || !strings.Contains(out, `description: "Règles : tags :latest # ok"`) || !strings.HasSuffix(out, "\ncorps\n") {
+		t.Fatalf("%q %v", out, err)
+	}
+	if _, err := fixFrontMatter(out); err == nil {
+		t.Fatal("déjà valide : doit refuser")
+	}
+}

@@ -549,3 +549,33 @@ func memToggle(key string) (string, error) {
 	}
 	return "g/rules/" + to, nil
 }
+
+var fmScalar = regexp.MustCompile(`^(\s*[A-Za-z0-9_.-]+):[ \t]+(\S.*?)\s*$`)
+
+// fixFrontMatter met entre guillemets les valeurs en texte brut qui rendent le YAML invalide (« : » ou « # » dans une description).
+// Refuse si l'en-tête reste invalide après coup, ou s'il n'y avait rien à corriger.
+func fixFrontMatter(text string) (string, error) {
+	y, body, ok := frontMatter(text)
+	if !ok {
+		return "", errors.New("pas de front matter à corriger")
+	}
+	if _, err := parseMeta(text); err == nil {
+		return "", errors.New("le front matter est déjà valide")
+	}
+	lines := strings.Split(strings.TrimRight(y, "\n"), "\n")
+	for i, l := range lines {
+		m := fmScalar.FindStringSubmatch(l)
+		if m == nil || strings.ContainsRune("\"'[{|>&*!%@`", rune(m[2][0])) {
+			continue
+		}
+		if strings.Contains(m[2], ": ") || strings.Contains(m[2], " #") || strings.HasSuffix(m[2], ":") {
+			q := strings.ReplaceAll(strings.ReplaceAll(m[2], `\`, `\\`), `"`, `\"`)
+			lines[i] = m[1] + `: "` + q + `"`
+		}
+	}
+	out := "---\n" + strings.Join(lines, "\n") + "\n---\n" + body
+	if _, err := parseMeta(out); err != nil {
+		return "", errors.New("pas de correction automatique possible : " + err.Error())
+	}
+	return out, nil
+}
