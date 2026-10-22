@@ -58,3 +58,23 @@ func TestPanneTmuxBloque(t *testing.T) {
 		}
 	}
 }
+
+// Un git qui ne répond plus (dépôt sur un montage réseau figé) : la liste des remotes revient vide au lieu d'attendre.
+func TestPanneGitBloque(t *testing.T) {
+	sleep, err := exec.LookPath("sleep")
+	if err != nil {
+		t.Skip("pas de sleep")
+	}
+	h, _, proj := web(t)
+	bin := t.TempDir()
+	os.WriteFile(filepath.Join(bin, "git"), []byte("#!/bin/sh\n"+sleep+" 30\n"), 0o755)
+	t.Setenv("PATH", bin)
+	old := cmdTimeout
+	cmdTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { cmdTimeout = old })
+	t0 := time.Now()
+	_, m, raw := call(t, h, "GET", "/git-remotes?dir="+proj, "")
+	if d := time.Since(t0); d > 4*time.Second || len(m["remotes"].([]any)) != 0 {
+		t.Fatalf("/git-remotes : %v %s", d, raw)
+	}
+}

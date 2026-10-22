@@ -51,7 +51,11 @@ func gitOut(dir string, args ...string) (string, error) {
 }
 
 func gitOut1(dir string, args ...string) (string, error) {
-	b, err := exec.Command("git", append([]string{"-C", dir}, args...)...).Output()
+	ctx, cancel := context.WithTimeout(context.Background(), cmdTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
+	cmd.WaitDelay = time.Second
+	b, err := cmd.Output()
 	return strings.TrimSpace(string(b)), err
 }
 
