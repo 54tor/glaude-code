@@ -300,6 +300,30 @@ describe("parsePrompt", () => {
     expect(p.question).toContain("rotate). Tout lien")
     expect(p.question).toMatch(/Quelle correction \?$/)
   })
+  it("autorisation : la commande et son titre accompagnent la question", () => {
+    const sep = "╌".repeat(60)
+    const screen = [
+      " Bash command · from the general-purpose agent                                  1 of 2",
+      " Clean temp file and verify commits",
+      sep,
+      " │ cd /home/u/cap-tortuga; rm /tmp/x/upload-full.php; git log --format='%h %s' -1 6e17c34",
+      sep,
+      " Ask rule Bash(rm *) overrides auto mode for this command.",
+      " /permissions to let auto mode decide",
+      "",
+      " Do you want to proceed?",
+      " ❯ 1. Yes",
+      "   2. No",
+      "",
+      " Esc to cancel · Tab to amend",
+    ].join("\n")
+    const p = parsePrompt(screen)!
+    expect(p.question).toBe("Do you want to proceed?")
+    expect(p.context).toContain("rm /tmp/x/upload-full.php")
+    expect(p.context).toContain("Clean temp file and verify commits")
+    expect(p.context).toContain("Bash command")
+    expect(p.context).toContain("Ask rule Bash(rm *)")
+  })
   it("dialogue encadré", () => {
     const p = parsePrompt(screens.boxed)!
     expect(p.options).toHaveLength(2)
