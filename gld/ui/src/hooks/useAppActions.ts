@@ -332,10 +332,11 @@ export function useAppActions(c: {
     hotLeft: (s) => (now && now - s.mtime < HOT ? Math.max(1, Math.ceil((HOT - (now - s.mtime)) / 60)) : null),
     read,
     open: (b) => act("/open", { ...b, args }, "Ouverture du terminal…", "last"),
-    startSession: async (project, prompt) => {
+    defaultChoice: choice,
+    startSession: async (project, prompt, c) => {
       const t = targets().find((x) => x.project === project)
       if (!t) return false
-      await act("/new-session", { dir: t.dir, id: t.id, prompt, args: withChoice(args, choice) }, "Nouvelle session…", "last")
+      await act("/new-session", { dir: t.dir, id: t.id, prompt, args: withChoice(args, c) }, "Nouvelle session…", "last")
       return true
     },
     newSession: (project, initial) => {

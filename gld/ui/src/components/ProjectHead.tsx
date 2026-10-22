@@ -5,7 +5,9 @@ import { isSend } from "@/lib/utils"
 import { useGit } from "@/hooks/useGit"
 import { Button } from "@/components/ui/button"
 import { useActions } from "./actions"
+import type { Choice } from "@/lib/models"
 import { GitBadge } from "./GitBadge"
+import { ModelPicker } from "./ModelPicker"
 
 // En tête d'un dossier : l'état git (branche, changements en attente, avance et retard) du dossier et de ses dépôts, puis un champ
 // pour lancer une nouvelle session dans ce dossier.
@@ -14,13 +16,15 @@ export function ProjectHead({ project, missing }: { project: string; missing: bo
   const git = useGit()
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
+  const [picked, setPicked] = useState<Choice | null>(null) // modèle et effort choisis ici ; sinon ceux des réglages
+  const choice = picked ?? a.defaultChoice
   const repos = git.repos[project] ?? []
   const own = git.status[project]
   const send = async () => {
     const prompt = text.trim()
     if (!prompt || busy) return
     setBusy(true)
-    const started = await a.startSession(project, prompt)
+    const started = await a.startSession(project, prompt, choice)
     setBusy(false)
     if (started) setText("")
   }
@@ -59,8 +63,8 @@ export function ProjectHead({ project, missing }: { project: string; missing: bo
             aria-label="Prompt d'une nouvelle session"
             className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
           />
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Modèle et options : ceux des réglages de l'interface.</span>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <ModelPicker value={choice} onChange={setPicked} disabled={busy} />
             <Button size="sm" className="ml-auto" onClick={send} disabled={!text.trim() || busy}>
               <Send /> Lancer la session
             </Button>

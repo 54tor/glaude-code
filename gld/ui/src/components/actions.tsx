@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react"
 import type { Group, Hit, Item, Project, Session, VGroup } from "@/lib/api"
+import type { Choice } from "@/lib/models"
 
 export type Row = { s: Session; g: Group }
 
@@ -49,7 +50,8 @@ export type Actions = {
   read: (s: Session) => void
   open: (body: { dir: string; id?: string }) => void
   resumeWith: (r: Row) => void // reprendre en envoyant un message
-  startSession: (project: string, prompt: string) => Promise<boolean> // lance tout de suite, avec le modèle et les options par défaut
+  defaultChoice: Choice // modèle et effort des réglages de l'interface
+  startSession: (project: string, prompt: string, choice: Choice) => Promise<boolean> // lance tout de suite, sans fenêtre intermédiaire
   newSession: (project: string, initial?: string) => void // nouvelle session dans ce dossier de travail
   copy: (s: Session) => void
   rename: (s: Session) => void
