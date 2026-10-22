@@ -12,15 +12,15 @@ const secs = (n: number) => (n < 60 ? `${Math.max(0, Math.round(n))} s` : n < 36
 // LiveStats (dans la barre d'outils) le contexte, les tokens et le bouton « Stats ». Ancien résumé : : ce que Claude fait en ce moment (réflexion, outil, attente) et un bouton « Stats » qui ouvre
 // la consommation de tokens et les sous-agents dans une fenêtre. Relu toutes les 2 s tant que la session est ouverte (fichiers
 // locaux seulement), une seule fois sinon.
-export type Live = { st: LiveState | null; now: number; open: boolean }
+export type Live = { st: LiveState | null; open: boolean }
 
 export function useLive(dir: string, id: string, open: boolean): Live {
   const [st, setSt] = useState<LiveState | null>(null)
-  const [now, setNow] = useState(() => Date.now() / 1000)
   useEffect(() => {
     if (!id) return
     let live = true
-    const load = () => api.sessionLive(dir, id).then((r) => live && (setSt(r), setNow(Date.now() / 1000)), () => {})
+    // Un relevé identique garde l'ancien objet : pas de nouveau rendu de la conversation toutes les 2 s.
+    const load = () => api.sessionLive(dir, id).then((r) => live && setSt((p) => (JSON.stringify(p) === JSON.stringify(r) ? p : r)), () => {})
     load()
     if (!open) return () => void (live = false)
     const t = setInterval(() => document.visibilityState === "visible" && load(), 2000)
@@ -29,12 +29,18 @@ export function useLive(dir: string, id: string, open: boolean): Live {
       clearInterval(t)
     }
   }, [dir, id, open])
+  return { st, open }
+}
+
+// Horloge d'une seconde, tenue dans le composant qui l'affiche : la conversation ne se redessine pas à chaque tic.
+function useNow(active: boolean) {
+  const [now, setNow] = useState(() => Date.now() / 1000)
   useEffect(() => {
-    if (!open) return
-    const t = setInterval(() => setNow(Date.now() / 1000), 1000) // le chrono avance entre deux relevés
+    if (!active) return
+    const t = setInterval(() => setNow(Date.now() / 1000), 1000)
     return () => clearInterval(t)
-  }, [open])
-  return { st, now, open }
+  }, [active])
+  return now
 }
 
 // Les états génériques (réflexion, travail) changent de verbe toutes les 6 s, l'un après l'autre, décalés d'une session à l'autre ;
@@ -48,7 +54,8 @@ function label(st: LiveState, id: string, now: number) {
 
 // Ce que Claude fait en ce moment, en dernière ligne de la transcription. `open` (la liste des sessions ouvertes, mise à jour dès la fermeture) prime sur le relevé :
 // le processus met un instant à finir après SIGTERM.
-export function LiveBar({ live: { st, now, open }, id }: { live: Live; id: string }) {
+export function LiveBar({ live: { st, open }, id }: { live: Live; id: string }) {
+  const now = useNow(open)
   if (!st) return null
   if (!(open && st.open)) return null // fermée : « Session fermée » est dans la barre d'outils (LiveStats), sans bande
   const isOpen = true
