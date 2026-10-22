@@ -54,14 +54,18 @@ export function Composer({
   const [mode, setMode] = useLocal("ccChatMode", "")
   const [choice, setChoice] = useState(defaultChoice)
   const running = !!turn?.running
+  // Le claude -p lancé par gld pour ce tour apparaît lui-même comme « session ouverte » (claude agents) pendant qu'il répond, et
+  // jusqu'au prochain relevé : tant que le tour est le nôtre, on ne bascule pas vers l'envoi à une session ouverte dans un terminal.
+  const [own, setOwn] = useState(false)
   const pics = useImages()
   const send = async () => {
     const prompt = [text.trim(), pics.suffix()].filter(Boolean).join("\n\n")
     if (!prompt || running) return
     setText("")
     pics.clear()
+    setOwn(true)
     setTurn(() => ({ id, msgs: [{ r: "user", t: prompt }], running: true }))
-    const fail = (error: string) => setTurn((t) => t && { ...t, running: false, error })
+    const fail = (error: string) => (setOwn(false), setTurn((t) => t && { ...t, running: false, error }))
     let res: Response
     try {
       res = await fetch("/chat", {
@@ -100,10 +104,11 @@ export function Composer({
     }
     setTurn((t) => t && { ...t, running: false })
     onDone()
+    setTimeout(() => setOwn(false), 30_000)
   }
   const stop = () => api.post("/chat-stop", { id })
 
-  if (live) return <LiveSend id={id} onSent={onSent} liveState={liveState} onAsk={onAsk} />
+  if (live && !running && !own) return <LiveSend id={id} onSent={onSent} liveState={liveState} onAsk={onAsk} />
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-7xl space-y-2">
