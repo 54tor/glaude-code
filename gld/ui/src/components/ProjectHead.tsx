@@ -1,5 +1,6 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Send } from "lucide-react"
+import { argAt } from "@/lib/commands"
 import { tilde } from "@/lib/format"
 import { isSend } from "@/lib/utils"
 import { useGit } from "@/hooks/useGit"
@@ -9,6 +10,7 @@ import type { Choice } from "@/lib/models"
 import { GitBadge } from "./GitBadge"
 import { GitChanges } from "./GitChanges"
 import { ModelPicker } from "./ModelPicker"
+import { SnippetMenu } from "./SnippetMenu"
 
 // En tête d'un dossier : l'état git (branche, changements en attente, avance et retard) du dossier et de ses dépôts, puis un champ
 // pour lancer une nouvelle session dans ce dossier.
@@ -16,11 +18,25 @@ export function ProjectHead({ project, missing }: { project: string; missing: bo
   const a = useActions()
   const git = useGit()
   const [text, setText] = useState("")
+  const area = useRef<HTMLTextAreaElement>(null)
   const [busy, setBusy] = useState(false)
   const [picked, setPicked] = useState<Choice | null>(null) // modèle et effort choisis ici ; sinon ceux des réglages
   const choice = picked ?? a.defaultChoice
   const repos = git.repos[project] ?? []
   const own = git.status[project]
+  // Insère le snippet à la position du curseur ; son premier $ARGUMENTS est sélectionné pour être remplacé en tapant.
+  const insert = (t: string) => {
+    const el = area.current
+    const i = el?.selectionStart ?? text.length
+    const j = el?.selectionEnd ?? text.length
+    const arg = argAt(t)
+    setText(text.slice(0, i) + t + text.slice(j))
+    requestAnimationFrame(() => {
+      el?.focus()
+      const from = i + (arg?.at ?? t.length)
+      el?.setSelectionRange(from, from + (arg?.len ?? 0))
+    })
+  }
   const send = async () => {
     const prompt = text.trim()
     if (!prompt || busy) return
@@ -56,6 +72,7 @@ export function ProjectHead({ project, missing }: { project: string; missing: bo
       {!missing && (
         <div className="space-y-2">
           <textarea
+            ref={area}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => isSend(e) && (e.preventDefault(), void send())}
@@ -67,6 +84,7 @@ export function ProjectHead({ project, missing }: { project: string; missing: bo
             className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
           />
           <div className="flex flex-wrap items-center gap-2 text-xs">
+            <SnippetMenu onInsert={insert} />
             <ModelPicker value={choice} onChange={setPicked} disabled={busy} />
             <Button size="sm" className="ml-auto" onClick={send} disabled={!text.trim() || busy}>
               <Send /> Lancer la session
