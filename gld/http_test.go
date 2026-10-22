@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Valeurs d'origine, capturées avant que les tests ne les remplacent.
@@ -283,8 +284,20 @@ func TestHTTPLancements(t *testing.T) {
 	ok(t, h, "/new-session", `{"dir":"-p","id":"`+id1+`","prompt":" "}`, false, "prompt vide")
 	ok(t, h, "/new-session", `{"dir":"-p","id":"`+id1+`","prompt":"`+strings.Repeat("x", 33<<10)+`"}`, false, "trop long")
 	ok(t, h, "/new-session", `{"dir":"-q","id":"`+id2+`","prompt":"p"}`, false, "introuvable")
-	agents(t, id1) // ouverte : n'empêche pas d'en démarrer une autre
+	agents(t, id1)         // ouverte : n'empêche pas d'en démarrer une autre
+	var left time.Duration // le lancement est borné : un terminal qui ne rend pas la main n'immobilise pas la requête
+	fm := matin
+	matin = func(ctx context.Context, args ...string) (string, error) {
+		if d, ok := ctx.Deadline(); ok {
+			left = time.Until(d)
+		}
+		return fm(ctx, args...)
+	}
 	ok(t, h, "/new-session", `{"dir":"-p","id":"`+id1+`","prompt":"suite"}`, true, "gld-matin --prompt suite "+proj)
+	matin = fm
+	if left < 25*time.Second || left > 30*time.Second {
+		t.Fatalf("délai du lancement : %v", left)
+	}
 	t.Setenv("FAKE_AGENTS", "illisible")
 	ok(t, h, "/new-session", `{"dir":"-p","id":"`+id1+`","prompt":"suite"}`, true, "gld-matin")
 	t.Setenv("FAKE_AGENTS", "[]")
@@ -347,6 +360,11 @@ func TestHTTPChat(t *testing.T) {
 	t.Setenv("FAKE_CHAT", `{"type":"result","subtype":"error_max_turns","is_error":true,"result":"trop de tours"}`)
 	if _, _, raw := call(t, h, "POST", "/chat", `{"dir":"-p","id":"`+id1+`","prompt":"salut"}`); !strings.Contains(raw, `"error":"error_max_turns trop de tours"`) {
 		t.Fatalf("résultat en erreur : %s", raw)
+	}
+	// Un résultat qui n'est ni en erreur ni un succès (sous-type inconnu) n'est pas présenté comme réussi.
+	t.Setenv("FAKE_CHAT", `{"type":"result","subtype":"error_during_execution","is_error":false}`)
+	if _, _, raw := call(t, h, "POST", "/chat", `{"dir":"-p","id":"`+id1+`","prompt":"salut"}`); strings.Contains(raw, `"ok":true`) || !strings.Contains(raw, `"error":"error_during_execution"`) {
+		t.Fatalf("résultat ambigu présenté comme réussi : %s", raw)
 	}
 
 	// Un seul tour à la fois par session ; arrêt.
