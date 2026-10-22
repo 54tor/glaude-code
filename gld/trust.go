@@ -17,18 +17,20 @@ var trustRe = regexp.MustCompile(`(?i)do you trust the files in this folder|is t
 
 type trustPane struct{ pane, dir string }
 
-// trustPanes : les panneaux (au plus 40 examinés) dont l'écran montre le dialogue de confiance, avec leur dossier courant.
+// trustPanes : les panneaux (au plus 40 examinés) dont l'écran montre le dialogue de confiance, avec leur dossier courant. Seuls
+// ceux où tourne Claude Code (claude, ou node pour une installation npm) comptent : un cat ou un éditeur qui affiche ce texte non.
 func trustPanes() []trustPane {
-	out, err := tmuxRun("", "list-panes", "-a", "-F", "#{pane_id}\t#{pane_current_path}")
+	out, err := tmuxRun("", "list-panes", "-a", "-F", "#{pane_id}\t#{pane_current_command}\t#{pane_current_path}")
 	if err != nil {
 		return nil
 	}
 	var res []trustPane
 	for i, l := range strings.Split(strings.TrimSpace(out), "\n") {
-		id, dir, ok := strings.Cut(l, "\t")
-		if i >= 40 || !ok || !paneRe.MatchString(id) || !filepath.IsAbs(dir) {
+		f := strings.SplitN(l, "\t", 3)
+		if i >= 40 || len(f) != 3 || !paneRe.MatchString(f[0]) || (f[1] != "claude" && f[1] != "node") || !filepath.IsAbs(f[2]) {
 			continue
 		}
+		id, dir := f[0], f[2]
 		if scr, err := tmuxRun("", "capture-pane", "-p", "-t", id); err == nil && trustRe.MatchString(scr) {
 			res = append(res, trustPane{id, filepath.Clean(dir)})
 		}

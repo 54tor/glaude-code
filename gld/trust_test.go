@@ -8,9 +8,9 @@ func TestTrustPanes(t *testing.T) {
 	tmuxRun = func(_ string, a ...string) (string, error) {
 		switch a[0] {
 		case "list-panes":
-			return "%1\t/home/u/neuf\n%2\t/home/u/autre\n%3\trelatif\n", nil
+			return "%1\tclaude\t/home/u/neuf\n%2\tclaude\t/home/u/autre\n%3\tclaude\trelatif\n%4\tless\t/home/u/code\n", nil
 		case "capture-pane":
-			if a[3] == "%1" || a[3] == "%3" {
+			if a[3] == "%1" || a[3] == "%3" || a[3] == "%4" {
 				return " Do you trust the files in this folder?\n 1. Yes, proceed\n 2. No, exit\n", nil
 			}
 			return "$ ls\n", nil
