@@ -23,6 +23,20 @@ const MODES = [
   ["auto", "Auto : Claude décide de ce qu'il peut faire"],
 ] as const
 
+// Le champ de saisie garde le focus après chaque envoi, même quand il est remplacé par l'autre (chat de gld ↔ session ouverte) :
+// le nouveau champ prend le focus à son montage s'il vient d'être demandé. Un seul composeur est affiché à la fois.
+let field: HTMLTextAreaElement | null = null
+let focusUntil = 0
+const fieldRef = (el: HTMLTextAreaElement | null) => {
+  field = el
+  if (el && Date.now() < focusUntil) el.focus()
+}
+const keepFocus = () => {
+  focusUntil = Date.now() + 8000
+  field?.focus()
+  requestAnimationFrame(() => field?.focus()) // après le rendu qui suit l'envoi
+}
+
 export type Turn = { id: string; msgs: Msg[]; running: boolean; error?: string; cost?: number }
 
 // Écrire dans la session depuis le navigateur : claude -p --resume, réponse relayée au fil de l'eau (NDJSON).
@@ -72,6 +86,7 @@ export function Composer({
     if (!prompt) return
     setText("")
     pics.clear()
+    keepFocus()
     if (running) setQ([...draftOf(id).queue, prompt])
     else {
       onWrite?.()
@@ -144,6 +159,7 @@ export function Composer({
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-7xl space-y-2">
         <textarea
+          ref={fieldRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => isSend(e) && (e.preventDefault(), send())}
@@ -232,6 +248,7 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
   const send = async () => {
     const full = [text.trim(), pics.suffix()].filter(Boolean).join("\n")
     if (!full || busy) return
+    keepFocus()
     setBusy(true)
     const r = await api.post("/session-send", { id, text: full }, 20_000)
     setBusy(false)
@@ -240,6 +257,7 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
       if (draftOf(id).text === text) setText("") // pas un texte tapé entre-temps
       pics.clear()
       onSent()
+      keepFocus()
     }
   }
   return (
@@ -266,6 +284,7 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
           </ul>
         )}
         <textarea
+          ref={fieldRef}
           value={text}
           onChange={(e) => (setText(e.target.value), setSel(0))}
           onKeyDown={(e) => {
