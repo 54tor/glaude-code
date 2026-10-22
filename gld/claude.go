@@ -122,14 +122,30 @@ func withPath(c *exec.Cmd) *exec.Cmd {
 // dedans (le tmux courant de gld, invisible pour l'utilisateur, ne convient pas).
 var matin = func(ctx context.Context, args ...string) (string, error) {
 	var buf strings.Builder
-	if launcherAvailable("terminator-tmux") {
-		args = append([]string{"--term", "terminator-tmux"}, args...)
+	if l := tmuxLauncher(); l != "" {
+		args = append([]string{"--term", l}, args...)
 	}
 	err := cliMatin(ctx, args, &buf)
 	if err != nil {
 		buf.WriteString("gld-matin : " + err.Error() + "\n")
 	}
 	return buf.String(), err
+}
+
+// tmuxLauncher : l'onglet d'émulateur où lancer une session avec tmux dedans, "" si tmux ou tout émulateur manque.
+func tmuxLauncher() string {
+	if launcherAvailable("terminator-tmux") {
+		return "terminator-tmux"
+	}
+	if !onPath("tmux") {
+		return ""
+	}
+	for _, l := range []string{"kitty", "wezterm", "gnome-terminal", "konsole", "xfce4-terminal", "tilix"} {
+		if launcherAvailable(l) {
+			return l + "+tmux"
+		}
+	}
+	return ""
 }
 
 // alive : ids des sessions ouvertes, ou nil si `claude agents --json` a échoué (on ne sait pas).

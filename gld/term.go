@@ -69,6 +69,11 @@ func shJoin(argv []string) string {
 
 // launcherCmd : la commande qui ouvre un onglet intitulé title exécutant argv.
 func launcherCmd(name, title string, argv []string) (*exec.Cmd, error) {
+	// « <émulateur>+tmux » : la session tourne dans tmux au sein de l'onglet, donc joignable par « Envoyer à la session ».
+	if base, ok := strings.CutSuffix(name, "+tmux"); ok {
+		return launcherCmd(base, title, []string{"tmux", "new-session", "-n", strings.ReplaceAll(title, "#", "##"), shJoin(argv),
+			";", "set-option", "set-titles", "on", ";", "set-option", "set-titles-string", "#T"})
+	}
 	with := func(prefix ...string) *exec.Cmd {
 		return exec.Command(prefix[0], append(prefix[1:], argv...)...)
 	}

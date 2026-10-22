@@ -238,6 +238,17 @@ func TestAliasDeProjet(t *testing.T) {
 	}
 }
 
+func TestLanceurEmulateurTmux(t *testing.T) {
+	c, err := launcherCmd("konsole+tmux", "T #(x)", []string{"/b/gld", "_run", "/tmp/a b.json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `konsole --new-tab -p tabtitle=T #(x) -e tmux new-session -n T ##(x) '/b/gld' '_run' '/tmp/a b.json' ; set-option set-titles on ; set-option set-titles-string #T`
+	if got := strings.Join(c.Args, " "); got != want {
+		t.Errorf("\n%s\n%s", got, want)
+	}
+}
+
 func TestLanceurTerminatorTmux(t *testing.T) {
 	c, err := launcherCmd("terminator-tmux", "Mon #(x) titre", []string{"/bin/gld", "_run", "/tmp/a b.json"})
 	if err != nil {
