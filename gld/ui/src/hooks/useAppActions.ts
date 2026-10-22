@@ -1,5 +1,6 @@
 import { useRef, type Dispatch, type SetStateAction } from "react"
 import { toast } from "sonner"
+import { watchTrust } from "@/lib/trust"
 import { api, type Caps, type Data, type Group, type Hit, type Item, type Project, type Session, type Snippet, type VGroup } from "@/lib/api"
 import { exportMarkdown } from "@/lib/export"
 import { size, tilde } from "@/lib/format"
@@ -63,6 +64,7 @@ export function useAppActions(c: {
       id,
       description: rest || undefined,
     })
+    if (r.ok && url === "/new-session") void watchTrust(home)
     await reload()
     // Une session lancée met un instant à créer son transcript : on relit jusqu'à ce qu'elle apparaisse.
     if (r.ok && (url === "/new-session" || url === "/open")) {

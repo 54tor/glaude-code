@@ -120,6 +120,7 @@ func handler() http.Handler {
 	routesHomes(mux)
 	routesGit(mux)
 	routesGitPush(mux)
+	routesTrust(mux)
 	routesKeepWarm(mux)
 	routesSkills(mux)
 	routesSlash(mux)
