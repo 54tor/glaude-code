@@ -322,6 +322,7 @@ export function useAppActions(c: {
       ),
     rename: (s) =>
       named("Renommer la session", s.named ? s.title : "", "Renommer", (title) => act("/rename", { dir: s.dir, id: s.id, title }, "Renommage…")),
+    renameAuto: (s) => act("/rename", { dir: s.dir, id: s.id, auto: true }, "Titre automatique…"),
     exportMd: (r) => exportMarkdown([{ s: r.s, project: tilde(r.g.project, home) }]).catch(() => toast.error("Export impossible")),
     move: async (rs) => {
       const to = await pickDir(rs.length > 1 ? `Déplacer ${plural(rs.length)} vers…` : `Déplacer « ${rs[0].s.title} » vers…`, rs[0].s.cwd)

@@ -243,14 +243,17 @@ func routesSessions(mux *http.ServeMux) {
 		writeJSON(w, 200, map[string]any{"hits": searchAll(q)})
 	})
 	mux.HandleFunc("POST /rename", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Dir, ID, Title string }
+		var req struct {
+			Dir, ID, Title string
+			Auto           bool
+		}
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil {
 			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
 			return
 		}
 		p, ok := transcript(req.Dir, req.ID)
 		title := strings.TrimSpace(spaceRe.ReplaceAllString(req.Title, " "))
-		if !ok || title == "" || utf8.RuneCountInString(title) > 200 {
+		if !ok || (title == "" && !req.Auto) || utf8.RuneCountInString(title) > 200 {
 			writeJSON(w, 400, map[string]any{"ok": false, "out": "titre ou session invalide"})
 			return
 		}
@@ -263,6 +266,13 @@ func routesSessions(mux *http.ServeMux) {
 		if live[req.ID] {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": "session ouverte : renomme-la avec /rename dans Claude, ou ferme-la d'abord"})
 			return
+		}
+		if req.Auto {
+			var terr error
+			if title, terr = autoTitle(p); terr != nil {
+				writeJSON(w, 200, map[string]any{"ok": false, "out": "titre automatique impossible : " + terr.Error()})
+				return
+			}
 		}
 		err := setTitle(p, req.ID, title)
 		journal("rename %s « %s » : %v", req.ID, title, errOr(err))
