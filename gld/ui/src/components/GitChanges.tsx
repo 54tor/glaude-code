@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useOpen } from "@/hooks/useOpen"
 import { ChevronRight } from "lucide-react"
 import { api, type GitChange } from "@/lib/api"
 import { cn } from "@/lib/utils"
@@ -12,7 +13,7 @@ const tone = (s: string) =>
 export function GitChanges({ dir, count }: { dir: string; count: number }) {
   const [files, setFiles] = useState<GitChange[]>([])
   const [more, setMore] = useState(0)
-  const [open, setOpen] = useState(false)
+  const [open, flip] = useOpen("g/" + dir)
   useEffect(() => {
     if (count === 0) return
     let live = true
@@ -31,7 +32,7 @@ export function GitChanges({ dir, count }: { dir: string; count: number }) {
   if (count === 0) return null
   return (
     <div className="basis-full">
-      <button onClick={() => setOpen(!open)} aria-expanded={open} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+      <button onClick={flip} aria-expanded={open} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
         <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} />
         {count} fichier{count > 1 ? "s" : ""} en cours de modification
       </button>

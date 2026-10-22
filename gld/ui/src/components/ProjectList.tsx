@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { setOpen, useOpenState } from "@/hooks/useOpen"
 import { ChevronRight, Folder, Layers, Pencil, Trash2, X } from "lucide-react"
 import type { Route } from "@/lib/route"
 import { tilde } from "@/lib/format"
@@ -14,19 +14,13 @@ import { useGit } from "@/hooks/useGit"
 export function ProjectList({ route, go }: { route: Route; go: (r: Route) => void }) {
   const a = useActions()
   const git = useGit()
-  const [open, setOpen] = useState(() => new Set<string>())
-  const toggle = (name: string) =>
-    setOpen((o) => {
-      const n = new Set(o)
-      if (n.has(name)) n.delete(name)
-      else n.add(name)
-      return n
-    })
+  const opened = useOpenState()
+  const toggle = (name: string) => setOpen("p/" + name, !opened["p/" + name])
   return (
     <ul className="space-y-px">
       {a.projects.map((p) => {
         const active = route.kind === "project" && route.name === p.name
-        const isOpen = open.has(p.name)
+        const isOpen = !!opened["p/" + p.name]
         return (
           <li key={p.name}>
             <ContextMenu>
