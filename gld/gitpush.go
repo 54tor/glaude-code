@@ -18,16 +18,19 @@ import (
 
 type GitRemote struct {
 	Name string `json:"name"`
-	URL  string `json:"url"` // sans mot de passe
+	URL  string `json:"url"` // sans identifiants
 }
 
-// maskURL retire le mot de passe d'une URL https://user:secret@hôte/… avant de l'afficher.
+// maskURL retire les identifiants d'une URL avant de l'afficher. En http(s), tout le userinfo part : un jeton s'y écrit aussi
+// bien à la place du nom (https://<jeton>@github.com/…) qu'à celle du mot de passe. En ssh, seul le mot de passe part.
 func maskURL(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil || u.User == nil {
 		return raw
 	}
-	if _, has := u.User.Password(); has {
+	if u.Scheme == "http" || u.Scheme == "https" {
+		u.User = nil
+	} else if _, has := u.User.Password(); has {
 		u.User = url.User(u.User.Username())
 	}
 	return u.String()
