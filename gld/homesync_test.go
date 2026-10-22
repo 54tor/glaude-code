@@ -135,3 +135,24 @@ func TestSyncRefuseFormatParticulier(t *testing.T) {
 		t.Fatal("fichier compact réécrit")
 	}
 }
+
+// Remplacer un skill rend la cible identique à la source : un fichier absent de la source part dans la sauvegarde.
+func TestSyncSkillRemplace(t *testing.T) {
+	src, dst := syncEnv(t)
+	put(t, filepath.Join(src, "skills", "deploy", "SKILL.md"), "neuf\n", old)
+	put(t, filepath.Join(dst, "skills", "deploy", "SKILL.md"), "ancien\n", old)
+	put(t, filepath.Join(dst, "skills", "deploy", "notes.md"), "en trop\n", old)
+	if _, err := syncApply("Pro", "Perso", []SyncPick{{"skill:deploy", "replace"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dst, "skills", "deploy", "notes.md")); err == nil {
+		t.Error("fichier absent de la source resté dans la cible")
+	}
+	saved, _ := filepath.Glob(filepath.Join(dst, "gld-web-sync-backups", "*", "skills", "deploy", "notes.md"))
+	if len(saved) != 1 {
+		t.Error("fichier retiré non sauvegardé")
+	}
+	if items, _ := syncPlan("Pro", "Perso"); func() bool { it, _ := syncItem(items, "skill:deploy"); return it.Status != "same" }() {
+		t.Error("skill encore différent après remplacement")
+	}
+}
