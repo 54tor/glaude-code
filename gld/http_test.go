@@ -604,7 +604,8 @@ func TestTerminalDesactiveParDefaut(t *testing.T) {
 		t.Fatalf("term-ws sans Origin : %d %s", r.Code, r.Body.String())
 	}
 	// Derrière la passerelle, l'Origin a été vérifié puis retiré : seul le jeton du terminal compte encore.
-	t.Setenv(childTokenEnv, "secret")
+	childToken = "secret"
+	t.Cleanup(func() { childToken = "" })
 	req = httptest.NewRequest("GET", "/term-ws?t=x", nil)
 	req.Host = testHost
 	req.Header.Set(childHeader, "secret")

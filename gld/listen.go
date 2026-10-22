@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 )
 
@@ -39,6 +40,21 @@ func checkToken(t string) error {
 		return errors.New("GLD_WEB_TOKEN : 16 caractères au moins")
 	}
 	return nil
+}
+
+// takeToken lit GLD_WEB_TOKEN (un jeton neuf hors localhost s'il manque), puis retire les jetons de l'environnement : claude,
+// tmux et les onglets lancés n'en héritent pas (un `env` exécuté par Claude finirait dans un transcript). En local, "" : pas de jeton.
+func takeToken(local bool) (string, error) {
+	token := os.Getenv("GLD_WEB_TOKEN")
+	os.Unsetenv("GLD_WEB_TOKEN")
+	os.Unsetenv(childTokenEnv)
+	if token != "" {
+		return token, checkToken(token)
+	}
+	if !local {
+		token = newToken()
+	}
+	return token, nil
 }
 
 func sameToken(a, b string) bool { return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1 }

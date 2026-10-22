@@ -59,17 +59,15 @@ func main() {
 
 	h := handler()
 	local := isLoopback(*listen)
-	token := ""
+	token, err := takeToken(local)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	if !local {
-		// Hors localhost : jeton obligatoire, et le Host n'est plus limité à l'adresse locale (le jeton remplace la garde).
-		token = os.Getenv("GLD_WEB_TOKEN")
-		if token == "" {
-			token = newToken()
-		} else if err := checkToken(token); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		openHosts = true
+		openHosts = true // hors localhost, le Host n'est plus limité à l'adresse locale : le jeton remplace la garde
+	}
+	if token != "" { // obligatoire hors localhost ; en local, exigé dès que GLD_WEB_TOKEN est fixé (machine partagée)
 		h = withToken(token, h)
 	}
 	srv := newServer(net.JoinHostPort(*listen, port), h)
@@ -89,8 +87,10 @@ func main() {
 	go watchWaiting(20 * time.Second)
 	go keepWarmLoop(30 * time.Second)
 	go func() { _ = syncIndex() }() // index de recherche prêt avant la première requête
-	if local {
+	if local && token == "" {
 		fmt.Fprintln(os.Stderr, "http://"+net.JoinHostPort(*listen, port))
+	} else if local {
+		fmt.Fprintln(os.Stderr, "http://"+net.JoinHostPort(*listen, port)+"/?token="+token)
 	} else {
 		fmt.Fprintln(os.Stderr, "⚠ gld écoute sur "+net.JoinHostPort(*listen, port)+" : accès protégé par un jeton, mais en HTTP clair.")
 		fmt.Fprintln(os.Stderr, "  Préférez un tunnel (SSH, Tailscale) ou un proxy TLS ; ne l'exposez pas sur Internet.")

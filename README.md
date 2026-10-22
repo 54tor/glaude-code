@@ -115,6 +115,13 @@ Glaude Code affiche alors une adresse contenant un **jeton secret** : ouvrez-la 
 chiffrée : passez par un tunnel (SSH, Tailscale…) et **ne l'exposez jamais directement sur Internet**, car la page peut
 lire et supprimer vos sessions et lancer Claude.
 
+Sur une machine partagée avec d'autres comptes, l'adresse locale est joignable par eux aussi. Fixez alors un jeton
+(16 caractères au moins) : il est exigé même sans `--listen`, et gld affiche l'adresse à ouvrir.
+
+```sh
+GLD_WEB_TOKEN=$(openssl rand -hex 24) gld
+```
+
 ## Windows
 
 `make windows` produit `gld.exe`. Le support Windows est compilé mais pas encore testé sur une vraie machine. Sous
