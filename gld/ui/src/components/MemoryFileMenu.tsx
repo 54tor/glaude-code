@@ -1,4 +1,4 @@
-import { BookOpen, Bot, Brain, ClipboardCopy, Copy, Eye, EyeOff, FolderInput, Globe, Link, Merge, Pencil, ScrollText, Trash2 } from "lucide-react"
+import { BookOpen, Bot, Brain, ClipboardCopy, Copy, Eye, EyeOff, FolderInput, Globe, Link, Merge, Pencil, ScrollText, Tag, Trash2 } from "lucide-react"
 import type { MemFile, MemTarget } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import {
@@ -10,6 +10,7 @@ import {
   ContextMenuSubTrigger,
 } from "@/components/ui/context-menu"
 import { copy, home, movable, toMemory, toRules } from "./memoryLib"
+import { TYPES } from "./MemoryTypes"
 
 export type FileActions = {
   open: (key: string) => void
@@ -19,6 +20,7 @@ export type FileActions = {
   toggle: (key: string) => void // coche pour une fusion
   move: (key: string, to: string, copy?: boolean) => void
   toggleRule: (key: string) => void
+  setType: (key: string, type: string) => void
   remove: (x: MemFile) => void
 }
 
@@ -73,6 +75,22 @@ export function FileMenu({ x, picked, targets, homeDir, a }: { x: MemFile; picke
       <ContextMenuItem onSelect={() => a.rewrite(x)}>
         <Bot /> Améliorer avec un modèle…
       </ContextMenuItem>
+      {(x.key.startsWith("m/") || x.key.startsWith("g/rules/")) && !x.key.endsWith("/MEMORY.md") && (
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>
+            <Tag /> Type
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent>
+            {TYPES.map((t) => (
+              <ContextMenuItem key={t.key} onSelect={() => a.setType(x.key, t.key)}>
+                <t.icon /> {t.key} <span className="text-xs text-muted-foreground">({t.label}){x.type === t.key && " ✓"}</span>
+              </ContextMenuItem>
+            ))}
+            <ContextMenuSeparator />
+            <ContextMenuItem onSelect={() => a.setType(x.key, "")}>Sans type{!x.type && " ✓"}</ContextMenuItem>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+      )}
       <ContextMenuItem onSelect={() => a.copyContent(x)}>
         <ClipboardCopy /> Copier le contenu
       </ContextMenuItem>

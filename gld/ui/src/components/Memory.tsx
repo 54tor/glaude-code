@@ -187,7 +187,7 @@ export function Memory({
   const setType = async (key: string, type: string) => {
     if (report(await api.post("/memory-type", { key, type }))) {
       await refresh()
-      setLoaded({ key, text: (await api.memoryFile(key)).text ?? "" })
+      if (key === sel) setLoaded({ key, text: (await api.memoryFile(key)).text ?? "" })
     }
   }
   const repair = async (dir: string) => {
@@ -307,7 +307,7 @@ export function Memory({
       picked={picked.has(x.key)}
       targets={targets(x.key)}
       homeDir={homeDir}
-      a={{ open: onPick, edit, rewrite: (y) => setWriter({ kind: "rewrite", key: y.key, name: y.name }), copyContent, toggle, move, toggleRule, remove }}
+      a={{ open: onPick, edit, rewrite: (y) => setWriter({ kind: "rewrite", key: y.key, name: y.name }), copyContent, toggle, move, toggleRule, setType, remove }}
     />
   )
   const section = (key: string, icon: typeof Globe, title: string, files: MemFile[], onWrite?: () => void, onConsolidate?: (file: string) => void, onNewRule?: () => void) => (
