@@ -37,9 +37,43 @@ var (
 )
 
 type gitEntry struct {
-	st GitState
-	ok bool // false : pas un dépôt (ou git a échoué)
-	at time.Time
+	st  GitState
+	ok  bool   // false : pas un dépôt (ou git a échoué)
+	out string // sortie brute de git status, pour la liste des fichiers
+	at  time.Time
+}
+
+// GitChange : un fichier en cours de modification. Status : deux lettres comme `git status --short` (index puis arbre de travail),
+// « ?? » pour un fichier non suivi, « UU » et assimilés pour un conflit.
+type GitChange struct {
+	Path   string `json:"path"`
+	Status string `json:"status"`
+	From   string `json:"from,omitempty"` // ancien nom d'un fichier renommé
+}
+
+// parseGitChanges lit les lignes de fichiers de `git status --porcelain=v2` (les chemins peuvent contenir des espaces).
+func parseGitChanges(out string) []GitChange {
+	var cs []GitChange
+	for _, l := range strings.Split(out, "\n") {
+		switch {
+		case strings.HasPrefix(l, "1 "):
+			if f := strings.SplitN(l, " ", 9); len(f) == 9 {
+				cs = append(cs, GitChange{Path: f[8], Status: strings.ReplaceAll(f[1], ".", " ")})
+			}
+		case strings.HasPrefix(l, "2 "):
+			if f := strings.SplitN(l, " ", 10); len(f) == 10 {
+				to, from, _ := strings.Cut(f[9], "\t")
+				cs = append(cs, GitChange{Path: to, From: from, Status: strings.ReplaceAll(f[1], ".", " ")})
+			}
+		case strings.HasPrefix(l, "u "):
+			if f := strings.SplitN(l, " ", 11); len(f) == 11 {
+				cs = append(cs, GitChange{Path: f[10], Status: f[1]})
+			}
+		case strings.HasPrefix(l, "? "):
+			cs = append(cs, GitChange{Path: strings.TrimPrefix(l, "? "), Status: "??"})
+		}
+	}
+	return cs
 }
 
 // parseGitStatus lit la sortie de `git status --porcelain=v2 --branch`.
@@ -102,7 +136,7 @@ func gitStates(dirs []string) map[string]GitState {
 			out, err := gitRun(d)
 			e := gitEntry{at: time.Now()}
 			if err == nil {
-				e.st, e.ok = parseGitStatus(out), true
+				e.st, e.ok, e.out = parseGitStatus(out), true, out
 			}
 			gitMu.Lock()
 			if len(gitCache) > 2000 {
@@ -174,7 +208,49 @@ func subRepos(dir string) []string {
 	return out
 }
 
+// knownRepo : dir est un dossier de sessions ou un dépôt découvert dessous. On n'interroge jamais un chemin venu du navigateur
+// qui ne soit pas l'un d'eux.
+func knownRepo(dir string) bool {
+	for _, g := range sessions() {
+		if g.Missing || g.Project == "" {
+			continue
+		}
+		if g.Project == dir {
+			return true
+		}
+		for _, s := range subRepos(g.Project) {
+			if s == dir {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+const maxChanges = 300
+
 func routesGit(mux *http.ServeMux) {
+	mux.HandleFunc("GET /git-changes", func(w http.ResponseWriter, r *http.Request) {
+		dir := r.URL.Query().Get("dir")
+		if !knownRepo(dir) {
+			writeJSON(w, 200, map[string]any{"files": []GitChange{}})
+			return
+		}
+		gitStates([]string{dir}) // relu si le résultat gardé est périmé
+		gitMu.Lock()
+		out := gitCache[dir].out
+		gitMu.Unlock()
+		cs := parseGitChanges(out)
+		more := len(cs) - maxChanges
+		if more > 0 {
+			cs = cs[:maxChanges]
+		}
+		sort.SliceStable(cs, func(i, j int) bool { return cs[i].Path < cs[j].Path })
+		if cs == nil {
+			cs = []GitChange{}
+		}
+		writeJSON(w, 200, map[string]any{"files": cs, "more": max(more, 0)})
+	})
 	mux.HandleFunc("GET /git-status", func(w http.ResponseWriter, r *http.Request) {
 		var dirs []string
 		repos := map[string][]string{}

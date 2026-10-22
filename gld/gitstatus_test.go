@@ -63,6 +63,31 @@ func TestRunGitStatusReel(t *testing.T) {
 	}
 }
 
+func TestParseGitChanges(t *testing.T) {
+	out := "# branch.head main\n" +
+		"1 .M N... 100644 100644 100644 a b src/mon fichier.go\n" +
+		"1 A. N... 000000 100644 100644 a b new.go\n" +
+		"2 R. N... 100644 100644 100644 a b R100 neuf.go\tancien.go\n" +
+		"u UU N... 1 1 1 1 a b c conflit.go\n" +
+		"? libre.txt\n"
+	want := []GitChange{
+		{Path: "src/mon fichier.go", Status: " M"},
+		{Path: "new.go", Status: "A "},
+		{Path: "neuf.go", From: "ancien.go", Status: "R "},
+		{Path: "conflit.go", Status: "UU"},
+		{Path: "libre.txt", Status: "??"},
+	}
+	got := parseGitChanges(out)
+	if len(got) != len(want) {
+		t.Fatalf("%+v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("%d : %+v au lieu de %+v", i, got[i], want[i])
+		}
+	}
+}
+
 // Les sous-dossiers qui contiennent un .git sont listés (pas les cachés, ni node_modules ni vendor).
 func TestSubRepos(t *testing.T) {
 	d := t.TempDir()

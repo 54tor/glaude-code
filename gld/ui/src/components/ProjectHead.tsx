@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { useActions } from "./actions"
 import type { Choice } from "@/lib/models"
 import { GitBadge } from "./GitBadge"
+import { GitChanges } from "./GitChanges"
 import { ModelPicker } from "./ModelPicker"
 
 // En tête d'un dossier : l'état git (branche, changements en attente, avance et retard) du dossier et de ses dépôts, puis un champ
@@ -38,6 +39,7 @@ export function ProjectHead({ project, missing }: { project: string; missing: bo
                 {tilde(project, a.home)}
               </span>
               <GitBadge st={own} />
+              <GitChanges dir={project} count={own.changed + own.untracked} />
             </li>
           )}
           {repos.map((d) => (
@@ -46,6 +48,7 @@ export function ProjectHead({ project, missing }: { project: string; missing: bo
                 {tilde(d, a.home)}
               </span>
               <GitBadge st={git.status[d]} />
+              <GitChanges dir={d} count={git.status[d] ? git.status[d].changed + git.status[d].untracked : 0} />
             </li>
           ))}
         </ul>
