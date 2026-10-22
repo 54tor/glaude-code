@@ -1,5 +1,74 @@
+/* eslint-disable no-irregular-whitespace -- captures réelles du terminal (espaces insécables) */
 import { describe, expect, it } from "vitest"
 import { parsePrompt } from "./prompt"
+
+const real = {
+  // Captures d'une vraie session Claude Code 2.1.307 (tmux), 2026-10-22.
+  permission: `
+  ⎿  · Quelle couleur préfères-tu ? → turquoise
+● Tu as répondu « turquoise », une option hors liste. Je lance maintenant la commande demandée.
+  Supprime le chemin de test /tmp/gldprobe-inexistant
+  ⎿  $ rm -rf /tmp/gldprobe-inexistant
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Bash command
+ Supprime le chemin de test /tmp/gldprobe-inexistant
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ rm -rf /tmp/gldprobe-inexistant
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ Ask rule Bash(rm *) overrides auto mode for this command.
+ /permissions to let auto mode decide
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. No
+ Esc to cancel · Tab to amend`,
+  multi: `
+←  ☐ Couleurs  ✔ Submit  →
+Quelles couleurs veux-tu sélectionner ?
+❯ 1. [ ] Rouge
+         Couleur chaude, forte visibilité.
+  2. [ ] Bleu
+         Couleur froide, neutre et apaisante.
+  3. [ ] Vert
+         Couleur associée à la nature et au succès.
+  4. [ ] Type something
+     Submit
+────────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+Enter to select · ↑/↓ to navigate · Esc to cancel`,
+  multiMid: `
+←  ☒ Couleurs  ✔ Submit  →
+Quelles couleurs veux-tu sélectionner ?
+  1. [✔] Rouge
+         Couleur chaude, forte visibilité.
+❯ 2. [✔] Bleu
+         Couleur froide, neutre et apaisante.
+  3. [ ] Vert
+         Couleur associée à la nature et au succès.
+  4. [ ] Type something
+     Submit
+────────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+Enter to select · ↑/↓ to navigate · Esc to cancel`,
+  single: ` ☐ Couleur
+Quelle couleur préfères-tu ?
+❯ 1. Rouge
+     Couleur chaude, forte visibilité.
+  2. Bleu
+     Couleur froide, neutre et apaisante.
+  3. Vert
+     Couleur associée à la nature et au succès.
+  4. Type something.
+────────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+Enter to select · ↑/↓ to navigate · Esc to cancel`,
+  review: `←  ☒ Couleurs  ✔ Submit  →
+Review your answers
+ ● Quelles couleurs veux-tu sélectionner ?
+   → Rouge, Bleu, violet
+Ready to submit your answers?
+❯ 1. Submit answers
+  2. Cancel`,
+}
 
 const screens = {
   permission: `
@@ -61,6 +130,46 @@ Voilà.
  ❯ 
  ⏵⏵ auto mode on`,
 }
+
+describe("parsePrompt : captures réelles", () => {
+  it("permission d'une commande risquée", () => {
+    const p = parsePrompt(real.permission)!
+    expect(p.question).toBe("Do you want to proceed?")
+    expect(p.options.map((o) => o.keys)).toEqual([["1"], ["2"]])
+    expect(p.submit).toBeUndefined()
+  })
+  it("choix multiples : cases, accès au champ libre, validation", () => {
+    const p = parsePrompt(real.multi)!
+    expect(p.question).toBe("Quelles couleurs veux-tu sélectionner ?")
+    expect(p.options.filter((o) => o.checked !== undefined).map((o) => [o.label, o.checked, o.keys[0]])).toEqual([
+      ["Rouge", false, "1"],
+      ["Bleu", false, "2"],
+      ["Vert", false, "3"],
+      ["Type something", false, "4"],
+    ])
+    const free = p.options.find((o) => o.text && o.checked !== undefined)!
+    expect(free.reach).toEqual(["Down", "Down", "Down"])
+    expect(p.submit).toEqual(["Down", "Down", "Down", "Down", "Enter"])
+    expect(p.options.at(-1)).toMatchObject({ chat: true, keys: ["5", "Enter"] })
+  })
+  it("choix multiples : curseur au milieu, cases cochées", () => {
+    const p = parsePrompt(real.multiMid)!
+    expect(p.options.slice(0, 2).map((o) => o.checked)).toEqual([true, true])
+    expect(p.submit).toEqual(["Down", "Down", "Down", "Enter"])
+    expect(p.options[3].reach).toEqual(["Down", "Down"])
+    expect(p.options[0].reach).toEqual(["Up"])
+  })
+  it("choix unique avec champ libre et discussion", () => {
+    const p = parsePrompt(real.single)!
+    expect(p.question).toBe("Quelle couleur préfères-tu ?")
+    expect(p.options.map((o) => [o.keys, !!o.text, !!o.chat])).toEqual([[["1"], false, false], [["2"], false, false], [["3"], false, false], [["4"], true, false], [["5", "Enter"], true, true]])
+    expect(p.submit).toBeUndefined()
+  })
+  it("relecture des réponses", () => {
+    const p = parsePrompt(real.review)!
+    expect(p.options.map((o) => o.keys[0])).toEqual(["1", "2"])
+  })
+})
 
 describe("parsePrompt", () => {
   it("permission : question et trois options numérotées, la dernière à réponse libre", () => {

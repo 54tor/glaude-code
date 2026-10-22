@@ -3,7 +3,7 @@ import { cn, isSend } from "@/lib/utils"
 import { parsePrompt, type Opt } from "@/lib/prompt"
 import { LiveAgents, type Live } from "./LiveStatus"
 import { toast } from "sonner"
-import { Bug, Copy, Minimize2, Power, Send, Square } from "lucide-react"
+import { Bug, Copy, Minimize2, Power, Send, Square, SquareCheck } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
 import { withChoice, type Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
@@ -301,13 +301,16 @@ function TerminalPanel({ id, onAsk }: { id: string; onAsk?: (asking: boolean) =>
   const [typing, setTyping] = useState<string | null>(null) // option à réponse libre en cours de saisie
   const [answer, setAnswer] = useState("")
   const choose = async (o: Opt) => {
-    if (!o.text) return press(...o.keys)
+    if (!o.text && !o.chat) return press(...o.keys)
     setTyping(o.label)
-    await press(...(o.keys[o.keys.length - 1] === "Enter" ? o.keys.slice(0, -1) : o.keys)) // sélectionne l'option sans valider
+    if (o.chat) return press(...o.keys) // quitte la question : le texte part ensuite dans la zone de saisie normale
+    // Champ libre : le curseur doit être sur la ligne sans la valider (case à cocher : chiffre = coche ; liste simple : chiffre = saut).
+    await press(...(o.reach ?? (o.keys[o.keys.length - 1] === "Enter" ? o.keys.slice(0, -1) : o.keys)))
   }
   const reply = async () => {
     const t = answer.trim()
     if (!t) return
+    if (prompt?.options.find((o) => o.label === typing)?.chat) await new Promise((x) => setTimeout(x, 800)) // laisse la question se fermer
     const r = await api.post("/session-send", { id, text: t })
     if (!r.ok) return void toast.error(r.out)
     setAnswer("")
@@ -326,7 +329,8 @@ function TerminalPanel({ id, onAsk }: { id: string; onAsk?: (asking: boolean) =>
           <div className="flex flex-col items-stretch gap-1.5">
             {prompt.options.map((o) => (
               <div key={o.label} className="contents">
-                <Button size="sm" disabled={pressing} variant={typing === o.label ? "secondary" : "outline"} className="h-auto min-h-8 justify-start py-1.5 text-left whitespace-normal" onClick={() => choose(o)} title={`Touches : ${o.keys.join(", ")}`}>
+                <Button size="sm" disabled={pressing} variant={typing === o.label ? "secondary" : "outline"} className="h-auto min-h-8 justify-start gap-2 py-1.5 text-left whitespace-normal" onClick={() => choose(o)} title={`Touches : ${o.keys.join(", ")}`}>
+                  {o.checked !== undefined && (o.checked ? <SquareCheck className="text-emerald-600" /> : <Square />)}
                   {o.label}
                 </Button>
                 {typing === o.label && (
@@ -349,6 +353,11 @@ function TerminalPanel({ id, onAsk }: { id: string; onAsk?: (asking: boolean) =>
                 )}
               </div>
             ))}
+            {prompt.submit && (
+              <Button size="sm" disabled={pressing} onClick={() => press(...prompt.submit!)} title="Valide les cases cochées">
+                <Send /> Valider
+              </Button>
+            )}
             <Button size="sm" disabled={pressing} variant="ghost" className="justify-start" onClick={() => press("Escape")}>
               Échap
             </Button>
