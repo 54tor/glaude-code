@@ -4,6 +4,7 @@ import { toast } from "sonner"
 import { api, type MemFile, type MemProject, type Snippet } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { argAt, body } from "@/lib/commands"
+import { isSend } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
@@ -145,7 +146,7 @@ function Form({ ask, snippets, onClose }: { ask: ComposeAsk; snippets: Snippet[]
         ref={area}
         value={text}
         onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "Enter" && (e.preventDefault(), send())}
+        onKeyDown={(e) => isSend(e) && (e.preventDefault(), send())}
         placeholder="Message envoyé à Claude…"
         autoFocus
         onFocus={(e) => {
@@ -217,7 +218,7 @@ function Form({ ask, snippets, onClose }: { ask: ComposeAsk; snippets: Snippet[]
           <Button variant="outline" onClick={onClose}>
             Annuler
           </Button>
-          <Button onClick={send} disabled={!ok || busy} title="Ctrl+Entrée">
+          <Button onClick={send} disabled={!ok || busy} title="Entrée (Maj+Entrée : saut de ligne)">
             <Send /> {ask.send}
           </Button>
         </div>
