@@ -64,6 +64,7 @@ export function Composer({
   // Brouillon et file vivent dans un magasin par session (useDraft) : fermer la fenêtre ne les perd pas, et l'envoi des messages
   // en file continue même fenêtre fermée.
   const setQ = (q: string[]) => setDraft(id, { queue: q })
+  const stopped = useRef(false) // arrêt demandé par l'utilisateur : le message était bien parti
   const send = () => {
     const prompt = [text.trim(), pics.suffix()].filter(Boolean).join("\n\n")
     if (!prompt) return
@@ -75,7 +76,10 @@ export function Composer({
   const submit = async (prompt: string) => {
     setOwn(true)
     setTurn(() => ({ id, msgs: [{ r: "user", t: prompt }], running: true }))
-    const fail = (error: string) => (setOwn(false), setTurn((t) => t && { ...t, running: false, error }))
+    // Un message non délivré n'est jamais perdu : il retourne en tête de la file (suspendue), à renvoyer d'un clic.
+    const keep = () => setQ([prompt, ...draftOf(id).queue])
+    const fail = (error: string) => (keep(), setOwn(false), setTurn((t) => t && { ...t, running: false, error }))
+    stopped.current = false
     let failed = false
     let res: Response
     try {
@@ -91,29 +95,34 @@ export function Composer({
     const reader = res.body.getReader()
     const dec = new TextDecoder()
     let buf = ""
-    for (;;) {
-      const { value, done } = await reader.read()
-      buf += dec.decode(value, { stream: !done })
-      const lines = buf.split("\n")
-      buf = lines.pop() ?? ""
-      for (const l of lines) {
-        if (!l.trim()) continue
-        const e = JSON.parse(l) as { msgs?: Msg[]; done?: boolean; ok?: boolean; error?: string; cost?: number; note?: string }
-        if (e.note) toast.info(e.note)
-        if (e.done && !e.ok) failed = true
-        setTurn(
-          (t) =>
-            t && {
-              ...t,
-              msgs: e.msgs ? [...t.msgs, ...e.msgs] : t.msgs,
-              running: e.done ? false : t.running,
-              error: e.done && !e.ok ? e.error || "Échec" : t.error,
-              cost: e.cost ?? t.cost,
-            }
-        )
+    try {
+      for (;;) {
+        const { value, done } = await reader.read()
+        buf += dec.decode(value, { stream: !done })
+        const lines = buf.split("\n")
+        buf = lines.pop() ?? ""
+        for (const l of lines) {
+          if (!l.trim()) continue
+          const e = JSON.parse(l) as { msgs?: Msg[]; done?: boolean; ok?: boolean; error?: string; cost?: number; note?: string }
+          if (e.note) toast.info(e.note)
+          if (e.done && !e.ok) failed = true
+          setTurn(
+            (t) =>
+              t && {
+                ...t,
+                msgs: e.msgs ? [...t.msgs, ...e.msgs] : t.msgs,
+                running: e.done ? false : t.running,
+                error: e.done && !e.ok ? e.error || "Échec" : t.error,
+                cost: e.cost ?? t.cost,
+              }
+          )
+        }
+        if (done) break
       }
-      if (done) break
+    } catch (e) {
+      return fail(e instanceof Error ? e.message : String(e)) // connexion coupée en cours de réponse
     }
+    if (failed && !stopped.current) keep() // échec de claude (pas un arrêt demandé) : on ne sait pas si le message est parti
     setTurn((t) => t && { ...t, running: false })
     await onDone() // le transcript est relu avant le tour suivant, qui efface sinon son propre affichage
     setTimeout(() => setOwn(false), 30_000)
@@ -123,7 +132,7 @@ export function Composer({
       submit(next)
     }
   }
-  const stop = () => api.post("/chat-stop", { id })
+  const stop = () => ((stopped.current = true), api.post("/chat-stop", { id }))
 
   if (live && !running && !own) return <LiveSend id={id} onSent={onSent} liveState={liveState} onAsk={onAsk} />
   return (
@@ -189,7 +198,8 @@ export function Composer({
 // tourne dans tmux, le message y est collé puis validé ; sinon on l'explique.
 function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => void; liveState: Live; onAsk?: (asking: boolean) => void }) {
   const [info, setInfo] = useState<{ ids: string[]; why: string } | null>(null)
-  const [text, setText] = useState("")
+  const { text } = useDraft(id) // gardé par session : fermer la fenêtre ou un échec d'envoi ne le perd pas
+  const setText = (t: string) => setDraft(id, { text: t })
   const [busy, setBusy] = useState(false)
   const [sel, setSel] = useState(0)
   const [extra, setExtra] = useState<(readonly [string, string])[]>([])
@@ -222,7 +232,7 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
     setBusy(false)
     if (!r.ok) toast.error(r.out) // le succès se voit dans la session : pas de notification
     if (r.ok) {
-      setText("")
+      if (draftOf(id).text === text) setText("") // pas un texte tapé entre-temps
       pics.clear()
       onSent()
     }
