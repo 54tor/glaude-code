@@ -9,6 +9,7 @@ import { useActions } from "./actions"
 import type { Choice } from "@/lib/models"
 import { GitBadge } from "./GitBadge"
 import { GitChanges } from "./GitChanges"
+import { GitPush } from "./GitPush"
 import { ModelPicker } from "./ModelPicker"
 import { SnippetMenu } from "./SnippetMenu"
 
@@ -55,6 +56,7 @@ export function ProjectHead({ project, missing }: { project: string; missing: bo
                 {tilde(project, a.home)}
               </span>
               <GitBadge st={own} />
+              <GitPush dir={project} st={own} />
               <GitChanges dir={project} count={own.changed + own.untracked} />
             </li>
           )}
@@ -64,6 +66,7 @@ export function ProjectHead({ project, missing }: { project: string; missing: bo
                 {tilde(d, a.home)}
               </span>
               <GitBadge st={git.status[d]} />
+              <GitPush dir={d} st={git.status[d]} />
               <GitChanges dir={d} count={git.status[d] ? git.status[d].changed + git.status[d].untracked : 0} />
             </li>
           ))}

@@ -119,6 +119,7 @@ func handler() http.Handler {
 	routesPermHelp(mux)
 	routesHomes(mux)
 	routesGit(mux)
+	routesGitPush(mux)
 	routesKeepWarm(mux)
 	routesSkills(mux)
 	routesSlash(mux)
