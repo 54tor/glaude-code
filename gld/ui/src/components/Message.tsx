@@ -1,3 +1,4 @@
+import { memo } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { CornerDownRight, Wrench } from "lucide-react"
@@ -55,7 +56,8 @@ function UserText({ t }: { t: string }) {
   return <>{parts}</>
 }
 
-export function Message({ m, conv }: { m: Msg; conv?: { dir: string; id: string } }) {
+// Mémoïsé (voir plus bas) : la conversation se redessine pour l'état de la session, pas pour chacun de ses messages.
+function MessageView({ m, conv }: { m: Msg; conv?: { dir: string; id: string } }) {
   const title = m.ts ? new Date(m.ts).toLocaleString("fr-FR") : undefined
   // Image de la conversation : relue à la demande dans le transcript (GET /conv-image), jamais embarquée dans la liste des messages.
   if (m.img && conv) {
@@ -105,3 +107,5 @@ export function Message({ m, conv }: { m: Msg; conv?: { dir: string; id: string 
     </div>
   )
 }
+
+export const Message = memo(MessageView, (a, b) => a.m === b.m && a.conv?.dir === b.conv?.dir && a.conv?.id === b.conv?.id)
