@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { setOpen, useOpen, useOpenState } from "@/hooks/useOpen"
 import { Check, ChevronRight, FolderInput, Layers, MessageSquarePlus, Plus, SquareTerminal, Star, Tag, Trash2, TriangleAlert } from "lucide-react"
 import type { GitState, VGroup } from "@/lib/api"
 import { tilde } from "@/lib/format"
@@ -62,7 +62,7 @@ type Props = {
   onSel: (key: string) => void
   selGroup: string // « clé du dossier \0 nom » du groupe affiché
   onGroup: (vg: VGroup, key: string) => void
-  isOpen: (n: Node, depth: number) => boolean
+  isOpen: (n: Node) => boolean
   toggle: (k: string) => void
 }
 
@@ -99,13 +99,13 @@ function GroupRow({ vg, n, depth, active, onGroup }: { vg: VGroup; n: Node; dept
 
 // Les dépôts git sous un dossier de sessions (sessions dans ~/php, dépôts dans ~/php/8.1, ~/php/8.2…) : un second niveau replié,
 // dont la ligne résume l'état (fichiers modifiés au total) ; cliquer l'ouvre.
-function RepoRows({ repos, status, depth, home }: { repos: string[]; status: Record<string, GitState>; depth: number; home: string }) {
-  const [open, setOpen] = useState(false)
+function RepoRows({ repos, status, depth, home, id }: { repos: string[]; status: Record<string, GitState>; depth: number; home: string; id: string }) {
+  const [open, flip] = useOpen("r/" + id)
   const pad = (depth + 1) * 12 + 4
   return (
     <li>
       <button
-        onClick={() => setOpen(!open)}
+        onClick={flip}
         aria-expanded={open}
         title={`${repos.length} dépôts git dans ce dossier`}
         className="flex h-7 w-full items-center gap-1 rounded-md pr-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -147,7 +147,7 @@ function Item({
   const groups = n.g ? a.vgroups.filter((vg) => vg.project === n.g!.project) : []
   const repos = n.g ? (git.repos[n.g.project] ?? []) : []
   const kids = (!leaf && n.kids.size > 0) || groups.length > 0 || repos.length > 0
-  const open = isOpen(n, depth)
+  const open = isOpen(n)
   const active = sel === n.key
   const sessionsOpen = n.g ? n.ss.some((s) => a.live.has(s.id)) : false
   return (
@@ -190,7 +190,7 @@ function Item({
       </ContextMenu>
       {kids && open && (
         <ul>
-          {repos.length > 0 && <RepoRows repos={repos} status={git.status} depth={depth} home={a.home} />}
+          {repos.length > 0 && <RepoRows repos={repos} status={git.status} depth={depth} home={a.home} id={n.key} />}
           {groups.map((vg) => (
             <GroupRow key={vg.name} vg={vg} n={n} depth={depth} active={selGroup === n.key + "\0" + vg.name} onGroup={onGroup} />
           ))}
@@ -227,8 +227,6 @@ function lift(nodes: Node[]): { n: Node; label?: string; leaf?: boolean }[] {
   return [...top, ...nodes.map((n) => ({ n }))]
 }
 
-const BIG_TREE = 80 // au-delà de ce nombre de dossiers, l'arbre démarre replié
-const count = (nodes: Node[]): number => nodes.reduce((t, n) => t + 1 + count([...n.kids.values()]), 0)
 
 export function ProjectTree({
   nodes,
@@ -246,19 +244,10 @@ export function ProjectTree({
   // Chargement paresseux : un grand arbre démarre replié (premier niveau seul, plus le chemin du dossier choisi) ;
   // les sous-dossiers d'un nœud replié ne sont pas rendus. Un petit arbre reste déplié. « toggled » : nœuds que
   // l'utilisateur a inversés par rapport à ce défaut.
-  const [toggled, setToggled] = useState(() => new Set<string>())
-  const big = useMemo(() => count(nodes) > BIG_TREE, [nodes])
-  const isOpen = (n: Node, depth: number) => {
-    const byDefault = !big || depth === 0 || sel.startsWith(n.key + "/") || sel === n.key
-    return toggled.has(n.key) ? !byDefault : byDefault
-  }
-  const toggle = (k: string) =>
-    setToggled((c) => {
-      const n = new Set(c)
-      if (n.has(k)) n.delete(k)
-      else n.add(k)
-      return n
-    })
+  const opened = useOpenState()
+  // Fermé par défaut, sauf le chemin du dossier affiché ; les choix de l'utilisateur sont gardés dans le navigateur.
+  const isOpen = (n: Node) => opened["t/" + n.key] ?? (sel.startsWith(n.key + "/") || sel === n.key)
+  const toggle = (k: string) => setOpen("t/" + k, !(opened["t/" + k] ?? (sel.startsWith(k + "/") || sel === k)))
   return (
     <ul className="space-y-px">
       {lift(nodes).map(({ n, label, leaf }) => (

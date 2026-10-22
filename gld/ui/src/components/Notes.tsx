@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { ChevronRight, MessageSquarePlus, NotebookPen, Send } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/api"
+import { useOpen } from "@/hooks/useOpen"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -12,7 +13,7 @@ import { useActions, type Row } from "./actions"
 export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: string; rows: Row[] }) {
   const a = useActions()
   const [text, setText] = useState<string | null>(null) // null : pas encore lu
-  const [open, setOpen] = useState(false)
+  const [open, flip] = useOpen("n/" + noteKey)
   const [sendable, setSendable] = useState<Set<string>>(new Set())
   const saved = useRef("")
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -26,7 +27,6 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
         const t = r.notes[noteKey] ?? ""
         saved.current = t
         setText(t)
-        setOpen(t !== "")
       },
       () => live && setText("")
     )
@@ -60,7 +60,7 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
   }
   return (
     <div className="mb-4 rounded-lg border">
-      <button onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium">
+      <button onClick={flip} aria-expanded={open} className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium">
         <ChevronRight className={cn("size-4 transition-transform", open && "rotate-90")} />
         <NotebookPen className="size-4 text-muted-foreground" />
         Bloc-notes
