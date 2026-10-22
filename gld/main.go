@@ -72,7 +72,7 @@ func main() {
 		openHosts = true
 		h = withToken(token, h)
 	}
-	srv := &http.Server{Addr: net.JoinHostPort(*listen, port), Handler: h}
+	srv := newServer(net.JoinHostPort(*listen, port), h)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	homeCtx = ctx
@@ -144,4 +144,12 @@ func handler() http.Handler {
 		}
 		guarded.ServeHTTP(w, r)
 	})
+}
+
+var readHeaderTimeout = 10 * time.Second
+
+// newServer : avec --listen, le serveur est joignable du réseau ; un client qui envoie ses en-têtes au compte-gouttes
+// (slowloris) ne garde pas une connexion ouverte au-delà de ce délai, avant même la vérification du jeton.
+func newServer(addr string, h http.Handler) *http.Server {
+	return &http.Server{Addr: addr, Handler: h, ReadHeaderTimeout: readHeaderTimeout}
 }
