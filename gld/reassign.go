@@ -76,6 +76,9 @@ func rewriteCwd(path, old, nw string, sub bool) error {
 	if err == nil {
 		err = w.Flush()
 	}
+	if err == nil {
+		err = out.Sync() // le transcript réécrit remplace l'original : il doit être sur disque avant le renommage
+	}
 	if cerr := out.Close(); err == nil {
 		err = cerr
 	}

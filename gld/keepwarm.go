@@ -63,7 +63,7 @@ func warmLoad() {
 func warmSave() {
 	b, _ := json.MarshalIndent(warmState, "", "  ")
 	tmp := warmFile() + ".tmp"
-	if os.WriteFile(tmp, b, 0o600) == nil {
+	if writeSynced(tmp, b, 0o600) == nil {
 		os.Rename(tmp, warmFile())
 	}
 }
