@@ -138,10 +138,26 @@ func TestSuggestionsPermissions(t *testing.T) {
 		b.WriteString(line("git log --oneline") + line("sed -n 1,5p f") + line("find . -name x") + line("env A=1 ls") + line("git -c core.pager=x log") + line("go build ./..."))
 	}
 	b.WriteString(line("git status") + line("make build"))
+	mcp := func(tool string) string {
+		return `{"type":"assistant","message":{"content":[{"type":"tool_use","name":"` + tool + `","input":{}}]}}` + "\n"
+	}
+	for i := 0; i < 3; i++ {
+		b.WriteString(mcp("mcp__plugin_playwright_playwright__browser_click") + mcp("mcp__plugin_playwright_playwright__browser_snapshot") + mcp("mcp__deja__x"))
+	}
+	b.WriteString(mcp("mcp__rare__x"))
 	put(t, filepath.Join(cfg, "projects", "-p", id1+".jsonl"), b.String(), old)
 	got := map[string]PermSuggest{}
-	for _, s := range permSuggestions([]string{"Bash(go test:*)"}) {
+	for _, s := range permSuggestions([]string{"Bash(go test:*)", "mcp__deja"}) {
 		got[s.Rule] = s
+	}
+	// un serveur MCP appelé au moins 3 fois est proposé en entier ; un serveur déjà autorisé ou rare ne l'est pas
+	if s := got["mcp__plugin_playwright_playwright"]; s.Count != 6 || s.ReadOnly || !strings.HasPrefix(s.Example, "mcp__plugin_playwright_playwright__") {
+		t.Fatalf("mcp : %+v", got)
+	}
+	for _, no := range []string{"mcp__deja", "mcp__rare"} {
+		if _, ok := got[no]; ok {
+			t.Errorf("règle MCP proposée à tort : %s", no)
+		}
 	}
 	if s := got["Bash(git status:*)"]; s.Count != 5 || !s.ReadOnly {
 		t.Fatalf("git status : %+v", got)
