@@ -1,21 +1,44 @@
 import { useSyncExternalStore } from "react"
 
-// Brouillon et messages en file d'attente d'une session, gardés hors du composant : fermer la fenêtre de la session ne les perd pas.
-// Le tour en cours et l'envoi des messages en file continuent aussi, car ils ne dépendent pas de l'affichage.
+// Brouillon et messages en file d'attente d'une session, gardés hors du composant et dans le navigateur (localStorage) : fermer la
+// fenêtre, échouer à livrer un message ou recharger la page ne les perd pas. Le tour en cours et l'envoi des messages en file
+// continuent aussi fenêtre fermée, car ils ne dépendent pas de l'affichage ; après un rechargement, la file reste suspendue.
 type Entry = { text: string; queue: string[] }
 const empty: Entry = { text: "", queue: [] }
-const entries = new Map<string, Entry>()
+const KEY = "gld.drafts"
+const MAX_SESSIONS = 50
+
+const load = (): Map<string, Entry> => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Record<string, Partial<Entry>>
+    return new Map(
+      Object.entries(raw).map(([id, e]) => [id, { text: typeof e.text === "string" ? e.text : "", queue: Array.isArray(e.queue) ? e.queue.filter((q): q is string => typeof q === "string") : [] }])
+    )
+  } catch {
+    return new Map()
+  }
+}
+const entries = load()
 const subs = new Set<() => void>()
 
-const emit = () => subs.forEach((f) => f())
+const save = () => {
+  try {
+    // les plus récemment modifiées en dernier : au-delà de la limite, les plus anciennes partent
+    const kept = [...entries].slice(-MAX_SESSIONS)
+    localStorage.setItem(KEY, JSON.stringify(Object.fromEntries(kept)))
+  } catch {
+    /* stockage plein ou indisponible : le magasin en mémoire continue de servir */
+  }
+}
 
 export const draftOf = (id: string): Entry => entries.get(id) ?? empty
 
 export function setDraft(id: string, patch: Partial<Entry>) {
   const next = { ...draftOf(id), ...patch }
-  if (!next.text && next.queue.length === 0) entries.delete(id)
-  else entries.set(id, next)
-  emit()
+  entries.delete(id) // ré-insérée à la fin
+  if (next.text || next.queue.length > 0) entries.set(id, next)
+  save()
+  subs.forEach((f) => f())
 }
 
 const subscribe = (f: () => void) => {
