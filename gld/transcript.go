@@ -117,6 +117,7 @@ type infoState struct {
 	off               int64 // octets déjà lus, toujours en fin de ligne complète
 	title, cwd, first string
 	tok               Tokens // total de la session
+	lastMsg           time.Time // horodatage du dernier message user/assistant : le mtime bouge aussi pour un titre ou un résumé
 	lastID            string // un même message s'écrit sur plusieurs lignes qui répètent son usage : seul le dernier compte
 	last              Tokens
 }
@@ -162,12 +163,18 @@ func (c *infoState) visit(b []byte) {
 	wantCwd := c.cwd == "" && bytes.Contains(b, []byte(`"cwd"`))
 	wantFirst := c.first == "" && bytes.Contains(b, []byte(`"type":"user"`))
 	wantUsage := bytes.Contains(b, []byte(`"usage"`)) && bytes.Contains(b, []byte(`"type":"assistant"`))
-	if !wantTitle && !wantCwd && !wantFirst && !wantUsage {
+	wantTS := bytes.Contains(b, []byte(`"timestamp"`)) && (bytes.Contains(b, []byte(`"type":"user"`)) || bytes.Contains(b, []byte(`"type":"assistant"`)))
+	if !wantTitle && !wantCwd && !wantFirst && !wantUsage && !wantTS {
 		return
 	}
 	var l line
 	if json.Unmarshal(b, &l) != nil {
 		return
+	}
+	if wantTS && (l.Type == "user" || l.Type == "assistant") {
+		if t, err := time.Parse(time.RFC3339Nano, l.Timestamp); err == nil && t.After(c.lastMsg) {
+			c.lastMsg = t
+		}
 	}
 	if wantTitle && l.CustomTitle != "" {
 		c.title = l.CustomTitle
@@ -206,8 +213,12 @@ func info(path string, st os.FileInfo) Session {
 		infoMu.Unlock()
 	}
 	title, cwd, first := c.title, c.cwd, c.first
+	mt := st.ModTime()
+	if !c.lastMsg.IsZero() && c.lastMsg.Before(mt) {
+		mt = c.lastMsg
+	}
 	s := Session{ID: strings.TrimSuffix(filepath.Base(path), ".jsonl"), Dir: filepath.Base(filepath.Dir(path)),
-		Named: title != "", Cwd: cwd, Mtime: float64(st.ModTime().UnixNano()) / 1e9, KB: st.Size() / 1024, Tok: c.tok}
+		Named: title != "", Cwd: cwd, Mtime: float64(mt.UnixNano()) / 1e9, KB: st.Size() / 1024, Tok: c.tok}
 	if s.Title = title; title == "" {
 		if s.Title = cut(first, 100); first == "" {
 			s.Title = "(sans titre)"

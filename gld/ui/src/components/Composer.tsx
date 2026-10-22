@@ -113,7 +113,7 @@ export function Composer({
           onKeyDown={(e) => isSend(e) && (e.preventDefault(), send())}
           onPaste={pics.onPaste}
           onDrop={pics.onDrop}
-          placeholder={running ? "Claude répond…" : "Écrire à Claude dans cette session… (Entrée pour envoyer, Maj+Entrée pour un saut de ligne ; une image se colle ou se dépose ici)"}
+          placeholder={running ? "Claude répond…" : "Écrire à Claude… (Entrée envoie, Maj+Entrée : saut de ligne)"}
           disabled={running}
           rows={2}
           maxLength={32000}
@@ -221,7 +221,7 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
           }}
           onPaste={pics.onPaste}
           onDrop={pics.onDrop}
-          placeholder="Écrire dans la session ouverte (tmux)… (Entrée pour envoyer, Maj+Entrée pour un saut de ligne ; une image se colle ou se dépose ici)"
+          placeholder="Écrire à la session… (Entrée envoie, Maj+Entrée : saut de ligne)"
           rows={2}
           maxLength={32000}
           disabled={busy}
