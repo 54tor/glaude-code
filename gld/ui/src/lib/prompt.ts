@@ -76,7 +76,7 @@ export function parsePrompt(screen: string): Prompt | null {
       }
     return q
   }
-  const multi = multiSelect(lines, above)
+  const multi = multiSelect(lines, above, (head) => recap(all, tailStart + head))
   if (multi) return multi
   // Lignes suivant une option, avant la prochaine : suite d'un libellé trop long, ou description (pas le pied ni les séparateurs).
   const detail = (i: number) => {
@@ -132,7 +132,7 @@ export function parsePrompt(screen: string): Prompt | null {
 
 // Question à choix multiples : « N. [ ] option » (ou [✔]), une ligne « Submit » sans numéro, puis « Chat about this » sous un séparateur.
 // Le curseur (❯) se déplace aux flèches ; la touche chiffre coche sans déplacer le curseur ; Entrée sur « Submit » valide.
-function multiSelect(lines: string[], above: (at: number) => string): Prompt | null {
+function multiSelect(lines: string[], above: (at: number) => string, recapAt: (head: number) => string | undefined): Prompt | null {
   // Signature stricte : les touches envoyées sont aveugles (Bas…Entrée), donc un texte qui imiterait des cases ne doit pas passer pour la vraie
   // question. Il faut l'en-tête « ← … Submit → », le pied « Enter to select » dans les 3 dernières lignes, et aucune demande d'autorisation
   // (qu'un « Valider » mal placé pourrait approuver) sur l'écran.
@@ -171,5 +171,14 @@ function multiSelect(lines: string[], above: (at: number) => string): Prompt | n
         ? [{ label: `${r.n}. ${r.label}`, keys: [r.n!, "Enter"], text: FREE.test(r.label), chat: CHAT.test(r.label) }]
         : []
   )
-  return { question: above(boxes[0].at + off), options, submit: [...reach(submit), "Enter"] }
+  return { question: above(boxes[0].at + off), context: recapAt(head), options, submit: [...reach(submit), "Enter"] }
+}
+
+// Le message de Claude affiché au-dessus d'un dialogue à onglets (récapitulatif des choix) : de sa puce « ● » jusqu'à l'en-tête, ou de
+// l'écran visible s'il est déjà remonté.
+function recap(all: string[], head: number): string | undefined {
+  let from = head
+  while (from > 0 && head - from < 80 && !/^\s*●/.test(all[from])) from--
+  const text = all.slice(from, head).filter((l) => !/^[─━╌▔\s]+$/.test(l)).join("\n").trim()
+  return text || undefined
 }
