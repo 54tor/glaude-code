@@ -140,7 +140,7 @@ export function useAppActions(c: {
       send: "Lancer la session",
       choice,
       targets: ts,
-      run: (prompt, c, t = ts[0]) => act("/new-session", { dir: t.dir, id: t.id, prompt, args: withChoice(args, c) }, "Nouvelle session…", "last"),
+      run: (prompt, c, t = ts[0]) => act("/new-session", { ...(t.cwd ? { cwd: t.cwd } : { dir: t.dir, id: t.id }), prompt, args: withChoice(args, c) }, "Nouvelle session…", "last"),
     })
   const groupRows = (x: VGroup) =>
     x.ids

@@ -202,24 +202,34 @@ func chatStopHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"ok": true, "out": "Arrêt demandé"})
 }
 
-// newSessionHandler ouvre une nouvelle session claude, dans le dossier de travail d'une session existante (dir/id),
+// newSessionHandler ouvre une nouvelle session claude, dans le dossier de travail d'une session existante (dir/id) ou dans un dossier
+// choisi (Cwd, absolu et existant),
 // avec un prompt (ex. les références des sessions d'un groupe). Via gld-matin (matin.go), qui passe le prompt par un fichier temporaire.
 func newSessionHandler(w http.ResponseWriter, r *http.Request) {
-	var req struct{ Dir, ID, Prompt, Args string }
+	var req struct{ Dir, ID, Prompt, Args, Cwd string }
 	if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil {
 		writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
 		return
 	}
 	p, ok := transcript(req.Dir, req.ID)
+	if req.Cwd != "" {
+		ok = filepath.IsAbs(req.Cwd) && !strings.ContainsRune(req.Cwd, 0)
+	}
 	args, err := claudeArgs(req.Args)
 	switch {
+	case !ok && req.Cwd != "":
+		err = errors.New("dossier invalide (chemin absolu attendu)")
 	case !ok:
 		err = errors.New("session invalide")
 	case err != nil:
 	case strings.TrimSpace(req.Prompt) == "":
 		err = errors.New("prompt vide")
 	default:
-		err = checkResumePrompt(req.ID, req.Prompt)
+		id := req.ID
+		if req.Cwd != "" {
+			id = "-" // aucune session visée : seule la validité du texte compte
+		}
+		err = checkResumePrompt(id, req.Prompt)
 		if errors.Is(err, errOpen) || errors.Is(err, errLive) {
 			err = nil // une session ouverte n'empêche pas d'en démarrer une nouvelle à côté (même sans savoir lesquelles le sont)
 		}
@@ -228,8 +238,11 @@ func newSessionHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 		return
 	}
-	st, _ := os.Stat(p)
-	cwd := info(p, st).Cwd
+	cwd := filepath.Clean(req.Cwd)
+	if req.Cwd == "" {
+		st, _ := os.Stat(p)
+		cwd = info(p, st).Cwd
+	}
 	if fi, err := os.Stat(cwd); cwd == "" || err != nil || !fi.IsDir() {
 		writeJSON(w, 200, map[string]any{"ok": false, "out": "dossier du projet introuvable : " + cwd})
 		return
