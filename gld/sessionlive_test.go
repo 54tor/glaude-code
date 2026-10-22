@@ -64,7 +64,7 @@ func TestCompte(t *testing.T) {
 	put(t, filepath.Join(cfg, ".claude.json"), `{"oauthAccount":{"emailAddress":"a@b.c","organizationType":"claude_max","organizationRateLimitTier":"default_claude_max_20x","hasExtraUsageEnabled":true,"accountUuid":"secret-id"},"cachedUsageUtilization":{"fetchedAtMs":1792568161473,"utilization":{"five_hour":{"utilization":21,"resets_at":"2026-10-21T08:50:00+00:00"},"seven_day":{"utilization":49,"resets_at":"x"},"seven_day_opus":null,"inconnue":{"utilization":1.5,"limit_dollars":250,"used_dollars":3.2}}}}`, old)
 	put(t, filepath.Join(cfg, "stats-cache.json"), `{"lastComputedDate":"2026-10-20","totalSessions":10,"totalMessages":99,"dailyActivity":[{"date":"2026-10-19","messageCount":5,"sessionCount":2,"toolCallCount":3}],"dailyModelTokens":[{"date":"2026-10-19","tokensByModel":{"m":1000}}],"modelUsage":{"m":{"inputTokens":1,"outputTokens":2,"cacheReadInputTokens":3,"cacheCreationInputTokens":4}}}`, old)
 	a := accountInfo()
-	if a.Email != "a@b.c" || a.Tier != "default_claude_max_20x" || !a.ExtraUsage || len(a.Limits) != 3 || a.Limits[0].Key != "five_hour" || a.Limits[0].Percent != 21 || a.Limits[2].Used == nil {
+	if a.Email != "a@b.c" || a.Tier != "default_claude_max_20x" || !a.ExtraUsage || len(a.Limits) != 3 || a.Limits[0].Key != "five_hour" || a.Limits[0].Percent != 21 || a.Limits[2].Used == nil || a.LimitsAt != 1792568161.473 {
 		t.Fatalf("compte : %+v", a)
 	}
 	if a.TotalSess != 10 || len(a.Days) != 1 || a.Days[0].Tokens["m"] != 1000 || len(a.Models) != 1 || a.Models[0].Out != 2 {
