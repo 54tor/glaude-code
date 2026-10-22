@@ -67,18 +67,21 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
     <ScrollArea className="min-h-0 flex-1">
       <div className="mx-auto max-w-5xl px-6 py-6">
         <Tabs value={tab || "sante"} onValueChange={onTab}>
-          <ScrollArea className="mb-4 w-full">
-            <TabsList className="w-max justify-start">
-              <TabsTrigger value="sante">Santé{ov.issues.length > 0 && ` (${ov.issues.length})`}</TabsTrigger>
-              <TabsTrigger value="projets">Projets</TabsTrigger>
-              <TabsTrigger value="precedence">Précédence</TabsTrigger>
-              <TabsTrigger value="hooks">Hooks ({ov.hooks.length})</TabsTrigger>
-              <TabsTrigger value="mcp">MCP</TabsTrigger>
-              <TabsTrigger value="permissions">Permissions</TabsTrigger>
-              <TabsTrigger value="reglages">Réglages</TabsTrigger>
-              <TabsTrigger value="json">JSON</TabsTrigger>
-              <TabsTrigger value="sauvegardes">Sauvegardes ({ov.backups.length})</TabsTrigger>
-            </TabsList>
+          {/* Le soulignement de l'onglet actif (::after, 5 px sous le bouton, même invisible) déborde de la liste : sans ce bas de marge il crée un défilement vertical. */}
+          <ScrollArea className="mb-2 w-full">
+            <div className="pb-2">
+              <TabsList className="w-max justify-start">
+                <TabsTrigger value="sante">Santé{ov.issues.length > 0 && ` (${ov.issues.length})`}</TabsTrigger>
+                <TabsTrigger value="projets">Projets</TabsTrigger>
+                <TabsTrigger value="precedence">Précédence</TabsTrigger>
+                <TabsTrigger value="hooks">Hooks ({ov.hooks.length})</TabsTrigger>
+                <TabsTrigger value="mcp">MCP</TabsTrigger>
+                <TabsTrigger value="permissions">Permissions</TabsTrigger>
+                <TabsTrigger value="reglages">Réglages</TabsTrigger>
+                <TabsTrigger value="json">JSON</TabsTrigger>
+                <TabsTrigger value="sauvegardes">Sauvegardes ({ov.backups.length})</TabsTrigger>
+              </TabsList>
+            </div>
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
           <TabsContent value="sante">

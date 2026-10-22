@@ -7,6 +7,19 @@ import (
 	"testing"
 )
 
+// Le dossier de configuration lui-même (cwd d'une fusion de mémoire globale) n'est pas un projet à configurer.
+func TestConfigSansDossierDeConfiguration(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	put(t, filepath.Join(cfg, "projects", "-c", id1+".jsonl"), `{"cwd":"`+cfg+`"}`+"\n", old)
+	if len(liveProjects()) != 1 {
+		t.Fatal("le projet de test n'existe pas")
+	}
+	if len(configProjects()) != 0 || len(projectConfigs()) != 0 {
+		t.Fatal("~/.claude listé comme projet de configuration")
+	}
+}
+
 func TestConfigParProjet(t *testing.T) {
 	cfg := t.TempDir()
 	use(cfg)
