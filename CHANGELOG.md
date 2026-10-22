@@ -18,6 +18,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - « Remplacer » un skill dans la synchronisation retire de la cible les fichiers absents de la source (ils vont dans la sauvegarde).
 - Un `claude` qui ne répond plus (mise à jour, invite) ne fige plus la liste des sessions : `claude agents` est abandonné au bout de 10 s, les sessions ouvertes sont alors inconnues et les suppressions refusées.
 - Un serveur tmux figé ne bloque plus la question de confiance ni l'envoi à une session : chaque appel à tmux est abandonné au bout de 10 s.
+- Un dépôt git qui ne répond plus (montage réseau figé) ne bloque plus la liste des remotes : les lectures de git sont abandonnées au bout de 10 s.
 - La liste des fichiers en cours de modification affiche les chemins accentués ou avec guillemet tels quels, au lieu de l'échappement de git (`"\303\251t\303\251.txt"`).
 
 ## [0.2.0] - 2026-10-22
