@@ -21,6 +21,9 @@ import (
 //go:embed all:ui/dist
 var uiFS embed.FS
 
+// Injectée à la compilation (-ldflags "-X main.version=v1.2.3") ; « dev » hors release.
+var version = "dev"
+
 var (
 	root      string
 	port      = env("GLD_WEB_PORT", env("CC_WEB_PORT", "8799")) // CC_* : anciens noms, encore lus
@@ -46,7 +49,12 @@ func main() {
 		os.Args = append(os.Args[:1], os.Args[2:]...)
 	}
 	listen := flag.String("listen", env("GLD_WEB_LISTEN", "127.0.0.1"), "adresse d'écoute (défaut 127.0.0.1 ; 0.0.0.0 pour tout le réseau, avec un jeton)")
+	showVersion := flag.Bool("version", false, "affiche la version et quitte")
 	flag.Parse()
+	if *showVersion {
+		fmt.Println("gld", version)
+		return
+	}
 	hosts["127.0.0.1:"+port], hosts["localhost:"+port] = true, true
 
 	h := handler()

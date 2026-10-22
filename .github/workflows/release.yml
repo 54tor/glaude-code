@@ -1,0 +1,39 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: gld/go.mod
+          cache-dependency-path: gld/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: gld/ui/package-lock.json
+      - run: make check
+      - run: make ui
+      - name: Binaires
+        working-directory: gld
+        run: |
+          mkdir -p ../out
+          # os/arch[/goarm] : linux 32 bits (386, armv6 compatible Pi 1+), 64 bits, windows x86/x64/arm64, macOS
+          for t in linux/amd64 linux/386 linux/arm64 linux/arm/6 windows/amd64 windows/386 windows/arm64 darwin/arm64 darwin/amd64; do
+            IFS=/ read -r os arch arm <<< "$t"
+            ext=; [ $os = windows ] && ext=.exe
+            name=gld-$os-$arch${arm:+v$arm}$ext
+            GOOS=$os GOARCH=$arch GOARM=$arm go build -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" -o ../out/$name .
+          done
+          cd ../out && sha256sum * > SHA256SUMS
+      - run: gh release create "$GITHUB_REF_NAME" out/* --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
