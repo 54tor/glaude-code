@@ -87,6 +87,7 @@ func main() {
 	migrateData()
 	go autosaveTabs(2 * time.Minute)
 	go watchWaiting(20 * time.Second)
+	go keepWarmLoop(30 * time.Second)
 	go func() { _ = syncIndex() }() // index de recherche prêt avant la première requête
 	if local {
 		fmt.Fprintln(os.Stderr, "http://"+net.JoinHostPort(*listen, port))
@@ -118,6 +119,7 @@ func handler() http.Handler {
 	routesPermHelp(mux)
 	routesHomes(mux)
 	routesGit(mux)
+	routesKeepWarm(mux)
 	routesSkills(mux)
 	routesSlash(mux)
 	routesImages(mux)
