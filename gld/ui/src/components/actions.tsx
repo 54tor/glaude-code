@@ -42,6 +42,7 @@ export type Actions = {
   newSession: (project: string, initial?: string) => void // nouvelle session dans ce dossier de travail
   copy: (s: Session) => void
   rename: (s: Session) => void
+  renameAuto: (s: Session) => void
   exportMd: (r: Row) => void
   move: (rows: Row[]) => void
   moveGroup: (g: Group, items: Item[]) => void
