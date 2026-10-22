@@ -301,6 +301,36 @@ func routesHomes(mux *http.ServeMux) {
 		homesMu.Unlock()
 		writeJSON(w, 200, map[string]any{"ok": true, "out": "Dossiers de configuration enregistrés"})
 	})
+	mux.HandleFunc("POST /homes-sync-plan", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ From, To string }
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		items, err := syncPlan(req.From, req.To)
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": "", "items": items})
+	})
+	mux.HandleFunc("POST /homes-sync-apply", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			From, To string
+			Picks    []SyncPick
+		}
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil || len(req.Picks) > 2000 {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		out, err := syncApply(req.From, req.To, req.Picks)
+		journal("homes-sync %q → %q : %d élément(s) : %v", req.From, req.To, len(req.Picks), errOr(err))
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": out})
+	})
 	mux.HandleFunc("POST /homes-select", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Name string }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
