@@ -260,6 +260,28 @@ describe("parsePrompt", () => {
     expect(p.options.map((o) => o.keys)).toEqual([["1"], ["2"], ["3"]])
     expect(p.options[2].text).toBe(true)
   })
+  it("question d'un onglet : tout le paragraphe, même s'il ne finit pas par un point d'interrogation", () => {
+    const screen = [
+      "←  ☐ Code mort  ☐ shadcn  ✔ Submit  →",
+      "",
+      "│ Code mort confirmé par deadcode (aucun appelant en production, vérifié sur linux, windows et darwin, ni appel dynamique ni route) :",
+      "│ que faire de recentSessions (open.go) et de memMove (memory.go) ? providerByID est gardée dans tous les cas : elle sert au",
+      "│ multi-fournisseur prévu dans todo.local.md.",
+      "",
+      "❯ 1. Supprimer les deux (Recommandé)",
+      "     recentSessions et son test partent.",
+      "  2. Supprimer recentSessions seule",
+      "  3. Tout garder",
+      "  4. Type something.",
+      "─────────────────────────────",
+      "  5. Chat about this",
+      "",
+      "Enter to select · Tab/Arrow keys to navigate",
+    ].join("\n")
+    const p = parsePrompt(screen)!
+    expect(p.question).toMatch(/^Code mort confirmé/)
+    expect(p.question).toMatch(/todo\.local\.md\.$/)
+  })
   it("une question longue repliée sur plusieurs lignes est lue en entier", () => {
     const screen = [
       "│ CODE-A4-1 (High) — À chaque item servi, Torznab fait tourner le jeton de téléchargement (ApiKeySnatchAuthorizer.php:37,58 :",
