@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react"
-import { ArrowDown, ArrowDownToLine, ArrowUpToLine, FileText, Loader2, MessageSquarePlus, MoreHorizontal, SquareTerminal, Wrench } from "lucide-react"
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
+import { ArrowDown, ArrowDownToLine, ArrowUpToLine, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, SquareTerminal, Wrench } from "lucide-react"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
 import { full, size, tilde } from "@/lib/format"
@@ -15,6 +15,9 @@ import { Message } from "./Message"
 import { Composer, type Turn } from "./Composer"
 import { LiveBar, LiveStats, useLive } from "./LiveStatus"
 import { LoadedDialog } from "./LoadedDialog"
+import { useLocal } from "@/hooks/useLocal"
+
+const FullTerminal = lazy(() => import("./FullTerminal")) // xterm n'est chargé qu'à l'ouverture du terminal
 
 // Messages chargés d'un coup (par la fin) : une session de plusieurs Go compte des milliers de messages.
 const PAGE = 200
@@ -48,6 +51,11 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
   const id = session?.id ?? ""
   const live = useLive(dir, id, a.live.has(id))
   const [tools, setTools] = useState(false)
+  const [view, setView] = useLocal("gld.session-view", "visuel") // choix gardé dans ce navigateur
+  const [termOn, setTermOn] = useState(false) // GLD_WEB_TERMINAL=1 côté serveur
+  useEffect(() => {
+    api.termInfo().then((r) => setTermOn(r.enabled), () => {})
+  }, [])
   const [loadedOpen, setLoadedOpen] = useState(false) // instructions réellement chargées (hook InstructionsLoaded)
   // Les messages sont rangés avec la clé (session, outils) qui les a produits : tant qu'elle ne correspond
   // pas à la demande courante, on affiche le chargement, sans remise à zéro synchrone dans un effet.
@@ -171,6 +179,7 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
       toEnd()
     } else if (stuck.current) toEnd()
   }, [msgs, toEnd, id])
+  const inTerm = termOn && view === "terminal" && !!id && a.live.has(id)
   const shown = turn?.msgs.length ?? 0
   useEffect(() => {
     if (shown && stuck.current) toEnd()
@@ -188,6 +197,11 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
           <Button variant={tools ? "secondary" : "ghost"} size="sm" onClick={() => setTools(!tools)} aria-pressed={tools}>
             <Wrench /> Outils {tools ? "affichés" : "masqués"}
           </Button>
+          {termOn && a.live.has(id) && (
+            <Button variant="secondary" size="sm" onClick={() => setView(inTerm ? "visuel" : "terminal")} title="Bascule entre la conversation et le terminal complet de la session">
+              {inTerm ? <MessagesSquare /> : <SquareTerminal />} {inTerm ? "Mode visuel" : "Mode terminal"}
+            </Button>
+          )}
           <Button variant="ghost" size="sm" onClick={() => setLoadedOpen(true)} title="Fichiers d'instructions que Claude a réellement chargés dans cette session">
             <FileText /> Instructions
           </Button>
@@ -218,7 +232,12 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
             )}
           </div>
         </div>
-        <div className="relative flex min-h-0 flex-1 flex-col">
+        {inTerm && (
+          <Suspense fallback={null}>
+            <FullTerminal key={id} id={id} />
+          </Suspense>
+        )}
+        <div className={inTerm ? "hidden" : "relative flex min-h-0 flex-1 flex-col"}>
         <ScrollArea ref={area} className="min-h-0 flex-1">
           <div className="session-text mx-auto max-w-7xl space-y-5 px-3 py-4 md:px-6 md:py-6">
             {msgs === null && (
@@ -259,7 +278,7 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
           </Button>
         )}
         </div>
-        {session && (
+        {session && !inTerm && (
           <Composer
             dir={dir}
             id={id}

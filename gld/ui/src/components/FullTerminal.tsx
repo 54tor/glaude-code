@@ -4,11 +4,10 @@ import "@xterm/xterm/css/xterm.css"
 import { Eye, Pencil } from "lucide-react"
 import { api } from "@/lib/api"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 // Terminal complet de la session (tmux) : lecture seule tant qu'on ne « prend pas la main » ; le serveur ignore toute frappe avant.
 // La taille est celle de la fenêtre tmux de l'hôte (le terminal de l'hôte n'est pas redimensionné) ; la zone défile si elle est plus grande.
-export default function FullTerminal({ id, onClose }: { id: string; onClose: () => void }) {
+export default function FullTerminal({ id }: { id: string }) {
   const box = useRef<HTMLDivElement>(null)
   const ws = useRef<WebSocket | null>(null)
   const term = useRef<Terminal | null>(null)
@@ -52,25 +51,20 @@ export default function FullTerminal({ id, onClose }: { id: string; onClose: () 
   }
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      {/* Échap appartient au terminal (Claude s'en sert) : la fenêtre se ferme par la croix ou le bouton. */}
-      <DialogContent onEscapeKeyDown={(e) => e.preventDefault()} className="flex max-h-[92vh] w-[96vw] flex-col gap-0 overflow-hidden p-0 sm:max-w-fit">
-        <DialogHeader className="flex-row items-center gap-3 border-b px-4 py-3 pr-12">
-          <DialogTitle className="text-base">Terminal de la session</DialogTitle>
-          <DialogDescription className="sr-only">Terminal tmux de la session, en lecture seule tant que la main n'est pas prise</DialogDescription>
-          {state === "ouvert" && (
-            <Button size="sm" variant={writable ? "secondary" : "outline"} onClick={() => setWrite(!writable)} title={writable ? "Repasser en lecture seule" : "Autoriser la saisie dans le terminal"}>
-              {writable ? <Pencil /> : <Eye />} {writable ? "Saisie active · repasser en lecture seule" : "Lecture seule · prendre la main"}
-            </Button>
-          )}
-          {state === "connexion" && !error && <span className="text-xs text-muted-foreground">Connexion…</span>}
-          {state === "fermé" && <span className="text-xs text-muted-foreground">Connexion fermée</span>}
-        </DialogHeader>
-        {error && <p className="px-4 py-6 text-sm text-destructive">{error}</p>}
-        <div className="min-h-0 overflow-auto bg-black p-2">
-          <div ref={box} />
-        </div>
-      </DialogContent>
-    </Dialog>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center gap-3 border-b px-4 py-2">
+        {state === "ouvert" && (
+          <Button size="sm" variant={writable ? "secondary" : "outline"} onClick={() => setWrite(!writable)} title={writable ? "Repasser en lecture seule" : "Autoriser la saisie dans le terminal"}>
+            {writable ? <Pencil /> : <Eye />} {writable ? "Saisie active · repasser en lecture seule" : "Lecture seule · prendre la main"}
+          </Button>
+        )}
+        {state === "connexion" && !error && <span className="text-xs text-muted-foreground">Connexion…</span>}
+        {state === "fermé" && <span className="text-xs text-muted-foreground">Connexion fermée</span>}
+      </div>
+      {error && <p className="px-4 py-6 text-sm text-destructive">{error}</p>}
+      <div className="min-h-0 flex-1 overflow-auto bg-black p-2">
+        <div ref={box} />
+      </div>
+    </div>
   )
 }
