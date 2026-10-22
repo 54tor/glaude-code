@@ -192,6 +192,9 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
               <li
                 key={cmd}
                 role="option"
+                ref={(el) => {
+                  if (el && i === sel % sugg.length) el.scrollIntoView({ block: "nearest" })
+                }}
                 aria-selected={i === sel % sugg.length}
                 onMouseDown={(e) => (e.preventDefault(), setText(cmd + " "))}
                 className={cn("flex cursor-pointer items-baseline gap-2 rounded px-2 py-1", i === sel % sugg.length && "bg-accent")}
