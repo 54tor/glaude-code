@@ -8,11 +8,13 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - **Pousser** : dans la vue dossier, bouton « Pousser » (commits en avance ou branche sans amont) qui propose les remotes du dépôt ; jamais de `--force`, identifiants des URL masqués (y compris un jeton placé à la place du nom), amont posé à la première poussée.
 - **Bloc-notes** par projet et par dossier, enregistré automatiquement (`gld-web-notes.json`) : le texte peut partir vers une nouvelle session ou vers une session ouverte dans tmux ; la note suit le projet quand on le renomme.
 - **Snippets** dans le champ de nouvelle session de la vue dossier, comme dans la fenêtre de saisie.
+- `GLD_WEB_TOKEN` est aussi exigé en écoute locale quand il est fixé (machine partagée entre plusieurs comptes).
 
 ### Modifié
 - **Maintenir au chaud** ne concerne plus que les sessions ouvertes dans un terminal : un ping `claude -p` ne relit pas le cache du mode interactif (mesuré : 0 token lu, tout le contexte réécrit). Le bouton est grisé sur une session fermée, et le maintien s'arrête si la session est fermée. Le coût cumulé n'est plus affiché (non mesurable par le terminal).
 
 ### Corrigé
+- Les jetons d'accès (`GLD_WEB_TOKEN`, jeton des gld enfants) ne sont plus transmis à `claude`, à tmux ni aux onglets lancés : un `env` exécuté par Claude ne les écrit plus dans un transcript.
 - Une session dont le maintien au chaud est arrêté pendant un passage n'est plus pinguée.
 - Le terminal web s'ouvre dans un dossier de configuration secondaire (l'origine du WebSocket est vérifiée par la passerelle).
 - La question de confiance d'un dossier n'est détectée que dans un panneau où tourne Claude Code, pas dans un `cat` ou un éditeur qui affiche le même texte.

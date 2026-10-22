@@ -113,7 +113,8 @@ func TestEnfantExigeLeJetonDeLaPasserelle(t *testing.T) {
 	if !childAuthorized(req("")) { // processus principal : pas de jeton attendu
 		t.Fatal("le processus principal doit tout accepter")
 	}
-	t.Setenv(childTokenEnv, "secret")
+	childToken = "secret"
+	t.Cleanup(func() { childToken = "" })
 	if childAuthorized(req("")) || childAuthorized(req("autre")) || !childAuthorized(req("secret")) {
 		t.Fatal("un enfant n'accepte que le jeton de sa passerelle")
 	}

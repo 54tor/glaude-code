@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 )
 
@@ -52,5 +53,28 @@ func TestWithToken(t *testing.T) {
 	}
 	if checkToken("court") == nil || checkToken(tok) != nil {
 		t.Fatal("longueur du jeton")
+	}
+}
+
+func TestTakeToken(t *testing.T) {
+	t.Setenv("GLD_WEB_TOKEN", "0123456789abcdef0123")
+	t.Setenv(childTokenEnv, "enfant")
+	if tok, err := takeToken(true); err != nil || tok != "0123456789abcdef0123" {
+		t.Fatal("jeton fixé, en local :", tok, err)
+	}
+	for _, k := range []string{"GLD_WEB_TOKEN", childTokenEnv} {
+		if _, ok := os.LookupEnv(k); ok {
+			t.Fatal(k, "reste dans l'environnement : les processus lancés en hériteraient")
+		}
+	}
+	if tok, _ := takeToken(true); tok != "" {
+		t.Fatal("en local sans jeton fixé, aucun jeton n'est exigé :", tok)
+	}
+	if tok, _ := takeToken(false); len(tok) != 48 {
+		t.Fatal("hors localhost, un jeton est créé :", tok)
+	}
+	t.Setenv("GLD_WEB_TOKEN", "court")
+	if _, err := takeToken(true); err == nil {
+		t.Fatal("un jeton trop court est refusé")
 	}
 }

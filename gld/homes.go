@@ -33,9 +33,11 @@ const (
 
 // childAuthorized : un gld enfant (lancé avec un jeton) n'accepte que les requêtes de sa passerelle ; le processus principal accepte tout.
 func childAuthorized(r *http.Request) bool {
-	t := os.Getenv(childTokenEnv)
-	return t == "" || sameToken(r.Header.Get(childHeader), t)
+	return childToken == "" || sameToken(r.Header.Get(childHeader), childToken)
 }
+
+// childToken : lu au démarrage, avant que main ne retire la variable de l'environnement.
+var childToken = os.Getenv(childTokenEnv)
 
 type Home struct {
 	Name string `json:"name"`
