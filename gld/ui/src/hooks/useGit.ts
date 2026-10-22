@@ -1,0 +1,39 @@
+import { useSyncExternalStore } from "react"
+import type { GitState } from "@/lib/api"
+import { api } from "@/lib/api"
+
+// État git des dossiers de projet, partagé par tous les composants qui l'affichent : une seule relecture périodique (30 s, onglet
+// visible, et au retour sur l'onglet) tant qu'au moins un composant l'utilise.
+type Map = Record<string, GitState>
+let state: Map = {}
+const subs = new Set<() => void>()
+let timer: ReturnType<typeof setInterval> | undefined
+
+const load = () =>
+  document.visibilityState === "visible" &&
+  api.gitStatus().then(
+    (r) => {
+      if (JSON.stringify(r.status) === JSON.stringify(state)) return // inchangé : pas de rendu
+      state = r.status
+      subs.forEach((f) => f())
+    },
+    () => {}
+  )
+
+function subscribe(f: () => void) {
+  subs.add(f)
+  if (subs.size === 1) {
+    load()
+    timer = setInterval(load, 30_000)
+    document.addEventListener("visibilitychange", load)
+  }
+  return () => {
+    subs.delete(f)
+    if (subs.size === 0) {
+      clearInterval(timer)
+      document.removeEventListener("visibilitychange", load)
+    }
+  }
+}
+
+export const useGit = (): Map => useSyncExternalStore(subscribe, () => state)
