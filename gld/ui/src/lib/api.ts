@@ -118,6 +118,7 @@ export type Ls = { path: string; parent: string; dirs: string[]; sep: string; er
 export type Result = { ok: boolean; out: string }
 // État git d'un dossier (gitstatus.go)
 export type GitState = { branch: string; detached?: boolean; upstream: boolean; ahead: number; behind: number; changed: number; untracked: number }
+export type GitChange = { path: string; status: string; from?: string } // status : « XY » comme git status --short
 // Dossiers de configuration Claude (homes.go) : current "" = celui du processus principal (main).
 export type HomesInfo = { current: string; main: string; homes: { name: string; dir: string; running: boolean }[] }
 
@@ -138,6 +139,7 @@ export const api = {
     ),
   ls: (path: string) => get<Ls>(`/ls?path=${enc(path)}`),
   homes: () => get<HomesInfo>("/homes"),
+  gitChanges: (dir: string) => get<{ files: GitChange[]; more?: number }>(`/git-changes?dir=${enc(dir)}`),
   gitStatus: () => get<{ status: Record<string, GitState>; repos: Record<string, string[]> }>("/git-status"),
   snippets: () => get<{ dir: string; files: Snippet[]; scopes: SnipScope[] }>("/snippet-list"),
   snippet: (key: string) => get<{ text?: string; error?: string; missing?: boolean }>(`/snippet?key=${enc(key)}`),
