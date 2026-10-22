@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestHookLoaded(t *testing.T) {
@@ -69,5 +72,23 @@ func TestAppelsAideSansSession(t *testing.T) {
 	}
 	if cmd.Dir != workDir() || cmd.Dir == os.TempDir() {
 		t.Fatalf("dossier de travail : %q", cmd.Dir)
+	}
+}
+
+// Le sémaphore des claude d'aide : quand il est plein, un appel attend puis abandonne à l'échéance de son délai, sans rien lancer.
+func TestHelperSem(t *testing.T) {
+	for range cap(helperSem) {
+		helperSem <- struct{}{}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if _, err := helperOutput(ctx, exec.Command("false")); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("sémaphore plein : l'appel aurait dû attendre puis abandonner :", err)
+	}
+	for range cap(helperSem) {
+		<-helperSem
+	}
+	if out, err := helperOutput(context.Background(), exec.Command("echo", "ok")); err != nil || string(out) != "ok\n" {
+		t.Fatal("sémaphore libre :", string(out), err)
 	}
 }

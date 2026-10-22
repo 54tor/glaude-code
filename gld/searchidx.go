@@ -197,10 +197,15 @@ func searchIndex(q string) ([]Hit, error) {
 	if err != nil {
 		return nil, err
 	}
+	// snippet() ne se calcule que pour le meilleur message de chaque session (id suit min(r)) : sur tous les messages trouvés,
+	// un mot courant dans un gros transcript coûtait une minute.
 	rows, err := db.Query(`
 WITH m AS MATERIALIZED (
-  SELECT dir, sid, bm25(msgs) AS r, snippet(msgs, 0, char(2), char(3), '…', 24) AS s FROM msgs WHERE msgs MATCH ?
-) SELECT dir, sid, count(*), min(r), s FROM m GROUP BY sid ORDER BY 4 LIMIT 300`, fq)
+  SELECT rowid AS id, dir, sid, bm25(msgs) AS r FROM msgs WHERE msgs MATCH ?1
+), b AS (
+  SELECT dir, sid, count(*) AS n, min(r) AS r, id FROM m GROUP BY sid ORDER BY 4 LIMIT 300
+) SELECT dir, sid, n, r, (SELECT snippet(msgs, 0, char(2), char(3), '…', 24) FROM msgs WHERE msgs MATCH ?1 AND rowid = b.id)
+FROM b ORDER BY 4`, fq)
 	if err != nil {
 		return nil, err
 	}

@@ -101,6 +101,20 @@ func helperCmd(ctx context.Context, model, system string) *exec.Cmd {
 	return cmd
 }
 
+// helperSem : au plus 2 claude d'aide à la fois ; une rafale (double-clic, script local) ne lance pas autant de processus
+// Node et d'appels facturés que de requêtes. Les suivants attendent leur tour, dans la limite de leur délai.
+var helperSem = make(chan struct{}, 2)
+
+func helperOutput(ctx context.Context, cmd *exec.Cmd) ([]byte, error) {
+	select {
+	case helperSem <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	defer func() { <-helperSem }()
+	return cmd.Output()
+}
+
 func withPath(c *exec.Cmd) *exec.Cmd {
 	if runtime.GOOS == "windows" {
 		return c

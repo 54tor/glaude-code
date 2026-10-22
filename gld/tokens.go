@@ -89,7 +89,7 @@ var tokenRun = func(text string) (int, string, float64, error) {
 	defer cancel()
 	cmd := helperCmd(ctx, "haiku", tokenSystem)
 	cmd.Stdin = strings.NewReader(text)
-	out, err := cmd.Output()
+	out, err := helperOutput(ctx, cmd)
 	var r struct {
 		IsError    bool                       `json:"is_error"`
 		Result     string                     `json:"result"`
