@@ -27,6 +27,7 @@ type SubLive struct {
 }
 
 type LiveState struct {
+	Said        string    `json:"said,omitempty"` // session en attente : dernier paragraphe de la réponse de Claude (souvent la question posée)
 	Open        bool      `json:"open"`
 	Status      string    `json:"status"`   // busy, idle, "" (inconnu)
 	Activity    string    `json:"activity"` // en une phrase
@@ -305,6 +306,7 @@ func sessionLive(dir, id string) LiveState {
 	st.Context, st.Out = u.context(), u.Out
 	if st.Open && st.Status == "idle" {
 		st.Activity, st.Thinking = "attend votre message", false
+		st.Said = lastSaid(p)
 	} else if st.Open && st.Status == "busy" {
 		st.Thinking = true
 		if st.Activity == "" || st.Activity == "a terminé sa réponse" {
@@ -362,4 +364,33 @@ func subLives(dir string) []SubLive {
 		out = out[:60]
 	}
 	return out
+}
+
+// lastSaid : le dernier paragraphe du dernier texte écrit par Claude (200 caractères au plus), "" s'il n'y en a pas.
+func lastSaid(path string) string {
+	lines := tailLines(path, 256<<10)
+	for i := len(lines) - 1; i >= 0; i-- {
+		var o struct {
+			Type    string `json:"type"`
+			IsMeta  bool   `json:"isMeta"`
+			Message struct {
+				Content json.RawMessage `json:"content"`
+			} `json:"message"`
+		}
+		if json.Unmarshal(lines[i], &o) != nil || o.Type != "assistant" {
+			continue
+		}
+		var blocks []struct{ Type, Text string }
+		if json.Unmarshal(o.Message.Content, &blocks) != nil {
+			continue
+		}
+		for j := len(blocks) - 1; j >= 0; j-- {
+			if t := strings.TrimSpace(blocks[j].Text); blocks[j].Type == "text" && t != "" {
+				paras := strings.Split(t, "\n\n")
+				return cut(spaceRe.ReplaceAllString(strings.TrimSpace(paras[len(paras)-1]), " "), 200)
+			}
+		}
+		return "" // le dernier message de Claude n'a pas de texte (outil seul)
+	}
+	return ""
 }

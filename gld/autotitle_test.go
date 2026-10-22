@@ -28,3 +28,12 @@ func TestLineMsgsSkipsMeta(t *testing.T) {
 		t.Fatalf("message normal perdu : %v", got)
 	}
 }
+
+func TestLastSaid(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	l := `{"type":"assistant","message":{"content":[{"type":"text","text":"Intro.\n\nSi vous préférez, dites-le."}]}}` + "\n"
+	os.WriteFile(p, []byte(l), 0o600)
+	if got := lastSaid(p); got != "Si vous préférez, dites-le." {
+		t.Fatalf("got %q", got)
+	}
+}
