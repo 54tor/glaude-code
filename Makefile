@@ -4,6 +4,7 @@
 # make macos   : gld-darwin-arm64 pour macOS Apple Silicon (M1 et suivants ; l'interface est construite avant, sans cgo)
 # make test    : tests Go (le dossier dist peut être vide : seul l'interface en dépend)
 # make check   : go vet + tests Go + tsc + eslint + tests de l'interface (rien n'est modifié)
+# make fuzz    : chaque cible de fuzzing de gld pendant FUZZTIME (60s par défaut) ; corpus dans le cache de go
 BIN ?= $(HOME)/.local/bin
 INDEX := gld/ui/dist/index.html
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
@@ -30,8 +31,12 @@ macos: ui
 test:
 	cd gld && go test -count=1 .
 
+FUZZTIME ?= 60s
+fuzz:
+	cd gld && for f in $$(go test -list '^Fuzz' . | grep '^Fuzz'); do go test -run '^$$' -fuzz "^$$f$$" -fuzztime $(FUZZTIME) -parallel 4 . || exit 1; done
+
 check:
 	cd gld && go vet ./... && go test -count=1 .
 	cd gld/ui && { [ -d node_modules ] || npm ci; } && npx tsc --noEmit && npx eslint . && npm test
 
-.PHONY: ui install windows macos test check
+.PHONY: ui install windows macos test check fuzz
