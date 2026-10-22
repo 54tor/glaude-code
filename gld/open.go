@@ -3,12 +3,8 @@ package main
 // Sessions à rouvrir dans un terminal (les onglets eux-mêmes : term.go, matin.go).
 
 import (
-	"os"
-	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
-	"time"
 )
 
 var unsafeTitle = regexp.MustCompile(`[^\p{L}\p{N} ._-]+`)
@@ -20,30 +16,3 @@ func safeTitle(s string) string {
 }
 
 var spaceRe = regexp.MustCompile(`\s+`)
-
-// recentSessions : les sessions à rouvrir pour un dossier de transcripts, comme gld-matin —
-// récentes (days), assez longues (minBytes), un seul titre par homonyme, hors sessions vivantes.
-func recentSessions(dir string, days int, minBytes int64) []Session {
-	files, _ := filepath.Glob(filepath.Join(dir, "*.jsonl"))
-	live := liveSessions()
-	var out []Session
-	for _, p := range files {
-		st, err := os.Stat(p)
-		if err != nil || st.Size() < minBytes || time.Since(st.ModTime()) > time.Duration(days)*24*time.Hour {
-			continue
-		}
-		if s := info(p, st); !live[s.ID] {
-			out = append(out, s)
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Mtime > out[j].Mtime })
-	seen := map[string]bool{}
-	var res []Session
-	for _, s := range out {
-		if k := spaceRe.ReplaceAllString(s.Title, " "); !seen[k] {
-			seen[k] = true
-			res = append(res, s)
-		}
-	}
-	return res
-}

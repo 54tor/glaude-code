@@ -288,7 +288,7 @@ func TestMemoryMove(t *testing.T) {
 	put(t, filepath.Join(cfg, "projects", "-b", "memory", "MEMORY.md"), "- [Z](z.md) — z", old)
 	put(t, filepath.Join(cfg, "projects", "-b", "memory", "y.md"), "autre y", old)
 
-	if dst, err := memMove("m/-a/x.md", "-b"); err != nil || dst != "m/-b/x.md" {
+	if dst, err := memTransfer("m/-a/x.md", "-b", false); err != nil || dst != "m/-b/x.md" {
 		t.Fatal(dst, err)
 	}
 	if s, _ := memRead("m/-b/x.md"); s != "contenu x" {
@@ -301,17 +301,17 @@ func TestMemoryMove(t *testing.T) {
 		t.Fatalf("index destination : %q", s)
 	}
 	put(t, filepath.Join(cfg, "projects", "-a", "memory", "y.md"), "y", old)
-	if _, err := memMove("m/-a/y.md", "-b"); err == nil {
+	if _, err := memTransfer("m/-a/y.md", "-b", false); err == nil {
 		t.Fatal("écrasement accepté")
 	}
-	if _, err := memMove("m/-b/x.md", "global"); err != nil {
+	if _, err := memTransfer("m/-b/x.md", "global", false); err != nil {
 		t.Fatal(err)
 	}
 	if s, _ := memRead("g/rules/x.md"); s != "contenu x" {
 		t.Fatal("vers les règles :", s)
 	}
 	for _, bad := range [][2]string{{"m/-a/y.md", "../x"}, {"m/-a/y.md", "-inexistant"}, {"g/CLAUDE.md", "-b"}} {
-		if _, err := memMove(bad[0], bad[1]); err == nil {
+		if _, err := memTransfer(bad[0], bad[1], false); err == nil {
 			t.Fatal("déplacement accepté :", bad)
 		}
 	}
