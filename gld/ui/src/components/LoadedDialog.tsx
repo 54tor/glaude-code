@@ -2,7 +2,6 @@ import { useEffect, useState } from "react"
 import { api, type LoadEvent } from "@/lib/api"
 import { ago, tilde } from "@/lib/format"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { ScrollArea } from "@/components/ui/scroll-area"
 
 const REASONS: Record<string, string> = {
   session_start: "au démarrage",
@@ -32,21 +31,21 @@ export function LoadedDialog({ id, home, open, onClose }: { id: string; home: st
   }, [open, id])
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="max-h-[90vh] min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Instructions chargées</DialogTitle>
           <DialogDescription>Fichiers que Claude a lus dans cette session : CLAUDE.md, règles, imports.</DialogDescription>
         </DialogHeader>
         {files === null ? null : files.length === 0 ? (
-          <div className="space-y-2 text-sm">
+          <div className="min-h-0 min-w-0 space-y-2 overflow-y-auto text-sm">
             <p>Rien d'enregistré pour cette session : le suivi n'est pas installé, ou la session est antérieure.</p>
             <p className="text-muted-foreground">
               Pour l'activer, ajoutez ceci aux réglages de Claude Code (<code>~/.claude/settings.json</code>) et lancez <code>make install</code> pour avoir <code>gld</code> dans <code>~/.local/bin</code> :
             </p>
-            <pre className="overflow-x-auto rounded-lg border bg-muted/40 p-2 text-xs">{HOOK_SNIPPET}</pre>
+            <pre className="max-w-full overflow-x-auto rounded-lg border bg-muted/40 p-2 text-xs">{HOOK_SNIPPET}</pre>
           </div>
         ) : (
-          <ScrollArea className="max-h-96">
+          <div className="min-h-0 min-w-0 overflow-y-auto">
             <ul className="space-y-1 pr-3 text-sm">
               {files.map((f, i) => (
                 <li key={i} className="rounded-md px-2 py-1 hover:bg-muted">
@@ -59,7 +58,7 @@ export function LoadedDialog({ id, home, open, onClose }: { id: string; home: st
                 </li>
               ))}
             </ul>
-          </ScrollArea>
+          </div>
         )}
       </DialogContent>
     </Dialog>
