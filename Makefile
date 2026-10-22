@@ -3,7 +3,7 @@
 # make windows : gld.exe pour Windows 64 bits (sans bash, sans jq ; l'interface est construite avant)
 # make macos   : gld-darwin-arm64 pour macOS Apple Silicon (M1 et suivants ; l'interface est construite avant, sans cgo)
 # make test    : tests Go (le dossier dist peut être vide : seul l'interface en dépend)
-# make check   : go vet + tests Go + tsc + eslint (rien n'est modifié)
+# make check   : go vet + tests Go + tsc + eslint + tests de l'interface (rien n'est modifié)
 BIN ?= $(HOME)/.local/bin
 INDEX := gld/ui/dist/index.html
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
@@ -32,6 +32,6 @@ test:
 
 check:
 	cd gld && go vet ./... && go test -count=1 .
-	cd gld/ui && { [ -d node_modules ] || npm ci; } && npx tsc --noEmit && npx eslint .
+	cd gld/ui && { [ -d node_modules ] || npm ci; } && npx tsc --noEmit && npx eslint . && npm test
 
 .PHONY: ui install windows macos test check
