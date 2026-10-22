@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { LiveAgents, type Live } from "./LiveStatus"
 import { toast } from "sonner"
@@ -312,9 +312,10 @@ function parsePrompt(screen: string): { question: string; options: Opt[] } | nul
 // L'écran du terminal de la session (tmux) relu toutes les 1,5 s, pour proposer en boutons les options détectées.
 function TerminalPanel({ id, onAsk }: { id: string; onAsk?: (asking: boolean) => void }) {
   const [screen, setScreen] = useState("")
+  const busy = useRef(false) // une touche vient d'être envoyée : l'écran affiché peut être périmé
   useEffect(() => {
     let live = true
-    const load = () => api.screen(id).then((r) => live && r.ok && setScreen(r.text ?? ""), () => {})
+    const load = () => !busy.current && api.screen(id).then((r) => live && !busy.current && r.ok && setScreen(r.text ?? ""), () => {})
     load()
     const t = setInterval(() => document.visibilityState === "visible" && load(), 1500)
     return () => {
@@ -322,14 +323,32 @@ function TerminalPanel({ id, onAsk }: { id: string; onAsk?: (asking: boolean) =>
       clearInterval(t)
     }
   }, [id])
-  // Une ou plusieurs touches, l'une après l'autre (déplacer la sélection puis valider).
+  // Une ou plusieurs touches, l'une après l'autre (déplacer la sélection puis valider). Les boutons restent bloqués tant que l'écran
+  // n'a pas changé (ou 4 s) : cliquer sur une question déjà quittée désynchroniserait la sélection.
+  const [pressing, setPressing] = useState(false)
   const press = async (...keys: string[]) => {
-    for (const key of keys) {
-      const r = await api.post("/session-key", { id, key })
-      if (!r.ok) return void toast.error(r.out)
-      await new Promise((x) => setTimeout(x, 80))
+    if (busy.current) return
+    busy.current = true
+    setPressing(true)
+    const before = screen
+    try {
+      for (const key of keys) {
+        const r = await api.post("/session-key", { id, key })
+        if (!r.ok) return void toast.error(r.out)
+        await new Promise((x) => setTimeout(x, 120))
+      }
+      for (let i = 0; i < 10; i++) {
+        await new Promise((x) => setTimeout(x, 400))
+        const s = await api.screen(id)
+        if (s.ok) {
+          setScreen(s.text ?? "")
+          if ((s.text ?? "") !== before) break
+        }
+      }
+    } finally {
+      busy.current = false
+      setPressing(false)
     }
-    api.screen(id).then((s) => s.ok && setScreen(s.text ?? ""))
   }
   const prompt = parsePrompt(screen)
   const [typing, setTyping] = useState<string | null>(null) // option à réponse libre en cours de saisie
@@ -360,7 +379,7 @@ function TerminalPanel({ id, onAsk }: { id: string; onAsk?: (asking: boolean) =>
           <div className="flex flex-col items-stretch gap-1.5">
             {prompt.options.map((o) => (
               <div key={o.label} className="contents">
-                <Button size="sm" variant={typing === o.label ? "secondary" : "outline"} className="h-auto min-h-8 justify-start py-1.5 text-left whitespace-normal" onClick={() => choose(o)} title={`Touches : ${o.keys.join(", ")}`}>
+                <Button size="sm" disabled={pressing} variant={typing === o.label ? "secondary" : "outline"} className="h-auto min-h-8 justify-start py-1.5 text-left whitespace-normal" onClick={() => choose(o)} title={`Touches : ${o.keys.join(", ")}`}>
                   {o.label}
                 </Button>
                 {typing === o.label && (
@@ -383,7 +402,7 @@ function TerminalPanel({ id, onAsk }: { id: string; onAsk?: (asking: boolean) =>
                 )}
               </div>
             ))}
-            <Button size="sm" variant="ghost" className="justify-start" onClick={() => press("Escape")}>
+            <Button size="sm" disabled={pressing} variant="ghost" className="justify-start" onClick={() => press("Escape")}>
               Échap
             </Button>
           </div>
