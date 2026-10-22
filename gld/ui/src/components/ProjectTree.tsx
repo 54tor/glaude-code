@@ -1,6 +1,6 @@
 import { setOpen, useOpen, useOpenState } from "@/hooks/useOpen"
 import { Check, ChevronRight, FolderInput, Layers, MessageSquarePlus, Plus, SquareTerminal, Star, Tag, Trash2, TriangleAlert } from "lucide-react"
-import type { GitState, VGroup } from "@/lib/api"
+import type { GitState, Group, Session, VGroup } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { CM, GroupItems } from "./SessionMenu"
 import { cn } from "@/lib/utils"
@@ -11,14 +11,14 @@ import { GitMini, SessionCount } from "./GitBadge"
 import { useGit } from "@/hooks/useGit"
 
 // Clic droit sur un dossier de projet : actions sur ses propres sessions.
-function ProjectItems({ n }: { n: Node }) {
+export function ProjectItems({ g, ss = g.sessions, extra }: { g: Group; ss?: Session[]; extra?: React.ReactNode }) {
   const a = useActions()
-  const g = n.g!
-  const own = n.ss.map((s) => ({ dir: s.dir, id: s.id }))
+  const own = ss.map((s) => ({ dir: s.dir, id: s.id }))
   return (
     <ContextMenuContent className="w-64">
-      {!g.missing && (
-        <ContextMenuItem onSelect={() => a.open({ dir: n.ss[0].dir })}>
+      {extra}
+      {!g.missing && own.length > 0 && (
+        <ContextMenuItem onSelect={() => a.open({ dir: own[0].dir })}>
           <SquareTerminal /> Reprendre les récentes
         </ContextMenuItem>
       )}
@@ -186,7 +186,7 @@ function Item({
             {n.g && <SessionCount n={n.ss.length} active={sessionsOpen} />}
           </div>
         </ContextMenuTrigger>
-        {n.g && <ProjectItems n={n} />}
+        {n.g && <ProjectItems g={n.g} ss={n.ss} />}
       </ContextMenu>
       {kids && open && (
         <ul>
