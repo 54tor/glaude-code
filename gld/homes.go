@@ -243,11 +243,22 @@ func withHomes(next http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
+			if strings.Contains(strings.ToLower(r.Header.Get("Upgrade")), "websocket") && !originIsHost(r) {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
 			p.ServeHTTP(w, r)
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// originIsHost : l'Origin de la requête désigne ce serveur. CrossOriginProtection laisse passer les GET, dont l'ouverture d'un
+// WebSocket : la passerelle en juge ici, avant de retirer l'Origin, et l'enfant se fie ensuite à son jeton (termweb.go).
+func originIsHost(r *http.Request) bool {
+	u, err := url.Parse(r.Header.Get("Origin"))
+	return err == nil && u.Host != "" && strings.EqualFold(u.Host, r.Host)
 }
 
 func routesHomes(mux *http.ServeMux) {

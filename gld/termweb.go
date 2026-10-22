@@ -115,7 +115,8 @@ func termWS(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if r.Header.Get("Origin") == "" { // un navigateur l'envoie toujours ; Accept vérifie ensuite qu'elle correspond au Host
+	behindGateway := os.Getenv(childTokenEnv) != ""     // la passerelle a vérifié l'Origin puis l'a retiré (homes.go)
+	if !behindGateway && r.Header.Get("Origin") == "" { // un navigateur l'envoie toujours ; Accept vérifie ensuite qu'elle correspond au Host
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
@@ -137,7 +138,7 @@ func termWS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { termMu.Lock(); delete(termBusy, t.id); termMu.Unlock() }()
 
-	c, err := websocket.Accept(w, r, nil)
+	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: behindGateway})
 	if err != nil {
 		return
 	}

@@ -73,6 +73,27 @@ func TestHomesAiguillage(t *testing.T) {
 	if first != "enfant" || second != "enfant" || starts != 1 {
 		t.Fatalf("le processus enfant doit répondre et n'être lancé qu'une fois (%d)", starts)
 	}
+	ws := func(origin string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", "/term-ws?t=x", nil)
+		r.Host = "127.0.0.1:8799"
+		r.Header.Set("Upgrade", "websocket")
+		if origin != "" {
+			r.Header.Set("Origin", origin)
+		}
+		r.AddCookie(&http.Cookie{Name: homeCookie, Value: enc})
+		w := httptest.NewRecorder()
+		principal.ServeHTTP(w, r)
+		return w
+	}
+	if w := ws("http://evil.example"); w.Code != 403 {
+		t.Fatalf("WebSocket d'une autre origine relayé : %d", w.Code)
+	}
+	if w := ws(""); w.Code != 403 {
+		t.Fatalf("WebSocket sans Origin relayé : %d", w.Code)
+	}
+	if w := ws("http://127.0.0.1:8799"); w.Body.String() != "enfant" {
+		t.Fatalf("WebSocket de la page refusé : %d %s", w.Code, w.Body.String())
+	}
 	if get("/homes", enc) != "principal" {
 		t.Fatal("/homes doit rester local")
 	}
