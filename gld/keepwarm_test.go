@@ -70,3 +70,30 @@ func TestLastModel(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 }
+
+// Les pings d'un passage se suivent (jusqu'à 5 min chacun) : une session désactivée entre-temps n'est plus pinguée.
+func TestKeepWarmStoppedDuringTick(t *testing.T) {
+	h, cfg, _ := web(t)
+	now := time.Now()
+	for _, id := range []string{id1, id3} {
+		p := filepath.Join(cfg, "projects", "-p", id+".jsonl")
+		at := now.Add(-57 * time.Minute)
+		os.WriteFile(p, []byte(`{"type":"user","cwd":"/p","timestamp":"`+at.UTC().Format(time.RFC3339Nano)+`","message":{"content":"x"}}`+"\n"), 0o600)
+		os.Chtimes(p, at, at)
+		forgetInfo(p)
+		ok(t, h, "/keepwarm", `{"dir":"-p","id":"`+id+`","on":true}`, true, "activé")
+	}
+	var pinged []string
+	old := warmPing
+	defer func() { warmPing = old }()
+	warmPing = func(id, path, cwd string, open bool) (float64, error) {
+		pinged = append(pinged, id)
+		other := map[string]string{id1: id3, id3: id1}[id]
+		ok(t, h, "/keepwarm", `{"dir":"-p","id":"`+other+`","on":false}`, true, "arrêté")
+		return 0, nil
+	}
+	warmTick(now)
+	if len(pinged) != 1 {
+		t.Fatalf("session arrêtée pendant le passage pinguée quand même : %v", pinged)
+	}
+}

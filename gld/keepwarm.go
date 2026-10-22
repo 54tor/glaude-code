@@ -164,7 +164,11 @@ func warmTick(now time.Time) {
 	for _, id := range ids {
 		warmMu.Lock()
 		s := warmState[id]
+		on := s != nil && s.On // arrêtée pendant les pings précédents de ce passage
 		warmMu.Unlock()
+		if !on {
+			continue
+		}
 		m, known := mt[id]
 		stop := func(note string) {
 			warmMu.Lock()
