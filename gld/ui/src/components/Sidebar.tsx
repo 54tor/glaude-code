@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { AlarmClock, Star, Brain, SlidersHorizontal, Zap, Flame, History, Clock, FileText, Inbox, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
+import { AlarmClock, Coins, Star, Brain, SlidersHorizontal, Zap, Flame, History, Clock, FileText, Inbox, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
 import { size } from "@/lib/format"
 import type { Choice } from "@/lib/models"
 import type { Route } from "@/lib/route"
@@ -10,6 +10,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/component
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useKeepWarm } from "@/hooks/useKeepWarm"
 import { HomeSwitcher } from "./HomeSwitcher"
 import { ProjectList } from "./ProjectList"
 import { ProjectTree } from "./ProjectTree"
@@ -49,6 +50,7 @@ function Heading({ children, action }: { children: React.ReactNode; action?: Rea
 // En orange, celles dont le cache expire dans moins de 10 minutes.
 function Hot({ rows, now, ttl }: { rows: Row[]; now: number; ttl: number }) {
   const a = useActions()
+  const warm = useKeepWarm()
   return (
     <>
       <Heading>
@@ -73,6 +75,7 @@ function Hot({ rows, now, ttl }: { rows: Row[]; now: number; ttl: number }) {
                 ) : (
                   <Flame className="size-4 shrink-0 text-orange-500" aria-hidden />
                 )}
+                {warm[s.id]?.on && <Coins className="size-3.5 shrink-0 text-amber-500" aria-label="maintien au chaud actif (payant)" />}
                 {a.live.has(s.id) && <span className="size-1.5 shrink-0 rounded-full bg-emerald-500" aria-label="ouverte" />}
                 <span className="flex-1 truncate text-left">{s.title}</span>
                 <span className={cn("shrink-0 text-xs tabular-nums", warn ? "font-medium text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>

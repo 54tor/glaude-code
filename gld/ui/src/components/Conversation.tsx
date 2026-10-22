@@ -15,6 +15,7 @@ import { Message } from "./Message"
 import { Composer, type Turn } from "./Composer"
 import { LiveBar, LiveStats, useLive } from "./LiveStatus"
 import { LoadedDialog } from "./LoadedDialog"
+import { KeepWarmBanner, KeepWarmButton, SessionStat } from "./KeepWarm"
 import { useLocal } from "@/hooks/useLocal"
 
 const FullTerminal = lazy(() => import("./FullTerminal")) // xterm n'est chargé qu'à l'ouverture du terminal
@@ -191,10 +192,16 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
     <Dialog open={!!session} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="flex h-[94vh] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none">
         <DialogHeader className="gap-1 border-b px-4 pt-4 pr-12 pb-3 md:px-6 md:pt-5 md:pr-14 md:pb-4">
-          <DialogTitle className="truncate text-base">{session?.title}</DialogTitle>
-          <DialogDescription className="sr-only">Conversation complète de la session</DialogDescription>
-          {session && <Meta s={session} d={detail} />}
+          <div className="flex items-start gap-4">
+            <div className="min-w-0 flex-1 space-y-1">
+              <DialogTitle className="truncate text-base">{session?.title}</DialogTitle>
+              <DialogDescription className="sr-only">Conversation complète de la session</DialogDescription>
+              {session && <Meta s={session} d={detail} />}
+            </div>
+            {session && <SessionStat s={session} live={live} />}
+          </div>
         </DialogHeader>
+        {session && <KeepWarmBanner s={session} />}
         <div className="flex flex-wrap items-center gap-1 border-b bg-muted/30 px-2 py-2 md:px-4">
           <Button variant={tools ? "secondary" : "ghost"} size="sm" onClick={() => setTools(!tools)} aria-pressed={tools}>
             <Wrench /> Outils {tools ? "affichés" : "masqués"}
@@ -213,6 +220,7 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
           <Button variant="ghost" size="icon-sm" onClick={toEnd} aria-label="Aller à la fin" title="Aller à la fin">
             <ArrowDownToLine />
           </Button>
+          {session && <KeepWarmButton s={session} />}
           {session && <LiveStats live={live} tok={session.tok} />}
           <div className="flex items-center gap-1">
             {row && !row.g.missing && (
