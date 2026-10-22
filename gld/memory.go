@@ -57,7 +57,7 @@ func globalClaude(path string) bool {
 	return err1 == nil && err2 == nil && os.SameFile(a, b)
 }
 
-func safeDir(d string) bool { return d != "" && d != ".." && !strings.ContainsAny(d, `/\`) }
+func safeDir(d string) bool { return d != "" && d != "." && d != ".." && !strings.ContainsAny(d, `/\`) }
 
 // projectCwd : le dossier de travail d'un dossier de transcripts (sa session la plus récente, sinon son nom décodé).
 func projectCwd(dir string) string {
@@ -88,7 +88,8 @@ func memResolve(key string) (string, string, error) {
 			return filepath.Join(cfgDir(), "rules"), n, nil
 		}
 	case strings.HasPrefix(key, "m/"):
-		if d, n, ok := strings.Cut(key[2:], "/"); ok && safeDir(d) && mdName.MatchString(n) {
+		// Le dossier du projet doit exister : sans quoi chaque nom reçu créerait un dossier dans projects/.
+		if d, n, ok := strings.Cut(key[2:], "/"); ok && safeDir(d) && mdName.MatchString(n) && isDirPath(filepath.Join(root, d)) {
 			return filepath.Join(root, d, "memory"), n, nil
 		}
 	case strings.HasPrefix(key, "r/"): // règle d'un projet : <dossier du projet>/.claude/rules/<nom>

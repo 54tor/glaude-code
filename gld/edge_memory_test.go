@@ -222,3 +222,22 @@ func TestLimitesOngletsCorbeille(t *testing.T) {
 
 // main : démarre, sert sur 127.0.0.1 et localhost, et s'arrête proprement sur interruption.
 // Dans un sous-processus (le binaire de test relancé) : main laisse tourner la sauvegarde des onglets.
+
+// Une clé de mémoire ne crée pas de dossier de projet : « . », un nom encodé ou un projet absent sont refusés.
+func TestMemResolveProjetExistant(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	os.MkdirAll(filepath.Join(cfg, "projects", "-p"), 0o755)
+	if _, _, err := memResolve("m/-p/MEMORY.md"); err != nil {
+		t.Fatal("projet existant refusé :", err)
+	}
+	for _, k := range []string{"m/./x.md", "m/%2e%2e/x.md", "m/．．/x.md", "m/-absent/x.md"} {
+		if memSave(k, "x") == nil {
+			t.Errorf("%s accepté", k)
+		}
+	}
+	ents, _ := os.ReadDir(filepath.Join(cfg, "projects"))
+	if len(ents) != 1 {
+		t.Fatalf("dossiers créés dans projects/ : %v", ents)
+	}
+}
