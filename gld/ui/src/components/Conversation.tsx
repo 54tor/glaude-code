@@ -156,6 +156,8 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
   // l'arrivée de messages ; le bouton « Aller à la fin » prend le relais.
   const stuck = useRef(true)
   const opened = useRef("") // session déjà amenée à la fin une fois
+  const asking = useRef(false) // une réponse est attendue : la vue ne bouge plus d'elle-même
+  const onAsk = useCallback((v: boolean) => void (asking.current = v), [])
   const [away, setAway] = useState(false)
   const ready = !!session && msgs !== null
   useEffect(() => {
@@ -177,12 +179,12 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
       opened.current = id
       stuck.current = true
       toEnd()
-    } else if (stuck.current) toEnd()
+    } else if (stuck.current && !asking.current) toEnd()
   }, [msgs, toEnd, id])
   const inTerm = termOn && view === "terminal" && !!id && a.live.has(id)
   const shown = turn?.msgs.length ?? 0
   useEffect(() => {
-    if (shown && stuck.current) toEnd()
+    if (shown && stuck.current && !asking.current) toEnd()
   }, [shown, toEnd])
 
   return (
@@ -286,6 +288,7 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
             defaultChoice={choice}
             live={a.live.has(id)}
             liveState={live}
+            onAsk={onAsk}
             onSent={() => setSentAt({ id, at: Date.now() })}
             turn={turn}
             setTurn={(f) => setChat((c) => f(c?.id === id ? c : null))}

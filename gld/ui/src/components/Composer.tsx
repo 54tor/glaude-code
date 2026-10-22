@@ -35,6 +35,7 @@ export function Composer({
   turn,
   setTurn,
   onDone,
+  onAsk,
 }: {
   dir: string
   id: string
@@ -46,6 +47,7 @@ export function Composer({
   turn: Turn | null
   setTurn: (f: (t: Turn | null) => Turn | null) => void
   onDone: () => void
+  onAsk?: (asking: boolean) => void // Claude attend une réponse dans le terminal
 }) {
   const [text, setText] = useState("")
   const [mode, setMode] = useLocal("ccChatMode", "")
@@ -100,7 +102,7 @@ export function Composer({
   }
   const stop = () => api.post("/chat-stop", { id })
 
-  if (live) return <LiveSend id={id} onSent={onSent} liveState={liveState} />
+  if (live) return <LiveSend id={id} onSent={onSent} liveState={liveState} onAsk={onAsk} />
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-7xl space-y-2">
@@ -140,7 +142,7 @@ export function Composer({
 
 // Session ouverte dans un terminal : deux processus ne peuvent pas écrire le même transcript, donc pas de claude -p ici. Si la session
 // tourne dans tmux, le message y est collé puis validé ; sinon on l'explique.
-function LiveSend({ id, onSent, liveState }: { id: string; onSent: () => void; liveState: Live }) {
+function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => void; liveState: Live; onAsk?: (asking: boolean) => void }) {
   const [info, setInfo] = useState<{ ids: string[]; why: string } | null>(null)
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
@@ -183,7 +185,7 @@ function LiveSend({ id, onSent, liveState }: { id: string; onSent: () => void; l
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-7xl space-y-2">
-        <TerminalPanel id={id} />
+        <TerminalPanel id={id} onAsk={onAsk} />
         {sugg.length > 0 && (
           <ul className="max-h-48 overflow-y-auto rounded-lg border bg-popover p-1 text-sm shadow-md" role="listbox" aria-label="Commandes">
             {sugg.map(([cmd, label], i) => (
@@ -298,7 +300,7 @@ function parsePrompt(screen: string): { question: string; options: Opt[] } | nul
 }
 
 // L'écran du terminal de la session (tmux) relu toutes les 1,5 s, pour proposer en boutons les options détectées.
-function TerminalPanel({ id }: { id: string }) {
+function TerminalPanel({ id, onAsk }: { id: string; onAsk?: (asking: boolean) => void }) {
   const [screen, setScreen] = useState("")
   useEffect(() => {
     let live = true
@@ -320,6 +322,11 @@ function TerminalPanel({ id }: { id: string }) {
     api.screen(id).then((s) => s.ok && setScreen(s.text ?? ""))
   }
   const prompt = parsePrompt(screen)
+  const asking = !!prompt
+  useEffect(() => {
+    onAsk?.(asking)
+    return () => onAsk?.(false)
+  }, [asking, onAsk])
   return (
     <div className="space-y-2">
       {prompt && (
