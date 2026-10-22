@@ -91,7 +91,7 @@ func TestRafraichirLesLimites(t *testing.T) {
 	}
 	use(t.TempDir()) // le journal du rafraîchissement ne doit pas tomber dans le dossier du paquet
 	old := usageStart
-	defer func() { usageStart = old; reset() }()
+	defer func() { usageWG.Wait(); usageStart = old; reset() }()
 	calls := make(chan struct{}, 4)
 	usageStart = func() error { calls <- struct{}{}; return nil }
 	reset()
@@ -107,7 +107,7 @@ func TestRafraichirLesLimites(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("la commande n'a pas été lancée")
 	}
-	time.Sleep(50 * time.Millisecond) // la goroutine rend la main
+	usageWG.Wait() // la goroutine a journalisé et rendu la main
 	if refreshUsage(fresh-3600, false) {
 		t.Fatal("deux lancements à moins d'une minute")
 	}
@@ -116,15 +116,7 @@ func TestRafraichirLesLimites(t *testing.T) {
 		t.Fatal("refresh forcé ignoré")
 	}
 	<-calls
-	for i := 0; i < 200; i++ { // la goroutine journalise (cfgDir) : elle doit finir avant que le test suivant change l'environnement
-		usageMu.Lock()
-		busy := usageBusy
-		usageMu.Unlock()
-		if !busy {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	usageWG.Wait()
 }
 
 func TestMessagesEnAttente(t *testing.T) {

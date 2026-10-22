@@ -203,6 +203,7 @@ var (
 	usageMu    sync.Mutex
 	usageLast  time.Time
 	usageBusy  bool
+	usageWG    sync.WaitGroup   // les rafraîchissements en vol : les tests attendent leur fin (le journal dépend de l'environnement)
 	usageStart = func() error { // remplaçable dans les tests
 		ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 		defer cancel()
@@ -224,7 +225,9 @@ func refreshUsage(at float64, force bool) bool {
 	}
 	usageBusy, usageLast = true, time.Now()
 	start := usageStart // lu ici, sous le verrou : la goroutine n'y touche plus
+	usageWG.Add(1)
 	go func() {
+		defer usageWG.Done()
 		err := start()
 		journal("usage : relevé des limites rafraîchi : %v", errOr(err))
 		usageMu.Lock()
