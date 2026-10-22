@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -23,8 +24,11 @@ func TestConfigSansDossierDeConfiguration(t *testing.T) {
 func TestConfigParProjet(t *testing.T) {
 	cfg := t.TempDir()
 	use(cfg)
+	vide := t.TempDir() // créé d'abord : premier par ordre alphabétique, il doit pourtant passer après le projet spécifique
 	proj := t.TempDir()
-	vide := t.TempDir()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	put(t, filepath.Join(home, ".claude.json"), `{"mcpServers":{"perso":{"command":"u"}},"projects":{"`+proj+`":{"mcpServers":{"local-srv":{"command":"l"}}}}}`, old)
 	put(t, filepath.Join(cfg, "projects", "-p", id1+".jsonl"), `{"cwd":"`+proj+`"}`+"\n", old)
 	put(t, filepath.Join(cfg, "projects", "-v", "22222222-2222-2222-2222-222222222222.jsonl"), `{"cwd":"`+vide+`"}`+"\n", old)
 	put(t, filepath.Join(proj, ".claude", "settings.json"), "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(make:*)\"\n    ]\n  },\n  \"env\": {\n    \"API_KEY\": \"secret\"\n  }\n}\n", old)
@@ -47,7 +51,11 @@ func TestConfigParProjet(t *testing.T) {
 	if len(p.Files) != 2 || p.Perms["allow"][0].Rule != "Bash(make:*)" || p.Perms["allow"][0].Scope != "p" || p.Perms["deny"][0].Scope != "l" {
 		t.Fatalf("réglages et règles : %+v", p)
 	}
-	if len(p.Hooks) != 1 || p.Hooks[0].Event != "Stop" || len(p.MCP) != 1 || p.MCP[0].Name != "mon-serveur" || len(p.Skills) != 1 || p.Skills[0] != "deploy" {
+	mcp := map[string]string{}
+	for _, m := range p.MCP {
+		mcp[m.Name] = m.Scope
+	}
+	if len(p.Hooks) != 1 || p.Hooks[0].Event != "Stop" || len(mcp) != 2 || mcp["mon-serveur"] != "project" || mcp["local-srv"] != "local" || len(p.Skills) != 1 || p.Skills[0] != "deploy" {
 		t.Fatalf("hooks, MCP, skills : %+v", p)
 	}
 	if len(p.Rules) != 2 || p.Rules[0].Name != "api.md" || len(p.Rules[0].Paths) != 1 || len(p.Rules[1].Paths) != 0 {
@@ -55,6 +63,20 @@ func TestConfigParProjet(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(p.Docs, " "), "README.md") || p.Specific == 0 {
 		t.Fatalf("docs : %+v", p)
+	}
+	if p.Files[0].Label != "settings.json" || p.Files[1].Label != "settings.local.json" {
+		t.Fatalf("libellés : %+v", p.Files)
+	}
+	rows := 0
+	for _, f := range p.Files {
+		rows += len(f.Rows)
+		if !sort.SliceIsSorted(f.Rows, func(i, j int) bool { return f.Rows[i].Path < f.Rows[j].Path }) {
+			t.Fatalf("lignes non triées : %+v", f.Rows)
+		}
+	}
+	// 1 hook + 2 MCP + 1 skill + 2 règles + les lignes des deux fichiers
+	if want := 6 + rows; p.Specific != want || rows < 4 {
+		t.Fatalf("éléments spécifiques : %d au lieu de %d (%d lignes)", p.Specific, want, rows)
 	}
 	for _, f := range p.Files {
 		for _, r := range f.Rows {
@@ -125,5 +147,17 @@ func TestReglesDeProjetDansLaMemoire(t *testing.T) {
 		if _, err := memRead(k); err == nil {
 			t.Errorf("clé acceptée : %s", k)
 		}
+	}
+}
+
+// Une règle de 1 Mio ou plus n'est pas analysée (listée sans portée) ; juste en dessous, elle l'est.
+func TestReglesDeProjetTaille(t *testing.T) {
+	proj := t.TempDir()
+	fm := "---\npaths:\n  - \"src/**\"\n---\n"
+	put(t, filepath.Join(proj, ".claude", "rules", "a.md"), fm+strings.Repeat("x", 1<<20-len(fm)), old)
+	put(t, filepath.Join(proj, ".claude", "rules", "b.md"), fm+strings.Repeat("x", 1<<20-len(fm)-1), old)
+	rs := projectRules(proj)
+	if len(rs) != 2 || len(rs[0].Paths) != 0 || len(rs[1].Paths) != 1 {
+		t.Fatalf("%+v", rs)
 	}
 }
