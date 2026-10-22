@@ -163,8 +163,8 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
     return (
       <div className="flex items-center gap-3 border-t px-6 py-3 text-xs text-muted-foreground">
         <p className="min-w-0 flex-1 text-center">
-          Session ouverte dans un terminal : écris-y directement (deux processus ne peuvent pas écrire le même transcript).
-          {info && " Lancée dans tmux, elle accepterait un message d'ici" + (info.why ? ` (tmux : ${info.why})` : "") + "."}
+          Cette session tourne dans un terminal hors tmux (un processus <code>claude</code> la détient : c'est peut-être celle où tu es en train de travailler) : écris-y directement.
+          {info && " Relancée dans tmux, elle accepterait un message d'ici" + (info.why ? ` (${info.why})` : "") + "."}
         </p>
         <CloseSession id={id} />
       </div>
