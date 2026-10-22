@@ -1,4 +1,4 @@
-import { Monitor, Moon, Settings2, Sun } from "lucide-react"
+import { Cog, Monitor, Moon, Sun } from "lucide-react"
 import { FONTS, SIZES } from "@/lib/fonts"
 import type { Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
@@ -94,8 +94,8 @@ export function Settings({
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="text-muted-foreground">
-          <Settings2 /> Réglages
+        <Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label="Réglages" title="Réglages">
+          <Cog />
         </Button>
       </DialogTrigger>
       <DialogContent className="flex h-[min(85vh,560px)] flex-col gap-4 sm:max-w-2xl">

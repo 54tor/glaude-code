@@ -147,6 +147,18 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             <h1 className="text-base font-semibold">Glaude Code</h1>
             <p className="text-xs text-muted-foreground">{p.loading ? "Chargement…" : `${p.total} sessions`}</p>
           </div>
+          <div className="ml-auto self-start">
+            <Settings
+              args={p.args}
+              setArgs={p.setArgs}
+              choice={p.choice}
+              setChoice={p.setChoice}
+              font={p.font}
+              setFont={p.setFont}
+              fontSize={p.fontSize}
+              setFontSize={p.setFontSize}
+            />
+          </div>
         </div>
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -284,16 +296,6 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
         )}
         <div className="flex items-center gap-2">
           <HomeSwitcher />
-          <Settings
-            args={p.args}
-            setArgs={p.setArgs}
-            choice={p.choice}
-            setChoice={p.setChoice}
-            font={p.font}
-            setFont={p.setFont}
-            fontSize={p.fontSize}
-            setFontSize={p.setFontSize}
-          />
           {p.args && (
             <code className="truncate text-xs text-muted-foreground" title="options ajoutées à claude">
               {p.args}
