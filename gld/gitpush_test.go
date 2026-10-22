@@ -8,9 +8,12 @@ import (
 
 func TestMaskURL(t *testing.T) {
 	for in, want := range map[string]string{
-		"https://u:secret@github.com/a/b.git": "https://u@github.com/a/b.git",
-		"https://github.com/a/b.git":          "https://github.com/a/b.git",
-		"git@github.com:a/b.git":              "git@github.com:a/b.git",
+		"https://u:secret@github.com/a/b.git":  "https://github.com/a/b.git",
+		"https://ghp_jeton@github.com/a/b.git": "https://github.com/a/b.git",
+		"ssh://git:secret@host/a/b.git":        "ssh://git@host/a/b.git",
+		"ssh://git@host/a/b.git":               "ssh://git@host/a/b.git",
+		"https://github.com/a/b.git":           "https://github.com/a/b.git",
+		"git@github.com:a/b.git":               "git@github.com:a/b.git",
 	} {
 		if got := maskURL(in); got != want {
 			t.Errorf("maskURL(%q) = %q, attendu %q", in, got, want)
