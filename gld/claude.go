@@ -149,12 +149,12 @@ func tmuxLauncher() string {
 	return ""
 }
 
-var agentsTimeout = 10 * time.Second // ~130 ms en temps normal
+var cmdTimeout = 10 * time.Second // claude agents et tmux : ~130 ms et quelques ms en temps normal
 
 // claudeAgents : la sortie de `claude agents --json`, bornée dans le temps : un claude bloqué (mise à jour, invite) ne fige ni
 // /api ni les boucles de fond, et n'empile pas un processus par rafraîchissement. Une erreur vaut « on ne sait pas ».
 func claudeAgents() ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), agentsTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), cmdTimeout)
 	defer cancel()
 	c := withPath(exec.CommandContext(ctx, "claude", "agents", "--json"))
 	c.WaitDelay = time.Second // un petit-enfant qui garde la sortie ouverte ne bloque pas non plus
