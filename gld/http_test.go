@@ -535,6 +535,15 @@ func TestHTTPOngletsGroupes(t *testing.T) {
 	if m := status(t, h, "GET", "/api", "", 200); len(m["vgroups"].([]any)) != 1 || m["favs"].([]any)[0] != id1 {
 		t.Fatal(m)
 	}
+
+	ok(t, h, "/vgroups", `{"groups":[],"favs":[],"projects":[{"name":"Site","dirs":["/a","/b/"]}]}`, true, "Groupes enregistrés")
+	ok(t, h, "/vgroups", `{"groups":[],"favs":[],"projects":[{"name":"Site","dirs":["rel"]}]}`, false, "")
+	ok(t, h, "/vgroups", `{"groups":[],"favs":[],"projects":[{"name":"X","dirs":[]},{"name":"X","dirs":[]}]}`, false, "")
+	ok(t, h, "/vgroups", `{"groups":[],"favs":[]}`, true, "Groupes enregistrés") // sans « projects » : conservés
+	m := status(t, h, "GET", "/api", "", 200)["projects"].([]any)
+	if len(m) != 1 || m[0].(map[string]any)["dirs"].([]any)[1] != "/b" {
+		t.Fatal(m)
+	}
 }
 
 func TestSlashCommands(t *testing.T) {

@@ -169,12 +169,19 @@ type VGroup struct {
 	Fav     bool     `json:"fav,omitempty"`
 }
 
+// Project : un ensemble nommé de dossiers de travail (chemins absolus, clés de groupe de sessions()).
+type Project struct {
+	Name string   `json:"name"`
+	Dirs []string `json:"dirs"`
+}
+
 // Store : contenu de ~/.claude/gld-web-groups.json.
 type Store struct {
 	Groups []VGroup `json:"groups"`
 	Favs   []string `json:"favs"` // sessions favorites
 	// Tags : étiquettes libres par session (id → étiquettes).
-	Tags map[string][]string `json:"tags"`
+	Tags     map[string][]string `json:"tags"`
+	Projects []Project           `json:"projects"`
 }
 
 const maxTags, maxTagLen = 12, 30
@@ -184,7 +191,7 @@ var groupsMu sync.Mutex
 func groupsFile() string { return filepath.Join(cfgDir(), "gld-web-groups.json") }
 
 func loadStore() Store {
-	st := Store{Groups: []VGroup{}, Favs: []string{}, Tags: map[string][]string{}}
+	st := Store{Groups: []VGroup{}, Favs: []string{}, Tags: map[string][]string{}, Projects: []Project{}}
 	b, err := os.ReadFile(groupsFile())
 	if err != nil {
 		return st
@@ -198,6 +205,9 @@ func loadStore() Store {
 		}
 		if st.Tags == nil {
 			st.Tags = map[string][]string{}
+		}
+		if st.Projects == nil {
+			st.Projects = []Project{}
 		}
 		return st
 	}
@@ -248,6 +258,24 @@ func saveStore(st Store) error {
 			if !idRe.MatchString(id) {
 				return errors.New("session invalide")
 			}
+		}
+	}
+	seenP := map[string]bool{}
+	for i := range st.Projects {
+		p := &st.Projects[i]
+		p.Name = strings.TrimSpace(spaceRe.ReplaceAllString(p.Name, " "))
+		if p.Name == "" || utf8.RuneCountInString(p.Name) > 80 || seenP[p.Name] || len(p.Dirs) > 200 {
+			return errors.New("projet sans nom, nom trop long ou en double")
+		}
+		seenP[p.Name] = true
+		seenD := map[string]bool{}
+		for j, d := range p.Dirs {
+			d = filepath.Clean(d)
+			if !filepath.IsAbs(d) || seenD[d] {
+				return errors.New("dossier de projet invalide ou en double")
+			}
+			seenD[d] = true
+			p.Dirs[j] = d
 		}
 	}
 	for _, id := range st.Favs {

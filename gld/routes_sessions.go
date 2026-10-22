@@ -29,7 +29,7 @@ func routesSessions(mux *http.ServeMux) {
 		groupsMu.Lock()
 		st := loadStore()
 		groupsMu.Unlock()
-		writeJSON(w, 200, map[string]any{"home": home, "root": root, "groups": sessions(), "live": live, "waiting": waiting(), "vgroups": st.Groups, "favs": st.Favs, "tags": st.Tags})
+		writeJSON(w, 200, map[string]any{"home": home, "root": root, "groups": sessions(), "live": live, "waiting": waiting(), "vgroups": st.Groups, "favs": st.Favs, "tags": st.Tags, "projects": st.Projects})
 	})
 	// Envoi d'un message à une session ouverte dans tmux (sendkeys.go) : lesquelles le permettent, puis l'envoi.
 	// État en direct d'une session (sessionlive.go) et informations du compte (account.go).
@@ -290,8 +290,14 @@ func routesSessions(mux *http.ServeMux) {
 			return
 		}
 		groupsMu.Lock()
-		if st.Tags == nil { // un client qui ne connaît pas les étiquettes ne les efface pas
-			st.Tags = loadStore().Tags
+		if st.Tags == nil || st.Projects == nil { // un client qui ne connaît pas un champ ne l'efface pas
+			old := loadStore()
+			if st.Tags == nil {
+				st.Tags = old.Tags
+			}
+			if st.Projects == nil {
+				st.Projects = old.Projects
+			}
 		}
 		err := saveStore(st)
 		groupsMu.Unlock()
