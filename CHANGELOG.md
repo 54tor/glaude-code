@@ -4,6 +4,22 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.1.3] - 2026-10-22
+
+### Ajouté
+- Questions du terminal prises en charge dans la conversation : confirmations risquées, choix simples ou multiples avec cases et validation, écran de relecture, approbation de plan, édition de fichier, réponse libre ; détection couverte par des tests sur captures réelles et bouton « Écran brut » pour déboguer.
+- Quand la session attend, la question posée par Claude s'affiche dans le bandeau, et sa dernière phrase est citée sous l'état.
+- Nouvelle session dans n'importe quel dossier.
+- Entrée envoie le message, Maj+Entrée va à la ligne.
+- Snippets : copie du contenu, de la commande ou du chemin au clic droit.
+
+### Corrigé
+- Les messages injectés par les skills ne s'affichent plus dans la conversation ni ne servent de titre.
+- La sélection du menu des commandes slash suit les flèches du clavier.
+- Les boutons de réponse attendent la mise à jour de l'écran avant un nouveau clic (plus de désynchronisation).
+- Le message « en attente de lecture » a la même géométrie qu'un message réel (léger décalage au survol).
+- Retrait de la phrase d'explication sous le champ de saisie.
+
 ## [0.1.2] - 2026-10-22
 
 ### Ajouté
@@ -76,7 +92,8 @@ Première version : `gld`, interface web locale pour parcourir, piloter et confi
 - Terminal intégré désactivé par défaut ; lecture bornée des fichiers de commandes.
 - Refus d'agir quand les sessions ouvertes sont indéterminées.
 
-[Non publié]: https://github.com/54tor/glaude-code/compare/v0.1.2...HEAD
+[Non publié]: https://github.com/54tor/glaude-code/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/54tor/glaude-code/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/54tor/glaude-code/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/54tor/glaude-code/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/54tor/glaude-code/releases/tag/v0.1.0
