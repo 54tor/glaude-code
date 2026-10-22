@@ -371,11 +371,8 @@ func mergePrompt(keys []string) (string, string, error) {
 	return b.String(), cwd, nil
 }
 
-// memMove déplace une entrée de mémoire de projet ou une règle globale vers la mémoire d'un autre projet
-// (to = son dossier de transcripts) ou vers les règles globales (to = "global"). Sans écraser ; l'index suit.
-func memMove(key, to string) (string, error) { return memTransfer(key, to, false) }
-
-// memTransfer : déplace une entrée ou une règle vers un projet (ou « global »), ou la copie si keep.
+// memTransfer déplace une entrée de mémoire de projet ou une règle vers la mémoire d'un autre projet (to = son dossier de
+// transcripts) ou vers les règles globales (to = "global"), ou la copie si keep. Sans écraser ; l'index suit.
 func memTransfer(key, to string, keep bool) (string, error) {
 	if !strings.HasPrefix(key, "m/") && !strings.HasPrefix(key, "g/rules/") && !strings.HasPrefix(key, "r/") {
 		return "", errors.New("seules les entrées de mémoire et les règles se déplacent")

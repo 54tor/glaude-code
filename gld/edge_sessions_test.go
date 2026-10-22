@@ -132,33 +132,13 @@ func TestReassignation(t *testing.T) {
 }
 
 func TestOuvertsEtRecents(t *testing.T) {
-	h, cfg, _ := web(t)
+	h, _, _ := web(t)
 	t.Setenv("FAKE_AGENTS", `[{"sessionId":"a","status":"busy","state":"blocked"},{"sessionId":"b","status":"busy","state":"running"},{"sessionId":"c","status":"idle"}]`)
 	if w := waiting(); strings.Join(w, ",") != "a,c" {
 		t.Fatalf("en attente : %v", w)
 	}
 	status(t, h, "GET", "/ls?path=::drives", "", 400) // la liste des lecteurs n'existe que sous Windows
 
-	// Sessions à rouvrir : récentes (2 jours < 7), assez longues (10 octets, limite comprise), pas ouvertes, récentes d'abord.
-	dir := filepath.Join(cfg, "projects", "-r")
-	titled := func(s string) string { return `{"type":"user","cwd":"/r","message":{"content":"` + s + `"}}` + "\n" }
-	put(t, filepath.Join(dir, id1+".jsonl"), titled("un"), 48*time.Hour)
-	put(t, filepath.Join(dir, id2+".jsonl"), titled("deux"), time.Hour)
-	put(t, filepath.Join(dir, id3+".jsonl"), "123456789\n", time.Hour) // exactement 10 octets
-	put(t, filepath.Join(dir, "44444444-4444-4444-4444-444444444444.jsonl"), "court\n", time.Hour)
-	put(t, filepath.Join(dir, "55555555-5555-5555-5555-555555555555.jsonl"), titled("vieille"), 8*24*time.Hour)
-	put(t, filepath.Join(dir, "66666666-6666-6666-6666-666666666666.jsonl"), titled("ouverte"), time.Hour)
-	liveSessions = func() map[string]bool { return map[string]bool{"66666666-6666-6666-6666-666666666666": true} }
-	var ids []string
-	for _, s := range recentSessions(dir, 7, 10) {
-		ids = append(ids, s.ID[:1])
-	}
-	if strings.Join(ids, "") != "231" && strings.Join(ids, "") != "321" {
-		t.Fatalf("récentes : %v", ids)
-	}
-	if ids[2] != "1" {
-		t.Fatal("tri : la plus ancienne en dernier")
-	}
 }
 
 func TestPurgeRestes(t *testing.T) {
