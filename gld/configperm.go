@@ -12,6 +12,9 @@ import (
 	"strings"
 )
 
+// mcpPrefix : clé interne des serveurs MCP dans le décompte (l'octet nul ne peut pas figurer dans une commande Bash).
+const mcpPrefix = "\x00mcp:"
+
 type PermSuggest struct {
 	Rule     string `json:"rule"`
 	Count    int    `json:"count"`
@@ -103,7 +106,7 @@ func permSuggestions(existing []string) []PermSuggest {
 	example := map[string]string{}
 	for _, f := range files {
 		for _, l := range tailLines(f.p, 3<<20) {
-			if !strings.Contains(string(l), `"name":"Bash"`) {
+			if !strings.Contains(string(l), `"name":"Bash"`) && !strings.Contains(string(l), `"name":"mcp__`) {
 				continue
 			}
 			var m struct {
@@ -118,6 +121,14 @@ func permSuggestions(existing []string) []PermSuggest {
 				continue
 			}
 			for _, c := range m.Message.Content {
+				// outil MCP (mcp__serveur__outil) : la règle porte sur le serveur entier, sans quoi chaque outil redemande
+				if srv, _, ok := strings.Cut(strings.TrimPrefix(c.Name, "mcp__"), "__"); c.Type == "tool_use" && strings.HasPrefix(c.Name, "mcp__") && ok && srv != "" {
+					counts[mcpPrefix+srv]++
+					if example[mcpPrefix+srv] == "" {
+						example[mcpPrefix+srv] = c.Name
+					}
+					continue
+				}
 				if c.Type == "tool_use" && c.Name == "Bash" {
 					if p := bashPrefix(c.Input.Command); p != "" {
 						counts[p]++
@@ -131,6 +142,12 @@ func permSuggestions(existing []string) []PermSuggest {
 	}
 	var out []PermSuggest
 	for p, n := range counts {
+		if srv, ok := strings.CutPrefix(p, mcpPrefix); ok {
+			if rule := "mcp__" + srv; n >= 3 && !have[rule] && !have[rule+"__*"] && !have["mcp__*"] {
+				out = append(out, PermSuggest{Rule: rule, Count: n, Example: example[p]})
+			}
+			continue
+		}
 		first := strings.Fields(p)[0]
 		rule := "Bash(" + p + ":*)"
 		if n < 3 || neverSuggest[first] || have[rule] || have["Bash("+first+":*)"] || have["Bash"] {
