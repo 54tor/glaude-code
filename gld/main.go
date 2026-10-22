@@ -113,6 +113,7 @@ func handler() http.Handler {
 	routesConfig(mux)
 	routesConfigRaw(mux)
 	routesConfigPerm(mux)
+	routesPermHelp(mux)
 	routesSkills(mux)
 	routesSlash(mux)
 	routesImages(mux)
