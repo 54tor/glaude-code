@@ -4,6 +4,16 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.1.1] - 2026-10-22
+
+### Ajouté
+- Captures d'écran dans le README, avec un jeu de données fictif pour les refaire.
+
+### Corrigé
+- Le dernier outil appelé n'est plus affiché quand la session attend un message.
+- Le terminal web tient 70 minutes sans saisie, au-delà du cache de prompt.
+- Le rafraîchissement des limites du compte ne provoque plus de course ni de journal égaré.
+
 ## [0.1.0] - 2026-10-22
 
 Première version : `gld`, interface web locale pour parcourir, piloter et configurer ses sessions Claude Code.
@@ -52,5 +62,6 @@ Première version : `gld`, interface web locale pour parcourir, piloter et confi
 - Terminal intégré désactivé par défaut ; lecture bornée des fichiers de commandes.
 - Refus d'agir quand les sessions ouvertes sont indéterminées.
 
-[Non publié]: https://github.com/54tor/glaude-code/compare/v0.1.0...HEAD
+[Non publié]: https://github.com/54tor/glaude-code/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/54tor/glaude-code/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/54tor/glaude-code/releases/tag/v0.1.0
