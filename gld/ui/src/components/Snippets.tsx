@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react"
-import { ArrowLeft, Bot, Check, Copy, Download, Loader2, MessageSquarePlus, Pencil, Plus, Save, Sparkles, Terminal, Trash2, Undo2, Upload, X } from "lucide-react"
+import { ArrowLeft, Bot, Check, ClipboardCopy, Copy, Download, Link, Loader2, MessageSquarePlus, Pencil, Plus, Save, Sparkles, Terminal, Trash2, Undo2, Upload, X } from "lucide-react"
 import { toast } from "sonner"
 import { api, type SnipScope, type Snippet } from "@/lib/api"
 import { ago, size, tilde } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -72,6 +73,16 @@ export function Snippets({
     setDraft({ key: sel, text: t })
   }
 
+  const copyText = (t: string, what: string) =>
+    navigator.clipboard.writeText(t).then(
+      () => toast.success(`${what} copié${what === "Chemin" ? "" : "e"}`),
+      () => toast.error("Copie impossible")
+    )
+  const copyContent = async (s: Snippet) => {
+    const r = await api.snippet(s.key)
+    if (r.text === undefined) return void toast.error(r.error ?? "Commande illisible")
+    copyText(r.text, "Contenu")
+  }
   const copy = () =>
     text !== null &&
     navigator.clipboard.writeText(text).then(
@@ -181,22 +192,37 @@ export function Snippets({
                   <ul className="space-y-px">
                     {vis.map((s) => (
                       <li key={s.key}>
+                        <ContextMenu>
+                          <ContextMenuTrigger asChild>
                         <button
-                          onClick={() => onPick(s.key)}
-                          title={s.description || s.path}
-                          className={cn(
-                            "flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
-                            s.key === sel ? "bg-accent font-medium" : "hover:bg-muted"
-                          )}
-                        >
-                          <Terminal className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                          <span className="min-w-0">
-                            <span className="block truncate font-mono text-[13px]">{s.command}</span>
-                            <span className="block truncate text-xs font-normal text-muted-foreground">
-                              {s.description || `${ago(s.mtime)} · ${size(s.kb)}`}
-                            </span>
-                          </span>
-                        </button>
+                              onClick={() => onPick(s.key)}
+                              title={s.description || s.path}
+                              className={cn(
+                                "flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
+                                s.key === sel ? "bg-accent font-medium" : "hover:bg-muted"
+                              )}
+                            >
+                              <Terminal className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                              <span className="min-w-0">
+                                <span className="block truncate font-mono text-[13px]">{s.command}</span>
+                                <span className="block truncate text-xs font-normal text-muted-foreground">
+                                  {s.description || `${ago(s.mtime)} · ${size(s.kb)}`}
+                                </span>
+                              </span>
+                            </button>
+                          </ContextMenuTrigger>
+                          <ContextMenuContent>
+                            <ContextMenuItem onSelect={() => copyContent(s)}>
+                              <ClipboardCopy /> Copier le contenu
+                            </ContextMenuItem>
+                            <ContextMenuItem onSelect={() => copyText(s.command, "Commande")}>
+                              <Terminal /> Copier la commande
+                            </ContextMenuItem>
+                            <ContextMenuItem onSelect={() => copyText(s.path, "Chemin")}>
+                              <Link /> Copier le chemin
+                            </ContextMenuItem>
+                          </ContextMenuContent>
+                        </ContextMenu>
                       </li>
                     ))}
                   </ul>
