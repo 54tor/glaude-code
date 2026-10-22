@@ -178,3 +178,55 @@ func jsonStr(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
 }
+
+// Routes d'écriture de la mémoire : chacune n'accepte que les clés de son ressort et modifie le fichier sur disque.
+func TestHTTPMemoireEcritures(t *testing.T) {
+	h, cfg, _ := web(t)
+	regle := filepath.Join(cfg, "rules", "a.md")
+	put(t, regle, "# Règle\n\ncorps\n", old)
+	entree := filepath.Join(cfg, "projects", "-p", "memory", "x.md")
+	put(t, entree, "---\nname: x\ndescription: d\nmetadata:\n  type: user\n---\n\ncorps\n", old)
+	put(t, filepath.Join(cfg, "projects", "-p", "memory", "MEMORY.md"), "- [Fantôme](fantome.md) — absent\n", old)
+	lire := func(p string) string { b, _ := os.ReadFile(p); return string(b) }
+
+	status(t, h, "POST", "/memory-paths", `{"key":"m/-p/x.md","paths":["src/**"]}`, 400)
+	ok(t, h, "/memory-paths", `{"key":"g/rules/a.md","paths":["src/**","*.go"]}`, true, "Portée")
+	if s := lire(regle); !strings.Contains(s, "paths:") || !strings.Contains(s, "src/**") || !strings.Contains(s, "corps") {
+		t.Fatalf("portée : %q", s)
+	}
+	status(t, h, "POST", "/memory-type", `{"key":"g/CLAUDE.md","type":"user"}`, 400)
+	ok(t, h, "/memory-type", `{"key":"m/-p/x.md","type":"feedback"}`, true, "Type")
+	if s := lire(entree); !strings.Contains(s, "type: feedback") || strings.Contains(s, "type: user") {
+		t.Fatalf("type : %q", s)
+	}
+	status(t, h, "POST", "/memory-fix", `{"key":"p/-p/CLAUDE.md"}`, 400)
+	ok(t, h, "/memory-fix", `{"key":"m/-p/absent.md"}`, false, "")
+
+	m := ok(t, h, "/memory-toggle", `{"key":"g/rules/a.md"}`, true, "désactivée")
+	if _, err := os.Stat(regle + ".off"); err != nil || m["key"] != "g/rules/a.md.off" {
+		t.Fatalf("désactivation : %v %v", err, m)
+	}
+	ok(t, h, "/memory-toggle", `{"key":"g/rules/a.md.off"}`, true, "réactivée")
+	if _, err := os.Stat(regle); err != nil {
+		t.Fatal("règle non réactivée")
+	}
+	ok(t, h, "/memory-toggle", `{"key":"g/CLAUDE.md"}`, false, "")
+
+	ok(t, h, "/memory-repair", `{"dir":"-p"}`, true, "1 ligne(s) retirée(s), 1 ajoutée(s)")
+	if s := lire(filepath.Join(cfg, "projects", "-p", "memory", "MEMORY.md")); strings.Contains(s, "fantome") || !strings.Contains(s, "x.md") {
+		t.Fatalf("index réparé : %q", s)
+	}
+	ok(t, h, "/memory-repair", `{"dir":"../x"}`, false, "")
+	for _, p := range []string{"/memory-paths", "/memory-type", "/memory-fix", "/memory-toggle", "/memory-repair", "/memory-rm", "/memory-lint", "/memory-tokens"} {
+		status(t, h, "POST", p, `{`, 400)
+	}
+	status(t, h, "POST", "/memory-tokens", `{"keys":["a","b","c","d","e","f","g"]}`, 400)
+	status(t, h, "POST", "/memory-lint", `{"scope":""}`, 400)
+	status(t, h, "GET", "/session-loaded?id=../x", "", 400)
+	if _, m, _ := call(t, h, "GET", "/memory-health", ""); m["issues"] == nil {
+		t.Fatalf("santé : %v", m)
+	}
+	if _, m, _ := call(t, h, "GET", "/memory-search?q=corps", ""); m["hits"].(map[string]any)["m/-p/x.md"] == nil {
+		t.Fatalf("recherche : %v", m)
+	}
+}
