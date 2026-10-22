@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Copy, Download, Upload } from "lucide-react"
+import { Copy, Download, FilePen, Upload } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -15,7 +15,7 @@ export function permsFragment(doc: Doc): string {
   return JSON.stringify({ permissions: out }, null, 2) + "\n"
 }
 
-export function PermIOButtons({ file, label, doc, onImport }: { file: string; label: string; doc: Doc; onImport: () => void }) {
+export function PermIOButtons({ file, label, doc, onImport, onRaw }: { file: string; label: string; doc: Doc; onImport: () => void; onRaw: () => void }) {
   const count = ["allow", "ask", "deny"].reduce((n, k) => n + (Array.isArray((doc?.permissions as Record<string, unknown> | undefined)?.[k]) ? ((doc!.permissions as Record<string, unknown[]>)[k]).length : 0), 0)
   const download = () => {
     const a = document.createElement("a")
@@ -36,6 +36,9 @@ export function PermIOButtons({ file, label, doc, onImport }: { file: string; la
       </Button>
       <Button size="sm" variant="ghost" onClick={copy} disabled={count === 0}>
         <Copy /> Copier
+      </Button>
+      <Button size="sm" variant="outline" onClick={onRaw} title="Modifie toutes les règles en texte, avec vérification de la syntaxe">
+        <FilePen /> Éditer en texte…
       </Button>
       <Button size="sm" variant="outline" onClick={onImport} title="Ajoute ou remplace les règles de ce fichier d'après un export">
         <Upload /> Importer…

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Check, ClipboardCopy, FolderOpen, Globe, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react"
+import { Check, ClipboardCopy, FolderOpen, Globe, Pencil, Plus, RotateCcw, Sparkles, Trash2, X } from "lucide-react"
 import type { BackupInfo, CfgEdit, CfgOverview, PermSuggest } from "@/lib/api"
 import { api } from "@/lib/api"
 import { describeKey } from "@/lib/configKeys"
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { Checkbox } from "@/components/ui/checkbox"
 import { PermImportDialog, PermIOButtons } from "./ConfigPermIO"
+import { PermRawDialog } from "./ConfigPermRaw"
 import { Input } from "@/components/ui/input"
 import { Choose } from "./Choose"
 import { useActions } from "./actions"
@@ -37,6 +38,16 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTran
   const a = useActions()
   const home = a.home
   const [importing, setImporting] = useState(false)
+  const [raw, setRaw] = useState(false)
+  // Explication de Haiku par règle (clé : catégorie + règle) ; « … » pendant la demande.
+  const [help, setHelp] = useState<Record<string, string>>({})
+  const explain = async (kind: string, rule: string) => {
+    const k = kind + "\0" + rule
+    if (help[k]) return setHelp((h) => Object.fromEntries(Object.entries(h).filter(([x]) => x !== k))) // deuxième clic : replie
+    setHelp((h) => ({ ...h, [k]: "…" }))
+    const r = await api.post("/config-perm-explain", { kind, rule })
+    setHelp((h) => ({ ...h, [k]: r.ok ? r.out : "Explication impossible : " + r.out }))
+  }
   const [draft, setDraft] = useState<Record<string, string>>({})
   const [sug, setSug] = useState<PermSuggest[] | null>(null)
   useEffect(() => {
@@ -59,7 +70,8 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTran
   const add = (kind: string, rule: string) => propose({ file, op: "add", path: ["permissions", kind], value: rule })
   return (
     <div className="space-y-5">
-      <PermIOButtons file={file} label={label} doc={doc} onImport={() => setImporting(true)} />
+      <PermIOButtons file={file} label={label} doc={doc} onImport={() => setImporting(true)} onRaw={() => setRaw(true)} />
+      <PermRawDialog open={raw} file={file} label={label} doc={doc} propose={proposePerms} onClose={() => setRaw(false)} />
       <PermImportDialog open={importing} file={file} label={label} propose={proposePerms} onClose={() => setImporting(false)} />
       {KINDS.map(([kind, label, hint]) => {
         const rules = [...list(at(doc, "permissions", kind)), ...added(file, kind)].filter((r, i, all) => all.indexOf(r) === i && !gone(file, kind, r)).sort(byRule)
@@ -92,14 +104,20 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTran
                 ) : (
                 <ContextMenu key={r}>
                 <ContextMenuTrigger asChild>
-                <li className="group flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted" onDoubleClick={() => setEdit({ kind, rule: r, text: r, to: kind })}>
+                <li className="group flex flex-wrap items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted" onDoubleClick={() => setEdit({ kind, rule: r, text: r, to: kind })}>
                   <code className="min-w-0 flex-1 text-xs break-all">{r}</code>
+                  {kind !== DIRS && (
+                    <Button variant="ghost" size="icon-xs" aria-label={`Expliquer ${r}`} title="Explication par Haiku" onClick={() => explain(kind, r)}>
+                      <Sparkles />
+                    </Button>
+                  )}
                   <Button variant="ghost" size="icon-xs" aria-label={`Modifier ${r}`} title="Modifier (ou double-clic)" onClick={() => setEdit({ kind, rule: r, text: r, to: kind })}>
                     <Pencil />
                   </Button>
                   <Button variant="ghost" size="icon-xs" aria-label={`Retirer ${r}`} onClick={() => propose({ file, op: "remove", path: ["permissions", kind], value: r })}>
                     <X />
                   </Button>
+                  {help[kind + "\0" + r] && <p className="basis-full pb-1 text-xs whitespace-pre-wrap text-muted-foreground">{help[kind + "\0" + r]}</p>}
                 </li>
                 </ContextMenuTrigger>
                 <ContextMenuContent className="w-64">
@@ -179,15 +197,19 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTran
         </h3>
         <ul className="mt-1 space-y-px">
           {(sug ?? []).map((s) => (
-            <li key={s.rule} className="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted">
+            <li key={s.rule} className="flex flex-wrap items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted">
               <code className="min-w-0 flex-1 text-xs break-all" title={s.example}>
                 {s.rule}
               </code>
+              <Button variant="ghost" size="icon-xs" aria-label={`Expliquer ${s.rule}`} title="Explication par Haiku" onClick={() => explain("allow", s.rule)}>
+                <Sparkles />
+              </Button>
               <span className="shrink-0 text-xs text-muted-foreground">{s.count} fois</span>
               <span className={cn("shrink-0 text-xs", s.readOnly ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>{s.readOnly ? "lecture seule" : "à vérifier"}</span>
               <Button size="xs" variant="outline" onClick={() => add("allow", s.rule)}>
                 Autoriser
               </Button>
+              {help["allow\0" + s.rule] && <p className="basis-full pb-1 text-xs whitespace-pre-wrap text-muted-foreground">{help["allow\0" + s.rule]}</p>}
             </li>
           ))}
           {sug?.length === 0 && <li className="px-2 py-1 text-xs text-muted-foreground">Rien à proposer.</li>}
