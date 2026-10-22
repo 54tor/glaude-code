@@ -4,6 +4,37 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.2.0] - 2026-10-22
+
+### Ajouté
+- **Projets** : ensembles nommés de dossiers de travail, au-dessus de l'arbre renommé « Sessions locales » ; un clic droit sur un dossier l'ajoute à un projet, un clic sur un projet réunit les sessions de ses dossiers.
+- **État git** : navigation compacte (changements en attente avec l'icône git, nombre de sessions avec un robot jaune quand l'une est ouverte), dépôts sous un dossier de sessions en second niveau replié, et dans la vue dossier la branche, l'avance et le retard, et la liste des fichiers en cours de modification. Relu passivement toutes les 30 s.
+- **Nouvelle session depuis la vue dossier** : champ de prompt avec choix du modèle et de l'effort.
+- **Plusieurs dossiers de configuration Claude** (`CLAUDE_CONFIG_DIR`, compte pro et perso) : sélecteur en haut de la barre latérale, un gld enfant par dossier derrière une passerelle protégée par un jeton interne.
+- **Onglet « Synchroniser »** : compare et copie réglages, règles de permission, `CLAUDE.md`, règles, commandes et skills d'un dossier de configuration à l'autre, élément par élément (fusionner ou remplacer), sans jamais copier de secrets et avec sauvegarde de ce qui est remplacé.
+- **Maintenir au chaud** : un ping automatique garde le cache des prompts quand il reste moins de 5 minutes, avec plafond, bandeau de coût toujours visible et statistiques de la session en haut à droite.
+- **Permissions** : explication de chaque règle par Haiku, édition de toutes les règles en texte avec vérification de la syntaxe, et serveurs MCP utilisés proposés en suggestion.
+- **File d'attente** : les messages écrits pendant une réponse partent à la suite ; bouton « Interrompre » sur une session ouverte.
+- Clic droit sur les sessions de la liste « Cache chaud ».
+- Licence MIT.
+- Préparation d'une architecture multi-fournisseurs : interface `Provider` et capacités, la session porte son fournisseur (Claude Code reste le seul).
+
+### Modifié
+- Le bouton des réglages est une roue crantée, en haut à droite du logo.
+- La vue ne descend plus qu'à l'ouverture d'une session et à l'envoi d'un message, plus à chaque mise à jour.
+- Le champ de saisie garde le focus après chaque message.
+
+### Corrigé
+- Le cache chaud se calcule depuis le dernier message de la session, plus depuis la date du fichier.
+- Une session lancée depuis l'interface web tourne dans tmux, quel que soit l'émulateur, donc elle accepte des messages d'ici.
+- Un message non délivré est remis en file ; brouillons et files sont gardés par session, même fenêtre fermée ou page rechargée.
+- Le champ d'envoi à une session ouverte ne se verrouille plus, et l'envoi s'abandonne au bout de 20 s.
+- Le composeur ne bascule plus vers l'envoi tmux pendant un tour lancé depuis le web.
+- La conversation ne se redessine plus à chaque seconde, ce qui gênait la saisie.
+- Barre de défilement parasite sur les onglets de configuration.
+- `~/.claude` et `~` ne sont plus listés comme projets de configuration.
+- Reprendre une session dit pourquoi rien ne s'ouvre (déjà ouverte, introuvable) au lieu de « 0 onglet lancé ».
+
 ## [0.1.3] - 2026-10-22
 
 ### Ajouté
@@ -92,7 +123,8 @@ Première version : `gld`, interface web locale pour parcourir, piloter et confi
 - Terminal intégré désactivé par défaut ; lecture bornée des fichiers de commandes.
 - Refus d'agir quand les sessions ouvertes sont indéterminées.
 
-[Non publié]: https://github.com/54tor/glaude-code/compare/v0.1.3...HEAD
+[Non publié]: https://github.com/54tor/glaude-code/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/54tor/glaude-code/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/54tor/glaude-code/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/54tor/glaude-code/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/54tor/glaude-code/compare/v0.1.0...v0.1.1
