@@ -132,3 +132,7 @@ la corbeille.
 
 **Le port 8799 est déjà pris.**
 Lancez `GLD_WEB_PORT=8800 gld`.
+
+## Licence
+
+MIT, voir [LICENSE](LICENSE).
