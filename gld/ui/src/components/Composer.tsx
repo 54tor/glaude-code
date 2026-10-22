@@ -38,6 +38,7 @@ export function Composer({
   setTurn,
   onDone,
   onAsk,
+  onWrite,
 }: {
   dir: string
   id: string
@@ -50,6 +51,7 @@ export function Composer({
   setTurn: (f: (t: Turn | null) => Turn | null) => void
   onDone: () => void | Promise<void>
   onAsk?: (asking: boolean) => void // Claude attend une réponse dans le terminal
+  onWrite?: () => void // l'utilisateur envoie un message : la vue descend
 }) {
   const { text, queue } = useDraft(id)
   const setText = (t: string) => setDraft(id, { text: t })
@@ -71,7 +73,10 @@ export function Composer({
     setText("")
     pics.clear()
     if (running) setQ([...draftOf(id).queue, prompt])
-    else submit(prompt)
+    else {
+      onWrite?.()
+      submit(prompt)
+    }
   }
   const submit = async (prompt: string) => {
     setOwn(true)
