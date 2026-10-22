@@ -4,6 +4,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.1.2] - 2026-10-22
+
 ### Ajouté
 - Terminal intégré à la session, ajusté à la zone et répercuté sur tmux, saisie active par défaut ; le mode visuel ou terminal est mémorisé dans le navigateur.
 - « Renommer auto » au clic droit d'une session, et titre automatique proposé dans la fenêtre de renommage.
@@ -74,6 +76,7 @@ Première version : `gld`, interface web locale pour parcourir, piloter et confi
 - Terminal intégré désactivé par défaut ; lecture bornée des fichiers de commandes.
 - Refus d'agir quand les sessions ouvertes sont indéterminées.
 
-[Non publié]: https://github.com/54tor/glaude-code/compare/v0.1.1...HEAD
+[Non publié]: https://github.com/54tor/glaude-code/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/54tor/glaude-code/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/54tor/glaude-code/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/54tor/glaude-code/releases/tag/v0.1.0
