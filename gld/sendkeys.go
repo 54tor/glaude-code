@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -58,10 +59,15 @@ var sessionPIDs = func() map[string]int {
 	return m
 }
 
-// parentOf : le processus parent (lecture de /proc/<pid>/stat), 0 si inconnu (remplaçable dans les tests).
+// parentOf : le processus parent (lecture de /proc/<pid>/stat, ou `ps` sous macOS qui n'a pas /proc), 0 si inconnu (remplaçable dans les tests).
 var parentOf = func(pid int) int {
 	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
 	if err != nil {
+		if runtime.GOOS == "darwin" {
+			out, _ := exec.Command("ps", "-o", "ppid=", "-p", strconv.Itoa(pid)).Output()
+			n, _ := strconv.Atoi(strings.TrimSpace(string(out)))
+			return n
+		}
 		return 0
 	}
 	s := string(b)
