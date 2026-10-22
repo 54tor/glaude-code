@@ -114,10 +114,13 @@ export default function App() {
   const grouped = new Set(node?.g ? vgroups.filter((x) => x.project === node.g!.project).flatMap((x) => x.ids) : [])
   const nGrouped = node?.ss.filter((s) => grouped.has(s.id)).length ?? 0
   const vg = route.kind === "group" ? vgroups.find((g) => g.name === route.name && gkey(g) === route.key) : undefined
+  const project = route.kind === "project" ? (data?.projects ?? []).find((x) => x.name === route.name) : undefined
   const rows: Row[] =
     route.kind === "recent"
       ? recent
-      : route.kind === "group"
+      : route.kind === "project"
+        ? view.rows.filter((r) => project?.dirs.includes(r.g.project)).sort(byDate)
+        : route.kind === "group"
         ? (vg?.ids ?? [])
             .map((id) => view.byId.get(id))
             .filter((r): r is Row => !!r)
@@ -192,6 +195,7 @@ export default function App() {
     all: "Toutes les sessions",
     active: "En cours et cache chaud",
     group: route.kind === "group" ? route.name : "",
+    project: route.kind === "project" ? route.name : "",
     snippets: "Snippets",
     memory: "Mémoire",
     config: "Configuration",
@@ -202,7 +206,9 @@ export default function App() {
   const sub =
     route.kind === "recent"
       ? `7 derniers jours · ${plural(recent.length)} dans ${plural(byProject.size, "projet")}`
-      : route.kind === "active"
+      : route.kind === "project"
+        ? `${plural(project?.dirs.length ?? 0, "dossier")} · ${plural(rows.length)}`
+        : route.kind === "active"
         ? `${plural(active.filter((r) => live.has(r.s.id)).length, "ouverte")} · ${plural(active.filter((r) => !live.has(r.s.id)).length, "au cache chaud")}`
         : route.kind === "skills"
           ? "Skills personnels, de projet et de plugins : lire, modifier, créer, copier"

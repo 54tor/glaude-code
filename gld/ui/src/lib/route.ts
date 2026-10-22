@@ -5,6 +5,7 @@ export type Route =
   | { kind: "all" }
   | { kind: "active" } // sessions ouvertes ou au cache chaud
   | { kind: "group"; name: string; key: string } // groupe virtuel du dossier de clé key
+  | { kind: "project"; name: string } // projet : ensemble de dossiers de travail
   | { kind: "dir"; key: string } // clé d'un nœud de l'arbre, ex. « ~/Projets/caddy »
   | { kind: "snippets"; path: string }
   | { kind: "tabs" }
@@ -24,6 +25,7 @@ export function parse(loc: string): Route {
       const i = rest.indexOf("/")
       if (i > 0) return { kind: "group", name: decodeURIComponent(rest.slice(0, i)), key: dec(rest.slice(i + 1)) }
     }
+    if (loc.startsWith("/projet/")) return { kind: "project", name: decodeURIComponent(loc.slice(8)) }
     if (loc.startsWith("/dossier/")) return { kind: "dir", key: dec(loc.slice(9)) }
     if (loc === "/onglets") return { kind: "tabs" }
     if (loc === "/configuration" || loc.startsWith("/configuration/")) return { kind: "config", tab: decodeURIComponent(loc.slice(15)) }
@@ -44,6 +46,8 @@ export function href(r: Route): string {
       return "/en-cours"
     case "group":
       return "/groupe/" + encodeURIComponent(r.name) + "/" + enc(r.key)
+    case "project":
+      return "/projet/" + encodeURIComponent(r.name)
     case "dir":
       return "/dossier/" + enc(r.key)
     case "tabs":

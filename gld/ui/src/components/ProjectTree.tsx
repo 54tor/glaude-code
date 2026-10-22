@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react"
-import { ChevronRight, Folder, FolderInput, FolderOpen, MessageSquarePlus, SquareTerminal, Star, Tag, Trash2, TriangleAlert } from "lucide-react"
+import { Check, ChevronRight, Folder, FolderInput, FolderOpen, Layers, MessageSquarePlus, Plus, SquareTerminal, Star, Tag, Trash2, TriangleAlert } from "lucide-react"
 import type { VGroup } from "@/lib/api"
 import { CM, GroupItems } from "./SessionMenu"
 import { cn } from "@/lib/utils"
 import { sorted, type Node } from "@/lib/tree"
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { useActions } from "./actions"
 
 // Clic droit sur un dossier de projet : actions sur ses propres sessions.
@@ -24,6 +24,25 @@ function ProjectItems({ n }: { n: Node }) {
           <MessageSquarePlus /> Nouvelle session…
         </ContextMenuItem>
       )}
+      <ContextMenuSub>
+        <ContextMenuSubTrigger>
+          <Layers /> Projet
+        </ContextMenuSubTrigger>
+        <ContextMenuSubContent className="w-56">
+          {a.projects.map((p) => {
+            const inIt = p.dirs.includes(g.project)
+            return (
+              <ContextMenuItem key={p.name} onSelect={() => (inIt ? a.projectActs.remove(g.project, p.name) : a.projectActs.add(g.project, p.name))}>
+                <Check className={inIt ? "" : "invisible"} /> <span className="truncate">{p.name}</span>
+              </ContextMenuItem>
+            )
+          })}
+          {a.projects.length > 0 && <ContextMenuSeparator />}
+          <ContextMenuItem onSelect={() => a.projectActs.add(g.project, null)}>
+            <Plus /> Nouveau projet…
+          </ContextMenuItem>
+        </ContextMenuSubContent>
+      </ContextMenuSub>
       <ContextMenuItem onSelect={() => a.moveGroup(g, own)}>
         <FolderInput /> Réassigner les {own.length} sessions…
       </ContextMenuItem>

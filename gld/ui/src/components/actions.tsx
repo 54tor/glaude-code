@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react"
-import type { Group, Hit, Item, Session, VGroup } from "@/lib/api"
+import type { Group, Hit, Item, Project, Session, VGroup } from "@/lib/api"
 
 export type Row = { s: Session; g: Group }
 
@@ -17,6 +17,14 @@ export type GroupActions = {
   show: (vg: VGroup) => void
 }
 
+// Projets : ensembles nommés de dossiers de travail.
+export type ProjectActions = {
+  add: (dir: string, name: string | null) => void // null : nouveau projet (nom demandé)
+  remove: (dir: string, name: string) => void
+  rename: (p: Project) => void
+  delete: (p: Project) => void
+}
+
 // État et actions partagés par la barre latérale, les listes, les menus et le lecteur.
 export type Actions = {
   home: string
@@ -25,6 +33,8 @@ export type Actions = {
   waiting: Set<string> // ouvertes, en attente de votre message
   hit: (id: string) => Hit | undefined
   vgroups: VGroup[]
+  projects: Project[]
+  projectActs: ProjectActions
   favs: Set<string> // sessions favorites
   toggleFav: (ids: string[]) => void
   tags: Record<string, string[]> // étiquettes par session

@@ -10,6 +10,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/component
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ProjectList } from "./ProjectList"
 import { ProjectTree } from "./ProjectTree"
 import { CM, GroupItems, SessionItems } from "./SessionMenu"
 import type { Session, VGroup } from "@/lib/api"
@@ -118,6 +119,7 @@ export type SidebarProps = {
 
 export function Sidebar({ searchRef, ...p }: SidebarProps) {
   const r = p.route
+  const a = useActions()
   const { open, onClose } = p
   useEffect(() => {
     if (!open) return
@@ -241,7 +243,14 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             </>
           )}
 
-          {(p.loading || p.tree.length > 0) && <Heading>Projets</Heading>}
+          {a.projects.length > 0 && (
+            <>
+              <Heading>Projets</Heading>
+              <ProjectList route={r} go={p.go} />
+            </>
+          )}
+
+          {(p.loading || p.tree.length > 0) && <Heading>Sessions locales</Heading>}
           {p.loading ? (
             <div className="space-y-2 px-2">
               <Skeleton className="h-6 w-full" />
