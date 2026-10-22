@@ -114,6 +114,16 @@ func TestRafraichirLesLimites(t *testing.T) {
 	if !refreshUsage(fresh, true) {
 		t.Fatal("refresh forcé ignoré")
 	}
+	<-calls
+	for i := 0; i < 200; i++ { // la goroutine journalise (cfgDir) : elle doit finir avant que le test suivant change l'environnement
+		usageMu.Lock()
+		busy := usageBusy
+		usageMu.Unlock()
+		if !busy {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func TestMessagesEnAttente(t *testing.T) {
