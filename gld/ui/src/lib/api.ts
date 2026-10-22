@@ -147,6 +147,7 @@ export const api = {
   homes: () => get<HomesInfo>("/homes"),
   keepWarm: () => get<{ items: Record<string, WarmState>; ttl: number; below: number }>("/keepwarm"),
   gitChanges: (dir: string) => get<{ files: GitChange[]; more?: number }>(`/git-changes?dir=${enc(dir)}`),
+  notes: () => get<{ notes: Record<string, string> }>("/notes"),
   trustPending: () => get<{ dirs: string[] }>("/trust-pending"),
   gitRemotes: (dir: string) => get<{ remotes: GitRemote[] }>(`/git-remotes?dir=${enc(dir)}`),
   gitStatus: () => get<{ status: Record<string, GitState>; repos: Record<string, string[]> }>("/git-status"),
