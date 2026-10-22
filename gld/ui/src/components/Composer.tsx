@@ -254,15 +254,24 @@ function CloseSession({ id }: { id: string }) {
 
 // Questions du terminal. Deux formes : une liste numérotée sous une phrase (autorisation d'un outil, choix d'un plan) : le bouton envoie
 // le chiffre ; une liste à sélection (« ❯ option » suivie des autres, sans numéro) : le bouton déplace la sélection puis valide.
-type Opt = { label: string; keys: string[] }
+type Opt = { label: string; keys: string[]; text?: boolean }
+// Options qui attendent une réponse libre (« Type something. », « Chat about this », « No, and tell Claude what to do differently »…).
+const FREE = /type something|chat about this|tell claude|something else|^\d+\.\s*other\b/i
 function parsePrompt(screen: string): { question: string; options: Opt[] } | null {
   // Un vrai dialogue du terminal porte une ligne d'aide en bas (« Esc to cancel », « Enter to confirm »…) ; le texte de Claude, lui, peut
   // contenir des listes numérotées ou un « ❯ » sans que rien n'attende de réponse. On ne regarde que le bas de l'écran.
-  const all = screen.split("\n").filter((l) => l.trim())
-  const tail = all.slice(-16)
+  // Les dialogues d'autorisation peuvent être encadrés (« │ ❯ 1. Yes │ ») : on retire le cadre avant d'analyser.
+  const all = screen
+    .split("\n")
+    .map((l) => l.replace(/^(\s*)[│┃]\s?/, "$1").replace(/\s*[│┃]\s*$/, ""))
+    .filter((l) => l.trim())
+  const tail = all.slice(-22)
   // « esc to interrupt » est la ligne d'état de Claude en pleine réflexion : rien n'attend alors de réponse.
   if (/esc to interrupt/i.test(tail.slice(-6).join("\n"))) return null
-  if (!/(esc|escape) to (cancel|exit|go back)|enter to (select|confirm)|to navigate/i.test(tail.slice(-3).join("\n"))) return null
+  // Les confirmations d'opération risquée n'ont pas toujours cette ligne d'aide tout en bas : on la cherche sur les dernières lignes,
+  // ou on reconnaît la question elle-même (« Do you want to proceed? »).
+  const foot = tail.slice(-8).join("\n")
+  if (!/(esc|escape) to (cancel|exit|go back)|enter to (select|confirm)|to navigate|tab to amend|do you want to|would you like to|proceed\?/i.test(foot)) return null
   const lines = tail
   const nums: { n: string; label: string; at: number }[] = []
   lines.forEach((l, i) => {
@@ -280,7 +289,7 @@ function parsePrompt(screen: string): { question: string; options: Opt[] } | nul
     }
     return q
   }
-  if (nums.length >= 2 && nums[0].n === "1") return { question: above(nums[0].at), options: nums.map((o) => ({ label: `${o.n}. ${o.label}`, keys: [o.n] })) }
+  if (nums.length >= 2 && nums[0].n === "1") return { question: above(nums[0].at), options: nums.map((o) => ({ label: `${o.n}. ${o.label}`, keys: [o.n], text: FREE.test(o.label) })) }
   const sel = lines.findIndex((l) => /^\s{0,3}❯ \S/.test(l))
   if (sel < 0) return null
   // Le texte des options est aligné sur celui de la ligne sélectionnée ; les autres lignes du dialogue ne le sont pas.
@@ -294,7 +303,8 @@ function parsePrompt(screen: string): { question: string; options: Opt[] } | nul
   const options: Opt[] = []
   for (let i = from; i <= to; i++) {
     const d = i - sel
-    options.push({ label: lines[i].slice(col).trim(), keys: [...Array(Math.abs(d)).fill(d < 0 ? "Up" : "Down"), "Enter"] })
+    const label = lines[i].slice(col).trim()
+    options.push({ label, keys: [...Array(Math.abs(d)).fill(d < 0 ? "Up" : "Down"), "Enter"], text: FREE.test(label) })
   }
   return { question: above(from), options }
 }
@@ -322,6 +332,21 @@ function TerminalPanel({ id, onAsk }: { id: string; onAsk?: (asking: boolean) =>
     api.screen(id).then((s) => s.ok && setScreen(s.text ?? ""))
   }
   const prompt = parsePrompt(screen)
+  const [typing, setTyping] = useState<string | null>(null) // option à réponse libre en cours de saisie
+  const [answer, setAnswer] = useState("")
+  const choose = async (o: Opt) => {
+    if (!o.text) return press(...o.keys)
+    setTyping(o.label)
+    await press(...(o.keys[o.keys.length - 1] === "Enter" ? o.keys.slice(0, -1) : o.keys)) // sélectionne l'option sans valider
+  }
+  const reply = async () => {
+    const t = answer.trim()
+    if (!t) return
+    const r = await api.post("/session-send", { id, text: t })
+    if (!r.ok) return void toast.error(r.out)
+    setAnswer("")
+    setTyping(null)
+  }
   const asking = !!prompt
   useEffect(() => {
     onAsk?.(asking)
@@ -334,9 +359,29 @@ function TerminalPanel({ id, onAsk }: { id: string; onAsk?: (asking: boolean) =>
           <p className="mb-1.5 font-medium">Claude attend une réponse dans le terminal{prompt.question ? ` : ${prompt.question}` : ""}</p>
           <div className="flex flex-col items-stretch gap-1.5">
             {prompt.options.map((o) => (
-              <Button key={o.label} size="sm" variant="outline" className="h-auto min-h-8 justify-start py-1.5 text-left whitespace-normal" onClick={() => press(...o.keys)} title={`Touches : ${o.keys.join(", ")}`}>
-                {o.label}
-              </Button>
+              <div key={o.label} className="contents">
+                <Button size="sm" variant={typing === o.label ? "secondary" : "outline"} className="h-auto min-h-8 justify-start py-1.5 text-left whitespace-normal" onClick={() => choose(o)} title={`Touches : ${o.keys.join(", ")}`}>
+                  {o.label}
+                </Button>
+                {typing === o.label && (
+                  <div className="flex items-end gap-1.5">
+                    <textarea
+                      autoFocus
+                      value={answer}
+                      onChange={(e) => setAnswer(e.target.value)}
+                      onKeyDown={(e) => (e.ctrlKey || e.metaKey || !e.shiftKey) && e.key === "Enter" && (e.preventDefault(), reply())}
+                      rows={2}
+                      maxLength={32000}
+                      placeholder="Ta réponse (Entrée pour envoyer, Maj+Entrée pour un saut de ligne)"
+                      className="field-sizing-content max-h-40 min-h-12 flex-1 resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                      aria-label="Réponse à la question du terminal"
+                    />
+                    <Button size="sm" onClick={reply} disabled={!answer.trim()}>
+                      <Send /> Envoyer
+                    </Button>
+                  </div>
+                )}
+              </div>
             ))}
             <Button size="sm" variant="ghost" className="justify-start" onClick={() => press("Escape")}>
               Échap
