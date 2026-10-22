@@ -61,6 +61,51 @@ Quelle couleur préfères-tu ?
 ────────────────────────────────────────────────────────────────────────────────────────────
   5. Chat about this
 Enter to select · ↑/↓ to navigate · Esc to cancel`,
+  plan: `
+  ⎿  /plan to preview
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+  ────────────────────────────────────────
+   Ready to code?
+   Here is Claude's plan:
+  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+   Plan : créer /tmp/gldprobe-x.txt
+   1. Créer le fichier vide /tmp/gldprobe-x.txt (par exemple avec touch).
+   2. Vérifier son existence avec ls -l /tmp/gldprobe-x.txt.
+   3. Rien d'autre : aucun autre fichier touché, aucun commit.
+  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+  ────────────────────────────────────────
+   Claude has written up a plan and is ready to execute. Would you like to proceed?
+   ❯ 1. Yes, and use auto mode
+     2. Yes, manually approve edits
+     3. Tell Claude what to change
+        shift+tab to approve with this feedback
+   ctrl+g to edit in VS Code · ~/.claude/plans/sans-explorer-le-code-groovy-pumpkin.md`,
+  edit: `
+────────────────────────────────────────
+ Edit file
+ ../../../../tmp/claude-1000/-home-mwinandy-Projets-glaude-code/b32f1960-1cff-4384-9aa3-1ef6c92fba6a/scratchpad/probe.txt
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ 1  une ligne
+ 2 -autre ligne
+ 2 +ligne modifiée
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ Do you want to make this edit to probe.txt?
+ ❯ 1. Yes
+   2. Yes, and switch to accept edits (auto-approve file edits and common file commands) for this session; Yes, and always allow access to
+      /tmp/claude-1000/-home-mwinandy-Projets-glaude-code/b32f1960-1cff-4384-9aa3-1ef6c92fba6a/scratchpad for this session (shift+tab)
+   3. No
+ Esc to cancel · Tab to amend`,
+  tabs: `
+←  ☐ Couleur  ☐ Saveur  ✔ Submit  →
+Quelle couleur préférez-vous ?
+❯ 1. Bleu
+     Teinte froide et sobre.
+  2. Vert
+     Teinte naturelle.
+  3. Type something.
+────────────────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel`,
   review: `←  ☒ Couleurs  ✔ Submit  →
 Review your answers
  ● Quelles couleurs veux-tu sélectionner ?
@@ -168,6 +213,27 @@ describe("parsePrompt : captures réelles", () => {
   it("relecture des réponses", () => {
     const p = parsePrompt(real.review)!
     expect(p.options.map((o) => o.keys[0])).toEqual(["1", "2"])
+  })
+})
+
+describe("parsePrompt : autres dialogues réels", () => {
+  it("approbation d'un plan : la 3e option est une réponse libre", () => {
+    const p = parsePrompt(real.plan)!
+    expect(p.question).toMatch(/Would you like to proceed/)
+    expect(p.options.map((o) => [o.keys[0], !!o.text])).toEqual([["1", false], ["2", false], ["3", true]])
+  })
+  it("édition d'un fichier : l'option 2 tient sur deux lignes", () => {
+    const p = parsePrompt(real.edit)!
+    expect(p.question).toBe("Do you want to make this edit to probe.txt?")
+    expect(p.options).toHaveLength(3)
+    expect(p.options[1].label).toMatch(/always allow access/)
+    expect(p.options[1].detail).toMatch(/scratchpad for this session/)
+  })
+  it("plusieurs questions : un onglet à la fois, la touche chiffre répond et passe à la suivante", () => {
+    const p = parsePrompt(real.tabs)!
+    expect(p.question).toBe("Quelle couleur préférez-vous ?")
+    expect(p.submit).toBeUndefined()
+    expect(p.options.map((o) => o.keys[0])).toEqual(["1", "2", "3", "4"])
   })
 })
 
