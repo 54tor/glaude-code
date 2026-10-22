@@ -3,7 +3,7 @@
 // checked : case d'une question à choix multiples (la touche chiffre la coche ou la décoche sans bouger le curseur) ; reach : touches
 // pour amener le curseur sur l'option sans la valider (nécessaire avant d'écrire dans une option « Type something »).
 export type Opt = { label: string; keys: string[]; detail?: string; text?: boolean; chat?: boolean; checked?: boolean; reach?: string[] }
-export type Prompt = { question: string; options: Opt[]; submit?: string[] }
+export type Prompt = { question: string; context?: string; options: Opt[]; submit?: string[] } // context : la commande ou le diff d'une demande d'autorisation
 // Options qui attendent une réponse libre (« Type something. », « Chat about this », « No, and tell Claude what to do differently »…).
 const CHAT = /chat about this/i
 const FREE = /type something|chat about this|tell claude|something else|^\d+\.\s*other\b/i
@@ -87,7 +87,30 @@ export function parsePrompt(screen: string): Prompt | null {
       .map((l) => l.trim())
       .join(" ")
   }
-  if (nums.length >= 2 && nums[0].n === "1") return { question: above(nums[0].at), options: nums.map((o, i) => ({ label: `${o.n}. ${o.label}`, detail: detail(i) || undefined, keys: [o.n], text: FREE.test(o.label), chat: CHAT.test(o.label), ...(CHAT.test(o.label) && { keys: [o.n, "Enter"] }) })) }
+  // Demande d'autorisation : la commande ou le diff sont dans un encadré (deux traits ╌ ou ─), avec un titre au-dessus. Sans ce contexte,
+  // « Do you want to proceed? » ne dit pas sur quoi porte la réponse.
+  const contextOf = (at: number, question: string) => {
+    const got: string[] = []
+    let seps = 0
+    for (let i = at - 1; i >= 0 && got.length < 40; i--) {
+      const t = lines[i].trim()
+      if (/^[╌─━┄┈]{8,}$/.test(t)) {
+        if (++seps === 2) {
+          for (let k = 1; k <= 2 && i - k >= 0; k++) got.unshift(lines[i - k].trim()) // le titre (type et description), au-dessus du trait
+          break
+        }
+        continue
+      }
+      got.unshift(lines[i].replace(/\s+$/, ""))
+    }
+    if (seps < 2) return undefined
+    const rest = got.filter((l) => l.trim() && !question.includes(l.trim()))
+    return rest.length ? rest.join("\n") : undefined
+  }
+  if (nums.length >= 2 && nums[0].n === "1") {
+    const question = above(nums[0].at)
+    return { question, context: contextOf(nums[0].at, question), options: nums.map((o, i) => ({ label: `${o.n}. ${o.label}`, detail: detail(i) || undefined, keys: [o.n], text: FREE.test(o.label), chat: CHAT.test(o.label), ...(CHAT.test(o.label) && { keys: [o.n, "Enter"] }) })) }
+  }
   const sel = lines.findIndex((l) => /^\s{0,3}❯ \S/.test(l))
   if (sel < 0) return null
   // Le texte des options est aligné sur celui de la ligne sélectionnée ; les autres lignes du dialogue ne le sont pas.

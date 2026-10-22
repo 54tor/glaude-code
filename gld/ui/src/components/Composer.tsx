@@ -414,6 +414,7 @@ function TerminalPanel({ id, onAsk }: { id: string; onAsk?: (asking: boolean) =>
     <div className="space-y-2">
       {prompt && (
         <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm">
+          {prompt.context && <pre className="mb-2 max-h-60 overflow-auto rounded-md border bg-background/70 p-2 font-mono text-xs break-words whitespace-pre-wrap">{prompt.context}</pre>}
           <p className="mb-1.5 font-medium">{prompt.question || "Réponse attendue"}</p>
           <div className="flex flex-col items-stretch gap-1.5">
             {prompt.options.map((o) => (
