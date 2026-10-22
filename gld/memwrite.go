@@ -116,7 +116,7 @@ var memDraft = func(model, system, prompt string) (string, float64, error) {
 	defer cancel()
 	cmd := helperCmd(ctx, model, system)
 	cmd.Stdin = strings.NewReader(prompt) // sur stdin : un argument est limité à 128 Kio (MAX_ARG_STRLEN), un brouillon peut citer 20 Mio
-	out, err := cmd.Output()
+	out, err := helperOutput(ctx, cmd)
 	var r struct {
 		Result  string
 		IsError bool    `json:"is_error"`

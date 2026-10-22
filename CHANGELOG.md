@@ -14,6 +14,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - **Maintenir au chaud** ne concerne plus que les sessions ouvertes dans un terminal : un ping `claude -p` ne relit pas le cache du mode interactif (mesuré : 0 token lu, tout le contexte réécrit). Le bouton est grisé sur une session fermée, et le maintien s'arrête si la session est fermée. Le coût cumulé n'est plus affiché (non mesurable par le terminal).
 
 ### Corrigé
+- La recherche ne bloque plus une minute sur un mot fréquent dans un gros transcript : l'extrait n'est calculé que pour le meilleur message de chaque session.
+- Au plus 2 appels à Claude d'aide (brouillons de mémoire, explication des permissions, titres, comptage de tokens) tournent à la fois : une rafale ne lance plus autant de processus et d'appels facturés que de clics.
 - Enregistrer ou copier une mémoire vers un dossier de projet absent (ou « . ») est refusé, au lieu de créer un dossier parasite dans `projects/`.
 - Les jetons d'accès (`GLD_WEB_TOKEN`, jeton des gld enfants) ne sont plus transmis à `claude`, à tmux ni aux onglets lancés : un `env` exécuté par Claude ne les écrit plus dans un transcript.
 - Une session dont le maintien au chaud est arrêté pendant un passage n'est plus pinguée.

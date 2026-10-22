@@ -28,7 +28,7 @@ var permHelpRun = func(prompt string) (string, error) {
 	defer cancel()
 	cmd := helperCmd(ctx, "haiku", permHelpSystem)
 	cmd.Stdin = strings.NewReader(prompt)
-	out, err := cmd.Output()
+	out, err := helperOutput(ctx, cmd)
 	var r struct {
 		IsError bool   `json:"is_error"`
 		Result  string `json:"result"`

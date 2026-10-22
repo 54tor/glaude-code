@@ -19,7 +19,7 @@ var titleRun = func(text string) (string, error) {
 	defer cancel()
 	cmd := helperCmd(ctx, "haiku", titleSystem)
 	cmd.Stdin = strings.NewReader(text)
-	out, err := cmd.Output()
+	out, err := helperOutput(ctx, cmd)
 	var r struct {
 		IsError bool   `json:"is_error"`
 		Result  string `json:"result"`
