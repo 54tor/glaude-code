@@ -77,6 +77,20 @@ describe("format", () => {
     expect(ago(t - 7200)).toBe("il y a 2 heures")
     expect(ago(t - 86400)).toBe("hier")
   })
+  it("ago : le nombre affiché n'atteint jamais la taille de l'unité suivante", () => {
+    expect(ago(t - 3570)).toBe("il y a 1 heure")
+    expect(ago(t - 86399)).toBe("hier")
+    fc.assert(
+      fc.property(fc.integer({ min: 60, max: 400 * 86400 }), (s) => {
+        const m = /il y a (\d+) (minute|heure|jour)/.exec(ago(t - s))
+        if (m)
+          expect(Number(m[1])).toBeLessThan(
+            { minute: 60, heure: 24, jour: 7 }[m[2]]!
+          )
+      }),
+      { seed: 5, numRuns: 3000 }
+    )
+  })
   it("bucket : bornes des tranches", () => {
     const midnight = new Date(2026, 9, 22).getTime() / 1000
     expect(bucket(midnight)).toBe("Aujourd'hui")
@@ -93,6 +107,8 @@ describe("format", () => {
     expect(compact(999)).toBe("999")
     expect(compact(1500)).toBe("1,5 k")
     expect(compact(2_500_000)).toBe("2,5 M")
+    expect(compact(999_949)).toBe("999,9 k")
+    expect(compact(999_950)).toBe("1 M")
     expect(tokTotal({ in: 1, out: 2, cw: 3 })).toBe(6)
   })
   it("tilde", () => {

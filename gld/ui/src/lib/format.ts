@@ -15,8 +15,9 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
 export function ago(sec: number): string {
   const d = sec - Date.now() / 1000
   if (Math.abs(d) < 60) return "à l'instant"
+  // unité suivante dès que l'arrondi l'atteindrait : 59 min 50 s donne « il y a 1 heure », pas « il y a 60 minutes »
   let u = UNITS[0]
-  for (const x of UNITS) if (Math.abs(d) >= x[1]) u = x
+  for (const x of UNITS) if (Math.round(Math.abs(d) / u[1]) * u[1] >= x[1]) u = x
   return rtf.format(Math.round(d / u[1]), u[0])
 }
 
@@ -51,6 +52,6 @@ export const tokTotal = (t: { in: number; out: number; cw: number }) => t.in + t
 export const compact = (n: number) =>
   n < 1000
     ? String(n)
-    : n < 1e6
+    : n < 999_950 // au-delà, l'arrondi au dixième afficherait « 1 000 k »
       ? `${(n / 1e3).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} k`
       : `${(n / 1e6).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} M`

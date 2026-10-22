@@ -19,6 +19,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Un `claude` qui ne répond plus (mise à jour, invite) ne fige plus la liste des sessions : `claude agents` est abandonné au bout de 10 s, les sessions ouvertes sont alors inconnues et les suppressions refusées.
 - Un serveur tmux figé ne bloque plus la question de confiance ni l'envoi à une session : chaque appel à tmux est abandonné au bout de 10 s.
 - Un dépôt git qui ne répond plus (montage réseau figé) ne bloque plus la liste des remotes : les lectures de git sont abandonnées au bout de 10 s.
+- Dates et compteurs aux bornes : « il y a 1 heure » au lieu de « il y a 60 minutes », « 1 M » au lieu de « 1 000 k ».
 - Avec `--listen`, un client qui envoie ses en-têtes au compte-gouttes est déconnecté au bout de 10 s (slowloris), avant même la vérification du jeton.
 - Les fichiers réécrits par remplacement (réglages, `history.jsonl`, transcripts réassignés, groupes, onglets) sont écrits sur disque (`fsync`) avant de remplacer l'original : une coupure de courant ne peut plus laisser un fichier vide.
 - La liste des fichiers en cours de modification affiche les chemins accentués ou avec guillemet tels quels, au lieu de l'échappement de git (`"\303\251t\303\251.txt"`).
