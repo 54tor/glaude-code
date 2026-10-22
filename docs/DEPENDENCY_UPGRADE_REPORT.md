@@ -1,3 +1,18 @@
+# Dépendances — 2026-10-22 (4e passage)
+
+Aucune dépendance modifiée dans ce passage.
+
+| Source | Constat | Décision |
+|---|---|---|
+| `govulncheck ./...` | Aucune vulnérabilité | — |
+| `npm audit --omit=dev` | 0 vulnérabilité | — |
+| `go list -m -u all` | `modernc.org/ccgo/v4` 4.37.0 → 4.38.0 et `gopkg.in/check.v1` : outils et tests de dépendances, absents du binaire | NO-CHANGE |
+| `npm outdated` | `typescript` 6.0.3 (7.0.2 existe), `@types/node` 24 (26 existe) | NO-CHANGE : mêmes motifs qu'au 2e passage (typescript-eslint 8 exige `<6.1.0`) |
+| `cn` 0.5.0 | Vérifié : paquet publié par shadcn-ui (`github.com/shadcn-ui/cn`), remplace clsx + tailwind-merge | Rien à faire |
+| `coder/websocket` 1.8.15 | API `AcceptOptions.InsecureSkipVerify` vérifiée par Context7 avant usage (TERM-002) | — |
+
+---
+
 # Dépendances — 2026-10-21 (2e passage)
 
 ## Go (le module Go, `go 1.26.0`, toolchain 1.27.1)
