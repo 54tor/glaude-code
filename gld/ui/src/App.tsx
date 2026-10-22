@@ -322,6 +322,7 @@ export default function App() {
               vg={vg}
               dirMissing={!node}
               projectDir={rows[0]?.s.dir ?? node?.ss[0]?.dir}
+              project={node?.g?.project}
               home={home}
               live={live}
               waiting={waiting}

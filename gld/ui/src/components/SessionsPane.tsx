@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Actions, Row } from "./actions"
+import { ProjectHead } from "./ProjectHead"
 import { ProjectMemory } from "./ProjectMemory"
 import { Live, SessionList } from "./SessionList"
 
@@ -33,6 +34,7 @@ export function SessionsPane({
   vg,
   dirMissing,
   projectDir,
+  project,
   home,
   live,
   waiting,
@@ -49,6 +51,7 @@ export function SessionsPane({
   vg: VGroup | undefined
   dirMissing: boolean // le dossier demandé n'existe pas dans l'arbre
   projectDir?: string // dossier de transcripts du projet affiché : sa mémoire locale s'affiche en tête
+  project?: string // chemin du dossier affiché (route « dir ») : état git et nouveau prompt en tête
   home: string
   live: Set<string>
   waiting: Set<string>
@@ -66,6 +69,8 @@ export function SessionsPane({
             ))}
           </div>
         )}
+
+        {!loading && route.kind === "dir" && project && <ProjectHead key={project} project={project} missing={dirMissing} />}
 
         {!loading && projectDir && (route.kind === "dir" || route.kind === "group") && <ProjectMemory key={projectDir} dir={projectDir} />}
 
