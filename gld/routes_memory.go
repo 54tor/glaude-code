@@ -159,6 +159,26 @@ func routesMemory(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "out": "Type enregistré"})
 	})
+	mux.HandleFunc("POST /memory-fix", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Key string }
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil || !(strings.HasPrefix(req.Key, "m/") || strings.HasPrefix(req.Key, "g/rules/")) {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		text, err := memRead(req.Key)
+		if err == nil {
+			var out string
+			if out, err = fixFrontMatter(text); err == nil {
+				err = memSave(req.Key, out)
+			}
+		}
+		journal("memory-fix %s : %v", req.Key, errOr(err))
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": "Front matter corrigé"})
+	})
 	// Décompte réel des tokens (tokens.go) : quelques fichiers par appel, le navigateur boucle.
 	mux.HandleFunc("POST /memory-tokens", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Keys []string }
