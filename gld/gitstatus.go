@@ -51,19 +51,22 @@ type GitChange struct {
 	From   string `json:"from,omitempty"` // ancien nom d'un fichier renommé
 }
 
-// parseGitChanges lit les lignes de fichiers de `git status --porcelain=v2` (les chemins peuvent contenir des espaces).
+// parseGitChanges lit les entrées de fichiers de `git status --porcelain=v2 -z` : séparées par NUL, chemins jamais échappés
+// (accents, espaces, guillemets tels quels) ; un renommage est suivi de l'ancien nom dans l'entrée suivante.
 func parseGitChanges(out string) []GitChange {
 	var cs []GitChange
-	for _, l := range strings.Split(out, "\n") {
+	recs := strings.Split(out, "\x00")
+	for i := 0; i < len(recs); i++ {
+		l := recs[i]
 		switch {
 		case strings.HasPrefix(l, "1 "):
 			if f := strings.SplitN(l, " ", 9); len(f) == 9 {
 				cs = append(cs, GitChange{Path: f[8], Status: strings.ReplaceAll(f[1], ".", " ")})
 			}
 		case strings.HasPrefix(l, "2 "):
-			if f := strings.SplitN(l, " ", 10); len(f) == 10 {
-				to, from, _ := strings.Cut(f[9], "\t")
-				cs = append(cs, GitChange{Path: to, From: from, Status: strings.ReplaceAll(f[1], ".", " ")})
+			if f := strings.SplitN(l, " ", 10); len(f) == 10 && i+1 < len(recs) {
+				i++
+				cs = append(cs, GitChange{Path: f[9], From: recs[i], Status: strings.ReplaceAll(f[1], ".", " ")})
 			}
 		case strings.HasPrefix(l, "u "):
 			if f := strings.SplitN(l, " ", 11); len(f) == 11 {
@@ -76,10 +79,12 @@ func parseGitChanges(out string) []GitChange {
 	return cs
 }
 
-// parseGitStatus lit la sortie de `git status --porcelain=v2 --branch`.
+// parseGitStatus lit la sortie de `git status --porcelain=v2 --branch -z`.
 func parseGitStatus(out string) GitState {
 	var s GitState
-	for _, l := range strings.Split(out, "\n") {
+	recs := strings.Split(out, "\x00")
+	for i := 0; i < len(recs); i++ {
+		l := recs[i]
 		switch {
 		case strings.HasPrefix(l, "# branch.head "):
 			if h := strings.TrimPrefix(l, "# branch.head "); h == "(detached)" {
@@ -95,7 +100,10 @@ func parseGitStatus(out string) GitState {
 				s.Ahead, _ = strconv.Atoi(strings.TrimPrefix(f[0], "+"))
 				s.Behind, _ = strconv.Atoi(strings.TrimPrefix(f[1], "-"))
 			}
-		case strings.HasPrefix(l, "1 "), strings.HasPrefix(l, "2 "), strings.HasPrefix(l, "u "):
+		case strings.HasPrefix(l, "2 "):
+			s.Changed++
+			i++ // l'ancien nom
+		case strings.HasPrefix(l, "1 "), strings.HasPrefix(l, "u "):
 			s.Changed++
 		case strings.HasPrefix(l, "? "):
 			s.Untrack++
@@ -108,7 +116,7 @@ func parseGitStatus(out string) GitState {
 func runGitStatus(dir string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-C", dir, "status", "--porcelain=v2", "--branch")
+	cmd := exec.CommandContext(ctx, "git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-C", dir, "status", "--porcelain=v2", "--branch", "-z")
 	cmd.Env = append(childEnv(), "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0")
 	b, err := cmd.Output()
 	return string(b), err

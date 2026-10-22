@@ -16,6 +16,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Le terminal web s'ouvre dans un dossier de configuration secondaire (l'origine du WebSocket est vérifiée par la passerelle).
 - La question de confiance d'un dossier n'est détectée que dans un panneau où tourne Claude Code, pas dans un `cat` ou un éditeur qui affiche le même texte.
 - « Remplacer » un skill dans la synchronisation retire de la cible les fichiers absents de la source (ils vont dans la sauvegarde).
+- La liste des fichiers en cours de modification affiche les chemins accentués ou avec guillemet tels quels, au lieu de l'échappement de git (`"\303\251t\303\251.txt"`).
 
 ## [0.2.0] - 2026-10-22
 

@@ -8,13 +8,13 @@ import (
 )
 
 func TestParseGitStatus(t *testing.T) {
-	out := "# branch.oid abc\n# branch.head main\n# branch.upstream origin/main\n# branch.ab +2 -1\n" +
-		"1 .M N... 100644 100644 100644 a b f.go\n2 R. N... 100644 100644 100644 a b R100 n.go\to.go\nu UU N... 1 1 1 1 a b c m.go\n? new.txt\n? other\n"
+	out := "# branch.oid abc\x00# branch.head main\x00# branch.upstream origin/main\x00# branch.ab +2 -1\x00" +
+		"1 .M N... 100644 100644 100644 a b f.go\x002 R. N... 100644 100644 100644 a b R100 n.go\x00o.go\x00u UU N... 1 1 1 1 a b c m.go\x00? new.txt\x00? other\x00"
 	want := GitState{Branch: "main", Upstream: true, Ahead: 2, Behind: 1, Changed: 3, Untrack: 2}
 	if got := parseGitStatus(out); got != want {
 		t.Fatalf("%+v", got)
 	}
-	if got := parseGitStatus("# branch.head (detached)\n"); !got.Detached || got.Branch != "" {
+	if got := parseGitStatus("# branch.head (detached)\x00"); !got.Detached || got.Branch != "" {
 		t.Fatalf("%+v", got)
 	}
 }
@@ -32,7 +32,7 @@ func TestGitStatesCache(t *testing.T) {
 		if dir == "/pas-un-depot" {
 			return "", errors.New("not a git repository")
 		}
-		return "# branch.head dev\n1 .M N... 1 1 1 a b f\n", nil
+		return "# branch.head dev\x001 .M N... 1 1 1 a b f\x00", nil
 	}
 	for i := 0; i < 2; i++ {
 		got := gitStates([]string{"/depot", "/pas-un-depot"})
@@ -65,12 +65,12 @@ func TestRunGitStatusReel(t *testing.T) {
 }
 
 func TestParseGitChanges(t *testing.T) {
-	out := "# branch.head main\n" +
-		"1 .M N... 100644 100644 100644 a b src/mon fichier.go\n" +
-		"1 A. N... 000000 100644 100644 a b new.go\n" +
-		"2 R. N... 100644 100644 100644 a b R100 neuf.go\tancien.go\n" +
-		"u UU N... 1 1 1 1 a b c conflit.go\n" +
-		"? libre.txt\n"
+	out := "# branch.head main\x00" +
+		"1 .M N... 100644 100644 100644 a b src/mon fichier.go\x00" +
+		"1 A. N... 000000 100644 100644 a b new.go\x00" +
+		"2 R. N... 100644 100644 100644 a b R100 neuf.go\x00ancien.go\x00" +
+		"u UU N... 1 1 1 1 a b c conflit.go\x00" +
+		"? libre.txt\x00"
 	want := []GitChange{
 		{Path: "src/mon fichier.go", Status: " M"},
 		{Path: "new.go", Status: "A "},
@@ -98,5 +98,38 @@ func TestSubRepos(t *testing.T) {
 	got := subRepos(d)
 	if len(got) != 2 || got[0] != d+"/8.1" || got[1] != d+"/8.2" {
 		t.Fatalf("%v", got)
+	}
+}
+
+// Les chemins accentués, avec guillemet ou renommés arrivent tels quels, sans l'échappement octal de git (« "\303\251t\303\251" »).
+func TestGitChangesCheminsReels(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git absent")
+	}
+	dir := t.TempDir()
+	git(t, dir, "init", "-q", "-b", "main")
+	put(t, dir+"/vieux nom.txt", "x\n", old)
+	git(t, dir, "add", ".")
+	git(t, dir, "commit", "-q", "-m", "un")
+	git(t, dir, "mv", "vieux nom.txt", "nouvel été.txt")
+	put(t, dir+"/été.txt", "x\n", old)
+	put(t, dir+`/q"uote.txt`, "x\n", old)
+	out, err := runGitStatus(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[GitChange]bool{
+		{Path: "nouvel été.txt", From: "vieux nom.txt", Status: "R "}: true,
+		{Path: "été.txt", Status: "??"}:                               true,
+		{Path: `q"uote.txt`, Status: "??"}:                            true,
+	}
+	got := parseGitChanges(out)
+	for _, c := range got {
+		if !want[c] {
+			t.Errorf("inattendu : %+v", c)
+		}
+	}
+	if s := parseGitStatus(out); len(got) != 3 || s.Changed != 1 || s.Untrack != 2 || s.Branch != "main" {
+		t.Fatalf("%+v %+v\n%q", got, s, out)
 	}
 }
