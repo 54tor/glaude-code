@@ -292,10 +292,8 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
             onSent={() => setSentAt({ id, at: Date.now() })}
             turn={turn}
             setTurn={(f) => setChat((c) => f(c?.id === id ? c : null))}
-            onDone={() => {
-              // Le transcript contient maintenant le tour : on le relit, et le tour affiché à part disparaît (sauf erreur).
-              reload().then(() => setChat((c) => (c?.id === id && !c.error ? { ...c, msgs: [] } : c)))
-            }}
+            // Le transcript contient maintenant le tour : on le relit, et le tour affiché à part disparaît (sauf erreur).
+            onDone={() => reload().then(() => setChat((c) => (c?.id === id && !c.error ? { ...c, msgs: [] } : c)))}
           />
         )}
         <LoadedDialog id={id} home={a.home} open={loadedOpen} onClose={() => setLoadedOpen(false)} />

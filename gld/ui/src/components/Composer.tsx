@@ -3,7 +3,7 @@ import { cn, isSend } from "@/lib/utils"
 import { parsePrompt, type Opt } from "@/lib/prompt"
 import { LiveAgents, type Live } from "./LiveStatus"
 import { toast } from "sonner"
-import { Bug, Copy, Minimize2, Power, Send, Square, SquareCheck } from "lucide-react"
+import { Bug, Copy, Minimize2, Power, Send, Square, SquareCheck, X } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
 import { withChoice, type Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
@@ -47,7 +47,7 @@ export function Composer({
   onSent: () => void // message envoyé à la session ouverte
   turn: Turn | null
   setTurn: (f: (t: Turn | null) => Turn | null) => void
-  onDone: () => void
+  onDone: () => void | Promise<void>
   onAsk?: (asking: boolean) => void // Claude attend une réponse dans le terminal
 }) {
   const [text, setText] = useState("")
@@ -58,14 +58,23 @@ export function Composer({
   // jusqu'au prochain relevé : tant que le tour est le nôtre, on ne bascule pas vers l'envoi à une session ouverte dans un terminal.
   const [own, setOwn] = useState(false)
   const pics = useImages()
-  const send = async () => {
+  // File d'attente : les messages écrits pendant que Claude répond partent l'un après l'autre à la fin du tour (sauf échec ou arrêt).
+  const [queue, setQueue] = useState<string[]>([])
+  const queueRef = useRef<string[]>([])
+  const setQ = (q: string[]) => ((queueRef.current = q), setQueue(q))
+  const send = () => {
     const prompt = [text.trim(), pics.suffix()].filter(Boolean).join("\n\n")
-    if (!prompt || running) return
+    if (!prompt) return
     setText("")
     pics.clear()
+    if (running) setQ([...queueRef.current, prompt])
+    else submit(prompt)
+  }
+  const submit = async (prompt: string) => {
     setOwn(true)
     setTurn(() => ({ id, msgs: [{ r: "user", t: prompt }], running: true }))
     const fail = (error: string) => (setOwn(false), setTurn((t) => t && { ...t, running: false, error }))
+    let failed = false
     let res: Response
     try {
       res = await fetch("/chat", {
@@ -89,6 +98,7 @@ export function Composer({
         if (!l.trim()) continue
         const e = JSON.parse(l) as { msgs?: Msg[]; done?: boolean; ok?: boolean; error?: string; cost?: number; note?: string }
         if (e.note) toast.info(e.note)
+        if (e.done && !e.ok) failed = true
         setTurn(
           (t) =>
             t && {
@@ -103,8 +113,13 @@ export function Composer({
       if (done) break
     }
     setTurn((t) => t && { ...t, running: false })
-    onDone()
+    await onDone() // le transcript est relu avant le tour suivant, qui efface sinon son propre affichage
     setTimeout(() => setOwn(false), 30_000)
+    const next = queueRef.current[0]
+    if (next !== undefined && !failed) {
+      setQ(queueRef.current.slice(1))
+      submit(next)
+    }
   }
   const stop = () => api.post("/chat-stop", { id })
 
@@ -118,14 +133,36 @@ export function Composer({
           onKeyDown={(e) => isSend(e) && (e.preventDefault(), send())}
           onPaste={pics.onPaste}
           onDrop={pics.onDrop}
-          placeholder={running ? "Claude répond…" : "Écrire à Claude… (Entrée envoie, Maj+Entrée : saut de ligne)"}
-          disabled={running}
+          placeholder={running ? "Claude répond… ton message partira ensuite (Entrée : mettre en file)" : "Écrire à Claude… (Entrée envoie, Maj+Entrée : saut de ligne)"}
           rows={2}
           maxLength={32000}
           className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
           aria-label="Message à Claude"
         />
         <ImageChips images={pics.images} busy={pics.busy} onRemove={pics.remove} />
+        {queue.length > 0 && (
+          <ul className="space-y-1 text-xs" aria-label="Messages en file d'attente">
+            {queue.map((q, i) => (
+              <li key={i} className="flex items-center gap-2 rounded-md border border-dashed px-2 py-1 text-muted-foreground">
+                <span className="shrink-0 tabular-nums">{i + 1}.</span>
+                <span className="min-w-0 flex-1 truncate" title={q}>
+                  {q}
+                </span>
+                <Button size="icon-xs" variant="ghost" aria-label="Retirer de la file" onClick={() => setQ(queue.filter((_, j) => j !== i))}>
+                  <X />
+                </Button>
+              </li>
+            ))}
+            {!running && (
+              <li className="flex items-center gap-2 text-muted-foreground">
+                File suspendue (le tour précédent a échoué ou a été arrêté).
+                <Button size="xs" variant="outline" onClick={() => (setQ(queue.slice(1)), submit(queue[0]))}>
+                  Envoyer le suivant
+                </Button>
+              </li>
+            )}
+          </ul>
+        )}
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <Choose value={mode} onChange={setMode} options={MODES} label="Autorisations accordées à Claude" disabled={running} className="max-w-full min-w-0" />
           <ModelPicker value={choice} onChange={setChoice} disabled={running} />
@@ -237,6 +274,19 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className="ml-auto" />
           <LiveAgents live={liveState} />
+          {liveState.st?.thinking && (
+            <Button
+              size="sm"
+              variant="outline"
+              title="Envoie Échap à la session : Claude interrompt sa réponse en cours (comme dans le terminal)"
+              onClick={async () => {
+                const r = await api.post("/session-key", { id, key: "Escape" })
+                if (!r.ok) toast.error(r.out)
+              }}
+            >
+              <Square /> Interrompre
+            </Button>
+          )}
           <SlashMenu id={id} text={text} onSent={onSent} />
           <CloseSession id={id} />
           <Button size="sm" onClick={send} disabled={(!text.trim() && !pics.images.length) || busy}>
