@@ -13,6 +13,7 @@ import (
 )
 
 const (
+	maxCleanupDays     = 100000 // au-delà, le calcul en durée déborderait ; 100 000 jours valent « jamais »
 	defaultCleanupDays = 30
 	cleanupWarn        = 24 * time.Hour
 )
@@ -30,8 +31,8 @@ func cleanupDays() int {
 	_, raw := allConfigs()
 	if v, ok := lookup(raw["u"], "cleanupPeriodDays"); ok {
 		if n, ok := v.(json.Number); ok {
-			if f, err := n.Float64(); err == nil && f >= 1 && f < 36500 {
-				return int(f)
+			if f, err := n.Float64(); err == nil && f >= 1 {
+				return int(min(f, maxCleanupDays))
 			}
 		}
 	}
