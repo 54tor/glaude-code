@@ -3,6 +3,7 @@ import { toast } from "sonner"
 import { watchTrust } from "@/lib/trust"
 import { wantConfigFile } from "@/lib/wantConfigFile"
 import { api, type Caps, type Data, type Group, type Hit, type Item, type Project, type Session, type Snippet, type VGroup } from "@/lib/api"
+import { segs } from "@/lib/paths"
 import { exportMarkdown } from "@/lib/export"
 import { size, tilde } from "@/lib/format"
 import { withChoice, type Choice } from "@/lib/models"
@@ -170,19 +171,21 @@ export function useAppActions(c: {
   const newGroup = (ids: string[], project: string) =>
     named(`Nouveau groupe dans ${tilde(project, home)}`, "", "Créer", (n) => addTo(ids, project, n))
   // Dossiers où lancer une nouvelle session : ceux qui existent encore, le plus récemment utilisé d'abord.
+  // Un dossier enregistré sans session se lance par son chemin (cwd), en dernier.
   const targets = (): Target[] =>
     (data?.groups ?? [])
-      .filter((x) => !x.missing && x.sessions.length)
+      .filter((x) => !x.missing)
       .map((x) => ({
         x,
         s: [...x.sessions].sort((p, q) => q.mtime - p.mtime)[0],
       }))
-      .sort((p, q) => q.s.mtime - p.s.mtime)
+      .sort((p, q) => (q.s?.mtime ?? 0) - (p.s?.mtime ?? 0))
       .map(({ x, s }) => ({
         label: tilde(x.project, home),
         project: x.project,
-        dir: s.dir,
-        id: s.id,
+        dir: s?.dir ?? "",
+        id: s?.id ?? "",
+        ...(s ? {} : { cwd: x.project }),
       }))
   const newSession = (title: string, subtitle: string, ts: Target[], initial = "") =>
     ts.length &&
@@ -296,6 +299,20 @@ export function useAppActions(c: {
     live,
     waiting,
     hit: (id) => hitMap?.get(id),
+    registeredDirs: data?.dirs ?? [],
+    addDir: () =>
+      void pickDir("Ajouter un dossier à la liste", home).then(async (p) => {
+        if (!p) return
+        const r = await api.post("/dirs", { op: "add", dir: p })
+        if (!r.ok) return void toast.error(r.out)
+        await reload()
+        go({ kind: "dir", key: segs(p, home).join("/") })
+      }),
+    removeDir: async (project) => {
+      const r = await api.post("/dirs", { op: "remove", dir: project })
+      if (!r.ok) return void toast.error(r.out)
+      await reload()
+    },
     openPerms: (project) => {
       const dir = data?.groups.find((g) => g.project === project)?.sessions[0]?.dir
       if (dir) wantConfigFile.id = "p/" + dir
@@ -364,7 +381,7 @@ export function useAppActions(c: {
     startSession: async (project, prompt, c) => {
       const t = targets().find((x) => x.project === project)
       if (!t) return false
-      await act("/new-session", { dir: t.dir, id: t.id, prompt, args: withChoice(args, c) }, "Nouvelle session…", "last")
+      await act("/new-session", { ...(t.cwd ? { cwd: t.cwd } : { dir: t.dir, id: t.id }), prompt, args: withChoice(args, c) }, "Nouvelle session…", "last")
       return true
     },
     newSession: (project, initial) => {

@@ -270,3 +270,12 @@ describe("divers", () => {
     expect(describeKey("inconnu.x")).toBeUndefined()
   })
 })
+
+describe("dossiers sans session", () => {
+  const data = { groups: [{ project: "/a/vide", missing: false, sessions: [] }, { project: "/a/plein", missing: false, sessions: [{ id: "s", title: "t", mtime: 1, kb: 1, dir: "d", cwd: "/a/plein", named: false, tok: {} }] }] } as never
+  it("un dossier enregistré reste dans l'arbre, la recherche l'écarte", () => {
+    expect(buildView(data, "", {}, null).entries.map((e) => e.g.project)).toEqual(["/a/vide", "/a/plein"])
+    expect(buildView(data, "plein", {}, null).entries.map((e) => e.g.project)).toEqual(["/a/plein"])
+    expect(buildView(data, "#prod", {}, null).entries.map((e) => e.g.project)).toEqual([])
+  })
+})
