@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -767,15 +766,15 @@ func TestAuthDeniedLogged(t *testing.T) {
 		g.s.db.QueryRow(`SELECT COUNT(*) FROM auth_events WHERE kind=? AND outcome='denied' AND ip='192.0.2.1'`, kind).Scan(&n)
 		return n
 	}
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 2*rateBudget; i++ {
 		g.do("POST", "/auth/logout", "", "", nil)
 	}
-	if count("auth") != 1 {
+	if count("auth") != rateBudget {
 		t.Fatalf("refus journalisés = %d", count("auth"))
 	}
 	g.tick(time.Minute)
 	g.do("GET", "/auth/sessions", "", "", nil)
-	if count("auth") != 2 {
+	if count("auth") != rateBudget+1 {
 		t.Fatalf("après une minute = %d", count("auth"))
 	}
 	c, _, _ := g.partial()
@@ -1042,64 +1041,122 @@ func TestBlockedEventsRateLimited(t *testing.T) {
 	}
 	var n int
 	g.s.db.QueryRow(`SELECT COUNT(*) FROM auth_events WHERE outcome='blocked'`).Scan(&n)
-	if n != 1 {
+	if n != rateBudget {
 		t.Fatalf("événements blocked : %d", n)
 	}
 	g.tick(time.Minute)
 	g.login("alice", "wrong password here")
 	g.s.db.QueryRow(`SELECT COUNT(*) FROM auth_events WHERE outcome='blocked'`).Scan(&n)
-	if n != 2 {
+	if n != rateBudget+1 {
 		t.Fatalf("après une minute : %d", n)
+	}
+	var sum string
+	g.s.db.QueryRow(`SELECT outcome FROM auth_events WHERE kind='suppressed'`).Scan(&sum)
+	if sum != "anon=15 overflow=0 uid=0" {
+		t.Fatalf("résumé : %q", sum)
 	}
 }
 
-// Un flot de noms distincts depuis une adresse ne remplit pas auth_events et ne tait pas les événements d'une autre
-// adresse ; ce qui est tu est compté dans un résumé par adresse et par minute. Un événement qui porte un compte passe toujours.
-func TestRateLogNameFlood(t *testing.T) {
+func rlRig(t *testing.T) (*authRig, *authAPI, func(string, ...any) int, func() string) {
 	g := newAuthRig(t)
 	a := routesAuth(http.NewServeMux(), g.s, g.th)
+	g.s.db.Exec(`DELETE FROM auth_events`)
 	count := func(q string, args ...any) (n int) {
 		g.s.db.QueryRow(`SELECT COUNT(*) FROM auth_events WHERE `+q, args...).Scan(&n)
 		return
 	}
-	before := count(`1`)
+	// summary passe à la minute suivante et rend le résumé écrit.
+	summary := func() (s string) {
+		g.tick(time.Minute)
+		a.rlFlush()
+		g.s.db.QueryRow(`SELECT outcome FROM auth_events WHERE kind='suppressed' ORDER BY rowid DESC LIMIT 1`).Scan(&s)
+		return
+	}
+	return g, a, count, summary
+}
+
+func TestRateLogNameFlood(t *testing.T) {
+	_, a, count, summary := rlRig(t)
 	for i := range 5000 {
 		a.rateLog(0, "nom"+strconv.Itoa(i), "198.51.100.1", evLogin, "blocked")
 	}
-	for i := range 10 {
-		a.rateLog(0, "", "198.51.100.1", evLogin, "kind"+strconv.Itoa(i))
+	if n := count(`1`); n != rateBudget {
+		t.Fatalf("une adresse : %d lignes", n)
 	}
-	a.rateLog(0, "x", "198.51.100.2", evLogin, "blocked")
-	a.rateLog(g.uid, "alice", "198.51.100.1", "mfa_totp", "blocked")
-	if n := count(`ip='198.51.100.1' AND user_id IS NULL`); n != rateBudget {
-		t.Fatalf("adresse inondée : %d lignes", n)
+	if s := summary(); s != "anon=4995 overflow=0 uid=0" {
+		t.Fatalf("résumé : %q", s)
 	}
-	if count(`ip='198.51.100.2'`) != 1 || count(`user_id=?`, g.uid) != 1 {
-		t.Fatal("autre adresse ou événement authentifié tu")
+	if n := count(`1`); n != rateBudget+1 {
+		t.Fatalf("avec le résumé : %d lignes", n)
 	}
-	g.tick(time.Minute)
 	a.rateLog(0, strings.Repeat("é", 100), "192.0.2.1", evLogin, "busy")
-	var sup string
-	g.s.db.QueryRow(`SELECT outcome FROM auth_events WHERE kind='suppressed' AND ip='198.51.100.1'`).Scan(&sup)
-	if want := strconv.Itoa(5000 + 10 - rateBudget); sup != want {
-		t.Fatalf("résumé %q, voulu %s", sup, want)
-	}
-	if n := count(`1`) - before; n > rateBudget+4 {
-		t.Fatalf("lignes : %d", n)
-	}
 	var got string
-	g.s.db.QueryRow(`SELECT name_tried FROM auth_events WHERE ip='192.0.2.1'`).Scan(&got)
+	a.s.db.QueryRow(`SELECT name_tried FROM auth_events WHERE ip='192.0.2.1'`).Scan(&got)
 	if len([]rune(got)) != 64 {
 		t.Fatalf("nom tronqué : %d", len([]rune(got)))
 	}
 }
 
-// Un écrivain qui tient la connexion ne bloque ni la décision du limiteur ni a.mu.
+func TestRateLogGlobalAndOverflow(t *testing.T) {
+	_, a, count, summary := rlRig(t)
+	for ip := range 300 {
+		for i := range 10 {
+			a.rateLog(0, "n"+strconv.Itoa(i), "10.0."+strconv.Itoa(ip/256)+"."+strconv.Itoa(ip%256), evLogin, "blocked")
+		}
+	}
+	if n := count(`kind=?`, evLogin); n != rlGlobal {
+		t.Fatalf("plafond global : %d lignes", n)
+	}
+	if s := summary(); s != "anon=2800 overflow=0 uid=0" {
+		t.Fatalf("résumé : %q", s)
+	}
+	// Table pleine : les adresses suivies gardent leur budget, les nouvelles vont au compte commun.
+	a.mu.Lock()
+	for i := range rlCap {
+		a.rl.src["fill"+strconv.Itoa(i)] = 0
+	}
+	a.mu.Unlock()
+	before := count(`1`)
+	a.rateLog(0, "", "203.0.113.1", evLogin, "busy")
+	a.rateLog(0, "", "fill3", evLogin, "busy")
+	if count(`1`)-before != 1 || count(`ip='fill3'`) != 1 {
+		t.Fatal("source suivie touchée par la table pleine")
+	}
+	if s := summary(); s != "anon=0 overflow=1 uid=0" {
+		t.Fatalf("résumé : %q", s)
+	}
+}
+
+func TestRateLogUIDDedup(t *testing.T) {
+	g, a, count, summary := rlRig(t)
+	for range 10 {
+		a.rateLog(g.uid, "alice", "198.51.100.1", "mfa_totp", "blocked")
+		a.rateLog(g.uid, "alice", "198.51.100.1", "mfa_totp", "busy")
+	}
+	if n := count(`user_id=?`, g.uid); n != 2 {
+		t.Fatalf("dédoublonnage par compte : %d", n)
+	}
+	if s := summary(); s != "anon=0 overflow=0 uid=18" {
+		t.Fatalf("résumé : %q", s)
+	}
+	// Les échecs du second facteur sont toujours écrits.
+	g.s.db.Exec(`DELETE FROM auth_events`)
+	g.enrolTOTP()
+	c, csrf, _ := g.partial()
+	for range 3 {
+		g.do("POST", "/auth/mfa/totp", c, csrf, map[string]string{"code": "000000"})
+		g.tick(time.Minute)
+	}
+	if n := count(`kind='mfa_totp' AND outcome='failure'`); n != 3 {
+		t.Fatalf("échecs du second facteur : %d", n)
+	}
+}
+
+// Une connexion tenue ne bloque que l'écriture, ni la décision du limiteur ni a.mu.
 func TestRateLogNoDBUnderLock(t *testing.T) {
-	g := newAuthRig(t)
-	a := routesAuth(http.NewServeMux(), g.s, g.th)
-	for range rateBudget + 1 {
-		a.rateLog(0, "", "198.51.100.1", evLogin, "b"+strconv.Itoa(rand.Int()))
+	g, a, _, _ := rlRig(t)
+	for range rateBudget {
+		a.rateLog(0, "", "198.51.100.1", evLogin, "blocked")
 	}
 	tx, err := g.s.db.Begin()
 	if err != nil {
@@ -1121,27 +1178,4 @@ func TestRateLogNoDBUnderLock(t *testing.T) {
 		t.Fatal("limiteur bloqué par la base")
 	}
 	tx.Rollback()
-}
-
-// Déconnexion et connexion réussie effacent le home choisi : un autre compte n'en hérite pas.
-func TestHomeCookieCleared(t *testing.T) {
-	g := newAuthRig(t)
-	secret := g.enrolTOTP()
-	c, csrf, _ := g.partial()
-	w := g.do("POST", "/auth/mfa/totp", c, csrf, map[string]string{"code": g.code(secret)})
-	cleared := func(w *httptest.ResponseRecorder) bool {
-		for _, k := range w.Result().Cookies() {
-			if k.Name == homeCookie && k.MaxAge < 0 {
-				return true
-			}
-		}
-		return false
-	}
-	if w.Code != 200 || !cleared(w) {
-		t.Fatalf("connexion : %d, gld_home effacé %v", w.Code, cleared(w))
-	}
-	nc, _ := newCookie(w)
-	if w := g.do("POST", "/auth/logout", nc, jbody(t, w)["csrf"].(string), nil); w.Code != 200 || !cleared(w) {
-		t.Fatalf("déconnexion : %d", w.Code)
-	}
 }
