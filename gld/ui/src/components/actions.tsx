@@ -32,6 +32,7 @@ export type Actions = {
   q: string
   live: Set<string>
   waiting: Set<string> // ouvertes, en attente de votre message
+  asking: Set<string> // ouvertes, avec une question ou une demande d'autorisation ouverte dans leur terminal
   hit: (id: string) => Hit | undefined
   registeredDirs: string[] // dossiers ajoutés à la main, sans session
   addDir: () => void // choisir un dossier à ajouter à la liste
