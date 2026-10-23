@@ -132,7 +132,10 @@ function adopt(name: string) {
   } catch {
     /* stockage indisponible */
   }
-  if (prev !== name && (prev !== null || storedKeys().some(userKey) || (snap.owner !== undefined && snap.owner !== name))) clearUserData()
+  // L'onglet compte aussi : un autre onglet a pu inscrire le nouveau compte comme propriétaire pendant que celui-ci gardait en
+  // mémoire les données du précédent.
+  const tabOther = snap.owner !== undefined && snap.owner !== name
+  if (tabOther || (prev !== name && (prev !== null || storedKeys().some(userKey)))) clearUserData()
   try {
     localStorage.setItem(OWNER, name)
   } catch {
