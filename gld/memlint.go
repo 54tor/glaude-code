@@ -5,7 +5,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"slices"
 	"strings"
 )
@@ -41,7 +40,7 @@ func memLintFiles(scope string) ([]string, error) {
 		return keys, nil
 	}
 	if !safeDir(scope) {
-		return nil, errors.New("projet invalide")
+		return nil, terr("srv.memmeta.projetInvalide")
 	}
 	for _, p := range projects {
 		if p.Dir != scope {
@@ -54,7 +53,7 @@ func memLintFiles(scope string) ([]string, error) {
 		}
 	}
 	if len(keys) == 0 {
-		return nil, errors.New("rien à analyser dans ce projet")
+		return nil, terr("srv.memlint.rienAAnalyserDans")
 	}
 	return keys, nil
 }
@@ -73,7 +72,7 @@ func memLintPrompt(keys []string) (string, error) {
 		b.WriteString("=== " + k + " ===\n" + text + "\n\n")
 	}
 	if b.Len() == 0 {
-		return "", errors.New("rien à analyser")
+		return "", terr("srv.memlint.rienAAnalyser")
 	}
 	return b.String(), nil
 }
@@ -94,7 +93,7 @@ func memLint(scope string) ([]Finding, float64, error) {
 	}
 	var raw []Finding
 	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &raw); err != nil {
-		return nil, cost, errors.New("réponse de l'analyse illisible")
+		return nil, cost, terr("srv.memlint.reponseDeLAnalyse")
 	}
 	res := []Finding{}
 	for _, f := range raw {

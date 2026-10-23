@@ -53,11 +53,11 @@ func sameDir(a, b string) bool {
 func snippetRel(rel string) (string, error) {
 	rel = filepath.FromSlash(strings.TrimSpace(rel))
 	if !filepath.IsLocal(rel) || !strings.HasSuffix(rel, ".md") {
-		return "", errors.New("chemin de snippet invalide (un fichier .md dans le dossier des commandes)")
+		return "", terr("srv.commands.cheminDeSnippetInvalide")
 	}
 	for _, seg := range strings.Split(rel, string(filepath.Separator)) {
 		if strings.HasPrefix(seg, ".") {
-			return "", errors.New("chemin de snippet invalide")
+			return "", terr("srv.commands.cheminDeSnippetInvalide2")
 		}
 	}
 	return rel, nil
@@ -72,18 +72,18 @@ func cmdBase(key string) (string, string, error) {
 	case strings.HasPrefix(key, "p/"):
 		d, r, ok := strings.Cut(key[2:], "/")
 		if !ok || !safeDir(d) {
-			return "", "", errors.New("projet invalide")
+			return "", "", terr("srv.memmeta.projetInvalide")
 		}
 		c := projectCwd(d)
 		if fi, err := os.Stat(c); c == "" || err != nil || !fi.IsDir() {
-			return "", "", errors.New("dossier du projet introuvable")
+			return "", "", terr("srv.memory.dossierDuProjetIntrouvable")
 		}
 		base, rel = filepath.Join(c, ".claude", "commands"), r
 		if sameDir(base, userCmdDir()) {
-			return "", "", errors.New("ce sont les commandes personnelles : voir la section Personnels")
+			return "", "", terr("srv.commands.ceSontLesCommandes")
 		}
 	default:
-		return "", "", errors.New("snippet invalide")
+		return "", "", terr("srv.commands.snippetInvalide")
 	}
 	rel, err := snippetRel(rel)
 	return base, rel, err
@@ -171,7 +171,7 @@ func readSnippet(key string) (string, error) {
 	defer r.Close()
 	b, err := r.ReadFile(rel)
 	if err == nil && (len(b) > snippetMax || !utf8.Valid(b)) {
-		err = errors.New("fichier trop gros ou pas du texte")
+		err = terr("srv.memory.fichierTropGrosOu")
 	}
 	return string(b), err
 }
@@ -179,7 +179,7 @@ func readSnippet(key string) (string, error) {
 // saveSnippet écrit un snippet (création refusée s'il existe déjà) ; la version remplacée va à la corbeille.
 func saveSnippet(key, text string, create bool) error {
 	if len(text) > snippetMax || !utf8.ValidString(text) {
-		return errors.New("texte trop long ou invalide")
+		return terr("srv.memory.texteTropLongOu")
 	}
 	base, rel, err := cmdBase(key)
 	if err != nil {
@@ -187,7 +187,7 @@ func saveSnippet(key, text string, create bool) error {
 	}
 	if old, err := readSnippet(key); err == nil {
 		if create {
-			return errors.New("ce snippet existe déjà : " + filepath.ToSlash(rel))
+			return terr("srv.commands.ceSnippetExisteDeja", "A1", filepath.ToSlash(rel))
 		}
 		if old != text {
 			if err := saveTrash("s/"+key, filepath.Join(base, rel), "remplacé", old); err != nil {
@@ -282,7 +282,7 @@ func importSnippets(scope string, files []ImportFile, overwrite bool) (done, ski
 	put := func(name string, data []byte) error {
 		name = strings.TrimPrefix(path.Clean("/"+filepath.ToSlash(name)), "/")
 		e := saveSnippet(prefix+name, string(data), !overwrite)
-		if e != nil && strings.Contains(e.Error(), "existe déjà") {
+		if e != nil && isMsg(e, "srv.commands.ceSnippetExisteDeja") {
 			skipped = append(skipped, name)
 			return nil
 		}
@@ -295,7 +295,7 @@ func importSnippets(scope string, files []ImportFile, overwrite bool) (done, ski
 		if strings.HasSuffix(strings.ToLower(f.Name), ".zip") {
 			z, e := zip.NewReader(bytes.NewReader(f.Data), int64(len(f.Data)))
 			if e != nil {
-				return done, skipped, errors.New(f.Name + " : archive illisible")
+				return done, skipped, terr("srv.commands.archiveIllisible", "A1", f.Name)
 			}
 			for _, zf := range z.File {
 				if zf.FileInfo().IsDir() || !strings.HasSuffix(zf.Name, ".md") || zf.UncompressedSize64 > snippetMax {

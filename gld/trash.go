@@ -105,7 +105,7 @@ func trashItem(id string) (Trashed, string, error) {
 			return t, string(b), err
 		}
 	}
-	return Trashed{}, "", errors.New("introuvable dans la corbeille")
+	return Trashed{}, "", terr("srv.trash.introuvableDansLaCorbeille")
 }
 
 // trashRestore remet le fichier à sa place ; s'il existe déjà, sa version actuelle part à son tour à la corbeille.

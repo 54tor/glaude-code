@@ -6,6 +6,7 @@ package main
 import (
 	"embed"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -201,4 +202,10 @@ func terr(id string, kv ...any) error {
 		}
 	}
 	return &msgErr{id: id, data: m, wrapped: w}
+}
+
+// isMsg : l'erreur (ou une erreur qu'elle enveloppe) vient de ce message du catalogue.
+func isMsg(err error, id string) bool {
+	var m *msgErr
+	return errors.As(err, &m) && m.id == id
 }

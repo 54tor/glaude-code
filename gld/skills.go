@@ -60,11 +60,11 @@ var (
 	bucketRe   = regexp.MustCompile(`^[\w-]{1,100}$`) // un lot de skills synchronisés
 )
 
-const skillLateYAML = "le front matter doit commencer à la toute première ligne, sinon tout le fichier est pris pour du contenu"
+func skillLateYAML() string { return L("srv.skills.lateYAML") }
 
 // skillBase : le dossier qui contient les skills d'une clé, et si on peut y écrire.
 func skillBase(key string) (base, name string, readonly bool, err error) {
-	bad := errors.New("skill invalide")
+	bad := terr("srv.skills.skillInvalide")
 	parts := strings.Split(key, "/")
 	switch {
 	case len(parts) == 2 && parts[0] == "u":
@@ -72,7 +72,7 @@ func skillBase(key string) (base, name string, readonly bool, err error) {
 	case len(parts) == 3 && parts[0] == "p" && safeDir(parts[1]):
 		cwd := projectCwd(parts[1])
 		if fi, e := os.Stat(cwd); cwd == "" || e != nil || !fi.IsDir() {
-			return "", "", false, errors.New("dossier du projet introuvable")
+			return "", "", false, terr("srv.memory.dossierDuProjetIntrouvable")
 		}
 		return filepath.Join(cwd, ".claude", "skills"), parts[2], false, nilIf(skillName.MatchString(parts[2]), bad)
 	case len(parts) == 3 && parts[0] == "s" && bucketRe.MatchString(parts[1]):
@@ -83,7 +83,7 @@ func skillBase(key string) (base, name string, readonly bool, err error) {
 				return p.base, parts[2], true, nilIf(skillName.MatchString(parts[2]), bad)
 			}
 		}
-		return "", "", true, errors.New("plugin introuvable")
+		return "", "", true, terr("srv.skills.pluginIntrouvable")
 	}
 	return "", "", false, bad
 }
@@ -173,12 +173,12 @@ func describeSkill(s *Skill, text string) {
 			}
 		}
 		if s.Warn == "" {
-			s.Warn = "pas de description : Claude Code retient la première ligne du contenu, et ne saura pas quand l'utiliser"
+			s.Warn = L("srv.skills.noDescription")
 		}
 	}
 	s.Chars = len([]rune(s.Description + textField(m, "when_to_use")))
 	if s.Chars > skillListCap && s.Warn == "" {
-		s.Warn = "description trop longue : tronquée à 1 536 caractères dans la liste des skills"
+		s.Warn = L("srv.skills.descTooLong")
 	}
 	s.Manual, _ = boolField(m, "disable-model-invocation")
 	if ui, set := boolField(m, "user-invocable"); set {
@@ -186,7 +186,7 @@ func describeSkill(s *Skill, text string) {
 	}
 	s.Tools = textField(m, "allowed-tools")
 	if s.Warn == "" && !strings.HasPrefix(text, "---\n") && strings.Contains(text[:min(len(text), 400)], "\nname:") {
-		s.Warn = skillLateYAML
+		s.Warn = skillLateYAML()
 	}
 }
 
@@ -270,7 +270,7 @@ func scanSkills(base, scope, project, plugin string, readonly bool, locks map[st
 		}
 		switch scope {
 		case "store":
-			s.Origin, s.Source = "store", "synchronisé depuis votre compte claude.ai"
+			s.Origin, s.Source = "store", L("srv.skills.synced")
 		case "plugin":
 			s.Origin, s.Source = "plugin", plugin
 		default:
@@ -336,7 +336,7 @@ func readSkill(key string) (string, []SkillFile, error) {
 		return "", nil, err
 	}
 	if len(b) > skillMaxBytes {
-		return "", nil, errors.New("SKILL.md trop gros")
+		return "", nil, terr("srv.skills.skillMdTropGros")
 	}
 	var files []SkillFile
 	fs.WalkDir(root.FS(), ".", func(p string, d fs.DirEntry, err error) error {
@@ -360,21 +360,21 @@ func saveSkill(key, text string, create bool) error {
 		return err
 	}
 	if readonly {
-		return errors.New("skill de plugin : lecture seule (copiez-le dans vos skills pour le modifier)")
+		return terr("srv.skills.skillDePluginLecture")
 	}
 	if len(text) > skillMaxBytes || strings.TrimSpace(text) == "" || !utf8.ValidString(text) {
-		return errors.New("texte vide, trop long ou invalide")
+		return terr("srv.skills.texteVideTropLong")
 	}
 	dir := filepath.Join(base, name)
 	if st, err := os.Lstat(dir); err == nil {
 		if create {
-			return errors.New("un skill de ce nom existe déjà")
+			return terr("srv.skills.unSkillDeCe")
 		}
 		if !st.IsDir() {
-			return errors.New("« " + name + " » n'est pas un dossier")
+			return terr("srv.skills.nEstPasUn", "A1", name)
 		}
 	} else if create && !skillNew.MatchString(name) {
-		return errors.New("nom invalide : minuscules, chiffres et tirets (64 caractères au plus)")
+		return terr("srv.skills.nomInvalideMinusculesChiffres")
 	}
 	if !create {
 		if old, _, err := readSkill(key); err == nil && old != text {
@@ -410,14 +410,14 @@ func removeSkill(key string) error {
 		return err
 	}
 	if readonly {
-		return errors.New("skill de plugin : lecture seule")
+		return terr("srv.skills.skillDePluginLecture2")
 	}
 	text, files, err := readSkill(key)
 	if err != nil {
 		return err
 	}
 	if len(files) > 1 {
-		return errors.New("ce skill contient d'autres fichiers que SKILL.md : supprimez son dossier à la main")
+		return terr("srv.skills.ceSkillContientD")
 	}
 	dir := filepath.Join(base, name)
 	if err := saveTrash("k/"+key, filepath.Join(dir, skillFile), "supprimé", text); err != nil {
@@ -447,18 +447,18 @@ func copySkill(key, to string) (string, error) {
 	case strings.HasPrefix(to, "p/") && safeDir(to[2:]):
 		dst = to + "/" + name
 	default:
-		return "", errors.New("destination invalide")
+		return "", terr("srv.memory.destinationInvalide")
 	}
 	dbase, dname, dro, err := skillBase(dst)
 	if err != nil || dro {
-		return "", errors.New("destination invalide")
+		return "", terr("srv.memory.destinationInvalide")
 	}
 	if dbase == base && dname == name {
-		return "", errors.New("déjà à cet endroit")
+		return "", terr("srv.memory.dejaACetEndroit")
 	}
 	target := filepath.Join(dbase, dname)
 	if _, err := os.Lstat(target); err == nil {
-		return "", errors.New("un skill de ce nom existe déjà à destination")
+		return "", terr("srv.skills.unSkillDeCe2")
 	}
 	src, err := os.OpenRoot(filepath.Join(base, name))
 	if err != nil {
@@ -476,14 +476,14 @@ func copySkill(key, to string) (string, error) {
 			return nil // dossiers (recréés à l'écriture), liens et fichiers spéciaux : ignorés
 		}
 		if n++; n > copyMaxFiles {
-			return errors.New("trop de fichiers (50 au plus) : copiez le dossier à la main")
+			return terr("srv.skills.tropDeFichiersAu")
 		}
 		b, err := fs.ReadFile(src.FS(), p)
 		if err != nil {
 			return err
 		}
 		if total += int64(len(b)); total > copyMaxBytes {
-			return errors.New("dossier trop gros (2 Mo au plus) : copiez-le à la main")
+			return terr("srv.skills.dossierTropGrosMo")
 		}
 		items = append(items, item{p, b})
 		return nil
@@ -521,11 +521,11 @@ Garde ce que contient déjà le fichier existant (sauf si la consigne le change)
 // skillDraft rédige ou révise un SKILL.md : la consigne, le texte actuel (key existant) et d'autres skills en référence.
 func skillDraft(model, instruction, key string, refs []string) (string, float64, error) {
 	if !slices.Contains(writeModels, model) {
-		return "", 0, errors.New("modèle inconnu")
+		return "", 0, terr("srv.memwrite.modeleInconnu")
 	}
 	instruction = strings.TrimSpace(instruction)
 	if instruction == "" || len(instruction) > 8<<10 || len(refs) > 5 {
-		return "", 0, errors.New("consigne vide ou trop longue, ou trop de références")
+		return "", 0, terr("srv.memwrite.consigneVideOuTrop")
 	}
 	var b strings.Builder
 	b.WriteString("Consigne : " + instruction + "\n")

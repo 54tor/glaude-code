@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -210,6 +211,37 @@ func TestTerrFollowsLangAndWraps(t *testing.T) {
 	}
 	if !errors.Is(e, base) {
 		t.Fatal("l'erreur enveloppée doit rester trouvable")
+	}
+}
+
+func TestImportSnippetsSkipsExistingInAnyLang(t *testing.T) {
+	use(t.TempDir())
+	for _, lang := range []string{"fr", "en"} {
+		setLangT(t, lang)
+		name := "doublon-" + lang + ".md"
+		files := []ImportFile{{name, []byte("contenu")}}
+		if done, _, err := importSnippets("", files, false); err != nil || len(done) != 1 {
+			t.Fatalf("%s : premier import %v %v", lang, done, err)
+		}
+		if done, skipped, err := importSnippets("", files, false); err != nil || len(done) != 0 || len(skipped) != 1 {
+			t.Fatalf("%s : second import %v %v %v", lang, done, skipped, err)
+		}
+	}
+}
+
+func TestMemorySkillMessagesLang(t *testing.T) {
+	for lang, want := range map[string]string{"fr": "skill invalide", "en": "invalid skill"} {
+		setLangT(t, lang)
+		if got := tr(lang, "srv.skills.skillInvalide", nil); got != want {
+			t.Errorf("%s : %q", lang, got)
+		}
+		if got := L("srv.memmeta.indexTooLong", "A1", 250, "A2", 200); !strings.Contains(got, "250") || !strings.Contains(got, "200") {
+			t.Errorf("%s : %q", lang, got)
+		}
+	}
+	setLangT(t, "en")
+	if got := L("srv.memmeta.stale"); got != "not modified for over six months" {
+		t.Fatal(got)
 	}
 }
 

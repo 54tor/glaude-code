@@ -3,14 +3,12 @@
 package main
 
 import (
-	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -45,13 +43,13 @@ func parseMeta(text string) (map[string]any, error) {
 	y, _, ok := frontMatter(text)
 	if !ok {
 		if strings.HasPrefix(text, "---\n") {
-			return nil, errors.New("front matter non fermé (ligne « --- » manquante)")
+			return nil, terr("srv.memmeta.frontMatterNonFerme")
 		}
 		return nil, nil
 	}
 	var m map[string]any
 	if err := yaml.Unmarshal([]byte(y), &m); err != nil {
-		return nil, errors.New("front matter invalide : " + cut(strings.ReplaceAll(err.Error(), "\n", " "), 120))
+		return nil, terr("srv.memmeta.frontMatterInvalide", "A1", cut(strings.ReplaceAll(err.Error(), "\n", " "), 120))
 	}
 	return m, nil
 }
@@ -68,20 +66,20 @@ func globsOf(m map[string]any) ([]string, error) {
 		for _, e := range v {
 			s, ok := e.(string)
 			if !ok || strings.TrimSpace(s) == "" {
-				return nil, errors.New("`paths:` doit contenir des motifs texte non vides")
+				return nil, terr("srv.memmeta.pathsDoitContenirDes")
 			}
 			out = append(out, strings.TrimSpace(s))
 		}
 	default:
-		return nil, errors.New("`paths:` doit être une liste de motifs")
+		return nil, terr("srv.memmeta.pathsDoitEtreUne")
 	}
 	for _, g := range out {
 		if !doublestar.ValidatePattern(g) {
-			return nil, errors.New("motif invalide : " + g)
+			return nil, terr("srv.memmeta.motifInvalide", "A1", g)
 		}
 	}
 	if len(out) == 0 {
-		return nil, errors.New("`paths:` est vide : la règle ne se chargerait jamais")
+		return nil, terr("srv.memmeta.pathsEstVideLa")
 	}
 	return out, nil
 }
@@ -222,7 +220,7 @@ func memHealth() []Issue {
 					p = filepath.Join(dir, p)
 				}
 				if _, err := os.Stat(p); err != nil {
-					issues = append(issues, Issue{Key: f.Key, Kind: "import", Msg: "import introuvable : @" + m[1]})
+					issues = append(issues, Issue{Key: f.Key, Kind: "import", Msg: L("srv.memmeta.importMissing", "A1", m[1])})
 				}
 			}
 		}
@@ -260,12 +258,12 @@ func memHealth() []Issue {
 		if err == nil {
 			if n := len(strings.Split(strings.TrimRight(idx, "\n"), "\n")); n > indexLines {
 				issues = append(issues, Issue{Key: ik, Kind: "index-long", Dir: p.Dir,
-					Msg: "l'index fait " + strconv.Itoa(n) + " lignes : au-delà de " + strconv.Itoa(indexLines) + ", Claude Code ne les charge pas"})
+					Msg: L("srv.memmeta.indexTooLong", "A1", n, "A2", indexLines)})
 			}
 			for _, m := range mdLink.FindAllStringSubmatch(idx, -1) {
 				listed[m[1]] = true
 				if !names[m[1]] {
-					issues = append(issues, Issue{Key: ik, Kind: "index-ligne", Dir: p.Dir, Msg: "l'index pointe vers « " + m[1] + " », qui n'existe pas"})
+					issues = append(issues, Issue{Key: ik, Kind: "index-ligne", Dir: p.Dir, Msg: L("srv.memmeta.indexDangling", "A1", m[1])})
 				}
 			}
 		}
@@ -273,10 +271,10 @@ func memHealth() []Issue {
 		for _, f := range entries {
 			slugs[strings.TrimSuffix(f.Name, ".md")] = true
 			if !listed[f.Name] {
-				issues = append(issues, Issue{Key: f.Key, Kind: "index-absent", Dir: p.Dir, Msg: "absent de MEMORY.md : Claude ne la verra pas"})
+				issues = append(issues, Issue{Key: f.Key, Kind: "index-absent", Dir: p.Dir, Msg: L("srv.memmeta.notInIndex")})
 			}
 			if time.Since(time.Unix(int64(f.Mtime), 0)) > staleAfter {
-				issues = append(issues, Issue{Key: f.Key, Kind: "perime", Msg: "non modifiée depuis plus de six mois"})
+				issues = append(issues, Issue{Key: f.Key, Kind: "perime", Msg: L("srv.memmeta.stale")})
 			}
 		}
 		for _, f := range entries {
@@ -286,7 +284,7 @@ func memHealth() []Issue {
 			}
 			for _, m := range wikiLink.FindAllStringSubmatch(text, -1) {
 				if !slugs[strings.TrimSuffix(strings.TrimSpace(m[1]), ".md")] {
-					issues = append(issues, Issue{Key: f.Key, Kind: "lien", Msg: "lien [[" + m[1] + "]] vers une entrée qui n'existe pas"})
+					issues = append(issues, Issue{Key: f.Key, Kind: "lien", Msg: L("srv.memmeta.brokenLink", "A1", m[1])})
 				}
 			}
 		}
@@ -297,7 +295,7 @@ func memHealth() []Issue {
 // memRepairIndex : retire de MEMORY.md les lignes qui pointent vers un fichier absent et y ajoute les entrées qui n'y sont pas.
 func memRepairIndex(dir string) (removed, added int, err error) {
 	if !safeDir(dir) {
-		return 0, 0, errors.New("dossier invalide")
+		return 0, 0, terr("srv.routes_sessions.dossierInvalide")
 	}
 	ik := "m/" + dir + "/MEMORY.md"
 	idx, _ := memRead(ik)
@@ -352,14 +350,14 @@ func memRepairIndex(dir string) (removed, added int, err error) {
 func memMatches(key, dir string) (files []string, total int, truncated bool, err error) {
 	f, ok := memFileByKey(key)
 	if !ok || len(f.Paths) == 0 {
-		return nil, 0, false, errors.New("cette règle n'est pas scopée")
+		return nil, 0, false, terr("srv.memmeta.cetteRegleNEst")
 	}
 	if !safeDir(dir) {
-		return nil, 0, false, errors.New("projet invalide")
+		return nil, 0, false, terr("srv.memmeta.projetInvalide")
 	}
 	cwd := projectCwd(dir)
 	if fi, e := os.Stat(cwd); cwd == "" || e != nil || !fi.IsDir() {
-		return nil, 0, false, errors.New("dossier du projet introuvable")
+		return nil, 0, false, terr("srv.memory.dossierDuProjetIntrouvable")
 	}
 	visited := 0
 	skip := map[string]bool{".git": true, "node_modules": true, "vendor": true, "dist": true, ".venv": true, "target": true}
@@ -409,7 +407,7 @@ func setPaths(text string, paths []string) (string, error) {
 		blk.WriteString("paths:\n")
 		for _, g := range paths {
 			if !doublestar.ValidatePattern(g) || strings.ContainsAny(g, "\n\"") {
-				return "", errors.New("motif invalide : " + g)
+				return "", terr("srv.memmeta.motifInvalide", "A1", g)
 			}
 			blk.WriteString("  - \"" + g + "\"\n")
 		}
@@ -451,7 +449,7 @@ var (
 // setType fixe metadata.type dans le front matter (créé au besoin), sans toucher aux autres champs ; "" retire le type.
 func setType(text, typ string) (string, error) {
 	if typ != "" && !slices.Contains(memTypes, typ) {
-		return "", errors.New("type inconnu : " + typ)
+		return "", terr("srv.memmeta.typeInconnu", "A1", typ)
 	}
 	y, body, ok := frontMatter(text)
 	if !ok {
@@ -526,7 +524,7 @@ func memSearch(q string) map[string]string {
 // memToggle : désactive une règle globale (x.md devient x.md.off, Claude ne la charge plus) ou la réactive.
 func memToggle(key string) (string, error) {
 	if !strings.HasPrefix(key, "g/rules/") {
-		return "", errors.New("seules les règles globales se désactivent")
+		return "", terr("srv.memmeta.seulesLesReglesGlobales")
 	}
 	base, rel, err := memResolve(key)
 	if err != nil {
@@ -542,7 +540,7 @@ func memToggle(key string) (string, error) {
 	}
 	defer r.Close()
 	if _, err := r.Stat(to); err == nil {
-		return "", errors.New("« " + to + " » existe déjà")
+		return "", terr("srv.memmeta.existeDeja", "A1", to)
 	}
 	if err := r.Rename(rel, to); err != nil {
 		return "", err
@@ -557,10 +555,10 @@ var fmScalar = regexp.MustCompile(`^(\s*[A-Za-z0-9_.-]+):[ \t]+(\S.*?)\s*$`)
 func fixFrontMatter(text string) (string, error) {
 	y, body, ok := frontMatter(text)
 	if !ok {
-		return "", errors.New("pas de front matter à corriger")
+		return "", terr("srv.memmeta.pasDeFrontMatter")
 	}
 	if _, err := parseMeta(text); err == nil {
-		return "", errors.New("le front matter est déjà valide")
+		return "", terr("srv.memmeta.leFrontMatterEst")
 	}
 	lines := strings.Split(strings.TrimRight(y, "\n"), "\n")
 	for i, l := range lines {
@@ -575,7 +573,7 @@ func fixFrontMatter(text string) (string, error) {
 	}
 	out := "---\n" + strings.Join(lines, "\n") + "\n---\n" + body
 	if _, err := parseMeta(out); err != nil {
-		return "", errors.New("pas de correction automatique possible : " + err.Error())
+		return "", terr("srv.memmeta.pasDeCorrectionAutomatique", "A1", err.Error())
 	}
 	return out, nil
 }
