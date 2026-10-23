@@ -18,7 +18,7 @@ func testThrottle(t *testing.T) (*throttle, *authStore, *time.Time) {
 }
 
 func TestBackoff(t *testing.T) {
-	th, _, _ := testThrottle(t)
+	th, _, clock := testThrottle(t)
 	want := map[int]time.Duration{2: 0, 3: time.Second, 4: 2 * time.Second, 8: 32 * time.Second}
 	for n := 1; n <= 8; n++ {
 		th.Fail("Alice", "10.0.0.1", "password")
@@ -28,6 +28,15 @@ func TestBackoff(t *testing.T) {
 				t.Fatalf("%d échecs : attente %v bloqué %v, voulu %v", n, got, blocked, w)
 			}
 		}
+	}
+	// Le délai court depuis le dernier échec.
+	*clock = clock.Add(31 * time.Second)
+	if got, _ := th.Check("alice", "10.0.0.1"); got != time.Second {
+		t.Fatalf("31 s après le 8e échec : %v", got)
+	}
+	*clock = clock.Add(time.Second)
+	if got, blocked := th.Check("alice", "10.0.0.1"); got != 0 || blocked {
+		t.Fatalf("délai écoulé : %v %v", got, blocked)
 	}
 	// Plafond, observé sur la clé ip: pour ne pas déclencher le verrou user:.
 	for n := 0; n < 20; n++ {

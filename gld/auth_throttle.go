@@ -59,20 +59,28 @@ func backoff(fails int64) time.Duration {
 }
 
 func (t *throttle) Check(user, ip string) (wait time.Duration, blocked bool) {
+	if wait, blocked = t.Pending(user, ip); blocked || wait > 0 {
+		return wait, blocked
+	}
+	return t.globalSlot(t.now()), false
+}
+
+// Pending est Check sans le plafond global : il sert à annoncer le Retry-After d'un échec sans consommer de place.
+func (t *throttle) Pending(user, ip string) (wait time.Duration, blocked bool) {
 	now := t.now()
 	cut := now.Add(-thWindow).Unix()
 	uk, ik, pk, mk := thKeys(user, ip)
 	kk := knownKey(user, ip)
-	rows, err := t.db.Query(`SELECT key, fails, first_at, locked_until FROM throttle WHERE key IN (?,?,?,?,?)`, uk, ik, pk, mk, kk)
+	rows, err := t.db.Query(`SELECT key, fails, first_at, locked_until, last_at FROM throttle WHERE key IN (?,?,?,?,?)`, uk, ik, pk, mk, kk)
 	if err != nil {
 		return thMaxDelay, true
 	}
-	type row struct{ fails, first, locked int64 }
+	type row struct{ fails, first, locked, last int64 }
 	got := map[string]row{}
 	for rows.Next() {
 		var k string
 		var r row
-		if err := rows.Scan(&k, &r.fails, &r.first, &r.locked); err != nil {
+		if err := rows.Scan(&k, &r.fails, &r.first, &r.locked, &r.last); err != nil {
 			rows.Close()
 			return thMaxDelay, true
 		}
@@ -101,11 +109,11 @@ func (t *throttle) Check(user, ip string) (wait time.Duration, blocked bool) {
 	if uLocked {
 		return min(time.Unix(u.locked, 0).Sub(now), thMaxDelay), true
 	}
-	wait = max(backoff(uFails), backoff(inWin(ik)), backoff(inWin(pk)))
-	if wait > 0 {
-		return wait, false
+	// Le délai court depuis le dernier échec : un nouvel essai après Retry-After est réellement vérifié.
+	left := func(k string, fails int64) time.Duration {
+		return max(0, backoff(fails)-now.Sub(time.Unix(got[k].last, 0)))
 	}
-	return t.globalSlot(now), false
+	return max(left(uk, uFails), left(ik, inWin(ik)), left(pk, inWin(pk))), false
 }
 
 func (t *throttle) globalSlot(now time.Time) time.Duration {
@@ -139,8 +147,9 @@ func (t *throttle) Fail(user, ip string, stage string) error {
 	defer tx.Rollback()
 	for _, k := range keys {
 		var fails int64
-		err := tx.QueryRow(`INSERT INTO throttle(key, fails, first_at, locked_until) VALUES (?1, 1, ?2, 0)
+		err := tx.QueryRow(`INSERT INTO throttle(key, fails, first_at, locked_until, last_at) VALUES (?1, 1, ?2, 0, ?2)
 ON CONFLICT(key) DO UPDATE SET
+  last_at = ?2,
   fails = CASE WHEN first_at <= ?3 THEN 1 ELSE fails + 1 END,
   first_at = CASE WHEN first_at <= ?3 THEN ?2 ELSE first_at END,
   locked_until = CASE WHEN ?1 LIKE 'user:%' AND (CASE WHEN first_at <= ?3 THEN 1 ELSE fails + 1 END) >= ?4
