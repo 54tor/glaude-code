@@ -285,7 +285,9 @@ func routesSessions(mux *http.ServeMux) {
 		}
 		// Pas de contexte lié à la requête : un navigateur qui se déconnecte ne doit pas
 		// interrompre une suppression en cours (sessions à moitié purgées).
+		sessionsMu.Lock()
 		n, spared, notes, err := purgeSessions(items)
+		sessionsMu.Unlock()
 		journal("rm %d session(s) : %d supprimée(s), %d épargnée(s) %v", len(items), n, spared, ids(items))
 		msg := rmSummary(n, spared)
 		if len(notes) > 0 {
@@ -301,7 +303,9 @@ func routesSessions(mux *http.ServeMux) {
 		if !ok {
 			return
 		}
+		sessionsMu.Lock()
 		n, err := reassign(items, to)
+		sessionsMu.Unlock()
 		journal("reassign %v vers %s : %v", ids(items), to, errOr(err))
 		if err != nil {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})

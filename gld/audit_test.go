@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -148,4 +150,30 @@ func TestCompteRafraichirEnPOST(t *testing.T) {
 	<-calls
 	usageWG.Wait()
 	status(t, h, "GET", "/account-refresh", "", 405)
+}
+
+// Deux mises à la corbeille simultanées, sur deux sessions distinctes, aboutissent toutes deux (verrou sessionsMu).
+func TestCorbeilleAjoutsConcurrents(t *testing.T) {
+	h, cfg, proj := web(t)
+	put(t, filepath.Join(cfg, "projects", "-p", id2+".jsonl"), `{"type":"user","cwd":"`+proj+`","message":{"content":"x"}}`+"\n", old)
+	var wg sync.WaitGroup
+	for _, id := range []string{id1, id2} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			r := httptest.NewRequest("POST", "/session-trash-add", strings.NewReader(`{"items":[{"dir":"-p","id":"`+id+`"}]}`))
+			r.Host = testHost
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if !strings.Contains(w.Body.String(), `"ok":true`) {
+				t.Errorf("%s : %s", id, w.Body.String())
+			}
+		}()
+	}
+	wg.Wait()
+	for _, id := range []string{id1, id2} {
+		if _, err := os.Stat(filepath.Join(cfg, "gld-web-trash", "sessions", id, id+".jsonl")); err != nil {
+			t.Errorf("%s absente de la corbeille", id)
+		}
+	}
 }

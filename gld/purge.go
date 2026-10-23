@@ -15,10 +15,17 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 var snapRe = regexp.MustCompile(`snapshot-[a-zA-Z]+-[0-9]+-[a-zA-Z0-9]+\.sh`)
+
+// sessionsMu sérialise les mutations de sessions (suppression, corbeille, restauration, réassignation, expiration) : deux
+// requêtes simultanées ne doivent pas déplacer ou purger les mêmes fichiers, ni réécrire history.jsonl en même temps.
+// Il se prend dans les handlers et la boucle de fond, jamais dans les fonctions internes, qui s'appellent entre elles
+// (purgeTrashed → restoreTrashed → purgeSessions).
+var sessionsMu sync.Mutex
 
 // liveSessions : ids des sessions vivantes, nil si indéterminé (remplaçable dans les tests).
 var liveSessions = alive
