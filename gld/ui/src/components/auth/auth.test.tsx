@@ -256,6 +256,28 @@ describe("propriétaire des données locales", () => {
     expect(localStorage.getItem("gld.owner")).toBe("alice")
   })
 
+  it("autre onglet déjà connecté au nouveau compte : les données en mémoire du précédent sont effacées", async () => {
+    seed("bob")
+    setDraft("s1", { text: "secret d'alice en mémoire" })
+    setAuth({ owner: "alice" })
+    server({ "/auth/me": me("bob"), "/homes": { body: { current: "", homes: [] } } })
+    await boot()
+    expect(draftOf("s1").text).toBe("")
+    for (const k of userKeys) expect(localStorage.getItem(k)).toBeNull()
+    expect(getAuth().owner).toBe("bob")
+    expect(localStorage.getItem("gld.owner")).toBe("bob")
+  })
+
+  it("même compte dans l'onglet et en stockage : données en mémoire et stockées gardées", async () => {
+    seed("alice")
+    setDraft("s1", { text: "brouillon d'alice" })
+    setAuth({ owner: "alice" })
+    server({ "/auth/me": me("alice"), "/homes": { body: { current: "", homes: [] } } })
+    await boot()
+    expect(draftOf("s1").text).toBe("brouillon d'alice")
+    for (const k of userKeys) expect(localStorage.getItem(k)).not.toBeNull()
+  })
+
   it("mode ouvert : rien lu, rien écrit, rien effacé", async () => {
     seed()
     server({ "/auth/me": { status: 404 } })
