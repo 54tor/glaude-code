@@ -7,6 +7,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,6 +20,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -41,7 +44,11 @@ var childToken = os.Getenv(childTokenEnv)
 type Home struct {
 	Name string `json:"name"`
 	Dir  string `json:"dir"` // dossier de configuration (celui qui contient projects/)
+	// ID est la clé des droits (home_acl) : stable au renommage, jamais réattribué à un nouveau home du même nom.
+	ID string `json:"id,omitempty"`
 }
+
+const mainHomeID = "main"
 
 type homeProc struct {
 	dir   string
@@ -62,7 +69,10 @@ var (
 
 func homesFile() string { return filepath.Join(cfgDir(), "gld-web-homes.json") }
 
-func loadHomes() []Home {
+// homesFileMu sérialise les écritures du fichier : deux attributions d'identifiant concurrentes en donneraient deux différents.
+var homesFileMu sync.Mutex
+
+func readHomes() []Home {
 	b, err := os.ReadFile(homesFile())
 	if err != nil {
 		return []Home{}
@@ -72,6 +82,53 @@ func loadHomes() []Home {
 		return []Home{}
 	}
 	return st.Homes
+}
+
+// loadHomes attribue et enregistre un identifiant aux homes d'un fichier antérieur qui n'en ont pas.
+func loadHomes() []Home {
+	hs := readHomes()
+	if !slices.ContainsFunc(hs, func(h Home) bool { return h.ID == "" }) {
+		return hs
+	}
+	homesFileMu.Lock()
+	defer homesFileMu.Unlock()
+	hs = readHomes()
+	changed := false
+	for i := range hs {
+		if hs[i].ID == "" {
+			hs[i].ID, changed = newHomeID(), true
+		}
+	}
+	if changed {
+		if err := writeHomes(hs); err != nil {
+			journal("homes : identifiants non enregistrés : %v", err)
+		}
+	}
+	return hs
+}
+
+func newHomeID() string {
+	b := make([]byte, 8)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+func writeHomes(hs []Home) error {
+	b, _ := json.MarshalIndent(map[string]any{"homes": hs}, "", "  ")
+	tmp := homesFile() + ".tmp"
+	if err := writeSynced(tmp, b, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, homesFile())
+}
+
+// homeIDFor : "" désigne le home principal ; un home nommé « main » garde son propre identifiant.
+func homeIDFor(name string) (string, bool) {
+	if name == "" {
+		return mainHomeID, true
+	}
+	h, ok := homeByName(name)
+	return h.ID, ok && h.ID != ""
 }
 
 // saveHomes valide la liste puis remplace le fichier (écriture atomique).
@@ -95,12 +152,27 @@ func saveHomes(hs []Home) error {
 	if len(hs) > 20 {
 		return terr("srv.homes.tropDeDossiersDe")
 	}
-	b, _ := json.MarshalIndent(map[string]any{"homes": hs}, "", "  ")
-	tmp := homesFile() + ".tmp"
-	if err := writeSynced(tmp, b, 0o600); err != nil {
-		return err
+	homesFileMu.Lock()
+	defer homesFileMu.Unlock()
+	// Un identifiant fourni n'est gardé que s'il existe déjà : un client ne peut pas reprendre celui d'un home supprimé.
+	byID, byName := map[string]bool{}, map[string]string{}
+	for _, h := range readHomes() {
+		if h.ID != "" {
+			byID[h.ID], byName[h.Name] = true, h.ID
+		}
 	}
-	return os.Rename(tmp, homesFile())
+	used := map[string]bool{}
+	for i := range hs {
+		h := &hs[i]
+		if !byID[h.ID] || used[h.ID] {
+			h.ID = byName[h.Name]
+		}
+		if h.ID == "" || used[h.ID] {
+			h.ID = newHomeID()
+		}
+		used[h.ID] = true
+	}
+	return writeHomes(hs)
 }
 
 func homeByName(name string) (Home, bool) {
@@ -272,11 +344,22 @@ func stopHomes() {
 // withHomes : les requêtes d'un navigateur qui a choisi un autre dossier vont à l'enfant correspondant ; /homes* reste local.
 func withHomes(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		g := gateFrom(r)
+		if g != nil && g.local { // routes de la passerelle (connexion, admin, statiques) : jamais relayées
+			next.ServeHTTP(w, r)
+			return
+		}
 		if name := homeFrom(r); name != "" && !strings.HasPrefix(r.URL.Path, "/homes") {
 			p, err := homeProxy(name)
-			if err != nil { // dossier retiré ou enfant en panne : retour au dossier courant
-				http.SetCookie(w, &http.Cookie{Name: homeCookie, Path: "/", MaxAge: -1})
+			if err != nil {
 				journal("homes %s : %v", name, err)
+				// Garde active : le droit a été vérifié pour ce home, servir un autre home le contournerait.
+				if g != nil || gateActive() {
+					writeJSON(w, 503, map[string]any{"ok": false, "out": err.Error()})
+					return
+				}
+				// dossier retiré ou enfant en panne : retour au dossier courant
+				http.SetCookie(w, &http.Cookie{Name: homeCookie, Path: "/", MaxAge: -1})
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -315,11 +398,18 @@ func routesHomes(mux *http.ServeMux) {
 			Home
 			Running bool `json:"running"`
 		}
+		g := gateFrom(r)
 		rows := []row{}
 		for _, h := range loadHomes() {
-			rows = append(rows, row{h, running[h.Name]})
+			if g.homeAllowed(h.ID) {
+				rows = append(rows, row{h, running[h.Name]})
+			}
 		}
-		writeJSON(w, 200, map[string]any{"current": cur, "main": cfgDir(), "homes": rows})
+		main := cfgDir()
+		if !g.homeAllowed(mainHomeID) {
+			main = ""
+		}
+		writeJSON(w, 200, map[string]any{"current": cur, "main": main, "mainId": mainHomeID, "homes": rows})
 	})
 	mux.HandleFunc("POST /homes-save", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Homes []Home }

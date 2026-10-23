@@ -65,7 +65,14 @@ func (s *authStore) NewSession(userID int64, ip, ua string) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
-func (s *authStore) Session(cookie string) (*Principal, error) {
+func (s *authStore) Session(cookie string) (*Principal, error) { return s.session(cookie, true) }
+
+// SessionPassive valide sans prolonger la fenêtre d'inactivité : un onglet qui sonde seul ne garde pas la session vivante.
+func (s *authStore) SessionPassive(cookie string) (*Principal, error) {
+	return s.session(cookie, false)
+}
+
+func (s *authStore) session(cookie string, touch bool) (*Principal, error) {
 	raw, err := base64.RawURLEncoding.DecodeString(cookie)
 	if err != nil || len(raw) != 32 {
 		return nil, errNoSession
@@ -92,7 +99,7 @@ func (s *authStore) Session(cookie string) (*Principal, error) {
 	if err = s.guard(err); err != nil || u.Disabled {
 		return nil, errNoSession
 	}
-	if now-seen >= int64(sessTouch/time.Second) {
+	if touch && now-seen >= int64(sessTouch/time.Second) {
 		if _, err := s.db.Exec(`UPDATE sessions SET last_seen_at=?, expires_at=? WHERE id_hash=?`, now, min(now+int64(sessIdle/time.Second), abs), h[:]); err != nil {
 			journal("auth: touch session: %v", err)
 		}
