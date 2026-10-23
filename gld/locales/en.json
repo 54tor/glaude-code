@@ -1,6 +1,7 @@
 {
-  "cli.auth.help": "\ngld-auth (or gld auth) — protection of the authentication database.\n\n  gld auth managed-settings    prints Claude Code's managed-settings.json\n                               (deny rules, Bash hook, sandbox) for the administrator to install\n",
+  "cli.auth.help": "\ngld-auth (or gld auth) — protection of the authentication database.\n\n  gld auth managed-settings    prints Claude Code's managed-settings.json\n                               (deny rules, hook on Bash, PowerShell and Monitor, sandbox)\n                               for the administrator to install\n\nThe hook only blocks on failure with Claude Code 2.1.295 or later.\n",
   "cli.auth.managedTarget": "install as root at: {{.A1}} (gld never writes it itself)",
+  "cli.auth.minVersion": "Claude Code 2.1.295 or later is required for a failing hook to block the command (onFailure); how older versions treat this field is not guaranteed.",
   "cli.guard.badInput": "gld: unreadable hook input, command refused",
   "cli.guard.denied": "gld: command refused, it targets gld's authentication database",
   "cli.main.authMode": "multi-user mode active: account sign-in is required; the token is only accepted as an Authorization: Bearer header.",

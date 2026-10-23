@@ -46,13 +46,31 @@ func guardDeny(authDir string) []string {
 	return out
 }
 
-// guardCommand : le hook en forme exec (programme + arguments, sans shell), donc sans guillemets à échapper.
-func guardCommand(authDir string) (string, []string) {
+func guardSelf() string {
 	self, err := os.Executable()
 	if err != nil {
-		self = "gld"
+		return "gld"
 	}
-	return self, []string{"_guard", authDir}
+	return self
+}
+
+// guardCommand : la ligne de commande du hook, en une chaîne (la forme exec, command + args, n'existe que dans les
+// versions récentes de Claude Code ; une plus ancienne lancerait le binaire seul et laisserait tout passer).
+func guardCommand(authDir string) string {
+	return hookCommandLine(guardSelf(), authDir, runtime.GOOS == "windows")
+}
+
+// hookCommandLine : sous Windows, le hook passe par Git Bash : barres obliques et guillemets doubles, où $, ` et "
+// restent à échapper.
+func hookCommandLine(self, authDir string, windows bool) string {
+	q := shq
+	if windows {
+		q = func(s string) string {
+			s = strings.ReplaceAll(s, `\`, "/")
+			return `"` + strings.NewReplacer(`"`, `\"`, "$", `\$`, "`", "\\`").Replace(s) + `"`
+		}
+	}
+	return q(self) + " _guard " + q(authDir)
 }
 
 // guardTools : les outils de Claude qui exécutent une commande shell reçue dans tool_input.command.
@@ -60,13 +78,12 @@ var guardTools = []string{"Bash", "PowerShell", "Monitor"}
 
 // guardSettings : le contenu du fichier managed-settings.json (ou de --settings) qui protège authDir.
 func guardSettings(authDir string) map[string]any {
-	cmd, args := guardCommand(authDir)
 	return map[string]any{
 		"permissions": map[string]any{"deny": guardDeny(authDir)},
 		"hooks": map[string]any{"PreToolUse": []any{map[string]any{
 			"matcher": strings.Join(guardTools, "|"),
 			// Un hook qui échoue (binaire déplacé, délai dépassé) bloque la commande au lieu de la laisser passer.
-			"hooks": []any{map[string]any{"type": "command", "command": cmd, "args": args, "onFailure": "block"}},
+			"hooks": []any{map[string]any{"type": "command", "command": guardCommand(authDir), "onFailure": "block"}},
 		}}},
 		// Appliqué par l'OS seulement quand le bac à sable de Claude Code est activé (sandbox.enabled).
 		"sandbox": map[string]any{"filesystem": map[string]any{"denyRead": []string{authDir}, "denyWrite": []string{authDir}}},
@@ -83,16 +100,13 @@ func guardNorm(s string) string {
 // guardHook : refuse une commande Bash qui cite la base, la clé ou le dossier d'authentification, ou lance sqlite.
 // ponytail: heuristique sur le texte, sans évaluer le shell ; variables, jokers, encodages ou scripts la contournent.
 func guardHook(cmd string, authDir string) (deny bool) {
-	c := guardNorm(cmd)
-	if sqliteRe.MatchString(c) {
+	// Deux lectures : barres obliques inverses retirées (au\th.db) ou lues comme séparateurs (C:\Users\...).
+	cs := []string{guardNorm(cmd), guardNorm(strings.ReplaceAll(cmd, `\`, "/"))}
+	if sqliteRe.MatchString(cs[0]) || strings.Contains(cs[0], "gld_auth_dir") {
 		return true
 	}
-	for _, n := range []string{"auth.db", "auth.key", "gld_auth_dir"} {
-		if strings.Contains(c, n) {
-			return true
-		}
-	}
-	var paths []string
+	// -wal, -shm et -journal : les fichiers annexes de SQLite contiennent aussi les données.
+	paths := []string{"auth.db", "auth.key", "auth.db-wal", "auth.db-shm", "auth.db-journal"}
 	if authDir != "" {
 		paths = append(paths, authDir)
 		if home, err := os.UserHomeDir(); err == nil && home != "" {
@@ -109,14 +123,21 @@ func guardHook(cmd string, authDir string) (deny bool) {
 		paths = append(paths, v)
 	}
 	for _, n := range paths {
-		if n = strings.TrimRight(guardNorm(n), "/"); n != "" && containsPath(c, n) {
-			return true
+		n = strings.TrimRight(guardNorm(strings.ReplaceAll(n, `\`, "/")), "/")
+		for _, c := range cs {
+			if n != "" && containsPath(c, n) {
+				return true
+			}
 		}
 	}
 	return false
 }
 
+const nameChars = "abcdefghijklmnopqrstuvwxyz0123456789_-"
+
 // containsPath : n apparaît dans c suivi d'une fin de chemin (/srv/gld vise /srv/gld/x, pas /srv/gld-backups).
+// Windows ignore les points finaux (auth.db. est auth.db) : un point ne sépare un autre nom que suivi d'un
+// caractère de nom (auth.db.bak). « : » (flux NTFS, auth.db::$DATA) est une fin de chemin.
 func containsPath(c, n string) bool {
 	for i := 0; ; {
 		j := strings.Index(c[i:], n)
@@ -124,7 +145,14 @@ func containsPath(c, n string) bool {
 			return false
 		}
 		end := i + j + len(n)
-		if end == len(c) || !strings.ContainsRune("abcdefghijklmnopqrstuvwxyz0123456789_.-", rune(c[end])) {
+		switch {
+		case end == len(c):
+			return true
+		case c[end] == '.':
+			if end+1 == len(c) || !strings.ContainsRune(nameChars, rune(c[end+1])) {
+				return true
+			}
+		case !strings.ContainsRune(nameChars, rune(c[end])):
 			return true
 		}
 		i += j + 1
@@ -182,7 +210,7 @@ func managedInstalled() bool {
 				Matcher string
 				Hooks   []struct {
 					Command string
-					Args    []string
+					Args    []string // forme exec, générée par une version précédente de gld
 				}
 			}
 		} `json:"hooks"`
@@ -195,10 +223,11 @@ func managedInstalled() bool {
 			return false
 		}
 	}
-	cmd, args := guardCommand(dir)
+	line, self, args := guardCommand(dir), guardSelf(), []string{"_guard", dir}
 	for _, g := range m.Hooks.PreToolUse {
 		for _, h := range g.Hooks {
-			if slices.Contains(strings.Split(g.Matcher, "|"), "Bash") && h.Command == cmd && slices.Equal(h.Args, args) {
+			ok := (h.Args == nil && h.Command == line) || (h.Args != nil && h.Command == self && slices.Equal(h.Args, args))
+			if ok && slices.Contains(strings.Split(g.Matcher, "|"), "Bash") {
 				return true
 			}
 		}
@@ -278,5 +307,6 @@ func cliAuth(_ context.Context, args []string, out io.Writer) error {
 		return err
 	}
 	fmt.Fprintln(os.Stderr, L("cli.auth.managedTarget", "A1", managedPath))
+	fmt.Fprintln(os.Stderr, L("cli.auth.minVersion"))
 	return nil
 }
