@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 )
 
 // mcpPrefix : clé interne des serveurs MCP dans le décompte (l'octet nul ne peut pas figurer dans une commande Bash).
@@ -163,8 +165,22 @@ func tailLines(path string, n int64) [][]byte {
 	return lines
 }
 
-// permSuggestions regarde les commandes Bash des 40 sessions les plus récentes (les 3 derniers Mo de chacune).
-func permSuggestions(existing []string) []PermSuggest {
+// usageCounts : le décompte des commandes Bash et des serveurs MCP des 40 sessions les plus récentes (les 3 derniers Mo de
+// chacune). La lecture coûte plusieurs secondes : le résultat est gardé 60 s, le filtre par règles existantes se refait à chaque appel.
+var (
+	cmdUsageMu    sync.Mutex
+	cmdUsageAt    time.Time
+	cmdUsageRoot  string // le cache ne vaut que pour le dossier de transcripts lu
+	cmdUsageCount map[string]int
+	cmdUsageEx    map[string]string
+)
+
+func usageCounts() (map[string]int, map[string]string) {
+	cmdUsageMu.Lock()
+	defer cmdUsageMu.Unlock()
+	if cmdUsageCount != nil && cmdUsageRoot == root && time.Since(cmdUsageAt) < 60*time.Second {
+		return cmdUsageCount, cmdUsageEx
+	}
 	type fileT struct {
 		p string
 		t int64
@@ -182,10 +198,6 @@ func permSuggestions(existing []string) []PermSuggest {
 	sort.Slice(files, func(i, j int) bool { return files[i].t > files[j].t })
 	if len(files) > 40 {
 		files = files[:40]
-	}
-	have := map[string]bool{}
-	for _, r := range existing {
-		have[r] = true
 	}
 	counts := map[string]int{}
 	example := map[string]string{}
@@ -232,6 +244,17 @@ func permSuggestions(existing []string) []PermSuggest {
 				}
 			}
 		}
+	}
+	cmdUsageCount, cmdUsageEx, cmdUsageAt, cmdUsageRoot = counts, example, time.Now(), root
+	return counts, example
+}
+
+// permSuggestions regarde les commandes Bash des 40 sessions les plus récentes (les 3 derniers Mo de chacune).
+func permSuggestions(existing []string) []PermSuggest {
+	counts, example := usageCounts()
+	have := map[string]bool{}
+	for _, r := range existing {
+		have[r] = true
 	}
 	var out []PermSuggest
 	for p, n := range counts {
