@@ -551,3 +551,38 @@ func TestUserCLIGrantHomeName(t *testing.T) {
 		t.Fatal("droit écrit sous le nom au lieu de l'identifiant")
 	}
 }
+
+// Restaurer un snippet ou un skill depuis la corbeille recrée du contenu exécutable : config_write exigé.
+func TestGateTrashRestoreNeedsConfig(t *testing.T) {
+	g := newGateRig(t)
+	ids := map[string]string{}
+	for _, k := range []string{"s/u/x.md", "k/outil/SKILL.md", "m/projet/note.md", "z/inconnu"} {
+		if err := saveTrash(k, "/p", "supprimé", "texte"); err != nil {
+			t.Fatal(err)
+		}
+		for _, it := range trashList() {
+			if it.Key == k {
+				ids[k] = it.ID
+			}
+		}
+	}
+	mw := g.user(t, "memoire", false)
+	g.grant(t, mw, "", RightMemWrite)
+	cw := g.user(t, "reglages", false)
+	g.grant(t, cw, "", RightMemWrite, RightConfigWrite)
+	for _, c := range []struct {
+		u    *gateUser
+		key  string
+		code int
+	}{
+		{&mw, "s/u/x.md", 403}, {&mw, "k/outil/SKILL.md", 403}, {&mw, "z/inconnu", 403}, {&mw, "m/projet/note.md", 200},
+		{&cw, "s/u/x.md", 200}, {&cw, "k/outil/SKILL.md", 200},
+	} {
+		if w := g.do("POST", "/trash-restore", c.u, "", `{"ID":"`+ids[c.key]+`"}`); w.Code != c.code {
+			t.Errorf("%s : %d", c.key, w.Code)
+		}
+	}
+	if w := g.do("POST", "/trash-restore", &mw, "", `{"ID":"../x"}`); w.Code != 403 {
+		t.Errorf("identifiant hors corbeille : %d", w.Code)
+	}
+}
