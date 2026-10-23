@@ -464,15 +464,28 @@ export function useAppActions(c: {
       }),
     remove: (items, what, after) =>
       setAsk({
-        title: "Supprimer définitivement ?",
+        title: "Mettre à la corbeille ?",
         rows: items.map((x) => x.id),
         removes: true,
-        body: `${what}${items.some((x) => live.has(x.id)) ? "\n\nLes sessions ouvertes seront d'abord fermées." : ""}\n\nSuppression définitive : transcript, sous-agents et fichiers associés.`,
-        confirm: "Supprimer",
-        run: () => {
+        body: `${what}${items.some((x) => live.has(x.id)) ? "\n\nLes sessions ouvertes seront d'abord fermées." : ""}\n\nLes sessions restent restaurables 30 jours (menu de la barre latérale : Corbeille).`,
+        confirm: "Mettre à la corbeille",
+        run: async () => {
           after?.()
           unpick(items)
-          act("/rm?close=1", { items }, "Suppression en cours…")
+          const r = await api.post("/session-trash-add?close=1", { items })
+          await reload()
+          if (!r.ok) return void toast.error(r.out)
+          toast.success(r.out.split("\n")[0], {
+            action: {
+              label: "Annuler",
+              onClick: async () => {
+                const b = await api.post("/session-trash-restore", { ids: items.map((x) => x.id) })
+                ;(b.ok ? toast.success : toast.error)(b.out.split("\n")[0])
+                await reload()
+              },
+            },
+            duration: 8000,
+          })
         },
       }),
   }

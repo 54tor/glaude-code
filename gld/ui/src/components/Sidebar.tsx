@@ -1,4 +1,6 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
+import { SessionTrash } from "./SessionTrash"
+import { Trash2 } from "lucide-react"
 import { AlarmClock, ChevronRight, FolderPlus, Repeat, Coins, FolderOpen, Star, Brain, SlidersHorizontal, Zap, Flame, History, Clock, FileText, Inbox, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
 import { size, tilde } from "@/lib/format"
 import type { Choice } from "@/lib/models"
@@ -153,6 +155,7 @@ export type SidebarProps = {
   route: Route
   go: (r: Route) => void
   counts: { recent: number; all: number; active: number }
+  reload: () => Promise<void>
   carousel: { n: number; on: boolean; start: () => void } // sessions en attente de réponse, parcourues l'une après l'autre
   favRows: Row[] // sessions favorites
   favGroups: { vg: VGroup; key: string }[] // groupes favoris, avec la clé de leur dossier
@@ -174,6 +177,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
   const r = p.route
   const link = (to: Route) => ({ to, onClick: () => p.go(to) })
   const a = useActions()
+  const [trashOpen, setTrashOpen] = useState(false)
   const { open, onClose } = p
   useEffect(() => {
     if (!open) return
@@ -183,6 +187,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
   }, [open, onClose])
   return (
     <>
+      <SessionTrash open={trashOpen} onClose={() => setTrashOpen(false)} reload={p.reload} />
       {/* Mobile : le menu est un tiroir par-dessus la page ; sur grand écran il reste une colonne fixe. */}
       <div className={cn("fixed inset-0 z-30 bg-black/40 transition-opacity md:hidden", p.open ? "opacity-100" : "pointer-events-none opacity-0")} onClick={p.onClose} aria-hidden="true" />
       <aside
@@ -259,6 +264,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           />
           <NavItem icon={Flame} label="En cours et cache chaud" n={p.counts.active} active={r.kind === "active"} {...link({ kind: "active" })} />
           <NavItem icon={Inbox} label="Toutes les sessions" n={p.counts.all} active={r.kind === "all"} {...link({ kind: "all" })} />
+          <NavItem icon={Trash2} label="Corbeille des sessions" active={false} onClick={() => setTrashOpen(true)} />
           <NavItem icon={History} label="Sessions sauvegardées" active={r.kind === "tabs"} {...link({ kind: "tabs" })} />
           <NavItem icon={Zap} label="Skills" active={r.kind === "skills"} {...link({ kind: "skills", key: "" })} />
           <NavItem icon={SlidersHorizontal} label="Configuration" active={r.kind === "config"} {...link({ kind: "config", tab: "" })} />

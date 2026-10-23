@@ -276,6 +276,7 @@ export default function App() {
           route={route}
           go={(r) => (setNavOpen(false), go(r))}
           counts={{ recent: recent.length, all: view.rows.length, active: active.length }}
+          reload={reload}
           favRows={favRows}
           favGroups={favGroups}
           groupCount={(x) => groupRows(x).length}
