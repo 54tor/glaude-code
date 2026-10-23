@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -57,18 +59,27 @@ func main() {
 	}
 	hosts["127.0.0.1:"+port], hosts["localhost:"+port], hosts[net.JoinHostPort(*listen, port)] = true, true, true
 
-	h := handler()
 	local := isLoopback(*listen)
 	token, generated, err := takeToken(local)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	// Une base illisible ou une clé qui ne la déchiffre pas arrête le serveur : repartir en mode ouvert contournerait les comptes.
+	if authSt, err = startAuth(); err != nil {
+		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.authRefused", map[string]any{"A1": err.Error()}))
+		os.Exit(1)
+	}
+	if authMode(authSt) {
+		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.authMode", nil))
+	}
+	tokenPrincipal = tokenForChildren(token)
+	h := handler()
 	if !local {
 		openHosts = true // hors localhost, le Host n'est plus limité à l'adresse locale : le jeton remplace la garde
 	}
 	if token != "" { // obligatoire hors localhost ; en local, exigé dès que GLD_WEB_TOKEN est fixé (machine partagée)
-		h = withToken(token, h)
+		h = withTokenOpen(token, h)
 	}
 	srv := newServer(net.JoinHostPort(*listen, port), h)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -109,6 +120,39 @@ func main() {
 	<-done
 }
 
+// authSt : base des comptes de la passerelle ; nil dans un home enfant (et dans les tests qui ne l'ouvrent pas).
+var authSt *authStore
+
+// startAuth ouvre la base des comptes ; jamais dans un enfant, qui ne sert que sa passerelle.
+func startAuth() (*authStore, error) {
+	if childToken != "" {
+		return nil, nil
+	}
+	return openAuthStore()
+}
+
+// authMode : jugé à chaque requête, pour qu'un premier compte créé par la ligne de commande s'applique sans redémarrage.
+func authMode(s *authStore) bool { return s != nil && childToken == "" && s.HasUsers() }
+
+var xffWarned sync.Once
+
+// warnXFF : derrière un proxy non déclaré, tous les clients partagent son adresse (limitation des essais, adresses connues).
+func warnXFF(r *http.Request) {
+	if os.Getenv("GLD_TRUSTED_PROXIES") != "" || r.Header.Get("X-Forwarded-For") == "" {
+		return
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	if a, err := netip.ParseAddr(host); err == nil && (a.IsLoopback() || a.IsPrivate()) {
+		xffWarned.Do(func() {
+			fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.xffUntrusted", nil))
+			journal("auth: X-Forwarded-For reçu de %s sans GLD_TRUSTED_PROXIES", host)
+		})
+	}
+}
+
 // handler : toutes les routes, derrière les gardes Host et CSRF.
 func handler() http.Handler {
 	mux := http.NewServeMux()
@@ -139,6 +183,13 @@ func handler() http.Handler {
 	// Anti DNS-rebinding : seul le Host local est servi (sauf écoute hors localhost, où le jeton le remplace).
 	// Anti CSRF : http.CrossOriginProtection (bibliothèque standard) refuse toute requête modifiante venue d'une autre origine.
 	// Le choix de dossier de configuration (homes.go) vient après ces gardes : la passerelle juge la requête d'origine avant de la transmettre.
+	// En mode multi-utilisateur, le garde des comptes s'insère entre ces gardes et le choix du dossier.
+	st := authSt
+	var gated http.Handler
+	if st != nil {
+		routesAuth(mux, st, newThrottle(st.db))
+		gated = http.NewCrossOriginProtection().Handler(authGate(mux, st, withAuthWatch(withHomes(mux))))
+	}
 	guarded := http.NewCrossOriginProtection().Handler(withHomes(mux))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !openHosts && !hosts[r.Host] {
@@ -147,6 +198,11 @@ func handler() http.Handler {
 		}
 		if !childAuthorized(r) {
 			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if gated != nil && authMode(st) {
+			warnXFF(r)
+			gated.ServeHTTP(w, r)
 			return
 		}
 		guarded.ServeHTTP(w, r)

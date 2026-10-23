@@ -158,6 +158,13 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	chatRun[req.ID] = cmd
 	chatMu.Unlock()
+	// Session révoquée ou droit retiré (withAuthWatch) : le tour s'arrête, contrairement à un onglet fermé.
+	stopRevoked := context.AfterFunc(r.Context(), func() {
+		if errors.Is(context.Cause(r.Context()), errAuthRevoked) {
+			cancel()
+		}
+	})
+	defer stopRevoked()
 	journal("chat %s mode=%q options=%v ignorées=%v (%d caractères)", req.ID, req.Mode, flags, ignored, len(req.Prompt))
 	defer func() {
 		cancel()

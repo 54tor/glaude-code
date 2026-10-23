@@ -92,6 +92,30 @@ func withToken(token string, next http.Handler) http.Handler {
 	})
 }
 
+// withTokenOpen : en mode ouvert, withToken tel quel. En mode multi-utilisateur, le login remplace le jeton pour le navigateur :
+// ni cookie gld_token ni ?token=, le jeton ne vaut plus qu'en Bearer (tokenForChildren), jugé par le garde.
+func withTokenOpen(token string, next http.Handler) http.Handler {
+	tok := withToken(token, next)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if authMode(authSt) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		tok.ServeHTTP(w, r)
+	})
+}
+
+// tokenForChildren : principal du jeton, en en-tête Authorization seulement ; sans jeton configuré, aucun Bearer n'est valable.
+func tokenForChildren(token string) func(*http.Request) *Principal {
+	return func(r *http.Request) *Principal {
+		h, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if token == "" || !ok || !sameToken(h, token) {
+			return nil
+		}
+		return &Principal{Token: true}
+	}
+}
+
 // urlsFor : les adresses à ouvrir pour une écoute sur host:port (toutes les interfaces si host est « 0.0.0.0 » ou « :: »).
 func urlsFor(host, port, token string) []string {
 	hosts := []string{host}

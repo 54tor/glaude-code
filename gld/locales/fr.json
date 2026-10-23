@@ -1,9 +1,12 @@
 {
+  "cli.main.authMode": "mode multi-utilisateur actif : la connexion par compte est exigée ; le jeton ne vaut plus qu'en en-tête Authorization: Bearer.",
+  "cli.main.authRefused": "base des comptes inutilisable ({{.A1}}) : gld refuse de démarrer. Vérifier la clé maîtresse (GLD_AUTH_KEY, coffre-fort, auth.key) et les droits du dossier.",
   "cli.main.flagListen": "adresse d'écoute (défaut 127.0.0.1 ; 0.0.0.0 pour tout le réseau, avec un jeton)",
   "cli.main.flagVersion": "affiche la version et quitte",
   "cli.main.plainHTTP": "⚠ gld écoute sur {{.A1}} : accès protégé par un jeton, mais en HTTP clair.",
   "cli.main.preferTunnel": "  Préférez un tunnel (SSH, Tailscale) ou un proxy TLS ; ne l'exposez pas sur Internet.",
   "cli.main.stopped": "arrêt.",
+  "cli.main.xffUntrusted": "⚠ en-tête X-Forwarded-For reçu d'une adresse locale ou privée sans GLD_TRUSTED_PROXIES : tous les clients partagent l'adresse du proxy. Déclarer le proxy dans GLD_TRUSTED_PROXIES.",
   "cli.matin.automatic": "automatique",
   "cli.matin.backup": "sauvegarde : {{.A1}} du {{.A2}}, {{.A3}} session(s)",
   "cli.matin.help": "\ngld-matin — rouvre chaque sujet Claude d'un projet dans un onglet de terminal.\n\n  gld-matin                      onglets pour le projet courant\n  gld-matin -n                   dry-run : affiche, n'ouvre rien\n  gld-matin ~/Projets/autre      cible un autre projet\n  gld-matin --term tmux          force un lanceur (défaut : auto-détecté)\n  gld-matin --term list          liste les lanceurs disponibles ici\n  gld-matin --age 40 --min 0     élargit la fenêtre (jours) et le seuil (octets)\n  gld-matin --nommees            ignore les sessions sans nom explicite\n  gld-matin --id <uuid> [projet] rouvre cette seule session (sans filtre d'âge ni de taille)\n  gld-matin --args \"...\"         options ajoutées à claude (défaut : aucune, ou $GLD_MATIN_ARGS)\n  gld-matin --resume [nom]       rouvre les sessions de la dernière sauvegarde de gld\n                                 (ou de la sauvegarde manuelle de ce nom), ex. après un redémarrage\n  gld-matin --prompt \"...\" [projet]  ouvre une NOUVELLE session claude avec ce prompt\n                                 (avec --id : reprend cette session en lui envoyant ce message)\n\nUn sujet = une session Claude, désignée par son nom, sinon (marqué « ~ ») par son premier prompt.\n",
