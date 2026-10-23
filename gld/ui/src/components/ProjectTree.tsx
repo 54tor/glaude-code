@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next"
 import { setOpen, useOpen, useOpenState } from "@/hooks/useOpen"
 import { Check, ChevronRight, FolderInput, FolderMinus, Layers, MessageSquarePlus, Plus, SquareTerminal, Star, Tag, Trash2, TriangleAlert } from "lucide-react"
 import type { GitState, Group, Session, VGroup } from "@/lib/api"
@@ -12,6 +13,7 @@ import { useGit } from "@/hooks/useGit"
 
 // Clic droit sur un dossier de projet : actions sur ses propres sessions.
 export function ProjectItems({ g, ss = g.sessions, extra }: { g: Group; ss?: Session[]; extra?: React.ReactNode }) {
+  const { t } = useTranslation()
   const a = useActions()
   const own = ss.map((s) => ({ dir: s.dir, id: s.id }))
   return (
@@ -19,17 +21,17 @@ export function ProjectItems({ g, ss = g.sessions, extra }: { g: Group; ss?: Ses
       {extra}
       {!g.missing && own.length > 0 && (
         <ContextMenuItem onSelect={() => a.open({ dir: own[0].dir })}>
-          <SquareTerminal /> Reprendre les récentes
+          <SquareTerminal /> {t("shell.tree.resumeRecent")}
         </ContextMenuItem>
       )}
       {!g.missing && (
         <ContextMenuItem onSelect={() => a.newSession(g.project)}>
-          <MessageSquarePlus /> Nouvelle session…
+          <MessageSquarePlus /> {t("shell.tree.newSession")}
         </ContextMenuItem>
       )}
       <ContextMenuSub>
         <ContextMenuSubTrigger>
-          <Layers /> Projet
+          <Layers /> {t("shell.tree.project")}
         </ContextMenuSubTrigger>
         <ContextMenuSubContent className="w-56">
           {a.projects.map((p) => {
@@ -42,18 +44,18 @@ export function ProjectItems({ g, ss = g.sessions, extra }: { g: Group; ss?: Ses
           })}
           {a.projects.length > 0 && <ContextMenuSeparator />}
           <ContextMenuItem onSelect={() => a.projectActs.add(g.project, null)}>
-            <Plus /> Nouveau projet…
+            <Plus /> {t("shell.tree.newProject")}
           </ContextMenuItem>
         </ContextMenuSubContent>
       </ContextMenuSub>
       {own.length > 0 && (
         <>
           <ContextMenuItem onSelect={() => a.moveGroup(g, own)}>
-            <FolderInput /> Réassigner les {own.length} sessions…
+            <FolderInput /> {t("shell.tree.reassign", { n: own.length })}
           </ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem variant="destructive" onSelect={() => a.remove(own, `les ${own.length} session(s) de ${g.project}`)}>
-            <Trash2 /> Supprimer les {own.length} sessions
+          <ContextMenuItem variant="destructive" onSelect={() => a.remove(own, t("shell.tree.removeLabel", { n: own.length, project: g.project }))}>
+            <Trash2 /> {t("shell.tree.deleteAll", { n: own.length })}
           </ContextMenuItem>
         </>
       )}
@@ -61,7 +63,7 @@ export function ProjectItems({ g, ss = g.sessions, extra }: { g: Group; ss?: Ses
         <>
           {own.length > 0 && <ContextMenuSeparator />}
           <ContextMenuItem onSelect={() => a.removeDir(g.project)}>
-            <FolderMinus /> Retirer de la liste des dossiers
+            <FolderMinus /> {t("shell.tree.removeDir")}
           </ContextMenuItem>
         </>
       )}
@@ -80,6 +82,7 @@ type Props = {
 
 // Un groupe virtuel, affiché comme un sous-dossier de son projet (même retrait, place du chevron comprise).
 function GroupRow({ vg, n, depth, active, onGroup }: { vg: VGroup; n: Node; depth: number; active: boolean; onGroup: Props["onGroup"] }) {
+  const { t } = useTranslation()
   const a = useActions()
   return (
     <li>
@@ -88,7 +91,7 @@ function GroupRow({ vg, n, depth, active, onGroup }: { vg: VGroup; n: Node; dept
           <button
             onClick={() => onGroup(vg, n.key)}
             aria-current={active}
-            title={`Groupe « ${vg.name} » de ${n.g?.project ?? n.name}`}
+            title={t("shell.tree.groupTitle", { name: vg.name, project: n.g?.project ?? n.name })}
             className={cn(
               "flex h-8 w-full items-center gap-2 rounded-md pr-2 text-left text-sm transition-colors data-[state=open]:bg-muted",
               active ? "bg-accent font-medium text-accent-foreground" : "text-foreground/80 hover:bg-muted hover:text-foreground"
@@ -97,7 +100,7 @@ function GroupRow({ vg, n, depth, active, onGroup }: { vg: VGroup; n: Node; dept
           >
             <Tag className="size-4 shrink-0 text-violet-500" />
             <span className="truncate">{vg.name}</span>
-            {vg.fav && <Star className="size-3 shrink-0 fill-amber-400 text-amber-400" aria-label="favori" />}
+            {vg.fav && <Star className="size-3 shrink-0 fill-amber-400 text-amber-400" aria-label={t("shell.list.favorite")} />}
             <span className="ml-auto text-xs text-muted-foreground tabular-nums">{a.groupActs.rows(vg).length}</span>
           </button>
         </ContextMenuTrigger>
@@ -112,6 +115,7 @@ function GroupRow({ vg, n, depth, active, onGroup }: { vg: VGroup; n: Node; dept
 // Les dépôts git sous un dossier de sessions (sessions dans ~/php, dépôts dans ~/php/8.1, ~/php/8.2…) : un second niveau replié,
 // dont la ligne résume l'état (fichiers modifiés au total) ; cliquer l'ouvre.
 function RepoRows({ repos, status, depth, home, id }: { repos: string[]; status: Record<string, GitState>; depth: number; home: string; id: string }) {
+  const { t } = useTranslation()
   const [open, flip] = useOpen("r/" + id)
   const pad = (depth + 1) * 12 + 4
   return (
@@ -119,12 +123,12 @@ function RepoRows({ repos, status, depth, home, id }: { repos: string[]; status:
       <button
         onClick={flip}
         aria-expanded={open}
-        title={`${repos.length} dépôts git dans ce dossier`}
+        title={t("shell.tree.reposHint", { n: repos.length })}
         className="flex h-7 w-full items-center gap-1 rounded-md pr-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         style={{ paddingLeft: pad }}
       >
         <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-90")} />
-        <span className="truncate">{repos.length} dépôts</span>
+        <span className="truncate">{t("shell.tree.repos", { n: repos.length })}</span>
         <span className="ml-auto" />
         <GitMini states={repos.map((d) => status[d])} />
       </button>
@@ -154,6 +158,7 @@ function Item({
   label,
   leaf,
 }: Props & { n: Node; depth: number; label?: string; leaf?: boolean }) {
+  const { t } = useTranslation()
   const a = useActions()
   const git = useGit()
   const groups = n.g ? a.vgroups.filter((vg) => vg.project === n.g!.project) : []
@@ -179,7 +184,7 @@ function Item({
                 !kids && "invisible"
               )}
               onClick={() => toggle(n.key)}
-              aria-label={open ? "Replier" : "Déplier"}
+              aria-label={open ? t("shell.tree.collapse") : t("shell.tree.expand")}
               aria-expanded={open}
               tabIndex={kids ? 0 : -1}
             >
@@ -192,7 +197,7 @@ function Item({
               aria-current={active}
             >
               <span className="truncate">{label ?? n.name}</span>
-              {n.g?.missing && <TriangleAlert className="size-3.5 shrink-0 text-amber-500" aria-label="dossier introuvable" />}
+              {n.g?.missing && <TriangleAlert className="size-3.5 shrink-0 text-amber-500" aria-label={t("shell.tree.dirMissing")} />}
             </button>
             {n.g && <GitMini states={[git.status[n.g.project], ...repos.map((d) => git.status[d])]} />}
             {n.g && <SessionCount n={n.ss.length} active={sessionsOpen} />}

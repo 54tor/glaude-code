@@ -1,7 +1,7 @@
 import { FolderInput, Menu, MessageSquarePlus, MoreHorizontal, Settings, SquareTerminal, Trash2, TriangleAlert } from "lucide-react"
 import { Link } from "wouter"
+import { useTranslation } from "react-i18next"
 import type { Group, Item, VGroup } from "@/lib/api"
-import { plural } from "@/lib/sessionsView"
 import type { Route } from "@/lib/route"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -45,56 +45,58 @@ export function PageHeader({
   actions: Actions
   groupActs: GroupActions
 }) {
+  const { t } = useTranslation()
+  const ownSessions = t("shell.count.sessions", { count: own.length })
   return (
     <>
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-background px-3 py-3 md:px-6 md:py-4">
-        <Button variant="ghost" size="icon-sm" className="md:hidden" onClick={onMenu} aria-label="Ouvrir le menu" aria-controls="menu">
+        <Button variant="ghost" size="icon-sm" className="md:hidden" onClick={onMenu} aria-label={t("shell.header.openMenu")} aria-controls="menu">
           <Menu />
         </Button>
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-xl font-semibold tracking-tight">{title}</h2>
           <p className="truncate text-[13px] text-muted-foreground">
             {sub}
-            {qt && (route.kind === "recent" || route.kind === "all" || route.kind === "active" || route.kind === "group" || route.kind === "dir") && `, recherche « ${qt} »`}
+            {qt && (route.kind === "recent" || route.kind === "all" || route.kind === "active" || route.kind === "group" || route.kind === "dir") && t("shell.header.search", { q: qt })}
           </p>
         </div>
         {g && nGrouped > 0 && (
           <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground select-none hover:text-foreground">
             <Checkbox checked={!!hideGrouped} onCheckedChange={(c) => setHideGrouped(c === true ? "1" : "")} />
-            Masquer les sessions groupées ({nGrouped})
+            {t("shell.header.hideGrouped", { n: nGrouped })}
           </label>
         )}
         {g && (
           <Button variant="ghost" size="sm" asChild>
-            <Link href={`/configuration/projets?projet=${encodeURIComponent(g.project)}`} title="Réglages, permissions, hooks et MCP propres à ce projet">
-              <Settings /> Réglages
+            <Link href={`/configuration/projets?projet=${encodeURIComponent(g.project)}`} title={t("shell.header.settingsHint")}>
+              <Settings /> {t("shell.header.settings")}
             </Link>
           </Button>
         )}
         {g && !g.missing && (
-          <Button variant="outline" size="sm" onClick={() => actions.newSession(g.project)} title="Nouvelle session Claude dans ce dossier">
-            <MessageSquarePlus /> Nouvelle session
+          <Button variant="outline" size="sm" onClick={() => actions.newSession(g.project)} title={t("shell.header.newInDirHint")}>
+            <MessageSquarePlus /> {t("shell.header.newSession")}
           </Button>
         )}
         {g && !g.missing && (
-          <Button variant="outline" size="sm" onClick={() => actions.open({ dir: firstDir! })} title="Un onglet de terminal par session des 7 derniers jours">
-            <SquareTerminal /> Reprendre les récentes
+          <Button variant="outline" size="sm" onClick={() => actions.open({ dir: firstDir! })} title={t("shell.header.resumeRecentHint")}>
+            <SquareTerminal /> {t("shell.tree.resumeRecent")}
           </Button>
         )}
         {vg && rowCount > 0 && (
           <>
-            <Button variant="outline" size="sm" onClick={() => groupActs.prompt(vg)} title="Nouvelle session avec les références de ces sessions">
-              <MessageSquarePlus /> Nouvelle session
+            <Button variant="outline" size="sm" onClick={() => groupActs.prompt(vg)} title={t("shell.header.newWithRefsHint")}>
+              <MessageSquarePlus /> {t("shell.header.newSession")}
             </Button>
-            <Button variant="outline" size="sm" onClick={() => groupActs.open(vg)} title="Un onglet de terminal par session (hors sessions déjà ouvertes)">
-              <SquareTerminal /> Tout reprendre
+            <Button variant="outline" size="sm" onClick={() => groupActs.open(vg)} title={t("shell.header.resumeAllHint")}>
+              <SquareTerminal /> {t("shell.header.resumeAll")}
             </Button>
           </>
         )}
         {(g || vg) && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label={g ? "Actions du projet" : "Actions du groupe"}>
+              <Button variant="ghost" size="icon-sm" aria-label={g ? t("shell.header.projectActions") : t("shell.header.groupActions")}>
                 <MoreHorizontal />
               </Button>
             </DropdownMenuTrigger>
@@ -102,10 +104,10 @@ export function PageHeader({
               {g && (
                 <>
                   <DropdownMenuItem onSelect={() => actions.moveGroup(g, own)}>
-                    <FolderInput /> Réassigner les {plural(own.length)}…
+                    <FolderInput /> {t("shell.header.reassign", { sessions: ownSessions })}
                   </DropdownMenuItem>
-                  <DropdownMenuItem variant="destructive" onSelect={() => actions.remove(own, `les ${plural(own.length)} de ${g.project}`)}>
-                    <Trash2 /> Supprimer les {plural(own.length)} du projet
+                  <DropdownMenuItem variant="destructive" onSelect={() => actions.remove(own, t("shell.header.removeLabel", { sessions: ownSessions, project: g.project }))}>
+                    <Trash2 /> {t("shell.header.deleteAll", { sessions: ownSessions })}
                   </DropdownMenuItem>
                 </>
               )}
@@ -120,9 +122,9 @@ export function PageHeader({
       {g?.missing && (
         <div className="flex items-center gap-3 border-b bg-amber-500/10 px-6 py-3 text-sm">
           <TriangleAlert className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-          <p className="flex-1">Ce dossier n'existe plus : ses sessions ne peuvent pas être reprises tant qu'elles ne sont pas rattachées à un dossier existant.</p>
+          <p className="flex-1">{t("shell.header.missing")}</p>
           <Button size="sm" variant="outline" onClick={() => actions.moveGroup(g, own)}>
-            Réassigner…
+            {t("shell.header.reassignShort")}
           </Button>
         </div>
       )}

@@ -16,7 +16,7 @@ import { useShortcuts } from "@/hooks/useShortcuts"
 import { useWaitingNotice } from "@/hooks/useWaitingNotice"
 import { applyFont } from "@/lib/fonts"
 import { type Choice } from "@/lib/models"
-import { AUTO, buildView, byDate, groupKey, HOT, plural, WEEK } from "@/lib/sessionsView"
+import { AUTO, buildView, byDate, groupKey, HOT, WEEK } from "@/lib/sessionsView"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ActionsCtx, type Row } from "@/components/actions"
 import { Confirm, type Ask } from "@/components/Confirm"
@@ -47,7 +47,7 @@ export default function App() {
   const reading = params.get("s")
 
   const { data, setData, snips, now, reload } = useAppData()
-  useTranslation() // re-rend toute l'application quand la langue change
+  const { t } = useTranslation() // re-rend toute l'application quand la langue change
   const serverLang = data?.lang
   useEffect(() => setLang(resolveFront(serverLang, navigator.language)), [serverLang])
   const [picked, setPicked] = useState(() => new Set<string>())
@@ -159,7 +159,7 @@ export default function App() {
   const waitingRows = [...waiting].filter((id) => live.has(id)).map((id) => everyId.get(id)).filter((r): r is Row => !!r && now - r.s.mtime < HOT).sort((x, y) => x.s.mtime - y.s.mtime)
   const nextWaiting = () => waitingRows.find((r) => r.s.id !== reading)
   const startCarousel = () => {
-    if (!waitingRows.length) return void toast.info("Aucune session n'attend de réponse")
+    if (!waitingRows.length) return void toast.info(t("shell.app.noneWaiting"))
     setCarousel(true)
     read(waitingRows[0].s)
   }
@@ -168,7 +168,7 @@ export default function App() {
     if (n) read(n.s)
     else {
       setCarousel(false)
-      toast.info("Plus aucune session en attente")
+      toast.info(t("shell.app.noMoreWaiting"))
     }
   }
   // La session affichée par le carrousel a été supprimée (ou a disparu) : on passe à la suivante, ou on sort du mode.
@@ -240,40 +240,44 @@ export default function App() {
   if (route.kind === "recent") for (const r of recent) byProject.set(r.g.project, [...(byProject.get(r.g.project) ?? []), r])
 
   const title = {
-    recent: "Récentes",
-    all: "Toutes les sessions",
-    active: "En cours et cache chaud",
+    recent: t("shell.app.title.recent"),
+    all: t("shell.app.title.all"),
+    active: t("shell.app.title.active"),
     group: route.kind === "group" ? route.name : "",
     project: route.kind === "project" ? route.name : "",
-    snippets: "Snippets",
-    memory: "Mémoire",
-    config: "Configuration",
-    skills: "Skills",
-    tabs: "Sessions sauvegardées",
-    dir: node?.name ?? "Dossier",
+    snippets: t("shell.app.title.snippets"),
+    memory: t("shell.app.title.memory"),
+    config: t("shell.app.title.config"),
+    skills: t("shell.app.title.skills"),
+    tabs: t("shell.app.title.tabs"),
+    dir: node?.name ?? t("shell.app.title.dir"),
   }[route.kind]
+  const nSessions = (count: number) => t("shell.count.sessions", { count })
   const sub =
     route.kind === "recent"
-      ? `7 derniers jours, ${plural(recent.length)} dans ${plural(byProject.size, "projet")}`
+      ? t("shell.app.sub.recent", { sessions: nSessions(recent.length), projects: t("shell.count.projects", { count: byProject.size }) })
       : route.kind === "project"
-        ? `${plural(project?.dirs.length ?? 0, "dossier")}, ${plural(rows.length)}`
+        ? t("shell.app.sub.project", { dirs: t("shell.count.dirs", { count: project?.dirs.length ?? 0 }), sessions: nSessions(rows.length) })
         : route.kind === "active"
-        ? `${plural(active.filter((r) => live.has(r.s.id)).length, "ouverte")}, ${plural(active.filter((r) => !live.has(r.s.id)).length, "au cache chaud")}`
+        ? t("shell.app.sub.active", {
+            open: t("shell.count.open", { count: active.filter((r) => live.has(r.s.id)).length }),
+            warm: t("shell.count.warm", { count: active.filter((r) => !live.has(r.s.id)).length }),
+          })
         : route.kind === "skills"
-          ? "Skills personnels, de projet et de plugins : lire, modifier, créer, copier"
+          ? t("shell.app.sub.skills")
           : route.kind === "config"
-          ? "Réglages, permissions, hooks et serveurs MCP de Claude Code"
+          ? t("shell.app.sub.config")
           : route.kind === "snippets"
             ? (snips?.dir ?? "")
           : route.kind === "memory"
-            ? "CLAUDE.md, AGENTS.md, README, PLAN, CONVENTIONS, TOOLING, règles et mémoire de chaque projet"
+            ? t("shell.app.sub.memory")
             : route.kind === "tabs"
-              ? "Les sessions ouvertes, pour les rouvrir d'un coup"
+              ? t("shell.app.sub.tabs")
               : route.kind === "group"
-                ? `Groupe de ${vg ? tilde(vg.project, home) : "?"}, ${plural(rows.length)}`
+                ? t("shell.app.sub.group", { dir: vg ? tilde(vg.project, home) : "?", sessions: nSessions(rows.length) })
                 : g
-                  ? `${tilde(g.project, home)}, ${plural(rows.length)}`
-                  : plural(rows.length)
+                  ? t("shell.app.sub.dir", { dir: tilde(g.project, home), sessions: nSessions(rows.length) })
+                  : nSessions(rows.length)
 
   return (
     <ActionsCtx.Provider value={actions}>
@@ -353,7 +357,7 @@ export default function App() {
                 onLaunch={(s, text) => {
                   // Le dossier du projet de la commande d'abord, sinon le plus récent.
                   const ts = targets().sort((x, y) => Number(y.project === s.project) - Number(x.project === s.project))
-                  newSession("Nouvelle session avec ce snippet", s.command, ts, body(text) + "\n\n")
+                  newSession(t("shell.app.snippetSession"), s.command, ts, body(text) + "\n\n")
                 }}
                 onChanged={reload}
                 onAsk={setAsk}
@@ -402,7 +406,7 @@ export default function App() {
       <Confirm ask={ask} onClose={() => setAsk(null)} />
       <Prompt ask={prompt} onClose={() => setPrompt(null)} />
       <Compose ask={compose} onClose={() => setCompose(null)} />
+      <SessionInfo row={info} onClose={() => setInfo(null)} />
     </ActionsCtx.Provider>
   )
 }
-      <SessionInfo row={info} onClose={() => setInfo(null)} />

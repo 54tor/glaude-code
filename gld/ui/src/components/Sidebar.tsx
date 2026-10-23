@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { SessionTrash } from "./SessionTrash"
 import { CleanupWarning } from "./CleanupWarning"
 import { Trash2 } from "lucide-react"
@@ -71,6 +72,7 @@ function Heading({ children, action }: { children: React.ReactNode; action?: Rea
 // Sessions actives depuis moins d'une heure : leur cache est chaud, les reprendre coûte peu.
 // En orange, celles dont le cache expire dans moins de 10 minutes.
 function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go: (r: Route) => void }) {
+  const { t } = useTranslation()
   const a = useActions()
   const warm = useKeepWarm()
   // Un dossier par projet de travail, le plus récemment actif d'abord (les lignes arrivent déjà triées par date).
@@ -85,23 +87,23 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
         <ContextMenuTrigger asChild>
           <button
             onClick={() => a.read(s)}
-            title={`${s.title}\nCache encore environ ${left} min`}
+            title={t("shell.sidebar.hotTitle", { title: s.title, left })}
             className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
           >
             {a.asking.has(s.id) ? (
-              <Info className="size-4 shrink-0 animate-pulse text-amber-500" aria-label="attend une réponse à une question" />
+              <Info className="size-4 shrink-0 animate-pulse text-amber-500" aria-label={t("shell.sidebar.asking")} />
             ) : a.live.has(s.id) && !a.waiting.has(s.id) ? (
-              <Loader2 className="size-4 shrink-0 animate-spin text-emerald-500" aria-label="Claude travaille" />
+              <Loader2 className="size-4 shrink-0 animate-spin text-emerald-500" aria-label={t("shell.sidebar.working")} />
             ) : warn ? (
-              <AlarmClock className="size-4 shrink-0 text-amber-500" aria-label="cache bientôt expiré" />
+              <AlarmClock className="size-4 shrink-0 text-amber-500" aria-label={t("shell.sidebar.cacheExpiring")} />
             ) : (
               <Flame className="size-4 shrink-0 text-orange-500" aria-hidden />
             )}
-            {warm[s.id]?.on && <Coins className="size-3.5 shrink-0 text-amber-500" aria-label="maintien au chaud actif (payant)" />}
-            {a.live.has(s.id) && <span className="size-1.5 shrink-0 rounded-full bg-emerald-500" aria-label="ouverte" />}
+            {warm[s.id]?.on && <Coins className="size-3.5 shrink-0 text-amber-500" aria-label={t("shell.sidebar.keepWarmOn")} />}
+            {a.live.has(s.id) && <span className="size-1.5 shrink-0 rounded-full bg-emerald-500" aria-label={t("shell.sidebar.open")} />}
             <span className="flex-1 truncate text-left">{s.title}</span>
             <span className={cn("shrink-0 text-xs tabular-nums", warn ? "font-medium text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>
-              {left} min
+              {t("shell.sidebar.minutes", { left })}
             </span>
           </button>
         </ContextMenuTrigger>
@@ -114,8 +116,8 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
   return (
     <>
       <Heading>
-        <span title="Le cache des prompts dure une heure : reprendre une de ces sessions maintenant est plus rapide et moins coûteux">
-          Cache chaud
+        <span title={t("shell.sidebar.hotHint")}>
+          {t("shell.sidebar.hot")}
         </span>
       </Heading>
       {[...folders].map(([project, rs]) => (
@@ -136,7 +138,7 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
               ss={rs.map((r) => r.s)}
               extra={
                 <ContextMenuItem onSelect={() => go({ kind: "dir", key: segs(project, a.home).join("/") })}>
-                  <FolderOpen /> Afficher le dossier
+                  <FolderOpen /> {t("shell.common.showFolder")}
                 </ContextMenuItem>
               }
             />
@@ -179,6 +181,7 @@ export type SidebarProps = {
 } & Fonts
 
 export function Sidebar({ searchRef, ...p }: SidebarProps) {
+  const { t } = useTranslation()
   const r = p.route
   const link = (to: Route) => ({ to, onClick: () => p.go(to) })
   const a = useActions()
@@ -197,7 +200,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
       <div className={cn("fixed inset-0 z-30 bg-black/40 transition-opacity md:hidden", p.open ? "opacity-100" : "pointer-events-none opacity-0")} onClick={p.onClose} aria-hidden="true" />
       <aside
         id="menu"
-        aria-label="Menu"
+        aria-label={t("shell.sidebar.menu")}
         className={cn(
           "fixed inset-y-0 left-0 z-40 flex w-[85vw] max-w-sm shrink-0 flex-col border-r bg-sidebar transition-transform duration-200 md:static md:z-auto md:w-72 md:translate-x-0 md:transition-none lg:w-80",
           p.open ? "translate-x-0 shadow-xl" : "invisible -translate-x-full md:visible"
@@ -208,7 +211,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           <img src="/icons/icon-192.png" alt="" className="size-10 shrink-0" />
           <div className="leading-tight">
             <h1 className="text-[15px] font-semibold tracking-tight">Glaude Code</h1>
-            <p className="text-xs text-muted-foreground tabular-nums">{p.loading ? "Chargement…" : `${p.total} sessions`}</p>
+            <p className="text-xs text-muted-foreground tabular-nums">{p.loading ? t("common.loading") : t("shell.count.sessions", { count: p.total })}</p>
           </div>
           <div className="ml-auto flex items-center gap-0.5">
             <HomeSwitcher />
@@ -231,21 +234,21 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             value={p.q}
             onChange={(e) => p.setQ(e.target.value)}
             onKeyDown={(e) => e.key === "Escape" && p.setQ("")}
-            placeholder="Rechercher…"
+            placeholder={t("shell.sidebar.searchPlaceholder")}
             className="bg-background pr-8 pl-8 shadow-none"
-            aria-label="Rechercher dans les titres, les projets et les conversations"
+            aria-label={t("shell.sidebar.searchLabel")}
             autoFocus
           />
           {p.searching ? (
             <Loader2
               className="absolute top-1/2 right-2.5 size-4 -translate-y-1/2 animate-spin text-muted-foreground"
-              aria-label="Recherche en cours"
+              aria-label={t("shell.sidebar.searching")}
             />
           ) : p.q ? (
             <button
               className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               onClick={() => p.setQ("")}
-              aria-label="Effacer la recherche"
+              aria-label={t("shell.sidebar.clearSearch")}
             >
               <X className="size-4" />
             </button>
@@ -259,26 +262,26 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
 
       <ScrollArea className="min-h-0 flex-1">
         <CleanupWarning />
-        <nav className="px-2 pb-3" aria-label="Navigation">
-          {(p.carousel.n > 0 || p.carousel.on) && <NavItem icon={Repeat} label="Carrousel des sessions en attente" n={p.carousel.n} active={p.carousel.on} onClick={p.carousel.start} />}
+        <nav className="px-2 pb-3" aria-label={t("shell.sidebar.navigation")}>
+          {(p.carousel.n > 0 || p.carousel.on) && <NavItem icon={Repeat} label={t("shell.sidebar.carousel")} n={p.carousel.n} active={p.carousel.on} onClick={p.carousel.start} />}
           <NavItem
             icon={Clock}
-            label="Récentes (7 jours)"
+            label={t("shell.sidebar.recent")}
             n={p.counts.recent}
             active={r.kind === "recent"}
             {...link({ kind: "recent" })}
           />
-          <NavItem icon={Flame} label="En cours et cache chaud" n={p.counts.active} active={r.kind === "active"} {...link({ kind: "active" })} />
-          <NavItem icon={Inbox} label="Toutes les sessions" n={p.counts.all} active={r.kind === "all"} {...link({ kind: "all" })} />
-          <NavItem icon={Trash2} label="Corbeille des sessions" active={false} onClick={() => setTrashOpen(true)} />
-          <NavItem icon={History} label="Sessions sauvegardées" active={r.kind === "tabs"} {...link({ kind: "tabs" })} />
-          <NavItem icon={Zap} label="Skills" active={r.kind === "skills"} {...link({ kind: "skills", key: "" })} />
-          <NavItem icon={SlidersHorizontal} label="Configuration" active={r.kind === "config"} {...link({ kind: "config", tab: "" })} />
-          <NavItem icon={Brain} label="Mémoire" active={r.kind === "memory"} {...link({ kind: "memory", key: "" })} />
+          <NavItem icon={Flame} label={t("shell.app.title.active")} n={p.counts.active} active={r.kind === "active"} {...link({ kind: "active" })} />
+          <NavItem icon={Inbox} label={t("shell.app.title.all")} n={p.counts.all} active={r.kind === "all"} {...link({ kind: "all" })} />
+          <NavItem icon={Trash2} label={t("shell.sidebar.trash")} active={false} onClick={() => setTrashOpen(true)} />
+          <NavItem icon={History} label={t("shell.app.title.tabs")} active={r.kind === "tabs"} {...link({ kind: "tabs" })} />
+          <NavItem icon={Zap} label={t("shell.app.title.skills")} active={r.kind === "skills"} {...link({ kind: "skills", key: "" })} />
+          <NavItem icon={SlidersHorizontal} label={t("shell.app.title.config")} active={r.kind === "config"} {...link({ kind: "config", tab: "" })} />
+          <NavItem icon={Brain} label={t("shell.app.title.memory")} active={r.kind === "memory"} {...link({ kind: "memory", key: "" })} />
           {p.snippets !== null && (
             <NavItem
               icon={FileText}
-              label="Snippets"
+              label={t("shell.app.title.snippets")}
               n={p.snippets}
               active={r.kind === "snippets"}
               {...link({ kind: "snippets", path: "" })}
@@ -289,7 +292,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
 
           {(p.favRows.length > 0 || p.favGroups.length > 0) && (
             <>
-              <Heading>Favoris</Heading>
+              <Heading>{t("shell.sidebar.favorites")}</Heading>
               {p.favGroups.map(({ vg, key }) => (
                 <ContextMenu key={key + "\0" + vg.name}>
                   <ContextMenuTrigger asChild>
@@ -325,19 +328,19 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
 
           {a.projects.length > 0 && (
             <>
-              <Heading>Projets</Heading>
+              <Heading>{t("shell.sidebar.projects")}</Heading>
               <ProjectList route={r} go={p.go} />
             </>
           )}
 
           <Heading
             action={
-              <Button variant="ghost" size="icon-xs" onClick={a.addDir} title="Ajouter un dossier sans session : on y lance un prompt sans mémoire Claude" aria-label="Ajouter un dossier">
+              <Button variant="ghost" size="icon-xs" onClick={a.addDir} title={t("shell.sidebar.addDirHint")} aria-label={t("shell.sidebar.addDir")}>
                 <FolderPlus />
               </Button>
             }
           >
-            Sessions locales
+            {t("shell.sidebar.local")}
           </Heading>
           {p.loading ? (
             <div className="space-y-2 px-2">
@@ -363,15 +366,15 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           <div className="flex items-center gap-2 px-1 text-xs">
             <ShieldCheck className="size-4 shrink-0 text-muted-foreground" />
             <span className="flex-1 text-muted-foreground">
-              {p.auto.n} revues de sécurité masquées ({size(p.auto.kb)})
+              {t("shell.sidebar.autoHidden", { n: p.auto.n, size: size(p.auto.kb) })}
             </span>
             <Button variant="ghost" size="xs" className="text-destructive hover:text-destructive" onClick={p.auto.purge}>
-              Nettoyer
+              {t("shell.sidebar.clean")}
             </Button>
           </div>
         )}
         {p.args && (
-          <code className="block truncate px-1 text-xs text-muted-foreground" title="options ajoutées à claude">
+          <code className="block truncate px-1 text-xs text-muted-foreground" title={t("shell.sidebar.argsHint")}>
             {p.args}
           </code>
         )}

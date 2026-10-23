@@ -20,6 +20,7 @@ import {
   Trash2,
   X,
 } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import type { VGroup } from "@/lib/api"
 import {
   ContextMenuItem,
@@ -68,17 +69,16 @@ export const CM: Kit = {
   SubContent: ContextMenuSubContent,
 }
 
-const plural = (n: number) => `${n} session${n > 1 ? "s" : ""}`
-
 // Sous-menu des groupes du dossier de travail (un groupe ne mélange jamais plusieurs dossiers).
 // Un groupe coché contient déjà toutes les sessions visées.
 function Groups({ M, rows }: { M: Kit; rows: Row[] }) {
+  const { t } = useTranslation()
   const a = useActions()
   const projects = new Set(rows.map((r) => r.g.project))
   if (projects.size > 1)
     return (
       <M.Item disabled>
-        <Tag /> Groupe : sessions de plusieurs dossiers
+        <Tag /> {t("shell.menu.groupMixed")}
       </M.Item>
     )
   const project = rows[0].g.project
@@ -87,7 +87,7 @@ function Groups({ M, rows }: { M: Kit; rows: Row[] }) {
   return (
     <M.Sub>
       <M.SubTrigger>
-        <Tag /> Groupe
+        <Tag /> {t("shell.menu.group")}
       </M.SubTrigger>
       <M.SubContent className="w-56">
         {mine.map((g) => {
@@ -100,7 +100,7 @@ function Groups({ M, rows }: { M: Kit; rows: Row[] }) {
         })}
         {mine.length > 0 && <M.Sep />}
         <M.Item onSelect={() => a.group(ids, project, null)}>
-          <Plus /> Nouveau groupe…
+          <Plus /> {t("shell.menu.newGroup")}
         </M.Item>
       </M.SubContent>
     </M.Sub>
@@ -108,11 +108,12 @@ function Groups({ M, rows }: { M: Kit; rows: Row[] }) {
 }
 
 function Fav({ M, ids }: { M: Kit; ids: string[] }) {
+  const { t } = useTranslation()
   const a = useActions()
   const all = ids.every((id) => a.favs.has(id))
   return (
     <M.Item onSelect={() => a.toggleFav(ids)}>
-      {all ? <StarOff /> : <Star />} {all ? "Retirer des favoris" : "Ajouter aux favoris"}
+      {all ? <StarOff /> : <Star />} {all ? t("shell.menu.unfav") : t("shell.menu.fav")}
     </M.Item>
   )
 }
@@ -120,6 +121,7 @@ function Fav({ M, ids }: { M: Kit; ids: string[] }) {
 // Entrées d'une session ; si elle fait partie d'une sélection multiple, elles s'appliquent à toute la sélection.
 // full : entrées supplémentaires du clic droit (lire, reprendre, sélectionner), déjà visibles ailleurs sinon.
 export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?: () => void; full?: boolean }) {
+  const { t } = useTranslation()
   const a = useActions()
   const { s, g } = row
   const many = a.picked.has(s.id) && a.selected.length > 1
@@ -128,20 +130,20 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
     const ids = rows.map((r) => r.s.id)
     return (
       <>
-        <M.Label>{plural(rows.length)} sélectionnées</M.Label>
+        <M.Label>{t("shell.selection.count", { count: rows.length })}</M.Label>
         <Fav M={M} ids={ids} />
         <Groups M={M} rows={rows} />
         {a.inGroup && (
           <M.Item onSelect={() => a.ungroup(ids)}>
-            <X /> Retirer du groupe
+            <X /> {t("shell.menu.ungroup")}
           </M.Item>
         )}
         <M.Item onSelect={() => a.move(rows)}>
-          <FolderInput /> Déplacer vers un autre dossier…
+          <FolderInput /> {t("shell.menu.move")}
         </M.Item>
         {rows.some((r) => a.live.has(r.s.id)) && (
           <M.Item onSelect={() => a.stop(rows.filter((r) => a.live.has(r.s.id)).map((r) => r.s.id))}>
-            <Power /> Fermer les sessions ouvertes
+            <Power /> {t("shell.menu.closeOpen")}
           </M.Item>
         )}
         <M.Sep />
@@ -150,11 +152,11 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
           onSelect={() =>
             a.remove(
               rows.map((r) => ({ dir: r.s.dir, id: r.s.id })),
-              `les ${plural(rows.length)} sélectionnées`
+              t("shell.menu.removeSelected", { count: rows.length })
             )
           }
         >
-          <Trash2 /> Supprimer {plural(rows.length)}
+          <Trash2 /> {t("shell.menu.deleteN", { sessions: t("shell.count.sessions", { count: rows.length }) })}
         </M.Item>
       </>
     )
@@ -163,63 +165,63 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
     <>
       {full && (
         <M.Item onSelect={() => a.read(s)}>
-          <BookOpen /> Lire la conversation
+          <BookOpen /> {t("shell.menu.read")}
         </M.Item>
       )}
       {full && !g.missing && (
         <M.Item onSelect={() => a.open({ dir: s.dir, id: s.id })}>
-          <SquareTerminal /> Reprendre dans un terminal
+          <SquareTerminal /> {t("shell.list.resume")}
         </M.Item>
       )}
       {!g.missing && (
         <M.Item onSelect={() => a.resumeWith(row)}>
-          <MessageSquareReply /> Reprendre avec un message…
+          <MessageSquareReply /> {t("shell.menu.resumeWith")}
         </M.Item>
       )}
       {!g.missing && (
         <M.Item onSelect={() => a.newSession(g.project)}>
-          <MessageSquarePlus /> Nouvelle session dans ce projet…
+          <MessageSquarePlus /> {t("shell.menu.newInProject")}
         </M.Item>
       )}
       {full && <M.Sep />}
-      <Fav M={M} ids={[s.id]} />
-      <M.Item onSelect={() => a.editTags(s)}>
       <M.Item onSelect={() => a.info(row)}>
         <Info /> {t("shell.menu.info")}
       </M.Item>
-        <Hash /> Étiquettes…
+      <Fav M={M} ids={[s.id]} />
+      <M.Item onSelect={() => a.editTags(s)}>
+        <Hash /> {t("shell.menu.tags")}
       </M.Item>
       <M.Item onSelect={() => a.rename(s)}>
-        <Pencil /> Renommer…
+        <Pencil /> {t("shell.menu.rename")}
       </M.Item>
       <M.Item onSelect={() => a.copy(s)}>
-        <Copy /> Copier « claude --resume »
+        <Copy /> {t("shell.menu.copyResume")}
       </M.Item>
       <M.Item onSelect={() => a.exportMd(row)}>
-        <Download /> Exporter en Markdown
+        <Download /> {t("shell.menu.exportMd")}
       </M.Item>
       <Groups M={M} rows={[row]} />
       {a.inGroup && (
         <M.Item onSelect={() => a.ungroup([s.id])}>
-          <X /> Retirer du groupe
+          <X /> {t("shell.menu.ungroup")}
         </M.Item>
       )}
       {full && (
         <M.Item onSelect={() => a.pick(s.id)}>
-          <CheckSquare /> {a.picked.has(s.id) ? "Désélectionner" : "Sélectionner"}
+          <CheckSquare /> {a.picked.has(s.id) ? t("shell.menu.deselect") : t("shell.menu.select")}
         </M.Item>
       )}
       <M.Item onSelect={() => a.move([row])}>
-        <FolderInput /> Déplacer vers un autre dossier…
+        <FolderInput /> {t("shell.menu.move")}
       </M.Item>
       {a.live.has(s.id) && (
         <M.Item onSelect={() => a.stop([s.id])}>
-          <Power /> Fermer la session
+          <Power /> {t("shell.menu.closeSession")}
         </M.Item>
       )}
       <M.Sep />
-      <M.Item variant="destructive" onSelect={() => a.remove([{ dir: s.dir, id: s.id }], `« ${s.title} »`, after)}>
-        <Trash2 /> Supprimer
+      <M.Item variant="destructive" onSelect={() => a.remove([{ dir: s.dir, id: s.id }], t("shell.menu.quoted", { title: s.title }), after)}>
+        <Trash2 /> {t("common.delete")}
       </M.Item>
     </>
   )
@@ -227,6 +229,7 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
 
 // Entrées d'un groupe virtuel (clic droit dans l'arbre, menu « ⋯ » de sa page).
 export function GroupItems({ M, vg, page }: { M: Kit; vg: VGroup; page?: boolean }) {
+  const { t } = useTranslation()
   const a = useActions()
   const n = a.groupActs.rows(vg).length
   const ga = a.groupActs
@@ -235,33 +238,33 @@ export function GroupItems({ M, vg, page }: { M: Kit; vg: VGroup; page?: boolean
       <M.Label className="truncate">{vg.name}</M.Label>
       {!page && (
         <M.Item onSelect={() => ga.show(vg)}>
-          <BookOpen /> Afficher
+          <BookOpen /> {t("shell.menu.show")}
         </M.Item>
       )}
       <M.Item onSelect={() => ga.open(vg)} disabled={!n}>
-        <SquareTerminal /> Reprendre les {plural(n)}
+        <SquareTerminal /> {t("shell.menu.resumeAll", { sessions: t("shell.count.sessions", { count: n }) })}
       </M.Item>
       <M.Item onSelect={() => ga.prompt(vg)} disabled={!n}>
-        <MessageSquarePlus /> Nouvelle session avec ces références…
+        <MessageSquarePlus /> {t("shell.menu.newWithRefs")}
       </M.Item>
       <M.Item onSelect={() => ga.refs(vg)} disabled={!n}>
-        <ClipboardList /> Copier les références
+        <ClipboardList /> {t("shell.menu.copyRefs")}
       </M.Item>
       <M.Item onSelect={() => ga.export(vg)} disabled={!n}>
-        <Download /> Exporter en Markdown
+        <Download /> {t("shell.menu.exportMd")}
       </M.Item>
       <M.Item onSelect={() => ga.select(vg)} disabled={!n}>
-        <CheckSquare /> Sélectionner ses sessions
+        <CheckSquare /> {t("shell.menu.selectSessions")}
       </M.Item>
       <M.Sep />
       <M.Item onSelect={() => ga.fav(vg)}>
-        {vg.fav ? <StarOff /> : <Star />} {vg.fav ? "Retirer des favoris" : "Ajouter aux favoris"}
+        {vg.fav ? <StarOff /> : <Star />} {vg.fav ? t("shell.menu.unfav") : t("shell.menu.fav")}
       </M.Item>
       <M.Item onSelect={() => ga.rename(vg)}>
-        <Pencil /> Renommer…
+        <Pencil /> {t("shell.menu.rename")}
       </M.Item>
       <M.Item variant="destructive" onSelect={() => ga.remove(vg)}>
-        <Trash2 /> Supprimer le groupe
+        <Trash2 /> {t("shell.menu.deleteGroup")}
       </M.Item>
     </>
   )

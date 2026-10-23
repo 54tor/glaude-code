@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { ArrowUp, Folder, Home, Search } from "lucide-react"
 import { toast } from "sonner"
+import { useTranslation } from "react-i18next"
 import { api, type Ls } from "@/lib/api"
 import { join } from "@/lib/paths"
 import { Button } from "@/components/ui/button"
@@ -15,6 +16,7 @@ export type Pick = { title: string; start: string; done: (path: string | null) =
 // Explorateur de dossiers (serveur : /ls). Un chemin disparu remonte au plus proche parent qui existe ;
 // sous Windows « ↑ » depuis la racine d'un lecteur affiche la liste des lecteurs.
 export function DirPicker({ pick, home }: { pick: Pick | null; home: string }) {
+  const { t } = useTranslation()
   const [cur, setCur] = useState("")
   const [dirs, setDirs] = useState<string[]>([])
   const [parent, setParent] = useState("")
@@ -70,13 +72,13 @@ export function DirPicker({ pick, home }: { pick: Pick | null; home: string }) {
       <DialogContent className="max-w-xl gap-3 sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{pick?.title}</DialogTitle>
-          <DialogDescription className="sr-only">Choisir un dossier existant</DialogDescription>
+          <DialogDescription className="sr-only">{t("shell.dirPicker.description")}</DialogDescription>
         </DialogHeader>
         <div className="flex gap-2">
-          <Button variant="outline" size="icon" onClick={() => go(parent)} disabled={parent === ""} title="dossier parent">
+          <Button variant="outline" size="icon" onClick={() => go(parent)} disabled={parent === ""} title={t("shell.dirPicker.parent")}>
             <ArrowUp />
           </Button>
-          <Button variant="outline" size="icon" onClick={() => go(home)} title="dossier personnel">
+          <Button variant="outline" size="icon" onClick={() => go(home)} title={t("shell.dirPicker.home")}>
             <Home />
           </Button>
           <Input
@@ -85,13 +87,13 @@ export function DirPicker({ pick, home }: { pick: Pick | null; home: string }) {
             className="font-mono text-xs"
             onChange={(e) => setTyped(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && go(typed.trim())}
-            aria-label="Chemin"
+            aria-label={t("shell.dirPicker.path")}
           />
         </div>
         <div className="flex items-center gap-2">
           <Checkbox id="hid" checked={hidden} onCheckedChange={(c) => setHidden(c === true)} />
           <Label htmlFor="hid" className="text-xs text-muted-foreground">
-            afficher les dossiers cachés
+            {t("shell.dirPicker.showHidden")}
           </Label>
         </div>
         <div className="relative">
@@ -107,16 +109,16 @@ export function DirPicker({ pick, home }: { pick: Pick | null; home: string }) {
                 setFilter("")
               }
             }}
-            placeholder="Filtrer les dossiers…"
+            placeholder={t("shell.dirPicker.filterPlaceholder")}
             className="pl-8"
-            aria-label="Filtrer les sous-dossiers"
+            aria-label={t("shell.dirPicker.filterLabel")}
             autoFocus
           />
         </div>
         <ScrollArea className="h-72 rounded-md border">
           <ul className="p-1">
             {shown.length === 0 && (
-              <li className="px-3 py-2 text-xs text-muted-foreground">{filter ? "(aucun dossier ne correspond)" : "(aucun sous-dossier)"}</li>
+              <li className="px-3 py-2 text-xs text-muted-foreground">{filter ? t("shell.dirPicker.noMatch") : t("shell.dirPicker.empty")}</li>
             )}
             {shown.map((d) => (
               <li key={d}>
@@ -135,10 +137,10 @@ export function DirPicker({ pick, home }: { pick: Pick | null; home: string }) {
         </ScrollArea>
         <DialogFooter>
           <Button variant="outline" onClick={() => close(null)}>
-            Annuler
+            {t("common.cancel")}
           </Button>
           <Button onClick={() => close(target)} disabled={isDrives}>
-            {focus ? `Choisir « ${focus} »` : "Choisir ce dossier"}
+            {focus ? t("shell.dirPicker.chooseNamed", { name: focus }) : t("shell.dirPicker.choose")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { TriangleAlert } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import { api } from "@/lib/api"
 import { useActions } from "./actions"
 
@@ -7,22 +8,23 @@ type Warn = Awaited<ReturnType<typeof api.cleanupWarning>>
 
 // Claude Code efface seul les transcripts plus vieux que `cleanupPeriodDays` : on prévient dès qu'il reste moins de 24 h.
 export function CleanupWarning() {
+  const { t } = useTranslation()
   const a = useActions()
   const [w, setW] = useState<(Warn & { at: number }) | null>(null) // at : heure du relevé, pour compter les heures restantes
   useEffect(() => {
     let live = true
     const load = () => document.visibilityState === "visible" && api.cleanupWarning().then((r) => live && setW({ ...r, at: Date.now() / 1000 }), () => {})
     load()
-    const t = setInterval(load, 10 * 60_000)
+    const iv = setInterval(load, 10 * 60_000)
     return () => {
       live = false
-      clearInterval(t)
+      clearInterval(iv)
     }
   }, [])
   if (!w || w.sessions.length === 0) return null
   const left = (e: number) => {
     const h = Math.ceil((e - w.at) / 3600)
-    return h <= 0 ? "dépassé : à tout moment" : h <= 1 ? "dans moins d'1 h" : `dans ${h} h`
+    return h <= 0 ? t("shell.cleanup.overdue") : h <= 1 ? t("shell.cleanup.lessThanHour") : t("shell.cleanup.inHours", { h })
   }
   const first = w.sessions[0]
   const n = w.sessions.length
@@ -31,8 +33,7 @@ export function CleanupWarning() {
       <p className="flex items-start gap-2 font-medium">
         <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" aria-hidden />
         <span>
-          {n} session{n > 1 ? "s" : ""} {n > 1 ? "seront effacées" : "sera effacée"} par Claude Code ({left(first.expires)} pour la première). Il garde les
-          transcripts {w.days} jour{w.days > 1 ? "s" : ""} (<code>cleanupPeriodDays</code>).
+          {t("shell.cleanup.warn", { count: n, left: left(first.expires) })} {t("shell.cleanup.keeps", { count: w.days })} (<code>cleanupPeriodDays</code>).
         </span>
       </p>
       <ul className="mt-1.5 space-y-0.5 pl-6">
@@ -46,12 +47,12 @@ export function CleanupWarning() {
         ))}
         {n > 3 && (
           <li className="text-muted-foreground">
-            et {n - 3} autre{n - 3 > 1 ? "s" : ""}…
+            {t("shell.cleanup.more", { count: n - 3 })}
           </li>
         )}
       </ul>
       <p className="mt-1.5 pl-6 text-muted-foreground">
-        Pour les garder, augmentez <code>cleanupPeriodDays</code> dans ~/.claude/settings.json (Configuration, onglet Réglages).
+        {t("shell.cleanup.hintPre")} <code>cleanupPeriodDays</code> {t("shell.cleanup.hintPost")}
       </p>
     </div>
   )

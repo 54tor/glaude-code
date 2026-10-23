@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react"
+import { i18n } from "@/i18n"
 import type { Row } from "@/components/actions"
 
 // Notification du navigateur quand une session se met à attendre (onglet en arrière-plan) ; permission demandée au premier clic.
@@ -16,7 +17,7 @@ export function useWaitingNotice(waiting: Set<string>, everyId: Map<string, Row>
     if (!prev || !document.hidden || !("Notification" in window) || Notification.permission !== "granted") return
     for (const id of waiting)
       if (!prev.has(id))
-        new Notification("Claude attend", {
+        new Notification(i18n.t("shell.notice.waiting"), {
           body: everyId.get(id)?.s.title ?? id,
           tag: id,
         })

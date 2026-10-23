@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next"
 import { setOpen, useOpenState } from "@/hooks/useOpen"
 import { ChevronRight, Folder, Layers, Pencil, Trash2, X } from "lucide-react"
 import type { Route } from "@/lib/route"
@@ -13,6 +14,7 @@ import { useGit } from "@/hooks/useGit"
 // Projets : ensembles nommés de dossiers de travail, affichés au-dessus de l'arbre des dossiers.
 // Un clic sur un projet affiche les sessions de tous ses dossiers ; ses dossiers se déplient dessous.
 export function ProjectList({ route, go }: { route: Route; go: (r: Route) => void }) {
+  const { t } = useTranslation()
   const a = useActions()
   const git = useGit()
   const opened = useOpenState()
@@ -35,7 +37,7 @@ export function ProjectList({ route, go }: { route: Route; go: (r: Route) => voi
                   <button
                     className={cn("relative z-10 grid size-5 shrink-0 place-items-center rounded text-muted-foreground hover:text-foreground", !p.dirs.length && "invisible")}
                     onClick={() => toggle(p.name)}
-                    aria-label={isOpen ? "Replier" : "Déplier"}
+                    aria-label={isOpen ? t("shell.tree.collapse") : t("shell.tree.expand")}
                     aria-expanded={isOpen}
                   >
                     <ChevronRight className={cn("size-3.5 transition-transform", isOpen && "rotate-90")} />
@@ -54,11 +56,11 @@ export function ProjectList({ route, go }: { route: Route; go: (r: Route) => voi
               </ContextMenuTrigger>
               <ContextMenuContent className="w-56">
                 <ContextMenuItem onSelect={() => a.projectActs.rename(p)}>
-                  <Pencil /> Renommer…
+                  <Pencil /> {t("shell.menu.rename")}
                 </ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem variant="destructive" onSelect={() => a.projectActs.delete(p)}>
-                  <Trash2 /> Supprimer le projet
+                  <Trash2 /> {t("shell.tree.deleteProject")}
                 </ContextMenuItem>
               </ContextMenuContent>
             </ContextMenu>
@@ -88,7 +90,7 @@ export function ProjectList({ route, go }: { route: Route; go: (r: Route) => voi
                         ) : (
                           <ContextMenuContent className="w-56">
                             <ContextMenuItem onSelect={() => a.projectActs.remove(d, p.name)}>
-                              <X /> Retirer du projet
+                              <X /> {t("shell.tree.removeFromProject")}
                             </ContextMenuItem>
                           </ContextMenuContent>
                         )}

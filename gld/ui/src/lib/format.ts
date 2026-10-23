@@ -41,11 +41,11 @@ export function bucket(sec: number): string {
   const day = new Date()
   day.setHours(0, 0, 0, 0)
   const t0 = day.getTime() / 1000
-  if (sec >= t0) return "Aujourd'hui"
-  if (sec >= t0 - 86400) return "Hier"
-  if (sec >= t0 - 6 * 86400) return "Cette semaine"
-  if (sec >= t0 - 29 * 86400) return "Ce mois-ci"
-  return "Plus ancien"
+  if (sec >= t0) return i18n.t("shell.format.today")
+  if (sec >= t0 - 86400) return i18n.t("shell.format.yesterday")
+  if (sec >= t0 - 6 * 86400) return i18n.t("shell.format.thisWeek")
+  if (sec >= t0 - 29 * 86400) return i18n.t("shell.format.thisMonth")
+  return i18n.t("shell.format.older")
 }
 
 // Tokens traités par la session : entrée neuve + sortie + cache écrit (le cache lu, relu à chaque tour, est compté à part).
