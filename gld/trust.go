@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var trustRe = regexp.MustCompile(`(?i)do you trust the files in this folder|is this a project you created or one you trust|yes, i trust this folder`)
@@ -133,10 +134,17 @@ func routesTrust(mux *http.ServeMux) {
 				}
 			}
 			// On ne valide qu'après avoir revu l'écran : le curseur doit être sur la réponse demandée.
-			if scr, err := tmuxRun("", "capture-pane", "-p", "-t", p.pane); ok && err == nil && trustOnWant(scr, req.Yes) {
-				if _, err := tmuxRun("", "send-keys", "-t", p.pane, "Enter"); err == nil {
-					n++
+			// Le terminal redessine après chaque touche : on attend (au plus ~2 s) que le curseur soit en place plutôt que de juger
+			// l'écran de l'instant, qui montre encore l'ancienne position.
+			for i := 0; ok && i < 20; i++ {
+				scr, err := tmuxRun("", "capture-pane", "-p", "-t", p.pane)
+				if err == nil && trustOnWant(scr, req.Yes) {
+					if _, err := tmuxRun("", "send-keys", "-t", p.pane, "Enter"); err == nil {
+						n++
+					}
+					break
 				}
+				time.Sleep(100 * time.Millisecond)
 			}
 		}
 		journal("trust-answer %s oui=%v : %d panneau(x)", req.Dir, req.Yes, n)
