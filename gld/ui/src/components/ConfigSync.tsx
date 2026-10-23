@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
 import { ArrowRight, ChevronRight, TriangleAlert } from "lucide-react"
-import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { api, type HomesInfo } from "@/lib/api"
 import { tilde } from "@/lib/format"
@@ -9,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Choose } from "./Choose"
 import { useActions } from "./actions"
+import { reportResult } from "@/lib/report"
 
 type Item = { id: string; kind: string; label: string; status: "new" | "diff" | "same"; risk?: string; merge: boolean; from: string; to: string }
 type Mode = "merge" | "replace"
@@ -72,7 +72,7 @@ export function SyncTab() {
     setBusy(true)
     const r = await post("/homes-sync-apply", { from, to, picks: chosen.map((id) => ({ id, mode: picks[id] })) })
     setBusy(false)
-    ;(r.ok ? toast.success : toast.error)(r.out)
+    reportResult(r)
     if (r.ok) load(from, to)
   }
 
