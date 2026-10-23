@@ -154,7 +154,7 @@ export function Snippets({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-      <div className={cn("shrink-0 flex-col border-b lg:flex lg:max-h-none lg:w-80 lg:flex-none lg:border-r lg:border-b-0", sel ? "hidden" : "flex min-h-0 flex-1")}>
+      <div className={cn("shrink-0 flex-col border-b bg-muted/30 lg:flex lg:max-h-none lg:w-80 lg:flex-none lg:border-r lg:border-b-0", sel ? "hidden" : "flex min-h-0 flex-1")}>
         <div className="space-y-2 border-b px-3 py-2">
           <Choose
             value={scope}
@@ -185,7 +185,7 @@ export function Snippets({
               if (!vis.length && sc) return null
               return (
                 <section key={sc || "u"} className="mb-3">
-                  <p className="truncate px-2 py-1 text-xs font-medium text-muted-foreground" title={sc ? undefined : dir}>
+                  <p className="truncate px-2 py-1 text-xs font-semibold text-muted-foreground" title={sc ? undefined : dir}>
                     {label(sc)}
                   </p>
                   {vis.length === 0 && (
@@ -201,14 +201,14 @@ export function Snippets({
                               title={s.description || s.path}
                               className={cn(
                                 "flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
-                                s.key === sel ? "bg-accent font-medium" : "hover:bg-muted"
+                                s.key === sel ? "bg-accent text-accent-foreground" : "hover:bg-muted"
                               )}
                             >
                               <Terminal className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                               <span className="min-w-0">
                                 <span className="block truncate font-mono text-[13px]">{s.command}</span>
                                 <span className="block truncate text-xs font-normal text-muted-foreground">
-                                  {s.description || `${ago(s.mtime)} · ${size(s.kb)}`}
+                                  {s.description || `${ago(s.mtime)}, ${size(s.kb)}`}
                                 </span>
                               </span>
                             </button>
@@ -249,7 +249,7 @@ export function Snippets({
           </p>
         ) : (
           <>
-            <div className="flex flex-wrap items-center gap-2 border-b px-6 py-2">
+            <div className="flex flex-wrap items-center gap-2 border-b bg-muted/40 px-6 py-1.5">
               <code className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={sel}>
                 {snip ? `${snip.command} · ${snip.path}` : sel.replace(/^(u|p\/[^/]+)\//, "")}
                 {sel === creating && " (nouvelle)"}
@@ -318,7 +318,7 @@ export function Snippets({
               />
             ) : (
               <ScrollArea className="min-h-0 flex-1">
-                <div className="mx-auto max-w-7xl px-6 py-6 text-sm leading-relaxed">
+                <div className="mx-auto max-w-5xl px-6 py-6 text-sm leading-relaxed">
                   {text === null ? <Skeleton className="h-32 w-full" /> : <CommandView text={text} />}
                 </div>
               </ScrollArea>

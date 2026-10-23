@@ -59,7 +59,7 @@ export function Section({
     <section className="group/sec mb-3">
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <div className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-muted-foreground" title={title}>
+          <div className="flex items-center gap-1.5 px-2 py-1 text-xs font-semibold text-muted-foreground" title={title}>
             <Icon className="size-3.5 shrink-0" /> <h3 className="flex-1 truncate">{title}</h3>
             {budget > 0 && (
               <span

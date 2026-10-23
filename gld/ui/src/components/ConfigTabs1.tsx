@@ -95,7 +95,7 @@ export function PrecedenceTab({ projects, home }: { projects: { dir: string; pro
             <col className="w-[24%]" />
             <col className="w-[24%]" />
           </colgroup>
-          <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
+          <thead className="bg-muted/50 text-left text-xs font-semibold text-muted-foreground">
             <tr>
               <th className="px-3 py-1.5">Réglage</th>
               <th className="px-3 py-1.5">Utilisateur</th>

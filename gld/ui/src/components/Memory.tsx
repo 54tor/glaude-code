@@ -354,7 +354,7 @@ export function Memory({
   const [fm, body] = split(text ?? "")
   return (
     <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
-      <ScrollArea className={cn("shrink-0 border-b lg:block lg:max-h-none lg:w-[28rem] lg:flex-none lg:border-r lg:border-b-0", sel ? "hidden" : "min-h-0 flex-1")}>
+      <ScrollArea className={cn("shrink-0 border-b bg-muted/30 lg:block lg:max-h-none lg:w-[28rem] lg:flex-none lg:border-r lg:border-b-0", sel ? "hidden" : "min-h-0 flex-1")}>
         <nav className="p-2">
           {!list && <Skeleton className="m-2 h-24" />}
           {list && (
@@ -477,7 +477,7 @@ export function Memory({
               />
             ) : (
               <ScrollArea className="min-h-0 flex-1">
-                <div className="mx-auto max-w-7xl px-6 py-6 text-sm leading-relaxed">
+                <div className="mx-auto max-w-5xl px-6 py-6 text-sm leading-relaxed">
                   {text === null ? (
                     <Skeleton className="h-32 w-full" />
                   ) : (
