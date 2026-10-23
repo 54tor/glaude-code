@@ -165,6 +165,13 @@ func TestSuggestionsPermissions(t *testing.T) {
 	if s := got["Bash(ls:*)"]; s.Count != 4 || !s.ReadOnly {
 		t.Fatalf("ls : %+v", got)
 	}
+	// une commande composée est découpée : chaque sous-commande d'un pipe compte, comme Claude Code les évalue
+	if s := got["Bash(cat:*)"]; s.Count != 4 || !s.ReadOnly {
+		t.Fatalf("cat : %+v", got)
+	}
+	if s := got["Bash(grep:*)"]; s.Count != 4 || !s.ReadOnly {
+		t.Fatalf("grep : %+v", got)
+	}
 	// « git log » peut lancer un programme (--ext-diff, --textconv) : proposée, mais pas « lecture seule »
 	if s := got["Bash(git log:*)"]; s.Count != 4 || s.ReadOnly {
 		t.Fatalf("git log : %+v", s)
@@ -173,7 +180,7 @@ func TestSuggestionsPermissions(t *testing.T) {
 	if s := got["Bash(go build:*)"]; s.Count != 4 || s.ReadOnly {
 		t.Fatalf("go build : %+v", s)
 	}
-	for _, no := range []string{"Bash(rm:*)", "Bash(go test:*)", "Bash(cat:*)", "Bash(make build:*)", "Bash(sed:*)", "Bash(find:*)", "Bash(env:*)", "Bash(git:*)"} {
+	for _, no := range []string{"Bash(rm:*)", "Bash(go test:*)", "Bash(make build:*)", "Bash(sed:*)", "Bash(find:*)", "Bash(env:*)", "Bash(git:*)"} {
 		if _, ok := got[no]; ok {
 			t.Errorf("règle proposée à tort : %s", no)
 		}
@@ -405,5 +412,23 @@ func TestImportSignaleDossierIntrouvable(t *testing.T) {
 	_, _, warns, _, err := permImport("u", `{"permissions":{"additionalDirectories":["~/inexistant-gld"]}}`, "replace", true)
 	if err != nil || len(warns) == 0 || !strings.Contains(warns[0].Msg, "introuvable") {
 		t.Fatal(warns, err)
+	}
+}
+
+func TestBashSegments(t *testing.T) {
+	for _, c := range []struct{ cmd, want string }{
+		{"ls -la", "ls -la"},
+		{"cd /x && git status && go test ./...", "git status|go test ./..."},
+		{`cat a.txt | grep "x && y" | wc -l`, `cat a.txt|grep "x && y"|wc -l`},
+		{"go build ./... 2>&1 | tail -5", "go build ./...|tail -5"},
+		{"for d in */; do ls $d; done", "ls $d"},
+		{"echo hi > out.txt", ""},
+		{"cat <<EOF\nx\nEOF", ""},
+		{"FOO=1 make build", ""},
+		{"git log $(git rev-parse HEAD)", ""},
+	} {
+		if got := strings.Join(bashSegments(c.cmd), "|"); got != c.want {
+			t.Errorf("%q : %q, attendu %q", c.cmd, got, c.want)
+		}
 	}
 }
