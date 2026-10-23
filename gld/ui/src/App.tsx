@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next"
 import { resolveFront, setLang } from "@/i18n"
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useSearchParams } from "wouter"
-import { type Group, type Session, type VGroup } from "@/lib/api"
+import { type Group, type VGroup } from "@/lib/api"
 import { body } from "@/lib/commands"
 import { href, parse, type Route } from "@/lib/route"
 import { buildTree, find, under } from "@/lib/tree"
@@ -47,7 +47,7 @@ export default function App() {
   const q = params.get("q") ?? ""
   const reading = params.get("s")
 
-  const { data, setData, snips, now, reload } = useAppData()
+  const { data, setData, snips, now, reload, error } = useAppData()
   const { t } = useTranslation() // re-rend toute l'application quand la langue change
   const serverLang = data?.lang
   useEffect(() => setLang(resolveFront(serverLang, navigator.language)), [serverLang])
@@ -151,7 +151,7 @@ export default function App() {
   // Sessions des sous-dossiers : affichées à part, sous la liste du dossier sélectionné.
   const subs = node ? [...node.kids.values()].flatMap(under).sort(byDate) : []
 
-  const read = (s: Session) =>
+  const read = (s: { id: string }) =>
     setParams((p) => {
       p.set("s", s.id)
       return p
@@ -381,6 +381,8 @@ export default function App() {
               actions={actions}
               go={go}
               clearSearch={() => setQ("")}
+              error={error}
+              retry={() => void reload().catch(() => {})}
             />
           )}
 

@@ -75,10 +75,10 @@ export function DirPicker({ pick, home }: { pick: Pick | null; home: string }) {
           <DialogDescription className="sr-only">{t("shell.dirPicker.description")}</DialogDescription>
         </DialogHeader>
         <div className="flex gap-2">
-          <Button variant="outline" size="icon" onClick={() => go(parent)} disabled={parent === ""} title={t("shell.dirPicker.parent")}>
+          <Button variant="outline" size="icon" onClick={() => go(parent)} disabled={parent === ""} title={t("shell.dirPicker.parent")} aria-label={t("shell.dirPicker.parent")}>
             <ArrowUp />
           </Button>
-          <Button variant="outline" size="icon" onClick={() => go(home)} title={t("shell.dirPicker.home")}>
+          <Button variant="outline" size="icon" onClick={() => go(home)} title={t("shell.dirPicker.home")} aria-label={t("shell.dirPicker.home")}>
             <Home />
           </Button>
           <Input

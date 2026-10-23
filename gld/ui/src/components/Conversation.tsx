@@ -383,8 +383,8 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
                 <Message key={`t${i}`} m={m} />
               ))}
             {turn?.running && (
-              <p className="flex items-center gap-2 text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" /> {t("conversation.view.replying")}
+              <p role="status" className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" aria-hidden /> {t("conversation.view.replying")}
               </p>
             )}
             <LiveBar live={live} id={id} />

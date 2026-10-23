@@ -63,10 +63,12 @@ export function Memory({
       return n
     })
 
-  const [loaded, setLoaded] = useState<{ key: string; text: string } | null>(null)
+  const [loaded, setLoaded] = useState<{ key: string; text: string; error?: string } | null>(null)
   const [draft, setDraft] = useEditorDraft("memory")
   const editNext = useRef("") // « Modifier » depuis le clic droit : passe en édition dès le chargement
-  const text = loaded?.key === sel ? loaded.text : null
+  // Une erreur de lecture reste à part : elle ne devient jamais le texte du fichier, donc jamais modifiable ni enregistrable.
+  const failed = loaded?.key === sel ? loaded.error : undefined
+  const text = loaded?.key === sel && failed === undefined ? loaded.text : null
   const editing = draft?.key === sel ? draft : null
   useLeaveGuard(!!draft && !(draft.key === sel && draft.text === text))
   // Corbeille : sel vaut « corbeille/<id> » pour afficher une version.
@@ -86,7 +88,7 @@ export function Memory({
     const get = inTrash ? api.trashFile(inTrash) : api.memoryFile(sel)
     get.then((r) => {
       if (!live) return
-      setLoaded({ key: sel, text: r.text ?? r.error ?? "" })
+      setLoaded(r.text === undefined ? { key: sel, text: "", error: r.error ?? "" } : { key: sel, text: r.text })
       if (editNext.current === sel && r.text !== undefined) setDraft({ key: sel, text: r.text })
       editNext.current = ""
     })
@@ -396,6 +398,9 @@ export function Memory({
                 )
               : null
           })}
+          {list && !list.global.some((x) => match(x, t("memory.main.global"))) && !list.projects.some((p) => p.files.some((x) => match(x, p.project))) && (
+            <p className="px-2 py-6 text-center text-sm text-muted-foreground">{all.length ? t("memory.main.noMatch") : t("memory.main.empty")}</p>
+          )}
           {trash.length > 0 && <TrashList trash={trash} current={inTrash} onPick={onPick} onPurgeAll={() => purge()} />}
         </nav>
       </ScrollArea>
@@ -479,7 +484,9 @@ export function Memory({
             ) : (
               <ScrollArea className="min-h-0 flex-1">
                 <div className="mx-auto max-w-5xl px-6 py-6 text-sm leading-relaxed">
-                  {text === null ? (
+                  {failed !== undefined ? (
+                    <p className="text-destructive">{failed || t("memory.main.unreadable")}</p>
+                  ) : text === null ? (
                     <Skeleton className="h-32 w-full" />
                   ) : (
                     <>

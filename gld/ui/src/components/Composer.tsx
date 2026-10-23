@@ -292,8 +292,9 @@ function LiveSend({ dir, id, onSent, liveState, onAsk }: { dir: string; id: stri
       else setQ([q[0], ...draftOf(id).queue]) // non délivré : il retourne en tête de la file
     }, wait + 300)
     return () => clearTimeout(t)
+    // id : changer de session annule l'envoi programmé, qui partirait sinon vers la file de la nouvelle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ok, working, asking, busy, queue.length, tick])
+  }, [id, ok, working, asking, busy, queue.length, tick])
   if (!ok)
     return (
       <div className="flex items-center gap-3 border-t px-6 py-3 text-xs text-muted-foreground">

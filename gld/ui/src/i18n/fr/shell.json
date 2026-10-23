@@ -104,7 +104,8 @@
       "emptyGroup": "Ajoute des sessions à ce groupe : clic droit sur une session › Groupe.",
       "noneActive": "Aucune session ouverte ni active depuis moins d'une heure.",
       "noneRecent": "Aucune session ces 7 derniers jours.",
-      "nothing": "Rien à afficher ici."
+      "nothing": "Rien à afficher ici.",
+      "unreachable": "Serveur injoignable"
     },
     "selection": {
       "count_one": "{{count}} session sélectionnée",

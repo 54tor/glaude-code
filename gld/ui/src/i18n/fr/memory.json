@@ -50,7 +50,9 @@
       "pickFile": "Choisis un fichier de mémoire à afficher. Clic droit pour ses actions.",
       "ruleOff": "Règle désactivée : Claude ne la charge plus.",
       "reactivate": "Réactiver",
-      "fileContent": "Contenu du fichier"
+      "fileContent": "Contenu du fichier",
+      "empty": "Aucune mémoire",
+      "noMatch": "Rien ne correspond"
     },
     "lib": {
       "blankRule": "# Nouvelle règle",
