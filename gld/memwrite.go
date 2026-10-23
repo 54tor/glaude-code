@@ -15,23 +15,18 @@ import (
 
 var writeModels = []string{"haiku", "sonnet", "opus", "fable"}
 
-const memSystem = `Tu rédiges des fichiers de mémoire Markdown pour Claude Code.
-Format : un en-tête YAML entre deux lignes « --- » avec name (kebab-case), description (une ligne, sert à décider de la pertinence) et metadata.type (user, feedback, project ou reference), puis le fait lui-même, concis. Pour feedback et project, ajoute une ligne **Why:** puis une ligne **How to apply:**.
-Garde la langue des références. Réponds uniquement avec le contenu complet du fichier, sans bloc de code ni commentaire.`
+func memSystem() string { return L("prompt.memSystem") }
 
 // claudeSystem : pour un CLAUDE.md (instructions lues à chaque session), pas d'en-tête YAML.
-const claudeSystem = `Tu rédiges un fichier CLAUDE.md : les instructions que Claude Code lit au début de chaque session.
-Markdown concis : quelques titres, des listes de règles courtes et actionnables, regroupées par thème ; pas d'en-tête YAML, pas de répétition, pas de remplissage.
-Garde ce que contient déjà le fichier existant (sauf s'il contredit les références, auquel cas les références l'emportent) et la langue des sources.
-Réponds uniquement avec le contenu complet du fichier, sans bloc de code ni commentaire.`
+func claudeSystem() string { return L("prompt.claudeSystem") }
 
 // agentsSystem : même consigne pour un AGENTS.md, lu par les agents de code en général.
-var agentsSystem = strings.NewReplacer("CLAUDE.md", "AGENTS.md", "que Claude Code lit", "que les agents de code lisent").Replace(claudeSystem)
+func agentsSystem() string {
+	return strings.NewReplacer("CLAUDE.md", "AGENTS.md", L("prompt.agentsFrom"), L("prompt.agentsTo")).Replace(claudeSystem())
+}
 
 // cmdSystem : mise en forme d'une commande personnalisée de Claude Code (un snippet).
-const cmdSystem = `Tu mets en forme une commande personnalisée de Claude Code : un fichier Markdown de prompt, invoqué par /nom.
-Format : un en-tête YAML entre deux lignes « --- » avec description (une ligne : ce que fait la commande) et, seulement si la commande prend des arguments, argument-hint (ex. [fichier] [niveau]) ; puis le prompt lui-même, clair et à l'impératif, structuré si c'est utile (étapes, contraintes, format de sortie attendu). Mets $ARGUMENTS (ou $1, $2…) là où l'utilisateur donne ses arguments.
-N'invente aucune exigence absente de la consigne ou du texte d'origine. Garde la langue de la source. Réponds uniquement avec le contenu complet du fichier, sans bloc de code ni commentaire.`
+func cmdSystem() string { return L("prompt.cmdSystem") }
 
 // snippetDraft : la commande mise en forme (ou rédigée) par le modèle, à partir du texte de l'éditeur et d'une consigne.
 func snippetDraft(model, instruction, text string) (string, float64, error) {
@@ -45,13 +40,13 @@ func snippetDraft(model, instruction, text string) (string, float64, error) {
 		return "", 0, terr("srv.memwrite.consigneOuTexteTrop")
 	}
 	if instruction == "" {
-		instruction = "Mets ce texte en forme comme une commande Claude Code."
+		instruction = L("prompt.cmdDefault")
 	}
-	prompt := "Consigne : " + instruction + "\n"
+	prompt := L("prompt.instruction", "A1", instruction) + "\n"
 	if text != "" {
-		prompt += "\nTexte actuel de la commande :\n~~~~\n" + text + "\n~~~~\n"
+		prompt += "\n" + L("prompt.currentCommand") + "\n~~~~\n" + text + "\n~~~~\n"
 	}
-	return memDraft(model, cmdSystem, prompt)
+	return memDraft(model, cmdSystem(), prompt)
 }
 
 // isClaudeMd : la clé désigne un fichier du projet ou global (CLAUDE.md, AGENTS.md, README.md, PLAN.md…), pas une entrée de mémoire :
@@ -61,10 +56,7 @@ func isClaudeMd(key string) bool {
 }
 
 // docSystem : pour la documentation d'un projet (README, plan, conventions, outillage), ni instructions de Claude ni mémoire.
-const docSystem = `Tu rédiges ou révises un document Markdown de projet logiciel (README, plan, conventions, outillage).
-Markdown clair et concis : titres, listes, exemples de commandes ; pas d'en-tête YAML, pas de remplissage.
-Garde ce que contient déjà le fichier existant (sauf s'il contredit les références, auquel cas les références l'emportent) et la langue des sources.
-Réponds uniquement avec le contenu complet du fichier, sans bloc de code englobant ni commentaire.`
+func docSystem() string { return L("prompt.docSystem") }
 
 // memWritePrompt : la consigne, le fichier à réécrire (s'il y en a un) et les références, toutes des clés validées.
 func memWritePrompt(instruction, key string, refs []string) (string, error) {
@@ -73,7 +65,7 @@ func memWritePrompt(instruction, key string, refs []string) (string, error) {
 		return "", terr("srv.memwrite.consigneVideOuTrop")
 	}
 	var b strings.Builder
-	b.WriteString("Consigne : " + instruction + "\n")
+	b.WriteString(L("prompt.instruction", "A1", instruction) + "\n")
 	quote := func(title, k string) error {
 		base, rel, err := memResolve(k)
 		if err != nil {
@@ -83,7 +75,7 @@ func memWritePrompt(instruction, key string, refs []string) (string, error) {
 		if err != nil {
 			return err
 		}
-		b.WriteString("\n" + title + " (" + base + string(os.PathSeparator) + rel + ") :\n~~~~\n" + t + "\n~~~~\n")
+		b.WriteString("\n" + L("prompt.quote", "A1", title, "A2", base+string(os.PathSeparator)+rel) + "\n~~~~\n" + t + "\n~~~~\n")
 		return nil
 	}
 	if key != "" {
@@ -92,8 +84,8 @@ func memWritePrompt(instruction, key string, refs []string) (string, error) {
 			if _, _, err := memResolve(key); err != nil {
 				return "", err
 			}
-			b.WriteString("\n(Le fichier n'existe pas encore : écris-le en entier.)\n")
-		} else if err := quote("Fichier à réécrire", key); err != nil {
+			b.WriteString("\n" + L("prompt.fileMissing") + "\n")
+		} else if err := quote(L("prompt.fileToRewrite"), key); err != nil {
 			return "", err
 		}
 	}
@@ -101,7 +93,7 @@ func memWritePrompt(instruction, key string, refs []string) (string, error) {
 		if k == key {
 			continue
 		}
-		if err := quote("Référence", k); err != nil {
+		if err := quote(L("prompt.reference"), k); err != nil {
 			return "", err
 		}
 	}
@@ -146,18 +138,18 @@ func memWriteDraft(model, instruction, key string, refs []string) (string, float
 	if err != nil {
 		return "", 0, err
 	}
-	system := memSystem
+	system := memSystem()
 	if isClaudeMd(key) {
-		system = claudeSystem
+		system = claudeSystem()
 		switch {
 		case strings.HasSuffix(key, "AGENTS.md"):
-			system = agentsSystem
+			system = agentsSystem()
 		case !isClaudeFile(key):
-			system = docSystem
+			system = docSystem()
 		}
 	}
 	text, cost, err := memDraft(model, system, prompt)
-	if err == nil && system == memSystem {
+	if err == nil && system == memSystem() {
 		if orig, rerr := memRead(key); rerr == nil {
 			text = keepHeader(orig, text)
 		}

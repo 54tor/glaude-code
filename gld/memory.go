@@ -337,7 +337,7 @@ func mergePrompt(keys []string) (string, string, error) {
 	home, _ := os.UserHomeDir()
 	cwd := ""
 	var b strings.Builder
-	b.WriteString("Fusionne ces fichiers de mémoire de Claude Code en un seul, sans perdre d'information utile :\n")
+	b.WriteString(L("prompt.mergeHeader") + "\n")
 	for _, k := range keys {
 		base, rel, err := memResolve(k)
 		if err != nil {
@@ -356,12 +356,7 @@ func mergePrompt(keys []string) (string, string, error) {
 			}
 		}
 	}
-	b.WriteString("\nRègles :\n" +
-		"- garde le format des fichiers (en-tête YAML name / description / metadata.type quand il y en a un) ;\n" +
-		"- supprime les doublons ; signale-moi les informations contradictoires ou périmées avant de trancher ;\n" +
-		"- écris le résultat dans le premier fichier, puis supprime les autres ;\n" +
-		"- mets à jour MEMORY.md (une ligne par entrée) s'il référence ces fichiers ;\n" +
-		"- montre-moi le résultat et attends mon accord avant d'écrire ou de supprimer quoi que ce soit.\n")
+	b.WriteString("\n" + L("prompt.mergeRules") + "\n")
 	if cwd == "" { // règles globales : le dossier de configuration, plutôt que ~ tout entier (autre dossier à approuver)
 		if c := filepath.Join(home, ".claude"); isDirPath(c) {
 			cwd = c
