@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { ArrowDown, ArrowDownToLine, ArrowUpToLine, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, Repeat, SquareTerminal, Wrench } from "lucide-react"
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
@@ -29,15 +30,16 @@ const FullTerminal = lazy(() => import("./FullTerminal")) // xterm n'est chargé
 const PAGE = 200
 
 function Meta({ s, d }: { s: Session; d: Detail | null }) {
+  const { t } = useTranslation()
   const a = useActions()
   const live = a.live.has(s.id)
   const bits = [
     tilde(s.cwd, a.home),
     full(s.mtime),
     size(s.kb),
-    d && `${d.n} prompt${d.n > 1 ? "s" : ""}`,
-    d?.subagents ? `${d.subagents} sous-agent${d.subagents > 1 ? "s" : ""}` : null,
-    d?.branch && `branche ${d.branch}`,
+    d && t("conversation.view.meta.prompts", { count: d.n }),
+    d?.subagents ? t("conversation.view.meta.subagents", { count: d.subagents }) : null,
+    d?.branch && t("conversation.view.meta.branch", { name: d.branch }),
     d?.models.filter((m) => !m.startsWith("<")).join(", "),
   ].filter(Boolean)
   return (
@@ -53,6 +55,7 @@ function Meta({ s, d }: { s: Session; d: Detail | null }) {
 }
 
 export function Conversation({ row, onClose, args, choice, carousel }: { row: Row | null; onClose: () => void; args: string; choice: Choice; carousel?: { n: number; next: () => void; stop: () => void } }) {
+  const { t } = useTranslation()
   const a = useActions()
   const session = row?.s ?? null
   // Les effets dépendent des identifiants, pas de l'objet : le rafraîchissement périodique de la liste
@@ -208,12 +211,12 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
   useEffect(() => {
     const vp = viewport()
     if (!vp) return
+    // Collée à la fin tant que l'utilisateur y est : la bande d'état (réflexion, outil, file d'attente) change de hauteur sans que la vue décale.
+    let stuck = vp.scrollHeight - vp.scrollTop - vp.clientHeight < 80
     const on = () => {
       stuck = vp.scrollHeight - vp.scrollTop - vp.clientHeight < 80
       setAway(!stuck)
     }
-    // Collée à la fin tant que l'utilisateur y est : la bande d'état (réflexion, outil, file d'attente) change de hauteur sans que la vue décale.
-    let stuck = vp.scrollHeight - vp.scrollTop - vp.clientHeight < 80
     vp.addEventListener("scroll", on, { passive: true })
     const ro = new ResizeObserver(() => stuck && !keepScroll.current && (vp.scrollTop = vp.scrollHeight))
     if (vp.firstElementChild) ro.observe(vp.firstElementChild)
@@ -248,7 +251,7 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
           <div className="flex items-start gap-4">
             <div className="min-w-0 flex-1 space-y-1">
               <DialogTitle className="truncate text-lg tracking-tight">{session?.title}</DialogTitle>
-              <DialogDescription className="sr-only">Conversation complète de la session</DialogDescription>
+              <DialogDescription className="sr-only">{t("conversation.view.description")}</DialogDescription>
               {session && <Meta s={session} d={detail} />}
             </div>
             {session && <SessionStat s={session} live={live} />}
@@ -257,31 +260,31 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
         {session && <KeepWarmBanner s={session} />}
         {carousel && (
           <div className="flex flex-wrap items-center gap-2 border-b bg-amber-500/10 px-4 py-1.5 text-sm">
-            <Repeat className="size-4 text-amber-600" aria-hidden /> Carrousel : {carousel.n} session{carousel.n > 1 ? "s" : ""} en attente. La suivante s'ouvre dès que vous répondez.
+            <Repeat className="size-4 text-amber-600" aria-hidden /> {t("conversation.view.carousel", { count: carousel.n })}
             <Button variant="outline" size="sm" className="ml-auto" onClick={carousel.next}>
-              Suivante
+              {t("conversation.view.next")}
             </Button>
             <Button variant="ghost" size="sm" onClick={carousel.stop}>
-              Quitter le carrousel
+              {t("conversation.view.quitCarousel")}
             </Button>
           </div>
         )}
         <div className="flex flex-wrap items-center gap-1 border-b bg-muted/40 px-2 py-1.5 md:px-4">
           <Button variant={tools ? "secondary" : "ghost"} size="sm" onClick={() => setTools(!tools)} aria-pressed={tools}>
-            <Wrench /> Outils {tools ? "affichés" : "masqués"}
+            <Wrench /> {tools ? t("conversation.view.toolsShown") : t("conversation.view.toolsHidden")}
           </Button>
           {termOn && a.live.has(id) && (
-            <Button variant="secondary" size="sm" onClick={() => setView(inTerm ? "visuel" : "terminal")} title="Bascule entre la conversation et le terminal complet de la session">
-              {inTerm ? <MessagesSquare /> : <SquareTerminal />} {inTerm ? "Mode visuel" : "Mode terminal"}
+            <Button variant="secondary" size="sm" onClick={() => setView(inTerm ? "visuel" : "terminal")} title={t("conversation.view.modeTitle")}>
+              {inTerm ? <MessagesSquare /> : <SquareTerminal />} {inTerm ? t("conversation.view.modeVisual") : t("conversation.view.modeTerminal")}
             </Button>
           )}
-          <Button variant="ghost" size="sm" onClick={() => setLoadedOpen(true)} title="Fichiers d'instructions que Claude a réellement chargés dans cette session">
-            <FileText /> Instructions
+          <Button variant="ghost" size="sm" onClick={() => setLoadedOpen(true)} title={t("conversation.view.instructionsTitle")}>
+            <FileText /> {t("conversation.view.instructions")}
           </Button>
-          <Button variant="ghost" size="icon-sm" onClick={toTop} aria-label="Aller au début" title="Aller au début">
+          <Button variant="ghost" size="icon-sm" onClick={toTop} aria-label={t("conversation.view.toTop")} title={t("conversation.view.toTop")}>
             <ArrowUpToLine />
           </Button>
-          <Button variant="ghost" size="icon-sm" onClick={toEnd} aria-label="Aller à la fin" title="Aller à la fin">
+          <Button variant="ghost" size="icon-sm" onClick={toEnd} aria-label={t("conversation.view.toEnd")} title={t("conversation.view.toEnd")}>
             <ArrowDownToLine />
           </Button>
           {session && <KeepWarmButton s={session} />}
@@ -296,18 +299,18 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
               </span>
             ))}
             {row && !row.g.missing && (
-              <Button variant="outline" size="sm" onClick={() => a.newSession(row.g.project)} title="Nouvelle session Claude dans le même dossier">
-                <MessageSquarePlus /> Nouvelle session
+              <Button variant="outline" size="sm" onClick={() => a.newSession(row.g.project)} title={t("conversation.view.newSessionTitle")}>
+                <MessageSquarePlus /> {t("conversation.view.newSession")}
               </Button>
             )}
             {session && (
               <Button size="sm" onClick={() => a.open({ dir: session.dir, id: session.id })}>
-                <SquareTerminal /> Reprendre dans un terminal
+                <SquareTerminal /> {t("conversation.view.resume")}
               </Button>
             )}
             {row && (
               <SessionDropdown row={row} after={onClose}>
-                <Button variant="ghost" size="icon-sm" aria-label="Plus d'actions">
+                <Button variant="ghost" size="icon-sm" aria-label={t("conversation.view.moreActions")}>
                   <MoreHorizontal />
                 </Button>
               </SessionDropdown>
@@ -332,14 +335,14 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
             {loadedNow?.more && (
               <div ref={top} className="text-center">
                 <Button variant="outline" size="sm" onClick={older} disabled={loadingOlder}>
-                  {loadingOlder ? <Loader2 className="animate-spin" /> : <ArrowUpToLine />} Charger les messages plus anciens
+                  {loadingOlder ? <Loader2 className="animate-spin" /> : <ArrowUpToLine />} {t("conversation.view.loadOlder")}
                 </Button>
               </div>
             )}
             {msgs?.map((m, i) => (
               <Message key={m.o === undefined ? i : `${m.o}.${m.n ?? 0}`} m={m} conv={{ dir, id, tools }} />
             ))}
-            {msgs?.length === 0 && !turn && <p className="text-center text-muted-foreground">Aucun message dans cette session.</p>}
+            {msgs?.length === 0 && !turn && <p className="text-center text-muted-foreground">{t("conversation.view.empty")}</p>}
             {turn?.msgs
               .filter((m) => tools || m.r !== "tool")
               .map((m, i) => (
@@ -347,7 +350,7 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
               ))}
             {turn?.running && (
               <p className="flex items-center gap-2 text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" /> Claude répond…
+                <Loader2 className="size-4 animate-spin" /> {t("conversation.view.replying")}
               </p>
             )}
             <LiveBar live={live} id={id} />
@@ -355,8 +358,8 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
           </div>
         </ScrollArea>
         {away && (
-          <Button size="sm" variant="secondary" className="absolute right-4 bottom-3 rounded-full shadow-md" onClick={toEnd} aria-label="Aller à la fin de la conversation">
-            <ArrowDown /> Aller à la fin
+          <Button size="sm" variant="secondary" className="absolute right-4 bottom-3 rounded-full shadow-md" onClick={toEnd} aria-label={t("conversation.view.toEndAria")}>
+            <ArrowDown /> {t("conversation.view.toEnd")}
           </Button>
         )}
         </div>

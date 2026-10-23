@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { FileDiff } from "lucide-react"
 import { api, type GitChange } from "@/lib/api"
 import { cn } from "@/lib/utils"
@@ -14,6 +15,7 @@ const tone = (s: string) =>
 // relue quand le nombre de changements annoncé par l'état git (relu toutes les 30 s) change. Le chemin du dépôt n'y est pas répété :
 // il est déjà affiché à côté du bouton.
 export function GitChanges({ dir, count }: { dir: string; count: number }) {
+  const { t } = useTranslation()
   const [files, setFiles] = useState<GitChange[]>([])
   const [more, setMore] = useState(0)
   const [open, setOpen] = useState(false)
@@ -36,16 +38,14 @@ export function GitChanges({ dir, count }: { dir: string; count: number }) {
   const name = dir.split("/").filter(Boolean).pop() ?? dir
   return (
     <>
-      <Button size="xs" variant="ghost" onClick={() => setOpen(true)} className="text-muted-foreground" title="Voir les fichiers modifiés">
-        <FileDiff /> {count} fichier{count > 1 ? "s" : ""}
+      <Button size="xs" variant="ghost" onClick={() => setOpen(true)} className="text-muted-foreground" title={t("conversation.gitChanges.viewTitle")}>
+        <FileDiff /> {t("conversation.gitChanges.files", { count })}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>
-              {count} fichier{count > 1 ? "s" : ""} en cours de modification
-            </DialogTitle>
-            <DialogDescription>Dépôt « {name} » : fichiers modifiés, ajoutés, supprimés ou non suivis.</DialogDescription>
+            <DialogTitle>{t("conversation.gitChanges.dialogTitle", { count })}</DialogTitle>
+            <DialogDescription>{t("conversation.gitChanges.description", { name })}</DialogDescription>
           </DialogHeader>
           <ScrollArea className="max-h-[60vh] rounded-md border">
             <ul className="space-y-px bg-muted/40 p-1 font-mono text-xs">
@@ -54,13 +54,13 @@ export function GitChanges({ dir, count }: { dir: string; count: number }) {
                   <span className={cn("w-5 shrink-0 text-center font-semibold whitespace-pre", tone(f.status))} title={f.status}>
                     {f.status.trim() || " "}
                   </span>
-                  <span className="min-w-0 flex-1 break-all" title={f.from ? `renommé depuis ${f.from}` : undefined}>
+                  <span className="min-w-0 flex-1 break-all" title={f.from ? t("conversation.gitChanges.renamedFrom", { from: f.from }) : undefined}>
                     {f.path}
                     {f.from && <span className="text-muted-foreground"> ← {f.from}</span>}
                   </span>
                 </li>
               ))}
-              {more > 0 && <li className="px-1.5 py-0.5 text-muted-foreground">… et {more} autre{more > 1 ? "s" : ""}</li>}
+              {more > 0 && <li className="px-1.5 py-0.5 text-muted-foreground">{t("conversation.gitChanges.more", { count: more })}</li>}
             </ul>
           </ScrollArea>
         </DialogContent>

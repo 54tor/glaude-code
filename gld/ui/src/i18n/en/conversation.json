@@ -1,0 +1,345 @@
+{
+  "conversation": {
+    "models": {
+      "default": "Default model"
+    },
+    "efforts": {
+      "default": "Default effort",
+      "low": "Low effort",
+      "medium": "Medium effort",
+      "high": "High effort",
+      "xhigh": "Very high effort",
+      "max": "Maximum effort"
+    },
+    "modelPicker": {
+      "model": "Model",
+      "effort": "Effort"
+    },
+    "trust": {
+      "title": "Trust {{dir}}?",
+      "description": "Claude Code is asking whether it may read and run the files in this folder. Only accept for a folder you know.",
+      "accept": "Trust",
+      "refuse": "Refuse"
+    },
+    "view": {
+      "meta": {
+        "prompts_one": "{{count}} prompt",
+        "prompts_other": "{{count}} prompts",
+        "subagents_one": "{{count}} subagent",
+        "subagents_other": "{{count}} subagents",
+        "branch": "branch {{name}}"
+      },
+      "description": "Full conversation of the session",
+      "carousel_one": "Carousel: {{count}} session waiting. The next one opens as soon as you reply.",
+      "carousel_other": "Carousel: {{count}} sessions waiting. The next one opens as soon as you reply.",
+      "next": "Next",
+      "quitCarousel": "Leave the carousel",
+      "toolsShown": "Tools shown",
+      "toolsHidden": "Tools hidden",
+      "modeVisual": "Visual mode",
+      "modeTerminal": "Terminal mode",
+      "modeTitle": "Switch between the conversation and the session's full terminal",
+      "instructions": "Instructions",
+      "instructionsTitle": "Instruction files Claude actually loaded in this session",
+      "toTop": "Go to the start",
+      "toEnd": "Go to the end",
+      "newSession": "New session",
+      "newSessionTitle": "New Claude session in the same folder",
+      "resume": "Resume in a terminal",
+      "moreActions": "More actions",
+      "loadOlder": "Load older messages",
+      "empty": "No messages in this session.",
+      "replying": "Claude is replying…",
+      "toEndAria": "Go to the end of the conversation"
+    },
+    "message": {
+      "pasted_one": "Pasted text · {{count}} line",
+      "pasted_other": "Pasted text · {{count}} lines",
+      "openImage": "Open the image full size",
+      "imageAlt": "Conversation image",
+      "toolResult": "tool result",
+      "toolCall": "tool call",
+      "readFail": "Could not read the rest of the message",
+      "showMore": "Show more · {{size}} left"
+    },
+    "composer": {
+      "modes": {
+        "readOnly": "Read-only: writing and running commands is refused",
+        "plan": "Plan: proposes without changing anything",
+        "acceptEdits": "Accept file edits",
+        "auto": "Auto: Claude decides what it may do"
+      },
+      "failed": "Failed",
+      "placeholderRunning": "Claude is replying… your message will go out afterwards (Enter: queue it)",
+      "placeholder": "Write to Claude… (Enter sends, Shift+Enter: new line)",
+      "messageAria": "Message to Claude",
+      "queueAria": "Queued messages",
+      "dequeue": "Remove from the queue",
+      "queueSuspended": "Queue paused (the previous turn failed or was stopped).",
+      "sendNext": "Send the next one",
+      "permissions": "Permissions granted to Claude",
+      "cost": "cost reported by claude: ${{cost}}",
+      "stop": "Stop",
+      "send": "Send",
+      "noTmux": "This session runs in a terminal outside tmux (a <0>claude</0> process holds it: it may be the one you are working in): write there directly.",
+      "relaunch": "Relaunched in tmux, it would accept a message from here{{why}}.",
+      "commandsAria": "Commands",
+      "sessionPlaceholder": "Write to the session… (Enter sends, Shift+Enter: new line)",
+      "sessionAria": "Message to the open session",
+      "afterQuestion": "after the question",
+      "whenIdle": "as soon as Claude is waiting",
+      "sending": "sending…",
+      "interruptTitle": "Sends Esc to the session: Claude interrupts its current reply (as in the terminal)",
+      "interrupt": "Interrupt",
+      "modelEllipsis": "Model…",
+      "effortEllipsis": "Effort…",
+      "sessionModel": "Session model",
+      "sessionEffort": "Session effort",
+      "sendToSession": "Send to the session",
+      "closeTitle": "Ends this session's claude process; the conversation can still be resumed",
+      "close": "Close the session",
+      "tabsAria": "Question tabs",
+      "answerExpected": "Answer expected",
+      "keys": "Keys: {{keys}}",
+      "answerPlaceholder": "Your answer (Enter to send, Shift+Enter for a new line)",
+      "answerAria": "Answer to the terminal question",
+      "validate": "Confirm",
+      "validateTitle": "Confirms the ticked boxes. Keys sent: {{keys}}",
+      "escape": "Esc",
+      "rawScreen": "Raw screen",
+      "rawScreenTitle": "The terminal screen as gld reads it, and what the detector makes of it",
+      "screenAria": "Terminal screen",
+      "emptyScreen": "(empty screen)",
+      "detectorAria": "Detector result",
+      "noPrompt": "detector: no question recognised",
+      "screenCopied": "Screen copied",
+      "copyFailed": "Could not copy",
+      "copyScreen": "Copy the screen",
+      "commands": "Commands",
+      "commandsTitle": "Claude Code commands"
+    },
+    "slash": {
+      "compact": {
+        "label": "Compact the context",
+        "hint": "Summarises the conversation to free up context; the text in the field is used as instructions for the summary"
+      },
+      "context": {
+        "label": "View the context",
+        "hint": "Context breakdown (instructions, memory, tools, messages)"
+      },
+      "cost": {
+        "label": "View the cost",
+        "hint": "Cost and duration of the session"
+      },
+      "usage": {
+        "label": "View usage limits",
+        "hint": "Refreshes the account's limits report"
+      },
+      "clear": {
+        "label": "Clear the conversation",
+        "hint": "Empties the context (the conversation stays in the transcript)"
+      },
+      "model": {
+        "label": "Change model",
+        "hint": "Opens the model choice: answer with the buttons that appear above the field"
+      },
+      "mcp": {
+        "label": "MCP servers",
+        "hint": "Status of the MCP servers"
+      },
+      "status": {
+        "label": "Claude Code status",
+        "hint": "Version, account, model, connection"
+      },
+      "memory": {
+        "label": "Memory",
+        "hint": "Loaded CLAUDE.md files"
+      },
+      "permissions": {
+        "label": "Permissions",
+        "hint": "Permission rules in effect"
+      },
+      "agents": {
+        "label": "Subagents",
+        "hint": "List of available agents"
+      },
+      "rewind": {
+        "label": "Rewind",
+        "hint": "Restores the conversation or the code to an earlier point"
+      },
+      "export": {
+        "label": "Export",
+        "hint": "Exports the conversation"
+      },
+      "doctor": {
+        "label": "Diagnostics",
+        "hint": "Checks the installation"
+      },
+      "help": {
+        "label": "Help",
+        "hint": "List of commands"
+      }
+    },
+    "compose": {
+      "memoryUnreadable": "Memory could not be read",
+      "memoryScope": "{{scope}} memory: {{name}}",
+      "memoryIntro": "From this memory entry ({{where}}):",
+      "folder": "Folder",
+      "newSessionFolder": "New session folder",
+      "otherFolder": "Other folder…",
+      "placeholder": "Message sent to Claude…",
+      "messageAria": "Message",
+      "insertMemory": "Insert a memory",
+      "thisProject": "This project",
+      "global": "Global",
+      "sendTitle": "Enter (Shift+Enter: new line)"
+    },
+    "prompt": {
+      "description": "Enter a name",
+      "failed": "Failed: details are in the notification. Your input is kept."
+    },
+    "live": {
+      "working": "working",
+      "open": "open",
+      "execTool": "running a tool…",
+      "queued": "Waiting to be read by the session",
+      "since": "for {{time}}",
+      "toolRunning": "tool running",
+      "lastTool": "last tool",
+      "closed": "Session closed",
+      "contextTitle": "Context sent on the last call",
+      "tokensTitle": "Tokens processed (excluding cache read)",
+      "statsTitle": "Tokens used and last call",
+      "stats": "Stats",
+      "statsHeading": "Session statistics",
+      "statsDescription": "Session tokens and context",
+      "usage": "Usage",
+      "input": "Input",
+      "output": "Output",
+      "cacheRead": "Cache read",
+      "cacheWrite": "Cache write",
+      "processedTitle": "Fresh input, output and cache write: the cache read, re-read every turn, is counted separately",
+      "processed": "Processed: {{n}} tokens (excluding cache read)",
+      "lastCall": "Last call",
+      "model": "Model:",
+      "contextSent": "Context sent: ≈ {{n}} tokens (input, cache read and cache write)",
+      "tokensOut": "Tokens produced: {{n}}",
+      "subagentsTitle": "Session subagents",
+      "subagents": "Subagents · {{n}}",
+      "runningCount": "({{running}} running)",
+      "dialogTitle": "Subagents ({{n}})",
+      "dialogTitleRunning": "Subagents ({{n}}, {{running}} running)",
+      "dialogDescription": "Subagents launched by the session",
+      "subContext": "· context {{n}}",
+      "subOpen": "Open this subagent's conversation",
+      "subEmpty": "No messages.",
+      "subNote": "Read only: a subagent takes no outside messages, it hands its result back to the session."
+    },
+    "tagged": {
+      "taskNotification": "Task notification",
+      "fields": {
+        "task": "task",
+        "call": "call",
+        "output": "output",
+        "type": "type",
+        "note": "note"
+      },
+      "compacted": "Conversation compacted",
+      "toolsBefore": "Tools used before the summary · {{n}}",
+      "summary": "Summary"
+    },
+    "notes": {
+      "sent": "Note sent to “{{title}}”",
+      "title": "Notepad",
+      "placeholder": "Ideas, TODOs, instructions to keep at hand… (saved automatically)",
+      "newSession": "New session with the note",
+      "sendOpen": "Send to an open session",
+      "sendLabel": "Sessions open in tmux, among those shown",
+      "none": "No session open in tmux",
+      "chars": "{{n}} chars"
+    },
+    "terminal": {
+      "openFailed": "could not open",
+      "readOnlyTitle": "Switch back to read-only",
+      "writeTitle": "Allow typing in the terminal",
+      "active": "Typing on · switch back to read-only",
+      "readOnly": "Read-only · take control",
+      "connecting": "Connecting…",
+      "closed": "Connection closed"
+    },
+    "keepWarm": {
+      "stopTitle": "Stop keeping warm",
+      "active": "Keep-warm on: stop",
+      "closedTitle": "Session closed: only a ping in its terminal warms its cache. Reopen it to keep it warm.",
+      "button": "Keep warm",
+      "buttonTitle": "Keeps the prompt cache warm by sending an automatic ping (paid)",
+      "menuLabel": "Whenever less than 5 min of cache remain, gld sends a short message in the session's terminal. Each ping is a billed turn and shows up in the conversation. Keeping warm stops if the session is closed.",
+      "atMost_one": "At most {{count}} ping (≈ {{count}} h)",
+      "atMost_other": "At most {{count}} pings (≈ {{count}} h)",
+      "bannerActive": "Keep-warm is on — it costs money.",
+      "pings_one": "{{pings}}/{{max}} ping",
+      "pings_other": "{{pings}}/{{max}} pings",
+      "bannerHint": "a ping goes out when less than 5 min of cache remain",
+      "stop": "Stop",
+      "statsAria": "Session statistics",
+      "hotTitle": "The prompt cache lasts one hour after the last message",
+      "cold": "cache cold",
+      "left": "cache {{min}} min",
+      "warmAria": "keep-warm on"
+    },
+    "loaded": {
+      "reasons": {
+        "sessionStart": "at startup",
+        "nested": "nested folder",
+        "glob": "path pattern",
+        "include": "imported (@)",
+        "compact": "after compaction"
+      },
+      "title": "Loaded instructions",
+      "description": "Files Claude read in this session: CLAUDE.md, rules, imports.",
+      "empty": "Nothing recorded for this session: tracking is not installed, or the session predates it.",
+      "enable": "To enable it, add this to Claude Code's settings (<0>~/.claude/settings.json</0>) and run <1>make install</1> to get <2>gld</2> in <3>~/.local/bin</3>:",
+      "for": "for {{path}}"
+    },
+    "git": {
+      "pending": "{{n}} pending change(s)",
+      "repoAria": "git repository",
+      "sessionsOpen": "{{n}} session(s), one of them open",
+      "sessions": "{{n}} session(s)",
+      "sessionsAria": "sessions",
+      "detached": "detached HEAD",
+      "branch": "Branch: {{branch}}",
+      "noUpstream": "no upstream",
+      "changedTitle": "{{n}} modified file(s)",
+      "untrackedTitle": "{{n}} untracked",
+      "ahead": "{{n}} commit(s) to push",
+      "behind": "{{n}} commit(s) to pull",
+      "clean": "clean",
+      "modified_one": "{{count}} modified",
+      "modified_other": "{{count}} modified",
+      "untracked_one": "{{count}} untracked",
+      "untracked_other": "{{count}} untracked"
+    },
+    "gitChanges": {
+      "viewTitle": "View modified files",
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files",
+      "dialogTitle_one": "{{count}} file being modified",
+      "dialogTitle_other": "{{count}} files being modified",
+      "description": "Repository “{{name}}”: modified, added, deleted or untracked files.",
+      "renamedFrom": "renamed from {{from}}",
+      "more_one": "… and {{count}} more",
+      "more_other": "… and {{count}} more"
+    },
+    "gitPush": {
+      "pushing": "Pushing {{branch}} to {{remote}}…",
+      "pushed": "{{branch}} pushed to {{remote}}",
+      "failed": "Push to {{remote}} failed",
+      "noUpstream": "Branch without upstream: pushing links it to the chosen remote",
+      "button": "Push",
+      "label": "Push “{{branch}}” to:",
+      "reading": "Reading remotes…",
+      "none": "No remote configured"
+    }
+  }
+}

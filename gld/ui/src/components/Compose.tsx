@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Brain, FileText, FolderSearch, Globe, Send } from "lucide-react"
 import { toast } from "sonner"
 import { api, type MemFile, type MemProject } from "@/lib/api"
@@ -50,6 +51,7 @@ export function Compose({ ask, onClose }: { ask: ComposeAsk | null; onClose: () 
 }
 
 function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
+  const { t: tr } = useTranslation()
   const a = useActions()
   const [text, setText] = useState(ask.initial ?? "")
   const [choice, setChoice] = useState(ask.choice)
@@ -105,10 +107,10 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
   // Une entrée de mémoire, citée telle quelle ; il reste à écrire la demande à la suite.
   const insertMemory = async (f: MemFile, scope: string) => {
     const r = await api.memoryFile(f.key)
-    if (r.text === undefined) return void toast.error(r.error ?? "Mémoire illisible")
+    if (r.text === undefined) return void toast.error(r.error ?? tr("conversation.compose.memoryUnreadable"))
     const fence = r.text.includes("```") ? "~~~~" : "```"
-    const where = f.key.startsWith("m/") ? `mémoire de ${scope} : ${f.name}` : `${scope}/${f.name}`
-    put(`D'après cette entrée memory (${where}) :\n\n${fence}markdown\n${r.text.trim()}\n${fence}\n\n`)
+    const where = f.key.startsWith("m/") ? tr("conversation.compose.memoryScope", { scope, name: f.name }) : `${scope}/${f.name}`
+    put(`${tr("conversation.compose.memoryIntro", { where })}\n\n${fence}markdown\n${r.text.trim()}\n${fence}\n\n`)
   }
   const memItems = (files: MemFile[], scope: string) =>
     files.map((f) => (
@@ -125,12 +127,12 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
       </DialogHeader>
       {ask.targets && (
         <div className="flex items-center gap-2 text-sm">
-          <span className="shrink-0 text-muted-foreground">Dossier</span>
+          <span className="shrink-0 text-muted-foreground">{tr("conversation.compose.folder")}</span>
           <Choose
             value={custom ? "custom" : String(target)}
             onChange={(v) => (v === "custom" ? null : (setCustom(null), setTarget(Number(v))))}
             options={[...ask.targets.map((t, i) => [String(i), t.label] as const), ...(custom ? [["custom", custom.label] as const] : [])]}
-            label="Dossier de la nouvelle session"
+            label={tr("conversation.compose.newSessionFolder")}
             size="default"
             className="min-w-0 flex-1"
           />
@@ -138,11 +140,11 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
             type="button"
             variant="outline"
             onClick={async () => {
-              const p = await a.pickDir("Dossier de la nouvelle session", tgt?.project ?? a.home)
+              const p = await a.pickDir(tr("conversation.compose.newSessionFolder"),tgt?.project ?? a.home)
               if (p) setCustom({ label: tilde(p, a.home), project: p, dir: "", id: "", cwd: p })
             }}
           >
-            <FolderSearch /> Autre dossier…
+            <FolderSearch /> {tr("conversation.compose.otherFolder")}
           </Button>
         </div>
       )}
@@ -151,7 +153,7 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => isSend(e) && (e.preventDefault(), send())}
-        placeholder="Message envoyé à Claude…"
+        placeholder={tr("conversation.compose.placeholder")}
         autoFocus
         onFocus={(e) => {
           // Texte prérempli d'une commande : son $ARGUMENTS sélectionné ; sinon le curseur à la fin.
@@ -162,21 +164,21 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
         rows={8}
         maxLength={32000}
         className="session-text w-full resize-y rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-        aria-label="Message"
+        aria-label={tr("conversation.compose.messageAria")}
       />
       <DialogFooter className="flex-wrap items-center gap-2 sm:justify-between">
         <div className="flex flex-wrap gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" disabled={!mem}>
-                <Brain /> Insérer une mémoire
+                <Brain /> {tr("conversation.compose.insertMemory")}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent onCloseAutoFocus={(e) => e.preventDefault()} align="start" className="max-h-80 w-80 overflow-y-auto">
               {own.map((p) => (
                 <div key={p.dir}>
                   <DropdownMenuLabel className="flex items-center gap-1.5">
-                    <Brain className="size-3.5" /> Ce projet
+                    <Brain className="size-3.5" /> {tr("conversation.compose.thisProject")}
                   </DropdownMenuLabel>
                   {memItems(p.files, tilde(p.project, a.home))}
                   <DropdownMenuSeparator />
@@ -185,7 +187,7 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
               {!!mem?.global.length && (
                 <>
                   <DropdownMenuLabel className="flex items-center gap-1.5">
-                    <Globe className="size-3.5" /> Globale
+                    <Globe className="size-3.5" /> {tr("conversation.compose.global")}
                   </DropdownMenuLabel>
                   {memItems(mem.global, "~/.claude")}
                 </>
@@ -211,9 +213,9 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
         <div className="flex flex-wrap items-center justify-end gap-2">
           <ModelPicker value={choice} onChange={setChoice} className="max-w-80" />
           <Button variant="outline" onClick={onClose}>
-            Annuler
+            {tr("common.cancel")}
           </Button>
-          <Button onClick={send} disabled={!ok || busy} title="Entrée (Maj+Entrée : saut de ligne)">
+          <Button onClick={send} disabled={!ok || busy} title={tr("conversation.compose.sendTitle")}>
             <Send /> {ask.send}
           </Button>
         </div>

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react"
+import { Trans, useTranslation } from "react-i18next"
+import { i18n } from "@/i18n"
 import { cn, isSend } from "@/lib/utils"
 import { parsePrompt, type Opt } from "@/lib/prompt"
 import { LiveAgents, type Live } from "./LiveStatus"
@@ -6,7 +8,7 @@ import { toast } from "sonner"
 import { Bug, Copy, Minimize2, Power, Send, Square, SquareCheck, X } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
 import { draftOf, setDraft, useDraft } from "@/hooks/useDraft"
-import { EFFORTS, MODELS, withChoice, type Choice } from "@/lib/models"
+import { efforts, models, withChoice, type Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
 import { Choose } from "./Choose"
 import { api, type Msg } from "@/lib/api"
@@ -16,12 +18,13 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 // Modes d'autorisation de claude -p : sans terminal, Claude ne peut pas demander la permission.
-const MODES = [
-  ["", "Lecture seule : écrire et lancer des commandes est refusé"],
-  ["plan", "Plan : propose sans rien modifier"],
-  ["acceptEdits", "Accepter les modifications de fichiers"],
-  ["auto", "Auto : Claude décide de ce qu'il peut faire"],
-] as const
+const modes = () =>
+  [
+    ["", i18n.t("conversation.composer.modes.readOnly")],
+    ["plan", i18n.t("conversation.composer.modes.plan")],
+    ["acceptEdits", i18n.t("conversation.composer.modes.acceptEdits")],
+    ["auto", i18n.t("conversation.composer.modes.auto")],
+  ] as const
 
 // Le champ de saisie garde le focus après chaque envoi, même quand il est remplacé par l'autre (chat de gld ↔ session ouverte) :
 // le nouveau champ prend le focus à son montage s'il vient d'être demandé. Un seul composeur est affiché à la fois.
@@ -67,6 +70,7 @@ export function Composer({
   onAsk?: (asking: boolean) => void // Claude attend une réponse dans le terminal
   onWrite?: () => void // l'utilisateur envoie un message : la vue descend
 }) {
+  const { t } = useTranslation()
   const { text, queue } = useDraft(id)
   const setText = (t: string) => setDraft(id, { text: t })
   const [mode, setMode] = useLocal("ccChatMode", "")
@@ -132,7 +136,7 @@ export function Composer({
                 ...t,
                 msgs: e.msgs ? [...t.msgs, ...e.msgs] : t.msgs,
                 running: e.done ? false : t.running,
-                error: e.done && !e.ok ? e.error || "Échec" : t.error,
+                error: e.done && !e.ok ? e.error || i18n.t("conversation.composer.failed") : t.error,
                 cost: e.cost ?? t.cost,
               }
           )
@@ -165,48 +169,48 @@ export function Composer({
           onKeyDown={(e) => isSend(e) && (e.preventDefault(), send())}
           onPaste={pics.onPaste}
           onDrop={pics.onDrop}
-          placeholder={running ? "Claude répond… ton message partira ensuite (Entrée : mettre en file)" : "Écrire à Claude… (Entrée envoie, Maj+Entrée : saut de ligne)"}
+          placeholder={running ? t("conversation.composer.placeholderRunning") : t("conversation.composer.placeholder")}
           rows={2}
           maxLength={32000}
           className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
-          aria-label="Message à Claude"
+          aria-label={t("conversation.composer.messageAria")}
         />
         <ImageChips images={pics.images} busy={pics.busy} onRemove={pics.remove} />
         {queue.length > 0 && (
-          <ul className="space-y-1 text-xs" aria-label="Messages en file d'attente">
+          <ul className="space-y-1 text-xs" aria-label={t("conversation.composer.queueAria")}>
             {queue.map((q, i) => (
               <li key={i} className="flex items-center gap-2 rounded-md border border-dashed px-2 py-1 text-muted-foreground">
                 <span className="shrink-0 tabular-nums">{i + 1}.</span>
                 <span className="min-w-0 flex-1 truncate" title={q}>
                   {q}
                 </span>
-                <Button size="icon-xs" variant="ghost" aria-label="Retirer de la file" onClick={() => setQ(queue.filter((_, j) => j !== i))}>
+                <Button size="icon-xs" variant="ghost" aria-label={t("conversation.composer.dequeue")} onClick={() => setQ(queue.filter((_, j) => j !== i))}>
                   <X />
                 </Button>
               </li>
             ))}
             {!running && (
               <li className="flex items-center gap-2 text-muted-foreground">
-                File suspendue (le tour précédent a échoué ou a été arrêté).
+                {t("conversation.composer.queueSuspended")}
                 <Button size="xs" variant="outline" onClick={() => (setQ(queue.slice(1)), submit(queue[0]))}>
-                  Envoyer le suivant
+                  {t("conversation.composer.sendNext")}
                 </Button>
               </li>
             )}
           </ul>
         )}
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <Choose value={mode} onChange={setMode} options={MODES} label="Autorisations accordées à Claude" disabled={running} className="max-w-full min-w-0" />
+          <Choose value={mode} onChange={setMode} options={modes()} label={t("conversation.composer.permissions")} disabled={running} className="max-w-full min-w-0" />
           <ModelPicker value={choice} onChange={setChoice} disabled={running} />
-          {turn?.cost ? <span className="text-muted-foreground">coût indiqué par claude : {turn.cost.toFixed(2)} $</span> : null}
+          {turn?.cost ? <span className="text-muted-foreground">{t("conversation.composer.cost", { cost: turn.cost.toFixed(2) })}</span> : null}
           <span className="ml-auto" />
           {running ? (
             <Button size="sm" variant="outline" onClick={stop}>
-              <Square /> Arrêter
+              <Square /> {t("conversation.composer.stop")}
             </Button>
           ) : (
             <Button size="sm" onClick={send} disabled={!text.trim() && !pics.images.length}>
-              <Send /> Envoyer
+              <Send /> {t("conversation.composer.send")}
             </Button>
           )}
         </div>
@@ -218,6 +222,7 @@ export function Composer({
 // Session ouverte dans un terminal : deux processus ne peuvent pas écrire le même transcript, donc pas de claude -p ici. Si la session
 // tourne dans tmux, le message y est collé puis validé ; sinon on l'explique.
 function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => void; liveState: Live; onAsk?: (asking: boolean) => void }) {
+  const { t } = useTranslation()
   const [info, setInfo] = useState<{ ids: string[]; why: string } | null>(null)
   const { text, queue } = useDraft(id) // gardé par session : fermer la fenêtre ou un échec d'envoi ne le perd pas
   const setText = (t: string) => setDraft(id, { text: t })
@@ -239,7 +244,7 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
     }
   }, [id])
   const ok = info?.ids.includes(id)
-  const sugg =/^\/\S*$/.test(text) ? [...SLASH.map(([c, l]) => [c, l] as const), ...extra].filter(([c]) => c.startsWith(text) && c !== text) : []
+  const sugg =/^\/\S*$/.test(text) ? [...slash().map(([c, l]) => [c, l] as const), ...extra].filter(([c]) => c.startsWith(text) && c !== text) : []
   // Un message écrit pendant que Claude travaille, ou qu'une question attend, est mis en file : il part dès que la session attend
   // (jamais dans une question, où il répondrait à sa place).
   const post = async (full: string) => {
@@ -289,8 +294,8 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
     return (
       <div className="flex items-center gap-3 border-t px-6 py-3 text-xs text-muted-foreground">
         <p className="min-w-0 flex-1 text-center">
-          Cette session tourne dans un terminal hors tmux (un processus <code>claude</code> la détient : c'est peut-être celle où tu es en train de travailler) : écris-y directement.
-          {info && " Relancée dans tmux, elle accepterait un message d'ici" + (info.why ? ` (${info.why})` : "") + "."}
+          <Trans i18nKey="conversation.composer.noTmux" components={[<code key="0" />]} />
+          {info && " " + t("conversation.composer.relaunch", { why: info.why ? ` (${info.why})` : "" })}
         </p>
         <CloseSession id={id} />
       </div>
@@ -300,7 +305,7 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
       <div className="mx-auto max-w-7xl space-y-2">
         <TerminalPanel id={id} onAsk={(a) => (setAsking(a), onAsk?.(a))} onSent={onSent} />
         {sugg.length > 0 && (
-          <ul className="max-h-48 overflow-y-auto rounded-lg border bg-popover p-1 text-sm shadow-md" role="listbox" aria-label="Commandes">
+          <ul className="max-h-48 overflow-y-auto rounded-lg border bg-popover p-1 text-sm shadow-md" role="listbox" aria-label={t("conversation.composer.commandsAria")}>
             {sugg.map(([cmd, label], i) => (
               <li
                 key={cmd}
@@ -334,23 +339,23 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
           }}
           onPaste={pics.onPaste}
           onDrop={pics.onDrop}
-          placeholder="Écrire à la session… (Entrée envoie, Maj+Entrée : saut de ligne)"
+          placeholder={t("conversation.composer.sessionPlaceholder")}
           rows={2}
           maxLength={32000}
           className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          aria-label="Message à la session ouverte"
+          aria-label={t("conversation.composer.sessionAria")}
         />
         <ImageChips images={pics.images} busy={pics.busy} onRemove={pics.remove} />
         {queue.length > 0 && (
-          <ul className="space-y-1 text-xs" aria-label="Messages en file d'attente">
+          <ul className="space-y-1 text-xs" aria-label={t("conversation.composer.queueAria")}>
             {queue.map((q, i) => (
               <li key={i} className="flex items-center gap-2 rounded-md border border-dashed px-2 py-1 text-muted-foreground">
                 <span className="shrink-0 tabular-nums">{i + 1}.</span>
                 <span className="min-w-0 flex-1 truncate" title={q}>
                   {q}
                 </span>
-                {i === 0 && <span className="shrink-0">{asking ? "après la question" : working ? "dès que Claude attend" : "part…"}</span>}
-                <Button size="icon-xs" variant="ghost" aria-label="Retirer de la file" onClick={() => setQ(queue.filter((_, j) => j !== i))}>
+                {i === 0 && <span className="shrink-0">{asking ? t("conversation.composer.afterQuestion") : working ? t("conversation.composer.whenIdle") : t("conversation.composer.sending")}</span>}
+                <Button size="icon-xs" variant="ghost" aria-label={t("conversation.composer.dequeue")} onClick={() => setQ(queue.filter((_, j) => j !== i))}>
                   <X />
                 </Button>
               </li>
@@ -364,33 +369,33 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
             <Button
               size="sm"
               variant="outline"
-              title="Envoie Échap à la session : Claude interrompt sa réponse en cours (comme dans le terminal)"
+              title={t("conversation.composer.interruptTitle")}
               onClick={async () => {
                 const r = await api.post("/session-key", { id, key: "Escape" })
                 if (!r.ok) toast.error(r.out)
               }}
             >
-              <Square /> Interrompre
+              <Square /> {t("conversation.composer.interrupt")}
             </Button>
           )}
           <Choose
-            value={MODELS.find(([a]) => a && liveState.st?.model?.toLowerCase().includes(a))?.[0] ?? ""}
+            value={models().find(([a]) => a && liveState.st?.model?.toLowerCase().includes(a))?.[0] ?? ""}
             onChange={async (m) => m && (await post(`/model ${m}`)) && onSent()}
-            options={[["", "Modèle…"], ...MODELS.slice(1)]}
-            label="Modèle de la session"
+            options={[["", t("conversation.composer.modelEllipsis")], ...models().slice(1)]}
+            label={t("conversation.composer.sessionModel")}
             disabled={working || asking || busy}
           />
           <Choose
             value=""
             onChange={async (e) => e && (await post(`/effort ${e}`)) && onSent()}
-            options={[["", "Effort…"], ...EFFORTS.slice(1)]}
-            label="Effort de la session"
+            options={[["", t("conversation.composer.effortEllipsis")], ...efforts().slice(1)]}
+            label={t("conversation.composer.sessionEffort")}
             disabled={working || asking || busy}
           />
           <SlashMenu id={id} text={text} onSent={onSent} />
           <CloseSession id={id} />
           <Button size="sm" onClick={send} disabled={(!text.trim() && !pics.images.length) || busy}>
-            <Send /> Envoyer à la session
+            <Send /> {t("conversation.composer.sendToSession")}
           </Button>
         </div>
       </div>
@@ -400,17 +405,19 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
 
 // Ferme la session ouverte (le processus claude reçoit SIGTERM), après confirmation.
 function CloseSession({ id }: { id: string }) {
+  const { t } = useTranslation()
   const a = useActions()
   const close = () => a.stop([id]) // confirme dans la fenêtre commune, puis met la liste à jour
   return (
-    <Button size="sm" variant="ghost" onClick={close} title="Termine le processus claude de cette session ; la conversation reste reprenable">
-      <Power /> Fermer la session
+    <Button size="sm" variant="ghost" onClick={close} title={t("conversation.composer.closeTitle")}>
+      <Power /> {t("conversation.composer.close")}
     </Button>
   )
 }
 
 // L'écran du terminal de la session (tmux) relu toutes les 1,5 s, pour proposer en boutons les options détectées.
 function TerminalPanel({ id, onAsk, onSent }: { id: string; onAsk?: (asking: boolean) => void; onSent: () => void }) {
+  const { t } = useTranslation()
   const [screen, setScreen] = useState("")
   const busy = useRef(false) // une touche vient d'être envoyée : l'écran affiché peut être périmé
   useEffect(() => {
@@ -465,10 +472,10 @@ function TerminalPanel({ id, onAsk, onSent }: { id: string; onAsk?: (asking: boo
     await press(...(o.reach ?? (o.keys[o.keys.length - 1] === "Enter" ? o.keys.slice(0, -1) : o.keys)))
   }
   const reply = async () => {
-    const t = answer.trim()
-    if (!t) return
+    const text = answer.trim()
+    if (!text) return
     if (prompt?.options.find((o) => o.label === typing)?.chat) await new Promise((x) => setTimeout(x, 800)) // laisse la question se fermer
-    const r = await api.post("/session-send", { id, text: t })
+    const r = await api.post("/session-send", { id, text })
     if (!r.ok) return void toast.error(r.out)
     setAnswer("")
     setTyping(null)
@@ -484,20 +491,20 @@ function TerminalPanel({ id, onAsk, onSent }: { id: string; onAsk?: (asking: boo
       {prompt && (
         <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm">
           {prompt.tabs && prompt.tabs.length > 1 && (
-            <p className="mb-1.5 flex flex-wrap gap-1 text-xs" aria-label="Onglets de la question">
-              {prompt.tabs.map((t) => (
-                <span key={t.label} className={t.done ? "rounded border border-emerald-600/40 px-1.5 text-emerald-700 dark:text-emerald-400" : "rounded border px-1.5 font-medium"}>
-                  {t.done ? "✔" : "•"} {t.label}
+            <p className="mb-1.5 flex flex-wrap gap-1 text-xs" aria-label={t("conversation.composer.tabsAria")}>
+              {prompt.tabs.map((tab) => (
+                <span key={tab.label} className={tab.done ? "rounded border border-emerald-600/40 px-1.5 text-emerald-700 dark:text-emerald-400" : "rounded border px-1.5 font-medium"}>
+                  {tab.done ? "✔" : "•"} {tab.label}
                 </span>
               ))}
             </p>
           )}
           {prompt.context && <pre className="mb-2 max-h-60 overflow-auto rounded-md border bg-background/70 p-2 font-mono text-xs break-words whitespace-pre-wrap">{prompt.context}</pre>}
-          <p className="mb-1.5 font-medium">{prompt.question || "Réponse attendue"}</p>
+          <p className="mb-1.5 font-medium">{prompt.question || t("conversation.composer.answerExpected")}</p>
           <div className="flex flex-col items-stretch gap-1.5">
             {prompt.options.map((o) => (
               <div key={o.label} className="contents">
-                <Button size="sm" disabled={pressing} variant={typing === o.label ? "secondary" : "outline"} className="h-auto min-h-8 justify-start gap-2 py-1.5 text-left whitespace-normal" onClick={() => choose(o)} title={`Touches : ${o.keys.join(", ")}`}>
+                <Button size="sm" disabled={pressing} variant={typing === o.label ? "secondary" : "outline"} className="h-auto min-h-8 justify-start gap-2 py-1.5 text-left whitespace-normal" onClick={() => choose(o)} title={t("conversation.composer.keys", { keys: o.keys.join(", ") })}>
                   {o.checked !== undefined && (o.checked ? <SquareCheck className="text-emerald-600" /> : <Square />)}
                   <span className="min-w-0">
                     {o.label}
@@ -513,43 +520,43 @@ function TerminalPanel({ id, onAsk, onSent }: { id: string; onAsk?: (asking: boo
                       onKeyDown={(e) => (e.ctrlKey || e.metaKey || !e.shiftKey) && e.key === "Enter" && (e.preventDefault(), reply())}
                       rows={2}
                       maxLength={32000}
-                      placeholder="Ta réponse (Entrée pour envoyer, Maj+Entrée pour un saut de ligne)"
+                      placeholder={t("conversation.composer.answerPlaceholder")}
                       className="field-sizing-content max-h-40 min-h-12 flex-1 resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-                      aria-label="Réponse à la question du terminal"
+                      aria-label={t("conversation.composer.answerAria")}
                     />
                     <Button size="sm" onClick={reply} disabled={!answer.trim()}>
-                      <Send /> Envoyer
+                      <Send /> {t("conversation.composer.send")}
                     </Button>
                   </div>
                 )}
               </div>
             ))}
             {prompt.submit && (
-              <Button size="sm" disabled={pressing} onClick={() => press(...prompt.submit!)} title={`Valide les cases cochées. Touches envoyées : ${prompt.submit.join(", ")}`}>
-                <Send /> Valider
+              <Button size="sm" disabled={pressing} onClick={() => press(...prompt.submit!)} title={t("conversation.composer.validateTitle", { keys: prompt.submit.join(", ") })}>
+                <Send /> {t("conversation.composer.validate")}
               </Button>
             )}
             <Button size="sm" disabled={pressing} variant="ghost" className="justify-start" onClick={() => press("Escape")}>
-              Échap
+              {t("conversation.composer.escape")}
             </Button>
           </div>
         </div>
       )}
       <div className="flex justify-end">
-        <Button size="xs" variant="ghost" className="text-muted-foreground" onClick={() => setDebug(!debug)} aria-pressed={debug} title="Écran du terminal tel que gld le lit, et ce que le détecteur en tire">
-          <Bug /> Écran brut
+        <Button size="xs" variant="ghost" className="text-muted-foreground" onClick={() => setDebug(!debug)} aria-pressed={debug} title={t("conversation.composer.rawScreenTitle")}>
+          <Bug /> {t("conversation.composer.rawScreen")}
         </Button>
       </div>
       {debug && (
         <div className="space-y-1.5 text-[11px]">
-          <pre className="max-h-72 overflow-auto rounded-lg border bg-background px-3 py-2 font-mono leading-snug whitespace-pre" aria-label="Écran du terminal">
-            {screen || "(écran vide)"}
+          <pre className="max-h-72 overflow-auto rounded-lg border bg-background px-3 py-2 font-mono leading-snug whitespace-pre" aria-label={t("conversation.composer.screenAria")}>
+            {screen || t("conversation.composer.emptyScreen")}
           </pre>
-          <pre className="max-h-40 overflow-auto rounded-lg border bg-muted/40 px-3 py-2 font-mono leading-snug whitespace-pre-wrap" aria-label="Résultat du détecteur">
-            {prompt ? JSON.stringify(prompt, null, 1) : "détecteur : aucune question reconnue"}
+          <pre className="max-h-40 overflow-auto rounded-lg border bg-muted/40 px-3 py-2 font-mono leading-snug whitespace-pre-wrap" aria-label={t("conversation.composer.detectorAria")}>
+            {prompt ? JSON.stringify(prompt, null, 1) : t("conversation.composer.noPrompt")}
           </pre>
-          <Button size="xs" variant="outline" onClick={() => navigator.clipboard.writeText(screen).then(() => toast.success("Écran copié"), () => toast.error("Copie impossible"))}>
-            <Copy /> Copier l'écran
+          <Button size="xs" variant="outline" onClick={() => navigator.clipboard.writeText(screen).then(() => toast.success(t("conversation.composer.screenCopied")), () => toast.error(t("conversation.composer.copyFailed")))}>
+            <Copy /> {t("conversation.composer.copyScreen")}
           </Button>
         </div>
       )}
@@ -559,26 +566,13 @@ function TerminalPanel({ id, onAsk, onSent }: { id: string; onAsk?: (asking: boo
 
 // Commandes de Claude Code envoyées telles quelles à la session (elles s'exécutent dans son terminal). /compact accepte des consignes :
 // ce qui est écrit dans le champ s'y ajoute (« /compact garde les décisions d'architecture »).
-
-const SLASH = [
-  ["/compact", "Compacter le contexte", "Résume la conversation pour libérer du contexte ; le texte du champ sert de consigne au résumé"],
-  ["/context", "Voir le contexte", "Répartition du contexte (instructions, mémoire, outils, messages)"],
-  ["/cost", "Voir le coût", "Coût et durée de la session"],
-  ["/usage", "Voir les limites d'usage", "Met à jour le relevé des limites du compte"],
-  ["/clear", "Effacer la conversation", "Vide le contexte (la conversation reste dans le transcript)"],
-  ["/model", "Changer de modèle", "Ouvre le choix du modèle : réponds avec les boutons qui apparaissent au-dessus du champ"],
-  ["/mcp", "Serveurs MCP", "État des serveurs MCP"],
-  ["/status", "État de Claude Code", "Version, compte, modèle, connexion"],
-  ["/memory", "Mémoire", "Fichiers CLAUDE.md chargés"],
-  ["/permissions", "Permissions", "Règles d'autorisation en vigueur"],
-  ["/agents", "Sous-agents", "Liste des agents disponibles"],
-  ["/rewind", "Revenir en arrière", "Rétablit la conversation ou le code à un point précédent"],
-  ["/export", "Exporter", "Exporte la conversation"],
-  ["/doctor", "Diagnostic", "Vérifie l'installation"],
-  ["/help", "Aide", "Liste des commandes"],
-] as const
+const slash = () => {
+  const s = (name: string) => [i18n.t(`conversation.slash.${name}.label`), i18n.t(`conversation.slash.${name}.hint`)] as const
+  return (["compact", "context", "cost", "usage", "clear", "model", "mcp", "status", "memory", "permissions", "agents", "rewind", "export", "doctor", "help"] as const).map((n) => [`/${n}`, ...s(n)] as const)
+}
 
 function SlashMenu({ id, text, onSent }: { id: string; text: string; onSent: () => void }) {
+  const { t } = useTranslation()
   const run = async (cmd: string) => {
     const full = cmd === "/compact" && text.trim() ? `${cmd} ${text.trim().replace(/\s+/g, " ")}` : cmd
     const r = await api.post("/session-send", { id, text: full })
@@ -588,12 +582,12 @@ function SlashMenu({ id, text, onSent }: { id: string; text: string; onSent: () 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button size="sm" variant="ghost" title="Commandes de Claude Code">
-          <Minimize2 /> Commandes
+        <Button size="sm" variant="ghost" title={t("conversation.composer.commandsTitle")}>
+          <Minimize2 /> {t("conversation.composer.commands")}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
-        {SLASH.map(([cmd, label, hint]) => (
+        {slash().map(([cmd, label, hint]) => (
           <DropdownMenuItem key={cmd} onSelect={() => run(cmd)} className="flex-col items-start gap-0">
             <span>
               {label} <code className="text-xs text-muted-foreground">{cmd}</code>

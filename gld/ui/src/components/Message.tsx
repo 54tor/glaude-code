@@ -1,5 +1,6 @@
 import { loc } from "@/i18n"
 import { memo, useState } from "react"
+import { useTranslation } from "react-i18next"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { CornerDownRight, Wrench } from "lucide-react"
@@ -40,24 +41,25 @@ export function Markdown({ t, onLink }: { t: string; onLink?: (href: string) => 
 // Texte collé dans Claude Code (<pasted_content id="…">…</pasted_content id="…">) : un bloc repliable.
 const PASTED = /<pasted_content id="[^"]*">\n?([\s\S]*?)\n?<\/pasted_content(?: id="[^"]*")?>/g
 
-function UserText({ t }: { t: string }) {
+function UserText({ t: text }: { t: string }) {
+  const { t } = useTranslation()
   const parts: React.ReactNode[] = []
   let at = 0
-  for (const m of t.matchAll(PASTED)) {
-    const before = t.slice(at, m.index).trim()
+  for (const m of text.matchAll(PASTED)) {
+    const before = text.slice(at, m.index).trim()
     if (before) parts.push(<span key={`t${at}`}>{noBreak(before)}</span>)
     const lines = m[1].split("\n").length
     parts.push(
       <details key={m.index} className="group/paste my-1 rounded-md border bg-background/60">
         <summary className="cursor-pointer list-none px-3 py-1.5 text-xs text-muted-foreground select-none hover:text-foreground">
-          Texte collé · {lines} ligne{lines > 1 ? "s" : ""}
+          {t("conversation.message.pasted", { count: lines })}
         </summary>
         <pre className="max-h-96 overflow-auto border-t px-3 py-2 text-xs whitespace-pre-wrap">{m[1]}</pre>
       </details>
     )
     at = m.index + m[0].length
   }
-  const rest = t.slice(at).trim()
+  const rest = text.slice(at).trim()
   if (rest) parts.push(<span key="rest">{noBreak(rest)}</span>)
   return <>{parts}</>
 }
@@ -66,14 +68,15 @@ function UserText({ t }: { t: string }) {
 type Conv = { dir: string; id: string; tools?: boolean }
 
 function MessageView({ m, conv }: { m: Msg; conv?: Conv }) {
+  const { t } = useTranslation()
   const title = m.ts ? new Date(m.ts).toLocaleString(loc()) : undefined
   // Image de la conversation : relue à la demande dans le transcript (GET /conv-image), jamais embarquée dans la liste des messages.
   if (m.img && conv) {
     const src = `/conv-image?dir=${encodeURIComponent(conv.dir)}&id=${encodeURIComponent(conv.id)}&o=${m.o ?? 0}&k=${m.k ?? 0}`
     return (
       <div title={title} className={`msg flex ${m.r === "user" ? "justify-end" : ""}`}>
-        <a href={src} target="_blank" rel="noopener noreferrer" title="Ouvrir l'image en grand">
-          <img src={src} loading="lazy" alt="Image de la conversation" className="max-h-80 max-w-full rounded-xl border bg-muted/30 object-contain" />
+        <a href={src} target="_blank" rel="noopener noreferrer" title={t("conversation.message.openImage")}>
+          <img src={src} loading="lazy" alt={t("conversation.message.imageAlt")} className="max-h-80 max-w-full rounded-xl border bg-muted/30 object-contain" />
         </a>
       </div>
     )
@@ -104,7 +107,7 @@ function MessageView({ m, conv }: { m: Msg; conv?: Conv }) {
     const Icon = result ? CornerDownRight : Wrench
     return (
       <div title={title} className="msg flex gap-2 border-l-2 border-primary/30 py-0.5 pl-3 text-muted-foreground">
-        <Icon className="mt-0.5 size-3.5 shrink-0" aria-label={result ? "résultat d'outil" : "appel d'outil"} />
+        <Icon className="mt-0.5 size-3.5 shrink-0" aria-label={result ? t("conversation.message.toolResult") : t("conversation.message.toolCall")} />
         <span className="min-w-0 break-words whitespace-pre-wrap">{noBreak(result ? m.t.slice(1).trimStart() : m.t)}</span>
       </div>
     )
@@ -118,6 +121,7 @@ function MessageView({ m, conv }: { m: Msg; conv?: Conv }) {
 
 // Message démesuré (coupé par le serveur) : affiché par morceaux, chacun à la demande.
 function CutMessage({ m, conv }: { m: Msg; conv?: Conv }) {
+  const { t } = useTranslation()
   const [more, setMore] = useState({ t: "", cut: m.cut ?? 0 })
   const [busy, setBusy] = useState(false)
   const next = async () => {
@@ -127,7 +131,7 @@ function CutMessage({ m, conv }: { m: Msg; conv?: Conv }) {
       const r = await api.convText(conv, !!conv.tools, m, more.cut)
       setMore((p) => ({ t: p.t + r.t, cut: r.cut }))
     } catch {
-      toast.error("Suite du message illisible")
+      toast.error(t("conversation.message.readFail"))
     } finally {
       setBusy(false)
     }
@@ -139,7 +143,7 @@ function CutMessage({ m, conv }: { m: Msg; conv?: Conv }) {
       {more.cut > 0 && conv && (
         <div className={m.r === "user" ? "flex justify-end" : ""}>
           <Button variant="outline" size="sm" disabled={busy} onClick={next}>
-            Afficher la suite · {size(left)} restants
+            {t("conversation.message.showMore", { size: size(left) })}
           </Button>
         </div>
       )}
