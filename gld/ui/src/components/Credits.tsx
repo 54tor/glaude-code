@@ -118,7 +118,6 @@ export function CreditsButton() {
             </h3>
             <p className="text-xs text-muted-foreground">Un don est libre, sans compte ni intermédiaire. Vérifiez l'adresse avant d'envoyer.</p>
             <Addr label="XMR" name="Monero" value={XMR} scheme="monero" />
-            <Addr label="BTC" name="Bitcoin" value={BTC} scheme="bitcoin" />
           </section>
         )}
 
