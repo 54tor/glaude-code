@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ChevronRight, MessageSquarePlus, NotebookPen, Plus, Send, X } from "lucide-react"
+import { Check, ChevronRight, LoaderCircle, MessageSquarePlus, NotebookPen, Plus, Send, X } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/api"
 import { useOpen } from "@/hooks/useOpen"
@@ -30,6 +30,10 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
   const [open, flip] = useOpen("n/" + noteKey)
   const [sendable, setSendable] = useState<Set<string>>(new Set())
   const saved = useRef("")
+  const [savedList, setSavedList] = useState<string[]>([]) // ce que le serveur a : une ligne différente est encore en attente
+  const [picked, setPicked] = useState<Set<number>>(new Set()) // lignes cochées ; aucune cochée = tout part
+  const fields = useRef<(HTMLTextAreaElement | null)[]>([])
+  const focusNext = useRef<number | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const latest = useRef({ text: "", key: noteKey })
 
@@ -40,6 +44,7 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
         if (!live) return
         const t = r.notes[noteKey] ?? ""
         saved.current = pack(parse(t))
+        setSavedList(parse(t))
         setItems(parse(t))
       },
       () => live && setItems([])
@@ -53,8 +58,13 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
     clearTimeout(timer.current)
     const { text: t, key } = latest.current
     if (t === saved.current) return
+    const before = saved.current
     saved.current = t
-    api.post("/notes", { key, text: t }).then((r) => r.ok || toast.error(r.out))
+    api.post("/notes", { key, text: t }).then((r) => {
+      if (r.ok) return setSavedList(parse(t))
+      saved.current = before
+      toast.error(r.out)
+    })
   }
   useEffect(() => flush, []) // enregistre ce qui reste en quittant la vue
 
@@ -64,15 +74,23 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
     clearTimeout(timer.current)
     timer.current = setTimeout(flush, 700)
   }
+  useEffect(() => {
+    if (focusNext.current !== null) fields.current[focusNext.current]?.focus()
+    focusNext.current = null
+  })
   if (items === null) return null
-  const body = items.map((i) => i.trim()).filter(Boolean).map((i) => "- " + i).join("\n")
+  const chosen = items.map((it, i) => ({ it: it.trim(), i })).filter((x) => x.it && (picked.size === 0 || picked.has(x.i)))
+  const body = chosen.map((x) => "- " + x.it).join("\n")
   const count = items.filter((i) => i.trim()).length
+  const togglePick = (i: number) => setPicked((p) => (p.has(i) ? new Set([...p].filter((x) => x !== i)) : new Set(p).add(i)))
+  const dropIdx = new Set(chosen.map((x) => x.i))
   const targets = rows.filter((r) => sendable.has(r.s.id) && a.live.has(r.s.id))
   const sendTo = async (r: Row) => {
     const res = await api.post("/session-send", { id: r.s.id, text: body }, 20_000)
     if (res.ok) {
       toast.success(tr("conversation.notes.sent", { title: r.s.title || r.s.id.slice(0, 8) }))
-      edit([])
+      edit(items.filter((_, j) => !dropIdx.has(j)))
+      setPicked(new Set())
       flush()
     }
     else toast.error(res.out)
@@ -90,8 +108,18 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
           <ul className="space-y-1.5">
             {items.map((it, i) => (
               <li key={i} className="flex items-start gap-1.5 rounded-lg border bg-background px-2 py-1">
+                <input type="checkbox" checked={picked.has(i)} onChange={() => togglePick(i)} aria-label={tr("conversation.notes.pick")} className="mt-2.5 size-3.5 shrink-0" />
                 <textarea
+                  ref={(el) => void (fields.current[i] = el)}
                   value={it}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter" || !(e.ctrlKey || e.metaKey)) return
+                    e.preventDefault()
+                    if (!it.trim()) return
+                    flush()
+                    if (i === items.length - 1 || items[i + 1].trim()) edit([...items.slice(0, i + 1), "", ...items.slice(i + 1)])
+                    focusNext.current = i + 1
+                  }}
                   onChange={(e) => edit(items.map((x, j) => (j === i ? e.target.value : x)))}
                   onBlur={flush}
                   maxLength={4000}
@@ -99,7 +127,13 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
                   aria-label={tr("conversation.notes.item")}
                   className="session-text field-sizing-content max-h-48 min-w-0 flex-1 resize-none bg-transparent py-1 outline-none"
                 />
-                <Button variant="ghost" size="icon-xs" onClick={() => edit(items.filter((_, j) => j !== i))} aria-label={tr("conversation.notes.remove")}>
+                {it.trim() &&
+                  (savedList[i] === it ? (
+                    <Check className="mt-1.5 size-3.5 shrink-0 text-success" aria-label={tr("conversation.notes.saved")} />
+                  ) : (
+                    <LoaderCircle className="mt-1.5 size-3.5 shrink-0 animate-spin text-muted-foreground" aria-label={tr("conversation.notes.saving")} />
+                  ))}
+                <Button variant="ghost" size="icon-xs" onClick={() => { setPicked(new Set()); edit(items.filter((_, j) => j !== i)) }} aria-label={tr("conversation.notes.remove")}>
                   <X />
                 </Button>
               </li>
@@ -110,7 +144,12 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
           </Button>
           <div className="flex flex-wrap items-center gap-2">
             {folder && (
-              <Button size="sm" variant="outline" disabled={!body} onClick={() => a.newSession(folder, body)}>
+              <Button size="sm" variant="outline" disabled={!body} onClick={() => {
+                  a.newSession(folder, body)
+                  edit(items.filter((_, j) => !dropIdx.has(j)))
+                  setPicked(new Set())
+                  flush()
+                }}>
                 <MessageSquarePlus /> {tr("conversation.notes.newSession")}
               </Button>
             )}

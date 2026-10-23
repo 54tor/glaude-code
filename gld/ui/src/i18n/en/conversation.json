@@ -100,6 +100,8 @@
       "closeTitle": "Ends this session's claude process; the conversation can still be resumed",
       "close": "Close the session",
       "tabsAria": "Question tabs",
+      "prevTab": "Previous tab",
+      "nextTab": "Next tab",
       "answerExpected": "Answer expected",
       "keys": "Keys: {{keys}}",
       "answerPlaceholder": "Your answer (Enter to send, Shift+Enter for a new line)",
@@ -259,6 +261,9 @@
       "sendLabel": "Sessions open in tmux, among those shown",
       "none": "No session open in tmux",
       "item": "Note item",
+      "pick": "Tick to send only this note",
+      "saved": "Saved",
+      "saving": "Saving…",
       "remove": "Remove item",
       "add": "Add item",
       "count": "{{count}} item(s)"
