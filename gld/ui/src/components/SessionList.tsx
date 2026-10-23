@@ -1,3 +1,4 @@
+import { loc } from "@/i18n"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Flame, MoreHorizontal, SquareTerminal, Star, Tag } from "lucide-react"
 import { ago, bucket, compact, full, size, tilde, tokTotal } from "@/lib/format"
@@ -112,7 +113,7 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
                 <>
                   <span
                     className="shrink-0 tabular-nums"
-                    title={`Entrée ${s.tok.in.toLocaleString("fr-FR")} · sortie ${s.tok.out.toLocaleString("fr-FR")} · cache écrit ${s.tok.cw.toLocaleString("fr-FR")} · cache lu ${s.tok.cr.toLocaleString("fr-FR")}`}
+                    title={`Entrée ${s.tok.in.toLocaleString(loc())} · sortie ${s.tok.out.toLocaleString(loc())} · cache écrit ${s.tok.cw.toLocaleString(loc())} · cache lu ${s.tok.cr.toLocaleString(loc())}`}
                   >
                     {compact(tokTotal(s.tok))} tokens
                   </span>

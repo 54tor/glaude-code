@@ -1,3 +1,4 @@
+import { loc } from "@/i18n"
 import { memo, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -65,7 +66,7 @@ function UserText({ t }: { t: string }) {
 type Conv = { dir: string; id: string; tools?: boolean }
 
 function MessageView({ m, conv }: { m: Msg; conv?: Conv }) {
-  const title = m.ts ? new Date(m.ts).toLocaleString("fr-FR") : undefined
+  const title = m.ts ? new Date(m.ts).toLocaleString(loc()) : undefined
   // Image de la conversation : relue à la demande dans le transcript (GET /conv-image), jamais embarquée dans la liste des messages.
   if (m.img && conv) {
     const src = `/conv-image?dir=${encodeURIComponent(conv.dir)}&id=${encodeURIComponent(conv.id)}&o=${m.o ?? 0}&k=${m.k ?? 0}`

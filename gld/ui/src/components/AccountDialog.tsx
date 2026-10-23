@@ -1,3 +1,4 @@
+import { loc } from "@/i18n"
 import { useEffect, useState } from "react"
 import { CircleUser } from "lucide-react"
 import { api, type Account } from "@/lib/api"
@@ -93,7 +94,7 @@ function Body({ a, updating, onRefresh }: { a: Account; updating: boolean; onRef
         {a.org && <Row k="Organisation">{a.org}</Row>}
         {a.billing && <Row k="Facturation">{a.billing === "stripe_subscription" ? "abonnement" : a.billing}</Row>}
         <Row k="Usage supplémentaire">{a.extraUsage ? "activé" : "désactivé"}{a.extraWhy ? ` · ${REASONS[a.extraWhy] ?? a.extraWhy}` : ""}</Row>
-        {a.since && <Row k="Abonné depuis">{new Date(a.since).toLocaleDateString("fr-FR", { dateStyle: "long" })}</Row>}
+        {a.since && <Row k="Abonné depuis">{new Date(a.since).toLocaleDateString(loc(), { dateStyle: "long" })}</Row>}
       </section>
 
       <section>
@@ -109,7 +110,7 @@ function Body({ a, updating, onRefresh }: { a: Account; updating: boolean; onRef
                   <span className="tabular-nums">{Math.round(l.percent * 10) / 10} %</span>
                   {l.usedDollars != null && l.limitDollars != null && (
                     <span className="text-muted-foreground">
-                      {l.usedDollars.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} $ sur {l.limitDollars.toLocaleString("fr-FR")} $
+                      {l.usedDollars.toLocaleString(loc(), { maximumFractionDigits: 2 })} $ sur {l.limitDollars.toLocaleString(loc())} $
                     </span>
                   )}
                   {l.resetsAt && !isNaN(Date.parse(l.resetsAt)) && <span className="ml-auto text-xs text-muted-foreground">se renouvelle {delay(Date.parse(l.resetsAt) / 1000 - now)}</span>}
@@ -132,10 +133,10 @@ function Body({ a, updating, onRefresh }: { a: Account; updating: boolean; onRef
 
       <section>
         <h3 className="mb-1 text-sm font-medium">Activité</h3>
-        <Row k="Sessions">{a.totalSessions.toLocaleString("fr-FR")}{a.firstSession ? ` depuis le ${new Date(a.firstSession).toLocaleDateString("fr-FR", { dateStyle: "long" })}` : ""}</Row>
-        <Row k="Messages">{a.totalMessages.toLocaleString("fr-FR")}</Row>
+        <Row k="Sessions">{a.totalSessions.toLocaleString(loc())}{a.firstSession ? ` depuis le ${new Date(a.firstSession).toLocaleDateString(loc(), { dateStyle: "long" })}` : ""}</Row>
+        <Row k="Messages">{a.totalMessages.toLocaleString(loc())}</Row>
         {days.length > 0 && <DayChart days={a.days} />}
-        {a.statsAt && <p className="mt-1 text-xs text-muted-foreground">Statistiques calculées par Claude Code jusqu'au {new Date(a.statsAt).toLocaleDateString("fr-FR", { dateStyle: "long" })}.</p>}
+        {a.statsAt && <p className="mt-1 text-xs text-muted-foreground">Statistiques calculées par Claude Code jusqu'au {new Date(a.statsAt).toLocaleDateString(loc(), { dateStyle: "long" })}.</p>}
       </section>
 
       {a.models.length > 0 && (
@@ -204,7 +205,7 @@ function DayChart({ days }: { days: Account["days"] }) {
             <div
               key={d.date}
               className="group relative flex h-full min-w-0 flex-1 flex-col justify-end"
-              title={`${date.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })} : ${d.messages.toLocaleString("fr-FR")} messages, ${d.sessions} sessions, ${d.tools.toLocaleString("fr-FR")} outils${dayTok(d.tokens) ? `, ${compact(dayTok(d.tokens))} tokens` : ""}`}
+              title={`${date.toLocaleDateString(loc(), { weekday: "long", day: "numeric", month: "long" })} : ${d.messages.toLocaleString(loc())} messages, ${d.sessions} sessions, ${d.tools.toLocaleString(loc())} outils${dayTok(d.tokens) ? `, ${compact(dayTok(d.tokens))} tokens` : ""}`}
             >
               <span className="mb-0.5 text-center text-[10px] tabular-nums text-muted-foreground">{v ? compact(v) : ""}</span>
               <div className="w-full rounded-t bg-primary/70 transition-colors group-hover:bg-primary" style={{ height: `${Math.max(v ? 2 : 0, (v / max) * 100)}%` }} />

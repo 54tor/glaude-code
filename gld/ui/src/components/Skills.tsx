@@ -1,3 +1,4 @@
+import { loc } from "@/i18n"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { AlertTriangle, ArrowLeft, BookOpen, Bot, ClipboardCopy, Copy, EyeOff, FileText, FolderInput, Hand, Pencil, Plus, Save, Sparkles, Trash2, X, Zap } from "lucide-react"
 import { toast } from "sonner"
@@ -137,7 +138,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
             />
             {data && (
               <span className="basis-full text-[11px] text-muted-foreground" title="Les descriptions des skills que Claude peut lancer seul sont toujours dans son contexte (1 536 caractères au plus chacune)">
-                ≈ {budget.toLocaleString("fr-FR")} car. de descriptions en contexte
+                ≈ {budget.toLocaleString(loc())} car. de descriptions en contexte
               </span>
             )}
           </div>
