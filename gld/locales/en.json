@@ -1,9 +1,12 @@
 {
+  "cli.main.authMode": "multi-user mode active: account sign-in is required; the token is only accepted as an Authorization: Bearer header.",
+  "cli.main.authRefused": "accounts database unusable ({{.A1}}): gld refuses to start. Check the master key (GLD_AUTH_KEY, keyring, auth.key) and the directory permissions.",
   "cli.main.flagListen": "listen address (default 127.0.0.1; 0.0.0.0 for the whole network, with a token)",
   "cli.main.flagVersion": "print the version and exit",
   "cli.main.plainHTTP": "⚠ gld is listening on {{.A1}}: access is protected by a token, but over plain HTTP.",
   "cli.main.preferTunnel": "  Prefer a tunnel (SSH, Tailscale) or a TLS proxy; do not expose it on the Internet.",
   "cli.main.stopped": "stopped.",
+  "cli.main.xffUntrusted": "⚠ X-Forwarded-For header received from a loopback or private address without GLD_TRUSTED_PROXIES: all clients share the proxy's address. Declare the proxy in GLD_TRUSTED_PROXIES.",
   "cli.matin.automatic": "automatic",
   "cli.matin.backup": "backup: {{.A1}} from {{.A2}}, {{.A3}} session(s)",
   "cli.matin.help": "\ngld-matin — reopens each Claude topic of a project in a terminal tab.\n\n  gld-matin                      tabs for the current project\n  gld-matin -n                   dry-run: shows, opens nothing\n  gld-matin ~/Projects/other     targets another project\n  gld-matin --term tmux          forces a launcher (default: auto-detected)\n  gld-matin --term list          lists the launchers available here\n  gld-matin --age 40 --min 0     widens the window (days) and the threshold (bytes)\n  gld-matin --nommees            ignores sessions without an explicit name\n  gld-matin --id <uuid> [project]  reopens only this session (no age or size filter)\n  gld-matin --args \"...\"         options added to claude (default: none, or $GLD_MATIN_ARGS)\n  gld-matin --resume [name]      reopens the sessions of gld's last backup\n                                 (or of the manual backup with that name), e.g. after a restart\n  gld-matin --prompt \"...\" [project]  opens a NEW claude session with this prompt\n                                 (with --id: resumes that session by sending it this message)\n\nOne topic = one Claude session, identified by its name, otherwise (marked \"~\") by its first prompt.\n",

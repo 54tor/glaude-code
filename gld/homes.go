@@ -203,6 +203,26 @@ func freePort() (string, error) {
 	return p, err
 }
 
+func childProxy(target *url.URL, token string) *httputil.ReverseProxy {
+	return &httputil.ReverseProxy{
+		Rewrite: func(r *httputil.ProxyRequest) {
+			r.SetURL(target) // le Host devient celui de l'enfant, que sa garde anti DNS-rebinding accepte
+			// La passerelle a déjà jugé l'origine de la requête (anti CSRF) et ses droits : l'enfant ne reçoit ni Origin ni
+			// Sec-Fetch-*, qu'il ne pourrait comparer qu'à sa propre adresse, ni cookie (session, jeton, choix de dossier) ni
+			// Authorization. Il exige le jeton de la passerelle.
+			for k := range r.Out.Header {
+				if strings.HasPrefix(strings.ToLower(k), "sec-fetch-") {
+					r.Out.Header.Del(k)
+				}
+			}
+			r.Out.Header.Del("Origin")
+			r.Out.Header.Del("Cookie")
+			r.Out.Header.Del("Authorization")
+			r.Out.Header.Set(childHeader, token)
+		},
+	}
+}
+
 // startHomeProc lance un gld enfant pour ce dossier et attend qu'il réponde.
 func startHomeProc(h Home) (*homeProc, error) {
 	self, err := os.Executable()
@@ -223,21 +243,7 @@ func startHomeProc(h Home) (*homeProc, error) {
 	target := &url.URL{Scheme: "http", Host: "127.0.0.1:" + port}
 	p := &homeProc{dir: h.Dir, cmd: cmd, port: port, done: make(chan struct{})}
 	go func() { cmd.Wait(); close(p.done) }()
-	p.proxy = &httputil.ReverseProxy{
-		Rewrite: func(r *httputil.ProxyRequest) {
-			r.SetURL(target) // le Host devient celui de l'enfant, que sa garde anti DNS-rebinding accepte
-			// La passerelle a déjà jugé l'origine de la requête (anti CSRF) : l'enfant ne reçoit ni Origin ni Sec-Fetch-*, qu'il
-			// ne pourrait comparer qu'à sa propre adresse, ni le cookie (jeton, choix de dossier). Il exige le jeton de la passerelle.
-			for k := range r.Out.Header {
-				if strings.HasPrefix(strings.ToLower(k), "sec-fetch-") {
-					r.Out.Header.Del(k)
-				}
-			}
-			r.Out.Header.Del("Origin")
-			r.Out.Header.Del("Cookie")
-			r.Out.Header.Set(childHeader, token)
-		},
-	}
+	p.proxy = childProxy(target, token)
 	for i := 0; i < 100; i++ {
 		select {
 		case <-p.done:

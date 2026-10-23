@@ -190,6 +190,10 @@ func termWS(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return
 		}
+		if authWS(r, RightExec) != nil {
+			c.Close(websocket.StatusPolicyViolation, "")
+			return
+		}
 		if typ == websocket.MessageText {
 			var m struct {
 				Write  *bool

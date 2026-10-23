@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // Valeurs propres au garde, hors allRights : Grant les refuse, aucune ligne home_acl ne peut les porter.
@@ -98,15 +99,15 @@ var passiveRoutes = map[string]bool{
 // tokenPrincipal : principal d'une requête Bearer ; nil tant que les jetons ne sont pas branchés.
 var tokenPrincipal = func(*http.Request) *Principal { return nil }
 
-var gateOn bool
-
-// gateActive : le garde est monté devant le mux (mode multi-utilisateur).
-func gateActive() bool { return gateOn }
+// gateActive : le garde est monté devant le mux (mode multi-utilisateur), jugé à chaque requête.
+func gateActive() bool { return authMode(authSt) }
 
 type gateInfo struct {
 	p     *Principal
 	s     *authStore
 	local bool // servie par la passerelle, jamais relayée à un home enfant
+	pat   string
+	need  Right
 }
 
 type gateKey struct{}
@@ -203,7 +204,7 @@ func authGate(mux *http.ServeMux, s *authStore, next http.Handler) http.Handler 
 			gateDeny(w, 403, "srv.auth.droitRefuse")
 			return
 		}
-		g := &gateInfo{s: s, local: need == rightPublic || need == rightAny || need == rightAdmin}
+		g := &gateInfo{s: s, local: need == rightPublic || need == rightAny || need == rightAdmin, pat: pat, need: need}
 		if need != rightPublic {
 			p, bearer := gatePrincipal(s, r, passiveRoutes[pat])
 			if p == nil {
@@ -302,4 +303,72 @@ func rightsErr(g *gateInfo, homeID string, ok func(map[Right]bool) bool) (int, s
 		return 403, "srv.auth.droitRefuse"
 	}
 	return 0, ""
+}
+
+// Flux longs : le garde ne juge qu'à l'ouverture, une session révoquée ou un droit retiré doit aussi couper un flux déjà ouvert.
+var (
+	authWatchEvery = 5 * time.Second
+	watchedRoutes  = map[string]bool{"GET /term-ws": true, "POST /chat": true}
+	errAuthRevoked = errors.New("auth: access revoked")
+)
+
+// authWS relit la session (expirée, révoquée, compte désactivé) et le droit sur le home de la requête. Sans garde, ou pour le
+// jeton (fixe pour la vie du processus), rien à revérifier.
+func authWS(r *http.Request, right Right) error {
+	g := gateFrom(r)
+	if g == nil || g.p == nil || g.p.Token {
+		return nil
+	}
+	c, err := r.Cookie(sessCookie)
+	if err != nil {
+		return errAuthRevoked
+	}
+	p, err := g.s.SessionPassive(c.Value)
+	if err != nil || !p.MFA || p.User == nil || g.p.User == nil || p.User.ID != g.p.User.ID {
+		return errAuthRevoked
+	}
+	if right == rightAny || right == rightPublic {
+		return nil
+	}
+	id, ok := homeIDFor(homeFrom(r))
+	if !ok {
+		return errAuthRevoked
+	}
+	m, err := g.s.Rights(p.User.ID, id)
+	if err != nil || !m[right] {
+		return errAuthRevoked
+	}
+	return nil
+}
+
+// withAuthWatch annule le contexte d'un flux long dès que authWS échoue : le WebSocket local se ferme (sa lecture suit ce
+// contexte), le proxy d'un home enfant coupe l'amont et le client, /chat arrête le tour en cours.
+func withAuthWatch(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		g := gateFrom(r)
+		if g == nil || g.p == nil || !watchedRoutes[g.pat] {
+			next.ServeHTTP(w, r)
+			return
+		}
+		ctx, cancel := context.WithCancelCause(r.Context())
+		defer cancel(nil)
+		r = r.WithContext(ctx)
+		go func() {
+			t := time.NewTicker(authWatchEvery)
+			defer t.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+					if authWS(r, g.need) != nil {
+						journal("auth: flux %s coupé (session ou droit retiré)", g.pat)
+						cancel(errAuthRevoked)
+						return
+					}
+				}
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
 }
