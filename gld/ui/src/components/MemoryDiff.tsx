@@ -1,5 +1,6 @@
 import { useMemo } from "react"
 import { ArrowRight } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import { cn } from "@/lib/utils"
 
 // --- différences entre deux versions --------------------------------------------------------------------
@@ -32,13 +33,14 @@ export function lineDiff(a: string, b: string): Row[] {
 
 // old : version de la corbeille ; cur : version actuelle du fichier. compact : sans titre ni marges (dans une boîte de dialogue).
 export function DiffView({ old, cur, compact }: { old: string; cur: string; compact?: boolean }) {
+  const { t } = useTranslation()
   const rows = useMemo(() => lineDiff(old, cur), [old, cur])
   const same = rows.every((r) => r.op === " ")
   return (
     <div className={compact ? "p-2 text-xs" : "session-text mx-auto max-w-7xl px-6 py-6"}>
       {!compact && (
         <p className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground">
-          Version de la corbeille <ArrowRight className="size-3" /> version actuelle {same && "· identiques"}
+          {t("memory.diff.old")} <ArrowRight className="size-3" /> {t("memory.diff.current")} {same && t("memory.diff.same")}
         </p>
       )}
       <pre className="font-mono whitespace-pre-wrap">

@@ -1,4 +1,5 @@
 import { BookOpen, Bot, Brain, ClipboardCopy, Copy, Eye, EyeOff, FolderInput, Globe, Link, Merge, Pencil, ScrollText, Tag, Trash2 } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import type { MemFile, MemTarget } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import {
@@ -25,23 +26,24 @@ export type FileActions = {
 }
 
 // Sous-menu « Déplacer vers » / « Copier vers » : les règles globales, puis la mémoire de chaque autre projet.
-function Destinations({ x, targets, homeDir, label, onChoose }: { x: MemFile; targets: MemTarget[]; homeDir: string; label: string; onChoose: (to: string) => void }) {
-  const Icon = label === "Copier vers" ? Copy : FolderInput
+function Destinations({ x, targets, homeDir, copying, onChoose }: { x: MemFile; targets: MemTarget[]; homeDir: string; copying?: boolean; onChoose: (to: string) => void }) {
+  const { t } = useTranslation()
+  const Icon = copying ? Copy : FolderInput
   return (
     <ContextMenuSub>
       <ContextMenuSubTrigger>
-        <Icon /> {label}
+        <Icon /> {copying ? t("memory.fileMenu.copyTo") : t("memory.fileMenu.moveTo")}
       </ContextMenuSubTrigger>
       <ContextMenuSubContent className="max-h-80 w-72 overflow-y-auto">
         {home(x.key) !== "global" && (
           <>
             <ContextMenuItem onSelect={() => onChoose("global")}>
-              <Globe /> Règles globales (rules/)
+              <Globe /> {t("memory.fileMenu.globalRules")}
             </ContextMenuItem>
             <ContextMenuSeparator />
           </>
         )}
-        {toRules(x.key) && <ContextMenuLabel>Règles du projet</ContextMenuLabel>}
+        {toRules(x.key) && <ContextMenuLabel>{t("memory.fileMenu.projectRules")}</ContextMenuLabel>}
         {toRules(x.key) &&
           targets.map((t) => (
             <ContextMenuItem key={"r" + t.dir} onSelect={() => onChoose("r:" + t.dir)}>
@@ -49,7 +51,7 @@ function Destinations({ x, targets, homeDir, label, onChoose }: { x: MemFile; ta
             </ContextMenuItem>
           ))}
         {toRules(x.key) && toMemory(x.key) && <ContextMenuSeparator />}
-        {toMemory(x.key) && <ContextMenuLabel>Mémoire du projet</ContextMenuLabel>}
+        {toMemory(x.key) && <ContextMenuLabel>{t("memory.fileMenu.projectMemory")}</ContextMenuLabel>}
         {toMemory(x.key) &&
           targets.map((t) => (
             <ContextMenuItem key={t.dir} onSelect={() => onChoose(t.dir)}>
@@ -63,58 +65,59 @@ function Destinations({ x, targets, homeDir, label, onChoose }: { x: MemFile; ta
 
 // Clic droit sur un fichier de mémoire.
 export function FileMenu({ x, picked, targets, homeDir, a }: { x: MemFile; picked: boolean; targets: MemTarget[]; homeDir: string; a: FileActions }) {
+  const { t } = useTranslation()
   return (
     <>
       <ContextMenuLabel className="truncate">{x.name}</ContextMenuLabel>
       <ContextMenuItem onSelect={() => a.open(x.key)}>
-        <BookOpen /> Ouvrir
+        <BookOpen /> {t("memory.fileMenu.open")}
       </ContextMenuItem>
       <ContextMenuItem onSelect={() => a.edit(x.key)}>
-        <Pencil /> Modifier
+        <Pencil /> {t("memory.fileMenu.edit")}
       </ContextMenuItem>
       <ContextMenuItem onSelect={() => a.rewrite(x)}>
-        <Bot /> Améliorer avec un modèle…
+        <Bot /> {t("memory.fileMenu.improve")}
       </ContextMenuItem>
       {(x.key.startsWith("m/") || x.key.startsWith("g/rules/")) && !x.key.endsWith("/MEMORY.md") && (
         <ContextMenuSub>
           <ContextMenuSubTrigger>
-            <Tag /> Type
+            <Tag /> {t("memory.fileMenu.type")}
           </ContextMenuSubTrigger>
           <ContextMenuSubContent>
-            {TYPES.map((t) => (
-              <ContextMenuItem key={t.key} onSelect={() => a.setType(x.key, t.key)}>
-                <t.icon /> {t.key} <span className="text-xs text-muted-foreground">({t.label}){x.type === t.key && " ✓"}</span>
+            {TYPES.map((ty) => (
+              <ContextMenuItem key={ty.key} onSelect={() => a.setType(x.key, ty.key)}>
+                <ty.icon /> {ty.key} <span className="text-xs text-muted-foreground">({ty.label}){x.type === ty.key && " ✓"}</span>
               </ContextMenuItem>
             ))}
             <ContextMenuSeparator />
-            <ContextMenuItem onSelect={() => a.setType(x.key, "")}>Sans type{!x.type && " ✓"}</ContextMenuItem>
+            <ContextMenuItem onSelect={() => a.setType(x.key, "")}>{t("memory.fileMenu.noType")}{!x.type && " ✓"}</ContextMenuItem>
           </ContextMenuSubContent>
         </ContextMenuSub>
       )}
       <ContextMenuItem onSelect={() => a.copyContent(x)}>
-        <ClipboardCopy /> Copier le contenu
+        <ClipboardCopy /> {t("memory.fileMenu.copyContent")}
       </ContextMenuItem>
-      <ContextMenuItem onSelect={() => copy(x.path, "Chemin")}>
-        <Link /> Copier le chemin
+      <ContextMenuItem onSelect={() => copy(x.path, "memory.lib.copiedPath")}>
+        <Link /> {t("memory.fileMenu.copyPath")}
       </ContextMenuItem>
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={() => a.toggle(x.key)}>
-        <Merge /> {picked ? "Retirer de la fusion" : "Sélectionner pour une fusion"}
+        <Merge /> {picked ? t("memory.fileMenu.unmerge") : t("memory.fileMenu.merge")}
       </ContextMenuItem>
       {movable(x.key) && (
         <>
-          <Destinations x={x} targets={targets} homeDir={homeDir} label="Déplacer vers" onChoose={(to) => a.move(x.key, to)} />
-          <Destinations x={x} targets={targets} homeDir={homeDir} label="Copier vers" onChoose={(to) => a.move(x.key, to, true)} />
+          <Destinations x={x} targets={targets} homeDir={homeDir} onChoose={(to) => a.move(x.key, to)} />
+          <Destinations x={x} targets={targets} homeDir={homeDir} copying onChoose={(to) => a.move(x.key, to, true)} />
         </>
       )}
       {x.key.startsWith("g/rules/") && (
         <ContextMenuItem onSelect={() => a.toggleRule(x.key)}>
-          {x.off ? <Eye /> : <EyeOff />} {x.off ? "Réactiver la règle" : "Désactiver la règle"}
+          {x.off ? <Eye /> : <EyeOff />} {x.off ? t("memory.fileMenu.reactivateRule") : t("memory.fileMenu.deactivateRule")}
         </ContextMenuItem>
       )}
       <ContextMenuSeparator />
       <ContextMenuItem variant="destructive" onSelect={() => a.remove(x)}>
-        <Trash2 /> Supprimer
+        <Trash2 /> {t("memory.fileMenu.remove")}
       </ContextMenuItem>
     </>
   )

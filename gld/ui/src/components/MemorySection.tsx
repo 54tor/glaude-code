@@ -1,4 +1,5 @@
 import { type LucideIcon, AlertTriangle, Calculator, ArrowDownWideNarrow, ArrowUpNarrowWide, CheckSquare, EyeOff, Filter, FileStack, FileText, Plus, ScrollText, Sparkles, Trash2 } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import type { MemFile } from "@/lib/api"
 import { ago } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -53,7 +54,9 @@ export function Section({
   onCount: () => void // décompte réel des tokens de la section
   issues: Map<string, number> // problèmes de santé par clé
 }) {
-  const [, label, SortIcon] = SORTS.find((s) => s[0] === sort.by) ?? SORTS[0]
+  const { t } = useTranslation()
+  const [, labelKey, SortIcon] = SORTS.find((s) => s[0] === sort.by) ?? SORTS[0]
+  const label = t(labelKey)
   const sortBtn = "size-5 md:opacity-0 md:group-hover/sec:opacity-100 md:focus-visible:opacity-100"
   return (
     <section className="group/sec mb-3">
@@ -64,13 +67,13 @@ export function Section({
             {budget > 0 && (
               <span
                 className="shrink-0 text-[10px] font-normal"
-                title={exact ? "Compte réel (tokenizer du modèle) de ce que cette section charge à chaque session" : "Estimation de ce que cette section charge à chaque session ; clic droit › Compter les tokens"}
+                title={exact ? t("memory.section.tokensExact") : t("memory.section.tokensEstimate")}
               >
                 {exact ? "" : "≈ "}
-                {budget >= 1000 ? `${(budget / 1000).toFixed(1)} k` : budget} tokens
+                {t("memory.section.tokens", { amount: budget >= 1000 ? `${(budget / 1000).toFixed(1)} k` : budget })}
               </span>
             )}
-            <Button variant="ghost" size="icon-xs" className={sortBtn} onClick={onNew} title="Nouvelle entrée" aria-label={`Nouvelle entrée · ${title}`}>
+            <Button variant="ghost" size="icon-xs" className={sortBtn} onClick={onNew} title={t("memory.section.newEntry")} aria-label={t("memory.section.newEntryAria", { title })}>
               <Plus />
             </Button>
             {/* Deux icônes : le critère (un clic passe au suivant) et le sens, pour ce dossier. */}
@@ -79,8 +82,8 @@ export function Section({
               size="icon-xs"
               className={sortBtn}
               onClick={() => onSort({ ...sort, by: SORTS[(SORTS.findIndex((s) => s[0] === sort.by) + 1) % SORTS.length][0] })}
-              title={`Tri par ${label} (cliquer pour changer)`}
-              aria-label={`Trier ${title} par : ${label}`}
+              title={t("memory.section.sortTitle", { label })}
+              aria-label={t("memory.section.sortAria", { title, label })}
             >
               <SortIcon />
             </Button>
@@ -89,8 +92,8 @@ export function Section({
               size="icon-xs"
               className={sortBtn}
               onClick={() => onSort({ ...sort, dir: sort.dir === "asc" ? "desc" : "asc" })}
-              title={sort.dir === "asc" ? "Croissant (cliquer pour inverser)" : "Décroissant (cliquer pour inverser)"}
-              aria-label={`${sort.dir === "asc" ? "Ordre croissant" : "Ordre décroissant"} · ${title}`}
+              title={sort.dir === "asc" ? t("memory.section.ascTitle") : t("memory.section.descTitle")}
+              aria-label={sort.dir === "asc" ? t("memory.section.ascAria", { title }) : t("memory.section.descAria", { title })}
             >
               {sort.dir === "asc" ? <ArrowUpNarrowWide /> : <ArrowDownWideNarrow />}
             </Button>
@@ -98,36 +101,36 @@ export function Section({
         </ContextMenuTrigger>
         <ContextMenuContent className="w-60">
           <ContextMenuItem onSelect={onNew}>
-            <Plus /> Nouvelle entrée…
+            <Plus /> {t("memory.section.menuNew")}
           </ContextMenuItem>
           {onNewRule && (
             <ContextMenuItem onSelect={onNewRule}>
-              <ScrollText /> Nouvelle règle du projet…
+              <ScrollText /> {t("memory.section.menuNewRule")}
             </ContextMenuItem>
           )}
           {onWrite && (
             <ContextMenuItem onSelect={onWrite}>
-              <Sparkles /> Nouvelle entrée avec Haiku…
+              <Sparkles /> {t("memory.section.menuNewHaiku")}
             </ContextMenuItem>
           )}
           {onConsolidate && (
             <ContextMenuItem onSelect={() => onConsolidate("CLAUDE.md")}>
-              <FileStack /> Consolider dans CLAUDE.md (Haiku)…
+              <FileStack /> {t("memory.section.menuConsolidate", { file: "CLAUDE.md" })}
             </ContextMenuItem>
           )}
           {onConsolidate && agents && (
             <ContextMenuItem onSelect={() => onConsolidate("AGENTS.md")}>
-              <FileStack /> Consolider dans AGENTS.md (Haiku)…
+              <FileStack /> {t("memory.section.menuConsolidate", { file: "AGENTS.md" })}
             </ContextMenuItem>
           )}
           <ContextMenuItem onSelect={onCount}>
-            <Calculator /> Compter les tokens (Haiku)
+            <Calculator /> {t("memory.section.menuCount")}
           </ContextMenuItem>
           <ContextMenuItem onSelect={() => onPickAll(files.map((f) => f.key))}>
-            <CheckSquare /> Tout sélectionner pour une fusion
+            <CheckSquare /> {t("memory.section.menuSelectAll")}
           </ContextMenuItem>
           <ContextMenuItem variant="destructive" onSelect={() => onRemoveAll(files.map((f) => f.key))}>
-            <Trash2 /> Supprimer tous les fichiers…
+            <Trash2 /> {t("memory.section.menuRemoveAll")}
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -139,7 +142,7 @@ export function Section({
                 <Checkbox
                   checked={picked.has(f.key)}
                   onCheckedChange={() => onToggle(f.key)}
-                  aria-label={`Sélectionner ${f.name} pour une fusion`}
+                  aria-label={t("memory.section.selectAria", { name: f.name })}
                   className={cn(
                     "ml-1 transition-opacity",
                     picked.size === 0 && "md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
@@ -155,18 +158,18 @@ export function Section({
                   {typeOf(f.type) ? (
                     (() => {
                       const T = typeOf(f.type)!
-                      return <T.icon className={cn("size-3.5 shrink-0", T.color)} aria-label={`type ${T.key}`} />
+                      return <T.icon className={cn("size-3.5 shrink-0", T.color)} aria-label={t("memory.section.typeAria", { key: T.key })} />
                     })()
                   ) : (
                     <FileText className="size-3.5 shrink-0 text-muted-foreground" />
                   )}
                   <span className={cn("min-w-0 flex-1 truncate", f.off && "text-muted-foreground line-through")}>{f.name}</span>
-                  {f.off && <EyeOff className="size-3.5 shrink-0 text-muted-foreground" aria-label="règle désactivée" />}
+                  {f.off && <EyeOff className="size-3.5 shrink-0 text-muted-foreground" aria-label={t("memory.section.ruleOff")} />}
                   {f.paths && (
-                    <Filter className="size-3.5 shrink-0 text-sky-500" aria-label="règle scopée" />
+                    <Filter className="size-3.5 shrink-0 text-sky-500" aria-label={t("memory.section.ruleScoped")} />
                   )}
                   {(f.warn || issues.has(f.key)) && (
-                    <AlertTriangle className="size-3.5 shrink-0 text-amber-500" aria-label="à vérifier" />
+                    <AlertTriangle className="size-3.5 shrink-0 text-amber-500" aria-label={t("memory.section.toCheck")} />
                   )}
                   <span className="shrink-0 text-xs font-normal text-muted-foreground">{ago(f.mtime)}</span>
                 </button>
