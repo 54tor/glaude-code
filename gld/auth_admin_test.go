@@ -523,6 +523,43 @@ func TestHomesSaveCascadeACL(t *testing.T) {
 	}
 }
 
+// Mode multi-utilisateur : un nom déjà pris ne se reprend qu'avec l'identifiant de son home, même invisible de l'admin.
+func TestHomesSaveNomPris(t *testing.T) {
+	g := newAdminRig(t)
+	root := g.login("root", true)
+	bob := g.login("bob", false)
+	dfoo, dx := t.TempDir(), t.TempDir()
+	if err := saveHomes([]Home{{Name: "foo", Dir: dfoo}}); err != nil {
+		t.Fatal(err)
+	}
+	h1 := mustHomeID(t, "foo")
+	g.s.Grant(bob.id, h1, RightMemRead)
+	for _, body := range []map[string]any{
+		{"homes": []Home{{Name: "foo", Dir: dx}}},
+		{"homes": []Home{{Name: " foo ", Dir: dx}}},
+		{"homes": []Home{{Name: "foo", Dir: dx, ID: "autre"}}},
+	} {
+		if m := g.ok(g.do("POST", "/homes-save", &root, body)); m["ok"] != false || !strings.Contains(m["out"].(string), "foo") {
+			t.Fatalf("%v : %v", body, m)
+		}
+	}
+	if hs := readHomes(); len(hs) != 1 || hs[0].ID != h1 || hs[0].Dir != dfoo || g.aclRows(h1) != 1 {
+		t.Fatalf("home touché : %+v acl=%d", hs, g.aclRows(h1))
+	}
+	if m := g.ok(g.do("POST", "/homes-save", &root, map[string]any{"homes": []Home{{Name: "foo", Dir: dx, ID: h1}}})); m["ok"] != true {
+		t.Fatalf("mise à jour : %v", m)
+	}
+	if h, _ := homeByName("foo"); h.ID != h1 || h.Dir != dx {
+		t.Fatalf("mise à jour : %+v", h)
+	}
+	if m := g.ok(g.do("POST", "/homes-save", &root, map[string]any{"homes": []Home{{Name: "bar", Dir: dfoo}}})); m["ok"] != true {
+		t.Fatalf("création : %v", m)
+	}
+	if id := mustHomeID(t, "bar"); id == h1 || len(readHomes()) != 2 || g.aclRows(h1) != 1 {
+		t.Fatalf("création : %s %+v", id, readHomes())
+	}
+}
+
 func TestAdminHomesAll(t *testing.T) {
 	g := newAdminRig(t)
 	root := g.login("root", true)

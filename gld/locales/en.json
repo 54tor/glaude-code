@@ -185,6 +185,7 @@
   "srv.homes.leProcessusEnfantS": "the child process stopped",
   "srv.homes.nomDeDossierDe": "configuration folder name empty, too long, with a forbidden character, or duplicated",
   "srv.homes.nomReserve": "“main” is reserved for the main configuration folder: choose another name",
+  "srv.homes.nomDejaPris": "\"{{.A1}}\": name already used by an existing configuration folder",
   "srv.homes.tropDeDossiersDe": "too many configuration folders (20 at most)",
   "srv.homes.unCheminAbsoluDifferent": "\"{{.A1}}\": an absolute path, different from the current configuration folder, is expected",
   "srv.homesync.cheminRefuse": "path refused: {{.A1}}",

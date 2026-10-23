@@ -136,6 +136,11 @@ func TestHomesRoutes(t *testing.T) {
 	if w := post("/homes-save", `{"homes":[{"name":"Pro","dir":"`+pro+`"}]}`); !strings.Contains(w.Body.String(), `"ok":true`) {
 		t.Fatal(w.Body.String())
 	}
+	// Mode ouvert : la liste complète renvoyée sans identifiant garde celui du home du même nom.
+	id := mustHomeID(t, "Pro")
+	if w := post("/homes-save", `{"homes":[{"name":"Pro","dir":"`+pro+`"}]}`); !strings.Contains(w.Body.String(), `"ok":true`) || mustHomeID(t, "Pro") != id {
+		t.Fatal(w.Body.String())
+	}
 	if w := post("/homes-select", `{"name":"absent"}`); !strings.Contains(w.Body.String(), `"ok":false`) {
 		t.Fatal("dossier inconnu choisi")
 	}
