@@ -216,7 +216,7 @@ func TestGateMemSyncNeedsBoth(t *testing.T) {
 			t.Errorf("%s sans mem_sync sur la destination : %d", p, w.Code)
 		}
 	}
-	g.grant(t, u, "Pro", RightMemSync)
+	g.grant(t, u, "Pro", RightMemSync, RightMemRead)
 	if w := g.do("POST", "/homes-sync-plan", &u, "", body); !reached(w) {
 		t.Fatalf("synchro permise refusée : %d %s", w.Code, w.Body)
 	}
@@ -241,6 +241,8 @@ func TestGateRightsMatrix(t *testing.T) {
 	u := g.user(t, "compta", false)
 	g.grant(t, u, "", RightUsageRead)
 	a := g.user(t, "admin", true)
+	wr := g.user(t, "redacteur", false)
+	g.grant(t, wr, "", RightMemWrite)
 	cases := []struct {
 		u      *gateUser
 		m, p   string
@@ -262,6 +264,13 @@ func TestGateRightsMatrix(t *testing.T) {
 		{nil, "GET", "/assets/x.js", true, 200},
 		{nil, "POST", "/auth/login", true, 200},
 		{&r, "GET", "/homes", true, 200},
+		{&r, "GET", "/search", false, 403},
+		{&wr, "POST", "/tabs-save", true, 200},
+		{&wr, "POST", "/rm", false, 403},
+		{&wr, "POST", "/rename", false, 403},
+		{&wr, "POST", "/reassign", false, 403},
+		{&wr, "POST", "/keepwarm", false, 403},
+		{&wr, "POST", "/session-trash-purge", false, 403},
 	}
 	for _, c := range cases {
 		w := g.do(c.m, c.p, c.u, "", "{}")
@@ -342,7 +351,7 @@ func TestGatePassiveNoTouch(t *testing.T) {
 	u := g.user(t, "alice", false)
 	g.grant(t, u, "", RightSessionsRead)
 	seen := func() (n int64) {
-		g.s.db.QueryRow(`SELECT last_seen_at FROM sessions WHERE user_id=?`, u.id).Scan(&n)
+		g.s.db.QueryRow(`SELECT expires_at FROM sessions WHERE user_id=?`, u.id).Scan(&n)
 		return
 	}
 	before := seen()
@@ -352,7 +361,12 @@ func TestGatePassiveNoTouch(t *testing.T) {
 	if w := g.do("GET", "/sessions-stamp", &u, "", ""); !reached(w) || seen() != before {
 		t.Fatalf("sondage compté comme activité : %d", w.Code)
 	}
-	if w := g.do("GET", "/conv", &u, "", ""); !reached(w) || seen() == before {
+	for _, p := range []string{"/api", "/conv", "/session-screen"} {
+		if w := g.do("GET", p, &u, "", ""); !reached(w) || seen() != before {
+			t.Fatalf("%s compté comme activité : %d", p, w.Code)
+		}
+	}
+	if w := g.do("GET", "/info", &u, "", ""); !reached(w) || seen() == before {
 		t.Fatalf("activité non comptée : %d", w.Code)
 	}
 }
@@ -432,5 +446,96 @@ func TestHomesListFiltered(t *testing.T) {
 	list(mux)
 	if len(out.Homes) != 2 || out.Main == "" {
 		t.Fatalf("sans garde, tout est listé : %+v", out)
+	}
+}
+
+func TestGateSyncApplyConfigItems(t *testing.T) {
+	g := newGateRig(t)
+	addHomes(t, "Pro")
+	u := g.user(t, "bob", false)
+	g.grant(t, u, "", RightMemSync, RightMemRead)
+	g.grant(t, u, "Pro", RightMemSync, RightMemWrite, RightMemRead)
+	apply := func(ids ...string) int {
+		var picks []map[string]string
+		for _, id := range ids {
+			picks = append(picks, map[string]string{"id": id, "mode": "replace"})
+		}
+		b, _ := json.Marshal(map[string]any{"from": "", "to": "Pro", "picks": picks})
+		return g.do("POST", "/homes-sync-apply", &u, "", string(b)).Code
+	}
+	for _, ok := range [][]string{{"file:CLAUDE.md"}, {"file:rules/a.md", "file:rules/sous/b.md"}, nil} {
+		if c := apply(ok...); c != 200 {
+			t.Errorf("%v sans config_write : %d", ok, c)
+		}
+	}
+	for _, bad := range []string{"set:hooks", "perm:allow", "skill:x", "file:commands/x.md", "file:rules/../commands/x.md",
+		"file:rules/a.sh", "file:rules\\a.md", "inconnu", ""} {
+		if c := apply("file:CLAUDE.md", bad); c != 403 {
+			t.Errorf("%q sans config_write : %d", bad, c)
+		}
+	}
+	g.grant(t, u, "Pro", RightConfigWrite)
+	if c := apply("set:hooks"); c != 200 {
+		t.Errorf("set:hooks avec config_write : %d", c)
+	}
+	// Le plan exige mem_read sur la destination (il en renvoie des aperçus).
+	g.s.Revoke(u.id, mustHomeID(t, "Pro"), RightMemRead)
+	if w := g.do("POST", "/homes-sync-plan", &u, "", `{"from":"","to":"Pro"}`); w.Code != 403 {
+		t.Errorf("plan sans mem_read sur la destination : %d", w.Code)
+	}
+}
+
+func mustHomeID(t *testing.T, name string) string {
+	t.Helper()
+	id, ok := homeIDFor(name)
+	if !ok {
+		t.Fatalf("home %q inconnu", name)
+	}
+	return id
+}
+
+func TestHomeNameMainReserved(t *testing.T) {
+	use(t.TempDir())
+	for _, n := range []string{"main", "Main", " MAIN "} {
+		if err := saveHomes([]Home{{Name: n, Dir: t.TempDir()}}); err == nil || !isMsg(err, "srv.homes.nomReserve") {
+			t.Errorf("%q accepté : %v", n, err)
+		}
+	}
+	mux := http.NewServeMux()
+	routesHomes(mux)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, httptest.NewRequest("POST", "/homes-save", strings.NewReader(`{"homes":[{"name":"main","dir":"`+t.TempDir()+`"}]}`)))
+	if !strings.Contains(w.Body.String(), `"ok":false`) {
+		t.Fatalf("/homes-save : %s", w.Body)
+	}
+}
+
+func TestUserCLIGrantHomeName(t *testing.T) {
+	s := testStore(t)
+	use(t.TempDir())
+	addHomes(t, "Pro")
+	id, _ := s.AddUser("alice", testPw, false)
+	s.db.Close()
+	pro := mustHomeID(t, "Pro")
+	for _, args := range [][]string{{"main", "mem_read"}, {"Pro", "mem_read"}, {pro, "mem_write"}, {"0123456789abcdef", "mem_read"}} {
+		if _, err := run(t, cliUser, append([]string{"grant", "alice"}, args...)...); err != nil {
+			t.Fatalf("%v : %v", args, err)
+		}
+	}
+	if _, err := run(t, cliUser, "grant", "alice", "Absent", "mem_read"); err == nil || !isMsg(err, "srv.user.homeInconnu") {
+		t.Fatalf("home inconnu : %v", err)
+	}
+	s2, err := openAuthStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.db.Close()
+	m, _ := s2.Rights(id, mainHomeID)
+	p, _ := s2.Rights(id, pro)
+	if !m[RightMemRead] || !p[RightMemRead] || !p[RightMemWrite] {
+		t.Fatalf("main %v, Pro %v", m, p)
+	}
+	if n, _ := s2.Rights(id, "Pro"); anyRight(n) {
+		t.Fatal("droit écrit sous le nom au lieu de l'identifiant")
 	}
 }

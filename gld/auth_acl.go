@@ -50,17 +50,14 @@ var routeRights = map[string]Right{
 	"POST /snippets-import": RightMemWrite,
 	"GET /notes":            RightMemRead, "POST /notes": RightMemWrite,
 	"GET /trash": RightMemRead, "GET /trash-file": RightMemRead, "POST /trash-restore": RightMemWrite, "POST /trash-purge": RightMemWrite,
-	"GET /search": RightMemRead, "GET /skills-list": RightMemRead, "GET /skill": RightMemRead,
-	"POST /rename": RightMemWrite, "POST /rm": RightMemWrite,
+	"GET /skills-list": RightMemRead, "GET /skill": RightMemRead,
 
 	// Lecture du home et état d'interface par home.
 	"GET /config": RightMemRead, "GET /config-projects": RightMemRead, "GET /config-effective": RightMemRead,
 	"GET /config-mcp": RightMemRead, "GET /config-perm-suggest": RightMemRead, "GET /slash-commands": RightMemRead,
 	"GET /git-status": RightMemRead, "GET /git-changes": RightMemRead, "GET /git-remotes": RightMemRead,
 	"GET /cleanup-warning": RightMemRead, "GET /tabs": RightMemRead, "GET /keepwarm": RightMemRead,
-	"POST /tabs-save": RightMemWrite, "POST /tabs-rm": RightMemWrite, "POST /keepwarm": RightMemWrite,
-	"POST /vgroups": RightMemWrite, "POST /reassign": RightMemWrite,
-	"POST /session-trash-add": RightMemWrite, "POST /session-trash-restore": RightMemWrite, "POST /session-trash-purge": RightMemWrite,
+	"POST /tabs-save": RightMemWrite, "POST /tabs-rm": RightMemWrite, "POST /vgroups": RightMemWrite,
 
 	// Réglages et skills : font exécuter du code par Claude Code.
 	"POST /config-edit": RightConfigWrite, "GET /config-raw": RightConfigWrite, "POST /config-raw": RightConfigWrite,
@@ -77,7 +74,7 @@ var routeRights = map[string]Right{
 	"GET /conv-image": RightSessionsRead, "GET /info": RightSessionsRead,
 	"GET /session-state": RightSessionsRead, "GET /session-live": RightSessionsRead, "GET /session-screen": RightSessionsRead,
 	"GET /session-loaded": RightSessionsRead, "GET /session-trash": RightSessionsRead, "GET /sessions-stamp": RightSessionsRead,
-	"GET /session-send-info": RightSessionsRead,
+	"GET /session-send-info": RightSessionsRead, "GET /search": RightSessionsRead,
 
 	// Exécution.
 	"POST /chat": RightExec, "POST /chat-stop": RightExec, "POST /new-session": RightExec,
@@ -85,12 +82,17 @@ var routeRights = map[string]Right{
 	"POST /session-send": RightExec, "POST /session-key": RightExec, "POST /session-close": RightExec,
 	"GET /trust-pending": RightExec, "POST /trust-answer": RightExec, "POST /open": RightExec, "POST /git-push": RightExec,
 	"GET /ls": RightExec, "POST /dirs": RightExec, "POST /image-upload": RightExec,
+	// Agissent sur les sessions : fermeture, suppression de transcriptions, tours de modèle.
+	"POST /rm": RightExec, "POST /rename": RightExec, "POST /reassign": RightExec, "POST /keepwarm": RightExec,
+	"POST /session-trash-add": RightExec, "POST /session-trash-restore": RightExec, "POST /session-trash-purge": RightExec,
 }
 
 // Routes de sondage : ne prolongent pas la session, sans quoi un onglet ouvert ne l'expirerait jamais.
 var passiveRoutes = map[string]bool{
-	"GET /sessions-stamp": true, "GET /session-live": true, "GET /session-state": true,
-	"GET /trust-pending": true, "GET /cleanup-warning": true,
+	"GET /api": true, "GET /sessions-stamp": true, "GET /session-live": true, "GET /session-state": true,
+	"GET /session-screen": true, "GET /conv": true, "GET /snippet-list": true, "GET /memory-list": true,
+	"GET /memory-health": true, "GET /memory-loaded": true, "GET /trash": true, "GET /keepwarm": true,
+	"GET /git-status": true, "GET /account": true, "GET /trust-pending": true, "GET /cleanup-warning": true,
 }
 
 // tokenPrincipal : principal d'une requête Bearer ; nil tant que les jetons ne sont pas branchés.
@@ -247,9 +249,23 @@ func gateCheck(g *gateInfo, r *http.Request, pat string, need Right) (int, strin
 	case need == rightAny:
 		return 0, ""
 	case pat == "POST /homes-sync-plan" || pat == "POST /homes-sync-apply":
-		var req struct{ From, To string }
+		var req struct {
+			From, To string
+			Picks    []SyncPick
+		}
 		if !peekJSON(r, &req) {
 			return 400, "srv.http_util.requeteInvalide"
+		}
+		// Le plan renvoie des aperçus de la destination ; appliquer un réglage, une skill ou une commande y fait exécuter du code.
+		destNeeds := []Right{RightMemSync, RightMemWrite}
+		if pat == "POST /homes-sync-plan" {
+			destNeeds = append(destNeeds, RightMemRead)
+		}
+		for _, p := range req.Picks {
+			if syncPickNeedsConfig(p.ID) {
+				destNeeds = append(destNeeds, RightConfigWrite)
+				break
+			}
 		}
 		from, ok1 := homeIDFor(req.From)
 		to, ok2 := homeIDFor(req.To)
@@ -259,7 +275,14 @@ func gateCheck(g *gateInfo, r *http.Request, pat string, need Right) (int, strin
 		if code, key := rightsErr(g, from, func(m map[Right]bool) bool { return m[RightMemSync] && m[RightMemRead] }); code != 0 {
 			return code, key
 		}
-		return rightsErr(g, to, func(m map[Right]bool) bool { return m[RightMemSync] && m[RightMemWrite] })
+		return rightsErr(g, to, func(m map[Right]bool) bool {
+			for _, n := range destNeeds {
+				if !m[n] {
+					return false
+				}
+			}
+			return true
+		})
 	}
 	id, ok := homeIDFor(homeFrom(r))
 	if !ok {
