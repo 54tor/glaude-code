@@ -116,7 +116,8 @@
       "copyFailed": "Could not copy",
       "copyScreen": "Copy the screen",
       "commands": "Commands",
-      "commandsTitle": "Claude Code commands"
+      "commandsTitle": "Claude Code commands",
+      "mentionAria": "Mention a session"
     },
     "slash": {
       "compact": {

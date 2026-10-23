@@ -363,7 +363,8 @@
       "purgeBody": "Environ {{size}} : sessions automatiques dont le titre contient « Review this change for security vulnerabilities » ou « You previously flagged these candidate ».\n\nLes sessions vivantes sont épargnées. Suppression définitive.",
       "purgeConfirm": "Supprimer {{n}} sessions",
       "purging": "Suppression de {{n}} sessions…",
-      "openingTerminal": "Ouverture du terminal…"
+      "openingTerminal": "Ouverture du terminal…",
+      "mention": "« {{title}} » (session {{id}}, transcript : {{path}})"
     },
     "info": {
       "id": "Identifiant",
