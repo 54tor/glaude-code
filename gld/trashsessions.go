@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"time"
 )
 
@@ -115,15 +114,15 @@ func listTrashedSessions() []TrashedSession {
 func restoreTrashed(id string) error {
 	m, ok := readTrashMeta(id)
 	if !ok {
-		return errors.New("session introuvable dans la corbeille")
+		return terr("srv.trashsessions.sessionIntrouvableDansLa")
 	}
 	dir := filepath.Join(root, m.Dir)
 	if m.Dir == "" || filepath.Base(m.Dir) != m.Dir {
-		return errors.New("dossier d'origine invalide")
+		return terr("srv.trashsessions.dossierDOrigineInvalide")
 	}
 	dst := filepath.Join(dir, id+".jsonl")
 	if _, err := os.Lstat(dst); err == nil {
-		return errors.New("un transcript de ce nom existe déjà")
+		return terr("srv.trashsessions.unTranscriptDeCe")
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
@@ -182,7 +181,7 @@ func routesTrashSessions(mux *http.ServeMux) {
 	mux.HandleFunc("POST /session-trash-restore", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ IDs []string }
 		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req) != nil || len(req.IDs) == 0 {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		n := 0
@@ -198,7 +197,7 @@ func routesTrashSessions(mux *http.ServeMux) {
 			}
 		}
 		journal("trash-restore %d session(s) : %v", n, errOr(err))
-		out := "Restaurée(s) : " + strconv.Itoa(n)
+		out := L("srv.trashsessions.restored", "A1", n)
 		if err != nil {
 			out += "\n" + err.Error()
 		}
@@ -223,7 +222,7 @@ func routesTrashSessions(mux *http.ServeMux) {
 		}
 		n, err := purgeTrashed(clean)
 		journal("trash-purge %d session(s) : %v", n, errOr(err))
-		out := "Supprimée(s) définitivement : " + strconv.Itoa(n)
+		out := L("srv.trashsessions.purged", "A1", n)
 		if err != nil {
 			out += "\n" + err.Error()
 		}

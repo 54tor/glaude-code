@@ -3,7 +3,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -274,12 +273,12 @@ func saveStore(st Store) error {
 		g.Name = strings.TrimSpace(spaceRe.ReplaceAllString(g.Name, " "))
 		k := [2]string{g.Project, g.Name}
 		if g.Name == "" || utf8.RuneCountInString(g.Name) > 80 || g.Project == "" || seen[k] {
-			return errors.New("groupe sans nom ni projet, nom trop long, ou en double dans ce projet")
+			return terr("srv.extra.groupeSansNomNi")
 		}
 		seen[k] = true
 		for _, id := range g.IDs {
 			if !idRe.MatchString(id) {
-				return errors.New("session invalide")
+				return terr("srv.chat.sessionInvalide")
 			}
 		}
 	}
@@ -288,14 +287,14 @@ func saveStore(st Store) error {
 		p := &st.Projects[i]
 		p.Name = strings.TrimSpace(spaceRe.ReplaceAllString(p.Name, " "))
 		if p.Name == "" || utf8.RuneCountInString(p.Name) > 80 || seenP[p.Name] || len(p.Dirs) > 200 {
-			return errors.New("projet sans nom, nom trop long ou en double")
+			return terr("srv.extra.projetSansNomNom")
 		}
 		seenP[p.Name] = true
 		seenD := map[string]bool{}
 		for j, d := range p.Dirs {
 			d = filepath.Clean(d)
 			if !filepath.IsAbs(d) || seenD[d] {
-				return errors.New("dossier de projet invalide ou en double")
+				return terr("srv.extra.dossierDeProjetInvalide")
 			}
 			seenD[d] = true
 			p.Dirs[j] = d
@@ -303,30 +302,30 @@ func saveStore(st Store) error {
 	}
 	seenDir := map[string]bool{}
 	if len(st.Dirs) > 200 {
-		return errors.New("trop de dossiers enregistrés")
+		return terr("srv.extra.tropDeDossiersEnregistres")
 	}
 	for i, d := range st.Dirs {
 		d = filepath.Clean(d)
 		if !filepath.IsAbs(d) || strings.ContainsRune(d, 0) || seenDir[d] {
-			return errors.New("dossier enregistré invalide ou en double")
+			return terr("srv.extra.dossierEnregistreInvalideOu")
 		}
 		seenDir[d] = true
 		st.Dirs[i] = d
 	}
 	for _, id := range st.Favs {
 		if !idRe.MatchString(id) {
-			return errors.New("favori invalide")
+			return terr("srv.extra.favoriInvalide")
 		}
 	}
 	for id, ts := range st.Tags {
 		if !idRe.MatchString(id) || len(ts) > maxTags {
-			return errors.New("étiquettes invalides")
+			return terr("srv.extra.etiquettesInvalides")
 		}
 		seenTag := map[string]bool{}
 		for i, t := range ts {
 			t = strings.TrimSpace(spaceRe.ReplaceAllString(t, " "))
 			if t == "" || utf8.RuneCountInString(t) > maxTagLen || seenTag[strings.ToLower(t)] {
-				return errors.New("étiquette vide, trop longue ou en double")
+				return terr("srv.extra.etiquetteVideTropLongue")
 			}
 			seenTag[strings.ToLower(t)] = true
 			ts[i] = t

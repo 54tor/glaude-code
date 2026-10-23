@@ -24,9 +24,9 @@ func checkPrompt(id, prompt string) error {
 	case prompt == "":
 		return nil
 	case id == "":
-		return errors.New("un message ne s'envoie qu'à une session précise")
+		return terr("srv.claude.unMessageNeS")
 	case len(prompt) > 32<<10 || !utf8.ValidString(prompt) || strings.ContainsRune(prompt, 0):
-		return errors.New("message trop long ou invalide")
+		return terr("srv.sendkeys.messageTropLongOu")
 	}
 	live, err := liveCheck()
 	if err != nil {
@@ -42,7 +42,7 @@ func checkPrompt(id, prompt string) error {
 // (qui ne sait pas l'échapper sûrement).
 func checkResumePrompt(id, prompt string) error {
 	if prompt != "" && runtime.GOOS == "windows" {
-		return errors.New("reprise avec un message non prise en charge sous Windows")
+		return terr("srv.claude.repriseAvecUnMessage")
 	}
 	return checkPrompt(id, prompt)
 }
@@ -53,7 +53,7 @@ func claudeArgs(raw string) ([]string, error) {
 	fs := strings.Fields(raw)
 	for _, f := range fs {
 		if !flagRe.MatchString(f) {
-			return nil, errors.New("option refusée : " + f)
+			return nil, terr("srv.chat.optionRefusee", "A1", f)
 		}
 	}
 	if len(fs) == 0 {

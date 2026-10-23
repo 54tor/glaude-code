@@ -29,9 +29,9 @@ func syntaxError(text string, err error) error {
 				col++
 			}
 		}
-		return fmt.Errorf("JSON invalide, ligne %d, colonne %d : %v", line, col, se)
+		return terr("srv.configraw.jsonInvalideLigneColonne", "A1", line, "A2", col, "A3", se)
 	}
-	return errors.New("JSON invalide : " + err.Error())
+	return terr("srv.configraw.jsonInvalide", "A1", err.Error())
 }
 
 // restoreMasked remplace, dans n, chaque masque resté à sa place par la valeur de o au même chemin.
@@ -68,7 +68,7 @@ func restoreMasked(n, o any, path string) (any, error) {
 			if s, ok := o.(string); ok {
 				return s, nil
 			}
-			return nil, errors.New("valeur masquée sans original à " + strings.TrimPrefix(path, ".") + " : saisissez la vraie valeur, ou remettez la clé à sa place")
+			return nil, terr("srv.configraw.valeurMasqueeSansOriginal", "A1", strings.TrimPrefix(path, "."))
 		}
 	}
 	return n, nil
@@ -105,7 +105,7 @@ func loadDoc(id string) (path string, orig []byte, exists bool, doc any, err err
 	doc = newOmap()
 	if exists && strings.TrimSpace(string(orig)) != "" {
 		if doc, err = parseOrdered(orig); err != nil {
-			err = errors.New("le fichier actuel est illisible : " + err.Error() + " (restaurez une sauvegarde ou corrigez-le à la main)")
+			err = terr("srv.configraw.leFichierActuelEst", "A1", err.Error())
 		}
 	}
 	return
@@ -126,7 +126,7 @@ func commitDoc(id, path string, orig []byte, exists bool, origDoc, nv any, dry b
 	}
 	if exists {
 		if err = saveBackup(id, orig); err != nil {
-			err = errors.New("sauvegarde impossible : " + err.Error())
+			err = terr("srv.homesync.sauvegardeImpossible", "A1", err.Error())
 			return
 		}
 	}
@@ -144,7 +144,7 @@ func configRawEdit(id, text string, dry bool) (before, after string, warns []Cfg
 		return
 	}
 	if len(text) > 1<<20 {
-		err = errors.New("fichier trop gros")
+		err = terr("srv.configperm_io.fichierTropGros")
 		return
 	}
 	nv, perr := parseOrdered([]byte(text))
@@ -153,7 +153,7 @@ func configRawEdit(id, text string, dry bool) (before, after string, warns []Cfg
 		return
 	}
 	if asMap(nv) == nil {
-		err = errors.New("le fichier doit contenir un objet JSON ({ … })")
+		err = terr("srv.configraw.leFichierDoitContenir")
 		return
 	}
 	if nv, err = restoreMasked(nv, origDoc, ""); err != nil {

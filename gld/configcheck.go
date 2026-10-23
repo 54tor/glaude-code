@@ -58,7 +58,7 @@ func summarize(v any) string {
 	case string:
 		return cut(x, 120)
 	case *omap:
-		return fmt.Sprintf("{%d clé(s)}", len(x.keys))
+		return "{" + L("srv.configcheck.keys", "A1", len(x.keys)) + "}"
 	case []any:
 		return fmt.Sprintf("[%d]", len(x))
 	}
@@ -244,7 +244,7 @@ func configHealth(files []ConfigFile, raw map[string]any) []CfgIssue {
 	}
 	for _, h := range hooksOf(raw) {
 		if h.Missing != "" {
-			issues = append(issues, CfgIssue{h.File, "hook", "hook " + h.Event + " : « " + h.Missing + " » introuvable (" + cut(h.Command, 70) + ")"})
+			issues = append(issues, CfgIssue{h.File, "hook", L("srv.configcheck.hookMissing", "A1", h.Event, "A2", h.Missing, "A3", cut(h.Command, 70))})
 		}
 	}
 	plugins := installedPlugins()
@@ -260,11 +260,11 @@ func configHealth(files []ConfigFile, raw map[string]any) []CfgIssue {
 			seen := map[string]bool{}
 			for _, r := range strList(v) {
 				if seen[r] {
-					issues = append(issues, CfgIssue{id, "permission", "règle en double dans " + kind + " : " + r})
+					issues = append(issues, CfgIssue{id, "permission", L("srv.configcheck.dupRule", "A1", kind, "A2", r)})
 				}
 				seen[r] = true
 				if kind == "allow" && broadRule.MatchString(r) {
-					issues = append(issues, CfgIssue{id, "permission", "règle trop large dans allow : « " + r + " » autorise tout l'outil"})
+					issues = append(issues, CfgIssue{id, "permission", L("srv.configcheck.broadRule", "A1", r)})
 				}
 			}
 		}
@@ -272,7 +272,7 @@ func configHealth(files []ConfigFile, raw map[string]any) []CfgIssue {
 			for _, dir := range strList(v) {
 				if p := expandDir(dir, id); p != "" {
 					if fi, err := os.Stat(p); err != nil || !fi.IsDir() {
-						issues = append(issues, CfgIssue{id, "dossier", "dossier supplémentaire introuvable : " + dir})
+						issues = append(issues, CfgIssue{id, "dossier", L("srv.configcheck.dirMissing", "A1", dir)})
 					}
 				}
 			}
@@ -285,14 +285,14 @@ func configHealth(files []ConfigFile, raw map[string]any) []CfgIssue {
 		}
 		for _, r := range strList(a) {
 			if deny[r] {
-				issues = append(issues, CfgIssue{id, "permission", "« " + r + " » est à la fois autorisée et refusée (le refus l'emporte)"})
+				issues = append(issues, CfgIssue{id, "permission", L("srv.configcheck.allowAndDeny", "A1", r)})
 			}
 		}
 		if ep, ok := lookup(doc, "enabledPlugins"); ok && plugins != nil {
 			if o := asMap(ep); o != nil {
 				for _, k := range o.keys {
 					if on, _ := o.m[k].(bool); on && !plugins[k] {
-						issues = append(issues, CfgIssue{id, "plugin", "plugin activé mais pas installé : " + k})
+						issues = append(issues, CfgIssue{id, "plugin", L("srv.configcheck.pluginMissing", "A1", k)})
 					}
 				}
 			}
@@ -302,7 +302,7 @@ func configHealth(files []ConfigFile, raw map[string]any) []CfgIssue {
 				if o := asMap(e); o != nil {
 					for _, k := range o.keys {
 						if s, _ := o.m[k].(string); secretKey.MatchString(k) && s != "" {
-							issues = append(issues, CfgIssue{id, "secret", "la variable " + k + " ressemble à un secret dans un fichier de projet (versionné) : préférez settings.local.json"})
+							issues = append(issues, CfgIssue{id, "secret", L("srv.configcheck.secretVar", "A1", k)})
 						}
 					}
 				}

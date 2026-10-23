@@ -4,8 +4,6 @@ package main
 // peut garder, partager ou coller dans un autre fichier de réglages.
 
 import (
-	"errors"
-	"fmt"
 	"strings"
 )
 
@@ -20,7 +18,7 @@ const permMax = 2000 // règles acceptées par import
 // Le mode par défaut (defaultMode) n'est jamais importé : c'est un réglage de confiance, pas une règle.
 func parsePermImport(text string) (map[string][]string, error) {
 	if len(text) > 1<<20 {
-		return nil, errors.New("fichier trop gros")
+		return nil, terr("srv.configperm_io.fichierTropGros")
 	}
 	v, err := parseOrdered([]byte(text))
 	if err != nil {
@@ -28,11 +26,11 @@ func parsePermImport(text string) (map[string][]string, error) {
 	}
 	root := asMap(v)
 	if root == nil {
-		return nil, errors.New("un objet JSON est attendu : {\"permissions\": {\"allow\": […]}}")
+		return nil, terr("srv.configperm_io.unObjetJsonEst")
 	}
 	if p, ok := root.get("permissions"); ok {
 		if root = asMap(p); root == nil {
-			return nil, errors.New("« permissions » doit être un objet")
+			return nil, terr("srv.configperm_io.permissionsDoitEtreUn")
 		}
 	}
 	out := map[string][]string{}
@@ -47,7 +45,7 @@ func parsePermImport(text string) (map[string][]string, error) {
 		}
 		list, ok := root.m[k].([]any)
 		if !ok {
-			return nil, fmt.Errorf("« %s » doit être une liste de règles", k)
+			return nil, terr("srv.configperm_io.doitEtreUneListe", "A1", k)
 		}
 		seen := map[string]bool{}
 		rules := []string{}
@@ -59,7 +57,7 @@ func parsePermImport(text string) (map[string][]string, error) {
 				max = 500
 			}
 			if !ok || s == "" || len(s) > max || strings.ContainsAny(s, "\n\r\x00") {
-				return nil, fmt.Errorf("« %s » : l'entrée n° %d n'est pas un texte d'une ligne", k, i+1)
+				return nil, terr("srv.configperm_io.lEntreeNN", "A1", k, "A2", i+1)
 			}
 			if !seen[s] {
 				seen[s] = true
@@ -70,10 +68,10 @@ func parsePermImport(text string) (map[string][]string, error) {
 		out[k] = rules
 	}
 	if len(out) == 0 {
-		return nil, errors.New("aucune liste allow, ask, deny ou additionalDirectories dans ce fichier")
+		return nil, terr("srv.configperm_io.aucuneListeAllowAsk")
 	}
 	if total > permMax {
-		return nil, fmt.Errorf("trop de règles (%d, au plus %d)", total, permMax)
+		return nil, terr("srv.configperm_io.tropDeReglesAu", "A1", total, "A2", permMax)
 	}
 	return out, nil
 }
@@ -84,7 +82,7 @@ func permImport(id, text, mode string, dry bool) (before, after string, warns []
 	cfgMu.Lock()
 	defer cfgMu.Unlock()
 	if mode != "merge" && mode != "replace" {
-		err = errors.New("mode d'import inconnu")
+		err = terr("srv.configperm_io.modeDImportInconnu")
 		return
 	}
 	imp, err := parsePermImport(text)
@@ -147,7 +145,7 @@ func permImport(id, text, mode string, dry bool) (before, after string, warns []
 		}
 		setRules(doc, kind, next)
 	}
-	summary = fmt.Sprintf("%d règle(s) ajoutée(s), %d retirée(s)", added, removed)
+	summary = L("srv.configperm_io.summary", "A1", added, "A2", removed)
 	before, after, warns, err = commitDoc(id, path, orig, exists, origDoc, doc, dry)
 	return
 }
