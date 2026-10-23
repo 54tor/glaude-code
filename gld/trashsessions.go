@@ -136,7 +136,12 @@ func expireTrashedSessions() (int, error) {
 
 // expireTrashLoop : l'expiration au démarrage, puis à chaque période, jusqu'à l'arrêt du serveur.
 func expireTrashLoop(every time.Duration) {
-	expireTrashedSessions()
+	expire := func() {
+		sessionsMu.Lock()
+		defer sessionsMu.Unlock()
+		expireTrashedSessions()
+	}
+	expire()
 	t := time.NewTicker(every)
 	defer t.Stop()
 	for {
@@ -144,7 +149,7 @@ func expireTrashLoop(every time.Duration) {
 		case <-homeCtx.Done():
 			return
 		case <-t.C:
-			expireTrashedSessions()
+			expire()
 		}
 	}
 }
@@ -212,7 +217,9 @@ func routesTrashSessions(mux *http.ServeMux) {
 		if r.URL.Query().Get("close") == "1" {
 			closeAndWait(items)
 		}
+		sessionsMu.Lock()
 		n, spared, err := trashSessions(items)
+		sessionsMu.Unlock()
 		journal("trash %d session(s) : %d déplacée(s), %d épargnée(s) %v : %v", len(items), n, spared, ids(items), errOr(err))
 		out := rmSummary(n, spared)
 		if err != nil {
@@ -228,6 +235,7 @@ func routesTrashSessions(mux *http.ServeMux) {
 		}
 		n := 0
 		var err error
+		sessionsMu.Lock()
 		for _, id := range req.IDs {
 			if !idRe.MatchString(id) {
 				continue
@@ -238,6 +246,7 @@ func routesTrashSessions(mux *http.ServeMux) {
 				n++
 			}
 		}
+		sessionsMu.Unlock()
 		journal("trash-restore %d session(s) : %v", n, errOr(err))
 		out := L("srv.trashsessions.restored", "A1", n)
 		if err != nil {
@@ -252,6 +261,8 @@ func routesTrashSessions(mux *http.ServeMux) {
 			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
+		sessionsMu.Lock()
+		defer sessionsMu.Unlock()
 		expireTrashedSessions()
 		ids := req.IDs
 		if len(ids) == 0 {
