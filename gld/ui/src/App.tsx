@@ -22,6 +22,7 @@ import { ActionsCtx, type Row } from "@/components/actions"
 import { Confirm, type Ask } from "@/components/Confirm"
 import { DirPicker, type Pick } from "@/components/DirPicker"
 import { PageHeader } from "@/components/PageHeader"
+import { SessionInfo } from "@/components/SessionInfo"
 import { Prompt, type Ask as PromptAsk } from "@/components/Prompt"
 import { SessionSelectionBar } from "@/components/SessionSelectionBar"
 import { SessionsPane } from "@/components/SessionsPane"
@@ -68,6 +69,7 @@ export default function App() {
   const [ask, setAsk] = useState<Ask | null>(null)
   const [prompt, setPrompt] = useState<PromptAsk | null>(null)
   const [compose, setCompose] = useState<ComposeAsk | null>(null)
+  const [info, setInfo] = useState<Row | null>(null)
   const search = useRef<HTMLInputElement>(null)
 
   const setQ = (v: string) =>
@@ -216,6 +218,7 @@ export default function App() {
     setAsk,
     setPrompt,
     setCompose,
+    setInfo,
     setPicker,
   })
   useShortcuts({ search, picked, clearPicked: () => setPicked(new Set()), byId: view.byId, actions })
@@ -402,3 +405,4 @@ export default function App() {
     </ActionsCtx.Provider>
   )
 }
+      <SessionInfo row={info} onClose={() => setInfo(null)} />

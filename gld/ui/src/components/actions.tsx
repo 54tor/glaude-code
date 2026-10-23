@@ -55,6 +55,7 @@ export type Actions = {
   hotLeft: (s: Session) => number | null // minutes de cache chaud restantes, null si froid
   touch: (id: string) => void // un prompt vient d'être envoyé à la session : elle remonte tout de suite (cache chaud), la liste se relit ensuite
   read: (s: Session) => void
+  info: (r: Row) => void // fiche de la session
   open: (body: { dir: string; id?: string }) => void
   resumeWith: (r: Row) => void // reprendre en envoyant un message
   caps: (s: Session) => Caps // ce que sait faire le fournisseur de cette session

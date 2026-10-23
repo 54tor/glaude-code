@@ -8,6 +8,7 @@ import {
   FolderInput,
   MessageSquarePlus,
   Hash,
+  Info,
   MessageSquareReply,
   Pencil,
   Plus,
@@ -183,6 +184,9 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
       {full && <M.Sep />}
       <Fav M={M} ids={[s.id]} />
       <M.Item onSelect={() => a.editTags(s)}>
+      <M.Item onSelect={() => a.info(row)}>
+        <Info /> {t("shell.menu.info")}
+      </M.Item>
         <Hash /> Étiquettes…
       </M.Item>
       <M.Item onSelect={() => a.rename(s)}>
