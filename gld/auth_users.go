@@ -291,9 +291,11 @@ func (s *authStore) ResetMFA(userID int64) error {
 	return err
 }
 
-func (s *authStore) HasUsers() bool {
+// HasUsers renvoie l'erreur de lecture : l'appelant ne doit jamais la confondre avec « aucun compte » (mode ouvert).
+func (s *authStore) HasUsers() (bool, error) {
 	var n int
-	return s.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM users)`).Scan(&n) == nil && n == 1
+	err := s.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM users)`).Scan(&n)
+	return n == 1, err
 }
 
 func rightCols() string {

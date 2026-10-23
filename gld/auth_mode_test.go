@@ -2,9 +2,15 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -14,15 +20,27 @@ import (
 
 const modeTok = "0123456789abcdef0123"
 
+// resetAuth remet l'état du mode à zéro sur s (nil : aucune base ouverte) et fige l'horloge ; tick la fait avancer d'une fenêtre.
+func resetAuth(t *testing.T, s *authStore) (tick func()) {
+	t.Helper()
+	oSt, oErr, oUsers, oSeen, oAt, oNow, oTP := authSt, authErr, authUsers, authSeen, authAt, modeNow, tokenPrincipal
+	t.Cleanup(func() {
+		authSt, authErr, authUsers, authSeen, authAt, modeNow, tokenPrincipal = oSt, oErr, oUsers, oSeen, oAt, oNow, oTP
+	})
+	now := time.Now()
+	authSt, authErr, authUsers, authSeen, authAt = s, nil, false, false, time.Time{}
+	modeNow = func() time.Time { return now }
+	tokenPrincipal = tokenForChildren(modeTok)
+	return func() { now = now.Add(modeEvery) }
+}
+
 // authWeb : le serveur complet de web(t), avec une base de comptes ouverte et le jeton branché comme dans main.
-func authWeb(t *testing.T) (*authStore, http.Handler) {
+func authWeb(t *testing.T) (*authStore, http.Handler, func()) {
 	t.Helper()
 	s := testStore(t)
-	oldSt, oldTP := authSt, tokenPrincipal
-	t.Cleanup(func() { authSt, tokenPrincipal = oldSt, oldTP })
-	authSt, tokenPrincipal = s, tokenForChildren(modeTok)
+	tick := resetAuth(t, s)
 	h, _, _ := web(t)
-	return s, withTokenOpen(modeTok, h)
+	return s, withTokenOpen(modeTok, h), tick
 }
 
 type modeReq struct {
@@ -49,19 +67,12 @@ func (q modeReq) do(h http.Handler) *httptest.ResponseRecorder {
 	return w
 }
 
-// Sans compte en base, la base ouverte ne change rien : mêmes réponses que withToken autour de l'ancien handler.
+// Sans compte en base, rien ne change : mêmes réponses sans base et avec une base vide, /auth/* exclu.
 func TestOpenModeUnchanged(t *testing.T) {
-	h0, _, _ := web(t) // authSt nil : le serveur d'avant
-	before := withToken(modeTok, h0)
-	s := testStore(t)
-	oldSt, oldTP := authSt, tokenPrincipal
-	t.Cleanup(func() { authSt, tokenPrincipal = oldSt, oldTP })
-	authSt, tokenPrincipal = s, tokenForChildren(modeTok)
-	after := withTokenOpen(modeTok, handler()) // même environnement que before
-	if authMode(s) {
-		t.Fatal("mode multi-utilisateur sans compte")
-	}
-	for _, q := range []modeReq{
+	resetAuth(t, nil)
+	h, _, _ := web(t)
+	srv := withTokenOpen(modeTok, h)
+	reqs := []modeReq{
 		{method: "GET", path: "/api"},
 		{method: "GET", path: "/api?token=" + modeTok},
 		{method: "GET", path: "/memoire?token=" + modeTok + "&x=1"},
@@ -75,17 +86,148 @@ func TestOpenModeUnchanged(t *testing.T) {
 		{method: "GET", path: "/inexistant", tokCookie: modeTok},
 		{method: "POST", path: "/memory-save", tokCookie: modeTok, origin: "https://ailleurs.example"},
 		{method: "POST", path: "/homes-save", bearer: modeTok, origin: "http://" + testHost},
-	} {
-		a, b := q.do(before), q.do(after)
+	}
+	var before []*httptest.ResponseRecorder
+	for _, q := range reqs {
+		before = append(before, q.do(srv))
+	}
+	if before[0].Code != 401 || before[1].Code != 303 || before[4].Code != 200 || before[6].Code != 200 {
+		t.Fatalf("withToken : %d %d %d %d", before[0].Code, before[1].Code, before[4].Code, before[6].Code)
+	}
+	resetAuth(t, testStore(t))
+	if authMode() {
+		t.Fatal("mode multi-utilisateur sans compte")
+	}
+	for i, q := range reqs {
+		a, b := before[i], q.do(srv)
 		if a.Code != b.Code || a.Body.String() != b.Body.String() ||
 			a.Header().Get("Set-Cookie") != b.Header().Get("Set-Cookie") || a.Header().Get("Location") != b.Header().Get("Location") {
-			t.Errorf("%s %s : avant %d %q, après %d %q", q.method, q.path, a.Code, cut(a.Body.String(), 120), b.Code, cut(b.Body.String(), 120))
+			t.Errorf("%s %s : sans base %d %q, base vide %d %q", q.method, q.path, a.Code, cut(a.Body.String(), 120), b.Code, cut(b.Body.String(), 120))
 		}
 	}
 }
 
+// Sans auth.db : ni dossier, ni base, ni clé, ni coffre-fort, et /auth/* n'existe pas.
+func TestNoAuthDBNoSideEffects(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "gld")
+	t.Setenv("GLD_AUTH_DIR", dir)
+	t.Setenv("GLD_AUTH_KEY", "")
+	g, st := keyringGet, keyringSet
+	t.Cleanup(func() { keyringGet, keyringSet = g, st })
+	keyringGet = func() (string, error) { t.Error("coffre-fort lu"); return "", errors.New("non") }
+	keyringSet = func(string) error { t.Error("coffre-fort écrit"); return errors.New("non") }
+	tick := resetAuth(t, nil)
+	h, _, _ := web(t)
+	srv := withTokenOpen(modeTok, h)
+	for range 3 {
+		tick()
+		if w := (modeReq{method: "GET", path: "/api", tokCookie: modeTok}).do(srv); w.Code != 200 {
+			t.Fatalf("mode ouvert : %d", w.Code)
+		}
+		if w := (modeReq{method: "GET", path: "/auth/me", tokCookie: modeTok}).do(srv); w.Code != 404 {
+			t.Fatalf("/auth/me sans base : %d", w.Code)
+		}
+	}
+	if _, err := os.Lstat(dir); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("dossier des comptes créé : %v", err)
+	}
+
+	// La base et un compte apparaissent pendant que le serveur tourne : bascule au plus tard une fenêtre plus tard.
+	t.Setenv("GLD_AUTH_KEY", strings.Repeat("cd", 32))
+	s, err := openAuthStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.db.Close()
+	if _, err := s.AddUser("alice", testPw, true); err != nil {
+		t.Fatal(err)
+	}
+	q := modeReq{method: "GET", path: "/api", tokCookie: modeTok}
+	if w := q.do(srv); w.Code != 200 {
+		t.Fatalf("dans la fenêtre du cache : %d", w.Code)
+	}
+	tick()
+	if w := q.do(srv); w.Code != 401 {
+		t.Fatalf("après la fenêtre : %d", w.Code)
+	}
+	if w := (modeReq{method: "GET", path: "/auth/me"}).do(srv); w.Code != 401 {
+		t.Fatalf("/auth/me monté : %d", w.Code)
+	}
+}
+
+// Une base avec des comptes ne rend jamais le mode ouvert sur une erreur : clé fausse, base fermée, fichier supprimé.
+func TestAuthFailClosed(t *testing.T) {
+	t.Run("TestStartupRefusesWrongKey", func(t *testing.T) {
+		s := testStore(t)
+		s.AddUser("alice", testPw, true)
+		s.db.Close()
+		t.Setenv("GLD_AUTH_KEY", strings.Repeat("ab", 32))
+		tick := resetAuth(t, nil)
+		h, _, _ := web(t)
+		srv := withTokenOpen(modeTok, h)
+		if _, _, err := authState(); err == nil {
+			t.Fatal("démarrage accepté")
+		}
+		tick()
+		w := (modeReq{method: "GET", path: "/api", tokCookie: modeTok}).do(srv)
+		if w.Code != 503 || !strings.Contains(w.Body.String(), jsonEsc(L("srv.auth.baseInutilisable"))) {
+			t.Fatalf("service : %d %s", w.Code, w.Body)
+		}
+	})
+	t.Run("base fermée", func(t *testing.T) {
+		s, srv, tick := authWeb(t)
+		s.AddUser("alice", testPw, true)
+		q := modeReq{method: "GET", path: "/api", tokCookie: modeTok}
+		if w := q.do(srv); w.Code != 401 {
+			t.Fatalf("mode actif : %d", w.Code)
+		}
+		s.db.Close()
+		tick()
+		if w := q.do(srv); w.Code != 503 {
+			t.Fatalf("base fermée : %d", w.Code)
+		}
+	})
+	t.Run("fichier supprimé", func(t *testing.T) {
+		s, srv, tick := authWeb(t)
+		s.AddUser("alice", testPw, true)
+		q := modeReq{method: "GET", path: "/api", tokCookie: modeTok}
+		if w := q.do(srv); w.Code != 401 {
+			t.Fatalf("mode actif : %d", w.Code)
+		}
+		if err := os.Remove(filepath.Join(os.Getenv("GLD_AUTH_DIR"), "auth.db")); err != nil {
+			t.Fatal(err)
+		}
+		for range 2 {
+			tick()
+			if w := q.do(srv); w.Code != 503 {
+				t.Fatalf("base supprimée : %d", w.Code)
+			}
+		}
+	})
+	t.Run("table vidée", func(t *testing.T) {
+		s, srv, tick := authWeb(t)
+		s.AddUser("alice", testPw, true)
+		q := modeReq{method: "GET", path: "/api", tokCookie: modeTok}
+		if w := q.do(srv); w.Code != 401 {
+			t.Fatalf("mode actif : %d", w.Code)
+		}
+		if _, err := s.db.Exec(`DELETE FROM users`); err != nil {
+			t.Fatal(err)
+		}
+		tick()
+		if w := q.do(srv); w.Code != 200 {
+			t.Fatalf("plus aucun compte : %d", w.Code)
+		}
+	})
+}
+
+func jsonEsc(s string) string {
+	b, _ := json.Marshal(s)
+	return strings.Trim(string(b), `"`)
+}
+
 func TestTokenIgnoredInURLWhenAuth(t *testing.T) {
-	s, h := authWeb(t)
+	s, h, _ := authWeb(t)
 	if _, err := s.AddUser("alice", testPw, true); err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +250,7 @@ func TestTokenIgnoredInURLWhenAuth(t *testing.T) {
 }
 
 func TestBearerStillWorks(t *testing.T) {
-	s, h := authWeb(t)
+	s, h, _ := authWeb(t)
 	if _, err := s.AddUser("alice", testPw, true); err != nil {
 		t.Fatal(err)
 	}
@@ -131,14 +273,11 @@ func TestChildHasNoGate(t *testing.T) {
 	if _, err := s.AddUser("alice", testPw, true); err != nil {
 		t.Fatal(err)
 	}
-	oldSt := authSt
-	t.Cleanup(func() { authSt, childToken = oldSt, "" })
-	authSt, childToken = s, "secret-enfant"
-	if authMode(s) {
-		t.Fatal("un enfant n'est jamais en mode multi-utilisateur")
-	}
-	if st, err := startAuth(); st != nil || err != nil {
-		t.Fatalf("un enfant n'ouvre pas la base : %v %v", st, err)
+	resetAuth(t, nil)
+	t.Cleanup(func() { childToken = "" })
+	childToken = "secret-enfant"
+	if st, on, err := authState(); st != nil || on || err != nil {
+		t.Fatalf("un enfant n'ouvre pas la base : %v %v %v", st, on, err)
 	}
 	h, _, _ := web(t)
 	r := httptest.NewRequest("GET", "/api", nil)
@@ -152,7 +291,7 @@ func TestChildHasNoGate(t *testing.T) {
 }
 
 func TestAuthModeSwitchPerRequest(t *testing.T) {
-	s, h := authWeb(t)
+	s, h, tick := authWeb(t)
 	q := modeReq{method: "GET", path: "/api", tokCookie: modeTok}
 	if w := q.do(h); w.Code != 200 {
 		t.Fatalf("mode ouvert : %d", w.Code)
@@ -160,13 +299,14 @@ func TestAuthModeSwitchPerRequest(t *testing.T) {
 	if _, err := s.AddUser("alice", testPw, true); err != nil { // comme `gld user add` pendant que le serveur tourne
 		t.Fatal(err)
 	}
+	tick()
 	if w := q.do(h); w.Code != 401 {
 		t.Fatalf("après le premier compte : %d", w.Code)
 	}
 }
 
 func TestUnauthShellServed(t *testing.T) {
-	s, h := authWeb(t)
+	s, h, _ := authWeb(t)
 	if _, err := s.AddUser("alice", testPw, true); err != nil {
 		t.Fatal(err)
 	}
@@ -179,15 +319,6 @@ func TestUnauthShellServed(t *testing.T) {
 	w := (modeReq{method: "GET", path: "/api", accept: "text/html"}).do(h)
 	if w.Code != 401 || !strings.HasPrefix(w.Header().Get("Content-Type"), "application/json") {
 		t.Fatalf("API sans session : %d %q", w.Code, w.Header().Get("Content-Type"))
-	}
-}
-
-func TestStartupRefusesWrongKey(t *testing.T) {
-	s := testStore(t)
-	s.db.Close()
-	t.Setenv("GLD_AUTH_KEY", strings.Repeat("ab", 32))
-	if st, err := startAuth(); err == nil || st != nil {
-		t.Fatalf("clé fausse acceptée : %v", err)
 	}
 }
 
@@ -299,4 +430,78 @@ func TestWSCutOnRevoke(t *testing.T) {
 			t.Fatalf("coupé en %v", d)
 		}
 	})
+}
+
+// /chat relayé à un home enfant : la révocation coupe le client et demande l'arrêt du tour à l'enfant.
+func TestChildChatStoppedOnRevoke(t *testing.T) {
+	old := authWatchEvery
+	t.Cleanup(func() { authWatchEvery = old })
+	authWatchEvery = 100 * time.Millisecond
+	g := newGateRig(t)
+	addHomes(t, "Pro")
+	u := g.user(t, "bob", false)
+	g.grant(t, u, "Pro", RightExec)
+	stopped, quit := make(chan string, 1), make(chan struct{})
+	cm := http.NewServeMux()
+	cm.HandleFunc("POST /chat", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("{\"text\":\"début\"}\n"))
+		w.(http.Flusher).Flush()
+		select { // un tour d'enfant ne suit pas le contexte de la requête
+		case <-time.After(8 * time.Second):
+		case <-quit:
+		}
+	})
+	cm.HandleFunc("POST /chat-stop", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ ID string }
+		json.NewDecoder(r.Body).Decode(&req)
+		if r.Header.Get(childHeader) != "x" {
+			t.Error("arrêt envoyé sans le jeton de la passerelle")
+		}
+		stopped <- req.ID
+		close(quit)
+	})
+	child := httptest.NewServer(cm)
+	defer child.Close()
+	cu, _ := url.Parse(child.URL)
+	oldStart := homeStart
+	t.Cleanup(func() { homeStart = oldStart; stopHomes() })
+	homeStart = func(h Home) (*homeProc, error) {
+		return &homeProc{dir: h.Dir, proxy: childProxy(cu, "x"), done: make(chan struct{})}, nil
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /chat", func(w http.ResponseWriter, r *http.Request) { t.Error("servi par la passerelle") })
+	srv := httptest.NewServer(authGate(mux, g.s, withAuthWatch(withHomes(mux))))
+	defer srv.Close()
+
+	r, _ := http.NewRequest("POST", srv.URL+"/chat", strings.NewReader(`{"ID":"`+id1+`","Prompt":"x"}`))
+	r.AddCookie(&http.Cookie{Name: sessCookie, Value: u.cookie})
+	r.AddCookie(&http.Cookie{Name: homeCookie, Value: "Pro"})
+	r.Header.Set(csrfHeader, u.csrf)
+	resp, err := http.DefaultClient.Do(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	buf := make([]byte, 64)
+	if n, err := resp.Body.Read(buf); n == 0 || err != nil {
+		t.Fatalf("début du flux : %d %v", n, err)
+	}
+	pro, _ := homeIDFor("Pro")
+	start := time.Now()
+	g.s.Revoke(u.id, pro, RightExec)
+	select {
+	case id := <-stopped:
+		if id != id1 {
+			t.Fatalf("arrêt demandé pour %q", id)
+		}
+	case <-time.After(6 * time.Second):
+		t.Fatal("arrêt jamais demandé à l'enfant")
+	}
+	done := make(chan error, 1)
+	go func() { _, err := io.ReadAll(resp.Body); done <- err }()
+	select {
+	case <-done:
+	case <-time.After(6*time.Second - time.Since(start)):
+		t.Fatal("flux du client non coupé")
+	}
 }

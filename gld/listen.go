@@ -97,7 +97,7 @@ func withToken(token string, next http.Handler) http.Handler {
 func withTokenOpen(token string, next http.Handler) http.Handler {
 	tok := withToken(token, next)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if authMode(authSt) {
+		if authMode() {
 			next.ServeHTTP(w, r)
 			return
 		}

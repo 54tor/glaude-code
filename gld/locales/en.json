@@ -51,6 +51,7 @@
   "srv.account.limit.seven_day_opus": "7 days · Opus",
   "srv.account.limit.seven_day_sonnet": "7 days · Sonnet",
   "srv.account.otherLimit": "Other limit ({{.A1}})",
+  "srv.auth.baseInutilisable": "accounts database unusable: service refused (details in the gld log).",
   "srv.auth.cleRefusee": "security key rejected",
   "srv.auth.codeInvalide": "invalid code",
   "srv.auth.csrf": "missing or invalid CSRF token",

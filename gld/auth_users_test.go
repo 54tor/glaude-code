@@ -37,8 +37,8 @@ func tamperEvents(t *testing.T, s *authStore) int {
 
 func TestAddUserNameUnique(t *testing.T) {
 	s := testStore(t)
-	if s.HasUsers() {
-		t.Fatal("empty store has users")
+	if on, err := s.HasUsers(); on || err != nil {
+		t.Fatal("empty store has users", err)
 	}
 	if _, err := s.AddUser("Alice", testPw, false); err != nil {
 		t.Fatal(err)
@@ -49,8 +49,11 @@ func TestAddUserNameUnique(t *testing.T) {
 		}
 	}
 	u, err := s.UserByName("ALICE")
-	if err != nil || u.Name != "alice" || !checkPassword(u.PwHash, testPw) || !s.HasUsers() {
+	if err != nil || u.Name != "alice" || !checkPassword(u.PwHash, testPw) {
 		t.Fatalf("lookup: %+v %v", u, err)
+	}
+	if on, err := s.HasUsers(); !on || err != nil {
+		t.Fatal("HasUsers", on, err)
 	}
 	if _, err := s.UserByName("bob"); !errors.Is(err, errNoUser) {
 		t.Fatalf("unknown: %v", err)
