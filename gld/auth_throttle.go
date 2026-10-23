@@ -44,6 +44,9 @@ func thKeys(user, ip string) (u, i, p, m string) {
 	return "user:" + n, "ip:" + ip, "pair:" + n + "|" + ip, "mfa:" + n
 }
 
+// Marqueur posé par Success : first_at sert de date de dernière connexion réussie.
+func knownKey(user, ip string) string { return "known:" + normName(user) + "|" + ip }
+
 func backoff(fails int64) time.Duration {
 	if fails < 3 {
 		return 0
@@ -59,7 +62,8 @@ func (t *throttle) Check(user, ip string) (wait time.Duration, blocked bool) {
 	now := t.now()
 	cut := now.Add(-thWindow).Unix()
 	uk, ik, pk, mk := thKeys(user, ip)
-	rows, err := t.db.Query(`SELECT key, fails, first_at, locked_until FROM throttle WHERE key IN (?,?,?,?)`, uk, ik, pk, mk)
+	kk := knownKey(user, ip)
+	rows, err := t.db.Query(`SELECT key, fails, first_at, locked_until FROM throttle WHERE key IN (?,?,?,?,?)`, uk, ik, pk, mk, kk)
 	if err != nil {
 		return thMaxDelay, true
 	}
@@ -68,11 +72,17 @@ func (t *throttle) Check(user, ip string) (wait time.Duration, blocked bool) {
 	for rows.Next() {
 		var k string
 		var r row
-		if rows.Scan(&k, &r.fails, &r.first, &r.locked) == nil {
-			got[k] = r
+		if err := rows.Scan(&k, &r.fails, &r.first, &r.locked); err != nil {
+			rows.Close()
+			return thMaxDelay, true
 		}
+		got[k] = r
 	}
+	err = rows.Err()
 	rows.Close()
+	if err != nil {
+		return thMaxDelay, true
+	}
 	inWin := func(k string) int64 {
 		if r, ok := got[k]; ok && r.first > cut {
 			return r.fails
@@ -85,7 +95,7 @@ func (t *throttle) Check(user, ip string) (wait time.Duration, blocked bool) {
 	u := got[uk]
 	uLocked := u.locked > now.Unix()
 	uFails := inWin(uk)
-	if (uLocked || uFails >= 3) && t.knownIPByName(normName(user), ip, now) {
+	if k, ok := got[kk]; ok && k.first >= now.Add(-thKnownFor).Unix() {
 		uLocked, uFails = false, 0
 	}
 	if uLocked {
@@ -114,7 +124,7 @@ func (t *throttle) globalSlot(now time.Time) time.Duration {
 	return 0
 }
 
-func (t *throttle) Fail(user, ip string, stage string) {
+func (t *throttle) Fail(user, ip string, stage string) error {
 	now := t.now().Unix()
 	cut := now - int64(thWindow/time.Second)
 	uk, ik, pk, mk := thKeys(user, ip)
@@ -124,7 +134,7 @@ func (t *throttle) Fail(user, ip string, stage string) {
 	}
 	tx, err := t.db.Begin()
 	if err != nil {
-		return
+		return err
 	}
 	defer tx.Rollback()
 	for _, k := range keys {
@@ -137,33 +147,36 @@ ON CONFLICT(key) DO UPDATE SET
     THEN ?2 + ?5 ELSE locked_until END
 RETURNING fails`, k, now, cut, thLockAfter, int64(thLockFor/time.Second)).Scan(&fails)
 		if err != nil {
-			return
+			return err
 		}
 		if k == uk && fails == thLockAfter {
-			tx.Exec(`INSERT INTO auth_events(at, name_tried, ip, kind, outcome) VALUES (?,?,?,?,?)`, now, normName(user), ip, "lock", "locked")
+			if _, err := tx.Exec(`INSERT INTO auth_events(at, name_tried, ip, kind, outcome) VALUES (?,?,?,?,?)`, now, normName(user), ip, "lock", "locked"); err != nil {
+				return err
+			}
 		}
 	}
-	tx.Commit()
+	return tx.Commit()
 }
 
 // Les compteurs mfa: ne sont pas remis à zéro : sinon un mot de passe connu suffirait
 // à rouvrir cinq essais de second facteur à volonté.
-func (t *throttle) Success(user, ip string) {
+func (t *throttle) Success(user, ip string) error {
+	now := t.now().Unix()
 	uk, _, pk, _ := thKeys(user, ip)
-	t.db.Exec(`DELETE FROM throttle WHERE key IN (?,?)`, uk, pk)
+	_, err := t.db.Exec(`DELETE FROM throttle WHERE key IN (?,?) OR (key LIKE 'known:%' AND first_at < ?)`,
+		uk, pk, now-int64(thKnownFor/time.Second))
+	if err != nil {
+		return err
+	}
+	_, err = t.db.Exec(`INSERT INTO throttle(key, fails, first_at, locked_until) VALUES (?, 0, ?, 0)
+ON CONFLICT(key) DO UPDATE SET first_at = excluded.first_at`, knownKey(user, ip), now)
+	return err
 }
 
 func (t *throttle) KnownIP(userID int64, ip string) bool {
 	var one int
 	return t.db.QueryRow(`SELECT 1 FROM auth_events WHERE user_id=? AND kind=? AND outcome=? AND ip=? AND at>=? LIMIT 1`,
 		userID, evLogin, evSuccess, ip, t.now().Add(-thKnownFor).Unix()).Scan(&one) == nil
-}
-
-func (t *throttle) knownIPByName(name, ip string, now time.Time) bool {
-	var one int
-	return t.db.QueryRow(`SELECT 1 FROM auth_events e JOIN users u ON u.id = e.user_id
-WHERE u.name=? AND e.kind=? AND e.outcome=? AND e.ip=? AND e.at>=? LIMIT 1`,
-		name, evLogin, evSuccess, ip, now.Add(-thKnownFor).Unix()).Scan(&one) == nil
 }
 
 func trustedProxy(a netip.Addr) bool {
