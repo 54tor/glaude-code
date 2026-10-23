@@ -37,7 +37,11 @@ func fullSession(t *testing.T, s *authStore, id int64) (string, *Principal) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.MarkMFA(p.SessionID); err != nil {
+	c, _, err = s.PromoteMFA(p.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p, err = s.Session(c); err != nil {
 		t.Fatal(err)
 	}
 	return c, p
@@ -153,14 +157,18 @@ func TestRevokeUser(t *testing.T) {
 	c1, _ := fullSession(t, s, id)
 	c2, p2 := fullSession(t, s, id)
 	cb, _ := fullSession(t, s, bob)
-	s.RevokeSession(p2.SessionID)
+	if err := s.RevokeSession(p2.SessionID); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := s.Session(c2); !errors.Is(err, errNoSession) {
 		t.Fatal("session révoquée encore valide")
 	}
 	if _, err := s.Session(c1); err != nil {
 		t.Fatal("autre session touchée")
 	}
-	s.RevokeUser(id)
+	if err := s.RevokeUser(id); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := s.Session(c1); !errors.Is(err, errNoSession) {
 		t.Fatal("RevokeUser sans effet")
 	}
@@ -276,5 +284,48 @@ func TestEventIP(t *testing.T) {
 	var ip string
 	if err := s.db.QueryRow(`SELECT ip FROM auth_events WHERE kind='login'`).Scan(&ip); err != nil || ip != "203.0.113.5" {
 		t.Fatalf("%q %v", ip, err)
+	}
+}
+
+func TestPromoteMFA(t *testing.T) {
+	now := testClock(t)
+	s, id := sessUser(t)
+	start := *now
+	old, err := s.NewSession(id, "203.0.113.5", "ua")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, _ := s.Session(old)
+	*now = now.Add(5 * time.Minute)
+	c, exp, err := s.PromoteMFA(p.SessionID)
+	if err != nil || !exp.Equal(start.Add(sessAbsolute)) {
+		t.Fatalf("promotion : %v %v", exp, err)
+	}
+	if _, err := s.Session(old); !errors.Is(err, errNoSession) {
+		t.Fatal("ancien cookie encore valide")
+	}
+	np, err := s.Session(c)
+	if err != nil || !np.MFA || np.User.ID != id || !np.Expires.Equal(exp) || np.CSRF == p.CSRF || np.SessionID == p.SessionID {
+		t.Fatalf("nouvelle session : %+v %v", np, err)
+	}
+	if _, _, err := s.PromoteMFA(np.SessionID); !errors.Is(err, errNoSession) {
+		t.Fatalf("double promotion : %v", err)
+	}
+	if _, _, err := s.PromoteMFA(p.SessionID); !errors.Is(err, errNoSession) {
+		t.Fatalf("promotion de l'ancienne : %v", err)
+	}
+	late, _ := s.NewSession(id, "", "")
+	lp, _ := s.Session(late)
+	*now = now.Add(thMFAWindow)
+	if _, _, err := s.PromoteMFA(lp.SessionID); !errors.Is(err, errNoSession) {
+		t.Fatalf("partielle échue promue : %v", err)
+	}
+}
+
+func TestRevokeClosedDB(t *testing.T) {
+	s, id := sessUser(t)
+	s.db.Close()
+	if s.RevokeUser(id) == nil || s.RevokeSession("00") == nil {
+		t.Fatal("erreur de base ignorée")
 	}
 }

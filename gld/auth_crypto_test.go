@@ -170,7 +170,7 @@ func TestCheckMasterKeyWitnessDeleted(t *testing.T) {
 	}
 	db.Exec(`DELETE FROM users`)
 	db.Exec(`PRAGMA foreign_keys=OFF`)
-	if _, err := db.Exec(`INSERT INTO home_acl(user_id,home_name) VALUES(99,'h')`); err != nil {
+	if _, err := db.Exec(`INSERT INTO home_acl(user_id,home_id) VALUES(99,'h')`); err != nil {
 		t.Fatal(err)
 	}
 	if err := checkMasterKey(db, k); err == nil {
