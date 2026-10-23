@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { SessionTrash } from "./SessionTrash"
 import { CleanupWarning } from "./CleanupWarning"
 import { Trash2 } from "lucide-react"
-import { AlarmClock, ChevronRight, FolderPlus, Repeat, Coins, FolderOpen, Star, Brain, SlidersHorizontal, Zap, Flame, History, Clock, FileText, Inbox, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
+import { AlarmClock, ChevronRight, FolderPlus, Repeat, Coins, FolderOpen, Star, Brain, SlidersHorizontal, Zap, Flame, History, Clock, FileText, Inbox, Info, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
 import { size, tilde } from "@/lib/format"
 import type { Choice } from "@/lib/models"
 import { href, type Route } from "@/lib/route"
@@ -88,7 +88,11 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
             title={`${s.title}\nCache encore environ ${left} min`}
             className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
           >
-            {warn ? (
+            {a.asking.has(s.id) ? (
+              <Info className="size-4 shrink-0 animate-pulse text-amber-500" aria-label="attend une réponse à une question" />
+            ) : a.live.has(s.id) && !a.waiting.has(s.id) ? (
+              <Loader2 className="size-4 shrink-0 animate-spin text-emerald-500" aria-label="Claude travaille" />
+            ) : warn ? (
               <AlarmClock className="size-4 shrink-0 text-amber-500" aria-label="cache bientôt expiré" />
             ) : (
               <Flame className="size-4 shrink-0 text-orange-500" aria-hidden />

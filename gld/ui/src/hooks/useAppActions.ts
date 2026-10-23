@@ -298,6 +298,7 @@ export function useAppActions(c: {
     q,
     live,
     waiting,
+    asking: new Set(data?.asking),
     hit: (id) => hitMap?.get(id),
     registeredDirs: data?.dirs ?? [],
     addDir: () =>
