@@ -68,7 +68,10 @@ func openAuthStore() (*authStore, error) {
 	}
 	s := &authStore{db: db, key: key}
 	if err == nil {
-		err = s.upgrade()
+		err = db.migrate(s.keyedStep)
+	}
+	if err == nil {
+		err = walPerms(dir)
 	}
 	if err != nil {
 		db.Close()
@@ -77,129 +80,124 @@ func openAuthStore() (*authStore, error) {
 	return s, nil
 }
 
-const (
-	accountsKey = "accounts"
-	upgradeKey  = "upgrade"
-	upgradeVer  = "7"
-)
+const accountsKey = "accounts"
 
 var errAccountsGone = errors.New("auth.db : tous les comptes ont disparu alors que des comptes avaient été créés ; supprimer auth.db et auth.key pour repartir de zéro")
 
-// Le marqueur est lié au témoin de clé de cette base : copié d'une autre base, il ne vaut rien.
-func (s *authStore) accountsMAC(q querier) ([]byte, error) {
-	var w []byte
-	if err := q.QueryRow(`SELECT value FROM meta WHERE key='key_witness'`).Scan(&w); err != nil {
-		return nil, err
-	}
-	return rowSig(s.key, "meta", accountsKey, string(w)), nil
+// accountsValue : l'état des comptes (« off » à la création de la base, « on » au premier compte), lié par MAC au témoin de
+// clé de cette base : copié d'une autre base, ou d'un état à l'autre, il ne vaut rien.
+func accountsValue(key, witness []byte, state string) []byte {
+	return append([]byte(state+":"), rowSig(key, "meta", accountsKey, string(witness), state)...)
 }
 
-func (s *authStore) markAccounts(tx *sql.Tx) error {
-	m, err := s.accountsMAC(tx)
-	if err != nil {
+func (s *authStore) setAccounts(tx *sql.Tx, state string) error {
+	var w []byte
+	if err := tx.QueryRow(`SELECT value FROM meta WHERE key='key_witness'`).Scan(&w); err != nil {
 		return err
 	}
-	_, err = tx.Exec(`INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)`, accountsKey, m)
+	_, err := tx.Exec(`INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)`, accountsKey, accountsValue(s.key, w, state))
 	return err
 }
 
-// AccountsOn : le mode multi-utilisateur est actif. Sans compte, seul l'absence du marqueur rend le mode ouvert :
-// des comptes supprimés de la base ferment le service au lieu de l'ouvrir.
+func (s *authStore) markAccounts(tx *sql.Tx) error { return s.setAccounts(tx, "on") }
+
+// AccountsOn : le mode multi-utilisateur est actif. L'état est écrit avec le témoin de clé : absent, illisible ou
+// contredit par la table users, c'est une altération et le service est fermé ; des comptes supprimés le ferment aussi.
 func (s *authStore) AccountsOn() (bool, error) {
 	on, err := s.HasUsers()
 	if err != nil {
 		return false, err
 	}
-	var v []byte
+	var v, w []byte
 	err = s.db.QueryRow(`SELECT value FROM meta WHERE key=?`, accountsKey).Scan(&v)
 	if errors.Is(err, sql.ErrNoRows) {
-		return on, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	want, err := s.accountsMAC(s.db)
-	if err != nil {
-		return false, err
-	}
-	if !hmac.Equal(v, want) {
 		return false, errTamper
 	}
-	if !on {
-		return false, errAccountsGone
+	if err == nil {
+		err = s.db.QueryRow(`SELECT value FROM meta WHERE key='key_witness'`).Scan(&w)
 	}
-	return true, nil
+	if err != nil {
+		return false, err
+	}
+	switch {
+	case hmac.Equal(v, accountsValue(s.key, w, "on")):
+		if !on {
+			return false, errAccountsGone
+		}
+		return true, nil
+	case hmac.Equal(v, accountsValue(s.key, w, "off")) && !on:
+		return false, nil
+	}
+	return false, errTamper
 }
 
-// upgrade re-signe une fois, avec la clé, les lignes users d'une base antérieure à mfa_enrolled : seule une ligne dont
-// l'ancienne signature est valide est re-signée (une ligne altérée le reste), et le bit est déduit des facteurs vérifiés.
-// Il pose aussi le marqueur des comptes sur une base qui en a déjà.
-func (s *authStore) upgrade() error {
-	var v string
-	err := s.db.QueryRow(`SELECT value FROM meta WHERE key=?`, upgradeKey).Scan(&v)
-	if err == nil && v == upgradeVer {
+// keyedStep s'exécute dans la transaction de la migration v, une seule fois. Pour 7 (mfa_enrolled signé) : les lignes users
+// à l'ancienne signature valide sont re-signées, le bit déduit des facteurs vérifiés à cet instant (une ligne altérée le
+// reste) ; une base antérieure reçoit l'état des comptes qu'elle n'avait pas.
+func (s *authStore) keyedStep(tx *sql.Tx, v int) error {
+	if v != 7 {
 		return nil
 	}
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	rows, err := tx.Query(`SELECT id,name,pw_hash,is_admin,disabled,sig FROM users`)
+	if err != nil {
 		return err
 	}
-	return s.inTx(func(tx *sql.Tx) error {
-		rows, err := tx.Query(`SELECT ` + userCols + ` FROM users`)
-		if err != nil {
+	type legacy struct {
+		u   User
+		sig []byte
+	}
+	var list []legacy
+	for rows.Next() {
+		var l legacy
+		var adm, dis any
+		if err := rows.Scan(&l.u.ID, &l.u.Name, &l.u.PwHash, &adm, &dis, &l.sig); err != nil {
+			rows.Close()
 			return err
 		}
-		var old []*User
-		for rows.Next() {
-			u, err := s.scanUser(rows)
-			if err != nil && !errors.Is(err, errTamper) {
-				rows.Close()
-				return err
-			}
-			if err != nil && !u.MFAEnrolled {
-				old = append(old, u)
-			}
+		var ok1, ok2 bool
+		l.u.Admin, ok1 = bit(adm)
+		l.u.Disabled, ok2 = bit(dis)
+		if ok1 && ok2 && rowSigOK(s.key, "users", strconv.FormatInt(l.u.ID, 10), l.sig, l.u.Name, l.u.PwHash, b01(l.u.Admin), b01(l.u.Disabled)) {
+			list = append(list, l)
 		}
-		err = rows.Err()
-		rows.Close()
-		if err != nil {
-			return err
-		}
-		for _, u := range old {
-			var sig []byte
-			if err := tx.QueryRow(`SELECT sig FROM users WHERE id=?`, u.ID).Scan(&sig); err != nil {
-				return err
-			}
-			if !rowSigOK(s.key, "users", strconv.FormatInt(u.ID, 10), sig, u.Name, u.PwHash, b01(u.Admin), b01(u.Disabled)) {
-				continue
-			}
-			t, err := s.loadTOTP(tx, u.ID)
-			if err != nil && !errors.Is(err, errNoTOTP) && !errors.Is(err, errTamper) {
-				return err
-			}
-			u.MFAEnrolled = err == nil && t.confirmed.Valid
-			creds, err := s.loadCreds(tx, u.ID)
-			if err != nil {
-				return err
-			}
-			for _, c := range creds {
-				u.MFAEnrolled = u.MFAEnrolled || !c.bad
-			}
-			if _, err := tx.Exec(`UPDATE users SET mfa_enrolled=?, sig=? WHERE id=? AND sig=?`, u.MFAEnrolled, s.userSig(u), u.ID, sig); err != nil {
-				return err
-			}
-		}
-		var n int
-		if err := tx.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&n); err != nil {
-			return err
-		}
-		if n > 0 {
-			if err := s.markAccounts(tx); err != nil {
-				return err
-			}
-		}
-		_, err = tx.Exec(`INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)`, upgradeKey, upgradeVer)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
 		return err
-	})
+	}
+	for _, l := range list {
+		u := l.u
+		t, err := s.loadTOTP(tx, u.ID)
+		if err != nil && !errors.Is(err, errNoTOTP) && !errors.Is(err, errTamper) {
+			return err
+		}
+		u.MFAEnrolled = err == nil && t.confirmed.Valid
+		creds, err := s.loadCreds(tx, u.ID)
+		if err != nil {
+			return err
+		}
+		for _, c := range creds {
+			u.MFAEnrolled = u.MFAEnrolled || !c.bad
+		}
+		if _, err := tx.Exec(`UPDATE users SET mfa_enrolled=?, sig=? WHERE id=? AND sig=?`, u.MFAEnrolled, s.userSig(&u), u.ID, l.sig); err != nil {
+			return err
+		}
+	}
+	var has, n int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM meta WHERE key=?`, accountsKey).Scan(&has); err != nil {
+		return err
+	}
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&n); err != nil {
+		return err
+	}
+	if has > 0 {
+		return nil
+	}
+	if n > 0 {
+		return s.setAccounts(tx, "on")
+	}
+	return s.setAccounts(tx, "off")
 }
 
 // markEnrolled pose le bit dans la transaction qui écrit le premier facteur ; u vient d'être relu et vérifié dans tx.

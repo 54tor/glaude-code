@@ -158,6 +158,10 @@ func TestCheckMasterKeyWitnessDeleted(t *testing.T) {
 		t.Fatal(err)
 	}
 	db.Exec(`DELETE FROM meta WHERE key='key_witness'`)
+	if err := checkMasterKey(db, k); err == nil {
+		t.Fatal("witness deleted beside the accounts state: recreated")
+	}
+	db.Exec(`DELETE FROM meta WHERE key='accounts'`)
 	if err := checkMasterKey(db, k); err != nil {
 		t.Fatalf("empty db should recreate witness: %v", err)
 	}
