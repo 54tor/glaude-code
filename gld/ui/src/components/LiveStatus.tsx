@@ -1,5 +1,5 @@
 import { i18n, loc } from "@/i18n"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { BarChart3, Bot, Loader2, Wrench } from "lucide-react"
 import { api, type LiveState, type Msg, type SubLive, type Tokens } from "@/lib/api"
@@ -203,6 +203,60 @@ export function LiveAgents({ live: { st }, dir, id }: { live: Live; dir: string;
           </div>
         </DialogContent>
       </Dialog>
+      <SubView dir={dir} id={id} sub={sub} running={!!st.subs.find((x) => x.id === sub?.id)?.running} onClose={() => setSub(null)} />
     </>
+  )
+}
+
+// Conversation d'un sous-agent, en fenêtre au-dessus de la liste ; relue toutes les 3 s tant qu'il travaille.
+function SubView({ dir, id, sub, running, onClose }: { dir: string; id: string; sub: SubLive | null; running: boolean; onClose: () => void }) {
+  const { t } = useTranslation()
+  const [tools, setTools] = useState(false)
+  const [got, setGot] = useState<{ key: string; msgs: Msg[] } | null>(null)
+  const sid = sub?.id
+  const key = `${sid}/${tools}`
+  const vp = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!sid) return
+    let live = true
+    const load = () => api.conv({ dir, id, sub: sid }, tools, { limit: 300 }).then((r) => live && setGot({ key, msgs: r.msgs }), () => {})
+    load()
+    if (!running) return () => void (live = false)
+    const iv = setInterval(() => document.visibilityState === "visible" && load(), 3000)
+    return () => {
+      live = false
+      clearInterval(iv)
+    }
+  }, [dir, id, sid, tools, running, key])
+  const msgs = got && sid && got.key.startsWith(`${sid}/`) ? got.msgs : null
+  // Collée à la fin tant qu'on y est, comme la conversation principale.
+  useEffect(() => {
+    const el = vp.current?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')
+    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 120) el.scrollTop = el.scrollHeight
+  }, [msgs])
+  return (
+    <Dialog open={!!sub} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="flex h-[85vh] max-h-[85vh] min-w-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
+        <DialogHeader className="border-b px-6 py-4">
+          <DialogTitle className="truncate pr-6">{sub?.desc || sub?.type}</DialogTitle>
+          <DialogDescription className="text-xs">{t("conversation.live.subNote")}</DialogDescription>
+          <div>
+            <Button size="sm" variant={tools ? "secondary" : "ghost"} onClick={() => setTools(!tools)} aria-pressed={tools}>
+              <Wrench /> {tools ? t("conversation.view.toolsShown") : t("conversation.view.toolsHidden")}
+            </Button>
+          </div>
+        </DialogHeader>
+        <div ref={vp} className="min-h-0 flex-1">
+          <ScrollArea className="h-full">
+            <div className="space-y-3 px-6 py-4 text-sm">
+              {msgs?.map((m, i) => (
+                <Message key={m.o === undefined ? i : `${m.o}.${m.n ?? 0}`} m={m} />
+              ))}
+              {msgs?.length === 0 && <p className="text-center text-muted-foreground">{t("conversation.live.subEmpty")}</p>}
+            </div>
+          </ScrollArea>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }

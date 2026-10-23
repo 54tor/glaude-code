@@ -145,9 +145,9 @@ export const api = {
   sessionTrash: () => get<{ sessions: { dir: string; id: string; title: string; cwd: string; at: number; kb: number }[]; days: number }>("/session-trash"),
   info: (s: Item) => get<Detail>(`/info?dir=${enc(s.dir)}&id=${s.id}`),
   // Sans page : toute la conversation. Avec page : `limit` messages par la fin ; `before` = « start » de la page suivante.
-  conv: (s: Item, tools: boolean, page?: { limit: number; before?: number }) =>
+  conv: (s: Item & { sub?: string }, tools: boolean, page?: { limit: number; before?: number }) =>
     get<{ msgs: Msg[]; start?: number; more?: boolean }>(
-      `/conv?dir=${enc(s.dir)}&id=${s.id}${tools ? "&tools=1" : ""}${page ? `&limit=${page.limit}&before=${page.before ?? 0}` : ""}`
+      `/conv?dir=${enc(s.dir)}&id=${s.id}${s.sub ? `&sub=${enc(s.sub)}` : ""}${tools ? "&tools=1" : ""}${page ? `&limit=${page.limit}&before=${page.before ?? 0}` : ""}`
     ),
   // Suite d'un message coupé, à partir de l'octet from ; cut = 0 : fin du texte.
   convText: (s: Item, tools: boolean, m: Msg, from: number) =>

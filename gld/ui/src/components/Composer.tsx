@@ -364,7 +364,7 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
         )}
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className="ml-auto" />
-          <LiveAgents live={liveState} />
+          <LiveAgents live={liveState} dir={dir} id={id} />
           {liveState.st?.thinking && (
             <Button
               size="sm"
