@@ -3,11 +3,13 @@ package main
 // Cas d'échec repérés par l'audit du 2026-10-23 : chaque test fige la correction d'une perte de données silencieuse.
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // Un corps illisible n'est pas une demande de tout vider.
@@ -97,4 +99,53 @@ func TestVerbesEnCache(t *testing.T) {
 	if got := spinnerVerbs("fr"); len(got) != 2 {
 		t.Fatalf("cache non invalidé : %v", got)
 	}
+}
+
+// Une lecture de la corbeille ne purge rien ; l'expiration passe par un POST (ou la boucle quotidienne).
+func TestCorbeilleExpirationHorsGET(t *testing.T) {
+	h, cfg, _ := web(t)
+	ok(t, h, "/session-trash-add", `{"items":[{"dir":"-p","id":"`+id1+`"}]}`, true, "")
+	dir := filepath.Join(cfg, "gld-web-trash", "sessions", id1)
+	b, _ := os.ReadFile(filepath.Join(dir, "meta.json"))
+	var m TrashedSession
+	json.Unmarshal(b, &m)
+	m.At = float64(time.Now().Add(-31 * 24 * time.Hour).Unix())
+	b, _ = json.Marshal(m)
+	os.WriteFile(filepath.Join(dir, "meta.json"), b, 0o600)
+	_, got, _ := call(t, h, "GET", "/session-trash", "")
+	if l, _ := got["sessions"].([]any); len(l) != 0 {
+		t.Fatalf("session expirée encore listée : %v", got)
+	}
+	if _, err := os.Stat(filepath.Join(dir, id1+".jsonl")); err != nil {
+		t.Fatal("GET /session-trash a purgé")
+	}
+	// Une purge d'un autre id expire au passage la session trop vieille.
+	ok(t, h, "/session-trash-purge", `{"ids":["`+id2+`"]}`, true, "")
+	if _, err := os.Stat(dir); err == nil {
+		t.Fatal("session expirée toujours dans la corbeille")
+	}
+	if _, err := os.Stat(filepath.Join(cfg, "projects", "-p", id1+".jsonl")); err == nil {
+		t.Fatal("transcript expiré remis en place au lieu d'être purgé")
+	}
+}
+
+// Forcer le relevé des limites passe par un POST.
+func TestCompteRafraichirEnPOST(t *testing.T) {
+	h, _, _ := web(t)
+	old := usageStart
+	calls := make(chan struct{}, 2)
+	usageStart = func() error { calls <- struct{}{}; return nil }
+	reset := func() {
+		usageMu.Lock()
+		usageLast, usageBusy = time.Time{}, false
+		usageMu.Unlock()
+	}
+	defer func() { usageWG.Wait(); usageStart = old; reset() }()
+	reset()
+	if _, m, _ := call(t, h, "POST", "/account-refresh", "{}"); m["refreshing"] != true {
+		t.Fatalf("POST /account-refresh : %v", m)
+	}
+	<-calls
+	usageWG.Wait()
+	status(t, h, "GET", "/account-refresh", "", 405)
 }
