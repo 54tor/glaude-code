@@ -25,6 +25,7 @@ export function ReauthForm({
   title,
   children,
   extraOk = true,
+  focusPassword = true,
   danger,
   onSubmit,
   onCancel,
@@ -32,6 +33,7 @@ export function ReauthForm({
   title: string
   children?: ReactNode // champs propres à l'action, au-dessus de la vérification
   extraOk?: boolean
+  focusPassword?: boolean // faux quand un champ propre à l'action vient en premier
   danger?: boolean
   onSubmit: (r: Reauth) => Promise<AuthRes>
   onCancel: () => void
@@ -75,7 +77,7 @@ export function ReauthForm({
       <p className="text-xs text-muted-foreground">{t("auth.reauth.hint")}</p>
       <div className="space-y-1.5">
         <Label htmlFor="gld-reauth-pw">{t("auth.reauth.password")}</Label>
-        <Input id="gld-reauth-pw" type="password" autoComplete="current-password" autoFocus value={pw} onChange={(e) => setPw(e.target.value)} />
+        <Input id="gld-reauth-pw" type="password" autoComplete="current-password" autoFocus={focusPassword} value={pw} onChange={(e) => setPw(e.target.value)} />
       </div>
       <CodeInput id="gld-reauth-code" label={t("auth.reauth.code")} value={code} onChange={setCode} />
       <ErrorLine msg={err} wait={left} />

@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next"
 import QRCode from "react-qr-code"
 import { Copy, Download, KeyRound, Smartphone } from "lucide-react"
 import { toast } from "sonner"
-import { authCall, boot, logout, setAuth, useAuth, useWait, waAssert, waAvailable, waRegister, type AuthRes, type Reauth } from "@/lib/auth"
+import { abandon, authCall, boot, setAuth, useAuth, useWait, waAssert, waAvailable, waRegister, type AuthRes, type Reauth } from "@/lib/auth"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -95,7 +95,7 @@ export function Mfa() {
         </>
       )}
       <ErrorLine msg={err ? t("auth.mfa.invalid") : undefined} wait={left} />
-      <Button variant="link" className="w-full" onClick={() => void logout()}>
+      <Button variant="link" className="w-full" onClick={() => void abandon()}>
         {t("auth.mfa.back")}
       </Button>
     </div>
@@ -112,8 +112,11 @@ export function RecoveryCodes({ codes, onDone }: { codes: string[]; onDone: () =
     const a = document.createElement("a")
     a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }))
     a.download = "gld-recovery-codes.txt"
+    document.body.append(a)
     a.click()
-    URL.revokeObjectURL(a.href)
+    a.remove()
+    // Révoquer aussitôt peut annuler le téléchargement dans certains navigateurs.
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000)
   }
   return (
     <div className="space-y-4">
@@ -242,7 +245,7 @@ export function Enrol({ reauth, hasTotp, onDone, onCancel }: { reauth?: Reauth; 
         )
       )}
       {first && (
-        <Button variant="link" className="w-full" onClick={() => void logout()}>
+        <Button variant="link" className="w-full" onClick={() => void abandon()}>
           {t("auth.mfa.back")}
         </Button>
       )}

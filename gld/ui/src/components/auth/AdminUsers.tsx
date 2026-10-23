@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useState, type FormEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { MoreHorizontal, TriangleAlert, UserPlus } from "lucide-react"
 import { toast } from "sonner"
-import { authCall, DANGEROUS, RIGHTS, useAuth, type AuthRes, type Factors, type Reauth, type Right } from "@/lib/auth"
+import { authCall, DANGEROUS, RIGHTS, signedOut, useAuth, type AuthRes, type Factors, type Reauth, type Right } from "@/lib/auth"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -110,6 +110,11 @@ export function AdminUsers() {
     }
     toast.success(t("auth.admin.done"))
     reset()
+    // Le serveur a fermé ses propres sessions (ou effacé son cookie) : l'interface se ferme proprement, comme depuis le profil.
+    if ("user" in p && p.user.name === me && (p.kind === "revoke" || p.kind === "resetMfa" || p.kind === "password")) {
+      signedOut()
+      return res
+    }
     await load()
     return res
   }
@@ -139,9 +144,10 @@ export function AdminUsers() {
     <div className="space-y-4 text-sm">
       {pending && (
         <ReauthForm
-          title={"user" in pending ? `${titles[pending.kind]} : ${pending.user.name}` : titles[pending.kind]}
+          title={"user" in pending ? t("auth.admin.titleFor", { title: titles[pending.kind], name: pending.user.name }) : titles[pending.kind]}
           danger={pending.kind !== "add" && pending.kind !== "enable"}
           extraOk={pending.kind === "grant" ? confirmed : pending.kind === "add" ? !!form.name && !!form.password : pending.kind === "password" ? !!form.password : true}
+          focusPassword={pending.kind !== "add"}
           onSubmit={(r) => perform(pending, r)}
           onCancel={reset}
         >
@@ -149,7 +155,7 @@ export function AdminUsers() {
             <>
               <div className="space-y-1.5">
                 <Label htmlFor="gld-new-name">{t("auth.login.name")}</Label>
-                <Input id="gld-new-name" autoComplete="off" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <Input id="gld-new-name" autoComplete="off" autoFocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </div>
               <div className="flex items-center gap-2">
                 <Checkbox id={adminId} checked={form.admin} onCheckedChange={(c) => setForm({ ...form, admin: c === true })} />
@@ -209,7 +215,7 @@ export function AdminUsers() {
                     {u.admin && <Badge variant="secondary">{t("auth.admin.admin")}</Badge>} {u.disabled && <Badge variant="outline">{t("auth.admin.disabled")}</Badge>}{" "}
                     {u.tampered && <Badge variant="destructive">{t("auth.admin.tampered")}</Badge>}
                   </td>
-                  <td className="text-xs">{t("auth.admin.factors", { totp: u.factors.totp ? "TOTP" : "–", keys: u.factors.webauthn, codes: u.factors.recovery })}</td>
+                  <td className="text-xs">{t("auth.admin.factors", { totp: u.factors.totp ? t("auth.admin.totp") : t("auth.admin.none"), keys: u.factors.webauthn, codes: u.factors.recovery })}</td>
                   <td className="tabular-nums">{u.sessions}</td>
                   <td className="text-right">
                     <DropdownMenu>
@@ -320,7 +326,7 @@ export function AdminEvents() {
       <form onSubmit={filter} className="flex flex-wrap items-end gap-2">
         <div className="space-y-1.5">
           <Label htmlFor="gld-ev-kind">{t("auth.admin.kind")}</Label>
-          <Input id="gld-ev-kind" value={kind} onChange={(e) => setKind(e.target.value)} placeholder="login" className="w-48" />
+          <Input id="gld-ev-kind" value={kind} onChange={(e) => setKind(e.target.value)} placeholder={t("auth.admin.kindHint")} className="w-48" />
         </div>
         <Button type="submit" size="sm" variant="outline">
           {t("auth.admin.filter")}

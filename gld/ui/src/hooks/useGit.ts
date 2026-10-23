@@ -38,4 +38,10 @@ function subscribe(f: () => void) {
 
 export const refreshGit = () => void load()
 
+// Changement de compte : l'état du précédent ne s'affiche pas en attendant la relecture.
+export function resetGit() {
+  state = { status: {}, repos: {} }
+  subs.forEach((f) => f())
+}
+
 export const useGit = (): Git => useSyncExternalStore(subscribe, () => state)

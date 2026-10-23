@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/lib/api"
 import { setLang } from "@/i18n"
-import { authFetch, boot, getAuth, logout, setAuth, useCan } from "@/lib/auth"
+import { authFetch, b64u, boot, getAuth, logout, setAuth, useCan } from "@/lib/auth"
 import { draftOf, setDraft } from "@/hooks/useDraft"
 import { AuthScreen, Login } from "./Login"
 import { Mfa } from "./Mfa"
@@ -34,7 +34,8 @@ const bodyOf = (c: Call) => JSON.parse(String(c.init.body ?? "{}")) as Record<st
 const headerOf = (c: Call, h: string) => new Headers(c.init.headers).get(h)
 
 beforeEach(() => {
-  setAuth({ state: "anon", csrf: "", user: undefined, factors: undefined, methods: [], enroll: false, expired: false })
+  setAuth({ state: "anon", csrf: "", user: undefined, factors: undefined, methods: [], enroll: false, expired: false, owner: undefined })
+  localStorage.clear()
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -216,6 +217,83 @@ describe("App", () => {
   })
 })
 
+describe("propriétaire des données locales", () => {
+  const me = (name: string) => ({ body: { ok: true, user: { name, admin: false }, mfa: true, csrf: "c", factors: { totp: true, webauthn: 0, recovery: 9, keys: [] }, rights: {}, homes: [] } })
+  const seed = (owner?: string) => {
+    if (owner) localStorage.setItem("gld.owner", owner)
+    localStorage.setItem("gld.drafts", JSON.stringify({ s1: { text: "brouillon", queue: [] } }))
+    localStorage.setItem("gld.editor.memory", JSON.stringify({ key: "k", text: "x" }))
+    localStorage.setItem("gld.open", JSON.stringify({ "/home/a/projet": true }))
+    localStorage.setItem("gld.mem.open.Projet", "1")
+    localStorage.setItem("ccMemSorts", "{}")
+    localStorage.setItem("gld.session-view", "brut")
+    localStorage.setItem("ccFont", "inter")
+  }
+  const userKeys = ["gld.drafts", "gld.editor.memory", "gld.open", "gld.mem.open.Projet", "ccMemSorts", "gld.session-view"]
+
+  it("rechargement puis autre compte : données effacées, nouveau propriétaire enregistré, préférences gardées", async () => {
+    seed("alice")
+    server({ "/auth/me": me("bob"), "/homes": { body: { current: "", homes: [] } } })
+    await boot()
+    for (const k of userKeys) expect(localStorage.getItem(k)).toBeNull()
+    expect(localStorage.getItem("gld.owner")).toBe("bob")
+    expect(localStorage.getItem("ccFont")).toBe("inter")
+  })
+
+  it("rechargement puis même compte : données gardées", async () => {
+    seed("alice")
+    server({ "/auth/me": me("alice"), "/homes": { body: { current: "", homes: [] } } })
+    await boot()
+    for (const k of userKeys) expect(localStorage.getItem(k)).not.toBeNull()
+    expect(localStorage.getItem("gld.owner")).toBe("alice")
+  })
+
+  it("données sans propriétaire en mode authentifié : effacées", async () => {
+    seed()
+    server({ "/auth/me": me("alice"), "/homes": { body: { current: "", homes: [] } } })
+    await boot()
+    for (const k of userKeys) expect(localStorage.getItem(k)).toBeNull()
+    expect(localStorage.getItem("gld.owner")).toBe("alice")
+  })
+
+  it("mode ouvert : rien lu, rien écrit, rien effacé", async () => {
+    seed()
+    server({ "/auth/me": { status: 404 } })
+    const get = vi.spyOn(Storage.prototype, "getItem")
+    await boot()
+    expect(get).not.toHaveBeenCalledWith("gld.owner")
+    for (const k of userKeys) expect(localStorage.getItem(k)).not.toBeNull()
+    expect(localStorage.getItem("gld.owner")).toBeNull()
+  })
+
+  it("déconnexion : données et propriétaire effacés", async () => {
+    seed("alice")
+    server({ "/auth/logout": { body: { ok: true } } })
+    await logout()
+    for (const k of [...userKeys, "gld.owner"]) expect(localStorage.getItem(k)).toBeNull()
+  })
+
+  it("retour depuis le second facteur pendant une reconnexion : la session partielle tombe, les brouillons restent", async () => {
+    seed("alice")
+    const calls = server({ "/auth/logout": { body: { ok: true } } })
+    setAuth({ state: "mfa", methods: ["totp"], expired: true, owner: "alice", csrf: "c" })
+    render(<Mfa />)
+    await act(async () => void fireEvent.click(screen.getByRole("button", { name: "Revenir à la connexion" })))
+    expect(calls.some((c) => c.url === "/auth/logout")).toBe(true)
+    expect(getAuth()).toMatchObject({ state: "anon", expired: true, owner: "alice" })
+    for (const k of userKeys) expect(localStorage.getItem(k)).not.toBeNull()
+  })
+})
+
+describe("base64url", () => {
+  it("aller-retour d'un tampon de plus de 200 Ko", () => {
+    const u = new Uint8Array(256 * 1024).map((_, i) => (i * 31 + 7) & 255)
+    const s = b64u.enc(u.buffer)
+    expect(s).not.toMatch(/[+/=]/)
+    expect(new Uint8Array(b64u.dec(s))).toEqual(u)
+  })
+})
+
 describe("Profile", () => {
   it("liste les clés par libellé, marque une clé altérée et retire une clé par son identifiant", async () => {
     const calls = server({ "/auth/sessions": { body: { ok: true, sessions: [] } }, "/auth/factor/remove": { body: { ok: true } }, "/auth/me": { status: 401 } })
@@ -334,6 +412,24 @@ describe("AdminUsers", () => {
     fireEvent.click(await screen.findByRole("button", { name: "bob" }))
     await act(async () => void fireEvent.click(screen.getByRole("checkbox", { name: "mem_write sur Dossier principal" })))
     expect(bodyOf(calls.find((c) => c.url === "/admin/acl")!)).toEqual({ user_id: 2, home_id: "main", grant: ["mem_write"] })
+  })
+
+  it("fermer ses propres sessions déconnecte proprement l'interface", async () => {
+    localStorage.setItem("gld.owner", "root")
+    localStorage.setItem("gld.drafts", "{}")
+    server({
+      "/admin/users": { body: { ok: true, users: [{ ...USER, id: 1, name: "root", admin: true }] } },
+      "/admin/homes": { body: { ok: true, homes: [{ id: "main", name: "main" }] } },
+      "/admin/sessions/revoke": { body: { ok: true } },
+    })
+    setAuth({ state: "ok", csrf: "tok", user: { name: "root", admin: true }, owner: "root" })
+    render(<AdminUsers />)
+    const trigger = await screen.findByRole("button", { name: "Actions pour root" })
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: "mouse" })
+    await act(async () => void fireEvent.click(await screen.findByRole("menuitem", { name: "Fermer toutes ses sessions" })))
+    await waitFor(() => expect(getAuth()).toMatchObject({ state: "anon", owner: undefined, expired: false }))
+    expect(localStorage.getItem("gld.owner")).toBeNull()
+    expect(localStorage.getItem("gld.drafts")).toBeNull()
   })
 
   it("rend les chaînes venues d'un attaquant en texte", async () => {
