@@ -1,5 +1,6 @@
 import { useRef, type Dispatch, type SetStateAction } from "react"
 import { toast } from "sonner"
+import { i18n } from "@/i18n"
 import { watchTrust } from "@/lib/trust"
 import { wantConfigFile } from "@/lib/wantConfigFile"
 import { api, type Caps, type Data, type Group, type Hit, type Item, type Project, type Session, type Snippet, type VGroup } from "@/lib/api"
@@ -7,7 +8,7 @@ import { segs } from "@/lib/paths"
 import { exportMarkdown } from "@/lib/export"
 import { size, tilde } from "@/lib/format"
 import { withChoice, type Choice } from "@/lib/models"
-import { byDate, cut, groupKey, HOT, plural, type View } from "@/lib/sessionsView"
+import { byDate, cut, groupKey, HOT, type View } from "@/lib/sessionsView"
 import type { Route } from "@/lib/route"
 import type { Actions, GroupActions, ProjectActions, Row } from "@/components/actions"
 import type { Ask } from "@/components/Confirm"
@@ -15,6 +16,7 @@ import type { ComposeAsk, Target } from "@/components/Compose"
 import type { Pick } from "@/components/DirPicker"
 import type { Ask as PromptAsk } from "@/components/Prompt"
 
+const ns = (count: number) => i18n.t("shell.count.sessions", { count })
 const NO_CAPS: Caps = { hotCache: false, keepWarm: false, config: false, memory: false, tuiPrompts: false, resume: false }
 
 // Tout ce que l'application sait faire d'une session ou d'un groupe (ouvrir, reprendre, renommer, déplacer, grouper,
@@ -47,9 +49,9 @@ export function useAppActions(c: {
   setAsk: (a: Ask | null) => void
   setPrompt: (a: PromptAsk | null) => void
   setCompose: (a: ComposeAsk | null) => void
+  setInfo: (r: Row | null) => void
   setPicker: (p: Pick | null) => void
 }) {
-  setInfo: (r: Row | null) => void
   const { data, setData, reload, home, q, setQ, go, read, now, live, waiting, hitMap, tags, vgroups, favs, vg, picked, setPicked, selected, everyId, view, args, choice, snippets, setAsk, setPrompt, setCompose, setInfo, setPicker } = c
   const lastPick = useRef<string | null>(null) // dernière case cochée, début d'une sélection de plage
   const gkey = (x: VGroup) => groupKey(x, home)
@@ -61,7 +63,7 @@ export function useAppActions(c: {
       .trim()
       .split("\n")
       .filter((l) => l.trim())
-    const main = (pick === "last" ? lines[lines.length - 1] : lines[0]) ?? (r.ok ? "Terminé" : "Échec")
+    const main = (pick === "last" ? lines[lines.length - 1] : lines[0]) ?? (r.ok ? i18n.t("shell.act.done") : i18n.t("shell.act.failed"))
     const rest = lines.filter((l) => l !== main).join("\n")
     ;(r.ok ? toast.success : toast.error)(main, {
       id,
@@ -123,31 +125,31 @@ export function useAppActions(c: {
       const put = (n: string) => {
         const has = projects.some((p) => p.name === n)
         saveProjects(has ? projects.map((p) => (p.name === n && !p.dirs.includes(dir) ? { ...p, dirs: [...p.dirs, dir] } : p)) : [...projects, { name: n, dirs: [dir] }])
-        toast.success(`${tilde(dir, home)} dans « ${n} »`)
+        toast.success(i18n.t("shell.act.addedToProject", { dir: tilde(dir, home), name: n }))
       }
       if (name !== null) put(name)
       else
-        named("Nouveau projet", "", "Créer", (n) => {
+        named(i18n.t("shell.act.newProject"), "", i18n.t("shell.act.create"), (n) => {
           const t = n.trim()
-          if (projects.some((p) => p.name === t)) toast.error(`Le projet « ${t} » existe déjà`)
+          if (projects.some((p) => p.name === t)) toast.error(i18n.t("shell.act.projectExists", { name: t }))
           else put(t)
         })
     },
     remove: (dir, name) => saveProjects(projects.map((p) => (p.name === name ? { ...p, dirs: p.dirs.filter((d) => d !== dir) } : p))),
     rename: (p) =>
-      named(`Renommer le projet « ${p.name} »`, p.name, "Renommer", (n) => {
+      named(i18n.t("shell.act.renameProject", { name: p.name }), p.name, i18n.t("shell.act.rename"), (n) => {
         const t = n.trim()
         if (t === p.name) return
-        if (projects.some((x) => x.name === t)) return void toast.error(`Le projet « ${t} » existe déjà`)
+        if (projects.some((x) => x.name === t)) return void toast.error(i18n.t("shell.act.projectExists", { name: t }))
         saveProjects(projects.map((x) => (x.name === p.name ? { ...x, name: t } : x)))
         void api.post("/notes", { key: "p/" + p.name, to: "p/" + t }) // la note suit le projet
         go({ kind: "project", name: t })
       }),
     delete: (p) =>
       setAsk({
-        title: `Supprimer le projet « ${p.name} » ?`,
-        body: "Seul le regroupement disparaît : les dossiers et leurs sessions restent.",
-        confirm: "Supprimer",
+        title: i18n.t("shell.act.deleteProjectTitle", { name: p.name }),
+        body: i18n.t("shell.act.deleteProjectBody"),
+        confirm: i18n.t("common.delete"),
         run: async () => {
           await saveProjects(projects.filter((x) => x.name !== p.name))
           go({ kind: "recent" })
@@ -162,15 +164,15 @@ export function useAppActions(c: {
     const exists = vgroups.some((g) => same(g, vg))
     saveGroups(exists ? vgroups.map((g) => (same(g, vg) ? { ...g, ids: [...new Set([...g.ids, ...ids])] } : g)) : [...vgroups, vg])
     if (ids.length)
-      toast.success(`${plural(ids.length)} dans « ${name} »`, {
+      toast.success(i18n.t("shell.act.addedToGroup", { sessions: ns(ids.length), name }), {
         action: {
-          label: "Voir",
+          label: i18n.t("shell.act.view"),
           onClick: () => go({ kind: "group", name, key: gkey(vg) }),
         },
       })
   }
   const newGroup = (ids: string[], project: string) =>
-    named(`Nouveau groupe dans ${tilde(project, home)}`, "", "Créer", (n) => addTo(ids, project, n))
+    named(i18n.t("shell.act.newGroup", { dir: tilde(project, home) }), "", i18n.t("shell.act.create"), (n) => addTo(ids, project, n))
   // Dossiers où lancer une nouvelle session : ceux qui existent encore, le plus récemment utilisé d'abord.
   // Un dossier enregistré sans session se lance par son chemin (cwd), en dernier.
   const targets = (): Target[] =>
@@ -196,10 +198,10 @@ export function useAppActions(c: {
       subtitle,
       project: ts[0].project,
       initial,
-      send: "Lancer la session",
+      send: i18n.t("shell.head.start"),
       choice,
       targets: ts,
-      run: (prompt, c, t = ts[0]) => act("/new-session", { ...(t.cwd ? { cwd: t.cwd } : { dir: t.dir, id: t.id }), prompt, args: withChoice(args, c) }, "Nouvelle session…", "last"),
+      run: (prompt, c, t = ts[0]) => act("/new-session", { ...(t.cwd ? { cwd: t.cwd } : { dir: t.dir, id: t.id }), prompt, args: withChoice(args, c) }, i18n.t("shell.act.starting"), "last"),
     })
   const groupRows = (x: VGroup) =>
     x.ids
@@ -208,9 +210,10 @@ export function useAppActions(c: {
       .sort(byDate)
   // Références des sessions d'un groupe, à coller dans un nouveau prompt.
   const refs = (x: VGroup) =>
-    `Sessions Claude du groupe « ${x.name} » (dossier ${tilde(x.project, home)}) :\n` +
+    i18n.t("shell.act.refsHeader", { name: x.name, dir: tilde(x.project, home) }) +
+    "\n" +
     groupRows(x)
-      .map((r) => `- ${r.s.title} — claude --resume ${r.s.id} — transcript : ${data?.root ?? "~/.claude/projects"}/${r.s.dir}/${r.s.id}.jsonl`)
+      .map((r) => i18n.t("shell.act.refsLine", { title: r.s.title, id: r.s.id, path: `${data?.root ?? "~/.claude/projects"}/${r.s.dir}/${r.s.id}.jsonl` }))
       .join("\n")
   const groupActs: GroupActions = {
     rows: groupRows,
@@ -219,21 +222,21 @@ export function useAppActions(c: {
     refs: (x) =>
       navigator.clipboard.writeText(refs(x)).then(
         () =>
-          toast.success("Références copiées", {
-            description: `${plural(groupRows(x).length)} du groupe « ${x.name} »`,
+          toast.success(i18n.t("shell.act.refsCopied"), {
+            description: i18n.t("shell.act.refsCopiedDesc", { sessions: ns(groupRows(x).length), name: x.name }),
           }),
-        () => toast.error("Copie impossible")
+        () => toast.error(i18n.t("shell.act.copyFailed"))
       ),
     prompt: (x) => {
       const first = groupRows(x)[0]
       if (!first) return
       setCompose({
         id: "g:" + x.project + x.name,
-        title: "Nouvelle session avec ces références",
-        subtitle: `Groupe « ${x.name} » · ${tilde(x.project, home)}`,
+        title: i18n.t("shell.act.newWithRefs"),
+        subtitle: i18n.t("shell.act.groupSubtitle", { name: x.name, dir: tilde(x.project, home) }),
         project: x.project,
         initial: refs(x) + "\n\n",
-        send: "Lancer la session",
+        send: i18n.t("shell.head.start"),
         choice,
         run: (prompt, c) =>
           act(
@@ -244,7 +247,7 @@ export function useAppActions(c: {
               prompt,
               args: withChoice(args, c),
             },
-            "Nouvelle session…",
+            i18n.t("shell.act.starting"),
             "last"
           ),
       })
@@ -255,22 +258,22 @@ export function useAppActions(c: {
           s: r.s,
           project: tilde(r.g.project, home),
         })),
-        `Groupe ${x.name}`
-      ).catch(() => toast.error("Export impossible")),
+        i18n.t("shell.act.groupExportTitle", { name: x.name })
+      ).catch(() => toast.error(i18n.t("shell.act.exportFailed"))),
     select: (x) => setPicked((p) => new Set([...p, ...groupRows(x).map((r) => r.s.id)])),
     fav: (x) => saveGroups(vgroups.map((g) => (same(g, x) ? { ...g, fav: !g.fav } : g))),
     rename: (x) =>
-      named(`Renommer le groupe « ${x.name} »`, x.name, "Renommer", (n) => {
+      named(i18n.t("shell.act.renameGroup", { name: x.name }), x.name, i18n.t("shell.act.rename"), (n) => {
         if (n === x.name) return
-        if (vgroups.some((g) => g.project === x.project && g.name === n)) return void toast.error(`Le groupe « ${n} » existe déjà dans ce dossier`)
+        if (vgroups.some((g) => g.project === x.project && g.name === n)) return void toast.error(i18n.t("shell.act.groupExists", { name: n }))
         saveGroups(vgroups.map((g) => (same(g, x) ? { ...g, name: n } : g)))
         if (vg && same(vg, x)) go({ kind: "group", name: n, key: gkey(x) })
       }),
     remove: (x) =>
       setAsk({
-        title: `Supprimer le groupe « ${x.name} » ?`,
-        body: "Seul le regroupement disparaît : les sessions restent intactes.",
-        confirm: "Supprimer le groupe",
+        title: i18n.t("shell.act.deleteGroupTitle", { name: x.name }),
+        body: i18n.t("shell.act.deleteGroupBody"),
+        confirm: i18n.t("shell.menu.deleteGroup"),
         run: () => {
           saveGroups(vgroups.filter((g) => !same(g, x)))
           if (vg && same(vg, x)) go({ kind: "dir", key: gkey(x) })
@@ -280,10 +283,10 @@ export function useAppActions(c: {
 
   // Plusieurs sessions dans des onglets de terminal, l'une après l'autre.
   const openMany = async (rs: Row[]) => {
-    const id = toast.loading(`Ouverture de ${plural(rs.length)}…`)
+    const id = toast.loading(i18n.t("shell.tabs.opening", { sessions: ns(rs.length) }))
     let n = 0
     for (const r of rs) if ((await api.post("/open", { dir: r.s.dir, id: r.s.id, args })).ok) n++
-    ;(n === rs.length ? toast.success : toast.error)(`${n} / ${rs.length} ouverte(s)`, { id })
+    ;(n === rs.length ? toast.success : toast.error)(i18n.t("shell.act.opened", { n, total: rs.length }), { id })
   }
 
 
@@ -303,7 +306,7 @@ export function useAppActions(c: {
     hit: (id) => hitMap?.get(id),
     registeredDirs: data?.dirs ?? [],
     addDir: () =>
-      void pickDir("Ajouter un dossier à la liste", home).then(async (p) => {
+      void pickDir(i18n.t("shell.act.addDirTitle"), home).then(async (p) => {
         if (!p) return
         const r = await api.post("/dirs", { op: "add", dir: p })
         if (!r.ok) return void toast.error(r.out)
@@ -329,7 +332,7 @@ export function useAppActions(c: {
     tags,
     filterTag: (t) => setQ("#" + t),
     editTags: (s) =>
-      named(`Étiquettes de « ${cut(s.title, 40)} » (séparées par des virgules)`, (tags[s.id] ?? []).join(", "), "Enregistrer", (v) => {
+      named(i18n.t("shell.act.tagsTitle", { title: cut(s.title, 40) }), (tags[s.id] ?? []).join(", "), i18n.t("common.save"), (v) => {
         const list = [
           ...new Set(
             v
@@ -375,7 +378,7 @@ export function useAppActions(c: {
       setTimeout(() => reload().catch(() => {}), 2000) // le transcript a enregistré le prompt : on prend l'heure réelle
     },
     read,
-    open: (b) => act("/open", { ...b, args }, "Ouverture du terminal…", "last"),
+    open: (b) => act("/open", { ...b, args }, i18n.t("shell.act.openingTerminal"), "last"),
     // Un fournisseur inconnu ou une réponse ancienne : aucune fonction optionnelle (l'interface reste sobre plutôt que fausse).
     caps: (s) => data?.providers?.find((p) => p.id === (s.provider ?? "claude"))?.caps ?? NO_CAPS,
     defaultChoice: choice,
@@ -383,22 +386,22 @@ export function useAppActions(c: {
     startSession: async (project, prompt, c) => {
       const t = targets().find((x) => x.project === project)
       if (!t) return false
-      await act("/new-session", { ...(t.cwd ? { cwd: t.cwd } : { dir: t.dir, id: t.id }), prompt, args: withChoice(args, c) }, "Nouvelle session…", "last")
+      await act("/new-session", { ...(t.cwd ? { cwd: t.cwd } : { dir: t.dir, id: t.id }), prompt, args: withChoice(args, c) }, i18n.t("shell.act.starting"), "last")
       return true
     },
     newSession: (project, initial) => {
       const t = targets().filter((x) => x.project === project)
-      if (t.length) newSession("Nouvelle session", t[0].label, t, initial)
+      if (t.length) newSession(i18n.t("shell.header.newSession"), t[0].label, t, initial)
     },
     resumeWith: (r) =>
       live.has(r.s.id)
-        ? void toast.info("Session déjà ouverte : écris le message dans son onglet")
+        ? void toast.info(i18n.t("shell.act.alreadyOpen"))
         : setCompose({
             id: r.s.id,
-            title: "Reprendre avec un message",
+            title: i18n.t("shell.act.resumeWith"),
             subtitle: r.s.title,
             project: r.g.project,
-            send: "Reprendre et envoyer",
+            send: i18n.t("shell.act.resumeSend"),
             choice,
             run: (text, c) =>
               act(
@@ -409,37 +412,37 @@ export function useAppActions(c: {
                   args: withChoice(args, c),
                   prompt: text,
                 },
-                "Reprise avec le message…",
+                i18n.t("shell.act.resuming"),
                 "last"
               ),
           }),
     copy: (s) =>
       navigator.clipboard.writeText(`claude --resume ${s.id}`).then(
         () =>
-          toast.success("Commande copiée", {
+          toast.success(i18n.t("shell.act.commandCopied"), {
             description: `claude --resume ${s.id}`,
           }),
-        () => toast.error("Copie impossible")
+        () => toast.error(i18n.t("shell.act.copyFailed"))
       ),
     rename: (s) =>
       named(
-        "Renommer la session",
+        i18n.t("shell.act.renameSession"),
         s.named ? s.title : "",
-        "Renommer",
-        (title) => act("/rename", { dir: s.dir, id: s.id, title }, "Renommage…"),
-        { label: "Titre automatique", hint: "Un modèle rédige le titre d'après la conversation", run: () => act("/rename", { dir: s.dir, id: s.id, auto: true }, "Titre automatique…") },
+        i18n.t("shell.act.rename"),
+        (title) => act("/rename", { dir: s.dir, id: s.id, title }, i18n.t("shell.act.renaming")),
+        { label: i18n.t("shell.act.autoTitle"), hint: i18n.t("shell.act.autoTitleHint"), run: () => act("/rename", { dir: s.dir, id: s.id, auto: true }, i18n.t("shell.act.autoTitling")) },
         s.id
       ),
-    exportMd: (r) => exportMarkdown([{ s: r.s, project: tilde(r.g.project, home) }]).catch(() => toast.error("Export impossible")),
-    move: async (rs) => {
-      const to = await pickDir(rs.length > 1 ? `Déplacer ${plural(rs.length)} vers…` : `Déplacer « ${rs[0].s.title} » vers…`, rs[0].s.cwd)
     info: setInfo,
+    exportMd: (r) => exportMarkdown([{ s: r.s, project: tilde(r.g.project, home) }]).catch(() => toast.error(i18n.t("shell.act.exportFailed"))),
+    move: async (rs) => {
+      const to = await pickDir(rs.length > 1 ? i18n.t("shell.act.moveMany", { sessions: ns(rs.length) }) : i18n.t("shell.act.moveOne", { title: rs[0].s.title }), rs[0].s.cwd)
       const items = rs.filter((r) => r.s.cwd !== to).map((r) => ({ dir: r.s.dir, id: r.s.id }))
-      if (to && items.length && (await act("/reassign", { items, to }, "Déplacement…"))) unpick(items)
+      if (to && items.length && (await act("/reassign", { items, to }, i18n.t("shell.act.moving")))) unpick(items)
     },
     moveGroup: async (g: Group, items: Item[]) => {
-      const to = await pickDir(`Réassigner ${plural(items.length)} vers…`, g.project)
-      if (to) act("/reassign", { items, to }, "Réassignation…")
+      const to = await pickDir(i18n.t("shell.act.reassignTo", { sessions: ns(items.length) }), g.project)
+      if (to) act("/reassign", { items, to }, i18n.t("shell.act.reassigning"))
     },
     group: (ids, project, name) => (name === null ? newGroup(ids, project) : addTo(ids, project, name)),
     ungroup: (ids, x = vg) => {
@@ -448,14 +451,14 @@ export function useAppActions(c: {
     pickDir,
     stop: (ids) =>
       setAsk({
-        title: ids.length > 1 ? `Fermer ${ids.length} sessions ouvertes ?` : "Fermer la session ouverte ?",
+        title: ids.length > 1 ? i18n.t("shell.act.closeMany", { n: ids.length }) : i18n.t("shell.act.closeOne"),
         rows: ids,
-        body: "Le processus claude reçoit SIGTERM ; la conversation reste reprenable.",
-        confirm: "Fermer",
+        body: i18n.t("shell.act.closeBody"),
+        confirm: i18n.t("common.close"),
         run: async () => {
           const rs = await Promise.all(ids.map((id) => api.post("/session-close", { id })))
           const bad = rs.find((r) => !r.ok)
-          ;(bad ? toast.error : toast.success)(bad ? bad.out : ids.length > 1 ? "Sessions fermées" : "Session fermée")
+          ;(bad ? toast.error : toast.success)(bad ? bad.out : ids.length > 1 ? i18n.t("shell.act.closedMany") : i18n.t("shell.act.closedOne"))
           // Le processus met un instant à finir : on retire les sessions tout de suite, puis on relit jusqu'à confirmation.
           const done = new Set(ids.filter((_, i) => rs[i].ok))
           setData((d) => d && { ...d, live: d.live.filter((x) => !done.has(x)), waiting: d.waiting.filter((x) => !done.has(x)) })
@@ -467,11 +470,11 @@ export function useAppActions(c: {
       }),
     remove: (items, what, after) =>
       setAsk({
-        title: "Mettre à la corbeille ?",
+        title: i18n.t("shell.act.trashTitle"),
         rows: items.map((x) => x.id),
         removes: true,
-        body: `${what}${items.some((x) => live.has(x.id)) ? "\n\nLes sessions ouvertes seront d'abord fermées." : ""}\n\nLes sessions restent restaurables 30 jours (menu de la barre latérale : Corbeille).`,
-        confirm: "Mettre à la corbeille",
+        body: `${what}${items.some((x) => live.has(x.id)) ? "\n\n" + i18n.t("shell.act.trashClosing") : ""}\n\n${i18n.t("shell.act.trashRestorable")}`,
+        confirm: i18n.t("shell.act.trashConfirm"),
         run: async () => {
           after?.()
           unpick(items)
@@ -480,7 +483,7 @@ export function useAppActions(c: {
           if (!r.ok) return void toast.error(r.out)
           toast.success(r.out.split("\n")[0], {
             action: {
-              label: "Annuler",
+              label: i18n.t("common.cancel"),
               onClick: async () => {
                 const b = await api.post("/session-trash-restore", { ids: items.map((x) => x.id) })
                 ;(b.ok ? toast.success : toast.error)(b.out.split("\n")[0])
@@ -496,10 +499,10 @@ export function useAppActions(c: {
   const purgeAuto = () => {
     const n = view.autoItems.length
     setAsk({
-      title: `Supprimer les ${n} revues de sécurité ?`,
-      body: `Environ ${size(view.akb)} : sessions automatiques dont le titre contient « Review this change for security vulnerabilities » ou « You previously flagged these candidate ».\n\nLes sessions vivantes sont épargnées. Suppression définitive.`,
-      confirm: `Supprimer ${n} sessions`,
-      run: () => act("/rm", { items: view.autoItems }, `Suppression de ${n} sessions…`),
+      title: i18n.t("shell.act.purgeTitle", { n }),
+      body: i18n.t("shell.act.purgeBody", { size: size(view.akb) }),
+      confirm: i18n.t("shell.act.purgeConfirm", { n }),
+      run: () => act("/rm", { items: view.autoItems }, i18n.t("shell.act.purging", { n })),
     })
   }
   return { actions, groupActs, groupRows, targets, newSession, purgeAuto }

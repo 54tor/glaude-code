@@ -9,6 +9,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useEffect, useRef } from "react"
+import { useTranslation } from "react-i18next"
 import { focusRow, rowAfter } from "@/lib/focusRow"
 
 export type Ask = {
@@ -21,6 +22,7 @@ export type Ask = {
 }
 
 export function Confirm({ ask, onClose }: { ask: Ask | null; onClose: () => void }) {
+  const { t } = useTranslation()
   // next : ligne voisine, retenue au clic (la ligne supprimée a souvent disparu quand le dialogue finit de se fermer)
   const last = useRef<{ ask: Ask | null; next?: string }>({ ask: null })
   useEffect(() => {
@@ -38,7 +40,7 @@ export function Confirm({ ask, onClose }: { ask: Ask | null; onClose: () => void
           <AlertDialogDescription className="whitespace-pre-line">{ask?.body}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Annuler</AlertDialogCancel>
+          <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
           <AlertDialogAction
             variant="destructive"
             onClick={() => {

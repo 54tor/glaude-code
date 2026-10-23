@@ -1,4 +1,5 @@
 import { useEffect, type RefObject } from "react"
+import { i18n } from "@/i18n"
 import type { Actions, Row } from "@/components/actions"
 
 // Raccourcis clavier, hors champ de saisie et hors fenêtre ou menu ouvert : / (recherche), j/k ou flèches (ligne),
@@ -45,7 +46,7 @@ export function useShortcuts({
       else if (e.key === "r") actions.rename(r.s)
       else if (e.key === "x") actions.pick(r.s.id)
       else if (e.key === "e") actions.exportMd(r)
-      else if (e.key === "Delete") actions.remove([one], `« ${r.s.title} »`)
+      else if (e.key === "Delete") actions.remove([one], i18n.t("shell.menu.quoted", { title: r.s.title }))
       else return
       e.preventDefault()
     }

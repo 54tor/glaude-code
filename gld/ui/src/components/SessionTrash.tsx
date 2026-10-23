@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { RotateCcw, Trash2 } from "lucide-react"
 import { toast } from "sonner"
+import { useTranslation } from "react-i18next"
 import { api } from "@/lib/api"
 import { ago, size, tilde } from "@/lib/format"
 import { Button } from "@/components/ui/button"
@@ -12,6 +13,7 @@ type Trashed = { dir: string; id: string; title: string; cwd: string; at: number
 
 // Corbeille des sessions : restaurer, supprimer pour de bon, ou tout vider. Les sessions y restent 30 jours.
 export function SessionTrash({ open, onClose, reload }: { open: boolean; onClose: () => void; reload: () => Promise<void> }) {
+  const { t } = useTranslation()
   const a = useActions()
   const [rows, setRows] = useState<Trashed[] | null>(null)
   const [days, setDays] = useState(30)
@@ -30,15 +32,13 @@ export function SessionTrash({ open, onClose, reload }: { open: boolean; onClose
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[85vh] sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Corbeille des sessions</DialogTitle>
-          <DialogDescription>
-            Une session reste restaurable {days} jours, puis elle est supprimée pour de bon, avec ses fichiers associés.
-          </DialogDescription>
+          <DialogTitle>{t("shell.sidebar.trash")}</DialogTitle>
+          <DialogDescription>{t("shell.trash.description", { days })}</DialogDescription>
         </DialogHeader>
         {rows === null ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">Chargement…</p>
+          <p className="py-6 text-center text-sm text-muted-foreground">{t("common.loading")}</p>
         ) : rows.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">La corbeille est vide.</p>
+          <p className="py-6 text-center text-sm text-muted-foreground">{t("shell.trash.empty")}</p>
         ) : (
           <ScrollArea className="max-h-[50vh] rounded-md border">
             <ul className="divide-y">
@@ -49,13 +49,13 @@ export function SessionTrash({ open, onClose, reload }: { open: boolean; onClose
                       {r.title || r.id}
                     </p>
                     <p className="truncate text-xs text-muted-foreground" title={r.cwd}>
-                      {r.cwd ? tilde(r.cwd, a.home) : r.dir} · supprimée {ago(r.at)} · {size(r.kb)}
+                      {r.cwd ? tilde(r.cwd, a.home) : r.dir} · {t("shell.trash.deleted", { ago: ago(r.at) })} · {size(r.kb)}
                     </p>
                   </div>
                   <Button size="xs" variant="outline" onClick={() => act("/session-trash-restore", [r.id])}>
-                    <RotateCcw /> Restaurer
+                    <RotateCcw /> {t("shell.trash.restore")}
                   </Button>
-                  <Button size="icon-xs" variant="ghost" aria-label="Supprimer définitivement" title="Supprimer définitivement" onClick={() => setConfirm([r.id])}>
+                  <Button size="icon-xs" variant="ghost" aria-label={t("shell.trash.purge")} title={t("shell.trash.purge")} onClick={() => setConfirm([r.id])}>
                     <Trash2 />
                   </Button>
                 </li>
@@ -65,23 +65,23 @@ export function SessionTrash({ open, onClose, reload }: { open: boolean; onClose
         )}
         {confirm && (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm">
-            Supprimer définitivement {confirm.length} session{confirm.length > 1 ? "s" : ""} ? Transcript, sous-agents et fichiers associés partent.
+            {t("shell.trash.confirm", { count: confirm.length })}
             <Button size="xs" variant="ghost" className="ml-auto" onClick={() => setConfirm(null)}>
-              Annuler
+              {t("common.cancel")}
             </Button>
             <Button size="xs" variant="destructive" onClick={() => act("/session-trash-purge", confirm)}>
-              Supprimer
+              {t("common.delete")}
             </Button>
           </div>
         )}
         <DialogFooter>
           {!!rows?.length && (
             <Button variant="outline" className="mr-auto" onClick={() => setConfirm(rows.map((r) => r.id))}>
-              Vider la corbeille
+              {t("shell.trash.emptyAll")}
             </Button>
           )}
           <Button variant="ghost" onClick={onClose}>
-            Fermer
+            {t("common.close")}
           </Button>
         </DialogFooter>
       </DialogContent>

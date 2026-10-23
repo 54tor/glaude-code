@@ -1,3 +1,5 @@
+import { i18n } from "@/i18n"
+
 // Accès aux routes du serveur Go (gld/main.go).
 
 // Fournisseurs d'agents de code (provider.go) : ce que chacun sait faire ; l'interface masque le reste.
@@ -193,7 +195,7 @@ export const api = {
       const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined })
       return (await r.json()) as Result
     } catch (e) {
-      return { ok: false, out: `Erreur : ${e instanceof Error ? e.message : String(e)}` }
+      return { ok: false, out: i18n.t("shell.api.error", { msg: e instanceof Error ? e.message : String(e) }) }
     }
   },
 }

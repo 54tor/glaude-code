@@ -1,9 +1,9 @@
+import { useTranslation } from "react-i18next"
 import { ChevronRight, Search, SquareTerminal } from "lucide-react"
 import type { VGroup } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { segs } from "@/lib/paths"
 import type { Route } from "@/lib/route"
-import { plural } from "@/lib/sessionsView"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -60,6 +60,7 @@ export function SessionsPane({
   go: (r: Route) => void
   clearSearch: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <ScrollArea className="min-h-0 flex-1">
       <div className="mx-auto max-w-7xl px-3 py-4 pb-24 md:px-6">
@@ -88,11 +89,11 @@ export function SessionsPane({
                   <button
                     className="min-w-0 truncate text-sm font-semibold hover:text-primary"
                     onClick={() => go({ kind: "dir", key: segs(project, home).join("/") })}
-                    title="Afficher le dossier"
+                    title={t("shell.common.showFolder")}
                   >
                     {tilde(project, home)}
                   </button>
-                  <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">{plural(rs.length)}</span>
+                  <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">{t("shell.count.sessions", { count: rs.length })}</span>
                   {rs.some((r) => live.has(r.s.id)) && <Live className="text-xs" waiting={rs.some((r) => waiting.has(r.s.id))} />}
                   {!rs[0].g.missing && (
                     <Button
@@ -100,9 +101,9 @@ export function SessionsPane({
                       size="xs"
                       className="ml-auto text-muted-foreground"
                       onClick={() => actions.open({ dir: rs[0].s.dir })}
-                      title="Un onglet de terminal par session des 7 derniers jours (hors sessions ouvertes)"
+                      title={t("shell.pane.resumeFolderHint")}
                     >
-                      <SquareTerminal /> <span className="hidden lg:inline">Reprendre le dossier</span>
+                      <SquareTerminal /> <span className="hidden lg:inline">{t("shell.pane.resumeFolder")}</span>
                     </Button>
                   )}
                 </div>
@@ -120,7 +121,7 @@ export function SessionsPane({
           <details open={rows.length === 0} className="group/subs mt-8 border-t pt-4">
             <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground">
               <ChevronRight className="size-4 transition-transform group-open/subs:rotate-90" />
-              Sessions des sous-dossiers
+              {t("shell.pane.subfolders")}
               <span className="text-xs font-normal tabular-nums">{subs.length}</span>
             </summary>
             <div className="mt-2">
@@ -131,22 +132,22 @@ export function SessionsPane({
 
         {!loading && rows.length === 0 && subs.length === 0 && (
           <Empty
-            title={route.kind === "group" && !vg ? "Groupe introuvable" : route.kind === "dir" && dirMissing ? "Dossier introuvable" : "Aucune session"}
+            title={route.kind === "group" && !vg ? t("shell.pane.groupMissing") : route.kind === "dir" && dirMissing ? t("shell.pane.dirMissing") : t("shell.pane.noSession")}
             text={
               qt
-                ? "Aucun titre, projet ni message ne correspond à cette recherche."
+                ? t("shell.pane.noMatch")
                 : route.kind === "group"
-                  ? "Ajoute des sessions à ce groupe : clic droit sur une session › Groupe."
+                  ? t("shell.pane.emptyGroup")
                   : route.kind === "active"
-                    ? "Aucune session ouverte ni active depuis moins d'une heure."
+                    ? t("shell.pane.noneActive")
                     : route.kind === "recent"
-                      ? "Aucune session ces 7 derniers jours."
-                      : "Rien à afficher ici."
+                      ? t("shell.pane.noneRecent")
+                      : t("shell.pane.nothing")
             }
           >
             {qt && (
               <Button variant="outline" size="sm" className="mt-2" onClick={clearSearch}>
-                Effacer la recherche
+                {t("shell.sidebar.clearSearch")}
               </Button>
             )}
           </Empty>

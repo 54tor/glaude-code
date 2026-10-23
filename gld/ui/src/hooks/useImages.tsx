@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react"
 import { X } from "lucide-react"
 import { toast } from "sonner"
+import { useTranslation } from "react-i18next"
+import { i18n } from "@/i18n"
 
 export type Img = { path: string; url: string; name: string }
 
@@ -31,9 +33,9 @@ export function useImages() {
         }
         const url = URL.createObjectURL(f)
         live.current.push(url)
-        setImages((l) => [...l, { path: j.path!, url, name: f.name || "image collée" }])
+        setImages((l) => [...l, { path: j.path!, url, name: f.name || i18n.t("shell.images.pasted") }])
       } catch (e) {
-        toast.error(`Envoi de l'image impossible : ${e instanceof Error ? e.message : String(e)}`)
+        toast.error(i18n.t("shell.images.uploadFailed", { msg: e instanceof Error ? e.message : String(e) }))
       }
     }
     setBusy(false)
@@ -66,9 +68,10 @@ export function useImages() {
 }
 
 export function ImageChips({ images, busy, onRemove }: { images: Img[]; busy: boolean; onRemove: (path: string) => void }) {
+  const { t } = useTranslation()
   if (!images.length && !busy) return null
   return (
-    <ul className="flex flex-wrap items-center gap-2" aria-label="Images jointes">
+    <ul className="flex flex-wrap items-center gap-2" aria-label={t("shell.images.attached")}>
       {images.map((i) => (
         <li key={i.path} className="group relative">
           <img src={i.url} alt={i.name} className="h-14 w-14 rounded-md border object-cover" />
@@ -76,13 +79,13 @@ export function ImageChips({ images, busy, onRemove }: { images: Img[]; busy: bo
             type="button"
             onClick={() => onRemove(i.path)}
             className="absolute -top-1.5 -right-1.5 hidden rounded-full border bg-background p-0.5 shadow group-hover:block focus-visible:block"
-            aria-label={`Retirer ${i.name}`}
+            aria-label={t("shell.images.remove", { name: i.name })}
           >
             <X className="size-3" />
           </button>
         </li>
       ))}
-      {busy && <li className="text-xs text-muted-foreground">envoi de l'image…</li>}
+      {busy && <li className="text-xs text-muted-foreground">{t("shell.images.uploading")}</li>}
     </ul>
   )
 }

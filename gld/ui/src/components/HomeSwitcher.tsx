@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { Check, FolderCog, Plus, X } from "lucide-react"
 import { toast } from "sonner"
+import { useTranslation } from "react-i18next"
 import { api, type HomesInfo } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { Button } from "@/components/ui/button"
@@ -22,6 +23,7 @@ const base = (p: string) => p.replace(/\/+$/, "").split("/").pop() || p
 // Dossier de configuration Claude affiché (CLAUDE_CONFIG_DIR : compte pro, compte perso…). Choisir un autre dossier recharge la page :
 // le serveur répond alors depuis un gld dédié à ce dossier (homes.go), avec ses propres sessions, mémoire et réglages.
 export function HomeSwitcher() {
+  const { t } = useTranslation()
   const a = useActions()
   const [info, setInfo] = useState<HomesInfo | null>(null)
   useEffect(() => {
@@ -45,7 +47,7 @@ export function HomeSwitcher() {
     setInfo(await api.homes())
   }
   const add = async () => {
-    const dir = await a.pickDir("Dossier de configuration de Claude Code (celui qui contient projects/)", info.main)
+    const dir = await a.pickDir(t("shell.home.pickTitle"), info.main)
     if (!dir) return
     let name = base(dir)
     for (let i = 2; info.homes.some((h) => h.name === name); i++) name = `${base(dir)} ${i}`
@@ -58,12 +60,12 @@ export function HomeSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-9 text-muted-foreground" aria-label="Dossier de configuration Claude" title={`Dossier de configuration Claude : ${label}`}>
+        <Button variant="ghost" size="icon" className="size-9 text-muted-foreground" aria-label={t("shell.home.label")} title={t("shell.home.titleWith", { label })}>
           <FolderCog className="size-6" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
-        <DropdownMenuLabel>Dossier de configuration Claude</DropdownMenuLabel>
+        <DropdownMenuLabel>{t("shell.home.label")}</DropdownMenuLabel>
         <DropdownMenuItem onSelect={() => select("")}>
           <Check className={info.current === "" ? "" : "invisible"} /> <span className="truncate">{tilde(info.main, a.home)}</span>
         </DropdownMenuItem>
@@ -76,12 +78,12 @@ export function HomeSwitcher() {
         ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={add}>
-          <Plus /> Ajouter un dossier…
+          <Plus /> {t("shell.home.add")}
         </DropdownMenuItem>
         {info.homes.length > 0 && (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
-              <X /> Retirer de la liste
+              <X /> {t("shell.home.remove")}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="w-56">
               {info.homes.map((h) => (

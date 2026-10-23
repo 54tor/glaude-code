@@ -1,4 +1,5 @@
 import { loc } from "@/i18n"
+import { useTranslation } from "react-i18next"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Flame, MoreHorizontal, SquareTerminal, Star, Tag } from "lucide-react"
 import { ago, bucket, compact, full, size, tilde, tokTotal } from "@/lib/format"
@@ -12,6 +13,7 @@ import { CM, SessionDropdown, SessionItems } from "./SessionMenu"
 
 // Point vert : la session tourne en ce moment dans un terminal.
 export function Live({ className, waiting }: { className?: string; waiting?: boolean }) {
+  const { t } = useTranslation()
   return (
     <span
       className={cn(
@@ -20,7 +22,7 @@ export function Live({ className, waiting }: { className?: string; waiting?: boo
         className
       )}
     >
-      <span className={cn("size-1.5 rounded-full bg-current", !waiting && "animate-pulse")} /> {waiting ? "attend" : "en cours"}
+      <span className={cn("size-1.5 rounded-full bg-current", !waiting && "animate-pulse")} /> {waiting ? t("shell.list.waiting") : t("shell.list.running")}
     </span>
   )
 }
@@ -53,6 +55,7 @@ function Snip({ text }: { text: string }) {
 }
 
 function Row({ row, showProject, showCache }: { row: R; showProject: boolean; showCache?: boolean }) {
+  const { t } = useTranslation()
   const a = useActions()
   const { s, g } = row
   const live = a.live.has(s.id)
@@ -75,7 +78,7 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
             checked={picked}
             onClick={(e) => a.pick(s.id, e.shiftKey)}
             onMouseDown={(e) => e.shiftKey && e.preventDefault()}
-            aria-label="Sélectionner"
+            aria-label={t("shell.list.select")}
             className={cn(
               "relative z-10 transition-opacity",
               !picked && a.selected.length === 0 && "md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
@@ -88,7 +91,7 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
             onClick={() => a.read(s)}
           >
             <span className={cn("line-clamp-1 text-[15px] leading-6", s.named ? "font-medium" : "text-foreground/85")}>
-              {a.favs.has(s.id) && <Star className="mr-1 inline size-3.5 -translate-y-px fill-amber-400 text-amber-400" aria-label="favori" />}
+              {a.favs.has(s.id) && <Star className="mr-1 inline size-3.5 -translate-y-px fill-amber-400 text-amber-400" aria-label={t("shell.list.favorite")} />}
               {s.title}
             </span>
             <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
@@ -101,7 +104,7 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
                       left <= 10 ? "font-medium text-amber-600 dark:text-amber-400" : "text-orange-500"
                     )}
                   >
-                    <Flame className="size-3.5" aria-hidden /> cache {left} min
+                    <Flame className="size-3.5" aria-hidden /> {t("shell.list.cache", { left })}
                   </span>
                 </>
               )}
@@ -113,16 +116,21 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
                 <>
                   <span
                     className="shrink-0 tabular-nums"
-                    title={`Entrée ${s.tok.in.toLocaleString(loc())} · sortie ${s.tok.out.toLocaleString(loc())} · cache écrit ${s.tok.cw.toLocaleString(loc())} · cache lu ${s.tok.cr.toLocaleString(loc())}`}
+                    title={t("shell.list.tokensDetail", {
+                      in: s.tok.in.toLocaleString(loc()),
+                      out: s.tok.out.toLocaleString(loc()),
+                      cw: s.tok.cw.toLocaleString(loc()),
+                      cr: s.tok.cr.toLocaleString(loc()),
+                    })}
                   >
-                    {compact(tokTotal(s.tok))} tokens
+                    {t("shell.list.tokens", { n: compact(tokTotal(s.tok)) })}
                   </span>
                 </>
               )}
               {hit && (
                 <>
                   <span className="shrink-0 text-primary">
-                    {hit.n} message{hit.n > 1 ? "s" : ""}
+                    {t("shell.list.messages", { count: hit.n })}
                   </span>
                 </>
               )}
@@ -131,18 +139,18 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
                   <span className="truncate">{tilde(g.project, a.home)}</span>
                 </>
               )}
-              {tags.map((t) => (
+              {tags.map((tag) => (
                 <button
-                  key={t}
+                  key={tag}
                   className="relative z-10 shrink-0 rounded-sm bg-accent px-1.5 text-accent-foreground hover:bg-primary/20"
-                  onClick={() => a.filterTag(t)}
-                  title={`Filtrer sur #${t}`}
+                  onClick={() => a.filterTag(tag)}
+                  title={t("shell.list.filterTag", { tag })}
                 >
-                  #{t}
+                  #{tag}
                 </button>
               ))}
               {groups.length > 0 && (
-                <span className="flex min-w-0 items-center gap-1 text-violet-600 dark:text-violet-400" title={`Groupes : ${groups.join(", ")}`}>
+                <span className="flex min-w-0 items-center gap-1 text-violet-600 dark:text-violet-400" title={t("shell.list.groups", { names: groups.join(", ") })}>
                   <Tag className="size-3 shrink-0" />
                   <span className="truncate">{groups.join(", ")}</span>
                 </span>
@@ -155,15 +163,15 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
             {!g.missing && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon-sm" onClick={() => a.open({ dir: s.dir, id: s.id })} aria-label="Reprendre dans un terminal">
+                  <Button variant="ghost" size="icon-sm" onClick={() => a.open({ dir: s.dir, id: s.id })} aria-label={t("shell.list.resume")}>
                     <SquareTerminal />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>{live ? "Déjà ouverte : reprendre quand même" : "Reprendre dans un terminal"}</TooltipContent>
+                <TooltipContent>{live ? t("shell.list.resumeAnyway") : t("shell.list.resume")}</TooltipContent>
               </Tooltip>
             )}
             <SessionDropdown row={row}>
-              <Button variant="ghost" size="icon-sm" aria-label="Plus d'actions">
+              <Button variant="ghost" size="icon-sm" aria-label={t("shell.list.moreActions")}>
                 <MoreHorizontal />
               </Button>
             </SessionDropdown>

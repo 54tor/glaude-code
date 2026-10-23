@@ -3,9 +3,11 @@
 import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme()
+  const { t } = useTranslation()
 
   return (
     <Sonner
@@ -36,9 +38,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--border-radius": "var(--radius)",
         } as React.CSSProperties
       }
-      containerAriaLabel="Notifications"
+      containerAriaLabel={t("shell.toast.notifications")}
       toastOptions={{
-        closeButtonAriaLabel: "Fermer la notification",
+        closeButtonAriaLabel: t("shell.toast.close"),
         classNames: {
           toast: "cn-toast",
         },
