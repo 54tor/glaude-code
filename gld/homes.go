@@ -187,6 +187,26 @@ func saveHomes(hs []Home) error {
 	return writeHomes(hs)
 }
 
+// mergeHomes : en mode multi-utilisateur, l'interface n'envoie que les homes visibles de l'admin. Un home du fichier absent
+// de la liste (ni par identifiant ni par nom) est donc conservé ; seuls les identifiants de removed sont retirés.
+func mergeHomes(before, sent []Home, removed []string) []Home {
+	out := []Home{}
+	for _, h := range sent {
+		if h.ID == "" || !slices.Contains(removed, h.ID) {
+			out = append(out, h)
+		}
+	}
+	for _, h := range before {
+		if slices.Contains(removed, h.ID) {
+			continue
+		}
+		if !slices.ContainsFunc(sent, func(s Home) bool { return (h.ID != "" && s.ID == h.ID) || s.Name == h.Name }) {
+			out = append(out, h)
+		}
+	}
+	return out
+}
+
 func homeByName(name string) (Home, bool) {
 	for _, h := range loadHomes() {
 		if h.Name == name {
@@ -434,14 +454,21 @@ func routesHomes(mux *http.ServeMux) {
 		writeJSON(w, 200, map[string]any{"current": cur, "main": main, "mainId": mainHomeID, "homes": rows})
 	})
 	mux.HandleFunc("POST /homes-save", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Homes []Home }
+		var req struct {
+			Homes   []Home
+			Removed []string
+		}
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil || req.Homes == nil {
 			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		before := readHomes()
-		err := saveHomes(req.Homes)
-		journal("homes-save %d dossier(s) : %v", len(req.Homes), errOr(err))
+		list := req.Homes
+		if gateFrom(r) != nil {
+			list = mergeHomes(before, req.Homes, req.Removed)
+		}
+		err := saveHomes(list)
+		journal("homes-save %d dossier(s) : %v", len(list), errOr(err))
 		if err != nil {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
@@ -459,7 +486,7 @@ func routesHomes(mux *http.ServeMux) {
 			}
 		}
 		keep := map[string]string{}
-		for _, h := range req.Homes {
+		for _, h := range list {
 			keep[h.Name] = h.Dir
 		}
 		homesMu.Lock() // un dossier retiré (ou dont le chemin a changé) n'a plus de processus
