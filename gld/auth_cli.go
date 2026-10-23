@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 
 	"golang.org/x/term"
@@ -156,15 +157,37 @@ func cliUser(ctx context.Context, args []string, out io.Writer) error {
 				break
 			}
 		}
-		err = s.Grant(u.ID, p[2], rights...)
+		var id string
+		if id, err = cliHomeID(p[2]); err == nil {
+			err = s.Grant(u.ID, id, rights...)
+		}
 	case "revoke":
-		err = s.Revoke(u.ID, p[2], rights...)
+		var id string
+		if id, err = cliHomeID(p[2]); err == nil {
+			err = s.Revoke(u.ID, id, rights...)
+		}
 	}
 	if err != nil {
 		return err
 	}
 	fmt.Fprintln(out, L("srv.user.fait"))
 	return nil
+}
+
+var homeIDRe = regexp.MustCompile(`^[0-9a-f]{16}$`)
+
+// cliHomeID : « main », un nom de home ou un identifiant brut (pour révoquer les droits d'un home déjà retiré).
+func cliHomeID(arg string) (string, error) {
+	if arg == mainHomeID {
+		return mainHomeID, nil
+	}
+	if id, ok := homeIDFor(arg); ok && arg != "" {
+		return id, nil
+	}
+	if homeIDRe.MatchString(arg) {
+		return arg, nil
+	}
+	return "", terr("srv.user.homeInconnu", "A1", arg)
 }
 
 func confirmDangerous(out io.Writer, yes bool) error {

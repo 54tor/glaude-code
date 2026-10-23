@@ -70,7 +70,10 @@ var (
 func homesFile() string { return filepath.Join(cfgDir(), "gld-web-homes.json") }
 
 // homesFileMu sérialise les écritures du fichier : deux attributions d'identifiant concurrentes en donneraient deux différents.
-var homesFileMu sync.Mutex
+var (
+	homesFileMu  sync.Mutex
+	mainNameOnce sync.Once
+)
 
 func readHomes() []Home {
 	b, err := os.ReadFile(homesFile())
@@ -87,6 +90,9 @@ func readHomes() []Home {
 // loadHomes attribue et enregistre un identifiant aux homes d'un fichier antérieur qui n'en ont pas.
 func loadHomes() []Home {
 	hs := readHomes()
+	if slices.ContainsFunc(hs, func(h Home) bool { return strings.EqualFold(h.Name, mainHomeID) }) {
+		mainNameOnce.Do(func() { journal("homes : un dossier nommé « main » (nom réservé) : le renommer") })
+	}
 	if !slices.ContainsFunc(hs, func(h Home) bool { return h.ID == "" }) {
 		return hs
 	}
@@ -139,6 +145,9 @@ func saveHomes(hs []Home) error {
 		h.Name = strings.TrimSpace(spaceRe.ReplaceAllString(h.Name, " "))
 		if h.Name == "" || utf8.RuneCountInString(h.Name) > 40 || !homeNameRe.MatchString(h.Name) || seen[h.Name] {
 			return terr("srv.homes.nomDeDossierDe")
+		}
+		if strings.EqualFold(h.Name, mainHomeID) {
+			return terr("srv.homes.nomReserve")
 		}
 		seen[h.Name] = true
 		h.Dir = filepath.Clean(h.Dir)
@@ -355,7 +364,7 @@ func withHomes(next http.Handler) http.Handler {
 				journal("homes %s : %v", name, err)
 				// Garde active : le droit a été vérifié pour ce home, servir un autre home le contournerait.
 				if g != nil || gateActive() {
-					writeJSON(w, 503, map[string]any{"ok": false, "out": err.Error()})
+					writeJSON(w, 503, map[string]any{"ok": false, "out": L("srv.homes.indisponible")})
 					return
 				}
 				// dossier retiré ou enfant en panne : retour au dossier courant

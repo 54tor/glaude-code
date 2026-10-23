@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"maps"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -82,6 +83,16 @@ func cutSync(s string) string {
 		return s[:syncPreview] + "\n…"
 	}
 	return s
+}
+
+// syncPickNeedsConfig : seuls CLAUDE.md et rules/*.md sont du texte inerte ; réglages, permissions, skills et commandes
+// font exécuter du code par Claude Code. Un identifiant non reconnu est traité comme tel.
+func syncPickNeedsConfig(id string) bool {
+	rel, ok := strings.CutPrefix(id, "file:")
+	if !ok || strings.Contains(rel, "\\") || path.Clean(rel) != rel {
+		return true
+	}
+	return rel != "CLAUDE.md" && !(strings.HasPrefix(rel, "rules/") && strings.HasSuffix(rel, ".md"))
 }
 
 // syncFile : fichiers texte copiables d'un dossier de configuration, par chemin relatif (CLAUDE.md, rules/*.md, commands/**.md).
