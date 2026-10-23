@@ -11,7 +11,7 @@ func syncEnv(t *testing.T) (src, dst string) {
 	cfg := t.TempDir()
 	use(cfg)
 	src, dst = t.TempDir(), t.TempDir()
-	if err := saveHomes([]Home{{"Pro", src}, {"Perso", dst}}); err != nil {
+	if err := saveHomes([]Home{{Name: "Pro", Dir: src}, {Name: "Perso", Dir: dst}}); err != nil {
 		t.Fatal(err)
 	}
 	return

@@ -15,19 +15,19 @@ func TestHomesEnregistrement(t *testing.T) {
 	cfg := t.TempDir()
 	use(cfg)
 	pro := t.TempDir()
-	if err := saveHomes([]Home{{"Pro", pro}}); err != nil {
+	if err := saveHomes([]Home{{Name: "Pro", Dir: pro}}); err != nil {
 		t.Fatal(err)
 	}
 	if got := loadHomes(); len(got) != 1 || got[0].Name != "Pro" || got[0].Dir != pro {
 		t.Fatalf("%+v", got)
 	}
 	for name, hs := range map[string][]Home{
-		"nom vide":            {{"", pro}},
-		"nom en double":       {{"A", pro}, {"A", pro}},
-		"séparateur":          {{"a/b", pro}},
-		"chemin relatif":      {{"A", "rel"}},
-		"dossier courant":     {{"A", cfg}},
-		"dossier introuvable": {{"A", pro + "/absent"}},
+		"nom vide":            {{Name: "", Dir: pro}},
+		"nom en double":       {{Name: "A", Dir: pro}, {Name: "A", Dir: pro}},
+		"séparateur":          {{Name: "a/b", Dir: pro}},
+		"chemin relatif":      {{Name: "A", Dir: "rel"}},
+		"dossier courant":     {{Name: "A", Dir: cfg}},
+		"dossier introuvable": {{Name: "A", Dir: pro + "/absent"}},
 	} {
 		if saveHomes(hs) == nil {
 			t.Errorf("%s accepté", name)
@@ -43,7 +43,7 @@ func TestHomesAiguillage(t *testing.T) {
 	cfg := t.TempDir()
 	use(cfg)
 	pro := t.TempDir()
-	if err := saveHomes([]Home{{"Pro perso", pro}}); err != nil {
+	if err := saveHomes([]Home{{Name: "Pro perso", Dir: pro}}); err != nil {
 		t.Fatal(err)
 	}
 	enfant := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("enfant")) }))
@@ -152,7 +152,7 @@ func TestHomesDemarrageHorsVerrou(t *testing.T) {
 	cfg := t.TempDir()
 	use(cfg)
 	a, b := t.TempDir(), t.TempDir()
-	if err := saveHomes([]Home{{"A", a}, {"B", b}}); err != nil {
+	if err := saveHomes([]Home{{Name: "A", Dir: a}, {Name: "B", Dir: b}}); err != nil {
 		t.Fatal(err)
 	}
 	enfant := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
@@ -212,7 +212,7 @@ func TestHomesRetireePendantDemarrage(t *testing.T) {
 	cfg := t.TempDir()
 	use(cfg)
 	a := t.TempDir()
-	if err := saveHomes([]Home{{"A", a}}); err != nil {
+	if err := saveHomes([]Home{{Name: "A", Dir: a}}); err != nil {
 		t.Fatal(err)
 	}
 	old := homeStart
