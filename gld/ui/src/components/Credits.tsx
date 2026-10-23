@@ -91,14 +91,14 @@ export function CreditsButton() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="Soutenir gld" title="Soutenir gld">
+        <Button variant="ghost" size="icon-sm" aria-label="Soutenir Glaude-Code" title="Soutenir Glaude-Code">
           <Heart />
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] gap-5 overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
-            <Heart className="size-5 text-primary" aria-hidden /> Soutenir gld
+            <Heart className="size-5 text-primary" aria-hidden /> Soutenir Glaude-Code
           </DialogTitle>
           <DialogDescription>
             gld est libre, gratuit et sans télémétrie. Il est écrit et maintenu par Sat0r sur son temps libre, sous licence MIT. Si
