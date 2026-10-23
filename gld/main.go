@@ -142,6 +142,7 @@ var (
 	authSeen  bool        // des comptes ont existé : seule une table vide lue avec succès rend le mode ouvert
 	authAt    time.Time   // dernier contrôle ; zéro : à refaire
 	authFI    os.FileInfo // fichier ouvert : une base remplacée ne doit pas être servie depuis l'ancien inode
+	purgeAt   time.Time   // dernière purge d'auth_events ; zéro à chaque ouverture de base
 )
 
 var (
@@ -171,7 +172,21 @@ func authState() (*authStore, bool, error) {
 		authSeen = true
 		warnGuard(true, os.Stderr)
 	}
+	if authErr == nil && authSt != nil {
+		purgeDue(authSt, now)
+	}
 	return authSt, authUsers, authErr
+}
+
+// purgeDue purge auth_events à l'ouverture de la base puis au plus une fois par 24 h ; appelée sous authMu.
+func purgeDue(st *authStore, now time.Time) {
+	if !purgeAt.IsZero() && now.Sub(purgeAt) < eventsPurgeEvery {
+		return
+	}
+	purgeAt = now
+	if _, err := st.PurgeEvents(eventsKeep); err != nil {
+		journal("auth: purge du journal d'authentification : %v", err)
+	}
 }
 
 func authCheck() (bool, error) {
@@ -207,7 +222,7 @@ func authCheck() (bool, error) {
 			st.db.Close()
 			return false, err
 		}
-		authSt = st
+		authSt, purgeAt = st, time.Time{}
 	}
 	on, err := authSt.HasUsers()
 	if err == nil && !on {
