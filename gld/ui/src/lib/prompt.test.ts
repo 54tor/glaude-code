@@ -1,4 +1,3 @@
-/* eslint-disable no-irregular-whitespace -- captures réelles du terminal (espaces insécables) */
 import { describe, expect, it } from "vitest"
 import { parsePrompt } from "./prompt"
 
