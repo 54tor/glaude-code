@@ -145,7 +145,7 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
           <div className="flex flex-wrap items-center gap-2">
             {folder && (
               <Button size="sm" variant="outline" disabled={!body} onClick={() => {
-                  a.newSession(folder, body)
+                  a.newSession(folder, body, () => { edit([]); flush() })
                   edit(items.filter((_, j) => !dropIdx.has(j)))
                   setPicked(new Set())
                   flush()
