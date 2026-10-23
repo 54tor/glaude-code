@@ -6,7 +6,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 
 // Adresses de soutien : vides, la ligne correspondante n'est pas affichée.
 const XMR = "869vB9woRhE1EHMHuYxho3JUj1kooxPDc1ejRw1999kNddapW2qPh9A1G7467itLQ5XYhFKFHp8cw3S53Ut62XtBB2dpx6W"
-const BTC = ""
 const REPO = "https://gitea.cale-cine.cc/SRC/glaude-code"
 
 const GO = [
@@ -112,7 +111,7 @@ export function CreditsButton() {
           </div>
         </section>
 
-        {(XMR || BTC) && (
+        {XMR && (
           <section className="space-y-2" aria-label="Don">
             <h3 className="flex items-center gap-2 text-sm font-semibold">
               <Coffee className="size-4" aria-hidden /> Offrir un café
