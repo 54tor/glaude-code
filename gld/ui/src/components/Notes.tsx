@@ -70,7 +70,11 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
   const targets = rows.filter((r) => sendable.has(r.s.id) && a.live.has(r.s.id))
   const sendTo = async (r: Row) => {
     const res = await api.post("/session-send", { id: r.s.id, text: body }, 20_000)
-    if (res.ok) toast.success(tr("conversation.notes.sent", { title: r.s.title || r.s.id.slice(0, 8) }))
+    if (res.ok) {
+      toast.success(tr("conversation.notes.sent", { title: r.s.title || r.s.id.slice(0, 8) }))
+      edit([])
+      flush()
+    }
     else toast.error(res.out)
   }
   return (
