@@ -124,7 +124,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
     <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
       <ScrollArea className={cn("shrink-0 border-b bg-muted/30 lg:block lg:max-h-none lg:w-96 lg:flex-none lg:border-r lg:border-b-0", sel ? "hidden" : "min-h-0 flex-1")}>
         <nav className="p-2">
-          <div className="mb-2 flex items-center gap-2 px-1">
+          <div className="mb-2 flex flex-wrap items-center gap-2 px-1">
             <Button size="xs" variant="outline" onClick={() => setCreating(true)}>
               <Plus /> Nouveau skill
             </Button>
@@ -136,7 +136,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
               className="min-w-0"
             />
             {data && (
-              <span className="text-[11px] text-muted-foreground" title="Les descriptions des skills que Claude peut lancer seul sont toujours dans son contexte (1 536 caractères au plus chacune)">
+              <span className="basis-full text-[11px] text-muted-foreground" title="Les descriptions des skills que Claude peut lancer seul sont toujours dans son contexte (1 536 caractères au plus chacune)">
                 ≈ {budget.toLocaleString("fr-FR")} car. de descriptions en contexte
               </span>
             )}
