@@ -81,3 +81,42 @@ func TestDummyCheckTiming(t *testing.T) {
 		t.Fatalf("real=%v dummy=%v", real, dummy)
 	}
 }
+
+func TestPasswordHashBounds(t *testing.T) {
+	lowArgon(t)
+	good, _ := hashPassword("correct horse battery")
+	salt, key := "AAAAAAAAAAAAAAAAAAAAAA", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+	mk := func(ver, params, s, k string) string { return "$argon2id$" + ver + "$" + params + "$" + s + "$" + k }
+	bad := []string{
+		mk("v=19", "m=4294967295,t=1,p=1", salt, key),
+		mk("v=19", "m=1024,t=4294967295,p=1", salt, key),
+		mk("v=19", "m=1024,t=1,p=255", salt, key),
+		mk("v=19", "m=1048577,t=1,p=1", salt, key),
+		mk("v=19", "m=1024,t=11,p=1", salt, key),
+		mk("v=19", "m=1024,t=1,p=17", salt, key),
+		mk("v=19", "m=1024,t=1,p=1", "", key),
+		mk("v=19", "m=1024,t=1,p=1", "AAAA", key),
+		mk("v=19", "m=1024,t=1,p=1", salt, strings.Repeat("A", 4000)),
+		mk("v=19", "m=1024,t=1,p=1", salt, "AAAA"),
+		mk("v=19", "m=64,t=1,p=1garbage", salt, key),
+		mk("v=19", "m=+64,t=1,p=1", salt, key),
+		mk("v=19", "m= 64,t=1,p=1", salt, key),
+		mk("v=19", "m=64,t=1", salt, key),
+		mk("v=19", "t=1,m=64,p=1", salt, key),
+		mk("v=19", "m=64,t=1,p=1,x=1", salt, key),
+		mk("v=18", "m=1024,t=1,p=1", salt, key),
+		mk("v=19garbage", "m=1024,t=1,p=1", salt, key),
+	}
+	start := time.Now()
+	for _, h := range bad {
+		if checkPassword(h, "x") {
+			t.Errorf("accepted %q", h)
+		}
+	}
+	if d := time.Since(start); d > time.Second {
+		t.Fatalf("too slow: %v", d)
+	}
+	if !checkPassword(good, "correct horse battery") {
+		t.Fatal("good hash rejected")
+	}
+}

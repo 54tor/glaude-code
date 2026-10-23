@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -64,21 +65,34 @@ func checkPassword(hash, pw string) bool {
 	if len(parts) != 6 || parts[1] != "argon2id" {
 		return false
 	}
-	var ver int
-	var m, t uint32
-	var p uint8
-	if _, err := fmt.Sscanf(parts[2], "v=%d", &ver); err != nil || ver != argon2.Version {
+	if parts[2] != "v=19" {
 		return false
 	}
-	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &m, &t, &p); err != nil || m == 0 || t == 0 || p == 0 {
+	kv := strings.Split(parts[3], ",")
+	if len(kv) != 3 {
+		return false
+	}
+	var v [3]uint64
+	for i, k := range []string{"m=", "t=", "p="} {
+		if !strings.HasPrefix(kv[i], k) {
+			return false
+		}
+		n, err := strconv.ParseUint(kv[i][len(k):], 10, 32)
+		if err != nil {
+			return false
+		}
+		v[i] = n
+	}
+	m, t, p := uint32(v[0]), uint32(v[1]), v[2]
+	if m == 0 || m > 1<<20 || t == 0 || t > 10 || p == 0 || p > 16 {
 		return false
 	}
 	salt, err1 := base64.RawStdEncoding.DecodeString(parts[4])
 	want, err2 := base64.RawStdEncoding.DecodeString(parts[5])
-	if err1 != nil || err2 != nil || len(want) == 0 {
+	if err1 != nil || err2 != nil || len(salt) < 8 || len(salt) > 64 || len(want) < 16 || len(want) > 64 {
 		return false
 	}
-	got := argon2.IDKey([]byte(pw), salt, t, m, p, uint32(len(want)))
+	got := argon2.IDKey([]byte(pw), salt, t, m, uint8(p), uint32(len(want)))
 	return subtle.ConstantTimeCompare(got, want) == 1
 }
 
