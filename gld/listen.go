@@ -97,7 +97,8 @@ func withToken(token string, next http.Handler) http.Handler {
 func withTokenOpen(token string, next http.Handler) http.Handler {
 	tok := withToken(token, next)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if authMode() {
+		r, d := reqMode(r)
+		if d.on || d.err != nil { // erreur : pas de jeton à juger, le handler refuse le service
 			next.ServeHTTP(w, r)
 			return
 		}

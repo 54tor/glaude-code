@@ -369,7 +369,7 @@ func withHomes(next http.Handler) http.Handler {
 			if err != nil {
 				journal("homes %s : %v", name, err)
 				// Garde active : le droit a été vérifié pour ce home, servir un autre home le contournerait.
-				if g != nil || gateActive() {
+				if g != nil || gateActive(r) {
 					writeJSON(w, 503, map[string]any{"ok": false, "out": L("srv.homes.indisponible")})
 					return
 				}

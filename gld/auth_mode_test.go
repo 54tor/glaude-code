@@ -23,12 +23,15 @@ const modeTok = "0123456789abcdef0123"
 // resetAuth remet l'état du mode à zéro sur s (nil : aucune base ouverte) et fige l'horloge ; tick la fait avancer d'une fenêtre.
 func resetAuth(t *testing.T, s *authStore) (tick func()) {
 	t.Helper()
-	oSt, oErr, oUsers, oSeen, oAt, oNow, oTP := authSt, authErr, authUsers, authSeen, authAt, modeNow, tokenPrincipal
+	oSt, oErr, oUsers, oSeen, oAt, oNow, oTP, oFI, oFn := authSt, authErr, authUsers, authSeen, authAt, modeNow, tokenPrincipal, authFI, authStateFn
 	t.Cleanup(func() {
-		authSt, authErr, authUsers, authSeen, authAt, modeNow, tokenPrincipal = oSt, oErr, oUsers, oSeen, oAt, oNow, oTP
+		authSt, authErr, authUsers, authSeen, authAt, modeNow, tokenPrincipal, authFI, authStateFn = oSt, oErr, oUsers, oSeen, oAt, oNow, oTP, oFI, oFn
 	})
 	now := time.Now()
-	authSt, authErr, authUsers, authSeen, authAt = s, nil, false, false, time.Time{}
+	authSt, authErr, authUsers, authSeen, authAt, authFI = s, nil, false, false, time.Time{}, nil
+	if s != nil {
+		authFI, _ = os.Lstat(filepath.Join(os.Getenv("GLD_AUTH_DIR"), "auth.db"))
+	}
 	modeNow = func() time.Time { return now }
 	tokenPrincipal = tokenForChildren(modeTok)
 	return func() { now = now.Add(modeEvery) }
@@ -95,7 +98,7 @@ func TestOpenModeUnchanged(t *testing.T) {
 		t.Fatalf("withToken : %d %d %d %d", before[0].Code, before[1].Code, before[4].Code, before[6].Code)
 	}
 	resetAuth(t, testStore(t))
-	if authMode() {
+	if _, on, _ := authState(); on {
 		t.Fatal("mode multi-utilisateur sans compte")
 	}
 	for i, q := range reqs {
@@ -503,5 +506,101 @@ func TestChildChatStoppedOnRevoke(t *testing.T) {
 	case <-done:
 	case <-time.After(6*time.Second - time.Since(start)):
 		t.Fatal("flux du client non coupé")
+	}
+}
+
+// Le mode est décidé une fois par requête : un état qui change entre le garde du jeton et le handler ne peut ni sauter le
+// jeton ni servir la branche ouverte.
+func TestModeDecidedOncePerRequest(t *testing.T) {
+	s, srv, _ := authWeb(t)
+	s.AddUser("alice", testPw, true)
+	for _, first := range []bool{true, false} {
+		n := 0
+		authStateFn = func() (*authStore, bool, error) {
+			n++
+			return s, first == (n%2 == 1), nil
+		}
+		w := (modeReq{method: "GET", path: "/api"}).do(srv)
+		if w.Code != 401 || n != 1 {
+			t.Fatalf("premier état %v : %d, %d évaluation(s)", first, w.Code, n)
+		}
+	}
+}
+
+// Une base remplacée pendant l'exécution n'est plus servie depuis l'ancien fichier : refus, puis réouverture.
+func TestAuthDBReplaced(t *testing.T) {
+	s := testStore(t)
+	s.AddUser("alice", testPw, true)
+	s.db.Close()
+	dir := os.Getenv("GLD_AUTH_DIR")
+	tick := resetAuth(t, nil)
+	h, _, _ := web(t)
+	srv := withTokenOpen(modeTok, h)
+	q := modeReq{method: "GET", path: "/api", tokCookie: modeTok}
+	if w := q.do(srv); w.Code != 401 {
+		t.Fatalf("mode actif : %d", w.Code)
+	}
+	old := authSt
+
+	other := t.TempDir()
+	t.Setenv("GLD_AUTH_DIR", other)
+	s2, err := openAuthStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s2.AddUser("bob", testPw, true)
+	s2.db.Close()
+	t.Setenv("GLD_AUTH_DIR", dir)
+	if err := os.Rename(filepath.Join(other, "auth.db"), filepath.Join(dir, "auth.db")); err != nil {
+		t.Fatal(err)
+	}
+	tick()
+	if w := q.do(srv); w.Code != 503 {
+		t.Fatalf("base remplacée : %d", w.Code)
+	}
+	tick()
+	if w := q.do(srv); w.Code != 401 || authSt == nil || authSt == old {
+		t.Fatalf("réouverture : %d", w.Code)
+	}
+	if _, err := authSt.UserByName("bob"); err != nil {
+		t.Fatalf("nouvelle base non lue : %v", err)
+	}
+	if err := old.db.Ping(); err == nil {
+		t.Fatal("ancienne base restée ouverte")
+	}
+}
+
+// /chat vers un home enfant au-delà de la limite de lecture : refusé, jamais relayé tronqué.
+func TestChildChatBodyTooBig(t *testing.T) {
+	g := newGateRig(t)
+	addHomes(t, "Pro")
+	u := g.user(t, "bob", false)
+	g.grant(t, u, "Pro", RightExec)
+	child := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { t.Error("relayé à l'enfant") }))
+	defer child.Close()
+	cu, _ := url.Parse(child.URL)
+	oldStart := homeStart
+	t.Cleanup(func() { homeStart = oldStart; stopHomes() })
+	homeStart = func(h Home) (*homeProc, error) {
+		return &homeProc{dir: h.Dir, proxy: childProxy(cu, "x"), done: make(chan struct{})}, nil
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /chat", func(w http.ResponseWriter, r *http.Request) {})
+	h := authGate(mux, g.s, withAuthWatch(withHomes(mux)))
+	body := `{"ID":"` + id1 + `","Prompt":"` + strings.Repeat("a", 70<<10) + `"}`
+	r := g.req("POST", "/chat", &u, "Pro", body)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 413 {
+		t.Fatalf("corps de 70 Kio : %d %s", w.Code, w.Body)
+	}
+	// Corps restitué en entier quand il n'est pas lu jusqu'au bout pour décider.
+	rr := httptest.NewRequest("POST", "/", strings.NewReader(body))
+	var v struct{ ID string }
+	if !errors.Is(peekJSON(rr, &v), errBodyTooBig) {
+		t.Fatal("dépassement non signalé")
+	}
+	if b, _ := io.ReadAll(rr.Body); string(b) != body {
+		t.Fatalf("corps restitué : %d octets sur %d", len(b), len(body))
 	}
 }
