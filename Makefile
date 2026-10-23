@@ -3,7 +3,7 @@
 # make windows : gld.exe pour Windows 64 bits (sans bash, sans jq ; l'interface est construite avant)
 # make macos   : gld-darwin-arm64 pour macOS Apple Silicon (M1 et suivants ; l'interface est construite avant, sans cgo)
 # make test    : tests Go (le dossier dist peut être vide : seul l'interface en dépend)
-# make check   : go vet + tests Go (-race) + tsc + eslint + tests de l'interface (rien n'est modifié)
+# make check   : go vet + tests Go (-race) + tsc + eslint + tests de l'interface (rien n'est modifié) ; check-ui : la partie interface seule
 # make cover   : tests Go sous -race avec couverture ; échoue sous COVER_MIN % (relevé : 80,7 % le 2026-10-22)
 # make fuzz    : chaque cible de fuzzing de gld pendant FUZZTIME (60s par défaut) ; corpus dans le cache de go
 BIN ?= $(HOME)/.local/bin
@@ -41,8 +41,11 @@ FUZZTIME ?= 60s
 fuzz:
 	cd gld && for f in $$(go test -list '^Fuzz' . | grep '^Fuzz'); do go test -run '^$$' -fuzz "^$$f$$" -fuzztime $(FUZZTIME) -parallel 4 . || exit 1; done
 
-check:
+check: check-ui
 	cd gld && go vet ./... && go test -race -count=1 .
+
+# La partie interface de check (la CI la lance seule : les tests Go y passent déjà sous -race dans cover).
+check-ui:
 	cd gld/ui && { [ -d node_modules ] || npm ci; } && npx tsc --noEmit && npx eslint . && npm test
 
-.PHONY: ui install windows macos test check fuzz cover
+.PHONY: ui install windows macos test check check-ui fuzz cover

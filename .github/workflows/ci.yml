@@ -21,7 +21,9 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: gld/ui/package-lock.json
-      - run: make check
+      - run: sudo apt-get install -y --no-install-recommends tmux # le test d'envoi réel vers tmux ne doit pas être sauté en CI
+      - run: cd gld && go vet ./...
+      - run: make check-ui
       - run: test -z "$(gofmt -s -l gld)"
       - name: staticcheck (linux, windows, darwin)
         working-directory: gld
