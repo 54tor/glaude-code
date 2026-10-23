@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -21,9 +22,14 @@ var (
 		}
 		return filepath.Join(d, "gld-web", "search.db")
 	}
-	idxMu sync.Mutex // un seul synchroniseur à la fois
-	idxDB *sql.DB
+	idxMu  sync.Mutex // un seul synchroniseur à la fois
+	idxDB  *sql.DB
+	idxNow = time.Now // remplacé par les tests
 )
+
+// indexSettle : un transcript déjà indexé et modifié depuis moins longtemps n'est pas relu. Une session vivante écrit en
+// continu, et relire un gros transcript à chaque frappe de recherche coûtait plusieurs secondes.
+const indexSettle = 30 * time.Second
 
 const idxSchema = `
 CREATE TABLE IF NOT EXISTS files(id INTEGER PRIMARY KEY, path TEXT UNIQUE, mod INTEGER, size INTEGER);
@@ -87,10 +93,14 @@ func syncIndex() error {
 		if err != nil {
 			continue
 		}
-		if r, ok := known[p]; ok && r.mod == st.ModTime().UnixNano() && r.size == st.Size() {
+		r, ok := known[p]
+		if ok && r.mod == st.ModTime().UnixNano() && r.size == st.Size() {
 			continue
 		}
-		if err := indexFile(db, p, st, known[p].id); err != nil {
+		if ok && idxNow().Sub(st.ModTime()) < indexSettle {
+			continue
+		}
+		if err := indexFile(db, p, st, r.id); err != nil {
 			return err
 		}
 	}
