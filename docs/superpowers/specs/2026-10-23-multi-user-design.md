@@ -18,7 +18,7 @@ Aujourd'hui gld a un jeton unique (`GLD_WEB_TOKEN`) : qui l'a voit tout, sur tou
 ## Hors périmètre
 
 - Fédération (OIDC, SAML, LDAP), inscription libre, réinitialisation par e-mail (aucun envoi de courrier).
-- Isolation système entre utilisateurs : tous les homes tournent sous le même utilisateur OS. L'ACL protège l'interface, pas le système de fichiers.
+- Isolation système entre utilisateurs : tous les homes tournent sous le même utilisateur OS. L'ACL protège l'interface, pas le système de fichiers (voir « Modèle de menace »).
 - Refonte des sessions Claude Code ou de leur format.
 - Journal d'audit exportable (seul un journal d'événements d'authentification est prévu).
 
@@ -68,6 +68,7 @@ SQLite, migrations numérotées appliquées au démarrage (un seul processus éc
 - `recovery_codes(user_id, hash, used_at)`
 - `sessions(id_hash, user_id, created_at, last_seen_at, expires_at, ip, ua, mfa_at)`
 - `home_acl(user_id, home_name, mem_read, mem_write, mem_sync, usage_read, exec)` : un droit absent vaut refusé. `home_name` est le nom du home dans `Home.Name`.
+- Colonne `sig` (HMAC) sur les tables sensibles : voir « Modèle de menace ».
 - `auth_events(at, user_id NULL, name_tried, ip, kind, outcome)` : connexions, échecs, verrouillages, changements de facteur, modifications d'ACL. Purgé après 90 jours.
 - `throttle(key, fails, first_at, locked_until)` : voir anti brute force.
 
@@ -127,6 +128,15 @@ Principes : ne jamais distinguer « inconnu » de « mauvais mot de passe », co
 - **Clé maîtresse** : si l'entrée du coffre-fort et `auth.key` existent, le coffre-fort l'emporte. Si la clé ne déchiffre pas les secrets, gld refuse de démarrer en mode multi-utilisateur (jamais de régénération silencieuse). Une clé dans un fichier voisin de la base ne protège pas contre qui lit le dossier : accepté, documenté.
 - **Historique d'adresses** (règle « IP connue depuis 30 jours ») : lu dans `auth_events`, filtré sur les connexions réussies. Derrière un proxy sans `GLD_TRUSTED_PROXIES`, tous les clients partagent une adresse : avertissement au démarrage si une adresse de bouclage ou privée est vue avec un en-tête `X-Forwarded-For`.
 - **Liste de mots de passe courants** : liste embarquée de 10 000 entrées d'une source publique, détail laissé au constructeur.
+
+## Modèle de menace et protection de la base (décision de l'opérateur)
+
+Constat : un utilisateur qui a `exec` ou `config_write` exécute du code sous l'utilisateur OS de gld, donc peut lire et écrire `auth.db`, `auth.key` et le coffre-fort. L'ACL protège l'interface, pas la machine. Pas d'isolation par compte OS ni de bac à sable dans ce lot ; la protection repose sur deux mesures :
+
+1. **Droits `exec` et `config_write` réservés aux personnes de confiance.** Un co-utilisateur « mémoire + usages + sessions » n'a aucun chemin vers la base. L'écran d'ACL signale en clair que `exec` et `config_write` équivalent au compte OS de gld, demande une confirmation à l'attribution, et la CLI `gld user grant` affiche le même avertissement. Aucun droit n'est accordé par défaut.
+2. **Intégrité détectée par signature.** Chaque ligne de `users`, `home_acl`, `totp`, `webauthn_creds` et `recovery_codes` porte un HMAC-SHA-256 calculé avec une clé d'intégrité dérivée de la clé maîtresse (HKDF, contexte distinct du chiffrement). Au démarrage et à chaque lecture d'une ligne pour décider d'un accès, une signature absente ou fausse fait refuser l'accès, journalise `auth_events` (`kind=tamper`) et alerte l'admin. L'identifiant de ligne et la table entrent dans le message signé, pour qu'une ligne ne soit pas copiable ailleurs. Limite assumée : si le même compte OS peut lire la clé maîtresse, un attaquant la lit aussi ; la signature n'arrête que l'écriture sans la clé (édition SQL directe), et c'est dit dans la documentation.
+
+Hors périmètre, notés pour plus tard : processus d'authentification sous un autre compte OS, bac à sable des sessions `exec` (réglages « managed » root, bubblewrap/seatbelt, shell du terminal web).
 
 ## Laissé au constructeur
 
