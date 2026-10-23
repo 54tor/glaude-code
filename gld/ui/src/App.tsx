@@ -222,7 +222,13 @@ export default function App() {
 
   const g: Group | null = node?.g ?? null
   const own = g ? node!.ss.map((s) => ({ dir: s.dir, id: s.id })) : []
-  const reader = reading ? (everyId.get(reading) ?? null) : null
+  // Le lecteur garde la dernière version connue de la session affichée : si une relecture de la liste ne la contient pas un instant
+  // (écriture en cours, erreur passagère), la conversation ne se vide pas ni ne se ferme. Une vraie disparition (suppression) est
+  // traitée à part (`gone`).
+  const found = reading ? (everyId.get(reading) ?? null) : null
+  const [kept, setKept] = useState<Row | null>(null)
+  if (found && found !== kept) setKept(found)
+  const reader = reading ? (found ?? (kept?.s.id === reading ? kept : null)) : null
   const favRows = [...favs].map((id) => everyId.get(id)).filter((r): r is Row => !!r)
   const favGroups = vgroups.filter((x) => x.fav).map((x) => ({ vg: x, key: gkey(x) }))
 

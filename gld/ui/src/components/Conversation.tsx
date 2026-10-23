@@ -83,7 +83,8 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
   const [info, setInfo] = useState<{ id: string; d: Detail } | null>(null)
   const area = useRef<HTMLDivElement>(null)
   const key = id ? `${dir}/${id}/${tools}` : ""
-  const msgs = loaded?.key === key ? loaded.msgs : null
+  // Même session, autre clé (outils affichés ou masqués) : l'ancien contenu reste à l'écran jusqu'à l'arrivée du nouveau.
+  const msgs = loaded?.key === key || (id && loaded?.key.startsWith(`${dir}/${id}/`)) ? loaded!.msgs : null
   const detail = info && info.id === id ? info.d : null
   // Tour en cours (ou dernier tour) écrit depuis le navigateur, affiché à la suite de la conversation.
   const [chat, setChat] = useState<Turn | null>(null)
