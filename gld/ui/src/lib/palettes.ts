@@ -40,6 +40,41 @@ export const PALETTES: Record<string, Palette> = {
     dark: { bg: "#282c34", fg: "#abb2bf", surface: "#2c313a", muted: "#3e4451", border: "#3e4451", primary: "#61afef", side: "#21252b" },
     light: { bg: "#fafafa", fg: "#383a42", surface: "#ffffff", muted: "#eaeaeb", border: "#dbdbdc", primary: "#4078f2", side: "#f0f0f1" },
   },
+  ayu: {
+    name: "Ayu",
+    dark: { bg: "#0b0e14", fg: "#bfbdb6", surface: "#131721", muted: "#1c2331", border: "#272d38", primary: "#e6b450", side: "#07090d" },
+    light: { bg: "#fcfcfc", fg: "#5c6166", surface: "#ffffff", muted: "#eff0f1", border: "#dcdee0", primary: "#e6a23c", side: "#f3f4f5" },
+  },
+  material: {
+    name: "Material",
+    dark: { bg: "#263238", fg: "#eeffff", surface: "#2c3b41", muted: "#32424a", border: "#37474f", primary: "#82aaff", side: "#1f292e" },
+    light: { bg: "#fafafa", fg: "#546e7a", surface: "#ffffff", muted: "#eceff1", border: "#cfd8dc", primary: "#6182b8", side: "#eef1f3" },
+  },
+  github: {
+    name: "GitHub",
+    dark: { bg: "#0d1117", fg: "#e6edf3", surface: "#161b22", muted: "#21262d", border: "#30363d", primary: "#58a6ff", side: "#010409" },
+    light: { bg: "#ffffff", fg: "#1f2328", surface: "#ffffff", muted: "#f6f8fa", border: "#d0d7de", primary: "#0969da", side: "#f6f8fa" },
+  },
+  rosepine: {
+    name: "Rosé Pine",
+    dark: { bg: "#191724", fg: "#e0def4", surface: "#1f1d2e", muted: "#26233a", border: "#403d52", primary: "#c4a7e7", side: "#14121d" },
+    light: { bg: "#faf4ed", fg: "#575279", surface: "#fffaf3", muted: "#f2e9e1", border: "#dfdad9", primary: "#907aa9", side: "#f4ede8" },
+  },
+  everforest: {
+    name: "Everforest",
+    dark: { bg: "#2d353b", fg: "#d3c6aa", surface: "#343f44", muted: "#3d484d", border: "#475258", primary: "#a7c080", side: "#232a2e" },
+    light: { bg: "#fdf6e3", fg: "#5c6a72", surface: "#fffbef", muted: "#f4f0d9", border: "#e6e2cc", primary: "#8da101", side: "#f4f0d9" },
+  },
+  kanagawa: {
+    name: "Kanagawa",
+    dark: { bg: "#1f1f28", fg: "#dcd7ba", surface: "#2a2a37", muted: "#363646", border: "#54546d", primary: "#7e9cd8", side: "#16161d" },
+    light: { bg: "#f2ecbc", fg: "#545464", surface: "#f9f5d7", muted: "#e7dba0", border: "#cfc49c", primary: "#4d699b", side: "#e7dba0" },
+  },
+  night: {
+    name: "Night Owl",
+    dark: { bg: "#011627", fg: "#d6deeb", surface: "#0b2942", muted: "#0e293f", border: "#122d42", primary: "#82aaff", side: "#010e1a" },
+    light: { bg: "#fbfbfb", fg: "#403f53", surface: "#ffffff", muted: "#f0f0f0", border: "#d9d9d9", primary: "#4876d6", side: "#f0f0f0" },
+  },
   catppuccin: {
     name: "Catppuccin",
     dark: { bg: "#1e1e2e", fg: "#cdd6f4", surface: "#313244", muted: "#313244", border: "#45475a", primary: "#cba6f7", side: "#181825" },
