@@ -21,6 +21,9 @@ import (
 
 const waChallengeTTL = 5 * time.Minute
 
+// Plafond du nombre de défis en attente : une rafale de Begin ne doit pas faire grossir la mémoire sans fin.
+var waMaxChallenges = 1000
+
 var (
 	errWebAuthnNeedsHTTPS = terr("srv.auth.webauthnHTTPS")
 	errWebAuthnBadURL     = terr("srv.auth.urlPubliqueInvalide")
@@ -31,27 +34,27 @@ var (
 )
 
 // newWebAuthn lit GLD_PUBLIC_URL à chaque appel : l'origine doit suivre la configuration effective.
-// Sans elle, seul l'accès local en http est servi ; un RPID ne peut pas être une adresse IP, d'où « localhost ».
+// Un RPID ne peut pas être une adresse IP et les navigateurs n'acceptent « localhost » que depuis localhost :
+// sans variable, seul http://localhost:<port> est servi, et une IP dans GLD_PUBLIC_URL est refusée.
 func newWebAuthn() (*webauthn.WebAuthn, error) {
-	rpid, origins := "localhost", []string{"http://localhost:" + port, "http://127.0.0.1:" + port, "http://[::1]:" + port}
+	rpid, origins := "localhost", []string{"http://localhost:" + port}
 	if raw := strings.TrimSpace(os.Getenv("GLD_PUBLIC_URL")); raw != "" {
 		u, err := url.Parse(raw)
-		if err != nil || u.Hostname() == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		h := ""
+		if err == nil {
+			h = strings.ToLower(u.Hostname())
+		}
+		if h == "" || net.ParseIP(h) != nil || (u.Scheme != "http" && u.Scheme != "https") {
 			return nil, errWebAuthnBadURL
 		}
-		h := strings.ToLower(u.Hostname())
-		ip := net.ParseIP(h)
-		local := h == "localhost" || (ip != nil && ip.IsLoopback())
-		if u.Scheme == "http" && !local {
+		if u.Scheme == "http" && h != "localhost" {
 			return nil, errWebAuthnNeedsHTTPS
 		}
-		if ip != nil && !ip.IsLoopback() {
-			return nil, errWebAuthnBadURL
+		origin := u.Scheme + "://" + h
+		if p := u.Port(); p != "" && !(u.Scheme == "https" && p == "443") && !(u.Scheme == "http" && p == "80") {
+			origin += ":" + p
 		}
-		if ip == nil {
-			rpid = h
-		}
-		origins = []string{u.Scheme + "://" + u.Host}
+		rpid, origins = h, []string{origin}
 	}
 	return webauthn.New(&webauthn.Config{RPDisplayName: "gld", RPID: rpid, RPOrigins: origins})
 }
@@ -74,12 +77,25 @@ func waPut(purpose, sessionID string, uid int64, d *webauthn.SessionData) {
 	now := authNow()
 	waChallenges.Lock()
 	defer waChallenges.Unlock()
-	for k, p := range waChallenges.m {
-		if now.Sub(p.at) > waChallengeTTL {
-			delete(waChallenges.m, k)
+	k := waKey(purpose, sessionID)
+	if _, ok := waChallenges.m[k]; !ok && len(waChallenges.m) >= waMaxChallenges {
+		for k, p := range waChallenges.m {
+			if now.Sub(p.at) > waChallengeTTL {
+				delete(waChallenges.m, k)
+			}
+		}
+		// ponytail: recherche linéaire du plus ancien, seulement quand le plafond est atteint.
+		for len(waChallenges.m) >= waMaxChallenges {
+			oldest, first := "", true
+			for k, p := range waChallenges.m {
+				if first || p.at.Before(waChallenges.m[oldest].at) {
+					oldest, first = k, false
+				}
+			}
+			delete(waChallenges.m, oldest)
 		}
 	}
-	waChallenges.m[waKey(purpose, sessionID)] = waPending{uid, *d, now}
+	waChallenges.m[k] = waPending{uid, *d, now}
 }
 
 // waTake consomme le défi même s'il est refusé : un défi ne sert qu'une fois.
@@ -367,6 +383,23 @@ type CredInfo struct {
 	Bad bool
 }
 
+// Une ligne altérée n'est journalisée qu'une fois par processus depuis la liste : la page de profil la relit à chaque affichage.
+var waTamperSeen = struct {
+	sync.Mutex
+	m map[string]bool
+}{m: map[string]bool{}}
+
+func waTamperFirstSeen(r *credRow) bool {
+	k := strconv.FormatInt(r.id, 10) + "\x00" + string(r.sig)
+	waTamperSeen.Lock()
+	defer waTamperSeen.Unlock()
+	if waTamperSeen.m[k] {
+		return false
+	}
+	waTamperSeen.m[k] = true
+	return true
+}
+
 func (s *authStore) WebAuthnList(userID int64) ([]CredInfo, error) {
 	list, err := s.loadCreds(s.db, userID)
 	if err != nil {
@@ -375,7 +408,7 @@ func (s *authStore) WebAuthnList(userID int64) ([]CredInfo, error) {
 	out := make([]CredInfo, 0, len(list))
 	for _, r := range list {
 		out = append(out, CredInfo{ID: r.id, Label: r.label, CreatedAt: r.createdAt, LastUsedAt: r.lastUsed.Int64, Bad: r.bad})
-		if r.bad {
+		if r.bad && waTamperFirstSeen(r) {
 			s.event(userID, "tamper", "webauthn_creds")
 		}
 	}

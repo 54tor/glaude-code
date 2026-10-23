@@ -18,6 +18,7 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
+	"github.com/go-webauthn/webauthn/webauthn"
 )
 
 // softKey est un authentificateur logiciel ES256 : la bibliothèque vérifie réellement ses signatures.
@@ -295,26 +296,30 @@ func TestWebAuthnWrongOrigin(t *testing.T) {
 
 func TestWebAuthnNeedsHTTPS(t *testing.T) {
 	cases := []struct {
-		url, rpid string
-		want      error
+		url, rpid, origin string
+		want              error
 	}{
-		{"", "localhost", nil},
-		{"https://gld.example.com", "gld.example.com", nil},
-		{"https://gld.example.com:8443/x", "gld.example.com", nil},
-		{"http://localhost:9000", "localhost", nil},
-		{"http://127.0.0.1:9000", "localhost", nil},
-		{"http://[::1]:9000", "localhost", nil},
-		{"http://gld.example.com", "", errWebAuthnNeedsHTTPS},
-		{"http://192.168.1.10:8799", "", errWebAuthnNeedsHTTPS},
-		{"https://10.0.0.1", "", errWebAuthnBadURL},
-		{"ftp://gld.example.com", "", errWebAuthnBadURL},
-		{"gld.example.com", "", errWebAuthnBadURL},
+		{"", "localhost", "http://localhost:" + port, nil},
+		{"https://gld.example.com", "gld.example.com", "https://gld.example.com", nil},
+		{"https://GLD.Example.com", "gld.example.com", "https://gld.example.com", nil},
+		{"https://gld.example.com:443", "gld.example.com", "https://gld.example.com", nil},
+		{"https://gld.example.com:8443/x", "gld.example.com", "https://gld.example.com:8443", nil},
+		{"http://localhost:9000", "localhost", "http://localhost:9000", nil},
+		{"http://LocalHost:80", "localhost", "http://localhost", nil},
+		{"http://127.0.0.1:9000", "", "", errWebAuthnBadURL},
+		{"http://[::1]:9000", "", "", errWebAuthnBadURL},
+		{"https://[::1]", "", "", errWebAuthnBadURL},
+		{"http://gld.example.com", "", "", errWebAuthnNeedsHTTPS},
+		{"http://192.168.1.10:8799", "", "", errWebAuthnBadURL},
+		{"https://10.0.0.1", "", "", errWebAuthnBadURL},
+		{"ftp://gld.example.com", "", "", errWebAuthnBadURL},
+		{"gld.example.com", "", "", errWebAuthnBadURL},
 	}
 	for _, c := range cases {
 		t.Setenv("GLD_PUBLIC_URL", c.url)
 		wa, err := newWebAuthn()
-		if !errors.Is(err, c.want) || (err == nil && wa.Config.RPID != c.rpid) {
-			t.Errorf("%q: %v", c.url, err)
+		if !errors.Is(err, c.want) || (err == nil && (wa.Config.RPID != c.rpid || len(wa.Config.RPOrigins) != 1 || wa.Config.RPOrigins[0] != c.origin)) {
+			t.Errorf("%q: %v %+v", c.url, err, wa)
 		}
 	}
 	t.Setenv("GLD_PUBLIC_URL", "https://gld.example.com")
@@ -354,9 +359,15 @@ func TestWebAuthnTamper(t *testing.T) {
 	if _, err := s.WebAuthnBeginRegister(id, "s1"); !errors.Is(err, errTamper) {
 		t.Fatalf("register beside a tampered row: %v", err)
 	}
-	l, err := s.WebAuthnList(id)
-	if err != nil || len(l) != 1 || !l[0].Bad {
-		t.Fatalf("list %+v: %v", l, err)
+	before := tamperEvents(t, s)
+	for i := 0; i < 2; i++ {
+		l, err := s.WebAuthnList(id)
+		if err != nil || len(l) != 1 || !l[0].Bad {
+			t.Fatalf("list %+v: %v", l, err)
+		}
+	}
+	if n := tamperEvents(t, s) - before; n != 1 {
+		t.Fatalf("tamper events from two lists = %d, want 1", n)
 	}
 	var used *int64
 	s.db.QueryRow(`SELECT last_used_at FROM webauthn_creds WHERE user_id=?`, id).Scan(&used)
@@ -397,5 +408,34 @@ func TestWebAuthnRemoveLastFactor(t *testing.T) {
 	l, _ = s2.WebAuthnList(id2)
 	if err := s2.WebAuthnRemove(id2, l[0].ID); err != nil {
 		t.Fatalf("key removal with a confirmed TOTP: %v", err)
+	}
+}
+
+func TestWebAuthnChallengeCap(t *testing.T) {
+	now := testClock(t)
+	oldMax, oldMap := waMaxChallenges, waChallenges.m
+	waMaxChallenges, waChallenges.m = 3, map[string]waPending{}
+	t.Cleanup(func() { waMaxChallenges, waChallenges.m = oldMax, oldMap })
+	sd := &webauthn.SessionData{}
+	waPut("login", "expired", 1, sd)
+	*now = now.Add(waChallengeTTL + time.Second)
+	for _, id := range []string{"a", "b", "c"} {
+		waPut("login", id, 1, sd)
+		*now = now.Add(time.Second)
+	}
+	if _, err := waTake("login", "expired", 1); err == nil {
+		t.Fatal("expired entry kept over a fresh one")
+	}
+	waPut("login", "d", 1, sd)
+	if len(waChallenges.m) != 3 {
+		t.Fatalf("map size %d", len(waChallenges.m))
+	}
+	if _, err := waTake("login", "a", 1); err == nil {
+		t.Fatal("oldest entry kept past the cap")
+	}
+	for _, id := range []string{"b", "c", "d"} {
+		if _, err := waTake("login", id, 1); err != nil {
+			t.Fatalf("%s dropped: %v", id, err)
+		}
 	}
 }

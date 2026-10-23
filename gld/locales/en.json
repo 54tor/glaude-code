@@ -59,7 +59,7 @@
   "srv.auth.nomPris": "this name is already taken",
   "srv.auth.tamper": "invalid signature in the authentication database: access denied",
   "srv.auth.totpDejaActif": "TOTP is already active: reset the factors before enrolling another one",
-  "srv.auth.urlPubliqueInvalide": "invalid GLD_PUBLIC_URL: an http(s) URL with a host name is expected",
+  "srv.auth.urlPubliqueInvalide": "invalid GLD_PUBLIC_URL: an http(s) URL with a host name (localhost or a domain, not an IP address) is expected",
   "srv.auth.utilisateurInconnu": "unknown user",
   "srv.auth.webauthnHTTPS": "WebAuthn requires HTTPS outside localhost: set GLD_PUBLIC_URL to an https:// address",
   "srv.autotitle.emptyConversation": "empty conversation",
