@@ -96,7 +96,7 @@ export function SessionStat({ s, live }: { s: Session; live: Live }) {
         </span>
       )}
       <span title="Tokens traités (hors cache lu)">
-        {live.st && live.st.context > 0 && <>ctx {compact(live.st.context)} · </>}
+        {live.st && live.st.context > 0 && <>ctx {compact(live.st.context)}&ensp;</>}
         {compact(tokTotal(s.tok as Tokens))} tok
       </span>
     </div>

@@ -92,7 +92,7 @@ export function SessionsPane({
                   >
                     {tilde(project, home)}
                   </button>
-                  <span className="shrink-0 text-xs text-muted-foreground">{plural(rs.length)}</span>
+                  <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">{plural(rs.length)}</span>
                   {rs.some((r) => live.has(r.s.id)) && <Live className="text-xs" waiting={rs.some((r) => waiting.has(r.s.id))} />}
                   {!rs[0].g.missing && (
                     <Button
@@ -102,7 +102,7 @@ export function SessionsPane({
                       onClick={() => actions.open({ dir: rs[0].s.dir })}
                       title="Un onglet de terminal par session des 7 derniers jours (hors sessions ouvertes)"
                     >
-                      <SquareTerminal /> Reprendre le dossier
+                      <SquareTerminal /> <span className="hidden lg:inline">Reprendre le dossier</span>
                     </Button>
                   )}
                 </div>
