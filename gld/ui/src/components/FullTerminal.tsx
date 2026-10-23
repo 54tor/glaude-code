@@ -3,12 +3,15 @@ import { Terminal } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
 import "@xterm/xterm/css/xterm.css"
 import { Eye, Pencil } from "lucide-react"
+import { useTranslation } from "react-i18next"
+import { i18n } from "@/i18n"
 import { api } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 
 // Terminal complet de la session (tmux) : lecture seule tant qu'on ne « prend pas la main » ; le serveur ignore toute frappe avant.
 // Le terminal épouse la zone d'affichage et la taille est répercutée sur la fenêtre tmux de l'hôte. La main est prise dès l'ouverture.
 export default function FullTerminal({ id }: { id: string }) {
+  const { t: tr } = useTranslation()
   const box = useRef<HTMLDivElement>(null)
   const ws = useRef<WebSocket | null>(null)
   const term = useRef<Terminal | null>(null)
@@ -24,7 +27,7 @@ export default function FullTerminal({ id }: { id: string }) {
     api.post("/term-open", { id }).then((r) => {
       const o = r as unknown as { ok: boolean; out: string; token?: string }
       if (dead) return
-      if (!o.ok || !o.token || !box.current) return setError(o.out || "ouverture impossible")
+      if (!o.ok || !o.token || !box.current) return setError(o.out || i18n.t("conversation.terminal.openFailed"))
       t = new Terminal({ fontSize: 13, cursorBlink: true, scrollback: 0, convertEol: false })
       const fit = new FitAddon()
       t.loadAddon(fit)
@@ -68,12 +71,12 @@ export default function FullTerminal({ id }: { id: string }) {
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center gap-3 border-b px-4 py-2">
         {state === "ouvert" && (
-          <Button size="sm" variant={writable ? "secondary" : "outline"} onClick={() => setWrite(!writable)} title={writable ? "Repasser en lecture seule" : "Autoriser la saisie dans le terminal"}>
-            {writable ? <Pencil /> : <Eye />} {writable ? "Saisie active · repasser en lecture seule" : "Lecture seule · prendre la main"}
+          <Button size="sm" variant={writable ? "secondary" : "outline"} onClick={() => setWrite(!writable)} title={writable ? tr("conversation.terminal.readOnlyTitle") : tr("conversation.terminal.writeTitle")}>
+            {writable ? <Pencil /> : <Eye />} {writable ? tr("conversation.terminal.active") : tr("conversation.terminal.readOnly")}
           </Button>
         )}
-        {state === "connexion" && !error && <span className="text-xs text-muted-foreground">Connexion…</span>}
-        {state === "fermé" && <span className="text-xs text-muted-foreground">Connexion fermée</span>}
+        {state === "connexion" && !error && <span className="text-xs text-muted-foreground">{tr("conversation.terminal.connecting")}</span>}
+        {state === "fermé" && <span className="text-xs text-muted-foreground">{tr("conversation.terminal.closed")}</span>}
       </div>
       {error && <p className="px-4 py-6 text-sm text-destructive">{error}</p>}
       <div className="min-h-0 flex-1 overflow-hidden bg-black p-2">

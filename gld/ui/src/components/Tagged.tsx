@@ -1,14 +1,22 @@
 import { Bell, Minimize2 } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import { Badge } from "@/components/ui/badge"
 
 // Blocs balisés que Claude Code glisse dans les messages (<task-notification>…) : affichés en carte lisible.
 const BLOCK = /<([a-z][a-z-]*)>([\s\S]*?)<\/\1>/g
-const NAMES: Record<string, string> = { "task-notification": "Notification de tâche" }
-const FIELDS: Record<string, string> = { "task-id": "tâche", "tool-use-id": "appel", "output-file": "sortie", "task-type": "type", note: "note" }
+const NAMES: Record<string, string> = { "task-notification": "conversation.tagged.taskNotification" }
+const FIELDS: Record<string, string> = {
+  "task-id": "conversation.tagged.fields.task",
+  "tool-use-id": "conversation.tagged.fields.call",
+  "output-file": "conversation.tagged.fields.output",
+  "task-type": "conversation.tagged.fields.type",
+  note: "conversation.tagged.fields.note",
+}
 
 export const isTagged = (t: string) => /^\s*<[a-z][a-z-]*>/.test(t) && !/^\s*<pasted_content/.test(t)
 
 function Card({ tag, body }: { tag: string; body: string }) {
+  const { t } = useTranslation()
   const fields = [...body.matchAll(BLOCK)].map(([, k, v]) => [k, v.trim()] as const)
   const get = (k: string) => fields.find(([f]) => f === k)?.[1]
   const status = get("status")
@@ -16,7 +24,7 @@ function Card({ tag, body }: { tag: string; body: string }) {
     <div className="rounded-xl border bg-muted/40 px-4 py-3 text-sm">
       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
         <Bell className="size-3.5" />
-        {NAMES[tag] ?? tag}
+        {NAMES[tag] ? t(NAMES[tag]) : tag}
         {status && (
           <Badge variant={status === "completed" ? "secondary" : "outline"} className="ml-auto">
             {status}
@@ -33,7 +41,7 @@ function Card({ tag, body }: { tag: string; body: string }) {
               .filter(([k]) => k !== "summary" && k !== "status")
               .map(([k, v]) => (
                 <div key={k} className="contents">
-                  <dt className="text-muted-foreground">{FIELDS[k] ?? k}</dt>
+                  <dt className="text-muted-foreground">{FIELDS[k] ? t(FIELDS[k]) : k}</dt>
                   <dd className="min-w-0 truncate font-mono" title={v}>
                     {v}
                   </dd>
@@ -75,20 +83,21 @@ export function Tagged({ t }: { t: string }) {
 const COMPACT = /<tools-used-before-summary>([\s\S]*?)<\/tools-used-before-summary>/
 export const isCompactSummary = (t: string) => COMPACT.test(t)
 
-export function CompactSummary({ t, md }: { t: string; md: (t: string) => React.ReactNode }) {
-  const m = t.match(COMPACT)!
+export function CompactSummary({ t: text, md }: { t: string; md: (t: string) => React.ReactNode }) {
+  const { t } = useTranslation()
+  const m = text.match(COMPACT)!
   const tools = m[1].split(",").map((x) => x.trim()).filter(Boolean)
-  const intro = t.slice(0, m.index).trim()
-  const body = t.slice((m.index ?? 0) + m[0].length).trim()
+  const intro = text.slice(0, m.index).trim()
+  const body = text.slice((m.index ?? 0) + m[0].length).trim()
   return (
     <div className="space-y-2 rounded-xl border bg-muted/40 px-4 py-3 text-sm">
       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-        <Minimize2 className="size-3.5" /> Conversation compactée
+        <Minimize2 className="size-3.5" /> {t("conversation.tagged.compacted")}
       </div>
       {intro && <p className="text-xs text-muted-foreground">{intro}</p>}
       {tools.length > 0 && (
         <details className="text-xs">
-          <summary className="cursor-pointer text-muted-foreground select-none hover:text-foreground">Outils utilisés avant le résumé · {tools.length}</summary>
+          <summary className="cursor-pointer text-muted-foreground select-none hover:text-foreground">{t("conversation.tagged.toolsBefore", { n: tools.length })}</summary>
           <div className="mt-1.5 flex flex-wrap gap-1">
             {tools.map((x) => (
               <Badge key={x} variant="outline" className="font-mono font-normal">
@@ -100,7 +109,7 @@ export function CompactSummary({ t, md }: { t: string; md: (t: string) => React.
       )}
       {body && (
         <details open>
-          <summary className="cursor-pointer text-xs text-muted-foreground select-none hover:text-foreground">Résumé</summary>
+          <summary className="cursor-pointer text-xs text-muted-foreground select-none hover:text-foreground">{t("conversation.tagged.summary")}</summary>
           <div className="mt-1.5">{md(body)}</div>
         </details>
       )}

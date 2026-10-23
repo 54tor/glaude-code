@@ -1,6 +1,7 @@
 import { toast } from "sonner"
 import { api } from "@/lib/api"
 import { tilde } from "@/lib/format"
+import { i18n } from "@/i18n"
 
 const asked = new Set<string>() // dossiers dont la question est déjà affichée
 
@@ -17,11 +18,11 @@ export async function watchTrust(home: string) {
           asked.delete(dir)
           if (!r.ok) toast.error(r.out)
         })
-      toast(`Faire confiance à ${tilde(dir, home)} ?`, {
-        description: "Claude Code demande s'il peut lire et exécuter les fichiers de ce dossier. À n'accepter que pour un dossier que tu connais.",
+      toast(i18n.t("conversation.trust.title", { dir: tilde(dir, home) }), {
+        description: i18n.t("conversation.trust.description"),
         duration: Infinity,
-        action: { label: "Faire confiance", onClick: () => void answer(true) },
-        cancel: { label: "Refuser", onClick: () => void answer(false) },
+        action: { label: i18n.t("conversation.trust.accept"), onClick: () => void answer(true) },
+        cancel: { label: i18n.t("conversation.trust.refuse"), onClick: () => void answer(false) },
         onDismiss: () => asked.delete(dir),
       })
     }

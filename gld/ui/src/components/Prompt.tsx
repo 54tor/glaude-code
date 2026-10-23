@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -34,6 +35,7 @@ export function Prompt({ ask, onClose }: { ask: Ask | null; onClose: () => void 
 }
 
 function Form({ ask, onClose }: { ask: Ask; onClose: () => void }) {
+  const { t } = useTranslation()
   const [v, setV] = useState(ask.value)
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -53,7 +55,7 @@ function Form({ ask, onClose }: { ask: Ask; onClose: () => void }) {
     <form onSubmit={submit} className="grid gap-4">
       <DialogHeader>
         <DialogTitle>{ask.title}</DialogTitle>
-        <DialogDescription className="sr-only">Saisir un nom</DialogDescription>
+        <DialogDescription className="sr-only">{t("conversation.prompt.description")}</DialogDescription>
       </DialogHeader>
       <Input
         value={v}
@@ -68,7 +70,7 @@ function Form({ ask, onClose }: { ask: Ask; onClose: () => void }) {
       />
       {failed && (
         <p id="prompt-error" role="alert" className="text-sm text-destructive">
-          Échec : le détail est dans la notification. La saisie est conservée.
+          {t("conversation.prompt.failed")}
         </p>
       )}
       <DialogFooter className="sm:items-center">
@@ -87,7 +89,7 @@ function Form({ ask, onClose }: { ask: Ask; onClose: () => void }) {
           </Button>
         )}
         <Button type="button" variant="outline" onClick={onClose}>
-          Annuler
+          {t("common.cancel")}
         </Button>
         <Button type="submit" disabled={!ok || busy}>
           {ask.confirm}

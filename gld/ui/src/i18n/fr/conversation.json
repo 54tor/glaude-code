@@ -1,0 +1,345 @@
+{
+  "conversation": {
+    "models": {
+      "default": "Modèle par défaut"
+    },
+    "efforts": {
+      "default": "Effort par défaut",
+      "low": "Effort bas",
+      "medium": "Effort moyen",
+      "high": "Effort élevé",
+      "xhigh": "Effort très élevé",
+      "max": "Effort maximal"
+    },
+    "modelPicker": {
+      "model": "Modèle",
+      "effort": "Effort"
+    },
+    "trust": {
+      "title": "Faire confiance à {{dir}} ?",
+      "description": "Claude Code demande s'il peut lire et exécuter les fichiers de ce dossier. À n'accepter que pour un dossier que tu connais.",
+      "accept": "Faire confiance",
+      "refuse": "Refuser"
+    },
+    "view": {
+      "meta": {
+        "prompts_one": "{{count}} prompt",
+        "prompts_other": "{{count}} prompts",
+        "subagents_one": "{{count}} sous-agent",
+        "subagents_other": "{{count}} sous-agents",
+        "branch": "branche {{name}}"
+      },
+      "description": "Conversation complète de la session",
+      "carousel_one": "Carrousel : {{count}} session en attente. La suivante s'ouvre dès que vous répondez.",
+      "carousel_other": "Carrousel : {{count}} sessions en attente. La suivante s'ouvre dès que vous répondez.",
+      "next": "Suivante",
+      "quitCarousel": "Quitter le carrousel",
+      "toolsShown": "Outils affichés",
+      "toolsHidden": "Outils masqués",
+      "modeVisual": "Mode visuel",
+      "modeTerminal": "Mode terminal",
+      "modeTitle": "Bascule entre la conversation et le terminal complet de la session",
+      "instructions": "Instructions",
+      "instructionsTitle": "Fichiers d'instructions que Claude a réellement chargés dans cette session",
+      "toTop": "Aller au début",
+      "toEnd": "Aller à la fin",
+      "newSession": "Nouvelle session",
+      "newSessionTitle": "Nouvelle session Claude dans le même dossier",
+      "resume": "Reprendre dans un terminal",
+      "moreActions": "Plus d'actions",
+      "loadOlder": "Charger les messages plus anciens",
+      "empty": "Aucun message dans cette session.",
+      "replying": "Claude répond…",
+      "toEndAria": "Aller à la fin de la conversation"
+    },
+    "message": {
+      "pasted_one": "Texte collé · {{count}} ligne",
+      "pasted_other": "Texte collé · {{count}} lignes",
+      "openImage": "Ouvrir l'image en grand",
+      "imageAlt": "Image de la conversation",
+      "toolResult": "résultat d'outil",
+      "toolCall": "appel d'outil",
+      "readFail": "Suite du message illisible",
+      "showMore": "Afficher la suite · {{size}} restants"
+    },
+    "composer": {
+      "modes": {
+        "readOnly": "Lecture seule : écrire et lancer des commandes est refusé",
+        "plan": "Plan : propose sans rien modifier",
+        "acceptEdits": "Accepter les modifications de fichiers",
+        "auto": "Auto : Claude décide de ce qu'il peut faire"
+      },
+      "failed": "Échec",
+      "placeholderRunning": "Claude répond… ton message partira ensuite (Entrée : mettre en file)",
+      "placeholder": "Écrire à Claude… (Entrée envoie, Maj+Entrée : saut de ligne)",
+      "messageAria": "Message à Claude",
+      "queueAria": "Messages en file d'attente",
+      "dequeue": "Retirer de la file",
+      "queueSuspended": "File suspendue (le tour précédent a échoué ou a été arrêté).",
+      "sendNext": "Envoyer le suivant",
+      "permissions": "Autorisations accordées à Claude",
+      "cost": "coût indiqué par claude : {{cost}} $",
+      "stop": "Arrêter",
+      "send": "Envoyer",
+      "noTmux": "Cette session tourne dans un terminal hors tmux (un processus <0>claude</0> la détient : c'est peut-être celle où tu es en train de travailler) : écris-y directement.",
+      "relaunch": "Relancée dans tmux, elle accepterait un message d'ici{{why}}.",
+      "commandsAria": "Commandes",
+      "sessionPlaceholder": "Écrire à la session… (Entrée envoie, Maj+Entrée : saut de ligne)",
+      "sessionAria": "Message à la session ouverte",
+      "afterQuestion": "après la question",
+      "whenIdle": "dès que Claude attend",
+      "sending": "part…",
+      "interruptTitle": "Envoie Échap à la session : Claude interrompt sa réponse en cours (comme dans le terminal)",
+      "interrupt": "Interrompre",
+      "modelEllipsis": "Modèle…",
+      "effortEllipsis": "Effort…",
+      "sessionModel": "Modèle de la session",
+      "sessionEffort": "Effort de la session",
+      "sendToSession": "Envoyer à la session",
+      "closeTitle": "Termine le processus claude de cette session ; la conversation reste reprenable",
+      "close": "Fermer la session",
+      "tabsAria": "Onglets de la question",
+      "answerExpected": "Réponse attendue",
+      "keys": "Touches : {{keys}}",
+      "answerPlaceholder": "Ta réponse (Entrée pour envoyer, Maj+Entrée pour un saut de ligne)",
+      "answerAria": "Réponse à la question du terminal",
+      "validate": "Valider",
+      "validateTitle": "Valide les cases cochées. Touches envoyées : {{keys}}",
+      "escape": "Échap",
+      "rawScreen": "Écran brut",
+      "rawScreenTitle": "Écran du terminal tel que gld le lit, et ce que le détecteur en tire",
+      "screenAria": "Écran du terminal",
+      "emptyScreen": "(écran vide)",
+      "detectorAria": "Résultat du détecteur",
+      "noPrompt": "détecteur : aucune question reconnue",
+      "screenCopied": "Écran copié",
+      "copyFailed": "Copie impossible",
+      "copyScreen": "Copier l'écran",
+      "commands": "Commandes",
+      "commandsTitle": "Commandes de Claude Code"
+    },
+    "slash": {
+      "compact": {
+        "label": "Compacter le contexte",
+        "hint": "Résume la conversation pour libérer du contexte ; le texte du champ sert de consigne au résumé"
+      },
+      "context": {
+        "label": "Voir le contexte",
+        "hint": "Répartition du contexte (instructions, mémoire, outils, messages)"
+      },
+      "cost": {
+        "label": "Voir le coût",
+        "hint": "Coût et durée de la session"
+      },
+      "usage": {
+        "label": "Voir les limites d'usage",
+        "hint": "Met à jour le relevé des limites du compte"
+      },
+      "clear": {
+        "label": "Effacer la conversation",
+        "hint": "Vide le contexte (la conversation reste dans le transcript)"
+      },
+      "model": {
+        "label": "Changer de modèle",
+        "hint": "Ouvre le choix du modèle : réponds avec les boutons qui apparaissent au-dessus du champ"
+      },
+      "mcp": {
+        "label": "Serveurs MCP",
+        "hint": "État des serveurs MCP"
+      },
+      "status": {
+        "label": "État de Claude Code",
+        "hint": "Version, compte, modèle, connexion"
+      },
+      "memory": {
+        "label": "Mémoire",
+        "hint": "Fichiers CLAUDE.md chargés"
+      },
+      "permissions": {
+        "label": "Permissions",
+        "hint": "Règles d'autorisation en vigueur"
+      },
+      "agents": {
+        "label": "Sous-agents",
+        "hint": "Liste des agents disponibles"
+      },
+      "rewind": {
+        "label": "Revenir en arrière",
+        "hint": "Rétablit la conversation ou le code à un point précédent"
+      },
+      "export": {
+        "label": "Exporter",
+        "hint": "Exporte la conversation"
+      },
+      "doctor": {
+        "label": "Diagnostic",
+        "hint": "Vérifie l'installation"
+      },
+      "help": {
+        "label": "Aide",
+        "hint": "Liste des commandes"
+      }
+    },
+    "compose": {
+      "memoryUnreadable": "Mémoire illisible",
+      "memoryScope": "mémoire de {{scope}} : {{name}}",
+      "memoryIntro": "D'après cette entrée memory ({{where}}) :",
+      "folder": "Dossier",
+      "newSessionFolder": "Dossier de la nouvelle session",
+      "otherFolder": "Autre dossier…",
+      "placeholder": "Message envoyé à Claude…",
+      "messageAria": "Message",
+      "insertMemory": "Insérer une mémoire",
+      "thisProject": "Ce projet",
+      "global": "Globale",
+      "sendTitle": "Entrée (Maj+Entrée : saut de ligne)"
+    },
+    "prompt": {
+      "description": "Saisir un nom",
+      "failed": "Échec : le détail est dans la notification. La saisie est conservée."
+    },
+    "live": {
+      "working": "travaille",
+      "open": "ouverte",
+      "execTool": "exécute un outil…",
+      "queued": "En attente de lecture par la session",
+      "since": "depuis {{time}}",
+      "toolRunning": "outil en cours",
+      "lastTool": "dernier outil",
+      "closed": "Session fermée",
+      "contextTitle": "Contexte envoyé au dernier appel",
+      "tokensTitle": "Tokens traités (hors cache lu)",
+      "statsTitle": "Tokens consommés et dernier appel",
+      "stats": "Stats",
+      "statsHeading": "Statistiques de la session",
+      "statsDescription": "Tokens et contexte de la session",
+      "usage": "Consommation",
+      "input": "Entrée",
+      "output": "Sortie",
+      "cacheRead": "Cache lu",
+      "cacheWrite": "Cache écrit",
+      "processedTitle": "Entrée neuve, sortie et cache écrit : le cache lu, relu à chaque tour, est compté à part",
+      "processed": "Traité : {{n}} tokens (hors cache lu)",
+      "lastCall": "Dernier appel",
+      "model": "Modèle :",
+      "contextSent": "Contexte envoyé : ≈ {{n}} tokens (entrée, cache lu et cache écrit)",
+      "tokensOut": "Tokens produits : {{n}}",
+      "subagentsTitle": "Sous-agents de la session",
+      "subagents": "Sous-agents · {{n}}",
+      "runningCount": "({{running}} en cours)",
+      "dialogTitle": "Sous-agents ({{n}})",
+      "dialogTitleRunning": "Sous-agents ({{n}}, {{running}} en cours)",
+      "dialogDescription": "Sous-agents lancés par la session",
+      "subContext": "· contexte {{n}}",
+      "subOpen": "Ouvrir la conversation de ce sous-agent",
+      "subEmpty": "Aucun message.",
+      "subNote": "Lecture seule : un sous-agent ne reçoit pas de message de l'extérieur, il rend son résultat à la session."
+    },
+    "tagged": {
+      "taskNotification": "Notification de tâche",
+      "fields": {
+        "task": "tâche",
+        "call": "appel",
+        "output": "sortie",
+        "type": "type",
+        "note": "note"
+      },
+      "compacted": "Conversation compactée",
+      "toolsBefore": "Outils utilisés avant le résumé · {{n}}",
+      "summary": "Résumé"
+    },
+    "notes": {
+      "sent": "Note envoyée à « {{title}} »",
+      "title": "Bloc-notes",
+      "placeholder": "Idées, TODO, consignes à garder sous la main… (enregistré automatiquement)",
+      "newSession": "Nouvelle session avec la note",
+      "sendOpen": "Envoyer à une session ouverte",
+      "sendLabel": "Sessions ouvertes dans tmux, parmi celles affichées",
+      "none": "Aucune session ouverte dans tmux",
+      "chars": "{{n}} car."
+    },
+    "terminal": {
+      "openFailed": "ouverture impossible",
+      "readOnlyTitle": "Repasser en lecture seule",
+      "writeTitle": "Autoriser la saisie dans le terminal",
+      "active": "Saisie active · repasser en lecture seule",
+      "readOnly": "Lecture seule · prendre la main",
+      "connecting": "Connexion…",
+      "closed": "Connexion fermée"
+    },
+    "keepWarm": {
+      "stopTitle": "Arrêter le maintien au chaud",
+      "active": "Maintien actif : arrêter",
+      "closedTitle": "Session fermée : seul un ping dans son terminal réchauffe son cache. Rouvrez-la pour la maintenir au chaud.",
+      "button": "Maintenir au chaud",
+      "buttonTitle": "Garde le cache des prompts chaud en envoyant un ping automatique (payant)",
+      "menuLabel": "Dès qu'il reste moins de 5 min de cache, gld envoie un court message dans le terminal de la session. Chaque ping est un tour facturé et apparaît dans la conversation. Le maintien s'arrête si la session est fermée.",
+      "atMost_one": "Au plus {{count}} ping (≈ {{count}} h)",
+      "atMost_other": "Au plus {{count}} pings (≈ {{count}} h)",
+      "bannerActive": "Maintien au chaud actif — ça coûte de l'argent.",
+      "pings_one": "{{pings}}/{{max}} ping",
+      "pings_other": "{{pings}}/{{max}} pings",
+      "bannerHint": "un ping part quand il reste moins de 5 min de cache",
+      "stop": "Arrêter",
+      "statsAria": "Statistiques de la session",
+      "hotTitle": "Le cache des prompts dure une heure après le dernier message",
+      "cold": "cache froid",
+      "left": "cache {{min}} min",
+      "warmAria": "maintien au chaud actif"
+    },
+    "loaded": {
+      "reasons": {
+        "sessionStart": "au démarrage",
+        "nested": "dossier imbriqué",
+        "glob": "motif de chemin",
+        "include": "importé (@)",
+        "compact": "après compactage"
+      },
+      "title": "Instructions chargées",
+      "description": "Fichiers que Claude a lus dans cette session : CLAUDE.md, règles, imports.",
+      "empty": "Rien d'enregistré pour cette session : le suivi n'est pas installé, ou la session est antérieure.",
+      "enable": "Pour l'activer, ajoutez ceci aux réglages de Claude Code (<0>~/.claude/settings.json</0>) et lancez <1>make install</1> pour avoir <2>gld</2> dans <3>~/.local/bin</3> :",
+      "for": "pour {{path}}"
+    },
+    "git": {
+      "pending": "{{n}} changement(s) en attente",
+      "repoAria": "dépôt git",
+      "sessionsOpen": "{{n}} session(s), dont une ouverte",
+      "sessions": "{{n}} session(s)",
+      "sessionsAria": "sessions",
+      "detached": "HEAD détaché",
+      "branch": "Branche : {{branch}}",
+      "noUpstream": "pas d'amont",
+      "changedTitle": "{{n}} fichier(s) modifié(s)",
+      "untrackedTitle": "{{n}} non suivi(s)",
+      "ahead": "{{n}} commit(s) à pousser",
+      "behind": "{{n}} commit(s) à récupérer",
+      "clean": "propre",
+      "modified_one": "{{count}} modifié",
+      "modified_other": "{{count}} modifiés",
+      "untracked_one": "{{count}} non suivi",
+      "untracked_other": "{{count}} non suivis"
+    },
+    "gitChanges": {
+      "viewTitle": "Voir les fichiers modifiés",
+      "files_one": "{{count}} fichier",
+      "files_other": "{{count}} fichiers",
+      "dialogTitle_one": "{{count}} fichier en cours de modification",
+      "dialogTitle_other": "{{count}} fichiers en cours de modification",
+      "description": "Dépôt « {{name}} » : fichiers modifiés, ajoutés, supprimés ou non suivis.",
+      "renamedFrom": "renommé depuis {{from}}",
+      "more_one": "… et {{count}} autre",
+      "more_other": "… et {{count}} autres"
+    },
+    "gitPush": {
+      "pushing": "Poussée de {{branch}} vers {{remote}}…",
+      "pushed": "{{branch}} poussée vers {{remote}}",
+      "failed": "Échec de la poussée vers {{remote}}",
+      "noUpstream": "Branche sans amont : la poussée la lie au remote choisi",
+      "button": "Pousser",
+      "label": "Pousser « {{branch}} » vers :",
+      "reading": "Lecture des remotes…",
+      "none": "Aucun remote configuré"
+    }
+  }
+}
