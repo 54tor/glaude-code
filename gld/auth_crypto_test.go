@@ -165,7 +165,15 @@ func TestCheckMasterKeyWitnessDeleted(t *testing.T) {
 	if _, err := db.Exec(`INSERT INTO users(name,pw_hash,created_at,pw_changed_at) VALUES('n','h',0,0)`); err != nil {
 		t.Fatal(err)
 	}
-	if err := checkMasterKey(db, bytes.Repeat([]byte{9}, 32)); err == nil {
-		t.Fatal("wrong key accepted with witness deleted")
+	if err := checkMasterKey(db, k); err == nil {
+		t.Fatal("populated db without witness accepted")
+	}
+	db.Exec(`DELETE FROM users`)
+	db.Exec(`PRAGMA foreign_keys=OFF`)
+	if _, err := db.Exec(`INSERT INTO home_acl(user_id,home_name) VALUES(99,'h')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkMasterKey(db, k); err == nil {
+		t.Fatal("home_acl row without witness accepted")
 	}
 }

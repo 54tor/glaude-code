@@ -142,7 +142,7 @@ func checkMasterKey(db *authDB, key []byte) error {
 	err := db.QueryRow(`SELECT value FROM meta WHERE key='key_witness'`).Scan(&w)
 	if errors.Is(err, sql.ErrNoRows) {
 		var n int
-		if err := db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&n); err != nil {
+		if err := db.QueryRow(`SELECT (SELECT COUNT(*) FROM users)+(SELECT COUNT(*) FROM totp)+(SELECT COUNT(*) FROM webauthn_creds)+(SELECT COUNT(*) FROM recovery_codes)+(SELECT COUNT(*) FROM sessions)+(SELECT COUNT(*) FROM home_acl)`).Scan(&n); err != nil {
 			return err
 		}
 		if n > 0 {
