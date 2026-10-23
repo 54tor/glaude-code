@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
 // Adresses de soutien : vides, la ligne correspondante n'est pas affichée.
-const XMR = ""
+const XMR = "869vB9woRhE1EHMHuYxho3JUj1kooxPDc1ejRw1999kNddapW2qPh9A1G7467itLQ5XYhFKFHp8cw3S53Ut62XtBB2dpx6W"
 const BTC = ""
 const REPO = "https://gitea.cale-cine.cc/SRC/glaude-code"
 
