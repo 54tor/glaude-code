@@ -27,7 +27,7 @@ type Reply = { ok: boolean; out: string; before: string; after: string; warnings
 
 // Toute modification d'un fichier de réglages passe par ici : aperçu des différences, confirmation, puis écriture
 // (le serveur fait une sauvegarde avant). Renvoie propose() et le dialogue à afficher.
-export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 0): { gone: (file: string, kind: string, rule: string) => boolean; added: (file: string, kind: string) => string[]; moveRule: (file: string, from: string, rule: string, to: string, text: string) => Promise<void>; propose: (e: CfgEdit) => Promise<void>; proposeRaw: (file: string, text: string) => Promise<string | null>; proposePerms: (file: string, text: string, mode: string, then?: () => void) => Promise<string | null>; dialog: ReactNode } {
+export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 0): { gone: (file: string, kind: string, rule: string) => boolean; added: (file: string, kind: string) => string[]; moveRule: (file: string, from: string, rule: string, to: string, text: string) => Promise<void>; propose: (e: CfgEdit) => Promise<void>; proposeRaw: (file: string, text: string) => Promise<string | null>; proposePerms: (file: string, text: string, mode: string, then?: () => void, now?: boolean) => Promise<string | null>; dialog: ReactNode } {
   const [pv, setPv] = useState<Preview | null>(null)
   const [busy, setBusy] = useState(false)
   // Modification simple (une règle, un réglage, une variable) : appliquée tout de suite, sans fenêtre de confirmation. Le serveur
@@ -94,11 +94,20 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
   }
   // Import de règles de permission : renvoie le message d'erreur, ou null si l'aperçu s'ouvre.
   // then : lancé après l'enregistrement réussi (abandonné si on annule), par exemple pour retirer la règle de son fichier d'origine.
-  const proposePerms = async (file: string, text: string, mode: string, then?: () => void) => {
+  // now : l'aperçu a déjà été vu (éditeur texte) ; on écrit sans second dialogue.
+  const proposePerms = async (file: string, text: string, mode: string, then?: () => void, now?: boolean) => {
     const r = (await api.post("/config-perm-import", { file, text, mode, dry: true })) as Reply
     if (!r.ok) return r.out
     if (r.before === r.after) {
       toast.info("Aucun changement : ces règles sont déjà là")
+      return null
+    }
+    if (now) {
+      const w = (await api.post("/config-perm-import", { file, text, mode, dry: false })) as Reply
+      if (!w.ok) return w.out
+      toast.success(w.out, { description: liveNotice(w.before, w.after, sessions), duration: 9000 })
+      onDone()
+      then?.()
       return null
     }
     setPv({ then, perm: { file, text, mode }, summary: r.out, before: r.before, after: r.after, warnings: r.warnings ?? [] })
