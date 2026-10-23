@@ -39,6 +39,7 @@ export function Tabs({ args, onAsk, onPrompt }: { args: string; onAsk: (a: Ask) 
         const r = await api.post("/tabs-save", { name })
         ;(r.ok ? toast.success : toast.error)(r.out)
         refresh()
+        return r.ok
       },
     })
 
@@ -61,6 +62,7 @@ export function Tabs({ args, onAsk, onPrompt }: { args: string; onAsk: (a: Ask) 
         const r = await api.post("/tabs-rm", { at: s.at })
         ;(r.ok ? toast.success : toast.error)(r.out)
         refresh()
+        return r.ok
       },
     })
 

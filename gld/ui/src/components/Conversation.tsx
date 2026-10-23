@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { ArrowDown, ArrowDownToLine, ArrowUpToLine, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, Repeat, SquareTerminal, Wrench } from "lucide-react"
+import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
 import { full, size, tilde } from "@/lib/format"
@@ -213,13 +214,7 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
     <Dialog open={!!session} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         className="flex h-[94vh] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
-        onCloseAutoFocus={(e) => {
-          const b = lastId.current && document.querySelector<HTMLElement>(`[data-row][data-id="${CSS.escape(lastId.current)}"]`)
-          if (b) {
-            e.preventDefault()
-            b.focus()
-          }
-        }}
+        onCloseAutoFocus={(e) => focusRow([lastId.current]) && e.preventDefault()}
       >
         <DialogHeader className="gap-1 border-b px-4 pt-4 pr-12 pb-3 md:px-6 md:pt-5 md:pr-14 md:pb-4">
           <div className="flex items-start gap-4">

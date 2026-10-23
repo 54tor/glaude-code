@@ -13,6 +13,7 @@ import { Choose } from "./Choose"
 import type { Ask } from "./Confirm"
 import { Markdown } from "./Message"
 import type { Ask as PromptAsk } from "./Prompt"
+import { useEditorDraft, useLeaveGuard } from "@/hooks/useEditorDraft"
 
 // Snippets = commandes Claude Code (/nom) : personnelles (~/.claude/commands) et de chaque projet (.claude/commands).
 // Lecture, copie, édition, création, suppression (vers la corbeille), import et export en zip.
@@ -44,7 +45,7 @@ export function Snippets({
   const f = q.toLowerCase()
   const shown = files.filter((s) => !f || (s.path + " " + s.command + " " + s.description + " " + s.project).toLowerCase().includes(f))
   const [loaded, setLoaded] = useState<{ key: string; text: string } | null>(null)
-  const [draft, setDraft] = useState<{ key: string; text: string } | null>(null)
+  const [draft, setDraft] = useEditorDraft("snippet")
   const [creating, setCreating] = useState("") // nouveau snippet pas encore enregistré
   const [scope, setScope] = useState("") // emplacement de Nouveau / Importer / Exporter ("" : personnelles)
   const [copied, setCopied] = useState(false)
@@ -53,6 +54,7 @@ export function Snippets({
   const upload = useRef<HTMLInputElement>(null)
   const text = loaded?.key === sel ? loaded.text : null
   const editing = draft?.key === sel ? draft : null
+  useLeaveGuard(!!draft && !(draft.key === sel && draft.text === text))
   const snip = files.find((s) => s.key === sel)
 
   useEffect(() => {

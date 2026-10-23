@@ -16,6 +16,7 @@ import type { Ask } from "./Confirm"
 import { Markdown } from "./Message"
 import { SkillWriter } from "./SkillWriter"
 import { split } from "./memoryLib"
+import { useEditorDraft, useLeaveGuard } from "@/hooks/useEditorDraft"
 
 // Origine d'un skill : badge court et explication.
 const ORIGINS = {
@@ -41,7 +42,7 @@ const NAME_OK = /^[a-z0-9][a-z0-9-]{0,63}$/
 export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: string; q: string; onPick: (key: string) => void; onAsk: (a: Ask) => void }) {
   const [data, setData] = useState<{ skills: Skill[]; projects: { dir: string; project: string }[] } | null>(null)
   const [loaded, setLoaded] = useState<{ key: string; text: string; files: SkillFile[]; error?: string } | null>(null)
-  const [draft, setDraft] = useState<{ key: string; text: string } | null>(null)
+  const [draft, setDraft] = useEditorDraft("skill")
   const [creating, setCreating] = useState(false)
   const [origin, setOrigin] = useState("all") // filtre sur l'origine
   const [writer, setWriter] = useState("") // clé du skill que le modèle rédige ; vide = fermé
@@ -63,6 +64,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
   const skill = data?.skills.find((s) => s.key === sel)
   const cur = loaded?.key === sel ? loaded : null
   const editing = draft?.key === sel ? draft : null
+  useLeaveGuard(!!draft && !(draft.key === sel && draft.text === cur?.text))
   const groups = useMemo(() => {
     const g = new Map<string, { title: string; items: Skill[] }>()
     for (const s of skills) {

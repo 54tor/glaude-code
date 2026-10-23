@@ -3,7 +3,9 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -509,5 +511,17 @@ func TestTags(t *testing.T) {
 		if saveStore(Store{Groups: []VGroup{}, Favs: []string{}, Tags: bad}) == nil {
 			t.Errorf("étiquettes %v acceptées", bad)
 		}
+	}
+}
+
+// Une aide qui échoue rapporte la dernière ligne de sa sortie d'erreur, pas seulement « exit status 1 ».
+func TestHelperOutputStderr(t *testing.T) {
+	cmd := exec.CommandContext(context.Background(), "sh", "-c", "echo détail >&2; echo 'Not logged in' >&2; exit 1")
+	_, err := helperOutput(context.Background(), cmd)
+	if err == nil || !strings.HasSuffix(err.Error(), "exit status 1 : Not logged in") {
+		t.Fatalf("erreur : %v", err)
+	}
+	if _, err := helperOutput(context.Background(), exec.Command("sh", "-c", "exit 2")); err == nil || err.Error() != "exit status 2" {
+		t.Fatalf("sans stderr : %v", err)
 	}
 }
