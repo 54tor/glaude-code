@@ -37,6 +37,7 @@ func routesAdmin(mux *http.ServeMux, a *authAPI) {
 	mux.HandleFunc("POST /admin/users/password", d.userPassword)
 	mux.HandleFunc("POST /admin/acl", d.acl)
 	mux.HandleFunc("GET /admin/events", d.events)
+	mux.HandleFunc("GET /admin/homes", d.homes)
 	mux.HandleFunc("GET /admin/sessions", d.sessionsList)
 	mux.HandleFunc("POST /admin/sessions/revoke", d.sessionsRevoke)
 }
@@ -86,6 +87,18 @@ func homeNames() map[string]string {
 		n[h.ID] = h.Name
 	}
 	return n
+}
+
+// homes : tous les homes, quels que soient les droits de l'admin, pour la matrice d'ACL ; noms et identifiants seulement.
+func (d *adminAPI) homes(w http.ResponseWriter, r *http.Request) {
+	if d.admin(w, r) == nil {
+		return
+	}
+	out := []map[string]string{{"id": mainHomeID, "name": mainHomeID}}
+	for _, h := range loadHomes() {
+		out = append(out, map[string]string{"id": h.ID, "name": h.Name})
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "homes": out})
 }
 
 func (d *adminAPI) users(w http.ResponseWriter, r *http.Request) {

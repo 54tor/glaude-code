@@ -98,7 +98,7 @@ func (g *adminRig) aclRows(home string) int {
 
 var adminRoutes = [][2]string{
 	{"GET", "/admin/users"}, {"POST", "/admin/users"}, {"POST", "/admin/users/disable"}, {"POST", "/admin/users/reset-mfa"},
-	{"POST", "/admin/users/password"}, {"POST", "/admin/acl"}, {"GET", "/admin/events"}, {"GET", "/admin/sessions?user_id=1"},
+	{"POST", "/admin/users/password"}, {"POST", "/admin/acl"}, {"GET", "/admin/events"}, {"GET", "/admin/homes"}, {"GET", "/admin/sessions?user_id=1"},
 	{"POST", "/admin/sessions/revoke"},
 }
 
@@ -498,5 +498,30 @@ func TestHomesSaveCascadeACL(t *testing.T) {
 	}
 	if w := g.do("POST", "/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": idb, "grant": []string{"mem_read"}}); w.Code != 400 {
 		t.Fatalf("home retiré : %d", w.Code)
+	}
+}
+
+func TestAdminHomesAll(t *testing.T) {
+	g := newAdminRig(t)
+	root := g.login("root", true)
+	da, db := t.TempDir(), t.TempDir()
+	if err := saveHomes([]Home{{Name: "a", Dir: da}, {Name: "b", Dir: db}}); err != nil {
+		t.Fatal(err)
+	}
+	w := g.do("GET", "/admin/homes", &root, nil)
+	m := g.ok(w)
+	if strings.Contains(w.Body.String(), da) || strings.Contains(w.Body.String(), db) {
+		t.Fatalf("chemin exposé : %s", w.Body)
+	}
+	hs := m["homes"].([]any)
+	want := []string{mainHomeID + "/" + mainHomeID, mustHomeID(t, "a") + "/a", mustHomeID(t, "b") + "/b"}
+	if len(hs) != len(want) {
+		t.Fatalf("homes : %v", hs)
+	}
+	for i, h := range hs {
+		h := h.(map[string]any)
+		if got := h["id"].(string) + "/" + h["name"].(string); got != want[i] || len(h) != 2 {
+			t.Fatalf("home %d : %v, attendu %s", i, h, want[i])
+		}
 	}
 }

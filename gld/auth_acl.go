@@ -38,7 +38,7 @@ var routeRights = map[string]Right{
 	// Administration des comptes et des droits.
 	"GET /admin/users": rightAdmin, "POST /admin/users": rightAdmin, "POST /admin/users/disable": rightAdmin,
 	"POST /admin/users/reset-mfa": rightAdmin, "POST /admin/users/password": rightAdmin, "POST /admin/acl": rightAdmin,
-	"GET /admin/events": rightAdmin, "GET /admin/sessions": rightAdmin, "POST /admin/sessions/revoke": rightAdmin,
+	"GET /admin/events": rightAdmin, "GET /admin/homes": rightAdmin, "GET /admin/sessions": rightAdmin, "POST /admin/sessions/revoke": rightAdmin,
 
 	// Homes.
 	"GET /homes": rightAny, "POST /homes-select": rightAny, "POST /homes-save": rightAdmin,
