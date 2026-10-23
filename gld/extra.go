@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -55,6 +56,19 @@ type texts struct {
 
 var textCache sync.Map // chemin -> texts
 
+// textCacheMax : octets de texte gardés au total. Sans borne, la recherche de repli (index FTS inutilisable) retenait le texte
+// de tous les transcripts à la fois ; au-delà, le cache est vidé et ne se reconstruit que par les transcripts réellement cherchés.
+const textCacheMax = 256 << 20
+
+var textBytes atomic.Int64
+
+func textsSize(t []string) (n int64) {
+	for _, s := range t {
+		n += int64(len(s))
+	}
+	return n
+}
+
 func messageTexts(path string) []string {
 	st, err := os.Stat(path)
 	if err != nil {
@@ -71,6 +85,10 @@ func messageTexts(path string) []string {
 			t = append(t, m.T)
 		}
 	})
+	if n := textsSize(t); textBytes.Add(n) > textCacheMax {
+		textCache.Clear()
+		textBytes.Store(n)
+	}
 	textCache.Store(path, texts{st.ModTime(), st.Size(), t})
 	return t
 }
