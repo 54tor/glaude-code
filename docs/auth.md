@@ -6,7 +6,7 @@ Lisez d'abord la section [Ce que les droits protègent, et ce qu'ils ne protège
 
 ## Activer
 
-Rien ne change tant qu'aucun compte n'existe : pas de base, pas de clé, comportement identique à l'ancien. Le mode s'active à la création du premier compte, en ligne de commande, jamais depuis l'interface web :
+Rien ne change tant qu'aucun compte n'existe : pas de base, pas de clé, comportement identique à l'ancien. À l'activation, la première connexion efface aussi, dans le navigateur, les brouillons et l'état d'affichage locaux du mode ouvert (ils n'ont pas de propriétaire connu). Le mode s'active à la création du premier compte, en ligne de commande, jamais depuis l'interface web :
 
 ```sh
 gld user add --admin alice
@@ -40,17 +40,28 @@ L'écran « Utilisateurs » de l'interface (administrateurs) fait la même chose
 
 Dossier d'authentification : `GLD_AUTH_DIR` s'il est fixé, sinon le dossier de configuration de l'OS suivi de `gld` (Linux `~/.config/gld`, macOS `~/Library/Application Support/gld`, Windows `%AppData%\gld`). Il est en 0700 et contient `auth.db` (SQLite, 0600). Il est distinct de `CLAUDE_CONFIG_DIR` : sauvegarder ou synchroniser un home n'emporte pas les comptes. Gld refuse un dossier ou un fichier qui est un lien symbolique, n'appartient pas à l'utilisateur courant, ou est lisible par d'autres (hors Windows).
 
-La base n'est créée qu'au premier `gld user add`. Une fois des comptes vus, une base supprimée, remplacée ou illisible fait **refuser le service** (503) jusqu'au redémarrage : jamais de retour silencieux au mode ouvert. Au démarrage, une base inutilisable arrête le serveur.
+La base n'est créée qu'au premier `gld user add`. Au démarrage, gld rend d'abord le dossier et la base privés (chmod 0700 et 0600), puis les vérifie ; une base inutilisable arrête le serveur.
+
+**Jamais de retour silencieux au mode ouvert, dans la limite de ce que gld peut prouver.** Un marqueur « comptes » (`meta.accounts`, état `off` ou `on`) est créé avec la base et signé avec la clé maîtresse. Il passe à `on` au premier compte et aucune commande ne le remet à `off`.
+
+| Altération | Effet |
+|---|---|
+| `auth.db` supprimée ou remplacée pendant que gld tourne | service refusé (503) jusqu'au redémarrage |
+| lignes de `users` supprimées (marqueur à `on`) | 503, y compris après redémarrage |
+| marqueur supprimé ou modifié à la main | 503 |
+| témoin de clé supprimé alors que la base est initialisée | refus de démarrer, aucune clé régénérée |
+
+Reste un cas **inévitable** : supprimer ensemble le témoin, le marqueur et toutes les lignes signées revient à fabriquer une base neuve, que gld ne distingue pas d'une première installation (aucun état hors de la base ne peut l'en empêcher ; c'est équivalent à supprimer `auth.db` puis redémarrer : mode ouvert). Pour repartir volontairement de zéro : arrêter gld, supprimer `auth.db` et `auth.key` (et l'entrée du coffre-fort si la clé y est), puis redémarrer et recréer le premier compte avec `gld user add --admin`.
 
 ### Clé maîtresse
 
-Les secrets TOTP sont chiffrés (AES-256-GCM) et chaque ligne sensible est signée avec une clé maîtresse de 32 octets. Ordre de recherche :
+Les secrets TOTP (et eux seuls) sont chiffrés (AES-256-GCM) ; les lignes sensibles sont signées (HMAC) avec une clé dérivée de la même clé maîtresse de 32 octets. Les autres colonnes restent en clair. Ordre de recherche :
 
 1. `GLD_AUTH_KEY` (64 caractères hexadécimaux) ;
 2. le coffre-fort de l'OS (service `gld`) ;
-3. sinon, un fichier `auth.key` (0600) à côté de la base, créé à la première utilisation. Il protège moins qu'un coffre-fort : qui lit le dossier lit la clé.
+3. sinon, un fichier `auth.key` (0600) à côté de la base, créé à la première utilisation. Il protège moins qu'un coffre-fort : qui lit le dossier lit la clé. gld l'écrit une fois sur la sortie d'erreur au démarrage quand la clé vient de ce fichier.
 
-Si la clé ne correspond pas à la base, gld refuse de démarrer (et la ligne de commande `gld user …` refuse aussi) ; il ne régénère jamais une clé en silence. **Perte de la clé** : `gld user reset-mfa` ne peut pas aider, puisqu'elle exige d'ouvrir la base. Retrouvez la clé (sauvegarde, `GLD_AUTH_KEY` d'origine). Sinon, déplacez `auth.db` (et `auth.key`) hors du dossier, puis recréez le premier compte avec `gld user add --admin` : tous les comptes, facteurs et droits sont à refaire.
+Si la clé ne correspond pas à la base, gld refuse de démarrer (et la ligne de commande `gld user …` refuse aussi) ; il ne génère jamais de clé (ni dans le coffre-fort, ni dans `auth.key`) sur une base qui possède déjà un témoin de clé. **Perte de la clé** : `gld user reset-mfa` ne peut pas aider, puisqu'elle exige d'ouvrir la base. Retrouvez la clé (sauvegarde, `GLD_AUTH_KEY` d'origine). Sinon, déplacez `auth.db` (et `auth.key`) hors du dossier, puis recréez le premier compte avec `gld user add --admin` : tous les comptes, facteurs et droits sont à refaire.
 
 ## Les droits
 
@@ -58,21 +69,21 @@ Sept droits, indépendants, par couple (compte, home). Un droit absent vaut refu
 
 | Droit | Ouvre |
 |---|---|
-| `mem_read` | mémoire, règles, snippets, notes, corbeille (lecture), santé, lecture du home (configuration, état git, onglets, commandes) |
-| `mem_write` | écrire, déplacer, fusionner, supprimer du texte inerte : CLAUDE.md, règles, mémoire, notes, snippets, corbeille |
-| `mem_sync` | prévisualiser et appliquer la synchronisation entre homes ; exige `mem_read` sur la source et `mem_write` sur la destination, vérifiés home par home. Appliquer des réglages, permissions, skills ou commandes exige en plus `config_write` sur la destination |
+| `mem_read` | mémoire, règles, snippets (lecture), notes, corbeille (lecture), santé, lecture du home (configuration, état git, onglets, commandes) |
+| `mem_write` | écrire, déplacer, fusionner, supprimer CLAUDE.md, règles, mémoire, notes, et purger la corbeille. Ne crée aucun contenu exécutable : les snippets (commandes slash) et la restauration d'un snippet ou d'un skill exigent `config_write`. `POST /snippet-draft` (simple brouillon, rien n'est écrit) reste en `mem_write` |
+| `mem_sync` | prévisualiser et appliquer la synchronisation entre homes ; exige `mem_read` sur la source et `mem_write` sur la destination, vérifiés home par home. Appliquer un élément autre que CLAUDE.md et les règles (réglages, permissions, skills, commandes) exige en plus `config_write` sur la destination |
 | `usage_read` | compte et usages, jamais le contenu des conversations |
-| `sessions_read` | transcriptions et état des sessions, recherche (`/search`) et `/info` (qui renvoient des extraits de prompts) |
-| `config_write` | réglages et skills (hooks, serveurs MCP, permissions), édition brute, restauration |
+| `sessions_read` | transcriptions et état des sessions, recherche (`/search`), `/info` et `/config-perm-suggest` (qui renvoient des extraits de prompts ou de transcriptions) |
+| `config_write` | réglages et skills (hooks, serveurs MCP, permissions), snippets (écriture, suppression, import), édition brute, restauration d'une sauvegarde, restauration d'un snippet ou d'un skill depuis la corbeille |
 | `exec` | chat, nouvelle session, terminal web, envoi de touches, confiance d'un dossier, push git, fermeture, renommage, suppression et corbeille de **sessions**, et `/ls`, `/dirs` (parcours du disque) |
 
 Notes :
 
 - `GET /homes` et `POST /homes-select` ne montrent que les homes où le compte a au moins un droit.
-- Créer ou retirer un home (`/homes-save`) est réservé aux administrateurs. Le nom `main` est réservé.
+- Créer ou retirer un home (`/homes-save`) est réservé aux administrateurs. Le nom `main` est réservé. En mode multi-utilisateur, le serveur conserve les homes que la requête ne cite pas : seuls les identifiants du champ `removed` sont retirés (avec leurs droits, en cascade).
 - Les droits sont rattachés à l'**identifiant** d'un home, pas à son nom. Supprimer un home supprime ses droits en cascade. Renommer un home via `/homes-save` en omettant son identifiant en crée un nouveau, donc fait perdre ses droits. Échanger les dossiers de deux homes déplace les droits avec les noms.
 - Un administrateur gère les comptes et les droits mais n'a **aucun accès implicite** aux homes : il s'accorde les droits qu'il veut.
-- Le jeton (Bearer) donne tous les droits d'un home mais jamais l'administration, ni les routes `/auth/*` et `/admin/*`.
+- Le jeton (Bearer) donne tous les droits sur **chaque** home mais jamais l'administration, ni les routes `/auth/*` et `/admin/*`.
 
 ### Ce que les droits protègent, et ce qu'ils ne protègent pas
 
@@ -82,18 +93,18 @@ Notes :
 
 1. `POST /auth/login` : nom et mot de passe, vérifiés en temps constant (un nom inconnu coûte autant qu'un nom existant, réponse identique).
 2. Second facteur, **obligatoire** : code TOTP, clé de sécurité WebAuthn (clé matérielle, passkey) ou l'un des 10 codes de secours (à usage unique, affichés une fois). Tant qu'il manque, seules les routes `/auth/*` répondent.
-3. Un compte sans aucun facteur en enrôle un à la première connexion (TOTP ou clé de sécurité), et reçoit ses codes de secours. **Attention** : cet enrôlement n'exige que le mot de passe. Quiconque connaît le mot de passe d'un compte encore sans facteur peut y enrôler le sien. Créez donc le compte juste avant la première connexion de la personne (ou enrôlez-la vous-même), et ne laissez pas traîner un compte sans facteur. `gld user reset-mfa` ramène un compte à cet état.
-4. Ajouter ou retirer un facteur (un compte garde toujours au moins un facteur), changer son mot de passe ou régénérer ses codes demande une réauthentification (mot de passe plus code ou assertion), valable 5 minutes. La liste des sessions du compte (`GET /auth/sessions`) n'en demande pas.
+3. Un compte sans aucun facteur en enrôle un à la première connexion (TOTP ou clé de sécurité), et reçoit ses codes de secours. **Attention** : cet enrôlement n'exige que le mot de passe. Quiconque connaît le mot de passe d'un compte encore sans facteur peut y enrôler le sien. Le bit `mfa_enrolled` du compte est signé et posé avec le premier facteur : supprimer les lignes de facteurs en SQL ne rouvre pas cet enrôlement (la connexion est refusée et un événement `tamper` est écrit) ; seul `gld user reset-mfa` le rouvre. Créez donc le compte juste avant la première connexion de la personne (ou enrôlez-la vous-même), et ne laissez pas traîner un compte sans facteur. `gld user reset-mfa` ramène un compte à cet état.
+4. Ajouter ou retirer un facteur (un compte garde toujours au moins un facteur), changer son mot de passe ou régénérer ses codes demande une réauthentification : le mot de passe **et** un code (TOTP ou de secours), à chaque action dangereuse. Seule une assertion de clé de sécurité (qui n'a pas de code à saisir) est retenue 5 minutes sur la session, avec le mot de passe toujours redemandé. Révoquer une session en demande aussi une. La liste des sessions du compte (`GET /auth/sessions`) n'en demande pas.
 
-Sessions : cookie `gld_session` (valeur aléatoire de 32 octets, stockée hachée), `HttpOnly`, `SameSite=Strict`, `Secure` quand la requête arrive en HTTPS (directement, ou via un proxy listé dans `GLD_TRUSTED_PROXIES` qui envoie `X-Forwarded-Proto: https`). Expiration glissante de 12 h, absolue de 30 jours. Les requêtes qui modifient l'état exigent l'en-tête CSRF `X-Gld-CSRF`. Désactiver un compte, réinitialiser ses facteurs ou changer son mot de passe ferme ses sessions.
+Sessions : cookie `gld_session` (valeur aléatoire de 32 octets ; la base ne garde que son empreinte HMAC-SHA-256 et signe la ligne), `HttpOnly`, `SameSite=Strict`, `Secure` quand la requête arrive en HTTPS (directement, ou via un proxy listé dans `GLD_TRUSTED_PROXIES` qui envoie `X-Forwarded-Proto: https`). Expiration glissante de 12 h, absolue de 30 jours. Les requêtes qui modifient l'état exigent l'en-tête CSRF `X-Gld-CSRF`. Désactiver un compte, réinitialiser ses facteurs ou changer son mot de passe ferme ses sessions. Le cookie `gld_home` (home choisi) est effacé à la déconnexion et à chaque connexion réussie. Les mises à niveau de la base (migrations 0006 et 0007) ferment toutes les sessions.
 
 ### Le jeton en mode multi-utilisateur
 
-Le cookie `gld_token` et `?token=` ne servent plus au navigateur. Le jeton ne vaut qu'en en-tête `Authorization: Bearer …`, jamais dans l'URL, pour l'automatisation et les gld enfants (un home autre que le principal est servi par un gld enfant, joignable seulement par la passerelle : elle retire `Cookie` et `Authorization` avant de relayer).
+Le cookie `gld_token` et `?token=` ne servent plus au navigateur. Le jeton ne vaut qu'en en-tête `Authorization: Bearer …`, jamais dans l'URL, et **seulement s'il est fixé par l'opérateur** (`GLD_WEB_TOKEN`) : un jeton généré automatiquement (écoute hors localhost sans la variable) est refusé en mode multi-utilisateur et n'est plus imprimé dans l'adresse de démarrage. Il sert à l'automatisation et aux gld enfants (un home autre que le principal est servi par un gld enfant, joignable seulement par la passerelle : elle retire `Cookie` et `Authorization` avant de relayer).
 
 ### Coupure des flux longs
 
-Le terminal web et `/chat` sont revérifiés pendant leur durée : session expirée, révoquée, compte désactivé ou droit retiré coupent le flux, et un tour de chat en cours est arrêté. Pour un home enfant, la revérification a lieu toutes les 5 s, pas à chaque message : un utilisateur révoqué peut encore écrire jusqu'à environ 5 s dans un terminal enfant.
+Le terminal web et `/chat` sont revérifiés pendant leur durée : session expirée, révoquée, compte désactivé ou droit retiré coupent le flux, et un tour de chat en cours est arrêté. Seul le terminal web **local** est contrôlé à chaque message reçu ; `/chat` local et les flux relayés vers un home enfant (terminal, chat) le sont toutes les 5 s : un utilisateur révoqué peut encore agir jusqu'à environ 5 s.
 
 ## Anti essais répétés
 
@@ -102,12 +113,17 @@ Compteurs en base, clés par nom, par adresse (une adresse IPv6 est ramenée à 
 | Mesure | Valeur |
 |---|---|
 | Délai progressif | dès 3 échecs : 2^(n-3) s, plafonné à 900 s, avant même de vérifier le mot de passe |
-| Verrou du compte | 10 échecs : 30 min. Ne s'applique pas à une adresse d'où le compte s'est déjà connecté avec succès dans les 30 derniers jours |
-| Second facteur | 5 échecs : session partielle détruite, mot de passe à ressaisir |
+| Verrou du compte | 10 échecs : 30 min. Ne s'applique pas à une adresse d'où le compte s'est déjà connecté avec succès dans les 30 derniers jours (marqueur `known:` dans `throttle`) |
+| Suite d'échecs consécutifs | échecs de mot de passe **et** de second facteur comptés sans fenêtre, remis à zéro par une connexion réussie : au 10e, verrou de 30 min et ligne dans le journal de la passerelle ; au 20e, verrou de 24 h. Levée depuis une adresse connue |
+| Second facteur | 5 échecs : session partielle détruite, mot de passe à ressaisir. Ces 5 échecs bloquent aussi la connexion par mot de passe de ce compte, depuis toute adresse, jusqu'à la fin de la fenêtre de 15 min |
+| Noms trop longs | un nom de plus de 64 caractères est compté sous une clé commune et refusé sans calcul argon2 |
+| Argon2 | 4 calculs simultanés au plus sur toute la passerelle |
 | Plafond global | 60 tentatives par minute sur toute la passerelle, en mémoire |
 | Codes TOTP | dérive acceptée de ±1 pas (30 s) ; un code déjà accepté n'est pas rejouable |
 
-Un déluge de connexions sur un nom peut gêner ce compte (déni de service local, borné par le délai). Le compteur global repart à zéro au redémarrage.
+Un déluge de connexions sur un nom peut gêner ce compte (déni de service local, borné par le délai). Le compteur global repart à zéro au redémarrage. La fenêtre de 15 min est fixe (elle part du premier échec). Les lignes de `throttle` sans effet, les sessions échues et les événements de plus de 90 jours sont purgés à l'ouverture de la base puis au plus une fois par 24 h.
+
+**Journal d'événements** : le nom saisi est tronqué à 64 caractères. Les refus et contentions sans compte (`blocked`, `busy`, `denied`) sont limités à 5 par minute et par adresse et 200 par minute en tout (table de 1024 adresses, au-delà elles partagent un compte commun) ; ceux d'un compte, à un par minute et par type. Une ligne `suppressed` par minute donne les totaux perdus, écrite au prochain événement ou à la prochaine requête vérifiée. Sont toujours écrits : altérations, verrous, échecs et succès du second facteur, succès de connexion, changements de droits, de facteurs et de mots de passe, révocations. Une inondation d'adresses peut donc taire d'autres refus anonymes pendant la minute.
 
 ### Proxys et adresse du client
 
@@ -128,20 +144,20 @@ L'origine doit être en `https`, sauf `http://localhost`. Une adresse IP est ref
 Quatre couches, de la plus forte à la plus faible :
 
 1. **Droits `exec` et `config_write` réservés aux gens de confiance** (voir plus haut). C'est la seule vraie mesure sans changement de déploiement.
-2. **Lignes signées.** Chaque ligne de `users`, `home_acl`, `totp`, `webauthn_creds` et `recovery_codes` porte un HMAC-SHA-256 (clé dérivée de la clé maîtresse), et les secrets sont chiffrés. Une ligne modifiée à la main en SQL (signature absente ou fausse) est refusée, journalisée (`tamper`) et signalée aux administrateurs ; elle apparaît marquée altérée, jamais cachée. Limites : **le rejeu d'une ancienne ligne valablement signée n'est pas détecté** (restaurer un droit révoqué, par exemple) ; et qui peut lire la clé maîtresse peut signer. La signature ne stoppe que l'écriture SQL sans la clé.
+2. **Lignes signées.** Chaque ligne de `users`, `home_acl`, `totp`, `webauthn_creds`, `recovery_codes` et `sessions` (identifiant, compte, création, second facteur) porte un HMAC-SHA-256 (clé dérivée de la clé maîtresse) ; seuls les secrets TOTP sont chiffrés. Le marqueur des comptes et le bit `mfa_enrolled` sont signés aussi ; l'expiration et la dernière activité d'une session ne le sont pas. Une ligne modifiée à la main en SQL (signature absente ou fausse) est refusée, journalisée (`tamper`) et signalée aux administrateurs ; elle apparaît marquée altérée, jamais cachée. Limites : **le rejeu d'une ancienne ligne valablement signée n'est pas détecté** (restaurer un droit révoqué, par exemple) ; et qui peut lire la clé maîtresse peut signer. La signature ne stoppe que l'écriture SQL sans la clé.
 3. **Garde-fou dans les sessions lancées par gld.** Pour les sessions Claude que gld démarre (chat web, onglets), il injecte des règles de refus `Read` et `Edit` sur le dossier d'authentification, un hook `PreToolUse` sur `Bash`, `PowerShell` et `Monitor` qui refuse les commandes citant `auth.db`, `auth.key`, le dossier d'authentification ou `sqlite`, et la configuration `sandbox.filesystem` (appliquée seulement si le bac à sable de Claude Code est activé, ce que gld ne fait pas). Il retire les `--settings` fournis par l'utilisateur.
 4. **Séparation par compte OS** (`GLD_RUN_AS`, expérimentale, voir plus bas).
 
 ### Fichier managed-settings
 
-Sans fichier managed, un compte `config_write` peut retirer les règles de ses propres réglages ; gld le détecte et avertit au démarrage. Le fichier appartient à root :
+Sans fichier managed, un compte `config_write` peut retirer les règles injectées de ses propres réglages ; gld le détecte et avertit au démarrage. Le fichier appartient à root :
 
 ```sh
 gld auth managed-settings > managed-settings.json
 sudo install -m 644 -o root managed-settings.json /etc/claude-code/managed-settings.json
 ```
 
-La commande imprime le JSON sur la sortie standard et la cible conseillée sur l'erreur standard, sans rien écrire. Cibles : Linux `/etc/claude-code/managed-settings.json`, macOS `/Library/Application Support/ClaudeCode/managed-settings.json`, Windows `C:\Program Files\ClaudeCode\managed-settings.json`. Le hook référence le binaire gld par chemin absolu et le dossier d'authentification : régénérez le fichier si vous déplacez l'un ou l'autre (un binaire déplacé fait échouer le hook, qui bloque alors les commandes shell). Le hook ne bloque en cas d'échec qu'avec Claude Code 2.1.295 ou plus récent ; avec une version plus ancienne, son comportement n'est pas documenté et il peut être ignoré.
+La commande imprime le JSON sur la sortie standard et la cible conseillée sur l'erreur standard, sans rien écrire. Cibles : Linux `/etc/claude-code/managed-settings.json`, macOS `/Library/Application Support/ClaudeCode/managed-settings.json`, Windows `C:\Program Files\ClaudeCode\managed-settings.json`. Le hook référence le binaire gld par chemin absolu et le dossier d'authentification : régénérez le fichier si vous déplacez l'un ou l'autre (un binaire déplacé fait échouer le hook, qui bloque alors les commandes shell). gld ne reconnaît le fichier installé que si son hook porte `onFailure: "block"`. Le hook ne bloque en cas d'échec qu'avec Claude Code 2.1.295 ou plus récent ; avec une version plus ancienne, son comportement n'est pas documenté et il peut être ignoré.
 
 Windows : la ligne de commande du hook vise Git Bash ; elle n'a pas été testée sous Windows, et sans Git Bash (hooks lancés par PowerShell) elle échoue en bloquant.
 
@@ -160,7 +176,7 @@ Il vise l'accident ou la dérive de Claude, pas un utilisateur malveillant qui a
 
 Routes `/admin/*` (administrateurs avec second facteur validé) : comptes (création, désactivation, mot de passe, réinitialisation des facteurs), droits (`/admin/acl`), journal d'événements, sessions d'un compte et leur révocation, liste des homes. Points d'attention :
 
-- Les opérations sensibles demandent une réauthentification de moins de 5 minutes : création de compte, réinitialisation de facteurs, changement de mot de passe, attribution de `exec` ou `config_write` (avec confirmation explicite), réactivation, désactivation d'un administrateur, révocation des sessions d'un administrateur. Désactiver un compte ordinaire est immédiat. On ne peut ni se désactiver soi-même ni désactiver le dernier administrateur actif. Il n'y a pas de route de rétrogradation d'un administrateur.
+- Les opérations sensibles demandent une réauthentification (mot de passe plus code ; une assertion de clé de sécurité reste valable 5 minutes) : création de compte, réinitialisation de facteurs, changement de mot de passe, attribution de `exec`, de `config_write` (avec confirmation explicite) ou de `sessions_read`, tout octroi de droits à soi-même, réactivation, désactivation d'un administrateur, révocation des sessions d'un administrateur. Les retraits de droits restent immédiats. Désactiver un compte ordinaire est immédiat. On ne peut ni se désactiver soi-même ni désactiver le dernier administrateur actif. Il n'y a pas de route de rétrogradation d'un administrateur.
 - Un mot de passe défini par un administrateur est temporaire par intention, mais **rien ne force son changement** à la première connexion.
 - `GET /admin/sessions` (adresse IP et navigateur d'un autre compte) et `GET /auth/sessions` (ses propres sessions) ne demandent pas de réauthentification.
 - Le journal d'événements est purgé au-delà de 90 jours (à l'ouverture de la base, puis au plus une fois par 24 h). Chaque action administrative l'écrit (compte visé, administrateur, adresse). `GET /account` (usages) peut déclencher un relevé.
@@ -196,9 +212,11 @@ Vérifications au démarrage : toute incohérence arrête gld, jamais de repli s
 Effets sur les sessions :
 
 - **`umask` 077** : tout ce que créent les processus lancés sous `GLD_RUN_AS` (claude et ses outils, git, tmux, gld enfants, onglets) naît en 0600 (fichiers) et 0700 (dossiers), dépôts de travail compris. Un dépôt partagé par groupe devient inutilisable pour les autres membres.
-- **Environnement purgé** : `GLD_AUTH_*`, `GLD_WEB_*`, `GLD_RUN_AS*`, l'identité de la passerelle (HOME, USER, LOGNAME, SHELL, MAIL), `TMUX*`, `XDG_*_HOME`, `XDG_RUNTIME_DIR`, `DBUS_SESSION_BUS_ADDRESS` et `SSH_AUTH_SOCK` ne passent pas. Un gld enfant reçoit seulement son jeton, son port et son adresse d'écoute. `ANTHROPIC_API_KEY` et `CLAUDE_*` passent. **Les autres secrets de l'environnement de l'opérateur (`DATABASE_URL`, `AWS_*`…) passent aussi** : retirez-les de l'environnement du service.
+- **Environnement purgé** : toute variable commençant par `GLD_AUTH_` ou `GLD_WEB_`, `GLD_RUN_AS` et `GLD_RUN_AS_EXPERIMENTAL`, l'identité de la passerelle (HOME, USER, LOGNAME, SHELL, MAIL), `TMUX*`, `XDG_*_HOME`, `XDG_RUNTIME_DIR`, `DBUS_SESSION_BUS_ADDRESS` et `SSH_AUTH_SOCK` ne passent pas. Un gld enfant reçoit seulement son jeton, son port et son adresse d'écoute. `ANTHROPIC_API_KEY` et `CLAUDE_*` passent. **Les autres secrets de l'environnement de l'opérateur (`DATABASE_URL`, `AWS_*`…) passent aussi** : retirez-les de l'environnement du service.
 
 Limites restantes de la vérification : entre le contrôle du parent existant et la création du dossier d'authentification, la passerelle ne garde aucun descripteur sur ce parent (un dossier vide root 0700 peut être créé ailleurs par un lien planté, le contrôle suivant refuse alors le démarrage) ; les comptes autres que la cible ne sont pas pris en compte ; les ACL ne sont vérifiées que sous Linux.
+
+Fermer une session ne signale qu'un processus dont les quatre uid (`/proc/<pid>/status`) sont ceux du compte cible (Linux ; ailleurs, refusé) ; une course entre la lecture et le signal n'est pas traitée.
 
 Non testé en réel : onglets tmux, envoi de touches et terminal web sous un autre uid ; macOS.
 
@@ -206,11 +224,16 @@ Non testé en réel : onglets tmux, envoi de touches et terminal web sous un aut
 
 - `exec` et `config_write` valent le compte OS de gld ; la séparation par compte est expérimentale.
 - Séparation par compte OS : voir [auth-followup-openroot.md](auth-followup-openroot.md).
-- Rejeu d'une ligne signée ancienne non détecté ; signature inutile contre qui lit la clé.
+- Rejeu d'une ligne signée ancienne non détecté ; signature inutile contre qui lit la clé. Le nombre de sessions affiché par `GET /admin/users` n'est pas vérifié (affichage seul).
+- Retour au mode ouvert possible si témoin, marqueur et lignes signées sont supprimés ensemble (voir « Où sont les données »).
+- Un déluge d'adresses peut taire d'autres refus anonymes dans le journal pendant une minute (le résumé `suppressed` en garde le total).
+- Une base créée par un état intermédiaire de développement du schéma 7 est refusée et doit être recréée ; les bases des schémas 5 et 6 se mettent à niveau seules.
+- `GET /auth/me` et l'enrôlement répondent 500 (et non 403) sur un compte altéré.
 - Clé maîtresse en fichier (`auth.key`) : protégée seulement par les droits du dossier.
-- Terminal web proxifié vers un home enfant : revérification toutes les 5 s. `/chat` vers un enfant est coupé par la passerelle puis arrêté par un appel `/chat-stop` à l'enfant ; le garde ne relit pas un corps de plus de 64 Kio (413).
+- `/chat` local, terminal et chat relayés vers un home enfant : revérification toutes les 5 s (seul le terminal local est contrôlé par message). `/chat` vers un enfant est coupé par la passerelle puis arrêté par un appel `/chat-stop` à l'enfant ; le garde ne relit pas un corps de plus de 64 Kio (413).
 - Fenêtre de 2 s après la création du premier compte pendant laquelle le serveur reste ouvert.
 - Enrôlement au premier login protégé par le seul mot de passe ; aucun changement de mot de passe forcé ; aucune route de rétrogradation d'administrateur.
+- `GLD_RUN_AS` : la passerelle suit encore des liens symboliques posés par le compte cible ; pas une frontière de sécurité.
 - Garde-fou : heuristique contournable, entrée de `Monitor` non vérifiée, `disableAllHooks`, Windows non testé, Claude Code 2.1.295 minimum pour le blocage en cas d'échec du hook.
 - `/admin/acl` : quand une requête accorde puis retire des droits, les deux se font en une seule transaction ; en cas d'échec, rien n'est modifié.
 - `/cleanup-warning` et `/git-status` exposent titres de sessions et dossiers aux comptes qui ont `mem_read`.

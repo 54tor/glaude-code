@@ -23,7 +23,7 @@ Opérations dangereuses :
 
 ## Liste des sites
 
-Relevée par `grep` des appels `os.*` et `filepath.WalkDir` dans les fichiers non-test, hors `auth_*`, `runas_*`, `owner_*`, `i18n*`, `listen.go`, `notify.go`, au commit `cf8136a`. Les numéros de ligne dérivent avec le code : relancez le relevé avant de travailler, et vérifiez chaque site (le relevé a quelques faux positifs, par exemple `trash.go:25` ouvre un journal de la passerelle). Exclus car exécutés sous la cible ou hors des dossiers modifiables : `sendkeys.go:69` (/proc), `term.go:160,169`, `185,186`, `loaded.go:53,61,64`, `searchidx.go:46`, `term.go:143` (gardé par `specPath`).
+Relevée par `grep` des appels `os.*` et `filepath.WalkDir` dans les fichiers non-test, hors `auth_*`, `runas_*`, `owner_*`, `i18n*`, `listen.go`, `notify.go`, au commit `cf8136a`. Les numéros de ligne dérivent avec le code : relancez le relevé avant de travailler, et vérifiez chaque site (le relevé a quelques faux positifs ; `trash.go:25` n'en est pas un, voir plus bas). Exclus car exécutés sous la cible ou hors des dossiers modifiables : `sendkeys.go:69` (/proc), `term.go:160,169`, `185,186`, `loaded.go:53,61,64`, `searchidx.go:46`, `term.go:143` (gardé par `specPath`).
 
 ### Écritures, renommages et suppressions (prioritaires)
 
@@ -49,6 +49,8 @@ Relevée par `grep` des appels `os.*` et `filepath.WalkDir` dans les fichiers no
 ### Lectures et parcours (fuite de fichiers de la passerelle par un lien posé par la cible)
 
 - configraw.go:83, 103 (`configRawRead`)
+- auth_acl.go:357 (garde de `POST /trash-restore`) : lit `meta.json` de l'élément dans la corbeille du home visé (`gld-web-trash/<id>/meta.json`) pour décider du droit exigé, en suivant les liens symboliques ; un lien posé par la cible fait lire un fichier arbitraire à la passerelle.
+- sendkeys.go:158 (`closeSession`) : le PID vient d'un relevé de `claude agents --json`. `runAsOwns(pid)` (runas_unix.go) refuse un processus qui n'appartient pas au compte cible (quatre uid de `/proc/<pid>/status`, Linux seulement), mais la course entre cette lecture et le signal n'est pas fermée (`pidfd` hors périmètre).
 - configwrite.go:208, 295, 337, 365, 372 (restauration d'une sauvegarde)
 - account.go:85, 134
 - matin.go:84
