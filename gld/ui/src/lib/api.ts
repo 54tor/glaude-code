@@ -138,6 +138,7 @@ async function get<T>(url: string): Promise<T> {
 
 export const api = {
   data: () => get<Data>("/api"),
+  cleanupWarning: () => get<{ days: number; sessions: { dir: string; id: string; title: string; cwd: string; expires: number }[] }>("/cleanup-warning"),
   sessionsStamp: () => get<{ stamp: number }>("/sessions-stamp"),
   sessionTrash: () => get<{ sessions: { dir: string; id: string; title: string; cwd: string; at: number; kb: number }[]; days: number }>("/session-trash"),
   info: (s: Item) => get<Detail>(`/info?dir=${enc(s.dir)}&id=${s.id}`),

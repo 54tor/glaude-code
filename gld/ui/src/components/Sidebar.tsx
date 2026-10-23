@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { SessionTrash } from "./SessionTrash"
+import { CleanupWarning } from "./CleanupWarning"
 import { Trash2 } from "lucide-react"
 import { AlarmClock, ChevronRight, FolderPlus, Repeat, Coins, FolderOpen, Star, Brain, SlidersHorizontal, Zap, Flame, History, Clock, FileText, Inbox, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
 import { size, tilde } from "@/lib/format"
@@ -253,6 +254,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
+        <CleanupWarning />
         <nav className="px-2 pb-3" aria-label="Navigation">
           {(p.carousel.n > 0 || p.carousel.on) && <NavItem icon={Repeat} label="Carrousel des sessions en attente" n={p.carousel.n} active={p.carousel.on} onClick={p.carousel.start} />}
           <NavItem
