@@ -15,7 +15,7 @@ export function ModelPicker({
   className?: string
 }) {
   return (
-    <div className={cn("flex min-w-0 gap-2", className)}>
+    <div className={cn("flex min-w-0 flex-wrap gap-2", className)}>
       <Choose value={value.model} onChange={(model) => onChange({ ...value, model })} options={MODELS} label="Modèle" disabled={disabled} />
       <Choose value={value.effort} onChange={(effort) => onChange({ ...value, effort })} options={EFFORTS} label="Effort" disabled={disabled} />
     </div>
