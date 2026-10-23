@@ -1,19 +1,20 @@
 import { useEffect } from "react"
-import { AlarmClock, ChevronRight, Coins, Star, Brain, SlidersHorizontal, Zap, Flame, History, Clock, FileText, Inbox, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
+import { AlarmClock, ChevronRight, Coins, FolderOpen, Star, Brain, SlidersHorizontal, Zap, Flame, History, Clock, FileText, Inbox, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
 import { size, tilde } from "@/lib/format"
 import type { Choice } from "@/lib/models"
 import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from "@/components/ui/context-menu"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useKeepWarm } from "@/hooks/useKeepWarm"
 import { HomeSwitcher } from "./HomeSwitcher"
 import { ProjectList } from "./ProjectList"
-import { ProjectTree } from "./ProjectTree"
+import { ProjectItems, ProjectTree } from "./ProjectTree"
+import { segs } from "@/lib/paths"
 import { CM, GroupItems, SessionItems } from "./SessionMenu"
 import type { Session, VGroup } from "@/lib/api"
 import { useActions, type Row } from "./actions"
@@ -66,7 +67,7 @@ function Heading({ children, action }: { children: React.ReactNode; action?: Rea
 
 // Sessions actives depuis moins d'une heure : leur cache est chaud, les reprendre coûte peu.
 // En orange, celles dont le cache expire dans moins de 10 minutes.
-function Hot({ rows, now, ttl }: { rows: Row[]; now: number; ttl: number }) {
+function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go: (r: Route) => void }) {
   const a = useActions()
   const warm = useKeepWarm()
   // Un dossier par projet de travail, le plus récemment actif d'abord (les lignes arrivent déjà triées par date).
@@ -112,14 +113,27 @@ function Hot({ rows, now, ttl }: { rows: Row[]; now: number; ttl: number }) {
       </Heading>
       {[...folders].map(([project, rs]) => (
         <details key={project} open className="group/hot">
-          <summary
-            title={tilde(project, a.home)}
-            className="flex h-7 cursor-pointer list-none items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted [&::-webkit-details-marker]:hidden"
-          >
-            <ChevronRight className="size-3.5 shrink-0 transition-transform group-open/hot:rotate-90" aria-hidden />
-            <span className="flex-1 truncate">{project.split("/").filter(Boolean).pop() ?? project}</span>
-            <span className="tabular-nums">{rs.length}</span>
-          </summary>
+          <ContextMenu>
+            <ContextMenuTrigger asChild>
+              <summary
+                title={tilde(project, a.home)}
+                className="flex h-7 cursor-pointer list-none items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted [&::-webkit-details-marker]:hidden"
+              >
+                <ChevronRight className="size-3.5 shrink-0 transition-transform group-open/hot:rotate-90" aria-hidden />
+                <span className="flex-1 truncate">{project.split("/").filter(Boolean).pop() ?? project}</span>
+                <span className="tabular-nums">{rs.length}</span>
+              </summary>
+            </ContextMenuTrigger>
+            <ProjectItems
+              g={rs[0].g}
+              ss={rs.map((r) => r.s)}
+              extra={
+                <ContextMenuItem onSelect={() => go({ kind: "dir", key: segs(project, a.home).join("/") })}>
+                  <FolderOpen /> Afficher le dossier
+                </ContextMenuItem>
+              }
+            />
+          </ContextMenu>
           <div className="ml-3 border-l pl-1">{rs.map(item)}</div>
         </details>
       ))}
@@ -257,7 +271,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             />
           )}
 
-          {p.hot.length > 0 && <Hot rows={p.hot} now={p.now} ttl={p.ttl} />}
+          {p.hot.length > 0 && <Hot rows={p.hot} now={p.now} ttl={p.ttl} go={p.go} />}
 
           {(p.favRows.length > 0 || p.favGroups.length > 0) && (
             <>
