@@ -4,6 +4,14 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+### Ajouté
+- **Multi-utilisateur (optionnel)** : comptes locaux créés par `gld user add --admin`, connexion par mot de passe plus second facteur obligatoire (TOTP, clés de sécurité WebAuthn, codes de secours), sessions à cookie et jeton CSRF. Sans compte, gld se comporte comme avant. Guide : `docs/auth.md`.
+- **Droits par home** : sept droits indépendants (`mem_read`, `mem_write`, `mem_sync`, `usage_read`, `sessions_read`, `config_write`, `exec`), refus par défaut de toute route non classée, interface et API d'administration (comptes, droits, journal, sessions). `exec` et `config_write` équivalent au compte système de gld.
+- **Défense contre les essais répétés** : délai progressif, verrou de compte, limite du second facteur et plafond global, adresse du client via `GLD_TRUSTED_PROXIES`.
+- **Base chiffrée et signée** : secrets TOTP chiffrés, lignes sensibles signées, clé maîtresse (`GLD_AUTH_KEY`, coffre-fort de l'OS ou `auth.key`) ; une ligne altérée est refusée et signalée.
+- **Garde-fou des sessions** : règles de refus, hook et bac à sable injectés dans les sessions lancées par gld ; `gld auth managed-settings` génère le fichier à installer par root.
+- **`GLD_RUN_AS` (expérimental)** : fait tourner claude, tmux et les gld enfants sous un autre compte système. Ce n'est pas encore une frontière de sécurité (voir `docs/auth.md`) ; exige `GLD_RUN_AS_EXPERIMENTAL=1` et root.
+
 ## [0.3.1] - 2026-10-23
 
 ### Corrigé

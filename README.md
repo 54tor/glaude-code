@@ -123,6 +123,17 @@ Sur une machine partagée avec d'autres comptes, l'adresse locale est joignable 
 GLD_WEB_TOKEN=$(openssl rand -hex 24) gld
 ```
 
+## Multi-utilisateur (optionnel)
+
+Par défaut, un seul jeton donne accès à tout. Pour que plusieurs personnes se connectent chacune avec leur compte, créez
+le premier administrateur : `gld user add --admin <nom>`. Dès lors, la connexion (mot de passe plus second facteur :
+TOTP, clé de sécurité ou codes de secours) remplace le jeton pour le navigateur, et chaque compte n'a accès qu'aux homes
+et aux droits que vous lui donnez (`gld user grant`, ou l'écran Utilisateurs). Sans compte, rien ne change.
+
+**Attention** : les droits `exec` (chat, terminal) et `config_write` (réglages, skills) équivalent au compte système qui
+fait tourner gld. Ne les donnez qu'à des personnes de confiance. Guide complet, variables, limites :
+[docs/auth.md](docs/auth.md).
+
 ## Langue
 
 Glaude Code parle français et anglais. La langue vient du réglage `language` de `~/.claude/settings.json`, le même que
