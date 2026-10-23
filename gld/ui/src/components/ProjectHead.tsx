@@ -10,13 +10,18 @@ import type { Choice } from "@/lib/models"
 import { GitBadge } from "./GitBadge"
 import { GitChanges } from "./GitChanges"
 import { GitPush } from "./GitPush"
+import { Choose } from "./Choose"
 import { ModelPicker } from "./ModelPicker"
 import { SnippetMenu } from "./SnippetMenu"
 
 // En tête d'un dossier : l'état git (branche, changements en attente, avance et retard) du dossier et de ses dépôts, puis un champ
 // pour lancer une nouvelle session dans ce dossier.
-export function ProjectHead({ project, missing }: { project: string; missing: boolean }) {
+// dirs : vue d'un projet (ensemble de dossiers) : le prompt part dans le dossier choisi dans la liste, au lieu d'un dossier fixe.
+export function ProjectHead({ project: fixed, missing: fixedMissing, dirs }: { project?: string; missing?: boolean; dirs?: string[] }) {
   const a = useActions()
+  const [dir, setDir] = useState("")
+  const project = dirs ? (dirs.includes(dir) ? dir : (dirs.find((d) => !a.folder(d)?.missing) ?? dirs[0] ?? "")) : (fixed ?? "")
+  const missing = dirs ? (a.folder(project)?.missing ?? false) : !!fixedMissing
   const git = useGit()
   const [text, setText] = useState("")
   const area = useRef<HTMLTextAreaElement>(null)
@@ -48,6 +53,12 @@ export function ProjectHead({ project, missing }: { project: string; missing: bo
   }
   return (
     <div className="mb-4 space-y-3">
+      {dirs && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          Dossier de la session :
+          <Choose value={project} onChange={setDir} options={dirs.map((d) => [d, tilde(d, a.home) + (a.folder(d)?.missing ? " (introuvable)" : "")] as const)} label="Dossier de la nouvelle session" className="min-w-0 max-w-xl" />
+        </div>
+      )}
       {(own || repos.length > 0) && (
         <ul className="space-y-1 rounded-lg border px-3 py-2 text-sm" aria-label="État git">
           {own && (
@@ -79,7 +90,7 @@ export function ProjectHead({ project, missing }: { project: string; missing: bo
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => isSend(e) && (e.preventDefault(), void send())}
-            placeholder="Nouvelle session dans ce dossier… (Entrée lance, Maj+Entrée : saut de ligne)"
+            placeholder={`Nouvelle session dans ${dirs ? "le dossier choisi" : "ce dossier"}… (Entrée lance, Maj+Entrée : saut de ligne)`}
             rows={2}
             maxLength={32000}
             disabled={busy}
