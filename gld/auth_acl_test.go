@@ -243,6 +243,10 @@ func TestGateRightsMatrix(t *testing.T) {
 	a := g.user(t, "admin", true)
 	wr := g.user(t, "redacteur", false)
 	g.grant(t, wr, "", RightMemWrite)
+	cw := g.user(t, "reglages", false)
+	g.grant(t, cw, "", RightConfigWrite)
+	sr := g.user(t, "historien", false)
+	g.grant(t, sr, "", RightSessionsRead)
 	cases := []struct {
 		u      *gateUser
 		m, p   string
@@ -271,6 +275,14 @@ func TestGateRightsMatrix(t *testing.T) {
 		{&wr, "POST", "/reassign", false, 403},
 		{&wr, "POST", "/keepwarm", false, 403},
 		{&wr, "POST", "/session-trash-purge", false, 403},
+		{&wr, "POST", "/snippet-save", false, 403},
+		{&wr, "POST", "/snippet-rm", false, 403},
+		{&wr, "POST", "/snippets-import", false, 403},
+		{&wr, "POST", "/snippet-draft", true, 200},
+		{&r, "GET", "/snippet-list", true, 200},
+		{&r, "GET", "/config-perm-suggest", false, 403},
+		{&cw, "POST", "/snippet-save", true, 200},
+		{&sr, "GET", "/config-perm-suggest", true, 200},
 	}
 	for _, c := range cases {
 		w := g.do(c.m, c.p, c.u, "", "{}")

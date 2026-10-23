@@ -52,15 +52,16 @@ var routeRights = map[string]Right{
 	"POST /memory-fix": RightMemWrite, "POST /memory-tokens": RightMemWrite, "POST /memory-lint": RightMemWrite,
 	"POST /memory-toggle": RightMemWrite, "POST /memory-rm": RightMemWrite, "POST /memory-merge": RightMemWrite,
 	"GET /snippet-list": RightMemRead, "GET /snippet": RightMemRead, "GET /snippets-export": RightMemRead,
-	"POST /snippet-save": RightMemWrite, "POST /snippet-draft": RightMemWrite, "POST /snippet-rm": RightMemWrite,
-	"POST /snippets-import": RightMemWrite,
-	"GET /notes":            RightMemRead, "POST /notes": RightMemWrite,
+	// /snippet-draft ne fait qu'un brouillon (même appel de modèle que /memory-draft) ; écrire un snippet, c'est écrire
+	// une commande slash de Claude Code (commands/*.md), donc config_write.
+	"POST /snippet-draft": RightMemWrite,
+	"GET /notes":          RightMemRead, "POST /notes": RightMemWrite,
 	"GET /trash": RightMemRead, "GET /trash-file": RightMemRead, "POST /trash-restore": RightMemWrite, "POST /trash-purge": RightMemWrite,
 	"GET /skills-list": RightMemRead, "GET /skill": RightMemRead,
 
 	// Lecture du home et état d'interface par home.
 	"GET /config": RightMemRead, "GET /config-projects": RightMemRead, "GET /config-effective": RightMemRead,
-	"GET /config-mcp": RightMemRead, "GET /config-perm-suggest": RightMemRead, "GET /slash-commands": RightMemRead,
+	"GET /config-mcp": RightMemRead, "GET /slash-commands": RightMemRead,
 	"GET /git-status": RightMemRead, "GET /git-changes": RightMemRead, "GET /git-remotes": RightMemRead,
 	"GET /cleanup-warning": RightMemRead, "GET /tabs": RightMemRead, "GET /keepwarm": RightMemRead,
 	"POST /tabs-save": RightMemWrite, "POST /tabs-rm": RightMemWrite, "POST /vgroups": RightMemWrite,
@@ -69,7 +70,8 @@ var routeRights = map[string]Right{
 	"POST /config-edit": RightConfigWrite, "GET /config-raw": RightConfigWrite, "POST /config-raw": RightConfigWrite,
 	"POST /config-restore": RightConfigWrite, "POST /config-perm-import": RightConfigWrite, "POST /config-mcp-status": RightConfigWrite,
 	"POST /config-perm-explain": RightConfigWrite,
-	"POST /skill-save":          RightConfigWrite, "POST /skill-copy": RightConfigWrite, "POST /skill-rm": RightConfigWrite,
+	"POST /snippet-save":        RightConfigWrite, "POST /snippet-rm": RightConfigWrite, "POST /snippets-import": RightConfigWrite,
+	"POST /skill-save": RightConfigWrite, "POST /skill-copy": RightConfigWrite, "POST /skill-rm": RightConfigWrite,
 	"POST /skill-draft": RightConfigWrite,
 
 	// Compte et usages.
@@ -81,6 +83,8 @@ var routeRights = map[string]Right{
 	"GET /session-state": RightSessionsRead, "GET /session-live": RightSessionsRead, "GET /session-screen": RightSessionsRead,
 	"GET /session-loaded": RightSessionsRead, "GET /session-trash": RightSessionsRead, "GET /sessions-stamp": RightSessionsRead,
 	"GET /session-send-info": RightSessionsRead, "GET /search": RightSessionsRead,
+	// Renvoie des extraits de commandes tirés des transcriptions.
+	"GET /config-perm-suggest": RightSessionsRead,
 
 	// Exécution.
 	"POST /chat": RightExec, "POST /chat-stop": RightExec, "POST /new-session": RightExec,
