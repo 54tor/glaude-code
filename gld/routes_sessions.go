@@ -31,6 +31,19 @@ func routesSessions(mux *http.ServeMux) {
 		groupsMu.Unlock()
 		writeJSON(w, 200, map[string]any{"home": home, "root": root, "groups": sessions(), "live": live, "waiting": waiting(), "vgroups": st.Groups, "favs": st.Favs, "tags": st.Tags, "projects": st.Projects, "providers": providerInfos()})
 	})
+	// Date de modification la plus récente d'un transcript : l'interface relit la liste quand elle change (un prompt tapé dans un
+	// terminal fait remonter la session sans attendre le rafraîchissement périodique). ponytail: un stat par transcript à chaque appel,
+	// à remplacer par une surveillance de fichiers si les transcripts se comptent en dizaines de milliers.
+	mux.HandleFunc("GET /sessions-stamp", func(w http.ResponseWriter, r *http.Request) {
+		var newest int64
+		files, _ := filepath.Glob(filepath.Join(root, "*", "*.jsonl"))
+		for _, p := range files {
+			if st, err := os.Stat(p); err == nil && st.ModTime().UnixNano() > newest {
+				newest = st.ModTime().UnixNano()
+			}
+		}
+		writeJSON(w, 200, map[string]any{"stamp": newest})
+	})
 	// Envoi d'un message à une session ouverte dans tmux (sendkeys.go) : lesquelles le permettent, puis l'envoi.
 	// État en direct d'une session (sessionlive.go) et informations du compte (account.go).
 	mux.HandleFunc("GET /session-live", func(w http.ResponseWriter, r *http.Request) {

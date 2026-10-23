@@ -138,6 +138,7 @@ async function get<T>(url: string): Promise<T> {
 
 export const api = {
   data: () => get<Data>("/api"),
+  sessionsStamp: () => get<{ stamp: number }>("/sessions-stamp"),
   info: (s: Item) => get<Detail>(`/info?dir=${enc(s.dir)}&id=${s.id}`),
   // Sans page : toute la conversation. Avec page : `limit` messages par la fin ; `before` = « start » de la page suivante.
   conv: (s: Item, tools: boolean, page?: { limit: number; before?: number }) =>
