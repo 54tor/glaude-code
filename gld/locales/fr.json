@@ -59,7 +59,7 @@
   "srv.auth.nomPris": "ce nom est déjà utilisé",
   "srv.auth.tamper": "signature invalide dans la base d'authentification : accès refusé",
   "srv.auth.totpDejaActif": "un TOTP est déjà actif : réinitialiser les facteurs avant d'en enrôler un autre",
-  "srv.auth.urlPubliqueInvalide": "GLD_PUBLIC_URL invalide : une URL http(s) avec un nom d'hôte est attendue",
+  "srv.auth.urlPubliqueInvalide": "GLD_PUBLIC_URL invalide : une URL http(s) avec un nom d'hôte (localhost ou un domaine, pas une adresse IP) est attendue",
   "srv.auth.utilisateurInconnu": "utilisateur inconnu",
   "srv.auth.webauthnHTTPS": "WebAuthn exige HTTPS hors localhost : fixer GLD_PUBLIC_URL à une adresse https://",
   "srv.autotitle.emptyConversation": "conversation vide",
