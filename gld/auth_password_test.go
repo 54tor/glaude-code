@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -118,5 +120,37 @@ func TestPasswordHashBounds(t *testing.T) {
 	}
 	if !checkPassword(good, "correct horse battery") {
 		t.Fatal("good hash rejected")
+	}
+}
+
+func TestArgonConcurrencyCapped(t *testing.T) {
+	var cur, peak atomic.Int64
+	old := argonIDKey
+	argonIDKey = func(pw, salt []byte, tm, m uint32, p uint8, l uint32) []byte {
+		n := cur.Add(1)
+		for p := peak.Load(); n > p && !peak.CompareAndSwap(p, n); p = peak.Load() {
+		}
+		time.Sleep(20 * time.Millisecond)
+		cur.Add(-1)
+		return make([]byte, l)
+	}
+	t.Cleanup(func() { argonIDKey = old })
+	h, _ := hashPassword("x")
+	var wg sync.WaitGroup
+	for i := range 16 {
+		wg.Go(func() {
+			switch i % 3 {
+			case 0:
+				hashPassword("x")
+			case 1:
+				checkPassword(h, "x")
+			default:
+				dummyCheck()
+			}
+		})
+	}
+	wg.Wait()
+	if p := peak.Load(); p > int64(cap(argonSem)) || p < 2 {
+		t.Fatalf("calculs simultanés : %d", p)
 	}
 }

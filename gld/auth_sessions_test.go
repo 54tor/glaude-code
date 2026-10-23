@@ -381,3 +381,21 @@ func TestSessionRowSigned(t *testing.T) {
 		t.Fatalf("session retournée vers un autre compte acceptée : %v", err)
 	}
 }
+
+func TestPurgeSessions(t *testing.T) {
+	now := testClock(t)
+	s, id := sessUser(t)
+	c, _ := fullSession(t, s, id)
+	s.NewSession(id, "", "")
+	*now = now.Add(thMFAWindow)
+	if n, err := s.PurgeSessions(); err != nil || n != 1 {
+		t.Fatalf("partielle : %d %v", n, err)
+	}
+	if _, err := s.Session(c); err != nil {
+		t.Fatal("session complète purgée")
+	}
+	*now = now.Add(sessIdle)
+	if n, err := s.PurgeSessions(); err != nil || n != 1 {
+		t.Fatalf("échue : %d %v", n, err)
+	}
+}

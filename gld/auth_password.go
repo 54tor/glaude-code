@@ -49,12 +49,24 @@ var commonPw = sync.OnceValue(func() map[string]struct{} {
 	return m
 })
 
+// argonSem borne les calculs argon2 simultanés (64 Mio chacun) : une rafale de requêtes ne fait pas exploser la mémoire.
+var (
+	argonSem   = make(chan struct{}, 4)
+	argonIDKey = argon2.IDKey
+)
+
+func argonKey(pw, salt []byte, t, m uint32, p uint8, l uint32) []byte {
+	argonSem <- struct{}{}
+	defer func() { <-argonSem }()
+	return argonIDKey(pw, salt, t, m, p, l)
+}
+
 func hashPassword(pw string) (string, error) {
 	salt := make([]byte, argonSaltLen)
 	if _, err := rand.Read(salt); err != nil {
 		return "", err
 	}
-	key := argon2.IDKey([]byte(pw), salt, argonTime, argonMemKiB, argonThreads, argonKeyLen)
+	key := argonKey([]byte(pw), salt, argonTime, argonMemKiB, argonThreads, argonKeyLen)
 	b := base64.RawStdEncoding
 	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s", argon2.Version,
 		argonMemKiB, argonTime, argonThreads, b.EncodeToString(salt), b.EncodeToString(key)), nil
@@ -92,13 +104,13 @@ func checkPassword(hash, pw string) bool {
 	if err1 != nil || err2 != nil || len(salt) < 8 || len(salt) > 64 || len(want) < 16 || len(want) > 64 {
 		return false
 	}
-	got := argon2.IDKey([]byte(pw), salt, t, m, uint8(p), uint32(len(want)))
+	got := argonKey([]byte(pw), salt, t, m, uint8(p), uint32(len(want)))
 	return subtle.ConstantTimeCompare(got, want) == 1
 }
 
 // dummyCheck dépense le même travail qu'une vérification, pour qu'un nom inconnu ne se distingue pas par le temps.
 func dummyCheck() {
-	argon2.IDKey([]byte("dummy"), make([]byte, argonSaltLen), argonTime, argonMemKiB, argonThreads, argonKeyLen)
+	argonKey([]byte("dummy"), make([]byte, argonSaltLen), argonTime, argonMemKiB, argonThreads, argonKeyLen)
 }
 
 func validPassword(pw string) error {

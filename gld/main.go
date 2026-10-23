@@ -185,7 +185,8 @@ func authState() (*authStore, bool, error) {
 	return authSt, authUsers, authErr
 }
 
-// purgeDue purge auth_events à l'ouverture de la base puis au plus une fois par 24 h ; appelée sous authMu.
+// purgeDue purge auth_events, les lignes mortes de throttle et les sessions expirées à l'ouverture de la base puis au plus
+// une fois par 24 h ; appelée sous authMu.
 func purgeDue(st *authStore, now time.Time) {
 	if !purgeAt.IsZero() && now.Sub(purgeAt) < eventsPurgeEvery {
 		return
@@ -193,6 +194,14 @@ func purgeDue(st *authStore, now time.Time) {
 	purgeAt = now
 	if _, err := st.PurgeEvents(eventsKeep); err != nil {
 		journal("auth: purge du journal d'authentification : %v", err)
+	}
+	th := newThrottle(st.db)
+	th.now = func() time.Time { return now }
+	if _, err := th.Purge(); err != nil {
+		journal("auth: purge des compteurs d'essais : %v", err)
+	}
+	if _, err := st.PurgeSessions(); err != nil {
+		journal("auth: purge des sessions expirées : %v", err)
 	}
 }
 

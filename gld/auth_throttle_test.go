@@ -66,14 +66,8 @@ func TestBackoffWindowResets(t *testing.T) {
 
 func TestUserLockUnknownIP(t *testing.T) {
 	th, s, clock := testThrottle(t)
-	id, err := s.AddUser("carol", testPw, false)
-	if err != nil {
+	if _, err := s.AddUser("carol", testPw, false); err != nil {
 		t.Fatal(err)
-	}
-	s.db.Exec(`INSERT INTO auth_events(at,user_id,ip,kind,outcome) VALUES(?,?,?,?,?)`,
-		clock.Add(-24*time.Hour).Unix(), id, "192.0.2.7", evLogin, evSuccess)
-	if !th.KnownIP(id, "192.0.2.7") || th.KnownIP(id, "198.51.100.1") {
-		t.Fatal("KnownIP")
 	}
 	if err := th.Success("Carol", "192.0.2.7"); err != nil {
 		t.Fatal(err)
@@ -100,7 +94,7 @@ func TestUserLockUnknownIP(t *testing.T) {
 		t.Fatalf("IP connue : %v %v", w, blocked)
 	}
 	var locks int
-	s.db.QueryRow(`SELECT COUNT(*) FROM auth_events WHERE kind='lock'`).Scan(&locks)
+	s.db.QueryRow(`SELECT COUNT(*) FROM auth_events WHERE kind='lock' AND outcome='locked'`).Scan(&locks)
 	if locks != 2 {
 		t.Fatalf("verrous journalisés : %d", locks)
 	}
@@ -236,5 +230,78 @@ func TestClientIPXFFSpoof(t *testing.T) {
 	r.Header.Set("X-Forwarded-For", "1.2.3.4, 203.0.113.5, 192.0.2.2")
 	if got := clientIP(r); got != "203.0.113.5" {
 		t.Fatalf("chaîne : %s", got)
+	}
+}
+
+// Essai lent : cinq échecs par quart d'heure ne déclenchent jamais le verrou user:, la suite d'échecs si.
+func TestStreakLock(t *testing.T) {
+	th, s, clock := testThrottle(t)
+	n := 0
+	for round := 0; round < 12 && n < thStreakLock; round++ {
+		for i := 0; i < 5; i++ {
+			if _, blocked := th.Check("erin", "198.51.100.1"); blocked {
+				t.Fatalf("bloqué après %d échecs", n)
+			}
+			stage := "password"
+			if i%2 == 1 {
+				stage = "mfa"
+			}
+			th.Fail("erin", fmt.Sprintf("203.0.113.%d", n), stage)
+			n++
+		}
+		*clock = clock.Add(thWindow)
+	}
+	*clock = clock.Add(-thWindow)
+	if _, blocked := th.Check("erin", "198.51.100.1"); !blocked {
+		t.Fatalf("pas de verrou après %d échecs consécutifs", n)
+	}
+	var ev int
+	s.db.QueryRow(`SELECT COUNT(*) FROM auth_events WHERE kind='lock' AND outcome='streak_10'`).Scan(&ev)
+	if ev != 1 {
+		t.Fatalf("événement de verrou : %d", ev)
+	}
+	*clock = clock.Add(thLockFor + time.Second)
+	if _, blocked := th.Check("erin", "198.51.100.1"); blocked {
+		t.Fatal("verrou de 30 min non levé")
+	}
+	for ; n < thStreakLong; n++ {
+		th.Fail("erin", "203.0.113.200", "mfa")
+		*clock = clock.Add(thLockFor + time.Second)
+	}
+	*clock = clock.Add(-thLockFor)
+	if w, blocked := th.Check("erin", "198.51.100.1"); !blocked || w != thMaxDelay {
+		t.Fatalf("verrou long : %v %v", w, blocked)
+	}
+	*clock = clock.Add(thStreakLongFor)
+	if err := th.Success("erin", "203.0.113.200"); err != nil {
+		t.Fatal(err)
+	}
+	var left int
+	s.db.QueryRow(`SELECT COUNT(*) FROM throttle WHERE key='streak:erin'`).Scan(&left)
+	if left != 0 {
+		t.Fatal("suite non remise à zéro par un succès")
+	}
+}
+
+func TestThrottlePurge(t *testing.T) {
+	th, s, clock := testThrottle(t)
+	th.Fail("x", "10.0.0.1", "password")
+	th.Success("y", "10.0.0.2")
+	*clock = clock.Add(thWindow + time.Second)
+	if n, err := th.Purge(); err != nil || n != 3 {
+		t.Fatalf("purge fenêtre : %d %v", n, err)
+	}
+	*clock = clock.Add(thStreakKeep)
+	if n, err := th.Purge(); err != nil || n != 1 {
+		t.Fatalf("purge suite : %d %v", n, err)
+	}
+	*clock = clock.Add(thKnownFor)
+	if n, err := th.Purge(); err != nil || n != 1 {
+		t.Fatalf("purge marqueur connu : %d %v", n, err)
+	}
+	var left int
+	s.db.QueryRow(`SELECT COUNT(*) FROM throttle`).Scan(&left)
+	if left != 0 {
+		t.Fatalf("restant : %d", left)
 	}
 }
