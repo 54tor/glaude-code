@@ -232,6 +232,29 @@ describe("parsePrompt : captures réelles", () => {
     expect(p.submit).toEqual(["Down", "Down", "Down", "Enter"])
     expect(p.tabs).toEqual([{ label: "UI-01", done: true }, { label: "UI-02", done: true }, { label: "Périmètre", done: false }])
   })
+  it("question à onglets à choix unique : récapitulatif et onglets", () => {
+    const screen = [
+      "● Deux décisions vous reviennent.",
+      "────────────────────────────────────────",
+      "←  ☐ Périmètre  ☐ Langage  ✔ Submit  →",
+      "",
+      "Quel périmètre pour le portage ?",
+      "",
+      "❯ 1. Tout le module",
+      "     Plus long mais complet.",
+      "  2. Le noyau seulement",
+      "  3. Type something.",
+      "────────────────────────────────────────",
+      "  4. Chat about this",
+      "",
+      "Enter to select · Tab/Arrow keys to navigate · Esc to cancel",
+    ].join("\n")
+    const p = parsePrompt(screen)!
+    expect(p.question).toBe("Quel périmètre pour le portage ?")
+    expect(p.context).toBe("● Deux décisions vous reviennent.")
+    expect(p.tabs).toEqual([{ label: "Périmètre", done: false }, { label: "Langage", done: false }])
+    expect(p.options[0].keys).toEqual(["1"])
+  })
   it("choix multiples : la description de chaque case est conservée", () => {
     const o = parsePrompt(real.multi)!.options
     expect(o[0].detail).toBe("Couleur chaude, forte visibilité.")

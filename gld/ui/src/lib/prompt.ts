@@ -109,7 +109,10 @@ export function parsePrompt(screen: string): Prompt | null {
   }
   if (nums.length >= 2 && nums[0].n === "1") {
     const question = above(nums[0].at)
-    return { question, context: contextOf(nums[0].at, question), options: nums.map((o, i) => ({ label: `${o.n}. ${o.label}`, detail: detail(i) || undefined, keys: [o.n], text: FREE.test(o.label), chat: CHAT.test(o.label), ...(CHAT.test(o.label) && { keys: [o.n, "Enter"] }) })) }
+    // Question à onglets à choix unique (« ← ☐ Q1 ☐ Q2 ✔ Submit → ») : le message de Claude au-dessus et l'état des onglets.
+    const head = lines.findIndex((l) => /^\s*←.*Submit.*→\s*$/.test(l))
+    const tabbed = head >= 0 && head < nums[0].at
+    return { question, context: contextOf(nums[0].at, question) ?? (tabbed ? recap(all, tailStart + head) : undefined), tabs: tabbed ? tabsOf(lines[head]) : undefined, options: nums.map((o, i) => ({ label: `${o.n}. ${o.label}`, detail: detail(i) || undefined, keys: [o.n], text: FREE.test(o.label), chat: CHAT.test(o.label), ...(CHAT.test(o.label) && { keys: [o.n, "Enter"] }) })) }
   }
   const sel = lines.findIndex((l) => /^\s{0,3}❯ \S/.test(l))
   if (sel < 0) return null
