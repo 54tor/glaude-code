@@ -7,7 +7,7 @@
   "cli.main.authRefused": "base des comptes inutilisable ({{.A1}}) : gld refuse de démarrer. Vérifier la clé maîtresse (GLD_AUTH_KEY, coffre-fort, auth.key) et les droits du dossier.",
   "cli.main.flagListen": "adresse d'écoute (défaut 127.0.0.1 ; 0.0.0.0 pour tout le réseau, avec un jeton)",
   "cli.main.flagVersion": "affiche la version et quitte",
-  "cli.main.guardMissing": "⚠ garde-fou non installé ({{.A1}} absent ou incomplet) : un utilisateur avec config_write ou exec peut lire la base d'authentification. Générer le fichier avec « gld auth managed-settings ».",
+  "cli.main.guardMissing": "⚠ garde-fou non installé ({{.A1}} absent ou incomplet) : sans lui, les outils de Claude peuvent lire la base d'authentification et un utilisateur config_write peut retirer les règles. Générer le fichier avec « gld auth managed-settings ». Même installé, il ne couvre ni le terminal web ni exec.",
   "cli.main.plainHTTP": "⚠ gld écoute sur {{.A1}} : accès protégé par un jeton, mais en HTTP clair.",
   "cli.main.preferTunnel": "  Préférez un tunnel (SSH, Tailscale) ou un proxy TLS ; ne l'exposez pas sur Internet.",
   "cli.main.stopped": "arrêt.",

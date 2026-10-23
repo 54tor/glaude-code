@@ -46,25 +46,27 @@ func guardDeny(authDir string) []string {
 	return out
 }
 
-func guardCommand(authDir string) string {
+// guardCommand : le hook en forme exec (programme + arguments, sans shell), donc sans guillemets à échapper.
+func guardCommand(authDir string) (string, []string) {
 	self, err := os.Executable()
 	if err != nil {
 		self = "gld"
 	}
-	q := shq
-	if runtime.GOOS == "windows" {
-		q = func(s string) string { return `"` + s + `"` }
-	}
-	return q(self) + " _guard " + q(authDir)
+	return self, []string{"_guard", authDir}
 }
+
+// guardTools : les outils de Claude qui exécutent une commande shell reçue dans tool_input.command.
+var guardTools = []string{"Bash", "PowerShell", "Monitor"}
 
 // guardSettings : le contenu du fichier managed-settings.json (ou de --settings) qui protège authDir.
 func guardSettings(authDir string) map[string]any {
+	cmd, args := guardCommand(authDir)
 	return map[string]any{
 		"permissions": map[string]any{"deny": guardDeny(authDir)},
 		"hooks": map[string]any{"PreToolUse": []any{map[string]any{
-			"matcher": "Bash",
-			"hooks":   []any{map[string]any{"type": "command", "command": guardCommand(authDir)}},
+			"matcher": strings.Join(guardTools, "|"),
+			// Un hook qui échoue (binaire déplacé, délai dépassé) bloque la commande au lieu de la laisser passer.
+			"hooks": []any{map[string]any{"type": "command", "command": cmd, "args": args, "onFailure": "block"}},
 		}}},
 		// Appliqué par l'OS seulement quand le bac à sable de Claude Code est activé (sandbox.enabled).
 		"sandbox": map[string]any{"filesystem": map[string]any{"denyRead": []string{authDir}, "denyWrite": []string{authDir}}},
@@ -85,24 +87,48 @@ func guardHook(cmd string, authDir string) (deny bool) {
 	if sqliteRe.MatchString(c) {
 		return true
 	}
-	needles := []string{"auth.db", "auth.key", "gld_auth_dir"}
+	for _, n := range []string{"auth.db", "auth.key", "gld_auth_dir"} {
+		if strings.Contains(c, n) {
+			return true
+		}
+	}
+	var paths []string
 	if authDir != "" {
-		needles = append(needles, authDir)
+		paths = append(paths, authDir)
 		if home, err := os.UserHomeDir(); err == nil && home != "" {
 			if rel, err := filepath.Rel(home, authDir); err == nil && rel != "." && !strings.HasPrefix(rel, "..") {
-				needles = append(needles, "~/"+rel, "$home/"+rel, "${home}/"+rel, filepath.ToSlash(rel))
+				rel = filepath.ToSlash(rel)
+				paths = append(paths, "~/"+rel, "$home/"+rel, "${home}/"+rel)
+				if strings.Contains(rel, "/") { // seul, un nom court comme « gld » refuserait presque tout
+					paths = append(paths, rel)
+				}
 			}
 		}
 	}
 	if v := os.Getenv("GLD_AUTH_DIR"); v != "" {
-		needles = append(needles, v)
+		paths = append(paths, v)
 	}
-	for _, n := range needles {
-		if n = guardNorm(n); n != "" && strings.Contains(c, n) {
+	for _, n := range paths {
+		if n = strings.TrimRight(guardNorm(n), "/"); n != "" && containsPath(c, n) {
 			return true
 		}
 	}
 	return false
+}
+
+// containsPath : n apparaît dans c suivi d'une fin de chemin (/srv/gld vise /srv/gld/x, pas /srv/gld-backups).
+func containsPath(c, n string) bool {
+	for i := 0; ; {
+		j := strings.Index(c[i:], n)
+		if j < 0 {
+			return false
+		}
+		end := i + j + len(n)
+		if end == len(c) || !strings.ContainsRune("abcdefghijklmnopqrstuvwxyz0123456789_.-", rune(c[end])) {
+			return true
+		}
+		i += j + 1
+	}
 }
 
 // runGuard : le hook PreToolUse (`gld _guard <dossier>`). Code 2 = refus, raison sur stderr. Une entrée illisible
@@ -118,7 +144,7 @@ func runGuard(in io.Reader, errw io.Writer, authDir string) int {
 		fmt.Fprintln(errw, L("cli.guard.badInput"))
 		return 2
 	}
-	if h.Tool != "Bash" {
+	if !slices.Contains(guardTools, h.Tool) {
 		return 0
 	}
 	if authDir == "" {
@@ -154,7 +180,10 @@ func managedInstalled() bool {
 		Hooks       struct {
 			PreToolUse []struct {
 				Matcher string
-				Hooks   []struct{ Command string }
+				Hooks   []struct {
+					Command string
+					Args    []string
+				}
 			}
 		} `json:"hooks"`
 	}
@@ -166,9 +195,10 @@ func managedInstalled() bool {
 			return false
 		}
 	}
+	cmd, args := guardCommand(dir)
 	for _, g := range m.Hooks.PreToolUse {
 		for _, h := range g.Hooks {
-			if g.Matcher == "Bash" && strings.Contains(h.Command, " _guard") {
+			if slices.Contains(strings.Split(g.Matcher, "|"), "Bash") && h.Command == cmd && slices.Equal(h.Args, args) {
 				return true
 			}
 		}
@@ -188,6 +218,40 @@ func warnGuard(on bool, w io.Writer) {
 
 // guardArgs : les mêmes réglages passés en --settings aux sessions que gld lance, dès qu'une base de comptes existe.
 // Ils ne peuvent pas affaiblir le fichier managed et s'ajoutent aux règles des réglages de l'utilisateur.
+// withGuard : argv de claude avec les réglages du garde-fou, placés juste avant --resume ou le prompt ; un --settings
+// fourni par l'utilisateur est retiré, sinon il pourrait remplacer celui du garde-fou.
+func withGuard(argv []string) []string {
+	g := guardArgs()
+	if g == nil {
+		return argv
+	}
+	var out []string
+	at := -1
+	for i := 0; i < len(argv); i++ {
+		a := argv[i]
+		switch {
+		case a == "--":
+			if at < 0 {
+				at = len(out)
+			}
+			out = append(out, argv[i:]...)
+			i = len(argv)
+		case a == "--settings":
+			i++
+		case strings.HasPrefix(a, "--settings="):
+		default:
+			if a == "--resume" && at < 0 {
+				at = len(out)
+			}
+			out = append(out, a)
+		}
+	}
+	if at < 0 {
+		at = len(out)
+	}
+	return slices.Concat(out[:at], g, out[at:])
+}
+
 func guardArgs() []string {
 	dir, err := absAuthDir()
 	if err != nil {
