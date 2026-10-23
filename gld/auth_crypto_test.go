@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/zalando/go-keyring"
 )
 
 func stubKeyring(t *testing.T) {
@@ -86,5 +88,84 @@ func TestRowSig(t *testing.T) {
 		if ok {
 			t.Fatalf("%s change accepted", name)
 		}
+	}
+}
+
+func TestMasterKeyKeyringPaths(t *testing.T) {
+	g, s := keyringGet, keyringSet
+	t.Cleanup(func() { keyringGet, keyringSet = g, s })
+	t.Setenv("GLD_AUTH_KEY", "")
+	good := strings.Repeat("cd", 32)
+
+	keyringGet = func() (string, error) { return " " + good + "\n", nil }
+	keyringSet = func(string) error { t.Fatal("Set called"); return nil }
+	if k, err := loadMasterKey(t.TempDir()); err != nil || k[0] != 0xcd {
+		t.Fatalf("keyring first: %v", err)
+	}
+
+	keyringGet = func() (string, error) { return "", errors.New("locked") }
+	dir := t.TempDir()
+	if _, err := loadMasterKey(dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "auth.key")); err != nil {
+		t.Fatal("transient error must fall back to file")
+	}
+
+	var stored string
+	keyringGet = func() (string, error) { return "", keyring.ErrNotFound }
+	keyringSet = func(v string) error { stored = v; return nil }
+	dir = t.TempDir()
+	if _, err := loadMasterKey(dir); err != nil || len(stored) != 64 {
+		t.Fatalf("not found should store in keyring: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "auth.key")); err == nil {
+		t.Fatal("file written despite keyring")
+	}
+}
+
+func TestMasterKeyInvalidEnv(t *testing.T) {
+	stubKeyring(t)
+	for _, v := range []string{"abcd", strings.Repeat("zz", 32)} {
+		t.Setenv("GLD_AUTH_KEY", v)
+		if _, err := loadMasterKey(t.TempDir()); err == nil {
+			t.Fatalf("%q accepted", v)
+		}
+	}
+	t.Setenv("GLD_AUTH_KEY", " "+strings.Repeat("ab", 32)+"\n")
+	if _, err := loadMasterKey(t.TempDir()); err != nil {
+		t.Fatalf("trim: %v", err)
+	}
+}
+
+func TestOpenShortInput(t *testing.T) {
+	k := bytes.Repeat([]byte{1}, 32)
+	for _, in := range [][]byte{nil, {1, 2}} {
+		if _, err := open(k, in); err == nil {
+			t.Fatal("short input accepted")
+		}
+	}
+}
+
+func TestCheckMasterKeyWitnessDeleted(t *testing.T) {
+	k := bytes.Repeat([]byte{1}, 32)
+	db, err := openAuthDB(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := checkMasterKey(db, k); err != nil {
+		t.Fatal(err)
+	}
+	db.Exec(`DELETE FROM meta WHERE key='key_witness'`)
+	if err := checkMasterKey(db, k); err != nil {
+		t.Fatalf("empty db should recreate witness: %v", err)
+	}
+	db.Exec(`DELETE FROM meta WHERE key='key_witness'`)
+	if _, err := db.Exec(`INSERT INTO users(name,pw_hash,created_at,pw_changed_at) VALUES('n','h',0,0)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkMasterKey(db, bytes.Repeat([]byte{9}, 32)); err == nil {
+		t.Fatal("wrong key accepted with witness deleted")
 	}
 }

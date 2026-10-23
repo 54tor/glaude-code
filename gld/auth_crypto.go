@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/zalando/go-keyring"
 )
@@ -38,13 +39,15 @@ func decodeKey(s string) ([]byte, error) {
 }
 
 // loadMasterKey: GLD_AUTH_KEY, then OS keyring, then auth.key. A new key goes to
-// the keyring when available, else to auth.key.
+// the keyring only when it reports the entry absent; any other keyring error
+// (locked, bus failure) falls back to the file and never overwrites the entry.
 func loadMasterKey(dir string) ([]byte, error) {
-	if e := os.Getenv("GLD_AUTH_KEY"); e != "" {
+	if e := strings.TrimSpace(os.Getenv("GLD_AUTH_KEY")); e != "" {
 		return decodeKey(e)
 	}
-	if s, err := keyringGet(); err == nil {
-		return decodeKey(s)
+	s, gerr := keyringGet()
+	if gerr == nil {
+		return decodeKey(strings.TrimSpace(s))
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
@@ -58,23 +61,27 @@ func loadMasterKey(dir string) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		return decodeKey(string(b))
+		return decodeKey(strings.TrimSpace(string(b)))
 	}
 	k := make([]byte, 32)
 	if _, err := rand.Read(k); err != nil {
 		return nil, err
 	}
 	enc := hex.EncodeToString(k)
-	if keyringSet(enc) == nil {
+	if errors.Is(gerr, keyring.ErrNotFound) && keyringSet(enc) == nil {
 		return k, nil
 	}
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
-	if _, err := f.WriteString(enc); err != nil {
-		return nil, err
+	_, werr := f.WriteString(enc)
+	if cerr := f.Close(); werr == nil {
+		werr = cerr
+	}
+	if werr != nil {
+		os.Remove(path)
+		return nil, werr
 	}
 	return k, nil
 }
@@ -134,6 +141,13 @@ func checkMasterKey(db *authDB, key []byte) error {
 	var w []byte
 	err := db.QueryRow(`SELECT value FROM meta WHERE key='key_witness'`).Scan(&w)
 	if errors.Is(err, sql.ErrNoRows) {
+		var n int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&n); err != nil {
+			return err
+		}
+		if n > 0 {
+			return errors.New("key witness missing on a populated auth database; refusing to start")
+		}
 		_, err = db.Exec(`INSERT INTO meta(key,value) VALUES('key_witness',?)`, seal(key, []byte(witnessPlain)))
 		return err
 	}
