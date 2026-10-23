@@ -130,7 +130,8 @@ export type WarmState = { dir: string; on: boolean; pings: number; max: number; 
 export type GitRemote = { name: string; url: string }
 export type GitChange = { path: string; status: string; from?: string } // status : « XY » comme git status --short
 // Dossiers de configuration Claude (homes.go) : current "" = celui du processus principal (main).
-export type HomesInfo = { current: string; main: string; homes: { name: string; dir: string; running: boolean }[] }
+// main "" et mainId : mode multi-utilisateur, le principal sans droit dessus ; id : clé des droits, connue du serveur.
+export type HomesInfo = { current: string; main: string; mainId?: string; homes: { name: string; dir: string; id?: string; running: boolean }[] }
 
 const enc = encodeURIComponent
 

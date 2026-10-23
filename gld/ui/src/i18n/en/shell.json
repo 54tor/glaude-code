@@ -220,7 +220,8 @@
       "label": "Claude configuration folder",
       "titleWith": "Claude configuration folder: {{label}}",
       "add": "Add a folder…",
-      "remove": "Remove from the list"
+      "remove": "Remove from the list",
+      "main": "Main folder"
     },
     "dirPicker": {
       "description": "Choose an existing folder",

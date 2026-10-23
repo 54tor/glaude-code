@@ -220,7 +220,8 @@
       "label": "Dossier de configuration Claude",
       "titleWith": "Dossier de configuration Claude : {{label}}",
       "add": "Ajouter un dossier…",
-      "remove": "Retirer de la liste"
+      "remove": "Retirer de la liste",
+      "main": "Dossier principal"
     },
     "dirPicker": {
       "description": "Choisir un dossier existant",

@@ -21,7 +21,11 @@ const load = (): Map<string, Entry> => {
 const entries = load()
 const subs = new Set<() => void>()
 
+let writable = () => true
+export const guardDrafts = (f: () => boolean) => void (writable = f)
+
 const save = () => {
+  if (!writable()) return
   try {
     // les plus récemment modifiées en dernier : au-delà de la limite, les plus anciennes partent
     const kept = [...entries].slice(-MAX_SESSIONS)
@@ -31,10 +35,9 @@ const save = () => {
   }
 }
 
-// Changement de compte dans l'onglet : la copie en mémoire part avec le stockage.
+// Changement de compte : seule la copie en mémoire part ; le stockage est vidé par l'appelant, ou appartient déjà à un autre compte.
 export function clearDrafts() {
   entries.clear()
-  save()
   subs.forEach((f) => f())
 }
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useState, type FormEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { MoreHorizontal, TriangleAlert, UserPlus } from "lucide-react"
 import { toast } from "sonner"
-import { authCall, DANGEROUS, RIGHTS, signedOut, useAuth, type AuthRes, type Factors, type Reauth, type Right } from "@/lib/auth"
+import { authCall, boot, DANGEROUS, RIGHTS, signedOut, useAuth, type AuthRes, type Factors, type Reauth, type Right } from "@/lib/auth"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -11,7 +11,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ReauthForm, when } from "./Profile"
+import { when } from "./Profile"
+import { ReauthForm } from "./Mfa"
 
 export type AclRow = { home_id: string; home_name: string; rights: Right[]; tampered?: boolean }
 export type User = { id: number; name: string; admin: boolean; disabled: boolean; created: number; factors: Factors; sessions: number; acl: AclRow[]; tampered: boolean }
@@ -115,6 +116,8 @@ export function AdminUsers() {
       signedOut()
       return res
     }
+    // Ses propres droits changés : useCan suit (boot garde les données, même compte).
+    if (p.kind === "grant" && p.user.name === me) await boot()
     await load()
     return res
   }
@@ -126,6 +129,7 @@ export function AdminUsers() {
     const res = await authCall<{ rights: Right[] }>("/admin/acl", { user_id: u.id, home_id: home, [on ? "grant" : "revoke"]: [right] })
     if (!res.ok) return void toast.error(res.body.out ?? t("auth.admin.failed"))
     setUsers((l) => l && l.map((x) => (x.id !== u.id ? x : { ...x, acl: [...x.acl.filter((a) => a.home_id !== home), { home_id: home, home_name: "", rights: res.body.rights ?? [] }] })))
+    if (u.name === me) await boot()
   }
 
   const titles: Record<Pending["kind"], string> = {

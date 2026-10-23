@@ -1,5 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react"
-import { clearDrafts } from "@/hooks/useDraft"
+import { toast } from "sonner"
+import { i18n } from "@/i18n"
+import { clearDrafts, guardDrafts } from "@/hooks/useDraft"
 import { resetGit } from "@/hooks/useGit"
 import { resetWarm } from "@/hooks/useKeepWarm"
 import { resetOpen } from "@/hooks/useOpen"
@@ -52,8 +54,11 @@ export function useAuth(): Auth {
 
 // Tout appel au serveur passe ici : jeton CSRF sur les requêtes modifiantes, retour à la connexion si la session tombe.
 // Un 401 portant Retry-After est un échec de vérification (mot de passe, code), pas une session perdue.
+// Hors session établie, seules les routes de connexion modifient : une file d'attente de l'application restée montée ne part pas
+// avec le jeton d'un compte en cours de connexion.
 export async function authFetch(url: string, init: RequestInit = {}): Promise<Response> {
   const m = (init.method ?? "GET").toUpperCase()
+  if (m !== "GET" && m !== "HEAD" && snap.state !== "ok" && snap.state !== "open" && !url.startsWith("/auth/")) throw new Error(i18n.t("auth.notReady"))
   if (snap.csrf && m !== "GET" && m !== "HEAD") {
     const h = new Headers(init.headers)
     h.set("X-Gld-CSRF", snap.csrf)
@@ -79,19 +84,26 @@ export async function authCall<T = object>(url: string, body?: unknown, method =
 const methodsOf = (f: Factors) => [...(f.totp ? ["totp"] : []), ...(f.webauthn ? ["webauthn"] : []), ...(f.recovery ? ["recovery"] : [])]
 
 // Au démarrage et après chaque étape de connexion. 404 : mode ouvert, l'application s'affiche comme sans comptes.
+// Une panne pendant un rafraîchissement (session établie) laisse l'application en place : seul un démarrage mène à « indisponible ».
 export async function boot(): Promise<void> {
+  const down = () => (snap.state === "ok" ? void toast.error(i18n.t("auth.refreshFailed")) : setAuth({ state: "unavailable" }))
   let r: Response
   try {
     r = await fetch("/auth/me")
   } catch {
-    return setAuth({ state: "unavailable" })
+    return down()
   }
   if (r.status === 404) return setAuth({ state: "open" })
   if (r.status === 401) {
     return setAuth({ state: "anon", csrf: "", user: undefined })
   }
-  if (!r.ok) return setAuth({ state: "unavailable" })
-  const b = (await r.json()) as { user: AuthUser; mfa: boolean; csrf: string; factors: Factors; rights?: Record<string, Right[]>; homes?: HomeRef[] }
+  if (!r.ok) return down()
+  let b: { user: AuthUser; mfa: boolean; csrf: string; factors: Factors; rights?: Record<string, Right[]>; homes?: HomeRef[] }
+  try {
+    b = await r.json()
+  } catch {
+    return down()
+  }
   const f = b.factors
   const base = { user: b.user, csrf: b.csrf, factors: f, methods: methodsOf(f), enroll: !f.totp && !f.webauthn }
   if (!b.mfa) return setAuth({ ...base, state: "mfa" })
@@ -126,12 +138,7 @@ const storedKeys = (): string[] => {
 // Le propriétaire est gardé dans le navigateur : un rechargement ne doit pas faire hériter un autre compte des données locales.
 // Données sans propriétaire connu (antérieures au mode multi-utilisateur) : effacées par prudence.
 function adopt(name: string) {
-  let prev: string | null = null
-  try {
-    prev = localStorage.getItem(OWNER)
-  } catch {
-    /* stockage indisponible */
-  }
+  const prev = storedOwner()
   // L'onglet compte aussi : un autre onglet a pu inscrire le nouveau compte comme propriétaire pendant que celui-ci gardait en
   // mémoire les données du précédent.
   const tabOther = snap.owner !== undefined && snap.owner !== name
@@ -142,6 +149,31 @@ function adopt(name: string) {
     /* stockage indisponible : la comparaison retombe sur l'onglet seul */
   }
 }
+
+const storedOwner = (): string | null => {
+  try {
+    return localStorage.getItem(OWNER)
+  } catch {
+    return null
+  }
+}
+
+// Un onglet resté sur un compte n'écrit plus les brouillons quand un autre onglet a inscrit un autre propriétaire.
+guardDrafts(() => snap.state === "open" || (snap.owner !== undefined && storedOwner() === snap.owner))
+
+// Autre onglet connecté sous un autre compte (ou déconnecté) : celui-ci lâche les données en mémoire sans les réécrire et revient
+// à la connexion.
+if (typeof window !== "undefined")
+  window.addEventListener("storage", (e) => {
+    if (e.key !== OWNER && e.key !== null) return
+    if (snap.owner === undefined || (e.key === null ? null : e.newValue) === snap.owner) return
+    clearDrafts()
+    resetGit()
+    resetWarm()
+    resetOpen()
+    resetTrust()
+    setAuth({ state: "anon", csrf: "", user: undefined, factors: undefined, expired: false, owner: undefined, rights: undefined, homes: undefined, home: undefined })
+  })
 
 export function clearUserData() {
   clearDrafts()
@@ -218,7 +250,11 @@ type CredRef = { id: string; type: string; transports?: string[] }
 type PKOptions = Record<string, unknown> & { challenge: string; user?: { id: string; name: string; displayName: string }; excludeCredentials?: CredRef[]; allowCredentials?: CredRef[] }
 const refs = (l?: CredRef[]) => l?.map((c) => ({ ...c, id: dec(c.id) }))
 
-export const waAvailable = () => typeof window !== "undefined" && window.isSecureContext && "PublicKeyCredential" in window
+// Le serveur déclare le nom d'hôte comme identifiant WebAuthn : une adresse IP n'en est jamais un, même si le navigateur la tient
+// pour sûre (127.0.0.1).
+const isIP = (h: string) => /^[\d.]+$/.test(h) || h.includes(":")
+export const waAvailable = (host = location.hostname) =>
+  typeof window !== "undefined" && window.isSecureContext && "PublicKeyCredential" in window && (host === "localhost" || !isIP(host))
 
 async function waCreate(o: { publicKey: PKOptions }) {
   const p = o.publicKey

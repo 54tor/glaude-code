@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from "react"
+import { useId, useState, type FormEvent, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import QRCode from "react-qr-code"
 import { Copy, Download, KeyRound, Smartphone } from "lucide-react"
@@ -44,12 +44,10 @@ export function Mfa() {
   const [left, wait] = useWait()
   const done = async (r: AuthRes<{ csrf: string }>) => {
     setBusy(false)
-    if (r.ok) {
-      if (r.body.csrf) setAuth({ csrf: r.body.csrf })
-      return boot()
-    }
-    // Sans Retry-After, la session partielle a été détruite (trop d'échecs) : retour au mot de passe.
-    if (r.status === 401 && !r.retry) return setAuth({ state: "anon", csrf: "" })
+    // Le jeton promu arrive par boot(), en même temps que l'état « ok » : avant, l'application encore montée n'envoie rien.
+    if (r.ok) return boot()
+    // Trop d'échecs détruisent la session partielle, Retry-After compris : sans elle, inutile d'attendre, retour au mot de passe.
+    if (r.status === 401 && (await fetch("/auth/me").then((m) => m.status, () => 0)) === 401) return setAuth({ state: "anon", csrf: "", user: undefined, factors: undefined })
     setErr(true)
     wait(r.retry)
   }
@@ -146,22 +144,111 @@ export function RecoveryCodes({ codes, onDone }: { codes: string[]; onDone: () =
   )
 }
 
-// Enrôlement d'un facteur : obligatoire à la première connexion (session partielle), ou depuis le profil avec une réauthentification.
-export function Enrol({ reauth, hasTotp, onDone, onCancel }: { reauth?: Reauth; hasTotp?: boolean; onDone: (csrf?: string) => void; onCancel?: () => void }) {
+// Mot de passe et code (TOTP ou secours), ou mot de passe et clé de sécurité : exigé avant toute action sensible.
+export function ReauthForm({
+  title,
+  children,
+  extraOk = true,
+  focusPassword = true,
+  danger,
+  onSubmit,
+  onCancel,
+}: {
+  title: string
+  children?: ReactNode // champs propres à l'action, au-dessus de la vérification
+  extraOk?: boolean
+  focusPassword?: boolean // faux quand un champ propre à l'action vient en premier
+  danger?: boolean
+  onSubmit: (r: Reauth) => Promise<AuthRes>
+  onCancel: () => void
+}) {
   const { t } = useTranslation()
-  const [step, setStep] = useState<"choose" | "totp" | "key">("choose")
+  const { factors } = useAuth()
+  const [pw, setPw] = useState("")
+  const [code, setCode] = useState("")
+  const [err, setErr] = useState<string>()
+  const [busy, setBusy] = useState(false)
+  const [left, wait] = useWait()
+  const send = async (r: Reauth) => {
+    setBusy(true)
+    setErr(undefined)
+    const res = await onSubmit(r)
+    setBusy(false)
+    if (res.ok) return
+    // Un code accepté ne resert pas : on le redemande à chaque essai.
+    setCode("")
+    setErr(outOf(res, t("auth.reauth.invalid")))
+    wait(res.retry)
+  }
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    void send({ password: pw, code: code.trim() })
+  }
+  // L'assertion validée sur la session vaut code pendant cinq minutes.
+  const withKey = async () => {
+    setBusy(true)
+    const a = await waAssert()
+    setBusy(false)
+    if (!a.ok) {
+      setErr(t("auth.reauth.invalid"))
+      return wait(a.retry)
+    }
+    await send({ password: pw, code: "" })
+  }
+  const off = busy || left > 0 || !pw || !extraOk
+  return (
+    <form onSubmit={submit} className="space-y-3 rounded-md border p-3" aria-label={title}>
+      <h3 className="text-sm font-medium">{title}</h3>
+      {children}
+      <p className="text-xs text-muted-foreground">{t("auth.reauth.hint")}</p>
+      <div className="space-y-1.5">
+        <Label htmlFor="gld-reauth-pw">{t("auth.reauth.password")}</Label>
+        <Input id="gld-reauth-pw" type="password" autoComplete="current-password" autoFocus={focusPassword} value={pw} onChange={(e) => setPw(e.target.value)} />
+      </div>
+      <CodeInput id="gld-reauth-code" label={t("auth.reauth.code")} value={code} onChange={setCode} />
+      <ErrorLine msg={err} wait={left} />
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" size="sm" variant={danger ? "destructive" : "default"} disabled={off || !code.trim()}>
+          {t("common.confirm")}
+        </Button>
+        {!!factors?.webauthn && waAvailable() && (
+          <Button type="button" size="sm" variant="outline" disabled={off} onClick={() => void withKey()}>
+            <KeyRound /> {t("auth.reauth.key")}
+          </Button>
+        )}
+        <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
+          {t("common.cancel")}
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+// Réponse d'une action protégée : échec de vérification (401, ou 403 sans réauth) en message générique, sinon le message du serveur.
+export const outOf = (r: AuthRes, generic: string) => (r.status === 401 || r.status === 403 || !r.body.out ? generic : r.body.out)
+
+// Enrôlement d'un facteur : obligatoire à la première connexion (session partielle), ou depuis le profil (reauth). Depuis le profil,
+// chaque début d'enrôlement porte sa propre réauthentification, vérifiée par le serveur avant le QR code ou la clé : un code TOTP ne
+// sert qu'une fois, revenir au choix le redemande.
+export function Enrol({ reauth, hasTotp, onDone, onCancel }: { reauth?: boolean; hasTotp?: boolean; onDone: () => void; onCancel?: () => void }) {
+  const { t } = useTranslation()
+  const [step, setStep] = useState<"choose" | "totpAuth" | "totp" | "key">("choose")
   const [totp, setTotp] = useState<{ secret: string; uri: string } | null>(null)
   const [code, setCode] = useState("")
   const [label, setLabel] = useState("")
   const [err, setErr] = useState<string>()
   const [busy, setBusy] = useState(false)
-  const [codes, setCodes] = useState<{ list: string[]; csrf?: string } | null>(null)
+  const [left, wait] = useWait()
+  const [codes, setCodes] = useState<string[] | null>(null)
   const first = !reauth
-  const fail = (r: AuthRes) => setErr(r.status === 401 || r.status === 403 || !r.body.out ? t("auth.enrol.failed") : r.body.out)
-  const finish = (r: AuthRes<{ csrf: string; recovery: string[] }>) => {
+  const fail = (r: AuthRes) => {
+    setErr(outOf(r, t("auth.enrol.failed")))
+    wait(r.retry)
+  }
+  const finish = (r: AuthRes<{ recovery: string[] }>) => {
     if (!r.ok) return fail(r)
-    if (r.body.recovery?.length) setCodes({ list: r.body.recovery, csrf: r.body.csrf })
-    else onDone(r.body.csrf)
+    if (r.body.recovery?.length) setCodes(r.body.recovery)
+    else onDone()
   }
   const call = async <T,>(f: () => Promise<AuthRes<T>>) => {
     setBusy(true)
@@ -170,36 +257,55 @@ export function Enrol({ reauth, hasTotp, onDone, onCancel }: { reauth?: Reauth; 
     setBusy(false)
     return r
   }
-  const startTotp = async () => {
-    const r = await call(() => authCall<{ secret: string; uri: string }>("/auth/totp/begin", reauth ?? {}))
-    if (!r.ok || !r.body.secret || !r.body.uri) return fail(r)
-    setTotp({ secret: r.body.secret, uri: r.body.uri })
+  const beginTotp = async (r?: Reauth): Promise<AuthRes> => {
+    const res = await authCall<{ secret: string; uri: string }>("/auth/totp/begin", r ?? {})
+    if (!res.ok || !res.body.secret || !res.body.uri) return { ...res, ok: false }
+    setTotp({ secret: res.body.secret, uri: res.body.uri })
     setStep("totp")
+    return res
+  }
+  const startTotp = async () => {
+    const r = await call(() => beginTotp())
+    if (!r.ok) fail(r)
   }
   const confirm = async (e: FormEvent) => {
     e.preventDefault()
-    finish(await call(() => authCall<{ csrf: string; recovery: string[] }>("/auth/totp/confirm", { code })))
+    finish(await call(() => authCall<{ recovery: string[] }>("/auth/totp/confirm", { code })))
     setCode("")
   }
   const register = async (e: FormEvent) => {
     e.preventDefault()
-    finish(await call(() => waRegister(label.trim(), reauth)))
+    finish(await call(() => waRegister(label.trim())))
   }
-  if (codes) return <RecoveryCodes codes={codes.list} onDone={() => onDone(codes.csrf)} />
+  const registerWith = async (r: Reauth): Promise<AuthRes> => {
+    const res = await waRegister(label.trim(), r)
+    if (res.ok) finish(res)
+    return res
+  }
+  const back = () => (setStep("choose"), setErr(undefined))
+  const off = busy || left > 0
+  const labelField = (
+    <div className="space-y-1.5">
+      <Label htmlFor="gld-enrol-label">{t("auth.enrol.label")}</Label>
+      <Input id="gld-enrol-label" value={label} maxLength={64} autoComplete="off" autoFocus onChange={(e) => setLabel(e.target.value)} placeholder={t("auth.enrol.labelHint")} />
+    </div>
+  )
+  if (codes) return <RecoveryCodes codes={codes} onDone={onDone} />
   return (
     <div className="space-y-4">
       {first ? <Heading sub={t("auth.enrol.sub")}>{t("auth.enrol.title")}</Heading> : <h3 className="text-sm font-medium">{t("auth.enrol.add")}</h3>}
       {step === "choose" && (
         <div className="grid gap-2">
-          <Button variant="outline" disabled={busy || hasTotp} onClick={() => void startTotp()}>
+          <Button variant="outline" disabled={off || hasTotp} onClick={() => (first ? void startTotp() : setStep("totpAuth"))}>
             <Smartphone /> {t("auth.enrol.totp")}
           </Button>
-          <Button variant="outline" disabled={busy || !waAvailable()} onClick={() => setStep("key")}>
+          <Button variant="outline" disabled={off || !waAvailable()} onClick={() => setStep("key")}>
             <KeyRound /> {t("auth.enrol.key")}
           </Button>
           {!waAvailable() && <p className="text-sm text-muted-foreground">{t("auth.webauthnUnavailable")}</p>}
         </div>
       )}
+      {step === "totpAuth" && <ReauthForm title={t("auth.enrol.totp")} onSubmit={beginTotp} onCancel={back} />}
       {step === "totp" && totp && (
         <form onSubmit={confirm} className="space-y-3">
           <p className="text-sm text-muted-foreground">{t("auth.enrol.scan")}</p>
@@ -216,28 +322,31 @@ export function Enrol({ reauth, hasTotp, onDone, onCancel }: { reauth?: Reauth; 
             </div>
           </div>
           <CodeInput id="gld-enrol-totp" label={t("auth.enrol.code")} value={code} onChange={setCode} totp />
-          <Button type="submit" className="w-full" disabled={busy || code.length !== 6}>
+          <Button type="submit" className="w-full" disabled={off || code.length !== 6}>
             {t("auth.enrol.confirm")}
           </Button>
         </form>
       )}
-      {step === "key" && (
-        <form onSubmit={register} className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="gld-enrol-label">{t("auth.enrol.label")}</Label>
-            <Input id="gld-enrol-label" value={label} maxLength={64} autoComplete="off" onChange={(e) => setLabel(e.target.value)} placeholder={t("auth.enrol.labelHint")} />
-          </div>
-          <Button type="submit" className="w-full" disabled={busy || !label.trim()}>
-            <KeyRound /> {t("auth.enrol.register")}
-          </Button>
-        </form>
-      )}
-      <ErrorLine msg={err} />
-      {step !== "choose" ? (
-        <Button variant="ghost" size="sm" onClick={() => (setStep("choose"), setErr(undefined))}>
+      {step === "key" &&
+        (first ? (
+          <form onSubmit={register} className="space-y-3">
+            {labelField}
+            <Button type="submit" className="w-full" disabled={off || !label.trim()}>
+              <KeyRound /> {t("auth.enrol.register")}
+            </Button>
+          </form>
+        ) : (
+          <ReauthForm title={t("auth.enrol.key")} extraOk={!!label.trim()} focusPassword={false} onSubmit={registerWith} onCancel={back}>
+            {labelField}
+          </ReauthForm>
+        ))}
+      {step !== "totpAuth" && (first || step !== "key") && <ErrorLine msg={err} wait={left} />}
+      {step === "totp" || (first && step === "key") ? (
+        <Button variant="ghost" size="sm" onClick={back}>
           {t("common.back")}
         </Button>
       ) : (
+        step === "choose" &&
         onCancel && (
           <Button variant="ghost" size="sm" onClick={onCancel}>
             {t("common.cancel")}
