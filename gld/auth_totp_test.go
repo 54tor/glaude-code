@@ -237,3 +237,25 @@ func TestRecoveryTamper(t *testing.T) {
 		t.Fatal("tampered row accepted or not logged")
 	}
 }
+
+func TestTOTPBeginTamperedPending(t *testing.T) {
+	s, id, _, _ := enrolled(t)
+	var before []byte
+	if err := s.db.QueryRow(`SELECT secret_enc FROM totp WHERE user_id=?`, id).Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`UPDATE totp SET confirmed_at=NULL WHERE user_id=?`, id); err != nil {
+		t.Fatal(err)
+	}
+	n := tamperEvents(t, s)
+	if _, _, err := s.TOTPBegin(id, "alice"); !errors.Is(err, errTamper) {
+		t.Fatalf("begin over tampered row: %v", err)
+	}
+	var after []byte
+	if err := s.db.QueryRow(`SELECT secret_enc FROM totp WHERE user_id=?`, id).Scan(&after); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) || tamperEvents(t, s) != n+1 {
+		t.Fatal("tampered row replaced or tamper not logged")
+	}
+}
