@@ -162,7 +162,11 @@ func TestRewriteCwd(t *testing.T) {
 	}
 	p := filepath.Join(t.TempDir(), "s.jsonl")
 	put(t, p, `{"cwd":"/h","x":1}`+"\n"+`{"cwd":"/h/.local/bin"}`+"\n"+`{"cwd":"/h/P/tb"}`+"\n", old)
-	if err := rewriteCwd(p, "/h", "/h/P/tb", false); err != nil {
+	c, err := prepareCwd(p, "/h", "/h/P/tb", false)
+	if err == nil {
+		err = c.commit()
+	}
+	if err != nil {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(p)

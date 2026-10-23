@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var cwdRe = regexp.MustCompile(`"cwd":("(?:[^"\\]|\\.)*")`)
@@ -29,8 +30,26 @@ func remapCwd(v, old, nw string, sub bool) string {
 	return v
 }
 
-// rewriteCwd remplace le cwd (voir remapCwd) dans un transcript, en gardant la date de modification.
-func rewriteCwd(path, old, nw string, sub bool) error {
+// cwdRewrite : un transcript réécrit dans path.tmp, en attente du renommage qui remplace l'original.
+type cwdRewrite struct {
+	path string
+	mod  time.Time
+}
+
+// commit remplace l'original par sa réécriture, en gardant la date de modification.
+func (c cwdRewrite) commit() error {
+	err := os.Rename(c.path+".tmp", c.path)
+	if err == nil {
+		forgetInfo(c.path)
+		err = os.Chtimes(c.path, c.mod, c.mod)
+	}
+	return err
+}
+
+func (c cwdRewrite) abort() { os.Remove(c.path + ".tmp") }
+
+// prepareCwd écrit dans path.tmp le transcript au cwd remplacé (voir remapCwd) ; commit le met en place.
+func prepareCwd(path, old, nw string, sub bool) (cwdRewrite, error) {
 	cwdKey := []byte(`"cwd":`)
 	remap := func(m []byte) []byte {
 		var v string
@@ -46,17 +65,17 @@ func rewriteCwd(path, old, nw string, sub bool) error {
 	}
 	st, err := os.Stat(path)
 	if err != nil {
-		return err
+		return cwdRewrite{}, err
 	}
 	in, err := os.Open(path)
 	if err != nil {
-		return err
+		return cwdRewrite{}, err
 	}
 	defer in.Close()
 	tmp := path + ".tmp"
 	out, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, st.Mode())
 	if err != nil {
-		return err
+		return cwdRewrite{}, err
 	}
 	w := bufio.NewWriterSize(out, 1<<20)
 	r := bufio.NewReaderSize(in, 1<<20)
@@ -84,13 +103,9 @@ func rewriteCwd(path, old, nw string, sub bool) error {
 	}
 	if err != nil {
 		os.Remove(tmp)
-		return err
+		return cwdRewrite{}, err
 	}
-	if err = os.Rename(tmp, path); err == nil {
-		forgetInfo(path)
-		err = os.Chtimes(path, st.ModTime(), st.ModTime())
-	}
-	return err
+	return cwdRewrite{path, st.ModTime()}, nil
 }
 
 // reassign déplace des sessions vers le dossier de transcripts de `to` (un dossier existant)
@@ -121,32 +136,61 @@ func reassign(items []item, to string) (int, error) {
 			}
 		}
 	}
-	if err := os.MkdirAll(dst, 0o755); err != nil {
-		return 0, err
-	}
-	for _, it := range items {
-		src := filepath.Join(root, it.Dir)
-		jl := filepath.Join(src, it.ID+".jsonl")
-		if st, err := os.Stat(jl); err == nil {
-			if old := info(jl, st).Cwd; old != "" && old != to {
-				_, gone := os.Stat(old)
-				files := []string{jl}
-				filepath.WalkDir(filepath.Join(src, it.ID), func(p string, e os.DirEntry, err error) error {
-					if err == nil && !e.IsDir() && strings.HasSuffix(p, ".jsonl") {
-						files = append(files, p)
-					}
-					return nil
-				})
-				for _, f := range files {
-					if err := rewriteCwd(f, old, to, gone != nil); err != nil {
-						return 0, err
-					}
-				}
+	// Toutes les réécritures (transcripts et sous-agents de chaque session) sont écrites avant le premier renommage : un
+	// échec en cours de route ne laisse pas une session à moitié réécrite.
+	pending := make([][]cwdRewrite, len(items))
+	abort := func() {
+		for _, l := range pending {
+			for _, c := range l {
+				c.abort()
 			}
 		}
+	}
+	for i, it := range items {
+		src := filepath.Join(root, it.Dir)
+		jl := filepath.Join(src, it.ID+".jsonl")
+		st, err := os.Stat(jl)
+		if err != nil {
+			continue
+		}
+		old := info(jl, st).Cwd
+		if old == "" || old == to {
+			continue
+		}
+		_, gone := os.Stat(old)
+		files := []string{jl}
+		filepath.WalkDir(filepath.Join(src, it.ID), func(p string, e os.DirEntry, err error) error {
+			if err == nil && !e.IsDir() && strings.HasSuffix(p, ".jsonl") {
+				files = append(files, p)
+			}
+			return nil
+		})
+		for _, f := range files {
+			c, err := prepareCwd(f, old, to, gone != nil)
+			if err != nil {
+				abort()
+				return 0, err
+			}
+			pending[i] = append(pending[i], c)
+		}
+	}
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		abort()
+		return 0, err
+	}
+	for i, it := range items {
+		for _, c := range pending[i] {
+			if err := c.commit(); err != nil {
+				abort()
+				return i, err
+			}
+			pending[i] = pending[i][1:]
+		}
+		src := filepath.Join(root, it.Dir)
 		for _, n := range []string{it.ID + ".jsonl", it.ID} {
 			if err := os.Rename(filepath.Join(src, n), filepath.Join(dst, n)); err != nil && !os.IsNotExist(err) {
-				return 0, err
+				abort()
+				return i, err
 			}
 		}
 		os.Remove(src) // seulement s'il est devenu vide

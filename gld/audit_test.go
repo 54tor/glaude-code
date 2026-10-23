@@ -224,3 +224,33 @@ func TestConvSansLimitePagine(t *testing.T) {
 		t.Fatalf("seconde page : %d messages, more %v", len(msgs), m["more"])
 	}
 }
+
+// Réassignation : si la réécriture d'un sous-agent échoue, rien n'a été remplacé (ni le transcript principal, ni de .tmp
+// laissé derrière) et la session reste où elle était.
+func TestReassignationAtomique(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	base := t.TempDir()
+	src, dst := filepath.Join(base, "src"), filepath.Join(base, "dst")
+	os.MkdirAll(src, 0o755)
+	os.MkdirAll(dst, 0o755)
+	enc := nonAlnum.ReplaceAllString(src, "-")
+	jl := filepath.Join(cfg, "projects", enc, id1+".jsonl")
+	orig := `{"cwd":"` + src + `"}` + "\n"
+	put(t, jl, orig, old)
+	agent := filepath.Join(cfg, "projects", enc, id1, "subagents", "a.jsonl")
+	put(t, agent, orig, old)
+	os.MkdirAll(agent+".tmp", 0o755) // le .tmp du sous-agent ne peut pas être créé
+	if _, err := reassign([]item{{enc, id1}}, dst); err == nil {
+		t.Fatal("échec de réécriture non signalé")
+	}
+	if b, _ := os.ReadFile(jl); string(b) != orig {
+		t.Fatalf("transcript principal réécrit malgré l'échec :\n%s", b)
+	}
+	if _, err := os.Stat(jl + ".tmp"); err == nil {
+		t.Fatal(".tmp du transcript principal laissé derrière")
+	}
+	if _, err := os.Stat(filepath.Join(cfg, "projects", nonAlnum.ReplaceAllString(dst, "-"), id1+".jsonl")); err == nil {
+		t.Fatal("session déplacée malgré l'échec")
+	}
+}
