@@ -90,7 +90,7 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
             className="min-w-0 flex-1 text-left outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring/50"
             onClick={() => a.read(s)}
           >
-            <span className={cn("line-clamp-1 text-[15px] leading-6", s.named ? "font-medium" : "text-foreground/85")}>
+            <span className={cn("line-clamp-1 text-md", s.named ? "font-medium" : "text-foreground/85")}>
               {a.favs.has(s.id) && <Star className="mr-1 inline size-3.5 -translate-y-px fill-amber-400 text-amber-400" aria-label={t("shell.list.favorite")} />}
               {s.title}
             </span>

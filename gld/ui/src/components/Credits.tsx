@@ -57,13 +57,13 @@ function Addr({ label, name, value, scheme }: { label: string; name: string; val
   return (
     <div className="rounded-lg border bg-muted/30 p-3">
       <div className="mb-1.5 flex items-center gap-2 text-sm font-medium">
-        <span className="rounded bg-primary px-1.5 py-0.5 font-mono text-xs text-primary-foreground">{label}</span> {name}
+        <span className="rounded-sm bg-primary px-1.5 py-0.5 font-mono text-xs text-primary-foreground">{label}</span> {name}
         <a href={`${scheme}:${value}`} className="ml-auto flex items-center gap-1 text-xs font-normal text-muted-foreground hover:text-foreground" title={t("shell.credits.walletHint")}>
           {t("shell.credits.wallet")} <ExternalLink className="size-3" />
         </a>
       </div>
       <div className="flex items-start gap-3">
-        <QRCode value={`${scheme}:${value}`} size={96} level="M" className="shrink-0 rounded bg-white p-1" aria-label={t("shell.credits.qr", { name })} />
+        <QRCode value={`${scheme}:${value}`} size={96} level="M" className="shrink-0 rounded-sm bg-white p-1" aria-label={t("shell.credits.qr", { name })} />
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <code className="font-mono text-xs leading-5 break-all select-all">{value}</code>
           <Button variant="outline" size="xs" className="self-start" onClick={copy} aria-label={t("shell.credits.copyAddress", { name })}>

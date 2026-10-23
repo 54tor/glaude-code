@@ -33,7 +33,7 @@ function OriginBadge({ s }: { s: Skill }) {
   const o = s.origin in ORIGINS ? s.origin : "custom"
   const what = t(`skills.origin.${o}.hint`)
   return (
-    <span className={cn("shrink-0 rounded px-1.5 py-px text-[10px] font-medium", ORIGINS[o])} title={s.source ? t("skills.origin.withSource", { what, source: s.source }) : what}>
+    <span className={cn("shrink-0 rounded-sm px-1.5 py-px text-2xs font-medium", ORIGINS[o])} title={s.source ? t("skills.origin.withSource", { what, source: s.source }) : what}>
       {t(`skills.origin.${o}.label`)}
     </span>
   )
@@ -141,7 +141,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
               className="min-w-0"
             />
             {data && (
-              <span className="basis-full text-[11px] text-muted-foreground" title={t("skills.skills.budgetHint")}>
+              <span className="basis-full text-2xs text-muted-foreground" title={t("skills.skills.budgetHint")}>
                 {t("skills.skills.budget", { n: budget.toLocaleString(loc()) })}
               </span>
             )}

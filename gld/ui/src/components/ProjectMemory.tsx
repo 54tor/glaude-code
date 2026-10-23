@@ -173,9 +173,9 @@ export function ProjectMemory({ dir }: { dir: string }) {
                       <button onClick={() => setShown({ f, edit: false })} className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-sm" title={f.path}>
                         <Icon className="size-3.5 shrink-0 text-muted-foreground" />
                         <span className={cn("min-w-0 flex-1 truncate", f.off && "line-through opacity-60")}>{f.name}</span>
-                        {f.type && <span className="shrink-0 rounded bg-muted px-1.5 text-[10px] text-muted-foreground">{f.type}</span>}
-                        {f.paths && <span className="shrink-0 text-[10px] text-muted-foreground">{t("memory.project.scoped")}</span>}
-                        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{f.always ? t("memory.project.tokens", { n: f.tokens }) : t("memory.project.onDemand")}</span>
+                        {f.type && <span className="shrink-0 rounded-sm bg-muted px-1.5 text-2xs text-muted-foreground">{f.type}</span>}
+                        {f.paths && <span className="shrink-0 text-2xs text-muted-foreground">{t("memory.project.scoped")}</span>}
+                        <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">{f.always ? t("memory.project.tokens", { n: f.tokens }) : t("memory.project.onDemand")}</span>
                       </button>
                       <Button size="icon-xs" variant="ghost" className="mr-1 shrink-0 opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100" onClick={() => go(href({ kind: "memory", key: f.key }))} aria-label={t("memory.project.openAria", { name: f.name })} title={t("memory.project.openTitle")}>
                         <ExternalLink />

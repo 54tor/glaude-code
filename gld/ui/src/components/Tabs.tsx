@@ -69,14 +69,14 @@ export function Tabs({ args, onAsk, onPrompt }: { args: string; onAsk: (a: Ask) 
   return (
     <ScrollArea className="min-h-0 flex-1">
       <div className="mx-auto max-w-7xl space-y-4 px-3 py-4 pb-24 md:px-6">
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-muted/30 px-4 py-3 text-sm">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 px-4 py-3 text-sm">
           <div className="min-w-0 flex-1">
             <p className="font-medium">
               {a.live.size ? t("shell.tabs.openNow", { count: a.live.size }) : t("shell.tabs.noneOpen")}
             </p>
             <p className="text-xs text-muted-foreground">
               {t("shell.tabs.autoNote")}{" "}
-              <code className="rounded bg-muted px-1">gld-matin --resume</code>
+              <code className="rounded-sm bg-muted px-1">gld-matin --resume</code>
             </p>
           </div>
           <Button size="sm" onClick={save} disabled={!a.live.size}>
@@ -87,7 +87,7 @@ export function Tabs({ args, onAsk, onPrompt }: { args: string; onAsk: (a: Ask) 
         {saves === null && <Skeleton className="h-24 w-full" />}
         {saves?.length === 0 && <p className="py-12 text-center text-sm text-muted-foreground">{t("shell.tabs.none")}</p>}
         {saves?.map((s) => (
-          <section key={s.at} className="rounded-xl border">
+          <section key={s.at} className="rounded-lg border">
             <div className="flex items-center gap-2 border-b px-4 py-2.5">
               <History className="size-4 shrink-0 text-muted-foreground" />
               <span className="truncate text-sm font-medium">{s.name || t("shell.tabs.auto")}</span>

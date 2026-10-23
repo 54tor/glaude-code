@@ -55,7 +55,7 @@ export function PageHeader({
         </Button>
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-xl font-semibold tracking-tight">{title}</h2>
-          <p className="truncate text-[13px] text-muted-foreground">
+          <p className="truncate text-sm text-muted-foreground">
             {sub}
             {qt && (route.kind === "recent" || route.kind === "all" || route.kind === "active" || route.kind === "group" || route.kind === "dir") && t("shell.header.search", { q: qt })}
           </p>

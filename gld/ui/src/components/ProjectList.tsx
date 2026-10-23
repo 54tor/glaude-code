@@ -35,7 +35,7 @@ export function ProjectList({ route, go }: { route: Route; go: (r: Route) => voi
                   )}
                 >
                   <button
-                    className={cn("relative z-10 grid size-5 shrink-0 place-items-center rounded text-muted-foreground hover:text-foreground", !p.dirs.length && "invisible")}
+                    className={cn("relative z-10 grid size-5 shrink-0 place-items-center rounded-sm text-muted-foreground hover:text-foreground", !p.dirs.length && "invisible")}
                     onClick={() => toggle(p.name)}
                     aria-label={isOpen ? t("shell.tree.collapse") : t("shell.tree.expand")}
                     aria-expanded={isOpen}

@@ -319,7 +319,7 @@ function LiveSend({ dir, id, onSent, liveState, onAsk }: { dir: string; id: stri
                 }}
                 aria-selected={i === sel % sugg.length}
                 onMouseDown={(e) => (e.preventDefault(), setText(cmd + " "))}
-                className={cn("flex cursor-pointer items-baseline gap-2 rounded px-2 py-1", i === sel % sugg.length && "bg-accent")}
+                className={cn("flex cursor-pointer items-baseline gap-2 rounded-md px-2 py-1", i === sel % sugg.length && "bg-accent")}
               >
                 <code className="text-xs">{cmd}</code>
                 <span className="text-muted-foreground">{label}</span>
@@ -499,7 +499,7 @@ function TerminalPanel({ id, onAsk, onSent }: { id: string; onAsk?: (asking: boo
           {prompt.tabs && prompt.tabs.length > 1 && (
             <p className="mb-1.5 flex flex-wrap gap-1 text-xs" aria-label={t("conversation.composer.tabsAria")}>
               {prompt.tabs.map((tab) => (
-                <span key={tab.label} className={tab.done ? "rounded border border-success/40 px-1.5 text-success" : "rounded border px-1.5 font-medium"}>
+                <span key={tab.label} className={tab.done ? "rounded-sm border border-success/40 px-1.5 text-success" : "rounded-sm border px-1.5 font-medium"}>
                   {tab.done ? "✔" : "•"} {tab.label}
                 </span>
               ))}
@@ -554,7 +554,7 @@ function TerminalPanel({ id, onAsk, onSent }: { id: string; onAsk?: (asking: boo
         </Button>
       </div>
       {debug && (
-        <div className="space-y-1.5 text-[11px]">
+        <div className="space-y-1.5 text-2xs">
           <pre className="max-h-72 overflow-auto rounded-lg border bg-background px-3 py-2 font-mono leading-snug whitespace-pre" aria-label={t("conversation.composer.screenAria")}>
             {screen || t("conversation.composer.emptyScreen")}
           </pre>

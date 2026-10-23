@@ -292,7 +292,7 @@ function Row({ f, value, file, propose }: { f: Field; value: unknown; file: stri
     <li className="flex flex-wrap items-center gap-2 py-1 text-sm">
       <span className="min-w-56 flex-1">
         {f.label}
-        {describeKey(f.key) && <span className="block text-[11px] leading-snug text-muted-foreground">{describeKey(f.key)}</span>}
+        {describeKey(f.key) && <span className="block text-2xs leading-snug text-muted-foreground">{describeKey(f.key)}</span>}
       </span>
       {f.kind === "bool" ? (
         <Checkbox checked={value === true} onCheckedChange={(c) => set(c === true)} aria-label={f.label} />
