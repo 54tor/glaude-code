@@ -333,6 +333,7 @@ export default function App() {
             setHideGrouped={setHideGrouped}
             actions={actions}
             groupActs={groupActs}
+            split={route.kind === "skills" || route.kind === "memory" || route.kind === "snippets"}
           />
 
           <Suspense fallback={<Skeleton className="m-6 h-32" />}>
