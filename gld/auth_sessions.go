@@ -59,6 +59,18 @@ func (s *authStore) PurgeEvents(olderThan time.Duration) (int64, error) {
 	return res.RowsAffected()
 }
 
+// PurgeSessions retire les sessions qu'aucun cookie ne peut plus rouvrir : échues, au-delà de l'échéance absolue,
+// ou partielles au-delà de la fenêtre du second facteur.
+func (s *authStore) PurgeSessions() (int64, error) {
+	now := authNow().Unix()
+	res, err := s.db.Exec(`DELETE FROM sessions WHERE expires_at <= ? OR created_at <= ? OR (mfa_at IS NULL AND created_at <= ?)`,
+		now, now-int64(sessAbsolute/time.Second), now-int64(thMFAWindow/time.Second))
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 // sessHash : HMAC avec la clé d'intégrité, pour qu'une ligne insérée sans la clé ne corresponde à aucun cookie.
 func (s *authStore) sessHash(raw []byte) []byte {
 	m := hmac.New(sha256.New, rowSigKey(s.key))

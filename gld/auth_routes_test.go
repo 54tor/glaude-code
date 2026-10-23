@@ -1009,3 +1009,45 @@ func TestEnrolledFactorsDeleted(t *testing.T) {
 		t.Fatalf("enrôlement après ResetMFA : %d %s", w.Code, w.Body)
 	}
 }
+
+// Nom trop long : échec générique, compté sous la clé commune, jamais écrit tel quel.
+func TestLoginOversizeName(t *testing.T) {
+	g := newAuthRig(t)
+	long := strings.Repeat("é", 65)
+	assertGenericFail(t, g.login(long, testPw))
+	var n int
+	g.s.db.QueryRow(`SELECT COUNT(*) FROM throttle WHERE key LIKE ?`, "%"+long+"%").Scan(&n)
+	if n != 0 {
+		t.Fatal("clé de throttle au nom trop long")
+	}
+	g.s.db.QueryRow(`SELECT COUNT(*) FROM auth_events WHERE name_tried LIKE ?`, "%"+long+"%").Scan(&n)
+	if n != 0 {
+		t.Fatal("événement au nom trop long")
+	}
+	g.s.db.QueryRow(`SELECT COUNT(*) FROM throttle WHERE key=?`, "user:"+oversizeName).Scan(&n)
+	if n != 1 {
+		t.Fatal("échec non compté sous la clé commune")
+	}
+}
+
+// Les refus « blocked » ne s'écrivent qu'une fois par minute pour un même nom et une même adresse.
+func TestBlockedEventsRateLimited(t *testing.T) {
+	g := newAuthRig(t)
+	for range thLockAfter {
+		g.th.Fail("alice", "198.51.100.9", "password")
+	}
+	for range 20 {
+		g.login("alice", "wrong password here")
+	}
+	var n int
+	g.s.db.QueryRow(`SELECT COUNT(*) FROM auth_events WHERE outcome='blocked'`).Scan(&n)
+	if n != 1 {
+		t.Fatalf("événements blocked : %d", n)
+	}
+	g.tick(time.Minute)
+	g.login("alice", "wrong password here")
+	g.s.db.QueryRow(`SELECT COUNT(*) FROM auth_events WHERE outcome='blocked'`).Scan(&n)
+	if n != 2 {
+		t.Fatalf("après une minute : %d", n)
+	}
+}

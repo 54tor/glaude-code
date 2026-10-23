@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -40,6 +41,9 @@ type authAPI struct {
 }
 
 const deniedCap = 1024
+
+// oversizeName : clé commune des noms de plus de 64 caractères ; normName rogne les espaces, aucun nom tapé n'y aboutit.
+const oversizeName = " oversize"
 
 type factorState struct {
 	TOTP     bool `json:"totp"`
@@ -177,7 +181,7 @@ func (a *authAPI) throttled(w http.ResponseWriter, uid int64, name, ip, kind str
 	if !blocked && wait <= 0 {
 		return false
 	}
-	a.log(uid, name, ip, kind, "blocked")
+	a.rateLog(uid, name, ip, kind, "blocked")
 	if blocked && onBlocked != nil {
 		onBlocked()
 	}
@@ -199,9 +203,13 @@ func (a *authAPI) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name, ip := normName(req.Name), clientIP(r)
+	// Un nom trop long pour un compte ne crée ni clé ni événement à son nom : tous partagent une seule clé.
+	if utf8.RuneCountInString(name) > 64 {
+		name = oversizeName
+	}
 	release, ok := a.claim("login:" + name)
 	if !ok {
-		a.log(0, name, ip, evLogin, "busy")
+		a.rateLog(0, name, ip, evLogin, "busy")
 		authFail(w, 0)
 		return
 	}
@@ -209,7 +217,7 @@ func (a *authAPI) login(w http.ResponseWriter, r *http.Request) {
 	if a.throttled(w, 0, name, ip, evLogin, nil) {
 		return
 	}
-	if !pwSane(req.Password) {
+	if !pwSane(req.Password) || name == oversizeName {
 		a.fail(w, 0, name, ip, evLogin, "invalid_password", "password")
 		return
 	}
@@ -292,10 +300,14 @@ func (a *authAPI) need(w http.ResponseWriter, r *http.Request, full bool) *Princ
 }
 
 // deniedLog journalise un refus au plus une fois par minute et par adresse : un flot anonyme
-// ne doit pas pouvoir remplir auth_events. Table pleine : le refus n'est pas journalisé.
-func (a *authAPI) deniedLog(uid int64, ip, kind string) {
+// ne doit pas pouvoir remplir auth_events.
+func (a *authAPI) deniedLog(uid int64, ip, kind string) { a.rateLog(uid, "", ip, kind, "denied") }
+
+// rateLog écrit un événement au plus une fois par minute pour un même (type, issue, nom, adresse). Table pleine :
+// l'événement n'est pas écrit.
+func (a *authAPI) rateLog(uid int64, name, ip, kind, outcome string) {
 	now := authNow()
-	k := kind + "|" + ip
+	k := kind + "|" + outcome + "|" + name + "|" + ip
 	a.mu.Lock()
 	if t, ok := a.denied[k]; ok && now.Sub(t) < time.Minute {
 		a.mu.Unlock()
@@ -314,7 +326,7 @@ func (a *authAPI) deniedLog(uid int64, ip, kind string) {
 	}
 	a.mu.Unlock()
 	if !full {
-		a.log(uid, "", ip, kind, "denied")
+		a.log(uid, name, ip, kind, outcome)
 	}
 }
 
@@ -351,7 +363,7 @@ func (a *authAPI) second(w http.ResponseWriter, r *http.Request, p *Principal, m
 	kind := "mfa_" + method
 	release, ok := a.claim(codeKey(uid))
 	if !ok {
-		a.log(uid, name, ip, kind, "busy")
+		a.rateLog(uid, name, ip, kind, "busy")
 		authFail(w, 0)
 		return
 	}
@@ -584,7 +596,7 @@ func (a *authAPI) reauth(w http.ResponseWriter, r *http.Request, p *Principal, q
 	name, ip, uid := p.User.Name, clientIP(r), p.User.ID
 	release, ok := a.claim(codeKey(uid))
 	if !ok {
-		a.log(uid, name, ip, "reauth", "busy")
+		a.rateLog(uid, name, ip, "reauth", "busy")
 		authFail(w, 0)
 		return false
 	}
@@ -649,7 +661,7 @@ func (a *authAPI) enrolCommit(w http.ResponseWriter, r *http.Request, p *Princip
 	if !p.MFA {
 		release, ok := a.claim("first:" + strconv.FormatInt(p.User.ID, 10))
 		if !ok {
-			a.log(p.User.ID, p.User.Name, clientIP(r), "enrol", what+"_busy")
+			a.rateLog(p.User.ID, p.User.Name, clientIP(r), "enrol", what+"_busy")
 			writeJSON(w, 409, map[string]any{"ok": false, "out": L("srv.auth.enrolementEnCours")})
 			return
 		}

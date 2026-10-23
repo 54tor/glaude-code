@@ -1,11 +1,13 @@
 package main
 
 import (
+	"database/sql"
 	"math"
 	"net"
 	"net/http"
 	"net/netip"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +22,11 @@ const (
 	thKnownFor   = 30 * 24 * time.Hour
 	thGlobalMax  = 60
 	thGlobalSpan = time.Minute
+	// Suite d'échecs consécutifs par compte, hors fenêtre : un essai lent (quelques échecs par quart d'heure) finit verrouillé.
+	thStreakLock    = 10
+	thStreakLong    = 20
+	thStreakLongFor = 24 * time.Hour
+	thStreakKeep    = 7 * 24 * time.Hour
 
 	evLogin   = "login"
 	evSuccess = "success"
@@ -40,12 +47,22 @@ func newThrottle(db *authDB) *throttle { return &throttle{db: db, now: time.Now}
 // Les clés dérivent du nom tapé, jamais d'une recherche du compte : un nom inconnu
 // se comporte exactement comme un nom existant.
 func thKeys(user, ip string) (u, i, p, m string) {
-	n := normName(user)
+	n := thName(user)
 	return "user:" + n, "ip:" + ip, "pair:" + n + "|" + ip, "mfa:" + n
 }
 
+func streakKey(user string) string { return "streak:" + thName(user) }
+
+// thName : la clé commune des noms trop longs n'est pas normalisée, pour qu'aucun nom tapé ne la rejoigne.
+func thName(user string) string {
+	if user == oversizeName {
+		return user
+	}
+	return normName(user)
+}
+
 // Marqueur posé par Success : first_at sert de date de dernière connexion réussie.
-func knownKey(user, ip string) string { return "known:" + normName(user) + "|" + ip }
+func knownKey(user, ip string) string { return "known:" + thName(user) + "|" + ip }
 
 func backoff(fails int64) time.Duration {
 	if fails < 3 {
@@ -70,8 +87,8 @@ func (t *throttle) Pending(user, ip string) (wait time.Duration, blocked bool) {
 	now := t.now()
 	cut := now.Add(-thWindow).Unix()
 	uk, ik, pk, mk := thKeys(user, ip)
-	kk := knownKey(user, ip)
-	rows, err := t.db.Query(`SELECT key, fails, first_at, locked_until, last_at FROM throttle WHERE key IN (?,?,?,?,?)`, uk, ik, pk, mk, kk)
+	kk, sk := knownKey(user, ip), streakKey(user)
+	rows, err := t.db.Query(`SELECT key, fails, first_at, locked_until, last_at FROM throttle WHERE key IN (?,?,?,?,?,?)`, uk, ik, pk, mk, kk, sk)
 	if err != nil {
 		return thMaxDelay, true
 	}
@@ -101,13 +118,13 @@ func (t *throttle) Pending(user, ip string) (wait time.Duration, blocked bool) {
 		return min(time.Unix(got[mk].first, 0).Add(thWindow).Sub(now), thMaxDelay), true
 	}
 	u := got[uk]
-	uLocked := u.locked > now.Unix()
+	lockEnd := max(u.locked, got[sk].locked)
 	uFails := inWin(uk)
 	if k, ok := got[kk]; ok && k.first >= now.Add(-thKnownFor).Unix() {
-		uLocked, uFails = false, 0
+		lockEnd, uFails = 0, 0
 	}
-	if uLocked {
-		return min(time.Unix(u.locked, 0).Sub(now), thMaxDelay), true
+	if lockEnd > now.Unix() {
+		return min(time.Unix(lockEnd, 0).Sub(now), thMaxDelay), true
 	}
 	// Le délai court depuis le dernier échec : un nouvel essai après Retry-After est réellement vérifié.
 	left := func(k string, fails int64) time.Duration {
@@ -159,12 +176,31 @@ RETURNING fails`, k, now, cut, thLockAfter, int64(thLockFor/time.Second)).Scan(&
 			return err
 		}
 		if k == uk && fails == thLockAfter {
-			if _, err := tx.Exec(`INSERT INTO auth_events(at, name_tried, ip, kind, outcome) VALUES (?,?,?,?,?)`, now, normName(user), ip, "lock", "locked"); err != nil {
+			if err := lockEvent(tx, now, user, ip, "locked"); err != nil {
 				return err
 			}
 		}
 	}
+	var streak int64
+	err = tx.QueryRow(`INSERT INTO throttle(key, fails, first_at, locked_until, last_at) VALUES (?1, 1, ?2, 0, ?2)
+ON CONFLICT(key) DO UPDATE SET last_at = ?2, fails = fails + 1,
+  locked_until = CASE WHEN fails + 1 >= ?4 THEN ?2 + ?6 WHEN fails + 1 >= ?3 THEN ?2 + ?5 ELSE locked_until END
+RETURNING fails`, streakKey(user), now, thStreakLock, thStreakLong, int64(thLockFor/time.Second), int64(thStreakLongFor/time.Second)).Scan(&streak)
+	if err != nil {
+		return err
+	}
+	if streak == thStreakLock || streak == thStreakLong {
+		if err := lockEvent(tx, now, user, ip, "streak_"+strconv.FormatInt(streak, 10)); err != nil {
+			return err
+		}
+	}
 	return tx.Commit()
+}
+
+func lockEvent(tx *sql.Tx, now int64, user, ip, outcome string) error {
+	journal("auth: compte %q verrouillé (%s) depuis %s", normName(user), outcome, ip)
+	_, err := tx.Exec(`INSERT INTO auth_events(at, name_tried, ip, kind, outcome) VALUES (?,?,?,?,?)`, now, normName(user), ip, "lock", outcome)
+	return err
 }
 
 // Les compteurs mfa: ne sont pas remis à zéro : sinon un mot de passe connu suffirait
@@ -172,8 +208,8 @@ RETURNING fails`, k, now, cut, thLockAfter, int64(thLockFor/time.Second)).Scan(&
 func (t *throttle) Success(user, ip string) error {
 	now := t.now().Unix()
 	uk, _, pk, _ := thKeys(user, ip)
-	_, err := t.db.Exec(`DELETE FROM throttle WHERE key IN (?,?) OR (key LIKE 'known:%' AND first_at < ?)`,
-		uk, pk, now-int64(thKnownFor/time.Second))
+	_, err := t.db.Exec(`DELETE FROM throttle WHERE key IN (?,?,?) OR (key LIKE 'known:%' AND first_at < ?)`,
+		uk, pk, streakKey(user), now-int64(thKnownFor/time.Second))
 	if err != nil {
 		return err
 	}
@@ -182,10 +218,19 @@ ON CONFLICT(key) DO UPDATE SET first_at = excluded.first_at`, knownKey(user, ip)
 	return err
 }
 
-func (t *throttle) KnownIP(userID int64, ip string) bool {
-	var one int
-	return t.db.QueryRow(`SELECT 1 FROM auth_events WHERE user_id=? AND kind=? AND outcome=? AND ip=? AND at>=? LIMIT 1`,
-		userID, evLogin, evSuccess, ip, t.now().Add(-thKnownFor).Unix()).Scan(&one) == nil
+// Purge retire les lignes qui ne pèsent plus sur aucune décision : un flot de noms inventés ne fait pas grossir la table.
+// Une suite d'échecs reste sept jours après son dernier échec.
+func (t *throttle) Purge() (int64, error) {
+	now := t.now().Unix()
+	res, err := t.db.Exec(`DELETE FROM throttle WHERE locked_until <= ?1 AND (
+  (key LIKE 'known:%' AND first_at < ?2) OR
+  (key LIKE 'streak:%' AND last_at < ?3) OR
+  (key NOT LIKE 'known:%' AND key NOT LIKE 'streak:%' AND first_at <= ?4))`,
+		now, now-int64(thKnownFor/time.Second), now-int64(thStreakKeep/time.Second), now-int64(thWindow/time.Second))
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
 
 func trustedProxy(a netip.Addr) bool {
