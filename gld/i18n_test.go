@@ -245,6 +245,39 @@ func TestMemorySkillMessagesLang(t *testing.T) {
 	}
 }
 
+func TestActivityLocalizedAndFlagged(t *testing.T) {
+	for lang, want := range map[string]string{"fr": "réfléchit au résultat", "en": "is thinking about the result"} {
+		setLangT(t, lang)
+		if got := localizeActivity("réfléchit au résultat"); got != want {
+			t.Errorf("%s : %q", lang, got)
+		}
+	}
+	setLangT(t, "en")
+	if got := localizeActivity("exécute Bash : ls"); got != "runs Bash : ls" {
+		t.Fatal(got)
+	}
+	if !isGenericActivity("travaille") || isGenericActivity("attend votre message") || isGenericActivity("exécute Bash") {
+		t.Fatal("états génériques")
+	}
+	if got := localizeActivity("libre"); got != "libre" {
+		t.Fatal("un texte inconnu reste tel quel")
+	}
+}
+
+func TestConfigMessagesLang(t *testing.T) {
+	setLangT(t, "en")
+	if got := L("srv.configcheck.dupRule", "A1", "allow", "A2", "Bash(ls)"); got != "duplicate rule in allow: Bash(ls)" {
+		t.Fatal(got)
+	}
+	if got := summarize(&omap{keys: []string{"a", "b"}}); got != "{2 key(s)}" {
+		t.Fatal(got)
+	}
+	setLangT(t, "fr")
+	if got := summarize(&omap{keys: []string{"a", "b"}}); got != "{2 clé(s)}" {
+		t.Fatal(got)
+	}
+}
+
 func TestInvalidRequestLang(t *testing.T) {
 	h, _, _ := web(t)
 	for lang, want := range map[string]string{"fr": "requête invalide", "en": "invalid request"} {

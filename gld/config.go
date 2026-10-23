@@ -7,7 +7,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -56,7 +55,7 @@ func parseOrdered(b []byte) (any, error) {
 		return nil, err
 	}
 	if _, err := dec.Token(); err != io.EOF {
-		return nil, errors.New("texte après la fin du document")
+		return nil, terr("srv.config.texteApresLaFin")
 	}
 	return v, nil
 }
@@ -159,11 +158,11 @@ func configPath(id string) (string, error) {
 	case strings.HasPrefix(id, "p/"), strings.HasPrefix(id, "l/"):
 		dir := id[2:]
 		if !safeDir(dir) {
-			return "", errors.New("projet invalide")
+			return "", terr("srv.memmeta.projetInvalide")
 		}
 		cwd := projectCwd(dir)
 		if fi, err := os.Stat(cwd); cwd == "" || err != nil || !fi.IsDir() {
-			return "", errors.New("dossier du projet introuvable")
+			return "", terr("srv.memory.dossierDuProjetIntrouvable")
 		}
 		name := "settings.json"
 		if id[0] == 'l' {
@@ -171,7 +170,7 @@ func configPath(id string) (string, error) {
 		}
 		return filepath.Join(cwd, ".claude", name), nil
 	}
-	return "", errors.New("fichier de réglages invalide")
+	return "", terr("srv.config.fichierDeReglagesInvalide")
 }
 
 var secretKey = regexp.MustCompile(`(?i)(key|token|secret|passw|credential|auth|cookie|bearer)`)
@@ -226,7 +225,7 @@ func readConfig(id string) (ConfigFile, any) {
 	f.Exists = true
 	v, err := parseOrdered(b)
 	if err != nil {
-		f.Error = "JSON invalide : " + err.Error()
+		f.Error = L("srv.configraw.jsonInvalide", "A1", err.Error())
 		return f, nil
 	}
 	if _, ok := v.(*omap); !ok {

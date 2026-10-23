@@ -105,7 +105,7 @@ var tokenRun = func(text string) (int, string, float64, error) {
 	}
 	if json.Unmarshal(out, &r) != nil || json.Unmarshal(out, &raw) != nil {
 		if err == nil {
-			err = errors.New("réponse illisible")
+			err = terr("srv.memwrite.reponseIllisible")
 		}
 		return 0, "", 0, err
 	}

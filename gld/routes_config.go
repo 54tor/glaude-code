@@ -55,7 +55,7 @@ func routesConfig(mux *http.ServeMux) {
 	mux.HandleFunc("POST /config-mcp-status", func(w http.ResponseWriter, r *http.Request) {
 		st, err := mcpStatus()
 		if err != nil {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": "claude mcp list : " + err.Error()})
+			writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.routes_config.claudeMcpList", "A1", err.Error())})
 			return
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "status": st})
@@ -76,7 +76,7 @@ func routesConfig(mux *http.ServeMux) {
 	mux.HandleFunc("POST /config-edit", func(w http.ResponseWriter, r *http.Request) {
 		var e CfgEdit
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<14)).Decode(&e) != nil || len(e.Path) == 0 {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		before, after, err := configEdit(e)
@@ -87,18 +87,18 @@ func routesConfig(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		out := "Enregistré (sauvegarde faite)"
+		out := L("srv.config.savedBackup")
 		if e.Dry {
-			out = "Aperçu"
+			out = L("srv.config.preview")
 		} else if before == after {
-			out = "Aucun changement"
+			out = L("srv.config.noChange")
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "out": out, "before": before, "after": after})
 	})
 	mux.HandleFunc("POST /config-restore", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Name string }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		err := restoreBackup(req.Name)
@@ -107,7 +107,7 @@ func routesConfig(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Sauvegarde restaurée"})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_config.sauvegardeRestauree")})
 	})
 }
 
@@ -127,7 +127,7 @@ func routesConfigPerm(mux *http.ServeMux) {
 			Dry              bool
 		}
 		if json.NewDecoder(io.LimitReader(r.Body, 2<<20)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		before, after, warns, summary, err := permImport(req.File, req.Text, req.Mode, req.Dry)
@@ -140,7 +140,7 @@ func routesConfigPerm(mux *http.ServeMux) {
 		}
 		out := summary
 		if !req.Dry {
-			out = "Importé (" + summary + ", sauvegarde faite)"
+			out = L("srv.config.importedBackup", "A1", summary)
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "out": out, "before": before, "after": after, "warnings": nz(warns)})
 	})
@@ -162,7 +162,7 @@ func routesConfigRaw(mux *http.ServeMux) {
 			Dry        bool
 		}
 		if json.NewDecoder(io.LimitReader(r.Body, 2<<20)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		before, after, warns, err := configRawEdit(req.File, req.Text, req.Dry)
@@ -173,11 +173,11 @@ func routesConfigRaw(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		out := "Enregistré (sauvegarde faite)"
+		out := L("srv.config.savedBackup")
 		if req.Dry {
-			out = "Aperçu"
+			out = L("srv.config.preview")
 		} else if before == after {
-			out = "Aucun changement"
+			out = L("srv.config.noChange")
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "out": out, "before": before, "after": after, "warnings": nz(warns)})
 	})

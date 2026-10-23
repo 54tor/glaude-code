@@ -32,6 +32,8 @@ type LiveState struct {
 	Status      string    `json:"status"`   // busy, idle, "" (inconnu)
 	Activity    string    `json:"activity"` // en une phrase
 	Thinking    bool      `json:"thinking"` // Claude travaille (réflexion ou outil)
+	Generic     bool      `json:"generic"`  // l'activité est un état générique (réflexion, travail) : l'interface affiche un verbe à la place
+	Exec        bool      `json:"exec"`     // l'activité est l'exécution d'un outil
 	Since       float64   `json:"since"`    // dernier événement du transcript (secondes epoch)
 	Context     int       `json:"context"`  // tokens du dernier appel : entrée + cache lu + cache écrit
 	Out         int       `json:"out"`      // tokens produits au dernier tour
@@ -115,6 +117,35 @@ var thinkingVerbs = []string{"réfléchit", "cogite", "médite", "mijote", "rumi
 	"échafaude une théorie bancale mais courageuse", "ratisse large", "sort la loupe de Sherlock", "peaufine sa botte secrète",
 	"dompte le chaos", "carbure au café imaginaire", "fait chanter les variables", "avale un dictionnaire de travers",
 	"reprend son souffle au bord du stack", "s'en remet au hasard bien organisé", "attrape les idées au vol", "fait du rangement dans ses pointeurs",
+}
+
+// Les états d'activité restent en français dans le code (comparaisons, tests) ; localizeActivity les traduit à la sortie.
+var activityIDs = map[string]string{
+	"a terminé sa réponse":           "srv.live.finished",
+	"réfléchit":                      "srv.live.thinking",
+	"réfléchit au résultat":          "srv.live.result",
+	"lit votre message et réfléchit": "srv.live.reading",
+	"attend votre message":           "srv.live.waiting",
+	"travaille":                      "srv.live.working",
+	"terminé":                        "srv.live.done",
+}
+
+func isGenericActivity(a string) bool {
+	switch a {
+	case "", "réfléchit", "travaille", "réfléchit au résultat", "lit votre message et réfléchit":
+		return true
+	}
+	return false
+}
+
+func localizeActivity(a string) string {
+	if id, ok := activityIDs[a]; ok {
+		return L(id)
+	}
+	if s, ok := strings.CutPrefix(a, "exécute "); ok {
+		return L("srv.live.exec", "A1", s)
+	}
+	return a
 }
 
 // spinnerVerbs : la liste par défaut, ou celle du réglage « spinnerVerbs » de Claude Code (mode « replace » : seulement la vôtre ;
@@ -316,6 +347,8 @@ func sessionLive(dir, id string) LiveState {
 	if !st.Open {
 		st.Thinking = false
 	}
+	st.Generic, st.Exec = isGenericActivity(st.Activity), strings.HasPrefix(st.Activity, "exécute ")
+	st.Activity = localizeActivity(st.Activity)
 	if st.Open {
 		st.Queue = pendingQueue(p)
 	}
@@ -352,6 +385,7 @@ func subLives(dir string) []SubLive {
 		if !s.Running && meta.Finished {
 			s.Activity = "terminé"
 		}
+		s.Activity = localizeActivity(s.Activity)
 		out = append(out, s)
 	}
 	sort.Slice(out, func(i, j int) bool {

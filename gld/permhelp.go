@@ -36,7 +36,7 @@ var permHelpRun = func(prompt string) (string, error) {
 	}
 	if json.Unmarshal(out, &r) != nil {
 		if err == nil {
-			err = errors.New("réponse illisible")
+			err = terr("srv.memwrite.reponseIllisible")
 		}
 		return "", err
 	}
@@ -50,7 +50,7 @@ var permHelpRun = func(prompt string) (string, error) {
 func permHelp(kind, rule string) (string, error) {
 	rule = strings.TrimSpace(rule)
 	if rule == "" || len(rule) > 300 || strings.ContainsAny(rule, "\n\r") {
-		return "", errors.New("règle invalide")
+		return "", terr("srv.permhelp.regleInvalide")
 	}
 	if kind != "allow" && kind != "ask" && kind != "deny" {
 		kind = ""
@@ -68,7 +68,7 @@ func permHelp(kind, rule string) (string, error) {
 		return "", err
 	}
 	if t = strings.TrimSpace(t); t == "" {
-		return "", errors.New("explication vide")
+		return "", terr("srv.permhelp.explicationVide")
 	}
 	t = cut(t, 900)
 	permHelpMu.Lock()
@@ -84,7 +84,7 @@ func routesPermHelp(mux *http.ServeMux) {
 	mux.HandleFunc("POST /config-perm-explain", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Kind, Rule string }
 		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		t, err := permHelp(req.Kind, req.Rule)

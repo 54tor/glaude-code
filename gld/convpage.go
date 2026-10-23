@@ -6,7 +6,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"io"
 	"os"
 	"unicode/utf8"
@@ -120,7 +119,7 @@ func convText(path string, o int64, n int, tools bool, from int) (string, int, e
 	}
 	ms := lineMsgs(line, tools)
 	if n < 0 || n >= len(ms) {
-		return "", 0, errors.New("message introuvable")
+		return "", 0, terr("srv.convpage.messageIntrouvable")
 	}
 	t, next := capText(ms[n].T, from)
 	return t, next, nil

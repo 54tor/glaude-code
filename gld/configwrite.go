@@ -51,23 +51,23 @@ func (e *CfgEdit) validate() error {
 			return nil
 		}
 		if e.Op != "set" {
-			return errors.New("opération refusée")
+			return terr("srv.configwrite.operationRefusee")
 		}
 		switch simpleKeys[p[0]] {
 		case "bool":
 			if _, ok := e.Value.(bool); !ok {
-				return errors.New(p[0] + " : un booléen est attendu")
+				return terr("srv.configwrite.unBooleenEstAttendu", "A1", p[0])
 			}
 		case "number":
 			f, ok := e.Value.(float64)
 			if !ok || f < 0 || f > 1e9 || f != float64(int64(f)) {
-				return errors.New(p[0] + " : un entier positif est attendu")
+				return terr("srv.configwrite.unEntierPositifEst", "A1", p[0])
 			}
 			e.Value = json.Number(fmt.Sprint(int64(f)))
 		default:
 			s, ok := e.Value.(string)
 			if !ok || s == "" || len(s) > 100 || strings.ContainsAny(s, "\n\r") {
-				return errors.New(p[0] + " : un texte court est attendu")
+				return terr("srv.configwrite.unTexteCourtEst", "A1", p[0])
 			}
 		}
 	case len(p) == 2 && p[0] == "env" && envName.MatchString(p[1]):
@@ -76,19 +76,19 @@ func (e *CfgEdit) validate() error {
 		}
 		s, ok := e.Value.(string)
 		if e.Op != "set" || !ok || len(s) > 2000 || strings.ContainsAny(s, "\n\r") {
-			return errors.New("variable d'environnement : un texte sur une ligne est attendu")
+			return terr("srv.configwrite.variableDEnvironnementUn")
 		}
 	case len(p) == 2 && p[0] == "enabledPlugins" && pluginID.MatchString(p[1]):
 		if e.Op == "delete" {
 			return nil
 		}
 		if _, ok := e.Value.(bool); !ok || e.Op != "set" {
-			return errors.New("plugin : un booléen est attendu")
+			return terr("srv.configwrite.pluginUnBooleenEst")
 		}
 	case len(p) == 2 && p[0] == "permissions" && (p[1] == "allow" || p[1] == "deny" || p[1] == "ask"):
 		s, ok := e.Value.(string)
 		if (e.Op != "add" && e.Op != "remove") || !ok || strings.TrimSpace(s) == "" || len(s) > 300 || strings.ContainsAny(s, "\n\r") {
-			return errors.New("règle de permission : un texte sur une ligne est attendu")
+			return terr("srv.configwrite.regleDePermissionUn")
 		}
 		e.Value = strings.TrimSpace(s)
 	case len(p) == 2 && p[0] == "permissions" && p[1] == "additionalDirectories":
@@ -96,7 +96,7 @@ func (e *CfgEdit) validate() error {
 		s, ok := e.Value.(string)
 		s = strings.TrimSpace(s)
 		if (e.Op != "add" && e.Op != "remove") || !ok || s == "" || len(s) > 500 || strings.ContainsAny(s, "\n\r\x00") {
-			return errors.New("dossier supplémentaire : un chemin sur une ligne est attendu")
+			return terr("srv.configwrite.dossierSupplementaireUnChemin")
 		}
 		e.Value = s
 	case len(p) == 2 && p[0] == "permissions" && p[1] == "defaultMode":
@@ -104,10 +104,10 @@ func (e *CfgEdit) validate() error {
 			return nil
 		}
 		if s, ok := e.Value.(string); e.Op != "set" || !ok || !wordRe.MatchString(s) {
-			return errors.New("mode par défaut : un mot est attendu")
+			return terr("srv.configwrite.modeParDefautUn")
 		}
 	default:
-		return errors.New("cette modification n'est pas permise ici : " + strings.Join(p, "."))
+		return terr("srv.configwrite.cetteModificationNEst", "A1", strings.Join(p, "."))
 	}
 	return nil
 }
@@ -159,12 +159,12 @@ func (e *CfgEdit) apply(doc *omap) error {
 		}
 		if e.Op == "add" {
 			if idx >= 0 {
-				return errors.New("cette règle existe déjà")
+				return terr("srv.configwrite.cetteRegleExisteDeja")
 			}
 			par.set(last, append(list, e.Value))
 		} else {
 			if idx < 0 {
-				return errors.New("cette règle n'existe pas")
+				return terr("srv.configwrite.cetteRegleNExiste")
 			}
 			list = append(list[:idx], list[idx+1:]...)
 			if len(list) == 0 {
@@ -221,7 +221,7 @@ func saveBackup(id string, content []byte) error {
 func notSymlink(path string) error {
 	for _, p := range []string{filepath.Dir(path), path} {
 		if st, err := os.Lstat(p); err == nil && st.Mode()&os.ModeSymlink != 0 {
-			return errors.New(p + " est un lien symbolique : modification refusée, éditez sa cible à la main")
+			return terr("srv.configwrite.estUnLienSymbolique", "A1", p)
 		}
 	}
 	return nil
@@ -295,14 +295,14 @@ func configEdit(e CfgEdit) (before, after string, err error) {
 	}
 	v, err := parseOrdered([]byte(text))
 	if err != nil {
-		return "", "", errors.New("fichier illisible : " + err.Error())
+		return "", "", terr("srv.configwrite.fichierIllisible", "A1", err.Error())
 	}
 	doc := asMap(v)
 	if doc == nil {
-		return "", "", errors.New("le fichier doit contenir un objet JSON")
+		return "", "", terr("srv.configwrite.leFichierDoitContenir")
 	}
 	if formatOrdered(doc) != strings.TrimRight(text, "\n") {
-		return "", "", errors.New("mise en forme particulière du fichier : modification refusée pour ne pas le reformater, éditez-le à la main")
+		return "", "", terr("srv.configwrite.miseEnFormeParticuliere")
 	}
 	before = text
 	if err = e.apply(doc); err != nil {
@@ -314,7 +314,7 @@ func configEdit(e CfgEdit) (before, after string, err error) {
 	}
 	if exists {
 		if err = saveBackup(e.File, orig); err != nil {
-			return "", "", errors.New("sauvegarde impossible : " + err.Error())
+			return "", "", terr("srv.homesync.sauvegardeImpossible", "A1", err.Error())
 		}
 	}
 	return before, after, writeConfig(path, []byte(after))
@@ -350,7 +350,7 @@ func restoreBackup(name string) error {
 	defer cfgMu.Unlock()
 	m := backupRe.FindStringSubmatch(name)
 	if m == nil {
-		return errors.New("sauvegarde invalide")
+		return terr("srv.configwrite.sauvegardeInvalide")
 	}
 	id := strings.ReplaceAll(m[2], "~", "/")
 	path, err := configPath(id)
@@ -362,7 +362,7 @@ func restoreBackup(name string) error {
 		return err
 	}
 	if _, err := parseOrdered(b); err != nil {
-		return errors.New("la sauvegarde n'est pas un JSON valide")
+		return terr("srv.configwrite.laSauvegardeNEst")
 	}
 	if cur, err := os.ReadFile(path); err == nil {
 		if err := saveBackup(id, cur); err != nil {
