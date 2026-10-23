@@ -29,19 +29,30 @@ func TestTrustPanes(t *testing.T) {
 func TestTrustKeys(t *testing.T) {
 	neuf := " Quick safety check: Is this a project you created or one you trust?\n ❯ No, exit\n   Yes, I trust this folder\n Enter to confirm · Esc to cancel"
 	ancien := " Do you trust the files in this folder?\n ❯ 1. Yes, proceed\n   2. No, exit\n"
+	// Des lignes « Yes… / No… » ailleurs sur l'écran (avant le dialogue) ne comptent pas.
+	bruit := "Yes, we should deploy\nNo, wait\n" + neuf
+	// Trois réponses, ou deux « Yes » : ambigu, rien n'est envoyé.
+	trois := " Is this a project you created or one you trust?\n ❯ No, exit\n   Yes, I trust this folder\n   Yes, always\n"
 	for _, c := range []struct {
 		scr  string
 		yes  bool
 		want string
+		nil_ bool
 	}{
-		{neuf, true, "Down Enter"},
-		{neuf, false, "Enter"},
-		{ancien, true, "Enter"},
-		{ancien, false, "Down Enter"},
-		{"rien à voir", true, ""},
+		{neuf, true, "Down", false},
+		{neuf, false, "", false},
+		{ancien, true, "", false},
+		{ancien, false, "Down", false},
+		{bruit, true, "Down", false},
+		{trois, true, "", true},
+		{"rien à voir", true, "", true},
 	} {
-		if got := strings.Join(trustKeys(c.scr, c.yes), " "); got != c.want {
-			t.Errorf("yes=%v : %q, attendu %q", c.yes, got, c.want)
+		keys, valid := trustKeys(c.scr, c.yes)
+		if valid == c.nil_ || strings.Join(keys, " ") != c.want {
+			t.Errorf("yes=%v : %q (valide=%v), attendu %q (ambigu=%v)", c.yes, keys, valid, c.want, c.nil_)
 		}
+	}
+	if trustOnWant(neuf, true) || !trustOnWant(neuf, false) || !trustOnWant(ancien, true) {
+		t.Error("position du curseur mal lue")
 	}
 }

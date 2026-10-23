@@ -40,40 +40,63 @@ func trustPanes() []trustPane {
 
 var trustOpt = regexp.MustCompile(`^\s*(❯|>)?\s*(?:\d+[.)]\s*)?((?:Yes|No)\b.*)$`)
 
-// trustKeys : les touches pour répondre au dialogue tel qu'il est affiché. Les versions récentes n'ont plus de chiffres et le curseur
-// (❯) part sur « No, exit » : on le déplace sur la réponse voulue puis on valide. nil si l'écran ne montre pas les deux réponses.
-func trustKeys(screen string, yes bool) []string {
-	var opts []string
-	cursor := -1
-	for _, l := range strings.Split(screen, "\n") {
+// trustOptions : les deux réponses du dialogue, lues dans le bloc qui suit la question (et nulle part ailleurs sur l'écran), et la
+// position du curseur (❯). ok est faux si le bloc n'a pas exactement une réponse « Yes » et une réponse « No ».
+func trustOptions(screen string) (opts []string, cursor int, ok bool) {
+	lines := strings.Split(screen, "\n")
+	q := -1
+	for i, l := range lines {
+		if trustRe.MatchString(l) {
+			q = i
+			break
+		}
+	}
+	if q < 0 {
+		return nil, -1, false
+	}
+	cursor = -1
+	for _, l := range lines[q+1:] {
 		if m := trustOpt.FindStringSubmatch(l); m != nil {
 			if m[1] != "" {
 				cursor = len(opts)
 			}
 			opts = append(opts, strings.ToLower(m[2]))
+		} else if len(opts) > 0 && strings.TrimSpace(l) != "" {
+			break // le bloc d'options est contigu : une autre ligne le termine
 		}
 	}
-	want := -1
-	for i, o := range opts {
-		if strings.HasPrefix(o, "yes") == yes {
-			want = i
-			break
-		}
+	if len(opts) != 2 || cursor < 0 || strings.HasPrefix(opts[0], "yes") == strings.HasPrefix(opts[1], "yes") {
+		return nil, -1, false
 	}
-	if cursor < 0 || want < 0 || len(opts) < 2 {
-		return nil
+	return opts, cursor, true
+}
+
+// trustKeys : les déplacements du curseur pour atteindre la réponse voulue. Les versions récentes n'ont plus de chiffres et le curseur
+// part sur « No, exit ». faux si l'écran n'est pas sans ambiguïté le dialogue ; la validation (Entrée) est envoyée à part, après
+// avoir revérifié l'écran.
+func trustKeys(screen string, yes bool) ([]string, bool) {
+	opts, cursor, ok := trustOptions(screen)
+	if !ok {
+		return nil, false
+	}
+	want := 0
+	if strings.HasPrefix(opts[1], "yes") == yes {
+		want = 1
 	}
 	var keys []string
-	for i := cursor; i != want; {
-		if want > cursor {
-			keys = append(keys, "Down")
-			i++
-		} else {
-			keys = append(keys, "Up")
-			i--
-		}
+	for ; cursor < want; cursor++ {
+		keys = append(keys, "Down")
 	}
-	return append(keys, "Enter")
+	for ; cursor > want; cursor-- {
+		keys = append(keys, "Up")
+	}
+	return keys, true
+}
+
+// trustOnWant : le curseur est bien sur la réponse voulue.
+func trustOnWant(screen string, yes bool) bool {
+	opts, cursor, ok := trustOptions(screen)
+	return ok && strings.HasPrefix(opts[cursor], "yes") == yes
 }
 
 func routesTrust(mux *http.ServeMux) {
@@ -98,19 +121,22 @@ func routesTrust(mux *http.ServeMux) {
 			if p.dir != filepath.Clean(req.Dir) {
 				continue
 			}
-			keys := trustKeys(p.screen, req.Yes)
-			if keys == nil {
+			moves, valid := trustKeys(p.screen, req.Yes)
+			if !valid {
 				continue
 			}
 			ok := true
-			for _, k := range keys {
+			for _, k := range moves {
 				if _, err := tmuxRun("", "send-keys", "-t", p.pane, k); err != nil {
 					ok = false
 					break
 				}
 			}
-			if ok {
-				n++
+			// On ne valide qu'après avoir revu l'écran : le curseur doit être sur la réponse demandée.
+			if scr, err := tmuxRun("", "capture-pane", "-p", "-t", p.pane); ok && err == nil && trustOnWant(scr, req.Yes) {
+				if _, err := tmuxRun("", "send-keys", "-t", p.pane, "Enter"); err == nil {
+					n++
+				}
 			}
 		}
 		journal("trust-answer %s oui=%v : %d panneau(x)", req.Dir, req.Yes, n)
