@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -143,5 +144,92 @@ func TestHomesRoutes(t *testing.T) {
 	}
 	if _, err := os.Stat(homesFile()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Le démarrage d'un enfant ne tient pas homesMu, et deux appels simultanés pour le même nom ne lancent qu'un processus.
+func TestHomesDemarrageHorsVerrou(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	a, b := t.TempDir(), t.TempDir()
+	if err := saveHomes([]Home{{"A", a}, {"B", b}}); err != nil {
+		t.Fatal(err)
+	}
+	enfant := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer enfant.Close()
+	u, _ := url.Parse(enfant.URL)
+	gate := make(chan struct{})
+	entered := make(chan string, 8)
+	var mu sync.Mutex
+	starts := map[string]int{}
+	old := homeStart
+	defer func() { homeStart = old; homesMu.Lock(); clear(homeProcs); homesMu.Unlock() }()
+	homeStart = func(h Home) (*homeProc, error) {
+		mu.Lock()
+		starts[h.Dir]++
+		mu.Unlock()
+		if h.Dir == a {
+			entered <- "A"
+			<-gate
+		}
+		return &homeProc{dir: h.Dir, proxy: httputil.NewSingleHostReverseProxy(u), done: make(chan struct{})}, nil
+	}
+	var wg sync.WaitGroup
+	for range 3 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := homeProxy("A"); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	<-entered // A démarre, bloqué dans homeStart
+	done := make(chan struct{})
+	go func() { // ni un autre dossier ni la liste ne doivent attendre A
+		defer close(done)
+		if _, err := homeProxy("B"); err != nil {
+			t.Error(err)
+		}
+		w := httptest.NewRecorder()
+		mux := http.NewServeMux()
+		routesHomes(mux)
+		mux.ServeHTTP(w, httptest.NewRequest("GET", "/homes", nil))
+		if w.Code != 200 {
+			t.Errorf("/homes : %d", w.Code)
+		}
+	}()
+	<-done
+	close(gate)
+	wg.Wait()
+	if starts[a] != 1 || starts[b] != 1 {
+		t.Fatalf("un seul démarrage par dossier attendu : %v", starts)
+	}
+}
+
+// Un dossier retiré pendant son démarrage n'est pas enregistré.
+func TestHomesRetireePendantDemarrage(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	a := t.TempDir()
+	if err := saveHomes([]Home{{"A", a}}); err != nil {
+		t.Fatal(err)
+	}
+	old := homeStart
+	defer func() { homeStart = old; homesMu.Lock(); clear(homeProcs); homesMu.Unlock() }()
+	homeStart = func(h Home) (*homeProc, error) {
+		if err := saveHomes([]Home{}); err != nil {
+			t.Error(err)
+		}
+		return &homeProc{dir: h.Dir, proxy: &httputil.ReverseProxy{}, done: make(chan struct{})}, nil
+	}
+	if _, err := homeProxy("A"); err == nil {
+		t.Fatal("le dossier retiré ne doit pas être servi")
+	}
+	homesMu.Lock()
+	n := len(homeProcs) + len(homeStartups)
+	homesMu.Unlock()
+	if n != 0 {
+		t.Fatalf("processus ou démarrage resté enregistré : %d", n)
 	}
 }
