@@ -398,3 +398,12 @@ func TestImportDossiersSupplementaires(t *testing.T) {
 		t.Fatal("chemin sur deux lignes accepté")
 	}
 }
+
+func TestImportSignaleDossierIntrouvable(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	_, _, warns, _, err := permImport("u", `{"permissions":{"additionalDirectories":["~/inexistant-gld"]}}`, "replace", true)
+	if err != nil || len(warns) == 0 || !strings.Contains(warns[0].Msg, "introuvable") {
+		t.Fatal(warns, err)
+	}
+}
