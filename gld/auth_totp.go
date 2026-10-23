@@ -197,6 +197,45 @@ func (s *authStore) TOTPVerify(userID int64, code string, at time.Time) bool {
 	return n == 1
 }
 
+// TOTPRemove refuse de retirer un TOTP confirmé s'il ne reste aucune clé WebAuthn utilisable ; un secret en attente part toujours.
+func (s *authStore) TOTPRemove(userID int64) error {
+	confirmed := false
+	err := s.inTx(func(tx *sql.Tx) error {
+		if _, err := s.userByID(tx, userID); err != nil {
+			return err
+		}
+		r, err := s.loadTOTP(tx, userID)
+		if err != nil {
+			return err
+		}
+		confirmed = r.confirmed.Valid
+		if confirmed {
+			list, err := s.loadCreds(tx, userID)
+			if err != nil {
+				return err
+			}
+			left := 0
+			for _, c := range list {
+				if !c.bad {
+					left++
+				}
+			}
+			if left == 0 {
+				return errLastFactor
+			}
+		}
+		_, err = tx.Exec(`DELETE FROM totp WHERE user_id=? AND sig=?`, userID, r.sig)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	if confirmed {
+		s.event(userID, "totp", "removed")
+	}
+	return nil
+}
+
 func (s *authStore) recoverySig(userID int64, hash string, used sql.NullInt64) []byte {
 	u := ""
 	if used.Valid {
