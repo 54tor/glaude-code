@@ -1,0 +1,7 @@
+{
+  "common.ok": "ok",
+  "test.items": {
+    "one": "{{.Count}} élément",
+    "other": "{{.Count}} éléments"
+  }
+}
