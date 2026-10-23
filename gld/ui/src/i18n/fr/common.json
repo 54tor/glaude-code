@@ -9,6 +9,7 @@
     "copy": "Copier",
     "copied": "Copié",
     "loading": "Chargement…",
+    "serverUnreachable": "Serveur injoignable ({{error}}) : la liste n'est plus relue",
     "retry": "Réessayer",
     "back": "Retour",
     "yes": "Oui",

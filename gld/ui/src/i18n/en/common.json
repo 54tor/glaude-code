@@ -9,6 +9,7 @@
     "copy": "Copy",
     "copied": "Copied",
     "loading": "Loading…",
+    "serverUnreachable": "Server unreachable ({{error}}): the list is no longer refreshed",
     "retry": "Retry",
     "back": "Back",
     "yes": "Yes",

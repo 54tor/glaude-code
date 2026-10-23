@@ -133,8 +133,10 @@ export type HomesInfo = { current: string; main: string; homes: { name: string; 
 
 const enc = encodeURIComponent
 
+// Une réponse d'erreur (serveur arrêté, 500, jeton expiré) lève au lieu d'être prise pour des données.
 async function get<T>(url: string): Promise<T> {
   const r = await fetch(url)
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
   return (await r.json()) as T
 }
 

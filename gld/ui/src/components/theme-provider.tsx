@@ -1,6 +1,24 @@
 import * as React from "react"
 import { applyPalette, PALETTES } from "@/lib/palettes"
 
+// Stockage bloqué (navigation privée, réglages) : on continue sans mémoire plutôt que de planter au montage.
+const store = {
+  get(k: string) {
+    try {
+      return localStorage.getItem(k)
+    } catch {
+      return null
+    }
+  },
+  set(k: string, v: string) {
+    try {
+      localStorage.setItem(k, v)
+    } catch {
+      /* sans stockage */
+    }
+  },
+}
+
 type Theme = "dark" | "light" | "system"
 type ResolvedTheme = "dark" | "light"
 
@@ -87,7 +105,7 @@ export function ThemeProvider({
   ...props
 }: ThemeProviderProps) {
   const [theme, setThemeState] = React.useState<Theme>(() => {
-    const storedTheme = localStorage.getItem(storageKey)
+    const storedTheme = store.get(storageKey)
     if (isTheme(storedTheme)) {
       return storedTheme
     }
@@ -96,12 +114,12 @@ export function ThemeProvider({
   })
 
   const [palette, setPaletteState] = React.useState(() => {
-    const p = localStorage.getItem("palette")
+    const p = store.get("palette")
     return p && PALETTES[p] ? p : "defaut"
   })
   const paletteRef = React.useRef(palette)
   const setPalette = React.useCallback((id: string) => {
-    localStorage.setItem("palette", id)
+    store.set("palette", id)
     paletteRef.current = id
     setPaletteState(id)
     applyPalette(id, document.documentElement.classList.contains("dark") ? "dark" : "light")
@@ -109,7 +127,7 @@ export function ThemeProvider({
 
   const setTheme = React.useCallback(
     (nextTheme: Theme) => {
-      localStorage.setItem(storageKey, nextTheme)
+      store.set(storageKey, nextTheme)
       setThemeState(nextTheme)
     },
     [storageKey]
@@ -182,7 +200,7 @@ export function ThemeProvider({
                 ? "light"
                 : "dark"
 
-        localStorage.setItem(storageKey, nextTheme)
+        store.set(storageKey, nextTheme)
         return nextTheme
       })
     }
