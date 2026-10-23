@@ -44,7 +44,8 @@ export default function App() {
   const [loc, nav] = useLocation()
   const [params, setParams] = useSearchParams()
   const route = parse(loc)
-  const q = params.get("q") ?? ""
+  // String() : le linter du compilateur React tient sinon q pour liée à params (mutable) et refuse les useMemo qui en dépendent.
+  const q = String(params.get("q") ?? "")
   const reading = params.get("s")
 
   const { data, setData, snips, now, reload, error } = useAppData()
@@ -90,7 +91,7 @@ export default function App() {
   const searching = qt.length >= 2 && !hitMap && route.kind !== "snippets" && route.kind !== "memory" && route.kind !== "tabs" && route.kind !== "config" && route.kind !== "skills"
 
   const tags = useMemo(() => data?.tags ?? {}, [data])
-  const view = buildView(data, qt, tags, hitMap)
+  const view = useMemo(() => buildView(data, qt, tags, hitMap), [data, qt, tags, hitMap])
 
   // Toutes les sessions, même filtrées : le lecteur reste ouvert quand la recherche change.
   const everyId = useMemo(() => {
@@ -115,14 +116,20 @@ export default function App() {
   useWaitingNotice(waiting, everyId)
 
   const gkey = (x: VGroup) => groupKey(x, home)
-  const recent = view.rows.filter((r) => now - r.s.mtime < WEEK)
-  const hot = (data?.groups ?? [])
-    .flatMap((g) => g.sessions.filter((s) => now - s.mtime < HOT && !AUTO.some((p) => s.title.includes(p))).map((s) => ({ s, g })))
-    .sort(byDate)
+  // Listes dérivées mémoïsées : un rendu sans nouvelles données (sélection, menu, saisie) ne les recalcule pas.
+  const recent = useMemo(() => view.rows.filter((r) => now - r.s.mtime < WEEK), [view.rows, now])
+  const hot = useMemo(
+    () =>
+      (data?.groups ?? [])
+        .flatMap((g) => g.sessions.filter((s) => now - s.mtime < HOT && !AUTO.some((p) => s.title.includes(p))).map((s) => ({ s, g })))
+        .sort(byDate),
+    [data, now]
+  )
   // Ouvertes d'abord, puis au cache chaud (récentes d'abord) ; la recherche s'applique comme ailleurs.
-  const active = view.rows
-    .filter((r) => live.has(r.s.id) || now - r.s.mtime < HOT)
-    .sort((a, b) => +live.has(b.s.id) - +live.has(a.s.id) || b.s.mtime - a.s.mtime)
+  const active = useMemo(
+    () => view.rows.filter((r) => live.has(r.s.id) || now - r.s.mtime < HOT).sort((a, b) => +live.has(b.s.id) - +live.has(a.s.id) || b.s.mtime - a.s.mtime),
+    [view.rows, live, now]
+  )
   const selected = [...picked].map((id) => view.byId.get(id)).filter((r): r is Row => !!r)
 
   const node = route.kind === "dir" ? find(tree, route.key) : null
@@ -233,12 +240,16 @@ export default function App() {
   const [kept, setKept] = useState<Row | null>(null)
   if (found && found !== kept) setKept(found)
   const reader = reading ? (found ?? (kept?.s.id === reading ? kept : null)) : null
-  const favRows = [...favs].map((id) => everyId.get(id)).filter((r): r is Row => !!r)
+  const favRows = useMemo(() => [...favs].map((id) => everyId.get(id)).filter((r): r is Row => !!r), [favs, everyId])
   const favGroups = vgroups.filter((x) => x.fav).map((x) => ({ vg: x, key: gkey(x) }))
 
   // Récentes : regroupées par projet, chaque projet pouvant être repris d'un coup.
-  const byProject = new Map<string, Row[]>()
-  if (route.kind === "recent") for (const r of recent) byProject.set(r.g.project, [...(byProject.get(r.g.project) ?? []), r])
+  const isRecent = route.kind === "recent"
+  const byProject = useMemo(() => {
+    const m = new Map<string, Row[]>()
+    if (isRecent) for (const r of recent) m.set(r.g.project, [...(m.get(r.g.project) ?? []), r])
+    return m
+  }, [isRecent, recent])
 
   const title = {
     recent: t("shell.app.title.recent"),

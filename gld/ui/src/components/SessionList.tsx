@@ -1,6 +1,6 @@
 import { loc } from "@/i18n"
 import { useTranslation } from "react-i18next"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { Flame, MoreHorizontal, SquareTerminal, Star, Tag } from "lucide-react"
 import { ago, bucket, compact, full, size, tilde, tokTotal } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -54,7 +54,8 @@ function Snip({ text }: { text: string }) {
   )
 }
 
-function Row({ row, showProject, showCache }: { row: R; showProject: boolean; showCache?: boolean }) {
+// memo : une ligne ne se redessine que si sa session, ses options ou le contexte des actions changent.
+const Row = memo(function Row({ row, showProject, showCache }: { row: R; showProject: boolean; showCache?: boolean }) {
   const { t } = useTranslation()
   const a = useActions()
   const { s, g } = row
@@ -183,7 +184,7 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
       </ContextMenuContent>
     </ContextMenu>
   )
-}
+})
 
 // Sessions triées de la plus récente à la plus ancienne, regroupées par période (sauf flat).
 const STEP = 100 // lignes rendues d'un coup ; la suite arrive en faisant défiler
