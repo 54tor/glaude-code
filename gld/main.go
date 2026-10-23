@@ -306,7 +306,8 @@ func handler() http.Handler {
 		for pat := range routeRights {
 			if strings.Contains(pat, " /auth/") || strings.Contains(pat, " /admin/") {
 				mux.HandleFunc(pat, func(w http.ResponseWriter, r *http.Request) {
-					if _, d := reqMode(r); d.st != nil {
+					// Sans compte, /auth/* n'existe pas : l'interface n'affiche pas de connexion que personne ne peut passer.
+					if _, d := reqMode(r); d.on {
 						chainFor(d.st).api.ServeHTTP(w, r)
 						return
 					}
