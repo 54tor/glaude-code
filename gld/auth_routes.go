@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
@@ -36,9 +37,6 @@ type authAPI struct {
 	reauthAt map[string]time.Time
 	busy     map[string]bool
 	denied   map[string]time.Time
-
-	// ponytail: un seul verrou pour tous les premiers enrôlements (rares) ; un verrou par compte si cela devenait un goulot.
-	firstMu sync.Mutex
 }
 
 const deniedCap = 1024
@@ -469,7 +467,12 @@ func (a *authAPI) mfaWebAuthnFinish(w http.ResponseWriter, r *http.Request) {
 	if p == nil {
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, waBodyMax)
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, waBodyMax))
+	if err != nil {
+		writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
 	a.second(w, r, p, "webauthn", func() bool { return a.s.WebAuthnFinishLogin(p.User.ID, p.SessionID, r) == nil })
 }
 
@@ -579,13 +582,24 @@ func (a *authAPI) enrolBegin(w http.ResponseWriter, r *http.Request) (*Principal
 	return p, true
 }
 
-// enrolCommit écrit le facteur. Sur session partielle, la vérification « aucun facteur », l'écriture,
-// les codes de secours et la promotion se font sous firstMu : de deux premiers enrôlements concurrents,
-// un seul aboutit et un seul jeu de codes existe.
+// enrolCommit écrit le facteur. Le corps est déjà lu et les codes de secours déjà hachés : sous la
+// clé first:<uid> ne restent que la vérification « aucun facteur », l'écriture, le stockage des codes et
+// la promotion. De deux premiers enrôlements concurrents d'un compte, un seul aboutit.
 func (a *authAPI) enrolCommit(w http.ResponseWriter, r *http.Request, p *Principal, what string, write func() error) {
+	var codes, hashes []string
 	if !p.MFA {
-		a.firstMu.Lock()
-		defer a.firstMu.Unlock()
+		var err error
+		if codes, hashes, err = genRecoveryCodes(); err != nil {
+			authInternal(w, err)
+			return
+		}
+		release, ok := a.claim("first:" + strconv.FormatInt(p.User.ID, 10))
+		if !ok {
+			a.log(p.User.ID, p.User.Name, clientIP(r), "enrol", what+"_busy")
+			writeJSON(w, 409, map[string]any{"ok": false, "out": L("srv.auth.enrolementEnCours")})
+			return
+		}
+		defer release()
 	}
 	f, err := a.s.factors(p.User.ID)
 	if err != nil {
@@ -601,16 +615,18 @@ func (a *authAPI) enrolCommit(w http.ResponseWriter, r *http.Request, p *Princip
 		authUserErr(w, 400, err)
 		return
 	}
-	a.enrolled(w, r, p, f, what)
-}
-
-func (a *authAPI) enrolled(w http.ResponseWriter, r *http.Request, p *Principal, before factorState, what string) {
 	ip := clientIP(r)
 	a.log(p.User.ID, p.User.Name, ip, "enrol", what)
 	out := map[string]any{"ok": true, "csrf": p.CSRF}
-	if before.none() {
-		codes, err := a.s.NewRecoveryCodes(p.User.ID)
-		if err != nil {
+	if f.none() {
+		// Session complète sans facteur : état anormal, mais le jeu de codes reste dû au premier facteur.
+		if hashes == nil {
+			if codes, hashes, err = genRecoveryCodes(); err != nil {
+				authInternal(w, err)
+				return
+			}
+		}
+		if err := a.s.storeRecoveryCodes(p.User.ID, hashes); err != nil {
 			authInternal(w, err)
 			return
 		}
@@ -671,7 +687,13 @@ func (a *authAPI) waRegisterFinish(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, waBodyMax)
+	// Lu en entier avant tout verrou : un client lent ne doit rien bloquer.
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, waBodyMax))
+	if err != nil {
+		writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
 	a.enrolCommit(w, r, p, "webauthn", func() error {
 		return a.s.WebAuthnFinishRegister(p.User.ID, p.SessionID, r.URL.Query().Get("label"), r)
 	})

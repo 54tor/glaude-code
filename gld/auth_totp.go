@@ -263,13 +263,22 @@ func normRecovery(c string) string {
 
 // NewRecoveryCodes remplace le jeu précédent ; les codes en clair ne sont rendus qu'ici.
 func (s *authStore) NewRecoveryCodes(userID int64) ([]string, error) {
-	codes := make([]string, 0, recoveryCount)
-	hashes := make([]string, 0, recoveryCount)
+	codes, hashes, err := genRecoveryCodes()
+	if err != nil {
+		return nil, err
+	}
+	return codes, s.storeRecoveryCodes(userID, hashes)
+}
+
+// genRecoveryCodes fait le travail argon2 hors de toute section verrouillée ; storeRecoveryCodes écrit le jeu.
+func genRecoveryCodes() (codes, hashes []string, err error) {
+	codes = make([]string, 0, recoveryCount)
+	hashes = make([]string, 0, recoveryCount)
 	seen := map[string]bool{}
 	buf := make([]byte, recoveryCodeLen)
 	for len(codes) < recoveryCount {
 		if _, err := rand.Read(buf); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		for i, b := range buf {
 			// 32 symboles : b&31 reste uniforme.
@@ -282,11 +291,15 @@ func (s *authStore) NewRecoveryCodes(userID int64) ([]string, error) {
 		seen[c] = true
 		h, err := hashPassword(c)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		codes = append(codes, c[:5]+"-"+c[5:])
 		hashes = append(hashes, h)
 	}
+	return codes, hashes, nil
+}
+
+func (s *authStore) storeRecoveryCodes(userID int64, hashes []string) error {
 	err := s.inTx(func(tx *sql.Tx) error {
 		if _, err := s.userByID(tx, userID); err != nil {
 			return err
@@ -302,10 +315,10 @@ func (s *authStore) NewRecoveryCodes(userID int64) ([]string, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 	s.event(userID, "recovery", "generated")
-	return codes, nil
+	return nil
 }
 
 // UseRecoveryCode hache hors transaction (argon2 est lent et la connexion est unique),
