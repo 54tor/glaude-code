@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
 import { AlarmClock, ChevronRight, FolderPlus, Repeat, Coins, FolderOpen, Star, Brain, SlidersHorizontal, Zap, Flame, History, Clock, FileText, Inbox, Info, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
@@ -7,6 +7,7 @@ import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -174,30 +175,22 @@ export type SidebarProps = {
   settings: React.ReactNode // bouton et fenêtre des Réglages, rendus par App
 }
 
+// Seuil md de Tailwind : en dessous, le menu est un tiroir.
+const MD = "(min-width: 768px)"
+const onWide = (cb: () => void) => {
+  const m = matchMedia(MD)
+  m.addEventListener("change", cb)
+  return () => m.removeEventListener("change", cb)
+}
+
 export function Sidebar({ searchRef, ...p }: SidebarProps) {
   const { t } = useTranslation()
   const r = p.route
   const link = (to: Route) => ({ to, onClick: () => p.go(to) })
   const a = useActions()
-  const { open, onClose } = p
-  useEffect(() => {
-    if (!open) return
-    const on = (e: KeyboardEvent) => e.key === "Escape" && onClose()
-    window.addEventListener("keydown", on)
-    return () => window.removeEventListener("keydown", on)
-  }, [open, onClose])
-  return (
+  const wide = useSyncExternalStore(onWide, () => matchMedia(MD).matches)
+  const body = (
     <>
-      {/* Mobile : le menu est un tiroir par-dessus la page ; sur grand écran il reste une colonne fixe. */}
-      <div className={cn("fixed inset-0 z-30 bg-black/40 transition-opacity md:hidden", p.open ? "opacity-100" : "pointer-events-none opacity-0")} onClick={p.onClose} aria-hidden="true" />
-      <aside
-        id="menu"
-        aria-label={t("shell.sidebar.menu")}
-        className={cn(
-          "fixed inset-y-0 left-0 z-40 flex w-[85vw] max-w-sm shrink-0 flex-col border-r bg-sidebar transition-transform duration-200 md:static md:z-auto md:w-72 md:translate-x-0 md:transition-none lg:w-80",
-          p.open ? "translate-x-0 shadow-xl" : "invisible -translate-x-full md:visible"
-        )}
-      >
       <div className="space-y-3 p-3">
         <div className="flex items-center gap-2.5 px-1 pt-1">
           <img src="/icons/icon-192.png" alt="" className="size-10 shrink-0" />
@@ -216,11 +209,15 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             ref={searchRef}
             value={p.q}
             onChange={(e) => p.setQ(e.target.value)}
-            onKeyDown={(e) => e.key === "Escape" && p.setQ("")}
+            // Échap vide la recherche et rend le focus à la page : j/k/t/d reprennent leur rôle de raccourcis.
+            onKeyDown={(e) => {
+              if (e.key !== "Escape") return
+              p.setQ("")
+              e.currentTarget.blur()
+            }}
             placeholder={t("shell.sidebar.searchPlaceholder")}
             className="bg-background pr-8 pl-8 shadow-none"
             aria-label={t("shell.sidebar.searchLabel")}
-            autoFocus
           />
           {p.searching ? (
             <Loader2
@@ -361,7 +358,31 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
         )}
       </div>
       )}
-      </aside>
     </>
+  )
+  if (wide)
+    return (
+      <aside id="menu" aria-label={t("shell.sidebar.menu")} className="flex w-72 shrink-0 flex-col border-r bg-sidebar lg:w-80">
+        {body}
+      </aside>
+    )
+  // Petit écran : tiroir modal (focus piégé, Échap, page derrière inerte) au lieu d'une colonne translatée hors de l'écran.
+  return (
+    <Dialog open={p.open} onOpenChange={(o) => !o && p.onClose()}>
+      <DialogContent
+        id="menu"
+        aria-describedby={undefined}
+        showCloseButton={false}
+        // Le tiroir s'ouvre depuis le bouton de l'en-tête, hors de tout DialogTrigger : on lui rend le focus à la main.
+        onCloseAutoFocus={(e) => {
+          e.preventDefault()
+          document.querySelector<HTMLElement>('[aria-controls="menu"]')?.focus()
+        }}
+        className="top-0 left-0 flex h-dvh w-[85vw] max-w-sm translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-0 border-r bg-sidebar p-0 text-sidebar-foreground duration-200 sm:max-w-sm data-open:zoom-in-100 data-open:slide-in-from-left data-closed:zoom-out-100 data-closed:slide-out-to-left"
+      >
+        <DialogTitle className="sr-only">{t("shell.sidebar.menu")}</DialogTitle>
+        {body}
+      </DialogContent>
+    </Dialog>
   )
 }
