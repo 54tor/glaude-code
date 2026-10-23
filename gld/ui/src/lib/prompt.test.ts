@@ -202,6 +202,36 @@ describe("parsePrompt : captures réelles", () => {
     expect(p.question).toBe("Quelles couleurs veux-tu sélectionner ?")
     expect(p.context).toBe("Récapitulatif de Claude :\n- UI-04 : focus ;")
   })
+  it("capture réelle à onglets : récapitulatif, question, descriptions, Submit", () => {
+    const screen = [
+      "● Voici les défauts :",
+      "  UI-02, barre d'outils du lecteur",
+      "  - A : autoriser le retour à la ligne.",
+      "",
+      "  Limites de l'audit",
+      "  - Pas de test au lecteur d'écran.",
+      "────────────────────────────────────────",
+      "←  ☒ UI-01  ☒ UI-02  ☐ Périmètre  ✔ Submit  →",
+      "",
+      "Quel périmètre pour le premier lot ?",
+      "",
+      "❯ 1. [ ] UI-01, UI-02",
+      "         Les défauts confirmés.",
+      "  2. [ ] UI-04 et UI-05",
+      "         Accessibilité.",
+      "  3. [ ] Type something",
+      "     Submit",
+      "────────────────────────────────────────",
+      "  4. Chat about this",
+      "",
+      "Enter to select · Tab/Arrow keys to navigate · Esc to cancel",
+    ].join("\n")
+    const p = parsePrompt(screen)!
+    expect(p.question).toBe("Quel périmètre pour le premier lot ?")
+    expect(p.context).toBe("● Voici les défauts :\n  UI-02, barre d'outils du lecteur\n  - A : autoriser le retour à la ligne.\n  Limites de l'audit\n  - Pas de test au lecteur d'écran.")
+    expect(p.options.map((o) => o.detail)).toEqual(["Les défauts confirmés.", "Accessibilité.", undefined, undefined])
+    expect(p.submit).toEqual(["Down", "Down", "Down", "Enter"])
+  })
   it("choix multiples : la description de chaque case est conservée", () => {
     const o = parsePrompt(real.multi)!.options
     expect(o[0].detail).toBe("Couleur chaude, forte visibilité.")
