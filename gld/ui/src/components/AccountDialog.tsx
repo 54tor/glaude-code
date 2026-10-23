@@ -223,7 +223,7 @@ function DayChart({ days }: { days: Account["days"] }) {
                 tokens: compact(dayTok(d.tokens)),
               })}
             >
-              <span className="mb-0.5 text-center text-[10px] tabular-nums text-muted-foreground">{v ? compact(v) : ""}</span>
+              <span className="mb-0.5 text-center text-2xs tabular-nums text-muted-foreground">{v ? compact(v) : ""}</span>
               <div className="w-full rounded-t bg-primary/70 transition-colors group-hover:bg-primary" style={{ height: `${Math.max(v ? 2 : 0, (v / max) * 100)}%` }} />
             </div>
           )
@@ -231,7 +231,7 @@ function DayChart({ days }: { days: Account["days"] }) {
       </div>
       <div className="flex gap-1 pt-1">
         {days.map((d) => (
-          <span key={d.date} className="min-w-0 flex-1 truncate text-center text-[10px] text-muted-foreground">
+          <span key={d.date} className="min-w-0 flex-1 truncate text-center text-2xs text-muted-foreground">
             {new Date(d.date).getDate()}
           </span>
         ))}

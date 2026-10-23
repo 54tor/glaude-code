@@ -56,7 +56,7 @@ export function HooksTab({ hooks }: { hooks: HookInfo[] }) {
           <li key={n} className="rounded-md border px-3 py-2 text-sm">
             <p className="flex flex-wrap items-center gap-2">
               <span className="font-medium">{h.event}</span>
-              {h.matcher && <code className="rounded bg-muted px-1 text-xs">{h.matcher}</code>}
+              {h.matcher && <code className="rounded-sm bg-muted px-1 text-xs">{h.matcher}</code>}
               <span className="text-xs text-muted-foreground">{LV[h.scope] ? t(`config.scope.${LV[h.scope]}`) : undefined}</span>
               {h.missing && <span className="text-xs text-warning">{t("config.hooks.missing", { path: h.missing })}</span>}
             </p>
@@ -113,7 +113,7 @@ export function PrecedenceTab({ projects, home }: { projects: { dir: string; pro
               <tr key={r.path} className="border-t align-top">
                 <td className="px-3 py-1.5">
                   <span className="font-mono text-xs break-all">{r.path}</span>
-                  {describeKey(r.path) && <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">{describeKey(r.path)}</span>}
+                  {describeKey(r.path) && <span className="mt-0.5 block text-2xs leading-snug text-muted-foreground">{describeKey(r.path)}</span>}
                 </td>
                 {(["u", "p", "l"] as const).map((lv) => (
                   <td key={lv} title={r.values[lv]} className={cn("px-3 py-1.5 text-xs break-words", r.values[lv] !== undefined && (r.merged || r.winner === lv) ? "font-medium" : "text-muted-foreground line-through decoration-muted-foreground/40")}>

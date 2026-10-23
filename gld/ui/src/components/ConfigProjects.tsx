@@ -18,7 +18,7 @@ const KINDS = ["allow", "ask", "deny", "additionalDirectories"] as const
 
 const Badge = ({ n, label }: { n: number; label: string }) =>
   n > 0 ? (
-    <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+    <span className="rounded-full bg-muted px-2 py-0.5 text-2xs text-muted-foreground">
       {n} {label}
     </span>
   ) : null
@@ -119,7 +119,7 @@ export function ProjectsTab({ home, version, gone, onAddDir, suggest, onEdit, on
                               <ContextMenuTrigger asChild>
                               <li className="flex items-center gap-2">
                                 <code className="min-w-0 flex-1 text-xs break-all">{r.rule}</code>
-                                <span className="shrink-0 text-[11px] text-muted-foreground">{r.scope === "p" ? t("config.scope.project") : t("config.scope.local")}</span>
+                                <span className="shrink-0 text-2xs text-muted-foreground">{r.scope === "p" ? t("config.scope.project") : t("config.scope.local")}</span>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
                                     <Button size="xs" variant="ghost">
@@ -177,7 +177,7 @@ export function ProjectsTab({ home, version, gone, onAddDir, suggest, onEdit, on
                             {rows.map((r) => (
                               <li key={r.path} className="text-xs">
                                 <code className="font-medium">{r.path}</code> <span className="text-muted-foreground">=</span> <span className="break-all">{r.value}</span>
-                                {describeKey(r.path) && <span className="block text-[11px] text-muted-foreground">{describeKey(r.path)}</span>}
+                                {describeKey(r.path) && <span className="block text-2xs text-muted-foreground">{describeKey(r.path)}</span>}
                               </li>
                             ))}
                           </ul>
@@ -199,7 +199,7 @@ export function ProjectsTab({ home, version, gone, onAddDir, suggest, onEdit, on
                       <ul className="space-y-1">
                         {p.hooks.map((h, i) => (
                           <li key={i} className="text-xs">
-                            <span className="font-medium">{h.event}</span> {h.matcher && <code className="rounded bg-muted px-1">{h.matcher}</code>}{" "}
+                            <span className="font-medium">{h.event}</span> {h.matcher && <code className="rounded-sm bg-muted px-1">{h.matcher}</code>}{" "}
                             <code className="break-all text-muted-foreground">{h.command}</code>
                             {h.missing && <span className="ml-1 text-warning">{t("config.hooks.missing", { path: h.missing })}</span>}
                           </li>

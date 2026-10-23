@@ -21,7 +21,7 @@ function Card({ tag, body }: { tag: string; body: string }) {
   const get = (k: string) => fields.find(([f]) => f === k)?.[1]
   const status = get("status")
   return (
-    <div className="rounded-xl border bg-muted/40 px-4 py-3 text-sm">
+    <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
         <Bell className="size-3.5" />
         {NAMES[tag] ? t(NAMES[tag]) : tag}
@@ -90,7 +90,7 @@ export function CompactSummary({ t: text, md }: { t: string; md: (t: string) => 
   const intro = text.slice(0, m.index).trim()
   const body = text.slice((m.index ?? 0) + m[0].length).trim()
   return (
-    <div className="space-y-2 rounded-xl border bg-muted/40 px-4 py-3 text-sm">
+    <div className="space-y-2 rounded-lg border bg-muted/40 px-4 py-3 text-sm">
       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
         <Minimize2 className="size-3.5" /> {t("conversation.tagged.compacted")}
       </div>

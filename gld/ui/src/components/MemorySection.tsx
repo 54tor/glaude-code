@@ -70,11 +70,11 @@ export function Section({
             <button type="button" className="flex min-w-0 flex-1 items-center gap-1.5 text-left" aria-expanded={open} onClick={() => setPref(open ? "0" : "1")}>
               <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-90")} />
               <Icon className="size-3.5 shrink-0" /> <h3 className="truncate">{title}</h3>
-              {!open && <span className="shrink-0 text-[10px] font-normal">{files.length}</span>}
+              {!open && <span className="shrink-0 text-2xs font-normal">{files.length}</span>}
             </button>
             {budget > 0 && (
               <span
-                className="shrink-0 text-[10px] font-normal"
+                className="shrink-0 text-2xs font-normal"
                 title={exact ? t("memory.section.tokensExact") : t("memory.section.tokensEstimate")}
               >
                 {exact ? "" : "≈ "}

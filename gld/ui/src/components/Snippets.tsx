@@ -208,7 +208,7 @@ export function Snippets({
                             >
                               <Terminal className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                               <span className="min-w-0">
-                                <span className="block truncate font-mono text-[13px]">{s.command}</span>
+                                <span className="block truncate font-mono text-sm">{s.command}</span>
                                 <span className="block truncate text-xs font-normal text-muted-foreground">
                                   {s.description || `${ago(s.mtime)}, ${size(s.kb)}`}
                                 </span>

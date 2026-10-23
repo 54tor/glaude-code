@@ -180,7 +180,7 @@ function Item({
           >
             <button
               className={cn(
-                "relative z-10 grid size-5 shrink-0 place-items-center rounded text-muted-foreground hover:text-foreground",
+                "relative z-10 grid size-5 shrink-0 place-items-center rounded-sm text-muted-foreground hover:text-foreground",
                 !kids && "invisible"
               )}
               onClick={() => toggle(n.key)}

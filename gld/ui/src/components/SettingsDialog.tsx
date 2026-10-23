@@ -187,7 +187,7 @@ export function Settings({
                 {KEYS.map(([k, v]) => (
                   <div key={k} className="contents">
                     <dt>
-                      <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-xs">{k.startsWith("cap.") ? t(`config.dialog.${k}`) : k}</kbd>
+                      <kbd className="rounded-sm border bg-muted px-1.5 py-0.5 font-mono text-xs">{k.startsWith("cap.") ? t(`config.dialog.${k}`) : k}</kbd>
                     </dt>
                     <dd className="text-muted-foreground">{t(`config.dialog.key.${v}`)}</dd>
                   </div>
