@@ -14,6 +14,11 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - **Maintenir au chaud** ne concerne plus que les sessions ouvertes dans un terminal : un ping `claude -p` ne relit pas le cache du mode interactif (mesuré : 0 token lu, tout le contexte réécrit). Le bouton est grisé sur une session fermée, et le maintien s'arrête si la session est fermée. Le coût cumulé n'est plus affiché (non mesurable par le terminal).
 
 ### Corrigé
+- Une modification non enregistrée (mémoire, skill, snippet, réglages JSON) n'est plus perdue : le navigateur demande confirmation avant de quitter, et le brouillon est retrouvé après un rechargement.
+- Une aide de modèle qui échoue (brouillon, lint, skill) affiche la raison donnée par `claude`, plus seulement « exit status 1 ».
+- Renommer : en cas d'échec, le dialogue reste ouvert avec la saisie ; après un dialogue ouvert depuis le menu d'une session, le focus revient sur sa ligne (ou sur la voisine après une suppression).
+- Accessibilité : champ de saisie nommé, erreur JSON reliée au champ, titres de section et boutons « Nouvelle entrée » nommés par section dans Mémoire, « Fermer » au lieu de « Close ».
+- Suppression : « 1 session supprimée » au lieu de « 1 supprimée(s), 0 vivante(s) épargnée(s) ».
 - Un message démesuré (plusieurs dizaines de Mo) ne fige plus le lecteur : la page n'en donne que les 64 premiers Ko, et « Afficher la suite » charge les morceaux suivants (`GET /conv-text`).
 - Écran étroit : le menu ⋯ du lecteur reste accessible à 375 px, Mémoire, Skills et Snippets n'affichent leurs deux panneaux qu'à partir de 1024 px (plus de défilement horizontal à 768 px), dates et compteurs ne débordent plus des lignes, les onglets de Configuration signalent qu'ils défilent.
 - Fermer le lecteur rend le focus clavier à la ligne de la session ; les animations respectent `prefers-reduced-motion` ; sur écran tactile, cases à cocher et petits boutons d'icône reçoivent le doigt sur 24 px.
