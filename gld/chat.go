@@ -37,7 +37,7 @@ var chatAllowed = map[string]bool{"--model": true, "--fallback-model": true, "--
 func claudeFlags(raw string) (kept, ignored []string, err error) {
 	for _, f := range strings.Fields(raw) {
 		if !flagRe.MatchString(f) {
-			return nil, nil, errors.New("option refusée : " + f)
+			return nil, nil, terr("srv.chat.optionRefusee", "A1", f)
 		}
 		if name, _, _ := strings.Cut(f, "="); chatAllowed[name] {
 			kept = append(kept, f)
@@ -107,19 +107,19 @@ func relay(out io.Reader, emit func(chatEvent)) (sawResult bool) {
 func chatHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct{ Dir, ID, Prompt, Args, Mode string }
 	if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil {
-		writeJSON(w, 400, map[string]any{"error": "requête invalide"})
+		writeJSON(w, 400, map[string]any{"error": L("srv.http_util.requeteInvalide")})
 		return
 	}
 	p, ok := transcript(req.Dir, req.ID)
 	flags, ignored, err := claudeFlags(req.Args)
 	switch {
 	case !ok:
-		err = errors.New("session invalide")
+		err = terr("srv.chat.sessionInvalide")
 	case err != nil:
 	case strings.TrimSpace(req.Prompt) == "":
-		err = errors.New("message vide")
+		err = terr("srv.chat.messageVide")
 	case !slices.Contains(chatModes, req.Mode):
-		err = errors.New("mode d'autorisation inconnu")
+		err = terr("srv.chat.modeDAutorisationInconnu")
 	default:
 		err = checkPrompt(req.ID, req.Prompt) // aucun shell ici : le message est un simple argument, Windows compris
 	}
@@ -130,14 +130,14 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 	st, _ := os.Stat(p)
 	cwd := info(p, st).Cwd
 	if fi, err := os.Stat(cwd); cwd == "" || err != nil || !fi.IsDir() {
-		writeJSON(w, 400, map[string]any{"error": "dossier du projet introuvable : " + cwd})
+		writeJSON(w, 400, map[string]any{"error": L("srv.routes_sessions.dossierDuProjetIntrouvable", "A1", cwd)})
 		return
 	}
 
 	chatMu.Lock()
 	if chatRun[req.ID] != nil {
 		chatMu.Unlock()
-		writeJSON(w, 409, map[string]any{"error": "Claude répond déjà dans cette session"})
+		writeJSON(w, 409, map[string]any{"error": L("srv.chat.claudeRepondDejaDans")})
 		return
 	}
 	// Pas lié à la requête : fermer l'onglet ne coupe pas Claude au milieu d'un tour (seul « Arrêter » le fait).
@@ -173,7 +173,7 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(ignored) > 0 {
-		emit(chatEvent{Note: "Options de Réglages non transmises au chat : " + strings.Join(ignored, " ") + " (autorisations : menu du chat)"})
+		emit(chatEvent{Note: L("srv.chat.ignoredOptions", "A1", strings.Join(ignored, " "))})
 	}
 	saw := relay(out, emit)
 	werr := cmd.Wait()
@@ -193,13 +193,13 @@ func chatStopHandler(w http.ResponseWriter, r *http.Request) {
 	cmd := chatRun[req.ID]
 	chatMu.Unlock()
 	if cmd == nil || cmd.Process == nil {
-		writeJSON(w, 200, map[string]any{"ok": false, "out": "rien en cours"})
+		writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.chat.rienEnCours")})
 		return
 	}
 	if cmd.Process.Signal(os.Interrupt) != nil { // Windows : pas de signal, on termine le processus
 		cmd.Process.Kill()
 	}
-	writeJSON(w, 200, map[string]any{"ok": true, "out": "Arrêt demandé"})
+	writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.chat.arretDemande")})
 }
 
 // newSessionHandler ouvre une nouvelle session claude, dans le dossier de travail d'une session existante (dir/id) ou dans un dossier
@@ -208,7 +208,7 @@ func chatStopHandler(w http.ResponseWriter, r *http.Request) {
 func newSessionHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct{ Dir, ID, Prompt, Args, Cwd string }
 	if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+		writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 		return
 	}
 	p, ok := transcript(req.Dir, req.ID)
@@ -218,12 +218,12 @@ func newSessionHandler(w http.ResponseWriter, r *http.Request) {
 	args, err := claudeArgs(req.Args)
 	switch {
 	case !ok && req.Cwd != "":
-		err = errors.New("dossier invalide (chemin absolu attendu)")
+		err = terr("srv.chat.dossierInvalideCheminAbsolu")
 	case !ok:
-		err = errors.New("session invalide")
+		err = terr("srv.chat.sessionInvalide")
 	case err != nil:
 	case strings.TrimSpace(req.Prompt) == "":
-		err = errors.New("prompt vide")
+		err = terr("srv.chat.promptVide")
 	default:
 		id := req.ID
 		if req.Cwd != "" {
@@ -244,7 +244,7 @@ func newSessionHandler(w http.ResponseWriter, r *http.Request) {
 		cwd = info(p, st).Cwd
 	}
 	if fi, err := os.Stat(cwd); cwd == "" || err != nil || !fi.IsDir() {
-		writeJSON(w, 200, map[string]any{"ok": false, "out": "dossier du projet introuvable : " + cwd})
+		writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.routes_sessions.dossierDuProjetIntrouvable", "A1", cwd)})
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)

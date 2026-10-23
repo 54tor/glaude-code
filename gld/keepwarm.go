@@ -68,7 +68,7 @@ func warmSave() {
 	}
 }
 
-const closedNote = "session fermée : un ping hors du terminal ne réchaufferait pas son cache, maintien arrêté"
+func closedNote() string { return L("srv.keepwarm.closedNote") }
 
 // warmTick : un passage sur les sessions maintenues. now est injecté pour les tests.
 func warmTick(now time.Time) {
@@ -110,12 +110,12 @@ func warmTick(now time.Time) {
 			warmMu.Unlock()
 		}
 		if !known {
-			stop("session introuvable : maintien arrêté")
+			stop(L("srv.keepwarm.notFound"))
 			continue
 		}
 		left := cacheTTL - now.Sub(time.Unix(int64(m), 0))
 		if left <= 0 {
-			stop("le cache était déjà froid : maintien arrêté")
+			stop(L("srv.keepwarm.alreadyCold"))
 			continue
 		}
 		if left >= warmBelow || now.Unix()-s.LastPing < 240 {
@@ -125,14 +125,14 @@ func warmTick(now time.Time) {
 			continue
 		}
 		if !open[id] {
-			stop(closedNote)
+			stop(closedNote())
 			continue
 		}
 		if !idle[id] {
 			continue // elle travaille : son activité garde le cache chaud
 		}
 		if s.Pings >= s.Max {
-			stop("limite de pings atteinte : maintien arrêté")
+			stop(L("srv.keepwarm.pingLimit"))
 			continue
 		}
 		err := warmPing(id)
@@ -140,7 +140,7 @@ func warmTick(now time.Time) {
 		warmMu.Lock()
 		s.LastPing = now.Unix()
 		if err != nil {
-			s.Note = "ping en échec : " + cut(err.Error(), 200)
+			s.Note = L("srv.keepwarm.pingFailed", "A1", cut(err.Error(), 200))
 		} else {
 			s.Pings++
 			s.Note = ""
@@ -174,16 +174,16 @@ func routesKeepWarm(mux *http.ServeMux) {
 			Max     int
 		}
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		if _, ok := transcript(req.Dir, req.ID); !ok {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": "session invalide"})
+			writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.chat.sessionInvalide")})
 			return
 		}
 		if req.On { // hors verrou : `claude agents` prend du temps
 			if open := liveSessions(); open != nil && !open[req.ID] {
-				writeJSON(w, 200, map[string]any{"ok": false, "out": "session fermée : rouvrez-la dans un terminal pour la maintenir au chaud"})
+				writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.keepwarm.sessionFermeeRouvrezLa")})
 				return
 			}
 		}
@@ -195,7 +195,7 @@ func routesKeepWarm(mux *http.ServeMux) {
 				s.On, s.Note = false, ""
 				warmSave()
 			}
-			writeJSON(w, 200, map[string]any{"ok": true, "out": "Maintien au chaud arrêté"})
+			writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.keepwarm.maintienAuChaudArrete")})
 			return
 		}
 		if req.Max <= 0 {
@@ -204,6 +204,6 @@ func routesKeepWarm(mux *http.ServeMux) {
 		req.Max = min(req.Max, warmMaxPings)
 		warmState[req.ID] = &WarmState{Dir: req.Dir, On: true, Max: req.Max}
 		warmSave()
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Maintien au chaud activé"})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.keepwarm.maintienAuChaudActive")})
 	})
 }

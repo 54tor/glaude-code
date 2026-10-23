@@ -113,7 +113,7 @@ func routesTrust(mux *http.ServeMux) {
 			Yes bool
 		}
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil || !filepath.IsAbs(req.Dir) {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		n := 0
@@ -141,9 +141,9 @@ func routesTrust(mux *http.ServeMux) {
 		}
 		journal("trust-answer %s oui=%v : %d panneau(x)", req.Dir, req.Yes, n)
 		if n == 0 {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": "plus aucune question de confiance à ce dossier"})
+			writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.trust.plusAucuneQuestionDe")})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Réponse envoyée"})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.trust.reponseEnvoyee")})
 	})
 }

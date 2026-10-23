@@ -46,11 +46,11 @@ func imageExt(b []byte) string {
 // saveImage range une image dans le dossier privé et renvoie son chemin ; les images de plus de 14 jours sont retirées au passage.
 func saveImage(b []byte) (string, error) {
 	if len(b) == 0 || len(b) > imgMax {
-		return "", errors.New("image vide ou trop grosse (12 Mo au plus)")
+		return "", terr("srv.images.imageVideOuTrop")
 	}
 	ext := imageExt(b)
 	if ext == "" {
-		return "", errors.New("format non reconnu : PNG, JPEG, GIF ou WebP")
+		return "", terr("srv.images.formatNonReconnuPng")
 	}
 	dir := imagesDir()
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -89,7 +89,7 @@ func lineAt(path string, o int64) ([]byte, error) {
 	}
 	defer f.Close()
 	if o < 0 {
-		return nil, errors.New("décalage négatif")
+		return nil, terr("srv.images.decalageNegatif")
 	}
 	if _, err := f.Seek(o, io.SeekStart); err != nil {
 		return nil, err
@@ -103,7 +103,7 @@ func lineAt(path string, o int64) ([]byte, error) {
 
 // convImage extrait le k-ième bloc d'une ligne de transcript (décalage o) si c'est une image encodée en base64.
 func convImage(path string, o int64, k int) ([]byte, string, error) {
-	bad := errors.New("image introuvable")
+	bad := terr("srv.images.imageIntrouvable")
 	if k < 0 || k > 1000 {
 		return nil, "", bad
 	}
@@ -149,7 +149,7 @@ func routesImages(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "path": p, "out": "Image ajoutée"})
+		writeJSON(w, 200, map[string]any{"ok": true, "path": p, "out": L("srv.images.imageAjoutee")})
 	})
 	mux.HandleFunc("GET /conv-image", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()

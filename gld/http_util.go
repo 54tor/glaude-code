@@ -23,12 +23,12 @@ func readItems(w http.ResponseWriter, r *http.Request) ([]item, string, bool) {
 		To    string
 	}
 	if json.NewDecoder(io.LimitReader(r.Body, 1<<22)).Decode(&req) != nil || len(req.Items) == 0 {
-		writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+		writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 		return nil, "", false
 	}
 	for _, it := range req.Items {
 		if _, ok := transcript(it.Dir, it.ID); !ok {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "id invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.idInvalide")})
 			return nil, "", false
 		}
 	}
@@ -46,7 +46,7 @@ func ids(items []item) []string {
 
 func errOr(err error) string {
 	if err != nil {
-		return "échec : " + err.Error()
+		return L("srv.common.failed", "A1", err.Error())
 	}
 	return "ok"
 }

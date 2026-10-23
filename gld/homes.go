@@ -8,7 +8,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -81,19 +80,19 @@ func saveHomes(hs []Home) error {
 		h := &hs[i]
 		h.Name = strings.TrimSpace(spaceRe.ReplaceAllString(h.Name, " "))
 		if h.Name == "" || utf8.RuneCountInString(h.Name) > 40 || !homeNameRe.MatchString(h.Name) || seen[h.Name] {
-			return errors.New("nom de dossier de configuration vide, trop long, avec un caractère interdit ou en double")
+			return terr("srv.homes.nomDeDossierDe")
 		}
 		seen[h.Name] = true
 		h.Dir = filepath.Clean(h.Dir)
 		if !filepath.IsAbs(h.Dir) || h.Dir == cfgDir() {
-			return errors.New("« " + h.Name + " » : un chemin absolu, différent du dossier de configuration courant, est attendu")
+			return terr("srv.homes.unCheminAbsoluDifferent", "A1", h.Name)
 		}
 		if fi, err := os.Stat(h.Dir); err != nil || !fi.IsDir() {
-			return errors.New("« " + h.Name + " » : dossier introuvable")
+			return terr("srv.homes.dossierIntrouvable", "A1", h.Name)
 		}
 	}
 	if len(hs) > 20 {
-		return errors.New("trop de dossiers de configuration (20 au plus)")
+		return terr("srv.homes.tropDeDossiersDe")
 	}
 	b, _ := json.MarshalIndent(map[string]any{"homes": hs}, "", "  ")
 	tmp := homesFile() + ".tmp"
@@ -160,7 +159,7 @@ func startHomeProc(h Home) (*homeProc, error) {
 	for i := 0; i < 100; i++ {
 		select {
 		case <-p.done:
-			return nil, errors.New("le processus enfant s'est arrêté")
+			return nil, terr("srv.homes.leProcessusEnfantS")
 		default:
 		}
 		if c, err := net.DialTimeout("tcp", target.Host, 200*time.Millisecond); err == nil {
@@ -170,7 +169,7 @@ func startHomeProc(h Home) (*homeProc, error) {
 		time.Sleep(100 * time.Millisecond)
 	}
 	cmd.Process.Kill()
-	return nil, errors.New("le processus enfant ne répond pas")
+	return nil, terr("srv.homes.leProcessusEnfantNe")
 }
 
 // childEnv : l'environnement du processus principal, sans le jeton ni les réglages d'écoute du serveur.
@@ -203,7 +202,7 @@ func homeFrom(r *http.Request) string {
 func homeProxy(name string) (http.Handler, error) {
 	h, ok := homeByName(name)
 	if !ok {
-		return nil, errors.New("dossier de configuration inconnu")
+		return nil, terr("srv.homes.dossierDeConfigurationInconnu")
 	}
 	homesMu.Lock()
 	defer homesMu.Unlock()
@@ -289,7 +288,7 @@ func routesHomes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /homes-save", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Homes []Home }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil || req.Homes == nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		err := saveHomes(req.Homes)
@@ -312,12 +311,12 @@ func routesHomes(mux *http.ServeMux) {
 			}
 		}
 		homesMu.Unlock()
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Dossiers de configuration enregistrés"})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.homes.dossiersDeConfigurationEnregistres")})
 	})
 	mux.HandleFunc("POST /homes-sync-plan", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ From, To string }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		items, err := syncPlan(req.From, req.To)
@@ -333,7 +332,7 @@ func routesHomes(mux *http.ServeMux) {
 			Picks    []SyncPick
 		}
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil || len(req.Picks) > 2000 {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		out, err := syncApply(req.From, req.To, req.Picks)
@@ -347,7 +346,7 @@ func routesHomes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /homes-select", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Name string }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		if req.Name != "" {
@@ -361,6 +360,6 @@ func routesHomes(mux *http.ServeMux) {
 			c.MaxAge = -1
 		}
 		http.SetCookie(w, c)
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Dossier de configuration choisi"})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.homes.dossierDeConfigurationChoisi")})
 	})
 }

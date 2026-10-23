@@ -81,10 +81,10 @@ func gitPush(dir, remote string) (string, error) {
 		known = known || r.Name == remote
 	}
 	if !known {
-		return "remote inconnu : " + remote, os.ErrInvalid
+		return L("srv.gitpush.unknownRemote", "A1", remote), os.ErrInvalid
 	}
 	if b, _ := gitOut1(dir, "symbolic-ref", "--short", "-q", "HEAD"); b == "" {
-		return "HEAD détaché : rien à pousser", os.ErrInvalid
+		return L("srv.gitpush.detached"), os.ErrInvalid
 	}
 	args := []string{"push"}
 	if up, _ := gitOut1(dir, "rev-parse", "--abbrev-ref", "@{u}"); up == "" {
@@ -111,12 +111,12 @@ func routesGitPush(mux *http.ServeMux) {
 	mux.HandleFunc("POST /git-push", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Dir, Remote string }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil || !knownRepo(req.Dir) {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "dossier invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.routes_sessions.dossierInvalide")})
 			return
 		}
 		out, err := gitPush(req.Dir, req.Remote)
 		if out == "" && err == nil {
-			out = "Poussé"
+			out = L("srv.gitpush.pushed")
 		}
 		writeJSON(w, 200, map[string]any{"ok": err == nil, "out": out})
 	})

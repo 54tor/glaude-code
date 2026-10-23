@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
@@ -93,7 +92,7 @@ func tmuxPanes() (map[int]string, error) {
 	out, err := tmuxRun("", "list-panes", "-a", "-F", "#{pane_id} #{pane_pid}")
 	if err != nil {
 		if strings.Contains(err.Error(), "error connecting") || strings.Contains(err.Error(), "no server") {
-			err = errors.New("aucune session n'a été lancée dans tmux")
+			err = terr("srv.sendkeys.aucuneSessionNA")
 		}
 		return nil, err
 	}
@@ -143,13 +142,13 @@ func sendable() (map[string]string, error) {
 func checkSendText(text string) error {
 	switch {
 	case strings.TrimSpace(text) == "":
-		return errors.New("message vide")
+		return terr("srv.chat.messageVide")
 	case len(text) > sendMax || !utf8.ValidString(text):
-		return errors.New("message trop long ou invalide")
+		return terr("srv.sendkeys.messageTropLongOu")
 	}
 	for _, r := range text {
 		if r < 0x20 && r != '\n' && r != '\t' || r == 0x7f || r >= 0x80 && r < 0xa0 {
-			return errors.New("le message contient un caractère de contrôle")
+			return terr("srv.sendkeys.leMessageContientUn")
 		}
 	}
 	return nil
@@ -161,18 +160,18 @@ var sendIdRe = regexp.MustCompile(`^[0-9a-f-]{36}$`)
 // écrit au fil de l'eau). Le pid vient d'un relevé frais de `claude agents --json`, jamais du navigateur.
 func closeSession(id string) error {
 	if !sendIdRe.MatchString(id) {
-		return errors.New("session invalide")
+		return terr("srv.chat.sessionInvalide")
 	}
 	pid, ok := sessionPIDs()[id]
 	if !ok {
-		return errors.New("session introuvable parmi les sessions ouvertes (déjà fermée ?)")
+		return terr("srv.sendkeys.sessionIntrouvableParmiLes")
 	}
 	p, err := os.FindProcess(pid)
 	if err != nil {
 		return err
 	}
 	if err := p.Signal(syscall.SIGTERM); err != nil {
-		return fmt.Errorf("fermeture impossible : %w", err)
+		return terr("srv.sendkeys.fermetureImpossible", "W1", err)
 	}
 	return nil
 }
@@ -200,29 +199,29 @@ func closeAndWait(items []item) {
 // sendToSession colle le texte dans le panneau tmux de la session, puis valide.
 func sendToSession(id, text string) error {
 	if !sendIdRe.MatchString(id) {
-		return errors.New("session invalide")
+		return terr("srv.chat.sessionInvalide")
 	}
 	if err := checkSendText(text); err != nil {
 		return err
 	}
 	ids, err := sendable()
 	if err != nil {
-		return fmt.Errorf("tmux inutilisable (%w) : lance les sessions dans tmux", err)
+		return terr("srv.sendkeys.tmuxInutilisableLanceLes", "W1", err)
 	}
 	pane, ok := ids[id]
 	if !ok {
-		return errors.New("cette session n'est pas dans tmux (ou n'est pas ouverte) : écris dans son terminal")
+		return terr("srv.sendkeys.cetteSessionNEst")
 	}
 	buf := "gld-send-" + strconv.Itoa(os.Getpid())
 	if _, err := tmuxRun(text, "load-buffer", "-b", buf, "-"); err != nil {
-		return fmt.Errorf("tmux load-buffer : %w", err)
+		return terr("srv.sendkeys.tmuxLoadBuffer", "W1", err)
 	}
 	if _, err := tmuxRun("", "paste-buffer", "-p", "-d", "-b", buf, "-t", pane); err != nil {
-		return fmt.Errorf("tmux paste-buffer : %w", err)
+		return terr("srv.sendkeys.tmuxPasteBuffer", "W1", err)
 	}
 	time.Sleep(200 * time.Millisecond) // laisse la TUI traiter le collage avant la validation
 	if _, err := tmuxRun("", "send-keys", "-t", pane, "Enter"); err != nil {
-		return fmt.Errorf("tmux send-keys : %w", err)
+		return terr("srv.sendkeys.tmuxSendKeys", "W1", err)
 	}
 	return nil
 }
@@ -238,15 +237,15 @@ var allowedKeys = map[string]string{
 
 func paneFor(id string) (string, error) {
 	if !sendIdRe.MatchString(id) {
-		return "", errors.New("session invalide")
+		return "", terr("srv.chat.sessionInvalide")
 	}
 	ids, err := sendable()
 	if err != nil {
-		return "", fmt.Errorf("tmux inutilisable (%w)", err)
+		return "", terr("srv.sendkeys.tmuxInutilisable", "W1", err)
 	}
 	p, ok := ids[id]
 	if !ok {
-		return "", errors.New("cette session n'est pas dans tmux (ou n'est pas ouverte)")
+		return "", terr("srv.sendkeys.cetteSessionNEst2")
 	}
 	return p, nil
 }
@@ -273,7 +272,7 @@ func sessionScreen(id string) (string, error) {
 func sendKey(id, key string) error {
 	k, ok := allowedKeys[key]
 	if !ok {
-		return errors.New("touche non permise")
+		return terr("srv.sendkeys.toucheNonPermise")
 	}
 	p, err := paneFor(id)
 	if err != nil {

@@ -9,8 +9,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -26,8 +24,8 @@ var snapRe = regexp.MustCompile(`snapshot-[a-zA-Z]+-[0-9]+-[a-zA-Z0-9]+\.sh`)
 var liveSessions = alive
 
 var (
-	errOpen = errors.New("session déjà ouverte : écris le message dans son onglet")
-	errLive = errors.New("impossible de savoir quelles sessions sont ouvertes (`claude agents --json` a échoué) : action refusée par prudence")
+	errOpen = terr("srv.purge.sessionDejaOuverteEcris")
+	errLive = terr("srv.purge.impossibleDeSavoirQuelles")
 )
 
 // liveCheck : les sessions vivantes, ou errLive. À utiliser avant toute action qui écrit ou supprime dans une session.
@@ -57,11 +55,11 @@ func safeRemove(p string) error {
 	cfg := cfgDir()
 	rel, err := filepath.Rel(cfg, p)
 	if err != nil || rel == "." || strings.Contains(rel, "..") {
-		return fmt.Errorf("refus d'effacer hors de %s : %s", cfg, p)
+		return terr("srv.purge.refusDEffacerHors", "A1", cfg, "A2", p)
 	}
 	for _, part := range strings.Split(rel, string(filepath.Separator)) {
 		if part == "memory" {
-			return fmt.Errorf("chemin protégé, non effacé : %s", p)
+			return terr("srv.purge.cheminProtegeNonEfface", "A1", p)
 		}
 	}
 	return os.RemoveAll(p)
@@ -209,7 +207,7 @@ func purgeSessions(items []item) (n, spared int, notes []string, err error) {
 		notes = solder(deleted, snaps)
 	}
 	if len(fails) > 0 {
-		err = fmt.Errorf("%d échec(s) : %s", len(fails), strings.Join(fails, " ; "))
+		err = terr("srv.purge.echecS", "A1", len(fails), "A2", strings.Join(fails, " ; "))
 	}
 	return
 }
@@ -255,7 +253,7 @@ func pruneHistory(deleted []string) (removed int, hashes map[string]bool, kept [
 					// ponytail: fenêtre résiduelle entre ce contrôle et le renommage ; Claude Code n'offre aucun verrou
 					os.Remove(tmp)
 					removed = 0
-					notes = append(notes, "  history.jsonl   : modifié pendant l'opération, lignes de prompt non retirées (réessaie)")
+					notes = append(notes, L("srv.purge.historyChanged"))
 				} else if e := os.Rename(tmp, hist); e != nil {
 					os.Remove(tmp)
 					removed = 0
@@ -275,7 +273,7 @@ func solder(deleted []string, snaps map[string]bool) []string {
 	cfg := cfgDir()
 	removed, hashes, kept, notes := pruneHistory(deleted)
 	if removed > 0 {
-		notes = append(notes, fmt.Sprintf("  history.jsonl   : %d ligne(s) de prompt retirée(s)", removed))
+		notes = append(notes, L("srv.purge.historyRemoved", "A1", removed))
 	}
 	if len(hashes) == 0 && len(snaps) == 0 {
 		return notes
@@ -325,10 +323,10 @@ func solder(deleted []string, snaps map[string]bool) []string {
 		}
 	}
 	if np > 0 {
-		notes = append(notes, fmt.Sprintf("  paste-cache     : %d collage(s) effacé(s)", np))
+		notes = append(notes, L("srv.purge.pasteCache", "A1", np))
 	}
 	if ns > 0 {
-		notes = append(notes, fmt.Sprintf("  shell-snapshots : %d instantané(s) effacé(s)", ns))
+		notes = append(notes, L("srv.purge.shellSnapshots", "A1", ns))
 	}
 	return notes
 }
