@@ -8,6 +8,7 @@ import type { Node } from "@/lib/tree"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { Tip } from "@/components/ui/tooltip"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -60,7 +61,7 @@ function NavItem({ icon: Icon, label, n, active, onClick, to }: { icon: typeof I
 function Heading({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="mt-5 mb-1 flex items-center px-2">
-      <p className="flex-1 text-xs font-semibold text-muted-foreground">{children}</p>
+      <h2 className="flex-1 text-xs font-semibold text-muted-foreground">{children}</h2>
       {action}
     </div>
   )
@@ -313,9 +314,11 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
 
           <Heading
             action={
-              <Button variant="ghost" size="icon-xs" onClick={a.addDir} title={t("shell.sidebar.addDirHint")} aria-label={t("shell.sidebar.addDir")}>
-                <FolderPlus />
-              </Button>
+              <Tip label={t("shell.sidebar.addDirHint")}>
+                <Button variant="ghost" size="icon-xs" onClick={a.addDir} aria-label={t("shell.sidebar.addDir")}>
+                  <FolderPlus />
+                </Button>
+              </Tip>
             }
           >
             {t("shell.sidebar.local")}

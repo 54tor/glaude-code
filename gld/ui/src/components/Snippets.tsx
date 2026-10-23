@@ -187,9 +187,9 @@ export function Snippets({
               if (!vis.length && sc) return null
               return (
                 <section key={sc || "u"} className="mb-3">
-                  <p className="truncate px-2 py-1 text-xs font-semibold text-muted-foreground" title={sc ? undefined : dir}>
+                  <h2 className="truncate px-2 py-1 text-xs font-semibold text-muted-foreground" title={sc ? undefined : dir}>
                     {label(sc)}
-                  </p>
+                  </h2>
                   {vis.length === 0 && (
                     <p className="px-2 py-1 text-xs text-muted-foreground">{files.length ? t("skills.snippets.noneMatch") : t("skills.snippets.none")}</p>
                   )}

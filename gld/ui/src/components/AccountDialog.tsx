@@ -6,6 +6,7 @@ import { api, type Account } from "@/lib/api"
 import { compact } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Tip } from "@/components/ui/tooltip"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 const TIERS: Record<string, string> = {
@@ -65,14 +66,16 @@ export function AccountButton() {
   const top = a?.limits.filter((l) => l.key === "five_hour" || l.key === "seven_day").sort((x, y) => y.percent - x.percent)[0]
   return (
     <>
-      <Button variant="ghost" size="sm" onClick={() => setOpen(true)} title={t("config.account.buttonTitle")} aria-label={t("config.account.title")}>
-        <CircleUser />
-        {top && (
-          <span className={cn("text-xs tabular-nums", top.percent >= 90 ? "text-destructive" : top.percent >= 70 ? "text-warning" : "text-muted-foreground")}>
-            {Math.round(top.percent)} %
-          </span>
-        )}
-      </Button>
+      <Tip label={t("config.account.buttonTitle")}>
+        <Button variant="ghost" size="sm" onClick={() => setOpen(true)} aria-label={t("config.account.title")}>
+          <CircleUser />
+          {top && (
+            <span className={cn("text-xs tabular-nums", top.percent >= 90 ? "text-destructive" : top.percent >= 70 ? "text-warning" : "text-muted-foreground")}>
+              {Math.round(top.percent)} %
+            </span>
+          )}
+        </Button>
+      </Tip>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="flex max-h-[90vh] min-w-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
           <DialogHeader className="border-b px-6 py-4">
