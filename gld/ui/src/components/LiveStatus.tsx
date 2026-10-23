@@ -57,9 +57,12 @@ function label(st: LiveState, id: string, now: number) {
 // le processus met un instant à finir après SIGTERM.
 export function LiveBar({ live: { st, open }, id }: { live: Live; id: string }) {
   const now = useNow(open)
+  const [expanded, setExpanded] = useState(false)
   if (!st) return null
   if (!(open && st.open)) return null // fermée : « Session fermée » est dans la barre d'outils (LiveStats), sans bande
   const isOpen = true
+  const isTool = st.thinking && !!st.tool
+  const detail = isTool ? st.tool : st.thinking ? "" : st.said
   return (
     <div className="space-y-2">
       {st.queue?.map((m) => (
@@ -80,17 +83,23 @@ export function LiveBar({ live: { st, open }, id }: { live: Live; id: string }) 
             {st.since > 0 && st.thinking && <span className="shrink-0 font-normal text-muted-foreground">depuis {secs(now - st.since)}</span>}
           </span>
         )}
-        {isOpen && !st.thinking && st.said && (
-          <span className="msg flex min-w-0 basis-full gap-2 border-l-2 border-amber-500/60 py-0.5 pl-3 text-xs text-muted-foreground" title={st.said}>
-            <span className="min-w-0 break-words whitespace-pre-wrap">{st.said}</span>
-          </span>
-        )}
-        {isOpen && st.thinking && st.tool && (
-          <span className="msg flex min-w-0 basis-full gap-2 border-l-2 py-0.5 pl-3 text-xs text-muted-foreground" title={st.tool}>
-            <Wrench className="mt-0.5 size-3.5 shrink-0" aria-label={st.toolRunning ? "outil en cours" : "dernier outil"} />
-            <span className="max-h-60 min-w-0 overflow-y-auto break-words whitespace-pre-wrap">{st.tool}</span>
-          </span>
-        )}
+        {/* Un seul emplacement d'une ligne : l'outil en cours, ou le dernier message de Claude quand il attend. Sa hauteur est toujours
+            réservée (même sans rien à montrer) pour que la page ne saute pas ; un clic le déplie. */}
+        <button
+          type="button"
+          disabled={!detail}
+          onClick={() => setExpanded((e) => !e)}
+          aria-expanded={detail ? expanded : undefined}
+          title={detail}
+          className={cn(
+            "msg flex min-h-5 min-w-0 basis-full items-start gap-2 border-l-2 py-0.5 pl-3 text-left text-xs leading-4 text-muted-foreground",
+            detail ? (isTool ? "" : "border-amber-500/60") : "border-transparent",
+            detail && "cursor-pointer hover:text-foreground"
+          )}
+        >
+          {isTool && <Wrench className="mt-px size-3.5 shrink-0" aria-label={st.toolRunning ? "outil en cours" : "dernier outil"} />}
+          <span className={cn("min-w-0 flex-1", expanded ? "max-h-60 overflow-y-auto break-words whitespace-pre-wrap" : "truncate")}>{detail || " "}</span>
+        </button>
       </div>
     </div>
   )
