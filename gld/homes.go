@@ -50,6 +50,9 @@ type Home struct {
 
 const mainHomeID = "main"
 
+// onHomesRemoved reçoit les identifiants des homes retirés par /homes-save ; branché par le mode multi-utilisateur.
+var onHomesRemoved func(r *http.Request, ids []string)
+
 type homeProc struct {
 	dir   string
 	cmd   *exec.Cmd
@@ -432,11 +435,24 @@ func routesHomes(mux *http.ServeMux) {
 			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
+		before := readHomes()
 		err := saveHomes(req.Homes)
 		journal("homes-save %d dossier(s) : %v", len(req.Homes), errOr(err))
 		if err != nil {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
+		}
+		if onHomesRemoved != nil {
+			after := readHomes()
+			var gone []string
+			for _, h := range before {
+				if h.ID != "" && !slices.ContainsFunc(after, func(a Home) bool { return a.ID == h.ID }) {
+					gone = append(gone, h.ID)
+				}
+			}
+			if len(gone) > 0 {
+				onHomesRemoved(r, gone)
+			}
 		}
 		keep := map[string]string{}
 		for _, h := range req.Homes {
