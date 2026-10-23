@@ -322,7 +322,7 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
             defaultChoice={choice}
             live={a.live.has(id)}
             liveState={live}
-            onSent={() => (a.touch(id), setSentAt({ id, at: Date.now() }), sentDown())}
+            onSent={() => (a.touch(id), setSentAt({ id, at: Date.now() }), sentDown(), void reloadRef.current())}
             onWrite={sentDown}
             turn={turn}
             setTurn={(f) => setChat((c) => f(c?.id === id ? c : null))}

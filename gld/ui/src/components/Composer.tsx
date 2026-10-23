@@ -263,7 +263,7 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-7xl space-y-2">
-        <TerminalPanel id={id} onAsk={onAsk} />
+        <TerminalPanel id={id} onAsk={onAsk} onSent={onSent} />
         {sugg.length > 0 && (
           <ul className="max-h-48 overflow-y-auto rounded-lg border bg-popover p-1 text-sm shadow-md" role="listbox" aria-label="Commandes">
             {sugg.map(([cmd, label], i) => (
@@ -345,7 +345,7 @@ function CloseSession({ id }: { id: string }) {
 }
 
 // L'écran du terminal de la session (tmux) relu toutes les 1,5 s, pour proposer en boutons les options détectées.
-function TerminalPanel({ id, onAsk }: { id: string; onAsk?: (asking: boolean) => void }) {
+function TerminalPanel({ id, onAsk, onSent }: { id: string; onAsk?: (asking: boolean) => void; onSent: () => void }) {
   const [screen, setScreen] = useState("")
   const busy = useRef(false) // une touche vient d'être envoyée : l'écran affiché peut être périmé
   useEffect(() => {
@@ -378,7 +378,10 @@ function TerminalPanel({ id, onAsk }: { id: string; onAsk?: (asking: boolean) =>
         const s = await api.screen(id)
         if (s.ok) {
           setScreen(s.text ?? "")
-          if ((s.text ?? "") !== before) break
+          if ((s.text ?? "") !== before) {
+            if (!parsePrompt(s.text ?? "")) onSent() // dialogue terminé : la suite arrive, on la suit tout de suite
+            break
+          }
         }
       }
     } finally {
@@ -404,6 +407,7 @@ function TerminalPanel({ id, onAsk }: { id: string; onAsk?: (asking: boolean) =>
     if (!r.ok) return void toast.error(r.out)
     setAnswer("")
     setTyping(null)
+    onSent()
   }
   const asking = !!prompt
   useEffect(() => {
