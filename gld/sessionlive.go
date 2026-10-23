@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -130,7 +131,28 @@ func defaultVerbs(lang string) []string {
 	return v
 }
 
+// verbsCache : /session-live est relu toutes les 2 s par le navigateur ; la liste ne change qu'avec settings.json ou la langue.
+var verbsCache struct {
+	sync.Mutex
+	key   string
+	verbs []string
+}
+
 func spinnerVerbs(lang string) []string {
+	settings := filepath.Join(cfgDir(), "settings.json")
+	key := lang + "\x00" + settings
+	if st, err := os.Stat(settings); err == nil {
+		key += "\x00" + strconv.FormatInt(st.ModTime().UnixNano(), 10) + "\x00" + strconv.FormatInt(st.Size(), 10)
+	}
+	verbsCache.Lock()
+	defer verbsCache.Unlock()
+	if verbsCache.key != key {
+		verbsCache.key, verbsCache.verbs = key, readSpinnerVerbs(lang, settings)
+	}
+	return verbsCache.verbs
+}
+
+func readSpinnerVerbs(lang, settings string) []string {
 	thinkingVerbs := defaultVerbs(lang)
 	var d struct {
 		SpinnerVerbs struct {
@@ -138,7 +160,7 @@ func spinnerVerbs(lang string) []string {
 			Verbs []string `json:"verbs"`
 		} `json:"spinnerVerbs"`
 	}
-	if b, err := os.ReadFile(filepath.Join(cfgDir(), "settings.json")); err != nil || json.Unmarshal(b, &d) != nil || len(d.SpinnerVerbs.Verbs) == 0 {
+	if b, err := os.ReadFile(settings); err != nil || json.Unmarshal(b, &d) != nil || len(d.SpinnerVerbs.Verbs) == 0 {
 		return thinkingVerbs
 	}
 	var mine []string
@@ -312,7 +334,6 @@ func sessionLive(dir, id string) LiveState {
 	if !ok {
 		return st
 	}
-	st.Activity, st.Thinking, st.Since, _, st.Model = "", false, 0, usage{}, ""
 	var u usage
 	st.Activity, st.Thinking, st.Since, u, st.Model, st.Tool, st.ToolRunning = readActivity(p)
 	st.Context, st.Out = u.context(), u.Out

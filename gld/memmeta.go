@@ -19,6 +19,8 @@ import (
 const indexLines = 200 // Claude Code ne charge que les 200 premières lignes de MEMORY.md
 
 // frontMatter : le bloc YAML en tête du texte et le reste. ok est faux s'il n'y en a pas.
+var blankLinesRe = regexp.MustCompile(`\n{2,}`)
+
 func frontMatter(text string) (yamlText, body string, ok bool) {
 	if !strings.HasPrefix(text, "---\n") {
 		return "", text, false
@@ -482,7 +484,7 @@ func setType(text, typ string) (string, error) {
 	default:
 		y += "metadata:\n  type: " + typ + "\n"
 	}
-	y = regexp.MustCompile(`\n{2,}`).ReplaceAllString(y, "\n")
+	y = blankLinesRe.ReplaceAllString(y, "\n")
 	out := "---\n" + y + "---\n" + body
 	if origErr == nil {
 		if _, err := parseMeta(out); err != nil {

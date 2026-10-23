@@ -73,7 +73,7 @@ func withToken(token string, next http.Handler) http.Handler {
 		if q := r.URL.Query(); sameToken(q.Get("token"), token) && q.Has("token") {
 			http.SetCookie(w, &http.Cookie{Name: tokenCookie, Value: token, Path: "/", MaxAge: 30 * 24 * 3600, HttpOnly: true, SameSite: http.SameSiteStrictMode})
 			q.Del("token")
-			u := url.URL{Path: r.URL.Path, RawQuery: q.Encode()}
+			u := url.URL{Path: "/" + strings.TrimLeft(r.URL.Path, "/"), RawQuery: q.Encode()} // jamais « //hôte » : redirection locale seulement
 			http.Redirect(w, r, u.String(), http.StatusSeeOther)
 			return
 		}

@@ -28,7 +28,14 @@ func watchWaiting(every time.Duration) {
 		return
 	}
 	prev := map[string]bool{}
-	for range time.Tick(every) {
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-homeCtx.Done():
+			return
+		case <-t.C:
+		}
 		cur := waiting()
 		fresh := newWaiting(prev, cur)
 		prev = map[string]bool{}

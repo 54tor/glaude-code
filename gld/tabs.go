@@ -67,15 +67,21 @@ func liveTabs() []TabSession {
 	return out
 }
 
-func loadTabs() []TabSave {
-	b, _ := os.ReadFile(tabsFile())
+// loadTabs : les sauvegardes ; un fichier absent est une liste vide, un fichier illisible une erreur (on ne réécrit jamais par-dessus).
+func loadTabs() ([]TabSave, error) {
+	b, err := os.ReadFile(tabsFile())
+	if err != nil {
+		return []TabSave{}, nil
+	}
 	return readTabs(b)
 }
 
-func readTabs(b []byte) []TabSave {
+func readTabs(b []byte) ([]TabSave, error) {
 	t := []TabSave{}
-	json.Unmarshal(b, &t)
-	return t
+	if err := json.Unmarshal(b, &t); err != nil {
+		return nil, terr("srv.tabs.fichierIllisible", "A1", err.Error())
+	}
+	return t, nil
 }
 
 func writeTabs(t []TabSave) error {
@@ -104,7 +110,13 @@ func saveTabs(name string, auto bool) (TabSave, bool, error) {
 	}
 	tabsMu.Lock()
 	defer tabsMu.Unlock()
-	all := loadTabs()
+	all, err := loadTabs()
+	if err != nil {
+		if auto {
+			journal("tabs-save : %v", err)
+		}
+		return TabSave{}, false, err
+	}
 	if auto {
 		for _, t := range all {
 			if t.Auto {
@@ -116,7 +128,7 @@ func saveTabs(name string, auto bool) (TabSave, bool, error) {
 		}
 	}
 	s := TabSave{name, auto, time.Now().Format(time.RFC3339Nano), ss}
-	err := writeTabs(pruneAuto(append([]TabSave{s}, all...)))
+	err = writeTabs(pruneAuto(append([]TabSave{s}, all...)))
 	if !auto {
 		journal("tabs-save « %s » %d session(s) : %v", name, len(ss), errOr(err))
 	}
@@ -144,7 +156,10 @@ func pruneAuto(l []TabSave) []TabSave {
 func removeTabs(at string) error {
 	tabsMu.Lock()
 	defer tabsMu.Unlock()
-	all := loadTabs()
+	all, err := loadTabs()
+	if err != nil {
+		return err
+	}
 	next := slices.DeleteFunc(slices.Clone(all), func(t TabSave) bool { return t.At == at })
 	if len(next) == len(all) {
 		return terr("srv.tabs.sauvegardeIntrouvable")
@@ -157,7 +172,14 @@ func removeTabs(at string) error {
 // Sans session ouverte (juste après un redémarrage), rien n'est écrit : la dernière sauvegarde reste intacte.
 func autosaveTabs(every time.Duration) {
 	saveTabs("", true)
-	for range time.Tick(every) {
-		saveTabs("", true)
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-homeCtx.Done():
+			return
+		case <-t.C:
+			saveTabs("", true)
+		}
 	}
 }

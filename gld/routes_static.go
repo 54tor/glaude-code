@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"io/fs"
 	"mime"
 	"net/http"
+	"os"
 )
 
 // routesStatic : la page de l'interface, ses ressources (embarquées dans le binaire) et leurs types MIME.
@@ -15,9 +17,12 @@ func routesStatic(mux *http.ServeMux) {
 	dist, _ := fs.Sub(uiFS, "ui/dist")
 	files := http.FileServerFS(dist)
 	// La page de l'interface, servie aussi pour ses chemins (routage côté navigateur).
-	index, _ := fs.ReadFile(dist, "index.html")
+	index, err := fs.ReadFile(dist, "index.html")
+	if err != nil { // binaire compilé sans `make ui` : on le dit plutôt que de servir une page vide
+		fmt.Fprintln(os.Stderr, "gld : interface absente du binaire (ui/dist vide) : lancer `make install`")
+	}
 	page := func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-ancestors 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; base-uri 'self'; frame-ancestors 'none'")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(index)
 	}

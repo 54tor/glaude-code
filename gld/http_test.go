@@ -431,7 +431,7 @@ func TestHTTPSnippets(t *testing.T) {
 	q = httptest.NewRequest("GET", "/snippets-export?scope=-p", nil)
 	q.Host = testHost
 	h.ServeHTTP(r, q)
-	if !strings.Contains(r.Header().Get("Content-Disposition"), `filename="commandes-p.zip"`) {
+	if !strings.Contains(r.Header().Get("Content-Disposition"), `filename=commandes-p.zip`) {
 		t.Fatalf("export de projet : %d %s", r.Code, r.Header())
 	}
 

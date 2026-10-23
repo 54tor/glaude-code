@@ -22,12 +22,17 @@ var notesMu sync.Mutex
 
 func notesFile() string { return filepath.Join(cfgDir(), "gld-web-notes.json") }
 
-func notesLoad() map[string]string {
+// notesLoad : les notes ; un fichier absent est vide, un fichier illisible une erreur (on ne réécrit jamais par-dessus).
+func notesLoad() (map[string]string, error) {
 	m := map[string]string{}
-	if b, err := os.ReadFile(notesFile()); err == nil {
-		json.Unmarshal(b, &m)
+	b, err := os.ReadFile(notesFile())
+	if err != nil {
+		return m, nil
 	}
-	return m
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, terr("srv.notes.fichierIllisible", "A1", err.Error())
+	}
+	return m, nil
 }
 
 func notesSave(m map[string]string) error {
@@ -47,7 +52,12 @@ func routesNotes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /notes", func(w http.ResponseWriter, r *http.Request) {
 		notesMu.Lock()
 		defer notesMu.Unlock()
-		writeJSON(w, 200, map[string]any{"notes": notesLoad()})
+		m, err := notesLoad()
+		if err != nil {
+			writeJSON(w, 500, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"notes": m})
 	})
 	// {key, text} : enregistre (texte vide : supprime) ; {key, to} : déplace la note (renommage d'un projet).
 	mux.HandleFunc("POST /notes", func(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +68,11 @@ func routesNotes(mux *http.ServeMux) {
 		}
 		notesMu.Lock()
 		defer notesMu.Unlock()
-		m := notesLoad()
+		m, err := notesLoad()
+		if err != nil {
+			writeJSON(w, 500, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
 		switch {
 		case req.To != "":
 			if t, ok := m[req.Key]; ok {
