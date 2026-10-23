@@ -2,7 +2,11 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"crypto/tls"
+	"database/sql"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -327,5 +331,53 @@ func TestRevokeClosedDB(t *testing.T) {
 	s.db.Close()
 	if s.RevokeUser(id) == nil || s.RevokeSession("00") == nil {
 		t.Fatal("erreur de base ignorée")
+	}
+}
+
+func TestSessionRowSigned(t *testing.T) {
+	now := testClock(t)
+	s, id := sessUser(t)
+	bob, err := s.AddUser("bob", testPw, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Une ligne insérée sans la clé : ni un SHA-256 du cookie ni la bonne empreinte sans signature ne valent.
+	raw := bytes.Repeat([]byte{7}, 32)
+	cookie := base64.RawURLEncoding.EncodeToString(raw)
+	plain := sha256.Sum256(raw)
+	n := now.Unix()
+	s.db.Exec(`INSERT INTO sessions(id_hash,user_id,created_at,last_seen_at,expires_at,mfa_at) VALUES(?,?,?,?,?,?)`, plain[:], bob, n, n, n+3600, n)
+	if _, err := s.Session(cookie); !errors.Is(err, errNoSession) {
+		t.Fatalf("SHA-256 brut accepté : %v", err)
+	}
+	s.db.Exec(`INSERT INTO sessions(id_hash,user_id,created_at,last_seen_at,expires_at,mfa_at) VALUES(?,?,?,?,?,?)`, s.sessHash(raw), bob, n, n, n+3600, n)
+	before := tamperEvents(t, s)
+	if _, err := s.Session(cookie); !errors.Is(err, errNoSession) {
+		t.Fatalf("ligne sans signature acceptée : %v", err)
+	}
+	if tamperEvents(t, s) != before+1 {
+		t.Fatal("altération non journalisée")
+	}
+
+	c, p := fullSession(t, s, id)
+	h, _ := hex.DecodeString(p.SessionID)
+	var mfa sql.NullInt64
+	var created int64
+	var sig []byte
+	s.db.QueryRow(`SELECT created_at,mfa_at,sig FROM sessions WHERE id_hash=?`, h).Scan(&created, &mfa, &sig)
+	if !mfa.Valid || !s.sessOK(h, id, created, mfa, sig) {
+		t.Fatal("ligne promue non signée")
+	}
+	var old int
+	s.db.QueryRow(`SELECT COUNT(*) FROM sessions WHERE user_id=? AND mfa_at IS NULL`, id).Scan(&old)
+	if old != 0 {
+		t.Fatal("session partielle conservée après promotion")
+	}
+	if _, err := s.Session(c); err != nil {
+		t.Fatalf("cookie légitime refusé : %v", err)
+	}
+	s.db.Exec(`UPDATE sessions SET user_id=? WHERE id_hash=?`, bob, h)
+	if _, err := s.Session(c); !errors.Is(err, errNoSession) {
+		t.Fatalf("session retournée vers un autre compte acceptée : %v", err)
 	}
 }

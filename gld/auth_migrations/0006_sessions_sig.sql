@@ -1,0 +1,2 @@
+ALTER TABLE sessions ADD COLUMN sig BLOB;
+DELETE FROM sessions;

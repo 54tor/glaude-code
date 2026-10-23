@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -829,29 +828,15 @@ func (a *authAPI) sessions(w http.ResponseWriter, r *http.Request) {
 	if p == nil {
 		return
 	}
-	rows, err := a.s.db.Query(`SELECT id_hash,created_at,last_seen_at,ip,ua,mfa_at IS NOT NULL FROM sessions WHERE user_id=? AND expires_at>? ORDER BY last_seen_at DESC`,
-		p.User.ID, authNow().Unix())
+	list, err := a.s.userSessions(p.User.ID)
 	if err != nil {
 		authInternal(w, err)
 		return
 	}
-	defer rows.Close()
 	out := []map[string]any{}
-	for rows.Next() {
-		var h []byte
-		var created, seen int64
-		var ip, ua string
-		var mfa bool
-		if err := rows.Scan(&h, &created, &seen, &ip, &ua, &mfa); err != nil {
-			authInternal(w, err)
-			return
-		}
-		id := hex.EncodeToString(h)
-		out = append(out, map[string]any{"id": id, "created": created, "seen": seen, "ip": ip, "ua": ua, "mfa": mfa, "current": id == p.SessionID})
-	}
-	if err := rows.Err(); err != nil {
-		authInternal(w, err)
-		return
+	for _, x := range list {
+		id := hex.EncodeToString(x.hash)
+		out = append(out, map[string]any{"id": id, "created": x.created, "seen": x.seen, "ip": x.ip, "ua": x.ua, "mfa": x.mfa, "current": id == p.SessionID})
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "sessions": out})
 }
@@ -873,10 +858,9 @@ func (a *authAPI) sessionRevoke(w http.ResponseWriter, r *http.Request) {
 	if !a.reauth(w, r, p, req.reauthReq) {
 		return
 	}
-	// user_id d'une session ne change jamais : vérifier puis révoquer ne laisse pas de fenêtre.
-	var owner int64
-	err = a.s.db.QueryRow(`SELECT user_id FROM sessions WHERE id_hash=?`, h).Scan(&owner)
-	if errors.Is(err, sql.ErrNoRows) || (err == nil && owner != p.User.ID) {
+	// user_id est signé : vérifier puis révoquer ne laisse pas de fenêtre.
+	owner, err := a.s.sessionOwner(h)
+	if errors.Is(err, errNoSession) || (err == nil && owner != p.User.ID) {
 		writeJSON(w, 404, map[string]any{"ok": false, "out": L("srv.auth.sessionInconnue")})
 		return
 	}
