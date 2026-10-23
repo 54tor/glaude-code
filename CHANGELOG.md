@@ -4,6 +4,11 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.3.1] - 2026-10-23
+
+### Corrigé
+- Go 1.26.10 minimum (au lieu de 1.26.0) : correctifs de la bibliothèque standard (`net/http`, dont GO-2026-6617, et `crypto/x509`) signalés par `govulncheck`.
+
 ## [0.3.0] - 2026-10-23
 
 ### Ajouté
