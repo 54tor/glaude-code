@@ -93,27 +93,60 @@ func readTrashMeta(id string) (TrashedSession, bool) {
 }
 
 // listTrashedSessions : le contenu de la corbeille, le plus récemment supprimé d'abord. Les sessions plus vieilles que
-// trashKeep sont purgées au passage.
+// trashKeep n'y figurent plus ; leur purge revient à expireTrashedSessions (une lecture ne supprime rien).
 func listTrashedSessions() []TrashedSession {
-	ents, _ := os.ReadDir(sessionTrashDir())
 	out := []TrashedSession{}
-	var old []string
-	for _, e := range ents {
-		m, ok := readTrashMeta(e.Name())
-		if !ok {
-			continue
+	for _, m := range trashedMetas() {
+		if !expired(m) {
+			out = append(out, m)
 		}
-		if time.Since(time.Unix(int64(m.At), 0)) > trashKeep {
-			old = append(old, m.ID)
-			continue
-		}
-		out = append(out, m)
-	}
-	if len(old) > 0 {
-		purgeTrashed(old)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].At > out[j].At })
 	return out
+}
+
+func trashedMetas() []TrashedSession {
+	ents, _ := os.ReadDir(sessionTrashDir())
+	var out []TrashedSession
+	for _, e := range ents {
+		if m, ok := readTrashMeta(e.Name()); ok {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+func expired(m TrashedSession) bool { return time.Since(time.Unix(int64(m.At), 0)) > trashKeep }
+
+// expireTrashedSessions purge pour de bon les sessions restées plus de trashKeep dans la corbeille.
+func expireTrashedSessions() (int, error) {
+	var old []string
+	for _, m := range trashedMetas() {
+		if expired(m) {
+			old = append(old, m.ID)
+		}
+	}
+	if len(old) == 0 {
+		return 0, nil
+	}
+	n, err := purgeTrashed(old)
+	journal("trash-expire %d session(s) : %v", n, errOr(err))
+	return n, err
+}
+
+// expireTrashLoop : l'expiration au démarrage, puis à chaque période, jusqu'à l'arrêt du serveur.
+func expireTrashLoop(every time.Duration) {
+	expireTrashedSessions()
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-homeCtx.Done():
+			return
+		case <-t.C:
+			expireTrashedSessions()
+		}
+	}
 }
 
 // restoreTrashed remet une session à sa place ; refuse d'écraser un transcript du même nom.
@@ -219,6 +252,7 @@ func routesTrashSessions(mux *http.ServeMux) {
 			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
+		expireTrashedSessions()
 		ids := req.IDs
 		if len(ids) == 0 {
 			ents, _ := os.ReadDir(sessionTrashDir())

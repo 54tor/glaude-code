@@ -88,6 +88,7 @@ func main() {
 	go autosaveTabs(2 * time.Minute)
 	go watchWaiting(20 * time.Second)
 	go keepWarmLoop(30 * time.Second)
+	go expireTrashLoop(24 * time.Hour)
 	go func() { _ = syncIndex() }() // index de recherche prêt avant la première requête
 	if local && token == "" {
 		fmt.Fprintln(os.Stderr, "http://"+net.JoinHostPort(*listen, port))
