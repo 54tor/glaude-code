@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -312,5 +313,11 @@ func TestManagedInstalledExact(t *testing.T) {
 	warnGuard(true, &w)
 	if w.Len() == 0 {
 		t.Fatal("fichier d'un autre dossier : avertissement attendu")
+	}
+}
+
+func TestCliAuthUnknownSubcommand(t *testing.T) {
+	if err := cliAuth(context.Background(), []string{"nimporte"}, io.Discard); err == nil || !strings.Contains(err.Error(), "nimporte") {
+		t.Fatalf("sous-commande inconnue acceptée : %v", err)
 	}
 }

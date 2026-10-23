@@ -86,6 +86,7 @@
   "srv.auth.nomPris": "ce nom est déjà utilisé",
   "srv.auth.sessionInconnue": "session inconnue",
   "srv.auth.sessionRequise": "session requise : se connecter",
+  "srv.auth.sousCommandeInconnue": "sous-commande inconnue : {{.A1}} (gld auth --help)",
   "srv.auth.tamper": "signature invalide dans la base d'authentification : accès refusé",
   "srv.auth.totpDejaActif": "un TOTP est déjà actif : réinitialiser les facteurs avant d'en enrôler un autre",
   "srv.auth.urlPubliqueInvalide": "GLD_PUBLIC_URL invalide : une URL http(s) avec un nom d'hôte (localhost ou un domaine, pas une adresse IP) est attendue",
