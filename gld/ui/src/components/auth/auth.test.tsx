@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/lib/api"
 import { setLang } from "@/i18n"
-import { authFetch, b64u, boot, getAuth, logout, setAuth, useCan } from "@/lib/auth"
+import { authFetch, b64u, boot, getAuth, logout, setAuth, useCan, waAvailable } from "@/lib/auth"
 import { draftOf, setDraft } from "@/hooks/useDraft"
 import { AuthScreen, Login } from "./Login"
 import { Mfa } from "./Mfa"
@@ -11,6 +11,8 @@ import { Profile } from "./Profile"
 import { AdminEvents, AdminUsers } from "./AdminUsers"
 import App from "@/App"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { HomeSwitcher } from "@/components/HomeSwitcher"
+import { ActionsCtx, type Actions } from "@/components/actions"
 
 type Reply = { status?: number; body?: unknown; headers?: Record<string, string> }
 type Call = { url: string; init: RequestInit }
@@ -469,5 +471,245 @@ describe("AdminUsers", () => {
     )
     await waitFor(() => expect(screen.getAllByText(EVIL).length).toBe(3))
     expect(container.querySelector("img")).toBeNull()
+  })
+})
+
+describe("HomeSwitcher", () => {
+  const HOMES = { current: "", main: "/h/.claude", mainId: "main", homes: [{ name: "perso", dir: "/p", id: "h1", running: false }] }
+  const mount = async () => {
+    const actions = { home: "/h", pickDir: async () => "/h/.claude-pro" } as unknown as Actions
+    render(
+      <TooltipProvider>
+        <ActionsCtx.Provider value={actions}>
+          <HomeSwitcher />
+        </ActionsCtx.Provider>
+      </TooltipProvider>
+    )
+    const trigger = await screen.findByRole("button", { name: "Dossier de configuration Claude" })
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: "mouse" })
+  }
+  const saved = (calls: Call[]) => bodyOf(calls.find((c) => c.url === "/homes-save")!)
+
+  it("mode authentifié (admin) : un ajout n'envoie que le nouveau home", async () => {
+    const calls = server({ "/homes": { body: HOMES }, "/homes-save": { body: { ok: true, out: "" } } })
+    setAuth({ state: "ok", csrf: "tok", user: { name: "root", admin: true } })
+    await mount()
+    await act(async () => void fireEvent.click(await screen.findByRole("menuitem", { name: "Ajouter un dossier…" })))
+    await waitFor(() => expect(calls.some((c) => c.url === "/homes-save")).toBe(true))
+    expect(saved(calls)).toEqual({ homes: [{ name: ".claude-pro", dir: "/h/.claude-pro" }] })
+  })
+
+  it("mode authentifié (admin) : un retrait envoie l'identifiant, jamais la liste", async () => {
+    const calls = server({ "/homes": { body: HOMES }, "/homes-save": { body: { ok: true, out: "" } } })
+    setAuth({ state: "ok", csrf: "tok", user: { name: "root", admin: true } })
+    await mount()
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Retirer de la liste" }))
+    await act(async () => void fireEvent.click(await screen.findByRole("menuitem", { name: "perso" })))
+    await waitFor(() => expect(calls.some((c) => c.url === "/homes-save")).toBe(true))
+    expect(saved(calls)).toEqual({ homes: [], removed: ["h1"] })
+  })
+
+  it("mode ouvert : la liste complète part comme avant", async () => {
+    const calls = server({ "/homes": { body: { current: "", main: "/h/.claude", homes: [{ name: "perso", dir: "/p", running: false }] } }, "/homes-save": { body: { ok: true, out: "" } } })
+    setAuth({ state: "open" })
+    await mount()
+    await act(async () => void fireEvent.click(await screen.findByRole("menuitem", { name: "Ajouter un dossier…" })))
+    await waitFor(() => expect(calls.some((c) => c.url === "/homes-save")).toBe(true))
+    expect(saved(calls)).toEqual({ homes: [{ name: "perso", dir: "/p" }, { name: ".claude-pro", dir: "/h/.claude-pro" }] })
+  })
+
+  it("non admin : sélection seulement ; principal sans droit nommé plutôt que vide", async () => {
+    server({ "/homes": { body: { ...HOMES, main: "" } } })
+    setAuth({ state: "ok", csrf: "tok", user: { name: "bob", admin: false } })
+    await mount()
+    expect(await screen.findByRole("menuitem", { name: "Dossier principal" })).toBeTruthy()
+    expect(screen.getByRole("menuitem", { name: /perso/ })).toBeTruthy()
+    expect(screen.queryByRole("menuitem", { name: "Ajouter un dossier…" })).toBeNull()
+    expect(screen.queryByRole("menuitem", { name: "Retirer de la liste" })).toBeNull()
+  })
+})
+
+describe("plusieurs onglets", () => {
+  const ownerEvent = (v: string | null) => {
+    if (v === null) localStorage.removeItem("gld.owner")
+    else localStorage.setItem("gld.owner", v)
+    window.dispatchEvent(new StorageEvent("storage", { key: "gld.owner", newValue: v }))
+  }
+
+  it("autre propriétaire inscrit ailleurs : mémoire vidée sans réécriture, retour à la connexion, plus aucune écriture", () => {
+    localStorage.setItem("gld.owner", "alice")
+    setAuth({ state: "ok", owner: "alice", csrf: "c", user: { name: "alice", admin: false } })
+    setDraft("s1", { text: "secret d'alice" })
+    expect(localStorage.getItem("gld.drafts")).toContain("secret d'alice")
+    const bob = JSON.stringify({ s9: { text: "brouillon de bob", queue: [] } })
+    localStorage.setItem("gld.drafts", bob)
+    ownerEvent("bob")
+    expect(draftOf("s1").text).toBe("")
+    expect(getAuth()).toMatchObject({ state: "anon", owner: undefined, csrf: "" })
+    expect(localStorage.getItem("gld.drafts")).toBe(bob)
+    setDraft("s1", { text: "écriture tardive" })
+    expect(localStorage.getItem("gld.drafts")).toBe(bob)
+  })
+
+  it("onglet obsolète : save() n'écrit rien si le propriétaire stocké diffère", () => {
+    localStorage.setItem("gld.owner", "bob")
+    setAuth({ state: "ok", owner: "alice", csrf: "c" })
+    setDraft("s1", { text: "secret d'alice" })
+    expect(localStorage.getItem("gld.drafts")).toBeNull()
+  })
+
+  it("même propriétaire : rien ne change", () => {
+    localStorage.setItem("gld.owner", "alice")
+    setAuth({ state: "ok", owner: "alice", csrf: "c" })
+    setDraft("s1", { text: "brouillon" })
+    ownerEvent("alice")
+    expect(draftOf("s1").text).toBe("brouillon")
+    expect(getAuth().state).toBe("ok")
+    setDraft("s1", { text: "brouillon 2" })
+    expect(localStorage.getItem("gld.drafts")).toContain("brouillon 2")
+  })
+
+  it("mode ouvert : ni contrôle ni réaction", () => {
+    setAuth({ state: "open", owner: undefined })
+    const get = vi.spyOn(Storage.prototype, "getItem")
+    setDraft("s1", { text: "libre" })
+    expect(get).not.toHaveBeenCalledWith("gld.owner")
+    ownerEvent("bob")
+    expect(getAuth().state).toBe("open")
+    expect(draftOf("s1").text).toBe("libre")
+    expect(localStorage.getItem("gld.drafts")).toContain("libre")
+    setDraft("s1", { text: "" })
+  })
+})
+
+describe("fenêtre entre second facteur et boot", () => {
+  const me = { body: { ok: true, user: { name: "alice", admin: false }, mfa: true, csrf: "c-ok", factors: { totp: true, webauthn: 0, recovery: 9, keys: [] }, rights: {}, homes: [] } }
+
+  it("le second facteur ne pose pas le jeton avant boot ; l'application restée montée n'envoie rien jusque-là", async () => {
+    let meReady = false
+    const calls = server({
+      "/auth/mfa/totp": { body: { ok: true, csrf: "c-new" } },
+      "/auth/me": () => (meReady ? me : { status: 503 }),
+      "/homes": { body: { current: "", homes: [] } },
+      "/session-send": { body: { ok: true, out: "" } },
+    })
+    setAuth({ state: "mfa", methods: ["totp"], expired: true, owner: "alice", csrf: "c-partial" })
+    render(<Mfa />)
+    fireEvent.change(screen.getByLabelText("Code de l'application (6 chiffres)"), { target: { value: "123456" } })
+    await act(async () => void fireEvent.click(screen.getByRole("button", { name: "Vérifier" })))
+    expect(getAuth().csrf).not.toBe("c-new")
+    const r = await api.post("/session-send", { id: "s", text: "file" })
+    expect(r.ok).toBe(false)
+    expect(calls.some((c) => c.url === "/session-send")).toBe(false)
+    meReady = true
+    await boot()
+    expect(getAuth()).toMatchObject({ state: "ok", csrf: "c-ok" })
+    await api.post("/session-send", { id: "s", text: "file" })
+    expect(headerOf(calls.find((c) => c.url === "/session-send")!, "X-Gld-CSRF")).toBe("c-ok")
+  })
+
+  it("401 avec attente et session partielle détruite : retour immédiat au mot de passe", async () => {
+    server({ "/auth/mfa/totp": { status: 401, headers: { "Retry-After": "30" } }, "/auth/me": { status: 401 } })
+    setAuth({ state: "mfa", methods: ["totp"], csrf: "c" })
+    render(<Mfa />)
+    fireEvent.change(screen.getByLabelText("Code de l'application (6 chiffres)"), { target: { value: "123456" } })
+    await act(async () => void fireEvent.click(screen.getByRole("button", { name: "Vérifier" })))
+    expect(getAuth().state).toBe("anon")
+  })
+
+  it("401 avec attente et session partielle vivante : décompte affiché", async () => {
+    server({ "/auth/mfa/totp": { status: 401, headers: { "Retry-After": "30" } }, "/auth/me": { body: { ...me.body, mfa: false } } })
+    setAuth({ state: "mfa", methods: ["totp"], csrf: "c" })
+    render(<Mfa />)
+    fireEvent.change(screen.getByLabelText("Code de l'application (6 chiffres)"), { target: { value: "123456" } })
+    await act(async () => void fireEvent.click(screen.getByRole("button", { name: "Vérifier" })))
+    expect(getAuth().state).toBe("mfa")
+    expect(screen.getByRole("alert").textContent).toContain("30 s")
+  })
+})
+
+describe("boot", () => {
+  it("corps non JSON au démarrage : indisponible", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("<html>", { status: 200 })))
+    setAuth({ state: "loading" })
+    await boot()
+    expect(getAuth().state).toBe("unavailable")
+  })
+
+  it("panne passagère pendant un rafraîchissement : l'application reste en place", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("réseau"))))
+    setAuth({ state: "ok", owner: "alice", csrf: "c", user: { name: "alice", admin: false } })
+    await boot()
+    expect(getAuth()).toMatchObject({ state: "ok", owner: "alice", csrf: "c" })
+  })
+})
+
+describe("WebAuthn", () => {
+  it("proposé sur localhost ou un nom de domaine sûr, jamais sur une adresse IP", () => {
+    vi.stubGlobal("isSecureContext", true)
+    vi.stubGlobal("PublicKeyCredential", class {})
+    expect(waAvailable("localhost")).toBe(true)
+    expect(waAvailable("gld.example.org")).toBe(true)
+    expect(waAvailable("127.0.0.1")).toBe(false)
+    expect(waAvailable("[::1]")).toBe(false)
+  })
+})
+
+describe("ajout d'un facteur depuis le profil", () => {
+  it("la réauthentification est vérifiée avant le QR code, et redemandée après un retour", async () => {
+    let n = 0
+    const calls = server({
+      "/auth/sessions": { body: { ok: true, sessions: [] } },
+      "/auth/totp/begin": () => (n++ === 0 ? { status: 401, body: { ok: false } } : { body: { ok: true, secret: "SECRET", uri: "otpauth://totp/x?secret=SECRET" } }),
+    })
+    setAuth({ state: "ok", csrf: "tok", user: { name: "alice", admin: false }, factors: { totp: false, webauthn: 0, recovery: 9, keys: [] } })
+    render(<Profile />)
+    fireEvent.click(screen.getByRole("button", { name: "Ajouter un facteur" }))
+    fireEvent.click(screen.getByRole("button", { name: "Application d'authentification (TOTP)" }))
+    expect(calls.some((c) => c.url === "/auth/totp/begin")).toBe(false)
+    fireEvent.change(screen.getByLabelText("Mot de passe actuel"), { target: { value: "pw" } })
+    fireEvent.change(screen.getByLabelText("Code (application ou secours)"), { target: { value: "111111" } })
+    await act(async () => void fireEvent.click(screen.getByRole("button", { name: "Confirmer" })))
+    expect(bodyOf(calls.find((c) => c.url === "/auth/totp/begin")!)).toEqual({ password: "pw", code: "111111" })
+    expect(screen.queryByText("SECRET")).toBeNull()
+    expect(screen.getByRole("alert").textContent).toContain("Vérification refusée")
+    expect((screen.getByLabelText("Code (application ou secours)") as HTMLInputElement).value).toBe("")
+    fireEvent.change(screen.getByLabelText("Code (application ou secours)"), { target: { value: "222222" } })
+    await act(async () => void fireEvent.click(screen.getByRole("button", { name: "Confirmer" })))
+    expect(screen.getByText("SECRET")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Retour" }))
+    fireEvent.click(screen.getByRole("button", { name: "Application d'authentification (TOTP)" }))
+    expect((screen.getByLabelText("Code (application ou secours)") as HTMLInputElement).value).toBe("")
+    expect((screen.getByLabelText("Mot de passe actuel") as HTMLInputElement).value).toBe("")
+  })
+
+  it("enrôlement de première connexion : Retry-After affiché sur 401", async () => {
+    server({ "/auth/totp/begin": { status: 401, body: { ok: false }, headers: { "Retry-After": "20" } } })
+    setAuth({ state: "mfa", enroll: true, csrf: "c" })
+    render(<AuthScreen />)
+    await act(async () => void fireEvent.click(screen.getByRole("button", { name: "Application d'authentification (TOTP)" })))
+    expect(screen.getByRole("alert").textContent).toContain("20 s")
+    expect(screen.getByRole("button", { name: "Application d'authentification (TOTP)" })).toHaveProperty("disabled", true)
+  })
+})
+
+describe("droits de l'admin sur lui-même", () => {
+  it("changer ses propres droits rafraîchit useCan sans effacer ses données", async () => {
+    localStorage.setItem("gld.owner", "root")
+    const calls = server({
+      "/admin/users": { body: { ok: true, users: [{ ...USER, id: 1, name: "root", admin: true }] } },
+      "/admin/homes": { body: { ok: true, homes: [{ id: "main", name: "main" }] } },
+      "/admin/acl": { body: { ok: true, rights: ["mem_read", "mem_write"] } },
+      "/auth/me": { body: { ok: true, user: { name: "root", admin: true }, mfa: true, csrf: "tok", factors: { totp: true, webauthn: 0, recovery: 9, keys: [] }, rights: { main: ["mem_read", "mem_write"] }, homes: [] } },
+      "/homes": { body: { current: "", mainId: "main", homes: [] } },
+    })
+    setAuth({ state: "ok", csrf: "tok", user: { name: "root", admin: true }, owner: "root", rights: { main: ["mem_read"] }, home: "main" })
+    setDraft("s1", { text: "brouillon de root" })
+    render(<AdminUsers />)
+    fireEvent.click(await screen.findByRole("button", { name: "root" }))
+    await act(async () => void fireEvent.click(screen.getByRole("checkbox", { name: "mem_write sur Dossier principal" })))
+    await waitFor(() => expect(getAuth().rights).toEqual({ main: ["mem_read", "mem_write"] }))
+    expect(calls.some((c) => c.url === "/auth/me")).toBe(true)
+    expect(draftOf("s1").text).toBe("brouillon de root")
   })
 })

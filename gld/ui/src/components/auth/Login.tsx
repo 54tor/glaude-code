@@ -17,12 +17,7 @@ export function AuthScreen() {
           <Unavailable />
         ) : a.state === "mfa" ? (
           a.enroll ? (
-            <Enrol
-              onDone={async (csrf) => {
-                if (csrf) setAuth({ csrf })
-                await boot()
-              }}
-            />
+            <Enrol onDone={() => void boot()} />
           ) : (
             <Mfa />
           )

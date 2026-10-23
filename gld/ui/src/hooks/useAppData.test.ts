@@ -7,6 +7,7 @@ const toastDismiss = vi.fn()
 vi.mock("sonner", () => ({ toast: { error: (...a: unknown[]) => toastError(...a), dismiss: (...a: unknown[]) => toastDismiss(...a) } }))
 
 const { useAppData } = await import("./useAppData")
+const { setAuth } = await import("@/lib/auth")
 
 const DATA = { home: "/h", root: "/h/.claude", groups: [], dirs: [], live: [], waiting: [], vgroups: [], favs: [], tags: {}, projects: [], providers: [] }
 const SNIPS = { dir: "/h/s", files: [], scopes: [] }
@@ -99,5 +100,23 @@ describe("useAppData", () => {
       await vi.advanceTimersByTimeAsync(0)
     })
     expect(st.calls.api).toBe(loads + 1)
+  })
+
+  it("403 : « accès refusé » en session établie seulement ; en mode ouvert, une erreur comme avant", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response("{}", { status: 403 }))))
+    setAuth({ state: "open" })
+    const open = renderHook(() => useAppData())
+    await flush()
+    expect(open.result.current.denied).toBe(false)
+    expect(open.result.current.error).toBe("HTTP 403")
+    expect(toastError).toHaveBeenCalledWith(expect.stringContaining("HTTP 403"), expect.objectContaining({ id: "server-down" }))
+    open.unmount()
+    toastError.mockClear()
+    setAuth({ state: "ok" })
+    const ok = renderHook(() => useAppData())
+    await flush()
+    expect(ok.result.current.denied).toBe(true)
+    expect(toastError).not.toHaveBeenCalled()
+    setAuth({ state: "loading" })
   })
 })

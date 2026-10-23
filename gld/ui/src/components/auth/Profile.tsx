@@ -1,102 +1,20 @@
-import { lazy, Suspense, useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react"
+import { lazy, Suspense, useCallback, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { CircleUserRound, KeyRound, LogOut, ShieldCheck, Users } from "lucide-react"
 import { toast } from "sonner"
 import { loc } from "@/i18n"
-import { authCall, boot, logout, signedOut, useAuth, useWait, waAssert, waAvailable, type AuthRes, type Reauth } from "@/lib/auth"
+import { authCall, boot, logout, signedOut, useAuth, type AuthRes, type Reauth } from "@/lib/auth"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { CodeInput, Enrol, RecoveryCodes } from "./Mfa"
-import { ErrorLine } from "./Login"
+import { Enrol, ReauthForm, RecoveryCodes } from "./Mfa"
 
 const AdminDialog = lazy(() => import("./AdminUsers").then((m) => ({ default: m.AdminDialog })))
 
 export const when = (sec: number) => new Date(sec * 1000).toLocaleString(loc(), { dateStyle: "short", timeStyle: "short" })
-
-// Réponse d'une action protégée : échec de vérification (401, ou 403 sans réauth) en message générique, sinon le message du serveur.
-export const outOf = (r: AuthRes, generic: string) => (r.status === 401 || r.status === 403 || !r.body.out ? generic : r.body.out)
-
-// Mot de passe et code (TOTP ou secours), ou mot de passe et clé de sécurité : exigé avant toute action sensible.
-export function ReauthForm({
-  title,
-  children,
-  extraOk = true,
-  focusPassword = true,
-  danger,
-  onSubmit,
-  onCancel,
-}: {
-  title: string
-  children?: ReactNode // champs propres à l'action, au-dessus de la vérification
-  extraOk?: boolean
-  focusPassword?: boolean // faux quand un champ propre à l'action vient en premier
-  danger?: boolean
-  onSubmit: (r: Reauth) => Promise<AuthRes>
-  onCancel: () => void
-}) {
-  const { t } = useTranslation()
-  const { factors } = useAuth()
-  const [pw, setPw] = useState("")
-  const [code, setCode] = useState("")
-  const [err, setErr] = useState<string>()
-  const [busy, setBusy] = useState(false)
-  const [left, wait] = useWait()
-  const send = async (r: Reauth) => {
-    setBusy(true)
-    setErr(undefined)
-    const res = await onSubmit(r)
-    setBusy(false)
-    if (res.ok) return
-    setErr(outOf(res, t("auth.reauth.invalid")))
-    wait(res.retry)
-  }
-  const submit = (e: FormEvent) => {
-    e.preventDefault()
-    void send({ password: pw, code: code.trim() })
-  }
-  // L'assertion validée sur la session vaut code pendant cinq minutes.
-  const withKey = async () => {
-    setBusy(true)
-    const a = await waAssert()
-    setBusy(false)
-    if (!a.ok) {
-      setErr(t("auth.reauth.invalid"))
-      return wait(a.retry)
-    }
-    await send({ password: pw, code: "" })
-  }
-  const off = busy || left > 0 || !pw || !extraOk
-  return (
-    <form onSubmit={submit} className="space-y-3 rounded-md border p-3" aria-label={title}>
-      <h3 className="text-sm font-medium">{title}</h3>
-      {children}
-      <p className="text-xs text-muted-foreground">{t("auth.reauth.hint")}</p>
-      <div className="space-y-1.5">
-        <Label htmlFor="gld-reauth-pw">{t("auth.reauth.password")}</Label>
-        <Input id="gld-reauth-pw" type="password" autoComplete="current-password" autoFocus={focusPassword} value={pw} onChange={(e) => setPw(e.target.value)} />
-      </div>
-      <CodeInput id="gld-reauth-code" label={t("auth.reauth.code")} value={code} onChange={setCode} />
-      <ErrorLine msg={err} wait={left} />
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" size="sm" variant={danger ? "destructive" : "default"} disabled={off || !code.trim()}>
-          {t("common.confirm")}
-        </Button>
-        {!!factors?.webauthn && waAvailable() && (
-          <Button type="button" size="sm" variant="outline" disabled={off} onClick={() => void withKey()}>
-            <KeyRound /> {t("auth.reauth.key")}
-          </Button>
-        )}
-        <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
-          {t("common.cancel")}
-        </Button>
-      </div>
-    </form>
-  )
-}
 
 // Menu de l'en-tête : rien en mode ouvert.
 export function UserMenu() {
@@ -140,7 +58,7 @@ export function UserMenu() {
 }
 
 type Sess = { id: string; created: number; seen: number; ip: string; ua: string; mfa: boolean; current: boolean }
-type Pending = { kind: "add" | "rmTotp" | "rmKey" | "regen" | "password" | "revoke"; id?: string; key?: number }
+type Pending = { kind: "rmTotp" | "rmKey" | "regen" | "password" | "revoke"; id?: string; key?: number }
 
 export function ProfileDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useTranslation()
@@ -163,7 +81,7 @@ export function Profile() {
   const f = a.factors ?? { totp: false, webauthn: 0, recovery: 0 }
   const [sessions, setSessions] = useState<Sess[] | null>(null)
   const [pending, setPending] = useState<Pending | null>(null)
-  const [adding, setAdding] = useState<Reauth | null>(null)
+  const [adding, setAdding] = useState(false)
   const [codes, setCodes] = useState<string[] | null>(null)
   const [pw1, setPw1] = useState("")
   const [pw2, setPw2] = useState("")
@@ -178,11 +96,6 @@ export function Profile() {
 
   const run = async (r: Reauth): Promise<AuthRes> => {
     const p = pending!
-    if (p.kind === "add") {
-      setAdding(r)
-      close()
-      return { status: 200, ok: true, body: {}, retry: 0 }
-    }
     const res =
       p.kind === "rmTotp"
         ? await authCall("/auth/factor/remove", { ...r, kind: "totp", id: 0 })
@@ -209,7 +122,6 @@ export function Profile() {
   }
 
   const titles: Record<Pending["kind"], string> = {
-    add: t("auth.profile.addFactor"),
     rmTotp: t("auth.profile.removeTotp"),
     rmKey: t("auth.profile.removeKey"),
     regen: t("auth.profile.regenerate"),
@@ -222,11 +134,11 @@ export function Profile() {
   if (adding)
     return (
       <Enrol
-        reauth={adding}
+        reauth
         hasTotp={f.totp}
-        onCancel={() => setAdding(null)}
+        onCancel={() => setAdding(false)}
         onDone={async () => {
-          setAdding(null)
+          setAdding(false)
           toast.success(t("auth.profile.done"))
           await boot()
         }}
@@ -235,7 +147,7 @@ export function Profile() {
   return (
     <div className="space-y-5 text-sm">
       {pending && (
-        <ReauthForm title={titles[pending.kind]} danger={pending.kind !== "add"} extraOk={pending.kind !== "password" || (pw1.length > 0 && pw1 === pw2)} onSubmit={run} onCancel={close}>
+        <ReauthForm title={titles[pending.kind]} danger extraOk={pending.kind !== "password" || (pw1.length > 0 && pw1 === pw2)} onSubmit={run} onCancel={close}>
           {pending.kind === "password" && (
             <>
               <div className="space-y-1.5">
@@ -288,7 +200,7 @@ export function Profile() {
           </li>
         </ul>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" disabled={!!pending} onClick={() => setPending({ kind: "add" })}>
+          <Button size="sm" variant="outline" disabled={!!pending} onClick={() => setAdding(true)}>
             {t("auth.profile.addFactor")}
           </Button>
           <Button size="sm" variant="outline" disabled={!!pending} onClick={() => setPending({ kind: "password" })}>

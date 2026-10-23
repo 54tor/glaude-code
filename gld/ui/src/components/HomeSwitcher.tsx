@@ -4,6 +4,7 @@ import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { api, type HomesInfo } from "@/lib/api"
 import { tilde } from "@/lib/format"
+import { useAuth } from "@/lib/auth"
 import { Button } from "@/components/ui/button"
 import { Tip } from "@/components/ui/tooltip"
 import {
@@ -26,6 +27,11 @@ const base = (p: string) => p.replace(/\/+$/, "").split("/").pop() || p
 export function HomeSwitcher() {
   const { t } = useTranslation()
   const a = useActions()
+  const auth = useAuth()
+  // Multi-utilisateur : la liste reçue est filtrée par les droits, la renvoyer entière effacerait les homes invisibles. On n'envoie
+  // que l'ajout, ou l'identifiant retiré ; seul un admin modifie la liste.
+  const multi = auth.state === "ok"
+  const edit = !multi || !!auth.user?.admin
   const [info, setInfo] = useState<HomesInfo | null>(null)
   useEffect(() => {
     let live = true
@@ -35,15 +41,16 @@ export function HomeSwitcher() {
     }
   }, [])
   if (!info) return null
-  const label = info.current || tilde(info.main, a.home)
+  const main = info.main ? tilde(info.main, a.home) : t("shell.home.main")
+  const label = info.current || main
   const select = async (name: string) => {
     if (name === info.current) return
     const r = await api.post("/homes-select", { name })
     if (r.ok) location.reload()
     else toast.error(r.out)
   }
-  const save = async (homes: { name: string; dir: string }[]) => {
-    const r = await api.post("/homes-save", { homes })
+  const save = async (body: { homes: { name: string; dir: string }[]; removed?: string[] }) => {
+    const r = await api.post("/homes-save", body)
     if (!r.ok) return void toast.error(r.out)
     setInfo(await api.homes())
   }
@@ -52,12 +59,13 @@ export function HomeSwitcher() {
     if (!dir) return
     let name = base(dir)
     for (let i = 2; info.homes.some((h) => h.name === name); i++) name = `${base(dir)} ${i}`
-    await save([...info.homes.map(({ name, dir }) => ({ name, dir })), { name, dir }])
+    await save({ homes: multi ? [{ name, dir }] : [...info.homes.map(({ name, dir }) => ({ name, dir })), { name, dir }] })
   }
-  const remove = async (name: string) => {
-    if (name === info.current) await select("")
-    await save(info.homes.filter((h) => h.name !== name).map(({ name, dir }) => ({ name, dir })))
+  const remove = async (h: HomesInfo["homes"][number]) => {
+    if (h.name === info.current) await select("")
+    await save(multi ? { homes: [], removed: [h.id!] } : { homes: info.homes.filter((x) => x.name !== h.name).map(({ name, dir }) => ({ name, dir })) })
   }
+  const removable = info.homes.filter((h) => !multi || h.id)
   return (
     <DropdownMenu>
       <Tip label={t("shell.home.titleWith", { label })}>
@@ -70,7 +78,7 @@ export function HomeSwitcher() {
       <DropdownMenuContent align="end" className="w-72">
         <DropdownMenuLabel>{t("shell.home.label")}</DropdownMenuLabel>
         <DropdownMenuItem onSelect={() => select("")}>
-          <Check className={info.current === "" ? "" : "invisible"} /> <span className="truncate">{tilde(info.main, a.home)}</span>
+          <Check className={info.current === "" ? "" : "invisible"} /> <span className="truncate">{main}</span>
         </DropdownMenuItem>
         {info.homes.map((h) => (
           <DropdownMenuItem key={h.name} onSelect={() => select(h.name)} title={h.dir}>
@@ -79,23 +87,27 @@ export function HomeSwitcher() {
             <span className="ml-auto truncate text-xs text-muted-foreground">{tilde(h.dir, a.home)}</span>
           </DropdownMenuItem>
         ))}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={add}>
-          <Plus /> {t("shell.home.add")}
-        </DropdownMenuItem>
-        {info.homes.length > 0 && (
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <X /> {t("shell.home.remove")}
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="w-56">
-              {info.homes.map((h) => (
-                <DropdownMenuItem key={h.name} onSelect={() => remove(h.name)}>
-                  <span className="truncate">{h.name}</span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
+        {edit && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={add}>
+              <Plus /> {t("shell.home.add")}
+            </DropdownMenuItem>
+            {removable.length > 0 && (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <X /> {t("shell.home.remove")}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-56">
+                  {removable.map((h) => (
+                    <DropdownMenuItem key={h.name} onSelect={() => remove(h)}>
+                      <span className="truncate">{h.name}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            )}
+          </>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
