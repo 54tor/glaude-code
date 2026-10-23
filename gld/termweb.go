@@ -11,7 +11,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -58,13 +57,13 @@ func termGeometry(pane string) (sess, win string, cols, rows int, err error) {
 	}
 	f := strings.Fields(out)
 	if len(f) != 4 || !tmuxRef.MatchString(f[0]) || !tmuxRef.MatchString(f[1]) {
-		err = fmt.Errorf("réponse tmux inattendue")
+		err = terr("srv.termweb.reponseTmuxInattendue")
 		return
 	}
 	cols, _ = strconv.Atoi(f[2])
 	rows, _ = strconv.Atoi(f[3])
 	if cols < 10 || rows < 3 || cols > 500 || rows > 300 {
-		err = fmt.Errorf("taille de fenêtre inattendue")
+		err = terr("srv.termweb.tailleDeFenetreInattendue")
 		return
 	}
 	return f[0], f[1], cols, rows, nil
@@ -77,18 +76,18 @@ func routesTerm(mux *http.ServeMux) {
 	mux.HandleFunc("POST /term-open", func(w http.ResponseWriter, r *http.Request) {
 		fail := func(code int, msg string) { writeJSON(w, code, map[string]any{"ok": false, "out": msg}) }
 		if !termEnabled() {
-			fail(403, "terminal intégré désactivé : lancer gld avec GLD_WEB_TERMINAL=1")
+			fail(403, L("srv.termweb.disabled"))
 			return
 		}
 		var req struct{ ID string }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil || !sendIdRe.MatchString(req.ID) {
-			fail(400, "requête invalide")
+			fail(400, L("srv.http_util.requeteInvalide"))
 			return
 		}
 		ids, err := sendable()
 		pane, ok := ids[req.ID]
 		if err != nil || !ok || !paneRe.MatchString(pane) {
-			fail(200, "cette session n'est pas dans tmux (ou n'est pas ouverte)")
+			fail(200, L("srv.sendkeys.cetteSessionNEst2"))
 			return
 		}
 		sess, win, cols, rows, err := termGeometry(pane)
@@ -129,11 +128,11 @@ func termWS(w http.ResponseWriter, r *http.Request) {
 	}
 	termMu.Unlock()
 	if !ok || time.Now().After(t.exp) {
-		http.Error(w, "jeton invalide ou expiré", http.StatusForbidden)
+		http.Error(w, L("srv.termweb.badToken"), http.StatusForbidden)
 		return
 	}
 	if busy {
-		http.Error(w, "terminal déjà ouvert pour cette session", http.StatusConflict)
+		http.Error(w, L("srv.termweb.alreadyOpen"), http.StatusConflict)
 		return
 	}
 	defer func() { termMu.Lock(); delete(termBusy, t.id); termMu.Unlock() }()
@@ -180,7 +179,7 @@ func termWS(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		cancel()
-		c.Close(websocket.StatusNormalClosure, "session terminée")
+		c.Close(websocket.StatusNormalClosure, L("srv.termweb.ended"))
 	}()
 
 	writable := false

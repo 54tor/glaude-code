@@ -61,11 +61,12 @@ type ModelStat struct {
 	CacheWrite int    `json:"cacheWrite"`
 }
 
-var limitLabels = map[string]string{
-	"five_hour":        "Session de 5 heures",
-	"seven_day":        "7 jours",
-	"seven_day_opus":   "7 jours · Opus",
-	"seven_day_sonnet": "7 jours · Sonnet",
+func limitLabel(k string) string {
+	switch k {
+	case "five_hour", "seven_day", "seven_day_opus", "seven_day_sonnet":
+		return L("srv.account.limit." + k)
+	}
+	return L("srv.account.otherLimit", "A1", k)
 }
 
 // claudeJSON : le fichier .claude.json de la configuration utilisée (dossier de configuration personnalisé, sinon ~).
@@ -120,10 +121,7 @@ func accountInfo() Account {
 				if json.Unmarshal(d.Usage.Util[k], &l) != nil || l.Util == nil {
 					continue // limite absente (null) ou d'une forme inconnue
 				}
-				label, known := limitLabels[k]
-				if !known {
-					label = "Autre limite (" + k + ")"
-				}
+				label := limitLabel(k)
 				u := UsageLimit{Key: k, Label: label, Percent: *l.Util, ResetsAt: l.ResetsAt, Limit: l.Limit, Used: l.Used}
 				if l.Locked != nil {
 					u.LockedWhy = *l.Locked

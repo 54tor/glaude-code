@@ -7,7 +7,6 @@ package main
 // de cette copie (`claude mcp add` s'en charge).
 
 import (
-	"errors"
 	"fmt"
 	"io/fs"
 	"maps"
@@ -52,7 +51,7 @@ func homeDir(name string) (string, error) {
 	if h, ok := homeByName(name); ok {
 		return h.Dir, nil
 	}
-	return "", errors.New("dossier de configuration inconnu : " + name)
+	return "", terr("srv.homesync.dossierDeConfigurationInconnu", "A1", name)
 }
 
 func syncSettings(dir string) (*omap, []byte, error) {
@@ -69,11 +68,11 @@ func syncSettings(dir string) (*omap, []byte, error) {
 	}
 	v, err := parseOrdered(b)
 	if err != nil {
-		return nil, nil, errors.New(path + " est illisible : " + err.Error())
+		return nil, nil, terr("srv.homesync.estIllisible", "A1", path, "A2", err.Error())
 	}
 	o := asMap(v)
 	if o == nil {
-		return nil, nil, errors.New(path + " : un objet JSON est attendu")
+		return nil, nil, terr("srv.homesync.unObjetJsonEst", "A1", path)
 	}
 	return o, b, nil
 }
@@ -212,7 +211,7 @@ func syncPlan(from, to string) ([]SyncItem, error) {
 		return nil, err
 	}
 	if fd == td {
-		return nil, errors.New("la source et la cible sont le même dossier")
+		return nil, terr("srv.homesync.laSourceEtLa")
 	}
 	fs, _, err := syncSettings(fd)
 	if err != nil {
@@ -323,7 +322,7 @@ func syncApply(from, to string, picks []SyncPick) (string, error) {
 		return "", err
 	}
 	if torig != nil && strings.TrimSpace(string(torig)) != "" && formatOrdered(ts)+"\n" != string(torig) {
-		return "", errors.New("le settings.json de la cible a une mise en forme particulière : il n'est pas réécrit (ouvre-le dans gld pour le normaliser)")
+		return "", terr("srv.homesync.leSettingsJsonDe")
 	}
 	sf, ss, tsk := syncFiles(fd), syncSkills(fd), syncSkills(td)
 	stamp := time.Now().Format("20060102-150405")
@@ -394,7 +393,7 @@ func syncApply(from, to string, picks []SyncPick) (string, error) {
 	}
 	if settingsTouched {
 		if err := syncBackup(td, stamp, "settings.json"); err != nil {
-			return "", errors.New("sauvegarde impossible : " + err.Error())
+			return "", terr("srv.homesync.sauvegardeImpossible", "A1", err.Error())
 		}
 		if err := writeConfig(filepath.Join(td, "settings.json"), []byte(formatOrdered(ts)+"\n")); err != nil {
 			return "", err
@@ -402,10 +401,10 @@ func syncApply(from, to string, picks []SyncPick) (string, error) {
 	}
 	for _, w := range writes {
 		if !syncRelOK(w.rel) {
-			return "", errors.New("chemin refusé : " + w.rel)
+			return "", terr("srv.homesync.cheminRefuse", "A1", w.rel)
 		}
 		if err := syncBackup(td, stamp, w.rel); err != nil {
-			return "", errors.New("sauvegarde impossible : " + err.Error())
+			return "", terr("srv.homesync.sauvegardeImpossible", "A1", err.Error())
 		}
 		if err := writeConfig(filepath.Join(td, w.rel), []byte(w.content)); err != nil {
 			return "", err
@@ -413,14 +412,14 @@ func syncApply(from, to string, picks []SyncPick) (string, error) {
 	}
 	for _, rel := range removes {
 		if !syncRelOK(rel) {
-			return "", errors.New("chemin refusé : " + rel)
+			return "", terr("srv.homesync.cheminRefuse", "A1", rel)
 		}
 		if err := syncBackup(td, stamp, rel); err != nil {
-			return "", errors.New("sauvegarde impossible : " + err.Error())
+			return "", terr("srv.homesync.sauvegardeImpossible", "A1", err.Error())
 		}
 		if err := os.Remove(filepath.Join(td, rel)); err != nil {
 			return "", err
 		}
 	}
-	return fmt.Sprintf("%d élément(s) copié(s) ; fichiers remplacés sauvegardés dans %s", n, filepath.Join(td, "gld-web-sync-backups", stamp)), nil
+	return L("srv.homesync.copied", "A1", n, "A2", filepath.Join(td, "gld-web-sync-backups", stamp)), nil
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -150,5 +151,74 @@ func TestApiLang(t *testing.T) {
 	withSettings(t, `{"language":"Spanish"}`)
 	if got := status(t, h, "GET", "/api", "", 200)["lang"]; got != "other" {
 		t.Fatalf("lang = %v", got)
+	}
+}
+
+func setLangT(t *testing.T, l string) {
+	t.Helper()
+	old := langOverride
+	langOverride = l
+	t.Cleanup(func() { langOverride = old })
+}
+
+func TestErrOrLang(t *testing.T) {
+	setLangT(t, "en")
+	if got := errOr(errors.New("x")); got != "failed: x" {
+		t.Fatalf("en : %q", got)
+	}
+	if errOr(nil) != "ok" {
+		t.Fatal("ok")
+	}
+	setLangT(t, "fr")
+	if got := errOr(errors.New("x")); got != "échec : x" {
+		t.Fatalf("fr : %q", got)
+	}
+}
+
+func TestRmSummaryLang(t *testing.T) {
+	for _, c := range []struct {
+		lang      string
+		n, spared int
+		want      string
+	}{
+		{"fr", 0, 0, "Aucune session supprimée"},
+		{"fr", 1, 0, "1 session supprimée"},
+		{"fr", 2, 1, "2 sessions supprimées ; 1 session ouverte épargnée"},
+		{"fr", 1, 2, "1 session supprimée ; 2 sessions ouvertes épargnées"},
+		{"en", 0, 0, "No session deleted"},
+		{"en", 1, 0, "1 session deleted"},
+		{"en", 2, 1, "2 sessions deleted; 1 open session spared"},
+		{"en", 1, 2, "1 session deleted; 2 open sessions spared"},
+	} {
+		setLangT(t, c.lang)
+		if got := rmSummary(c.n, c.spared); got != c.want {
+			t.Errorf("%s %d/%d : %q, attendu %q", c.lang, c.n, c.spared, got, c.want)
+		}
+	}
+}
+
+func TestTerrFollowsLangAndWraps(t *testing.T) {
+	base := errors.New("boom")
+	e := terr("srv.sendkeys.fermetureImpossible", "W1", base)
+	setLangT(t, "fr")
+	if e.Error() != "fermeture impossible : boom" {
+		t.Fatalf("fr : %q", e.Error())
+	}
+	setLangT(t, "en")
+	if e.Error() != "cannot close: boom" {
+		t.Fatalf("en : %q", e.Error())
+	}
+	if !errors.Is(e, base) {
+		t.Fatal("l'erreur enveloppée doit rester trouvable")
+	}
+}
+
+func TestInvalidRequestLang(t *testing.T) {
+	h, _, _ := web(t)
+	for lang, want := range map[string]string{"fr": "requête invalide", "en": "invalid request"} {
+		setLangT(t, lang)
+		if got := status(t, h, "POST", "/rm", "pas du json", 400)["out"]; got != want {
+			t.Errorf("%s : %v", lang, got)
+		}
 	}
 }

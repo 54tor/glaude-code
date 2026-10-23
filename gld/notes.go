@@ -53,7 +53,7 @@ func routesNotes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /notes", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Key, Text, To string }
 		if json.NewDecoder(io.LimitReader(r.Body, noteMax+1<<10)).Decode(&req) != nil || !noteKeyOK(req.Key) || len(req.Text) > noteMax || (req.To != "" && !noteKeyOK(req.To)) {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		notesMu.Lock()
@@ -69,7 +69,7 @@ func routesNotes(mux *http.ServeMux) {
 			delete(m, req.Key)
 		default:
 			if _, has := m[req.Key]; !has && len(m) >= notesMax {
-				writeJSON(w, 200, map[string]any{"ok": false, "out": "trop de notes"})
+				writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.notes.tropDeNotes")})
 				return
 			}
 			m[req.Key] = req.Text
@@ -78,6 +78,6 @@ func routesNotes(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Note enregistrée"})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.notes.noteEnregistree")})
 	})
 }

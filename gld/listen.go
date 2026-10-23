@@ -8,7 +8,6 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
-	"errors"
 	"net"
 	"net/http"
 	"net/url"
@@ -37,7 +36,7 @@ func newToken() string {
 // checkToken : un jeton fourni par l'utilisateur doit être assez long pour résister à l'essai systématique.
 func checkToken(t string) error {
 	if len(t) < 16 {
-		return errors.New("GLD_WEB_TOKEN : 16 caractères au moins")
+		return terr("srv.listen.gldWebTokenCaracteres")
 	}
 	return nil
 }
@@ -79,7 +78,7 @@ func withToken(token string, next http.Handler) http.Handler {
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
-		http.Error(w, "Jeton requis : ouvrez l'adresse affichée au démarrage de gld (…/?token=…).", http.StatusUnauthorized)
+		http.Error(w, L("srv.listen.tokenRequired"), http.StatusUnauthorized)
 	})
 }
 

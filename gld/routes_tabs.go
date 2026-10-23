@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 )
@@ -20,7 +19,7 @@ func routesTabs(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": fmt.Sprintf("%d session(s) sauvegardée(s)", len(s.Sessions))})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_tabs.sessionSSauvegardeeS", "A1", len(s.Sessions))})
 	})
 	mux.HandleFunc("POST /tabs-rm", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ At string }
@@ -29,7 +28,7 @@ func routesTabs(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Sauvegarde supprimée"})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_tabs.sauvegardeSupprimee")})
 	})
 	// Fusion de fichiers de mémoire par Claude : le prompt est construit ici, à partir des seules clés validées ;
 	// launch l'ouvre dans une nouvelle session (gld-matin --prompt), sinon il est seulement renvoyé pour être copié.

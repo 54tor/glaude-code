@@ -4,7 +4,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -97,11 +96,11 @@ func sameIDs(a, b []TabSession) bool {
 func saveTabs(name string, auto bool) (TabSave, bool, error) {
 	name = strings.TrimSpace(spaceRe.ReplaceAllString(name, " "))
 	if utf8.RuneCountInString(name) > 80 {
-		return TabSave{}, false, errors.New("nom trop long")
+		return TabSave{}, false, terr("srv.tabs.nomTropLong")
 	}
 	ss := liveTabs()
 	if len(ss) == 0 {
-		return TabSave{}, false, errors.New("aucune session ouverte")
+		return TabSave{}, false, terr("srv.tabs.aucuneSessionOuverte")
 	}
 	tabsMu.Lock()
 	defer tabsMu.Unlock()
@@ -148,7 +147,7 @@ func removeTabs(at string) error {
 	all := loadTabs()
 	next := slices.DeleteFunc(slices.Clone(all), func(t TabSave) bool { return t.At == at })
 	if len(next) == len(all) {
-		return errors.New("sauvegarde introuvable")
+		return terr("srv.tabs.sauvegardeIntrouvable")
 	}
 	journal("tabs-rm %s", at)
 	return writeTabs(next)

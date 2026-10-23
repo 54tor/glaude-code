@@ -97,11 +97,11 @@ func rewriteCwd(path, old, nw string, sub bool) error {
 // et y réécrit leur cwd. Tout est vérifié avant le premier déplacement.
 func reassign(items []item, to string) (int, error) {
 	if !filepath.IsAbs(to) {
-		return 0, errors.New("chemin absolu requis")
+		return 0, terr("srv.routes_sessions.cheminAbsoluRequis")
 	}
 	to = filepath.Clean(to)
 	if fi, err := os.Stat(to); err != nil || !fi.IsDir() {
-		return 0, errors.New("le dossier cible n'existe pas : " + to)
+		return 0, terr("srv.reassign.leDossierCibleN", "A1", to)
 	}
 	dst := filepath.Join(root, nonAlnum.ReplaceAllString(to, "-"))
 	live, err := liveCheck()
@@ -110,14 +110,14 @@ func reassign(items []item, to string) (int, error) {
 	}
 	for _, it := range items {
 		if live[it.ID] {
-			return 0, errors.New("session vivante, ferme-la d'abord : " + it.ID[:8])
+			return 0, terr("srv.reassign.sessionVivanteFermeLa", "A1", it.ID[:8])
 		}
 		if filepath.Join(root, it.Dir) == dst {
-			return 0, errors.New("déjà dans ce dossier : " + it.ID[:8])
+			return 0, terr("srv.reassign.dejaDansCeDossier", "A1", it.ID[:8])
 		}
 		for _, n := range []string{it.ID + ".jsonl", it.ID} {
 			if _, err := os.Lstat(filepath.Join(dst, n)); err == nil {
-				return 0, errors.New("existe déjà dans la cible : " + n)
+				return 0, terr("srv.reassign.existeDejaDansLa", "A1", n)
 			}
 		}
 	}

@@ -122,7 +122,7 @@ func TestKeepWarmSessionFermee(t *testing.T) {
 	os.Chtimes(p, at, at)
 	forgetInfo(p)
 	warmTick(now)
-	if pings != 0 || warmState[id1].On || warmState[id1].Note != closedNote {
+	if pings != 0 || warmState[id1].On || warmState[id1].Note != closedNote() {
 		t.Fatalf("session fermée pinguée : %d %+v", pings, warmState[id1])
 	}
 }

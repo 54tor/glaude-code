@@ -7,7 +7,6 @@ package main
 import (
 	"bufio"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -110,7 +109,7 @@ func launcherCmd(name, title string, argv []string) (*exec.Cmd, error) {
 		consoleAttr(c)
 		return c, nil
 	}
-	return nil, errors.New("lanceur inconnu : " + name)
+	return nil, terr("srv.term.lanceurInconnu", "A1", name)
 }
 
 // openTab ouvre un onglet qui exécute spec (remplaçable dans les tests).
@@ -120,7 +119,7 @@ var openTab = func(launcher, title string, spec tabSpec) error {
 		return err
 	}
 	if strings.Contains(self, ";") {
-		return errors.New("« ; » interdit dans le chemin de gld")
+		return terr("srv.term.interditDansLeChemin")
 	}
 	f, err := os.CreateTemp("", "gld-*.json")
 	if err != nil {
@@ -166,7 +165,7 @@ func runTab(file string) int {
 	}
 	// L'onglet se refermerait aussitôt : on laisse lire l'erreur.
 	fmt.Fprintln(os.Stderr, "gld :", err)
-	fmt.Fprint(os.Stderr, "[Entrée pour fermer] ")
+	fmt.Fprint(os.Stderr, L("srv.term.pressEnter")+" ")
 	bufio.NewReader(os.Stdin).ReadString('\n')
 	return 1
 }

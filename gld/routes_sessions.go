@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -35,12 +34,12 @@ func routesSessions(mux *http.ServeMux) {
 	mux.HandleFunc("POST /dirs", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Op, Dir string }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req) != nil || (req.Op != "add" && req.Op != "remove") || !filepath.IsAbs(req.Dir) || strings.ContainsRune(req.Dir, 0) {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		dir := filepath.Clean(req.Dir)
 		if fi, err := os.Stat(dir); req.Op == "add" && (err != nil || !fi.IsDir()) {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": "dossier introuvable : " + dir})
+			writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.routes_sessions.dossierIntrouvable", "A1", dir)})
 			return
 		}
 		groupsMu.Lock()
@@ -62,7 +61,7 @@ func routesSessions(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Enregistré"})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_sessions.enregistre")})
 	})
 	// Date de modification la plus récente d'un transcript : l'interface relit la liste quand elle change (un prompt tapé dans un
 	// terminal fait remonter la session sans attendre le rafraîchissement périodique). ponytail: un stat par transcript à chaque appel,
@@ -112,7 +111,7 @@ func routesSessions(mux *http.ServeMux) {
 	mux.HandleFunc("POST /session-close", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ ID string }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		err := closeSession(req.ID)
@@ -121,7 +120,7 @@ func routesSessions(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Session fermée"})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_sessions.sessionFermee")})
 	})
 	mux.HandleFunc("GET /session-screen", func(w http.ResponseWriter, r *http.Request) {
 		text, err := sessionScreen(r.URL.Query().Get("id"))
@@ -134,7 +133,7 @@ func routesSessions(mux *http.ServeMux) {
 	mux.HandleFunc("POST /session-key", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ ID, Key string }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		err := sendKey(req.ID, req.Key)
@@ -143,12 +142,12 @@ func routesSessions(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Touche envoyée"})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_sessions.toucheEnvoyee")})
 	})
 	mux.HandleFunc("POST /session-send", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ ID, Text string }
 		if json.NewDecoder(io.LimitReader(r.Body, sendMax+1<<10)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		err := sendToSession(req.ID, req.Text)
@@ -157,7 +156,7 @@ func routesSessions(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Message envoyé à la session"})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_sessions.messageEnvoyeALa")})
 	})
 	// Explorateur de dossiers pour « Réassigner » / « Déplacer » : sous-dossiers d'un chemin.
 	// Un chemin disparu remonte au plus proche parent qui existe.
@@ -178,7 +177,7 @@ func routesSessions(mux *http.ServeMux) {
 			return
 		}
 		if !filepath.IsAbs(p) {
-			writeJSON(w, 400, map[string]any{"error": "chemin absolu requis"})
+			writeJSON(w, 400, map[string]any{"error": L("srv.routes_sessions.cheminAbsoluRequis")})
 			return
 		}
 		p = filepath.Clean(p)
@@ -295,7 +294,7 @@ func routesSessions(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": fmt.Sprintf("%d session(s) réassignée(s) vers %s", n, to)})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_sessions.sessionSReassigneeS", "A1", n, "A2", to)})
 	})
 	// Recherche dans le texte des conversations (au moins 2 caractères).
 	mux.HandleFunc("GET /search", func(w http.ResponseWriter, r *http.Request) {
@@ -312,13 +311,13 @@ func routesSessions(mux *http.ServeMux) {
 			Auto           bool
 		}
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		p, ok := transcript(req.Dir, req.ID)
 		title := strings.TrimSpace(spaceRe.ReplaceAllString(req.Title, " "))
 		if !ok || (title == "" && !req.Auto) || utf8.RuneCountInString(title) > 200 {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "titre ou session invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.routes_sessions.titreOuSessionInvalide")})
 			return
 		}
 		// Une session ouverte réécrit son propre titre : le nôtre serait écrasé.
@@ -328,13 +327,13 @@ func routesSessions(mux *http.ServeMux) {
 			return
 		}
 		if live[req.ID] {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": "session ouverte : renomme-la avec /rename dans Claude, ou ferme-la d'abord"})
+			writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.routes_sessions.sessionOuverteRenommeLa")})
 			return
 		}
 		if req.Auto {
 			var terr error
 			if title, terr = autoTitle(p); terr != nil {
-				writeJSON(w, 200, map[string]any{"ok": false, "out": "titre automatique impossible : " + terr.Error()})
+				writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.routes_sessions.titreAutomatiqueImpossible", "A1", terr.Error())})
 				return
 			}
 		}
@@ -344,13 +343,13 @@ func routesSessions(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Renommée : " + title})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_sessions.renommee", "A1", title)})
 	})
 	// Snippets = commandes Claude Code (commands.go) : personnelles (~/.claude/commands, ou GLD_WEB_SNIPPETS) et de projet.
 	mux.HandleFunc("POST /vgroups", func(w http.ResponseWriter, r *http.Request) {
 		var st Store
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&st) != nil || st.Groups == nil || st.Favs == nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		groupsMu.Lock()
@@ -373,14 +372,14 @@ func routesSessions(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Groupes enregistrés"})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_sessions.groupesEnregistres")})
 	})
 	// Rouvre dans un onglet de terminal via gld-matin : une session (id) ou les récentes du projet.
 	// Le cwd vient du transcript côté serveur, jamais du navigateur.
 	mux.HandleFunc("POST /open", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Dir, ID, Args, Prompt string }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		var p string
@@ -395,7 +394,7 @@ func routesSessions(mux *http.ServeMux) {
 		if req.ID != "" {
 			var ok bool
 			if p, ok = transcript(req.Dir, req.ID); !ok {
-				writeJSON(w, 400, map[string]any{"ok": false, "out": "id invalide"})
+				writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.idInvalide")})
 				return
 			}
 			args = append(args, "--id", req.ID)
@@ -403,19 +402,19 @@ func routesSessions(mux *http.ServeMux) {
 				args = append(args, "--prompt", req.Prompt)
 			}
 		} else if strings.ContainsAny(req.Dir, "/\\") || req.Dir == "" || req.Dir == ".." {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "dossier invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.routes_sessions.dossierInvalide")})
 			return
 		} else if fs, _ := filepath.Glob(filepath.Join(root, req.Dir, "*.jsonl")); len(fs) > 0 {
 			p = fs[0]
 		}
 		st, err := os.Stat(p)
 		if err != nil {
-			writeJSON(w, 404, map[string]any{"ok": false, "out": "aucune session"})
+			writeJSON(w, 404, map[string]any{"ok": false, "out": L("srv.routes_sessions.aucuneSession")})
 			return
 		}
 		cwd := info(p, st).Cwd
 		if fi, err := os.Stat(cwd); cwd == "" || err != nil || !fi.IsDir() {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": "dossier du projet introuvable : " + cwd})
+			writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.routes_sessions.dossierDuProjetIntrouvable", "A1", cwd)})
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
@@ -430,16 +429,12 @@ func routesSessions(mux *http.ServeMux) {
 
 // rmSummary : bilan d'une suppression, lisible tel quel dans une notification.
 func rmSummary(n, spared int) string {
-	s := "Aucune session supprimée"
-	if n == 1 {
-		s = "1 session supprimée"
-	} else if n > 1 {
-		s = fmt.Sprintf("%d sessions supprimées", n)
+	s := L("srv.rm.none")
+	if n > 0 {
+		s = L("srv.rm.deleted", "Count", n)
 	}
-	if spared == 1 {
-		s += " ; 1 session ouverte épargnée"
-	} else if spared > 1 {
-		s += fmt.Sprintf(" ; %d sessions ouvertes épargnées", spared)
+	if spared > 0 {
+		s += L("srv.rm.spared", "Count", spared)
 	}
 	return s
 }

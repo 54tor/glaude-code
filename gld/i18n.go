@@ -169,3 +169,36 @@ func trKeys(lang string) []string {
 	sort.Strings(keys)
 	return keys
 }
+
+type msgErr struct {
+	id      string
+	data    map[string]any
+	wrapped error
+}
+
+// Error écrit le message dans la langue courante au moment de l'affichage, pas de la création.
+func (e *msgErr) Error() string { return tr(uiLang(), e.id, e.data) }
+func (e *msgErr) Unwrap() error { return e.wrapped }
+
+func kvMap(kv []any) map[string]any {
+	m := make(map[string]any, len(kv)/2)
+	for i := 0; i+1 < len(kv); i += 2 {
+		m[kv[i].(string)] = kv[i+1]
+	}
+	return m
+}
+
+// L : le texte de l'identifiant dans la langue de l'interface ; kv = paires nom, valeur du modèle.
+func L(id string, kv ...any) string { return tr(uiLang(), id, kvMap(kv)) }
+
+// terr : une erreur dont le texte vient du catalogue ; la valeur d'un nom en « W… » est l'erreur enveloppée.
+func terr(id string, kv ...any) error {
+	m := kvMap(kv)
+	var w error
+	for k, v := range m {
+		if e, ok := v.(error); ok && strings.HasPrefix(k, "W") {
+			w = e
+		}
+	}
+	return &msgErr{id: id, data: m, wrapped: w}
+}
