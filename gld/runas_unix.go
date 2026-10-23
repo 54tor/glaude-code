@@ -42,7 +42,9 @@ var (
 	canReadAs     = canReadAsHelper
 	selfExe       = selfExeOS
 	binaryHasCaps = binaryHasCapsOS
-	statOwner     = statOwnerOS
+	lstatOwner    = lstatOwnerOS
+	hasACL        = hasACLOS
+	runAsGOOS     = runtime.GOOS
 	access        = unix.Access
 )
 
@@ -218,8 +220,14 @@ func checkRunAsSeparation() error {
 	if gatewayEUID() != 0 {
 		return terr("srv.runas.notPrivileged")
 	}
-	if st, err := procStatus(); err == nil && (capField(st, "CapAmb:") != 0 || capField(st, "CapInh:") != 0) {
-		return terr("srv.runas.inheritedCaps")
+	if runAsGOOS == "linux" { // ailleurs (macOS) ni /proc ni capacités
+		st, err := procStatus()
+		if err != nil {
+			return terr("srv.runas.procStatus", "A1", err)
+		}
+		if capField(st, "CapAmb:") != 0 || capField(st, "CapInh:") != 0 {
+			return terr("srv.runas.inheritedCaps")
+		}
 	}
 	bin, err := selfExe()
 	if err != nil {
@@ -228,21 +236,25 @@ func checkRunAsSeparation() error {
 	if has, err := binaryHasCaps(bin); err != nil || has {
 		return terr("srv.runas.fileCaps", "A1", bin)
 	}
+	if p, err := unsafeChain(bin, a.cred); err != nil || p != "" {
+		return chainErr("srv.runas.binaryWritable", a.name, p, err)
+	}
 	dir, err := authDir()
 	if err != nil {
 		return err
 	}
+	dir = filepath.Clean(dir)
 	if within(dir, a.home) {
 		return terr("srv.runas.homeInAuthDir", "A1", a.home, "A2", dir)
 	}
 	if within(a.home, dir) {
 		return terr("srv.runas.authDirInHome", "A1", dir, "A2", a.home)
 	}
-	if p, err := writableAncestor(dir, a.cred); err != nil || p != "" {
-		if err != nil {
-			p = err.Error()
-		}
-		return terr("srv.runas.ancestorWritable", "A1", p, "A2", a.name)
+	if err := ensureAuthDir(dir); err != nil {
+		return terr("srv.runas.authDirCreate", "A1", dir, "A2", err)
+	}
+	if p, err := unsafeChain(dir, a.cred); err != nil || p != "" {
+		return chainErr("srv.runas.ancestorWritable", a.name, p, err)
 	}
 	runAsAcct = a
 	auth, binW, err := canReadAs(dir, bin)
@@ -260,6 +272,34 @@ func checkRunAsSeparation() error {
 	return err
 }
 
+func chainErr(key, name, p string, err error) error {
+	if errors.Is(err, errACL) {
+		return terr("srv.runas.acl", "A1", p)
+	}
+	if err != nil {
+		p = err.Error()
+	}
+	return terr(key, "A1", name, "A2", p)
+}
+
+// ensureAuthDir : le dossier des comptes existe au moment de la vérification (sinon ses parents seuls seraient jugés) ; absent,
+// il est créé en 0700 puis relu : un dossier réel, de root, sans droit pour le groupe ni les autres.
+func ensureAuthDir(dir string) error {
+	if _, _, _, err := lstatOwner(dir); errors.Is(err, os.ErrNotExist) {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return err
+		}
+	}
+	uid, _, mode, err := lstatOwner(dir)
+	switch {
+	case err != nil:
+		return err
+	case !mode.IsDir() || uid != 0 || mode.Perm()&0o077 != 0 || mode&os.ModeSticky != 0:
+		return errors.New(dir + ": " + mode.String())
+	}
+	return nil
+}
+
 // within : p est dir ou un chemin sous dir (liens résolus).
 func within(dir, p string) bool {
 	if d, err := filepath.EvalSymlinks(dir); err == nil {
@@ -272,8 +312,8 @@ func within(dir, p string) bool {
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, "../")
 }
 
-func statOwnerOS(p string) (uid, gid uint32, mode os.FileMode, err error) {
-	fi, err := os.Stat(p)
+func lstatOwnerOS(p string) (uid, gid uint32, mode os.FileMode, err error) {
+	fi, err := os.Lstat(p)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -284,12 +324,13 @@ func statOwnerOS(p string) (uid, gid uint32, mode os.FileMode, err error) {
 	return st.Uid, st.Gid, fi.Mode(), nil
 }
 
-// targetCanWrite : le compte cible peut créer, renommer ou remplacer une entrée de ce dossier.
-func targetCanWrite(uid, gid uint32, mode os.FileMode, c *syscall.Credential) bool {
+// targetCanWrite : le compte cible peut modifier cette entrée (fichier) ou en créer, renommer, remplacer dedans (dossier).
+// La dérogation root + sticky (/tmp) ne vaut que pour un parent, jamais pour l'élément vérifié lui-même.
+func targetCanWrite(uid, gid uint32, mode os.FileMode, c *syscall.Credential, ancestor bool) bool {
 	switch {
 	case uid == c.Uid:
 		return true
-	case uid == 0 && mode&os.ModeSticky != 0:
+	case ancestor && uid == 0 && mode&os.ModeSticky != 0:
 		return false
 	case mode.Perm()&0o002 != 0:
 		return true
@@ -297,32 +338,69 @@ func targetCanWrite(uid, gid uint32, mode os.FileMode, c *syscall.Credential) bo
 	return mode.Perm()&0o020 != 0 && (gid == c.Gid || slices.Contains(c.Groups, gid))
 }
 
-// writableAncestor : le premier dossier, du dossier des comptes jusqu'à /, que le compte cible pourrait modifier ("" : aucun).
-// Un dossier absent est remplacé par son premier parent existant.
-func writableAncestor(dir string, c *syscall.Credential) (string, error) {
-	p := filepath.Clean(dir)
-	for {
-		if r, err := filepath.EvalSymlinks(p); err == nil {
-			p = r
-			break
-		} else if !errors.Is(err, os.ErrNotExist) || p == "/" {
-			return "", err
-		}
-		p = filepath.Dir(p)
+var errACL = errors.New("posix acl")
+
+// unsafeChain : le premier élément de p ou de ses parents jusqu'à / que le compte cible pourrait modifier ("" : aucun).
+// Deux parcours : le chemin tel que configuré, élément par élément (un lien n'y est admis que s'il est à root, son dossier
+// étant lui-même vérifié), puis le chemin résolu. Une ACL POSIX sur un élément fait refuser : les bits de mode ne suffisent plus.
+func unsafeChain(p string, c *syscall.Credential) (string, error) {
+	p = filepath.Clean(p)
+	if !filepath.IsAbs(p) {
+		return p, errors.New(p + ": relative path")
 	}
-	for {
-		uid, gid, mode, err := statOwner(p)
+	check := func(q string, ancestor bool) (bool, error) {
+		uid, gid, mode, err := lstatOwner(q)
 		if err != nil {
-			return "", err
+			return false, err
 		}
-		if targetCanWrite(uid, gid, mode, c) {
-			return p, nil
+		if mode&os.ModeSymlink != 0 {
+			return uid != 0, nil
 		}
-		if p == "/" {
-			return "", nil
+		if acl, err := hasACL(q); err != nil || acl {
+			if err == nil {
+				err = errACL
+			}
+			return true, err
 		}
-		p = filepath.Dir(p)
+		return targetCanWrite(uid, gid, mode, c, ancestor), nil
 	}
+	walk := func(q string) (string, error) {
+		for ancestor := false; ; ancestor = true {
+			if bad, err := check(q, ancestor); err != nil || bad {
+				return q, err
+			}
+			if q == "/" {
+				return "", nil
+			}
+			q = filepath.Dir(q)
+		}
+	}
+	if bad, err := walk(p); err != nil || bad != "" {
+		return bad, err
+	}
+	r, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		return p, err
+	}
+	return walk(r)
+}
+
+// hasACLOS : une ACL POSIX (accès, ou par défaut pour les fichiers à venir) sur p ; Linux seulement.
+func hasACLOS(p string) (bool, error) {
+	if runAsGOOS != "linux" {
+		return false, nil
+	}
+	for _, a := range []string{"system.posix_acl_access", "system.posix_acl_default"} {
+		_, err := unix.Getxattr(p, a, nil)
+		switch {
+		case err == nil:
+			return true, nil
+		case errors.Is(err, unix.ENODATA), errors.Is(err, unix.ENOTSUP), errors.Is(err, unix.EOPNOTSUPP):
+			continue
+		}
+		return false, err
+	}
+	return false, nil
 }
 
 func selfExeOS() (string, error) {
@@ -335,10 +413,10 @@ func selfExeOS() (string, error) {
 
 // binaryHasCapsOS : capacités de fichier (Linux seulement) ; leur absence ou un système de fichiers sans xattr ne bloque pas.
 func binaryHasCapsOS(p string) (bool, error) {
-	if runtime.GOOS != "linux" {
+	if runAsGOOS != "linux" {
 		return false, nil
 	}
-	_, err := unix.Getxattr(p, "security.capability", make([]byte, 64))
+	_, err := unix.Getxattr(p, "security.capability", nil)
 	switch {
 	case err == nil:
 		return true, nil
@@ -381,14 +459,13 @@ func accessAs(p string, mode uint32) (bool, error) {
 
 // runCanRead : le corps de « gld _canread », exécuté sous le compte cible ; lecture, écriture et traversée testées.
 func runCanRead(dir, bin string) int {
-	checks := []struct {
+	type chk struct {
 		p    string
 		mode uint32
-	}{
-		{dir, unix.R_OK}, {dir, unix.W_OK}, {dir, unix.X_OK},
-		{filepath.Join(dir, "auth.db"), unix.R_OK}, {filepath.Join(dir, "auth.db"), unix.W_OK},
-		{filepath.Join(dir, "auth.db-wal"), unix.R_OK}, {filepath.Join(dir, "auth.db-wal"), unix.W_OK},
-		{filepath.Join(dir, "auth.key"), unix.R_OK}, {filepath.Join(dir, "auth.key"), unix.W_OK},
+	}
+	checks := []chk{{dir, unix.R_OK}, {dir, unix.W_OK}, {dir, unix.X_OK}}
+	for _, f := range []string{"auth.db", "auth.db-wal", "auth.db-shm", "auth.db-journal", "auth.key"} {
+		checks = append(checks, chk{filepath.Join(dir, f), unix.R_OK}, chk{filepath.Join(dir, f), unix.W_OK})
 	}
 	for _, c := range checks {
 		ok, err := accessAs(c.p, c.mode)
