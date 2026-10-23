@@ -185,6 +185,7 @@
   "srv.homes.leProcessusEnfantS": "le processus enfant s'est arrêté",
   "srv.homes.nomDeDossierDe": "nom de dossier de configuration vide, trop long, avec un caractère interdit ou en double",
   "srv.homes.nomReserve": "« main » est réservé au dossier de configuration principal : choisir un autre nom",
+  "srv.homes.nomDejaPris": "« {{.A1}} » : nom déjà pris par un dossier de configuration existant",
   "srv.homes.tropDeDossiersDe": "trop de dossiers de configuration (20 au plus)",
   "srv.homes.unCheminAbsoluDifferent": "« {{.A1}} » : un chemin absolu, différent du dossier de configuration courant, est attendu",
   "srv.homesync.cheminRefuse": "chemin refusé : {{.A1}}",

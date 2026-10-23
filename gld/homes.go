@@ -465,6 +465,15 @@ func routesHomes(mux *http.ServeMux) {
 		before := readHomes()
 		list := req.Homes
 		if gateFrom(r) != nil {
+			// Le nom d'un home existant, peut-être invisible de l'admin, ne se reprend pas sans son identifiant : sinon le
+			// home serait repointé vers un autre dossier pour ceux qui y ont des droits.
+			for _, s := range req.Homes {
+				name := strings.TrimSpace(spaceRe.ReplaceAllString(s.Name, " "))
+				if slices.ContainsFunc(before, func(b Home) bool { return b.Name == name && (s.ID == "" || s.ID != b.ID) }) {
+					writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.homes.nomDejaPris", "A1", name)})
+					return
+				}
+			}
 			list = mergeHomes(before, req.Homes, req.Removed)
 		}
 		err := saveHomes(list)
