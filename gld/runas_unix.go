@@ -579,3 +579,36 @@ func runSpec() int {
 	fmt.Println(f.Name())
 	return 0
 }
+
+// procStatusOf : /proc/<pid>/status (remplaçable dans les tests).
+var procStatusOf = func(pid int) ([]byte, error) { return os.ReadFile("/proc/" + strconv.Itoa(pid) + "/status") }
+
+// runAsOwns : sous GLD_RUN_AS, la passerelle (souvent root) ne signale qu'un processus du compte cible ; le pid vient
+// d'une commande exécutée sous ce compte, qui pourrait désigner n'importe quel processus. Hors Linux, pas de /proc : refus.
+func runAsOwns(pid int) error {
+	if runAsAcct == nil {
+		return nil
+	}
+	if runAsGOOS != "linux" {
+		return errors.New("signal refused under GLD_RUN_AS outside Linux")
+	}
+	b, err := procStatusOf(pid)
+	if err != nil {
+		return err
+	}
+	for _, l := range strings.Split(string(b), "\n") {
+		if v, ok := strings.CutPrefix(l, "Uid:"); ok {
+			f := strings.Fields(v)
+			if len(f) != 4 {
+				break
+			}
+			for _, x := range f {
+				if n, err := strconv.ParseUint(x, 10, 32); err != nil || uint32(n) != runAsAcct.cred.Uid {
+					return fmt.Errorf("process %d not owned by the target account", pid)
+				}
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("process %d: uid unreadable", pid)
+}

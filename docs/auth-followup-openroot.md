@@ -27,6 +27,7 @@ Relevée par `grep` des appels `os.*` et `filepath.WalkDir` dans les fichiers no
 
 ### Écritures, renommages et suppressions (prioritaires)
 
+- trash.go:25 : `journal()` ouvre `gld-web.log` dans `cfgDir()` en suivant les liens symboliques ; un lien posé par la cible (vers `/etc/ld.so.preload` par exemple) fait écrire root où elle veut, jusqu'à l'exécution de code en root. Ce n'est pas un faux positif.
 - configwrite.go:191, 195, 218, 240, 252, 259, 267 (chmod après création : course), 268, 271, 272 : `writeConfig` et sauvegardes `gld-web-config-backups`
 - claude.go:91 : `RemoveAll(workPath)` ; ce dossier peut retomber sur `cfgDir()` (claude.go:81)
 - commands.go:198

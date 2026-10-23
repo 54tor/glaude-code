@@ -33,3 +33,6 @@ func runCanRead(string, string) int { return 2 }
 func runSpec() int { return 2 }
 
 func writeSpecAsTarget(string, []byte) (string, error) { return "", errors.ErrUnsupported }
+
+// runAsOwns : GLD_RUN_AS n'existe pas sous Windows.
+func runAsOwns(int) error { return nil }

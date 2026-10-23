@@ -666,3 +666,27 @@ func TestRunAsRealSwitch(t *testing.T) {
 		t.Fatalf("sortie sous le compte cible :\n%s", s)
 	}
 }
+
+func TestRunAsOwns(t *testing.T) {
+	old, oldS, oldOS := runAsAcct, procStatusOf, runAsGOOS
+	t.Cleanup(func() { runAsAcct, procStatusOf, runAsGOOS = old, oldS, oldOS })
+	runAsAcct, runAsGOOS = nil, "linux"
+	if runAsOwns(1) != nil {
+		t.Fatal("hors GLD_RUN_AS : refus")
+	}
+	runAsAcct = testAccount()
+	uid := "1500"
+	procStatusOf = func(int) ([]byte, error) { return []byte("Name:\tclaude\nUid:\t" + uid + "\t" + uid + "\t1500\t1500\n"), nil }
+	if err := runAsOwns(42); err != nil {
+		t.Fatalf("processus du compte cible : %v", err)
+	}
+	uid = "0"
+	if runAsOwns(42) == nil {
+		t.Fatal("processus root signalé")
+	}
+	uid = "1500"
+	runAsGOOS = "darwin"
+	if runAsOwns(42) == nil {
+		t.Fatal("hors Linux : signal accepté")
+	}
+}

@@ -165,6 +165,9 @@ func closeSession(id string) error {
 	if !ok {
 		return terr("srv.sendkeys.sessionIntrouvableParmiLes")
 	}
+	if err := runAsOwns(pid); err != nil {
+		return terr("srv.sendkeys.fermetureImpossible", "W1", err)
+	}
 	p, err := os.FindProcess(pid)
 	if err != nil {
 		return err
