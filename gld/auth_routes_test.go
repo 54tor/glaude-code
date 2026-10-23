@@ -536,6 +536,17 @@ func TestSessionsListRevoke(t *testing.T) {
 	if _, err := g.s.Session(c); err != nil {
 		t.Fatal("session courante révoquée")
 	}
+	bob, err := g.s.AddUser("bob", testPw, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bc, bp := fullSession(t, g.s, bob)
+	if w := g.do("POST", "/auth/sessions/revoke", c, csrf, map[string]string{"id": bp.SessionID, "password": testPw, "code": g.code(secret)}); w.Code != 404 {
+		t.Fatalf("révocation de la session d'autrui : %d", w.Code)
+	}
+	if _, err := g.s.Session(bc); err != nil {
+		t.Fatal("session d'autrui révoquée")
+	}
 }
 
 func TestRecoveryConcurrentSerialised(t *testing.T) {
@@ -607,5 +618,167 @@ func TestRecoveryRegenerate(t *testing.T) {
 	g.s.db.QueryRow(`SELECT COUNT(*) FROM auth_events WHERE user_id=? AND kind='recovery' AND outcome='regenerated' AND ip='192.0.2.1'`, g.uid).Scan(&n)
 	if n != 1 {
 		t.Fatalf("événements = %d", n)
+	}
+}
+
+// Vingt faux codes parallèles par vague : une seule vérification à la fois, et exactement cinq au total,
+// car chaque vérification compte son échec avant de libérer la clé et le 6e détenteur trouve le seuil atteint.
+func TestMFAParallelSerialised(t *testing.T) {
+	g := newAuthRig(t)
+	g.enrolTOTP()
+	c, csrf, _ := g.partial()
+	var active, peak, total atomic.Int64
+	orig := verifyTOTP
+	verifyTOTP = func(s *authStore, uid int64, code string, at time.Time) bool {
+		n := active.Add(1)
+		for {
+			p := peak.Load()
+			if n <= p || peak.CompareAndSwap(p, n) {
+				break
+			}
+		}
+		total.Add(1)
+		time.Sleep(2 * time.Millisecond)
+		active.Add(-1)
+		return orig(s, uid, code, at)
+	}
+	t.Cleanup(func() { verifyTOTP = orig })
+	for round := 0; round < 8; round++ {
+		var wg sync.WaitGroup
+		for i := 0; i < 20; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				g.do("POST", "/auth/mfa/totp", c, csrf, map[string]string{"code": "000000"})
+			}()
+		}
+		wg.Wait()
+		if g.do("GET", "/auth/me", c, "", nil).Code == 401 {
+			break
+		}
+		g.tick(10 * time.Second)
+	}
+	if peak.Load() != 1 {
+		t.Fatalf("vérifications simultanées : %d", peak.Load())
+	}
+	if total.Load() != thMFALimit || g.th.mfaFails("alice") != thMFALimit {
+		t.Fatalf("vérifications %d, échecs comptés %d", total.Load(), g.th.mfaFails("alice"))
+	}
+	if g.do("GET", "/auth/me", c, "", nil).Code != 401 {
+		t.Fatal("session partielle survivante")
+	}
+}
+
+func TestLoginBusyName(t *testing.T) {
+	g := newAuthRig(t)
+	entered, release := make(chan struct{}, 2), make(chan struct{})
+	var calls atomic.Int64
+	orig := verifyPassword
+	verifyPassword = func(h, p string) bool {
+		calls.Add(1)
+		entered <- struct{}{}
+		<-release
+		return orig(h, p)
+	}
+	t.Cleanup(func() { verifyPassword = orig })
+	var wg sync.WaitGroup
+	var first *httptest.ResponseRecorder
+	wg.Add(1)
+	go func() { defer wg.Done(); first = g.login("alice", testPw) }()
+	<-entered
+	assertGenericFail(t, g.login("Alice", testPw))
+	if calls.Load() != 1 {
+		t.Fatalf("vérifications simultanées = %d", calls.Load())
+	}
+	close(release)
+	wg.Wait()
+	if first.Code != 200 {
+		t.Fatalf("première connexion : %d", first.Code)
+	}
+}
+
+func TestFirstEnrolRace(t *testing.T) {
+	g := newAuthRig(t)
+	c1, csrf1, _ := g.partial()
+	c2, csrf2, _ := g.partial()
+	w := g.do("POST", "/auth/totp/begin", c1, csrf1, map[string]string{})
+	secret := jbody(t, w)["secret"].(string)
+	w = g.do("POST", "/auth/webauthn/register/begin", c2, csrf2, map[string]string{})
+	if w.Code != 200 {
+		t.Fatalf("webauthn begin : %d %s", w.Code, w.Body)
+	}
+	var b struct{ Options protocol.CredentialCreation }
+	if err := json.Unmarshal(w.Body.Bytes(), &b); err != nil {
+		t.Fatal(err)
+	}
+	k := newSoftKey(t)
+	att, _ := io.ReadAll(k.attest(t, &b.Options).Body)
+	var wg sync.WaitGroup
+	codes := make([]int, 2)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		codes[0] = g.do("POST", "/auth/totp/confirm", c1, csrf1, map[string]string{"code": codeAt(t, secret, *g.clock)}).Code
+	}()
+	go func() {
+		defer wg.Done()
+		codes[1] = g.do("POST", "/auth/webauthn/register/finish?label=cle", c2, csrf2, att).Code
+	}()
+	wg.Wait()
+	sort.Ints(codes)
+	if codes[0] != 200 || codes[1] != 403 {
+		t.Fatalf("statuts = %v", codes)
+	}
+	var sets int
+	g.s.db.QueryRow(`SELECT COUNT(*) FROM auth_events WHERE user_id=? AND kind='recovery' AND outcome='generated'`, g.uid).Scan(&sets)
+	if f, err := g.s.factors(g.uid); err != nil || sets != 1 || f.Recovery != recoveryCount || (f.TOTP == (f.WebAuthn == 1)) {
+		t.Fatalf("jeux de codes %d, facteurs %+v %v", sets, f, err)
+	}
+}
+
+func TestFactorRemoveTamperedTOTP(t *testing.T) {
+	g := newAuthRig(t)
+	secret := g.enrolTOTP()
+	k := newSoftKey(t)
+	if err := waRegister(t, g.s, g.uid, k, "x"); err != nil {
+		t.Fatal(err)
+	}
+	c, csrf := g.full(secret)
+	if _, err := g.s.db.Exec(`UPDATE totp SET last_step=last_step+1000 WHERE user_id=?`, g.uid); err != nil {
+		t.Fatal(err)
+	}
+	before := tamperEvents(t, g.s)
+	g.waReauth(k, c, csrf)
+	w := g.do("POST", "/auth/factor/remove", c, csrf, map[string]any{"kind": "totp", "password": testPw})
+	if w.Code != 409 || jbody(t, w)["out"] != L("srv.auth.tamper") {
+		t.Fatalf("retrait d'un TOTP altéré : %d %s", w.Code, w.Body)
+	}
+	if tamperEvents(t, g.s) <= before {
+		t.Fatal("altération non journalisée")
+	}
+}
+
+func TestAuthDeniedLogged(t *testing.T) {
+	g := newAuthRig(t)
+	count := func(kind string) int {
+		var n int
+		g.s.db.QueryRow(`SELECT COUNT(*) FROM auth_events WHERE kind=? AND outcome='denied' AND ip='192.0.2.1'`, kind).Scan(&n)
+		return n
+	}
+	for i := 0; i < 5; i++ {
+		g.do("POST", "/auth/logout", "", "", nil)
+	}
+	if count("auth") != 1 {
+		t.Fatalf("refus journalisés = %d", count("auth"))
+	}
+	g.tick(time.Minute)
+	g.do("GET", "/auth/sessions", "", "", nil)
+	if count("auth") != 2 {
+		t.Fatalf("après une minute = %d", count("auth"))
+	}
+	c, _, _ := g.partial()
+	g.do("POST", "/auth/logout", c, "bad", nil)
+	if count("csrf") != 1 {
+		t.Fatalf("refus CSRF journalisés = %d", count("csrf"))
 	}
 }

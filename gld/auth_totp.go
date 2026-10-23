@@ -224,8 +224,16 @@ func (s *authStore) TOTPRemove(userID int64) error {
 				return errLastFactor
 			}
 		}
-		_, err = tx.Exec(`DELETE FROM totp WHERE user_id=? AND sig=?`, userID, r.sig)
-		return err
+		res, err := tx.Exec(`DELETE FROM totp WHERE user_id=? AND sig=?`, userID, r.sig)
+		if err != nil {
+			return err
+		}
+		if n, err := res.RowsAffected(); err != nil {
+			return err
+		} else if n == 0 {
+			return errNoTOTP
+		}
+		return nil
 	})
 	if err != nil {
 		return err
