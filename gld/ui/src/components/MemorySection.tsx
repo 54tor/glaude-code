@@ -1,8 +1,9 @@
-import { type LucideIcon, AlertTriangle, Calculator, ArrowDownWideNarrow, ArrowUpNarrowWide, CheckSquare, EyeOff, Filter, FileStack, FileText, Plus, ScrollText, Sparkles, Trash2 } from "lucide-react"
+import { type LucideIcon, AlertTriangle, ChevronRight, Calculator, ArrowDownWideNarrow, ArrowUpNarrowWide, CheckSquare, EyeOff, Filter, FileStack, FileText, Plus, ScrollText, Sparkles, Trash2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { MemFile } from "@/lib/api"
 import { ago } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { useLocal } from "@/hooks/useLocal"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
@@ -57,13 +58,20 @@ export function Section({
   const { t } = useTranslation()
   const [, labelKey, SortIcon] = SORTS.find((s) => s[0] === sort.by) ?? SORTS[0]
   const label = t(labelKey)
+  // Repliée par défaut, sauf si elle contient le fichier ouvert ; le choix de l'utilisateur est gardé par section.
+  const [pref, setPref] = useLocal(`gld.mem.open.${title}`, "")
+  const open = pref ? pref === "1" : files.some((f) => f.key === sel)
   const sortBtn = "size-5 md:opacity-0 md:group-hover/sec:opacity-100 md:focus-visible:opacity-100"
   return (
     <section className="group/sec mb-3">
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <div className="flex items-center gap-1.5 px-2 py-1 text-xs font-semibold text-muted-foreground" title={title}>
-            <Icon className="size-3.5 shrink-0" /> <h3 className="flex-1 truncate">{title}</h3>
+            <button type="button" className="flex min-w-0 flex-1 items-center gap-1.5 text-left" aria-expanded={open} onClick={() => setPref(open ? "0" : "1")}>
+              <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-90")} />
+              <Icon className="size-3.5 shrink-0" /> <h3 className="truncate">{title}</h3>
+              {!open && <span className="shrink-0 text-[10px] font-normal">{files.length}</span>}
+            </button>
             {budget > 0 && (
               <span
                 className="shrink-0 text-[10px] font-normal"
@@ -134,7 +142,7 @@ export function Section({
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
-      <ul className="space-y-px">
+      <ul className={cn("space-y-px", !open && "hidden")}>
         {files.map((f) => (
           <ContextMenu key={f.key}>
             <ContextMenuTrigger asChild>

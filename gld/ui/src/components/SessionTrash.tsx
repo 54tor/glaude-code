@@ -6,7 +6,6 @@ import { api } from "@/lib/api"
 import { ago, size, tilde } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { useActions } from "./actions"
 
 type Trashed = { dir: string; id: string; title: string; cwd: string; at: number; kb: number }
@@ -30,7 +29,7 @@ export function SessionTrash({ open, onClose, reload }: { open: boolean; onClose
   }
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[85vh] sm:max-w-2xl">
+      <DialogContent className="max-h-[85vh] min-w-0 overflow-hidden sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t("shell.sidebar.trash")}</DialogTitle>
           <DialogDescription>{t("shell.trash.description", { days })}</DialogDescription>
@@ -40,7 +39,7 @@ export function SessionTrash({ open, onClose, reload }: { open: boolean; onClose
         ) : rows.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">{t("shell.trash.empty")}</p>
         ) : (
-          <ScrollArea className="max-h-[50vh] rounded-md border">
+          <div className="max-h-[50vh] min-w-0 overflow-y-auto rounded-md border">
             <ul className="divide-y">
               {rows.map((r) => (
                 <li key={r.id} className="flex items-center gap-2 px-3 py-2">
@@ -61,7 +60,7 @@ export function SessionTrash({ open, onClose, reload }: { open: boolean; onClose
                 </li>
               ))}
             </ul>
-          </ScrollArea>
+          </div>
         )}
         {confirm && (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm">
