@@ -80,7 +80,7 @@ func (t *throttle) mfaFails(user string) int64 {
 	return fails
 }
 
-func routesAuth(mux *http.ServeMux, s *authStore, th *throttle) {
+func routesAuth(mux *http.ServeMux, s *authStore, th *throttle) *authAPI {
 	a := &authAPI{s: s, th: th, reauthAt: map[string]time.Time{}, busy: map[string]bool{}, denied: map[string]time.Time{}}
 	mux.HandleFunc("POST /auth/login", a.login)
 	mux.HandleFunc("POST /auth/mfa/totp", a.mfaTOTP)
@@ -98,6 +98,7 @@ func routesAuth(mux *http.ServeMux, s *authStore, th *throttle) {
 	mux.HandleFunc("POST /auth/password", a.password)
 	mux.HandleFunc("GET /auth/sessions", a.sessions)
 	mux.HandleFunc("POST /auth/sessions/revoke", a.sessionRevoke)
+	return a
 }
 
 // authFail est l'unique réponse d'échec : même statut, même corps, mêmes en-têtes quelle que soit la cause.

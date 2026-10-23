@@ -296,7 +296,7 @@ func handler() http.Handler {
 		c := chains[st]
 		if c == nil {
 			c = &authChain{api: http.NewServeMux()}
-			routesAuth(c.api, st, newThrottle(st.db))
+			routesAdmin(c.api, routesAuth(c.api, st, newThrottle(st.db)))
 			c.gated = http.NewCrossOriginProtection().Handler(authGate(mux, st, withAuthWatch(withHomes(mux))))
 			chains[st] = c
 		}
@@ -304,7 +304,7 @@ func handler() http.Handler {
 	}
 	mountAuth := func() {
 		for pat := range routeRights {
-			if strings.Contains(pat, " /auth/") {
+			if strings.Contains(pat, " /auth/") || strings.Contains(pat, " /admin/") {
 				mux.HandleFunc(pat, func(w http.ResponseWriter, r *http.Request) {
 					if _, d := reqMode(r); d.st != nil {
 						chainFor(d.st).api.ServeHTTP(w, r)
@@ -315,6 +315,7 @@ func handler() http.Handler {
 			}
 		}
 	}
+	onHomesRemoved = homesRemovedACL
 	guarded := http.NewCrossOriginProtection().Handler(withHomes(mux))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !openHosts && !hosts[r.Host] {
