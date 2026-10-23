@@ -7,8 +7,8 @@ require (
 	github.com/coder/websocket v1.8.15
 	github.com/creack/pty v1.1.24
 	github.com/nicksnyder/go-i18n/v2 v2.6.1
+	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/text v0.43.0
-	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.61.0
 )
 

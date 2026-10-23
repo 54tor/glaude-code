@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/bmatcuk/doublestar/v4"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 const indexLines = 200 // Claude Code ne charge que les 200 premières lignes de MEMORY.md
