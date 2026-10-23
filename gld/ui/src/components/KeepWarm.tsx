@@ -1,4 +1,4 @@
-import { Coins, Flame, Snowflake } from "lucide-react"
+import { Coins, Flame, Microwave, Snowflake } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api, type Session, type Tokens } from "@/lib/api"
@@ -25,7 +25,7 @@ export function KeepWarmButton({ s }: { s: Session }) {
   if (warm?.on)
     return (
       <Button variant="outline" size="sm" className="border-warning/60 text-warning" onClick={() => set(s, false)} title={t("conversation.keepWarm.stopTitle")}>
-        <Coins /> <span className="max-md:sr-only">{t("conversation.keepWarm.active")}</span>
+        <Microwave className="warm-wave" /> <span className="max-md:sr-only">{t("conversation.keepWarm.active")}</span>
       </Button>
     )
   if (!a.live.has(s.id))
@@ -73,7 +73,7 @@ export function KeepWarmItem({ s }: { s: Session }) {
   if (warm?.on)
     return (
       <DropdownMenuItem onSelect={() => set(s, false)}>
-        <Coins /> {t("conversation.keepWarm.active")}
+        <Microwave className="warm-wave" /> {t("conversation.keepWarm.active")}
       </DropdownMenuItem>
     )
   if (!a.live.has(s.id))
@@ -102,7 +102,7 @@ export function KeepWarmBanner({ s }: { s: Session }) {
   if (!a.caps(s).keepWarm || (!warm?.on && !warm?.note)) return null
   return (
     <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-1.5 text-xs md:px-6", warm.on ? "border-warning/40 bg-warning/10 text-warning" : "bg-muted/40 text-muted-foreground")}>
-      <Coins className="size-4 shrink-0" />
+      {warm.on ? <Microwave className="warm-wave size-4 shrink-0" /> : <Coins className="size-4 shrink-0" />}
       {warm.on ? (
         <>
           <span className="font-medium">{t("conversation.keepWarm.bannerActive")}</span>
@@ -134,7 +134,7 @@ export function SessionStat({ s, live }: { s: Session; live: Live }) {
         <span className={cn("flex items-center gap-1 font-medium", left === null ? "" : left <= 5 ? "text-warning" : "text-warning")} title={t("conversation.keepWarm.hotTitle")}>
           {left === null ? <Snowflake className="size-3.5" /> : <Flame className="size-3.5" />}
           {left === null ? t("conversation.keepWarm.cold") : t("conversation.keepWarm.left", { min: left })}
-          {warm?.on && <Coins className="size-3.5 text-warning" aria-label={t("conversation.keepWarm.warmAria")} />}
+          {warm?.on && <Microwave className="warm-wave size-3.5" aria-label={t("conversation.keepWarm.warmAria")} />}
         </span>
       )}
       <span className="max-md:hidden" title={t("conversation.live.tokensTitle")}>

@@ -215,3 +215,11 @@
   [data-slot="checkbox"], [data-slot="button"][data-size="icon-xs"] { position: relative; }
   [data-slot="checkbox"]::after, [data-slot="button"][data-size="icon-xs"]::after { content: ""; position: absolute; inset: -4px; }
 }
+
+/* Session maintenue au chaud : micro-ondes orange, onde qui pulse autour de l'icône. */
+.warm-wave { color: #f97316; animation: warm-wave 1.6s ease-out infinite; }
+@keyframes warm-wave {
+  0% { filter: drop-shadow(0 0 0 rgb(249 115 22 / 0.7)); }
+  100% { filter: drop-shadow(0 0 6px rgb(249 115 22 / 0)); }
+}
+@media (prefers-reduced-motion: reduce) { .warm-wave { animation: none; } }
