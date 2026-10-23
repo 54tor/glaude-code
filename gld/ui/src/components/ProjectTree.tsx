@@ -187,7 +187,7 @@ function Item({
             </button>
             <button
               className="flex min-w-0 flex-1 items-center gap-2 text-left outline-none after:absolute after:inset-0 after:rounded-md focus-visible:after:ring-2 focus-visible:after:ring-ring/50"
-              onClick={() => onSel(n.key)}
+              onClick={() => (kids && !open && setOpen("t/" + n.key, true), onSel(n.key))}
               title={n.g?.project ?? label ?? n.name}
               aria-current={active}
             >
