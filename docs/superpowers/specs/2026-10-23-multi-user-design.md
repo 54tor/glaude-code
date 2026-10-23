@@ -77,16 +77,16 @@ SQLite, migrations numérotées appliquées au démarrage (un seul processus éc
 | Droit | Donne accès à (lecture ou écriture) |
 |---|---|
 | `mem_read` | liste et contenu de la mémoire, règles, snippets, notes, recherche, santé, tokens chargés (`GET /memory-*`, `/snippet*`, `/notes`, `/search`, `/skills-list`, `/skill`, `/trash*`) |
-| `mem_write` | enregistrer, déplacer, supprimer, réparer, fusionner du texte inerte : CLAUDE.md, règles, entrées de mémoire, notes, snippets, corbeille, renommage et suppression de fichiers mémoire (`POST /memory-*`, `/snippet-*`, `/notes`, `/trash-*`, `/rename`, `/rm`) |
+| `mem_write` | enregistrer, déplacer, supprimer, réparer, fusionner du texte inerte : CLAUDE.md, règles, entrées de mémoire, notes, snippets, corbeille, renommage et suppression de fichiers mémoire (`POST /memory-*`, `/snippet-*`, `/notes`, `/trash-*`) |
 | `config_write` | réglages et skills, qui déclenchent l'exécution de code par Claude Code : `/config-edit`, `/config-raw`, `/config-restore`, `/config-perm-import`, `/skill-save`, `/skill-copy`, `/skill-rm`, `/config-mcp-status` (peut lancer des serveurs MCP). Équivaut en pratique à `exec`, écrit tel quel dans l'écran d'ACL |
-| `mem_sync` | prévisualiser et appliquer la synchro entre homes (`/homes-sync-plan`, `/homes-sync-apply`). Exige aussi `mem_read` sur la source et `mem_write` sur la destination ; chaque home est vérifié séparément |
-| `usage_read` | compte et usages (`GET /account`, `/info`, statistiques), jamais le contenu des conversations |
-| `sessions_read` | transcriptions et état des sessions : `/conv*`, `/session-state`, `/session-live`, `/session-screen`, `/session-loaded`, `/session-trash` (lecture), `/sessions-stamp`, `/session-send-info` |
-| `exec` | chat, nouvelle session, terminal web, envoi de touches, confiance de dossier, ouverture externe, push git, fermeture de session (`/chat*`, `/new-session`, `/term-*`, `/session-send`, `/session-key`, `/session-close`, `/trust-*`, `/open`, `/git-push`) |
+| `mem_sync` | prévisualiser et appliquer la synchro entre homes (`/homes-sync-plan`, `/homes-sync-apply`). Exige aussi `mem_read` sur la source et `mem_write` sur la destination ; chaque home est vérifié séparément. Appliquer des éléments de type réglage, permission, skill ou commande exige en plus `config_write` sur la destination |
+| `usage_read` | compte et usages (`GET /account`, statistiques), jamais le contenu des conversations |
+| `sessions_read` | transcriptions et état des sessions, recherche et détail : `GET /search`, `GET /info`, `/conv*`, `/session-state`, `/session-live`, `/session-screen`, `/session-loaded`, `/session-trash` (lecture), `/sessions-stamp`, `/session-send-info` |
+| `exec` | chat, nouvelle session, terminal web, envoi de touches, confiance de dossier, ouverture externe, push git, fermeture, renommage, suppression, réaffectation et corbeille de sessions, maintien au chaud (`/chat*`, `/rename`, `/rm`, `/reassign`, `/session-trash-add|restore|purge`, `POST /keepwarm`, `/new-session`, `/term-*`, `/session-send`, `/session-key`, `/session-close`, `/trust-*`, `/open`, `/git-push`) |
 
 Règles :
 - Les routes sont classées dans une table unique `route → droit`, dans le code, avec un test qui échoue si une route enregistrée dans le `mux` n'y figure pas (refus par défaut).
-- Routes non nommées ci-dessus : classées une par une dans le plan (choix du rédacteur). Lecture seule du home (`/config`, `/config-effective`, `/config-projects`, `/slash-commands`, `/git-status|changes|remotes`, `/cleanup-warning`, `/tabs`, `/keepwarm` en lecture) : `mem_read`. Écritures d'état d'interface par home (`/tabs-*`, `/keepwarm`, `/vgroups`, `/reassign`, `/session-trash-*`) : `mem_write`. `/ls` et `/dirs` parcourent le disque hors home : `exec`. `/homes-save` crée des gld enfants avec un `CLAUDE_CONFIG_DIR` arbitraire : admin seulement. `/image-upload`, `/conv-image` : `exec` et `sessions_read`.
+- Routes non nommées ci-dessus : classées une par une dans le plan (choix du rédacteur). Lecture seule du home (`/config`, `/config-effective`, `/config-projects`, `/slash-commands`, `/git-status|changes|remotes`, `/cleanup-warning`, `/tabs`, `/keepwarm` en lecture) : `mem_read`. Écritures d'état d'interface par home (`/tabs-*`, `/vgroups`) : `mem_write`. `/ls` et `/dirs` parcourent le disque hors home : `exec`. `/homes-save` crée des gld enfants avec un `CLAUDE_CONFIG_DIR` arbitraire : admin seulement. `/image-upload`, `/conv-image` : `exec` et `sessions_read`.
 - Notes, onglets et keepwarm sont déjà propres à chaque home (chaque enfant a sa configuration) : ils suivent l'ACL du home, pas de portée par utilisateur.
 - `home_acl` référence un identifiant de home interne et stable, pas son nom ; suppression d'un home : suppression en cascade de ses lignes, pour qu'un nom réutilisé ne reprenne pas d'anciens droits.
 - L'admin global gère comptes et ACL mais n'a pas d'accès aux homes sans ligne `home_acl` (pas de super-droit implicite), il s'en accorde à lui-même.
@@ -156,7 +156,7 @@ Hors périmètre, notés pour plus tard : bac à sable du terminal web et de tou
 
 ## Risques connus
 
-- Perte de la clé maîtresse : les secrets TOTP deviennent illisibles ; la procédure de repli est `gld user reset-mfa` et réenrôlement.
+- Perte de la clé maîtresse : les secrets TOTP deviennent illisibles ; la ligne de commande a besoin de la clé pour ouvrir la base, donc `gld user reset-mfa` ne sert à rien. Procédure : retrouver la clé, sinon déplacer `auth.db` et `auth.key` hors du dossier et recréer le premier administrateur (comptes, facteurs et droits à refaire).
 - Serveur sans coffre-fort OS : la clé maîtresse en fichier protège moins qu'un coffre-fort ; documenté.
 - WebAuthn exige HTTPS ou localhost et un `RPID` stable : `GLD_PUBLIC_URL` à fixer derrière un proxy.
 - Les droits ne protègent pas contre un utilisateur ayant `exec` : à documenter clairement dans l'écran d'ACL.
