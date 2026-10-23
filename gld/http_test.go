@@ -665,3 +665,13 @@ func TestDossiersEnregistres(t *testing.T) {
 		t.Fatalf("retrait sans effet : %v", m["dirs"])
 	}
 }
+
+func TestRelayUpstreamLimit(t *testing.T) {
+	in := `{"type":"system","subtype":"api_retry","attempt":2,"max_retries":10,"retry_delay_ms":1500,"error_status":429}` + "\n" +
+		`{"type":"result","subtype":"success","is_error":true,"result":"API Error: 529 Overloaded"}` + "\n"
+	var evs []chatEvent
+	relay(strings.NewReader(in), func(e chatEvent) { evs = append(evs, e) })
+	if len(evs) != 2 || !strings.Contains(evs[0].Note, "429") || !strings.Contains(evs[0].Note, "2/10") || !strings.Contains(evs[1].Error, "529") || evs[1].OK {
+		t.Fatalf("%+v", evs)
+	}
+}

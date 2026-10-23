@@ -98,6 +98,8 @@
   "srv.chat.arretDemande": "Stop requested",
   "srv.chat.claudeRepondDejaDans": "Claude is already replying in this session",
   "srv.chat.dossierInvalideCheminAbsolu": "invalid folder (absolute path expected)",
+  "srv.chat.apiRetry": "Retrying after API error {{.A1}} ({{.A2}}/{{.A3}}, in {{.A4}} s)",
+  "srv.chat.apiLimit": "API rate limit or overload ({{.A1}})",
   "srv.chat.ignoredOptions": "Settings options not passed to the chat: {{.A1}} (permissions: chat menu)",
   "srv.chat.messageVide": "empty message",
   "srv.chat.modeDAutorisationInconnu": "unknown permission mode",

@@ -98,6 +98,8 @@
   "srv.chat.arretDemande": "Arrêt demandé",
   "srv.chat.claudeRepondDejaDans": "Claude répond déjà dans cette session",
   "srv.chat.dossierInvalideCheminAbsolu": "dossier invalide (chemin absolu attendu)",
+  "srv.chat.apiRetry": "Nouvelle tentative après l'erreur {{.A1}} de l'API ({{.A2}}/{{.A3}}, dans {{.A4}} s)",
+  "srv.chat.apiLimit": "Limite ou surcharge de l'API ({{.A1}})",
   "srv.chat.ignoredOptions": "Options de Réglages non transmises au chat : {{.A1}} (autorisations : menu du chat)",
   "srv.chat.messageVide": "message vide",
   "srv.chat.modeDAutorisationInconnu": "mode d'autorisation inconnu",

@@ -12,7 +12,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -71,6 +73,8 @@ type chatEvent struct {
 	Note  string  `json:"note,omitempty"`
 }
 
+var upstreamLimit = regexp.MustCompile(`\\b(429|529)\\b`)
+
 // relay traduit la sortie stream-json de claude en événements pour le lecteur.
 func relay(out io.Reader, emit func(chatEvent)) (sawResult bool) {
 	r := bufio.NewReaderSize(out, 1<<20)
@@ -81,6 +85,10 @@ func relay(out io.Reader, emit func(chatEvent)) (sawResult bool) {
 				Type, Subtype, Result string
 				IsError               bool    `json:"is_error"`
 				Cost                  float64 `json:"total_cost_usd"`
+				Attempt               int     `json:"attempt"`
+				MaxRetries            int     `json:"max_retries"`
+				DelayMs               int     `json:"retry_delay_ms"`
+				Status                int     `json:"error_status"`
 			}
 			if json.Unmarshal(b, &h) == nil {
 				switch h.Type {
@@ -88,11 +96,18 @@ func relay(out io.Reader, emit func(chatEvent)) (sawResult bool) {
 					if ms := lineMsgs(b, true); len(ms) > 0 {
 						emit(chatEvent{Msgs: ms})
 					}
+				case "system":
+					if h.Subtype == "api_retry" && (h.Status == 429 || h.Status == 529) {
+						emit(chatEvent{Note: L("srv.chat.apiRetry", "A1", strconv.Itoa(h.Status), "A2", strconv.Itoa(h.Attempt), "A3", strconv.Itoa(h.MaxRetries), "A4", strconv.Itoa((h.DelayMs+999)/1000))})
+					}
 				case "result":
 					sawResult = true
 					e := chatEvent{Done: true, OK: !h.IsError && h.Subtype == "success", Cost: h.Cost}
 					if !e.OK {
 						e.Error = strings.TrimSpace(h.Subtype + " " + cut(h.Result, 500))
+						if m := upstreamLimit.FindString(h.Result); m != "" {
+							e.Error = L("srv.chat.apiLimit", "A1", m) + " : " + e.Error
+						}
 					}
 					emit(e)
 				}
