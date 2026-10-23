@@ -45,7 +45,7 @@ function UserText({ t }: { t: string }) {
     if (before) parts.push(<span key={`t${at}`}>{before}</span>)
     const lines = m[1].split("\n").length
     parts.push(
-      <details key={m.index} className="group/paste my-1 rounded-lg border bg-background/60">
+      <details key={m.index} className="group/paste my-1 rounded-md border bg-background/60">
         <summary className="cursor-pointer list-none px-3 py-1.5 text-xs text-muted-foreground select-none hover:text-foreground">
           Texte collé · {lines} ligne{lines > 1 ? "s" : ""}
         </summary>
@@ -90,7 +90,7 @@ function MessageView({ m, conv }: { m: Msg; conv?: Conv }) {
   if (m.r === "user")
     return (
       <div title={title} className="msg flex justify-end">
-        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-primary/[0.07] px-4 py-2.5 break-words whitespace-pre-wrap dark:bg-primary/10">
+        <div className="max-w-[85%] rounded-lg bg-accent px-4 py-2.5 break-words whitespace-pre-wrap text-accent-foreground">
           <UserText t={m.t} />
         </div>
       </div>
@@ -100,7 +100,7 @@ function MessageView({ m, conv }: { m: Msg; conv?: Conv }) {
     const result = m.t.startsWith("↳")
     const Icon = result ? CornerDownRight : Wrench
     return (
-      <div title={title} className="msg flex gap-2 border-l-2 py-0.5 pl-3 text-muted-foreground">
+      <div title={title} className="msg flex gap-2 border-l-2 border-primary/30 py-0.5 pl-3 text-muted-foreground">
         <Icon className="mt-0.5 size-3.5 shrink-0" aria-label={result ? "résultat d'outil" : "appel d'outil"} />
         <span className="min-w-0 break-words whitespace-pre-wrap">{result ? m.t.slice(1).trimStart() : m.t}</span>
       </div>

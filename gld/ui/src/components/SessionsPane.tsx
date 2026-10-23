@@ -16,7 +16,7 @@ import { Live, SessionList } from "./SessionList"
 function Empty({ title, text, children }: { title: string; text: string; children?: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center gap-2 py-20 text-center">
-      <Search className="size-8 text-muted-foreground/50" />
+      <Search className="size-7 text-muted-foreground/40" />
       <p className="font-medium">{title}</p>
       <p className="max-w-sm text-sm text-muted-foreground">{text}</p>
       {children}
@@ -81,12 +81,12 @@ export function SessionsPane({
         {!loading && projectDir && (route.kind === "dir" || route.kind === "group") && <ProjectMemory key={projectDir} dir={projectDir} />}
 
         {!loading && route.kind === "recent" && (
-          <div className="space-y-6">
+          <div className="space-y-8">
             {[...byProject].map(([project, rs]) => (
               <section key={project}>
-                <div className="flex items-center gap-2 px-3 py-1.5">
+                <div className="mb-1 flex items-center gap-3 border-b px-3 py-1.5">
                   <button
-                    className="min-w-0 truncate text-sm font-medium hover:underline"
+                    className="min-w-0 truncate text-sm font-semibold hover:text-primary"
                     onClick={() => go({ kind: "dir", key: segs(project, home).join("/") })}
                     title="Afficher le dossier"
                   >

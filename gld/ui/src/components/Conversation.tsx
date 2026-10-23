@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
-import { ArrowDown, ArrowDownToLine, ArrowUpToLine, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, SquareTerminal, Wrench } from "lucide-react"
+import { ArrowDown, ArrowDownToLine, ArrowUpToLine, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, Repeat, SquareTerminal, Wrench } from "lucide-react"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
 import { full, size, tilde } from "@/lib/format"
@@ -36,14 +36,18 @@ function Meta({ s, d }: { s: Session; d: Detail | null }) {
     d?.models.filter((m) => !m.startsWith("<")).join(", "),
   ].filter(Boolean)
   return (
-    <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+    <p className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
       {live && <Live waiting={a.waiting.has(s.id)} />}
-      <span className="truncate">{(live ? "· " : "") + bits.join(" · ")}</span>
+      {bits.map((b, i) => (
+        <span key={i} className={i === 0 ? "truncate" : "shrink-0"}>
+          {b}
+        </span>
+      ))}
     </p>
   )
 }
 
-export function Conversation({ row, onClose, args, choice }: { row: Row | null; onClose: () => void; args: string; choice: Choice }) {
+export function Conversation({ row, onClose, args, choice, carousel }: { row: Row | null; onClose: () => void; args: string; choice: Choice; carousel?: { n: number; next: () => void; stop: () => void } }) {
   const a = useActions()
   const session = row?.s ?? null
   // Les effets dépendent des identifiants, pas de l'objet : le rafraîchissement périodique de la liste
@@ -220,7 +224,7 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
         <DialogHeader className="gap-1 border-b px-4 pt-4 pr-12 pb-3 md:px-6 md:pt-5 md:pr-14 md:pb-4">
           <div className="flex items-start gap-4">
             <div className="min-w-0 flex-1 space-y-1">
-              <DialogTitle className="truncate text-base">{session?.title}</DialogTitle>
+              <DialogTitle className="truncate text-lg tracking-tight">{session?.title}</DialogTitle>
               <DialogDescription className="sr-only">Conversation complète de la session</DialogDescription>
               {session && <Meta s={session} d={detail} />}
             </div>
@@ -228,7 +232,18 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
           </div>
         </DialogHeader>
         {session && <KeepWarmBanner s={session} />}
-        <div className="flex flex-wrap items-center gap-1 border-b bg-muted/30 px-2 py-2 md:px-4">
+        {carousel && (
+          <div className="flex flex-wrap items-center gap-2 border-b bg-amber-500/10 px-4 py-1.5 text-sm">
+            <Repeat className="size-4 text-amber-600" aria-hidden /> Carrousel : {carousel.n} session{carousel.n > 1 ? "s" : ""} en attente. La suivante s'ouvre dès que vous répondez.
+            <Button variant="outline" size="sm" className="ml-auto" onClick={carousel.next}>
+              Suivante
+            </Button>
+            <Button variant="ghost" size="sm" onClick={carousel.stop}>
+              Quitter le carrousel
+            </Button>
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-1 border-b bg-muted/40 px-2 py-1.5 md:px-4">
           <Button variant={tools ? "secondary" : "ghost"} size="sm" onClick={() => setTools(!tools)} aria-pressed={tools}>
             <Wrench /> Outils {tools ? "affichés" : "masqués"}
           </Button>
@@ -275,7 +290,7 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
         )}
         <div className={inTerm ? "hidden" : "relative flex min-h-0 flex-1 flex-col"}>
         <ScrollArea ref={area} className="min-h-0 flex-1">
-          <div className="session-text mx-auto max-w-7xl space-y-5 px-3 py-4 md:px-6 md:py-6">
+          <div className="session-text mx-auto max-w-5xl space-y-6 px-3 py-4 md:px-8 md:py-6">
             {msgs === null && (
               <>
                 <Skeleton className="ml-auto h-10 w-2/3" />
@@ -322,7 +337,7 @@ export function Conversation({ row, onClose, args, choice }: { row: Row | null; 
             defaultChoice={choice}
             live={a.live.has(id)}
             liveState={live}
-            onSent={() => (a.touch(id), setSentAt({ id, at: Date.now() }), sentDown(), void reloadRef.current())}
+            onSent={() => (a.touch(id), setSentAt({ id, at: Date.now() }), sentDown(), void reloadRef.current(), carousel?.next())}
             onWrite={sentDown}
             turn={turn}
             setTurn={(f) => setChat((c) => f(c?.id === id ? c : null))}

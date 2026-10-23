@@ -46,15 +46,15 @@ export function PageHeader({
 }) {
   return (
     <>
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-3 py-3 md:px-6 md:py-4">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-background px-3 py-3 md:px-6 md:py-4">
         <Button variant="ghost" size="icon-sm" className="md:hidden" onClick={onMenu} aria-label="Ouvrir le menu" aria-controls="menu">
           <Menu />
         </Button>
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-lg font-semibold tracking-tight">{title}</h2>
-          <p className="truncate text-xs text-muted-foreground">
+          <h2 className="truncate text-xl font-semibold tracking-tight">{title}</h2>
+          <p className="truncate text-[13px] text-muted-foreground">
             {sub}
-            {qt && (route.kind === "recent" || route.kind === "all" || route.kind === "active" || route.kind === "group" || route.kind === "dir") && ` · recherche « ${qt} »`}
+            {qt && (route.kind === "recent" || route.kind === "all" || route.kind === "active" || route.kind === "group" || route.kind === "dir") && `, recherche « ${qt} »`}
           </p>
         </div>
         {g && nGrouped > 0 && (
