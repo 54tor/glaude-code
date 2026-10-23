@@ -60,7 +60,7 @@ function Editor({ file, label, doc, propose, onClose }: { file: string; label: s
       />
       <ul className="max-h-32 space-y-0.5 overflow-y-auto text-xs" aria-label={t("config.permRaw.lintAria")}>
         {lint.map((l, i) => (
-          <li key={i} className={l.level === "error" ? "flex gap-1.5 text-destructive" : "flex gap-1.5 text-amber-600 dark:text-amber-400"}>
+          <li key={i} className={l.level === "error" ? "flex gap-1.5 text-destructive" : "flex gap-1.5 text-warning"}>
             {l.level === "error" ? <CircleAlert className="mt-0.5 size-3.5 shrink-0" /> : <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />}
             <span className="tabular-nums">{t("config.permRaw.line", { n: l.line })}</span> {l.msg}
           </li>
@@ -70,7 +70,7 @@ function Editor({ file, label, doc, propose, onClose }: { file: string; label: s
       {pv && pv.before !== pv.after && (
         <>
           {pv.warns.length > 0 && (
-            <ul className="space-y-0.5 text-xs text-amber-600 dark:text-amber-400" aria-label={t("config.permRaw.warnAria")}>
+            <ul className="space-y-0.5 text-xs text-warning" aria-label={t("config.permRaw.warnAria")}>
               {pv.warns.map((w, i) => (
                 <li key={i}>⚠ {w.msg}</li>
               ))}

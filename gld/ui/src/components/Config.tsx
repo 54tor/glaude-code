@@ -71,7 +71,7 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
       {scope !== "u" && (
         <Choose value={dirOf} onChange={(d) => setFileId(scope + "/" + d)} options={ov.projects.map((p) => [p.dir, tilde(p.project, home)] as const)} label={t("config.main.projectDirAria")} className="min-w-0 max-w-md" />
       )}
-      {!file && <span className="text-xs text-amber-600 dark:text-amber-400">{t("config.main.toCreate")}</span>}
+      {!file && <span className="text-xs text-warning">{t("config.main.toCreate")}</span>}
       <span className="text-xs text-muted-foreground">{t("config.main.applyNote")}</span>
     </div>
   )

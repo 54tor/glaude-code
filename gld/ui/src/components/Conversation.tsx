@@ -259,8 +259,8 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
         </DialogHeader>
         {session && <KeepWarmBanner s={session} />}
         {carousel && (
-          <div className="flex flex-wrap items-center gap-2 border-b bg-amber-500/10 px-4 py-1.5 text-sm">
-            <Repeat className="size-4 text-amber-600" aria-hidden /> {t("conversation.view.carousel", { count: carousel.n })}
+          <div className="flex flex-wrap items-center gap-2 border-b bg-warning/10 px-4 py-1.5 text-sm">
+            <Repeat className="size-4 text-warning" aria-hidden /> {t("conversation.view.carousel", { count: carousel.n })}
             <Button variant="outline" size="sm" className="ml-auto" onClick={carousel.next}>
               {t("conversation.view.next")}
             </Button>

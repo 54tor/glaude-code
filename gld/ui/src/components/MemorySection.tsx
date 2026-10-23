@@ -174,10 +174,10 @@ export function Section({
                   <span className={cn("min-w-0 flex-1 truncate", f.off && "text-muted-foreground line-through")}>{f.name}</span>
                   {f.off && <EyeOff className="size-3.5 shrink-0 text-muted-foreground" aria-label={t("memory.section.ruleOff")} />}
                   {f.paths && (
-                    <Filter className="size-3.5 shrink-0 text-sky-500" aria-label={t("memory.section.ruleScoped")} />
+                    <Filter className="size-3.5 shrink-0 text-info" aria-label={t("memory.section.ruleScoped")} />
                   )}
                   {(f.warn || issues.has(f.key)) && (
-                    <AlertTriangle className="size-3.5 shrink-0 text-amber-500" aria-label={t("memory.section.toCheck")} />
+                    <AlertTriangle className="size-3.5 shrink-0 text-warning" aria-label={t("memory.section.toCheck")} />
                   )}
                   <span className="shrink-0 text-xs font-normal text-muted-foreground">{ago(f.mtime)}</span>
                 </button>

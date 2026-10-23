@@ -48,7 +48,7 @@ export function ProjectList({ route, go }: { route: Route; go: (r: Route) => voi
                     aria-current={active}
                     title={p.name}
                   >
-                    <Layers className="size-4 shrink-0 text-sky-500" />
+                    <Layers className="size-4 shrink-0 text-info" />
                     <span className="truncate">{p.name}</span>
                   </button>
                   <span className="text-xs text-muted-foreground tabular-nums">{p.dirs.length}</span>

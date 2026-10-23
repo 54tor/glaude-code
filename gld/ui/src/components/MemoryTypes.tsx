@@ -15,7 +15,7 @@ export const TYPES: readonly { key: string; label: string; icon: LucideIcon; col
       return i18n.t("memory.types.user.label")
     },
     icon: User,
-    color: "text-sky-500",
+    color: "text-info",
     get what() {
       return i18n.t("memory.types.user.what")
     },
@@ -29,7 +29,7 @@ export const TYPES: readonly { key: string; label: string; icon: LucideIcon; col
       return i18n.t("memory.types.feedback.label")
     },
     icon: MessageSquareQuote,
-    color: "text-amber-500",
+    color: "text-warning",
     get what() {
       return i18n.t("memory.types.feedback.what")
     },
@@ -43,7 +43,7 @@ export const TYPES: readonly { key: string; label: string; icon: LucideIcon; col
       return i18n.t("memory.types.project.label")
     },
     icon: FolderKanban,
-    color: "text-emerald-500",
+    color: "text-success",
     get what() {
       return i18n.t("memory.types.project.what")
     },
@@ -57,7 +57,7 @@ export const TYPES: readonly { key: string; label: string; icon: LucideIcon; col
       return i18n.t("memory.types.reference.label")
     },
     icon: BookMarked,
-    color: "text-violet-500",
+    color: "text-info",
     get what() {
       return i18n.t("memory.types.reference.what")
     },

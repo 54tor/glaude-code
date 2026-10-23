@@ -495,11 +495,11 @@ function TerminalPanel({ id, onAsk, onSent }: { id: string; onAsk?: (asking: boo
   return (
     <div className="space-y-2">
       {prompt && (
-        <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm">
+        <div className="rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-sm">
           {prompt.tabs && prompt.tabs.length > 1 && (
             <p className="mb-1.5 flex flex-wrap gap-1 text-xs" aria-label={t("conversation.composer.tabsAria")}>
               {prompt.tabs.map((tab) => (
-                <span key={tab.label} className={tab.done ? "rounded border border-emerald-600/40 px-1.5 text-emerald-700 dark:text-emerald-400" : "rounded border px-1.5 font-medium"}>
+                <span key={tab.label} className={tab.done ? "rounded border border-success/40 px-1.5 text-success" : "rounded border px-1.5 font-medium"}>
                   {tab.done ? "✔" : "•"} {tab.label}
                 </span>
               ))}
@@ -511,7 +511,7 @@ function TerminalPanel({ id, onAsk, onSent }: { id: string; onAsk?: (asking: boo
             {prompt.options.map((o) => (
               <div key={o.label} className="contents">
                 <Button size="sm" disabled={pressing} variant={typing === o.label ? "secondary" : "outline"} className="h-auto min-h-8 justify-start gap-2 py-1.5 text-left whitespace-normal" onClick={() => choose(o)} title={t("conversation.composer.keys", { keys: o.keys.join(", ") })}>
-                  {o.checked !== undefined && (o.checked ? <SquareCheck className="text-emerald-600" /> : <Square />)}
+                  {o.checked !== undefined && (o.checked ? <SquareCheck className="text-success" /> : <Square />)}
                   <span className="min-w-0">
                     {o.label}
                     {o.detail && <span className="block text-xs font-normal text-muted-foreground">{o.detail}</span>}

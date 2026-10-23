@@ -24,7 +24,7 @@ export function KeepWarmButton({ s }: { s: Session }) {
   if (!a.caps(s).keepWarm) return null // fonction propre à certains fournisseurs
   if (warm?.on)
     return (
-      <Button variant="outline" size="sm" className="border-amber-500/60 text-amber-600 dark:text-amber-400" onClick={() => set(s, false)} title={t("conversation.keepWarm.stopTitle")}>
+      <Button variant="outline" size="sm" className="border-warning/60 text-warning" onClick={() => set(s, false)} title={t("conversation.keepWarm.stopTitle")}>
         <Coins /> <span className="max-md:sr-only">{t("conversation.keepWarm.active")}</span>
       </Button>
     )
@@ -61,7 +61,7 @@ export function KeepWarmBanner({ s }: { s: Session }) {
   const warm = useKeepWarm()[s.id]
   if (!a.caps(s).keepWarm || (!warm?.on && !warm?.note)) return null
   return (
-    <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-1.5 text-xs md:px-6", warm.on ? "border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300" : "bg-muted/40 text-muted-foreground")}>
+    <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-1.5 text-xs md:px-6", warm.on ? "border-warning/40 bg-warning/10 text-warning" : "bg-muted/40 text-muted-foreground")}>
       <Coins className="size-4 shrink-0" />
       {warm.on ? (
         <>
@@ -91,10 +91,10 @@ export function SessionStat({ s, live }: { s: Session; live: Live }) {
   return (
     <div className="flex shrink-0 flex-col items-end gap-0.5 text-xs text-muted-foreground tabular-nums" aria-label={t("conversation.keepWarm.statsAria")}>
       {a.caps(s).hotCache && (
-        <span className={cn("flex items-center gap-1 font-medium", left === null ? "" : left <= 5 ? "text-amber-600 dark:text-amber-400" : "text-orange-500")} title={t("conversation.keepWarm.hotTitle")}>
+        <span className={cn("flex items-center gap-1 font-medium", left === null ? "" : left <= 5 ? "text-warning" : "text-warning")} title={t("conversation.keepWarm.hotTitle")}>
           {left === null ? <Snowflake className="size-3.5" /> : <Flame className="size-3.5" />}
           {left === null ? t("conversation.keepWarm.cold") : t("conversation.keepWarm.left", { min: left })}
-          {warm?.on && <Coins className="size-3.5 text-amber-500" aria-label={t("conversation.keepWarm.warmAria")} />}
+          {warm?.on && <Coins className="size-3.5 text-warning" aria-label={t("conversation.keepWarm.warmAria")} />}
         </span>
       )}
       <span className="max-md:hidden" title={t("conversation.live.tokensTitle")}>

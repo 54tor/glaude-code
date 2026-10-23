@@ -29,9 +29,9 @@ export function CleanupWarning() {
   const first = w.sessions[0]
   const n = w.sessions.length
   return (
-    <div role="alert" className="mx-3 mb-2 rounded-lg border border-amber-500/50 bg-amber-500/10 p-2.5 text-xs">
+    <div role="alert" className="mx-3 mb-2 rounded-lg border border-warning/50 bg-warning/10 p-2.5 text-xs">
       <p className="flex items-start gap-2 font-medium">
-        <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" aria-hidden />
+        <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
         <span>
           {t("shell.cleanup.warn", { count: n, left: left(first.expires) })} {t("shell.cleanup.keeps", { count: w.days })} (<code>cleanupPeriodDays</code>).
         </span>

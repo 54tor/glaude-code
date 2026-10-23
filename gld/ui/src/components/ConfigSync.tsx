@@ -14,7 +14,7 @@ type Item = { id: string; kind: string; label: string; status: "new" | "diff" | 
 type Mode = "merge" | "replace"
 
 const KINDS = ["setting", "perm", "file", "skill"]
-const STATUS = { new: "text-emerald-600 dark:text-emerald-400", diff: "text-amber-600 dark:text-amber-400", same: "text-muted-foreground" } as const
+const STATUS = { new: "text-success", diff: "text-warning", same: "text-muted-foreground" } as const
 
 const post = (url: string, body: unknown) =>
   fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json() as Promise<{ ok: boolean; out: string; items?: Item[] }>)
@@ -135,7 +135,7 @@ export function SyncTab() {
                             <code className="truncate text-xs">{i.label}</code>
                           </button>
                           {i.risk === "exec" && (
-                            <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400" title={t("config.sync.riskTitle")}>
+                            <span className="flex items-center gap-1 text-xs text-warning" title={t("config.sync.riskTitle")}>
                               <TriangleAlert className="size-3.5" /> {t("config.sync.risk")}
                             </span>
                           )}

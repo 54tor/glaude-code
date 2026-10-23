@@ -68,7 +68,7 @@ export function AccountButton() {
       <Button variant="ghost" size="sm" onClick={() => setOpen(true)} title={t("config.account.buttonTitle")} aria-label={t("config.account.title")}>
         <CircleUser />
         {top && (
-          <span className={cn("text-xs tabular-nums", top.percent >= 90 ? "text-destructive" : top.percent >= 70 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>
+          <span className={cn("text-xs tabular-nums", top.percent >= 90 ? "text-destructive" : top.percent >= 70 ? "text-warning" : "text-muted-foreground")}>
             {Math.round(top.percent)} %
           </span>
         )}
@@ -124,7 +124,7 @@ function Body({ a, updating, onRefresh }: { a: Account; updating: boolean; onRef
                   {l.resetsAt && !isNaN(Date.parse(l.resetsAt)) && <span className="ml-auto text-xs text-muted-foreground">{t("config.account.resets", { delay: delay(Date.parse(l.resetsAt) / 1000 - now) })}</span>}
                 </div>
                 <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={Math.round(l.percent)} aria-valuemin={0} aria-valuemax={100} aria-label={l.label}>
-                  <div className={cn("h-full rounded-full", l.percent >= 90 ? "bg-destructive" : l.percent >= 70 ? "bg-amber-500" : "bg-emerald-500")} style={{ width: `${Math.min(100, l.percent)}%` }} />
+                  <div className={cn("h-full rounded-full", l.percent >= 90 ? "bg-destructive" : l.percent >= 70 ? "bg-warning" : "bg-success")} style={{ width: `${Math.min(100, l.percent)}%` }} />
                 </div>
                 {l.lockedWhy && <p className="text-xs text-muted-foreground">{t("config.account.locked", { why: l.lockedWhy })}</p>}
               </li>
