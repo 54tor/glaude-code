@@ -48,8 +48,8 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "web" { // « gld web » : le serveur, nommé explicitement (sans argument, c'est déjà lui)
 		os.Args = append(os.Args[:1], os.Args[2:]...)
 	}
-	listen := flag.String("listen", env("GLD_WEB_LISTEN", "127.0.0.1"), "adresse d'écoute (défaut 127.0.0.1 ; 0.0.0.0 pour tout le réseau, avec un jeton)")
-	showVersion := flag.Bool("version", false, "affiche la version et quitte")
+	listen := flag.String("listen", env("GLD_WEB_LISTEN", "127.0.0.1"), tr(cliLang(), "cli.main.flagListen", nil))
+	showVersion := flag.Bool("version", false, tr(cliLang(), "cli.main.flagVersion", nil))
 	flag.Parse()
 	if *showVersion {
 		fmt.Println("gld", version)
@@ -77,7 +77,7 @@ func main() {
 	defer stopHomes()
 	go func() {
 		<-ctx.Done()
-		fmt.Fprintln(os.Stderr, "\narrêt.")
+		fmt.Fprintln(os.Stderr, "\n"+tr(cliLang(), "cli.main.stopped", nil))
 		c, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		srv.Shutdown(c)
@@ -92,8 +92,8 @@ func main() {
 	} else if local {
 		fmt.Fprintln(os.Stderr, "http://"+net.JoinHostPort(*listen, port)+"/?token="+token)
 	} else {
-		fmt.Fprintln(os.Stderr, "⚠ gld écoute sur "+net.JoinHostPort(*listen, port)+" : accès protégé par un jeton, mais en HTTP clair.")
-		fmt.Fprintln(os.Stderr, "  Préférez un tunnel (SSH, Tailscale) ou un proxy TLS ; ne l'exposez pas sur Internet.")
+		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.plainHTTP", map[string]any{"A1": net.JoinHostPort(*listen, port)}))
+		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.preferTunnel", nil))
 		for _, u := range urlsFor(*listen, port, token) {
 			fmt.Fprintln(os.Stderr, "  "+u)
 		}

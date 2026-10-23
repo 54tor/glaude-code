@@ -278,6 +278,31 @@ func TestConfigMessagesLang(t *testing.T) {
 	}
 }
 
+func TestMatinOutputLang(t *testing.T) {
+	use(t.TempDir())
+	setLangT(t, "en")
+	out, err := run(t, cliMatin, "-h")
+	if err != nil && !errors.Is(err, errHelp) {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "reopens each Claude topic") || strings.Contains(out, "rouvre chaque sujet") {
+		t.Fatalf("aide en anglais : %q", out[:80])
+	}
+	if _, err := run(t, cliMatin, "--nimporte"); err == nil || err.Error() != "unknown option: --nimporte" {
+		t.Fatalf("option inconnue en anglais : %v", err)
+	}
+	if out, _ := run(t, cliMatin, "--term", "list"); !strings.Contains(out, "launchers available here:") {
+		t.Fatalf("lanceurs : %q", out)
+	}
+	setLangT(t, "fr")
+	if out, _ := run(t, cliMatin, "-h"); !strings.Contains(out, "rouvre chaque sujet") {
+		t.Fatalf("aide en français : %q", out[:80])
+	}
+	if _, err := run(t, cliMatin, "--nimporte"); err == nil || err.Error() != "option inconnue : --nimporte" {
+		t.Fatalf("option inconnue en français : %v", err)
+	}
+}
+
 func TestInvalidRequestLang(t *testing.T) {
 	h, _, _ := web(t)
 	for lang, want := range map[string]string{"fr": "requête invalide", "en": "invalid request"} {

@@ -98,10 +98,16 @@ func resolveLang(norm, empty string) string {
 	return empty
 }
 
+// cliMode : le processus est une commande en ligne, pas le serveur ; uiLang suit alors cliLang.
+var cliMode bool
+
 // uiLang : la langue des textes que le serveur renvoie à l'interface.
 func uiLang() string {
 	if langOverride != "" {
 		return langOverride
+	}
+	if cliMode {
+		return cliLang()
 	}
 	return resolveLang(normalizeLang(userLanguageRaw()), "fr")
 }

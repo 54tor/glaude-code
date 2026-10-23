@@ -33,9 +33,11 @@ func dispatchCLI(argv []string) (code int, ok bool) {
 		}
 		name, args = args[0], args[1:]
 		if name == "_run" && len(args) == 1 {
+			cliMode = true
 			return runTab(args[0]), true
 		}
 		if name == "_loaded" { // hook InstructionsLoaded de Claude Code (loaded.go)
+			cliMode = true
 			return runLoaded(os.Stdin), true
 		}
 		if strings.HasPrefix(name, "_") && cliCommands[name] == nil { // sous-commande interne inconnue : jamais de serveur lancé par un hook
@@ -46,6 +48,7 @@ func dispatchCLI(argv []string) (code int, ok bool) {
 	if fn == nil {
 		return 0, false
 	}
+	cliMode = true
 	err := fn(context.Background(), args, os.Stdout)
 	switch {
 	case err == nil, errors.Is(err, errHelp):
@@ -56,7 +59,7 @@ func dispatchCLI(argv []string) (code int, ok bool) {
 }
 
 var (
-	errHelp = errors.New("aide")
+	errHelp = terr("srv.cli.aide")
 )
 
 // flags : analyse minimale à la façon des scripts : options booléennes, options à valeur, le reste en positionnels.
@@ -95,7 +98,7 @@ func parseFlags(args []string, bool_, val []string, alias map[string]string) (*f
 		case a == "-h" || a == "--help":
 			return nil, errHelp
 		case strings.HasPrefix(a, "-") && a != "-":
-			return nil, fmt.Errorf("option inconnue : %s", args[i])
+			return nil, terr("srv.cli.optionInconnue", "A1", args[i])
 		default:
 			f.pos = append(f.pos, a)
 		}
@@ -145,7 +148,7 @@ func resolveProject(target string) (project, error) {
 		return project{}, err
 	}
 	if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
-		return project{}, fmt.Errorf("projet introuvable : %s", target)
+		return project{}, terr("srv.cli.projetIntrouvable", "A1", target)
 	}
 	p := project{Path: abs, Transcripts: filepath.Join(root, nonAlnum.ReplaceAllString(abs, "-"))}
 	if ls, _ := filepath.Glob(filepath.Join(p.Transcripts, "*.jsonl")); len(ls) == 0 {
@@ -157,7 +160,7 @@ func resolveProject(target string) (project, error) {
 		}
 	}
 	if fi, err := os.Stat(p.Transcripts); err != nil || !fi.IsDir() {
-		return p, fmt.Errorf("aucune session Claude pour %s\n          (cherché dans %s)", abs, p.Transcripts)
+		return p, terr("srv.cli.aucuneSessionClaudePour", "A1", abs, "A2", p.Transcripts)
 	}
 	return p, nil
 }
