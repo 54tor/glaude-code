@@ -18,6 +18,10 @@ import { LiveBar, LiveStats, useLive } from "./LiveStatus"
 import { LoadedDialog } from "./LoadedDialog"
 import { KeepWarmBanner, KeepWarmButton, SessionStat } from "./KeepWarm"
 import { useLocal } from "@/hooks/useLocal"
+import { useGit } from "@/hooks/useGit"
+import { GitBadge } from "./GitBadge"
+import { GitChanges } from "./GitChanges"
+import { GitPush } from "./GitPush"
 
 const FullTerminal = lazy(() => import("./FullTerminal")) // xterm n'est chargé qu'à l'ouverture du terminal
 
@@ -56,6 +60,9 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
   const dir = session?.dir ?? ""
   const id = session?.id ?? ""
   const live = useLive(dir, id, a.live.has(id))
+  // État git du dossier de la session et de ses dépôts, si ce sont des dépôts : on peut voir les changements et pousser d'ici.
+  const git = useGit()
+  const gitDirs = row ? [row.g.project, ...(git.repos[row.g.project] ?? [])].filter((d) => git.status[d]) : []
   const lastId = useRef("") // à la fermeture, session vaut déjà null : le focus revient à la ligne de cette session
   useEffect(() => {
     if (id) lastId.current = id
@@ -259,6 +266,14 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
           {session && <KeepWarmButton s={session} />}
           {session && <LiveStats live={live} tok={session.tok} />}
           <div className="flex flex-wrap items-center gap-1">
+            {gitDirs.map((d) => (
+              <span key={d} className="flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs" title={d}>
+                <span className="max-w-32 truncate text-muted-foreground">{d.split("/").filter(Boolean).pop()}</span>
+                <GitBadge st={git.status[d]} />
+                <GitPush dir={d} st={git.status[d]} />
+                <GitChanges dir={d} count={git.status[d] ? git.status[d].changed + git.status[d].untracked : 0} />
+              </span>
+            ))}
             {row && !row.g.missing && (
               <Button variant="outline" size="sm" onClick={() => a.newSession(row.g.project)} title="Nouvelle session Claude dans le même dossier">
                 <MessageSquarePlus /> Nouvelle session
