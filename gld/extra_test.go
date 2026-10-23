@@ -525,3 +525,16 @@ func TestHelperOutputStderr(t *testing.T) {
 		t.Fatalf("sans stderr : %v", err)
 	}
 }
+
+func TestTextCacheBornee(t *testing.T) {
+	textCache.Clear()
+	textBytes.Store(textCacheMax)
+	p := filepath.Join(t.TempDir(), "t.jsonl")
+	os.WriteFile(p, []byte("{\"type\":\"user\",\"message\":{\"content\":\"bonjour\"}}\n"), 0o600)
+	if got := messageTexts(p); len(got) != 1 {
+		t.Fatalf("textes : %v", got)
+	}
+	if n := textBytes.Load(); n > textCacheMax/2 {
+		t.Fatalf("le cache plein n'a pas été vidé : %d", n)
+	}
+}

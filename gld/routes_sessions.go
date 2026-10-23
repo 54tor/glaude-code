@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 )
@@ -67,14 +68,7 @@ func routesSessions(mux *http.ServeMux) {
 	// terminal fait remonter la session sans attendre le rafraîchissement périodique). ponytail: un stat par transcript à chaque appel,
 	// à remplacer par une surveillance de fichiers si les transcripts se comptent en dizaines de milliers.
 	mux.HandleFunc("GET /sessions-stamp", func(w http.ResponseWriter, r *http.Request) {
-		var newest int64
-		files, _ := filepath.Glob(filepath.Join(root, "*", "*.jsonl"))
-		for _, p := range files {
-			if st, err := os.Stat(p); err == nil && st.ModTime().UnixNano() > newest {
-				newest = st.ModTime().UnixNano()
-			}
-		}
-		writeJSON(w, 200, map[string]any{"stamp": newest})
+		writeJSON(w, 200, map[string]any{"stamp": newestTranscript()})
 	})
 	// Envoi d'un message à une session ouverte dans tmux (sendkeys.go) : lesquelles le permettent, puis l'envoi.
 	// État en direct d'une session (sessionlive.go) et informations du compte (account.go).
@@ -437,4 +431,31 @@ func rmSummary(n, spared int) string {
 		s += L("srv.rm.spared", "Count", spared)
 	}
 	return s
+}
+
+// newestTranscript : la date de modification la plus récente des transcripts, gardée stampTTL ; plusieurs onglets ouverts
+// interrogent la route toutes les 3 s, chacun parcourait les 316 transcripts (11 ms mesurés) à chaque fois.
+var (
+	stampMu   sync.Mutex
+	stampAt   time.Time
+	stampRoot string
+	stampVal  int64
+	stampTTL  = time.Second
+)
+
+func newestTranscript() int64 {
+	stampMu.Lock()
+	defer stampMu.Unlock()
+	if stampRoot == root && time.Since(stampAt) < stampTTL {
+		return stampVal
+	}
+	var newest int64
+	files, _ := filepath.Glob(filepath.Join(root, "*", "*.jsonl"))
+	for _, p := range files {
+		if st, err := os.Stat(p); err == nil && st.ModTime().UnixNano() > newest {
+			newest = st.ModTime().UnixNano()
+		}
+	}
+	stampAt, stampRoot, stampVal = time.Now(), root, newest
+	return newest
 }
