@@ -1,4 +1,5 @@
 import { useState } from "react"
+import QRCode from "react-qr-code"
 import { Bug, ChevronRight, Coffee, Copy, ExternalLink, GitFork, Heart, Star } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -59,11 +60,14 @@ function Addr({ label, name, value, scheme }: { label: string; name: string; val
           Ouvrir dans le portefeuille <ExternalLink className="size-3" />
         </a>
       </div>
-      <div className="flex items-start gap-2">
-        <code className="min-w-0 flex-1 font-mono text-xs leading-5 break-all select-all">{value}</code>
-        <Button variant="outline" size="xs" onClick={copy} aria-label={`Copier l'adresse ${name}`}>
-          <Copy /> Copier
-        </Button>
+      <div className="flex items-start gap-3">
+        <QRCode value={`${scheme}:${value}`} size={96} level="M" className="shrink-0 rounded bg-white p-1" aria-label={`QR code de l'adresse ${name}`} />
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <code className="font-mono text-xs leading-5 break-all select-all">{value}</code>
+          <Button variant="outline" size="xs" className="self-start" onClick={copy} aria-label={`Copier l'adresse ${name}`}>
+            <Copy /> Copier
+          </Button>
+        </div>
       </div>
     </div>
   )
