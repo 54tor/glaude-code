@@ -27,6 +27,7 @@ import { Prompt, type Ask as PromptAsk } from "@/components/Prompt"
 import { SessionSelectionBar } from "@/components/SessionSelectionBar"
 import { SessionsPane } from "@/components/SessionsPane"
 import { Sidebar } from "@/components/Sidebar"
+import { Settings } from "@/components/SettingsDialog"
 import { Compose, type ComposeAsk } from "@/components/Compose"
 
 // Les grandes vues se chargent à la demande : le premier chargement ne porte que la liste des sessions.
@@ -307,13 +308,7 @@ export default function App() {
           snippets={snips ? snips.files.length : null}
           auto={{ n: view.autoItems.length, kb: view.akb, purge: purgeAuto }}
           args={args}
-          setArgs={setArgs}
-          choice={choice}
-          setChoice={setChoice}
-          font={font}
-          setFont={setFont}
-          fontSize={fontSize}
-          setFontSize={setFontSize}
+          settings={<Settings args={args} setArgs={setArgs} choice={choice} setChoice={setChoice} font={font} setFont={setFont} fontSize={fontSize} setFontSize={setFontSize} />}
         />
 
         <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
