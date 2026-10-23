@@ -41,7 +41,8 @@ const Memory = lazy(() => import("@/components/Memory").then((m) => ({ default: 
 const Tabs = lazy(() => import("@/components/Tabs").then((m) => ({ default: m.Tabs })))
 
 // Mode multi-utilisateur : l'application ne se monte qu'une session ouverte. Une session perdue en cours d'usage la laisse
-// montée sous l'écran de connexion, pour retrouver vues et brouillons après reconnexion.
+// montée sous l'écran de connexion, pour retrouver vues et brouillons après reconnexion du même compte ; la clé owner la
+// remonte à neuf si un autre compte se connecte.
 export default function App() {
   const a = useAuth()
   useEffect(() => void boot(), [])
@@ -49,7 +50,7 @@ export default function App() {
   const open = a.state === "open" || a.state === "ok"
   return (
     <>
-      {(open || a.expired) && <Shell />}
+      {(open || a.expired) && <Shell key={a.owner ?? ""} />}
       {!open && <AuthScreen />}
     </>
   )

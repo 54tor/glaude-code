@@ -31,6 +31,13 @@ const save = () => {
   }
 }
 
+// Changement de compte dans l'onglet : la copie en mémoire part avec le stockage.
+export function clearDrafts() {
+  entries.clear()
+  save()
+  subs.forEach((f) => f())
+}
+
 export const draftOf = (id: string): Entry => entries.get(id) ?? empty
 
 export function setDraft(id: string, patch: Partial<Entry>) {

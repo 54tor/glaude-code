@@ -10,6 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import type { Actions, GroupActions } from "./actions"
 import { AccountButton } from "./AccountDialog"
 import { UserMenu } from "./auth/Profile"
+import { useCan } from "@/lib/auth"
 import { CreditsButton } from "./Credits"
 import { DD, GroupItems } from "./SessionMenu"
 import { SessionTrash } from "./SessionTrash"
@@ -55,6 +56,7 @@ export function PageHeader({
 }) {
   const { t } = useTranslation()
   const [trashOpen, setTrashOpen] = useState(false)
+  const exec = useCan()("exec") // sans ce droit sur le home, sessions et terminal sont refusés : on ne les propose pas
   const ownSessions = t("shell.count.sessions", { count: own.length })
   // Même axe que le contenu de la vue : le titre ne reste pas collé à gauche quand la liste est centrée sur grand écran.
   const box = cn("flex flex-wrap items-center gap-x-3 px-3 md:px-6", !split && "mx-auto w-full max-w-7xl")
@@ -85,17 +87,17 @@ export function PageHeader({
               </Link>
             </Button>
           )}
-          {g && !g.missing && (
+          {g && !g.missing && exec && (
             <Button size="sm" onClick={() => actions.newSession(g.project)} title={t("shell.header.newInDirHint")}>
               <MessageSquarePlus /> {t("shell.header.newSession")}
             </Button>
           )}
-          {g && !g.missing && (
+          {g && !g.missing && exec && (
             <Button variant="outline" size="sm" onClick={() => actions.open({ dir: firstDir! })} title={t("shell.header.resumeRecentHint")}>
               <SquareTerminal /> {t("shell.tree.resumeRecent")}
             </Button>
           )}
-          {vg && rowCount > 0 && (
+          {vg && rowCount > 0 && exec && (
             <>
               <Button size="sm" onClick={() => groupActs.prompt(vg)} title={t("shell.header.newWithRefsHint")}>
                 <MessageSquarePlus /> {t("shell.header.newSession")}
@@ -105,7 +107,7 @@ export function PageHeader({
               </Button>
             </>
           )}
-          {(g || vg) && (
+          {(g || vg) && exec && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon-sm" aria-label={g ? t("shell.header.projectActions") : t("shell.header.groupActions")}>
