@@ -9,6 +9,7 @@ import { tilde } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Choose } from "./Choose"
 
 const LV: Record<string, string> = { u: "user", p: "project", l: "local" }
@@ -70,6 +71,8 @@ export function HooksTab({ hooks }: { hooks: HookInfo[] }) {
 
 // --- précédence ----------------------------------------------------------------------------------------------
 
+const LEVEL = { u: "config.precedence.colUser", p: "config.precedence.colProject", l: "config.precedence.colLocal" } as const
+
 export function PrecedenceTab({ projects, home }: { projects: { dir: string; project: string }[]; home: string }) {
   const { t } = useTranslation()
   const [dir, setDir] = useState("")
@@ -92,46 +95,60 @@ export function PrecedenceTab({ projects, home }: { projects: { dir: string; pro
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("config.precedence.filterPlaceholder")} className="h-8 w-48" aria-label={t("config.precedence.filterAria")} />
         <span className="text-xs text-muted-foreground">{t("config.precedence.hint")}</span>
       </div>
-      <div className="overflow-x-auto rounded-md border">
-        <table className="w-full table-fixed text-sm">
-          <colgroup>
-            <col className="w-[28%]" />
-            <col className="w-[24%]" />
-            <col className="w-[24%]" />
-            <col className="w-[24%]" />
-          </colgroup>
-          <thead className="bg-muted/50 text-left text-xs font-semibold text-muted-foreground">
-            <tr>
-              <th className="px-3 py-1.5">{t("config.precedence.colSetting")}</th>
-              <th className="px-3 py-1.5">{t("config.precedence.colUser")}</th>
-              <th className="px-3 py-1.5">{t("config.precedence.colProject")}</th>
-              <th className="px-3 py-1.5">{t("config.precedence.colLocal")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map((r) => (
-              <tr key={r.path} className="border-t align-top">
-                <td className="px-3 py-1.5">
-                  <span className="font-mono text-xs break-all">{r.path}</span>
-                  {describeKey(r.path) && <span className="mt-0.5 block text-2xs leading-snug text-muted-foreground">{describeKey(r.path)}</span>}
-                </td>
-                {(["u", "p", "l"] as const).map((lv) => (
-                  <td key={lv} title={r.values[lv]} className={cn("px-3 py-1.5 text-xs break-words", r.values[lv] !== undefined && (r.merged || r.winner === lv) ? "font-medium" : "text-muted-foreground line-through decoration-muted-foreground/40")}>
-                    <span className="line-clamp-3">{r.values[lv] ?? ""}</span>
-                  </td>
-                ))}
-              </tr>
-            ))}
-            {rows && shown.length === 0 && (
+      {/* Sous sm, chaque réglage devient une carte : les trois niveaux s'empilent sous son nom, chacun avec son libellé. */}
+      {rows === null ? (
+        <Skeleton className="h-40 w-full" />
+      ) : (
+        <div className="overflow-x-auto rounded-md border">
+          <table className="w-full table-fixed text-sm max-sm:block">
+            <colgroup className="max-sm:hidden">
+              <col className="w-[28%]" />
+              <col className="w-[24%]" />
+              <col className="w-[24%]" />
+              <col className="w-[24%]" />
+            </colgroup>
+            <thead className="bg-muted/50 text-left text-xs font-semibold text-muted-foreground max-sm:hidden">
               <tr>
-                <td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">
-                  {t("config.precedence.none")}
-                </td>
+                <th className="px-3 py-1.5">{t("config.precedence.colSetting")}</th>
+                <th className="px-3 py-1.5">{t("config.precedence.colUser")}</th>
+                <th className="px-3 py-1.5">{t("config.precedence.colProject")}</th>
+                <th className="px-3 py-1.5">{t("config.precedence.colLocal")}</th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="max-sm:block">
+              {shown.map((r) => (
+                <tr key={r.path} className="border-t align-top max-sm:block max-sm:py-1.5 max-sm:first:border-t-0">
+                  <td className="px-3 py-1.5 max-sm:block">
+                    <span className="font-mono text-xs break-all">{r.path}</span>
+                    {describeKey(r.path) && <span className="mt-0.5 block text-2xs leading-snug text-muted-foreground">{describeKey(r.path)}</span>}
+                  </td>
+                  {(["u", "p", "l"] as const).map((lv) => (
+                    <td
+                      key={lv}
+                      title={r.values[lv]}
+                      data-label={t(LEVEL[lv])}
+                      className={cn(
+                        "px-3 py-1.5 text-xs break-words max-sm:block max-sm:py-0.5 max-sm:before:text-2xs max-sm:before:text-muted-foreground max-sm:before:content-[attr(data-label)]",
+                        r.values[lv] === undefined && "max-sm:hidden",
+                        r.values[lv] !== undefined && (r.merged || r.winner === lv) ? "font-medium" : "text-muted-foreground"
+                      )}
+                    >
+                      <span className={cn("line-clamp-3", !(r.values[lv] !== undefined && (r.merged || r.winner === lv)) && "line-through decoration-muted-foreground/40")}>{r.values[lv] ?? ""}</span>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+              {shown.length === 0 && (
+                <tr className="max-sm:block">
+                  <td colSpan={4} className="px-3 py-6 text-center text-muted-foreground max-sm:block">
+                    {t("config.precedence.none")}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
       <p className="text-xs text-muted-foreground">{t("config.precedence.note")}</p>
     </div>
   )

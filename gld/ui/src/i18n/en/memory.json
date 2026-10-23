@@ -50,7 +50,9 @@
       "pickFile": "Pick a memory file to display. Right-click for its actions.",
       "ruleOff": "Rule disabled: Claude no longer loads it.",
       "reactivate": "Enable",
-      "fileContent": "File content"
+      "fileContent": "File content",
+      "empty": "No memory",
+      "noMatch": "Nothing matches"
     },
     "lib": {
       "blankRule": "# New rule",
@@ -138,7 +140,7 @@
         "lintDuplicate": "duplicate",
         "lintContradiction": "contradiction",
         "lintStale": "outdated",
-        "stale":"Old entry"
+        "stale": "Old entry"
       },
       "title": "Memory health",
       "toCheck_one": "{{count}} item to check. Nothing is changed without your click.",

@@ -46,7 +46,7 @@ export function Snippets({
   const { t } = useTranslation()
   const f = q.toLowerCase()
   const shown = files.filter((s) => !f || (s.path + " " + s.command + " " + s.description + " " + s.project).toLowerCase().includes(f))
-  const [loaded, setLoaded] = useState<{ key: string; text: string } | null>(null)
+  const [loaded, setLoaded] = useState<{ key: string; text: string; error?: string } | null>(null)
   const [draft, setDraft] = useEditorDraft("snippet")
   const [creating, setCreating] = useState("") // nouveau snippet pas encore enregistré
   const [scope, setScope] = useState("") // emplacement de Nouveau / Importer / Exporter ("" : personnelles)
@@ -54,7 +54,9 @@ export function Snippets({
   const [haiku, setHaiku] = useState(false) // fenêtre de mise en forme ouverte
   const [before, setBefore] = useState<{ key: string; text: string } | null>(null) // texte d'avant la mise en forme
   const upload = useRef<HTMLInputElement>(null)
-  const text = loaded?.key === sel ? loaded.text : null
+  // Erreur de lecture gardée à part : affichée, jamais éditée ni lancée comme une commande.
+  const failed = loaded?.key === sel ? loaded.error : undefined
+  const text = loaded?.key === sel && failed === undefined ? loaded.text : null
   const editing = draft?.key === sel ? draft : null
   useLeaveGuard(!!draft && !(draft.key === sel && draft.text === text))
   const snip = files.find((s) => s.key === sel)
@@ -62,7 +64,7 @@ export function Snippets({
   useEffect(() => {
     if (!sel || sel === creating) return
     let live = true
-    api.snippet(sel).then((r) => live && setLoaded({ key: sel, text: r.text ?? r.error ?? "" }))
+    api.snippet(sel).then((r) => live && setLoaded(r.text === undefined ? { key: sel, text: "", error: r.error ?? "" } : { key: sel, text: r.text }))
     return () => {
       live = false
     }
@@ -321,7 +323,7 @@ export function Snippets({
             ) : (
               <ScrollArea className="min-h-0 flex-1">
                 <div className="mx-auto max-w-5xl px-6 py-6 text-sm leading-relaxed">
-                  {text === null ? <Skeleton className="h-32 w-full" /> : <CommandView text={text} />}
+                  {failed !== undefined ? <p className="text-destructive">{failed || t("skills.snippets.unreadable")}</p> : text === null ? <Skeleton className="h-32 w-full" /> : <CommandView text={text} />}
                 </div>
               </ScrollArea>
             )}

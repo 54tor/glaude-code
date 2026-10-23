@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { ChevronRight, Search, SquareTerminal } from "lucide-react"
+import { ChevronRight, Search, SquareTerminal, WifiOff } from "lucide-react"
 import type { VGroup } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { segs } from "@/lib/paths"
@@ -13,10 +13,10 @@ import { Notes } from "./Notes"
 import { ProjectMemory } from "./ProjectMemory"
 import { Live, SessionList } from "./SessionList"
 
-function Empty({ title, text, children }: { title: string; text: string; children?: React.ReactNode }) {
+function Empty({ title, text, icon: Icon = Search, children }: { title: string; text: string; icon?: typeof Search; children?: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center gap-2 py-20 text-center">
-      <Search className="size-7 text-muted-foreground/40" />
+      <Icon className="size-7 text-muted-foreground/40" />
       <p className="font-medium">{title}</p>
       <p className="max-w-sm text-sm text-muted-foreground">{text}</p>
       {children}
@@ -42,8 +42,12 @@ export function SessionsPane({
   actions,
   go,
   clearSearch,
+  error,
+  retry,
 }: {
   loading: boolean
+  error: string | null // dernier chargement en échec (serveur arrêté, HTTP 5xx)
+  retry: () => void
   route: Route
   rows: Row[]
   subs: Row[] // sessions des sous-dossiers
@@ -64,7 +68,14 @@ export function SessionsPane({
   return (
     <ScrollArea className="min-h-0 flex-1">
       <div className="mx-auto max-w-7xl px-3 py-4 pb-24 md:px-6">
-        {loading && (
+        {loading && error && (
+          <Empty icon={WifiOff} title={t("shell.pane.unreachable")} text={error}>
+            <Button variant="outline" size="sm" className="mt-2" onClick={retry}>
+              {t("common.retry")}
+            </Button>
+          </Empty>
+        )}
+        {loading && !error && (
           <div className="space-y-3 px-3">
             {[0, 1, 2, 3, 4].map((i) => (
               <Skeleton key={i} className="h-12 w-full" />

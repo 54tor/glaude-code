@@ -104,7 +104,8 @@
       "emptyGroup": "Add sessions to this group: right-click a session › Group.",
       "noneActive": "No session open or active within the last hour.",
       "noneRecent": "No sessions in the last 7 days.",
-      "nothing": "Nothing to show here."
+      "nothing": "Nothing to show here.",
+      "unreachable": "Server unreachable"
     },
     "selection": {
       "count_one": "{{count}} session selected",

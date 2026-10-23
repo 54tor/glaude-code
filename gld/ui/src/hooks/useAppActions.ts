@@ -3,7 +3,7 @@ import { toast } from "sonner"
 import { i18n } from "@/i18n"
 import { watchTrust } from "@/lib/trust"
 import { wantConfigFile } from "@/lib/wantConfigFile"
-import { api, type Caps, type Data, type Group, type Hit, type Item, type Project, type Session, type Snippet, type VGroup } from "@/lib/api"
+import { api, type Caps, type Data, type Group, type Hit, type Item, type Project, type Snippet, type VGroup } from "@/lib/api"
 import { segs } from "@/lib/paths"
 import { exportMarkdown } from "@/lib/export"
 import { size, tilde } from "@/lib/format"
@@ -29,7 +29,7 @@ export function useAppActions(c: {
   q: string
   setQ: (v: string) => void
   go: (r: Route) => void
-  read: (s: Session) => void
+  read: (s: { id: string }) => void
   now: number
   live: Set<string>
   waiting: Set<string>
