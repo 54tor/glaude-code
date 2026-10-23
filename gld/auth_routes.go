@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"mime"
@@ -37,12 +38,13 @@ type authAPI struct {
 	mu       sync.Mutex
 	reauthAt map[string]time.Time
 	busy     map[string]bool
-	rl       map[string]*rlSource
+	rl       rlWindow
 }
 
 const (
 	rlCap      = 1024
 	rateBudget = 5
+	rlGlobal   = 200
 )
 
 // oversizeName : clé commune des noms de plus de 64 caractères ; normName rogne les espaces, aucun nom tapé n'y aboutit.
@@ -95,7 +97,7 @@ func (t *throttle) mfaFails(user string) int64 {
 }
 
 func routesAuth(mux *http.ServeMux, s *authStore, th *throttle) *authAPI {
-	a := &authAPI{s: s, th: th, reauthAt: map[string]time.Time{}, busy: map[string]bool{}, rl: map[string]*rlSource{}}
+	a := &authAPI{s: s, th: th, reauthAt: map[string]time.Time{}, busy: map[string]bool{}}
 	mux.HandleFunc("POST /auth/login", a.login)
 	mux.HandleFunc("POST /auth/mfa/totp", a.mfaTOTP)
 	mux.HandleFunc("POST /auth/mfa/recovery", a.mfaRecovery)
@@ -277,6 +279,7 @@ func (a *authAPI) login(w http.ResponseWriter, r *http.Request) {
 
 // need exige une session valide et, hors GET, le jeton CSRF ; full exige en plus le second facteur.
 func (a *authAPI) need(w http.ResponseWriter, r *http.Request, full bool) *Principal {
+	a.rlFlush()
 	c, err := r.Cookie(sessCookie)
 	var p *Principal
 	if err == nil {
@@ -305,93 +308,78 @@ func (a *authAPI) need(w http.ResponseWriter, r *http.Request, full bool) *Princ
 // deniedLog journalise un refus ; anonyme, il passe par la limite de rateLog.
 func (a *authAPI) deniedLog(uid int64, ip, kind string) { a.rateLog(uid, "", ip, kind, "denied") }
 
-// rlSource : la minute en cours d'une adresse (déjà réduite à son /64 par clientIP).
-type rlSource struct {
-	start   time.Time
-	fresh   int
-	seen    map[string]bool
-	dropped int64
+// rlWindow : la minute en cours du limiteur d'événements, tenue sous a.mu ; rien n'y touche la base.
+type rlWindow struct {
+	start    time.Time
+	src      map[string]int  // événements anonymes écrits par adresse (déjà réduite à son /64 par clientIP)
+	anon     int             // événements anonymes écrits, toutes adresses
+	uids     map[string]bool // (compte, type|issue) déjà écrits
+	anonDrop int64
+	overflow int64
+	uidDrop  int64
 }
 
-type rlSummary struct {
-	ip      string
-	at      int64
-	dropped int64
-}
-
-// rateLog : un événement qui porte un compte est toujours écrit (borné par l'authentification). Un événement anonyme est
-// écrit au plus une fois par minute pour un même (type, issue) et au plus rateBudget fois par minute pour une même adresse ;
-// le nom tapé n'entre dans aucune clé. Le reste est compté en mémoire, et chaque minute close d'une adresse qui a perdu
-// des événements donne un seul événement « suppressed » (issue : le nombre perdu). Aucune écriture sous a.mu.
+// rateLog écrit un refus de connexion ou une contention. Anonyme : au plus rateBudget par adresse et rlGlobal en tout par
+// minute ; table d'adresses pleine, l'événement va au compte commun « overflow » (aucune adresse n'est évincée). Avec un
+// compte : une fois par minute par (compte, type|issue). Le nom tapé n'entre dans aucune clé. Les comptes perdus sont tenus
+// en mémoire et écrits en un seul résumé « suppressed » par minute, après la minute, hors du verrou. Les événements
+// critiques (altération, verrou, échecs et succès du second facteur, changements de droits ou de facteurs) ne passent pas ici.
 func (a *authAPI) rateLog(uid int64, name, ip, kind, outcome string) {
 	if r := []rune(name); len(r) > 64 {
 		name = string(r[:64])
 	}
 	now := authNow()
-	write := uid != 0
+	write := false
 	a.mu.Lock()
-	due := a.rlDue(now)
-	if !write {
-		src := a.rl[ip]
-		if src == nil || now.Sub(src.start) >= time.Minute {
-			if src != nil && src.dropped > 0 {
-				due = append(due, rlSummary{ip, src.start.Unix(), src.dropped})
-			}
-			if src == nil && len(a.rl) >= rlCap {
-				due = append(due, a.rlEvict()...)
-			}
-			src = &rlSource{start: now, seen: map[string]bool{}}
-			a.rl[ip] = src
-		}
-		k := kind + "|" + outcome
-		if !src.seen[k] && src.fresh < rateBudget {
-			src.seen[k], write = true, true
-			src.fresh++
+	sum := a.rlRoll(now)
+	w := &a.rl
+	if uid != 0 {
+		k := strconv.FormatInt(uid, 10) + "|" + kind + "|" + outcome
+		if !w.uids[k] {
+			w.uids[k], write = true, true
 		} else {
-			src.dropped++
+			w.uidDrop++
 		}
+	} else if n, ok := w.src[ip]; !ok && len(w.src) >= rlCap {
+		w.overflow++
+	} else if n < rateBudget && w.anon < rlGlobal {
+		w.src[ip], w.anon, write = n+1, w.anon+1, true
+	} else {
+		w.src[ip] = n
+		w.anonDrop++
 	}
 	a.mu.Unlock()
-	a.flushSuppressed(due)
+	a.writeSuppressed(sum)
 	if write {
 		a.log(uid, name, ip, kind, outcome)
 	}
 }
 
-// rlDue retire les minutes closes et renvoie leurs résumés ; appelée sous a.mu.
-func (a *authAPI) rlDue(now time.Time) []rlSummary {
-	var out []rlSummary
-	for ip, src := range a.rl {
-		if now.Sub(src.start) >= time.Minute {
-			if src.dropped > 0 {
-				out = append(out, rlSummary{ip, src.start.Unix(), src.dropped})
-			}
-			delete(a.rl, ip)
-		}
+// rlRoll ferme la minute écoulée et renvoie son résumé (vide s'il n'y a rien eu à taire) ; appelée sous a.mu.
+func (a *authAPI) rlRoll(now time.Time) string {
+	w := &a.rl
+	if w.src != nil && now.Sub(w.start) < time.Minute {
+		return ""
 	}
-	return out
+	sum := ""
+	if w.anonDrop+w.overflow+w.uidDrop > 0 {
+		sum = fmt.Sprintf("anon=%d overflow=%d uid=%d", w.anonDrop, w.overflow, w.uidDrop)
+	}
+	*w = rlWindow{start: now, src: map[string]int{}, uids: map[string]bool{}}
+	return sum
 }
 
-// rlEvict retire la source la plus ancienne (table pleine) ; son compte d'événements perdus n'est pas perdu. Sous a.mu.
-// ponytail: recherche linéaire, seulement quand rlCap sources sont actives dans la même minute.
-func (a *authAPI) rlEvict() []rlSummary {
-	old := ""
-	for ip, src := range a.rl {
-		if old == "" || src.start.Before(a.rl[old].start) {
-			old = ip
-		}
-	}
-	src := a.rl[old]
-	delete(a.rl, old)
-	if src.dropped > 0 {
-		return []rlSummary{{old, src.start.Unix(), src.dropped}}
-	}
-	return nil
+// rlFlush ferme la minute écoulée sans événement à écrire ; appelée par chaque requête qui vérifie une session.
+func (a *authAPI) rlFlush() {
+	a.mu.Lock()
+	sum := a.rlRoll(authNow())
+	a.mu.Unlock()
+	a.writeSuppressed(sum)
 }
 
-func (a *authAPI) flushSuppressed(due []rlSummary) {
-	for _, d := range due {
-		a.s.db.Exec(`INSERT INTO auth_events(at,ip,kind,outcome) VALUES(?,?,?,?)`, d.at, d.ip, "suppressed", strconv.FormatInt(d.dropped, 10))
+func (a *authAPI) writeSuppressed(sum string) {
+	if sum != "" {
+		a.s.db.Exec(`INSERT INTO auth_events(at,kind,outcome) VALUES(?,?,?)`, authNow().Unix(), "suppressed", sum)
 	}
 }
 
