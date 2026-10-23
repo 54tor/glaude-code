@@ -337,6 +337,20 @@ func TestACLChangeLogged(t *testing.T) {
 	}
 }
 
+func TestGrantSessionsReadNeedsReauth(t *testing.T) {
+	g := newAdminRig(t)
+	root := g.login("root", true)
+	bob := g.login("bob", false)
+	body := map[string]any{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"sessions_read"}}
+	if w := g.do("POST", "/admin/acl", &root, body); w.Code != 403 {
+		t.Fatalf("sessions_read sans réauth : %d", w.Code)
+	}
+	body["reauth"] = root.reauth()
+	g.ok(g.do("POST", "/admin/acl", &root, body))
+	// Retirer reste immédiat.
+	g.ok(g.do("POST", "/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "revoke": []string{"sessions_read"}}))
+}
+
 func TestAdminNoImplicitHomeAccess(t *testing.T) {
 	g := newAdminRig(t)
 	root := g.login("root", true)
@@ -346,7 +360,10 @@ func TestAdminNoImplicitHomeAccess(t *testing.T) {
 	if m := g.ok(g.do("GET", "/homes", &root, nil)); m["main"] != "" {
 		t.Fatalf("home principal visible sans droit : %v", m)
 	}
-	g.ok(g.do("POST", "/admin/acl", &root, map[string]any{"user_id": root.id, "home_id": mainHomeID, "grant": []string{"mem_read"}}))
+	if w := g.do("POST", "/admin/acl", &root, map[string]any{"user_id": root.id, "home_id": mainHomeID, "grant": []string{"mem_read"}}); w.Code != 403 {
+		t.Fatalf("octroi à soi-même sans réauth : %d", w.Code)
+	}
+	g.ok(g.do("POST", "/admin/acl", &root, map[string]any{"user_id": root.id, "home_id": mainHomeID, "grant": []string{"mem_read"}, "reauth": root.reauth()}))
 	if w := g.do("GET", "/memory-list", &root, nil); w.Code != 200 {
 		t.Fatalf("après /admin/acl : %d %s", w.Code, w.Body)
 	}

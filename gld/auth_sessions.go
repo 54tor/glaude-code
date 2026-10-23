@@ -316,3 +316,7 @@ func setSessionCookie(w http.ResponseWriter, r *http.Request, v string, exp time
 func clearSessionCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{Name: sessCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteStrictMode})
 }
+
+func clearHomeCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{Name: homeCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteStrictMode})
+}

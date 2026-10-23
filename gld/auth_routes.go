@@ -484,6 +484,8 @@ func (a *authAPI) promote(w http.ResponseWriter, r *http.Request, p *Principal, 
 		return "", false
 	}
 	setSessionCookie(w, r, c, exp)
+	// Le compte précédent du navigateur est inconnu (session échue) : le home choisi n'est jamais légué.
+	clearHomeCookie(w)
 	a.s.eventIP(p.User.ID, evLogin, evSuccess, ip)
 	return np.CSRF, true
 }
@@ -573,6 +575,7 @@ func (a *authAPI) logout(w http.ResponseWriter, r *http.Request) {
 	}
 	a.forgetReauth(p.SessionID)
 	clearSessionCookie(w)
+	clearHomeCookie(w)
 	a.log(p.User.ID, p.User.Name, clientIP(r), "logout", "ok")
 	writeJSON(w, 200, map[string]any{"ok": true})
 }

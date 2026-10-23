@@ -279,18 +279,24 @@ func TestManagedInstalledExact(t *testing.T) {
 		b, _ := json.Marshal(m)
 		os.WriteFile(managedPath, b, 0o600)
 	}
-	hook := func(matcher, cmd string, args []string) map[string]any {
+	hookOn := func(matcher, cmd string, args []string, onFailure string) map[string]any {
 		m := guardSettings(dir)
-		m["hooks"] = map[string]any{"PreToolUse": []any{map[string]any{"matcher": matcher,
-			"hooks": []any{map[string]any{"type": "command", "command": cmd, "args": args}}}}}
+		h := map[string]any{"type": "command", "command": cmd, "args": args}
+		if onFailure != "" {
+			h["onFailure"] = onFailure
+		}
+		m["hooks"] = map[string]any{"PreToolUse": []any{map[string]any{"matcher": matcher, "hooks": []any{h}}}}
 		return m
 	}
+	hook := func(matcher, cmd string, args []string) map[string]any { return hookOn(matcher, cmd, args, "block") }
 	self, args, line := guardSelf(), []string{"_guard", dir}, guardCommand(dir)
 	for _, c := range []struct {
 		m    map[string]any
 		want bool
 	}{
 		{hook("Bash|PowerShell|Monitor", line, nil), true},
+		{hookOn("Bash|PowerShell|Monitor", line, nil, ""), false}, // sans onFailure, un hook en échec laisse passer
+		{hookOn("Bash|PowerShell|Monitor", line, nil, "ignore"), false},
 		{hook("Bash", line+" ", nil), false},
 		{hook("Bash", hookCommandLine(self, "/autre/dossier", false), nil), false},
 		{hook("Bash|PowerShell", self, args), true}, // forme exec du commit précédent
