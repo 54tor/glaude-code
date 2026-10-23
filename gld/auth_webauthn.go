@@ -278,16 +278,20 @@ func (s *authStore) WebAuthnFinishRegister(userID int64, sessionID, label string
 	row := &credRow{uid: userID, credID: c.ID, pub: c.PublicKey, signCount: int64(c.Authenticator.SignCount),
 		transports: strings.Join(tr, ","), label: label, createdAt: authNow().Unix(), flags: int64(c.Flags.ProtocolValue())}
 	err = s.inTx(func(tx *sql.Tx) error {
-		if _, err := s.userByID(tx, userID); err != nil {
+		u, err := s.userByID(tx, userID)
+		if err != nil {
 			return err
 		}
-		_, err := tx.Exec(`INSERT INTO webauthn_creds(user_id,cred_id,public_key,sign_count,transports,label,created_at,flags,sig) VALUES(?,?,?,?,?,?,?,?,?)`,
+		_, err = tx.Exec(`INSERT INTO webauthn_creds(user_id,cred_id,public_key,sign_count,transports,label,created_at,flags,sig) VALUES(?,?,?,?,?,?,?,?,?)`,
 			userID, row.credID, row.pub, row.signCount, row.transports, row.label, row.createdAt, row.flags, s.credSig(row))
 		var se interface{ Code() int }
 		if errors.As(err, &se) && se.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE {
 			return errWebAuthnFailed
 		}
-		return err
+		if err != nil {
+			return err
+		}
+		return s.markEnrolled(tx, u)
 	})
 	if err != nil {
 		return err

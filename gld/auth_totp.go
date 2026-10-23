@@ -151,15 +151,25 @@ func (s *authStore) TOTPConfirm(userID int64, code string) error {
 	}
 	old := r.sig
 	r.confirmed, r.lastStep = sql.NullInt64{Int64: now.Unix(), Valid: true}, step
-	res, err := s.db.Exec(`UPDATE totp SET confirmed_at=?, last_step=?, sig=? WHERE user_id=? AND sig=? AND confirmed_at IS NULL`,
-		r.confirmed.Int64, step, s.totpSig(r), userID, old)
+	err = s.inTx(func(tx *sql.Tx) error {
+		u, err := s.userByID(tx, userID)
+		if err != nil {
+			return err
+		}
+		res, err := tx.Exec(`UPDATE totp SET confirmed_at=?, last_step=?, sig=? WHERE user_id=? AND sig=? AND confirmed_at IS NULL`,
+			r.confirmed.Int64, step, s.totpSig(r), userID, old)
+		if err != nil {
+			return err
+		}
+		if n, err := res.RowsAffected(); err != nil {
+			return err
+		} else if n == 0 {
+			return errBadCode
+		}
+		return s.markEnrolled(tx, u)
+	})
 	if err != nil {
 		return err
-	}
-	if n, err := res.RowsAffected(); err != nil {
-		return err
-	} else if n == 0 {
-		return errBadCode
 	}
 	s.event(userID, "totp", "enrolled")
 	return nil

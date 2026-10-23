@@ -107,17 +107,20 @@ func withTokenOpen(token string, next http.Handler) http.Handler {
 }
 
 // tokenForChildren : principal du jeton, en en-tête Authorization seulement ; sans jeton configuré, aucun Bearer n'est valable.
-func tokenForChildren(token string) func(*http.Request) *Principal {
+// Un jeton généré (écoute hors localhost sans GLD_WEB_TOKEN) ne vaut pas non plus : imprimé au démarrage, il donnerait
+// tous les droits sans mot de passe ni second facteur. Seul un jeton fixé par l'opérateur est accepté.
+func tokenForChildren(token string, generated bool) func(*http.Request) *Principal {
 	return func(r *http.Request) *Principal {
 		h, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if token == "" || !ok || !sameToken(h, token) {
+		if token == "" || generated || !ok || !sameToken(h, token) {
 			return nil
 		}
 		return &Principal{Token: true}
 	}
 }
 
-// urlsFor : les adresses à ouvrir pour une écoute sur host:port (toutes les interfaces si host est « 0.0.0.0 » ou « :: »).
+// urlsFor : les adresses à ouvrir pour une écoute sur host:port (toutes les interfaces si host est « 0.0.0.0 » ou « :: ») ;
+// sans jeton, l'adresse nue.
 func urlsFor(host, port, token string) []string {
 	hosts := []string{host}
 	if ip := net.ParseIP(host); ip != nil && ip.IsUnspecified() {
@@ -131,7 +134,11 @@ func urlsFor(host, port, token string) []string {
 	}
 	var out []string
 	for _, h := range hosts {
-		out = append(out, "http://"+net.JoinHostPort(h, port)+"/?token="+token)
+		u := "http://" + net.JoinHostPort(h, port) + "/"
+		if token != "" {
+			u += "?token=" + token
+		}
+		out = append(out, u)
 	}
 	return out
 }

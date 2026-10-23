@@ -1,12 +1,12 @@
 package main
 
 import (
+	"crypto/hmac"
 	"database/sql"
 	"errors"
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -43,6 +43,9 @@ type User struct {
 	Disabled    bool
 	CreatedAt   int64
 	PwChangedAt int64
+	// MFAEnrolled est posé avec le premier facteur et effacé seulement par ResetMFA : sans lui, supprimer les lignes de
+	// facteurs rouvrirait l'enrôlement avec le seul mot de passe.
+	MFAEnrolled bool
 }
 
 type authStore struct {
@@ -59,15 +62,154 @@ func openAuthStore() (*authStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	key, err := loadMasterKey(dir)
+	key, err := loadMasterKey(dir, db)
 	if err == nil {
 		err = checkMasterKey(db, key)
+	}
+	s := &authStore{db: db, key: key}
+	if err == nil {
+		err = s.upgrade()
 	}
 	if err != nil {
 		db.Close()
 		return nil, err
 	}
-	return &authStore{db: db, key: key}, nil
+	return s, nil
+}
+
+const (
+	accountsKey = "accounts"
+	upgradeKey  = "upgrade"
+	upgradeVer  = "7"
+)
+
+var errAccountsGone = errors.New("auth.db : tous les comptes ont disparu alors que des comptes avaient été créés ; supprimer auth.db et auth.key pour repartir de zéro")
+
+// Le marqueur est lié au témoin de clé de cette base : copié d'une autre base, il ne vaut rien.
+func (s *authStore) accountsMAC(q querier) ([]byte, error) {
+	var w []byte
+	if err := q.QueryRow(`SELECT value FROM meta WHERE key='key_witness'`).Scan(&w); err != nil {
+		return nil, err
+	}
+	return rowSig(s.key, "meta", accountsKey, string(w)), nil
+}
+
+func (s *authStore) markAccounts(tx *sql.Tx) error {
+	m, err := s.accountsMAC(tx)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(`INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)`, accountsKey, m)
+	return err
+}
+
+// AccountsOn : le mode multi-utilisateur est actif. Sans compte, seul l'absence du marqueur rend le mode ouvert :
+// des comptes supprimés de la base ferment le service au lieu de l'ouvrir.
+func (s *authStore) AccountsOn() (bool, error) {
+	on, err := s.HasUsers()
+	if err != nil {
+		return false, err
+	}
+	var v []byte
+	err = s.db.QueryRow(`SELECT value FROM meta WHERE key=?`, accountsKey).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return on, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	want, err := s.accountsMAC(s.db)
+	if err != nil {
+		return false, err
+	}
+	if !hmac.Equal(v, want) {
+		return false, errTamper
+	}
+	if !on {
+		return false, errAccountsGone
+	}
+	return true, nil
+}
+
+// upgrade re-signe une fois, avec la clé, les lignes users d'une base antérieure à mfa_enrolled : seule une ligne dont
+// l'ancienne signature est valide est re-signée (une ligne altérée le reste), et le bit est déduit des facteurs vérifiés.
+// Il pose aussi le marqueur des comptes sur une base qui en a déjà.
+func (s *authStore) upgrade() error {
+	var v string
+	err := s.db.QueryRow(`SELECT value FROM meta WHERE key=?`, upgradeKey).Scan(&v)
+	if err == nil && v == upgradeVer {
+		return nil
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	return s.inTx(func(tx *sql.Tx) error {
+		rows, err := tx.Query(`SELECT ` + userCols + ` FROM users`)
+		if err != nil {
+			return err
+		}
+		var old []*User
+		for rows.Next() {
+			u, err := s.scanUser(rows)
+			if err != nil && !errors.Is(err, errTamper) {
+				rows.Close()
+				return err
+			}
+			if err != nil && !u.MFAEnrolled {
+				old = append(old, u)
+			}
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return err
+		}
+		for _, u := range old {
+			var sig []byte
+			if err := tx.QueryRow(`SELECT sig FROM users WHERE id=?`, u.ID).Scan(&sig); err != nil {
+				return err
+			}
+			if !rowSigOK(s.key, "users", strconv.FormatInt(u.ID, 10), sig, u.Name, u.PwHash, b01(u.Admin), b01(u.Disabled)) {
+				continue
+			}
+			t, err := s.loadTOTP(tx, u.ID)
+			if err != nil && !errors.Is(err, errNoTOTP) && !errors.Is(err, errTamper) {
+				return err
+			}
+			u.MFAEnrolled = err == nil && t.confirmed.Valid
+			creds, err := s.loadCreds(tx, u.ID)
+			if err != nil {
+				return err
+			}
+			for _, c := range creds {
+				u.MFAEnrolled = u.MFAEnrolled || !c.bad
+			}
+			if _, err := tx.Exec(`UPDATE users SET mfa_enrolled=?, sig=? WHERE id=? AND sig=?`, u.MFAEnrolled, s.userSig(u), u.ID, sig); err != nil {
+				return err
+			}
+		}
+		var n int
+		if err := tx.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&n); err != nil {
+			return err
+		}
+		if n > 0 {
+			if err := s.markAccounts(tx); err != nil {
+				return err
+			}
+		}
+		_, err = tx.Exec(`INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)`, upgradeKey, upgradeVer)
+		return err
+	})
+}
+
+// markEnrolled pose le bit dans la transaction qui écrit le premier facteur ; u vient d'être relu et vérifié dans tx.
+func (s *authStore) markEnrolled(tx *sql.Tx, u *User) error {
+	if u.MFAEnrolled {
+		return nil
+	}
+	u.MFAEnrolled = true
+	_, err := tx.Exec(`UPDATE users SET mfa_enrolled=1, sig=? WHERE id=?`, s.userSig(u), u.ID)
+	return err
 }
 
 func b01(b bool) string {
@@ -78,7 +220,7 @@ func b01(b bool) string {
 }
 
 func (s *authStore) userSig(u *User) []byte {
-	return rowSig(s.key, "users", strconv.FormatInt(u.ID, 10), u.Name, u.PwHash, b01(u.Admin), b01(u.Disabled))
+	return rowSig(s.key, "users", strconv.FormatInt(u.ID, 10), u.Name, u.PwHash, b01(u.Admin), b01(u.Disabled), b01(u.MFAEnrolled))
 }
 
 func (s *authStore) aclSig(userID int64, homeID string, r map[Right]bool) []byte {
@@ -86,7 +228,7 @@ func (s *authStore) aclSig(userID int64, homeID string, r map[Right]bool) []byte
 }
 
 func (s *authStore) event(userID int64, kind, outcome string) {
-	s.db.Exec(`INSERT INTO auth_events(at,user_id,kind,outcome) VALUES(?,?,?,?)`, time.Now().Unix(), userID, kind, outcome)
+	s.db.Exec(`INSERT INTO auth_events(at,user_id,kind,outcome) VALUES(?,?,?,?)`, authNow().Unix(), userID, kind, outcome)
 }
 
 type querier interface {
@@ -153,7 +295,7 @@ func (s *authStore) AddUser(name, pw string, admin bool) (int64, error) {
 	}
 	u := &User{Name: n, PwHash: h, Admin: admin}
 	err = s.inTx(func(tx *sql.Tx) error {
-		now := time.Now().Unix()
+		now := authNow().Unix()
 		res, err := tx.Exec(`INSERT INTO users(name,pw_hash,is_admin,disabled,created_at,pw_changed_at) VALUES(?,?,?,0,?,?)`, n, h, admin, now, now)
 		var se interface{ Code() int }
 		if errors.As(err, &se) && se.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE {
@@ -165,8 +307,10 @@ func (s *authStore) AddUser(name, pw string, admin bool) (int64, error) {
 		if u.ID, err = res.LastInsertId(); err != nil {
 			return err
 		}
-		_, err = tx.Exec(`UPDATE users SET sig=? WHERE id=?`, s.userSig(u), u.ID)
-		return err
+		if _, err = tx.Exec(`UPDATE users SET sig=? WHERE id=?`, s.userSig(u), u.ID); err != nil {
+			return err
+		}
+		return s.markAccounts(tx)
 	})
 	if err != nil {
 		return 0, err
@@ -174,23 +318,24 @@ func (s *authStore) AddUser(name, pw string, admin bool) (int64, error) {
 	return u.ID, nil
 }
 
-const userCols = `id,name,pw_hash,is_admin,disabled,created_at,pw_changed_at,sig`
+const userCols = `id,name,pw_hash,is_admin,disabled,created_at,pw_changed_at,mfa_enrolled,sig`
 
 // scanUser ne journalise pas : l'appelant passe l'erreur par guard (ou inTx).
 func (s *authStore) scanUser(row interface{ Scan(...any) error }) (*User, error) {
 	u := &User{}
-	var adm, dis any
+	var adm, dis, enr any
 	var sig []byte
-	if err := row.Scan(&u.ID, &u.Name, &u.PwHash, &adm, &dis, &u.CreatedAt, &u.PwChangedAt, &sig); err != nil {
+	if err := row.Scan(&u.ID, &u.Name, &u.PwHash, &adm, &dis, &u.CreatedAt, &u.PwChangedAt, &enr, &sig); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, errNoUser
 		}
 		return nil, err
 	}
-	var ok1, ok2 bool
+	var ok1, ok2, ok3 bool
 	u.Admin, ok1 = bit(adm)
 	u.Disabled, ok2 = bit(dis)
-	if !ok1 || !ok2 || !rowSigOK(s.key, "users", strconv.FormatInt(u.ID, 10), sig, u.Name, u.PwHash, b01(u.Admin), b01(u.Disabled)) {
+	u.MFAEnrolled, ok3 = bit(enr)
+	if !ok1 || !ok2 || !ok3 || !hmac.Equal(sig, s.userSig(u)) {
 		return u, &tamperErr{u.ID, "users"}
 	}
 	return u, nil
@@ -266,7 +411,7 @@ func (s *authStore) SetPassword(id int64, pw string) error {
 			return err
 		}
 		u.PwHash = h
-		if _, err := tx.Exec(`UPDATE users SET pw_hash=?, pw_changed_at=?, sig=? WHERE id=?`, h, time.Now().Unix(), s.userSig(u), id); err != nil {
+		if _, err := tx.Exec(`UPDATE users SET pw_hash=?, pw_changed_at=?, sig=? WHERE id=?`, h, authNow().Unix(), s.userSig(u), id); err != nil {
 			return err
 		}
 		_, err = tx.Exec(`DELETE FROM sessions WHERE user_id=?`, id)
@@ -276,7 +421,8 @@ func (s *authStore) SetPassword(id int64, pw string) error {
 
 func (s *authStore) ResetMFA(userID int64) error {
 	err := s.inTx(func(tx *sql.Tx) error {
-		if _, err := s.userByID(tx, userID); err != nil {
+		u, err := s.userByID(tx, userID)
+		if err != nil {
 			return err
 		}
 		for _, t := range []string{"totp", "webauthn_creds", "recovery_codes", "sessions"} {
@@ -284,7 +430,9 @@ func (s *authStore) ResetMFA(userID int64) error {
 				return err
 			}
 		}
-		return nil
+		u.MFAEnrolled = false
+		_, err = tx.Exec(`UPDATE users SET mfa_enrolled=0, sig=? WHERE id=?`, s.userSig(u), userID)
+		return err
 	})
 	if err == nil {
 		s.event(userID, "mfa_reset", "ok")

@@ -68,13 +68,16 @@ func main() {
 		os.Exit(1)
 	}
 	// Une base illisible ou une clé qui ne la déchiffre pas arrête le serveur : repartir en mode ouvert contournerait les comptes.
-	_, on, err := authState()
+	st, on, err := authState()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.authRefused", map[string]any{"A1": err.Error()}))
 		os.Exit(1)
 	}
 	if on {
 		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.authMode", nil))
+	}
+	if dir, derr := authDir(); st != nil && derr == nil && keyFromFile.Load() {
+		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.keyFromFile", map[string]any{"A1": filepath.Join(dir, "auth.key")}))
 	}
 	if err := checkRunAsSeparation(); err != nil {
 		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.runAsRefused", map[string]any{"A1": err.Error()}))
@@ -83,7 +86,7 @@ func main() {
 	if runAsOn() {
 		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.runAsOn", map[string]any{"A1": runAsHome()}))
 	}
-	tokenPrincipal = tokenForChildren(token)
+	tokenPrincipal = tokenForChildren(token, generated)
 	h := handler()
 	if !local {
 		openHosts = true // hors localhost, le Host n'est plus limité : le jeton (mode ouvert) ou la session (comptes) protège du DNS-rebinding
@@ -118,7 +121,11 @@ func main() {
 	} else {
 		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.plainHTTP", map[string]any{"A1": net.JoinHostPort(*listen, port)}))
 		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.preferTunnel", nil))
-		for _, u := range urlsFor(*listen, port, tokenShown(token, generated)) {
+		shown := tokenShown(token, generated)
+		if on && generated { // le jeton généré ne vaut rien en mode multi-utilisateur : la connexion par compte le remplace
+			shown = ""
+		}
+		for _, u := range urlsFor(*listen, port, shown) {
 			fmt.Fprintln(os.Stderr, "  "+u)
 		}
 	}
@@ -224,7 +231,7 @@ func authCheck() (bool, error) {
 		}
 		authSt, purgeAt = st, time.Time{}
 	}
-	on, err := authSt.HasUsers()
+	on, err := authSt.AccountsOn()
 	if err == nil && !on {
 		authSeen = false
 	}

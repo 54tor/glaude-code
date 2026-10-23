@@ -33,7 +33,7 @@ func resetAuth(t *testing.T, s *authStore) (tick func()) {
 		authFI, _ = os.Lstat(filepath.Join(os.Getenv("GLD_AUTH_DIR"), "auth.db"))
 	}
 	modeNow = func() time.Time { return now }
-	tokenPrincipal = tokenForChildren(modeTok)
+	tokenPrincipal = tokenForChildren(modeTok, false)
 	return func() { now = now.Add(modeEvery) }
 }
 
@@ -217,9 +217,26 @@ func TestAuthFailClosed(t *testing.T) {
 		if _, err := s.db.Exec(`DELETE FROM users`); err != nil {
 			t.Fatal(err)
 		}
+		// Le marqueur des comptes créés reste : des comptes supprimés ferment le service, jamais le mode ouvert.
+		for range 2 {
+			tick()
+			if w := q.do(srv); w.Code != 503 {
+				t.Fatalf("plus aucun compte : %d", w.Code)
+			}
+		}
+	})
+	t.Run("marqueur altéré", func(t *testing.T) {
+		s, srv, tick := authWeb(t)
+		s.AddUser("alice", testPw, true)
+		s.db.Exec(`UPDATE meta SET value=x'00' WHERE key=?`, accountsKey)
 		tick()
-		if w := q.do(srv); w.Code != 200 {
-			t.Fatalf("plus aucun compte : %d", w.Code)
+		if w := (modeReq{method: "GET", path: "/api", tokCookie: modeTok}).do(srv); w.Code != 503 {
+			t.Fatalf("marqueur altéré : %d", w.Code)
+		}
+		s.db.Exec(`DELETE FROM users`)
+		tick()
+		if w := (modeReq{method: "GET", path: "/api", tokCookie: modeTok}).do(srv); w.Code != 503 {
+			t.Fatalf("marqueur altéré sans compte : %d", w.Code)
 		}
 	})
 }
@@ -268,6 +285,23 @@ func TestBearerStillWorks(t *testing.T) {
 	}
 	if w := (modeReq{method: "POST", path: "/homes-save", bearer: modeTok}).do(h); w.Code != 403 {
 		t.Fatalf("route admin avec Bearer : %d %s", w.Code, w.Body)
+	}
+}
+
+// Un jeton généré (hors localhost sans GLD_WEB_TOKEN) ne vaut pas en Bearer quand les comptes existent, ni ne s'imprime.
+func TestGeneratedTokenNoBearer(t *testing.T) {
+	s, h, _ := authWeb(t)
+	if _, err := s.AddUser("alice", testPw, true); err != nil {
+		t.Fatal(err)
+	}
+	tokenPrincipal = tokenForChildren(modeTok, true)
+	if w := (modeReq{method: "GET", path: "/api", bearer: modeTok}).do(h); w.Code != 401 {
+		t.Fatalf("Bearer d'un jeton généré : %d %s", w.Code, w.Body)
+	}
+	for _, u := range urlsFor("192.0.2.1", "8799", "") {
+		if strings.Contains(u, "token") {
+			t.Fatalf("adresse sans jeton : %q", u)
+		}
 	}
 }
 

@@ -37,7 +37,7 @@ func TestMasterKeyOrder(t *testing.T) {
 	stubKeyring(t)
 	dir := t.TempDir()
 	t.Setenv("GLD_AUTH_KEY", strings.Repeat("ab", 32))
-	k, err := loadMasterKey(dir)
+	k, err := loadMasterKey(dir, emptyDB(t))
 	if err != nil || k[0] != 0xab {
 		t.Fatalf("env: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestMasterKeyOrder(t *testing.T) {
 		t.Fatal("file created despite env key")
 	}
 	t.Setenv("GLD_AUTH_KEY", "")
-	k1, err := loadMasterKey(dir)
+	k1, err := loadMasterKey(dir, emptyDB(t))
 	if err != nil || len(k1) != 32 {
 		t.Fatalf("file: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestMasterKeyOrder(t *testing.T) {
 	if fi.Mode().Perm() != 0o600 {
 		t.Fatalf("mode %v", fi.Mode().Perm())
 	}
-	if k2, _ := loadMasterKey(dir); !bytes.Equal(k1, k2) {
+	if k2, _ := loadMasterKey(dir, emptyDB(t)); !bytes.Equal(k1, k2) {
 		t.Fatal("key not stable")
 	}
 
@@ -99,13 +99,13 @@ func TestMasterKeyKeyringPaths(t *testing.T) {
 
 	keyringGet = func() (string, error) { return " " + good + "\n", nil }
 	keyringSet = func(string) error { t.Fatal("Set called"); return nil }
-	if k, err := loadMasterKey(t.TempDir()); err != nil || k[0] != 0xcd {
+	if k, err := loadMasterKey(t.TempDir(), emptyDB(t)); err != nil || k[0] != 0xcd {
 		t.Fatalf("keyring first: %v", err)
 	}
 
 	keyringGet = func() (string, error) { return "", errors.New("locked") }
 	dir := t.TempDir()
-	if _, err := loadMasterKey(dir); err != nil {
+	if _, err := loadMasterKey(dir, emptyDB(t)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "auth.key")); err != nil {
@@ -116,7 +116,7 @@ func TestMasterKeyKeyringPaths(t *testing.T) {
 	keyringGet = func() (string, error) { return "", keyring.ErrNotFound }
 	keyringSet = func(v string) error { stored = v; return nil }
 	dir = t.TempDir()
-	if _, err := loadMasterKey(dir); err != nil || len(stored) != 64 {
+	if _, err := loadMasterKey(dir, emptyDB(t)); err != nil || len(stored) != 64 {
 		t.Fatalf("not found should store in keyring: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "auth.key")); err == nil {
@@ -128,12 +128,12 @@ func TestMasterKeyInvalidEnv(t *testing.T) {
 	stubKeyring(t)
 	for _, v := range []string{"abcd", strings.Repeat("zz", 32)} {
 		t.Setenv("GLD_AUTH_KEY", v)
-		if _, err := loadMasterKey(t.TempDir()); err == nil {
+		if _, err := loadMasterKey(t.TempDir(), emptyDB(t)); err == nil {
 			t.Fatalf("%q accepted", v)
 		}
 	}
 	t.Setenv("GLD_AUTH_KEY", " "+strings.Repeat("ab", 32)+"\n")
-	if _, err := loadMasterKey(t.TempDir()); err != nil {
+	if _, err := loadMasterKey(t.TempDir(), emptyDB(t)); err != nil {
 		t.Fatalf("trim: %v", err)
 	}
 }
@@ -175,5 +175,45 @@ func TestCheckMasterKeyWitnessDeleted(t *testing.T) {
 	}
 	if err := checkMasterKey(db, k); err == nil {
 		t.Fatal("home_acl row without witness accepted")
+	}
+}
+
+func emptyDB(t *testing.T) *authDB {
+	t.Helper()
+	db, err := openAuthDB(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return db
+}
+
+// Coffre-fort en erreur sans auth.key sur une base qui a déjà un témoin : aucune clé n'est créée ni écrite.
+func TestMasterKeyNoRegenerate(t *testing.T) {
+	g, s := keyringGet, keyringSet
+	t.Cleanup(func() { keyringGet, keyringSet = g, s })
+	t.Setenv("GLD_AUTH_KEY", "")
+	db := emptyDB(t)
+	if err := checkMasterKey(db, bytes.Repeat([]byte{3}, 32)); err != nil {
+		t.Fatal(err)
+	}
+	for _, kerr := range []error{errors.New("locked"), keyring.ErrNotFound} {
+		keyringGet = func() (string, error) { return "", kerr }
+		keyringSet = func(string) error { t.Fatal("Set called"); return nil }
+		dir := t.TempDir()
+		if _, err := loadMasterKey(dir, db); err == nil {
+			t.Fatalf("%v : clé régénérée sur une base peuplée", kerr)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "auth.key")); err == nil {
+			t.Fatalf("%v : auth.key écrite", kerr)
+		}
+	}
+	keyringGet = func() (string, error) { return "", errors.New("locked") }
+	dir := t.TempDir()
+	if _, err := loadMasterKey(dir, emptyDB(t)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "auth.key")); err != nil {
+		t.Fatal("base neuve : clé non générée")
 	}
 }
