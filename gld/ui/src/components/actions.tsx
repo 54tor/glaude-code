@@ -49,6 +49,7 @@ export type Actions = {
   selected: Row[]
   pick: (id: string, range?: boolean) => void // range : Maj+clic, de la dernière case cochée à celle-ci
   hotLeft: (s: Session) => number | null // minutes de cache chaud restantes, null si froid
+  touch: (id: string) => void // un prompt vient d'être envoyé à la session : elle remonte tout de suite (cache chaud), la liste se relit ensuite
   read: (s: Session) => void
   open: (body: { dir: string; id?: string }) => void
   resumeWith: (r: Row) => void // reprendre en envoyant un message
