@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 )
@@ -138,7 +139,9 @@ var openTab = func(launcher, title string, spec tabSpec) error {
 		err = c.Start()
 	}
 	if err != nil {
-		os.Remove(name)
+		if specPath(name) {
+			os.Remove(name)
+		}
 		return err
 	}
 	go c.Wait() // pas de zombie dans le serveur
@@ -167,6 +170,13 @@ func writeSpec(self string, spec tabSpec) (string, error) {
 		return "", err
 	}
 	return f.Name(), nil
+}
+
+// specPath : name est bien un fichier gld-*.json posé directement dans le dossier temporaire ; sous GLD_RUN_AS, il vient de la
+// sortie d'un processus du compte cible, que la passerelle ne doit pas laisser lui désigner un fichier à effacer.
+func specPath(name string) bool {
+	ok, _ := filepath.Match("gld-*.json", filepath.Base(name))
+	return ok && name == filepath.Clean(name) && filepath.Dir(name) == filepath.Clean(os.TempDir())
 }
 
 // runTab : le corps de « gld _run <fichier> », exécuté dans l'onglet. Il se place dans le dossier du projet et
