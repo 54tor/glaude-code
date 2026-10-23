@@ -42,7 +42,7 @@ Dossier d'authentification : `GLD_AUTH_DIR` s'il est fixé, sinon le dossier de 
 
 La base n'est créée qu'au premier `gld user add`. Au démarrage, gld rend d'abord le dossier et la base privés (chmod 0700 et 0600), puis les vérifie ; une base inutilisable arrête le serveur.
 
-**Jamais de retour silencieux au mode ouvert, dans la limite de ce que gld peut prouver.** Un marqueur « comptes » (`meta.accounts`, état `off` ou `on`) est créé avec la base et signé avec la clé maîtresse. Il passe à `on` au premier compte et aucune commande ne le remet à `off`.
+**Jamais de retour silencieux au mode ouvert, dans la limite de ce que gld peut prouver.** Un marqueur « comptes » (`meta.accounts`, état `off` ou `on`) est créé avec la base et signé avec la clé maîtresse. Il passe à `on` au premier compte et aucune commande ne le remet à `off`. La valeur signée de `off` est déterministe : qui a lu la base pendant qu'elle était à `off` peut la réécrire après avoir supprimé les comptes (c'est la limite du rejeu, voir « Lignes signées »).
 
 | Altération | Effet |
 |---|---|
@@ -80,7 +80,7 @@ Sept droits, indépendants, par couple (compte, home). Un droit absent vaut refu
 Notes :
 
 - `GET /homes` et `POST /homes-select` ne montrent que les homes où le compte a au moins un droit.
-- Créer ou retirer un home (`/homes-save`) est réservé aux administrateurs. Le nom `main` est réservé. En mode multi-utilisateur, le serveur conserve les homes que la requête ne cite pas : seuls les identifiants du champ `removed` sont retirés (avec leurs droits, en cascade).
+- Créer ou retirer un home (`/homes-save`) est réservé aux administrateurs. Le nom `main` est réservé. En mode multi-utilisateur, le serveur conserve les homes que la requête ne cite pas : seuls les identifiants du champ `removed` sont retirés (avec leurs droits, en cascade). Une entrée sans identifiant (ou avec un autre) qui porte le nom d'un home existant, même invisible de l'admin, est refusée (« nom déjà pris ») ; seule l'entrée qui porte l'identifiant de ce home le modifie.
 - Les droits sont rattachés à l'**identifiant** d'un home, pas à son nom. Supprimer un home supprime ses droits en cascade. Renommer un home via `/homes-save` en omettant son identifiant en crée un nouveau, donc fait perdre ses droits. Échanger les dossiers de deux homes déplace les droits avec les noms.
 - Un administrateur gère les comptes et les droits mais n'a **aucun accès implicite** aux homes : il s'accorde les droits qu'il veut.
 - Le jeton (Bearer) donne tous les droits sur **chaque** home mais jamais l'administration, ni les routes `/auth/*` et `/admin/*`.
