@@ -18,6 +18,12 @@ const subscribe = (f: () => void) => {
   return () => void subs.delete(f)
 }
 
+// Changement de compte : les blocs ouverts nomment ses dossiers.
+export function resetOpen() {
+  state = {}
+  subs.forEach((f) => f())
+}
+
 export function setOpen(key: string, open: boolean) {
   state = { ...state, [key]: open }
   try {

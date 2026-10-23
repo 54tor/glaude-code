@@ -5,6 +5,8 @@ import { i18n } from "@/i18n"
 
 const asked = new Set<string>() // dossiers dont la question est déjà affichée
 
+export const resetTrust = () => asked.clear()
+
 // Une session lancée dans un dossier neuf attend, dans son terminal, la réponse au dialogue de confiance de Claude Code. On guette
 // ce dialogue quelques secondes et on pose la question ici ; la réponse est envoyée au terminal.
 export async function watchTrust(home: string) {

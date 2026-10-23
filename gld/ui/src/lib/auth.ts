@@ -1,5 +1,9 @@
 import { useEffect, useState, useSyncExternalStore } from "react"
 import { clearDrafts } from "@/hooks/useDraft"
+import { resetGit } from "@/hooks/useGit"
+import { resetWarm } from "@/hooks/useKeepWarm"
+import { resetOpen } from "@/hooks/useOpen"
+import { resetTrust } from "@/lib/trust"
 
 // Mode multi-utilisateur (auth_routes.go, auth_admin.go) : état de connexion partagé, appels vers /auth/* et /admin/*, WebAuthn.
 
@@ -91,8 +95,7 @@ export async function boot(): Promise<void> {
   const f = b.factors
   const base = { user: b.user, csrf: b.csrf, factors: f, methods: methodsOf(f), enroll: !f.totp && !f.webauthn }
   if (!b.mfa) return setAuth({ ...base, state: "mfa" })
-  // Un autre compte se connecte dans cet onglet : rien de ce que le précédent avait chargé ou écrit ne doit lui rester.
-  if (snap.owner && snap.owner !== b.user.name) clearUserData()
+  adopt(b.user.name)
   setAuth({ ...base, state: "ok", expired: false, owner: b.user.name, rights: b.rights ?? {}, homes: b.homes ?? [], home: await currentHome() })
 }
 
@@ -108,25 +111,65 @@ async function currentHome(): Promise<string | undefined> {
   }
 }
 
-// Brouillons de conversation et d'éditeurs : du contenu propre au compte, jamais laissé au suivant.
+// Ce que ce navigateur garde d'un compte : brouillons (texte de conversation), et état d'affichage qui nomme ses dossiers et sa mémoire.
+const OWNER = "gld.owner"
+const userKey = (k: string) =>
+  k === "gld.drafts" || k.startsWith("gld.editor.") || k === "gld.open" || k.startsWith("gld.mem.open.") || k === "ccMemSorts" || k === "gld.session-view"
+const storedKeys = (): string[] => {
+  try {
+    return Object.keys(localStorage)
+  } catch {
+    return []
+  }
+}
+
+// Le propriétaire est gardé dans le navigateur : un rechargement ne doit pas faire hériter un autre compte des données locales.
+// Données sans propriétaire connu (antérieures au mode multi-utilisateur) : effacées par prudence.
+function adopt(name: string) {
+  let prev: string | null = null
+  try {
+    prev = localStorage.getItem(OWNER)
+  } catch {
+    /* stockage indisponible */
+  }
+  if (prev !== name && (prev !== null || storedKeys().some(userKey) || (snap.owner !== undefined && snap.owner !== name))) clearUserData()
+  try {
+    localStorage.setItem(OWNER, name)
+  } catch {
+    /* stockage indisponible : la comparaison retombe sur l'onglet seul */
+  }
+}
+
 export function clearUserData() {
   clearDrafts()
-  try {
-    for (const k of Object.keys(localStorage)) if (k === "gld.drafts" || k.startsWith("gld.editor.")) localStorage.removeItem(k)
-  } catch {
-    /* stockage indisponible : rien n'y a été écrit */
-  }
+  resetGit()
+  resetWarm()
+  resetOpen()
+  resetTrust()
+  for (const k of storedKeys()) if (userKey(k)) localStorage.removeItem(k)
 }
 
 // Fin de session voulue (déconnexion, mot de passe changé, session courante révoquée) : l'application est démontée et vidée.
 export function signedOut() {
   clearUserData()
+  try {
+    localStorage.removeItem(OWNER)
+  } catch {
+    /* stockage indisponible */
+  }
   setAuth({ state: "anon", csrf: "", user: undefined, factors: undefined, expired: false, owner: undefined, rights: undefined, homes: undefined, home: undefined })
 }
 
 export async function logout(): Promise<void> {
   await authCall("/auth/logout")
   signedOut()
+}
+
+// Abandon d'une connexion en cours (retour depuis le second facteur) : la session partielle tombe, les données locales restent,
+// car elles appartiennent au compte propriétaire, que la prochaine connexion départagera.
+export async function abandon(): Promise<void> {
+  await authCall("/auth/logout")
+  setAuth({ state: "anon", csrf: "", user: undefined, factors: undefined })
 }
 
 // Droit sur le home courant. Mode ouvert, ou home inconnu : permis, le refus du serveur (403) reste le dernier mot.
@@ -157,11 +200,17 @@ const dec = (s: string): ArrayBuffer => {
   const b = atob(s.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(s.length / 4) * 4, "="))
   return Uint8Array.from(b, (c) => c.charCodeAt(0)).buffer
 }
-const enc = (buf: ArrayBuffer): string =>
-  btoa(String.fromCharCode(...new Uint8Array(buf)))
+// Par tranches : étaler tout le tampon dans fromCharCode dépasse la pile pour une grosse attestation.
+const enc = (buf: ArrayBuffer): string => {
+  const u = new Uint8Array(buf)
+  let s = ""
+  for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000))
+  return btoa(s)
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "")
+}
+export const b64u = { enc, dec }
 type CredRef = { id: string; type: string; transports?: string[] }
 type PKOptions = Record<string, unknown> & { challenge: string; user?: { id: string; name: string; displayName: string }; excludeCredentials?: CredRef[]; allowCredentials?: CredRef[] }
 const refs = (l?: CredRef[]) => l?.map((c) => ({ ...c, id: dec(c.id) }))

@@ -17,6 +17,11 @@ export const refreshWarm = () =>
     },
     () => {}
   )
+// Changement de compte : l'état du précédent ne s'affiche pas en attendant la relecture.
+export function resetWarm() {
+  state = {}
+  subs.forEach((f) => f())
+}
 const tick = () => document.visibilityState === "visible" && refreshWarm()
 
 function subscribe(f: () => void) {
