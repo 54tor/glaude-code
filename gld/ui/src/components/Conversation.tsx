@@ -93,8 +93,18 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
   const viewport = useCallback(() => area.current?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]'), [])
   const loadedNow = loaded?.key === key ? loaded : null
   // Relecture (après un tour) : au moins la page de base, plus de quoi garder ce qui est déjà affiché.
-  const reload = () =>
-    api.conv({ dir, id }, tools, { limit: Math.max(PAGE, (loadedNow?.msgs.length ?? 0) + 50) }).then((r) => setLoaded({ key, msgs: r.msgs, start: r.start ?? 0, more: !!r.more }))
+  // Les relectures se chevauchent (toutes les 2 s pendant qu'une session travaille, plus celle de l'envoi) : sur un serveur lent, une
+  // réponse plus ancienne arrivait après une plus récente et faisait disparaître les derniers messages. Seule la dernière demande
+  // compte ; renvoie les messages lus, ou null si une demande plus récente l'a remplacée.
+  const seq = useRef(0)
+  const reload = () => {
+    const n = ++seq.current
+    return api.conv({ dir, id }, tools, { limit: Math.max(PAGE, (loadedNow?.msgs.length ?? 0) + 50) }).then((r) => {
+      if (n !== seq.current) return null
+      setLoaded({ key, msgs: r.msgs, start: r.start ?? 0, more: !!r.more })
+      return r.msgs
+    })
+  }
   const reloadRef = useRef(reload)
   useEffect(() => {
     reloadRef.current = reload
@@ -102,7 +112,9 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
   const older = useCallback(async () => {
     if (!loadedNow || loadingOlder) return
     setLoadingOlder(true)
+    const n = ++seq.current // une relecture en vol, plus ancienne que ce chargement, ne doit pas l'écraser
     const r = await api.conv({ dir, id }, tools, { limit: PAGE, before: loadedNow.start })
+    if (n !== seq.current) return void setLoadingOlder(false) // une relecture plus récente est passée : on redemandera
     keepScroll.current = true
     setLoaded({ key, msgs: [...r.msgs, ...loadedNow.msgs], start: r.start ?? 0, more: !!r.more })
     setLoadingOlder(false)
@@ -352,7 +364,17 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
             turn={turn}
             setTurn={(f) => setChat((c) => f(c?.id === id ? c : null))}
             // Le transcript contient maintenant le tour : on le relit, et le tour affiché à part disparaît (sauf erreur).
-            onDone={() => reload().then(() => setChat((c) => (c?.id === id && !c.error ? { ...c, msgs: [] } : c)))}
+            onDone={async () => {
+              // Le tour affiché à part ne disparaît que lorsque le transcript relu le contient (Claude l'écrit parfois avec retard) :
+              // sinon la réponse s'effaçait un instant, voire jusqu'à la relecture suivante.
+              const sent = turn?.msgs.find((m) => m.r === "user")?.t.trim()
+              for (let i = 0; i < 5; i++) {
+                const got = await reload()
+                if (got === null || !sent || got.slice(-12).some((m) => m.r === "user" && m.t.includes(sent.slice(0, 60)))) break
+                await new Promise((r) => setTimeout(r, 1000))
+              }
+              setChat((c) => (c?.id === id && !c.error ? { ...c, msgs: [] } : c))
+            }}
           />
         )}
         <LoadedDialog id={id} home={a.home} open={loadedOpen} onClose={() => setLoadedOpen(false)} />
