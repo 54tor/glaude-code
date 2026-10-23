@@ -1,5 +1,6 @@
-import { loc } from "@/i18n"
+import { i18n, loc } from "@/i18n"
 import { useEffect, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { CircleUser } from "lucide-react"
 import { api, type Account } from "@/lib/api"
 import { compact } from "@/lib/format"
@@ -13,14 +14,19 @@ const TIERS: Record<string, string> = {
   default_claude_pro: "Pro",
   default_claude_ai: "Pro",
 }
-const REASONS: Record<string, string> = { out_of_credits: "crédits épuisés", overage_not_provisioned: "non activé pour ce compte", org_level_disabled: "désactivé par l'organisation" }
+const REASONS = new Set(["out_of_credits", "overage_not_provisioned", "org_level_disabled"])
 const tier = (a: Account) => TIERS[a.tier ?? ""] ?? (a.orgType ?? "").replace("claude_", "") ?? ""
 
 // Délai avant une échéance, ou depuis un relevé.
 function delay(sec: number): string {
   const s = Math.abs(sec)
-  const t = s < 3600 ? `${Math.max(1, Math.round(s / 60))} min` : s < 86400 ? `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min` : `${Math.floor(s / 86400)} j ${Math.round((s % 86400) / 3600)} h`
-  return sec >= 0 ? `dans ${t}` : `il y a ${t}`
+  const t =
+    s < 3600
+      ? i18n.t("config.account.minutes", { n: Math.max(1, Math.round(s / 60)) })
+      : s < 86400
+        ? i18n.t("config.account.hoursMin", { h: Math.floor(s / 3600), m: Math.round((s % 3600) / 60) })
+        : i18n.t("config.account.daysHours", { d: Math.floor(s / 86400), h: Math.round((s % 86400) / 3600) })
+  return sec >= 0 ? i18n.t("config.account.delayIn", { t }) : i18n.t("config.account.delayAgo", { t })
 }
 
 const Row = ({ k, children }: { k: string; children: React.ReactNode }) => (
@@ -32,6 +38,7 @@ const Row = ({ k, children }: { k: string; children: React.ReactNode }) => (
 
 // Bouton de l'en-tête : la limite d'usage la plus proche du plafond, et la fenêtre « Compte » (plan, limites, activité, modèles).
 export function AccountButton() {
+  const { t } = useTranslation()
   const [a, setA] = useState<Account | null>(null)
   const [open, setOpen] = useState(false)
   const [updating, setUpdating] = useState(false)
@@ -58,7 +65,7 @@ export function AccountButton() {
   const top = a?.limits.filter((l) => l.key === "five_hour" || l.key === "seven_day").sort((x, y) => y.percent - x.percent)[0]
   return (
     <>
-      <Button variant="ghost" size="sm" onClick={() => setOpen(true)} title="Compte : plan, limites d'usage, activité" aria-label="Compte">
+      <Button variant="ghost" size="sm" onClick={() => setOpen(true)} title={t("config.account.buttonTitle")} aria-label={t("config.account.title")}>
         <CircleUser />
         {top && (
           <span className={cn("text-xs tabular-nums", top.percent >= 90 ? "text-destructive" : top.percent >= 70 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>
@@ -69,11 +76,11 @@ export function AccountButton() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="flex max-h-[90vh] min-w-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
           <DialogHeader className="border-b px-6 py-4">
-            <DialogTitle>Compte</DialogTitle>
-            <DialogDescription className="sr-only">Plan, limites d'usage, activité et tokens par modèle</DialogDescription>
+            <DialogTitle>{t("config.account.title")}</DialogTitle>
+            <DialogDescription className="sr-only">{t("config.account.srDesc")}</DialogDescription>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
-            {a ? <Body a={a} updating={updating || !!a.refreshing} onRefresh={refresh} /> : <p className="p-6 text-sm text-muted-foreground">Chargement…</p>}
+            {a ? <Body a={a} updating={updating || !!a.refreshing} onRefresh={refresh} /> : <p className="p-6 text-sm text-muted-foreground">{t("common.loading")}</p>}
           </div>
         </DialogContent>
       </Dialog>
@@ -82,25 +89,26 @@ export function AccountButton() {
 }
 
 function Body({ a, updating, onRefresh }: { a: Account; updating: boolean; onRefresh: () => void }) {
+  const { t } = useTranslation()
   const [now] = useState(() => Date.now() / 1000) // l'heure de l'ouverture : la fenêtre ne bouge pas toute seule
   const days = a.days
   return (
     <div className="space-y-6 px-6 py-5">
       <section>
-        <h3 className="mb-1 text-sm font-medium">Compte</h3>
-        <Row k="Adresse">{a.email || "inconnue"}</Row>
-        {a.name && <Row k="Nom">{a.name}</Row>}
-        <Row k="Plan">{tier(a) || "inconnu"}</Row>
-        {a.org && <Row k="Organisation">{a.org}</Row>}
-        {a.billing && <Row k="Facturation">{a.billing === "stripe_subscription" ? "abonnement" : a.billing}</Row>}
-        <Row k="Usage supplémentaire">{a.extraUsage ? "activé" : "désactivé"}{a.extraWhy ? ` · ${REASONS[a.extraWhy] ?? a.extraWhy}` : ""}</Row>
-        {a.since && <Row k="Abonné depuis">{new Date(a.since).toLocaleDateString(loc(), { dateStyle: "long" })}</Row>}
+        <h3 className="mb-1 text-sm font-medium">{t("config.account.title")}</h3>
+        <Row k={t("config.account.rowAddress")}>{a.email || t("config.account.unknownFem")}</Row>
+        {a.name && <Row k={t("config.account.rowName")}>{a.name}</Row>}
+        <Row k={t("config.account.rowPlan")}>{tier(a) || t("config.account.unknown")}</Row>
+        {a.org && <Row k={t("config.account.rowOrg")}>{a.org}</Row>}
+        {a.billing && <Row k={t("config.account.rowBilling")}>{a.billing === "stripe_subscription" ? t("config.account.subscription") : a.billing}</Row>}
+        <Row k={t("config.account.rowExtra")}>{a.extraUsage ? t("config.account.on") : t("config.account.off")}{a.extraWhy ? ` · ${REASONS.has(a.extraWhy) ? t(`config.account.reason.${a.extraWhy}`) : a.extraWhy}` : ""}</Row>
+        {a.since && <Row k={t("config.account.rowSince")}>{new Date(a.since).toLocaleDateString(loc(), { dateStyle: "long" })}</Row>}
       </section>
 
       <section>
-        <h3 className="mb-1 text-sm font-medium">Limites d'usage</h3>
+        <h3 className="mb-1 text-sm font-medium">{t("config.account.limitsTitle")}</h3>
         {a.limits.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Aucun relevé pour l'instant : il est demandé à Claude Code (un instant).</p>
+          <p className="text-sm text-muted-foreground">{t("config.account.noLimits")}</p>
         ) : (
           <ul className="space-y-2">
             {a.limits.map((l) => (
@@ -110,47 +118,47 @@ function Body({ a, updating, onRefresh }: { a: Account; updating: boolean; onRef
                   <span className="tabular-nums">{Math.round(l.percent * 10) / 10} %</span>
                   {l.usedDollars != null && l.limitDollars != null && (
                     <span className="text-muted-foreground">
-                      {l.usedDollars.toLocaleString(loc(), { maximumFractionDigits: 2 })} $ sur {l.limitDollars.toLocaleString(loc())} $
+                      {t("config.account.money", { used: l.usedDollars.toLocaleString(loc(), { maximumFractionDigits: 2 }), limit: l.limitDollars.toLocaleString(loc()) })}
                     </span>
                   )}
-                  {l.resetsAt && !isNaN(Date.parse(l.resetsAt)) && <span className="ml-auto text-xs text-muted-foreground">se renouvelle {delay(Date.parse(l.resetsAt) / 1000 - now)}</span>}
+                  {l.resetsAt && !isNaN(Date.parse(l.resetsAt)) && <span className="ml-auto text-xs text-muted-foreground">{t("config.account.resets", { delay: delay(Date.parse(l.resetsAt) / 1000 - now) })}</span>}
                 </div>
                 <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={Math.round(l.percent)} aria-valuemin={0} aria-valuemax={100} aria-label={l.label}>
                   <div className={cn("h-full rounded-full", l.percent >= 90 ? "bg-destructive" : l.percent >= 70 ? "bg-amber-500" : "bg-emerald-500")} style={{ width: `${Math.min(100, l.percent)}%` }} />
                 </div>
-                {l.lockedWhy && <p className="text-xs text-muted-foreground">verrouillée : {l.lockedWhy}</p>}
+                {l.lockedWhy && <p className="text-xs text-muted-foreground">{t("config.account.locked", { why: l.lockedWhy })}</p>}
               </li>
             ))}
           </ul>
         )}
         <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          {a.limitsAt ? `Relevé ${delay(a.limitsAt - now)}` : "Aucun relevé"}
+          {a.limitsAt ? t("config.account.statement", { delay: delay(a.limitsAt - now) }) : t("config.account.noStatement")}
           <Button size="xs" variant="outline" onClick={onRefresh} disabled={updating}>
-            {updating ? "Mise à jour…" : "Actualiser"}
+            {updating ? t("config.account.updating") : t("config.account.refresh")}
           </Button>
         </p>
       </section>
 
       <section>
-        <h3 className="mb-1 text-sm font-medium">Activité</h3>
-        <Row k="Sessions">{a.totalSessions.toLocaleString(loc())}{a.firstSession ? ` depuis le ${new Date(a.firstSession).toLocaleDateString(loc(), { dateStyle: "long" })}` : ""}</Row>
-        <Row k="Messages">{a.totalMessages.toLocaleString(loc())}</Row>
+        <h3 className="mb-1 text-sm font-medium">{t("config.account.activity")}</h3>
+        <Row k={t("config.account.metric.sessions")}>{a.firstSession ? t("config.account.sessionsSince", { n: a.totalSessions.toLocaleString(loc()), date: new Date(a.firstSession).toLocaleDateString(loc(), { dateStyle: "long" }) }) : a.totalSessions.toLocaleString(loc())}</Row>
+        <Row k={t("config.account.metric.messages")}>{a.totalMessages.toLocaleString(loc())}</Row>
         {days.length > 0 && <DayChart days={a.days} />}
-        {a.statsAt && <p className="mt-1 text-xs text-muted-foreground">Statistiques calculées par Claude Code jusqu'au {new Date(a.statsAt).toLocaleDateString(loc(), { dateStyle: "long" })}.</p>}
+        {a.statsAt && <p className="mt-1 text-xs text-muted-foreground">{t("config.account.statsUntil", { date: new Date(a.statsAt).toLocaleDateString(loc(), { dateStyle: "long" }) })}</p>}
       </section>
 
       {a.models.length > 0 && (
         <section>
-          <h3 className="mb-1 text-sm font-medium">Tokens par modèle (depuis le début)</h3>
+          <h3 className="mb-1 text-sm font-medium">{t("config.account.tokensTitle")}</h3>
           <div className="overflow-x-auto">
           <table className="w-full min-w-[28rem] text-xs">
             <thead className="text-left text-muted-foreground">
               <tr>
-                <th className="py-1 font-normal">Modèle</th>
-                <th className="font-normal">Entrée</th>
-                <th className="font-normal">Sortie</th>
-                <th className="font-normal">Cache lu</th>
-                <th className="font-normal">Cache écrit</th>
+                <th className="py-1 font-normal">{t("config.account.colModel")}</th>
+                <th className="font-normal">{t("config.account.colIn")}</th>
+                <th className="font-normal">{t("config.account.colOut")}</th>
+                <th className="font-normal">{t("config.account.colCacheRead")}</th>
+                <th className="font-normal">{t("config.account.colCacheWrite")}</th>
               </tr>
             </thead>
             <tbody>
@@ -174,30 +182,32 @@ function Body({ a, updating, onRefresh }: { a: Account; updating: boolean; onRef
 
 const dayTok = (t?: Record<string, number>) => Object.values(t ?? {}).reduce((n, v) => n + v, 0)
 const METRICS = [
-  ["messages", "Messages", (d: Account["days"][number]) => d.messages],
-  ["tokens", "Tokens", (d: Account["days"][number]) => dayTok(d.tokens)],
-  ["tools", "Appels d'outils", (d: Account["days"][number]) => d.tools],
-  ["sessions", "Sessions", (d: Account["days"][number]) => d.sessions],
+  ["messages", (d: Account["days"][number]) => d.messages],
+  ["tokens", (d: Account["days"][number]) => dayTok(d.tokens)],
+  ["tools", (d: Account["days"][number]) => d.tools],
+  ["sessions", (d: Account["days"][number]) => d.sessions],
 ] as const
 
 // Activité des derniers jours : une barre par jour, au choix messages, tokens, outils ou sessions ; le détail du jour au survol.
 function DayChart({ days }: { days: Account["days"] }) {
+  const { t } = useTranslation()
   const [metric, setMetric] = useState<(typeof METRICS)[number][0]>("messages")
-  const [, label, value] = METRICS.find((m) => m[0] === metric)!
+  const [, value] = METRICS.find((m) => m[0] === metric)!
+  const label = t(`config.account.metric.${metric}`)
   const max = Math.max(1, ...days.map(value))
   return (
     <div className="mt-2">
       <div className="mb-1 flex flex-wrap items-center gap-1">
-        {METRICS.map(([k, l]) => (
+        {METRICS.map(([k]) => (
           <Button key={k} size="xs" variant={metric === k ? "secondary" : "ghost"} onClick={() => setMetric(k)} aria-pressed={metric === k}>
-            {l}
+            {t(`config.account.metric.${k}`)}
           </Button>
         ))}
         <span className="ml-auto text-xs text-muted-foreground">
-          {days.length} derniers jours actifs · max {compact(max)}
+          {t("config.account.lastDays", { n: days.length, max: compact(max) })}
         </span>
       </div>
-      <div className="flex h-32 items-end gap-1 border-b" role="img" aria-label={`${label} par jour`}>
+      <div className="flex h-32 items-end gap-1 border-b" role="img" aria-label={t("config.account.perDay", { label })}>
         {days.map((d) => {
           const v = value(d)
           const date = new Date(d.date)
@@ -205,7 +215,13 @@ function DayChart({ days }: { days: Account["days"] }) {
             <div
               key={d.date}
               className="group relative flex h-full min-w-0 flex-1 flex-col justify-end"
-              title={`${date.toLocaleDateString(loc(), { weekday: "long", day: "numeric", month: "long" })} : ${d.messages.toLocaleString(loc())} messages, ${d.sessions} sessions, ${d.tools.toLocaleString(loc())} outils${dayTok(d.tokens) ? `, ${compact(dayTok(d.tokens))} tokens` : ""}`}
+              title={t(dayTok(d.tokens) ? "config.account.dayTitleTokens" : "config.account.dayTitle", {
+                date: date.toLocaleDateString(loc(), { weekday: "long", day: "numeric", month: "long" }),
+                messages: d.messages.toLocaleString(loc()),
+                sessions: d.sessions,
+                tools: d.tools.toLocaleString(loc()),
+                tokens: compact(dayTok(d.tokens)),
+              })}
             >
               <span className="mb-0.5 text-center text-[10px] tabular-nums text-muted-foreground">{v ? compact(v) : ""}</span>
               <div className="w-full rounded-t bg-primary/70 transition-colors group-hover:bg-primary" style={{ height: `${Math.max(v ? 2 : 0, (v / max) * 100)}%` }} />

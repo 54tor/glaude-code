@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from "react"
 import { toast } from "sonner"
+import { useTranslation } from "react-i18next"
+import { i18n } from "@/i18n"
 import { api, type CfgEdit, type CfgIssue } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -15,11 +17,11 @@ export function liveNotice(before: string, after: string, sessions: number): str
     .map((r) => r.t)
     .join("\n")
   const todo: string[] = []
-  if (/"model"\s*:/.test(changed)) todo.push("model : dans une session ouverte, tapez /model")
-  if (/"(effortLevel|modelSettings)"\s*:/.test(changed)) todo.push("effort : tapez /effort dans la session")
-  if (/"enabledPlugins"|"pluginConfigs"|"[\w.-]+@[\w.-]+"\s*:/.test(changed)) todo.push("plugins : tapez /reload-plugins dans la session")
-  const live = sessions ? `Les ${sessions} session${sessions > 1 ? "s" : ""} ouverte${sessions > 1 ? "s" : ""} rechargent les réglages toutes seules.` : "Les sessions ouvertes rechargent les réglages toutes seules."
-  return todo.length ? `${live} À faire à la main — ${todo.join(" ; ")}.` : live
+  if (/"model"\s*:/.test(changed)) todo.push(i18n.t("config.edit.model"))
+  if (/"(effortLevel|modelSettings)"\s*:/.test(changed)) todo.push(i18n.t("config.edit.effort"))
+  if (/"enabledPlugins"|"pluginConfigs"|"[\w.-]+@[\w.-]+"\s*:/.test(changed)) todo.push(i18n.t("config.edit.plugins"))
+  const live = sessions ? i18n.t("config.edit.live", { count: sessions }) : i18n.t("config.edit.liveNone")
+  return todo.length ? i18n.t("config.edit.manual", { live, todo: todo.join(i18n.t("config.edit.sep")) }) : live
 }
 
 type Preview = { then?: () => void; edit?: CfgEdit; raw?: { file: string; text: string }; perm?: { file: string; text: string; mode: string }; summary?: string; before: string; after: string; warnings: CfgIssue[] }
@@ -28,6 +30,7 @@ type Reply = { ok: boolean; out: string; before: string; after: string; warnings
 // Toute modification d'un fichier de réglages passe par ici : aperçu des différences, confirmation, puis écriture
 // (le serveur fait une sauvegarde avant). Renvoie propose() et le dialogue à afficher.
 export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 0): { gone: (file: string, kind: string, rule: string) => boolean; added: (file: string, kind: string) => string[]; moveRule: (file: string, from: string, rule: string, to: string, text: string) => Promise<void>; propose: (e: CfgEdit) => Promise<void>; proposeRaw: (file: string, text: string) => Promise<string | null>; proposePerms: (file: string, text: string, mode: string, then?: () => void, now?: boolean) => Promise<string | null>; dialog: ReactNode } {
+  const { t } = useTranslation()
   const [pv, setPv] = useState<Preview | null>(null)
   const [busy, setBusy] = useState(false)
   // Modification simple (une règle, un réglage, une variable) : appliquée tout de suite, sans fenêtre de confirmation. Le serveur
@@ -64,7 +67,7 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
     if (!r.ok) {
       hide(old, false) // l'ancienne règle existe toujours
       toast.error(r.out)
-    } else toast.success("Règle modifiée", { description: liveNotice(a.before, r.after, sessions), duration: 6000 })
+    } else toast.success(t("config.edit.ruleEdited"), { description: liveNotice(a.before, r.after, sessions), duration: 6000 })
     await onDone()
     // L'ancienne place reste masquée : d'autres vues (onglet Projets) se relisent à part et la montreraient encore un instant.
     setPending((p) => p.filter((k) => k !== neu))
@@ -76,7 +79,7 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
     const r = (await api.post("/config-edit", edit)) as Reply
     if (!r.ok || r.before === r.after) {
       if (rule) hide(rule, false)
-      return void (r.ok ? toast.info("Aucun changement") : toast.error(r.out))
+      return void (r.ok ? toast.info(t("config.shared.noChange")) : toast.error(r.out))
     }
     toast.success(r.out, { description: liveNotice(r.before, r.after, sessions), duration: 6000 })
     await onDone() // la règle reste masquée : les vues qui se relisent à part la montreraient encore un instant
@@ -86,7 +89,7 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
     const r = (await api.post("/config-raw", { file, text, dry: true })) as Reply
     if (!r.ok) return r.out
     if (r.before === r.after) {
-      toast.info("Aucun changement")
+      toast.info(t("config.shared.noChange"))
       return null
     }
     setPv({ raw: { file, text }, before: r.before, after: r.after, warnings: r.warnings ?? [] })
@@ -99,7 +102,7 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
     const r = (await api.post("/config-perm-import", { file, text, mode, dry: true })) as Reply
     if (!r.ok) return r.out
     if (r.before === r.after) {
-      toast.info("Aucun changement : ces règles sont déjà là")
+      toast.info(t("config.edit.alreadyThere"))
       return null
     }
     if (now) {
@@ -130,9 +133,9 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
     <Dialog open={!!pv} onOpenChange={(o) => !o && setPv(null)}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Enregistrer cette modification ?</DialogTitle>
+          <DialogTitle>{t("config.edit.dialogTitle")}</DialogTitle>
           <DialogDescription>
-            {(pv?.edit?.file ?? pv?.raw?.file ?? pv?.perm?.file) === "u" ? "~/.claude/settings.json" : (pv?.edit?.file ?? pv?.raw?.file ?? pv?.perm?.file)}{pv?.summary ? ` — ${pv.summary}` : ""} — une sauvegarde de l'état actuel est faite avant l'écriture.
+            {(pv?.edit?.file ?? pv?.raw?.file ?? pv?.perm?.file) === "u" ? "~/.claude/settings.json" : (pv?.edit?.file ?? pv?.raw?.file ?? pv?.perm?.file)}{pv?.summary ? ` — ${pv.summary}` : ""} {t("config.edit.backupNote")}
           </DialogDescription>
         </DialogHeader>
         {!!pv?.warnings.length && (
@@ -145,10 +148,10 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
         <ScrollArea className="max-h-96 rounded-md border">{pv && <DiffView old={pv.before} cur={pv.after} compact />}</ScrollArea>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setPv(null)}>
-            Annuler
+            {t("common.cancel")}
           </Button>
           <Button onClick={apply} disabled={busy}>
-            Enregistrer
+            {t("common.save")}
           </Button>
         </DialogFooter>
       </DialogContent>
