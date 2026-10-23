@@ -258,7 +258,10 @@
       "sendOpen": "Send to an open session",
       "sendLabel": "Sessions open in tmux, among those shown",
       "none": "No session open in tmux",
-      "chars": "{{n}} chars"
+      "item": "Note item",
+      "remove": "Remove item",
+      "add": "Add item",
+      "count": "{{count}} item(s)"
     },
     "terminal": {
       "openFailed": "could not open",

@@ -1,7 +1,7 @@
 import { i18n, loc } from "@/i18n"
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { CircleUser } from "lucide-react"
+import { CircleUser, Loader2 } from "lucide-react"
 import { api, type Account } from "@/lib/api"
 import { compact } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -30,6 +30,9 @@ function delay(sec: number): string {
   return sec >= 0 ? i18n.t("config.account.delayIn", { t }) : i18n.t("config.account.delayAgo", { t })
 }
 
+// Une limite dont la fenêtre est déjà close : le pourcentage relevé ne dit plus rien.
+const stale = (l: Account["limits"][number], now: number) => !!l.resetsAt && !isNaN(Date.parse(l.resetsAt)) && Date.parse(l.resetsAt) / 1000 < now
+
 const Row = ({ k, children }: { k: string; children: React.ReactNode }) => (
   <div className="flex gap-3 py-0.5 text-sm">
     <span className="w-44 shrink-0 text-muted-foreground">{k}</span>
@@ -43,9 +46,20 @@ export function AccountButton() {
   const [a, setA] = useState<Account | null>(null)
   const [open, setOpen] = useState(false)
   const [updating, setUpdating] = useState(false)
+  const [now, setNow] = useState(() => Date.now() / 1000)
   useEffect(() => {
     let live = true
-    const load = () => api.account().then((r) => live && setA(r), () => {})
+    const load = () =>
+      api.account().then(
+        (r) => {
+          if (!live) return
+          setA(r)
+          setNow(Date.now() / 1000)
+          const n = Date.now() / 1000
+          if (r.limits.some((l) => stale(l, n))) void api.account(true).then((x) => live && setA(x), () => {})
+        },
+        () => {}
+      )
     load()
     const t = setInterval(() => document.visibilityState === "visible" && load(), 60_000)
     return () => {
@@ -63,16 +77,20 @@ export function AccountButton() {
     }
     setUpdating(false)
   }
-  const top = a?.limits.filter((l) => l.key === "five_hour" || l.key === "seven_day").sort((x, y) => y.percent - x.percent)[0]
+  const shown = (["five_hour", "seven_day"] as const).map((k) => a?.limits.find((l) => l.key === k)).filter((l) => !!l)
   return (
     <>
       <Tip label={t("config.account.buttonTitle")}>
         <Button variant="ghost" size="sm" onClick={() => setOpen(true)} aria-label={t("config.account.title")}>
           <CircleUser />
-          {top && (
-            <span className={cn("text-xs tabular-nums", top.percent >= 90 ? "text-destructive" : top.percent >= 70 ? "text-warning" : "text-muted-foreground")}>
-              {Math.round(top.percent)} %
-            </span>
+          {shown.map((l) =>
+            stale(l, now) ? (
+              <Loader2 key={l.key} className="size-3 animate-spin text-muted-foreground" aria-label={t("config.account.updating")} />
+            ) : (
+              <span key={l.key} title={l.label} className={cn("text-xs tabular-nums", l.percent >= 90 ? "text-destructive" : l.percent >= 70 ? "text-warning" : "text-muted-foreground")}>
+                {Math.round(l.percent)} %
+              </span>
+            )
           )}
         </Button>
       </Tip>
@@ -118,13 +136,13 @@ function Body({ a, updating, onRefresh }: { a: Account; updating: boolean; onRef
               <li key={l.key}>
                 <div className="flex items-baseline gap-2 text-sm">
                   <span className="font-medium">{l.label}</span>
-                  <span className="tabular-nums">{Math.round(l.percent * 10) / 10} %</span>
+                  {!stale(l, now) && <span className="tabular-nums">{Math.round(l.percent * 10) / 10} %</span>}
                   {l.usedDollars != null && l.limitDollars != null && (
                     <span className="text-muted-foreground">
                       {t("config.account.money", { used: l.usedDollars.toLocaleString(loc(), { maximumFractionDigits: 2 }), limit: l.limitDollars.toLocaleString(loc()) })}
                     </span>
                   )}
-                  {l.resetsAt && !isNaN(Date.parse(l.resetsAt)) && <span className="ml-auto text-xs text-muted-foreground">{t("config.account.resets", { delay: delay(Date.parse(l.resetsAt) / 1000 - now) })}</span>}
+                  {l.resetsAt && !isNaN(Date.parse(l.resetsAt)) && (stale(l, now) ? <Loader2 className="ml-auto size-3.5 animate-spin text-muted-foreground" aria-label={t("config.account.updating")} /> : <span className="ml-auto text-xs text-muted-foreground">{t("config.account.resets", { delay: delay(Date.parse(l.resetsAt) / 1000 - now) })}</span>)}
                 </div>
                 <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={Math.round(l.percent)} aria-valuemin={0} aria-valuemax={100} aria-label={l.label}>
                   <div className={cn("h-full rounded-full", l.percent >= 90 ? "bg-destructive" : l.percent >= 70 ? "bg-warning" : "bg-success")} style={{ width: `${Math.min(100, l.percent)}%` }} />

@@ -142,11 +142,11 @@ export function Section({
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
-      <ul className={cn("space-y-px", !open && "hidden")}>
+      <ul className={cn("space-y-1.5 px-1", !open && "hidden")}>
         {files.map((f) => (
           <ContextMenu key={f.key}>
             <ContextMenuTrigger asChild>
-              <li className="group flex items-center gap-1.5 rounded-md data-[state=open]:bg-muted">
+              <li className="group flex items-center gap-1.5 rounded-lg border bg-card py-1 data-[state=open]:bg-muted">
                 <Checkbox
                   checked={picked.has(f.key)}
                   onCheckedChange={() => onToggle(f.key)}
@@ -179,7 +179,10 @@ export function Section({
                   {(f.warn || issues.has(f.key)) && (
                     <AlertTriangle className="size-3.5 shrink-0 text-warning" aria-label={t("memory.section.toCheck")} />
                   )}
-                  <span className="shrink-0 text-xs font-normal text-muted-foreground">{ago(f.mtime)}</span>
+                  <span className="flex shrink-0 flex-col items-end text-xs font-normal leading-tight text-muted-foreground">
+                    <span>{ago(f.mtime)}</span>
+                    <span className="text-2xs tabular-nums">{f.tokens} tok</span>
+                  </span>
                 </button>
               </li>
             </ContextMenuTrigger>
