@@ -18,6 +18,7 @@ import { ImageChips, useImages } from "@/hooks/useImages"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { readNdjson } from "@/lib/ndjson"
+import { authFetch } from "@/lib/auth"
 
 // Modes d'autorisation de claude -p : sans terminal, Claude ne peut pas demander la permission.
 const modes = () =>
@@ -110,7 +111,7 @@ export function Composer({
     let failed = false
     let res: Response
     try {
-      res = await fetch("/chat", {
+      res = await authFetch("/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dir, id, prompt, args: withChoice(args, choice), mode }),

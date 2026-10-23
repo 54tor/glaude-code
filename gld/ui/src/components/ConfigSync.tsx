@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Choose } from "./Choose"
 import { useActions } from "./actions"
 import { reportResult } from "@/lib/report"
+import { authFetch } from "@/lib/auth"
 
 type Item = { id: string; kind: string; label: string; status: "new" | "diff" | "same"; risk?: string; merge: boolean; from: string; to: string }
 type Mode = "merge" | "replace"
@@ -17,7 +18,7 @@ const KINDS = ["setting", "perm", "file", "skill"]
 const STATUS = { new: "text-success", diff: "text-warning", same: "text-muted-foreground" } as const
 
 const post = (url: string, body: unknown) =>
-  fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json() as Promise<{ ok: boolean; out: string; items?: Item[] }>)
+  authFetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json() as Promise<{ ok: boolean; out: string; items?: Item[] }>)
 
 // Copie des réglages d'un dossier de configuration Claude vers un autre : chaque élément se compare, se prévisualise et se choisit
 // (fusionner ou remplacer). Le plan vient du serveur, qui revérifie chaque choix avant d'écrire et sauvegarde ce qu'il remplace.

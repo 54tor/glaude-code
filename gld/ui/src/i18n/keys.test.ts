@@ -5,7 +5,7 @@ const sources = import.meta.glob<string>("/src/**/*.{ts,tsx}", { query: "?raw", 
 
 // t("a.b.c") ou i18n.t("a.b.c") : les clés littérales seulement (les clés construites avec ${…} sont ignorées).
 const CALL = /\b(?:i18n\.)?(?:t|tr)\(\s*"([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)+)"/g
-const OTHER = /\b(?:labelKey|titleKey|descKey|key)\s*:\s*"((?:common|format|shell|conversation|memory|config|skills)\.[a-zA-Z0-9_.]+)"/g
+const OTHER = /\b(?:labelKey|titleKey|descKey|key)\s*:\s*"((?:common|format|shell|conversation|memory|config|skills|auth)\.[a-zA-Z0-9_.]+)"/g
 
 describe("clés de traduction", () => {
   const used = new Map<string, string>()

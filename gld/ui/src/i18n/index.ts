@@ -3,7 +3,7 @@ import { initReactI18next } from "react-i18next"
 export type Lang = "fr" | "en"
 
 // Un fichier par domaine (fr/<domaine>.json, en/<domaine>.json), dont la clé de premier niveau porte le nom du fichier :
-// common, format, shell, conversation, memory, config, skills.
+// common, format, shell, conversation, memory, config, skills, auth.
 const merge = (mods: Record<string, { default: object }>) => Object.assign({}, ...Object.values(mods).map((m) => m.default))
 export const catalogFiles = {
   fr: import.meta.glob<{ default: object }>("./fr/*.json", { eager: true }),
