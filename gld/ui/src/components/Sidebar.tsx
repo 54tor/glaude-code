@@ -1,6 +1,6 @@
 import { useEffect } from "react"
-import { AlarmClock, Coins, Star, Brain, SlidersHorizontal, Zap, Flame, History, Clock, FileText, Inbox, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
-import { size } from "@/lib/format"
+import { AlarmClock, ChevronRight, Coins, Star, Brain, SlidersHorizontal, Zap, Flame, History, Clock, FileText, Inbox, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
+import { size, tilde } from "@/lib/format"
 import type { Choice } from "@/lib/models"
 import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
@@ -69,6 +69,40 @@ function Heading({ children, action }: { children: React.ReactNode; action?: Rea
 function Hot({ rows, now, ttl }: { rows: Row[]; now: number; ttl: number }) {
   const a = useActions()
   const warm = useKeepWarm()
+  // Un dossier par projet de travail, le plus récemment actif d'abord (les lignes arrivent déjà triées par date).
+  const folders = new Map<string, Row[]>()
+  for (const r of rows) folders.set(r.g.project, [...(folders.get(r.g.project) ?? []), r])
+  const item = (row: Row) => {
+    const { s } = row
+    const left = Math.max(1, Math.ceil((ttl - (now - s.mtime)) / 60))
+    const warn = left <= 10
+    return (
+      <ContextMenu key={s.id}>
+        <ContextMenuTrigger asChild>
+          <button
+            onClick={() => a.read(s)}
+            title={`${s.title}\nCache encore environ ${left} min`}
+            className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm text-foreground/80 transition-colors hover:bg-muted hover:text-foreground"
+          >
+            {warn ? (
+              <AlarmClock className="size-4 shrink-0 text-amber-500" aria-label="cache bientôt expiré" />
+            ) : (
+              <Flame className="size-4 shrink-0 text-orange-500" aria-hidden />
+            )}
+            {warm[s.id]?.on && <Coins className="size-3.5 shrink-0 text-amber-500" aria-label="maintien au chaud actif (payant)" />}
+            {a.live.has(s.id) && <span className="size-1.5 shrink-0 rounded-full bg-emerald-500" aria-label="ouverte" />}
+            <span className="flex-1 truncate text-left">{s.title}</span>
+            <span className={cn("shrink-0 text-xs tabular-nums", warn ? "font-medium text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>
+              {left} min
+            </span>
+          </button>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-64">
+          <SessionItems M={CM} row={row} full />
+        </ContextMenuContent>
+      </ContextMenu>
+    )
+  }
   return (
     <>
       <Heading>
@@ -76,37 +110,19 @@ function Hot({ rows, now, ttl }: { rows: Row[]; now: number; ttl: number }) {
           Cache chaud
         </span>
       </Heading>
-      {rows.slice(0, 5).map((row) => {
-        const { s } = row
-        const left = Math.max(1, Math.ceil((ttl - (now - s.mtime)) / 60))
-        const warn = left <= 10
-        return (
-          <ContextMenu key={s.id}>
-            <ContextMenuTrigger asChild>
-              <button
-                onClick={() => a.read(s)}
-                title={`${s.title}\nCache encore environ ${left} min`}
-                className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm text-foreground/80 transition-colors hover:bg-muted hover:text-foreground"
-              >
-                {warn ? (
-                  <AlarmClock className="size-4 shrink-0 text-amber-500" aria-label="cache bientôt expiré" />
-                ) : (
-                  <Flame className="size-4 shrink-0 text-orange-500" aria-hidden />
-                )}
-                {warm[s.id]?.on && <Coins className="size-3.5 shrink-0 text-amber-500" aria-label="maintien au chaud actif (payant)" />}
-                {a.live.has(s.id) && <span className="size-1.5 shrink-0 rounded-full bg-emerald-500" aria-label="ouverte" />}
-                <span className="flex-1 truncate text-left">{s.title}</span>
-                <span className={cn("shrink-0 text-xs tabular-nums", warn ? "font-medium text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>
-                  {left} min
-                </span>
-              </button>
-            </ContextMenuTrigger>
-            <ContextMenuContent className="w-64">
-              <SessionItems M={CM} row={row} full />
-            </ContextMenuContent>
-          </ContextMenu>
-        )
-      })}
+      {[...folders].map(([project, rs]) => (
+        <details key={project} open className="group/hot">
+          <summary
+            title={tilde(project, a.home)}
+            className="flex h-7 cursor-pointer list-none items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted [&::-webkit-details-marker]:hidden"
+          >
+            <ChevronRight className="size-3.5 shrink-0 transition-transform group-open/hot:rotate-90" aria-hidden />
+            <span className="flex-1 truncate">{project.split("/").filter(Boolean).pop() ?? project}</span>
+            <span className="tabular-nums">{rs.length}</span>
+          </summary>
+          <div className="ml-3 border-l pl-1">{rs.map(item)}</div>
+        </details>
+      ))}
     </>
   )
 }
