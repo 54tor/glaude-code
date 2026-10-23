@@ -8,6 +8,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 type Right string
@@ -86,9 +88,45 @@ func (s *authStore) event(userID int64, kind, outcome string) {
 	s.db.Exec(`INSERT INTO auth_events(at,user_id,kind,outcome) VALUES(?,?,?,?)`, time.Now().Unix(), userID, kind, outcome)
 }
 
-func (s *authStore) tamper(userID int64, table string) error {
-	s.event(userID, "tamper", table)
-	return errTamper
+type querier interface {
+	QueryRow(string, ...any) *sql.Row
+}
+
+// tamperErr remonte la ligne fautive jusqu'à guard, qui la journalise hors transaction :
+// la connexion unique est tenue par la transaction tant qu'elle n'est pas close.
+type tamperErr struct {
+	uid   int64
+	table string
+}
+
+func (e *tamperErr) Error() string { return errTamper.Error() }
+func (e *tamperErr) Unwrap() error { return errTamper }
+
+func (s *authStore) guard(err error) error {
+	var t *tamperErr
+	if errors.As(err, &t) {
+		s.event(t.uid, "tamper", t.table)
+		return errTamper
+	}
+	return err
+}
+
+func (s *authStore) inTx(fn func(*sql.Tx) error) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	if err := fn(tx); err != nil {
+		tx.Rollback()
+		return s.guard(err)
+	}
+	return tx.Commit()
+}
+
+// bit : une valeur stockée hors de {0, 1} (ou d'un autre type) vaut altération.
+func bit(v any) (on, ok bool) {
+	n, isInt := v.(int64)
+	return n == 1, isInt && (n == 0 || n == 1)
 }
 
 // Le nom est stocké normalisé : l'unicité de la colonne vaut alors celle de normName.
@@ -112,59 +150,64 @@ func (s *authStore) AddUser(name, pw string, admin bool) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	tx, err := s.db.Begin()
-	if err != nil {
-		return 0, err
-	}
-	defer tx.Rollback()
-	var dup int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM users WHERE name=?`, n).Scan(&dup); err != nil {
-		return 0, err
-	}
-	if dup > 0 {
-		return 0, errNameTaken
-	}
-	now := time.Now().Unix()
-	res, err := tx.Exec(`INSERT INTO users(name,pw_hash,is_admin,disabled,created_at,pw_changed_at) VALUES(?,?,?,0,?,?)`, n, h, admin, now, now)
-	if err != nil {
-		return 0, err
-	}
 	u := &User{Name: n, PwHash: h, Admin: admin}
-	if u.ID, err = res.LastInsertId(); err != nil {
+	err = s.inTx(func(tx *sql.Tx) error {
+		now := time.Now().Unix()
+		res, err := tx.Exec(`INSERT INTO users(name,pw_hash,is_admin,disabled,created_at,pw_changed_at) VALUES(?,?,?,0,?,?)`, n, h, admin, now, now)
+		var se interface{ Code() int }
+		if errors.As(err, &se) && se.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE {
+			return errNameTaken
+		}
+		if err != nil {
+			return err
+		}
+		if u.ID, err = res.LastInsertId(); err != nil {
+			return err
+		}
+		_, err = tx.Exec(`UPDATE users SET sig=? WHERE id=?`, s.userSig(u), u.ID)
+		return err
+	})
+	if err != nil {
 		return 0, err
 	}
-	if _, err := tx.Exec(`UPDATE users SET sig=? WHERE id=?`, s.userSig(u), u.ID); err != nil {
-		return 0, err
-	}
-	return u.ID, tx.Commit()
+	return u.ID, nil
 }
 
 const userCols = `id,name,pw_hash,is_admin,disabled,created_at,pw_changed_at,sig`
 
+// scanUser ne journalise pas : l'appelant passe l'erreur par guard (ou inTx).
 func (s *authStore) scanUser(row interface{ Scan(...any) error }) (*User, error) {
 	u := &User{}
+	var adm, dis any
 	var sig []byte
-	if err := row.Scan(&u.ID, &u.Name, &u.PwHash, &u.Admin, &u.Disabled, &u.CreatedAt, &u.PwChangedAt, &sig); err != nil {
+	if err := row.Scan(&u.ID, &u.Name, &u.PwHash, &adm, &dis, &u.CreatedAt, &u.PwChangedAt, &sig); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, errNoUser
 		}
 		return nil, err
 	}
-	if !rowSigOK(s.key, "users", strconv.FormatInt(u.ID, 10), sig, u.Name, u.PwHash, b01(u.Admin), b01(u.Disabled)) {
-		return nil, s.tamper(u.ID, "users")
+	var ok1, ok2 bool
+	u.Admin, ok1 = bit(adm)
+	u.Disabled, ok2 = bit(dis)
+	if !ok1 || !ok2 || !rowSigOK(s.key, "users", strconv.FormatInt(u.ID, 10), sig, u.Name, u.PwHash, b01(u.Admin), b01(u.Disabled)) {
+		return u, &tamperErr{u.ID, "users"}
 	}
 	return u, nil
 }
 
+func (s *authStore) userByID(q querier, id int64) (*User, error) {
+	return s.scanUser(q.QueryRow(`SELECT `+userCols+` FROM users WHERE id=?`, id))
+}
+
 func (s *authStore) UserByName(name string) (*User, error) {
-	return s.scanUser(s.db.QueryRow(`SELECT `+userCols+` FROM users WHERE name=?`, normName(name)))
+	u, err := s.scanUser(s.db.QueryRow(`SELECT `+userCols+` FROM users WHERE name=?`, normName(name)))
+	if err != nil {
+		return nil, s.guard(err)
+	}
+	return u, nil
 }
 
-func (s *authStore) userByID(id int64) (*User, error) {
-	return s.scanUser(s.db.QueryRow(`SELECT `+userCols+` FROM users WHERE id=?`, id))
-}
-
-// Users renvoie aussi les lignes dont la signature est fausse, marquées par bad[id].
+// Users renvoie aussi les lignes altérées, marquées par bad[id], une entrée de journal par ligne.
 func (s *authStore) Users() (users []*User, bad map[int64]bool, err error) {
 	rows, err := s.db.Query(`SELECT ` + userCols + ` FROM users ORDER BY id`)
 	if err != nil {
@@ -172,16 +215,13 @@ func (s *authStore) Users() (users []*User, bad map[int64]bool, err error) {
 	}
 	defer rows.Close()
 	bad = map[int64]bool{}
-	var tampered []int64
 	for rows.Next() {
-		u := &User{}
-		var sig []byte
-		if err := rows.Scan(&u.ID, &u.Name, &u.PwHash, &u.Admin, &u.Disabled, &u.CreatedAt, &u.PwChangedAt, &sig); err != nil {
+		u, err := s.scanUser(rows)
+		if err != nil && !errors.Is(err, errTamper) {
 			return nil, nil, err
 		}
-		if !rowSigOK(s.key, "users", strconv.FormatInt(u.ID, 10), sig, u.Name, u.PwHash, b01(u.Admin), b01(u.Disabled)) {
+		if err != nil {
 			bad[u.ID] = true
-			tampered = append(tampered, u.ID)
 		}
 		users = append(users, u)
 	}
@@ -189,73 +229,66 @@ func (s *authStore) Users() (users []*User, bad map[int64]bool, err error) {
 		return nil, nil, err
 	}
 	rows.Close()
-	for _, id := range tampered {
-		s.tamper(id, "users")
+	for id := range bad {
+		s.event(id, "tamper", "users")
 	}
 	return users, bad, nil
 }
 
-func (s *authStore) saveUser(u *User, sql string, args ...any) error {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if _, err := tx.Exec(sql, args...); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(`UPDATE users SET sig=? WHERE id=?`, s.userSig(u), u.ID); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(`DELETE FROM sessions WHERE user_id=?`, u.ID); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-// SetDisabled et SetPassword révoquent les sessions ouvertes du compte.
+// SetDisabled et SetPassword relisent et re-signent dans la même transaction, et révoquent les sessions du compte.
 func (s *authStore) SetDisabled(id int64, off bool) error {
-	u, err := s.userByID(id)
-	if err != nil {
+	return s.inTx(func(tx *sql.Tx) error {
+		u, err := s.userByID(tx, id)
+		if err != nil {
+			return err
+		}
+		u.Disabled = off
+		if _, err := tx.Exec(`UPDATE users SET disabled=?, sig=? WHERE id=?`, off, s.userSig(u), id); err != nil {
+			return err
+		}
+		_, err = tx.Exec(`DELETE FROM sessions WHERE user_id=?`, id)
 		return err
-	}
-	u.Disabled = off
-	return s.saveUser(u, `UPDATE users SET disabled=? WHERE id=?`, off, id)
+	})
 }
 
 func (s *authStore) SetPassword(id int64, pw string) error {
 	if err := validPassword(pw); err != nil {
 		return err
 	}
-	u, err := s.userByID(id)
+	h, err := hashPassword(pw)
 	if err != nil {
 		return err
 	}
-	if u.PwHash, err = hashPassword(pw); err != nil {
+	return s.inTx(func(tx *sql.Tx) error {
+		u, err := s.userByID(tx, id)
+		if err != nil {
+			return err
+		}
+		u.PwHash = h
+		if _, err := tx.Exec(`UPDATE users SET pw_hash=?, pw_changed_at=?, sig=? WHERE id=?`, h, time.Now().Unix(), s.userSig(u), id); err != nil {
+			return err
+		}
+		_, err = tx.Exec(`DELETE FROM sessions WHERE user_id=?`, id)
 		return err
-	}
-	return s.saveUser(u, `UPDATE users SET pw_hash=?, pw_changed_at=? WHERE id=?`, u.PwHash, time.Now().Unix(), id)
+	})
 }
 
 func (s *authStore) ResetMFA(userID int64) error {
-	if _, err := s.userByID(userID); err != nil {
-		return err
-	}
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	for _, t := range []string{"totp", "webauthn_creds", "recovery_codes", "sessions"} {
-		if _, err := tx.Exec(`DELETE FROM `+t+` WHERE user_id=?`, userID); err != nil {
+	err := s.inTx(func(tx *sql.Tx) error {
+		if _, err := s.userByID(tx, userID); err != nil {
 			return err
 		}
+		for _, t := range []string{"totp", "webauthn_creds", "recovery_codes", "sessions"} {
+			if _, err := tx.Exec(`DELETE FROM `+t+` WHERE user_id=?`, userID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err == nil {
+		s.event(userID, "mfa_reset", "ok")
 	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	s.event(userID, "mfa_reset", "ok")
-	return nil
+	return err
 }
 
 func (s *authStore) HasUsers() bool {
@@ -273,7 +306,12 @@ func rightCols() string {
 
 // Rights relit et vérifie la ligne à chaque appel : aucune mise en cache.
 func (s *authStore) Rights(userID int64, homeID string) (map[Right]bool, error) {
-	vals := make([]bool, len(allRights))
+	m, err := s.rights(s.db, userID, homeID)
+	return m, s.guard(err)
+}
+
+func (s *authStore) rights(q querier, userID int64, homeID string) (map[Right]bool, error) {
+	vals := make([]any, len(allRights))
 	dst := make([]any, 0, len(allRights)+1)
 	for i := range vals {
 		dst = append(dst, &vals[i])
@@ -281,18 +319,20 @@ func (s *authStore) Rights(userID int64, homeID string) (map[Right]bool, error) 
 	var sig []byte
 	dst = append(dst, &sig)
 	m := map[Right]bool{}
-	err := s.db.QueryRow(`SELECT `+rightCols()+`,sig FROM home_acl WHERE user_id=? AND home_id=?`, userID, homeID).Scan(dst...)
+	err := q.QueryRow(`SELECT `+rightCols()+`,sig FROM home_acl WHERE user_id=? AND home_id=?`, userID, homeID).Scan(dst...)
 	if errors.Is(err, sql.ErrNoRows) {
 		return m, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	bad := false
 	for i, r := range allRights {
-		m[r] = vals[i]
+		on, ok := bit(vals[i])
+		m[r], bad = on, bad || !ok
 	}
-	if !rowSigOK(s.key, "home_acl", strconv.FormatInt(userID, 10), sig, append([]string{homeID}, rightStrings(m)...)...) {
-		return nil, s.tamper(userID, "home_acl")
+	if bad || !rowSigOK(s.key, "home_acl", strconv.FormatInt(userID, 10), sig, append([]string{homeID}, rightStrings(m)...)...) {
+		return nil, &tamperErr{userID, "home_acl"}
 	}
 	return m, nil
 }
@@ -317,28 +357,33 @@ func (s *authStore) setRights(userID int64, homeID string, on bool, rights []Rig
 	if homeID == "" {
 		return terr("srv.auth.homeVide")
 	}
-	if _, err := s.userByID(userID); err != nil {
-		return err
-	}
-	m, err := s.Rights(userID, homeID)
-	if err != nil {
-		return err
-	}
 	names := make([]string, len(rights))
 	for i, r := range rights {
 		if !validRight(r) {
 			return terr("srv.auth.droitInconnu", "A1", string(r))
 		}
-		m[r] = on
 		names[i] = string(r)
 	}
-	args := []any{userID, homeID}
-	for _, r := range allRights {
-		args = append(args, m[r])
-	}
-	args = append(args, s.aclSig(userID, homeID, m))
-	q := `INSERT OR REPLACE INTO home_acl(user_id,home_id,` + rightCols() + `,sig) VALUES(?,?` + strings.Repeat(",?", len(allRights)+1) + `)`
-	if _, err := s.db.Exec(q, args...); err != nil {
+	err := s.inTx(func(tx *sql.Tx) error {
+		if _, err := s.userByID(tx, userID); err != nil {
+			return err
+		}
+		m, err := s.rights(tx, userID, homeID)
+		if err != nil {
+			return err
+		}
+		for _, r := range rights {
+			m[r] = on
+		}
+		args := []any{userID, homeID}
+		for _, r := range allRights {
+			args = append(args, m[r])
+		}
+		args = append(args, s.aclSig(userID, homeID, m))
+		_, err = tx.Exec(`INSERT OR REPLACE INTO home_acl(user_id,home_id,`+rightCols()+`,sig) VALUES(?,?`+strings.Repeat(",?", len(allRights)+1)+`)`, args...)
+		return err
+	})
+	if err != nil {
 		return err
 	}
 	op := "revoke"
