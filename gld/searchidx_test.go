@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestSearchIndex(t *testing.T) {
@@ -39,7 +40,7 @@ func TestSearchIndex(t *testing.T) {
 		t.Fatal("syntaxe FTS non neutralisée")
 	}
 	// Transcript modifié puis supprimé : l'index suit.
-	put(t, p2, `{"type":"user","cwd":"/p","message":{"content":"désormais caddy"}}`, 0)
+	put(t, p2, `{"type":"user","cwd":"/p","message":{"content":"désormais caddy"}}`, 2*indexSettle)
 	if len(hits("caddy")) != 2 {
 		t.Fatal("transcript modifié non relu")
 	}
@@ -60,5 +61,37 @@ func TestFtsQuery(t *testing.T) {
 		if got := ftsQuery(in); got != want {
 			t.Errorf("ftsQuery(%q) = %q, attendu %q", in, got, want)
 		}
+	}
+}
+
+func TestSearchIndexSettle(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	now := time.Now()
+	idxNow = func() time.Time { return now }
+	t.Cleanup(func() { idxNow = time.Now })
+	p := filepath.Join(cfg, "projects", "-p", id1+".jsonl")
+	msg := func(w string) string { return `{"type":"user","cwd":"/p","message":{"content":"` + w + `"}}` }
+	hits := func(q string) int {
+		h, err := searchIndex(q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(h)
+	}
+	// Première indexation : immédiate, même pour un transcript tout frais.
+	put(t, p, msg("alpha"), 0)
+	if hits("alpha") != 1 {
+		t.Fatal("un transcript inconnu doit être indexé tout de suite")
+	}
+	// Déjà indexé, puis modifié à l'instant : pas relu.
+	put(t, p, msg("bravo"), 0)
+	if hits("bravo") != 0 || hits("alpha") != 1 {
+		t.Fatal("un transcript modifié depuis moins de indexSettle ne doit pas être relu")
+	}
+	// Une fois le délai écoulé : relu.
+	now = now.Add(indexSettle + time.Second)
+	if hits("bravo") != 1 || hits("alpha") != 0 {
+		t.Fatal("un transcript stabilisé doit être relu")
 	}
 }
