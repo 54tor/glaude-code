@@ -48,9 +48,10 @@ func (s *authStore) totpSig(r *totpRow) []byte {
 	return rowSig(s.key, "totp", strconv.FormatInt(r.uid, 10), string(r.nonce), string(r.enc), conf, strconv.FormatInt(r.lastStep, 10))
 }
 
-func (s *authStore) loadTOTP(userID int64) (*totpRow, error) {
+// loadTOTP ne journalise pas : l'appelant passe l'erreur par guard (ou inTx).
+func (s *authStore) loadTOTP(q querier, userID int64) (*totpRow, error) {
 	r := &totpRow{uid: userID}
-	err := s.db.QueryRow(`SELECT secret_enc,nonce,confirmed_at,last_step,sig FROM totp WHERE user_id=?`, userID).
+	err := q.QueryRow(`SELECT secret_enc,nonce,confirmed_at,last_step,sig FROM totp WHERE user_id=?`, userID).
 		Scan(&r.enc, &r.nonce, &r.confirmed, &r.lastStep, &r.sig)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, errNoTOTP
@@ -59,7 +60,7 @@ func (s *authStore) loadTOTP(userID int64) (*totpRow, error) {
 		return nil, err
 	}
 	if !hmac.Equal(r.sig, s.totpSig(r)) {
-		return nil, s.guard(&tamperErr{userID, "totp"})
+		return nil, &tamperErr{userID, "totp"}
 	}
 	return r, nil
 }
@@ -102,16 +103,26 @@ func (s *authStore) TOTPBegin(userID int64, account string) (secret, uri string,
 		if _, err := s.userByID(tx, userID); err != nil {
 			return err
 		}
-		res, err := tx.Exec(`INSERT INTO totp(user_id,secret_enc,nonce,confirmed_at,last_step,sig) VALUES(?,?,?,NULL,0,?)
-			ON CONFLICT(user_id) DO UPDATE SET secret_enc=excluded.secret_enc, nonce=excluded.nonce, last_step=0, sig=excluded.sig
-			WHERE totp.confirmed_at IS NULL`, userID, r.enc, r.nonce, s.totpSig(r))
+		old, err := s.loadTOTP(tx, userID)
+		if errors.Is(err, errNoTOTP) {
+			_, err = tx.Exec(`INSERT INTO totp(user_id,secret_enc,nonce,confirmed_at,last_step,sig) VALUES(?,?,?,NULL,0,?)`, userID, r.enc, r.nonce, s.totpSig(r))
+			return err
+		}
+		if err != nil {
+			return err
+		}
+		if old.confirmed.Valid {
+			return errTOTPActive
+		}
+		res, err := tx.Exec(`UPDATE totp SET secret_enc=?, nonce=?, last_step=0, sig=? WHERE user_id=? AND confirmed_at IS NULL AND sig=?`,
+			r.enc, r.nonce, s.totpSig(r), userID, old.sig)
 		if err != nil {
 			return err
 		}
 		if n, err := res.RowsAffected(); err != nil {
 			return err
 		} else if n == 0 {
-			return errTOTPActive
+			return errors.New("totp row changed concurrently")
 		}
 		return nil
 	})
@@ -122,7 +133,8 @@ func (s *authStore) TOTPBegin(userID int64, account string) (secret, uri string,
 }
 
 func (s *authStore) TOTPConfirm(userID int64, code string) error {
-	r, err := s.loadTOTP(userID)
+	r, err := s.loadTOTP(s.db, userID)
+	err = s.guard(err)
 	if errors.Is(err, errNoTOTP) {
 		return errBadCode
 	}
@@ -155,7 +167,8 @@ func (s *authStore) TOTPConfirm(userID int64, code string) error {
 
 // TOTPVerify avance last_step par un UPDATE conditionnel : de deux vérifications concurrentes du même code, une seule gagne.
 func (s *authStore) TOTPVerify(userID int64, code string, at time.Time) bool {
-	r, err := s.loadTOTP(userID)
+	r, err := s.loadTOTP(s.db, userID)
+	err = s.guard(err)
 	if err != nil || !r.confirmed.Valid {
 		if err != nil && !errors.Is(err, errNoTOTP) && !errors.Is(err, errTamper) {
 			journal("auth: totp verify: %v", err)
