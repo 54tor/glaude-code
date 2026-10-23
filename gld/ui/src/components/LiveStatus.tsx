@@ -117,11 +117,11 @@ export function LiveStats({ live: { st, open }, tok }: { live: Live; tok: Tokens
     <>
       <span className="ml-auto flex items-center gap-x-3 px-1 text-xs text-muted-foreground tabular-nums">
         {!(open && st.open) && <span className="font-medium">{t("conversation.live.closed")}</span>}
-        {st.context > 0 && <span title={t("conversation.live.contextTitle")}>ctx {compact(st.context)}</span>}
-        <span title={t("conversation.live.tokensTitle")}>{compact(tokTotal(tok))} tok</span>
+        {st.context > 0 && <span className="max-md:hidden" title={t("conversation.live.contextTitle")}>ctx {compact(st.context)}</span>}
+        <span className="max-md:hidden" title={t("conversation.live.tokensTitle")}>{compact(tokTotal(tok))} tok</span>
       </span>
       <Button size="sm" variant="ghost" onClick={() => setStats(true)} title={t("conversation.live.statsTitle")}>
-        <BarChart3 /> {t("conversation.live.stats")}
+        <BarChart3 /> <span className="max-md:sr-only">{t("conversation.live.stats")}</span>
       </Button>
       <Dialog open={stats} onOpenChange={setStats}>
         <DialogContent className="flex max-h-[85vh] min-w-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">

@@ -25,20 +25,20 @@ export function KeepWarmButton({ s }: { s: Session }) {
   if (warm?.on)
     return (
       <Button variant="outline" size="sm" className="border-amber-500/60 text-amber-600 dark:text-amber-400" onClick={() => set(s, false)} title={t("conversation.keepWarm.stopTitle")}>
-        <Coins /> {t("conversation.keepWarm.active")}
+        <Coins /> <span className="max-md:sr-only">{t("conversation.keepWarm.active")}</span>
       </Button>
     )
   if (!a.live.has(s.id))
     return (
       <Button variant="ghost" size="sm" disabled title={t("conversation.keepWarm.closedTitle")}>
-        <Flame /> {t("conversation.keepWarm.button")}
+        <Flame /> <span className="max-md:sr-only">{t("conversation.keepWarm.button")}</span>
       </Button>
     )
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="sm" title={t("conversation.keepWarm.buttonTitle")}>
-          <Flame /> {t("conversation.keepWarm.button")}
+          <Flame /> <span className="max-md:sr-only">{t("conversation.keepWarm.button")}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-80">
@@ -97,7 +97,7 @@ export function SessionStat({ s, live }: { s: Session; live: Live }) {
           {warm?.on && <Coins className="size-3.5 text-amber-500" aria-label={t("conversation.keepWarm.warmAria")} />}
         </span>
       )}
-      <span title={t("conversation.live.tokensTitle")}>
+      <span className="max-md:hidden" title={t("conversation.live.tokensTitle")}>
         {live.st && live.st.context > 0 && <>ctx {compact(live.st.context)}&ensp;</>}
         {compact(tokTotal(s.tok as Tokens))} tok
       </span>
