@@ -109,9 +109,12 @@ export function LiveBar({ live: { st, open }, id }: { live: Live; id: string }) 
 }
 
 // Contexte, tokens et sous-agents sur une ligne, le détail dans une fenêtre.
-export function LiveStats({ live: { st, open }, tok }: { live: Live; tok: Tokens }) {
+// shown/onShown : la fenêtre peut aussi s'ouvrir depuis le menu « … » du lecteur (petit écran, bouton masqué).
+export function LiveStats({ live: { st, open }, tok, shown, onShown }: { live: Live; tok: Tokens; shown?: boolean; onShown?: (v: boolean) => void }) {
   const { t } = useTranslation()
-  const [stats, setStats] = useState(false)
+  const [own, setOwn] = useState(false)
+  const stats = shown ?? own
+  const setStats = onShown ?? setOwn
   if (!st) return null
   return (
     <>
@@ -120,7 +123,7 @@ export function LiveStats({ live: { st, open }, tok }: { live: Live; tok: Tokens
         {st.context > 0 && <span className="max-md:hidden" title={t("conversation.live.contextTitle")}>ctx {compact(st.context)}</span>}
         <span className="max-md:hidden" title={t("conversation.live.tokensTitle")}>{compact(tokTotal(tok))} tok</span>
       </span>
-      <Button size="sm" variant="ghost" onClick={() => setStats(true)} title={t("conversation.live.statsTitle")}>
+      <Button size="sm" variant="ghost" className="max-md:hidden" onClick={() => setStats(true)} title={t("conversation.live.statsTitle")}>
         <BarChart3 /> <span className="max-md:sr-only">{t("conversation.live.stats")}</span>
       </Button>
       <Dialog open={stats} onOpenChange={setStats}>

@@ -271,11 +271,13 @@ export function GroupItems({ M, vg, page }: { M: Kit; vg: VGroup; page?: boolean
 }
 
 // Menu « ⋯ » d'une session.
-export function SessionDropdown({ row, after, children }: { row: Row; after?: () => void; children: React.ReactNode }) {
+// extra : entrées propres à l'appelant, en tête du menu (commandes du lecteur repliées sur petit écran).
+export function SessionDropdown({ row, after, extra, children }: { row: Row; after?: () => void; extra?: React.ReactNode; children: React.ReactNode }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
+        {extra}
         <SessionItems M={DD} row={row} after={after} />
       </DropdownMenuContent>
     </DropdownMenu>

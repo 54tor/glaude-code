@@ -1,12 +1,13 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowDown, ArrowDownToLine, ArrowUpToLine, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, Repeat, SquareTerminal, Wrench } from "lucide-react"
+import { ArrowDown, ArrowDownToLine, ArrowUpToLine, BarChart3, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, Repeat, SquareTerminal, Wrench } from "lucide-react"
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
 import { full, size, tilde } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenuCheckboxItem, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useActions } from "./actions"
@@ -17,7 +18,7 @@ import { Message } from "./Message"
 import { Composer, type Turn } from "./Composer"
 import { LiveBar, LiveStats, useLive } from "./LiveStatus"
 import { LoadedDialog } from "./LoadedDialog"
-import { KeepWarmBanner, KeepWarmButton, SessionStat } from "./KeepWarm"
+import { KeepWarmBanner, KeepWarmButton, KeepWarmItem, SessionStat } from "./KeepWarm"
 import { useLocal } from "@/hooks/useLocal"
 import { useGit } from "@/hooks/useGit"
 import { GitBadge } from "./GitBadge"
@@ -77,6 +78,7 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
     api.termInfo().then((r) => setTermOn(r.enabled), () => {})
   }, [])
   const [loadedOpen, setLoadedOpen] = useState(false) // instructions réellement chargées (hook InstructionsLoaded)
+  const [statsOpen, setStatsOpen] = useState(false)
   // Les messages sont rangés avec la clé (session, outils) qui les a produits : tant qu'elle ne correspond
   // pas à la demande courante, on affiche le chargement, sans remise à zéro synchrone dans un effet.
   // start/more : décalage de la première ligne lue et existence de messages plus anciens (lecture par la fin).
@@ -269,55 +271,85 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
             </Button>
           </div>
         )}
+        {/* Petit écran : une seule ligne (reprendre, aller à la fin, menu « … » qui reprend les autres commandes) ; l'état git passe dessous. */}
         <div className="flex flex-wrap items-center gap-1 border-b bg-muted/40 px-2 py-1.5 in-data-[kb]:hidden md:px-4">
-          <Button variant={tools ? "secondary" : "ghost"} size="sm" onClick={() => setTools(!tools)} aria-pressed={tools}>
-            <Wrench /> <span className="max-md:sr-only">{tools ? t("conversation.view.toolsShown") : t("conversation.view.toolsHidden")}</span>
+          <Button variant={tools ? "secondary" : "ghost"} size="sm" className="max-md:hidden" onClick={() => setTools(!tools)} aria-pressed={tools}>
+            <Wrench /> {tools ? t("conversation.view.toolsShown") : t("conversation.view.toolsHidden")}
           </Button>
           {termOn && a.live.has(id) && (
-            <Button variant="secondary" size="sm" onClick={() => setView(inTerm ? "visuel" : "terminal")} title={t("conversation.view.modeTitle")}>
-              {inTerm ? <MessagesSquare /> : <SquareTerminal />} <span className="max-md:sr-only">{inTerm ? t("conversation.view.modeVisual") : t("conversation.view.modeTerminal")}</span>
+            <Button variant="secondary" size="sm" className="max-md:hidden" onClick={() => setView(inTerm ? "visuel" : "terminal")} title={t("conversation.view.modeTitle")}>
+              {inTerm ? <MessagesSquare /> : <SquareTerminal />} {inTerm ? t("conversation.view.modeVisual") : t("conversation.view.modeTerminal")}
             </Button>
           )}
-          <Button variant="ghost" size="sm" onClick={() => setLoadedOpen(true)} title={t("conversation.view.instructionsTitle")}>
-            <FileText /> <span className="max-md:sr-only">{t("conversation.view.instructions")}</span>
+          <Button variant="ghost" size="sm" className="max-md:hidden" onClick={() => setLoadedOpen(true)} title={t("conversation.view.instructionsTitle")}>
+            <FileText /> {t("conversation.view.instructions")}
           </Button>
           <Button variant="ghost" size="icon-sm" className="max-md:hidden" onClick={toTop} aria-label={t("conversation.view.toTop")} title={t("conversation.view.toTop")}>
             <ArrowUpToLine />
           </Button>
-          <Button variant="ghost" size="icon-sm" className="max-md:hidden" onClick={toEnd} aria-label={t("conversation.view.toEnd")} title={t("conversation.view.toEnd")}>
+          <Button variant="ghost" size="icon-sm" onClick={toEnd} aria-label={t("conversation.view.toEnd")} title={t("conversation.view.toEnd")}>
             <ArrowDownToLine />
           </Button>
-          {session && <KeepWarmButton s={session} />}
-          {session && <LiveStats live={live} tok={session.tok} />}
-          <div className="flex flex-wrap items-center gap-1 max-md:contents">
-            <div className="flex items-center gap-1 max-md:order-last max-md:w-full max-md:overflow-x-auto md:contents">
-            {gitDirs.map((d) => (
-              <span key={d} className="flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs" title={d}>
-                {d !== row?.g.project && <span className="max-w-32 truncate text-muted-foreground">{d.split("/").filter(Boolean).pop()}</span>}
-                <GitBadge st={git.status[d]} />
-                <GitPush dir={d} st={git.status[d]} />
-                <GitChanges dir={d} count={git.status[d] ? git.status[d].changed + git.status[d].untracked : 0} />
-              </span>
-            ))}
+          {session && (
+            <span className="contents max-md:hidden">
+              <KeepWarmButton s={session} />
+            </span>
+          )}
+          {session && <LiveStats live={live} tok={session.tok} shown={statsOpen} onShown={setStatsOpen} />}
+          {gitDirs.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1 max-md:order-last max-md:w-full md:contents">
+              {gitDirs.map((d) => (
+                <span key={d} className="flex min-w-0 flex-wrap items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs md:shrink-0" title={d}>
+                  {d !== row?.g.project && <span className="max-w-32 truncate text-muted-foreground">{d.split("/").filter(Boolean).pop()}</span>}
+                  <GitBadge st={git.status[d]} />
+                  <GitPush dir={d} st={git.status[d]} />
+                  <GitChanges dir={d} count={git.status[d] ? git.status[d].changed + git.status[d].untracked : 0} />
+                </span>
+              ))}
             </div>
-            {row && !row.g.missing && (
-              <Button variant="outline" size="sm" className="max-md:hidden" onClick={() => a.newSession(row.g.project)} title={t("conversation.view.newSessionTitle")}>
-                <MessageSquarePlus /> {t("conversation.view.newSession")}
+          )}
+          {row && !row.g.missing && (
+            <Button variant="outline" size="sm" className="max-md:hidden" onClick={() => a.newSession(row.g.project)} title={t("conversation.view.newSessionTitle")}>
+              <MessageSquarePlus /> {t("conversation.view.newSession")}
+            </Button>
+          )}
+          {session && (
+            <Button size="sm" className="max-md:ml-auto" onClick={() => a.open({ dir: session.dir, id: session.id })}>
+              <SquareTerminal /> {t("conversation.view.resume")}
+            </Button>
+          )}
+          {row && (
+            <SessionDropdown
+              row={row}
+              after={onClose}
+              extra={
+                <DropdownMenuGroup className="md:hidden">
+                  <DropdownMenuCheckboxItem checked={tools} onCheckedChange={(c) => setTools(c === true)}>
+                    {t("conversation.view.showTools")}
+                  </DropdownMenuCheckboxItem>
+                  {termOn && a.live.has(id) && (
+                    <DropdownMenuItem onSelect={() => setView(inTerm ? "visuel" : "terminal")}>
+                      {inTerm ? <MessagesSquare /> : <SquareTerminal />} {inTerm ? t("conversation.view.modeVisual") : t("conversation.view.modeTerminal")}
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onSelect={() => setLoadedOpen(true)}>
+                    <FileText /> {t("conversation.view.instructions")}
+                  </DropdownMenuItem>
+                  {live.st && (
+                    <DropdownMenuItem onSelect={() => setStatsOpen(true)}>
+                      <BarChart3 /> {t("conversation.live.stats")}
+                    </DropdownMenuItem>
+                  )}
+                  {session && <KeepWarmItem s={session} />}
+                  <DropdownMenuSeparator />
+                </DropdownMenuGroup>
+              }
+            >
+              <Button variant="ghost" size="icon-sm" aria-label={t("conversation.view.moreActions")}>
+                <MoreHorizontal />
               </Button>
-            )}
-            {session && (
-              <Button size="sm" onClick={() => a.open({ dir: session.dir, id: session.id })}>
-                <SquareTerminal /> <span className="max-md:sr-only">{t("conversation.view.resume")}</span>
-              </Button>
-            )}
-            {row && (
-              <SessionDropdown row={row} after={onClose}>
-                <Button variant="ghost" size="icon-sm" aria-label={t("conversation.view.moreActions")}>
-                  <MoreHorizontal />
-                </Button>
-              </SessionDropdown>
-            )}
-          </div>
+            </SessionDropdown>
+          )}
         </div>
         {inTerm && (
           <Suspense fallback={null}>
