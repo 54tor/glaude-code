@@ -511,8 +511,59 @@ func (a *authAPI) me(w http.ResponseWriter, r *http.Request) {
 	out := map[string]any{"ok": true, "user": map[string]any{"name": p.User.Name, "admin": p.User.Admin}, "mfa": p.MFA, "csrf": p.CSRF, "factors": f}
 	if !p.MFA {
 		out["out"] = L("srv.auth.mfaRequis")
+		writeJSON(w, 200, out)
+		return
 	}
+	creds, err := a.s.WebAuthnList(p.User.ID)
+	if err != nil {
+		authInternal(w, err)
+		return
+	}
+	keys := make([]map[string]any, 0, len(creds))
+	for _, k := range creds {
+		keys = append(keys, map[string]any{"id": k.ID, "label": k.Label, "created": k.CreatedAt, "bad": k.Bad})
+	}
+	out["factors"] = map[string]any{"totp": f.TOTP, "webauthn": f.WebAuthn, "recovery": f.Recovery, "keys": keys}
+	rights, homes, err := a.myHomes(p.User.ID)
+	if err != nil {
+		authInternal(w, err)
+		return
+	}
+	out["rights"], out["homes"] = rights, homes
 	writeJSON(w, 200, out)
+}
+
+// myHomes ne liste que les homes où le compte a au moins un droit (ou une ligne altérée, montrée vide) :
+// un compte sans droit n'apprend rien des homes existants.
+func (a *authAPI) myHomes(uid int64) (map[string][]Right, []map[string]string, error) {
+	rights := map[string][]Right{}
+	homes := []map[string]string{}
+	names := homeNames()
+	ids := []string{mainHomeID}
+	for _, h := range loadHomes() {
+		ids = append(ids, h.ID)
+	}
+	for _, id := range ids {
+		m, err := a.s.Rights(uid, id)
+		held := []Right{}
+		switch {
+		case errors.Is(err, errTamper):
+		case err != nil:
+			return nil, nil, err
+		default:
+			for _, r := range allRights {
+				if m[r] {
+					held = append(held, r)
+				}
+			}
+			if len(held) == 0 {
+				continue
+			}
+		}
+		rights[id] = held
+		homes = append(homes, map[string]string{"id": id, "name": names[id]})
+	}
+	return rights, homes, nil
 }
 
 // reauthReq : mot de passe, plus un code (TOTP ou secours) ou, à défaut, une assertion WebAuthn

@@ -862,3 +862,76 @@ func TestEnrollFailedConfirmNoArgon(t *testing.T) {
 		t.Fatalf("bon code : %d, générations %d", w.Code, gens.Load())
 	}
 }
+
+func TestMeRightsHomesKeys(t *testing.T) {
+	g := newAuthRig(t)
+	old := root
+	t.Cleanup(func() { root = old })
+	use(t.TempDir())
+	addHomes(t, "work", "perso")
+	ids := map[string]string{}
+	for _, h := range loadHomes() {
+		ids[h.Name] = h.ID
+	}
+	bob, _ := g.s.AddUser("bob", testPw, false)
+	carol, _ := g.s.AddUser("carol", testPw, false)
+	g.s.Grant(g.uid, mainHomeID, RightMemRead, RightExec)
+	g.s.Grant(g.uid, ids["work"], RightMemWrite)
+	g.s.Grant(bob, ids["perso"], RightMemRead)
+	k := newSoftKey(t)
+	if err := waRegister(t, g.s, g.uid, k, "x"); err != nil {
+		t.Fatal(err)
+	}
+	me := func(uid int64) map[string]any {
+		t.Helper()
+		c, _ := fullSession(t, g.s, uid)
+		w := g.do("GET", "/auth/me", c, "", nil)
+		if w.Code != 200 {
+			t.Fatalf("me : %d %s", w.Code, w.Body)
+		}
+		return jbody(t, w)
+	}
+	m := me(g.uid)
+	want := map[string]any{mainHomeID: []any{"mem_read", "exec"}, ids["work"]: []any{"mem_write"}}
+	if !reflect.DeepEqual(m["rights"], want) {
+		t.Fatalf("droits = %v", m["rights"])
+	}
+	homes := m["homes"].([]any)
+	if len(homes) != 2 || homes[0].(map[string]any)["name"] != mainHomeID || homes[1].(map[string]any)["name"] != "work" {
+		t.Fatalf("homes = %v", homes)
+	}
+	f := m["factors"].(map[string]any)
+	keys := f["keys"].([]any)
+	if f["webauthn"] != 1.0 || len(keys) != 1 || keys[0].(map[string]any)["label"] != "clé" || keys[0].(map[string]any)["id"] == nil {
+		t.Fatalf("facteurs = %v", f)
+	}
+	if m := me(carol); !reflect.DeepEqual(m["rights"], map[string]any{}) || len(m["homes"].([]any)) != 0 {
+		t.Fatalf("sans droit : %v %v", m["rights"], m["homes"])
+	}
+	if m := me(bob); !reflect.DeepEqual(m["rights"], map[string]any{ids["perso"]: []any{"mem_read"}}) {
+		t.Fatalf("bob : %v", m["rights"])
+	}
+	before := tamperEvents(t, g.s)
+	if _, err := g.s.db.Exec(`UPDATE home_acl SET exec=1 WHERE user_id=? AND home_id=?`, g.uid, ids["work"]); err != nil {
+		t.Fatal(err)
+	}
+	if r := me(g.uid)["rights"].(map[string]any); !reflect.DeepEqual(r[ids["work"]], []any{}) || len(r[mainHomeID].([]any)) != 2 {
+		t.Fatalf("ligne altérée : %v", r)
+	}
+	if tamperEvents(t, g.s) <= before {
+		t.Fatal("altération non journalisée")
+	}
+	c, _, _ := g.partial()
+	pm := jbody(t, g.do("GET", "/auth/me", c, "", nil))
+	var got []string
+	for k := range pm {
+		got = append(got, k)
+	}
+	sort.Strings(got)
+	if !reflect.DeepEqual(got, []string{"csrf", "factors", "mfa", "ok", "out", "user"}) {
+		t.Fatalf("forme partielle : %v", got)
+	}
+	if _, has := pm["factors"].(map[string]any)["keys"]; has {
+		t.Fatal("clés exposées en session partielle")
+	}
+}
