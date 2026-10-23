@@ -3,7 +3,7 @@
 // checked : case d'une question à choix multiples (la touche chiffre la coche ou la décoche sans bouger le curseur) ; reach : touches
 // pour amener le curseur sur l'option sans la valider (nécessaire avant d'écrire dans une option « Type something »).
 export type Opt = { label: string; keys: string[]; detail?: string; text?: boolean; chat?: boolean; checked?: boolean; reach?: string[] }
-export type Prompt = { question: string; context?: string; options: Opt[]; submit?: string[] } // context : la commande ou le diff d'une demande d'autorisation
+export type Prompt = { question: string; context?: string; options: Opt[]; submit?: string[]; tabs?: { label: string; done: boolean }[] } // tabs : onglets de la question (☒ répondu) ; context : la commande ou le diff d'une demande d'autorisation
 // Options qui attendent une réponse libre (« Type something. », « Chat about this », « No, and tell Claude what to do differently »…).
 const CHAT = /chat about this/i
 const FREE = /type something|chat about this|tell claude|something else|^\d+\.\s*other\b/i
@@ -171,7 +171,7 @@ function multiSelect(lines: string[], above: (at: number) => string, recapAt: (h
         ? [{ label: `${r.n}. ${r.label}`, keys: [r.n!, "Enter"], text: FREE.test(r.label), chat: CHAT.test(r.label) }]
         : []
   )
-  return { question: above(boxes[0].at + off), context: recapAt(head), options, submit: [...reach(submit), "Enter"] }
+  return { question: above(boxes[0].at + off), context: recapAt(head), tabs: tabsOf(lines[0]), options, submit: [...reach(submit), "Enter"] }
 }
 
 // Le message de Claude affiché au-dessus d'un dialogue à onglets (récapitulatif des choix) : de sa puce « ● » jusqu'à l'en-tête, ou de
@@ -181,4 +181,10 @@ function recap(all: string[], head: number): string | undefined {
   while (from > 0 && head - from < 200 && !/^\s*●/.test(all[from])) from--
   const text = all.slice(from, head).filter((l) => !/^[─━╌▔\s]+$/.test(l)).join("\n").trim()
   return text || undefined
+}
+
+// « ←  ☒ UI-01  ☐ Périmètre  ✔ Submit  → » : les onglets avant Submit, répondus (☒) ou non (☐).
+function tabsOf(head: string): { label: string; done: boolean }[] | undefined {
+  const tabs = [...head.matchAll(/([☐☒])\s+(.+?)(?=\s{2,}[☐☒✔]|\s*$)/g)].map((m) => ({ label: m[2].trim(), done: m[1] === "☒" }))
+  return tabs.length ? tabs : undefined
 }

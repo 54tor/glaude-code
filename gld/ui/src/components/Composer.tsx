@@ -414,6 +414,15 @@ function TerminalPanel({ id, onAsk }: { id: string; onAsk?: (asking: boolean) =>
     <div className="space-y-2">
       {prompt && (
         <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm">
+          {prompt.tabs && prompt.tabs.length > 1 && (
+            <p className="mb-1.5 flex flex-wrap gap-1 text-xs" aria-label="Onglets de la question">
+              {prompt.tabs.map((t) => (
+                <span key={t.label} className={t.done ? "rounded border border-emerald-600/40 px-1.5 text-emerald-700 dark:text-emerald-400" : "rounded border px-1.5 font-medium"}>
+                  {t.done ? "✔" : "•"} {t.label}
+                </span>
+              ))}
+            </p>
+          )}
           {prompt.context && <pre className="mb-2 max-h-60 overflow-auto rounded-md border bg-background/70 p-2 font-mono text-xs break-words whitespace-pre-wrap">{prompt.context}</pre>}
           <p className="mb-1.5 font-medium">{prompt.question || "Réponse attendue"}</p>
           <div className="flex flex-col items-stretch gap-1.5">
