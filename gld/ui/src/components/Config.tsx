@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
+import { useTranslation } from "react-i18next"
 import { api, type CfgOverview } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
@@ -18,6 +19,7 @@ import { takeConfigFile } from "@/lib/wantConfigFile"
 // Configuration de Claude Code : réglages utilisateur, de projet et locaux. Lecture (précédence, santé, hooks, MCP) et
 // modifications limitées aux réglages simples, variables d'environnement, plugins et permissions, avec aperçu et sauvegarde.
 export function Config({ home, tab, onTab }: { home: string; tab: string; onTab: (t: string) => void }) {
+  const { t } = useTranslation()
   const [ov, setOv] = useState<CfgOverview | null>(null)
   const [fileId, setFileId] = useState(() => takeConfigFile() || "u") // fichier édité dans « Permissions » et « Réglages »
   const reload = useCallback(() => api.config().then(setOv), [])
@@ -39,7 +41,7 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
     if (!r.ok) return void toast.error(r.out)
     if (move) await propose({ file, op: "remove", path: ["permissions", kind], value: rule })
     else {
-      toast.success("Règle copiée dans vos réglages")
+      toast.success(t("config.main.copiedToUser"))
       reload()
     }
   }
@@ -47,30 +49,30 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
 
   const label = (id: string) =>
     id === "u"
-      ? "Utilisateur · ~/.claude/settings.json"
-      : `${id[0] === "p" ? "Projet" : "Local"} · ${tilde(ov.projects.find((p) => p.dir === id.slice(2))?.project ?? id.slice(2), home)}`
+      ? t("config.main.userFile")
+      : t(id[0] === "p" ? "config.main.projectLabel" : "config.main.localLabel", { dir: tilde(ov.projects.find((p) => p.dir === id.slice(2))?.project ?? id.slice(2), home) })
   const scope = fileId === "u" ? "u" : fileId[0] // u : utilisateur, p : projet, l : local
   const dirOf = fileId === "u" ? "" : fileId.slice(2)
   const file = ov.files.find((f) => f.id === fileId)
   const doc = (file?.data ?? undefined) as Record<string, unknown> | undefined
   const fileSelect = (
     <div className="mb-5 flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
-      Emplacement :
+      {t("config.main.location")}
       <Choose
         value={scope}
         onChange={(v) => setFileId(v === "u" ? "u" : v + "/" + (dirOf || ov.projects[0]?.dir || ""))}
         options={[
-          ["u", "Utilisateur · ~/.claude/settings.json"],
-          ...(ov.projects.length ? ([["p", "Projet · .claude/settings.json (partagé)"], ["l", "Local · .claude/settings.local.json (non partagé)"]] as const) : []),
+          ["u", t("config.main.userFile")],
+          ...(ov.projects.length ? ([["p", t("config.main.optProject")], ["l", t("config.main.optLocal")]] as const) : []),
         ]}
-        label="Emplacement des réglages"
+        label={t("config.main.locationAria")}
         className="min-w-0 max-w-xs"
       />
       {scope !== "u" && (
-        <Choose value={dirOf} onChange={(d) => setFileId(scope + "/" + d)} options={ov.projects.map((p) => [p.dir, tilde(p.project, home)] as const)} label="Dossier du projet" className="min-w-0 max-w-md" />
+        <Choose value={dirOf} onChange={(d) => setFileId(scope + "/" + d)} options={ov.projects.map((p) => [p.dir, tilde(p.project, home)] as const)} label={t("config.main.projectDirAria")} className="min-w-0 max-w-md" />
       )}
-      {!file && <span className="text-xs text-amber-600 dark:text-amber-400">fichier à créer à la première modification</span>}
-      <span className="text-xs text-muted-foreground">Chaque modification est appliquée tout de suite, après une sauvegarde (onglet Sauvegardes). Les sessions ouvertes rechargent seules les réglages (sauf model, effort et plugins : /model, /effort, /reload-plugins).</span>
+      {!file && <span className="text-xs text-amber-600 dark:text-amber-400">{t("config.main.toCreate")}</span>}
+      <span className="text-xs text-muted-foreground">{t("config.main.applyNote")}</span>
     </div>
   )
 
@@ -83,16 +85,16 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
           <ScrollArea className="mb-2 w-full [mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)]">
             <div className="pb-2">
               <TabsList className="w-max justify-start">
-                <TabsTrigger value="sante">Santé{ov.issues.length > 0 && ` (${ov.issues.length})`}</TabsTrigger>
-                <TabsTrigger value="projets">Projets</TabsTrigger>
-                <TabsTrigger value="precedence">Précédence</TabsTrigger>
-                <TabsTrigger value="hooks">Hooks ({ov.hooks.length})</TabsTrigger>
+                <TabsTrigger value="sante">{t("config.main.tabs.health")}{ov.issues.length > 0 && ` (${ov.issues.length})`}</TabsTrigger>
+                <TabsTrigger value="projets">{t("config.main.tabs.projects")}</TabsTrigger>
+                <TabsTrigger value="precedence">{t("config.main.tabs.precedence")}</TabsTrigger>
+                <TabsTrigger value="hooks">{t("config.main.tabs.hooks")} ({ov.hooks.length})</TabsTrigger>
                 <TabsTrigger value="mcp">MCP</TabsTrigger>
-                <TabsTrigger value="permissions">Permissions</TabsTrigger>
-                <TabsTrigger value="reglages">Réglages</TabsTrigger>
+                <TabsTrigger value="permissions">{t("config.main.tabs.permissions")}</TabsTrigger>
+                <TabsTrigger value="reglages">{t("config.main.tabs.settings")}</TabsTrigger>
                 <TabsTrigger value="json">JSON</TabsTrigger>
-                <TabsTrigger value="sauvegardes">Sauvegardes ({ov.backups.length})</TabsTrigger>
-                <TabsTrigger value="sync">Synchroniser</TabsTrigger>
+                <TabsTrigger value="sauvegardes">{t("config.main.tabs.backups")} ({ov.backups.length})</TabsTrigger>
+                <TabsTrigger value="sync">{t("config.main.tabs.sync")}</TabsTrigger>
               </TabsList>
             </div>
             <ScrollBar orientation="horizontal" />
@@ -106,7 +108,7 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
               home={home}
               gone={gone}
               onAddDir={async (file, project, dir) => {
-                const p = dir ?? (await a.pickDir("Ajouter un dossier à " + tilde(project, home), project))
+                const p = dir ?? (await a.pickDir(t("config.main.pickDir", { dir: tilde(project, home) }), project))
                 if (p) await propose({ file, op: "add", path: ["permissions", "additionalDirectories"], value: p })
               }}
               // Autres dossiers des projets auxquels appartient ce dossier, sans ceux déjà autorisés (~/ et chemins absolus).

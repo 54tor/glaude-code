@@ -1,4 +1,5 @@
 import { Cog, Monitor, Moon, Sun } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import { FONTS, SIZES } from "@/lib/fonts"
 import type { Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
@@ -13,22 +14,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
 const THEMES = [
-  { v: "light", label: "Clair", Icon: Sun },
-  { v: "dark", label: "Sombre", Icon: Moon },
-  { v: "system", label: "Système", Icon: Monitor },
+  { v: "light", label: "themeLight", Icon: Sun },
+  { v: "dark", label: "themeDark", Icon: Moon },
+  { v: "system", label: "themeSystem", Icon: Monitor },
 ] as const
 
+// [touche affichée (cap.* : nom traduit), id du libellé]
 const KEYS: [string, string][] = [
-  ["/", "rechercher"],
-  ["j / k", "session suivante / précédente"],
-  ["Entrée", "lire"],
-  ["t", "reprendre dans un terminal"],
-  ["m", "reprendre avec un message"],
-  ["r", "renommer"],
-  ["x", "sélectionner"],
-  ["e", "exporter en Markdown"],
-  ["Suppr", "supprimer"],
-  ["Échap", "vider la sélection"],
+  ["/", "search"],
+  ["j / k", "nav"],
+  ["cap.enter", "enter"],
+  ["t", "t"],
+  ["m", "m"],
+  ["r", "r"],
+  ["x", "x"],
+  ["e", "e"],
+  ["cap.del", "del"],
+  ["cap.esc", "esc"],
 ]
 
 // Réglages rarement modifiés : options passées à claude, thème, raccourcis.
@@ -36,10 +38,11 @@ export type Fonts = { font: string; setFont: (v: string) => void; fontSize: stri
 
 // Police des conversations : un aperçu par jeu, en latin et en cyrillique, plus la taille.
 function FontPicker({ font, setFont, fontSize, setFontSize }: Fonts) {
+  const { t } = useTranslation()
   return (
     <div className="space-y-1.5">
-      <Label>Police des conversations</Label>
-      <div className="grid gap-1 sm:grid-cols-2" role="radiogroup" aria-label="Police des conversations">
+      <Label>{t("config.dialog.font")}</Label>
+      <div className="grid gap-1 sm:grid-cols-2" role="radiogroup" aria-label={t("config.dialog.font")}>
         {Object.entries(FONTS).map(([id, f]) => (
           <button
             key={id}
@@ -84,6 +87,7 @@ export function Settings({
   setChoice,
   ...fonts
 }: { args: string; setArgs: (v: string) => void; choice: Choice; setChoice: (c: Choice) => void } & Fonts) {
+  const { t } = useTranslation()
   const { theme, setTheme, palette, setPalette } = useTheme()
   const section = (title: string, hint: string, body: React.ReactNode) => (
     <div className="space-y-1.5">
@@ -95,45 +99,45 @@ export function Settings({
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-9 text-muted-foreground" aria-label="Réglages" title="Réglages">
+        <Button variant="ghost" size="icon" className="size-9 text-muted-foreground" aria-label={t("config.dialog.title")} title={t("config.dialog.title")}>
           <Cog className="size-6" />
         </Button>
       </DialogTrigger>
       <DialogContent className="flex h-[min(85vh,560px)] flex-col gap-4 sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Réglages</DialogTitle>
-          <DialogDescription>Enregistrés dans ce navigateur.</DialogDescription>
+          <DialogTitle>{t("config.dialog.title")}</DialogTitle>
+          <DialogDescription>{t("config.dialog.desc")}</DialogDescription>
         </DialogHeader>
         <Tabs defaultValue="claude" className="min-h-0 flex-1">
           <TabsList>
-            <TabsTrigger value="claude">Claude</TabsTrigger>
-            <TabsTrigger value="look">Apparence</TabsTrigger>
-            <TabsTrigger value="keys">Raccourcis</TabsTrigger>
+            <TabsTrigger value="claude">{t("config.dialog.tabClaude")}</TabsTrigger>
+            <TabsTrigger value="look">{t("config.dialog.tabLook")}</TabsTrigger>
+            <TabsTrigger value="keys">{t("config.dialog.tabKeys")}</TabsTrigger>
           </TabsList>
           <ScrollArea className="mt-2 min-h-0 flex-1 pr-3">
             <TabsContent value="claude" className="space-y-5">
               {section(
-                "Options ajoutées à claude",
-                "Utilisées à chaque reprise dans un terminal. Le chat du lecteur n'en garde que --model, --fallback-model et --effort. Vide par défaut.",
+                t("config.dialog.argsTitle"),
+                t("config.dialog.argsHint"),
                 <Input
                   id="args"
                   value={args}
                   onChange={(e) => setArgs(e.target.value)}
-                  placeholder="ex. --dangerously-skip-permissions"
+                  placeholder={t("config.dialog.argsPlaceholder")}
                   className="font-mono text-xs"
                   spellCheck={false}
-                  aria-label="Options ajoutées à claude"
+                  aria-label={t("config.dialog.argsTitle")}
                 />
               )}
               {section(
-                "Modèle et effort des nouveaux prompts",
-                "Proposés par défaut pour reprendre avec un message, une nouvelle session ou le chat ; modifiables à chaque prompt.",
+                t("config.dialog.modelTitle"),
+                t("config.dialog.modelHint"),
                 <ModelPicker value={choice} onChange={setChoice} />
               )}
             </TabsContent>
             <TabsContent value="look" className="space-y-5">
               {section(
-                "Thème",
+                t("config.dialog.theme"),
                 "",
                 <div className="grid max-w-sm grid-cols-3 gap-1 rounded-lg bg-muted p-1">
                   {THEMES.map(({ v, label, Icon }) => (
@@ -146,15 +150,15 @@ export function Settings({
                         theme === v ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"
                       )}
                     >
-                      <Icon className="size-3.5" /> {label}
+                      <Icon className="size-3.5" /> {t(`config.dialog.${label}`)}
                     </button>
                   ))}
                 </div>
               )}
               {section(
-                "Palette de couleurs",
+                t("config.dialog.palette"),
                 "",
-                <div className="grid max-w-md grid-cols-2 gap-1.5" role="radiogroup" aria-label="Palette de couleurs">
+                <div className="grid max-w-md grid-cols-2 gap-1.5" role="radiogroup" aria-label={t("config.dialog.palette")}>
                   {Object.entries(PALETTES).map(([id, p]) => {
                     const t = p.dark
                     return (
@@ -183,9 +187,9 @@ export function Settings({
                 {KEYS.map(([k, v]) => (
                   <div key={k} className="contents">
                     <dt>
-                      <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-xs">{k}</kbd>
+                      <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-xs">{k.startsWith("cap.") ? t(`config.dialog.${k}`) : k}</kbd>
                     </dt>
-                    <dd className="text-muted-foreground">{v}</dd>
+                    <dd className="text-muted-foreground">{t(`config.dialog.key.${v}`)}</dd>
                   </div>
                 ))}
               </dl>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { CircleAlert, TriangleAlert } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import { formatRaw, parseRaw, type RawPerms } from "@/lib/permLint"
 import { api, type CfgIssue } from "@/lib/api"
 import { DiffView } from "./MemoryDiff"
@@ -16,6 +17,7 @@ const rulesOf = (doc: Doc, k: string): string[] => {
 // Édition de toutes les règles (allow, ask, deny) et des dossiers supplémentaires d'un fichier en texte brut, vérifiée à la frappe. L'enregistrement passe par
 // l'import en mode « remplacer » : aperçu des différences, sauvegarde, puis écriture.
 function Editor({ file, label, doc, propose, onClose }: { file: string; label: string; doc: Doc; propose: (file: string, text: string, mode: string, then?: () => void, now?: boolean) => Promise<string | null>; onClose: () => void }) {
+  const { t } = useTranslation()
   const [text, setText] = useState(() => formatRaw({ allow: rulesOf(doc, "allow"), ask: rulesOf(doc, "ask"), deny: rulesOf(doc, "deny"), additionalDirectories: rulesOf(doc, "additionalDirectories") } as RawPerms))
   const [error, setError] = useState("")
   const { perms, lint } = useMemo(() => parseRaw(text), [text])
@@ -46,49 +48,47 @@ function Editor({ file, label, doc, propose, onClose }: { file: string; label: s
   return (
     <DialogContent className="sm:max-w-3xl">
       <DialogHeader>
-        <DialogTitle>Éditer les permissions en texte</DialogTitle>
-        <DialogDescription>
-          {label} : une règle par ligne sous [allow], [ask] ou [deny], un chemin par ligne sous [additionalDirectories], « # » pour un commentaire (non conservé). Le mode par défaut n'est pas touché.
-        </DialogDescription>
+        <DialogTitle>{t("config.permRaw.title")}</DialogTitle>
+        <DialogDescription>{t("config.permRaw.desc", { label })}</DialogDescription>
       </DialogHeader>
       <textarea
         value={text}
         onChange={(e) => (setText(e.target.value), setError(""))}
         spellCheck={false}
-        aria-label="Règles de permission"
+        aria-label={t("config.permRaw.textAria")}
         className="h-72 w-full resize-y rounded-md border bg-background p-3 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       />
-      <ul className="max-h-32 space-y-0.5 overflow-y-auto text-xs" aria-label="Vérification">
+      <ul className="max-h-32 space-y-0.5 overflow-y-auto text-xs" aria-label={t("config.permRaw.lintAria")}>
         {lint.map((l, i) => (
           <li key={i} className={l.level === "error" ? "flex gap-1.5 text-destructive" : "flex gap-1.5 text-amber-600 dark:text-amber-400"}>
             {l.level === "error" ? <CircleAlert className="mt-0.5 size-3.5 shrink-0" /> : <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />}
-            <span className="tabular-nums">Ligne {l.line}</span> {l.msg}
+            <span className="tabular-nums">{t("config.permRaw.line", { n: l.line })}</span> {l.msg}
           </li>
         ))}
-        {lint.length === 0 && <li className="text-muted-foreground">Rien à signaler : {perms.allow.length + perms.ask.length + perms.deny.length} règle(s), {perms.additionalDirectories.length} dossier(s).</li>}
+        {lint.length === 0 && <li className="text-muted-foreground">{t("config.permRaw.clean", { rules: perms.allow.length + perms.ask.length + perms.deny.length, dirs: perms.additionalDirectories.length })}</li>}
       </ul>
       {pv && pv.before !== pv.after && (
         <>
           {pv.warns.length > 0 && (
-            <ul className="space-y-0.5 text-xs text-amber-600 dark:text-amber-400" aria-label="Avertissements du serveur">
+            <ul className="space-y-0.5 text-xs text-amber-600 dark:text-amber-400" aria-label={t("config.permRaw.warnAria")}>
               {pv.warns.map((w, i) => (
                 <li key={i}>⚠ {w.msg}</li>
               ))}
             </ul>
           )}
-          <div className="max-h-48 overflow-auto rounded-md border" aria-label="Différences">
+          <div className="max-h-48 overflow-auto rounded-md border" aria-label={t("config.permRaw.diffAria")}>
             <DiffView old={pv.before} cur={pv.after} compact />
           </div>
         </>
       )}
-      {pv && pv.before === pv.after && errors === 0 && <p className="text-xs text-muted-foreground">Aucun changement par rapport au fichier.</p>}
+      {pv && pv.before === pv.after && errors === 0 && <p className="text-xs text-muted-foreground">{t("config.permRaw.unchanged")}</p>}
       {error && <p className="text-sm text-destructive">{error}</p>}
       <DialogFooter>
         <Button variant="ghost" onClick={onClose}>
-          Annuler
+          {t("common.cancel")}
         </Button>
-        <Button onClick={save} disabled={errors > 0 || !pv || pv.before === pv.after} title={errors ? "Corrige les erreurs pour continuer" : undefined}>
-          Enregistrer
+        <Button onClick={save} disabled={errors > 0 || !pv || pv.before === pv.after} title={errors ? t("config.permRaw.fixErrors") : undefined}>
+          {t("common.save")}
         </Button>
       </DialogFooter>
     </DialogContent>

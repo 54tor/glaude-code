@@ -1,10 +1,16 @@
 // Palettes classiques des éditeurs. Chacune donne, en clair et en sombre, 7 couleurs dont on tire toutes les variables du thème.
 // "defaut" ne pose rien : ce sont les couleurs de index.css.
+import { i18n } from "@/i18n"
+
 export type Tone = { bg: string; fg: string; surface: string; muted: string; border: string; primary: string; side: string }
 export type Palette = { name: string; light?: Tone; dark?: Tone }
 
 export const PALETTES: Record<string, Palette> = {
-  defaut: { name: "Pupitre (défaut)" },
+  defaut: {
+    get name() {
+      return i18n.t("config.palettes.default")
+    },
+  },
   dracula: {
     name: "Dracula",
     dark: { bg: "#282a36", fg: "#f8f8f2", surface: "#343746", muted: "#44475a", border: "#44475a", primary: "#bd93f9", side: "#21222c" },
