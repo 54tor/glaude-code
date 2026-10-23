@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -112,7 +113,23 @@ func helperOutput(ctx context.Context, cmd *exec.Cmd) ([]byte, error) {
 		return nil, ctx.Err()
 	}
 	defer func() { <-helperSem }()
-	return cmd.Output()
+	out, err := cmd.Output()
+	// « exit status 1 » seul ne dit rien : on joint la dernière ligne que claude a écrite sur sa sortie d'erreur.
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		if l := lastLine(ee.Stderr); l != "" {
+			err = fmt.Errorf("%w : %s", err, cut(l, 300))
+		}
+	}
+	return out, err
+}
+
+func lastLine(b []byte) string {
+	t := strings.TrimSpace(string(b))
+	if i := strings.LastIndexByte(t, '\n'); i >= 0 {
+		t = strings.TrimSpace(t[i+1:])
+	}
+	return t
 }
 
 func withPath(c *exec.Cmd) *exec.Cmd {

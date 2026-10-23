@@ -23,6 +23,7 @@ import { TypeHelp } from "./MemoryTypes"
 import { TrashList, TrashViewer } from "./MemoryTrash"
 import { MemoryWriter, type WriteTarget } from "./MemoryWriter"
 import { useMemoryData } from "./useMemoryData"
+import { useEditorDraft, useLeaveGuard } from "@/hooks/useEditorDraft"
 
 // Mémoire de Claude : globale (CLAUDE.md, rules/) et par projet (memory/, CLAUDE.md et AGENTS.md du projet), lecture et édition.
 export function Memory({
@@ -61,10 +62,11 @@ export function Memory({
     })
 
   const [loaded, setLoaded] = useState<{ key: string; text: string } | null>(null)
-  const [draft, setDraft] = useState<{ key: string; text: string } | null>(null)
+  const [draft, setDraft] = useEditorDraft("memory")
   const editNext = useRef("") // « Modifier » depuis le clic droit : passe en édition dès le chargement
   const text = loaded?.key === sel ? loaded.text : null
   const editing = draft?.key === sel ? draft : null
+  useLeaveGuard(!!draft && !(draft.key === sel && draft.text === text))
   // Corbeille : sel vaut « corbeille/<id> » pour afficher une version.
   const inTrash = sel.startsWith("corbeille/") ? sel.slice(10) : ""
 
@@ -89,7 +91,7 @@ export function Memory({
     return () => {
       live = false
     }
-  }, [sel, inTrash])
+  }, [sel, inTrash, setDraft])
 
   const all = list ? [...list.global, ...list.projects.flatMap((p) => p.files)] : []
   const file = all.find((f) => f.key === sel)

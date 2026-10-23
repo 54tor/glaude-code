@@ -59,8 +59,8 @@ export function Section({
     <section className="group/sec mb-3">
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <p className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-muted-foreground" title={title}>
-            <Icon className="size-3.5 shrink-0" /> <span className="flex-1 truncate">{title}</span>
+          <div className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-muted-foreground" title={title}>
+            <Icon className="size-3.5 shrink-0" /> <h3 className="flex-1 truncate">{title}</h3>
             {budget > 0 && (
               <span
                 className="shrink-0 text-[10px] font-normal"
@@ -70,7 +70,7 @@ export function Section({
                 {budget >= 1000 ? `${(budget / 1000).toFixed(1)} k` : budget} tokens
               </span>
             )}
-            <Button variant="ghost" size="icon-xs" className={sortBtn} onClick={onNew} title="Nouvelle entrée" aria-label="Nouvelle entrée">
+            <Button variant="ghost" size="icon-xs" className={sortBtn} onClick={onNew} title="Nouvelle entrée" aria-label={`Nouvelle entrée · ${title}`}>
               <Plus />
             </Button>
             {/* Deux icônes : le critère (un clic passe au suivant) et le sens, pour ce dossier. */}
@@ -80,7 +80,7 @@ export function Section({
               className={sortBtn}
               onClick={() => onSort({ ...sort, by: SORTS[(SORTS.findIndex((s) => s[0] === sort.by) + 1) % SORTS.length][0] })}
               title={`Tri par ${label} (cliquer pour changer)`}
-              aria-label={`Trier par : ${label}`}
+              aria-label={`Trier ${title} par : ${label}`}
             >
               <SortIcon />
             </Button>
@@ -90,11 +90,11 @@ export function Section({
               className={sortBtn}
               onClick={() => onSort({ ...sort, dir: sort.dir === "asc" ? "desc" : "asc" })}
               title={sort.dir === "asc" ? "Croissant (cliquer pour inverser)" : "Décroissant (cliquer pour inverser)"}
-              aria-label={sort.dir === "asc" ? "Ordre croissant" : "Ordre décroissant"}
+              aria-label={`${sort.dir === "asc" ? "Ordre croissant" : "Ordre décroissant"} · ${title}`}
             >
               {sort.dir === "asc" ? <ArrowUpNarrowWide /> : <ArrowDownWideNarrow />}
             </Button>
-          </p>
+          </div>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-60">
           <ContextMenuItem onSelect={onNew}>

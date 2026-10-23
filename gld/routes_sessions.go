@@ -242,7 +242,7 @@ func routesSessions(mux *http.ServeMux) {
 		// interrompre une suppression en cours (sessions à moitié purgées).
 		n, spared, notes, err := purgeSessions(items)
 		journal("rm %d session(s) : %d supprimée(s), %d épargnée(s) %v", len(items), n, spared, ids(items))
-		msg := fmt.Sprintf("%d supprimée(s), %d vivante(s) épargnée(s)", n, spared)
+		msg := rmSummary(n, spared)
 		if len(notes) > 0 {
 			msg += "\n" + strings.Join(notes, "\n")
 		}
@@ -390,4 +390,20 @@ func routesSessions(mux *http.ServeMux) {
 
 	// Anti DNS-rebinding : seul le Host local est servi. Anti CSRF : http.CrossOriginProtection
 	// (bibliothèque standard) refuse toute requête modifiante venue d'une autre origine.
+}
+
+// rmSummary : bilan d'une suppression, lisible tel quel dans une notification.
+func rmSummary(n, spared int) string {
+	s := "Aucune session supprimée"
+	if n == 1 {
+		s = "1 session supprimée"
+	} else if n > 1 {
+		s = fmt.Sprintf("%d sessions supprimées", n)
+	}
+	if spared == 1 {
+		s += " ; 1 session ouverte épargnée"
+	} else if spared > 1 {
+		s += fmt.Sprintf(" ; %d sessions ouvertes épargnées", spared)
+	}
+	return s
 }

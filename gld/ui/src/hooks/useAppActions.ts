@@ -150,7 +150,7 @@ export function useAppActions(c: {
       }),
   }
   const same = (x: VGroup, y: VGroup) => x.name === y.name && x.project === y.project
-  const named = (title: string, value: string, confirm: string, run: (v: string) => void, auto?: PromptAsk["auto"]) => setPrompt({ title, value, confirm, run, auto })
+  const named = (title: string, value: string, confirm: string, run: PromptAsk["run"], auto?: PromptAsk["auto"], row?: string) => setPrompt({ title, value, confirm, run, auto, row })
   // Un groupe est un sous-dossier virtuel : il ne contient que des sessions de son dossier de travail.
   const addTo = (ids: string[], project: string, name: string) => {
     const vg = { name, project, ids }
@@ -320,7 +320,10 @@ export function useAppActions(c: {
         if (list.length) next[s.id] = list
         else delete next[s.id]
         saveStore(vgroups, [...favs], next)
-      }),
+        },
+        undefined,
+        s.id
+      ),
     toggleFav: (ids) => {
       const add = ids.some((id) => !favs.has(id))
       saveStore(vgroups, add ? [...new Set([...favs, ...ids])] : [...favs].filter((id) => !ids.includes(id)))
@@ -402,7 +405,8 @@ export function useAppActions(c: {
         s.named ? s.title : "",
         "Renommer",
         (title) => act("/rename", { dir: s.dir, id: s.id, title }, "Renommage…"),
-        { label: "Titre automatique", hint: "Un modèle rédige le titre d'après la conversation", run: () => act("/rename", { dir: s.dir, id: s.id, auto: true }, "Titre automatique…") }
+        { label: "Titre automatique", hint: "Un modèle rédige le titre d'après la conversation", run: () => act("/rename", { dir: s.dir, id: s.id, auto: true }, "Titre automatique…") },
+        s.id
       ),
     exportMd: (r) => exportMarkdown([{ s: r.s, project: tilde(r.g.project, home) }]).catch(() => toast.error("Export impossible")),
     move: async (rs) => {
@@ -422,6 +426,7 @@ export function useAppActions(c: {
     stop: (ids) =>
       setAsk({
         title: ids.length > 1 ? `Fermer ${ids.length} sessions ouvertes ?` : "Fermer la session ouverte ?",
+        rows: ids,
         body: "Le processus claude reçoit SIGTERM ; la conversation reste reprenable.",
         confirm: "Fermer",
         run: async () => {
@@ -440,6 +445,8 @@ export function useAppActions(c: {
     remove: (items, what, after) =>
       setAsk({
         title: "Supprimer définitivement ?",
+        rows: items.map((x) => x.id),
+        removes: true,
         body: `${what}${items.some((x) => live.has(x.id)) ? "\n\nLes sessions ouvertes seront d'abord fermées." : ""}\n\nSuppression définitive : transcript, sous-agents et fichiers associés.`,
         confirm: "Supprimer",
         run: () => {

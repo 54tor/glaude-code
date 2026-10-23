@@ -247,8 +247,8 @@ func TestHTTPRm(t *testing.T) {
 	t.Setenv("FAKE_AGENTS", "illisible")
 	ok(t, h, "/rm", `{"items":[{"dir":"-p","id":"`+id1+`"}]}`, false, "action refusée")
 	agents(t, id1)
-	ok(t, h, "/rm", `{"items":[{"dir":"-p","id":"`+id1+`"}]}`, false, "0 supprimée(s), 1 vivante(s) épargnée(s)")
-	ok(t, h, "/rm", `{"items":[{"dir":"-p","id":"`+id1+`"},{"dir":"-p","id":"`+id2+`"}]}`, true, "1 supprimée(s), 1 vivante(s)")
+	ok(t, h, "/rm", `{"items":[{"dir":"-p","id":"`+id1+`"}]}`, false, "Aucune session supprimée ; 1 session ouverte épargnée")
+	ok(t, h, "/rm", `{"items":[{"dir":"-p","id":"`+id1+`"},{"dir":"-p","id":"`+id2+`"}]}`, true, "1 session supprimée ; 1 session ouverte épargnée")
 	if exists(filepath.Join(cfg, "projects", "-p", id2+".jsonl")) || !exists(filepath.Join(cfg, "projects", "-p", id1+".jsonl")) {
 		t.Fatal("mauvaise session effacée")
 	}

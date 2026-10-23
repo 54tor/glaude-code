@@ -29,7 +29,7 @@ func TestLimitesHTTP(t *testing.T) {
 
 	// Le compte rendu de suppression est joint au message.
 	put(t, filepath.Join(cfg, "history.jsonl"), `{"sessionId":"`+id1+`"}`+"\n", old)
-	ok(t, h, "/rm", `{"items":[{"dir":"-p","id":"`+id1+`"}]}`, true, "1 supprimée(s), 0 vivante(s) épargnée(s)\\n  history.jsonl   : 1 ligne(s)")
+	ok(t, h, "/rm", `{"items":[{"dir":"-p","id":"`+id1+`"}]}`, true, "1 session supprimée\\n  history.jsonl   : 1 ligne(s)")
 
 	// Réponse du chat poussée au fil de l'eau.
 	put(t, filepath.Join(cfg, "projects", "-p", id2+".jsonl"), `{"cwd":"`+filepath.Join(cfg, "..", "p")+`"}`+"\n", old)

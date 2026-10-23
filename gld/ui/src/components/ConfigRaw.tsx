@@ -2,12 +2,13 @@ import { useEffect, useState } from "react"
 import { api } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useEditorDraft, useLeaveGuard } from "@/hooks/useEditorDraft"
 
 // Le fichier de réglages en JSON brut : tout est modifiable (hooks, MCP du projet…), avec validation de la syntaxe, aperçu des
 // différences et sauvegarde. Les secrets sont affichés masqués ; laissés tels quels, ils sont conservés à l'enregistrement.
 export function RawTab({ file, version, proposeRaw }: { file: string; version: number; proposeRaw: (file: string, text: string) => Promise<string | null> }) {
   const [loaded, setLoaded] = useState<{ key: string; text: string; err?: string } | null>(null)
-  const [draft, setDraft] = useState<{ key: string; text: string } | null>(null)
+  const [draft, setDraft] = useEditorDraft("config-json")
   const [error, setError] = useState("")
   const key = `${file}#${version}`
   useEffect(() => {
@@ -17,6 +18,7 @@ export function RawTab({ file, version, proposeRaw }: { file: string; version: n
       live = false
     }
   }, [file, key])
+  useLeaveGuard(!!draft && !(draft.key === key && draft.text === loaded?.text))
   if (loaded?.key !== key) return <Skeleton className="h-64 w-full" />
   const text = draft?.key === key ? draft.text : loaded.text
   const dirty = text !== loaded.text
@@ -30,9 +32,15 @@ export function RawTab({ file, version, proposeRaw }: { file: string; version: n
         onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "s" && (e.preventDefault(), dirty && save())}
         spellCheck={false}
         aria-label="JSON du fichier de réglages"
+        aria-invalid={!!error || undefined}
+        aria-describedby={error ? "raw-error" : undefined}
         className="h-[28rem] w-full resize-y rounded-md border bg-background p-3 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       />
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && (
+        <p id="raw-error" role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
       <div className="flex items-center gap-2">
         <Button size="sm" onClick={save} disabled={!dirty}>
           Aperçu et enregistrer
