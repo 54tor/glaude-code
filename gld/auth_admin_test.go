@@ -204,8 +204,68 @@ func TestLastAdmin(t *testing.T) {
 	}
 	s.SetDisabled(b, false)
 	s.db.Exec(`UPDATE users SET name='b2' WHERE id=?`, b)
-	if last, _ := s.lastAdmin(a); !last {
-		t.Fatal("un admin altéré ne compte pas")
+	before := tamperEvents(t, s)
+	for range 3 {
+		if last, _ := s.lastAdmin(a); !last {
+			t.Fatal("un admin altéré ne compte pas")
+		}
+	}
+	if n := tamperEvents(t, s); n != before {
+		t.Fatalf("lastAdmin journalise : %d -> %d", before, n)
+	}
+}
+
+// Cookie d'admin volé, sans réauth : il ne peut ni désactiver un autre admin ni couper ses sessions ; un compte ordinaire,
+// si.
+func TestDisableAdminNeedsReauth(t *testing.T) {
+	g := newAdminRig(t)
+	root := g.login("root", true)
+	other := g.login("other", true)
+	bob := g.login("bob", false)
+	if w := g.do("POST", "/admin/users/disable", &root, map[string]any{"id": other.id, "disabled": true}); w.Code != 403 {
+		t.Fatalf("désactiver un admin sans réauth : %d", w.Code)
+	}
+	if w := g.do("POST", "/admin/sessions/revoke", &root, map[string]any{"user_id": other.id}); w.Code != 403 {
+		t.Fatalf("révoquer un admin sans réauth : %d", w.Code)
+	}
+	if w := g.do("GET", "/admin/users", &other, nil); w.Code != 200 {
+		t.Fatalf("l'autre admin a été écarté : %d", w.Code)
+	}
+	g.ok(g.do("POST", "/admin/sessions/revoke", &root, map[string]any{"user_id": bob.id}))
+	bob = g.session(bob.id)
+	g.ok(g.do("POST", "/admin/users/disable", &root, map[string]any{"id": bob.id, "disabled": true}))
+	g.ok(g.do("POST", "/admin/sessions/revoke", &root, map[string]any{"user_id": other.id, "reauth": root.reauth()}))
+	g.ok(g.do("POST", "/admin/users/disable", &root, map[string]any{"id": other.id, "disabled": true, "reauth": root.reauth()}))
+	if u, _ := g.s.UserByName("other"); !u.Disabled {
+		t.Fatal("admin non désactivé après réauth")
+	}
+}
+
+// Accorder et retirer dans la même requête : une écriture refusée n'applique ni l'un ni l'autre.
+func TestACLAtomic(t *testing.T) {
+	g := newAdminRig(t)
+	root := g.login("root", true)
+	bob := g.login("bob", false)
+	g.s.Grant(bob.id, mainHomeID, RightMemWrite)
+	if _, err := g.s.db.Exec(`CREATE TRIGGER no_final BEFORE INSERT ON home_acl WHEN NEW.mem_read=1 AND NEW.mem_write=0 BEGIN SELECT RAISE(ABORT,'refus'); END`); err != nil {
+		t.Fatal(err)
+	}
+	w := g.do("POST", "/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"mem_read"}, "revoke": []string{"mem_write"}})
+	if w.Code != 500 {
+		t.Fatalf("écriture refusée : %d %s", w.Code, w.Body)
+	}
+	if m, err := g.s.Rights(bob.id, mainHomeID); err != nil || m[RightMemRead] || !m[RightMemWrite] {
+		t.Fatalf("application partielle : %v %v", m, err)
+	}
+	g.s.db.Exec(`DROP TRIGGER no_final`)
+	m := g.ok(g.do("POST", "/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"mem_read"}, "revoke": []string{"mem_write"}}))
+	if got := m["rights"].([]any); len(got) != 1 || got[0] != "mem_read" {
+		t.Fatalf("droits : %v", got)
+	}
+	var n int
+	g.s.db.QueryRow(`SELECT COUNT(*) FROM auth_events WHERE kind='acl' AND user_id=? AND outcome=?`, bob.id, "grant main mem_read; revoke main mem_write").Scan(&n)
+	if n != 1 {
+		t.Fatalf("un seul événement du store attendu : %d", n)
 	}
 }
 

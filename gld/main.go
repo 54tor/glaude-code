@@ -315,7 +315,6 @@ func handler() http.Handler {
 			}
 		}
 	}
-	onHomesRemoved = homesRemovedACL
 	guarded := http.NewCrossOriginProtection().Handler(withHomes(mux))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !openHosts && !hosts[r.Host] {
