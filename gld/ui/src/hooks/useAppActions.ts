@@ -342,7 +342,12 @@ export function useAppActions(c: {
         return n
       })
     },
-    hotLeft: (s) => (now && now - s.mtime < HOT ? Math.max(1, Math.ceil((HOT - (now - s.mtime)) / 60)) : null),
+    hotLeft: (s) => (now && now - s.mtime < HOT ? Math.min(HOT / 60, Math.max(1, Math.ceil((HOT - (now - s.mtime)) / 60))) : null),
+    touch: (id) => {
+      const t = Date.now() / 1000
+      setData((d) => d && { ...d, groups: d.groups.map((g) => ({ ...g, sessions: g.sessions.map((s) => (s.id === id ? { ...s, mtime: t } : s)) })) })
+      setTimeout(() => reload().catch(() => {}), 2000) // le transcript a enregistré le prompt : on prend l'heure réelle
+    },
     read,
     open: (b) => act("/open", { ...b, args }, "Ouverture du terminal…", "last"),
     // Un fournisseur inconnu ou une réponse ancienne : aucune fonction optionnelle (l'interface reste sobre plutôt que fausse).
