@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 
 	"github.com/zalando/go-keyring"
 )
@@ -38,10 +39,15 @@ func decodeKey(s string) ([]byte, error) {
 	return k, nil
 }
 
+// keyFromFile : la clé vient de auth.key (protection plus faible qu'un coffre-fort) ; lu par main pour avertir.
+var keyFromFile atomic.Bool
+
 // loadMasterKey: GLD_AUTH_KEY, then OS keyring, then auth.key. A new key goes to
 // the keyring only when it reports the entry absent; any other keyring error
 // (locked, bus failure) falls back to the file and never overwrites the entry.
-func loadMasterKey(dir string) ([]byte, error) {
+// A base that already carries a key witness never gets a new key: regenerating
+// would silently orphan every signed row.
+func loadMasterKey(dir string, db *authDB) ([]byte, error) {
 	if e := strings.TrimSpace(os.Getenv("GLD_AUTH_KEY")); e != "" {
 		return decodeKey(e)
 	}
@@ -61,7 +67,15 @@ func loadMasterKey(dir string) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+		keyFromFile.Store(true)
 		return decodeKey(strings.TrimSpace(string(b)))
+	}
+	var one int
+	switch err := db.QueryRow(`SELECT 1 FROM meta WHERE key='key_witness'`).Scan(&one); {
+	case err == nil:
+		return nil, fmt.Errorf("master key unavailable (keyring: %v) and no auth.key, but the auth database already has a key; refusing to create a new one", gerr)
+	case !errors.Is(err, sql.ErrNoRows):
+		return nil, err
 	}
 	k := make([]byte, 32)
 	if _, err := rand.Read(k); err != nil {
@@ -83,6 +97,7 @@ func loadMasterKey(dir string) ([]byte, error) {
 		os.Remove(path)
 		return nil, werr
 	}
+	keyFromFile.Store(true)
 	return k, nil
 }
 

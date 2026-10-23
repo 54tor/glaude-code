@@ -149,6 +149,9 @@ func TestWebAuthnRegisterLogin(t *testing.T) {
 	if waEvents(t, s, "enrolled") != 1 {
 		t.Fatal("enrolment not logged")
 	}
+	if u, err := s.userByID(s.db, id); err != nil || !u.MFAEnrolled {
+		t.Fatalf("mfa_enrolled non posé : %+v %v", u, err)
+	}
 	opts, err := s.WebAuthnBeginRegister(id, "s1")
 	if err != nil {
 		t.Fatal(err)

@@ -52,6 +52,10 @@ func (f factorState) none() bool { return !f.TOTP && f.WebAuthn == 0 }
 // factors échoue sur toute ligne altérée : un facteur douteux ne doit jamais rouvrir l'enrôlement sans second facteur.
 func (s *authStore) factors(uid int64) (factorState, error) {
 	var f factorState
+	u, err := s.userByID(s.db, uid)
+	if err != nil {
+		return f, s.guard(err)
+	}
 	t, err := s.loadTOTP(s.db, uid)
 	if err = s.guard(err); err != nil && !errors.Is(err, errNoTOTP) {
 		return f, err
@@ -62,6 +66,10 @@ func (s *authStore) factors(uid int64) (factorState, error) {
 		return f, s.guard(err)
 	}
 	f.WebAuthn = len(creds)
+	// Compte enrôlé sans aucun facteur : lignes supprimées, jamais une raison d'enrôler avec le seul mot de passe.
+	if u.MFAEnrolled && f.none() {
+		return f, s.guard(&tamperErr{uid, "mfa_factors"})
+	}
 	err = s.db.QueryRow(`SELECT COUNT(*) FROM recovery_codes WHERE user_id=? AND used_at IS NULL`, uid).Scan(&f.Recovery)
 	return f, err
 }

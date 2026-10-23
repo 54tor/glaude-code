@@ -980,3 +980,32 @@ func TestPurgeEvents(t *testing.T) {
 		t.Fatal("base fermée sans erreur")
 	}
 }
+
+// Facteurs supprimés d'un compte enrôlé : altération, jamais un nouvel enrôlement au seul mot de passe.
+func TestEnrolledFactorsDeleted(t *testing.T) {
+	g := newAuthRig(t)
+	g.enrolTOTP()
+	c, csrf, _ := g.partial()
+	g.s.db.Exec(`DELETE FROM totp WHERE user_id=?`, g.uid)
+	g.s.db.Exec(`DELETE FROM webauthn_creds WHERE user_id=?`, g.uid)
+	before := tamperEvents(t, g.s)
+	g.tick(time.Minute)
+	assertGenericFail(t, g.login("alice", testPw))
+	if tamperEvents(t, g.s) <= before {
+		t.Fatal("altération non journalisée")
+	}
+	if w := g.do("POST", "/auth/totp/begin", c, csrf, map[string]string{}); w.Code == 200 {
+		t.Fatalf("enrôlement rouvert : %d %s", w.Code, w.Body)
+	}
+	if err := g.s.ResetMFA(g.uid); err != nil {
+		t.Fatal(err)
+	}
+	g.tick(thWindow)
+	c, csrf, m := g.partial()
+	if m["enroll"] != true {
+		t.Fatalf("après ResetMFA : %v", m)
+	}
+	if w := g.do("POST", "/auth/totp/begin", c, csrf, map[string]string{}); w.Code != 200 {
+		t.Fatalf("enrôlement après ResetMFA : %d %s", w.Code, w.Body)
+	}
+}

@@ -1,9 +1,16 @@
 package main
 
 import (
+	"bytes"
+	"database/sql"
+	"errors"
+	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -108,5 +115,90 @@ func TestAuthDirEnv(t *testing.T) {
 	base, _ := os.UserConfigDir()
 	if d, err := authDir(); err != nil || d != filepath.Join(base, "gld") {
 		t.Fatal(d, err)
+	}
+}
+
+// Base créée par le schéma 0005 : à l'ouverture, les sessions partent, les comptes à l'ancienne signature valide sont
+// re-signés avec mfa_enrolled déduit de leurs facteurs, une ligne altérée le reste et le marqueur des comptes est posé.
+func TestUpgradeFromSchema5(t *testing.T) {
+	stubKeyring(t)
+	dir := t.TempDir()
+	t.Setenv("GLD_AUTH_DIR", dir)
+	t.Setenv("GLD_AUTH_KEY", strings.Repeat("cd", 32))
+	key := bytes.Repeat([]byte{0xcd}, 32)
+	db, err := sql.Open("sqlite", filepath.Join(dir, "auth.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for v := 1; v <= 5; v++ {
+		names, _ := fs.Glob(authMigrations, fmt.Sprintf("auth_migrations/%04d_*.sql", v))
+		body, _ := authMigrations.ReadFile(names[0])
+		if _, err := db.Exec(string(body)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	oldSig := func(id int64, name string) []byte { return rowSig(key, "users", strconv.FormatInt(id, 10), name, "h", "0", "0") }
+	tr := &totpRow{uid: 1, nonce: []byte("n"), enc: []byte("e"), confirmed: sql.NullInt64{Int64: 5, Valid: true}}
+	s0 := &authStore{key: key}
+	for _, q := range []struct {
+		sql  string
+		args []any
+	}{
+		{`CREATE TABLE schema_version (version INTEGER NOT NULL)`, nil},
+		{`INSERT INTO schema_version VALUES (1),(2),(3),(4),(5)`, nil},
+		{`INSERT INTO meta(key,value) VALUES('key_witness',?)`, []any{seal(key, []byte(witnessPlain))}},
+		{`INSERT INTO users(id,name,pw_hash,is_admin,disabled,created_at,pw_changed_at,sig) VALUES(1,'a','h',0,0,0,0,?),(2,'b','h',0,0,0,0,?),(3,'c','h',0,0,0,0,x'00')`, []any{oldSig(1, "a"), oldSig(2, "b")}},
+		{`INSERT INTO totp(user_id,secret_enc,nonce,confirmed_at,last_step,sig) VALUES(1,?,?,5,0,?)`, []any{tr.enc, tr.nonce, s0.totpSig(tr)}},
+		{`INSERT INTO sessions(id_hash,user_id,created_at,last_seen_at,expires_at,mfa_at) VALUES(x'01',1,0,0,99999999999,0)`, nil},
+	} {
+		if _, err := db.Exec(q.sql, q.args...); err != nil {
+			t.Fatal(q.sql, err)
+		}
+	}
+	db.Close()
+	os.Chmod(filepath.Join(dir, "auth.db"), 0o600)
+
+	s, err := openAuthStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.db.Close()
+	var n int
+	s.db.QueryRow(`SELECT COUNT(*) FROM sessions`).Scan(&n)
+	if n != 0 {
+		t.Fatal("sessions conservées")
+	}
+	for id, want := range map[int64]bool{1: true, 2: false} {
+		u, err := s.userByID(s.db, id)
+		if err != nil || u.MFAEnrolled != want {
+			t.Fatalf("compte %d : %+v %v", id, u, err)
+		}
+	}
+	if _, err := s.userByID(s.db, 3); !errors.Is(err, errTamper) {
+		t.Fatalf("ligne altérée re-signée : %v", err)
+	}
+	if on, err := s.AccountsOn(); !on || err != nil {
+		t.Fatalf("marqueur : %v %v", on, err)
+	}
+	s.db.Exec(`DELETE FROM users`)
+	if _, err := s.AccountsOn(); !errors.Is(err, errAccountsGone) {
+		t.Fatalf("comptes supprimés : %v", err)
+	}
+}
+
+func TestAccountsMarker(t *testing.T) {
+	s := testStore(t)
+	if on, err := s.AccountsOn(); on || err != nil {
+		t.Fatalf("base neuve : %v %v", on, err)
+	}
+	if _, err := s.AddUser("alice", testPw, true); err != nil {
+		t.Fatal(err)
+	}
+	if on, err := s.AccountsOn(); !on || err != nil {
+		t.Fatalf("après un compte : %v %v", on, err)
+	}
+	s.db.Exec(`UPDATE meta SET value=x'01' WHERE key=?`, accountsKey)
+	if _, err := s.AccountsOn(); !errors.Is(err, errTamper) {
+		t.Fatalf("marqueur altéré : %v", err)
 	}
 }
