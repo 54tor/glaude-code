@@ -131,12 +131,18 @@ Principes : ne jamais distinguer « inconnu » de « mauvais mot de passe », co
 
 ## Modèle de menace et protection de la base (décision de l'opérateur)
 
-Constat : un utilisateur qui a `exec` ou `config_write` exécute du code sous l'utilisateur OS de gld, donc peut lire et écrire `auth.db`, `auth.key` et le coffre-fort. L'ACL protège l'interface, pas la machine. Pas d'isolation par compte OS ni de bac à sable dans ce lot ; la protection repose sur deux mesures :
+Constat : un utilisateur qui a `exec` ou `config_write` exécute du code sous l'utilisateur OS de gld, donc peut lire et écrire `auth.db`, `auth.key` et le coffre-fort. L'ACL protège l'interface, pas la machine. Pas d'isolation par compte OS dans ce lot ; la protection repose sur trois mesures :
 
 1. **Droits `exec` et `config_write` réservés aux personnes de confiance.** Un co-utilisateur « mémoire + usages + sessions » n'a aucun chemin vers la base. L'écran d'ACL signale en clair que `exec` et `config_write` équivalent au compte OS de gld, demande une confirmation à l'attribution, et la CLI `gld user grant` affiche le même avertissement. Aucun droit n'est accordé par défaut.
 2. **Intégrité détectée par signature.** Chaque ligne de `users`, `home_acl`, `totp`, `webauthn_creds` et `recovery_codes` porte un HMAC-SHA-256 calculé avec une clé d'intégrité dérivée de la clé maîtresse (HKDF, contexte distinct du chiffrement). Au démarrage et à chaque lecture d'une ligne pour décider d'un accès, une signature absente ou fausse fait refuser l'accès, journalise `auth_events` (`kind=tamper`) et alerte l'admin. L'identifiant de ligne et la table entrent dans le message signé, pour qu'une ligne ne soit pas copiable ailleurs. Limite assumée : si le même compte OS peut lire la clé maîtresse, un attaquant la lit aussi ; la signature n'arrête que l'écriture sans la clé (édition SQL directe), et c'est dit dans la documentation.
 
-Hors périmètre, notés pour plus tard : processus d'authentification sous un autre compte OS, bac à sable des sessions `exec` (réglages « managed » root, bubblewrap/seatbelt, shell du terminal web).
+3. **Garde-fou dans les sessions lancées par gld (défense en profondeur, décision de l'opérateur).** Pour chaque session Claude démarrée par gld, la passerelle injecte :
+   - des règles `permissions.deny` sur `Read`, `Edit` et `Write` du dossier d'authentification ;
+   - un hook `PreToolUse` sur `Bash` qui refuse toute commande citant `auth.db`, `auth.key`, le dossier d'authentification ou lançant `sqlite3` ;
+   - la configuration `sandbox.filesystem` (lecture et écriture refusées sur ce dossier), seule partie appliquée par l'OS.
+   Ces réglages sont fournis par un fichier « managed » appartenant à root (`/etc/claude-code/managed-settings.json` ou équivalent macOS/Windows) que l'administrateur installe ; gld en génère le contenu (`gld auth managed-settings`) mais ne peut pas l'installer seul. Sans ce fichier, un utilisateur avec `config_write` peut retirer les règles : gld le détecte au démarrage et avertit. Limites assumées : le terminal web, un script ou un shell ordinaire ne passent pas par les outils de Claude, donc contournent règles et hook ; le garde-fou vise l'accident ou la dérive de Claude, pas un utilisateur malveillant ayant `exec`.
+
+Hors périmètre, notés pour plus tard : processus d'authentification sous un autre compte OS, bac à sable du terminal web et de tout shell lancé par `exec`.
 
 ## Laissé au constructeur
 
