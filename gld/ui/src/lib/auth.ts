@@ -1,4 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from "react"
+import { clearDrafts } from "@/hooks/useDraft"
 
 // Mode multi-utilisateur (auth_routes.go, auth_admin.go) : état de connexion partagé, appels vers /auth/* et /admin/*, WebAuthn.
 
@@ -7,7 +8,9 @@ export type Right = (typeof RIGHTS)[number]
 // Ces deux droits font exécuter du code sous le compte système de gld.
 export const DANGEROUS: readonly Right[] = ["exec", "config_write"]
 
-export type Factors = { totp: boolean; webauthn: number; recovery: number }
+export type Key = { id: number; label: string; created: number; bad: boolean }
+export type Factors = { totp: boolean; webauthn: number; recovery: number; keys?: Key[] }
+export type HomeRef = { id: string; name: string }
 export type AuthUser = { name: string; admin: boolean }
 export type AuthState = "loading" | "open" | "anon" | "mfa" | "ok" | "unavailable"
 export type Reauth = { password: string; code: string }
@@ -19,6 +22,10 @@ export type Auth = {
   methods: string[] // seconds facteurs proposés : totp, webauthn, recovery
   enroll: boolean // compte sans facteur : enrôlement obligatoire
   expired: boolean // session perdue en cours d'usage : l'application reste montée sous l'écran de connexion
+  owner?: string // compte dont l'application montée porte les données ; un autre compte la fait remonter à neuf
+  rights?: Record<string, Right[]> // par identifiant de home, seulement ceux où le compte a un droit
+  homes?: HomeRef[]
+  home?: string // identifiant du home servi à cette page (le choix de home recharge la page)
 }
 
 let snap: Auth = { state: "loading", csrf: "", methods: [], enroll: false, expired: false }
@@ -77,20 +84,55 @@ export async function boot(): Promise<void> {
   }
   if (r.status === 404) return setAuth({ state: "open" })
   if (r.status === 401) {
-    // Une base sans compte monte /auth/* sans activer le mode : une route ordinaire servie sans session le révèle.
-    const probe = await fetch("/sessions-stamp").catch(() => null)
-    if (probe?.ok) return setAuth({ state: "open" })
     return setAuth({ state: "anon", csrf: "", user: undefined })
   }
   if (!r.ok) return setAuth({ state: "unavailable" })
-  const b = (await r.json()) as { user: AuthUser; mfa: boolean; csrf: string; factors: Factors }
+  const b = (await r.json()) as { user: AuthUser; mfa: boolean; csrf: string; factors: Factors; rights?: Record<string, Right[]>; homes?: HomeRef[] }
   const f = b.factors
-  setAuth({ state: b.mfa ? "ok" : "mfa", user: b.user, csrf: b.csrf, factors: f, methods: methodsOf(f), enroll: !f.totp && !f.webauthn, ...(b.mfa ? { expired: false } : {}) })
+  const base = { user: b.user, csrf: b.csrf, factors: f, methods: methodsOf(f), enroll: !f.totp && !f.webauthn }
+  if (!b.mfa) return setAuth({ ...base, state: "mfa" })
+  // Un autre compte se connecte dans cet onglet : rien de ce que le précédent avait chargé ou écrit ne doit lui rester.
+  if (snap.owner && snap.owner !== b.user.name) clearUserData()
+  setAuth({ ...base, state: "ok", expired: false, owner: b.user.name, rights: b.rights ?? {}, homes: b.homes ?? [], home: await currentHome() })
+}
+
+// /homes donne le nom du home servi ("" : le principal) ; les droits sont rangés par identifiant.
+async function currentHome(): Promise<string | undefined> {
+  try {
+    const r = await fetch("/homes")
+    if (!r.ok) return undefined
+    const h = (await r.json()) as { current: string; mainId?: string; homes: { name: string; id?: string }[] }
+    return h.current ? h.homes.find((x) => x.name === h.current)?.id : (h.mainId ?? "main")
+  } catch {
+    return undefined
+  }
+}
+
+// Brouillons de conversation et d'éditeurs : du contenu propre au compte, jamais laissé au suivant.
+export function clearUserData() {
+  clearDrafts()
+  try {
+    for (const k of Object.keys(localStorage)) if (k === "gld.drafts" || k.startsWith("gld.editor.")) localStorage.removeItem(k)
+  } catch {
+    /* stockage indisponible : rien n'y a été écrit */
+  }
+}
+
+// Fin de session voulue (déconnexion, mot de passe changé, session courante révoquée) : l'application est démontée et vidée.
+export function signedOut() {
+  clearUserData()
+  setAuth({ state: "anon", csrf: "", user: undefined, factors: undefined, expired: false, owner: undefined, rights: undefined, homes: undefined, home: undefined })
 }
 
 export async function logout(): Promise<void> {
   await authCall("/auth/logout")
-  setAuth({ state: "anon", csrf: "", user: undefined, factors: undefined, expired: false })
+  signedOut()
+}
+
+// Droit sur le home courant. Mode ouvert, ou home inconnu : permis, le refus du serveur (403) reste le dernier mot.
+export function useCan(): (r: Right) => boolean {
+  const a = useAuth()
+  return (r) => a.state !== "ok" || !a.rights || !a.home || !!a.rights[a.home]?.includes(r)
 }
 
 // Attente imposée par Retry-After : secondes restantes, et de quoi la déclencher.

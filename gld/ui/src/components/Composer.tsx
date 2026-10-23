@@ -18,7 +18,7 @@ import { ImageChips, useImages } from "@/hooks/useImages"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { readNdjson } from "@/lib/ndjson"
-import { authFetch } from "@/lib/auth"
+import { authFetch, useCan } from "@/lib/auth"
 
 // Modes d'autorisation de claude -p : sans terminal, Claude ne peut pas demander la permission.
 const modes = () =>
@@ -74,6 +74,7 @@ export function Composer({
   onWrite?: () => void // l'utilisateur envoie un message : la vue descend
 }) {
   const { t } = useTranslation()
+  const exec = useCan()("exec")
   const { text, queue } = useDraft(id)
   const setText = (t: string) => setDraft(id, { text: t })
   const mention = useMention(text, setText, id)
@@ -202,7 +203,7 @@ export function Composer({
               <Square /> {t("conversation.composer.stop")}
             </Button>
           ) : (
-            <Button size="sm" onClick={send} disabled={!text.trim() && !pics.images.length}>
+            <Button size="sm" onClick={send} disabled={(!text.trim() && !pics.images.length) || !exec}>
               <Send /> <span className="max-md:sr-only">{t("conversation.composer.send")}</span>
             </Button>
           )}
@@ -216,6 +217,7 @@ export function Composer({
 // tourne dans tmux, le message y est collé puis validé ; sinon on l'explique.
 function LiveSend({ dir, id, onSent, liveState, onAsk }: { dir: string; id: string; onSent: () => void; liveState: Live; onAsk?: (asking: boolean) => void }) {
   const { t } = useTranslation()
+  const exec = useCan()("exec")
   const [info, setInfo] = useState<{ ids: string[]; why: string } | null>(null)
   const { text, queue } = useDraft(id) // gardé par session : fermer la fenêtre ou un échec d'envoi ne le perd pas
   const setText = (t: string) => setDraft(id, { text: t })
@@ -391,7 +393,7 @@ function LiveSend({ dir, id, onSent, liveState, onAsk }: { dir: string; id: stri
           />
           <SlashMenu id={id} text={text} onSent={onSent} />
           <CloseSession id={id} />
-          <Button size="sm" onClick={send} disabled={(!text.trim() && !pics.images.length) || busy}>
+          <Button size="sm" onClick={send} disabled={(!text.trim() && !pics.images.length) || busy || !exec}>
             <Send /> {t("conversation.composer.sendToSession")}
           </Button>
         </div>

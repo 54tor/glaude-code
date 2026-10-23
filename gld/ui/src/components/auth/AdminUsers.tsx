@@ -78,13 +78,11 @@ export function AdminUsers() {
   const load = useCallback(async () => {
     const [u, h] = await Promise.all([
       authCall<{ users: User[] }>("/admin/users", undefined, "GET"),
-      authCall<{ mainId: string; main: string; homes: Home[] }>("/homes", undefined, "GET"),
+      authCall<{ homes: Home[] }>("/admin/homes", undefined, "GET"),
     ])
     if (u.ok) setUsers(u.body.users ?? [])
     else toast.error(u.body.out ?? t("auth.admin.loadFailed"))
-    const list: Home[] = [{ id: h.body.mainId ?? "main", name: t("auth.admin.mainHome") }]
-    for (const x of h.body.homes ?? []) if (x.id) list.push({ id: x.id, name: x.name })
-    setHomes(list)
+    setHomes((h.body.homes ?? []).map((x) => (x.id === "main" ? { id: x.id, name: t("auth.admin.mainHome") } : x)))
   }, [t])
   useEffect(() => {
     void Promise.resolve().then(load)

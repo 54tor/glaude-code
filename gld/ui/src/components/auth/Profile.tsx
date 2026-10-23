@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next"
 import { CircleUserRound, KeyRound, LogOut, ShieldCheck, Users } from "lucide-react"
 import { toast } from "sonner"
 import { loc } from "@/i18n"
-import { authCall, boot, logout, setAuth, useAuth, useWait, waAssert, waAvailable, type AuthRes, type Reauth } from "@/lib/auth"
+import { authCall, boot, logout, signedOut, useAuth, useWait, waAssert, waAvailable, type AuthRes, type Reauth } from "@/lib/auth"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -138,7 +138,7 @@ export function UserMenu() {
 }
 
 type Sess = { id: string; created: number; seen: number; ip: string; ua: string; mfa: boolean; current: boolean }
-type Pending = { kind: "add" | "rmTotp" | "regen" | "password" | "revoke"; id?: string }
+type Pending = { kind: "add" | "rmTotp" | "rmKey" | "regen" | "password" | "revoke"; id?: string; key?: number }
 
 export function ProfileDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useTranslation()
@@ -184,6 +184,8 @@ export function Profile() {
     const res =
       p.kind === "rmTotp"
         ? await authCall("/auth/factor/remove", { ...r, kind: "totp", id: 0 })
+        : p.kind === "rmKey"
+          ? await authCall("/auth/factor/remove", { ...r, kind: "webauthn", id: p.key })
         : p.kind === "regen"
           ? await authCall<{ recovery: string[] }>("/auth/recovery/regenerate", r)
           : p.kind === "password"
@@ -195,7 +197,7 @@ export function Profile() {
     if (rec) setCodes(rec)
     if (p.kind === "password" || (p.kind === "revoke" && sessions?.find((s) => s.id === p.id)?.current)) {
       toast.success(t("auth.profile.reconnect"))
-      setAuth({ state: "anon", csrf: "", user: undefined, expired: false })
+      signedOut()
       return res
     }
     toast.success(t("auth.profile.done"))
@@ -207,6 +209,7 @@ export function Profile() {
   const titles: Record<Pending["kind"], string> = {
     add: t("auth.profile.addFactor"),
     rmTotp: t("auth.profile.removeTotp"),
+    rmKey: t("auth.profile.removeKey"),
     regen: t("auth.profile.regenerate"),
     password: t("auth.profile.changePassword"),
     revoke: t("auth.profile.revoke"),
@@ -261,8 +264,19 @@ export function Profile() {
           </li>
           <li className="flex flex-wrap items-center gap-2 p-2">
             <span className="flex-1">{t("auth.profile.keys")}</span>
-            <Badge variant="outline">{f.webauthn}</Badge>
+            <Badge variant="outline">{f.keys?.length ?? f.webauthn}</Badge>
           </li>
+          {f.keys?.map((k) => (
+            <li key={k.id} className="flex flex-wrap items-center gap-2 p-2 pl-6">
+              <KeyRound className="size-4 text-muted-foreground" aria-hidden />
+              <span className="min-w-0 flex-1 truncate">{k.label || t("auth.profile.keyNoLabel")}</span>
+              {k.bad && <Badge variant="destructive">{t("auth.admin.tampered")}</Badge>}
+              <span className="text-xs text-muted-foreground">{when(k.created)}</span>
+              <Button size="xs" variant="ghost" disabled={!!pending} aria-label={t("auth.profile.removeKeyNamed", { label: k.label })} onClick={() => setPending({ kind: "rmKey", key: k.id })}>
+                {t("common.delete")}
+              </Button>
+            </li>
+          ))}
           <li className="flex flex-wrap items-center gap-2 p-2">
             <span className="flex-1">{t("auth.profile.recovery")}</span>
             <Badge variant={f.recovery ? "outline" : "destructive"}>{f.recovery}</Badge>

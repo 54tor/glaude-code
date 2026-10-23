@@ -3,9 +3,11 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/lib/api"
 import { setLang } from "@/i18n"
-import { authFetch, boot, getAuth, setAuth } from "@/lib/auth"
+import { authFetch, boot, getAuth, logout, setAuth, useCan } from "@/lib/auth"
+import { draftOf, setDraft } from "@/hooks/useDraft"
 import { AuthScreen, Login } from "./Login"
 import { Mfa } from "./Mfa"
+import { Profile } from "./Profile"
 import { AdminEvents, AdminUsers } from "./AdminUsers"
 import App from "@/App"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -128,10 +130,28 @@ describe("jeton CSRF et session", () => {
     expect(getAuth().state).toBe("open")
   })
 
-  it("une base sans compte (/auth/me en 401 mais routes servies) reste en mode ouvert", async () => {
-    server({ "/auth/me": { status: 401 }, "/sessions-stamp": { body: { stamp: 1 } } })
+  it("/auth/me en 401 : connexion, sans autre sonde", async () => {
+    const calls = server({ "/auth/me": { status: 401 } })
     await boot()
-    expect(getAuth().state).toBe("open")
+    expect(getAuth().state).toBe("anon")
+    expect(calls.map((c) => c.url)).toEqual(["/auth/me"])
+  })
+
+  it("session complète : droits, homes et home courant exposés ; useCan suit le home courant", async () => {
+    server({
+      "/auth/me": { body: { ok: true, user: { name: "alice", admin: false }, mfa: true, csrf: "c", factors: { totp: true, webauthn: 0, recovery: 9, keys: [] }, rights: { h1: ["mem_read"], main: ["exec"] }, homes: [{ id: "h1", name: "perso" }, { id: "main", name: "main" }] } },
+      "/homes": { body: { current: "perso", mainId: "main", homes: [{ name: "perso", id: "h1" }] } },
+    })
+    await boot()
+    expect(getAuth()).toMatchObject({ state: "ok", home: "h1", rights: { h1: ["mem_read"] } })
+    let can: (r: "exec" | "mem_read") => boolean = () => true
+    function Probe() {
+      can = useCan()
+      return null
+    }
+    render(<Probe />)
+    expect(can("mem_read")).toBe(true)
+    expect(can("exec")).toBe(false)
   })
 
   it("/auth/me en 503 : écran indisponible avec bouton Réessayer", async () => {
@@ -189,10 +209,91 @@ describe("App", () => {
   })
 
   it("/auth/me en 401 : écran de connexion, application non montée", async () => {
-    server({ "/auth/me": { status: 401 }, "/sessions-stamp": { status: 401 } })
+    server({ "/auth/me": { status: 401 } })
     await mount()
     expect(screen.getByText("Connexion")).toBeTruthy()
     expect(screen.queryByText("Récentes")).toBeNull()
+  })
+})
+
+describe("Profile", () => {
+  it("liste les clés par libellé, marque une clé altérée et retire une clé par son identifiant", async () => {
+    const calls = server({ "/auth/sessions": { body: { ok: true, sessions: [] } }, "/auth/factor/remove": { body: { ok: true } }, "/auth/me": { status: 401 } })
+    const keys = [
+      { id: 7, label: "clé USB", created: 0, bad: false },
+      { id: 9, label: EVIL, created: 0, bad: true },
+    ]
+    setAuth({ state: "ok", csrf: "tok", user: { name: "alice", admin: false }, factors: { totp: true, webauthn: 2, recovery: 9, keys } })
+    const { container } = render(<Profile />)
+    expect(screen.getByText("clé USB")).toBeTruthy()
+    expect(screen.getByText(EVIL)).toBeTruthy()
+    expect(container.querySelector("img")).toBeNull()
+    expect(screen.getByText("altéré")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Retirer la clé clé USB" }))
+    fireEvent.change(screen.getByLabelText("Mot de passe actuel"), { target: { value: "pw" } })
+    fireEvent.change(screen.getByLabelText("Code (application ou secours)"), { target: { value: "123456" } })
+    await act(async () => void fireEvent.click(screen.getByRole("button", { name: "Confirmer" })))
+    expect(bodyOf(calls.find((c) => c.url === "/auth/factor/remove")!)).toEqual({ password: "pw", code: "123456", kind: "webauthn", id: 7 })
+  })
+})
+
+describe("changement de compte dans l'onglet", () => {
+  const me = (name: string) => ({ body: { ok: true, user: { name, admin: false }, mfa: true, csrf: "c-" + name, factors: { totp: true, webauthn: 0, recovery: 9, keys: [] }, rights: { main: ["sessions_read", "exec"] }, homes: [{ id: "main", name: "main" }] } })
+  let who = "alice"
+  const setup = async () => {
+    vi.spyOn(navigator, "language", "get").mockReturnValue("fr-FR")
+    vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }))
+    server({ "/auth/me": () => me(who), "/homes": { body: { current: "", mainId: "main", homes: [] } }, "/gone": { status: 401 } })
+    who = "alice"
+    localStorage.clear()
+    setAuth({ state: "loading", owner: undefined })
+    render(
+      <TooltipProvider>
+        <App />
+      </TooltipProvider>
+    )
+    await act(() => new Promise((r) => setTimeout(r, 30)))
+    setDraft("s1", { text: "secret d'alice" })
+    localStorage.setItem("gld.editor.memory", JSON.stringify({ key: "k", text: "brouillon" }))
+    localStorage.setItem("ccFont", "inter")
+    return screen.getAllByRole("heading", { level: 2 })[0]
+  }
+  const expireThenLogin = async (name: string) => {
+    await act(async () => void (await authFetch("/gone")))
+    expect(getAuth()).toMatchObject({ state: "anon", expired: true })
+    expect(screen.getByText(/Session expirée/)).toBeTruthy()
+    who = name
+    await act(() => boot())
+    await act(() => new Promise((r) => setTimeout(r, 30)))
+  }
+
+  it("même compte après expiration : l'application et les brouillons sont conservés", async () => {
+    const head = await setup()
+    await expireThenLogin("alice")
+    expect(screen.getAllByRole("heading", { level: 2 })[0]).toBe(head)
+    expect(draftOf("s1").text).toBe("secret d'alice")
+    expect(localStorage.getItem("gld.editor.memory")).not.toBeNull()
+  })
+
+  it("autre compte après expiration : application remontée à neuf, brouillons effacés, préférences gardées", async () => {
+    const head = await setup()
+    await expireThenLogin("bob")
+    expect(getAuth().owner).toBe("bob")
+    expect(head.isConnected).toBe(false)
+    expect(screen.getAllByText("Récentes").length).toBeGreaterThan(0)
+    expect(draftOf("s1").text).toBe("")
+    expect(localStorage.getItem("gld.drafts")).toBeNull()
+    expect(localStorage.getItem("gld.editor.memory")).toBeNull()
+    expect(localStorage.getItem("ccFont")).toBe("inter")
+  })
+
+  it("déconnexion : application démontée et brouillons effacés", async () => {
+    await setup()
+    await act(() => logout())
+    expect(screen.queryByText("Récentes")).toBeNull()
+    expect(screen.getByText("Connexion")).toBeTruthy()
+    expect(draftOf("s1").text).toBe("")
+    expect(localStorage.getItem("gld.editor.memory")).toBeNull()
   })
 })
 
@@ -200,7 +301,7 @@ describe("AdminUsers", () => {
   it("demande confirmation et réauthentification avant d'accorder exec, avec l'avertissement", async () => {
     const calls = server({
       "/admin/users": { body: { ok: true, users: [USER] } },
-      "/homes": { body: { mainId: "main", main: "/h", homes: [] } },
+      "/admin/homes": { body: { ok: true, homes: [{ id: "main", name: "main" }] } },
       "/admin/acl": { body: { ok: true, rights: ["mem_read", "exec"] } },
     })
     setAuth({ state: "ok", csrf: "tok", user: { name: "root", admin: true }, factors: { totp: true, webauthn: 0, recovery: 10 } })
@@ -225,7 +326,7 @@ describe("AdminUsers", () => {
   it("un droit ordinaire s'accorde sans réauthentification", async () => {
     const calls = server({
       "/admin/users": { body: { ok: true, users: [USER] } },
-      "/homes": { body: { mainId: "main", homes: [] } },
+      "/admin/homes": { body: { ok: true, homes: [{ id: "main", name: "main" }] } },
       "/admin/acl": { body: { ok: true, rights: ["mem_read", "mem_write"] } },
     })
     setAuth({ state: "ok", csrf: "tok", user: { name: "root", admin: true } })
@@ -238,7 +339,7 @@ describe("AdminUsers", () => {
   it("rend les chaînes venues d'un attaquant en texte", async () => {
     server({
       "/admin/users": { body: { ok: true, users: [{ ...USER, name: EVIL }] } },
-      "/homes": { body: { mainId: "main", homes: [] } },
+      "/admin/homes": { body: { ok: true, homes: [{ id: "main", name: "main" }] } },
       "/admin/events": { body: { ok: true, events: [{ id: 1, at: 0, user_id: 0, user: "", name_tried: EVIL, ip: "1.2.3.4", kind: "login", outcome: EVIL }] } },
     })
     setAuth({ state: "ok", csrf: "tok", user: { name: "root", admin: true } })
