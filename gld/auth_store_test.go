@@ -38,9 +38,9 @@ func TestOpenAuthDB(t *testing.T) {
 	if err := db.QueryRow(`SELECT MAX(version), COUNT(*) FROM schema_version`).Scan(&v, &rows); err != nil {
 		t.Fatal(err)
 	}
-	entries, _ := authMigrations.ReadDir("auth_migrations")
-	if v != len(entries) || rows != len(entries) {
-		t.Fatalf("version %d rows %d, want %d", v, rows, len(entries))
+	// Sans la clé, openAuthDB s'arrête avant la première migration qui l'exige ; openAuthStore applique le reste.
+	if v != keyedFrom-1 || rows != keyedFrom-1 {
+		t.Fatalf("version %d rows %d, want %d", v, rows, keyedFrom-1)
 	}
 	for _, tb := range []string{"users", "totp", "webauthn_creds", "recovery_codes", "sessions", "home_acl", "auth_events", "throttle", "meta"} {
 		if _, err := db.Exec("SELECT 1 FROM " + tb + " LIMIT 1"); err != nil {
@@ -180,9 +180,67 @@ func TestUpgradeFromSchema5(t *testing.T) {
 	if on, err := s.AccountsOn(); !on || err != nil {
 		t.Fatalf("marqueur : %v %v", on, err)
 	}
+	var v int
+	s.db.QueryRow(`SELECT MAX(version) FROM schema_version`).Scan(&v)
+	entries, _ := authMigrations.ReadDir("auth_migrations")
+	if v != len(entries) {
+		t.Fatalf("version %d, voulu %d", v, len(entries))
+	}
+
+	// Après la mise à niveau, rien ne la rejoue : facteurs supprimés, marqueur effacé, ancienne signature remise.
+	s.db.Exec(`DELETE FROM totp WHERE user_id=1`)
+	s.db.Exec(`DELETE FROM meta WHERE key=?`, accountsKey)
+	s.db.Exec(`UPDATE users SET sig=? WHERE id=2`, oldSig(2, "b"))
+	s.db.Close()
+	s, err = openAuthStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.db.Close()
+	if u, err := s.userByID(s.db, 1); err != nil || !u.MFAEnrolled {
+		t.Fatalf("bit perdu : %+v %v", u, err)
+	}
+	if _, err := s.factors(1); !errors.Is(err, errTamper) {
+		t.Fatalf("facteurs supprimés : %v", err)
+	}
+	if _, err := s.userByID(s.db, 2); !errors.Is(err, errTamper) {
+		t.Fatalf("ancienne signature re-signée : %v", err)
+	}
+	if _, err := s.AccountsOn(); !errors.Is(err, errTamper) {
+		t.Fatalf("marqueur effacé : %v", err)
+	}
 	s.db.Exec(`DELETE FROM users`)
-	if _, err := s.AccountsOn(); !errors.Is(err, errAccountsGone) {
-		t.Fatalf("comptes supprimés : %v", err)
+	if _, err := s.AccountsOn(); !errors.Is(err, errTamper) {
+		t.Fatalf("marqueur et comptes effacés : %v", err)
+	}
+}
+
+// Base antérieure sans compte : elle se comporte comme une base neuve (mode ouvert), puis le premier compte l'active.
+func TestUpgradeEmptyLegacy(t *testing.T) {
+	stubKeyring(t)
+	dir := t.TempDir()
+	t.Setenv("GLD_AUTH_DIR", dir)
+	t.Setenv("GLD_AUTH_KEY", strings.Repeat("cd", 32))
+	db, err := openAuthDB(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := bytes.Repeat([]byte{0xcd}, 32)
+	db.Exec(`INSERT INTO meta(key,value) VALUES('key_witness',?)`, seal(key, []byte(witnessPlain)))
+	db.Close()
+	s, err := openAuthStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.db.Close()
+	if on, err := s.AccountsOn(); on || err != nil {
+		t.Fatalf("base antérieure vide : %v %v", on, err)
+	}
+	if _, err := s.AddUser("alice", testPw, true); err != nil {
+		t.Fatal(err)
+	}
+	if on, err := s.AccountsOn(); !on || err != nil {
+		t.Fatalf("après un compte : %v %v", on, err)
 	}
 }
 
@@ -200,5 +258,10 @@ func TestAccountsMarker(t *testing.T) {
 	s.db.Exec(`UPDATE meta SET value=x'01' WHERE key=?`, accountsKey)
 	if _, err := s.AccountsOn(); !errors.Is(err, errTamper) {
 		t.Fatalf("marqueur altéré : %v", err)
+	}
+	s.db.Exec(`DELETE FROM meta WHERE key=?`, accountsKey)
+	s.db.Exec(`DELETE FROM users`)
+	if _, err := s.AccountsOn(); !errors.Is(err, errTamper) {
+		t.Fatalf("marqueur et comptes supprimés : %v", err)
 	}
 }

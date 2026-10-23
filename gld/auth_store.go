@@ -83,20 +83,32 @@ func openAuthDB(dir string) (*authDB, error) {
 	}
 	db.SetMaxOpenConns(1)
 	a := &authDB{db}
-	if err := a.migrate(); err != nil {
+	if err := a.migrate(nil); err != nil {
 		db.Close()
 		return nil, err
 	}
-	for _, sfx := range []string{"-wal", "-shm"} {
-		if err := os.Chmod(path+sfx, 0o600); err != nil && !os.IsNotExist(err) {
-			db.Close()
-			return nil, err
-		}
+	if err := walPerms(dir); err != nil {
+		db.Close()
+		return nil, err
 	}
 	return a, nil
 }
 
-func (a *authDB) migrate() error {
+func walPerms(dir string) error {
+	for _, sfx := range []string{"-wal", "-shm"} {
+		if err := os.Chmod(filepath.Join(dir, "auth.db")+sfx, 0o600); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+// keyedFrom : première migration qui exige la clé maîtresse (re-signature des lignes existantes). Elle et les suivantes ne
+// s'appliquent que par openAuthStore, avec keyed exécuté dans la transaction même de la migration : la re-signature a lieu
+// une seule fois, liée au numéro de version, jamais à un drapeau qu'on pourrait effacer.
+const keyedFrom = 7
+
+func (a *authDB) migrate(keyed func(*sql.Tx, int) error) error {
 	if _, err := a.Exec(`CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)`); err != nil {
 		return err
 	}
@@ -122,6 +134,9 @@ func (a *authDB) migrate() error {
 		if v <= cur {
 			continue
 		}
+		if v >= keyedFrom && keyed == nil {
+			break
+		}
 		body, err := authMigrations.ReadFile("auth_migrations/" + n)
 		if err != nil {
 			return err
@@ -133,6 +148,12 @@ func (a *authDB) migrate() error {
 		if _, err := tx.Exec(string(body)); err != nil {
 			tx.Rollback()
 			return fmt.Errorf("migration %s: %w", n, err)
+		}
+		if keyed != nil {
+			if err := keyed(tx, v); err != nil {
+				tx.Rollback()
+				return fmt.Errorf("migration %s: %w", n, err)
+			}
 		}
 		if _, err := tx.Exec(`INSERT INTO schema_version(version) VALUES (?)`, v); err != nil {
 			tx.Rollback()
