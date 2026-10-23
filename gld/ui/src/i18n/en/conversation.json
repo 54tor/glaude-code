@@ -36,6 +36,7 @@
       "quitCarousel": "Leave the carousel",
       "toolsShown": "Tools shown",
       "toolsHidden": "Tools hidden",
+      "showTools": "Show tools",
       "modeVisual": "Visual mode",
       "modeTerminal": "Terminal mode",
       "modeTitle": "Switch between the conversation and the session's full terminal",

@@ -6,7 +6,7 @@ import { compact, tokTotal } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { refreshWarm, useKeepWarm } from "@/hooks/useKeepWarm"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useActions } from "./actions"
 import type { Live } from "./LiveStatus"
 
@@ -42,15 +42,55 @@ export function KeepWarmButton({ s }: { s: Session }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-80">
-        <DropdownMenuLabel className="whitespace-normal">{t("conversation.keepWarm.menuLabel")}</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {[3, 6, 12, 24].map((n) => (
-          <DropdownMenuItem key={n} onSelect={() => set(s, true, n)}>
-            {t("conversation.keepWarm.atMost", { count: n })}
-          </DropdownMenuItem>
-        ))}
+        <Offers s={s} />
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+// L'activation dit d'abord ce que ça coûte, puis propose un plafond de pings.
+function Offers({ s }: { s: Session }) {
+  const { t } = useTranslation()
+  return (
+    <>
+      <DropdownMenuLabel className="whitespace-normal">{t("conversation.keepWarm.menuLabel")}</DropdownMenuLabel>
+      <DropdownMenuSeparator />
+      {[3, 6, 12, 24].map((n) => (
+        <DropdownMenuItem key={n} onSelect={() => set(s, true, n)}>
+          {t("conversation.keepWarm.atMost", { count: n })}
+        </DropdownMenuItem>
+      ))}
+    </>
+  )
+}
+
+// Même commande, en entrée du menu « … » du lecteur sur petit écran.
+export function KeepWarmItem({ s }: { s: Session }) {
+  const { t } = useTranslation()
+  const a = useActions()
+  const warm = useKeepWarm()[s.id]
+  if (!a.caps(s).keepWarm) return null
+  if (warm?.on)
+    return (
+      <DropdownMenuItem onSelect={() => set(s, false)}>
+        <Coins /> {t("conversation.keepWarm.active")}
+      </DropdownMenuItem>
+    )
+  if (!a.live.has(s.id))
+    return (
+      <DropdownMenuItem disabled>
+        <Flame /> {t("conversation.keepWarm.button")}
+      </DropdownMenuItem>
+    )
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>
+        <Flame /> {t("conversation.keepWarm.button")}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="w-72">
+        <Offers s={s} />
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   )
 }
 
