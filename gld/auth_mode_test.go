@@ -604,3 +604,24 @@ func TestChildChatBodyTooBig(t *testing.T) {
 		t.Fatalf("corps restitué : %d octets sur %d", len(b), len(body))
 	}
 }
+
+// Base présente sans compte : /auth/* répond comme une route inconnue ; le premier compte l'ouvre dans la fenêtre du cache.
+func TestAuthRoutesHiddenWithoutUsers(t *testing.T) {
+	s, srv, tick := authWeb(t)
+	me := modeReq{method: "GET", path: "/auth/me", tokCookie: modeTok}
+	unknown := modeReq{method: "GET", path: "/inexistant", tokCookie: modeTok}
+	w, u := me.do(srv), unknown.do(srv)
+	if w.Code != 404 || w.Body.String() != u.Body.String() {
+		t.Fatalf("/auth/me sans compte : %d %q", w.Code, w.Body)
+	}
+	if w := (modeReq{method: "POST", path: "/auth/login", tokCookie: modeTok}).do(srv); w.Code != 404 {
+		t.Fatalf("/auth/login sans compte : %d", w.Code)
+	}
+	if _, err := s.AddUser("alice", testPw, true); err != nil {
+		t.Fatal(err)
+	}
+	tick()
+	if w := (modeReq{method: "GET", path: "/auth/me"}).do(srv); w.Code != 401 {
+		t.Fatalf("/auth/me après le premier compte : %d", w.Code)
+	}
+}
