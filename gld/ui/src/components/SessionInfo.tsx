@@ -47,10 +47,10 @@ export function SessionInfo({ row, onClose }: { row: Row | null; onClose: () => 
     <Dialog open={!!row} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[85vh] min-w-0 overflow-hidden sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle className="truncate">{s?.title}</DialogTitle>
+          <DialogTitle className="truncate pr-8">{s?.title}</DialogTitle>
           <DialogDescription className="sr-only">{t("shell.info.description")}</DialogDescription>
         </DialogHeader>
-        <dl className="grid min-h-0 grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 overflow-y-auto text-sm">
+        <dl className="grid min-h-0 grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 overflow-y-auto text-sm">
           {rows.map(([k, v]) => (
             <div key={k} className="contents">
               <dt className="text-muted-foreground">{k}</dt>
