@@ -135,7 +135,10 @@
         "import": "Broken import",
         "link": "Broken link",
         "frontMatter": "Front matter",
-        "stale": "Old entry"
+        "lintDuplicate": "duplicate",
+        "lintContradiction": "contradiction",
+        "lintStale": "outdated",
+        "stale":"Old entry"
       },
       "title": "Memory health",
       "toCheck_one": "{{count}} item to check. Nothing is changed without your click.",

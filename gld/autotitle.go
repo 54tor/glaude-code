@@ -49,7 +49,7 @@ func autoTitle(path string) (string, error) {
 		}
 	}
 	if b.Len() == 0 {
-		return "", errors.New("conversation vide")
+		return "", terr("srv.autotitle.emptyConversation")
 	}
 	t, err := titleRun(b.String())
 	if err != nil {
@@ -57,7 +57,7 @@ func autoTitle(path string) (string, error) {
 	}
 	t = strings.Trim(spaceRe.ReplaceAllString(t, " "), " \"«».")
 	if t == "" {
-		return "", errors.New("titre vide")
+		return "", terr("srv.autotitle.emptyTitle")
 	}
 	return cut(t, 80), nil
 }

@@ -135,6 +135,9 @@
         "import": "Import cassé",
         "link": "Lien cassé",
         "frontMatter": "Front matter",
+        "lintDuplicate": "doublon",
+        "lintContradiction": "contradiction",
+        "lintStale": "périmé",
         "stale": "Entrée ancienne"
       },
       "title": "Santé de la mémoire",

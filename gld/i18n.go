@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/nicksnyder/go-i18n/v2/i18n"
 	"golang.org/x/text/language"
@@ -42,12 +43,18 @@ func loadBundle() {
 // normalizeLang : fr, en, other (langue connue mais non traduite) ou vide (aucun réglage).
 func normalizeLang(raw string) string {
 	s := strings.ToLower(strings.TrimSpace(raw))
-	switch {
-	case s == "":
+	if s == "" {
 		return ""
-	case s == "fr" || strings.HasPrefix(s, "fr-") || strings.HasPrefix(s, "fr_") || s == "french" || s == "français" || s == "francais":
+	}
+	// Premier mot seulement : « fr-FR », « fr_CA.UTF-8 », « French (Canada) ».
+	first := strings.FieldsFunc(s, func(r rune) bool { return !unicode.IsLetter(r) })
+	if len(first) == 0 {
+		return "other"
+	}
+	switch first[0] {
+	case "fr", "french", "français", "francais":
 		return "fr"
-	case s == "en" || strings.HasPrefix(s, "en-") || strings.HasPrefix(s, "en_") || s == "english" || s == "anglais":
+	case "en", "english", "anglais":
 		return "en"
 	}
 	return "other"
@@ -119,11 +126,13 @@ func cliLang() string {
 	}
 	norm := normalizeLang(userLanguageRaw())
 	if norm == "" {
-		for _, k := range []string{"LC_ALL", "LANG"} {
-			if v := os.Getenv(k); v != "" && v != "C" && v != "POSIX" {
-				norm = normalizeLang(v)
-				break
+		for _, k := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
+			v := os.Getenv(k)
+			if v == "" || v == "C" || v == "POSIX" || strings.HasPrefix(v, "C.") {
+				continue // locale neutre : elle ne dit rien de la langue de l'utilisateur
 			}
+			norm = normalizeLang(v)
+			break
 		}
 	}
 	return resolveLang(norm, "fr")
@@ -132,6 +141,12 @@ func cliLang() string {
 // replyLang : la langue de réponse demandée aux modèles d'aide, celle du réglage telle qu'écrite par l'utilisateur.
 func replyLang() string {
 	if raw := userLanguageRaw(); raw != "" && langOverride == "" {
+		switch normalizeLang(raw) {
+		case "fr":
+			return "français"
+		case "en":
+			return "English"
+		}
 		return raw
 	}
 	if uiLang() == "en" {
