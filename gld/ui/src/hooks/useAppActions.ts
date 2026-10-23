@@ -67,12 +67,15 @@ export function useAppActions(c: {
     })
     if (r.ok && url === "/new-session") void watchTrust(home)
     await reload()
-    // Une session lancée met un instant à créer son transcript : on relit jusqu'à ce qu'elle apparaisse.
+    // Une session lancée met un instant à créer son transcript : on relit jusqu'à ce qu'elle apparaisse, sans retenir l'appelant
+    // (la fenêtre de saisie se ferme dès le lancement).
     if (r.ok && (url === "/new-session" || url === "/open")) {
-      for (let i = 0; i < 8; i++) {
-        await new Promise((res) => setTimeout(res, 700))
-        await reload()
-      }
+      void (async () => {
+        for (let i = 0; i < 8; i++) {
+          await new Promise((res) => setTimeout(res, 700))
+          await reload().catch(() => {})
+        }
+      })()
     }
     return r.ok
   }
