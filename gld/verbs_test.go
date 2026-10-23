@@ -11,7 +11,7 @@ import (
 )
 
 // Effectif attendu par langue : 124 verbes d'origine, puis +500 (français), puis +500 (anglais).
-var wantVerbs = map[string]int{"fr": 124, "en": 124}
+var wantVerbs = map[string]int{"fr": 624, "en": 124}
 
 var forbiddenVerbWords = regexp.MustCompile(`(?i)\b(heures?|sommeil|fatigue|dormir|bonne nuit|sleep|tired|bedtime|o'clock)\b`)
 
