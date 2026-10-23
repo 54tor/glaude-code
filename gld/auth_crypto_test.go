@@ -1,0 +1,90 @@
+package main
+
+import (
+	"bytes"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func stubKeyring(t *testing.T) {
+	g, s := keyringGet, keyringSet
+	keyringGet = func() (string, error) { return "", errors.New("no keyring") }
+	keyringSet = func(string) error { return errors.New("no keyring") }
+	t.Cleanup(func() { keyringGet, keyringSet = g, s })
+}
+
+func TestSealOpen(t *testing.T) {
+	k := bytes.Repeat([]byte{1}, 32)
+	a, b := seal(k, []byte("x")), seal(k, []byte("x"))
+	if bytes.Equal(a, b) {
+		t.Fatal("nonce reused")
+	}
+	if p, err := open(k, a); err != nil || string(p) != "x" {
+		t.Fatalf("roundtrip: %q %v", p, err)
+	}
+	a[len(a)-1] ^= 1
+	if _, err := open(k, a); err == nil {
+		t.Fatal("tampered ciphertext accepted")
+	}
+}
+
+func TestMasterKeyOrder(t *testing.T) {
+	stubKeyring(t)
+	dir := t.TempDir()
+	t.Setenv("GLD_AUTH_KEY", strings.Repeat("ab", 32))
+	k, err := loadMasterKey(dir)
+	if err != nil || k[0] != 0xab {
+		t.Fatalf("env: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "auth.key")); err == nil {
+		t.Fatal("file created despite env key")
+	}
+	t.Setenv("GLD_AUTH_KEY", "")
+	k1, err := loadMasterKey(dir)
+	if err != nil || len(k1) != 32 {
+		t.Fatalf("file: %v", err)
+	}
+	fi, _ := os.Stat(filepath.Join(dir, "auth.key"))
+	if fi.Mode().Perm() != 0o600 {
+		t.Fatalf("mode %v", fi.Mode().Perm())
+	}
+	if k2, _ := loadMasterKey(dir); !bytes.Equal(k1, k2) {
+		t.Fatal("key not stable")
+	}
+
+	db, err := openAuthDB(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := checkMasterKey(db, k1); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkMasterKey(db, k1); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkMasterKey(db, bytes.Repeat([]byte{9}, 32)); err == nil {
+		t.Fatal("wrong key accepted")
+	}
+}
+
+func TestRowSig(t *testing.T) {
+	k := bytes.Repeat([]byte{2}, 32)
+	s := rowSig(k, "users", "1", "a", "b")
+	if !rowSigOK(k, "users", "1", s, "a", "b") {
+		t.Fatal("valid sig rejected")
+	}
+	for name, ok := range map[string]bool{
+		"table": rowSigOK(k, "sessions", "1", s, "a", "b"),
+		"id":    rowSigOK(k, "users", "2", s, "a", "b"),
+		"field": rowSigOK(k, "users", "1", s, "a", "c"),
+		"split": rowSigOK(k, "users", "1", s, "ab", ""),
+	} {
+		if ok {
+			t.Fatalf("%s change accepted", name)
+		}
+	}
+}
