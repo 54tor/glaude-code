@@ -487,12 +487,18 @@ function TerminalPanel({ id, onAsk, onSent }: { id: string; onAsk?: (asking: boo
       {prompt && (
         <div className="rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-sm">
           {prompt.tabs && prompt.tabs.length > 1 && (
-            <p className="mb-1.5 flex flex-wrap gap-1 text-xs" aria-label={t("conversation.composer.tabsAria")}>
+            <p className="mb-1.5 flex flex-wrap items-center gap-1 text-xs" aria-label={t("conversation.composer.tabsAria")}>
+              <Button size="xs" variant="ghost" disabled={pressing} onClick={() => press("Left")} aria-label={t("conversation.composer.prevTab")} title={t("conversation.composer.prevTab")}>
+                ←
+              </Button>
               {prompt.tabs.map((tab) => (
                 <span key={tab.label} className={tab.done ? "rounded-sm border border-success/40 px-1.5 text-success" : "rounded-sm border px-1.5 font-medium"}>
                   {tab.done ? "✔" : "•"} {tab.label}
                 </span>
               ))}
+              <Button size="xs" variant="ghost" disabled={pressing} onClick={() => press("Right")} aria-label={t("conversation.composer.nextTab")} title={t("conversation.composer.nextTab")}>
+                →
+              </Button>
             </p>
           )}
           {prompt.context && <pre className="mb-2 max-h-60 overflow-auto rounded-md border bg-background/70 p-2 font-mono text-xs break-words whitespace-pre-wrap">{prompt.context}</pre>}
