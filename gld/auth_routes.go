@@ -38,9 +38,17 @@ type authAPI struct {
 	reauthAt map[string]time.Time
 	busy     map[string]bool
 	denied   map[string]time.Time
+
+	// Minute en cours de rateLog : événements neufs écrits, événements tus, ligne du résumé « suppressed ».
+	rlStart            time.Time
+	rlFresh, rlDropped int64
+	rlRow              int64
 }
 
-const deniedCap = 1024
+const (
+	deniedCap  = 1024
+	rateBudget = 20
+)
 
 // oversizeName : clé commune des noms de plus de 64 caractères ; normName rogne les espaces, aucun nom tapé n'y aboutit.
 const oversizeName = " oversize"
@@ -303,30 +311,53 @@ func (a *authAPI) need(w http.ResponseWriter, r *http.Request, full bool) *Princ
 // ne doit pas pouvoir remplir auth_events.
 func (a *authAPI) deniedLog(uid int64, ip, kind string) { a.rateLog(uid, "", ip, kind, "denied") }
 
-// rateLog écrit un événement au plus une fois par minute pour un même (type, issue, nom, adresse). Table pleine :
-// l'événement n'est pas écrit.
+// rateLog écrit un événement au plus une fois par minute pour un même (type, issue, adresse) ; le nom tapé, choisi par le
+// client, n'entre pas dans la clé. Au plus rateBudget événements neufs par minute en tout. Ce qui n'est pas écrit (doublon,
+// budget épuisé, table pleine) est compté dans un seul événement « suppressed » par minute, dont l'issue est le compte.
 func (a *authAPI) rateLog(uid int64, name, ip, kind, outcome string) {
 	now := authNow()
-	k := kind + "|" + outcome + "|" + name + "|" + ip
+	k := kind + "|" + outcome + "|" + ip
 	a.mu.Lock()
-	if t, ok := a.denied[k]; ok && now.Sub(t) < time.Minute {
-		a.mu.Unlock()
-		return
+	if now.Sub(a.rlStart) >= time.Minute {
+		a.rlStart, a.rlFresh, a.rlDropped, a.rlRow = now, 0, 0, 0
 	}
-	if len(a.denied) >= deniedCap {
-		for dk, t := range a.denied {
-			if now.Sub(t) >= time.Minute {
-				delete(a.denied, dk)
+	write := false
+	if t, ok := a.denied[k]; !ok || now.Sub(t) >= time.Minute {
+		if len(a.denied) >= deniedCap {
+			for dk, t := range a.denied {
+				if now.Sub(t) >= time.Minute {
+					delete(a.denied, dk)
+				}
 			}
 		}
+		if len(a.denied) < deniedCap && a.rlFresh < rateBudget {
+			a.denied[k] = now
+			a.rlFresh++
+			write = true
+		}
 	}
-	full := len(a.denied) >= deniedCap
-	if !full {
-		a.denied[k] = now
+	var dropped, row int64
+	if !write {
+		a.rlDropped++
+		dropped, row = a.rlDropped, a.rlRow
 	}
-	a.mu.Unlock()
-	if !full {
+	if write {
+		a.mu.Unlock()
+		if r := []rune(name); len(r) > 64 {
+			name = string(r[:64])
+		}
 		a.log(uid, name, ip, kind, outcome)
+		return
+	}
+	// Sous le verrou : deux refus simultanés ne créent pas deux résumés pour la même minute.
+	defer a.mu.Unlock()
+	if row != 0 {
+		a.s.db.Exec(`UPDATE auth_events SET outcome=? WHERE rowid=?`, strconv.FormatInt(dropped, 10), row)
+		return
+	}
+	res, err := a.s.db.Exec(`INSERT INTO auth_events(at,kind,outcome) VALUES(?,?,?)`, now.Unix(), "suppressed", strconv.FormatInt(dropped, 10))
+	if err == nil {
+		a.rlRow, _ = res.LastInsertId()
 	}
 }
 
