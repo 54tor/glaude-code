@@ -4,7 +4,21 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.3.0] - 2026-10-23
+
 ### Ajouté
+- **Deux langues** (français, anglais) : interface, textes du serveur, ligne de commande, consignes des aides à Claude et 500 verbes d'attente par langue. La langue suit le réglage `language` de Claude ; liste déroulante dans Réglages, onglet Apparence.
+- **Corbeille des sessions** : supprimer déplace la session dans la corbeille (bouton Annuler), restauration, suppression définitive et purge à 30 jours ; accessible depuis « Toutes les sessions ». Avertissement 24 h avant que Claude Code n'efface des sessions (`cleanupPeriodDays`).
+- **Lecteur de session** : fiche d'infos au clic droit, sous-agents ouverts en modale (lecture seule), état git du dossier avec poussée, liste des fichiers modifiés dans une fenêtre, `@` pour mentionner une autre session, identifiant de la session copiable depuis le menu (à la place de la commande `claude --resume`).
+- **Sessions ouvertes** : sélecteurs de modèle et d'effort avec le modèle en cours ; les messages écrits pendant que la session travaille ou pose une question partent dès qu'elle attend ; spinner pour une session qui travaille et « i » clignotant pour une question en attente.
+- **Questions et autorisations de Claude** : récapitulatif et état des onglets des questions à onglets, commande ou diff affichés avec la demande d'autorisation, réponse au dialogue de confiance d'un dossier depuis l'interface.
+- **Mode carrousel** sur les sessions en attente de réponse, menu contextuel sur les dossiers du cache chaud, cache chaud rangé par dossier, une session y remonte dès qu'un prompt lui est envoyé.
+- **Dossiers** : ajout d'un dossier sans session pour y lancer un prompt, bouton Permissions sur les réglages du projet, prompt lancé dans le dossier choisi parmi ceux du projet.
+- **Configuration** : choix de l'emplacement (utilisateur, projet, local) puis du dossier ; l'éditeur texte des permissions montre les différences et avertissements en direct et couvre les dossiers supplémentaires ; suggestions de règles tirées aussi des sous-commandes des commandes Bash composées.
+- **Mobile** : lecteur compact calé sur le clavier virtuel, barre du lecteur sur une ligne avec commandes secondaires dans le menu « … », tiroir de navigation en dialogue Radix.
+- 15 palettes de couleurs (Dracula, Nord, Solarized, Gruvbox, Monokai, Tokyo Night, One, Catppuccin, Ayu, Material, GitHub, Rosé Pine, Everforest, Kanagawa, Night Owl), avec couleurs d'état contrastées.
+- Mémoire : sections repliables, repliées par défaut ; les blocs repliables gardent leur état.
+- Dialogue Crédits et soutien (licence, bibliothèques, adresse XMR avec QR code).
 - **Pousser** : dans la vue dossier, bouton « Pousser » (commits en avance ou branche sans amont) qui propose les remotes du dépôt ; jamais de `--force`, identifiants des URL masqués (y compris un jeton placé à la place du nom), amont posé à la première poussée.
 - **Bloc-notes** par projet et par dossier, enregistré automatiquement (`gld-web-notes.json`) : le texte peut partir vers une nouvelle session ou vers une session ouverte dans tmux ; la note suit le projet quand on le renomme.
 - **Snippets** dans le champ de nouvelle session de la vue dossier, comme dans la fenêtre de saisie.
@@ -39,6 +53,18 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Avec `--listen`, un client qui envoie ses en-têtes au compte-gouttes est déconnecté au bout de 10 s (slowloris), avant même la vérification du jeton.
 - Les fichiers réécrits par remplacement (réglages, `history.jsonl`, transcripts réassignés, groupes, onglets) sont écrits sur disque (`fsync`) avant de remplacer l'original : une coupure de courant ne peut plus laisser un fichier vide.
 - La liste des fichiers en cours de modification affiche les chemins accentués ou avec guillemet tels quels, au lieu de l'échappement de git (`"\303\251t\303\251.txt"`).
+- Le focus clavier, les titres de section (`h2`) et les infobulles des boutons d'icône sont conformes (Radix) ; les fenêtres ne s'élargissent plus au contenu sur petit écran ; la corbeille ne déborde plus.
+- Un échec réseau ou un serveur injoignable est signalé au lieu de squelettes muets ; les erreurs de lecture ne se glissent plus dans le texte éditable.
+- La conversation reste collée à sa fin quand la bande d'état change de hauteur, ne se vide plus quand la liste se relit sans elle, et une relecture lente ne la remplace plus par une version plus ancienne.
+- Le carrousel ne parcourt que les sessions actives, écarte le cache froid et passe à la suivante quand la session affichée est supprimée ; après une suppression, le focus va à la session voisine.
+- Dialogue de confiance d'un dossier : bonnes touches, curseur vérifié avant Entrée, seul le bloc d'options est lu.
+- Les questions longues, à cases à cocher ou à onglets s'affichent en entier avec leur description.
+- Le décompte des commandes pour les suggestions de règles est gardé 60 s ; le cache du tampon des transcripts et celui des textes de recherche sont bornés (1 s, 256 Mo) ; l'index de recherche ne relit pas un transcript modifié depuis moins de 30 s.
+- Un `cleanupPeriodDays` très grand n'est plus ramené à 30 jours.
+- Plus d'effet de bord sur les requêtes GET : l'expiration de la corbeille tourne en tâche de fond, l'actualisation du compte se fait par `POST /account-refresh`. Les mutations de sessions (suppression, corbeille, réassignation) sont sous verrou, la réassignation est atomique, et le démarrage d'un gld enfant ne bloque plus les autres.
+- Un jeton fourni par `GLD_WEB_TOKEN` n'est plus imprimé sur stderr ; l'exploration des dossiers ne descend plus dans `/proc`, `/sys`, `/dev`, `/run`, `/mnt` ni `/media`.
+- `/conv` sans `limit` rend des pages de 1000 messages ; l'export Markdown parcourt les pages jusqu'au bout.
+- La page d'un projet est servie par le serveur (plus de 404 au rechargement), et les dossiers d'un projet ne sont plus répétés sous « Sessions locales ».
 
 ## [0.2.0] - 2026-10-22
 
