@@ -5,6 +5,7 @@ import { setLang, type Lang } from "@/i18n"
 import { api } from "@/lib/api"
 import { FONTS, SIZES } from "@/lib/fonts"
 import type { Choice } from "@/lib/models"
+import { Choose } from "./Choose"
 import { ModelPicker } from "./ModelPicker"
 import { cn } from "@/lib/utils"
 import { useTheme } from "@/components/theme-provider"
@@ -153,21 +154,14 @@ export function Settings({
               {section(
                 t("config.dialog.language"),
                 t("config.dialog.languageHint"),
-                <div className="grid max-w-sm grid-cols-2 gap-1 rounded-lg bg-muted p-1">
-                  {LANGS.map(({ v, label, claude }) => (
-                    <button
-                      key={v}
-                      onClick={() => pickLang(v, claude)}
-                      aria-pressed={i18n.language === v}
-                      className={cn(
-                        "rounded-md py-1 text-xs transition-colors",
-                        i18n.language === v ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+                <Choose
+                  value={i18n.language}
+                  onChange={(v) => pickLang(v as Lang, LANGS.find((l) => l.v === v)!.claude)}
+                  options={LANGS.map((l) => [l.v, l.label] as const)}
+                  label={t("config.dialog.language")}
+                  size="default"
+                  className="w-full max-w-sm"
+                />
               )}
               {section(
                 t("config.dialog.theme"),
