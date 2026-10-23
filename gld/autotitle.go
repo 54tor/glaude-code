@@ -25,7 +25,7 @@ var titleRun = func(text string) (string, error) {
 	}
 	if json.Unmarshal(out, &r) != nil {
 		if err == nil {
-			err = errors.New("réponse illisible")
+			err = terr("srv.memwrite.reponseIllisible")
 		}
 		return "", err
 	}

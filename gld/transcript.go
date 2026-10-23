@@ -59,8 +59,9 @@ func promptOf(l *line) string {
 		s = strings.Join(t, " ")
 	}
 	// Texte collé dans Claude Code : remplacé par une mention, un prompt fait seulement d'un collage ne sert pas de titre.
-	s = strings.TrimSpace(pastedRe.ReplaceAllString(s, " [texte collé] "))
-	if s == "[texte collé]" || strings.HasPrefix(s, "<") || strings.HasPrefix(strings.ToLower(s), "caveat:") {
+	pasted := L("srv.transcript.pasted")
+	s = strings.TrimSpace(pastedRe.ReplaceAllString(s, " "+pasted+" "))
+	if s == pasted || strings.HasPrefix(s, "<") || strings.HasPrefix(strings.ToLower(s), "caveat:") {
 		return ""
 	}
 	return spaceRe.ReplaceAllString(s, " ")
