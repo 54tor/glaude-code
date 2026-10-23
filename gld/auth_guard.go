@@ -193,7 +193,7 @@ func absAuthDir() (string, error) {
 	return filepath.Abs(d)
 }
 
-// managedInstalled : le fichier managed existe et porte nos règles de refus et le hook (le reste est toléré).
+// managedInstalled : le fichier managed existe et porte nos règles de refus et le hook bloquant (le reste est toléré).
 func managedInstalled() bool {
 	dir, err := absAuthDir()
 	if err != nil {
@@ -209,8 +209,9 @@ func managedInstalled() bool {
 			PreToolUse []struct {
 				Matcher string
 				Hooks   []struct {
-					Command string
-					Args    []string // forme exec, générée par une version précédente de gld
+					Command   string
+					Args      []string // forme exec, générée par une version précédente de gld
+					OnFailure string   `json:"onFailure"`
 				}
 			}
 		} `json:"hooks"`
@@ -227,7 +228,8 @@ func managedInstalled() bool {
 	for _, g := range m.Hooks.PreToolUse {
 		for _, h := range g.Hooks {
 			ok := (h.Args == nil && h.Command == line) || (h.Args != nil && h.Command == self && slices.Equal(h.Args, args))
-			if ok && slices.Contains(strings.Split(g.Matcher, "|"), "Bash") {
+			// Sans onFailure « block », un hook en échec laisse passer la commande : ce n'est pas le garde-fou.
+			if ok && h.OnFailure == "block" && slices.Contains(strings.Split(g.Matcher, "|"), "Bash") {
 				return true
 			}
 		}

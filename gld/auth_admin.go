@@ -392,6 +392,11 @@ func (d *adminAPI) acl(w http.ResponseWriter, r *http.Request) {
 		if !d.fresh(w, r, p, req.Reauth) {
 			return
 		}
+	} else if len(grant) > 0 && (slices.Contains(grant, RightSessionsRead) || req.UserID == p.User.ID) {
+		// Lire les transcriptions d'autrui, ou s'accorder un droit : un cookie volé ne doit pas y suffire.
+		if !d.fresh(w, r, p, req.Reauth) {
+			return
+		}
 	}
 	if err := d.s.SetRights(req.UserID, req.HomeID, grant, revoke); err != nil {
 		d.userErr(w, err)

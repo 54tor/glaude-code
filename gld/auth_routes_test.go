@@ -1122,3 +1122,26 @@ func TestRateLogNoDBUnderLock(t *testing.T) {
 	}
 	tx.Rollback()
 }
+
+// Déconnexion et connexion réussie effacent le home choisi : un autre compte n'en hérite pas.
+func TestHomeCookieCleared(t *testing.T) {
+	g := newAuthRig(t)
+	secret := g.enrolTOTP()
+	c, csrf, _ := g.partial()
+	w := g.do("POST", "/auth/mfa/totp", c, csrf, map[string]string{"code": g.code(secret)})
+	cleared := func(w *httptest.ResponseRecorder) bool {
+		for _, k := range w.Result().Cookies() {
+			if k.Name == homeCookie && k.MaxAge < 0 {
+				return true
+			}
+		}
+		return false
+	}
+	if w.Code != 200 || !cleared(w) {
+		t.Fatalf("connexion : %d, gld_home effacé %v", w.Code, cleared(w))
+	}
+	nc, _ := newCookie(w)
+	if w := g.do("POST", "/auth/logout", nc, jbody(t, w)["csrf"].(string), nil); w.Code != 200 || !cleared(w) {
+		t.Fatalf("déconnexion : %d", w.Code)
+	}
+}
