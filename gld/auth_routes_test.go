@@ -219,13 +219,14 @@ func TestLoginThrottled(t *testing.T) {
 	}
 	w := g.login("alice", testPw)
 	assertGenericFail(t, w)
-	if ra, _ := strconv.Atoi(w.Header().Get("Retry-After")); ra < 1 {
+	ra, _ := strconv.Atoi(w.Header().Get("Retry-After"))
+	if ra < 1 {
 		t.Fatalf("Retry-After = %q", w.Header().Get("Retry-After"))
 	}
 	if n.Load() != 3 {
 		t.Fatal("mot de passe vérifié pendant l'attente")
 	}
-	g.tick(thWindow + time.Second)
+	g.tick(time.Duration(ra) * time.Second)
 	if w := g.login("alice", testPw); w.Code != 200 {
 		t.Fatalf("après l'attente : %d %s", w.Code, w.Body)
 	}
@@ -328,31 +329,34 @@ func TestLoginRecovery(t *testing.T) {
 	}
 }
 
-// Le compteur mfa: est amorcé à 4 : les clés user:, ip: et pair: imposeraient sinon une attente dès le 3e échec.
 func TestMFAFailuresKillSession(t *testing.T) {
 	g := newAuthRig(t)
 	secret := g.enrolTOTP()
-	c1, csrf1, _ := g.partial()
+	c, csrf, _ := g.partial()
 	c2, csrf2, _ := g.partial()
-	if _, err := g.s.db.Exec(`INSERT INTO throttle(key,fails,first_at,locked_until) VALUES('mfa:alice',?,?,0)`, thMFALimit-1, g.clock.Unix()); err != nil {
-		t.Fatal(err)
+	ra := 0
+	for i := 1; i <= thMFALimit; i++ {
+		g.tick(time.Duration(ra) * time.Second)
+		w := g.do("POST", "/auth/mfa/totp", c, csrf, map[string]string{"code": "000000"})
+		assertGenericFail(t, w)
+		ra, _ = strconv.Atoi(w.Header().Get("Retry-After"))
+		_, cleared := newCookie(w)
+		if cleared != (i == thMFALimit) {
+			t.Fatalf("essai %d : cookie effacé = %v (%s)", i, cleared, w.Body)
+		}
 	}
-	w := g.do("POST", "/auth/mfa/totp", c1, csrf1, map[string]string{"code": "000000"})
-	assertGenericFail(t, w)
-	if _, cleared := newCookie(w); !cleared {
-		t.Fatal("cookie non effacé au 5e échec")
+	// Chaque essai a été vérifié : les cinq échecs sont comptés, aucun n'a été refusé d'avance.
+	if f := g.th.mfaFails("alice"); f != thMFALimit {
+		t.Fatalf("échecs mfa comptés = %d", f)
 	}
-	if w := g.do("GET", "/auth/me", c1, "", nil); w.Code != 401 {
+	if w := g.do("GET", "/auth/me", c, "", nil); w.Code != 401 {
 		t.Fatalf("session partielle survivante : %d", w.Code)
 	}
-	// Au-delà du seuil, même un bon code n'est plus vérifié et la session part.
-	w = g.do("POST", "/auth/mfa/totp", c2, csrf2, map[string]string{"code": g.code(secret)})
+	// Au-delà du seuil, même un bon code sur une autre session partielle n'est pas vérifié.
+	w := g.do("POST", "/auth/mfa/totp", c2, csrf2, map[string]string{"code": g.code(secret)})
 	assertGenericFail(t, w)
 	if _, cleared := newCookie(w); !cleared {
 		t.Fatal("cookie non effacé")
-	}
-	if w := g.do("GET", "/auth/me", c2, "", nil); w.Code != 401 {
-		t.Fatalf("session partielle survivante : %d", w.Code)
 	}
 }
 
@@ -568,5 +572,40 @@ func TestRecoveryConcurrentSerialised(t *testing.T) {
 	wg.Wait()
 	if first.Code != 200 {
 		t.Fatalf("première tentative : %d %s", first.Code, first.Body)
+	}
+}
+
+func TestRecoveryRegenerate(t *testing.T) {
+	g := newAuthRig(t)
+	secret := g.enrolTOTP()
+	old, err := g.s.NewRecoveryCodes(g.uid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pc, pcsrf, _ := g.partial()
+	if w := g.do("POST", "/auth/recovery/regenerate", pc, pcsrf, map[string]string{"password": testPw, "code": g.code(secret)}); w.Code != 403 {
+		t.Fatalf("session partielle : %d", w.Code)
+	}
+	c, csrf := g.full(secret)
+	assertGenericFail(t, g.do("POST", "/auth/recovery/regenerate", c, csrf, map[string]string{"password": testPw}))
+	g.tick(2 * time.Second)
+	w := g.do("POST", "/auth/recovery/regenerate", c, csrf, map[string]string{"password": testPw, "code": g.code(secret)})
+	if w.Code != 200 {
+		t.Fatalf("régénération : %d %s", w.Code, w.Body)
+	}
+	codes := jbody(t, w)["recovery"].([]any)
+	if len(codes) != recoveryCount {
+		t.Fatalf("codes = %v", codes)
+	}
+	if g.s.UseRecoveryCode(g.uid, old[0]) {
+		t.Fatal("ancien code encore valable")
+	}
+	if !g.s.UseRecoveryCode(g.uid, codes[0].(string)) {
+		t.Fatal("nouveau code refusé")
+	}
+	var n int
+	g.s.db.QueryRow(`SELECT COUNT(*) FROM auth_events WHERE user_id=? AND kind='recovery' AND outcome='regenerated' AND ip='192.0.2.1'`, g.uid).Scan(&n)
+	if n != 1 {
+		t.Fatalf("événements = %d", n)
 	}
 }

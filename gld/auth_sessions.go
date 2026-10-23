@@ -41,7 +41,7 @@ type Principal struct {
 }
 
 func (s *authStore) eventIP(userID int64, kind, outcome, ip string) {
-	s.db.Exec(`INSERT INTO auth_events(at,user_id,ip,kind,outcome) VALUES(?,?,?,?,?)`, time.Now().Unix(), userID, ip, kind, outcome)
+	s.db.Exec(`INSERT INTO auth_events(at,user_id,ip,kind,outcome) VALUES(?,?,?,?,?)`, authNow().Unix(), userID, ip, kind, outcome)
 }
 
 func newSessionValue() (raw, hash []byte) {

@@ -87,6 +87,7 @@ func routesAuth(mux *http.ServeMux, s *authStore, th *throttle) {
 	mux.HandleFunc("POST /auth/webauthn/register/begin", a.waRegisterBegin)
 	mux.HandleFunc("POST /auth/webauthn/register/finish", a.waRegisterFinish)
 	mux.HandleFunc("POST /auth/factor/remove", a.factorRemove)
+	mux.HandleFunc("POST /auth/recovery/regenerate", a.recoveryRegenerate)
 	mux.HandleFunc("POST /auth/password", a.password)
 	mux.HandleFunc("GET /auth/sessions", a.sessions)
 	mux.HandleFunc("POST /auth/sessions/revoke", a.sessionRevoke)
@@ -142,7 +143,7 @@ func (a *authAPI) log(uid int64, name, ip, kind, outcome string) {
 	if uid != 0 {
 		u = uid
 	}
-	a.s.db.Exec(`INSERT INTO auth_events(at,user_id,name_tried,ip,kind,outcome) VALUES(?,?,?,?,?,?)`, time.Now().Unix(), u, name, ip, kind, outcome)
+	a.s.db.Exec(`INSERT INTO auth_events(at,user_id,name_tried,ip,kind,outcome) VALUES(?,?,?,?,?,?)`, authNow().Unix(), u, name, ip, kind, outcome)
 }
 
 func (a *authAPI) fail(w http.ResponseWriter, uid int64, name, ip, kind, outcome, stage string) {
@@ -150,7 +151,8 @@ func (a *authAPI) fail(w http.ResponseWriter, uid int64, name, ip, kind, outcome
 		journal("auth: throttle: %v", err)
 	}
 	a.log(uid, name, ip, kind, outcome)
-	authFail(w, 0)
+	wait, _ := a.th.Pending(name, ip)
+	authFail(w, wait)
 }
 
 // throttled répond aussitôt, sans rien vérifier, quand une attente ou un verrou s'applique ;
@@ -293,7 +295,8 @@ func (a *authAPI) second(w http.ResponseWriter, r *http.Request, p *Principal, m
 		if !p.MFA && a.th.mfaFails(name) >= thMFALimit {
 			a.kill(w, p, ip)
 		}
-		authFail(w, 0)
+		wait, _ := a.th.Pending(name, ip)
+		authFail(w, wait)
 		return
 	}
 	a.log(uid, name, ip, kind, evSuccess)
@@ -633,6 +636,22 @@ func (a *authAPI) factorRemove(w http.ResponseWriter, r *http.Request) {
 		a.log(p.User.ID, p.User.Name, ip, "factor_remove", "refused")
 		authUserErr(w, 409, err)
 	}
+}
+
+// recoveryRegenerate remplace tout le jeu : les anciens codes cessent de valoir, les nouveaux ne sont montrés qu'ici.
+func (a *authAPI) recoveryRegenerate(w http.ResponseWriter, r *http.Request) {
+	p := a.need(w, r, true)
+	var req reauthReq
+	if p == nil || !decodeAuth(w, r, &req) || !a.reauth(w, r, p, req) {
+		return
+	}
+	codes, err := a.s.NewRecoveryCodes(p.User.ID)
+	if err != nil {
+		authInternal(w, err)
+		return
+	}
+	a.log(p.User.ID, p.User.Name, clientIP(r), "recovery", "regenerated")
+	writeJSON(w, 200, map[string]any{"ok": true, "recovery": codes})
 }
 
 func (a *authAPI) password(w http.ResponseWriter, r *http.Request) {
