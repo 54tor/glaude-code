@@ -1051,3 +1051,40 @@ func TestBlockedEventsRateLimited(t *testing.T) {
 		t.Fatalf("après une minute : %d", n)
 	}
 }
+
+// Un flot de noms distincts depuis une adresse ne remplit ni auth_events ni la table de déduplication, et ne tait pas
+// les événements d'une autre adresse ; ce qui est tu est compté dans un seul résumé.
+func TestRateLogNameFlood(t *testing.T) {
+	g := newAuthRig(t)
+	a := routesAuth(http.NewServeMux(), g.s, g.th)
+	var before int
+	g.s.db.QueryRow(`SELECT COUNT(*) FROM auth_events`).Scan(&before)
+	for i := range 5000 {
+		a.rateLog(0, "nom"+strconv.Itoa(i), "198.51.100.1", evLogin, "blocked")
+	}
+	a.rateLog(0, "x", "198.51.100.2", evLogin, "blocked")
+	var n, other int
+	var sup string
+	g.s.db.QueryRow(`SELECT COUNT(*) FROM auth_events`).Scan(&n)
+	g.s.db.QueryRow(`SELECT COUNT(*) FROM auth_events WHERE ip='198.51.100.2'`).Scan(&other)
+	g.s.db.QueryRow(`SELECT outcome FROM auth_events WHERE kind='suppressed'`).Scan(&sup)
+	if n-before > 3 || other != 1 || sup != "4999" {
+		t.Fatalf("lignes %d, autre adresse %d, résumé %q", n-before, other, sup)
+	}
+	// Budget global : au-delà de rateBudget adresses neuves dans la minute, le reste va au résumé.
+	for i := range 100 {
+		a.rateLog(0, "", "203.0.113."+strconv.Itoa(i), evLogin, "busy")
+	}
+	g.s.db.QueryRow(`SELECT COUNT(*) FROM auth_events`).Scan(&n)
+	if n-before > rateBudget+1 {
+		t.Fatalf("budget dépassé : %d lignes", n-before)
+	}
+	long := strings.Repeat("é", 100)
+	g.tick(time.Minute)
+	a.rateLog(0, long, "192.0.2.1", evLogin, "busy")
+	var got string
+	g.s.db.QueryRow(`SELECT name_tried FROM auth_events WHERE ip='192.0.2.1'`).Scan(&got)
+	if len([]rune(got)) != 64 {
+		t.Fatalf("nom tronqué : %d", len([]rune(got)))
+	}
+}
