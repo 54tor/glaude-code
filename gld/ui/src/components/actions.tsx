@@ -64,7 +64,7 @@ export type Actions = {
   snippets: Snippet[] // commandes personnelles et de projets, à insérer dans un prompt
   defaultChoice: Choice // modèle et effort des réglages de l'interface
   startSession: (project: string, prompt: string, choice: Choice) => Promise<boolean> // lance tout de suite, sans fenêtre intermédiaire
-  newSession: (project: string, initial?: string) => void // nouvelle session dans ce dossier de travail
+  newSession: (project: string, initial?: string, onSent?: () => void) => void // nouvelle session dans ce dossier de travail
   copy: (s: Session) => void
   rename: (s: Session) => void
   exportMd: (r: Row) => void

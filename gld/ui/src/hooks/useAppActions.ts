@@ -182,7 +182,7 @@ export function useAppActions(c: {
         id: s?.id ?? "",
         ...(s ? {} : { cwd: x.project }),
       }))
-  const newSession = (title: string, subtitle: string, ts: Target[], initial = "") =>
+  const newSession = (title: string, subtitle: string, ts: Target[], initial = "", onSent?: () => void) =>
     ts.length &&
     setCompose({
       id: "new:" + ts[0].project + title,
@@ -193,7 +193,11 @@ export function useAppActions(c: {
       send: i18n.t("shell.head.start"),
       choice,
       targets: ts,
-      run: (prompt, c, t = ts[0]) => act("/new-session", { ...(t.cwd ? { cwd: t.cwd } : { dir: t.dir, id: t.id }), prompt, args: withChoice(args, c) }, i18n.t("shell.act.starting"), "last"),
+      run: (prompt, c, t = ts[0]) =>
+        act("/new-session", { ...(t.cwd ? { cwd: t.cwd } : { dir: t.dir, id: t.id }), prompt, args: withChoice(args, c) }, i18n.t("shell.act.starting"), "last").then((ok) => {
+          if (ok) onSent?.()
+          return ok
+        }),
     })
   const groupRows = (x: VGroup) =>
     x.ids
@@ -383,9 +387,9 @@ export function useAppActions(c: {
       await act("/new-session", { ...(t.cwd ? { cwd: t.cwd } : { dir: t.dir, id: t.id }), prompt, args: withChoice(args, c) }, i18n.t("shell.act.starting"), "last")
       return true
     },
-    newSession: (project, initial) => {
+    newSession: (project, initial, onSent) => {
       const t = targets().filter((x) => x.project === project)
-      if (t.length) newSession(i18n.t("shell.header.newSession"), t[0].label, t, initial)
+      if (t.length) newSession(i18n.t("shell.header.newSession"), t[0].label, t, initial, onSent)
     },
     resumeWith: (r) =>
       live.has(r.s.id)
