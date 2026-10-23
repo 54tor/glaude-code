@@ -148,8 +148,8 @@ export default function App() {
       p.set("s", s.id)
       return p
     })
-  // En attente depuis le plus longtemps d'abord.
-  const waitingRows = [...waiting].map((id) => everyId.get(id)).filter((r): r is Row => !!r).sort((x, y) => x.s.mtime - y.s.mtime)
+  // Sessions ouvertes (actives) qui attendent, depuis le plus longtemps d'abord.
+  const waitingRows = [...waiting].filter((id) => live.has(id)).map((id) => everyId.get(id)).filter((r): r is Row => !!r).sort((x, y) => x.s.mtime - y.s.mtime)
   const nextWaiting = () => waitingRows.find((r) => r.s.id !== reading)
   const startCarousel = () => {
     if (!waitingRows.length) return void toast.info("Aucune session n'attend de réponse")
