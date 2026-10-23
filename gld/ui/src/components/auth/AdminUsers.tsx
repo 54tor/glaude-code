@@ -103,7 +103,7 @@ export function AdminUsers() {
             : p.kind === "password"
               ? await authCall("/admin/users/password", { ...r, id: p.user.id, password: form.password })
               : p.kind === "grant"
-                ? await authCall("/admin/acl", { ...r, user_id: p.user.id, home_id: p.home, grant: [p.right], confirm: true })
+                ? await authCall("/admin/acl", { ...r, user_id: p.user.id, home_id: p.home, grant: [p.right], ...(DANGEROUS.includes(p.right) ? { confirm: true } : {}) })
                 : await authCall("/admin/sessions/revoke", { ...r, user_id: p.user.id })
     if (!res.ok) {
       if (!reauth) toast.error(res.body.out ?? t("auth.admin.failed"))
@@ -123,9 +123,10 @@ export function AdminUsers() {
   }
   const ask = (p: Pending) => (needsReauth(p, me) ? (setConfirmed(false), setPending(p)) : void perform(p))
 
-  // Retirer un droit, ou accorder un droit ordinaire : immédiat. exec et config_write : confirmation puis réauthentification.
+  // Retirer un droit, ou accorder un droit ordinaire à autrui : immédiat. exec et config_write : confirmation puis réauthentification ;
+  // sessions_read et tout droit qu'on s'accorde : réauthentification.
   const toggle = async (u: User, home: string, right: Right, on: boolean) => {
-    if (on && DANGEROUS.includes(right)) return ask({ kind: "grant", user: u, home, right })
+    if (on && (DANGEROUS.includes(right) || right === "sessions_read" || u.name === me)) return ask({ kind: "grant", user: u, home, right })
     const res = await authCall<{ rights: Right[] }>("/admin/acl", { user_id: u.id, home_id: home, [on ? "grant" : "revoke"]: [right] })
     if (!res.ok) return void toast.error(res.body.out ?? t("auth.admin.failed"))
     setUsers((l) => l && l.map((x) => (x.id !== u.id ? x : { ...x, acl: [...x.acl.filter((a) => a.home_id !== home), { home_id: home, home_name: "", rights: res.body.rights ?? [] }] })))
@@ -139,7 +140,7 @@ export function AdminUsers() {
     resetMfa: t("auth.admin.resetMfa"),
     password: t("auth.admin.setPassword"),
     revoke: t("auth.admin.revokeSessions"),
-    grant: t("auth.admin.grantDangerous"),
+    grant: pending?.kind === "grant" && !DANGEROUS.includes(pending.right) ? t("auth.admin.grantRight", { right: pending.right }) : t("auth.admin.grantDangerous"),
   }
   const user = users?.find((u) => u.id === sel)
   const cols = user ? [...homes, ...user.acl.filter((a) => !homes.some((h) => h.id === a.home_id)).map((a) => ({ id: a.home_id, name: a.home_name || a.home_id }))] : []
@@ -150,7 +151,7 @@ export function AdminUsers() {
         <ReauthForm
           title={"user" in pending ? t("auth.admin.titleFor", { title: titles[pending.kind], name: pending.user.name }) : titles[pending.kind]}
           danger={pending.kind !== "add" && pending.kind !== "enable"}
-          extraOk={pending.kind === "grant" ? confirmed : pending.kind === "add" ? !!form.name && !!form.password : pending.kind === "password" ? !!form.password : true}
+          extraOk={pending.kind === "grant" ? confirmed || !DANGEROUS.includes(pending.right) : pending.kind === "add" ? !!form.name && !!form.password : pending.kind === "password" ? !!form.password : true}
           focusPassword={pending.kind !== "add"}
           onSubmit={(r) => perform(pending, r)}
           onCancel={reset}
@@ -173,7 +174,7 @@ export function AdminUsers() {
               <Input id="gld-new-pw" type="password" autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
             </div>
           )}
-          {pending.kind === "grant" && (
+          {pending.kind === "grant" && DANGEROUS.includes(pending.right) && (
             <>
               <p className="flex gap-2 font-medium text-destructive">
                 <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />

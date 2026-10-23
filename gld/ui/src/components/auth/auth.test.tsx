@@ -438,6 +438,38 @@ describe("AdminUsers", () => {
     expect(bodyOf(calls.find((c) => c.url === "/admin/acl")!)).toEqual({ user_id: 2, home_id: "main", grant: ["mem_write"] })
   })
 
+  it("sessions_read demande la réauthentification, sans confirmation exec", async () => {
+    const calls = server({
+      "/admin/users": { body: { ok: true, users: [USER] } },
+      "/admin/homes": { body: { ok: true, homes: [{ id: "main", name: "main" }] } },
+      "/admin/acl": { body: { ok: true, rights: ["mem_read", "sessions_read"] } },
+    })
+    setAuth({ state: "ok", csrf: "tok", user: { name: "root", admin: true }, factors: { totp: true, webauthn: 0, recovery: 10 } })
+    render(<AdminUsers />)
+    fireEvent.click(await screen.findByRole("button", { name: "bob" }))
+    await act(async () => void fireEvent.click(screen.getByRole("checkbox", { name: "sessions_read sur Dossier principal" })))
+    expect(calls.some((c) => c.url === "/admin/acl")).toBe(false)
+    expect(screen.queryByRole("checkbox", { name: "Je confirme accorder ce droit en connaissance de cause" })).toBeNull()
+    fireEvent.change(screen.getByLabelText("Mot de passe actuel"), { target: { value: "pw-admin" } })
+    fireEvent.change(screen.getByLabelText("Code (application ou secours)"), { target: { value: "123456" } })
+    await act(async () => void fireEvent.click(screen.getByRole("button", { name: "Confirmer" })))
+    expect(bodyOf(calls.find((c) => c.url === "/admin/acl")!)).toEqual({ reauth: { password: "pw-admin", code: "123456" }, user_id: 2, home_id: "main", grant: ["sessions_read"] })
+  })
+
+  it("retirer un droit ne demande rien", async () => {
+    const calls = server({
+      "/admin/users": { body: { ok: true, users: [USER] } },
+      "/admin/homes": { body: { ok: true, homes: [{ id: "main", name: "main" }] } },
+      "/admin/acl": { body: { ok: true, rights: [] } },
+    })
+    setAuth({ state: "ok", csrf: "tok", user: { name: "root", admin: true } })
+    render(<AdminUsers />)
+    fireEvent.click(await screen.findByRole("button", { name: "bob" }))
+    await act(async () => void fireEvent.click(screen.getByRole("checkbox", { name: "mem_read sur Dossier principal" })))
+    expect(screen.queryByLabelText("Mot de passe actuel")).toBeNull()
+    expect(bodyOf(calls.find((c) => c.url === "/admin/acl")!)).toEqual({ user_id: 2, home_id: "main", revoke: ["mem_read"] })
+  })
+
   it("fermer ses propres sessions déconnecte proprement l'interface", async () => {
     localStorage.setItem("gld.owner", "root")
     localStorage.setItem("gld.drafts", "{}")
@@ -497,6 +529,19 @@ describe("HomeSwitcher", () => {
     await act(async () => void fireEvent.click(await screen.findByRole("menuitem", { name: "Ajouter un dossier…" })))
     await waitFor(() => expect(calls.some((c) => c.url === "/homes-save")).toBe(true))
     expect(saved(calls)).toEqual({ homes: [{ name: ".claude-pro", dir: "/h/.claude-pro" }] })
+  })
+
+  it("mode authentifié (admin) : le nom évite aussi les homes invisibles (/admin/homes)", async () => {
+    const calls = server({
+      "/homes": { body: HOMES },
+      "/admin/homes": { body: { ok: true, homes: [{ id: "main", name: "main" }, { id: "h9", name: ".claude-pro" }] } },
+      "/homes-save": { body: { ok: true, out: "" } },
+    })
+    setAuth({ state: "ok", csrf: "tok", user: { name: "root", admin: true } })
+    await mount()
+    await act(async () => void fireEvent.click(await screen.findByRole("menuitem", { name: "Ajouter un dossier…" })))
+    await waitFor(() => expect(calls.some((c) => c.url === "/homes-save")).toBe(true))
+    expect(saved(calls)).toEqual({ homes: [{ name: ".claude-pro 2", dir: "/h/.claude-pro" }] })
   })
 
   it("mode authentifié (admin) : un retrait envoie l'identifiant, jamais la liste", async () => {
@@ -694,7 +739,7 @@ describe("ajout d'un facteur depuis le profil", () => {
 })
 
 describe("droits de l'admin sur lui-même", () => {
-  it("changer ses propres droits rafraîchit useCan sans effacer ses données", async () => {
+  it("s'accorder un droit exige la réauthentification, puis rafraîchit useCan sans effacer ses données", async () => {
     localStorage.setItem("gld.owner", "root")
     const calls = server({
       "/admin/users": { body: { ok: true, users: [{ ...USER, id: 1, name: "root", admin: true }] } },
@@ -708,6 +753,11 @@ describe("droits de l'admin sur lui-même", () => {
     render(<AdminUsers />)
     fireEvent.click(await screen.findByRole("button", { name: "root" }))
     await act(async () => void fireEvent.click(screen.getByRole("checkbox", { name: "mem_write sur Dossier principal" })))
+    expect(calls.some((c) => c.url === "/admin/acl")).toBe(false)
+    fireEvent.change(screen.getByLabelText("Mot de passe actuel"), { target: { value: "pw-admin" } })
+    fireEvent.change(screen.getByLabelText("Code (application ou secours)"), { target: { value: "123456" } })
+    await act(async () => void fireEvent.click(screen.getByRole("button", { name: "Confirmer" })))
+    expect(bodyOf(calls.find((c) => c.url === "/admin/acl")!)).toEqual({ reauth: { password: "pw-admin", code: "123456" }, user_id: 1, home_id: "main", grant: ["mem_write"] })
     await waitFor(() => expect(getAuth().rights).toEqual({ main: ["mem_read", "mem_write"] }))
     expect(calls.some((c) => c.url === "/auth/me")).toBe(true)
     expect(draftOf("s1").text).toBe("brouillon de root")
