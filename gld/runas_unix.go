@@ -195,14 +195,14 @@ func applyRunAs(cmd *exec.Cmd, keep ...string) {
 	cmd.Env = out
 }
 
-func capField(status []byte, key string) uint64 {
+// capField : un champ hexadécimal de /proc/self/status ; absent ou illisible, c'est une erreur (jamais 0 par défaut).
+func capField(status []byte, key string) (uint64, error) {
 	for _, l := range strings.Split(string(status), "\n") {
 		if v, ok := strings.CutPrefix(l, key); ok {
-			n, _ := strconv.ParseUint(strings.TrimSpace(v), 16, 64)
-			return n
+			return strconv.ParseUint(strings.TrimSpace(v), 16, 64)
 		}
 	}
-	return 0
+	return 0, errors.New(key + " absent")
 }
 
 // checkRunAsSeparation : au démarrage du serveur, si GLD_RUN_AS est fixé, vérifie la séparation ; une erreur arrête gld
@@ -225,8 +225,14 @@ func checkRunAsSeparation() error {
 		if err != nil {
 			return terr("srv.runas.procStatus", "A1", err)
 		}
-		if capField(st, "CapAmb:") != 0 || capField(st, "CapInh:") != 0 {
-			return terr("srv.runas.inheritedCaps")
+		for _, k := range []string{"CapAmb:", "CapInh:"} {
+			n, err := capField(st, k)
+			if err != nil {
+				return terr("srv.runas.procStatus", "A1", err)
+			}
+			if n != 0 {
+				return terr("srv.runas.inheritedCaps")
+			}
 		}
 	}
 	bin, err := selfExe()
@@ -244,11 +250,31 @@ func checkRunAsSeparation() error {
 		return err
 	}
 	dir = filepath.Clean(dir)
+	if !filepath.IsAbs(dir) { // avant toute création : un chemin relatif dépendrait du dossier courant
+		return terr("srv.runas.authDirRelative", "A1", dir)
+	}
 	if within(dir, a.home) {
 		return terr("srv.runas.homeInAuthDir", "A1", a.home, "A2", dir)
 	}
 	if within(a.home, dir) {
 		return terr("srv.runas.authDirInHome", "A1", dir, "A2", a.home)
+	}
+	// Le parent existant est jugé avant que MkdirAll n'écrive dessous.
+	existing := dir
+	for {
+		_, _, _, err := lstatOwner(existing)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, os.ErrNotExist) || existing == "/" {
+			return chainErr("srv.runas.ancestorWritable", a.name, existing, err)
+		}
+		existing = filepath.Dir(existing)
+	}
+	if existing != dir {
+		if p, err := unsafeChainFrom(existing, a.cred, true, 0); err != nil || p != "" {
+			return chainErr("srv.runas.ancestorWritable", a.name, p, err)
+		}
 	}
 	if err := ensureAuthDir(dir); err != nil {
 		return terr("srv.runas.authDirCreate", "A1", dir, "A2", err)
@@ -287,17 +313,26 @@ func chainErr(key, name, p string, err error) error {
 func ensureAuthDir(dir string) error {
 	if _, _, _, err := lstatOwner(dir); errors.Is(err, os.ErrNotExist) {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
-			return err
+			return pathless(err)
 		}
 	}
 	uid, _, mode, err := lstatOwner(dir)
 	switch {
 	case err != nil:
-		return err
+		return pathless(err)
 	case !mode.IsDir() || uid != 0 || mode.Perm()&0o077 != 0 || mode&os.ModeSticky != 0:
-		return errors.New(dir + ": " + mode.String())
+		return errors.New(mode.String())
 	}
 	return nil
+}
+
+// pathless : l'erreur sans le chemin, que le message cite déjà.
+func pathless(err error) error {
+	var pe *os.PathError
+	if errors.As(err, &pe) {
+		return errors.New(pe.Op + ": " + pe.Err.Error())
+	}
+	return err
 }
 
 // within : p est dir ou un chemin sous dir (liens résolus).
@@ -344,30 +379,55 @@ var errACL = errors.New("posix acl")
 // Deux parcours : le chemin tel que configuré, élément par élément (un lien n'y est admis que s'il est à root, son dossier
 // étant lui-même vérifié), puis le chemin résolu. Une ACL POSIX sur un élément fait refuser : les bits de mode ne suffisent plus.
 func unsafeChain(p string, c *syscall.Credential) (string, error) {
+	return unsafeChainFrom(p, c, false, 0)
+}
+
+// linkDepth : borne des liens suivis dans unsafeChain (une boucle de liens ne la fait pas tourner sans fin).
+const linkDepth = 16
+
+// unsafeChainFrom : leafAncestor, p est lui-même un parent (dérogation sticky permise) ; depth, liens déjà suivis. Un lien
+// de root est accepté si la chaîne de sa cible l'est aussi (cible relative : par rapport au dossier du lien).
+func unsafeChainFrom(p string, c *syscall.Credential, leafAncestor bool, depth int) (string, error) {
 	p = filepath.Clean(p)
 	if !filepath.IsAbs(p) {
 		return p, errors.New(p + ": relative path")
 	}
-	check := func(q string, ancestor bool) (bool, error) {
+	if depth > linkDepth {
+		return p, errors.New(p + ": too many links")
+	}
+	check := func(q string, ancestor bool) (string, error) {
 		uid, gid, mode, err := lstatOwner(q)
 		if err != nil {
-			return false, err
+			return q, err
 		}
 		if mode&os.ModeSymlink != 0 {
-			return uid != 0, nil
+			if uid != 0 {
+				return q, nil
+			}
+			to, err := os.Readlink(q)
+			if err != nil {
+				return q, err
+			}
+			if !filepath.IsAbs(to) {
+				to = filepath.Join(filepath.Dir(q), to)
+			}
+			return unsafeChainFrom(to, c, ancestor, depth+1)
 		}
 		if acl, err := hasACL(q); err != nil || acl {
 			if err == nil {
 				err = errACL
 			}
-			return true, err
+			return q, err
 		}
-		return targetCanWrite(uid, gid, mode, c, ancestor), nil
+		if targetCanWrite(uid, gid, mode, c, ancestor) {
+			return q, nil
+		}
+		return "", nil
 	}
 	walk := func(q string) (string, error) {
-		for ancestor := false; ; ancestor = true {
-			if bad, err := check(q, ancestor); err != nil || bad {
-				return q, err
+		for ancestor := leafAncestor; ; ancestor = true {
+			if bad, err := check(q, ancestor); err != nil || bad != "" {
+				return bad, err
 			}
 			if q == "/" {
 				return "", nil

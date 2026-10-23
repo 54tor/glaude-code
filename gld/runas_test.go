@@ -421,8 +421,8 @@ func TestRunAsRefusesUnsafeChain(t *testing.T) {
 		m    map[string]fakeStat
 		want string
 	}{
-		{"cible propriétaire", map[string]fakeStat{auth: {1500, 1500, d | 0o700, nil}}, L("srv.runas.authDirCreate", "A1", auth, "A2", auth+": "+(d|0o700).String())},
-		{"dossier des comptes sticky", map[string]fakeStat{auth: {0, 0, d | os.ModeSticky | 0o777, nil}}, L("srv.runas.authDirCreate", "A1", auth, "A2", auth+": "+(d|os.ModeSticky|0o777).String())},
+		{"cible propriétaire", map[string]fakeStat{auth: {1500, 1500, d | 0o700, nil}}, L("srv.runas.authDirCreate", "A1", auth, "A2", (d | 0o700).String())},
+		{"dossier des comptes sticky", map[string]fakeStat{auth: {0, 0, d | os.ModeSticky | 0o777, nil}}, L("srv.runas.authDirCreate", "A1", auth, "A2", (d | os.ModeSticky | 0o777).String())},
 		{"parent propriété de la cible", map[string]fakeStat{base: {1500, 1500, d | 0o700, nil}}, anc(base)},
 		{"groupe supplémentaire", map[string]fakeStat{base: {0, 27, d | 0o775, nil}}, anc(base)},
 		{"groupe principal", map[string]fakeStat{base: {0, 1500, d | 0o770, nil}}, anc(base)},
@@ -496,6 +496,95 @@ func TestRunAsRefusesUnsafeChain(t *testing.T) {
 		} else if err == nil || err.Error() != c.want {
 			t.Errorf("%s : %v, attendu %q", c.name, err, c.want)
 		}
+	}
+}
+
+func TestRunAsRefusesBeforeCreating(t *testing.T) {
+	fakeAccounts(t, 1000)
+	t.Setenv("GLD_RUN_AS", "alice")
+	base, _ := filepath.EvalSymlinks(t.TempDir())
+	parent := filepath.Join(base, "p")
+	os.Mkdir(parent, 0o755)
+	t.Setenv("GLD_AUTH_DIR", filepath.Join(parent, "x", "auth"))
+	overStat(map[string]fakeStat{parent: {0, 0, os.ModeDir | 0o777, nil}})
+	err := checkRunAsSeparation()
+	if err == nil || err.Error() != L("srv.runas.ancestorWritable", "A1", "alice", "A2", parent) || runAsAcct != nil {
+		t.Fatalf("parent modifiable par la cible accepté : %v", err)
+	}
+	if ents, _ := os.ReadDir(parent); len(ents) != 0 {
+		t.Fatalf("dossier créé malgré le refus : %v", ents)
+	}
+
+	// parent root sticky (/tmp) : accepté, le dossier est créé
+	overStat(map[string]fakeStat{parent: {0, 0, os.ModeDir | os.ModeSticky | 0o777, nil}})
+	if err := checkRunAsSeparation(); err != nil {
+		t.Fatalf("parent root sticky refusé : %v", err)
+	}
+	lstatOwner = rootOwned
+
+	// chemin relatif : refusé, rien n'est créé dans le dossier courant
+	cwd := t.TempDir()
+	t.Chdir(cwd)
+	t.Setenv("GLD_AUTH_DIR", filepath.Join("rel", "auth"))
+	runAsAcct = nil
+	if err := checkRunAsSeparation(); err == nil || err.Error() != L("srv.runas.authDirRelative", "A1", "rel/auth") {
+		t.Fatalf("chemin relatif accepté : %v", err)
+	}
+	if ents, _ := os.ReadDir(cwd); len(ents) != 0 {
+		t.Fatalf("dossier relatif créé : %v", ents)
+	}
+}
+
+func TestRunAsFollowsLinkChains(t *testing.T) {
+	fakeAccounts(t, 1000)
+	t.Setenv("GLD_RUN_AS", "alice")
+	base, _ := filepath.EvalSymlinks(t.TempDir())
+	a, b, c := filepath.Join(base, "A"), filepath.Join(base, "B"), filepath.Join(base, "C")
+	for _, d := range []string{a, b, filepath.Join(c, "auth")} {
+		os.MkdirAll(d, 0o700)
+	}
+	// A/l1 -> ../B/l2 (relatif) -> C ; le chemin configuré passe par A, le chemin résolu par C : B n'est vu qu'en suivant l1
+	os.Symlink(filepath.Join("..", "B", "l2"), filepath.Join(a, "l1"))
+	os.Symlink(c, filepath.Join(b, "l2"))
+	t.Setenv("GLD_AUTH_DIR", filepath.Join(a, "l1", "auth"))
+	if err := checkRunAsSeparation(); err != nil {
+		t.Fatalf("chaîne de liens sûre refusée : %v", err)
+	}
+	overStat(map[string]fakeStat{b: {0, 0, os.ModeDir | 0o777, nil}})
+	runAsAcct = nil
+	if err := checkRunAsSeparation(); err == nil || err.Error() != L("srv.runas.ancestorWritable", "A1", "alice", "A2", b) {
+		t.Fatalf("dossier intermédiaire modifiable accepté : %v", err)
+	}
+	lstatOwner = rootOwned
+
+	// boucle de liens : refus, pas de récursion sans fin
+	os.Symlink(filepath.Join(base, "L2"), filepath.Join(base, "L1"))
+	os.Symlink(filepath.Join(base, "L1"), filepath.Join(base, "L2"))
+	if p, err := unsafeChain(filepath.Join(base, "L1", "auth"), testAccount().cred); err == nil {
+		t.Fatalf("boucle de liens acceptée : %q", p)
+	}
+}
+
+func TestCapFieldFailsClosed(t *testing.T) {
+	fakeAccounts(t, 1000)
+	t.Setenv("GLD_AUTH_DIR", authTempDir(t))
+	t.Setenv("GLD_RUN_AS", "alice")
+	for _, st := range []string{
+		"CapInh:\t0000000000000000\n",              // CapAmb absent
+		"CapAmb:\t0000000000000000\n",              // CapInh absent
+		"CapInh:\tzz\nCapAmb:\t0000000000000000\n", // illisible
+		"CapInh:\t0000000000000000\nCapAmb:\t\n",   // vide
+		"",
+	} {
+		procStatus = func() ([]byte, error) { return []byte(st), nil }
+		runAsAcct = nil
+		err := checkRunAsSeparation()
+		if err == nil || !strings.HasPrefix(err.Error(), strings.Split(L("srv.runas.procStatus", "A1", "@"), "@")[0]) || runAsAcct != nil {
+			t.Errorf("%q : %v", st, err)
+		}
+	}
+	if n, err := capField([]byte("CapAmb:\t00000000000000a0\n"), "CapAmb:"); err != nil || n != 0xa0 {
+		t.Errorf("capField : %x %v", n, err)
 	}
 }
 
