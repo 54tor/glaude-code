@@ -66,22 +66,29 @@ func TestUserLockUnknownIP(t *testing.T) {
 	if !th.KnownIP(id, "192.0.2.7") || th.KnownIP(id, "198.51.100.1") {
 		t.Fatal("KnownIP")
 	}
+	if err := th.Success("Carol", "192.0.2.7"); err != nil {
+		t.Fatal(err)
+	}
+	// Check ne doit jamais lire la table users.
+	if _, err := s.db.Exec(`ALTER TABLE users RENAME TO users_hidden`); err != nil {
+		t.Fatal(err)
+	}
 	for n := 0; n < thLockAfter; n++ {
-		th.Fail("Carol", fmt.Sprintf("203.0.113.%d", n), "password")
+		if err := th.Fail("Carol", fmt.Sprintf("203.0.113.%d", n), "password"); err != nil {
+			t.Fatal(err)
+		}
+		th.Fail("ghost", fmt.Sprintf("203.0.113.%d", n), "password")
 	}
 	w, blocked := th.Check("carol", "198.51.100.1")
 	if !blocked || w != thMaxDelay {
 		t.Fatalf("IP inconnue : %v %v", w, blocked)
 	}
+	gw, gb := th.Check("ghost", "198.51.100.1")
+	if gw != w || gb != blocked {
+		t.Fatalf("nom inconnu %v %v, nom existant %v %v", gw, gb, w, blocked)
+	}
 	if w, blocked := th.Check("carol", "192.0.2.7"); blocked || w != 0 {
 		t.Fatalf("IP connue : %v %v", w, blocked)
-	}
-	// Un nom inexistant se verrouille de la même façon.
-	for n := 0; n < thLockAfter; n++ {
-		th.Fail("ghost", fmt.Sprintf("203.0.113.%d", n), "password")
-	}
-	if _, blocked := th.Check("ghost", "198.51.100.1"); !blocked {
-		t.Fatal("nom inconnu non verrouillé")
 	}
 	var locks int
 	s.db.QueryRow(`SELECT COUNT(*) FROM auth_events WHERE kind='lock'`).Scan(&locks)
@@ -91,6 +98,35 @@ func TestUserLockUnknownIP(t *testing.T) {
 	*clock = clock.Add(thLockFor + time.Second)
 	if _, blocked := th.Check("carol", "198.51.100.1"); blocked {
 		t.Fatal("verrou non levé après 30 min")
+	}
+}
+
+func TestUserLockKnownIPExpires(t *testing.T) {
+	th, _, clock := testThrottle(t)
+	th.Success("carol", "192.0.2.7")
+	*clock = clock.Add(thKnownFor + time.Hour)
+	for n := 0; n < thLockAfter; n++ {
+		th.Fail("carol", fmt.Sprintf("203.0.113.%d", n), "password")
+	}
+	if _, blocked := th.Check("carol", "192.0.2.7"); !blocked {
+		t.Fatal("marqueur de plus de 30 jours encore pris en compte")
+	}
+	th.Success("dave", "10.0.0.1")
+	var n int
+	th.db.QueryRow(`SELECT COUNT(*) FROM throttle WHERE key='known:carol|192.0.2.7'`).Scan(&n)
+	if n != 0 {
+		t.Fatal("marqueur expiré non purgé")
+	}
+}
+
+func TestThrottleClosedDB(t *testing.T) {
+	th, s, _ := testThrottle(t)
+	s.db.Close()
+	if _, blocked := th.Check("x", "10.0.0.1"); !blocked {
+		t.Fatal("Check ouvert sur base fermée")
+	}
+	if th.Fail("x", "10.0.0.1", "password") == nil {
+		t.Fatal("Fail sans erreur sur base fermée")
 	}
 }
 
@@ -123,7 +159,7 @@ func TestSuccessClears(t *testing.T) {
 		keys = append(keys, k)
 	}
 	rows.Close()
-	if len(keys) != 1 || keys[0] != "ip:10.0.0.1" {
+	if len(keys) != 2 || keys[0] != "ip:10.0.0.1" || keys[1] != "known:erin|10.0.0.1" {
 		t.Fatalf("clés restantes : %v", keys)
 	}
 }
@@ -176,5 +212,20 @@ func TestClientIPXFF(t *testing.T) {
 	r.RemoteAddr = "[2001:db8:1:2:aaaa:bbbb:cccc:dddd]:443"
 	if got := clientIP(r); got != "2001:db8:1:2::/64" {
 		t.Fatalf("IPv6 : %s", got)
+	}
+}
+
+func TestClientIPXFFSpoof(t *testing.T) {
+	t.Setenv("GLD_TRUSTED_PROXIES", "192.0.2.1,192.0.2.2")
+	r := httptest.NewRequest("POST", "/auth/login", nil)
+	r.RemoteAddr = "198.51.100.9:1234"
+	r.Header.Set("X-Forwarded-For", "1.2.3.4")
+	if got := clientIP(r); got != "198.51.100.9" {
+		t.Fatalf("pair non fiable : %s", got)
+	}
+	r.RemoteAddr = "192.0.2.1:1234"
+	r.Header.Set("X-Forwarded-For", "1.2.3.4, 203.0.113.5, 192.0.2.2")
+	if got := clientIP(r); got != "203.0.113.5" {
+		t.Fatalf("chaîne : %s", got)
 	}
 }
