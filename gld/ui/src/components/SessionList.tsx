@@ -66,7 +66,7 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
       <ContextMenuTrigger asChild>
         <li
           className={cn(
-            "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/60 has-[[data-state=open]]:bg-muted/60 data-[state=open]:bg-muted/60",
+            "group relative flex items-center gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-muted/70 has-[[data-state=open]]:bg-muted/70 data-[state=open]:bg-muted/70",
             picked && "bg-accent hover:bg-accent"
           )}
         >
@@ -86,17 +86,12 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
             className="min-w-0 flex-1 text-left outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring/50"
             onClick={() => a.read(s)}
           >
-            <span className={cn("line-clamp-1 text-sm", s.named ? "font-medium" : "text-foreground/80")}>
+            <span className={cn("line-clamp-1 text-[15px] leading-6", s.named ? "font-medium" : "text-foreground/85")}>
               {a.favs.has(s.id) && <Star className="mr-1 inline size-3.5 -translate-y-px fill-amber-400 text-amber-400" aria-label="favori" />}
               {s.title}
             </span>
-            <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-              {live && (
-                <>
-                  <Live waiting={a.waiting.has(s.id)} />
-                  <span aria-hidden>·</span>
-                </>
-              )}
+            <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+              {live && <Live waiting={a.waiting.has(s.id)} />}
               {left !== null && (
                 <>
                   <span
@@ -107,17 +102,14 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
                   >
                     <Flame className="size-3.5" aria-hidden /> cache {left} min
                   </span>
-                  <span aria-hidden>·</span>
                 </>
               )}
               <span title={full(s.mtime)} className="shrink-0">
                 {ago(s.mtime)}
               </span>
-              <span aria-hidden>·</span>
               <span className="shrink-0 tabular-nums">{size(s.kb)}</span>
               {tokTotal(s.tok) > 0 && (
                 <>
-                  <span aria-hidden>·</span>
                   <span
                     className="shrink-0 tabular-nums"
                     title={`Entrée ${s.tok.in.toLocaleString("fr-FR")} · sortie ${s.tok.out.toLocaleString("fr-FR")} · cache écrit ${s.tok.cw.toLocaleString("fr-FR")} · cache lu ${s.tok.cr.toLocaleString("fr-FR")}`}
@@ -128,22 +120,20 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
               )}
               {hit && (
                 <>
-                  <span aria-hidden>·</span>
-                  <span className="shrink-0">
+                  <span className="shrink-0 text-primary">
                     {hit.n} message{hit.n > 1 ? "s" : ""}
                   </span>
                 </>
               )}
               {showProject && (
                 <>
-                  <span aria-hidden>·</span>
                   <span className="truncate">{tilde(g.project, a.home)}</span>
                 </>
               )}
               {tags.map((t) => (
                 <button
                   key={t}
-                  className="relative z-10 shrink-0 rounded-full bg-sky-500/15 px-1.5 text-sky-700 hover:bg-sky-500/25 dark:text-sky-300"
+                  className="relative z-10 shrink-0 rounded-sm bg-accent px-1.5 text-accent-foreground hover:bg-primary/20"
                   onClick={() => a.filterTag(t)}
                   title={`Filtrer sur #${t}`}
                 >
@@ -152,9 +142,6 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
               ))}
               {groups.length > 0 && (
                 <span className="flex min-w-0 items-center gap-1 text-violet-600 dark:text-violet-400" title={`Groupes : ${groups.join(", ")}`}>
-                  <span aria-hidden className="text-muted-foreground">
-                    ·
-                  </span>
                   <Tag className="size-3 shrink-0" />
                   <span className="truncate">{groups.join(", ")}</span>
                 </span>
@@ -232,7 +219,7 @@ export function SessionList({ items: all, showProject, flat, showCache }: { item
     <div className="space-y-6">
       {groups.map(([b, list]) => (
         <section key={b}>
-          <h3 className="sticky top-0 z-20 bg-background/95 px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur">{b}</h3>
+          <h3 className="sticky top-0 z-20 border-b bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground">{b}</h3>
           <ul className="space-y-px">
             {list.map((r) => (
               <Row key={r.s.id} row={r} showProject={showProject} showCache={showCache} />

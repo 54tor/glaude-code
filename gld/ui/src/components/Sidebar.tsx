@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { AlarmClock, ChevronRight, Coins, FolderOpen, Star, Brain, SlidersHorizontal, Zap, Flame, History, Clock, FileText, Inbox, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
+import { AlarmClock, ChevronRight, Repeat, Coins, FolderOpen, Star, Brain, SlidersHorizontal, Zap, Flame, History, Clock, FileText, Inbox, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
 import { size, tilde } from "@/lib/format"
 import type { Choice } from "@/lib/models"
 import { href, type Route } from "@/lib/route"
@@ -24,8 +24,8 @@ import { Settings, type Fonts } from "./SettingsDialog"
 // Avec `to`, un vrai lien : clic du milieu ou Ctrl+clic ouvrent la vue dans un autre onglet.
 function NavItem({ icon: Icon, label, n, active, onClick, to }: { icon: typeof Inbox; label: string; n?: number; active: boolean; onClick: () => void; to?: Route }) {
   const cls = cn(
-    "flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm transition-colors",
-    active ? "bg-accent font-medium" : "text-foreground/80 hover:bg-muted hover:text-foreground"
+    "flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-sm transition-colors",
+    active ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground [&>svg]:text-primary" : "text-sidebar-foreground/85 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
   )
   const body = (
     <>
@@ -58,8 +58,8 @@ function NavItem({ icon: Icon, label, n, active, onClick, to }: { icon: typeof I
 
 function Heading({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <div className="mt-4 mb-1 flex items-center px-2">
-      <p className="flex-1 text-xs font-medium text-muted-foreground">{children}</p>
+    <div className="mt-5 mb-1 flex items-center px-2">
+      <p className="flex-1 text-xs font-semibold text-muted-foreground">{children}</p>
       {action}
     </div>
   )
@@ -83,7 +83,7 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
           <button
             onClick={() => a.read(s)}
             title={`${s.title}\nCache encore environ ${left} min`}
-            className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm text-foreground/80 transition-colors hover:bg-muted hover:text-foreground"
+            className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
           >
             {warn ? (
               <AlarmClock className="size-4 shrink-0 text-amber-500" aria-label="cache bientôt expiré" />
@@ -153,6 +153,7 @@ export type SidebarProps = {
   route: Route
   go: (r: Route) => void
   counts: { recent: number; all: number; active: number }
+  carousel: { n: number; on: boolean; start: () => void } // sessions en attente de réponse, parcourues l'une après l'autre
   favRows: Row[] // sessions favorites
   favGroups: { vg: VGroup; key: string }[] // groupes favoris, avec la clé de leur dossier
   groupCount: (vg: VGroup) => number
@@ -193,11 +194,11 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
         )}
       >
       <div className="space-y-3 p-3">
-        <div className="flex items-center gap-2 px-1 pt-1">
-          <img src="/icons/icon-192.png" alt="" className="size-14 shrink-0" />
+        <div className="flex items-center gap-2.5 px-1 pt-1">
+          <img src="/icons/icon-192.png" alt="" className="size-10 shrink-0" />
           <div className="leading-tight">
-            <h1 className="text-base font-semibold">Glaude Code</h1>
-            <p className="text-xs text-muted-foreground">{p.loading ? "Chargement…" : `${p.total} sessions`}</p>
+            <h1 className="text-[15px] font-semibold tracking-tight">Glaude Code</h1>
+            <p className="text-xs text-muted-foreground tabular-nums">{p.loading ? "Chargement…" : `${p.total} sessions`}</p>
           </div>
           <div className="ml-auto flex items-center gap-0.5">
             <HomeSwitcher />
@@ -221,7 +222,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             onChange={(e) => p.setQ(e.target.value)}
             onKeyDown={(e) => e.key === "Escape" && p.setQ("")}
             placeholder="Rechercher…"
-            className="bg-background pr-8 pl-8"
+            className="bg-background pr-8 pl-8 shadow-none"
             aria-label="Rechercher dans les titres, les projets et les conversations"
             autoFocus
           />
@@ -248,6 +249,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
 
       <ScrollArea className="min-h-0 flex-1">
         <nav className="px-2 pb-3" aria-label="Navigation">
+          {(p.carousel.n > 0 || p.carousel.on) && <NavItem icon={Repeat} label="Carrousel des sessions en attente" n={p.carousel.n} active={p.carousel.on} onClick={p.carousel.start} />}
           <NavItem
             icon={Clock}
             label="Récentes (7 jours)"
@@ -335,26 +337,26 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
         </nav>
       </ScrollArea>
 
+      {(p.auto.n > 0 || p.args) && (
       <div className="space-y-2 border-t p-3">
         {p.auto.n > 0 && (
-          <div className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2 text-xs">
+          <div className="flex items-center gap-2 px-1 text-xs">
             <ShieldCheck className="size-4 shrink-0 text-muted-foreground" />
             <span className="flex-1 text-muted-foreground">
-              {p.auto.n} revues de sécurité masquées · {size(p.auto.kb)}
+              {p.auto.n} revues de sécurité masquées ({size(p.auto.kb)})
             </span>
             <Button variant="ghost" size="xs" className="text-destructive hover:text-destructive" onClick={p.auto.purge}>
               Nettoyer
             </Button>
           </div>
         )}
-        <div className="flex items-center gap-2">
-          {p.args && (
-            <code className="truncate text-xs text-muted-foreground" title="options ajoutées à claude">
-              {p.args}
-            </code>
-          )}
-        </div>
+        {p.args && (
+          <code className="block truncate px-1 text-xs text-muted-foreground" title="options ajoutées à claude">
+            {p.args}
+          </code>
+        )}
       </div>
+      )}
       </aside>
     </>
   )

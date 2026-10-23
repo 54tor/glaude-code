@@ -1,3 +1,4 @@
+import { toast } from "sonner"
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useSearchParams } from "wouter"
 import { type Group, type Session, type VGroup } from "@/lib/api"
@@ -100,6 +101,7 @@ export default function App() {
   }, [projects, view.entries, home, tree])
   const live = useMemo(() => new Set(data?.live), [data])
   const waiting = useMemo(() => new Set(data?.waiting), [data])
+  const [carousel, setCarousel] = useState(false) // mode carrousel : on parcourt les sessions qui attendent une réponse
   const vgroups = useMemo(() => data?.vgroups ?? [], [data])
   const favs = useMemo(() => new Set(data?.favs), [data])
   useWaitingNotice(waiting, everyId)
@@ -146,7 +148,24 @@ export default function App() {
       p.set("s", s.id)
       return p
     })
-  const closeReader = () =>
+  // En attente depuis le plus longtemps d'abord.
+  const waitingRows = [...waiting].map((id) => everyId.get(id)).filter((r): r is Row => !!r).sort((x, y) => x.s.mtime - y.s.mtime)
+  const nextWaiting = () => waitingRows.find((r) => r.s.id !== reading)
+  const startCarousel = () => {
+    if (!waitingRows.length) return void toast.info("Aucune session n'attend de réponse")
+    setCarousel(true)
+    read(waitingRows[0].s)
+  }
+  const advanceCarousel = () => {
+    const n = nextWaiting()
+    if (n) read(n.s)
+    else {
+      setCarousel(false)
+      toast.info("Plus aucune session en attente")
+    }
+  }
+  const closeReader = () => (
+    setCarousel(false),
     setParams(
       (p) => {
         p.delete("s")
@@ -154,6 +173,7 @@ export default function App() {
       },
       { replace: true }
     )
+  )
 
   const { actions, groupActs, groupRows, targets, newSession, purgeAuto } = useAppActions({
     data,
@@ -212,11 +232,11 @@ export default function App() {
   }[route.kind]
   const sub =
     route.kind === "recent"
-      ? `7 derniers jours · ${plural(recent.length)} dans ${plural(byProject.size, "projet")}`
+      ? `7 derniers jours, ${plural(recent.length)} dans ${plural(byProject.size, "projet")}`
       : route.kind === "project"
-        ? `${plural(project?.dirs.length ?? 0, "dossier")} · ${plural(rows.length)}`
+        ? `${plural(project?.dirs.length ?? 0, "dossier")}, ${plural(rows.length)}`
         : route.kind === "active"
-        ? `${plural(active.filter((r) => live.has(r.s.id)).length, "ouverte")} · ${plural(active.filter((r) => !live.has(r.s.id)).length, "au cache chaud")}`
+        ? `${plural(active.filter((r) => live.has(r.s.id)).length, "ouverte")}, ${plural(active.filter((r) => !live.has(r.s.id)).length, "au cache chaud")}`
         : route.kind === "skills"
           ? "Skills personnels, de projet et de plugins : lire, modifier, créer, copier"
           : route.kind === "config"
@@ -228,9 +248,9 @@ export default function App() {
             : route.kind === "tabs"
               ? "Les sessions ouvertes, pour les rouvrir d'un coup"
               : route.kind === "group"
-                ? `Groupe de ${vg ? tilde(vg.project, home) : "?"} · ${plural(rows.length)}`
+                ? `Groupe de ${vg ? tilde(vg.project, home) : "?"}, ${plural(rows.length)}`
                 : g
-                  ? `${tilde(g.project, home)} · ${plural(rows.length)}`
+                  ? `${tilde(g.project, home)}, ${plural(rows.length)}`
                   : plural(rows.length)
 
   return (
@@ -254,6 +274,7 @@ export default function App() {
           read={(s) => (setNavOpen(false), read(s))}
           tree={localTree}
           hot={hot}
+          carousel={{ n: waitingRows.length, on: carousel, start: startCarousel }}
           now={now}
           ttl={HOT}
           snippets={snips ? snips.files.length : null}
@@ -352,7 +373,7 @@ export default function App() {
       </div>
 
       <Suspense fallback={null}>
-        <Conversation row={reader} onClose={closeReader} args={args} choice={choice} />
+        <Conversation row={reader} onClose={closeReader} args={args} choice={choice} carousel={carousel ? { n: waitingRows.length, next: advanceCarousel, stop: () => setCarousel(false) } : undefined} />
       </Suspense>
       <DirPicker pick={picker} home={home} />
       <Confirm ask={ask} onClose={() => setAsk(null)} />
