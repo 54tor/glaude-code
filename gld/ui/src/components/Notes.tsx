@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ChevronRight, MessageSquarePlus, NotebookPen, Send } from "lucide-react"
+import { ChevronRight, MessageSquarePlus, NotebookPen, Plus, Send, X } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/api"
 import { useOpen } from "@/hooks/useOpen"
@@ -9,12 +9,24 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useActions, type Row } from "./actions"
 
+// Une note = une liste d'items, enregistrée en JSON ; un ancien texte libre devient un item par ligne non vide.
+const parse = (raw: string): string[] => {
+  try {
+    const v: unknown = JSON.parse(raw)
+    if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string")
+  } catch {
+    /* texte libre */
+  }
+  return raw.split("\n").filter((l) => l.trim())
+}
+const pack = (items: string[]) => (items.some((i) => i.trim()) ? JSON.stringify(items) : "")
+
 // Bloc-notes d'un projet ou d'un dossier, enregistré tout seul. Le texte peut partir vers une nouvelle session (dans folder) ou vers
 // une session ouverte dans tmux parmi celles de la vue.
 export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: string; rows: Row[] }) {
   const { t: tr } = useTranslation()
   const a = useActions()
-  const [text, setText] = useState<string | null>(null) // null : pas encore lu
+  const [items, setItems] = useState<string[] | null>(null) // null : pas encore lu
   const [open, flip] = useOpen("n/" + noteKey)
   const [sendable, setSendable] = useState<Set<string>>(new Set())
   const saved = useRef("")
@@ -27,10 +39,10 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
       (r) => {
         if (!live) return
         const t = r.notes[noteKey] ?? ""
-        saved.current = t
-        setText(t)
+        saved.current = pack(parse(t))
+        setItems(parse(t))
       },
-      () => live && setText("")
+      () => live && setItems([])
     )
     return () => {
       live = false
@@ -46,14 +58,15 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
   }
   useEffect(() => flush, []) // enregistre ce qui reste en quittant la vue
 
-  const edit = (t: string) => {
-    setText(t)
-    latest.current = { text: t, key: noteKey }
+  const edit = (next: string[]) => {
+    setItems(next)
+    latest.current = { text: pack(next), key: noteKey }
     clearTimeout(timer.current)
     timer.current = setTimeout(flush, 700)
   }
-  if (text === null) return null
-  const body = text.trim()
+  if (items === null) return null
+  const body = items.map((i) => i.trim()).filter(Boolean).map((i) => "- " + i).join("\n")
+  const count = items.filter((i) => i.trim()).length
   const targets = rows.filter((r) => sendable.has(r.s.id) && a.live.has(r.s.id))
   const sendTo = async (r: Row) => {
     const res = await api.post("/session-send", { id: r.s.id, text: body }, 20_000)
@@ -66,20 +79,31 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
         <ChevronRight className={cn("size-4 transition-transform", open && "rotate-90")} />
         <NotebookPen className="size-4 text-muted-foreground" />
         {tr("conversation.notes.title")}
-        {body && !open && <span className="min-w-0 truncate text-xs font-normal text-muted-foreground">{body.split("\n")[0]}</span>}
+        {count > 0 && <span className="text-xs font-normal text-muted-foreground">{count}</span>}
       </button>
       {open && (
         <div className="space-y-2 border-t p-3">
-          <textarea
-            value={text}
-            onChange={(e) => edit(e.target.value)}
-            onBlur={flush}
-            maxLength={65000}
-            rows={4}
-            placeholder={tr("conversation.notes.placeholder")}
-            aria-label={tr("conversation.notes.title")}
-            className="session-text field-sizing-content max-h-96 min-h-24 w-full resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          />
+          <ul className="space-y-1.5">
+            {items.map((it, i) => (
+              <li key={i} className="flex items-start gap-1.5 rounded-lg border bg-background px-2 py-1">
+                <textarea
+                  value={it}
+                  onChange={(e) => edit(items.map((x, j) => (j === i ? e.target.value : x)))}
+                  onBlur={flush}
+                  maxLength={4000}
+                  rows={1}
+                  aria-label={tr("conversation.notes.item")}
+                  className="session-text field-sizing-content max-h-48 min-w-0 flex-1 resize-none bg-transparent py-1 outline-none"
+                />
+                <Button variant="ghost" size="icon-xs" onClick={() => edit(items.filter((_, j) => j !== i))} aria-label={tr("conversation.notes.remove")}>
+                  <X />
+                </Button>
+              </li>
+            ))}
+          </ul>
+          <Button size="sm" variant="ghost" onClick={() => edit([...items, ""])}>
+            <Plus /> {tr("conversation.notes.add")}
+          </Button>
           <div className="flex flex-wrap items-center gap-2">
             {folder && (
               <Button size="sm" variant="outline" disabled={!body} onClick={() => a.newSession(folder, body)}>
@@ -102,7 +126,7 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <span className="ml-auto text-xs text-muted-foreground tabular-nums">{tr("conversation.notes.chars", { n: text.length })}</span>
+            <span className="ml-auto text-xs text-muted-foreground tabular-nums">{tr("conversation.notes.count", { count })}</span>
           </div>
         </div>
       )}
