@@ -3,7 +3,9 @@ package main
 import (
 	"errors"
 	"os"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -187,5 +189,114 @@ func TestUserCLIGrantNeedsConfirmation(t *testing.T) {
 	}
 	if out, err := run(t, cliUser, "list"); err != nil || !strings.Contains(out, "alice") || strings.Contains(out, testPw) {
 		t.Fatalf("list: %v\n%s", err, out)
+	}
+}
+
+func TestUserConcurrentUpdates(t *testing.T) {
+	s := testStore(t)
+	id, _ := s.AddUser("alice", testPw, false)
+	var wg sync.WaitGroup
+	for g := 0; g < 2; g++ {
+		wg.Add(1)
+		go func(g int) {
+			defer wg.Done()
+			for i := 0; i < 20; i++ {
+				var err error
+				if g == 0 {
+					err = s.SetDisabled(id, i%2 == 0)
+				} else {
+					err = s.SetPassword(id, testPw+strconv.Itoa(i))
+				}
+				if err != nil {
+					t.Error(err)
+				}
+			}
+		}(g)
+	}
+	wg.Wait()
+	if _, err := s.UserByName("alice"); err != nil || tamperEvents(t, s) != 0 {
+		t.Fatalf("after concurrent updates: %v, %d tamper events", err, tamperEvents(t, s))
+	}
+}
+
+func TestGrantConcurrent(t *testing.T) {
+	s := testStore(t)
+	id, _ := s.AddUser("alice", testPw, false)
+	var wg sync.WaitGroup
+	for _, r := range allRights {
+		wg.Add(1)
+		go func(r Right) {
+			defer wg.Done()
+			if err := s.Grant(id, "main", r); err != nil {
+				t.Error(err)
+			}
+		}(r)
+	}
+	wg.Wait()
+	m, err := s.Rights(id, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range allRights {
+		if !m[r] {
+			t.Errorf("lost grant %s", r)
+		}
+	}
+}
+
+func TestAddUserConcurrent(t *testing.T) {
+	s := testStore(t)
+	var wg sync.WaitGroup
+	errs := make(chan error, 8)
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := s.AddUser("alice", testPw, false)
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	ok := 0
+	for err := range errs {
+		switch {
+		case err == nil:
+			ok++
+		case !errors.Is(err, errNameTaken):
+			t.Errorf("unexpected: %v", err)
+		}
+	}
+	if ok != 1 {
+		t.Fatalf("%d successes", ok)
+	}
+}
+
+func TestUserOutOfRangeValues(t *testing.T) {
+	s := testStore(t)
+	id, _ := s.AddUser("alice", testPw, true)
+	s.Grant(id, "main", RightExec)
+	s.db.Exec(`UPDATE users SET is_admin=2 WHERE id=?`, id)
+	if _, err := s.UserByName("alice"); !errors.Is(err, errTamper) || tamperEvents(t, s) != 1 {
+		t.Fatalf("is_admin=2: %v", err)
+	}
+	s.db.Exec(`UPDATE home_acl SET exec=2 WHERE user_id=?`, id)
+	if _, err := s.Rights(id, "main"); !errors.Is(err, errTamper) || tamperEvents(t, s) != 2 {
+		t.Fatalf("exec=2: %v", err)
+	}
+	s.db.Exec(`UPDATE home_acl SET exec='x' WHERE user_id=?`, id)
+	if _, err := s.Rights(id, "main"); !errors.Is(err, errTamper) {
+		t.Fatalf("exec='x': %v", err)
+	}
+}
+
+func TestUsersListTamperOnce(t *testing.T) {
+	s := testStore(t)
+	id, _ := s.AddUser("alice", testPw, false)
+	s.AddUser("bob", testPw, false)
+	s.db.Exec(`UPDATE users SET disabled=1 WHERE id=?`, id)
+	users, bad, err := s.Users()
+	if err != nil || len(users) != 2 || len(bad) != 1 || !bad[id] || tamperEvents(t, s) != 1 {
+		t.Fatalf("list: %d users, bad=%v, err=%v, events=%d", len(users), bad, err, tamperEvents(t, s))
 	}
 }
