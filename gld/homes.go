@@ -52,11 +52,12 @@ type homeProc struct {
 }
 
 var (
-	homesMu    sync.Mutex
-	homeProcs  = map[string]*homeProc{}
-	homeCtx    = context.Background() // remplacé par le contexte d'arrêt du serveur
-	homeNameRe = regexp.MustCompile(`^[^\x00-\x1f/\\]+$`)
-	homeStart  = startHomeProc // remplaçable dans les tests
+	homesMu      sync.Mutex
+	homeProcs    = map[string]*homeProc{}
+	homeStartups = map[string]*homeStarting{}
+	homeCtx      = context.Background() // remplacé par le contexte d'arrêt du serveur
+	homeNameRe   = regexp.MustCompile(`^[^\x00-\x1f/\\]+$`)
+	homeStart    = startHomeProc // remplaçable dans les tests
 )
 
 func homesFile() string { return filepath.Join(cfgDir(), "gld-web-homes.json") }
@@ -198,27 +199,62 @@ func homeFrom(r *http.Request) string {
 	return v
 }
 
-// homeProxy : le proxy de l'enfant de ce dossier, lancé au besoin.
+// homeStarting : un démarrage en cours pour un nom ; les appels concurrents attendent ce résultat au lieu de lancer un doublon.
+type homeStarting struct {
+	done chan struct{}
+	p    *homeProc
+	err  error
+}
+
+// homeProxy : le proxy de l'enfant de ce dossier, lancé au besoin. Le démarrage (jusqu'à dix secondes) se fait hors de
+// homesMu, que /homes et l'enregistrement des dossiers prennent aussi.
 func homeProxy(name string) (http.Handler, error) {
 	h, ok := homeByName(name)
 	if !ok {
 		return nil, terr("srv.homes.dossierDeConfigurationInconnu")
 	}
 	homesMu.Lock()
-	defer homesMu.Unlock()
 	if p := homeProcs[name]; p != nil {
 		select {
 		case <-p.done:
 			delete(homeProcs, name)
 		default:
+			homesMu.Unlock()
 			return p.proxy, nil
 		}
 	}
+	if s := homeStartups[name]; s != nil {
+		homesMu.Unlock()
+		<-s.done
+		if s.err != nil {
+			return nil, s.err
+		}
+		return s.p.proxy, nil
+	}
+	s := &homeStarting{done: make(chan struct{})}
+	homeStartups[name] = s
+	homesMu.Unlock()
+
 	p, err := homeStart(h)
+	// Le dossier a pu être retiré ou déplacé pendant le démarrage : le processus ne servirait plus le bon dossier.
+	cur, still := homeByName(name)
+	homesMu.Lock()
+	delete(homeStartups, name)
+	if err == nil && (!still || cur.Dir != h.Dir) {
+		if p.cmd != nil && p.cmd.Process != nil {
+			p.cmd.Process.Kill()
+		}
+		p, err = nil, terr("srv.homes.dossierDeConfigurationInconnu")
+	}
+	if err == nil {
+		homeProcs[name] = p
+	}
+	s.p, s.err = p, err
+	homesMu.Unlock()
+	close(s.done)
 	if err != nil {
 		return nil, err
 	}
-	homeProcs[name] = p
 	return p.proxy, nil
 }
 
