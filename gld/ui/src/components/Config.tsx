@@ -49,18 +49,27 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
     id === "u"
       ? "Utilisateur · ~/.claude/settings.json"
       : `${id[0] === "p" ? "Projet" : "Local"} · ${tilde(ov.projects.find((p) => p.dir === id.slice(2))?.project ?? id.slice(2), home)}`
-  const files = ov.files.filter((f) => !f.error)
-  // Un projet sans fichier de réglages peut en recevoir un : on propose aussi ses fichiers « local » absents.
-  const options: (readonly [string, string])[] = [
-    ...files.map((f) => [f.id, label(f.id)] as const),
-    ...ov.projects.flatMap((p) => ["p/", "l/"].map((x) => x + p.dir).filter((id) => !ov.files.some((f) => f.id === id)).map((id) => [id, label(id) + " (à créer)"] as const)),
-  ]
+  const scope = fileId === "u" ? "u" : fileId[0] // u : utilisateur, p : projet, l : local
+  const dirOf = fileId === "u" ? "" : fileId.slice(2)
   const file = ov.files.find((f) => f.id === fileId)
   const doc = (file?.data ?? undefined) as Record<string, unknown> | undefined
   const fileSelect = (
     <div className="mb-5 flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
-      Fichier modifié :
-      <Choose value={fileId} onChange={setFileId} options={options} label="Fichier de réglages" className="min-w-0 max-w-xl" />
+      Emplacement :
+      <Choose
+        value={scope}
+        onChange={(v) => setFileId(v === "u" ? "u" : v + "/" + (dirOf || ov.projects[0]?.dir || ""))}
+        options={[
+          ["u", "Utilisateur · ~/.claude/settings.json"],
+          ...(ov.projects.length ? ([["p", "Projet · .claude/settings.json (partagé)"], ["l", "Local · .claude/settings.local.json (non partagé)"]] as const) : []),
+        ]}
+        label="Emplacement des réglages"
+        className="min-w-0 max-w-xs"
+      />
+      {scope !== "u" && (
+        <Choose value={dirOf} onChange={(d) => setFileId(scope + "/" + d)} options={ov.projects.map((p) => [p.dir, tilde(p.project, home)] as const)} label="Dossier du projet" className="min-w-0 max-w-md" />
+      )}
+      {!file && <span className="text-xs text-amber-600 dark:text-amber-400">fichier à créer à la première modification</span>}
       <span className="text-xs text-muted-foreground">Chaque modification est appliquée tout de suite, après une sauvegarde (onglet Sauvegardes). Les sessions ouvertes rechargent seules les réglages (sauf model, effort et plugins : /model, /effort, /reload-plugins).</span>
     </div>
   )
