@@ -153,7 +153,7 @@ export function Settings({
               )}
               {section(
                 "Palette de couleurs",
-                "Classiques des éditeurs ; chacune a sa variante claire et sombre, selon le thème ci-dessus.",
+                "",
                 <div className="grid max-w-md grid-cols-2 gap-1.5" role="radiogroup" aria-label="Palette de couleurs">
                   {Object.entries(PALETTES).map(([id, p]) => {
                     const t = p.dark
