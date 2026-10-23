@@ -1,5 +1,8 @@
 import { Cog, Monitor, Moon, Sun } from "lucide-react"
 import { useTranslation } from "react-i18next"
+import { toast } from "sonner"
+import { setLang, type Lang } from "@/i18n"
+import { api } from "@/lib/api"
 import { FONTS, SIZES } from "@/lib/fonts"
 import type { Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
@@ -12,6 +15,11 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
+
+const LANGS: { v: Lang; label: string; claude: string }[] = [
+  { v: "fr", label: "Français", claude: "French" },
+  { v: "en", label: "English", claude: "English" },
+]
 
 const THEMES = [
   { v: "light", label: "themeLight", Icon: Sun },
@@ -87,8 +95,14 @@ export function Settings({
   setChoice,
   ...fonts
 }: { args: string; setArgs: (v: string) => void; choice: Choice; setChoice: (c: Choice) => void } & Fonts) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { theme, setTheme, palette, setPalette } = useTheme()
+  // La langue est le réglage « language » de Claude Code (settings.json) : l'interface change tout de suite, le serveur et les commandes la lisent au prochain appel.
+  const pickLang = async (lang: Lang, claude: string) => {
+    setLang(lang)
+    const r = (await api.post("/config-edit", { file: "u", op: "set", path: ["language"], value: claude })) as { ok: boolean; out: string }
+    if (!r.ok) toast.error(r.out)
+  }
   const section = (title: string, hint: string, body: React.ReactNode) => (
     <div className="space-y-1.5">
       <Label>{title}</Label>
@@ -136,6 +150,25 @@ export function Settings({
               )}
             </TabsContent>
             <TabsContent value="look" className="space-y-5">
+              {section(
+                t("config.dialog.language"),
+                t("config.dialog.languageHint"),
+                <div className="grid max-w-sm grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+                  {LANGS.map(({ v, label, claude }) => (
+                    <button
+                      key={v}
+                      onClick={() => pickLang(v, claude)}
+                      aria-pressed={i18n.language === v}
+                      className={cn(
+                        "rounded-md py-1 text-xs transition-colors",
+                        i18n.language === v ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
               {section(
                 t("config.dialog.theme"),
                 "",
