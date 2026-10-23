@@ -237,18 +237,23 @@ func routesSessions(mux *http.ServeMux) {
 				return
 			}
 		}
-		if lim, _ := strconv.Atoi(q.Get("limit")); lim > 0 { // par la fin : « before » est le décalage rendu par la page suivante
-			before, _ := strconv.ParseInt(q.Get("before"), 10, 64)
-			msgs, start, more, err := convPage(p, q.Get("tools") == "1", before, min(lim, 5000))
-			if err != nil {
-				writeJSON(w, 500, map[string]any{})
-				return
-			}
-			capMsgs(msgs)
-			writeJSON(w, 200, map[string]any{"msgs": msgs, "start": start, "more": more})
+		// Par la fin : « before » est le décalage rendu par la page suivante. Sans limit (export), des pages de 1000 messages
+		// aux textes entiers : un transcript de plusieurs centaines de Mo ne se charge plus d'un bloc.
+		lim, _ := strconv.Atoi(q.Get("limit"))
+		whole := lim <= 0
+		if whole {
+			lim = 1000
+		}
+		before, _ := strconv.ParseInt(q.Get("before"), 10, 64)
+		msgs, start, more, err := convPage(p, q.Get("tools") == "1", before, min(lim, 5000))
+		if err != nil {
+			writeJSON(w, 500, map[string]any{})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"msgs": conv(p, q.Get("tools") == "1")})
+		if !whole {
+			capMsgs(msgs)
+		}
+		writeJSON(w, 200, map[string]any{"msgs": msgs, "start": start, "more": more})
 	})
 	mux.HandleFunc("GET /conv-text", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -193,5 +194,33 @@ func TestJetonFourniJamaisImprime(t *testing.T) {
 	tok, gen, _ = takeToken(false)
 	if s := tokenShown(tok, gen); s != tok || len(s) != 48 {
 		t.Fatalf("jeton généré : %q", s)
+	}
+}
+
+// /conv sans limit ne charge plus tout le transcript : pages de 1000 messages, textes entiers, more et start pour la suite.
+func TestConvSansLimitePagine(t *testing.T) {
+	h, cfg, proj := web(t)
+	var b strings.Builder
+	long := strings.Repeat("é", msgCap) // plus de msgCap octets : coupé avec limit, entier sans
+	for i := range 1200 {
+		txt := "m" + strconv.Itoa(i)
+		if i == 1199 {
+			txt = long
+		}
+		b.WriteString(`{"type":"user","cwd":"` + proj + `","message":{"content":"` + txt + `"}}` + "\n")
+	}
+	put(t, filepath.Join(cfg, "projects", "-p", id2+".jsonl"), b.String(), old)
+	m := status(t, h, "GET", "/conv?dir=-p&id="+id2, "", 200)
+	msgs, _ := m["msgs"].([]any)
+	if len(msgs) != 1000 || m["more"] != true {
+		t.Fatalf("première page : %d messages, more %v", len(msgs), m["more"])
+	}
+	if last, _ := msgs[999].(map[string]any); last["t"] != long {
+		t.Fatal("texte coupé sans limit : l'export perdrait la fin")
+	}
+	start := int64(m["start"].(float64))
+	m = status(t, h, "GET", "/conv?dir=-p&id="+id2+"&before="+strconv.FormatInt(start, 10), "", 200)
+	if msgs, _ := m["msgs"].([]any); len(msgs) != 200 || m["more"] != false {
+		t.Fatalf("seconde page : %d messages, more %v", len(msgs), m["more"])
 	}
 }
