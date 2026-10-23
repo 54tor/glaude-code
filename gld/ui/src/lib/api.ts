@@ -146,10 +146,11 @@ export const api = {
   sessionsStamp: () => get<{ stamp: number }>("/sessions-stamp"),
   sessionTrash: () => get<{ sessions: { dir: string; id: string; title: string; cwd: string; at: number; kb: number }[]; days: number }>("/session-trash"),
   info: (s: Item) => get<Detail>(`/info?dir=${enc(s.dir)}&id=${s.id}`),
-  // Sans page : toute la conversation. Avec page : `limit` messages par la fin ; `before` = « start » de la page suivante.
-  conv: (s: Item & { sub?: string }, tools: boolean, page?: { limit: number; before?: number }) =>
+  // Lecture par la fin, `before` = « start » rendu par la page précédente. Avec `limit` : autant de messages, textes coupés à
+  // 64 Kio (le lecteur). Sans `limit` : pages de 1000 messages aux textes entiers (l'export).
+  conv: (s: Item & { sub?: string }, tools: boolean, page?: { limit?: number; before?: number }) =>
     get<{ msgs: Msg[]; start?: number; more?: boolean }>(
-      `/conv?dir=${enc(s.dir)}&id=${s.id}${s.sub ? `&sub=${enc(s.sub)}` : ""}${tools ? "&tools=1" : ""}${page ? `&limit=${page.limit}&before=${page.before ?? 0}` : ""}`
+      `/conv?dir=${enc(s.dir)}&id=${s.id}${s.sub ? `&sub=${enc(s.sub)}` : ""}${tools ? "&tools=1" : ""}${page?.limit ? `&limit=${page.limit}` : ""}${page ? `&before=${page.before ?? 0}` : ""}`
     ),
   // Suite d'un message coupé, à partir de l'octet from ; cut = 0 : fin du texte.
   convText: (s: Item, tools: boolean, m: Msg, from: number) =>
@@ -175,7 +176,11 @@ export const api = {
   configProjects: () => get<{ projects: ProjectCfg[] }>("/config-projects"),
   sessionIdle: (id: string) => get<{ idle: boolean }>(`/session-state?id=${enc(id)}`),
   sessionLive: (dir: string, id: string) => get<LiveState>(`/session-live?dir=${enc(dir)}&id=${enc(id)}`),
-  account: (refresh = false) => get<Account>(refresh ? "/account?refresh=1" : "/account"),
+  // refresh : relevé demandé par un POST (un GET ne doit rien déclencher), puis lecture de l'état, qui dit « refreshing ».
+  account: async (refresh = false) => {
+    if (refresh) await api.post("/account-refresh", {})
+    return get<Account>("/account")
+  },
   screen: (id: string) => get<{ ok: boolean; out?: string; text?: string }>(`/session-screen?id=${enc(id)}`),
   termInfo: () => get<{ enabled: boolean }>("/term-info"),
   sendInfo: () => get<{ ids: string[]; why: string }>("/session-send-info"),
