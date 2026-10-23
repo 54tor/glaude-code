@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -17,6 +18,8 @@ import (
 )
 
 // routesSessions : liste, lecture, suppression, réassignation, recherche et réouverture des sessions.
+var subRe = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
 func routesSessions(mux *http.ServeMux) {
 	routesTerm(mux)
 	home, _ := os.UserHomeDir()
@@ -218,6 +221,17 @@ func routesSessions(mux *http.ServeMux) {
 			return
 		}
 		q := r.URL.Query()
+		if sub := q.Get("sub"); sub != "" { // transcript d'un sous-agent de cette session
+			if !subRe.MatchString(sub) {
+				writeJSON(w, 404, map[string]any{})
+				return
+			}
+			p = filepath.Join(strings.TrimSuffix(p, ".jsonl"), "subagents", "agent-"+sub+".jsonl")
+			if st, err := os.Stat(p); err != nil || !st.Mode().IsRegular() {
+				writeJSON(w, 404, map[string]any{})
+				return
+			}
+		}
 		if lim, _ := strconv.Atoi(q.Get("limit")); lim > 0 { // par la fin : « before » est le décalage rendu par la page suivante
 			before, _ := strconv.ParseInt(q.Get("before"), 10, 64)
 			msgs, start, more, err := convPage(p, q.Get("tools") == "1", before, min(lim, 5000))
