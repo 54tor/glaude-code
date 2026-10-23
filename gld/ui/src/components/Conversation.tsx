@@ -200,8 +200,8 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
     return () => io.disconnect()
   }, [more, older, viewport])
   const toTop = () => viewport()?.scrollTo({ top: 0 })
-  // La vue ne descend que dans deux cas : à l'ouverture de la session, et quand l'utilisateur envoie un message. Elle ne suit jamais
-  // l'arrivée de messages ou une mise à jour : lire plus haut ne doit pas être interrompu ; le bouton « Aller à la fin » prend le relais.
+  // La vue descend à l'ouverture, à l'envoi d'un message, et suit la fin tant que l'utilisateur y est. Dès qu'il remonte lire, elle ne
+  // bouge plus ; le bouton « Aller à la fin » prend le relais.
   const opened = useRef("") // session déjà amenée à la fin une fois
   const [away, setAway] = useState(false)
   const ready = !!session && msgs !== null
@@ -209,10 +209,18 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
     const vp = viewport()
     if (!vp) return
     const on = () => {
-      setAway(vp.scrollHeight - vp.scrollTop - vp.clientHeight >= 80)
+      stuck = vp.scrollHeight - vp.scrollTop - vp.clientHeight < 80
+      setAway(!stuck)
     }
+    // Collée à la fin tant que l'utilisateur y est : la bande d'état (réflexion, outil, file d'attente) change de hauteur sans que la vue décale.
+    let stuck = vp.scrollHeight - vp.scrollTop - vp.clientHeight < 80
     vp.addEventListener("scroll", on, { passive: true })
-    return () => vp.removeEventListener("scroll", on)
+    const ro = new ResizeObserver(() => stuck && !keepScroll.current && (vp.scrollTop = vp.scrollHeight))
+    if (vp.firstElementChild) ro.observe(vp.firstElementChild)
+    return () => {
+      vp.removeEventListener("scroll", on)
+      ro.disconnect()
+    }
   }, [viewport, ready])
   useEffect(() => {
     if (!id) opened.current = ""
