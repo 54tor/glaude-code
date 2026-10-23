@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"strconv"
 	"time"
 )
 
@@ -58,21 +59,41 @@ func (s *authStore) PurgeEvents(olderThan time.Duration) (int64, error) {
 	return res.RowsAffected()
 }
 
-func newSessionValue() (raw, hash []byte) {
+// sessHash : HMAC avec la clé d'intégrité, pour qu'une ligne insérée sans la clé ne corresponde à aucun cookie.
+func (s *authStore) sessHash(raw []byte) []byte {
+	m := hmac.New(sha256.New, rowSigKey(s.key))
+	m.Write([]byte("gld-session\x00"))
+	m.Write(raw)
+	return m.Sum(nil)
+}
+
+func (s *authStore) newSessionValue() (raw, hash []byte) {
 	raw = make([]byte, 32)
 	rand.Read(raw)
-	h := sha256.Sum256(raw)
-	return raw, h[:]
+	return raw, s.sessHash(raw)
+}
+
+// expires_at et last_seen_at restent hors signature : l'échéance absolue dérive de created_at, signé.
+func (s *authStore) sessSig(h []byte, uid, created int64, mfa sql.NullInt64) []byte {
+	m := ""
+	if mfa.Valid {
+		m = strconv.FormatInt(mfa.Int64, 10)
+	}
+	return rowSig(s.key, "sessions", hex.EncodeToString(h), strconv.FormatInt(uid, 10), strconv.FormatInt(created, 10), m)
+}
+
+func (s *authStore) sessOK(h []byte, uid, created int64, mfa sql.NullInt64, sig []byte) bool {
+	return hmac.Equal(sig, s.sessSig(h, uid, created, mfa))
 }
 
 func (s *authStore) NewSession(userID int64, ip, ua string) (string, error) {
-	raw, h := newSessionValue()
+	raw, h := s.newSessionValue()
 	if len(ua) > 512 {
 		ua = ua[:512]
 	}
 	now := authNow().Unix()
-	_, err := s.db.Exec(`INSERT INTO sessions(id_hash,user_id,created_at,last_seen_at,expires_at,ip,ua) VALUES(?,?,?,?,?,?,?)`,
-		h, userID, now, now, now+int64(sessIdle/time.Second), ip, ua)
+	_, err := s.db.Exec(`INSERT INTO sessions(id_hash,user_id,created_at,last_seen_at,expires_at,ip,ua,sig) VALUES(?,?,?,?,?,?,?,?)`,
+		h, userID, now, now, now+int64(sessIdle/time.Second), ip, ua, s.sessSig(h, userID, now, sql.NullInt64{}))
 	if err != nil {
 		return "", err
 	}
@@ -91,20 +112,27 @@ func (s *authStore) session(cookie string, touch bool) (*Principal, error) {
 	if err != nil || len(raw) != 32 {
 		return nil, errNoSession
 	}
-	h := sha256.Sum256(raw)
+	h := s.sessHash(raw)
 	var uid, created, seen, exp int64
 	var mfa sql.NullInt64
-	err = s.db.QueryRow(`SELECT user_id,created_at,last_seen_at,expires_at,mfa_at FROM sessions WHERE id_hash=?`, h[:]).Scan(&uid, &created, &seen, &exp, &mfa)
+	var sig []byte
+	err = s.db.QueryRow(`SELECT user_id,created_at,last_seen_at,expires_at,mfa_at,sig FROM sessions WHERE id_hash=?`, h).Scan(&uid, &created, &seen, &exp, &mfa, &sig)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, errNoSession
 	}
 	if err != nil {
 		return nil, err
 	}
+	if !s.sessOK(h, uid, created, mfa, sig) {
+		s.guard(&tamperErr{uid, "sessions"})
+		// Retirée après journalisation : un cookie rejoué ne remplit pas auth_events.
+		s.db.Exec(`DELETE FROM sessions WHERE id_hash=? AND sig IS ?`, h, sig)
+		return nil, errNoSession
+	}
 	now := authNow().Unix()
 	abs := created + int64(sessAbsolute/time.Second)
 	if now >= exp || now >= abs || (!mfa.Valid && now >= created+int64(thMFAWindow/time.Second)) {
-		if _, err := s.db.Exec(`DELETE FROM sessions WHERE id_hash=?`, h[:]); err != nil {
+		if _, err := s.db.Exec(`DELETE FROM sessions WHERE id_hash=?`, h); err != nil {
 			journal("auth: purge session: %v", err)
 		}
 		return nil, errNoSession
@@ -114,11 +142,11 @@ func (s *authStore) session(cookie string, touch bool) (*Principal, error) {
 		return nil, errNoSession
 	}
 	if touch && now-seen >= int64(sessTouch/time.Second) {
-		if _, err := s.db.Exec(`UPDATE sessions SET last_seen_at=?, expires_at=? WHERE id_hash=?`, now, min(now+int64(sessIdle/time.Second), abs), h[:]); err != nil {
+		if _, err := s.db.Exec(`UPDATE sessions SET last_seen_at=?, expires_at=? WHERE id_hash=?`, now, min(now+int64(sessIdle/time.Second), abs), h); err != nil {
 			journal("auth: touch session: %v", err)
 		}
 	}
-	return &Principal{User: u, SessionID: hex.EncodeToString(h[:]), MFA: mfa.Valid, CSRF: s.csrfFor(h[:]), Expires: time.Unix(abs, 0)}, nil
+	return &Principal{User: u, SessionID: hex.EncodeToString(h), MFA: mfa.Valid, CSRF: s.csrfFor(h), Expires: time.Unix(abs, 0)}, nil
 }
 
 func (s *authStore) csrfFor(idHash []byte) string {
@@ -138,32 +166,95 @@ func (s *authStore) PromoteMFA(sessionID string) (cookie string, exp time.Time, 
 	if err != nil {
 		return "", time.Time{}, errNoSession
 	}
-	raw, h := newSessionValue()
+	raw, h := s.newSessionValue()
 	now := authNow().Unix()
 	err = s.inTx(func(tx *sql.Tx) error {
 		var uid, created int64
 		var ip, ua string
-		err := tx.QueryRow(`SELECT user_id,created_at,ip,ua FROM sessions WHERE id_hash=? AND mfa_at IS NULL AND created_at > ?`,
-			old, now-int64(thMFAWindow/time.Second)).Scan(&uid, &created, &ip, &ua)
+		var sig []byte
+		err := tx.QueryRow(`SELECT user_id,created_at,ip,ua,sig FROM sessions WHERE id_hash=? AND mfa_at IS NULL AND created_at > ?`,
+			old, now-int64(thMFAWindow/time.Second)).Scan(&uid, &created, &ip, &ua, &sig)
 		if errors.Is(err, sql.ErrNoRows) {
 			return errNoSession
 		}
 		if err != nil {
 			return err
 		}
+		if !s.sessOK(old, uid, created, sql.NullInt64{}, sig) {
+			return &tamperErr{uid, "sessions"}
+		}
 		if _, err := tx.Exec(`DELETE FROM sessions WHERE id_hash=?`, old); err != nil {
 			return err
 		}
 		abs := created + int64(sessAbsolute/time.Second)
 		exp = time.Unix(abs, 0)
-		_, err = tx.Exec(`INSERT INTO sessions(id_hash,user_id,created_at,last_seen_at,expires_at,ip,ua,mfa_at) VALUES(?,?,?,?,?,?,?,?)`,
-			h, uid, created, now, min(now+int64(sessIdle/time.Second), abs), ip, ua, now)
+		mfa := sql.NullInt64{Int64: now, Valid: true}
+		_, err = tx.Exec(`INSERT INTO sessions(id_hash,user_id,created_at,last_seen_at,expires_at,ip,ua,mfa_at,sig) VALUES(?,?,?,?,?,?,?,?,?)`,
+			h, uid, created, now, min(now+int64(sessIdle/time.Second), abs), ip, ua, now, s.sessSig(h, uid, created, mfa))
 		return err
 	})
 	if err != nil {
 		return "", time.Time{}, err
 	}
 	return base64.RawURLEncoding.EncodeToString(raw), exp, nil
+}
+
+type sessRow struct {
+	hash          []byte
+	created, seen int64
+	ip, ua        string
+	mfa           bool
+}
+
+// userSessions : les sessions non expirées du compte ; une ligne à la signature invalide est écartée et journalisée.
+func (s *authStore) userSessions(uid int64) ([]sessRow, error) {
+	rows, err := s.db.Query(`SELECT id_hash,created_at,last_seen_at,ip,ua,mfa_at,sig FROM sessions WHERE user_id=? AND expires_at>? ORDER BY last_seen_at DESC`,
+		uid, authNow().Unix())
+	if err != nil {
+		return nil, err
+	}
+	var out []sessRow
+	bad := false
+	for rows.Next() {
+		var r sessRow
+		var mfa sql.NullInt64
+		var sig []byte
+		if err := rows.Scan(&r.hash, &r.created, &r.seen, &r.ip, &r.ua, &mfa, &sig); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if !s.sessOK(r.hash, uid, r.created, mfa, sig) {
+			bad = true
+			continue
+		}
+		r.mfa = mfa.Valid
+		out = append(out, r)
+	}
+	err = rows.Err()
+	rows.Close()
+	if bad {
+		s.guard(&tamperErr{uid, "sessions"})
+	}
+	return out, err
+}
+
+// sessionOwner : le compte d'une session, signature vérifiée ; une ligne altérée vaut une session inconnue.
+func (s *authStore) sessionOwner(h []byte) (int64, error) {
+	var uid, created int64
+	var mfa sql.NullInt64
+	var sig []byte
+	err := s.db.QueryRow(`SELECT user_id,created_at,mfa_at,sig FROM sessions WHERE id_hash=?`, h).Scan(&uid, &created, &mfa, &sig)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, errNoSession
+	}
+	if err != nil {
+		return 0, err
+	}
+	if !s.sessOK(h, uid, created, mfa, sig) {
+		s.guard(&tamperErr{uid, "sessions"})
+		return 0, errNoSession
+	}
+	return uid, nil
 }
 
 // RevokeSession porte ce nom car authStore.Revoke retire déjà des droits de home_acl.

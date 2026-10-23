@@ -466,29 +466,15 @@ func (d *adminAPI) sessionsList(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 		return
 	}
-	rows, err := d.s.db.Query(`SELECT id_hash,created_at,last_seen_at,ip,ua,mfa_at IS NOT NULL FROM sessions WHERE user_id=? AND expires_at>? ORDER BY last_seen_at DESC`,
-		uid, authNow().Unix())
+	list, err := d.s.userSessions(uid)
 	if err != nil {
 		authInternal(w, err)
 		return
 	}
-	defer rows.Close()
 	out := []map[string]any{}
-	for rows.Next() {
-		var h []byte
-		var created, seen int64
-		var ip, ua string
-		var mfa bool
-		if err := rows.Scan(&h, &created, &seen, &ip, &ua, &mfa); err != nil {
-			authInternal(w, err)
-			return
-		}
+	for _, x := range list {
 		// Un préfixe suffit à reconnaître une session ; l'identifiant entier permettrait de la révoquer ailleurs.
-		out = append(out, map[string]any{"id": hex.EncodeToString(h)[:8], "created": created, "seen": seen, "ip": ip, "ua": ua, "mfa": mfa})
-	}
-	if err := rows.Err(); err != nil {
-		authInternal(w, err)
-		return
+		out = append(out, map[string]any{"id": hex.EncodeToString(x.hash)[:8], "created": x.created, "seen": x.seen, "ip": x.ip, "ua": x.ua, "mfa": x.mfa})
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "sessions": out})
 }
