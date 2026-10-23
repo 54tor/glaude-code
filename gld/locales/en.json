@@ -330,6 +330,7 @@
   "srv.termweb.ended": "session ended",
   "srv.termweb.reponseTmuxInattendue": "unexpected tmux reply",
   "srv.termweb.tailleDeFenetreInattendue": "unexpected window size",
+  "srv.transcript.pasted": "[pasted text]",
   "srv.trash.introuvableDansLaCorbeille": "not found in the trash",
   "srv.trashsessions.dossierDOrigineInvalide": "invalid original folder",
   "srv.trashsessions.purged": "Permanently deleted: {{.A1}}",
