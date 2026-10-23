@@ -79,15 +79,13 @@ func routesSessions(mux *http.ServeMux) {
 		writeJSON(w, 200, sessionLive(r.URL.Query().Get("dir"), r.URL.Query().Get("id")))
 	})
 	// Relevé trop vieux : on le rafraîchit en arrière-plan (la page relit toutes les minutes). Le forcer lance claude :
-	// c'est un POST, que CrossOriginProtection garde. refresh=1 sur le GET reste lu le temps que l'interface migre.
+	// c'est un POST, que CrossOriginProtection garde (un GET serait déclenchable par une image sur un site tiers).
 	account := func(w http.ResponseWriter, force bool) {
 		a := accountInfo()
 		a.Refreshing = refreshUsage(a.LimitsAt, force)
 		writeJSON(w, 200, a)
 	}
-	mux.HandleFunc("GET /account", func(w http.ResponseWriter, r *http.Request) {
-		account(w, r.URL.Query().Get("refresh") == "1")
-	})
+	mux.HandleFunc("GET /account", func(w http.ResponseWriter, r *http.Request) { account(w, false) })
 	mux.HandleFunc("POST /account-refresh", func(w http.ResponseWriter, r *http.Request) { account(w, true) })
 	mux.HandleFunc("GET /session-send-info", func(w http.ResponseWriter, r *http.Request) {
 		ids, err := sendable()
