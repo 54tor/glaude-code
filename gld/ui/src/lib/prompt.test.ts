@@ -231,6 +231,7 @@ describe("parsePrompt : captures réelles", () => {
     expect(p.context).toBe("● Voici les défauts :\n  UI-02, barre d'outils du lecteur\n  - A : autoriser le retour à la ligne.\n  Limites de l'audit\n  - Pas de test au lecteur d'écran.")
     expect(p.options.map((o) => o.detail)).toEqual(["Les défauts confirmés.", "Accessibilité.", undefined, undefined])
     expect(p.submit).toEqual(["Down", "Down", "Down", "Enter"])
+    expect(p.tabs).toEqual([{ label: "UI-01", done: true }, { label: "UI-02", done: true }, { label: "Périmètre", done: false }])
   })
   it("choix multiples : la description de chaque case est conservée", () => {
     const o = parsePrompt(real.multi)!.options
