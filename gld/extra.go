@@ -182,6 +182,8 @@ type Store struct {
 	// Tags : étiquettes libres par session (id → étiquettes).
 	Tags     map[string][]string `json:"tags"`
 	Projects []Project           `json:"projects"`
+	// Dirs : dossiers de travail ajoutés à la main, qui n'ont pas (encore) de session : on y lance un prompt sans mémoire Claude.
+	Dirs []string `json:"dirs"`
 }
 
 const maxTags, maxTagLen = 12, 30
@@ -191,7 +193,7 @@ var groupsMu sync.Mutex
 func groupsFile() string { return filepath.Join(cfgDir(), "gld-web-groups.json") }
 
 func loadStore() Store {
-	st := Store{Groups: []VGroup{}, Favs: []string{}, Tags: map[string][]string{}, Projects: []Project{}}
+	st := Store{Groups: []VGroup{}, Favs: []string{}, Tags: map[string][]string{}, Projects: []Project{}, Dirs: []string{}}
 	b, err := os.ReadFile(groupsFile())
 	if err != nil {
 		return st
@@ -208,6 +210,9 @@ func loadStore() Store {
 		}
 		if st.Projects == nil {
 			st.Projects = []Project{}
+		}
+		if st.Dirs == nil {
+			st.Dirs = []string{}
 		}
 		return st
 	}
@@ -277,6 +282,18 @@ func saveStore(st Store) error {
 			seenD[d] = true
 			p.Dirs[j] = d
 		}
+	}
+	seenDir := map[string]bool{}
+	if len(st.Dirs) > 200 {
+		return errors.New("trop de dossiers enregistrés")
+	}
+	for i, d := range st.Dirs {
+		d = filepath.Clean(d)
+		if !filepath.IsAbs(d) || strings.ContainsRune(d, 0) || seenDir[d] {
+			return errors.New("dossier enregistré invalide ou en double")
+		}
+		seenDir[d] = true
+		st.Dirs[i] = d
 	}
 	for _, id := range st.Favs {
 		if !idRe.MatchString(id) {

@@ -552,3 +552,21 @@ func transcript(dir, id string) (string, bool) {
 	st, err := os.Stat(p)
 	return p, err == nil && st.Mode().IsRegular()
 }
+
+// withEmptyDirs : les dossiers enregistrés à la main qui n'ont aucune session apparaissent comme des dossiers vides, pour qu'on puisse
+// y lancer un prompt. Un dossier qui a déjà des sessions n'est pas répété.
+func withEmptyDirs(groups []Group, dirs []string) []Group {
+	have := map[string]bool{}
+	for _, g := range groups {
+		have[g.Project] = true
+	}
+	for _, d := range dirs {
+		if have[d] {
+			continue
+		}
+		fi, err := os.Stat(d)
+		groups = append(groups, Group{d, err != nil || !fi.IsDir(), []Session{}})
+	}
+	sort.Slice(groups, func(i, j int) bool { return groups[i].Project < groups[j].Project })
+	return groups
+}

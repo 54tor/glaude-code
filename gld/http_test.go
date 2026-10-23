@@ -631,3 +631,37 @@ func TestSessionsStamp(t *testing.T) {
 		t.Fatalf("le tampon n'a pas bougé : %v -> %v", first, second)
 	}
 }
+
+func TestDossiersEnregistres(t *testing.T) {
+	h, _, _ := web(t)
+	vide := t.TempDir()
+	status(t, h, "POST", "/dirs", `{"op":"add","dir":"relatif"}`, 400)
+	status(t, h, "POST", "/dirs", `{"op":"x","dir":"`+vide+`"}`, 400)
+	ok(t, h, "/dirs", `{"op":"add","dir":"`+vide+`/inconnu"}`, false, "introuvable")
+	ok(t, h, "/dirs", `{"op":"add","dir":"`+vide+`"}`, true, "")
+	ok(t, h, "/dirs", `{"op":"add","dir":"`+vide+`/"}`, true, "") // doublon : un seul exemplaire
+	_, m, _ := call(t, h, "GET", "/api", "")
+	n := 0
+	for _, g := range m["groups"].([]any) {
+		if g.(map[string]any)["project"] == vide {
+			n++
+			if len(g.(map[string]any)["sessions"].([]any)) != 0 {
+				t.Fatal("le dossier enregistré a des sessions")
+			}
+		}
+	}
+	if n != 1 {
+		t.Fatalf("dossier vide présent %d fois", n)
+	}
+	// un client qui ne connaît pas le champ ne l'efface pas
+	status(t, h, "POST", "/vgroups", `{"groups":[],"favs":[]}`, 200)
+	_, m, _ = call(t, h, "GET", "/api", "")
+	if d, _ := m["dirs"].([]any); len(d) != 1 {
+		t.Fatalf("dossiers perdus : %v", m["dirs"])
+	}
+	ok(t, h, "/dirs", `{"op":"remove","dir":"`+vide+`"}`, true, "")
+	_, m, _ = call(t, h, "GET", "/api", "")
+	if d, _ := m["dirs"].([]any); len(d) != 0 {
+		t.Fatalf("retrait sans effet : %v", m["dirs"])
+	}
+}
