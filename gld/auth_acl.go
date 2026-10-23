@@ -7,6 +7,8 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -323,7 +325,46 @@ func gateCheck(g *gateInfo, r *http.Request, pat string, need Right) (int, strin
 	if !ok {
 		return 403, "srv.auth.droitRefuse"
 	}
+	if pat == "POST /trash-restore" {
+		var req struct{ ID string }
+		if err := peekJSON(r, &req); err != nil {
+			return peekErr(err)
+		}
+		if trashNeedsConfig(homeFrom(r), req.ID) {
+			return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] && m[RightConfigWrite] })
+		}
+	}
 	return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] })
+}
+
+// memKeyPrefixes : les clés de mémoire (memResolve), qui ne mènent jamais à commands/, skills/ ni aux réglages.
+var memKeyPrefixes = []string{"g/CLAUDE.md", "g/rules/", "m/", "r/", "p/"}
+
+// trashNeedsConfig : restaurer un snippet (s/…) ou un skill (k/…) recrée une commande slash ou un skill exécutables.
+// Élément introuvable, illisible ou de forme inconnue : config_write aussi.
+func trashNeedsConfig(home, id string) bool {
+	dir := cfgDir()
+	if home != "" {
+		h, ok := homeByName(home)
+		if !ok {
+			return true
+		}
+		dir = h.Dir
+	}
+	if id == "" || id == "." || id == ".." || strings.ContainsAny(id, `/\`) {
+		return true
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "gld-web-trash", id, "meta.json"))
+	var t Trashed
+	if err != nil || json.Unmarshal(b, &t) != nil || t.ID != id {
+		return true
+	}
+	for _, p := range memKeyPrefixes {
+		if t.Key == p || (strings.HasSuffix(p, "/") && strings.HasPrefix(t.Key, p)) {
+			return false
+		}
+	}
+	return true
 }
 
 func rightsErr(g *gateInfo, homeID string, ok func(map[Right]bool) bool) (int, string) {
