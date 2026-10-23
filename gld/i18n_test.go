@@ -34,7 +34,7 @@ func noOverride(t *testing.T) {
 
 func TestNormalizeLang(t *testing.T) {
 	for in, want := range map[string]string{
-		"fr": "fr", "FR-fr": "fr", "French": "fr", "Français": "fr",
+		"fr": "fr", "FR-fr": "fr", "French": "fr", "Français": "fr", "French (Canada)": "fr", "fr_CA.UTF-8": "fr", "English (UK)": "en", "en_GB.UTF-8": "en", "enigma": "other",
 		"en-US": "en", "English": "en", "en": "en",
 		"Spanish": "other", "日本語": "other",
 		"": "", "  ": "",
@@ -96,9 +96,16 @@ func TestCliLang(t *testing.T) {
 		t.Fatalf("le réglage prime sur LANG : %q", got)
 	}
 	withSettings(t, `{}`)
-	t.Setenv("LANG", "C")
-	if got := cliLang(); got != "fr" {
-		t.Fatalf("LANG=C : %q", got)
+	for _, neutral := range []string{"C", "POSIX", "C.UTF-8"} {
+		t.Setenv("LANG", neutral)
+		if got := cliLang(); got != "fr" {
+			t.Fatalf("LANG=%s : %q", neutral, got)
+		}
+	}
+	t.Setenv("LANG", "C.UTF-8")
+	t.Setenv("LC_MESSAGES", "en_US.UTF-8")
+	if got := cliLang(); got != "en" {
+		t.Fatalf("LC_MESSAGES anglais malgré LANG neutre : %q", got)
 	}
 }
 
@@ -107,6 +114,10 @@ func TestReplyLang(t *testing.T) {
 	withSettings(t, `{"language":"Spanish"}`)
 	if got := replyLang(); got != "Spanish" {
 		t.Fatalf("%q", got)
+	}
+	withSettings(t, `{"language":"fr"}`)
+	if got := replyLang(); got != "français" {
+		t.Fatalf("un code devient le nom de la langue : %q", got)
 	}
 	withSettings(t, `{}`)
 	if got := replyLang(); got != "français" {

@@ -21,6 +21,13 @@ const KINDS: Record<string, string> = {
   perime: "memory.health.kinds.stale",
 }
 
+// Valeurs de « kind » de l'analyse par le modèle (memlint.go) : des codes stables, affichés traduits.
+const LINT_KINDS: Record<string, string> = {
+  doublon: "memory.health.kinds.lintDuplicate",
+  contradiction: "memory.health.kinds.lintContradiction",
+  périmé: "memory.health.kinds.lintStale",
+}
+
 export function HealthDialog({
   open,
   issues,
@@ -89,7 +96,7 @@ export function HealthDialog({
             ) : (
               lint.findings?.map((f, n) => (
                 <div key={n} className="rounded-md border px-2 py-1.5">
-                  <p className="text-xs font-medium text-muted-foreground">{f.kind}</p>
+                  <p className="text-xs font-medium text-muted-foreground">{LINT_KINDS[f.kind] ? t(LINT_KINDS[f.kind]) : f.kind}</p>
                   <p>{f.why}</p>
                   <p className="mt-1 flex flex-wrap gap-1">
                     {f.keys.map((k) => (
