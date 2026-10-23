@@ -29,6 +29,8 @@ import { SessionsPane } from "@/components/SessionsPane"
 import { Sidebar } from "@/components/Sidebar"
 import { Settings } from "@/components/SettingsDialog"
 import { Compose, type ComposeAsk } from "@/components/Compose"
+import { AuthScreen } from "@/components/auth/Login"
+import { boot, useAuth } from "@/lib/auth"
 
 // Les grandes vues se chargent à la demande : le premier chargement ne porte que la liste des sessions.
 const Conversation = lazy(() => import("@/components/Conversation").then((m) => ({ default: m.Conversation })))
@@ -38,9 +40,24 @@ const Skills = lazy(() => import("@/components/Skills").then((m) => ({ default: 
 const Memory = lazy(() => import("@/components/Memory").then((m) => ({ default: m.Memory })))
 const Tabs = lazy(() => import("@/components/Tabs").then((m) => ({ default: m.Tabs })))
 
+// Mode multi-utilisateur : l'application ne se monte qu'une session ouverte. Une session perdue en cours d'usage la laisse
+// montée sous l'écran de connexion, pour retrouver vues et brouillons après reconnexion.
+export default function App() {
+  const a = useAuth()
+  useEffect(() => void boot(), [])
+  if (a.state === "loading") return null
+  const open = a.state === "open" || a.state === "ok"
+  return (
+    <>
+      {(open || a.expired) && <Shell />}
+      {!open && <AuthScreen />}
+    </>
+  )
+}
+
 // Application : état de navigation (route, recherche, sélection, réglages) et assemblage. Les données viennent de
 // useAppData, les actions de useAppActions, les raccourcis de useShortcuts.
-export default function App() {
+function Shell() {
   const [loc, nav] = useLocation()
   const [params, setParams] = useSearchParams()
   const route = parse(loc)
@@ -48,7 +65,7 @@ export default function App() {
   const q = String(params.get("q") ?? "")
   const reading = params.get("s")
 
-  const { data, setData, snips, now, reload, error } = useAppData()
+  const { data, setData, snips, now, reload, error, denied } = useAppData()
   const { t } = useTranslation() // re-rend toute l'application quand la langue change
   const serverLang = data?.lang
   useEffect(() => setLang(resolveFront(serverLang, navigator.language)), [serverLang])
@@ -393,6 +410,7 @@ export default function App() {
               go={go}
               clearSearch={() => setQ("")}
               error={error}
+              denied={denied}
               retry={() => void reload().catch(() => {})}
             />
           )}

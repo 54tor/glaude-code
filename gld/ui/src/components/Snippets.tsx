@@ -16,6 +16,7 @@ import { Markdown } from "./Message"
 import type { Ask as PromptAsk } from "./Prompt"
 import { useEditorDraft, useLeaveGuard } from "@/hooks/useEditorDraft"
 import { reportResult } from "@/lib/report"
+import { authFetch } from "@/lib/auth"
 
 // Snippets = commandes Claude Code (/nom) : personnelles (~/.claude/commands) et de chaque projet (.claude/commands).
 // Lecture, copie, édition, création, suppression (vers la corbeille), import et export en zip.
@@ -145,7 +146,7 @@ export function Snippets({
     for (const file of list) fd.append("files", file)
     const id = toast.loading(t("skills.snippets.importing"))
     try {
-      const r = (await (await fetch("/snippets-import", { method: "POST", body: fd })).json()) as { ok: boolean; out: string }
+      const r = (await (await authFetch("/snippets-import", { method: "POST", body: fd })).json()) as { ok: boolean; out: string }
       reportResult(r, { id })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e), { id })

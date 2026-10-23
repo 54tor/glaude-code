@@ -1,4 +1,5 @@
 import { i18n } from "@/i18n"
+import { authFetch } from "@/lib/auth"
 
 // Accès aux routes du serveur Go (gld/main.go).
 
@@ -133,10 +134,19 @@ export type HomesInfo = { current: string; main: string; homes: { name: string; 
 
 const enc = encodeURIComponent
 
+// status : 403 dit un droit manquant (mode multi-utilisateur), à distinguer d'un serveur injoignable.
+export class HttpError extends Error {
+  status: number
+  constructor(status: number) {
+    super(`HTTP ${status}`)
+    this.status = status
+  }
+}
+
 // Une réponse d'erreur (serveur arrêté, 500, jeton expiré) lève au lieu d'être prise pour des données.
 async function get<T>(url: string): Promise<T> {
-  const r = await fetch(url)
-  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  const r = await authFetch(url)
+  if (!r.ok) throw new HttpError(r.status)
   return (await r.json()) as T
 }
 
@@ -199,7 +209,7 @@ export const api = {
   // timeoutMs : abandonne la requête au bout de ce délai (sinon elle attend le serveur indéfiniment).
   async post(url: string, body: unknown, timeoutMs?: number): Promise<Result> {
     try {
-      const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined })
+      const r = await authFetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined })
       return (await r.json()) as Result
     } catch (e) {
       return { ok: false, out: i18n.t("shell.api.error", { msg: e instanceof Error ? e.message : String(e) }) }

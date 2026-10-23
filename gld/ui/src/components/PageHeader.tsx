@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import type { Actions, GroupActions } from "./actions"
 import { AccountButton } from "./AccountDialog"
+import { UserMenu } from "./auth/Profile"
 import { CreditsButton } from "./Credits"
 import { DD, GroupItems } from "./SessionMenu"
 import { SessionTrash } from "./SessionTrash"
@@ -136,6 +137,7 @@ export function PageHeader({
           )}
           <CreditsButton />
           <AccountButton />
+          <UserMenu />
         </div>
       </header>
 

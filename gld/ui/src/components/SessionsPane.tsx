@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { ChevronRight, Search, SquareTerminal, WifiOff } from "lucide-react"
+import { ChevronRight, Lock, Search, SquareTerminal, WifiOff } from "lucide-react"
 import type { VGroup } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { segs } from "@/lib/paths"
@@ -43,10 +43,12 @@ export function SessionsPane({
   go,
   clearSearch,
   error,
+  denied,
   retry,
 }: {
   loading: boolean
   error: string | null // dernier chargement en échec (serveur arrêté, HTTP 5xx)
+  denied?: boolean // droit sessions_read absent sur ce home
   retry: () => void
   route: Route
   rows: Row[]
@@ -69,7 +71,7 @@ export function SessionsPane({
     <ScrollArea className="min-h-0 flex-1">
       <div className="mx-auto max-w-7xl px-3 py-4 pb-24 md:px-6">
         {loading && error && (
-          <Empty icon={WifiOff} title={t("shell.pane.unreachable")} text={error}>
+          <Empty icon={denied ? Lock : WifiOff} title={denied ? t("auth.denied.title") : t("shell.pane.unreachable")} text={error}>
             <Button variant="outline" size="sm" className="mt-2" onClick={retry}>
               {t("common.retry")}
             </Button>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { i18n } from "@/i18n"
-import { api, type Data, type SnipScope, type Snippet } from "@/lib/api"
+import { api, HttpError, type Data, type SnipScope, type Snippet } from "@/lib/api"
 import { REFRESH } from "@/lib/sessionsView"
 
 export type Snippets = { dir: string; files: Snippet[]; scopes: SnipScope[] }
@@ -14,6 +14,7 @@ export function useAppData() {
   const [snips, setSnips] = useState<Snippets | null>(null)
   const [now, setNow] = useState(0)
   const [error, setError] = useState<string | null>(null) // serveur injoignable : dit une fois, effacé dès qu'une relecture passe
+  const [denied, setDenied] = useState(false) // mode multi-utilisateur sans le droit sessions_read sur ce home : rien à afficher, rien à signaler
   const stamps = useRef(0)
   const reload = useCallback(async () => {
     try {
@@ -22,8 +23,14 @@ export function useAppData() {
       setSnips(s)
       setNow(Date.now() / 1000)
       setError(null)
+      setDenied(false)
       toast.dismiss("server-down")
     } catch (e) {
+      if (e instanceof HttpError && e.status === 403) {
+        setDenied(true)
+        setError(i18n.t("auth.denied.sessions"))
+        throw e
+      }
       const msg = e instanceof Error ? e.message : String(e)
       setError(msg)
       toast.error(i18n.t("common.serverUnreachable", { error: msg }), { id: "server-down", duration: Infinity })
@@ -48,5 +55,5 @@ export function useAppData() {
       document.removeEventListener("visibilitychange", tick)
     }
   }, [reload])
-  return { data, setData, snips, now, reload, error }
+  return { data, setData, snips, now, reload, error, denied }
 }

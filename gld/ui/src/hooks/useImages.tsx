@@ -3,6 +3,7 @@ import { X } from "lucide-react"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { i18n } from "@/i18n"
+import { authFetch } from "@/lib/auth"
 
 export type Img = { path: string; url: string; name: string }
 
@@ -25,7 +26,7 @@ export function useImages() {
     setBusy(true)
     for (const f of pics) {
       try {
-        const r = await fetch("/image-upload", { method: "POST", headers: { "Content-Type": f.type }, body: f })
+        const r = await authFetch("/image-upload", { method: "POST", headers: { "Content-Type": f.type }, body: f })
         const j = (await r.json()) as { ok: boolean; path?: string; out: string }
         if (!j.ok || !j.path) {
           toast.error(j.out)
