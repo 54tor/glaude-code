@@ -151,6 +151,9 @@ func TestCompteRafraichirEnPOST(t *testing.T) {
 	<-calls
 	usageWG.Wait()
 	status(t, h, "GET", "/account-refresh", "", 405)
+	if _, m, _ := call(t, h, "GET", "/account?refresh=1", ""); m["refreshing"] == true {
+		t.Fatalf("GET /account?refresh=1 force encore le relevé : %v", m)
+	}
 }
 
 // Deux mises à la corbeille simultanées, sur deux sessions distinctes, aboutissent toutes deux (verrou sessionsMu).
