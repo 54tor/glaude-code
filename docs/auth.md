@@ -97,7 +97,7 @@ Le terminal web et `/chat` sont revérifiés pendant leur durée : session expir
 
 ## Anti essais répétés
 
-Compteurs en base, clés par nom, par adresse et par couple nom + adresse ; la fenêtre est de 15 minutes. La réponse est la même quelle que soit la cause (« identifiants invalides ou compte temporairement bloqué ») avec un `Retry-After`, le détail va dans le journal d'événements.
+Compteurs en base, clés par nom, par adresse (une adresse IPv6 est ramenée à son préfixe /64) et par couple nom + adresse ; la fenêtre est de 15 minutes. La réponse est la même quelle que soit la cause (« identifiants invalides ou compte temporairement bloqué ») avec un `Retry-After`, le détail va dans le journal d'événements.
 
 | Mesure | Valeur |
 |---|---|
@@ -105,7 +105,7 @@ Compteurs en base, clés par nom, par adresse et par couple nom + adresse ; la f
 | Verrou du compte | 10 échecs : 30 min. Ne s'applique pas à une adresse d'où le compte s'est déjà connecté avec succès dans les 30 derniers jours |
 | Second facteur | 5 échecs : session partielle détruite, mot de passe à ressaisir |
 | Plafond global | 60 tentatives par minute sur toute la passerelle, en mémoire |
-| Codes TOTP | un code déjà accepté n'est pas rejouable |
+| Codes TOTP | dérive acceptée de ±1 pas (30 s) ; un code déjà accepté n'est pas rejouable |
 
 Un déluge de connexions sur un nom peut gêner ce compte (déni de service local, borné par le délai). Le compteur global repart à zéro au redémarrage.
 
@@ -163,11 +163,11 @@ Routes `/admin/*` (administrateurs avec second facteur validé) : comptes (créa
 - Les opérations sensibles demandent une réauthentification de moins de 5 minutes : création de compte, réinitialisation de facteurs, changement de mot de passe, attribution de `exec` ou `config_write` (avec confirmation explicite), réactivation, désactivation d'un administrateur, révocation des sessions d'un administrateur. Désactiver un compte ordinaire est immédiat. On ne peut ni se désactiver soi-même ni désactiver le dernier administrateur actif. Il n'y a pas de route de rétrogradation d'un administrateur.
 - Un mot de passe défini par un administrateur est temporaire par intention, mais **rien ne force son changement** à la première connexion.
 - `GET /admin/sessions` (adresse IP et navigateur d'un autre compte) et `GET /auth/sessions` (ses propres sessions) ne demandent pas de réauthentification.
-- Chaque action administrative écrit le journal d'événements (compte visé, administrateur, adresse). `GET /account` (usages) peut déclencher un relevé.
+- Le journal d'événements est purgé au-delà de 90 jours (à l'ouverture de la base, puis au plus une fois par 24 h). Chaque action administrative l'écrit (compte visé, administrateur, adresse). `GET /account` (usages) peut déclencher un relevé.
 
 ## `GLD_RUN_AS` : séparation par compte OS (expérimental)
 
-**Ce n'est pas encore une frontière de sécurité.** Le mode fait tourner sous un autre compte système les processus qu'un utilisateur peut influencer : claude, tmux, le terminal web, git, les onglets et les gld enfants. Mais la passerelle (root) lit et écrit encore elle-même, en suivant les liens symboliques, des dossiers de configuration et de projet que ce compte peut modifier (écriture de réglages et sauvegardes, synchronisation entre homes, restauration, lecture brute de configuration, corbeilles…). Un lien posé par le compte cible peut donc faire lire ou écrire à root un fichier arbitraire. Corriger cela demande de migrer ces accès vers `os.OpenRoot` ou des opérations par descripteur ; ce travail n'est pas fait, et la liste des appels concernés est tenue dans le journal du lot (`.superpowers/sdd/2026-10-23-multi-user/task-16-report.md`). Tant qu'il n'est pas fait, n'utilisez pas `GLD_RUN_AS` pour contenir un utilisateur hostile.
+**Ce n'est pas encore une frontière de sécurité.** Le mode fait tourner sous un autre compte système les processus qu'un utilisateur peut influencer : claude, tmux, le terminal web, git, les onglets et les gld enfants. Mais la passerelle (root) lit et écrit encore elle-même, en suivant les liens symboliques, des dossiers de configuration et de projet que ce compte peut modifier (écriture de réglages et sauvegardes, synchronisation entre homes, restauration, lecture brute de configuration, corbeilles…). Un lien posé par le compte cible peut donc faire lire ou écrire à root un fichier arbitraire. Corriger cela demande de migrer ces accès vers `os.OpenRoot` ou des opérations par descripteur : voir [auth-followup-openroot.md](auth-followup-openroot.md). Tant que ce n'est pas fait, n'utilisez pas `GLD_RUN_AS` pour contenir un utilisateur hostile.
 
 Activation : unix seulement, passerelle lancée **en root** :
 
@@ -175,21 +175,37 @@ Activation : unix seulement, passerelle lancée **en root** :
 GLD_RUN_AS=gld-sessions GLD_RUN_AS_EXPERIMENTAL=1 gld
 ```
 
-`GLD_RUN_AS` accepte un nom, un uid ou `uid:gid`. Sans `GLD_RUN_AS_EXPERIMENTAL=1`, gld refuse de démarrer. Sous Windows c'est sans effet (avertissement). Prérequis :
+`GLD_RUN_AS` accepte un nom, un uid ou `uid:gid`. Sans `GLD_RUN_AS_EXPERIMENTAL=1`, gld refuse de démarrer ; avec, il affiche un avertissement. Sous Windows c'est sans effet (avertissement). Il n'existe plus de mode par capacités (`setcap`) : root est exigé.
 
-- passerelle lancée par root, sans capacités ambiantes ou héritées, et binaire gld sans capacités de fichier (systemd : pas de `User=`, pas d'`AmbientCapabilities=`) ;
-- dossier d'authentification (`GLD_AUTH_DIR`, par exemple `/var/lib/gld-auth`) en 0700 à root, aucun parent modifiable par le compte cible (hors dossiers root avec sticky bit), hors du HOME de la cible et réciproquement ;
-- binaire gld exécutable par la cible mais modifiable ni par elle, ni dans son dossier (par exemple `/usr/local/bin`) ;
+Prérequis côté opérateur :
+
+- passerelle lancée par root (systemd : pas de `User=`, pas d'`AmbientCapabilities=`) ;
+- dossier d'authentification (`GLD_AUTH_DIR`, par exemple `/var/lib/gld-auth`) sur un chemin absolu ; gld le crée en root 0700 s'il manque ;
+- binaire gld exécutable par la cible, mais ni lui, ni son dossier, ni aucun de ses parents modifiables par elle (par exemple `/usr/local/bin`) ;
 - compte cible non root, hors groupe 0, différent de celui de la passerelle ; `CLAUDE_CONFIG_DIR` et les dossiers des homes inscriptibles par la cible ;
-- retirer de l'environnement du service les secrets sans rapport (`DATABASE_URL`, `AWS_*`…) : ils passent aux sessions ; avec systemd `PrivateTmp=`, le serveur tmux de la cible vit dans le /tmp privé du service.
+- avec systemd, `PrivateTmp=` : le serveur tmux de la cible vit dans le /tmp privé du service.
 
-Au démarrage gld vérifie tout cela, y compris, en relançant un assistant sous le compte cible, qu'il n'a aucun accès à `auth.db`, `auth.key` ni au dossier d'authentification, et refuse de démarrer à la moindre incohérence (jamais de repli silencieux). Les processus lancés ont un `umask` de 077 et un environnement purgé (`GLD_AUTH_*`, `GLD_WEB_*`, identité de la passerelle, `TMUX*`, `XDG_*`, `SSH_AUTH_SOCK`…).
+Vérifications au démarrage : toute incohérence arrête gld, jamais de repli silencieux sous le compte de la passerelle.
+
+- Compte valide : introuvable, root, membre du groupe 0 ou identique à la passerelle sont refusés.
+- Processus : euid 0 ; sous Linux, `/proc/self/status` lisible avec `CapAmb` et `CapInh` vides ; binaire sans capacités de fichier.
+- Binaire : lui et chacun de ses parents jusqu'à `/` ne doivent appartenir ni être modifiables (bits groupe ou autres, selon l'uid et les gids de la cible) par le compte cible, ni porter une ACL POSIX (Linux ; macOS non vérifié). Un parent root avec sticky bit est toléré, jamais le binaire lui-même.
+- Dossier d'authentification : chemin absolu ; HOME de la cible et dossier non imbriqués, dans aucun sens. Le premier parent existant est jugé avant toute création, puis le dossier est créé en 0700 s'il manque et relu (vrai dossier, propriété de root, sans droit groupe ni autres, sans sticky). Le chemin tel que configuré et le chemin résolu sont tous deux parcourus jusqu'à `/` avec les mêmes règles, les chaînes de liens symboliques sont suivies (16 liens au plus, une boucle est refusée) et un lien n'est admis que si lui et sa cible sont sûrs.
+- Assistant `gld _canread`, lancé sous la cible : `access(2)` ne doit lui donner aucun accès au dossier d'authentification ni à `auth.db`, `auth.db-wal`, `-shm`, `-journal` et `auth.key`, ni d'écriture sur le binaire et son dossier. Cette couche s'ajoute aux autres, jamais seule.
+
+Effets sur les sessions :
+
+- **`umask` 077** : tout ce que créent les processus lancés sous `GLD_RUN_AS` (claude et ses outils, git, tmux, gld enfants, onglets) naît en 0600 (fichiers) et 0700 (dossiers), dépôts de travail compris. Un dépôt partagé par groupe devient inutilisable pour les autres membres.
+- **Environnement purgé** : `GLD_AUTH_*`, `GLD_WEB_*`, `GLD_RUN_AS*`, l'identité de la passerelle (HOME, USER, LOGNAME, SHELL, MAIL), `TMUX*`, `XDG_*_HOME`, `XDG_RUNTIME_DIR`, `DBUS_SESSION_BUS_ADDRESS` et `SSH_AUTH_SOCK` ne passent pas. Un gld enfant reçoit seulement son jeton, son port et son adresse d'écoute. `ANTHROPIC_API_KEY` et `CLAUDE_*` passent. **Les autres secrets de l'environnement de l'opérateur (`DATABASE_URL`, `AWS_*`…) passent aussi** : retirez-les de l'environnement du service.
+
+Limites restantes de la vérification : entre le contrôle du parent existant et la création du dossier d'authentification, la passerelle ne garde aucun descripteur sur ce parent (un dossier vide root 0700 peut être créé ailleurs par un lien planté, le contrôle suivant refuse alors le démarrage) ; les comptes autres que la cible ne sont pas pris en compte ; les ACL ne sont vérifiées que sous Linux.
 
 Non testé en réel : onglets tmux, envoi de touches et terminal web sous un autre uid ; macOS.
 
 ## Limites connues
 
 - `exec` et `config_write` valent le compte OS de gld ; la séparation par compte est expérimentale.
+- Séparation par compte OS : voir [auth-followup-openroot.md](auth-followup-openroot.md).
 - Rejeu d'une ligne signée ancienne non détecté ; signature inutile contre qui lit la clé.
 - Clé maîtresse en fichier (`auth.key`) : protégée seulement par les droits du dossier.
 - Terminal web proxifié vers un home enfant : revérification toutes les 5 s. `/chat` vers un enfant est coupé par la passerelle puis arrêté par un appel `/chat-stop` à l'enfant ; le garde ne relit pas un corps de plus de 64 Kio (413).
