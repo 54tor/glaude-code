@@ -33,6 +33,9 @@ export type Actions = {
   live: Set<string>
   waiting: Set<string> // ouvertes, en attente de votre message
   hit: (id: string) => Hit | undefined
+  registeredDirs: string[] // dossiers ajoutés à la main, sans session
+  addDir: () => void // choisir un dossier à ajouter à la liste
+  removeDir: (project: string) => void // retirer un dossier de la liste (ses sessions, s'il en a, ne bougent pas)
   openPerms: (project: string) => void // onglet Permissions de Configuration, sur les réglages de ce dossier
   folder: (project: string) => Group | undefined // dossier de travail et ses sessions
   vgroups: VGroup[]

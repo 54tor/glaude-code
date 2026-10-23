@@ -38,7 +38,8 @@ export function buildView(data: Data | null, qt: string, tags: Record<string, st
         ? tags[s.id]?.some((t) => t.toLowerCase().includes(tag))
         : !f || g.project.toLowerCase().includes(f) || s.title.toLowerCase().includes(f) || hitMap?.has(s.id)
     )
-    if (ss.length) entries.push({ g, ss })
+    // Un dossier enregistré à la main (sans session) reste dans l'arbre, sauf si la recherche l'écarte.
+    if (ss.length || (g.sessions.length === 0 && tag === null && (!f || g.project.toLowerCase().includes(f)))) entries.push({ g, ss })
   }
   const rows = entries.flatMap(({ g, ss }) => ss.map((s) => ({ s, g }))).sort(byDate)
   return { entries, rows, byId: new Map(rows.map((r) => [r.s.id, r])), autoItems, akb, total }

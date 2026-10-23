@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { AlarmClock, ChevronRight, Repeat, Coins, FolderOpen, Star, Brain, SlidersHorizontal, Zap, Flame, History, Clock, FileText, Inbox, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
+import { AlarmClock, ChevronRight, FolderPlus, Repeat, Coins, FolderOpen, Star, Brain, SlidersHorizontal, Zap, Flame, History, Clock, FileText, Inbox, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
 import { size, tilde } from "@/lib/format"
 import type { Choice } from "@/lib/models"
 import { href, type Route } from "@/lib/route"
@@ -318,7 +318,15 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             </>
           )}
 
-          {(p.loading || p.tree.length > 0) && <Heading>Sessions locales</Heading>}
+          <Heading
+            action={
+              <Button variant="ghost" size="icon-xs" onClick={a.addDir} title="Ajouter un dossier sans session : on y lance un prompt sans mémoire Claude" aria-label="Ajouter un dossier">
+                <FolderPlus />
+              </Button>
+            }
+          >
+            Sessions locales
+          </Heading>
           {p.loading ? (
             <div className="space-y-2 px-2">
               <Skeleton className="h-6 w-full" />

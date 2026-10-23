@@ -1,5 +1,5 @@
 import { setOpen, useOpen, useOpenState } from "@/hooks/useOpen"
-import { Check, ChevronRight, FolderInput, Layers, MessageSquarePlus, Plus, SquareTerminal, Star, Tag, Trash2, TriangleAlert } from "lucide-react"
+import { Check, ChevronRight, FolderInput, FolderMinus, Layers, MessageSquarePlus, Plus, SquareTerminal, Star, Tag, Trash2, TriangleAlert } from "lucide-react"
 import type { GitState, Group, Session, VGroup } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { CM, GroupItems } from "./SessionMenu"
@@ -46,13 +46,25 @@ export function ProjectItems({ g, ss = g.sessions, extra }: { g: Group; ss?: Ses
           </ContextMenuItem>
         </ContextMenuSubContent>
       </ContextMenuSub>
-      <ContextMenuItem onSelect={() => a.moveGroup(g, own)}>
-        <FolderInput /> Réassigner les {own.length} sessions…
-      </ContextMenuItem>
-      <ContextMenuSeparator />
-      <ContextMenuItem variant="destructive" onSelect={() => a.remove(own, `les ${own.length} session(s) de ${g.project}`)}>
-        <Trash2 /> Supprimer les {own.length} sessions
-      </ContextMenuItem>
+      {own.length > 0 && (
+        <>
+          <ContextMenuItem onSelect={() => a.moveGroup(g, own)}>
+            <FolderInput /> Réassigner les {own.length} sessions…
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem variant="destructive" onSelect={() => a.remove(own, `les ${own.length} session(s) de ${g.project}`)}>
+            <Trash2 /> Supprimer les {own.length} sessions
+          </ContextMenuItem>
+        </>
+      )}
+      {a.registeredDirs.includes(g.project) && (
+        <>
+          {own.length > 0 && <ContextMenuSeparator />}
+          <ContextMenuItem onSelect={() => a.removeDir(g.project)}>
+            <FolderMinus /> Retirer de la liste des dossiers
+          </ContextMenuItem>
+        </>
+      )}
     </ContextMenuContent>
   )
 }
