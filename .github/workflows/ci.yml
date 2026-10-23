@@ -7,6 +7,7 @@ on:
     - cron: "17 3 * * 1" # chaque lundi : fuzzing plus long et nouvelles vulnérabilités connues
 jobs:
   check:
+    if: github.server_url == 'https://github.com'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
