@@ -1,4 +1,5 @@
 import * as React from "react"
+import { applyPalette, PALETTES } from "@/lib/palettes"
 
 type Theme = "dark" | "light" | "system"
 type ResolvedTheme = "dark" | "light"
@@ -13,6 +14,8 @@ type ThemeProviderProps = {
 type ThemeProviderState = {
   theme: Theme
   setTheme: (theme: Theme) => void
+  palette: string
+  setPalette: (id: string) => void
 }
 
 const COLOR_SCHEME_QUERY = "(prefers-color-scheme: dark)"
@@ -92,6 +95,18 @@ export function ThemeProvider({
     return defaultTheme
   })
 
+  const [palette, setPaletteState] = React.useState(() => {
+    const p = localStorage.getItem("palette")
+    return p && PALETTES[p] ? p : "defaut"
+  })
+  const paletteRef = React.useRef(palette)
+  const setPalette = React.useCallback((id: string) => {
+    localStorage.setItem("palette", id)
+    paletteRef.current = id
+    setPaletteState(id)
+    applyPalette(id, document.documentElement.classList.contains("dark") ? "dark" : "light")
+  }, [])
+
   const setTheme = React.useCallback(
     (nextTheme: Theme) => {
       localStorage.setItem(storageKey, nextTheme)
@@ -111,6 +126,7 @@ export function ThemeProvider({
 
       root.classList.remove("light", "dark")
       root.classList.add(resolvedTheme)
+      applyPalette(paletteRef.current, resolvedTheme)
 
       if (restoreTransitions) {
         restoreTransitions()
@@ -207,8 +223,10 @@ export function ThemeProvider({
     () => ({
       theme,
       setTheme,
+      palette,
+      setPalette,
     }),
-    [theme, setTheme]
+    [theme, setTheme, palette, setPalette]
   )
 
   return (
