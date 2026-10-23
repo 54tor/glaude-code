@@ -44,16 +44,21 @@ func (s *authStore) eventIP(userID int64, kind, outcome, ip string) {
 	s.db.Exec(`INSERT INTO auth_events(at,user_id,ip,kind,outcome) VALUES(?,?,?,?,?)`, time.Now().Unix(), userID, ip, kind, outcome)
 }
 
-func (s *authStore) NewSession(userID int64, ip, ua string) (string, error) {
-	raw := make([]byte, 32)
+func newSessionValue() (raw, hash []byte) {
+	raw = make([]byte, 32)
 	rand.Read(raw)
 	h := sha256.Sum256(raw)
+	return raw, h[:]
+}
+
+func (s *authStore) NewSession(userID int64, ip, ua string) (string, error) {
+	raw, h := newSessionValue()
 	if len(ua) > 512 {
 		ua = ua[:512]
 	}
 	now := authNow().Unix()
 	_, err := s.db.Exec(`INSERT INTO sessions(id_hash,user_id,created_at,last_seen_at,expires_at,ip,ua) VALUES(?,?,?,?,?,?,?)`,
-		h[:], userID, now, now, now+int64(sessIdle/time.Second), ip, ua)
+		h, userID, now, now, now+int64(sessIdle/time.Second), ip, ua)
 	if err != nil {
 		return "", err
 	}
@@ -78,7 +83,9 @@ func (s *authStore) Session(cookie string) (*Principal, error) {
 	now := authNow().Unix()
 	abs := created + int64(sessAbsolute/time.Second)
 	if now >= exp || now >= abs || (!mfa.Valid && now >= created+int64(thMFAWindow/time.Second)) {
-		s.db.Exec(`DELETE FROM sessions WHERE id_hash=?`, h[:])
+		if _, err := s.db.Exec(`DELETE FROM sessions WHERE id_hash=?`, h[:]); err != nil {
+			journal("auth: purge session: %v", err)
+		}
 		return nil, errNoSession
 	}
 	u, err := s.userByID(s.db, uid)
@@ -86,7 +93,9 @@ func (s *authStore) Session(cookie string) (*Principal, error) {
 		return nil, errNoSession
 	}
 	if now-seen >= int64(sessTouch/time.Second) {
-		s.db.Exec(`UPDATE sessions SET last_seen_at=?, expires_at=? WHERE id_hash=?`, now, min(now+int64(sessIdle/time.Second), abs), h[:])
+		if _, err := s.db.Exec(`UPDATE sessions SET last_seen_at=?, expires_at=? WHERE id_hash=?`, now, min(now+int64(sessIdle/time.Second), abs), h[:]); err != nil {
+			journal("auth: touch session: %v", err)
+		}
 	}
 	return &Principal{User: u, SessionID: hex.EncodeToString(h[:]), MFA: mfa.Valid, CSRF: s.csrfFor(h[:]), Expires: time.Unix(abs, 0)}, nil
 }
@@ -101,30 +110,54 @@ func (s *authStore) csrfFor(idHash []byte) string {
 	return hex.EncodeToString(m.Sum(nil))
 }
 
-func (s *authStore) MarkMFA(sessionID string) error {
+// PromoteMFA remplace la session partielle par une nouvelle valeur : un cookie capté avant
+// le second facteur ne vaut rien après. created_at est conservé, donc l'échéance absolue aussi.
+func (s *authStore) PromoteMFA(sessionID string) (cookie string, exp time.Time, err error) {
+	old, err := hex.DecodeString(sessionID)
+	if err != nil {
+		return "", time.Time{}, errNoSession
+	}
+	raw, h := newSessionValue()
+	now := authNow().Unix()
+	err = s.inTx(func(tx *sql.Tx) error {
+		var uid, created int64
+		var ip, ua string
+		err := tx.QueryRow(`SELECT user_id,created_at,ip,ua FROM sessions WHERE id_hash=? AND mfa_at IS NULL AND created_at > ?`,
+			old, now-int64(thMFAWindow/time.Second)).Scan(&uid, &created, &ip, &ua)
+		if errors.Is(err, sql.ErrNoRows) {
+			return errNoSession
+		}
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`DELETE FROM sessions WHERE id_hash=?`, old); err != nil {
+			return err
+		}
+		abs := created + int64(sessAbsolute/time.Second)
+		exp = time.Unix(abs, 0)
+		_, err = tx.Exec(`INSERT INTO sessions(id_hash,user_id,created_at,last_seen_at,expires_at,ip,ua,mfa_at) VALUES(?,?,?,?,?,?,?,?)`,
+			h, uid, created, now, min(now+int64(sessIdle/time.Second), abs), ip, ua, now)
+		return err
+	})
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	return base64.RawURLEncoding.EncodeToString(raw), exp, nil
+}
+
+// RevokeSession porte ce nom car authStore.Revoke retire déjà des droits de home_acl.
+func (s *authStore) RevokeSession(sessionID string) error {
 	h, err := hex.DecodeString(sessionID)
 	if err != nil {
 		return errNoSession
 	}
-	res, err := s.db.Exec(`UPDATE sessions SET mfa_at=? WHERE id_hash=?`, authNow().Unix(), h)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n != 1 {
-		return errNoSession
-	}
-	return nil
+	_, err = s.db.Exec(`DELETE FROM sessions WHERE id_hash=?`, h)
+	return err
 }
 
-// RevokeSession porte ce nom car authStore.Revoke retire déjà des droits de home_acl.
-func (s *authStore) RevokeSession(sessionID string) {
-	if h, err := hex.DecodeString(sessionID); err == nil {
-		s.db.Exec(`DELETE FROM sessions WHERE id_hash=?`, h)
-	}
-}
-
-func (s *authStore) RevokeUser(userID int64) {
-	s.db.Exec(`DELETE FROM sessions WHERE user_id=?`, userID)
+func (s *authStore) RevokeUser(userID int64) error {
+	_, err := s.db.Exec(`DELETE FROM sessions WHERE user_id=?`, userID)
+	return err
 }
 
 func csrfOK(r *http.Request, p *Principal) bool {
