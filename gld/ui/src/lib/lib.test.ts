@@ -279,3 +279,20 @@ describe("dossiers sans session", () => {
     expect(buildView(data, "#prod", {}, null).entries.map((e) => e.g.project)).toEqual([])
   })
 })
+
+import { rehypeNoBreak } from "./noBreak"
+describe("tirets insécables", () => {
+  it("les mots courts à tirets restent d'un bloc, les longs et le code non", () => {
+    const tree = {
+      type: "root",
+      children: [
+        { type: "element", tagName: "p", children: [{ type: "text", value: "voir UI-01 et un-identifiant-vraiment-beaucoup-trop-long fin" }] },
+        { type: "element", tagName: "code", children: [{ type: "text", value: "a-b" }] },
+      ],
+    }
+    rehypeNoBreak()(tree)
+    const p = tree.children[0].children as { type: string; value?: string; tagName?: string }[]
+    expect(p.map((n) => n.value ?? n.tagName)).toEqual(["voir ", "span", " et un-identifiant-vraiment-beaucoup-trop-long fin"])
+    expect(tree.children[1].children[0].type).toBe("text")
+  })
+})
