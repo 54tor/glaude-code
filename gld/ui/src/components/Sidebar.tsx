@@ -271,7 +271,6 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             active={r.kind === "recent"}
             {...link({ kind: "recent" })}
           />
-          <NavItem icon={Flame} label={t("shell.app.title.active")} n={p.counts.active} active={r.kind === "active"} {...link({ kind: "active" })} />
           <NavItem icon={Inbox} label={t("shell.app.title.all")} n={p.counts.all} active={r.kind === "all"} {...link({ kind: "all" })} />
           <NavItem icon={Trash2} label={t("shell.sidebar.trash")} active={false} onClick={() => setTrashOpen(true)} />
           <NavItem icon={History} label={t("shell.app.title.tabs")} active={r.kind === "tabs"} {...link({ kind: "tabs" })} />
