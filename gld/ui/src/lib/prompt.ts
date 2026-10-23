@@ -178,7 +178,7 @@ function multiSelect(lines: string[], above: (at: number) => string, recapAt: (h
 // l'écran visible s'il est déjà remonté.
 function recap(all: string[], head: number): string | undefined {
   let from = head
-  while (from > 0 && head - from < 80 && !/^\s*●/.test(all[from])) from--
+  while (from > 0 && head - from < 200 && !/^\s*●/.test(all[from])) from--
   const text = all.slice(from, head).filter((l) => !/^[─━╌▔\s]+$/.test(l)).join("\n").trim()
   return text || undefined
 }

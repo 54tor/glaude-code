@@ -251,13 +251,14 @@ func paneFor(id string) (string, error) {
 	return p, nil
 }
 
-// sessionScreen : le texte affiché dans le panneau de la session (écran visible, sans couleurs), espaces de fin retirés.
+// sessionScreen : le texte du panneau de la session (écran visible et 200 lignes d'historique, sans couleurs), espaces de fin retirés.
+// L'historique sert à retrouver le message de Claude qui précède une question trop longue pour l'écran.
 func sessionScreen(id string) (string, error) {
 	p, err := paneFor(id)
 	if err != nil {
 		return "", err
 	}
-	out, err := tmuxRun("", "capture-pane", "-p", "-t", p)
+	out, err := tmuxRun("", "capture-pane", "-p", "-S", "-200", "-t", p)
 	if err != nil {
 		return "", err
 	}
