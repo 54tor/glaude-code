@@ -151,6 +151,7 @@ func termWS(w http.ResponseWriter, r *http.Request) {
 	cmd := exec.Command("tmux", "new-session", "-t", t.sess, "-s", name, ";",
 		"set-option", "destroy-unattached", "on", ";", "select-window", "-t", t.win, ";", "select-pane", "-t", t.pane)
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
+	applyRunAs(cmd) // avant pty.StartWithSize, qui complète SysProcAttr sans le remplacer
 	f, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: uint16(t.rows), Cols: uint16(t.cols)})
 	if err != nil {
 		c.Close(websocket.StatusInternalError, "tmux inutilisable")

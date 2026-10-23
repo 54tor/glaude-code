@@ -136,7 +136,10 @@ func withPath(c *exec.Cmd) *exec.Cmd {
 	if runtime.GOOS == "windows" {
 		return c
 	}
-	home, _ := os.UserHomeDir()
+	home := runAsHome()
+	if home == "" {
+		home, _ = os.UserHomeDir()
+	}
 	local := filepath.Join(home, ".local/bin")
 	c.Env = append(os.Environ(), "PATH="+local+":"+os.Getenv("PATH"))
 	// exec.Command a déjà cherché le programme dans le PATH du serveur, où ~/.local/bin peut manquer
@@ -146,6 +149,7 @@ func withPath(c *exec.Cmd) *exec.Cmd {
 			c.Path, c.Err = filepath.Join(local, name), nil
 		}
 	}
+	applyRunAs(c)
 	return c
 }
 

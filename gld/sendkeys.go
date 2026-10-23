@@ -32,6 +32,7 @@ var tmuxRun = func(stdin string, args ...string) (string, error) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "tmux", args...)
 	cmd.WaitDelay = time.Second
+	applyRunAs(cmd)
 	if stdin != "" {
 		cmd.Stdin = strings.NewReader(stdin)
 	}

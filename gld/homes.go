@@ -239,6 +239,10 @@ func startHomeProc(h Home) (*homeProc, error) {
 	token := newToken()
 	cmd := exec.CommandContext(homeCtx, self, "web")
 	cmd.Env = append(childEnv(), "CLAUDE_CONFIG_DIR="+h.Dir, "GLD_WEB_PORT="+port, "GLD_WEB_LISTEN=127.0.0.1", childTokenEnv+"="+token)
+	if runAsOn() {
+		cmd.Env = append(cmd.Env, runAsChildEnv+"=1")
+		applyRunAs(cmd, childTokenEnv)
+	}
 	cmd.Stderr, cmd.Stdout = io.Discard, io.Discard
 	if err := cmd.Start(); err != nil {
 		return nil, err

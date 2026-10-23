@@ -36,6 +36,14 @@ func dispatchCLI(argv []string) (code int, ok bool) {
 			cliMode = true
 			return runTab(args[0]), true
 		}
+		if name == "_canread" && len(args) == 1 { // vérification de GLD_RUN_AS, sous le compte cible (runas_unix.go)
+			cliMode = true
+			return runCanRead(args[0]), true
+		}
+		if name == "_spec" && len(args) == 0 { // fichier d'un onglet, créé sous le compte cible
+			cliMode = true
+			return runSpec(), true
+		}
 		if name == "_loaded" { // hook InstructionsLoaded de Claude Code (loaded.go)
 			cliMode = true
 			return runLoaded(os.Stdin), true
