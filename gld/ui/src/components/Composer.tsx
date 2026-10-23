@@ -17,6 +17,7 @@ import { useActions } from "./actions"
 import { ImageChips, useImages } from "@/hooks/useImages"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { readNdjson } from "@/lib/ndjson"
 
 // Modes d'autorisation de claude -p : sans terminal, Claude ne peut pas demander la permission.
 const modes = () =>
@@ -118,32 +119,20 @@ export function Composer({
       return fail(e instanceof Error ? e.message : String(e))
     }
     if (!res.ok || !res.body) return fail(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `HTTP ${res.status}`)
-    const reader = res.body.getReader()
-    const dec = new TextDecoder()
-    let buf = ""
     try {
-      for (;;) {
-        const { value, done } = await reader.read()
-        buf += dec.decode(value, { stream: !done })
-        const lines = buf.split("\n")
-        buf = lines.pop() ?? ""
-        for (const l of lines) {
-          if (!l.trim()) continue
-          const e = JSON.parse(l) as { msgs?: Msg[]; done?: boolean; ok?: boolean; error?: string; cost?: number; note?: string }
-          if (e.note) toast.info(e.note)
-          if (e.done && !e.ok) failed = true
-          setTurn(
-            (t) =>
-              t && {
-                ...t,
-                msgs: e.msgs ? [...t.msgs, ...e.msgs] : t.msgs,
-                running: e.done ? false : t.running,
-                error: e.done && !e.ok ? e.error || i18n.t("conversation.composer.failed") : t.error,
-                cost: e.cost ?? t.cost,
-              }
-          )
-        }
-        if (done) break
+      for await (const e of readNdjson<{ msgs?: Msg[]; done?: boolean; ok?: boolean; error?: string; cost?: number; note?: string }>(res.body)) {
+        if (e.note) toast.info(e.note)
+        if (e.done && !e.ok) failed = true
+        setTurn(
+          (t) =>
+            t && {
+              ...t,
+              msgs: e.msgs ? [...t.msgs, ...e.msgs] : t.msgs,
+              running: e.done ? false : t.running,
+              error: e.done && !e.ok ? e.error || i18n.t("conversation.composer.failed") : t.error,
+              cost: e.cost ?? t.cost,
+            }
+        )
       }
     } catch (e) {
       return fail(e instanceof Error ? e.message : String(e)) // connexion coupée en cours de réponse
