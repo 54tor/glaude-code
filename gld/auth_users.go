@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -348,23 +349,29 @@ func rightStrings(m map[Right]bool) []string {
 }
 
 func (s *authStore) Grant(userID int64, homeID string, rights ...Right) error {
-	return s.setRights(userID, homeID, true, rights)
+	return s.SetRights(userID, homeID, rights, nil)
 }
 
 func (s *authStore) Revoke(userID int64, homeID string, rights ...Right) error {
-	return s.setRights(userID, homeID, false, rights)
+	return s.SetRights(userID, homeID, nil, rights)
 }
 
-func (s *authStore) setRights(userID int64, homeID string, on bool, rights []Right) error {
+// SetRights accorde puis retire dans une seule transaction : une seule ligne re-signée, rien d'appliqué en cas d'échec.
+func (s *authStore) SetRights(userID int64, homeID string, grant, revoke []Right) error {
 	if homeID == "" {
 		return terr("srv.auth.homeVide")
 	}
-	names := make([]string, len(rights))
-	for i, r := range rights {
+	names := func(rs []Right) string {
+		n := make([]string, len(rs))
+		for i, r := range rs {
+			n[i] = string(r)
+		}
+		return strings.Join(n, ",")
+	}
+	for _, r := range append(slices.Clone(grant), revoke...) {
 		if !validRight(r) {
 			return terr("srv.auth.droitInconnu", "A1", string(r))
 		}
-		names[i] = string(r)
 	}
 	err := s.inTx(func(tx *sql.Tx) error {
 		if _, err := s.userByID(tx, userID); err != nil {
@@ -374,8 +381,11 @@ func (s *authStore) setRights(userID int64, homeID string, on bool, rights []Rig
 		if err != nil {
 			return err
 		}
-		for _, r := range rights {
-			m[r] = on
+		for _, r := range grant {
+			m[r] = true
+		}
+		for _, r := range revoke {
+			m[r] = false
 		}
 		args := []any{userID, homeID}
 		for _, r := range allRights {
@@ -388,11 +398,14 @@ func (s *authStore) setRights(userID int64, homeID string, on bool, rights []Rig
 	if err != nil {
 		return err
 	}
-	op := "revoke"
-	if on {
-		op = "grant"
+	var ops []string
+	if len(grant) > 0 {
+		ops = append(ops, "grant "+homeID+" "+names(grant))
 	}
-	s.event(userID, "acl", op+" "+homeID+" "+strings.Join(names, ","))
+	if len(revoke) > 0 {
+		ops = append(ops, "revoke "+homeID+" "+names(revoke))
+	}
+	s.event(userID, "acl", strings.Join(ops, "; "))
 	return nil
 }
 

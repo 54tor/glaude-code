@@ -196,21 +196,42 @@ func (d *adminAPI) userAdd(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"ok": true, "id": id})
 }
 
-// lastAdmin : target est le seul admin actif à signature valide.
+// lastAdmin : target est le seul admin actif à signature valide. Ne journalise pas les lignes altérées : appelé à chaque
+// désactivation, il remplirait auth_events ; GET /admin/users les signale.
 func (s *authStore) lastAdmin(target int64) (bool, error) {
-	users, bad, err := s.Users()
+	rows, err := s.db.Query(`SELECT `+userCols+` FROM users WHERE id<>? AND is_admin=1 AND disabled=0`, target)
 	if err != nil {
 		return false, err
 	}
-	for _, u := range users {
-		if u.ID != target && u.Admin && !u.Disabled && !bad[u.ID] {
+	defer rows.Close()
+	for rows.Next() {
+		u, err := s.scanUser(rows)
+		if err == nil && u.Admin && !u.Disabled {
 			return false, nil
 		}
+		if err != nil && !errors.Is(err, errTamper) {
+			return false, err
+		}
 	}
-	return true, nil
+	return true, rows.Err()
 }
 
-// userDisable : désactiver est une mesure d'urgence, sans réauthentification ; réactiver rend un accès, et l'exige.
+// adminTarget : une cible admin, ou dont la ligne est altérée (statut douteux), exige une réauth fraîche, pour qu'un
+// cookie volé ne suffise pas à écarter les autres admins.
+func (d *adminAPI) adminTarget(w http.ResponseWriter, id int64) (admin, ok bool) {
+	u, err := d.s.userByID(d.s.db, id)
+	switch {
+	case errors.Is(err, errTamper):
+		return true, true
+	case err != nil:
+		d.userErr(w, err)
+		return false, false
+	}
+	return u.Admin, true
+}
+
+// userDisable : désactiver un compte ordinaire est une mesure d'urgence, sans réauthentification ; réactiver rend un accès
+// et désactiver un admin écarte un pair : les deux l'exigent.
 func (d *adminAPI) userDisable(w http.ResponseWriter, r *http.Request) {
 	p := d.admin(w, r)
 	var req struct {
@@ -225,7 +246,8 @@ func (d *adminAPI) userDisable(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.admin.soiMeme")})
 		return
 	}
-	if !req.Disabled && !d.fresh(w, r, p, req.Reauth) {
+	admin, ok := d.adminTarget(w, req.ID)
+	if !ok || ((!req.Disabled || admin) && !d.fresh(w, r, p, req.Reauth)) {
 		return
 	}
 	d.mu.Lock()
@@ -358,13 +380,7 @@ func (d *adminAPI) acl(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if len(grant) > 0 {
-		err = d.s.Grant(req.UserID, req.HomeID, grant...)
-	}
-	if err == nil && len(revoke) > 0 {
-		err = d.s.Revoke(req.UserID, req.HomeID, revoke...)
-	}
-	if err != nil {
+	if err := d.s.SetRights(req.UserID, req.HomeID, grant, revoke); err != nil {
 		d.userErr(w, err)
 		return
 	}
@@ -467,10 +483,18 @@ func (d *adminAPI) sessionsList(w http.ResponseWriter, r *http.Request) {
 func (d *adminAPI) sessionsRevoke(w http.ResponseWriter, r *http.Request) {
 	p := d.admin(w, r)
 	var req struct {
+		adminReq
 		UserID int64 `json:"user_id"`
 	}
 	if p == nil || !decodeAuth(w, r, &req) {
 		return
+	}
+	// Ses propres sessions : pas de pair à écarter.
+	if req.UserID != p.User.ID {
+		admin, ok := d.adminTarget(w, req.UserID)
+		if !ok || (admin && !d.fresh(w, r, p, req.Reauth)) {
+			return
+		}
 	}
 	if err := d.s.RevokeUser(req.UserID); err != nil {
 		authInternal(w, err)
@@ -504,6 +528,8 @@ func (s *authStore) DeleteHomesACL(ids []string, by int64, ip string) error {
 	}
 	return err
 }
+
+func init() { onHomesRemoved = homesRemovedACL }
 
 // homesRemovedACL : branché sur onHomesRemoved ; sans garde (mode ouvert, home enfant), aucune ligne à retirer.
 func homesRemovedACL(r *http.Request, ids []string) {
