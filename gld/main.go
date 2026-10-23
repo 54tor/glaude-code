@@ -162,6 +162,7 @@ func authState() (*authStore, bool, error) {
 	}
 	if authUsers {
 		authSeen = true
+		warnGuard(true, os.Stderr)
 	}
 	return authSt, authUsers, authErr
 }

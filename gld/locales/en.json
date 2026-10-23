@@ -1,8 +1,13 @@
 {
+  "cli.auth.help": "\ngld-auth (or gld auth) — protection of the authentication database.\n\n  gld auth managed-settings    prints Claude Code's managed-settings.json\n                               (deny rules, Bash hook, sandbox) for the administrator to install\n",
+  "cli.auth.managedTarget": "install as root at: {{.A1}} (gld never writes it itself)",
+  "cli.guard.badInput": "gld: unreadable hook input, command refused",
+  "cli.guard.denied": "gld: command refused, it targets gld's authentication database",
   "cli.main.authMode": "multi-user mode active: account sign-in is required; the token is only accepted as an Authorization: Bearer header.",
   "cli.main.authRefused": "accounts database unusable ({{.A1}}): gld refuses to start. Check the master key (GLD_AUTH_KEY, keyring, auth.key) and the directory permissions.",
   "cli.main.flagListen": "listen address (default 127.0.0.1; 0.0.0.0 for the whole network, with a token)",
   "cli.main.flagVersion": "print the version and exit",
+  "cli.main.guardMissing": "⚠ guard not installed ({{.A1}} missing or incomplete): a user with config_write or exec can read the authentication database. Generate the file with \"gld auth managed-settings\".",
   "cli.main.plainHTTP": "⚠ gld is listening on {{.A1}}: access is protected by a token, but over plain HTTP.",
   "cli.main.preferTunnel": "  Prefer a tunnel (SSH, Tailscale) or a TLS proxy; do not expose it on the Internet.",
   "cli.main.stopped": "stopped.",

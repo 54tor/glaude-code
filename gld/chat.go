@@ -142,7 +142,7 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// Pas lié à la requête : fermer l'onglet ne coupe pas Claude au milieu d'un tour (seul « Arrêter » le fait).
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-	cmd := withPath(exec.CommandContext(ctx, "claude", chatArgs(flags, req.ID, req.Mode, req.Prompt)...))
+	cmd := withPath(exec.CommandContext(ctx, "claude", chatArgs(append(guardArgs(), flags...), req.ID, req.Mode, req.Prompt)...))
 	cmd.Dir = cwd
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
