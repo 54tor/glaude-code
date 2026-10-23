@@ -28,7 +28,7 @@ func routesSkills(mux *http.ServeMux) {
 			Create    bool
 		}
 		if json.NewDecoder(io.LimitReader(r.Body, skillMaxBytes+4096)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		err := saveSkill(req.Key, req.Text, req.Create)
@@ -37,12 +37,12 @@ func routesSkills(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Enregistré"})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_sessions.enregistre")})
 	})
 	mux.HandleFunc("POST /skill-rm", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Key string }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		err := removeSkill(req.Key)
@@ -51,12 +51,12 @@ func routesSkills(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Supprimé (copie à la corbeille)"})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_skills.supprimeCopieALa")})
 	})
 	mux.HandleFunc("POST /skill-copy", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Key, To string }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		dst, err := copySkill(req.Key, req.To)
@@ -65,7 +65,7 @@ func routesSkills(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Copié", "key": dst})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_skills.copie"), "key": dst})
 	})
 	// Rédaction ou révision par un petit modèle : rien n'est enregistré, l'éditeur s'ouvre avec le texte.
 	mux.HandleFunc("POST /skill-draft", func(w http.ResponseWriter, r *http.Request) {
@@ -74,7 +74,7 @@ func routesSkills(mux *http.ServeMux) {
 			Refs                    []string
 		}
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		text, cost, err := skillDraft(req.Model, req.Instruction, req.Key, req.Refs)
@@ -83,6 +83,6 @@ func routesSkills(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Brouillon prêt", "text": text, "cost": cost})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_memory.brouillonPret"), "text": text, "cost": cost})
 	})
 }

@@ -38,11 +38,11 @@ func snippetDraft(model, instruction, text string) (string, float64, error) {
 	instruction, text = strings.TrimSpace(instruction), strings.TrimSpace(text)
 	switch {
 	case !slices.Contains(writeModels, model):
-		return "", 0, errors.New("modèle inconnu")
+		return "", 0, terr("srv.memwrite.modeleInconnu")
 	case instruction == "" && text == "":
-		return "", 0, errors.New("rien à mettre en forme")
+		return "", 0, terr("srv.memwrite.rienAMettreEn")
 	case len(instruction) > 8<<10 || len(text) > snippetMax:
-		return "", 0, errors.New("consigne ou texte trop long")
+		return "", 0, terr("srv.memwrite.consigneOuTexteTrop")
 	}
 	if instruction == "" {
 		instruction = "Mets ce texte en forme comme une commande Claude Code."
@@ -70,7 +70,7 @@ Réponds uniquement avec le contenu complet du fichier, sans bloc de code englob
 func memWritePrompt(instruction, key string, refs []string) (string, error) {
 	instruction = strings.TrimSpace(instruction)
 	if instruction == "" || len(instruction) > 8<<10 || len(refs) > 20 {
-		return "", errors.New("consigne vide ou trop longue, ou trop de références")
+		return "", terr("srv.memwrite.consigneVideOuTrop")
 	}
 	var b strings.Builder
 	b.WriteString("Consigne : " + instruction + "\n")
@@ -124,7 +124,7 @@ var memDraft = func(model, system, prompt string) (string, float64, error) {
 	}
 	if json.Unmarshal(out, &r) != nil {
 		if err == nil {
-			err = errors.New("réponse illisible")
+			err = terr("srv.memwrite.reponseIllisible")
 		}
 		return "", 0, err
 	}
@@ -140,7 +140,7 @@ var memDraft = func(model, system, prompt string) (string, float64, error) {
 
 func memWriteDraft(model, instruction, key string, refs []string) (string, float64, error) {
 	if !slices.Contains(writeModels, model) {
-		return "", 0, errors.New("modèle inconnu")
+		return "", 0, terr("srv.memwrite.modeleInconnu")
 	}
 	prompt, err := memWritePrompt(instruction, key, refs)
 	if err != nil {

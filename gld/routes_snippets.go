@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -35,7 +34,7 @@ func routesSnippets(mux *http.ServeMux) {
 			Create    bool // nouveau snippet : refusé s'il existe déjà
 		}
 		if json.NewDecoder(io.LimitReader(r.Body, snippetMax+1<<10)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		err := saveSnippet(req.Key, req.Text, req.Create)
@@ -44,12 +43,12 @@ func routesSnippets(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Snippet enregistré"})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_snippets.snippetEnregistre")})
 	})
 	mux.HandleFunc("POST /snippet-draft", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Model, Instruction, Text string }
 		if json.NewDecoder(io.LimitReader(r.Body, snippetMax+16<<10)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		text, cost, err := snippetDraft(req.Model, req.Instruction, req.Text)
@@ -58,7 +57,7 @@ func routesSnippets(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Mise en forme prête", "text": text, "cost": cost})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_snippets.miseEnFormePrete"), "text": text, "cost": cost})
 	})
 	mux.HandleFunc("POST /snippet-rm", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Key string }
@@ -69,13 +68,13 @@ func routesSnippets(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Snippet supprimé"})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_snippets.snippetSupprime")})
 	})
 	// Export : les snippets d'un scope en archive zip ; import : fichiers .md ou archives .zip (multipart).
 	mux.HandleFunc("GET /snippets-export", func(w http.ResponseWriter, r *http.Request) {
 		scope := r.URL.Query().Get("scope")
 		if scope != "" && !safeDir(scope) {
-			http.Error(w, "scope invalide", 400)
+			http.Error(w, L("srv.routes_snippets.scopeInvalide"), 400)
 			return
 		}
 		b, n, err := exportSnippets(scope)
@@ -95,12 +94,12 @@ func routesSnippets(mux *http.ServeMux) {
 	mux.HandleFunc("POST /snippets-import", func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 16<<20)
 		if r.ParseMultipartForm(16<<20) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "envoi invalide ou trop gros (16 Mo au plus)"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.routes_snippets.envoiInvalideOuTrop")})
 			return
 		}
 		scope := r.FormValue("scope")
 		if scope != "" && !safeDir(scope) {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "scope invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.routes_snippets.scopeInvalide")})
 			return
 		}
 		var files []ImportFile
@@ -115,9 +114,9 @@ func routesSnippets(mux *http.ServeMux) {
 		}
 		done, skipped, err := importSnippets(scope, files, r.FormValue("overwrite") == "1")
 		journal("snippets-import %q : %d importé(s), %d déjà présent(s) : %v", scope, len(done), len(skipped), errOr(err))
-		out := fmt.Sprintf("%d importé(s)", len(done))
+		out := L("srv.snippets.imported", "A1", len(done))
 		if len(skipped) > 0 {
-			out += fmt.Sprintf(", %d déjà présent(s), laissé(s) tel(s) quel(s) : %s", len(skipped), strings.Join(skipped, ", "))
+			out += L("srv.snippets.skipped", "A1", len(skipped), "A2", strings.Join(skipped, ", "))
 		}
 		if err != nil {
 			out += "\n" + err.Error()

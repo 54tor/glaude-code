@@ -79,7 +79,7 @@ func projectCwd(dir string) string {
 
 // memResolve traduit une clé en (dossier de base, chemin relatif), après validation stricte.
 func memResolve(key string) (string, string, error) {
-	bad := errors.New("fichier de mémoire invalide")
+	bad := terr("srv.memory.fichierDeMemoireInvalide")
 	switch {
 	case key == "g/CLAUDE.md":
 		return cfgDir(), "CLAUDE.md", nil
@@ -103,10 +103,10 @@ func memResolve(key string) (string, string, error) {
 				if f == a {
 					c := projectCwd(d)
 					if fi, err := os.Stat(c); c == "" || err != nil || !fi.IsDir() {
-						return "", "", errors.New("dossier du projet introuvable")
+						return "", "", terr("srv.memory.dossierDuProjetIntrouvable")
 					}
 					if globalClaude(filepath.Join(c, filepath.FromSlash(f))) {
-						return "", "", errors.New("c'est le CLAUDE.md global : il se gère dans la section Globale")
+						return "", "", terr("srv.memory.cEstLeClaude")
 					}
 					return c, filepath.FromSlash(f), nil
 				}
@@ -120,15 +120,15 @@ func memResolve(key string) (string, string, error) {
 // globales (un projet lancé depuis ~).
 func projectRulesDir(cwd string) (string, error) {
 	if fi, err := os.Stat(cwd); cwd == "" || err != nil || !fi.IsDir() {
-		return "", errors.New("dossier du projet introuvable")
+		return "", terr("srv.memory.dossierDuProjetIntrouvable")
 	}
 	rules := filepath.Join(cwd, ".claude", "rules")
 	if rules == filepath.Join(cfgDir(), "rules") {
-		return "", errors.New("ce sont les règles globales : elles se gèrent dans la section Globale")
+		return "", terr("srv.memory.ceSontLesRegles")
 	}
 	for _, p := range []string{filepath.Join(cwd, ".claude"), rules} {
 		if fi, err := os.Lstat(p); err == nil && fi.Mode()&os.ModeSymlink != 0 {
-			return "", errors.New(".claude est un lien symbolique : refusé")
+			return "", terr("srv.memory.claudeEstUnLien")
 		}
 	}
 	return rules, nil
@@ -236,7 +236,7 @@ func memRead(key string) (string, error) {
 	defer r.Close()
 	b, err := r.ReadFile(rel)
 	if err == nil && (len(b) > memMax || !utf8.Valid(b)) {
-		err = errors.New("fichier trop gros ou pas du texte")
+		err = terr("srv.memory.fichierTropGrosOu")
 	}
 	return string(b), err
 }
@@ -247,7 +247,7 @@ func memSave(key, text string) error { return memWrite(key, text, true) }
 // memWrite : keep met d'abord la version actuelle à la corbeille (pas pour les mises à jour d'index, dérivées).
 func memWrite(key, text string, keep bool) error {
 	if len(text) > memMax || !utf8.ValidString(text) {
-		return errors.New("texte trop long ou invalide")
+		return terr("srv.memory.texteTropLongOu")
 	}
 	base, rel, err := memResolve(key)
 	if err != nil {
@@ -332,7 +332,7 @@ func memDelete(key string, trash bool) error {
 // mergePrompt : la demande de fusion faite à Claude, et le dossier où la lancer (le projet concerné, sinon ~).
 func mergePrompt(keys []string) (string, string, error) {
 	if len(keys) < 2 || len(keys) > 20 {
-		return "", "", errors.New("choisis de 2 à 20 fichiers")
+		return "", "", terr("srv.memory.choisisDeAFichiers")
 	}
 	home, _ := os.UserHomeDir()
 	cwd := ""
@@ -345,7 +345,7 @@ func mergePrompt(keys []string) (string, string, error) {
 		}
 		p := filepath.Join(base, rel)
 		if _, err := os.Stat(p); err != nil {
-			return "", "", errors.New("introuvable : " + p)
+			return "", "", terr("srv.memory.introuvable", "A1", p)
 		}
 		b.WriteString("- " + p + "\n")
 		if d, _, ok := strings.Cut(k[2:], "/"); cwd == "" && (k[0] == 'm' || k[0] == 'p') && ok {
@@ -376,7 +376,7 @@ func mergePrompt(keys []string) (string, string, error) {
 // transcripts) ou vers les règles globales (to = "global"), ou la copie si keep. Sans écraser ; l'index suit.
 func memTransfer(key, to string, keep bool) (string, error) {
 	if !strings.HasPrefix(key, "m/") && !strings.HasPrefix(key, "g/rules/") && !strings.HasPrefix(key, "r/") {
-		return "", errors.New("seules les entrées de mémoire et les règles se déplacent")
+		return "", terr("srv.memory.seulesLesEntreesDe")
 	}
 	_, rel, err := memResolve(key)
 	if err != nil {
@@ -387,28 +387,28 @@ func memTransfer(key, to string, keep bool) (string, error) {
 	case to == "global":
 	case strings.HasPrefix(to, "r:"): // règles d'un projet (to = « r:<dossier> »)
 		if !safeDir(to[2:]) {
-			return "", errors.New("destination invalide")
+			return "", terr("srv.memory.destinationInvalide")
 		}
 		dst = "r/" + to[2:] + "/" + rel
 		if _, _, err := memResolve(dst); err != nil {
 			return "", err
 		}
 	case strings.HasPrefix(key, "r/"):
-		return "", errors.New("une règle de projet va vers les règles globales ou celles d'un autre projet")
+		return "", terr("srv.memory.uneRegleDeProjet")
 	default:
 		if !safeDir(to) {
-			return "", errors.New("destination invalide")
+			return "", terr("srv.memory.destinationInvalide")
 		}
 		if fi, err := os.Stat(filepath.Join(root, to)); err != nil || !fi.IsDir() {
-			return "", errors.New("projet de destination introuvable")
+			return "", terr("srv.memory.projetDeDestinationIntrouvable")
 		}
 		dst = "m/" + to + "/" + rel
 	}
 	if dst == key {
-		return "", errors.New("déjà à cet endroit")
+		return "", terr("srv.memory.dejaACetEndroit")
 	}
 	if _, err := memRead(dst); err == nil || !errors.Is(err, os.ErrNotExist) {
-		return "", errors.New("un fichier du même nom existe déjà à destination")
+		return "", terr("srv.memory.unFichierDuMeme")
 	}
 	text, err := memRead(key)
 	if err != nil {

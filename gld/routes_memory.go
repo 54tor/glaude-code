@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -37,7 +36,7 @@ func routesMemory(mux *http.ServeMux) {
 			Index     bool // nouvelle entrée : l'ajouter aussi à MEMORY.md
 		}
 		if json.NewDecoder(io.LimitReader(r.Body, memMax+1<<10)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		err := memSave(req.Key, req.Text)
@@ -49,7 +48,7 @@ func routesMemory(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Enregistré"})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_sessions.enregistre")})
 	})
 	mux.HandleFunc("POST /memory-move", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
@@ -57,7 +56,7 @@ func routesMemory(mux *http.ServeMux) {
 			Copy    bool
 		}
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		dst, err := memTransfer(req.Key, req.To, req.Copy)
@@ -66,9 +65,9 @@ func routesMemory(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		out := "Déplacé"
+		out := L("srv.routes_memory.moved")
 		if req.Copy {
-			out = "Copié"
+			out = L("srv.routes_skills.copie")
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "out": out, "key": dst})
 	})
@@ -79,7 +78,7 @@ func routesMemory(mux *http.ServeMux) {
 			Refs                    []string
 		}
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		text, cost, err := memWriteDraft(req.Model, req.Instruction, req.Key, req.Refs)
@@ -88,7 +87,7 @@ func routesMemory(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Brouillon prêt", "text": text, "cost": cost})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_memory.brouillonPret"), "text": text, "cost": cost})
 	})
 	// Santé, portée des règles, recherche plein texte, désactivation (memmeta.go).
 	mux.HandleFunc("GET /memory-health", func(w http.ResponseWriter, r *http.Request) {
@@ -97,7 +96,7 @@ func routesMemory(mux *http.ServeMux) {
 	mux.HandleFunc("POST /memory-repair", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Dir string }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		rm, add, err := memRepairIndex(req.Dir)
@@ -106,7 +105,7 @@ func routesMemory(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": fmt.Sprintf("Index réparé : %d ligne(s) retirée(s), %d ajoutée(s)", rm, add)})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_memory.indexRepareLigneS", "A1", rm, "A2", add)})
 	})
 	mux.HandleFunc("GET /memory-matches", func(w http.ResponseWriter, r *http.Request) {
 		files, total, trunc, err := memMatches(r.URL.Query().Get("key"), r.URL.Query().Get("dir"))
@@ -122,7 +121,7 @@ func routesMemory(mux *http.ServeMux) {
 			Paths []string
 		}
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<14)).Decode(&req) != nil || !strings.HasPrefix(req.Key, "g/rules/") {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		text, err := memRead(req.Key)
@@ -137,12 +136,12 @@ func routesMemory(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Portée enregistrée"})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_memory.porteeEnregistree")})
 	})
 	mux.HandleFunc("POST /memory-type", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Key, Type string }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil || !(strings.HasPrefix(req.Key, "m/") || strings.HasPrefix(req.Key, "g/rules/")) {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		text, err := memRead(req.Key)
@@ -157,12 +156,12 @@ func routesMemory(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Type enregistré"})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_memory.typeEnregistre")})
 	})
 	mux.HandleFunc("POST /memory-fix", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Key string }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil || !(strings.HasPrefix(req.Key, "m/") || strings.HasPrefix(req.Key, "g/rules/")) {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		text, err := memRead(req.Key)
@@ -177,13 +176,13 @@ func routesMemory(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Front matter corrigé"})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_memory.frontMatterCorrige")})
 	})
 	// Décompte réel des tokens (tokens.go) : quelques fichiers par appel, le navigateur boucle.
 	mux.HandleFunc("POST /memory-tokens", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Keys []string }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<14)).Decode(&req) != nil || len(req.Keys) == 0 || len(req.Keys) > 6 {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		counts, errs, total := map[string]int{}, map[string]string{}, 0.0
@@ -208,7 +207,7 @@ func routesMemory(mux *http.ServeMux) {
 	mux.HandleFunc("POST /memory-lint", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Scope string }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil || req.Scope == "" {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		findings, cost, err := memLint(req.Scope)
@@ -242,7 +241,7 @@ func routesMemory(mux *http.ServeMux) {
 	mux.HandleFunc("POST /memory-toggle", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Key string }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		dst, err := memToggle(req.Key)
@@ -251,16 +250,16 @@ func routesMemory(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		out := "Règle désactivée"
+		out := L("srv.routes_memory.ruleOff")
 		if !strings.HasSuffix(dst, ".off") {
-			out = "Règle réactivée"
+			out = L("srv.routes_memory.ruleOn")
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "out": out, "key": dst})
 	})
 	mux.HandleFunc("POST /memory-rm", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Key string }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		err := memRemove(req.Key)
@@ -269,7 +268,7 @@ func routesMemory(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Supprimé"})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_memory.supprime")})
 	})
 	// Sessions ouvertes sauvegardées (tabs.go) : liste, sauvegarde manuelle (nom facultatif), suppression.
 	mux.HandleFunc("POST /memory-merge", func(w http.ResponseWriter, r *http.Request) {
@@ -280,7 +279,7 @@ func routesMemory(mux *http.ServeMux) {
 			Prompt string // texte relu et modifié dans la fenêtre de saisie : remplace celui du serveur
 		}
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		prompt, cwd, err := mergePrompt(req.Keys)
@@ -290,13 +289,13 @@ func routesMemory(mux *http.ServeMux) {
 		}
 		if req.Prompt != "" {
 			if len(req.Prompt) > 32<<10 || !utf8.ValidString(req.Prompt) || strings.ContainsRune(req.Prompt, 0) {
-				writeJSON(w, 200, map[string]any{"ok": false, "out": "prompt trop long ou invalide"})
+				writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.routes_memory.promptTropLongOu")})
 				return
 			}
 			prompt = req.Prompt
 		}
 		if !req.Launch {
-			writeJSON(w, 200, map[string]any{"ok": true, "out": "Prompt copié", "prompt": prompt})
+			writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_memory.promptCopie"), "prompt": prompt})
 			return
 		}
 		args, err := claudeArgs(req.Args)
@@ -330,7 +329,7 @@ func routesMemory(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Restauré : " + t.Path, "key": t.Key})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_memory.restaure", "A1", t.Path), "key": t.Key})
 	})
 	mux.HandleFunc("POST /trash-purge", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
@@ -339,7 +338,7 @@ func routesMemory(mux *http.ServeMux) {
 		}
 		json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req)
 		if req.ID == "" && !req.All {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": "précise un élément, ou all: true pour tout vider"})
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.routes_memory.preciseUnElementOu")})
 			return
 		}
 		err := trashPurge(req.ID)
@@ -348,7 +347,7 @@ func routesMemory(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "Corbeille vidée"})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_memory.corbeilleVidee")})
 	})
 	// Groupes virtuels et favoris : le navigateur envoie l'ensemble, le serveur le valide et le remplace.
 }
