@@ -15,7 +15,7 @@ import (
 
 var trustRe = regexp.MustCompile(`(?i)do you trust the files in this folder|is this a project you created or one you trust|yes, i trust this folder`)
 
-type trustPane struct{ pane, dir string }
+type trustPane struct{ pane, dir, screen string }
 
 // trustPanes : les panneaux (au plus 40 examinés) dont l'écran montre le dialogue de confiance, avec leur dossier courant. Seuls
 // ceux où tourne Claude Code (claude, ou node pour une installation npm) comptent : un cat ou un éditeur qui affiche ce texte non.
@@ -32,10 +32,48 @@ func trustPanes() []trustPane {
 		}
 		id, dir := f[0], f[2]
 		if scr, err := tmuxRun("", "capture-pane", "-p", "-t", id); err == nil && trustRe.MatchString(scr) {
-			res = append(res, trustPane{id, filepath.Clean(dir)})
+			res = append(res, trustPane{id, filepath.Clean(dir), scr})
 		}
 	}
 	return res
+}
+
+var trustOpt = regexp.MustCompile(`^\s*(❯|>)?\s*(?:\d+[.)]\s*)?((?:Yes|No)\b.*)$`)
+
+// trustKeys : les touches pour répondre au dialogue tel qu'il est affiché. Les versions récentes n'ont plus de chiffres et le curseur
+// (❯) part sur « No, exit » : on le déplace sur la réponse voulue puis on valide. nil si l'écran ne montre pas les deux réponses.
+func trustKeys(screen string, yes bool) []string {
+	var opts []string
+	cursor := -1
+	for _, l := range strings.Split(screen, "\n") {
+		if m := trustOpt.FindStringSubmatch(l); m != nil {
+			if m[1] != "" {
+				cursor = len(opts)
+			}
+			opts = append(opts, strings.ToLower(m[2]))
+		}
+	}
+	want := -1
+	for i, o := range opts {
+		if strings.HasPrefix(o, "yes") == yes {
+			want = i
+			break
+		}
+	}
+	if cursor < 0 || want < 0 || len(opts) < 2 {
+		return nil
+	}
+	var keys []string
+	for i := cursor; i != want; {
+		if want > cursor {
+			keys = append(keys, "Down")
+			i++
+		} else {
+			keys = append(keys, "Up")
+			i--
+		}
+	}
+	return append(keys, "Enter")
 }
 
 func routesTrust(mux *http.ServeMux) {
@@ -55,16 +93,24 @@ func routesTrust(mux *http.ServeMux) {
 			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
 			return
 		}
-		key := "2"
-		if req.Yes {
-			key = "1"
-		}
 		n := 0
 		for _, p := range trustPanes() {
-			if p.dir == filepath.Clean(req.Dir) {
-				if _, err := tmuxRun("", "send-keys", "-t", p.pane, key); err == nil {
-					n++
+			if p.dir != filepath.Clean(req.Dir) {
+				continue
+			}
+			keys := trustKeys(p.screen, req.Yes)
+			if keys == nil {
+				continue
+			}
+			ok := true
+			for _, k := range keys {
+				if _, err := tmuxRun("", "send-keys", "-t", p.pane, k); err != nil {
+					ok = false
+					break
 				}
+			}
+			if ok {
+				n++
 			}
 		}
 		journal("trust-answer %s oui=%v : %d panneau(x)", req.Dir, req.Yes, n)

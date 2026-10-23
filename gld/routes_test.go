@@ -65,7 +65,7 @@ func TestHTTPTrust(t *testing.T) {
 		case "list-panes":
 			return "%1\tclaude\t/home/u/neuf\n%2\tclaude\t/home/u/autre\n", nil
 		case "capture-pane":
-			return "Do you trust the files in this folder?\n", nil
+			return "Is this a project you created or one you trust?\n ❯ No, exit\n   Yes, I trust this folder\n", nil
 		case "send-keys":
 			sent = append(sent, a[2]+"="+a[3])
 		}
@@ -80,7 +80,8 @@ func TestHTTPTrust(t *testing.T) {
 	ok(t, h, "/trust-answer", `{"dir":"/home/u/ailleurs","yes":true}`, false, "plus aucune question")
 	ok(t, h, "/trust-answer", `{"dir":"/home/u/neuf/","yes":true}`, true, "")
 	ok(t, h, "/trust-answer", `{"dir":"/home/u/autre","yes":false}`, true, "")
-	if strings.Join(sent, " ") != "%1=1 %2=2" {
+	// oui : curseur sur « No, exit » → Bas puis Entrée ; non : le curseur y est déjà → Entrée
+	if strings.Join(sent, " ") != "%1=Down %1=Enter %2=Enter" {
 		t.Fatalf("touches envoyées : %v", sent)
 	}
 }
