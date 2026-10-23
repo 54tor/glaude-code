@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"unicode/utf8"
 )
 
@@ -150,10 +151,23 @@ type MemTarget struct {
 	Project string `json:"project"`
 }
 
+// memTargets : un projet par dossier de transcripts, sans lire ses fichiers de mémoire (ce que memList fait en plus).
+func memTargets() []MemTarget {
+	dirs, _ := os.ReadDir(root)
+	targets := []MemTarget{}
+	for _, d := range dirs {
+		if d.IsDir() {
+			targets = append(targets, MemTarget{d.Name(), projectCwd(d.Name())})
+		}
+	}
+	sort.Slice(targets, func(i, j int) bool { return targets[i].Project < targets[j].Project })
+	return targets
+}
+
 // liveProjects : les projets dont le dossier de travail existe encore, avec ou sans fichier de mémoire. Les réglages, skills et
 // .mcp.json d'un projet vivent dans son dossier, pas dans ~/.claude.
 func liveProjects() []MemTarget {
-	_, _, targets := memList()
+	targets := memTargets()
 	out := []MemTarget{}
 	for _, t := range targets {
 		if fi, err := os.Stat(t.Project); t.Project != "" && err == nil && fi.IsDir() {
@@ -244,11 +258,15 @@ func memRead(key string) (string, error) {
 // memSave remplace le fichier (écriture atomique, droits conservés) ou le crée ; la version remplacée va à la corbeille.
 func memSave(key, text string) error { return memWrite(key, text, true) }
 
+var memWriteMu sync.Mutex // deux écritures de la même entrée se partageaient le même fichier temporaire
+
 // memWrite : keep met d'abord la version actuelle à la corbeille (pas pour les mises à jour d'index, dérivées).
 func memWrite(key, text string, keep bool) error {
 	if len(text) > memMax || !utf8.ValidString(text) {
 		return terr("srv.memory.texteTropLongOu")
 	}
+	memWriteMu.Lock()
+	defer memWriteMu.Unlock()
 	base, rel, err := memResolve(key)
 	if err != nil {
 		return err

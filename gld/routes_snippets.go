@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"strings"
@@ -88,7 +89,7 @@ func routesSnippets(mux *http.ServeMux) {
 		}
 		journal("snippets-export %q : %d fichier(s)", scope, n)
 		w.Header().Set("Content-Type", "application/zip")
-		w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
+		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
 		w.Write(b)
 	})
 	mux.HandleFunc("POST /snippets-import", func(w http.ResponseWriter, r *http.Request) {

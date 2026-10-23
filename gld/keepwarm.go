@@ -63,8 +63,12 @@ func warmLoad() {
 func warmSave() {
 	b, _ := json.MarshalIndent(warmState, "", "  ")
 	tmp := warmFile() + ".tmp"
-	if writeSynced(tmp, b, 0o600) == nil {
-		os.Rename(tmp, warmFile())
+	err := writeSynced(tmp, b, 0o600)
+	if err == nil {
+		err = os.Rename(tmp, warmFile())
+	}
+	if err != nil {
+		journal("keepwarm-save : %v", err)
 	}
 }
 
@@ -151,8 +155,15 @@ func warmTick(now time.Time) {
 }
 
 func keepWarmLoop(every time.Duration) {
-	for range time.Tick(every) {
-		warmTick(time.Now())
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-homeCtx.Done():
+			return
+		case <-t.C:
+			warmTick(time.Now())
+		}
 	}
 }
 

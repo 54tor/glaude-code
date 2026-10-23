@@ -28,8 +28,8 @@ type Expiring struct {
 
 // cleanupDays : la durée de conservation de Claude Code, en jours.
 func cleanupDays() int {
-	_, raw := allConfigs()
-	if v, ok := lookup(raw["u"], "cleanupPeriodDays"); ok {
+	_, doc := readConfig("u") // le réglage est utilisateur seul : inutile de lire les projets et leur mémoire
+	if v, ok := lookup(doc, "cleanupPeriodDays"); ok {
 		if n, ok := v.(json.Number); ok {
 			if f, err := n.Float64(); err == nil && f >= 1 {
 				return int(min(f, maxCleanupDays))

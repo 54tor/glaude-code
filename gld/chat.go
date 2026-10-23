@@ -144,10 +144,13 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	cmd := withPath(exec.CommandContext(ctx, "claude", chatArgs(flags, req.ID, req.Mode, req.Prompt)...))
 	cmd.Dir = cwd
-	out, _ := cmd.StdoutPipe()
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
-	if err := cmd.Start(); err != nil {
+	out, err := cmd.StdoutPipe()
+	if err == nil {
+		err = cmd.Start()
+	}
+	if err != nil {
 		chatMu.Unlock()
 		cancel()
 		writeJSON(w, 500, map[string]any{"error": err.Error()})

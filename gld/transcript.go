@@ -127,6 +127,9 @@ type infoState struct {
 var (
 	infoMu    sync.Mutex
 	infoCache = map[string]infoState{}
+	// Au-delà, les entrées des fichiers disparus sont évincées plutôt que tout vider : vider forçait la relecture complète
+	// de chaque transcript à chaque passage dès 5 000 sessions.
+	infoCacheMax = 50_000
 )
 
 // forgetInfo : à appeler quand un transcript est réécrit sur place (le début a pu changer).
@@ -208,8 +211,15 @@ func info(path string, st os.FileInfo) Session {
 		c = scanInfo(path, c)
 		c.size, c.mtime = st.Size(), st.ModTime()
 		infoMu.Lock()
-		if len(infoCache) > 5000 {
-			clear(infoCache)
+		if len(infoCache) > infoCacheMax { // on ne garde que les transcripts qui existent encore : une entrée pèse quelques centaines d'octets
+			for p := range infoCache {
+				if _, err := os.Stat(p); err != nil {
+					delete(infoCache, p)
+				}
+			}
+			if len(infoCache) > infoCacheMax {
+				clear(infoCache)
+			}
 		}
 		infoCache[path] = c
 		infoMu.Unlock()

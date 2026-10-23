@@ -9,7 +9,12 @@ import (
 // routesTabs : sessions ouvertes sauvegardées.
 func routesTabs(mux *http.ServeMux) {
 	mux.HandleFunc("GET /tabs", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"saves": loadTabs()})
+		saves, err := loadTabs()
+		if err != nil {
+			writeJSON(w, 500, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"saves": saves})
 	})
 	mux.HandleFunc("POST /tabs-save", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Name string }

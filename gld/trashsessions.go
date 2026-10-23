@@ -54,13 +54,16 @@ func trashSessions(items []item) (n, spared int, err error) {
 		if e := os.MkdirAll(dst, 0o700); e != nil {
 			return n, spared, e
 		}
-		b, _ := json.Marshal(meta)
-		if e := os.WriteFile(filepath.Join(dst, "meta.json"), b, 0o600); e != nil {
-			return n, spared, e
-		}
-		if e := os.Rename(p, filepath.Join(dst, it.ID+".jsonl")); e != nil {
+		// Le transcript d'abord, la fiche ensuite : une fiche sans transcript serait une entrée fantôme, impossible à purger.
+		moved := filepath.Join(dst, it.ID+".jsonl")
+		if e := os.Rename(p, moved); e != nil {
 			err = errors.Join(err, e)
 			continue
+		}
+		b, _ := json.Marshal(meta)
+		if e := os.WriteFile(filepath.Join(dst, "meta.json"), b, 0o600); e != nil {
+			os.Rename(moved, p)
+			return n, spared, e
 		}
 		if sub := filepath.Join(root, it.Dir, it.ID); dirExists(sub) {
 			if e := os.Rename(sub, filepath.Join(dst, "sub")); e != nil {
@@ -79,8 +82,11 @@ func dirExists(p string) bool {
 
 func readTrashMeta(id string) (TrashedSession, bool) {
 	var m TrashedSession
+	if !idRe.MatchString(id) {
+		return m, false
+	}
 	b, err := os.ReadFile(filepath.Join(trashSessionPath(id), "meta.json"))
-	if err != nil || json.Unmarshal(b, &m) != nil || m.ID != id || !idRe.MatchString(id) {
+	if err != nil || json.Unmarshal(b, &m) != nil || m.ID != id || !safeDir(m.Dir) {
 		return m, false
 	}
 	return m, true
@@ -117,9 +123,6 @@ func restoreTrashed(id string) error {
 		return terr("srv.trashsessions.sessionIntrouvableDansLa")
 	}
 	dir := filepath.Join(root, m.Dir)
-	if m.Dir == "" || filepath.Base(m.Dir) != m.Dir {
-		return terr("srv.trashsessions.dossierDOrigineInvalide")
-	}
 	dst := filepath.Join(dir, id+".jsonl")
 	if _, err := os.Lstat(dst); err == nil {
 		return terr("srv.trashsessions.unTranscriptDeCe")
@@ -132,7 +135,9 @@ func restoreTrashed(id string) error {
 		return err
 	}
 	if sub := filepath.Join(src, "sub"); dirExists(sub) {
-		os.Rename(sub, filepath.Join(dir, id))
+		if err := os.Rename(sub, filepath.Join(dir, id)); err != nil {
+			return err // le transcript est revenu ; les sous-agents restent dans la corbeille plutôt que d'être effacés
+		}
 	}
 	return os.RemoveAll(src)
 }
@@ -144,6 +149,10 @@ func purgeTrashed(ids []string) (int, error) {
 	for _, id := range ids {
 		m, ok := readTrashMeta(id)
 		if !ok {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(trashSessionPath(id), id+".jsonl")); err != nil {
+			os.RemoveAll(trashSessionPath(id)) // fiche sans transcript : rien à remettre en place
 			continue
 		}
 		if err := restoreTrashed(id); err != nil {
@@ -203,10 +212,13 @@ func routesTrashSessions(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"ok": err == nil && n > 0, "out": out})
 	})
-	// ids absent ou vide : toute la corbeille.
+	// ids absent ou vide : toute la corbeille. Un corps illisible n'est pas une demande de tout vider.
 	mux.HandleFunc("POST /session-trash-purge", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ IDs []string }
-		json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req)
+		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+			return
+		}
 		ids := req.IDs
 		if len(ids) == 0 {
 			ents, _ := os.ReadDir(sessionTrashDir())

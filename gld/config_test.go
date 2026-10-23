@@ -48,6 +48,9 @@ func TestMasquage(t *testing.T) {
 
 // Le vrai fichier de l'utilisateur (s'il existe) doit survivre à l'aller-retour : sinon une écriture le reformaterait.
 func TestFichierUtilisateurAllerRetour(t *testing.T) {
+	if os.Getenv("GLD_TEST_REAL_HOME") == "" {
+		t.Skip("lit le vrai ~/.claude/settings.json : GLD_TEST_REAL_HOME=1 pour l'exercer")
+	}
 	home, _ := os.UserHomeDir()
 	b, err := os.ReadFile(home + "/.claude/settings.json")
 	if err != nil {

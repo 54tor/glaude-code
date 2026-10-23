@@ -154,12 +154,10 @@ func checkSendText(text string) error {
 	return nil
 }
 
-var sendIdRe = regexp.MustCompile(`^[0-9a-f-]{36}$`)
-
 // closeSession termine le processus claude d'une session interactive ouverte (SIGTERM : il quitte proprement, le transcript est déjà
 // écrit au fil de l'eau). Le pid vient d'un relevé frais de `claude agents --json`, jamais du navigateur.
 func closeSession(id string) error {
-	if !sendIdRe.MatchString(id) {
+	if !idRe.MatchString(id) {
 		return terr("srv.chat.sessionInvalide")
 	}
 	pid, ok := sessionPIDs()[id]
@@ -198,7 +196,7 @@ func closeAndWait(items []item) {
 
 // sendToSession colle le texte dans le panneau tmux de la session, puis valide.
 func sendToSession(id, text string) error {
-	if !sendIdRe.MatchString(id) {
+	if !idRe.MatchString(id) {
 		return terr("srv.chat.sessionInvalide")
 	}
 	if err := checkSendText(text); err != nil {
@@ -236,7 +234,7 @@ var allowedKeys = map[string]string{
 }
 
 func paneFor(id string) (string, error) {
-	if !sendIdRe.MatchString(id) {
+	if !idRe.MatchString(id) {
 		return "", terr("srv.chat.sessionInvalide")
 	}
 	ids, err := sendable()

@@ -27,6 +27,9 @@ type EffRow struct {
 
 var levelRank = map[string]int{"u": 0, "p": 1, "l": 2}
 
+// shellWordRe : les mots d'une ligne de commande de hook, guillemets simples ou doubles respectés.
+var shellWordRe = regexp.MustCompile(`"([^"]*)"|'([^']*)'|(\S+)`)
+
 func level(id string) string { return id[:1] }
 
 // flatten met un document à plat : « permissions.allow[] » pour les éléments d'une liste, un chemin par feuille.
@@ -132,7 +135,7 @@ func missingPart(cmd string) string {
 		}
 		return s
 	}
-	tokens := regexp.MustCompile(`"([^"]*)"|'([^']*)'|(\S+)`).FindAllStringSubmatch(cmd, -1)
+	tokens := shellWordRe.FindAllStringSubmatch(cmd, -1)
 	atCommand := true // le mot suivant est un nom de programme (début, ou après && || ; |)
 	for _, m := range tokens {
 		w := m[1] + m[2] + m[3]

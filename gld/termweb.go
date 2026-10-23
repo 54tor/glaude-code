@@ -80,7 +80,7 @@ func routesTerm(mux *http.ServeMux) {
 			return
 		}
 		var req struct{ ID string }
-		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil || !sendIdRe.MatchString(req.ID) {
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil || !idRe.MatchString(req.ID) {
 			fail(400, L("srv.http_util.requeteInvalide"))
 			return
 		}

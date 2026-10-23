@@ -1,0 +1,100 @@
+package main
+
+// Cas d'échec repérés par l'audit du 2026-10-23 : chaque test fige la correction d'une perte de données silencieuse.
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+// Un corps illisible n'est pas une demande de tout vider.
+func TestCorbeillePurgeCorpsInvalide(t *testing.T) {
+	h, cfg, _ := web(t)
+	body := `{"items":[{"dir":"-p","id":"` + id1 + `"}]}`
+	ok(t, h, "/session-trash-add", body, true, "")
+	status(t, h, "POST", "/session-trash-purge", `{`, 400)
+	_, m, _ := call(t, h, "GET", "/session-trash", "")
+	if l, _ := m["sessions"].([]any); len(l) != 1 {
+		t.Fatalf("corbeille vidée par un corps invalide : %v", m)
+	}
+	if _, err := os.Stat(filepath.Join(cfg, "gld-web-trash", "sessions", id1, id1+".jsonl")); err != nil {
+		t.Fatal("transcript parti de la corbeille")
+	}
+}
+
+// Restauration : si le dossier des sous-agents existe déjà, ils restent dans la corbeille au lieu d'être effacés.
+func TestCorbeilleRestaurationSousAgentsPreserves(t *testing.T) {
+	h, cfg, _ := web(t)
+	sub := filepath.Join(cfg, "projects", "-p", id1)
+	os.MkdirAll(sub, 0o755)
+	os.WriteFile(filepath.Join(sub, "agent.jsonl"), []byte("{}\n"), 0o600)
+	ok(t, h, "/session-trash-add", `{"items":[{"dir":"-p","id":"`+id1+`"}]}`, true, "")
+	os.MkdirAll(filepath.Join(sub, "autre"), 0o755) // un dossier du même nom réapparaît
+	ok(t, h, "/session-trash-restore", `{"ids":["`+id1+`"]}`, false, "")
+	if _, err := os.Stat(filepath.Join(cfg, "gld-web-trash", "sessions", id1, "sub", "agent.jsonl")); err != nil {
+		t.Fatal("les sous-agents ont été effacés")
+	}
+}
+
+// Une fiche sans transcript (déplacement interrompu) se purge au lieu de rester listée pour toujours.
+func TestCorbeilleFicheFantome(t *testing.T) {
+	h, cfg, _ := web(t)
+	ok(t, h, "/session-trash-add", `{"items":[{"dir":"-p","id":"`+id1+`"}]}`, true, "")
+	os.Remove(filepath.Join(cfg, "gld-web-trash", "sessions", id1, id1+".jsonl"))
+	ok(t, h, "/session-trash-purge", `{"ids":["`+id1+`"]}`, true, "")
+	if _, err := os.Stat(filepath.Join(cfg, "gld-web-trash", "sessions", id1)); err == nil {
+		t.Fatal("fiche fantôme toujours là")
+	}
+}
+
+// Un fichier de sauvegardes illisible n'est jamais réécrit (ses sauvegardes manuelles seraient perdues).
+func TestOngletsFichierIllisible(t *testing.T) {
+	_, cfg, _ := web(t)
+	os.WriteFile(filepath.Join(cfg, "gld-web-tabs.json"), []byte("{pas du json"), 0o600)
+	if _, err := readTabs([]byte("{pas du json")); err == nil {
+		t.Fatal("readTabs accepte du JSON invalide")
+	}
+	if _, _, err := saveTabs("", true); err == nil {
+		t.Fatal("saveTabs a écrit par-dessus un fichier illisible")
+	}
+	if b, _ := os.ReadFile(filepath.Join(cfg, "gld-web-tabs.json")); string(b) != "{pas du json" {
+		t.Fatal("fichier réécrit")
+	}
+}
+
+// Même garde pour les notes.
+func TestNotesFichierIllisible(t *testing.T) {
+	h, cfg, _ := web(t)
+	os.WriteFile(filepath.Join(cfg, "gld-web-notes.json"), []byte("["), 0o600)
+	status(t, h, "POST", "/notes", `{"key":"d//tmp/x","text":"bonjour"}`, 500)
+	if b, _ := os.ReadFile(filepath.Join(cfg, "gld-web-notes.json")); string(b) != "[" {
+		t.Fatal("fichier réécrit")
+	}
+}
+
+// La redirection après ?token= reste locale, même pour un chemin « //hôte ».
+func TestJetonRedirectionLocale(t *testing.T) {
+	h := withToken("abcdefghijklmnop", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "http://127.0.0.1:8799//evil.example/?token=abcdefghijklmnop", nil))
+	if loc := rec.Header().Get("Location"); rec.Code != 303 || loc != "/evil.example/" {
+		t.Fatalf("code %d, Location %q", rec.Code, loc)
+	}
+}
+
+// Les verbes d'attente sont relus seulement quand settings.json change.
+func TestVerbesEnCache(t *testing.T) {
+	_, cfg, _ := web(t)
+	settings := filepath.Join(cfg, "settings.json")
+	os.WriteFile(settings, []byte(`{"spinnerVerbs":{"mode":"replace","verbs":["un"]}}`), 0o644)
+	if got := spinnerVerbs("fr"); len(got) != 1 || got[0] != "un" {
+		t.Fatalf("verbes : %v", got)
+	}
+	os.WriteFile(settings, []byte(`{"spinnerVerbs":{"mode":"replace","verbs":["deux","trois"]}}`), 0o644)
+	if got := spinnerVerbs("fr"); len(got) != 2 {
+		t.Fatalf("cache non invalidé : %v", got)
+	}
+}

@@ -207,9 +207,6 @@ func younger(fi os.FileInfo, days int) bool {
 	return time.Since(fi.ModTime()) < time.Duration(days)*24*time.Hour
 }
 
-// trunc : coupe à n caractères (runes), sans rien ajouter.
-func trunc(s string, n int) string { return cut(s, n) }
-
 // pad : complète à droite jusqu'à n caractères, comme printf %-ns.
 func pad(s string, n int) string {
 	if k := len([]rune(s)); k < n {
@@ -220,7 +217,7 @@ func pad(s string, n int) string {
 
 func mdate(fi os.FileInfo) string { return fi.ModTime().Format("01-02_15:04") }
 
-func short(id string) string { return trunc(id, 8) }
+func short(id string) string { return cut(id, 8) }
 
 func helpText(out io.Writer, text string) error {
 	fmt.Fprintln(out, strings.TrimSpace(text))

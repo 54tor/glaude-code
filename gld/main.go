@@ -55,7 +55,7 @@ func main() {
 		fmt.Println("gld", version)
 		return
 	}
-	hosts["127.0.0.1:"+port], hosts["localhost:"+port] = true, true
+	hosts["127.0.0.1:"+port], hosts["localhost:"+port], hosts[net.JoinHostPort(*listen, port)] = true, true, true
 
 	h := handler()
 	local := isLoopback(*listen)
@@ -75,7 +75,9 @@ func main() {
 	defer stop()
 	homeCtx = ctx
 	defer stopHomes()
+	done := make(chan struct{}) // Shutdown attend les requêtes en vol : main ne doit pas sortir avant lui
 	go func() {
+		defer close(done)
 		<-ctx.Done()
 		fmt.Fprintln(os.Stderr, "\n"+tr(cliLang(), "cli.main.stopped", nil))
 		c, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -103,6 +105,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	<-done
 }
 
 // handler : toutes les routes, derrière les gardes Host et CSRF.
@@ -152,7 +155,8 @@ func handler() http.Handler {
 var readHeaderTimeout = 10 * time.Second
 
 // newServer : avec --listen, le serveur est joignable du réseau ; un client qui envoie ses en-têtes au compte-gouttes
-// (slowloris) ne garde pas une connexion ouverte au-delà de ce délai, avant même la vérification du jeton.
+// (slowloris) ne garde pas une connexion ouverte au-delà de ce délai, avant même la vérification du jeton. IdleTimeout
+// ferme de même une connexion keep-alive qui ne redemande rien (sans effet sur une réponse en cours ni sur le WebSocket).
 func newServer(addr string, h http.Handler) *http.Server {
-	return &http.Server{Addr: addr, Handler: h, ReadHeaderTimeout: readHeaderTimeout}
+	return &http.Server{Addr: addr, Handler: h, ReadHeaderTimeout: readHeaderTimeout, IdleTimeout: 2 * time.Minute}
 }

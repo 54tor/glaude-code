@@ -32,6 +32,7 @@ type tokenStore struct {
 
 var (
 	tokMu     sync.Mutex
+	tokRunMu  sync.Mutex // sérialise les appels à Haiku, sans retenir tokMu (lectures du cache) pendant leurs 90 s
 	tokLoaded *tokenStore
 )
 
@@ -127,20 +128,29 @@ func countTokens(text string) (n int, cost float64, cached bool, err error) {
 	if strings.TrimSpace(text) == "" {
 		return 0, 0, true, nil
 	}
-	tokMu.Lock()
-	defer tokMu.Unlock() // un seul appel à la fois : le coût fixe et le cache restent cohérents
-	s := tokens()
+	tokRunMu.Lock() // un seul appel à la fois : le coût fixe et le cache restent cohérents, sans bloquer les lectures du cache
+	defer tokRunMu.Unlock()
 	total, model, c, err := tokenRun(text)
 	if err != nil {
 		return 0, c, false, err
 	}
 	cost += c
-	if s.Model != model || s.Base == 0 { // nouveau modèle : ses comptes anciens ne valent plus, on remesure le coût fixe
-		one, _, c2, err := tokenRun("x")
+	tokMu.Lock()
+	s := tokens()
+	base := s.Model != model || s.Base == 0
+	tokMu.Unlock()
+	var one int
+	if base { // nouveau modèle : ses comptes anciens ne valent plus, on remesure le coût fixe
+		var c2 float64
+		one, _, c2, err = tokenRun("x")
 		cost += c2
 		if err != nil {
 			return 0, cost, false, err
 		}
+	}
+	tokMu.Lock()
+	defer tokMu.Unlock()
+	if base {
 		s.Model, s.Base, s.Counts, s.SumBytes, s.SumToks = model, one-1, map[string]int{}, 0, 0
 	}
 	n = max(total-s.Base, 1)

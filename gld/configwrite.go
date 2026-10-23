@@ -37,9 +37,8 @@ var simpleKeys = map[string]string{
 }
 
 var (
-	envName  = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,99}$`)
-	pluginID = regexp.MustCompile(`^[\w.-]{1,100}@[\w.-]{1,100}$`)
-	wordRe   = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,40}$`)
+	envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,99}$`)
+	wordRe  = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,40}$`)
 )
 
 // validate vérifie que la modification fait partie de celles permises, et normalise sa valeur.
@@ -78,7 +77,7 @@ func (e *CfgEdit) validate() error {
 		if e.Op != "set" || !ok || len(s) > 2000 || strings.ContainsAny(s, "\n\r") {
 			return terr("srv.configwrite.variableDEnvironnementUn")
 		}
-	case len(p) == 2 && p[0] == "enabledPlugins" && pluginID.MatchString(p[1]):
+	case len(p) == 2 && p[0] == "enabledPlugins" && pluginIDRe.MatchString(p[1]):
 		if e.Op == "delete" {
 			return nil
 		}
@@ -206,7 +205,13 @@ func saveBackup(id string, content []byte) error {
 		}
 		break
 	}
-	ents, _ := os.ReadDir(backupsDir()) // les 100 dernières seulement
+	all, _ := os.ReadDir(backupsDir()) // les 100 dernières seulement ; un fichier étranger au dossier n'est jamais touché
+	var ents []os.DirEntry
+	for _, e := range all {
+		if backupRe.MatchString(e.Name()) {
+			ents = append(ents, e)
+		}
+	}
 	if len(ents) > 100 {
 		sort.Slice(ents, func(i, j int) bool { return ents[i].Name() < ents[j].Name() })
 		for _, e := range ents[:len(ents)-100] {

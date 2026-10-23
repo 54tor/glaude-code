@@ -79,10 +79,10 @@ func cliMatin(ctx context.Context, args []string, out io.Writer) error {
 // matinResume rouvre les sessions d'une sauvegarde de gld : chacune par un appel avec --id, donc mêmes règles
 // (sessions déjà ouvertes épargnées, -n respecté).
 func matinResume(ctx context.Context, o matinOpts, name string, out io.Writer) error {
-	saves := loadTabs()
+	saves, _ := loadTabs()
 	if len(saves) == 0 {
 		if b, err := os.ReadFile(filepath.Join(cfgDir(), "cc-web-tabs.json")); err == nil { // ancien nom, avant la première migration
-			saves = readTabs(b)
+			saves, _ = readTabs(b)
 		}
 	}
 	if len(saves) == 0 {
@@ -102,7 +102,7 @@ func matinResume(ctx context.Context, o matinOpts, name string, out io.Writer) e
 	if save.Name != "" {
 		label = save.Name
 	}
-	fmt.Fprintln(out, L("cli.matin.backup", "A1", label, "A2", strings.Replace(trunc(save.At, 16), "T", " ", 1), "A3", len(save.Sessions)))
+	fmt.Fprintln(out, L("cli.matin.backup", "A1", label, "A2", strings.Replace(cut(save.At, 16), "T", " ", 1), "A3", len(save.Sessions)))
 	for _, s := range save.Sessions {
 		fmt.Fprintln(out)
 		one := o
@@ -208,14 +208,14 @@ func matinRun(ctx context.Context, o matinOpts, out io.Writer) error {
 			continue
 		}
 		if live[t.S.ID] {
-			fmt.Fprintf(out, "  %s %s %s %s\n", pad(L("cli.matin.stateOpen"), 12), mark, pad(trunc(title, 45), 45), short(t.S.ID))
+			fmt.Fprintf(out, "  %s %s %s %s\n", pad(L("cli.matin.stateOpen"), 12), mark, pad(cut(title, 45), 45), short(t.S.ID))
 			opened = true
 			continue
 		}
 		if o.dry {
-			fmt.Fprintf(out, "  %s %s %s %s  (%s)\n", pad(L("cli.matin.stateWould"), 12), mark, pad(trunc(title, 45), 45), short(t.S.ID), mdate(t.Info))
+			fmt.Fprintf(out, "  %s %s %s %s  (%s)\n", pad(L("cli.matin.stateWould"), 12), mark, pad(cut(title, 45), 45), short(t.S.ID), mdate(t.Info))
 		} else {
-			fmt.Fprintf(out, "  %s %s %s %s\n", pad(L("cli.matin.stateOpening"), 12), mark, pad(trunc(title, 45), 45), short(t.S.ID))
+			fmt.Fprintf(out, "  %s %s %s %s\n", pad(L("cli.matin.stateOpening"), 12), mark, pad(cut(title, 45), 45), short(t.S.ID))
 			if err := openTab(launcher, title, tabSpec{Cwd: p.Path, Args: claudeTabArgs(o.args, t.S.ID, o.prompt)}); err != nil {
 				fmt.Fprintln(out, "   ", L("srv.common.failed", "A1", err.Error()))
 			}

@@ -250,7 +250,7 @@ func TestTabs(t *testing.T) {
 	}
 	open = []string{id1, id2}
 	saveTabs("", true)
-	all := loadTabs()
+	all, _ := loadTabs()
 	if len(all) != 3 || !all[0].Auto || len(all[0].Sessions) != 2 {
 		t.Fatalf("sauvegardes : %+v", all)
 	}
@@ -258,7 +258,10 @@ func TestTabs(t *testing.T) {
 	if _, _, err := saveTabs("", true); err == nil {
 		t.Fatal("aucune session ouverte : rien ne doit être écrasé")
 	}
-	if removeTabs(all[0].At) != nil || len(loadTabs()) != len(all)-1 {
+	if err := removeTabs(all[0].At); err != nil {
+		t.Fatal("suppression :", err)
+	}
+	if rest, _ := loadTabs(); len(rest) != len(all)-1 {
 		t.Fatal("suppression")
 	}
 }
