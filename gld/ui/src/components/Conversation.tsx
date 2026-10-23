@@ -43,10 +43,10 @@ function Meta({ s, d }: { s: Session; d: Detail | null }) {
     d?.models.filter((m) => !m.startsWith("<")).join(", "),
   ].filter(Boolean)
   return (
-    <p className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+    <p className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground max-md:flex-nowrap max-md:overflow-hidden in-data-[kb]:hidden">
       {live && <Live waiting={a.waiting.has(s.id)} />}
       {bits.map((b, i) => (
-        <span key={i} className={i === 0 ? "truncate" : "shrink-0"}>
+        <span key={i} className={i === 0 ? "truncate" : i > 1 ? "shrink-0 max-md:hidden" : "shrink-0"}>
           {b}
         </span>
       ))}
@@ -244,7 +244,7 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
   return (
     <Dialog open={!!session} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        className="flex h-[94vh] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
+        className="flex h-[calc(var(--vvh,100dvh)*0.94)] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0 max-md:top-[var(--vvt,0px)] max-md:left-0 max-md:h-[var(--vvh,100dvh)] max-md:w-screen max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none max-md:border-0 sm:max-w-none"
         onCloseAutoFocus={(e) => focusRow(lastId.current) && e.preventDefault()}
       >
         <DialogHeader className="gap-1 border-b px-4 pt-4 pr-12 pb-3 md:px-6 md:pt-5 md:pr-14 md:pb-4">
@@ -269,43 +269,45 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
             </Button>
           </div>
         )}
-        <div className="flex flex-wrap items-center gap-1 border-b bg-muted/40 px-2 py-1.5 md:px-4">
+        <div className="flex flex-wrap items-center gap-1 border-b bg-muted/40 px-2 py-1.5 in-data-[kb]:hidden md:px-4">
           <Button variant={tools ? "secondary" : "ghost"} size="sm" onClick={() => setTools(!tools)} aria-pressed={tools}>
-            <Wrench /> {tools ? t("conversation.view.toolsShown") : t("conversation.view.toolsHidden")}
+            <Wrench /> <span className="max-md:sr-only">{tools ? t("conversation.view.toolsShown") : t("conversation.view.toolsHidden")}</span>
           </Button>
           {termOn && a.live.has(id) && (
             <Button variant="secondary" size="sm" onClick={() => setView(inTerm ? "visuel" : "terminal")} title={t("conversation.view.modeTitle")}>
-              {inTerm ? <MessagesSquare /> : <SquareTerminal />} {inTerm ? t("conversation.view.modeVisual") : t("conversation.view.modeTerminal")}
+              {inTerm ? <MessagesSquare /> : <SquareTerminal />} <span className="max-md:sr-only">{inTerm ? t("conversation.view.modeVisual") : t("conversation.view.modeTerminal")}</span>
             </Button>
           )}
           <Button variant="ghost" size="sm" onClick={() => setLoadedOpen(true)} title={t("conversation.view.instructionsTitle")}>
-            <FileText /> {t("conversation.view.instructions")}
+            <FileText /> <span className="max-md:sr-only">{t("conversation.view.instructions")}</span>
           </Button>
-          <Button variant="ghost" size="icon-sm" onClick={toTop} aria-label={t("conversation.view.toTop")} title={t("conversation.view.toTop")}>
+          <Button variant="ghost" size="icon-sm" className="max-md:hidden" onClick={toTop} aria-label={t("conversation.view.toTop")} title={t("conversation.view.toTop")}>
             <ArrowUpToLine />
           </Button>
-          <Button variant="ghost" size="icon-sm" onClick={toEnd} aria-label={t("conversation.view.toEnd")} title={t("conversation.view.toEnd")}>
+          <Button variant="ghost" size="icon-sm" className="max-md:hidden" onClick={toEnd} aria-label={t("conversation.view.toEnd")} title={t("conversation.view.toEnd")}>
             <ArrowDownToLine />
           </Button>
           {session && <KeepWarmButton s={session} />}
           {session && <LiveStats live={live} tok={session.tok} />}
-          <div className="flex flex-wrap items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1 max-md:contents">
+            <div className="flex items-center gap-1 max-md:order-last max-md:w-full max-md:overflow-x-auto md:contents">
             {gitDirs.map((d) => (
-              <span key={d} className="flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs" title={d}>
+              <span key={d} className="flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs" title={d}>
                 {d !== row?.g.project && <span className="max-w-32 truncate text-muted-foreground">{d.split("/").filter(Boolean).pop()}</span>}
                 <GitBadge st={git.status[d]} />
                 <GitPush dir={d} st={git.status[d]} />
                 <GitChanges dir={d} count={git.status[d] ? git.status[d].changed + git.status[d].untracked : 0} />
               </span>
             ))}
+            </div>
             {row && !row.g.missing && (
-              <Button variant="outline" size="sm" onClick={() => a.newSession(row.g.project)} title={t("conversation.view.newSessionTitle")}>
+              <Button variant="outline" size="sm" className="max-md:hidden" onClick={() => a.newSession(row.g.project)} title={t("conversation.view.newSessionTitle")}>
                 <MessageSquarePlus /> {t("conversation.view.newSession")}
               </Button>
             )}
             {session && (
               <Button size="sm" onClick={() => a.open({ dir: session.dir, id: session.id })}>
-                <SquareTerminal /> {t("conversation.view.resume")}
+                <SquareTerminal /> <span className="max-md:sr-only">{t("conversation.view.resume")}</span>
               </Button>
             )}
             {row && (

@@ -203,14 +203,14 @@ export function Composer({
           <Choose value={mode} onChange={setMode} options={modes()} label={t("conversation.composer.permissions")} disabled={running} className="max-w-full min-w-0" />
           <ModelPicker value={choice} onChange={setChoice} disabled={running} />
           {turn?.cost ? <span className="text-muted-foreground">{t("conversation.composer.cost", { cost: turn.cost.toFixed(2) })}</span> : null}
-          <span className="ml-auto" />
+          <span className="ml-auto max-md:hidden" />
           {running ? (
             <Button size="sm" variant="outline" onClick={stop}>
               <Square /> {t("conversation.composer.stop")}
             </Button>
           ) : (
             <Button size="sm" onClick={send} disabled={!text.trim() && !pics.images.length}>
-              <Send /> {t("conversation.composer.send")}
+              <Send /> <span className="max-md:sr-only">{t("conversation.composer.send")}</span>
             </Button>
           )}
         </div>

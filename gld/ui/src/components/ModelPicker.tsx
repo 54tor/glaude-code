@@ -17,9 +17,9 @@ export function ModelPicker({
 }) {
   const { t } = useTranslation()
   return (
-    <div className={cn("flex min-w-0 flex-wrap gap-2", className)}>
-      <Choose value={value.model} onChange={(model) => onChange({ ...value, model })} options={models()} label={t("conversation.modelPicker.model")} disabled={disabled} />
-      <Choose value={value.effort} onChange={(effort) => onChange({ ...value, effort })} options={efforts()} label={t("conversation.modelPicker.effort")} disabled={disabled} />
+    <div className={cn("flex min-w-0 flex-wrap gap-2 max-md:flex-1 max-md:flex-nowrap", className)}>
+      <Choose value={value.model} onChange={(model) => onChange({ ...value, model })} options={models()} label={t("conversation.modelPicker.model")} disabled={disabled} className="max-md:min-w-0 max-md:flex-1" />
+      <Choose value={value.effort} onChange={(effort) => onChange({ ...value, effort })} options={efforts()} label={t("conversation.modelPicker.effort")} disabled={disabled} className="max-md:min-w-0 max-md:flex-1" />
     </div>
   )
 }
