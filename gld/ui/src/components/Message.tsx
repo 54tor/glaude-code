@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { api, type Msg } from "@/lib/api"
 import { size } from "@/lib/format"
+import { noBreak, rehypeNoBreak } from "@/lib/noBreak"
 import { CompactSummary, isCompactSummary, isTagged, Tagged } from "./Tagged"
 
 // Messages de Claude : Markdown (tableaux GFM compris). react-markdown n'interprète jamais de HTML brut
@@ -16,6 +17,7 @@ export function Markdown({ t, onLink }: { t: string; onLink?: (href: string) => 
     <div className="md">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeNoBreak]}
         components={{
           // URL filtrée (javascript:…) : plus de href, donc du texte simple plutôt qu'un lien qui rouvrirait la page.
           a: ({ href, children }) =>
@@ -42,7 +44,7 @@ function UserText({ t }: { t: string }) {
   let at = 0
   for (const m of t.matchAll(PASTED)) {
     const before = t.slice(at, m.index).trim()
-    if (before) parts.push(<span key={`t${at}`}>{before}</span>)
+    if (before) parts.push(<span key={`t${at}`}>{noBreak(before)}</span>)
     const lines = m[1].split("\n").length
     parts.push(
       <details key={m.index} className="group/paste my-1 rounded-md border bg-background/60">
@@ -55,7 +57,7 @@ function UserText({ t }: { t: string }) {
     at = m.index + m[0].length
   }
   const rest = t.slice(at).trim()
-  if (rest) parts.push(<span key="rest">{rest}</span>)
+  if (rest) parts.push(<span key="rest">{noBreak(rest)}</span>)
   return <>{parts}</>
 }
 
@@ -102,7 +104,7 @@ function MessageView({ m, conv }: { m: Msg; conv?: Conv }) {
     return (
       <div title={title} className="msg flex gap-2 border-l-2 border-primary/30 py-0.5 pl-3 text-muted-foreground">
         <Icon className="mt-0.5 size-3.5 shrink-0" aria-label={result ? "résultat d'outil" : "appel d'outil"} />
-        <span className="min-w-0 break-words whitespace-pre-wrap">{result ? m.t.slice(1).trimStart() : m.t}</span>
+        <span className="min-w-0 break-words whitespace-pre-wrap">{noBreak(result ? m.t.slice(1).trimStart() : m.t)}</span>
       </div>
     )
   }
