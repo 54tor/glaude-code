@@ -280,7 +280,7 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
           <div className="flex flex-wrap items-center gap-1">
             {gitDirs.map((d) => (
               <span key={d} className="flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs" title={d}>
-                <span className="max-w-32 truncate text-muted-foreground">{d.split("/").filter(Boolean).pop()}</span>
+                {d !== row?.g.project && <span className="max-w-32 truncate text-muted-foreground">{d.split("/").filter(Boolean).pop()}</span>}
                 <GitBadge st={git.status[d]} />
                 <GitPush dir={d} st={git.status[d]} />
                 <GitChanges dir={d} count={git.status[d] ? git.status[d].changed + git.status[d].untracked : 0} />
