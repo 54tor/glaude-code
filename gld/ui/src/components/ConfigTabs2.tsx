@@ -9,6 +9,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { Checkbox } from "@/components/ui/checkbox"
 import { PermImportDialog, PermIOButtons } from "./ConfigPermIO"
 import { PermRawDialog } from "./ConfigPermRaw"
+import { takeConfigRaw } from "@/lib/wantConfigFile"
 import { Input } from "@/components/ui/input"
 import { Choose } from "./Choose"
 import { useActions } from "./actions"
@@ -38,7 +39,7 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTran
   const a = useActions()
   const home = a.home
   const [importing, setImporting] = useState(false)
-  const [raw, setRaw] = useState(false)
+  const [raw, setRaw] = useState(takeConfigRaw) // ouvert d'emblée depuis le bouton Permissions d'un dossier
   // Explication de Haiku par règle (clé : catégorie + règle) ; « … » pendant la demande.
   const [help, setHelp] = useState<Record<string, string>>({})
   const explain = async (kind: string, rule: string) => {

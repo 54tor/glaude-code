@@ -296,6 +296,7 @@ export function useAppActions(c: {
     openPerms: (project) => {
       const dir = data?.groups.find((g) => g.project === project)?.sessions[0]?.dir
       if (dir) wantConfigFile.id = "p/" + dir
+      wantConfigFile.raw = true
       go({ kind: "config", tab: "permissions" })
     },
     folder: (project) => data?.groups.find((g) => g.project === project),
