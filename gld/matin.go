@@ -13,25 +13,7 @@ import (
 	"time"
 )
 
-const matinHelp = `
-gld-matin — rouvre chaque sujet Claude d'un projet dans un onglet de terminal.
-
-  gld-matin                      onglets pour le projet courant
-  gld-matin -n                   dry-run : affiche, n'ouvre rien
-  gld-matin ~/Projets/autre      cible un autre projet
-  gld-matin --term tmux          force un lanceur (défaut : auto-détecté)
-  gld-matin --term list          liste les lanceurs disponibles ici
-  gld-matin --age 40 --min 0     élargit la fenêtre (jours) et le seuil (octets)
-  gld-matin --nommees            ignore les sessions sans nom explicite
-  gld-matin --id <uuid> [projet] rouvre cette seule session (sans filtre d'âge ni de taille)
-  gld-matin --args "..."         options ajoutées à claude (défaut : aucune, ou $GLD_MATIN_ARGS)
-  gld-matin --resume [nom]       rouvre les sessions de la dernière sauvegarde de gld
-                                 (ou de la sauvegarde manuelle de ce nom), ex. après un redémarrage
-  gld-matin --prompt "..." [projet]  ouvre une NOUVELLE session claude avec ce prompt
-                                 (avec --id : reprend cette session en lui envoyant ce message)
-
-Un sujet = une session Claude, désignée par son nom, sinon (marqué « ~ ») par son premier prompt.
-`
+func matinHelp() string { return L("cli.matin.help") }
 
 type matinOpts struct {
 	dry, nommees                bool
@@ -60,7 +42,7 @@ func cliMatin(ctx context.Context, args []string, out io.Writer) error {
 	f, err := parseFlags(rest, []string{"--dry-run", "--nommees"}, []string{"--id", "--args", "--prompt", "--term", "--age", "--min"}, map[string]string{"-n": "--dry-run"})
 	if err != nil {
 		if err == errHelp {
-			return helpText(out, matinHelp)
+			return helpText(out, matinHelp())
 		}
 		return err
 	}
@@ -104,7 +86,7 @@ func matinResume(ctx context.Context, o matinOpts, name string, out io.Writer) e
 		}
 	}
 	if len(saves) == 0 {
-		return fmt.Errorf("aucune sauvegarde (%s)", tabsFile())
+		return terr("srv.matin.aucuneSauvegarde", "A1", tabsFile())
 	}
 	var save *TabSave
 	for i := range saves {
@@ -114,13 +96,13 @@ func matinResume(ctx context.Context, o matinOpts, name string, out io.Writer) e
 		}
 	}
 	if save == nil {
-		return fmt.Errorf("sauvegarde introuvable : %s", name)
+		return terr("srv.matin.sauvegardeIntrouvable", "A1", name)
 	}
-	label := "automatique"
+	label := L("cli.matin.automatic")
 	if save.Name != "" {
 		label = save.Name
 	}
-	fmt.Fprintf(out, "sauvegarde : %s du %s, %d session(s)\n", label, strings.Replace(trunc(save.At, 16), "T", " ", 1), len(save.Sessions))
+	fmt.Fprintln(out, L("cli.matin.backup", "A1", label, "A2", strings.Replace(trunc(save.At, 16), "T", " ", 1), "A3", len(save.Sessions)))
 	for _, s := range save.Sessions {
 		fmt.Fprintln(out)
 		one := o
@@ -134,7 +116,7 @@ func matinResume(ctx context.Context, o matinOpts, name string, out io.Writer) e
 
 func matinRun(ctx context.Context, o matinOpts, out io.Writer) error {
 	if o.launch == "list" {
-		fmt.Fprintln(out, "lanceurs disponibles ici :")
+		fmt.Fprintln(out, L("cli.matin.launchers"))
 		for _, l := range launchers {
 			if launcherAvailable(l) {
 				fmt.Fprintln(out, "  "+l)
@@ -154,16 +136,16 @@ func matinRun(ctx context.Context, o matinOpts, out io.Writer) error {
 			return err
 		}
 		if o.dry {
-			fmt.Fprintf(out, "ouvrirait une nouvelle session dans %s\n", dir)
+			fmt.Fprintln(out, L("cli.matin.wouldOpenNew", "A1", dir))
 			return nil
 		}
 		if launcher == "" {
-			return fmt.Errorf("aucun terminal supporté détecté (--term list)")
+			return terr("srv.matin.aucunTerminalSupporteDetecte")
 		}
 		if err := openTab(launcher, "claude", tabSpec{Cwd: dir, Args: claudeTabArgs(o.args, "", o.prompt)}); err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "1 onglet lancé : nouvelle session dans %s.\n", dir)
+		fmt.Fprintln(out, L("cli.matin.openedNew", "A1", dir))
 		return nil
 	}
 
@@ -175,11 +157,11 @@ func matinRun(ctx context.Context, o matinOpts, out io.Writer) error {
 		return err
 	}
 	if launcher == "" && !o.dry {
-		return fmt.Errorf("aucun terminal supporté détecté. --term list pour voir,\n          ou --term <nom> pour en forcer un")
+		return terr("srv.matin.aucunTerminalSupporteDetecte2")
 	}
-	fmt.Fprintf(out, "projet : %s\n", p.Path)
+	fmt.Fprintln(out, L("cli.matin.project", "A1", p.Path))
 	if !o.dry {
-		fmt.Fprintf(out, "onglets: %s\n", launcher)
+		fmt.Fprintln(out, L("cli.matin.tabs", "A1", launcher))
 	}
 	fmt.Fprintln(out)
 
@@ -198,7 +180,7 @@ func matinRun(ctx context.Context, o matinOpts, out io.Writer) error {
 		}
 	}
 	if len(recent) == 0 {
-		fmt.Fprintf(out, "aucune session de moins de %d jours.\n", o.age)
+		fmt.Fprintln(out, L("cli.matin.noRecent", "A1", o.age))
 		return nil
 	}
 
@@ -226,16 +208,16 @@ func matinRun(ctx context.Context, o matinOpts, out io.Writer) error {
 			continue
 		}
 		if live[t.S.ID] {
-			fmt.Fprintf(out, "  déjà ouverte %s %s %s\n", mark, pad(trunc(title, 45), 45), short(t.S.ID))
+			fmt.Fprintf(out, "  %s %s %s %s\n", pad(L("cli.matin.stateOpen"), 12), mark, pad(trunc(title, 45), 45), short(t.S.ID))
 			opened = true
 			continue
 		}
 		if o.dry {
-			fmt.Fprintf(out, "  ouvrirait    %s %s %s  (%s)\n", mark, pad(trunc(title, 45), 45), short(t.S.ID), mdate(t.Info))
+			fmt.Fprintf(out, "  %s %s %s %s  (%s)\n", pad(L("cli.matin.stateWould"), 12), mark, pad(trunc(title, 45), 45), short(t.S.ID), mdate(t.Info))
 		} else {
-			fmt.Fprintf(out, "  ouvre        %s %s %s\n", mark, pad(trunc(title, 45), 45), short(t.S.ID))
+			fmt.Fprintf(out, "  %s %s %s %s\n", pad(L("cli.matin.stateOpening"), 12), mark, pad(trunc(title, 45), 45), short(t.S.ID))
 			if err := openTab(launcher, title, tabSpec{Cwd: p.Path, Args: claudeTabArgs(o.args, t.S.ID, o.prompt)}); err != nil {
-				fmt.Fprintf(out, "    échec : %v\n", err)
+				fmt.Fprintln(out, "   ", L("srv.common.failed", "A1", err.Error()))
 			}
 			select {
 			case <-time.After(o.pause):
@@ -248,14 +230,14 @@ func matinRun(ctx context.Context, o matinOpts, out io.Writer) error {
 	fmt.Fprintln(out)
 	if o.id != "" && n == 0 { // une session précise : ne rien ouvrir est un échec à dire clairement, pas « 0 onglet »
 		if opened {
-			return fmt.Errorf("cette session est déjà ouverte dans un terminal : rien à lancer (le terminal qui la porte est déjà là)")
+			return terr("srv.matin.cetteSessionEstDeja")
 		}
-		return fmt.Errorf("session %s introuvable dans ce projet", short(o.id))
+		return terr("srv.matin.sessionIntrouvableDansCe", "A1", short(o.id))
 	}
 	if o.dry {
-		fmt.Fprintf(out, "%d sujet(s) seraient rouverts. Lancez sans -n pour ouvrir.\n", n)
+		fmt.Fprintln(out, L("cli.matin.wouldReopen", "A1", n))
 	} else {
-		fmt.Fprintf(out, "%d onglet(s) lancé(s).\n", n)
+		fmt.Fprintln(out, L("cli.matin.launched", "A1", n))
 	}
 	return nil
 }
@@ -270,7 +252,7 @@ func absDir(target string) (string, error) {
 		return "", err
 	}
 	if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
-		return "", fmt.Errorf("projet introuvable")
+		return "", terr("srv.matin.projetIntrouvable")
 	}
 	return abs, nil
 }
