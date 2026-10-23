@@ -185,6 +185,34 @@ var cmdTimeout = 10 * time.Second // claude agents et tmux : ~130 ms et quelques
 // claudeAgents : la sortie de `claude agents --json`, bornée dans le temps : un claude bloqué (mise à jour, invite) ne fige ni
 // /api ni les boucles de fond, et n'empile pas un processus par rafraîchissement. Une erreur vaut « on ne sait pas ».
 func claudeAgents() ([]byte, error) {
+	agentsMu.Lock()
+	defer agentsMu.Unlock()
+	if time.Since(agentsAt) < agentsTTL {
+		return agentsOut, agentsErr
+	}
+	agentsOut, agentsErr = runClaudeAgents()
+	agentsAt = time.Now()
+	return agentsOut, agentsErr
+}
+
+// Un relevé vaut agentsTTL, et un seul claude tourne à la fois : /api demandait deux relevés d'affilée, l'écran tmux un toutes
+// les 1,5 s, closeAndWait un tous les 200 ms ; chaque relevé est un processus Node de 130 ms et 210 Mo (mesuré).
+// forgetAgents : avant une action qui écrit ou supprime (liveCheck), le prochain relevé est frais.
+var (
+	agentsMu  sync.Mutex
+	agentsAt  time.Time
+	agentsOut []byte
+	agentsErr error
+	agentsTTL = 1500 * time.Millisecond
+)
+
+func forgetAgents() {
+	agentsMu.Lock()
+	agentsAt = time.Time{}
+	agentsMu.Unlock()
+}
+
+func runClaudeAgents() ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), cmdTimeout)
 	defer cancel()
 	c := withPath(exec.CommandContext(ctx, "claude", "agents", "--json"))

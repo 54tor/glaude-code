@@ -219,9 +219,14 @@ export function Composer({
 // tourne dans tmux, le message y est collé puis validé ; sinon on l'explique.
 function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => void; liveState: Live; onAsk?: (asking: boolean) => void }) {
   const [info, setInfo] = useState<{ ids: string[]; why: string } | null>(null)
-  const { text } = useDraft(id) // gardé par session : fermer la fenêtre ou un échec d'envoi ne le perd pas
+  const { text, queue } = useDraft(id) // gardé par session : fermer la fenêtre ou un échec d'envoi ne le perd pas
   const setText = (t: string) => setDraft(id, { text: t })
+  const setQ = (q: string[]) => setDraft(id, { queue: q })
   const [busy, setBusy] = useState(false)
+  const [asking, setAsking] = useState(false) // une question attend une réponse dans le terminal : rien ne s'y écrit tant qu'elle est ouverte
+  const working = !!liveState.st?.thinking
+  const lastSent = useRef(0)
+  const [tick, setTick] = useState(0)
   const [sel, setSel] = useState(0)
   const [extra, setExtra] = useState<(readonly [string, string])[]>([])
   const pics = useImages()
@@ -234,6 +239,52 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
     }
   }, [id])
   const ok = info?.ids.includes(id)
+  const sugg =/^\/\S*$/.test(text) ? [...SLASH.map(([c, l]) => [c, l] as const), ...extra].filter(([c]) => c.startsWith(text) && c !== text) : []
+  // Un message écrit pendant que Claude travaille, ou qu'une question attend, est mis en file : il part dès que la session attend
+  // (jamais dans une question, où il répondrait à sa place).
+  const post = async (full: string) => {
+    setBusy(true)
+    const r = await api.post("/session-send", { id, text: full }, 20_000)
+    setBusy(false)
+    if (!r.ok) toast.error(r.out) // le succès se voit dans la session : pas de notification
+    else {
+      lastSent.current = Date.now()
+      setTimeout(() => setTick((n) => n + 1), 4500)
+    }
+    return r.ok
+  }
+  const send = async () => {
+    const full = [text.trim(), pics.suffix()].filter(Boolean).join("\n")
+    if (!full || busy) return
+    keepFocus()
+    if (working || asking) {
+      setQ([...draftOf(id).queue, full])
+      if (draftOf(id).text === text) setText("")
+      pics.clear()
+      return
+    }
+    if (await post(full)) {
+      if (draftOf(id).text === text) setText("") // pas un texte tapé entre-temps
+      pics.clear()
+      onSent()
+      keepFocus()
+    }
+  }
+  // La session attend (ni au travail, ni en question) : le premier message de la file part. Un court délai laisse le message
+  // précédent démarrer un tour avant de juger la session libre.
+  useEffect(() => {
+    if (!ok || working || asking || busy || queue.length === 0) return
+    const wait = Math.max(0, 4000 - (Date.now() - lastSent.current))
+    const t = setTimeout(async () => {
+      const q = draftOf(id).queue
+      if (q.length === 0) return
+      setQ(q.slice(1))
+      if (await post(q[0])) onSent()
+      else setQ([q[0], ...draftOf(id).queue]) // non délivré : il retourne en tête de la file
+    }, wait + 300)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ok, working, asking, busy, queue.length, tick])
   if (!ok)
     return (
       <div className="flex items-center gap-3 border-t px-6 py-3 text-xs text-muted-foreground">
@@ -244,26 +295,10 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
         <CloseSession id={id} />
       </div>
     )
-  const sugg = /^\/\S*$/.test(text) ? [...SLASH.map(([c, l]) => [c, l] as const), ...extra].filter(([c]) => c.startsWith(text) && c !== text) : []
-  const send = async () => {
-    const full = [text.trim(), pics.suffix()].filter(Boolean).join("\n")
-    if (!full || busy) return
-    keepFocus()
-    setBusy(true)
-    const r = await api.post("/session-send", { id, text: full }, 20_000)
-    setBusy(false)
-    if (!r.ok) toast.error(r.out) // le succès se voit dans la session : pas de notification
-    if (r.ok) {
-      if (draftOf(id).text === text) setText("") // pas un texte tapé entre-temps
-      pics.clear()
-      onSent()
-      keepFocus()
-    }
-  }
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-7xl space-y-2">
-        <TerminalPanel id={id} onAsk={onAsk} onSent={onSent} />
+        <TerminalPanel id={id} onAsk={(a) => (setAsking(a), onAsk?.(a))} onSent={onSent} />
         {sugg.length > 0 && (
           <ul className="max-h-48 overflow-y-auto rounded-lg border bg-popover p-1 text-sm shadow-md" role="listbox" aria-label="Commandes">
             {sugg.map(([cmd, label], i) => (
@@ -306,6 +341,22 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
           aria-label="Message à la session ouverte"
         />
         <ImageChips images={pics.images} busy={pics.busy} onRemove={pics.remove} />
+        {queue.length > 0 && (
+          <ul className="space-y-1 text-xs" aria-label="Messages en file d'attente">
+            {queue.map((q, i) => (
+              <li key={i} className="flex items-center gap-2 rounded-md border border-dashed px-2 py-1 text-muted-foreground">
+                <span className="shrink-0 tabular-nums">{i + 1}.</span>
+                <span className="min-w-0 flex-1 truncate" title={q}>
+                  {q}
+                </span>
+                {i === 0 && <span className="shrink-0">{asking ? "après la question" : working ? "dès que Claude attend" : "part…"}</span>}
+                <Button size="icon-xs" variant="ghost" aria-label="Retirer de la file" onClick={() => setQ(queue.filter((_, j) => j !== i))}>
+                  <X />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className="ml-auto" />
           <LiveAgents live={liveState} />

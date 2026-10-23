@@ -234,9 +234,40 @@ type Group struct {
 	Sessions []Session `json:"sessions"`
 }
 
-// decodeDir retrouve le chemin d'un dossier de transcripts (/ . _ espace… → « - », donc lossy)
-// en descendant l'arborescence réelle : seuls les dossiers dont le nom encodé colle sont suivis.
+// decodeCache : décoder un nom coûte un ReadDir par niveau et une regex par entrée ; avec un millier de dossiers de projets
+// (la plupart sans transcript), memList, listSnippets et memHealth y passaient 2 s à chaque relecture (toutes les 15 s).
+// Le résultat, trouvé ou non, vaut decodeTTL ; le cwd lu dans un transcript garde la priorité (projectCwd, sessions).
+var (
+	decodeMu    sync.Mutex
+	decodeCache = map[string]decoded{}
+	decodeTTL   = 2 * time.Minute
+)
+
+type decoded struct {
+	path string
+	at   time.Time
+}
+
 func decodeDir(name string) string {
+	decodeMu.Lock()
+	d, ok := decodeCache[name]
+	decodeMu.Unlock()
+	if ok && time.Since(d.at) < decodeTTL {
+		return d.path
+	}
+	p := decodeDirWalk(name)
+	decodeMu.Lock()
+	if len(decodeCache) > 5000 {
+		clear(decodeCache)
+	}
+	decodeCache[name] = decoded{p, time.Now()}
+	decodeMu.Unlock()
+	return p
+}
+
+// decodeDirWalk retrouve le chemin d'un dossier de transcripts (/ . _ espace… → « - », donc lossy)
+// en descendant l'arborescence réelle : seuls les dossiers dont le nom encodé colle sont suivis.
+func decodeDirWalk(name string) string {
 	var walk func(p, rest string) string
 	walk = func(p, rest string) string {
 		ents, err := os.ReadDir(p)

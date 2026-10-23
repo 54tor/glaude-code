@@ -32,6 +32,7 @@ var (
 
 // liveCheck : les sessions vivantes, ou errLive. À utiliser avant toute action qui écrit ou supprime dans une session.
 func liveCheck() (map[string]bool, error) {
+	forgetAgents()
 	if m := liveSessions(); m != nil {
 		return m, nil
 	}
