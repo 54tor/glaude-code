@@ -49,7 +49,8 @@ export function useAppActions(c: {
   setCompose: (a: ComposeAsk | null) => void
   setPicker: (p: Pick | null) => void
 }) {
-  const { data, setData, reload, home, q, setQ, go, read, now, live, waiting, hitMap, tags, vgroups, favs, vg, picked, setPicked, selected, everyId, view, args, choice, snippets, setAsk, setPrompt, setCompose, setPicker } = c
+  setInfo: (r: Row | null) => void
+  const { data, setData, reload, home, q, setQ, go, read, now, live, waiting, hitMap, tags, vgroups, favs, vg, picked, setPicked, selected, everyId, view, args, choice, snippets, setAsk, setPrompt, setCompose, setInfo, setPicker } = c
   const lastPick = useRef<string | null>(null) // dernière case cochée, début d'une sélection de plage
   const gkey = (x: VGroup) => groupKey(x, home)
   // Une action : toast de progression puis de résultat, erreurs jamais muettes, liste rechargée.
@@ -432,6 +433,7 @@ export function useAppActions(c: {
     exportMd: (r) => exportMarkdown([{ s: r.s, project: tilde(r.g.project, home) }]).catch(() => toast.error("Export impossible")),
     move: async (rs) => {
       const to = await pickDir(rs.length > 1 ? `Déplacer ${plural(rs.length)} vers…` : `Déplacer « ${rs[0].s.title} » vers…`, rs[0].s.cwd)
+    info: setInfo,
       const items = rs.filter((r) => r.s.cwd !== to).map((r) => ({ dir: r.s.dir, id: r.s.id }))
       if (to && items.length && (await act("/reassign", { items, to }, "Déplacement…"))) unpick(items)
     },
