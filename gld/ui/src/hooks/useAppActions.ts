@@ -419,10 +419,10 @@ export function useAppActions(c: {
               ),
           }),
     copy: (s) =>
-      navigator.clipboard.writeText(`claude --resume ${s.id}`).then(
+      navigator.clipboard.writeText(s.id).then(
         () =>
-          toast.success(i18n.t("shell.act.commandCopied"), {
-            description: `claude --resume ${s.id}`,
+          toast.success(i18n.t("shell.act.idCopied"), {
+            description: s.id,
           }),
         () => toast.error(i18n.t("shell.act.copyFailed"))
       ),

@@ -195,7 +195,7 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
         <Pencil /> {t("shell.menu.rename")}
       </M.Item>
       <M.Item onSelect={() => a.copy(s)}>
-        <Copy /> {t("shell.menu.copyResume")}
+        <Copy /> {t("shell.menu.copyId")}
       </M.Item>
       <M.Item onSelect={() => a.exportMd(row)}>
         <Download /> {t("shell.menu.exportMd")}
