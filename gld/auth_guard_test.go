@@ -42,15 +42,16 @@ func TestGuardHookDenies(t *testing.T) {
 func TestGuardSettingsShape(t *testing.T) {
 	dir := "/srv/x/gld"
 	b, _ := json.Marshal(guardSettings(dir))
-	want := `{"hooks":{"PreToolUse":[{"hooks":[{"command":"CMD","type":"command"}],"matcher":"Bash"}]},` +
+	want := `{"hooks":{"PreToolUse":[{"hooks":[{"args":["_guard","/srv/x/gld"],"command":"CMD","onFailure":"block","type":"command"}],"matcher":"Bash|PowerShell|Monitor"}]},` +
 		`"permissions":{"deny":["Read(//srv/x/gld/**)","Edit(//srv/x/gld/**)","Read(//srv/x/gld/auth.db)","Edit(//srv/x/gld/auth.db)","Read(//srv/x/gld/auth.key)","Edit(//srv/x/gld/auth.key)"]},` +
 		`"sandbox":{"filesystem":{"denyRead":["/srv/x/gld"],"denyWrite":["/srv/x/gld"]}}}`
-	cmd, _ := json.Marshal(guardCommand(dir))
+	self, _ := guardCommand(dir)
+	cmd, _ := json.Marshal(self)
 	if got := strings.Replace(string(b), string(cmd), `"CMD"`, 1); got != want {
 		t.Fatalf("got  %s\nwant %s", got, want)
 	}
-	if !strings.HasSuffix(guardCommand(dir), " _guard '/srv/x/gld'") || !filepath.IsAbs(strings.Trim(strings.Fields(guardCommand(dir))[0], "'")) {
-		t.Fatalf("commande du hook : %s", guardCommand(dir))
+	if !filepath.IsAbs(self) {
+		t.Fatalf("binaire du hook non absolu : %s", self)
 	}
 }
 
@@ -62,6 +63,9 @@ func TestGuardProtocol(t *testing.T) {
 		{`{"tool_name":"Bash","tool_input":{"command":"cat /a/auth.db"}}`, 2},
 		{`{"tool_name":"Bash","tool_input":{"command":"ls"}}`, 0},
 		{`{"tool_name":"Read","tool_input":{"file_path":"/a/auth.db"}}`, 0},
+		{`{"tool_name":"PowerShell","tool_input":{"command":"Get-Content /a/auth.db"}}`, 2},
+		{`{"tool_name":"Monitor","tool_input":{"command":"tail -F /a/x"}}`, 2},
+		{`{"tool_name":"PowerShell","tool_input":{"command":"Get-ChildItem"}}`, 0},
 		{`pas du json`, 2},
 	}
 	for _, c := range cases {
@@ -161,5 +165,112 @@ func TestGuardArgsOnlyWithAuthDB(t *testing.T) {
 	a := guardArgs()
 	if len(a) != 2 || a[0] != "--settings" || !json.Valid([]byte(a[1])) {
 		t.Fatalf("avec base : %v", a)
+	}
+}
+
+func TestGuardHookPathBoundaries(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	t.Setenv("GLD_AUTH_DIR", "")
+	short := filepath.Join(home, "gld")
+	for cmd, want := range map[string]bool{
+		`go build ./gld`:       false,
+		`cd gld && ls`:         false,
+		`cat ~/gld/x`:          true,
+		`ls "$HOME"/gld`:       true,
+		`ls ${HOME}/gld/`:      true,
+		`ls ` + short:          true,
+		`ls ` + short + `-old`: false,
+	} {
+		if got := guardHook(cmd, short); got != want {
+			t.Errorf("dossier %s, guardHook(%q) = %v, attendu %v", short, cmd, got, want)
+		}
+	}
+	for cmd, want := range map[string]bool{
+		`ls /srv/gld-backups`: false,
+		`ls /srv/gld.bak`:     false,
+		`ls /srv/gld`:         true,
+		`cat /srv/gld/x`:      true,
+		`ls /srv/gld;echo`:    true,
+	} {
+		if got := guardHook(cmd, "/srv/gld"); got != want {
+			t.Errorf("guardHook(%q) = %v, attendu %v", cmd, got, want)
+		}
+	}
+}
+
+func TestWithGuardStripsUserSettings(t *testing.T) {
+	managedFixture(t, "")
+	dir, _ := absAuthDir()
+	os.MkdirAll(dir, 0o700)
+	os.WriteFile(filepath.Join(dir, "auth.db"), nil, 0o600)
+	g := guardArgs()
+	for _, in := range [][]string{
+		{"--settings", "/tmp/evil.json", "--model", "opus", "--settings=/tmp/e2.json", "--resume", "id1", "--", "p"},
+		{"--settings=/tmp/e2.json", "-p", "--resume", "id1", "--output-format", "stream-json", "--", "--settings x"},
+		{"--settings", "/tmp/evil.json"},
+	} {
+		out := withGuard(in)
+		n := 0
+		for i, a := range out {
+			if a == "/tmp/evil.json" || a == "--settings=/tmp/e2.json" {
+				t.Fatalf("réglage utilisateur conservé : %v", out)
+			}
+			if a == "--settings" {
+				n++
+				if out[i+1] != g[1] {
+					t.Fatalf("mauvais --settings : %v", out)
+				}
+				if i+2 < len(out) && out[i+2] != "--resume" && out[i+2] != "--" {
+					t.Fatalf("garde-fou pas juste avant --resume ou le prompt : %v", out)
+				}
+			}
+		}
+		if n != 1 {
+			t.Fatalf("--settings du garde-fou attendu une fois : %v", out)
+		}
+		if l := in[len(in)-1]; l == "--settings x" && out[len(out)-1] != l {
+			t.Fatalf("prompt modifié : %v", out)
+		}
+	}
+}
+
+func TestManagedInstalledExact(t *testing.T) {
+	managedFixture(t, "")
+	dir, _ := absAuthDir()
+	write := func(m map[string]any) {
+		b, _ := json.Marshal(m)
+		os.WriteFile(managedPath, b, 0o600)
+	}
+	hook := func(matcher, cmd string, args []string) map[string]any {
+		m := guardSettings(dir)
+		m["hooks"] = map[string]any{"PreToolUse": []any{map[string]any{"matcher": matcher,
+			"hooks": []any{map[string]any{"type": "command", "command": cmd, "args": args}}}}}
+		return m
+	}
+	self, args := guardCommand(dir)
+	for _, c := range []struct {
+		m    map[string]any
+		want bool
+	}{
+		{hook("Bash|PowerShell", self, args), true},
+		{hook("Bash", self, args), true},
+		{hook("PowerShell", self, args), false},
+		{hook("Bash", "/autre/gld", args), false},
+		{hook("Bash", self, []string{"_guard", "/autre/dossier"}), false},
+	} {
+		write(c.m)
+		if got := managedInstalled(); got != c.want {
+			b, _ := json.Marshal(c.m["hooks"])
+			t.Errorf("%s : %v, attendu %v", b, got, c.want)
+		}
+	}
+	other := guardSettings("/autre/dossier")
+	write(other)
+	guardWarned.Store(false)
+	t.Cleanup(func() { guardWarned.Store(false) })
+	var w bytes.Buffer
+	warnGuard(true, &w)
+	if w.Len() == 0 {
+		t.Fatal("fichier d'un autre dossier : avertissement attendu")
 	}
 }

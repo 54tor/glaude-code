@@ -7,7 +7,7 @@
   "cli.main.authRefused": "accounts database unusable ({{.A1}}): gld refuses to start. Check the master key (GLD_AUTH_KEY, keyring, auth.key) and the directory permissions.",
   "cli.main.flagListen": "listen address (default 127.0.0.1; 0.0.0.0 for the whole network, with a token)",
   "cli.main.flagVersion": "print the version and exit",
-  "cli.main.guardMissing": "⚠ guard not installed ({{.A1}} missing or incomplete): a user with config_write or exec can read the authentication database. Generate the file with \"gld auth managed-settings\".",
+  "cli.main.guardMissing": "⚠ guard not installed ({{.A1}} missing or incomplete): without it, Claude's tools can read the authentication database and a config_write user can remove the rules. Generate the file with \"gld auth managed-settings\". Even installed, it does not cover the web terminal or exec.",
   "cli.main.plainHTTP": "⚠ gld is listening on {{.A1}}: access is protected by a token, but over plain HTTP.",
   "cli.main.preferTunnel": "  Prefer a tunnel (SSH, Tailscale) or a TLS proxy; do not expose it on the Internet.",
   "cli.main.stopped": "stopped.",
