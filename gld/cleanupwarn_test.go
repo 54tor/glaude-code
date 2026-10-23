@@ -30,4 +30,10 @@ func TestSessionsBientotSupprimees(t *testing.T) {
 	if l, _ := m["sessions"].([]any); m["days"] != float64(7) || len(l) != 1 {
 		t.Fatalf("réglage 7 jours : %v", m)
 	}
+	// une valeur énorme (réglage « jamais ») ne déclenche aucun avertissement
+	os.WriteFile(filepath.Join(cfg, "settings.json"), []byte(`{"cleanupPeriodDays": 3650000}`), 0o600)
+	_, m, _ = call(t, h, "GET", "/cleanup-warning", "")
+	if l, _ := m["sessions"].([]any); len(l) != 0 {
+		t.Fatalf("valeur énorme : %v", m)
+	}
 }
