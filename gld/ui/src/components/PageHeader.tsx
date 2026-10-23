@@ -85,7 +85,7 @@ export function PageHeader({
             </Button>
           )}
           {g && !g.missing && (
-            <Button variant="outline" size="sm" onClick={() => actions.newSession(g.project)} title={t("shell.header.newInDirHint")}>
+            <Button size="sm" onClick={() => actions.newSession(g.project)} title={t("shell.header.newInDirHint")}>
               <MessageSquarePlus /> {t("shell.header.newSession")}
             </Button>
           )}
@@ -96,7 +96,7 @@ export function PageHeader({
           )}
           {vg && rowCount > 0 && (
             <>
-              <Button variant="outline" size="sm" onClick={() => groupActs.prompt(vg)} title={t("shell.header.newWithRefsHint")}>
+              <Button size="sm" onClick={() => groupActs.prompt(vg)} title={t("shell.header.newWithRefsHint")}>
                 <MessageSquarePlus /> {t("shell.header.newSession")}
               </Button>
               <Button variant="outline" size="sm" onClick={() => groupActs.open(vg)} title={t("shell.header.resumeAllHint")}>
