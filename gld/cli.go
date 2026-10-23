@@ -21,7 +21,7 @@ import (
 
 type cliFunc func(ctx context.Context, args []string, out io.Writer) error
 
-var cliCommands = map[string]cliFunc{"matin": cliMatin, "user": cliUser}
+var cliCommands = map[string]cliFunc{"matin": cliMatin, "user": cliUser, "auth": cliAuth}
 
 // dispatchCLI exécute une commande si argv la désigne. ok=false : c'est le serveur qu'on lance.
 func dispatchCLI(argv []string) (code int, ok bool) {
@@ -39,6 +39,10 @@ func dispatchCLI(argv []string) (code int, ok bool) {
 		if name == "_loaded" { // hook InstructionsLoaded de Claude Code (loaded.go)
 			cliMode = true
 			return runLoaded(os.Stdin), true
+		}
+		if name == "_guard" && len(args) <= 1 { // hook PreToolUse de Claude Code (auth_guard.go)
+			cliMode = true
+			return runGuard(os.Stdin, os.Stderr, strings.Join(args, "")), true
 		}
 		if strings.HasPrefix(name, "_") && cliCommands[name] == nil { // sous-commande interne inconnue : jamais de serveur lancé par un hook
 			return 2, true

@@ -121,6 +121,7 @@ var openTab = func(launcher, title string, spec tabSpec) error {
 	if strings.Contains(self, ";") {
 		return terr("srv.term.interditDansLeChemin")
 	}
+	spec.Args = append(guardArgs(), spec.Args...)
 	f, err := os.CreateTemp("", "gld-*.json")
 	if err != nil {
 		return err

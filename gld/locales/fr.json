@@ -1,8 +1,13 @@
 {
+  "cli.auth.help": "\ngld-auth (ou gld auth) — protection de la base d'authentification.\n\n  gld auth managed-settings    imprime le fichier managed-settings.json de Claude Code\n                               (règles de refus, hook Bash, bac à sable) à installer par l'administrateur\n",
+  "cli.auth.managedTarget": "à installer en root dans : {{.A1}} (gld ne l'écrit jamais lui-même)",
+  "cli.guard.badInput": "gld : entrée du hook illisible, commande refusée",
+  "cli.guard.denied": "gld : commande refusée, elle vise la base d'authentification de gld",
   "cli.main.authMode": "mode multi-utilisateur actif : la connexion par compte est exigée ; le jeton ne vaut plus qu'en en-tête Authorization: Bearer.",
   "cli.main.authRefused": "base des comptes inutilisable ({{.A1}}) : gld refuse de démarrer. Vérifier la clé maîtresse (GLD_AUTH_KEY, coffre-fort, auth.key) et les droits du dossier.",
   "cli.main.flagListen": "adresse d'écoute (défaut 127.0.0.1 ; 0.0.0.0 pour tout le réseau, avec un jeton)",
   "cli.main.flagVersion": "affiche la version et quitte",
+  "cli.main.guardMissing": "⚠ garde-fou non installé ({{.A1}} absent ou incomplet) : un utilisateur avec config_write ou exec peut lire la base d'authentification. Générer le fichier avec « gld auth managed-settings ».",
   "cli.main.plainHTTP": "⚠ gld écoute sur {{.A1}} : accès protégé par un jeton, mais en HTTP clair.",
   "cli.main.preferTunnel": "  Préférez un tunnel (SSH, Tailscale) ou un proxy TLS ; ne l'exposez pas sur Internet.",
   "cli.main.stopped": "arrêt.",
