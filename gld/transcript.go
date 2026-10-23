@@ -276,6 +276,10 @@ func decodeDir(name string) string {
 	return p
 }
 
+// skipRoots : racines que decodeDirWalk ne descend jamais. Pseudo-systèmes de fichiers (/proc, /sys, boucles de liens
+// symboliques) et montages réseau (/mnt, /media) : un ReadDir y coûte des secondes, ou ne finit pas.
+var skipRoots = map[string]bool{"/proc": true, "/sys": true, "/dev": true, "/run": true, "/mnt": true, "/media": true}
+
 // decodeDirWalk retrouve le chemin d'un dossier de transcripts (/ . _ espace… → « - », donc lossy)
 // en descendant l'arborescence réelle : seuls les dossiers dont le nom encodé colle sont suivis.
 func decodeDirWalk(name string) string {
@@ -291,6 +295,9 @@ func decodeDirWalk(name string) string {
 			}
 			enc := nonAlnum.ReplaceAllString(e.Name(), "-")
 			next := filepath.Join(p, e.Name())
+			if skipRoots[next] {
+				continue
+			}
 			if rest == enc {
 				return next
 			}

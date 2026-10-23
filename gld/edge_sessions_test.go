@@ -201,3 +201,25 @@ func TestPurgeRestes(t *testing.T) {
 		t.Fatal("compte rendu sans rien d'effacé :", notes)
 	}
 }
+
+func TestDecodeDirWalkRacinesExclues(t *testing.T) {
+	proj := filepath.Join(t.TempDir(), "mon projet")
+	if err := os.MkdirAll(proj, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	enc := nonAlnum.ReplaceAllString(proj, "-")
+	if got := decodeDirWalk(enc); got != proj {
+		t.Fatalf("décodage = %q, attendu %q", got, proj)
+	}
+	top := "/" + strings.SplitN(strings.TrimPrefix(proj, "/"), "/", 2)[0]
+	skipRoots[top] = true
+	defer delete(skipRoots, top)
+	if got := decodeDirWalk(enc); got != "" {
+		t.Fatalf("une racine exclue (%s) a été parcourue : %q", top, got)
+	}
+	for _, r := range []string{"/proc", "/sys", "/dev", "/run", "/mnt", "/media"} {
+		if !skipRoots[r] {
+			t.Errorf("%s doit être exclue", r)
+		}
+	}
+}
