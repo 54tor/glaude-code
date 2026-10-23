@@ -36,9 +36,9 @@ func dispatchCLI(argv []string) (code int, ok bool) {
 			cliMode = true
 			return runTab(args[0]), true
 		}
-		if name == "_canread" && len(args) == 1 { // vérification de GLD_RUN_AS, sous le compte cible (runas_unix.go)
+		if name == "_canread" && len(args) == 2 { // vérification de GLD_RUN_AS, sous le compte cible (runas_unix.go)
 			cliMode = true
-			return runCanRead(args[0]), true
+			return runCanRead(args[0], args[1]), true
 		}
 		if name == "_spec" && len(args) == 0 { // fichier d'un onglet, créé sous le compte cible
 			cliMode = true

@@ -13,10 +13,13 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 type runAsAccount struct {
@@ -37,6 +40,10 @@ var (
 	gatewayEUID   = os.Geteuid
 	procStatus    = func() ([]byte, error) { return os.ReadFile("/proc/self/status") }
 	canReadAs     = canReadAsHelper
+	selfExe       = selfExeOS
+	binaryHasCaps = binaryHasCapsOS
+	statOwner     = statOwnerOS
+	access        = unix.Access
 )
 
 // runAs lit GLD_RUN_AS (nom, uid ou uid:gid) ; nil sans erreur si la variable est vide.
@@ -129,18 +136,26 @@ func tmuxDetached() bool { return runAsAcct != nil || os.Getenv(runAsChildEnv) =
 
 const runAsChildEnv = "GLD_RUN_AS_CHILD"
 
-// Variables jamais transmises au compte cible : secrets et réglages de la passerelle, identité et sockets de son compte
-// (TMUX désignerait le serveur tmux de la passerelle, SSH_AUTH_SOCK son agent).
+// Variables jamais transmises au compte cible : réglages de la passerelle (GLD_AUTH_*, GLD_WEB_* et GLD_RUN_AS*, par préfixe),
+// identité et sockets de son compte (TMUX désignerait le serveur tmux de la passerelle, SSH_AUTH_SOCK son agent). Les autres
+// secrets de l'opérateur (DATABASE_URL, AWS_*…) passent : à retirer de l'environnement du service.
 var runAsDrop = map[string]bool{
-	"GLD_AUTH_KEY": true, "GLD_AUTH_DIR": true, "GLD_WEB_TOKEN": true, childTokenEnv: true, "GLD_RUN_AS": true,
+	"GLD_RUN_AS": true, "GLD_RUN_AS_EXPERIMENTAL": true,
 	"HOME": true, "USER": true, "LOGNAME": true, "SHELL": true, "MAIL": true,
 	"TMUX": true, "TMUX_PANE": true, "TMUX_TMPDIR": true,
 	"XDG_RUNTIME_DIR": true, "XDG_CONFIG_HOME": true, "XDG_DATA_HOME": true, "XDG_CACHE_HOME": true, "XDG_STATE_HOME": true,
 	"DBUS_SESSION_BUS_ADDRESS": true, "SSH_AUTH_SOCK": true,
 }
 
+func runAsDropped(k string) bool {
+	return runAsDrop[k] || strings.HasPrefix(k, "GLD_AUTH_") || strings.HasPrefix(k, "GLD_WEB_")
+}
+
+// runAsUmask : un exec.Cmd ne fixe pas le umask de l'enfant ; un sh intermédiaire le pose puis s'efface (exec, même pid).
+const runAsUmask = `umask 077 && exec "$0" "$@"`
+
 // applyRunAs fait lancer cmd sous le compte cible ; sans GLD_RUN_AS, cmd reste intact. keep : variables à transmettre malgré
-// runAsDrop (le jeton d'un gld enfant).
+// runAsDropped (jeton, port et adresse d'un gld enfant).
 func applyRunAs(cmd *exec.Cmd, keep ...string) {
 	a := runAsAcct
 	if a == nil {
@@ -152,6 +167,10 @@ func applyRunAs(cmd *exec.Cmd, keep ...string) {
 	c := *a.cred
 	c.Groups = slices.Clone(a.cred.Groups)
 	cmd.SysProcAttr.Credential = &c
+	if cmd.Err == nil && cmd.Path != "" {
+		cmd.Args = append([]string{"/bin/sh", "-c", runAsUmask, cmd.Path}, cmd.Args[1:]...)
+		cmd.Path = "/bin/sh"
+	}
 	env := cmd.Env
 	if env == nil {
 		env = os.Environ()
@@ -160,7 +179,7 @@ func applyRunAs(cmd *exec.Cmd, keep ...string) {
 	hasConf := false
 	for _, e := range env {
 		k, _, _ := strings.Cut(e, "=")
-		if runAsDrop[k] && !slices.Contains(keep, k) {
+		if runAsDropped(k) && !slices.Contains(keep, k) {
 			continue
 		}
 		hasConf = hasConf || k == "CLAUDE_CONFIG_DIR"
@@ -174,9 +193,6 @@ func applyRunAs(cmd *exec.Cmd, keep ...string) {
 	cmd.Env = out
 }
 
-// Capacités Linux : CAP_KILL (5), CAP_SETGID (6), CAP_SETUID (7).
-const runAsCaps = 1<<5 | 1<<6 | 1<<7
-
 func capField(status []byte, key string) uint64 {
 	for _, l := range strings.Split(string(status), "\n") {
 		if v, ok := strings.CutPrefix(l, key); ok {
@@ -187,22 +203,30 @@ func capField(status []byte, key string) uint64 {
 	return 0
 }
 
-// checkRunAsSeparation : au démarrage du serveur, si GLD_RUN_AS est fixé, vérifie que la séparation est réelle ; une erreur
-// arrête gld (jamais de repli silencieux sous le compte de la passerelle).
+// checkRunAsSeparation : au démarrage du serveur, si GLD_RUN_AS est fixé, vérifie la séparation ; une erreur arrête gld
+// (jamais de repli silencieux sous le compte de la passerelle).
 func checkRunAsSeparation() error {
 	a, err := parseRunAs(os.Getenv("GLD_RUN_AS"))
 	if a == nil || err != nil {
 		return err
 	}
+	if os.Getenv("GLD_RUN_AS_EXPERIMENTAL") != "1" {
+		return terr("srv.runas.experimentalRequired")
+	}
+	// Root seulement : passer de root à un uid non nul vide toutes les capacités des enfants, ce que ne garantit pas une
+	// passerelle non root dotée de capacités (ensemble ambiant conservé, capacités de fichier reprises par chaque gld relancé).
 	if gatewayEUID() != 0 {
-		st, _ := procStatus()
-		if capField(st, "CapEff:")&runAsCaps != runAsCaps {
-			return terr("srv.runas.notPrivileged")
-		}
-		// Les capacités ambiantes passeraient aux sessions (un changement d'uid sans root ne les efface pas).
-		if capField(st, "CapAmb:") != 0 {
-			return terr("srv.runas.ambientCaps")
-		}
+		return terr("srv.runas.notPrivileged")
+	}
+	if st, err := procStatus(); err == nil && (capField(st, "CapAmb:") != 0 || capField(st, "CapInh:") != 0) {
+		return terr("srv.runas.inheritedCaps")
+	}
+	bin, err := selfExe()
+	if err != nil {
+		return err
+	}
+	if has, err := binaryHasCaps(bin); err != nil || has {
+		return terr("srv.runas.fileCaps", "A1", bin)
 	}
 	dir, err := authDir()
 	if err != nil {
@@ -211,21 +235,32 @@ func checkRunAsSeparation() error {
 	if within(dir, a.home) {
 		return terr("srv.runas.homeInAuthDir", "A1", a.home, "A2", dir)
 	}
+	if within(a.home, dir) {
+		return terr("srv.runas.authDirInHome", "A1", dir, "A2", a.home)
+	}
+	if p, err := writableAncestor(dir, a.cred); err != nil || p != "" {
+		if err != nil {
+			p = err.Error()
+		}
+		return terr("srv.runas.ancestorWritable", "A1", p, "A2", a.name)
+	}
 	runAsAcct = a
-	readable, err := canReadAs(dir)
-	if err == nil && readable {
-		err = terr("srv.runas.authDirReadable", "A1", a.name, "A2", dir)
-	} else if err != nil {
+	auth, binW, err := canReadAs(dir, bin)
+	switch {
+	case err != nil:
 		err = terr("srv.runas.helperFailed", "A1", a.name, "A2", err)
+	case auth:
+		err = terr("srv.runas.authDirReadable", "A1", a.name, "A2", dir)
+	case binW:
+		err = terr("srv.runas.binaryWritable", "A1", a.name, "A2", bin)
 	}
 	if err != nil {
 		runAsAcct = nil
-		return err
 	}
-	return nil
+	return err
 }
 
-// within : p est dir ou un chemin sous dir.
+// within : p est dir ou un chemin sous dir (liens résolus).
 func within(dir, p string) bool {
 	if d, err := filepath.EvalSymlinks(dir); err == nil {
 		dir = d
@@ -237,40 +272,141 @@ func within(dir, p string) bool {
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, "../")
 }
 
-// canReadAsHelper relance gld sous le compte cible (« gld _canread <dossier> ») : code 0 illisible, 3 lisible.
-func canReadAsHelper(dir string) (bool, error) {
-	self, err := os.Executable()
+func statOwnerOS(p string) (uid, gid uint32, mode os.FileMode, err error) {
+	fi, err := os.Stat(p)
 	if err != nil {
-		return false, err
+		return 0, 0, 0, err
 	}
-	cmd := exec.Command(self, "_canread", dir)
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	if !ok {
+		return 0, 0, 0, errors.New(p + ": stat")
+	}
+	return st.Uid, st.Gid, fi.Mode(), nil
+}
+
+// targetCanWrite : le compte cible peut créer, renommer ou remplacer une entrée de ce dossier.
+func targetCanWrite(uid, gid uint32, mode os.FileMode, c *syscall.Credential) bool {
+	switch {
+	case uid == c.Uid:
+		return true
+	case uid == 0 && mode&os.ModeSticky != 0:
+		return false
+	case mode.Perm()&0o002 != 0:
+		return true
+	}
+	return mode.Perm()&0o020 != 0 && (gid == c.Gid || slices.Contains(c.Groups, gid))
+}
+
+// writableAncestor : le premier dossier, du dossier des comptes jusqu'à /, que le compte cible pourrait modifier ("" : aucun).
+// Un dossier absent est remplacé par son premier parent existant.
+func writableAncestor(dir string, c *syscall.Credential) (string, error) {
+	p := filepath.Clean(dir)
+	for {
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			p = r
+			break
+		} else if !errors.Is(err, os.ErrNotExist) || p == "/" {
+			return "", err
+		}
+		p = filepath.Dir(p)
+	}
+	for {
+		uid, gid, mode, err := statOwner(p)
+		if err != nil {
+			return "", err
+		}
+		if targetCanWrite(uid, gid, mode, c) {
+			return p, nil
+		}
+		if p == "/" {
+			return "", nil
+		}
+		p = filepath.Dir(p)
+	}
+}
+
+func selfExeOS() (string, error) {
+	p, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	return filepath.EvalSymlinks(p)
+}
+
+// binaryHasCapsOS : capacités de fichier (Linux seulement) ; leur absence ou un système de fichiers sans xattr ne bloque pas.
+func binaryHasCapsOS(p string) (bool, error) {
+	if runtime.GOOS != "linux" {
+		return false, nil
+	}
+	_, err := unix.Getxattr(p, "security.capability", make([]byte, 64))
+	switch {
+	case err == nil:
+		return true, nil
+	case errors.Is(err, unix.ENODATA), errors.Is(err, unix.ENOTSUP), errors.Is(err, unix.EOPNOTSUPP):
+		return false, nil
+	}
+	return false, err
+}
+
+// canReadAsHelper relance gld sous le compte cible (« gld _canread <dossier> <binaire> ») : code 0 aucun accès, 3 dossier des
+// comptes accessible, 4 binaire modifiable ; tout autre résultat est une erreur.
+func canReadAsHelper(dir, bin string) (auth, binW bool, err error) {
+	cmd := exec.Command(bin, "_canread", dir, bin)
 	cmd.Dir = "/"
 	applyRunAs(cmd)
 	err = cmd.Run()
 	var ee *exec.ExitError
 	switch {
 	case err == nil:
-		return false, nil
+		return false, false, nil
 	case errors.As(err, &ee) && ee.ExitCode() == 3:
+		return true, false, nil
+	case errors.As(err, &ee) && ee.ExitCode() == 4:
+		return false, true, nil
+	}
+	return false, false, err
+}
+
+// accessAs : vrai si le compte courant (réel) a l'un des droits mode ; absent ou refusé : faux ; autre erreur : remontée.
+func accessAs(p string, mode uint32) (bool, error) {
+	err := access(p, mode)
+	switch {
+	case err == nil:
 		return true, nil
+	case errors.Is(err, unix.EACCES), errors.Is(err, unix.ENOENT), errors.Is(err, unix.EPERM), errors.Is(err, unix.EROFS):
+		return false, nil
 	}
 	return false, err
 }
 
-// runCanRead : le corps de « gld _canread », exécuté sous le compte cible.
-func runCanRead(dir string) int {
-	readable := false
-	if _, err := os.ReadDir(dir); err == nil {
-		readable = true
+// runCanRead : le corps de « gld _canread », exécuté sous le compte cible ; lecture, écriture et traversée testées.
+func runCanRead(dir, bin string) int {
+	checks := []struct {
+		p    string
+		mode uint32
+	}{
+		{dir, unix.R_OK}, {dir, unix.W_OK}, {dir, unix.X_OK},
+		{filepath.Join(dir, "auth.db"), unix.R_OK}, {filepath.Join(dir, "auth.db"), unix.W_OK},
+		{filepath.Join(dir, "auth.db-wal"), unix.R_OK}, {filepath.Join(dir, "auth.db-wal"), unix.W_OK},
+		{filepath.Join(dir, "auth.key"), unix.R_OK}, {filepath.Join(dir, "auth.key"), unix.W_OK},
 	}
-	for _, f := range []string{"auth.db", "auth.db-wal", "auth.key"} {
-		if fh, err := os.Open(filepath.Join(dir, f)); err == nil {
-			fh.Close()
-			readable = true
+	for _, c := range checks {
+		ok, err := accessAs(c.p, c.mode)
+		if err != nil {
+			return 1
+		}
+		if ok {
+			return 3
 		}
 	}
-	if readable {
-		return 3
+	for _, p := range []string{bin, filepath.Dir(bin)} {
+		ok, err := accessAs(p, unix.W_OK)
+		if err != nil {
+			return 1
+		}
+		if ok {
+			return 4
+		}
 	}
 	return 0
 }

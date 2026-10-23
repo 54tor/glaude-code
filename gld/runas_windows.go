@@ -28,7 +28,7 @@ func checkRunAsSeparation() error {
 	return nil
 }
 
-func runCanRead(string) int { return 2 }
+func runCanRead(string, string) int { return 2 }
 
 func runSpec() int { return 2 }
 
