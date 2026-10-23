@@ -45,6 +45,9 @@ func bashPrefix(cmd string) string {
 	if len(f) == 0 || strings.Contains(f[0], "=") {
 		return ""
 	}
+	if strings.HasPrefix(f[0], ".") || strings.ContainsAny(f[0], "/$(){}*?~\"'") { // script, variable, sous-shell : pas de règle sur un nom de commande
+		return ""
+	}
 	first := filepath.Base(f[0])
 	if twoWords[first] {
 		if len(f) < 2 || strings.HasPrefix(f[1], "-") { // « git -c x=y … » : une règle sur « git » seul autoriserait tout git
@@ -53,6 +56,88 @@ func bashPrefix(cmd string) string {
 		return first + " " + f[1]
 	}
 	return first
+}
+
+var shellKeyword = map[string]bool{"for": true, "while": true, "until": true, "if": true, "then": true, "else": true, "elif": true, "fi": true, "do": true, "done": true, "case": true, "esac": true, "function": true, "{": true, "}": true, "(": true, ")": true, "!": true, "cd": true, "export": true, "set": true, "unset": true, "echo": true, "printf": true, "true": true, "false": true, "test": true, "[": true, "[[": true}
+
+// unquoted : le texte sans ce qui est entre guillemets.
+func unquoted(s string) string {
+	var b strings.Builder
+	var q rune
+	for _, c := range s {
+		switch {
+		case q != 0:
+			if c == q {
+				q = 0
+			}
+		case c == '\'' || c == '"':
+			q = c
+		default:
+			b.WriteRune(c)
+		}
+	}
+	return b.String()
+}
+
+// bashSegments : les commandes simples d'une commande composée (&&, ||, ;, |, sauts de ligne hors guillemets), comme Claude Code les
+// évalue une à une. Une commande avec here-document, substitution ou redirection vers un fichier n'est pas découpée : elle donne nil.
+// Les mots-clés du shell (for, if…), cd, echo et autres commandes sans effet à autoriser sont écartés.
+func bashSegments(cmd string) []string {
+	if strings.Contains(cmd, "<<") || strings.Contains(cmd, "$(") || strings.Contains(cmd, "`") {
+		return nil
+	}
+	var segs []string
+	var cur strings.Builder
+	var quote rune
+	flush := func() {
+		if t := strings.TrimSpace(cur.String()); t != "" {
+			segs = append(segs, t)
+		}
+		cur.Reset()
+	}
+	rs := []rune(cmd)
+	for i := 0; i < len(rs); i++ {
+		c := rs[i]
+		switch {
+		case quote != 0:
+			if c == quote {
+				quote = 0
+			}
+			cur.WriteRune(c)
+		case c == '\'' || c == '"':
+			quote = c
+			cur.WriteRune(c)
+		case c == '\\' && i+1 < len(rs):
+			cur.WriteRune(c)
+			i++
+			cur.WriteRune(rs[i])
+		case c == '&' && i+1 < len(rs) && rs[i+1] == '&', c == '|' && i+1 < len(rs) && rs[i+1] == '|':
+			i++
+			flush()
+		case c == ';' || c == '|' || c == '\n':
+			flush()
+		default:
+			cur.WriteRune(c)
+		}
+	}
+	flush()
+	var out []string
+	for _, sg := range segs {
+		// « 2>&1 », « 2>/dev/null » et « >/dev/null » ne comptent pas comme des écritures de fichier.
+		clean := strings.NewReplacer("2>&1", "", "2>/dev/null", "", ">/dev/null", "", "&>/dev/null", "").Replace(sg)
+		if strings.ContainsAny(unquoted(clean), "<>&") {
+			continue // redirection vers un fichier, arrière-plan : une règle sur la commande seule ne le couvre pas
+		}
+		f := strings.Fields(clean)
+		for len(f) > 0 && (f[0] == "do" || f[0] == "then" || f[0] == "else") { // « do ls » : la commande suit le mot-clé
+			f = f[1:]
+		}
+		if len(f) == 0 || shellKeyword[f[0]] || strings.Contains(f[0], "=") {
+			continue
+		}
+		out = append(out, strings.Join(f, " "))
+	}
+	return out
 }
 
 // tailLines : les lignes complètes des derniers n octets d'un fichier.
@@ -130,10 +215,18 @@ func permSuggestions(existing []string) []PermSuggest {
 					continue
 				}
 				if c.Type == "tool_use" && c.Name == "Bash" {
-					if p := bashPrefix(c.Input.Command); p != "" {
-						counts[p]++
-						if example[p] == "" {
-							example[p] = cut(c.Input.Command, 100)
+					cmds := bashSegments(c.Input.Command)
+					if len(cmds) == 0 {
+						cmds = []string{c.Input.Command} // commande simple, ou que bashPrefix saura refuser
+					}
+					seen := map[string]bool{} // une commande qui répète le même préfixe ne compte qu'une fois
+					for _, seg := range cmds {
+						if p := bashPrefix(seg); p != "" && !seen[p] {
+							seen[p] = true
+							counts[p]++
+							if example[p] == "" {
+								example[p] = cut(c.Input.Command, 100)
+							}
 						}
 					}
 				}
