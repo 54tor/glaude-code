@@ -10,6 +10,7 @@ import type { Actions, GroupActions } from "./actions"
 import { AccountButton } from "./AccountDialog"
 import { CreditsButton } from "./Credits"
 import { DD, GroupItems } from "./SessionMenu"
+import { cn } from "@/lib/utils"
 
 // En-tête de la page : titre, sous-titre, actions du dossier ou du groupe affiché, et avertissement d'un dossier disparu.
 export function PageHeader({
@@ -28,6 +29,7 @@ export function PageHeader({
   setHideGrouped,
   actions,
   groupActs,
+  split,
 }: {
   onMenu: () => void // mobile : ouvre le menu
   title: string
@@ -44,88 +46,95 @@ export function PageHeader({
   setHideGrouped: (v: string) => void
   actions: Actions
   groupActs: GroupActions
+  split?: boolean // vue en deux colonnes pleine largeur : l'en-tête suit leur bord gauche plutôt que le conteneur centré
 }) {
   const { t } = useTranslation()
   const ownSessions = t("shell.count.sessions", { count: own.length })
+  // Même axe que le contenu de la vue : le titre ne reste pas collé à gauche quand la liste est centrée sur grand écran.
+  const box = cn("flex flex-wrap items-center gap-x-3 px-3 md:px-6", !split && "mx-auto w-full max-w-7xl")
   return (
     <>
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-background px-3 py-3 md:px-6 md:py-4">
-        <Button variant="ghost" size="icon-sm" className="md:hidden" onClick={onMenu} aria-label={t("shell.header.openMenu")} aria-controls="menu">
-          <Menu />
-        </Button>
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-xl font-semibold tracking-tight">{title}</h2>
-          <p className="truncate text-sm text-muted-foreground">
-            {sub}
-            {qt && (route.kind === "recent" || route.kind === "all" || route.kind === "active" || route.kind === "group" || route.kind === "dir") && t("shell.header.search", { q: qt })}
-          </p>
-        </div>
-        {g && nGrouped > 0 && (
-          <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground select-none hover:text-foreground">
-            <Checkbox checked={!!hideGrouped} onCheckedChange={(c) => setHideGrouped(c === true ? "1" : "")} />
-            {t("shell.header.hideGrouped", { n: nGrouped })}
-          </label>
-        )}
-        {g && (
-          <Button variant="ghost" size="sm" asChild>
-            <Link href={`/configuration/projets?projet=${encodeURIComponent(g.project)}`} title={t("shell.header.settingsHint")}>
-              <Settings /> {t("shell.header.settings")}
-            </Link>
+      <header className="border-b bg-background">
+        <div className={cn(box, "gap-y-2 py-3 md:py-4")}>
+          <Button variant="ghost" size="icon-sm" className="md:hidden" onClick={onMenu} aria-label={t("shell.header.openMenu")} aria-controls="menu">
+            <Menu />
           </Button>
-        )}
-        {g && !g.missing && (
-          <Button variant="outline" size="sm" onClick={() => actions.newSession(g.project)} title={t("shell.header.newInDirHint")}>
-            <MessageSquarePlus /> {t("shell.header.newSession")}
-          </Button>
-        )}
-        {g && !g.missing && (
-          <Button variant="outline" size="sm" onClick={() => actions.open({ dir: firstDir! })} title={t("shell.header.resumeRecentHint")}>
-            <SquareTerminal /> {t("shell.tree.resumeRecent")}
-          </Button>
-        )}
-        {vg && rowCount > 0 && (
-          <>
-            <Button variant="outline" size="sm" onClick={() => groupActs.prompt(vg)} title={t("shell.header.newWithRefsHint")}>
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-xl font-semibold tracking-tight">{title}</h2>
+            <p className="truncate text-sm text-muted-foreground">
+              {sub}
+              {qt && (route.kind === "recent" || route.kind === "all" || route.kind === "active" || route.kind === "group" || route.kind === "dir") && t("shell.header.search", { q: qt })}
+            </p>
+          </div>
+          {g && nGrouped > 0 && (
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground select-none hover:text-foreground">
+              <Checkbox checked={!!hideGrouped} onCheckedChange={(c) => setHideGrouped(c === true ? "1" : "")} />
+              {t("shell.header.hideGrouped", { n: nGrouped })}
+            </label>
+          )}
+          {g && (
+            <Button variant="ghost" size="sm" asChild>
+              <Link href={`/configuration/projets?projet=${encodeURIComponent(g.project)}`} title={t("shell.header.settingsHint")}>
+                <Settings /> {t("shell.header.settings")}
+              </Link>
+            </Button>
+          )}
+          {g && !g.missing && (
+            <Button variant="outline" size="sm" onClick={() => actions.newSession(g.project)} title={t("shell.header.newInDirHint")}>
               <MessageSquarePlus /> {t("shell.header.newSession")}
             </Button>
-            <Button variant="outline" size="sm" onClick={() => groupActs.open(vg)} title={t("shell.header.resumeAllHint")}>
-              <SquareTerminal /> {t("shell.header.resumeAll")}
+          )}
+          {g && !g.missing && (
+            <Button variant="outline" size="sm" onClick={() => actions.open({ dir: firstDir! })} title={t("shell.header.resumeRecentHint")}>
+              <SquareTerminal /> {t("shell.tree.resumeRecent")}
             </Button>
-          </>
-        )}
-        {(g || vg) && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label={g ? t("shell.header.projectActions") : t("shell.header.groupActions")}>
-                <MoreHorizontal />
+          )}
+          {vg && rowCount > 0 && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => groupActs.prompt(vg)} title={t("shell.header.newWithRefsHint")}>
+                <MessageSquarePlus /> {t("shell.header.newSession")}
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
-              {g && (
-                <>
-                  <DropdownMenuItem onSelect={() => actions.moveGroup(g, own)}>
-                    <FolderInput /> {t("shell.header.reassign", { sessions: ownSessions })}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem variant="destructive" onSelect={() => actions.remove(own, t("shell.header.removeLabel", { sessions: ownSessions, project: g.project }))}>
-                    <Trash2 /> {t("shell.header.deleteAll", { sessions: ownSessions })}
-                  </DropdownMenuItem>
-                </>
-              )}
-              {vg && <GroupItems M={DD} vg={vg} page />}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-        <CreditsButton />
-        <AccountButton />
+              <Button variant="outline" size="sm" onClick={() => groupActs.open(vg)} title={t("shell.header.resumeAllHint")}>
+                <SquareTerminal /> {t("shell.header.resumeAll")}
+              </Button>
+            </>
+          )}
+          {(g || vg) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon-sm" aria-label={g ? t("shell.header.projectActions") : t("shell.header.groupActions")}>
+                  <MoreHorizontal />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                {g && (
+                  <>
+                    <DropdownMenuItem onSelect={() => actions.moveGroup(g, own)}>
+                      <FolderInput /> {t("shell.header.reassign", { sessions: ownSessions })}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem variant="destructive" onSelect={() => actions.remove(own, t("shell.header.removeLabel", { sessions: ownSessions, project: g.project }))}>
+                      <Trash2 /> {t("shell.header.deleteAll", { sessions: ownSessions })}
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {vg && <GroupItems M={DD} vg={vg} page />}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          <CreditsButton />
+          <AccountButton />
+        </div>
       </header>
 
       {g?.missing && (
-        <div className="flex items-center gap-3 border-b bg-warning/10 px-6 py-3 text-sm">
-          <TriangleAlert className="size-4 shrink-0 text-warning" />
-          <p className="flex-1">{t("shell.header.missing")}</p>
-          <Button size="sm" variant="outline" onClick={() => actions.moveGroup(g, own)}>
-            {t("shell.header.reassignShort")}
-          </Button>
+        <div className="border-b bg-warning/10 text-sm">
+          <div className={cn(box, "gap-3 py-3")}>
+            <TriangleAlert className="size-4 shrink-0 text-warning" />
+            <p className="flex-1">{t("shell.header.missing")}</p>
+            <Button size="sm" variant="outline" onClick={() => actions.moveGroup(g, own)}>
+              {t("shell.header.reassignShort")}
+            </Button>
+          </div>
         </div>
       )}
     </>
