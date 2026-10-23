@@ -1,9 +1,15 @@
 import i18next from "i18next"
 import { initReactI18next } from "react-i18next"
-import en from "./en.json"
-import fr from "./fr.json"
-
 export type Lang = "fr" | "en"
+
+// Un fichier par domaine (fr/<domaine>.json, en/<domaine>.json), dont la clé de premier niveau porte le nom du fichier.
+const merge = (mods: Record<string, { default: object }>) => Object.assign({}, ...Object.values(mods).map((m) => m.default))
+export const catalogFiles = {
+  fr: import.meta.glob<{ default: object }>("./fr/*.json", { eager: true }),
+  en: import.meta.glob<{ default: object }>("./en/*.json", { eager: true }),
+}
+const fr = merge(catalogFiles.fr)
+const en = merge(catalogFiles.en)
 
 const pick = (s: string): Lang | "" => {
   const v = s.trim().toLowerCase()

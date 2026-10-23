@@ -1,0 +1,18 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "save": "Save",
+    "delete": "Delete",
+    "confirm": "Confirm",
+    "apply": "Apply",
+    "copy": "Copy",
+    "copied": "Copied",
+    "loading": "Loading…",
+    "retry": "Retry",
+    "back": "Back",
+    "yes": "Yes",
+    "no": "No",
+    "ok": "ok"
+  }
+}
