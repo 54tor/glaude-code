@@ -42,16 +42,53 @@ func TestGuardHookDenies(t *testing.T) {
 func TestGuardSettingsShape(t *testing.T) {
 	dir := "/srv/x/gld"
 	b, _ := json.Marshal(guardSettings(dir))
-	want := `{"hooks":{"PreToolUse":[{"hooks":[{"args":["_guard","/srv/x/gld"],"command":"CMD","onFailure":"block","type":"command"}],"matcher":"Bash|PowerShell|Monitor"}]},` +
+	want := `{"hooks":{"PreToolUse":[{"hooks":[{"command":"CMD","onFailure":"block","type":"command"}],"matcher":"Bash|PowerShell|Monitor"}]},` +
 		`"permissions":{"deny":["Read(//srv/x/gld/**)","Edit(//srv/x/gld/**)","Read(//srv/x/gld/auth.db)","Edit(//srv/x/gld/auth.db)","Read(//srv/x/gld/auth.key)","Edit(//srv/x/gld/auth.key)"]},` +
 		`"sandbox":{"filesystem":{"denyRead":["/srv/x/gld"],"denyWrite":["/srv/x/gld"]}}}`
-	self, _ := guardCommand(dir)
-	cmd, _ := json.Marshal(self)
+	cmd, _ := json.Marshal(guardCommand(dir))
 	if got := strings.Replace(string(b), string(cmd), `"CMD"`, 1); got != want {
 		t.Fatalf("got  %s\nwant %s", got, want)
 	}
-	if !filepath.IsAbs(self) {
-		t.Fatalf("binaire du hook non absolu : %s", self)
+	if want := shq(guardSelf()) + " _guard '/srv/x/gld'"; guardCommand(dir) != want || !filepath.IsAbs(guardSelf()) {
+		t.Fatalf("commande du hook : %s", guardCommand(dir))
+	}
+}
+
+func TestGuardHookCommandLine(t *testing.T) {
+	for _, c := range []struct {
+		self, dir string
+		win       bool
+		want      string
+	}{
+		{"/opt/g ld/gld", "/home/a'b/.config/gld", false, `'/opt/g ld/gld' _guard '/home/a'\''b/.config/gld'`},
+		{`C:\Program Files\gld\gld.exe`, `C:\Users\x\AppData\Roaming\gld`, true, `"C:/Program Files/gld/gld.exe" _guard "C:/Users/x/AppData/Roaming/gld"`},
+		{`C:\a$b\gld.exe`, "C:\\d`e", true, `"C:/a\$b/gld.exe" _guard "C:/d\` + "`" + `e"`},
+	} {
+		if got := hookCommandLine(c.self, c.dir, c.win); got != c.want {
+			t.Errorf("hookCommandLine(%q, %q, %v) = %s, attendu %s", c.self, c.dir, c.win, got, c.want)
+		}
+	}
+}
+
+func TestGuardHookWindowsSpellings(t *testing.T) {
+	t.Setenv("GLD_AUTH_DIR", "")
+	for cmd, want := range map[string]bool{
+		`type auth.db.`:         true,
+		`type auth.db...`:       true,
+		`type "auth.db."`:       true,
+		`more < auth.db::$DATA`: true,
+		`copy auth.db-wal x`:    true,
+		`type auth.key. > x`:    true,
+		`type auth.db.bak`:      false,
+		`dir gld.bak`:           false,
+		`dir /srv/gld-backups`:  false,
+		`type C:\srv\gld\x`:     true,
+		`type C:\srv\gld.bak\x`: false,
+		`type C:\srv\gld.\x`:    true,
+	} {
+		if got := guardHook(cmd, `C:\srv\gld`); got != want {
+			t.Errorf("guardHook(%q) = %v, attendu %v", cmd, got, want)
+		}
 	}
 }
 
@@ -247,12 +284,15 @@ func TestManagedInstalledExact(t *testing.T) {
 			"hooks": []any{map[string]any{"type": "command", "command": cmd, "args": args}}}}}
 		return m
 	}
-	self, args := guardCommand(dir)
+	self, args, line := guardSelf(), []string{"_guard", dir}, guardCommand(dir)
 	for _, c := range []struct {
 		m    map[string]any
 		want bool
 	}{
-		{hook("Bash|PowerShell", self, args), true},
+		{hook("Bash|PowerShell|Monitor", line, nil), true},
+		{hook("Bash", line+" ", nil), false},
+		{hook("Bash", hookCommandLine(self, "/autre/dossier", false), nil), false},
+		{hook("Bash|PowerShell", self, args), true}, // forme exec du commit précédent
 		{hook("Bash", self, args), true},
 		{hook("PowerShell", self, args), false},
 		{hook("Bash", "/autre/gld", args), false},
