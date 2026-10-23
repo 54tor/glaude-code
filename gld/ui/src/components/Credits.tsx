@@ -4,6 +4,7 @@ import { Bug, ChevronRight, Coffee, Copy, ExternalLink, GitFork, Heart, Star } f
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
+import { Tip } from "@/components/ui/tooltip"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
 // Adresses de soutien : vides, la ligne correspondante n'est pas affichée.
@@ -93,11 +94,13 @@ export function CreditsButton() {
   const [open, setOpen] = useState(false)
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label={t("shell.credits.support")} title={t("shell.credits.support")}>
-          <Heart />
-        </Button>
-      </DialogTrigger>
+      <Tip label={t("shell.credits.support")}>
+        <DialogTrigger asChild>
+          <Button variant="ghost" size="icon-sm" aria-label={t("shell.credits.support")}>
+            <Heart />
+          </Button>
+        </DialogTrigger>
+      </Tip>
       <DialogContent className="max-h-[90vh] gap-5 overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">

@@ -149,10 +149,10 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
           {!data && <Skeleton className="m-2 h-24" />}
           {groups.map((g) => (
             <section key={g.title} className="mb-3">
-              <p className="flex items-center px-2 py-1 text-xs font-semibold text-muted-foreground">
+              <h2 className="flex items-center px-2 py-1 text-xs font-semibold text-muted-foreground">
                 <span className="flex-1 truncate">{g.title}</span>
                 <span className="font-normal tabular-nums">{g.items.length}</span>
-              </p>
+              </h2>
               <ul className="space-y-px">
                 {g.items.map((s) => (
                   <li key={s.key}>

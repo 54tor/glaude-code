@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next"
 import { api, type HomesInfo } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { Button } from "@/components/ui/button"
+import { Tip } from "@/components/ui/tooltip"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,11 +60,13 @@ export function HomeSwitcher() {
   }
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-9 text-muted-foreground" aria-label={t("shell.home.label")} title={t("shell.home.titleWith", { label })}>
-          <FolderCog className="size-6" />
-        </Button>
-      </DropdownMenuTrigger>
+      <Tip label={t("shell.home.titleWith", { label })}>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="size-9 text-muted-foreground" aria-label={t("shell.home.label")}>
+            <FolderCog className="size-6" />
+          </Button>
+        </DropdownMenuTrigger>
+      </Tip>
       <DropdownMenuContent align="end" className="w-72">
         <DropdownMenuLabel>{t("shell.home.label")}</DropdownMenuLabel>
         <DropdownMenuItem onSelect={() => select("")}>
