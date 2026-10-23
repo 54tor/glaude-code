@@ -123,7 +123,7 @@ export function DirPicker({ pick, home }: { pick: Pick | null; home: string }) {
                 <button
                   ref={d === focus ? (el) => el?.scrollIntoView({ block: "center" }) : undefined}
                   aria-current={d === focus ? "true" : undefined}
-                  className={`flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left hover:bg-muted ${d === focus ? "bg-accent font-medium" : ""}`}
+                  className={`flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left hover:bg-muted ${d === focus ? "bg-accent text-accent-foreground" : ""}`}
                   onClick={() => go(join(cur, d, sep))}
                 >
                   <Folder className="size-4 shrink-0 text-muted-foreground" />
