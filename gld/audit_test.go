@@ -177,3 +177,21 @@ func TestCorbeilleAjoutsConcurrents(t *testing.T) {
 		}
 	}
 }
+
+// Un jeton fourni par l'utilisateur n'est jamais imprimé ; seul un jeton généré l'est (il faut bien le connaître).
+func TestJetonFourniJamaisImprime(t *testing.T) {
+	t.Setenv("GLD_WEB_TOKEN", "0123456789abcdef0123")
+	tok, gen, _ := takeToken(false)
+	if s := tokenShown(tok, gen); s != "$GLD_WEB_TOKEN" {
+		t.Fatalf("jeton fourni imprimé : %q", s)
+	}
+	for _, u := range urlsFor("127.0.0.1", "8799", tokenShown(tok, gen)) {
+		if strings.Contains(u, tok) {
+			t.Fatalf("jeton fourni dans l'adresse : %q", u)
+		}
+	}
+	tok, gen, _ = takeToken(false)
+	if s := tokenShown(tok, gen); s != tok || len(s) != 48 {
+		t.Fatalf("jeton généré : %q", s)
+	}
+}

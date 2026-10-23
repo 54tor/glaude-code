@@ -116,7 +116,8 @@ chiffrée : passez par un tunnel (SSH, Tailscale…) et **ne l'exposez jamais di
 lire et supprimer vos sessions et lancer Claude.
 
 Sur une machine partagée avec d'autres comptes, l'adresse locale est joignable par eux aussi. Fixez alors un jeton
-(16 caractères au moins) : il est exigé même sans `--listen`, et gld affiche l'adresse à ouvrir.
+(16 caractères au moins) : il est exigé même sans `--listen`, et gld affiche l'adresse à ouvrir avec `$GLD_WEB_TOKEN`
+à la place du jeton, pour qu'il ne finisse pas dans les journaux : remplacez-le par votre valeur.
 
 ```sh
 GLD_WEB_TOKEN=$(openssl rand -hex 24) gld

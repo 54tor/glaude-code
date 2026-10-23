@@ -41,19 +41,29 @@ func checkToken(t string) error {
 	return nil
 }
 
-// takeToken lit GLD_WEB_TOKEN (un jeton neuf hors localhost s'il manque), puis retire les jetons de l'environnement : claude,
-// tmux et les onglets lancés n'en héritent pas (un `env` exécuté par Claude finirait dans un transcript). En local, "" : pas de jeton.
-func takeToken(local bool) (string, error) {
-	token := os.Getenv("GLD_WEB_TOKEN")
+// takeToken lit GLD_WEB_TOKEN (un jeton neuf hors localhost s'il manque, generated vaut alors true), puis retire les jetons
+// de l'environnement : claude, tmux et les onglets lancés n'en héritent pas (un `env` exécuté par Claude finirait dans un
+// transcript). En local, "" : pas de jeton.
+func takeToken(local bool) (token string, generated bool, err error) {
+	token = os.Getenv("GLD_WEB_TOKEN")
 	os.Unsetenv("GLD_WEB_TOKEN")
 	os.Unsetenv(childTokenEnv)
 	if token != "" {
-		return token, checkToken(token)
+		return token, false, checkToken(token)
 	}
 	if !local {
-		token = newToken()
+		return newToken(), true, nil
 	}
-	return token, nil
+	return "", false, nil
+}
+
+// tokenShown : le jeton tel qu'imprimé dans l'adresse à ouvrir. Celui que fournit l'utilisateur n'est jamais écrit : stderr
+// finit dans des journaux (systemd les conserve), et il le connaît déjà.
+func tokenShown(token string, generated bool) string {
+	if generated {
+		return token
+	}
+	return "$GLD_WEB_TOKEN"
 }
 
 func sameToken(a, b string) bool { return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1 }
