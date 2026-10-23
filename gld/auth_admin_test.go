@@ -487,8 +487,13 @@ func TestHomesSaveCascadeACL(t *testing.T) {
 		g.s.Grant(bob.id, id, RightMemRead)
 		g.s.Grant(root.id, id, RightMemRead)
 	}
+	// Liste partielle sans Removed (l'admin ne voit pas tous les homes) : rien n'est perdu.
 	g.ok(g.do("POST", "/homes-save", &root, map[string]any{"Homes": []Home{{Name: "a", Dir: da, ID: ida}}}))
-	if g.aclRows(idb) != 0 || g.aclRows(ida) != 2 || g.aclRows(mainHomeID) != 2 {
+	if len(readHomes()) != 2 || g.aclRows(idb) != 2 || g.aclRows(ida) != 2 {
+		t.Fatalf("liste partielle : homes=%d b=%d a=%d", len(readHomes()), g.aclRows(idb), g.aclRows(ida))
+	}
+	g.ok(g.do("POST", "/homes-save", &root, map[string]any{"Homes": []Home{{Name: "a", Dir: da, ID: ida}}, "Removed": []string{idb}}))
+	if len(readHomes()) != 1 || g.aclRows(idb) != 0 || g.aclRows(ida) != 2 || g.aclRows(mainHomeID) != 2 {
 		t.Fatalf("cascade : b=%d a=%d main=%d", g.aclRows(idb), g.aclRows(ida), g.aclRows(mainHomeID))
 	}
 	var n int
