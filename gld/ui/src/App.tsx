@@ -164,6 +164,14 @@ export default function App() {
       toast.info("Plus aucune session en attente")
     }
   }
+  // La session affichée par le carrousel a été supprimée (ou a disparu) : on passe à la suivante, ou on sort du mode.
+  const gone = !!data && !!reading && !everyId.has(reading)
+  useEffect(() => {
+    if (!carousel || !gone) return
+    const t = setTimeout(advanceCarousel, 0)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carousel, gone])
   const closeReader = () => (
     setCarousel(false),
     setParams(
