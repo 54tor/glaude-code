@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"net"
 	"net/http"
 	"net/netip"
@@ -66,11 +67,12 @@ func main() {
 		os.Exit(1)
 	}
 	// Une base illisible ou une clé qui ne la déchiffre pas arrête le serveur : repartir en mode ouvert contournerait les comptes.
-	if authSt, err = startAuth(); err != nil {
+	_, on, err := authState()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.authRefused", map[string]any{"A1": err.Error()}))
 		os.Exit(1)
 	}
-	if authMode(authSt) {
+	if on {
 		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.authMode", nil))
 	}
 	tokenPrincipal = tokenForChildren(token)
@@ -120,19 +122,81 @@ func main() {
 	<-done
 }
 
-// authSt : base des comptes de la passerelle ; nil dans un home enfant (et dans les tests qui ne l'ouvrent pas).
-var authSt *authStore
+// État du mode multi-utilisateur, relu au plus toutes les modeEvery. Tant que auth.db n'existe pas (créée par `gld user add`),
+// rien n'est créé ni ouvert : ni dossier, ni base, ni clé, ni coffre-fort.
+var (
+	modeNow   = time.Now
+	modeEvery = 2 * time.Second
+	authMu    sync.Mutex
+	authSt    *authStore // nil tant que la base n'existe pas, et toujours dans un home enfant
+	authErr   error      // base inutilisable : le service est refusé, jamais rendu en mode ouvert
+	authUsers bool
+	authSeen  bool      // des comptes ont existé : seule une table vide lue avec succès rend le mode ouvert
+	authAt    time.Time // dernier contrôle ; zéro : à refaire
+)
 
-// startAuth ouvre la base des comptes ; jamais dans un enfant, qui ne sert que sa passerelle.
-func startAuth() (*authStore, error) {
+var errAuthGone = errors.New("auth.db disparue alors que des comptes existaient")
+
+// authState : la base (ouverte au premier contrôle qui la trouve), le mode actif (au moins un compte) et l'échec éventuel.
+// Toute erreur ferme le service (503) : une base illisible ne doit jamais ouvrir l'interface sans compte.
+func authState() (*authStore, bool, error) {
 	if childToken != "" {
-		return nil, nil
+		return nil, false, nil
 	}
-	return openAuthStore()
+	authMu.Lock()
+	defer authMu.Unlock()
+	now := modeNow()
+	if !authAt.IsZero() && now.Sub(authAt) < modeEvery {
+		return authSt, authUsers, authErr
+	}
+	authAt, authErr = now, nil
+	authUsers, authErr = authCheck()
+	if authErr != nil {
+		journal("auth: base des comptes inutilisable : %v", authErr)
+		authUsers = false
+	}
+	if authUsers {
+		authSeen = true
+	}
+	return authSt, authUsers, authErr
 }
 
-// authMode : jugé à chaque requête, pour qu'un premier compte créé par la ligne de commande s'applique sans redémarrage.
-func authMode(s *authStore) bool { return s != nil && childToken == "" && s.HasUsers() }
+func authCheck() (bool, error) {
+	dir, err := authDir()
+	if err != nil { // sans dossier de configuration, `gld user add` n'aurait pas pu créer la base non plus
+		if authSeen {
+			return false, err
+		}
+		return false, nil
+	}
+	if _, err := os.Lstat(filepath.Join(dir, "auth.db")); err != nil {
+		switch {
+		case !errors.Is(err, fs.ErrNotExist):
+			return false, err
+		case authSeen:
+			return false, errAuthGone
+		}
+		return false, nil
+	}
+	if authSt == nil {
+		st, err := openAuthStore()
+		if err != nil {
+			return false, err
+		}
+		authSt = st
+	}
+	on, err := authSt.HasUsers()
+	if err == nil && !on {
+		authSeen = false
+	}
+	return on, err
+}
+
+// authMode : mode multi-utilisateur actif (au moins un compte, processus non enfant), jugé à chaque requête.
+func authMode() bool {
+	_, on, _ := authState()
+	return on
+}
 
 var xffWarned sync.Once
 
@@ -183,13 +247,12 @@ func handler() http.Handler {
 	// Anti DNS-rebinding : seul le Host local est servi (sauf écoute hors localhost, où le jeton le remplace).
 	// Anti CSRF : http.CrossOriginProtection (bibliothèque standard) refuse toute requête modifiante venue d'une autre origine.
 	// Le choix de dossier de configuration (homes.go) vient après ces gardes : la passerelle juge la requête d'origine avant de la transmettre.
-	// En mode multi-utilisateur, le garde des comptes s'insère entre ces gardes et le choix du dossier.
-	st := authSt
-	var gated http.Handler
-	if st != nil {
-		routesAuth(mux, st, newThrottle(st.db))
-		gated = http.NewCrossOriginProtection().Handler(authGate(mux, st, withAuthWatch(withHomes(mux))))
-	}
+	// En mode multi-utilisateur, le garde des comptes s'insère entre ces gardes et le choix du dossier. Les routes /auth/* ne
+	// sont montées qu'une fois la base trouvée.
+	var (
+		gateOnce sync.Once
+		gated    http.Handler
+	)
 	guarded := http.NewCrossOriginProtection().Handler(withHomes(mux))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !openHosts && !hosts[r.Host] {
@@ -200,7 +263,18 @@ func handler() http.Handler {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
-		if gated != nil && authMode(st) {
+		st, on, err := authState()
+		if err != nil {
+			gateDeny(w, 503, "srv.auth.baseInutilisable")
+			return
+		}
+		if st != nil {
+			gateOnce.Do(func() {
+				routesAuth(mux, st, newThrottle(st.db))
+				gated = http.NewCrossOriginProtection().Handler(authGate(mux, st, withAuthWatch(withHomes(mux))))
+			})
+		}
+		if on {
 			warnXFF(r)
 			gated.ServeHTTP(w, r)
 			return

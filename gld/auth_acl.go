@@ -100,7 +100,10 @@ var passiveRoutes = map[string]bool{
 var tokenPrincipal = func(*http.Request) *Principal { return nil }
 
 // gateActive : le garde est monté devant le mux (mode multi-utilisateur), jugé à chaque requête.
-func gateActive() bool { return authMode(authSt) }
+func gateActive() bool {
+	_, on, err := authState()
+	return on || err != nil
+}
 
 type gateInfo struct {
 	p     *Principal
@@ -350,6 +353,14 @@ func withAuthWatch(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		// /chat relayé à un enfant : la coupure ne lui parvient que comme un client parti, et un tour continue alors (onglet
+		// fermé). La passerelle lui demande donc l'arrêt explicitement, avec l'identifiant lu ici (l'enfant n'en lit pas plus).
+		var chatID, child string
+		if g.pat == "POST /chat" && homeFrom(r) != "" {
+			var req struct{ ID string }
+			peekJSON(r, &req)
+			chatID, child = req.ID, homeFrom(r)
+		}
 		ctx, cancel := context.WithCancelCause(r.Context())
 		defer cancel(nil)
 		r = r.WithContext(ctx)
@@ -364,6 +375,9 @@ func withAuthWatch(next http.Handler) http.Handler {
 					if authWS(r, g.need) != nil {
 						journal("auth: flux %s coupé (session ou droit retiré)", g.pat)
 						cancel(errAuthRevoked)
+						if chatID != "" {
+							stopChildChat(child, chatID)
+						}
 						return
 					}
 				}
@@ -372,3 +386,29 @@ func withAuthWatch(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// stopChildChat envoie POST /chat-stop à l'enfant du home, par son proxy (en-tête X-Gld-Child compris).
+func stopChildChat(home, id string) {
+	p, err := homeProxy(home)
+	if err != nil {
+		journal("auth: arrêt du tour %s sur %s : %v", id, home, err)
+		return
+	}
+	b, _ := json.Marshal(map[string]string{"ID": id})
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "POST", "/chat-stop", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	w := &discardWriter{h: http.Header{}}
+	p.ServeHTTP(w, req)
+	journal("auth: arrêt du tour %s sur %s demandé : %d", id, home, w.code)
+}
+
+type discardWriter struct {
+	h    http.Header
+	code int
+}
+
+func (d *discardWriter) Header() http.Header         { return d.h }
+func (d *discardWriter) Write(b []byte) (int, error) { return len(b), nil }
+func (d *discardWriter) WriteHeader(c int)           { d.code = c }
