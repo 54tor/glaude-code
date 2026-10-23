@@ -59,7 +59,7 @@ func main() {
 
 	h := handler()
 	local := isLoopback(*listen)
-	token, err := takeToken(local)
+	token, generated, err := takeToken(local)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -93,11 +93,11 @@ func main() {
 	if local && token == "" {
 		fmt.Fprintln(os.Stderr, "http://"+net.JoinHostPort(*listen, port))
 	} else if local {
-		fmt.Fprintln(os.Stderr, "http://"+net.JoinHostPort(*listen, port)+"/?token="+token)
+		fmt.Fprintln(os.Stderr, "http://"+net.JoinHostPort(*listen, port)+"/?token="+tokenShown(token, generated))
 	} else {
 		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.plainHTTP", map[string]any{"A1": net.JoinHostPort(*listen, port)}))
 		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.preferTunnel", nil))
-		for _, u := range urlsFor(*listen, port, token) {
+		for _, u := range urlsFor(*listen, port, tokenShown(token, generated)) {
 			fmt.Fprintln(os.Stderr, "  "+u)
 		}
 	}
