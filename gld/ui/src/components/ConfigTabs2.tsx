@@ -1,3 +1,4 @@
+import { loc } from "@/i18n"
 import { useState } from "react"
 import { Check, ClipboardCopy, FolderOpen, Globe, Pencil, Plus, RotateCcw, Sparkles, Trash2, X } from "lucide-react"
 import type { BackupInfo, CfgEdit, CfgOverview, PermSuggest } from "@/lib/api"
@@ -33,7 +34,7 @@ const KINDS = [
 const RULE_KINDS = KINDS.slice(0, 3) // catégories entre lesquelles une règle de permission peut passer
 const DIRS = "additionalDirectories"
 // Affichage trié (le fichier garde son ordre) : par outil (Bash, Edit, Read…), puis alphabétique, sans tenir compte de la casse.
-export const byRule = (a: string, b: string) => a.localeCompare(b, "fr", { sensitivity: "base", numeric: true })
+export const byRule = (a: string, b: string) => a.localeCompare(b, loc(), { sensitivity: "base", numeric: true })
 
 export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTransfer, added, moveRule }: { added: (file: string, kind: string) => string[]; moveRule: (file: string, from: string, rule: string, to: string, text: string) => Promise<void>; onTransfer: (file: string, kind: string, rule: string, move: boolean) => void; gone: (file: string, kind: string, rule: string) => boolean; file: string; label: string; doc: Doc; propose: Propose; proposePerms: (file: string, text: string, mode: string, then?: () => void, now?: boolean) => Promise<string | null> }) {
   const a = useActions()

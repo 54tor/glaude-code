@@ -1,3 +1,4 @@
+import { loc } from "@/i18n"
 import { ALargeSmall, Clock, HardDrive } from "lucide-react"
 import { toast } from "sonner"
 import type { MemFile, MemProject, MemTarget } from "@/lib/api"
@@ -12,7 +13,7 @@ export const SORTS = [
 ] as const
 export type Sort = { by: string; dir: string }
 export const DEFAULT_SORT: Sort = { by: "date", dir: "desc" }
-export const byName = (a: string, b: string) => a.localeCompare(b, "fr", { numeric: true })
+export const byName = (a: string, b: string) => a.localeCompare(b, loc(), { numeric: true })
 // Comparateur de fichiers ; à égalité (la taille est en Ko arrondis), le nom départage.
 export const cmpFiles = (by: string, dir: string) => (a: MemFile, b: MemFile) => {
   const d = (by === "name" ? byName(a.name, b.name) : by === "size" ? a.kb - b.kb : a.mtime - b.mtime) || byName(a.name, b.name)

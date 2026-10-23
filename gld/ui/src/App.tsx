@@ -1,4 +1,6 @@
 import { toast } from "sonner"
+import { useTranslation } from "react-i18next"
+import { resolveFront, setLang } from "@/i18n"
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useSearchParams } from "wouter"
 import { type Group, type Session, type VGroup } from "@/lib/api"
@@ -44,6 +46,9 @@ export default function App() {
   const reading = params.get("s")
 
   const { data, setData, snips, now, reload } = useAppData()
+  useTranslation() // re-rend toute l'application quand la langue change
+  const serverLang = data?.lang
+  useEffect(() => setLang(resolveFront(serverLang, navigator.language)), [serverLang])
   const [picked, setPicked] = useState(() => new Set<string>())
   const [args, setArgs] = useLocal("ccArgs", "")
   const [hideGrouped, setHideGrouped] = useLocal("ccHideGrouped", "") // vue d'un dossier : masquer les sessions déjà groupées

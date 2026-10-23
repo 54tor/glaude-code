@@ -1,0 +1,10 @@
+{
+  "common": {
+    "ok": "ok"
+  },
+  "format": {
+    "now": "just now",
+    "kb": "KB",
+    "mb": "MB"
+  }
+}

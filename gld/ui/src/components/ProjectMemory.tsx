@@ -1,3 +1,4 @@
+import { loc } from "@/i18n"
 import { useEffect, useRef, useState } from "react"
 import { BookOpen, Brain, ChevronRight, ClipboardCopy, Copy, FileText, Globe, Link as LinkIcon, ExternalLink, Pencil, ScrollText, Tag, Trash2 } from "lucide-react"
 import { useLocation } from "wouter"
@@ -130,7 +131,7 @@ export function ProjectMemory({ dir }: { dir: string }) {
   const refresh = () => setTick((t) => t + 1)
   if (!files || files.length === 0) return null
   const tokens = files.filter((f) => f.always).reduce((n, f) => n + f.tokens, 0)
-  const sorted = [...files].sort((a, b) => +!!b.always - +!!a.always || a.name.localeCompare(b.name, "fr"))
+  const sorted = [...files].sort((a, b) => +!!b.always - +!!a.always || a.name.localeCompare(b.name, loc()))
 
   const setType = async (f: MemFile, type: string) => report(await api.post("/memory-type", { key: f.key, type })) && refresh()
   const toGlobal = async (f: MemFile, copyIt: boolean) => report((await api.post("/memory-move", { key: f.key, to: "global", copy: copyIt })) as { ok: boolean; out: string }) && refresh()
@@ -154,7 +155,7 @@ export function ProjectMemory({ dir }: { dir: string }) {
         <span className="font-medium">Mémoire du projet</span>
         <span className="text-xs text-muted-foreground">
           {files.length} fichier{files.length > 1 ? "s" : ""}
-          {tokens > 0 && ` · ≈ ${tokens.toLocaleString("fr-FR")} tokens chargés à chaque session`}
+          {tokens > 0 && ` · ≈ ${tokens.toLocaleString(loc())} tokens chargés à chaque session`}
         </span>
       </button>
       {open && (
