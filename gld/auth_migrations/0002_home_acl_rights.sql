@@ -1,0 +1,14 @@
+DROP TABLE home_acl;
+CREATE TABLE home_acl (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  home_id TEXT NOT NULL,
+  mem_read INTEGER NOT NULL DEFAULT 0,
+  mem_write INTEGER NOT NULL DEFAULT 0,
+  config_write INTEGER NOT NULL DEFAULT 0,
+  mem_sync INTEGER NOT NULL DEFAULT 0,
+  usage_read INTEGER NOT NULL DEFAULT 0,
+  sessions_read INTEGER NOT NULL DEFAULT 0,
+  exec INTEGER NOT NULL DEFAULT 0,
+  sig BLOB,
+  PRIMARY KEY (user_id, home_id)
+);

@@ -21,7 +21,7 @@ import (
 
 type cliFunc func(ctx context.Context, args []string, out io.Writer) error
 
-var cliCommands = map[string]cliFunc{"matin": cliMatin}
+var cliCommands = map[string]cliFunc{"matin": cliMatin, "user": cliUser}
 
 // dispatchCLI exécute une commande si argv la désigne. ok=false : c'est le serveur qu'on lance.
 func dispatchCLI(argv []string) (code int, ok bool) {
