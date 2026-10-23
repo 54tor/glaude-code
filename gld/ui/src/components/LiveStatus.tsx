@@ -63,7 +63,7 @@ export function LiveBar({ live: { st, open }, id }: { live: Live; id: string }) 
     <div className="space-y-2">
       {st.queue?.map((m) => (
         <div key={m.ts + m.t} className="mb-3 flex justify-end" title={new Date(m.ts).toLocaleString("fr-FR")}>
-          <div className="msg relative max-w-[85%] rounded-2xl rounded-br-md bg-muted/30 px-4 py-2.5 break-words whitespace-pre-wrap text-muted-foreground outline-1 -outline-offset-1 outline-dashed outline-border">
+          <div className="msg relative max-w-[85%] rounded-lg bg-muted/30 px-4 py-2.5 break-words whitespace-pre-wrap text-muted-foreground outline-1 -outline-offset-1 outline-dashed outline-border">
             {m.t}
             <span className="absolute top-full right-2 mt-0.5 text-[10px] font-medium tracking-wide whitespace-nowrap uppercase">En attente de lecture par la session</span>
           </div>
