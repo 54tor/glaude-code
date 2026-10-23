@@ -37,17 +37,12 @@ type authAPI struct {
 	mu       sync.Mutex
 	reauthAt map[string]time.Time
 	busy     map[string]bool
-	denied   map[string]time.Time
-
-	// Minute en cours de rateLog : événements neufs écrits, événements tus, ligne du résumé « suppressed ».
-	rlStart            time.Time
-	rlFresh, rlDropped int64
-	rlRow              int64
+	rl       map[string]*rlSource
 }
 
 const (
-	deniedCap  = 1024
-	rateBudget = 20
+	rlCap      = 1024
+	rateBudget = 5
 )
 
 // oversizeName : clé commune des noms de plus de 64 caractères ; normName rogne les espaces, aucun nom tapé n'y aboutit.
@@ -100,7 +95,7 @@ func (t *throttle) mfaFails(user string) int64 {
 }
 
 func routesAuth(mux *http.ServeMux, s *authStore, th *throttle) *authAPI {
-	a := &authAPI{s: s, th: th, reauthAt: map[string]time.Time{}, busy: map[string]bool{}, denied: map[string]time.Time{}}
+	a := &authAPI{s: s, th: th, reauthAt: map[string]time.Time{}, busy: map[string]bool{}, rl: map[string]*rlSource{}}
 	mux.HandleFunc("POST /auth/login", a.login)
 	mux.HandleFunc("POST /auth/mfa/totp", a.mfaTOTP)
 	mux.HandleFunc("POST /auth/mfa/recovery", a.mfaRecovery)
@@ -307,57 +302,96 @@ func (a *authAPI) need(w http.ResponseWriter, r *http.Request, full bool) *Princ
 	return p
 }
 
-// deniedLog journalise un refus au plus une fois par minute et par adresse : un flot anonyme
-// ne doit pas pouvoir remplir auth_events.
+// deniedLog journalise un refus ; anonyme, il passe par la limite de rateLog.
 func (a *authAPI) deniedLog(uid int64, ip, kind string) { a.rateLog(uid, "", ip, kind, "denied") }
 
-// rateLog écrit un événement au plus une fois par minute pour un même (type, issue, adresse) ; le nom tapé, choisi par le
-// client, n'entre pas dans la clé. Au plus rateBudget événements neufs par minute en tout. Ce qui n'est pas écrit (doublon,
-// budget épuisé, table pleine) est compté dans un seul événement « suppressed » par minute, dont l'issue est le compte.
+// rlSource : la minute en cours d'une adresse (déjà réduite à son /64 par clientIP).
+type rlSource struct {
+	start   time.Time
+	fresh   int
+	seen    map[string]bool
+	dropped int64
+}
+
+type rlSummary struct {
+	ip      string
+	at      int64
+	dropped int64
+}
+
+// rateLog : un événement qui porte un compte est toujours écrit (borné par l'authentification). Un événement anonyme est
+// écrit au plus une fois par minute pour un même (type, issue) et au plus rateBudget fois par minute pour une même adresse ;
+// le nom tapé n'entre dans aucune clé. Le reste est compté en mémoire, et chaque minute close d'une adresse qui a perdu
+// des événements donne un seul événement « suppressed » (issue : le nombre perdu). Aucune écriture sous a.mu.
 func (a *authAPI) rateLog(uid int64, name, ip, kind, outcome string) {
+	if r := []rune(name); len(r) > 64 {
+		name = string(r[:64])
+	}
 	now := authNow()
-	k := kind + "|" + outcome + "|" + ip
+	write := uid != 0
 	a.mu.Lock()
-	if now.Sub(a.rlStart) >= time.Minute {
-		a.rlStart, a.rlFresh, a.rlDropped, a.rlRow = now, 0, 0, 0
-	}
-	write := false
-	if t, ok := a.denied[k]; !ok || now.Sub(t) >= time.Minute {
-		if len(a.denied) >= deniedCap {
-			for dk, t := range a.denied {
-				if now.Sub(t) >= time.Minute {
-					delete(a.denied, dk)
-				}
-			}
-		}
-		if len(a.denied) < deniedCap && a.rlFresh < rateBudget {
-			a.denied[k] = now
-			a.rlFresh++
-			write = true
-		}
-	}
-	var dropped, row int64
+	due := a.rlDue(now)
 	if !write {
-		a.rlDropped++
-		dropped, row = a.rlDropped, a.rlRow
-	}
-	if write {
-		a.mu.Unlock()
-		if r := []rune(name); len(r) > 64 {
-			name = string(r[:64])
+		src := a.rl[ip]
+		if src == nil || now.Sub(src.start) >= time.Minute {
+			if src != nil && src.dropped > 0 {
+				due = append(due, rlSummary{ip, src.start.Unix(), src.dropped})
+			}
+			if src == nil && len(a.rl) >= rlCap {
+				due = append(due, a.rlEvict()...)
+			}
+			src = &rlSource{start: now, seen: map[string]bool{}}
+			a.rl[ip] = src
 		}
+		k := kind + "|" + outcome
+		if !src.seen[k] && src.fresh < rateBudget {
+			src.seen[k], write = true, true
+			src.fresh++
+		} else {
+			src.dropped++
+		}
+	}
+	a.mu.Unlock()
+	a.flushSuppressed(due)
+	if write {
 		a.log(uid, name, ip, kind, outcome)
-		return
 	}
-	// Sous le verrou : deux refus simultanés ne créent pas deux résumés pour la même minute.
-	defer a.mu.Unlock()
-	if row != 0 {
-		a.s.db.Exec(`UPDATE auth_events SET outcome=? WHERE rowid=?`, strconv.FormatInt(dropped, 10), row)
-		return
+}
+
+// rlDue retire les minutes closes et renvoie leurs résumés ; appelée sous a.mu.
+func (a *authAPI) rlDue(now time.Time) []rlSummary {
+	var out []rlSummary
+	for ip, src := range a.rl {
+		if now.Sub(src.start) >= time.Minute {
+			if src.dropped > 0 {
+				out = append(out, rlSummary{ip, src.start.Unix(), src.dropped})
+			}
+			delete(a.rl, ip)
+		}
 	}
-	res, err := a.s.db.Exec(`INSERT INTO auth_events(at,kind,outcome) VALUES(?,?,?)`, now.Unix(), "suppressed", strconv.FormatInt(dropped, 10))
-	if err == nil {
-		a.rlRow, _ = res.LastInsertId()
+	return out
+}
+
+// rlEvict retire la source la plus ancienne (table pleine) ; son compte d'événements perdus n'est pas perdu. Sous a.mu.
+// ponytail: recherche linéaire, seulement quand rlCap sources sont actives dans la même minute.
+func (a *authAPI) rlEvict() []rlSummary {
+	old := ""
+	for ip, src := range a.rl {
+		if old == "" || src.start.Before(a.rl[old].start) {
+			old = ip
+		}
+	}
+	src := a.rl[old]
+	delete(a.rl, old)
+	if src.dropped > 0 {
+		return []rlSummary{{old, src.start.Unix(), src.dropped}}
+	}
+	return nil
+}
+
+func (a *authAPI) flushSuppressed(due []rlSummary) {
+	for _, d := range due {
+		a.s.db.Exec(`INSERT INTO auth_events(at,ip,kind,outcome) VALUES(?,?,?,?)`, d.at, d.ip, "suppressed", strconv.FormatInt(d.dropped, 10))
 	}
 }
 
