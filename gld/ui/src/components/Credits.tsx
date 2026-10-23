@@ -1,12 +1,13 @@
 import { useState } from "react"
-import { Coffee, Copy, Heart } from "lucide-react"
+import { Bug, ChevronRight, Coffee, Copy, ExternalLink, GitFork, Heart, Star } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
-// Adresses de soutien : vides, la section correspondante n'est pas affichée.
+// Adresses de soutien : vides, la ligne correspondante n'est pas affichée.
 const XMR = ""
 const BTC = ""
+const REPO = "https://github.com/54tor/glaude-code"
 
 const GO = [
   ["modernc.org/sqlite", "https://gitlab.com/cznic/sqlite"],
@@ -28,15 +29,17 @@ const WEB = [
   ["Geist, Inter, IBM Plex, JetBrains Mono, Fira Code", "https://fontsource.org"],
 ]
 
+const link = "underline-offset-2 hover:underline"
+
 function Libs({ title, rows }: { title: string; rows: string[][] }) {
   return (
     <div>
-      <h3 className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">{title}</h3>
+      <h4 className="mb-1 text-xs font-medium text-muted-foreground">{title}</h4>
       <p className="text-sm leading-6">
         {rows.map(([n, u], i) => (
           <span key={n}>
             {i > 0 && ", "}
-            <a href={u} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">
+            <a href={u} target="_blank" rel="noreferrer" className={link}>
               {n}
             </a>
           </span>
@@ -46,19 +49,37 @@ function Libs({ title, rows }: { title: string; rows: string[][] }) {
   )
 }
 
-function Addr({ label, value }: { label: string; value: string }) {
+function Addr({ label, name, value, scheme }: { label: string; name: string; value: string; scheme: string }) {
   if (!value) return null
-  const copy = () => navigator.clipboard.writeText(value).then(() => toast.success(`Adresse ${label} copiée`), () => toast.error("Copie impossible"))
+  const copy = () => navigator.clipboard.writeText(value).then(() => toast.success(`Adresse ${name} copiée`), () => toast.error("Copie impossible"))
   return (
-    <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2">
-      <span className="w-10 shrink-0 text-xs font-semibold">{label}</span>
-      <code className="min-w-0 flex-1 truncate font-mono text-xs" title={value}>
-        {value}
-      </code>
-      <Button variant="ghost" size="icon-sm" onClick={copy} aria-label={`Copier l'adresse ${label}`}>
-        <Copy />
-      </Button>
+    <div className="rounded-lg border bg-muted/30 p-3">
+      <div className="mb-1.5 flex items-center gap-2 text-sm font-medium">
+        <span className="rounded bg-primary px-1.5 py-0.5 font-mono text-xs text-primary-foreground">{label}</span> {name}
+        <a href={`${scheme}:${value}`} className="ml-auto flex items-center gap-1 text-xs font-normal text-muted-foreground hover:text-foreground" title="Ouvre le portefeuille installé">
+          Ouvrir dans le portefeuille <ExternalLink className="size-3" />
+        </a>
+      </div>
+      <div className="flex items-start gap-2">
+        <code className="min-w-0 flex-1 font-mono text-xs leading-5 break-all select-all">{value}</code>
+        <Button variant="outline" size="xs" onClick={copy} aria-label={`Copier l'adresse ${name}`}>
+          <Copy /> Copier
+        </Button>
+      </div>
     </div>
+  )
+}
+
+function Way({ icon: Icon, title, text, href }: { icon: typeof Star; title: string; text: string; href: string }) {
+  return (
+    <a href={href} target="_blank" rel="noreferrer" className="flex items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted">
+      <Icon className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium">{title}</span>
+        <span className="block text-xs text-muted-foreground">{text}</span>
+      </span>
+      <ExternalLink className="mt-1 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+    </a>
   )
 }
 
@@ -67,34 +88,51 @@ export function CreditsButton() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="Crédits et soutien" title="Crédits et soutien">
+        <Button variant="ghost" size="icon-sm" aria-label="Soutenir gld" title="Soutenir gld">
           <Heart />
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] gap-5 overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>gld</DialogTitle>
+          <DialogTitle className="flex items-center gap-2 text-xl">
+            <Heart className="size-5 text-primary" aria-hidden /> Soutenir gld
+          </DialogTitle>
           <DialogDescription>
-            Écrit par Sat0r, publié sous licence MIT (2026).{" "}
-            <a href="https://github.com/54tor/glaude-code" target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">
-              Code source
-            </a>
-            .
+            gld est libre, gratuit et sans télémétrie. Il est écrit et maintenu par Sat0r sur son temps libre, sous licence MIT. Si
+            vous l'utilisez tous les jours, voici comment l'aider à continuer.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
-          <Libs title="Côté serveur (Go)" rows={GO} />
-          <Libs title="Côté navigateur" rows={WEB} />
-          {(XMR || BTC) && (
-            <div className="space-y-2 border-t pt-4">
-              <h3 className="flex items-center gap-2 text-sm font-medium">
-                <Coffee className="size-4" /> Offrir un café
-              </h3>
-              <Addr label="XMR" value={XMR} />
-              <Addr label="BTC" value={BTC} />
-            </div>
-          )}
-        </div>
+
+        <section className="space-y-2" aria-label="Aider sans dépenser">
+          <h3 className="text-sm font-semibold">Aider, sans rien dépenser</h3>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Way icon={Star} title="Mettre une étoile" text="Aide d'autres à découvrir le projet." href={REPO} />
+            <Way icon={Bug} title="Signaler un défaut" text="Une reproduction précise vaut un correctif." href={`${REPO}/issues`} />
+            <Way icon={GitFork} title="Contribuer au code" text="Corrections et idées, en demande de fusion." href={`${REPO}/pulls`} />
+          </div>
+        </section>
+
+        {(XMR || BTC) && (
+          <section className="space-y-2" aria-label="Don">
+            <h3 className="flex items-center gap-2 text-sm font-semibold">
+              <Coffee className="size-4" aria-hidden /> Offrir un café
+            </h3>
+            <p className="text-xs text-muted-foreground">Un don est libre, sans compte ni intermédiaire. Vérifiez l'adresse avant d'envoyer.</p>
+            <Addr label="XMR" name="Monero" value={XMR} scheme="monero" />
+            <Addr label="BTC" name="Bitcoin" value={BTC} scheme="bitcoin" />
+          </section>
+        )}
+
+        <details className="group/credits rounded-lg border">
+          <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-medium select-none [&::-webkit-details-marker]:hidden">
+            <ChevronRight className="size-4 transition-transform group-open/credits:rotate-90" aria-hidden />
+            Bibliothèques utilisées
+          </summary>
+          <div className="space-y-3 border-t px-3 py-3">
+            <Libs title="Côté serveur (Go)" rows={GO} />
+            <Libs title="Côté navigateur" rows={WEB} />
+          </div>
+        </details>
       </DialogContent>
     </Dialog>
   )
