@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
-import { AlarmClock, ChevronRight, FolderPlus, Repeat, Coins, FolderOpen, Star, Brain, SlidersHorizontal, Zap, Flame, History, Clock, FileText, Inbox, Info, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
+import { AlarmClock, ChevronRight, FolderPlus, Repeat, FolderOpen, Star, Brain, SlidersHorizontal, Zap, Flame, Microwave, History, Clock, FileText, Inbox, Info, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
 import { size, tilde } from "@/lib/format"
 import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
@@ -94,10 +94,11 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
               <Loader2 className="size-4 shrink-0 animate-spin text-success" aria-label={t("shell.sidebar.working")} />
             ) : warn ? (
               <AlarmClock className="size-4 shrink-0 text-warning" aria-label={t("shell.sidebar.cacheExpiring")} />
+            ) : warm[s.id]?.on ? (
+              <Microwave className="warm-wave size-4 shrink-0" aria-label={t("shell.sidebar.keepWarmOn")} />
             ) : (
               <Flame className="size-4 shrink-0 text-warning" aria-hidden />
             )}
-            {warm[s.id]?.on && <Coins className="size-3.5 shrink-0 text-warning" aria-label={t("shell.sidebar.keepWarmOn")} />}
             {a.live.has(s.id) && <span className="size-1.5 shrink-0 rounded-full bg-success" aria-label={t("shell.sidebar.open")} />}
             <span className="flex-1 truncate text-left">{s.title}</span>
             <span className={cn("shrink-0 text-xs tabular-nums", warn ? "font-medium text-warning" : "text-muted-foreground")}>
