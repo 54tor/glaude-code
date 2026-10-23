@@ -86,6 +86,7 @@
   "srv.auth.nomPris": "this name is already taken",
   "srv.auth.sessionInconnue": "unknown session",
   "srv.auth.sessionRequise": "session required: sign in",
+  "srv.auth.sousCommandeInconnue": "unknown subcommand: {{.A1}} (gld auth --help)",
   "srv.auth.tamper": "invalid signature in the authentication database: access denied",
   "srv.auth.totpDejaActif": "TOTP is already active: reset the factors before enrolling another one",
   "srv.auth.urlPubliqueInvalide": "invalid GLD_PUBLIC_URL: an http(s) URL with a host name (localhost or a domain, not an IP address) is expected",

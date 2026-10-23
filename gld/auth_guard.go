@@ -294,8 +294,15 @@ func guardArgs() []string {
 }
 
 func cliAuth(_ context.Context, args []string, out io.Writer) error {
-	if len(args) != 1 || args[0] != "managed-settings" {
+	f, err := parseFlags(args, nil, nil, nil)
+	if err == errHelp || (err == nil && len(f.pos) == 0) {
 		return helpText(out, L("cli.auth.help"))
+	}
+	if err != nil {
+		return err
+	}
+	if len(f.pos) != 1 || f.pos[0] != "managed-settings" {
+		return terr("srv.auth.sousCommandeInconnue", "A1", strings.Join(f.pos, " "))
 	}
 	dir, err := absAuthDir()
 	if err != nil {
