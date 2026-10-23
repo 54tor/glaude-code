@@ -4,8 +4,10 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,28 +20,64 @@ var authMigrations embed.FS
 
 type authDB struct{ *sql.DB }
 
-func authDir() string {
+func authDir() (string, error) {
 	if d := os.Getenv("GLD_AUTH_DIR"); d != "" {
-		return d
+		return d, nil
 	}
 	base, err := os.UserConfigDir()
 	if err != nil {
-		base = os.TempDir()
+		return "", fmt.Errorf("auth dir: %w", err)
 	}
-	return filepath.Join(base, "gld")
+	return filepath.Join(base, "gld"), nil
+}
+
+func checkPrivate(path string, wantDir bool) error {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("%s: symlink refused", path)
+	}
+	if fi.IsDir() != wantDir {
+		return fmt.Errorf("%s: unexpected file type", path)
+	}
+	if !ownedByMe(fi) {
+		return fmt.Errorf("%s: not owned by current user", path)
+	}
+	if runtime.GOOS != "windows" && fi.Mode().Perm()&0o077 != 0 {
+		return fmt.Errorf("%s: mode %v too permissive", path, fi.Mode().Perm())
+	}
+	return nil
 }
 
 func openAuthDB(dir string) (*authDB, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
-	_ = os.Chmod(dir, 0o700)
-	path := filepath.Join(dir, "auth.db")
-	if f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600); err == nil {
-		f.Close()
+	if err := os.Chmod(dir, 0o700); err != nil {
+		return nil, err
 	}
-	_ = os.Chmod(path, 0o600)
-	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
+	if err := checkPrivate(dir, true); err != nil {
+		return nil, err
+	}
+	path := filepath.Join(dir, "auth.db")
+	if fi, err := os.Lstat(path); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("%s: symlink refused", path)
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	f.Close()
+	if err := os.Chmod(path, 0o600); err != nil {
+		return nil, err
+	}
+	if err := checkPrivate(path, false); err != nil {
+		return nil, err
+	}
+	u := url.URL{Scheme: "file", Path: path, RawQuery: "_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"}
+	db, err := sql.Open("sqlite", u.String())
 	if err != nil {
 		return nil, err
 	}
@@ -48,6 +86,12 @@ func openAuthDB(dir string) (*authDB, error) {
 	if err := a.migrate(); err != nil {
 		db.Close()
 		return nil, err
+	}
+	for _, sfx := range []string{"-wal", "-shm"} {
+		if err := os.Chmod(path+sfx, 0o600); err != nil && !os.IsNotExist(err) {
+			db.Close()
+			return nil, err
+		}
 	}
 	return a, nil
 }
