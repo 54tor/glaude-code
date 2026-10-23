@@ -91,6 +91,12 @@ export function Composer({
   const setQ = (q: string[]) => setDraft(id, { queue: q })
   const stopped = useRef(false) // arrêt demandé par l'utilisateur : le message était bien parti
   const send = () => {
+    const rn = /^\/rename\s+(\S[\s\S]*)$/.exec(text.trim())
+    if (rn) {
+      setText("")
+      api.post("/rename", { dir, id, title: rn[1] }).then((r) => (r.ok ? toast.success(r.out) : toast.error(r.out)), () => toast.error(t("conversation.composer.failed")))
+      return void onDone()
+    }
     const prompt = [text.trim(), pics.suffix()].filter(Boolean).join("\n\n")
     if (!prompt) return
     setText("")
