@@ -122,6 +122,15 @@ Sur une machine partagée avec d'autres comptes, l'adresse locale est joignable 
 GLD_WEB_TOKEN=$(openssl rand -hex 24) gld
 ```
 
+## Langue
+
+Glaude Code parle français et anglais. La langue vient du réglage `language` de `~/.claude/settings.json`, le même que
+celui de Claude Code, modifiable dans Configuration. `French` ou `fr` donne le français, `English` ou `en` l'anglais.
+Toute autre langue donne l'anglais pour l'interface, et les titres automatiques, explications et rédactions demandés à
+Claude suivent votre réglage. Sans réglage, l'interface suit la langue du navigateur, les commandes `gld-*` suivent
+`LC_ALL` puis `LANG`, et le serveur parle français. Le contenu de vos sessions, mémoires, skills et snippets n'est jamais
+traduit.
+
 ## Windows
 
 `make windows` produit `gld.exe`. Le support Windows est compilé mais pas encore testé sur une vraie machine. Sous
