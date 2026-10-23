@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { ArrowLeft, Bot, Check, ClipboardCopy, Copy, Download, Link, Loader2, MessageSquarePlus, Pencil, Plus, Save, Sparkles, Terminal, Trash2, Undo2, Upload, X } from "lucide-react"
 import { toast } from "sonner"
 import { api, type SnipScope, type Snippet } from "@/lib/api"
@@ -42,6 +43,7 @@ export function Snippets({
   onAsk: (a: Ask) => void
   onPrompt: (a: PromptAsk) => void
 }) {
+  const { t } = useTranslation()
   const f = q.toLowerCase()
   const shown = files.filter((s) => !f || (s.path + " " + s.command + " " + s.description + " " + s.project).toLowerCase().includes(f))
   const [loaded, setLoaded] = useState<{ key: string; text: string } | null>(null)
@@ -66,24 +68,24 @@ export function Snippets({
     }
   }, [sel, creating])
 
-  const label = (sc: string) => (sc ? tilde(scopes.find((x) => x.dir === sc)?.project ?? sc, home) : "Personnelles")
+  const label = (sc: string) => (sc ? tilde(scopes.find((x) => x.dir === sc)?.project ?? sc, home) : t("skills.snippets.personal"))
   const prefix = (sc: string) => (sc ? `p/${sc}/` : "u/")
 
-  const formatted = (t: string) => {
+  const formatted = (txt: string) => {
     const cur = editing?.text ?? text ?? ""
     setBefore({ key: sel, text: cur })
-    setDraft({ key: sel, text: t })
+    setDraft({ key: sel, text: txt })
   }
 
-  const copyText = (t: string, what: string) =>
-    navigator.clipboard.writeText(t).then(
-      () => toast.success(`${what} copié${what === "Chemin" ? "" : "e"}`),
-      () => toast.error("Copie impossible")
+  const copyText = (txt: string, what: "Content" | "Command" | "Path") =>
+    navigator.clipboard.writeText(txt).then(
+      () => toast.success(t(`skills.snippets.copied${what}`)),
+      () => toast.error(t("skills.snippets.copyFailed"))
     )
   const copyContent = async (s: Snippet) => {
     const r = await api.snippet(s.key)
-    if (r.text === undefined) return void toast.error(r.error ?? "Commande illisible")
-    copyText(r.text, "Contenu")
+    if (r.text === undefined) return void toast.error(r.error ?? t("skills.snippets.unreadable"))
+    copyText(r.text, "Content")
   }
   const copy = () =>
     text !== null &&
@@ -92,7 +94,7 @@ export function Snippets({
         setCopied(true)
         setTimeout(() => setCopied(false), 1200)
       },
-      () => toast.error("Copie impossible")
+      () => toast.error(t("skills.snippets.copyFailed"))
     )
   const save = async () => {
     if (!editing) return
@@ -106,13 +108,13 @@ export function Snippets({
   }
   const create = () =>
     onPrompt({
-      title: `Nouvelle commande · ${label(scope)}`,
+      title: t("skills.snippets.newPromptTitle", { scope: label(scope) }),
       value: "",
-      placeholder: "nom, ou dossier/nom : devient /nom ou /dossier:nom",
-      confirm: "Créer",
+      placeholder: t("skills.snippets.newPlaceholder"),
+      confirm: t("skills.snippets.create"),
       run: (name) => {
         const key = prefix(scope) + (name.endsWith(".md") ? name : name + ".md")
-        if (files.some((s) => s.key === key)) return void toast.error("Cette commande existe déjà")
+        if (files.some((s) => s.key === key)) return void toast.error(t("skills.snippets.exists"))
         setCreating(key)
         setDraft({ key, text: "---\ndescription: \n---\n\n" })
         onPick(key)
@@ -120,9 +122,9 @@ export function Snippets({
     })
   const remove = () =>
     onAsk({
-      title: `Supprimer ${snip?.command ?? sel} ?`,
-      body: "Elle est d'abord copiée dans la corbeille (zone Mémoire), d'où elle peut être restaurée.",
-      confirm: "Supprimer",
+      title: t("skills.snippets.deleteTitle", { name: snip?.command ?? sel }),
+      body: t("skills.snippets.deleteBody"),
+      confirm: t("common.delete"),
       run: async () => {
         const r = await api.post("/snippet-rm", { key: sel })
         ;(r.ok ? toast.success : toast.error)(r.out)
@@ -138,7 +140,7 @@ export function Snippets({
     const fd = new FormData()
     fd.set("scope", scope)
     for (const file of list) fd.append("files", file)
-    const id = toast.loading("Import…")
+    const id = toast.loading(t("skills.snippets.importing"))
     try {
       const r = (await (await fetch("/snippets-import", { method: "POST", body: fd })).json()) as { ok: boolean; out: string }
       ;(r.ok ? toast.success : toast.error)(r.out, { id })
@@ -159,20 +161,20 @@ export function Snippets({
           <Choose
             value={scope}
             onChange={setScope}
-            options={[["", "Personnelles"] as const, ...scopes.map((x) => [x.dir, tilde(x.project, home)] as const)]}
-            label="Emplacement"
+            options={[["", t("skills.snippets.personal")] as const, ...scopes.map((x) => [x.dir, tilde(x.project, home)] as const)]}
+            label={t("skills.snippets.location")}
             className="w-full"
           />
           <div className="flex gap-1">
-            <Button variant="outline" size="xs" onClick={create} title="Nouvelle commande à cet emplacement">
-              <Plus /> Nouveau
+            <Button variant="outline" size="xs" onClick={create} title={t("skills.snippets.newTitle")}>
+              <Plus /> {t("skills.snippets.new")}
             </Button>
-            <Button variant="ghost" size="xs" onClick={() => upload.current?.click()} title="Importer des .md ou une archive .zip">
-              <Upload /> Importer
+            <Button variant="ghost" size="xs" onClick={() => upload.current?.click()} title={t("skills.snippets.importTitle")}>
+              <Upload /> {t("skills.snippets.import")}
             </Button>
-            <Button variant="ghost" size="xs" asChild title="Exporter les commandes de cet emplacement en .zip">
+            <Button variant="ghost" size="xs" asChild title={t("skills.snippets.exportTitle")}>
               <a href={`/snippets-export?scope=${encodeURIComponent(scope)}`} download>
-                <Download /> Exporter
+                <Download /> {t("skills.snippets.export")}
               </a>
             </Button>
             <input ref={upload} type="file" multiple accept=".md,.zip" className="hidden" onChange={(e) => importFiles(e.target.files)} />
@@ -189,7 +191,7 @@ export function Snippets({
                     {label(sc)}
                   </p>
                   {vis.length === 0 && (
-                    <p className="px-2 py-1 text-xs text-muted-foreground">{files.length ? "Aucune ne correspond." : "Aucune commande."}</p>
+                    <p className="px-2 py-1 text-xs text-muted-foreground">{files.length ? t("skills.snippets.noneMatch") : t("skills.snippets.none")}</p>
                   )}
                   <ul className="space-y-px">
                     {vis.map((s) => (
@@ -215,13 +217,13 @@ export function Snippets({
                           </ContextMenuTrigger>
                           <ContextMenuContent>
                             <ContextMenuItem onSelect={() => copyContent(s)}>
-                              <ClipboardCopy /> Copier le contenu
+                              <ClipboardCopy /> {t("skills.snippets.copyContent")}
                             </ContextMenuItem>
-                            <ContextMenuItem onSelect={() => copyText(s.command, "Commande")}>
-                              <Terminal /> Copier la commande
+                            <ContextMenuItem onSelect={() => copyText(s.command, "Command")}>
+                              <Terminal /> {t("skills.snippets.copyCommand")}
                             </ContextMenuItem>
-                            <ContextMenuItem onSelect={() => copyText(s.path, "Chemin")}>
-                              <Link /> Copier le chemin
+                            <ContextMenuItem onSelect={() => copyText(s.path, "Path")}>
+                              <Link /> {t("skills.snippets.copyPath")}
                             </ContextMenuItem>
                           </ContextMenuContent>
                         </ContextMenu>
@@ -238,21 +240,21 @@ export function Snippets({
         {sel && (
           <div className="border-b px-2 py-1.5 lg:hidden">
             <Button variant="ghost" size="sm" onClick={() => onPick("")}>
-              <ArrowLeft /> Liste
+              <ArrowLeft /> {t("skills.snippets.list")}
             </Button>
           </div>
         )}
 
         {!sel ? (
           <p className="px-6 py-20 text-center text-sm text-muted-foreground">
-            Choisis une commande, ou crée-en une. Elle est aussi utilisable en <code>/nom</code> dans Claude Code.
+            {t("skills.snippets.pickA")} <code>/nom</code> {t("skills.snippets.pickB")}
           </p>
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-2 border-b bg-muted/40 px-6 py-1.5">
               <code className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={sel}>
                 {snip ? `${snip.command} · ${snip.path}` : sel.replace(/^(u|p\/[^/]+)\//, "")}
-                {sel === creating && " (nouvelle)"}
+                {sel === creating && ` ${t("skills.snippets.newMark")}`}
               </code>
               {editing ? (
                 <>
@@ -267,41 +269,41 @@ export function Snippets({
                       }
                     }}
                   >
-                    <X /> Annuler
+                    <X /> {t("common.cancel")}
                   </Button>
                   {before?.key === sel && before.text !== editing.text && (
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => (setDraft({ key: sel, text: before.text }), setBefore(null))}
-                      title="Revenir au texte d'avant la mise en forme"
+                      title={t("skills.snippets.undoTitle")}
                     >
-                      <Undo2 /> Texte d'avant
+                      <Undo2 /> {t("skills.snippets.undo")}
                     </Button>
                   )}
                   <Button variant="outline" size="sm" onClick={() => setHaiku(true)}>
-                    <Bot /> Améliorer…
+                    <Bot /> {t("skills.snippets.improve")}
                   </Button>
                   <Button size="sm" onClick={save} disabled={editing.text === text}>
-                    <Save /> Enregistrer
+                    <Save /> {t("common.save")}
                   </Button>
                 </>
               ) : (
                 <>
                   <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={remove} disabled={text === null}>
-                    <Trash2 /> Supprimer
+                    <Trash2 /> {t("common.delete")}
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => text !== null && setDraft({ key: sel, text })} disabled={text === null}>
-                    <Pencil /> Modifier
+                    <Pencil /> {t("skills.snippets.edit")}
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setHaiku(true)} disabled={text === null} title="Améliorer avec un modèle (mise en forme)">
-                    <Bot /> Améliorer…
+                  <Button variant="ghost" size="sm" onClick={() => setHaiku(true)} disabled={text === null} title={t("skills.snippets.improveTitle")}>
+                    <Bot /> {t("skills.snippets.improve")}
                   </Button>
                   <Button variant="outline" size="sm" onClick={copy} disabled={text === null}>
-                    {copied ? <Check /> : <Copy />} {copied ? "Copié" : "Copier"}
+                    {copied ? <Check /> : <Copy />} {copied ? t("common.copied") : t("common.copy")}
                   </Button>
                   <Button size="sm" onClick={() => snip && text !== null && onLaunch(snip, text)} disabled={!snip || text === null}>
-                    <MessageSquarePlus /> Nouvelle session avec
+                    <MessageSquarePlus /> {t("skills.snippets.launch")}
                   </Button>
                 </>
               )}
@@ -314,7 +316,7 @@ export function Snippets({
                 spellCheck={false}
                 autoFocus
                 className="session-text min-h-0 flex-1 resize-none bg-background px-6 py-4 outline-none"
-                aria-label="Contenu de la commande"
+                aria-label={t("skills.snippets.editorLabel")}
               />
             ) : (
               <ScrollArea className="min-h-0 flex-1">
@@ -342,14 +344,14 @@ function CommandView({ text }: { text: string }) {
   )
 }
 
-const MODELS = [
-  ["haiku", "Haiku (rapide, quelques dixièmes de centime)"],
-  ["sonnet", "Sonnet"],
-  ["opus", "Opus"],
-] as const
-
 // Mise en forme d'une commande par un petit modèle : le résultat remplace le texte de l'éditeur, sans être enregistré.
 function HaikuFormat({ open, text, onClose, onDone }: { open: boolean; text: string; onClose: () => void; onDone: (t: string) => void }) {
+  const { t } = useTranslation()
+  const models = [
+    ["haiku", t("skills.format.modelHaiku")],
+    ["sonnet", "Sonnet"],
+    ["opus", "Opus"],
+  ] as const
   const [instruction, setInstruction] = useState("")
   const [model, setModel] = useState("haiku")
   const [busy, setBusy] = useState(false)
@@ -358,7 +360,7 @@ function HaikuFormat({ open, text, onClose, onDone }: { open: boolean; text: str
     const r = (await api.post("/snippet-draft", { model, instruction, text })) as { ok: boolean; out: string; text?: string; cost?: number }
     setBusy(false)
     if (!r.ok || !r.text) return void toast.error(r.out)
-    toast.success("Mise en forme prête : relis-la puis enregistre", { description: r.cost ? `coût : ${r.cost.toFixed(4)} $` : undefined })
+    toast.success(t("skills.format.formatReady"), { description: r.cost ? t("skills.format.cost", { cost: r.cost.toFixed(4) }) : undefined })
     setInstruction("")
     onClose()
     onDone(r.text)
@@ -367,32 +369,28 @@ function HaikuFormat({ open, text, onClose, onDone }: { open: boolean; text: str
     <Dialog open={open} onOpenChange={(o) => !o && !busy && onClose()}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Mettre en forme avec Haiku</DialogTitle>
-          <DialogDescription>
-            En-tête description et argument-hint, prompt clair, $ARGUMENTS à sa place. Le résultat s'ouvre dans l'éditeur, sans être enregistré.
-          </DialogDescription>
+          <DialogTitle>{t("skills.format.title")}</DialogTitle>
+          <DialogDescription>{t("skills.format.description")}</DialogDescription>
         </DialogHeader>
         <textarea
           value={instruction}
           onChange={(e) => setInstruction(e.target.value)}
           onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "Enter" && (e.preventDefault(), run())}
-          placeholder={
-            text.trim() ? "Consigne facultative : ajoute un format de sortie, prends un fichier en argument…" : "Décris la commande à rédiger…"
-          }
+          placeholder={text.trim() ? t("skills.format.placeholderEdit") : t("skills.format.placeholderNew")}
           autoFocus
           rows={3}
           disabled={busy}
           className="w-full resize-y rounded-lg border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          aria-label="Consigne"
+          aria-label={t("skills.format.instruction")}
         />
         <DialogFooter className="flex-wrap items-center gap-2 sm:justify-between">
-          <Choose value={model} onChange={setModel} options={MODELS} label="Modèle" size="default" />
+          <Choose value={model} onChange={setModel} options={models} label={t("skills.format.model")} size="default" />
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose} disabled={busy}>
-              Annuler
+              {t("common.cancel")}
             </Button>
-            <Button onClick={run} disabled={busy || (!text.trim() && !instruction.trim())} title="Ctrl+Entrée">
-              {busy ? <Loader2 className="animate-spin" /> : <Sparkles />} Mettre en forme
+            <Button onClick={run} disabled={busy || (!text.trim() && !instruction.trim())} title={t("skills.format.shortcut")}>
+              {busy ? <Loader2 className="animate-spin" /> : <Sparkles />} {t("skills.format.run")}
             </Button>
           </div>
         </DialogFooter>
