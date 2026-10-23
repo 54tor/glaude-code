@@ -1,4 +1,5 @@
 import { FileText } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/lib/api"
 import { tilde } from "@/lib/format"
@@ -9,18 +10,19 @@ import { useActions } from "./actions"
 
 // Menu « Insérer un snippet » : lit la commande choisie et rend son corps (sans en-tête) à onInsert.
 export function SnippetMenu({ onInsert }: { onInsert: (text: string) => void }) {
+  const { t } = useTranslation()
   const a = useActions()
   if (a.snippets.length === 0) return null
   const pick = async (key: string) => {
     const r = await api.snippet(key)
-    if (r.text === undefined) return void toast.error(r.error ?? "Snippet illisible")
+    if (r.text === undefined) return void toast.error(r.error ?? t("skills.snippetMenu.unreadable"))
     onInsert(body(r.text))
   }
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm">
-          <FileText /> Insérer un snippet
+          <FileText /> {t("skills.snippetMenu.insert")}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent onCloseAutoFocus={(e) => e.preventDefault()} align="start" className="max-h-72 w-72 overflow-y-auto">
