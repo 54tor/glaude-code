@@ -118,6 +118,7 @@ func runGitStatus(dir string) (string, error) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-C", dir, "status", "--porcelain=v2", "--branch", "-z")
 	cmd.Env = append(childEnv(), "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0")
+	applyRunAs(cmd)
 	b, err := cmd.Output()
 	return string(b), err
 }

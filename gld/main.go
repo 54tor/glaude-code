@@ -76,6 +76,13 @@ func main() {
 	if on {
 		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.authMode", nil))
 	}
+	if err := checkRunAsSeparation(); err != nil {
+		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.runAsRefused", map[string]any{"A1": err.Error()}))
+		os.Exit(1)
+	}
+	if runAsOn() {
+		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.runAsOn", map[string]any{"A1": runAsHome()}))
+	}
 	tokenPrincipal = tokenForChildren(token)
 	h := handler()
 	if !local {

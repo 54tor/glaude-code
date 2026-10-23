@@ -27,6 +27,9 @@ var launchers = []string{"tmux", "kitty", "wezterm", "wt", "terminator-tmux", "t
 func onPath(name string) bool { _, err := exec.LookPath(name); return err == nil }
 
 func launcherAvailable(name string) bool {
+	if tmuxDetached() { // aucun bureau sous le compte cible : seul son serveur tmux reçoit les sessions
+		return name == "tmux" && onPath("tmux")
+	}
 	switch name {
 	case "tmux":
 		return os.Getenv("TMUX") != "" && onPath("tmux")
@@ -78,6 +81,9 @@ func launcherCmd(name, title string, argv []string) (*exec.Cmd, error) {
 	}
 	switch name {
 	case "tmux":
+		if tmuxDetached() {
+			return exec.Command("tmux", "new-session", "-d", "-n", strings.ReplaceAll(title, "#", "##"), shJoin(argv)), nil
+		}
 		// -n passe par l'expansion de formats de tmux : « #(commande) » d'un titre s'exécuterait. « ## » est un « # » littéral.
 		return exec.Command("tmux", "new-window", "-n", strings.ReplaceAll(title, "#", "##"), shJoin(argv)), nil
 	case "kitty":
@@ -122,26 +128,45 @@ var openTab = func(launcher, title string, spec tabSpec) error {
 		return terr("srv.term.interditDansLeChemin")
 	}
 	spec.Args = withGuard(spec.Args)
-	f, err := os.CreateTemp("", "gld-*.json")
+	name, err := writeSpec(self, spec)
 	if err != nil {
 		return err
 	}
-	if err := json.NewEncoder(f).Encode(spec); err != nil {
-		f.Close()
-		os.Remove(f.Name())
-		return err
-	}
-	f.Close()
-	c, err := launcherCmd(launcher, title, []string{self, "_run", f.Name()})
+	c, err := launcherCmd(launcher, title, []string{self, "_run", name})
 	if err == nil {
+		applyRunAs(c)
 		err = c.Start()
 	}
 	if err != nil {
-		os.Remove(f.Name())
+		os.Remove(name)
 		return err
 	}
 	go c.Wait() // pas de zombie dans le serveur
 	return nil
+}
+
+// writeSpec : le fichier JSON que relit « gld _run » ; sous GLD_RUN_AS, créé par le compte cible qui seul doit le lire.
+func writeSpec(self string, spec tabSpec) (string, error) {
+	b, err := json.Marshal(spec)
+	if err != nil {
+		return "", err
+	}
+	if runAsOn() {
+		return writeSpecAsTarget(self, b)
+	}
+	f, err := os.CreateTemp("", "gld-*.json")
+	if err != nil {
+		return "", err
+	}
+	_, err = f.Write(append(b, '\n'))
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		os.Remove(f.Name())
+		return "", err
+	}
+	return f.Name(), nil
 }
 
 // runTab : le corps de « gld _run <fichier> », exécuté dans l'onglet. Il se place dans le dossier du projet et

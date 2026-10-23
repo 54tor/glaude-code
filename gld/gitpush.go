@@ -46,6 +46,7 @@ func gitOut(dir string, args ...string) (string, error) {
 			cmd.Env = append(cmd.Env, "GIT_SSH_COMMAND=ssh -o BatchMode=yes") // pas de demande de phrase de passe sur le terminal de gld
 		}
 	}
+	applyRunAs(cmd)
 	b, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(b)), err
 }
@@ -55,6 +56,7 @@ func gitOut1(dir string, args ...string) (string, error) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
 	cmd.WaitDelay = time.Second
+	applyRunAs(cmd)
 	b, err := cmd.Output()
 	return strings.TrimSpace(string(b)), err
 }
