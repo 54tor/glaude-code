@@ -44,6 +44,20 @@ func (s *authStore) eventIP(userID int64, kind, outcome, ip string) {
 	s.db.Exec(`INSERT INTO auth_events(at,user_id,ip,kind,outcome) VALUES(?,?,?,?,?)`, authNow().Unix(), userID, ip, kind, outcome)
 }
 
+const (
+	eventsKeep       = 90 * 24 * time.Hour
+	eventsPurgeEvery = 24 * time.Hour
+)
+
+// PurgeEvents supprime en une seule instruction les événements plus anciens que olderThan.
+func (s *authStore) PurgeEvents(olderThan time.Duration) (int64, error) {
+	res, err := s.db.Exec(`DELETE FROM auth_events WHERE at < ?`, authNow().Add(-olderThan).Unix())
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 func newSessionValue() (raw, hash []byte) {
 	raw = make([]byte, 32)
 	rand.Read(raw)

@@ -935,3 +935,48 @@ func TestMeRightsHomesKeys(t *testing.T) {
 		t.Fatal("clés exposées en session partielle")
 	}
 }
+
+func TestPurgeEvents(t *testing.T) {
+	g := newAuthRig(t)
+	ins := func(age time.Duration, kind string) {
+		if _, err := g.s.db.Exec(`INSERT INTO auth_events(at,user_id,kind,outcome) VALUES(?,?,?,?)`, g.clock.Add(-age).Unix(), g.uid, kind, "x"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	count := func() (n int) {
+		g.s.db.QueryRow(`SELECT COUNT(*) FROM auth_events`).Scan(&n)
+		return
+	}
+	g.th.Success("alice", "10.0.0.1")
+	day := 24 * time.Hour
+	ins(89*day, "tamper")
+	ins(91*day, "login")
+	old := purgeAt
+	t.Cleanup(func() { purgeAt = old })
+	purgeAt = time.Time{}
+	purgeDue(g.s, *g.clock)
+	if n := count(); n != 1 {
+		t.Fatalf("après purge : %d lignes", n)
+	}
+	var kind string
+	g.s.db.QueryRow(`SELECT kind FROM auth_events`).Scan(&kind)
+	var known int
+	g.s.db.QueryRow(`SELECT COUNT(*) FROM throttle WHERE key LIKE 'known:%'`).Scan(&known)
+	if kind != "tamper" || known != 1 {
+		t.Fatalf("conservés : %q, known %d", kind, known)
+	}
+	ins(91*day, "login")
+	purgeDue(g.s, g.clock.Add(time.Hour))
+	if count() != 2 {
+		t.Fatal("purge avant 24 h")
+	}
+	g.tick(day)
+	purgeDue(g.s, *g.clock)
+	if count() != 1 {
+		t.Fatal("pas de purge après 24 h")
+	}
+	g.s.db.Close()
+	if _, err := g.s.PurgeEvents(eventsKeep); err == nil {
+		t.Fatal("base fermée sans erreur")
+	}
+}
