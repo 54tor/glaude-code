@@ -4,6 +4,7 @@ import type { Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
 import { cn } from "@/lib/utils"
 import { useTheme } from "@/components/theme-provider"
+import { PALETTES } from "@/lib/palettes"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -47,7 +48,7 @@ function FontPicker({ font, setFont, fontSize, setFontSize }: Fonts) {
             onClick={() => setFont(id)}
             className={cn(
               "block w-full rounded-md border px-2.5 py-1.5 text-left transition-colors",
-              font === id ? "border-primary bg-accent" : "border-transparent hover:bg-muted"
+              font === id ? "border-primary bg-accent text-accent-foreground" : "border-transparent hover:bg-muted"
             )}
           >
             <span className="block text-xs text-muted-foreground">{f.label}</span>
@@ -83,7 +84,7 @@ export function Settings({
   setChoice,
   ...fonts
 }: { args: string; setArgs: (v: string) => void; choice: Choice; setChoice: (c: Choice) => void } & Fonts) {
-  const { theme, setTheme } = useTheme()
+  const { theme, setTheme, palette, setPalette } = useTheme()
   const section = (title: string, hint: string, body: React.ReactNode) => (
     <div className="space-y-1.5">
       <Label>{title}</Label>
@@ -148,6 +149,31 @@ export function Settings({
                       <Icon className="size-3.5" /> {label}
                     </button>
                   ))}
+                </div>
+              )}
+              {section(
+                "Palette de couleurs",
+                "Classiques des éditeurs ; chacune a sa variante claire et sombre, selon le thème ci-dessus.",
+                <div className="grid max-w-md grid-cols-2 gap-1.5" role="radiogroup" aria-label="Palette de couleurs">
+                  {Object.entries(PALETTES).map(([id, p]) => {
+                    const t = p.dark
+                    return (
+                      <button
+                        key={id}
+                        role="radio"
+                        aria-checked={palette === id}
+                        onClick={() => setPalette(id)}
+                        className={cn("flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors", palette === id ? "border-primary bg-accent font-medium" : "hover:bg-muted")}
+                      >
+                        <span className="flex shrink-0 -space-x-1" aria-hidden>
+                          {(t ? [t.bg, t.primary, t.fg] : ["#1e2530", "#7fd6e6", "#e6e9ee"]).map((c) => (
+                            <span key={c} className="size-3.5 rounded-full border border-black/20" style={{ background: c }} />
+                          ))}
+                        </span>
+                        {p.name}
+                      </button>
+                    )
+                  })}
                 </div>
               )}
               <FontPicker {...fonts} />
