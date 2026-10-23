@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
 import { AlarmClock, ChevronRight, FolderPlus, Repeat, Coins, FolderOpen, Star, Brain, SlidersHorizontal, Zap, Flame, History, Clock, FileText, Inbox, Info, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
 import { size, tilde } from "@/lib/format"
-import type { Choice } from "@/lib/models"
 import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
 import { cn } from "@/lib/utils"
@@ -20,7 +19,6 @@ import { segs } from "@/lib/paths"
 import { CM, GroupItems, SessionItems } from "./SessionMenu"
 import type { Session, VGroup } from "@/lib/api"
 import { useActions, type Row } from "./actions"
-import { Settings, type Fonts } from "./SettingsDialog"
 
 
 // Avec `to`, un vrai lien : clic du milieu ou Ctrl+clic ouvrent la vue dans un autre onglet.
@@ -172,11 +170,9 @@ export type SidebarProps = {
   ttl: number // durée du cache, en secondes
   snippets: number | null // null : bibliothèque non configurée
   auto: { n: number; kb: number; purge: () => void }
-  args: string
-  setArgs: (v: string) => void
-  choice: Choice
-  setChoice: (c: Choice) => void
-} & Fonts
+  args: string // arguments de lancement des Réglages, rappelés en bas du menu
+  settings: React.ReactNode // bouton et fenêtre des Réglages, rendus par App
+}
 
 export function Sidebar({ searchRef, ...p }: SidebarProps) {
   const { t } = useTranslation()
@@ -211,16 +207,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           </div>
           <div className="ml-auto flex items-center gap-0.5">
             <HomeSwitcher />
-            <Settings
-              args={p.args}
-              setArgs={p.setArgs}
-              choice={p.choice}
-              setChoice={p.setChoice}
-              font={p.font}
-              setFont={p.setFont}
-              fontSize={p.fontSize}
-              setFontSize={p.setFontSize}
-            />
+            {p.settings}
           </div>
         </div>
         <div className="relative">
