@@ -48,8 +48,8 @@ export function DiffView({ old, cur, compact }: { old: string; cur: string; comp
           <div
             key={i}
             className={cn(
-              r.op === "+" && "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
-              r.op === "-" && "bg-red-500/15 text-red-700 dark:text-red-300",
+              r.op === "+" && "bg-success/10 text-success",
+              r.op === "-" && "bg-destructive/10 text-destructive",
               r.op === " " && "text-muted-foreground"
             )}
           >

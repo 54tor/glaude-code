@@ -9,7 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 
 // Couleur de la lettre d'état : ajouté (vert), supprimé (rouge), conflit (rouge vif), non suivi (gris), modifié ou renommé (ambre).
 const tone = (s: string) =>
-  s.includes("U") || s === "AA" || s === "DD" ? "text-destructive" : s === "??" ? "text-muted-foreground" : s.includes("D") ? "text-red-500" : s.includes("A") ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
+  s.includes("U") || s === "AA" || s === "DD" ? "text-destructive" : s === "??" ? "text-muted-foreground" : s.includes("D") ? "text-destructive" : s.includes("A") ? "text-success" : "text-warning"
 
 // Les fichiers en cours de modification d'un dépôt : un bouton ouvre la liste dans une fenêtre. La liste est lue à l'ouverture, et
 // relue quand le nombre de changements annoncé par l'état git (relu toutes les 30 s) change. Le chemin du dépôt n'y est pas répété :

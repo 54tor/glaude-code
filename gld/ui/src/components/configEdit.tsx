@@ -139,7 +139,7 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
           </DialogDescription>
         </DialogHeader>
         {!!pv?.warnings.length && (
-          <ul className="space-y-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
+          <ul className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-2 text-xs">
             {pv.warnings.map((w, i) => (
               <li key={i}>⚠ {w.msg}</li>
             ))}

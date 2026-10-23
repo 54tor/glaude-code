@@ -34,7 +34,7 @@ export function Toolbar({
           onClick={onHealth}
           title={t("memory.bars.healthTitle")}
         >
-          <HeartPulse className={issues ? "text-amber-500" : ""} /> {t("memory.bars.health")}{issues > 0 && ` (${issues})`}
+          <HeartPulse className={issues ? "text-warning" : ""} /> {t("memory.bars.health")}{issues > 0 && ` (${issues})`}
         </Button>
         {TYPES.map((x) => (
           <Button

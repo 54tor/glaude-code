@@ -18,7 +18,7 @@ export function Live({ className, waiting }: { className?: string; waiting?: boo
     <span
       className={cn(
         "inline-flex shrink-0 items-center gap-1 font-medium",
-        waiting ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400",
+        waiting ? "text-warning" : "text-success",
         className
       )}
     >
@@ -101,7 +101,7 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
                   <span
                     className={cn(
                       "inline-flex shrink-0 items-center gap-1",
-                      left <= 10 ? "font-medium text-amber-600 dark:text-amber-400" : "text-orange-500"
+                      left <= 10 ? "font-medium text-warning" : "text-warning"
                     )}
                   >
                     <Flame className="size-3.5" aria-hidden /> {t("shell.list.cache", { left })}
@@ -150,7 +150,7 @@ function Row({ row, showProject, showCache }: { row: R; showProject: boolean; sh
                 </button>
               ))}
               {groups.length > 0 && (
-                <span className="flex min-w-0 items-center gap-1 text-violet-600 dark:text-violet-400" title={t("shell.list.groups", { names: groups.join(", ") })}>
+                <span className="flex min-w-0 items-center gap-1 text-info" title={t("shell.list.groups", { names: groups.join(", ") })}>
                   <Tag className="size-3 shrink-0" />
                   <span className="truncate">{groups.join(", ")}</span>
                 </span>

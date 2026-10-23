@@ -115,7 +115,7 @@ export function HealthDialog({
             {issues.map((i, n) => (
               <li key={n} className="flex items-start gap-1">
                 <button onClick={() => (onOpenKey(i.key), onClose())} className="flex min-w-0 flex-1 items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted">
-                  <AlertTriangle className={cn("mt-0.5 size-3.5 shrink-0", i.kind === "perime" ? "text-muted-foreground" : "text-amber-500")} />
+                  <AlertTriangle className={cn("mt-0.5 size-3.5 shrink-0", i.kind === "perime" ? "text-muted-foreground" : "text-warning")} />
                   <span className="min-w-0">
                     <span className="block text-xs font-medium text-muted-foreground">
                       {KINDS[i.kind] ? t(KINDS[i.kind]) : i.kind} · {i.key}

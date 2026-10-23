@@ -201,7 +201,7 @@ export function ProjectsTab({ home, version, gone, onAddDir, suggest, onEdit, on
                           <li key={i} className="text-xs">
                             <span className="font-medium">{h.event}</span> {h.matcher && <code className="rounded bg-muted px-1">{h.matcher}</code>}{" "}
                             <code className="break-all text-muted-foreground">{h.command}</code>
-                            {h.missing && <span className="ml-1 text-amber-600 dark:text-amber-400">{t("config.hooks.missing", { path: h.missing })}</span>}
+                            {h.missing && <span className="ml-1 text-warning">{t("config.hooks.missing", { path: h.missing })}</span>}
                           </li>
                         ))}
                       </ul>
@@ -235,7 +235,7 @@ export function ProjectsTab({ home, version, gone, onAddDir, suggest, onEdit, on
                               <code>{r.name}</code>
                             </Link>{" "}
                             <span className="text-muted-foreground">{r.paths?.length ? t("config.projects.ruleOnlyFor", { paths: r.paths.join(", ") }) : t("config.projects.ruleAlways")}</span>
-                            {r.warn && <span className="ml-1 text-amber-600 dark:text-amber-400">{r.warn}</span>}
+                            {r.warn && <span className="ml-1 text-warning">{r.warn}</span>}
                           </li>
                         ))}
                       </ul>

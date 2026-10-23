@@ -207,7 +207,7 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTran
                 <Sparkles />
               </Button>
               <span className="shrink-0 text-xs text-muted-foreground">{t("config.perms.times", { count: s.count })}</span>
-              <span className={cn("shrink-0 text-xs", s.readOnly ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>{s.readOnly ? t("config.perms.readOnly") : t("config.perms.toCheck")}</span>
+              <span className={cn("shrink-0 text-xs", s.readOnly ? "text-success" : "text-warning")}>{s.readOnly ? t("config.perms.readOnly") : t("config.perms.toCheck")}</span>
               <Button size="xs" variant="outline" onClick={() => add("allow", s.rule)}>
                 {t("config.perms.allowBtn")}
               </Button>
@@ -380,7 +380,7 @@ export function SettingsTab({ file, doc, plugins, propose }: { file: string; doc
                 <span className="min-w-0 flex-1 truncate" title={p.id}>
                   {p.id}
                 </span>
-                {!p.installed && <span className="shrink-0 text-xs text-amber-600 dark:text-amber-400">{t("config.settings.notInstalled")}</span>}
+                {!p.installed && <span className="shrink-0 text-xs text-warning">{t("config.settings.notInstalled")}</span>}
               </li>
             ))}
           </ul>

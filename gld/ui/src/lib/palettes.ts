@@ -88,8 +88,17 @@ export const PALETTES: Record<string, Palette> = {
   },
 }
 
-export function paletteVars(t: Tone): Record<string, string> {
+// Couleurs d'état de index.css, assombries en clair (certains fonds clairs, Tokyo Night, sont gris) et tirées vers le texte en
+// sombre : au moins 4,5:1 sur le fond et la barre latérale des 15 palettes.
+const STATES = {
+  light: { warning: "oklch(0.52 0.12 65)", success: "oklch(0.50 0.12 150)", info: "oklch(0.50 0.12 250)" },
+  dark: { warning: "oklch(0.80 0.14 75)", success: "oklch(0.78 0.14 155)", info: "oklch(0.78 0.10 245)" },
+}
+
+export function paletteVars(t: Tone, mode: "light" | "dark"): Record<string, string> {
+  const states = Object.fromEntries(Object.entries(STATES[mode]).map(([k, v]) => [k, `color-mix(in oklch, ${v}, ${mode === "light" ? "black 10%" : `${t.fg} 20%`})`]))
   return {
+    ...states,
     background: t.bg, foreground: t.fg, card: t.surface, "card-foreground": t.fg, popover: t.surface, "popover-foreground": t.fg,
     primary: t.primary, "primary-foreground": t.bg, secondary: t.muted, "secondary-foreground": t.fg,
     muted: t.muted, "muted-foreground": `color-mix(in oklab, ${t.fg} 62%, ${t.bg})`, accent: t.muted, "accent-foreground": t.fg,
@@ -99,12 +108,12 @@ export function paletteVars(t: Tone): Record<string, string> {
   }
 }
 
-const NAMES = Object.keys(paletteVars(PALETTES.nord.dark!))
+const NAMES = Object.keys(paletteVars(PALETTES.nord.dark!, "dark"))
 
 export function applyPalette(id: string, mode: "light" | "dark") {
   const style = document.documentElement.style
   NAMES.forEach((v) => style.removeProperty("--" + v))
   const tone = PALETTES[id]?.[mode]
   if (!tone) return
-  for (const [k, v] of Object.entries(paletteVars(tone))) style.setProperty("--" + k, v)
+  for (const [k, v] of Object.entries(paletteVars(tone, mode))) style.setProperty("--" + k, v)
 }

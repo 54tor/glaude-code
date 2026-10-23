@@ -91,18 +91,18 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
             className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
           >
             {a.asking.has(s.id) ? (
-              <Info className="size-4 shrink-0 animate-pulse text-amber-500" aria-label={t("shell.sidebar.asking")} />
+              <Info className="size-4 shrink-0 animate-pulse text-warning" aria-label={t("shell.sidebar.asking")} />
             ) : a.live.has(s.id) && !a.waiting.has(s.id) ? (
-              <Loader2 className="size-4 shrink-0 animate-spin text-emerald-500" aria-label={t("shell.sidebar.working")} />
+              <Loader2 className="size-4 shrink-0 animate-spin text-success" aria-label={t("shell.sidebar.working")} />
             ) : warn ? (
-              <AlarmClock className="size-4 shrink-0 text-amber-500" aria-label={t("shell.sidebar.cacheExpiring")} />
+              <AlarmClock className="size-4 shrink-0 text-warning" aria-label={t("shell.sidebar.cacheExpiring")} />
             ) : (
-              <Flame className="size-4 shrink-0 text-orange-500" aria-hidden />
+              <Flame className="size-4 shrink-0 text-warning" aria-hidden />
             )}
-            {warm[s.id]?.on && <Coins className="size-3.5 shrink-0 text-amber-500" aria-label={t("shell.sidebar.keepWarmOn")} />}
-            {a.live.has(s.id) && <span className="size-1.5 shrink-0 rounded-full bg-emerald-500" aria-label={t("shell.sidebar.open")} />}
+            {warm[s.id]?.on && <Coins className="size-3.5 shrink-0 text-warning" aria-label={t("shell.sidebar.keepWarmOn")} />}
+            {a.live.has(s.id) && <span className="size-1.5 shrink-0 rounded-full bg-success" aria-label={t("shell.sidebar.open")} />}
             <span className="flex-1 truncate text-left">{s.title}</span>
-            <span className={cn("shrink-0 text-xs tabular-nums", warn ? "font-medium text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>
+            <span className={cn("shrink-0 text-xs tabular-nums", warn ? "font-medium text-warning" : "text-muted-foreground")}>
               {t("shell.sidebar.minutes", { left })}
             </span>
           </button>

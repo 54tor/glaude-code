@@ -120,8 +120,8 @@ export function PageHeader({
       </header>
 
       {g?.missing && (
-        <div className="flex items-center gap-3 border-b bg-amber-500/10 px-6 py-3 text-sm">
-          <TriangleAlert className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+        <div className="flex items-center gap-3 border-b bg-warning/10 px-6 py-3 text-sm">
+          <TriangleAlert className="size-4 shrink-0 text-warning" />
           <p className="flex-1">{t("shell.header.missing")}</p>
           <Button size="sm" variant="outline" onClick={() => actions.moveGroup(g, own)}>
             {t("shell.header.reassignShort")}

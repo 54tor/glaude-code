@@ -78,7 +78,7 @@ export function LiveBar({ live: { st, open }, id }: { live: Live; id: string }) 
       ))}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
         {isOpen && (
-          <span className={cn("flex min-w-0 items-center gap-1.5 font-medium", st.thinking ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>
+          <span className={cn("flex min-w-0 items-center gap-1.5 font-medium", st.thinking ? "text-success" : "text-warning")}>
             {st.thinking ? <Loader2 className="size-3.5 shrink-0 animate-spin" /> : <span className="size-1.5 shrink-0 rounded-full bg-current" />}
             <span className="truncate" title={st.activity}>
               {st.tool && st.exec ? t("conversation.live.execTool") : label(st, id, now)}
@@ -96,7 +96,7 @@ export function LiveBar({ live: { st, open }, id }: { live: Live; id: string }) 
           title={detail}
           className={cn(
             "msg flex min-h-5 min-w-0 basis-full items-start gap-2 border-l-2 py-0.5 pl-3 text-left text-xs leading-4 text-muted-foreground",
-            detail ? (isTool ? "" : "border-amber-500/60") : "border-transparent",
+            detail ? (isTool ? "" : "border-warning/60") : "border-transparent",
             detail && "cursor-pointer hover:text-foreground"
           )}
         >
@@ -176,7 +176,7 @@ export function LiveAgents({ live: { st }, dir, id }: { live: Live; dir: string;
     <>
       <Button size="sm" variant="ghost" onClick={() => setShown(true)} title={t("conversation.live.subagentsTitle")}>
         <Bot /> {t("conversation.live.subagents", { n: st.subs.length })}
-        {running > 0 && <span className="text-emerald-600 dark:text-emerald-400">{t("conversation.live.runningCount", { running })}</span>}
+        {running > 0 && <span className="text-success">{t("conversation.live.runningCount", { running })}</span>}
       </Button>
       <Dialog open={shown} onOpenChange={setShown}>
         <DialogContent className="flex max-h-[85vh] min-w-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
@@ -189,7 +189,7 @@ export function LiveAgents({ live: { st }, dir, id }: { live: Live; dir: string;
               {st.subs.map((s) => (
                 <li key={s.id}>
                   <button type="button" onClick={() => setSub(s)} title={t("conversation.live.subOpen")} className="flex w-full flex-wrap items-center gap-x-2 rounded-md px-1.5 py-1 text-left hover:bg-muted">
-                    {s.running ? <Loader2 className="size-3.5 animate-spin text-emerald-600 dark:text-emerald-400" /> : <span className="size-1.5 rounded-full bg-muted-foreground/50" />}
+                    {s.running ? <Loader2 className="size-3.5 animate-spin text-success" /> : <span className="size-1.5 rounded-full bg-muted-foreground/50" />}
                     <span className="font-medium">{s.desc || s.type}</span>
                     <span className="text-xs text-muted-foreground">{s.type}</span>
                     <span className="min-w-0 truncate text-xs text-muted-foreground" title={s.activity}>

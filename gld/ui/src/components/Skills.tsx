@@ -22,9 +22,9 @@ import { useEditorDraft, useLeaveGuard } from "@/hooks/useEditorDraft"
 
 // Origine d'un skill : badge court et explication.
 const ORIGINS = {
-  store: "bg-violet-500/15 text-violet-700 dark:text-violet-300",
-  plugin: "bg-sky-500/15 text-sky-700 dark:text-sky-300",
-  install: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  store: "bg-info/10 text-info",
+  plugin: "bg-info/10 text-info",
+  install: "bg-success/10 text-success",
   custom: "bg-muted text-muted-foreground",
 } as const
 
@@ -163,12 +163,12 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
                             className={cn("flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors", s.key === sel ? "bg-accent text-accent-foreground" : "hover:bg-muted")}
                           >
                             <span className="flex items-center gap-1.5">
-                              <Zap className="size-3.5 shrink-0 text-amber-500" />
+                              <Zap className="size-3.5 shrink-0 text-warning" />
                               <span className="min-w-0 flex-1 truncate font-medium">{s.name}</span>
                         <OriginBadge s={s} />
                               {s.manual && <Hand className="size-3.5 shrink-0 text-muted-foreground" aria-label={t("skills.skills.manualOnly")} />}
                               {s.hidden && <EyeOff className="size-3.5 shrink-0 text-muted-foreground" aria-label={t("skills.skills.hiddenInMenu")} />}
-                              {s.warn && <AlertTriangle className="size-3.5 shrink-0 text-amber-500" aria-label={t("skills.skills.toCheck")} />}
+                              {s.warn && <AlertTriangle className="size-3.5 shrink-0 text-warning" aria-label={t("skills.skills.toCheck")} />}
                             </span>
                             <span className="line-clamp-2 text-xs text-muted-foreground">{s.description || t("skills.skills.noDescription")}</span>
                           </button>
@@ -296,8 +296,8 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
               {skill.readOnly && t("skills.skills.readOnlyHint")}
             </p>
             {skill.warn && !editing && (
-              <p className="flex items-start gap-2 border-b bg-amber-500/10 px-6 py-2 text-xs">
-                <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-500" /> {skill.warn}
+              <p className="flex items-start gap-2 border-b bg-warning/10 px-6 py-2 text-xs">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" /> {skill.warn}
               </p>
             )}
             {editing ? (

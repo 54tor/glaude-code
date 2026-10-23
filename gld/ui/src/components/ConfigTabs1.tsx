@@ -23,14 +23,14 @@ export function HealthTab({ issues, home, projects }: { issues: CfgIssue[]; home
   if (!issues.length)
     return (
       <p className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
-        <CheckCircle2 className="size-4 text-emerald-500" /> {t("config.health.ok")}
+        <CheckCircle2 className="size-4 text-success" /> {t("config.health.ok")}
       </p>
     )
   return (
     <ul className="space-y-1">
       {issues.map((i, n) => (
         <li key={n} className="flex items-start gap-2 rounded-md border px-3 py-2 text-sm">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" />
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
           <span className="min-w-0">
             <span className="block text-xs font-medium text-muted-foreground">
               {KIND.has(i.kind) ? t(`config.issueKind.${i.kind}`) : i.kind} · {fileLabel(t, i.file, home, projects)}
@@ -58,7 +58,7 @@ export function HooksTab({ hooks }: { hooks: HookInfo[] }) {
               <span className="font-medium">{h.event}</span>
               {h.matcher && <code className="rounded bg-muted px-1 text-xs">{h.matcher}</code>}
               <span className="text-xs text-muted-foreground">{LV[h.scope] ? t(`config.scope.${LV[h.scope]}`) : undefined}</span>
-              {h.missing && <span className="text-xs text-amber-600 dark:text-amber-400">{t("config.hooks.missing", { path: h.missing })}</span>}
+              {h.missing && <span className="text-xs text-warning">{t("config.hooks.missing", { path: h.missing })}</span>}
             </p>
             <code className="mt-1 block text-xs break-all text-muted-foreground">{h.command || `(${h.type})`}</code>
           </li>
@@ -174,7 +174,7 @@ export function McpTab({ home }: { home: string }) {
                 {s.type} · {s.scope === "user" ? t("config.scope.user") : s.scope === "project" ? ".mcp.json" : t("config.scope.local")}
                 {s.project ? ` · ${tilde(s.project, home)}` : ""}
               </span>
-              {status && <span className={cn("text-xs", ok(status[s.name]) ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>{status[s.name] ?? t("config.mcp.unknownState")}</span>}
+              {status && <span className={cn("text-xs", ok(status[s.name]) ? "text-success" : "text-warning")}>{status[s.name] ?? t("config.mcp.unknownState")}</span>}
             </p>
             <code className="mt-1 block text-xs break-all text-muted-foreground">{s.url || s.command}</code>
             {!!s.envKeys?.length && <p className="text-xs text-muted-foreground">{t("config.mcp.variables", { list: s.envKeys.join(", ") })}</p>}
@@ -189,7 +189,7 @@ export function McpTab({ home }: { home: string }) {
             {others.map((n) => (
               <li key={n} className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm">
                 <span className="min-w-0 flex-1 truncate">{n}</span>
-                <span className={cn("shrink-0 text-xs", ok(status![n]) ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>{status![n]}</span>
+                <span className={cn("shrink-0 text-xs", ok(status![n]) ? "text-success" : "text-warning")}>{status![n]}</span>
               </li>
             ))}
           </ul>

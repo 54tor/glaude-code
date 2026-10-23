@@ -98,7 +98,7 @@ function GroupRow({ vg, n, depth, active, onGroup }: { vg: VGroup; n: Node; dept
             )}
             style={{ paddingLeft: (depth + 1) * 12 + 4 + 24 }}
           >
-            <Tag className="size-4 shrink-0 text-violet-500" />
+            <Tag className="size-4 shrink-0 text-info" />
             <span className="truncate">{vg.name}</span>
             {vg.fav && <Star className="size-3 shrink-0 fill-amber-400 text-amber-400" aria-label={t("shell.list.favorite")} />}
             <span className="ml-auto text-xs text-muted-foreground tabular-nums">{a.groupActs.rows(vg).length}</span>
@@ -197,7 +197,7 @@ function Item({
               aria-current={active}
             >
               <span className="truncate">{label ?? n.name}</span>
-              {n.g?.missing && <TriangleAlert className="size-3.5 shrink-0 text-amber-500" aria-label={t("shell.tree.dirMissing")} />}
+              {n.g?.missing && <TriangleAlert className="size-3.5 shrink-0 text-warning" aria-label={t("shell.tree.dirMissing")} />}
             </button>
             {n.g && <GitMini states={[git.status[n.g.project], ...repos.map((d) => git.status[d])]} />}
             {n.g && <SessionCount n={n.ss.length} active={sessionsOpen} />}
