@@ -6,7 +6,7 @@ import { toast } from "sonner"
 import { Bug, Copy, Minimize2, Power, Send, Square, SquareCheck, X } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
 import { draftOf, setDraft, useDraft } from "@/hooks/useDraft"
-import { withChoice, type Choice } from "@/lib/models"
+import { EFFORTS, MODELS, withChoice, type Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
 import { Choose } from "./Choose"
 import { api, type Msg } from "@/lib/api"
@@ -373,6 +373,20 @@ function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => 
               <Square /> Interrompre
             </Button>
           )}
+          <Choose
+            value={MODELS.find(([a]) => a && liveState.st?.model?.toLowerCase().includes(a))?.[0] ?? ""}
+            onChange={async (m) => m && (await post(`/model ${m}`)) && onSent()}
+            options={[["", "Modèle…"], ...MODELS.slice(1)]}
+            label="Modèle de la session"
+            disabled={working || asking || busy}
+          />
+          <Choose
+            value=""
+            onChange={async (e) => e && (await post(`/effort ${e}`)) && onSent()}
+            options={[["", "Effort…"], ...EFFORTS.slice(1)]}
+            label="Effort de la session"
+            disabled={working || asking || busy}
+          />
           <SlashMenu id={id} text={text} onSent={onSent} />
           <CloseSession id={id} />
           <Button size="sm" onClick={send} disabled={(!text.trim() && !pics.images.length) || busy}>
