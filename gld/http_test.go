@@ -615,3 +615,19 @@ func TestTerminalDesactiveParDefaut(t *testing.T) {
 		t.Fatalf("term-ws derrière la passerelle : %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestSessionsStamp(t *testing.T) {
+	h, cfg, _ := web(t)
+	_, m, _ := call(t, h, "GET", "/sessions-stamp", "")
+	first, _ := m["stamp"].(float64)
+	if first == 0 {
+		t.Fatal("tampon vide")
+	}
+	p := filepath.Join(cfg, "projects", "-p", id1+".jsonl")
+	later := time.Now().Add(time.Hour)
+	os.Chtimes(p, later, later)
+	_, m, _ = call(t, h, "GET", "/sessions-stamp", "")
+	if second, _ := m["stamp"].(float64); second <= first {
+		t.Fatalf("le tampon n'a pas bougé : %v -> %v", first, second)
+	}
+}
