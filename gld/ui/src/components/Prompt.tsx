@@ -26,7 +26,7 @@ export function Prompt({ ask, onClose }: { ask: Ask | null; onClose: () => void 
   }, [ask])
   return (
     <Dialog open={!!ask} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md" onCloseAutoFocus={(e) => last.current?.row && focusRow([last.current.row]) && e.preventDefault()}>
+      <DialogContent className="sm:max-w-md" onCloseAutoFocus={(e) => focusRow(last.current?.row) && e.preventDefault()}>
         {ask && <Form key={ask.title + ask.value} ask={ask} onClose={onClose} />}
       </DialogContent>
     </Dialog>

@@ -214,7 +214,7 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
     <Dialog open={!!session} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         className="flex h-[94vh] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none"
-        onCloseAutoFocus={(e) => focusRow([lastId.current]) && e.preventDefault()}
+        onCloseAutoFocus={(e) => focusRow(lastId.current) && e.preventDefault()}
       >
         <DialogHeader className="gap-1 border-b px-4 pt-4 pr-12 pb-3 md:px-6 md:pt-5 md:pr-14 md:pb-4">
           <div className="flex items-start gap-4">
