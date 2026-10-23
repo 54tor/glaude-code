@@ -26,6 +26,7 @@ var (
 	verifyPassword = checkPassword
 	dummyPassword  = dummyCheck
 	useRecovery    = (*authStore).UseRecoveryCode
+	genRecovery    = genRecoveryCodes
 	verifyTOTP     = (*authStore).TOTPVerify
 )
 
@@ -582,17 +583,11 @@ func (a *authAPI) enrolBegin(w http.ResponseWriter, r *http.Request) (*Principal
 	return p, true
 }
 
-// enrolCommit écrit le facteur. Le corps est déjà lu et les codes de secours déjà hachés : sous la
-// clé first:<uid> ne restent que la vérification « aucun facteur », l'écriture, le stockage des codes et
-// la promotion. De deux premiers enrôlements concurrents d'un compte, un seul aboutit.
+// enrolCommit écrit le facteur, corps déjà lu. Sous la clé first:<uid> (qui ne sérialise que ce compte) :
+// vérification « aucun facteur », écriture qui valide le code ou l'attestation, puis seulement en cas
+// de succès les codes de secours (argon2) et la promotion. Un échec ne coûte aucun argon2.
 func (a *authAPI) enrolCommit(w http.ResponseWriter, r *http.Request, p *Principal, what string, write func() error) {
-	var codes, hashes []string
 	if !p.MFA {
-		var err error
-		if codes, hashes, err = genRecoveryCodes(); err != nil {
-			authInternal(w, err)
-			return
-		}
 		release, ok := a.claim("first:" + strconv.FormatInt(p.User.ID, 10))
 		if !ok {
 			a.log(p.User.ID, p.User.Name, clientIP(r), "enrol", what+"_busy")
@@ -619,12 +614,10 @@ func (a *authAPI) enrolCommit(w http.ResponseWriter, r *http.Request, p *Princip
 	a.log(p.User.ID, p.User.Name, ip, "enrol", what)
 	out := map[string]any{"ok": true, "csrf": p.CSRF}
 	if f.none() {
-		// Session complète sans facteur : état anormal, mais le jeu de codes reste dû au premier facteur.
-		if hashes == nil {
-			if codes, hashes, err = genRecoveryCodes(); err != nil {
-				authInternal(w, err)
-				return
-			}
+		codes, hashes, err := genRecovery()
+		if err != nil {
+			authInternal(w, err)
+			return
 		}
 		if err := a.s.storeRecoveryCodes(p.User.ID, hashes); err != nil {
 			authInternal(w, err)

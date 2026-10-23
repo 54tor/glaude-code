@@ -843,3 +843,22 @@ func TestFirstEnrolStalledBody(t *testing.T) {
 		t.Fatalf("enrôlement d'alice : %d %s", slow.Code, slow.Body)
 	}
 }
+
+func TestEnrollFailedConfirmNoArgon(t *testing.T) {
+	g := newAuthRig(t)
+	var gens atomic.Int64
+	orig := genRecovery
+	genRecovery = func() ([]string, []string, error) { gens.Add(1); return orig() }
+	t.Cleanup(func() { genRecovery = orig })
+	n := argonCalls(t)
+	c, csrf, _ := g.partial()
+	secret := jbody(t, g.do("POST", "/auth/totp/begin", c, csrf, map[string]string{}))["secret"].(string)
+	before := n.Load()
+	w := g.do("POST", "/auth/totp/confirm", c, csrf, map[string]string{"code": "000000"})
+	if w.Code != 400 || jbody(t, w)["out"] != L("srv.auth.codeInvalide") || gens.Load() != 0 || n.Load() != before {
+		t.Fatalf("faux code : %d %s, générations %d", w.Code, w.Body, gens.Load())
+	}
+	if w := g.do("POST", "/auth/totp/confirm", c, csrf, map[string]string{"code": codeAt(t, secret, *g.clock)}); w.Code != 200 || gens.Load() != 1 {
+		t.Fatalf("bon code : %d, générations %d", w.Code, gens.Load())
+	}
+}
