@@ -1,0 +1,18 @@
+{
+  "common": {
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "confirm": "Confirmer",
+    "apply": "Appliquer",
+    "copy": "Copier",
+    "copied": "Copié",
+    "loading": "Chargement…",
+    "retry": "Réessayer",
+    "back": "Retour",
+    "yes": "Oui",
+    "no": "Non",
+    "ok": "ok"
+  }
+}

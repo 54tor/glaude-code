@@ -3,13 +3,13 @@ import { act, cleanup, render } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
 import { useTranslation } from "react-i18next"
 import { ago, size } from "@/lib/format"
-import en from "./en.json"
-import fr from "./fr.json"
-import { resolveFront, setLang } from "./index"
+import { catalogFiles, i18n, resolveFront, setLang } from "./index"
 
 const flat = (o: object, p = ""): string[] =>
   Object.entries(o).flatMap(([k, v]) => (typeof v === "object" && v ? flat(v, p + k + ".") : [p + k]))
 const leaves = (o: object): string[] => Object.values(o).flatMap((v) => (typeof v === "object" && v ? leaves(v) : [String(v)]))
+const names = (m: Record<string, unknown>) => Object.keys(m).map((p) => p.split("/").pop()).sort()
+const bundle = (lang: string) => i18n.getResourceBundle(lang, "translation") as object
 
 afterEach(() => {
   cleanup()
@@ -27,9 +27,14 @@ describe("resolveFront", () => {
 })
 
 describe("catalogues", () => {
-  it("ont les mêmes clés et aucune valeur vide", () => {
-    expect(flat(en)).toEqual(flat(fr))
-    for (const v of [...leaves(fr), ...leaves(en)]) expect(v.trim()).not.toBe("")
+  it("ont les mêmes fichiers, les mêmes clés et aucune valeur vide", () => {
+    expect(names(catalogFiles.en)).toEqual(names(catalogFiles.fr))
+    expect(flat(bundle("en")).sort()).toEqual(flat(bundle("fr")).sort())
+    for (const v of [...leaves(bundle("fr")), ...leaves(bundle("en"))]) expect(v.trim()).not.toBe("")
+  })
+  it("le premier niveau de chaque fichier porte son nom", () => {
+    for (const lang of ["fr", "en"] as const)
+      for (const [p, m] of Object.entries(catalogFiles[lang])) expect(Object.keys(m.default)).toEqual([p.split("/").pop()!.replace(".json", "")])
   })
 })
 
