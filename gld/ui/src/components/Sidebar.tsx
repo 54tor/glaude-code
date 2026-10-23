@@ -1,8 +1,6 @@
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { useTranslation } from "react-i18next"
-import { SessionTrash } from "./SessionTrash"
 import { CleanupWarning } from "./CleanupWarning"
-import { Trash2 } from "lucide-react"
 import { AlarmClock, ChevronRight, FolderPlus, Repeat, Coins, FolderOpen, Star, Brain, SlidersHorizontal, Zap, Flame, History, Clock, FileText, Inbox, Info, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
 import { size, tilde } from "@/lib/format"
 import type { Choice } from "@/lib/models"
@@ -185,7 +183,6 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
   const r = p.route
   const link = (to: Route) => ({ to, onClick: () => p.go(to) })
   const a = useActions()
-  const [trashOpen, setTrashOpen] = useState(false)
   const { open, onClose } = p
   useEffect(() => {
     if (!open) return
@@ -195,7 +192,6 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
   }, [open, onClose])
   return (
     <>
-      <SessionTrash open={trashOpen} onClose={() => setTrashOpen(false)} reload={p.reload} />
       {/* Mobile : le menu est un tiroir par-dessus la page ; sur grand écran il reste une colonne fixe. */}
       <div className={cn("fixed inset-0 z-30 bg-black/40 transition-opacity md:hidden", p.open ? "opacity-100" : "pointer-events-none opacity-0")} onClick={p.onClose} aria-hidden="true" />
       <aside
@@ -272,7 +268,6 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             {...link({ kind: "recent" })}
           />
           <NavItem icon={Inbox} label={t("shell.app.title.all")} n={p.counts.all} active={r.kind === "all"} {...link({ kind: "all" })} />
-          <NavItem icon={Trash2} label={t("shell.sidebar.trash")} active={false} onClick={() => setTrashOpen(true)} />
           <NavItem icon={History} label={t("shell.app.title.tabs")} active={r.kind === "tabs"} {...link({ kind: "tabs" })} />
           <NavItem icon={Zap} label={t("shell.app.title.skills")} active={r.kind === "skills"} {...link({ kind: "skills", key: "" })} />
           <NavItem icon={SlidersHorizontal} label={t("shell.app.title.config")} active={r.kind === "config"} {...link({ kind: "config", tab: "" })} />
