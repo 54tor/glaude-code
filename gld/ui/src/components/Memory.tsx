@@ -3,6 +3,7 @@ import { ArrowLeft, Brain, Globe } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
+import { useTranslation } from "react-i18next"
 import { useLocal } from "@/hooks/useLocal"
 import { api, type Finding, type MemFile, type Trashed } from "@/lib/api"
 import { tilde } from "@/lib/format"
@@ -12,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import type { Ask } from "./Confirm"
 import type { ComposeAsk } from "./Compose"
 import { Markdown } from "./Message"
-import { BLANK_ENTRY, BLANK_RULE, cmpFiles, copy, DEFAULT_SORT, home, newKey, split, type Sort } from "./memoryLib"
+import { BLANK_ENTRY, blankRule, cmpFiles, copy, DEFAULT_SORT, home, newKey, split, type Sort } from "./memoryLib"
 import { Toolbar, SelectionBar } from "./MemoryBars"
 import { FileBar } from "./MemoryFileBar"
 import { FileMenu } from "./MemoryFileMenu"
@@ -43,6 +44,7 @@ export function Memory({
   onCompose: (a: ComposeAsk) => void
   args: string
 }) {
+  const { t } = useTranslation()
   const [picked, setPicked] = useState(() => new Set<string>())
   const [sortsRaw, setSortsRaw] = useLocal("ccMemSorts", "{}") // { <dossier>: { by, dir } }
   const sorts: Record<string, Sort> = (() => {
@@ -125,7 +127,7 @@ export function Memory({
     return r.ok
   }
   const save = async () => {
-    if (!editing) return void toast.error("Aucun brouillon à enregistrer")
+    if (!editing) return void toast.error(t("memory.main.noDraft"))
     // Nouvelle entrée de mémoire de projet ou de règle globale : le nom saisi fixe le fichier.
     const m = /^(m\/[^/]+|r\/[^/]+|g\/rules)\/[^/]+$/.exec(sel)
     const scopeOf = (p: string) => (p === "g/rules" ? "global" : p[0] === "r" ? "r:" + p.slice(2) : p.slice(2))
@@ -146,26 +148,23 @@ export function Memory({
     setWriter({
       kind: "rewrite",
       key: scope === "global" ? "g/CLAUDE.md" : `p/${scope}/${target}`,
-      name: scope === "global" ? "~/.claude/CLAUDE.md" : `${target} de ${label}`,
+      name: scope === "global" ? "~/.claude/CLAUDE.md" : t("memory.main.consolidateName", { target, label }),
       refs: refs.map((x) => x.key),
-      instruction:
-        scope === "global"
-          ? "Consolide ces règles globales dans ce CLAUDE.md : garde les consignes durables, regroupe-les par thème, retire les doublons. Conserve telles quelles les lignes d'import existantes (« @fichier »)."
-          : `Consolide ces entrées de mémoire dans le ${target} du projet : garde les règles durables, utiles à chaque session, regroupe-les par thème, retire les doublons et ce qui est périmé.`,
+      instruction: scope === "global" ? t("memory.main.consolidateGlobal") : t("memory.main.consolidateProject", { target }),
     })
   }
-  const onDraft = async (t: WriteTarget, body: string) => {
-    const key = t.kind === "rewrite" ? t.key : newKey(all, t.scope, body)
-    if (t.kind === "rewrite") {
+  const onDraft = async (tg: WriteTarget, body: string) => {
+    const key = tg.kind === "rewrite" ? tg.key : newKey(all, tg.scope, body)
+    if (tg.kind === "rewrite") {
       // Un brouillon identique au fichier n'a rien à enregistrer : on le dit plutôt que d'ouvrir un éditeur sans changement.
       const cur = (await api.memoryFile(key)).text
-      if (cur !== undefined && cur.trimEnd() === body.trimEnd()) return void toast.info("Haiku n'a rien changé : le texte est identique au fichier")
+      if (cur !== undefined && cur.trimEnd() === body.trimEnd()) return void toast.info(t("memory.main.haikuSame"))
     }
     setDraft({ key, text: body })
     onPick(key)
   }
   // Entrée écrite à la main : un modèle prérempli, la clé se fixe à l'enregistrement d'après le nom.
-  const blank = (scope: string) => onDraft({ kind: "new", scope, label: "" }, scope === "global" || scope.startsWith("r:") ? BLANK_RULE : BLANK_ENTRY)
+  const blank = (scope: string) => onDraft({ kind: "new", scope, label: "" }, scope === "global" || scope.startsWith("r:") ? blankRule() : BLANK_ENTRY)
   const edit = (key: string) => {
     if (key === sel && text !== null) return setDraft({ key, text })
     editNext.current = key
@@ -200,8 +199,9 @@ export function Memory({
       if (r.ok) ok++
       else fails.push(`${key} : ${r.out}`)
     }
-    if (fails.length) toast.error(`${ok} corrigé${ok > 1 ? "s" : ""}, ${fails.length} échec${fails.length > 1 ? "s" : ""} : ${fails[0]}`)
-    else toast.success(`${ok} front matter${ok > 1 ? "s" : ""} corrigé${ok > 1 ? "s" : ""}`)
+    if (fails.length)
+      toast.error(t("memory.main.fixPartial", { done: t("memory.main.fixedCount", { count: ok }), failed: t("memory.main.failCount", { count: fails.length }), first: fails[0] }))
+    else toast.success(t("memory.main.fixOk", { count: ok }))
     refresh()
   }
   const repair = async (dir: string) => {
@@ -210,9 +210,9 @@ export function Memory({
   }
   const remove = (x: MemFile) =>
     onAsk({
-      title: `Supprimer ${x.name} ?`,
-      body: x.key.startsWith("m/") ? "Suppression définitive. Sa ligne dans MEMORY.md est retirée aussi." : "Suppression définitive (une copie reste dans la corbeille).",
-      confirm: "Supprimer",
+      title: t("memory.main.deleteTitle", { name: x.name }),
+      body: x.key.startsWith("m/") ? t("memory.main.deleteBodyMemory") : t("memory.main.deleteBodyFile"),
+      confirm: t("common.delete"),
       run: async () => {
         if (report(await api.post("/memory-rm", { key: x.key }))) {
           if (x.key === sel) onPick("")
@@ -223,9 +223,9 @@ export function Memory({
   // Suppression d'un groupe : chaque fichier va à la corbeille (restaurable), un à un, avec un bilan.
   const removeMany = (keys: string[], what: string) =>
     onAsk({
-      title: `Supprimer ${what} (${keys.length} fichier${keys.length > 1 ? "s" : ""}) ?`,
-      body: "Chaque fichier est copié à la corbeille avant d'être supprimé ; les lignes de MEMORY.md sont retirées aussi.",
-      confirm: "Tout supprimer",
+      title: t("memory.main.removeManyTitle", { what, count: keys.length }),
+      body: t("memory.main.removeManyBody"),
+      confirm: t("memory.main.removeAll"),
       run: async () => {
         let ok = 0
         const fails: string[] = []
@@ -234,8 +234,9 @@ export function Memory({
           if (r.ok) ok++
           else fails.push(r.out)
         }
-        if (fails.length) toast.error(`${ok} supprimé${ok > 1 ? "s" : ""}, ${fails.length} échec${fails.length > 1 ? "s" : ""} : ${fails[0]}`)
-        else toast.success(`${ok} fichier${ok > 1 ? "s" : ""} à la corbeille`)
+        if (fails.length)
+          toast.error(t("memory.main.fixPartial", { done: t("memory.main.removedCount", { count: ok }), failed: t("memory.main.failCount", { count: fails.length }), first: fails[0] }))
+        else toast.success(t("memory.main.trashedFiles", { count: ok }))
         setPicked(new Set())
         if (keys.includes(sel)) onPick("")
         refresh()
@@ -243,26 +244,26 @@ export function Memory({
     })
   const copyContent = async (x: MemFile) => {
     const r = await api.memoryFile(x.key)
-    if (r.text === undefined) return void toast.error(r.error ?? "Fichier illisible")
-    copy(r.text, "Contenu")
+    if (r.text === undefined) return void toast.error(r.error ?? t("memory.main.unreadable"))
+    copy(r.text, "memory.lib.copiedContent")
   }
   // Fusion par Claude : le serveur rédige le prompt ; on le copie, ou on l'ouvre dans la fenêtre de saisie (relecture, modèle) avant de lancer la session.
   const merge = async (launch: boolean) => {
     const keys = [...picked]
     const r = (await api.post("/memory-merge", { keys, launch: false })) as { ok: boolean; out: string; prompt?: string }
-    if (!r.ok || !r.prompt) return void toast.error(r.out.trim() || "Échec")
-    if (!launch) return void copy(r.prompt, "Prompt de fusion")
+    if (!r.ok || !r.prompt) return void toast.error(r.out.trim() || t("memory.main.failed"))
+    if (!launch) return void copy(r.prompt, "memory.lib.copiedMergePrompt")
     onCompose({
       id: "merge:" + keys.join(","),
-      title: "Fusionner la mémoire",
-      subtitle: `${keys.length} fichiers · la session est interactive : tu valideras avant toute écriture`,
+      title: t("memory.main.mergeTitle"),
+      subtitle: t("memory.main.mergeSubtitle", { n: keys.length }),
       project: "",
       initial: r.prompt,
-      send: "Lancer la fusion",
+      send: t("memory.main.mergeSend"),
       choice: { model: "haiku", effort: "" }, // tâche mécanique
       run: async (text, c) => {
         const m = (await api.post("/memory-merge", { keys, launch: true, prompt: text, args: withChoice(args, c) })) as { ok: boolean; out: string }
-        ;(m.ok ? toast.success : toast.error)(m.out.trim() || (m.ok ? "Session lancée" : "Échec"))
+        ;(m.ok ? toast.success : toast.error)(m.out.trim() || (m.ok ? t("memory.main.mergeStarted") : t("memory.main.failed")))
         if (m.ok) setPicked(new Set())
         return m.ok
       },
@@ -270,8 +271,8 @@ export function Memory({
   }
   // Décompte réel des tokens par Haiku (tokens.go), quelques fichiers à la fois ; la liste se rafraîchit à chaque lot.
   const countTokens = async (keys: string[]) => {
-    if (!keys.length) return void toast.info("Tout est déjà compté")
-    const id = toast.loading(`Décompte de ${keys.length} fichier${keys.length > 1 ? "s" : ""}…`)
+    if (!keys.length) return void toast.info(t("memory.main.alreadyCounted"))
+    const id = toast.loading(t("memory.main.counting", { count: keys.length }))
     let cost = 0
     let failed = ""
     for (let i = 0; i < keys.length; i += 4) {
@@ -280,12 +281,12 @@ export function Memory({
       failed ||= Object.values(r.errors ?? {})[0] ?? r.out ?? ""
       await refresh()
     }
-    ;(failed ? toast.error : toast.success)(failed ? `Décompte incomplet : ${failed}` : `Tokens comptés (${cost.toFixed(4)} $)`, { id })
+    ;(failed ? toast.error : toast.success)(failed ? t("memory.main.countFailed", { error: failed }) : t("memory.main.counted", { cost: cost.toFixed(4) }), { id })
   }
   const haikuFromSelection = () => {
     const dir = [...picked].find((k) => k.startsWith("m/"))?.split("/")[1]
     const p = list?.projects.find((x) => x.dir === dir)
-    setWriter(dir ? { kind: "new", scope: dir, label: tilde(p?.project ?? dir, homeDir) } : { kind: "new", scope: "global", label: "règles globales" })
+    setWriter(dir ? { kind: "new", scope: dir, label: tilde(p?.project ?? dir, homeDir) } : { kind: "new", scope: "global", label: t("memory.main.globalRules") })
   }
 
   // --- corbeille ----------------------------------------------------------------------------------------------
@@ -297,14 +298,14 @@ export function Memory({
       if (r.key) onPick(r.key)
     }
   }
-  const purge = (t?: Trashed) =>
+  const purge = (item?: Trashed) =>
     onAsk({
-      title: t ? "Supprimer définitivement cette version ?" : `Vider la corbeille (${trash.length}) ?`,
-      body: "Cette fois, c'est définitif.",
-      confirm: t ? "Supprimer" : "Vider",
+      title: item ? t("memory.main.purgeOne") : t("memory.main.purgeAll", { n: trash.length }),
+      body: t("memory.main.purgeBody"),
+      confirm: item ? t("common.delete") : t("memory.trash.empty"),
       run: async () => {
-        if (report(await api.post("/trash-purge", t ? { id: t.id } : { all: true }))) {
-          if (!t || t.id === inTrash) onPick("")
+        if (report(await api.post("/trash-purge", item ? { id: item.id } : { all: true }))) {
+          if (!item || item.id === inTrash) onPick("")
           refresh()
         }
       },
@@ -340,7 +341,7 @@ export function Memory({
       onWrite={onWrite}
       onConsolidate={onConsolidate}
       agents={key !== "global"}
-      onRemoveAll={(keys) => removeMany(keys, `la section « ${title} »`)}
+      onRemoveAll={(keys) => removeMany(keys, t("memory.main.sectionOf", { title }))}
       menu={menu}
       sort={sortOf(key)}
       onSort={(s) => setSortsRaw(JSON.stringify({ ...sorts, [key]: s }))}
@@ -366,17 +367,17 @@ export function Memory({
               onHealth={() => setHealthOpen(true)}
               onType={setTypeFilter}
               onTypeHelp={() => setTypeHelp(true)}
-              onCleanOrphans={() => removeMany(orphans, `les mémoires de ${gone.length} projet${gone.length > 1 ? "s" : ""} introuvable${gone.length > 1 ? "s" : ""}`)}
+              onCleanOrphans={() => removeMany(orphans, t("memory.main.orphansOf", { count: gone.length }))}
             />
           )}
           {list &&
-            list.global.some((x) => match(x, "globale")) &&
+            list.global.some((x) => match(x, t("memory.main.global"))) &&
             section(
               "global",
               Globe,
-              "Globale",
-              list.global.filter((x) => match(x, "globale")),
-              () => setWriter({ kind: "new", scope: "global", label: "règles globales" }),
+              t("memory.main.global"),
+              list.global.filter((x) => match(x, t("memory.main.global"))),
+              () => setWriter({ kind: "new", scope: "global", label: t("memory.main.globalRules") }),
               () => consolidate("global", "")
             )}
           {list?.projects.map((p) => {
@@ -386,7 +387,7 @@ export function Memory({
               ? section(
                   p.dir,
                   Brain,
-                  label + (p.missing ? " (introuvable)" : ""),
+                  p.missing ? t("memory.main.projectMissing", { label }) : label,
                   files,
                   () => setWriter({ kind: "new", scope: p.dir, label }),
                   // un CLAUDE.md de projet s'écrit dans son dossier : impossible s'il a disparu, inutile sans mémoire
@@ -403,7 +404,7 @@ export function Memory({
           count={picked.size}
           onPrompt={() => merge(false)}
           onHaiku={haikuFromSelection}
-          onRemove={() => removeMany([...picked], "la sélection")}
+          onRemove={() => removeMany([...picked], t("memory.main.selection"))}
           onMerge={() => merge(true)}
           onClear={() => setPicked(new Set())}
         />
@@ -412,7 +413,7 @@ export function Memory({
         {sel && (
           <div className="border-b px-2 py-1.5 lg:hidden">
             <Button variant="ghost" size="sm" onClick={() => onPick("")}>
-              <ArrowLeft /> Liste
+              <ArrowLeft /> {t("memory.main.list")}
             </Button>
           </div>
         )}
@@ -427,7 +428,7 @@ export function Memory({
             onRestore={() => trashed && restore(trashed)}
           />
         ) : !sel ? (
-          <p className="px-6 py-20 text-center text-sm text-muted-foreground">Choisis un fichier de mémoire à afficher. Clic droit pour ses actions.</p>
+          <p className="px-6 py-20 text-center text-sm text-muted-foreground">{t("memory.main.pickFile")}</p>
         ) : (
           <>
             <FileBar
@@ -459,9 +460,9 @@ export function Memory({
             )}
             {file?.off && sel.startsWith("g/rules/") && (
               <p className="border-b bg-muted/30 px-6 py-2 text-xs text-muted-foreground">
-                Règle désactivée : Claude ne la charge plus.{" "}
+                {t("memory.main.ruleOff")}{" "}
                 <button className="underline" onClick={() => toggleRule(file.key)}>
-                  Réactiver
+                  {t("memory.main.reactivate")}
                 </button>
               </p>
             )}
@@ -473,7 +474,7 @@ export function Memory({
                 spellCheck={false}
                 autoFocus
                 className="session-text min-h-0 flex-1 resize-none bg-background px-6 py-4 outline-none"
-                aria-label="Contenu du fichier"
+                aria-label={t("memory.main.fileContent")}
               />
             ) : (
               <ScrollArea className="min-h-0 flex-1">
@@ -500,7 +501,7 @@ export function Memory({
         onOpenKey={onPick}
         onRepair={repair}
         onFix={fix}
-        scopes={[["global", "Règles globales et CLAUDE.md"], ...(list?.projects ?? []).filter((p) => p.files.some((x) => x.key.startsWith("m/"))).map((p) => [p.dir, tilde(p.project, homeDir)] as const)]}
+        scopes={[["global", t("memory.main.scopeGlobal")], ...(list?.projects ?? []).filter((p) => p.files.some((x) => x.key.startsWith("m/"))).map((p) => [p.dir, tilde(p.project, homeDir)] as const)]}
         onLint={async (scope) => {
           const r = (await api.post("/memory-lint", { scope })) as { ok: boolean; out?: string; findings?: Finding[]; cost?: number }
           return r.ok ? { findings: r.findings, cost: r.cost } : { error: r.out, cost: r.cost }

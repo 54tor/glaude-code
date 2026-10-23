@@ -1,4 +1,5 @@
 import { Bot, Brain, Eye, EyeOff, FolderInput, Globe, Pencil, Save, ScrollText, Trash2, X } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import type { MemFile, MemTarget } from "@/lib/api"
 import { ago, size, tilde } from "@/lib/format"
 import { Button } from "@/components/ui/button"
@@ -50,20 +51,21 @@ export function FileBar({
   onRewrite: () => void
   loads?: { sessions: number; last: number } // chargements réels, si le suivi est installé
 }) {
+  const { t } = useTranslation()
   return (
     <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 border-b px-6 py-2">
       <code className="min-w-40 flex-1 truncate text-xs text-muted-foreground" title={file?.path}>
         {file ? `${file.name} · ${size(file.kb)}` : sel}
-        {file && loads && (loads.sessions ? ` · chargée dans ${loads.sessions} session${loads.sessions > 1 ? "s" : ""}, dernière ${ago(loads.last)}` : " · jamais chargée depuis l'activation du suivi")}
+        {file && loads && (loads.sessions ? t("memory.fileBar.loadedIn", { count: loads.sessions, ago: ago(loads.last) }) : t("memory.fileBar.neverLoaded"))}
       </code>
       {editing ? (
         <>
           <Button variant="ghost" size="sm" onClick={onCancel}>
-            <X /> Annuler
+            <X /> {t("memory.fileBar.cancel")}
           </Button>
-          {!dirty && <span className="text-xs text-muted-foreground">identique au fichier : rien à enregistrer</span>}
+          {!dirty && <span className="text-xs text-muted-foreground">{t("memory.fileBar.identical")}</span>}
           <Button size="sm" onClick={onSave} disabled={!dirty}>
-            <Save /> Enregistrer
+            <Save /> {t("memory.fileBar.save")}
           </Button>
         </>
       ) : (
@@ -72,19 +74,19 @@ export function FileBar({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm">
-                  <FolderInput /> Déplacer vers…
+                  <FolderInput /> {t("memory.fileBar.moveTo")}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="max-h-80 w-72 overflow-y-auto">
                 {home(sel) !== "global" && (
                   <>
                     <DropdownMenuItem onSelect={() => onMove("global")}>
-                      <Globe /> Règles globales (rules/)
+                      <Globe /> {t("memory.fileBar.globalRules")}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                   </>
                 )}
-                {toRules(sel) && <DropdownMenuLabel>Règles du projet</DropdownMenuLabel>}
+                {toRules(sel) && <DropdownMenuLabel>{t("memory.fileBar.projectRules")}</DropdownMenuLabel>}
                 {toRules(sel) &&
                   targets.map((t) => (
                     <DropdownMenuItem key={"r" + t.dir} onSelect={() => onMove("r:" + t.dir)}>
@@ -92,7 +94,7 @@ export function FileBar({
                     </DropdownMenuItem>
                   ))}
                 {toRules(sel) && toMemory(sel) && <DropdownMenuSeparator />}
-                {toMemory(sel) && <DropdownMenuLabel>Mémoire du projet</DropdownMenuLabel>}
+                {toMemory(sel) && <DropdownMenuLabel>{t("memory.fileBar.projectMemory")}</DropdownMenuLabel>}
                 {toMemory(sel) &&
                   targets.map((t) => (
                     <DropdownMenuItem key={t.dir} onSelect={() => onMove(t.dir)}>
@@ -106,26 +108,26 @@ export function FileBar({
             <Choose
               value={file.type ?? ""}
               onChange={onType}
-              options={[["", "Sans type"], ...TYPES.map((t) => [t.key, `${t.key} (${t.label})`] as const)]}
-              label="Type de l'entrée"
+              options={[["", t("memory.fileBar.noType")], ...TYPES.map((x) => [x.key, `${x.key} (${x.label})`] as const)]}
+              label={t("memory.fileBar.typeAria")}
               className="w-44"
             />
           )}
           {file && sel.startsWith("g/rules/") && (
             <Button variant="ghost" size="sm" onClick={onToggleRule}>
-              {file.off ? <Eye /> : <EyeOff />} {file.off ? "Réactiver" : "Désactiver"}
+              {file.off ? <Eye /> : <EyeOff />} {file.off ? t("memory.fileBar.reactivate") : t("memory.fileBar.deactivate")}
             </Button>
           )}
           <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={onRemove} disabled={!file}>
-            <Trash2 /> Supprimer
+            <Trash2 /> {t("memory.fileBar.remove")}
           </Button>
           {file && (
             <Button variant="ghost" size="sm" onClick={onRewrite}>
-              <Bot /> Améliorer…
+              <Bot /> {t("memory.fileBar.improve")}
             </Button>
           )}
           <Button size="sm" onClick={onEdit} disabled={!textReady}>
-            <Pencil /> Modifier
+            <Pencil /> {t("memory.fileBar.edit")}
           </Button>
         </>
       )}

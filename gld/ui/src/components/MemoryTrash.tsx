@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react"
 import { ArchiveRestore, FileText, Trash, Trash2 } from "lucide-react"
+import { useTranslation } from "react-i18next"
+import { i18n } from "@/i18n"
 import { api, type Trashed } from "@/lib/api"
 import { ago } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -7,14 +9,18 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { DiffView } from "./MemoryDiff"
 
+// Le serveur stocke la raison en français : on l'affiche traduite, toute autre valeur telle quelle.
+const reasonLabel = (r: string) => (r === "remplacé" ? i18n.t("memory.trash.reasonReplaced") : r === "supprimé" ? i18n.t("memory.trash.reasonDeleted") : r)
+
 // Corbeille dans la colonne de gauche : les versions supprimées ou remplacées.
 export function TrashList({ trash, current, onPick, onPurgeAll }: { trash: Trashed[]; current: string; onPick: (k: string) => void; onPurgeAll: () => void }) {
+  const { t } = useTranslation()
   return (
     <section className="mt-4 border-t pt-2">
       <div className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-muted-foreground">
-        <Trash className="size-3.5" /> <span className="flex-1">Corbeille</span>
+        <Trash className="size-3.5" /> <span className="flex-1">{t("memory.trash.title")}</span>
         <Button variant="ghost" size="xs" className="h-5 px-1.5 text-xs" onClick={onPurgeAll}>
-          Vider
+          {t("memory.trash.empty")}
         </Button>
       </div>
       <ul className="space-y-px">
@@ -31,7 +37,7 @@ export function TrashList({ trash, current, onPick, onPurgeAll }: { trash: Trash
               <FileText className="size-3.5 shrink-0" />
               <span className="min-w-0 flex-1 truncate">{t.path.split(/[\\/]/).pop()}</span>
               <span className="shrink-0 text-xs font-normal">
-                {t.reason} {ago(t.at)}
+                {reasonLabel(t.reason)} {ago(t.at)}
               </span>
             </button>
           </li>
@@ -57,6 +63,7 @@ export function TrashViewer({
   onPurge: () => void
   onRestore: () => void
 }) {
+  const { t } = useTranslation()
   const [diff, setDiff] = useState(false)
   const [current, setCurrent] = useState<string | null>(null)
   const key = trashed?.key
@@ -73,20 +80,20 @@ export function TrashViewer({
     <>
       <div className="flex items-center gap-2 border-b px-6 py-2">
         <code className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={trashed?.path}>
-          {trashed ? `${shortPath(trashed.path)} · ${trashed.reason} ${ago(trashed.at)}` : "Introuvable dans la corbeille"}
+          {trashed ? `${shortPath(trashed.path)} · ${reasonLabel(trashed.reason)} ${ago(trashed.at)}` : t("memory.trash.notFound")}
         </code>
         {trashed && (
           <>
             {exists && (
               <Button variant={diff ? "secondary" : "ghost"} size="sm" onClick={() => setDiff(!diff)} aria-pressed={diff}>
-                Comparer à l'actuelle
+                {t("memory.trash.compare")}
               </Button>
             )}
             <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={onPurge}>
-              <Trash2 /> Supprimer définitivement
+              <Trash2 /> {t("memory.trash.purge")}
             </Button>
             <Button size="sm" onClick={onRestore}>
-              <ArchiveRestore /> Restaurer
+              <ArchiveRestore /> {t("memory.trash.restore")}
             </Button>
           </>
         )}

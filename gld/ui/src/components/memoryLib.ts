@@ -1,4 +1,4 @@
-import { loc } from "@/i18n"
+import { i18n, loc } from "@/i18n"
 import { ALargeSmall, Clock, HardDrive } from "lucide-react"
 import { toast } from "sonner"
 import type { MemFile, MemProject, MemTarget } from "@/lib/api"
@@ -7,9 +7,9 @@ export type List = { global: MemFile[]; projects: MemProject[]; targets: MemTarg
 
 // Tri des fichiers de mémoire : critère et sens propres à chaque dossier (section), retenus dans le navigateur.
 export const SORTS = [
-  ["date", "date de modification", Clock],
-  ["name", "nom", ALargeSmall],
-  ["size", "taille", HardDrive],
+  ["date", "memory.lib.sort.date", Clock], // la deuxième valeur est une clé de catalogue
+  ["name", "memory.lib.sort.name", ALargeSmall],
+  ["size", "memory.lib.sort.size", HardDrive],
 ] as const
 export type Sort = { by: string; dir: string }
 export const DEFAULT_SORT: Sort = { by: "date", dir: "desc" }
@@ -36,10 +36,11 @@ export const home = (key: string) => (key.startsWith("m/") || key.startsWith("r/
 export const toRules = (key: string) => key.startsWith("r/") || key.startsWith("g/rules/")
 export const toMemory = (key: string) => !key.startsWith("r/")
 
-export const copy = (text: string, what: string) =>
+// done : clé de catalogue du message de succès.
+export const copy = (text: string, done: string) =>
   navigator.clipboard.writeText(text).then(
-    () => toast.success(`${what} copié`),
-    () => toast.error("Copie impossible")
+    () => toast.success(i18n.t(done)),
+    () => toast.error(i18n.t("memory.lib.copyFailed"))
   )
 
 // Clé d'une nouvelle entrée : le nom du front matter (ou le premier titre), simplifié en nom de fichier, sans écraser un fichier existant.
@@ -59,5 +60,5 @@ export function newKey(all: MemFile[], scope: string, text: string): string {
 }
 
 // Modèles d'une entrée écrite à la main (règle globale : un titre ; mémoire de projet : un front matter).
-export const BLANK_RULE = "# Nouvelle règle\n\n"
+export const blankRule = () => i18n.t("memory.lib.blankRule") + "\n\n"
 export const BLANK_ENTRY = "---\nname: nouvelle-entree\ndescription: \nmetadata:\n  type: project\n---\n\n"

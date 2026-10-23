@@ -1,4 +1,5 @@
-import { loc } from "@/i18n"
+import { i18n, loc } from "@/i18n"
+import { useTranslation } from "react-i18next"
 import { useEffect, useRef, useState } from "react"
 import { BookOpen, Brain, ChevronRight, ClipboardCopy, Copy, FileText, Globe, Link as LinkIcon, ExternalLink, Pencil, ScrollText, Tag, Trash2 } from "lucide-react"
 import { useLocation } from "wouter"
@@ -20,6 +21,7 @@ const report = (r: { ok: boolean; out: string }) => (r.ok ? toast.success(r.out)
 
 // Édition d'un fichier sur place : le texte brut, enregistré tel quel (comme dans la page Mémoire).
 function EditDialog({ file, edit, onClose, onSaved }: { file: MemFile; edit: boolean; onClose: () => void; onSaved: () => void }) {
+  const { t } = useTranslation()
   const [text, setText] = useState<string | null>(null)
   const [editing, setEditing] = useState(edit) // d'abord l'aperçu mis en forme ; « Modifier » passe au texte brut
   const [busy, setBusy] = useState(false)
@@ -32,7 +34,7 @@ function EditDialog({ file, edit, onClose, onSaved }: { file: MemFile; edit: boo
     api.memoryFile(file.key).then((r) => {
       if (!live) return
       if (r.text === undefined) {
-        toast.error(r.error ?? "Fichier illisible")
+        toast.error(r.error ?? i18n.t("memory.main.unreadable"))
         close.current()
       } else setText(r.text)
     })
@@ -66,13 +68,13 @@ function EditDialog({ file, edit, onClose, onSaved }: { file: MemFile; edit: boo
             disabled={text === null || busy}
             spellCheck={false}
             autoFocus
-            aria-label={`Contenu de ${file.name}`}
+            aria-label={t("memory.project.contentAria", { name: file.name })}
             className="field-sizing-content min-h-64 w-full flex-1 resize-none overflow-y-auto rounded-lg border bg-background px-3 py-2 font-mono text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           />
         ) : (
           <div className="min-h-32 flex-1 overflow-y-auto rounded-lg border px-4 py-3 text-sm leading-relaxed">
             {text === null ? (
-              <p className="text-muted-foreground">Chargement…</p>
+              <p className="text-muted-foreground">{t("common.loading")}</p>
             ) : (
               <>
                 {fm && <pre className="mb-3 rounded-lg border bg-muted/40 px-3 py-2 text-xs whitespace-pre-wrap text-muted-foreground">{fm}</pre>}
@@ -85,19 +87,19 @@ function EditDialog({ file, edit, onClose, onSaved }: { file: MemFile; edit: boo
           {editing ? (
             <>
               <Button variant="ghost" onClick={() => setEditing(false)}>
-                Aperçu
+                {t("memory.project.preview")}
               </Button>
-              <Button onClick={save} disabled={text === null || busy} title="Ctrl+Entrée">
-                Enregistrer
+              <Button onClick={save} disabled={text === null || busy} title={t("memory.project.shortcut")}>
+                {t("common.save")}
               </Button>
             </>
           ) : (
             <>
               <Button variant="ghost" onClick={onClose}>
-                Fermer
+                {t("common.close")}
               </Button>
               <Button onClick={() => setEditing(true)} disabled={text === null}>
-                <Pencil /> Modifier
+                <Pencil /> {t("memory.project.edit")}
               </Button>
             </>
           )}
@@ -111,6 +113,7 @@ function EditDialog({ file, edit, onClose, onSaved }: { file: MemFile; edit: boo
 // Un clic ouvre le fichier dans une fenêtre d'édition (la page Mémoire reste à un clic : flèche ou menu) ; un clic droit permet aussi de changer son type,
 // de le copier ou déplacer vers les règles globales, ou de le supprimer. Relue au retour sur l'onglet.
 export function ProjectMemory({ dir }: { dir: string }) {
+  const { t } = useTranslation()
   const [files, setFiles] = useState<MemFile[] | null>(null)
   const [open, setOpen] = useState(true)
   const [shown, setShown] = useState<{ f: MemFile; edit: boolean } | null>(null)
@@ -137,8 +140,8 @@ export function ProjectMemory({ dir }: { dir: string }) {
   const toGlobal = async (f: MemFile, copyIt: boolean) => report((await api.post("/memory-move", { key: f.key, to: "global", copy: copyIt })) as { ok: boolean; out: string }) && refresh()
   const copyContent = async (f: MemFile) => {
     const r = await api.memoryFile(f.key)
-    if (r.text === undefined) return void toast.error(r.error ?? "Fichier illisible")
-    copy(r.text, "Contenu")
+    if (r.text === undefined) return void toast.error(r.error ?? t("memory.main.unreadable"))
+    copy(r.text, "memory.lib.copiedContent")
   }
   const remove = async () => {
     const f = removing
@@ -152,10 +155,10 @@ export function ProjectMemory({ dir }: { dir: string }) {
       <button onClick={() => setOpen(!open)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm" aria-expanded={open}>
         <ChevronRight className={cn("size-4 shrink-0 transition-transform", open && "rotate-90")} />
         <Brain className="size-4 shrink-0 text-muted-foreground" />
-        <span className="font-medium">Mémoire du projet</span>
+        <span className="font-medium">{t("memory.project.title")}</span>
         <span className="text-xs text-muted-foreground">
-          {files.length} fichier{files.length > 1 ? "s" : ""}
-          {tokens > 0 && ` · ≈ ${tokens.toLocaleString(loc())} tokens chargés à chaque session`}
+          {t("memory.project.files", { count: files.length })}
+          {tokens > 0 && t("memory.project.tokensLoaded", { tokens: tokens.toLocaleString(loc()) })}
         </span>
       </button>
       {open && (
@@ -171,10 +174,10 @@ export function ProjectMemory({ dir }: { dir: string }) {
                         <Icon className="size-3.5 shrink-0 text-muted-foreground" />
                         <span className={cn("min-w-0 flex-1 truncate", f.off && "line-through opacity-60")}>{f.name}</span>
                         {f.type && <span className="shrink-0 rounded bg-muted px-1.5 text-[10px] text-muted-foreground">{f.type}</span>}
-                        {f.paths && <span className="shrink-0 text-[10px] text-muted-foreground">scopée</span>}
-                        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{f.always ? `${f.tokens} tok.` : "à la demande"}</span>
+                        {f.paths && <span className="shrink-0 text-[10px] text-muted-foreground">{t("memory.project.scoped")}</span>}
+                        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{f.always ? t("memory.project.tokens", { n: f.tokens }) : t("memory.project.onDemand")}</span>
                       </button>
-                      <Button size="icon-xs" variant="ghost" className="mr-1 shrink-0 opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100" onClick={() => go(href({ kind: "memory", key: f.key }))} aria-label={`Ouvrir ${f.name} dans la page Mémoire`} title="Ouvrir dans la page Mémoire">
+                      <Button size="icon-xs" variant="ghost" className="mr-1 shrink-0 opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100" onClick={() => go(href({ kind: "memory", key: f.key }))} aria-label={t("memory.project.openAria", { name: f.name })} title={t("memory.project.openTitle")}>
                         <ExternalLink />
                       </Button>
                     </div>
@@ -182,50 +185,50 @@ export function ProjectMemory({ dir }: { dir: string }) {
                   <ContextMenuContent className="w-60">
                     <ContextMenuLabel className="truncate">{f.name}</ContextMenuLabel>
                     <ContextMenuItem onSelect={() => setShown({ f, edit: false })}>
-                      <BookOpen /> Afficher
+                      <BookOpen /> {t("memory.project.show")}
                     </ContextMenuItem>
                     <ContextMenuItem onSelect={() => go(href({ kind: "memory", key: f.key }))}>
-                      <ExternalLink /> Ouvrir dans la page Mémoire
+                      <ExternalLink /> {t("memory.project.openPage")}
                     </ContextMenuItem>
                     <ContextMenuItem onSelect={() => setShown({ f, edit: true })}>
-                      <Pencil /> Modifier ici
+                      <Pencil /> {t("memory.project.editHere")}
                     </ContextMenuItem>
                     {canType(f) && (
                       <ContextMenuSub>
                         <ContextMenuSubTrigger>
-                          <Tag /> Type
+                          <Tag /> {t("memory.project.type")}
                         </ContextMenuSubTrigger>
                         <ContextMenuSubContent>
-                          {TYPES.map((t) => (
-                            <ContextMenuItem key={t.key} onSelect={() => setType(f, t.key)}>
-                              <t.icon /> {t.key} <span className="text-xs text-muted-foreground">({t.label}){f.type === t.key && " ✓"}</span>
+                          {TYPES.map((ty) => (
+                            <ContextMenuItem key={ty.key} onSelect={() => setType(f, ty.key)}>
+                              <ty.icon /> {ty.key} <span className="text-xs text-muted-foreground">({ty.label}){f.type === ty.key && " ✓"}</span>
                             </ContextMenuItem>
                           ))}
                           <ContextMenuSeparator />
-                          <ContextMenuItem onSelect={() => setType(f, "")}>Sans type{!f.type && " ✓"}</ContextMenuItem>
+                          <ContextMenuItem onSelect={() => setType(f, "")}>{t("memory.project.noType")}{!f.type && " ✓"}</ContextMenuItem>
                         </ContextMenuSubContent>
                       </ContextMenuSub>
                     )}
                     <ContextMenuItem onSelect={() => copyContent(f)}>
-                      <ClipboardCopy /> Copier le contenu
+                      <ClipboardCopy /> {t("memory.project.copyContent")}
                     </ContextMenuItem>
-                    <ContextMenuItem onSelect={() => copy(f.path, "Chemin")}>
-                      <LinkIcon /> Copier le chemin
+                    <ContextMenuItem onSelect={() => copy(f.path, "memory.lib.copiedPath")}>
+                      <LinkIcon /> {t("memory.project.copyPath")}
                     </ContextMenuItem>
                     {movable(f.key) && !f.key.endsWith("/MEMORY.md") && ( // l'index MEMORY.md reste dans son projet
                       <>
                         <ContextMenuSeparator />
                         <ContextMenuItem onSelect={() => toGlobal(f, false)}>
-                          <Globe /> Déplacer vers les règles globales
+                          <Globe /> {t("memory.project.moveGlobal")}
                         </ContextMenuItem>
                         <ContextMenuItem onSelect={() => toGlobal(f, true)}>
-                          <Copy /> Copier vers les règles globales
+                          <Copy /> {t("memory.project.copyGlobal")}
                         </ContextMenuItem>
                       </>
                     )}
                     <ContextMenuSeparator />
                     <ContextMenuItem variant="destructive" onSelect={() => setRemoving(f)}>
-                      <Trash2 /> Supprimer
+                      <Trash2 /> {t("memory.project.remove")}
                     </ContextMenuItem>
                   </ContextMenuContent>
                 </ContextMenu>
@@ -238,15 +241,15 @@ export function ProjectMemory({ dir }: { dir: string }) {
       <AlertDialog open={!!removing} onOpenChange={(o) => !o && setRemoving(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Supprimer {removing?.name} ?</AlertDialogTitle>
+            <AlertDialogTitle>{t("memory.project.deleteTitle", { name: removing?.name ?? "" })}</AlertDialogTitle>
             <AlertDialogDescription>
-              {removing?.key.startsWith("m/") ? "Suppression définitive. Sa ligne dans MEMORY.md est retirée aussi." : "Suppression définitive (une copie reste dans la corbeille)."}
+              {removing?.key.startsWith("m/") ? t("memory.project.deleteBodyMemory") : t("memory.project.deleteBodyFile")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction variant="destructive" onClick={remove}>
-              Supprimer
+              {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
