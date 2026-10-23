@@ -447,15 +447,15 @@ func TestMemoryDraft(t *testing.T) {
 	if _, _, err := memWriteDraft("haiku", "x", "", []string{"m/../a.md"}); err == nil {
 		t.Fatal("référence invalide acceptée")
 	}
-	if sys != memSystem {
+	if sys != memSystem() {
 		t.Fatal("une entrée de mémoire se rédige au format mémoire")
 	}
 	// Conversion en CLAUDE.md global (absent ici) : format CLAUDE.md, fichier à créer.
-	if _, _, err := memWriteDraft("haiku", "convertis", "g/CLAUDE.md", []string{"m/-p/a.md"}); err != nil || sys != claudeSystem || !strings.Contains(got, "n'existe pas encore") {
+	if _, _, err := memWriteDraft("haiku", "convertis", "g/CLAUDE.md", []string{"m/-p/a.md"}); err != nil || sys != claudeSystem() || !strings.Contains(got, "n'existe pas encore") {
 		t.Fatal(err, got)
 	}
 	// Mise en forme d'une commande : format commande, texte transmis, consigne par défaut.
-	if _, _, err := snippetDraft("haiku", "", "fais une revue de code"); err != nil || sys != cmdSystem || !strings.Contains(got, "fais une revue de code") || !strings.Contains(got, "Mets ce texte en forme") {
+	if _, _, err := snippetDraft("haiku", "", "fais une revue de code"); err != nil || sys != cmdSystem() || !strings.Contains(got, "fais une revue de code") || !strings.Contains(got, "Mets ce texte en forme") {
 		t.Fatal(err, got)
 	}
 	if _, _, err := snippetDraft("haiku", "", " "); err == nil {

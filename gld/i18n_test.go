@@ -109,8 +109,37 @@ func TestReplyLang(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 	withSettings(t, `{}`)
-	if got := replyLang(); got != "fr" {
+	if got := replyLang(); got != "français" {
 		t.Fatalf("%q", got)
+	}
+}
+
+func TestHelperPromptsFollowLanguage(t *testing.T) {
+	noOverride(t)
+	withSettings(t, `{"language":"Spanish"}`)
+	if got := titleSystem(); !strings.Contains(got, "You give a short title") || !strings.Contains(got, "in Spanish.") {
+		t.Fatalf("titre : %q", got)
+	}
+	if got := permHelpSystem(); !strings.Contains(got, "in Spanish,") {
+		t.Fatalf("permission : %q", got)
+	}
+	if got := lintSystem(); !strings.Contains(got, "doublon|contradiction|périmé") || !strings.Contains(got, "in Spanish.") {
+		t.Fatalf("lint : %q", got)
+	}
+	withSettings(t, `{}`)
+	if got := titleSystem(); !strings.Contains(got, "Tu donnes un titre court") || !strings.Contains(got, "en français.") {
+		t.Fatalf("titre fr : %q", got)
+	}
+	setLangT(t, "en")
+	if got := memSystem(); !strings.Contains(got, "You write Markdown memory files") {
+		t.Fatalf("mémoire en : %q", got)
+	}
+	if got := agentsSystem(); !strings.Contains(got, "AGENTS.md") || !strings.Contains(got, "that coding agents read") {
+		t.Fatalf("agents en : %q", got)
+	}
+	setLangT(t, "fr")
+	if got := agentsSystem(); !strings.Contains(got, "que les agents de code lisent") {
+		t.Fatalf("agents fr : %q", got)
 	}
 }
 

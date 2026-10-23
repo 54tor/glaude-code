@@ -131,13 +131,13 @@ func cliLang() string {
 
 // replyLang : la langue de réponse demandée aux modèles d'aide, celle du réglage telle qu'écrite par l'utilisateur.
 func replyLang() string {
-	if langOverride != "" {
-		return langOverride
-	}
-	if raw := userLanguageRaw(); raw != "" {
+	if raw := userLanguageRaw(); raw != "" && langOverride == "" {
 		return raw
 	}
-	return uiLang()
+	if uiLang() == "en" {
+		return "English"
+	}
+	return "français"
 }
 
 // tr : le texte de l'identifiant dans la langue ; data["Count"] (entier) choisit la forme du pluriel.

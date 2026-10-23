@@ -513,10 +513,7 @@ func copySkill(key, to string) (string, error) {
 }
 
 // skillSystem : consigne de rédaction d'un SKILL.md.
-const skillSystem = `Tu rédiges un SKILL.md pour Claude Code : un en-tête YAML entre deux lignes « --- », puis les instructions en Markdown.
-En-tête : name (minuscules, chiffres et tirets), description (ce que fait le skill et QUAND l'utiliser, avec les formulations qui doivent le déclencher ; l'essentiel d'abord, 1 000 caractères au plus), et seulement si utile : disable-model-invocation: true (workflow à effet de bord, lancé par l'utilisateur seul), allowed-tools (outils pré-autorisés pendant le tour), argument-hint.
-Corps : impératif, concis, étapes numérotées, contraintes et format de sortie ; $ARGUMENTS là où l'utilisateur donne ses arguments. N'invente aucune exigence absente de la consigne ou des références.
-Garde ce que contient déjà le fichier existant (sauf si la consigne le change) et sa langue. Réponds uniquement avec le contenu complet du fichier, sans bloc de code englobant ni commentaire.`
+func skillSystem() string { return L("prompt.skillSystem") }
 
 // skillDraft rédige ou révise un SKILL.md : la consigne, le texte actuel (key existant) et d'autres skills en référence.
 func skillDraft(model, instruction, key string, refs []string) (string, float64, error) {
@@ -528,16 +525,16 @@ func skillDraft(model, instruction, key string, refs []string) (string, float64,
 		return "", 0, terr("srv.memwrite.consigneVideOuTrop")
 	}
 	var b strings.Builder
-	b.WriteString("Consigne : " + instruction + "\n")
+	b.WriteString(L("prompt.instruction", "A1", instruction) + "\n")
 	var cur string
 	if key != "" {
 		text, _, err := readSkill(key)
 		switch {
 		case err == nil:
 			cur = text
-			b.WriteString("\nSKILL.md à réviser (" + key + ") :\n~~~~\n" + text + "\n~~~~\n")
+			b.WriteString("\n" + L("prompt.skillToRevise", "A1", key) + "\n~~~~\n" + text + "\n~~~~\n")
 		case errors.Is(err, os.ErrNotExist):
-			b.WriteString("\n(Le skill n'existe pas encore : écris le fichier en entier.)\n")
+			b.WriteString("\n" + L("prompt.skillMissing") + "\n")
 		default:
 			return "", 0, err
 		}
@@ -550,9 +547,9 @@ func skillDraft(model, instruction, key string, refs []string) (string, float64,
 		if err != nil {
 			return "", 0, err
 		}
-		b.WriteString("\nSkill de référence (" + r + ") :\n~~~~\n" + cut(text, 6000) + "\n~~~~\n")
+		b.WriteString("\n" + L("prompt.skillRef", "A1", r) + "\n~~~~\n" + cut(text, 6000) + "\n~~~~\n")
 	}
-	out, cost, err := memDraft(model, skillSystem, b.String())
+	out, cost, err := memDraft(model, skillSystem(), b.String())
 	if err != nil {
 		return "", cost, err
 	}

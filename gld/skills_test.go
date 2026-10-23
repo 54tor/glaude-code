@@ -135,7 +135,7 @@ func TestBrouillonSkill(t *testing.T) {
 	if err != nil || !strings.HasPrefix(out, "---\nname: a\ndescription: d\n---\n") {
 		t.Fatalf("en-tête non conservé : %q %v", out, err)
 	}
-	if system != skillSystem || !strings.Contains(prompt, "corps") || !strings.Contains(prompt, "condense") {
+	if system != skillSystem() || !strings.Contains(prompt, "corps") || !strings.Contains(prompt, "condense") {
 		t.Fatal("prompt :", prompt)
 	}
 	if _, _, err := skillDraft("modele-inconnu", "x", "", nil); err == nil {

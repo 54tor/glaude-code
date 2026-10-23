@@ -10,14 +10,13 @@ import (
 	"time"
 )
 
-const titleSystem = "Tu donnes un titre court (3 à 7 mots, sans guillemets ni point final) à la conversation reçue, " +
-	"dans la langue de l'utilisateur. Réponds uniquement par le titre."
+func titleSystem() string { return L("prompt.titleSystem", "A1", replyLang()) }
 
 // titleRun demande le titre à Haiku (remplaçable dans les tests).
 var titleRun = func(text string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	cmd := helperCmd(ctx, "haiku", titleSystem)
+	cmd := helperCmd(ctx, "haiku", titleSystem())
 	cmd.Stdin = strings.NewReader(text)
 	out, err := helperOutput(ctx, cmd)
 	var r struct {
