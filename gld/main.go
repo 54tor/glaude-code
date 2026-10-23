@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -32,7 +33,7 @@ var (
 	port      = env("GLD_WEB_PORT", env("CC_WEB_PORT", "8799")) // CC_* : anciens noms, encore lus
 	idRe      = regexp.MustCompile(`^[0-9a-f-]{36}$`)
 	hosts     = map[string]bool{}
-	openHosts bool // écoute hors localhost (listen.go) : le jeton remplace la garde sur le Host
+	openHosts bool // écoute hors localhost (listen.go) : le jeton, ou en mode multi-utilisateur la session, remplace la garde sur le Host
 )
 
 func env(k, d string) string {
@@ -78,7 +79,7 @@ func main() {
 	tokenPrincipal = tokenForChildren(token)
 	h := handler()
 	if !local {
-		openHosts = true // hors localhost, le Host n'est plus limité à l'adresse locale : le jeton remplace la garde
+		openHosts = true // hors localhost, le Host n'est plus limité : le jeton (mode ouvert) ou la session (comptes) protège du DNS-rebinding
 	}
 	if token != "" { // obligatoire hors localhost ; en local, exigé dès que GLD_WEB_TOKEN est fixé (machine partagée)
 		h = withTokenOpen(token, h)
@@ -131,11 +132,15 @@ var (
 	authSt    *authStore // nil tant que la base n'existe pas, et toujours dans un home enfant
 	authErr   error      // base inutilisable : le service est refusé, jamais rendu en mode ouvert
 	authUsers bool
-	authSeen  bool      // des comptes ont existé : seule une table vide lue avec succès rend le mode ouvert
-	authAt    time.Time // dernier contrôle ; zéro : à refaire
+	authSeen  bool        // des comptes ont existé : seule une table vide lue avec succès rend le mode ouvert
+	authAt    time.Time   // dernier contrôle ; zéro : à refaire
+	authFI    os.FileInfo // fichier ouvert : une base remplacée ne doit pas être servie depuis l'ancien inode
 )
 
-var errAuthGone = errors.New("auth.db disparue alors que des comptes existaient")
+var (
+	errAuthGone     = errors.New("auth.db disparue alors que des comptes existaient")
+	errAuthReplaced = errors.New("auth.db remplacée : base rouverte au prochain contrôle")
+)
 
 // authState : la base (ouverte au premier contrôle qui la trouve), le mode actif (au moins un compte) et l'échec éventuel.
 // Toute erreur ferme le service (503) : une base illisible ne doit jamais ouvrir l'interface sans compte.
@@ -169,7 +174,9 @@ func authCheck() (bool, error) {
 		}
 		return false, nil
 	}
-	if _, err := os.Lstat(filepath.Join(dir, "auth.db")); err != nil {
+	path := filepath.Join(dir, "auth.db")
+	fi, err := os.Lstat(path)
+	if err != nil {
 		switch {
 		case !errors.Is(err, fs.ErrNotExist):
 			return false, err
@@ -178,9 +185,18 @@ func authCheck() (bool, error) {
 		}
 		return false, nil
 	}
+	if authSt != nil && !os.SameFile(authFI, fi) {
+		authSt.db.Close()
+		authSt, authFI = nil, nil
+		return false, errAuthReplaced
+	}
 	if authSt == nil {
 		st, err := openAuthStore()
 		if err != nil {
+			return false, err
+		}
+		if authFI, err = os.Lstat(path); err != nil {
+			st.db.Close()
 			return false, err
 		}
 		authSt = st
@@ -192,10 +208,25 @@ func authCheck() (bool, error) {
 	return on, err
 }
 
-// authMode : mode multi-utilisateur actif (au moins un compte, processus non enfant), jugé à chaque requête.
-func authMode() bool {
-	_, on, _ := authState()
-	return on
+type authDecision struct {
+	st  *authStore
+	on  bool
+	err error
+}
+
+type modeKey struct{}
+
+var authStateFn = authState
+
+// reqMode : le mode est décidé une seule fois par requête, au premier garde qui la voit ; les suivants relisent cette
+// décision, sans quoi l'expiration du cache entre deux gardes pourrait sauter le jeton puis servir en mode ouvert.
+func reqMode(r *http.Request) (*http.Request, authDecision) {
+	if d, ok := r.Context().Value(modeKey{}).(authDecision); ok {
+		return r, d
+	}
+	st, on, err := authStateFn()
+	d := authDecision{st, on, err}
+	return r.WithContext(context.WithValue(r.Context(), modeKey{}, d)), d
 }
 
 var xffWarned sync.Once
@@ -244,15 +275,46 @@ func handler() http.Handler {
 	mux.HandleFunc("POST /chat", chatHandler)
 	mux.HandleFunc("POST /chat-stop", chatStopHandler)
 	mux.HandleFunc("POST /new-session", newSessionHandler)
-	// Anti DNS-rebinding : seul le Host local est servi (sauf écoute hors localhost, où le jeton le remplace).
+	// Anti DNS-rebinding : seul le Host local est servi (sauf écoute hors localhost, où le jeton, ou la session en mode
+	// multi-utilisateur, le remplace).
 	// Anti CSRF : http.CrossOriginProtection (bibliothèque standard) refuse toute requête modifiante venue d'une autre origine.
 	// Le choix de dossier de configuration (homes.go) vient après ces gardes : la passerelle juge la requête d'origine avant de la transmettre.
 	// En mode multi-utilisateur, le garde des comptes s'insère entre ces gardes et le choix du dossier. Les routes /auth/* ne
-	// sont montées qu'une fois la base trouvée.
+	// sont montées qu'une fois la base trouvée, et suivent la base ouverte (rouverte si le fichier est remplacé).
+	type authChain struct {
+		api   *http.ServeMux
+		gated http.Handler
+	}
 	var (
-		gateOnce sync.Once
-		gated    http.Handler
+		mountOnce sync.Once
+		chainMu   sync.Mutex
+		chains    = map[*authStore]*authChain{}
 	)
+	chainFor := func(st *authStore) *authChain {
+		chainMu.Lock()
+		defer chainMu.Unlock()
+		c := chains[st]
+		if c == nil {
+			c = &authChain{api: http.NewServeMux()}
+			routesAuth(c.api, st, newThrottle(st.db))
+			c.gated = http.NewCrossOriginProtection().Handler(authGate(mux, st, withAuthWatch(withHomes(mux))))
+			chains[st] = c
+		}
+		return c
+	}
+	mountAuth := func() {
+		for pat := range routeRights {
+			if strings.Contains(pat, " /auth/") {
+				mux.HandleFunc(pat, func(w http.ResponseWriter, r *http.Request) {
+					if _, d := reqMode(r); d.st != nil {
+						chainFor(d.st).api.ServeHTTP(w, r)
+						return
+					}
+					http.NotFound(w, r)
+				})
+			}
+		}
+	}
 	guarded := http.NewCrossOriginProtection().Handler(withHomes(mux))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !openHosts && !hosts[r.Host] {
@@ -263,20 +325,17 @@ func handler() http.Handler {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
-		st, on, err := authState()
-		if err != nil {
+		r, d := reqMode(r)
+		if d.err != nil {
 			gateDeny(w, 503, "srv.auth.baseInutilisable")
 			return
 		}
-		if st != nil {
-			gateOnce.Do(func() {
-				routesAuth(mux, st, newThrottle(st.db))
-				gated = http.NewCrossOriginProtection().Handler(authGate(mux, st, withAuthWatch(withHomes(mux))))
-			})
+		if d.st != nil {
+			mountOnce.Do(mountAuth)
 		}
-		if on {
+		if d.on {
 			warnXFF(r)
-			gated.ServeHTTP(w, r)
+			chainFor(d.st).gated.ServeHTTP(w, r)
 			return
 		}
 		guarded.ServeHTTP(w, r)

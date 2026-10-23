@@ -99,10 +99,10 @@ var passiveRoutes = map[string]bool{
 // tokenPrincipal : principal d'une requête Bearer ; nil tant que les jetons ne sont pas branchés.
 var tokenPrincipal = func(*http.Request) *Principal { return nil }
 
-// gateActive : le garde est monté devant le mux (mode multi-utilisateur), jugé à chaque requête.
-func gateActive() bool {
-	_, on, err := authState()
-	return on || err != nil
+// gateActive : le garde est monté devant le mux (mode multi-utilisateur), selon la décision prise pour cette requête.
+func gateActive(r *http.Request) bool {
+	_, d := reqMode(r)
+	return d.on || d.err != nil
 }
 
 type gateInfo struct {
@@ -185,12 +185,34 @@ func gatePrincipal(s *authStore, r *http.Request, passive bool) (p *Principal, b
 	return p, false
 }
 
-// peekJSON lit le corps pour décider, puis le remet en place pour le handler.
-func peekJSON(r *http.Request, v any) bool {
-	b, err := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+const peekMax = 1 << 16 // la limite de lecture des handlers concernés
+
+var errBodyTooBig = errors.New("body too large")
+
+// peekJSON lit le corps pour décider, puis le remet en place, entier, pour le handler. Au-delà de peekMax, errBodyTooBig :
+// décider sur un début de corps et relayer la suite serait juger une autre requête que celle servie.
+func peekJSON(r *http.Request, v any) error {
+	b, err := io.ReadAll(io.LimitReader(r.Body, peekMax+1))
+	if len(b) > peekMax {
+		r.Body = struct {
+			io.Reader
+			io.Closer
+		}{io.MultiReader(bytes.NewReader(b), r.Body), r.Body}
+		return errBodyTooBig
+	}
 	r.Body.Close()
 	r.Body = io.NopCloser(bytes.NewReader(b))
-	return err == nil && json.Unmarshal(b, v) == nil
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, v)
+}
+
+func peekErr(err error) (int, string) {
+	if errors.Is(err, errBodyTooBig) {
+		return 413, "srv.http_util.requeteTropGrosse"
+	}
+	return 400, "srv.http_util.requeteInvalide"
 }
 
 // authGate applique routeRights. Le motif vient du mux qui servira la requête : une variante de chemin
@@ -242,8 +264,8 @@ func gateCheck(g *gateInfo, r *http.Request, pat string, need Right) (int, strin
 		return 0, ""
 	case pat == "POST /homes-select":
 		var req struct{ Name string }
-		if !peekJSON(r, &req) {
-			return 400, "srv.http_util.requeteInvalide"
+		if err := peekJSON(r, &req); err != nil {
+			return peekErr(err)
 		}
 		id, ok := homeIDFor(req.Name)
 		if !ok {
@@ -257,8 +279,8 @@ func gateCheck(g *gateInfo, r *http.Request, pat string, need Right) (int, strin
 			From, To string
 			Picks    []SyncPick
 		}
-		if !peekJSON(r, &req) {
-			return 400, "srv.http_util.requeteInvalide"
+		if err := peekJSON(r, &req); err != nil {
+			return peekErr(err)
 		}
 		// Le plan renvoie des aperçus de la destination ; appliquer un réglage, une skill ou une commande y fait exécuter du code.
 		destNeeds := []Right{RightMemSync, RightMemWrite}
@@ -358,7 +380,10 @@ func withAuthWatch(next http.Handler) http.Handler {
 		var chatID, child string
 		if g.pat == "POST /chat" && homeFrom(r) != "" {
 			var req struct{ ID string }
-			peekJSON(r, &req)
+			if errors.Is(peekJSON(r, &req), errBodyTooBig) {
+				gateDeny(w, 413, "srv.http_util.requeteTropGrosse")
+				return
+			}
 			chatID, child = req.ID, homeFrom(r)
 		}
 		ctx, cancel := context.WithCancelCause(r.Context())

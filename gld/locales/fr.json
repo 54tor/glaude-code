@@ -179,6 +179,7 @@
   "srv.homesync.unObjetJsonEst": "{{.A1}} : un objet JSON est attendu",
   "srv.http_util.idInvalide": "id invalide",
   "srv.http_util.requeteInvalide": "requête invalide",
+  "srv.http_util.requeteTropGrosse": "requête trop grosse (64 Kio au plus)",
   "srv.images.decalageNegatif": "décalage négatif",
   "srv.images.formatNonReconnuPng": "format non reconnu : PNG, JPEG, GIF ou WebP",
   "srv.images.imageAjoutee": "Image ajoutée",

@@ -179,6 +179,7 @@
   "srv.homesync.unObjetJsonEst": "{{.A1}}: a JSON object is expected",
   "srv.http_util.idInvalide": "invalid id",
   "srv.http_util.requeteInvalide": "invalid request",
+  "srv.http_util.requeteTropGrosse": "request too large (64 KiB at most)",
   "srv.images.decalageNegatif": "negative offset",
   "srv.images.formatNonReconnuPng": "unrecognised format: PNG, JPEG, GIF or WebP",
   "srv.images.imageAjoutee": "Image added",
