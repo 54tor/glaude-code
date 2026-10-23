@@ -363,7 +363,8 @@
       "purgeBody": "About {{size}}: automatic sessions whose title contains “Review this change for security vulnerabilities” or “You previously flagged these candidate”.\n\nLive sessions are spared. Permanent deletion.",
       "purgeConfirm": "Delete {{n}} sessions",
       "purging": "Deleting {{n}} sessions…",
-      "openingTerminal": "Opening the terminal…"
+      "openingTerminal": "Opening the terminal…",
+      "mention": "“{{title}}” (session {{id}}, transcript: {{path}})"
     },
     "info": {
       "id": "ID",

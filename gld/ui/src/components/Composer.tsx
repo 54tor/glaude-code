@@ -10,6 +10,7 @@ import { useLocal } from "@/hooks/useLocal"
 import { draftOf, setDraft, useDraft } from "@/hooks/useDraft"
 import { efforts, models, withChoice, type Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
+import { useMention } from "./Mention"
 import { Choose } from "./Choose"
 import { api, type Msg } from "@/lib/api"
 import { useActions } from "./actions"
@@ -73,6 +74,7 @@ export function Composer({
   const { t } = useTranslation()
   const { text, queue } = useDraft(id)
   const setText = (t: string) => setDraft(id, { text: t })
+  const mention = useMention(text, setText, id)
   const [mode, setMode] = useLocal("ccChatMode", "")
   const [choice, setChoice] = useState(defaultChoice)
   const running = !!turn?.running
@@ -162,11 +164,12 @@ export function Composer({
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-7xl space-y-2">
+        {mention.list}
         <textarea
           ref={fieldRef}
           value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => isSend(e) && (e.preventDefault(), send())}
+          onChange={(e) => (setText(e.target.value), mention.track(e.target))}
+          onKeyDown={(e) => !mention.onKey(e) && isSend(e) && (e.preventDefault(), send())}
           onPaste={pics.onPaste}
           onDrop={pics.onDrop}
           placeholder={running ? t("conversation.composer.placeholderRunning") : t("conversation.composer.placeholder")}
@@ -226,6 +229,7 @@ function LiveSend({ dir, id, onSent, liveState, onAsk }: { dir: string; id: stri
   const [info, setInfo] = useState<{ ids: string[]; why: string } | null>(null)
   const { text, queue } = useDraft(id) // gardé par session : fermer la fenêtre ou un échec d'envoi ne le perd pas
   const setText = (t: string) => setDraft(id, { text: t })
+  const mention = useMention(text, setText, id)
   const setQ = (q: string[]) => setDraft(id, { queue: q })
   const [busy, setBusy] = useState(false)
   const [asking, setAsking] = useState(false) // une question attend une réponse dans le terminal : rien ne s'y écrit tant qu'elle est ouverte
@@ -323,11 +327,13 @@ function LiveSend({ dir, id, onSent, liveState, onAsk }: { dir: string; id: stri
             ))}
           </ul>
         )}
+        {mention.list}
         <textarea
           ref={fieldRef}
           value={text}
-          onChange={(e) => (setText(e.target.value), setSel(0))}
+          onChange={(e) => (setText(e.target.value), setSel(0), mention.track(e.target))}
           onKeyDown={(e) => {
+            if (mention.onKey(e)) return
             if (!sugg.length) return isSend(e) ? (e.preventDefault(), void send()) : undefined
             if (e.key === "ArrowDown" || e.key === "ArrowUp") {
               e.preventDefault()

@@ -30,6 +30,8 @@ export type ProjectActions = {
 export type Actions = {
   home: string
   q: string
+  root: string // dossier des transcripts
+  rows: Row[] // toutes les sessions, les plus récentes d'abord
   live: Set<string>
   waiting: Set<string> // ouvertes, en attente de votre message
   asking: Set<string> // ouvertes, avec une question ou une demande d'autorisation ouverte dans leur terminal

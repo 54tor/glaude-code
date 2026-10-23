@@ -299,6 +299,8 @@ export function useAppActions(c: {
 
   const actions: Actions = {
     home,
+    root: data?.root ?? "~/.claude/projects",
+    rows: [...everyId.values()].sort((x, y) => y.s.mtime - x.s.mtime),
     q,
     live,
     waiting,

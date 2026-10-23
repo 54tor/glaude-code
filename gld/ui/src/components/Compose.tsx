@@ -19,6 +19,7 @@ import {
 import { useActions } from "./actions"
 import type { Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
+import { useMention } from "./Mention"
 import { Choose } from "./Choose"
 import { SnippetMenu } from "./SnippetMenu"
 import { GitBadge } from "./GitBadge"
@@ -54,6 +55,7 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
   const { t: tr } = useTranslation()
   const a = useActions()
   const [text, setText] = useState(ask.initial ?? "")
+  const mention = useMention(text, setText)
   const [choice, setChoice] = useState(ask.choice)
   const [target, setTarget] = useState(0)
   const [custom, setCustom] = useState<Target | null>(null) // dossier choisi dans l'explorateur
@@ -148,11 +150,12 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
           </Button>
         </div>
       )}
+      {mention.list}
       <textarea
         ref={area}
         value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => isSend(e) && (e.preventDefault(), send())}
+        onChange={(e) => (setText(e.target.value), mention.track(e.target))}
+        onKeyDown={(e) => !mention.onKey(e) && isSend(e) && (e.preventDefault(), send())}
         placeholder={tr("conversation.compose.placeholder")}
         autoFocus
         onFocus={(e) => {
