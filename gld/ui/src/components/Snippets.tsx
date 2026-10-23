@@ -15,6 +15,7 @@ import type { Ask } from "./Confirm"
 import { Markdown } from "./Message"
 import type { Ask as PromptAsk } from "./Prompt"
 import { useEditorDraft, useLeaveGuard } from "@/hooks/useEditorDraft"
+import { reportResult } from "@/lib/report"
 
 // Snippets = commandes Claude Code (/nom) : personnelles (~/.claude/commands) et de chaque projet (.claude/commands).
 // Lecture, copie, édition, création, suppression (vers la corbeille), import et export en zip.
@@ -101,7 +102,7 @@ export function Snippets({
   const save = async () => {
     if (!editing) return
     const r = await api.post("/snippet-save", { key: sel, text: editing.text, create: sel === creating })
-    ;(r.ok ? toast.success : toast.error)(r.out)
+    reportResult(r)
     if (!r.ok) return
     setLoaded({ key: sel, text: editing.text })
     setDraft(null)
@@ -129,7 +130,7 @@ export function Snippets({
       confirm: t("common.delete"),
       run: async () => {
         const r = await api.post("/snippet-rm", { key: sel })
-        ;(r.ok ? toast.success : toast.error)(r.out)
+        reportResult(r)
         if (r.ok) {
           onPick("")
           onChanged()
@@ -145,7 +146,7 @@ export function Snippets({
     const id = toast.loading(t("skills.snippets.importing"))
     try {
       const r = (await (await fetch("/snippets-import", { method: "POST", body: fd })).json()) as { ok: boolean; out: string }
-      ;(r.ok ? toast.success : toast.error)(r.out, { id })
+      reportResult(r, { id })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e), { id })
     }

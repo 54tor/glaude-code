@@ -25,6 +25,7 @@ import { TrashList, TrashViewer } from "./MemoryTrash"
 import { MemoryWriter, type WriteTarget } from "./MemoryWriter"
 import { useMemoryData } from "./useMemoryData"
 import { useEditorDraft, useLeaveGuard } from "@/hooks/useEditorDraft"
+import { reportResult } from "@/lib/report"
 
 // Mémoire de Claude : globale (CLAUDE.md, rules/) et par projet (memory/, CLAUDE.md et AGENTS.md du projet), lecture et édition.
 export function Memory({
@@ -123,18 +124,13 @@ export function Memory({
   const [typeHelp, setTypeHelp] = useState(false)
 
   // --- appels au serveur --------------------------------------------------------------------------------------
-  // Réponse {ok, out} : message, puis suite si ok.
-  const report = (r: { ok: boolean; out: string }) => {
-    ;(r.ok ? toast.success : toast.error)(r.out)
-    return r.ok
-  }
   const save = async () => {
     if (!editing) return void toast.error(t("memory.main.noDraft"))
     // Nouvelle entrée de mémoire de projet ou de règle globale : le nom saisi fixe le fichier.
     const m = /^(m\/[^/]+|r\/[^/]+|g\/rules)\/[^/]+$/.exec(sel)
     const scopeOf = (p: string) => (p === "g/rules" ? "global" : p[0] === "r" ? "r:" + p.slice(2) : p.slice(2))
     const key = !file && m ? newKey(all, scopeOf(m[1]), editing.text) : sel
-    if (report(await api.post("/memory-save", { key, text: editing.text, index: !file }))) {
+    if (reportResult(await api.post("/memory-save", { key, text: editing.text, index: !file }))) {
       setLoaded({ key, text: editing.text })
       setDraft(null)
       if (key !== sel) onPick(key)
@@ -174,7 +170,7 @@ export function Memory({
   }
   const move = async (key: string, to: string, copyIt = false) => {
     const r = (await api.post("/memory-move", { key, to, copy: copyIt })) as { ok: boolean; out: string; key?: string }
-    if (report(r) && r.key) {
+    if (reportResult(r) && r.key) {
       refresh()
       if (key === sel && !copyIt) onPick(r.key)
     }
@@ -182,13 +178,13 @@ export function Memory({
   // Règle globale désactivée : fichier renommé en .md.off, Claude ne la charge plus.
   const toggleRule = async (key: string) => {
     const r = (await api.post("/memory-toggle", { key })) as { ok: boolean; out: string; key?: string }
-    if (report(r) && r.key) {
+    if (reportResult(r) && r.key) {
       refresh()
       if (key === sel) onPick(r.key)
     }
   }
   const setType = async (key: string, type: string) => {
-    if (report(await api.post("/memory-type", { key, type }))) {
+    if (reportResult(await api.post("/memory-type", { key, type }))) {
       await refresh()
       if (key === sel) setLoaded({ key, text: (await api.memoryFile(key)).text ?? "" })
     }
@@ -207,7 +203,7 @@ export function Memory({
     refresh()
   }
   const repair = async (dir: string) => {
-    report(await api.post("/memory-repair", { dir }))
+    reportResult(await api.post("/memory-repair", { dir }))
     refresh()
   }
   const remove = (x: MemFile) =>
@@ -216,7 +212,7 @@ export function Memory({
       body: x.key.startsWith("m/") ? t("memory.main.deleteBodyMemory") : t("memory.main.deleteBodyFile"),
       confirm: t("common.delete"),
       run: async () => {
-        if (report(await api.post("/memory-rm", { key: x.key }))) {
+        if (reportResult(await api.post("/memory-rm", { key: x.key }))) {
           if (x.key === sel) onPick("")
           refresh()
         }
@@ -295,7 +291,7 @@ export function Memory({
   const trashed = trash.find((t) => t.id === inTrash)
   const restore = async (t: Trashed) => {
     const r = (await api.post("/trash-restore", { id: t.id })) as { ok: boolean; out: string; key?: string }
-    if (report(r)) {
+    if (reportResult(r)) {
       await refresh()
       if (r.key) onPick(r.key)
     }
@@ -306,7 +302,7 @@ export function Memory({
       body: t("memory.main.purgeBody"),
       confirm: item ? t("common.delete") : t("memory.trash.empty"),
       run: async () => {
-        if (report(await api.post("/trash-purge", item ? { id: item.id } : { all: true }))) {
+        if (reportResult(await api.post("/trash-purge", item ? { id: item.id } : { all: true }))) {
           if (!item || item.id === inTrash) onPick("")
           refresh()
         }

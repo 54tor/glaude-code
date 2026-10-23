@@ -19,6 +19,7 @@ import { Markdown } from "./Message"
 import { SkillWriter } from "./SkillWriter"
 import { split } from "./memoryLib"
 import { useEditorDraft, useLeaveGuard } from "@/hooks/useEditorDraft"
+import { reportResult } from "@/lib/report"
 
 // Origine d'un skill : badge court et explication.
 const ORIGINS = {
@@ -85,7 +86,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
   const save = async () => {
     if (!editing) return
     const r = await api.post("/skill-save", { key: sel, text: editing.text, create: false })
-    ;(r.ok ? toast.success : toast.error)(r.out)
+    reportResult(r)
     if (r.ok) {
       setDraft(null)
       reload()
@@ -100,7 +101,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
       confirm: t("common.delete"),
       run: async () => {
         const r = await api.post("/skill-rm", { key: skill.key })
-        ;(r.ok ? toast.success : toast.error)(r.out)
+        reportResult(r)
         if (r.ok) {
           if (skill.key === sel) onPick("")
           reload()
@@ -109,7 +110,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
     })
   const copyTo = async (to: string, key = sel) => {
     const r = (await api.post("/skill-copy", { key, to })) as { ok: boolean; out: string; key?: string }
-    ;(r.ok ? toast.success : toast.error)(r.out)
+    reportResult(r)
     if (r.ok && r.key) {
       await reload()
       onPick(r.key)
@@ -365,7 +366,7 @@ function NewSkill({ open, projects, home, onClose, onCreated }: { open: boolean;
     const key = where === "u" ? `u/${name}` : `p/${where}/${name}`
     const text = `---\nname: ${name}\ndescription: \n---\n\n# ${name}\n\nInstructions du skill.\n`
     const r = await api.post("/skill-save", { key, text, create: true })
-    ;(r.ok ? toast.success : toast.error)(r.out)
+    reportResult(r)
     if (r.ok) {
       setName("")
       onClose()

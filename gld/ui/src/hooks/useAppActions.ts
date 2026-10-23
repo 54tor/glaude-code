@@ -15,6 +15,7 @@ import type { Ask } from "@/components/Confirm"
 import type { ComposeAsk, Target } from "@/components/Compose"
 import type { Pick } from "@/components/DirPicker"
 import type { Ask as PromptAsk } from "@/components/Prompt"
+import { reportResult } from "@/lib/report"
 
 const ns = (count: number) => i18n.t("shell.count.sessions", { count })
 const NO_CAPS: Caps = { hotCache: false, keepWarm: false, config: false, memory: false, tuiPrompts: false, resume: false }
@@ -59,16 +60,7 @@ export function useAppActions(c: {
   const act = async (url: string, body: unknown, busy: string, pick: "first" | "last" = "first") => {
     const id = toast.loading(busy)
     const r = await api.post(url, body)
-    const lines = r.out
-      .trim()
-      .split("\n")
-      .filter((l) => l.trim())
-    const main = (pick === "last" ? lines[lines.length - 1] : lines[0]) ?? (r.ok ? i18n.t("shell.act.done") : i18n.t("shell.act.failed"))
-    const rest = lines.filter((l) => l !== main).join("\n")
-    ;(r.ok ? toast.success : toast.error)(main, {
-      id,
-      description: rest || undefined,
-    })
+    reportResult(r, { id, pick })
     if (r.ok && url === "/new-session") void watchTrust(home)
     await reload()
     // Une session lancée met un instant à créer son transcript : on relit jusqu'à ce qu'elle apparaisse, sans retenir l'appelant

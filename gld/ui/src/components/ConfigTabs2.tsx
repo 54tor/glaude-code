@@ -18,6 +18,7 @@ import { Choose } from "./Choose"
 import { useActions } from "./actions"
 import { toast } from "sonner"
 import { useEffect } from "react"
+import { reportResult } from "@/lib/report"
 
 type Doc = Record<string, unknown> | undefined
 type Propose = (e: CfgEdit) => Promise<void>
@@ -396,7 +397,7 @@ export function BackupsTab({ backups, onRestored, label }: { backups: BackupInfo
   const { t } = useTranslation()
   const restore = async (b: BackupInfo) => {
     const r = await api.post("/config-restore", { name: b.name })
-    ;(r.ok ? toast.success : toast.error)(r.out)
+    reportResult(r)
     if (r.ok) onRestored()
   }
   if (!backups.length) return <p className="py-8 text-sm text-muted-foreground">{t("config.backups.none")}</p>

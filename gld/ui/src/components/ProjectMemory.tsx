@@ -14,10 +14,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { TYPES } from "./MemoryTypes"
 import { Markdown } from "./Message"
 import { copy, movable, split } from "./memoryLib"
+import { reportResult } from "@/lib/report"
 
 const icon = (key: string) => (key.startsWith("m/") ? Brain : key.startsWith("r/") ? ScrollText : FileText)
 
-const report = (r: { ok: boolean; out: string }) => (r.ok ? toast.success(r.out) : toast.error(r.out), r.ok)
 
 // Édition d'un fichier sur place : le texte brut, enregistré tel quel (comme dans la page Mémoire).
 function EditDialog({ file, edit, onClose, onSaved }: { file: MemFile; edit: boolean; onClose: () => void; onSaved: () => void }) {
@@ -45,7 +45,7 @@ function EditDialog({ file, edit, onClose, onSaved }: { file: MemFile; edit: boo
   const save = async () => {
     if (text === null) return
     setBusy(true)
-    const ok = report(await api.post("/memory-save", { key: file.key, text }))
+    const ok = reportResult(await api.post("/memory-save", { key: file.key, text }))
     setBusy(false)
     if (ok) {
       onSaved()
@@ -136,8 +136,8 @@ export function ProjectMemory({ dir }: { dir: string }) {
   const tokens = files.filter((f) => f.always).reduce((n, f) => n + f.tokens, 0)
   const sorted = [...files].sort((a, b) => +!!b.always - +!!a.always || a.name.localeCompare(b.name, loc()))
 
-  const setType = async (f: MemFile, type: string) => report(await api.post("/memory-type", { key: f.key, type })) && refresh()
-  const toGlobal = async (f: MemFile, copyIt: boolean) => report((await api.post("/memory-move", { key: f.key, to: "global", copy: copyIt })) as { ok: boolean; out: string }) && refresh()
+  const setType = async (f: MemFile, type: string) => reportResult(await api.post("/memory-type", { key: f.key, type })) && refresh()
+  const toGlobal = async (f: MemFile, copyIt: boolean) => reportResult((await api.post("/memory-move", { key: f.key, to: "global", copy: copyIt })) as { ok: boolean; out: string }) && refresh()
   const copyContent = async (f: MemFile) => {
     const r = await api.memoryFile(f.key)
     if (r.text === undefined) return void toast.error(r.error ?? t("memory.main.unreadable"))
@@ -146,7 +146,7 @@ export function ProjectMemory({ dir }: { dir: string }) {
   const remove = async () => {
     const f = removing
     setRemoving(null)
-    if (f && report(await api.post("/memory-rm", { key: f.key }))) refresh()
+    if (f && reportResult(await api.post("/memory-rm", { key: f.key }))) refresh()
   }
   const canType = (f: MemFile) => f.key.startsWith("m/") && !f.key.endsWith("/MEMORY.md")
 

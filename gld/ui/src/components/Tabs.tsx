@@ -13,6 +13,7 @@ import { useActions } from "./actions"
 import type { Ask } from "./Confirm"
 import type { Ask as PromptAsk } from "./Prompt"
 import { Live } from "./SessionList"
+import { reportResult } from "@/lib/report"
 
 // Sessions ouvertes sauvegardées (automatiquement toutes les 2 min, ou à la main avec un nom), à rouvrir d'un coup.
 export function Tabs({ args, onAsk, onPrompt }: { args: string; onAsk: (a: Ask) => void; onPrompt: (a: PromptAsk) => void }) {
@@ -37,7 +38,7 @@ export function Tabs({ args, onAsk, onPrompt }: { args: string; onAsk: (a: Ask) 
       confirm: t("common.save"),
       run: async (name) => {
         const r = await api.post("/tabs-save", { name })
-        ;(r.ok ? toast.success : toast.error)(r.out)
+        reportResult(r)
         refresh()
         return r.ok
       },
@@ -60,7 +61,7 @@ export function Tabs({ args, onAsk, onPrompt }: { args: string; onAsk: (a: Ask) 
       confirm: t("common.delete"),
       run: async () => {
         const r = await api.post("/tabs-rm", { at: s.at })
-        ;(r.ok ? toast.success : toast.error)(r.out)
+        reportResult(r)
         refresh()
         return r.ok
       },
