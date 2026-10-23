@@ -22,15 +22,17 @@ export function DirPicker({ pick, home }: { pick: Pick | null; home: string }) {
   const [hidden, setHidden] = useState(false)
   const [typed, setTyped] = useState("")
   const [filter, setFilter] = useState("") // filtre des sous-dossiers du dossier affiché
+  const [focus, setFocus] = useState("") // sous-dossier mis en évidence : le dossier d'où l'on part, vu depuis son parent
   const filterRef = useRef<HTMLInputElement>(null)
 
-  const show = (r: Ls) => {
+  const show = (r: Ls, focused = "") => {
     if (r.error) {
       toast.error(r.error)
       return
     }
     setCur(r.path)
     setTyped(r.path)
+    setFocus(focused)
     setFilter("")
     filterRef.current?.focus() // on tape aussitôt pour filtrer le nouveau dossier
     setDirs(r.dirs)
@@ -41,16 +43,27 @@ export function DirPicker({ pick, home }: { pick: Pick | null; home: string }) {
   useEffect(() => {
     if (!pick) return
     let live = true
-    api.ls(pick.start || home).then((r) => live && show(r))
+    api.ls(pick.start || home).then(async (r) => {
+      if (!live) return
+      // Le dossier de départ existe : on s'ouvre sur son parent, positionné sur lui.
+      const trim = (x: string) => (x.length > 1 ? x.replace(/[\\/]+$/, "") : x)
+      if (pick.start && !r.error && r.parent && trim(r.path) === trim(pick.start)) {
+        const p = await api.ls(r.parent)
+        if (!live) return
+        if (!p.error) return show(p, trim(r.path).split(r.sep).pop() ?? "")
+      }
+      show(r)
+    })
     return () => {
       live = false
     }
   }, [pick, home])
 
   const f = filter.toLowerCase()
-  const shown = dirs.filter((d) => (hidden || !d.startsWith(".") || (f && d.toLowerCase().startsWith(f))) && d.toLowerCase().includes(f))
+  const shown = dirs.filter((d) => (hidden || d === focus || !d.startsWith(".") || (f && d.toLowerCase().startsWith(f))) && d.toLowerCase().includes(f))
   const isDrives = cur === ""
   const close = (path: string | null) => pick?.done(path)
+  const target = focus ? join(cur, focus, sep) : cur
 
   return (
     <Dialog open={!!pick} onOpenChange={(o) => !o && close(null)}>
@@ -108,7 +121,9 @@ export function DirPicker({ pick, home }: { pick: Pick | null; home: string }) {
             {shown.map((d) => (
               <li key={d}>
                 <button
-                  className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left hover:bg-muted"
+                  ref={d === focus ? (el) => el?.scrollIntoView({ block: "center" }) : undefined}
+                  aria-current={d === focus ? "true" : undefined}
+                  className={`flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left hover:bg-muted ${d === focus ? "bg-accent font-medium" : ""}`}
                   onClick={() => go(join(cur, d, sep))}
                 >
                   <Folder className="size-4 shrink-0 text-muted-foreground" />
@@ -122,8 +137,8 @@ export function DirPicker({ pick, home }: { pick: Pick | null; home: string }) {
           <Button variant="outline" onClick={() => close(null)}>
             Annuler
           </Button>
-          <Button onClick={() => close(cur)} disabled={isDrives}>
-            Choisir ce dossier
+          <Button onClick={() => close(target)} disabled={isDrives}>
+            {focus ? `Choisir « ${focus} »` : "Choisir ce dossier"}
           </Button>
         </DialogFooter>
       </DialogContent>
