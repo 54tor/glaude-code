@@ -158,7 +158,7 @@ export function Composer({
   }
   const stop = () => ((stopped.current = true), api.post("/chat-stop", { id }))
 
-  if (live && !running && !own) return <LiveSend id={id} onSent={onSent} liveState={liveState} onAsk={onAsk} />
+  if (live && !running && !own) return <LiveSend dir={dir} id={id} onSent={onSent} liveState={liveState} onAsk={onAsk} />
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-7xl space-y-2">
@@ -221,7 +221,7 @@ export function Composer({
 
 // Session ouverte dans un terminal : deux processus ne peuvent pas écrire le même transcript, donc pas de claude -p ici. Si la session
 // tourne dans tmux, le message y est collé puis validé ; sinon on l'explique.
-function LiveSend({ id, onSent, liveState, onAsk }: { id: string; onSent: () => void; liveState: Live; onAsk?: (asking: boolean) => void }) {
+function LiveSend({ dir, id, onSent, liveState, onAsk }: { dir: string; id: string; onSent: () => void; liveState: Live; onAsk?: (asking: boolean) => void }) {
   const { t } = useTranslation()
   const [info, setInfo] = useState<{ ids: string[]; why: string } | null>(null)
   const { text, queue } = useDraft(id) // gardé par session : fermer la fenêtre ou un échec d'envoi ne le perd pas
