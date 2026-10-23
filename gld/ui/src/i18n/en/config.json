@@ -353,6 +353,8 @@
     "dialog": {
       "title": "Settings",
       "desc": "Saved in this browser.",
+      "language": "Language",
+      "languageHint": "Saved in Claude Code's \"language\" setting (settings.json): it also applies to the gld commands and to the texts requested from Claude.",
       "tabClaude": "Claude",
       "tabLook": "Appearance",
       "tabKeys": "Shortcuts",

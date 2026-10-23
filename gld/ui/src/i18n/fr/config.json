@@ -353,6 +353,8 @@
     "dialog": {
       "title": "Réglages",
       "desc": "Enregistrés dans ce navigateur.",
+      "language": "Langue",
+      "languageHint": "Enregistrée dans le réglage « language » de Claude Code (settings.json) : elle sert aussi aux commandes gld et aux textes demandés à Claude.",
       "tabClaude": "Claude",
       "tabLook": "Apparence",
       "tabKeys": "Raccourcis",
