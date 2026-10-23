@@ -122,7 +122,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
 
   return (
     <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-      <ScrollArea className={cn("shrink-0 border-b lg:block lg:max-h-none lg:w-96 lg:flex-none lg:border-r lg:border-b-0", sel ? "hidden" : "min-h-0 flex-1")}>
+      <ScrollArea className={cn("shrink-0 border-b bg-muted/30 lg:block lg:max-h-none lg:w-96 lg:flex-none lg:border-r lg:border-b-0", sel ? "hidden" : "min-h-0 flex-1")}>
         <nav className="p-2">
           <div className="mb-2 flex items-center gap-2 px-1">
             <Button size="xs" variant="outline" onClick={() => setCreating(true)}>
@@ -144,8 +144,9 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
           {!data && <Skeleton className="m-2 h-24" />}
           {groups.map((g) => (
             <section key={g.title} className="mb-3">
-              <p className="px-2 py-1 text-xs font-medium text-muted-foreground">
-                {g.title} <span className="font-normal">· {g.items.length}</span>
+              <p className="flex items-center px-2 py-1 text-xs font-semibold text-muted-foreground">
+                <span className="flex-1 truncate">{g.title}</span>
+                <span className="font-normal tabular-nums">{g.items.length}</span>
               </p>
               <ul className="space-y-px">
                 {g.items.map((s) => (
@@ -154,7 +155,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
                       <ContextMenuTrigger asChild>
                           <button
                             onClick={() => onPick(s.key)}
-                            className={cn("flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors", s.key === sel ? "bg-accent" : "hover:bg-muted")}
+                            className={cn("flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors", s.key === sel ? "bg-accent text-accent-foreground" : "hover:bg-muted")}
                           >
                             <span className="flex items-center gap-1.5">
                               <Zap className="size-3.5 shrink-0 text-amber-500" />
@@ -232,12 +233,12 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
         )}
 
         {!sel ? (
-          <p className="px-6 py-20 text-center text-sm text-muted-foreground">Choisis un skill à afficher. Un skill est un dossier avec un SKILL.md : Claude le charge quand sa description correspond à la demande, ou quand tu tapes /nom.</p>
+          <p className="mx-auto max-w-md px-6 py-20 text-center text-sm text-muted-foreground">Choisis un skill à afficher. Un skill est un dossier avec un SKILL.md : Claude le charge quand sa description correspond à la demande, ou quand tu tapes /nom.</p>
         ) : !skill ? (
           <p className="px-6 py-20 text-center text-sm text-muted-foreground">Skill introuvable.</p>
         ) : (
           <>
-            <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 border-b px-6 py-2">
+            <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 border-b bg-muted/40 px-6 py-1.5">
               <code className="min-w-40 flex-1 truncate text-xs text-muted-foreground" title={skill.path}>
                 /{skill.dir} · {skill.scope === "plugin" ? `plugin ${skill.plugin} · lecture seule` : skill.scope === "store" ? "store · lecture seule" : skill.scope === "project" ? tilde(skill.project ?? "", home) : "personnel"} · {skill.files} fichier{skill.files > 1 ? "s" : ""} · {ago(skill.mtime)}
               </code>
