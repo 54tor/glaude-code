@@ -726,7 +726,8 @@ func TestFirstEnrolRace(t *testing.T) {
 	}()
 	wg.Wait()
 	sort.Ints(codes)
-	if codes[0] != 200 || codes[1] != 403 {
+	// Le perdant voit soit le facteur déjà écrit (403), soit l'enrôlement encore en cours (409).
+	if codes[0] != 200 || (codes[1] != 403 && codes[1] != 409) {
 		t.Fatalf("statuts = %v", codes)
 	}
 	var sets int
@@ -780,5 +781,65 @@ func TestAuthDeniedLogged(t *testing.T) {
 	g.do("POST", "/auth/logout", c, "bad", nil)
 	if count("csrf") != 1 {
 		t.Fatalf("refus CSRF journalisés = %d", count("csrf"))
+	}
+}
+
+type stallReader struct {
+	started chan struct{}
+	gate    chan struct{}
+	once    sync.Once
+	r       io.Reader
+}
+
+func (s *stallReader) Read(p []byte) (int, error) {
+	s.once.Do(func() { close(s.started) })
+	<-s.gate
+	return s.r.Read(p)
+}
+
+// Un corps qui traîne sur le premier enrôlement d'alice ne retient pas celui de bob.
+func TestFirstEnrolStalledBody(t *testing.T) {
+	g := newAuthRig(t)
+	if _, err := g.s.AddUser("bob", testPw, false); err != nil {
+		t.Fatal(err)
+	}
+	c, csrf, _ := g.partial()
+	w := g.do("POST", "/auth/webauthn/register/begin", c, csrf, map[string]string{})
+	var b struct{ Options protocol.CredentialCreation }
+	if err := json.Unmarshal(w.Body.Bytes(), &b); err != nil {
+		t.Fatal(err)
+	}
+	att, _ := io.ReadAll(newSoftKey(t).attest(t, &b.Options).Body)
+	sr := &stallReader{started: make(chan struct{}), gate: make(chan struct{}), r: bytes.NewReader(att)}
+	r := httptest.NewRequest("POST", "/auth/webauthn/register/finish?label=cle", sr)
+	r.AddCookie(&http.Cookie{Name: sessCookie, Value: c})
+	r.Header.Set(csrfHeader, csrf)
+	slow := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() { g.h.ServeHTTP(slow, r); close(done) }()
+	<-sr.started
+
+	fast := make(chan int, 1)
+	go func() {
+		lw := g.login("bob", testPw)
+		bc, _ := newCookie(lw)
+		bcsrf, _ := jbody(t, lw)["csrf"].(string)
+		bw := g.do("POST", "/auth/totp/begin", bc, bcsrf, map[string]string{})
+		secret, _ := jbody(t, bw)["secret"].(string)
+		fast <- g.do("POST", "/auth/totp/confirm", bc, bcsrf, map[string]string{"code": codeAt(t, secret, *g.clock)}).Code
+	}()
+	select {
+	case code := <-fast:
+		if code != 200 {
+			t.Fatalf("enrôlement de bob : %d", code)
+		}
+	case <-time.After(5 * time.Second):
+		close(sr.gate)
+		t.Fatal("enrôlement de bob bloqué par le corps lent d'alice")
+	}
+	close(sr.gate)
+	<-done
+	if slow.Code != 200 {
+		t.Fatalf("enrôlement d'alice : %d %s", slow.Code, slow.Body)
 	}
 }
