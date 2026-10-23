@@ -29,7 +29,40 @@ func routesSessions(mux *http.ServeMux) {
 		groupsMu.Lock()
 		st := loadStore()
 		groupsMu.Unlock()
-		writeJSON(w, 200, map[string]any{"home": home, "root": root, "groups": sessions(), "live": live, "waiting": waiting(), "vgroups": st.Groups, "favs": st.Favs, "tags": st.Tags, "projects": st.Projects, "providers": providerInfos()})
+		writeJSON(w, 200, map[string]any{"home": home, "root": root, "groups": withEmptyDirs(sessions(), st.Dirs), "dirs": st.Dirs, "live": live, "waiting": waiting(), "vgroups": st.Groups, "favs": st.Favs, "tags": st.Tags, "projects": st.Projects, "providers": providerInfos()})
+	})
+	// Dossiers enregistrés à la main (sans session) : ajout ou retrait.
+	mux.HandleFunc("POST /dirs", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Op, Dir string }
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req) != nil || (req.Op != "add" && req.Op != "remove") || !filepath.IsAbs(req.Dir) || strings.ContainsRune(req.Dir, 0) {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": "requête invalide"})
+			return
+		}
+		dir := filepath.Clean(req.Dir)
+		if fi, err := os.Stat(dir); req.Op == "add" && (err != nil || !fi.IsDir()) {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": "dossier introuvable : " + dir})
+			return
+		}
+		groupsMu.Lock()
+		st := loadStore()
+		next := []string{}
+		for _, d := range st.Dirs {
+			if d != dir {
+				next = append(next, d)
+			}
+		}
+		if req.Op == "add" {
+			next = append(next, dir)
+		}
+		st.Dirs = next
+		err := saveStore(st)
+		groupsMu.Unlock()
+		journal("dirs %s %s : %v", req.Op, dir, errOr(err))
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": "Enregistré"})
 	})
 	// Date de modification la plus récente d'un transcript : l'interface relit la liste quand elle change (un prompt tapé dans un
 	// terminal fait remonter la session sans attendre le rafraîchissement périodique). ponytail: un stat par transcript à chaque appel,
@@ -321,8 +354,11 @@ func routesSessions(mux *http.ServeMux) {
 			return
 		}
 		groupsMu.Lock()
-		if st.Tags == nil || st.Projects == nil { // un client qui ne connaît pas un champ ne l'efface pas
+		if st.Tags == nil || st.Projects == nil || st.Dirs == nil { // un client qui ne connaît pas un champ ne l'efface pas
 			old := loadStore()
+			if st.Dirs == nil {
+				st.Dirs = old.Dirs
+			}
 			if st.Tags == nil {
 				st.Tags = old.Tags
 			}
