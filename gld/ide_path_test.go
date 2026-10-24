@@ -130,3 +130,55 @@ func TestIdeOpenRootAndFail(t *testing.T) {
 		t.Errorf("escape: %d", w.Code)
 	}
 }
+
+func TestIdeForbiddenRoot(t *testing.T) {
+	_, cfg, proj := web(t)
+	home, _ := os.UserHomeDir()
+	auth := filepath.Join(t.TempDir(), "authx")
+	os.MkdirAll(filepath.Join(auth, "sub"), 0o755)
+	t.Setenv("GLD_AUTH_DIR", auth)
+	os.MkdirAll(filepath.Join(cfg, "projects"), 0o755)
+	for _, d := range []string{filepath.Join(home, ".claudex"), filepath.Join(home, "pp")} {
+		os.MkdirAll(d, 0o755)
+	}
+	link := filepath.Join(t.TempDir(), "lienhome")
+	if err := os.Symlink(home, link); err != nil {
+		t.Fatal(err)
+	}
+	bad := []string{home, filepath.Dir(home), "/", cfg, filepath.Join(cfg, "projects"),
+		auth, filepath.Join(auth, "sub"), filepath.Dir(auth), link}
+	for _, d := range bad {
+		if !ideForbiddenRoot(d) {
+			t.Errorf("%q should be forbidden", d)
+		}
+	}
+	for _, d := range []string{proj, filepath.Join(home, ".claudex"), filepath.Join(home, "pp"), t.TempDir() + "/z"} {
+		if ideForbiddenRoot(d) {
+			t.Errorf("%q should be allowed", d)
+		}
+	}
+}
+
+func TestIdeKnownDirForbiddenAllWays(t *testing.T) {
+	_, cfg, _ := web(t)
+	home, _ := os.UserHomeDir()
+	put(t, filepath.Join(cfg, "projects", "-h", id2+".jsonl"),
+		`{"type":"user","cwd":"`+home+`","timestamp":"2026-01-01T00:00:00Z","message":{"content":"x"}}`+"\n", old)
+	if _, ok := ideKnownDir(home); ok {
+		t.Error("session cwd = HOME accepted")
+	}
+	st := loadStore()
+	st.Dirs = append(st.Dirs, cfg)
+	st.Projects = append(st.Projects, Project{Name: "h", Dirs: []string{filepath.Dir(home)}})
+	if err := saveStore(st); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range []string{cfg, filepath.Dir(home)} {
+		if _, ok := ideKnownDir(d); ok {
+			t.Errorf("%q accepted", d)
+		}
+	}
+	if _, err := ideOpenRoot(cfg); !errors.Is(err, errIdeDir) {
+		t.Errorf("ideOpenRoot: %v", err)
+	}
+}
