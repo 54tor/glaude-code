@@ -97,6 +97,9 @@
       "none": "the terminal attaches to a Claude session open in this folder",
       "pick": "Session to show",
       "ended": "The session has ended."
+    },
+    "drafts": {
+      "dropped": "Draft of “{{name}}” discarded: the file changed on disk."
     }
   }
 }

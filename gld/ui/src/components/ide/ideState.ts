@@ -9,8 +9,10 @@ export type Action =
   | { t: "edit"; path: string; content: string }
   // content : texte effectivement envoyé ; une saisie faite pendant l'enregistrement reste donc sale.
   | { t: "saved"; path: string; etag: string; content?: string }
-  | { t: "disk"; path: string; kind: "changed" | "deleted" }
-  | { t: "reloaded"; path: string; content: string; etag: string; notice?: "mixedEol" }
+  // always : signaler même un onglet propre (relecture impossible, le disque ne peut pas être repris seul).
+  | { t: "disk"; path: string; kind: "changed" | "deleted"; always?: boolean }
+  // force : « Recharger » demandé par l'utilisateur ; sinon un onglet devenu sale entre-temps n'est pas écrasé, il passe en conflit.
+  | { t: "reloaded"; path: string; content: string; etag: string; notice?: "mixedEol"; force?: boolean }
   | { t: "renamed"; from: string; to: string }
 
 export const isDirty = (t: Tab) => t.content !== t.saved
@@ -37,11 +39,11 @@ export function reduce(s: IdeState, a: Action): IdeState {
     case "disk": {
       // Un onglet sale n'est jamais rechargé : on signale. Propre et modifié : le composant recharge.
       const t = s.tabs.find((x) => x.path === a.path)
-      if (!t || (a.kind === "changed" && !isDirty(t))) return s
+      if (!t || (a.kind === "changed" && !isDirty(t) && !a.always)) return s
       return patch(s, a.path, (x) => ({ ...x, conflict: a.kind }))
     }
     case "reloaded":
-      return patch(s, a.path, (t) => ({ ...t, conflict: undefined, content: a.content, saved: a.content, etag: a.etag, ...(a.notice && { readOnly: true, notice: a.notice }) }))
+      return patch(s, a.path, (t) => (isDirty(t) && !a.force ? { ...t, conflict: "changed" } : { ...t, conflict: undefined, content: a.content, saved: a.content, etag: a.etag, ...(a.notice && { readOnly: true, notice: a.notice }) }))
     case "renamed": {
       const move = (p: string) => (p === a.from ? a.to : p.startsWith(a.from + "/") ? a.to + p.slice(a.from.length) : p)
       return { tabs: s.tabs.map((t) => ({ ...t, path: move(t.path) })), active: move(s.active) }

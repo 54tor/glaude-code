@@ -97,6 +97,9 @@
       "none": "le terminal se branche sur une session Claude ouverte dans ce dossier",
       "pick": "Session à afficher",
       "ended": "La session est terminée."
+    },
+    "drafts": {
+      "dropped": "Brouillon de « {{name}} » abandonné : le fichier a changé sur le disque."
     }
   }
 }
