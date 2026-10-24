@@ -610,3 +610,62 @@ describe("IdeView, évènement pendant une sauvegarde", () => {
     expect(ed("a.txt")).toBe(JSON.stringify("v2"))
   })
 })
+
+describe("IdeView : onglets restaurés au rechargement", () => {
+  const KEY = "gld.ide./p.tabs"
+  const tabs = () => screen.queryAllByRole("tab").map((x) => x.getAttribute("data-path"))
+  const activeTab = () => screen.getAllByRole("tab").find((x) => x.getAttribute("aria-selected") === "true")?.getAttribute("data-path")
+  const stored = () => JSON.parse(localStorage.getItem(KEY) ?? "null")
+
+  it("rouvre les onglets mémorisés dans l'ordre, par le flux normal, et active le bon", async () => {
+    localStorage.setItem(KEY, JSON.stringify({ paths: ["b.txt", "mix.txt", "big.bin", "a.txt"], active: "mix.txt" }))
+    render(<IdeView dir="/p" />)
+    await waitFor(() => expect(tabs()).toEqual(["b.txt", "mix.txt", "big.bin", "a.txt"]))
+    expect(activeTab()).toBe("mix.txt")
+    expect(screen.getByText(/mélange des fins de ligne/)).toBeTruthy()
+    expect(document.activeElement).toBe(document.body)
+  })
+
+  it("un fichier disparu est sauté sans message", async () => {
+    file.mockImplementation(async (_d, p) => (p === "gone.txt" ? res(404, { error: "absent" }) : res(200, { content: "x", etag: "e1", size: 1, mtime: 1 })))
+    localStorage.setItem(KEY, JSON.stringify({ paths: ["gone.txt", "c.txt"], active: "gone.txt" }))
+    render(<IdeView dir="/p" />)
+    await waitFor(() => expect(tabs()).toEqual(["c.txt"]))
+    expect(activeTab()).toBe("c.txt")
+    expect(toast.error).not.toHaveBeenCalled()
+    await waitFor(() => expect(stored()).toEqual({ paths: ["c.txt"], active: "c.txt" }))
+  })
+
+  it("un stockage illisible est ignoré", async () => {
+    for (const junk of ["{", "42", JSON.stringify({ paths: "a.txt" }), JSON.stringify({ paths: [1, null, "a.txt"], active: 3 })]) {
+      localStorage.setItem(KEY, junk)
+      render(<IdeView dir="/p" />)
+      await screen.findByText("a.txt", { selector: "[role=treeitem] span" })
+      if (junk.includes('"a.txt"]')) await waitFor(() => expect(tabs()).toEqual(["a.txt"]))
+      else expect(tabs()).toEqual([])
+      cleanup()
+    }
+  })
+
+  it("la liste est bornée à 30 chemins", async () => {
+    const many = Array.from({ length: 50 }, (_, i) => `f${i}.txt`)
+    localStorage.setItem(KEY, JSON.stringify({ paths: many, active: "f45.txt" }))
+    render(<IdeView dir="/p" />)
+    await waitFor(() => expect(tabs()).toHaveLength(30))
+    expect(file).toHaveBeenCalledTimes(30)
+    expect(stored().paths).toEqual(many.slice(0, 30))
+  })
+
+  it("ouvrir et fermer mettent à jour la liste ; le contenu, même non enregistré, n'est jamais mémorisé", async () => {
+    const input = await openA()
+    await openFile("b.txt")
+    await waitFor(() => expect(stored()).toEqual({ paths: ["a.txt", "b.txt"], active: "b.txt" }))
+    fireEvent.click(screen.getByRole("tab", { name: /a\.txt/ }))
+    fireEvent.change(input, { target: { value: "SECRET" } })
+    await waitFor(() => expect(stored()).toEqual({ paths: ["a.txt", "b.txt"], active: "a.txt" }))
+    fireEvent.click(screen.getByLabelText("Fermer b.txt"))
+    await waitFor(() => expect(stored()).toEqual({ paths: ["a.txt"], active: "a.txt" }))
+    expect(Object.values(localStorage).join("")).not.toContain("SECRET")
+    expect(Object.values(localStorage).join("")).not.toContain("l1")
+  })
+})

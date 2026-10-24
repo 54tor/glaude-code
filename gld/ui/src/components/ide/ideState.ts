@@ -22,7 +22,7 @@ export function reduce(s: IdeState, a: Action): IdeState {
     case "open":
       return s.tabs.some((t) => t.path === a.tab.path) ? { ...s, active: a.tab.path } : { tabs: [...s.tabs, a.tab], active: a.tab.path }
     case "focus":
-      return { ...s, active: a.path }
+      return s.tabs.some((t) => t.path === a.path) ? { ...s, active: a.path } : s
     case "close": {
       const i = s.tabs.findIndex((t) => t.path === a.path)
       if (i < 0) return s
