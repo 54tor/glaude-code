@@ -46,7 +46,8 @@
       "close": "Close {{path}}",
       "closeTitle": "Close “{{name}}” without saving?",
       "closeBody": "The unsaved changes to this file will be lost.",
-      "closeConfirm": "Close without saving"
+      "closeConfirm": "Close without saving",
+      "closeAllTitle": "Close all tabs?"
     },
     "editor": {
       "loading": "Loading the editor…"
@@ -100,6 +101,52 @@
     },
     "drafts": {
       "dropped": "Draft of “{{name}}” discarded: the file changed on disk."
+    },
+    "cmd": {
+      "file": {
+        "newFile": "New file",
+        "newFolder": "New folder",
+        "save": "Save",
+        "saveAll": "Save all",
+        "closeTab": "Close tab",
+        "closeAll": "Close all tabs",
+        "quickOpen": "Quick open"
+      },
+      "edit": {
+        "undo": "Undo",
+        "redo": "Redo"
+      },
+      "find": {
+        "find": "Find",
+        "replace": "Replace"
+      },
+      "goto": {
+        "line": "Go to line",
+        "palette": "Command palette"
+      },
+      "view": {
+        "wordWrap": "Word wrap",
+        "minimap": "Minimap",
+        "fontPlus": "Increase text size",
+        "fontMinus": "Decrease text size",
+        "fontReset": "Default text size",
+        "toggleTree": "Show file tree",
+        "toggleTerminal": "Show terminal area",
+        "toggleStatus": "Show status bar"
+      },
+      "terminal": {
+        "toggle": "Open or collapse the terminal",
+        "focusSession": "Go to session terminal"
+      }
+    },
+    "reason": {
+      "noTab": "No open tab",
+      "readOnly": "Read-only file",
+      "noWrite": "You are not allowed to modify files in this folder",
+      "noEditor": "No active editor",
+      "noExec": "The terminal requires the “exec” right",
+      "termOff": "Built-in terminal disabled (GLD_WEB_TERMINAL=1)",
+      "nothingDirty": "No changes to save"
     }
   }
 }
