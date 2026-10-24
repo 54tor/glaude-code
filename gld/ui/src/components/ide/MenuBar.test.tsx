@@ -150,6 +150,19 @@ describe("MenuBar", () => {
     }
   })
 
+  it("raccourcis traduits : Maj en français, Shift en anglais, nom ARIA canonique", async () => {
+    const { unmount } = render(<MenuBar ctx={ctx()} />)
+    alt("e")
+    const redo = await item("Rétablir")
+    expect(redo.textContent).toContain("Ctrl+Maj+Z")
+    expect(redo.getAttribute("aria-keyshortcuts")).toBe("Control+Shift+Z")
+    unmount()
+    setLang("en")
+    render(<MenuBar ctx={ctx()} />)
+    alt("e")
+    expect((await item("Redo")).textContent).toContain("Ctrl+Shift+Z")
+  })
+
   it("bascules cochées selon les préférences ; une entrée active lance sa commande", async () => {
     const c = ctx({ prefs: { ...DEFAULT_PREFS, wordWrap: true, set: vi.fn() } })
     render(<MenuBar ctx={c} />)
@@ -222,6 +235,19 @@ describe("MenuBar : focus après une commande", () => {
     await closed()
     expect(h.focus).not.toHaveBeenCalled()
     expect(document.activeElement).toBe(trigger("Affichage"))
+  })
+
+  it("Fermer l'onglet et Fermer tous les onglets : pas de focus dans un éditeur qui se démonte, retour au menu", async () => {
+    const { c, h } = setup()
+    for (const name of ["Fermer l'onglet", "Fermer tous les onglets"]) {
+      alt("f")
+      fireEvent.click(await item(name))
+      await closed()
+      await waitFor(() => expect(document.activeElement).toBe(trigger("Fichier")))
+    }
+    expect(c.closeTab).toHaveBeenCalledTimes(1)
+    expect(c.closeAll).toHaveBeenCalledTimes(1)
+    expect(h.focus).not.toHaveBeenCalled()
   })
 
   it("Échap : le focus revient au menu, rien ne s'exécute", async () => {

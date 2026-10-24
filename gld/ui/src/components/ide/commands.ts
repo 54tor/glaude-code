@@ -54,8 +54,9 @@ export type Command = {
   label: string
   shortcut?: string
   group: "file" | "edit" | "find" | "view" | "goto" | "terminal"
-  // Agit dans l'éditeur : un bouton lui donne le focus avant de la lancer (la saisie rapide de Monaco l'exige).
-  editorFocus: boolean
+  // editor : menu et boutons donnent le focus à l'éditeur avant la commande (la saisie rapide de Monaco l'exige).
+  // keep : le focus reste sur le déclencheur (fermeture d'onglets : l'éditeur va se démonter ; bascules de zones).
+  focus: "editor" | "keep"
   enabled(ctx: CmdCtx): boolean
   reason?(ctx: CmdCtx): string
   run(ctx: CmdCtx): void
@@ -87,7 +88,7 @@ const cmd = (
   guards: Guard[],
   run: (c: CmdCtx) => void,
   shortcut?: string,
-  editorFocus = group === "edit" || group === "find" || group === "goto"
+  focus: Command["focus"] = "editor"
 ): Command => {
   const reason = (c: CmdCtx) => guards.map((g) => g(c)).find(Boolean) ?? ""
   return {
@@ -95,7 +96,7 @@ const cmd = (
     label: `ide.cmd.${id}`,
     group,
     shortcut,
-    editorFocus,
+    focus,
     run,
     enabled: (c) => !reason(c),
     ...(guards.length && { reason }),
@@ -118,9 +119,9 @@ export const commands: Command[] = [
     (c) => c.save(),
     "Ctrl+S"
   ),
-  cmd("file.saveAll", "file", [write, dirty], (c) => c.saveAll()),
-  cmd("file.closeTab", "file", [hasTab], (c) => c.closeTab()),
-  cmd("file.closeAll", "file", [anyTab], (c) => c.closeAll()),
+  cmd("file.saveAll", "file", [write, dirty], (c) => c.saveAll(), undefined, "keep"),
+  cmd("file.closeTab", "file", [hasTab], (c) => c.closeTab(), undefined, "keep"),
+  cmd("file.closeAll", "file", [anyTab], (c) => c.closeAll(), undefined, "keep"),
   cmd("file.quickOpen", "file", [], (c) => c.openQuick(), "Ctrl+P"),
   cmd(
     "edit.undo",
@@ -134,7 +135,7 @@ export const commands: Command[] = [
     "edit",
     [hasEditor, writable, write],
     (c) => c.editor?.redo(),
-    "Ctrl+Maj+Z"
+    "Ctrl+Shift+Z"
   ),
   cmd("find.find", "find", [hasEditor], (c) => c.editor?.find(), "Ctrl+F"),
   cmd(
@@ -146,17 +147,23 @@ export const commands: Command[] = [
   ),
   cmd("goto.line", "goto", [hasEditor], (c) => c.editor?.gotoLine(), "Ctrl+G"),
   cmd("goto.palette", "goto", [hasEditor], (c) => c.editor?.palette(), "F1"),
-  cmd("view.wordWrap", "view", [], toggle("wordWrap"), undefined, true),
+  cmd("view.wordWrap", "view", [], toggle("wordWrap")),
   cmd("view.minimap", "view", [], toggle("minimap")),
-  cmd("view.fontPlus", "view", [], font(1), undefined, true),
-  cmd("view.fontMinus", "view", [], font(-1), undefined, true),
-  cmd("view.fontReset", "view", [], font(0), undefined, true),
-  cmd("view.toggleTree", "view", [], toggle("showTree")),
-  cmd("view.toggleTerminal", "view", [exec, term], toggle("showTerminal")),
-  cmd("view.toggleStatus", "view", [], toggle("showStatus")),
-  cmd("terminal.toggle", "terminal", [exec, term], toggle("showTerminal")),
-  cmd("terminal.focusSession", "terminal", [exec, term], (c) =>
-    c.focusSession()
-  ),
+  cmd("view.fontPlus", "view", [], font(1)),
+  cmd("view.fontMinus", "view", [], font(-1)),
+  cmd("view.fontReset", "view", [], font(0)),
+  cmd("view.toggleTree", "view", [], toggle("showTree"), undefined, "keep"),
+  cmd("view.toggleTerminal", "view", [exec, term], toggle("showTerminal"), undefined, "keep"),
+  cmd("view.toggleStatus", "view", [], toggle("showStatus"), undefined, "keep"),
+  cmd("terminal.toggle", "terminal", [exec, term], toggle("showTerminal"), undefined, "keep"),
+  cmd("terminal.focusSession", "terminal", [exec, term], (c) => c.focusSession(), undefined, "keep"),
 ]
 
+// Raccourcis écrits en anglais dans le registre (noms ARIA) ; seules les touches nommées changent à l'affichage.
+const NAMED = ["Ctrl", "Shift", "Alt", "Enter", "Escape"]
+export const showKeys = (s: string, t: (k: string) => string) =>
+  s
+    .split("+")
+    .map((k) => (NAMED.includes(k) ? t(`ide.keys.${k}`) : k))
+    .join("+")
+export const ariaKeys = (s?: string) => s?.replace("Ctrl", "Control")

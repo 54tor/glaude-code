@@ -177,4 +177,24 @@ describe("EditorToolbar", () => {
     vi.unstubAllGlobals()
   })
 
+  it("raccourci traduit dans l'infobulle, nom ARIA canonique sur le bouton", async () => {
+    vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} })
+    render(<EditorToolbar ctx={ctx()} />)
+    expect(btn("Enregistrer").getAttribute("aria-keyshortcuts")).toBe("Control+S")
+    expect(btn("Rétablir").getAttribute("aria-keyshortcuts")).toBe("Control+Shift+Z")
+    expect(btn("Tout enregistrer").hasAttribute("aria-keyshortcuts")).toBe(false)
+    fireEvent.focus(btn("Rétablir"))
+    await waitFor(() => expect(document.querySelector("[data-slot=tooltip-content] kbd")?.textContent).toBe("Ctrl+Maj+Z"))
+    vi.unstubAllGlobals()
+  })
+
+  it("Fermer tous les onglets : le focus reste sur le bouton, pas dans l'éditeur qui se démonte", () => {
+    const c = ctx()
+    render(<EditorToolbar ctx={c} />)
+    btn("Fermer tous les onglets").focus()
+    fireEvent.click(btn("Fermer tous les onglets"))
+    expect(c.closeAll).toHaveBeenCalled()
+    expect(c.editor!.focus).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(btn("Fermer tous les onglets"))
+  })
 })

@@ -3,7 +3,7 @@ import fr from "@/i18n/fr/ide.json"
 import en from "@/i18n/en/ide.json"
 import type { Right } from "@/lib/auth"
 import type { Tab } from "./ideState"
-import { commands, type CmdCtx, type EditorHandle } from "./commands"
+import { ariaKeys, commands, showKeys, type CmdCtx, type EditorHandle } from "./commands"
 import { DEFAULT_PREFS } from "./useViewPrefs"
 
 const at = (o: unknown, key: string) =>
@@ -159,6 +159,11 @@ describe("registre de commandes", () => {
     }
   })
 
+  it("focus : une seule source ; fermer et basculer les zones ne visent pas l'éditeur", () => {
+    const keep = ["file.saveAll", "file.closeTab", "file.closeAll", "view.toggleTree", "view.toggleTerminal", "view.toggleStatus", "terminal.toggle", "terminal.focusSession"]
+    for (const c of commands) expect(c.focus, c.id).toBe(keep.includes(c.id) ? "keep" : "editor")
+  })
+
   it("une commande désactivée donne une raison non vide, traduite en fr et en", () => {
     for (const k of blocked)
       for (const c of commands) {
@@ -189,7 +194,17 @@ describe("registre de commandes", () => {
     expect(byId("file.save").shortcut).toBe("Ctrl+S")
     expect(byId("file.quickOpen").shortcut).toBe("Ctrl+P")
     expect(byId("goto.palette").shortcut).toBe("F1")
-    expect(byId("edit.redo").shortcut).toBe("Ctrl+Maj+Z")
+    expect(byId("edit.redo").shortcut).toBe("Ctrl+Shift+Z")
   })
 
+  it("raccourcis : touches nommées traduites à l'affichage, noms ARIA canoniques", () => {
+    const fr = (k: string) => ({ "ide.keys.Shift": "Maj", "ide.keys.Enter": "Entrée", "ide.keys.Escape": "Échap", "ide.keys.Ctrl": "Ctrl", "ide.keys.Alt": "Alt" })[k] ?? "?"
+    expect(showKeys("Ctrl+Shift+Z", fr)).toBe("Ctrl+Maj+Z")
+    expect(showKeys("Alt+Enter", fr)).toBe("Alt+Entrée")
+    expect(showKeys("Escape", fr)).toBe("Échap")
+    expect(showKeys("F1", fr)).toBe("F1")
+    expect(ariaKeys("Ctrl+Shift+Z")).toBe("Control+Shift+Z")
+    expect(ariaKeys(undefined)).toBeUndefined()
+    for (const k of ["Ctrl", "Shift", "Alt", "Enter", "Escape"]) expect(has(`ide.keys.${k}`), k).toBe(true)
+  })
 })

@@ -223,6 +223,13 @@
       },
       "dirty_one": "{{count}} modified tab",
       "dirty_other": "{{count}} modified tabs"
+    },
+    "keys": {
+      "Ctrl": "Ctrl",
+      "Shift": "Shift",
+      "Alt": "Alt",
+      "Enter": "Enter",
+      "Escape": "Esc"
     }
   }
 }
