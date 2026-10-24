@@ -6,7 +6,7 @@ import { tilde } from "@/lib/format"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { SettingsPanel, type UiSettings } from "./SettingsDialog"
+import { ClaudeOptions, SettingsPanel, type UiSettings } from "./SettingsDialog"
 import { useActions } from "./actions"
 import { Choose } from "./Choose"
 import { useConfigEdit } from "./configEdit"
@@ -141,11 +141,14 @@ export function Config({ home, tab, onTab, ui }: { home: string; tab: string; on
             <PermsTab added={added} moveRule={moveRule} gone={gone} onTransfer={transfer} file={fileId} label={label(fileId)} doc={doc} propose={propose} proposePerms={proposePerms} />
           </TabsContent>
           <TabsContent value="reglages">
+            <div className="mb-6">
+              <ClaudeOptions args={ui.args} setArgs={ui.setArgs} choice={ui.choice} setChoice={ui.setChoice} />
+            </div>
             {fileSelect}
             <SettingsTab file={fileId} doc={doc} plugins={ov.plugins} propose={propose} />
           </TabsContent>
           <TabsContent value="interface">
-            <SettingsPanel {...ui} />
+            <SettingsPanel font={ui.font} setFont={ui.setFont} fontSize={ui.fontSize} setFontSize={ui.setFontSize} />
           </TabsContent>
           <TabsContent value="json">
             {fileSelect}
