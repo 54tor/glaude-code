@@ -36,11 +36,17 @@ export default function CodeEditor({ path, value, readOnly, theme, onChange, onS
     monaco.editor.getModel(uri)?.dispose()
     const m = monaco.editor.createModel(value, undefined, uri)
     const e = monaco.editor.create(box.current!, { ...base(theme), model: m, readOnly })
-    e.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => cb.current.onSave())
+    // Pas addCommand : ce raccourci est global à Monaco, le dernier éditeur créé l'emporterait et Ctrl+S enregistrerait un autre onglet.
+    const keys = e.onKeyDown((k) => {
+      if (!(k.ctrlKey || k.metaKey) || k.altKey || k.shiftKey || k.keyCode !== monaco.KeyCode.KeyS) return
+      k.preventDefault()
+      cb.current.onSave()
+    })
     const sub = m.onDidChangeContent(() => cb.current.onChange(m.getValue()))
     model.current = m
     ed.current = e
     return () => {
+      keys.dispose()
       sub.dispose()
       e.dispose()
       m.dispose()
@@ -70,9 +76,12 @@ export function DiffView({ path, original, modified, theme }: { path: string; or
     const mod = own ?? monaco.editor.createModel(modified)
     const orig = monaco.editor.createModel(original, mod.getLanguageId())
     const d = monaco.editor.createDiffEditor(box.current!, { ...base(theme), originalEditable: false })
-    d.setModel({ original: orig, modified: mod })
+    // Modèle de vue gardé : d.dispose() ne l'arrête pas, et un calcul en vol sur un modèle disposé lève « no diff result available ».
+    const vm = d.createViewModel({ original: orig, modified: mod })
+    d.setModel(vm)
     return () => {
       d.dispose()
+      vm.dispose()
       orig.dispose()
       if (!own) mod.dispose()
     }
