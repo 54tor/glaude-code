@@ -73,6 +73,43 @@ describe("EditorToolbar", () => {
     expect(c.prefs.set).toHaveBeenCalledWith("showTerminal", false)
   })
 
+  it("les commandes de l'éditeur lui donnent le focus avant de s'exécuter : la saisie rapide de Monaco l'exige", () => {
+    for (const [name, fn] of [["Aller à la ligne", "gotoLine"], ["Palette de commandes", "palette"], ["Rechercher", "find"]] as const) {
+      const c = ctx()
+      const h = c.editor!
+      const order: string[] = []
+      vi.mocked(h.focus).mockImplementation(() => void order.push("focus"))
+      vi.mocked(h[fn]).mockImplementation(() => void order.push(fn))
+      const { unmount } = render(<EditorToolbar ctx={c} />)
+      fireEvent.click(btn(name))
+      expect(order).toEqual(["focus", fn])
+      unmount()
+    }
+  })
+
+  it("une commande sans rapport avec l'éditeur ne lui prend pas le focus", () => {
+    const c = ctx()
+    render(<EditorToolbar ctx={c} />)
+    fireEvent.click(btn("Tout enregistrer"))
+    fireEvent.click(btn("Ouvrir ou replier le terminal"))
+    expect(c.editor!.focus).not.toHaveBeenCalled()
+  })
+
+  it("sans éditeur ou bouton désactivé : ni focus ni commande", () => {
+    const c = ctx({ editor: null })
+    render(<EditorToolbar ctx={c} />)
+    fireEvent.click(btn("Retour à la ligne automatique"))
+    expect(c.prefs.set).toHaveBeenCalledWith("wordWrap", true)
+    cleanup()
+    const r = ctx({ readOnly: true })
+    render(<EditorToolbar ctx={r} />)
+    fireEvent.click(btn("Remplacer"))
+    fireEvent.click(btn("Annuler"))
+    expect(r.editor!.focus).not.toHaveBeenCalled()
+    expect(r.editor!.replace).not.toHaveBeenCalled()
+    expect(r.editor!.undo).not.toHaveBeenCalled()
+  })
+
   it("le retour à la ligne est un bouton bascule qui reflète la préférence", () => {
     render(<EditorToolbar ctx={ctx({ prefs: { ...DEFAULT_PREFS, wordWrap: true, set: vi.fn() } })} />)
     expect(btn("Retour à la ligne automatique").getAttribute("aria-pressed")).toBe("true")
