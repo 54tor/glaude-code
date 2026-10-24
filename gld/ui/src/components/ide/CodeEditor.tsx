@@ -1,11 +1,24 @@
 import { useEffect, useRef } from "react"
 import * as monaco from "monaco-editor/editor"
+import { typescriptDefaults } from "monaco-editor/languages/features/typescript/register"
 import "./monacoSetup"
 import { FONTS } from "@/lib/fonts"
 
 type Theme = "light" | "dark"
 const themeOf = (t: Theme) => (t === "dark" ? "vs-dark" : "vs")
 const base = (theme: Theme) => ({ theme: themeOf(theme), fontFamily: FONTS.jetbrains.mono, fontSize: 13, automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false })
+
+// Sources du projet données au service TypeScript ; null retire l'entrée. Seul ce module touche Monaco.
+const libs = new Map<string, monaco.IDisposable>()
+export function setTsLib(path: string, content: string | null) {
+  libs.get(path)?.dispose()
+  libs.delete(path)
+  if (content !== null) libs.set(path, typescriptDefaults.addExtraLib(content, `file:///${path}`))
+}
+export function clearTsLibs() {
+  for (const d of libs.values()) d.dispose()
+  libs.clear()
+}
 
 // Un éditeur et un modèle par onglet : le modèle naît avec l'onglet et disparaît avec lui. Le texte reçu sert tel quel (CRLF compris).
 export default function CodeEditor({ path, value, readOnly, theme, onChange, onSave }: { path: string; value: string; readOnly?: boolean; theme: Theme; onChange(v: string): void; onSave(): void }) {

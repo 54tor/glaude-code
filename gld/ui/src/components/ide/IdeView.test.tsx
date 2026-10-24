@@ -1,13 +1,18 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest"
 import { setLang } from "@/i18n"
 import { setAuth } from "@/lib/auth"
 import { api, type FsEntry, type FsRes } from "@/lib/api"
 import { IdeView } from "./IdeView"
 
+const feed = vi.hoisted(() => ({ setTsLib: vi.fn(), clearTsLibs: vi.fn() }))
+const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn() }))
+vi.mock("sonner", async (orig) => ({ ...(await orig<typeof import("sonner")>()), toast }))
+
 // Monaco ne tourne pas sous jsdom : l'éditeur simulé garde la valeur telle quelle (un textarea normaliserait les CRLF).
 vi.mock("./CodeEditor", () => ({
+  ...feed,
   default: ({ path, value, readOnly, onChange, onSave }: { path: string; value: string; readOnly?: boolean; onChange(v: string): void; onSave(): void }) => (
     <div>
       <pre data-testid={`ed:${path}`}>{JSON.stringify(value)}</pre>
@@ -33,11 +38,44 @@ vi.mock("./ConflictDiff", () => ({
 const e = (name: string, type: FsEntry["type"]): FsEntry => ({ name, type, size: 1, mtime: 1 })
 const res = <T,>(status: number, body: object): FsRes<T> => ({ status, ok: status < 300 && (body as { ok?: boolean }).ok !== false, body: body as FsRes<T>["body"] })
 
+class FakeES {
+  static all: FakeES[] = []
+  onopen: ((e: Event) => void) | null = null
+  onmessage: ((e: MessageEvent) => void) | null = null
+  onerror: ((e: Event) => void) | null = null
+  closed = false
+  url: string
+  constructor(url: string) {
+    this.url = url
+    FakeES.all.push(this)
+  }
+  close() {
+    this.closed = true
+  }
+  open() {
+    act(() => this.onopen?.(new Event("open")))
+  }
+  emit(data: object | string) {
+    act(() => this.onmessage?.({ data: typeof data === "string" ? data : JSON.stringify(data) } as MessageEvent))
+  }
+}
+const stream = async () => {
+  await waitFor(() => expect(FakeES.all.filter((x) => !x.closed)).toHaveLength(1))
+  return FakeES.all.find((x) => !x.closed)!
+}
+
 let file: MockInstance<typeof api.fsFile>
 let save: MockInstance<typeof api.fsSave>
+let index: MockInstance<typeof api.fsIndex>
 beforeEach(() => {
   setLang("fr")
   localStorage.clear()
+  FakeES.all = []
+  vi.stubGlobal("EventSource", FakeES)
+  feed.setTsLib.mockReset()
+  feed.clearTsLibs.mockReset()
+  toast.mockReset()
+  index = vi.spyOn(api, "fsIndex").mockResolvedValue(res(200, { state: "ready", files: [] }))
   vi.spyOn(api, "fsTree").mockResolvedValue({ entries: [e("a.txt", "file"), e("b.txt", "file"), e("c.txt", "file"), e("lf.txt", "file"), e("mix.txt", "file"), e("cr.txt", "file"), e("big.bin", "file"), e("img.png", "file")], truncated: false })
   file = vi.spyOn(api, "fsFile").mockImplementation(async (_d, p) => {
     if (p === "big.bin") return res(413, { error: "trop gros" })
@@ -51,6 +89,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
   vi.restoreAllMocks()
   setAuth({ state: "loading", rights: undefined, home: undefined })
 })
@@ -281,5 +320,217 @@ describe("IdeView", () => {
     await waitFor(() => expect(screen.getAllByRole("tab")).toHaveLength(2))
     expect(selected()).toEqual(["b.txt"])
     expect(document.activeElement).toBe(tab("b.txt"))
+  })
+})
+
+const sleep = (ms: number) => act(() => new Promise((r) => setTimeout(r, ms)))
+const disk = (over: Record<string, FsRes<{ content: string; etag: string }>>) => {
+  const base = file.getMockImplementation()!
+  file.mockImplementation(async (d, p) => over[p] ?? base(d, p))
+}
+const ed = (p: string) => screen.getByTestId(`ed:${p}`).textContent
+
+describe("IdeView, évènements disque", () => {
+  it("write sur un onglet propre : relu et remplacé sans bandeau, toast discret", async () => {
+    await openA()
+    const es = await stream()
+    disk({ "a.txt": res(200, { content: "neuf", etag: "e9" }) })
+    es.emit({ path: "a.txt", type: "write" })
+    await waitFor(() => expect(ed("a.txt")).toBe(JSON.stringify("neuf")))
+    expect(screen.queryByRole("alert")).toBeNull()
+    await waitFor(() => expect(toast).toHaveBeenCalledTimes(1))
+    expect(toast.mock.calls[0][0]).toContain("a.txt")
+  })
+
+  it("write sur un onglet sale : bandeau de conflit, contenu intact", async () => {
+    const input = await openA()
+    fireEvent.change(input, { target: { value: "x" } })
+    const es = await stream()
+    disk({ "a.txt": res(200, { content: "neuf", etag: "e9" }) })
+    es.emit({ path: "a.txt", type: "write" })
+    expect(await screen.findByText(/modifié sur le disque/)).toBeTruthy()
+    expect(ed("a.txt")).toBe(JSON.stringify("l1\r\nl2\r\nx"))
+  })
+
+  it("remove d'un fichier ouvert : bandeau « supprimé »", async () => {
+    await openA()
+    const es = await stream()
+    disk({ "a.txt": res(404, { ok: false, out: "introuvable" }) })
+    es.emit({ path: "a.txt", type: "remove" })
+    expect(await screen.findByText(/supprimé du disque/)).toBeTruthy()
+  })
+
+  it("écho de notre propre enregistrement : ni rechargement, ni conflit, ni toast", async () => {
+    const input = await openA()
+    fireEvent.change(input, { target: { value: "x" } })
+    ctrlS(input)
+    await waitFor(() => expect(screen.queryByLabelText("Modifications non enregistrées")).toBeNull())
+    const es = await stream()
+    disk({ "a.txt": res(200, { content: "l1\r\nl2\r\nx", etag: "e2" }) })
+    const calls = file.mock.calls.length
+    es.emit({ path: "a.txt", type: "write" })
+    await waitFor(() => expect(file.mock.calls.length).toBe(calls + 1))
+    await sleep(500)
+    expect(screen.queryByRole("alert")).toBeNull()
+    expect(toast).not.toHaveBeenCalled()
+    expect(ed("a.txt")).toBe(JSON.stringify("l1\r\nl2\r\nx"))
+  })
+
+  it("plusieurs rechargements rapprochés : un seul toast", async () => {
+    render(<IdeView dir="/p" />)
+    await openFile("a.txt")
+    await openFile("b.txt")
+    const es = await stream()
+    disk({ "a.txt": res(200, { content: "A", etag: "e9" }), "b.txt": res(200, { content: "B", etag: "e9" }) })
+    es.emit({ path: "a.txt", type: "write" })
+    es.emit({ path: "b.txt", type: "write" })
+    await waitFor(() => expect(ed("b.txt")).toBe(JSON.stringify("B")))
+    await sleep(600)
+    expect(toast).toHaveBeenCalledTimes(1)
+    expect(toast.mock.calls[0][0]).toContain("2")
+  })
+
+  it("create dans un dossier déplié : ce dossier est relu ; l'index est resondé une fois", async () => {
+    localStorage.setItem("gld.ide./p.open", JSON.stringify(["src"]))
+    const tree = vi.mocked(api.fsTree)
+    render(<IdeView dir="/p" />)
+    const es = await stream()
+    await waitFor(() => expect(index).toHaveBeenCalledTimes(1))
+    const n = (p: string) => tree.mock.calls.filter((c) => c[1] === p).length
+    const before = { src: n("src"), root: n(""), other: n("other") }
+    es.emit({ path: "src/new.ts", type: "create" })
+    es.emit({ path: "x.ts", type: "create" })
+    es.emit({ path: "other/y.ts", type: "create" })
+    await waitFor(() => expect(n("src")).toBe(before.src + 1))
+    await waitFor(() => expect(n("")).toBe(before.root + 1))
+    expect(n("other")).toBe(before.other)
+    await waitFor(() => expect(index).toHaveBeenCalledTimes(2), { timeout: 2500 })
+    await sleep(1200)
+    expect(index).toHaveBeenCalledTimes(2)
+  })
+
+  it("JSON malformé : ignoré", async () => {
+    await openA()
+    const es = await stream()
+    es.emit("{pas du json")
+    es.emit({ nope: 1 })
+    await sleep(300)
+    expect(file).toHaveBeenCalledTimes(1)
+  })
+
+  it("resync : onglet propre relu, onglet sale en conflit, fichier disparu signalé, dossiers et index relus", async () => {
+    localStorage.setItem("gld.ide./p.open", JSON.stringify(["src"]))
+    const tree = vi.mocked(api.fsTree)
+    render(<IdeView dir="/p" />)
+    await openFile("a.txt")
+    await openFile("c.txt")
+    await openFile("b.txt")
+    fireEvent.change(screen.getByLabelText("type:b.txt"), { target: { value: "x" } })
+    const es = await stream()
+    await waitFor(() => expect(index).toHaveBeenCalledTimes(1))
+    const n = (p: string) => tree.mock.calls.filter((c) => c[1] === p).length
+    const before = { src: n("src"), root: n("") }
+    disk({ "a.txt": res(200, { content: "A", etag: "e9" }), "b.txt": res(200, { content: "B", etag: "e9" }), "c.txt": res(404, { ok: false }) })
+    es.emit({ path: "", type: "resync" })
+    await waitFor(() => expect(ed("a.txt")).toBe(JSON.stringify("A")))
+    expect(await screen.findByText(/modifié sur le disque/)).toBeTruthy()
+    expect(ed("b.txt")).toBe(JSON.stringify("l1\r\nl2\r\nx"))
+    fireEvent.click(screen.getByRole("tab", { name: /c\.txt/ }))
+    expect(await screen.findByText(/supprimé du disque/)).toBeTruthy()
+    await waitFor(() => expect(n("src")).toBe(before.src + 1))
+    expect(n("")).toBe(before.root + 1)
+    await waitFor(() => expect(index).toHaveBeenCalledTimes(2), { timeout: 2500 })
+  })
+
+  it("une réouverture après coupure vaut resync, pas la première ouverture", async () => {
+    await openA()
+    const es = await stream()
+    es.open()
+    await sleep(300)
+    expect(file).toHaveBeenCalledTimes(1)
+    disk({ "a.txt": res(200, { content: "neuf", etag: "e9" }) })
+    es.open()
+    await waitFor(() => expect(ed("a.txt")).toBe(JSON.stringify("neuf")))
+  })
+
+  it("dossiers déclarés : racine et dépliés, plafonnés à 200 en gardant les moins profonds", async () => {
+    const deep = Array.from({ length: 150 }, (_, i) => `d/sub${i}`)
+    const shallow = Array.from({ length: 100 }, (_, i) => `top${i}`)
+    localStorage.setItem("gld.ide./p.open", JSON.stringify([...deep, ...shallow, "a b,c"]))
+    render(<IdeView dir="/p" />)
+    const es = await stream()
+    const u = new URL(es.url, "http://x")
+    expect(u.pathname).toBe("/fs-watch")
+    expect(u.searchParams.get("dir")).toBe("/p")
+    const paths = es.url.split("&paths=")[1].split(",").map(decodeURIComponent)
+    expect(paths).toHaveLength(200)
+    expect(paths[0]).toBe("")
+    for (const s of [...shallow, "a b,c"]) expect(paths).toContain(s)
+  })
+
+  it("le flux est rouvert quand les dossiers dépliés changent, fermé au démontage", async () => {
+    vi.mocked(api.fsTree).mockImplementation(async (_d, p) => ({ entries: p === "" ? [e("src", "dir")] : [e("b.txt", "file")], truncated: false }))
+    const r = render(<IdeView dir="/p" />)
+    const first = await stream()
+    expect(new URL(first.url, "http://x").searchParams.get("paths")).toBe("")
+    fireEvent.click(await screen.findByLabelText("Déplier src"))
+    await waitFor(() => expect(first.closed).toBe(true))
+    const second = await stream()
+    expect(new URL(second.url, "http://x").searchParams.get("paths")).toBe(",src")
+    r.unmount()
+    expect(second.closed).toBe(true)
+  })
+})
+
+describe("IdeView, ouverture rapide et alimentation TypeScript", () => {
+  it("Ctrl+P dans l'espace ouvre la liste, Entrée ouvre le fichier ; hors de l'espace rien n'est bloqué", async () => {
+    index.mockResolvedValue(res(200, { state: "ready", files: [{ path: "a.txt", size: 1, mtime: 1 }, { path: "src/b.txt", size: 1, mtime: 1 }] }))
+    render(<IdeView dir="/p" />)
+    await screen.findByText("a.txt", { selector: "[role=treeitem] span" })
+    expect(fireEvent.keyDown(document.body, { key: "p", ctrlKey: true })).toBe(true)
+    expect(screen.queryByRole("combobox")).toBeNull()
+    expect(fireEvent.keyDown(screen.getByRole("tree"), { key: "p", ctrlKey: true })).toBe(false)
+    const input = await screen.findByRole("combobox")
+    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2))
+    fireEvent.change(input, { target: { value: "b" } })
+    fireEvent.keyDown(input, { key: "Enter" })
+    await screen.findByRole("tab", { name: /b\.txt/ })
+    expect(file).toHaveBeenCalledWith("/p", "src/b.txt")
+    expect(screen.queryByRole("combobox")).toBeNull()
+  })
+
+  it("alimente le service TypeScript avec les seuls fichiers de l'index, vidé au démontage", async () => {
+    index.mockResolvedValue(res(200, { state: "ready", files: [{ path: "a.ts", size: 3, mtime: 1 }, { path: "b.json", size: 2, mtime: 1 }, { path: "x.go", size: 1, mtime: 1 }] }))
+    const files = vi.spyOn(api, "fsFiles").mockImplementation(async (_d, ps) => res(200, { files: ps.map((path) => ({ path, content: "c:" + path })) }))
+    const r = render(<IdeView dir="/p" />)
+    await waitFor(() => expect(feed.setTsLib).toHaveBeenCalledTimes(2))
+    expect(files.mock.calls[0][1].sort()).toEqual(["a.ts", "b.json"])
+    expect(feed.setTsLib).toHaveBeenCalledWith("a.ts", "c:a.ts")
+    r.unmount()
+    await waitFor(() => expect(feed.clearTsLibs).toHaveBeenCalled())
+  })
+
+  it("l'alimentation s'arrête au démontage", async () => {
+    index.mockResolvedValue(res(200, { state: "ready", files: [{ path: "a.ts", size: 3, mtime: 1 }] }))
+    const pending = deferred<FsRes<{ files: { path: string; content: string }[] }>>()
+    const files = vi.spyOn(api, "fsFiles").mockReturnValue(pending.promise)
+    const r = render(<IdeView dir="/p" />)
+    await waitFor(() => expect(files).toHaveBeenCalled())
+    r.unmount()
+    pending.resolve(res(200, { files: [{ path: "a.ts", content: "x" }] }))
+    await sleep(50)
+    expect(feed.setTsLib).not.toHaveBeenCalled()
+  })
+
+  it("un fichier alimenté qui change est remplacé, un fichier disparu retiré", async () => {
+    index.mockResolvedValue(res(200, { state: "ready", files: [{ path: "a.ts", size: 3, mtime: 1 }, { path: "b.ts", size: 3, mtime: 1 }] }))
+    vi.spyOn(api, "fsFiles").mockImplementation(async (_d, ps) => res(200, { files: ps.map((path) => ({ path, content: "v" + path })) }))
+    render(<IdeView dir="/p" />)
+    await waitFor(() => expect(feed.setTsLib).toHaveBeenCalledTimes(2))
+    const es = await stream()
+    index.mockResolvedValue(res(200, { state: "ready", files: [{ path: "a.ts", size: 4, mtime: 2 }] }))
+    es.emit({ path: "a.ts", type: "write" })
+    await waitFor(() => expect(feed.setTsLib).toHaveBeenCalledWith("b.ts", null), { timeout: 2500 })
+    expect(feed.setTsLib.mock.calls.filter((c) => c[0] === "a.ts")).toHaveLength(2)
   })
 })

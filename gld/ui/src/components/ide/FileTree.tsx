@@ -8,7 +8,7 @@ import { api, type FsEntry, type FsRes } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Confirm, type Ask } from "@/components/Confirm"
 import { Prompt, type Ask as PromptAsk } from "@/components/Prompt"
-import { useTree } from "./useTree"
+import type { useTree } from "./useTree"
 
 type TreeAction = "newFile" | "newDir" | "rename" | "delete"
 type TreeTarget = { path: string; name: string; type: FsEntry["type"] }
@@ -17,11 +17,10 @@ type Row = TreeTarget & { parent: string; depth: number }
 const join = (p: string, n: string) => (p ? p + "/" : "") + n
 const rootTarget: TreeTarget = { path: "", name: "", type: "dir" }
 
-type Props = { dir: string; canWrite: boolean; selected: string; onOpen: (path: string) => void; onRenamed?: (from: string, to: string) => void }
+type Props = { dir: string; tree: ReturnType<typeof useTree>; canWrite: boolean; selected: string; onOpen: (path: string) => void; onRenamed?: (from: string, to: string) => void }
 
-export function FileTree({ dir, canWrite, selected, onOpen, onRenamed }: Props) {
+export function FileTree({ dir, tree, canWrite, selected, onOpen, onRenamed }: Props) {
   const { t } = useTranslation()
-  const tree = useTree(dir)
   const [focus, setFocus] = useState("")
   const box = useRef<HTMLUListElement>(null)
   const kbd = useRef(false) // le focus n'est déplacé par code que si le changement vient du clavier

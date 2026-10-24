@@ -12,7 +12,12 @@ import { FileTree } from "./FileTree"
 import { Tabs } from "./Tabs"
 import { ConflictBar } from "./ConflictBar"
 import { ConflictDiff } from "./ConflictDiff"
+import { QuickOpen } from "./QuickOpen"
 import { isDirty, reduce } from "./ideState"
+import { useTree } from "./useTree"
+import { useIndex } from "./useIndex"
+import { useWatch, type WatchEvent } from "./useWatch"
+import { pickFeed, runFeed } from "./feedTs"
 
 const CodeEditor = lazy(() => import("./CodeEditor"))
 
@@ -26,6 +31,8 @@ const watchTheme = (f: () => void) => {
   return () => o.disconnect()
 }
 const useResolvedTheme = () => useSyncExternalStore(watchTheme, () => (document.documentElement.classList.contains("dark") ? "dark" : "light"))
+
+const parentOf = (p: string) => p.slice(0, Math.max(0, p.lastIndexOf("/")))
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
@@ -71,6 +78,16 @@ export function IdeView({ dir }: { dir: string }) {
   })
   const saving = useRef(new Map<string, boolean>()) // chemin → une nouvelle demande attend la fin de celle en cours
   const theme = useResolvedTheme()
+  const tree = useTree(dir)
+  const index = useIndex(dir)
+  const [quick, setQuick] = useState(false)
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+  const later = (k: string, ms: number, f: () => void) => {
+    clearTimeout(timers.current.get(k))
+    timers.current.set(k, setTimeout(() => (timers.current.delete(k), f()), ms))
+  }
+  const reloaded = useRef(new Set<string>())
+  const fed = useRef(new Map<string, number>()) // chemin → mtime de l'index au moment de l'alimentation
   const w = drag.w ?? clamp(Number(wStr) || 260, 140, 700)
   const h = drag.h ?? clamp(Number(hStr) || 160, 60, 600)
 
@@ -88,9 +105,9 @@ export function IdeView({ dir }: { dir: string }) {
     const mixed = mixedEol(c)
     dispatch({ t: "open", tab: { path, content: c, saved: c, etag: r.body.etag ?? "", readOnly: mixed || !can("fs_write"), ...(mixed && { notice: "mixedEol" as const }) } })
   }
-  const reload = async (path: string) => {
-    setDiff(null)
-    const r = await api.fsFile(dir, path)
+  const reload = async (path: string, pre?: Awaited<ReturnType<typeof api.fsFile>>) => {
+    setDiff((d) => (d?.path === path ? null : d))
+    const r = pre ?? (await api.fsFile(dir, path))
     if (r.ok && r.body.content !== undefined) dispatch({ t: "reloaded", path, content: r.body.content, etag: r.body.etag ?? "", ...(mixedEol(r.body.content) && { notice: "mixedEol" as const }) })
     else fail(r)
   }
@@ -125,6 +142,70 @@ export function IdeView({ dir }: { dir: string }) {
       saving.current.delete(path)
     }
   }
+  // Relit le disque pour un onglet ouvert après un évènement : l'etag dit si quelque chose a changé (notre propre écho n'en change pas).
+  const check = async (path: string) => {
+    const r = await api.fsFile(dir, path)
+    const tab = live.current.tabs.find((x) => x.path === path)
+    if (!tab || saving.current.has(path)) return
+    if (r.status === 404) return dispatch({ t: "disk", path, kind: "deleted" })
+    if (!r.ok || r.body.content === undefined || tab.notice === "tooBig" || tab.notice === "binary" || r.body.etag === tab.etag) return
+    if (r.body.content === tab.content) return dispatch({ t: "saved", path, etag: r.body.etag ?? "", content: tab.content })
+    if (isDirty(tab)) return dispatch({ t: "disk", path, kind: "changed" })
+    await reload(path, r)
+    reloaded.current.add(path)
+    later("toast", 300, () => {
+      const names = [...reloaded.current]
+      reloaded.current.clear()
+      const name = names[0].slice(names[0].lastIndexOf("/") + 1)
+      toast(names.length === 1 ? t("ide.watch.reloaded", { name }) : t("ide.watch.reloadedMany", { count: names.length }), { id: "ide-reloaded" })
+    })
+  }
+  const onDisk = (e: WatchEvent) => {
+    later("index", 1000, index.refetch)
+    if (e.type === "resync") {
+      tree.refresh("")
+      for (const d of tree.open) tree.refresh(d)
+      for (const x of live.current.tabs) check(x.path)
+      return
+    }
+    const parent = parentOf(e.path)
+    if (parent === "" || tree.open.has(parent)) later("d:" + parent, 150, () => tree.refresh(parent))
+    for (const x of live.current.tabs) if (x.path === e.path || x.path.startsWith(e.path + "/")) later("f:" + x.path, 150, () => check(x.path))
+  }
+  useWatch(dir, ["", ...tree.open], onDisk)
+  useEffect(() => {
+    const all = timers.current
+    return () => all.forEach(clearTimeout)
+  }, [])
+
+  // Alimentation du service TypeScript : seulement les fichiers de l'index, et seulement ceux qui ont changé depuis.
+  useEffect(() => {
+    if (index.state === "building") return
+    const mtime = new Map(index.files.map((f) => [f.path, f.mtime]))
+    const picked = pickFeed(index.files, live.current.active)
+    const keep = new Set(picked)
+    const gone = [...fed.current.keys()].filter((p) => !keep.has(p))
+    const todo = picked.filter((p) => fed.current.get(p) !== mtime.get(p))
+    if (!gone.length && !todo.length) return
+    const ac = new AbortController()
+    import("./CodeEditor").then(({ setTsLib }) => {
+      if (ac.signal.aborted) return
+      for (const p of gone) {
+        setTsLib(p, null)
+        fed.current.delete(p)
+      }
+      return runFeed(dir, todo, (p, c) => (setTsLib(p, c), fed.current.set(p, mtime.get(p) ?? 0)), ac.signal)
+    })
+    return () => ac.abort()
+  }, [dir, index.files, index.state])
+  useEffect(() => {
+    const f = fed.current
+    return () => {
+      if (f.size) import("./CodeEditor").then((m) => m.clearTsLibs())
+      f.clear()
+    }
+  }, [dir])
+
   const showDiff = async (path: string) => {
     const r = await api.fsFile(dir, path)
     if (r.ok && r.body.content !== undefined) setDiff({ path, original: r.body.content })
@@ -137,8 +218,12 @@ export function IdeView({ dir }: { dir: string }) {
     setConfirm({ title: t("ide.tabs.closeTitle", { name: path.slice(path.lastIndexOf("/") + 1) }), body: t("ide.tabs.closeBody"), confirm: t("ide.tabs.closeConfirm"), run: go })
   }
   // Ctrl+S hors de Monaco (arbre, onglets) : jamais la boîte « Enregistrer la page » du navigateur.
+  // Ctrl+P n'est pris qu'ici : ailleurs dans gld, l'impression du navigateur reste disponible.
   const key = (e: KeyboardEvent) => {
-    if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "s" || e.defaultPrevented) return
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.defaultPrevented) return
+    const k = e.key.toLowerCase()
+    if (k === "p") return e.preventDefault(), setQuick(true)
+    if (k !== "s") return
     e.preventDefault()
     if (ide.active) save(ide.active)
   }
@@ -147,7 +232,7 @@ export function IdeView({ dir }: { dir: string }) {
   return (
     <div className="flex min-h-0 flex-1" onKeyDown={key}>
       <aside className="flex min-h-0 shrink-0 flex-col" style={{ width: w }}>
-        <FileTree dir={dir} canWrite={can("fs_write")} selected={ide.active} onOpen={open} onRenamed={(from, to) => dispatch({ t: "renamed", from, to })} />
+        <FileTree dir={dir} tree={tree} canWrite={can("fs_write")} selected={ide.active} onOpen={open} onRenamed={(from, to) => dispatch({ t: "renamed", from, to })} />
       </aside>
       <Handle label={t("ide.resize.tree")} start={() => w} onMove={(v) => setDrag({ w: clamp(v, 140, 700) })} onEnd={(v) => (setW(String(clamp(v, 140, 700))), setDrag({}))} />
       <div className="flex min-w-0 flex-1 flex-col">
@@ -195,6 +280,7 @@ export function IdeView({ dir }: { dir: string }) {
         )}
       </div>
       <Confirm ask={confirm} onClose={() => setConfirm(null)} />
+      <QuickOpen open={quick} files={index.files.map((f) => f.path)} state={index.state} onClose={() => setQuick(false)} onPick={(p) => (setQuick(false), open(p))} />
     </div>
   )
 }
