@@ -16,6 +16,8 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
+// ideEvent : type create|write|remove|rename pour un changement direct, ou resync (path vide) quand des évènements
+// ont été perdus (tampon plein, débordement d'inotify, passage au sondage) : le client relit alors ce qu'il affiche.
 type ideEvent struct {
 	Path string `json:"path"`
 	Type string `json:"type"`
@@ -27,12 +29,15 @@ var (
 	ideIdleTTL      = 2 * time.Minute
 	idePing         = 25 * time.Second
 	ideNewWatcher   = fsnotify.NewWatcher
+	ideSubBuf       = 256
+	ideTreeBudget   = time.Second
 )
+
+var ideResync = ideEvent{Type: "resync"}
 
 const (
 	ideWatchMax = 2000
 	ideSubPaths = 200
-	ideSubBuf   = 256
 )
 
 type ideSig struct {
@@ -53,6 +58,7 @@ type ideWorkspace struct {
 	mu       sync.Mutex
 	closed   bool
 	ix       *ideIdx
+	gen      int
 	failed   bool
 	subs     map[*ideSub]bool
 	watcher  *fsnotify.Watcher
@@ -92,7 +98,7 @@ func ideWS(dir string) (*ideWorkspace, error) {
 		w.fallbackLocked()
 	} else {
 		w.watcher = fw
-		go w.loop(fw)
+		go w.loop(fw, ideDebounce)
 	}
 	ideWorkspaces[dir] = w
 	return w, nil
@@ -172,15 +178,18 @@ func (w *ideWorkspace) idx() ideIdx {
 		cur = w.ix
 	}
 	w.failed = false
-	go w.build()
+	go w.build(w.gen)
 	return *cur
 }
 
-func (w *ideWorkspace) build() {
+// build ne publie que pour sa génération : une invalidation survenue pendant le parcours l'emporte.
+func (w *ideWorkspace) build(gen int) {
 	defer func() {
 		if recover() != nil {
 			w.mu.Lock()
-			w.ix, w.failed = &ideIdx{state: "partial", set: map[string]bool{}}, true
+			if w.gen == gen {
+				w.ix, w.failed = &ideIdx{state: "partial", set: map[string]bool{}}, true
+			}
 			w.mu.Unlock()
 		}
 	}()
@@ -190,13 +199,17 @@ func (w *ideWorkspace) build() {
 	for _, e := range entries {
 		set[e.Path] = true
 	}
-	st := "ready"
-	if partial {
-		st = "partial"
-	}
 	sort.SliceStable(dirs, func(i, j int) bool { return strings.Count(dirs[i], "/") < strings.Count(dirs[j], "/") })
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if w.gen != gen {
+		return
+	}
+	// Au sondage, l'index n'est plus tenu à jour hors des dossiers déclarés.
+	st := "ready"
+	if partial || w.poll {
+		st = "partial"
+	}
 	w.ix = &ideIdx{state: st, entries: entries, set: set}
 	for _, d := range dirs {
 		if len(w.idxDirs) >= ideWatchMax {
@@ -236,6 +249,34 @@ func (w *ideWorkspace) unwatchLocked(rel string) {
 	}
 }
 
+// lostLocked : des changements ont pu échapper ; les abonnés relisent et le prochain /fs-index reconstruit.
+func (w *ideWorkspace) lostLocked() {
+	w.ix = nil
+	w.gen++
+	for s := range w.subs {
+		s.send(ideResync)
+	}
+}
+
+// send vide un tampon plein au profit d'un seul resync, qui rend caducs les évènements en attente ; ce resync
+// n'est jamais perdu et plusieurs débordements n'en laissent qu'un. Seul flushLocked (sous w.mu) écrit.
+func (s *ideSub) send(e ideEvent) {
+	select {
+	case s.ch <- e:
+		return
+	default:
+	}
+	for {
+		select {
+		case <-s.ch:
+			continue
+		default:
+		}
+		break
+	}
+	s.ch <- ideResync
+}
+
 // fallbackLocked : sans inotify (épuisé, débordé, indisponible), seuls les dossiers déclarés sont sondés.
 func (w *ideWorkspace) fallbackLocked() {
 	if w.poll || w.closed {
@@ -249,8 +290,9 @@ func (w *ideWorkspace) fallbackLocked() {
 	for d := range w.declared {
 		w.snaps[d] = w.scanLocked(d)
 	}
+	w.lostLocked()
+	t := time.NewTicker(idePollInterval)
 	go func() {
-		t := time.NewTicker(idePollInterval)
 		defer t.Stop()
 		for {
 			select {
@@ -318,7 +360,7 @@ func (w *ideWorkspace) pollOnce() {
 	w.flushLocked(evs)
 }
 
-func (w *ideWorkspace) loop(fw *fsnotify.Watcher) {
+func (w *ideWorkspace) loop(fw *fsnotify.Watcher, debounce time.Duration) {
 	var pending []ideEvent
 	var tick <-chan time.Time
 	for {
@@ -327,6 +369,9 @@ func (w *ideWorkspace) loop(fw *fsnotify.Watcher) {
 			return
 		case ev, ok := <-fw.Events:
 			if !ok {
+				w.mu.Lock()
+				w.flushLocked(pending)
+				w.mu.Unlock()
 				return
 			}
 			e, keep := w.convert(ev)
@@ -341,7 +386,7 @@ func (w *ideWorkspace) loop(fw *fsnotify.Watcher) {
 				pending = append(pending, e)
 			}
 			if tick == nil {
-				tick = time.After(ideDebounce)
+				tick = time.After(debounce)
 			}
 		case err, ok := <-fw.Errors:
 			if !ok {
@@ -349,8 +394,10 @@ func (w *ideWorkspace) loop(fw *fsnotify.Watcher) {
 			}
 			if errors.Is(err, fsnotify.ErrEventOverflow) {
 				w.mu.Lock()
+				w.flushLocked(pending)
 				w.fallbackLocked()
 				w.mu.Unlock()
+				pending, tick = nil, nil
 			}
 		case <-tick:
 			w.mu.Lock()
@@ -391,10 +438,7 @@ func (w *ideWorkspace) flushLocked(evs []ideEvent) {
 		parent := path.Dir(e.Path)
 		for s := range w.subs {
 			if s.dirs[parent] {
-				select {
-				case s.ch <- e:
-				default: // ponytail: un client trop lent perd des évènements ; il relit l'arbre à la reconnexion
-				}
+				s.send(e)
 			}
 		}
 	}
@@ -412,18 +456,22 @@ func ideIndexable(rel string) bool {
 
 // addTreeLocked surveille puis parcourt un dossier arrivé (mkdir suivi d'une écriture rapide, mv d'un dossier
 // plein) : dans cet ordre, rien de ce qui y apparaît ensuite n'échappe.
-func (w *ideWorkspace) addTreeLocked(rel string, byPath map[string]ideIndexEntry) {
+// Le budget (une échéance, les entrées restantes) est commun à tous les dossiers d'un lot : une rafale de
+// mkdir ne le multiplie pas. Renvoie false quand le parcours est incomplet.
+func (w *ideWorkspace) addTreeLocked(rel string, byPath map[string]ideIndexEntry, deadline time.Time) bool {
 	if len(w.idxDirs) < ideWatchMax && w.watchLocked(rel) {
 		w.idxDirs[rel] = true
 	}
+	lim := ideLimits{ideIndexLimits.Entries - len(byPath), ideIndexLimits.Depth - strings.Count(rel, "/") - 1, time.Until(deadline)}
+	if lim.Entries <= 0 || lim.Depth < 0 || lim.Time <= 0 {
+		return false
+	}
 	sub, err := w.root.OpenRoot(rel)
 	if err != nil {
-		return
+		return true
 	}
 	defer sub.Close()
-	// ponytail: parcours sous verrou borné à 1 s ; un gros dossier déplacé fait attendre /fs-index d'autant
-	lim := ideLimits{ideIndexLimits.Entries - len(byPath), ideIndexLimits.Depth - strings.Count(rel, "/") - 1, time.Second}
-	es, dirs, _ := ideWalk(sub, lim)
+	es, dirs, partial := ideWalk(sub, lim)
 	for _, e := range es {
 		e.Path = rel + "/" + e.Path
 		byPath[e.Path] = e
@@ -433,6 +481,7 @@ func (w *ideWorkspace) addTreeLocked(rel string, byPath map[string]ideIndexEntry
 			w.idxDirs[d] = true
 		}
 	}
+	return !partial
 }
 
 // applyLocked met l'index à jour par copie, l'ancien instantané restant lisible par les appelants.
@@ -444,6 +493,9 @@ func (w *ideWorkspace) applyLocked(evs []ideEvent) {
 	for _, e := range w.ix.entries {
 		byPath[e.Path] = e
 	}
+	st := w.ix.state
+	// ponytail: parcours sous verrou borné par ideTreeBudget et par lot ; un gros dossier déplacé fait attendre /fs-index d'autant
+	deadline := time.Now().Add(ideTreeBudget)
 	for _, e := range evs {
 		if !ideIndexable(e.Path) {
 			continue
@@ -463,7 +515,9 @@ func (w *ideWorkspace) applyLocked(evs []ideEvent) {
 				}
 			}
 		case fi.IsDir():
-			w.addTreeLocked(e.Path, byPath)
+			if !w.addTreeLocked(e.Path, byPath, deadline) {
+				st = "partial"
+			}
 		case fi.Mode().IsRegular():
 			if _, ok := byPath[e.Path]; ok || len(byPath) < ideIndexLimits.Entries {
 				byPath[e.Path] = ideIndexEntry{e.Path, fi.Size(), fi.ModTime().Unix()}
@@ -477,7 +531,7 @@ func (w *ideWorkspace) applyLocked(evs []ideEvent) {
 		set[p] = true
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
-	w.ix = &ideIdx{state: w.ix.state, entries: entries, set: set}
+	w.ix = &ideIdx{state: st, entries: entries, set: set}
 }
 
 func (w *ideWorkspace) Subscribe(paths []string) (<-chan ideEvent, func()) {

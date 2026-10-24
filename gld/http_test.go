@@ -72,6 +72,7 @@ func web(t *testing.T) (h http.Handler, cfg, proj string) {
 		`{"type":"user","cwd":"`+proj+`","gitBranch":"main","timestamp":"2026-01-01T00:00:00Z","message":{"content":"Déploie caddy"}}`+"\n"+
 			`{"type":"assistant","message":{"content":[{"type":"text","text":"fait"},{"type":"tool_use","name":"Bash","input":{"command":"ls"}}]}}`+"\n", old)
 	hosts[testHost] = true
+	t.Cleanup(ideCloseAll)
 	return handler(), cfg, proj
 }
 
