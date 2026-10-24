@@ -81,7 +81,7 @@ type Props = {
 }
 
 // Un groupe virtuel, affiché comme un sous-dossier de son projet (même retrait, place du chevron comprise).
-function GroupRow({ vg, n, depth, active, onGroup }: { vg: VGroup; n: Node; depth: number; active: boolean; onGroup: Props["onGroup"] }) {
+export function GroupRow({ vg, dirKey, project, depth, active, onGroup }: { vg: VGroup; dirKey: string; project: string; depth: number; active: boolean; onGroup: Props["onGroup"] }) {
   const { t } = useTranslation()
   const a = useActions()
   return (
@@ -89,9 +89,9 @@ function GroupRow({ vg, n, depth, active, onGroup }: { vg: VGroup; n: Node; dept
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <button
-            onClick={() => onGroup(vg, n.key)}
+            onClick={() => onGroup(vg, dirKey)}
             aria-current={active}
-            title={t("shell.tree.groupTitle", { name: vg.name, project: n.g?.project ?? n.name })}
+            title={t("shell.tree.groupTitle", { name: vg.name, project })}
             className={cn(
               "flex h-8 w-full items-center gap-2 rounded-md pr-2 text-left text-sm transition-colors data-[state=open]:bg-muted",
               active ? "bg-accent font-medium text-accent-foreground" : "text-foreground/80 hover:bg-muted hover:text-foreground"
@@ -209,7 +209,7 @@ function Item({
         <ul>
           {repos.length > 0 && <RepoRows repos={repos} status={git.status} depth={depth} home={a.home} id={n.key} />}
           {groups.map((vg) => (
-            <GroupRow key={vg.name} vg={vg} n={n} depth={depth} active={selGroup === n.key + "\0" + vg.name} onGroup={onGroup} />
+            <GroupRow key={vg.name} vg={vg} dirKey={n.key} project={n.g?.project ?? n.name} depth={depth} active={selGroup === n.key + "\0" + vg.name} onGroup={onGroup} />
           ))}
           {!leaf &&
             sorted(n).map((c) => (

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { useActions } from "./actions"
 import { GitMini } from "./GitBadge"
-import { ProjectItems } from "./ProjectTree"
+import { GroupRow, ProjectItems } from "./ProjectTree"
 import { useGit } from "@/hooks/useGit"
 
 // Projets : ensembles nommés de dossiers de travail, affichés au-dessus de l'arbre des dossiers.
@@ -95,6 +95,20 @@ export function ProjectList({ route, go }: { route: Route; go: (r: Route) => voi
                           </ContextMenuContent>
                         )}
                       </ContextMenu>
+                      {a.vgroups
+                        .filter((vg) => vg.project === d)
+                        .map((vg) => (
+                          <ul key={vg.name}>
+                            <GroupRow
+                              vg={vg}
+                              dirKey={key}
+                              project={d}
+                              depth={2}
+                              active={route.kind === "group" && route.key === key && route.name === vg.name}
+                              onGroup={(g, k) => go({ kind: "group", name: g.name, key: k })}
+                            />
+                          </ul>
+                        ))}
                     </li>
                   )
                 })}
