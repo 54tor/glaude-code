@@ -4,6 +4,8 @@ L'espace de travail ouvre un dossier de travail de gld dans le navigateur : arbo
 
 Ce que l'on y fait : parcourir le dossier, ouvrir et corriger un fichier, voir les marqueurs git (`M`, `A`, `D`, `R`, `U`, `?`), créer, renommer, supprimer vers une corbeille, ouvrir un fichier par son nom (`Ctrl+P`). Ce que l'on n'y fait pas : recherche multi-fichiers, LSP externe, débogueur, extensions, diff git (le diff ne sert qu'aux conflits).
 
+Tant que l'espace est affiché, `Ctrl+P` (`Cmd+P`) ouvre l'ouverture rapide où que soit le focus, au lieu de l'impression du navigateur. Les onglets ouverts (chemins seulement, jamais le contenu, 30 au plus) et l'onglet actif sont mémorisés par navigateur et par dossier, puis rouverts au rechargement ; un fichier devenu illisible est sauté sans message.
+
 ## Droits
 
 | Droit | Ouvre |

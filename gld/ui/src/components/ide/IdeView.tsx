@@ -100,6 +100,9 @@ export function IdeView({ dir }: { dir: string }) {
   const index = useIndex(dir)
   const git = useGitMarks(dir)
   const [quick, setQuick] = useState(false)
+  const rootEl = useRef<HTMLDivElement>(null)
+  const picked = useRef("")
+  const [focusReq, setFocusReq] = useState({ path: "", n: 0 })
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const later = (k: string, ms: number, f: () => void) => {
     clearTimeout(timers.current.get(k))
@@ -119,11 +122,11 @@ export function IdeView({ dir }: { dir: string }) {
     if (tabOf(path)) return dispatch({ t: "focus", path })
     show(path, await api.fsFile(dir, path))
   }
-  // quiet : restauration au chargement, un fichier disparu depuis est sauté sans message.
+  // quiet : restauration au chargement, tout fichier devenu illisible (supprimé, refusé, panne) est sauté sans message.
   const show = (path: string, r: Awaited<ReturnType<typeof api.fsFile>>, quiet?: boolean) => {
     if (r.status === 413 || r.status === 415)
       return dispatch({ t: "open", tab: { path, content: "", saved: "", etag: "", readOnly: true, notice: r.status === 413 ? "tooBig" : "binary" } })
-    if (quiet && r.status === 404) return
+    if (quiet && (!r.ok || r.body.content === undefined)) return
     if (!r.ok || r.body.content === undefined) return fail(r)
     const c = r.body.content
     const mixed = mixedEol(c)
@@ -131,6 +134,7 @@ export function IdeView({ dir }: { dir: string }) {
   }
   // Lectures en parallèle, onglets posés dans l'ordre mémorisé ; aucun focus pris, le premier rendu n'attend pas.
   useEffect(() => {
+    if (!can("fs_read")) return
     const { paths, active } = parseTabs(savedTabs)
     let gone = false
     Promise.all(paths.map((p) => api.fsFile(dir, p).catch(() => null))).then((rs) => {
@@ -269,19 +273,34 @@ export function IdeView({ dir }: { dir: string }) {
     setConfirm({ title: t("ide.tabs.closeTitle", { name: path.slice(path.lastIndexOf("/") + 1) }), body: t("ide.tabs.closeBody"), confirm: t("ide.tabs.closeConfirm"), run: go })
   }
   // Ctrl+S hors de Monaco (arbre, onglets) : jamais la boîte « Enregistrer la page » du navigateur.
-  // Ctrl+P n'est pris qu'ici : ailleurs dans gld, l'impression du navigateur reste disponible.
   const key = (e: KeyboardEvent) => {
-    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.defaultPrevented) return
-    const k = e.key.toLowerCase()
-    if (k === "p") return e.preventDefault(), setQuick(true)
-    if (k !== "s") return
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.defaultPrevented || e.key.toLowerCase() !== "s") return
     e.preventDefault()
     if (ide.active) save(ide.active)
+  }
+  // Ctrl+P sur tout le document : l'espace est la page, et sans focus dedans le navigateur ouvrirait l'impression.
+  // Ailleurs dans gld (espace démonté), l'impression reste disponible.
+  useEffect(() => {
+    const k = (e: globalThis.KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.defaultPrevented || e.key.toLowerCase() !== "p") return
+      e.preventDefault()
+      setQuick(true)
+      document.querySelector<HTMLElement>('[aria-controls="ide-quick-list"]')?.focus()
+    }
+    document.addEventListener("keydown", k)
+    return () => document.removeEventListener("keydown", k)
+  }, [])
+  // Fermeture de l'ouverture rapide : focus dans l'espace tout de suite, puis dans l'éditeur visé dès qu'il existe.
+  const refocus = () => {
+    const path = picked.current || live.current.active
+    picked.current = ""
+    rootEl.current?.focus()
+    if (path) setFocusReq((f) => ({ path, n: f.n + 1 }))
   }
 
   if (!can("fs_read")) return <p className="p-6 text-sm text-muted-foreground">{t("ide.denied")}</p>
   return (
-    <div className="flex min-h-0 flex-1" onKeyDown={key}>
+    <div ref={rootEl} tabIndex={-1} className="flex min-h-0 flex-1 outline-none" onKeyDown={key}>
       <aside className="flex min-h-0 shrink-0 flex-col" style={{ width: w }}>
         {git.marks.size > 0 && (
           <div className="flex shrink-0 flex-col items-start px-1 pt-1">
@@ -315,7 +334,7 @@ export function IdeView({ dir }: { dir: string }) {
                   <div className="flex size-full flex-col">
                     {tab.notice === "mixedEol" && <p className="shrink-0 border-b px-3 py-1.5 text-sm text-muted-foreground">{t("ide.notice.mixedEol")}</p>}
                     <div className="min-h-0 flex-1">
-                      <CodeEditor path={tab.path} value={tab.content} readOnly={tab.readOnly} theme={theme} onChange={(v) => !tab.readOnly && dispatch({ t: "edit", path: tab.path, content: v })} onSave={() => save(tab.path)} />
+                      <CodeEditor path={tab.path} value={tab.content} readOnly={tab.readOnly} theme={theme} focus={focusReq.path === tab.path ? focusReq.n : 0} onChange={(v) => !tab.readOnly && dispatch({ t: "edit", path: tab.path, content: v })} onSave={() => save(tab.path)} />
                     </div>
                   </div>
                 )}
@@ -341,7 +360,7 @@ export function IdeView({ dir }: { dir: string }) {
         )}
       </div>
       <Confirm ask={confirm} onClose={() => setConfirm(null)} />
-      <QuickOpen open={quick} files={index.files.map((f) => f.path)} state={index.state} onClose={() => setQuick(false)} onPick={(p) => (setQuick(false), open(p))} />
+      <QuickOpen open={quick} files={index.files.map((f) => f.path)} state={index.state} onClose={() => setQuick(false)} onCloseFocus={refocus} onPick={(p) => ((picked.current = p), setQuick(false), open(p))} />
     </div>
   )
 }
