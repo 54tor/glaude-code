@@ -80,6 +80,23 @@
     "watch": {
       "reloaded": "« {{name}} » rechargé depuis le disque",
       "reloadedMany": "{{count}} fichiers rechargés depuis le disque"
+    },
+    "git": {
+      "M": "Modifié",
+      "A": "Ajouté",
+      "D": "Supprimé",
+      "R": "Renommé",
+      "?": "Non suivi",
+      "U": "En conflit",
+      "dir": "Contient des changements non validés",
+      "more": "et {{count}} autres"
+    },
+    "term": {
+      "label": "Terminal de session",
+      "disabled": "terminal intégré désactivé (GLD_WEB_TERMINAL=1)",
+      "none": "le terminal se branche sur une session Claude ouverte dans ce dossier",
+      "pick": "Session à afficher",
+      "ended": "La session est terminée."
     }
   }
 }

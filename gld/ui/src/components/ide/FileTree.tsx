@@ -8,6 +8,7 @@ import { api, type FsEntry, type FsRes } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Confirm, type Ask } from "@/components/Confirm"
 import { Prompt, type Ask as PromptAsk } from "@/components/Prompt"
+import { tone } from "../GitChanges"
 import type { useTree } from "./useTree"
 
 type TreeAction = "newFile" | "newDir" | "rename" | "delete"
@@ -17,9 +18,9 @@ type Row = TreeTarget & { parent: string; depth: number }
 const join = (p: string, n: string) => (p ? p + "/" : "") + n
 const rootTarget: TreeTarget = { path: "", name: "", type: "dir" }
 
-type Props = { dir: string; tree: ReturnType<typeof useTree>; canWrite: boolean; selected: string; onOpen: (path: string) => void; onRenamed?: (from: string, to: string) => void }
+type Props = { dir: string; tree: ReturnType<typeof useTree>; canWrite: boolean; selected: string; marks?: Map<string, string>; dirs?: Set<string>; onOpen: (path: string) => void; onRenamed?: (from: string, to: string) => void }
 
-export function FileTree({ dir, tree, canWrite, selected, onOpen, onRenamed }: Props) {
+export function FileTree({ dir, tree, canWrite, selected, marks, dirs, onOpen, onRenamed }: Props) {
   const { t } = useTranslation()
   const [focus, setFocus] = useState("")
   const box = useRef<HTMLUListElement>(null)
@@ -132,6 +133,7 @@ export function FileTree({ dir, tree, canWrite, selected, onOpen, onRenamed }: P
         {rows.map((r, i) => {
           const isDir = r.type === "dir"
           const isOpen = isDir && tree.open.has(r.path)
+          const mark = isDir ? undefined : marks?.get(r.path)
           const item = (
             <li
               role="treeitem"
@@ -157,7 +159,13 @@ export function FileTree({ dir, tree, canWrite, selected, onOpen, onRenamed }: P
                 <span className="size-5 shrink-0" />
               )}
               {isDir ? <Folder className="size-4 shrink-0 text-info" /> : r.type === "symlink" ? <Link2 className="size-4 shrink-0" /> : <File className="size-4 shrink-0 text-muted-foreground" />}
-              <span className="truncate">{r.name}</span>
+              <span className={cn("truncate", isDir && dirs?.has(r.path) && "text-warning/80")}>{r.name}</span>
+              {isDir && dirs?.has(r.path) && <span aria-hidden title={t("ide.git.dir")} className="ml-auto size-1.5 shrink-0 rounded-full bg-warning/60" />}
+              {mark && (
+                <span className={cn("ml-auto w-4 shrink-0 text-center text-xs font-semibold", tone(mark === "?" ? "??" : mark === "U" ? "UU" : mark))} title={t(`ide.git.${mark}`)}>
+                  {mark}
+                </span>
+              )}
             </li>
           )
           if (!canWrite) return cloneElement(item, { key: r.path })
