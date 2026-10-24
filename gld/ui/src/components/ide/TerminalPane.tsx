@@ -1,9 +1,10 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react"
+import { Suspense, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useLocal } from "@/hooks/useLocal"
+import { retryLazy } from "@/lib/retryLazy"
 import type { Session } from "./useTerminalAvailability"
 
-const FullTerminal = lazy(() => import("../FullTerminal"))
+const FullTerminal = retryLazy(() => import("../FullTerminal"))
 
 // Le serveur ne lance jamais de shell : le terminal s'attache à une session Claude déjà vivante dont le dossier est le projet.
 // focus : demande de focus en attente, acquittée par onFocused pour ne jamais être rejouée à un remontage.

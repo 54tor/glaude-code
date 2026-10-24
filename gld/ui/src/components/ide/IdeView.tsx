@@ -1,10 +1,11 @@
-import { lazy, Suspense, useEffect, useReducer, useRef, useState, type KeyboardEvent } from "react"
+import { Suspense, useEffect, useReducer, useRef, useState, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { cn } from "cn"
 import { api, type FsRes } from "@/lib/api"
 import { useCan } from "@/lib/auth"
 import { useLocal } from "@/hooks/useLocal"
+import { retryLazy } from "@/lib/retryLazy"
 import { Confirm, type Ask } from "@/components/Confirm"
 import { FileTree, type TreeActions } from "./FileTree"
 import { TreeToolbar } from "./TreeToolbar"
@@ -29,7 +30,7 @@ import { useViewPrefs } from "./useViewPrefs"
 import { MenuBar } from "./MenuBar"
 import { WorkspaceStatus } from "./StatusBar"
 
-const CodeEditor = lazy(() => import("./CodeEditor"))
+const CodeEditor = retryLazy(() => import("./CodeEditor"))
 
 // Sans droit de lecture, aucun hook de l'espace ne tourne : ni flux, ni sondage d'index, ni Ctrl+P pris.
 export function IdeView({ dir }: { dir: string }) {
