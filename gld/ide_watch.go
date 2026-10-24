@@ -1,0 +1,574 @@
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"io/fs"
+	"net/http"
+	"os"
+	"path"
+	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/fsnotify/fsnotify"
+)
+
+type ideEvent struct {
+	Path string `json:"path"`
+	Type string `json:"type"`
+}
+
+var (
+	ideDebounce     = 150 * time.Millisecond
+	idePollInterval = 3 * time.Second
+	ideIdleTTL      = 2 * time.Minute
+	idePing         = 25 * time.Second
+	ideNewWatcher   = fsnotify.NewWatcher
+)
+
+const (
+	ideWatchMax = 2000
+	ideSubPaths = 200
+	ideSubBuf   = 256
+)
+
+type ideSig struct {
+	mtime, size int64
+	dir         bool
+}
+
+type ideSub struct {
+	dirs map[string]bool
+	ch   chan ideEvent
+}
+
+type ideWorkspace struct {
+	dir  string
+	root *os.Root
+	done chan struct{}
+
+	mu       sync.Mutex
+	closed   bool
+	ix       *ideIdx
+	failed   bool
+	subs     map[*ideSub]bool
+	watcher  *fsnotify.Watcher
+	idxDirs  map[string]bool
+	declared map[string]int
+	poll     bool
+	snaps    map[string]map[string]ideSig
+	last     time.Time
+	timer    *time.Timer
+}
+
+var (
+	ideWSMu       sync.Mutex
+	ideWorkspaces = map[string]*ideWorkspace{}
+)
+
+func ideWS(dir string) (*ideWorkspace, error) {
+	ideWSMu.Lock()
+	defer ideWSMu.Unlock()
+	if w := ideWorkspaces[dir]; w != nil {
+		w.mu.Lock()
+		w.touchLocked()
+		w.mu.Unlock()
+		return w, nil
+	}
+	root, err := ideOpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	w := &ideWorkspace{dir: dir, root: root, done: make(chan struct{}), subs: map[*ideSub]bool{},
+		idxDirs: map[string]bool{}, declared: map[string]int{}, snaps: map[string]map[string]ideSig{}}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.timer = time.AfterFunc(ideIdleTTL, w.expire)
+	w.touchLocked()
+	if fw, err := ideNewWatcher(); err != nil {
+		w.fallbackLocked()
+	} else {
+		w.watcher = fw
+		go w.loop(fw)
+	}
+	ideWorkspaces[dir] = w
+	return w, nil
+}
+
+func (w *ideWorkspace) touchLocked() {
+	w.last = time.Now()
+	if w.timer != nil {
+		w.timer.Reset(ideIdleTTL)
+	}
+}
+
+func (w *ideWorkspace) expire() {
+	ideWSMu.Lock()
+	defer ideWSMu.Unlock()
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.closed || len(w.subs) > 0 {
+		return
+	}
+	if d := ideIdleTTL - time.Since(w.last); d > 0 {
+		w.timer.Reset(d)
+		return
+	}
+	w.closeLocked()
+	if ideWorkspaces[w.dir] == w {
+		delete(ideWorkspaces, w.dir)
+	}
+}
+
+func (w *ideWorkspace) closeLocked() {
+	if w.closed {
+		return
+	}
+	w.closed = true
+	w.timer.Stop()
+	if w.watcher != nil {
+		w.watcher.Close()
+		w.watcher = nil
+	}
+	w.root.Close()
+	close(w.done)
+}
+
+// reopen sert l'appelant qui a obtenu l'espace juste avant sa libération.
+func (w *ideWorkspace) reopen() *ideWorkspace {
+	nw, err := ideWS(w.dir)
+	if err != nil {
+		return nil
+	}
+	return nw
+}
+
+func (w *ideWorkspace) Index() ([]ideIndexEntry, string) {
+	ix := w.idx()
+	return ix.entries, ix.state
+}
+
+// idx lance la construction unique au premier appel, puis une nouvelle après un échec ; ne bloque jamais.
+func (w *ideWorkspace) idx() ideIdx {
+	w.mu.Lock()
+	if w.closed {
+		w.mu.Unlock()
+		if nw := w.reopen(); nw != nil {
+			return nw.idx()
+		}
+		return ideIdx{state: "partial"}
+	}
+	defer w.mu.Unlock()
+	w.touchLocked()
+	cur := w.ix
+	if cur != nil && !w.failed {
+		return *cur
+	}
+	if cur == nil {
+		w.ix = &ideIdx{state: "building"}
+		cur = w.ix
+	}
+	w.failed = false
+	go w.build()
+	return *cur
+}
+
+func (w *ideWorkspace) build() {
+	defer func() {
+		if recover() != nil {
+			w.mu.Lock()
+			w.ix, w.failed = &ideIdx{state: "partial", set: map[string]bool{}}, true
+			w.mu.Unlock()
+		}
+	}()
+	ideBuildHook()
+	entries, dirs, partial := ideWalk(w.root, ideIndexLimits)
+	set := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		set[e.Path] = true
+	}
+	st := "ready"
+	if partial {
+		st = "partial"
+	}
+	sort.SliceStable(dirs, func(i, j int) bool { return strings.Count(dirs[i], "/") < strings.Count(dirs[j], "/") })
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.ix = &ideIdx{state: st, entries: entries, set: set}
+	for _, d := range dirs {
+		if len(w.idxDirs) >= ideWatchMax {
+			break
+		}
+		if w.watchLocked(d) {
+			w.idxDirs[d] = true
+		}
+	}
+}
+
+// watchLocked n'ajoute que des dossiers qui viennent de passer ideLstat par la racine : fsnotify ouvre par
+// chemin absolu, donc un remplacement par un lien entre ce contrôle et l'ajout reste possible.
+func (w *ideWorkspace) watchLocked(rel string) bool {
+	if w.watcher == nil || w.closed {
+		return false
+	}
+	if w.idxDirs[rel] || w.declared[rel] > 0 {
+		return true
+	}
+	fi, err := ideLstat(w.root, rel)
+	if err != nil || !fi.IsDir() {
+		return false
+	}
+	if err := w.watcher.Add(filepath.Join(w.dir, filepath.FromSlash(rel))); err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			w.fallbackLocked()
+		}
+		return false
+	}
+	return true
+}
+
+func (w *ideWorkspace) unwatchLocked(rel string) {
+	if w.watcher != nil && !w.idxDirs[rel] && w.declared[rel] == 0 {
+		w.watcher.Remove(filepath.Join(w.dir, filepath.FromSlash(rel)))
+	}
+}
+
+// fallbackLocked : sans inotify (épuisé, débordé, indisponible), seuls les dossiers déclarés sont sondés.
+func (w *ideWorkspace) fallbackLocked() {
+	if w.poll || w.closed {
+		return
+	}
+	w.poll = true
+	if w.watcher != nil {
+		w.watcher.Close()
+		w.watcher = nil
+	}
+	for d := range w.declared {
+		w.snaps[d] = w.scanLocked(d)
+	}
+	go func() {
+		t := time.NewTicker(idePollInterval)
+		defer t.Stop()
+		for {
+			select {
+			case <-w.done:
+				return
+			case <-t.C:
+				w.pollOnce()
+			}
+		}
+	}()
+}
+
+func (w *ideWorkspace) scanLocked(rel string) map[string]ideSig {
+	out := map[string]ideSig{}
+	if fi, err := ideLstat(w.root, rel); err != nil || !fi.IsDir() {
+		return out
+	}
+	d, err := w.root.Open(rel)
+	if err != nil {
+		return out
+	}
+	des, _ := d.ReadDir(-1)
+	d.Close()
+	for _, de := range des {
+		s := ideSig{dir: de.IsDir()}
+		if info, err := de.Info(); err == nil {
+			s.mtime, s.size = info.ModTime().UnixNano(), info.Size()
+		}
+		out[de.Name()] = s
+	}
+	return out
+}
+
+func ideJoin(dir, name string) string {
+	if dir == "." {
+		return name
+	}
+	if name == "." {
+		return dir
+	}
+	return dir + "/" + name
+}
+
+func (w *ideWorkspace) pollOnce() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	var evs []ideEvent
+	for d := range w.declared {
+		prev, cur := w.snaps[d], w.scanLocked(d)
+		for n, s := range cur {
+			if p, ok := prev[n]; !ok {
+				evs = append(evs, ideEvent{ideJoin(d, n), "create"})
+			} else if p != s {
+				evs = append(evs, ideEvent{ideJoin(d, n), "write"})
+			}
+		}
+		for n := range prev {
+			if _, ok := cur[n]; !ok {
+				evs = append(evs, ideEvent{ideJoin(d, n), "remove"})
+			}
+		}
+		w.snaps[d] = cur
+	}
+	sort.Slice(evs, func(i, j int) bool { return evs[i].Path < evs[j].Path })
+	w.flushLocked(evs)
+}
+
+func (w *ideWorkspace) loop(fw *fsnotify.Watcher) {
+	var pending []ideEvent
+	var tick <-chan time.Time
+	for {
+		select {
+		case <-w.done:
+			return
+		case ev, ok := <-fw.Events:
+			if !ok {
+				return
+			}
+			e, keep := w.convert(ev)
+			if !keep {
+				continue
+			}
+			dup := false
+			for _, p := range pending {
+				dup = dup || p == e
+			}
+			if !dup {
+				pending = append(pending, e)
+			}
+			if tick == nil {
+				tick = time.After(ideDebounce)
+			}
+		case err, ok := <-fw.Errors:
+			if !ok {
+				return
+			}
+			if errors.Is(err, fsnotify.ErrEventOverflow) {
+				w.mu.Lock()
+				w.fallbackLocked()
+				w.mu.Unlock()
+			}
+		case <-tick:
+			w.mu.Lock()
+			w.flushLocked(pending)
+			w.mu.Unlock()
+			pending, tick = nil, nil
+		}
+	}
+}
+
+func (w *ideWorkspace) convert(ev fsnotify.Event) (ideEvent, bool) {
+	rel, err := filepath.Rel(w.dir, ev.Name)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return ideEvent{}, false
+	}
+	e := ideEvent{Path: filepath.ToSlash(rel)}
+	switch {
+	case ev.Has(fsnotify.Create):
+		e.Type = "create"
+	case ev.Has(fsnotify.Write):
+		e.Type = "write"
+	case ev.Has(fsnotify.Remove):
+		e.Type = "remove"
+	case ev.Has(fsnotify.Rename):
+		e.Type = "rename"
+	default:
+		return ideEvent{}, false
+	}
+	return e, true
+}
+
+func (w *ideWorkspace) flushLocked(evs []ideEvent) {
+	if len(evs) == 0 || w.closed {
+		return
+	}
+	w.applyLocked(evs)
+	for _, e := range evs {
+		parent := path.Dir(e.Path)
+		for s := range w.subs {
+			if s.dirs[parent] {
+				select {
+				case s.ch <- e:
+				default: // ponytail: un client trop lent perd des évènements ; il relit l'arbre à la reconnexion
+				}
+			}
+		}
+	}
+}
+
+func ideIndexable(rel string) bool {
+	parts := strings.Split(rel, "/")
+	for _, p := range parts {
+		if ideIgnored(p) {
+			return false
+		}
+	}
+	return len(parts)-1 <= ideIndexLimits.Depth
+}
+
+// addTreeLocked surveille puis parcourt un dossier arrivé (mkdir suivi d'une écriture rapide, mv d'un dossier
+// plein) : dans cet ordre, rien de ce qui y apparaît ensuite n'échappe.
+func (w *ideWorkspace) addTreeLocked(rel string, byPath map[string]ideIndexEntry) {
+	if len(w.idxDirs) < ideWatchMax && w.watchLocked(rel) {
+		w.idxDirs[rel] = true
+	}
+	sub, err := w.root.OpenRoot(rel)
+	if err != nil {
+		return
+	}
+	defer sub.Close()
+	// ponytail: parcours sous verrou borné à 1 s ; un gros dossier déplacé fait attendre /fs-index d'autant
+	lim := ideLimits{ideIndexLimits.Entries - len(byPath), ideIndexLimits.Depth - strings.Count(rel, "/") - 1, time.Second}
+	es, dirs, _ := ideWalk(sub, lim)
+	for _, e := range es {
+		e.Path = rel + "/" + e.Path
+		byPath[e.Path] = e
+	}
+	for _, d := range dirs {
+		if d = ideJoin(rel, d); d != rel && len(w.idxDirs) < ideWatchMax && w.watchLocked(d) {
+			w.idxDirs[d] = true
+		}
+	}
+}
+
+// applyLocked met l'index à jour par copie, l'ancien instantané restant lisible par les appelants.
+func (w *ideWorkspace) applyLocked(evs []ideEvent) {
+	if w.ix == nil || w.ix.state == "building" {
+		return
+	}
+	byPath := make(map[string]ideIndexEntry, len(w.ix.entries)+len(evs))
+	for _, e := range w.ix.entries {
+		byPath[e.Path] = e
+	}
+	for _, e := range evs {
+		if !ideIndexable(e.Path) {
+			continue
+		}
+		fi, err := ideLstat(w.root, e.Path)
+		switch {
+		case err != nil || e.Type == "remove" || e.Type == "rename":
+			delete(byPath, e.Path)
+			for p := range byPath {
+				if strings.HasPrefix(p, e.Path+"/") {
+					delete(byPath, p)
+				}
+			}
+			for d := range w.idxDirs {
+				if d == e.Path || strings.HasPrefix(d, e.Path+"/") {
+					delete(w.idxDirs, d)
+				}
+			}
+		case fi.IsDir():
+			w.addTreeLocked(e.Path, byPath)
+		case fi.Mode().IsRegular():
+			if _, ok := byPath[e.Path]; ok || len(byPath) < ideIndexLimits.Entries {
+				byPath[e.Path] = ideIndexEntry{e.Path, fi.Size(), fi.ModTime().Unix()}
+			}
+		}
+	}
+	entries := make([]ideIndexEntry, 0, len(byPath))
+	set := make(map[string]bool, len(byPath))
+	for p, e := range byPath {
+		entries = append(entries, e)
+		set[p] = true
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
+	w.ix = &ideIdx{state: w.ix.state, entries: entries, set: set}
+}
+
+func (w *ideWorkspace) Subscribe(paths []string) (<-chan ideEvent, func()) {
+	w.mu.Lock()
+	if w.closed {
+		w.mu.Unlock()
+		if nw := w.reopen(); nw != nil {
+			return nw.Subscribe(paths)
+		}
+		return make(chan ideEvent), func() {}
+	}
+	defer w.mu.Unlock()
+	s := &ideSub{dirs: map[string]bool{}, ch: make(chan ideEvent, ideSubBuf)}
+	for _, p := range paths {
+		if len(s.dirs) >= ideSubPaths {
+			break
+		}
+		rel, err := ideRel(p, true)
+		if err != nil || s.dirs[rel] {
+			continue
+		}
+		if fi, err := ideLstat(w.root, rel); err != nil || !fi.IsDir() {
+			continue
+		}
+		if !w.poll && !w.watchLocked(rel) && !w.poll {
+			continue
+		}
+		if w.poll && w.declared[rel] == 0 {
+			w.snaps[rel] = w.scanLocked(rel)
+		}
+		s.dirs[rel] = true
+		w.declared[rel]++
+	}
+	w.subs[s] = true
+	var once sync.Once
+	return s.ch, func() {
+		once.Do(func() {
+			w.mu.Lock()
+			defer w.mu.Unlock()
+			delete(w.subs, s)
+			for d := range s.dirs {
+				if w.declared[d]--; w.declared[d] <= 0 {
+					delete(w.declared, d)
+					delete(w.snaps, d)
+					w.unwatchLocked(d)
+				}
+			}
+			if !w.closed {
+				w.touchLocked()
+			}
+		})
+	}
+}
+
+func routesIDEWatch(mux *http.ServeMux) {
+	mux.HandleFunc("GET /fs-watch", func(rw http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		dir, ok := ideKnownDir(q.Get("dir"))
+		if !ok {
+			ideFail(rw, errIdeDir)
+			return
+		}
+		ws, err := ideWS(dir)
+		if err != nil {
+			ideFail(rw, err)
+			return
+		}
+		ch, cancel := ws.Subscribe(strings.Split(q.Get("paths"), ","))
+		defer cancel()
+		rw.Header().Set("Content-Type", "text/event-stream")
+		rw.Header().Set("Cache-Control", "no-store")
+		rw.Header().Set("X-Accel-Buffering", "no")
+		rw.WriteHeader(http.StatusOK)
+		rc := http.NewResponseController(rw)
+		rc.Flush()
+		ping := time.NewTicker(idePing)
+		defer ping.Stop()
+		for {
+			var out []byte
+			select {
+			case <-r.Context().Done():
+				return
+			case e := <-ch:
+				b, _ := json.Marshal(e)
+				out = append(append([]byte("data: "), b...), "\n\n"...)
+			case <-ping.C:
+				out = []byte(": ping\n\n")
+			}
+			if _, err := rw.Write(out); err != nil || rc.Flush() != nil {
+				return
+			}
+		}
+	})
+}
