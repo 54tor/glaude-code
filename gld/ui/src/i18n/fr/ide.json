@@ -177,6 +177,47 @@
       "purgeConfirm": "Supprimer définitivement",
       "exists": "« {{path}} » existe déjà à cet emplacement : renommez ou supprimez l'entrée en place avant de restaurer.",
       "restored": "« {{path}} » restauré"
+    },
+    "menubar": {
+      "label": "Menu de l'espace de travail",
+      "file": "Fichier",
+      "edit": "Édition",
+      "find": "Rechercher",
+      "view": "Affichage",
+      "goto": "Aller à",
+      "terminal": "Terminal",
+      "key": {
+        "file": "f",
+        "edit": "e",
+        "find": "r",
+        "view": "a",
+        "goto": "l",
+        "terminal": "t"
+      }
+    },
+    "status": {
+      "label": "Barre d'état",
+      "pos": "Ligne {{line}}, colonne {{col}}",
+      "selected_one": "{{count}} caractère sélectionné",
+      "selected_other": "{{count}} caractères sélectionnés",
+      "readOnly": "lecture seule",
+      "spaces": "Espaces : {{n}}",
+      "tabs": "Tabulations",
+      "encoding": "UTF-8",
+      "branch": "Branche git :",
+      "watch": {
+        "open": "Surveillance active",
+        "connecting": "Connexion de la surveillance…",
+        "retry": "Surveillance coupée, reconnexion dans {{n}} s",
+        "closed": "Surveillance interrompue"
+      },
+      "index": {
+        "building": "Indexation en cours",
+        "partial": "Index partiel",
+        "ready": "Index prêt"
+      },
+      "dirty_one": "{{count}} onglet modifié",
+      "dirty_other": "{{count}} onglets modifiés"
     }
   }
 }
