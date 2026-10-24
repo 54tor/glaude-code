@@ -180,7 +180,6 @@ export type SidebarProps = {
   snippets: number | null // null : bibliothèque non configurée
   auto: { n: number; kb: number; purge: () => void }
   args: string // arguments de lancement des Réglages, rappelés en bas du menu
-  settings: React.ReactNode // bouton et fenêtre des Réglages, rendus par App
 }
 
 // Seuil md de Tailwind : en dessous, le menu est un tiroir.
@@ -208,7 +207,6 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           </div>
           <div className="ml-auto flex items-center gap-0.5">
             <HomeSwitcher />
-            {p.settings}
           </div>
         </div>
         <div className="relative">
