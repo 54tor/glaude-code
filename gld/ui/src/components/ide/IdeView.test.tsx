@@ -1111,3 +1111,60 @@ describe("IdeView : commandes du terminal", () => {
     expect(api.termInfo).not.toHaveBeenCalled()
   })
 })
+
+describe("IdeView : menu et barre d'état", () => {
+  const status = (line: number) => ({ line, col: 1, selected: 0, eol: "CRLF" as const, language: "plaintext", indent: "spaces:4", readOnly: false })
+  const bar = () => screen.getByRole("group", { name: "Barre d'état" })
+  afterEach(() => {
+    for (const p of ["a.txt", "b.txt"]) handles.of(p).subscribe.mockImplementation(() => () => {})
+  })
+
+  it("menu au-dessus, barre d'état qui suit l'onglet actif et se vide sans onglet", async () => {
+    const offA = vi.fn()
+    handles.of("a.txt").subscribe.mockImplementation((l: (s: unknown) => void) => (l(status(1)), offA))
+    handles.of("b.txt").subscribe.mockImplementation((l: (s: unknown) => void) => (l(status(2)), () => {}))
+    render(<IdeView dir="/p" />)
+    expect(screen.getByRole("menubar", { name: "Menu de l'espace de travail" })).toBeTruthy()
+    expect(within(bar()).queryByText(/Ligne/)).toBeNull()
+    await openFile("a.txt")
+    expect(await within(bar()).findByText("Ligne 1, colonne 1")).toBeTruthy()
+    expect(within(bar()).getByText("Espaces : 4")).toBeTruthy()
+    await openFile("b.txt")
+    expect(await within(bar()).findByText("Ligne 2, colonne 1")).toBeTruthy()
+    expect(offA).toHaveBeenCalled()
+    fireEvent.change(screen.getByLabelText("type:b.txt"), { target: { value: "x" } })
+    expect(within(bar()).getByText("1 onglet modifié")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Fermer a.txt" }))
+    fireEvent.click(screen.getByRole("button", { name: "Fermer b.txt" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Fermer sans enregistrer" }))
+    await waitFor(() => expect(within(bar()).queryByText(/Ligne/)).toBeNull())
+  })
+
+  it("état du flux dans la barre ; la préférence masque la barre", async () => {
+    render(<IdeView dir="/p" />)
+    const es = await stream()
+    es.open()
+    expect(within(bar()).getByRole("status").textContent).toContain("Surveillance active")
+    act(() => document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "a", altKey: true, bubbles: true })))
+    fireEvent.click(within(await screen.findByRole("menu")).getByRole("menuitemcheckbox", { name: "Afficher la barre d'état" }))
+    await waitFor(() => expect(screen.queryByRole("group", { name: "Barre d'état" })).toBeNull())
+  })
+})
+
+describe("IdeView : bouton du terminal de la barre d'état", () => {
+  beforeEach(() => {
+    setAuth({ state: "open" } as never)
+    vi.spyOn(api, "termInfo").mockResolvedValue({ enabled: true })
+    vi.spyOn(api, "data").mockResolvedValue({ live: ["s1"], groups: [{ project: "p", missing: false, sessions: [{ id: "s1", cwd: "/p", mtime: 1 }] }] } as never)
+  })
+  it("replie puis rouvre la zone par le même chemin que terminal.toggle", async () => {
+    render(<IdeView dir="/p" />)
+    await screen.findByTestId("term")
+    const b = () => within(screen.getByRole("group", { name: "Barre d'état" })).getByRole("button", { name: "Ouvrir ou replier le terminal" })
+    fireEvent.click(b())
+    await waitFor(() => expect(screen.queryByTestId("term")).toBeNull())
+    expect(b().getAttribute("aria-expanded")).toBe("false")
+    fireEvent.click(b())
+    expect(await screen.findByTestId("term")).toBeTruthy()
+  })
+})
