@@ -9,11 +9,12 @@ const themeOf = (t: Theme) => (t === "dark" ? "vs-dark" : "vs")
 const base = (theme: Theme) => ({ theme: themeOf(theme), fontFamily: FONTS.jetbrains.mono, fontSize: 13, automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false })
 
 // Sources du projet données au service TypeScript ; null retire l'entrée. Seul ce module touche Monaco.
+// Clé identique à l'URI du modèle d'un onglet ouvert (encodée) : sinon TypeScript voit deux racines au même texte.
 const libs = new Map<string, monaco.IDisposable>()
 export function setTsLib(path: string, content: string | null) {
   libs.get(path)?.dispose()
   libs.delete(path)
-  if (content !== null) libs.set(path, typescriptDefaults.addExtraLib(content, `file:///${path}`))
+  if (content !== null) libs.set(path, typescriptDefaults.addExtraLib(content, monaco.Uri.file(path).toString()))
 }
 export function clearTsLibs() {
   for (const d of libs.values()) d.dispose()

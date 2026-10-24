@@ -4,7 +4,7 @@ import { cn } from "cn"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import type { IndexState } from "./useIndex"
-import { rank } from "./quickOpen"
+import { rank } from "./rank"
 
 type Props = { open: boolean; files: string[]; state: IndexState; onPick: (path: string) => void; onClose: () => void }
 

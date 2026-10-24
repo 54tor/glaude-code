@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { rank } from "./quickOpen"
+import { rank } from "./rank"
 
 describe("rank", () => {
   it("sous-séquence insensible à la casse", () => {
