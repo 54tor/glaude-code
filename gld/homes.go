@@ -247,8 +247,11 @@ func childProxy(target *url.URL, token string) *httputil.ReverseProxy {
 			r.Out.Header.Del("Origin")
 			r.Out.Header.Del("Cookie")
 			r.Out.Header.Del("Authorization")
+			r.Out.Header.Del(ideAuditHeader)
 			r.Out.Header.Set(childHeader, token)
+			r.Out = r.Out.WithContext(context.WithValue(r.Out.Context(), auditIPKey{}, clientIP(r.In)))
 		},
+		ModifyResponse: ideAuditRelay,
 	}
 }
 
