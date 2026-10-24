@@ -84,6 +84,18 @@ Rien n'est perdu : tout fichier supprimé ou remplacé passe d'abord par une **c
   Chaque modification montre ce qui change avant d'être écrite, et une sauvegarde est faite à chaque fois.
 - **Compte** (en haut à droite) : vos limites d'usage et votre consommation des 14 derniers jours.
 
+### Espace de travail
+
+Le bouton **Espace de travail** de la vue dossier ouvre le dossier dans le navigateur : arborescence avec marqueurs
+git, éditeur à onglets (Monaco, le moteur de VS Code, servi par gld sans CDN), `Ctrl+S` pour enregistrer, `Ctrl+P`
+pour ouvrir un fichier par son nom, et un bandeau qui demande quoi faire quand l'agent a modifié le fichier entre-temps
+(recharger, écraser, comparer). Supprimer envoie dans une corbeille `.gld-trash/` ignorée par git. Le terminal ne lance
+pas de shell : il s'attache à une session Claude vivante du dossier (`GLD_WEB_TERMINAL=1`).
+
+En multi-utilisateur, il faut les droits `fs_read` (lire) et `fs_write` (écrire), plus `exec` pour le terminal ; aucun
+n'est donné par défaut. Il n'y a pas de liste de fichiers interdits : `fs_read` lit aussi `.env` et les clés. Routes,
+limites et sécurité : [docs/ide.md](docs/ide.md).
+
 ### Sur téléphone
 
 La page s'adapte aux petits écrans : le menu passe dans le bouton ☰.
