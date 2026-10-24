@@ -133,3 +133,33 @@ func TestGitChangesCheminsReels(t *testing.T) {
 		t.Fatalf("%+v %+v\n%q", got, s, out)
 	}
 }
+
+func TestGitPrefix(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git absent")
+	}
+	dir := t.TempDir()
+	git(t, dir, "init", "-q", "-b", "main")
+	put(t, dir+"/sub/dir/f.txt", "x\n", old)
+	put(t, dir+"/top.txt", "x\n", old)
+	if p := gitPrefix(dir); p != "" {
+		t.Fatalf("racine : %q", p)
+	}
+	if p := gitPrefix(dir + "/sub/dir"); p != "sub/dir/" {
+		t.Fatalf("sous-dossier : %q", p)
+	}
+	out, err := runGitStatus(dir + "/sub/dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	for _, c := range parseGitChanges(out) {
+		paths = append(paths, c.Path)
+	}
+	if len(paths) != 2 {
+		t.Fatalf("les changements hors du sous-dossier restent renvoyés : %v", paths)
+	}
+	if gitPrefix(t.TempDir()) != "" {
+		t.Fatal("hors dépôt")
+	}
+}
