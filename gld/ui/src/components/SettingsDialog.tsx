@@ -110,59 +110,74 @@ export type UiSettings = {
   setChoice: (c: Choice) => void
 } & Fonts
 
-// Réglages de l'interface (options passées à claude, apparence, raccourcis), dans la page Configuration.
-export function SettingsPanel({
-  args,
-  setArgs,
-  choice,
-  setChoice,
-  ...fonts
-}: UiSettings) {
+const section = (title: string, hint: string, body: React.ReactNode) => (
+  <div className="space-y-1.5">
+    <Label>{title}</Label>
+    {body}
+    {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+  </div>
+)
+
+// Options de l'interface passées à claude (arguments, modèle et effort par défaut) : en tête de l'onglet Réglages.
+export function ClaudeOptions({ args, setArgs, choice, setChoice }: Pick<UiSettings, "args" | "setArgs" | "choice" | "setChoice">) {
+  const { t } = useTranslation()
+  return (
+    <section className="space-y-5">
+      <h3 className="border-b pb-1 text-md font-semibold">
+        {t("config.dialog.tabClaude")}
+      </h3>
+      {section(
+        t("config.dialog.argsTitle"),
+        t("config.dialog.argsHint"),
+        <Input
+          id="args"
+          value={args}
+          onChange={(e) => setArgs(e.target.value)}
+          placeholder={t("config.dialog.argsPlaceholder")}
+          className="font-mono text-xs"
+          spellCheck={false}
+          aria-label={t("config.dialog.argsTitle")}
+        />
+      )}
+      {section(
+        t("config.dialog.modelTitle"),
+        t("config.dialog.modelHint"),
+        <ModelPicker value={choice} onChange={setChoice} />
+      )}
+    </section>
+  )
+}
+
+// Réglages de l'interface (raccourcis, apparence), dans la page Configuration.
+export function SettingsPanel(fonts: Fonts) {
   const { t, i18n } = useTranslation()
   const { theme, setTheme, palette, setPalette } = useTheme()
   // La langue est le réglage « language » de Claude Code (settings.json) : l'interface change tout de suite, le serveur et les commandes la lisent au prochain appel.
   const pickLang = async (lang: Lang, claude: string) => {
     setLang(lang)
-    const r = (await api.post("/config-edit", {
-      file: "u",
-      op: "set",
-      path: ["language"],
-      value: claude,
-    })) as { ok: boolean; out: string }
+    const r = (await api.post("/config-edit", { file: "u", op: "set", path: ["language"], value: claude })) as { ok: boolean; out: string }
     if (!r.ok) toast.error(r.out)
   }
-  const section = (title: string, hint: string, body: React.ReactNode) => (
-    <div className="space-y-1.5">
-      <Label>{title}</Label>
-      {body}
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-    </div>
-  )
   return (
     <div className="space-y-8">
-      <p className="text-sm text-muted-foreground">{t("config.dialog.desc")}</p>
-      <section className="space-y-5">
+      <section className="space-y-3">
         <h3 className="border-b pb-1 text-md font-semibold">
-          {t("config.dialog.tabClaude")}
+          {t("config.dialog.tabKeys")}
         </h3>
-        {section(
-          t("config.dialog.argsTitle"),
-          t("config.dialog.argsHint"),
-          <Input
-            id="args"
-            value={args}
-            onChange={(e) => setArgs(e.target.value)}
-            placeholder={t("config.dialog.argsPlaceholder")}
-            className="font-mono text-xs"
-            spellCheck={false}
-            aria-label={t("config.dialog.argsTitle")}
-          />
-        )}
-        {section(
-          t("config.dialog.modelTitle"),
-          t("config.dialog.modelHint"),
-          <ModelPicker value={choice} onChange={setChoice} />
-        )}
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+          {KEYS.map(([k, v]) => (
+            <div key={k} className="contents">
+              <dt>
+                <kbd className="rounded-sm border bg-muted px-1.5 py-0.5 font-mono text-xs">
+                  {k.startsWith("cap.") ? t(`config.dialog.${k}`) : k}
+                </kbd>
+              </dt>
+              <dd className="text-muted-foreground">
+                {t(`config.dialog.key.${v}`)}
+              </dd>
+            </div>
+          ))}
+        </dl>
       </section>
       <section className="space-y-5">
         <h3 className="border-b pb-1 text-md font-semibold">
@@ -245,25 +260,6 @@ export function SettingsPanel({
           </div>
         )}
         <FontPicker {...fonts} />
-      </section>
-      <section className="space-y-3">
-        <h3 className="border-b pb-1 text-md font-semibold">
-          {t("config.dialog.tabKeys")}
-        </h3>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-          {KEYS.map(([k, v]) => (
-            <div key={k} className="contents">
-              <dt>
-                <kbd className="rounded-sm border bg-muted px-1.5 py-0.5 font-mono text-xs">
-                  {k.startsWith("cap.") ? t(`config.dialog.${k}`) : k}
-                </kbd>
-              </dt>
-              <dd className="text-muted-foreground">
-                {t(`config.dialog.key.${v}`)}
-              </dd>
-            </div>
-          ))}
-        </dl>
       </section>
     </div>
   )
