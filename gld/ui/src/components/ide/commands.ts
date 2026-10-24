@@ -53,6 +53,8 @@ export type Command = {
   label: string
   shortcut?: string
   group: "file" | "edit" | "find" | "view" | "goto" | "terminal"
+  // Agit dans l'éditeur : un bouton lui donne le focus avant de la lancer (la saisie rapide de Monaco l'exige).
+  editorFocus: boolean
   enabled(ctx: CmdCtx): boolean
   reason?(ctx: CmdCtx): string
   run(ctx: CmdCtx): void
@@ -76,7 +78,8 @@ const cmd = (
   group: Command["group"],
   guards: Guard[],
   run: (c: CmdCtx) => void,
-  shortcut?: string
+  shortcut?: string,
+  editorFocus = group === "edit" || group === "find" || group === "goto"
 ): Command => {
   const reason = (c: CmdCtx) => guards.map((g) => g(c)).find(Boolean) ?? ""
   return {
@@ -84,6 +87,7 @@ const cmd = (
     label: `ide.cmd.${id}`,
     group,
     shortcut,
+    editorFocus,
     run,
     enabled: (c) => !reason(c),
     ...(guards.length && { reason }),
@@ -134,11 +138,11 @@ export const commands: Command[] = [
   ),
   cmd("goto.line", "goto", [hasEditor], (c) => c.editor?.gotoLine(), "Ctrl+G"),
   cmd("goto.palette", "goto", [hasEditor], (c) => c.editor?.palette(), "F1"),
-  cmd("view.wordWrap", "view", [], toggle("wordWrap")),
+  cmd("view.wordWrap", "view", [], toggle("wordWrap"), undefined, true),
   cmd("view.minimap", "view", [], toggle("minimap")),
-  cmd("view.fontPlus", "view", [], font(1)),
-  cmd("view.fontMinus", "view", [], font(-1)),
-  cmd("view.fontReset", "view", [], font(0)),
+  cmd("view.fontPlus", "view", [], font(1), undefined, true),
+  cmd("view.fontMinus", "view", [], font(-1), undefined, true),
+  cmd("view.fontReset", "view", [], font(0), undefined, true),
   cmd("view.toggleTree", "view", [], toggle("showTree")),
   cmd("view.toggleTerminal", "view", [], toggle("showTerminal")),
   cmd("view.toggleStatus", "view", [], toggle("showStatus")),

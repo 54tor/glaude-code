@@ -42,6 +42,12 @@ export function ToolButton({ label, shortcut, reason, pressed, onClick, children
   )
 }
 
+// Même ordre que le menu : focus d'abord, la commande ensuite ; sans éditeur monté (ctx.editor null), aucun focus.
+const run = (c: (typeof commands)[number], ctx: CmdCtx) => {
+  if (c.editorFocus) ctx.editor?.focus()
+  c.run(ctx)
+}
+
 // Bouton d'une commande du registre : libellé, raccourci, raison et action viennent tous du registre.
 export function CmdButton({ id, ctx, pressed, children }: { id: string; ctx: CmdCtx; pressed?: boolean; children: ReactNode }) {
   const { t } = useTranslation()
@@ -49,7 +55,7 @@ export function CmdButton({ id, ctx, pressed, children }: { id: string; ctx: Cmd
   if (!c) return null
   const reason = c.enabled(ctx) ? "" : t(c.reason?.(ctx) ?? "")
   return (
-    <ToolButton label={t(c.label)} shortcut={c.shortcut} reason={reason} pressed={pressed} onClick={() => c.run(ctx)}>
+    <ToolButton label={t(c.label)} shortcut={c.shortcut} reason={reason} pressed={pressed} onClick={() => run(c, ctx)}>
       {children}
     </ToolButton>
   )
