@@ -177,6 +177,47 @@
       "purgeConfirm": "Delete permanently",
       "exists": "“{{path}}” already exists at that location: rename or delete the entry in place before restoring.",
       "restored": "“{{path}}” restored"
+    },
+    "menubar": {
+      "label": "Workspace menu",
+      "file": "File",
+      "edit": "Edit",
+      "find": "Search",
+      "view": "View",
+      "goto": "Go",
+      "terminal": "Terminal",
+      "key": {
+        "file": "f",
+        "edit": "e",
+        "find": "s",
+        "view": "v",
+        "goto": "g",
+        "terminal": "t"
+      }
+    },
+    "status": {
+      "label": "Status bar",
+      "pos": "Line {{line}}, column {{col}}",
+      "selected_one": "{{count}} character selected",
+      "selected_other": "{{count}} characters selected",
+      "readOnly": "read-only",
+      "spaces": "Spaces: {{n}}",
+      "tabs": "Tabs",
+      "encoding": "UTF-8",
+      "branch": "Git branch:",
+      "watch": {
+        "open": "Watching",
+        "connecting": "Connecting the watcher…",
+        "retry": "Watcher cut, reconnecting in {{n}} s",
+        "closed": "Watching interrupted"
+      },
+      "index": {
+        "building": "Indexing",
+        "partial": "Partial index",
+        "ready": "Index ready"
+      },
+      "dirty_one": "{{count}} modified tab",
+      "dirty_other": "{{count}} modified tabs"
     }
   }
 }
