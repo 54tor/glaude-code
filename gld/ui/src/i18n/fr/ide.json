@@ -223,6 +223,13 @@
       },
       "dirty_one": "{{count}} onglet modifié",
       "dirty_other": "{{count}} onglets modifiés"
+    },
+    "keys": {
+      "Ctrl": "Ctrl",
+      "Shift": "Maj",
+      "Alt": "Alt",
+      "Enter": "Entrée",
+      "Escape": "Échap"
     }
   }
 }

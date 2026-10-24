@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next"
 import { Menubar } from "radix-ui"
 import { CheckIcon } from "lucide-react"
 import { isEditableTarget } from "@/lib/editable"
-import { commands, type CmdCtx, type Command } from "./commands"
+import { ariaKeys, commands, showKeys, type CmdCtx, type Command } from "./commands"
 import type { ViewPrefValues } from "./useViewPrefs"
 
 const GROUPS: Command["group"][] = ["file", "edit", "find", "view", "goto", "terminal"]
@@ -15,9 +15,6 @@ const CHECKS: Record<string, Toggle> = {
   "view.toggleTerminal": "showTerminal",
   "view.toggleStatus": "showStatus",
 }
-// Commandes sans rapport avec l'éditeur : le focus revient au menu comme Radix le fait, pas dans un éditeur peut-être masqué.
-const NO_EDITOR = new Set(["view.toggleTree", "view.toggleTerminal", "view.toggleStatus", "terminal.toggle", "terminal.focusSession"])
-const ariaKeys = (s?: string) => s?.replace("Ctrl", "Control").replace("Maj", "Shift")
 const itemCls =
   "relative flex cursor-default items-center gap-2 rounded-md py-1 pr-2 pl-7 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground aria-disabled:opacity-60"
 
@@ -36,7 +33,7 @@ function Entry({ c, ctx, onRan }: { c: Command; ctx: CmdCtx; onRan(): void }) {
     className: itemCls,
     onSelect: (e: Event) => {
       if (off) return e.preventDefault()
-      if (ctx.editor && !NO_EDITOR.has(c.id)) {
+      if (ctx.editor && c.focus === "editor") {
         onRan()
         ctx.editor.focus()
       }
@@ -55,7 +52,7 @@ function Entry({ c, ctx, onRan }: { c: Command; ctx: CmdCtx; onRan(): void }) {
       </span>
       {c.shortcut && (
         <kbd aria-hidden className="ml-4 text-xs text-muted-foreground">
-          {c.shortcut}
+          {showKeys(c.shortcut, t)}
         </kbd>
       )}
     </>
