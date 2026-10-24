@@ -88,7 +88,9 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
   const [loaded, setLoaded] = useState<{ key: string; msgs: Msg[]; start: number; more: boolean } | null>(null)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const idRef = useRef(id)
-  idRef.current = id
+  useEffect(() => {
+    idRef.current = id // lu par le gestionnaire de défilement, qui ne se réabonne pas à chaque changement de session
+  }, [id])
   const restoring = useRef(false) // position mémorisée en cours de rétablissement : le suivi de la fin attend
   const keepScroll = useRef(false) // le chargement de messages plus anciens ne doit pas ramener à la fin
   const [info, setInfo] = useState<{ id: string; d: Detail } | null>(null)
