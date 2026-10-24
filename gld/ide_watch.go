@@ -599,7 +599,7 @@ func routesIDEWatch(mux *http.ServeMux) {
 			ideFail(rw, err)
 			return
 		}
-		ch, cancel := ws.Subscribe(strings.Split(q.Get("paths"), ","))
+		ch, cancel := ws.Subscribe(q["paths"])
 		defer cancel()
 		rw.Header().Set("Content-Type", "text/event-stream")
 		rw.Header().Set("Cache-Control", "no-store")

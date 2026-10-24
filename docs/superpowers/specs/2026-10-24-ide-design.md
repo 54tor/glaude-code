@@ -89,7 +89,7 @@ Toutes relatives à un dossier `dir` (chemin absolu qui doit être un dossier de
 | `POST /fs-files` | `{paths[]}` : contenu de plusieurs fichiers indexés d'un coup (pour alimenter l'éditeur), mêmes plafonds que `/fs-file` | `fs_read` |
 | `POST /fs-save` | `{path, content, etag}` ; écriture atomique (fichier temporaire + rename, permissions conservées) ; `409` si l'`etag` diffère | `fs_write` |
 | `POST /fs-new`, `/fs-rename`, `/fs-rm` | création, renommage ; suppression = déplacement dans `<projet>/.gld-trash/` horodaté (restaurable, voir Corbeille) | `fs_write` |
-| `GET /fs-watch?dir=&paths=` | flux SSE d'événements de changement (voir ci-dessous) | `fs_read` |
+| `GET /fs-watch?dir=&paths=a&paths=b` | flux SSE d'événements de changement (voir ci-dessous) ; un paramètre `paths` répété par dossier déclaré (vide = racine, 200 au plus) | `fs_read` |
 
 Le terminal garde `/term-open` et `/term-ws` (droit `exec`).
 
