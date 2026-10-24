@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"io/fs"
 	"net/http"
 	"os"
 	"path"
@@ -11,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -29,6 +29,7 @@ var (
 	ideIdleTTL      = 2 * time.Minute
 	idePing         = 25 * time.Second
 	ideNewWatcher   = fsnotify.NewWatcher
+	ideWatchAdd     = func(fw *fsnotify.Watcher, p string) error { return fw.Add(p) }
 	ideSubBuf       = 256
 	ideTreeBudget   = time.Second
 )
@@ -112,6 +113,18 @@ func ideWS(dir string) (*ideWorkspace, error) {
 	return w, nil
 }
 
+// ideCloseAll ferme tous les espaces (arrêt du serveur, fin de test) : leurs flux /fs-watch se terminent.
+func ideCloseAll() {
+	ideWSMu.Lock()
+	defer ideWSMu.Unlock()
+	for d, w := range ideWorkspaces {
+		w.mu.Lock()
+		w.closeLocked()
+		w.mu.Unlock()
+		delete(ideWorkspaces, d)
+	}
+}
+
 func (w *ideWorkspace) touchLocked() {
 	w.last = time.Now()
 	if w.timer != nil {
@@ -149,6 +162,11 @@ func (w *ideWorkspace) closeLocked() {
 	}
 	w.root.Close()
 	close(w.done)
+	// Plus rien n'écrit : flushLocked et fallbackLocked s'arrêtent sur w.closed.
+	for s := range w.subs {
+		close(s.ch)
+	}
+	clear(w.subs)
 }
 
 // reopen sert l'appelant qui a obtenu l'espace juste avant sa libération.
@@ -242,8 +260,9 @@ func (w *ideWorkspace) watchLocked(rel string) bool {
 	if err != nil || !fi.IsDir() {
 		return false
 	}
-	if err := w.watcher.Add(filepath.Join(w.dir, filepath.FromSlash(rel))); err != nil {
-		if !errors.Is(err, fs.ErrNotExist) {
+	if err := ideWatchAdd(w.watcher, filepath.Join(w.dir, filepath.FromSlash(rel))); err != nil {
+		// Seules les limites d'inotify condamnent la veille ; un dossier refusé (EACCES…) est seulement sauté.
+		if errors.Is(err, syscall.ENOSPC) || errors.Is(err, syscall.EMFILE) || errors.Is(err, syscall.ENFILE) {
 			w.fallbackLocked()
 		}
 		return false
@@ -635,7 +654,10 @@ func routesIDEWatch(mux *http.ServeMux) {
 			select {
 			case <-r.Context().Done():
 				return
-			case e := <-ch:
+			case e, ok := <-ch:
+				if !ok {
+					return
+				}
 				b, _ := json.Marshal(e)
 				out = append(append([]byte("data: "), b...), "\n\n"...)
 			case <-ping.C:
