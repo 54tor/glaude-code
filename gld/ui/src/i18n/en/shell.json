@@ -49,6 +49,13 @@
         "dir": "{{dir}}, {{sessions}}"
       }
     },
+    "search": {
+      "placeholder": "Search sessions",
+      "placeholderContent": "Search names and content",
+      "label": "Search this view",
+      "content": "Content",
+      "contentHint": "Advanced mode: also searches conversation text (slower)"
+    },
     "sidebar": {
       "coldTitle": "{{title}}\nOpen, cache expired",
       "cold": "cold cache",
