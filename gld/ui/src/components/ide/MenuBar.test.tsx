@@ -147,3 +147,70 @@ describe("MenuBar", () => {
     expect(c.openQuick).toHaveBeenCalledTimes(1)
   })
 })
+
+describe("MenuBar : focus après une commande", () => {
+  const setup = (o: Partial<CmdCtx> = {}) => {
+    const order: string[] = []
+    const h = handle()
+    const c = ctx({ editor: h, ...o })
+    render(
+      <>
+        <MenuBar ctx={c} />
+        <div className="monaco-editor" data-testid="box">
+          <textarea aria-label="ed" />
+          <input aria-label="find-widget" />
+        </div>
+      </>
+    )
+    const edEl = screen.getByLabelText("ed")
+    vi.mocked(h.focus).mockImplementation(() => (order.push("focus"), edEl.focus()))
+    vi.mocked(h.find).mockImplementation(() => (order.push("find"), screen.getByLabelText("find-widget").focus()))
+    vi.mocked(h.undo).mockImplementation(() => void order.push("undo"))
+    return { c, h, order, edEl }
+  }
+  const trigger = (name: string) => within(screen.getByRole("menubar")).getByRole("menuitem", { name })
+  const closed = () => waitFor(() => expect(screen.queryByRole("menu")).toBeNull())
+
+  it("Rechercher : l'éditeur reçoit le focus avant la commande, le widget de Monaco le garde", async () => {
+    const { h, order } = setup()
+    alt("r")
+    fireEvent.click(await item("Rechercher"))
+    await closed()
+    expect(order).toEqual(["focus", "find"])
+    expect(h.find).toHaveBeenCalledTimes(1)
+    expect(document.activeElement).toBe(screen.getByLabelText("find-widget"))
+  })
+
+  it("Annuler et Retour à la ligne : focus dans l'éditeur, une seule fois", async () => {
+    const { c, h, order, edEl } = setup()
+    alt("e")
+    fireEvent.click(await item("Annuler"))
+    await closed()
+    expect(order).toEqual(["focus", "undo"])
+    expect(document.activeElement).toBe(edEl)
+    alt("a")
+    fireEvent.click(await item("Retour à la ligne automatique"))
+    await closed()
+    expect(h.focus).toHaveBeenCalledTimes(2)
+    expect(c.prefs.set).toHaveBeenCalledTimes(1)
+    expect(document.activeElement).toBe(edEl)
+  })
+
+  it("bascule de l'arborescence : pas de focus dans l'éditeur, retour au menu", async () => {
+    const { h } = setup()
+    alt("a")
+    fireEvent.click(await item("Afficher l'arborescence"))
+    await closed()
+    expect(h.focus).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(trigger("Affichage"))
+  })
+
+  it("Échap : le focus revient au menu, rien ne s'exécute", async () => {
+    const { h } = setup()
+    alt("f")
+    fireEvent.keyDown(await menu(), { key: "Escape" })
+    await closed()
+    expect(h.focus).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(trigger("Fichier"))
+  })
+})
