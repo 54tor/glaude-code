@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { PanelBottom } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -14,7 +14,8 @@ export type BottomView = { open: boolean; available: boolean }
 // Barre toujours visible : l'utilisateur voit l'état du terminal même replié ou indisponible.
 // Le terminal ne s'ouvre seul que s'il y a de quoi l'attacher ; un choix explicite de l'utilisateur prime ensuite.
 // focusN : demande de focus de la session (ouvre la zone, sans prendre la main).
-export function BottomPane({ dir, prefs, focusN = 0, onView }: { dir: string; prefs: ViewPrefs; focusN?: number; onView?: (v: BottomView) => void }) {
+// onToggle : bascule de la zone par le registre des commandes ; à défaut, la préférence directement.
+export function BottomPane({ dir, prefs, focusN = 0, onView, onToggle }: { dir: string; prefs: ViewPrefs; focusN?: number; onView?: (v: BottomView) => void; onToggle?: () => void }) {
   const { t } = useTranslation()
   const { state, sessions } = useTerminalAvailability(dir)
   const [hStr, setH] = useLocal(`gld.ide.${dir}.h`, "160")
@@ -25,9 +26,12 @@ export function BottomPane({ dir, prefs, focusN = 0, onView }: { dir: string; pr
   const available = usable
   useEffect(() => onView?.({ open, available }), [open, available, onView])
   const handled = useRef(focusN)
+  const [pending, setPending] = useState(false)
+  const focused = useCallback(() => setPending(false), [])
   useEffect(() => {
     if (focusN === handled.current || !usable) return
     handled.current = focusN
+    setPending(true)
     if (!open) prefs.set("showTerminal", true)
   }, [focusN, usable, open, prefs])
   const reason = state === "forbidden" ? t("ide.reason.noExec") : state === "disabled" ? t("ide.term.disabled") : ""
@@ -44,16 +48,16 @@ export function BottomPane({ dir, prefs, focusN = 0, onView }: { dir: string; pr
           size="icon-sm"
           disabled={!usable}
           title={reason || undefined}
-          aria-pressed={open}
+          aria-expanded={open}
           aria-label={t(open ? "ide.bottom.hide" : "ide.bottom.show")}
-          onClick={() => prefs.set("showTerminal", !open)}
+          onClick={() => (onToggle ? onToggle() : prefs.set("showTerminal", !open))}
         >
           <PanelBottom />
         </Button>
       </div>
       {open && (
         <div className="flex shrink-0 flex-col overflow-auto" style={{ height: h }}>
-          <TerminalContent dir={dir} sessions={sessions} focusN={focusN} />
+          <TerminalContent dir={dir} sessions={sessions} focus={pending} onFocused={focused} />
         </div>
       )}
     </>
