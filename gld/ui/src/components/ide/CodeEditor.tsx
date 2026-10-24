@@ -52,8 +52,12 @@ export default function CodeEditor({ path, value, readOnly, theme, onChange, onS
   useEffect(() => {
     if (model.current && model.current.getValue() !== value) model.current.setValue(value)
   }, [value])
-  useEffect(() => ed.current?.updateOptions({ readOnly }), [readOnly])
-  useEffect(() => monaco.editor.setTheme(themeOf(theme)), [theme])
+  useEffect(() => {
+    ed.current?.updateOptions({ readOnly })
+  }, [readOnly])
+  useEffect(() => {
+    monaco.editor.setTheme(themeOf(theme))
+  }, [theme])
 
   return <div ref={box} className="size-full" />
 }
