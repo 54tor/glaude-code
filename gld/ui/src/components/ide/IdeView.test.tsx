@@ -1040,6 +1040,17 @@ describe("IdeView : barres d'outils et commandes", () => {
     await waitFor(() => expect(screen.queryByRole("tab")).toBeNull())
   })
 
+  it("« Fermer tous les onglets » : onglet sale en arrière-plan, actif propre : confirmation quand même", async () => {
+    render(<IdeView dir="/p" />)
+    await openFile("a.txt")
+    fireEvent.change(screen.getByLabelText("type:a.txt"), { target: { value: "x" } })
+    await openFile("b.txt")
+    expect(screen.getByRole("tab", { name: /b\.txt/ }).getAttribute("aria-selected")).toBe("true")
+    fireEvent.click(tool("Fermer tous les onglets"))
+    expect(await screen.findByText("Fermer tous les onglets ?")).toBeTruthy()
+    expect(screen.getAllByRole("tab", { hidden: true })).toHaveLength(2)
+  })
+
   it("« Fermer tous les onglets » sans onglet sale : aucune confirmation", async () => {
     render(<IdeView dir="/p" />)
     await openFile("a.txt")
