@@ -19,7 +19,7 @@ const ctx = (o: Partial<CmdCtx> = {}, rights: Right[] = ["fs_read", "fs_write", 
     readOnly: false,
     editor: handle(),
     prefs: { ...DEFAULT_PREFS, set: vi.fn() },
-    terminalAvailable: true,
+    terminal: "ready",
     treeShown: true,
     save: vi.fn(),
     saveAll: vi.fn(),
@@ -176,4 +176,5 @@ describe("EditorToolbar", () => {
     expect(ids.map((id) => document.getElementById(id)?.textContent)).toContain("Fichier en lecture seule")
     vi.unstubAllGlobals()
   })
+
 })

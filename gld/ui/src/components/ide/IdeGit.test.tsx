@@ -114,18 +114,25 @@ describe("IdeView marqueurs git et terminal", () => {
     await act(async () => {})
     expect(screen.queryByTestId("term")).toBeNull()
   })
-  it("sans choix : session vivante, terminal monté d'emblée sans prendre la main", async () => {
+  it("sans choix : session vivante, zone repliée, rien d'attaché ; le bouton l'ouvre sans prendre la main", async () => {
     render(<IdeView dir="/p" />)
+    await screen.findByText("1 session en direct — ouvrir le terminal")
+    await act(async () => {})
+    expect(screen.queryByTestId("term")).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Afficher le panneau du bas" }))
     const term = await screen.findByTestId("term")
     expect(term.textContent).toBe("s1")
     expect(term.dataset.take).toBe("false")
   })
-  it("le bouton replie puis rouvre, et mémorise le choix", async () => {
+  it("le bouton ouvre, replie puis rouvre, et mémorise le choix", async () => {
     render(<IdeView dir="/p" />)
+    await screen.findByText("1 session en direct — ouvrir le terminal")
+    fireEvent.click(screen.getByRole("button", { name: "Afficher le panneau du bas" }))
     await screen.findByTestId("term")
+    expect(localStorage.getItem("gld.ide.view.showTerminalChosen")).toBe("1")
     fireEvent.click(screen.getByRole("button", { name: "Masquer le panneau du bas" }))
     expect(screen.queryByTestId("term")).toBeNull()
-    expect(localStorage.getItem("gld.ide.view.showTerminalChosen")).toBe("1")
+    expect(localStorage.getItem("gld.ide.view.showTerminal")).toBe("0")
     fireEvent.click(screen.getByRole("button", { name: "Afficher le panneau du bas" }))
     expect((await screen.findByTestId("term")).textContent).toBe("s1")
   })

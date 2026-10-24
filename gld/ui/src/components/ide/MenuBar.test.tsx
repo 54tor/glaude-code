@@ -19,7 +19,7 @@ const ctx = (o: Partial<CmdCtx> = {}, rights: Right[] = ["fs_read", "fs_write", 
     readOnly: false,
     editor: handle(),
     prefs: { ...DEFAULT_PREFS, set: vi.fn() },
-    terminalAvailable: true,
+    terminal: "ready",
     treeShown: true,
     save: vi.fn(),
     saveAll: vi.fn(),
@@ -124,11 +124,30 @@ describe("MenuBar", () => {
     alt("t")
     expect(reasonOf(await item("Ouvrir ou replier le terminal"))).toMatch(/exec/)
     unmount()
-    render(<MenuBar ctx={ctx({ terminalAvailable: false })} />)
+    render(<MenuBar ctx={ctx({ terminal: "disabled" })} />)
     alt("t")
     const go = await item("Aller au terminal de session")
     expect(go.getAttribute("aria-disabled")).toBe("true")
     expect(reasonOf(go)).toMatch(/GLD_WEB_TERMINAL/)
+  })
+
+  it("Affichage › zone terminal : désactivée sans exec, pendant le chargement ou terminal coupé, chacun avec sa raison ; rien ne s'exécute", async () => {
+    const c = ctx({}, ["fs_read", "fs_write"])
+    const { unmount } = render(<MenuBar ctx={c} />)
+    alt("a")
+    const off = await item("Afficher la zone terminal")
+    expect(off.getAttribute("aria-disabled")).toBe("true")
+    expect(reasonOf(off)).toBe("Le terminal demande le droit « exec »")
+    fireEvent.click(off)
+    expect(c.prefs.set).not.toHaveBeenCalled()
+    unmount()
+    for (const [terminal, r] of [["loading", /chargement/i], ["disabled", /GLD_WEB_TERMINAL/], ["nosessions", /sessions_read/]] as const) {
+      const { unmount: u } = render(<MenuBar ctx={ctx({ terminal })} />)
+      alt("a")
+      const el = await item("Afficher la zone terminal")
+      expect(reasonOf(el), terminal).toMatch(r)
+      u()
+    }
   })
 
   it("bascules cochées selon les préférences ; une entrée active lance sa commande", async () => {

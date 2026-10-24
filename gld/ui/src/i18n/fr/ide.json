@@ -102,7 +102,9 @@
       "title": "Terminal",
       "help": "lancez `claude` dans ce dossier",
       "ready_one": "{{count}} session en direct",
-      "ready_other": "{{count}} sessions en direct"
+      "ready_other": "{{count}} sessions en direct",
+      "readyClosed_one": "{{count}} session en direct — ouvrir le terminal",
+      "readyClosed_other": "{{count}} sessions en direct — ouvrir le terminal"
     },
     "drafts": {
       "dropped": "Brouillon de « {{name}} » abandonné : le fichier a changé sur le disque."
@@ -152,7 +154,10 @@
       "noExec": "Le terminal demande le droit « exec »",
       "termOff": "Terminal intégré désactivé (GLD_WEB_TERMINAL=1)",
       "nothingDirty": "Aucune modification à enregistrer",
-      "noTree": "Affichez l'arborescence pour créer à la racine"
+      "noTree": "Affichez l'arborescence pour créer à la racine",
+      "termLoading": "Terminal en cours de chargement",
+      "noSessionsRead": "Liste des sessions inaccessible (droit « sessions_read » requis)",
+      "sessionsDown": "Liste des sessions indisponible"
     },
     "toolbar": {
       "editor": "Actions de l'éditeur",

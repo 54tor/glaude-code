@@ -58,7 +58,7 @@ function Workspace({ dir }: { dir: string }) {
   const saving = useRef(new Map<string, boolean>()) // chemin → une nouvelle demande attend la fin de celle en cours
   const theme = useResolvedTheme()
   const prefs = useViewPrefs()
-  const [term, setTerm] = useState<BottomView>({ open: false, available: false })
+  const [term, setTerm] = useState<BottomView>({ open: false, state: "loading" })
   const [termFocus, setTermFocus] = useState(0)
   // Poignée de l'éditeur de l'onglet actif, en état : les commandes qui en dépendent se réactivent dès son montage.
   const [editor, setEditor] = useState<EditorHandle | null>(null)
@@ -248,9 +248,9 @@ function Workspace({ dir }: { dir: string }) {
     tabs: ide.tabs,
     readOnly: !!active?.readOnly,
     editor,
-    // La bascule part de l'état réellement affiché, pas de la préférence brute (ouverture d'emblée sans choix).
+    // La bascule part de l'état réellement affiché, pas de la préférence brute (ouverte par défaut, repliée tant qu'aucun choix).
     prefs: { ...prefs, showTerminal: term.open },
-    terminalAvailable: term.available,
+    terminal: term.state,
     treeShown: prefs.showTree,
     newFile: () => treeActions.current?.create("newFile"),
     newFolder: () => treeActions.current?.create("newDir"),
@@ -359,7 +359,7 @@ function Workspace({ dir }: { dir: string }) {
             </Suspense>
             {diff && diff.path === ide.active && active && <ConflictDiff path={diff.path} original={diff.original} modified={active.content} theme={theme} onClose={() => setDiff(null)} />}
           </div>
-          <BottomPane dir={dir} prefs={prefs} focusN={termFocus} onView={setTerm} onToggle={(open) => run("view.toggleTerminal", { ...ctx, prefs: { ...prefs, showTerminal: open } })} />
+          <BottomPane dir={dir} prefs={prefs} focusN={termFocus} onView={setTerm} onToggle={(v) => run("view.toggleTerminal", { ...ctx, terminal: v.state, prefs: { ...prefs, showTerminal: v.open } })} />
         </div>
       </div>
       {prefs.showStatus && <WorkspaceStatus dir={dir} ctx={ctx} watch={watch} index={index.state} />}
