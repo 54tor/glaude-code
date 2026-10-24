@@ -7,7 +7,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
 )
@@ -37,15 +36,21 @@ func ideIgnored(name string) bool {
 	return strings.HasPrefix(name, ".") || name == "vendor" || name == "node_modules"
 }
 
-// ideBuildIndex parcourt l'arbre sans lire le contenu des fichiers ni suivre de lien ; une borne
-// atteinte rend ce qui est déjà collecté avec partial=true.
-func ideBuildIndex(root *os.Root, lim ideLimits) (entries []ideIndexEntry, partial bool) {
+func ideBuildIndex(root *os.Root, lim ideLimits) ([]ideIndexEntry, bool) {
+	es, _, partial := ideWalk(root, lim)
+	return es, partial
+}
+
+// ideWalk parcourt l'arbre sans lire le contenu des fichiers ni suivre de lien ; une borne
+// atteinte rend ce qui est déjà collecté avec partial=true. dirs sert à la veille du disque.
+func ideWalk(root *os.Root, lim ideLimits) (entries []ideIndexEntry, dirs []string, partial bool) {
 	type item struct {
 		dir   string
 		depth int
 	}
 	deadline := time.Now().Add(lim.Time)
 	stack := []item{{".", 0}}
+	seen := 0
 walk:
 	for len(stack) > 0 {
 		it := stack[len(stack)-1]
@@ -63,7 +68,13 @@ walk:
 		if err != nil {
 			continue
 		}
+		dirs = append(dirs, it.dir)
 		for _, de := range des {
+			// Un seul dossier énorme dépasserait sinon la borne de temps.
+			if seen++; seen%256 == 0 && time.Now().After(deadline) {
+				partial = true
+				break walk
+			}
 			name := de.Name()
 			if ideIgnored(name) {
 				continue
@@ -94,49 +105,22 @@ walk:
 		}
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
-	return entries, partial
+	return entries, dirs, partial
 }
 
+// ideIdx est immuable une fois publié : la veille en publie une copie à chaque changement.
 type ideIdx struct {
 	state   string
 	entries []ideIndexEntry
 	set     map[string]bool
 }
 
-var (
-	ideIndexMu sync.Mutex
-	ideIndexes = map[string]*ideIdx{}
-)
-
-// ideIndexGet lance la construction unique du dossier au premier appel ; elle ne bloque jamais.
 func ideIndexGet(dir string) ideIdx {
-	ideIndexMu.Lock()
-	defer ideIndexMu.Unlock()
-	if ix, ok := ideIndexes[dir]; ok {
-		return *ix
+	ws, err := ideWS(dir)
+	if err != nil {
+		return ideIdx{state: "partial"}
 	}
-	ideIndexes[dir] = &ideIdx{state: "building"}
-	go func() {
-		ideBuildHook()
-		var entries []ideIndexEntry
-		partial := true
-		if root, err := os.OpenRoot(dir); err == nil {
-			entries, partial = ideBuildIndex(root, ideIndexLimits)
-			root.Close()
-		}
-		set := make(map[string]bool, len(entries))
-		for _, e := range entries {
-			set[e.Path] = true
-		}
-		st := "ready"
-		if partial {
-			st = "partial"
-		}
-		ideIndexMu.Lock()
-		ideIndexes[dir] = &ideIdx{state: st, entries: entries, set: set}
-		ideIndexMu.Unlock()
-	}()
-	return ideIdx{state: "building"}
+	return ws.idx()
 }
 
 func routesIDEIndex(mux *http.ServeMux) {
