@@ -4,7 +4,16 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.4.1] - 2026-10-24
+
+### Ajouté
+- **Sessions ouvertes** : la barre latérale liste les sessions ouvertes « froides » avec les chaudes ; un double clic ouvre le dossier de la session, et la fenêtre du lecteur gagne un bouton dossier.
+- **Bloc-notes** : « tout sélectionner » et envoi des items vers une session fermée.
+- **Réglages** : les réglages du dossier sont réunis dans la fenêtre des Réglages (ils ne sont plus dans l'en-tête de page).
+- **Compte** : « Révoquer les autres sessions » ferme toutes les sessions de connexion du compte sauf la courante (`POST /auth/sessions/revoke-others`, réauthentification demandée, journalisé `session_revoke`).
+
 ### Corrigé
+- Le menu de poussée n'affiche que le nom du remote, plus son adresse.
 - La vérification de l'interface (`make check-ui`, règle ESLint `react-hooks/refs`) échouait sur `Conversation.tsx` : l'identifiant de la session lu par le gestionnaire de défilement est mis à jour dans un effet et non plus pendant le rendu. Aucun changement de comportement.
 
 ## [0.4.0] - 2026-10-24
@@ -217,7 +226,8 @@ Première version : `gld`, interface web locale pour parcourir, piloter et confi
 - Terminal intégré désactivé par défaut ; lecture bornée des fichiers de commandes.
 - Refus d'agir quand les sessions ouvertes sont indéterminées.
 
-[Non publié]: https://github.com/54tor/glaude-code/compare/v0.4.0...HEAD
+[Non publié]: https://github.com/54tor/glaude-code/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/54tor/glaude-code/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/54tor/glaude-code/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/54tor/glaude-code/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/54tor/glaude-code/compare/v0.2.0...v0.3.0
