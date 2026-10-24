@@ -36,9 +36,8 @@ export function GitPush({ dir, st }: { dir: string; st: GitState | undefined }) 
         {remotes === null && <DropdownMenuItem disabled>{t("conversation.gitPush.reading")}</DropdownMenuItem>}
         {remotes?.length === 0 && <DropdownMenuItem disabled>{t("conversation.gitPush.none")}</DropdownMenuItem>}
         {remotes?.map((r) => (
-          <DropdownMenuItem key={r.name} onSelect={() => push(r)} title={r.url}>
+          <DropdownMenuItem key={r.name} onSelect={() => push(r)}>
             <span className="font-medium">{r.name}</span>
-            <span className="ml-2 truncate text-xs text-muted-foreground">{r.url}</span>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
