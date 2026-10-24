@@ -8,15 +8,15 @@ const depth = (p: string) => (p ? p.split("/").length : 0)
 // Au-delà du plafond du serveur, les dossiers les moins profonds d'abord : ce sont les plus visibles.
 export const capDirs = (dirs: string[]) => [...new Set(dirs)].sort((a, b) => depth(a) - depth(b) || (a < b ? -1 : a > b ? 1 : 0)).slice(0, MAX_DIRS)
 
-export type WatchState = { connected: boolean; state: "open" | "retrying" | "closed"; retryIn: number }
+export type WatchState = { connected: boolean; state: "open" | "connecting" | "waiting" | "browserRetry"; retryIn: number }
 const BACKOFF = [5, 15, 30]
-const CONNECTING: WatchState = { connected: false, state: "retrying", retryIn: 0 }
+const CONNECTING: WatchState = { connected: false, state: "connecting", retryIn: 0 }
 
 // Toute réouverture après la première (reconnexion d'EventSource ou nouveau flux après un changement de dossiers) vaut resync :
 // des évènements ont pu se perdre entre les deux.
 // Fermé définitivement (réponse non 200, session expirée), l'EventSource ne réessaie plus : on rouvre nous-mêmes après 5 s, 15 s, puis 30 s.
-// state : « retrying » pendant une connexion ou une attente (retryIn en secondes, 0 si la connexion est en cours),
-// « closed » quand le flux est coupé et que le navigateur réessaie seul.
+// state : « waiting » pendant notre propre attente avant de rouvrir (retryIn en secondes),
+// « browserRetry » quand le flux est coupé et que le navigateur réessaie seul.
 export function useWatch(dir: string, declaredDirs: string[], onEvent: (e: WatchEvent) => void): WatchState {
   const [w, setW] = useState<WatchState>(CONNECTING)
   const cb = useRef(onEvent)
@@ -47,11 +47,11 @@ export function useWatch(dir: string, declaredDirs: string[], onEvent: (e: Watch
           opened.current = true
         }
         s.onerror = () => {
-          if (s.readyState !== 2) return setW({ connected: false, state: "closed", retryIn: 0 })
+          if (s.readyState !== 2) return setW({ connected: false, state: "browserRetry", retryIn: 0 })
           s.close()
           es = undefined
           const wait = BACKOFF[Math.min(tries++, BACKOFF.length - 1)]
-          setW({ connected: false, state: "retrying", retryIn: wait })
+          setW({ connected: false, state: "waiting", retryIn: wait })
           connect(wait * 1000)
         }
         s.onmessage = (m) => {
