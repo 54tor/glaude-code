@@ -20,6 +20,10 @@ export default defineConfig({
     // Noms stables : le binaire Go embarque dist/ au make install et le sert sous /assets/ ; un nom prévisible se vérifie et se cache simplement.
     rolldownOptions: {
       output: {
+        // Monaco (≈ 4 Mo) découpé en morceaux < 700 ko, tous chargés à la demande : app.js garde seul la limite.
+        codeSplitting: {
+          groups: [{ name: "monaco", test: /node_modules[\\/]monaco-editor/, maxSize: 600_000 }],
+        },
         entryFileNames: "assets/app.js",
         chunkFileNames: "assets/[name].js",
         assetFileNames: "assets/[name][extname]",
