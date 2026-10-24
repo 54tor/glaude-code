@@ -1,4 +1,6 @@
+import { useEffect, useRef, type RefObject } from "react"
 import { api } from "@/lib/api"
+import type { FsIndexEntry, IndexState } from "./useIndex"
 
 const MAX_FILE = 100 * 1024
 const MAX_FILES = 300
@@ -42,4 +44,38 @@ export async function runFeed(dir: string, paths: string[], sink: (path: string,
       sink(f.path, f.content)
     }
   }
+}
+
+// live : onglet actif lu au moment de l'alimentation, sans relancer le calcul à chaque changement d'onglet.
+export function useTsFeed(dir: string, files: FsIndexEntry[], state: IndexState, live: RefObject<{ active: string }>) {
+  const fed = useRef(new Map<string, string>()) // chemin → « mtime:taille » de l'index au moment de l'alimentation
+  // Alimentation du service TypeScript : seulement les fichiers de l'index, et seulement ceux qui ont changé depuis.
+  useEffect(() => {
+    if (state === "building") return
+    const stamp = new Map(files.map((f) => [f.path, `${f.mtime}:${f.size}`]))
+    const picked = pickFeed(files, live.current.active)
+    const keep = new Set(picked)
+    const gone = [...fed.current.keys()].filter((p) => !keep.has(p))
+    const todo = picked.filter((p) => fed.current.get(p) !== stamp.get(p))
+    if (!gone.length && !todo.length) return
+    const ac = new AbortController()
+    import("./CodeEditor")
+      .then(({ setTsLib }) => {
+        if (ac.signal.aborted) return
+        for (const p of gone) {
+          setTsLib(p, null)
+          fed.current.delete(p)
+        }
+        return runFeed(dir, todo, (p, c) => (setTsLib(p, c), fed.current.set(p, stamp.get(p) ?? "")), ac.signal)
+      })
+      .catch(() => {})
+    return () => ac.abort()
+  }, [dir, files, state, live])
+  useEffect(() => {
+    const f = fed.current
+    return () => {
+      if (f.size) import("./CodeEditor").then((m) => m.clearTsLibs(), () => {})
+      f.clear()
+    }
+  }, [dir])
 }

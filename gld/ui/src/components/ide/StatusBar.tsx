@@ -4,7 +4,9 @@ import { GitBranch, SquareTerminal } from "lucide-react"
 import { cn } from "cn"
 import { buttonVariants } from "@/components/ui/button"
 import type { GitState } from "@/lib/api"
-import type { EditorHandle, EditorStatus } from "./commands"
+import { useGit } from "@/hooks/useGit"
+import { commands, type CmdCtx, type EditorHandle, type EditorStatus } from "./commands"
+import { isDirty } from "./ideState"
 import type { IndexState } from "./useIndex"
 import type { WatchState } from "./useWatch"
 
@@ -23,19 +25,20 @@ export function branchOf(dir: string, status: Record<string, GitState>) {
 }
 
 type Props = {
-  status: EditorStatus | null
+  editor: EditorHandle | null
   watch: WatchState
   index: IndexState
   branch?: string
   dirty: number
-  // reason : lue au rendu de la barre, le contexte des commandes ne se lit pas pendant celui de l'espace (refs).
-  term: { open: boolean; reason(): string; onToggle(): void }
+  term: { open: boolean; reason: string; onToggle(): void }
 }
 
+// L'abonnement au curseur vit ici : une frappe ou un déplacement ne refait le rendu que de la barre, pas de tout l'espace.
 // Seuls l'état du flux et celui de l'index sont annoncés : la position du curseur change à chaque frappe.
 // Écran étroit : les éléments passent à la ligne, l'encodage et l'indentation disparaissent.
-export function StatusBar({ status, watch, index, branch, dirty, term }: Props) {
+export function StatusBar({ editor, watch, index, branch, dirty, term }: Props) {
   const { t } = useTranslation()
+  const status = useEditorStatus(editor)
   const id = useId()
   const indent = status?.indent.startsWith("tabs:") ? t("ide.status.tabs") : status && t("ide.status.spaces", { n: status.indent.split(":")[1] })
   const flux =
@@ -46,7 +49,7 @@ export function StatusBar({ status, watch, index, branch, dirty, term }: Props) 
         : watch.state === "waiting"
           ? t("ide.status.watch.retry", { n: watch.retryIn })
           : t("ide.status.watch.connecting")
-  const reason = term.reason()
+  const reason = term.reason
   const off = !!reason
   return (
     <div aria-label={t("ide.status.label")} role="group" className="flex shrink-0 flex-wrap items-center gap-x-3 border-t px-2 text-xs text-muted-foreground">
@@ -93,4 +96,14 @@ export function StatusBar({ status, watch, index, branch, dirty, term }: Props) 
       )}
     </div>
   )
+}
+
+// Barre de l'espace : branche, onglets modifiés et bouton du terminal tirés du contexte des commandes (même chemin que terminal.toggle).
+export function WorkspaceStatus({ dir, ctx, watch, index }: { dir: string; ctx: CmdCtx; watch: WatchState; index: IndexState }) {
+  const { t } = useTranslation()
+  const repos = useGit()
+  const tc = commands.find((x) => x.id === "terminal.toggle")!
+  const on = tc.enabled(ctx)
+  const term = { open: ctx.prefs.showTerminal, reason: on ? "" : t(tc.reason?.(ctx) ?? ""), onToggle: () => on && tc.run(ctx) }
+  return <StatusBar editor={ctx.editor} watch={watch} index={index} branch={branchOf(dir, repos.status)} dirty={ctx.tabs.filter(isDirty).length} term={term} />
 }

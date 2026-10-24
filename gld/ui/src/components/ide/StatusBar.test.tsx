@@ -7,9 +7,10 @@ import type { EditorHandle, EditorStatus } from "./commands"
 import type { GitState } from "@/lib/api"
 
 const st = (o: Partial<EditorStatus> = {}): EditorStatus => ({ line: 3, col: 7, selected: 0, eol: "LF", language: "typescript", indent: "spaces:2", readOnly: false, ...o })
-const term = (o: { open?: boolean; reason?: string } = {}) => ({ open: false, onToggle: vi.fn(), ...o, reason: () => o.reason ?? "" })
+const term = (o: { open?: boolean; reason?: string } = {}) => ({ open: false, reason: "", onToggle: vi.fn(), ...o })
+const ed = (s: EditorStatus | null) => s && ({ subscribe: (l: (x: EditorStatus) => void) => (l(s), () => {}) } as unknown as EditorHandle)
 const bar = (o: Partial<Parameters<typeof StatusBar>[0]> = {}) =>
-  render(<StatusBar status={st()} watch={{ connected: true, state: "open", retryIn: 0 }} index="ready" branch="main" dirty={0} term={term()} {...o} />)
+  render(<StatusBar editor={ed(st())} watch={{ connected: true, state: "open", retryIn: 0 }} index="ready" branch="main" dirty={0} term={term()} {...o} />)
 
 beforeEach(() => setLang("fr"))
 afterEach(cleanup)
@@ -23,12 +24,12 @@ describe("StatusBar", () => {
   })
 
   it("sélection, CRLF, lecture seule, tabulations", () => {
-    bar({ status: st({ selected: 12, eol: "CRLF", readOnly: true, indent: "tabs:4" }) })
+    bar({ editor: ed(st({ selected: 12, eol: "CRLF", readOnly: true, indent: "tabs:4" })) })
     for (const s of ["12 caractères sélectionnés", "CRLF", "lecture seule", "Tabulations"]) expect(screen.getByText(s)).toBeTruthy()
   })
 
   it("aucun onglet actif : rien sur la position ni l'éditeur ; hors dépôt : pas de branche", () => {
-    bar({ status: null, branch: undefined })
+    bar({ editor: null, branch: undefined })
     expect(screen.queryByText(/Ligne/)).toBeNull()
     expect(screen.queryByText("LF")).toBeNull()
     expect(screen.queryByText(/Branche/)).toBeNull()
@@ -41,7 +42,7 @@ describe("StatusBar", () => {
     expect(live.textContent).toContain("Surveillance active")
     expect(live.textContent).toContain("Indexation en cours")
     expect(live.textContent).not.toContain("Ligne")
-    const p = { status: st(), branch: "main", dirty: 0, term: term() }
+    const p = { editor: ed(st()), branch: "main", dirty: 0, term: term() }
     rerender(<StatusBar {...p} watch={{ connected: false, state: "waiting", retryIn: 15 }} index="partial" />)
     expect(live.textContent).toContain("reconnexion dans 15 s")
     expect(live.textContent).toContain("Index partiel")
@@ -53,7 +54,7 @@ describe("StatusBar", () => {
   it("onglets modifiés", () => {
     const { rerender } = bar({ dirty: 1 })
     expect(screen.getByText("1 onglet modifié")).toBeTruthy()
-    rerender(<StatusBar status={st()} watch={{ connected: true, state: "open", retryIn: 0 }} index="ready" dirty={3} term={term()} />)
+    rerender(<StatusBar editor={ed(st())} watch={{ connected: true, state: "open", retryIn: 0 }} index="ready" dirty={3} term={term()} />)
     expect(screen.getByText("3 onglets modifiés")).toBeTruthy()
   })
 
@@ -65,7 +66,7 @@ describe("StatusBar", () => {
     fireEvent.click(b)
     expect(t1.onToggle).toHaveBeenCalled()
     const t2 = term({ reason: "Le terminal demande le droit « exec »" })
-    rerender(<StatusBar status={st()} watch={{ connected: true, state: "open", retryIn: 0 }} index="ready" dirty={0} term={t2} />)
+    rerender(<StatusBar editor={ed(st())} watch={{ connected: true, state: "open", retryIn: 0 }} index="ready" dirty={0} term={t2} />)
     const off = screen.getByRole("button", { name: "Ouvrir ou replier le terminal" })
     expect(off.getAttribute("aria-disabled")).toBe("true")
     expect(document.getElementById(off.getAttribute("aria-describedby")!)?.textContent).toMatch(/exec/)
