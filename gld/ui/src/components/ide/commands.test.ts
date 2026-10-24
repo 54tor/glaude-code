@@ -50,6 +50,7 @@ const ctx = (
     editor: handle(),
     prefs: { ...DEFAULT_PREFS, set: vi.fn() },
     terminalAvailable: true,
+    treeShown: true,
     save: vi.fn(),
     saveAll: vi.fn(),
     newFile: vi.fn(),
@@ -106,6 +107,7 @@ const blocked: CmdCtx[] = [
   ctx({}, ["fs_read"]),
   ctx({ tab: undefined, tabs: [], editor: null }),
   ctx({ terminalAvailable: false }),
+  ctx({ treeShown: false }),
 ]
 
 describe("registre de commandes", () => {
@@ -130,6 +132,13 @@ describe("registre de commandes", () => {
       expect(byId(id).enabled(ctx({ tabs: [tab({ content: "y" })] })), id).toBe(
         true
       )
+    }
+  })
+
+  it("création à la racine : désactivée quand l'arborescence est masquée", () => {
+    for (const id of ["file.newFile", "file.newFolder"]) {
+      expect(byId(id).enabled(ctx({ treeShown: false })), id).toBe(false)
+      expect(byId(id).reason!(ctx({ treeShown: false })), id).toBe("ide.reason.noTree")
     }
   })
 

@@ -151,7 +151,8 @@
       "noEditor": "Aucun éditeur actif",
       "noExec": "Le terminal demande le droit « exec »",
       "termOff": "Terminal intégré désactivé (GLD_WEB_TERMINAL=1)",
-      "nothingDirty": "Aucune modification à enregistrer"
+      "nothingDirty": "Aucune modification à enregistrer",
+      "noTree": "Affichez l'arborescence pour créer à la racine"
     },
     "toolbar": {
       "editor": "Actions de l'éditeur",

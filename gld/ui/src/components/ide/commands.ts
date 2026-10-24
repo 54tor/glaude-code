@@ -36,6 +36,8 @@ export type CmdCtx = {
   prefs: ViewPrefs
   // Terminal intégré activé côté serveur (GLD_WEB_TERMINAL=1).
   terminalAvailable: boolean
+  // Arborescence affichée : la création à la racine passe par son flux, sans elle la commande ne ferait rien.
+  treeShown: boolean
   save(): void
   saveAll(): void
   newFile(): void
@@ -66,6 +68,7 @@ const exec: Guard = (c) => (c.can("exec") ? "" : "ide.reason.noExec")
 const term: Guard = (c) => (c.terminalAvailable ? "" : "ide.reason.termOff")
 const dirty: Guard = (c) =>
   c.tabs.some((t) => isDirty(t) && !t.readOnly) ? "" : "ide.reason.nothingDirty"
+const treeOn: Guard = (c) => (c.treeShown ? "" : "ide.reason.noTree")
 const anyTab: Guard = (c) => (c.tabs.length ? "" : "ide.reason.noTab")
 
 const cmd = (
@@ -94,8 +97,8 @@ const font = (d: 1 | -1 | 0) => (c: CmdCtx) =>
   c.prefs.set("fontSize", zoomed(c.prefs.fontSize, d))
 
 export const commands: Command[] = [
-  cmd("file.newFile", "file", [write], (c) => c.newFile()),
-  cmd("file.newFolder", "file", [write], (c) => c.newFolder()),
+  cmd("file.newFile", "file", [write, treeOn], (c) => c.newFile()),
+  cmd("file.newFolder", "file", [write, treeOn], (c) => c.newFolder()),
   cmd(
     "file.save",
     "file",

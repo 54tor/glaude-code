@@ -20,6 +20,7 @@ const ctx = (o: Partial<CmdCtx> = {}, rights: Right[] = ["fs_read", "fs_write", 
     editor: handle(),
     prefs: { ...DEFAULT_PREFS, set: vi.fn() },
     terminalAvailable: true,
+    treeShown: true,
     save: vi.fn(),
     saveAll: vi.fn(),
     newFile: vi.fn(),
@@ -32,7 +33,7 @@ const ctx = (o: Partial<CmdCtx> = {}, rights: Right[] = ["fs_read", "fs_write", 
   }
 }
 const btn = (name: string) => screen.getByRole("button", { name })
-const reasonOf = (el: HTMLElement) => document.getElementById(el.getAttribute("aria-describedby") ?? "")?.textContent
+const reasonOf = (el: HTMLElement) => document.getElementById((el.getAttribute("aria-describedby") ?? "").split(" ")[0])?.textContent
 
 beforeEach(() => setLang("fr"))
 afterEach(cleanup)
@@ -114,6 +115,28 @@ describe("EditorToolbar", () => {
     fireEvent.keyDown(first, { key: "ArrowRight" })
     await waitFor(() => expect(document.activeElement).toBe(btn("Tout enregistrer")))
     expect(bar.contains(document.activeElement)).toBe(true)
+    vi.unstubAllGlobals()
+  })
+  it("infobulle : libellé et raccourci ; désactivé : la raison en plus, et la description pointe sur la raison", async () => {
+    vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} })
+    render(<EditorToolbar ctx={ctx({ readOnly: true })} />)
+    const tip = () => document.querySelector<HTMLElement>("[data-slot=tooltip-content]")
+    fireEvent.focus(btn("Rechercher"))
+    await waitFor(() => expect(tip()).toBeTruthy())
+    expect(tip()!.textContent).toContain("Rechercher")
+    expect(tip()!.querySelector("kbd")?.textContent).toBe("Ctrl+F")
+    expect(tip()!.textContent).not.toContain("lecture seule")
+    const on = (btn("Rechercher").getAttribute("aria-describedby") ?? "").split(" ")
+    expect(on.map((id) => document.getElementById(id)?.textContent ?? "").join()).not.toContain("lecture seule")
+    fireEvent.blur(btn("Rechercher"))
+    await waitFor(() => expect(tip()).toBeNull())
+    const off = btn("Annuler")
+    fireEvent.focus(off)
+    await waitFor(() => expect(tip()?.textContent).toContain("Annuler"))
+    expect(tip()!.querySelector("kbd")?.textContent).toBe("Ctrl+Z")
+    expect(tip()!.textContent).toContain("Fichier en lecture seule")
+    const ids = off.getAttribute("aria-describedby")!.split(" ")
+    expect(ids.map((id) => document.getElementById(id)?.textContent)).toContain("Fichier en lecture seule")
     vi.unstubAllGlobals()
   })
 })
