@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Menubar } from "radix-ui"
 import { CheckIcon } from "lucide-react"
@@ -15,12 +15,15 @@ const CHECKS: Record<string, Toggle> = {
   "view.toggleTerminal": "showTerminal",
   "view.toggleStatus": "showStatus",
 }
+// Commandes sans rapport avec l'éditeur : le focus revient au menu comme Radix le fait, pas dans un éditeur peut-être masqué.
+const NO_EDITOR = new Set(["view.toggleTree", "view.toggleTerminal", "view.toggleStatus", "terminal.toggle", "terminal.focusSession"])
 const ariaKeys = (s?: string) => s?.replace("Ctrl", "Control").replace("Maj", "Shift")
 const itemCls =
   "relative flex cursor-default items-center gap-2 rounded-md py-1 pr-2 pl-7 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground aria-disabled:opacity-60"
 
 // aria-disabled plutôt que disabled : l'entrée reste atteignable au clavier pour lire la raison du refus.
-function Entry({ c, ctx }: { c: Command; ctx: CmdCtx }) {
+// Focus donné à l'éditeur AVANT la commande : celles qui ouvrent un widget de Monaco (recherche, ligne, palette) le reprennent ensuite.
+function Entry({ c, ctx, onRan }: { c: Command; ctx: CmdCtx; onRan(): void }) {
   const { t } = useTranslation()
   const id = useId()
   const off = !c.enabled(ctx)
@@ -31,7 +34,14 @@ function Entry({ c, ctx }: { c: Command; ctx: CmdCtx }) {
     "aria-describedby": off ? id : undefined,
     "aria-keyshortcuts": ariaKeys(c.shortcut),
     className: itemCls,
-    onSelect: (e: Event) => (off ? e.preventDefault() : c.run(ctx)),
+    onSelect: (e: Event) => {
+      if (off) return e.preventDefault()
+      if (ctx.editor && !NO_EDITOR.has(c.id)) {
+        onRan()
+        ctx.editor.focus()
+      }
+      c.run(ctx)
+    },
   }
   const body = (
     <>
@@ -66,6 +76,13 @@ function Entry({ c, ctx }: { c: Command; ctx: CmdCtx }) {
 export function MenuBar({ ctx }: { ctx: CmdCtx }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState("")
+  // Une commande a rendu le focus à l'éditeur : Radix ne doit pas le remettre sur le menu en se fermant.
+  const ran = useRef(false)
+  const onRan = () => void (ran.current = true)
+  const closeFocus = (e: Event) => {
+    if (ran.current) e.preventDefault()
+    ran.current = false
+  }
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
       if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.defaultPrevented || isEditableTarget(e.target)) return
@@ -88,11 +105,11 @@ export function MenuBar({ ctx }: { ctx: CmdCtx }) {
             {t(`ide.menubar.${g}`)}
           </Menubar.Trigger>
           <Menubar.Portal>
-            <Menubar.Content align="start" sideOffset={4} className="z-50 min-w-56 rounded-lg border bg-popover p-1 text-popover-foreground shadow-md">
+            <Menubar.Content align="start" sideOffset={4} onCloseAutoFocus={closeFocus} className="z-50 min-w-56 rounded-lg border bg-popover p-1 text-popover-foreground shadow-md">
               {commands
                 .filter((c) => c.group === g)
                 .map((c) => (
-                  <Entry key={c.id} c={c} ctx={ctx} />
+                  <Entry key={c.id} c={c} ctx={ctx} onRan={onRan} />
                 ))}
             </Menubar.Content>
           </Menubar.Portal>
