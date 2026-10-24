@@ -4,6 +4,18 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.4.2] - 2026-10-24
+
+### Ajouté
+- **Recherche** : un champ de recherche dans chaque vue de sessions, par nom, et dans le contenu en mode avancé.
+- **Configuration** : les options de Claude passent dans l'onglet Réglages ; l'onglet Interface réunit les raccourcis puis l'apparence (couleurs et raccourcis en sections).
+
+### Modifié
+- Barre latérale : les groupes de sessions s'affichent sous les dossiers d'un projet ; le bouton engrenage est retiré (les réglages sont dans la page Configuration).
+
+### Corrigé
+- La CI échouait sur `TestRightsRowCopy` : la migration des droits `fs_read`/`fs_write` de la 0.4.0 avait ajouté deux colonnes à `home_acl`, et le test insérait ses lignes par position sans voir l'échec de l'insertion. Le test nomme maintenant ses colonnes et vérifie l'insertion ; la détection d'une ligne de droits copiée vers un autre utilisateur ou un autre home est vérifiée pour de bon (aucun changement du code de production).
+
 ## [0.4.1] - 2026-10-24
 
 ### Ajouté
@@ -226,7 +238,8 @@ Première version : `gld`, interface web locale pour parcourir, piloter et confi
 - Terminal intégré désactivé par défaut ; lecture bornée des fichiers de commandes.
 - Refus d'agir quand les sessions ouvertes sont indéterminées.
 
-[Non publié]: https://github.com/54tor/glaude-code/compare/v0.4.1...HEAD
+[Non publié]: https://github.com/54tor/glaude-code/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/54tor/glaude-code/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/54tor/glaude-code/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/54tor/glaude-code/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/54tor/glaude-code/compare/v0.3.0...v0.3.1
