@@ -55,6 +55,9 @@ function Meta({ s, d }: { s: Session; d: Detail | null }) {
   )
 }
 
+// Position de lecture par session, gardée à la fermeture de la fenêtre : `end` vaut vrai quand on était à moins d'une demi-page de la fin.
+const scrollMem = new Map<string, { top: number; end: boolean }>()
+
 export function Conversation({ row, onClose, args, choice, carousel }: { row: Row | null; onClose: () => void; args: string; choice: Choice; carousel?: { n: number; next: () => void; stop: () => void } }) {
   const { t } = useTranslation()
   const a = useActions()
@@ -84,6 +87,9 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
   // start/more : décalage de la première ligne lue et existence de messages plus anciens (lecture par la fin).
   const [loaded, setLoaded] = useState<{ key: string; msgs: Msg[]; start: number; more: boolean } | null>(null)
   const [loadingOlder, setLoadingOlder] = useState(false)
+  const idRef = useRef(id)
+  idRef.current = id
+  const restoring = useRef(false) // position mémorisée en cours de rétablissement : le suivi de la fin attend
   const keepScroll = useRef(false) // le chargement de messages plus anciens ne doit pas ramener à la fin
   const [info, setInfo] = useState<{ id: string; d: Detail } | null>(null)
   const area = useRef<HTMLDivElement>(null)
@@ -197,6 +203,28 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
     }, 3000)
     evs.forEach((e) => vp.addEventListener(e, stop, { passive: true }))
   }, [viewport])
+  // Rétablit la position mémorisée pendant que les hauteurs se précisent (rendu paresseux), jusqu'à ce que l'utilisateur prenne la main
+  // ou au bout de 1,5 s.
+  const restore = useCallback(
+    (top: number) => {
+      const vp = viewport()
+      if (!vp) return
+      restoring.current = true
+      const go = () => (vp.scrollTop = top)
+      go()
+      const iv = setInterval(go, 50)
+      const evs = ["wheel", "touchstart", "keydown", "pointerdown"]
+      const stop = () => {
+        clearInterval(iv)
+        clearTimeout(t)
+        restoring.current = false
+        evs.forEach((e) => vp.removeEventListener(e, stop))
+      }
+      const t = setTimeout(stop, 1500)
+      evs.forEach((e) => vp.addEventListener(e, stop, { passive: true }))
+    },
+    [viewport]
+  )
   // Chargement paresseux : les messages plus anciens arrivent d'eux-mêmes quand on remonte près du début.
   const top = useRef<HTMLDivElement>(null)
   const more = !!loadedNow?.more
@@ -220,8 +248,10 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
     // Collée à la fin tant que l'utilisateur y est : la bande d'état (réflexion, outil, file d'attente) change de hauteur sans que la vue décale.
     let stuck = vp.scrollHeight - vp.scrollTop - vp.clientHeight < 80
     const on = () => {
-      stuck = vp.scrollHeight - vp.scrollTop - vp.clientHeight < 80
+      const gap = vp.scrollHeight - vp.scrollTop - vp.clientHeight
+      stuck = gap < 80
       setAway(!stuck)
+      if (idRef.current && !restoring.current) scrollMem.set(idRef.current, { top: vp.scrollTop, end: gap < vp.clientHeight / 2 })
     }
     // Aimant : à la fin d'un défilement (pas pendant, sinon il lutte avec le suivi de la fin), à moins d'une demi-page de la fin la vue s'y colle.
     const snap = () => {
@@ -230,7 +260,7 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
     }
     vp.addEventListener("scrollend", snap, { passive: true })
     vp.addEventListener("scroll", on, { passive: true })
-    const ro = new ResizeObserver(() => stuck && !keepScroll.current && (vp.scrollTop = vp.scrollHeight))
+    const ro = new ResizeObserver(() => stuck && !keepScroll.current && !restoring.current && (vp.scrollTop = vp.scrollHeight))
     if (vp.firstElementChild) ro.observe(vp.firstElementChild)
     return () => {
       vp.removeEventListener("scroll", on)
@@ -244,9 +274,11 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
     if (!msgs) return
     if (opened.current !== id && viewport()) {
       opened.current = id
-      pinEnd()
+      const m = scrollMem.get(id)
+      if (m && !m.end) restore(m.top)
+      else pinEnd()
     }
-  }, [msgs, pinEnd, viewport, id, ready])
+  }, [msgs, pinEnd, restore, viewport, id, ready])
   const inTerm = termOn && view === "terminal" && !!id && a.live.has(id)
   // Envoi d'un message : on descend pour voir la réponse arriver, puis une seconde fois quand le transcript relu contient le message.
   const sentDown = useCallback(() => {
