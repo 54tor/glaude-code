@@ -15,9 +15,9 @@ export default defineConfig({
   build: {
     // Jamais de data: dans la CSS (petites polices) : la CSP de gld n'autorise que les fichiers servis.
     assetsInlineLimit: 0,
-    // Servi en local par le binaire Go : le poids du bundle principal (≈ 540 ko) ne coûte rien sur le réseau ; xterm est déjà chargé à la demande.
+    // Servi en local par le binaire Go : le poids du bundle principal (≈ 650 ko) ne coûte rien sur le réseau ; xterm est déjà chargé à la demande.
     chunkSizeWarningLimit: 700,
-    // Noms stables : dist/ est versionné (le binaire Go l'embarque), autant éviter le bruit dans l'historique.
+    // Noms stables : le binaire Go embarque dist/ au make install et le sert sous /assets/ ; un nom prévisible se vérifie et se cache simplement.
     rolldownOptions: {
       output: {
         entryFileNames: "assets/app.js",
@@ -26,7 +26,7 @@ export default defineConfig({
       },
     },
   },
-  // Workers de Monaco : mêmes noms stables que le reste de dist/.
+  // Workers de Monaco : noms stables eux aussi (ts.worker.js, editor.worker.js…), servis par gld, même origine que la CSP.
   worker: {
     format: "es",
     rolldownOptions: {
