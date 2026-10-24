@@ -20,15 +20,14 @@ import { isDirty, reduce } from "./ideState"
 import { useTree } from "./useTree"
 import { useIndex } from "./useIndex"
 import { useWatch, type WatchEvent } from "./useWatch"
-import { pickFeed, runFeed } from "./feedTs"
+import { useTsFeed } from "./feedTs"
 import { Handle } from "./Handle"
 import { readDrafts, useDrafts, type Draft } from "./drafts"
 import { clamp, MAX_TABS, mixedEol, nameOf, parentOf, parseTabs, useResolvedTheme } from "./ideHelpers"
 import { commands, type CmdCtx, type EditorHandle } from "./commands"
 import { useViewPrefs } from "./useViewPrefs"
 import { MenuBar } from "./MenuBar"
-import { branchOf, StatusBar, useEditorStatus } from "./StatusBar"
-import { useGit } from "@/hooks/useGit"
+import { WorkspaceStatus } from "./StatusBar"
 
 const CodeEditor = lazy(() => import("./CodeEditor"))
 
@@ -63,8 +62,6 @@ function Workspace({ dir }: { dir: string }) {
   const [termFocus, setTermFocus] = useState(0)
   // Poignée de l'éditeur de l'onglet actif, en état : les commandes qui en dépendent se réactivent dès son montage.
   const [editor, setEditor] = useState<EditorHandle | null>(null)
-  const status = useEditorStatus(editor)
-  const repos = useGit()
   const tree = useTree(dir)
   const treeActions = useRef<TreeActions | null>(null)
   const [filter, setFilter] = useState("")
@@ -81,7 +78,6 @@ function Workspace({ dir }: { dir: string }) {
   }
   const reloaded = useRef(new Set<string>())
   const seq = useRef(new Map<string, number>()) // chemin → numéro de la dernière lecture lancée
-  const fed = useRef(new Map<string, string>()) // chemin → « mtime:taille » de l'index au moment de l'alimentation
   const w = drag.w ?? clamp(Number(wStr) || 260, 140, 700)
 
   const tabOf = (p: string) => ide.tabs.find((x) => x.path === p)
@@ -227,35 +223,7 @@ function Workspace({ dir }: { dir: string }) {
     return () => all.forEach(clearTimeout)
   }, [])
 
-  // Alimentation du service TypeScript : seulement les fichiers de l'index, et seulement ceux qui ont changé depuis.
-  useEffect(() => {
-    if (index.state === "building") return
-    const stamp = new Map(index.files.map((f) => [f.path, `${f.mtime}:${f.size}`]))
-    const picked = pickFeed(index.files, live.current.active)
-    const keep = new Set(picked)
-    const gone = [...fed.current.keys()].filter((p) => !keep.has(p))
-    const todo = picked.filter((p) => fed.current.get(p) !== stamp.get(p))
-    if (!gone.length && !todo.length) return
-    const ac = new AbortController()
-    import("./CodeEditor")
-      .then(({ setTsLib }) => {
-        if (ac.signal.aborted) return
-        for (const p of gone) {
-          setTsLib(p, null)
-          fed.current.delete(p)
-        }
-        return runFeed(dir, todo, (p, c) => (setTsLib(p, c), fed.current.set(p, stamp.get(p) ?? "")), ac.signal)
-      })
-      .catch(() => {})
-    return () => ac.abort()
-  }, [dir, index.files, index.state])
-  useEffect(() => {
-    const f = fed.current
-    return () => {
-      if (f.size) import("./CodeEditor").then((m) => m.clearTsLibs(), () => {})
-      f.clear()
-    }
-  }, [dir])
+  useTsFeed(dir, index.files, index.state, live)
 
   const showDiff = async (path: string) => {
     const r = await api.fsFile(dir, path)
@@ -299,7 +267,6 @@ function Workspace({ dir }: { dir: string }) {
     const c = commands.find((x) => x.id === id)
     if (c?.enabled(k)) c.run(k)
   }
-  const termCmd = commands.find((x) => x.id === "terminal.toggle")!
   // Ctrl+S hors de Monaco (arbre, onglets) : jamais la boîte « Enregistrer la page » du navigateur.
   const key = (e: KeyboardEvent) => {
     if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.defaultPrevented || e.key.toLowerCase() !== "s") return
@@ -395,7 +362,7 @@ function Workspace({ dir }: { dir: string }) {
           <BottomPane dir={dir} prefs={prefs} focusN={termFocus} onView={setTerm} onToggle={(open) => run("view.toggleTerminal", { ...ctx, prefs: { ...prefs, showTerminal: open } })} />
         </div>
       </div>
-      {prefs.showStatus && <StatusBar status={status} watch={watch} index={index.state} branch={branchOf(dir, repos.status)} dirty={ide.tabs.filter(isDirty).length} term={{ open: term.open, reason: () => (termCmd.enabled(ctx) ? "" : t(termCmd.reason?.(ctx) ?? "")), onToggle: () => run("terminal.toggle") }} />}
+      {prefs.showStatus && <WorkspaceStatus dir={dir} ctx={ctx} watch={watch} index={index.state} />}
       <Confirm ask={confirm} onClose={() => setConfirm(null)} />
       <QuickOpen open={quick} files={index.files.map((f) => f.path)} state={index.state} onClose={() => setQuick(false)} onCloseFocus={refocus} onPick={(p) => ((picked.current = p), setQuick(false), open(p))} />
     </div>
