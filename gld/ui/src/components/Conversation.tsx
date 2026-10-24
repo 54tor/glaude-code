@@ -190,7 +190,11 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
       ro.disconnect()
       evs.forEach((e) => vp.removeEventListener(e, stop))
     }
-    const t = setTimeout(stop, 3000)
+    // Hauteurs enfin stables, l'utilisateur n'ayant pas touché à la vue : à moins d'une demi-page de la fin, on y reste collé.
+    const t = setTimeout(() => {
+      stop()
+      if (vp.scrollHeight - vp.scrollTop - vp.clientHeight < vp.clientHeight / 2) vp.scrollTop = vp.scrollHeight
+    }, 3000)
     evs.forEach((e) => vp.addEventListener(e, stop, { passive: true }))
   }, [viewport])
   // Chargement paresseux : les messages plus anciens arrivent d'eux-mêmes quand on remonte près du début.
@@ -219,10 +223,10 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
       stuck = vp.scrollHeight - vp.scrollTop - vp.clientHeight < 80
       setAway(!stuck)
     }
-    // Aimant : à la fin d'un défilement (pas pendant, sinon il lutte avec le suivi de la fin), à moins de 80 px de la fin la vue s'y colle.
+    // Aimant : à la fin d'un défilement (pas pendant, sinon il lutte avec le suivi de la fin), à moins d'une demi-page de la fin la vue s'y colle.
     const snap = () => {
       const gap = vp.scrollHeight - vp.scrollTop - vp.clientHeight
-      if (gap > 0 && gap < 80) vp.scrollTop = vp.scrollHeight
+      if (gap > 0 && gap < vp.clientHeight / 2) vp.scrollTop = vp.scrollHeight
     }
     vp.addEventListener("scrollend", snap, { passive: true })
     vp.addEventListener("scroll", on, { passive: true })
