@@ -246,9 +246,13 @@ func TestFsWriteRefusesSymlinkedParent(t *testing.T) {
 }
 
 func TestFsRmMovesToTrash(t *testing.T) {
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git absent")
+	}
 	h, _, proj := web(t)
-	if out, err := exec.Command("git", "-C", proj, "init", "-q").CombinedOutput(); err != nil {
-		t.Skip("git", string(out))
+	if out, err := exec.Command(git, "-C", proj, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatal("git", string(out))
 	}
 	os.MkdirAll(filepath.Join(proj, "d", "e"), 0o755)
 	os.WriteFile(filepath.Join(proj, "d", "e", "f.txt"), []byte("x"), 0o644)
@@ -277,7 +281,7 @@ func TestFsRmMovesToTrash(t *testing.T) {
 	if readF(t, filepath.Join(proj, ".gld-trash", id, "item", "f.txt")) != "x" {
 		t.Fatal("item")
 	}
-	out, _ := exec.Command("git", "-C", proj, "status", "--porcelain").Output()
+	out, _ := exec.Command(git, "-C", proj, "status", "--porcelain").Output()
 	if strings.Contains(string(out), "gld-trash") {
 		t.Fatal(string(out))
 	}
@@ -419,5 +423,134 @@ func TestFsWriteRequiresFsWrite(t *testing.T) {
 	}
 	if w := g.do("GET", "/fs-trash", &ro, "", ""); w.Code != 200 || !reached(w) {
 		t.Errorf("/fs-trash avec fs_read : %d", w.Code)
+	}
+}
+
+func TestFsSaveRefusesTrash(t *testing.T) {
+	h, _, proj := web(t)
+	os.WriteFile(filepath.Join(proj, "f"), nil, 0o644)
+	id := trashOne(t, h, proj, "f")
+	for _, p := range []string{".gld-trash/" + id + "/from", ".gld-trash/.gitignore", ".gld-trash/new"} {
+		if c, _, _ := jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": p, "content": "x", "force": true}); c != 400 {
+			t.Errorf("%s: %d", p, c)
+		}
+	}
+	if readF(t, filepath.Join(proj, ".gld-trash", id, "from")) != "f" || readF(t, filepath.Join(proj, ".gld-trash", ".gitignore")) != "*\n" {
+		t.Fatal("trash modified")
+	}
+}
+
+func TestFsSaveJSONEscapedBodyAtLimit(t *testing.T) {
+	h, _, proj := web(t)
+	body := strings.Repeat("\n\"", ideMaxFile/2)
+	if c, _, raw := jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "e.txt", "content": body, "etag": ""}); c != 200 {
+		t.Fatal(c, raw[:min(len(raw), 200)])
+	}
+	if readF(t, filepath.Join(proj, "e.txt")) != body {
+		t.Fatal("content differs")
+	}
+	if c, _, _ := jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "e2.txt", "content": body + "x", "etag": ""}); c != 413 {
+		t.Fatal(c)
+	}
+}
+
+func TestFsSaveEtagRecheckBeforeRename(t *testing.T) {
+	h, _, proj := web(t)
+	f := filepath.Join(proj, "a.txt")
+	os.WriteFile(f, []byte("v1"), 0o644)
+	e := etagOf(t, h, proj, "a.txt")
+	t.Cleanup(func() { ideBeforeRename = func() {} })
+	ideBeforeRename = func() { os.WriteFile(f, []byte("agent-wrote-this"), 0o644) }
+	c, m, raw := jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "a.txt", "content": "mine", "etag": e})
+	if c != 409 || m["conflict"] != true || m["deleted"] != false || m["etag"] == "" {
+		t.Fatal(c, raw)
+	}
+	if readF(t, f) != "agent-wrote-this" {
+		t.Fatal("overwritten")
+	}
+	// deleted in the window
+	os.WriteFile(f, []byte("v1"), 0o644)
+	e = etagOf(t, h, proj, "a.txt")
+	ideBeforeRename = func() { os.Remove(f) }
+	c, m, _ = jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "a.txt", "content": "mine", "etag": e})
+	if c != 409 || m["deleted"] != true {
+		t.Fatal(c, m)
+	}
+	if _, err := os.Stat(f); err == nil {
+		t.Fatal("recreated")
+	}
+	// creation raced by a new file
+	ideBeforeRename = func() { os.WriteFile(f, []byte("theirs"), 0o644) }
+	c, m, _ = jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "a.txt", "content": "mine", "etag": ""})
+	if c != 409 || m["deleted"] != false || readF(t, f) != "theirs" {
+		t.Fatal(c, m)
+	}
+	ents, _ := os.ReadDir(proj)
+	if len(ents) != 2 { // a.txt and .gld-trash? no: a.txt only expected
+		for _, e := range ents {
+			if strings.HasPrefix(e.Name(), ".gld-tmp-") {
+				t.Fatal("temp left", e.Name())
+			}
+		}
+	}
+}
+
+func TestFsTrashRestoreTamperedFrom(t *testing.T) {
+	h, _, proj := web(t)
+	os.WriteFile(filepath.Join(proj, "f"), []byte("x"), 0o644)
+	id := trashOne(t, h, proj, "f")
+	fromF := filepath.Join(proj, ".gld-trash", id, "from")
+	for _, bad := range []string{"../x", "/etc/x", ".gld-trash/foo", ""} {
+		os.WriteFile(fromF, []byte(bad), 0o644)
+		if c, _, raw := jpost(t, h, "/fs-trash-restore", map[string]any{"dir": proj, "id": id}); c != 400 {
+			t.Errorf("%q: %d %s", bad, c, raw)
+		}
+		if readF(t, filepath.Join(proj, ".gld-trash", id, "item")) != "x" {
+			t.Fatal("moved")
+		}
+	}
+	if _, err := os.Stat(filepath.Join(proj, ".gld-trash", "foo")); err == nil {
+		t.Fatal("created")
+	}
+}
+
+func TestFsTrashRestoreRefusesSymlinks(t *testing.T) {
+	h, _, proj := web(t)
+	os.WriteFile(filepath.Join(proj, "f"), []byte("x"), 0o644)
+	id := trashOne(t, h, proj, "f")
+	base := filepath.Join(proj, ".gld-trash", id)
+
+	// symlinked from
+	os.Rename(filepath.Join(base, "from"), filepath.Join(proj, "realfrom"))
+	os.Symlink("../../realfrom", filepath.Join(base, "from"))
+	if c, _, _ := jpost(t, h, "/fs-trash-restore", map[string]any{"dir": proj, "id": id}); c != 403 {
+		t.Fatal("from", c)
+	}
+	os.Remove(filepath.Join(base, "from"))
+	os.Rename(filepath.Join(proj, "realfrom"), filepath.Join(base, "from"))
+
+	// symlinked item
+	os.Rename(filepath.Join(base, "item"), filepath.Join(proj, "realitem"))
+	os.Symlink("../../realitem", filepath.Join(base, "item"))
+	if c, _, _ := jpost(t, h, "/fs-trash-restore", map[string]any{"dir": proj, "id": id}); c != 403 {
+		t.Fatal("item", c)
+	}
+	if _, err := os.Stat(filepath.Join(proj, "f")); err == nil {
+		t.Fatal("restored through link")
+	}
+	os.Remove(filepath.Join(base, "item"))
+	os.Rename(filepath.Join(proj, "realitem"), filepath.Join(base, "item"))
+
+	// symlinked id
+	os.Rename(base, filepath.Join(proj, "realid"))
+	os.Symlink("../realid", base)
+	if c, _, _ := jpost(t, h, "/fs-trash-restore", map[string]any{"dir": proj, "id": id}); c != 403 {
+		t.Fatal("id", c)
+	}
+	if _, err := os.Stat(filepath.Join(proj, "f")); err == nil {
+		t.Fatal("restored through link")
+	}
+	if readF(t, filepath.Join(proj, "realid", "item")) != "x" {
+		t.Fatal("moved")
 	}
 }
