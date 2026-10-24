@@ -303,3 +303,66 @@ func TestUsersListTamperOnce(t *testing.T) {
 		t.Fatalf("list: %d users, bad=%v, err=%v, events=%d", len(users), bad, err, tamperEvents(t, s))
 	}
 }
+
+func TestFsRightsGrantRevoke(t *testing.T) {
+	s := testStore(t)
+	u, err := s.AddUser("Alice", testPw, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Grant(u, "main", RightFsRead, RightFsWrite); err != nil {
+		t.Fatal(err)
+	}
+	m, err := s.Rights(u, "main")
+	if err != nil || !m[RightFsRead] || !m[RightFsWrite] {
+		t.Fatalf("après grant : %v %v", m, err)
+	}
+	if err := s.Revoke(u, "main", RightFsWrite); err != nil {
+		t.Fatal(err)
+	}
+	if m, err = s.Rights(u, "main"); err != nil || !m[RightFsRead] || m[RightFsWrite] {
+		t.Fatalf("après revoke : %v %v", m, err)
+	}
+}
+
+func TestMigration8ResignsACL(t *testing.T) {
+	s := testStore(t)
+	u, err := s.AddUser("Alice", testPw, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Grant(u, "main", RightMemRead); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Grant(u, "other", RightExec); err != nil {
+		t.Fatal(err)
+	}
+	old := func(home string, on ...string) []byte {
+		return rowSig(s.key, "home_acl", strconv.FormatInt(u, 10), append([]string{home}, on...)...)
+	}
+	for _, q := range []string{`ALTER TABLE home_acl DROP COLUMN fs_read`, `ALTER TABLE home_acl DROP COLUMN fs_write`, `DELETE FROM schema_version WHERE version=8`} {
+		if _, err := s.db.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.db.Exec(`UPDATE home_acl SET sig=? WHERE home_id='main'`, old("main", "1", "0", "0", "0", "0", "0", "0")); err != nil {
+		t.Fatal(err)
+	}
+	// La ligne « other » garde une signature invalide : elle doit rester altérée.
+	if _, err := s.db.Exec(`UPDATE home_acl SET sig=? WHERE home_id='other'`, []byte("bad")); err != nil {
+		t.Fatal(err)
+	}
+	s.db.Close()
+	s2, err := openAuthStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.db.Close()
+	m, err := s2.Rights(u, "main")
+	if err != nil || !m[RightMemRead] || m[RightFsRead] || m[RightFsWrite] {
+		t.Fatalf("droits après migration : %v %v", m, err)
+	}
+	if _, err := s2.Rights(u, "other"); err == nil {
+		t.Fatal("ligne altérée re-signée")
+	}
+}

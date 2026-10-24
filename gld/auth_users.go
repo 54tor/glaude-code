@@ -23,10 +23,12 @@ const (
 	RightUsageRead    Right = "usage_read"
 	RightSessionsRead Right = "sessions_read"
 	RightExec         Right = "exec"
+	RightFsRead       Right = "fs_read"
+	RightFsWrite      Right = "fs_write"
 )
 
 // Les valeurs sont aussi les noms de colonnes de home_acl ; l'ordre fixe celui de la signature.
-var allRights = []Right{RightMemRead, RightMemWrite, RightConfigWrite, RightMemSync, RightUsageRead, RightSessionsRead, RightExec}
+var allRights = []Right{RightMemRead, RightMemWrite, RightConfigWrite, RightMemSync, RightUsageRead, RightSessionsRead, RightExec, RightFsRead, RightFsWrite}
 
 var (
 	errTamper    = terr("srv.auth.tamper")
@@ -135,9 +137,67 @@ func (s *authStore) AccountsOn() (bool, error) {
 // à l'ancienne signature valide sont re-signées, le bit déduit des facteurs vérifiés à cet instant (une ligne altérée le
 // reste) ; une base antérieure reçoit l'état des comptes qu'elle n'avait pas.
 func (s *authStore) keyedStep(tx *sql.Tx, v int) error {
-	if v != 7 {
-		return nil
+	switch v {
+	case 7:
+		return s.stepMFAEnrolled(tx)
+	case 8:
+		return s.stepFsRights(tx)
 	}
+	return nil
+}
+
+// stepFsRights : la signature de home_acl couvre la liste ordonnée des droits, que 8 allonge de deux colonnes à 0. Une
+// ligne à l'ancienne signature valide est re-signée ; une ligne altérée le reste.
+func (s *authStore) stepFsRights(tx *sql.Tx) error {
+	const n = 7
+	rows, err := tx.Query(`SELECT user_id,home_id,` + strings.Join(strings.Split(rightCols(), ",")[:n], ",") + `,sig FROM home_acl`)
+	if err != nil {
+		return err
+	}
+	type legacy struct {
+		uid  int64
+		home string
+		m    map[Right]bool
+		sig  []byte
+	}
+	var list []legacy
+	for rows.Next() {
+		l := legacy{m: map[Right]bool{}}
+		vals := make([]any, n)
+		dst := []any{&l.uid, &l.home}
+		for i := range vals {
+			dst = append(dst, &vals[i])
+		}
+		dst = append(dst, &l.sig)
+		if err := rows.Scan(dst...); err != nil {
+			rows.Close()
+			return err
+		}
+		ok := true
+		f := []string{l.home}
+		for i, r := range allRights[:n] {
+			on, k := bit(vals[i])
+			l.m[r], ok = on, ok && k
+			f = append(f, b01(on))
+		}
+		if ok && rowSigOK(s.key, "home_acl", strconv.FormatInt(l.uid, 10), l.sig, f...) {
+			list = append(list, l)
+		}
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, l := range list {
+		if _, err := tx.Exec(`UPDATE home_acl SET sig=? WHERE user_id=? AND home_id=? AND sig=?`, s.aclSig(l.uid, l.home, l.m), l.uid, l.home, l.sig); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *authStore) stepMFAEnrolled(tx *sql.Tx) error {
 	rows, err := tx.Query(`SELECT id,name,pw_hash,is_admin,disabled,sig FROM users`)
 	if err != nil {
 		return err

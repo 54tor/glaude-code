@@ -384,7 +384,7 @@ func (d *adminAPI) acl(w http.ResponseWriter, r *http.Request) {
 		bad("srv.admin.homeInconnu", "A1", req.HomeID)
 		return
 	}
-	if slices.Contains(grant, RightExec) || slices.Contains(grant, RightConfigWrite) {
+	if slices.Contains(grant, RightExec) || slices.Contains(grant, RightConfigWrite) || slices.Contains(grant, RightFsWrite) {
 		if !req.Confirm {
 			bad("srv.admin.confirmerExec")
 			return
@@ -392,7 +392,7 @@ func (d *adminAPI) acl(w http.ResponseWriter, r *http.Request) {
 		if !d.fresh(w, r, p, req.Reauth) {
 			return
 		}
-	} else if len(grant) > 0 && (slices.Contains(grant, RightSessionsRead) || req.UserID == p.User.ID) {
+	} else if len(grant) > 0 && (slices.Contains(grant, RightSessionsRead) || slices.Contains(grant, RightFsRead) || req.UserID == p.User.ID) {
 		// Lire les transcriptions d'autrui, ou s'accorder un droit : un cookie volé ne doit pas y suffire.
 		if !d.fresh(w, r, p, req.Reauth) {
 			return

@@ -584,3 +584,22 @@ func TestAdminHomesAll(t *testing.T) {
 		}
 	}
 }
+
+func TestAdminGrantFsRules(t *testing.T) {
+	g := newAdminRig(t)
+	root := g.login("root", true)
+	bob := g.login("bob", false)
+	w := g.do("POST", "/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"fs_write"}, "reauth": root.reauth()})
+	if w.Code != 400 {
+		t.Fatalf("fs_write sans confirm : %d", w.Code)
+	}
+	w = g.do("POST", "/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"fs_write"}, "confirm": true})
+	if w.Code != 403 {
+		t.Fatalf("fs_write sans réauth : %d", w.Code)
+	}
+	w = g.do("POST", "/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"fs_read"}})
+	if w.Code != 403 {
+		t.Fatalf("fs_read sans réauth : %d", w.Code)
+	}
+	g.ok(g.do("POST", "/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"fs_read", "fs_write"}, "confirm": true, "reauth": root.reauth()}))
+}
