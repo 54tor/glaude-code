@@ -39,6 +39,19 @@ const parentOf = (p: string) => p.slice(0, Math.max(0, p.lastIndexOf("/")))
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
+// Onglets mémorisés : chemins seulement, jamais le contenu ; tout stockage illisible vaut liste vide.
+const MAX_TABS = 30
+const parseTabs = (s: string): { paths: string[]; active: string } => {
+  try {
+    const v: unknown = JSON.parse(s)
+    const o = (v && typeof v === "object" ? v : {}) as { paths?: unknown; active?: unknown }
+    const paths = Array.isArray(o.paths) ? o.paths.filter((x): x is string => typeof x === "string").slice(0, MAX_TABS) : []
+    return { paths, active: typeof o.active === "string" ? o.active : "" }
+  } catch {
+    return { paths: [], active: "" }
+  }
+}
+
 // Poignée de redimensionnement aux événements pointer : onMove pendant le glissement, onEnd au relâchement.
 function Handle({ label, vertical, start, onMove, onEnd }: { label: string; vertical?: boolean; start: () => number; onMove: (v: number) => void; onEnd: (v: number) => void }) {
   const from = useRef<{ at: number; v: number } | null>(null)
@@ -70,6 +83,8 @@ export function IdeView({ dir }: { dir: string }) {
   const [wStr, setW] = useLocal(`gld.ide.${dir}.w`, "260")
   const [hStr, setH] = useLocal(`gld.ide.${dir}.h`, "160")
   const [bottom, setBottom] = useLocal(`gld.ide.${dir}.bottom`, "1")
+  const [savedTabs, setSavedTabs] = useLocal(`gld.ide.${dir}.tabs`, "")
+  const [restored, setRestored] = useState(false)
   const [drag, setDrag] = useState<{ w?: number; h?: number }>({})
   const [ide, dispatch] = useReducer(reduce, { tabs: [], active: "" })
   const [diff, setDiff] = useState<{ path: string; original: string } | null>(null)
@@ -102,14 +117,37 @@ export function IdeView({ dir }: { dir: string }) {
 
   const open = async (path: string) => {
     if (tabOf(path)) return dispatch({ t: "focus", path })
-    const r = await api.fsFile(dir, path)
+    show(path, await api.fsFile(dir, path))
+  }
+  // quiet : restauration au chargement, un fichier disparu depuis est sauté sans message.
+  const show = (path: string, r: Awaited<ReturnType<typeof api.fsFile>>, quiet?: boolean) => {
     if (r.status === 413 || r.status === 415)
       return dispatch({ t: "open", tab: { path, content: "", saved: "", etag: "", readOnly: true, notice: r.status === 413 ? "tooBig" : "binary" } })
+    if (quiet && r.status === 404) return
     if (!r.ok || r.body.content === undefined) return fail(r)
     const c = r.body.content
     const mixed = mixedEol(c)
     dispatch({ t: "open", tab: { path, content: c, saved: c, etag: r.body.etag ?? "", readOnly: mixed || !can("fs_write"), ...(mixed && { notice: "mixedEol" as const }) } })
   }
+  // Lectures en parallèle, onglets posés dans l'ordre mémorisé ; aucun focus pris, le premier rendu n'attend pas.
+  useEffect(() => {
+    const { paths, active } = parseTabs(savedTabs)
+    let gone = false
+    Promise.all(paths.map((p) => api.fsFile(dir, p).catch(() => null))).then((rs) => {
+      if (gone) return
+      rs.forEach((r, i) => r && show(paths[i], r, true))
+      if (active) dispatch({ t: "focus", path: active })
+      setRestored(true)
+    })
+    return () => {
+      gone = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const tabsSnap = JSON.stringify({ paths: ide.tabs.slice(0, MAX_TABS).map((x) => x.path), active: ide.active })
+  useEffect(() => {
+    if (restored && tabsSnap !== savedTabs) setSavedTabs(tabsSnap)
+  }, [restored, tabsSnap, savedTabs, setSavedTabs])
   const reload = async (path: string, pre?: Awaited<ReturnType<typeof api.fsFile>>) => {
     setDiff((d) => (d?.path === path ? null : d))
     const r = pre ?? (await api.fsFile(dir, path))
