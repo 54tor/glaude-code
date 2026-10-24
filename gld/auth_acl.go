@@ -90,7 +90,9 @@ var routeRights = map[string]Right{
 
 	// Exécution.
 	"POST /chat": RightExec, "POST /chat-stop": RightExec, "POST /new-session": RightExec,
-	"GET /fs-tree": RightFsRead, "GET /fs-file": RightFsRead,
+	"GET /fs-tree": RightFsRead, "GET /fs-file": RightFsRead, "GET /fs-trash": RightFsRead,
+	"POST /fs-save": RightFsWrite, "POST /fs-new": RightFsWrite, "POST /fs-rename": RightFsWrite, "POST /fs-rm": RightFsWrite,
+	"POST /fs-trash-restore": RightFsWrite, "POST /fs-trash-purge": RightFsWrite,
 	"GET /term-info": RightExec, "POST /term-open": RightExec, "GET /term-ws": RightExec,
 	"POST /session-send": RightExec, "POST /session-key": RightExec, "POST /session-close": RightExec,
 	"GET /trust-pending": RightExec, "POST /trust-answer": RightExec, "POST /open": RightExec, "POST /git-push": RightExec,
