@@ -4,9 +4,11 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.4.0] - 2026-10-24
+
 ### Ajouté
 - **Multi-utilisateur (optionnel)** : comptes locaux créés par `gld user add --admin`, connexion par mot de passe plus second facteur obligatoire (TOTP, clés de sécurité WebAuthn, codes de secours), sessions à cookie et jeton CSRF. Sans compte, gld se comporte comme avant. Guide : `docs/auth.md`.
-- **Droits par home** : sept droits indépendants (`mem_read`, `mem_write`, `mem_sync`, `usage_read`, `sessions_read`, `config_write`, `exec`), refus par défaut de toute route non classée, snippets et restauration de skills réservés à `config_write` (jamais de contenu exécutable avec `mem_write`), interface et API d'administration (comptes, droits, journal, sessions). `exec` et `config_write` équivalent au compte système de gld.
+- **Droits par home** : neuf droits indépendants (`mem_read`, `mem_write`, `mem_sync`, `usage_read`, `sessions_read`, `config_write`, `exec`, `fs_read`, `fs_write`), refus par défaut de toute route non classée, snippets et restauration de skills réservés à `config_write` (jamais de contenu exécutable avec `mem_write`), interface et API d'administration (comptes, droits, journal, sessions). `exec` et `config_write` équivalent au compte système de gld.
 - **Défense contre les essais répétés** : délai progressif, verrou de compte, suite d'échecs consécutifs (30 min au 10e, 24 h au 20e), limite du second facteur (qui bloque aussi le mot de passe du compte), plafond global, journal d'événements limité et purgé à 90 jours, adresse du client via `GLD_TRUSTED_PROXIES`.
 - **Base signée** : seuls les secrets TOTP sont chiffrés ; les lignes sensibles (comptes, droits, facteurs, sessions) et le marqueur des comptes sont signés avec une clé dérivée de la clé maîtresse (`GLD_AUTH_KEY`, coffre-fort de l'OS ou `auth.key`). Une ligne altérée est refusée et signalée ; des comptes supprimés ferment le service (503) au lieu de rouvrir le mode ouvert (sauf base entièrement recréée : voir `docs/auth.md`).
 - **Garde-fou des sessions** : règles de refus, hook et bac à sable injectés dans les sessions lancées par gld ; `gld auth managed-settings` génère le fichier à installer par root.
@@ -15,6 +17,16 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - **Poids** : Monaco et ses workers ajoutent ~13 Mo non compressés à `ui/dist` (dont ~7 Mo pour le worker TypeScript), chargés seulement à l'ouverture de l'espace de travail ; le bundle principal ne change pas, mais le binaire Go, qui embarque `ui/dist`, grossit d'autant.
 - **Retour arrière** : la migration qui re-signe `home_acl` (droits `fs_read`/`fs_write`) rend chaque ligne de droits « altérée » pour un binaire plus ancien, qui refuse alors l'accès (le service reste fermé) ; revenir à une version antérieure exige de restaurer `auth.db`.
 - **`GLD_RUN_AS` (expérimental)** : fait tourner claude, tmux et les gld enfants sous un autre compte système. Ce n'est pas encore une frontière de sécurité (voir `docs/auth.md`) ; exige `GLD_RUN_AS_EXPERIMENTAL=1` et root.
+- **Build de l'interface** : Monaco est découpé en 8 morceaux d'environ 500 ko chargés avec l'éditeur (la limite d'avertissement de 700 ko est conservée) ; `ui/scripts/check-chunks.mjs`, lancé par `npm run build`, fait échouer la construction sur un cycle entre morceaux, un morceau trop gros (hors workers) ou un `app.js` qui n'est plus l'entrée, et le Makefile reconstruit l'interface quand le garde ou la configuration change. Un découpage naïf (`maxSize`) avait produit des morceaux qui s'importent mutuellement et une page blanche à l'ouverture d'un fichier : le garde l'attrape.
+- **Lecteur de session** : la transcription s'aimante à la fin en descendant (à moins d'une demi-page de la fin, y compris à la réouverture), et la position de lecture est mémorisée par session à la réouverture de la fenêtre.
+- **Bloc-notes** : notes en liste d'items cochables retirés une fois envoyés (y compris après l'envoi par nouvelle session), `Ctrl+Entrée` pour envoyer, état d'enregistrement par ligne ; navigation entre les onglets des questions de Claude. Fenêtre et semaine dans l'en-tête de la fiche Compte, spinner quand les chiffres sont périmés ; mémoire affichée en blocs.
+- **Sidebar** : une icône de micro-ondes orange animée remplace le feu pour une session maintenue au chaud.
+- **Erreurs amont** : les 429/529 et les nouvelles tentatives de Claude s'affichent dans la conversation.
+
+### Corrigé
+- `/rename` renomme la session au lieu d'être envoyé à Claude.
+- Lecteur : les lignes d'activité ne sont plus collées au bas de la fenêtre de la transcription et la zone d'activité reprend le fond de la transcription ; l'aimant n'agit qu'en fin de défilement.
+- Une page qui ne se charge pas (erreur de rendu, morceau de l'interface introuvable après une mise à jour) ne laisse plus un écran blanc : un message propose « Réessayer » ou « Recharger la page ».
 
 ## [0.3.1] - 2026-10-23
 
@@ -202,7 +214,10 @@ Première version : `gld`, interface web locale pour parcourir, piloter et confi
 - Terminal intégré désactivé par défaut ; lecture bornée des fichiers de commandes.
 - Refus d'agir quand les sessions ouvertes sont indéterminées.
 
-[Non publié]: https://github.com/54tor/glaude-code/compare/v0.2.0...HEAD
+[Non publié]: https://github.com/54tor/glaude-code/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/54tor/glaude-code/compare/v0.3.1...v0.4.0
+[0.3.1]: https://github.com/54tor/glaude-code/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/54tor/glaude-code/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/54tor/glaude-code/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/54tor/glaude-code/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/54tor/glaude-code/compare/v0.1.1...v0.1.2
