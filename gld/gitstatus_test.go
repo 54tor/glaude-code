@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestParseGitStatus(t *testing.T) {
@@ -161,5 +162,26 @@ func TestGitPrefix(t *testing.T) {
 	}
 	if gitPrefix(t.TempDir()) != "" {
 		t.Fatal("hors dépôt")
+	}
+}
+
+// Le préfixe gardé expire avec l'état git du dossier : un « git init » ultérieur est vu.
+func TestGitPrefixExpires(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git absent")
+	}
+	dir := t.TempDir()
+	git(t, dir, "init", "-q", "-b", "main")
+	gitPrefixMu.Lock()
+	gitPrefixes[dir] = gitPrefixEntry{"vieux/", time.Now().Add(-2 * gitTTL)}
+	gitPrefixMu.Unlock()
+	if p := gitPrefix(dir); p != "" {
+		t.Fatalf("préfixe périmé servi : %q", p)
+	}
+	gitPrefixMu.Lock()
+	gitPrefixes[dir] = gitPrefixEntry{"frais/", time.Now()}
+	gitPrefixMu.Unlock()
+	if p := gitPrefix(dir); p != "frais/" {
+		t.Fatalf("préfixe frais relu : %q", p)
 	}
 }
