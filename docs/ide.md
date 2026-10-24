@@ -26,7 +26,7 @@ Les garde-fous sont structurels :
 - Chaque chemin est résolu dans un `os.Root` ouvert sur la racine : `..`, chemin absolu, `\` et NUL sont refusés.
 - **Aucun lien symbolique n'est suivi**, même vers l'intérieur de la racine : listé comme tel dans l'arbre, jamais ouvert, jamais écrasé.
 - Aucun parcours récursif déclenché par une requête : l'arbre se charge un dossier à la fois. La seule descente récursive est l'indexeur, bornée (voir plus bas).
-- Le contenu des fichiers n'est jamais journalisé.
+- Le contenu des fichiers n'est jamais journalisé. Avec les comptes activés, chaque écriture réussie (`save`, `create`, `new`, `rename`, `rm`, `restore`, `purge`) ajoute un événement `ide_write` au journal d'`/admin/events` : `<op> <dossier>:<chemin> [octets]` (nom du dossier racine seul, jamais le chemin disque ; octets pour `save`/`create`), plafonné à 300 octets. Un refus ou un conflit n'y figure pas ; un jeton porteur est écrit sans compte. Sans comptes, aucun journal.
 - La CSP de gld est inchangée : Monaco et ses workers sont servis par gld (`/assets/`), **jamais par un CDN**.
 
 ## Routes
