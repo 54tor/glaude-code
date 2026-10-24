@@ -85,15 +85,19 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
   const togglePick = (i: number) => setPicked((p) => (p.has(i) ? new Set([...p].filter((x) => x !== i)) : new Set(p).add(i)))
   const dropIdx = new Set(chosen.map((x) => x.i))
   const targets = rows.filter((r) => sendable.has(r.s.id) && a.live.has(r.s.id))
+  const closed = rows.filter((r) => !a.live.has(r.s.id)).slice(0, 30)
+  const filled = items.map((x, i) => (x.trim() ? i : -1)).filter((i) => i >= 0)
+  const allPicked = filled.length > 0 && filled.every((i) => picked.has(i))
   const sendTo = async (r: Row) => {
-    const res = await api.post("/session-send", { id: r.s.id, text: body }, 20_000)
+    const live = a.live.has(r.s.id)
+    const res = live ? await api.post("/session-send", { id: r.s.id, text: body }, 20_000) : { ok: await a.resumeSend(r, body), out: "" }
     if (res.ok) {
       toast.success(tr("conversation.notes.sent", { title: r.s.title || r.s.id.slice(0, 8) }))
       edit(items.filter((_, j) => !dropIdx.has(j)))
       setPicked(new Set())
       flush()
     }
-    else toast.error(res.out)
+    else if (res.out) toast.error(res.out)
   }
   return (
     <div className="mb-4 rounded-lg border">
@@ -105,6 +109,12 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
       </button>
       {open && (
         <div className="space-y-2 border-t p-3">
+          {filled.length > 1 && (
+            <label className="flex w-fit cursor-pointer items-center gap-1.5 px-2 text-xs text-muted-foreground">
+              <input type="checkbox" checked={allPicked} onChange={() => setPicked(allPicked ? new Set() : new Set(filled))} className="size-3.5" />
+              {tr("conversation.notes.selectAll")}
+            </label>
+          )}
           <ul className="space-y-1.5">
             {items.map((it, i) => (
               <li key={i} className="flex items-start gap-1.5 rounded-lg border bg-background px-2 py-1">
@@ -161,8 +171,14 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="max-h-72 w-80 overflow-y-auto">
                 <DropdownMenuLabel className="whitespace-normal">{tr("conversation.notes.sendLabel")}</DropdownMenuLabel>
-                {targets.length === 0 && <DropdownMenuItem disabled>{tr("conversation.notes.none")}</DropdownMenuItem>}
+                {targets.length === 0 && closed.length === 0 && <DropdownMenuItem disabled>{tr("conversation.notes.none")}</DropdownMenuItem>}
                 {targets.map((r) => (
+                  <DropdownMenuItem key={r.s.id} onSelect={() => void sendTo(r)}>
+                    <span className="truncate">{r.s.title || r.s.id.slice(0, 8)}</span>
+                  </DropdownMenuItem>
+                ))}
+                {closed.length > 0 && <DropdownMenuLabel className="whitespace-normal text-xs font-normal text-muted-foreground">{tr("conversation.notes.closedLabel")}</DropdownMenuLabel>}
+                {closed.map((r) => (
                   <DropdownMenuItem key={r.s.id} onSelect={() => void sendTo(r)}>
                     <span className="truncate">{r.s.title || r.s.id.slice(0, 8)}</span>
                   </DropdownMenuItem>

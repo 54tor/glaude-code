@@ -414,6 +414,7 @@ export function useAppActions(c: {
                 "last"
               ),
           }),
+    resumeSend: (r, text) => act("/open", { dir: r.s.dir, id: r.s.id, args: withChoice(args, choice), prompt: text }, i18n.t("shell.act.resuming"), "last"),
     copy: (s) =>
       navigator.clipboard.writeText(s.id).then(
         () =>
