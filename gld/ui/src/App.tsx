@@ -2,7 +2,9 @@ import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { resolveFront, setLang } from "@/i18n"
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
-import { useLocation, useSearchParams } from "wouter"
+import { Link, useLocation, useSearchParams } from "wouter"
+import { Cog } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { type Group, type VGroup } from "@/lib/api"
 import { body } from "@/lib/commands"
 import { href, parse, type Route } from "@/lib/route"
@@ -29,7 +31,6 @@ import { Prompt, type Ask as PromptAsk } from "@/components/Prompt"
 import { SessionSelectionBar } from "@/components/SessionSelectionBar"
 import { SessionsPane } from "@/components/SessionsPane"
 import { Sidebar } from "@/components/Sidebar"
-import { Settings } from "@/components/SettingsDialog"
 import { segs } from "@/lib/paths"
 import { Compose, type ComposeAsk } from "@/components/Compose"
 import { AuthScreen } from "@/components/auth/Login"
@@ -344,7 +345,13 @@ function Shell() {
           snippets={snips ? snips.files.length : null}
           auto={{ n: view.autoItems.length, kb: view.akb, purge: purgeAuto }}
           args={args}
-          settings={<Settings folder={g?.project} args={args} setArgs={setArgs} choice={choice} setChoice={setChoice} font={font} setFont={setFont} fontSize={fontSize} setFontSize={setFontSize} />}
+          settings={
+            <Button variant="ghost" size="icon" className="size-9 text-muted-foreground" asChild>
+              <Link href={href({ kind: "config", tab: "interface" })} aria-label={t("config.dialog.title")} title={t("config.dialog.title")}>
+                <Cog className="size-6" />
+              </Link>
+            </Button>
+          }
         />
 
         <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
@@ -377,7 +384,7 @@ function Shell() {
           ) : route.kind === "skills" ? (
             <Skills sel={route.key} home={home} q={qt} onPick={(key) => go({ kind: "skills", key })} onAsk={setAsk} />
           ) : route.kind === "config" ? (
-            <Config home={home} tab={route.tab} onTab={(tab) => go({ kind: "config", tab })} />
+            <Config home={home} tab={route.tab} onTab={(tab) => go({ kind: "config", tab })} ui={{ args, setArgs, choice, setChoice, font, setFont, fontSize, setFontSize }} />
           ) : route.kind === "memory" ? (
             <Memory sel={route.key} home={home} q={qt} onPick={(key) => go({ kind: "memory", key })} onAsk={setAsk} onCompose={setCompose} args={args} />
           ) : route.kind === "snippets" ? (
