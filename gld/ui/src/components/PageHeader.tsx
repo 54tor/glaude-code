@@ -1,4 +1,4 @@
-import { FolderInput, Menu, MessageSquarePlus, MoreHorizontal, Settings, SquareTerminal, Trash2, TriangleAlert } from "lucide-react"
+import { FolderInput, Menu, MessageSquarePlus, MoreHorizontal, SquareTerminal, Trash2, TriangleAlert } from "lucide-react"
 import { useState } from "react"
 import { Link } from "wouter"
 import { useTranslation } from "react-i18next"
@@ -79,13 +79,6 @@ export function PageHeader({
               <Checkbox checked={!!hideGrouped} onCheckedChange={(c) => setHideGrouped(c === true ? "1" : "")} />
               {t("shell.header.hideGrouped", { n: nGrouped })}
             </label>
-          )}
-          {g && (
-            <Button variant="ghost" size="sm" asChild>
-              <Link href={`/configuration/projets?projet=${encodeURIComponent(g.project)}`} title={t("shell.header.settingsHint")}>
-                <Settings /> {t("shell.header.settings")}
-              </Link>
-            </Button>
           )}
           {g && !g.missing && exec && (
             <Button size="sm" onClick={() => actions.newSession(g.project)} title={t("shell.header.newInDirHint")}>

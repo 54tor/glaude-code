@@ -357,6 +357,8 @@
       "languageHint": "Enregistrée dans le réglage « language » de Claude Code (settings.json) : elle sert aussi aux commandes gld et aux textes demandés à Claude.",
       "tabClaude": "Claude",
       "tabLook": "Apparence",
+      "tabFolder": "Dossier",
+      "folderOpen": "Réglages du dossier",
       "tabKeys": "Raccourcis",
       "argsTitle": "Options ajoutées à claude",
       "argsHint": "Utilisées à chaque reprise dans un terminal. Le chat du lecteur n'en garde que --model, --fallback-model et --effort. Vide par défaut.",

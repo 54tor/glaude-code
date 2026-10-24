@@ -357,6 +357,8 @@
       "languageHint": "Saved in Claude Code's \"language\" setting (settings.json): it also applies to the gld commands and to the texts requested from Claude.",
       "tabClaude": "Claude",
       "tabLook": "Appearance",
+      "tabFolder": "Folder",
+      "folderOpen": "Folder settings",
       "tabKeys": "Shortcuts",
       "argsTitle": "Options added to claude",
       "argsHint": "Used on every resume in a terminal. The viewer chat only keeps --model, --fallback-model and --effort. Empty by default.",
