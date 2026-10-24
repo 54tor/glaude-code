@@ -30,6 +30,25 @@ describe("QuickOpen", () => {
     expect(pick).toHaveBeenCalledWith("src/lib/api.ts")
   })
 
+  it("scrollIntoView qui renvoie une Promise (Chrome) : ouverture et flèches sans erreur", () => {
+    const orig = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = (() => Promise.resolve()) as unknown as typeof orig
+    const err = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      const { pick } = mount()
+      const input = screen.getByRole("combobox")
+      fireEvent.keyDown(input, { key: "ArrowDown" })
+      fireEvent.keyDown(input, { key: "ArrowDown" })
+      fireEvent.keyDown(input, { key: "Enter" })
+      expect(pick).toHaveBeenCalledWith("src/lib/api.ts")
+      cleanup()
+      expect(err).not.toHaveBeenCalled()
+    } finally {
+      Element.prototype.scrollIntoView = orig
+      err.mockRestore()
+    }
+  })
+
   it("Échap ferme", () => {
     const { close } = mount()
     fireEvent.keyDown(screen.getByRole("combobox"), { key: "Escape" })

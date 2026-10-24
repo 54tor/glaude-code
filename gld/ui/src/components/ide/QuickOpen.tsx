@@ -22,7 +22,10 @@ function Body({ files, state, onPick }: Omit<Props, "open" | "onClose">) {
   const [sel, setSel] = useState(0)
   const list = useMemo(() => rank(files, q), [files, q])
   const box = useRef<HTMLUListElement>(null)
-  useEffect(() => box.current?.children[sel]?.scrollIntoView?.({ block: "nearest" }), [sel])
+  // Corps en bloc : dans Chrome, scrollIntoView renvoie une Promise que React prendrait pour un nettoyage.
+  useEffect(() => {
+    box.current?.children[sel]?.scrollIntoView?.({ block: "nearest" })
+  }, [sel])
 
   const key = (e: KeyboardEvent) => {
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
