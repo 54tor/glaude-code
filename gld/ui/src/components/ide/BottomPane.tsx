@@ -14,8 +14,9 @@ export type BottomView = { open: boolean; available: boolean }
 // Barre toujours visible : l'utilisateur voit l'état du terminal même replié ou indisponible.
 // Le terminal ne s'ouvre seul que s'il y a de quoi l'attacher ; un choix explicite de l'utilisateur prime ensuite.
 // focusN : demande de focus de la session (ouvre la zone, sans prendre la main).
-// onToggle : bascule de la zone par le registre des commandes ; à défaut, la préférence directement.
-export function BottomPane({ dir, prefs, focusN = 0, onView, onToggle }: { dir: string; prefs: ViewPrefs; focusN?: number; onView?: (v: BottomView) => void; onToggle?: () => void }) {
+// onToggle : bascule de la zone par le registre des commandes, avec l'état affiché ici (celui remonté par onView
+// peut avoir un rendu de retard) ; à défaut, la préférence directement.
+export function BottomPane({ dir, prefs, focusN = 0, onView, onToggle }: { dir: string; prefs: ViewPrefs; focusN?: number; onView?: (v: BottomView) => void; onToggle?: (open: boolean) => void }) {
   const { t } = useTranslation()
   const { state, sessions } = useTerminalAvailability(dir)
   const [hStr, setH] = useLocal(`gld.ide.${dir}.h`, "160")
@@ -50,7 +51,7 @@ export function BottomPane({ dir, prefs, focusN = 0, onView, onToggle }: { dir: 
           title={reason || undefined}
           aria-expanded={open}
           aria-label={t(open ? "ide.bottom.hide" : "ide.bottom.show")}
-          onClick={() => (onToggle ? onToggle() : prefs.set("showTerminal", !open))}
+          onClick={() => (onToggle ? onToggle(open) : prefs.set("showTerminal", !open))}
         >
           <PanelBottom />
         </Button>

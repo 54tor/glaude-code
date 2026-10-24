@@ -290,9 +290,9 @@ function Workspace({ dir }: { dir: string }) {
     closeAll,
     openQuick: () => setQuick(true),
   }
-  const run = (id: string) => {
+  const run = (id: string, k: CmdCtx = ctx) => {
     const c = commands.find((x) => x.id === id)
-    if (c?.enabled(ctx)) c.run(ctx)
+    if (c?.enabled(k)) c.run(k)
   }
   // Ctrl+S hors de Monaco (arbre, onglets) : jamais la boîte « Enregistrer la page » du navigateur.
   const key = (e: KeyboardEvent) => {
@@ -384,7 +384,7 @@ function Workspace({ dir }: { dir: string }) {
           </Suspense>
           {diff && diff.path === ide.active && active && <ConflictDiff path={diff.path} original={diff.original} modified={active.content} theme={theme} onClose={() => setDiff(null)} />}
         </div>
-        <BottomPane dir={dir} prefs={prefs} focusN={termFocus} onView={setTerm} onToggle={() => run("view.toggleTerminal")} />
+        <BottomPane dir={dir} prefs={prefs} focusN={termFocus} onView={setTerm} onToggle={(open) => run("view.toggleTerminal", { ...ctx, prefs: { ...prefs, showTerminal: open } })} />
       </div>
       <Confirm ask={confirm} onClose={() => setConfirm(null)} />
       <QuickOpen open={quick} files={index.files.map((f) => f.path)} state={index.state} onClose={() => setQuick(false)} onCloseFocus={refocus} onPick={(p) => ((picked.current = p), setQuick(false), open(p))} />

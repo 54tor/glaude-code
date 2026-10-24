@@ -59,4 +59,12 @@ describe("TerminalContent", () => {
     expect(document.activeElement).toBe(document.body)
     expect(done).toHaveBeenCalledTimes(1)
   })
+  it("session montée collante : un choix mémorisé qui revient en vie ne la remplace pas", async () => {
+    localStorage.setItem("gld.ide./p.term", "b")
+    const { rerender } = render(<TerminalContent dir="/p" sessions={[s("a")]} />)
+    expect((await screen.findByTestId("term")).textContent).toBe("a")
+    rerender(<TerminalContent dir="/p" sessions={[s("a"), s("b")]} />)
+    expect(screen.getByTestId("term").textContent).toBe("a")
+    expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe("a")
+  })
 })
