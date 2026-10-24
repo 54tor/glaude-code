@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { setLang } from "@/i18n"
 import { api, type Data } from "@/lib/api"
+import { setAuth } from "@/lib/auth"
 import { IdeView } from "./IdeView"
 
 vi.mock("./CodeEditor", () => ({
@@ -31,6 +32,8 @@ let git: ReturnType<typeof vi.spyOn>
 beforeEach(() => {
   setLang("fr")
   localStorage.clear()
+  // Les droits doivent être connus : le terminal ne sonde rien tant que l'authentification charge.
+  setAuth({ state: "open" } as never)
   FakeES.all = []
   vi.stubGlobal("EventSource", FakeES)
   vi.spyOn(api, "fsIndex").mockResolvedValue(ok({ state: "ready", files: [] }))
