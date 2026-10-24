@@ -297,6 +297,11 @@
     "notice": {
       "waiting": "Claude is waiting"
     },
+    "routeError": {
+      "title": "This page could not be loaded",
+      "hint": "A new version of the application is probably installed.",
+      "reload": "Reload the page"
+    },
     "fonts": {
       "adwaita": "Adwaita Mono (system)"
     },
