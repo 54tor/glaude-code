@@ -486,11 +486,9 @@ func TestFsSaveEtagRecheckBeforeRename(t *testing.T) {
 		t.Fatal(c, m)
 	}
 	ents, _ := os.ReadDir(proj)
-	if len(ents) != 2 { // a.txt and .gld-trash? no: a.txt only expected
-		for _, e := range ents {
-			if strings.HasPrefix(e.Name(), ".gld-tmp-") {
-				t.Fatal("temp left", e.Name())
-			}
+	for _, e := range ents {
+		if strings.HasPrefix(e.Name(), ".gld-tmp-") {
+			t.Fatal("temp left", e.Name())
 		}
 	}
 }

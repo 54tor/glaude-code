@@ -117,11 +117,17 @@ func TestIdeOpenRootAndFail(t *testing.T) {
 	if _, err := ideOpenRoot(t.TempDir()); !errors.Is(err, errIdeDir) {
 		t.Fatalf("got %v", err)
 	}
-	cases := map[int]error{404: errIdeDir, 400: errIdePath, 403: errIdeSymlink, 413: errIdeTooBig, 415: errIdeBinary, 409: errIdeConflict, 500: errors.New("open /secret/disk/path: boom")}
-	for code, e := range cases {
+	cases := []struct {
+		code int
+		e    error
+	}{{404, errIdeDir}, {404, errIdeNotFound}, {400, errIdePath}, {403, errIdeSymlink}, {413, errIdeTooBig}, {415, errIdeBinary},
+		{409, errIdeConflict}, {409, errIdeExists}, {500, errors.New("open /secret/disk/path: boom")}}
+	for _, c := range cases {
+		code, e := c.code, c.e
 		w := httptest.NewRecorder()
 		ideFail(w, e)
-		if w.Code != code || strings.Contains(w.Body.String(), "/secret") || !strings.Contains(w.Body.String(), `"ok":false`) {
+		if w.Code != code || strings.Contains(w.Body.String(), "/secret") || !strings.Contains(w.Body.String(), `"ok":false`) ||
+			(code != 500 && !strings.Contains(w.Body.String(), e.Error())) {
 			t.Errorf("%d: got %d %s", code, w.Code, w.Body)
 		}
 	}
