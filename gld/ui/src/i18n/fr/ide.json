@@ -53,7 +53,8 @@
     },
     "notice": {
       "tooBig": "Ce fichier est trop volumineux pour l'éditeur : onglet en lecture seule.",
-      "binary": "Ce fichier n'est pas un fichier texte : onglet en lecture seule."
+      "binary": "Ce fichier n'est pas un fichier texte : onglet en lecture seule.",
+      "mixedEol": "Ce fichier mélange des fins de ligne (CRLF, LF ou CR seul) : il est ouvert en lecture seule pour ne pas le réécrire."
     },
     "conflict": {
       "changed": "Ce fichier a été modifié sur le disque depuis son ouverture.",

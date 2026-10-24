@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest"
 import { setLang } from "@/i18n"
+import { setAuth } from "@/lib/auth"
 import { api, type FsEntry, type FsRes } from "@/lib/api"
 import { IdeView } from "./IdeView"
 
@@ -37,10 +38,13 @@ let save: MockInstance<typeof api.fsSave>
 beforeEach(() => {
   setLang("fr")
   localStorage.clear()
-  vi.spyOn(api, "fsTree").mockResolvedValue({ entries: [e("a.txt", "file"), e("big.bin", "file"), e("img.png", "file")], truncated: false })
+  vi.spyOn(api, "fsTree").mockResolvedValue({ entries: [e("a.txt", "file"), e("b.txt", "file"), e("c.txt", "file"), e("lf.txt", "file"), e("mix.txt", "file"), e("cr.txt", "file"), e("big.bin", "file"), e("img.png", "file")], truncated: false })
   file = vi.spyOn(api, "fsFile").mockImplementation(async (_d, p) => {
     if (p === "big.bin") return res(413, { error: "trop gros" })
     if (p === "img.png") return res(415, { error: "binaire" })
+    if (p === "lf.txt") return res(200, { content: "a\nb\n", etag: "e1", size: 4, mtime: 1 })
+    if (p === "mix.txt") return res(200, { content: "a\r\nb\n", etag: "e1", size: 5, mtime: 1 })
+    if (p === "cr.txt") return res(200, { content: "a\rb", etag: "e1", size: 3, mtime: 1 })
     return res(200, { content: "l1\r\nl2\r\n", etag: "e1", size: 8, mtime: 1 })
   })
   save = vi.spyOn(api, "fsSave").mockResolvedValue(res(200, { ok: true, etag: "e2" }))
@@ -48,6 +52,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  setAuth({ state: "loading", rights: undefined, home: undefined })
 })
 
 const openA = async () => {
@@ -56,6 +61,15 @@ const openA = async () => {
   return screen.findByLabelText("type:a.txt")
 }
 const ctrlS = (el: Element) => fireEvent.keyDown(el, { key: "s", ctrlKey: true })
+const openFile = async (name: string) => {
+  fireEvent.click(await screen.findByText(name, { selector: "[role=treeitem] span" }))
+  await screen.findByRole("tab", { name: new RegExp(name.replace(".", "\\.")) })
+}
+const deferred = <T,>() => {
+  let resolve!: (v: T) => void
+  const promise = new Promise<T>((r) => (resolve = r))
+  return { promise, resolve }
+}
 
 describe("IdeView", () => {
   it("ouvrir un fichier crée un onglet, un second clic ne le duplique pas", async () => {
@@ -175,5 +189,97 @@ describe("IdeView", () => {
     expect(screen.getAllByRole("tab")).toHaveLength(2)
     ctrlS(screen.getByRole("tablist"))
     expect(save).not.toHaveBeenCalled()
+  })
+
+  it("fins de ligne mixtes (ou CR isolé) : lecture seule avec message, jamais sale, Ctrl+S sans effet", async () => {
+    render(<IdeView dir="/p" />)
+    for (const name of ["mix.txt", "cr.txt"]) {
+      await openFile(name)
+      const input = await screen.findByLabelText(`type:${name}`)
+      expect((input as HTMLInputElement).readOnly).toBe(true)
+      expect(screen.getAllByText(/mélange des fins de ligne/).length).toBeGreaterThan(0)
+      fireEvent.change(input, { target: { value: "x" } })
+      expect(screen.queryByLabelText("Modifications non enregistrées")).toBeNull()
+      ctrlS(input)
+    }
+    expect(save).not.toHaveBeenCalled()
+  })
+
+  it("fins de ligne uniformes LF : éditable et aller-retour à l'octet près", async () => {
+    render(<IdeView dir="/p" />)
+    await openFile("lf.txt")
+    const input = await screen.findByLabelText("type:lf.txt")
+    expect((input as HTMLInputElement).readOnly).toBe(false)
+    expect(screen.queryByText(/mélange des fins de ligne/)).toBeNull()
+    ctrlS(input)
+    await waitFor(() => expect(save).toHaveBeenCalled())
+    expect(save.mock.calls[0][2]).toBe("a\nb\n")
+  })
+
+  it("utilisateur fs_read seul : onglet en lecture seule, Ctrl+S sans effet, pas de création à la racine", async () => {
+    setAuth({ state: "ok", home: "h", rights: { h: ["fs_read"] } })
+    const input = await openA()
+    expect((input as HTMLInputElement).readOnly).toBe(true)
+    ctrlS(input)
+    ctrlS(screen.getByRole("tablist"))
+    expect(save).not.toHaveBeenCalled()
+    expect(screen.queryByRole("button", { name: "Nouveau fichier" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "Nouveau dossier" })).toBeNull()
+  })
+
+  it("deux Ctrl+S rapprochés : la seconde attend la première et part avec le nouvel etag, sans conflit", async () => {
+    const first = deferred<FsRes<{ etag: string; conflict: boolean; deleted: boolean }>>()
+    save.mockReturnValueOnce(first.promise).mockResolvedValueOnce(res(200, { ok: true, etag: "e3" }))
+    const input = await openA()
+    fireEvent.change(input, { target: { value: "x" } })
+    ctrlS(input)
+    fireEvent.change(input, { target: { value: "y" } })
+    ctrlS(input)
+    ctrlS(input)
+    expect(save).toHaveBeenCalledTimes(1)
+    first.resolve(res(200, { ok: true, etag: "e2" }))
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(2))
+    expect(save.mock.calls[1].slice(0, 4)).toEqual(["/p", "a.txt", "l1\r\nl2\r\nxy", "e2"])
+    await waitFor(() => expect(screen.queryByLabelText("Modifications non enregistrées")).toBeNull())
+    expect(screen.queryByRole("alert")).toBeNull()
+    expect(save).toHaveBeenCalledTimes(2)
+  })
+
+  it("une seconde demande sans saisie entre-temps est abandonnée", async () => {
+    const first = deferred<FsRes<{ etag: string; conflict: boolean; deleted: boolean }>>()
+    save.mockReturnValueOnce(first.promise)
+    const input = await openA()
+    fireEvent.change(input, { target: { value: "x" } })
+    ctrlS(input)
+    ctrlS(input)
+    first.resolve(res(200, { ok: true, etag: "e2" }))
+    await waitFor(() => expect(screen.queryByLabelText("Modifications non enregistrées")).toBeNull())
+    expect(save).toHaveBeenCalledTimes(1)
+  })
+
+  it("onglets au clavier : flèches, Début, Fin activent l'onglet ; Suppr le ferme", async () => {
+    render(<IdeView dir="/p" />)
+    for (const n of ["a.txt", "b.txt", "c.txt"]) await openFile(n)
+    const tab = (n: string) => screen.getByRole("tab", { name: new RegExp(n.replace(".", "\\.")) })
+    const selected = () => screen.getAllByRole("tab").filter((t) => t.getAttribute("aria-selected") === "true").map((t) => t.getAttribute("title"))
+    expect(selected()).toEqual(["c.txt"])
+    expect(screen.getAllByRole("tab").filter((t) => t.tabIndex === 0)).toHaveLength(1)
+    tab("c.txt").focus()
+    fireEvent.keyDown(tab("c.txt"), { key: "ArrowLeft" })
+    expect(selected()).toEqual(["b.txt"])
+    expect(document.activeElement).toBe(tab("b.txt"))
+    expect(tab("b.txt").tabIndex).toBe(0)
+    fireEvent.keyDown(tab("b.txt"), { key: "Home" })
+    expect(selected()).toEqual(["a.txt"])
+    fireEvent.keyDown(tab("a.txt"), { key: "ArrowLeft" })
+    expect(selected()).toEqual(["c.txt"])
+    fireEvent.keyDown(tab("c.txt"), { key: "ArrowRight" })
+    expect(selected()).toEqual(["a.txt"])
+    fireEvent.keyDown(tab("a.txt"), { key: "End" })
+    expect(selected()).toEqual(["c.txt"])
+    fireEvent.keyDown(tab("c.txt"), { key: "Delete" })
+    await waitFor(() => expect(screen.getAllByRole("tab")).toHaveLength(2))
+    expect(selected()).toEqual(["b.txt"])
+    expect(document.activeElement).toBe(tab("b.txt"))
   })
 })
