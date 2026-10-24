@@ -68,6 +68,18 @@
     "diff": {
       "title": "Disk version on the left, yours on the right",
       "close": "Close the comparison"
+    },
+    "quick": {
+      "title": "Open a file",
+      "hint": "Type part of the name, choose with the arrow keys, open with Enter.",
+      "placeholder": "File name…",
+      "partial": "Partial index: the project has too many files, some are not listed.",
+      "building": "Indexing…",
+      "none": "No matching file"
+    },
+    "watch": {
+      "reloaded": "“{{name}}” reloaded from disk",
+      "reloadedMany": "{{count}} files reloaded from disk"
     }
   }
 }

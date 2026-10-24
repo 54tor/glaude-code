@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { setLang } from "@/i18n"
 import { api, type FsEntry } from "@/lib/api"
 import { FileTree } from "./FileTree"
+import { useTree } from "./useTree"
 
 const e = (name: string, type: FsEntry["type"]): FsEntry => ({ name, type, size: 1, mtime: 1 })
 const root = [e("src", "dir"), e("link", "symlink"), e("a.txt", "file")]
@@ -19,7 +20,11 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-const mount = (o: Partial<Parameters<typeof FileTree>[0]> = {}) => render(<FileTree dir="/p" canWrite={false} selected="" onOpen={() => {}} {...o} />)
+type P = Omit<Parameters<typeof FileTree>[0], "tree">
+function Host(p: P) {
+  return <FileTree {...p} tree={useTree(p.dir)} />
+}
+const mount = (o: Partial<P> = {}) => render(<Host dir="/p" canWrite={false} selected="" onOpen={() => {}} {...o} />)
 
 describe("FileTree", () => {
   it("ne charge que la racine au montage, puis un seul appel au dépliage", async () => {

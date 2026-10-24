@@ -68,6 +68,18 @@
     "diff": {
       "title": "À gauche la version du disque, à droite la vôtre",
       "close": "Fermer la comparaison"
+    },
+    "quick": {
+      "title": "Ouvrir un fichier",
+      "hint": "Tapez une partie du nom, choisissez avec les flèches, ouvrez avec Entrée.",
+      "placeholder": "Nom du fichier…",
+      "partial": "Index partiel : le projet compte trop de fichiers, certains n'apparaissent pas.",
+      "building": "Indexation en cours…",
+      "none": "Aucun fichier ne correspond"
+    },
+    "watch": {
+      "reloaded": "« {{name}} » rechargé depuis le disque",
+      "reloadedMany": "{{count}} fichiers rechargés depuis le disque"
     }
   }
 }
