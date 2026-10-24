@@ -1,9 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -160,5 +166,101 @@ func TestFsAuditOpenMode(t *testing.T) {
 	h, _, proj := web(t)
 	if c, _, raw := jpost(t, h, "/fs-new", map[string]any{"dir": proj, "path": "a", "kind": "file"}); c != 200 {
 		t.Fatal(c, raw)
+	}
+}
+
+// Un enfant n'a pas de base de comptes : il renvoie la ligne d'audit nettoyée à sa passerelle, jamais sur un échec.
+func TestFsAuditChildHeader(t *testing.T) {
+	h, _, proj := web(t)
+	childToken = "tok"
+	t.Cleanup(func() { childToken = "" })
+	post := func(body map[string]any) *httptest.ResponseRecorder {
+		b, _ := json.Marshal(body)
+		r := httptest.NewRequest("POST", "/fs-new", bytes.NewReader(b))
+		r.Host = testHost
+		r.Header.Set(childHeader, "tok")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	w := post(map[string]any{"dir": proj, "path": "x\ny", "kind": "file"})
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body)
+	}
+	got, err := url.QueryUnescape(w.Header().Get(ideAuditHeader))
+	if err != nil || got != "new "+filepath.Base(proj)+":x?y" {
+		t.Fatalf("%q %v", w.Header().Get(ideAuditHeader), err)
+	}
+	if w = post(map[string]any{"dir": proj, "path": "x\ny", "kind": "file"}); w.Code != 409 || w.Header().Get(ideAuditHeader) != "" {
+		t.Fatal(w.Code, w.Header())
+	}
+}
+
+// La passerelle écrit l'évènement relayé par l'enfant pour l'utilisateur de la requête et retire l'en-tête.
+func TestFsAuditRelayedFromChild(t *testing.T) {
+	a := newAuditRig(t)
+	pro := t.TempDir()
+	if err := saveHomes([]Home{{Name: "pro", Dir: pro}}); err != nil {
+		t.Fatal(err)
+	}
+	id, _ := homeIDFor("pro")
+	if err := a.s.Grant(a.u.id, id, RightFsWrite); err != nil {
+		t.Fatal(err)
+	}
+	var forged atomic.Int32
+	child := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get(ideAuditHeader) != "" {
+			forged.Add(1)
+		}
+		switch r.URL.Path {
+		case "/fs-save":
+			w.Header().Set(ideAuditHeader, url.QueryEscape("save pro:a.txt 6"))
+			w.WriteHeader(200)
+		case "/fs-new":
+			w.Header().Set(ideAuditHeader, url.QueryEscape("new pro:refusé"))
+			w.WriteHeader(409)
+		default:
+			w.WriteHeader(200)
+		}
+		w.Write([]byte(`{"ok":true}`))
+	}))
+	defer child.Close()
+	u, _ := url.Parse(child.URL)
+	old := homeStart
+	t.Cleanup(func() { homeStart = old; homesMu.Lock(); clear(homeProcs); homesMu.Unlock() })
+	homeStart = func(h Home) (*homeProc, error) {
+		return &homeProc{dir: h.Dir, proxy: childProxy(u, "tok"), done: make(chan struct{})}, nil
+	}
+	do := func(path string, forge bool) *httptest.ResponseRecorder {
+		b, _ := json.Marshal(map[string]any{"dir": pro, "path": "a.txt", "content": "ééé", "kind": "file"})
+		r := httptest.NewRequest("POST", path, bytes.NewReader(b))
+		r.Host = testHost
+		r.Header.Set("Content-Type", "application/json")
+		r.AddCookie(&http.Cookie{Name: sessCookie, Value: a.u.cookie})
+		r.AddCookie(&http.Cookie{Name: homeCookie, Value: "pro"})
+		r.Header.Set(csrfHeader, a.u.csrf)
+		if forge {
+			r.Header.Set(ideAuditHeader, url.QueryEscape("save pro:forgé 1"))
+		}
+		w := httptest.NewRecorder()
+		a.h.ServeHTTP(w, r)
+		return w
+	}
+	if w := do("/fs-save", false); w.Code != 200 || w.Header().Get(ideAuditHeader) != "" {
+		t.Fatal(w.Code, w.Header())
+	}
+	if w := do("/fs-new", false); w.Code != 409 || w.Header().Get(ideAuditHeader) != "" {
+		t.Fatal(w.Code, w.Header())
+	}
+	if w := do("/fs-rm", true); w.Code != 200 {
+		t.Fatal(w.Code)
+	}
+	a.want(t, "save pro:a.txt 6")
+	if forged.Load() != 0 {
+		t.Fatal("en-tête forgé relayé à l'enfant")
+	}
+	var uid int64
+	if err := a.s.db.QueryRow(`SELECT user_id FROM auth_events WHERE kind='ide_write'`).Scan(&uid); err != nil || uid != a.u.id {
+		t.Fatal(uid, err)
 	}
 }

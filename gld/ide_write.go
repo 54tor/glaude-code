@@ -273,7 +273,7 @@ func routesIDEWrite(mux *http.ServeMux) {
 		if !existed {
 			op = "create"
 		}
-		ideAudit(r, op, req.Dir, rel, int64(len(req.Content)))
+		ideAudit(w, r, op, req.Dir, rel, int64(len(req.Content)))
 		writeJSON(w, 200, map[string]any{"ok": true, "etag": ideEtag(nfi)})
 	})
 
@@ -316,7 +316,7 @@ func routesIDEWrite(mux *http.ServeMux) {
 			ideFail(w, err)
 			return
 		}
-		ideAudit(r, "new", req.Dir, rel, -1)
+		ideAudit(w, r, "new", req.Dir, rel, -1)
 		writeJSON(w, 200, map[string]any{"ok": true})
 	})
 
@@ -353,7 +353,7 @@ func routesIDEWrite(mux *http.ServeMux) {
 			ideFail(w, err)
 			return
 		}
-		ideAudit(r, "rename", req.Dir, from+" -> "+to, -1)
+		ideAudit(w, r, "rename", req.Dir, from+" -> "+to, -1)
 		writeJSON(w, 200, map[string]any{"ok": true})
 	})
 
@@ -423,7 +423,7 @@ func routesIDEWrite(mux *http.ServeMux) {
 			fail(err)
 			return
 		}
-		ideAudit(r, "rm", req.Dir, rel, -1)
+		ideAudit(w, r, "rm", req.Dir, rel, -1)
 		writeJSON(w, 200, map[string]any{"ok": true, "id": id})
 	})
 
@@ -517,7 +517,7 @@ func routesIDEWrite(mux *http.ServeMux) {
 		}
 		root.Remove(base + "/from")
 		root.Remove(base)
-		ideAudit(r, "restore", req.Dir, from, -1)
+		ideAudit(w, r, "restore", req.Dir, from, -1)
 		writeJSON(w, 200, map[string]any{"ok": true})
 	})
 
@@ -544,7 +544,7 @@ func routesIDEWrite(mux *http.ServeMux) {
 			ideFail(w, err)
 			return
 		}
-		ideAudit(r, "purge", req.Dir, what, -1)
+		ideAudit(w, r, "purge", req.Dir, what, -1)
 		writeJSON(w, 200, map[string]any{"ok": true})
 	})
 }
