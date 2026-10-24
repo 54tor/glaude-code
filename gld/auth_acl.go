@@ -387,7 +387,7 @@ func rightsErr(g *gateInfo, homeID string, ok func(map[Right]bool) bool) (int, s
 // Flux longs : le garde ne juge qu'à l'ouverture, une session révoquée ou un droit retiré doit aussi couper un flux déjà ouvert.
 var (
 	authWatchEvery = 5 * time.Second
-	watchedRoutes  = map[string]bool{"GET /term-ws": true, "POST /chat": true}
+	watchedRoutes  = map[string]bool{"GET /term-ws": true, "POST /chat": true, "GET /fs-watch": true}
 	errAuthRevoked = errors.New("auth: access revoked")
 )
 
