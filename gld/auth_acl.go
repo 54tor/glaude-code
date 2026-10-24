@@ -26,7 +26,7 @@ var routeRights = map[string]Right{
 	"GET /{$}": rightPublic, "GET /toutes": rightPublic, "GET /en-cours": rightPublic, "GET /dossier/": rightPublic,
 	"GET /groupe/": rightPublic, "GET /projet/": rightPublic, "GET /snippets": rightPublic, "GET /snippets/": rightPublic,
 	"GET /memoire": rightPublic, "GET /memoire/": rightPublic, "GET /onglets": rightPublic, "GET /configuration": rightPublic,
-	"GET /configuration/": rightPublic, "GET /skills": rightPublic, "GET /skills/": rightPublic, "GET /assets/": rightPublic,
+	"GET /configuration/": rightPublic, "GET /skills": rightPublic, "GET /skills/": rightPublic, "GET /espace/": rightPublic, "GET /assets/": rightPublic,
 	"GET /icons/": rightPublic, "GET /favicon.ico": rightPublic, "GET /manifest.webmanifest": rightPublic,
 
 	// Connexion et profil.
@@ -90,6 +90,7 @@ var routeRights = map[string]Right{
 
 	// Exécution.
 	"POST /chat": RightExec, "POST /chat-stop": RightExec, "POST /new-session": RightExec,
+	"GET /fs-tree": RightFsRead, "GET /fs-file": RightFsRead,
 	"GET /term-info": RightExec, "POST /term-open": RightExec, "GET /term-ws": RightExec,
 	"POST /session-send": RightExec, "POST /session-key": RightExec, "POST /session-close": RightExec,
 	"GET /trust-pending": RightExec, "POST /trust-answer": RightExec, "POST /open": RightExec, "POST /git-push": RightExec,
