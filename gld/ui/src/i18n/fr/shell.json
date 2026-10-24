@@ -297,6 +297,11 @@
     "notice": {
       "waiting": "Claude attend"
     },
+    "routeError": {
+      "title": "Cette page n'a pas pu se charger",
+      "hint": "Une nouvelle version de l'application est probablement installée.",
+      "reload": "Recharger la page"
+    },
     "fonts": {
       "adwaita": "Adwaita Mono (système)"
     },

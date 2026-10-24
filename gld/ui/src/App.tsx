@@ -17,6 +17,7 @@ import { useWaitingNotice } from "@/hooks/useWaitingNotice"
 import { applyFont } from "@/lib/fonts"
 import { type Choice } from "@/lib/models"
 import { AUTO, buildView, byDate, groupKey, HOT, WEEK } from "@/lib/sessionsView"
+import { RouteErrorBoundary } from "@/components/RouteErrorBoundary"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ActionsCtx, type Row } from "@/components/actions"
 import { Confirm, type Ask } from "@/components/Confirm"
@@ -365,6 +366,7 @@ function Shell() {
             reload={reload}
           />
 
+          <RouteErrorBoundary key={route.kind}>
           <Suspense fallback={<Skeleton className="m-6 h-32" />}>
           {route.kind === "workspace" ? (
             <IdeView key={route.dir} dir={route.dir} />
@@ -423,6 +425,7 @@ function Shell() {
           )}
 
           </Suspense>
+          </RouteErrorBoundary>
 
           {selected.length > 0 && (
             <SessionSelectionBar
