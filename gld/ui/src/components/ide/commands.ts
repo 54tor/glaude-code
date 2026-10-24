@@ -1,6 +1,7 @@
 import type { Right } from "@/lib/auth"
 import { isDirty, type Tab } from "./ideState"
 import { zoomed, type ViewPrefs } from "./useViewPrefs"
+import type { TermState } from "./useTerminalAvailability"
 
 // indent : « spaces:N » ou « tabs:N », mis en forme par la barre d'état.
 export type EditorStatus = {
@@ -34,8 +35,8 @@ export type CmdCtx = {
   // null tant qu'aucun éditeur n'est monté pour l'onglet actif (chargement paresseux de Monaco, notice tooBig/binary).
   editor: EditorHandle | null
   prefs: ViewPrefs
-  // Terminal intégré activé côté serveur (GLD_WEB_TERMINAL=1).
-  terminalAvailable: boolean
+  // État de la zone terminal (droit exec, GLD_WEB_TERMINAL=1, liste des sessions) : chaque refus a sa raison.
+  terminal: TermState
   // Arborescence affichée : la création à la racine passe par son flux, sans elle la commande ne ferait rien.
   treeShown: boolean
   save(): void
@@ -67,7 +68,14 @@ const hasTab: Guard = (c) => (c.tab ? "" : "ide.reason.noTab")
 const writable: Guard = (c) => (c.readOnly ? "ide.reason.readOnly" : "")
 const hasEditor: Guard = (c) => (c.editor ? "" : "ide.reason.noEditor")
 const exec: Guard = (c) => (c.can("exec") ? "" : "ide.reason.noExec")
-const term: Guard = (c) => (c.terminalAvailable ? "" : "ide.reason.termOff")
+const TERM_REASON: Partial<Record<TermState, string>> = {
+  loading: "ide.reason.termLoading",
+  disabled: "ide.reason.termOff",
+  forbidden: "ide.reason.noExec",
+  nosessions: "ide.reason.noSessionsRead",
+  unavailable: "ide.reason.sessionsDown",
+}
+const term: Guard = (c) => TERM_REASON[c.terminal] ?? ""
 const dirty: Guard = (c) =>
   c.tabs.some((t) => isDirty(t) && !t.readOnly) ? "" : "ide.reason.nothingDirty"
 const treeOn: Guard = (c) => (c.treeShown ? "" : "ide.reason.noTree")
@@ -144,10 +152,11 @@ export const commands: Command[] = [
   cmd("view.fontMinus", "view", [], font(-1), undefined, true),
   cmd("view.fontReset", "view", [], font(0), undefined, true),
   cmd("view.toggleTree", "view", [], toggle("showTree")),
-  cmd("view.toggleTerminal", "view", [], toggle("showTerminal")),
+  cmd("view.toggleTerminal", "view", [exec, term], toggle("showTerminal")),
   cmd("view.toggleStatus", "view", [], toggle("showStatus")),
   cmd("terminal.toggle", "terminal", [exec, term], toggle("showTerminal")),
   cmd("terminal.focusSession", "terminal", [exec, term], (c) =>
     c.focusSession()
   ),
 ]
+

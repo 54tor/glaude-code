@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { setLang } from "@/i18n"
 import { setAuth } from "@/lib/auth"
-import { api, type Data } from "@/lib/api"
+import { api, HttpError, type Data } from "@/lib/api"
 import { BottomPane } from "./BottomPane"
 import { DEFAULT_PREFS, type ViewPrefs } from "./useViewPrefs"
 
@@ -18,6 +18,8 @@ const setup = (enabled: boolean, d: Data) => {
   vi.spyOn(api, "data").mockResolvedValue(d)
 }
 const prefs = (o: Partial<ViewPrefs> = {}): ViewPrefs => ({ ...DEFAULT_PREFS, set: vi.fn(), ...o })
+// Zone déjà ouverte une fois par l'utilisateur : seul cas où elle s'attache au chargement.
+const opened = () => prefs({ showTerminalChosen: true, showTerminal: true })
 beforeEach(() => {
   setLang("fr")
   localStorage.clear()
@@ -51,12 +53,51 @@ describe("BottomPane", () => {
     expect(await screen.findByText(/lancez `claude` dans ce dossier/)).toBeTruthy()
     expect(screen.queryByTestId("term")).toBeNull()
   })
-  it("une session vivante, aucun choix mémorisé : ouverte d'emblée en lecture seule", async () => {
+  it("une session vivante, jamais ouverte : repliée, invite, rien d'attaché ; le bouton l'ouvre en lecture seule", async () => {
     setup(true, data(["a"], [s("a", "/p", 1)]))
-    render(<BottomPane dir="/p" prefs={prefs()} />)
+    const p = prefs()
+    const { rerender } = render(<BottomPane dir="/p" prefs={p} />)
+    expect(await screen.findByText("1 session en direct — ouvrir le terminal")).toBeTruthy()
+    expect(screen.queryByTestId("term")).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Afficher le panneau du bas" }))
+    expect(p.set).toHaveBeenCalledWith("showTerminal", true)
+    rerender(<BottomPane dir="/p" prefs={opened()} />)
     const t = await screen.findByTestId("term")
     expect(t.textContent).toBe("a")
     expect(t.dataset.take).toBe("false")
+    expect(screen.getByText("1 session en direct")).toBeTruthy()
+  })
+  it("sans le droit sessions_read : raison explicite, aucune lecture de la liste des sessions", async () => {
+    setup(true, data(["a"], [s("a", "/p", 1)]))
+    setAuth({ state: "ok", home: "h", rights: { h: ["fs_read", "exec"] } } as never)
+    render(<BottomPane dir="/p" prefs={opened()} />)
+    expect(await screen.findByText(/sessions_read/)).toBeTruthy()
+    expect((screen.getByRole("button") as HTMLButtonElement).disabled).toBe(true)
+    await new Promise((r) => setTimeout(r, 20))
+    expect(api.termInfo).toHaveBeenCalled()
+    expect(api.data).not.toHaveBeenCalled()
+  })
+  it("liste des sessions refusée (403) : raison explicite, plus aucun sondage", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.spyOn(api, "termInfo").mockResolvedValue({ enabled: true })
+    vi.spyOn(api, "data").mockRejectedValue(new HttpError(403))
+    render(<BottomPane dir="/p" prefs={opened()} />)
+    expect(await screen.findByText(/sessions_read/)).toBeTruthy()
+    expect(screen.queryByText(/GLD_WEB_TERMINAL/)).toBeNull()
+    vi.advanceTimersByTime(31000)
+    expect(api.data).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+  })
+  it("liste des sessions en panne : raison générique, le sondage continue", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.spyOn(api, "termInfo").mockResolvedValue({ enabled: true })
+    vi.spyOn(api, "data").mockRejectedValue(new HttpError(500))
+    render(<BottomPane dir="/p" prefs={opened()} />)
+    expect(await screen.findByText("Liste des sessions indisponible")).toBeTruthy()
+    vi.spyOn(api, "data").mockResolvedValue(data(["a"], [s("a", "/p", 1)]))
+    vi.advanceTimersByTime(11000)
+    expect((await screen.findByTestId("term")).textContent).toBe("a")
+    vi.useRealTimers()
   })
   it("choix mémorisé replié : prioritaire, rien de monté", async () => {
     setup(true, data(["a"], [s("a", "/p", 1)]))
@@ -72,7 +113,7 @@ describe("BottomPane", () => {
   })
   it("le bouton enregistre un choix explicite", async () => {
     setup(true, data(["a"], [s("a", "/p", 1)]))
-    const p = prefs()
+    const p = opened()
     render(<BottomPane dir="/p" prefs={p} />)
     await screen.findByTestId("term")
     fireEvent.click(screen.getByRole("button", { name: "Masquer le panneau du bas" }))
@@ -81,7 +122,7 @@ describe("BottomPane", () => {
   it("plusieurs sessions : sélecteur collant quand api.data réordonne", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     setup(true, data(["a", "b"], [s("a", "/p", 1), s("b", "/p", 5)]))
-    render(<BottomPane dir="/p" prefs={prefs()} />)
+    render(<BottomPane dir="/p" prefs={opened()} />)
     const el = await screen.findByTestId("term")
     expect(el.textContent).toBe("b")
     vi.spyOn(api, "data").mockResolvedValue(data(["a", "b"], [s("a", "/p", 9), s("b", "/p", 5)]))
@@ -109,7 +150,7 @@ describe("BottomPane", () => {
   it("onglet masqué : le sondage saute, reprend au retour de visibilité", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     setup(true, data(["a"], [s("a", "/p", 1)]))
-    render(<BottomPane dir="/p" prefs={prefs()} />)
+    render(<BottomPane dir="/p" prefs={opened()} />)
     await screen.findByTestId("term")
     const n = vi.mocked(api.data).mock.calls.length
     const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true)
@@ -122,24 +163,27 @@ describe("BottomPane", () => {
   })
   it("bouton de repli : aria-expanded, pas aria-pressed", async () => {
     setup(true, data(["a"], [s("a", "/p", 1)]))
-    render(<BottomPane dir="/p" prefs={prefs()} />)
+    render(<BottomPane dir="/p" prefs={opened()} />)
     await screen.findByTestId("term")
     const b = screen.getByRole("button", { name: "Masquer le panneau du bas" })
     expect(b.getAttribute("aria-expanded")).toBe("true")
     expect(b.hasAttribute("aria-pressed")).toBe(false)
   })
-  it("pluriel : une session, deux sessions", async () => {
+  it("pluriel : une session, deux sessions, ouvert et replié", async () => {
     setup(true, data(["a"], [s("a", "/p", 1)]))
-    const { unmount } = render(<BottomPane dir="/p" prefs={prefs()} />)
+    const { unmount } = render(<BottomPane dir="/p" prefs={opened()} />)
     expect(await screen.findByText("1 session en direct")).toBeTruthy()
     unmount()
     setup(true, data(["a", "b"], [s("a", "/p", 1), s("b", "/p", 2)]))
-    render(<BottomPane dir="/p" prefs={prefs()} />)
+    const { unmount: u2 } = render(<BottomPane dir="/p" prefs={opened()} />)
     expect(await screen.findByText("2 sessions en direct")).toBeTruthy()
+    u2()
+    render(<BottomPane dir="/p" prefs={prefs()} />)
+    expect(await screen.findByText("2 sessions en direct — ouvrir le terminal")).toBeTruthy()
   })
   it("compare les dossiers sans le séparateur final", async () => {
     setup(true, data(["a"], [s("a", "/p/", 1)]))
-    render(<BottomPane dir="/p" prefs={prefs()} />)
+    render(<BottomPane dir="/p" prefs={opened()} />)
     expect((await screen.findByTestId("term")).textContent).toBe("a")
   })
   it("demande de focus : ouvre la zone repliée, focus une seule fois", async () => {
@@ -160,14 +204,14 @@ describe("BottomPane", () => {
     await new Promise((r) => setTimeout(r, 20))
     expect(document.activeElement).toBe(document.body)
   })
-  it("onToggle reçoit l'état affiché par la zone, pas celui remonté avec un rendu de retard", async () => {
+  it("onToggle reçoit l'état affiché (replié faute de choix), pas la préférence brute (ouverte par défaut)", async () => {
     setup(true, data(["a"], [s("a", "/p", 1)]))
     const onToggle = vi.fn()
     const p = prefs()
     render(<BottomPane dir="/p" prefs={p} onToggle={onToggle} />)
-    await screen.findByTestId("term")
-    fireEvent.click(screen.getByRole("button", { name: "Masquer le panneau du bas" }))
-    expect(onToggle).toHaveBeenCalledWith(true)
+    await screen.findByText("1 session en direct — ouvrir le terminal")
+    fireEvent.click(screen.getByRole("button", { name: "Afficher le panneau du bas" }))
+    expect(onToggle).toHaveBeenCalledWith({ open: false, state: "ready" })
     expect(p.set).not.toHaveBeenCalled()
   })
 })

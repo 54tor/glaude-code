@@ -49,7 +49,7 @@ const ctx = (
     readOnly: false,
     editor: handle(),
     prefs: { ...DEFAULT_PREFS, set: vi.fn() },
-    terminalAvailable: true,
+    terminal: "ready",
     treeShown: true,
     save: vi.fn(),
     saveAll: vi.fn(),
@@ -106,7 +106,10 @@ const blocked: CmdCtx[] = [
   }),
   ctx({}, ["fs_read"]),
   ctx({ tab: undefined, tabs: [], editor: null }),
-  ctx({ terminalAvailable: false }),
+  ctx({ terminal: "disabled" }),
+  ctx({ terminal: "loading" }),
+  ctx({ terminal: "nosessions" }),
+  ctx({ terminal: "unavailable" }),
   ctx({ treeShown: false }),
 ]
 
@@ -142,11 +145,17 @@ describe("registre de commandes", () => {
     }
   })
 
-  it("groupe terminal : désactivé sans exec ou terminal désactivé", () => {
-    for (const c of commands.filter((c) => c.group === "terminal")) {
+  it("terminal (groupe Terminal et Affichage › zone terminal) : désactivé sans exec ou terminal indisponible, raison propre à chaque cas", () => {
+    const ids = ["terminal.toggle", "terminal.focusSession", "view.toggleTerminal"]
+    for (const c of ids.map(byId)) {
       expect(c.enabled(ctx({}, ["fs_read", "fs_write"])), c.id).toBe(false)
-      expect(c.enabled(ctx({ terminalAvailable: false })), c.id).toBe(false)
+      expect(c.reason!(ctx({}, ["fs_read", "fs_write"])), c.id).toBe("ide.reason.noExec")
+      expect(c.reason!(ctx({ terminal: "disabled" })), c.id).toBe("ide.reason.termOff")
+      expect(c.reason!(ctx({ terminal: "loading" })), c.id).toBe("ide.reason.termLoading")
+      expect(c.reason!(ctx({ terminal: "nosessions" })), c.id).toBe("ide.reason.noSessionsRead")
+      expect(c.reason!(ctx({ terminal: "unavailable" })), c.id).toBe("ide.reason.sessionsDown")
       expect(c.enabled(ctx()), c.id).toBe(true)
+      expect(c.enabled(ctx({ terminal: "nosession" })), c.id).toBe(true)
     }
   })
 
@@ -182,4 +191,5 @@ describe("registre de commandes", () => {
     expect(byId("goto.palette").shortcut).toBe("F1")
     expect(byId("edit.redo").shortcut).toBe("Ctrl+Maj+Z")
   })
+
 })
