@@ -10,7 +10,8 @@
       "truncated": "List truncated: this folder has too many entries to show them all.",
       "loading": "Loading…",
       "failed": "Could not read the folder",
-      "empty": "Empty folder"
+      "empty": "Empty folder",
+      "noMatch": "No loaded entry matches."
     },
     "menu": {
       "newFile": "New file",
@@ -100,7 +101,8 @@
       "ended": "The session has ended.",
       "title": "Terminal",
       "help": "run `claude` in this folder",
-      "ready": "{{count}} live session(s)"
+      "ready_one": "{{count}} live session",
+      "ready_other": "{{count}} live sessions"
     },
     "drafts": {
       "dropped": "Draft of “{{name}}” discarded: the file changed on disk."
@@ -150,6 +152,30 @@
       "noExec": "The terminal requires the “exec” right",
       "termOff": "Built-in terminal disabled (GLD_WEB_TERMINAL=1)",
       "nothingDirty": "No changes to save"
+    },
+    "toolbar": {
+      "editor": "Editor actions",
+      "tree": "File tree actions",
+      "refresh": "Refresh",
+      "collapseAll": "Collapse all",
+      "trash": "Trash",
+      "filter": "Filter by name",
+      "filterPlaceholder": "Filter…",
+      "clearFilter": "Clear filter"
+    },
+    "trash": {
+      "title": "Workspace trash",
+      "hint": "Entries deleted from this folder, most recent first.",
+      "loading": "Loading…",
+      "failed": "Could not read the trash.",
+      "empty": "The trash is empty.",
+      "restore": "Restore {{path}}",
+      "purge": "Delete {{path}} permanently",
+      "purgeTitle": "Delete “{{path}}” permanently?",
+      "purgeBody": "The entry is erased from disk: this cannot be undone.",
+      "purgeConfirm": "Delete permanently",
+      "exists": "“{{path}}” already exists at that location: rename or delete the entry in place before restoring.",
+      "restored": "“{{path}}” restored"
     }
   }
 }
