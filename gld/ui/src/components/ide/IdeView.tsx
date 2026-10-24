@@ -26,6 +26,9 @@ import { readDrafts, useDrafts, type Draft } from "./drafts"
 import { clamp, MAX_TABS, mixedEol, nameOf, parentOf, parseTabs, useResolvedTheme } from "./ideHelpers"
 import { commands, type CmdCtx, type EditorHandle } from "./commands"
 import { useViewPrefs } from "./useViewPrefs"
+import { MenuBar } from "./MenuBar"
+import { branchOf, StatusBar, useEditorStatus } from "./StatusBar"
+import { useGit } from "@/hooks/useGit"
 
 const CodeEditor = lazy(() => import("./CodeEditor"))
 
@@ -60,6 +63,8 @@ function Workspace({ dir }: { dir: string }) {
   const [termFocus, setTermFocus] = useState(0)
   // Poignée de l'éditeur de l'onglet actif, en état : les commandes qui en dépendent se réactivent dès son montage.
   const [editor, setEditor] = useState<EditorHandle | null>(null)
+  const status = useEditorStatus(editor)
+  const repos = useGit()
   const tree = useTree(dir)
   const treeActions = useRef<TreeActions | null>(null)
   const [filter, setFilter] = useState("")
@@ -216,7 +221,7 @@ function Workspace({ dir }: { dir: string }) {
     if (parent === "" || tree.open.has(parent)) later("d:" + parent, 150, () => tree.refresh(parent))
     for (const x of live.current.tabs) if (x.path === e.path || x.path.startsWith(e.path + "/")) later("f:" + x.path, 150, () => check(x.path))
   }
-  useWatch(dir, ["", ...tree.open], onDisk)
+  const watch = useWatch(dir, ["", ...tree.open], onDisk)
   useEffect(() => {
     const all = timers.current
     return () => all.forEach(clearTimeout)
@@ -294,6 +299,7 @@ function Workspace({ dir }: { dir: string }) {
     const c = commands.find((x) => x.id === id)
     if (c?.enabled(k)) c.run(k)
   }
+  const termCmd = commands.find((x) => x.id === "terminal.toggle")!
   // Ctrl+S hors de Monaco (arbre, onglets) : jamais la boîte « Enregistrer la page » du navigateur.
   const key = (e: KeyboardEvent) => {
     if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.defaultPrevented || e.key.toLowerCase() !== "s") return
@@ -321,71 +327,75 @@ function Workspace({ dir }: { dir: string }) {
   }
 
   return (
-    <div ref={rootEl} tabIndex={-1} className="flex min-h-0 flex-1 outline-none" onKeyDown={key}>
-      {prefs.showTree && (
-        <>
-          <aside className="flex min-h-0 shrink-0 flex-col" style={{ width: w }}>
-            <TreeToolbar dir={dir} tree={tree} ctx={ctx} filter={filter} onFilter={setFilter} onRestored={tree.refreshAll} />
-            {git.marks.size > 0 && (
-              <div className="flex shrink-0 flex-col items-start px-1 pt-1">
-                <GitChanges dir={dir} count={git.marks.size} onOpen={open} prefix={git.prefix} />
-                {git.more > 0 && <p className="px-2 text-xs text-muted-foreground">{t("ide.git.more", { count: git.more })}</p>}
-              </div>
-            )}
-            <FileTree dir={dir} tree={tree} marks={git.marks} dirs={git.dirs} canWrite={can("fs_write")} selected={ide.active} filter={filter} actionsRef={treeActions} onOpen={open} onRenamed={(from, to) => dispatch({ t: "renamed", from, to })} />
-          </aside>
-          <Handle label={t("ide.resize.tree")} start={() => w} onMove={(v) => setDrag({ w: clamp(v, 140, 700) })} onEnd={(v) => (setW(String(clamp(v, 140, 700))), setDrag({}))} />
-        </>
-      )}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <EditorToolbar ctx={ctx} />
-        {ide.tabs.length > 0 && <Tabs tabs={ide.tabs} active={ide.active} onFocus={(path) => dispatch({ t: "focus", path })} onClose={close} />}
-        {active?.conflict && (
-          <ConflictBar
-            kind={active.conflict}
-            readOnly={active.readOnly}
-            onReload={() => reload(active.path, undefined, true)}
-            onOverwrite={() => save(active.path, "force")}
-            onDiff={() => showDiff(active.path)}
-            onRecreate={() => save(active.path, "create")}
-            onClose={() => close(active.path)}
-          />
+    <div ref={rootEl} tabIndex={-1} className="flex min-h-0 flex-1 flex-col outline-none" onKeyDown={key}>
+      <MenuBar ctx={ctx} />
+      <div className="flex min-h-0 flex-1">
+        {prefs.showTree && (
+          <>
+            <aside className="flex min-h-0 shrink-0 flex-col" style={{ width: w }}>
+              <TreeToolbar dir={dir} tree={tree} ctx={ctx} filter={filter} onFilter={setFilter} onRestored={tree.refreshAll} />
+              {git.marks.size > 0 && (
+                <div className="flex shrink-0 flex-col items-start px-1 pt-1">
+                  <GitChanges dir={dir} count={git.marks.size} onOpen={open} prefix={git.prefix} />
+                  {git.more > 0 && <p className="px-2 text-xs text-muted-foreground">{t("ide.git.more", { count: git.more })}</p>}
+                </div>
+              )}
+              <FileTree dir={dir} tree={tree} marks={git.marks} dirs={git.dirs} canWrite={can("fs_write")} selected={ide.active} filter={filter} actionsRef={treeActions} onOpen={open} onRenamed={(from, to) => dispatch({ t: "renamed", from, to })} />
+            </aside>
+            <Handle label={t("ide.resize.tree")} start={() => w} onMove={(v) => setDrag({ w: clamp(v, 140, 700) })} onEnd={(v) => (setW(String(clamp(v, 140, 700))), setDrag({}))} />
+          </>
         )}
-        <div className="relative min-h-0 flex-1">
-          {ide.tabs.length === 0 && <div className="grid h-full place-items-center p-6 text-sm text-muted-foreground">{t("ide.center.none")}</div>}
-          <Suspense fallback={<p className="p-6 text-sm text-muted-foreground">{t("ide.editor.loading")}</p>}>
-            {ide.tabs.map((tab) => (
-              <div key={tab.path} className={cn("absolute inset-0", tab.path !== ide.active && "hidden")}>
-                {tab.notice === "tooBig" || tab.notice === "binary" ? (
-                  <p className="p-6 text-sm text-muted-foreground">{t(tab.notice === "tooBig" ? "ide.notice.tooBig" : "ide.notice.binary")}</p>
-                ) : (
-                  <div className="flex size-full flex-col">
-                    {tab.notice === "mixedEol" && <p className="shrink-0 border-b px-3 py-1.5 text-sm text-muted-foreground">{t("ide.notice.mixedEol")}</p>}
-                    <div className="min-h-0 flex-1">
-                      <CodeEditor
-                        path={tab.path}
-                        value={tab.content}
-                        readOnly={tab.readOnly}
-                        theme={theme}
-                        wordWrap={prefs.wordWrap}
-                        minimap={prefs.minimap}
-                        fontSize={prefs.fontSize}
-                        onFontSize={(n) => prefs.set("fontSize", n)}
-                        editorRef={tab.path === ide.active ? setEditor : undefined}
-                        focus={focusReq.path === tab.path ? focusReq.n : 0}
-                        onChange={(v) => !tab.readOnly && dispatch({ t: "edit", path: tab.path, content: v })}
-                        onSave={(v) => save(tab.path, undefined, v)}
-                      />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <EditorToolbar ctx={ctx} />
+          {ide.tabs.length > 0 && <Tabs tabs={ide.tabs} active={ide.active} onFocus={(path) => dispatch({ t: "focus", path })} onClose={close} />}
+          {active?.conflict && (
+            <ConflictBar
+              kind={active.conflict}
+              readOnly={active.readOnly}
+              onReload={() => reload(active.path, undefined, true)}
+              onOverwrite={() => save(active.path, "force")}
+              onDiff={() => showDiff(active.path)}
+              onRecreate={() => save(active.path, "create")}
+              onClose={() => close(active.path)}
+            />
+          )}
+          <div className="relative min-h-0 flex-1">
+            {ide.tabs.length === 0 && <div className="grid h-full place-items-center p-6 text-sm text-muted-foreground">{t("ide.center.none")}</div>}
+            <Suspense fallback={<p className="p-6 text-sm text-muted-foreground">{t("ide.editor.loading")}</p>}>
+              {ide.tabs.map((tab) => (
+                <div key={tab.path} className={cn("absolute inset-0", tab.path !== ide.active && "hidden")}>
+                  {tab.notice === "tooBig" || tab.notice === "binary" ? (
+                    <p className="p-6 text-sm text-muted-foreground">{t(tab.notice === "tooBig" ? "ide.notice.tooBig" : "ide.notice.binary")}</p>
+                  ) : (
+                    <div className="flex size-full flex-col">
+                      {tab.notice === "mixedEol" && <p className="shrink-0 border-b px-3 py-1.5 text-sm text-muted-foreground">{t("ide.notice.mixedEol")}</p>}
+                      <div className="min-h-0 flex-1">
+                        <CodeEditor
+                          path={tab.path}
+                          value={tab.content}
+                          readOnly={tab.readOnly}
+                          theme={theme}
+                          wordWrap={prefs.wordWrap}
+                          minimap={prefs.minimap}
+                          fontSize={prefs.fontSize}
+                          onFontSize={(n) => prefs.set("fontSize", n)}
+                          editorRef={tab.path === ide.active ? setEditor : undefined}
+                          focus={focusReq.path === tab.path ? focusReq.n : 0}
+                          onChange={(v) => !tab.readOnly && dispatch({ t: "edit", path: tab.path, content: v })}
+                          onSave={(v) => save(tab.path, undefined, v)}
+                        />
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </Suspense>
-          {diff && diff.path === ide.active && active && <ConflictDiff path={diff.path} original={diff.original} modified={active.content} theme={theme} onClose={() => setDiff(null)} />}
+                  )}
+                </div>
+              ))}
+            </Suspense>
+            {diff && diff.path === ide.active && active && <ConflictDiff path={diff.path} original={diff.original} modified={active.content} theme={theme} onClose={() => setDiff(null)} />}
+          </div>
+          <BottomPane dir={dir} prefs={prefs} focusN={termFocus} onView={setTerm} onToggle={(open) => run("view.toggleTerminal", { ...ctx, prefs: { ...prefs, showTerminal: open } })} />
         </div>
-        <BottomPane dir={dir} prefs={prefs} focusN={termFocus} onView={setTerm} onToggle={(open) => run("view.toggleTerminal", { ...ctx, prefs: { ...prefs, showTerminal: open } })} />
       </div>
+      {prefs.showStatus && <StatusBar status={status} watch={watch} index={index.state} branch={branchOf(dir, repos.status)} dirty={ide.tabs.filter(isDirty).length} term={{ open: term.open, reason: () => (termCmd.enabled(ctx) ? "" : t(termCmd.reason?.(ctx) ?? "")), onToggle: () => run("terminal.toggle") }} />}
       <Confirm ask={confirm} onClose={() => setConfirm(null)} />
       <QuickOpen open={quick} files={index.files.map((f) => f.path)} state={index.state} onClose={() => setQuick(false)} onCloseFocus={refocus} onPick={(p) => ((picked.current = p), setQuick(false), open(p))} />
     </div>
