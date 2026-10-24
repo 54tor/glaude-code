@@ -123,20 +123,27 @@ func runGitStatus(dir string) (string, error) {
 	return string(b), err
 }
 
+type gitPrefixEntry struct {
+	p  string
+	at time.Time
+}
+
 var (
-	gitPrefixes = map[string]string{}
+	gitPrefixes = map[string]gitPrefixEntry{}
 	gitPrefixMu sync.Mutex
 )
 
 // gitPrefix : chemin de dir sous la racine de son dépôt (« sub/dir/ », vide à la racine). Les chemins de git status sont relatifs à
-// la racine ; l'interface s'en sert pour les ramener au dossier. Gardé pour la durée du processus, un échec vaut « ».
+// la racine ; l'interface s'en sert pour les ramener au dossier. Gardé gitTTL comme l'état du dossier (un « git init »
+// ultérieur change la racine), un échec vaut « ».
 func gitPrefix(dir string) string {
 	gitPrefixMu.Lock()
-	p, ok := gitPrefixes[dir]
+	e, ok := gitPrefixes[dir]
 	gitPrefixMu.Unlock()
-	if ok {
-		return p
+	if ok && time.Since(e.at) <= gitTTL {
+		return e.p
 	}
+	var p string
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-C", dir, "rev-parse", "--show-prefix")
@@ -145,7 +152,7 @@ func gitPrefix(dir string) string {
 	if b, err := cmd.Output(); err == nil {
 		p = strings.TrimSpace(string(b))
 		gitPrefixMu.Lock()
-		gitPrefixes[dir] = p
+		gitPrefixes[dir] = gitPrefixEntry{p, time.Now()}
 		gitPrefixMu.Unlock()
 	}
 	return p
