@@ -2,9 +2,42 @@
 
 L'espace de travail ouvre un dossier de travail de gld dans le navigateur : arborescence, éditeur à onglets (Monaco, le moteur de VS Code) et terminal branché sur une session Claude vivante du dossier. On l'ouvre par le bouton **Espace de travail** de la vue dossier ; l'adresse est `/espace/<dossier absolu encodé>`.
 
-Ce que l'on y fait : parcourir le dossier, ouvrir et corriger un fichier, voir les marqueurs git (`M`, `A`, `D`, `R`, `U`, `?`), créer, renommer, supprimer vers une corbeille, ouvrir un fichier par son nom (`Ctrl+P`). Ce que l'on n'y fait pas : recherche multi-fichiers, LSP externe, débogueur, extensions, diff git (le diff ne sert qu'aux conflits).
+Ce que l'on y fait : parcourir et filtrer le dossier, ouvrir et corriger un fichier, voir les marqueurs git (`M`, `A`, `D`, `R`, `U`, `?`), créer, renommer, supprimer vers une corbeille puis restaurer ou purger, ouvrir un fichier par son nom (`Ctrl+P`), suivre la session Claude du dossier dans la zone terminal. Ce que l'on n'y fait pas : shell libre, exécution ou débogage, recherche multi-fichiers, LSP externe, extensions, diff git (le diff ne sert qu'aux conflits).
 
 Tant que l'espace est affiché, `Ctrl+P` (`Cmd+P`) ouvre l'ouverture rapide où que soit le focus, au lieu de l'impression du navigateur. Les onglets ouverts (chemins seulement, jamais le contenu, 30 au plus) et l'onglet actif sont mémorisés par navigateur et par dossier, puis rouverts au rechargement ; un fichier devenu illisible est sauté sans message. Le contenu non enregistré n'est gardé qu'en `sessionStorage` (brouillons, onglet du navigateur seulement, ~2 Mo au plus, jamais en `localStorage`) : au rechargement un brouillon n'est repris que si le fichier n'a pas changé sur le disque depuis, sinon il est abandonné avec un message ; tant qu'un onglet est modifié, le navigateur demande confirmation avant de quitter ou recharger la page.
+
+## Barres et menu
+
+L'espace se présente comme un petit IDE : un menu en haut, une barre d'actions au-dessus de l'éditeur, une barre d'outils au-dessus de l'arborescence, une barre d'état en bas et la zone terminal entre l'éditeur et la barre d'état. Toutes les actions viennent d'un seul registre de commandes : le menu, les barres et les raccourcis proposent les mêmes, avec les mêmes conditions. Une action impossible n'est jamais masquée : elle est désactivée et dit pourquoi (info-bulle des boutons, ligne sous l'entrée du menu) : aucun onglet, fichier en lecture seule, droit `fs_write` ou `exec` absent, terminal intégré désactivé, rien à enregistrer, arborescence masquée.
+
+- **Menu** : Fichier (nouveau fichier, nouveau dossier, enregistrer, tout enregistrer, fermer l'onglet, fermer tous les onglets, ouverture rapide), Édition (annuler, rétablir), Rechercher (rechercher, remplacer), Affichage (retour à la ligne, minimap, taille du texte −/+/défaut, arborescence, zone terminal, barre d'état), Aller à (ligne, palette de commandes), Terminal (ouvrir ou replier, aller au terminal de session). Il n'y a pas de menu « Exécuter » : gld n'a ni configuration d'exécution ni débogueur. Les raccourcis sont affichés à droite des entrées. Une commande qui agit sur l'éditeur lui rend le focus : après Annuler on continue de taper, après Rechercher ou Aller à la ligne le focus est dans le champ de Monaco.
+- **Barre de l'éditeur** : enregistrer, tout enregistrer, annuler, rétablir, rechercher, remplacer, aller à la ligne, palette (F1), retour à la ligne automatique, taille du texte −/+, afficher l'arborescence ; à droite, aller au terminal de session, ouvrir ou replier le terminal, fermer tous les onglets.
+- **Barre de l'arborescence** : nouveau fichier et nouveau dossier **à la racine** (le menu contextuel d'un dossier crée dedans), actualiser (relit les dossiers dépliés), tout replier, ouverture rapide, corbeille, et un **filtre par nom**. Le filtre porte sur les entrées **déjà chargées** (dossiers dépliés au moins une fois), garde visibles les dossiers parents d'une entrée trouvée, ne modifie pas l'état déplié mémorisé (effacer le filtre, par la croix ou `Échap`, rend l'arbre tel qu'il était) ; les flèches suivent ce qui est affiché.
+- **Corbeille** : la fenêtre liste les entrées supprimées de ce dossier, les plus récentes d'abord, avec **Restaurer** (refusé si le chemin d'origine est occupé : renommez ou supprimez d'abord l'entrée en place) et **Supprimer définitivement** (après confirmation). Sans `fs_write`, la liste reste lisible et les deux actions sont désactivées.
+- **Barre d'état** : ligne et colonne du curseur, nombre de caractères sélectionnés, fins de ligne (`LF` ou `CRLF`, et « lecture seule » quand l'onglet l'est), langage, indentation, encodage (toujours UTF-8 : gld refuse les autres), branche git du dépôt le plus proche, état de la surveillance du disque, état de l'index (en cours, prêt, partiel), nombre d'onglets modifiés, bouton du terminal. Sur écran étroit, l'indentation et l'encodage disparaissent et les éléments passent à la ligne.
+
+### Raccourcis
+
+| Raccourci | Effet | Où |
+|---|---|---|
+| `Ctrl+S` (`Cmd+S`) | Enregistrer l'onglet | partout dans l'espace (jamais « Enregistrer la page » du navigateur) |
+| `Ctrl+P` (`Cmd+P`) | Ouverture rapide | partout dans l'espace (jamais l'impression du navigateur) |
+| `Ctrl+Z`, `Ctrl+Maj+Z` | Annuler, rétablir | dans l'éditeur |
+| `Ctrl+F`, `Ctrl+H` | Rechercher, remplacer | dans l'éditeur |
+| `Ctrl+G` | Aller à la ligne | dans l'éditeur |
+| `F1` | Palette de commandes de Monaco | dans l'éditeur |
+| `Alt+F`, `Alt+E`, `Alt+R`, `Alt+A`, `Alt+L`, `Alt+T` | Ouvrir Fichier, Édition, Rechercher, Affichage, Aller à, Terminal (en anglais : `Alt+F`, `E`, `S`, `V`, `G`, `T`) | hors d'un champ de saisie |
+| Flèches, `Entrée`, `Échap` | Parcourir le menu ouvert, choisir, fermer (le focus revient au menu) | menu |
+
+Les raccourcis globaux ne prennent jamais la frappe destinée à Monaco, à xterm ou à un champ : `Alt+lettre` tapé dans l'éditeur reste à l'éditeur. Les raccourcis ne sont pas personnalisables.
+
+### Accessibilité
+
+Le menu est un `menubar` ARIA (flèches pour passer d'un menu à l'autre, `Échap` rend le focus au déclencheur) ; les barres sont des `toolbar` nommées (« Actions de l'éditeur », « Actions de l'arborescence ») ; chaque bouton a un nom accessible, son raccourci en info-bulle et, s'il est désactivé, la raison reliée par `aria-describedby` (`aria-disabled` : il reste atteignable au clavier). Les bascules (retour à la ligne, arborescence, terminal) exposent leur état (`aria-pressed`, cases cochées dans le menu). Seuls l'état de la surveillance et celui de l'index sont annoncés (`role="status"`) : la position du curseur, qui change à chaque frappe, ne l'est pas.
+
+### Préférences d'affichage
+
+Retour à la ligne, minimap, taille du texte (10 à 28, 13 par défaut) et visibilité de l'arborescence, de la zone terminal et de la barre d'état sont gardés dans le `localStorage` du navigateur, sous les clés `gld.ide.view.*` (une clé par valeur ; une valeur illisible revient à son défaut). Ces préférences valent pour tous les dossiers de ce navigateur ; elles ne suivent pas le compte d'un navigateur à l'autre. La largeur de l'arborescence et la hauteur de la zone terminal sont gardées par dossier (`gld.ide.<dossier>.*`).
 
 ## Droits
 
@@ -70,6 +103,7 @@ L'index sert à l'ouverture rapide (`Ctrl+P`) et à donner à Monaco les sources
 - `{"path": "", "type": "resync"}` signifie que des évènements ont pu être perdus (tampon plein, débordement d'inotify, passage au sondage) : le client relit tout ce qu'il affiche (dossiers dépliés, onglets propres), et le prochain `/fs-index` reconstruit l'index.
 - Le flux est coupé à la révocation des droits ou de la session, et se termine aussitôt à l'arrêt du serveur.
 - Un dossier illisible (droits) est seulement sauté ; seules les limites d'inotify (`ENOSPC`, `EMFILE`, `ENFILE`) font passer au sondage.
+- **Reconnexion** : coupure réseau, le navigateur réessaie seul (« Surveillance interrompue » dans la barre d'état). Si le flux est fermé pour de bon (serveur arrêté, réponse autre que `200`, session expirée), l'espace le rouvre lui-même après 5 s, puis 15 s, puis toutes les 30 s ; la barre d'état affiche « Surveillance coupée, reconnexion dans N s » (attente prévue, non décomptée), puis « Surveillance active ». Chaque réouverture vaut resync : l'arbre et les onglets propres sont relus, un onglet modifié dont le fichier a changé affiche le bandeau de conflit.
 
 ## Corbeille
 
@@ -87,15 +121,27 @@ Supprimer déplace l'élément dans `<racine>/.gld-trash/<id>/item`, avec son ch
 - Pas de marqueurs git pour une racine connue seulement par les dossiers ajoutés à la main ou ceux d'un projet (`/git-changes` n'accepte que les dépôts des sessions).
 - Une instance inotify par espace de travail vivant, gardée jusqu'à 2 minutes après le dernier usage ; la limite par défaut du noyau est de 128 instances par utilisateur (`fs.inotify.max_user_instances`).
 - Les changements faits pendant la toute première construction de l'index n'y figurent qu'au prochain resync ou à la prochaine reconstruction.
-- Le flux d'observation s'arrête sans bruit si le serveur répond autre chose que `200` (session expirée en mode multi-utilisateur), jusqu'au rechargement de la page.
+- Le filtre de l'arborescence ne cherche que dans les dossiers déjà chargés ; pour chercher un fichier n'importe où, utiliser `Ctrl+P`.
+- À moins de ~600 px de large, l'arborescence et l'éditeur restent côte à côte : l'éditeur devient étroit et la barre de l'éditeur défile horizontalement.
 - Le journal `ide_write` couvre tous les homes (relais par la passerelle pour les homes enfants) ; il n'est pas soumis au limiteur des événements d'authentification, seulement à la purge à 90 jours.
 
 ## Terminal
 
-Le terminal **ne lance pas de shell**. Il réutilise `/term-open` et `/term-ws` et s'attache au terminal d'une session Claude **vivante** dont le dossier est celui de l'espace de travail. Il exige le droit `exec` et `GLD_WEB_TERMINAL=1` ; sans session vivante ou sans cette variable, la zone explique pourquoi. Le panneau du bas est replié par défaut : rien n'est demandé au serveur avant de le déplier. Le terminal s'y ouvre en lecture seule, sans prendre le focus ni redimensionner la fenêtre tmux de l'hôte ; le bouton crayon prend la main (frappes et taille). En lecture seule, le terminal garde la taille de l'hôte et peut donc s'afficher tronqué.
+gld **ne propose volontairement aucun shell libre** : pas de `bash`, pas de pty ouvert pour l'utilisateur, pas de fenêtre tmux créée à sa demande, aucune route qui lance un processus depuis l'espace de travail. Le terminal réutilise `/term-open` et `/term-ws` et s'attache au terminal d'une session Claude **vivante** dont le dossier est celui de l'espace de travail ; pour un shell, ouvrez votre propre terminal.
+
+Une barre « Terminal » est toujours visible au-dessus de la barre d'état, avec l'état de la zone :
+
+| État | Message | Zone |
+|---|---|---|
+| `GLD_WEB_TERMINAL=1` absent | terminal intégré désactivé (`GLD_WEB_TERMINAL=1`) | fermée, bouton désactivé |
+| droit `exec` absent | le terminal demande le droit « exec » | fermée, bouton désactivé ; aucune requête au serveur |
+| aucune session vivante dans ce dossier | lancez `claude` dans ce dossier | repliée, peut être dépliée |
+| une ou plusieurs sessions vivantes | N session(s) en direct (sélecteur si plusieurs, choix gardé par dossier) | **ouverte d'emblée** |
+
+Règle d'ouverture : tant que l'utilisateur n'a pas ouvert ou replié la zone lui-même, elle s'ouvre seule si le terminal est activé, que l'utilisateur a `exec` et qu'une session vivante existe dans le dossier ; sinon elle reste repliée. Dès qu'il l'a ouverte ou repliée (bouton, menu Terminal, Affichage), ce choix est gardé (`gld.ide.view.showTerminal`) et prime. Ouverte d'emblée, la zone est **en lecture seule** : elle ne prend pas le focus (la frappe reste dans l'éditeur) et n'envoie pas de taille à la fenêtre tmux de l'hôte ; le bouton « Lecture seule · prendre la main » donne la main (frappes, taille de la fenêtre, focus). En lecture seule, le terminal garde la taille de l'hôte et peut donc s'afficher tronqué. La liste des sessions vivantes est relue toutes les 10 s, et pas du tout quand l'onglet du navigateur est en arrière-plan.
 
 ## Poids et dépendances
 
 - Dépendances ajoutées : `monaco-editor` (npm) et `github.com/fsnotify/fsnotify` (Go).
-- Monaco est chargé à la demande, à l'ouverture de l'espace de travail : le bundle principal (`assets/app.js`, ~650 Ko) ne bouge pas. Monaco et ses workers pèsent **~13 Mo** non compressés, dont **~7 Mo pour le worker TypeScript** (`ts.worker.js`), chargé seulement quand l'éditeur s'ouvre. Le réseau ne paie donc rien tant que l'espace de travail n'est pas ouvert ; ce poids s'ajoute surtout au **binaire Go**, qui embarque `ui/dist` au `make install`. Le code de Monaco est découpé en chunks `assets/monaco*.js` tous sous la limite de 700 Ko de `chunkSizeWarningLimit` ; la limite reste donc active et signale toute croissance réelle de `assets/app.js`.
+- Monaco est chargé à la demande, à l'ouverture de l'espace de travail : le bundle principal (`assets/app.js`, ~600 Ko mesurés) ne contient pas Monaco. Monaco et ses workers pèsent **~13 Mo** non compressés, dont **~7 Mo pour le worker TypeScript** (`ts.worker.js`), chargé seulement quand l'éditeur s'ouvre. Le réseau ne paie donc rien tant que l'espace de travail n'est pas ouvert ; ce poids s'ajoute surtout au **binaire Go**, qui embarque `ui/dist` au `make install`. Le code de Monaco est découpé en chunks `assets/monaco*.js` tous sous la limite de 700 Ko de `chunkSizeWarningLimit` ; la limite reste donc active et signale toute croissance réelle de `assets/app.js`.
 - Les workers (`editor`, `ts`, `json`, `css`, `html`) sont servis sous `/assets/` avec des noms stables (`ts.worker.js`…), même origine. Le petit `assets/editorWebWorkerMain.js` (0,5 Ko) est une copie brute que Vite émet mais que gld ne charge jamais.

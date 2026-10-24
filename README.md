@@ -89,8 +89,11 @@ Rien n'est perdu : tout fichier supprimé ou remplacé passe d'abord par une **c
 Le bouton **Espace de travail** de la vue dossier ouvre le dossier dans le navigateur : arborescence avec marqueurs
 git, éditeur à onglets (Monaco, le moteur de VS Code, servi par gld sans CDN), `Ctrl+S` pour enregistrer, `Ctrl+P`
 pour ouvrir un fichier par son nom, et un bandeau qui demande quoi faire quand l'agent a modifié le fichier entre-temps
-(recharger, écraser, comparer). Supprimer envoie dans une corbeille `.gld-trash/` ignorée par git. Le terminal ne lance
-pas de shell : il s'attache à une session Claude vivante du dossier (`GLD_WEB_TERMINAL=1`).
+(recharger, écraser, comparer). Un menu (Fichier, Édition, Rechercher, Affichage, Aller à, Terminal), une barre d'actions
+de l'éditeur, une barre d'outils de l'arborescence (filtre, corbeille avec restauration et purge) et une barre d'état
+(curseur, fins de ligne, branche, état de la surveillance) donnent accès à tout sans connaître les raccourcis.
+Supprimer envoie dans une corbeille `.gld-trash/` ignorée par git. gld ne propose volontairement aucun shell : la zone
+terminal, toujours visible, s'attache en lecture seule à une session Claude vivante du dossier (`GLD_WEB_TERMINAL=1`).
 
 En multi-utilisateur, il faut les droits `fs_read` (lire) et `fs_write` (écrire), plus `exec` pour le terminal ; aucun
 n'est donné par défaut. Il n'y a pas de liste de fichiers interdits : `fs_read` lit aussi `.env` et les clés. Routes,
