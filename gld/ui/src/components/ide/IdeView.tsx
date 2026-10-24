@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useReducer, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react"
+import { lazy, Suspense, useEffect, useReducer, useRef, useState, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { PanelBottom } from "lucide-react"
 import { toast } from "sonner"
@@ -23,37 +23,11 @@ import { useWatch, type WatchEvent } from "./useWatch"
 import { pickFeed, runFeed } from "./feedTs"
 import { Handle } from "./Handle"
 import { readDrafts, useDrafts, type Draft } from "./drafts"
+import { clamp, MAX_TABS, mixedEol, nameOf, parentOf, parseTabs, useResolvedTheme } from "./ideHelpers"
+import { commands, type CmdCtx, type EditorHandle } from "./commands"
+import { useViewPrefs } from "./useViewPrefs"
 
 const CodeEditor = lazy(() => import("./CodeEditor"))
-
-// Monaco ramène des fins de ligne mixtes (ou un CR isolé) à la majoritaire : enregistrer réécrirait tout le fichier.
-const mixedEol = (c: string) => /\r(?!\n)/.test(c) || (c.includes("\r\n") && /(^|[^\r])\n/.test(c))
-
-// Le fournisseur de thème de gld pose la classe sur <html> : on la suit, « système » compris.
-const watchTheme = (f: () => void) => {
-  const o = new MutationObserver(f)
-  o.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] })
-  return () => o.disconnect()
-}
-const useResolvedTheme = () => useSyncExternalStore(watchTheme, () => (document.documentElement.classList.contains("dark") ? "dark" : "light"))
-
-const parentOf = (p: string) => p.slice(0, Math.max(0, p.lastIndexOf("/")))
-const nameOf = (p: string) => p.slice(p.lastIndexOf("/") + 1)
-
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
-
-// Onglets mémorisés : chemins seulement, jamais le contenu ; tout stockage illisible vaut liste vide.
-const MAX_TABS = 30
-const parseTabs = (s: string): { paths: string[]; active: string } => {
-  try {
-    const v: unknown = JSON.parse(s)
-    const o = (v && typeof v === "object" ? v : {}) as { paths?: unknown; active?: unknown }
-    const paths = Array.isArray(o.paths) ? o.paths.filter((x): x is string => typeof x === "string").slice(0, MAX_TABS) : []
-    return { paths, active: typeof o.active === "string" ? o.active : "" }
-  } catch {
-    return { paths: [], active: "" }
-  }
-}
 
 // Sans droit de lecture, aucun hook de l'espace ne tourne : ni flux, ni sondage d'index, ni Ctrl+P pris.
 export function IdeView({ dir }: { dir: string }) {
@@ -84,6 +58,9 @@ function Workspace({ dir }: { dir: string }) {
   })
   const saving = useRef(new Map<string, boolean>()) // chemin → une nouvelle demande attend la fin de celle en cours
   const theme = useResolvedTheme()
+  const prefs = useViewPrefs()
+  // Poignée de l'éditeur de l'onglet actif, en état : les commandes qui en dépendent se réactivent dès son montage.
+  const [editor, setEditor] = useState<EditorHandle | null>(null)
   const tree = useTree(dir)
   const index = useIndex(dir)
   const git = useGitMarks(dir)
@@ -287,11 +264,39 @@ function Workspace({ dir }: { dir: string }) {
     if (!tab || !isDirty(tab)) return go()
     setConfirm({ title: t("ide.tabs.closeTitle", { name: nameOf(path) }), body: t("ide.tabs.closeBody"), confirm: t("ide.tabs.closeConfirm"), run: go })
   }
+  // Une seule confirmation pour tous les onglets modifiés : plusieurs boîtes s'écraseraient l'une l'autre.
+  const closeAll = () => {
+    const go = () => (ide.tabs.forEach((x) => dispatch({ t: "close", path: x.path })), setDiff(null))
+    if (!ide.tabs.some(isDirty)) return go()
+    setConfirm({ title: t("ide.tabs.closeAllTitle"), body: t("ide.tabs.closeBody"), confirm: t("ide.tabs.closeConfirm"), run: go })
+  }
+  const ctx: CmdCtx = {
+    can,
+    tab: active,
+    tabs: ide.tabs,
+    readOnly: !!active?.readOnly,
+    editor,
+    prefs,
+    // ponytail: terminal, création à la racine et focus de session restent inertes jusqu'aux lots de la zone terminal et des barres.
+    terminalAvailable: false,
+    newFile: () => {}, newFolder: () => {}, focusSession: () => {},
+    save: () => void (active && save(active.path)),
+    saveAll: async () => {
+      for (const x of ide.tabs) if (isDirty(x) && !x.readOnly) await save(x.path)
+    },
+    closeTab: () => active && close(active.path),
+    closeAll,
+    openQuick: () => setQuick(true),
+  }
+  const run = (id: string) => {
+    const c = commands.find((x) => x.id === id)
+    if (c?.enabled(ctx)) c.run(ctx)
+  }
   // Ctrl+S hors de Monaco (arbre, onglets) : jamais la boîte « Enregistrer la page » du navigateur.
   const key = (e: KeyboardEvent) => {
     if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.defaultPrevented || e.key.toLowerCase() !== "s") return
     e.preventDefault()
-    if (ide.active) save(ide.active)
+    run("file.save")
   }
   // Ctrl+P sur tout le document : l'espace est la page, et sans focus dedans le navigateur ouvrirait l'impression.
   // Ailleurs dans gld (espace démonté), l'impression reste disponible.
@@ -349,7 +354,20 @@ function Workspace({ dir }: { dir: string }) {
                   <div className="flex size-full flex-col">
                     {tab.notice === "mixedEol" && <p className="shrink-0 border-b px-3 py-1.5 text-sm text-muted-foreground">{t("ide.notice.mixedEol")}</p>}
                     <div className="min-h-0 flex-1">
-                      <CodeEditor path={tab.path} value={tab.content} readOnly={tab.readOnly} theme={theme} focus={focusReq.path === tab.path ? focusReq.n : 0} onChange={(v) => !tab.readOnly && dispatch({ t: "edit", path: tab.path, content: v })} onSave={(v) => save(tab.path, undefined, v)} />
+                      <CodeEditor
+                        path={tab.path}
+                        value={tab.content}
+                        readOnly={tab.readOnly}
+                        theme={theme}
+                        wordWrap={prefs.wordWrap}
+                        minimap={prefs.minimap}
+                        fontSize={prefs.fontSize}
+                        onFontSize={(n) => prefs.set("fontSize", n)}
+                        editorRef={tab.path === ide.active ? setEditor : undefined}
+                        focus={focusReq.path === tab.path ? focusReq.n : 0}
+                        onChange={(v) => !tab.readOnly && dispatch({ t: "edit", path: tab.path, content: v })}
+                        onSave={(v) => save(tab.path, undefined, v)}
+                      />
                     </div>
                   </div>
                 )}

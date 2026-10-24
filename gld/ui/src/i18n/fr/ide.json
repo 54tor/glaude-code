@@ -46,7 +46,8 @@
       "close": "Fermer {{path}}",
       "closeTitle": "Fermer « {{name}} » sans enregistrer ?",
       "closeBody": "Les modifications non enregistrées de ce fichier seront perdues.",
-      "closeConfirm": "Fermer sans enregistrer"
+      "closeConfirm": "Fermer sans enregistrer",
+      "closeAllTitle": "Fermer tous les onglets ?"
     },
     "editor": {
       "loading": "Chargement de l'éditeur…"
@@ -100,6 +101,52 @@
     },
     "drafts": {
       "dropped": "Brouillon de « {{name}} » abandonné : le fichier a changé sur le disque."
+    },
+    "cmd": {
+      "file": {
+        "newFile": "Nouveau fichier",
+        "newFolder": "Nouveau dossier",
+        "save": "Enregistrer",
+        "saveAll": "Tout enregistrer",
+        "closeTab": "Fermer l'onglet",
+        "closeAll": "Fermer tous les onglets",
+        "quickOpen": "Ouverture rapide"
+      },
+      "edit": {
+        "undo": "Annuler",
+        "redo": "Rétablir"
+      },
+      "find": {
+        "find": "Rechercher",
+        "replace": "Remplacer"
+      },
+      "goto": {
+        "line": "Aller à la ligne",
+        "palette": "Palette de commandes"
+      },
+      "view": {
+        "wordWrap": "Retour à la ligne automatique",
+        "minimap": "Minimap",
+        "fontPlus": "Agrandir le texte",
+        "fontMinus": "Réduire le texte",
+        "fontReset": "Taille de texte par défaut",
+        "toggleTree": "Afficher l'arborescence",
+        "toggleTerminal": "Afficher la zone terminal",
+        "toggleStatus": "Afficher la barre d'état"
+      },
+      "terminal": {
+        "toggle": "Ouvrir ou replier le terminal",
+        "focusSession": "Aller au terminal de session"
+      }
+    },
+    "reason": {
+      "noTab": "Aucun onglet ouvert",
+      "readOnly": "Fichier en lecture seule",
+      "noWrite": "Vous n'avez pas le droit de modifier les fichiers de ce dossier",
+      "noEditor": "Aucun éditeur actif",
+      "noExec": "Le terminal demande le droit « exec »",
+      "termOff": "Terminal intégré désactivé (GLD_WEB_TERMINAL=1)",
+      "nothingDirty": "Aucune modification à enregistrer"
     }
   }
 }
