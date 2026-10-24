@@ -41,9 +41,9 @@ export function StatusBar({ status, watch, index, branch, dirty, term }: Props) 
   const flux =
     watch.state === "open"
       ? t("ide.status.watch.open")
-      : watch.state === "closed"
+      : watch.state === "browserRetry"
         ? t("ide.status.watch.closed")
-        : watch.retryIn
+        : watch.state === "waiting"
           ? t("ide.status.watch.retry", { n: watch.retryIn })
           : t("ide.status.watch.connecting")
   const reason = term.reason()

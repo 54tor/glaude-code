@@ -42,10 +42,10 @@ describe("StatusBar", () => {
     expect(live.textContent).toContain("Indexation en cours")
     expect(live.textContent).not.toContain("Ligne")
     const p = { status: st(), branch: "main", dirty: 0, term: term() }
-    rerender(<StatusBar {...p} watch={{ connected: false, state: "retrying", retryIn: 15 }} index="partial" />)
+    rerender(<StatusBar {...p} watch={{ connected: false, state: "waiting", retryIn: 15 }} index="partial" />)
     expect(live.textContent).toContain("reconnexion dans 15 s")
     expect(live.textContent).toContain("Index partiel")
-    rerender(<StatusBar {...p} watch={{ connected: false, state: "closed", retryIn: 0 }} index="ready" />)
+    rerender(<StatusBar {...p} watch={{ connected: false, state: "browserRetry", retryIn: 0 }} index="ready" />)
     expect(live.textContent).toContain("Surveillance interrompue")
     expect(live.textContent).toContain("Index prêt")
   })
