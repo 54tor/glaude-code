@@ -12,7 +12,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
 # L'interface n'est reconstruite que si son code ou ses dépendances ont changé.
-$(INDEX): $(shell find gld/ui/src gld/ui/public -type f 2>/dev/null) gld/ui/package-lock.json gld/ui/index.html gld/ui/vite.config.ts
+$(INDEX): $(shell find gld/ui/src gld/ui/public -type f 2>/dev/null) gld/ui/package-lock.json gld/ui/index.html gld/ui/vite.config.ts gld/ui/scripts/check-chunks.mjs
 	cd gld/ui && { [ -d node_modules ] || npm ci; } && npm run build && touch dist/.gitkeep
 
 ui: $(INDEX)
