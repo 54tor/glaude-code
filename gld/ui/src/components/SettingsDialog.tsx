@@ -1,4 +1,5 @@
-import { Cog, Monitor, Moon, Sun } from "lucide-react"
+import { Cog, FolderCog, Monitor, Moon, Sun } from "lucide-react"
+import { Link } from "wouter"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { setLang, type Lang } from "@/i18n"
@@ -13,7 +14,7 @@ import { PALETTES } from "@/lib/palettes"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
@@ -94,8 +95,9 @@ export function Settings({
   setArgs,
   choice,
   setChoice,
+  folder,
   ...fonts
-}: { args: string; setArgs: (v: string) => void; choice: Choice; setChoice: (c: Choice) => void } & Fonts) {
+}: { args: string; setArgs: (v: string) => void; choice: Choice; setChoice: (c: Choice) => void; folder?: string } & Fonts) {
   const { t, i18n } = useTranslation()
   const { theme, setTheme, palette, setPalette } = useTheme()
   // La langue est le réglage « language » de Claude Code (settings.json) : l'interface change tout de suite, le serveur et les commandes la lisent au prochain appel.
@@ -128,6 +130,7 @@ export function Settings({
             <TabsTrigger value="claude">{t("config.dialog.tabClaude")}</TabsTrigger>
             <TabsTrigger value="look">{t("config.dialog.tabLook")}</TabsTrigger>
             <TabsTrigger value="keys">{t("config.dialog.tabKeys")}</TabsTrigger>
+            {folder && <TabsTrigger value="folder">{t("config.dialog.tabFolder")}</TabsTrigger>}
           </TabsList>
           <ScrollArea className="mt-2 min-h-0 flex-1 pr-3">
             <TabsContent value="claude" className="space-y-5">
@@ -209,6 +212,18 @@ export function Settings({
               )}
               <FontPicker {...fonts} />
             </TabsContent>
+            {folder && (
+              <TabsContent value="folder" className="space-y-3">
+                <p className="text-sm text-muted-foreground">{t("shell.header.settingsHint")}</p>
+                <DialogClose asChild>
+                  <Button variant="outline" asChild>
+                    <Link href={`/configuration/projets?projet=${encodeURIComponent(folder)}`}>
+                      <FolderCog /> {t("config.dialog.folderOpen")}
+                    </Link>
+                  </Button>
+                </DialogClose>
+              </TabsContent>
+            )}
             <TabsContent value="keys">
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
                 {KEYS.map(([k, v]) => (
