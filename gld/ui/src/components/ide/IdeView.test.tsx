@@ -158,6 +158,7 @@ describe("IdeView", () => {
   it("409 : bandeau à trois actions ; « Écraser » rappelle avec force", async () => {
     save.mockResolvedValueOnce(res(409, { ok: false, conflict: true, deleted: false, etag: "e5" }))
     const input = await openA()
+    disk({ "a.txt": res(200, { content: "disque", etag: "e5" }) })
     fireEvent.change(input, { target: { value: "x" } })
     ctrlS(input)
     const bar = await screen.findByRole("alert")
@@ -172,6 +173,7 @@ describe("IdeView", () => {
   it("« Recharger » remplace le contenu par celui du disque", async () => {
     save.mockResolvedValueOnce(res(409, { ok: false, conflict: true, deleted: false, etag: "e5" }))
     const input = await openA()
+    disk({ "a.txt": res(200, { content: "disque", etag: "e5" }) })
     fireEvent.change(input, { target: { value: "x" } })
     ctrlS(input)
     const bar = await screen.findByRole("alert")
@@ -185,6 +187,7 @@ describe("IdeView", () => {
   it("« Voir les différences » compare la version du disque à la vôtre", async () => {
     save.mockResolvedValueOnce(res(409, { ok: false, conflict: true, deleted: false, etag: "e5" }))
     const input = await openA()
+    disk({ "a.txt": res(200, { content: "disque", etag: "e5" }) })
     fireEvent.change(input, { target: { value: "x" } })
     ctrlS(input)
     const bar = await screen.findByRole("alert")
@@ -754,5 +757,219 @@ describe("IdeView : restauration silencieuse", () => {
     render(<IdeView dir="/p" />)
     await act(async () => {})
     expect(file).not.toHaveBeenCalled()
+  })
+})
+
+describe("IdeView : brouillons des onglets non enregistrés (sessionStorage)", () => {
+  const DKEY = "gld.ide./p.drafts"
+  const TKEY = "gld.ide./p.tabs"
+  const drafts = () => JSON.parse(sessionStorage.getItem(DKEY) ?? "null")
+  const dirty = () => screen.queryByLabelText("Modifications non enregistrées")
+  const leave = () => {
+    const ev = new Event("beforeunload", { cancelable: true })
+    window.dispatchEvent(ev)
+    return ev.defaultPrevented
+  }
+  beforeEach(() => sessionStorage.clear())
+
+  it("onglet sale : brouillon écrit en sessionStorage après le délai, jamais en localStorage", async () => {
+    const input = await openA()
+    fireEvent.change(input, { target: { value: "x" } })
+    expect(drafts()).toBeNull()
+    await waitFor(() => expect(drafts()).toEqual({ "a.txt": { content: "l1\r\nl2\r\nx", baseEtag: "e1" } }), { timeout: 1500 })
+    expect(Object.values(localStorage).join("")).not.toContain("l1")
+  })
+
+  it("enregistré : brouillon retiré", async () => {
+    const input = await openA()
+    fireEvent.change(input, { target: { value: "x" } })
+    await waitFor(() => expect(drafts()).not.toBeNull(), { timeout: 1500 })
+    ctrlS(input)
+    await waitFor(() => expect(drafts()).toBeNull(), { timeout: 1500 })
+  })
+
+  it("pagehide et démontage écrivent tout de suite ; au remontage le brouillon revient, onglet sale", async () => {
+    const input = await openA()
+    fireEvent.change(input, { target: { value: "x" } })
+    window.dispatchEvent(new Event("pagehide"))
+    expect(drafts()).toEqual({ "a.txt": { content: "l1\r\nl2\r\nx", baseEtag: "e1" } })
+    fireEvent.change(input, { target: { value: "y" } })
+    cleanup()
+    expect(drafts()["a.txt"].content).toBe("l1\r\nl2\r\nxy")
+    render(<IdeView dir="/p" />)
+    await waitFor(() => expect(ed("a.txt")).toBe(JSON.stringify("l1\r\nl2\r\nxy")))
+    expect(dirty()).toBeTruthy()
+    ctrlS(screen.getByLabelText("type:a.txt"))
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+    expect(save.mock.calls[0].slice(0, 4)).toEqual(["/p", "a.txt", "l1\r\nl2\r\nxy", "e1"])
+  })
+
+  it("le fichier a changé sur le disque depuis : brouillon abandonné avec un toast", async () => {
+    localStorage.setItem(TKEY, JSON.stringify({ paths: ["a.txt"], active: "a.txt" }))
+    sessionStorage.setItem(DKEY, JSON.stringify({ "a.txt": { content: "brouillon", baseEtag: "e0" } }))
+    render(<IdeView dir="/p" />)
+    await waitFor(() => expect(ed("a.txt")).toBe(JSON.stringify("l1\r\nl2\r\n")))
+    expect(dirty()).toBeNull()
+    await waitFor(() => expect(toast).toHaveBeenCalled())
+    expect(toast.mock.calls[0][0]).toContain("a.txt")
+    await waitFor(() => expect(drafts()).toBeNull(), { timeout: 1500 })
+  })
+
+  it("stockage illisible : ignoré sans erreur", async () => {
+    localStorage.setItem(TKEY, JSON.stringify({ paths: ["a.txt"], active: "a.txt" }))
+    for (const junk of ["{", "42", "[1]", JSON.stringify({ "a.txt": { content: 1, baseEtag: "e1" } })]) {
+      sessionStorage.setItem(DKEY, junk)
+      render(<IdeView dir="/p" />)
+      await waitFor(() => expect(ed("a.txt")).toBe(JSON.stringify("l1\r\nl2\r\n")))
+      expect(dirty()).toBeNull()
+      cleanup()
+    }
+  })
+
+  it("beforeunload n'est empêché que s'il y a un onglet sale", async () => {
+    const input = await openA()
+    expect(leave()).toBe(false)
+    fireEvent.change(input, { target: { value: "x" } })
+    expect(leave()).toBe(true)
+    ctrlS(input)
+    await waitFor(() => expect(dirty()).toBeNull())
+    expect(leave()).toBe(false)
+  })
+
+  it("onglet en lecture seule : aucun brouillon écrit ni réappliqué", async () => {
+    setAuth({ state: "ok", home: "h", rights: { h: ["fs_read"] } })
+    localStorage.setItem(TKEY, JSON.stringify({ paths: ["a.txt"], active: "a.txt" }))
+    sessionStorage.setItem(DKEY, JSON.stringify({ "a.txt": { content: "brouillon", baseEtag: "e1" } }))
+    render(<IdeView dir="/p" />)
+    await waitFor(() => expect(ed("a.txt")).toBe(JSON.stringify("l1\r\nl2\r\n")))
+    fireEvent.change(screen.getByLabelText("type:a.txt"), { target: { value: "x" } })
+    await sleep(700)
+    expect(drafts()).toBeNull()
+    expect(leave()).toBe(false)
+  })
+
+  it("au-delà de ~2 Mio cumulés : le brouillon de trop est sauté, la garde de sortie reste", async () => {
+    const input = await openA()
+    await openFile("b.txt")
+    fireEvent.change(input, { target: { value: "A".repeat(1_500_000) } })
+    fireEvent.change(screen.getByLabelText("type:b.txt"), { target: { value: "B".repeat(1_000_000) } })
+    await waitFor(() => expect(drafts()).not.toBeNull(), { timeout: 1500 })
+    expect(Object.keys(drafts())).toEqual(["a.txt"])
+    expect(leave()).toBe(true)
+  })
+})
+
+describe("IdeView : sauvegarde et relectures concurrentes", () => {
+  it("Ctrl+S sur onglet propre, frappe pendant la requête, 409 « modifié » : le texte tapé survit, bandeau ; « Recharger » l'écarte exprès", async () => {
+    const pending = deferred<FsRes<{ etag: string; conflict: boolean; deleted: boolean }>>()
+    save.mockReturnValueOnce(pending.promise)
+    const input = await openA()
+    ctrlS(input)
+    fireEvent.change(input, { target: { value: "y" } })
+    disk({ "a.txt": res(200, { content: "disque", etag: "e5" }) })
+    await act(async () => pending.resolve(res(409, { ok: false, conflict: true, deleted: false, etag: "e5" })))
+    const bar = await screen.findByRole("alert")
+    expect(ed("a.txt")).toBe(JSON.stringify("l1\r\nl2\r\ny"))
+    fireEvent.click(within(bar).getByRole("button", { name: "Recharger" }))
+    await waitFor(() => expect(ed("a.txt")).toBe(JSON.stringify("disque")))
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
+
+  it("409 alors que le disque est identique (simple touch) : etag adopté, enregistrement relancé, aucun conflit", async () => {
+    save.mockResolvedValueOnce(res(409, { ok: false, conflict: true, deleted: false, etag: "e7" })).mockResolvedValueOnce(res(200, { ok: true, etag: "e8" }))
+    const input = await openA()
+    fireEvent.change(input, { target: { value: "x" } })
+    disk({ "a.txt": res(200, { content: "l1\r\nl2\r\n", etag: "e7" }) })
+    ctrlS(input)
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(2))
+    expect(save.mock.calls[1].slice(0, 4)).toEqual(["/p", "a.txt", "l1\r\nl2\r\nx", "e7"])
+    await waitFor(() => expect(screen.queryByLabelText("Modifications non enregistrées")).toBeNull())
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
+
+  it("une relecture lancée avant une sauvegarde n'applique jamais la version d'avant", async () => {
+    await openA()
+    const es = await stream()
+    const old = deferred<FsRes<{ content: string; etag: string }>>()
+    const base = file.getMockImplementation()!
+    let n = 0
+    file.mockImplementation(async (d, p) => (p === "a.txt" && ++n === 1 ? old.promise : base(d, p)))
+    es.emit({ path: "a.txt", type: "write" })
+    await waitFor(() => expect(n).toBe(1))
+    const input = screen.getByLabelText("type:a.txt")
+    fireEvent.change(input, { target: { value: "x" } })
+    ctrlS(input)
+    await waitFor(() => expect(screen.queryByLabelText("Modifications non enregistrées")).toBeNull())
+    await act(async () => old.resolve(res(200, { content: "vieux", etag: "e8" })))
+    await sleep(100)
+    expect(ed("a.txt")).toBe(JSON.stringify("l1\r\nl2\r\nx"))
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
+
+  it("relecture en 413 ou 500 : signalé « modifié » au lieu de rester périmé ; panne réseau : ignorée", async () => {
+    await openA()
+    const es = await stream()
+    disk({ "a.txt": { status: 0, ok: false, body: {} } })
+    es.emit({ path: "a.txt", type: "write" })
+    await sleep(400)
+    expect(screen.queryByRole("alert")).toBeNull()
+    for (const status of [413, 500]) {
+      disk({ "a.txt": res(status, { error: "x" }) })
+      es.emit({ path: "a.txt", type: "write" })
+      expect(await screen.findByText(/modifié sur le disque/)).toBeTruthy()
+    }
+    expect(ed("a.txt")).toBe(JSON.stringify("l1\r\nl2\r\n"))
+  })
+
+  it("onglet en lecture seule en conflit : ni « Écraser » ni « Enregistrer sous le même nom »", async () => {
+    setAuth({ state: "ok", home: "h", rights: { h: ["fs_read"] } })
+    await openA()
+    const es = await stream()
+    disk({ "a.txt": res(413, { error: "x" }) })
+    es.emit({ path: "a.txt", type: "write" })
+    const bar = await screen.findByRole("alert")
+    expect(within(bar).queryByRole("button", { name: "Écraser" })).toBeNull()
+    expect(within(bar).getByRole("button", { name: "Recharger" })).toBeTruthy()
+    disk({ "a.txt": res(404, { error: "x" }) })
+    es.emit({ path: "a.txt", type: "remove" })
+    expect(await screen.findByText(/supprimé du disque/)).toBeTruthy()
+    expect(within(screen.getByRole("alert")).queryByRole("button", { name: "Enregistrer sous le même nom" })).toBeNull()
+    expect(within(screen.getByRole("alert")).getByRole("button", { name: "Fermer" })).toBeTruthy()
+  })
+})
+
+describe("IdeView : flux, droits, TypeScript", () => {
+  it("page refusée : aucun flux, aucun sondage d'index, Ctrl+P laissé au navigateur", async () => {
+    setAuth({ state: "ok", home: "h", rights: { h: [] } })
+    render(<IdeView dir="/p" />)
+    await sleep(400)
+    expect(FakeES.all).toHaveLength(0)
+    expect(index).not.toHaveBeenCalled()
+    expect(api.fsTree).not.toHaveBeenCalled()
+    expect(fireEvent.keyDown(document.body, { key: "p", ctrlKey: true })).toBe(true)
+  })
+
+  it("réouverture du flux après un changement de dossiers dépliés : resync implicite", async () => {
+    vi.mocked(api.fsTree).mockImplementation(async (_d, p) => ({ entries: p === "" ? [e("src", "dir"), e("a.txt", "file")] : [e("b.txt", "file")], truncated: false }))
+    await openA()
+    const first = await stream()
+    first.open()
+    fireEvent.click(await screen.findByLabelText("Déplier src"))
+    await waitFor(() => expect(first.closed).toBe(true))
+    const second = await stream()
+    disk({ "a.txt": res(200, { content: "neuf", etag: "e9" }) })
+    second.open()
+    await waitFor(() => expect(ed("a.txt")).toBe(JSON.stringify("neuf")))
+  })
+
+  it("alimentation TypeScript : une taille qui change à mtime égal relit le fichier", async () => {
+    index.mockResolvedValue(res(200, { state: "ready", files: [{ path: "a.ts", size: 3, mtime: 1 }] }))
+    vi.spyOn(api, "fsFiles").mockImplementation(async (_d, ps) => res(200, { files: ps.map((path) => ({ path, content: "v" })) }))
+    render(<IdeView dir="/p" />)
+    await waitFor(() => expect(feed.setTsLib).toHaveBeenCalledTimes(1))
+    const es = await stream()
+    index.mockResolvedValue(res(200, { state: "ready", files: [{ path: "a.ts", size: 9, mtime: 1 }] }))
+    es.emit({ path: "a.ts", type: "write" })
+    await waitFor(() => expect(feed.setTsLib).toHaveBeenCalledTimes(2), { timeout: 2500 })
   })
 })

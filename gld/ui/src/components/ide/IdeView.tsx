@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useReducer, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent } from "react"
+import { lazy, Suspense, useEffect, useReducer, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { PanelBottom } from "lucide-react"
 import { toast } from "sonner"
@@ -21,6 +21,8 @@ import { useTree } from "./useTree"
 import { useIndex } from "./useIndex"
 import { useWatch, type WatchEvent } from "./useWatch"
 import { pickFeed, runFeed } from "./feedTs"
+import { Handle } from "./Handle"
+import { readDrafts, useDrafts, type Draft } from "./drafts"
 
 const CodeEditor = lazy(() => import("./CodeEditor"))
 
@@ -36,6 +38,7 @@ const watchTheme = (f: () => void) => {
 const useResolvedTheme = () => useSyncExternalStore(watchTheme, () => (document.documentElement.classList.contains("dark") ? "dark" : "light"))
 
 const parentOf = (p: string) => p.slice(0, Math.max(0, p.lastIndexOf("/")))
+const nameOf = (p: string) => p.slice(p.lastIndexOf("/") + 1)
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
@@ -52,32 +55,16 @@ const parseTabs = (s: string): { paths: string[]; active: string } => {
   }
 }
 
-// Poignée de redimensionnement aux événements pointer : onMove pendant le glissement, onEnd au relâchement.
-function Handle({ label, vertical, start, onMove, onEnd }: { label: string; vertical?: boolean; start: () => number; onMove: (v: number) => void; onEnd: (v: number) => void }) {
-  const from = useRef<{ at: number; v: number } | null>(null)
-  const pos = (e: PointerEvent) => (vertical ? e.clientY : e.clientX)
-  const next = (e: PointerEvent) => from.current!.v + (vertical ? from.current!.at - pos(e) : pos(e) - from.current!.at)
-  return (
-    <div
-      role="separator"
-      aria-orientation={vertical ? "horizontal" : "vertical"}
-      aria-label={label}
-      className={vertical ? "h-1 shrink-0 cursor-row-resize bg-border hover:bg-ring/50" : "w-1 shrink-0 cursor-col-resize bg-border hover:bg-ring/50"}
-      onPointerDown={(e) => {
-        e.currentTarget.setPointerCapture(e.pointerId)
-        from.current = { at: pos(e), v: start() }
-      }}
-      onPointerMove={(e) => from.current && onMove(next(e))}
-      onPointerUp={(e) => {
-        if (from.current) onEnd(next(e))
-        from.current = null
-      }}
-    />
-  )
+// Sans droit de lecture, aucun hook de l'espace ne tourne : ni flux, ni sondage d'index, ni Ctrl+P pris.
+export function IdeView({ dir }: { dir: string }) {
+  const { t } = useTranslation()
+  const can = useCan()
+  if (!can("fs_read")) return <p className="p-6 text-sm text-muted-foreground">{t("ide.denied")}</p>
+  return <Workspace dir={dir} />
 }
 
-// Espace de travail d'un dossier : arborescence, zone centrale, panneau du bas repliable.
-export function IdeView({ dir }: { dir: string }) {
+// Espace de travail d'un dossier : arborescence, zone centrale, panneau du bas repliable (replié par défaut : le terminal ne s'attache que sur demande).
+function Workspace({ dir }: { dir: string }) {
   const { t } = useTranslation()
   const can = useCan()
   const [wStr, setW] = useLocal(`gld.ide.${dir}.w`, "260")
@@ -111,7 +98,7 @@ export function IdeView({ dir }: { dir: string }) {
   }
   const reloaded = useRef(new Set<string>())
   const seq = useRef(new Map<string, number>()) // chemin → numéro de la dernière lecture lancée
-  const fed = useRef(new Map<string, number>()) // chemin → mtime de l'index au moment de l'alimentation
+  const fed = useRef(new Map<string, string>()) // chemin → « mtime:taille » de l'index au moment de l'alimentation
   const w = drag.w ?? clamp(Number(wStr) || 260, 140, 700)
   const h = drag.h ?? clamp(Number(hStr) || 160, 60, 600)
 
@@ -123,24 +110,28 @@ export function IdeView({ dir }: { dir: string }) {
     if (tabOf(path)) return dispatch({ t: "focus", path })
     show(path, await api.fsFile(dir, path))
   }
+  const dropped = (path: string) => toast(t("ide.drafts.dropped", { name: nameOf(path) }), { id: "ide-draft:" + path })
   // quiet : restauration au chargement, tout fichier devenu illisible (supprimé, refusé, panne) est sauté sans message.
-  const show = (path: string, r: Awaited<ReturnType<typeof api.fsFile>>, quiet?: boolean) => {
+  // draft : brouillon de la session, repris seulement si le disque n'a pas bougé depuis (même etag).
+  const show = (path: string, r: Awaited<ReturnType<typeof api.fsFile>>, quiet?: boolean, draft?: Draft) => {
+    const c = r.ok ? r.body.content : undefined
+    const mixed = c !== undefined && mixedEol(c)
+    const readOnly = mixed || !can("fs_write")
+    const keep = !!draft && c !== undefined && !readOnly && draft.baseEtag === (r.body.etag ?? "")
+    if (draft && !keep) dropped(path)
     if (r.status === 413 || r.status === 415)
       return dispatch({ t: "open", tab: { path, content: "", saved: "", etag: "", readOnly: true, notice: r.status === 413 ? "tooBig" : "binary" } })
-    if (quiet && (!r.ok || r.body.content === undefined)) return
-    if (!r.ok || r.body.content === undefined) return fail(r)
-    const c = r.body.content
-    const mixed = mixedEol(c)
-    dispatch({ t: "open", tab: { path, content: c, saved: c, etag: r.body.etag ?? "", readOnly: mixed || !can("fs_write"), ...(mixed && { notice: "mixedEol" as const }) } })
+    if (c === undefined) return quiet ? undefined : fail(r)
+    dispatch({ t: "open", tab: { path, content: keep ? draft.content : c, saved: c, etag: r.body.etag ?? "", readOnly, ...(mixed && { notice: "mixedEol" as const }) } })
   }
   // Lectures en parallèle, onglets posés dans l'ordre mémorisé ; aucun focus pris, le premier rendu n'attend pas.
   useEffect(() => {
-    if (!can("fs_read")) return
     const { paths, active } = parseTabs(savedTabs)
+    const drafts = readDrafts(dir)
     let gone = false
     Promise.all(paths.map((p) => api.fsFile(dir, p).catch(() => null))).then((rs) => {
       if (gone) return
-      rs.forEach((r, i) => r && show(paths[i], r, true))
+      rs.forEach((r, i) => (r ? show(paths[i], r, true, drafts[paths[i]]) : drafts[paths[i]] && dropped(paths[i])))
       if (active) dispatch({ t: "focus", path: active })
       setRestored(true)
     })
@@ -153,30 +144,48 @@ export function IdeView({ dir }: { dir: string }) {
   useEffect(() => {
     if (restored && tabsSnap !== savedTabs) setSavedTabs(tabsSnap)
   }, [restored, tabsSnap, savedTabs, setSavedTabs])
-  const reload = async (path: string, pre?: Awaited<ReturnType<typeof api.fsFile>>) => {
+  useDrafts(dir, ide.tabs, restored)
+  // force : « Recharger » de l'utilisateur, qui écarte exprès ses modifications.
+  const reload = async (path: string, pre?: Awaited<ReturnType<typeof api.fsFile>>, force?: boolean) => {
     setDiff((d) => (d?.path === path ? null : d))
     const r = pre ?? (await api.fsFile(dir, path))
-    if (r.ok && r.body.content !== undefined) dispatch({ t: "reloaded", path, content: r.body.content, etag: r.body.etag ?? "", ...(mixedEol(r.body.content) && { notice: "mixedEol" as const }) })
+    if (r.ok && r.body.content !== undefined) dispatch({ t: "reloaded", path, content: r.body.content, etag: r.body.etag ?? "", force, ...(mixedEol(r.body.content) && { notice: "mixedEol" as const }) })
     else fail(r)
   }
   // force : écraser la version du disque ; create : recréer un fichier supprimé (etag vide).
   // Une sauvegarde à la fois par fichier : la suivante partirait avec l'ancien etag et lèverait un faux conflit contre la nôtre.
-  const save = async (path: string, how?: "force" | "create") => {
+  // value : texte du modèle de l'éditeur au moment du Ctrl+S (la dernière frappe n'est peut-être pas encore dans l'état).
+  const save = async (path: string, how?: "force" | "create", value?: string) => {
     const tab = live.current.tabs.find((x) => x.path === path)
     if (!tab || tab.readOnly) return
     if (saving.current.has(path)) return void saving.current.set(path, true)
     saving.current.set(path, false)
+    // Une relecture partie avant la sauvegarde ne doit pas appliquer ensuite la version d'avant.
+    seq.current.set(path, (seq.current.get(path) ?? 0) + 1)
     if (how) setDiff(null)
-    let content = tab.content
+    let content = value ?? tab.content
     let etag = how === "create" ? "" : tab.etag
     let force = how === "force" || undefined
+    let touched = false
     try {
       for (;;) {
         const r = await api.fsSave(dir, path, content, etag, force)
         if (!r.ok) {
           if (r.status !== 409) return fail(r)
-          if (!r.body.deleted && !isDirty(tab)) return reload(path)
-          return dispatch({ t: "disk", path, kind: r.body.deleted ? "deleted" : "changed" })
+          if (r.body.deleted) return dispatch({ t: "disk", path, kind: "deleted" })
+          // Décision sur l'onglet tel qu'il est maintenant : une frappe pendant l'aller-retour le rend sale.
+          const d = await api.fsFile(dir, path)
+          const now = live.current.tabs.find((x) => x.path === path)
+          if (!now) return
+          const disk = d.ok ? d.body.content : undefined
+          // Simple touch ou réécriture identique : on adopte le nouvel etag et on réessaie une fois.
+          if (!touched && disk === now.saved && d.body.etag) {
+            touched = true
+            etag = d.body.etag
+            continue
+          }
+          if (!isDirty(now) && disk !== undefined) return reload(path, d)
+          return dispatch({ t: "disk", path, kind: "changed", always: true })
         }
         dispatch({ t: "saved", path, etag: r.body.etag ?? "", content })
         later("git", 1000, git.refresh)
@@ -203,7 +212,10 @@ export function IdeView({ dir }: { dir: string }) {
     const tab = live.current.tabs.find((x) => x.path === path)
     if (!tab) return
     if (r.status === 404) return dispatch({ t: "disk", path, kind: "deleted" })
-    if (!r.ok || r.body.content === undefined || tab.notice === "tooBig" || tab.notice === "binary" || r.body.etag === tab.etag) return
+    if (r.status === 0 || tab.notice === "tooBig" || tab.notice === "binary") return
+    // Relecture refusée (fichier devenu trop gros, panne) : l'onglet ne reflète plus le disque, on le dit au lieu de se taire.
+    if (!r.ok || r.body.content === undefined) return dispatch({ t: "disk", path, kind: "changed", always: true })
+    if (r.body.etag === tab.etag) return
     if (r.body.content === tab.content) return dispatch({ t: "saved", path, etag: r.body.etag ?? "", content: tab.content })
     if (isDirty(tab)) return dispatch({ t: "disk", path, kind: "changed" })
     await reload(path, r)
@@ -211,7 +223,7 @@ export function IdeView({ dir }: { dir: string }) {
     later("toast", 300, () => {
       const names = [...reloaded.current]
       reloaded.current.clear()
-      const name = names[0].slice(names[0].lastIndexOf("/") + 1)
+      const name = nameOf(names[0])
       toast(names.length === 1 ? t("ide.watch.reloaded", { name }) : t("ide.watch.reloadedMany", { count: names.length }), { id: "ide-reloaded" })
     })
   }
@@ -237,27 +249,29 @@ export function IdeView({ dir }: { dir: string }) {
   // Alimentation du service TypeScript : seulement les fichiers de l'index, et seulement ceux qui ont changé depuis.
   useEffect(() => {
     if (index.state === "building") return
-    const mtime = new Map(index.files.map((f) => [f.path, f.mtime]))
+    const stamp = new Map(index.files.map((f) => [f.path, `${f.mtime}:${f.size}`]))
     const picked = pickFeed(index.files, live.current.active)
     const keep = new Set(picked)
     const gone = [...fed.current.keys()].filter((p) => !keep.has(p))
-    const todo = picked.filter((p) => fed.current.get(p) !== mtime.get(p))
+    const todo = picked.filter((p) => fed.current.get(p) !== stamp.get(p))
     if (!gone.length && !todo.length) return
     const ac = new AbortController()
-    import("./CodeEditor").then(({ setTsLib }) => {
-      if (ac.signal.aborted) return
-      for (const p of gone) {
-        setTsLib(p, null)
-        fed.current.delete(p)
-      }
-      return runFeed(dir, todo, (p, c) => (setTsLib(p, c), fed.current.set(p, mtime.get(p) ?? 0)), ac.signal)
-    })
+    import("./CodeEditor")
+      .then(({ setTsLib }) => {
+        if (ac.signal.aborted) return
+        for (const p of gone) {
+          setTsLib(p, null)
+          fed.current.delete(p)
+        }
+        return runFeed(dir, todo, (p, c) => (setTsLib(p, c), fed.current.set(p, stamp.get(p) ?? "")), ac.signal)
+      })
+      .catch(() => {})
     return () => ac.abort()
   }, [dir, index.files, index.state])
   useEffect(() => {
     const f = fed.current
     return () => {
-      if (f.size) import("./CodeEditor").then((m) => m.clearTsLibs())
+      if (f.size) import("./CodeEditor").then((m) => m.clearTsLibs(), () => {})
       f.clear()
     }
   }, [dir])
@@ -271,7 +285,7 @@ export function IdeView({ dir }: { dir: string }) {
     const tab = tabOf(path)
     const go = () => (dispatch({ t: "close", path }), setDiff((d) => (d?.path === path ? null : d)))
     if (!tab || !isDirty(tab)) return go()
-    setConfirm({ title: t("ide.tabs.closeTitle", { name: path.slice(path.lastIndexOf("/") + 1) }), body: t("ide.tabs.closeBody"), confirm: t("ide.tabs.closeConfirm"), run: go })
+    setConfirm({ title: t("ide.tabs.closeTitle", { name: nameOf(path) }), body: t("ide.tabs.closeBody"), confirm: t("ide.tabs.closeConfirm"), run: go })
   }
   // Ctrl+S hors de Monaco (arbre, onglets) : jamais la boîte « Enregistrer la page » du navigateur.
   const key = (e: KeyboardEvent) => {
@@ -299,7 +313,6 @@ export function IdeView({ dir }: { dir: string }) {
     if (path) setFocusReq((f) => ({ path, n: f.n + 1 }))
   }
 
-  if (!can("fs_read")) return <p className="p-6 text-sm text-muted-foreground">{t("ide.denied")}</p>
   return (
     <div ref={rootEl} tabIndex={-1} className="flex min-h-0 flex-1 outline-none" onKeyDown={key}>
       <aside className="flex min-h-0 shrink-0 flex-col" style={{ width: w }}>
@@ -317,7 +330,8 @@ export function IdeView({ dir }: { dir: string }) {
         {active?.conflict && (
           <ConflictBar
             kind={active.conflict}
-            onReload={() => reload(active.path)}
+            readOnly={active.readOnly}
+            onReload={() => reload(active.path, undefined, true)}
             onOverwrite={() => save(active.path, "force")}
             onDiff={() => showDiff(active.path)}
             onRecreate={() => save(active.path, "create")}
@@ -335,7 +349,7 @@ export function IdeView({ dir }: { dir: string }) {
                   <div className="flex size-full flex-col">
                     {tab.notice === "mixedEol" && <p className="shrink-0 border-b px-3 py-1.5 text-sm text-muted-foreground">{t("ide.notice.mixedEol")}</p>}
                     <div className="min-h-0 flex-1">
-                      <CodeEditor path={tab.path} value={tab.content} readOnly={tab.readOnly} theme={theme} focus={focusReq.path === tab.path ? focusReq.n : 0} onChange={(v) => !tab.readOnly && dispatch({ t: "edit", path: tab.path, content: v })} onSave={() => save(tab.path)} />
+                      <CodeEditor path={tab.path} value={tab.content} readOnly={tab.readOnly} theme={theme} focus={focusReq.path === tab.path ? focusReq.n : 0} onChange={(v) => !tab.readOnly && dispatch({ t: "edit", path: tab.path, content: v })} onSave={(v) => save(tab.path, undefined, v)} />
                     </div>
                   </div>
                 )}

@@ -29,7 +29,10 @@ export function useEditorDraft(name: string) {
 export function useLeaveGuard(dirty: boolean) {
   useEffect(() => {
     if (!dirty) return
-    const stop = (e: BeforeUnloadEvent) => e.preventDefault()
+    const stop = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = "" // navigateurs qui ignorent encore preventDefault seul
+    }
     addEventListener("beforeunload", stop)
     return () => removeEventListener("beforeunload", stop)
   }, [dirty])

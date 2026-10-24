@@ -56,11 +56,21 @@ describe("reduce", () => {
     expect(reduce(two, { t: "disk", path: "a", kind: "deleted" }).tabs[0].conflict).toBe("deleted")
   })
 
-  it("reloaded remplace contenu et etag et lève le conflit", () => {
+  it("reloaded demandé (force) remplace contenu et etag et lève le conflit", () => {
     let s = reduce(two, { t: "edit", path: "a", content: "mien" })
     s = reduce(s, { t: "disk", path: "a", kind: "changed" })
-    s = reduce(s, { t: "reloaded", path: "a", content: "disque", etag: "e9" })
+    s = reduce(s, { t: "reloaded", path: "a", content: "disque", etag: "e9", force: true })
     expect(s.tabs[0]).toEqual({ path: "a", content: "disque", saved: "disque", etag: "e9" })
+  })
+
+  it("reloaded automatique sur un onglet devenu sale : contenu gardé, conflit", () => {
+    const s = reduce(reduce(two, { t: "edit", path: "a", content: "mien" }), { t: "reloaded", path: "a", content: "disque", etag: "e9" })
+    expect(s.tabs[0]).toMatchObject({ content: "mien", conflict: "changed" })
+  })
+
+  it("disk « changed » always : signale aussi un onglet propre", () => {
+    expect(reduce(two, { t: "disk", path: "a", kind: "changed" }).tabs[0].conflict).toBeUndefined()
+    expect(reduce(two, { t: "disk", path: "a", kind: "changed", always: true }).tabs[0].conflict).toBe("changed")
   })
 
   it("saved lève le conflit", () => {
