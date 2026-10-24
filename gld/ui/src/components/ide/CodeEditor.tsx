@@ -23,11 +23,13 @@ export function clearTsLibs() {
 
 // Un éditeur et un modèle par onglet : le modèle naît avec l'onglet et disparaît avec lui. Le texte reçu sert tel quel (CRLF compris).
 // focus : compteur de demandes de focus venues de l'espace ; 0 n'en demande aucune.
-export default function CodeEditor({ path, value, readOnly, theme, focus, onChange, onSave }: { path: string; value: string; readOnly?: boolean; theme: Theme; focus?: number; onChange(v: string): void; onSave(): void }) {
+export default function CodeEditor({ path, value, readOnly, theme, focus, onChange, onSave }: { path: string; value: string; readOnly?: boolean; theme: Theme; focus?: number; onChange(v: string): void; onSave(v: string): void }) {
   const box = useRef<HTMLDivElement>(null)
   const model = useRef<monaco.editor.ITextModel | null>(null)
   const ed = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const cb = useRef({ onChange, onSave })
+  // Valeurs émises que le parent n'a pas encore renvoyées : une frappe entre un rendu et son effet ferait sinon revenir le texte d'avant.
+  const mine = useRef<string[]>([])
   useEffect(() => {
     cb.current = { onChange, onSave }
   })
@@ -41,9 +43,13 @@ export default function CodeEditor({ path, value, readOnly, theme, focus, onChan
     const keys = e.onKeyDown((k) => {
       if (!(k.ctrlKey || k.metaKey) || k.altKey || k.shiftKey || k.keyCode !== monaco.KeyCode.KeyS) return
       k.preventDefault()
-      cb.current.onSave()
+      cb.current.onSave(m.getValue())
     })
-    const sub = m.onDidChangeContent(() => cb.current.onChange(m.getValue()))
+    const sub = m.onDidChangeContent(() => {
+      const v = m.getValue()
+      if (mine.current.push(v) > 64) mine.current.shift()
+      cb.current.onChange(v)
+    })
     model.current = m
     ed.current = e
     return () => {
@@ -55,8 +61,11 @@ export default function CodeEditor({ path, value, readOnly, theme, focus, onChan
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path])
 
-  // Rechargement depuis le disque : seule une valeur différente de celle du modèle vient de l'extérieur.
+  // Rechargement depuis le disque : seule une valeur que nous n'avons pas émise vient de l'extérieur.
   useEffect(() => {
+    const i = mine.current.indexOf(value)
+    if (i >= 0) return void mine.current.splice(0, i + 1)
+    mine.current = []
     if (model.current && model.current.getValue() !== value) model.current.setValue(value)
   }, [value])
   useEffect(() => {
