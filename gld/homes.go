@@ -31,6 +31,8 @@ const (
 	homeCookie    = "gld_home"
 	childHeader   = "X-Gld-Child"
 	childTokenEnv = "GLD_WEB_CHILD_TOKEN"
+	// ideMainCfgEnv : la config du processus principal, qu'un enfant doit aussi refuser comme racine de l'espace.
+	ideMainCfgEnv = "GLD_WEB_MAIN_CONFIG"
 )
 
 // childAuthorized : un gld enfant (lancé avec un jeton) n'accepte que les requêtes de sa passerelle ; le processus principal accepte tout.
@@ -70,7 +72,9 @@ var (
 	homeStart    = startHomeProc // remplaçable dans les tests
 )
 
-func homesFile() string { return filepath.Join(cfgDir(), "gld-web-homes.json") }
+const homesFileName = "gld-web-homes.json"
+
+func homesFile() string { return filepath.Join(cfgDir(), homesFileName) }
 
 // homesFileMu sérialise les écritures du fichier : deux attributions d'identifiant concurrentes en donneraient deux différents.
 var (
@@ -78,8 +82,10 @@ var (
 	mainNameOnce sync.Once
 )
 
-func readHomes() []Home {
-	b, err := os.ReadFile(homesFile())
+func readHomes() []Home { return readHomesFile(homesFile()) }
+
+func readHomesFile(f string) []Home {
+	b, err := os.ReadFile(f)
 	if err != nil {
 		return []Home{}
 	}
@@ -261,7 +267,7 @@ func startHomeProc(h Home) (*homeProc, error) {
 	cmd.Env = append(childEnv(), "CLAUDE_CONFIG_DIR="+h.Dir, "GLD_WEB_PORT="+port, "GLD_WEB_LISTEN=127.0.0.1", childTokenEnv+"="+token)
 	if runAsOn() {
 		cmd.Env = append(cmd.Env, runAsChildEnv+"=1")
-		applyRunAs(cmd, childTokenEnv, "GLD_WEB_PORT", "GLD_WEB_LISTEN")
+		applyRunAs(cmd, childTokenEnv, "GLD_WEB_PORT", "GLD_WEB_LISTEN", ideMainCfgEnv)
 	}
 	cmd.Stderr, cmd.Stdout = io.Discard, io.Discard
 	if err := cmd.Start(); err != nil {
@@ -292,12 +298,16 @@ func childEnv() []string {
 	var out []string
 	for _, e := range os.Environ() {
 		k, _, _ := strings.Cut(e, "=")
-		if k == "GLD_WEB_TOKEN" || k == "GLD_WEB_PORT" || k == "GLD_WEB_LISTEN" || k == "CLAUDE_CONFIG_DIR" || k == "CC_WEB_PORT" || k == childTokenEnv {
+		if k == "GLD_WEB_TOKEN" || k == "GLD_WEB_PORT" || k == "GLD_WEB_LISTEN" || k == "CLAUDE_CONFIG_DIR" || k == "CC_WEB_PORT" || k == childTokenEnv || k == ideMainCfgEnv {
 			continue
 		}
 		out = append(out, e)
 	}
-	return out
+	main := cfgDir()
+	if m := os.Getenv(ideMainCfgEnv); m != "" {
+		main = m
+	}
+	return append(out, ideMainCfgEnv+"="+main)
 }
 
 // homeFrom : le dossier choisi par ce navigateur ("" : celui du processus principal). Le nom est encodé dans le cookie.
