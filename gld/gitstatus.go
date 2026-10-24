@@ -123,6 +123,34 @@ func runGitStatus(dir string) (string, error) {
 	return string(b), err
 }
 
+var (
+	gitPrefixes = map[string]string{}
+	gitPrefixMu sync.Mutex
+)
+
+// gitPrefix : chemin de dir sous la racine de son dépôt (« sub/dir/ », vide à la racine). Les chemins de git status sont relatifs à
+// la racine ; l'interface s'en sert pour les ramener au dossier. Gardé pour la durée du processus, un échec vaut « ».
+func gitPrefix(dir string) string {
+	gitPrefixMu.Lock()
+	p, ok := gitPrefixes[dir]
+	gitPrefixMu.Unlock()
+	if ok {
+		return p
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-C", dir, "rev-parse", "--show-prefix")
+	cmd.Env = append(childEnv(), "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0")
+	applyRunAs(cmd)
+	if b, err := cmd.Output(); err == nil {
+		p = strings.TrimSpace(string(b))
+		gitPrefixMu.Lock()
+		gitPrefixes[dir] = p
+		gitPrefixMu.Unlock()
+	}
+	return p
+}
+
 // gitStates : l'état de chaque dossier. Ce qui est périmé est relu en parallèle, dans la limite de 2 s ; le reste de la liste
 // arrive à la requête suivante.
 func gitStates(dirs []string) map[string]GitState {
@@ -242,7 +270,7 @@ func routesGit(mux *http.ServeMux) {
 	mux.HandleFunc("GET /git-changes", func(w http.ResponseWriter, r *http.Request) {
 		dir := r.URL.Query().Get("dir")
 		if !knownRepo(dir) {
-			writeJSON(w, 200, map[string]any{"files": []GitChange{}})
+			writeJSON(w, 200, map[string]any{"files": []GitChange{}, "prefix": ""})
 			return
 		}
 		gitStates([]string{dir}) // relu si le résultat gardé est périmé
@@ -258,7 +286,7 @@ func routesGit(mux *http.ServeMux) {
 		if cs == nil {
 			cs = []GitChange{}
 		}
-		writeJSON(w, 200, map[string]any{"files": cs, "more": max(more, 0)})
+		writeJSON(w, 200, map[string]any{"files": cs, "more": max(more, 0), "prefix": gitPrefix(dir)})
 	})
 	mux.HandleFunc("GET /git-status", func(w http.ResponseWriter, r *http.Request) {
 		var dirs []string
