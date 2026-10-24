@@ -676,7 +676,9 @@ func TestRunAsOwns(t *testing.T) {
 	}
 	runAsAcct = testAccount()
 	uid := "1500"
-	procStatusOf = func(int) ([]byte, error) { return []byte("Name:\tclaude\nUid:\t" + uid + "\t" + uid + "\t1500\t1500\n"), nil }
+	procStatusOf = func(int) ([]byte, error) {
+		return []byte("Name:\tclaude\nUid:\t" + uid + "\t" + uid + "\t1500\t1500\n"), nil
+	}
 	if err := runAsOwns(42); err != nil {
 		t.Fatalf("processus du compte cible : %v", err)
 	}
