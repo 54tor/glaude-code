@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowDown, ArrowDownToLine, ArrowUpToLine, BarChart3, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, Repeat, SquareTerminal, Wrench } from "lucide-react"
+import { ArrowDown, ArrowDownToLine, ArrowUpToLine, BarChart3, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, FolderOpen, Repeat, SquareTerminal, Wrench } from "lucide-react"
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
@@ -58,7 +58,7 @@ function Meta({ s, d }: { s: Session; d: Detail | null }) {
 // Position de lecture par session, gardée à la fermeture de la fenêtre : `end` vaut vrai quand on était à moins d'une demi-page de la fin.
 const scrollMem = new Map<string, { top: number; end: boolean }>()
 
-export function Conversation({ row, onClose, args, choice, carousel }: { row: Row | null; onClose: () => void; args: string; choice: Choice; carousel?: { n: number; next: () => void; stop: () => void } }) {
+export function Conversation({ row, onClose, onFolder, args, choice, carousel }: { row: Row | null; onClose: () => void; onFolder?: () => void; args: string; choice: Choice; carousel?: { n: number; next: () => void; stop: () => void } }) {
   const { t } = useTranslation()
   const a = useActions()
   const session = row?.s ?? null
@@ -324,6 +324,11 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
           {termOn && a.live.has(id) && (
             <Button variant="secondary" size="sm" className="max-md:hidden" onClick={() => setView(inTerm ? "visuel" : "terminal")} title={t("conversation.view.modeTitle")}>
               {inTerm ? <MessagesSquare /> : <SquareTerminal />} {inTerm ? t("conversation.view.modeVisual") : t("conversation.view.modeTerminal")}
+            </Button>
+          )}
+          {onFolder && (
+            <Button variant="ghost" size="sm" onClick={onFolder} title={t("shell.common.showFolder")}>
+              <FolderOpen /> <span className="max-md:sr-only">{t("shell.common.showFolder")}</span>
             </Button>
           )}
           <Button variant="ghost" size="sm" className="max-md:hidden" onClick={() => setLoadedOpen(true)} title={t("conversation.view.instructionsTitle")}>

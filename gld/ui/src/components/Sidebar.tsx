@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
-import { AlarmClock, ChevronRight, FolderPlus, Repeat, FolderOpen, Star, Brain, SlidersHorizontal, Zap, Flame, Microwave, History, Clock, FileText, Inbox, Info, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
+import { AlarmClock, ChevronRight, FolderPlus, Repeat, FolderOpen, Star, Brain, SlidersHorizontal, Zap, Flame, Microwave, Snowflake, History, Clock, FileText, Inbox, Info, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
 import { size, tilde } from "@/lib/format"
 import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
@@ -78,14 +78,16 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
   for (const r of rows) folders.set(r.g.project, [...(folders.get(r.g.project) ?? []), r])
   const item = (row: Row) => {
     const { s } = row
+    const cold = now - s.mtime >= ttl // ouverte mais cache expiré
     const left = Math.max(1, Math.ceil((ttl - (now - s.mtime)) / 60))
-    const warn = left <= 10
+    const warn = !cold && left <= 10
     return (
       <ContextMenu key={s.id}>
         <ContextMenuTrigger asChild>
           <button
             onClick={() => a.read(s)}
-            title={t("shell.sidebar.hotTitle", { title: s.title, left })}
+            onDoubleClick={() => go({ kind: "dir", key: segs(row.g.project, a.home).join("/") })}
+            title={cold ? t("shell.sidebar.coldTitle", { title: s.title }) : t("shell.sidebar.hotTitle", { title: s.title, left })}
             className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
           >
             {a.asking.has(s.id) ? (
@@ -96,14 +98,18 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
               <AlarmClock className="size-4 shrink-0 text-warning" aria-label={t("shell.sidebar.cacheExpiring")} />
             ) : warm[s.id]?.on ? (
               <Microwave className="warm-wave size-4 shrink-0" aria-label={t("shell.sidebar.keepWarmOn")} />
+            ) : cold ? (
+              <Snowflake className="size-4 shrink-0 text-info" aria-label={t("shell.sidebar.cold")} />
             ) : (
               <Flame className="size-4 shrink-0 text-warning" aria-hidden />
             )}
             {a.live.has(s.id) && <span className="size-1.5 shrink-0 rounded-full bg-success" aria-label={t("shell.sidebar.open")} />}
             <span className="flex-1 truncate text-left">{s.title}</span>
-            <span className={cn("shrink-0 text-xs tabular-nums", warn ? "font-medium text-warning" : "text-muted-foreground")}>
-              {t("shell.sidebar.minutes", { left })}
-            </span>
+            {!cold && (
+              <span className={cn("shrink-0 text-xs tabular-nums", warn ? "font-medium text-warning" : "text-muted-foreground")}>
+                {t("shell.sidebar.minutes", { left })}
+              </span>
+            )}
           </button>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-64">
