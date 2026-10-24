@@ -77,10 +77,15 @@ describe("useWatch : reconnexion", () => {
     live()[0].die()
     tick(15000)
     live()[0].open()
+    expect(ev).toHaveBeenCalledTimes(1)
     expect(ev).toHaveBeenCalledWith({ path: "", type: "resync" })
     expect(result.current.state).toBe("open")
     live()[0].die()
     expect(result.current.retryIn).toBe(5)
+    tick(5000)
+    live()[0].open()
+    expect(ev).toHaveBeenCalledTimes(2)
+    expect(ev.mock.calls.every(([e]) => e.type === "resync")).toBe(true)
   })
 
   it("erreur passagère : pas de nouveau flux, état interrompu", () => {
