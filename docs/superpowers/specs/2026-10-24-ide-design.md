@@ -21,7 +21,7 @@ Pendant qu'une session Claude tourne, l'opérateur doit pouvoir, sans quitter gl
 | | A. IDE léger CodeMirror | B. code-server / OpenVSCode Server derrière gld | **C. Monaco natif (retenu)** |
 |---|---|---|---|
 | Principe | Arbre + éditeur CodeMirror 6 + terminal existant, API fichiers Go | Processus VS Code serveur, reverse-proxy authentifié par gld, iframe | Comme A, éditeur Monaco |
-| Poids | ~300 Ko gzip en plus | Binaire externe de plusieurs centaines de Mo | ~2-5 Mo en plus (workers) |
+| Poids | ~300 Ko gzip en plus | Binaire externe de plusieurs centaines de Mo | ~13 Mo non compressés en plus, mesurés (dont ~7 Mo pour le worker TypeScript) |
 | Cohérence avec gld | Totale : ACL, home, thème, i18n | Faible : seconde interface, seconde authentification à raccorder, extensions hors contrôle | Totale |
 | Surface de sécurité | API fichiers à confiner (maîtrisée) | Un IDE complet exposé, WebSocket opaques, mises à jour à suivre | Idem A |
 | Fonctions d'IDE (LSP, débogueur, extensions) | Aucune | Toutes | Aucune (LSP à brancher soi-même) |
@@ -73,13 +73,13 @@ La suite spécifie C.
 - Fonctionne en mode multi-home : routes servies par le home enfant concerné comme les autres, jamais par la passerelle.
 - Aucun commentaire dans le HTML/bundles servis ; commentaires de source permis s'ils disent un *pourquoi*.
 - Builds et tests ciblés (`go test -run`, `vitest run <fichier>`), `-j 4` au plus ; pas de passe globale sans accord.
-- Documentation : `docs/reference/` et README mis à jour dans le même lot.
+- Documentation : `docs/ide.md` (il n'y a pas de `docs/reference/`), README et CHANGELOG mis à jour dans le même lot.
 
 ## Conception
 
 ### API serveur (nouveau fichier `gld/ide.go`)
 
-Toutes relatives à un dossier `dir` (chemin absolu qui doit être un dossier de travail connu de gld : dossier de sessions, dossier ajouté à la main ou dossier d'un projet) ; la racine est ce dossier, ouverte une fois par requête avec `os.OpenRoot`.
+Toutes relatives à un dossier `dir` (chemin absolu qui doit être un dossier de travail connu de gld : dossier de sessions, dossier ajouté à la main ou dossier d'un projet) ; la racine est ce dossier, ouverte une fois par requête avec `os.OpenRoot`. Sont refusés comme racine `$HOME` et ses ancêtres, le dossier de configuration de Claude et le dossier d'auth de gld (et tout dossier dedans ou qui les contient).
 
 | Route | Rôle | Droit |
 |---|---|---|
@@ -89,6 +89,8 @@ Toutes relatives à un dossier `dir` (chemin absolu qui doit être un dossier de
 | `POST /fs-files` | `{paths[]}` : contenu de plusieurs fichiers indexés d'un coup (pour alimenter l'éditeur), mêmes plafonds que `/fs-file` | `fs_read` |
 | `POST /fs-save` | `{path, content, etag}` ; écriture atomique (fichier temporaire + rename, permissions conservées) ; `409` si l'`etag` diffère | `fs_write` |
 | `POST /fs-new`, `/fs-rename`, `/fs-rm` | création, renommage ; suppression = déplacement dans `<projet>/.gld-trash/` horodaté (restaurable, voir Corbeille) | `fs_write` |
+| `GET /fs-trash` | liste de la corbeille (`id`, chemin d'origine, date) | `fs_read` |
+| `POST /fs-trash-restore`, `/fs-trash-purge` | restauration (sans écrasement) et purge d'une entrée de la corbeille | `fs_write` |
 | `GET /fs-watch?dir=&paths=a&paths=b` | flux SSE d'événements de changement (voir ci-dessous) ; un paramètre `paths` répété par dossier déclaré (vide = racine, 200 au plus) | `fs_read` |
 
 Le terminal garde `/term-open` et `/term-ws` (droit `exec`).
@@ -128,6 +130,7 @@ Surveillance côté Go par `fsnotify` (bibliothèque reconnue), limitée aux dos
 - `FileTree`, `EditorTabs`, `CodeEditor` (seul module important `monaco-editor`, chargé en `lazy` : le bundle principal de gld ne grossit pas). Thème Monaco synchronisé sur `next-themes`, police choisie parmi celles déjà embarquées.
 - Conflit : bandeau « modifié sur le disque » avec trois actions (Recharger, Écraser, Voir les différences). Un onglet sale dont le fichier change sur disque ne se recharge jamais seul.
 - Fichier modifié par l'agent et onglet propre : rechargement silencieux avec toast discret.
+- Fichier qui mélange les fins de ligne : ouvert en lecture seule avec un message (l'enregistrer le réécrirait en entier).
 - Route front `/espace/<dossier absolu encodé>` (la racine de l'API est un dossier, pas un nom de projet ; cohérent avec `/projet/`, `/dossier/`), ajoutée au `routeRights` en `rightPublic` comme les autres pages statiques.
 
 ### Sécurité
@@ -147,7 +150,7 @@ Surveillance côté Go par `fsnotify` (bibliothèque reconnue), limitée aux dos
 
 ### Corbeille
 
-`/fs-rm` déplace l'élément vers `<projet>/.gld-trash/<horodatage>/<chemin relatif>`. À la première création, gld écrit `.gld-trash/.gitignore` contenant `*` (mon choix) : le dossier s'ignore lui-même, sans toucher au `.gitignore` ni à `.git/info/exclude` du projet. Une restauration remet le fichier à son chemin d'origine et refuse d'écraser un fichier existant. Le purge est manuel (action explicite dans l'arbre), jamais automatique.
+`/fs-rm` déplace l'élément vers `<projet>/.gld-trash/<id>/item` et écrit son chemin d'origine dans `<projet>/.gld-trash/<id>/from` (`id` : horodatage en nanosecondes). À la première création, gld écrit `.gld-trash/.gitignore` contenant `*` (mon choix) : le dossier s'ignore lui-même, sans toucher au `.gitignore` ni à `.git/info/exclude` du projet. Une restauration remet le fichier à son chemin d'origine et refuse d'écraser un fichier existant. Le purge est manuel (action explicite dans l'arbre), jamais automatique.
 
 ## Hors périmètre de la première livraison
 
