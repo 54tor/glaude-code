@@ -87,6 +87,7 @@ export function IdeView({ dir }: { dir: string }) {
     timers.current.set(k, setTimeout(() => (timers.current.delete(k), f()), ms))
   }
   const reloaded = useRef(new Set<string>())
+  const seq = useRef(new Map<string, number>()) // chemin → numéro de la dernière lecture lancée
   const fed = useRef(new Map<string, number>()) // chemin → mtime de l'index au moment de l'alimentation
   const w = drag.w ?? clamp(Number(wStr) || 260, 140, 700)
   const h = drag.h ?? clamp(Number(hStr) || 160, 60, 600)
@@ -143,10 +144,16 @@ export function IdeView({ dir }: { dir: string }) {
     }
   }
   // Relit le disque pour un onglet ouvert après un évènement : l'etag dit si quelque chose a changé (notre propre écho n'en change pas).
-  const check = async (path: string) => {
+  // Pendant une sauvegarde on repousse : l'etag final dira si c'était notre écho ou un vrai changement extérieur.
+  const check = async (path: string): Promise<void> => {
+    if (saving.current.has(path)) return later("f:" + path, 300, () => check(path))
+    const n = (seq.current.get(path) ?? 0) + 1
+    seq.current.set(path, n)
     const r = await api.fsFile(dir, path)
+    if (seq.current.get(path) !== n) return
+    if (saving.current.has(path)) return later("f:" + path, 300, () => check(path))
     const tab = live.current.tabs.find((x) => x.path === path)
-    if (!tab || saving.current.has(path)) return
+    if (!tab) return
     if (r.status === 404) return dispatch({ t: "disk", path, kind: "deleted" })
     if (!r.ok || r.body.content === undefined || tab.notice === "tooBig" || tab.notice === "binary" || r.body.etag === tab.etag) return
     if (r.body.content === tab.content) return dispatch({ t: "saved", path, etag: r.body.etag ?? "", content: tab.content })
@@ -165,7 +172,7 @@ export function IdeView({ dir }: { dir: string }) {
     if (e.type === "resync") {
       tree.refresh("")
       for (const d of tree.open) tree.refresh(d)
-      for (const x of live.current.tabs) check(x.path)
+      for (const x of live.current.tabs) later("f:" + x.path, 150, () => check(x.path))
       return
     }
     const parent = parentOf(e.path)

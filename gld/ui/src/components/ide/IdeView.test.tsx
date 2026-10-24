@@ -548,3 +548,65 @@ describe("IdeView, ouverture rapide et alimentation TypeScript", () => {
     expect(feed.setTsLib.mock.calls.filter((c) => c[0] === "a.ts")).toHaveLength(2)
   })
 })
+
+describe("IdeView, évènement pendant une sauvegarde", () => {
+  const inFlight = async () => {
+    const pending = deferred<FsRes<{ etag: string; conflict: boolean; deleted: boolean }>>()
+    save.mockReturnValueOnce(pending.promise)
+    const input = await openA()
+    fireEvent.change(input, { target: { value: "x" } })
+    ctrlS(input)
+    const es = await stream()
+    return { input, es, done: () => act(async () => pending.resolve(res(200, { ok: true, etag: "e2" }))) }
+  }
+
+  it("changement extérieur pendant la sauvegarde, onglet propre ensuite : rechargé une fois la sauvegarde finie", async () => {
+    const { es, done } = await inFlight()
+    disk({ "a.txt": res(200, { content: "ext", etag: "e7" }) })
+    es.emit({ path: "a.txt", type: "write" })
+    await sleep(400)
+    expect(ed("a.txt")).toBe(JSON.stringify("l1\r\nl2\r\nx"))
+    await done()
+    await waitFor(() => expect(ed("a.txt")).toBe(JSON.stringify("ext")))
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
+
+  it("changement extérieur pendant la sauvegarde, onglet sale ensuite : conflit, contenu intact", async () => {
+    const { input, es, done } = await inFlight()
+    fireEvent.change(input, { target: { value: "y" } })
+    disk({ "a.txt": res(200, { content: "ext", etag: "e7" }) })
+    es.emit({ path: "a.txt", type: "write" })
+    await sleep(400)
+    await done()
+    expect(await screen.findByText(/modifié sur le disque/)).toBeTruthy()
+    expect(ed("a.txt")).toBe(JSON.stringify("l1\r\nl2\r\nxy"))
+  })
+
+  it("seul l'écho de la sauvegarde en cours : rien", async () => {
+    const { es, done } = await inFlight()
+    disk({ "a.txt": res(200, { content: "l1\r\nl2\r\nx", etag: "e2" }) })
+    es.emit({ path: "a.txt", type: "write" })
+    await sleep(400)
+    await done()
+    await sleep(700)
+    expect(screen.queryByRole("alert")).toBeNull()
+    expect(toast).not.toHaveBeenCalled()
+    expect(screen.queryByLabelText("Modifications non enregistrées")).toBeNull()
+  })
+
+  it("réponses dans le désordre : une lecture plus ancienne n'écrase pas la plus récente", async () => {
+    await openA()
+    const es = await stream()
+    const old = deferred<FsRes<{ content: string; etag: string }>>()
+    const base = file.getMockImplementation()!
+    let n = 0
+    file.mockImplementation(async (d, p) => (p !== "a.txt" ? base(d, p) : ++n === 1 ? old.promise : res(200, { content: "v2", etag: "e9" })))
+    es.emit({ path: "a.txt", type: "write" })
+    await waitFor(() => expect(n).toBe(1))
+    es.emit({ path: "", type: "resync" })
+    await waitFor(() => expect(ed("a.txt")).toBe(JSON.stringify("v2")))
+    await act(async () => old.resolve(res(200, { content: "v1", etag: "e8" })))
+    await sleep(100)
+    expect(ed("a.txt")).toBe(JSON.stringify("v2"))
+  })
+})
