@@ -21,9 +21,53 @@ var (
 	errIdeExists   = terr("srv.ide.existeDeja")
 )
 
+// pathUnder : a est b ou un descendant de b, par segments (jamais par préfixe de chaîne).
+func pathUnder(a, b string) bool {
+	r, err := filepath.Rel(b, a)
+	return err == nil && r != ".." && !strings.HasPrefix(r, ".."+string(filepath.Separator))
+}
+
+// ideForbiddenRoot écarte comme racine le home (et ses ancêtres), la config Claude et le dossier
+// d'auth de gld : un compte fs_read y lirait auth.db, auth.key et les identifiants Claude.
+func ideForbiddenRoot(dir string) bool {
+	forms := func(p string) []string {
+		p = filepath.Clean(p)
+		if r, err := filepath.EvalSymlinks(p); err == nil && r != p {
+			return []string{p, r}
+		}
+		return []string{p}
+	}
+	var guarded []string
+	if h, err := os.UserHomeDir(); err == nil && h != "" {
+		guarded = append(guarded, forms(h)...)
+	}
+	for _, d := range forms(dir) {
+		for _, h := range guarded {
+			if pathUnder(h, d) {
+				return true
+			}
+		}
+	}
+	prot := forms(cfgDir())
+	if a, err := authDir(); err == nil && a != "" {
+		prot = append(prot, forms(a)...)
+	}
+	for _, d := range forms(dir) {
+		for _, p := range prot {
+			if pathUnder(d, p) || pathUnder(p, d) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // ideKnownDir n'accepte qu'un dossier déjà connu de gld, jamais un chemin arbitraire du disque.
 func ideKnownDir(dir string) (string, bool) {
 	if dir == "" || strings.ContainsRune(dir, 0) || !filepath.IsAbs(dir) || filepath.Clean(dir) != dir {
+		return "", false
+	}
+	if ideForbiddenRoot(dir) {
 		return "", false
 	}
 	if knownRepo(dir) {
