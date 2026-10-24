@@ -65,6 +65,25 @@ describe("FileTree", () => {
     expect(screen.getByText("Supprimer")).toBeTruthy()
   })
 
+  it("boutons de création à la racine : masqués sans fs_write, créent à la racine avec", async () => {
+    const spy = tree()
+    const { unmount } = mount()
+    await screen.findByText("src")
+    expect(screen.queryByRole("button", { name: "Nouveau fichier" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "Nouveau dossier" })).toBeNull()
+    unmount()
+    const fsNew = vi.spyOn(api, "fsNew").mockResolvedValue({ status: 200, ok: true, body: { ok: true } })
+    mount({ canWrite: true })
+    await screen.findByText("src")
+    expect(screen.getByRole("button", { name: "Nouveau dossier" })).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Nouveau fichier" }))
+    fireEvent.change(await screen.findByPlaceholderText("Nom"), { target: { value: "n.txt" } })
+    fireEvent.click(screen.getByRole("button", { name: "Valider" }))
+    await waitFor(() => expect(fsNew).toHaveBeenCalledWith("/p", "n.txt", "file"))
+    await waitFor(() => expect(spy.mock.calls.filter((c) => c[1] === "").length).toBe(3))
+    expect(localStorage.getItem("gld.ide./p.open") ?? "[]").toBe("[]")
+  })
+
   it("navigue au clavier", async () => {
     tree()
     const open = vi.fn()

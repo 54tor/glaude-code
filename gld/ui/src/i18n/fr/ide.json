@@ -29,8 +29,7 @@
       "deleteConfirm": "Supprimer"
     },
     "center": {
-      "none": "Aucun fichier sélectionné",
-      "selected": "Fichier sélectionné : {{path}}"
+      "none": "Aucun fichier sélectionné"
     },
     "bottom": {
       "show": "Afficher le panneau du bas",
@@ -40,6 +39,34 @@
       "tree": "Redimensionner l'arborescence",
       "bottom": "Redimensionner le panneau du bas"
     },
-    "denied": "Vous n'avez pas le droit de lire les fichiers de ce dossier."
+    "denied": "Vous n'avez pas le droit de lire les fichiers de ce dossier.",
+    "tabs": {
+      "label": "Onglets ouverts",
+      "dirty": "Modifications non enregistrées",
+      "close": "Fermer {{path}}",
+      "closeTitle": "Fermer « {{name}} » sans enregistrer ?",
+      "closeBody": "Les modifications non enregistrées de ce fichier seront perdues.",
+      "closeConfirm": "Fermer sans enregistrer"
+    },
+    "editor": {
+      "loading": "Chargement de l'éditeur…"
+    },
+    "notice": {
+      "tooBig": "Ce fichier est trop volumineux pour l'éditeur : onglet en lecture seule.",
+      "binary": "Ce fichier n'est pas un fichier texte : onglet en lecture seule."
+    },
+    "conflict": {
+      "changed": "Ce fichier a été modifié sur le disque depuis son ouverture.",
+      "deleted": "Ce fichier a été supprimé du disque.",
+      "reload": "Recharger",
+      "overwrite": "Écraser",
+      "diff": "Voir les différences",
+      "recreate": "Enregistrer sous le même nom",
+      "close": "Fermer"
+    },
+    "diff": {
+      "title": "À gauche la version du disque, à droite la vôtre",
+      "close": "Fermer la comparaison"
+    }
   }
 }

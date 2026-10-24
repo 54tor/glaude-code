@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { cn } from "cn"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { api, type FsEntry, type FsRes } from "@/lib/api"
+import { Button } from "@/components/ui/button"
 import { Confirm, type Ask } from "@/components/Confirm"
 import { Prompt, type Ask as PromptAsk } from "@/components/Prompt"
 import { useTree } from "./useTree"
@@ -14,8 +15,11 @@ type TreeTarget = { path: string; name: string; type: FsEntry["type"] }
 type Row = TreeTarget & { parent: string; depth: number }
 
 const join = (p: string, n: string) => (p ? p + "/" : "") + n
+const rootTarget: TreeTarget = { path: "", name: "", type: "dir" }
 
-export function FileTree({ dir, canWrite, selected, onOpen }: { dir: string; canWrite: boolean; selected: string; onOpen: (path: string) => void }) {
+type Props = { dir: string; canWrite: boolean; selected: string; onOpen: (path: string) => void; onRenamed?: (from: string, to: string) => void }
+
+export function FileTree({ dir, canWrite, selected, onOpen, onRenamed }: Props) {
   const { t } = useTranslation()
   const tree = useTree(dir)
   const [focus, setFocus] = useState("")
@@ -38,7 +42,8 @@ export function FileTree({ dir, canWrite, selected, onOpen }: { dir: string; can
         confirm: t("ide.ask.confirm"),
         run: async (name) => {
           if (!done(await api.fsNew(dir, join(r.path, name.trim()), kind))) return false
-          if (tree.open.has(r.path)) tree.refresh(r.path)
+          // La racine ("") est toujours affichée : on la relit sans l'ajouter aux dossiers dépliés.
+          if (r.path === "" || tree.open.has(r.path)) tree.refresh(r.path)
           else tree.setOpen(r.path, true)
           return true
         },
@@ -50,8 +55,10 @@ export function FileTree({ dir, canWrite, selected, onOpen }: { dir: string; can
         value: r.name,
         confirm: t("ide.ask.confirm"),
         run: async (name) => {
-          if (!done(await api.fsRename(dir, r.path, join(parent, name.trim())))) return false
+          const to = join(parent, name.trim())
+          if (!done(await api.fsRename(dir, r.path, to))) return false
           tree.refresh(parent)
+          onRenamed?.(r.path, to)
           return true
         },
       })
@@ -108,6 +115,16 @@ export function FileTree({ dir, canWrite, selected, onOpen }: { dir: string; can
 
   return (
     <div className="min-h-0 flex-1 overflow-auto py-1 text-sm">
+      {canWrite && (
+        <div className="flex justify-end gap-0.5 px-1 pb-1">
+          <Button variant="ghost" size="icon-sm" aria-label={t("ide.menu.newFile")} title={t("ide.menu.newFile")} onClick={() => onAction("newFile", rootTarget)}>
+            <FilePlus />
+          </Button>
+          <Button variant="ghost" size="icon-sm" aria-label={t("ide.menu.newDir")} title={t("ide.menu.newDir")} onClick={() => onAction("newDir", rootTarget)}>
+            <FolderPlus />
+          </Button>
+        </div>
+      )}
       {truncated && <p className="mx-2 mb-1 rounded-md border px-2 py-1 text-xs text-muted-foreground">{t("ide.tree.truncated")}</p>}
       {rootList === "loading" && <p className="px-3 py-1 text-xs text-muted-foreground">{t("ide.tree.loading")}</p>}
       {rootList === "failed" && <p className="px-3 py-1 text-xs text-destructive">{t("ide.tree.failed")}</p>}

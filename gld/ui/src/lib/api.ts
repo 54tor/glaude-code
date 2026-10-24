@@ -151,6 +151,7 @@ async function get<T>(url: string): Promise<T> {
   return (await r.json()) as T
 }
 
+export type FsTrashItem = { id: string; path: string; mtime: number }
 export type FsEntry = { name: string; type: "dir" | "file" | "symlink"; size: number; mtime: number }
 // Réponse d'un appel fs-* : le statut (409, 413, 415…) arrive comme donnée, jamais comme exception ; 0 = réseau.
 export type FsRes<T = object> = { status: number; ok: boolean; body: Partial<T> & { ok?: boolean; error?: string } }
@@ -172,11 +173,11 @@ export const api = {
   fsNew: (dir: string, path: string, kind: "file" | "dir") => fsCall("/fs-new", { dir, path, kind }),
   fsRename: (dir: string, from: string, to: string) => fsCall("/fs-rename", { dir, from, to }),
   fsRm: (dir: string, path: string) => fsCall("/fs-rm", { dir, path }),
-  fsTrash: (dir: string) => fsCall<{ items: unknown[] }>(`/fs-trash?${fsq(dir)}`),
+  fsTrash: (dir: string) => fsCall<{ items: FsTrashItem[] }>(`/fs-trash?${fsq(dir)}`),
   fsTrashRestore: (dir: string, id: string) => fsCall("/fs-trash-restore", { dir, id }),
   fsTrashPurge: (dir: string, id: string) => fsCall("/fs-trash-purge", { dir, id }),
   fsIndex: (dir: string) => fsCall<{ state: string; files: { path: string; size: number; mtime: number }[] }>(`/fs-index?${fsq(dir)}`),
-  fsFiles: (dir: string, paths: string[]) => fsCall<{ files: unknown[] }>("/fs-files", { dir, paths }),
+  fsFiles: (dir: string, paths: string[]) => fsCall<{ files: { path: string; content: string }[] }>("/fs-files", { dir, paths }),
   data: () => get<Data>("/api"),
   cleanupWarning: () => get<{ days: number; sessions: { dir: string; id: string; title: string; cwd: string; expires: number }[] }>("/cleanup-warning"),
   sessionsStamp: () => get<{ stamp: number }>("/sessions-stamp"),
