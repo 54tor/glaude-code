@@ -264,3 +264,14 @@ func TestFsAuditRelayedFromChild(t *testing.T) {
 		t.Fatal(uid, err)
 	}
 }
+
+func TestFsAuditCleanFormatControls(t *testing.T) {
+	for _, r := range []rune{0x202a, 0x202e, 0x2066, 0x2069, 0x200e, 0x200f, 0x061c, 0x2028, 0x2029, 0xfeff} {
+		if got := ideAuditClean("a" + string(r) + "b"); got != "a?b" {
+			t.Errorf("U+%04X : %q", r, got)
+		}
+	}
+	if got := ideAuditClean("é/ü"); got != "é/ü" {
+		t.Fatal(got)
+	}
+}

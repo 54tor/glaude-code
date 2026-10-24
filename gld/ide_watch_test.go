@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -29,19 +30,6 @@ func wsTest(t *testing.T) {
 		ideCloseAll()
 		ideDebounce, ideIdleTTL, idePollInterval, idePing = od, ot, op, oi
 	})
-}
-
-// ideCloseAll ferme les espaces ouverts par un test (web l'appelle aussi) : leur veille lirait sinon les
-// réglages qu'un test suivant abaisse.
-func ideCloseAll() {
-	ideWSMu.Lock()
-	defer ideWSMu.Unlock()
-	for d, w := range ideWorkspaces {
-		w.mu.Lock()
-		w.closeLocked()
-		w.mu.Unlock()
-		delete(ideWorkspaces, d)
-	}
 }
 
 func next(t *testing.T, ch <-chan ideEvent) ideEvent {
@@ -532,5 +520,77 @@ func TestWatchMassRemoveFast(t *testing.T) {
 	}
 	if w.idxDirs["d199"] || w.idxDirs["d199/sub"] || !w.idxDirs["d000"] || !w.idxDirs["d198/sub"] {
 		t.Fatal("dossiers surveillés")
+	}
+}
+
+// À l'arrêt du serveur, un flux /fs-watch ouvert se termine dès la fermeture des espaces, sans attendre le délai de Shutdown.
+func TestFsWatchEndsOnClose(t *testing.T) {
+	h, _, proj := web(t)
+	wsTest(t)
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	req, _ := http.NewRequest("GET", srv.URL+"/fs-watch?dir="+proj+"&paths=", nil)
+	req.Host = testHost
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil || resp.StatusCode != 200 {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	ws, _ := ideWS(proj)
+	ch, cancel := ws.Subscribe([]string{""})
+	defer cancel()
+	ideCloseAll()
+	done := make(chan struct{})
+	go func() { io.Copy(io.Discard, resp.Body); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("flux toujours ouvert après fermeture de l'espace")
+	}
+	if _, ok := <-ch; ok {
+		t.Fatal("canal d'abonné pas fermé")
+	}
+}
+
+// Un dossier illisible est seulement sauté : la veille inotify reste active pour le reste.
+func TestWatchAddDeniedSkipsDir(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root lit tout")
+	}
+	_, _, proj := web(t)
+	wsTest(t)
+	mk(t, proj, "locked/x")
+	os.Chmod(filepath.Join(proj, "locked"), 0)
+	t.Cleanup(func() { os.Chmod(filepath.Join(proj, "locked"), 0o755) })
+	ws, _ := ideWS(proj)
+	ch, cancel := ws.Subscribe([]string{"locked", ""})
+	defer cancel()
+	ws.mu.Lock()
+	poll := ws.poll
+	ws.mu.Unlock()
+	if poll {
+		t.Fatal("passé au sondage pour un dossier illisible")
+	}
+	mk(t, proj, "n.txt")
+	if e := next(t, ch); e != (ideEvent{"n.txt", "create"}) {
+		t.Fatal(e)
+	}
+}
+
+// Les limites d'inotify (ENOSPC, EMFILE) font passer au sondage.
+func TestWatchAddLimitFallsBackToPoll(t *testing.T) {
+	_, _, proj := web(t)
+	wsTest(t)
+	old := ideWatchAdd
+	ideWatchAdd = func(*fsnotify.Watcher, string) error { return fmt.Errorf("add: %w", syscall.ENOSPC) }
+	t.Cleanup(func() { ideWatchAdd = old })
+	mk(t, proj, "src/a")
+	ws, _ := ideWS(proj)
+	_, cancel := ws.Subscribe([]string{"src"})
+	defer cancel()
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
+	if !ws.poll {
+		t.Fatal("ENOSPC sans repli au sondage")
 	}
 }

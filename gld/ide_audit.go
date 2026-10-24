@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -64,10 +65,11 @@ func ideAuditRelay(resp *http.Response) error {
 	return nil
 }
 
-// ideAuditClean remplace les caractères de contrôle et plafonne à ideAuditMax octets.
+// ideAuditClean remplace les caractères de contrôle, de format et de direction (un U+202E retournerait la ligne
+// affichée dans l'admin) ainsi que les séparateurs U+2028/U+2029, puis plafonne à ideAuditMax octets.
 func ideAuditClean(s string) string {
 	s = strings.Map(func(r rune) rune {
-		if r < 0x20 || r == 0x7f || (r >= 0x80 && r < 0xa0) || r == utf8.RuneError {
+		if r < 0x20 || r == 0x7f || (r >= 0x80 && r < 0xa0) || r == utf8.RuneError || r == 0x2028 || r == 0x2029 || unicode.Is(unicode.Cf, r) {
 			return '?'
 		}
 		return r

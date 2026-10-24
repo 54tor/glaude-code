@@ -95,6 +95,7 @@ func main() {
 		h = withTokenOpen(token, h)
 	}
 	srv := newServer(net.JoinHostPort(*listen, port), h)
+	srv.RegisterOnShutdown(ideCloseAll) // sinon un flux /fs-watch ouvert fait attendre Shutdown jusqu'à son délai
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	homeCtx = ctx
