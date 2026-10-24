@@ -76,7 +76,7 @@ export function LiveBar({ live: { st, open }, id }: { live: Live; id: string }) 
           </div>
         </div>
       ))}
-      <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 bg-background/95 py-2 text-sm backdrop-blur">
+      <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 bg-popover/95 py-2 text-sm backdrop-blur">
         {isOpen && (
           <span className={cn("flex min-w-0 items-center gap-1.5 font-medium", st.thinking ? "text-success" : "text-warning")}>
             {st.thinking ? <Loader2 className="size-3.5 shrink-0 animate-spin" /> : <span className="size-1.5 shrink-0 rounded-full bg-current" />}
