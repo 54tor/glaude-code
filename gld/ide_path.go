@@ -58,13 +58,10 @@ func ideOpenRoot(dir string) (*os.Root, error) {
 }
 
 func ideRel(p string, allowRoot bool) (string, error) {
-	if p == "" || p == "." {
-		if allowRoot {
+	if p == "" || strings.ContainsAny(p, "\x00\\") || strings.HasPrefix(p, "/") {
+		if p == "" && allowRoot {
 			return ".", nil
 		}
-		return "", errIdePath
-	}
-	if strings.ContainsAny(p, "\x00\\") || strings.HasPrefix(p, "/") {
 		return "", errIdePath
 	}
 	for _, s := range strings.Split(p, "/") {
@@ -72,7 +69,11 @@ func ideRel(p string, allowRoot bool) (string, error) {
 			return "", errIdePath
 		}
 	}
-	return path.Clean(p), nil
+	c := path.Clean(p)
+	if c == "." && !allowRoot {
+		return "", errIdePath
+	}
+	return c, nil
 }
 
 // ideLstat refuse tout lien, même interne à la racine : os.Root ne bloque que les évasions.
