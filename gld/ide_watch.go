@@ -75,15 +75,23 @@ var (
 	ideWorkspaces = map[string]*ideWorkspace{}
 )
 
+// ideWS ne prend jamais w.mu sous ideWSMu : un lot long sur un espace bloquerait l'ouverture de tous les autres.
 func ideWS(dir string) (*ideWorkspace, error) {
 	ideWSMu.Lock()
-	defer ideWSMu.Unlock()
 	if w := ideWorkspaces[dir]; w != nil {
+		ideWSMu.Unlock()
 		w.mu.Lock()
-		w.touchLocked()
+		closed := w.closed
+		if !closed {
+			w.touchLocked()
+		}
 		w.mu.Unlock()
+		if closed { // libéré entre-temps : expire et ideCloseAll l'ont déjà retiré de la table
+			return ideWS(dir)
+		}
 		return w, nil
 	}
+	defer ideWSMu.Unlock()
 	root, err := ideOpenRoot(dir)
 	if err != nil {
 		return nil, err
@@ -362,6 +370,7 @@ func (w *ideWorkspace) pollOnce() {
 
 func (w *ideWorkspace) loop(fw *fsnotify.Watcher, debounce time.Duration) {
 	var pending []ideEvent
+	seen := map[ideEvent]bool{}
 	var tick <-chan time.Time
 	for {
 		select {
@@ -378,11 +387,8 @@ func (w *ideWorkspace) loop(fw *fsnotify.Watcher, debounce time.Duration) {
 			if !keep {
 				continue
 			}
-			dup := false
-			for _, p := range pending {
-				dup = dup || p == e
-			}
-			if !dup {
+			if !seen[e] {
+				seen[e] = true
 				pending = append(pending, e)
 			}
 			if tick == nil {
@@ -398,12 +404,14 @@ func (w *ideWorkspace) loop(fw *fsnotify.Watcher, debounce time.Duration) {
 				w.fallbackLocked()
 				w.mu.Unlock()
 				pending, tick = nil, nil
+				clear(seen)
 			}
 		case <-tick:
 			w.mu.Lock()
 			w.flushLocked(pending)
 			w.mu.Unlock()
 			pending, tick = nil, nil
+			clear(seen)
 		}
 	}
 }
@@ -458,7 +466,7 @@ func ideIndexable(rel string) bool {
 // plein) : dans cet ordre, rien de ce qui y apparaît ensuite n'échappe.
 // Le budget (une échéance, les entrées restantes) est commun à tous les dossiers d'un lot : une rafale de
 // mkdir ne le multiplie pas. Renvoie false quand le parcours est incomplet.
-func (w *ideWorkspace) addTreeLocked(rel string, byPath map[string]ideIndexEntry, deadline time.Time) bool {
+func (w *ideWorkspace) addTreeLocked(rel string, byPath map[string]ideIndexEntry, added map[string]bool, deadline time.Time) bool {
 	if len(w.idxDirs) < ideWatchMax && w.watchLocked(rel) {
 		w.idxDirs[rel] = true
 	}
@@ -475,6 +483,7 @@ func (w *ideWorkspace) addTreeLocked(rel string, byPath map[string]ideIndexEntry
 	for _, e := range es {
 		e.Path = rel + "/" + e.Path
 		byPath[e.Path] = e
+		added[e.Path] = true
 	}
 	for _, d := range dirs {
 		if d = ideJoin(rel, d); d != rel && len(w.idxDirs) < ideWatchMax && w.watchLocked(d) {
@@ -494,6 +503,8 @@ func (w *ideWorkspace) applyLocked(evs []ideEvent) {
 		byPath[e.Path] = e
 	}
 	st := w.ix.state
+	old := w.ix.entries // trié : les descendants d'un dossier y forment une plage contiguë
+	added := map[string]bool{}
 	// ponytail: parcours sous verrou borné par ideTreeBudget et par lot ; un gros dossier déplacé fait attendre /fs-index d'autant
 	deadline := time.Now().Add(ideTreeBudget)
 	for _, e := range evs {
@@ -504,23 +515,33 @@ func (w *ideWorkspace) applyLocked(evs []ideEvent) {
 		switch {
 		case err != nil || e.Type == "remove" || e.Type == "rename":
 			delete(byPath, e.Path)
-			for p := range byPath {
-				if strings.HasPrefix(p, e.Path+"/") {
-					delete(byPath, p)
-				}
+			delete(added, e.Path)
+			pre := e.Path + "/"
+			for i := sort.Search(len(old), func(i int) bool { return old[i].Path >= pre }); i < len(old) && strings.HasPrefix(old[i].Path, pre); i++ {
+				delete(byPath, old[i].Path)
 			}
-			for d := range w.idxDirs {
-				if d == e.Path || strings.HasPrefix(d, e.Path+"/") {
-					delete(w.idxDirs, d)
+			// Seul un dossier surveillé a pu recevoir des entrées pendant ce lot ou avoir des sous-dossiers surveillés.
+			if w.idxDirs[e.Path] {
+				for p := range added {
+					if strings.HasPrefix(p, pre) {
+						delete(byPath, p)
+						delete(added, p)
+					}
+				}
+				for d := range w.idxDirs {
+					if d == e.Path || strings.HasPrefix(d, pre) {
+						delete(w.idxDirs, d)
+					}
 				}
 			}
 		case fi.IsDir():
-			if !w.addTreeLocked(e.Path, byPath, deadline) {
+			if !w.addTreeLocked(e.Path, byPath, added, deadline) {
 				st = "partial"
 			}
 		case fi.Mode().IsRegular():
 			if _, ok := byPath[e.Path]; ok || len(byPath) < ideIndexLimits.Entries {
 				byPath[e.Path] = ideIndexEntry{e.Path, fi.Size(), fi.ModTime().Unix()}
+				added[e.Path] = true
 			}
 		}
 	}
