@@ -4,6 +4,11 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.4.1] - 2026-10-24
+
+### Corrigé
+- La vérification de l'interface (`make check-ui`, règle ESLint `react-hooks/refs`) échouait sur `Conversation.tsx` : l'identifiant de la session lu par le gestionnaire de défilement est mis à jour dans un effet et non plus pendant le rendu. Aucun changement de comportement.
+
 ## [0.4.0] - 2026-10-24
 
 ### Ajouté
@@ -214,7 +219,8 @@ Première version : `gld`, interface web locale pour parcourir, piloter et confi
 - Terminal intégré désactivé par défaut ; lecture bornée des fichiers de commandes.
 - Refus d'agir quand les sessions ouvertes sont indéterminées.
 
-[Non publié]: https://github.com/54tor/glaude-code/compare/v0.4.0...HEAD
+[Non publié]: https://github.com/54tor/glaude-code/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/54tor/glaude-code/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/54tor/glaude-code/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/54tor/glaude-code/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/54tor/glaude-code/compare/v0.2.0...v0.3.0
