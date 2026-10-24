@@ -6,6 +6,7 @@ import { tilde } from "@/lib/format"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { SettingsPanel, type UiSettings } from "./SettingsDialog"
 import { useActions } from "./actions"
 import { Choose } from "./Choose"
 import { useConfigEdit } from "./configEdit"
@@ -18,7 +19,7 @@ import { takeConfigFile } from "@/lib/wantConfigFile"
 
 // Configuration de Claude Code : réglages utilisateur, de projet et locaux. Lecture (précédence, santé, hooks, MCP) et
 // modifications limitées aux réglages simples, variables d'environnement, plugins et permissions, avec aperçu et sauvegarde.
-export function Config({ home, tab, onTab }: { home: string; tab: string; onTab: (t: string) => void }) {
+export function Config({ home, tab, onTab, ui }: { home: string; tab: string; onTab: (t: string) => void; ui: UiSettings }) {
   const { t } = useTranslation()
   const [ov, setOv] = useState<CfgOverview | null>(null)
   const [fileId, setFileId] = useState(() => takeConfigFile() || "u") // fichier édité dans « Permissions » et « Réglages »
@@ -94,6 +95,7 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
                 <TabsTrigger value="reglages">{t("config.main.tabs.settings")}</TabsTrigger>
                 <TabsTrigger value="json">JSON</TabsTrigger>
                 <TabsTrigger value="sauvegardes">{t("config.main.tabs.backups")} ({ov.backups.length})</TabsTrigger>
+                <TabsTrigger value="interface">{t("config.main.tabs.interface")}</TabsTrigger>
                 <TabsTrigger value="sync">{t("config.main.tabs.sync")}</TabsTrigger>
               </TabsList>
             </div>
@@ -141,6 +143,9 @@ export function Config({ home, tab, onTab }: { home: string; tab: string; onTab:
           <TabsContent value="reglages">
             {fileSelect}
             <SettingsTab file={fileId} doc={doc} plugins={ov.plugins} propose={propose} />
+          </TabsContent>
+          <TabsContent value="interface">
+            <SettingsPanel {...ui} />
           </TabsContent>
           <TabsContent value="json">
             {fileSelect}

@@ -1,5 +1,4 @@
-import { Cog, FolderCog, Monitor, Moon, Sun } from "lucide-react"
-import { Link } from "wouter"
+import { Monitor, Moon, Sun } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { setLang, type Lang } from "@/i18n"
@@ -11,12 +10,9 @@ import { ModelPicker } from "./ModelPicker"
 import { cn } from "@/lib/utils"
 import { useTheme } from "@/components/theme-provider"
 import { PALETTES } from "@/lib/palettes"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ScrollArea } from "@/components/ui/scroll-area"
 
 const LANGS: { v: Lang; label: string; claude: string }[] = [
   { v: "fr", label: "Français", claude: "French" },
@@ -90,14 +86,10 @@ function FontPicker({ font, setFont, fontSize, setFontSize }: Fonts) {
   )
 }
 
-export function Settings({
-  args,
-  setArgs,
-  choice,
-  setChoice,
-  folder,
-  ...fonts
-}: { args: string; setArgs: (v: string) => void; choice: Choice; setChoice: (c: Choice) => void; folder?: string } & Fonts) {
+export type UiSettings = { args: string; setArgs: (v: string) => void; choice: Choice; setChoice: (c: Choice) => void } & Fonts
+
+// Réglages de l'interface (options passées à claude, apparence, raccourcis), dans la page Configuration.
+export function SettingsPanel({ args, setArgs, choice, setChoice, ...fonts }: UiSettings) {
   const { t, i18n } = useTranslation()
   const { theme, setTheme, palette, setPalette } = useTheme()
   // La langue est le réglage « language » de Claude Code (settings.json) : l'interface change tout de suite, le serveur et les commandes la lisent au prochain appel.
@@ -114,25 +106,15 @@ export function Settings({
     </div>
   )
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="size-9 text-muted-foreground" aria-label={t("config.dialog.title")} title={t("config.dialog.title")}>
-          <Cog className="size-6" />
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="flex h-[min(85vh,560px)] flex-col gap-4 sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{t("config.dialog.title")}</DialogTitle>
-          <DialogDescription>{t("config.dialog.desc")}</DialogDescription>
-        </DialogHeader>
-        <Tabs defaultValue="claude" className="min-h-0 flex-1">
-          <TabsList>
-            <TabsTrigger value="claude">{t("config.dialog.tabClaude")}</TabsTrigger>
-            <TabsTrigger value="look">{t("config.dialog.tabLook")}</TabsTrigger>
-            <TabsTrigger value="keys">{t("config.dialog.tabKeys")}</TabsTrigger>
-            {folder && <TabsTrigger value="folder">{t("config.dialog.tabFolder")}</TabsTrigger>}
-          </TabsList>
-          <ScrollArea className="mt-2 min-h-0 flex-1 pr-3">
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">{t("config.dialog.desc")}</p>
+      <Tabs defaultValue="claude">
+        <TabsList>
+          <TabsTrigger value="claude">{t("config.dialog.tabClaude")}</TabsTrigger>
+          <TabsTrigger value="look">{t("config.dialog.tabLook")}</TabsTrigger>
+          <TabsTrigger value="keys">{t("config.dialog.tabKeys")}</TabsTrigger>
+        </TabsList>
+        <div className="mt-3">
             <TabsContent value="claude" className="space-y-5">
               {section(
                 t("config.dialog.argsTitle"),
@@ -212,18 +194,6 @@ export function Settings({
               )}
               <FontPicker {...fonts} />
             </TabsContent>
-            {folder && (
-              <TabsContent value="folder" className="space-y-3">
-                <p className="text-sm text-muted-foreground">{t("shell.header.settingsHint")}</p>
-                <DialogClose asChild>
-                  <Button variant="outline" asChild>
-                    <Link href={`/configuration/projets?projet=${encodeURIComponent(folder)}`}>
-                      <FolderCog /> {t("config.dialog.folderOpen")}
-                    </Link>
-                  </Button>
-                </DialogClose>
-              </TabsContent>
-            )}
             <TabsContent value="keys">
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
                 {KEYS.map(([k, v]) => (
@@ -236,9 +206,8 @@ export function Settings({
                 ))}
               </dl>
             </TabsContent>
-          </ScrollArea>
-        </Tabs>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </Tabs>
+    </div>
   )
 }
