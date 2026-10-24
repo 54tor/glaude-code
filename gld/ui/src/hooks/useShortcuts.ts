@@ -1,5 +1,6 @@
 import { useEffect, type RefObject } from "react"
 import { i18n } from "@/i18n"
+import { isEditableTarget } from "@/lib/editable"
 import type { Actions, Row } from "@/components/actions"
 
 // Raccourcis clavier, hors champ de saisie et hors fenêtre ou menu ouvert : / (recherche), j/k ou flèches (ligne),
@@ -19,8 +20,7 @@ export function useShortcuts({
 }) {
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement
-      if (/INPUT|TEXTAREA/.test(t.tagName) || t.isContentEditable || e.ctrlKey || e.metaKey || e.altKey) return
+      if (isEditableTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey) return
       if (document.querySelector('[role="dialog"],[role="alertdialog"],[role="menu"]')) return
       if (e.key === "/") {
         e.preventDefault()
