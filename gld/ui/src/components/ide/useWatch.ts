@@ -8,10 +8,12 @@ const depth = (p: string) => (p ? p.split("/").length : 0)
 // Au-delà du plafond du serveur, les dossiers les moins profonds d'abord : ce sont les plus visibles.
 export const capDirs = (dirs: string[]) => [...new Set(dirs)].sort((a, b) => depth(a) - depth(b) || (a < b ? -1 : a > b ? 1 : 0)).slice(0, MAX_DIRS)
 
-// Toute réouverture après la première (reconnexion automatique d'EventSource) vaut resync : des évènements ont pu se perdre.
+// Toute réouverture après la première (reconnexion d'EventSource ou nouveau flux après un changement de dossiers) vaut resync :
+// des évènements ont pu se perdre entre les deux.
 export function useWatch(dir: string, declaredDirs: string[], onEvent: (e: WatchEvent) => void) {
   const [connected, setConnected] = useState(false)
   const cb = useRef(onEvent)
+  const opened = useRef(false)
   useEffect(() => {
     cb.current = onEvent
   })
@@ -26,12 +28,11 @@ export function useWatch(dir: string, declaredDirs: string[], onEvent: (e: Watch
     if (typeof EventSource === "undefined") return
     let es: EventSource | undefined
     const timer = setTimeout(() => {
-      let opened = false
       es = new EventSource(`/fs-watch${query}`)
       es.onopen = () => {
         setConnected(true)
-        if (opened) cb.current({ path: "", type: "resync" })
-        opened = true
+        if (opened.current) cb.current({ path: "", type: "resync" })
+        opened.current = true
       }
       es.onerror = () => setConnected(false)
       es.onmessage = (m) => {
