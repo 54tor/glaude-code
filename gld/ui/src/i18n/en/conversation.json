@@ -258,6 +258,8 @@
       "placeholder": "Ideas, TODOs, instructions to keep at hand… (saved automatically)",
       "newSession": "New session with the note",
       "sendOpen": "Send to an open session",
+      "selectAll": "Select all",
+      "closedLabel": "Closed sessions: reopened in a terminal with this message",
       "sendLabel": "Sessions open in tmux, among those shown",
       "none": "No session open in tmux",
       "item": "Note item",

@@ -60,6 +60,7 @@ export type Actions = {
   info: (r: Row) => void // fiche de la session
   open: (body: { dir: string; id?: string }) => void
   resumeWith: (r: Row) => void // reprendre en envoyant un message
+  resumeSend: (r: Row, text: string) => Promise<boolean> // reprendre une session fermée avec ce texte, sans fenêtre de saisie
   caps: (s: Session) => Caps // ce que sait faire le fournisseur de cette session
   snippets: Snippet[] // commandes personnelles et de projets, à insérer dans un prompt
   defaultChoice: Choice // modèle et effort des réglages de l'interface

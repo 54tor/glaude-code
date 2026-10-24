@@ -258,6 +258,8 @@
       "placeholder": "Idées, TODO, consignes à garder sous la main… (enregistré automatiquement)",
       "newSession": "Nouvelle session avec la note",
       "sendOpen": "Envoyer à une session ouverte",
+      "selectAll": "Tout sélectionner",
+      "closedLabel": "Sessions fermées : elles sont rouvertes dans un terminal avec ce message",
       "sendLabel": "Sessions ouvertes dans tmux, parmi celles affichées",
       "none": "Aucune session ouverte dans tmux",
       "item": "Item de la note",
