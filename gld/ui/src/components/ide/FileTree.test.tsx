@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { setLang } from "@/i18n"
 import { api, type FsEntry } from "@/lib/api"
-import { FileTree } from "./FileTree"
+import { FileTree, type TreeActions } from "./FileTree"
 import { useTree } from "./useTree"
 
 const e = (name: string, type: FsEntry["type"]): FsEntry => ({ name, type, size: 1, mtime: 1 })
@@ -70,23 +70,51 @@ describe("FileTree", () => {
     expect(screen.getByText("Supprimer")).toBeTruthy()
   })
 
-  it("boutons de création à la racine : masqués sans fs_write, créent à la racine avec", async () => {
+  it("création à la racine via la poignée exposée : flux de création existant", async () => {
     const spy = tree()
-    const { unmount } = mount()
+    const fsNew = vi.spyOn(api, "fsNew").mockResolvedValue({ status: 200, ok: true, body: { ok: true } })
+    const actions: { current: TreeActions | null } = { current: null }
+    mount({ canWrite: true, actionsRef: actions })
     await screen.findByText("src")
     expect(screen.queryByRole("button", { name: "Nouveau fichier" })).toBeNull()
-    expect(screen.queryByRole("button", { name: "Nouveau dossier" })).toBeNull()
-    unmount()
-    const fsNew = vi.spyOn(api, "fsNew").mockResolvedValue({ status: 200, ok: true, body: { ok: true } })
-    mount({ canWrite: true })
-    await screen.findByText("src")
-    expect(screen.getByRole("button", { name: "Nouveau dossier" })).toBeTruthy()
-    fireEvent.click(screen.getByRole("button", { name: "Nouveau fichier" }))
+    act(() => actions.current!.create("newFile"))
     fireEvent.change(await screen.findByPlaceholderText("Nom"), { target: { value: "n.txt" } })
     fireEvent.click(screen.getByRole("button", { name: "Valider" }))
     await waitFor(() => expect(fsNew).toHaveBeenCalledWith("/p", "n.txt", "file"))
-    await waitFor(() => expect(spy.mock.calls.filter((c) => c[1] === "").length).toBe(3))
+    await waitFor(() => expect(spy.mock.calls.filter((c) => c[1] === "").length).toBe(2))
     expect(localStorage.getItem("gld.ide./p.open") ?? "[]").toBe("[]")
+    act(() => actions.current!.create("newDir"))
+    expect(await screen.findByText("Nouveau dossier")).toBeTruthy()
+  })
+
+  it("filtre : sous-chaîne insensible à la casse sur les entrées chargées, ancêtres gardés, aucun appel réseau", async () => {
+    localStorage.setItem("gld.ide./p.open", JSON.stringify(["src"]))
+    const spy = tree()
+    const { rerender } = mount({ filter: "B.G" })
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(2))
+    rerender(<Host dir="/p" canWrite={false} selected="" onOpen={() => {}} filter="B.G" />)
+    expect(await screen.findByText("b.go")).toBeTruthy()
+    expect(screen.getByText("src")).toBeTruthy()
+    expect(screen.queryByText("a.txt")).toBeNull()
+    expect(screen.queryByText("link")).toBeNull()
+    rerender(<Host dir="/p" canWrite={false} selected="" onOpen={() => {}} filter="zzz" />)
+    expect(screen.getByText("Aucune entrée chargée ne correspond.")).toBeTruthy()
+    rerender(<Host dir="/p" canWrite={false} selected="" onOpen={() => {}} filter="" />)
+    expect(screen.getByText("a.txt")).toBeTruthy()
+    expect(screen.getByText("link")).toBeTruthy()
+    expect(spy).toHaveBeenCalledTimes(2)
+  })
+
+  it("filtre : un dossier chargé puis replié est aussi parcouru", async () => {
+    const spy = tree()
+    const { rerender } = mount()
+    fireEvent.click(await screen.findByLabelText("Déplier src"))
+    await screen.findByText("b.go")
+    fireEvent.click(screen.getByLabelText("Replier src"))
+    await waitFor(() => expect(screen.queryByText("b.go")).toBeNull())
+    rerender(<Host dir="/p" canWrite={false} selected="" onOpen={() => {}} filter="b.go" />)
+    expect(screen.getByText("b.go")).toBeTruthy()
+    expect(spy).toHaveBeenCalledTimes(2)
   })
 
   it("navigue au clavier", async () => {

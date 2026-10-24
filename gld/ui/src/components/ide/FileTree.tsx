@@ -1,11 +1,10 @@
-import { cloneElement, useEffect, useRef, useState, type KeyboardEvent } from "react"
+import { cloneElement, useEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react"
 import { useTranslation } from "react-i18next"
 import { ChevronRight, File, FilePlus, Folder, FolderPlus, Link2, Pencil, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "cn"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { api, type FsEntry, type FsRes } from "@/lib/api"
-import { Button } from "@/components/ui/button"
 import { Confirm, type Ask } from "@/components/Confirm"
 import { Prompt, type Ask as PromptAsk } from "@/components/Prompt"
 import { tone } from "../GitChanges"
@@ -18,9 +17,12 @@ type Row = TreeTarget & { parent: string; depth: number }
 const join = (p: string, n: string) => (p ? p + "/" : "") + n
 const rootTarget: TreeTarget = { path: "", name: "", type: "dir" }
 
-type Props = { dir: string; tree: ReturnType<typeof useTree>; canWrite: boolean; selected: string; marks?: Map<string, string>; dirs?: Set<string>; onOpen: (path: string) => void; onRenamed?: (from: string, to: string) => void }
+// actionsRef : création à la racine pilotée de l'extérieur (barre de l'arbre), par le même flux que le menu contextuel.
+export type TreeActions = { create(kind: "newFile" | "newDir"): void }
+// filter : sous-chaîne du nom, sans casse, sur les seuls listings déjà chargés ; les ancêtres d'une entrée trouvée restent visibles.
+type Props = { dir: string; tree: ReturnType<typeof useTree>; canWrite: boolean; selected: string; marks?: Map<string, string>; dirs?: Set<string>; filter?: string; actionsRef?: RefObject<TreeActions | null>; onOpen: (path: string) => void; onRenamed?: (from: string, to: string) => void }
 
-export function FileTree({ dir, tree, canWrite, selected, marks, dirs, onOpen, onRenamed }: Props) {
+export function FileTree({ dir, tree, canWrite, selected, marks, dirs, filter = "", actionsRef, onOpen, onRenamed }: Props) {
   const { t } = useTranslation()
   const [focus, setFocus] = useState("")
   const box = useRef<HTMLUListElement>(null)
@@ -72,15 +74,29 @@ export function FileTree({ dir, tree, canWrite, selected, marks, dirs, onOpen, o
     })
   }
 
+  useEffect(() => {
+    if (!actionsRef) return
+    actionsRef.current = { create: (kind) => onAction(kind, rootTarget) }
+  })
+
+  const q = filter.trim().toLowerCase()
+  const expanded = (path: string) => (q ? typeof tree.lists[path] === "object" : tree.open.has(path))
   const rows: Row[] = []
-  const walk = (parent: string, depth: number) => {
+  // Renvoie vrai si une entrée de ce dossier (ou de ses sous-dossiers chargés) correspond au filtre.
+  const walk = (parent: string, depth: number): boolean => {
     const l = tree.lists[parent]
-    if (typeof l !== "object") return
+    if (typeof l !== "object") return false
+    let any = false
     for (const e of l.entries) {
       const path = join(parent, e.name)
+      const at = rows.length
       rows.push({ path, parent, name: e.name, type: e.type, depth })
-      if (e.type === "dir" && tree.open.has(path)) walk(path, depth + 1)
+      const self = !q || e.name.toLowerCase().includes(q)
+      const sub = e.type === "dir" && expanded(path) && walk(path, depth + 1)
+      if (!self && !sub) rows.length = at
+      any ||= self || sub
     }
+    return any
   }
   walk("", 0)
   const rootList = tree.lists[""]
@@ -115,24 +131,15 @@ export function FileTree({ dir, tree, canWrite, selected, marks, dirs, onOpen, o
 
   return (
     <div className="min-h-0 flex-1 overflow-auto py-1 text-sm">
-      {canWrite && (
-        <div className="flex justify-end gap-0.5 px-1 pb-1">
-          <Button variant="ghost" size="icon-sm" aria-label={t("ide.menu.newFile")} title={t("ide.menu.newFile")} onClick={() => onAction("newFile", rootTarget)}>
-            <FilePlus />
-          </Button>
-          <Button variant="ghost" size="icon-sm" aria-label={t("ide.menu.newDir")} title={t("ide.menu.newDir")} onClick={() => onAction("newDir", rootTarget)}>
-            <FolderPlus />
-          </Button>
-        </div>
-      )}
       {truncated && <p className="mx-2 mb-1 rounded-md border px-2 py-1 text-xs text-muted-foreground">{t("ide.tree.truncated")}</p>}
       {rootList === "loading" && <p className="px-3 py-1 text-xs text-muted-foreground">{t("ide.tree.loading")}</p>}
       {rootList === "failed" && <p className="px-3 py-1 text-xs text-destructive">{t("ide.tree.failed")}</p>}
       {typeof rootList === "object" && rootList.entries.length === 0 && <p className="px-3 py-1 text-xs text-muted-foreground">{t("ide.tree.empty")}</p>}
+      {q && typeof rootList === "object" && rootList.entries.length > 0 && rows.length === 0 && <p className="px-3 py-1 text-xs text-muted-foreground">{t("ide.tree.noMatch")}</p>}
       <ul ref={box} role="tree" aria-label={t("ide.tree.label")} onKeyDown={key} onPointerDown={() => (kbd.current = false)}>
         {rows.map((r, i) => {
           const isDir = r.type === "dir"
-          const isOpen = isDir && tree.open.has(r.path)
+          const isOpen = isDir && expanded(r.path)
           const mark = isDir ? undefined : marks?.get(r.path)
           const item = (
             <li

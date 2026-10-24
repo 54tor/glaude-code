@@ -6,7 +6,9 @@ import { api, type FsRes } from "@/lib/api"
 import { useCan } from "@/lib/auth"
 import { useLocal } from "@/hooks/useLocal"
 import { Confirm, type Ask } from "@/components/Confirm"
-import { FileTree } from "./FileTree"
+import { FileTree, type TreeActions } from "./FileTree"
+import { TreeToolbar } from "./TreeToolbar"
+import { EditorToolbar } from "./EditorToolbar"
 import { Tabs } from "./Tabs"
 import { ConflictBar } from "./ConflictBar"
 import { ConflictDiff } from "./ConflictDiff"
@@ -59,6 +61,8 @@ function Workspace({ dir }: { dir: string }) {
   // Poignée de l'éditeur de l'onglet actif, en état : les commandes qui en dépendent se réactivent dès son montage.
   const [editor, setEditor] = useState<EditorHandle | null>(null)
   const tree = useTree(dir)
+  const treeActions = useRef<TreeActions | null>(null)
+  const [filter, setFilter] = useState("")
   const index = useIndex(dir)
   const git = useGitMarks(dir)
   const [quick, setQuick] = useState(false)
@@ -204,8 +208,7 @@ function Workspace({ dir }: { dir: string }) {
     later("index", 1000, index.refetch)
     later("git", 1000, git.refresh)
     if (e.type === "resync") {
-      tree.refresh("")
-      for (const d of tree.open) tree.refresh(d)
+      tree.refreshAll()
       for (const x of live.current.tabs) later("f:" + x.path, 150, () => check(x.path))
       return
     }
@@ -275,8 +278,8 @@ function Workspace({ dir }: { dir: string }) {
     // La bascule part de l'état réellement affiché, pas de la préférence brute (ouverture d'emblée sans choix).
     prefs: { ...prefs, showTerminal: term.open },
     terminalAvailable: term.available,
-    // ponytail: la création à la racine reste inerte jusqu'au lot des barres.
-    newFile: () => {}, newFolder: () => {},
+    newFile: () => treeActions.current?.create("newFile"),
+    newFolder: () => treeActions.current?.create("newDir"),
     focusSession: () => setTermFocus((n) => n + 1),
     save: () => void (active && save(active.path)),
     saveAll: async () => {
@@ -318,17 +321,23 @@ function Workspace({ dir }: { dir: string }) {
 
   return (
     <div ref={rootEl} tabIndex={-1} className="flex min-h-0 flex-1 outline-none" onKeyDown={key}>
-      <aside className="flex min-h-0 shrink-0 flex-col" style={{ width: w }}>
-        {git.marks.size > 0 && (
-          <div className="flex shrink-0 flex-col items-start px-1 pt-1">
-            <GitChanges dir={dir} count={git.marks.size} onOpen={open} prefix={git.prefix} />
-            {git.more > 0 && <p className="px-2 text-xs text-muted-foreground">{t("ide.git.more", { count: git.more })}</p>}
-          </div>
-        )}
-        <FileTree dir={dir} tree={tree} marks={git.marks} dirs={git.dirs} canWrite={can("fs_write")} selected={ide.active} onOpen={open} onRenamed={(from, to) => dispatch({ t: "renamed", from, to })} />
-      </aside>
-      <Handle label={t("ide.resize.tree")} start={() => w} onMove={(v) => setDrag({ w: clamp(v, 140, 700) })} onEnd={(v) => (setW(String(clamp(v, 140, 700))), setDrag({}))} />
+      {prefs.showTree && (
+        <>
+          <aside className="flex min-h-0 shrink-0 flex-col" style={{ width: w }}>
+            <TreeToolbar dir={dir} tree={tree} ctx={ctx} filter={filter} onFilter={setFilter} onRestored={tree.refreshAll} />
+            {git.marks.size > 0 && (
+              <div className="flex shrink-0 flex-col items-start px-1 pt-1">
+                <GitChanges dir={dir} count={git.marks.size} onOpen={open} prefix={git.prefix} />
+                {git.more > 0 && <p className="px-2 text-xs text-muted-foreground">{t("ide.git.more", { count: git.more })}</p>}
+              </div>
+            )}
+            <FileTree dir={dir} tree={tree} marks={git.marks} dirs={git.dirs} canWrite={can("fs_write")} selected={ide.active} filter={filter} actionsRef={treeActions} onOpen={open} onRenamed={(from, to) => dispatch({ t: "renamed", from, to })} />
+          </aside>
+          <Handle label={t("ide.resize.tree")} start={() => w} onMove={(v) => setDrag({ w: clamp(v, 140, 700) })} onEnd={(v) => (setW(String(clamp(v, 140, 700))), setDrag({}))} />
+        </>
+      )}
       <div className="flex min-w-0 flex-1 flex-col">
+        <EditorToolbar ctx={ctx} />
         {ide.tabs.length > 0 && <Tabs tabs={ide.tabs} active={ide.active} onFocus={(path) => dispatch({ t: "focus", path })} onClose={close} />}
         {active?.conflict && (
           <ConflictBar
@@ -374,7 +383,7 @@ function Workspace({ dir }: { dir: string }) {
           </Suspense>
           {diff && diff.path === ide.active && active && <ConflictDiff path={diff.path} original={diff.original} modified={active.content} theme={theme} onClose={() => setDiff(null)} />}
         </div>
-        <BottomPane dir={dir} prefs={prefs} focusN={termFocus} onView={setTerm} />
+        <BottomPane dir={dir} prefs={prefs} focusN={termFocus} onView={setTerm} onToggle={() => run("view.toggleTerminal")} />
       </div>
       <Confirm ask={confirm} onClose={() => setConfirm(null)} />
       <QuickOpen open={quick} files={index.files.map((f) => f.path)} state={index.state} onClose={() => setQuick(false)} onCloseFocus={refocus} onPick={(p) => ((picked.current = p), setQuick(false), open(p))} />
