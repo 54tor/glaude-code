@@ -8,11 +8,27 @@ import { IdeView } from "./IdeView"
 
 // Monaco simulé avec sa sémantique réelle : addCommand passe par le service de raccourcis partagé (le dernier inscrit gagne),
 // onKeyDown est propre à chaque éditeur.
-const m = vi.hoisted(() => ({ log: [] as string[], cmds: [] as (() => void)[], keys: new Map<string, ((k: object) => void)[]>() }))
+type Model = { uri: string; value: string; type(v: string): void }
+const m = vi.hoisted(() => ({ log: [] as string[], cmds: [] as (() => void)[], keys: new Map<string, ((k: object) => void)[]>(), models: new Map<string, Model>() }))
 vi.mock("./monacoSetup", () => ({}))
 vi.mock("monaco-editor/languages/features/typescript/register", () => ({ typescriptDefaults: {} }))
 vi.mock("monaco-editor/editor", () => {
-  const model = (name: string, v = "") => ({ uri: name, getLanguageId: () => "plaintext", getValue: () => v, onDidChangeContent: () => ({ dispose() {} }), dispose: () => m.log.push(`${name}.dispose`) })
+  // type : frappe de l'utilisateur (le modèle change et prévient) ; setValue : écriture venue du composant, journalisée.
+  const model = (name: string, v = "") => {
+    const ls: (() => void)[] = []
+    const o = {
+      uri: name,
+      value: v,
+      getLanguageId: () => "plaintext",
+      getValue: () => o.value,
+      type: (x: string) => ((o.value = x), ls.forEach((f) => f())),
+      setValue: (x: string) => (m.log.push(`setValue:${x}`), (o.value = x), ls.forEach((f) => f())),
+      onDidChangeContent: (f: () => void) => (ls.push(f), { dispose() {} }),
+      dispose: () => m.log.push(`${name}.dispose`),
+    }
+    m.models.set(name, o)
+    return o
+  }
   return {
     Uri: { file: (p: string) => p },
     KeyMod: { CtrlCmd: 2048 },
@@ -65,6 +81,7 @@ afterEach(() => {
   m.log.length = 0
   m.cmds.length = 0
   m.keys.clear()
+  m.models.clear()
 })
 
 describe("CodeEditor", () => {
@@ -79,6 +96,33 @@ describe("CodeEditor", () => {
     )
     ctrlS("a.ts")
     expect(save.mock.calls).toEqual([["a.ts"]])
+  })
+})
+
+describe("CodeEditor : synchro valeur / modèle", () => {
+  it("une valeur périmée renvoyée par le parent pendant la frappe n'annule rien ; une valeur extérieure remplace le modèle", async () => {
+    const { default: CodeEditor } = await import("./CodeEditor")
+    const props = { path: "a.ts", theme: "light" as const, onChange: vi.fn(), onSave: () => {} }
+    const r = render(<CodeEditor {...props} value="" />)
+    const mdl = m.models.get("a.ts")!
+    mdl.type("a")
+    mdl.type("ab")
+    r.rerender(<CodeEditor {...props} value="a" />)
+    r.rerender(<CodeEditor {...props} value="ab" />)
+    expect(mdl.value).toBe("ab")
+    expect(m.log.filter((x) => x.startsWith("setValue"))).toEqual([])
+    r.rerender(<CodeEditor {...props} value="disque" />)
+    expect(mdl.value).toBe("disque")
+    expect(m.log.filter((x) => x.startsWith("setValue"))).toEqual(["setValue:disque"])
+  })
+
+  it("Ctrl+S donne le texte du modèle, dernière frappe comprise", async () => {
+    const { default: CodeEditor } = await import("./CodeEditor")
+    const onSave = vi.fn()
+    render(<CodeEditor path="a.ts" value="v1" theme="light" onChange={() => {}} onSave={onSave} />)
+    m.models.get("a.ts")!.type("v12")
+    ctrlS("a.ts")
+    expect(onSave).toHaveBeenCalledWith("v12")
   })
 })
 
