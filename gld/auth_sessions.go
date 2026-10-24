@@ -279,6 +279,16 @@ func (s *authStore) RevokeSession(sessionID string) error {
 	return err
 }
 
+// RevokeOthers ferme toutes les sessions de l'utilisateur sauf celle dont l'identifiant est donné.
+func (s *authStore) RevokeOthers(userID int64, keepID string) error {
+	h, err := hex.DecodeString(keepID)
+	if err != nil {
+		return errNoSession
+	}
+	_, err = s.db.Exec(`DELETE FROM sessions WHERE user_id=? AND id_hash<>?`, userID, h)
+	return err
+}
+
 func (s *authStore) RevokeUser(userID int64) error {
 	_, err := s.db.Exec(`DELETE FROM sessions WHERE user_id=?`, userID)
 	return err
