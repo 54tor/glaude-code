@@ -30,6 +30,7 @@ import { SessionSelectionBar } from "@/components/SessionSelectionBar"
 import { SessionsPane } from "@/components/SessionsPane"
 import { Sidebar } from "@/components/Sidebar"
 import { Settings } from "@/components/SettingsDialog"
+import { segs } from "@/lib/paths"
 import { Compose, type ComposeAsk } from "@/components/Compose"
 import { AuthScreen } from "@/components/auth/Login"
 import { boot, useAuth } from "@/lib/auth"
@@ -142,9 +143,9 @@ function Shell() {
   const hot = useMemo(
     () =>
       (data?.groups ?? [])
-        .flatMap((g) => g.sessions.filter((s) => now - s.mtime < HOT && !AUTO.some((p) => s.title.includes(p))).map((s) => ({ s, g })))
+        .flatMap((g) => g.sessions.filter((s) => (live.has(s.id) || now - s.mtime < HOT) && !AUTO.some((p) => s.title.includes(p))).map((s) => ({ s, g })))
         .sort(byDate),
-    [data, now]
+    [data, now, live]
   )
   // Ouvertes d'abord, puis au cache chaud (récentes d'abord) ; la recherche s'applique comme ailleurs.
   const active = useMemo(
@@ -439,7 +440,7 @@ function Shell() {
       </div>
 
       <Suspense fallback={null}>
-        <Conversation row={reader} onClose={closeReader} args={args} choice={choice} carousel={carousel ? { n: waitingRows.length, next: advanceCarousel, stop: () => setCarousel(false) } : undefined} />
+        <Conversation row={reader} onClose={closeReader} onFolder={reader ? () => go({ kind: "dir", key: segs(reader.g.project, home).join("/") }) : undefined} args={args} choice={choice} carousel={carousel ? { n: waitingRows.length, next: advanceCarousel, stop: () => setCarousel(false) } : undefined} />
       </Suspense>
       <DirPicker pick={picker} home={home} />
       <Confirm ask={ask} onClose={() => setAsk(null)} />

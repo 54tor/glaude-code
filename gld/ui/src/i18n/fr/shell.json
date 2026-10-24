@@ -29,7 +29,7 @@
       "title": {
         "recent": "Récentes",
         "all": "Toutes les sessions",
-        "active": "En cours et cache chaud",
+        "active": "Sessions ouvertes",
         "snippets": "Snippets",
         "memory": "Mémoire",
         "config": "Configuration",
@@ -50,6 +50,8 @@
       }
     },
     "sidebar": {
+      "coldTitle": "{{title}}\nOuverte, cache expiré",
+      "cold": "cache froid",
       "hotTitle": "{{title}}\nCache encore environ {{left}} min",
       "asking": "attend une réponse à une question",
       "working": "Claude travaille",
@@ -57,8 +59,8 @@
       "keepWarmOn": "maintien au chaud actif (payant)",
       "open": "ouverte",
       "minutes": "{{left}} min",
-      "hotHint": "Le cache des prompts dure une heure : reprendre une de ces sessions maintenant est plus rapide et moins coûteux",
-      "hot": "Cache chaud",
+      "hotHint": "Ouvertes dans un terminal ou au cache encore chaud (une heure) : reprendre une session au cache chaud est plus rapide et moins coûteux",
+      "hot": "Sessions ouvertes",
       "menu": "Menu",
       "searchPlaceholder": "Rechercher…",
       "searchLabel": "Rechercher dans les titres, les projets et les conversations",
