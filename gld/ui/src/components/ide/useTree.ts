@@ -59,6 +59,12 @@ export function useTree(dir: string) {
     }
   }
   const refresh = (path: string) => load(path)
+  // Dossiers repliés : leur listing peut rester périmé, il sera relu au prochain dépliage.
+  const refreshAll = () => {
+    load("")
+    for (const p of open) load(p)
+  }
+  const collapseAll = () => setRaw("[]")
 
-  return { open, lists, setOpen, refresh }
+  return { open, lists, setOpen, refresh, refreshAll, collapseAll }
 }

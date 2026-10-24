@@ -7,6 +7,18 @@ import { api, type FsEntry, type FsRes } from "@/lib/api"
 import { IdeView } from "./IdeView"
 
 const feed = vi.hoisted(() => ({ setTsLib: vi.fn(), clearTsLibs: vi.fn() }))
+// Une poignée simulée par chemin : on vérifie que les commandes visent l'éditeur de l'onglet actif.
+const handles = vi.hoisted(() => {
+  const all = new Map<string, Record<string, ReturnType<typeof vi.fn>>>()
+  const of = (p: string) => {
+    if (!all.has(p)) all.set(p, { undo: vi.fn(), redo: vi.fn(), find: vi.fn(), replace: vi.fn(), gotoLine: vi.fn(), palette: vi.fn(), focus: vi.fn(), zoom: vi.fn(), subscribe: vi.fn(() => () => {}) })
+    return all.get(p)!
+  }
+  return { all, of }
+})
+vi.mock("../FullTerminal", () => ({
+  default: ({ id, takeHand }: { id: string; takeHand?: boolean }) => <div data-testid="term" data-take={String(takeHand)}>{id}</div>,
+}))
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn() }))
 vi.mock("sonner", async (orig) => ({ ...(await orig<typeof import("sonner")>()), toast }))
 
@@ -14,11 +26,16 @@ vi.mock("sonner", async (orig) => ({ ...(await orig<typeof import("sonner")>()),
 // focus : demande de focus de l'espace, honorée comme le ferait Monaco.
 vi.mock("./CodeEditor", async () => {
   const { useEffect, useRef } = await import("react")
-  const Editor = ({ path, value, readOnly, focus, onChange, onSave }: { path: string; value: string; readOnly?: boolean; focus?: number; onChange(v: string): void; onSave(): void }) => {
+  const Editor = ({ path, value, readOnly, focus, editorRef, onChange, onSave }: { path: string; value: string; readOnly?: boolean; focus?: number; editorRef?: (h: unknown) => void; onChange(v: string): void; onSave(): void }) => {
     const el = useRef<HTMLInputElement>(null)
     useEffect(() => {
       if (focus) el.current?.focus()
     }, [focus])
+    useEffect(() => {
+      if (!editorRef) return
+      editorRef(handles.of(path))
+      return () => editorRef(null)
+    }, [editorRef, path])
     return (
     <div>
       <pre data-testid={`ed:${path}`}>{JSON.stringify(value)}</pre>
@@ -274,8 +291,8 @@ describe("IdeView", () => {
     ctrlS(input)
     ctrlS(screen.getByRole("tablist"))
     expect(save).not.toHaveBeenCalled()
-    expect(screen.queryByRole("button", { name: "Nouveau fichier" })).toBeNull()
-    expect(screen.queryByRole("button", { name: "Nouveau dossier" })).toBeNull()
+    expect(screen.getByRole("button", { name: "Nouveau fichier" }).getAttribute("aria-disabled")).toBe("true")
+    expect(screen.getByRole("button", { name: "Nouveau dossier" }).getAttribute("aria-disabled")).toBe("true")
   })
 
   it("deux Ctrl+S rapprochés : la seconde attend la première et part avec le nouvel etag, sans conflit", async () => {
@@ -971,5 +988,125 @@ describe("IdeView : flux, droits, TypeScript", () => {
     index.mockResolvedValue(res(200, { state: "ready", files: [{ path: "a.ts", size: 9, mtime: 1 }] }))
     es.emit({ path: "a.ts", type: "write" })
     await waitFor(() => expect(feed.setTsLib).toHaveBeenCalledTimes(2), { timeout: 2500 })
+  })
+})
+
+describe("IdeView : barres d'outils et commandes", () => {
+  beforeEach(() => handles.all.clear())
+  const tool = (name: string) => within(screen.getByRole("toolbar", { name: "Actions de l'éditeur" })).getByRole("button", { name })
+
+  it("la poignée suit l'onglet actif : la barre agit sur l'éditeur de l'onglet affiché", async () => {
+    render(<IdeView dir="/p" />)
+    await openFile("a.txt")
+    await openFile("b.txt")
+    await waitFor(() => expect(tool("Annuler").getAttribute("aria-disabled")).toBeNull())
+    fireEvent.click(tool("Annuler"))
+    expect(handles.of("b.txt").undo).toHaveBeenCalledTimes(1)
+    expect(handles.of("a.txt").undo).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole("tab", { name: /a\.txt/ }))
+    fireEvent.click(tool("Aller à la ligne"))
+    expect(handles.of("a.txt").gotoLine).toHaveBeenCalledTimes(1)
+    expect(handles.of("b.txt").gotoLine).not.toHaveBeenCalled()
+  })
+
+  it("« Enregistrer » de la barre passe par le flux d'enregistrement existant", async () => {
+    const input = await openA()
+    fireEvent.change(input, { target: { value: "x" } })
+    fireEvent.click(tool("Enregistrer"))
+    await waitFor(() => expect(save).toHaveBeenCalledWith("/p", "a.txt", "l1\r\nl2\r\nx", "e1", undefined))
+  })
+
+  it("« Tout enregistrer » enregistre chaque onglet sale en série", async () => {
+    render(<IdeView dir="/p" />)
+    await openFile("a.txt")
+    fireEvent.change(screen.getByLabelText("type:a.txt"), { target: { value: "x" } })
+    await openFile("b.txt")
+    fireEvent.change(screen.getByLabelText("type:b.txt"), { target: { value: "y" } })
+    fireEvent.click(tool("Tout enregistrer"))
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(2))
+    expect(save.mock.calls.map((c) => c[1])).toEqual(["a.txt", "b.txt"])
+  })
+
+  it("« Fermer tous les onglets » demande confirmation si un onglet est sale", async () => {
+    render(<IdeView dir="/p" />)
+    await openFile("a.txt")
+    await openFile("b.txt")
+    fireEvent.change(screen.getByLabelText("type:b.txt"), { target: { value: "y" } })
+    fireEvent.click(tool("Fermer tous les onglets"))
+    expect(await screen.findByText("Fermer tous les onglets ?")).toBeTruthy()
+    expect(screen.getAllByRole("tab", { hidden: true })).toHaveLength(2)
+    fireEvent.click(screen.getByRole("button", { name: "Fermer sans enregistrer" }))
+    await waitFor(() => expect(screen.queryByRole("tab")).toBeNull())
+  })
+
+  it("« Fermer tous les onglets » sans onglet sale : aucune confirmation", async () => {
+    render(<IdeView dir="/p" />)
+    await openFile("a.txt")
+    fireEvent.click(tool("Fermer tous les onglets"))
+    expect(screen.queryByRole("tab")).toBeNull()
+    expect(screen.queryByText("Fermer tous les onglets ?")).toBeNull()
+  })
+
+  it("nouveau fichier de la barre de l'arbre : création à la racine par le flux existant", async () => {
+    const fsNew = vi.spyOn(api, "fsNew").mockResolvedValue(res(200, { ok: true }))
+    render(<IdeView dir="/p" />)
+    await screen.findByText("a.txt", { selector: "[role=treeitem] span" })
+    fireEvent.click(within(screen.getByRole("toolbar", { name: "Actions de l'arborescence" })).getByRole("button", { name: "Nouveau dossier" }))
+    fireEvent.change(await screen.findByPlaceholderText("Nom"), { target: { value: "lib" } })
+    fireEvent.click(screen.getByRole("button", { name: "Valider" }))
+    await waitFor(() => expect(fsNew).toHaveBeenCalledWith("/p", "lib", "dir"))
+  })
+
+  it("arborescence masquée par la préférence : ni arbre ni barre de l'arbre", async () => {
+    localStorage.setItem("gld.ide.view.showTree", "0")
+    render(<IdeView dir="/p" />)
+    await screen.findByRole("toolbar", { name: "Actions de l'éditeur" })
+    expect(screen.queryByRole("tree")).toBeNull()
+    expect(screen.queryByRole("toolbar", { name: "Actions de l'arborescence" })).toBeNull()
+    fireEvent.click(tool("Afficher l'arborescence"))
+    expect(await screen.findByRole("tree")).toBeTruthy()
+  })
+})
+
+describe("IdeView : commandes du terminal", () => {
+  beforeEach(() => {
+    setAuth({ state: "open" } as never)
+    vi.spyOn(api, "termInfo").mockResolvedValue({ enabled: true })
+    vi.spyOn(api, "data").mockResolvedValue({ live: ["s1"], groups: [{ project: "p", missing: false, sessions: [{ id: "s1", cwd: "/p", mtime: 1 }] }] } as never)
+  })
+  const tool = (name: string) => within(screen.getByRole("toolbar", { name: "Actions de l'éditeur" })).getByRole("button", { name })
+
+  it("terminal.toggle replie puis rouvre la zone ; view.toggleTerminal par le bouton de la zone", async () => {
+    render(<IdeView dir="/p" />)
+    await screen.findByTestId("term")
+    fireEvent.click(tool("Ouvrir ou replier le terminal"))
+    await waitFor(() => expect(screen.queryByTestId("term")).toBeNull())
+    fireEvent.click(tool("Ouvrir ou replier le terminal"))
+    expect(await screen.findByTestId("term")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Masquer le panneau du bas" }))
+    await waitFor(() => expect(screen.queryByTestId("term")).toBeNull())
+    fireEvent.click(screen.getByRole("button", { name: "Afficher le panneau du bas" }))
+    expect(await screen.findByTestId("term")).toBeTruthy()
+  })
+
+  it("terminal.focusSession ouvre la zone repliée et donne le focus, sans prendre la main", async () => {
+    localStorage.setItem("gld.ide.view.showTerminalChosen", "1")
+    localStorage.setItem("gld.ide.view.showTerminal", "0")
+    render(<IdeView dir="/p" />)
+    await waitFor(() => expect(tool("Aller au terminal de session").getAttribute("aria-disabled")).toBeNull())
+    expect(screen.queryByTestId("term")).toBeNull()
+    fireEvent.click(tool("Aller au terminal de session"))
+    const term = await screen.findByTestId("term")
+    expect(term.dataset.take).toBe("false")
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("Terminal de session")))
+  })
+
+  it("sans exec : commandes du terminal désactivées avec la raison", async () => {
+    setAuth({ state: "ok", home: "h", rights: { h: ["fs_read", "fs_write"] } })
+    render(<IdeView dir="/p" />)
+    const b = await waitFor(() => tool("Aller au terminal de session"))
+    expect(b.getAttribute("aria-disabled")).toBe("true")
+    expect(document.getElementById(b.getAttribute("aria-describedby")!)?.textContent).toMatch(/exec/)
+    expect(api.termInfo).not.toHaveBeenCalled()
   })
 })
