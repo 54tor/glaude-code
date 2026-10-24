@@ -494,3 +494,43 @@ func TestFsWatchRepeatedPathsKeepCommas(t *testing.T) {
 	}
 	t.Fatal("flux coupé")
 }
+
+// Une suppression de masse ne balaie pas l'index pour chaque fichier : 10 000 retraits sur 20 000 entrées restent brefs.
+func TestWatchMassRemoveFast(t *testing.T) {
+	dir := t.TempDir()
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	w := &ideWorkspace{dir: dir, root: root, subs: map[*ideSub]bool{}, idxDirs: map[string]bool{},
+		declared: map[string]int{}, snaps: map[string]map[string]ideSig{}}
+	var entries []ideIndexEntry
+	set := map[string]bool{}
+	for i := 0; i < 20000; i++ {
+		p := fmt.Sprintf("d%03d/f%05d", i/100, i)
+		entries = append(entries, ideIndexEntry{Path: p})
+		set[p] = true
+		w.idxDirs[fmt.Sprintf("d%03d", i/100)] = true
+		w.idxDirs[fmt.Sprintf("d%03d/sub", i/100)] = true
+	}
+	w.ix = &ideIdx{state: "ready", entries: entries, set: set}
+	var evs []ideEvent
+	for i := 0; i < 10000; i++ {
+		evs = append(evs, ideEvent{fmt.Sprintf("d%03d/f%05d", i/100, i), "remove"})
+	}
+	evs = append(evs, ideEvent{"d199", "remove"})
+	start := time.Now()
+	w.mu.Lock()
+	w.applyLocked(evs)
+	w.mu.Unlock()
+	if d := time.Since(start); d > 2*time.Second {
+		t.Fatalf("10 000 retraits en %v", d)
+	}
+	if len(w.ix.entries) != 20000-10000-100 || w.ix.set["d199/f19950"] || !w.ix.set["d198/f19850"] {
+		t.Fatal(len(w.ix.entries))
+	}
+	if w.idxDirs["d199"] || w.idxDirs["d199/sub"] || !w.idxDirs["d000"] || !w.idxDirs["d198/sub"] {
+		t.Fatal("dossiers surveillés")
+	}
+}
