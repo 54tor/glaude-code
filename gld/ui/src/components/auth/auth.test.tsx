@@ -409,7 +409,7 @@ describe("AdminUsers", () => {
     setAuth({ state: "ok", csrf: "tok", user: { name: "root", admin: true }, factors: { totp: true, webauthn: 0, recovery: 10 } })
     render(<AdminUsers />)
     fireEvent.click(await screen.findByRole("button", { name: "bob" }))
-    expect(screen.getByText(/exec et config_write équivalent au compte système de gld/)).toBeTruthy()
+    expect(screen.getByText(/exec, config_write et fs_write équivalent au compte système de gld/)).toBeTruthy()
     await act(async () => void fireEvent.click(screen.getByRole("checkbox", { name: "exec sur Dossier principal" })))
     expect(calls.some((c) => c.url === "/admin/acl")).toBe(false)
     expect(screen.getByText("exec sur Dossier principal équivaut au compte système de gld.")).toBeTruthy()

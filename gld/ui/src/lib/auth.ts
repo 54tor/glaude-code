@@ -11,7 +11,7 @@ import { resetTrust } from "@/lib/trust"
 
 export const RIGHTS = ["mem_read", "mem_write", "config_write", "mem_sync", "usage_read", "sessions_read", "exec", "fs_read", "fs_write"] as const
 export type Right = (typeof RIGHTS)[number]
-// exec et config_write font exécuter du code sous le compte système de gld ; fs_write écrit n'importe où dans les projets (hooks, scripts).
+// exec, config_write et fs_write équivalent au compte système de gld.
 export const DANGEROUS: readonly Right[] = ["exec", "config_write", "fs_write"]
 
 export type Key = { id: number; label: string; created: number; bad: boolean }
