@@ -1,6 +1,5 @@
 import { FolderInput, Menu, MessageSquarePlus, MoreHorizontal, SquareTerminal, Trash2, TriangleAlert } from "lucide-react"
 import { useState } from "react"
-import { Link } from "wouter"
 import { useTranslation } from "react-i18next"
 import type { Group, Item, VGroup } from "@/lib/api"
 import type { Route } from "@/lib/route"
