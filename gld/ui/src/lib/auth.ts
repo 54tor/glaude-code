@@ -9,10 +9,10 @@ import { resetTrust } from "@/lib/trust"
 
 // Mode multi-utilisateur (auth_routes.go, auth_admin.go) : état de connexion partagé, appels vers /auth/* et /admin/*, WebAuthn.
 
-export const RIGHTS = ["mem_read", "mem_write", "config_write", "mem_sync", "usage_read", "sessions_read", "exec"] as const
+export const RIGHTS = ["mem_read", "mem_write", "config_write", "mem_sync", "usage_read", "sessions_read", "exec", "fs_read", "fs_write"] as const
 export type Right = (typeof RIGHTS)[number]
-// Ces deux droits font exécuter du code sous le compte système de gld.
-export const DANGEROUS: readonly Right[] = ["exec", "config_write"]
+// exec et config_write font exécuter du code sous le compte système de gld ; fs_write écrit n'importe où dans les projets (hooks, scripts).
+export const DANGEROUS: readonly Right[] = ["exec", "config_write", "fs_write"]
 
 export type Key = { id: number; label: string; created: number; bad: boolean }
 export type Factors = { totp: boolean; webauthn: number; recovery: number; keys?: Key[] }

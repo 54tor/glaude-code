@@ -65,7 +65,7 @@ Si la clé ne correspond pas à la base, gld refuse de démarrer (et la ligne de
 
 ## Les droits
 
-Sept droits, indépendants, par couple (compte, home). Un droit absent vaut refusé. Chaque route est classée dans une table unique (`routeRights`, `gld/auth_acl.go`) ; un test échoue si une route n'y figure pas.
+Neuf droits, indépendants, par couple (compte, home). Un droit absent vaut refusé. Chaque route est classée dans une table unique (`routeRights`, `gld/auth_acl.go`) ; un test échoue si une route n'y figure pas.
 
 | Droit | Ouvre |
 |---|---|
@@ -76,6 +76,8 @@ Sept droits, indépendants, par couple (compte, home). Un droit absent vaut refu
 | `sessions_read` | transcriptions et état des sessions, recherche (`/search`), `/info` et `/config-perm-suggest` (qui renvoient des extraits de prompts ou de transcriptions) |
 | `config_write` | réglages et skills (hooks, serveurs MCP, permissions), snippets (écriture, suppression, import), édition brute, restauration d'une sauvegarde, restauration d'un snippet ou d'un skill depuis la corbeille |
 | `exec` | chat, nouvelle session, terminal web, envoi de touches, confiance d'un dossier, push git, fermeture, renommage, suppression et corbeille de **sessions**, et `/ls`, `/dirs` (parcours du disque) |
+| `fs_read` | lire l'arborescence et les fichiers d'un projet, y compris `.env` et clés |
+| `fs_write` | écrire, créer, renommer et supprimer (vers `.gld-trash/`) des fichiers d'un projet. L'espace de travail complet exige en plus `exec` pour le terminal |
 
 Notes :
 
@@ -176,7 +178,7 @@ Il vise l'accident ou la dérive de Claude, pas un utilisateur malveillant qui a
 
 Routes `/admin/*` (administrateurs avec second facteur validé) : comptes (création, désactivation, mot de passe, réinitialisation des facteurs), droits (`/admin/acl`), journal d'événements, sessions d'un compte et leur révocation, liste des homes. Points d'attention :
 
-- Les opérations sensibles demandent une réauthentification (mot de passe plus code ; une assertion de clé de sécurité reste valable 5 minutes) : création de compte, réinitialisation de facteurs, changement de mot de passe, attribution de `exec`, de `config_write` (avec confirmation explicite) ou de `sessions_read`, tout octroi de droits à soi-même, réactivation, désactivation d'un administrateur, révocation des sessions d'un administrateur. Les retraits de droits restent immédiats. Désactiver un compte ordinaire est immédiat. On ne peut ni se désactiver soi-même ni désactiver le dernier administrateur actif. Il n'y a pas de route de rétrogradation d'un administrateur.
+- Les opérations sensibles demandent une réauthentification (mot de passe plus code ; une assertion de clé de sécurité reste valable 5 minutes) : création de compte, réinitialisation de facteurs, changement de mot de passe, attribution de `exec`, de `config_write` ou de `fs_write` (avec confirmation explicite), de `sessions_read` ou de `fs_read`, tout octroi de droits à soi-même, réactivation, désactivation d'un administrateur, révocation des sessions d'un administrateur. Les retraits de droits restent immédiats. Désactiver un compte ordinaire est immédiat. On ne peut ni se désactiver soi-même ni désactiver le dernier administrateur actif. Il n'y a pas de route de rétrogradation d'un administrateur.
 - Un mot de passe défini par un administrateur est temporaire par intention, mais **rien ne force son changement** à la première connexion.
 - `GET /admin/sessions` (adresse IP et navigateur d'un autre compte) et `GET /auth/sessions` (ses propres sessions) ne demandent pas de réauthentification.
 - Le journal d'événements est purgé au-delà de 90 jours (à l'ouverture de la base, puis au plus une fois par 24 h). Chaque action administrative l'écrit (compte visé, administrateur, adresse). `GET /account` (usages) peut déclencher un relevé.
