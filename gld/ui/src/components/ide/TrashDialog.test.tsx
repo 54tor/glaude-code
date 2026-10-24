@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { setLang } from "@/i18n"
 import { api, type FsRes } from "@/lib/api"
@@ -83,5 +83,40 @@ describe("TrashDialog", () => {
     expect(screen.getByText("Vous n'avez pas le droit de modifier les fichiers de ce dossier")).toBeTruthy()
     fireEvent.click(b)
     expect(restore).not.toHaveBeenCalled()
+  })
+  it("une requête à la fois : pendant une restauration, restaurer et purger sont désactivés", async () => {
+    list()
+    let done!: (v: FsRes) => void
+    const restore = vi.spyOn(api, "fsTrashRestore").mockReturnValue(new Promise<FsRes>((r) => (done = r)))
+    const purge = vi.spyOn(api, "fsTrashPurge")
+    mount()
+    await screen.findByText("a.txt")
+    fireEvent.click(screen.getByRole("button", { name: "Restaurer a.txt" }))
+    fireEvent.click(screen.getByRole("button", { name: "Restaurer a.txt" }))
+    fireEvent.click(screen.getByRole("button", { name: "Restaurer src/b.ts" }))
+    const p = screen.getByRole("button", { name: "Supprimer définitivement src/b.ts" }) as HTMLButtonElement
+    expect(p.disabled).toBe(true)
+    fireEvent.click(p)
+    expect(restore).toHaveBeenCalledTimes(1)
+    expect(purge).not.toHaveBeenCalled()
+    await act(async () => done(res(200, { ok: true })))
+    await waitFor(() => expect(p.disabled).toBe(false))
+  })
+  it("une requête à la fois : pendant une purge, restaurer et purger sont désactivés", async () => {
+    list()
+    let done!: (v: FsRes) => void
+    const purge = vi.spyOn(api, "fsTrashPurge").mockReturnValue(new Promise<FsRes>((r) => (done = r)))
+    const restore = vi.spyOn(api, "fsTrashRestore")
+    mount()
+    await screen.findByText("a.txt")
+    fireEvent.click(screen.getByRole("button", { name: "Supprimer définitivement a.txt" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Supprimer définitivement" }))
+    await waitFor(() => expect(purge).toHaveBeenCalledTimes(1))
+    const r = screen.getByRole("button", { name: "Restaurer src/b.ts" }) as HTMLButtonElement
+    await waitFor(() => expect(r.disabled).toBe(true))
+    fireEvent.click(r)
+    expect(restore).not.toHaveBeenCalled()
+    await act(async () => done(res(200, { ok: true })))
+    await waitFor(() => expect(r.disabled).toBe(false))
   })
 })

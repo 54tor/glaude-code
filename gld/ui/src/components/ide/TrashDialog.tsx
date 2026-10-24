@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { RotateCcw, Trash2 } from "lucide-react"
 import { toast } from "sonner"
@@ -41,43 +41,68 @@ function Body({ dir, canWrite, onRestored }: Omit<Props, "open" | "onClose">) {
   const [error, setError] = useState("")
   const [confirm, setConfirm] = useState<Ask | null>(null)
 
+  // Une requête à la fois (restaurer ou purger) ; plus aucune mise à jour d'état une fois le dialogue fermé.
+  const pending = useRef(false)
+  const alive = useRef(true)
+  useEffect(() => {
+    alive.current = true
+    return () => {
+      alive.current = false
+    }
+  }, [])
   const load = useCallback(
     () =>
       api
         .fsTrash(dir)
-        .then((r) => setItems(r.ok && r.body.items ? r.body.items : "failed")),
+        .then(
+          (r) =>
+            alive.current &&
+            setItems(r.ok && r.body.items ? r.body.items : "failed")
+        ),
     [dir]
   )
   useEffect(() => {
     load()
   }, [load])
-
-  const restore = async (x: FsTrashItem) => {
-    setBusy(x.id)
+  const exclusive = async (id: string, f: () => Promise<void>) => {
+    if (pending.current) return
+    pending.current = true
+    setBusy(id)
     setError("")
-    const r = await api.fsTrashRestore(dir, x.id)
-    setBusy("")
-    if (!r.ok)
-      return setError(
-        r.status === 409
-          ? t("ide.trash.exists", { path: x.path })
-          : r.body.error || t("shell.act.failed")
-      )
-    toast(t("ide.trash.restored", { path: x.path }))
-    onRestored()
-    void load()
+    try {
+      await f()
+    } finally {
+      pending.current = false
+      if (alive.current) setBusy("")
+    }
   }
+
+  const restore = (x: FsTrashItem) =>
+    exclusive(x.id, async () => {
+      const r = await api.fsTrashRestore(dir, x.id)
+      if (!alive.current) return
+      if (!r.ok)
+        return setError(
+          r.status === 409
+            ? t("ide.trash.exists", { path: x.path })
+            : r.body.error || t("shell.act.failed")
+        )
+      toast(t("ide.trash.restored", { path: x.path }))
+      onRestored()
+      void load()
+    })
   const purge = (x: FsTrashItem) =>
     setConfirm({
       title: t("ide.trash.purgeTitle", { path: x.path }),
       body: t("ide.trash.purgeBody"),
       confirm: t("ide.trash.purgeConfirm"),
-      run: async () => {
-        setError("")
-        const r = await api.fsTrashPurge(dir, x.id)
-        if (!r.ok) return setError(r.body.error || t("shell.act.failed"))
-        void load()
-      },
+      run: () =>
+        void exclusive(x.id, async () => {
+          const r = await api.fsTrashPurge(dir, x.id)
+          if (!alive.current) return
+          if (!r.ok) return setError(r.body.error || t("shell.act.failed"))
+          void load()
+        }),
     })
   const date = new Intl.DateTimeFormat(i18n.language, {
     dateStyle: "short",
