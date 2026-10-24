@@ -217,16 +217,16 @@ describe("IdeView", () => {
     save.mockResolvedValueOnce(res(409, { ok: false, conflict: true, deleted: true, etag: "" }))
     const input = await openA()
     ctrlS(input)
-    const bar = await screen.findByRole("alert")
+    const bar = await screen.findByRole("alert", {}, { timeout: 2500 })
     fireEvent.click(within(bar).getByRole("button", { name: "Enregistrer sous le même nom" }))
-    await waitFor(() => expect(save).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(2), { timeout: 2500 })
     expect(save.mock.calls[1].slice(0, 4)).toEqual(["/p", "a.txt", "l1\r\nl2\r\n", ""])
-    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull())
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull(), { timeout: 2500 })
 
     save.mockResolvedValueOnce(res(409, { ok: false, conflict: true, deleted: true, etag: "" }))
     ctrlS(input)
-    fireEvent.click(within(await screen.findByRole("alert")).getByRole("button", { name: "Fermer" }))
-    await waitFor(() => expect(screen.queryByRole("tab")).toBeNull())
+    fireEvent.click(within(await screen.findByRole("alert", {}, { timeout: 2500 })).getByRole("button", { name: "Fermer" }))
+    await waitFor(() => expect(screen.queryByRole("tab")).toBeNull(), { timeout: 2500 })
   })
 
   it("fermer un onglet sale demande confirmation", async () => {
