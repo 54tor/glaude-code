@@ -10,15 +10,17 @@ import { Button } from "@/components/ui/button"
 
 // Terminal complet de la session (tmux) : lecture seule tant qu'on ne « prend pas la main » ; le serveur ignore toute frappe avant.
 // Le terminal épouse la zone d'affichage et la taille est répercutée sur la fenêtre tmux de l'hôte. La main est prise dès l'ouverture.
-export default function FullTerminal({ id }: { id: string }) {
+// takeHand=false (espace de travail) : ni main, ni focus, ni taille imposée à l'hôte tant que l'utilisateur ne clique pas sur le crayon.
+export default function FullTerminal({ id, takeHand = true }: { id: string; takeHand?: boolean }) {
   const { t: tr } = useTranslation()
   const box = useRef<HTMLDivElement>(null)
   const ws = useRef<WebSocket | null>(null)
   const term = useRef<Terminal | null>(null)
   const [state, setState] = useState<"connexion" | "ouvert" | "fermé">("connexion")
   const [error, setError] = useState("")
-  const [writable, setWritable] = useState(true)
-  const writableRef = useRef(true)
+  const [writable, setWritable] = useState(takeHand)
+  const writableRef = useRef(takeHand)
+  const sizeRef = useRef<() => void>(() => {})
 
   useEffect(() => {
     let dead = false
@@ -34,7 +36,8 @@ export default function FullTerminal({ id }: { id: string }) {
       term.current = t
       t.open(box.current)
       fit.fit()
-      const sendSize = () => ws.current?.readyState === WebSocket.OPEN && t && ws.current.send(JSON.stringify({ resize: { cols: t.cols, rows: t.rows } }))
+      const sendSize = () => (takeHand || writableRef.current) && ws.current?.readyState === WebSocket.OPEN && t && ws.current.send(JSON.stringify({ resize: { cols: t.cols, rows: t.rows } }))
+      sizeRef.current = sendSize
       ro = new ResizeObserver(() => (fit.fit(), sendSize()))
       ro.observe(box.current)
       const sock = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/term-ws?t=${o.token}`)
@@ -43,6 +46,7 @@ export default function FullTerminal({ id }: { id: string }) {
       sock.onopen = () => {
         setState("ouvert")
         sendSize()
+        if (!takeHand) return
         sock.send(JSON.stringify({ write: true }))
         t?.focus()
       }
@@ -57,14 +61,16 @@ export default function FullTerminal({ id }: { id: string }) {
       ws.current?.close()
       t?.dispose()
     }
-  }, [id])
+  }, [id, takeHand])
 
   const setWrite = (on: boolean) => {
     if (ws.current?.readyState !== WebSocket.OPEN) return
     ws.current.send(JSON.stringify({ write: on }))
     writableRef.current = on
     setWritable(on)
-    if (on) term.current?.focus()
+    if (!on) return
+    sizeRef.current()
+    term.current?.focus()
   }
 
   return (

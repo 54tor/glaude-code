@@ -41,7 +41,8 @@ function Pane({ dir }: { dir: string }) {
     .flatMap((g) => g.sessions)
     .filter((s) => bare(s.cwd) === bare(dir) && live.has(s.id))
     .sort((a, b) => b.mtime - a.mtime)
-  const cur = sessions.find((s) => s.id === pick) ?? sessions[0]
+  // Collante : le tri par activité change à chaque sondage, la session montée ne doit pas changer avec lui.
+  const cur = sessions.find((s) => s.id === pick) ?? sessions.find((s) => s.id === seen) ?? sessions[0]
   const curId = cur?.id
   if (curId && curId !== seen) setSeen(curId)
   if (on === null) return null
@@ -77,7 +78,7 @@ function Pane({ dir }: { dir: string }) {
         </select>
       )}
       <Suspense fallback={null}>
-        <FullTerminal key={cur.id} id={cur.id} />
+        <FullTerminal key={cur.id} id={cur.id} takeHand={false} />
       </Suspense>
     </div>
   )

@@ -92,7 +92,7 @@ Supprimer déplace l'élément dans `<racine>/.gld-trash/<id>/item`, avec son ch
 
 ## Terminal
 
-Le terminal **ne lance pas de shell**. Il réutilise `/term-open` et `/term-ws` et s'attache au terminal d'une session Claude **vivante** dont le dossier est celui de l'espace de travail. Il exige le droit `exec` et `GLD_WEB_TERMINAL=1` ; sans session vivante ou sans cette variable, la zone explique pourquoi.
+Le terminal **ne lance pas de shell**. Il réutilise `/term-open` et `/term-ws` et s'attache au terminal d'une session Claude **vivante** dont le dossier est celui de l'espace de travail. Il exige le droit `exec` et `GLD_WEB_TERMINAL=1` ; sans session vivante ou sans cette variable, la zone explique pourquoi. Le panneau du bas est replié par défaut : rien n'est demandé au serveur avant de le déplier. Le terminal s'y ouvre en lecture seule, sans prendre le focus ni redimensionner la fenêtre tmux de l'hôte ; le bouton crayon prend la main (frappes et taille). En lecture seule, le terminal garde la taille de l'hôte et peut donc s'afficher tronqué.
 
 ## Poids et dépendances
 

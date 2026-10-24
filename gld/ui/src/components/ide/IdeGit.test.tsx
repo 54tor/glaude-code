@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { setLang } from "@/i18n"
 import { api, type Data } from "@/lib/api"
@@ -13,7 +13,7 @@ vi.mock("./CodeEditor", () => ({
   ),
 }))
 vi.mock("../FullTerminal", () => ({
-  default: ({ id }: { id: string }) => <div data-testid="term">{id}</div>,
+  default: ({ id, takeHand }: { id: string; takeHand?: boolean }) => <div data-testid="term" data-take={String(takeHand)}>{id}</div>,
 }))
 
 class FakeES {
@@ -110,8 +110,23 @@ describe("IdeView marqueurs git et terminal", () => {
     expect(screen.queryByTestId("term")).toBeNull()
     expect(api.termInfo).not.toHaveBeenCalled()
   })
-  it("zone basse ouverte : le terminal de la session vivante est monté", async () => {
+  it("zone basse ouverte : le terminal de la session vivante est monté, sans prendre la main", async () => {
+    localStorage.setItem("gld.ide./p.bottom", "1")
     render(<IdeView dir="/p" />)
+    const term = await screen.findByTestId("term")
+    expect(term.textContent).toBe("s1")
+    expect(term.dataset.take).toBe("false")
+  })
+  it("par défaut la zone basse est repliée : rien n'est demandé avant de la déplier", async () => {
+    render(<IdeView dir="/p" />)
+    await screen.findByTitle("Modifié")
+    await act(async () => {})
+    expect(api.termInfo).not.toHaveBeenCalled()
+    expect(screen.queryByTestId("term")).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Afficher le panneau du bas" }))
     expect((await screen.findByTestId("term")).textContent).toBe("s1")
+    expect(localStorage.getItem("gld.ide./p.bottom")).toBe("1")
+    fireEvent.click(screen.getByRole("button", { name: "Masquer le panneau du bas" }))
+    expect(screen.queryByTestId("term")).toBeNull()
   })
 })
