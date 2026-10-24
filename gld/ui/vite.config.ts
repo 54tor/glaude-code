@@ -26,4 +26,15 @@ export default defineConfig({
       },
     },
   },
+  // Workers de Monaco : mêmes noms stables que le reste de dist/.
+  worker: {
+    format: "es",
+    rolldownOptions: {
+      output: {
+        entryFileNames: "assets/[name].js",
+        chunkFileNames: "assets/[name].js",
+        assetFileNames: "assets/[name][extname]",
+      },
+    },
+  },
 })

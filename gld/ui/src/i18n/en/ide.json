@@ -29,8 +29,7 @@
       "deleteConfirm": "Delete"
     },
     "center": {
-      "none": "No file selected",
-      "selected": "Selected file: {{path}}"
+      "none": "No file selected"
     },
     "bottom": {
       "show": "Show the bottom panel",
@@ -40,6 +39,34 @@
       "tree": "Resize the file tree",
       "bottom": "Resize the bottom panel"
     },
-    "denied": "You are not allowed to read the files of this folder."
+    "denied": "You are not allowed to read the files of this folder.",
+    "tabs": {
+      "label": "Open tabs",
+      "dirty": "Unsaved changes",
+      "close": "Close {{path}}",
+      "closeTitle": "Close “{{name}}” without saving?",
+      "closeBody": "The unsaved changes to this file will be lost.",
+      "closeConfirm": "Close without saving"
+    },
+    "editor": {
+      "loading": "Loading the editor…"
+    },
+    "notice": {
+      "tooBig": "This file is too large for the editor: read-only tab.",
+      "binary": "This file is not a text file: read-only tab."
+    },
+    "conflict": {
+      "changed": "This file was changed on disk since it was opened.",
+      "deleted": "This file was deleted from disk.",
+      "reload": "Reload",
+      "overwrite": "Overwrite",
+      "diff": "Show differences",
+      "recreate": "Save under the same name",
+      "close": "Close"
+    },
+    "diff": {
+      "title": "Disk version on the left, yours on the right",
+      "close": "Close the comparison"
+    }
   }
 }

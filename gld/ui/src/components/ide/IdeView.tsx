@@ -1,10 +1,28 @@
-import { useRef, useState, type PointerEvent } from "react"
+import { lazy, Suspense, useReducer, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { PanelBottom } from "lucide-react"
+import { toast } from "sonner"
+import { cn } from "cn"
+import { api, type FsRes } from "@/lib/api"
 import { useCan } from "@/lib/auth"
 import { useLocal } from "@/hooks/useLocal"
 import { Button } from "@/components/ui/button"
+import { Confirm, type Ask } from "@/components/Confirm"
 import { FileTree } from "./FileTree"
+import { Tabs } from "./Tabs"
+import { ConflictBar } from "./ConflictBar"
+import { ConflictDiff } from "./ConflictDiff"
+import { isDirty, reduce } from "./ideState"
+
+const CodeEditor = lazy(() => import("./CodeEditor"))
+
+// Le fournisseur de thème de gld pose la classe sur <html> : on la suit, « système » compris.
+const watchTheme = (f: () => void) => {
+  const o = new MutationObserver(f)
+  o.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] })
+  return () => o.disconnect()
+}
+const useResolvedTheme = () => useSyncExternalStore(watchTheme, () => (document.documentElement.classList.contains("dark") ? "dark" : "light"))
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
@@ -40,19 +58,94 @@ export function IdeView({ dir }: { dir: string }) {
   const [hStr, setH] = useLocal(`gld.ide.${dir}.h`, "160")
   const [bottom, setBottom] = useLocal(`gld.ide.${dir}.bottom`, "1")
   const [drag, setDrag] = useState<{ w?: number; h?: number }>({})
-  const [sel, setSel] = useState("")
+  const [ide, dispatch] = useReducer(reduce, { tabs: [], active: "" })
+  const [diff, setDiff] = useState<{ path: string; original: string } | null>(null)
+  const [confirm, setConfirm] = useState<Ask | null>(null)
+  const theme = useResolvedTheme()
   const w = drag.w ?? clamp(Number(wStr) || 260, 140, 700)
   const h = drag.h ?? clamp(Number(hStr) || 160, 60, 600)
 
+  const tabOf = (p: string) => ide.tabs.find((x) => x.path === p)
+  const active = tabOf(ide.active)
+  const fail = (r: FsRes) => toast.error(r.body.error || t("shell.act.failed"))
+
+  const open = async (path: string) => {
+    if (tabOf(path)) return dispatch({ t: "focus", path })
+    const r = await api.fsFile(dir, path)
+    if (r.status === 413 || r.status === 415)
+      return dispatch({ t: "open", tab: { path, content: "", saved: "", etag: "", readOnly: true, notice: r.status === 413 ? "tooBig" : "binary" } })
+    if (!r.ok || r.body.content === undefined) return fail(r)
+    dispatch({ t: "open", tab: { path, content: r.body.content, saved: r.body.content, etag: r.body.etag ?? "", readOnly: !can("fs_write") } })
+  }
+  const reload = async (path: string) => {
+    setDiff(null)
+    const r = await api.fsFile(dir, path)
+    if (r.ok && r.body.content !== undefined) dispatch({ t: "reloaded", path, content: r.body.content, etag: r.body.etag ?? "" })
+    else fail(r)
+  }
+  // force : écraser la version du disque ; create : recréer un fichier supprimé (etag vide).
+  const save = async (path: string, how?: "force" | "create") => {
+    const tab = tabOf(path)
+    if (!tab || tab.readOnly) return
+    if (how) setDiff(null)
+    const r = await api.fsSave(dir, path, tab.content, how === "create" ? "" : tab.etag, how === "force" || undefined)
+    if (r.ok) return dispatch({ t: "saved", path, etag: r.body.etag ?? "", content: tab.content })
+    if (r.status !== 409) return fail(r)
+    if (!r.body.deleted && !isDirty(tab)) return reload(path)
+    dispatch({ t: "disk", path, kind: r.body.deleted ? "deleted" : "changed" })
+  }
+  const showDiff = async (path: string) => {
+    const r = await api.fsFile(dir, path)
+    if (r.ok && r.body.content !== undefined) setDiff({ path, original: r.body.content })
+    else fail(r)
+  }
+  const close = (path: string) => {
+    const tab = tabOf(path)
+    const go = () => (dispatch({ t: "close", path }), setDiff((d) => (d?.path === path ? null : d)))
+    if (!tab || !isDirty(tab)) return go()
+    setConfirm({ title: t("ide.tabs.closeTitle", { name: path.slice(path.lastIndexOf("/") + 1) }), body: t("ide.tabs.closeBody"), confirm: t("ide.tabs.closeConfirm"), run: go })
+  }
+  // Ctrl+S hors de Monaco (arbre, onglets) : jamais la boîte « Enregistrer la page » du navigateur.
+  const key = (e: KeyboardEvent) => {
+    if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "s" || e.defaultPrevented) return
+    e.preventDefault()
+    if (ide.active) save(ide.active)
+  }
+
   if (!can("fs_read")) return <p className="p-6 text-sm text-muted-foreground">{t("ide.denied")}</p>
   return (
-    <div className="flex min-h-0 flex-1">
+    <div className="flex min-h-0 flex-1" onKeyDown={key}>
       <aside className="flex min-h-0 shrink-0 flex-col" style={{ width: w }}>
-        <FileTree dir={dir} canWrite={can("fs_write")} selected={sel} onOpen={setSel} />
+        <FileTree dir={dir} canWrite={can("fs_write")} selected={ide.active} onOpen={open} onRenamed={(from, to) => dispatch({ t: "renamed", from, to })} />
       </aside>
       <Handle label={t("ide.resize.tree")} start={() => w} onMove={(v) => setDrag({ w: clamp(v, 140, 700) })} onEnd={(v) => (setW(String(clamp(v, 140, 700))), setDrag({}))} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="grid min-h-0 flex-1 place-items-center p-6 text-sm text-muted-foreground">{sel ? t("ide.center.selected", { path: sel }) : t("ide.center.none")}</div>
+        {ide.tabs.length > 0 && <Tabs tabs={ide.tabs} active={ide.active} onFocus={(path) => dispatch({ t: "focus", path })} onClose={close} />}
+        {active?.conflict && (
+          <ConflictBar
+            kind={active.conflict}
+            onReload={() => reload(active.path)}
+            onOverwrite={() => save(active.path, "force")}
+            onDiff={() => showDiff(active.path)}
+            onRecreate={() => save(active.path, "create")}
+            onClose={() => close(active.path)}
+          />
+        )}
+        <div className="relative min-h-0 flex-1">
+          {ide.tabs.length === 0 && <div className="grid h-full place-items-center p-6 text-sm text-muted-foreground">{t("ide.center.none")}</div>}
+          <Suspense fallback={<p className="p-6 text-sm text-muted-foreground">{t("ide.editor.loading")}</p>}>
+            {ide.tabs.map((tab) => (
+              <div key={tab.path} className={cn("absolute inset-0", tab.path !== ide.active && "hidden")}>
+                {tab.notice ? (
+                  <p className="p-6 text-sm text-muted-foreground">{t(tab.notice === "tooBig" ? "ide.notice.tooBig" : "ide.notice.binary")}</p>
+                ) : (
+                  <CodeEditor path={tab.path} value={tab.content} readOnly={tab.readOnly} theme={theme} onChange={(v) => dispatch({ t: "edit", path: tab.path, content: v })} onSave={() => save(tab.path)} />
+                )}
+              </div>
+            ))}
+          </Suspense>
+          {diff && diff.path === ide.active && active && <ConflictDiff path={diff.path} original={diff.original} modified={active.content} theme={theme} onClose={() => setDiff(null)} />}
+        </div>
         <div className="flex justify-end border-t px-2 py-0.5">
           <Button variant="ghost" size="icon-sm" onClick={() => setBottom(bottom ? "" : "1")} aria-pressed={!!bottom} aria-label={t(bottom ? "ide.bottom.hide" : "ide.bottom.show")}>
             <PanelBottom />
@@ -65,6 +158,7 @@ export function IdeView({ dir }: { dir: string }) {
           </>
         )}
       </div>
+      <Confirm ask={confirm} onClose={() => setConfirm(null)} />
     </div>
   )
 }
