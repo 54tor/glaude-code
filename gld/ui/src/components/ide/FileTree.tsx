@@ -77,6 +77,9 @@ export function FileTree({ dir, tree, canWrite, selected, marks, dirs, filter = 
   useEffect(() => {
     if (!actionsRef) return
     actionsRef.current = { create: (kind) => onAction(kind, rootTarget) }
+    return () => {
+      actionsRef.current = null
+    }
   })
 
   const q = filter.trim().toLowerCase()
@@ -106,8 +109,11 @@ export function FileTree({ dir, tree, canWrite, selected, marks, dirs, filter = 
     if (kbd.current) box.current?.querySelector<HTMLElement>(`[data-path="${CSS.escape(focus)}"]`)?.focus()
   }, [focus])
 
+  // Filtre actif : l'affichage montre tout listing chargé déplié ; plier ou déplier n'aurait aucun effet visible
+  // et réécrirait en douce les dossiers dépliés mémorisés, donc rien ne bascule tant qu'il filtre.
+  const toggle = (path: string, on: boolean) => !q && tree.setOpen(path, on)
   const activate = (r: Row) => {
-    if (r.type === "dir") tree.setOpen(r.path, !tree.open.has(r.path))
+    if (r.type === "dir") toggle(r.path, !expanded(r.path))
     else if (r.type === "file") onOpen(r.path)
   }
   const key = (e: KeyboardEvent) => {
@@ -123,9 +129,9 @@ export function FileTree({ dir, tree, canWrite, selected, marks, dirs, filter = 
     else if (e.key === "Enter") activate(cur)
     else if (e.key === "ArrowRight") {
       if (cur.type !== "dir") return
-      if (!tree.open.has(cur.path)) tree.setOpen(cur.path, true)
-      else go(i + 1)
-    } else if (cur.type === "dir" && tree.open.has(cur.path)) tree.setOpen(cur.path, false)
+      if (!expanded(cur.path)) toggle(cur.path, true)
+      else if (rows[i + 1]?.parent === cur.path) go(i + 1)
+    } else if (cur.type === "dir" && expanded(cur.path) && !q) toggle(cur.path, false)
     else if (cur.parent) setFocus(cur.parent)
   }
 
