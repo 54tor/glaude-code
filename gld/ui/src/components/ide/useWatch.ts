@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react"
 export type WatchEvent = { path: string; type: "create" | "write" | "remove" | "rename" | "resync" }
 
 const MAX_DIRS = 200
+const MAX_QUERY = 6000
 const depth = (p: string) => (p ? p.split("/").length : 0)
 // Au-delà du plafond du serveur, les dossiers les moins profonds d'abord : ce sont les plus visibles.
 export const capDirs = (dirs: string[]) => [...new Set(dirs)].sort((a, b) => depth(a) - depth(b) || (a < b ? -1 : a > b ? 1 : 0)).slice(0, MAX_DIRS)
@@ -14,13 +15,19 @@ export function useWatch(dir: string, declaredDirs: string[], onEvent: (e: Watch
   useEffect(() => {
     cb.current = onEvent
   })
-  const paths = capDirs(declaredDirs).map(encodeURIComponent).join(",")
+  // Un paramètre par dossier : une virgule dans un nom ne coupe rien. Budget d'URL : les plus profonds tombent d'abord.
+  let query = `?dir=${encodeURIComponent(dir)}`
+  for (const d of capDirs(declaredDirs)) {
+    const part = `&paths=${encodeURIComponent(d)}`
+    if (query.length + part.length > MAX_QUERY) break
+    query += part
+  }
   useEffect(() => {
     if (typeof EventSource === "undefined") return
     let es: EventSource | undefined
     const timer = setTimeout(() => {
       let opened = false
-      es = new EventSource(`/fs-watch?dir=${encodeURIComponent(dir)}&paths=${paths}`)
+      es = new EventSource(`/fs-watch${query}`)
       es.onopen = () => {
         setConnected(true)
         if (opened) cb.current({ path: "", type: "resync" })
@@ -41,6 +48,6 @@ export function useWatch(dir: string, declaredDirs: string[], onEvent: (e: Watch
       es?.close()
       setConnected(false)
     }
-  }, [dir, paths])
+  }, [query])
   return { connected }
 }

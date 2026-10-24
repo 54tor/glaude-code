@@ -461,3 +461,36 @@ func TestFsWatchCutOnRevoke(t *testing.T) {
 		t.Fatalf("coupé en %v", d)
 	}
 }
+
+// Paramètres paths répétés : un dossier dont le nom contient une virgule reste un seul chemin.
+func TestFsWatchRepeatedPathsKeepCommas(t *testing.T) {
+	h, _, proj := web(t)
+	wsTest(t)
+	mk(t, proj, "a/.k", "b/.k", "a,b/.k")
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	req, _ := http.NewRequestWithContext(ctx, "GET", srv.URL+"/fs-watch?dir="+proj+"&paths=a%2Cb", nil)
+	req.Host = testHost
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	mk(t, proj, "a/x.txt", "b/y.txt")
+	time.Sleep(4 * ideDebounce)
+	mk(t, proj, "a,b/z.txt")
+	sc := bufio.NewScanner(resp.Body)
+	for sc.Scan() {
+		if d, ok := strings.CutPrefix(sc.Text(), "data: "); ok {
+			var got ideEvent
+			json.Unmarshal([]byte(d), &got)
+			if got.Path != "a,b/z.txt" || got.Type != "create" {
+				t.Fatal("premier évènement inattendu :", got)
+			}
+			return
+		}
+	}
+	t.Fatal("flux coupé")
+}
