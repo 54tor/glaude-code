@@ -1,5 +1,6 @@
-// notice : raison d'un onglet en lecture seule ouvert sans contenu (413, 415).
-export type Tab = { path: string; content: string; saved: string; etag: string; readOnly?: boolean; notice?: "tooBig" | "binary"; conflict?: "changed" | "deleted" }
+// notice : raison d'une lecture seule imposée ; tooBig et binary (413, 415) arrivent sans contenu.
+export type Notice = "tooBig" | "binary" | "mixedEol"
+export type Tab = { path: string; content: string; saved: string; etag: string; readOnly?: boolean; notice?: Notice; conflict?: "changed" | "deleted" }
 export type IdeState = { tabs: Tab[]; active: string }
 export type Action =
   | { t: "open"; tab: Tab }
@@ -9,7 +10,7 @@ export type Action =
   // content : texte effectivement envoyé ; une saisie faite pendant l'enregistrement reste donc sale.
   | { t: "saved"; path: string; etag: string; content?: string }
   | { t: "disk"; path: string; kind: "changed" | "deleted" }
-  | { t: "reloaded"; path: string; content: string; etag: string }
+  | { t: "reloaded"; path: string; content: string; etag: string; notice?: "mixedEol" }
   | { t: "renamed"; from: string; to: string }
 
 export const isDirty = (t: Tab) => t.content !== t.saved
@@ -29,7 +30,8 @@ export function reduce(s: IdeState, a: Action): IdeState {
       return { tabs, active: s.active !== a.path ? s.active : (tabs[i] ?? tabs[i - 1])?.path ?? "" }
     }
     case "edit":
-      return patch(s, a.path, (t) => ({ ...t, content: a.content }))
+      // Un onglet en lecture seule ne devient jamais sale, même si l'éditeur renormalise son texte.
+      return patch(s, a.path, (t) => (t.readOnly ? t : { ...t, content: a.content }))
     case "saved":
       return patch(s, a.path, (t) => ({ ...t, conflict: undefined, saved: a.content ?? t.content, etag: a.etag }))
     case "disk": {
@@ -39,7 +41,7 @@ export function reduce(s: IdeState, a: Action): IdeState {
       return patch(s, a.path, (x) => ({ ...x, conflict: a.kind }))
     }
     case "reloaded":
-      return patch(s, a.path, (t) => ({ ...t, conflict: undefined, content: a.content, saved: a.content, etag: a.etag }))
+      return patch(s, a.path, (t) => ({ ...t, conflict: undefined, content: a.content, saved: a.content, etag: a.etag, ...(a.notice && { readOnly: true, notice: a.notice }) }))
     case "renamed": {
       const move = (p: string) => (p === a.from ? a.to : p.startsWith(a.from + "/") ? a.to + p.slice(a.from.length) : p)
       return { tabs: s.tabs.map((t) => ({ ...t, path: move(t.path) })), active: move(s.active) }

@@ -23,6 +23,16 @@ describe("reduce", () => {
     expect(s.tabs[0].etag).toBe("e2")
   })
 
+  it("edit n'a aucun effet sur un onglet en lecture seule", () => {
+    const ro: IdeState = { tabs: [tab("a", "x", { readOnly: true })], active: "a" }
+    expect(reduce(ro, { t: "edit", path: "a", content: "normalisé" })).toEqual(ro)
+  })
+
+  it("reloaded avec fins de ligne mixtes passe l'onglet en lecture seule", () => {
+    const s = reduce(two, { t: "reloaded", path: "a", content: "a\r\nb\n", etag: "e9", notice: "mixedEol" })
+    expect(s.tabs[0]).toMatchObject({ content: "a\r\nb\n", readOnly: true, notice: "mixedEol" })
+  })
+
   it("saved avec le contenu envoyé garde sale une saisie faite pendant l'enregistrement", () => {
     let s = reduce(two, { t: "edit", path: "a", content: "y" })
     s = reduce(s, { t: "edit", path: "a", content: "yz" })

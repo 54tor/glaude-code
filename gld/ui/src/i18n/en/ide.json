@@ -53,7 +53,8 @@
     },
     "notice": {
       "tooBig": "This file is too large for the editor: read-only tab.",
-      "binary": "This file is not a text file: read-only tab."
+      "binary": "This file is not a text file: read-only tab.",
+      "mixedEol": "This file mixes line endings (CRLF, LF or a lone CR): it is opened read-only so it is not rewritten."
     },
     "conflict": {
       "changed": "This file was changed on disk since it was opened.",

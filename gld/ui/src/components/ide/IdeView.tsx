@@ -1,4 +1,4 @@
-import { lazy, Suspense, useReducer, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent } from "react"
+import { lazy, Suspense, useEffect, useReducer, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { PanelBottom } from "lucide-react"
 import { toast } from "sonner"
@@ -15,6 +15,9 @@ import { ConflictDiff } from "./ConflictDiff"
 import { isDirty, reduce } from "./ideState"
 
 const CodeEditor = lazy(() => import("./CodeEditor"))
+
+// Monaco ramène des fins de ligne mixtes (ou un CR isolé) à la majoritaire : enregistrer réécrirait tout le fichier.
+const mixedEol = (c: string) => /\r(?!\n)/.test(c) || (c.includes("\r\n") && /(^|[^\r])\n/.test(c))
 
 // Le fournisseur de thème de gld pose la classe sur <html> : on la suit, « système » compris.
 const watchTheme = (f: () => void) => {
@@ -61,6 +64,12 @@ export function IdeView({ dir }: { dir: string }) {
   const [ide, dispatch] = useReducer(reduce, { tabs: [], active: "" })
   const [diff, setDiff] = useState<{ path: string; original: string } | null>(null)
   const [confirm, setConfirm] = useState<Ask | null>(null)
+  // État vu par les sauvegardes en attente : une sauvegarde mise en file repart du contenu courant, pas de celui de son clic.
+  const live = useRef(ide)
+  useEffect(() => {
+    live.current = ide
+  })
+  const saving = useRef(new Map<string, boolean>()) // chemin → une nouvelle demande attend la fin de celle en cours
   const theme = useResolvedTheme()
   const w = drag.w ?? clamp(Number(wStr) || 260, 140, 700)
   const h = drag.h ?? clamp(Number(hStr) || 160, 60, 600)
@@ -75,24 +84,46 @@ export function IdeView({ dir }: { dir: string }) {
     if (r.status === 413 || r.status === 415)
       return dispatch({ t: "open", tab: { path, content: "", saved: "", etag: "", readOnly: true, notice: r.status === 413 ? "tooBig" : "binary" } })
     if (!r.ok || r.body.content === undefined) return fail(r)
-    dispatch({ t: "open", tab: { path, content: r.body.content, saved: r.body.content, etag: r.body.etag ?? "", readOnly: !can("fs_write") } })
+    const c = r.body.content
+    const mixed = mixedEol(c)
+    dispatch({ t: "open", tab: { path, content: c, saved: c, etag: r.body.etag ?? "", readOnly: mixed || !can("fs_write"), ...(mixed && { notice: "mixedEol" as const }) } })
   }
   const reload = async (path: string) => {
     setDiff(null)
     const r = await api.fsFile(dir, path)
-    if (r.ok && r.body.content !== undefined) dispatch({ t: "reloaded", path, content: r.body.content, etag: r.body.etag ?? "" })
+    if (r.ok && r.body.content !== undefined) dispatch({ t: "reloaded", path, content: r.body.content, etag: r.body.etag ?? "", ...(mixedEol(r.body.content) && { notice: "mixedEol" as const }) })
     else fail(r)
   }
   // force : écraser la version du disque ; create : recréer un fichier supprimé (etag vide).
+  // Une sauvegarde à la fois par fichier : la suivante partirait avec l'ancien etag et lèverait un faux conflit contre la nôtre.
   const save = async (path: string, how?: "force" | "create") => {
-    const tab = tabOf(path)
+    const tab = live.current.tabs.find((x) => x.path === path)
     if (!tab || tab.readOnly) return
+    if (saving.current.has(path)) return void saving.current.set(path, true)
+    saving.current.set(path, false)
     if (how) setDiff(null)
-    const r = await api.fsSave(dir, path, tab.content, how === "create" ? "" : tab.etag, how === "force" || undefined)
-    if (r.ok) return dispatch({ t: "saved", path, etag: r.body.etag ?? "", content: tab.content })
-    if (r.status !== 409) return fail(r)
-    if (!r.body.deleted && !isDirty(tab)) return reload(path)
-    dispatch({ t: "disk", path, kind: r.body.deleted ? "deleted" : "changed" })
+    let content = tab.content
+    let etag = how === "create" ? "" : tab.etag
+    let force = how === "force" || undefined
+    try {
+      for (;;) {
+        const r = await api.fsSave(dir, path, content, etag, force)
+        if (!r.ok) {
+          if (r.status !== 409) return fail(r)
+          if (!r.body.deleted && !isDirty(tab)) return reload(path)
+          return dispatch({ t: "disk", path, kind: r.body.deleted ? "deleted" : "changed" })
+        }
+        dispatch({ t: "saved", path, etag: r.body.etag ?? "", content })
+        const next = live.current.tabs.find((x) => x.path === path)
+        if (!saving.current.get(path) || !next || next.content === content) return
+        saving.current.set(path, false)
+        content = next.content
+        etag = r.body.etag ?? ""
+        force = undefined
+      }
+    } finally {
+      saving.current.delete(path)
+    }
   }
   const showDiff = async (path: string) => {
     const r = await api.fsFile(dir, path)
@@ -136,10 +167,15 @@ export function IdeView({ dir }: { dir: string }) {
           <Suspense fallback={<p className="p-6 text-sm text-muted-foreground">{t("ide.editor.loading")}</p>}>
             {ide.tabs.map((tab) => (
               <div key={tab.path} className={cn("absolute inset-0", tab.path !== ide.active && "hidden")}>
-                {tab.notice ? (
+                {tab.notice === "tooBig" || tab.notice === "binary" ? (
                   <p className="p-6 text-sm text-muted-foreground">{t(tab.notice === "tooBig" ? "ide.notice.tooBig" : "ide.notice.binary")}</p>
                 ) : (
-                  <CodeEditor path={tab.path} value={tab.content} readOnly={tab.readOnly} theme={theme} onChange={(v) => dispatch({ t: "edit", path: tab.path, content: v })} onSave={() => save(tab.path)} />
+                  <div className="flex size-full flex-col">
+                    {tab.notice === "mixedEol" && <p className="shrink-0 border-b px-3 py-1.5 text-sm text-muted-foreground">{t("ide.notice.mixedEol")}</p>}
+                    <div className="min-h-0 flex-1">
+                      <CodeEditor path={tab.path} value={tab.content} readOnly={tab.readOnly} theme={theme} onChange={(v) => !tab.readOnly && dispatch({ t: "edit", path: tab.path, content: v })} onSave={() => save(tab.path)} />
+                    </div>
+                  </div>
                 )}
               </div>
             ))}
