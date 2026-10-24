@@ -456,6 +456,41 @@ describe("AdminUsers", () => {
     expect(bodyOf(calls.find((c) => c.url === "/admin/acl")!)).toEqual({ reauth: { password: "pw-admin", code: "123456" }, user_id: 2, home_id: "main", grant: ["sessions_read"] })
   })
 
+  it("fs_write demande confirmation et réauthentification", async () => {
+    const calls = server({
+      "/admin/users": { body: { ok: true, users: [USER] } },
+      "/admin/homes": { body: { ok: true, homes: [{ id: "main", name: "main" }] } },
+      "/admin/acl": { body: { ok: true, rights: ["mem_read", "fs_write"] } },
+    })
+    setAuth({ state: "ok", csrf: "tok", user: { name: "root", admin: true }, factors: { totp: true, webauthn: 0, recovery: 10 } })
+    render(<AdminUsers />)
+    fireEvent.click(await screen.findByRole("button", { name: "bob" }))
+    await act(async () => void fireEvent.click(screen.getByRole("checkbox", { name: "fs_write sur Dossier principal" })))
+    expect(calls.some((c) => c.url === "/admin/acl")).toBe(false)
+    fireEvent.change(screen.getByLabelText("Mot de passe actuel"), { target: { value: "pw-admin" } })
+    fireEvent.change(screen.getByLabelText("Code (application ou secours)"), { target: { value: "123456" } })
+    fireEvent.click(screen.getByRole("checkbox", { name: "Je confirme accorder ce droit en connaissance de cause" }))
+    await act(async () => void fireEvent.click(screen.getByRole("button", { name: "Confirmer" })))
+    expect(bodyOf(calls.find((c) => c.url === "/admin/acl")!)).toEqual({ reauth: { password: "pw-admin", code: "123456" }, user_id: 2, home_id: "main", grant: ["fs_write"], confirm: true })
+  })
+
+  it("fs_read demande la réauthentification, sans confirmation", async () => {
+    const calls = server({
+      "/admin/users": { body: { ok: true, users: [USER] } },
+      "/admin/homes": { body: { ok: true, homes: [{ id: "main", name: "main" }] } },
+      "/admin/acl": { body: { ok: true, rights: ["mem_read", "fs_read"] } },
+    })
+    setAuth({ state: "ok", csrf: "tok", user: { name: "root", admin: true }, factors: { totp: true, webauthn: 0, recovery: 10 } })
+    render(<AdminUsers />)
+    fireEvent.click(await screen.findByRole("button", { name: "bob" }))
+    await act(async () => void fireEvent.click(screen.getByRole("checkbox", { name: "fs_read sur Dossier principal" })))
+    expect(screen.queryByRole("checkbox", { name: "Je confirme accorder ce droit en connaissance de cause" })).toBeNull()
+    fireEvent.change(screen.getByLabelText("Mot de passe actuel"), { target: { value: "pw-admin" } })
+    fireEvent.change(screen.getByLabelText("Code (application ou secours)"), { target: { value: "123456" } })
+    await act(async () => void fireEvent.click(screen.getByRole("button", { name: "Confirmer" })))
+    expect(bodyOf(calls.find((c) => c.url === "/admin/acl")!)).toEqual({ reauth: { password: "pw-admin", code: "123456" }, user_id: 2, home_id: "main", grant: ["fs_read"] })
+  })
+
   it("retirer un droit ne demande rien", async () => {
     const calls = server({
       "/admin/users": { body: { ok: true, users: [USER] } },

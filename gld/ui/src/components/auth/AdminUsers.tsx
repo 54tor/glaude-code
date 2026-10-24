@@ -123,10 +123,10 @@ export function AdminUsers() {
   }
   const ask = (p: Pending) => (needsReauth(p, me) ? (setConfirmed(false), setPending(p)) : void perform(p))
 
-  // Retirer un droit, ou accorder un droit ordinaire à autrui : immédiat. exec et config_write : confirmation puis réauthentification ;
-  // sessions_read et tout droit qu'on s'accorde : réauthentification.
+  // Retirer un droit, ou accorder un droit ordinaire à autrui : immédiat. exec, config_write et fs_write : confirmation puis réauthentification ;
+  // sessions_read, fs_read et tout droit qu'on s'accorde : réauthentification.
   const toggle = async (u: User, home: string, right: Right, on: boolean) => {
-    if (on && (DANGEROUS.includes(right) || right === "sessions_read" || u.name === me)) return ask({ kind: "grant", user: u, home, right })
+    if (on && (DANGEROUS.includes(right) || right === "sessions_read" || right === "fs_read" || u.name === me)) return ask({ kind: "grant", user: u, home, right })
     const res = await authCall<{ rights: Right[] }>("/admin/acl", { user_id: u.id, home_id: home, [on ? "grant" : "revoke"]: [right] })
     if (!res.ok) return void toast.error(res.body.out ?? t("auth.admin.failed"))
     setUsers((l) => l && l.map((x) => (x.id !== u.id ? x : { ...x, acl: [...x.acl.filter((a) => a.home_id !== home), { home_id: home, home_name: "", rights: res.body.rights ?? [] }] })))
