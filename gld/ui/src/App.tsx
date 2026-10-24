@@ -2,10 +2,8 @@ import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { resolveFront, setLang } from "@/i18n"
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
-import { Link, useLocation, useSearchParams } from "wouter"
-import { Cog } from "lucide-react"
+import { useLocation, useSearchParams } from "wouter"
 import { SessionSearch } from "@/components/SessionSearch"
-import { Button } from "@/components/ui/button"
 import { type Group, type VGroup } from "@/lib/api"
 import { body } from "@/lib/commands"
 import { href, parse, type Route } from "@/lib/route"
@@ -356,13 +354,6 @@ function Shell() {
           snippets={snips ? snips.files.length : null}
           auto={{ n: view.autoItems.length, kb: view.akb, purge: purgeAuto }}
           args={args}
-          settings={
-            <Button variant="ghost" size="icon" className="size-9 text-muted-foreground" asChild>
-              <Link href={href({ kind: "config", tab: "interface" })} aria-label={t("config.dialog.title")} title={t("config.dialog.title")}>
-                <Cog className="size-6" />
-              </Link>
-            </Button>
-          }
         />
 
         <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
