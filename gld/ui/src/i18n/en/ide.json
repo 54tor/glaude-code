@@ -80,6 +80,23 @@
     "watch": {
       "reloaded": "“{{name}}” reloaded from disk",
       "reloadedMany": "{{count}} files reloaded from disk"
+    },
+    "git": {
+      "M": "Modified",
+      "A": "Added",
+      "D": "Deleted",
+      "R": "Renamed",
+      "?": "Untracked",
+      "U": "Conflict",
+      "dir": "Contains uncommitted changes",
+      "more": "and {{count}} more"
+    },
+    "term": {
+      "label": "Session terminal",
+      "disabled": "built-in terminal disabled (GLD_WEB_TERMINAL=1)",
+      "none": "the terminal attaches to a Claude session open in this folder",
+      "pick": "Session to show",
+      "ended": "The session has ended."
     }
   }
 }

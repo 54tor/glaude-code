@@ -13,6 +13,9 @@ import { Tabs } from "./Tabs"
 import { ConflictBar } from "./ConflictBar"
 import { ConflictDiff } from "./ConflictDiff"
 import { QuickOpen } from "./QuickOpen"
+import { GitChanges } from "../GitChanges"
+import { TerminalPane } from "./TerminalPane"
+import { useGitMarks } from "./useGitMarks"
 import { isDirty, reduce } from "./ideState"
 import { useTree } from "./useTree"
 import { useIndex } from "./useIndex"
@@ -80,6 +83,7 @@ export function IdeView({ dir }: { dir: string }) {
   const theme = useResolvedTheme()
   const tree = useTree(dir)
   const index = useIndex(dir)
+  const git = useGitMarks(dir)
   const [quick, setQuick] = useState(false)
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const later = (k: string, ms: number, f: () => void) => {
@@ -132,6 +136,7 @@ export function IdeView({ dir }: { dir: string }) {
           return dispatch({ t: "disk", path, kind: r.body.deleted ? "deleted" : "changed" })
         }
         dispatch({ t: "saved", path, etag: r.body.etag ?? "", content })
+        later("git", 1000, git.refresh)
         const next = live.current.tabs.find((x) => x.path === path)
         if (!saving.current.get(path) || !next || next.content === content) return
         saving.current.set(path, false)
@@ -169,6 +174,7 @@ export function IdeView({ dir }: { dir: string }) {
   }
   const onDisk = (e: WatchEvent) => {
     later("index", 1000, index.refetch)
+    later("git", 1000, git.refresh)
     if (e.type === "resync") {
       tree.refresh("")
       for (const d of tree.open) tree.refresh(d)
@@ -239,7 +245,13 @@ export function IdeView({ dir }: { dir: string }) {
   return (
     <div className="flex min-h-0 flex-1" onKeyDown={key}>
       <aside className="flex min-h-0 shrink-0 flex-col" style={{ width: w }}>
-        <FileTree dir={dir} tree={tree} canWrite={can("fs_write")} selected={ide.active} onOpen={open} onRenamed={(from, to) => dispatch({ t: "renamed", from, to })} />
+        {git.marks.size > 0 && (
+          <div className="flex shrink-0 flex-col items-start px-1 pt-1">
+            <GitChanges dir={dir} count={git.marks.size} onOpen={open} />
+            {git.more > 0 && <p className="px-2 text-xs text-muted-foreground">{t("ide.git.more", { count: git.more })}</p>}
+          </div>
+        )}
+        <FileTree dir={dir} tree={tree} marks={git.marks} dirs={git.dirs} canWrite={can("fs_write")} selected={ide.active} onOpen={open} onRenamed={(from, to) => dispatch({ t: "renamed", from, to })} />
       </aside>
       <Handle label={t("ide.resize.tree")} start={() => w} onMove={(v) => setDrag({ w: clamp(v, 140, 700) })} onEnd={(v) => (setW(String(clamp(v, 140, 700))), setDrag({}))} />
       <div className="flex min-w-0 flex-1 flex-col">
@@ -274,15 +286,19 @@ export function IdeView({ dir }: { dir: string }) {
           </Suspense>
           {diff && diff.path === ide.active && active && <ConflictDiff path={diff.path} original={diff.original} modified={active.content} theme={theme} onClose={() => setDiff(null)} />}
         </div>
-        <div className="flex justify-end border-t px-2 py-0.5">
-          <Button variant="ghost" size="icon-sm" onClick={() => setBottom(bottom ? "" : "1")} aria-pressed={!!bottom} aria-label={t(bottom ? "ide.bottom.hide" : "ide.bottom.show")}>
-            <PanelBottom />
-          </Button>
-        </div>
-        {bottom && (
+        {can("exec") && (
+          <div className="flex justify-end border-t px-2 py-0.5">
+            <Button variant="ghost" size="icon-sm" onClick={() => setBottom(bottom ? "" : "1")} aria-pressed={!!bottom} aria-label={t(bottom ? "ide.bottom.hide" : "ide.bottom.show")}>
+              <PanelBottom />
+            </Button>
+          </div>
+        )}
+        {bottom && can("exec") && (
           <>
             <Handle label={t("ide.resize.bottom")} vertical start={() => h} onMove={(v) => setDrag({ h: clamp(v, 60, 600) })} onEnd={(v) => (setH(String(clamp(v, 60, 600))), setDrag({}))} />
-            <div className="shrink-0 overflow-auto" style={{ height: h }} />
+            <div className="flex shrink-0 flex-col overflow-auto" style={{ height: h }}>
+              <TerminalPane dir={dir} />
+            </div>
           </>
         )}
       </div>
