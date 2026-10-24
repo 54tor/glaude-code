@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -180,5 +181,51 @@ func TestIdeKnownDirForbiddenAllWays(t *testing.T) {
 	}
 	if _, err := ideOpenRoot(cfg); !errors.Is(err, errIdeDir) {
 		t.Errorf("ideOpenRoot: %v", err)
+	}
+}
+
+func TestIdeForbiddenOtherHomes(t *testing.T) {
+	_, cfg, proj := web(t)
+	home, _ := os.UserHomeDir()
+	pro, perso := filepath.Join(home, ".claude-pro"), filepath.Join(home, ".claude-perso")
+	for _, d := range []string{pro, perso, filepath.Join(pro, "projects"), filepath.Join(home, ".claude-prox")} {
+		os.MkdirAll(d, 0o755)
+	}
+	if err := saveHomes([]Home{{Name: "pro", Dir: pro}, {Name: "perso", Dir: perso}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range []string{pro, filepath.Join(pro, "projects"), perso} {
+		if !ideForbiddenRoot(d) {
+			t.Errorf("main : %q accepté", d)
+		}
+	}
+	if ideForbiddenRoot(filepath.Join(home, ".claude-prox")) || ideForbiddenRoot(proj) {
+		t.Error("voisin refusé")
+	}
+	if !slices.Contains(childEnv(), ideMainCfgEnv+"="+cfg) {
+		t.Fatal("childEnv ne transmet pas la config principale")
+	}
+	// enfant simulé : sa config est celle de pro, la principale n'est connue que par la variable
+	use(pro)
+	t.Cleanup(func() { use(cfg) })
+	if ideForbiddenRoot(cfg) {
+		t.Fatal("sans la variable, rien ne protège la config principale (préalable du test)")
+	}
+	t.Setenv(ideMainCfgEnv, cfg)
+	for _, d := range []string{cfg, filepath.Join(cfg, "projects"), perso, pro} {
+		if !ideForbiddenRoot(d) {
+			t.Errorf("enfant : %q accepté", d)
+		}
+	}
+	if ideForbiddenRoot(proj) {
+		t.Error("enfant : projet refusé")
+	}
+}
+
+func TestIdeForbiddenHomeUnresolvable(t *testing.T) {
+	_, _, proj := web(t)
+	t.Setenv("HOME", "")
+	if !ideForbiddenRoot(proj) {
+		t.Fatal("HOME introuvable : la garde doit refuser")
 	}
 }

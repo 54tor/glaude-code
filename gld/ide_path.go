@@ -27,8 +27,8 @@ func pathUnder(a, b string) bool {
 	return err == nil && r != ".." && !strings.HasPrefix(r, ".."+string(filepath.Separator))
 }
 
-// ideForbiddenRoot écarte comme racine le home (et ses ancêtres), la config Claude et le dossier
-// d'auth de gld : un compte fs_read y lirait auth.db, auth.key et les identifiants Claude.
+// ideForbiddenRoot écarte comme racine le home (et ses ancêtres), la config Claude de chaque home et le dossier
+// d'auth de gld : un compte fs_read y lirait auth.db, auth.key et les identifiants Claude d'un autre home.
 func ideForbiddenRoot(dir string) bool {
 	forms := func(p string) []string {
 		p = filepath.Clean(p)
@@ -37,10 +37,12 @@ func ideForbiddenRoot(dir string) bool {
 		}
 		return []string{p}
 	}
-	var guarded []string
-	if h, err := os.UserHomeDir(); err == nil && h != "" {
-		guarded = append(guarded, forms(h)...)
+	// Sans $HOME résolu, rien ne prouve qu'une racine n'en est pas un ancêtre : tout est refusé.
+	h, err := os.UserHomeDir()
+	if err != nil || h == "" {
+		return true
 	}
+	guarded := forms(h)
 	for _, d := range forms(dir) {
 		for _, h := range guarded {
 			if pathUnder(h, d) {
@@ -48,7 +50,22 @@ func ideForbiddenRoot(dir string) bool {
 			}
 		}
 	}
-	prot := forms(cfgDir())
+	cfgs := []string{cfgDir()}
+	homes := readHomes()
+	// Un enfant lit son propre fichier de homes : la config principale et ses homes viennent de la passerelle.
+	if m := os.Getenv(ideMainCfgEnv); m != "" && filepath.IsAbs(m) {
+		cfgs = append(cfgs, m)
+		homes = append(homes, readHomesFile(filepath.Join(m, homesFileName))...)
+	}
+	for _, hm := range homes {
+		if filepath.IsAbs(hm.Dir) {
+			cfgs = append(cfgs, hm.Dir)
+		}
+	}
+	var prot []string
+	for _, c := range cfgs {
+		prot = append(prot, forms(c)...)
+	}
 	if a, err := authDir(); err == nil && a != "" {
 		prot = append(prot, forms(a)...)
 	}
