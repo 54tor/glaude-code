@@ -13,7 +13,7 @@ import { api, type Data } from "@/lib/api"
 import { TerminalPane } from "./TerminalPane"
 
 vi.mock("../FullTerminal", () => ({
-  default: ({ id }: { id: string }) => <div data-testid="term">{id}</div>,
+  default: ({ id, takeHand }: { id: string; takeHand?: boolean }) => <div data-testid="term" data-take={String(takeHand)}>{id}</div>,
 }))
 
 const s = (id: string, cwd: string, mtime: number) =>
@@ -83,6 +83,24 @@ describe("TerminalPane", () => {
     vi.spyOn(api, "data").mockResolvedValue(data([], [s("a", "/p", 1)]))
     vi.advanceTimersByTime(11000)
     expect(await screen.findByText("La session est terminée.")).toBeTruthy()
+    vi.useRealTimers()
+  })
+  it("l'espace monte le terminal sans prendre la main", async () => {
+    setup(true, data(["a"], [s("a", "/p", 1)]))
+    render(<TerminalPane dir="/p" />)
+    expect((await screen.findByTestId("term")).dataset.take).toBe("false")
+  })
+  it("session collante : un sondage qui réordonne les sessions ne change pas celle montée", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    setup(true, data(["a", "b"], [s("a", "/p", 1), s("b", "/p", 5)]))
+    render(<TerminalPane dir="/p" />)
+    const el = await screen.findByTestId("term")
+    expect(el.textContent).toBe("b")
+    vi.spyOn(api, "data").mockResolvedValue(data(["a", "b"], [s("a", "/p", 9), s("b", "/p", 5)]))
+    vi.advanceTimersByTime(11000)
+    await waitFor(() => expect((screen.getByRole("combobox") as HTMLSelectElement).options[0].value).toBe("a"))
+    expect(screen.getByTestId("term")).toBe(el)
+    expect(el.textContent).toBe("b")
     vi.useRealTimers()
   })
   it("compare les dossiers sans le séparateur final", async () => {

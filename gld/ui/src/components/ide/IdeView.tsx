@@ -82,7 +82,8 @@ export function IdeView({ dir }: { dir: string }) {
   const can = useCan()
   const [wStr, setW] = useLocal(`gld.ide.${dir}.w`, "260")
   const [hStr, setH] = useLocal(`gld.ide.${dir}.h`, "160")
-  const [bottom, setBottom] = useLocal(`gld.ide.${dir}.bottom`, "1")
+  const [bottomStr, setBottom] = useLocal(`gld.ide.${dir}.bottom`, "0")
+  const bottom = bottomStr === "1"
   const [savedTabs, setSavedTabs] = useLocal(`gld.ide.${dir}.tabs`, "")
   const [restored, setRestored] = useState(false)
   const [drag, setDrag] = useState<{ w?: number; h?: number }>({})
@@ -345,7 +346,7 @@ export function IdeView({ dir }: { dir: string }) {
         </div>
         {can("exec") && (
           <div className="flex justify-end border-t px-2 py-0.5">
-            <Button variant="ghost" size="icon-sm" onClick={() => setBottom(bottom ? "" : "1")} aria-pressed={!!bottom} aria-label={t(bottom ? "ide.bottom.hide" : "ide.bottom.show")}>
+            <Button variant="ghost" size="icon-sm" onClick={() => setBottom(bottom ? "0" : "1")} aria-pressed={bottom} aria-label={t(bottom ? "ide.bottom.hide" : "ide.bottom.show")}>
               <PanelBottom />
             </Button>
           </div>
