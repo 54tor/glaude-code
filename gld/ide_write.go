@@ -17,6 +17,9 @@ import (
 
 const ideTrash = ".gld-trash"
 
+// ideBeforeRename est un point d'injection pour les tests de course.
+var ideBeforeRename = func() {}
+
 var ideTrashID = regexp.MustCompile(`^[0-9]+$`)
 
 // ideBody décode le JSON ; un corps au-delà de max devient errIdeTooBig.
@@ -75,7 +78,8 @@ func ideConflict(w http.ResponseWriter, deleted bool, etag string) {
 }
 
 // ideAtomicWrite : le temporaire reste dans le dossier cible pour que Rename ne change pas de volume.
-func ideAtomicWrite(root *os.Root, rel string, data []byte, mode fs.FileMode) error {
+// verify est rappelé juste avant le Rename pour réduire la fenêtre de mise à jour perdue.
+func ideAtomicWrite(root *os.Root, rel string, data []byte, mode fs.FileMode, verify func() error) error {
 	tmp := path.Join(path.Dir(rel), ".gld-tmp-"+strconv.FormatInt(time.Now().UnixNano(), 36))
 	f, err := root.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
 	if err != nil {
@@ -90,6 +94,10 @@ func ideAtomicWrite(root *os.Root, rel string, data []byte, mode fs.FileMode) er
 	}
 	if cerr := f.Close(); err == nil {
 		err = cerr
+	}
+	if err == nil && verify != nil {
+		ideBeforeRename()
+		err = verify()
 	}
 	if err == nil {
 		err = root.Rename(tmp, rel)
@@ -113,7 +121,15 @@ func ideTrashDir(root *os.Root) error {
 }
 
 func ideReadFrom(root *os.Root, id string) (string, error) {
-	f, err := root.Open(ideTrash + "/" + id + "/from")
+	p := ideTrash + "/" + id + "/from"
+	fi, err := ideLstat(root, p)
+	if err != nil {
+		return "", err
+	}
+	if !fi.Mode().IsRegular() {
+		return "", errIdePath
+	}
+	f, err := root.Open(p)
 	if err != nil {
 		return "", errIdeNotFound
 	}
@@ -169,13 +185,14 @@ func ideTrashRoot(w http.ResponseWriter, dir, id string) (*os.Root, bool) {
 	return root, true
 }
 
+// Le plafond de corps couvre le pire cas d'échappement JSON (\u00XX, 6 octets par octet).
 func routesIDEWrite(mux *http.ServeMux) {
 	mux.HandleFunc("POST /fs-save", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Dir, Path, Content, Etag string
 			Force                    bool
 		}
-		if !ideBody(w, r, ideMaxFile+64<<10, &req) {
+		if !ideBody(w, r, 6*ideMaxFile+64<<10, &req) {
 			return
 		}
 		if len(req.Content) > ideMaxFile {
@@ -188,6 +205,10 @@ func routesIDEWrite(mux *http.ServeMux) {
 			return
 		}
 		defer root.Close()
+		if ideInTrash(rel) {
+			ideFail(w, errIdePath)
+			return
+		}
 		if err := ideParentDir(root, rel); err != nil {
 			ideFail(w, err)
 			return
@@ -214,7 +235,32 @@ func routesIDEWrite(mux *http.ServeMux) {
 			ideFail(w, err)
 			return
 		}
-		if err := ideAtomicWrite(root, rel, []byte(req.Content), mode); err != nil {
+		existed := fi != nil
+		var cur string
+		verify := func() error {
+			if req.Force {
+				return nil
+			}
+			nfi, err := root.Lstat(rel)
+			switch {
+			case err != nil && !existed && errors.Is(err, fs.ErrNotExist):
+				return nil
+			case err != nil && errors.Is(err, fs.ErrNotExist):
+				cur = ""
+			case err != nil:
+				return err
+			case existed && nfi.Mode().IsRegular() && ideEtag(nfi) == req.Etag:
+				return nil
+			default:
+				cur = ideEtag(nfi)
+			}
+			return errIdeConflict
+		}
+		if err := ideAtomicWrite(root, rel, []byte(req.Content), mode, verify); err != nil {
+			if errors.Is(err, errIdeConflict) {
+				ideConflict(w, existed && cur == "", cur)
+				return
+			}
 			ideFail(w, err)
 			return
 		}
@@ -292,6 +338,7 @@ func routesIDEWrite(mux *http.ServeMux) {
 			ideFail(w, err)
 			return
 		}
+		// Le test d'existence puis le Rename restent séparés : os.Root n'offre pas de renommage sans écrasement.
 		if ideExists(root, to) {
 			ideFail(w, errIdeExists)
 			return
@@ -443,10 +490,11 @@ func routesIDEWrite(mux *http.ServeMux) {
 			ideFail(w, errIdePath)
 			return
 		}
-		if _, err := root.Lstat(base + "/item"); err != nil {
-			ideFail(w, errIdeNotFound)
+		if _, err := ideLstat(root, base+"/item"); err != nil {
+			ideFail(w, err)
 			return
 		}
+		// Le test d'existence puis le Rename restent séparés : os.Root n'offre pas de renommage sans écrasement.
 		if ideExists(root, from) {
 			ideFail(w, errIdeExists)
 			return
