@@ -38,6 +38,7 @@ const Snippets = lazy(() => import("@/components/Snippets").then((m) => ({ defau
 const Config = lazy(() => import("@/components/Config").then((m) => ({ default: m.Config })))
 const Skills = lazy(() => import("@/components/Skills").then((m) => ({ default: m.Skills })))
 const Memory = lazy(() => import("@/components/Memory").then((m) => ({ default: m.Memory })))
+const IdeView = lazy(() => import("@/components/ide/IdeView").then((m) => ({ default: m.IdeView })))
 const Tabs = lazy(() => import("@/components/Tabs").then((m) => ({ default: m.Tabs })))
 
 // Mode multi-utilisateur : l'application ne se monte qu'une session ouverte. Une session perdue en cours d'usage la laisse
@@ -280,6 +281,7 @@ function Shell() {
     config: t("shell.app.title.config"),
     skills: t("shell.app.title.skills"),
     tabs: t("shell.app.title.tabs"),
+    workspace: t("ide.title"),
     dir: node?.name ?? t("shell.app.title.dir"),
   }[route.kind]
   const nSessions = (count: number) => t("shell.count.sessions", { count })
@@ -301,7 +303,9 @@ function Shell() {
             ? (snips?.dir ?? "")
           : route.kind === "memory"
             ? t("shell.app.sub.memory")
-            : route.kind === "tabs"
+            : route.kind === "workspace"
+              ? tilde(route.dir, home)
+              : route.kind === "tabs"
               ? t("shell.app.sub.tabs")
               : route.kind === "group"
                 ? t("shell.app.sub.group", { dir: vg ? tilde(vg.project, home) : "?", sessions: nSessions(rows.length) })
@@ -362,7 +366,9 @@ function Shell() {
           />
 
           <Suspense fallback={<Skeleton className="m-6 h-32" />}>
-          {route.kind === "tabs" ? (
+          {route.kind === "workspace" ? (
+            <IdeView key={route.dir} dir={route.dir} />
+          ) : route.kind === "tabs" ? (
             <Tabs args={args} onAsk={setAsk} onPrompt={setPrompt} />
           ) : route.kind === "skills" ? (
             <Skills sel={route.key} home={home} q={qt} onPick={(key) => go({ kind: "skills", key })} onAsk={setAsk} />

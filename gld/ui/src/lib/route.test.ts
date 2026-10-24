@@ -17,6 +17,7 @@ const route: fc.Arbitrary<Route> = fc.oneof(
     key,
   }),
   fc.record({ kind: fc.constant("project" as const), name: fc.string() }),
+  fc.record({ kind: fc.constant("workspace" as const), dir: fc.string({ minLength: 1 }) }),
   fc.record({ kind: fc.constant("dir" as const), key }),
   fc.record({ kind: fc.constant("config" as const), tab: fc.string() }),
   fc.record({
@@ -53,6 +54,11 @@ describe("route", () => {
     ]) {
       expect(parse(loc)).toEqual({ kind: "recent" })
     }
+  })
+  it("espace de travail : aller-retour et encodage invalide", () => {
+    expect(href({ kind: "workspace", dir: "/home/moi/p" })).toBe("/espace/%2Fhome%2Fmoi%2Fp")
+    expect(parse("/espace/%2Fhome%2Fmoi%2Fp")).toEqual({ kind: "workspace", dir: "/home/moi/p" })
+    expect(parse("/espace/%E0%A4%A")).toEqual({ kind: "recent" })
   })
   it("ne lève jamais d'exception", () => {
     fc.assert(
