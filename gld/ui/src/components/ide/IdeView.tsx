@@ -278,6 +278,7 @@ function Workspace({ dir }: { dir: string }) {
     // La bascule part de l'état réellement affiché, pas de la préférence brute (ouverture d'emblée sans choix).
     prefs: { ...prefs, showTerminal: term.open },
     terminalAvailable: term.available,
+    treeShown: prefs.showTree,
     newFile: () => treeActions.current?.create("newFile"),
     newFolder: () => treeActions.current?.create("newDir"),
     focusSession: () => setTermFocus((n) => n + 1),

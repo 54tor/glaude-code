@@ -151,7 +151,8 @@
       "noEditor": "No active editor",
       "noExec": "The terminal requires the “exec” right",
       "termOff": "Built-in terminal disabled (GLD_WEB_TERMINAL=1)",
-      "nothingDirty": "No changes to save"
+      "nothingDirty": "No changes to save",
+      "noTree": "Show the file tree to create at the root"
     },
     "toolbar": {
       "editor": "Editor actions",

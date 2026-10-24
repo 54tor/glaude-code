@@ -16,6 +16,7 @@ const ctx = (rights: Right[] = ["fs_read", "fs_write"]): CmdCtx => ({
   editor: null,
   prefs: { ...DEFAULT_PREFS, set: vi.fn() },
   terminalAvailable: false,
+  treeShown: true,
   save: vi.fn(),
   saveAll: vi.fn(),
   newFile: vi.fn(),

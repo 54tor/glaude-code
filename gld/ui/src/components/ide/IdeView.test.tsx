@@ -850,7 +850,8 @@ describe("IdeView : brouillons des onglets non enregistrés (sessionStorage)", (
     expect(leave()).toBe(true)
     ctrlS(input)
     await waitFor(() => expect(dirty()).toBeNull())
-    expect(leave()).toBe(false)
+    // Le retrait de l'écouteur est un effet passif : il peut suivre de peu le rendu « propre ».
+    await waitFor(() => expect(leave()).toBe(false))
   })
 
   it("onglet en lecture seule : aucun brouillon écrit ni réappliqué", async () => {
