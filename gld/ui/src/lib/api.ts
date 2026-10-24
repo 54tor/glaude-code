@@ -195,7 +195,7 @@ export const api = {
   ls: (path: string) => get<Ls>(`/ls?path=${enc(path)}`),
   homes: () => get<HomesInfo>("/homes"),
   keepWarm: () => get<{ items: Record<string, WarmState>; ttl: number; below: number }>("/keepwarm"),
-  gitChanges: (dir: string) => get<{ files: GitChange[]; more?: number }>(`/git-changes?dir=${enc(dir)}`),
+  gitChanges: (dir: string) => get<{ files: GitChange[]; more?: number; prefix?: string }>(`/git-changes?dir=${enc(dir)}`),
   notes: () => get<{ notes: Record<string, string> }>("/notes"),
   trustPending: () => get<{ dirs: string[] }>("/trust-pending"),
   gitRemotes: (dir: string) => get<{ remotes: GitRemote[] }>(`/git-remotes?dir=${enc(dir)}`),

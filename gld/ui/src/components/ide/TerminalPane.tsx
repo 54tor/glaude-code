@@ -11,6 +11,7 @@ function Pane({ dir }: { dir: string }) {
   const { t } = useTranslation()
   const [on, setOn] = useState<boolean | null>(null)
   const [data, setData] = useState<Data | null>(null)
+  const [seen, setSeen] = useState("")
   const [pick, setPick] = useLocal(`gld.ide.${dir}.term`, "")
   useEffect(() => {
     api.termInfo().then(
@@ -34,6 +35,15 @@ function Pane({ dir }: { dir: string }) {
     }
   }, [on])
 
+  const bare = (p: string) => p.replace(/[/\\]+$/, "")
+  const live = new Set(data?.live ?? [])
+  const sessions = (data?.groups ?? [])
+    .flatMap((g) => g.sessions)
+    .filter((s) => bare(s.cwd) === bare(dir) && live.has(s.id))
+    .sort((a, b) => b.mtime - a.mtime)
+  const cur = sessions.find((s) => s.id === pick) ?? sessions[0]
+  const curId = cur?.id
+  if (curId && curId !== seen) setSeen(curId)
   if (on === null) return null
   if (!on)
     return (
@@ -41,16 +51,12 @@ function Pane({ dir }: { dir: string }) {
         {t("ide.term.disabled")}
       </p>
     )
-  const live = new Set(data?.live ?? [])
-  const sessions = (data?.groups ?? [])
-    .flatMap((g) => g.sessions)
-    .filter((s) => s.cwd === dir && live.has(s.id))
-    .sort((a, b) => b.mtime - a.mtime)
-  if (!sessions.length)
+  if (!cur)
     return (
-      <p className="p-3 text-sm text-muted-foreground">{t("ide.term.none")}</p>
+      <p className="p-3 text-sm text-muted-foreground">
+        {t(seen ? "ide.term.ended" : "ide.term.none")}
+      </p>
     )
-  const cur = sessions.find((s) => s.id === pick) ?? sessions[0]
   return (
     <div
       className="flex size-full min-h-0 flex-col"

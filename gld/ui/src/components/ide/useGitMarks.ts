@@ -5,8 +5,9 @@ export type GitMarks = {
   marks: Map<string, string>
   dirs: Set<string>
   more: number
+  prefix: string
 }
-const none = (): GitMarks => ({ marks: new Map(), dirs: new Set(), more: 0 })
+const none = (): GitMarks => ({ marks: new Map(), dirs: new Set(), more: 0, prefix: "" })
 
 // « XY » de git status --short → une lettre : conflit U, non suivi ?, sinon l'état de l'index puis celui de l'arbre.
 const letter = (s: string) => {
@@ -16,9 +17,12 @@ const letter = (s: string) => {
   return "MADR".includes(c) ? c : c === "C" ? "A" : "M"
 }
 
-export function toMarks(files: GitChange[], more = 0): GitMarks {
+// prefix : chemin du dossier sous la racine du dépôt ; seuls ses changements comptent, ramenés au dossier.
+export function toMarks(all: GitChange[], more = 0, prefix = ""): GitMarks {
+  const files = all.filter((f) => f.path.startsWith(prefix)).map((f) => ({ ...f, path: f.path.slice(prefix.length) }))
   const r = none()
   r.more = more
+  r.prefix = prefix
   for (const f of files) {
     r.marks.set(f.path, letter(f.status))
     for (let i = f.path.indexOf("/"); i > 0; i = f.path.indexOf("/", i + 1))
@@ -34,7 +38,7 @@ export function useGitMarks(dir: string) {
   const refresh = useCallback(() => {
     const n = ++seq.current
     api.gitChanges(dir).then(
-      (r) => n === seq.current && setG(toMarks(r.files ?? [], r.more ?? 0)),
+      (r) => n === seq.current && setG(toMarks(r.files ?? [], r.more ?? 0, r.prefix ?? "")),
       () => n === seq.current && setG(none())
     )
   }, [dir])

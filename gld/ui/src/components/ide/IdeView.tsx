@@ -247,7 +247,7 @@ export function IdeView({ dir }: { dir: string }) {
       <aside className="flex min-h-0 shrink-0 flex-col" style={{ width: w }}>
         {git.marks.size > 0 && (
           <div className="flex shrink-0 flex-col items-start px-1 pt-1">
-            <GitChanges dir={dir} count={git.marks.size} onOpen={open} />
+            <GitChanges dir={dir} count={git.marks.size} onOpen={open} prefix={git.prefix} />
             {git.more > 0 && <p className="px-2 text-xs text-muted-foreground">{t("ide.git.more", { count: git.more })}</p>}
           </div>
         )}

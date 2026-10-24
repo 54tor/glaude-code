@@ -17,7 +17,7 @@ const Row = ({ onClick, ...p }: React.ComponentProps<"div"> & { onClick?: () => 
 // Les fichiers en cours de modification d'un dépôt : un bouton ouvre la liste dans une fenêtre. La liste est lue à l'ouverture, et
 // relue quand le nombre de changements annoncé par l'état git (relu toutes les 30 s) change. Le chemin du dépôt n'y est pas répété :
 // il est déjà affiché à côté du bouton.
-export function GitChanges({ dir, count, onOpen }: { dir: string; count: number; onOpen?: (path: string) => void }) {
+export function GitChanges({ dir, count, onOpen, prefix }: { dir: string; count: number; onOpen?: (path: string) => void; prefix?: string }) {
   const { t } = useTranslation()
   const [files, setFiles] = useState<GitChange[]>([])
   const [more, setMore] = useState(0)
@@ -28,7 +28,8 @@ export function GitChanges({ dir, count, onOpen }: { dir: string; count: number;
     api.gitChanges(dir).then(
       (r) => {
         if (!live) return
-        setFiles(r.files)
+        const pre = prefix ?? ""
+        setFiles(pre ? r.files.filter((f) => f.path.startsWith(pre)).map((f) => ({ ...f, path: f.path.slice(pre.length), from: f.from?.startsWith(pre) ? f.from.slice(pre.length) : f.from })) : r.files)
         setMore(r.more ?? 0)
       },
       () => {}
@@ -36,7 +37,7 @@ export function GitChanges({ dir, count, onOpen }: { dir: string; count: number;
     return () => {
       live = false
     }
-  }, [dir, count, open])
+  }, [dir, count, open, prefix])
   if (count === 0) return null
   const name = dir.split("/").filter(Boolean).pop() ?? dir
   return (
