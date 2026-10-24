@@ -215,7 +215,12 @@ export function Conversation({ row, onClose, args, choice, carousel }: { row: Ro
     if (!vp) return
     // Collée à la fin tant que l'utilisateur y est : la bande d'état (réflexion, outil, file d'attente) change de hauteur sans que la vue décale.
     let stuck = vp.scrollHeight - vp.scrollTop - vp.clientHeight < 80
+    let last = vp.scrollTop
     const on = () => {
+      const gap = vp.scrollHeight - vp.scrollTop - vp.clientHeight
+      // Aimant : en descendant à moins de 80 px de la fin, la vue s'y colle ; en remontant, elle se laisse quitter.
+      if (gap > 0 && gap < 80 && vp.scrollTop > last) vp.scrollTop = vp.scrollHeight
+      last = vp.scrollTop
       stuck = vp.scrollHeight - vp.scrollTop - vp.clientHeight < 80
       setAway(!stuck)
     }
