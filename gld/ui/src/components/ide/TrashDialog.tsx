@@ -80,6 +80,8 @@ function Body({ dir, canWrite, onRestored }: Omit<Props, "open" | "onClose">) {
   const restore = (x: FsTrashItem) =>
     exclusive(x.id, async () => {
       const r = await api.fsTrashRestore(dir, x.id)
+      // Le fichier est revenu sur le disque même si la fenêtre a été fermée entre-temps : l'arbre doit le montrer.
+      if (r.ok) onRestored()
       if (!alive.current) return
       if (!r.ok)
         return setError(
@@ -88,7 +90,6 @@ function Body({ dir, canWrite, onRestored }: Omit<Props, "open" | "onClose">) {
             : r.body.error || t("shell.act.failed")
         )
       toast(t("ide.trash.restored", { path: x.path }))
-      onRestored()
       void load()
     })
   const purge = (x: FsTrashItem) =>
