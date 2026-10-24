@@ -97,7 +97,10 @@
       "disabled": "terminal intégré désactivé (GLD_WEB_TERMINAL=1)",
       "none": "le terminal se branche sur une session Claude ouverte dans ce dossier",
       "pick": "Session à afficher",
-      "ended": "La session est terminée."
+      "ended": "La session est terminée.",
+      "title": "Terminal",
+      "help": "lancez `claude` dans ce dossier",
+      "ready": "{{count}} session(s) en direct"
     },
     "drafts": {
       "dropped": "Brouillon de « {{name}} » abandonné : le fichier a changé sur le disque."
