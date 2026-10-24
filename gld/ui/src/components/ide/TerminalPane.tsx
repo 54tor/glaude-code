@@ -19,14 +19,15 @@ export function TerminalContent({ dir, sessions, focus, onFocused }: { dir: stri
   }, [focus, onFocused])
   const byId = (id: string) => sessions.find((s) => s.id === id)
   // Collante : le tri par activité change à chaque sondage, la session montée ne doit pas changer avec lui.
-  // Une session montée qui disparaît n'est jamais remplacée en silence : l'utilisateur choisit la suivante.
-  const cur = byId(pick) ?? (seen ? byId(seen) : sessions[0])
+  // Une fois une session montée, seul le sélecteur en change : ni le choix mémorisé qui revivrait, ni la disparition
+  // de la session (l'utilisateur choisit alors la suivante).
+  const cur = seen ? byId(seen) : (byId(pick) ?? sessions[0])
   if (cur && cur.id !== seen) setSeen(cur.id)
   const chooser = (cur ? sessions.length > 1 : !!seen && sessions.length > 0) && (
     <select
       aria-label={t("ide.term.pick")}
       value={cur?.id ?? ""}
-      onChange={(e) => setPick(e.target.value)}
+      onChange={(e) => (setPick(e.target.value), setSeen(e.target.value))}
       className="m-1 w-fit rounded-md border bg-background px-2 py-1 text-xs"
     >
       {!cur && <option value="" disabled>{t("ide.term.pick")}</option>}
