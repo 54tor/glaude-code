@@ -69,7 +69,7 @@ function Entry({ c, ctx, onRan }: { c: Command; ctx: CmdCtx; onRan(): void }) {
 }
 
 // Entrées tirées du registre par groupe : un menu ne peut pas proposer une action que les barres ignorent.
-// Alt+lettre ouvre un menu, sauf dans une cible de saisie (Monaco, xterm, champs) ; F1 reste à Monaco.
+// Alt+lettre ouvre un menu, sauf dans une cible de saisie (Monaco, xterm, champs) ou une modale (le menu s'ouvrirait derrière) ; F1 reste à Monaco.
 export function MenuBar({ ctx }: { ctx: CmdCtx }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState("")
@@ -83,6 +83,7 @@ export function MenuBar({ ctx }: { ctx: CmdCtx }) {
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
       if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.defaultPrevented || isEditableTarget(e.target)) return
+      if (e.target instanceof Element && e.target.closest("[role=dialog], [role=alertdialog]")) return
       const g = GROUPS.find((x) => t(`ide.menubar.key.${x}`) === e.key.toLowerCase())
       if (!g) return
       e.preventDefault()

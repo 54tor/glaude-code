@@ -163,6 +163,23 @@ describe("MenuBar", () => {
     expect((await item("Redo")).textContent).toContain("Ctrl+Shift+Z")
   })
 
+  it("Alt+lettre ignoré sous une modale : aucun menu ne s'ouvre derrière", () => {
+    render(
+      <>
+        <MenuBar ctx={ctx()} />
+        <div role="dialog">
+          <button>dans la modale</button>
+        </div>
+        <div role="alertdialog">
+          <button>alerte</button>
+        </div>
+      </>
+    )
+    expect(alt("f", screen.getByText("dans la modale"))).toBe(true)
+    expect(alt("f", screen.getByText("alerte"))).toBe(true)
+    expect(screen.queryByRole("menu")).toBeNull()
+  })
+
   it("bascules cochées selon les préférences ; une entrée active lance sa commande", async () => {
     const c = ctx({ prefs: { ...DEFAULT_PREFS, wordWrap: true, set: vi.fn() } })
     render(<MenuBar ctx={c} />)

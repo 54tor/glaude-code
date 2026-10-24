@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { useState } from "react"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { setLang } from "@/i18n"
@@ -67,6 +68,24 @@ describe("TreeToolbar", () => {
     rerender(<TreeToolbar dir="/p" tree={tree()} ctx={ctx()} filter="Src" onFilter={f} onRestored={() => {}} />)
     fireEvent.click(btn("Effacer le filtre"))
     expect(f).toHaveBeenLastCalledWith("")
+  })
+
+  it("effacer le filtre par le bouton rend le focus au champ ; Échap vide aussi", () => {
+    const Host = () => {
+      const [f, setF] = useState("Src")
+      return <TreeToolbar dir="/p" tree={tree()} ctx={ctx()} filter={f} onFilter={setF} onRestored={() => {}} />
+    }
+    render(<Host />)
+    const input = screen.getByRole("searchbox", { name: "Filtrer par nom" }) as HTMLInputElement
+    btn("Effacer le filtre").focus()
+    fireEvent.click(btn("Effacer le filtre"))
+    expect(input.value).toBe("")
+    expect(screen.queryByRole("button", { name: "Effacer le filtre" })).toBeNull()
+    expect(document.activeElement).toBe(input)
+    fireEvent.change(input, { target: { value: "x" } })
+    fireEvent.keyDown(input, { key: "Escape" })
+    expect(input.value).toBe("")
+    expect(document.activeElement).toBe(input)
   })
 
   it("Corbeille ouvre le dialogue de la corbeille", async () => {
