@@ -299,6 +299,7 @@ export function useAppActions(c: {
     rows: [...everyId.values()].sort((x, y) => y.s.mtime - x.s.mtime),
     q,
     live,
+    background: new Set(data?.background),
     waiting,
     asking: new Set(data?.asking),
     hit: (id) => hitMap?.get(id),

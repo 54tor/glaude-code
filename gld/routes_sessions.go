@@ -29,10 +29,14 @@ func routesSessions(mux *http.ServeMux) {
 		for id := range liveSessions() {
 			live = append(live, id)
 		}
+		background := []string{}
+		for id := range backgroundSessions() {
+			background = append(background, id)
+		}
 		groupsMu.Lock()
 		st := loadStore()
 		groupsMu.Unlock()
-		writeJSON(w, 200, map[string]any{"home": home, "root": root, "groups": withEmptyDirs(sessions(), st.Dirs), "dirs": st.Dirs, "live": live, "waiting": waiting(), "asking": askingSessions(), "vgroups": st.Groups, "favs": st.Favs, "tags": st.Tags, "projects": st.Projects, "providers": providerInfos(), "lang": normalizeLang(userLanguageRaw())})
+		writeJSON(w, 200, map[string]any{"home": home, "root": root, "groups": withEmptyDirs(sessions(), st.Dirs), "dirs": st.Dirs, "live": live, "background": background, "waiting": waiting(), "asking": askingSessions(), "vgroups": st.Groups, "favs": st.Favs, "tags": st.Tags, "projects": st.Projects, "providers": providerInfos(), "lang": normalizeLang(userLanguageRaw())})
 	})
 	// Dossiers enregistrés à la main (sans session) : ajout ou retrait.
 	mux.HandleFunc("POST /dirs", func(w http.ResponseWriter, r *http.Request) {

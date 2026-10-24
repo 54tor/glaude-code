@@ -12,7 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useActions } from "./actions"
 import { SessionDropdown } from "./SessionMenu"
-import { Live } from "./SessionList"
+import { BgBadge, Live } from "./SessionList"
 import type { Row } from "./actions"
 import { Message } from "./Message"
 import { Composer, type Turn } from "./Composer"
@@ -46,6 +46,7 @@ function Meta({ s, d }: { s: Session; d: Detail | null }) {
   return (
     <p className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground max-md:flex-nowrap max-md:overflow-hidden in-data-[kb]:hidden">
       {live && <Live waiting={a.waiting.has(s.id)} />}
+      {live && <BgBadge id={s.id} />}
       {bits.map((b, i) => (
         <span key={i} className={i === 0 ? "truncate" : i > 1 ? "shrink-0 max-md:hidden" : "shrink-0"}>
           {b}

@@ -87,6 +87,8 @@
       "argsHint": "options added to claude"
     },
     "list": {
+      "background": "background",
+      "backgroundHint": "Background session, no terminal: “Close” stops it, its conversation is kept",
       "waiting": "waiting",
       "running": "running",
       "select": "Select",

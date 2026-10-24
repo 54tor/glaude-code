@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
@@ -62,6 +63,34 @@ var sessionPIDs = func() map[string]int {
 		}
 	}
 	return m
+}
+
+// backgroundSessions : id court (celui de `claude stop`) des tâches de fond, par id de session (remplaçable dans les tests).
+var backgroundSessions = func() map[string]string {
+	out, err := claudeAgents()
+	var a []struct{ SessionId, Id, Kind string }
+	m := map[string]string{}
+	if err != nil || json.Unmarshal(out, &a) != nil {
+		return m
+	}
+	for _, x := range a {
+		if x.SessionId != "" && x.Id != "" && x.Kind == "background" {
+			m[x.SessionId] = x.Id
+		}
+	}
+	return m
+}
+
+// stopBackground arrête une tâche de fond (`claude stop`) : sa conversation est conservée (remplaçable dans les tests).
+var stopBackground = func(short string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), cmdTimeout)
+	defer cancel()
+	c := withPath(exec.CommandContext(ctx, "claude", "stop", short))
+	c.WaitDelay = time.Second
+	if out, err := c.CombinedOutput(); err != nil {
+		return fmt.Errorf("%w: %s", err, strings.TrimSpace(cut(string(out), 300)))
+	}
+	return nil
 }
 
 // parentOf : le processus parent (lecture de /proc/<pid>/stat, ou `ps` sous macOS qui n'a pas /proc), 0 si inconnu (remplaçable dans les tests).
@@ -163,6 +192,14 @@ func closeSession(id string) error {
 	}
 	pid, ok := sessionPIDs()[id]
 	if !ok {
+		if short, bg := backgroundSessions()[id]; bg {
+			err := stopBackground(short)
+			forgetAgents()
+			if err != nil {
+				return terr("srv.sendkeys.fermetureImpossible", "W1", err)
+			}
+			return nil
+		}
 		return terr("srv.sendkeys.sessionIntrouvableParmiLes")
 	}
 	if err := runAsOwns(pid); err != nil {
@@ -183,7 +220,8 @@ func closeSession(id string) error {
 func closeAndWait(items []item) {
 	open := map[string]bool{}
 	for _, it := range items {
-		if _, ok := sessionPIDs()[it.ID]; ok && closeSession(it.ID) == nil {
+		_, isBg := backgroundSessions()[it.ID]
+		if _, ok := sessionPIDs()[it.ID]; (ok || isBg) && closeSession(it.ID) == nil {
 			open[it.ID] = true
 		}
 	}

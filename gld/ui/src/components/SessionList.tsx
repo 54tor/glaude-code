@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { Flame, MoreHorizontal, SquareTerminal, Star, Tag } from "lucide-react"
 import { ago, bucket, compact, full, size, tilde, tokTotal } from "@/lib/format"
+import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -12,6 +13,17 @@ import { useActions, type Row as R } from "./actions"
 import { CM, SessionDropdown, SessionItems } from "./SessionMenu"
 
 // Point vert : la session tourne en ce moment dans un terminal.
+// Tâche de fond (`claude --bg`) : ouverte sans terminal, elle s'arrête depuis le menu « Fermer ».
+export function BgBadge({ id }: { id: string }) {
+  const { t } = useTranslation()
+  const a = useActions()
+  return a.background.has(id) ? (
+    <Badge variant="outline" className="shrink-0" title={t("shell.list.backgroundHint")}>
+      {t("shell.list.background")}
+    </Badge>
+  ) : null
+}
+
 export function Live({ className, waiting }: { className?: string; waiting?: boolean }) {
   const { t } = useTranslation()
   return (
@@ -97,6 +109,7 @@ const Row = memo(function Row({ row, showProject, showCache }: { row: R; showPro
             </span>
             <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
               {live && <Live waiting={a.waiting.has(s.id)} />}
+              {live && <BgBadge id={s.id} />}
               {left !== null && (
                 <>
                   <span

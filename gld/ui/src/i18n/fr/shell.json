@@ -87,6 +87,8 @@
       "argsHint": "options ajoutées à claude"
     },
     "list": {
+      "background": "tâche de fond",
+      "backgroundHint": "Session lancée en arrière-plan, sans terminal : « Fermer » l'arrête, sa conversation est conservée",
       "waiting": "attend",
       "running": "en cours",
       "select": "Sélectionner",

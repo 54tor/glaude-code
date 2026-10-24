@@ -159,3 +159,19 @@ func TestEcranEtTouches(t *testing.T) {
 		t.Error("session invalide acceptée")
 	}
 }
+
+func TestCloseBackgroundSession(t *testing.T) {
+	const sid = "28535867-7765-4b88-867d-ee7dade64898"
+	oldPid, oldBg, oldStop := sessionPIDs, backgroundSessions, stopBackground
+	t.Cleanup(func() { sessionPIDs, backgroundSessions, stopBackground = oldPid, oldBg, oldStop })
+	sessionPIDs = func() map[string]int { return map[string]int{} }
+	backgroundSessions = func() map[string]string { return map[string]string{sid: "28535867"} }
+	var got string
+	stopBackground = func(short string) error { got = short; return nil }
+	if err := closeSession(sid); err != nil || got != "28535867" {
+		t.Fatalf("err=%v short=%q", err, got)
+	}
+	if err := closeSession("11111111-1111-1111-1111-111111111111"); err == nil {
+		t.Fatal("session inconnue acceptée")
+	}
+}
