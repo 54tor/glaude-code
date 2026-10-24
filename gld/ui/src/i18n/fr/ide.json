@@ -10,7 +10,8 @@
       "truncated": "Liste tronquée : ce dossier contient trop d'entrées pour être affiché en entier.",
       "loading": "Chargement…",
       "failed": "Lecture du dossier impossible",
-      "empty": "Dossier vide"
+      "empty": "Dossier vide",
+      "noMatch": "Aucune entrée chargée ne correspond."
     },
     "menu": {
       "newFile": "Nouveau fichier",
@@ -100,7 +101,8 @@
       "ended": "La session est terminée.",
       "title": "Terminal",
       "help": "lancez `claude` dans ce dossier",
-      "ready": "{{count}} session(s) en direct"
+      "ready_one": "{{count}} session en direct",
+      "ready_other": "{{count}} sessions en direct"
     },
     "drafts": {
       "dropped": "Brouillon de « {{name}} » abandonné : le fichier a changé sur le disque."
@@ -150,6 +152,30 @@
       "noExec": "Le terminal demande le droit « exec »",
       "termOff": "Terminal intégré désactivé (GLD_WEB_TERMINAL=1)",
       "nothingDirty": "Aucune modification à enregistrer"
+    },
+    "toolbar": {
+      "editor": "Actions de l'éditeur",
+      "tree": "Actions de l'arborescence",
+      "refresh": "Actualiser",
+      "collapseAll": "Tout replier",
+      "trash": "Corbeille",
+      "filter": "Filtrer par nom",
+      "filterPlaceholder": "Filtrer…",
+      "clearFilter": "Effacer le filtre"
+    },
+    "trash": {
+      "title": "Corbeille de l'espace de travail",
+      "hint": "Les entrées supprimées de ce dossier, les plus récentes d'abord.",
+      "loading": "Chargement…",
+      "failed": "Lecture de la corbeille impossible.",
+      "empty": "La corbeille est vide.",
+      "restore": "Restaurer {{path}}",
+      "purge": "Supprimer définitivement {{path}}",
+      "purgeTitle": "Supprimer définitivement « {{path}} » ?",
+      "purgeBody": "L'entrée est effacée du disque : cette action est irréversible.",
+      "purgeConfirm": "Supprimer définitivement",
+      "exists": "« {{path}} » existe déjà à cet emplacement : renommez ou supprimez l'entrée en place avant de restaurer.",
+      "restored": "« {{path}} » restauré"
     }
   }
 }
