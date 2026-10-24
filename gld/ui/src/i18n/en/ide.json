@@ -97,7 +97,10 @@
       "disabled": "built-in terminal disabled (GLD_WEB_TERMINAL=1)",
       "none": "the terminal attaches to a Claude session open in this folder",
       "pick": "Session to show",
-      "ended": "The session has ended."
+      "ended": "The session has ended.",
+      "title": "Terminal",
+      "help": "run `claude` in this folder",
+      "ready": "{{count}} live session(s)"
     },
     "drafts": {
       "dropped": "Draft of “{{name}}” discarded: the file changed on disk."

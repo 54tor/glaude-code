@@ -1,12 +1,10 @@
 import { lazy, Suspense, useEffect, useReducer, useRef, useState, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
-import { PanelBottom } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "cn"
 import { api, type FsRes } from "@/lib/api"
 import { useCan } from "@/lib/auth"
 import { useLocal } from "@/hooks/useLocal"
-import { Button } from "@/components/ui/button"
 import { Confirm, type Ask } from "@/components/Confirm"
 import { FileTree } from "./FileTree"
 import { Tabs } from "./Tabs"
@@ -14,7 +12,7 @@ import { ConflictBar } from "./ConflictBar"
 import { ConflictDiff } from "./ConflictDiff"
 import { QuickOpen } from "./QuickOpen"
 import { GitChanges } from "../GitChanges"
-import { TerminalPane } from "./TerminalPane"
+import { BottomPane, type BottomView } from "./BottomPane"
 import { useGitMarks } from "./useGitMarks"
 import { isDirty, reduce } from "./ideState"
 import { useTree } from "./useTree"
@@ -37,17 +35,14 @@ export function IdeView({ dir }: { dir: string }) {
   return <Workspace dir={dir} />
 }
 
-// Espace de travail d'un dossier : arborescence, zone centrale, panneau du bas repliable (replié par défaut : le terminal ne s'attache que sur demande).
+// Espace de travail d'un dossier : arborescence, zone centrale, zone terminal du bas (barre toujours visible, jamais de shell : elle s'attache à une session Claude vivante).
 function Workspace({ dir }: { dir: string }) {
   const { t } = useTranslation()
   const can = useCan()
   const [wStr, setW] = useLocal(`gld.ide.${dir}.w`, "260")
-  const [hStr, setH] = useLocal(`gld.ide.${dir}.h`, "160")
-  const [bottomStr, setBottom] = useLocal(`gld.ide.${dir}.bottom`, "0")
-  const bottom = bottomStr === "1"
   const [savedTabs, setSavedTabs] = useLocal(`gld.ide.${dir}.tabs`, "")
   const [restored, setRestored] = useState(false)
-  const [drag, setDrag] = useState<{ w?: number; h?: number }>({})
+  const [drag, setDrag] = useState<{ w?: number }>({})
   const [ide, dispatch] = useReducer(reduce, { tabs: [], active: "" })
   const [diff, setDiff] = useState<{ path: string; original: string } | null>(null)
   const [confirm, setConfirm] = useState<Ask | null>(null)
@@ -59,6 +54,8 @@ function Workspace({ dir }: { dir: string }) {
   const saving = useRef(new Map<string, boolean>()) // chemin → une nouvelle demande attend la fin de celle en cours
   const theme = useResolvedTheme()
   const prefs = useViewPrefs()
+  const [term, setTerm] = useState<BottomView>({ open: false, available: false })
+  const [termFocus, setTermFocus] = useState(0)
   // Poignée de l'éditeur de l'onglet actif, en état : les commandes qui en dépendent se réactivent dès son montage.
   const [editor, setEditor] = useState<EditorHandle | null>(null)
   const tree = useTree(dir)
@@ -77,7 +74,6 @@ function Workspace({ dir }: { dir: string }) {
   const seq = useRef(new Map<string, number>()) // chemin → numéro de la dernière lecture lancée
   const fed = useRef(new Map<string, string>()) // chemin → « mtime:taille » de l'index au moment de l'alimentation
   const w = drag.w ?? clamp(Number(wStr) || 260, 140, 700)
-  const h = drag.h ?? clamp(Number(hStr) || 160, 60, 600)
 
   const tabOf = (p: string) => ide.tabs.find((x) => x.path === p)
   const active = tabOf(ide.active)
@@ -276,10 +272,12 @@ function Workspace({ dir }: { dir: string }) {
     tabs: ide.tabs,
     readOnly: !!active?.readOnly,
     editor,
-    prefs,
-    // ponytail: terminal, création à la racine et focus de session restent inertes jusqu'aux lots de la zone terminal et des barres.
-    terminalAvailable: false,
-    newFile: () => {}, newFolder: () => {}, focusSession: () => {},
+    // La bascule part de l'état réellement affiché, pas de la préférence brute (ouverture d'emblée sans choix).
+    prefs: { ...prefs, showTerminal: term.open },
+    terminalAvailable: term.available,
+    // ponytail: la création à la racine reste inerte jusqu'au lot des barres.
+    newFile: () => {}, newFolder: () => {},
+    focusSession: () => setTermFocus((n) => n + 1),
     save: () => void (active && save(active.path)),
     saveAll: async () => {
       for (const x of ide.tabs) if (isDirty(x) && !x.readOnly) await save(x.path)
@@ -376,21 +374,7 @@ function Workspace({ dir }: { dir: string }) {
           </Suspense>
           {diff && diff.path === ide.active && active && <ConflictDiff path={diff.path} original={diff.original} modified={active.content} theme={theme} onClose={() => setDiff(null)} />}
         </div>
-        {can("exec") && (
-          <div className="flex justify-end border-t px-2 py-0.5">
-            <Button variant="ghost" size="icon-sm" onClick={() => setBottom(bottom ? "0" : "1")} aria-pressed={bottom} aria-label={t(bottom ? "ide.bottom.hide" : "ide.bottom.show")}>
-              <PanelBottom />
-            </Button>
-          </div>
-        )}
-        {bottom && can("exec") && (
-          <>
-            <Handle label={t("ide.resize.bottom")} vertical start={() => h} onMove={(v) => setDrag({ h: clamp(v, 60, 600) })} onEnd={(v) => (setH(String(clamp(v, 60, 600))), setDrag({}))} />
-            <div className="flex shrink-0 flex-col overflow-auto" style={{ height: h }}>
-              <TerminalPane dir={dir} />
-            </div>
-          </>
-        )}
+        <BottomPane dir={dir} prefs={prefs} focusN={termFocus} onView={setTerm} />
       </div>
       <Confirm ask={confirm} onClose={() => setConfirm(null)} />
       <QuickOpen open={quick} files={index.files.map((f) => f.path)} state={index.state} onClose={() => setQuick(false)} onCloseFocus={refocus} onPick={(p) => ((picked.current = p), setQuick(false), open(p))} />

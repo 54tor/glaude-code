@@ -1,57 +1,24 @@
-import { lazy, Suspense, useEffect, useState } from "react"
+import { lazy, Suspense, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { api, type Data } from "@/lib/api"
-import { useCan } from "@/lib/auth"
 import { useLocal } from "@/hooks/useLocal"
+import { useTerminalAvailability, type Session } from "./useTerminalAvailability"
 
 const FullTerminal = lazy(() => import("../FullTerminal"))
 
 // Le serveur ne lance jamais de shell : le terminal s'attache à une session Claude déjà vivante dont le dossier est le projet.
-function Pane({ dir }: { dir: string }) {
+// focusN : demande de focus du sélecteur (ou du conteneur) sans prendre la main sur le terminal.
+export function TerminalContent({ dir, sessions, focusN = 0 }: { dir: string; sessions: Session[]; focusN?: number }) {
   const { t } = useTranslation()
-  const [on, setOn] = useState<boolean | null>(null)
-  const [data, setData] = useState<Data | null>(null)
   const [seen, setSeen] = useState("")
   const [pick, setPick] = useLocal(`gld.ide.${dir}.term`, "")
+  const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    api.termInfo().then(
-      (r) => setOn(r.enabled),
-      () => setOn(false)
-    )
-  }, [])
-  useEffect(() => {
-    if (!on) return
-    let alive = true
-    const load = () =>
-      api.data().then(
-        (d) => alive && setData(d),
-        () => {}
-      )
-    load()
-    const timer = setInterval(load, 10000)
-    return () => {
-      alive = false
-      clearInterval(timer)
-    }
-  }, [on])
-
-  const bare = (p: string) => p.replace(/[/\\]+$/, "")
-  const live = new Set(data?.live ?? [])
-  const sessions = (data?.groups ?? [])
-    .flatMap((g) => g.sessions)
-    .filter((s) => bare(s.cwd) === bare(dir) && live.has(s.id))
-    .sort((a, b) => b.mtime - a.mtime)
+    if (focusN) box.current?.focus()
+  }, [focusN])
   // Collante : le tri par activité change à chaque sondage, la session montée ne doit pas changer avec lui.
   const cur = sessions.find((s) => s.id === pick) ?? sessions.find((s) => s.id === seen) ?? sessions[0]
   const curId = cur?.id
   if (curId && curId !== seen) setSeen(curId)
-  if (on === null) return null
-  if (!on)
-    return (
-      <p className="p-3 text-sm text-muted-foreground">
-        {t("ide.term.disabled")}
-      </p>
-    )
   if (!cur)
     return (
       <p className="p-3 text-sm text-muted-foreground">
@@ -60,7 +27,9 @@ function Pane({ dir }: { dir: string }) {
     )
   return (
     <div
-      className="flex size-full min-h-0 flex-col"
+      ref={box}
+      tabIndex={-1}
+      className="flex size-full min-h-0 flex-col outline-none"
       aria-label={t("ide.term.label")}
     >
       {sessions.length > 1 && (
@@ -85,5 +54,13 @@ function Pane({ dir }: { dir: string }) {
 }
 
 export function TerminalPane({ dir }: { dir: string }) {
-  return useCan()("exec") ? <Pane dir={dir} /> : null
+  const { state, sessions } = useTerminalAvailability(dir)
+  if (state === "loading" || state === "forbidden") return null
+  if (state === "disabled") return <DisabledNote />
+  return <TerminalContent dir={dir} sessions={sessions} />
+}
+
+export function DisabledNote() {
+  const { t } = useTranslation()
+  return <p className="p-3 text-sm text-muted-foreground">{t("ide.term.disabled")}</p>
 }
