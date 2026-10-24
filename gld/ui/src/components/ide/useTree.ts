@@ -19,14 +19,15 @@ export function useTree(dir: string) {
   const open = new Set(parseOpen(raw))
   const [lists, setLists] = useState<Record<string, Listing>>({})
   const started = useRef(new Set<string>())
+  const seq = useRef(new Map<string, number>()) // chemin → dernière lecture lancée : une réponse plus ancienne est ignorée
 
   const load = useCallback(
     (path: string) => {
+      const n = (seq.current.get(path) ?? 0) + 1
+      seq.current.set(path, n)
+      const set = (v: Listing) => seq.current.get(path) === n && setLists((l) => ({ ...l, [path]: v }))
       setLists((l) => (l[path] && typeof l[path] === "object" ? l : { ...l, [path]: "loading" }))
-      api.fsTree(dir, path).then(
-        (r) => setLists((l) => ({ ...l, [path]: r })),
-        () => setLists((l) => ({ ...l, [path]: "failed" }))
-      )
+      api.fsTree(dir, path).then(set, () => set("failed"))
     },
     [dir]
   )
