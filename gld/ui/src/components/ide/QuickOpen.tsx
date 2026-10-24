@@ -6,12 +6,20 @@ import { Input } from "@/components/ui/input"
 import type { IndexState } from "./useIndex"
 import { rank } from "./rank"
 
-type Props = { open: boolean; files: string[]; state: IndexState; onPick: (path: string) => void; onClose: () => void }
+// onCloseFocus : où rendre le focus à la fermeture, à la place de l'élément d'avant (souvent un éditeur masqué depuis).
+type Props = { open: boolean; files: string[]; state: IndexState; onPick: (path: string) => void; onClose: () => void; onCloseFocus?: () => void }
 
-export function QuickOpen({ open, onClose, ...rest }: Props) {
+export function QuickOpen({ open, onClose, onCloseFocus, ...rest }: Props) {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="top-[20%] translate-y-0 sm:max-w-xl">{open && <Body {...rest} />}</DialogContent>
+      <DialogContent
+        className="top-[20%] translate-y-0 sm:max-w-xl"
+        onCloseAutoFocus={(e) => {
+          if (!onCloseFocus) return
+          e.preventDefault()
+          onCloseFocus()
+        }}
+      >{open && <Body {...rest} />}</DialogContent>
     </Dialog>
   )
 }

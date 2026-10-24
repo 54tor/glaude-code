@@ -11,12 +11,19 @@ const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn() }))
 vi.mock("sonner", async (orig) => ({ ...(await orig<typeof import("sonner")>()), toast }))
 
 // Monaco ne tourne pas sous jsdom : l'éditeur simulé garde la valeur telle quelle (un textarea normaliserait les CRLF).
-vi.mock("./CodeEditor", () => ({
-  ...feed,
-  default: ({ path, value, readOnly, onChange, onSave }: { path: string; value: string; readOnly?: boolean; onChange(v: string): void; onSave(): void }) => (
+// focus : demande de focus de l'espace, honorée comme le ferait Monaco.
+vi.mock("./CodeEditor", async () => {
+  const { useEffect, useRef } = await import("react")
+  const Editor = ({ path, value, readOnly, focus, onChange, onSave }: { path: string; value: string; readOnly?: boolean; focus?: number; onChange(v: string): void; onSave(): void }) => {
+    const el = useRef<HTMLInputElement>(null)
+    useEffect(() => {
+      if (focus) el.current?.focus()
+    }, [focus])
+    return (
     <div>
       <pre data-testid={`ed:${path}`}>{JSON.stringify(value)}</pre>
       <input
+        ref={el}
         aria-label={`type:${path}`}
         readOnly={readOnly}
         value=""
@@ -29,8 +36,10 @@ vi.mock("./CodeEditor", () => ({
         }}
       />
     </div>
-  ),
-}))
+    )
+  }
+  return { ...feed, default: Editor }
+})
 vi.mock("./ConflictDiff", () => ({
   ConflictDiff: ({ original, modified }: { original: string; modified: string }) => <div data-testid="diff">{JSON.stringify([original, modified])}</div>,
 }))
@@ -497,12 +506,10 @@ describe("IdeView, évènements disque", () => {
 })
 
 describe("IdeView, ouverture rapide et alimentation TypeScript", () => {
-  it("Ctrl+P dans l'espace ouvre la liste, Entrée ouvre le fichier ; hors de l'espace rien n'est bloqué", async () => {
+  it("Ctrl+P dans l'espace ouvre la liste, Entrée ouvre le fichier", async () => {
     index.mockResolvedValue(res(200, { state: "ready", files: [{ path: "a.txt", size: 1, mtime: 1 }, { path: "src/b.txt", size: 1, mtime: 1 }] }))
     render(<IdeView dir="/p" />)
     await screen.findByText("a.txt", { selector: "[role=treeitem] span" })
-    expect(fireEvent.keyDown(document.body, { key: "p", ctrlKey: true })).toBe(true)
-    expect(screen.queryByRole("combobox")).toBeNull()
     expect(fireEvent.keyDown(screen.getByRole("tree"), { key: "p", ctrlKey: true })).toBe(false)
     const input = await screen.findByRole("combobox")
     await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(2))
@@ -667,5 +674,85 @@ describe("IdeView : onglets restaurés au rechargement", () => {
     await waitFor(() => expect(stored()).toEqual({ paths: ["a.txt"], active: "a.txt" }))
     expect(Object.values(localStorage).join("")).not.toContain("SECRET")
     expect(Object.values(localStorage).join("")).not.toContain("l1")
+  })
+})
+
+describe("IdeView : Ctrl+P écouté sur le document, focus rendu à l'espace", () => {
+  // fireEvent renvoie false quand le comportement par défaut (impression) a été empêché.
+  const ctrlP = (el: Element = document.body) => fireEvent.keyDown(el, { key: "p", ctrlKey: true })
+  const root = () => screen.getByRole("tree").closest<HTMLElement>('[tabindex="-1"]')!
+  beforeEach(() => {
+    index.mockResolvedValue(res(200, { state: "ready", files: [{ path: "a.txt", size: 1, mtime: 1 }, { path: "b.txt", size: 1, mtime: 1 }] }))
+  })
+
+  it("sans focus dans l'espace, Ctrl+P ouvre ; choisir rend le focus à l'éditeur ; les Ctrl+P suivants restent pris", async () => {
+    render(<IdeView dir="/p" />)
+    await screen.findByRole("tree")
+    expect(ctrlP()).toBe(false)
+    const box = await screen.findByRole("combobox")
+    fireEvent.change(box, { target: { value: "b.txt" } })
+    fireEvent.keyDown(box, { key: "Enter" })
+    const ed = await screen.findByLabelText("type:b.txt")
+    await waitFor(() => expect(document.activeElement).toBe(ed))
+    expect(root().contains(document.activeElement)).toBe(true)
+    expect(ctrlP(ed)).toBe(false)
+    fireEvent.keyDown(await screen.findByRole("combobox"), { key: "Escape" })
+    await waitFor(() => expect(screen.queryByRole("combobox")).toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(ed))
+    expect(ctrlP()).toBe(false)
+    expect(await screen.findByRole("combobox")).toBeTruthy()
+  })
+
+  it("Échap sans onglet : focus sur la racine de l'espace", async () => {
+    render(<IdeView dir="/p" />)
+    await screen.findByRole("tree")
+    expect(ctrlP()).toBe(false)
+    fireEvent.keyDown(await screen.findByRole("combobox"), { key: "Escape" })
+    await waitFor(() => expect(screen.queryByRole("combobox")).toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(root()))
+    expect(ctrlP(root())).toBe(false)
+  })
+
+  it("Ctrl+P fenêtre ouverte : elle reste ouverte et la saisie reprend le focus", async () => {
+    render(<IdeView dir="/p" />)
+    await screen.findByRole("tree")
+    ctrlP()
+    const box = await screen.findByRole("combobox")
+    box.blur()
+    expect(ctrlP()).toBe(false)
+    expect(screen.getByRole("combobox")).toBe(box)
+    expect(document.activeElement).toBe(box)
+  })
+
+  it("démonté : Ctrl+P n'est plus pris", async () => {
+    const { unmount } = render(<IdeView dir="/p" />)
+    await screen.findByRole("tree")
+    unmount()
+    expect(ctrlP()).toBe(true)
+  })
+})
+
+describe("IdeView : restauration silencieuse", () => {
+  const KEY = "gld.ide./p.tabs"
+  it("aucun message pour un échec quelconque (403, 500, réseau) ; seuls les onglets lisibles reviennent", async () => {
+    file.mockImplementation(async (_d, p) => {
+      if (p === "lien.txt") return res(403, { error: "lien" })
+      if (p === "panne.txt") return res(500, { error: "panne" })
+      if (p === "reseau.txt") throw new Error("réseau")
+      return res(200, { content: "x", etag: "e1", size: 1, mtime: 1 })
+    })
+    localStorage.setItem(KEY, JSON.stringify({ paths: ["lien.txt", "panne.txt", "reseau.txt", "c.txt"], active: "lien.txt" }))
+    render(<IdeView dir="/p" />)
+    await waitFor(() => expect(screen.queryAllByRole("tab").map((x) => x.getAttribute("data-path"))).toEqual(["c.txt"]))
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(toast).not.toHaveBeenCalled()
+  })
+
+  it("sans fs_read : aucune requête de restauration", async () => {
+    setAuth({ state: "ok", home: "h", rights: { h: [] } })
+    localStorage.setItem(KEY, JSON.stringify({ paths: ["a.txt"], active: "a.txt" }))
+    render(<IdeView dir="/p" />)
+    await act(async () => {})
+    expect(file).not.toHaveBeenCalled()
   })
 })

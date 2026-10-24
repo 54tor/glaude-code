@@ -22,7 +22,8 @@ export function clearTsLibs() {
 }
 
 // Un éditeur et un modèle par onglet : le modèle naît avec l'onglet et disparaît avec lui. Le texte reçu sert tel quel (CRLF compris).
-export default function CodeEditor({ path, value, readOnly, theme, onChange, onSave }: { path: string; value: string; readOnly?: boolean; theme: Theme; onChange(v: string): void; onSave(): void }) {
+// focus : compteur de demandes de focus venues de l'espace ; 0 n'en demande aucune.
+export default function CodeEditor({ path, value, readOnly, theme, focus, onChange, onSave }: { path: string; value: string; readOnly?: boolean; theme: Theme; focus?: number; onChange(v: string): void; onSave(): void }) {
   const box = useRef<HTMLDivElement>(null)
   const model = useRef<monaco.editor.ITextModel | null>(null)
   const ed = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
@@ -58,6 +59,9 @@ export default function CodeEditor({ path, value, readOnly, theme, onChange, onS
   useEffect(() => {
     if (model.current && model.current.getValue() !== value) model.current.setValue(value)
   }, [value])
+  useEffect(() => {
+    if (focus) ed.current?.focus()
+  }, [focus])
   useEffect(() => {
     ed.current?.updateOptions({ readOnly })
   }, [readOnly])
