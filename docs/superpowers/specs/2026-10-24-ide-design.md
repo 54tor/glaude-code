@@ -97,7 +97,7 @@ Le terminal garde `/term-open` et `/term-ws` (droit `exec`).
 
 ### Nouveaux droits (mon choix)
 
-`fs_read` et `fs_write`, ajoutés à `allRights`. Ils sont **distincts** de `mem_*` et de `exec`, car lire le code d'un projet n'est pas lire sa mémoire, et écrire un fichier est à égalité de gravité avec `config_write` (le code écrit sera exécuté par Claude ou par l'opérateur). `fs_write` implique `fs_read`. L'espace de travail complet exige en plus `exec` pour le terminal ; sans `exec` l'onglet terminal n'apparaît pas. Mode mono-utilisateur : tout est ouvert, comme le reste de gld.
+`fs_read` et `fs_write`, ajoutés à `allRights`. Ils sont **distincts** de `mem_*` et de `exec`, car lire le code d'un projet n'est pas lire sa mémoire, et écrire un fichier est à égalité de gravité avec `config_write` (le code écrit sera exécuté par Claude ou par l'opérateur). `fs_write` **n'implique pas** `fs_read` (les routes de lecture n'exigent que `fs_read`) : les accorder ensemble ; un compte `fs_write` seul écrit par l'API sans pouvoir ouvrir l'espace. L'espace de travail complet exige en plus `exec` pour le terminal ; sans `exec` l'onglet terminal n'apparaît pas. Mode mono-utilisateur : tout est ouvert, comme le reste de gld.
 
 ### Indexation
 
@@ -138,8 +138,8 @@ Surveillance côté Go par `fsnotify` (bibliothèque reconnue), limitée aux dos
 - Tout chemin est résolu **dans** `os.Root` ; une erreur d'évasion donne `403` sans préciser la raison.
 - **Aucune liste de refus** (décision de l'opérateur) : `.env`, clés et `.git/` sont ouvrables et modifiables par quiconque a `fs_read`/`fs_write`. C'est pourquoi ces droits sont séparés et ne s'accordent pas par défaut. Les limites sont structurelles : pas de parcours récursif (aucun `os.Walk`), un dossier par requête ; liens symboliques jamais suivis (ni listés comme dossiers, ni ouverts, ni écrasés : `Lstat`, ouverture refusée sur `ModeSymlink`).
 - Écriture atomique et conservation du mode du fichier ; refus d'écrire dans un lien symbolique, y compris vers l'intérieur de la racine (plus strict qu'`os.Root`, qui ne bloque que la sortie).
-- Taille de requête plafonnée (2 Mo + marge), limitation de débit sur `/fs-save` réutilisant l'infrastructure de `auth_throttle.go`.
-- Journal d'audit des écritures (`fs_write`, chemin, utilisateur, octets, jamais le contenu) dans la table d'événements de `/admin/events`.
+- Corps de `/fs-save` plafonné à 6 × 2 Mio + 64 Kio (pire cas d'échappement JSON d'un contenu de 2 Mio). **Pas de limitation de débit** : `auth_throttle.go` freine les échecs d'authentification (clé IP/compte, verrouillage), pas des écritures autorisées ; l'accès exige déjà `fs_write`, droit à égalité avec le compte système (écart assumé à la version initiale de cette spec).
+- Journal d'audit des écritures (`fs_write`, chemin, utilisateur, octets, jamais le contenu) dans la table d'événements de `/admin/events`, pour tous les homes : un gld enfant renvoie la ligne à la passerelle dans un en-tête interne de réponse, retiré avant le client.
 - CSP et en-têtes de gld inchangés ; l'éditeur ne charge aucun script externe, workers inclus (même origine).
 
 ### Tests

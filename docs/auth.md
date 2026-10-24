@@ -76,8 +76,8 @@ Neuf droits, indépendants, par couple (compte, home). Un droit absent vaut refu
 | `sessions_read` | transcriptions et état des sessions, recherche (`/search`), `/info` et `/config-perm-suggest` (qui renvoient des extraits de prompts ou de transcriptions) |
 | `config_write` | réglages et skills (hooks, serveurs MCP, permissions), snippets (écriture, suppression, import), édition brute, restauration d'une sauvegarde, restauration d'un snippet ou d'un skill depuis la corbeille |
 | `exec` | chat, nouvelle session, terminal web, envoi de touches, confiance d'un dossier, push git, fermeture, renommage, suppression et corbeille de **sessions**, et `/ls`, `/dirs` (parcours du disque) |
-| `fs_read` | lire l'arborescence et les fichiers d'un projet, y compris `.env` et clés. La racine doit être un dossier de travail connu de gld ; `$HOME`, ses ancêtres, la config Claude et le dossier d'auth de gld sont refusés (voir [ide.md](ide.md)) |
-| `fs_write` | écrire, créer, renommer et supprimer (vers `.gld-trash/`) des fichiers d'un projet. L'espace de travail complet exige en plus `exec` pour le terminal |
+| `fs_read` | lire l'arborescence et les fichiers d'un projet, y compris `.env` et clés. La racine doit être un dossier de travail connu de gld ; `$HOME`, ses ancêtres, la config Claude de chaque home et le dossier d'auth de gld sont refusés (voir [ide.md](ide.md)) |
+| `fs_write` | écrire, créer, renommer et supprimer (vers `.gld-trash/`) des fichiers d'un projet. **N'implique pas** `fs_read` : accorder les deux ensemble. L'espace de travail complet exige en plus `exec` pour le terminal |
 
 Notes :
 

@@ -11,7 +11,7 @@ Tant que l'espace est affiché, `Ctrl+P` (`Cmd+P`) ouvre l'ouverture rapide où 
 | Droit | Ouvre |
 |---|---|
 | `fs_read` | arborescence, lecture des fichiers, index, flux d'évènements, liste de la corbeille |
-| `fs_write` | enregistrer, créer, renommer, supprimer (vers la corbeille), restaurer et purger la corbeille. Implique `fs_read` |
+| `fs_write` | enregistrer, créer, renommer, supprimer (vers la corbeille), restaurer et purger la corbeille. **N'implique pas** `fs_read` : accorder les deux ensemble (sans `fs_read`, l'espace ne s'ouvre pas, l'écriture par l'API reste possible) |
 | `exec` | le terminal de l'espace de travail (sans `exec`, la zone terminal n'apparaît pas) |
 
 En mode multi-utilisateur, **aucun de ces droits n'est accordé par défaut**. Les accorder demande une réauthentification, et `fs_write` une confirmation explicite. En mode ouvert (sans compte), tout est ouvert, comme le reste de gld. Voir [auth.md](auth.md).
@@ -22,11 +22,11 @@ C'est un choix assumé : **il n'y a pas de liste de fichiers interdits**. Quicon
 
 Les garde-fous sont structurels :
 
-- **Racines admises** : seulement un dossier déjà connu de gld (dossier de sessions, dépôt découvert dessous, dossier ajouté à la main ou dossier d'un projet), donné en chemin absolu propre. Sont **refusés comme racine** : `$HOME` et tout ancêtre de `$HOME`, le dossier de configuration de Claude (`CLAUDE_CONFIG_DIR` ou `~/.claude`) et le dossier d'authentification de gld (`GLD_AUTH_DIR`, sinon `~/.config/gld`), ainsi que tout dossier situé dedans ou qui les contient. Sans cette règle, un compte `fs_read` lirait `auth.db`, `auth.key` ou les identifiants de Claude.
+- **Racines admises** : seulement un dossier déjà connu de gld (dossier de sessions, dépôt découvert dessous, dossier ajouté à la main ou dossier d'un projet), donné en chemin absolu propre. Sont **refusés comme racine** : `$HOME` et tout ancêtre de `$HOME`, le dossier de configuration de Claude (`CLAUDE_CONFIG_DIR` ou `~/.claude`) **et celui de chaque home** déclaré (un home enfant refuse aussi la config du processus principal, transmise par `GLD_WEB_MAIN_CONFIG`), le dossier d'authentification de gld (`GLD_AUTH_DIR`, sinon `~/.config/gld`), ainsi que tout dossier situé dedans ou qui les contient (comparaison par segments, chemins résolus compris : `~/.claudex` reste admis). Si `$HOME` est introuvable, tout est refusé. Sans cette règle, un compte `fs_read` lirait `auth.db`, `auth.key` ou les identifiants de Claude d'un autre home.
 - Chaque chemin est résolu dans un `os.Root` ouvert sur la racine : `..`, chemin absolu, `\` et NUL sont refusés.
 - **Aucun lien symbolique n'est suivi**, même vers l'intérieur de la racine : listé comme tel dans l'arbre, jamais ouvert, jamais écrasé.
 - Aucun parcours récursif déclenché par une requête : l'arbre se charge un dossier à la fois. La seule descente récursive est l'indexeur, bornée (voir plus bas).
-- Le contenu des fichiers n'est jamais journalisé. Avec les comptes activés, chaque écriture réussie (`save`, `create`, `new`, `rename`, `rm`, `restore`, `purge`) ajoute un événement `ide_write` au journal d'`/admin/events` : `<op> <dossier>:<chemin> [octets]` (nom du dossier racine seul, jamais le chemin disque ; octets pour `save`/`create`), plafonné à 300 octets. Un refus ou un conflit n'y figure pas ; un jeton porteur est écrit sans compte. Sans comptes, aucun journal.
+- Le contenu des fichiers n'est jamais journalisé. Avec les comptes activés, chaque écriture réussie (`save`, `create`, `new`, `rename`, `rm`, `restore`, `purge`) ajoute un événement `ide_write` au journal d'`/admin/events` : `<op> <dossier>:<chemin> [octets]` (nom du dossier racine seul, jamais le chemin disque ; octets pour `save`/`create`), plafonné à 300 octets. Un refus ou un conflit n'y figure pas ; un jeton porteur est écrit sans compte. Pour un home autre que le principal, le gld enfant renvoie la ligne déjà nettoyée à la passerelle dans un en-tête interne de réponse, que la passerelle écrit pour l'utilisateur de la requête puis retire avant de répondre ; un client ne peut ni la voir ni la forger. Sans comptes, aucun journal.
 - La CSP de gld est inchangée : Monaco et ses workers sont servis par gld (`/assets/`), **jamais par un CDN**.
 
 ## Routes
@@ -46,7 +46,7 @@ Toutes prennent `dir`, le dossier racine (chemin absolu). `path` est relatif à 
 | `POST /fs-trash-purge` | `fs_write` | `{dir, id}` | `{ok}` : suppression définitive de cette entrée |
 | `GET /fs-index` | `fs_read` | `dir` | `{state, files: [{path, size, mtime}]}` ; `state` = `building`, `ready` ou `partial` |
 | `POST /fs-files` | `fs_read` | `{dir, paths}` | `{files: [{path, content}]}` : contenu de fichiers **de l'index** seulement, **300 chemins** par requête, **100 Kio** par fichier (les autres sont omis) |
-| `GET /fs-watch` | `fs_read` | `dir`, `paths` répété (un par dossier observé, vide = racine) | flux SSE (voir Observation) |
+| `GET /fs-watch` | `fs_read` | `dir`, `paths` répété (un par dossier observé ; `paths=` avec une valeur vide = racine ; **aucun** `paths` = rien n'est observé) | flux SSE (voir Observation) |
 
 Erreurs : `404` dossier inconnu ou refusé comme racine, élément absent ; `400` chemin invalide ; `403` lien symbolique ; `409` conflit ou élément existant ; `413` trop gros ; `415` binaire. La raison exacte d'un refus de confinement n'est pas donnée.
 
@@ -58,7 +58,7 @@ L'index sert à l'ouverture rapide (`Ctrl+P`) et à donner à Monaco les sources
 
 - **Ignorés** : tout élément dont le nom commence par `.` (`.git`, `.env`, `.gld-trash`…), `vendor`, `node_modules`, et les liens symboliques. Ils restent visibles et ouvrables dans l'arbre ; ils sont seulement hors index.
 - **Bornes** : **20 000 entrées, profondeur 12, 5 s**. Au-delà, l'index est marqué `partial` et l'interface le signale.
-- Une seule construction à la fois par dossier ; jamais déclenchée par `/fs-tree` ni `/fs-file`.
+- Une construction par dossier ; après un resync, la reconstruction peut chevaucher l'ancienne, dont le résultat périmé est écarté. Jamais déclenchée par `/fs-tree` ni `/fs-file`.
 - **Alimentation de Monaco** (côté navigateur) : fichiers `.ts .tsx .js .jsx .json` de l'index, **300 fichiers, 100 Kio chacun, 5 Mio au total** au plus, les plus proches du fichier ouvert d'abord.
 
 ## Observation du disque
@@ -68,7 +68,8 @@ L'index sert à l'ouverture rapide (`Ctrl+P`) et à donner à Monaco les sources
 - Au plus **200 dossiers** par abonnement (`paths` répété). Le navigateur garde l'adresse sous **~6000 octets** : au-delà, il observe moins de dossiers.
 - Chaque évènement est `data: {"path": "...", "type": "create|write|remove|rename"}`, jamais le contenu.
 - `{"path": "", "type": "resync"}` signifie que des évènements ont pu être perdus (tampon plein, débordement d'inotify, passage au sondage) : le client relit tout ce qu'il affiche (dossiers dépliés, onglets propres), et le prochain `/fs-index` reconstruit l'index.
-- Le flux est coupé à la révocation des droits ou de la session.
+- Le flux est coupé à la révocation des droits ou de la session, et se termine aussitôt à l'arrêt du serveur.
+- Un dossier illisible (droits) est seulement sauté ; seules les limites d'inotify (`ENOSPC`, `EMFILE`, `ENFILE`) font passer au sondage.
 
 ## Corbeille
 
@@ -80,6 +81,14 @@ Supprimer déplace l'élément dans `<racine>/.gld-trash/<id>/item`, avec son ch
 - **Fins de ligne** : un fichier en `CRLF` ou en `LF` s'édite et s'enregistre avec ses fins de ligne. Un fichier qui **mélange** les fins de ligne s'ouvre en **lecture seule** avec un message, pour ne pas le réécrire en entier.
 - Fichiers de plus de 2 Mio ou binaires : ouverts en lecture seule avec un message, sans contenu.
 - Thème clair/sombre et polices de gld.
+
+## Limites connues
+
+- Pas de marqueurs git pour une racine connue seulement par les dossiers ajoutés à la main ou ceux d'un projet (`/git-changes` n'accepte que les dépôts des sessions).
+- Une instance inotify par espace de travail vivant, gardée jusqu'à 2 minutes après le dernier usage ; la limite par défaut du noyau est de 128 instances par utilisateur (`fs.inotify.max_user_instances`).
+- Les changements faits pendant la toute première construction de l'index n'y figurent qu'au prochain resync ou à la prochaine reconstruction.
+- Le flux d'observation s'arrête sans bruit si le serveur répond autre chose que `200` (session expirée en mode multi-utilisateur), jusqu'au rechargement de la page.
+- Le journal `ide_write` couvre tous les homes (relais par la passerelle pour les homes enfants) ; il n'est pas soumis au limiteur des événements d'authentification, seulement à la purge à 90 jours.
 
 ## Terminal
 
