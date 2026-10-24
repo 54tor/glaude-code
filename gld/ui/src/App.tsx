@@ -133,13 +133,15 @@ function Shell() {
   }, [data])
 
   const home = data?.home ?? ""
+  // La barre latérale ne suit pas la recherche : elle montre toujours toutes les sessions, la recherche ne filtre que la vue affichée.
+  const base = useMemo(() => buildView(data, "", tags, null), [data, tags])
   const tree = useMemo(() => buildTree(view.entries, home), [view.entries, home])
   // « Sessions locales » : seulement les dossiers qui ne sont dans aucun projet (ils ont leur place sous « Projets »).
   const projects = data?.projects
   const localTree = useMemo(() => {
     const inProject = new Set(projects?.flatMap((p) => p.dirs))
-    return inProject.size ? buildTree(view.entries.filter((e) => !inProject.has(e.g.project)), home) : tree
-  }, [projects, view.entries, home, tree])
+    return buildTree(base.entries.filter((e) => !inProject.has(e.g.project)), home)
+  }, [projects, base.entries, home])
   const live = useMemo(() => new Set(data?.live), [data])
   const waiting = useMemo(() => new Set(data?.waiting), [data])
   const [carousel, setCarousel] = useState(false) // mode carrousel : on parcourt les sessions qui attendent une réponse
@@ -181,7 +183,7 @@ function Shell() {
             .filter((r): r is Row => !!r)
             .sort(byDate)
         : route.kind === "dir"
-          ? (node?.ss ?? []).filter((s) => !(hideGrouped && grouped.has(s.id))).map((s) => ({ s, g: node!.g! }))
+          ? (node?.ss ?? []).filter((s) => !(hideGrouped && !qt && grouped.has(s.id))).map((s) => ({ s, g: node!.g! }))
           : route.kind === "all"
             ? view.rows
             : route.kind === "active"
@@ -340,7 +342,7 @@ function Shell() {
           searching={searching}
           route={route}
           go={(r) => (setNavOpen(false), go(r))}
-          counts={{ recent: recent.length, all: view.rows.length, active: active.length }}
+          counts={{ recent: base.rows.filter((r) => now - r.s.mtime < WEEK).length, all: base.rows.length, active: base.rows.filter((r) => live.has(r.s.id) || now - r.s.mtime < HOT).length }}
           reload={reload}
           favRows={favRows}
           favGroups={favGroups}

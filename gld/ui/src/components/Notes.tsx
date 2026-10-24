@@ -6,6 +6,7 @@ import { api } from "@/lib/api"
 import { useOpen } from "@/hooks/useOpen"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useActions, type Row } from "./actions"
 
@@ -111,14 +112,14 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
         <div className="space-y-2 border-t p-3">
           {filled.length > 1 && (
             <label className="flex w-fit cursor-pointer items-center gap-1.5 px-2 text-xs text-muted-foreground">
-              <input type="checkbox" checked={allPicked} onChange={() => setPicked(allPicked ? new Set() : new Set(filled))} className="size-3.5" />
+              <Checkbox checked={allPicked} onCheckedChange={() => setPicked(allPicked ? new Set() : new Set(filled))} />
               {tr("conversation.notes.selectAll")}
             </label>
           )}
           <ul className="space-y-1.5">
             {items.map((it, i) => (
               <li key={i} className="flex items-start gap-1.5 rounded-lg border bg-background px-2 py-1">
-                <input type="checkbox" checked={picked.has(i)} onChange={() => togglePick(i)} aria-label={tr("conversation.notes.pick")} className="mt-2.5 size-3.5 shrink-0" />
+                <Checkbox checked={picked.has(i)} onCheckedChange={() => togglePick(i)} aria-label={tr("conversation.notes.pick")} className="mt-2.5 shrink-0" />
                 <textarea
                   ref={(el) => void (fields.current[i] = el)}
                   value={it}
