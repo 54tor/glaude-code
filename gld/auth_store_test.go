@@ -137,7 +137,9 @@ func TestUpgradeFromSchema5(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	oldSig := func(id int64, name string) []byte { return rowSig(key, "users", strconv.FormatInt(id, 10), name, "h", "0", "0") }
+	oldSig := func(id int64, name string) []byte {
+		return rowSig(key, "users", strconv.FormatInt(id, 10), name, "h", "0", "0")
+	}
 	tr := &totpRow{uid: 1, nonce: []byte("n"), enc: []byte("e"), confirmed: sql.NullInt64{Int64: 5, Valid: true}}
 	s0 := &authStore{key: key}
 	for _, q := range []struct {
