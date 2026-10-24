@@ -45,6 +45,7 @@ func ideResolve(r *http.Request, allowRoot bool) (*os.Root, string, fs.FileInfo,
 
 func routesIDE(mux *http.ServeMux) {
 	routesIDEWrite(mux)
+	routesIDEIndex(mux)
 	mux.HandleFunc("GET /fs-tree", func(w http.ResponseWriter, r *http.Request) {
 		root, rel, fi, err := ideResolve(r, true)
 		if err != nil {
