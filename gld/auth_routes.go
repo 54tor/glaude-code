@@ -114,6 +114,7 @@ func routesAuth(mux *http.ServeMux, s *authStore, th *throttle) *authAPI {
 	mux.HandleFunc("POST /auth/password", a.password)
 	mux.HandleFunc("GET /auth/sessions", a.sessions)
 	mux.HandleFunc("POST /auth/sessions/revoke", a.sessionRevoke)
+	mux.HandleFunc("POST /auth/sessions/revoke-others", a.sessionRevokeOthers)
 	return a
 }
 
@@ -915,6 +916,21 @@ func (a *authAPI) sessions(w http.ResponseWriter, r *http.Request) {
 		out = append(out, map[string]any{"id": id, "created": x.created, "seen": x.seen, "ip": x.ip, "ua": x.ua, "mfa": x.mfa, "current": id == p.SessionID})
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "sessions": out})
+}
+
+// sessionRevokeOthers : nettoyage à la demande des autres sessions ouvertes du compte, la courante reste.
+func (a *authAPI) sessionRevokeOthers(w http.ResponseWriter, r *http.Request) {
+	p := a.need(w, r, true)
+	var req reauthReq
+	if p == nil || !decodeAuth(w, r, &req) || !a.reauth(w, r, p, req) {
+		return
+	}
+	if err := a.s.RevokeOthers(p.User.ID, p.SessionID); err != nil {
+		authInternal(w, err)
+		return
+	}
+	a.log(p.User.ID, p.User.Name, clientIP(r), "session_revoke", "others")
+	writeJSON(w, 200, map[string]any{"ok": true})
 }
 
 func (a *authAPI) sessionRevoke(w http.ResponseWriter, r *http.Request) {

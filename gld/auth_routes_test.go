@@ -547,6 +547,22 @@ func TestSessionsListRevoke(t *testing.T) {
 	if _, err := g.s.Session(bc); err != nil {
 		t.Fatal("session d'autrui révoquée")
 	}
+	thirdC, _ := fullSession(t, g.s, g.uid)
+	if w := g.do("POST", "/auth/sessions/revoke-others", c, csrf, map[string]string{"password": testPw}); w.Code != 401 {
+		t.Fatalf("nettoyage sans facteur : %d", w.Code)
+	}
+	if w := g.do("POST", "/auth/sessions/revoke-others", c, csrf, map[string]string{"password": testPw, "code": g.code(secret)}); w.Code != 200 {
+		t.Fatalf("nettoyage : %d %s", w.Code, w.Body)
+	}
+	if _, err := g.s.Session(c); err != nil {
+		t.Fatal("session courante révoquée par le nettoyage")
+	}
+	if _, err := g.s.Session(thirdC); err == nil {
+		t.Fatal("autre session de l'utilisateur survivante")
+	}
+	if _, err := g.s.Session(bc); err != nil {
+		t.Fatal("le nettoyage a touché la session d'autrui")
+	}
 }
 
 func TestRecoveryConcurrentSerialised(t *testing.T) {

@@ -35,7 +35,7 @@ var routeRights = map[string]Right{
 	"GET /auth/me": rightPublic, "POST /auth/totp/begin": rightPublic, "POST /auth/totp/confirm": rightPublic,
 	"POST /auth/webauthn/register/begin": rightPublic, "POST /auth/webauthn/register/finish": rightPublic,
 	"POST /auth/factor/remove": rightPublic, "POST /auth/recovery/regenerate": rightPublic, "POST /auth/password": rightPublic,
-	"GET /auth/sessions": rightPublic, "POST /auth/sessions/revoke": rightPublic,
+	"GET /auth/sessions": rightPublic, "POST /auth/sessions/revoke": rightPublic, "POST /auth/sessions/revoke-others": rightPublic,
 
 	// Administration des comptes et des droits.
 	"GET /admin/users": rightAdmin, "POST /admin/users": rightAdmin, "POST /admin/users/disable": rightAdmin,

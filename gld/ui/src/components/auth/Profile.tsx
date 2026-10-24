@@ -58,7 +58,7 @@ export function UserMenu() {
 }
 
 type Sess = { id: string; created: number; seen: number; ip: string; ua: string; mfa: boolean; current: boolean }
-type Pending = { kind: "rmTotp" | "rmKey" | "regen" | "password" | "revoke"; id?: string; key?: number }
+type Pending = { kind: "rmTotp" | "rmKey" | "regen" | "password" | "revoke" | "revokeOthers"; id?: string; key?: number }
 
 export function ProfileDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useTranslation()
@@ -105,7 +105,9 @@ export function Profile() {
           ? await authCall<{ recovery: string[] }>("/auth/recovery/regenerate", r)
           : p.kind === "password"
             ? await authCall("/auth/password", { ...r, new: pw1 })
-            : await authCall("/auth/sessions/revoke", { ...r, id: p.id })
+            : p.kind === "revokeOthers"
+              ? await authCall("/auth/sessions/revoke-others", r)
+              : await authCall("/auth/sessions/revoke", { ...r, id: p.id })
     if (!res.ok) return res
     close()
     const rec = (res.body as { recovery?: string[] }).recovery
@@ -117,7 +119,7 @@ export function Profile() {
     }
     toast.success(t("auth.profile.done"))
     await boot()
-    if (p.kind === "revoke") await loadSessions()
+    if (p.kind === "revoke" || p.kind === "revokeOthers") await loadSessions()
     return res
   }
 
@@ -127,6 +129,7 @@ export function Profile() {
     regen: t("auth.profile.regenerate"),
     password: t("auth.profile.changePassword"),
     revoke: t("auth.profile.revoke"),
+    revokeOthers: t("auth.profile.revokeOthers"),
   }
   const pwMismatch = !!pw2 && pw1 !== pw2
 
@@ -232,6 +235,11 @@ export function Profile() {
               </li>
             ))}
           </ul>
+        )}
+        {sessions && sessions.length > 1 && (
+          <Button size="sm" variant="outline" disabled={!!pending} onClick={() => setPending({ kind: "revokeOthers" })}>
+            {t("auth.profile.revokeOthers")}
+          </Button>
         )}
       </section>
 
