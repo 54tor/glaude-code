@@ -93,9 +93,10 @@ pour ouvrir un fichier par son nom, et un bandeau qui demande quoi faire quand l
 de l'éditeur, une barre d'outils de l'arborescence (filtre, corbeille avec restauration et purge) et une barre d'état
 (curseur, fins de ligne, branche, état de la surveillance) donnent accès à tout sans connaître les raccourcis.
 Supprimer envoie dans une corbeille `.gld-trash/` ignorée par git. gld ne propose volontairement aucun shell : la zone
-terminal, toujours visible, s'attache en lecture seule à une session Claude vivante du dossier (`GLD_WEB_TERMINAL=1`).
+terminal, toujours visible, s'attache en lecture seule à une session Claude vivante du dossier (`GLD_WEB_TERMINAL=1`),
+seulement après que vous l'avez ouverte une première fois.
 
-En multi-utilisateur, il faut les droits `fs_read` (lire) et `fs_write` (écrire), plus `exec` pour le terminal ; aucun
+En multi-utilisateur, il faut les droits `fs_read` (lire) et `fs_write` (écrire), plus `exec` et `sessions_read` pour le terminal ; aucun
 n'est donné par défaut. Il n'y a pas de liste de fichiers interdits : `fs_read` lit aussi `.env` et les clés. Routes,
 limites et sécurité : [docs/ide.md](docs/ide.md).
 
