@@ -308,6 +308,7 @@ func handler() http.Handler {
 	routesNotes(mux)
 	routesKeepWarm(mux)
 	routesSkills(mux)
+	routesIDE(mux)
 	routesSlash(mux)
 	routesImages(mux)
 	// Conversation dans le navigateur (chat.go).
