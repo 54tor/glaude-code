@@ -150,7 +150,7 @@ func cliUser(ctx context.Context, args []string, out io.Writer) error {
 		err = s.ResetMFA(u.ID)
 	case "grant":
 		for _, r := range rights {
-			if r == RightExec || r == RightConfigWrite {
+			if r == RightExec || r == RightConfigWrite || r == RightFsWrite {
 				if err = confirmDangerous(out, f.bools["--yes"]); err != nil {
 					return err
 				}
