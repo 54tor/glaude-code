@@ -4,6 +4,7 @@ import { resolveFront, setLang } from "@/i18n"
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useLocation, useSearchParams } from "wouter"
 import { Cog } from "lucide-react"
+import { SessionSearch } from "@/components/SessionSearch"
 import { Button } from "@/components/ui/button"
 import { type Group, type VGroup } from "@/lib/api"
 import { body } from "@/lib/commands"
@@ -107,14 +108,24 @@ function Shell() {
       { replace: true }
     )
   // Changer de vue garde la recherche en cours.
-  const go = (r: Route) => nav(href(r) + (q ? `?q=${encodeURIComponent(q)}` : ""))
+  const adv = params.get("qa") === "1" // recherche avancée : aussi dans le contenu des conversations
+  const setAdv = (v: boolean) =>
+    setParams(
+      (p) => {
+        if (v) p.set("qa", "1")
+        else p.delete("qa")
+        return p
+      },
+      { replace: true }
+    )
+  const go = (r: Route) => nav(href(r) + (q ? `?q=${encodeURIComponent(q)}${adv ? "&qa=1" : ""}` : ""))
 
   const qt = q.trim()
-  const hitMap = useSearchHits(qt)
-  const searching = qt.length >= 2 && !hitMap && route.kind !== "snippets" && route.kind !== "memory" && route.kind !== "tabs" && route.kind !== "config" && route.kind !== "skills"
+  const hitMap = useSearchHits(adv ? qt : "")
+  const searching = adv && qt.length >= 2 && !hitMap && route.kind !== "snippets" && route.kind !== "memory" && route.kind !== "tabs" && route.kind !== "config" && route.kind !== "skills"
 
   const tags = useMemo(() => data?.tags ?? {}, [data])
-  const view = useMemo(() => buildView(data, qt, tags, hitMap), [data, qt, tags, hitMap])
+  const view = useMemo(() => buildView(data, qt, tags, hitMap, adv), [data, qt, tags, hitMap, adv])
 
   // Toutes les sessions, même filtrées : le lecteur reste ouvert quand la recherche change.
   const everyId = useMemo(() => {
@@ -373,6 +384,9 @@ function Shell() {
             groupActs={groupActs}
             split={route.kind === "skills" || route.kind === "memory" || route.kind === "snippets"}
             reload={reload}
+            searchBox={
+              ["recent", "all", "active", "project", "group", "dir"].includes(route.kind) ? <SessionSearch q={q} setQ={setQ} adv={adv} setAdv={setAdv} searching={searching} /> : undefined
+            }
           />
 
           <RouteErrorBoundary key={route.kind}>

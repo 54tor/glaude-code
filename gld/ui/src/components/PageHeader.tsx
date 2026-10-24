@@ -34,6 +34,7 @@ export function PageHeader({
   groupActs,
   split,
   reload,
+  searchBox,
 }: {
   onMenu: () => void // mobile : ouvre le menu
   title: string
@@ -51,6 +52,7 @@ export function PageHeader({
   actions: Actions
   groupActs: GroupActions
   reload: () => Promise<void>
+  searchBox?: React.ReactNode // champ de recherche de la vue
   split?: boolean // vue en deux colonnes pleine largeur : l'en-tête suit leur bord gauche plutôt que le conteneur centré
 }) {
   const { t } = useTranslation()
@@ -70,9 +72,10 @@ export function PageHeader({
             <h2 className="truncate text-xl font-semibold tracking-tight">{title}</h2>
             <p className="truncate text-sm text-muted-foreground">
               {sub}
-              {qt && (route.kind === "recent" || route.kind === "all" || route.kind === "active" || route.kind === "group" || route.kind === "dir") && t("shell.header.search", { q: qt })}
+              {qt && (route.kind === "recent" || route.kind === "all" || route.kind === "active" || route.kind === "project" || route.kind === "group" || route.kind === "dir") && t("shell.header.search", { q: qt })}
             </p>
           </div>
+          {searchBox}
           {g && nGrouped > 0 && (
             <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground select-none hover:text-foreground">
               <Checkbox checked={!!hideGrouped} onCheckedChange={(c) => setHideGrouped(c === true ? "1" : "")} />
