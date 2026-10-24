@@ -8,6 +8,7 @@ import { useGit } from "@/hooks/useGit"
 import { Button } from "@/components/ui/button"
 import { useActions } from "./actions"
 import type { Choice } from "@/lib/models"
+import { WorkspaceButton } from "./ide/WorkspaceButton"
 import { GitBadge } from "./GitBadge"
 import { GitChanges } from "./GitChanges"
 import { GitPush } from "./GitPush"
@@ -104,6 +105,7 @@ export function ProjectHead({ project: fixed, missing: fixedMissing, dirs }: { p
             <Button size="sm" variant="outline" onClick={() => a.openPerms(project)} title={t("shell.head.permsHint")}>
               <ShieldCheck /> {t("shell.head.perms")}
             </Button>
+            <WorkspaceButton dir={project} />
             <ModelPicker value={choice} onChange={setPicked} disabled={busy} />
             <Button size="sm" className="ml-auto" onClick={send} disabled={!text.trim() || busy}>
               <Send /> {t("shell.head.start")}

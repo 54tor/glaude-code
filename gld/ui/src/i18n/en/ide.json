@@ -1,0 +1,45 @@
+{
+  "ide": {
+    "open": "Workspace",
+    "openHint": "Browse and edit the files of this folder",
+    "title": "Workspace",
+    "tree": {
+      "label": "Files",
+      "expand": "Expand {{name}}",
+      "collapse": "Collapse {{name}}",
+      "truncated": "List truncated: this folder has too many entries to show them all.",
+      "loading": "Loading…",
+      "failed": "Could not read the folder",
+      "empty": "Empty folder"
+    },
+    "menu": {
+      "newFile": "New file",
+      "newDir": "New folder",
+      "rename": "Rename",
+      "delete": "Delete"
+    },
+    "ask": {
+      "newFile": "New file",
+      "newDir": "New folder",
+      "rename": "Rename “{{name}}”",
+      "name": "Name",
+      "confirm": "Confirm",
+      "deleteTitle": "Delete “{{name}}”?",
+      "deleteBody": "The entry is moved to the workspace trash.",
+      "deleteConfirm": "Delete"
+    },
+    "center": {
+      "none": "No file selected",
+      "selected": "Selected file: {{path}}"
+    },
+    "bottom": {
+      "show": "Show the bottom panel",
+      "hide": "Hide the bottom panel"
+    },
+    "resize": {
+      "tree": "Resize the file tree",
+      "bottom": "Resize the bottom panel"
+    },
+    "denied": "You are not allowed to read the files of this folder."
+  }
+}

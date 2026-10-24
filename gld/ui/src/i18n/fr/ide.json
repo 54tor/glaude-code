@@ -1,0 +1,45 @@
+{
+  "ide": {
+    "open": "Espace de travail",
+    "openHint": "Parcourir et modifier les fichiers de ce dossier",
+    "title": "Espace de travail",
+    "tree": {
+      "label": "Fichiers",
+      "expand": "Déplier {{name}}",
+      "collapse": "Replier {{name}}",
+      "truncated": "Liste tronquée : ce dossier contient trop d'entrées pour être affiché en entier.",
+      "loading": "Chargement…",
+      "failed": "Lecture du dossier impossible",
+      "empty": "Dossier vide"
+    },
+    "menu": {
+      "newFile": "Nouveau fichier",
+      "newDir": "Nouveau dossier",
+      "rename": "Renommer",
+      "delete": "Supprimer"
+    },
+    "ask": {
+      "newFile": "Nouveau fichier",
+      "newDir": "Nouveau dossier",
+      "rename": "Renommer « {{name}} »",
+      "name": "Nom",
+      "confirm": "Valider",
+      "deleteTitle": "Supprimer « {{name}} » ?",
+      "deleteBody": "L'entrée est placée dans la corbeille de l'espace de travail.",
+      "deleteConfirm": "Supprimer"
+    },
+    "center": {
+      "none": "Aucun fichier sélectionné",
+      "selected": "Fichier sélectionné : {{path}}"
+    },
+    "bottom": {
+      "show": "Afficher le panneau du bas",
+      "hide": "Masquer le panneau du bas"
+    },
+    "resize": {
+      "tree": "Redimensionner l'arborescence",
+      "bottom": "Redimensionner le panneau du bas"
+    },
+    "denied": "Vous n'avez pas le droit de lire les fichiers de ce dossier."
+  }
+}
