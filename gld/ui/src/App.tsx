@@ -18,6 +18,7 @@ import { applyFont } from "@/lib/fonts"
 import { type Choice } from "@/lib/models"
 import { AUTO, buildView, byDate, groupKey, HOT, WEEK } from "@/lib/sessionsView"
 import { RouteErrorBoundary } from "@/components/RouteErrorBoundary"
+import { retryLazy } from "@/lib/retryLazy"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ActionsCtx, type Row } from "@/components/actions"
 import { Confirm, type Ask } from "@/components/Confirm"
@@ -35,12 +36,12 @@ import { boot, useAuth } from "@/lib/auth"
 
 // Les grandes vues se chargent à la demande : le premier chargement ne porte que la liste des sessions.
 const Conversation = lazy(() => import("@/components/Conversation").then((m) => ({ default: m.Conversation })))
-const Snippets = lazy(() => import("@/components/Snippets").then((m) => ({ default: m.Snippets })))
-const Config = lazy(() => import("@/components/Config").then((m) => ({ default: m.Config })))
-const Skills = lazy(() => import("@/components/Skills").then((m) => ({ default: m.Skills })))
-const Memory = lazy(() => import("@/components/Memory").then((m) => ({ default: m.Memory })))
-const IdeView = lazy(() => import("@/components/ide/IdeView").then((m) => ({ default: m.IdeView })))
-const Tabs = lazy(() => import("@/components/Tabs").then((m) => ({ default: m.Tabs })))
+const Snippets = retryLazy(() => import("@/components/Snippets").then((m) => ({ default: m.Snippets })))
+const Config = retryLazy(() => import("@/components/Config").then((m) => ({ default: m.Config })))
+const Skills = retryLazy(() => import("@/components/Skills").then((m) => ({ default: m.Skills })))
+const Memory = retryLazy(() => import("@/components/Memory").then((m) => ({ default: m.Memory })))
+const IdeView = retryLazy(() => import("@/components/ide/IdeView").then((m) => ({ default: m.IdeView })))
+const Tabs = retryLazy(() => import("@/components/Tabs").then((m) => ({ default: m.Tabs })))
 
 // Mode multi-utilisateur : l'application ne se monte qu'une session ouverte. Une session perdue en cours d'usage la laisse
 // montée sous l'écran de connexion, pour retrouver vues et brouillons après reconnexion du même compte ; la clé owner la
