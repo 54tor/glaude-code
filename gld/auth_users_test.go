@@ -125,11 +125,15 @@ func TestRightsRowCopy(t *testing.T) {
 	a, _ := s.AddUser("alice", testPw, false)
 	b, _ := s.AddUser("bob", testPw, false)
 	s.Grant(a, "main", RightExec)
-	s.db.Exec(`INSERT INTO home_acl SELECT ?,home_id,mem_read,mem_write,config_write,mem_sync,usage_read,sessions_read,exec,sig FROM home_acl WHERE user_id=?`, b, a)
+	if _, err := s.db.Exec(`INSERT INTO home_acl(user_id,home_id,mem_read,mem_write,config_write,mem_sync,usage_read,sessions_read,exec,fs_read,fs_write,sig) SELECT ?,home_id,mem_read,mem_write,config_write,mem_sync,usage_read,sessions_read,exec,fs_read,fs_write,sig FROM home_acl WHERE user_id=?`, b, a); err != nil {
+		t.Fatalf("copie de ligne impossible : %v", err)
+	}
 	if _, err := s.Rights(b, "main"); !errors.Is(err, errTamper) {
 		t.Fatalf("copied to other user: %v", err)
 	}
-	s.db.Exec(`INSERT INTO home_acl SELECT user_id,'perso',mem_read,mem_write,config_write,mem_sync,usage_read,sessions_read,exec,sig FROM home_acl WHERE user_id=? AND home_id='main'`, a)
+	if _, err := s.db.Exec(`INSERT INTO home_acl(user_id,home_id,mem_read,mem_write,config_write,mem_sync,usage_read,sessions_read,exec,fs_read,fs_write,sig) SELECT user_id,'perso',mem_read,mem_write,config_write,mem_sync,usage_read,sessions_read,exec,fs_read,fs_write,sig FROM home_acl WHERE user_id=? AND home_id='main'`, a); err != nil {
+		t.Fatalf("copie de ligne impossible : %v", err)
+	}
 	if _, err := s.Rights(a, "perso"); !errors.Is(err, errTamper) {
 		t.Fatalf("copied to other home: %v", err)
 	}
