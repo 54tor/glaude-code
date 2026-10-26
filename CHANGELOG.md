@@ -4,6 +4,11 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.4.5] - 2026-10-26
+
+### Corrigé
+- Sécurité : `dompurify` est forcé en 3.4.17 (`overrides`) ; la version 3.4.15 embarquée par `monaco-editor` avait une faille critique et un audit de dépendances échouait en CI.
+
 ## [0.4.4] - 2026-10-26
 
 ### Ajouté
