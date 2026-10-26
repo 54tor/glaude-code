@@ -285,7 +285,10 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   }, [viewport, ready])
   useEffect(() => {
     if (!id) opened.current = ""
-    if (keepScroll.current) return void (keepScroll.current = false)
+    // Messages plus anciens chargés : la position reste. Mais jamais avant que la session ait été amenée à la fin (ou à sa position mémorisée) :
+    // sinon un chargement déclenché dès l'ouverture sautait l'ancrage et laissait la vue à une demi-ligne de la fin.
+    if (keepScroll.current && opened.current === id) return void (keepScroll.current = false)
+    keepScroll.current = false
     if (!msgs) return
     if (opened.current !== id && viewport()) {
       opened.current = id
