@@ -185,6 +185,8 @@
       "start": "Lancer la session"
     },
     "header": {
+      "mcpTitle": "Serveurs MCP de ce projet : état relevé par claude mcp list (relevé gardé une minute)",
+      "mcpLabel": "Serveurs MCP",
       "openMenu": "Ouvrir le menu",
       "search": ", recherche « {{q}} »",
       "hideGrouped": "Masquer les sessions groupées ({{n}})",

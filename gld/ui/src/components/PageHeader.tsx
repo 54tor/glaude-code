@@ -1,4 +1,5 @@
 import { Menu, MessageSquarePlus, MoreHorizontal, Trash2, TriangleAlert, RefreshCcwDot } from "lucide-react"
+import { McpStatus } from "./McpStatus"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { Group, Item, VGroup } from "@/lib/api"
@@ -56,7 +57,8 @@ export function PageHeader({
 }) {
   const { t } = useTranslation()
   const [trashOpen, setTrashOpen] = useState(false)
-  const exec = useCan()("exec") // sans ce droit sur le home, sessions et terminal sont refusés : on ne les propose pas
+  const can = useCan()
+  const exec = can("exec") // sans ce droit sur le home, sessions et terminal sont refusés : on ne les propose pas
   // Même axe que le contenu de la vue : le titre ne reste pas collé à gauche quand la liste est centrée sur grand écran.
   const box = cn("flex flex-wrap items-center gap-x-3 px-3 md:px-6", !split && "mx-auto w-full max-w-7xl")
   return (
@@ -95,6 +97,7 @@ export function PageHeader({
               <RefreshCcwDot /> {t("shell.tree.resumeRecent")}
             </Button>
           )}
+          {g && !g.missing && firstDir && can("config_write") && <McpStatus dir={firstDir} />}
           {vg && rowCount > 0 && exec && (
             <>
               <Button size="sm" onClick={() => groupActs.prompt(vg)} title={t("shell.header.newWithRefsHint")}>

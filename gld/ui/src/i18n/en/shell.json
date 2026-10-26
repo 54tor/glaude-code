@@ -185,6 +185,8 @@
       "start": "Start the session"
     },
     "header": {
+      "mcpTitle": "MCP servers of this project: state read with claude mcp list (cached for a minute)",
+      "mcpLabel": "MCP servers",
       "openMenu": "Open the menu",
       "search": ", search “{{q}}”",
       "hideGrouped": "Hide grouped sessions ({{n}})",

@@ -36,3 +36,11 @@ func TestMarketplaceActRefuse(t *testing.T) {
 		}
 	}
 }
+
+func TestProjectMcpRefuse(t *testing.T) {
+	for _, d := range []string{"", "..", "a/b", "dossier-inconnu-xyz"} {
+		if _, err := projectMcp(d); err == nil {
+			t.Errorf("accepté : %q", d)
+		}
+	}
+}

@@ -70,7 +70,7 @@ var routeRights = map[string]Right{
 
 	// Réglages et skills : font exécuter du code par Claude Code.
 	"POST /config-edit": RightConfigWrite, "GET /config-raw": RightConfigWrite, "POST /config-raw": RightConfigWrite,
-	"POST /config-restore": RightConfigWrite, "POST /config-perm-import": RightConfigWrite, "POST /config-mcp-status": RightConfigWrite,
+	"POST /config-restore": RightConfigWrite, "POST /config-perm-import": RightConfigWrite, "POST /config-mcp-status": RightConfigWrite, "POST /project-mcp": RightConfigWrite,
 	"POST /config-perm-explain": RightConfigWrite,
 	"POST /snippet-save":        RightConfigWrite, "POST /snippet-rm": RightConfigWrite, "POST /snippets-import": RightConfigWrite,
 	"POST /skill-save": RightConfigWrite, "POST /skill-copy": RightConfigWrite, "POST /skill-rm": RightConfigWrite,

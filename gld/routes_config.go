@@ -60,6 +60,19 @@ func routesConfig(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "status": st})
 	})
+	mux.HandleFunc("POST /project-mcp", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Dir string }
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+			return
+		}
+		st, err := projectMcp(req.Dir)
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "servers": st})
+	})
 	mux.HandleFunc("GET /config-perm-suggest", func(w http.ResponseWriter, r *http.Request) {
 		_, raw := allConfigs()
 		var have []string
