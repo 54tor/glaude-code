@@ -76,6 +76,13 @@ func withToken(token string, next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if c, err := r.Cookie(devCookie); err == nil && deviceOK(c.Value) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if r.Method == "GET" && r.URL.Path == "/pair" && redeemDevice(w, r) {
+			return
+		}
 		if h, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok && sameToken(h, token) {
 			next.ServeHTTP(w, r)
 			return
