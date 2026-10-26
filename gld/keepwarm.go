@@ -72,6 +72,18 @@ func warmSave() {
 	}
 }
 
+// sessionMtime : date du dernier message d'une session connue.
+func sessionMtime(id string) (float64, bool) {
+	for _, g := range sessions() {
+		for _, s := range g.Sessions {
+			if s.ID == id {
+				return s.Mtime, true
+			}
+		}
+	}
+	return 0, false
+}
+
 func closedNote() string { return L("srv.keepwarm.closedNote") }
 
 // warmTick : un passage sur les sessions maintenues. now est injecté pour les tests.
@@ -183,6 +195,7 @@ func routesKeepWarm(mux *http.ServeMux) {
 			Dir, ID string
 			On      bool
 			Max     int
+			Reheat  bool // session au cache froid : accepte d'en payer la reconstruction par un premier ping
 		}
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
 			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
@@ -192,10 +205,21 @@ func routesKeepWarm(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.chat.sessionInvalide")})
 			return
 		}
+		reheated := false
 		if req.On { // hors verrou : `claude agents` prend du temps
 			if open := liveSessions(); open != nil && !open[req.ID] {
 				writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.keepwarm.sessionFermeeRouvrezLa")})
 				return
+			}
+			// Reconstruire un cache froid coûte cher : le premier ping n'est envoyé que sur demande explicite (Reheat).
+			if m, known := sessionMtime(req.ID); req.Reheat && known && time.Since(time.Unix(int64(m), 0)) >= cacheTTL {
+				err := warmPing(req.ID) // le premier tour reconstruit le cache, le maintien prend ensuite le relais
+				journal("keepwarm-reheat %s : %v", req.ID, errOr(err))
+				if err != nil {
+					writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.keepwarm.pingFailed", "A1", cut(err.Error(), 200))})
+					return
+				}
+				reheated = true
 			}
 		}
 		warmMu.Lock()
@@ -213,7 +237,11 @@ func routesKeepWarm(mux *http.ServeMux) {
 			req.Max = warmDefaultMx
 		}
 		req.Max = min(req.Max, warmMaxPings)
-		warmState[req.ID] = &WarmState{Dir: req.Dir, On: true, Max: req.Max}
+		ns := &WarmState{Dir: req.Dir, On: true, Max: req.Max}
+		if reheated {
+			ns.Pings, ns.LastPing = 1, time.Now().Unix()
+		}
+		warmState[req.ID] = ns
 		warmSave()
 		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.keepwarm.maintienAuChaudActive")})
 	})

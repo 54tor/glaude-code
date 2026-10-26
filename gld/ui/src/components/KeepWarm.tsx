@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useActions } from "./actions"
 
-const set = async (s: Session, on: boolean, max?: number) => {
-  const r = await api.post("/keepwarm", { dir: s.dir, id: s.id, on, max })
+const set = async (s: Session, on: boolean, max?: number, reheat?: boolean) => {
+  const r = await api.post("/keepwarm", { dir: s.dir, id: s.id, on, max, reheat })
   if (!r.ok) toast.error(r.out)
   refreshWarm()
 }
@@ -49,13 +49,15 @@ export function KeepWarmButton({ s }: { s: Session }) {
 // L'activation dit d'abord ce que ça coûte, puis propose un plafond de pings.
 function Offers({ s }: { s: Session }) {
   const { t } = useTranslation()
+  const a = useActions()
+  const cold = a.caps(s).hotCache && a.hotLeft(s) === null // cache expiré : le premier ping le reconstruit en entier
   return (
     <>
-      <DropdownMenuLabel className="whitespace-normal">{t("conversation.keepWarm.menuLabel")}</DropdownMenuLabel>
+      <DropdownMenuLabel className="whitespace-normal">{t(cold ? "conversation.keepWarm.coldLabel" : "conversation.keepWarm.menuLabel")}</DropdownMenuLabel>
       <DropdownMenuSeparator />
       {[3, 6, 12, 24].map((n) => (
-        <DropdownMenuItem key={n} onSelect={() => set(s, true, n)}>
-          {t("conversation.keepWarm.atMost", { count: n })}
+        <DropdownMenuItem key={n} onSelect={() => set(s, true, n, cold)}>
+          {t(cold ? "conversation.keepWarm.reheatAtMost" : "conversation.keepWarm.atMost", { count: n })}
         </DropdownMenuItem>
       ))}
     </>

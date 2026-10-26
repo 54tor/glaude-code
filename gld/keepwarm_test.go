@@ -126,3 +126,25 @@ func TestKeepWarmSessionFermee(t *testing.T) {
 		t.Fatalf("session fermée pinguée : %d %+v", pings, warmState[id1])
 	}
 }
+
+func TestKeepWarmReheatFroid(t *testing.T) {
+	h, cfg, _ := web(t)
+	openAndIdle(t, id1)
+	p := filepath.Join(cfg, "projects", "-p", id1+".jsonl")
+	at := time.Now().Add(-2 * time.Hour)
+	os.WriteFile(p, []byte(`{"type":"user","cwd":"/p","timestamp":"`+at.UTC().Format(time.RFC3339Nano)+`","message":{"content":"x"}}`+"\n"), 0o600)
+	os.Chtimes(p, at, at)
+	forgetInfo(p)
+	var pings int
+	old := warmPing
+	defer func() { warmPing = old }()
+	warmPing = func(id string) error { pings++; return nil }
+	ok(t, h, "/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true}`, true, "") // froid sans demande de réchauffage : aucun ping
+	if pings != 0 {
+		t.Fatal("ping sans accord")
+	}
+	ok(t, h, "/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true,"reheat":true}`, true, "")
+	if pings != 1 || warmState[id1].Pings != 1 {
+		t.Fatalf("réchauffage : %d ping(s), état %+v", pings, warmState[id1])
+	}
+}
