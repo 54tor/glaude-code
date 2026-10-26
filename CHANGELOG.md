@@ -4,6 +4,18 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.4.4] - 2026-10-26
+
+### Ajouté
+- **Plugins** : un bouton « Plugins » dans la page Skills ouvre une fenêtre qui liste les plugins installés (toutes portées), les active ou les désactive, les met à jour et les désinstalle, et propose les plus installés des marketplaces avec recherche, pour l'utilisateur ou pour un projet (`GET /plugins`, `POST /plugin-act`, via `claude plugin`).
+- **Marketplaces** : la même fenêtre liste les marketplaces configurés, en ajoute (dépôt `owner/repo` ou URL https, jamais un chemin local), les met à jour et les retire (`GET /marketplaces`, `POST /marketplace-act`). Lecture avec le droit de lecture, modifications avec le droit d'écriture de configuration.
+
+### Modifié
+- Les dossiers de « Projets » et de « Sessions locales » reprennent le style des sessions ouvertes : trait de guidage à gauche des enfants et lignes compactes (28 px, texte discret).
+
+### Corrigé
+- CI : trois faux positifs gitleaks (deux jetons de test, `argon2.IDKey`) sont ignorés par empreinte dans `.gitleaksignore`.
+
 ## [0.4.3] - 2026-10-26
 
 ### Ajouté
@@ -265,7 +277,8 @@ Première version : `gld`, interface web locale pour parcourir, piloter et confi
 - Terminal intégré désactivé par défaut ; lecture bornée des fichiers de commandes.
 - Refus d'agir quand les sessions ouvertes sont indéterminées.
 
-[Non publié]: https://github.com/54tor/glaude-code/compare/v0.4.3...HEAD
+[Non publié]: https://github.com/54tor/glaude-code/compare/v0.4.4...HEAD
+[0.4.4]: https://github.com/54tor/glaude-code/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/54tor/glaude-code/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/54tor/glaude-code/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/54tor/glaude-code/compare/v0.4.0...v0.4.1
