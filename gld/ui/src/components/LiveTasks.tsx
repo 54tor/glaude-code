@@ -49,7 +49,7 @@ export function LiveTasks({ live: { st }, dir, id }: { live: Live; dir: string; 
         <DialogContent className="flex h-[85vh] max-h-[85vh] min-w-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
           <DialogHeader className="border-b px-6 py-4">
             <DialogTitle>{t("conversation.tasks.dialogTitle", { n: tasks.length })}</DialogTitle>
-            <DialogDescription>{t("conversation.tasks.description")}</DialogDescription>
+            <DialogDescription className="sr-only">{t("conversation.tasks.description")}</DialogDescription>
           </DialogHeader>
           <ScrollArea className="min-h-0 flex-1">
           <ul className="space-y-1 px-4 py-4 text-sm">
