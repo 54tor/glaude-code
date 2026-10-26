@@ -106,13 +106,13 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
             ) : (
               <Flame className="size-4 shrink-0 text-warning" aria-hidden />
             )}
-            {a.live.has(s.id) && <span className="size-1.5 shrink-0 rounded-full bg-success" aria-label={t("shell.sidebar.open")} />}
             <span className="flex-1 truncate text-left">{s.title}</span>
             {!cold && (
               <span className={cn("shrink-0 text-xs tabular-nums", warn ? "font-medium text-warning" : "text-muted-foreground")}>
                 {t("shell.sidebar.minutes", { left })}
               </span>
             )}
+            {a.live.has(s.id) && <span className="size-1.5 shrink-0 rounded-full bg-success" aria-label={t("shell.sidebar.open")} />}
           </button>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-64">
