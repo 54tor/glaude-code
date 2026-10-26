@@ -1,16 +1,15 @@
-import { FolderInput, Menu, MessageSquarePlus, MoreHorizontal, Trash2, TriangleAlert, RefreshCcwDot } from "lucide-react"
+import { Menu, MessageSquarePlus, MoreHorizontal, Trash2, TriangleAlert, RefreshCcwDot } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { Group, Item, VGroup } from "@/lib/api"
 import type { Route } from "@/lib/route"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import type { Actions, GroupActions } from "./actions"
 import { AccountButton } from "./AccountDialog"
 import { UserMenu } from "./auth/Profile"
 import { useCan } from "@/lib/auth"
-import { CreditsButton } from "./Credits"
 import { DD, GroupItems } from "./SessionMenu"
 import { SessionTrash } from "./SessionTrash"
 import { cn } from "@/lib/utils"
@@ -58,7 +57,6 @@ export function PageHeader({
   const { t } = useTranslation()
   const [trashOpen, setTrashOpen] = useState(false)
   const exec = useCan()("exec") // sans ce droit sur le home, sessions et terminal sont refusés : on ne les propose pas
-  const ownSessions = t("shell.count.sessions", { count: own.length })
   // Même axe que le contenu de la vue : le titre ne reste pas collé à gauche quand la liste est centrée sur grand écran.
   const box = cn("flex flex-wrap items-center gap-x-3 px-3 md:px-6", !split && "mx-auto w-full max-w-7xl")
   return (
@@ -77,7 +75,6 @@ export function PageHeader({
           </div>
           {/* Petit écran : avec le titre sur la première ligne ; grand écran : en fin de ligne. */}
           <div className="flex items-center gap-1 md:order-last">
-            <CreditsButton />
             <AccountButton />
             <UserMenu />
           </div>
@@ -108,25 +105,15 @@ export function PageHeader({
               </Button>
             </>
           )}
-          {(g || vg) && exec && (
+          {vg && exec && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-sm" aria-label={g ? t("shell.header.projectActions") : t("shell.header.groupActions")}>
+                <Button variant="ghost" size="icon-sm" aria-label={t("shell.header.groupActions")}>
                   <MoreHorizontal />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64">
-                {g && (
-                  <>
-                    <DropdownMenuItem onSelect={() => actions.moveGroup(g, own)}>
-                      <FolderInput /> {t("shell.header.reassign", { sessions: ownSessions })}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem variant="destructive" onSelect={() => actions.remove(own, t("shell.header.removeLabel", { sessions: ownSessions, project: g.project }))}>
-                      <Trash2 /> {t("shell.header.deleteAll", { sessions: ownSessions })}
-                    </DropdownMenuItem>
-                  </>
-                )}
-                {vg && <GroupItems M={DD} vg={vg} page />}
+                <GroupItems M={DD} vg={vg} page />
               </DropdownMenuContent>
             </DropdownMenu>
           )}

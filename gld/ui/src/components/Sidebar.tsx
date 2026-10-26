@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useKeepWarm } from "@/hooks/useKeepWarm"
+import { CreditsButton } from "./Credits"
 import { HomeSwitcher } from "./HomeSwitcher"
 import { ProjectList } from "./ProjectList"
 import { ProjectItems, ProjectTree } from "./ProjectTree"
@@ -206,6 +207,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             <p className="text-xs text-muted-foreground tabular-nums">{p.loading ? t("common.loading") : t("shell.count.sessions", { count: p.total })}</p>
           </div>
           <div className="ml-auto flex items-center gap-0.5">
+            <CreditsButton />
             <HomeSwitcher />
           </div>
         </div>
