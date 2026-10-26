@@ -4,6 +4,33 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.4.3] - 2026-10-26
+
+### Ajouté
+- **Lecteur, en-tête en deux colonnes** : à gauche le titre puis le dossier du projet (bouton), la date du dernier message, les sous-agents (bouton grisé s'il n'y en a pas) et l'état git ; à droite « Maintenir au chaud », l'état du cache (froid en bleu glace, chaud en minutes restantes), ouverte ou fermée, puis « Stats », « Nouvelle session » et le menu « … » (« Reprendre » et « Pré-Prompt » y sont).
+- **Fenêtre Stats** : réunit les informations de la session (clic droit → Infos ouvre la même fenêtre), le cache et le maintien au chaud, la consommation, le dernier appel et la liste des sous-agents, dont chacun ouvre sa conversation.
+- **Pré-Prompt** : chaque fichier chargé par Claude s'ouvre dans une fenêtre au-dessus de la liste (`GET /session-loaded-file`, limité aux fichiers que le hook a vus charger dans cette session, lecture bornée à 1 Mio).
+- **Outils masqués** : une ligne repliée « N outils » remplace les appels masqués ; un clic relit et déplie ces messages (`GET /conv-tools`, 1 000 messages au plus). Le bouton « Outils masqués » passe au-dessus de la saisie, à côté de « debug » (grisé tant que la session n'est pas ouverte).
+- **Session ouverte** : un bouton de mode (Maj+Tab) lit le mode de permission sur l'écran tmux et passe au suivant ; rangée de commandes réordonnée (modèle et effort à gauche, commandes, fermer, arrêter, envoyer à droite).
+- **File d'attente** : annuler un message en file le remet dans la saisie.
+- **Compactage** : un bandeau conseille de compacter au-dessus de la saisie quand le contexte dépasse 60 % de la fenêtre (1 M de tokens si le modèle porte `[1m]` ou si le contexte a dépassé 200 k, sinon 200 k).
+- **Maintien au chaud** : une session au cache froid peut être réchauffée par un premier ping avant le maintien (explicite, le menu prévient du coût ; `reheat` sur `POST /keepwarm`).
+- **Tâches de fond** : pastille « tâche de fond » et arrêt par `claude stop` depuis la liste et l'en-tête du lecteur ; message dédié sous la saisie ; maintien au chaud grisé.
+- **Navigation du lecteur** : « Aller au début » apparaît dès qu'on défile, comme « Aller à la fin », et les deux sont relus à l'ouverture et quand le contenu change.
+
+### Modifié
+- Recherche : la bascule « Contenu » est dans le champ de recherche ; la barre latérale ne dépend plus de la recherche et les sessions groupées restent toujours trouvées.
+- Le cœur de soutien passe en haut de la barre latérale ; le menu « … » de la vue projet est retiré ; cœur, compte et menu utilisateur restent sur la première ligne de l'en-tête sur petit écran.
+- Toutes les actions « Reprendre » utilisent l'icône `refresh-ccw-dot` ; « Instructions » devient « Pré-Prompt » ; l'icône du maintien au chaud est le micro-ondes dans tous ses états.
+
+### Supprimé
+- **Étiquettes de session** : l'entrée « Étiquettes… », les pastilles `#étiquette`, le filtre `#prod` et le champ `tags` du magasin. Les étiquettes déjà enregistrées sont ignorées puis effacées à la prochaine sauvegarde du magasin.
+
+### Corrigé
+- Anneau de focus du bouton dossier rogné par la troncature ; première ligne de l'en-tête non alignée sur la croix de fermeture.
+- Les routes `GET /conv-tools` et `GET /session-loaded-file` sont déclarées dans la table des droits (`sessions_read`).
+- Build : avertissement `debugName` du groupe de découpage Monaco.
+
 ## [0.4.2] - 2026-10-24
 
 ### Ajouté
@@ -238,7 +265,8 @@ Première version : `gld`, interface web locale pour parcourir, piloter et confi
 - Terminal intégré désactivé par défaut ; lecture bornée des fichiers de commandes.
 - Refus d'agir quand les sessions ouvertes sont indéterminées.
 
-[Non publié]: https://github.com/54tor/glaude-code/compare/v0.4.2...HEAD
+[Non publié]: https://github.com/54tor/glaude-code/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/54tor/glaude-code/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/54tor/glaude-code/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/54tor/glaude-code/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/54tor/glaude-code/compare/v0.3.1...v0.4.0
