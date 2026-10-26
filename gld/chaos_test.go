@@ -25,6 +25,10 @@ func TestPanneClaudeBloque(t *testing.T) {
 	old := cmdTimeout
 	cmdTimeout = 300 * time.Millisecond
 	t.Cleanup(func() { cmdTimeout = old })
+	// main_test.go coupe le cache de `claude agents` ; /api doit ici relancer un seul relevé, comme en production.
+	oldTTL := agentsTTL
+	agentsTTL = 1500 * time.Millisecond
+	t.Cleanup(func() { agentsTTL = oldTTL })
 
 	t0 := time.Now()
 	_, m, _ := call(t, h, "GET", "/api", "")

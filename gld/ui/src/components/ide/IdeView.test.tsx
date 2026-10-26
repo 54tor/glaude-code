@@ -1000,6 +1000,7 @@ describe("IdeView : barres d'outils et commandes", () => {
     render(<IdeView dir="/p" />)
     await openFile("a.txt")
     await openFile("b.txt")
+    await waitFor(() => expect(screen.getByRole("tab", { name: /b\.txt/ }).getAttribute("aria-selected")).toBe("true"))
     await waitFor(() => expect(tool("Annuler").getAttribute("aria-disabled")).toBeNull())
     fireEvent.click(tool("Annuler"))
     expect(handles.of("b.txt").undo).toHaveBeenCalledTimes(1)
