@@ -11,7 +11,7 @@ import { Enrol, Mfa } from "./Mfa"
 export function AuthScreen() {
   const a = useAuth()
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-background">
+    <div className="safe-t safe-b fixed inset-0 z-50 overflow-y-auto bg-background">
       <main className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center px-4 py-10">
         {a.state === "unavailable" ? (
           <Unavailable />
