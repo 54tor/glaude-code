@@ -73,7 +73,7 @@ export default defineConfig({
         // Monaco (≈ 4 Mo) découpé en morceaux < 700 ko, tous chargés à la demande avec l'éditeur ; app.js reste l'entrée.
         // Pas de maxSize : il coupait Monaco en chunks qui s'importaient mutuellement, page blanche en production.
         codeSplitting: {
-          groups: [{ name: monacoSlice, test: (id) => isMonaco(id) && !!monacoIds.push(id), includeDependenciesRecursively: false }],
+          groups: [{ name: monacoSlice, debugName: "monaco", test: (id) => isMonaco(id) && !!monacoIds.push(id), includeDependenciesRecursively: false }],
         },
         entryFileNames: "assets/app.js",
         chunkFileNames: "assets/[name].js",
