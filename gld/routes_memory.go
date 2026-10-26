@@ -246,8 +246,23 @@ func routesMemory(mux *http.ServeMux) {
 		for _, e := range loadsOfSession(readLoaded(), id) {
 			known = known || e.File == file
 		}
-		b, err := os.ReadFile(file)
-		if !known || err != nil || len(b) > memMax || !utf8.Valid(b) {
+		if !known {
+			writeJSON(w, 404, map[string]any{})
+			return
+		}
+		f, err := os.Open(file)
+		if err != nil {
+			writeJSON(w, 404, map[string]any{})
+			return
+		}
+		defer f.Close()
+		st, err := f.Stat()
+		if err != nil || !st.Mode().IsRegular() || st.Size() > memMax {
+			writeJSON(w, 404, map[string]any{})
+			return
+		}
+		b, err := io.ReadAll(io.LimitReader(f, memMax+1))
+		if err != nil || len(b) > memMax || !utf8.Valid(b) {
 			writeJSON(w, 404, map[string]any{})
 			return
 		}
