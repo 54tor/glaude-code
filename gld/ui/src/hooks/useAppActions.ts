@@ -2,7 +2,6 @@ import { useRef, type Dispatch, type SetStateAction } from "react"
 import { toast } from "sonner"
 import { i18n } from "@/i18n"
 import { watchTrust } from "@/lib/trust"
-import { wantConfigFile } from "@/lib/wantConfigFile"
 import { api, type Caps, type Data, type Group, type Hit, type Item, type Project, type Snippet, type VGroup } from "@/lib/api"
 import { segs } from "@/lib/paths"
 import { exportMarkdown } from "@/lib/export"
@@ -316,9 +315,8 @@ export function useAppActions(c: {
     },
     openPerms: (project) => {
       const dir = data?.groups.find((g) => g.project === project)?.sessions[0]?.dir
-      if (dir) wantConfigFile.id = "p/" + dir
-      wantConfigFile.raw = true
-      go({ kind: "config", tab: "permissions" })
+      if (dir) go({ kind: "projectConfig", dir })
+      else go({ kind: "config", tab: "permissions" })
     },
     folder: (project) => data?.groups.find((g) => g.project === project),
     vgroups,

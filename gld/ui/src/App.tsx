@@ -294,6 +294,7 @@ function Shell() {
     skills: t("shell.app.title.skills"),
     tabs: t("shell.app.title.tabs"),
     workspace: t("ide.title"),
+    projectConfig: t("shell.app.title.projectConfig"),
     dir: node?.name ?? t("shell.app.title.dir"),
   }[route.kind]
   const nSessions = (count: number) => t("shell.count.sessions", { count })
@@ -317,6 +318,8 @@ function Shell() {
             ? t("shell.app.sub.memory")
             : route.kind === "workspace"
               ? tilde(route.dir, home)
+              : route.kind === "projectConfig"
+              ? tilde(data?.groups.find((x) => x.sessions[0]?.dir === route.dir)?.project ?? route.dir, home)
               : route.kind === "tabs"
               ? t("shell.app.sub.tabs")
               : route.kind === "group"
@@ -388,6 +391,8 @@ function Shell() {
             <Tabs args={args} onAsk={setAsk} onPrompt={setPrompt} />
           ) : route.kind === "skills" ? (
             <Skills sel={route.key} home={home} q={qt} onPick={(key) => go({ kind: "skills", key })} onAsk={setAsk} />
+          ) : route.kind === "projectConfig" ? (
+            <Config key={route.dir} dir={route.dir} home={home} tab="" onTab={() => go({ kind: "config", tab: "permissions" })} ui={{ args, setArgs, choice, setChoice, font, setFont, fontSize, setFontSize }} />
           ) : route.kind === "config" ? (
             <Config home={home} tab={route.tab} onTab={(tab) => go({ kind: "config", tab })} ui={{ args, setArgs, choice, setChoice, font, setFont, fontSize, setFontSize }} />
           ) : route.kind === "memory" ? (

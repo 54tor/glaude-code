@@ -33,6 +33,7 @@
         "snippets": "Snippets",
         "memory": "Memory",
         "config": "Configuration",
+        "projectConfig": "Project permissions and settings",
         "skills": "Skills",
         "tabs": "Saved sessions",
         "dir": "Folder"

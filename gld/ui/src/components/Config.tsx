@@ -16,13 +16,16 @@ import { RawTab } from "./ConfigRaw"
 import { BackupsTab, PermsTab, SettingsTab } from "./ConfigTabs2"
 import { SyncTab } from "./ConfigSync"
 import { takeConfigFile } from "@/lib/wantConfigFile"
+import { Button } from "@/components/ui/button"
 
 // Configuration de Claude Code : réglages utilisateur, de projet et locaux. Lecture (précédence, santé, hooks, MCP) et
 // modifications limitées aux réglages simples, variables d'environnement, plugins et permissions, avec aperçu et sauvegarde.
-export function Config({ home, tab, onTab, ui }: { home: string; tab: string; onTab: (t: string) => void; ui: UiSettings }) {
+// dir : écran d'un seul projet (permissions et réglages de ses fichiers partagé et local), avec un lien vers les permissions globales.
+export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: string; onTab: (t: string) => void; ui: UiSettings; dir?: string }) {
   const { t } = useTranslation()
   const [ov, setOv] = useState<CfgOverview | null>(null)
-  const [fileId, setFileId] = useState(() => takeConfigFile() || "u") // fichier édité dans « Permissions » et « Réglages »
+  const [fileId, setFileId] = useState(() => (dir ? "p/" + dir : takeConfigFile() || "u"))
+  const [projTab, setProjTab] = useState("permissions") // fichier édité dans « Permissions » et « Réglages »
   const reload = useCallback(() => api.config().then(setOv), [])
   useEffect(() => {
     reload()
@@ -61,15 +64,21 @@ export function Config({ home, tab, onTab, ui }: { home: string; tab: string; on
       {t("config.main.location")}
       <Choose
         value={scope}
-        onChange={(v) => setFileId(v === "u" ? "u" : v + "/" + (dirOf || ov.projects[0]?.dir || ""))}
-        options={[
-          ["u", t("config.main.userFile")],
-          ...(ov.projects.length ? ([["p", t("config.main.optProject")], ["l", t("config.main.optLocal")]] as const) : []),
-        ]}
+        onChange={(v) => setFileId(v === "u" ? "u" : v + "/" + (dirOf || dir || ov.projects[0]?.dir || ""))}
+        options={
+          dir
+            ? [["p", t("config.main.optProject")], ["l", t("config.main.optLocal")]]
+            : [["u", t("config.main.userFile")], ...(ov.projects.length ? ([["p", t("config.main.optProject")], ["l", t("config.main.optLocal")]] as const) : [])]
+        }
         label={t("config.main.locationAria")}
         className="min-w-0 max-w-xs"
       />
-      {scope !== "u" && (
+      {dir && (
+        <Button size="sm" variant="outline" className="ml-auto" onClick={() => onTab("permissions")} title={t("config.main.globalPermsHint")}>
+          {t("config.main.globalPerms")}
+        </Button>
+      )}
+      {!dir && scope !== "u" && (
         <Choose value={dirOf} onChange={(d) => setFileId(scope + "/" + d)} options={ov.projects.map((p) => [p.dir, tilde(p.project, home)] as const)} label={t("config.main.projectDirAria")} className="min-w-0 max-w-md" />
       )}
       {!file && <span className="text-xs text-warning">{t("config.main.toCreate")}</span>}
@@ -80,12 +89,19 @@ export function Config({ home, tab, onTab, ui }: { home: string; tab: string; on
   return (
     <ScrollArea className="min-h-0 flex-1">
       <div className="mx-auto max-w-7xl px-3 py-6 md:px-6">
-        <Tabs value={tab || "sante"} onValueChange={onTab}>
+        <Tabs value={dir ? projTab : tab || "sante"} onValueChange={dir ? setProjTab : onTab}>
           {/* Le soulignement de l'onglet actif (::after, 5 px sous le bouton, même invisible) déborde de la liste : sans ce bas de marge il crée un défilement vertical. */}
           {/* ponytail: fondu fixe, même une fois au bout du défilement ; un vrai indicateur demanderait d'écouter le scroll. */}
           <ScrollArea className="mb-2 w-full [mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)]">
             <div className="pb-2">
               <TabsList className="w-max justify-start">
+                {dir ? (
+                  <>
+                    <TabsTrigger value="permissions">{t("config.main.tabs.permissions")}</TabsTrigger>
+                    <TabsTrigger value="reglages">{t("config.main.tabs.settings")}</TabsTrigger>
+                  </>
+                ) : (
+                  <>
                 <TabsTrigger value="sante">{t("config.main.tabs.health")}{ov.issues.length > 0 && ` (${ov.issues.length})`}</TabsTrigger>
                 <TabsTrigger value="projets">{t("config.main.tabs.projects")}</TabsTrigger>
                 <TabsTrigger value="precedence">{t("config.main.tabs.precedence")}</TabsTrigger>
@@ -97,6 +113,8 @@ export function Config({ home, tab, onTab, ui }: { home: string; tab: string; on
                 <TabsTrigger value="sauvegardes">{t("config.main.tabs.backups")} ({ov.backups.length})</TabsTrigger>
                 <TabsTrigger value="interface">{t("config.main.tabs.interface")}</TabsTrigger>
                 <TabsTrigger value="sync">{t("config.main.tabs.sync")}</TabsTrigger>
+                  </>
+                )}
               </TabsList>
             </div>
             <ScrollBar orientation="horizontal" />
@@ -141,9 +159,11 @@ export function Config({ home, tab, onTab, ui }: { home: string; tab: string; on
             <PermsTab added={added} moveRule={moveRule} gone={gone} onTransfer={transfer} file={fileId} label={label(fileId)} doc={doc} propose={propose} proposePerms={proposePerms} />
           </TabsContent>
           <TabsContent value="reglages">
-            <div className="mb-6">
-              <ClaudeOptions args={ui.args} setArgs={ui.setArgs} choice={ui.choice} setChoice={ui.setChoice} />
-            </div>
+            {!dir && (
+              <div className="mb-6">
+                <ClaudeOptions args={ui.args} setArgs={ui.setArgs} choice={ui.choice} setChoice={ui.setChoice} />
+              </div>
+            )}
             {fileSelect}
             <SettingsTab file={fileId} doc={doc} plugins={ov.plugins} propose={propose} />
           </TabsContent>

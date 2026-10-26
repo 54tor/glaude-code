@@ -18,6 +18,7 @@ const route: fc.Arbitrary<Route> = fc.oneof(
   }),
   fc.record({ kind: fc.constant("project" as const), name: fc.string() }),
   fc.record({ kind: fc.constant("workspace" as const), dir: fc.string({ minLength: 1 }) }),
+  fc.record({ kind: fc.constant("projectConfig" as const), dir: fc.string({ minLength: 1 }) }),
   fc.record({ kind: fc.constant("dir" as const), key }),
   fc.record({ kind: fc.constant("config" as const), tab: fc.string() }),
   fc.record({

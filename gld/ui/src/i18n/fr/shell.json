@@ -33,6 +33,7 @@
         "snippets": "Snippets",
         "memory": "Mémoire",
         "config": "Configuration",
+        "projectConfig": "Permissions et réglages du projet",
         "skills": "Skills",
         "tabs": "Sessions sauvegardées",
         "dir": "Dossier"

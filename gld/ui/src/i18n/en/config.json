@@ -18,6 +18,8 @@
       "projectLabel": "Project · {{dir}}",
       "localLabel": "Local · {{dir}}",
       "location": "Location:",
+      "globalPerms": "Global permissions",
+      "globalPermsHint": "Open the permissions of your user file (~/.claude/settings.json)",
       "optProject": "Project · .claude/settings.json (shared)",
       "optLocal": "Local · .claude/settings.local.json (not shared)",
       "locationAria": "Settings location",
