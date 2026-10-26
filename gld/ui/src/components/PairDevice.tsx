@@ -10,21 +10,21 @@ import { Button } from "@/components/ui/button"
 import { Tip } from "@/components/ui/tooltip"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
-// Connecter un appareil : QR d'une adresse à code unique (pair.go). Mode jeton : liste et révocation des appareils jumelés ;
+// Connecter un appareil : code à usage unique (pair.go), en chiffres à saisir sur « Connecter cet appareil » et en QR. Mode jeton : liste et révocation des appareils jumelés ;
 // mode comptes : les sessions du profil en tiennent lieu.
 export function PairButton() {
   const { t } = useTranslation()
   const a = useAuth()
   const [open, setOpen] = useState(false)
-  const [code, setCode] = useState<{ url: string; until: number } | null>(null)
+  const [code, setCode] = useState<{ code: string; url: string; until: number } | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const [devices, setDevices] = useState<Device[] | null>(null)
   const open_ = a.state === "open"
 
   const fresh = useCallback(async () => {
-    const r = (await api.post("/pair-code", {})) as { ok: boolean; out?: string; url?: string; ttl?: number }
-    if (!r.ok || !r.url) return void toast.error(r.out ?? t("shell.pair.failed"))
-    setCode({ url: r.url, until: Date.now() + (r.ttl ?? 120) * 1000 })
+    const r = (await api.post("/pair-code", {})) as { ok: boolean; out?: string; code?: string; url?: string; ttl?: number }
+    if (!r.ok || !r.url || !r.code) return void toast.error(r.out ?? t("shell.pair.failed"))
+    setCode({ code: r.code, url: r.url, until: Date.now() + (r.ttl ?? 120) * 1000 })
   }, [t])
   const list = useCallback(() => {
     if (open_) api.devices().then((r) => setDevices(r.devices ?? []), () => setDevices([]))
@@ -68,6 +68,11 @@ export function PairButton() {
         </DialogHeader>
 
         <div className="flex flex-col items-center gap-3">
+          {code && left > 0 && (
+            <p className="font-mono text-4xl font-semibold tracking-widest tabular-nums select-all" aria-label={t("shell.pair.code")}>
+              {code.code.slice(0, 4)} {code.code.slice(4)}
+            </p>
+          )}
           <div className="grid size-56 place-items-center rounded-lg bg-white p-3">
             {code && left > 0 ? (
               <QRCode value={code.url} size={200} level="M" title={t("shell.pair.qr")} />

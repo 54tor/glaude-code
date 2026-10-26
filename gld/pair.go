@@ -1,11 +1,12 @@
 package main
 
-// Jumelage d'un appareil par QR code. Un navigateur déjà connecté demande un code à usage unique (deux minutes) et
-// l'affiche en QR. L'adresse ouvre une page de confirmation sans effet (un aperçu de lien ne consomme rien) ; son bouton
-// envoie un POST de même origine qui crée la session de l'appareil, sans qu'il voie le jeton ni le mot de passe.
+// Jumelage d'un appareil. Un navigateur déjà connecté demande un code à usage unique (huit chiffres, deux minutes) et
+// l'affiche en clair et en QR. Le téléphone le saisit sur « Connecter cet appareil » (/pair, liée depuis la page du jeton
+// et l'écran de connexion) : la session naît là où il le tape, donc dans la PWA. Le QR ouvre /pair?c=…, une page de
+// confirmation sans effet (un aperçu de lien ne consomme rien) dont le bouton envoie le même POST de même origine.
+// Les codes faux comptent dans les essais du jeton (tokenBlocked) : 10^8 codes, deux minutes, 10 essais par minute.
 // Mode jeton : session d'appareil (devices.json, 90 jours sans visite), liée au jeton : en changer coupe tous les appareils.
 // Mode comptes : session du compte dans auth.db, second facteur acquis, tant que la session qui a émis le code vit.
-// Sur iPhone, l'appareil photo ouvre l'adresse dans Safari : la PWA ajoutée ensuite à l'écran d'accueil en copie le cookie.
 
 import (
 	"crypto/hmac"
@@ -15,8 +16,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
+	mbig "math/big"
 	"net/http"
 	"net/url"
 	"os"
@@ -46,9 +49,6 @@ var (
 )
 
 func newPairCode(uid int64, sid string) string {
-	b := make([]byte, 24)
-	rand.Read(b)
-	c := base64.RawURLEncoding.EncodeToString(b)
 	now := authNow()
 	pairMu.Lock()
 	defer pairMu.Unlock()
@@ -57,8 +57,24 @@ func newPairCode(uid int64, sid string) string {
 			delete(pairCodes, k)
 		}
 	}
-	pairCodes[c] = pairCode{now.Add(pairTTL), uid, sid}
-	return c
+	for {
+		n, _ := rand.Int(rand.Reader, mbig.NewInt(1e8))
+		c := fmt.Sprintf("%08d", n)
+		if _, used := pairCodes[c]; !used {
+			pairCodes[c] = pairCode{now.Add(pairTTL), uid, sid}
+			return c
+		}
+	}
+}
+
+// pairDigits : le code tel que tapé (« 1234 5678 », « 1234-5678 »), réduit à ses chiffres.
+func pairDigits(c string) string {
+	return strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, c)
 }
 
 // pairLookup lit le code ; take le consomme, valide ou non : un code essayé ne sert plus.
@@ -209,13 +225,33 @@ func pairEntry(w http.ResponseWriter, r *http.Request, st *authStore) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
-	expired := func() {
-		gatePage(w, http.StatusGone, gateData{Title: L("srv.pair.title"), Text: L("srv.pair.expired")})
+	form := func(code int, errKey string) {
+		d := gateData{Title: L("srv.pair.title"), Text: L("srv.pair.text"), Action: "/pair", Code: true, Button: L("srv.pair.button"), Link: "/", LinkText: L("srv.pair.back")}
+		if errKey != "" {
+			d.Err = L(errKey)
+		}
+		gatePage(w, code, d)
+	}
+	expired := func() { form(http.StatusGone, "srv.pair.expired") }
+	ip := clientIP(r)
+	if r.Method == "GET" && r.URL.Query().Get("c") == "" {
+		form(200, "")
+		return
+	}
+	if r.Method == "POST" && pairCOP.Check(r) != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	if tokenBlocked(ip, false) {
+		w.Header().Set("Retry-After", "60")
+		form(http.StatusTooManyRequests, "srv.token.tooMany")
+		return
 	}
 	if r.Method == "GET" {
-		c := r.URL.Query().Get("c")
+		c := pairDigits(r.URL.Query().Get("c"))
 		p, ok := pairLookup(c, false)
 		if !ok || (p.uid != 0) != (st != nil) {
+			tokenBlocked(ip, true)
 			expired()
 			return
 		}
@@ -231,17 +267,13 @@ func pairEntry(w http.ResponseWriter, r *http.Request, st *authStore) {
 		gatePage(w, 200, gateData{Title: L("srv.pair.title"), Text: text, Action: "/pair", Hidden: c, Button: L("srv.pair.button")})
 		return
 	}
-	if pairCOP.Check(r) != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
-	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<12)
-	p, ok := pairLookup(r.PostFormValue("c"), true)
+	p, ok := pairLookup(pairDigits(r.PostFormValue("c")), true)
 	if !ok || (p.uid != 0) != (st != nil) {
+		tokenBlocked(ip, true)
 		expired()
 		return
 	}
-	ip := clientIP(r)
 	if st == nil {
 		c, err := addDevice(r.UserAgent(), ip)
 		if err != nil {
@@ -312,7 +344,8 @@ func routesPair(mux *http.ServeMux) {
 			}
 			uid, sid = g.p.User.ID, g.p.SessionID
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "url": publicBase(r) + "/pair?c=" + newPairCode(uid, sid), "ttl": int(pairTTL / time.Second)})
+		c := newPairCode(uid, sid)
+		writeJSON(w, 200, map[string]any{"ok": true, "code": c, "url": publicBase(r) + "/pair?c=" + c, "ttl": int(pairTTL / time.Second)})
 	})
 	// Mode comptes, ou sans jeton ; en mode jeton, withToken répond avant.
 	entry := func(w http.ResponseWriter, r *http.Request) {

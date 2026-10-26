@@ -133,11 +133,13 @@ chiffrée : passez par un tunnel (SSH, Tailscale…) et **ne l'exposez jamais di
 lire et supprimer vos sessions et lancer Claude.
 
 Pour connecter un téléphone sans recopier le jeton, ouvrez **Connecter un appareil** (icône de téléphone en haut de la
-barre latérale) sur un appareil déjà connecté : le QR code porte un code valable deux minutes et une seule fois. Après
-confirmation sur le téléphone, celui-ci reçoit sa propre session : en mode jeton, elle dure tant qu'il revient au moins
-une fois tous les 90 jours, se révoque depuis la même fenêtre, et tombe si le jeton change ; avec des comptes, c'est une
-session du compte qui a affiché le code, visible dans Profil › Sessions. Sur iPhone, l'appareil photo ouvre le lien
-dans Safari ; ajoutez ensuite la page à l'écran d'accueil, l'application reprend la connexion de Safari.
+barre latérale) sur un appareil déjà connecté : il affiche un code à huit chiffres, valable deux minutes et une seule
+fois. Sur le téléphone, ouvrez Glaude Code (l'application de l'écran d'accueil ou le navigateur), touchez **Connecter cet
+appareil** sous le champ du jeton ou du mot de passe, puis tapez le code : la connexion se fait là où il est tapé, donc
+dans l'application. Le même code existe en QR, mais l'appareil photo ouvre alors le navigateur, pas l'application.
+Le téléphone reçoit sa propre session : en mode jeton, elle dure tant qu'il revient au moins une fois tous les 90 jours,
+se révoque depuis la même fenêtre, et tombe si le jeton change ; avec des comptes, c'est une session du compte qui a
+affiché le code, visible dans Profil › Sessions. Dix codes faux par minute bloquent l'adresse une minute.
 
 Le QR code reprend l'adresse de la page qui l'affiche. Si vous l'affichez depuis `127.0.0.1` ou l'IP locale alors que le
 téléphone passe par un nom de domaine (proxy, tunnel), donnez cette adresse publique :

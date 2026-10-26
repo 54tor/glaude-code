@@ -89,6 +89,9 @@ export function Login() {
       <Button type="submit" className="w-full" disabled={busy || left > 0 || !name || !pw}>
         {t("auth.login.submit")}
       </Button>
+      <Button asChild variant="link" className="w-full">
+        <a href="/pair">{t("auth.login.pair")}</a>
+      </Button>
     </form>
   )
 }

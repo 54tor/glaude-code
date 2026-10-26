@@ -257,3 +257,52 @@ func TestPairPublicURL(t *testing.T) {
 		}
 	}
 }
+
+// Le code tapé sur « Connecter cet appareil » (page du jeton › /pair) connecte sans confirmation ; les codes faux
+// épuisent les essais de l'adresse.
+func TestPairTyped(t *testing.T) {
+	resetAuth(t, nil)
+	resetTokenTries()
+	t.Cleanup(resetTokenTries)
+	t.Setenv("GLD_AUTH_DIR", t.TempDir())
+	h, _, _ := web(t)
+	srv := withTokenOpen(modeTok, h)
+	tok := &http.Cookie{Name: tokenCookie, Value: modeTok}
+	post := func(c string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", "/pair", strings.NewReader("c="+url.QueryEscape(c)))
+		r.Host = testHost
+		r.Header.Set("Origin", "http://"+testHost)
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, r)
+		return w
+	}
+
+	r := httptest.NewRequest("GET", "/", nil)
+	r.Header.Set("Sec-Fetch-Mode", "navigate")
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, r)
+	if !strings.Contains(w.Body.String(), `href="/pair"`) {
+		t.Fatal("la page du jeton ne mène pas à « Connecter cet appareil »")
+	}
+	if w := pairReq(srv, "GET", "/pair", "", nil); w.Code != 200 || !strings.Contains(w.Body.String(), `name="c"`) {
+		t.Fatalf("formulaire du code : %d", w.Code)
+	}
+	code := pairCodeFrom(t, pairReq(srv, "POST", "/pair-code", "{}", tok))
+	if len(code) != 8 || pairDigits(code) != code {
+		t.Fatalf("code : %q", code)
+	}
+	w = post(code[:4] + " " + code[4:])
+	if w.Code != http.StatusSeeOther || cookieOf(w, devCookie) == nil {
+		t.Fatalf("code tapé : %d %v", w.Code, w.Result().Cookies())
+	}
+	for i := 0; i < tokenMaxTries; i++ {
+		if w := post("00000000"); w.Code != http.StatusGone {
+			t.Fatalf("code faux n°%d : %d", i+1, w.Code)
+		}
+	}
+	code = pairCodeFrom(t, pairReq(srv, "POST", "/pair-code", "{}", tok))
+	if w := post(code); w.Code != http.StatusTooManyRequests || cookieOf(w, devCookie) != nil {
+		t.Fatalf("après %d essais : %d", tokenMaxTries, w.Code)
+	}
+}
