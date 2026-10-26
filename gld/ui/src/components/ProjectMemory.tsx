@@ -175,7 +175,7 @@ export function ProjectMemory({ dir }: { dir: string }) {
                         <span className={cn("min-w-0 flex-1 truncate", f.off && "line-through opacity-60")}>{f.name}</span>
                         {f.type && <span className="shrink-0 rounded-sm bg-muted px-1.5 text-2xs text-muted-foreground">{f.type}</span>}
                         {f.paths && <span className="shrink-0 text-2xs text-muted-foreground">{t("memory.project.scoped")}</span>}
-                        <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">{f.always ? t("memory.project.tokens", { n: f.tokens }) : t("memory.project.onDemand")}</span>
+                        {f.always && <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">{t("memory.project.tokens", { n: f.tokens })}</span>}
                       </button>
                       <Button size="icon-xs" variant="ghost" className="mr-1 shrink-0 opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100" onClick={() => go(href({ kind: "memory", key: f.key }))} aria-label={t("memory.project.openAria", { name: f.name })} title={t("memory.project.openTitle")}>
                         <ExternalLink />
