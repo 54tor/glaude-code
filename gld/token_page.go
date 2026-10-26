@@ -58,21 +58,58 @@ func tokenPage(w http.ResponseWriter, code int, errKey string) {
 	gatePage(w, code, d)
 }
 
-// Essais du jeton par le formulaire : tokenMaxTries échecs par minute pour tout le serveur, puis 429 jusqu'à la minute
-// suivante. Les appareils déjà connectés (cookie) ne passent pas par là.
-// ponytail: compteur global, par adresse si un attaquant bloque le formulaire des autres.
-const tokenMaxTries = 10
+// Essais du jeton par le formulaire, par minute : tokenMaxTries échecs par adresse (clientIP, derrière un proxy déclaré
+// dans GLD_TRUSTED_PROXIES), et tokenMaxGlobal pour tout le serveur contre un essai réparti sur beaucoup d'adresses.
+// Les appareils déjà connectés (cookie) ne passent pas par là.
+const (
+	tokenMaxTries  = 10
+	tokenMaxGlobal = 100
+)
 
-var tokenTries struct {
-	sync.Mutex
+type tryWin struct {
 	n     int
 	since time.Time
 }
 
+func (t *tryWin) at(now time.Time) *tryWin {
+	if now.Sub(t.since) > time.Minute {
+		t.n, t.since = 0, now
+	}
+	return t
+}
+
+var tokenTries = struct {
+	sync.Mutex
+	all tryWin
+	by  map[string]*tryWin
+}{by: map[string]*tryWin{}}
+
 func resetTokenTries() {
 	tokenTries.Lock()
-	tokenTries.n, tokenTries.since = 0, time.Time{}
+	tokenTries.all, tokenTries.by = tryWin{}, map[string]*tryWin{}
 	tokenTries.Unlock()
+}
+
+// tokenBlocked dit si l'adresse ou le serveur a épuisé ses essais ; fail en compte un de plus.
+func tokenBlocked(ip string, fail bool) bool {
+	now := authNow()
+	tokenTries.Lock()
+	defer tokenTries.Unlock()
+	w := tokenTries.by[ip]
+	if w == nil {
+		if len(tokenTries.by) >= 4096 { // ponytail: purge complète au plafond, les fenêtres ne durent qu'une minute
+			tokenTries.by = map[string]*tryWin{}
+		}
+		w = &tryWin{}
+		tokenTries.by[ip] = w
+	}
+	w.at(now)
+	tokenTries.all.at(now)
+	if fail {
+		w.n++
+		tokenTries.all.n++
+	}
+	return w.n >= tokenMaxTries || tokenTries.all.n >= tokenMaxGlobal
 }
 
 // tokenLogin : POST /token-login, formulaire de la page du jeton.
@@ -81,24 +118,16 @@ func tokenLogin(w http.ResponseWriter, r *http.Request, token string) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	now := authNow()
-	tokenTries.Lock()
-	if now.Sub(tokenTries.since) > time.Minute {
-		tokenTries.n, tokenTries.since = 0, now
-	}
-	blocked := tokenTries.n >= tokenMaxTries
-	tokenTries.Unlock()
-	if blocked {
+	ip := clientIP(r)
+	if tokenBlocked(ip, false) {
 		w.Header().Set("Retry-After", "60")
 		tokenPage(w, http.StatusTooManyRequests, "srv.token.tooMany")
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<12)
 	if !sameToken(r.PostFormValue("token"), token) {
-		tokenTries.Lock()
-		tokenTries.n++
-		tokenTries.Unlock()
-		journal("token: jeton refusé depuis %s", clientIP(r))
+		tokenBlocked(ip, true)
+		journal("token: jeton refusé depuis %s", ip)
 		tokenPage(w, http.StatusUnauthorized, "srv.token.bad")
 		return
 	}
