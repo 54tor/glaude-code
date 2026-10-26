@@ -388,6 +388,8 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
         id="menu"
         aria-describedby={undefined}
         showCloseButton={false}
+        // Focus sur le tiroir lui-même, pas sur son premier bouton : sinon l'infobulle de ce bouton s'ouvre sur la recherche.
+        onOpenAutoFocus={(e) => (e.preventDefault(), (e.currentTarget as HTMLElement).focus())}
         // Le tiroir s'ouvre depuis le bouton de l'en-tête, hors de tout DialogTrigger : on lui rend le focus à la main.
         onCloseAutoFocus={(e) => {
           e.preventDefault()
