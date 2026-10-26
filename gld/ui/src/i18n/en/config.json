@@ -275,6 +275,8 @@
       "raw": "Edit as text…",
       "importTitle": "Adds or replaces this file's rules from an export",
       "import": "Import…",
+      "resetTitle": "Removes every rule and extra folder from this file (preview and backup before writing)",
+      "reset": "Reset",
       "tooBig": "File too large",
       "dialogTitle": "Import permission rules",
       "dialogDesc": "Into {{label}}. The default mode (defaultMode) is never imported.",

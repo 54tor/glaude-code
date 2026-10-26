@@ -275,6 +275,8 @@
       "raw": "Éditer en texte…",
       "importTitle": "Ajoute ou remplace les règles de ce fichier d'après un export",
       "import": "Importer…",
+      "resetTitle": "Retire toutes les règles et dossiers supplémentaires de ce fichier (aperçu et sauvegarde avant écriture)",
+      "reset": "Réinitialiser",
       "tooBig": "Fichier trop gros",
       "dialogTitle": "Importer des règles de permission",
       "dialogDesc": "Vers {{label}}. Le mode par défaut (defaultMode) n'est jamais importé.",

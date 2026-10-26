@@ -69,9 +69,14 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTran
     await moveRule(file, edit.kind, edit.rule, edit.to, text)
   }
   const add = (kind: string, rule: string) => propose({ file, op: "add", path: ["permissions", kind], value: rule })
+  // Vide les quatre listes : l'aperçu montre l'écart et la sauvegarde précède l'écriture, comme pour un import.
+  const reset = async () => {
+    const err = await proposePerms(file, JSON.stringify({ allow: [], ask: [], deny: [], additionalDirectories: [] }), "replace")
+    if (err) toast.error(err)
+  }
   return (
     <div className="space-y-5">
-      <PermIOButtons file={file} label={label} doc={doc} onImport={() => setImporting(true)} onRaw={() => setRaw(true)} />
+      <PermIOButtons file={file} label={label} doc={doc} onImport={() => setImporting(true)} onRaw={() => setRaw(true)} onReset={reset} />
       <PermRawDialog open={raw} file={file} label={label} doc={doc} propose={proposePerms} onClose={() => setRaw(false)} />
       <PermImportDialog open={importing} file={file} label={label} propose={proposePerms} onClose={() => setImporting(false)} />
       {KINDS.map((kind) => {

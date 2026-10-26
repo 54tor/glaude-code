@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Copy, Download, FilePen, Upload } from "lucide-react"
+import { Copy, Download, FilePen, RotateCcw, Upload } from "lucide-react"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
@@ -16,8 +16,9 @@ export function permsFragment(doc: Doc): string {
   return JSON.stringify({ permissions: out }, null, 2) + "\n"
 }
 
-export function PermIOButtons({ file, label, doc, onImport, onRaw }: { file: string; label: string; doc: Doc; onImport: () => void; onRaw: () => void }) {
+export function PermIOButtons({ file, label, doc, onImport, onRaw, onReset }: { file: string; label: string; doc: Doc; onImport: () => void; onRaw: () => void; onReset: () => void }) {
   const { t } = useTranslation()
+  const dirs = (doc?.permissions as Record<string, unknown> | undefined)?.additionalDirectories
   const count = ["allow", "ask", "deny"].reduce((n, k) => n + (Array.isArray((doc?.permissions as Record<string, unknown> | undefined)?.[k]) ? ((doc!.permissions as Record<string, unknown[]>)[k]).length : 0), 0)
   const download = () => {
     const a = document.createElement("a")
@@ -44,6 +45,9 @@ export function PermIOButtons({ file, label, doc, onImport, onRaw }: { file: str
       </Button>
       <Button size="sm" variant="outline" onClick={onImport} title={t("config.permIO.importTitle")}>
         <Upload /> {t("config.permIO.import")}
+      </Button>
+      <Button size="sm" variant="outline" className="text-destructive" onClick={onReset} disabled={count === 0 && !(Array.isArray(dirs) && dirs.length)} title={t("config.permIO.resetTitle")}>
+        <RotateCcw /> {t("config.permIO.reset")}
       </Button>
     </div>
   )
