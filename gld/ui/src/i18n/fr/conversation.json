@@ -40,7 +40,7 @@
       "modeVisual": "Mode visuel",
       "modeTerminal": "Mode terminal",
       "modeTitle": "Bascule entre la conversation et le terminal complet de la session",
-      "instructions": "Instructions",
+      "instructions": "Pré-Prompt",
       "instructionsTitle": "Fichiers d'instructions que Claude a réellement chargés dans cette session",
       "toTop": "Aller au début",
       "toEnd": "Aller à la fin",

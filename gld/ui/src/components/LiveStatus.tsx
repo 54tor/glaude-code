@@ -1,7 +1,7 @@
 import { i18n, loc } from "@/i18n"
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { BarChart3, Bot, Loader2, Wrench } from "lucide-react"
+import { Bot, Loader2, Wrench } from "lucide-react"
 import { api, type LiveState, type Msg, type SubLive, type Tokens } from "@/lib/api"
 import { compact, tokTotal } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -110,7 +110,7 @@ export function LiveBar({ live: { st, open }, id }: { live: Live; id: string }) 
 
 // Contexte, tokens et sous-agents sur une ligne, le détail dans une fenêtre.
 // shown/onShown : la fenêtre peut aussi s'ouvrir depuis le menu « … » du lecteur (petit écran, bouton masqué).
-export function LiveStats({ live: { st, open }, tok, shown, onShown }: { live: Live; tok: Tokens; shown?: boolean; onShown?: (v: boolean) => void }) {
+export function LiveStats({ live: { st }, tok, shown, onShown }: { live: Live; tok: Tokens; shown?: boolean; onShown?: (v: boolean) => void }) {
   const { t } = useTranslation()
   const [own, setOwn] = useState(false)
   const stats = shown ?? own
@@ -118,14 +118,6 @@ export function LiveStats({ live: { st, open }, tok, shown, onShown }: { live: L
   if (!st) return null
   return (
     <>
-      <span className="ml-auto flex items-center gap-x-3 px-1 text-xs text-muted-foreground tabular-nums">
-        {!(open && st.open) && <span className="font-medium">{t("conversation.live.closed")}</span>}
-        {st.context > 0 && <span className="max-md:hidden" title={t("conversation.live.contextTitle")}>ctx {compact(st.context)}</span>}
-        <span className="max-md:hidden" title={t("conversation.live.tokensTitle")}>{compact(tokTotal(tok))} tok</span>
-      </span>
-      <Button size="sm" variant="ghost" className="max-md:hidden" onClick={() => setStats(true)} title={t("conversation.live.statsTitle")}>
-        <BarChart3 /> <span className="max-md:sr-only">{t("conversation.live.stats")}</span>
-      </Button>
       <Dialog open={stats} onOpenChange={setStats}>
         <DialogContent className="flex max-h-[85vh] min-w-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
           <DialogHeader className="border-b px-6 py-4">

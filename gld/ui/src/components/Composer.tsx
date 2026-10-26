@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Trans, useTranslation } from "react-i18next"
 import { i18n } from "@/i18n"
 import { cn, isSend } from "@/lib/utils"
@@ -59,6 +59,7 @@ export function Composer({
   onDone,
   onAsk,
   onWrite,
+  extra,
 }: {
   dir: string
   id: string
@@ -72,6 +73,7 @@ export function Composer({
   onDone: () => void | Promise<void>
   onAsk?: (asking: boolean) => void // Claude attend une réponse dans le terminal
   onWrite?: () => void // l'utilisateur envoie un message : la vue descend
+  extra?: ReactNode // commandes de la vue, affichées au-dessus de la zone de saisie
 }) {
   const { t } = useTranslation()
   const exec = useCan()("exec")
@@ -157,11 +159,12 @@ export function Composer({
   }
   const stop = () => ((stopped.current = true), api.post("/chat-stop", { id }))
 
-  if (live && !running && !own) return <LiveSend dir={dir} id={id} onSent={onSent} liveState={liveState} onAsk={onAsk} />
+  if (live && !running && !own) return <LiveSend dir={dir} id={id} onSent={onSent} liveState={liveState} onAsk={onAsk} bar={extra} />
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-7xl space-y-2">
         {mention.list}
+        {extra && <div className="flex justify-end">{extra}</div>}
         <textarea
           ref={fieldRef}
           value={text}
@@ -221,7 +224,7 @@ export function Composer({
 
 // Session ouverte dans un terminal : deux processus ne peuvent pas écrire le même transcript, donc pas de claude -p ici. Si la session
 // tourne dans tmux, le message y est collé puis validé ; sinon on l'explique.
-function LiveSend({ dir, id, onSent, liveState, onAsk }: { dir: string; id: string; onSent: () => void; liveState: Live; onAsk?: (asking: boolean) => void }) {
+function LiveSend({ dir, id, onSent, liveState, onAsk, bar }: { dir: string; id: string; onSent: () => void; liveState: Live; onAsk?: (asking: boolean) => void; bar?: ReactNode }) {
   const { t } = useTranslation()
   const exec = useCan()("exec")
   const [info, setInfo] = useState<{ ids: string[]; why: string } | null>(null)
@@ -300,13 +303,14 @@ function LiveSend({ dir, id, onSent, liveState, onAsk }: { dir: string; id: stri
           <Trans i18nKey="conversation.composer.noTmux" components={[<code key="0" />]} />
           {info && " " + t("conversation.composer.relaunch", { why: info.why ? ` (${info.why})` : "" })}
         </p>
+        {bar}
         <CloseSession id={id} />
       </div>
     )
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-7xl space-y-2">
-        <TerminalPanel id={id} onAsk={(a) => (setAsking(a), onAsk?.(a))} onSent={onSent} />
+        <TerminalPanel id={id} onAsk={(a) => (setAsking(a), onAsk?.(a))} onSent={onSent} extra={bar} />
         {sugg.length > 0 && (
           <ul className="max-h-48 overflow-y-auto rounded-lg border bg-popover p-1 text-sm shadow-md" role="listbox" aria-label={t("conversation.composer.commandsAria")}>
             {sugg.map(([cmd, label], i) => (
@@ -421,7 +425,7 @@ function CloseSession({ id }: { id: string }) {
 }
 
 // L'écran du terminal de la session (tmux) relu toutes les 1,5 s, pour proposer en boutons les options détectées.
-function TerminalPanel({ id, onAsk, onSent }: { id: string; onAsk?: (asking: boolean) => void; onSent: () => void }) {
+function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (asking: boolean) => void; onSent: () => void; extra?: ReactNode }) {
   const { t } = useTranslation()
   const [screen, setScreen] = useState("")
   const busy = useRef(false) // une touche vient d'être envoyée : l'écran affiché peut être périmé
@@ -553,7 +557,8 @@ function TerminalPanel({ id, onAsk, onSent }: { id: string; onAsk?: (asking: boo
           </div>
         </div>
       )}
-      <div className="flex justify-end">
+      <div className="flex items-center justify-end gap-1">
+        {extra}
         <Button size="xs" variant="ghost" className="text-muted-foreground" onClick={() => setDebug(!debug)} aria-pressed={debug} title={t("conversation.composer.rawScreenTitle")}>
           <Bug /> {t("conversation.composer.rawScreen")}
         </Button>

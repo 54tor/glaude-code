@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowDown, ArrowDownToLine, ArrowUpToLine, BarChart3, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, FolderOpen, Repeat, SquareTerminal, Wrench } from "lucide-react"
+import { ArrowDown, ArrowUpToLine, BarChart3, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, Repeat, SquareTerminal, Wrench } from "lucide-react"
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
@@ -18,7 +18,7 @@ import { Message } from "./Message"
 import { Composer, type Turn } from "./Composer"
 import { LiveBar, LiveStats, useLive } from "./LiveStatus"
 import { LoadedDialog } from "./LoadedDialog"
-import { KeepWarmBanner, KeepWarmButton, KeepWarmItem, SessionStat } from "./KeepWarm"
+import { KeepWarmBanner, KeepWarmItem, SessionStat } from "./KeepWarm"
 import { useLocal } from "@/hooks/useLocal"
 import { useGit } from "@/hooks/useGit"
 import { GitBadge } from "./GitBadge"
@@ -30,7 +30,7 @@ const FullTerminal = lazy(() => import("./FullTerminal")) // xterm n'est chargé
 // Messages chargés d'un coup (par la fin) : une session de plusieurs Go compte des milliers de messages.
 const PAGE = 200
 
-function Meta({ s, d }: { s: Session; d: Detail | null }) {
+function Meta({ s, d, onFolder }: { s: Session; d: Detail | null; onFolder?: () => void }) {
   const { t } = useTranslation()
   const a = useActions()
   const live = a.live.has(s.id)
@@ -49,7 +49,13 @@ function Meta({ s, d }: { s: Session; d: Detail | null }) {
       {live && <BgBadge id={s.id} />}
       {bits.map((b, i) => (
         <span key={i} className={i === 0 ? "truncate" : i > 1 ? "shrink-0 max-md:hidden" : "shrink-0"}>
-          {b}
+          {i === 0 && onFolder ? (
+            <button type="button" onClick={onFolder} title={t("shell.common.showFolder")} className="max-w-full cursor-pointer truncate underline-offset-2 hover:text-foreground hover:underline">
+              {b}
+            </button>
+          ) : (
+            b
+          )}
         </span>
       ))}
     </p>
@@ -300,9 +306,9 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             <div className="min-w-0 flex-1 space-y-1">
               <DialogTitle className="truncate text-lg tracking-tight">{session?.title}</DialogTitle>
               <DialogDescription className="sr-only">{t("conversation.view.description")}</DialogDescription>
-              {session && <Meta s={session} d={detail} />}
+              {session && <Meta s={session} d={detail} onFolder={onFolder} />}
             </div>
-            {session && <SessionStat s={session} live={live} />}
+            {session && <SessionStat s={session} live={live} onStats={() => setStatsOpen(true)} />}
           </div>
         </DialogHeader>
         {session && <KeepWarmBanner s={session} />}
@@ -319,33 +325,14 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
         )}
         {/* Petit écran : une seule ligne (reprendre, aller à la fin, menu « … » qui reprend les autres commandes) ; l'état git passe dessous. */}
         <div className="flex flex-wrap items-center gap-1 border-b bg-muted/40 px-2 py-1.5 in-data-[kb]:hidden md:px-4">
-          <Button variant={tools ? "secondary" : "ghost"} size="sm" className="max-md:hidden" onClick={() => setTools(!tools)} aria-pressed={tools}>
-            <Wrench /> {tools ? t("conversation.view.toolsShown") : t("conversation.view.toolsHidden")}
-          </Button>
           {termOn && a.live.has(id) && (
             <Button variant="secondary" size="sm" className="max-md:hidden" onClick={() => setView(inTerm ? "visuel" : "terminal")} title={t("conversation.view.modeTitle")}>
               {inTerm ? <MessagesSquare /> : <SquareTerminal />} {inTerm ? t("conversation.view.modeVisual") : t("conversation.view.modeTerminal")}
             </Button>
           )}
-          {onFolder && (
-            <Button variant="ghost" size="sm" onClick={onFolder} title={t("shell.common.showFolder")}>
-              <FolderOpen /> <span className="max-md:sr-only">{t("shell.common.showFolder")}</span>
-            </Button>
-          )}
           <Button variant="ghost" size="sm" className="max-md:hidden" onClick={() => setLoadedOpen(true)} title={t("conversation.view.instructionsTitle")}>
             <FileText /> {t("conversation.view.instructions")}
           </Button>
-          <Button variant="ghost" size="icon-sm" className="max-md:hidden" onClick={toTop} aria-label={t("conversation.view.toTop")} title={t("conversation.view.toTop")}>
-            <ArrowUpToLine />
-          </Button>
-          <Button variant="ghost" size="icon-sm" onClick={toEnd} aria-label={t("conversation.view.toEnd")} title={t("conversation.view.toEnd")}>
-            <ArrowDownToLine />
-          </Button>
-          {session && (
-            <span className="contents max-md:hidden">
-              <KeepWarmButton s={session} />
-            </span>
-          )}
           {session && <LiveStats live={live} tok={session.tok} shown={statsOpen} onShown={setStatsOpen} />}
           {gitDirs.length > 0 && (
             <div className="flex flex-wrap items-center gap-1 max-md:order-last max-md:w-full md:contents">
@@ -407,7 +394,17 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             <FullTerminal key={id} id={id} />
           </Suspense>
         )}
-        <div className={inTerm ? "hidden" : "relative flex min-h-0 flex-1 flex-col"}>
+        <div className={inTerm ? "hidden" : "group/scroll relative flex min-h-0 flex-1 flex-col"}>
+          <Button
+            size="icon-sm"
+            variant="secondary"
+            className="absolute top-3 right-4 z-10 rounded-full opacity-0 shadow-md transition-opacity group-hover/scroll:opacity-100 focus-visible:opacity-100 max-md:hidden"
+            onClick={toTop}
+            aria-label={t("conversation.view.toTop")}
+            title={t("conversation.view.toTop")}
+          >
+            <ArrowUpToLine />
+          </Button>
         <ScrollArea ref={area} className="min-h-0 flex-1">
           <div className="session-text mx-auto max-w-5xl space-y-6 px-3 py-4 md:px-8 md:py-6">
             {msgs === null && (
@@ -458,6 +455,11 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             liveState={live}
             onSent={() => (a.touch(id), setSentAt({ id, at: Date.now() }), sentDown(), void reloadRef.current(), carousel?.next())}
             onWrite={sentDown}
+            extra={
+              <Button variant={tools ? "secondary" : "ghost"} size="xs" className="text-muted-foreground max-md:hidden" onClick={() => setTools(!tools)} aria-pressed={tools}>
+                <Wrench /> {tools ? t("conversation.view.toolsShown") : t("conversation.view.toolsHidden")}
+              </Button>
+            }
             turn={turn}
             setTurn={(f) => setChat((c) => f(c?.id === id ? c : null))}
             // Le transcript contient maintenant le tour : on le relit, et le tour affiché à part disparaît (sauf erreur).

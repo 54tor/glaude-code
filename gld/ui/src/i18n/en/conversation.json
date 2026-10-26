@@ -40,7 +40,7 @@
       "modeVisual": "Visual mode",
       "modeTerminal": "Terminal mode",
       "modeTitle": "Switch between the conversation and the session's full terminal",
-      "instructions": "Instructions",
+      "instructions": "Pre-prompt",
       "instructionsTitle": "Instruction files Claude actually loaded in this session",
       "toTop": "Go to the start",
       "toEnd": "Go to the end",

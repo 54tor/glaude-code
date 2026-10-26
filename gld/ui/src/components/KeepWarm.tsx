@@ -1,4 +1,4 @@
-import { Coins, Flame, Microwave, Snowflake } from "lucide-react"
+import { BarChart3, Coins, Flame, Microwave, Snowflake } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api, type Session, type Tokens } from "@/lib/api"
@@ -122,8 +122,8 @@ export function KeepWarmBanner({ s }: { s: Session }) {
   )
 }
 
-// Statistiques de la session affichée, en haut à droite : cache restant, contexte, tokens, maintien.
-export function SessionStat({ s, live }: { s: Session; live: Live }) {
+// Colonne de droite de l'en-tête : cache restant, état « fermée », bouton « Stats » (contexte, tokens) et maintien au chaud.
+export function SessionStat({ s, live, onStats }: { s: Session; live: Live; onStats: () => void }) {
   const { t } = useTranslation()
   const a = useActions()
   const warm = useKeepWarm()[s.id]
@@ -137,10 +137,17 @@ export function SessionStat({ s, live }: { s: Session; live: Live }) {
           {warm?.on && <Microwave className="warm-wave size-3.5" aria-label={t("conversation.keepWarm.warmAria")} />}
         </span>
       )}
-      <span className="max-md:hidden" title={t("conversation.live.tokensTitle")}>
-        {live.st && live.st.context > 0 && <>ctx {compact(live.st.context)}&ensp;</>}
-        {compact(tokTotal(s.tok as Tokens))} tok
-      </span>
+      <div className="flex items-center gap-1">
+        {live.st && !(live.open && live.st.open) && <span className="font-medium">{t("conversation.live.closed")}</span>}
+        <Button size="xs" variant="ghost" className="tabular-nums max-md:hidden" onClick={onStats} disabled={!live.st} title={t("conversation.live.statsTitle")}>
+          <BarChart3 />
+          {t("conversation.live.stats")} :
+          {live.st && live.st.context > 0 && <> ctx {compact(live.st.context)}</>} {compact(tokTotal(s.tok as Tokens))} tok
+        </Button>
+        <span className="max-md:hidden">
+          <KeepWarmButton s={s} />
+        </span>
+      </div>
     </div>
   )
 }
