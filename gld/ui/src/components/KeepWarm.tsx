@@ -26,7 +26,7 @@ export function KeepWarmButton({ s }: { s: Session }) {
         <Microwave className="warm-wave" /> <span className="max-md:sr-only">{t("conversation.keepWarm.active")}</span>
       </Button>
     )
-  if (!a.live.has(s.id))
+  if (!a.live.has(s.id) || a.background.has(s.id)) // un ping part dans un terminal : une tâche de fond n'en a pas
     return (
       <Button variant="ghost" size="sm" disabled title={t("conversation.keepWarm.closedTitle")}>
         <Microwave /> <span className="max-md:sr-only">{t("conversation.keepWarm.button")}</span>
@@ -74,7 +74,7 @@ export function KeepWarmItem({ s }: { s: Session }) {
         <Microwave className="warm-wave" /> {t("conversation.keepWarm.active")}
       </DropdownMenuItem>
     )
-  if (!a.live.has(s.id))
+  if (!a.live.has(s.id) || a.background.has(s.id)) // un ping part dans un terminal : une tâche de fond n'en a pas
     return (
       <DropdownMenuItem disabled>
         <Microwave /> {t("conversation.keepWarm.button")}

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowDown, ArrowUpToLine, BarChart3, Bug, FolderOpen, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, Repeat, SquareTerminal, Wrench } from "lucide-react"
+import { ArrowDown, ArrowUpToLine, BarChart3, Bug, FolderOpen, Power, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, Repeat, SquareTerminal, Wrench } from "lucide-react"
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
@@ -38,7 +38,6 @@ function Meta({ s, onFolder, extra }: { s: Session; onFolder?: () => void; extra
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground in-data-[kb]:hidden">
       {live && <Live waiting={a.waiting.has(s.id)} />}
-      {live && <BgBadge id={s.id} />}
       {bits.map((b, i) => (
         <span key={i} className={i === 0 ? "min-w-0 truncate" : "shrink-0 max-md:hidden"}>
           {i === 0 && onFolder ? (
@@ -359,7 +358,16 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
                 <div className="flex items-center gap-2 max-md:hidden">
                   <KeepWarmButton s={session} />
                   <CacheState s={session} />
-                  <span className="font-medium">{a.live.has(id) ? t("shell.info.open") : t("shell.info.closed")}</span>
+                  {a.background.has(id) ? (
+                    <>
+                      <BgBadge id={id} />
+                      <Button variant="outline" size="xs" className="text-destructive" onClick={() => a.stop([id])} title={t("shell.list.backgroundHint")}>
+                        <Power /> {t("conversation.view.stopBackground")}
+                      </Button>
+                    </>
+                  ) : (
+                    <span className="font-medium">{a.live.has(id) ? t("shell.info.open") : t("shell.info.closed")}</span>
+                  )}
                 </div>
                 <div className="flex items-center gap-1">
                   <StatsButton live={live} s={session} onClick={() => setStatsOpen(true)} />

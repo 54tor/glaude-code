@@ -231,6 +231,7 @@ export function Composer({
 // tourne dans tmux, le message y est collé puis validé ; sinon on l'explique.
 function LiveSend({ id, onSent, liveState, onAsk, bar }: { id: string; onSent: () => void; liveState: Live; onAsk?: (asking: boolean) => void; bar?: ReactNode }) {
   const { t } = useTranslation()
+  const a = useActions()
   const exec = useCan()("exec")
   const [info, setInfo] = useState<{ ids: string[]; why: string } | null>(null)
   const { text, queue } = useDraft(id) // gardé par session : fermer la fenêtre ou un échec d'envoi ne le perd pas
@@ -310,8 +311,14 @@ function LiveSend({ id, onSent, liveState, onAsk, bar }: { id: string; onSent: (
     return (
       <div className="flex items-center gap-3 border-t px-6 py-3 text-xs text-muted-foreground">
         <p className="min-w-0 flex-1 text-center">
-          <Trans i18nKey="conversation.composer.noTmux" components={[<code key="0" />]} />
-          {info && " " + t("conversation.composer.relaunch", { why: info.why ? ` (${info.why})` : "" })}
+          {a.background.has(id) ? (
+            t("conversation.composer.backgroundOnly")
+          ) : (
+            <>
+              <Trans i18nKey="conversation.composer.noTmux" components={[<code key="0" />]} />
+              {info && " " + t("conversation.composer.relaunch", { why: info.why ? ` (${info.why})` : "" })}
+            </>
+          )}
         </p>
         {bar}
         <CloseSession id={id} />
