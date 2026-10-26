@@ -1,25 +1,4 @@
-import {
-  BookOpen,
-  Check,
-  CheckSquare,
-  ClipboardList,
-  Copy,
-  Download,
-  FolderInput,
-  MessageSquarePlus,
-  Hash,
-  Info,
-  MessageSquareReply,
-  Pencil,
-  Plus,
-  Power,
-  SquareTerminal,
-  Star,
-  StarOff,
-  Tag,
-  Trash2,
-  X,
-} from "lucide-react"
+import { BookOpen, Check, CheckSquare, ClipboardList, Copy, Download, FolderInput, MessageSquarePlus, Hash, Info, MessageSquareReply, Pencil, Plus, Power, Star, StarOff, Tag, Trash2, X, RefreshCcwDot } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { VGroup } from "@/lib/api"
 import {
@@ -170,7 +149,7 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
       )}
       {full && !g.missing && (
         <M.Item onSelect={() => a.open({ dir: s.dir, id: s.id })}>
-          <SquareTerminal /> {t("shell.list.resume")}
+          <RefreshCcwDot /> {t("shell.list.resume")}
         </M.Item>
       )}
       {!g.missing && (
@@ -242,7 +221,7 @@ export function GroupItems({ M, vg, page }: { M: Kit; vg: VGroup; page?: boolean
         </M.Item>
       )}
       <M.Item onSelect={() => ga.open(vg)} disabled={!n}>
-        <SquareTerminal /> {t("shell.menu.resumeAll", { sessions: t("shell.count.sessions", { count: n }) })}
+        <RefreshCcwDot /> {t("shell.menu.resumeAll", { sessions: t("shell.count.sessions", { count: n }) })}
       </M.Item>
       <M.Item onSelect={() => ga.prompt(vg)} disabled={!n}>
         <MessageSquarePlus /> {t("shell.menu.newWithRefs")}

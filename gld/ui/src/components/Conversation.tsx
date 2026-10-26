@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowDown, ArrowUpToLine, BarChart3, Bug, FolderOpen, Minimize2, Power, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, Repeat, SquareTerminal, Wrench } from "lucide-react"
+import { ArrowDown, ArrowUpToLine, BarChart3, Bug, FolderOpen, Minimize2, Power, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, Repeat, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
@@ -325,7 +325,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
         <>
           {session && (
             <DropdownMenuItem onSelect={() => a.open({ dir: session.dir, id: session.id })}>
-              <SquareTerminal /> {t("conversation.view.resume")}
+              <RefreshCcwDot /> {t("conversation.view.resume")}
             </DropdownMenuItem>
           )}
           <DropdownMenuItem onSelect={() => setLoadedOpen(true)} title={t("conversation.view.instructionsTitle")}>

@@ -1,4 +1,4 @@
-import { FolderInput, Menu, MessageSquarePlus, MoreHorizontal, SquareTerminal, Trash2, TriangleAlert } from "lucide-react"
+import { FolderInput, Menu, MessageSquarePlus, MoreHorizontal, Trash2, TriangleAlert, RefreshCcwDot } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { Group, Item, VGroup } from "@/lib/api"
@@ -95,7 +95,7 @@ export function PageHeader({
           )}
           {g && !g.missing && exec && (
             <Button variant="outline" size="sm" onClick={() => actions.open({ dir: firstDir! })} title={t("shell.header.resumeRecentHint")}>
-              <SquareTerminal /> {t("shell.tree.resumeRecent")}
+              <RefreshCcwDot /> {t("shell.tree.resumeRecent")}
             </Button>
           )}
           {vg && rowCount > 0 && exec && (
@@ -104,7 +104,7 @@ export function PageHeader({
                 <MessageSquarePlus /> {t("shell.header.newSession")}
               </Button>
               <Button variant="outline" size="sm" onClick={() => groupActs.open(vg)} title={t("shell.header.resumeAllHint")}>
-                <SquareTerminal /> {t("shell.header.resumeAll")}
+                <RefreshCcwDot /> {t("shell.header.resumeAll")}
               </Button>
             </>
           )}

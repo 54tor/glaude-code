@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { setOpen, useOpen, useOpenState } from "@/hooks/useOpen"
-import { Check, ChevronRight, FolderInput, FolderMinus, Layers, MessageSquarePlus, Plus, SquareTerminal, Star, Tag, Trash2, TriangleAlert } from "lucide-react"
+import { Check, ChevronRight, FolderInput, FolderMinus, Layers, MessageSquarePlus, Plus, Star, Tag, Trash2, TriangleAlert, RefreshCcwDot } from "lucide-react"
 import type { GitState, Group, Session, VGroup } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { CM, GroupItems } from "./SessionMenu"
@@ -21,7 +21,7 @@ export function ProjectItems({ g, ss = g.sessions, extra }: { g: Group; ss?: Ses
       {extra}
       {!g.missing && own.length > 0 && (
         <ContextMenuItem onSelect={() => a.open({ dir: own[0].dir })}>
-          <SquareTerminal /> {t("shell.tree.resumeRecent")}
+          <RefreshCcwDot /> {t("shell.tree.resumeRecent")}
         </ContextMenuItem>
       )}
       {!g.missing && (

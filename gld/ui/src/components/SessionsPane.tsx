@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { ChevronRight, Lock, Search, SquareTerminal, WifiOff } from "lucide-react"
+import { ChevronRight, Lock, Search, WifiOff, RefreshCcwDot } from "lucide-react"
 import type { VGroup } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { segs } from "@/lib/paths"
@@ -116,7 +116,7 @@ export function SessionsPane({
                       onClick={() => actions.open({ dir: rs[0].s.dir })}
                       title={t("shell.pane.resumeFolderHint")}
                     >
-                      <SquareTerminal /> <span className="hidden lg:inline">{t("shell.pane.resumeFolder")}</span>
+                      <RefreshCcwDot /> <span className="hidden lg:inline">{t("shell.pane.resumeFolder")}</span>
                     </Button>
                   )}
                 </div>
