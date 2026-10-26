@@ -86,6 +86,10 @@ func withToken(token string, next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if r.Method == "POST" && r.URL.Path == "/token-login" {
+			tokenLogin(w, r, token)
+			return
+		}
 		if r.URL.Path == "/pair" { // confirmation et échange d'un code de jumelage, avant tout jeton
 			pairEntry(w, r, nil)
 			return
@@ -99,6 +103,10 @@ func withToken(token string, next http.Handler) http.Handler {
 			q.Del("token")
 			u := url.URL{Path: "/" + strings.TrimLeft(r.URL.Path, "/"), RawQuery: q.Encode()} // jamais « //hôte » : redirection locale seulement
 			http.Redirect(w, r, u.String(), http.StatusSeeOther)
+			return
+		}
+		if wantsPage(r) { // navigateur ou PWA sans cookie : saisir le jeton plutôt qu'un 401 en texte
+			tokenPage(w, http.StatusOK, "")
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")

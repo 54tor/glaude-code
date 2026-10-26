@@ -15,7 +15,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"html/template"
 	"io"
 	"io/fs"
 	"net/http"
@@ -199,26 +198,6 @@ func deviceOK(cookie string) bool {
 	return i >= 0
 }
 
-var pairTmpl = template.Must(template.New("pair").Parse(`<!doctype html>
-<html lang="{{.Lang}}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{.Title}}</title>
-<style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:17px -apple-system,system-ui,sans-serif;background:#111418;color:#e8eaed}
-main{max-width:22rem;padding:1.5rem;text-align:center}p{color:#a0a4ab;line-height:1.5}
-button{font:inherit;font-weight:600;min-height:44px;padding:.75rem 1.75rem;border:0;border-radius:.6rem;background:#5a9a3e;color:#fff}
-@media (prefers-color-scheme:light){body{background:#fff;color:#111418}p{color:#555}}</style></head>
-<body><main><h1>{{.Title}}</h1><p>{{.Text}}</p>{{if .Code}}<form method="post" action="/pair"><input type="hidden" name="c" value="{{.Code}}"><button>{{.Button}}</button></form>{{end}}</main></body></html>
-`))
-
-func pairPage(w http.ResponseWriter, code int, title, text, c string) {
-	h := w.Header()
-	h.Set("Content-Type", "text/html; charset=utf-8")
-	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
-	h.Set("Cache-Control", "no-store")
-	h.Set("Referrer-Policy", "no-referrer") // le code est dans l'adresse
-	w.WriteHeader(code)
-	pairTmpl.Execute(w, map[string]string{"Lang": uiLang(), "Title": title, "Text": text, "Code": c, "Button": L("srv.pair.button")})
-}
-
 var pairCOP = http.NewCrossOriginProtection()
 
 // pairEntry : GET /pair (confirmation, sans effet) et POST /pair (création de la session). st nil : mode jeton.
@@ -230,7 +209,9 @@ func pairEntry(w http.ResponseWriter, r *http.Request, st *authStore) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
-	expired := func() { pairPage(w, http.StatusGone, L("srv.pair.title"), L("srv.pair.expired"), "") }
+	expired := func() {
+		gatePage(w, http.StatusGone, gateData{Title: L("srv.pair.title"), Text: L("srv.pair.expired")})
+	}
 	if r.Method == "GET" {
 		c := r.URL.Query().Get("c")
 		p, ok := pairLookup(c, false)
@@ -247,7 +228,7 @@ func pairEntry(w http.ResponseWriter, r *http.Request, st *authStore) {
 			}
 			text = L("srv.pair.textAccount", "A1", u.Name)
 		}
-		pairPage(w, 200, L("srv.pair.title"), text, c)
+		gatePage(w, 200, gateData{Title: L("srv.pair.title"), Text: text, Action: "/pair", Hidden: c, Button: L("srv.pair.button")})
 		return
 	}
 	if pairCOP.Check(r) != nil {
