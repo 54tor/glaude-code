@@ -34,4 +34,9 @@ func routesStatic(mux *http.ServeMux) {
 	mux.Handle("GET /icons/", files)
 	mux.Handle("GET /favicon.ico", files)
 	mux.Handle("GET /manifest.webmanifest", files)
+	// Service worker : à la racine pour couvrir tout le site ; jamais mis en cache lui-même, pour que sa mise à jour soit vue tout de suite.
+	mux.HandleFunc("GET /sw.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		files.ServeHTTP(w, r)
+	})
 }

@@ -23,6 +23,9 @@ if (vv) {
   fit()
 }
 
+// Service worker : cache des ressources statiques et clic sur les notifications (contexte sécurisé : HTTPS ou localhost).
+if (import.meta.env.PROD && "serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {})
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider>
