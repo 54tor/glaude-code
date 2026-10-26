@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { TYPES } from "./MemoryTypes"
+import { TYPES, typeOf } from "./MemoryTypes"
 import { Markdown } from "./Message"
 import { copy, movable, split } from "./memoryLib"
 import { reportResult } from "@/lib/report"
@@ -164,16 +164,17 @@ export function ProjectMemory({ dir }: { dir: string }) {
       {open && (
         <ul className="grid gap-px border-t p-1 md:grid-cols-2">
           {sorted.map((f) => {
-            const Icon = icon(f.key)
+            const ty = typeOf(f.type)
+            const Icon = ty?.icon ?? icon(f.key)
             return (
               <li key={f.key}>
                 <ContextMenu>
                   <ContextMenuTrigger asChild>
                     <div className="group/row flex items-center rounded-md hover:bg-muted">
                       <button onClick={() => setShown({ f, edit: false })} className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-sm" title={f.path}>
-                        <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+                        <Icon className={cn("size-3.5 shrink-0", ty?.color ?? "text-muted-foreground")} />
                         <span className={cn("min-w-0 flex-1 truncate", f.off && "line-through opacity-60")}>{f.name}</span>
-                        {f.type && <span className="shrink-0 rounded-sm bg-muted px-1.5 text-2xs text-muted-foreground">{f.type}</span>}
+                        {ty && <span className={cn("shrink-0 rounded-sm bg-muted px-1.5 text-2xs", ty.color)}>{ty.label}</span>}
                         {f.paths && <span className="shrink-0 text-2xs text-muted-foreground">{t("memory.project.scoped")}</span>}
                         {f.always && <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">{t("memory.project.tokens", { n: f.tokens })}</span>}
                       </button>
