@@ -91,6 +91,11 @@ export function Composer({
   // Brouillon et file vivent dans un magasin par session (useDraft) : fermer la fenêtre ne les perd pas, et l'envoi des messages
   // en file continue même fenêtre fermée.
   const setQ = (q: string[]) => setDraft(id, { queue: q })
+  // Annuler un message en file le remet dans la zone de saisie (à la suite de ce qui s'y trouve déjà).
+  const unqueue = (i: number) => {
+    const d = draftOf(id)
+    setDraft(id, { queue: d.queue.filter((_, j) => j !== i), text: d.text.trim() ? `${d.text}\n${d.queue[i]}` : d.queue[i] })
+  }
   const stopped = useRef(false) // arrêt demandé par l'utilisateur : le message était bien parti
   const send = () => {
     const rn = /^\/rename\s+(\S[\s\S]*)$/.exec(text.trim())
@@ -187,7 +192,7 @@ export function Composer({
                 <span className="min-w-0 flex-1 truncate" title={q}>
                   {q}
                 </span>
-                <Button size="icon-xs" variant="ghost" aria-label={t("conversation.composer.dequeue")} onClick={() => setQ(queue.filter((_, j) => j !== i))}>
+                <Button size="icon-xs" variant="ghost" aria-label={t("conversation.composer.dequeue")} onClick={() => unqueue(i)}>
                   <X />
                 </Button>
               </li>
@@ -232,6 +237,11 @@ function LiveSend({ id, onSent, liveState, onAsk, bar }: { id: string; onSent: (
   const setText = (t: string) => setDraft(id, { text: t })
   const mention = useMention(text, setText, id)
   const setQ = (q: string[]) => setDraft(id, { queue: q })
+  // Annuler un message en file le remet dans la zone de saisie (à la suite de ce qui s'y trouve déjà).
+  const unqueue = (i: number) => {
+    const d = draftOf(id)
+    setDraft(id, { queue: d.queue.filter((_, j) => j !== i), text: d.text.trim() ? `${d.text}\n${d.queue[i]}` : d.queue[i] })
+  }
   const [busy, setBusy] = useState(false)
   const [asking, setAsking] = useState(false) // une question attend une réponse dans le terminal : rien ne s'y écrit tant qu'elle est ouverte
   const working = !!liveState.st?.thinking
@@ -364,28 +374,14 @@ function LiveSend({ id, onSent, liveState, onAsk, bar }: { id: string; onSent: (
                   {q}
                 </span>
                 {i === 0 && <span className="shrink-0">{asking ? t("conversation.composer.afterQuestion") : working ? t("conversation.composer.whenIdle") : t("conversation.composer.sending")}</span>}
-                <Button size="icon-xs" variant="ghost" aria-label={t("conversation.composer.dequeue")} onClick={() => setQ(queue.filter((_, j) => j !== i))}>
+                <Button size="icon-xs" variant="ghost" aria-label={t("conversation.composer.dequeue")} onClick={() => unqueue(i)}>
                   <X />
                 </Button>
               </li>
             ))}
           </ul>
         )}
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="ml-auto" />
-          {liveState.st?.thinking && (
-            <Button
-              size="sm"
-              variant="outline"
-              title={t("conversation.composer.interruptTitle")}
-              onClick={async () => {
-                const r = await api.post("/session-key", { id, key: "Escape" })
-                if (!r.ok) toast.error(r.out)
-              }}
-            >
-              <Square /> {t("conversation.composer.interrupt")}
-            </Button>
-          )}
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <Choose
             value={models().find(([a]) => a && liveState.st?.model?.toLowerCase().includes(a))?.[0] ?? ""}
             onChange={async (m) => m && (await post(`/model ${m}`)) && onSent()}
@@ -400,8 +396,22 @@ function LiveSend({ id, onSent, liveState, onAsk, bar }: { id: string; onSent: (
             label={t("conversation.composer.sessionEffort")}
             disabled={working || asking || busy}
           />
+          <span className="ml-auto" />
           <SlashMenu id={id} text={text} onSent={onSent} />
           <CloseSession id={id} />
+          {liveState.st?.thinking && (
+            <Button
+              size="sm"
+              variant="outline"
+              title={t("conversation.composer.interruptTitle")}
+              onClick={async () => {
+                const r = await api.post("/session-key", { id, key: "Escape" })
+                if (!r.ok) toast.error(r.out)
+              }}
+            >
+              <Square /> {t("conversation.composer.interrupt")}
+            </Button>
+          )}
           <Button size="sm" onClick={send} disabled={(!text.trim() && !pics.images.length) || busy || !exec}>
             <Send /> {t("conversation.composer.sendToSession")}
           </Button>
