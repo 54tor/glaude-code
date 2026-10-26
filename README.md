@@ -127,7 +127,8 @@ Par défaut, la page n'est visible que depuis votre ordinateur. Pour l'ouvrir de
 gld --listen 0.0.0.0
 ```
 
-Glaude Code affiche alors une adresse contenant un **jeton secret** : ouvrez-la telle quelle. La connexion n'est pas
+Glaude Code affiche alors une adresse contenant un **jeton secret** : ouvrez-la telle quelle. Sans cette adresse, la page
+demande le jeton ; elle porte l'icône et le manifeste, donc l'ajout à l'écran d'accueil d'un iPhone fonctionne depuis elle. La connexion n'est pas
 chiffrée : passez par un tunnel (SSH, Tailscale…) et **ne l'exposez jamais directement sur Internet**, car la page peut
 lire et supprimer vos sessions et lancer Claude.
 
