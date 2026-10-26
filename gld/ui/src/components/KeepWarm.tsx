@@ -29,14 +29,14 @@ export function KeepWarmButton({ s }: { s: Session }) {
   if (!a.live.has(s.id))
     return (
       <Button variant="ghost" size="sm" disabled title={t("conversation.keepWarm.closedTitle")}>
-        <Flame /> <span className="max-md:sr-only">{t("conversation.keepWarm.button")}</span>
+        <Microwave /> <span className="max-md:sr-only">{t("conversation.keepWarm.button")}</span>
       </Button>
     )
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="sm" title={t("conversation.keepWarm.buttonTitle")}>
-          <Flame /> <span className="max-md:sr-only">{t("conversation.keepWarm.button")}</span>
+          <Microwave /> <span className="max-md:sr-only">{t("conversation.keepWarm.button")}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-80">
@@ -77,13 +77,13 @@ export function KeepWarmItem({ s }: { s: Session }) {
   if (!a.live.has(s.id))
     return (
       <DropdownMenuItem disabled>
-        <Flame /> {t("conversation.keepWarm.button")}
+        <Microwave /> {t("conversation.keepWarm.button")}
       </DropdownMenuItem>
     )
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
-        <Flame /> {t("conversation.keepWarm.button")}
+        <Microwave /> {t("conversation.keepWarm.button")}
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className="w-72">
         <Offers s={s} />
