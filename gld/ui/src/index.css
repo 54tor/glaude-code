@@ -229,3 +229,10 @@
 .safe-b { padding-bottom: env(safe-area-inset-bottom); }
 [data-kb] .safe-b { padding-bottom: 0; }
 .safe-x { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+
+/* iOS zoome la page au focus de tout champ écrit en moins de 16 px (Monaco et xterm compris, d'où !important sur leur style en ligne). */
+@supports (-webkit-touch-callout: none) {
+  @media (pointer: coarse) {
+    input, textarea, select { font-size: 16px !important; }
+  }
+}
