@@ -6,7 +6,7 @@ import { Check, ClipboardCopy, FolderOpen, Globe, Pencil, Plus, RotateCcw, Spark
 import type { BackupInfo, CfgEdit, CfgOverview, PermSuggest } from "@/lib/api"
 import { api } from "@/lib/api"
 import { describeKey } from "@/lib/configKeys"
-import { cn } from "@/lib/utils"
+import { cn, copyText } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -132,7 +132,7 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTran
                   <ContextMenuItem onSelect={() => setEdit({ kind, rule: r, text: r, to: kind })}>
                     <Pencil /> {t("config.perms.edit")}
                   </ContextMenuItem>
-                  <ContextMenuItem onSelect={() => navigator.clipboard.writeText(r).then(() => toast.success(t("config.shared.ruleCopied")), () => toast.error(t("config.shared.copyFailed")))}>
+                  <ContextMenuItem onSelect={() => copyText(r).then(() => toast.success(t("config.shared.ruleCopied")), () => toast.error(t("config.shared.copyFailed")))}>
                     <ClipboardCopy /> {t("config.perms.copyRule")}
                   </ContextMenuItem>
                   {kind !== DIRS && (

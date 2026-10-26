@@ -4,6 +4,7 @@ import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { copyText } from "@/lib/utils"
 
 type Doc = Record<string, unknown> | undefined
 
@@ -28,7 +29,7 @@ export function PermIOButtons({ file, label, doc, onImport, onRaw, onReset }: { 
     URL.revokeObjectURL(a.href)
   }
   const copy = () =>
-    navigator.clipboard.writeText(permsFragment(doc)).then(
+    copyText(permsFragment(doc)).then(
       () => toast.success(t("config.permIO.copied")),
       () => toast.error(t("config.shared.copyFailed"))
     )

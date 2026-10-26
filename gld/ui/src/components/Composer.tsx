@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Trans, useTranslation } from "react-i18next"
 import { i18n } from "@/i18n"
-import { cn, isSend } from "@/lib/utils"
+import { cn, copyText, isSend } from "@/lib/utils"
 import { modeOfScreen, parsePrompt, type Opt } from "@/lib/prompt"
 import { type Live } from "./LiveStatus"
 import { toast } from "sonner"
@@ -614,7 +614,7 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
           <pre className="max-h-40 overflow-auto rounded-lg border bg-muted/40 px-3 py-2 font-mono leading-snug whitespace-pre-wrap" aria-label={t("conversation.composer.detectorAria")}>
             {prompt ? JSON.stringify(prompt, null, 1) : t("conversation.composer.noPrompt")}
           </pre>
-          <Button size="xs" variant="outline" onClick={() => navigator.clipboard.writeText(screen).then(() => toast.success(t("conversation.composer.screenCopied")), () => toast.error(t("conversation.composer.copyFailed")))}>
+          <Button size="xs" variant="outline" onClick={() => copyText(screen).then(() => toast.success(t("conversation.composer.screenCopied")), () => toast.error(t("conversation.composer.copyFailed")))}>
             <Copy /> {t("conversation.composer.copyScreen")}
           </Button>
         </div>

@@ -5,7 +5,7 @@ import { AlertTriangle, ArrowLeft, BookOpen, Bot, ClipboardCopy, Copy, EyeOff, F
 import { toast } from "sonner"
 import { api, type Skill, type SkillFile } from "@/lib/api"
 import { ago, tilde } from "@/lib/format"
-import { cn } from "@/lib/utils"
+import { cn, copyText } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from "@/components/ui/context-menu"
@@ -125,7 +125,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
     onPick(key)
     setDraft({ key, text: r.text })
   }
-  const copyName = (s: Skill) => navigator.clipboard.writeText("/" + s.dir).then(() => toast.success(t("skills.skills.nameCopied", { dir: s.dir })), () => toast.error(t("skills.skills.copyFailed")))
+  const copyName = (s: Skill) => copyText("/" + s.dir).then(() => toast.success(t("skills.skills.nameCopied", { dir: s.dir })), () => toast.error(t("skills.skills.copyFailed")))
   const [fm, body] = split(cur?.text ?? "")
 
   return (

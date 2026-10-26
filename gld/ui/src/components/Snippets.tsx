@@ -4,7 +4,7 @@ import { ArrowLeft, Bot, Check, ClipboardCopy, Copy, Download, Link, Loader2, Me
 import { toast } from "sonner"
 import { api, type SnipScope, type Snippet } from "@/lib/api"
 import { ago, size, tilde } from "@/lib/format"
-import { cn } from "@/lib/utils"
+import { cn, copyText } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -81,19 +81,19 @@ export function Snippets({
     setDraft({ key: sel, text: txt })
   }
 
-  const copyText = (txt: string, what: "Content" | "Command" | "Path") =>
-    navigator.clipboard.writeText(txt).then(
+  const copyAs = (txt: string, what: "Content" | "Command" | "Path") =>
+    copyText(txt).then(
       () => toast.success(t(`skills.snippets.copied${what}`)),
       () => toast.error(t("skills.snippets.copyFailed"))
     )
   const copyContent = async (s: Snippet) => {
     const r = await api.snippet(s.key)
     if (r.text === undefined) return void toast.error(r.error ?? t("skills.snippets.unreadable"))
-    copyText(r.text, "Content")
+    copyAs(r.text, "Content")
   }
   const copy = () =>
     text !== null &&
-    navigator.clipboard.writeText(text).then(
+    copyText(text).then(
       () => {
         setCopied(true)
         setTimeout(() => setCopied(false), 1200)
@@ -223,10 +223,10 @@ export function Snippets({
                             <ContextMenuItem onSelect={() => copyContent(s)}>
                               <ClipboardCopy /> {t("skills.snippets.copyContent")}
                             </ContextMenuItem>
-                            <ContextMenuItem onSelect={() => copyText(s.command, "Command")}>
+                            <ContextMenuItem onSelect={() => copyAs(s.command, "Command")}>
                               <Terminal /> {t("skills.snippets.copyCommand")}
                             </ContextMenuItem>
-                            <ContextMenuItem onSelect={() => copyText(s.path, "Path")}>
+                            <ContextMenuItem onSelect={() => copyAs(s.path, "Path")}>
                               <Link /> {t("skills.snippets.copyPath")}
                             </ContextMenuItem>
                           </ContextMenuContent>

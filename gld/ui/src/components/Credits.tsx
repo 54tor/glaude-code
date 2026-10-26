@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Tip } from "@/components/ui/tooltip"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { copyText } from "@/lib/utils"
 
 // Adresses de soutien : vides, la ligne correspondante n'est pas affichée.
 const XMR = "869vB9woRhE1EHMHuYxho3JUj1kooxPDc1ejRw1999kNddapW2qPh9A1G7467itLQ5XYhFKFHp8cw3S53Ut62XtBB2dpx6W"
@@ -54,7 +55,7 @@ function Libs({ title, rows }: { title: string; rows: string[][] }) {
 function Addr({ label, name, value, scheme }: { label: string; name: string; value: string; scheme: string }) {
   const { t } = useTranslation()
   if (!value) return null
-  const copy = () => navigator.clipboard.writeText(value).then(() => toast.success(t("shell.credits.copied", { name })), () => toast.error(t("shell.credits.copyFailed")))
+  const copy = () => copyText(value).then(() => toast.success(t("shell.credits.copied", { name })), () => toast.error(t("shell.credits.copyFailed")))
   return (
     <div className="rounded-lg border bg-muted/30 p-3">
       <div className="mb-1.5 flex items-center gap-2 text-sm font-medium">

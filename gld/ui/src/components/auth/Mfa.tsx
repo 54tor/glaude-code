@@ -10,8 +10,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { ErrorLine, Heading } from "./Login"
+import { copyText } from "@/lib/utils"
 
-const copy = (text: string, ok: string) => void navigator.clipboard?.writeText(text).then(() => toast.success(ok), () => {})
+const copy = (text: string, ok: string) => void copyText(text).then(() => toast.success(ok), () => {})
 
 export function CodeInput({ id, label, value, onChange, totp }: { id: string; label: string; value: string; onChange: (v: string) => void; totp?: boolean }) {
   return (

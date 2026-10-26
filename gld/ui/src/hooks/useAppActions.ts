@@ -15,6 +15,7 @@ import type { ComposeAsk, Target } from "@/components/Compose"
 import type { Pick } from "@/components/DirPicker"
 import type { Ask as PromptAsk } from "@/components/Prompt"
 import { reportResult } from "@/lib/report"
+import { copyText } from "@/lib/utils"
 
 const ns = (count: number) => i18n.t("shell.count.sessions", { count })
 const NO_CAPS: Caps = { hotCache: false, keepWarm: false, config: false, memory: false, tuiPrompts: false, resume: false }
@@ -212,7 +213,7 @@ export function useAppActions(c: {
     show: (x) => go({ kind: "group", name: x.name, key: gkey(x) }),
     open: (x) => openMany(groupRows(x).filter((r) => !r.g.missing && !live.has(r.s.id))),
     refs: (x) =>
-      navigator.clipboard.writeText(refs(x)).then(
+      copyText(refs(x)).then(
         () =>
           toast.success(i18n.t("shell.act.refsCopied"), {
             description: i18n.t("shell.act.refsCopiedDesc", { sessions: ns(groupRows(x).length), name: x.name }),
@@ -392,7 +393,7 @@ export function useAppActions(c: {
           }),
     resumeSend: (r, text) => act("/open", { dir: r.s.dir, id: r.s.id, args: withChoice(args, choice), prompt: text }, i18n.t("shell.act.resuming"), "last"),
     copy: (s) =>
-      navigator.clipboard.writeText(s.id).then(
+      copyText(s.id).then(
         () =>
           toast.success(i18n.t("shell.act.idCopied"), {
             description: s.id,

@@ -2,6 +2,7 @@ import { i18n, loc } from "@/i18n"
 import { ALargeSmall, Clock, HardDrive } from "lucide-react"
 import { toast } from "sonner"
 import type { MemFile, MemProject, MemTarget } from "@/lib/api"
+import { copyText } from "@/lib/utils"
 
 export type List = { global: MemFile[]; projects: MemProject[]; targets: MemTarget[] }
 
@@ -38,7 +39,7 @@ export const toMemory = (key: string) => !key.startsWith("r/")
 
 // done : clé de catalogue du message de succès.
 export const copy = (text: string, done: string) =>
-  navigator.clipboard.writeText(text).then(
+  copyText(text).then(
     () => toast.success(i18n.t(done)),
     () => toast.error(i18n.t("memory.lib.copyFailed"))
   )

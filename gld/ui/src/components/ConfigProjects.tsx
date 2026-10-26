@@ -5,7 +5,7 @@ import { api, type ProjectCfg } from "@/lib/api"
 import { describeKey } from "@/lib/configKeys"
 import { href } from "@/lib/route"
 import { tilde } from "@/lib/format"
-import { cn } from "@/lib/utils"
+import { cn, copyText } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
@@ -137,7 +137,7 @@ export function ProjectsTab({ home, version, gone, onAddDir, suggest, onEdit, on
                               </li>
                               </ContextMenuTrigger>
                               <ContextMenuContent className="w-60">
-                                <ContextMenuItem onSelect={() => navigator.clipboard.writeText(r.rule).then(() => toast.success(t("config.shared.ruleCopied")), () => toast.error(t("config.shared.copyFailed")))}>
+                                <ContextMenuItem onSelect={() => copyText(r.rule).then(() => toast.success(t("config.shared.ruleCopied")), () => toast.error(t("config.shared.copyFailed")))}>
                                   <ClipboardCopy /> {t("config.perms.copyRule")}
                                 </ContextMenuItem>
                                 <ContextMenuItem onSelect={() => onTransfer(`${r.scope}/${p.dir}`, k, r.rule, false)}>
