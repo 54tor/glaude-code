@@ -354,7 +354,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
         className="flex h-[calc(var(--vvh,100dvh)*0.94)] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0 max-md:top-[var(--vvt,0px)] max-md:left-0 max-md:h-[var(--vvh,100dvh)] max-md:w-screen max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none max-md:border-0 sm:max-w-none"
         onCloseAutoFocus={(e) => focusRow(lastId.current) && e.preventDefault()}
       >
-        <DialogHeader className="gap-1 border-b px-4 pt-4 pr-12 pb-3 md:px-6 md:pt-5 md:pr-14 md:pb-4">
+        <DialogHeader className="gap-1 border-b px-4 pt-2.5 pr-12 pb-3 md:px-6 md:pr-12 md:pb-4">
           <div className="flex items-start gap-4">
             <div className="min-w-0 flex-1 space-y-1">
               <DialogTitle className="truncate text-lg tracking-tight">{session?.title}</DialogTitle>
@@ -363,7 +363,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             </div>
             {session && (
               <div className="flex shrink-0 flex-col items-end gap-1 text-xs text-muted-foreground">
-                <div className="flex items-center gap-2 max-md:hidden">
+                <div className="flex min-h-7 items-center gap-2 max-md:hidden">
                   <KeepWarmButton s={session} />
                   <CacheState s={session} />
                   {a.background.has(id) ? (
