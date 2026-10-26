@@ -390,17 +390,17 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
                     </>
                   ) : null}
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="-mr-[38px] flex items-center gap-1">
                   <StatsButton live={live} s={session} onClick={() => setStatsOpen(true)} />
                   {row && !row.g.missing && (
                     <Button variant="outline" size="xs" className="max-md:hidden" onClick={() => a.newSession(row.g.project)} title={t("conversation.view.newSessionTitle")}>
                       <MessageSquarePlus /> {t("conversation.view.newSession")}
                     </Button>
                   )}
+                  {moreMenu}
                 </div>
               </div>
             )}
-            {session && <div className="absolute top-[42px] right-2.5">{moreMenu}</div>}
           </div>
         </DialogHeader>
         {session && <KeepWarmBanner s={session} />}
