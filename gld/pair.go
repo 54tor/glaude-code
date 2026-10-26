@@ -4,7 +4,7 @@ package main
 // l'affiche en clair et en QR. Le téléphone le saisit sur « Connecter cet appareil » (/pair, liée depuis la page du jeton
 // et l'écran de connexion) : la session naît là où il le tape, donc dans la PWA. Le QR ouvre /pair?c=…, une page de
 // confirmation sans effet (un aperçu de lien ne consomme rien) dont le bouton envoie le même POST de même origine.
-// Les codes faux comptent dans les essais du jeton (tokenBlocked) : 10^8 codes, deux minutes, 10 essais par minute.
+// Les codes faux comptent dans les essais du jeton (tokenTry) : 10^8 codes, deux minutes, 10 essais par minute.
 // Mode jeton : session d'appareil (devices.json, 90 jours sans visite), liée au jeton : en changer coupe tous les appareils.
 // Mode comptes : session du compte dans auth.db, second facteur acquis, tant que la session qui a émis le code vit.
 
@@ -242,7 +242,7 @@ func pairEntry(w http.ResponseWriter, r *http.Request, st *authStore) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	if tokenBlocked(ip, false) {
+	if !tokenTry(ip) {
 		w.Header().Set("Retry-After", "60")
 		form(http.StatusTooManyRequests, "srv.token.tooMany")
 		return
@@ -251,10 +251,10 @@ func pairEntry(w http.ResponseWriter, r *http.Request, st *authStore) {
 		c := pairDigits(r.URL.Query().Get("c"))
 		p, ok := pairLookup(c, false)
 		if !ok || (p.uid != 0) != (st != nil) {
-			tokenBlocked(ip, true)
 			expired()
 			return
 		}
+		tokenRefund(ip)
 		text := L("srv.pair.textToken")
 		if st != nil {
 			u, err := st.userByID(st.db, p.uid)
@@ -270,10 +270,10 @@ func pairEntry(w http.ResponseWriter, r *http.Request, st *authStore) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<12)
 	p, ok := pairLookup(pairDigits(r.PostFormValue("c")), true)
 	if !ok || (p.uid != 0) != (st != nil) {
-		tokenBlocked(ip, true)
 		expired()
 		return
 	}
+	tokenRefund(ip)
 	if st == nil {
 		c, err := addDevice(r.UserAgent(), ip)
 		if err != nil {

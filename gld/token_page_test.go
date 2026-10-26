@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -81,5 +83,28 @@ func TestTokenPage(t *testing.T) {
 	}
 	if w := tokenFormFrom(srv, modeTok, same, "198.51.100.8:1"); w.Code != http.StatusTooManyRequests {
 		t.Fatalf("plafond global : %d", w.Code)
+	}
+}
+
+// Des essais simultanés ne dépassent pas le plafond : la réservation et le contrôle se font sous le même verrou.
+func TestTokenTryConcurrent(t *testing.T) {
+	resetTokenTries()
+	t.Cleanup(resetTokenTries)
+	var ok atomic.Int32
+	var wg sync.WaitGroup
+	for range 50 {
+		wg.Go(func() {
+			if tokenTry("192.0.2.9") {
+				ok.Add(1)
+			}
+		})
+	}
+	wg.Wait()
+	if ok.Load() != tokenMaxTries {
+		t.Fatalf("%d essais admis, plafond %d", ok.Load(), tokenMaxTries)
+	}
+	tokenRefund("192.0.2.9")
+	if !tokenTry("192.0.2.9") {
+		t.Fatal("un essai rendu n'est pas réutilisable")
 	}
 }

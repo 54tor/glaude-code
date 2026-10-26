@@ -93,8 +93,9 @@ func resetTokenTries() {
 	tokenTries.Unlock()
 }
 
-// tokenBlocked dit si l'adresse ou le serveur a épuisé ses essais ; fail en compte un de plus.
-func tokenBlocked(ip string, fail bool) bool {
+// tokenTry réserve un essai, sous le même verrou que le contrôle : des requêtes simultanées ne passent pas toutes avant
+// le premier échec. false : l'adresse ou le serveur a épuisé ses essais. Un essai réussi se rend par tokenRefund.
+func tokenTry(ip string) bool {
 	now := authNow()
 	tokenTries.Lock()
 	defer tokenTries.Unlock()
@@ -108,11 +109,23 @@ func tokenBlocked(ip string, fail bool) bool {
 	}
 	w.at(now)
 	tokenTries.all.at(now)
-	if fail {
-		w.n++
-		tokenTries.all.n++
+	if w.n >= tokenMaxTries || tokenTries.all.n >= tokenMaxGlobal {
+		return false
 	}
-	return w.n >= tokenMaxTries || tokenTries.all.n >= tokenMaxGlobal
+	w.n++
+	tokenTries.all.n++
+	return true
+}
+
+func tokenRefund(ip string) {
+	tokenTries.Lock()
+	defer tokenTries.Unlock()
+	if w := tokenTries.by[ip]; w != nil && w.n > 0 {
+		w.n--
+	}
+	if tokenTries.all.n > 0 {
+		tokenTries.all.n--
+	}
 }
 
 // tokenLogin : POST /token-login, formulaire de la page du jeton.
@@ -122,18 +135,18 @@ func tokenLogin(w http.ResponseWriter, r *http.Request, token string) {
 		return
 	}
 	ip := clientIP(r)
-	if tokenBlocked(ip, false) {
+	if !tokenTry(ip) {
 		w.Header().Set("Retry-After", "60")
 		tokenPage(w, http.StatusTooManyRequests, "srv.token.tooMany")
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<12)
 	if !sameToken(r.PostFormValue("token"), token) {
-		tokenBlocked(ip, true)
 		journal("token: jeton refusé depuis %s", ip)
 		tokenPage(w, http.StatusUnauthorized, "srv.token.bad")
 		return
 	}
+	tokenRefund(ip)
 	http.SetCookie(w, &http.Cookie{Name: tokenCookie, Value: token, Path: "/", MaxAge: 30 * 24 * 3600, HttpOnly: true, Secure: requestHTTPS(r), SameSite: http.SameSiteStrictMode})
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
