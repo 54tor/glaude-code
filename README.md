@@ -131,6 +131,13 @@ Glaude Code affiche alors une adresse contenant un **jeton secret** : ouvrez-la 
 chiffrée : passez par un tunnel (SSH, Tailscale…) et **ne l'exposez jamais directement sur Internet**, car la page peut
 lire et supprimer vos sessions et lancer Claude.
 
+Pour connecter un téléphone sans recopier le jeton, ouvrez **Connecter un appareil** (icône de téléphone en haut de la
+barre latérale) sur un appareil déjà connecté : le QR code porte un code valable deux minutes et une seule fois. Après
+confirmation sur le téléphone, celui-ci reçoit sa propre session : en mode jeton, elle dure tant qu'il revient au moins
+une fois tous les 90 jours, se révoque depuis la même fenêtre, et tombe si le jeton change ; avec des comptes, c'est une
+session du compte qui a affiché le code, visible dans Profil › Sessions. Sur iPhone, l'appareil photo ouvre le lien
+dans Safari ; ajoutez ensuite la page à l'écran d'accueil, l'application reprend la connexion de Safari.
+
 Sur iPhone et iPad, l'application installée (« Sur l'écran d'accueil ») n'a ni notifications, ni copie native, ni clé
 de sécurité tant qu'elle est servie en HTTP. gld peut servir lui-même en HTTPS avec un certificat auquel l'appareil fait
 confiance, par exemple créé avec [mkcert](https://github.com/FiloSottile/mkcert) (installez son autorité racine sur
