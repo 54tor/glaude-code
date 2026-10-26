@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowDown, ArrowUpToLine, BarChart3, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, Repeat, SquareTerminal, Wrench } from "lucide-react"
+import { ArrowDown, ArrowUpToLine, BarChart3, Bug, FolderOpen, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, Repeat, SquareTerminal, Wrench } from "lucide-react"
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
@@ -30,7 +30,7 @@ const FullTerminal = lazy(() => import("./FullTerminal")) // xterm n'est chargé
 // Messages chargés d'un coup (par la fin) : une session de plusieurs Go compte des milliers de messages.
 const PAGE = 200
 
-function Meta({ s, d, onFolder }: { s: Session; d: Detail | null; onFolder?: () => void }) {
+function Meta({ s, onFolder }: { s: Session; onFolder?: () => void }) {
   const { t } = useTranslation()
   const a = useActions()
   const live = a.live.has(s.id)
@@ -38,10 +38,6 @@ function Meta({ s, d, onFolder }: { s: Session; d: Detail | null; onFolder?: () 
     tilde(s.cwd, a.home),
     full(s.mtime),
     size(s.kb),
-    d && t("conversation.view.meta.prompts", { count: d.n }),
-    d?.subagents ? t("conversation.view.meta.subagents", { count: d.subagents }) : null,
-    d?.branch && t("conversation.view.meta.branch", { name: d.branch }),
-    d?.models.filter((m) => !m.startsWith("<")).join(", "),
   ].filter(Boolean)
   return (
     <p className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground max-md:flex-nowrap max-md:overflow-hidden in-data-[kb]:hidden">
@@ -50,9 +46,9 @@ function Meta({ s, d, onFolder }: { s: Session; d: Detail | null; onFolder?: () 
       {bits.map((b, i) => (
         <span key={i} className={i === 0 ? "truncate" : i > 1 ? "shrink-0 max-md:hidden" : "shrink-0"}>
           {i === 0 && onFolder ? (
-            <button type="button" onClick={onFolder} title={t("shell.common.showFolder")} className="max-w-full cursor-pointer truncate underline-offset-2 hover:text-foreground hover:underline">
-              {b}
-            </button>
+            <Button variant="outline" size="xs" onClick={onFolder} title={t("shell.common.showFolder")} className="max-w-full justify-start">
+              <FolderOpen /> <span className="truncate">{b}</span>
+            </Button>
           ) : (
             b
           )}
@@ -308,7 +304,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             <div className="min-w-0 flex-1 space-y-1">
               <DialogTitle className="truncate text-lg tracking-tight">{session?.title}</DialogTitle>
               <DialogDescription className="sr-only">{t("conversation.view.description")}</DialogDescription>
-              {session && <Meta s={session} d={detail} onFolder={onFolder} />}
+              {session && <Meta s={session} onFolder={onFolder} />}
             </div>
             {session && <SessionStat s={session} live={live} onStats={() => setStatsOpen(true)} />}
           </div>
@@ -335,7 +331,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
           <Button variant="ghost" size="sm" className="max-md:hidden" onClick={() => setLoadedOpen(true)} title={t("conversation.view.instructionsTitle")}>
             <FileText /> {t("conversation.view.instructions")}
           </Button>
-          {session && <LiveStats live={live} tok={session.tok} shown={statsOpen} onShown={setStatsOpen} />}
+          {session && <LiveStats live={live} s={session} detail={detail} shown={statsOpen} onShown={setStatsOpen} />}
           {gitDirs.length > 0 && (
             <div className="flex flex-wrap items-center gap-1 max-md:order-last max-md:w-full md:contents">
               {gitDirs.map((d) => (
@@ -375,11 +371,9 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
                   <DropdownMenuItem onSelect={() => setLoadedOpen(true)}>
                     <FileText /> {t("conversation.view.instructions")}
                   </DropdownMenuItem>
-                  {live.st && (
-                    <DropdownMenuItem onSelect={() => setStatsOpen(true)}>
-                      <BarChart3 /> {t("conversation.live.stats")}
-                    </DropdownMenuItem>
-                  )}
+                  <DropdownMenuItem onSelect={() => setStatsOpen(true)}>
+                    <BarChart3 /> {t("conversation.live.stats")}
+                  </DropdownMenuItem>
                   {session && <KeepWarmItem s={session} />}
                   <DropdownMenuSeparator />
                 </DropdownMenuGroup>
@@ -453,9 +447,16 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             onSent={() => (a.touch(id), setSentAt({ id, at: Date.now() }), sentDown(), void reloadRef.current(), carousel?.next())}
             onWrite={sentDown}
             extra={
-              <Button variant={tools ? "secondary" : "ghost"} size="xs" className="text-muted-foreground max-md:hidden" onClick={() => setTools(!tools)} aria-pressed={tools}>
-                <Wrench /> {tools ? t("conversation.view.toolsShown") : t("conversation.view.toolsHidden")}
-              </Button>
+              <>
+                {!a.live.has(id) && (
+                  <Button size="xs" variant="ghost" disabled className="text-muted-foreground" title={t("conversation.composer.rawScreenTitle")}>
+                    <Bug /> {t("conversation.composer.rawScreen")}
+                  </Button>
+                )}
+                <Button variant={tools ? "secondary" : "ghost"} size="xs" className="text-muted-foreground max-md:hidden" onClick={() => setTools(!tools)} aria-pressed={tools}>
+                  <Wrench /> {tools ? t("conversation.view.toolsShown") : t("conversation.view.toolsHidden")}
+                </Button>
+              </>
             }
             turn={turn}
             setTurn={(f) => setChat((c) => f(c?.id === id ? c : null))}

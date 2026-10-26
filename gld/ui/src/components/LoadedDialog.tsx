@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { Trans, useTranslation } from "react-i18next"
 import { api, type LoadEvent } from "@/lib/api"
 import { ago, tilde } from "@/lib/format"
+import { FileText } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 const REASONS: Record<string, string> = {
@@ -23,6 +24,11 @@ export const HOOK_SNIPPET = `"hooks": {
 export function LoadedDialog({ id, home, open, onClose }: { id: string; home: string; open: boolean; onClose: () => void }) {
   const { t } = useTranslation()
   const [files, setFiles] = useState<LoadEvent[] | null>(null)
+  const [view, setView] = useState<{ file: string; text: string | null } | null>(null) // fichier ouvert dans une fenêtre au-dessus
+  const openFile = (file: string) => {
+    setView({ file, text: null })
+    api.sessionLoadedFile(id, file).then((r) => setView((v) => (v?.file === file ? { file, text: r.text ?? "" } : v)), () => setView((v) => (v?.file === file ? { file, text: "" } : v)))
+  }
   useEffect(() => {
     if (!open || !id) return
     let live = true
@@ -51,7 +57,9 @@ export function LoadedDialog({ id, home, open, onClose }: { id: string; home: st
             <ul className="space-y-1 pr-3 text-sm">
               {files.map((f, i) => (
                 <li key={i} className="rounded-md px-2 py-1 hover:bg-muted">
-                  <span className="break-all">{tilde(f.file, home)}</span>
+                  <button type="button" onClick={() => openFile(f.file)} title={t("conversation.loaded.openFile")} className="flex cursor-pointer items-start gap-1.5 text-left break-all hover:underline">
+                    <FileText className="mt-0.5 size-3.5 shrink-0" /> {tilde(f.file, home)}
+                  </button>
                   <span className="block text-xs text-muted-foreground">
                     {REASONS[f.reason ?? ""] ? t(REASONS[f.reason ?? ""]) : f.reason}
                     {f.globs?.length ? ` · ${f.globs.join(", ")}` : ""}
@@ -63,6 +71,15 @@ export function LoadedDialog({ id, home, open, onClose }: { id: string; home: st
           </div>
         )}
       </DialogContent>
+      <Dialog open={!!view} onOpenChange={(o) => !o && setView(null)}>
+        <DialogContent className="flex h-[85vh] max-h-[85vh] min-w-0 flex-col overflow-hidden sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-sm break-all">{view && tilde(view.file, home)}</DialogTitle>
+            <DialogDescription className="sr-only">{t("conversation.loaded.fileDescription")}</DialogDescription>
+          </DialogHeader>
+          <pre className="min-h-0 flex-1 overflow-auto rounded-lg border bg-muted/40 p-3 text-xs whitespace-pre-wrap">{view?.text ?? "…"}</pre>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   )
 }

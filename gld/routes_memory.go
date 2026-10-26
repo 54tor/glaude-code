@@ -235,6 +235,24 @@ func routesMemory(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"files": ev})
 	})
+	mux.HandleFunc("GET /session-loaded-file", func(w http.ResponseWriter, r *http.Request) {
+		id, file := r.URL.Query().Get("id"), r.URL.Query().Get("file")
+		if !idRe.MatchString(id) {
+			writeJSON(w, 400, map[string]any{})
+			return
+		}
+		// Seuls les fichiers que le hook a vus charger dans cette session se lisent : pas de lecture de chemin arbitraire.
+		known := false
+		for _, e := range loadsOfSession(readLoaded(), id) {
+			known = known || e.File == file
+		}
+		b, err := os.ReadFile(file)
+		if !known || err != nil || len(b) > memMax || !utf8.Valid(b) {
+			writeJSON(w, 404, map[string]any{})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"text": string(b)})
+	})
 	mux.HandleFunc("GET /memory-search", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"hits": memSearch(r.URL.Query().Get("q"))})
 	})

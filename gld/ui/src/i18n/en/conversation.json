@@ -215,6 +215,8 @@
       "tokensTitle": "Tokens processed (excluding cache read)",
       "statsTitle": "Tokens used and last call",
       "stats": "Stats",
+      "sessionHeading": "Session",
+      "cacheHeading": "Prompt cache",
       "statsHeading": "Session statistics",
       "statsDescription": "Session tokens and context",
       "usage": "Usage",
@@ -308,6 +310,8 @@
         "compact": "after compaction"
       },
       "title": "Loaded instructions",
+      "openFile": "Open this file",
+      "fileDescription": "Contents of a file Claude loaded",
       "description": "Files Claude read in this session: CLAUDE.md, rules, imports.",
       "empty": "Nothing recorded for this session: tracking is not installed, or the session predates it.",
       "enable": "To enable it, add this to Claude Code's settings (<0>~/.claude/settings.json</0>) and run <1>make install</1> to get <2>gld</2> in <3>~/.local/bin</3>:",

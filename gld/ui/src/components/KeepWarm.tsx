@@ -122,31 +122,34 @@ export function KeepWarmBanner({ s }: { s: Session }) {
   )
 }
 
-// Colonne de droite de l'en-tête : cache restant, état « fermée », bouton « Stats » (contexte, tokens) et maintien au chaud.
-export function SessionStat({ s, live, onStats }: { s: Session; live: Live; onStats: () => void }) {
+// Cache des prompts de la session : minutes restantes ou « froid », et le maintien s'il est actif.
+export function CacheState({ s }: { s: Session }) {
   const { t } = useTranslation()
   const a = useActions()
   const warm = useKeepWarm()[s.id]
   const left = a.hotLeft(s)
+  if (!a.caps(s).hotCache) return null
+  return (
+    <span className="flex items-center gap-1 font-medium text-warning" title={t("conversation.keepWarm.hotTitle")}>
+      {left === null ? <Snowflake className="size-3.5" /> : <Flame className="size-3.5" />}
+      {left === null ? t("conversation.keepWarm.cold") : t("conversation.keepWarm.left", { min: left })}
+      {warm?.on && <Microwave className="warm-wave size-3.5" aria-label={t("conversation.keepWarm.warmAria")} />}
+    </span>
+  )
+}
+
+// Colonne de droite de l'en-tête : état « fermée » et bouton « Stats » (contexte, tokens) qui ouvre la fenêtre des statistiques.
+export function SessionStat({ s, live, onStats }: { s: Session; live: Live; onStats: () => void }) {
+  const { t } = useTranslation()
   return (
     <div className="flex shrink-0 flex-col items-end gap-0.5 text-xs text-muted-foreground tabular-nums" aria-label={t("conversation.keepWarm.statsAria")}>
-      {a.caps(s).hotCache && (
-        <span className={cn("flex items-center gap-1 font-medium", left === null ? "" : left <= 5 ? "text-warning" : "text-warning")} title={t("conversation.keepWarm.hotTitle")}>
-          {left === null ? <Snowflake className="size-3.5" /> : <Flame className="size-3.5" />}
-          {left === null ? t("conversation.keepWarm.cold") : t("conversation.keepWarm.left", { min: left })}
-          {warm?.on && <Microwave className="warm-wave size-3.5" aria-label={t("conversation.keepWarm.warmAria")} />}
-        </span>
-      )}
       <div className="flex items-center gap-1">
         {live.st && !(live.open && live.st.open) && <span className="font-medium">{t("conversation.live.closed")}</span>}
-        <Button size="xs" variant="ghost" className="tabular-nums max-md:hidden" onClick={onStats} disabled={!live.st} title={t("conversation.live.statsTitle")}>
+        <Button size="xs" variant="ghost" className="tabular-nums max-md:hidden" onClick={onStats} title={t("conversation.live.statsTitle")}>
           <BarChart3 />
           {t("conversation.live.stats")} :
           {live.st && live.st.context > 0 && <> ctx {compact(live.st.context)}</>} {compact(tokTotal(s.tok as Tokens))} tok
         </Button>
-        <span className="max-md:hidden">
-          <KeepWarmButton s={s} />
-        </span>
       </div>
     </div>
   )

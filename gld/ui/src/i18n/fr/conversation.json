@@ -215,6 +215,8 @@
       "tokensTitle": "Tokens traités (hors cache lu)",
       "statsTitle": "Tokens consommés et dernier appel",
       "stats": "Stats",
+      "sessionHeading": "Session",
+      "cacheHeading": "Cache des prompts",
       "statsHeading": "Statistiques de la session",
       "statsDescription": "Tokens et contexte de la session",
       "usage": "Consommation",
@@ -308,6 +310,8 @@
         "compact": "après compactage"
       },
       "title": "Instructions chargées",
+      "openFile": "Ouvrir ce fichier",
+      "fileDescription": "Contenu du fichier chargé par Claude",
       "description": "Fichiers que Claude a lus dans cette session : CLAUDE.md, règles, imports.",
       "empty": "Rien d'enregistré pour cette session : le suivi n'est pas installé, ou la session est antérieure.",
       "enable": "Pour l'activer, ajoutez ceci aux réglages de Claude Code (<0>~/.claude/settings.json</0>) et lancez <1>make install</1> pour avoir <2>gld</2> dans <3>~/.local/bin</3> :",
