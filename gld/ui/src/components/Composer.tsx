@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Trans, useTranslation } from "react-i18next"
 import { i18n } from "@/i18n"
-import { cn, copyText, isSend } from "@/lib/utils"
+import { cn, copyText, isSend, keyHint } from "@/lib/utils"
 import { modeOfScreen, parsePrompt, type Opt } from "@/lib/prompt"
 import { type Live } from "./LiveStatus"
 import { toast } from "sonner"
@@ -179,7 +179,7 @@ export function Composer({
           onKeyDown={(e) => !mention.onKey(e) && isSend(e) && (e.preventDefault(), send())}
           onPaste={pics.onPaste}
           onDrop={pics.onDrop}
-          placeholder={running ? t("conversation.composer.placeholderRunning") : t("conversation.composer.placeholder")}
+          placeholder={keyHint(running ? t("conversation.composer.placeholderRunning") : t("conversation.composer.placeholder"))}
           rows={2}
           maxLength={32000}
           className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
@@ -375,7 +375,7 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint }: { id: stri
           }}
           onPaste={pics.onPaste}
           onDrop={pics.onDrop}
-          placeholder={t("conversation.composer.sessionPlaceholder")}
+          placeholder={keyHint(t("conversation.composer.sessionPlaceholder"))}
           rows={2}
           maxLength={32000}
           className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -581,10 +581,10 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
                       autoFocus
                       value={answer}
                       onChange={(e) => setAnswer(e.target.value)}
-                      onKeyDown={(e) => (e.ctrlKey || e.metaKey || !e.shiftKey) && e.key === "Enter" && (e.preventDefault(), reply())}
+                      onKeyDown={(e) => isSend(e) && (e.preventDefault(), reply())}
                       rows={2}
                       maxLength={32000}
-                      placeholder={t("conversation.composer.answerPlaceholder")}
+                      placeholder={keyHint(t("conversation.composer.answerPlaceholder"))}
                       className="field-sizing-content max-h-40 min-h-12 flex-1 resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                       aria-label={t("conversation.composer.answerAria")}
                     />

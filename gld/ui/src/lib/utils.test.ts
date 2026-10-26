@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { copyText } from "./utils"
+import { copyText, isSend, keyHint } from "./utils"
 
 describe("copyText", () => {
   afterEach(() => vi.unstubAllGlobals())
@@ -18,5 +18,25 @@ describe("copyText", () => {
     vi.stubGlobal("navigator", { ...navigator, clipboard: undefined })
     document.execCommand = vi.fn(() => false)
     await expect(copyText("abc")).rejects.toThrow()
+  })
+})
+
+describe("Entrée au clavier tactile", () => {
+  afterEach(() => vi.unstubAllGlobals())
+  const enter = (o: { shiftKey?: boolean; ctrlKey?: boolean } = {}) => ({ key: "Enter", shiftKey: false, nativeEvent: {}, ...o })
+  const touch = (on: boolean) => vi.stubGlobal("matchMedia", (q: string) => ({ matches: on && q.includes("coarse"), media: q }))
+
+  it("avec un clavier, Entrée envoie et Maj+Entrée va à la ligne", () => {
+    touch(false)
+    expect(isSend(enter())).toBe(true)
+    expect(isSend(enter({ shiftKey: true }))).toBe(false)
+    expect(keyHint("Écrire… (Entrée envoie)")).toBe("Écrire… (Entrée envoie)")
+  })
+
+  it("sur iPhone, Entrée va à la ligne, Ctrl+Entrée envoie encore, l'aide clavier disparaît", () => {
+    touch(true)
+    expect(isSend(enter())).toBe(false)
+    expect(isSend(enter({ ctrlKey: true }))).toBe(true)
+    expect(keyHint("Écrire à Claude… (Entrée envoie, Maj+Entrée : saut de ligne)")).toBe("Écrire à Claude…")
   })
 })

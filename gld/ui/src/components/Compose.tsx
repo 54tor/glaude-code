@@ -5,7 +5,7 @@ import { toast } from "sonner"
 import { api, type MemFile, type MemProject } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { argAt } from "@/lib/commands"
-import { isSend } from "@/lib/utils"
+import { isSend, keyHint } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
@@ -156,7 +156,7 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
         value={text}
         onChange={(e) => (setText(e.target.value), mention.track(e.target))}
         onKeyDown={(e) => !mention.onKey(e) && isSend(e) && (e.preventDefault(), send())}
-        placeholder={tr("conversation.compose.placeholder")}
+        placeholder={keyHint(tr("conversation.compose.placeholder"))}
         autoFocus
         onFocus={(e) => {
           // Texte prérempli d'une commande : son $ARGUMENTS sélectionné ; sinon le curseur à la fin.
