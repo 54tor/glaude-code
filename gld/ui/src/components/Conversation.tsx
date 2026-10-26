@@ -250,6 +250,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   // bouge plus ; le bouton « Aller à la fin » prend le relais.
   const opened = useRef("") // session déjà amenée à la fin une fois
   const [away, setAway] = useState(false)
+  const [fromTop, setFromTop] = useState(false)
   const ready = !!session && msgs !== null
   useEffect(() => {
     const vp = viewport()
@@ -260,6 +261,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
       const gap = vp.scrollHeight - vp.scrollTop - vp.clientHeight
       stuck = gap < 80
       setAway(!stuck)
+      setFromTop(vp.scrollTop > 200)
       if (idRef.current && !restoring.current) scrollMem.set(idRef.current, { top: vp.scrollTop, end: gap < vp.clientHeight / 2 })
     }
     // Aimant : à la fin d'un défilement (pas pendant, sinon il lutte avec le suivi de la fin), à moins d'une demi-page de la fin la vue s'y colle.
@@ -394,17 +396,12 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             <FullTerminal key={id} id={id} />
           </Suspense>
         )}
-        <div className={inTerm ? "hidden" : "group/scroll relative flex min-h-0 flex-1 flex-col"}>
-          <Button
-            size="icon-sm"
-            variant="secondary"
-            className="absolute top-3 right-4 z-10 rounded-full opacity-0 shadow-md transition-opacity group-hover/scroll:opacity-100 focus-visible:opacity-100 max-md:hidden"
-            onClick={toTop}
-            aria-label={t("conversation.view.toTop")}
-            title={t("conversation.view.toTop")}
-          >
-            <ArrowUpToLine />
-          </Button>
+        <div className={inTerm ? "hidden" : "relative flex min-h-0 flex-1 flex-col"}>
+          {fromTop && (
+            <Button size="sm" variant="secondary" className="absolute top-3 right-4 z-10 rounded-full shadow-md" onClick={toTop} aria-label={t("conversation.view.toTop")}>
+              <ArrowUpToLine /> {t("conversation.view.toTop")}
+            </Button>
+          )}
         <ScrollArea ref={area} className="min-h-0 flex-1">
           <div className="session-text mx-auto max-w-5xl space-y-6 px-3 py-4 md:px-8 md:py-6">
             {msgs === null && (
