@@ -55,6 +55,8 @@ func main() {
 	listen := flag.String("listen", env("GLD_WEB_LISTEN", "127.0.0.1"), tr(cliLang(), "cli.main.flagListen", nil))
 	tokenFlag := flag.String("token", "", tr(cliLang(), "cli.main.flagToken", nil))
 	showVersion := flag.Bool("version", false, tr(cliLang(), "cli.main.flagVersion", nil))
+	tlsCert := flag.String("tls-cert", env("GLD_WEB_TLS_CERT", ""), tr(cliLang(), "cli.main.flagTLSCert", nil))
+	tlsKey := flag.String("tls-key", env("GLD_WEB_TLS_KEY", ""), tr(cliLang(), "cli.main.flagTLSKey", nil))
 	flag.Parse()
 	if *showVersion {
 		fmt.Println("gld", version)
@@ -63,6 +65,15 @@ func main() {
 	hosts["127.0.0.1:"+port], hosts["localhost:"+port], hosts[net.JoinHostPort(*listen, port)] = true, true, true
 
 	local := isLoopback(*listen)
+	useTLS, err := tlsPair(*tlsCert, *tlsKey)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	scheme := "http"
+	if useTLS {
+		scheme = "https"
+	}
 	if *tokenFlag != "" { // ponytail: l'argument reste visible dans ps ; GLD_WEB_TOKEN ou un fichier si la machine est partagée
 		os.Setenv("GLD_WEB_TOKEN", *tokenFlag)
 	}
@@ -120,22 +131,28 @@ func main() {
 	go expireTrashLoop(24 * time.Hour)
 	go func() { _ = syncIndex() }() // index de recherche prêt avant la première requête
 	if local && token == "" {
-		fmt.Fprintln(os.Stderr, "http://"+net.JoinHostPort(*listen, port))
+		fmt.Fprintln(os.Stderr, scheme+"://"+net.JoinHostPort(*listen, port))
 	} else if local {
-		fmt.Fprintln(os.Stderr, "http://"+net.JoinHostPort(*listen, port)+"/?token="+tokenShown(token, generated))
+		fmt.Fprintln(os.Stderr, scheme+"://"+net.JoinHostPort(*listen, port)+"/?token="+tokenShown(token, generated))
 	} else {
-		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.plainHTTP", map[string]any{"A1": net.JoinHostPort(*listen, port)}))
+		if !useTLS {
+			fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.plainHTTP", map[string]any{"A1": net.JoinHostPort(*listen, port)}))
+		}
 		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.preferTunnel", nil))
 		shown := tokenShown(token, generated)
 		if on && generated { // le jeton généré ne vaut rien en mode multi-utilisateur : la connexion par compte le remplace
 			shown = ""
 		}
-		for _, u := range urlsFor(*listen, port, shown) {
+		for _, u := range urlsFor(scheme, *listen, port, shown) {
 			fmt.Fprintln(os.Stderr, "  "+u)
 		}
 	}
 	defer removeWorkDir()
-	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	serve := srv.ListenAndServe
+	if useTLS {
+		serve = func() error { return srv.ListenAndServeTLS(*tlsCert, *tlsKey) }
+	}
+	if err := serve(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

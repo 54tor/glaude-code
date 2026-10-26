@@ -189,7 +189,7 @@ func TestJetonFourniJamaisImprime(t *testing.T) {
 	if s := tokenShown(tok, gen); s != "$GLD_WEB_TOKEN" {
 		t.Fatalf("jeton fourni imprimé : %q", s)
 	}
-	for _, u := range urlsFor("127.0.0.1", "8799", tokenShown(tok, gen)) {
+	for _, u := range urlsFor("http", "127.0.0.1", "8799", tokenShown(tok, gen)) {
 		if strings.Contains(u, tok) {
 			t.Fatalf("jeton fourni dans l'adresse : %q", u)
 		}

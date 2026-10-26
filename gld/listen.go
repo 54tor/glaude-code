@@ -119,9 +119,17 @@ func tokenForChildren(token string, generated bool) func(*http.Request) *Princip
 	}
 }
 
+// tlsPair : HTTPS servi par gld quand un certificat et sa clé sont donnés ; l'un sans l'autre est une erreur, pas un repli en HTTP.
+func tlsPair(cert, key string) (bool, error) {
+	if (cert == "") != (key == "") {
+		return false, terr("srv.listen.tlsPair")
+	}
+	return cert != "", nil
+}
+
 // urlsFor : les adresses à ouvrir pour une écoute sur host:port (toutes les interfaces si host est « 0.0.0.0 » ou « :: ») ;
 // sans jeton, l'adresse nue.
-func urlsFor(host, port, token string) []string {
+func urlsFor(scheme, host, port, token string) []string {
 	hosts := []string{host}
 	if ip := net.ParseIP(host); ip != nil && ip.IsUnspecified() {
 		hosts = nil
@@ -134,7 +142,7 @@ func urlsFor(host, port, token string) []string {
 	}
 	var out []string
 	for _, h := range hosts {
-		u := "http://" + net.JoinHostPort(h, port) + "/"
+		u := scheme + "://" + net.JoinHostPort(h, port) + "/"
 		if token != "" {
 			u += "?token=" + token
 		}

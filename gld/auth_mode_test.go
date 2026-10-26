@@ -298,7 +298,7 @@ func TestGeneratedTokenNoBearer(t *testing.T) {
 	if w := (modeReq{method: "GET", path: "/api", bearer: modeTok}).do(h); w.Code != 401 {
 		t.Fatalf("Bearer d'un jeton généré : %d %s", w.Code, w.Body)
 	}
-	for _, u := range urlsFor("192.0.2.1", "8799", "") {
+	for _, u := range urlsFor("http", "192.0.2.1", "8799", "") {
 		if strings.Contains(u, "token") {
 			t.Fatalf("adresse sans jeton : %q", u)
 		}

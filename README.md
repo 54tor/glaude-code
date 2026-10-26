@@ -131,6 +131,19 @@ Glaude Code affiche alors une adresse contenant un **jeton secret** : ouvrez-la 
 chiffrée : passez par un tunnel (SSH, Tailscale…) et **ne l'exposez jamais directement sur Internet**, car la page peut
 lire et supprimer vos sessions et lancer Claude.
 
+Sur iPhone et iPad, l'application installée (« Sur l'écran d'accueil ») n'a ni notifications, ni copie native, ni clé
+de sécurité tant qu'elle est servie en HTTP. gld peut servir lui-même en HTTPS avec un certificat auquel l'appareil fait
+confiance, par exemple créé avec [mkcert](https://github.com/FiloSottile/mkcert) (installez son autorité racine sur
+l'iPhone, puis activez-la dans Réglages › Général › Informations › Réglages de confiance des certificats) :
+
+```sh
+mkcert 192.168.0.10 mon-pc.local
+gld --listen 0.0.0.0 --tls-cert 192.168.0.10+1.pem --tls-key 192.168.0.10+1-key.pem
+```
+
+Les variables `GLD_WEB_TLS_CERT` et `GLD_WEB_TLS_KEY` équivalent aux deux options. Les clés de sécurité (WebAuthn)
+exigent en plus un nom de domaine, pas une adresse IP.
+
 Sur une machine partagée avec d'autres comptes, l'adresse locale est joignable par eux aussi. Fixez alors un jeton
 (16 caractères au moins) : il est exigé même sans `--listen`, et gld affiche l'adresse à ouvrir avec `$GLD_WEB_TOKEN`
 à la place du jeton, pour qu'il ne finisse pas dans les journaux : remplacez-le par votre valeur.
