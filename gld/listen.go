@@ -71,6 +71,7 @@ func sameToken(a, b string) bool { return subtle.ConstantTimeCompare([]byte(a), 
 // withToken : exige le jeton, en cookie (posé par ?token=…, puis la requête est redirigée sans le jeton dans l'adresse)
 // ou en en-tête « Authorization: Bearer … » (curl).
 func withToken(token string, next http.Handler) http.Handler {
+	setDevKey(token)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if c, err := r.Cookie(tokenCookie); err == nil && sameToken(c.Value, token) {
 			next.ServeHTTP(w, r)
@@ -80,7 +81,8 @@ func withToken(token string, next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if r.Method == "GET" && r.URL.Path == "/pair" && redeemDevice(w, r) {
+		if r.URL.Path == "/pair" { // confirmation et échange d'un code de jumelage, avant tout jeton
+			pairEntry(w, r, nil)
 			return
 		}
 		if h, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok && sameToken(h, token) {

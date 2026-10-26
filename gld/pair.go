@@ -1,18 +1,21 @@
 package main
 
 // Jumelage d'un appareil par QR code. Un navigateur déjà connecté demande un code à usage unique (deux minutes) et
-// l'affiche en QR ; l'appareil qui ouvre l'adresse reçoit sa propre session, sans voir le jeton ni le mot de passe.
-// Mode jeton : session d'appareil (devices.json, 90 jours sans visite), révocable sans changer le jeton.
-// Mode comptes : session du compte dans auth.db, second facteur acquis, comme après une connexion complète.
+// l'affiche en QR. L'adresse ouvre une page de confirmation sans effet (un aperçu de lien ne consomme rien) ; son bouton
+// envoie un POST de même origine qui crée la session de l'appareil, sans qu'il voie le jeton ni le mot de passe.
+// Mode jeton : session d'appareil (devices.json, 90 jours sans visite), liée au jeton : en changer coupe tous les appareils.
+// Mode comptes : session du compte dans auth.db, second facteur acquis, tant que la session qui a émis le code vit.
 // Sur iPhone, l'appareil photo ouvre l'adresse dans Safari : la PWA ajoutée ensuite à l'écran d'accueil en copie le cookie.
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"html/template"
 	"io"
 	"io/fs"
 	"net/http"
@@ -32,7 +35,8 @@ const (
 
 type pairCode struct {
 	exp time.Time
-	uid int64 // 0 : mode jeton
+	uid int64  // 0 : mode jeton
+	sid string // session émettrice (mode comptes)
 }
 
 var (
@@ -40,7 +44,7 @@ var (
 	pairCodes = map[string]pairCode{}
 )
 
-func newPairCode(uid int64) string {
+func newPairCode(uid int64, sid string) string {
 	b := make([]byte, 24)
 	rand.Read(b)
 	c := base64.RawURLEncoding.EncodeToString(b)
@@ -52,38 +56,59 @@ func newPairCode(uid int64) string {
 			delete(pairCodes, k)
 		}
 	}
-	pairCodes[c] = pairCode{now.Add(pairTTL), uid}
+	pairCodes[c] = pairCode{now.Add(pairTTL), uid, sid}
 	return c
 }
 
-// takePairCode consomme le code, valide ou non : un code essayé ne sert plus.
-func takePairCode(c string) (pairCode, bool) {
+// pairLookup lit le code ; take le consomme, valide ou non : un code essayé ne sert plus.
+func pairLookup(c string, take bool) (pairCode, bool) {
 	pairMu.Lock()
 	defer pairMu.Unlock()
 	p, ok := pairCodes[c]
-	delete(pairCodes, c)
+	if take {
+		delete(pairCodes, c)
+	}
 	return p, ok && authNow().Before(p.exp)
 }
 
-// device : un appareil jumelé en mode jeton. Le cookie n'est jamais stocké, seulement son empreinte.
+// device : un appareil jumelé en mode jeton. Le cookie n'est jamais stocké, seulement son HMAC sous la clé du jeton.
 type device struct {
 	ID      string `json:"id"`
+	Bind    string `json:"bind"` // empreinte de la clé du jeton : un autre jeton ne reconnaît plus l'appareil
 	Name    string `json:"name"`
 	IP      string `json:"ip"`
 	Created int64  `json:"created"`
 	Seen    int64  `json:"seen"`
 }
 
-var devMu sync.Mutex
+var (
+	devMu  sync.Mutex
+	devKey []byte // dérivée du jeton par withToken ; nil sans jeton : rien à jumeler
+)
+
+func setDevKey(token string) {
+	m := hmac.New(sha256.New, []byte(token))
+	m.Write([]byte("gld-device"))
+	devMu.Lock()
+	devKey = m.Sum(nil)
+	devMu.Unlock()
+}
+
+// devMac et devBind supposent devMu tenu.
+func devMac(cookie string) string {
+	m := hmac.New(sha256.New, devKey)
+	m.Write([]byte(cookie))
+	return hex.EncodeToString(m.Sum(nil))
+}
+
+func devBind() string {
+	h := sha256.Sum256(devKey)
+	return hex.EncodeToString(h[:8])
+}
 
 func devicesFile() (string, error) {
 	d, err := authDir()
 	return filepath.Join(d, "devices.json"), err
-}
-
-func devHash(cookie string) string {
-	h := sha256.Sum256([]byte(cookie))
-	return hex.EncodeToString(h[:])
 }
 
 func loadDevices() ([]device, error) {
@@ -118,10 +143,10 @@ func saveDevices(ds []device) error {
 	return os.Rename(tmp, p)
 }
 
-// liveDevices : les appareils vus depuis moins de devIdle.
+// liveDevices : les appareils du jeton courant vus depuis moins de devIdle (devMu tenu).
 func liveDevices(ds []device) []device {
-	limit := authNow().Add(-devIdle).Unix()
-	return slices.DeleteFunc(ds, func(d device) bool { return d.Seen < limit })
+	limit, bind := authNow().Add(-devIdle).Unix(), devBind()
+	return slices.DeleteFunc(ds, func(d device) bool { return d.Seen < limit || d.Bind != bind })
 }
 
 func addDevice(ua, ip string) (string, error) {
@@ -134,26 +159,32 @@ func addDevice(ua, ip string) (string, error) {
 	now := authNow().Unix()
 	devMu.Lock()
 	defer devMu.Unlock()
+	if devKey == nil {
+		return "", errors.New("pas de jeton")
+	}
 	ds, err := loadDevices()
 	if err != nil {
 		return "", err
 	}
-	return c, saveDevices(append(liveDevices(ds), device{devHash(c), ua, ip, now, now}))
+	return c, saveDevices(append(liveDevices(ds), device{devMac(c), devBind(), ua, ip, now, now}))
 }
 
 // deviceOK admet un cookie d'appareil encore vivant et repousse son échéance (au plus une écriture par minute).
 func deviceOK(cookie string) bool {
-	id, now := devHash(cookie), authNow().Unix()
+	now := authNow().Unix()
 	devMu.Lock()
 	defer devMu.Unlock()
+	if devKey == nil {
+		return false
+	}
 	ds, err := loadDevices()
 	if err != nil {
 		journal("pair: devices.json illisible : %v", err)
 		return false
 	}
-	n := len(ds)
+	n, id := len(ds), devMac(cookie)
 	ds = liveDevices(ds)
-	i := slices.IndexFunc(ds, func(d device) bool { return d.ID == id })
+	i := slices.IndexFunc(ds, func(d device) bool { return hmac.Equal([]byte(d.ID), []byte(id)) })
 	dirty := len(ds) != n
 	if i >= 0 && now-ds[i].Seen >= int64(devTouch/time.Second) {
 		ds[i].Seen, dirty = now, true
@@ -166,50 +197,143 @@ func deviceOK(cookie string) bool {
 	return i >= 0
 }
 
-// redeemDevice : GET /pair?c=… en mode jeton. Faux si le code n'est pas un code du mode jeton (l'appelant refuse alors).
-func redeemDevice(w http.ResponseWriter, r *http.Request) bool {
-	p, ok := takePairCode(r.URL.Query().Get("c"))
-	if !ok || p.uid != 0 {
-		return false
+var pairTmpl = template.Must(template.New("pair").Parse(`<!doctype html>
+<html lang="{{.Lang}}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{.Title}}</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:17px -apple-system,system-ui,sans-serif;background:#111418;color:#e8eaed}
+main{max-width:22rem;padding:1.5rem;text-align:center}p{color:#a0a4ab;line-height:1.5}
+button{font:inherit;font-weight:600;min-height:44px;padding:.75rem 1.75rem;border:0;border-radius:.6rem;background:#5a9a3e;color:#fff}
+@media (prefers-color-scheme:light){body{background:#fff;color:#111418}p{color:#555}}</style></head>
+<body><main><h1>{{.Title}}</h1><p>{{.Text}}</p>{{if .Code}}<form method="post" action="/pair"><input type="hidden" name="c" value="{{.Code}}"><button>{{.Button}}</button></form>{{end}}</main></body></html>
+`))
+
+func pairPage(w http.ResponseWriter, code int, title, text, c string) {
+	h := w.Header()
+	h.Set("Content-Type", "text/html; charset=utf-8")
+	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+	h.Set("Cache-Control", "no-store")
+	h.Set("Referrer-Policy", "no-referrer") // le code est dans l'adresse
+	w.WriteHeader(code)
+	pairTmpl.Execute(w, map[string]string{"Lang": uiLang(), "Title": title, "Text": text, "Code": c, "Button": L("srv.pair.button")})
+}
+
+var pairCOP = http.NewCrossOriginProtection()
+
+// pairEntry : GET /pair (confirmation, sans effet) et POST /pair (création de la session). st nil : mode jeton.
+func pairEntry(w http.ResponseWriter, r *http.Request, st *authStore) {
+	devMu.Lock()
+	keyless := devKey == nil
+	devMu.Unlock()
+	if st == nil && keyless {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
 	}
-	c, err := addDevice(r.UserAgent(), clientIP(r))
-	if err != nil {
-		journal("pair: %v", err)
-		return false
+	expired := func() { pairPage(w, http.StatusGone, L("srv.pair.title"), L("srv.pair.expired"), "") }
+	if r.Method == "GET" {
+		c := r.URL.Query().Get("c")
+		p, ok := pairLookup(c, false)
+		if !ok || (p.uid != 0) != (st != nil) {
+			expired()
+			return
+		}
+		text := L("srv.pair.textToken")
+		if st != nil {
+			u, err := st.userByID(st.db, p.uid)
+			if err != nil {
+				expired()
+				return
+			}
+			text = L("srv.pair.textAccount", "A1", u.Name)
+		}
+		pairPage(w, 200, L("srv.pair.title"), text, c)
+		return
 	}
-	// MaxAge large : l'échéance réelle (90 jours sans visite) est tenue côté serveur.
-	http.SetCookie(w, &http.Cookie{Name: devCookie, Value: c, Path: "/", MaxAge: 400 * 24 * 3600, HttpOnly: true, Secure: requestHTTPS(r), SameSite: http.SameSiteLaxMode})
-	journal("pair: appareil jumelé depuis %s", clientIP(r))
+	if pairCOP.Check(r) != nil {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<12)
+	p, ok := pairLookup(r.PostFormValue("c"), true)
+	if !ok || (p.uid != 0) != (st != nil) {
+		expired()
+		return
+	}
+	ip := clientIP(r)
+	if st == nil {
+		c, err := addDevice(r.UserAgent(), ip)
+		if err != nil {
+			journal("pair: %v", err)
+			expired()
+			return
+		}
+		// MaxAge large : l'échéance réelle (90 jours sans visite) est tenue côté serveur.
+		http.SetCookie(w, &http.Cookie{Name: devCookie, Value: c, Path: "/", MaxAge: 400 * 24 * 3600, HttpOnly: true, Secure: requestHTTPS(r), SameSite: http.SameSiteStrictMode})
+		journal("pair: appareil jumelé depuis %s", ip)
+	} else if !redeemSession(w, r, st, p, ip) {
+		expired()
+		return
+	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// redeemSession : la session naît complète (second facteur acquis), à condition que la session émettrice soit encore
+// ouverte et complète : la révoquer annule aussi ses codes en attente.
+func redeemSession(w http.ResponseWriter, r *http.Request, st *authStore, p pairCode, ip string) bool {
+	ss, err := st.userSessions(p.uid)
+	if err != nil || !slices.ContainsFunc(ss, func(x sessRow) bool { return x.mfa && hex.EncodeToString(x.hash) == p.sid }) {
+		return false
+	}
+	c, err := st.NewSession(p.uid, ip, r.UserAgent())
+	var pr *Principal
+	if err == nil {
+		pr, err = st.Session(c) // refuse un compte désactivé depuis
+	}
+	var exp time.Time
+	if err == nil {
+		c, exp, err = st.PromoteMFA(pr.SessionID)
+	}
+	if err != nil {
+		if !errors.Is(err, errNoSession) {
+			journal("pair: session : %v", err)
+		}
+		return false
+	}
+	setSessionCookie(w, r, c, exp)
+	clearHomeCookie(w)
+	st.eventIP(p.uid, evLogin, "pair", ip)
 	return true
 }
 
 func routesPair(mux *http.ServeMux) {
-	mux.HandleFunc("POST /pair", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /pair-code", func(w http.ResponseWriter, r *http.Request) {
 		r, d := reqMode(r)
 		var uid int64
+		var sid string
 		if d.on {
 			g, _ := r.Context().Value(gateKey{}).(*gateInfo)
 			if g == nil || g.p == nil || g.p.User == nil || !g.p.MFA {
 				writeJSON(w, 403, map[string]any{"ok": false, "out": L("srv.auth.droitRefuse")})
 				return
 			}
-			uid = g.p.User.ID
+			uid, sid = g.p.User.ID, g.p.SessionID
 		}
 		scheme := "http"
 		if requestHTTPS(r) {
 			scheme = "https"
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "url": scheme + "://" + r.Host + "/pair?c=" + newPairCode(uid), "ttl": int(pairTTL / time.Second)})
+		writeJSON(w, 200, map[string]any{"ok": true, "url": scheme + "://" + r.Host + "/pair?c=" + newPairCode(uid, sid), "ttl": int(pairTTL / time.Second)})
 	})
-	// Mode comptes ; en mode jeton, withToken répond avant (redeemDevice).
-	mux.HandleFunc("GET /pair", func(w http.ResponseWriter, r *http.Request) {
+	// Mode comptes, ou sans jeton ; en mode jeton, withToken répond avant.
+	entry := func(w http.ResponseWriter, r *http.Request) {
 		r, d := reqMode(r)
-		if d.on && redeemSession(w, r, d.st) {
-			return
+		var st *authStore
+		if d.on {
+			st = d.st
 		}
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-	})
+		pairEntry(w, r, st)
+	}
+	mux.HandleFunc("GET /pair", entry)
+	mux.HandleFunc("POST /pair", entry)
 	// Mode jeton seulement : en mode comptes, les sessions du compte (/auth/sessions) en tiennent lieu.
 	mux.HandleFunc("GET /devices", func(w http.ResponseWriter, r *http.Request) {
 		if _, d := reqMode(r); d.on {
@@ -218,12 +342,15 @@ func routesPair(mux *http.ServeMux) {
 		}
 		devMu.Lock()
 		ds, err := loadDevices()
+		if err == nil {
+			ds = liveDevices(ds)
+		}
 		devMu.Unlock()
 		if err != nil {
 			writeJSON(w, 500, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "devices": liveDevices(ds)})
+		writeJSON(w, 200, map[string]any{"ok": true, "devices": ds})
 	})
 	mux.HandleFunc("POST /devices-revoke", func(w http.ResponseWriter, r *http.Request) {
 		if _, d := reqMode(r); d.on {
@@ -248,34 +375,4 @@ func routesPair(mux *http.ServeMux) {
 		journal("pair: appareil %s révoqué", cut(req.ID, 8))
 		writeJSON(w, 200, map[string]any{"ok": true})
 	})
-}
-
-// redeemSession : GET /pair?c=… en mode comptes. La session naît complète (second facteur acquis) : le code a été
-// demandé par une session complète du même compte.
-func redeemSession(w http.ResponseWriter, r *http.Request, st *authStore) bool {
-	p, ok := takePairCode(r.URL.Query().Get("c"))
-	if !ok || p.uid == 0 || st == nil {
-		return false
-	}
-	ip := clientIP(r)
-	c, err := st.NewSession(p.uid, ip, r.UserAgent())
-	var pr *Principal
-	if err == nil {
-		pr, err = st.Session(c)
-	}
-	var exp time.Time
-	if err == nil {
-		c, exp, err = st.PromoteMFA(pr.SessionID)
-	}
-	if err != nil {
-		if !errors.Is(err, errNoSession) {
-			journal("pair: session : %v", err)
-		}
-		return false
-	}
-	setSessionCookie(w, r, c, exp)
-	clearHomeCookie(w)
-	st.eventIP(p.uid, evLogin, "pair", ip)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
-	return true
 }

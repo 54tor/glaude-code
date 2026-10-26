@@ -43,7 +43,7 @@ var routeRights = map[string]Right{
 	"GET /admin/events": rightAdmin, "GET /admin/homes": rightAdmin, "GET /admin/sessions": rightAdmin, "POST /admin/sessions/revoke": rightAdmin,
 
 	// Jumelage d'un appareil par QR code (pair.go).
-	"POST /pair": rightAny, "GET /pair": rightPublic, "GET /devices": rightAny, "POST /devices-revoke": rightAny,
+	"POST /pair-code": rightAny, "GET /pair": rightPublic, "POST /pair": rightPublic, "GET /devices": rightAny, "POST /devices-revoke": rightAny,
 
 	// Homes.
 	"GET /homes": rightAny, "POST /homes-select": rightAny, "POST /homes-save": rightAdmin,
