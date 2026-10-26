@@ -386,6 +386,7 @@
   "srv.skills.nEstPasUn": "\"{{.A1}}\" is not a folder",
   "srv.skills.noDescription": "no description: Claude Code keeps the first line of the content, and will not know when to use it",
   "srv.skills.nomInvalideMinusculesChiffres": "invalid name: lowercase letters, digits and hyphens (64 characters at most)",
+  "srv.plugins.projetRequis": "Project required for this scope",
   "srv.skills.pluginIntrouvable": "plugin not found",
   "srv.skills.skillDePluginLecture": "plugin skill: read-only (copy it into your skills to edit it)",
   "srv.skills.skillDePluginLecture2": "plugin skill: read-only",

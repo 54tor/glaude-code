@@ -1,7 +1,7 @@
 import { loc } from "@/i18n"
 import { useTranslation } from "react-i18next"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { AlertTriangle, ArrowLeft, BookOpen, Bot, ClipboardCopy, Copy, EyeOff, FileText, FolderInput, Hand, Pencil, Plus, Save, Sparkles, Trash2, X, Zap } from "lucide-react"
+import { AlertTriangle, ArrowLeft, BookOpen, Bot, ClipboardCopy, Copy, EyeOff, FileText, FolderInput, Hand, Pencil, Plug, Plus, Save, Sparkles, Trash2, X, Zap } from "lucide-react"
 import { toast } from "sonner"
 import { api, type Skill, type SkillFile } from "@/lib/api"
 import { ago, tilde } from "@/lib/format"
@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Choose } from "./Choose"
 import type { Ask } from "./Confirm"
 import { Markdown } from "./Message"
+import { PluginsDialog } from "./PluginsDialog"
 import { SkillWriter } from "./SkillWriter"
 import { split } from "./memoryLib"
 import { useEditorDraft, useLeaveGuard } from "@/hooks/useEditorDraft"
@@ -50,6 +51,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
   const [loaded, setLoaded] = useState<{ key: string; text: string; files: SkillFile[]; error?: string } | null>(null)
   const [draft, setDraft] = useEditorDraft("skill")
   const [creating, setCreating] = useState(false)
+  const [plugins, setPlugins] = useState(false)
   const [origin, setOrigin] = useState("all") // filtre sur l'origine
   const [writer, setWriter] = useState("") // clé du skill que le modèle rédige ; vide = fermé
   const reload = useCallback(() => api.skills().then(setData), [])
@@ -133,6 +135,9 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
           <div className="mb-2 flex flex-wrap items-center gap-2 px-1">
             <Button size="xs" variant="outline" onClick={() => setCreating(true)}>
               <Plus /> {t("skills.skills.newSkill")}
+            </Button>
+            <Button size="xs" variant="outline" onClick={() => setPlugins(true)}>
+              <Plug /> {t("skills.plugins.button")}
             </Button>
             <Choose
               value={origin}
@@ -351,6 +356,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
         )}
       </div>
       <SkillWriter open={!!writer} skillKey={writer} name={data?.skills.find((s) => s.key === writer)?.name ?? ""} onClose={() => setWriter("")} onDraft={(text) => setDraft({ key: writer, text })} />
+      <PluginsDialog open={plugins} projects={data?.projects ?? []} home={home} onClose={() => setPlugins(false)} onChange={reload} />
       <NewSkill open={creating} projects={data?.projects ?? []} home={home} onClose={() => setCreating(false)} onCreated={async (key) => (await reload(), onPick(key))} />
     </div>
   )

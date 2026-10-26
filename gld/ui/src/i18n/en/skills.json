@@ -1,5 +1,22 @@
 {
   "skills": {
+    "plugins": {
+      "title": "Plugins",
+      "description": "Install, enable or remove plugins (skills, commands, agents) from the marketplaces, for you or for a project.",
+      "search": "Search plugins…",
+      "installFor": "Install for",
+      "scopeUser": "Personal",
+      "installed": "Installed ({{count}})",
+      "available": "Available (most installed)",
+      "install": "Install",
+      "uninstall": "Uninstall",
+      "update": "Update",
+      "enable": "Enable",
+      "disable": "Disable",
+      "installs": "Installs",
+      "none": "No plugin found",
+      "button": "Plugins"
+    },
     "origin": {
       "all": "All origins",
       "label": "Origin",

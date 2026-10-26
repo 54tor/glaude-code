@@ -32,6 +32,8 @@ export type MemFile = {
 export type LoadEvent = { at: number; session: string; file: string; type?: string; reason?: string; globs?: string[]; trigger?: string }
 export type FileLoads = { sessions: number; last: number }
 // Skills (skills.go)
+export type PluginInst = { id: string; version: string; scope: string; enabled: boolean; project?: string }
+export type PluginAvail = { id: string; name: string; description: string; marketplace: string; installs: number; installed: boolean }
 export type Skill = {
   key: string
   name: string
@@ -213,6 +215,7 @@ export const api = {
   slashCommands: () => get<{ commands: { cmd: string; desc: string; origin: string }[] }>("/slash-commands"),
   skills: () => get<{ skills: Skill[]; projects: { dir: string; project: string }[] }>("/skills-list"),
   skill: (key: string) => get<{ text?: string; files?: SkillFile[]; error?: string }>(`/skill?key=${enc(key)}`),
+  plugins: (q = "") => get<{ installed?: PluginInst[]; available?: PluginAvail[]; error?: string }>(`/plugins?q=${enc(q)}`),
   configProjects: () => get<{ projects: ProjectCfg[] }>("/config-projects"),
   sessionIdle: (id: string) => get<{ idle: boolean }>(`/session-state?id=${enc(id)}`),
   sessionLive: (dir: string, id: string) => get<LiveState>(`/session-live?dir=${enc(dir)}&id=${enc(id)}`),

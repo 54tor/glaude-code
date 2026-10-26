@@ -85,4 +85,22 @@ func routesSkills(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_memory.brouillonPret"), "text": text, "cost": cost})
 	})
+	mux.HandleFunc("GET /plugins", func(w http.ResponseWriter, r *http.Request) {
+		inst, av, err := listPlugins(r.URL.Query().Get("q"), 40)
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"installed": inst, "available": av})
+	})
+	mux.HandleFunc("POST /plugin-act", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Action, ID, Scope, Project string }
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+			return
+		}
+		out, err := pluginAct(req.Action, req.ID, req.Scope, req.Project)
+		journal("plugin-act %s %s (%s %s) : %v", req.Action, req.ID, req.Scope, req.Project, errOr(err))
+		writeJSON(w, 200, map[string]any{"ok": err == nil, "out": out})
+	})
 }

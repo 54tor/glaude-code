@@ -386,6 +386,7 @@
   "srv.skills.nEstPasUn": "« {{.A1}} » n'est pas un dossier",
   "srv.skills.noDescription": "pas de description : Claude Code retient la première ligne du contenu, et ne saura pas quand l'utiliser",
   "srv.skills.nomInvalideMinusculesChiffres": "nom invalide : minuscules, chiffres et tirets (64 caractères au plus)",
+  "srv.plugins.projetRequis": "Projet requis pour cette portée",
   "srv.skills.pluginIntrouvable": "plugin introuvable",
   "srv.skills.skillDePluginLecture": "skill de plugin : lecture seule (copiez-le dans vos skills pour le modifier)",
   "srv.skills.skillDePluginLecture2": "skill de plugin : lecture seule",
