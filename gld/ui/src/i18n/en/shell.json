@@ -185,7 +185,9 @@
       "start": "Start the session"
     },
     "header": {
-      "mcpTitle": "MCP servers of this project: state read with claude mcp list (cached for a minute)",
+      "mcpTitle": "MCP servers of this project: read on click with claude mcp list, only if Claude Code has trusted this folder",
+      "mcpChecking": "Checking (a few seconds)…",
+      "mcpFailed": "Check failed",
       "mcpLabel": "MCP servers",
       "openMenu": "Open the menu",
       "search": ", search “{{q}}”",

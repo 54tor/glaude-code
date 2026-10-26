@@ -308,6 +308,7 @@
     "one": "; {{.Count}} open session spared",
     "other": "; {{.Count}} open sessions spared"
   },
+  "srv.mcpproject.nonApprouve": "Folder not trusted: open Claude Code there once and accept trust, otherwise its MCP servers are not started",
   "srv.routes_config.claudeMcpList": "claude mcp list: {{.A1}}",
   "srv.routes_config.sauvegardeRestauree": "Backup restored",
   "srv.routes_memory.brouillonPret": "Draft ready",

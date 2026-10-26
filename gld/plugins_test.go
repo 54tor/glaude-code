@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestListPlugins(t *testing.T) {
 	old := pluginRaw
@@ -42,5 +46,17 @@ func TestProjectMcpRefuse(t *testing.T) {
 		if _, err := projectMcp(d); err == nil {
 			t.Errorf("accepté : %q", d)
 		}
+	}
+}
+
+func TestProjectTrusted(t *testing.T) {
+	h := t.TempDir()
+	t.Setenv("HOME", h)
+	if projectTrusted("/a/b") {
+		t.Fatal("sans ~/.claude.json")
+	}
+	os.WriteFile(filepath.Join(h, ".claude.json"), []byte(`{"projects":{"/a":{"hasTrustDialogAccepted":true},"/c":{"hasTrustDialogAccepted":false}}}`), 0o600)
+	if !projectTrusted("/a/b") || projectTrusted("/c") || projectTrusted("/d") {
+		t.Fatal("confiance héritée du parent, refusée sinon")
 	}
 }

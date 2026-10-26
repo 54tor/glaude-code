@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -55,6 +57,32 @@ var projectMcpStates = func(cwd string) ([]McpState, error) {
 	return out, nil
 }
 
+// projectTrusted : Claude Code a déjà accepté la confiance de ce dossier (ou d'un parent) dans ~/.claude.json. `claude mcp list` démarre les
+// serveurs du .mcp.json du projet sans demander : on ne le lance donc jamais dans un dossier que l'utilisateur n'a pas approuvé.
+func projectTrusted(cwd string) bool {
+	home, _ := os.UserHomeDir()
+	b, err := os.ReadFile(filepath.Join(home, ".claude.json"))
+	if err != nil {
+		return false
+	}
+	var d struct {
+		Projects map[string]struct {
+			Trusted bool `json:"hasTrustDialogAccepted"`
+		} `json:"projects"`
+	}
+	if json.Unmarshal(b, &d) != nil {
+		return false
+	}
+	for p := filepath.Clean(cwd); ; p = filepath.Dir(p) {
+		if d.Projects[p].Trusted {
+			return true
+		}
+		if p == filepath.Dir(p) {
+			return false
+		}
+	}
+}
+
 func projectMcp(dir string) ([]McpState, error) {
 	cwd := ""
 	if safeDir(dir) {
@@ -62,6 +90,9 @@ func projectMcp(dir string) ([]McpState, error) {
 	}
 	if fi, e := os.Stat(cwd); cwd == "" || e != nil || !fi.IsDir() {
 		return nil, terr("srv.memory.dossierDuProjetIntrouvable")
+	}
+	if !projectTrusted(cwd) {
+		return nil, terr("srv.mcpproject.nonApprouve")
 	}
 	return projectMcpStates(cwd)
 }

@@ -308,6 +308,7 @@
     "one": " ; {{.Count}} session ouverte épargnée",
     "other": " ; {{.Count}} sessions ouvertes épargnées"
   },
+  "srv.mcpproject.nonApprouve": "Dossier non approuvé : ouvrez-y une fois Claude Code pour accepter la confiance, sinon ses serveurs MCP ne sont pas lancés",
   "srv.routes_config.claudeMcpList": "claude mcp list : {{.A1}}",
   "srv.routes_config.sauvegardeRestauree": "Sauvegarde restaurée",
   "srv.routes_memory.brouillonPret": "Brouillon prêt",
