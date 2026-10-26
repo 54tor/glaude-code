@@ -278,12 +278,6 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
       flags()
       if (idRef.current && !restoring.current) scrollMem.set(idRef.current, { top: vp.scrollTop, end: gap < vp.clientHeight / 2 })
     }
-    // Aimant : à la fin d'un défilement (pas pendant, sinon il lutte avec le suivi de la fin), à moins d'une demi-page de la fin la vue s'y colle.
-    const snap = () => {
-      const gap = vp.scrollHeight - vp.scrollTop - vp.clientHeight
-      if (gap > 0 && gap < vp.clientHeight / 2) vp.scrollTop = vp.scrollHeight
-    }
-    vp.addEventListener("scrollend", snap, { passive: true })
     vp.addEventListener("scroll", on, { passive: true })
     const ro = new ResizeObserver(() => {
       if (stuck && !keepScroll.current && !restoring.current) vp.scrollTop = vp.scrollHeight
@@ -292,7 +286,6 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
     if (vp.firstElementChild) ro.observe(vp.firstElementChild)
     return () => {
       vp.removeEventListener("scroll", on)
-      vp.removeEventListener("scrollend", snap)
       ro.disconnect()
     }
   }, [viewport, ready])
