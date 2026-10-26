@@ -60,6 +60,7 @@ export function Composer({
   onAsk,
   onWrite,
   extra,
+  compactHint,
 }: {
   dir: string
   id: string
@@ -74,6 +75,7 @@ export function Composer({
   onAsk?: (asking: boolean) => void // Claude attend une réponse dans le terminal
   onWrite?: () => void // l'utilisateur envoie un message : la vue descend
   extra?: ReactNode // commandes de la vue, affichées au-dessus de la zone de saisie
+  compactHint?: string | null // conseil de compacter, avec le bouton, au-dessus de la saisie d'une session ouverte
 }) {
   const { t } = useTranslation()
   const exec = useCan()("exec")
@@ -164,7 +166,7 @@ export function Composer({
   }
   const stop = () => ((stopped.current = true), api.post("/chat-stop", { id }))
 
-  if (live && !running && !own) return <LiveSend id={id} onSent={onSent} liveState={liveState} onAsk={onAsk} bar={extra} />
+  if (live && !running && !own) return <LiveSend id={id} onSent={onSent} liveState={liveState} onAsk={onAsk} bar={extra} compactHint={compactHint} />
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-7xl space-y-2">
@@ -229,7 +231,7 @@ export function Composer({
 
 // Session ouverte dans un terminal : deux processus ne peuvent pas écrire le même transcript, donc pas de claude -p ici. Si la session
 // tourne dans tmux, le message y est collé puis validé ; sinon on l'explique.
-function LiveSend({ id, onSent, liveState, onAsk, bar }: { id: string; onSent: () => void; liveState: Live; onAsk?: (asking: boolean) => void; bar?: ReactNode }) {
+function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint }: { id: string; onSent: () => void; liveState: Live; onAsk?: (asking: boolean) => void; bar?: ReactNode; compactHint?: string | null }) {
   const { t } = useTranslation()
   const a = useActions()
   const exec = useCan()("exec")
@@ -327,6 +329,15 @@ function LiveSend({ id, onSent, liveState, onAsk, bar }: { id: string; onSent: (
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-7xl space-y-2">
+        {compactHint && (
+          <p role="status" className="flex items-center gap-2 rounded-md bg-warning/10 px-3 py-1 text-xs text-warning">
+            <Minimize2 className="size-3.5 shrink-0" aria-hidden />
+            <span className="min-w-0 flex-1">{compactHint}</span>
+            <Button size="xs" variant="outline" disabled={!exec} title={t("conversation.composer.compactTitle")} onClick={() => sendSlash(id, "/compact", text, onSent)}>
+              {t("conversation.composer.compact")}
+            </Button>
+          </p>
+        )}
         <TerminalPanel id={id} onAsk={(a) => (setAsking(a), onAsk?.(a))} onSent={onSent} extra={bar} />
         {sugg.length > 0 && (
           <ul className="max-h-48 overflow-y-auto rounded-lg border bg-popover p-1 text-sm shadow-md" role="listbox" aria-label={t("conversation.composer.commandsAria")}>
@@ -627,14 +638,16 @@ const slash = () => {
   return (["compact", "context", "cost", "usage", "clear", "model", "mcp", "status", "memory", "permissions", "agents", "rewind", "export", "doctor", "help"] as const).map((n) => [`/${n}`, ...s(n)] as const)
 }
 
+async function sendSlash(id: string, cmd: string, text: string, onSent: () => void) {
+  const full = cmd === "/compact" && text.trim() ? `${cmd} ${text.trim().replace(/\s+/g, " ")}` : cmd
+  const r = await api.post("/session-send", { id, text: full })
+  if (!r.ok) toast.error(r.out)
+  else onSent()
+}
+
 function SlashMenu({ id, text, onSent }: { id: string; text: string; onSent: () => void }) {
   const { t } = useTranslation()
-  const run = async (cmd: string) => {
-    const full = cmd === "/compact" && text.trim() ? `${cmd} ${text.trim().replace(/\s+/g, " ")}` : cmd
-    const r = await api.post("/session-send", { id, text: full })
-    if (!r.ok) toast.error(r.out)
-    else onSent()
-  }
+  const run = (cmd: string) => sendSlash(id, cmd, text, onSent)
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

@@ -34,7 +34,7 @@
       "carousel_other": "Carrousel : {{count}} sessions en attente. La suivante s'ouvre dès que vous répondez.",
       "next": "Suivante",
       "quitCarousel": "Quitter le carrousel",
-      "compactHint": "Contexte à {{ctx}} (≈ {{pct}} %) : il est recommandé de compacter. Les instructions éventuelles s'écrivent dans la saisie, puis Commandes → Compacter.",
+      "compactHint": "Contexte à {{ctx}} (≈ {{pct}} %) : il est recommandé de compacter. Le texte de la saisie sert de consigne au résumé.",
       "toolAnchor_one": "{{count}} outil",
       "toolAnchor_other": "{{count}} outils",
       "toolsShown": "Outils affichés",
@@ -127,6 +127,8 @@
       "copyFailed": "Copie impossible",
       "copyScreen": "Copier l'écran",
       "commands": "Commandes",
+      "compact": "Compacter",
+      "compactTitle": "Envoie /compact à la session ; le texte de la saisie s'y ajoute comme consigne",
       "commandsTitle": "Commandes de Claude Code",
       "mentionAria": "Mentionner une session"
     },

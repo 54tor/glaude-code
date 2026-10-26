@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowDown, ArrowUpToLine, BarChart3, Bug, FolderOpen, Minimize2, Power, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, Repeat, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
+import { ArrowDown, ArrowUpToLine, BarChart3, Bug, FolderOpen, Power, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, Repeat, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
@@ -474,11 +474,6 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
           </Button>
         )}
         </div>
-        {hint && (
-          <p role="status" className="flex items-center gap-2 border-t bg-warning/10 px-4 py-1.5 text-xs text-warning">
-            <Minimize2 className="size-3.5 shrink-0" aria-hidden /> {hint}
-          </p>
-        )}
         {session && !inTerm && (
           <Composer
             dir={dir}
@@ -489,6 +484,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             liveState={live}
             onSent={() => (a.touch(id), setSentAt({ id, at: Date.now() }), sentDown(), void reloadRef.current(), carousel?.next())}
             onWrite={sentDown}
+            compactHint={hint}
             extra={
               <>
                 {!a.live.has(id) && (

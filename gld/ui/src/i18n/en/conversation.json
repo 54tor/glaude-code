@@ -34,7 +34,7 @@
       "carousel_other": "Carousel: {{count}} sessions waiting. The next one opens as soon as you reply.",
       "next": "Next",
       "quitCarousel": "Leave the carousel",
-      "compactHint": "Context at {{ctx}} (≈ {{pct}}%): compacting is recommended. Write any instructions in the input, then Commands → Compact.",
+      "compactHint": "Context at {{ctx}} (≈ {{pct}} %): compacting is recommended. Any text in the input is used as instructions for the summary.",
       "toolAnchor_one": "{{count}} tool",
       "toolAnchor_other": "{{count}} tools",
       "toolsShown": "Tools shown",
@@ -127,6 +127,8 @@
       "copyFailed": "Could not copy",
       "copyScreen": "Copy the screen",
       "commands": "Commands",
+      "compact": "Compact",
+      "compactTitle": "Sends /compact to the session; any text in the input is added as instructions",
       "commandsTitle": "Claude Code commands",
       "mentionAria": "Mention a session"
     },
