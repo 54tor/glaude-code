@@ -191,3 +191,17 @@ function tabsOf(head: string): { label: string; done: boolean }[] | undefined {
   const tabs = [...head.matchAll(/([☐☒])\s+(.+?)(?=\s{2,}[☐☒✔]|\s*$)/g)].map((m) => ({ label: m[2].trim(), done: m[1] === "☒" }))
   return tabs.length ? tabs : undefined
 }
+
+export type LiveMode = "default" | "plan" | "acceptEdits" | "bypass" | "auto"
+
+// Mode de permission d'une session ouverte, lu dans le pied de l'écran tmux (« ⏸ plan mode on (shift+tab to cycle) »…).
+// Sans mention, c'est le mode normal ; sans écran, inconnu.
+export function modeOfScreen(screen: string): LiveMode | null {
+  if (!screen.trim()) return null
+  const foot = screen.split("\n").slice(-6).join("\n").toLowerCase()
+  if (foot.includes("plan mode on")) return "plan"
+  if (foot.includes("accept edits on")) return "acceptEdits"
+  if (foot.includes("bypass permissions on")) return "bypass"
+  if (foot.includes("auto mode on")) return "auto"
+  return "default"
+}

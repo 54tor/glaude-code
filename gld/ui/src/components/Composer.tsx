@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Trans, useTranslation } from "react-i18next"
 import { i18n } from "@/i18n"
 import { cn, isSend } from "@/lib/utils"
-import { parsePrompt, type Opt } from "@/lib/prompt"
+import { modeOfScreen, parsePrompt, type Opt } from "@/lib/prompt"
 import { type Live } from "./LiveStatus"
 import { toast } from "sonner"
 import { Bug, Copy, Minimize2, Power, Send, Square, SquareCheck, X } from "lucide-react"
@@ -382,6 +382,7 @@ function LiveSend({ id, onSent, liveState, onAsk, bar }: { id: string; onSent: (
           </ul>
         )}
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <LiveModeButton id={id} disabled={working || asking || busy} />
           <Choose
             value={models().find(([a]) => a && liveState.st?.model?.toLowerCase().includes(a))?.[0] ?? ""}
             onChange={async (m) => m && (await post(`/model ${m}`)) && onSent()}
@@ -418,6 +419,29 @@ function LiveSend({ id, onSent, liveState, onAsk, bar }: { id: string; onSent: (
         </div>
       </div>
     </div>
+  )
+}
+
+// Mode de permission de la session ouverte : lu sur l'écran tmux, un clic envoie Maj+Tab (mode suivant).
+function LiveModeButton({ id, disabled }: { id: string; disabled: boolean }) {
+  const { t } = useTranslation()
+  const [mode, setMode] = useState<ReturnType<typeof modeOfScreen>>(null)
+  const read = () => api.screen(id).then((r) => r.ok && setMode(modeOfScreen(r.text ?? "")), () => {})
+  useEffect(() => {
+    read()
+    const iv = setInterval(() => document.visibilityState === "visible" && read(), 3000)
+    return () => clearInterval(iv)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
+  const next = async () => {
+    const r = await api.post("/session-key", { id, key: "ShiftTab" })
+    if (!r.ok) return void toast.error(r.out)
+    setTimeout(read, 400)
+  }
+  return (
+    <Button size="sm" variant="outline" disabled={disabled} onClick={next} title={t("conversation.composer.liveModeTitle")}>
+      {t("conversation.composer.liveMode", { mode: t(`conversation.composer.liveModes.${mode ?? "unknown"}`) })}
+    </Button>
   )
 }
 

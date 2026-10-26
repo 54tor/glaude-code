@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { parsePrompt } from "./prompt"
+import { modeOfScreen, parsePrompt } from "./prompt"
 
 const real = {
   // Captures d'une vraie session Claude Code 2.1.307 (tmux), 2026-10-22.
@@ -409,5 +409,15 @@ describe("parsePrompt", () => {
   it("rien en pleine réflexion ni sur du texte ordinaire", () => {
     expect(parsePrompt(screens.busy)).toBeNull()
     expect(parsePrompt(screens.prose)).toBeNull()
+  })
+})
+
+describe("modeOfScreen", () => {
+  it("lit le mode dans le pied de l'écran", () => {
+    expect(modeOfScreen("…\n  ⏸ plan mode on (shift+tab to cycle)")).toBe("plan")
+    expect(modeOfScreen("…\n  ⏵⏵ accept edits on (shift+tab to cycle)")).toBe("acceptEdits")
+    expect(modeOfScreen("…\n  ⏵⏵ bypass permissions on (shift+tab to cycle)")).toBe("bypass")
+    expect(modeOfScreen("…\n  ? for shortcuts")).toBe("default")
+    expect(modeOfScreen("  ")).toBeNull()
   })
 })
