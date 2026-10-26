@@ -135,6 +135,8 @@ export type GitRemote = { name: string; url: string }
 export type GitChange = { path: string; status: string; from?: string } // status : « XY » comme git status --short
 // Dossiers de configuration Claude (homes.go) : current "" = celui du processus principal (main).
 // main "" et mainId : mode multi-utilisateur, le principal sans droit dessus ; id : clé des droits, connue du serveur.
+// Appareil jumelé par QR code en mode jeton (pair.go) ; seen : dernière visite, en secondes Unix.
+export type Device = { id: string; name: string; ip: string; created: number; seen: number }
 export type HomesInfo = { current: string; main: string; mainId?: string; homes: { name: string; dir: string; id?: string; running: boolean }[] }
 
 const enc = encodeURIComponent
@@ -200,6 +202,7 @@ export const api = {
     get<{ t: string; cut: number }>(`/conv-text?dir=${enc(s.dir)}&id=${s.id}&o=${m.o ?? 0}&n=${m.n ?? 0}&from=${from}${tools ? "&tools=1" : ""}`),
   ls: (path: string) => get<Ls>(`/ls?path=${enc(path)}`),
   homes: () => get<HomesInfo>("/homes"),
+  devices: () => get<{ devices: Device[] | null }>("/devices"),
   keepWarm: () => get<{ items: Record<string, WarmState>; ttl: number; below: number }>("/keepwarm"),
   gitChanges: (dir: string) => get<{ files: GitChange[]; more?: number; prefix?: string }>(`/git-changes?dir=${enc(dir)}`),
   notes: () => get<{ notes: Record<string, string> }>("/notes"),

@@ -274,6 +274,23 @@
       "server": "Server side (Go)",
       "browser": "Browser side"
     },
+    "pair": {
+      "title": "Connect a device",
+      "intro": "Scan this code with your phone: it signs in without typing a token or password. The code works only once.",
+      "qr": "Sign-in QR code",
+      "expires": "Valid for {{s}} more s",
+      "expired": "Code expired",
+      "renew": "New code",
+      "failed": "Could not create a code",
+      "step1": "On iPhone, point the Camera at the code, tap the link, then “Connect”: Safari opens, signed in.",
+      "step2": "For the app: in Safari, Share › Add to Home Screen. It keeps Safari's sign-in.",
+      "devices": "Paired devices",
+      "none": "No paired device.",
+      "unknown": "Unknown device",
+      "seen": "{{ip}} · seen {{ago}}",
+      "revoke": "Disconnect",
+      "accountNote": "The device gets a session of your account, listed and revocable in Profile › Sessions."
+    },
     "cleanup": {
       "overdue": "overdue: any moment now",
       "lessThanHour": "in less than 1 h",

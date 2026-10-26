@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useKeepWarm } from "@/hooks/useKeepWarm"
 import { useCan } from "@/lib/auth"
 import { CreditsButton } from "./Credits"
+import { PairButton } from "./PairDevice"
 import { HomeSwitcher } from "./HomeSwitcher"
 import { McpStatus } from "./McpStatus"
 import { ProjectList } from "./ProjectList"
@@ -211,6 +212,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             <p className="text-xs text-muted-foreground tabular-nums">{p.loading ? t("common.loading") : t("shell.count.sessions", { count: p.total })}</p>
           </div>
           <div className="ml-auto flex items-center gap-0.5">
+            <PairButton />
             <CreditsButton />
             <HomeSwitcher />
             {p.mcpDir && can("config_write") && <McpStatus dir={p.mcpDir} />}
