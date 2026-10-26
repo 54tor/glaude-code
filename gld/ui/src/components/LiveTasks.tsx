@@ -4,6 +4,7 @@ import { CircleAlert, CircleCheck, CircleHelp, ListChecks, Loader2 } from "lucid
 import { api, type BgTask } from "@/lib/api"
 import { ago } from "@/lib/format"
 import { Button } from "@/components/ui/button"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import type { Live } from "./LiveStatus"
 
@@ -45,12 +46,13 @@ export function LiveTasks({ live: { st }, dir, id }: { live: Live; dir: string; 
         {running > 0 && <span className="text-success">{t("conversation.live.runningCount", { running })}</span>}
       </Button>
       <Dialog open={shown} onOpenChange={setShown}>
-        <DialogContent className="flex max-h-[85vh] min-w-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+        <DialogContent className="flex h-[85vh] max-h-[85vh] min-w-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
           <DialogHeader className="border-b px-6 py-4">
             <DialogTitle>{t("conversation.tasks.dialogTitle", { n: tasks.length })}</DialogTitle>
             <DialogDescription>{t("conversation.tasks.description")}</DialogDescription>
           </DialogHeader>
-          <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto px-4 py-4 text-sm">
+          <ScrollArea className="min-h-0 flex-1">
+          <ul className="space-y-1 px-4 py-4 text-sm">
             {[...tasks].reverse().map((x) => (
               <li key={x.id}>
                 <button type="button" onClick={() => setPick(x)} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted" title={t("conversation.tasks.open")}>
@@ -62,17 +64,18 @@ export function LiveTasks({ live: { st }, dir, id }: { live: Live; dir: string; 
               </li>
             ))}
           </ul>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
       <Dialog open={!!pick} onOpenChange={(o) => !o && setPick(null)}>
-        <DialogContent className="flex max-h-[85vh] min-w-0 flex-col gap-2 sm:max-w-3xl">
+        <DialogContent className="flex h-[85vh] max-h-[85vh] min-w-0 flex-col gap-2 sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="truncate">{cur?.desc || pick?.id}</DialogTitle>
             <DialogDescription>{cur?.summary || t(`conversation.tasks.status.${cur?.status ?? "running"}`, { defaultValue: cur?.status })}</DialogDescription>
           </DialogHeader>
-          <pre className="min-h-24 flex-1 overflow-auto rounded-md border bg-muted/30 p-3 font-mono text-xs whitespace-pre-wrap">
-            {out?.id === pick?.id ? (out?.ok ? out.text || t("conversation.tasks.empty") : t("conversation.tasks.noOutput")) : "…"}
-          </pre>
+          <ScrollArea className="min-h-0 flex-1 rounded-md border bg-muted/30">
+            <pre className="p-3 font-mono text-xs break-all whitespace-pre-wrap">{out?.id === pick?.id ? (out?.ok ? out.text || t("conversation.tasks.empty") : t("conversation.tasks.noOutput")) : "…"}</pre>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
     </>

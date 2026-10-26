@@ -3,6 +3,7 @@ import { Trans, useTranslation } from "react-i18next"
 import { api, type LoadEvent } from "@/lib/api"
 import { ago, tilde } from "@/lib/format"
 import { FileText } from "lucide-react"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 const REASONS: Record<string, string> = {
@@ -53,7 +54,7 @@ export function LoadedDialog({ id, home, open, onClose }: { id: string; home: st
             <pre className="max-w-full overflow-x-auto rounded-lg border bg-muted/40 p-2 text-xs">{HOOK_SNIPPET}</pre>
           </div>
         ) : (
-          <div className="min-h-0 min-w-0 overflow-y-auto">
+          <ScrollArea className="min-h-0 min-w-0">
             <ul className="space-y-1 pr-3 text-sm">
               {files.map((f, i) => (
                 <li key={i} className="rounded-md px-2 py-1 hover:bg-muted">
@@ -68,7 +69,7 @@ export function LoadedDialog({ id, home, open, onClose }: { id: string; home: st
                 </li>
               ))}
             </ul>
-          </div>
+          </ScrollArea>
         )}
       </DialogContent>
       <Dialog open={!!view} onOpenChange={(o) => !o && setView(null)}>
@@ -77,7 +78,9 @@ export function LoadedDialog({ id, home, open, onClose }: { id: string; home: st
             <DialogTitle className="text-sm break-all">{view && tilde(view.file, home)}</DialogTitle>
             <DialogDescription className="sr-only">{t("conversation.loaded.fileDescription")}</DialogDescription>
           </DialogHeader>
-          <pre className="min-h-0 flex-1 overflow-auto rounded-lg border bg-muted/40 p-3 text-xs whitespace-pre-wrap">{view?.text ?? "…"}</pre>
+          <ScrollArea className="min-h-0 flex-1 rounded-lg border bg-muted/40">
+            <pre className="p-3 text-xs break-words whitespace-pre-wrap">{view?.text ?? "…"}</pre>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
     </Dialog>

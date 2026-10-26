@@ -36,3 +36,11 @@ func TestBgOutRe(t *testing.T) {
 		t.Fatal("forme du chemin de sortie")
 	}
 }
+
+func TestBgOutputOKRefuse(t *testing.T) {
+	for _, p := range []string{"/etc/passwd", "/tmp/claude-1/x/../../etc/y/11111111-2222-3333-4444-555555555555/tasks/a.output", "/tmp/claude-1000/-p/11111111-2222-3333-4444-555555555555/tasks/a.output/", ""} {
+		if bgOutputOK(p) {
+			t.Errorf("accepté : %q", p)
+		}
+	}
+}

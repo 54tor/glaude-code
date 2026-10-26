@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 )
 
 type BgTask struct {
@@ -150,9 +151,6 @@ func scanBgTasks(p string) []BgTask {
 				if t.Desc == "" {
 					t.Desc = t.Summary
 				}
-				if bgOutRe.MatchString(m["output-file"]) {
-					t.Output = m["output-file"]
-				}
 			}
 		}
 		if err != nil {
@@ -165,11 +163,8 @@ func scanBgTasks(p string) []BgTask {
 	out := make([]BgTask, 0, len(order))
 	for _, id := range order {
 		t := byID[id]
-		if t.Output == "" {
-			t.Output = bgOutputPath(p, id)
-		}
-		_, e := os.Stat(t.Output)
-		t.HasOut = e == nil
+		t.Output = bgOutputPath(p, id) // jamais le chemin écrit dans le transcript : il n'est pas de confiance
+		t.HasOut = bgOutputOK(t.Output)
 		out = append(out, *t)
 	}
 	return out
@@ -184,14 +179,39 @@ func bgOutputPath(transcript, id string) string {
 	return filepath.Join(os.TempDir(), "claude-"+strconv.Itoa(os.Getuid()), dir, sess, "tasks", id+".output")
 }
 
+// bgOutputOK : un fichier ordinaire (ni lien symbolique, ni répertoire) qui appartient à l'utilisateur de gld, au chemin que Claude Code lui donne.
+func bgOutputOK(path string) bool {
+	if filepath.Clean(path) != path || !bgOutRe.MatchString(path) {
+		return false
+	}
+	fi, err := os.Lstat(path)
+	if err != nil || !fi.Mode().IsRegular() {
+		return false
+	}
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	return ok && int(st.Uid) == os.Getuid()
+}
+
 // bgOutput : les 64 derniers Kio de la sortie d'une tâche de ce transcript. L'identifiant doit être une tâche relevée dans le transcript
 // et le chemin respecter la forme que Claude Code lui donne.
 func bgOutput(p, id string) (string, bool) {
 	for _, t := range scanBgTasks(p) {
-		if _, e := os.Stat(t.Output); t.ID == id && bgOutRe.MatchString(t.Output) && e == nil {
-			b := tailLines(t.Output, 64<<10)
-			return string(bytes.Join(b, []byte("\n"))), true
+		if t.ID != id || !bgOutputOK(t.Output) {
+			continue
 		}
+		f, err := os.OpenFile(t.Output, os.O_RDONLY|syscall.O_NOFOLLOW, 0) // un lien posé entre la vérification et l'ouverture est refusé
+		if err != nil {
+			return "", false
+		}
+		defer f.Close()
+		fi, err := f.Stat()
+		if err != nil || !fi.Mode().IsRegular() {
+			return "", false
+		}
+		off := max(0, fi.Size()-64<<10)
+		b := make([]byte, fi.Size()-off)
+		n, _ := f.ReadAt(b, off)
+		return string(b[:n]), true
 	}
 	return "", false
 }

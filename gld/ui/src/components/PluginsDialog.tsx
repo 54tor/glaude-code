@@ -60,7 +60,7 @@ export function PluginsDialog({ open, onClose, projects, home, onChange }: { ope
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-2xl">
+      <DialogContent className="flex h-[85vh] max-h-[85vh] flex-col sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t("skills.plugins.title")}</DialogTitle>
           <DialogDescription>{t("skills.plugins.description")}</DialogDescription>
