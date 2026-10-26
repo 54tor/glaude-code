@@ -164,13 +164,26 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
       if (Date.now() - sentAt.at > 15 * 60_000) return setSentAt(null)
       const [, st] = await Promise.all([reloadRef.current(), api.sessionIdle(id)])
       // Le premier relevé suit de près l'envoi : la session n'a pas encore commencé, on laisse quelques secondes.
-      if (live && st.idle && Date.now() - sentAt.at > 4000) setSentAt(null)
+      if (live && st.idle && Date.now() - sentAt.at > 4000) {
+        setSentAt(null)
+        // Le relevé a pu précéder l'écriture de la dernière réponse dans le transcript : une relecture de plus, juste après.
+        setTimeout(() => void reloadRef.current(), 1500)
+      }
     }, 2000)
     return () => {
       live = false
       clearInterval(t)
     }
   }, [sentAt, id])
+
+  // Session qui passe en attente alors qu'elle est affichée (même pilotée depuis son terminal) : sa dernière réponse vient d'être écrite.
+  const idle = !!id && a.waiting.has(id)
+  useEffect(() => {
+    if (!idle) return
+    void reloadRef.current()
+    const t = setTimeout(() => void reloadRef.current(), 1500)
+    return () => clearTimeout(t)
+  }, [idle, id])
 
   // content-visibility affine les hauteurs en cours de rendu : on recolle à la fin sur quelques images.
   const toEnd = useCallback(() => {
