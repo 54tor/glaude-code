@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"strings"
 )
 
@@ -81,6 +82,10 @@ func withToken(token string, next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if r.Method == "GET" && publicAsset(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if r.URL.Path == "/pair" { // confirmation et échange d'un code de jumelage, avant tout jeton
 			pairEntry(w, r, nil)
 			return
@@ -99,6 +104,12 @@ func withToken(token string, next http.Handler) http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		http.Error(w, L("srv.listen.tokenRequired"), http.StatusUnauthorized)
 	})
+}
+
+// publicAsset : manifeste et icônes, chargés par le navigateur sans cookie (manifeste, icône d'écran d'accueil d'iOS) ;
+// fichiers fixes de l'interface, sans donnée. Le chemin doit être déjà propre : « /icons/../x » ne passe pas.
+func publicAsset(p string) bool {
+	return path.Clean(p) == p && (p == "/manifest.webmanifest" || p == "/favicon.ico" || strings.HasPrefix(p, "/icons/"))
 }
 
 // withTokenOpen : en mode ouvert, withToken tel quel. En mode multi-utilisateur, le login remplace le jeton pour le navigateur :

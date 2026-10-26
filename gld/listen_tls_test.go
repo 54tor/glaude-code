@@ -47,3 +47,24 @@ func TestTokenCookieSecure(t *testing.T) {
 		}
 	}
 }
+
+// Le navigateur charge le manifeste (et iOS l'icône d'écran d'accueil) sans cookie : ces fichiers publics passent sans jeton,
+// le reste non.
+func TestPublicAssetsWithoutToken(t *testing.T) {
+	h := withToken("0123456789abcdef0123", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
+	for path, want := range map[string]int{
+		"/manifest.webmanifest": 200, "/icons/apple-touch-icon.png": 200, "/favicon.ico": 200,
+		"/": 401, "/api": 401, "/icons/../api": 401, "/sw.js": 401, "/assets/app.js": 401,
+	} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		if w.Code != want {
+			t.Errorf("%s : %d, attendu %d", path, w.Code, want)
+		}
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("POST", "/manifest.webmanifest", nil))
+	if w.Code != 401 {
+		t.Errorf("POST sur un fichier public : %d", w.Code)
+	}
+}
