@@ -313,6 +313,9 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
               <SquareTerminal /> {t("conversation.view.resume")}
             </DropdownMenuItem>
           )}
+          <DropdownMenuItem onSelect={() => setLoadedOpen(true)} title={t("conversation.view.instructionsTitle")}>
+            <FileText /> {t("conversation.view.instructions")}
+          </DropdownMenuItem>
           <DropdownMenuGroup className="md:hidden">
             <DropdownMenuCheckboxItem checked={tools} onCheckedChange={(c) => setTools(c === true)}>
               {t("conversation.view.showTools")}
@@ -322,9 +325,6 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
                 {inTerm ? <MessagesSquare /> : <SquareTerminal />} {inTerm ? t("conversation.view.modeVisual") : t("conversation.view.modeTerminal")}
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem onSelect={() => setLoadedOpen(true)}>
-              <FileText /> {t("conversation.view.instructions")}
-            </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setStatsOpen(true)}>
               <BarChart3 /> {t("conversation.live.stats")}
             </DropdownMenuItem>
@@ -394,17 +394,14 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             </Button>
           </div>
         )}
-        {/* Mode terminal et pré-prompt : sur petit écran ils sont dans le menu « … » de l'en-tête. */}
-        <div className="flex flex-wrap items-center gap-1 border-b bg-muted/40 px-2 py-1.5 in-data-[kb]:hidden max-md:hidden md:px-4">
-          {termOn && a.live.has(id) && (
-            <Button variant="secondary" size="sm" className="max-md:hidden" onClick={() => setView(inTerm ? "visuel" : "terminal")} title={t("conversation.view.modeTitle")}>
+        {/* Mode terminal : sur petit écran il est dans le menu « … » de l'en-tête. */}
+        {termOn && a.live.has(id) && (
+          <div className="flex items-center gap-1 border-b bg-muted/40 px-2 py-1.5 in-data-[kb]:hidden max-md:hidden md:px-4">
+            <Button variant="secondary" size="sm" onClick={() => setView(inTerm ? "visuel" : "terminal")} title={t("conversation.view.modeTitle")}>
               {inTerm ? <MessagesSquare /> : <SquareTerminal />} {inTerm ? t("conversation.view.modeVisual") : t("conversation.view.modeTerminal")}
             </Button>
-          )}
-          <Button variant="ghost" size="sm" className="max-md:hidden" onClick={() => setLoadedOpen(true)} title={t("conversation.view.instructionsTitle")}>
-            <FileText /> {t("conversation.view.instructions")}
-          </Button>
-        </div>
+          </div>
+        )}
         {session && <LiveStats live={live} s={session} project={row?.g.project ?? session.cwd} detail={detail} shown={statsOpen} onShown={setStatsOpen} />}
         {inTerm && (
           <Suspense fallback={null}>
