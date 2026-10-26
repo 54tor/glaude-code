@@ -4,6 +4,11 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.4.6] - 2026-10-26
+
+### Corrigé
+- Windows : la compilation échouait sur `syscall.Stat_t` et `syscall.O_NOFOLLOW` dans la lecture des tâches de fond. Le contrôle de propriété passe par `ownedByMe` et `O_NOFOLLOW` devient une constante par plateforme (`fsflags_unix.go`, `fsflags_windows.go`).
+
 ## [0.4.5] - 2026-10-26
 
 ### Corrigé
