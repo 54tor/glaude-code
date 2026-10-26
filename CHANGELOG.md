@@ -4,6 +4,12 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.4.7] - 2026-10-26
+
+### Corrigé
+- Tests : `TestPanneClaudeBloque` rétablit le cache de `claude agents` de production, sinon `/api` relançait chaque relevé (environ 5 s, au-delà du seuil de 4 s).
+- Tests : le test de la poignée de l'éditeur attend que l'onglet `b.txt` soit actif avant de cliquer (course en CI).
+
 ## [0.4.6] - 2026-10-26
 
 ### Corrigé
