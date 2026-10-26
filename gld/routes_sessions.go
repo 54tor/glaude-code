@@ -82,6 +82,16 @@ func routesSessions(mux *http.ServeMux) {
 	mux.HandleFunc("GET /session-live", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, sessionLive(r.URL.Query().Get("dir"), r.URL.Query().Get("id")))
 	})
+	mux.HandleFunc("GET /session-task-output", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		p, ok := transcript(q.Get("dir"), q.Get("id"))
+		if !ok {
+			writeJSON(w, 400, map[string]any{})
+			return
+		}
+		out, ok := bgOutput(p, q.Get("task"))
+		writeJSON(w, 200, map[string]any{"ok": ok, "text": out})
+	})
 	// Relevé trop vieux : on le rafraîchit en arrière-plan (la page relit toutes les minutes). Le forcer lance claude :
 	// c'est un POST, que CrossOriginProtection garde (un GET serait déclenchable par une image sur un site tiers).
 	account := func(w http.ResponseWriter, force bool) {

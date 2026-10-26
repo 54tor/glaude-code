@@ -132,6 +132,22 @@
       "commandsTitle": "Claude Code commands",
       "mentionAria": "Mention a session"
     },
+    "tasks": {
+      "title": "Session background tasks (background commands, Monitor, workflows)",
+      "count": "{{n}} task(s)",
+      "dialogTitle": "Background tasks ({{n}})",
+      "description": "Read from the session transcript; click one to see its output.",
+      "open": "Show output",
+      "empty": "(empty output)",
+      "noOutput": "Output not found: the file no longer exists.",
+      "status": {
+        "running": "running",
+        "completed": "completed",
+        "failed": "failed",
+        "killed": "stopped",
+        "unknown": "unknown state"
+      }
+    },
     "slash": {
       "compact": {
         "label": "Compact the context",

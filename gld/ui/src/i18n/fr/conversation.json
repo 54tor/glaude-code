@@ -132,6 +132,22 @@
       "commandsTitle": "Commandes de Claude Code",
       "mentionAria": "Mentionner une session"
     },
+    "tasks": {
+      "title": "Tâches de fond de la session (commandes en arrière-plan, Monitor, workflows)",
+      "count": "{{n}} tâche(s)",
+      "dialogTitle": "Tâches de fond ({{n}})",
+      "description": "Relevées dans le transcript de la session ; un clic affiche la sortie.",
+      "open": "Voir la sortie",
+      "empty": "(sortie vide)",
+      "noOutput": "Sortie introuvable : le fichier n'existe plus.",
+      "status": {
+        "running": "en cours",
+        "completed": "terminée",
+        "failed": "échec",
+        "killed": "arrêtée",
+        "unknown": "état inconnu"
+      }
+    },
     "slash": {
       "compact": {
         "label": "Compacter le contexte",

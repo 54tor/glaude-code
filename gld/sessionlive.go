@@ -42,6 +42,7 @@ type LiveState struct {
 	Tool        string    `json:"tool"`        // dernier outil appelé (« Bash : go test »)
 	ToolRunning bool      `json:"toolRunning"` // son résultat n'est pas encore arrivé
 	Subs        []SubLive `json:"subs"`
+	Tasks       []BgTask  `json:"tasks"`
 	Verbs       []string  `json:"verbs"` // verbes affichés à tour de rôle pendant la réflexion
 	Queue       []Queued  `json:"queue"` // messages envoyés pendant que Claude travaillait, pas encore lus par la session
 }
@@ -328,7 +329,7 @@ func readActivity(path string) (activity string, thinking bool, since float64, u
 }
 
 func sessionLive(dir, id string) LiveState {
-	st := LiveState{Subs: []SubLive{}, Verbs: spinnerVerbs(uiLang()), Queue: []Queued{}}
+	st := LiveState{Subs: []SubLive{}, Tasks: []BgTask{}, Verbs: spinnerVerbs(uiLang()), Queue: []Queued{}}
 	st.Status, st.Open = sessionStatus(id)
 	p, ok := transcript(dir, id)
 	if !ok {
@@ -355,6 +356,9 @@ func sessionLive(dir, id string) LiveState {
 		st.Queue = pendingQueue(p)
 	}
 	st.Subs = subLives(filepath.Join(filepath.Dir(p), id, "subagents"))
+	if t := bgTasks(p, st.Open); t != nil {
+		st.Tasks = t
+	}
 	return st
 }
 

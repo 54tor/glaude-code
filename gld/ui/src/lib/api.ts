@@ -100,7 +100,8 @@ export type Hit = { dir: string; id: string; n: number; snip: string }
 export type Item = { dir: string; id: string }
 export type Detail = { prompts: string[]; n: number; branch: string; models: string[]; t0: string; t1: string; subagents: number }
 export type SubLive = { id: string; desc: string; type: string; running: boolean; activity: string; context: number; out: number; mtime: number }
-export type LiveState = { said?: string; open: boolean; status: string; activity: string; thinking: boolean; generic?: boolean; exec?: boolean; since: number; context: number; out: number; model: string; tool?: string; toolRunning?: boolean; subs: SubLive[]; verbs?: string[]; queue?: { t: string; ts: string }[] }
+export type BgTask = { id: string; tool?: string; desc: string; status: string; summary?: string; start?: string; end?: string; hasOutput: boolean }
+export type LiveState = { said?: string; open: boolean; status: string; activity: string; thinking: boolean; generic?: boolean; exec?: boolean; since: number; context: number; out: number; model: string; tool?: string; toolRunning?: boolean; subs: SubLive[]; tasks?: BgTask[]; verbs?: string[]; queue?: { t: string; ts: string }[] }
 export type UsageLimit = { key: string; label: string; percent: number; resetsAt?: string; limitDollars?: number; usedDollars?: number; lockedWhy?: string }
 export type Account = {
   email: string
@@ -220,6 +221,7 @@ export const api = {
   plugins: (q = "") => get<{ installed?: PluginInst[]; available?: PluginAvail[]; error?: string }>(`/plugins?q=${enc(q)}`),
   configProjects: () => get<{ projects: ProjectCfg[] }>("/config-projects"),
   sessionIdle: (id: string) => get<{ idle: boolean }>(`/session-state?id=${enc(id)}`),
+  taskOutput: (dir: string, id: string, task: string) => get<{ ok: boolean; text?: string }>(`/session-task-output?dir=${enc(dir)}&id=${enc(id)}&task=${enc(task)}`),
   sessionLive: (dir: string, id: string) => get<LiveState>(`/session-live?dir=${enc(dir)}&id=${enc(id)}`),
   // refresh : relevé demandé par un POST (un GET ne doit rien déclencher), puis lecture de l'état, qui dit « refreshing ».
   account: async (refresh = false) => {

@@ -16,6 +16,7 @@ import { BgBadge, Live } from "./SessionList"
 import type { Row } from "./actions"
 import { Message } from "./Message"
 import { CloseSession, Composer, type Turn } from "./Composer"
+import { LiveTasks } from "./LiveTasks"
 import { LiveAgents, LiveBar, LiveStats, StatsButton, useLive } from "./LiveStatus"
 import { LoadedDialog } from "./LoadedDialog"
 import { CacheState, KeepWarmBanner, KeepWarmButton, KeepWarmItem } from "./KeepWarm"
@@ -307,6 +308,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   const metaExtra = session && (
     <>
       <LiveAgents live={live} dir={dir} id={id} />
+      <LiveTasks live={live} dir={dir} id={id} />
       {gitDirs.map((d) => (
         <span key={d} className="flex min-w-0 flex-wrap items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs md:shrink-0" title={d}>
           {d !== row?.g.project && <span className="max-w-32 truncate text-muted-foreground">{d.split("/").filter(Boolean).pop()}</span>}
