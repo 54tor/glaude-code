@@ -9,7 +9,7 @@ vi.mock("sonner", () => ({ toast: { error: (...a: unknown[]) => toastError(...a)
 const { useAppData } = await import("./useAppData")
 const { setAuth } = await import("@/lib/auth")
 
-const DATA = { home: "/h", root: "/h/.claude", groups: [], dirs: [], live: [], waiting: [], vgroups: [], favs: [], tags: {}, projects: [], providers: [] }
+const DATA = { home: "/h", root: "/h/.claude", groups: [], dirs: [], live: [], waiting: [], vgroups: [], favs: [], projects: [], providers: [] }
 const SNIPS = { dir: "/h/s", files: [], scopes: [] }
 
 // Faux serveur : /api, /snippet-list et /sessions-stamp ; down rend des 502.

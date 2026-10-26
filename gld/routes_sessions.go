@@ -36,7 +36,7 @@ func routesSessions(mux *http.ServeMux) {
 		groupsMu.Lock()
 		st := loadStore()
 		groupsMu.Unlock()
-		writeJSON(w, 200, map[string]any{"home": home, "root": root, "groups": withEmptyDirs(sessions(), st.Dirs), "dirs": st.Dirs, "live": live, "background": background, "waiting": waiting(), "asking": askingSessions(), "vgroups": st.Groups, "favs": st.Favs, "tags": st.Tags, "projects": st.Projects, "providers": providerInfos(), "lang": normalizeLang(userLanguageRaw())})
+		writeJSON(w, 200, map[string]any{"home": home, "root": root, "groups": withEmptyDirs(sessions(), st.Dirs), "dirs": st.Dirs, "live": live, "background": background, "waiting": waiting(), "asking": askingSessions(), "vgroups": st.Groups, "favs": st.Favs, "projects": st.Projects, "providers": providerInfos(), "lang": normalizeLang(userLanguageRaw())})
 	})
 	// Dossiers enregistrés à la main (sans session) : ajout ou retrait.
 	mux.HandleFunc("POST /dirs", func(w http.ResponseWriter, r *http.Request) {
@@ -394,13 +394,10 @@ func routesSessions(mux *http.ServeMux) {
 			return
 		}
 		groupsMu.Lock()
-		if st.Tags == nil || st.Projects == nil || st.Dirs == nil { // un client qui ne connaît pas un champ ne l'efface pas
+		if st.Projects == nil || st.Dirs == nil { // un client qui ne connaît pas un champ ne l'efface pas
 			old := loadStore()
 			if st.Dirs == nil {
 				st.Dirs = old.Dirs
-			}
-			if st.Tags == nil {
-				st.Tags = old.Tags
 			}
 			if st.Projects == nil {
 				st.Projects = old.Projects

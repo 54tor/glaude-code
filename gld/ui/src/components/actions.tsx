@@ -47,9 +47,6 @@ export type Actions = {
   projectActs: ProjectActions
   favs: Set<string> // sessions favorites
   toggleFav: (ids: string[]) => void
-  tags: Record<string, string[]> // étiquettes par session
-  editTags: (s: Session) => void
-  filterTag: (tag: string) => void // filtre la liste sur cette étiquette
   inGroup: VGroup | null // groupe virtuel affiché
   groupActs: GroupActions
   picked: Set<string> // ids sélectionnés

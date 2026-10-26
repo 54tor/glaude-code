@@ -139,7 +139,7 @@ describe("tree", () => {
 
 describe("sessionsView", () => {
   const data = (groups: Group[]) => ({ groups }) as Data
-  it("masque les revues automatiques, filtre par texte, étiquette et résultat de recherche, trie par date", () => {
+  it("masque les revues automatiques, filtre par texte et résultat de recherche, trie par date", () => {
     const g = group(
       "/p/Caddy",
       sess("1", "Déploie", 10, 2),
@@ -147,32 +147,26 @@ describe("sessionsView", () => {
       sess("3", AUTO[0] + " x", 20, 5),
       sess("4", "Rien", 5)
     )
-    const v = buildView(data([g]), "", {}, null)
+    const v = buildView(data([g]), "", null)
     expect(v.rows.map((r) => r.s.id)).toEqual(["2", "1", "4"])
     expect(v.autoItems).toEqual([{ dir: "-d", id: "3" }])
     expect(v.akb).toBe(5)
     expect(v.total).toBe(3)
     expect(
-      buildView(data([g]), "déploie", {}, null).rows.map((r) => r.s.id)
+      buildView(data([g]), "déploie", null).rows.map((r) => r.s.id)
     ).toEqual(["1"])
-    expect(buildView(data([g]), "caddy", {}, null).rows).toHaveLength(0) // le nom seul n'inclut pas le chemin du dossier
-    expect(buildView(data([g]), "caddy", {}, null, true).rows).toHaveLength(3)
-    expect(
-      buildView(data([g]), "#PR", { "4": ["prod"] }, null).rows.map(
-        (r) => r.s.id
-      )
-    ).toEqual(["4"])
+    expect(buildView(data([g]), "caddy", null).rows).toHaveLength(0) // le nom seul n'inclut pas le chemin du dossier
+    expect(buildView(data([g]), "caddy", null, true).rows).toHaveLength(3)
     expect(
       buildView(
         data([g]),
         "introuvable",
-        {},
         new Map([["2", {} as never]]),
         true
       ).rows.map((r) => r.s.id)
     ).toEqual(["2"])
-    expect(buildView(data([g]), "introuvable", {}, new Map([["2", {} as never]])).rows).toEqual([])
-    expect(buildView(null, "", {}, null).rows).toEqual([])
+    expect(buildView(data([g]), "introuvable", new Map([["2", {} as never]])).rows).toEqual([])
+    expect(buildView(null, "", null).rows).toEqual([])
   })
   it("plural, cut", () => {
     expect(plural(1)).toBe("1 session")
@@ -277,9 +271,8 @@ describe("divers", () => {
 describe("dossiers sans session", () => {
   const data = { groups: [{ project: "/a/vide", missing: false, sessions: [] }, { project: "/a/plein", missing: false, sessions: [{ id: "s", title: "t", mtime: 1, kb: 1, dir: "d", cwd: "/a/plein", named: false, tok: {} }] }] } as never
   it("un dossier enregistré reste dans l'arbre, la recherche l'écarte", () => {
-    expect(buildView(data, "", {}, null).entries.map((e) => e.g.project)).toEqual(["/a/vide", "/a/plein"])
-    expect(buildView(data, "plein", {}, null, true).entries.map((e) => e.g.project)).toEqual(["/a/plein"])
-    expect(buildView(data, "#prod", {}, null).entries.map((e) => e.g.project)).toEqual([])
+    expect(buildView(data, "", null).entries.map((e) => e.g.project)).toEqual(["/a/vide", "/a/plein"])
+    expect(buildView(data, "plein", null, true).entries.map((e) => e.g.project)).toEqual(["/a/plein"])
   })
 })
 

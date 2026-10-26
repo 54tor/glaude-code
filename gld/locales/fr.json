@@ -169,8 +169,6 @@
   "srv.convpage.messageIntrouvable": "message introuvable",
   "srv.extra.dossierDeProjetInvalide": "dossier de projet invalide ou en double",
   "srv.extra.dossierEnregistreInvalideOu": "dossier enregistré invalide ou en double",
-  "srv.extra.etiquetteVideTropLongue": "étiquette vide, trop longue ou en double",
-  "srv.extra.etiquettesInvalides": "étiquettes invalides",
   "srv.extra.favoriInvalide": "favori invalide",
   "srv.extra.groupeSansNomNi": "groupe sans nom ni projet, nom trop long, ou en double dans ce projet",
   "srv.extra.projetSansNomNom": "projet sans nom, nom trop long ou en double",

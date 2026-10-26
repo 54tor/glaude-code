@@ -75,7 +75,6 @@ const Row = memo(function Row({ row, showProject, showCache }: { row: R; showPro
   const left = showCache ? a.hotLeft(s) : null
   const picked = a.picked.has(s.id)
   const hit = a.hit(s.id)
-  const tags = a.tags[s.id] ?? []
   // Une session peut appartenir à plusieurs groupes de son dossier.
   const groups = a.vgroups.filter((x) => x.project === g.project && x.ids.includes(s.id) && x.name !== a.inGroup?.name).map((x) => x.name)
   return (
@@ -153,16 +152,6 @@ const Row = memo(function Row({ row, showProject, showCache }: { row: R; showPro
                   <span className="truncate">{tilde(g.project, a.home)}</span>
                 </>
               )}
-              {tags.map((tag) => (
-                <button
-                  key={tag}
-                  className="relative z-10 shrink-0 rounded-sm bg-accent px-1.5 text-accent-foreground hover:bg-primary/20"
-                  onClick={() => a.filterTag(tag)}
-                  title={t("shell.list.filterTag", { tag })}
-                >
-                  #{tag}
-                </button>
-              ))}
               {groups.length > 0 && (
                 <span className="flex min-w-0 items-center gap-1 text-info" title={t("shell.list.groups", { names: groups.join(", ") })}>
                   <Tag className="size-3 shrink-0" />

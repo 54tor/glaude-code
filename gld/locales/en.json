@@ -169,8 +169,6 @@
   "srv.convpage.messageIntrouvable": "message not found",
   "srv.extra.dossierDeProjetInvalide": "invalid or duplicated project folder",
   "srv.extra.dossierEnregistreInvalideOu": "invalid or duplicated registered folder",
-  "srv.extra.etiquetteVideTropLongue": "tag empty, too long or duplicated",
-  "srv.extra.etiquettesInvalides": "invalid tags",
   "srv.extra.favoriInvalide": "invalid favourite",
   "srv.extra.groupeSansNomNi": "group with no name or project, name too long, or duplicated in this project",
   "srv.extra.projetSansNomNom": "project with no name, name too long or duplicated",

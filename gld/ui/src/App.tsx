@@ -122,8 +122,7 @@ function Shell() {
   const hitMap = useSearchHits(adv ? qt : "")
   const searching = adv && qt.length >= 2 && !hitMap && route.kind !== "snippets" && route.kind !== "memory" && route.kind !== "tabs" && route.kind !== "config" && route.kind !== "skills"
 
-  const tags = useMemo(() => data?.tags ?? {}, [data])
-  const view = useMemo(() => buildView(data, qt, tags, hitMap, adv), [data, qt, tags, hitMap, adv])
+  const view = useMemo(() => buildView(data, qt, hitMap, adv), [data, qt, hitMap, adv])
 
   // Toutes les sessions, même filtrées : le lecteur reste ouvert quand la recherche change.
   const everyId = useMemo(() => {
@@ -134,7 +133,7 @@ function Shell() {
 
   const home = data?.home ?? ""
   // La barre latérale ne suit pas la recherche : elle montre toujours toutes les sessions, la recherche ne filtre que la vue affichée.
-  const base = useMemo(() => buildView(data, "", tags, null), [data, tags])
+  const base = useMemo(() => buildView(data, "", null), [data])
   const tree = useMemo(() => buildTree(view.entries, home), [view.entries, home])
   // « Sessions locales » : seulement les dossiers qui ne sont dans aucun projet (ils ont leur place sous « Projets »).
   const projects = data?.projects
@@ -238,14 +237,12 @@ function Shell() {
     reload,
     home,
     q,
-    setQ,
     go,
     read,
     now,
     live,
     waiting,
     hitMap,
-    tags,
     vgroups,
     favs,
     vg,

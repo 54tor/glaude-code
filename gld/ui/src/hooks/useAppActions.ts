@@ -8,7 +8,7 @@ import { segs } from "@/lib/paths"
 import { exportMarkdown } from "@/lib/export"
 import { size, tilde } from "@/lib/format"
 import { withChoice, type Choice } from "@/lib/models"
-import { byDate, cut, groupKey, HOT, type View } from "@/lib/sessionsView"
+import { byDate, groupKey, HOT, type View } from "@/lib/sessionsView"
 import type { Route } from "@/lib/route"
 import type { Actions, GroupActions, ProjectActions, Row } from "@/components/actions"
 import type { Ask } from "@/components/Confirm"
@@ -28,14 +28,12 @@ export function useAppActions(c: {
   reload: () => Promise<void>
   home: string
   q: string
-  setQ: (v: string) => void
   go: (r: Route) => void
   read: (s: { id: string }) => void
   now: number
   live: Set<string>
   waiting: Set<string>
   hitMap: Map<string, Hit> | null
-  tags: Record<string, string[]>
   vgroups: VGroup[]
   favs: Set<string>
   vg: VGroup | undefined // groupe affiché
@@ -53,7 +51,7 @@ export function useAppActions(c: {
   setInfo: (r: Row | null) => void
   setPicker: (p: Pick | null) => void
 }) {
-  const { data, setData, reload, home, q, setQ, go, read, now, live, waiting, hitMap, tags, vgroups, favs, vg, picked, setPicked, selected, everyId, view, args, choice, snippets, setAsk, setPrompt, setCompose, setInfo, setPicker } = c
+  const { data, setData, reload, home, q, go, read, now, live, waiting, hitMap, vgroups, favs, vg, picked, setPicked, selected, everyId, view, args, choice, snippets, setAsk, setPrompt, setCompose, setInfo, setPicker } = c
   const lastPick = useRef<string | null>(null) // dernière case cochée, début d'une sélection de plage
   const gkey = (x: VGroup) => groupKey(x, home)
   // Une action : toast de progression puis de résultat, erreurs jamais muettes, liste rechargée.
@@ -89,12 +87,11 @@ export function useAppActions(c: {
     )
 
   // Groupes virtuels et favoris : mise à jour immédiate de l'affichage, puis enregistrement côté serveur.
-  const saveStore = async (groups: VGroup[], favList: string[], tagMap = tags) => {
-    setData((d) => d && { ...d, vgroups: groups, favs: favList, tags: tagMap })
+  const saveStore = async (groups: VGroup[], favList: string[]) => {
+    setData((d) => d && { ...d, vgroups: groups, favs: favList })
     const r = await api.post("/vgroups", {
       groups,
       favs: favList,
-      tags: tagMap,
     })
     if (!r.ok) {
       toast.error(r.out)
@@ -106,7 +103,7 @@ export function useAppActions(c: {
   const projects = data?.projects ?? []
   const saveProjects = async (next: Project[]) => {
     setData((d) => d && { ...d, projects: next })
-    const r = await api.post("/vgroups", { groups: vgroups, favs: [...favs], tags, projects: next })
+    const r = await api.post("/vgroups", { groups: vgroups, favs: [...favs], projects: next })
     if (!r.ok) {
       toast.error(r.out)
       await reload()
@@ -328,26 +325,6 @@ export function useAppActions(c: {
     projects,
     projectActs,
     favs,
-    tags,
-    filterTag: (t) => setQ("#" + t),
-    editTags: (s) =>
-      named(i18n.t("shell.act.tagsTitle", { title: cut(s.title, 40) }), (tags[s.id] ?? []).join(", "), i18n.t("common.save"), (v) => {
-        const list = [
-          ...new Set(
-            v
-              .split(",")
-              .map((t) => t.trim())
-              .filter(Boolean)
-          ),
-        ]
-        const next = { ...tags }
-        if (list.length) next[s.id] = list
-        else delete next[s.id]
-        saveStore(vgroups, [...favs], next)
-        },
-        undefined,
-        s.id
-      ),
     toggleFav: (ids) => {
       const add = ids.some((id) => !favs.has(id))
       saveStore(vgroups, add ? [...new Set([...favs, ...ids])] : [...favs].filter((id) => !ids.includes(id)))

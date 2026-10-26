@@ -1,4 +1,4 @@
-import { BookOpen, Check, CheckSquare, ClipboardList, Copy, Download, FolderInput, MessageSquarePlus, Hash, Info, MessageSquareReply, Pencil, Plus, Power, Star, StarOff, Tag, Trash2, X, RefreshCcwDot } from "lucide-react"
+import { BookOpen, Check, CheckSquare, ClipboardList, Copy, Download, FolderInput, MessageSquarePlus, Info, MessageSquareReply, Pencil, Plus, Power, Star, StarOff, Tag, Trash2, X, RefreshCcwDot } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { VGroup } from "@/lib/api"
 import {
@@ -167,9 +167,6 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
         <Info /> {t("shell.menu.info")}
       </M.Item>
       <Fav M={M} ids={[s.id]} />
-      <M.Item onSelect={() => a.editTags(s)}>
-        <Hash /> {t("shell.menu.tags")}
-      </M.Item>
       <M.Item onSelect={() => a.rename(s)}>
         <Pencil /> {t("shell.menu.rename")}
       </M.Item>

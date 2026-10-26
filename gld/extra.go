@@ -194,23 +194,19 @@ type Project struct {
 
 // Store : contenu de ~/.claude/gld-web-groups.json.
 type Store struct {
-	Groups []VGroup `json:"groups"`
-	Favs   []string `json:"favs"` // sessions favorites
-	// Tags : étiquettes libres par session (id → étiquettes).
-	Tags     map[string][]string `json:"tags"`
-	Projects []Project           `json:"projects"`
+	Groups   []VGroup  `json:"groups"`
+	Favs     []string  `json:"favs"` // sessions favorites
+	Projects []Project `json:"projects"`
 	// Dirs : dossiers de travail ajoutés à la main, qui n'ont pas (encore) de session : on y lance un prompt sans mémoire Claude.
 	Dirs []string `json:"dirs"`
 }
-
-const maxTags, maxTagLen = 12, 30
 
 var groupsMu sync.Mutex
 
 func groupsFile() string { return filepath.Join(cfgDir(), "gld-web-groups.json") }
 
 func loadStore() Store {
-	st := Store{Groups: []VGroup{}, Favs: []string{}, Tags: map[string][]string{}, Projects: []Project{}, Dirs: []string{}}
+	st := Store{Groups: []VGroup{}, Favs: []string{}, Projects: []Project{}, Dirs: []string{}}
 	b, err := os.ReadFile(groupsFile())
 	if err != nil {
 		return st
@@ -221,9 +217,6 @@ func loadStore() Store {
 		}
 		if st.Favs == nil {
 			st.Favs = []string{}
-		}
-		if st.Tags == nil {
-			st.Tags = map[string][]string{}
 		}
 		if st.Projects == nil {
 			st.Projects = []Project{}
@@ -315,20 +308,6 @@ func saveStore(st Store) error {
 	for _, id := range st.Favs {
 		if !idRe.MatchString(id) {
 			return terr("srv.extra.favoriInvalide")
-		}
-	}
-	for id, ts := range st.Tags {
-		if !idRe.MatchString(id) || len(ts) > maxTags {
-			return terr("srv.extra.etiquettesInvalides")
-		}
-		seenTag := map[string]bool{}
-		for i, t := range ts {
-			t = strings.TrimSpace(spaceRe.ReplaceAllString(t, " "))
-			if t == "" || utf8.RuneCountInString(t) > maxTagLen || seenTag[strings.ToLower(t)] {
-				return terr("srv.extra.etiquetteVideTropLongue")
-			}
-			seenTag[strings.ToLower(t)] = true
-			ts[i] = t
 		}
 	}
 	b, _ := json.MarshalIndent(st, "", "  ")
