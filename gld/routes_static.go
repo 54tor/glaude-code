@@ -24,12 +24,17 @@ func routesStatic(mux *http.ServeMux) {
 	page := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; base-uri 'self'; frame-ancestors 'none'")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache") // elle désigne les /assets/ de la version servie
 		w.Write(index)
 	}
 	for _, p := range []string{"GET /{$}", "GET /toutes", "GET /en-cours", "GET /dossier/", "GET /groupe/", "GET /projet/", "GET /snippets", "GET /snippets/", "GET /memoire", "GET /memoire/", "GET /onglets", "GET /configuration", "GET /configuration/", "GET /skills", "GET /skills/", "GET /espace/", "GET /reglages/"} {
 		mux.HandleFunc(p, page)
 	}
-	mux.Handle("GET /assets/", files)
+	// Noms hachés par le build : un fichier de /assets/ ne change jamais, navigateur et CDN le gardent un an.
+	mux.Handle("GET /assets/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		files.ServeHTTP(w, r)
+	}))
 	// Icônes et manifeste (ui/public) : favicon, icônes d'application.
 	mux.Handle("GET /icons/", files)
 	mux.Handle("GET /favicon.ico", files)

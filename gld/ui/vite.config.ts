@@ -67,28 +67,29 @@ export default defineConfig({
     assetsInlineLimit: 0,
     // Servi en local par le binaire Go : le poids du bundle principal (≈ 600 ko) ne coûte rien sur le réseau ; xterm est déjà chargé à la demande.
     chunkSizeWarningLimit: 700,
-    // Noms stables : le binaire Go embarque dist/ au make install et le sert sous /assets/ ; un nom prévisible se vérifie et se cache simplement.
+    // Noms hachés : servis sous /assets/ avec un cache permanent (navigateur, service worker, CDN) ; une nouvelle version change
+    // les noms, index.html (jamais mis en cache) pointe vers les nouveaux.
     rolldownOptions: {
       output: {
-        // Monaco (≈ 4 Mo) découpé en morceaux < 700 ko, tous chargés à la demande avec l'éditeur ; app.js reste l'entrée.
+        // Monaco (≈ 4 Mo) découpé en morceaux < 700 ko, tous chargés à la demande avec l'éditeur ; app-<hash>.js reste l'entrée.
         // Pas de maxSize : il coupait Monaco en chunks qui s'importaient mutuellement, page blanche en production.
         codeSplitting: {
           groups: [{ name: monacoSlice, debugName: "monaco", test: (id) => isMonaco(id) && !!monacoIds.push(id), includeDependenciesRecursively: false }],
         },
-        entryFileNames: "assets/app.js",
-        chunkFileNames: "assets/[name].js",
-        assetFileNames: "assets/[name][extname]",
+        entryFileNames: "assets/app-[hash].js",
+        chunkFileNames: "assets/[name]-[hash].js",
+        assetFileNames: "assets/[name]-[hash][extname]",
       },
     },
   },
-  // Workers de Monaco : noms stables eux aussi (ts.worker.js, editor.worker.js…), servis par gld, même origine que la CSP.
+  // Workers de Monaco : hachés eux aussi (ts.worker-<hash>.js…), servis par gld, même origine que la CSP.
   worker: {
     format: "es",
     rolldownOptions: {
       output: {
-        entryFileNames: "assets/[name].js",
-        chunkFileNames: "assets/[name].js",
-        assetFileNames: "assets/[name][extname]",
+        entryFileNames: "assets/[name]-[hash].js",
+        chunkFileNames: "assets/[name]-[hash].js",
+        assetFileNames: "assets/[name]-[hash][extname]",
       },
     },
   },
