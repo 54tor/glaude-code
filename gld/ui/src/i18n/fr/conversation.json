@@ -34,6 +34,7 @@
       "carousel_other": "Carrousel : {{count}} sessions en attente. La suivante s'ouvre dès que vous répondez.",
       "next": "Suivante",
       "quitCarousel": "Quitter le carrousel",
+      "compactHint": "Contexte à {{ctx}} (≈ {{pct}} %) : il est recommandé de compacter. Les instructions éventuelles s'écrivent dans la saisie, puis Commandes → Compacter.",
       "toolAnchor_one": "{{count}} outil",
       "toolAnchor_other": "{{count}} outils",
       "toolsShown": "Outils affichés",

@@ -1,10 +1,10 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowDown, ArrowUpToLine, BarChart3, Bug, FolderOpen, Power, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, Repeat, SquareTerminal, Wrench } from "lucide-react"
+import { ArrowDown, ArrowUpToLine, BarChart3, Bug, FolderOpen, Minimize2, Power, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, Repeat, SquareTerminal, Wrench } from "lucide-react"
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
-import { full, tilde } from "@/lib/format"
+import { compact, full, tilde } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenuCheckboxItem, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
@@ -30,6 +30,8 @@ const FullTerminal = lazy(() => import("./FullTerminal")) // xterm n'est chargé
 
 // Messages chargés d'un coup (par la fin) : une session de plusieurs Go compte des milliers de messages.
 const PAGE = 200
+const COMPACT_WINDOW = 200_000
+const COMPACT_HINT_AT = 0.6 // part de la fenêtre à partir de laquelle on conseille de compacter
 
 function Meta({ s, onFolder, extra }: { s: Session; onFolder?: () => void; extra?: React.ReactNode }) {
   const { t } = useTranslation()
@@ -298,6 +300,10 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
     setTimeout(toEnd, 2500)
   }, [toEnd])
 
+  // Contexte du dernier appel : fenêtre de 1 M de tokens si le modèle l'indique ou si on l'a déjà dépassée de 200 k, sinon 200 k.
+  const ctx = live.st?.context ?? 0
+  const win = live.st?.model.includes("[1m]") || ctx > COMPACT_WINDOW ? 1_000_000 : COMPACT_WINDOW
+  const hint = a.live.has(id) && ctx >= win * COMPACT_HINT_AT ? t("conversation.view.compactHint", { ctx: compact(ctx), pct: Math.round((ctx / win) * 100) }) : null
   const metaExtra = session && (
     <>
       <LiveAgents live={live} dir={dir} id={id} />
@@ -468,6 +474,11 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
           </Button>
         )}
         </div>
+        {hint && (
+          <p role="status" className="flex items-center gap-2 border-t bg-warning/10 px-4 py-1.5 text-xs text-warning">
+            <Minimize2 className="size-3.5 shrink-0" aria-hidden /> {hint}
+          </p>
+        )}
         {session && !inTerm && (
           <Composer
             dir={dir}
