@@ -374,7 +374,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   return (
     <Dialog open={!!session} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        className="safe-t safe-b flex h-[calc(var(--vvh,100dvh)*0.94)] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0 max-md:top-[var(--vvt,0px)] max-md:left-0 max-md:h-[var(--vvh,100dvh)] max-md:w-screen max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none max-md:border-0 sm:max-w-none"
+        className="safe-t safe-b flex h-[calc(var(--vvh,100dvh)*0.94)] max-md:[&>[data-slot=dialog-close]]:top-[calc(env(safe-area-inset-top)+0.625rem)] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0 max-md:top-[var(--vvt,0px)] max-md:left-0 max-md:h-[var(--vvh,100dvh)] max-md:w-screen max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none max-md:border-0 sm:max-w-none"
         onCloseAutoFocus={(e) => focusRow(lastId.current) && e.preventDefault()}
       >
         <DialogHeader className="gap-1 border-b px-4 pt-2.5 pr-12 pb-3 md:px-6 md:pr-12 md:pb-4">
@@ -399,7 +399,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
                     </>
                   ) : null}
                 </div>
-                <div className="-mr-[38px] flex items-center gap-1">
+                <div className="flex items-center gap-1 md:-mr-[38px]">
                   <StatsButton live={live} s={session} onClick={() => setStatsOpen(true)} />
                   {row && !row.g.missing && (
                     <Button variant="outline" size="xs" className="max-md:hidden" onClick={() => a.newSession(row.g.project)} title={t("conversation.view.newSessionTitle")}>
