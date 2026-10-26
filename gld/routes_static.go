@@ -26,7 +26,7 @@ func routesStatic(mux *http.ServeMux) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Write(index)
 	}
-	for _, p := range []string{"GET /{$}", "GET /toutes", "GET /en-cours", "GET /dossier/", "GET /groupe/", "GET /projet/", "GET /snippets", "GET /snippets/", "GET /memoire", "GET /memoire/", "GET /onglets", "GET /configuration", "GET /configuration/", "GET /skills", "GET /skills/", "GET /espace/"} {
+	for _, p := range []string{"GET /{$}", "GET /toutes", "GET /en-cours", "GET /dossier/", "GET /groupe/", "GET /projet/", "GET /snippets", "GET /snippets/", "GET /memoire", "GET /memoire/", "GET /onglets", "GET /configuration", "GET /configuration/", "GET /skills", "GET /skills/", "GET /espace/", "GET /reglages/"} {
 		mux.HandleFunc(p, page)
 	}
 	mux.Handle("GET /assets/", files)
