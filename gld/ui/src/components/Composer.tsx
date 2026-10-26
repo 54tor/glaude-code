@@ -323,7 +323,6 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint }: { id: stri
           )}
         </p>
         {bar}
-        <CloseSession id={id} />
       </div>
     )
   return (
@@ -417,7 +416,6 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint }: { id: stri
           />
           <span className="ml-auto" />
           <SlashMenu id={id} text={text} onSent={onSent} />
-          <CloseSession id={id} />
           {liveState.st?.thinking && (
             <Button
               size="sm"
@@ -464,7 +462,7 @@ function LiveModeButton({ id, disabled }: { id: string; disabled: boolean }) {
 }
 
 // Ferme la session ouverte (le processus claude reçoit SIGTERM), après confirmation.
-function CloseSession({ id }: { id: string }) {
+export function CloseSession({ id }: { id: string }) {
   const { t } = useTranslation()
   const a = useActions()
   const close = () => a.stop([id]) // confirme dans la fenêtre commune, puis met la liste à jour

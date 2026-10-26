@@ -15,7 +15,7 @@ import { SessionDropdown } from "./SessionMenu"
 import { BgBadge, Live } from "./SessionList"
 import type { Row } from "./actions"
 import { Message } from "./Message"
-import { Composer, type Turn } from "./Composer"
+import { CloseSession, Composer, type Turn } from "./Composer"
 import { LiveAgents, LiveBar, LiveStats, StatsButton, useLive } from "./LiveStatus"
 import { LoadedDialog } from "./LoadedDialog"
 import { CacheState, KeepWarmBanner, KeepWarmButton, KeepWarmItem } from "./KeepWarm"
@@ -344,6 +344,11 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
               <BarChart3 /> {t("conversation.live.stats")}
             </DropdownMenuItem>
             {session && <KeepWarmItem s={session} />}
+            {a.live.has(id) && !a.background.has(id) && (
+              <DropdownMenuItem onSelect={() => a.stop([id])} title={t("conversation.composer.closeTitle")}>
+                <Power /> {t("conversation.composer.close")}
+              </DropdownMenuItem>
+            )}
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
         </>
@@ -371,6 +376,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             {session && (
               <div className="flex shrink-0 flex-col items-end gap-1 text-xs text-muted-foreground">
                 <div className="flex min-h-7 items-center gap-2 max-md:hidden">
+                  {a.live.has(id) && !a.background.has(id) && <CloseSession id={id} />}
                   <KeepWarmButton s={session} />
                   <CacheState s={session} />
                   {a.background.has(id) ? (
