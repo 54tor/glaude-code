@@ -223,3 +223,9 @@
   100% { filter: drop-shadow(0 0 6px rgb(249 115 22 / 0)); }
 }
 @media (prefers-reduced-motion: reduce) { .warm-wave { animation: none; } }
+
+/* iPhone : l'application installée s'étend sous l'indicateur d'accueil et l'encoche (viewport-fit=cover). Les surfaces pleine
+   hauteur s'en écartent ; clavier ouvert, il couvre déjà l'indicateur. */
+.safe-b { padding-bottom: env(safe-area-inset-bottom); }
+[data-kb] .safe-b { padding-bottom: 0; }
+.safe-x { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }

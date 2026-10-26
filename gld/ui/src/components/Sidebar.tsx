@@ -393,7 +393,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           e.preventDefault()
           document.querySelector<HTMLElement>('[aria-controls="menu"]')?.focus()
         }}
-        className="top-0 left-0 flex h-dvh w-[85vw] max-w-sm translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-0 border-r bg-sidebar p-0 text-sidebar-foreground duration-200 sm:max-w-sm data-open:zoom-in-100 data-open:slide-in-from-left data-closed:zoom-out-100 data-closed:slide-out-to-left"
+        className="safe-b top-0 left-0 flex h-dvh w-[85vw] max-w-sm translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-0 border-r bg-sidebar p-0 text-sidebar-foreground duration-200 sm:max-w-sm data-open:zoom-in-100 data-open:slide-in-from-left data-closed:zoom-out-100 data-closed:slide-out-to-left"
       >
         <DialogTitle className="sr-only">{t("shell.sidebar.menu")}</DialogTitle>
         {body}

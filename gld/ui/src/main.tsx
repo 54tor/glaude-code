@@ -31,7 +31,7 @@ createRoot(document.getElementById("root")!).render(
     <ThemeProvider>
       <TooltipProvider>
         <App />
-        <Toaster position="bottom-right" richColors closeButton />
+        <Toaster position="bottom-right" mobileOffset={{ bottom: "calc(16px + env(safe-area-inset-bottom))" }} richColors closeButton />
       </TooltipProvider>
     </ThemeProvider>
   </StrictMode>
