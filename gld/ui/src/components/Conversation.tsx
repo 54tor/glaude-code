@@ -249,11 +249,16 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
     if (!vp) return
     // Collée à la fin tant que l'utilisateur y est : la bande d'état (réflexion, outil, file d'attente) change de hauteur sans que la vue décale.
     let stuck = vp.scrollHeight - vp.scrollTop - vp.clientHeight < 80
+    // Boutons « Aller à la fin / au début » : relus aussi à l'ouverture et quand le contenu change, pas seulement au défilement.
+    const flags = () => {
+      setAway(vp.scrollHeight - vp.scrollTop - vp.clientHeight >= 80)
+      setFromTop(vp.scrollTop > 200)
+    }
+    flags()
     const on = () => {
       const gap = vp.scrollHeight - vp.scrollTop - vp.clientHeight
       stuck = gap < 80
-      setAway(!stuck)
-      setFromTop(vp.scrollTop > 200)
+      flags()
       if (idRef.current && !restoring.current) scrollMem.set(idRef.current, { top: vp.scrollTop, end: gap < vp.clientHeight / 2 })
     }
     // Aimant : à la fin d'un défilement (pas pendant, sinon il lutte avec le suivi de la fin), à moins d'une demi-page de la fin la vue s'y colle.
@@ -263,7 +268,10 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
     }
     vp.addEventListener("scrollend", snap, { passive: true })
     vp.addEventListener("scroll", on, { passive: true })
-    const ro = new ResizeObserver(() => stuck && !keepScroll.current && !restoring.current && (vp.scrollTop = vp.scrollHeight))
+    const ro = new ResizeObserver(() => {
+      if (stuck && !keepScroll.current && !restoring.current) vp.scrollTop = vp.scrollHeight
+      flags()
+    })
     if (vp.firstElementChild) ro.observe(vp.firstElementChild)
     return () => {
       vp.removeEventListener("scroll", on)
