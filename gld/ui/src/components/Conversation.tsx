@@ -347,7 +347,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             </DropdownMenuItem>
             {session && <KeepWarmItem s={session} />}
             {a.live.has(id) && !a.background.has(id) && (
-              <DropdownMenuItem onSelect={() => a.stop([id])} title={t("conversation.composer.closeTitle")}>
+              <DropdownMenuItem onSelect={() => a.stop([id], onClose)} title={t("conversation.composer.closeTitle")}>
                 <Power /> {t("conversation.composer.close")}
               </DropdownMenuItem>
             )}
@@ -378,7 +378,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             {session && (
               <div className="flex shrink-0 flex-col items-end gap-1 text-xs text-muted-foreground">
                 <div className="flex min-h-7 items-center gap-2 max-md:hidden">
-                  {a.live.has(id) && !a.background.has(id) && <CloseSession id={id} />}
+                  {a.live.has(id) && !a.background.has(id) && <CloseSession id={id} onClosed={onClose} />}
                   <KeepWarmButton s={session} />
                   <CacheState s={session} />
                   {a.background.has(id) ? (

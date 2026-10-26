@@ -462,10 +462,10 @@ function LiveModeButton({ id, disabled }: { id: string; disabled: boolean }) {
 }
 
 // Ferme la session ouverte (le processus claude reçoit SIGTERM), après confirmation.
-export function CloseSession({ id }: { id: string }) {
+export function CloseSession({ id, onClosed }: { id: string; onClosed?: () => void }) {
   const { t } = useTranslation()
   const a = useActions()
-  const close = () => a.stop([id]) // confirme dans la fenêtre commune, puis met la liste à jour
+  const close = () => a.stop([id], onClosed) // confirme dans la fenêtre commune, puis met la liste à jour
   return (
     <Button size="sm" variant="ghost" onClick={close} title={t("conversation.composer.closeTitle")}>
       <Power /> {t("conversation.composer.close")}
