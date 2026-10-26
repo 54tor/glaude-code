@@ -28,7 +28,7 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
   const { t: tr } = useTranslation()
   const a = useActions()
   const [items, setItems] = useState<string[] | null>(null) // null : pas encore lu
-  const [open, flip] = useOpen("n/" + noteKey)
+  const [open, flip] = useOpen("n/" + noteKey, true)
   const [sendable, setSendable] = useState<Set<string>>(new Set())
   const saved = useRef("")
   const [savedList, setSavedList] = useState<string[]>([]) // ce que le serveur a : une ligne différente est encore en attente
