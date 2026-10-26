@@ -7,6 +7,7 @@
   "cli.main.authMode": "mode multi-utilisateur actif : la connexion par compte est exigée ; le jeton fixé par GLD_WEB_TOKEN ne vaut plus qu'en en-tête Authorization: Bearer ; un jeton généré n'est plus accepté.",
   "cli.main.authRefused": "base des comptes inutilisable ({{.A1}}) : gld refuse de démarrer. Vérifier la clé maîtresse (GLD_AUTH_KEY, coffre-fort, auth.key) et les droits du dossier.",
   "cli.main.flagListen": "adresse d'écoute (défaut 127.0.0.1 ; 0.0.0.0 pour tout le réseau, avec un jeton)",
+  "cli.main.flagToken": "jeton d'accès (16 caractères au moins ; équivaut à GLD_WEB_TOKEN, mais visible dans ps)",
   "cli.main.flagVersion": "affiche la version et quitte",
   "cli.main.keyFromFile": "⚠ clé maîtresse lue dans {{.A1}} : un fichier protège moins qu'un coffre-fort du système ; qui le lit avec la base peut forger des comptes et des droits.",
   "cli.main.guardMissing": "⚠ garde-fou non installé ({{.A1}} absent ou incomplet) : sans ce fichier géré, un utilisateur config_write peut retirer les règles que gld injecte dans les sessions de Claude. Générer le fichier avec « gld auth managed-settings ». Même installé, il ne couvre ni le terminal web ni exec.",

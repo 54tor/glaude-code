@@ -53,6 +53,7 @@ func main() {
 		os.Args = append(os.Args[:1], os.Args[2:]...)
 	}
 	listen := flag.String("listen", env("GLD_WEB_LISTEN", "127.0.0.1"), tr(cliLang(), "cli.main.flagListen", nil))
+	tokenFlag := flag.String("token", "", tr(cliLang(), "cli.main.flagToken", nil))
 	showVersion := flag.Bool("version", false, tr(cliLang(), "cli.main.flagVersion", nil))
 	flag.Parse()
 	if *showVersion {
@@ -62,6 +63,9 @@ func main() {
 	hosts["127.0.0.1:"+port], hosts["localhost:"+port], hosts[net.JoinHostPort(*listen, port)] = true, true, true
 
 	local := isLoopback(*listen)
+	if *tokenFlag != "" { // ponytail: l'argument reste visible dans ps ; GLD_WEB_TOKEN ou un fichier si la machine est partagée
+		os.Setenv("GLD_WEB_TOKEN", *tokenFlag)
+	}
 	token, generated, err := takeToken(local)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

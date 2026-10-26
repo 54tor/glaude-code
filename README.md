@@ -139,6 +139,8 @@ Sur une machine partagée avec d'autres comptes, l'adresse locale est joignable 
 GLD_WEB_TOKEN=$(openssl rand -hex 24) gld
 ```
 
+`gld --token=<jeton>` fait la même chose, mais l'argument est visible de tous dans `ps` : préférez la variable sur une machine partagée.
+
 ## Multi-utilisateur (optionnel)
 
 Par défaut, un seul jeton donne accès à tout. Pour que plusieurs personnes se connectent chacune avec leur compte, créez
