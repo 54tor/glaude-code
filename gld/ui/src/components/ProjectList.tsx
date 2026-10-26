@@ -30,8 +30,8 @@ export function ProjectList({ route, go }: { route: Route; go: (r: Route) => voi
               <ContextMenuTrigger asChild>
                 <div
                   className={cn(
-                    "group relative flex h-8 items-center gap-1 rounded-md pr-2 pl-1 text-sm transition-colors",
-                    active ? "bg-accent font-medium text-accent-foreground" : "text-foreground/80 hover:bg-muted hover:text-foreground"
+                    "group relative flex h-7 items-center gap-1 rounded-md pr-2 pl-1 text-xs transition-colors",
+                    active ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
                 >
                   <button
@@ -65,7 +65,8 @@ export function ProjectList({ route, go }: { route: Route; go: (r: Route) => voi
               </ContextMenuContent>
             </ContextMenu>
             {isOpen && (
-              <ul>
+              <ul className="relative">
+                <span aria-hidden className="pointer-events-none absolute inset-y-0 left-3.5 w-px bg-border" />
                 {p.dirs.map((d) => {
                   const key = segs(d, a.home).join("/")
                   return (
@@ -76,8 +77,8 @@ export function ProjectList({ route, go }: { route: Route; go: (r: Route) => voi
                             onClick={() => go({ kind: "dir", key })}
                             title={d}
                             className={cn(
-                              "flex h-8 w-full items-center gap-2 rounded-md pr-2 pl-9 text-left text-sm transition-colors",
-                              route.kind === "dir" && route.key === key ? "bg-accent font-medium text-accent-foreground" : "text-foreground/80 hover:bg-muted hover:text-foreground"
+                              "flex h-7 w-full items-center gap-2 rounded-md pr-2 pl-9 text-left text-xs transition-colors",
+                              route.kind === "dir" && route.key === key ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
                             )}
                           >
                             <Folder className="size-4 shrink-0 text-muted-foreground" />

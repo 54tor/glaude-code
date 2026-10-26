@@ -93,8 +93,8 @@ export function GroupRow({ vg, dirKey, project, depth, active, onGroup }: { vg: 
             aria-current={active}
             title={t("shell.tree.groupTitle", { name: vg.name, project })}
             className={cn(
-              "flex h-8 w-full items-center gap-2 rounded-md pr-2 text-left text-sm transition-colors data-[state=open]:bg-muted",
-              active ? "bg-accent font-medium text-accent-foreground" : "text-foreground/80 hover:bg-muted hover:text-foreground"
+              "flex h-7 w-full items-center gap-2 rounded-md pr-2 text-left text-xs transition-colors data-[state=open]:bg-muted",
+              active ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
             style={{ paddingLeft: (depth + 1) * 12 + 4 + 24 }}
           >
@@ -173,8 +173,8 @@ function Item({
         <ContextMenuTrigger asChild disabled={!n.g}>
           <div
             className={cn(
-              "group relative flex h-8 items-center gap-1 rounded-md pr-2 text-sm transition-colors",
-              active ? "bg-accent font-medium text-accent-foreground" : "text-foreground/80 hover:bg-muted hover:text-foreground"
+              "group relative flex h-7 items-center gap-1 rounded-md pr-2 text-xs transition-colors",
+              active ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
             style={{ paddingLeft: depth * 12 + 4 }}
           >
@@ -206,7 +206,8 @@ function Item({
         {n.g && <ProjectItems g={n.g} ss={n.ss} />}
       </ContextMenu>
       {kids && open && (
-        <ul>
+        <ul className="relative">
+          <span aria-hidden className="pointer-events-none absolute inset-y-0 w-px bg-border" style={{ left: depth * 12 + 4 + 10 }} />
           {repos.length > 0 && <RepoRows repos={repos} status={git.status} depth={depth} home={a.home} id={n.key} />}
           {groups.map((vg) => (
             <GroupRow key={vg.name} vg={vg} dirKey={n.key} project={n.g?.project ?? n.name} depth={depth} active={selGroup === n.key + "\0" + vg.name} onGroup={onGroup} />
