@@ -331,7 +331,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
           <Button variant="ghost" size="sm" className="max-md:hidden" onClick={() => setLoadedOpen(true)} title={t("conversation.view.instructionsTitle")}>
             <FileText /> {t("conversation.view.instructions")}
           </Button>
-          {session && <LiveStats live={live} s={session} detail={detail} shown={statsOpen} onShown={setStatsOpen} />}
+          {session && <LiveStats live={live} s={session} project={row?.g.project ?? session.cwd} detail={detail} shown={statsOpen} onShown={setStatsOpen} />}
           {gitDirs.length > 0 && (
             <div className="flex flex-wrap items-center gap-1 max-md:order-last max-md:w-full md:contents">
               {gitDirs.map((d) => (

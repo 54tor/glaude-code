@@ -215,7 +215,7 @@
       "tokensTitle": "Tokens traités (hors cache lu)",
       "statsTitle": "Tokens consommés et dernier appel",
       "stats": "Stats",
-      "sessionHeading": "Session",
+      "sessionHeading": "Informations",
       "cacheHeading": "Cache des prompts",
       "statsHeading": "Statistiques de la session",
       "statsDescription": "Tokens et contexte de la session",

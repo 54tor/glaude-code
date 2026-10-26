@@ -3,12 +3,13 @@ import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Bot, Loader2, Wrench } from "lucide-react"
 import { api, type Detail, type LiveState, type Msg, type Session, type SubLive, type Tokens } from "@/lib/api"
-import { compact, tokTotal } from "@/lib/format"
+import { compact, full, size, tilde, tokTotal } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Message } from "./Message"
 import { CacheState, KeepWarmButton } from "./KeepWarm"
+import { useActions } from "./actions"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 const secs = (n: number) => (n < 60 ? `${Math.max(0, Math.round(n))} s` : n < 3600 ? `${Math.floor(n / 60)} min ${Math.round(n % 60)} s` : `${Math.floor(n / 3600)} h ${Math.floor((n % 3600) / 60)} min`)
@@ -111,27 +112,45 @@ export function LiveBar({ live: { st, open }, id }: { live: Live; id: string }) 
 
 // Fenêtre « Stats » : faits de la session, cache et maintien au chaud, consommation, dernier appel, sous-agents.
 // shown/onShown : ouverte depuis l'en-tête du lecteur ou le menu « … » (petit écran).
-export function LiveStats({ live: { st }, s, detail, shown, onShown }: { live: Live; s: Session; detail: Detail | null; shown: boolean; onShown: (v: boolean) => void }) {
+export function LiveStats({ live: { st }, s, project, detail, shown, onShown }: { live: Live; s: Session; project: string; detail: Detail | null; shown: boolean; onShown: (v: boolean) => void }) {
   const { t } = useTranslation()
+  const a = useActions()
   const [sub, setSub] = useState<SubLive | null>(null)
   const tok = s.tok as Tokens
+  const d = detail
   const facts = [
-    detail && t("conversation.view.meta.prompts", { count: detail.n }),
-    detail?.subagents ? t("conversation.view.meta.subagents", { count: detail.subagents }) : null,
-    detail?.models.filter((m) => !m.startsWith("<")).join(", "),
-  ].filter(Boolean)
+    [t("shell.info.id"), <code key="i" className="text-xs break-all">{s.id}</code>],
+    [t("shell.info.cwd"), tilde(s.cwd, a.home)],
+    [t("shell.info.project"), tilde(project, a.home)],
+    [t("shell.info.modified"), full(s.mtime)],
+    [t("shell.info.size"), size(s.kb)],
+    [t("shell.info.state"), a.live.has(s.id) ? t("shell.info.open") : t("shell.info.closed")],
+    d ? [t("shell.info.prompts"), String(d.n)] : null,
+    d?.subagents ? [t("shell.info.subagents"), String(d.subagents)] : null,
+    d?.branch ? [t("shell.info.branch"), d.branch] : null,
+    d?.models.length ? [t("shell.info.models"), d.models.filter((m) => !m.startsWith("<")).join(", ")] : null,
+    d?.t0 ? [t("shell.info.started"), full(d.t0)] : null,
+    d?.t1 ? [t("shell.info.last"), full(d.t1)] : null,
+  ].filter(Boolean) as [string, React.ReactNode][]
   return (
     <>
       <Dialog open={shown} onOpenChange={onShown}>
         <DialogContent className="flex max-h-[85vh] min-w-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
           <DialogHeader className="border-b px-6 py-4">
-            <DialogTitle>{t("conversation.live.statsHeading")}</DialogTitle>
+            <DialogTitle className="truncate pr-8">{s.title}</DialogTitle>
             <DialogDescription className="sr-only">{t("conversation.live.statsDescription")}</DialogDescription>
           </DialogHeader>
           <div className="min-h-0 flex-1 space-y-5 overflow-x-hidden overflow-y-auto px-6 py-5 text-sm">
             <section>
               <h3 className="mb-1 font-medium">{t("conversation.live.sessionHeading")}</h3>
-              {facts.length > 0 && <p className="text-muted-foreground">{facts.join(" · ")}</p>}
+              <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5">
+                {facts.map(([k, v]) => (
+                  <div key={k} className="contents">
+                    <dt className="text-muted-foreground">{k}</dt>
+                    <dd className="min-w-0 break-words">{v}</dd>
+                  </div>
+                ))}
+              </dl>
             </section>
             <section className="space-y-2">
               <h3 className="font-medium">{t("conversation.live.cacheHeading")}</h3>
