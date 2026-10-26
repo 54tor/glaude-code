@@ -406,7 +406,7 @@ func memTransfer(key, to string, keep bool) (string, error) {
 		if _, _, err := memResolve(dst); err != nil {
 			return "", err
 		}
-	case strings.HasPrefix(key, "r/"):
+	case strings.HasPrefix(key, "r/") && to != strings.Split(key, "/")[1]: // une règle ne retourne qu'à la mémoire de son propre projet
 		return "", terr("srv.memory.uneRegleDeProjet")
 	default:
 		if !safeDir(to) {

@@ -1,4 +1,4 @@
-import { BookOpen, Bot, Brain, ClipboardCopy, Copy, Eye, EyeOff, FolderInput, Globe, Link, Merge, Pencil, ScrollText, Tag, Trash2 } from "lucide-react"
+import { BookOpen, Bot, Zap, ZapOff, Brain, ClipboardCopy, Copy, Eye, EyeOff, FolderInput, Globe, Link, Merge, Pencil, ScrollText, Tag, Trash2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { MemFile, MemTarget } from "@/lib/api"
 import { tilde } from "@/lib/format"
@@ -109,6 +109,11 @@ export function FileMenu({ x, picked, targets, homeDir, a }: { x: MemFile; picke
           <Destinations x={x} targets={targets} homeDir={homeDir} onChoose={(to) => a.move(x.key, to)} />
           <Destinations x={x} targets={targets} homeDir={homeDir} copying onChoose={(to) => a.move(x.key, to, true)} />
         </>
+      )}
+      {(x.key.startsWith("m/") || x.key.startsWith("r/")) && !x.key.endsWith("/MEMORY.md") && !x.paths?.length && (
+        <ContextMenuItem onSelect={() => a.move(x.key, x.key.startsWith("m/") ? "r:" + home(x.key) : home(x.key))}>
+          {x.key.startsWith("m/") ? <Zap /> : <ZapOff />} {x.key.startsWith("m/") ? t("memory.fileMenu.loadAlways") : t("memory.fileMenu.loadOnDemand")}
+        </ContextMenuItem>
       )}
       {x.key.startsWith("g/rules/") && (
         <ContextMenuItem onSelect={() => a.toggleRule(x.key)}>
