@@ -15,7 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 )
 
 type BgTask struct {
@@ -188,8 +187,7 @@ func bgOutputOK(path string) bool {
 	if err != nil || !fi.Mode().IsRegular() {
 		return false
 	}
-	st, ok := fi.Sys().(*syscall.Stat_t)
-	return ok && int(st.Uid) == os.Getuid()
+	return ownedByMe(fi)
 }
 
 // bgOutput : les 64 derniers Kio de la sortie d'une tâche de ce transcript. L'identifiant doit être une tâche relevée dans le transcript
@@ -199,7 +197,7 @@ func bgOutput(p, id string) (string, bool) {
 		if t.ID != id || !bgOutputOK(t.Output) {
 			continue
 		}
-		f, err := os.OpenFile(t.Output, os.O_RDONLY|syscall.O_NOFOLLOW, 0) // un lien posé entre la vérification et l'ouverture est refusé
+		f, err := os.OpenFile(t.Output, os.O_RDONLY|oNoFollow, 0) // un lien posé entre la vérification et l'ouverture est refusé
 		if err != nil {
 			return "", false
 		}
