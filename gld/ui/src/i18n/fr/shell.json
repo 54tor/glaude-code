@@ -309,7 +309,8 @@
       "uploading": "envoi de l'image…"
     },
     "notice": {
-      "waiting": "Claude attend"
+      "waiting": "Claude a terminé",
+      "asking": "Claude attend votre réponse"
     },
     "routeError": {
       "title": "Cette page n'a pas pu se charger",

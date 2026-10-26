@@ -309,7 +309,8 @@
       "uploading": "uploading the image…"
     },
     "notice": {
-      "waiting": "Claude is waiting"
+      "waiting": "Claude has finished",
+      "asking": "Claude needs your answer"
     },
     "routeError": {
       "title": "This page could not be loaded",

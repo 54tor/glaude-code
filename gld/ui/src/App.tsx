@@ -146,7 +146,7 @@ function Shell() {
   const [carousel, setCarousel] = useState(false) // mode carrousel : on parcourt les sessions qui attendent une réponse
   const vgroups = useMemo(() => data?.vgroups ?? [], [data])
   const favs = useMemo(() => new Set(data?.favs), [data])
-  useWaitingNotice(waiting, everyId)
+  useWaitingNotice(waiting, useMemo(() => new Set(data?.asking), [data]), everyId)
 
   const gkey = (x: VGroup) => groupKey(x, home)
   // Listes dérivées mémoïsées : un rendu sans nouvelles données (sélection, menu, saisie) ne les recalcule pas.
