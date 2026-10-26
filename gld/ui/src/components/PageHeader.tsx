@@ -75,6 +75,12 @@ export function PageHeader({
               {qt && (route.kind === "recent" || route.kind === "all" || route.kind === "active" || route.kind === "project" || route.kind === "group" || route.kind === "dir") && t("shell.header.search", { q: qt })}
             </p>
           </div>
+          {/* Petit écran : avec le titre sur la première ligne ; grand écran : en fin de ligne. */}
+          <div className="flex items-center gap-1 md:order-last">
+            <CreditsButton />
+            <AccountButton />
+            <UserMenu />
+          </div>
           {searchBox}
           {g && nGrouped > 0 && (
             <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground select-none hover:text-foreground">
@@ -132,9 +138,6 @@ export function PageHeader({
               <SessionTrash open={trashOpen} onClose={() => setTrashOpen(false)} reload={reload} />
             </>
           )}
-          <CreditsButton />
-          <AccountButton />
-          <UserMenu />
         </div>
       </header>
 
