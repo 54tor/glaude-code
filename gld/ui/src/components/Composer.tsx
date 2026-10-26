@@ -3,7 +3,7 @@ import { Trans, useTranslation } from "react-i18next"
 import { i18n } from "@/i18n"
 import { cn, isSend } from "@/lib/utils"
 import { parsePrompt, type Opt } from "@/lib/prompt"
-import { LiveAgents, type Live } from "./LiveStatus"
+import { type Live } from "./LiveStatus"
 import { toast } from "sonner"
 import { Bug, Copy, Minimize2, Power, Send, Square, SquareCheck, X } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
@@ -159,7 +159,7 @@ export function Composer({
   }
   const stop = () => ((stopped.current = true), api.post("/chat-stop", { id }))
 
-  if (live && !running && !own) return <LiveSend dir={dir} id={id} onSent={onSent} liveState={liveState} onAsk={onAsk} bar={extra} />
+  if (live && !running && !own) return <LiveSend id={id} onSent={onSent} liveState={liveState} onAsk={onAsk} bar={extra} />
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-7xl space-y-2">
@@ -224,7 +224,7 @@ export function Composer({
 
 // Session ouverte dans un terminal : deux processus ne peuvent pas écrire le même transcript, donc pas de claude -p ici. Si la session
 // tourne dans tmux, le message y est collé puis validé ; sinon on l'explique.
-function LiveSend({ dir, id, onSent, liveState, onAsk, bar }: { dir: string; id: string; onSent: () => void; liveState: Live; onAsk?: (asking: boolean) => void; bar?: ReactNode }) {
+function LiveSend({ id, onSent, liveState, onAsk, bar }: { id: string; onSent: () => void; liveState: Live; onAsk?: (asking: boolean) => void; bar?: ReactNode }) {
   const { t } = useTranslation()
   const exec = useCan()("exec")
   const [info, setInfo] = useState<{ ids: string[]; why: string } | null>(null)
@@ -373,7 +373,6 @@ function LiveSend({ dir, id, onSent, liveState, onAsk, bar }: { dir: string; id:
         )}
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className="ml-auto" />
-          <LiveAgents live={liveState} dir={dir} id={id} />
           {liveState.st?.thinking && (
             <Button
               size="sm"

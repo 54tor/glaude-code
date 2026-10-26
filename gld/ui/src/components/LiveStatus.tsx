@@ -1,7 +1,7 @@
 import { i18n, loc } from "@/i18n"
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Bot, Loader2, Wrench } from "lucide-react"
+import { BarChart3, Bot, Loader2, Wrench } from "lucide-react"
 import { api, type Detail, type LiveState, type Msg, type Session, type SubLive, type Tokens } from "@/lib/api"
 import { compact, full, size, tilde, tokTotal } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -107,6 +107,17 @@ export function LiveBar({ live: { st, open }, id }: { live: Live; id: string }) 
         </button>
       </div>
     </div>
+  )
+}
+
+// Bouton de l'en-tête : contexte et tokens, ouvre la fenêtre « Stats ».
+export function StatsButton({ live: { st }, s, onClick }: { live: Live; s: Session; onClick: () => void }) {
+  const { t } = useTranslation()
+  return (
+    <Button size="xs" variant="ghost" className="tabular-nums max-md:hidden" onClick={onClick} title={t("conversation.live.statsTitle")}>
+      <BarChart3 />
+      {t("conversation.live.stats")} :{st && st.context > 0 && <> ctx {compact(st.context)}</>} {compact(tokTotal(s.tok as Tokens))} tok
+    </Button>
   )
 }
 
@@ -228,11 +239,17 @@ export function LiveAgents({ live: { st }, dir, id }: { live: Live; dir: string;
   const { t } = useTranslation()
   const [shown, setShown] = useState(false)
   const [sub, setSub] = useState<SubLive | null>(null)
-  if (!st || st.subs.length === 0) return null
-  const running = st.subs.filter((s) => s.running).length
+  const subs = st?.subs ?? []
+  const running = subs.filter((s) => s.running).length
+  if (!st || subs.length === 0)
+    return (
+      <Button size="xs" variant="ghost" disabled title={t("conversation.live.subagentsTitle")}>
+        <Bot /> {t("conversation.live.subagents", { n: 0 })}
+      </Button>
+    )
   return (
     <>
-      <Button size="sm" variant="ghost" onClick={() => setShown(true)} title={t("conversation.live.subagentsTitle")}>
+      <Button size="xs" variant="ghost" onClick={() => setShown(true)} title={t("conversation.live.subagentsTitle")}>
         <Bot /> {t("conversation.live.subagents", { n: st.subs.length })}
         {running > 0 && <span className="text-success">{t("conversation.live.runningCount", { running })}</span>}
       </Button>

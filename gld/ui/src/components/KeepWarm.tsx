@@ -1,14 +1,12 @@
-import { BarChart3, Coins, Flame, Microwave, Snowflake } from "lucide-react"
+import { Coins, Flame, Microwave, Snowflake } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
-import { api, type Session, type Tokens } from "@/lib/api"
-import { compact, tokTotal } from "@/lib/format"
+import { api, type Session } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { refreshWarm, useKeepWarm } from "@/hooks/useKeepWarm"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useActions } from "./actions"
-import type { Live } from "./LiveStatus"
 
 const set = async (s: Session, on: boolean, max?: number) => {
   const r = await api.post("/keepwarm", { dir: s.dir, id: s.id, on, max })
@@ -135,22 +133,5 @@ export function CacheState({ s }: { s: Session }) {
       {left === null ? t("conversation.keepWarm.cold") : t("conversation.keepWarm.left", { min: left })}
       {warm?.on && <Microwave className="warm-wave size-3.5" aria-label={t("conversation.keepWarm.warmAria")} />}
     </span>
-  )
-}
-
-// Colonne de droite de l'en-tête : état « fermée » et bouton « Stats » (contexte, tokens) qui ouvre la fenêtre des statistiques.
-export function SessionStat({ s, live, onStats }: { s: Session; live: Live; onStats: () => void }) {
-  const { t } = useTranslation()
-  return (
-    <div className="flex shrink-0 flex-col items-end gap-0.5 text-xs text-muted-foreground tabular-nums" aria-label={t("conversation.keepWarm.statsAria")}>
-      <div className="flex items-center gap-1">
-        {live.st && !(live.open && live.st.open) && <span className="font-medium">{t("conversation.live.closed")}</span>}
-        <Button size="xs" variant="ghost" className="tabular-nums max-md:hidden" onClick={onStats} title={t("conversation.live.statsTitle")}>
-          <BarChart3 />
-          {t("conversation.live.stats")} :
-          {live.st && live.st.context > 0 && <> ctx {compact(live.st.context)}</>} {compact(tokTotal(s.tok as Tokens))} tok
-        </Button>
-      </div>
-    </div>
   )
 }

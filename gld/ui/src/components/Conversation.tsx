@@ -4,7 +4,7 @@ import { ArrowDown, ArrowUpToLine, BarChart3, Bug, FolderOpen, FileText, Loader2
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
-import { full, size, tilde } from "@/lib/format"
+import { full, tilde } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenuCheckboxItem, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
@@ -16,9 +16,9 @@ import { BgBadge, Live } from "./SessionList"
 import type { Row } from "./actions"
 import { Message } from "./Message"
 import { Composer, type Turn } from "./Composer"
-import { LiveBar, LiveStats, useLive } from "./LiveStatus"
+import { LiveAgents, LiveBar, LiveStats, StatsButton, useLive } from "./LiveStatus"
 import { LoadedDialog } from "./LoadedDialog"
-import { KeepWarmBanner, KeepWarmItem, SessionStat } from "./KeepWarm"
+import { CacheState, KeepWarmBanner, KeepWarmButton, KeepWarmItem } from "./KeepWarm"
 import { useLocal } from "@/hooks/useLocal"
 import { useGit } from "@/hooks/useGit"
 import { GitBadge } from "./GitBadge"
@@ -30,21 +30,17 @@ const FullTerminal = lazy(() => import("./FullTerminal")) // xterm n'est chargé
 // Messages chargés d'un coup (par la fin) : une session de plusieurs Go compte des milliers de messages.
 const PAGE = 200
 
-function Meta({ s, onFolder }: { s: Session; onFolder?: () => void }) {
+function Meta({ s, onFolder, extra }: { s: Session; onFolder?: () => void; extra?: React.ReactNode }) {
   const { t } = useTranslation()
   const a = useActions()
   const live = a.live.has(s.id)
-  const bits = [
-    tilde(s.cwd, a.home),
-    full(s.mtime),
-    size(s.kb),
-  ].filter(Boolean)
+  const bits = [tilde(s.cwd, a.home), full(s.mtime)]
   return (
-    <p className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground max-md:flex-nowrap max-md:overflow-hidden in-data-[kb]:hidden">
+    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground in-data-[kb]:hidden">
       {live && <Live waiting={a.waiting.has(s.id)} />}
       {live && <BgBadge id={s.id} />}
       {bits.map((b, i) => (
-        <span key={i} className={i === 0 ? "truncate" : i > 1 ? "shrink-0 max-md:hidden" : "shrink-0"}>
+        <span key={i} className={i === 0 ? "min-w-0 truncate" : "shrink-0 max-md:hidden"}>
           {i === 0 && onFolder ? (
             <Button variant="outline" size="xs" onClick={onFolder} title={t("shell.common.showFolder")} className="max-w-full justify-start">
               <FolderOpen /> <span className="truncate">{b}</span>
@@ -54,7 +50,8 @@ function Meta({ s, onFolder }: { s: Session; onFolder?: () => void }) {
           )}
         </span>
       ))}
-    </p>
+      {extra}
+    </div>
   )
 }
 
@@ -293,6 +290,57 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
     setTimeout(toEnd, 2500)
   }, [toEnd])
 
+  const metaExtra = session && (
+    <>
+      <LiveAgents live={live} dir={dir} id={id} />
+      {gitDirs.map((d) => (
+        <span key={d} className="flex min-w-0 flex-wrap items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs md:shrink-0" title={d}>
+          {d !== row?.g.project && <span className="max-w-32 truncate text-muted-foreground">{d.split("/").filter(Boolean).pop()}</span>}
+          <GitBadge st={git.status[d]} />
+          <GitPush dir={d} st={git.status[d]} />
+          <GitChanges dir={d} count={git.status[d] ? git.status[d].changed + git.status[d].untracked : 0} />
+        </span>
+      ))}
+    </>
+  )
+  const moreMenu = row && (
+    <SessionDropdown
+      row={row}
+      after={onClose}
+      extra={
+        <>
+          {session && (
+            <DropdownMenuItem onSelect={() => a.open({ dir: session.dir, id: session.id })}>
+              <SquareTerminal /> {t("conversation.view.resume")}
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuGroup className="md:hidden">
+            <DropdownMenuCheckboxItem checked={tools} onCheckedChange={(c) => setTools(c === true)}>
+              {t("conversation.view.showTools")}
+            </DropdownMenuCheckboxItem>
+            {termOn && a.live.has(id) && (
+              <DropdownMenuItem onSelect={() => setView(inTerm ? "visuel" : "terminal")}>
+                {inTerm ? <MessagesSquare /> : <SquareTerminal />} {inTerm ? t("conversation.view.modeVisual") : t("conversation.view.modeTerminal")}
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onSelect={() => setLoadedOpen(true)}>
+              <FileText /> {t("conversation.view.instructions")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setStatsOpen(true)}>
+              <BarChart3 /> {t("conversation.live.stats")}
+            </DropdownMenuItem>
+            {session && <KeepWarmItem s={session} />}
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+        </>
+      }
+    >
+      <Button variant="ghost" size="icon-sm" aria-label={t("conversation.view.moreActions")}>
+        <MoreHorizontal />
+      </Button>
+    </SessionDropdown>
+  )
+
   return (
     <Dialog open={!!session} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
@@ -304,9 +352,26 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             <div className="min-w-0 flex-1 space-y-1">
               <DialogTitle className="truncate text-lg tracking-tight">{session?.title}</DialogTitle>
               <DialogDescription className="sr-only">{t("conversation.view.description")}</DialogDescription>
-              {session && <Meta s={session} onFolder={onFolder} />}
+              {session && <Meta s={session} onFolder={onFolder} extra={metaExtra} />}
             </div>
-            {session && <SessionStat s={session} live={live} onStats={() => setStatsOpen(true)} />}
+            {session && (
+              <div className="flex shrink-0 flex-col items-end gap-1 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2 max-md:hidden">
+                  <KeepWarmButton s={session} />
+                  <CacheState s={session} />
+                  <span className="font-medium">{a.live.has(id) ? t("shell.info.open") : t("shell.info.closed")}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <StatsButton live={live} s={session} onClick={() => setStatsOpen(true)} />
+                  {row && !row.g.missing && (
+                    <Button variant="outline" size="xs" className="max-md:hidden" onClick={() => a.newSession(row.g.project)} title={t("conversation.view.newSessionTitle")}>
+                      <MessageSquarePlus /> {t("conversation.view.newSession")}
+                    </Button>
+                  )}
+                  {moreMenu}
+                </div>
+              </div>
+            )}
           </div>
         </DialogHeader>
         {session && <KeepWarmBanner s={session} />}
@@ -321,8 +386,8 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             </Button>
           </div>
         )}
-        {/* Petit écran : une seule ligne (reprendre, aller à la fin, menu « … » qui reprend les autres commandes) ; l'état git passe dessous. */}
-        <div className="flex flex-wrap items-center gap-1 border-b bg-muted/40 px-2 py-1.5 in-data-[kb]:hidden md:px-4">
+        {/* Mode terminal et pré-prompt : sur petit écran ils sont dans le menu « … » de l'en-tête. */}
+        <div className="flex flex-wrap items-center gap-1 border-b bg-muted/40 px-2 py-1.5 in-data-[kb]:hidden max-md:hidden md:px-4">
           {termOn && a.live.has(id) && (
             <Button variant="secondary" size="sm" className="max-md:hidden" onClick={() => setView(inTerm ? "visuel" : "terminal")} title={t("conversation.view.modeTitle")}>
               {inTerm ? <MessagesSquare /> : <SquareTerminal />} {inTerm ? t("conversation.view.modeVisual") : t("conversation.view.modeTerminal")}
@@ -331,60 +396,8 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
           <Button variant="ghost" size="sm" className="max-md:hidden" onClick={() => setLoadedOpen(true)} title={t("conversation.view.instructionsTitle")}>
             <FileText /> {t("conversation.view.instructions")}
           </Button>
-          {session && <LiveStats live={live} s={session} project={row?.g.project ?? session.cwd} detail={detail} shown={statsOpen} onShown={setStatsOpen} />}
-          {gitDirs.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1 max-md:order-last max-md:w-full md:contents">
-              {gitDirs.map((d) => (
-                <span key={d} className="flex min-w-0 flex-wrap items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs md:shrink-0" title={d}>
-                  {d !== row?.g.project && <span className="max-w-32 truncate text-muted-foreground">{d.split("/").filter(Boolean).pop()}</span>}
-                  <GitBadge st={git.status[d]} />
-                  <GitPush dir={d} st={git.status[d]} />
-                  <GitChanges dir={d} count={git.status[d] ? git.status[d].changed + git.status[d].untracked : 0} />
-                </span>
-              ))}
-            </div>
-          )}
-          {row && !row.g.missing && (
-            <Button variant="outline" size="sm" className="max-md:hidden" onClick={() => a.newSession(row.g.project)} title={t("conversation.view.newSessionTitle")}>
-              <MessageSquarePlus /> {t("conversation.view.newSession")}
-            </Button>
-          )}
-          {session && (
-            <Button size="sm" className="max-md:ml-auto" onClick={() => a.open({ dir: session.dir, id: session.id })}>
-              <SquareTerminal /> {t("conversation.view.resume")}
-            </Button>
-          )}
-          {row && (
-            <SessionDropdown
-              row={row}
-              after={onClose}
-              extra={
-                <DropdownMenuGroup className="md:hidden">
-                  <DropdownMenuCheckboxItem checked={tools} onCheckedChange={(c) => setTools(c === true)}>
-                    {t("conversation.view.showTools")}
-                  </DropdownMenuCheckboxItem>
-                  {termOn && a.live.has(id) && (
-                    <DropdownMenuItem onSelect={() => setView(inTerm ? "visuel" : "terminal")}>
-                      {inTerm ? <MessagesSquare /> : <SquareTerminal />} {inTerm ? t("conversation.view.modeVisual") : t("conversation.view.modeTerminal")}
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem onSelect={() => setLoadedOpen(true)}>
-                    <FileText /> {t("conversation.view.instructions")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setStatsOpen(true)}>
-                    <BarChart3 /> {t("conversation.live.stats")}
-                  </DropdownMenuItem>
-                  {session && <KeepWarmItem s={session} />}
-                  <DropdownMenuSeparator />
-                </DropdownMenuGroup>
-              }
-            >
-              <Button variant="ghost" size="icon-sm" aria-label={t("conversation.view.moreActions")}>
-                <MoreHorizontal />
-              </Button>
-            </SessionDropdown>
-          )}
         </div>
+        {session && <LiveStats live={live} s={session} project={row?.g.project ?? session.cwd} detail={detail} shown={statsOpen} onShown={setStatsOpen} />}
         {inTerm && (
           <Suspense fallback={null}>
             <FullTerminal key={id} id={id} />
