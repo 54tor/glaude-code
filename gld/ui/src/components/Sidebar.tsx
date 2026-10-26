@@ -317,6 +317,13 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             </>
           )}
 
+          {a.projects.length > 0 && (
+            <>
+              <Heading>{t("shell.sidebar.projects")}</Heading>
+              <ProjectList route={r} go={p.go} />
+            </>
+          )}
+
           <Heading
             action={
               <Tip label={t("shell.sidebar.addDirHint")}>
@@ -342,13 +349,6 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
               selGroup={r.kind === "group" ? r.key + "\0" + r.name : ""}
               onGroup={(vg, key) => p.go({ kind: "group", name: vg.name, key })}
             />
-          )}
-
-          {a.projects.length > 0 && (
-            <>
-              <Heading>{t("shell.sidebar.projects")}</Heading>
-              <ProjectList route={r} go={p.go} />
-            </>
           )}
         </nav>
       </ScrollArea>
