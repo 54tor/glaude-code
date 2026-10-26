@@ -186,10 +186,6 @@
       "start": "Lancer la session"
     },
     "header": {
-      "mcpTitle": "Serveurs MCP de ce projet : relevé au clic par claude mcp list, uniquement si Claude Code a approuvé ce dossier",
-      "mcpChecking": "Relevé en cours (quelques secondes)…",
-      "mcpFailed": "Relevé impossible",
-      "mcpLabel": "Serveurs MCP",
       "openMenu": "Ouvrir le menu",
       "search": ", recherche « {{q}} »",
       "hideGrouped": "Masquer les sessions groupées ({{n}})",

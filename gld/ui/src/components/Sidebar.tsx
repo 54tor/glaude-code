@@ -14,11 +14,9 @@ import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useKeepWarm } from "@/hooks/useKeepWarm"
-import { useCan } from "@/lib/auth"
 import { CreditsButton } from "./Credits"
 import { PairButton } from "./PairDevice"
 import { HomeSwitcher } from "./HomeSwitcher"
-import { McpStatus } from "./McpStatus"
 import { ProjectList } from "./ProjectList"
 import { ProjectItems, ProjectTree } from "./ProjectTree"
 import { segs } from "@/lib/paths"
@@ -184,7 +182,6 @@ export type SidebarProps = {
   snippets: number | null // null : bibliothèque non configurée
   auto: { n: number; kb: number; purge: () => void }
   args: string // arguments de lancement des Réglages, rappelés en bas du menu
-  mcpDir?: string // dossier du projet affiché : son état MCP s'affiche dans l'en-tête, à droite du sélecteur de home
 }
 
 // Seuil md de Tailwind : en dessous, le menu est un tiroir.
@@ -200,7 +197,6 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
   const r = p.route
   const link = (to: Route) => ({ to, onClick: () => p.go(to) })
   const a = useActions()
-  const can = useCan()
   const wide = useSyncExternalStore(onWide, () => matchMedia(MD).matches)
   const body = (
     <>
@@ -215,7 +211,6 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             <PairButton />
             <CreditsButton />
             <HomeSwitcher />
-            {p.mcpDir && can("config_write") && <McpStatus dir={p.mcpDir} />}
           </div>
         </div>
         <div className="relative">
