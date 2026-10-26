@@ -30,9 +30,8 @@ export function McpStatus({ dir }: { dir: string }) {
   return (
     <DropdownMenu onOpenChange={(o) => o && !busy && load()}>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" title={t("shell.header.mcpTitle")}>
-          {busy ? <Loader2 className="animate-spin" /> : <Plug className={cur && !cur.error ? (bad ? "text-warning" : "text-success") : undefined} />} MCP
-          {cur && !cur.error && ` ${cur.servers.length - bad}/${cur.servers.length}`}
+        <Button variant="ghost" size="icon-sm" title={cur && !cur.error ? `${t("shell.header.mcpTitle")} · ${cur.servers.length - bad}/${cur.servers.length}` : t("shell.header.mcpTitle")} aria-label="MCP">
+          {busy ? <Loader2 className="animate-spin" /> : <Plug className={cur && !cur.error ? (bad ? "text-warning" : "text-success") : "text-muted-foreground"} />}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="max-h-96 w-96 overflow-y-auto">
