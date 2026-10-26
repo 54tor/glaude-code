@@ -96,8 +96,8 @@ export function CreditsButton() {
     <Dialog open={open} onOpenChange={setOpen}>
       <Tip label={t("shell.credits.support")}>
         <DialogTrigger asChild>
-          <Button variant="ghost" size="icon-sm" aria-label={t("shell.credits.support")}>
-            <Heart />
+          <Button variant="ghost" size="icon" className="size-9 text-muted-foreground" aria-label={t("shell.credits.support")}>
+            <Heart className="size-6" />
           </Button>
         </DialogTrigger>
       </Tip>

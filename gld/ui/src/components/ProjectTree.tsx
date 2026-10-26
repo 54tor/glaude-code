@@ -199,7 +199,7 @@ function Item({
               <span className="truncate">{label ?? n.name}</span>
               {n.g?.missing && <TriangleAlert className="size-3.5 shrink-0 text-warning" aria-label={t("shell.tree.dirMissing")} />}
             </button>
-            {n.g && <GitMini states={[git.status[n.g.project], ...repos.map((d) => git.status[d])]} />}
+            {n.g && <GitMini slot states={[git.status[n.g.project], ...repos.map((d) => git.status[d])]} />}
             {n.g && <SessionCount n={n.ss.length} active={sessionsOpen} />}
           </div>
         </ContextMenuTrigger>

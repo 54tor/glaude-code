@@ -6,12 +6,13 @@ import { cn } from "@/lib/utils"
 const dirtyOf = (st: GitState | undefined) => (st ? st.changed + st.untracked : 0)
 
 // Navigation : « <changements en attente> [git] » ; rien pour un dossier qui n'est pas un dépôt.
-export function GitMini({ states }: { states: (GitState | undefined)[] }) {
+// slot : réserve la place quand rien n'est en attente, pour que les icônes s'alignent d'une ligne à l'autre.
+export function GitMini({ states, slot }: { states: (GitState | undefined)[]; slot?: boolean }) {
   const { t } = useTranslation()
   const dirty = states.reduce((n, s) => n + dirtyOf(s), 0)
-  if (dirty === 0) return null // rien en attente : ni nombre ni icône
+  if (dirty === 0) return slot ? <span className="w-9 shrink-0" aria-hidden /> : null // rien en attente : ni nombre ni icône
   return (
-    <span className="flex shrink-0 items-center gap-0.5 text-xs text-warning" title={t("conversation.git.pending", { n: dirty })}>
+    <span className="flex w-9 shrink-0 items-center justify-end gap-0.5 text-xs text-warning" title={t("conversation.git.pending", { n: dirty })}>
       <span className="font-medium tabular-nums">{dirty}</span>
       <GitBranch className="size-3.5" aria-label={t("conversation.git.repoAria")} />
     </span>
@@ -23,7 +24,7 @@ export function SessionCount({ n, active }: { n: number; active: boolean }) {
   const { t } = useTranslation()
   return (
     <span
-      className={cn("flex shrink-0 items-center gap-0.5 text-xs tabular-nums", active ? "font-medium text-warning" : "text-muted-foreground")}
+      className={cn("flex w-9 shrink-0 items-center justify-end gap-0.5 text-xs tabular-nums", active ? "font-medium text-warning" : "text-muted-foreground")}
       title={active ? t("conversation.git.sessionsOpen", { n }) : t("conversation.git.sessions", { n })}
     >
       {n}
