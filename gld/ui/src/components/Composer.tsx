@@ -606,12 +606,6 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
           </div>
         </div>
       )}
-      <div className="flex items-center justify-end gap-1">
-        {extra}
-        <Button size="xs" variant="ghost" className="text-muted-foreground" onClick={() => setDebug(!debug)} aria-pressed={debug} title={t("conversation.composer.rawScreenTitle")}>
-          <Bug /> {t("conversation.composer.rawScreen")}
-        </Button>
-      </div>
       {debug && (
         <div className="space-y-1.5 text-2xs">
           <pre className="max-h-72 overflow-auto rounded-lg border bg-background px-3 py-2 font-mono leading-snug whitespace-pre" aria-label={t("conversation.composer.screenAria")}>
@@ -625,6 +619,12 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
           </Button>
         </div>
       )}
+      <div className="flex items-center justify-end gap-1">
+        {extra}
+        <Button size="xs" variant="ghost" className="text-muted-foreground" onClick={() => setDebug(!debug)} aria-pressed={debug} title={t("conversation.composer.rawScreenTitle")}>
+          <Bug /> {t("conversation.composer.rawScreen")}
+        </Button>
+      </div>
     </div>
   )
 }
