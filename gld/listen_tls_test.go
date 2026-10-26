@@ -1,6 +1,9 @@
 package main
 
 import (
+	"crypto/tls"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -21,6 +24,26 @@ func TestURLsForScheme(t *testing.T) {
 	for _, u := range urlsFor("https", "192.0.2.1", "8799", "") {
 		if !strings.HasPrefix(u, "https://192.0.2.1:8799/") {
 			t.Fatalf("adresse : %q", u)
+		}
+	}
+}
+
+// Le cookie du jeton ne doit pas repartir en HTTP clair quand la page est servie en HTTPS (TLS direct ou proxy de confiance).
+func TestTokenCookieSecure(t *testing.T) {
+	h := withToken("0123456789abcdef0123", http.NotFoundHandler())
+	for _, c := range []struct {
+		tls  bool
+		want bool
+	}{{false, false}, {true, true}} {
+		r := httptest.NewRequest("GET", "/?token=0123456789abcdef0123", nil)
+		if c.tls {
+			r.TLS = &tls.ConnectionState{}
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		ck := w.Result().Cookies()
+		if len(ck) != 1 || ck[0].Secure != c.want {
+			t.Fatalf("TLS %v : cookies %v, Secure attendu %v", c.tls, ck, c.want)
 		}
 	}
 }
