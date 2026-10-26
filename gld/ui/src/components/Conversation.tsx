@@ -42,7 +42,7 @@ function Meta({ s, onFolder, extra }: { s: Session; onFolder?: () => void; extra
     <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground in-data-[kb]:hidden">
       {live && <Live waiting={a.waiting.has(s.id)} />}
       {bits.map((b, i) => (
-        <span key={i} className={i === 0 ? "min-w-0 truncate" : "shrink-0 max-md:hidden"}>
+        <span key={i} className={i === 0 ? (onFolder ? "min-w-0 max-w-full" : "min-w-0 truncate") : "shrink-0 max-md:hidden"}>
           {i === 0 && onFolder ? (
             <Button variant="outline" size="xs" onClick={onFolder} title={t("shell.common.showFolder")} className="max-w-full justify-start">
               <FolderOpen /> <span className="truncate">{b}</span>
