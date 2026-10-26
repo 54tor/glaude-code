@@ -19,9 +19,11 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -304,6 +306,18 @@ func redeemSession(w http.ResponseWriter, r *http.Request, st *authStore, p pair
 	return true
 }
 
+// publicBase : l'adresse que le téléphone ouvrira. GLD_PUBLIC_URL (--public-url) d'abord : l'ordinateur qui affiche le QR
+// est souvent sur 127.0.0.1 ou l'IP locale ; sinon, l'adresse par laquelle la requête est arrivée.
+func publicBase(r *http.Request) string {
+	if u, err := url.Parse(strings.TrimSpace(os.Getenv("GLD_PUBLIC_URL"))); err == nil && u.Host != "" && (u.Scheme == "http" || u.Scheme == "https") {
+		return u.Scheme + "://" + u.Host
+	}
+	if requestHTTPS(r) {
+		return "https://" + r.Host
+	}
+	return "http://" + r.Host
+}
+
 func routesPair(mux *http.ServeMux) {
 	mux.HandleFunc("POST /pair-code", func(w http.ResponseWriter, r *http.Request) {
 		r, d := reqMode(r)
@@ -317,11 +331,7 @@ func routesPair(mux *http.ServeMux) {
 			}
 			uid, sid = g.p.User.ID, g.p.SessionID
 		}
-		scheme := "http"
-		if requestHTTPS(r) {
-			scheme = "https"
-		}
-		writeJSON(w, 200, map[string]any{"ok": true, "url": scheme + "://" + r.Host + "/pair?c=" + newPairCode(uid, sid), "ttl": int(pairTTL / time.Second)})
+		writeJSON(w, 200, map[string]any{"ok": true, "url": publicBase(r) + "/pair?c=" + newPairCode(uid, sid), "ttl": int(pairTTL / time.Second)})
 	})
 	// Mode comptes, ou sans jeton ; en mode jeton, withToken répond avant.
 	entry := func(w http.ResponseWriter, r *http.Request) {

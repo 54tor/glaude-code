@@ -138,6 +138,13 @@ une fois tous les 90 jours, se révoque depuis la même fenêtre, et tombe si le
 session du compte qui a affiché le code, visible dans Profil › Sessions. Sur iPhone, l'appareil photo ouvre le lien
 dans Safari ; ajoutez ensuite la page à l'écran d'accueil, l'application reprend la connexion de Safari.
 
+Le QR code reprend l'adresse de la page qui l'affiche. Si vous l'affichez depuis `127.0.0.1` ou l'IP locale alors que le
+téléphone passe par un nom de domaine (proxy, tunnel), donnez cette adresse publique :
+
+```sh
+gld --listen 0.0.0.0 --public-url https://gld.exemple.org   # ou GLD_PUBLIC_URL=https://gld.exemple.org
+```
+
 Sur iPhone et iPad, l'application installée (« Sur l'écran d'accueil ») n'a ni notifications, ni copie native, ni clé
 de sécurité tant qu'elle est servie en HTTP. gld peut servir lui-même en HTTPS avec un certificat auquel l'appareil fait
 confiance, par exemple créé avec [mkcert](https://github.com/FiloSottile/mkcert) (installez son autorité racine sur

@@ -235,3 +235,25 @@ func TestPairAccountMode(t *testing.T) {
 		t.Fatalf("GET /devices en mode comptes : %d", rw.Code)
 	}
 }
+
+// GLD_PUBLIC_URL fixe l'adresse du QR : l'ordinateur qui l'affiche peut être sur 127.0.0.1 ou l'IP locale.
+func TestPairPublicURL(t *testing.T) {
+	resetAuth(t, nil)
+	t.Setenv("GLD_AUTH_DIR", t.TempDir())
+	h, _, _ := web(t)
+	srv := withTokenOpen(modeTok, h)
+	tok := &http.Cookie{Name: tokenCookie, Value: modeTok}
+	for _, c := range []struct{ env, want string }{
+		{"https://gld.example.org", "https://gld.example.org/pair?c="},
+		{"https://gld.example.org:8443/", "https://gld.example.org:8443/pair?c="},
+		{"pas une adresse", "http://" + testHost + "/pair?c="},
+		{"", "http://" + testHost + "/pair?c="},
+	} {
+		t.Setenv("GLD_PUBLIC_URL", c.env)
+		var out struct{ URL string }
+		w := pairReq(srv, "POST", "/pair-code", "{}", tok)
+		if json.Unmarshal(w.Body.Bytes(), &out) != nil || !strings.HasPrefix(out.URL, c.want) {
+			t.Errorf("GLD_PUBLIC_URL=%q : %q, attendu %q…", c.env, out.URL, c.want)
+		}
+	}
+}

@@ -55,6 +55,7 @@ func main() {
 	listen := flag.String("listen", env("GLD_WEB_LISTEN", "127.0.0.1"), tr(cliLang(), "cli.main.flagListen", nil))
 	tokenFlag := flag.String("token", "", tr(cliLang(), "cli.main.flagToken", nil))
 	showVersion := flag.Bool("version", false, tr(cliLang(), "cli.main.flagVersion", nil))
+	publicURL := flag.String("public-url", "", tr(cliLang(), "cli.main.flagPublicURL", nil))
 	tlsCert := flag.String("tls-cert", env("GLD_WEB_TLS_CERT", ""), tr(cliLang(), "cli.main.flagTLSCert", nil))
 	tlsKey := flag.String("tls-key", env("GLD_WEB_TLS_KEY", ""), tr(cliLang(), "cli.main.flagTLSKey", nil))
 	flag.Parse()
@@ -73,6 +74,9 @@ func main() {
 	scheme := "http"
 	if useTLS {
 		scheme = "https"
+	}
+	if *publicURL != "" {
+		os.Setenv("GLD_PUBLIC_URL", *publicURL)
 	}
 	if *tokenFlag != "" { // ponytail: l'argument reste visible dans ps ; GLD_WEB_TOKEN ou un fichier si la machine est partagée
 		os.Setenv("GLD_WEB_TOKEN", *tokenFlag)

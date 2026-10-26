@@ -7,6 +7,7 @@
   "cli.main.authMode": "mode multi-utilisateur actif : la connexion par compte est exigée ; le jeton fixé par GLD_WEB_TOKEN ne vaut plus qu'en en-tête Authorization: Bearer ; un jeton généré n'est plus accepté.",
   "cli.main.authRefused": "base des comptes inutilisable ({{.A1}}) : gld refuse de démarrer. Vérifier la clé maîtresse (GLD_AUTH_KEY, coffre-fort, auth.key) et les droits du dossier.",
   "cli.main.flagListen": "adresse d'écoute (défaut 127.0.0.1 ; 0.0.0.0 pour tout le réseau, avec un jeton)",
+  "cli.main.flagPublicURL": "adresse publique de gld, ex. https://gld.exemple.org : celle du QR « Connecter un appareil » et de WebAuthn (équivaut à GLD_PUBLIC_URL)",
   "cli.main.flagTLSCert": "certificat TLS (PEM) : gld sert en HTTPS ; équivaut à GLD_WEB_TLS_CERT, va avec --tls-key",
   "cli.main.flagTLSKey": "clé privée du certificat TLS (PEM) ; équivaut à GLD_WEB_TLS_KEY",
   "cli.main.flagToken": "jeton d'accès (16 caractères au moins ; équivaut à GLD_WEB_TOKEN, mais visible dans ps)",
