@@ -115,7 +115,7 @@ function EditDialog({ file, edit, onClose, onSaved }: { file: MemFile; edit: boo
 export function ProjectMemory({ dir }: { dir: string }) {
   const { t } = useTranslation()
   const [files, setFiles] = useState<MemFile[] | null>(null)
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
   const [shown, setShown] = useState<{ f: MemFile; edit: boolean } | null>(null)
   const [removing, setRemoving] = useState<MemFile | null>(null)
   const [, go] = useLocation()

@@ -337,6 +337,7 @@ function Shell() {
           setQ={setQ}
           searchRef={search}
           searching={searching}
+          mcpDir={g && !g.missing ? node?.ss[0]?.dir : undefined}
           route={route}
           go={(r) => (setNavOpen(false), go(r))}
           counts={{ recent: base.rows.filter((r) => now - r.s.mtime < WEEK).length, all: base.rows.length, active: base.rows.filter((r) => live.has(r.s.id) || now - r.s.mtime < HOT).length }}
@@ -375,7 +376,7 @@ function Shell() {
             split={route.kind === "skills" || route.kind === "memory" || route.kind === "snippets"}
             reload={reload}
             searchBox={
-              ["recent", "all", "active", "project", "group", "dir"].includes(route.kind) ? <SessionSearch q={q} setQ={setQ} adv={adv} setAdv={setAdv} searching={searching} /> : undefined
+              ["recent", "all", "active", "project", "group", "dir", "memory"].includes(route.kind) ? <SessionSearch q={q} setQ={setQ} adv={adv} setAdv={setAdv} searching={searching} /> : undefined
             }
           />
 

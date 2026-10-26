@@ -1,5 +1,4 @@
 import { Menu, MessageSquarePlus, MoreHorizontal, Trash2, TriangleAlert, RefreshCcwDot } from "lucide-react"
-import { McpStatus } from "./McpStatus"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { Group, Item, VGroup } from "@/lib/api"
@@ -97,7 +96,6 @@ export function PageHeader({
               <RefreshCcwDot /> {t("shell.tree.resumeRecent")}
             </Button>
           )}
-          {g && !g.missing && firstDir && can("config_write") && <McpStatus dir={firstDir} />}
           {vg && rowCount > 0 && exec && (
             <>
               <Button size="sm" onClick={() => groupActs.prompt(vg)} title={t("shell.header.newWithRefsHint")}>
