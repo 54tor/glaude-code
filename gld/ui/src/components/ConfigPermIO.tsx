@@ -26,7 +26,7 @@ export function PermIOButtons({ file, label, doc, onImport, onRaw, onReset }: { 
     a.href = URL.createObjectURL(new Blob([permsFragment(doc)], { type: "application/json" }))
     a.download = `permissions-${file === "u" ? t("config.permIO.fileUser") : label.replace(/[^\w.-]+/g, "-").slice(0, 40)}.json`
     a.click()
-    URL.revokeObjectURL(a.href)
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000)
   }
   const copy = () =>
     copyText(permsFragment(doc)).then(

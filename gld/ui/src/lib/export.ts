@@ -35,5 +35,5 @@ export async function exportMarkdown(items: { s: Session; project: string }[], t
   a.href = URL.createObjectURL(new Blob([md], { type: "text/markdown;charset=utf-8" }))
   a.download = `${slug(title ?? items[0].s.title) || items[0].s.id}.md`
   a.click()
-  URL.revokeObjectURL(a.href)
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
 }
