@@ -95,3 +95,28 @@ func TestConvTextChunks(t *testing.T) {
 		t.Fatal("rang hors ligne accepté")
 	}
 }
+
+// Outils masqués : un appel laisse une ancre vide (pas son résultat) ; les outils d'une plage se relisent à la demande.
+func TestConvAnchorsEtOutils(t *testing.T) {
+	lines := []string{
+		`{"type":"user","timestamp":"t0","message":{"content":"bonjour"}}`,
+		`{"type":"assistant","timestamp":"t1","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"ls"}}]}}`,
+		`{"type":"user","timestamp":"t2","message":{"content":[{"type":"tool_result","content":"a b"}]}}`,
+		`{"type":"assistant","timestamp":"t3","message":{"content":[{"type":"text","text":"fini"}]}}`,
+	}
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	if err := os.WriteFile(p, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ms, _, _, err := convPageMode(p, false, true, 0, 50)
+	if err != nil || len(ms) != 3 || ms[1].R != "tool" || ms[1].T != "" || ms[2].T != "fini" {
+		t.Fatalf("ancres : %+v %v", ms, err)
+	}
+	if plain, _, _, _ := convPage(p, false, 0, 50); len(plain) != 2 {
+		t.Fatalf("sans ancres : %d messages", len(plain))
+	}
+	tools, err := convTools(p, ms[1].O, ms[2].O)
+	if err != nil || len(tools) != 2 || !strings.HasPrefix(tools[0].T, "Bash") || !strings.HasPrefix(tools[1].T, "↳") {
+		t.Fatalf("outils de la plage : %+v %v", tools, err)
+	}
+}

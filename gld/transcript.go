@@ -524,7 +524,11 @@ func flat(c json.RawMessage) string {
 }
 
 // lineMsgs extrait d'une ligne de transcript le texte des échanges, plus (tools) les appels d'outils et leurs résultats tronqués.
-func lineMsgs(b []byte, tools bool) []Msg {
+func lineMsgs(b []byte, tools bool) []Msg { return lineMsgsMode(b, tools, false) }
+
+// lineMsgsMode : avec anchors (outils masqués), chaque appel d'outil laisse un message vide de rôle « tool » : l'interface en fait
+// une ancre repliée à la place des outils. Les résultats d'outil n'en laissent pas (un appel et son résultat comptent pour un).
+func lineMsgsMode(b []byte, tools, anchors bool) []Msg {
 	if bytes.Contains(b, []byte(`"isMeta":true`)) {
 		return nil
 	}
@@ -563,6 +567,8 @@ func lineMsgs(b []byte, tools bool) []Msg {
 		case "tool_use":
 			if tools {
 				out = append(out, Msg{R: "tool", T: x.Name + "  " + toolArg(x.Input), Ts: l.Timestamp})
+			} else if anchors {
+				out = append(out, Msg{R: "tool", Ts: l.Timestamp})
 			}
 		case "tool_result":
 			if tools {

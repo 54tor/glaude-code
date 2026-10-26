@@ -230,7 +230,7 @@ func TestHTTPMemoireEcritures(t *testing.T) {
 	status(t, h, "POST", "/memory-lint", `{"scope":""}`, 400)
 	status(t, h, "GET", "/session-loaded?id=../x", "", 400)
 	status(t, h, "GET", "/session-loaded-file?id=../x&file=/etc/passwd", "", 400)
-	status(t, h, "GET", "/session-loaded-file?id=abc&file=/etc/passwd", "", 404) // chemin jamais chargé par la session
+	status(t, h, "GET", "/session-loaded-file?id=11111111-1111-1111-1111-111111111111&file=/etc/passwd", "", 404) // chemin jamais chargé par la session
 	if _, m, _ := call(t, h, "GET", "/memory-health", ""); m["issues"] == nil {
 		t.Fatalf("santé : %v", m)
 	}

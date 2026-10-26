@@ -5,7 +5,9 @@ package main
 // décalage de la première ligne lue) sert ensuite à demander les messages précédents.
 
 import (
+	"bufio"
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"unicode/utf8"
@@ -16,6 +18,11 @@ var convChunk int64 = 4 << 20 // variable pour que les tests puissent la réduir
 // convPage renvoie au moins limit messages (sauf en début de fichier) parmi les lignes situées avant l'octet before
 // (0 : la fin du fichier), dans l'ordre du fichier. more dit s'il existe des lignes avant start.
 func convPage(path string, tools bool, before int64, limit int) (msgs []Msg, start int64, more bool, err error) {
+	return convPageMode(path, tools, false, before, limit)
+}
+
+// convPageMode : voir lineMsgsMode pour anchors.
+func convPageMode(path string, tools, anchors bool, before int64, limit int) (msgs []Msg, start int64, more bool, err error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, 0, false, err
@@ -65,7 +72,7 @@ func convPage(path string, tools bool, before int64, limit int) (msgs []Msg, sta
 			}
 			line := data[ls:hi]
 			start = pos + ls
-			if m := withOffset(lineMsgs(line, tools), start); len(m) > 0 {
+			if m := withOffset(lineMsgsMode(line, tools, anchors), start); len(m) > 0 {
 				groups = append(groups, m)
 				n += len(m)
 			}
@@ -117,10 +124,46 @@ func convText(path string, o int64, n int, tools bool, from int) (string, int, e
 	if err != nil {
 		return "", 0, err
 	}
-	ms := lineMsgs(line, tools)
+	ms := lineMsgsMode(line, tools, !tools) // la page des outils masqués porte des ancres : mêmes rangs
 	if n < 0 || n >= len(ms) {
 		return "", 0, terr("srv.convpage.messageIntrouvable")
 	}
 	t, next := capText(ms[n].T, from)
 	return t, next, nil
+}
+
+// convTools rend les messages d'outil des lignes dont le décalage est dans [from, until) (until 0 : jusqu'à la fin), pour déplier
+// une ancre. Au plus convToolsMax messages.
+const convToolsMax = 1000
+
+func convTools(path string, from, until int64) ([]Msg, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	if _, err := f.Seek(from, io.SeekStart); err != nil {
+		return nil, err
+	}
+	r := bufio.NewReaderSize(f, 1<<20)
+	out := []Msg{}
+	for off := from; (until == 0 || off < until) && len(out) < convToolsMax; {
+		b, err := r.ReadBytes('\n')
+		if len(b) > 0 {
+			for _, m := range withOffset(lineMsgs(b, true), off) {
+				if m.R == "tool" {
+					out = append(out, m)
+				}
+			}
+			off += int64(len(b))
+		}
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, err
+		}
+	}
+	capMsgs(out)
+	return out, nil
 }

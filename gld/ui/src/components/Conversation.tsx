@@ -22,6 +22,7 @@ import { CacheState, KeepWarmBanner, KeepWarmButton, KeepWarmItem } from "./Keep
 import { useLocal } from "@/hooks/useLocal"
 import { useGit } from "@/hooks/useGit"
 import { GitBadge } from "./GitBadge"
+import { groupTools, ToolAnchor } from "./ToolAnchor"
 import { GitChanges } from "./GitChanges"
 import { GitPush } from "./GitPush"
 
@@ -112,7 +113,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   const seq = useRef(0)
   const reload = () => {
     const n = ++seq.current
-    return api.conv({ dir, id }, tools, { limit: Math.max(PAGE, (loadedNow?.msgs.length ?? 0) + 50) }).then((r) => {
+    return api.conv({ dir, id }, tools, { limit: Math.max(PAGE, (loadedNow?.msgs.length ?? 0) + 50), anchors: true }).then((r) => {
       if (n !== seq.current) return null
       setLoaded({ key, msgs: r.msgs, start: r.start ?? 0, more: !!r.more })
       return r.msgs
@@ -126,7 +127,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
     if (!loadedNow || loadingOlder) return
     setLoadingOlder(true)
     const n = ++seq.current // une relecture en vol, plus ancienne que ce chargement, ne doit pas l'écraser
-    const r = await api.conv({ dir, id }, tools, { limit: PAGE, before: loadedNow.start })
+    const r = await api.conv({ dir, id }, tools, { limit: PAGE, before: loadedNow.start, anchors: true })
     if (n !== seq.current) return void setLoadingOlder(false) // une relecture plus récente est passée : on redemandera
     keepScroll.current = true
     setLoaded({ key, msgs: [...r.msgs, ...loadedNow.msgs], start: r.start ?? 0, more: !!r.more })
@@ -138,7 +139,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   useEffect(() => {
     if (!id) return
     let live = true
-    api.conv({ dir, id }, tools, { limit: PAGE }).then((r) => live && setLoaded({ key, msgs: r.msgs, start: r.start ?? 0, more: !!r.more }))
+    api.conv({ dir, id }, tools, { limit: PAGE, anchors: true }).then((r) => live && setLoaded({ key, msgs: r.msgs, start: r.start ?? 0, more: !!r.more }))
     return () => {
       live = false
     }
@@ -438,9 +439,14 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
                 </Button>
               </div>
             )}
-            {msgs?.map((m, i) => (
-              <Message key={m.o === undefined ? i : `${m.o}.${m.n ?? 0}`} m={m} conv={{ dir, id, tools }} />
-            ))}
+            {msgs &&
+              groupTools(msgs).map((x, i) =>
+                "count" in x ? (
+                  <ToolAnchor key={`a${x.from}`} dir={dir} id={id} g={x} />
+                ) : (
+                  <Message key={x.o === undefined ? i : `${x.o}.${x.n ?? 0}`} m={x} conv={{ dir, id, tools }} />
+                )
+              )}
             {msgs?.length === 0 && !turn && <p className="text-center text-muted-foreground">{t("conversation.view.empty")}</p>}
             {turn?.msgs
               .filter((m) => tools || m.r !== "tool")

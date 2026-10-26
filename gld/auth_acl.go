@@ -80,10 +80,10 @@ var routeRights = map[string]Right{
 	"GET /account": RightUsageRead, "POST /account-refresh": RightUsageRead,
 
 	// Transcriptions et état des sessions. /info renvoie les premiers messages d'une session : contenu, pas usage.
-	"GET /api": RightSessionsRead, "GET /conv": RightSessionsRead, "GET /conv-text": RightSessionsRead,
+	"GET /api": RightSessionsRead, "GET /conv": RightSessionsRead, "GET /conv-text": RightSessionsRead, "GET /conv-tools": RightSessionsRead,
 	"GET /conv-image": RightSessionsRead, "GET /info": RightSessionsRead,
 	"GET /session-state": RightSessionsRead, "GET /session-live": RightSessionsRead, "GET /session-screen": RightSessionsRead,
-	"GET /session-loaded": RightSessionsRead, "GET /session-trash": RightSessionsRead, "GET /sessions-stamp": RightSessionsRead,
+	"GET /session-loaded": RightSessionsRead, "GET /session-loaded-file": RightSessionsRead, "GET /session-trash": RightSessionsRead, "GET /sessions-stamp": RightSessionsRead,
 	"GET /session-send-info": RightSessionsRead, "GET /search": RightSessionsRead,
 	// Renvoie des extraits de commandes tirés des transcriptions.
 	"GET /config-perm-suggest": RightSessionsRead,

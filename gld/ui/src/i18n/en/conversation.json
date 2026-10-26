@@ -34,6 +34,8 @@
       "carousel_other": "Carousel: {{count}} sessions waiting. The next one opens as soon as you reply.",
       "next": "Next",
       "quitCarousel": "Leave the carousel",
+      "toolAnchor_one": "{{count}} tool",
+      "toolAnchor_other": "{{count}} tools",
       "toolsShown": "Tools shown",
       "toolsHidden": "Tools hidden",
       "showTools": "Show tools",

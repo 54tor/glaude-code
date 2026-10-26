@@ -247,7 +247,7 @@ func routesSessions(mux *http.ServeMux) {
 			lim = 1000
 		}
 		before, _ := strconv.ParseInt(q.Get("before"), 10, 64)
-		msgs, start, more, err := convPage(p, q.Get("tools") == "1", before, min(lim, 5000))
+		msgs, start, more, err := convPageMode(p, q.Get("tools") == "1", q.Get("anchors") == "1", before, min(lim, 5000))
 		if err != nil {
 			writeJSON(w, 500, map[string]any{})
 			return
@@ -256,6 +256,23 @@ func routesSessions(mux *http.ServeMux) {
 			capMsgs(msgs)
 		}
 		writeJSON(w, 200, map[string]any{"msgs": msgs, "start": start, "more": more})
+	})
+	// Outils d'une ancre dépliée : lignes du transcript dans [from, until).
+	mux.HandleFunc("GET /conv-tools", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		p, ok := transcript(q.Get("dir"), q.Get("id"))
+		from, e1 := strconv.ParseInt(q.Get("from"), 10, 64)
+		until, e2 := strconv.ParseInt(q.Get("until"), 10, 64)
+		if !ok || e1 != nil || e2 != nil || from < 0 || until < 0 {
+			writeJSON(w, 404, map[string]any{})
+			return
+		}
+		msgs, err := convTools(p, from, until)
+		if err != nil {
+			writeJSON(w, 500, map[string]any{})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"msgs": msgs})
 	})
 	mux.HandleFunc("GET /conv-text", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()

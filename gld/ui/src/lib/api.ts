@@ -185,10 +185,12 @@ export const api = {
   info: (s: Item) => get<Detail>(`/info?dir=${enc(s.dir)}&id=${s.id}`),
   // Lecture par la fin, `before` = « start » rendu par la page précédente. Avec `limit` : autant de messages, textes coupés à
   // 64 Kio (le lecteur). Sans `limit` : pages de 1000 messages aux textes entiers (l'export).
-  conv: (s: Item & { sub?: string }, tools: boolean, page?: { limit?: number; before?: number }) =>
+  conv: (s: Item & { sub?: string }, tools: boolean, page?: { limit?: number; before?: number; anchors?: boolean }) =>
     get<{ msgs: Msg[]; start?: number; more?: boolean }>(
-      `/conv?dir=${enc(s.dir)}&id=${s.id}${s.sub ? `&sub=${enc(s.sub)}` : ""}${tools ? "&tools=1" : ""}${page?.limit ? `&limit=${page.limit}` : ""}${page ? `&before=${page.before ?? 0}` : ""}`
+      `/conv?dir=${enc(s.dir)}&id=${s.id}${s.sub ? `&sub=${enc(s.sub)}` : ""}${tools ? "&tools=1" : ""}${page?.limit ? `&limit=${page.limit}` : ""}${page ? `&before=${page.before ?? 0}` : ""}${page?.anchors && !tools ? "&anchors=1" : ""}`
     ),
+  // Messages d'outil des lignes [from, until) du transcript, pour déplier une ancre.
+  convTools: (s: Item, from: number, until: number) => get<{ msgs: Msg[] }>(`/conv-tools?dir=${enc(s.dir)}&id=${s.id}&from=${from}&until=${until}`),
   // Suite d'un message coupé, à partir de l'octet from ; cut = 0 : fin du texte.
   convText: (s: Item, tools: boolean, m: Msg, from: number) =>
     get<{ t: string; cut: number }>(`/conv-text?dir=${enc(s.dir)}&id=${s.id}&o=${m.o ?? 0}&n=${m.n ?? 0}&from=${from}${tools ? "&tools=1" : ""}`),
