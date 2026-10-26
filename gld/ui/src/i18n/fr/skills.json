@@ -1,6 +1,12 @@
 {
   "skills": {
     "plugins": {
+      "marketplaces": "Marketplaces ({{count}})",
+      "marketAdd": "owner/repo ou URL https…",
+      "marketAddBtn": "Ajouter",
+      "marketUpdate": "Mettre à jour",
+      "marketUpdateAll": "Tout mettre à jour",
+      "marketRemove": "Retirer",
       "title": "Plugins",
       "description": "Installer, activer ou retirer des plugins (skills, commandes, agents) depuis les marketplaces, pour vous ou pour un projet.",
       "search": "Rechercher un plugin…",

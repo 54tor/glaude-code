@@ -145,3 +145,47 @@ func pluginAct(act, id, scope, project string) (string, error) {
 	plugCache.Unlock()
 	return strings.TrimSpace(string(out)), err
 }
+
+type Marketplace struct {
+	Name   string `json:"name"`
+	Source string `json:"source"`
+	Repo   string `json:"repo,omitempty"`
+	URL    string `json:"url,omitempty"`
+}
+
+var (
+	marketNameRe = regexp.MustCompile(`^[\w.-]{1,100}$`)
+	marketSrcRe  = regexp.MustCompile(`^([\w.-]{1,100}/[\w.-]{1,100}|https://[\w.-]+(:\d+)?/[\w./~%+-]{1,300})$`) // dépôt GitHub ou URL https ; jamais un chemin local
+)
+
+func listMarketplaces() ([]Marketplace, error) {
+	b, err := runPlugin("", 30*time.Second, "marketplace", "list", "--json")
+	if err != nil {
+		return nil, err
+	}
+	out := []Marketplace{}
+	return out, json.Unmarshal(b, &out)
+}
+
+// marketplaceAct : add (source = dépôt « owner/repo » ou URL https), remove, update (name vide = tous).
+func marketplaceAct(act, source, name string) (string, error) {
+	var args []string
+	switch {
+	case act == "add" && marketSrcRe.MatchString(source):
+		args = []string{"add", "--scope", "user", source}
+	case act == "remove" && marketNameRe.MatchString(name):
+		args = []string{"remove", name}
+	case act == "update" && (name == "" || marketNameRe.MatchString(name)):
+		args = []string{"update"}
+		if name != "" {
+			args = append(args, name)
+		}
+	default:
+		return "", terr("srv.http_util.requeteInvalide")
+	}
+	out, err := runPlugin("", 3*time.Minute, append([]string{"marketplace"}, args...)...)
+	plugCache.Lock()
+	plugCache.raw = nil
+	plugCache.Unlock()
+	return strings.TrimSpace(string(out)), err
+}

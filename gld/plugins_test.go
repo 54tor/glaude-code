@@ -28,3 +28,11 @@ func TestPluginActRefuse(t *testing.T) {
 		}
 	}
 }
+
+func TestMarketplaceActRefuse(t *testing.T) {
+	for _, c := range [][3]string{{"add", "/etc", ""}, {"add", "../x", ""}, {"add", "http://a.b/c", ""}, {"add", "a/b;rm", ""}, {"remove", "", "a b"}, {"drop", "", "x"}} {
+		if _, err := marketplaceAct(c[0], c[1], c[2]); err == nil {
+			t.Errorf("accepté : %v", c)
+		}
+	}
+}

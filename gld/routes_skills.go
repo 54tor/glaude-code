@@ -103,4 +103,22 @@ func routesSkills(mux *http.ServeMux) {
 		journal("plugin-act %s %s (%s %s) : %v", req.Action, req.ID, req.Scope, req.Project, errOr(err))
 		writeJSON(w, 200, map[string]any{"ok": err == nil, "out": out})
 	})
+	mux.HandleFunc("GET /marketplaces", func(w http.ResponseWriter, r *http.Request) {
+		m, err := listMarketplaces()
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"marketplaces": m})
+	})
+	mux.HandleFunc("POST /marketplace-act", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Action, Source, Name string }
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+			return
+		}
+		out, err := marketplaceAct(req.Action, req.Source, req.Name)
+		journal("marketplace-act %s %s %s : %v", req.Action, req.Source, req.Name, errOr(err))
+		writeJSON(w, 200, map[string]any{"ok": err == nil, "out": out})
+	})
 }

@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next"
 import { useCallback, useEffect, useState } from "react"
-import { Download, Loader2, Power, RefreshCw, Search, Trash2 } from "lucide-react"
-import { api, type PluginAvail, type PluginInst } from "@/lib/api"
+import { Download, Loader2, Plus, Power, RefreshCw, Search, Trash2 } from "lucide-react"
+import { api, type Marketplace, type PluginAvail, type PluginInst } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { reportResult } from "@/lib/report"
 import { Button } from "@/components/ui/button"
@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Choose } from "./Choose"
+
+const SOURCE_OK = /^([\w.-]+\/[\w.-]+|https:\/\/\S+)$/
 
 type Project = { dir: string; project: string }
 
@@ -20,12 +22,16 @@ export function PluginsDialog({ open, onClose, projects, home, onChange }: { ope
   const [scope, setScope] = useState("user") // "user" ou "p/<dossier>"
   const [data, setData] = useState<{ installed: PluginInst[]; available: PluginAvail[]; error?: string } | null>(null)
   const [busy, setBusy] = useState("")
+  const [markets, setMarkets] = useState<Marketplace[]>([])
+  const [src, setSrc] = useState("")
+  const loadMarkets = useCallback(() => api.marketplaces().then((r) => setMarkets(r.marketplaces ?? [])), [])
   const load = useCallback((query: string) => api.plugins(query).then((r) => setData({ installed: r.installed ?? [], available: r.available ?? [], error: r.error })), [])
   useEffect(() => {
     if (!open) return
+    loadMarkets()
     const h = setTimeout(() => load(q), q ? 300 : 0)
     return () => clearTimeout(h)
-  }, [open, q, load])
+  }, [open, q, load, loadMarkets])
 
   const run = async (key: string, action: string, id: string, sc: string, project: string) => {
     setBusy(key)
@@ -34,6 +40,17 @@ export function PluginsDialog({ open, onClose, projects, home, onChange }: { ope
     reportResult(r)
     if (r.ok) {
       await load(q)
+      onChange()
+    }
+  }
+  const market = async (key: string, action: string, source = "", name = "") => {
+    setBusy(key)
+    const r = await api.post("/marketplace-act", { action, source, name })
+    setBusy("")
+    reportResult(r)
+    if (r.ok) {
+      if (action === "add") setSrc("")
+      await Promise.all([loadMarkets(), load(q)])
       onChange()
     }
   }
@@ -60,6 +77,44 @@ export function PluginsDialog({ open, onClose, projects, home, onChange }: { ope
           {data?.error && <p className="p-4 text-sm text-destructive">{data.error}</p>}
           {data && !data.error && (
             <div className="space-y-4 pr-3">
+              {!q && (
+                <section>
+                  <h3 className="mb-1 flex items-center text-xs font-semibold text-muted-foreground">
+                    <span className="flex-1">{t("skills.plugins.marketplaces", { count: markets.length })}</span>
+                    <Button size="xs" variant="ghost" disabled={busy === "mk:*"} onClick={() => market("mk:*", "update")}>
+                      {busy === "mk:*" ? <Loader2 className="animate-spin" /> : <RefreshCw />} {t("skills.plugins.marketUpdateAll")}
+                    </Button>
+                  </h3>
+                  <ul className="divide-y rounded-md border">
+                    {markets.map((m) => (
+                      <li key={m.name} className="flex items-center gap-2 px-3 py-1.5 text-sm">
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-medium">{m.name}</div>
+                          <div className="truncate text-xs text-muted-foreground">{m.repo ?? m.url ?? m.source}</div>
+                        </div>
+                        <Button size="icon-xs" variant="ghost" disabled={busy === "mk:" + m.name} title={t("skills.plugins.marketUpdate")} onClick={() => market("mk:" + m.name, "update", "", m.name)}>
+                          <RefreshCw />
+                        </Button>
+                        <Button size="icon-xs" variant="ghost" disabled={busy === "mk:" + m.name} title={t("skills.plugins.marketRemove")} onClick={() => market("mk:" + m.name, "remove", "", m.name)}>
+                          <Trash2 />
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                  <form
+                    className="mt-2 flex gap-2"
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      if (SOURCE_OK.test(src.trim())) market("mk:add", "add", src.trim())
+                    }}
+                  >
+                    <Input value={src} onChange={(e) => setSrc(e.target.value)} placeholder={t("skills.plugins.marketAdd")} />
+                    <Button type="submit" size="sm" variant="outline" disabled={busy === "mk:add" || !SOURCE_OK.test(src.trim())}>
+                      {busy === "mk:add" ? <Loader2 className="animate-spin" /> : <Plus />} {t("skills.plugins.marketAddBtn")}
+                    </Button>
+                  </form>
+                </section>
+              )}
               {!q && (
                 <section>
                   <h3 className="mb-1 text-xs font-semibold text-muted-foreground">{t("skills.plugins.installed", { count: data.installed.length })}</h3>
