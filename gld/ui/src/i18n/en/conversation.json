@@ -415,7 +415,14 @@
       "modeRo": "Read-only",
       "listFailed": "Could not load your shared sessions.",
       "retry": "Retry",
-      "byeOthers": "Other shared sessions:"
+      "byeOthers": "Other shared sessions:",
+      "files": "Files",
+      "filesBack": "Conversation",
+      "filesEmpty": "Empty folder",
+      "filesDirFailed": "Could not read this folder.",
+      "fileFailed": "Could not read this file.",
+      "filePick": "Select a file (read-only).",
+      "filesTruncated": "List truncated"
     }
   }
 }

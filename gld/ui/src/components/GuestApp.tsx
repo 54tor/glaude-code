@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowUpToLine, ChevronDown, Loader2, LogOut, Send, Wrench, X } from "lucide-react"
+import { ArrowUpToLine, ChevronDown, FolderOpen, Loader2, LogOut, MessageSquare, Send, Wrench, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -8,6 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { api, HttpError, type GuestShare, type LiveState, type Msg, type QItem } from "@/lib/api"
 import { setAuth } from "@/lib/auth"
+import { GuestFiles } from "./GuestFiles"
 import { LiveBar } from "./LiveStatus"
 import { Message } from "./Message"
 
@@ -126,6 +127,7 @@ function GuestSession({ handle }: { handle: string }) {
   const others = (shares ?? []).filter((s) => s.handle !== handle)
   const [h, setH] = useState<Hist>({ msgs: [], start: 0, more: false })
   const [tools, setTools] = useState(false)
+  const [files, setFiles] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
   const hRef = useRef(h)
   const seq = useRef(0)
@@ -293,12 +295,16 @@ function GuestSession({ handle }: { handle: string }) {
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
+            <Button variant="outline" size="xs" aria-pressed={files} onClick={() => setFiles(!files)}>
+              {files ? <MessageSquare /> : <FolderOpen />} {files ? t("conversation.guest.filesBack") : t("conversation.guest.files")}
+            </Button>
             <Button variant="outline" size="xs" onClick={() => void leave()}>
               <LogOut /> {t("conversation.guest.leave")}
             </Button>
           </div>
         </DialogHeader>
-        <ScrollArea className="min-h-0 flex-1">
+        {files && <GuestFiles dir={dir} />}
+        <ScrollArea className={files ? "hidden" : "min-h-0 flex-1"}>
           <div className="session-text mx-auto max-w-5xl space-y-6 px-3 py-4 md:px-8 md:py-6">
             {h.more && (
               <div className="text-center">

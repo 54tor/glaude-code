@@ -415,7 +415,14 @@
       "modeRo": "Lecture seule",
       "listFailed": "Impossible de charger vos sessions partagées.",
       "retry": "Réessayer",
-      "byeOthers": "Autres sessions partagées :"
+      "byeOthers": "Autres sessions partagées :",
+      "files": "Fichiers",
+      "filesBack": "Conversation",
+      "filesEmpty": "Dossier vide",
+      "filesDirFailed": "Impossible de lire ce dossier.",
+      "fileFailed": "Impossible de lire ce fichier.",
+      "filePick": "Sélectionnez un fichier (lecture seule).",
+      "filesTruncated": "Liste tronquée"
     }
   }
 }
