@@ -450,3 +450,17 @@ func TestDrainFreshScreenCheck(t *testing.T) {
 		}
 	}
 }
+
+func TestQueueOpenNullFile(t *testing.T) {
+	for _, body := range []string{"null", `{"s":null}`} {
+		dir := t.TempDir()
+		os.WriteFile(dir+"/queue.json", []byte(body), 0o600)
+		q, err := openQueue(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := q.Add("s", "host", "x"); err != nil || len(q.List("s")) != 1 {
+			t.Fatalf("%s : %v", body, err)
+		}
+	}
+}

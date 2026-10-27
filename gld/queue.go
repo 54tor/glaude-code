@@ -49,6 +49,9 @@ func openQueue(dir string) (*queueStore, error) {
 	if err := json.Unmarshal(b, &q.sess); err != nil {
 		return nil, err
 	}
+	if q.sess == nil { // un fichier « null » donnerait une carte nil : le prochain Add paniquerait
+		q.sess = map[string][]QItem{}
+	}
 	// Un envoi interrompu a pu atteindre la session : on ne le rejoue pas sans l'accord de l'hôte.
 	for _, l := range q.sess {
 		for i := range l {
