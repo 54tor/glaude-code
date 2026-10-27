@@ -17,6 +17,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unicode/utf8"
@@ -237,6 +238,9 @@ func closeAndWait(items []item) {
 }
 
 // sendToSession colle le texte dans le panneau tmux de la session, puis valide.
+// sendSeq : un tampon tmux par envoi, sinon deux envois simultanés (warmTick et un utilisateur) se collent mutuellement leur texte.
+var sendSeq atomic.Uint64
+
 func sendToSession(id, text string) error {
 	if !idRe.MatchString(id) {
 		return terr("srv.chat.sessionInvalide")
@@ -252,7 +256,7 @@ func sendToSession(id, text string) error {
 	if !ok {
 		return terr("srv.sendkeys.cetteSessionNEst")
 	}
-	buf := "gld-send-" + strconv.Itoa(os.Getpid())
+	buf := "gld-send-" + strconv.Itoa(os.Getpid()) + "-" + strconv.FormatUint(sendSeq.Add(1), 10)
 	if _, err := tmuxRun(text, "load-buffer", "-b", buf, "-"); err != nil {
 		return terr("srv.sendkeys.tmuxLoadBuffer", "W1", err)
 	}

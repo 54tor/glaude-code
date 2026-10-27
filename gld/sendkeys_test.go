@@ -48,6 +48,12 @@ func TestEnvoiTmux(t *testing.T) {
 	if last[0][0] != "ligne 1\nligne 2" || last[1][len(last[1])-1] != "%3" || last[1][2] != "-p" || last[2][len(last[2])-1] != "Enter" {
 		t.Fatalf("appels : %v", last)
 	}
+	if err := sendToSession(sid, "encore"); err != nil {
+		t.Fatal(err)
+	}
+	if b := (*calls)[len(*calls)-3][3]; b == last[0][3] { // deux envois simultanés ne doivent pas partager un tampon
+		t.Fatalf("tampon réutilisé : %s", b)
+	}
 }
 
 func TestEnvoiRefuse(t *testing.T) {
