@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Download, Loader2, Plus, Power, RefreshCw, Search, Trash2 } from "lucide-react"
 import { api, type Marketplace, type PluginAvail, type PluginInst } from "@/lib/api"
 import { tilde } from "@/lib/format"
@@ -43,12 +43,20 @@ export function PluginsPanel({ projects, home, onChange, inline }: { projects: P
   const [markets, setMarkets] = useState<Marketplace[]>([])
   const [src, setSrc] = useState("")
   const loadMarkets = useCallback(() => api.marketplaces().then((r) => setMarkets(r.marketplaces ?? [])), [])
-  const load = useCallback((query: string) => api.plugins(query).then((r) => setData({ installed: r.installed ?? [], available: r.available ?? [], error: r.error })), [])
+  const seq = useRef(0) // seule la dernière recherche s'affiche : une réponse lente pour « a » n'écrase pas celle de « ab »
+  const load = useCallback((query: string) => {
+    const n = ++seq.current
+    return api.plugins(query).then((r) => {
+      if (n === seq.current) setData({ installed: r.installed ?? [], available: r.available ?? [], error: r.error })
+    })
+  }, [])
   useEffect(() => {
     loadMarkets()
+  }, [loadMarkets])
+  useEffect(() => {
     const h = setTimeout(() => load(q), q ? 300 : 0)
     return () => clearTimeout(h)
-  }, [q, load, loadMarkets])
+  }, [q, load])
 
   const run = async (key: string, action: string, id: string, sc: string, project: string) => {
     setBusy(key)
