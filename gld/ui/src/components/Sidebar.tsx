@@ -114,7 +114,7 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
             onClick={() => a.read(s)}
             onDoubleClick={() => go({ kind: "dir", key: segs(row.g.project, a.home).join("/") })}
             title={cold ? t("shell.sidebar.coldTitle", { title: s.title }) : t("shell.sidebar.hotTitle", { title: s.title, left })}
-            className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+            className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-sm text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
           >
             {a.asking.has(s.id) ? (
               <Info className="size-4 shrink-0 animate-pulse text-warning" aria-label={t("shell.sidebar.asking")} />
