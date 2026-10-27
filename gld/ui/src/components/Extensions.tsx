@@ -56,7 +56,23 @@ export function Extensions({ home }: { home: string }) {
   const mcpHere = mcp.filter((s) => s.scope === "user" || (dir && s.project && s.project === ov.projects.find((p) => p.dir === dir)?.project) || (dir && s.scope === "project"))
   const skillsHere = skills.filter((s) => s.scope === "user" || s.scope === "plugin" || (s.scope === "project" && (!dir || s.project === ov.projects.find((p) => p.dir === dir)?.project)))
   const chars = skillsHere.filter((s) => !s.manual).reduce((n, s) => n + s.chars, 0)
+  const cfg = (f: string) => ov.files.find((x) => x.id === f)?.data as { skillOverrides?: Record<string, string>; disabledMcpjsonServers?: string[] } | undefined
+  const skillMode = (f: string, name: string) => cfg(f)?.skillOverrides?.[name]
+  const skillEff = (name: string) => [files.l, files.p, "u"].map((f) => (f ? skillMode(f, name) : undefined)).find(Boolean) ?? "on"
+  const mcpOff = (f: string, name: string) => cfg(f)?.disabledMcpjsonServers?.includes(name) === true
+  const mcpEff = (name: string) => [files.l, files.p, "u"].some((f) => f && mcpOff(f, name))
   const scopeName = { u: t("extensions.scopeU"), p: t("extensions.scopeP"), l: t("extensions.scopeL") }
+  const head = (
+    <thead className="text-xs text-muted-foreground">
+      <tr>
+        <th className="py-1 text-left font-normal" />
+        {(["u", "p", "l"] as const).map((k) => (
+          <th key={k} className="w-20 py-1 font-normal">{scopeName[k]}</th>
+        ))}
+        <th className="w-24 py-1 font-normal">{t("extensions.effective")}</th>
+      </tr>
+    </thead>
+  )
   const sect = "text-md font-semibold border-b pb-1 mb-2 flex items-center gap-2"
 
   return (
@@ -123,17 +139,39 @@ export function Extensions({ home }: { home: string }) {
           <h3 className={sect}>
             {t("extensions.skills")} <span className="text-xs font-normal text-muted-foreground">{t("extensions.skillsTotal", { count: skillsHere.length, chars })}</span>
           </h3>
-          <ul className="grid gap-px sm:grid-cols-2">
-            {skillsHere.map((s) => (
-              <li key={s.key}>
-                <Link href={href({ kind: "skills", key: s.key })} className="flex items-baseline gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted">
-                  <span className="min-w-0 flex-1 truncate">{s.name}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">{s.plugin ? t("extensions.fromPlugin", { name: s.plugin }) : s.scope === "project" ? t("extensions.fromProject") : t("extensions.fromUser")}</span>
-                  {(s.manual || s.hidden) && <span className="shrink-0 text-xs text-warning">{s.manual ? t("extensions.manual") : t("extensions.hidden")}</span>}
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <table className="w-full text-sm">
+            {head}
+            <tbody className="divide-y">
+              {skillsHere.map((s) => (
+                <tr key={s.key} className="hover:bg-muted/50">
+                  <td className="min-w-0 py-1 pr-2">
+                    <Link href={href({ kind: "skills", key: s.key })} className="break-all hover:underline">{s.name}</Link>{" "}
+                    <span className="text-xs text-muted-foreground">{s.plugin ? t("extensions.fromPlugin", { name: s.plugin }) : s.scope === "project" ? t("extensions.fromProject") : t("extensions.fromUser")}</span>
+                    {(s.manual || s.hidden) && <span className="ml-2 text-xs text-warning">{s.manual ? t("extensions.manual") : t("extensions.hidden")}</span>}
+                  </td>
+                  {(["u", "p", "l"] as const).map((k) => {
+                    const f = files[k]
+                    const m = f && skillMode(f, s.name)
+                    return (
+                      <td key={k} className="text-center">
+                        {f && !s.plugin ? (
+                          <Checkbox
+                            checked={m !== "off"}
+                            className={m === undefined ? "opacity-50" : undefined}
+                            aria-label={t("extensions.toggle", { id: s.name, scope: scopeName[k] })}
+                            onCheckedChange={(c) => propose(c === true ? { file: f, op: "delete", path: ["skillOverrides", s.name] } : { file: f, op: "set", path: ["skillOverrides", s.name], value: "off" })}
+                          />
+                        ) : (
+                          <span className="text-muted-foreground">·</span>
+                        )}
+                      </td>
+                    )
+                  })}
+                  <td className={`text-center text-xs ${skillEff(s.name) === "off" ? "text-muted-foreground" : "text-success"}`}>{skillEff(s.name) === "on" ? t("extensions.on") : skillEff(s.name) === "off" ? t("extensions.off") : skillEff(s.name)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
           {!skillsHere.length && <p className="py-3 text-sm text-muted-foreground">{t("extensions.noSkills")}</p>}
         </section>
 
@@ -163,14 +201,38 @@ export function Extensions({ home }: { home: string }) {
             {t("extensions.mcp")} ({mcpHere.length})
             <Link href={href({ kind: "config", tab: "mcp" })} className="ml-auto text-xs font-normal text-muted-foreground underline">MCP</Link>
           </h3>
-          <ul className="space-y-1">
-            {mcpHere.map((s, n) => (
-              <li key={n} className="rounded-md border px-3 py-1.5 text-sm">
-                <span className="font-medium">{s.name}</span> <span className="text-xs text-muted-foreground">{s.type} · {s.scope === "user" ? scopeName.u : s.scope === "project" ? scopeName.p : scopeName.l}</span>
-                <code className="block text-xs break-all text-muted-foreground">{s.url || s.command}</code>
-              </li>
-            ))}
-          </ul>
+          <table className="w-full text-sm">
+            {head}
+            <tbody className="divide-y">
+              {mcpHere.map((m, n) => (
+                <tr key={n} className="hover:bg-muted/50 align-top">
+                  <td className="min-w-0 py-1 pr-2">
+                    <span className="font-medium">{m.name}</span> <span className="text-xs text-muted-foreground">{m.type} · {m.scope === "user" ? scopeName.u : m.scope === "project" ? ".mcp.json" : scopeName.l}</span>
+                    <code className="block text-xs break-all text-muted-foreground">{m.url || m.command}</code>
+                  </td>
+                  {(["u", "p", "l"] as const).map((k) => {
+                    const f = files[k]
+                    return (
+                      <td key={k} className="pt-1.5 text-center">
+                        {f && m.scope === "project" ? (
+                          <Checkbox
+                            checked={!mcpOff(f, m.name)}
+                            aria-label={t("extensions.toggle", { id: m.name, scope: scopeName[k] })}
+                            onCheckedChange={(c) => propose({ file: f, op: c === true ? "remove" : "add", path: ["disabledMcpjsonServers"], value: m.name })}
+                          />
+                        ) : (
+                          <span className="text-muted-foreground">·</span>
+                        )}
+                      </td>
+                    )
+                  })}
+                  <td className={`pt-1.5 text-center text-xs ${m.scope !== "project" ? "text-muted-foreground" : mcpEff(m.name) ? "text-muted-foreground" : "text-success"}`}>{m.scope !== "project" ? "—" : mcpEff(m.name) ? t("extensions.off") : t("extensions.on")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {mcpHere.some((m) => m.scope !== "project") && <p className="mt-2 text-xs text-muted-foreground">{t("extensions.mcpManaged")}</p>}
+          <p className="mt-1 text-xs text-muted-foreground">{t("extensions.offWins")}</p>
           {!mcpHere.length && <p className="py-3 text-sm text-muted-foreground">{t("extensions.noMcp")}</p>}
         </section>
       </div>

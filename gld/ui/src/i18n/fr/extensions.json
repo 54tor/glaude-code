@@ -33,6 +33,8 @@
     "loadError": "Impossible de lire les plugins : {{err}}",
     "toggle": "{{id}} — {{scope}}",
     "skillsTotal": "{{count}} skills, {{chars}} car. dans le contexte",
-    "from": "Source"
+    "from": "Source",
+    "mcpManaged": "Défini dans ~/.claude.json (utilisateur ou local) : à gérer avec `claude mcp`, gld n'y écrit pas.",
+    "offWins": "Une désactivation dans une portée l'emporte sur les autres."
   }
 }

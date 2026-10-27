@@ -33,6 +33,8 @@
     "loadError": "Cannot read plugins: {{err}}",
     "toggle": "{{id}} — {{scope}}",
     "skillsTotal": "{{count}} skills, {{chars}} chars in context",
-    "from": "Source"
+    "from": "Source",
+    "mcpManaged": "Defined in ~/.claude.json (user or local): manage with `claude mcp`, gld does not write there.",
+    "offWins": "A disable in any scope wins over the others."
   }
 }

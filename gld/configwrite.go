@@ -39,6 +39,9 @@ var simpleKeys = map[string]string{
 var (
 	envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,99}$`)
 	wordRe  = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,40}$`)
+	// nom d'un skill ou d'un serveur MCP, comme Claude Code l'écrit dans skillOverrides et disabledMcpjsonServers
+	skillNameRe = regexp.MustCompile(`^[\w.:-]{1,100}$`)
+	skillModes  = map[string]bool{"on": true, "name-only": true, "user-invocable-only": true, "off": true}
 )
 
 // validate vérifie que la modification fait partie de celles permises, et normalise sa valeur.
@@ -98,6 +101,17 @@ func (e *CfgEdit) validate() error {
 			return terr("srv.configwrite.dossierSupplementaireUnChemin")
 		}
 		e.Value = s
+	case len(p) == 2 && p[0] == "skillOverrides" && skillNameRe.MatchString(p[1]):
+		if e.Op == "delete" {
+			return nil
+		}
+		if s, ok := e.Value.(string); e.Op != "set" || !ok || !skillModes[s] {
+			return terr("srv.configwrite.cetteModificationNEst", "A1", strings.Join(p, "."))
+		}
+	case len(p) == 1 && p[0] == "disabledMcpjsonServers":
+		if s, ok := e.Value.(string); (e.Op != "add" && e.Op != "remove") || !ok || !skillNameRe.MatchString(s) {
+			return terr("srv.configwrite.cetteModificationNEst", "A1", p[0])
+		}
 	case len(p) == 2 && p[0] == "permissions" && p[1] == "defaultMode":
 		if e.Op == "delete" {
 			return nil

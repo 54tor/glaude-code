@@ -61,6 +61,16 @@ func TestEcritureConfig(t *testing.T) {
 	if after, _ = do(CfgEdit{Op: "delete", Path: []string{"enabledPlugins", "a@b"}}); strings.Contains(after, "env") || strings.Contains(after, "enabledPlugins") {
 		t.Fatal(after)
 	}
+	// skills et serveurs .mcp.json désactivés : valeur énumérée, liste retirée avec sa dernière entrée
+	do(CfgEdit{Op: "set", Path: []string{"skillOverrides", "deploy"}, Value: "off"})
+	do(CfgEdit{Op: "add", Path: []string{"disabledMcpjsonServers"}, Value: "memory"})
+	if b, _ := os.ReadFile(p); !strings.Contains(string(b), `"deploy": "off"`) || !strings.Contains(string(b), `"memory"`) {
+		t.Fatal(string(b))
+	}
+	do(CfgEdit{Op: "delete", Path: []string{"skillOverrides", "deploy"}})
+	if after, _ = do(CfgEdit{Op: "remove", Path: []string{"disabledMcpjsonServers"}, Value: "memory"}); strings.Contains(after, "skillOverrides") || strings.Contains(after, "disabledMcpjsonServers") {
+		t.Fatal(after)
+	}
 	// nombres et booléens typés
 	if _, err = do(CfgEdit{Op: "set", Path: []string{"cleanupPeriodDays"}, Value: float64(30)}); err != nil {
 		t.Fatal(err)
@@ -79,6 +89,8 @@ func TestEcritureConfig(t *testing.T) {
 		{Op: "set", Path: []string{"env", "A"}, Value: "ligne1\nligne2"},
 		{Op: "add", Path: []string{"permissions", "allow"}, Value: ""},
 		{Op: "set", Path: []string{"enabledPlugins", "sans-arobase"}, Value: true},
+		{Op: "set", Path: []string{"skillOverrides", "deploy"}, Value: "maybe"},
+		{Op: "add", Path: []string{"disabledMcpjsonServers"}, Value: "a b"},
 	} {
 		if _, err := do(e); err == nil {
 			t.Errorf("modification acceptée : %+v", e)
