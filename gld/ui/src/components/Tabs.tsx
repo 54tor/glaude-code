@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { History, MoreHorizontal, Save, SquareTerminal, Trash2 } from "lucide-react"
+import { History, MoreHorizontal, Power, Save, SquareTerminal, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { api, type TabSave, type TabSession } from "@/lib/api"
@@ -54,6 +54,15 @@ export function Tabs({ args, onAsk, onPrompt }: { args: string; onAsk: (a: Ask) 
     ;(n === todo.length ? toast.success : toast.error)(t("shell.tabs.reopened", { n, total: todo.length }), { id })
   }
 
+  // Sauvegarde d'abord (la sauvegarde automatique saute les listes vides), puis ferme : « Tout rouvrir » reprend ce point.
+  const closeAll = async () => {
+    const ids = [...a.live]
+    const r = await api.post("/tabs-save", { name: t("shell.tabs.beforeClose") })
+    if (!r.ok) return void reportResult(r)
+    await refresh()
+    a.stop(ids, refresh)
+  }
+
   const remove = (s: TabSave) =>
     onAsk({
       title: t("shell.tabs.deleteTitle"),
@@ -82,6 +91,12 @@ export function Tabs({ args, onAsk, onPrompt }: { args: string; onAsk: (a: Ask) 
           </div>
           <Button size="sm" onClick={save} disabled={!a.live.size}>
             <Save /> {t("shell.tabs.saveNow")}
+          </Button>
+          <Button size="sm" variant="outline" onClick={closeAll} disabled={!a.live.size}>
+            <Power /> {t("shell.tabs.closeAll")}
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => saves?.[0] && reopen(saves[0].sessions)} disabled={!saves?.length} title={t("shell.tabs.reopenLastTitle")}>
+            <SquareTerminal /> {t("shell.tabs.reopenLast")}
           </Button>
         </div>
 

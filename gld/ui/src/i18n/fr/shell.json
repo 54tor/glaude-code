@@ -223,6 +223,10 @@
       "none": "Aucune sauvegarde pour l'instant.",
       "auto": "Sauvegarde automatique",
       "manual": "manuelle",
+      "beforeClose": "avant fermeture",
+      "closeAll": "Fermer toutes les sessions",
+      "reopenLast": "Rouvrir les dernières",
+      "reopenLastTitle": "Rouvre les sessions de la sauvegarde la plus récente (par exemple après avoir changé des variables d'environnement)",
       "reopenAll": "Tout rouvrir",
       "actions": "Actions de la sauvegarde",
       "deleteSave": "Supprimer la sauvegarde"

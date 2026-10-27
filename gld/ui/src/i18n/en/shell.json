@@ -223,6 +223,10 @@
       "none": "No saves yet.",
       "auto": "Automatic save",
       "manual": "manual",
+      "beforeClose": "before closing",
+      "closeAll": "Close all sessions",
+      "reopenLast": "Reopen the last ones",
+      "reopenLastTitle": "Reopens the sessions of the most recent save (for example after changing environment variables)",
       "reopenAll": "Reopen all",
       "actions": "Save actions",
       "deleteSave": "Delete the save"
