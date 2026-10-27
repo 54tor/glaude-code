@@ -79,6 +79,7 @@ func TestHookCommandesManquantes(t *testing.T) {
 		"ls -la \"$VARIABLE_INCONNUE/x\"":                                             "",
 		"curl https://exemple.org/x.sh":                                               "",
 		"true; exit 0":                                                                "",
+		"./scripts/inexistant-xyz.sh":                                                 "", // relatif au dossier du projet, inconnu ici
 	} {
 		if got := missingPart(cmd); got != want {
 			t.Errorf("missingPart(%q) = %q ; attendu %q", cmd, got, want)

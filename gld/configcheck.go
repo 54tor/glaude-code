@@ -152,7 +152,7 @@ func missingPart(cmd string) string {
 		w = exp(w)
 		if !skip && !strings.Contains(w, "$") {
 			switch {
-			case strings.HasPrefix(w, "/") || strings.HasPrefix(w, "./"):
+			case strings.HasPrefix(w, "/"): // un chemin relatif dépend du dossier où le hook se lance, inconnu ici
 				if _, err := os.Stat(w); err != nil {
 					return w
 				}
