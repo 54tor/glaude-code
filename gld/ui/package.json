@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build && node scripts/check-chunks.mjs dist && node -e \"require('fs').writeFileSync('dist/.gitkeep','')\"",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -b",
     "preview": "vite preview",
     "test": "vitest run",
     "coverage": "vitest run --coverage --coverage.include='src/**' --coverage.reporter=text-summary --coverage.thresholds.lines=15 --coverage.thresholds.branches=7"

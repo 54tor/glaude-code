@@ -46,6 +46,6 @@ check: check-ui
 
 # La partie interface de check (la CI la lance seule : les tests Go y passent déjà sous -race dans cover).
 check-ui:
-	cd gld/ui && { [ -d node_modules ] || npm ci; } && npx tsc --noEmit && npx eslint . && npm test
+	cd gld/ui && { [ -d node_modules ] || npm ci; } && npx tsc -b && npx eslint . && npm test
 
 .PHONY: ui install windows macos test check check-ui fuzz cover
