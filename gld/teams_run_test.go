@@ -176,17 +176,19 @@ func TestSendNeverAnswersPermissionPrompt(t *testing.T) {
 
 func TestTeamKeyOnlyAllowedKeys(t *testing.T) {
 	root, f := setup(t)
-	if err := teamKey(root, trName, "ada", "rm -rf"); err == nil {
+	f.screens[trLPane] = permFixture(t)
+	if err := teamKey(root, trName, "team-lead", "rm -rf", ""); err == nil {
 		t.Fatal("touche refusée attendue")
 	}
-	if err := teamKey(root, trName, "ada", "Enter"); err != nil || len(f.keys) != 1 {
+	if err := teamKey(root, trName, "team-lead", "Enter", ""); err != nil || len(f.keys) != 1 {
 		t.Fatal(err, f.keys)
 	}
 }
 
 func TestTeamKeyTargetsLeadPane(t *testing.T) {
 	root, f := setup(t)
-	if err := teamKey(root, trName, "team-lead", "1"); err != nil || f.keys[0] != [2]string{trLPane, "1"} {
+	f.screens[trLPane] = permFixture(t)
+	if err := teamKey(root, trName, "team-lead", "1", ""); err != nil || f.keys[0] != [2]string{trLPane, "1"} {
 		t.Fatal(err, f.keys)
 	}
 }
@@ -275,7 +277,7 @@ func TestTeamBadName(t *testing.T) {
 	if _, err := teamSend(root, bad, "a", "b", "c"); err == nil {
 		t.Error("teamSend")
 	}
-	if teamKey(root, bad, "a", "1") == nil {
+	if teamKey(root, bad, "a", "1", "") == nil {
 		t.Error("teamKey")
 	}
 	if _, err := teamScreen(root, bad, "a"); err == nil {
@@ -360,11 +362,43 @@ func TestPromptAppearsBetweenCheckAndPaste(t *testing.T) {
 func TestTeamKeyScreenNeedLiveTeam(t *testing.T) {
 	root, f := setup(t)
 	f.panes = map[string]string{}
-	if teamKey(root, trName, "ada", "1") == nil || len(f.keys) != 0 {
+	if teamKey(root, trName, "ada", "1", "") == nil || len(f.keys) != 0 {
 		t.Error("teamKey sur une team périmée")
 	}
 	caps := f.caps
 	if _, err := teamScreen(root, trName, "ada"); err == nil || f.caps != caps {
 		t.Error("teamScreen sur une team périmée")
+	}
+}
+
+func permFixture(t *testing.T) string {
+	b, err := os.ReadFile("testdata/teams/permission-prompt-lead-pane.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestTeamKeyRefusesWhenNoDialog(t *testing.T) {
+	root, f := setup(t)
+	if err := teamKey(root, trName, "team-lead", "1", ""); err == nil || len(f.keys) != 0 {
+		t.Fatal(err, f.keys)
+	}
+}
+
+func TestTeamKeyRefusesWhenDialogChanged(t *testing.T) {
+	root, f := setup(t)
+	f.screens[trLPane] = permFixture(t)
+	if err := teamKey(root, trName, "team-lead", "1", "autre dialogue"); err == nil || len(f.keys) != 0 {
+		t.Fatal(err, f.keys)
+	}
+}
+
+func TestTeamKeyOKWhenExpectMatches(t *testing.T) {
+	root, f := setup(t)
+	f.screens[trLPane] = permFixture(t)
+	_, txt := permText(f.screens[trLPane])
+	if err := teamKey(root, trName, "team-lead", "1", "  "+txt+"\n"); err != nil || len(f.keys) != 1 {
+		t.Fatal(err, f.keys)
 	}
 }

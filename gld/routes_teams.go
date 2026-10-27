@@ -148,11 +148,11 @@ func routesTeams(mux *http.ServeMux) {
 		reply(w, 200, map[string]any{"ok": true, "queued": queued})
 	})
 	mux.HandleFunc("POST /team-key", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Name, Agent, Key string }
+		var req struct{ Name, Agent, Key, Expect string }
 		if !body(w, r, &req) || !okName(w, req.Name) {
 			return
 		}
-		err := teamKey(cfgDir(), req.Name, req.Agent, req.Key)
+		err := teamKey(cfgDir(), req.Name, req.Agent, req.Key, req.Expect)
 		journal("team-key %s -> %s : %v", req.Name, req.Agent, errOr(err))
 		if err != nil {
 			fail(w, err)

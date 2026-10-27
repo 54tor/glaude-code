@@ -441,6 +441,8 @@
   "srv.teams_run.paneAbsent": "cet agent n'a pas de terminal où écrire",
   "srv.teams_run.fileOuverte": "trop de messages en attente pour cette team",
   "srv.teams_run.envoiImpossible": "envoi impossible : {{.W1}}",
+  "srv.teams_run.aucunDialogue": "aucun dialogue n'attend de réponse dans le terminal",
+  "srv.teams_run.dialogueChange": "le dialogue a changé : relisez-le avant de répondre",
   "srv.teams_run.dialogueEnCours": "un dialogue attend une réponse dans le terminal",
   "srv.teams_run.captureImpossible": "lecture du terminal impossible : {{.W1}}",
   "srv.teams_run.fermetureImpossible": "fermeture impossible : {{.W1}}",

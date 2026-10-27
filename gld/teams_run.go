@@ -153,6 +153,12 @@ func (c teamCtx) permission() (agent, text string, asking, captured bool) {
 	if !screenAsks(scr) {
 		return "", "", false, true
 	}
+	agent, text = permText(scr)
+	return agent, text, true, true
+}
+
+// permText : le texte de la demande visible à l'écran (même coupe que la vue), et le coéquipier demandeur si le titre est lisible.
+func permText(scr string) (agent, t string) {
 	lines := strings.Split(strings.TrimRight(scr, " \n"), "\n")
 	if len(lines) > 80 {
 		lines = lines[len(lines)-80:]
@@ -167,14 +173,14 @@ func (c teamCtx) permission() (agent, text string, asking, captured bool) {
 			break
 		}
 	}
-	t := strings.TrimRight(strings.Join(lines[from:], "\n"), " \n")
+	t = strings.TrimRight(strings.Join(lines[from:], "\n"), " \n")
 	if len(t) > permCut {
 		t = t[:permCut]
 		for !utf8.ValidString(t) {
 			t = t[:len(t)-1]
 		}
 	}
-	return agent, t, true, true
+	return agent, t
 }
 
 // states : état de chaque agent par nom, et le texte d'une demande de permission en attente.
@@ -354,7 +360,9 @@ func teamSend(cfgRoot, name, author, to, text string) (bool, error) {
 	return true, nil
 }
 
-func teamKey(cfgRoot, name, agent, key string) error {
+// teamKey : expect est la demande que l'humain a vue (vide : pas de comparaison). Sous le verrou du pane, rien ne part sans
+// dialogue en attente, ni si l'écran a changé depuis : une réponse ne valide jamais un dialogue non vu.
+func teamKey(cfgRoot, name, agent, key, expect string) error {
 	if !teamNameRe.MatchString(name) {
 		return terr("srv.teams_run.nomInvalide")
 	}
@@ -374,6 +382,18 @@ func teamKey(cfgRoot, name, agent, key string) error {
 	}
 	if pane == "" {
 		return terr("srv.teams_run.paneAbsent")
+	}
+	mu := paneMu(pane)
+	mu.Lock()
+	defer mu.Unlock()
+	scr, cerr := teamPanes.Capture(pane)
+	if cerr != nil || !screenAsks(scr) {
+		return terr("srv.teams_run.aucunDialogue")
+	}
+	if expect != "" {
+		if _, fresh := permText(scr); strings.TrimSpace(fresh) != strings.TrimSpace(expect) {
+			return terr("srv.teams_run.dialogueChange")
+		}
 	}
 	return teamPanes.Key(pane, key)
 }

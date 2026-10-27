@@ -441,6 +441,8 @@
   "srv.teams_run.paneAbsent": "this agent has no terminal to write to",
   "srv.teams_run.fileOuverte": "too many queued messages for this team",
   "srv.teams_run.envoiImpossible": "send failed: {{.W1}}",
+  "srv.teams_run.aucunDialogue": "no dialog is waiting for an answer in the terminal",
+  "srv.teams_run.dialogueChange": "the dialog changed: read it again before answering",
   "srv.teams_run.dialogueEnCours": "a dialog is waiting for an answer in the terminal",
   "srv.teams_run.captureImpossible": "cannot read the terminal: {{.W1}}",
   "srv.teams_run.fermetureImpossible": "cannot close the team: {{.W1}}",
