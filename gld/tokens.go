@@ -11,7 +11,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -41,7 +40,7 @@ func tokenFile() string { return filepath.Join(cfgDir(), "gld-web-tokens.json") 
 func tokens() *tokenStore {
 	if tokLoaded == nil {
 		tokLoaded = &tokenStore{Counts: map[string]int{}}
-		if b, err := os.ReadFile(tokenFile()); err == nil {
+		if b, err := readTrusted(tokenFile()); err == nil {
 			var s tokenStore
 			if json.Unmarshal(b, &s) == nil && s.Counts != nil {
 				tokLoaded = &s
