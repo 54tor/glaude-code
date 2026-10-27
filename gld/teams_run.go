@@ -76,7 +76,6 @@ var (
 
 var (
 	permTitleRe = regexp.MustCompile(`· from the (\S+) agent`)
-	permOptRe   = regexp.MustCompile(`^\s*(❯\s*)?1\. `)
 )
 
 type teamCtx struct {
@@ -141,55 +140,47 @@ func (c teamCtx) leadName() string {
 	return ""
 }
 
-// permission : (agent demandeur, texte) quand le pane du chef affiche une demande d'un coéquipier, sinon ("", "").
-func (c teamCtx) permission() (agent, text string, captured bool) {
+// permission : l'écran du chef attend une réponse (screenAsks attrape aussi sa propre demande et les longues demandes) ; agent
+// nomme le coéquipier demandeur quand le titre « · from the X agent » est visible. captured faux : écran illisible.
+func (c teamCtx) permission() (agent, text string, asking, captured bool) {
 	if c.leadPane == "" {
-		return "", "", false
+		return "", "", false, false
 	}
 	scr, err := teamPanes.Capture(c.leadPane)
 	if err != nil {
-		return "", "", false
+		return "", "", false, false
 	}
-	lines := strings.Split(scr, "\n")
-	// seules les dernières lignes comptent : une demande déjà traitée reste dans l'historique capturé
-	n, start := 0, 0
+	if !screenAsks(scr) {
+		return "", "", false, true
+	}
+	lines := strings.Split(strings.TrimRight(scr, " \n"), "\n")
+	if len(lines) > 80 {
+		lines = lines[len(lines)-80:]
+	}
+	from := len(lines) - 15
+	if from < 0 {
+		from = 0
+	}
 	for i := len(lines) - 1; i >= 0; i-- {
-		if strings.TrimSpace(lines[i]) != "" {
-			n++
-		}
-		if n == 20 {
-			start = i
+		if m := permTitleRe.FindStringSubmatch(lines[i]); m != nil {
+			agent, from = m[1], i
 			break
 		}
 	}
-	lines = lines[start:]
-	for i := len(lines) - 1; i >= 0; i-- {
-		m := permTitleRe.FindStringSubmatch(lines[i])
-		if m == nil {
-			continue
+	t := strings.TrimRight(strings.Join(lines[from:], "\n"), " \n")
+	if len(t) > permCut {
+		t = t[:permCut]
+		for !utf8.ValidString(t) {
+			t = t[:len(t)-1]
 		}
-		rest := lines[i:]
-		for _, l := range rest[1:] {
-			if permOptRe.MatchString(l) {
-				t := strings.TrimRight(strings.Join(rest, "\n"), " \n")
-				if len(t) > permCut {
-					t = t[:permCut]
-					for !utf8.ValidString(t) {
-						t = t[:len(t)-1]
-					}
-				}
-				return m[1], t, true
-			}
-		}
-		break
 	}
-	return "", "", true
+	return agent, t, true, true
 }
 
 // states : état de chaque agent par nom, et le texte d'une demande de permission en attente.
 func (c teamCtx) states() (map[string]string, string) {
 	st := map[string]string{}
-	who, ptxt, captured := c.permission()
+	who, ptxt, asking, captured := c.permission()
 	idle := false
 	for _, id := range teamPanes.Idle() {
 		if id == c.tf.LeadSessionID {
@@ -202,7 +193,7 @@ func (c teamCtx) states() (map[string]string, string) {
 			st[m.Name] = "unknown"
 		case m.Lead && !captured:
 			st[m.Name] = "unknown"
-		case m.Lead && who != "":
+		case m.Lead && asking:
 			st[m.Name] = "waiting"
 		case m.Lead && idle:
 			st[m.Name] = "idle"
@@ -226,9 +217,18 @@ func paneMu(pane string) *sync.Mutex {
 	return mu.(*sync.Mutex)
 }
 
+var errAsking = terr("srv.teams_run.dialogueEnCours")
+
+// deliver recontrôle l'écran du pane sous son verrou, juste avant le collage : un dialogue apparu depuis le relevé d'état serait
+// validé par l'Entrée du collage. errAsking : rien n'est parti, l'appelant met en file.
 func deliver(cfgRoot, team, pane string, m queuedMsg) error {
 	mu := paneMu(pane)
 	mu.Lock()
+	scr, cerr := teamPanes.Capture(pane)
+	if cerr != nil || screenAsks(scr) {
+		mu.Unlock()
+		return errAsking
+	}
 	err := teamPanes.Paste(pane, m.Text)
 	mu.Unlock()
 	if err != nil {
@@ -339,16 +339,19 @@ func teamSend(cfgRoot, name, author, to, text string) (bool, error) {
 	for _, q := range teamQueue[name] {
 		pending = pending || q.To == to // l'ordre d'envoi est conservé
 	}
-	if st[to] != "idle" || pending {
-		defer teamRunMu.Unlock()
-		if len(teamQueue[name]) >= teamQueueMax {
-			return false, terr("srv.teams_run.fileOuverte")
-		}
-		teamQueue[name] = append(teamQueue[name], m)
-		return true, nil
-	}
 	teamRunMu.Unlock()
-	return false, deliver(cfgRoot, name, pane, m)
+	if st[to] == "idle" && !pending {
+		if err := deliver(cfgRoot, name, pane, m); err != errAsking {
+			return false, err
+		}
+	}
+	teamRunMu.Lock()
+	defer teamRunMu.Unlock()
+	if len(teamQueue[name]) >= teamQueueMax {
+		return false, terr("srv.teams_run.fileOuverte")
+	}
+	teamQueue[name] = append(teamQueue[name], m)
+	return true, nil
 }
 
 func teamKey(cfgRoot, name, agent, key string) error {
@@ -361,6 +364,9 @@ func teamKey(cfgRoot, name, agent, key string) error {
 	c, err := teamLoad(cfgRoot, name)
 	if err != nil {
 		return err
+	}
+	if c.leadPane == "" {
+		return terr("srv.teams_run.equipeInactive")
 	}
 	pane, ok := c.target(agent)
 	if !ok {
@@ -377,6 +383,9 @@ func teamScreen(cfgRoot, name, agent string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if c.leadPane == "" {
+		return "", terr("srv.teams_run.equipeInactive")
+	}
 	pane, ok := c.target(agent)
 	if !ok {
 		return "", terr("srv.teams_run.agentInconnu")
@@ -386,7 +395,7 @@ func teamScreen(cfgRoot, name, agent string) (string, error) {
 	}
 	scr, err := teamPanes.Capture(pane)
 	if err != nil {
-		return "", err
+		return "", terr("srv.teams_run.captureImpossible", "W1", err)
 	}
 	lines := strings.Split(strings.TrimRight(scr, " \n"), "\n")
 	if len(lines) > 200 {
@@ -404,7 +413,7 @@ func teamClose(cfgRoot, name string) error {
 		return err
 	}
 	if err := teamPanes.Close(tf.LeadSessionID); err != nil {
-		return err
+		return terr("srv.teams_run.fermetureImpossible", "W1", err)
 	}
 	if err := journalDrop(cfgRoot, name); err != nil {
 		return err

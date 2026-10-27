@@ -261,6 +261,7 @@ func sendToSession(id, text string) error {
 
 // sendToPane colle le texte dans le panneau puis valide (le texte est déjà contrôlé par l'appelant).
 func sendToPane(pane, text string) error {
+	// ponytail: fenêtre résiduelle de 200 ms entre le collage et l'Entrée, pendant laquelle un dialogue pourrait apparaître ; pas de parade côté tmux
 	// Un texte qui finit sur « @chemin » ouvre le menu de fichiers de Claude Code, qui avale Entrée : l'espace final le ferme.
 	if i := strings.LastIndexAny(text, " \n"); strings.HasPrefix(text[i+1:], "@") {
 		text += " "

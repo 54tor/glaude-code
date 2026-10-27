@@ -23,6 +23,8 @@ type fakeIO struct {
 	idle    []string
 	screens map[string]string
 	capErr  map[string]bool
+	script  map[string][]string // captures successives d'un pane avant de retomber sur screens
+	caps    int
 	pastes  [][2]string
 	keys    [][2]string
 	closed  []string
@@ -39,6 +41,11 @@ func (f *fakeIO) Idle() []string { f.mu.Lock(); defer f.mu.Unlock(); return f.id
 func (f *fakeIO) Capture(p string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.caps++
+	if q := f.script[p]; len(q) > 0 {
+		f.script[p] = q[1:]
+		return q[0], nil
+	}
 	if f.capErr[p] {
 		return "", errors.New("capture")
 	}
@@ -303,5 +310,61 @@ func TestConcurrentSendsSerialised(t *testing.T) {
 	wg.Wait()
 	if f.overlap || len(f.pastes) != 8 {
 		t.Fatalf("chevauchement %v, collages %d", f.overlap, len(f.pastes))
+	}
+}
+
+const leadOwnPrompt = ` Bash command
+   rm -rf build
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, and don't ask again
+   3. No, and tell Claude what to do differently (esc)
+`
+
+func TestSendNeverAnswersLeadOwnPrompt(t *testing.T) {
+	root, f := setup(t)
+	f.screens[trLPane] = leadOwnPrompt
+	q, err := teamSend(root, trName, "max", "team-lead", "oui")
+	if err != nil || !q || len(f.pastes) != 0 {
+		t.Fatal(q, err, f.pastes)
+	}
+	v, _ := teamView(root, trName)
+	if v.Permission == "" || len(f.pastes) != 0 {
+		t.Fatalf("permission %q, collages %v", v.Permission, f.pastes)
+	}
+}
+
+func TestSendNeverAnswersLongTeammatePrompt(t *testing.T) {
+	root, f := setup(t)
+	b, _ := os.ReadFile("testdata/teams/permission-prompt-lead-pane.txt")
+	parts := strings.SplitN(string(b), "╌", 2)
+	f.screens[trLPane] = parts[0] + strings.Repeat("   | ligne de diff\n", 40) + "╌" + parts[1]
+	q, err := teamSend(root, trName, "max", "team-lead", "oui")
+	if err != nil || !q || len(f.pastes) != 0 {
+		t.Fatal(q, err, f.pastes)
+	}
+}
+
+func TestPromptAppearsBetweenCheckAndPaste(t *testing.T) {
+	root, f := setup(t)
+	f.script = map[string][]string{trLPane: {"", leadOwnPrompt}}
+	q, err := teamSend(root, trName, "max", "team-lead", "oui")
+	if err != nil || !q || len(f.pastes) != 0 {
+		t.Fatal(q, err, f.pastes)
+	}
+	if n := len(teamQueue[trName]); n != 1 {
+		t.Fatalf("file = %d", n)
+	}
+}
+
+func TestTeamKeyScreenNeedLiveTeam(t *testing.T) {
+	root, f := setup(t)
+	f.panes = map[string]string{}
+	if teamKey(root, trName, "ada", "1") == nil || len(f.keys) != 0 {
+		t.Error("teamKey sur une team périmée")
+	}
+	caps := f.caps
+	if _, err := teamScreen(root, trName, "ada"); err == nil || f.caps != caps {
+		t.Error("teamScreen sur une team périmée")
 	}
 }
