@@ -1,0 +1,19 @@
+{
+  "teams": {
+    "title": "Teams",
+    "composition": "Composition",
+    "lead": "chef",
+    "count": "{{teams}} team(s) · {{mates}} coéquipier(s)",
+    "tooMany": "Plus de {{max}} coéquipiers (limite conseillée par Claude Code).",
+    "goal": "Objectif",
+    "dir": "Dossier",
+    "pickDir": "Dossier de travail de la team",
+    "choose": "Choisir",
+    "launch": "Lancer",
+    "conflicts": "Fichiers d'agent en conflit",
+    "running": "En cours",
+    "members": "{{count}} agents",
+    "live": "live",
+    "none": "Aucune"
+  }
+}

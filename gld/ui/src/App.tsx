@@ -41,6 +41,7 @@ import { boot, useAuth } from "@/lib/auth"
 const Conversation = lazy(() => import("@/components/Conversation").then((m) => ({ default: m.Conversation })))
 const Snippets = retryLazy(() => import("@/components/Snippets").then((m) => ({ default: m.Snippets })))
 const Extensions = retryLazy(() => import("@/components/Extensions").then((m) => ({ default: m.Extensions })))
+const TeamsPage = retryLazy(() => import("@/components/teams/TeamsPage").then((m) => ({ default: m.TeamsPage })))
 const Config = retryLazy(() => import("@/components/Config").then((m) => ({ default: m.Config })))
 const Skills = retryLazy(() => import("@/components/Skills").then((m) => ({ default: m.Skills })))
 const Memory = retryLazy(() => import("@/components/Memory").then((m) => ({ default: m.Memory })))
@@ -297,6 +298,7 @@ function Shell() {
     memory: t("shell.app.title.memory"),
     config: t("shell.app.title.config"),
     extensions: t("shell.app.title.extensions"),
+    teams: t("teams.title"),
     skills: t("shell.app.title.skills"),
     tabs: t("shell.app.title.tabs"),
     workspace: t("ide.title"),
@@ -397,6 +399,8 @@ function Shell() {
             <Skills sel={route.key} home={home} q={qt} onPick={(key) => go({ kind: "skills", key })} onAsk={setAsk} />
           ) : route.kind === "projectConfig" ? (
             <Config key={route.dir} dir={route.dir} home={home} tab="" onTab={() => go({ kind: "config", tab: "permissions" })} ui={{ args, setArgs, choice, setChoice, font, setFont, fontSize, setFontSize }} />
+          ) : route.kind === "teams" ? (
+            <TeamsPage home={home} />
           ) : route.kind === "extensions" ? (
             <Extensions home={home} onAsk={setAsk} />
           ) : route.kind === "config" ? (

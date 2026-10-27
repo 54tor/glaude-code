@@ -1,0 +1,19 @@
+{
+  "teams": {
+    "title": "Teams",
+    "composition": "Composition",
+    "lead": "lead",
+    "count": "{{teams}} team(s) · {{mates}} teammate(s)",
+    "tooMany": "More than {{max}} teammates (limit advised by Claude Code).",
+    "goal": "Goal",
+    "dir": "Folder",
+    "pickDir": "Team working folder",
+    "choose": "Choose",
+    "launch": "Launch",
+    "conflicts": "Conflicting agent files",
+    "running": "Running",
+    "members": "{{count}} agents",
+    "live": "live",
+    "none": "None"
+  }
+}

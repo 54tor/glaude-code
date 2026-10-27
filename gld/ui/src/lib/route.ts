@@ -12,6 +12,7 @@ export type Route =
   | { kind: "workspace"; dir: string } // espace de travail (IDE) d'un dossier absolu
   | { kind: "projectConfig"; dir: string } // permissions et réglages d'un projet (dossier de transcripts de ses sessions)
   | { kind: "skills"; key: string } // clé de skills.go, ex. « u/revue » ou « p/-home-moi-Projets-x/deploy »
+  | { kind: "teams" } // équipes d'agents : composition et lancement
   | { kind: "extensions" } // plugins, skills, hooks et MCP actifs par portée
   | { kind: "config"; tab: string } // onglet affiché ("" : Santé) ; configuration de Claude Code (réglages, hooks, permissions, MCP)
   | { kind: "memory"; key: string } // clé de memory.go, ex. « m/-home-moi-Projets-x/MEMORY.md »
@@ -34,6 +35,7 @@ export function parse(loc: string): Route {
     if (loc.startsWith("/reglages/")) return { kind: "projectConfig", dir: decodeURIComponent(loc.slice(10)) }
     if (loc === "/onglets") return { kind: "tabs" }
     if (loc === "/configuration" || loc.startsWith("/configuration/")) return { kind: "config", tab: decodeURIComponent(loc.slice(15)) }
+    if (loc === "/equipes") return { kind: "teams" }
     if (loc === "/extensions") return { kind: "extensions" }
     if (loc === "/skills" || loc.startsWith("/skills/")) return { kind: "skills", key: dec(loc.slice(8)) }
     if (loc === "/memoire" || loc.startsWith("/memoire/")) return { kind: "memory", key: dec(loc.slice(9)) }
@@ -62,6 +64,8 @@ export function href(r: Route): string {
       return "/espace/" + encodeURIComponent(r.dir)
     case "projectConfig":
       return "/reglages/" + encodeURIComponent(r.dir)
+    case "teams":
+      return "/equipes"
     case "extensions":
       return "/extensions"
     case "config":
