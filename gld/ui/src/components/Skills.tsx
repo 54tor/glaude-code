@@ -83,7 +83,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
     }
     return [...g.values()]
   }, [skills, home, t])
-  const budget = (data?.skills ?? []).filter((s) => !s.manual).reduce((n, s) => n + Math.min(s.chars, 1536), 0)
+  const budget = (data?.skills ?? []).filter((s) => !s.manual).reduce((n, s) => n + s.descTokens, 0)
 
   const save = async () => {
     if (!editing) return
@@ -330,6 +330,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
                         {skill.hidden && <span>{t("skills.skills.hiddenDetail")}</span>}
                         {skill.tools && <span>{t("skills.skills.tools", { tools: skill.tools })}</span>}
                         <span>{t(skill.chars > 1536 ? "skills.skills.charsTruncated" : "skills.skills.chars", { chars: skill.chars })}</span>
+                        <span>{t("skills.skills.tokens", { desc: skill.descTokens, all: skill.tokens })}</span>
                       </p>
                       {fm && <pre className="mb-4 rounded-lg border bg-muted/40 px-3 py-2 text-xs whitespace-pre-wrap text-muted-foreground">{fm}</pre>}
                       <Markdown t={body} />

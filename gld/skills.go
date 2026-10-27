@@ -32,6 +32,8 @@ type Skill struct {
 	ReadOnly    bool    `json:"readOnly,omitempty"`
 	Description string  `json:"description"`
 	Chars       int     `json:"chars"`            // description + when_to_use : ce que la liste des skills coûte en contexte
+	DescTokens  int     `json:"descTokens"`       // estimation en tokens de la description (permanente en contexte, sauf Manual)
+	Tokens      int     `json:"tokens"`           // estimation en tokens du SKILL.md entier (chargé quand le skill est lancé)
 	Manual      bool    `json:"manual,omitempty"` // disable-model-invocation : Claude ne le lance pas seul (description hors contexte)
 	Hidden      bool    `json:"hidden,omitempty"` // user-invocable: false
 	Tools       string  `json:"tools,omitempty"`  // allowed-tools
@@ -176,7 +178,10 @@ func describeSkill(s *Skill, text string) {
 			s.Warn = L("srv.skills.noDescription")
 		}
 	}
-	s.Chars = len([]rune(s.Description + textField(m, "when_to_use")))
+	listed := s.Description + textField(m, "when_to_use")
+	s.Chars = len([]rune(listed))
+	s.DescTokens = estimateTokens(len(cut(listed, skillListCap)))
+	s.Tokens = estimateTokens(len(text))
 	if s.Chars > skillListCap && s.Warn == "" {
 		s.Warn = L("srv.skills.descTooLong")
 	}

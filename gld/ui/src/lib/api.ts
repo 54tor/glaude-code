@@ -47,6 +47,8 @@ export type Skill = {
   readOnly?: boolean
   description: string
   chars: number
+  descTokens: number
+  tokens: number
   manual?: boolean
   hidden?: boolean
   tools?: string
