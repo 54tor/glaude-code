@@ -16,7 +16,7 @@ import { useMention } from "./Mention"
 import { Choose } from "./Choose"
 import { api, type Msg } from "@/lib/api"
 import { useActions } from "./actions"
-import { ImageChips, useImages } from "@/hooks/useImages"
+import { AttachButton, ImageChips, useImages } from "@/hooks/useImages"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { readNdjson } from "@/lib/ndjson"
@@ -217,6 +217,7 @@ export function Composer({
           <ModelPicker value={choice} onChange={setChoice} disabled={running} />
           {turn?.cost ? <span className="text-muted-foreground">{t("conversation.composer.cost", { cost: turn.cost.toFixed(2) })}</span> : null}
           <span className="ml-auto max-md:hidden" />
+          <AttachButton onPick={pics.pick} disabled={running} />
           {running ? (
             <Button size="sm" variant="outline" onClick={stop}>
               <Square /> {t("conversation.composer.stop")}
@@ -411,6 +412,7 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint }: { id: stri
           />
           <span className="ml-auto" />
           <SlashMenu id={id} text={text} onSent={onSent} />
+          <AttachButton onPick={pics.pick} />
           {liveState.st?.thinking && (
             <Button
               size="sm"

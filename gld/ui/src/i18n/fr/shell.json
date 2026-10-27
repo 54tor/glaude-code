@@ -327,6 +327,7 @@
       "uploadFailed": "Envoi de l'image impossible : {{msg}}",
       "attached": "Images jointes",
       "remove": "Retirer {{name}}",
+      "attach": "Joindre une image",
       "uploading": "envoi de l'image…"
     },
     "notice": {

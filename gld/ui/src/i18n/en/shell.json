@@ -327,6 +327,7 @@
       "uploadFailed": "Could not upload the image: {{msg}}",
       "attached": "Attached images",
       "remove": "Remove {{name}}",
+      "attach": "Attach an image",
       "uploading": "uploading the image…"
     },
     "notice": {

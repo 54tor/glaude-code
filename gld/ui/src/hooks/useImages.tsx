@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { X } from "lucide-react"
+import { Paperclip, X } from "lucide-react"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { i18n } from "@/i18n"
@@ -61,6 +61,7 @@ export function useImages() {
         add(files)
       }
     },
+    pick: (files: File[]) => add(files),
     remove: (path: string) => setImages((l) => l.filter((i) => i.path !== path)),
     clear: () => setImages([]),
     // À ajouter au message : une mention « @chemin » par image.
@@ -88,5 +89,26 @@ export function ImageChips({ images, busy, onRemove }: { images: Img[]; busy: bo
       ))}
       {busy && <li className="text-xs text-muted-foreground">{t("shell.images.uploading")}</li>}
     </ul>
+  )
+}
+
+// Bouton « joindre » : sur mobile, le collage et le glisser-déposer n'existent pas.
+export function AttachButton({ onPick, disabled }: { onPick: (files: File[]) => void; disabled?: boolean }) {
+  const { t } = useTranslation()
+  const ref = useRef<HTMLInputElement>(null)
+  return (
+    <>
+      <input ref={ref} type="file" accept={OK.join(",")} multiple hidden onChange={(e) => (onPick(Array.from(e.target.files ?? [])), (e.target.value = ""))} />
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => ref.current?.click()}
+        title={t("shell.images.attach")}
+        aria-label={t("shell.images.attach")}
+        className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+      >
+        <Paperclip className="size-4" />
+      </button>
+    </>
   )
 }
