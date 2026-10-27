@@ -175,11 +175,11 @@ func TestGuestNonWhitelistedForbidden(t *testing.T) {
 	h := guestWeb(t, nil, modeTok)
 	c, csrf := guestIn(t, h)
 	for _, rt := range [][2]string{
-		{"POST", "/session-key"}, {"POST", "/trust-answer"}, {"GET", "/fs-file?path=/etc/passwd"}, {"POST", "/chat"},
+		{"POST", "/session-key"}, {"POST", "/trust-answer"}, {"POST", "/chat"},
 		{"GET", "/auth/me"}, {"GET", "/config"}, {"POST", "/queue-retry"}, {"POST", "/invite-create"}, {"POST", "/share-end"},
 		{"GET", "/api"}, {"GET", "/conv-doc?path=/etc/x.md"}, {"POST", "/session-send"}, {"GET", "/homes"},
 		{"GET", "//conv"}, {"GET", "/conv/"}, {"GET", "/%63onv"}, {"GET", "/conv/../api"}, {"POST", "/conv"}, {"GET", "/queue-add"},
-		{"GET", "/invite/../api"}, {"GET", "/session-screen"},
+		{"GET", "/invite/../api"}, {"GET", "/session-screen"}, {"POST", "/fs-file"}, {"GET", "/fs-file?path=.env"}, {"GET", "/fs-tree?path=.git"}, {"GET", "/ide-search"},
 	} {
 		w := gReq{method: rt[0], path: rt[1], body: `{"id":"` + id1 + `"}`, cookie: c, csrf: csrf}.do(h)
 		if w.Code != 403 || !strings.HasPrefix(w.Header().Get("Content-Type"), "application/json") {
@@ -1161,5 +1161,13 @@ func TestNoStoreWriterFlushes(t *testing.T) {
 	f.Flush()
 	if !rec.Flushed || rec.Header().Get("Cache-Control") != "no-store" || http.NewResponseController(w).Flush() != nil {
 		t.Fatalf("flush : %v %q", rec.Flushed, rec.Header().Get("Cache-Control"))
+	}
+}
+
+func TestGuestSecretPath(t *testing.T) {
+	for p, want := range map[string]bool{"": false, "src/a.go": false, ".git/config": true, "a/.env.local": true, "k/server.PEM": true, "id_rsa": true, "envx": false} {
+		if guestSecretPath(p) != want {
+			t.Errorf("%q: want %v", p, want)
+		}
 	}
 }

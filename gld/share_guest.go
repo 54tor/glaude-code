@@ -54,6 +54,7 @@ var guestStatics = map[string]bool{
 var guestRoutes = map[string]bool{
 	"GET /conv": true, "GET /conv-text": true, "GET /conv-tools": true, "GET /conv-image": true,
 	"GET /session-live": true, "GET /session-state": true, "GET /session-task-output": true,
+	"GET /fs-tree": true, "GET /fs-file": true,
 	"GET /queue": true, "POST /queue-add": true, "POST /queue-rm": true, "GET /guest-me": true, "POST /guest-leave": true,
 	"GET /guest": true, "GET /assets/": true, "GET /icons/": true, "GET /favicon.ico": true, "GET /manifest.webmanifest": true,
 }
@@ -429,6 +430,10 @@ func guestServe(mux *http.ServeMux, sh Share, in Invite, sec, hd string) http.Ha
 				"invite": in.ID, "label": in.label()})
 			return
 		}
+		if (pat == "GET /fs-tree" || pat == "GET /fs-file") && guestSecretPath(r.URL.Query().Get("path")) {
+			guestDeny(w, 403, "srv.share_guest.refuse")
+			return
+		}
 		r2 := r.Clone(r.Context())
 		q := r2.URL.Query()
 		q.Set("id", sh.Session)
@@ -677,4 +682,16 @@ func guestChildMe(r *http.Request, home, sec, hd string) (guestItem, int) {
 		return guestItem{}, http.StatusBadGateway
 	}
 	return it, http.StatusOK
+}
+
+// guestSecretPath : un segment .git, .env*, clé ou certificat ferme le chemin à l'invité (lecture seule du dossier du partage).
+func guestSecretPath(p string) bool {
+	for _, seg := range strings.Split(p, "/") {
+		l := strings.ToLower(seg)
+		if l == ".git" || strings.HasPrefix(l, ".env") || strings.HasPrefix(l, "id_rsa") || strings.HasPrefix(l, "id_ed25519") ||
+			strings.HasSuffix(l, ".pem") || strings.HasSuffix(l, ".key") {
+			return true
+		}
+	}
+	return false
 }
