@@ -150,15 +150,6 @@ func (c teamCtx) target(agent string) (pane string, ok bool) {
 	return "", false
 }
 
-func (c teamCtx) leadName() string {
-	for _, m := range c.tf.Members {
-		if m.Lead {
-			return m.Name
-		}
-	}
-	return ""
-}
-
 // permission : l'écran du chef attend une réponse (screenAsks attrape aussi sa propre demande et les longues demandes) ; agent
 // nomme le coéquipier demandeur quand le titre « · from the X agent » est visible. captured faux : écran illisible.
 func (c teamCtx) permission() (agent, text string, asking, captured bool) {
