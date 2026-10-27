@@ -242,7 +242,7 @@ export type ColdHintProps = { text: string; onNew: () => void }
 function ColdHint({ text, onNew }: ColdHintProps) {
   const { t } = useTranslation()
   return (
-    <p role="status" className="flex items-center gap-2 rounded-md bg-warning/10 px-3 py-1 text-xs text-warning">
+    <p role="status" className="flex items-center gap-2 rounded-md bg-info/10 px-3 py-1 text-xs text-info">
       <Snowflake className="size-3.5 shrink-0" aria-hidden />
       <span className="min-w-0 flex-1">{text}</span>
       <Button size="xs" variant="outline" title={t("conversation.composer.coldNewTitle")} onClick={onNew}>
