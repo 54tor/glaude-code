@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -71,9 +72,30 @@ func (g *gateRig) grant(t *testing.T, u gateUser, home string, rights ...Right) 
 	if !ok {
 		t.Fatalf("home %q inconnu", home)
 	}
-	if err := g.s.Grant(u.id, id, rights...); err != nil {
+	if err := g.rawGrant(u.id, id, rights...); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// rawGrant écrit la ligne d'ACL sans l'invariant « écrire exige lire » de SetRights : la porte doit aussi tenir devant une
+// ligne héritée qui le viole.
+func (g *gateRig) rawGrant(userID int64, homeID string, rights ...Right) error {
+	return g.s.inTx(func(tx *sql.Tx) error {
+		m, err := g.s.rights(tx, userID, homeID)
+		if err != nil {
+			return err
+		}
+		for _, r := range rights {
+			m[r] = true
+		}
+		args := []any{userID, homeID}
+		for _, r := range allRights {
+			args = append(args, m[r])
+		}
+		args = append(args, g.s.aclSig(userID, homeID, m))
+		_, err = tx.Exec(`INSERT OR REPLACE INTO home_acl(user_id,home_id,`+rightCols()+`,sig) VALUES(?,?`+strings.Repeat(",?", len(allRights)+1)+`)`, args...)
+		return err
+	})
 }
 
 func (g *gateRig) req(method, target string, u *gateUser, home, body string) *http.Request {
@@ -491,7 +513,7 @@ func TestGateSyncApplyConfigItems(t *testing.T) {
 		t.Errorf("set:hooks avec config_write : %d", c)
 	}
 	// Le plan exige mem_read sur la destination (il en renvoie des aperçus).
-	g.s.Revoke(u.id, mustHomeID(t, "Pro"), RightMemRead)
+	g.s.SetRights(u.id, mustHomeID(t, "Pro"), nil, []Right{RightMemRead, RightMemWrite, RightConfigWrite})
 	if w := g.do("POST", "/homes-sync-plan", &u, "", `{"from":"","to":"Pro"}`); w.Code != 403 {
 		t.Errorf("plan sans mem_read sur la destination : %d", w.Code)
 	}
@@ -689,6 +711,26 @@ func TestGateDraftsNeedMemRead(t *testing.T) {
 	} {
 		if got := g.do("POST", c.path, c.u, "", `{}`).Code; got != c.code {
 			t.Errorf("%s : %d, attendu %d", c.path, got, c.code)
+		}
+	}
+}
+
+func TestSetRightsWriteNeedsRead(t *testing.T) {
+	g := newGateRig(t)
+	u := g.user(t, "ecrivain", false)
+	id, _ := homeIDFor("")
+	for _, w := range []Right{RightMemWrite, RightConfigWrite} {
+		if err := g.s.Grant(u.id, id, w); err == nil {
+			t.Fatalf("%s sans mem_read accordé", w)
+		}
+		if err := g.s.SetRights(u.id, id, []Right{w, RightMemRead}, nil); err != nil {
+			t.Fatalf("%s avec mem_read : %v", w, err)
+		}
+		if err := g.s.Revoke(u.id, id, RightMemRead); err == nil {
+			t.Fatalf("mem_read retiré alors que %s reste", w)
+		}
+		if err := g.s.SetRights(u.id, id, nil, []Right{w, RightMemRead}); err != nil {
+			t.Fatalf("retrait groupé : %v", err)
 		}
 	}
 }

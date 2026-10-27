@@ -246,7 +246,7 @@ func TestACLAtomic(t *testing.T) {
 	g := newAdminRig(t)
 	root := g.login("root", true)
 	bob := g.login("bob", false)
-	g.s.Grant(bob.id, mainHomeID, RightMemWrite)
+	g.s.Grant(bob.id, mainHomeID, RightMemRead, RightMemWrite)
 	if _, err := g.s.db.Exec(`CREATE TRIGGER no_final BEFORE INSERT ON home_acl WHEN NEW.mem_read=1 AND NEW.mem_write=0 BEGIN SELECT RAISE(ABORT,'refus'); END`); err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +254,7 @@ func TestACLAtomic(t *testing.T) {
 	if w.Code != 500 {
 		t.Fatalf("écriture refusée : %d %s", w.Code, w.Body)
 	}
-	if m, err := g.s.Rights(bob.id, mainHomeID); err != nil || m[RightMemRead] || !m[RightMemWrite] {
+	if m, err := g.s.Rights(bob.id, mainHomeID); err != nil || !m[RightMemRead] || !m[RightMemWrite] {
 		t.Fatalf("application partielle : %v %v", m, err)
 	}
 	g.s.db.Exec(`DROP TRIGGER no_final`)

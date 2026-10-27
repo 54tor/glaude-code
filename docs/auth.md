@@ -86,7 +86,7 @@ Notes :
 - Les droits sont rattachés à l'**identifiant** d'un home, pas à son nom. Supprimer un home supprime ses droits en cascade. Renommer un home via `/homes-save` en omettant son identifiant en crée un nouveau, donc fait perdre ses droits. Échanger les dossiers de deux homes déplace les droits avec les noms.
 - Un administrateur gère les comptes et les droits mais n'a **aucun accès implicite** aux homes : il s'accorde les droits qu'il veut.
 - Le jeton (Bearer) donne tous les droits sur **chaque** home mais jamais l'administration, ni les routes `/auth/*` et `/admin/*`.
-- `POST /memory-draft` et `POST /skill-draft` lisent côté serveur les fichiers que l'appelant désigne et renvoient la réponse du modèle, ce qui peut en restituer le contenu : elles exigent donc `mem_read` en plus de `mem_write` (respectivement `config_write`). Les autres routes `mem_write` n'ont pas cette exigence.
+- `POST /memory-draft` et `POST /skill-draft` lisent côté serveur les fichiers que l'appelant désigne et renvoient la réponse du modèle, ce qui peut en restituer le contenu : elles exigent donc `mem_read` en plus de `mem_write` (respectivement `config_write`). Plus généralement, le serveur refuse d'accorder `mem_write` ou `config_write` à un compte sans `mem_read` sur le même home (`gld user grant` comme l'écran d'administration), et de retirer `mem_read` tant que l'un des deux reste ; les lignes déjà enregistrées qui ne respectent pas cette règle continuent de fonctionner, mais les brouillons leur sont refusés.
 
 ### Ce que les droits protègent, et ce qu'ils ne protègent pas
 

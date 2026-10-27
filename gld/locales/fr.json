@@ -80,6 +80,7 @@
   "srv.auth.csrf": "jeton CSRF manquant ou invalide",
   "srv.auth.defiExpire": "défi expiré ou inconnu : recommencer",
   "srv.auth.dernierFacteur": "impossible de retirer le dernier second facteur du compte",
+  "srv.auth.ecritureSansLecture": "écrire (mem_write) ou modifier les réglages (config_write) exige aussi mem_read",
   "srv.auth.droitInconnu": "droit inconnu : {{.A1}} (droits valides : mem_read, mem_write, config_write, mem_sync, usage_read, sessions_read, exec, fs_read, fs_write)",
   "srv.auth.droitRefuse": "accès refusé : droit insuffisant sur ce dossier de configuration",
   "srv.auth.enrolementEnCours": "un enrôlement est déjà en cours pour ce compte : réessayer",

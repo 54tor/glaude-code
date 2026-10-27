@@ -234,7 +234,7 @@ func TestGrantConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func(r Right) {
 			defer wg.Done()
-			if err := s.Grant(id, "main", r); err != nil {
+			if err := s.Grant(id, "main", r, RightMemRead); err != nil {
 				t.Error(err)
 			}
 		}(r)

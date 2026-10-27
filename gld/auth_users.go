@@ -593,6 +593,10 @@ func (s *authStore) SetRights(userID int64, homeID string, grant, revoke []Right
 		for _, r := range revoke {
 			m[r] = false
 		}
+		// Écrire (mémoire ou réglages) sans lire permettrait de lire par le détour des brouillons du modèle.
+		if (m[RightMemWrite] || m[RightConfigWrite]) && !m[RightMemRead] {
+			return terr("srv.auth.ecritureSansLecture")
+		}
 		args := []any{userID, homeID}
 		for _, r := range allRights {
 			args = append(args, m[r])

@@ -80,6 +80,7 @@
   "srv.auth.csrf": "missing or invalid CSRF token",
   "srv.auth.defiExpire": "challenge expired or unknown: start again",
   "srv.auth.dernierFacteur": "cannot remove the account's last second factor",
+  "srv.auth.ecritureSansLecture": "writing (mem_write) or changing settings (config_write) also requires mem_read",
   "srv.auth.droitInconnu": "unknown right: {{.A1}} (valid rights: mem_read, mem_write, config_write, mem_sync, usage_read, sessions_read, exec, fs_read, fs_write)",
   "srv.auth.droitRefuse": "access denied: insufficient rights on this configuration folder",
   "srv.auth.enrolementEnCours": "an enrolment is already in progress for this account: try again",

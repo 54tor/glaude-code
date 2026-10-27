@@ -892,7 +892,7 @@ func TestMeRightsHomesKeys(t *testing.T) {
 	bob, _ := g.s.AddUser("bob", testPw, false)
 	carol, _ := g.s.AddUser("carol", testPw, false)
 	g.s.Grant(g.uid, mainHomeID, RightMemRead, RightExec)
-	g.s.Grant(g.uid, ids["work"], RightMemWrite)
+	g.s.Grant(g.uid, ids["work"], RightMemRead, RightMemWrite)
 	g.s.Grant(bob, ids["perso"], RightMemRead)
 	k := newSoftKey(t)
 	if err := waRegister(t, g.s, g.uid, k, "x"); err != nil {
@@ -908,7 +908,7 @@ func TestMeRightsHomesKeys(t *testing.T) {
 		return jbody(t, w)
 	}
 	m := me(g.uid)
-	want := map[string]any{mainHomeID: []any{"mem_read", "exec"}, ids["work"]: []any{"mem_write"}}
+	want := map[string]any{mainHomeID: []any{"mem_read", "exec"}, ids["work"]: []any{"mem_read", "mem_write"}}
 	if !reflect.DeepEqual(m["rights"], want) {
 		t.Fatalf("droits = %v", m["rights"])
 	}
