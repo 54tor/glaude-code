@@ -71,20 +71,26 @@ bouton **Envoyer à la session** écrit directement dedans, et vous voyez en dir
 
 ### Partager une session avec un collègue
 
-- Ouvrez le menu de la session (**…**) et choisissez **Partager…**, puis **Générer et copier le lien**. Le lien se
-  colle dans la messagerie ; régénérer le lien rend l'ancien inutilisable.
-- Le lien est **à usage unique** : le premier qui l'ouvre et appuie sur le bouton le réserve. Tout autre navigateur ou
-  appareil est refusé.
+- Ouvrez le menu de la session (**…**) et choisissez **Partager…**, puis **Inviter quelqu'un** (nom facultatif, « Invité
+  N » sinon). Le lien se copie et se colle dans la messagerie. Une session peut avoir **jusqu'à 10 invitations**, chacune
+  avec son propre lien, son nom, son mode (écriture ou lecture seule) et sa révocation ; **Régénérer le lien** rend
+  l'ancien inutilisable sans toucher aux autres invités.
+- Chaque lien est **à usage unique** : le premier qui l'ouvre et appuie sur le bouton le réserve. Tout autre navigateur
+  ou appareil est refusé.
+- Le bouton **Invitations** de l'en-tête (visible dès qu'un partage existe) ouvre l'overlay de toutes les invitations :
+  état de chacune (connecté, absent depuis…, lien non utilisé), mode, lien, révocation, et les **messages d'invités en
+  attente**, que vous pouvez retirer. La pastille compte les invités connectés et les messages en attente, sans
+  notification. Un message d'invité attend que la session soit ouverte, au repos et sans question affichée.
 - L'invité voit toute la conversation, y compris les sorties d'outils et des tâches de fond, et la suit en direct. Il
   peut écrire dans la **file d'envoi** : gld transmet ses messages quand la session est au repos et qu'aucune question
-  n'est affichée à l'écran. Ils arrivent dans la session précédés de `[Invité]`. Il ne peut ni répondre aux demandes de
+  n'est affichée à l'écran. Ils arrivent dans la session précédés de `[Invité <nom>]`. Il ne peut ni répondre aux demandes de
   permission, ni ouvrir de documents, ni voir vos autres sessions, mais il peut citer des fichiers du projet avec `@`.
 - Une session lancée sans demandes de permission (acceptation automatique, bypass) exécute les messages de l'invité
   directement : ne la partagez qu'avec quelqu'un de confiance.
-- Depuis la session, vous pouvez **passer en lecture seule** (l'invité ne peut plus écrire et ses messages encore en file
-  sont supprimés, sauf celui en cours d'envoi ; il peut toujours retirer les siens), **redonner l'écriture**, ou
-  **Mettre fin au partage** : l'invité perd l'accès immédiatement et ses messages en file sont supprimés.
-- Un navigateur peut rejoindre **plusieurs sessions partagées** (une par session et par navigateur) : `/guest` les
+- Par invité, vous pouvez **passer en lecture seule** (il ne peut plus écrire et ses messages encore en file sont
+  supprimés, sauf celui en cours d'envoi ; il peut toujours retirer les siens), **redonner l'écriture** ou **révoquer** :
+  il perd l'accès immédiatement et ses messages en file sont supprimés. **Mettre fin au partage** les révoque tous.
+- Un navigateur peut rejoindre **plusieurs sessions partagées** (une invitation par session et par navigateur) : `/guest` les
   liste (et redirige s'il n'y en a qu'une), un menu **Autres sessions partagées** de la vue invité permet de passer de
   l'une à l'autre.
 - L'invité voit le **titre** de la session : il est repris tel quel du titre de la session et donc divulgué à
@@ -92,7 +98,7 @@ bouton **Envoyer à la session** écrit directement dedans, et vous voyez en dir
 - La file d'envoi est désormais sur le serveur, pour toutes les sessions : elle survit à la fermeture de l'onglet. Un
   message en cours d'envoi au moment d'un redémarrage de gld apparaît **incertain** et n'est jamais renvoyé
   automatiquement ; vous pouvez le relancer depuis la file. Limites : 50 messages par session, 32 Ko par message,
-  10 ajouts par minute pour l'invité.
+  10 ajouts par minute par invitation.
 - Limites à connaître :
   - Sans HTTPS, le cookie de l'invité n'est pas marqué `Secure` : utilisez une adresse HTTPS si vous exposez gld.
   - Le cookie de l'invité dure 30 jours. Après **Quitter**, le lien est consommé : régénérez-en un.
