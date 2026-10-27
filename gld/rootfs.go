@@ -124,3 +124,11 @@ func rWriteAtomic(base, path string, b []byte, mode os.FileMode) error {
 	}
 	return nil
 }
+
+// mkdirTrusted : sous cfgDir(), création confinée ; ailleurs (dossier d'un projet, qui appartient déjà au compte), MkdirAll.
+func mkdirTrusted(path string, perm os.FileMode) error {
+	if _, err := relIn(cfgDir(), path); err == nil {
+		return rMkdirAll(cfgDir(), path, perm)
+	}
+	return os.MkdirAll(path, perm)
+}

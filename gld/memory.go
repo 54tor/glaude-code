@@ -279,7 +279,7 @@ func memWrite(key, text string, keep bool) error {
 			}
 		}
 	}
-	if err := os.MkdirAll(base, 0o755); err != nil {
+	if err := mkdirTrusted(base, 0o755); err != nil {
 		return err
 	}
 	r, err := os.OpenRoot(base)
