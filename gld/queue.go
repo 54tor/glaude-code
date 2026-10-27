@@ -1,0 +1,174 @@
+package main
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+)
+
+const queueMax = 50
+
+var (
+	errQueueFull = errors.New("file pleine")
+	errQueueText = errors.New("texte refusé")
+)
+
+type QItem struct {
+	ID     string `json:"id"`
+	Text   string `json:"text"`
+	Author string `json:"author"`
+	State  string `json:"state"`
+	At     int64  `json:"at"`
+	SentAt int64  `json:"sentAt,omitempty"`
+}
+
+type queueStore struct {
+	mu   sync.Mutex
+	dir  string
+	sess map[string][]QItem
+}
+
+// Un fichier existant mais illisible ou corrompu fait échouer l'ouverture : il ne doit jamais être écrasé.
+func openQueue(dir string) (*queueStore, error) {
+	q := &queueStore{dir: dir, sess: map[string][]QItem{}}
+	b, err := readTrustedIn(dir, filepath.Join(dir, "queue.json"))
+	if errors.Is(err, os.ErrNotExist) {
+		return q, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(b, &q.sess); err != nil {
+		return nil, err
+	}
+	// Un envoi interrompu a pu atteindre la session : on ne le rejoue pas sans l'accord de l'hôte.
+	for _, l := range q.sess {
+		for i := range l {
+			if l[i].State == "sending" {
+				l[i].State = "uncertain"
+			}
+		}
+	}
+	return q, nil
+}
+
+func (q *queueStore) save() error {
+	b, err := json.Marshal(q.sess)
+	if err != nil {
+		return err
+	}
+	return rWriteAtomic(q.dir, filepath.Join(q.dir, "queue.json"), b, 0o600)
+}
+
+func (q *queueStore) Add(session, author, text string) (QItem, error) {
+	if checkSendText(text) != nil || strings.ContainsRune(text, 0) {
+		return QItem{}, errQueueText
+	}
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if len(q.sess[session]) >= queueMax {
+		return QItem{}, errQueueFull
+	}
+	var r [8]byte
+	rand.Read(r[:])
+	it := QItem{ID: hex.EncodeToString(r[:]), Text: text, Author: author, State: "queued", At: time.Now().Unix()}
+	q.sess[session] = append(q.sess[session], it)
+	if err := q.save(); err != nil {
+		q.sess[session] = q.sess[session][:len(q.sess[session])-1]
+		return QItem{}, err
+	}
+	return it, nil
+}
+
+func (q *queueStore) List(session string) []QItem {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return append([]QItem{}, q.sess[session]...)
+}
+
+func (q *queueStore) find(session, id string) int {
+	for i, it := range q.sess[session] {
+		if it.ID == id {
+			return i
+		}
+	}
+	return -1
+}
+
+// remove retire l'item et la clé de session devenue vide ; l'échec d'écriture ne bloque pas : la mémoire reste la référence.
+func (q *queueStore) remove(session string, i int) QItem {
+	l := q.sess[session]
+	it := l[i]
+	if len(l) == 1 {
+		delete(q.sess, session)
+	} else {
+		q.sess[session] = append(l[:i:i], l[i+1:]...)
+	}
+	q.save()
+	return it
+}
+
+func (q *queueStore) Remove(session, itemID string) (QItem, bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	i := q.find(session, itemID)
+	if i < 0 {
+		return QItem{}, false
+	}
+	return q.remove(session, i), true
+}
+
+func (q *queueStore) Retry(session, itemID string) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	i := q.find(session, itemID)
+	if i < 0 || q.sess[session][i].State != "uncertain" {
+		return false
+	}
+	q.sess[session][i].State = "queued"
+	q.sess[session][i].SentAt = 0
+	q.save()
+	return true
+}
+
+func (q *queueStore) Head(session string) (QItem, bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	for _, it := range q.sess[session] {
+		switch it.State {
+		case "queued":
+			return it, true
+		case "sending", "uncertain":
+			return QItem{}, false
+		}
+	}
+	return QItem{}, false
+}
+
+func (q *queueStore) MarkSending(session, itemID string) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if i := q.find(session, itemID); i >= 0 {
+		q.sess[session][i].State = "sending"
+		q.sess[session][i].SentAt = time.Now().Unix()
+		q.save()
+	}
+}
+
+func (q *queueStore) Done(session, itemID string) { q.Remove(session, itemID) }
+
+func (q *queueStore) Sessions() []string {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	out := make([]string, 0, len(q.sess))
+	for s := range q.sess {
+		out = append(out, s)
+	}
+	return out
+}

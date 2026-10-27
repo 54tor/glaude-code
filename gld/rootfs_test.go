@@ -206,3 +206,23 @@ func TestWalkRootSuitUnLienHorsRunAs(t *testing.T) {
 		t.Fatalf("commandes d'un dossier lié : %+v", got)
 	}
 }
+
+func TestQueueNeSuitPasLesLiens(t *testing.T) {
+	dir, out := t.TempDir(), t.TempDir()
+	q, err := openQueue(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	victim := filepath.Join(out, "victime")
+	os.WriteFile(victim, []byte("intact"), 0o600)
+	os.Symlink(victim, filepath.Join(dir, "queue.json"))
+	if _, err := q.Add("s", "host", "x"); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(victim); string(b) != "intact" {
+		t.Fatalf("fichier hors de la base écrasé : %q", b)
+	}
+	if fi, err := os.Lstat(filepath.Join(dir, "queue.json")); err != nil || fi.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("queue.json reste un lien : %v", err)
+	}
+}
