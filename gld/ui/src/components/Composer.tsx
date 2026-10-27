@@ -563,6 +563,7 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
             </p>
           )}
           {prompt.context && <pre className="mb-2 max-h-60 overflow-auto rounded-md border bg-background/70 p-2 font-mono text-xs break-words whitespace-pre-wrap">{prompt.context}</pre>}
+          {prompt.preview && <pre className="mb-2 max-h-60 overflow-auto rounded-md border bg-background/70 p-2 font-mono text-xs leading-tight whitespace-pre">{prompt.preview}</pre>}
           <p className="mb-1.5 font-medium">{prompt.question || t("conversation.composer.answerExpected")}</p>
           <div className="flex flex-col items-stretch gap-1.5">
             {prompt.options.map((o) => (

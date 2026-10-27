@@ -3,11 +3,40 @@
 // checked : case d'une question à choix multiples (la touche chiffre la coche ou la décoche sans bouger le curseur) ; reach : touches
 // pour amener le curseur sur l'option sans la valider (nécessaire avant d'écrire dans une option « Type something »).
 export type Opt = { label: string; keys: string[]; detail?: string; text?: boolean; chat?: boolean; checked?: boolean; reach?: string[] }
-export type Prompt = { question: string; context?: string; options: Opt[]; submit?: string[]; tabs?: { label: string; done: boolean }[] } // tabs : onglets de la question (☒ répondu) ; context : la commande ou le diff d'une demande d'autorisation
+export type Prompt = { question: string; context?: string; preview?: string; options: Opt[]; submit?: string[]; tabs?: { label: string; done: boolean }[] } // tabs : onglets de la question (☒ répondu) ; context : la commande ou le diff d'une demande d'autorisation
 // Options qui attendent une réponse libre (« Type something. », « Chat about this », « No, and tell Claude what to do differently »…).
 const CHAT = /chat about this/i
 const FREE = /type something|chat about this|tell claude|something else|^\d+\.\s*other\b/i
+// Aperçu côte à côte (option.preview) : un cadre ┌─┐ à droite des options, aligné sur toute sa hauteur. On le retire des lignes (sinon il
+// se mêle aux libellés) et on garde son contenu, ligne à ligne, tel que dessiné : c'est l'aperçu de l'option sélectionnée.
+function splitPreview(rows: string[]): { rows: string[]; preview?: string } {
+  const out: string[] = []
+  const panel: string[] = []
+  let col = -1
+  for (const raw of rows) {
+    if (col < 0) {
+      const m = /^(.*?\S)\s{2,}(?=[┌╭]─{2,}[┐╮]\s*$)/.exec(raw)
+      if (m && !panel.length) {
+        col = raw.search(/[┌╭]─{2,}[┐╮]\s*$/)
+        out.push(raw.slice(0, col).trimEnd())
+        continue
+      }
+      out.push(raw)
+      continue
+    }
+    const right = raw.slice(col)
+    out.push(raw.slice(0, col).trimEnd())
+    if (/^[└╰]─*[┘╯]/.test(right)) col = -1
+    else panel.push(right.replace(/^[│┃] ?/, "").replace(/\s*[│┃]\s*$/, ""))
+  }
+  return { rows: out, preview: panel.length ? panel.join("\n").trimEnd() : undefined }
+}
 export function parsePrompt(screen: string): Prompt | null {
+  const { rows, preview } = splitPreview(screen.split("\n"))
+  const p = parseLines(rows)
+  return p && preview ? { ...p, preview } : p
+}
+function parseLines(src: string[]): Prompt | null {
   // Un vrai dialogue du terminal porte une ligne d'aide en bas (« Esc to cancel », « Enter to confirm »…) ; le texte de Claude, lui, peut
   // contenir des listes numérotées ou un « ❯ » sans que rien n'attende de réponse. On ne regarde que le bas de l'écran.
   // Les dialogues d'autorisation peuvent être encadrés (« │ ❯ 1. Yes │ ») : on retire le cadre avant d'analyser.
@@ -15,7 +44,7 @@ export function parsePrompt(screen: string): Prompt | null {
   const gap = new Set<string>()
   let blank = false
   const all: string[] = []
-  for (const raw of screen.split("\n")) {
+  for (const raw of src) {
     const l = raw.replace(/^(\s*)[│┃]\s?/, "$1").replace(/\s*[│┃]\s*$/, "")
     if (!l.trim()) {
       blank = true

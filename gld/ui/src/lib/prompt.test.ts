@@ -402,6 +402,23 @@ describe("parsePrompt", () => {
     expect(p.question).toBe("Ready to submit your answers?")
     expect(p.options.map((o) => o.keys[0])).toEqual(["1", "2"])
   })
+  it("aperçu côte à côte : le cadre ne se mêle pas aux options", () => {
+    const screen = [
+      "←  ☐ C2-1 High  ☐ C2-2 Disque  ✔ Submit  →",
+      "",
+      "C2-1 (High) : un master illisible fait servir le pool sans passkey. Que faire ?",
+      "",
+      "❯ 1. Invalide = fermé             ┌───────────────────────────────┐",
+      "    (Recommended)                 │ Chaîne confirmée :            │",
+      "  2. Refuser le snapshot          │   pool.rs:105  Invalid(None)  │",
+      "  3. Laisser en l'état            └───────────────────────────────┘",
+      "",
+      "Enter to select · ↑/↓ to navigate · Esc to cancel",
+    ].join("\n")
+    const p = parsePrompt(screen)!
+    expect(p.options.map((o) => o.label)).toEqual(["1. Invalide = fermé", "2. Refuser le snapshot", "3. Laisser en l'état"])
+    expect(p.preview).toBe("Chaîne confirmée :\n  pool.rs:105  Invalid(None)")
+  })
   it("liste à sélection : flèches puis Entrée", () => {
     const p = parsePrompt(screens.select)!
     expect(p.options.map((o) => o.keys)).toEqual([["Enter"], ["Down", "Enter"], ["Down", "Down", "Enter"]])
