@@ -421,7 +421,7 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint }: { id: stri
                 if (!r.ok) toast.error(r.out)
               }}
             >
-              <Square /> {t("conversation.composer.interrupt")}
+              <Square className="max-md:hidden" /> {t("conversation.composer.interrupt")}
             </Button>
           )}
           <Button size="sm" onClick={send} disabled={(!text.trim() && !pics.images.length) || busy || !exec}>
@@ -621,7 +621,7 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
       )}
       <div className="flex items-center justify-end gap-1">
         {extra}
-        <Button size="xs" variant="ghost" className="text-muted-foreground" onClick={() => setDebug(!debug)} aria-pressed={debug} title={t("conversation.composer.rawScreenTitle")}>
+        <Button size="xs" variant="ghost" className="text-muted-foreground max-md:[&>svg]:hidden" onClick={() => setDebug(!debug)} aria-pressed={debug} title={t("conversation.composer.rawScreenTitle")}>
           <Bug /> {t("conversation.composer.rawScreen")}
         </Button>
       </div>
@@ -649,7 +649,7 @@ function SlashMenu({ id, text, onSent }: { id: string; text: string; onSent: () 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button size="sm" variant="ghost" title={t("conversation.composer.commandsTitle")}>
+        <Button size="sm" variant="ghost" className="max-md:[&>svg]:hidden" title={t("conversation.composer.commandsTitle")}>
           <Minimize2 /> {t("conversation.composer.commands")}
         </Button>
       </DropdownMenuTrigger>

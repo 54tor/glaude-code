@@ -47,7 +47,7 @@ function Meta({ s, onFolder, extra }: { s: Session; onFolder?: () => void; extra
       {bits.map((b, i) => (
         <span key={i} title={i === 1 ? full(s.mtime) : undefined} className={i === 0 ? (onFolder ? "min-w-0 max-w-full" : "min-w-0 truncate") : "shrink-0 max-md:hidden @max-[60rem]:hidden"}>
           {i === 0 && onFolder ? (
-            <Button variant="outline" size="xs" onClick={onFolder} title={t("shell.common.showFolder")} className="max-w-full justify-start">
+            <Button variant="outline" size="xs" onClick={onFolder} title={t("shell.common.showFolder")} className="max-w-full justify-start max-md:[&>svg]:hidden">
               <FolderOpen /> <span className="truncate">{b}</span>
             </Button>
           ) : (
@@ -499,12 +499,12 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             extra={
               <>
                 {termOn && a.live.has(id) && (
-                  <Button variant="ghost" size="xs" className="text-muted-foreground" onClick={() => setView("terminal")} title={t("conversation.view.modeTitle")}>
+                  <Button variant="ghost" size="xs" className="text-muted-foreground max-md:[&>svg]:hidden" onClick={() => setView("terminal")} title={t("conversation.view.modeTitle")}>
                     <SquareTerminal /> {t("conversation.view.modeTerminal")}
                   </Button>
                 )}
                 {!a.live.has(id) && (
-                  <Button size="xs" variant="ghost" disabled className="text-muted-foreground" title={t("conversation.composer.rawScreenTitle")}>
+                  <Button size="xs" variant="ghost" disabled className="text-muted-foreground max-md:[&>svg]:hidden" title={t("conversation.composer.rawScreenTitle")}>
                     <Bug /> {t("conversation.composer.rawScreen")}
                   </Button>
                 )}

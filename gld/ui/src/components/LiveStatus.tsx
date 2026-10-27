@@ -252,7 +252,7 @@ export function LiveAgents({ live: { st }, dir, id }: { live: Live; dir: string;
   if (!st || subs.length === 0) return null
   return (
     <>
-      <Button size="xs" variant="ghost" onClick={() => setShown(true)} title={t("conversation.live.subagentsTitle")}>
+      <Button size="xs" variant="ghost" className="max-md:[&>svg]:hidden" onClick={() => setShown(true)} title={t("conversation.live.subagentsTitle")}>
         <Bot /> {t("conversation.live.subagents", { n: st.subs.length })}
         {running > 0 && <span className="text-success">{t("conversation.live.runningCount", { running })}</span>}
       </Button>
