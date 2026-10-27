@@ -17,6 +17,7 @@ import { useKeepWarm } from "@/hooks/useKeepWarm"
 import { CreditsButton } from "./Credits"
 import { PairButton } from "./PairDevice"
 import { HomeSwitcher } from "./HomeSwitcher"
+import { DropZone } from "./DropZone"
 import { ProjectList } from "./ProjectList"
 import { ProjectItems, ProjectTree } from "./ProjectTree"
 import { segs } from "@/lib/paths"
@@ -325,6 +326,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             </>
           )}
 
+          <DropZone onDir={a.addDirPath}>
           <Heading
             action={
               <Tip label={t("shell.sidebar.addDirHint")}>
@@ -351,6 +353,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
               onGroup={(vg, key) => p.go({ kind: "group", name: vg.name, key })}
             />
           )}
+          </DropZone>
         </nav>
       </ScrollArea>
 

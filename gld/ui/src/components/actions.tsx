@@ -39,6 +39,7 @@ export type Actions = {
   hit: (id: string) => Hit | undefined
   registeredDirs: string[] // dossiers ajoutés à la main, sans session
   addDir: () => void // choisir un dossier à ajouter à la liste
+  addDirPath: (dir: string) => void // ajouter ce dossier (déposé depuis un projet)
   removeDir: (project: string) => void // retirer un dossier de la liste (ses sessions, s'il en a, ne bougent pas)
   openPerms: (project: string) => void // onglet Permissions de Configuration, sur les réglages de ce dossier
   folder: (project: string) => Group | undefined // dossier de travail et ses sessions

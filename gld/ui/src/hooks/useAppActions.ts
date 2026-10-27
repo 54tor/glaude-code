@@ -290,6 +290,13 @@ export function useAppActions(c: {
       return n
     })
 
+  const addDirPath = async (p: string) => {
+    const r = await api.post("/dirs", { op: "add", dir: p })
+    if (!r.ok) return void toast.error(r.out)
+    await reload()
+    go({ kind: "dir", key: segs(p, home).join("/") })
+  }
+
   const actions: Actions = {
     home,
     root: data?.root ?? "~/.claude/projects",
@@ -301,14 +308,8 @@ export function useAppActions(c: {
     asking: new Set(data?.asking),
     hit: (id) => hitMap?.get(id),
     registeredDirs: data?.dirs ?? [],
-    addDir: () =>
-      void pickDir(i18n.t("shell.act.addDirTitle"), home).then(async (p) => {
-        if (!p) return
-        const r = await api.post("/dirs", { op: "add", dir: p })
-        if (!r.ok) return void toast.error(r.out)
-        await reload()
-        go({ kind: "dir", key: segs(p, home).join("/") })
-      }),
+    addDir: () => void pickDir(i18n.t("shell.act.addDirTitle"), home).then((p) => p && addDirPath(p)),
+    addDirPath,
     removeDir: async (project) => {
       const r = await api.post("/dirs", { op: "remove", dir: project })
       if (!r.ok) return void toast.error(r.out)

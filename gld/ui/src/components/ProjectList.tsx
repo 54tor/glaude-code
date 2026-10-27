@@ -4,6 +4,7 @@ import { ChevronRight, Folder, Layers, Pencil, Trash2, X } from "lucide-react"
 import type { Route } from "@/lib/route"
 import { tilde } from "@/lib/format"
 import { segs } from "@/lib/paths"
+import { DIR_MIME } from "@/lib/dnd"
 import { cn } from "@/lib/utils"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { useActions } from "./actions"
@@ -74,6 +75,8 @@ export function ProjectList({ route, go }: { route: Route; go: (r: Route) => voi
                       <ContextMenu>
                         <ContextMenuTrigger asChild>
                           <button
+                            draggable
+                            onDragStart={(e) => e.dataTransfer.setData(DIR_MIME, d)}
                             onClick={() => go({ kind: "dir", key })}
                             title={d}
                             className={cn(
