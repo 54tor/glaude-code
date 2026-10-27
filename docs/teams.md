@@ -1,6 +1,6 @@
 # Équipes d'agents
 
-Les équipes d'agents natives de Claude Code, pilotées depuis la page `/equipes` de gld : un chef (Atlas) et des coéquipiers. Gld fournit un catalogue de 21 agents et 11 équipes. La composition lancée est l'union des équipes cochées, sans doublon.
+Les équipes d'agents natives de Claude Code, pilotées depuis la page `/equipes` de gld : un chef de projet et des coéquipiers. Gld fournit un catalogue de 21 agents et 11 équipes. Un agent du catalogue a un identifiant de rôle (`testeur`, `chef`…) et un libellé de rôle (« Testeur », « Chef de projet »), sans prénom. La composition lancée est l'union des équipes cochées, sans doublon.
 
 Fonction expérimentale de Claude Code. Rien dans ce document n'a été vérifié de bout en bout, voir [Non vérifié](#non-vérifié).
 
@@ -8,9 +8,13 @@ Fonction expérimentale de Claude Code. Rien dans ce document n'a été vérifi�
 
 `POST /teams-launch` (dossier absolu, objectif de 4000 caractères au plus, ids d'équipes) :
 
-1. écrit les définitions d'agents des coéquipiers dans `<CLAUDE_CONFIG_DIR>/agents/<id>.md` ;
-2. génère un uuid de session ; le nom d'équipe est `session-` + ses 8 premiers caractères ;
-3. ouvre la session du chef dans tmux avec `--teammate-mode=tmux --session-id=<uuid>` et un prompt qui liste les coéquipiers à créer.
+1. tire un prénom par coéquipier avec `gofakeit` (32 coéquipiers au plus par lancement) ;
+2. écrit les définitions d'agents des coéquipiers dans `<CLAUDE_CONFIG_DIR>/agents/<id>.md`, `<id>` étant l'identifiant de rôle ;
+3. génère un uuid de session ; le nom d'équipe est `session-` + ses 8 premiers caractères ;
+4. écrit le roster (prénom -> identifiant de rôle) dans `<CLAUDE_CONFIG_DIR>/gld-teams-journal/<équipe>.roster.json`, avant le lancement ;
+5. ouvre la session du chef dans tmux avec `--teammate-mode=tmux --session-id=<uuid>` et un prompt qui liste les coéquipiers à créer.
+
+Prénoms : tirés à chaque lancement, nom d'exécution du coéquipier = 2 à 12 lettres ASCII minuscules, distincts entre eux, des identifiants de rôle et de `team-lead`. Le prompt nomme le fichier d'agent par son identifiant de rôle et le coéquipier par son prénom. La réponse de `POST /teams-launch` liste `Mates` : `{ID, Name}` (identifiant de rôle, prénom). L'interface affiche « Prénom · Libellé de rôle » (le chef : « Chef de projet ») ; les envois, touches et écrans gardent le nom brut. Sans roster (équipe lancée hors gld, fichier absent ou illisible), seul le prénom est affiché.
 
 Le mode de permissions est celui par défaut de Claude Code : rien n'est approuvé automatiquement.
 
@@ -61,13 +65,16 @@ Constats du spike (Claude Code 2.1.311, `gld/testdata/teams/NOTES.md`) :
 | Fichier | Contenu | Limites |
 |---|---|---|
 | `<CLAUDE_CONFIG_DIR>/gld-teams-journal/<équipe>.jsonl` | messages directs humains | 4 Mio, 500 derniers affichés, supprimé à la fermeture |
+| `<CLAUDE_CONFIG_DIR>/gld-teams-journal/<équipe>.roster.json` | prénom -> identifiant de rôle | 64 entrées, 64 Kio, supprimé à la fermeture et si le lancement échoue |
 | `<CLAUDE_CONFIG_DIR>/gld-teams.json` | agents et équipes personnels | 200 agents, 100 équipes, prompt de 8000 octets |
+
+Le roster est un second état ajouté par gld à côté du journal, écrit avant le lancement. Un lancement interrompu avant sa suppression peut laisser un petit fichier orphelin.
 
 Modifier un élément fourni crée une copie personnelle ; les éléments fournis ne sont jamais écrits. Un agent utilisé par une équipe ne peut pas être supprimé.
 
 La file de messages et le log des boîtes sont en mémoire : perdus au redémarrage de gld. La file n'est vidée que lorsque quelqu'un interroge `GET /team`.
 
-`POST /team-close` ferme la session du chef, puis supprime le journal, le log et la file de l'équipe. Si le chef a déjà quitté (équipe terminée), il n'y a rien à fermer : le nettoyage a lieu quand même, et le bouton reste actif. Si tmux est injoignable, `team-send`, `team-key`, `team-screen` et `team-close` répondent « tmux injoignable » (et non « team inactive ») ; `GET /team` et `GET /teams` répondent normalement, équipe non active.
+`POST /team-close` ferme la session du chef, puis supprime le journal, le roster, le log et la file de l'équipe. Si le chef a déjà quitté (équipe terminée), il n'y a rien à fermer : le nettoyage a lieu quand même, et le bouton reste actif. Si tmux est injoignable, `team-send`, `team-key`, `team-screen` et `team-close` répondent « tmux injoignable » (et non « team inactive ») ; `GET /team` et `GET /teams` répondent normalement, équipe non active.
 
 Agent : le champ `Model` se limite à 64 caractères parmi `A-Za-z0-9._-` (vide admis). Un lancement dont la sortie contient `unknown option`, `unknown argument` ou `unrecognized` est signalé « indisponible : cette version de claude ne gère pas les teams ». L'écran affiche « Répondre dans le terminal » quand le chef attend (ou n'est pas lisible) sans demande lisible.
 
@@ -92,4 +99,5 @@ Agent : le champ `Model` se limite à 64 caractères parmi `A-Za-z0-9._-` (vide 
 - [ ] `isActive:false` dans `config.json` veut dire « coéquipier vivant mais au repos » ; s'il veut dire « parti », les messages aux coéquipiers restent en file.
 - [ ] SIGTERM du chef ferme les panes des coéquipiers ; sinon des panes tmux orphelins restent.
 - [ ] Échap sur la demande d'un coéquipier (option 3, « No, and tell Claude what to do differently ») laisse le chef en attente d'instructions : vérifier que l'écran le montre alors au repos.
+- [ ] Claude Code accepte un prénom tiré en minuscules comme nom d'exécution d'un agent défini par fichier. Les lancements enregistrés ont utilisé `ada`, `hugo`, `zoe`, saisis par le chef dans le prompt, jamais tirés.
 - [ ] Les coéquipiers démarrés depuis `agents/<id>.md` respectent `tools: Read, Grep, Glob`.

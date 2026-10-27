@@ -5,7 +5,7 @@ import { Confirm, type Ask } from "@/components/Confirm"
 import { Button } from "@/components/ui/button"
 import { useCan } from "@/lib/auth"
 import { teamClose, teamGet, teamKey, teamScreen, type TeamView } from "@/lib/teams"
-import { AgentList } from "./AgentList"
+import { AgentList, agentLabel } from "./AgentList"
 import { MessageBox } from "./MessageBox"
 
 const WIDE = 1024
@@ -25,6 +25,7 @@ function useWidth(ref: React.RefObject<HTMLElement | null>) {
 
 function Messages({ view, who }: { view: TeamView; who?: string }) {
   const { t } = useTranslation()
+  const dn = (n: string) => view.Agents.find((a) => a.Name === n)?.Display ?? n
   const all = [
     ...view.Messages.map((m, i) => ({ k: "m" + (m.ID || i), from: m.From, to: m.To, text: m.Text || m.Summary, at: m.At })),
     ...view.Direct.map((m, i) => ({ k: "d" + i, from: m.Author, to: m.To, text: m.Text, at: m.At })),
@@ -37,7 +38,7 @@ function Messages({ view, who }: { view: TeamView; who?: string }) {
       {all.map((m) => (
         <li key={m.k} className="space-y-0.5 px-3 py-2">
           <div className="text-xs text-muted-foreground">
-            <b>{m.from}</b> → {m.to}
+            <b>{dn(m.from)}</b> → {dn(m.to)}
           </div>
           <div className="whitespace-pre-wrap break-words">{m.text}</div>
         </li>
@@ -231,7 +232,7 @@ export function TeamRun({ name }: { name: string }) {
             <div className="rounded-lg border">
               <div className="flex flex-wrap gap-2 border-b p-2">
                 <span className="mr-auto px-1 text-sm">
-                  <b>{mate.Name}</b> · {mate.Role}
+                  {agentLabel(mate)}
                 </span>
                 {act && (
                   <Button size="sm" variant="outline" onClick={() => setTo(mate.Name)}>

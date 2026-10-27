@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { setLang } from "@/i18n"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import * as teams from "@/lib/teams"
@@ -28,12 +28,12 @@ const view = (o: Partial<teams.TeamView> = {}): teams.TeamView => ({
   LeadSessionID: "s1",
   Live: true,
   Agents: [
-    { Name: "Atlas", AgentID: "atlas", Role: "chef de projet", Pane: "%1", State: "idle", Lead: true },
-    { Name: "Ada", AgentID: "ada", Role: "backend", Pane: "%2", State: "working", Lead: false },
+    { Name: "team-lead", Display: "Chef de projet", AgentID: "chef-de-projet", Role: "", Pane: "%1", State: "idle", Lead: true },
+    { Name: "ada", Display: "Ada", AgentID: "backend", Role: "Backend", Pane: "%2", State: "working", Lead: false },
   ],
   Tasks: [{ ID: "1", Title: "Écrire l'API", Status: "in_progress" }],
-  Messages: [{ ID: "m1", From: "Ada", To: "Atlas", Text: "fini", Summary: "", Kind: "", At: 2000, Read: false }],
-  Direct: [{ Author: "Max", To: "Ada", Text: "bonjour Ada", At: 1000 }],
+  Messages: [{ ID: "m1", From: "ada", To: "team-lead", Text: "fini", Summary: "", Kind: "", At: 2000, Read: false }],
+  Direct: [{ Author: "Max", To: "ada", Text: "bonjour Ada", At: 1000 }],
   Queued: 0,
   Permission: "",
   Unknown: [],
@@ -79,6 +79,46 @@ describe("TeamRun", () => {
     await screen.findByRole("heading", { name: NAME })
     expect(screen.queryByRole("region", { name: "Messages" })).toBeNull()
   })
+  const marcus = { Name: "marcus", Display: "Marcus", AgentID: "testeur", Role: "Testeur", Pane: "%3", State: "idle", Lead: false }
+  it("agent : « Prénom · Rôle », prénom seul sans rôle, chef sans rôle", async () => {
+    mockGet(view({ Agents: [...view().Agents, marcus, { ...marcus, Name: "zoe", Display: "Zoe", Role: "" }] }))
+    render(<TeamRun name={NAME} />)
+    await screen.findByRole("heading", { name: NAME })
+    const list = screen.getByRole("region", { name: "Agents" })
+    expect(list.textContent).toContain("Chef de projet")
+    expect(list.textContent).not.toContain("team-lead")
+    const li = (n: string) => within(list).getByText(n).closest("li")!.textContent
+    expect(li("Marcus")).toContain("· Testeur")
+    expect(li("Zoe")).not.toMatch(/·|Testeur/)
+    expect(screen.getByRole("option", { name: "Marcus · Testeur" })).toBeTruthy()
+    expect(screen.getByRole("option", { name: "Zoe" })).toBeTruthy()
+  })
+  it("liste étroite : en-tête du détail « Prénom · Rôle »", async () => {
+    width = 600
+    mockGet(view({ Agents: [...view().Agents, marcus] }))
+    render(<TeamRun name={NAME} />)
+    fireEvent.click(await screen.findByRole("button", { name: /Marcus/ }))
+    expect(screen.getAllByText("Marcus · Testeur").some((e) => e.tagName === "SPAN")).toBe(true)
+  })
+  it("envoi à Marcus : nom brut en argument, option valeur brute", async () => {
+    mockGet(view({ Agents: [...view().Agents, marcus] }))
+    render(<TeamRun name={NAME} />)
+    await screen.findByRole("heading", { name: NAME })
+    expect((screen.getByRole("option", { name: "Marcus · Testeur" }) as HTMLOptionElement).value).toBe("marcus")
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "marcus" } })
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "salut" } })
+    fireEvent.click(screen.getByRole("button", { name: "Envoyer" }))
+    await waitFor(() => expect(teams.teamSend).toHaveBeenCalledWith(NAME, "marcus", "salut"))
+  })
+  it("messages : noms bruts remplacés par Display, auteur humain inchangé", async () => {
+    mockGet(view({ Agents: [...view().Agents, marcus], Messages: [{ ID: "m2", From: "marcus", To: "team-lead", Text: "ok", Summary: "", Kind: "", At: 3000, Read: false }], Direct: [{ Author: "Max", To: "marcus", Text: "hello", At: 1000 }] }))
+    const { container } = render(<TeamRun name={NAME} />)
+    await screen.findByText("hello")
+    const heads = [...container.querySelectorAll("li .text-xs")].map((e) => e.textContent)
+    expect(heads).toContain("Max → Marcus")
+    expect(heads).toContain("Marcus → Chef de projet")
+    expect(container.textContent).not.toMatch(/marcus →|→ marcus|team-lead →|→ team-lead/)
+  })
   it("un message direct montre son auteur", async () => {
     mockGet()
     render(<TeamRun name={NAME} />)
@@ -92,15 +132,15 @@ describe("TeamRun", () => {
     await screen.findByText(payload)
     expect(container.querySelector("img")).toBeNull()
     fireEvent.click(screen.getByRole("button", { name: "Oui" }))
-    await waitFor(() => expect(teams.teamKey).toHaveBeenCalledWith(NAME, "Atlas", "1", expect.any(String)))
+    await waitFor(() => expect(teams.teamKey).toHaveBeenCalledWith(NAME, "team-lead", "1", expect.any(String)))
     fireEvent.click(screen.getByRole("button", { name: "Non" }))
-    await waitFor(() => expect(teams.teamKey).toHaveBeenCalledWith(NAME, "Atlas", "Escape", expect.any(String)))
+    await waitFor(() => expect(teams.teamKey).toHaveBeenCalledWith(NAME, "team-lead", "Escape", expect.any(String)))
   })
   it("Unknown : marqueur format inconnu", async () => {
     mockGet(view({ Unknown: ["foo.json"] }))
     render(<TeamRun name={NAME} />)
     expect(await screen.findByText("format inconnu")).toBeTruthy()
-    expect(screen.getAllByText("Atlas").length).toBeGreaterThan(0)
+    expect(screen.getAllByText("Chef de projet").length).toBeGreaterThan(0)
   })
   it("Live=false : actions désactivées, historique lisible", async () => {
     mockGet(view({ Live: false, Permission: "x" }))
@@ -115,10 +155,10 @@ describe("TeamRun", () => {
     await screen.findByRole("heading", { name: NAME })
     const send = screen.getByRole("button", { name: "Envoyer" }) as HTMLButtonElement
     expect(send.disabled).toBe(true)
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "Ada" } })
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "ada" } })
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "salut" } })
     fireEvent.click(send)
-    await waitFor(() => expect(teams.teamSend).toHaveBeenCalledWith(NAME, "Ada", "salut"))
+    await waitFor(() => expect(teams.teamSend).toHaveBeenCalledWith(NAME, "ada", "salut"))
     expect(await screen.findByText("en file")).toBeTruthy()
   })
   it("envoi refusé : out en texte", async () => {
@@ -129,7 +169,7 @@ describe("TeamRun", () => {
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "x" } })
     fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter" })
     expect(await screen.findByText("<b>trop long</b>")).toBeTruthy()
-    expect(teams.teamSend).toHaveBeenCalledWith(NAME, "Atlas", "x")
+    expect(teams.teamSend).toHaveBeenCalledWith(NAME, "team-lead", "x")
   })
   it("lecteur : aucune action", async () => {
     rights.exec = false
@@ -163,7 +203,7 @@ describe("TeamRun", () => {
     expect(await screen.findByText("Répondre dans le terminal")).toBeTruthy()
   })
   it("compte rendu d'un coéquipier (idle avec texte) affiché comme un message", async () => {
-    mockGet(view({ Messages: [{ ID: "i1", From: "Ada", To: "Atlas", Text: "rapport final", Summary: "", Kind: "idle", At: 3000, Read: false }] }))
+    mockGet(view({ Messages: [{ ID: "i1", From: "ada", To: "team-lead", Text: "rapport final", Summary: "", Kind: "idle", At: 3000, Read: false }] }))
     render(<TeamRun name={NAME} />)
     expect(await screen.findByText("rapport final")).toBeTruthy()
   })
@@ -190,7 +230,7 @@ describe("TeamRun", () => {
     fireEvent.click(oui)
     fireEvent.click(oui)
     expect(teams.teamKey).toHaveBeenCalledTimes(1)
-    expect(teams.teamKey).toHaveBeenCalledWith(NAME, "Atlas", "1", "dlg")
+    expect(teams.teamKey).toHaveBeenCalledWith(NAME, "team-lead", "1", "dlg")
     await act(async () => done({ ok: true } as never))
   })
   it("relève partie avant la touche : Oui/Non restent désactivés", async () => {
@@ -220,7 +260,7 @@ describe("TeamRun", () => {
   })
   it("changement de nom : réponse de l'ancienne team jetée, pas d'action avec l'ancien chef", async () => {
     let relA: (v: never) => void = () => {}
-    const vB = view({ Name: "session-bbbbbbbb", Permission: "dlgB", Agents: [{ Name: "Zed", AgentID: "z", Role: "r", Pane: "%9", State: "idle", Lead: true }] })
+    const vB = view({ Name: "session-bbbbbbbb", Permission: "dlgB", Agents: [{ Name: "zed", Display: "Zed", AgentID: "z", Role: "R", Pane: "%9", State: "idle", Lead: true }] })
     vi.mocked(teams.teamGet).mockImplementation((n) => (n === NAME ? new Promise((r) => (relA = r as never)) : Promise.resolve({ ok: true, view: vB } as never)))
     const { rerender } = render(<TeamRun name={NAME} />)
     rerender(<TeamRun name="session-bbbbbbbb" />)
@@ -229,6 +269,6 @@ describe("TeamRun", () => {
     expect(screen.queryByText("dlgA")).toBeNull()
     expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("session-bbbbbbbb")
     fireEvent.click(screen.getByRole("button", { name: "Oui" }))
-    await waitFor(() => expect(teams.teamKey).toHaveBeenCalledWith("session-bbbbbbbb", "Zed", "1", "dlgB"))
+    await waitFor(() => expect(teams.teamKey).toHaveBeenCalledWith("session-bbbbbbbb", "zed", "1", "dlgB"))
   })
 })

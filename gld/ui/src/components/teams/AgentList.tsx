@@ -9,6 +9,9 @@ export function stateKey(s: string) {
   return s in SYM ? s : "unknown"
 }
 
+// « Prénom · Rôle », prénom seul sans rôle.
+export const agentLabel = (a: AgentView) => (a.Role ? `${a.Display} · ${a.Role}` : a.Display)
+
 export function AgentList({ agents, sel, onPick }: { agents: AgentView[]; sel?: string; onPick?: (name: string) => void }) {
   const { t } = useTranslation()
   return (
@@ -18,9 +21,9 @@ export function AgentList({ agents, sel, onPick }: { agents: AgentView[]; sel?: 
         const body = (
           <>
             <span aria-hidden>{SYM[k]}</span>
-            <span className="font-medium">{a.Name}</span>
+            <span className="font-medium">{a.Display}</span>
             {a.Lead && <span className="text-xs text-muted-foreground">{t("teams.lead")}</span>}
-            <span className="truncate text-muted-foreground">{a.Role}</span>
+            {a.Role && <span className="truncate text-muted-foreground">· {a.Role}</span>}
             <span className="ml-auto text-xs">{t(`teams.state.${k}`)}</span>
           </>
         )

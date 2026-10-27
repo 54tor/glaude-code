@@ -6,9 +6,10 @@ export type Agent = { ID: string; Name: string; Role: string; Access: string; Pr
 export type Team = { ID: string; Name: string; Members: string[]; Builtin: boolean; Base: string }
 export type Catalog = { agents: Agent[]; teams: Team[] }
 export type Composition = { lead: Agent; mates: Agent[]; tooMany: boolean }
-export type Run = { TeamName: string; SessionID: string; Mates: string[]; Conflicts: string[]; TooMany: boolean }
+export type Run = { TeamName: string; SessionID: string; Mates: { ID: string; Name: string }[]; Conflicts: string[]; TooMany: boolean }
 export type TeamBrief = { Name: string; LeadSessionID: string; Live: boolean; Members: number }
-export type AgentView = { Name: string; AgentID: string; Role: string; Pane: string; State: string; Lead: boolean }
+// Name : nom d'exécution brut (clé des actions) ; Display : à afficher.
+export type AgentView = { Name: string; Display: string; AgentID: string; Role: string; Pane: string; State: string; Lead: boolean }
 export type TeamTask = { ID: string; Title: string; Status: string }
 export type InboxMsg = { ID: string; From: string; To: string; Text: string; Summary: string; Kind: string; At: number; Read: boolean }
 export type DirectMsg = { Author: string; To: string; Text: string; At: number }

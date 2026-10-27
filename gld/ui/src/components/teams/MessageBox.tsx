@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
+import { agentLabel } from "./AgentList"
 import { teamSend, type AgentView } from "@/lib/teams"
 import { isSend } from "@/lib/utils"
 
@@ -26,7 +27,7 @@ export function MessageBox({ name, agents, to, setTo, queued, disabled }: { name
         <select aria-label={t("teams.to")} value={to} onChange={(e) => setTo(e.target.value)} className="rounded-md border bg-background px-2 py-1 text-sm" disabled={disabled}>
           {agents.map((a) => (
             <option key={a.Name} value={a.Name}>
-              {a.Name}
+              {agentLabel(a)}
             </option>
           ))}
         </select>
