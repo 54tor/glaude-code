@@ -71,6 +71,9 @@ func routesIDE(mux *http.ServeMux) {
 		}
 		entries := make([]ideEntry, 0, len(des))
 		for _, de := range des {
+			if de.Name() == ".git" {
+				continue
+			}
 			e := ideEntry{Name: de.Name(), Type: "file"}
 			switch {
 			case de.Type()&fs.ModeSymlink != 0:

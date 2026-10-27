@@ -137,3 +137,13 @@ func TestFsReadRequiresFsRead(t *testing.T) {
 		}
 	}
 }
+
+func TestFsTreeHidesDotGit(t *testing.T) {
+	h, _, proj := web(t)
+	os.Mkdir(filepath.Join(proj, ".git"), 0o755)
+	os.WriteFile(filepath.Join(proj, "a.txt"), []byte("x"), 0o644)
+	_, m, raw := call(t, h, "GET", fsq("/fs-tree", proj, ""), "")
+	if got := strings.Join(names(m), ","); got != "file:a.txt" {
+		t.Fatal(got, raw)
+	}
+}
