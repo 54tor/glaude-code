@@ -1,0 +1,12 @@
+[
+  {
+    "from": "ada",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"ada\",\"timestamp\":\"2026-10-27T05:56:30.073Z\",\"idleReason\":\"available\",\"result\":\"`/tmp/gld-spike-perm.txt` est créé avec « x », sans demande de permission.\"}",
+    "timestamp": "2026-10-27T05:56:30.073Z",
+    "color": "blue",
+    "msgV": 1,
+    "msg_id": "fd8254eb-7300-4571-b9be-6a23ec728570",
+    "type": "message",
+    "read": false
+  }
+]

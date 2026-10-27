@@ -1,0 +1,66 @@
+{
+  "name": "session-9d087000",
+  "createdAt": 1793080504323,
+  "leadAgentId": "team-lead@session-9d087000",
+  "leadSessionId": "9d087000-13eb-4519-9823-771e3a943e4c",
+  "leadProcess": {
+    "pid": 3762253,
+    "pidSpace": "4000D#pid:[4026531836]",
+    "claimedAt": 1793080504323,
+    "procStart": "4290448"
+  },
+  "members": [
+    {
+      "agentId": "team-lead@session-9d087000",
+      "name": "team-lead",
+      "agentType": "team-lead",
+      "joinedAt": 1793080504323,
+      "tmuxPaneId": "leader",
+      "cwd": "/home/USER/proj",
+      "subscriptions": [],
+      "backendType": "in-process"
+    },
+    {
+      "agentId": "ada@session-9d087000",
+      "name": "ada",
+      "color": "blue",
+      "joinedAt": 1793080536682,
+      "tmuxPaneId": "%67",
+      "subscriptions": [],
+      "model": "sonnet",
+      "prompt": "Tu es ada, coéquipière de hugo. Étapes, strictement minimales :\n1. Écris le fichier /home/USER/proj/9d087000-13eb-4519-9823-771e3a943e4c/scratchpad/hello.txt avec le contenu exact : hi\n2. Envoie EXACTEMENT UN message à hugo avec SendMessage (to: \"hugo\") : \"hello.txt est écrit\". N'en envoie pas d'autre, même si hugo répond.\n3. Réponds en une ligne puis arrête-toi. Ne touche à rien d'autre.",
+      "planModeRequired": false,
+      "cwd": "/home/USER/proj",
+      "backendType": "tmux",
+      "isActive": false
+    },
+    {
+      "agentId": "hugo@session-9d087000",
+      "name": "hugo",
+      "color": "green",
+      "joinedAt": 1793080536684,
+      "tmuxPaneId": "%68",
+      "subscriptions": [],
+      "model": "sonnet",
+      "prompt": "Tu es hugo, coéquipier de ada. Étapes, strictement minimales :\n1. Attends que le fichier /home/USER/proj/9d087000-13eb-4519-9823-771e3a943e4c/scratchpad/hello.txt existe (Bash : until [ -f <chemin> ]; do sleep 1; done, avec timeout 60 s), puis lis-le une seule fois.\n2. Envoie EXACTEMENT UN message à ada avec SendMessage (to: \"ada\") : \"j'ai lu hello.txt : <contenu>\". N'en envoie pas d'autre, même si ada écrit.\n3. Réponds en une ligne puis arrête-toi. Ne touche à rien d'autre.",
+      "planModeRequired": false,
+      "cwd": "/home/USER/proj",
+      "backendType": "tmux",
+      "isActive": false
+    },
+    {
+      "agentId": "zoe@session-9d087000",
+      "name": "zoe",
+      "color": "yellow",
+      "joinedAt": 1793080654235,
+      "tmuxPaneId": "%70",
+      "subscriptions": [],
+      "model": "sonnet",
+      "prompt": "Tu es zoe. Exécute uniquement cette commande avec l'outil Bash : echo y > /tmp/gld-spike-perm2.txt\nNe contourne aucune demande de permission (pas de dangerouslyDisableSandbox, pas d'autre méthode). Si la commande est refusée ou bloquée, dis-le tel quel. Ne fais rien d'autre. Réponds en une ligne puis arrête-toi.",
+      "planModeRequired": false,
+      "cwd": "/home/USER/proj",
+      "backendType": "tmux",
+      "isActive": false
+    }
+  ]
+}
