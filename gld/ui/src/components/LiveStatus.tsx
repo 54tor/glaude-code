@@ -116,6 +116,14 @@ export function LiveBar({ live: { st, open }, id }: { live: Live; id: string }) 
               <span className="min-w-0 truncate">{s.activity}</span>
             </div>
           ))}
+        {st.tasks
+          ?.filter((x) => x.status === "running")
+          .map((x) => (
+            <div key={x.id} className="flex min-w-0 basis-full items-center gap-2 pl-3 text-xs text-muted-foreground" title={x.desc}>
+              <Loader2 className="size-3.5 shrink-0 animate-spin text-success" />
+              <span className="min-w-0 truncate font-medium text-foreground">{x.desc || x.id}</span>
+            </div>
+          ))}
       </div>
     </div>
   )
