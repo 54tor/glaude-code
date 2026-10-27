@@ -14,7 +14,9 @@ const FIELDS: Record<string, string> = {
   note: "conversation.tagged.fields.note",
 }
 
-export const isTagged = (t: string) => /^\s*<[a-z][a-z-]*[\s>]/.test(t) && !/^\s*<pasted_content/.test(t)
+const KNOWN = /<(?:teammate-message|task-notification)[\s>][\s\S]*?<\/(?:teammate-message|task-notification)>/
+// Début de message balisé quelconque, ou balise connue glissée plus loin dans le texte (ex. après un tiret de liste).
+export const isTagged = (t: string) => (/^\s*<[a-z][a-z-]*[\s>]/.test(t) && !/^\s*<pasted_content/.test(t)) || KNOWN.test(t)
 
 function Card({ tag, attrs, body }: { tag: string; attrs: string; body: string }) {
   const { t } = useTranslation()
