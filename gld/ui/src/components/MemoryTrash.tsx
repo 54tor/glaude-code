@@ -23,7 +23,7 @@ export function TrashList({ trash, current, onPick, onPurgeAll }: { trash: Trash
           {t("memory.trash.empty")}
         </Button>
       </div>
-      <ul className="space-y-px">
+      <ul className="ml-[15px] space-y-px border-l pl-1">
         {trash.map((t) => (
           <li key={t.id}>
             <button

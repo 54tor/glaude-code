@@ -63,7 +63,7 @@ export function Section({
   const open = pref ? pref === "1" : files.some((f) => f.key === sel)
   const sortBtn = "size-5 md:opacity-0 md:group-hover/sec:opacity-100 md:focus-visible:opacity-100"
   return (
-    <section className="group/sec mb-3">
+    <section className="group/sec mb-2">
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <div className="flex items-center gap-1.5 px-2 py-1 text-xs font-semibold text-muted-foreground" title={title}>
@@ -142,17 +142,18 @@ export function Section({
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
-      <ul className={cn("space-y-1.5 px-1", !open && "hidden")}>
+      {/* Trait de filiation comme dans l'arbre de la nav : les fichiers sont rattachés à leur section. */}
+      <ul className={cn("ml-[15px] space-y-px border-l pl-1", !open && "hidden")}>
         {files.map((f) => (
           <ContextMenu key={f.key}>
             <ContextMenuTrigger asChild>
-              <li className="group flex items-center gap-1.5 rounded-lg border bg-card py-1 data-[state=open]:bg-muted">
+              <li className="group flex items-center gap-1.5 rounded-md data-[state=open]:bg-muted">
                 <Checkbox
                   checked={picked.has(f.key)}
                   onCheckedChange={() => onToggle(f.key)}
                   aria-label={t("memory.section.selectAria", { name: f.name })}
                   className={cn(
-                    "ml-1 transition-opacity",
+                    "transition-opacity",
                     picked.size === 0 && "md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
                   )}
                 />
@@ -160,7 +161,7 @@ export function Section({
                   onClick={() => onPick(f.key)}
                   className={cn(
                     "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors",
-                    f.key === sel ? "bg-accent font-medium" : "hover:bg-muted"
+                    f.key === sel ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
                 >
                   {typeOf(f.type) ? (
