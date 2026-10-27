@@ -89,6 +89,7 @@ func relay(out io.Reader, emit func(chatEvent)) (sawResult bool) {
 				MaxRetries            int     `json:"max_retries"`
 				DelayMs               int     `json:"retry_delay_ms"`
 				Status                int     `json:"error_status"`
+				Level, Content        string
 			}
 			if json.Unmarshal(b, &h) == nil {
 				switch h.Type {
@@ -99,6 +100,8 @@ func relay(out io.Reader, emit func(chatEvent)) (sawResult bool) {
 				case "system":
 					if h.Subtype == "api_retry" && (h.Status == 429 || h.Status == 529) {
 						emit(chatEvent{Note: L("srv.chat.apiRetry", "A1", strconv.Itoa(h.Status), "A2", strconv.Itoa(h.Attempt), "A3", strconv.Itoa(h.MaxRetries), "A4", strconv.Itoa((h.DelayMs+999)/1000))})
+					} else if h.Subtype == "informational" && h.Level == "warning" && strings.TrimSpace(h.Content) != "" {
+						emit(chatEvent{Note: cut(strings.TrimSpace(h.Content), 500)})
 					}
 				case "result":
 					sawResult = true

@@ -76,3 +76,11 @@ func TestMemeDossier(t *testing.T) {
 		t.Fatal("globalClaude")
 	}
 }
+
+func TestRelayInformationalWarning(t *testing.T) {
+	var evs []chatEvent
+	relay(strings.NewReader(`{"type":"system","subtype":"informational","level":"warning","content":"safeguards flagged this session"}`+"\n"+`{"type":"system","subtype":"informational","level":"info","content":"x"}`+"\n"), func(e chatEvent) { evs = append(evs, e) })
+	if len(evs) != 1 || evs[0].Note != "safeguards flagged this session" {
+		t.Fatalf("evs = %+v", evs)
+	}
+}
