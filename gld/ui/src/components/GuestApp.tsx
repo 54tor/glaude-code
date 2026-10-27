@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Loader2, LogOut, X } from "lucide-react"
+import { ArrowUpToLine, Loader2, LogOut, Wrench, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { api, HttpError, type LiveState, type Msg, type QItem } from "@/lib/api"
@@ -12,6 +12,8 @@ import { Message } from "./Message"
 // qu'utilisent la barre latérale, Conversation ou le composeur hôte (api, info, git, docs, envoi direct) n'est refusée sans être appelée.
 type Me = { id: string; dir: string; mode: "rw" | "ro" }
 type Phase = "loading" | "on" | "ended" | "bye"
+type Hist = { msgs: Msg[]; start: number; more: boolean }
+const PAGE = 200
 
 // 401/403 ou réponse non JSON : le serveur traite la requête comme celle d'un hôte, donc le partage n'existe plus.
 const over = (e: unknown) => (e instanceof HttpError && (e.status === 401 || e.status === 403)) || e instanceof SyntaxError
@@ -20,21 +22,32 @@ export function GuestApp() {
   const { t } = useTranslation()
   const [phase, setPhase] = useState<Phase>("loading")
   const [me, setMe] = useState<Me | null>(null)
-  const [msgs, setMsgs] = useState<Msg[]>([])
+  const [h, setH] = useState<Hist>({ msgs: [], start: 0, more: false })
+  const [tools, setTools] = useState(false)
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  const hRef = useRef(h)
+  const seq = useRef(0)
+  const sending = useRef(false)
   const [st, setSt] = useState<LiveState | null>(null)
   const [queue, setQueue] = useState<QItem[]>([])
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
   const end = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    hRef.current = h
+  })
 
-  const readMe = useCallback(async () => {
+  const readMe = useCallback(async (): Promise<boolean> => {
     try {
       const r = await api.guestMe()
       setAuth({ state: "open", csrf: r.csrf })
       setMe((p) => (p && p.id === r.id && p.mode === r.mode ? p : { id: r.id, dir: r.dir, mode: r.mode }))
       setPhase((p) => (p === "loading" ? "on" : p))
+      return false
     } catch (e) {
-      if (over(e)) setPhase("ended")
+      if (!over(e)) return false
+      setPhase("ended")
+      return true
     }
   }, [])
 
@@ -54,46 +67,66 @@ export function GuestApp() {
   useEffect(() => {
     if (!active || !id) return
     let alive = true
-    const load = () =>
-      Promise.all([api.conv({ dir, id }, false, { limit: 200 }), api.sessionLive(dir, id), api.queue(id)]).then(
+    const load = () => {
+      const gen = seq.current
+      return Promise.all([api.conv({ dir, id }, tools, { limit: Math.max(PAGE, hRef.current.msgs.length + 50) }), api.sessionLive(dir, id), api.queue(id)]).then(
         ([c, l, q]) => {
           if (!alive) return
-          setMsgs(c.msgs)
+          if (gen === seq.current) {
+            const next = { msgs: c.msgs, start: c.start ?? 0, more: !!c.more }
+            setH((p) => (JSON.stringify(p) === JSON.stringify(next) ? p : next))
+          }
           setSt((p) => (JSON.stringify(p) === JSON.stringify(l) ? p : l))
           setQueue(q.items ?? [])
         },
         (e) => alive && over(e) && setPhase("ended")
       )
+    }
     void load()
     const timer = setInterval(() => document.visibilityState === "visible" && void load(), 2000)
     return () => {
       alive = false
       clearInterval(timer)
     }
-  }, [active, id, dir])
+  }, [active, id, dir, tools])
 
-  useEffect(() => end.current?.scrollIntoView?.({ block: "end" }), [msgs.length])
+  const older = async () => {
+    if (loadingOlder || !h.more) return
+    setLoadingOlder(true)
+    try {
+      const r = await api.conv({ dir, id }, tools, { limit: PAGE, before: h.start })
+      seq.current++
+      setH((p) => ({ msgs: [...r.msgs, ...p.msgs], start: r.start ?? 0, more: !!r.more }))
+    } catch (e) {
+      if (over(e)) setPhase("ended")
+    }
+    setLoadingOlder(false)
+  }
+
+  useEffect(() => end.current?.scrollIntoView?.({ block: "end" }), [h.msgs.length])
 
   const rw = me?.mode === "rw"
   const send = async () => {
     const v = text.trim()
-    if (!v || busy || !rw) return
+    if (!v || sending.current || !rw) return
+    sending.current = true
     setBusy(true)
     const r = await api.queueAdd(id, v)
+    sending.current = false
     setBusy(false)
-    if (!r.ok) return void toast.error(r.out)
+    if (!r.ok) return void ((await readMe()) || toast.error(r.out))
     setText("")
     api.queue(id).then((q) => setQueue(q.items ?? []), () => {})
   }
   const remove = async (q: QItem) => {
     const r = await api.queueRm(id, q.id)
-    if (!r.ok) toast.error(r.out)
+    if (!r.ok && !(await readMe())) toast.error(r.out)
     api.queue(id).then((x) => setQueue(x.items ?? []), () => {})
   }
   const leave = async () => {
     const r = await api.guestLeave()
     if (r.ok) setPhase("bye")
-    else toast.error(r.out)
+    else if (!(await readMe())) toast.error(r.out)
   }
 
   if (phase === "ended" || phase === "bye")
@@ -114,14 +147,24 @@ export function GuestApp() {
   return (
     <main className="mx-auto flex h-svh max-w-3xl flex-col px-4">
       <header className="flex items-center justify-between gap-2 py-3">
-        <h1 className="text-sm font-semibold">{t("conversation.guest.title")}</h1>
+        <h1 className="min-w-0 flex-1 text-sm font-semibold">{t("conversation.guest.title")}</h1>
+        <Button size="sm" variant={tools ? "secondary" : "ghost"} aria-pressed={tools} onClick={() => setTools(!tools)}>
+          <Wrench /> {t("conversation.view.toolsShown")}
+        </Button>
         <Button size="sm" variant="outline" onClick={() => void leave()}>
           <LogOut /> {t("conversation.guest.leave")}
         </Button>
       </header>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-3">
-        {msgs.map((m, i) => (
-          <Message key={`${m.o ?? i}-${i}`} m={m} conv={{ dir, id, guest: true }} />
+        {h.more && (
+          <div className="flex justify-center">
+            <Button size="sm" variant="outline" disabled={loadingOlder} onClick={() => void older()}>
+              {loadingOlder ? <Loader2 className="animate-spin" /> : <ArrowUpToLine />} {t("conversation.view.loadOlder")}
+            </Button>
+          </div>
+        )}
+        {h.msgs.map((m, i) => (
+          <Message key={`${m.o ?? i}-${i}`} m={m} conv={{ dir, id, tools, guest: true }} />
         ))}
         <LiveBar live={{ st, open: true }} id={id} />
         <div ref={end} />
