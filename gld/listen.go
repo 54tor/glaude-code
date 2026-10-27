@@ -49,6 +49,11 @@ func takeToken(local bool) (token string, generated bool, err error) {
 	token = os.Getenv("GLD_WEB_TOKEN")
 	os.Unsetenv("GLD_WEB_TOKEN")
 	os.Unsetenv(childTokenEnv)
+	if childToken != "" {
+		if err := hideEnviron(); err != nil {
+			journal("hideEnviron : %v", err)
+		}
+	}
 	if token != "" {
 		return token, false, checkToken(token)
 	}
