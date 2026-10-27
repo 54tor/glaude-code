@@ -248,7 +248,8 @@ export function Memory({
   // Fusion par Claude : le serveur rédige le prompt ; on le copie, ou on l'ouvre dans la fenêtre de saisie (relecture, modèle) avant de lancer la session.
   const merge = async (launch: boolean) => {
     const keys = [...picked]
-    const r = (await api.post("/memory-merge", { keys, launch: false })) as { ok: boolean; out: string; prompt?: string }
+    const draft = async (out?: string) => (await api.post("/memory-merge", { keys, out, launch: false })) as { ok: boolean; out: string; prompt?: string }
+    const r = await draft()
     if (!r.ok || !r.prompt) return void toast.error(r.out.trim() || t("memory.main.failed"))
     if (!launch) return void copy(r.prompt, "memory.lib.copiedMergePrompt")
     onCompose({
@@ -259,8 +260,14 @@ export function Memory({
       initial: r.prompt,
       send: t("memory.main.mergeSend"),
       choice: { model: "haiku", effort: "" }, // tâche mécanique
-      run: async (text, c) => {
-        const m = (await api.post("/memory-merge", { keys, launch: true, prompt: text, args: withChoice(args, c) })) as { ok: boolean; out: string }
+      outputs: keys.map((k) => ({ key: k, label: all.find((x) => x.key === k)?.name ?? k })),
+      reprompt: async (out) => {
+        const d = await draft(out)
+        if (!d.ok || !d.prompt) return void toast.error(d.out.trim() || t("memory.main.failed"))
+        return d.prompt
+      },
+      run: async (text, c, _t, out) => {
+        const m = (await api.post("/memory-merge", { keys, out, launch: true, prompt: text, args: withChoice(args, c) })) as { ok: boolean; out: string }
         ;(m.ok ? toast.success : toast.error)(m.out.trim() || (m.ok ? t("memory.main.mergeStarted") : t("memory.main.failed")))
         if (m.ok) setPicked(new Set())
         return m.ok

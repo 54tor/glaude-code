@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -347,11 +348,20 @@ func memDelete(key string, trash bool) error {
 	return nil
 }
 
+const mergeMax = 100
+
 // mergePrompt : la demande de fusion faite à Claude, et le dossier où la lancer (le projet concerné, sinon ~).
-func mergePrompt(keys []string) (string, string, error) {
-	if len(keys) < 2 || len(keys) > 20 {
-		return "", "", terr("srv.memory.choisisDeAFichiers")
+// out : le document de sortie, l'un des fichiers choisis (vide : le premier).
+func mergePrompt(keys []string, out string) (string, string, error) {
+	if len(keys) < 2 || len(keys) > mergeMax {
+		return "", "", terr("srv.memory.choisisDeAFichiers", "A1", mergeMax)
 	}
+	if out == "" {
+		out = keys[0]
+	} else if !slices.Contains(keys, out) {
+		return "", "", terr("srv.memory.documentDeSortieInvalide")
+	}
+	outPath := ""
 	home, _ := os.UserHomeDir()
 	cwd := ""
 	var b strings.Builder
@@ -366,6 +376,9 @@ func mergePrompt(keys []string) (string, string, error) {
 			return "", "", terr("srv.memory.introuvable", "A1", p)
 		}
 		b.WriteString("- " + p + "\n")
+		if k == out {
+			outPath = p
+		}
 		if d, _, ok := strings.Cut(k[2:], "/"); cwd == "" && (k[0] == 'm' || k[0] == 'p') && ok {
 			if c := projectCwd(d); c != "" {
 				if fi, err := os.Stat(c); err == nil && fi.IsDir() {
@@ -374,7 +387,7 @@ func mergePrompt(keys []string) (string, string, error) {
 			}
 		}
 	}
-	b.WriteString("\n" + L("prompt.mergeRules") + "\n")
+	b.WriteString("\n" + L("prompt.mergeRules", "A1", outPath) + "\n")
 	if cwd == "" { // règles globales : le dossier de configuration, plutôt que ~ tout entier (autre dossier à approuver)
 		if c := filepath.Join(home, ".claude"); isDirPath(c) {
 			cwd = c

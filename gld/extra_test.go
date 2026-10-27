@@ -277,14 +277,24 @@ func TestMergePrompt(t *testing.T) {
 	put(t, filepath.Join(cfg, "projects", "-p", id1+".jsonl"), `{"cwd":"`+proj+`"}`+"\n", old)
 	put(t, filepath.Join(cfg, "projects", "-p", "memory", "a.md"), "a", old)
 	put(t, filepath.Join(cfg, "projects", "-p", "memory", "b.md"), "b", old)
-	p, cwd, err := mergePrompt([]string{"m/-p/a.md", "m/-p/b.md"})
+	p, cwd, err := mergePrompt([]string{"m/-p/a.md", "m/-p/b.md"}, "")
 	if err != nil || cwd != proj || !strings.Contains(p, filepath.Join(cfg, "projects", "-p", "memory", "b.md")) {
 		t.Fatal(p, cwd, err)
 	}
-	if _, _, err := mergePrompt([]string{"m/-p/a.md"}); err == nil {
+	a, b := filepath.Join(cfg, "projects", "-p", "memory", "a.md"), filepath.Join(cfg, "projects", "-p", "memory", "b.md")
+	if !strings.Contains(p, "dans "+a+",") {
+		t.Fatal("sortie par défaut : le premier fichier", p)
+	}
+	if p, _, err = mergePrompt([]string{"m/-p/a.md", "m/-p/b.md"}, "m/-p/b.md"); err != nil || !strings.Contains(p, "dans "+b+",") {
+		t.Fatal("sortie choisie", p, err)
+	}
+	if _, _, err = mergePrompt([]string{"m/-p/a.md", "m/-p/b.md"}, "m/-p/c.md"); err == nil {
+		t.Fatal("sortie hors sélection acceptée")
+	}
+	if _, _, err := mergePrompt([]string{"m/-p/a.md"}, ""); err == nil {
 		t.Fatal("un seul fichier accepté")
 	}
-	if _, _, err := mergePrompt([]string{"m/-p/a.md", "m/-p/../x.md"}); err == nil {
+	if _, _, err := mergePrompt([]string{"m/-p/a.md", "m/-p/../x.md"}, ""); err == nil {
 		t.Fatal("clé invalide acceptée")
 	}
 }

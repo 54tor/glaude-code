@@ -35,8 +35,10 @@ export type ComposeAsk = {
   initial?: string
   send: string // libellé du bouton
   choice: Choice // modèle et effort proposés par défaut (Réglages)
+  outputs?: { key: string; label: string }[] // fusion : le document de sortie ; en changer régénère le texte par reprompt
+  reprompt?: (output: string) => Promise<string | undefined>
   targets?: Target[] // plusieurs : un menu pour choisir le dossier (le premier par défaut)
-  run: (text: string, choice: Choice, target?: Target) => Promise<boolean> // false : la fenêtre reste ouverte, le texte n'est pas perdu
+  run: (text: string, choice: Choice, target?: Target, output?: string) => Promise<boolean> // false : la fenêtre reste ouverte, le texte n'est pas perdu
 }
 
 // Saisie d'un message, éventuellement composé à partir de snippets et d'entrées de mémoire.
@@ -55,6 +57,7 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
   const mention = useMention(text, setText)
   const [choice, setChoice] = useState(ask.choice)
   const [target, setTarget] = useState(0)
+  const [output, setOutput] = useState(ask.outputs?.[0]?.key)
   const [custom, setCustom] = useState<Target | null>(null) // dossier choisi dans l'explorateur
   const tgt = custom ?? ask.targets?.[target]
   const project = tgt?.project ?? ask.project
@@ -77,7 +80,7 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
   const send = async () => {
     if (!ok || busy) return
     setBusy(true)
-    const done = await ask.run(text.trim(), choice, tgt)
+    const done = await ask.run(text.trim(), choice, tgt, output)
     setBusy(false)
     if (done) onClose()
   }
@@ -121,6 +124,24 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
         <DialogTitle>{ask.title}</DialogTitle>
         <DialogDescription className="truncate">{ask.subtitle}</DialogDescription>
       </DialogHeader>
+      {ask.outputs && (
+        <div className="flex items-center gap-2 text-sm">
+          <span className="shrink-0 text-muted-foreground">{tr("conversation.compose.output")}</span>
+          <Choose
+            value={output ?? ""}
+            onChange={async (v) => {
+              const t = await ask.reprompt?.(v)
+              if (t === undefined) return
+              setOutput(v)
+              setText(t)
+            }}
+            options={ask.outputs.map((o) => [o.key, o.label] as const)}
+            label={tr("conversation.compose.outputAria")}
+            size="default"
+            className="min-w-0 flex-1"
+          />
+        </div>
+      )}
       {ask.targets && (
         <div className="flex items-center gap-2 text-sm">
           <span className="shrink-0 text-muted-foreground">{tr("conversation.compose.folder")}</span>

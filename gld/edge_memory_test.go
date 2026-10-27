@@ -133,24 +133,24 @@ func TestLimitesMemoire(t *testing.T) {
 		t.Fatal("écriture sur un dossier acceptée")
 	}
 
-	// Fusion : de 2 à 20 fichiers, tous présents ; le dossier de lancement suit une clé de projet.
+	// Fusion : de 2 à mergeMax fichiers, tous présents ; le dossier de lancement suit une clé de projet.
 	var keys []string
-	for i := range 21 {
+	for i := range mergeMax + 1 {
 		k := fmt.Sprintf("m/-a/f%02d.md", i)
 		put(t, filepath.Join(pp, "-a", "memory", filepath.Base(k)), "f", old)
 		keys = append(keys, k)
 	}
-	if _, _, err := mergePrompt(keys[:20]); err != nil {
-		t.Fatal("20 fichiers refusés :", err)
+	if _, _, err := mergePrompt(keys[:mergeMax], ""); err != nil {
+		t.Fatal("mergeMax fichiers refusés :", err)
 	}
-	if _, _, err := mergePrompt(keys); err == nil {
-		t.Fatal("21 fichiers acceptés")
+	if _, _, err := mergePrompt(keys, ""); err == nil {
+		t.Fatal("trop de fichiers acceptés")
 	}
-	if _, _, err := mergePrompt([]string{"m/-a/y.md", "m/-a/absent.md"}); err == nil || !strings.Contains(err.Error(), "introuvable : "+filepath.Join(pp, "-a", "memory", "absent.md")) {
+	if _, _, err := mergePrompt([]string{"m/-a/y.md", "m/-a/absent.md"}, ""); err == nil || !strings.Contains(err.Error(), "introuvable : "+filepath.Join(pp, "-a", "memory", "absent.md")) {
 		t.Fatal(err)
 	}
 	put(t, filepath.Join(cfg, "CLAUDE.md"), "g", old)
-	if _, cwd, err := mergePrompt([]string{"g/CLAUDE.md", "p/-a/.claude/CLAUDE.md"}); err != nil || cwd != pa {
+	if _, cwd, err := mergePrompt([]string{"g/CLAUDE.md", "p/-a/.claude/CLAUDE.md"}, ""); err != nil || cwd != pa {
 		t.Fatal("dossier de fusion :", cwd, err)
 	}
 

@@ -211,6 +211,8 @@
       }
     },
     "compose": {
+    "output": "Document de sortie",
+    "outputAria": "Choisir le document de sortie (régénère le texte)",
       "memoryUnreadable": "Mémoire illisible",
       "memoryScope": "mémoire de {{scope}} : {{name}}",
       "memoryIntro": "D'après cette entrée memory ({{where}}) :",

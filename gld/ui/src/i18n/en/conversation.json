@@ -211,6 +211,8 @@
       }
     },
     "compose": {
+    "output": "Output document",
+    "outputAria": "Choose the output document (regenerates the text)",
       "memoryUnreadable": "Memory could not be read",
       "memoryScope": "{{scope}} memory: {{name}}",
       "memoryIntro": "From this memory entry ({{where}}):",

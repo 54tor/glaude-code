@@ -307,6 +307,7 @@ func routesMemory(mux *http.ServeMux) {
 	mux.HandleFunc("POST /memory-merge", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Keys   []string
+			Out    string // document de sortie : l'une des clés (vide : la première)
 			Launch bool
 			Args   string
 			Prompt string // texte relu et modifié dans la fenêtre de saisie : remplace celui du serveur
@@ -315,7 +316,7 @@ func routesMemory(mux *http.ServeMux) {
 			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
-		prompt, cwd, err := mergePrompt(req.Keys)
+		prompt, cwd, err := mergePrompt(req.Keys, req.Out)
 		if err != nil {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
