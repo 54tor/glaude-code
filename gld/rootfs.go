@@ -132,3 +132,14 @@ func mkdirTrusted(path string, perm os.FileMode) error {
 	}
 	return os.MkdirAll(path, perm)
 }
+
+// walkRoot : la racine d'un parcours, lien résolu (un ~/.claude/commands lié à un dépôt de dotfiles), car WalkDir ne descend
+// pas dans une racine qui est un lien. Sous GLD_RUN_AS, jamais : ce lien peut avoir été posé par le compte cible.
+func walkRoot(p string) string {
+	if !runAsOn() {
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			return r
+		}
+	}
+	return p
+}

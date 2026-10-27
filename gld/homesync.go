@@ -110,12 +110,13 @@ func syncFiles(dir string) map[string]string {
 	}
 	read("CLAUDE.md")
 	for _, sub := range []string{"rules", "commands"} {
-		base := filepath.Join(dir, sub)
+		base := walkRoot(filepath.Join(dir, sub))
 		filepath.WalkDir(base, func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return nil
 			}
-			rel, _ := filepath.Rel(dir, p)
+			r, _ := filepath.Rel(base, p)
+			rel := filepath.Join(sub, r)
 			if d.IsDir() {
 				if strings.Count(rel, string(filepath.Separator)) > 3 || (p != base && strings.HasPrefix(d.Name(), ".")) {
 					return filepath.SkipDir
@@ -139,7 +140,7 @@ func syncSkills(dir string) map[string]map[string]string {
 		if !e.IsDir() || !syncSegRe.MatchString(e.Name()) {
 			continue
 		}
-		root := filepath.Join(dir, "skills", e.Name())
+		root := walkRoot(filepath.Join(dir, "skills", e.Name()))
 		files, total, ok := map[string]string{}, int64(0), true
 		filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 			if err != nil || d.IsDir() {

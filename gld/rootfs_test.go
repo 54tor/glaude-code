@@ -196,3 +196,13 @@ func TestImagesEtSkillsNeSuiventPasLesLiens(t *testing.T) {
 		t.Fatalf("écrit hors de la config : %v", ents)
 	}
 }
+
+func TestWalkRootSuitUnLienHorsRunAs(t *testing.T) {
+	real, links := t.TempDir(), t.TempDir()
+	os.WriteFile(filepath.Join(real, "revue.md"), []byte("---\ndescription: d\n---\n"), 0o644)
+	os.Symlink(real, filepath.Join(links, "commands"))
+	got := walkCommands(filepath.Join(links, "commands"), "", "", nil)
+	if len(got) != 1 || got[0].Path != "revue.md" {
+		t.Fatalf("commandes d'un dossier lié : %+v", got)
+	}
+}

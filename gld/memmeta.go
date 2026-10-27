@@ -363,6 +363,7 @@ func memMatches(key, dir string) (files []string, total int, truncated bool, err
 	}
 	visited := 0
 	skip := map[string]bool{".git": true, "node_modules": true, "vendor": true, "dist": true, ".venv": true, "target": true}
+	cwd = walkRoot(cwd)
 	filepath.WalkDir(cwd, func(p string, d fs.DirEntry, e error) error {
 		if e != nil {
 			return nil

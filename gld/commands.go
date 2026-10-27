@@ -111,6 +111,7 @@ func walkCommands(base, scope, project string, out []Snippet) []Snippet {
 	if scope != "" {
 		prefix = "p/" + scope + "/"
 	}
+	base = walkRoot(base)
 	filepath.WalkDir(base, func(p string, e os.DirEntry, err error) error {
 		if err != nil {
 			return nil
