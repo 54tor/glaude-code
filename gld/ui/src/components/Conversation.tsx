@@ -32,6 +32,8 @@ const FullTerminal = lazy(() => import("./FullTerminal")) // xterm n'est chargé
 // Messages chargés d'un coup (par la fin) : une session de plusieurs Go compte des milliers de messages.
 const PAGE = 200
 const COMPACT_WINDOW = 200_000
+// Fenêtre par modèle : la famille 5 en a une de 1 M ; le transcript ne porte jamais le suffixe « [1m] » des modèles plus anciens.
+const windowOf = (model: string, ctx: number) => (/-5-\d/.test(model) || model.includes("[1m]") || ctx > COMPACT_WINDOW ? 1_000_000 : COMPACT_WINDOW)
 const COMPACT_HINT_AT = 0.6 // part de la fenêtre à partir de laquelle on conseille de compacter
 
 function Meta({ s, onFolder, extra }: { s: Session; onFolder?: () => void; extra?: React.ReactNode }) {
@@ -312,7 +314,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
 
   // Contexte du dernier appel : fenêtre de 1 M de tokens si le modèle l'indique ou si on l'a déjà dépassée de 200 k, sinon 200 k.
   const ctx = live.st?.context ?? 0
-  const win = live.st?.model.includes("[1m]") || ctx > COMPACT_WINDOW ? 1_000_000 : COMPACT_WINDOW
+  const win = windowOf(live.st?.model ?? "", ctx)
   const hint = a.live.has(id) && ctx >= win * COMPACT_HINT_AT ? t("conversation.view.compactHint", { ctx: compact(ctx), pct: Math.round((ctx / win) * 100) }) : null
   const metaExtra = session && (
     <>
