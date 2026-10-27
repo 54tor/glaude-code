@@ -337,7 +337,7 @@ func syncApply(from, to string, picks []SyncPick) (string, error) {
 		return "", terr("srv.homesync.leSettingsJsonDe")
 	}
 	sf, ss, tsk := syncFiles(fd), syncSkills(fd), syncSkills(td)
-	stamp := time.Now().Format("20060102-150405")
+	stamp := time.Now().Format("20060102-150405.000000") // deux synchros dans la même seconde ne partagent pas leur sauvegarde
 	settingsTouched, n := false, 0
 	type fileOut struct {
 		rel, content string
@@ -408,32 +408,37 @@ func syncApply(from, to string, picks []SyncPick) (string, error) {
 		}
 		n++
 	}
+	// Tout est validé puis sauvegardé avant la première écriture : un refus n'écrit rien, une panne en cours de route laisse une
+	// sauvegarde complète de ce qui a pu changer.
+	touched := []string{}
 	if settingsTouched {
-		if err := syncBackup(td, stamp, "settings.json"); err != nil {
+		touched = append(touched, "settings.json")
+	}
+	for _, w := range writes {
+		touched = append(touched, w.rel)
+	}
+	touched = append(touched, removes...)
+	for _, rel := range touched {
+		if !syncRelOK(rel) {
+			return "", terr("srv.homesync.cheminRefuse", "A1", rel)
+		}
+	}
+	for _, rel := range touched {
+		if err := syncBackup(td, stamp, rel); err != nil {
 			return "", terr("srv.homesync.sauvegardeImpossible", "A1", err.Error())
 		}
+	}
+	if settingsTouched {
 		if err := writeConfig(filepath.Join(td, "settings.json"), []byte(formatOrdered(ts)+"\n")); err != nil {
 			return "", err
 		}
 	}
 	for _, w := range writes {
-		if !syncRelOK(w.rel) {
-			return "", terr("srv.homesync.cheminRefuse", "A1", w.rel)
-		}
-		if err := syncBackup(td, stamp, w.rel); err != nil {
-			return "", terr("srv.homesync.sauvegardeImpossible", "A1", err.Error())
-		}
 		if err := writeConfigExec(filepath.Join(td, w.rel), []byte(w.content), w.exec); err != nil {
 			return "", err
 		}
 	}
 	for _, rel := range removes {
-		if !syncRelOK(rel) {
-			return "", terr("srv.homesync.cheminRefuse", "A1", rel)
-		}
-		if err := syncBackup(td, stamp, rel); err != nil {
-			return "", terr("srv.homesync.sauvegardeImpossible", "A1", err.Error())
-		}
 		if err := rRemove(td, filepath.Join(td, rel)); err != nil {
 			return "", err
 		}

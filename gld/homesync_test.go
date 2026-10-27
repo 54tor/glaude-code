@@ -191,3 +191,24 @@ func TestSyncSkillGardeLeBitExecutable(t *testing.T) {
 		t.Fatal("SKILL.md rendu exécutable")
 	}
 }
+
+func TestSyncDeuxFoisLaMemeSeconde(t *testing.T) {
+	src, dst := syncEnv(t)
+	put(t, filepath.Join(src, "skills", "d", "SKILL.md"), "v1\n", old)
+	put(t, filepath.Join(dst, "skills", "d", "SKILL.md"), "original\n", old)
+	for i := 0; i < 2; i++ {
+		if _, err := syncApply("Pro", "Perso", []SyncPick{{"skill:d", "replace"}}); err != nil {
+			t.Fatal(err)
+		}
+		put(t, filepath.Join(src, "skills", "d", "SKILL.md"), "v2\n", old)
+	}
+	saved, _ := filepath.Glob(filepath.Join(dst, "gld-web-sync-backups", "*", "skills", "d", "SKILL.md"))
+	found := false
+	for _, p := range saved {
+		b, _ := os.ReadFile(p)
+		found = found || string(b) == "original\n"
+	}
+	if len(saved) != 2 || !found {
+		t.Fatalf("sauvegardes : %v, original gardé : %v", saved, found)
+	}
+}
