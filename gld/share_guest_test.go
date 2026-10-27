@@ -945,3 +945,46 @@ func TestGuestConvImageShareQueryRelayed(t *testing.T) {
 		t.Fatalf("relais : %d %q %q %q", w.Code, path, share, guest)
 	}
 }
+
+// Quatre partages d'un home enfant, les trois plus anciens terminés : la page /guest/<poignée> du quatrième s'ouvre (son
+// cookie est lu en premier) ; /guest passe par le balayage plafonné, qui efface les morts et sert au chargement suivant.
+func TestGuestStaticHandleFirstAndClearsDead(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	addHomes(t, "perso")
+	hm, _ := homeByName("perso")
+	cs, _ := openShares(hm.Dir)
+	var jar []*http.Cookie
+	var hds []string
+	for i := range 4 {
+		sess := strings.Repeat(string(rune('a'+i)), 8) + "-1111-1111-1111-111111111111"
+		tok, _ := cs.Create(sess, "-p", "")
+		sec, _, _ := cs.Redeem(tok)
+		hds = append(hds, shareHandle(sess))
+		jar = append(jar, &http.Cookie{Name: guestCookieName(hds[i]), Value: "perso." + sec})
+	}
+	for i := range 3 {
+		sess := strings.Repeat(string(rune('a'+i)), 8) + "-1111-1111-1111-111111111111"
+		if err := cs.End(sess); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if w := (gReq{method: "GET", path: "/guest/" + hds[3], jar: jar}).do(h); w.Code != 200 || w.Header().Get("Content-Security-Policy") == "" {
+		t.Fatalf("page du partage vivant : %d", w.Code)
+	}
+	w := gReq{method: "GET", path: "/guest", jar: jar}.do(h)
+	if w.Code != 401 || cookieOf(w, jar[3].Name) != nil {
+		t.Fatalf("/guest, trois morts d'abord : %d %v", w.Code, w.Result().Cookies())
+	}
+	for _, c := range jar[:3] {
+		if k := cookieOf(w, c.Name); k == nil || k.MaxAge >= 0 {
+			t.Fatalf("cookie mort non effacé : %s", c.Name)
+		}
+	}
+	if w := (gReq{method: "GET", path: "/guest", jar: jar[3:]}).do(h); w.Code != 200 {
+		t.Fatalf("/guest après effacement : %d", w.Code)
+	}
+	w = gReq{method: "GET", path: "/guest/" + hds[0], jar: jar}.do(h)
+	if k := cookieOf(w, jar[0].Name); w.Code != 401 || k == nil || k.MaxAge >= 0 || cookieOf(w, jar[3].Name) != nil {
+		t.Fatalf("page d'un partage mort : %d %v", w.Code, w.Result().Cookies())
+	}
+}

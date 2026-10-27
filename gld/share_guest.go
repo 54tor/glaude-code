@@ -204,17 +204,34 @@ func guestClear(w http.ResponseWriter, r *http.Request, name string) {
 	http.SetCookie(w, &http.Cookie{Name: name, Path: "/", MaxAge: -1, HttpOnly: true, Secure: requestHTTPS(r), SameSite: http.SameSiteStrictMode})
 }
 
-func guestStatic(mux *http.ServeMux, r *http.Request) bool {
+// guestStatic : la page /guest/<poignée> juge d'abord le cookie de cette poignée (une lecture), puis le balayage plafonné ;
+// les cookies examinés et invalides sont effacés, sans quoi des partages terminés masqueraient longtemps un partage vivant.
+func guestStatic(mux *http.ServeMux, w http.ResponseWriter, r *http.Request) bool {
 	if r.Method != http.MethodGet || r.URL.RawPath != "" || path.Clean(r.URL.Path) != r.URL.Path {
 		return false
 	}
-	if _, pat := mux.Handler(r); !guestStatics[pat] {
+	_, pat := mux.Handler(r)
+	if !guestStatics[pat] {
 		return false
 	}
+	first := ""
+	if hd := strings.TrimPrefix(r.URL.Path, "/guest/"); pat == "GET /guest/{handle}" && validHandle(hd) {
+		if c, err := r.Cookie(guestCookieName(hd)); err == nil {
+			if _, _, _, ok := guestPre(hd, c.Value, false); ok {
+				return true
+			}
+			first = c.Name
+			guestClear(w, r, c.Name)
+		}
+	}
 	for _, c := range guestCookies(r) {
+		if c.Name == first {
+			continue
+		}
 		if _, _, _, ok := guestPre(strings.TrimPrefix(c.Name, guestCookiePrefix), c.Value, false); ok {
 			return true
 		}
+		guestClear(w, r, c.Name)
 	}
 	return false
 }
@@ -274,7 +291,7 @@ func guestGate(mux *http.ServeMux, next http.Handler) http.Handler {
 			hd = r.URL.Query().Get("share")
 		}
 		if !validHandle(hd) {
-			if guestStatic(mux, r) {
+			if guestStatic(mux, w, r) {
 				mux.ServeHTTP(w, r)
 				return
 			}
