@@ -257,3 +257,18 @@ func TestMemWriteGardeUnFichierIllisible(t *testing.T) {
 		t.Fatalf("contenu perdu : %q", b)
 	}
 }
+
+func TestSetTypeNeToucheQueMetadata(t *testing.T) {
+	text := "---\nname: x\nhooks:\n  type: command\nmetadata:\n  type: user\n---\ncorps\n"
+	out, err := setType(text, "feedback")
+	if err != nil || !strings.Contains(out, "hooks:\n  type: command") || !strings.Contains(out, "metadata:\n  type: feedback") {
+		t.Fatalf("setType : %q %v", out, err)
+	}
+	out, err = setType(text, "")
+	if err != nil || !strings.Contains(out, "hooks:\n  type: command") || strings.Contains(out, "type: user") {
+		t.Fatalf("retrait du type : %q %v", out, err)
+	}
+	if out, _ := setType("---\nhooks:\n  type: command\n---\n", "user"); !strings.Contains(out, "hooks:\n  type: command") || !strings.Contains(out, "metadata:\n  type: user") {
+		t.Fatalf("sans metadata : %q", out)
+	}
+}

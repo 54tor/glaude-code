@@ -454,9 +454,23 @@ var (
 	typeIndented = regexp.MustCompile(`(?m)^([ \t]+type:)[^\n]*$`)
 	typeTop      = regexp.MustCompile(`(?m)^type:[^\n]*$`)
 	metaLine     = regexp.MustCompile(`(?m)^metadata:[ \t]*$`)
+	topKey       = regexp.MustCompile(`(?m)^[^ \t\n#]`)
 )
 
 // setType fixe metadata.type dans le front matter (créé au besoin), sans toucher aux autres champs ; "" retire le type.
+// metaBlock : les lignes indentées sous metadata: (vide s'il n'y en a pas), jusqu'à la prochaine clé de premier niveau.
+func metaBlock(y string) (start, end int) {
+	loc := metaLine.FindStringIndex(y)
+	if loc == nil {
+		return len(y), len(y)
+	}
+	start = loc[1]
+	if next := topKey.FindStringIndex(y[start+1:]); next != nil {
+		return start, start + 1 + next[0]
+	}
+	return start, len(y)
+}
+
 func setType(text, typ string) (string, error) {
 	if typ != "" && !slices.Contains(memTypes, typ) {
 		return "", terr("srv.memmeta.typeInconnu", "A1", typ)
@@ -472,19 +486,22 @@ func setType(text, typ string) (string, error) {
 	// la modification est textuelle, et on ne refuse que de rendre invalide un en-tête qui ne l'était pas.
 	_, origErr := parseMeta(text)
 	y = strings.TrimRight(y, "\n") + "\n"
+	// Seul le type: indenté sous metadata: est le nôtre : un « type: » sous une autre clé (hooks…) n'est jamais touché.
+	ms, me := metaBlock(y)
+	block := y[ms:me]
 	switch {
 	case typ == "":
-		y = typeIndented.ReplaceAllString(y, "")
+		y = y[:ms] + typeIndented.ReplaceAllString(block, "") + y[me:]
 		y = typeTop.ReplaceAllString(y, "")
-	case typeIndented.MatchString(y):
+	case typeIndented.MatchString(block):
 		done := false
-		y = typeIndented.ReplaceAllStringFunc(y, func(l string) string {
+		y = y[:ms] + typeIndented.ReplaceAllStringFunc(block, func(l string) string {
 			if done {
 				return l
 			}
 			done = true
 			return typeIndented.FindStringSubmatch(l)[1] + " " + typ
-		})
+		}) + y[me:]
 	case typeTop.MatchString(y):
 		y = typeTop.ReplaceAllString(y, "type: "+typ)
 	case metaLine.MatchString(y):
