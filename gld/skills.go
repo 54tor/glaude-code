@@ -102,7 +102,7 @@ type pluginRoot struct{ id, base string }
 
 // pluginSkillRoots : le dossier skills/ de chaque plugin installé (une seule version par plugin : la dernière listée).
 func pluginSkillRoots() []pluginRoot {
-	b, err := os.ReadFile(filepath.Join(cfgDir(), "plugins", "installed_plugins.json"))
+	b, err := readTrusted(filepath.Join(cfgDir(), "plugins", "installed_plugins.json"))
 	if err != nil {
 		return nil
 	}
@@ -222,7 +222,7 @@ func (e LockEntry) label() string {
 
 // readLock : le skills-lock.json d'un projet ou le ~/.agents/.skill-lock.json personnel ; nil si absent ou illisible.
 func readLock(path string) map[string]LockEntry {
-	b, err := os.ReadFile(path)
+	b, err := readTrusted(path)
 	if err != nil {
 		return nil
 	}
@@ -277,7 +277,7 @@ func countSkillFiles(dir string) (n int, kb int64) {
 
 func scanSkills(base, scope, project, plugin string, readonly bool, locks map[string]LockEntry, keyOf func(name string) string) []Skill {
 	var out []Skill
-	ents, err := os.ReadDir(base)
+	ents, err := readDirTrusted(base)
 	if err != nil {
 		return nil
 	}
@@ -296,7 +296,7 @@ func scanSkills(base, scope, project, plugin string, readonly bool, locks map[st
 		s := Skill{Key: keyOf(e.Name()), Dir: e.Name(), Scope: scope, Project: project, Plugin: plugin, ReadOnly: readonly, Mtime: float64(st.ModTime().UnixNano()) / 1e9, Path: p}
 		var text string
 		if st.Size() <= skillMaxBytes {
-			if b, err := os.ReadFile(p); err == nil {
+			if b, err := readTrusted(p); err == nil {
 				text = string(b)
 				describeSkill(&s, text)
 			}
@@ -346,7 +346,7 @@ func listSkills() []Skill {
 		id := pr.id
 		out = append(out, scanSkills(pr.base, "plugin", "", id, true, nil, func(n string) string { return "x/" + id + "/" + n })...)
 	}
-	if buckets, err := os.ReadDir(filepath.Join(cfgDir(), "skills", "synced")); err == nil {
+	if buckets, err := readDirTrusted(filepath.Join(cfgDir(), "skills", "synced")); err == nil {
 		for _, b := range buckets {
 			if b.IsDir() && bucketRe.MatchString(b.Name()) {
 				id := b.Name()
@@ -467,7 +467,7 @@ func removeSkill(key string) error {
 	dir := filepath.Join(base, name)
 	// readSkill ne compte que les fichiers réguliers : un lien ou un sous-dossier vide bloquerait la suppression du dossier
 	// après celle de SKILL.md, et le skill disparaîtrait en laissant son dossier.
-	if ents, err := os.ReadDir(dir); len(files) > 1 || err != nil || len(ents) != 1 {
+	if ents, err := readDirTrusted(dir); len(files) > 1 || err != nil || len(ents) != 1 {
 		return terr("srv.skills.ceSkillContientD")
 	}
 	if err := saveTrash("k/"+key, filepath.Join(dir, skillFile), "supprimé", text); err != nil {
