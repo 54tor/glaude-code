@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"os"
 	"unicode/utf8"
 )
 
@@ -23,7 +22,7 @@ func convPage(path string, tools bool, before int64, limit int) (msgs []Msg, sta
 
 // convPageMode : voir lineMsgsMode pour anchors.
 func convPageMode(path string, tools, anchors bool, before int64, limit int) (msgs []Msg, start int64, more bool, err error) {
-	f, err := os.Open(path)
+	f, err := openTrusted(path)
 	if err != nil {
 		return nil, 0, false, err
 	}
@@ -138,7 +137,7 @@ func convText(path string, o int64, n int, tools bool, from int) (string, int, e
 const convToolsMax = 1000
 
 func convTools(path string, from, until int64) ([]Msg, error) {
-	f, err := os.Open(path)
+	f, err := openTrusted(path)
 	if err != nil {
 		return nil, err
 	}
