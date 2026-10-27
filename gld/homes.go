@@ -30,6 +30,7 @@ import (
 const (
 	homeCookie    = "gld_home"
 	childHeader   = "X-Gld-Child"
+	userHeader    = "X-Gld-User"
 	childTokenEnv = "GLD_WEB_CHILD_TOKEN"
 	// ideMainCfgEnv : la config du processus principal, qu'un enfant doit aussi refuser comme racine de l'espace.
 	ideMainCfgEnv = "GLD_WEB_MAIN_CONFIG"
@@ -244,6 +245,11 @@ func childProxy(target *url.URL, token string) *httputil.ReverseProxy {
 			r.Out.Header.Del("Cookie")
 			r.Out.Header.Del("Authorization")
 			r.Out.Header.Del(ideAuditHeader)
+			// Auteur des messages d'équipe : toujours effacé côté client, puis posé d'après le principal authentifié.
+			r.Out.Header.Del(userHeader)
+			if g := gateFrom(r.In); g != nil && g.p != nil {
+				r.Out.Header.Set(userHeader, principalName(g))
+			}
 			r.Out.Header.Set(childHeader, token)
 			r.Out = r.Out.WithContext(context.WithValue(r.Out.Context(), auditIPKey{}, clientIP(r.In)))
 		},

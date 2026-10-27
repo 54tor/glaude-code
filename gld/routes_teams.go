@@ -4,10 +4,45 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
 // routesTeams : équipes d'agents (catalogue, lancement, suivi, messages). Fines : la logique est dans teams_*.go.
+// principalName : le nom d'auteur d'un principal (« token » pour un jeton Bearer).
+func principalName(g *gateInfo) string {
+	switch {
+	case g == nil || g.p == nil:
+		return "local"
+	case g.p.Token:
+		return "token"
+	}
+	return g.p.User.Name
+}
+
+// teamAuthor : l'auteur vient du principal authentifié, jamais du corps. Sur un home enfant (sans garde), la passerelle
+// transmet le nom dans userHeader ; il n'est cru qu'avec le jeton d'enfant valide (childToken vide = processus principal,
+// où un client pourrait forger l'en-tête).
+func teamAuthor(r *http.Request) string {
+	if childToken != "" && childAuthorized(r) {
+		n := strings.Map(func(c rune) rune {
+			if unicode.IsControl(c) {
+				return -1
+			}
+			return c
+		}, r.Header.Get(userHeader))
+		if rs := []rune(n); len(rs) > 64 {
+			n = string(rs[:64])
+		}
+		if n != "" {
+			return n
+		}
+		return "local"
+	}
+	return principalName(gateFrom(r))
+}
+
 func routesTeams(mux *http.ServeMux) {
 	reply := func(w http.ResponseWriter, code int, v map[string]any) {
 		w.Header().Set("Cache-Control", "no-store")
@@ -34,17 +69,6 @@ func routesTeams(mux *http.ServeMux) {
 		}
 		return true
 	}
-	author := func(r *http.Request) string {
-		g := gateFrom(r)
-		switch {
-		case g == nil || g.p == nil:
-			return "local"
-		case g.p.Token:
-			return "token"
-		}
-		return g.p.User.Name
-	}
-
 	mux.HandleFunc("GET /teams-catalog", func(w http.ResponseWriter, r *http.Request) {
 		c, err := loadCatalog(cfgDir())
 		if err != nil {
@@ -115,7 +139,7 @@ func routesTeams(mux *http.ServeMux) {
 		if !body(w, r, &req) || !okName(w, req.Name) {
 			return
 		}
-		queued, err := teamSend(cfgDir(), req.Name, author(r), req.To, req.Text)
+		queued, err := teamSend(cfgDir(), req.Name, teamAuthor(r), req.To, req.Text)
 		journal("team-send %s -> %s (%d caractères) : %v", req.Name, req.To, utf8.RuneCountInString(req.Text), errOr(err))
 		if err != nil {
 			fail(w, err)

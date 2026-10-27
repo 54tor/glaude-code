@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -107,21 +111,117 @@ func TestTeamsPassiveRoutes(t *testing.T) {
 
 func TestTeamsLaunchConflictShape(t *testing.T) {
 	g, _ := teamsRig(t)
-	old := teamTmux
-	teamTmux = func() string { return "tmux" }
-	t.Cleanup(func() { teamTmux = old })
+	fakeLaunchEnv(t)
 	u := g.user(t, "admin", true)
 	g.grant(t, u, "", RightExec)
-	// Une définition perso déjà présente sur disque avec un autre contenu donne un conflit.
-	cat, _ := loadCatalog(g.cfg)
-	if len(cat.Teams) == 0 {
-		t.Skip("catalogue vide")
+	// Un agent perso homonyme sans marqueur : conflit avant tout lancement.
+	os.MkdirAll(filepath.Join(g.cfg, "agents"), 0o755)
+	os.WriteFile(filepath.Join(g.cfg, "agents", "ada.md"), []byte("---\nname: ada\n---\nmien\n"), 0o644)
+	w := g.do("POST", "/teams-launch", &u, "", `{"teamIds":["feature"],"goal":"x","dir":"`+t.TempDir()+`"}`)
+	var out struct {
+		Ok  bool
+		Out string
+		Run Run
 	}
-	w := g.do("POST", "/teams-launch", &u, "", `{"teamIds":["inconnue"],"goal":"x","dir":"`+t.TempDir()+`"}`)
-	var out map[string]any
 	json.Unmarshal(w.Body.Bytes(), &out)
-	if out["ok"] != false || out["out"] == "" {
+	if out.Ok || out.Out == "" || len(out.Run.Conflicts) != 1 || out.Run.Conflicts[0] != "ada" {
 		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+}
+
+func TestTeamsRightsMatrix(t *testing.T) {
+	g, _ := teamsRig(t)
+	cw := g.user(t, "editeur", false)
+	g.grant(t, cw, "", RightConfigWrite)
+	if w := g.do("POST", "/teams-agent-rm", &cw, "", `{"id":"x"}`); w.Code == 403 {
+		t.Errorf("config_write refusé : %d", w.Code)
+	}
+	rd := g.user(t, "lecteur", false)
+	g.grant(t, rd, "", RightSessionsRead)
+	for _, p := range []string{"/teams-agent-save", "/teams-agent-rm", "/teams-team-save", "/teams-team-rm"} {
+		if w := g.do("POST", p, &rd, "", `{}`); w.Code != 403 {
+			t.Errorf("%s : %d", p, w.Code)
+		}
+	}
+	if w := g.do("GET", "/team-screen?name="+trName+"&agent=ada", &rd, "", ""); w.Code != 200 {
+		t.Errorf("team-screen : %d", w.Code)
+	}
+}
+
+func TestTeamSendBearerIsToken(t *testing.T) {
+	g, _ := teamsRig(t)
+	old := tokenPrincipal
+	tokenPrincipal = func(*http.Request) *Principal { return &Principal{Token: true, MFA: true} }
+	t.Cleanup(func() { tokenPrincipal = old })
+	r := g.req("POST", "/team-send", nil, "", `{"name":"`+trName+`","to":"ada","text":"x"}`)
+	r.Header.Set("Authorization", "Bearer abc")
+	w := httptest.NewRecorder()
+	g.h.ServeHTTP(w, r)
+	d, _ := journalRead(g.cfg, trName)
+	if w.Code != 200 || len(d) != 1 || d[0].Author != "token" {
+		t.Fatalf("%d %s %v", w.Code, w.Body, d)
+	}
+}
+
+func TestAuthorHonoursHeaderOnlyWithChildToken(t *testing.T) {
+	mk := func(tok string) *http.Request {
+		r := httptest.NewRequest("POST", "/team-send", nil)
+		r.Header.Set(userHeader, "bob\x07"+strings.Repeat("é", 80))
+		if tok != "" {
+			r.Header.Set(childHeader, tok)
+		}
+		return r
+	}
+	if a := teamAuthor(mk("")); a != "local" { // processus principal : en-tête forgeable, ignoré
+		t.Errorf("principal : %q", a)
+	}
+	childToken = "secret"
+	t.Cleanup(func() { childToken = "" })
+	if a := teamAuthor(mk("autre")); a != "local" {
+		t.Errorf("mauvais jeton : %q", a)
+	}
+	if a := teamAuthor(mk("secret")); a != "bob"+strings.Repeat("é", 61) {
+		t.Errorf("jeton valide : %q", a)
+	}
+}
+
+func proxyHeader(t *testing.T, r *http.Request) http.Header {
+	t.Helper()
+	var got http.Header
+	back := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { got = r.Header.Clone() }))
+	defer back.Close()
+	u, _ := url.Parse(back.URL)
+	childProxy(u, "jeton").ServeHTTP(httptest.NewRecorder(), r)
+	if got == nil {
+		t.Fatal("requête non relayée")
+	}
+	return got
+}
+
+func withPrincipal(r *http.Request, p *Principal) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), gateKey{}, &gateInfo{p: p}))
+}
+
+func TestChildProxySetsUserHeader(t *testing.T) {
+	r := withPrincipal(httptest.NewRequest("GET", "/api", nil), &Principal{User: &User{Name: "alice"}})
+	if h := proxyHeader(t, r); h.Get(userHeader) != "alice" {
+		t.Fatalf("%q", h.Get(userHeader))
+	}
+	r = withPrincipal(httptest.NewRequest("GET", "/api", nil), &Principal{Token: true})
+	if h := proxyHeader(t, r); h.Get(userHeader) != "token" {
+		t.Fatalf("%q", h.Get(userHeader))
+	}
+}
+
+func TestChildProxyOverwritesClientUserHeader(t *testing.T) {
+	r := httptest.NewRequest("GET", "/api", nil)
+	r.Header.Set(userHeader, "mallory")
+	if h := proxyHeader(t, r); h.Get(userHeader) != "" { // sans principal : effacé
+		t.Fatalf("sans principal : %q", h.Get(userHeader))
+	}
+	r = withPrincipal(r, &Principal{User: &User{Name: "alice"}})
+	if h := proxyHeader(t, r); h.Get(userHeader) != "alice" {
+		t.Fatalf("%q", h.Get(userHeader))
 	}
 }
 
