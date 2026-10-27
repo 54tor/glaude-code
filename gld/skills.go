@@ -481,6 +481,7 @@ func copySkill(key, to string) (string, error) {
 	type item struct {
 		rel  string
 		data []byte
+		mode fs.FileMode
 	}
 	var items []item
 	err = fs.WalkDir(src.FS(), ".", func(p string, d fs.DirEntry, err error) error {
@@ -497,7 +498,11 @@ func copySkill(key, to string) (string, error) {
 		if total += int64(len(b)); total > copyMaxBytes {
 			return terr("srv.skills.dossierTropGrosMo")
 		}
-		items = append(items, item{p, b})
+		mode := fs.FileMode(0o644)
+		if fi, err := d.Info(); err == nil {
+			mode |= fi.Mode() & 0o111 // un scripts/run.sh doit rester exécutable ; rien d'autre n'est repris de la source
+		}
+		items = append(items, item{p, b, mode})
 		return nil
 	})
 	if err != nil {
@@ -517,7 +522,7 @@ func copySkill(key, to string) (string, error) {
 				return "", err
 			}
 		}
-		if err := dst2.WriteFile(it.rel, it.data, 0o644); err != nil {
+		if err := dst2.WriteFile(it.rel, it.data, it.mode); err != nil {
 			return "", err
 		}
 	}

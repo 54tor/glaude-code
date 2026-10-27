@@ -16,6 +16,7 @@ func TestSkills(t *testing.T) {
 	put(t, filepath.Join(cfg, "skills", "sans-desc", "SKILL.md"), "# Titre du skill\n\ncorps\n", old)
 	put(t, filepath.Join(cfg, "skills", "avec-fichiers", "SKILL.md"), "---\ndescription: x\n---\nx\n", old)
 	put(t, filepath.Join(cfg, "skills", "avec-fichiers", "scripts", "go.sh"), "echo\n", old)
+	os.Chmod(filepath.Join(cfg, "skills", "avec-fichiers", "scripts", "go.sh"), 0o755)
 	put(t, filepath.Join(cfg, "skills", "dossier-sans-skill", "notes.txt"), "rien\n", old)
 	put(t, filepath.Join(proj, ".claude", "skills", "local", "SKILL.md"), "---\ndescription: Skill du projet\n---\nx\n", old)
 	plug := filepath.Join(cfg, "plugins", "cache", "p", "1")
@@ -112,6 +113,9 @@ func TestSkills(t *testing.T) {
 	}
 	if b, err := os.ReadFile(filepath.Join(proj, ".claude", "skills", "avec-fichiers", "scripts", "go.sh")); err != nil || string(b) != "echo\n" {
 		t.Fatalf("fichier d'appui non copié : %q %v", b, err)
+	}
+	if st, err := os.Stat(filepath.Join(proj, ".claude", "skills", "avec-fichiers", "scripts", "go.sh")); err != nil || st.Mode()&0o100 == 0 {
+		t.Fatalf("script copié sans bit exécutable : %v %v", st, err)
 	}
 	for _, to := range []string{"x", "p/..", "u/y", ""} {
 		if _, err := copySkill("u/revue", to); err == nil {
