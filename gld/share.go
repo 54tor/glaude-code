@@ -14,13 +14,16 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 const (
 	shareSeenSave = 10 * time.Second
 	shareOnline   = 30 * time.Second
+	shareTitleMax = 120
 )
 
 type Share struct {
@@ -31,6 +34,7 @@ type Share struct {
 	CookieHash string `json:"cookieHash"`
 	CreatedAt  int64  `json:"createdAt"`
 	LastSeen   int64  `json:"lastSeen"`
+	Title      string `json:"title"`
 }
 
 type shareStore struct {
@@ -56,6 +60,26 @@ func newSecret() string {
 func hashSecret(s string) string {
 	h := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(h[:])
+}
+
+// shareHandle : désigne le partage d'une session (nom du cookie invité, adresse /guest/<poignée>) ; jamais un secret.
+func shareHandle(session string) string {
+	h := sha256.Sum256([]byte("gld-share-handle\x00" + session))
+	return hex.EncodeToString(h[:])[:16]
+}
+
+func shareTitle(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, s)
+	r := []rune(strings.TrimSpace(s))
+	if len(r) > shareTitleMax {
+		r = r[:shareTitleMax]
+	}
+	return strings.TrimSpace(string(r))
 }
 
 func hashEq(a, b string) bool {
@@ -96,12 +120,12 @@ func (s *shareStore) save() error {
 }
 
 // Create échoue fermé : si l'écriture échoue, l'ancien partage est rétabli et aucun jeton n'est rendu.
-func (s *shareStore) Create(session, dir string) (string, error) {
+func (s *shareStore) Create(session, dir, title string) (string, error) {
 	tok := newSecret()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	prev, had := s.m[session]
-	s.m[session] = &Share{Session: session, Dir: dir, Mode: "rw", TokenHash: hashSecret(tok), CreatedAt: time.Now().Unix()}
+	s.m[session] = &Share{Session: session, Dir: dir, Mode: "rw", TokenHash: hashSecret(tok), CreatedAt: time.Now().Unix(), Title: shareTitle(title)}
 	if err := s.save(); err != nil {
 		if had {
 			s.m[session] = prev
@@ -203,8 +227,8 @@ func routesShare(mux *http.ServeMux) {
 	fail := func(w http.ResponseWriter, code int, key string) {
 		writeJSON(w, code, map[string]any{"ok": false, "out": L(key)})
 	}
-	body := func(w http.ResponseWriter, r *http.Request) (struct{ ID, Dir, Mode string }, bool) {
-		var req struct{ ID, Dir, Mode string }
+	body := func(w http.ResponseWriter, r *http.Request) (struct{ ID, Dir, Mode, Title string }, bool) {
+		var req struct{ ID, Dir, Mode, Title string }
 		if json.NewDecoder(io.LimitReader(r.Body, 4<<10)).Decode(&req) != nil || !idRe.MatchString(req.ID) {
 			fail(w, 400, "srv.http_util.requeteInvalide")
 			return req, false
@@ -224,7 +248,7 @@ func routesShare(mux *http.ServeMux) {
 			fail(w, 404, "srv.share.sessionIntrouvable")
 			return
 		}
-		tok, err := shareSt.Create(req.ID, req.Dir)
+		tok, err := shareSt.Create(req.ID, req.Dir, req.Title)
 		if err != nil {
 			fail(w, 500, "srv.share.indisponible")
 			return

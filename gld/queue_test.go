@@ -480,7 +480,7 @@ func drainShareEnv(t *testing.T, mode string) *shareStore {
 		return nil
 	}
 	s, _ := newShares(t)
-	if _, err := s.Create(shSess, "dir"); err != nil {
+	if _, err := s.Create(shSess, "dir", ""); err != nil {
 		t.Fatal(err)
 	}
 	if mode != "rw" {

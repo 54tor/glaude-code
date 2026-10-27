@@ -190,7 +190,7 @@ func TestShareUnavailable(t *testing.T) {
 
 func mkShare(t *testing.T, s *shareStore) string {
 	t.Helper()
-	tok, err := s.Create(shSess, "dir")
+	tok, err := s.Create(shSess, "dir", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestShareCreateRollsBackOnWriteFailure(t *testing.T) {
 	s, _ := openShares(d)
 	old := mkShare(t, s)
 	lock(t, d)
-	if tok, err := s.Create(shSess, "dir2"); err == nil || tok != "" {
+	if tok, err := s.Create(shSess, "dir2", ""); err == nil || tok != "" {
 		t.Fatalf("erreur attendue : %q %v", tok, err)
 	}
 	if sh, ok := s.Get(shSess); !ok || sh.Dir != "dir" {
@@ -230,7 +230,7 @@ func TestShareCreateFailureLeavesNoShare(t *testing.T) {
 	d := roDir(t)
 	s, _ := openShares(d)
 	lock(t, d)
-	if _, err := s.Create(shSess, "dir"); err == nil {
+	if _, err := s.Create(shSess, "dir", ""); err == nil {
 		t.Fatal("erreur attendue")
 	}
 	if _, ok := s.Get(shSess); ok {
@@ -275,7 +275,7 @@ func TestShareOpenNullEntries(t *testing.T) {
 		}
 		s.ByCookie("x")
 		s.SetMode("x", "ro")
-		if _, err := s.Create(shSess, "dir"); err != nil {
+		if _, err := s.Create(shSess, "dir", ""); err != nil {
 			t.Fatal(c, err)
 		}
 		if _, ok := s.Get("x"); ok {
@@ -384,5 +384,39 @@ func TestShareReadOnlyDropsQueuedGuestItems(t *testing.T) {
 		if it.Author == "guest" && it.State == "queued" {
 			t.Fatalf("item invité encore en file : %+v", it)
 		}
+	}
+}
+
+func TestShareTitleSanitized(t *testing.T) {
+	long := strings.Repeat("é", 130)
+	for in, want := range map[string]string{"": "", "  a\x00b\nc\u0085\u001b[31m  ": "abc[31m", "Titre": "Titre", long: long[:240]} {
+		if got := shareTitle(in); got != want {
+			t.Errorf("%q : %q, attendu %q", in, got, want)
+		}
+	}
+	mux := shareMux(t)
+	if w := post(mux, "/share-create", `{"id":"`+shSess+`","dir":"proj","title":"  Ma\tsession  "}`); w.Code != 200 {
+		t.Fatalf("create : %d %s", w.Code, w.Body)
+	}
+	if sh, _ := shareSt.Get(shSess); sh.Title != "Masession" {
+		t.Fatalf("titre : %q", sh.Title)
+	}
+	if w := post(mux, "/share-create", `{"id":"`+shSess+`","dir":"proj"}`); w.Code != 200 {
+		t.Fatalf("sans titre : %d", w.Code)
+	}
+	if sh, _ := shareSt.Get(shSess); sh.Title != "" {
+		t.Fatalf("titre : %q", sh.Title)
+	}
+}
+
+func TestShareOldFileWithoutTitleLoads(t *testing.T) {
+	d := t.TempDir()
+	os.WriteFile(filepath.Join(d, "shares.json"), []byte(`{"`+shSess+`":{"session":"`+shSess+`","dir":"dir","mode":"ro","tokenHash":"x"}}`), 0o600)
+	s, err := openShares(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sh, ok := s.Get(shSess); !ok || sh.Title != "" || sh.Mode != "ro" || sh.Dir != "dir" {
+		t.Fatalf("ancien fichier : %+v", sh)
 	}
 }

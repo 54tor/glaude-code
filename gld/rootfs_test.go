@@ -236,7 +236,7 @@ func TestSharesNeSuitPasLesLiens(t *testing.T) {
 	victim := filepath.Join(out, "victime")
 	os.WriteFile(victim, []byte("intact"), 0o600)
 	os.Symlink(victim, filepath.Join(dir, "shares.json"))
-	s.Create("s", "d") // erreur attendue : lien refusé, sans écriture hors base
+	s.Create("s", "d", "") // erreur attendue : lien refusé, sans écriture hors base
 	if b, _ := os.ReadFile(victim); string(b) != "intact" {
 		t.Fatalf("fichier hors de la base écrasé : %q", b)
 	}

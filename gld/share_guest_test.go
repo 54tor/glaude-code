@@ -13,6 +13,11 @@ import (
 
 const gOther = "22222222-2222-2222-2222-222222222222"
 
+var (
+	hID1  = shareHandle(id1)
+	gName = guestCookieName(hID1)
+)
+
 // guestWeb : le serveur complet, jeton hôte branché comme dans main (vide : sans jeton), magasins dans des dossiers jetables.
 func guestWeb(t *testing.T, s *authStore, tok string) http.Handler {
 	t.Helper()
@@ -32,16 +37,29 @@ func guestWeb(t *testing.T, s *authStore, tok string) http.Handler {
 	return h
 }
 
+// gReq : cookie est la valeur du cookie invité de la poignée share (par défaut celle de id1), envoyée avec l'en-tête de
+// partage sauf noShare ; jar ajoute des cookies bruts.
 type gReq struct {
-	method, path, body, cookie, csrf, tokCookie string
-	hdr                                         map[string]string
+	method, path, body, cookie, csrf, tokCookie, share string
+	noShare                                            bool
+	hdr                                                map[string]string
+	jar                                                []*http.Cookie
 }
 
 func (q gReq) do(h http.Handler) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(q.method, q.path, strings.NewReader(q.body))
 	r.Host = testHost
+	if q.share == "" {
+		q.share = hID1
+	}
 	if q.cookie != "" {
-		r.AddCookie(&http.Cookie{Name: guestCookie, Value: q.cookie})
+		r.AddCookie(&http.Cookie{Name: guestCookieName(q.share), Value: q.cookie})
+		if !q.noShare {
+			r.Header.Set(shareHeader, q.share)
+		}
+	}
+	for _, c := range q.jar {
+		r.AddCookie(c)
 	}
 	if q.tokCookie != "" {
 		r.AddCookie(&http.Cookie{Name: tokenCookie, Value: q.tokCookie})
@@ -57,32 +75,38 @@ func (q gReq) do(h http.Handler) *httptest.ResponseRecorder {
 	return w
 }
 
-// guestIn : partage de id1 créé, lien ouvert ; rend le cookie et l'en-tête CSRF de l'invité.
-func guestIn(t *testing.T, h http.Handler) (cookie, csrf string) {
+// guestJoin : partage de sess créé, lien ouvert ; rend le cookie et l'en-tête CSRF de l'invité.
+func guestJoin(t *testing.T, h http.Handler, sess, dir, title string) (cookie, csrf string) {
 	t.Helper()
-	tok, err := shareSt.Create(id1, "-p")
+	tok, err := shareSt.Create(sess, dir, title)
 	if err != nil {
 		t.Fatal(err)
 	}
+	hd := shareHandle(sess)
 	w := gReq{method: "POST", path: "/invite/main/" + tok}.do(h)
-	c := cookieOf(w, guestCookie)
-	if w.Code != 303 || c == nil {
-		t.Fatalf("invite : %d %v", w.Code, w.Result().Cookies())
+	c := cookieOf(w, guestCookieName(hd))
+	if w.Code != 303 || c == nil || w.Header().Get("Location") != "/guest/"+hd {
+		t.Fatalf("invite : %d %q %v", w.Code, w.Header().Get("Location"), w.Result().Cookies())
 	}
-	w = gReq{method: "GET", path: "/guest-me", cookie: c.Value}.do(h)
+	w = gReq{method: "GET", path: "/guest-me", cookie: c.Value, share: hd}.do(h)
 	var me struct{ ID, Dir, Mode, CSRF string }
-	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &me) != nil || me.CSRF == "" {
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &me) != nil || me.CSRF == "" || me.ID != sess {
 		t.Fatalf("guest-me : %d %s", w.Code, w.Body)
 	}
 	return c.Value, me.CSRF
 }
 
+func guestIn(t *testing.T, h http.Handler) (cookie, csrf string) {
+	t.Helper()
+	return guestJoin(t, h, id1, "-p", "")
+}
+
 func TestGuestRedeemSetsCookieAndHidesToken(t *testing.T) {
 	h := guestWeb(t, nil, modeTok)
-	tok, _ := shareSt.Create(id1, "-p")
+	tok, _ := shareSt.Create(id1, "-p", "")
 	w := gReq{method: "POST", path: "/invite/main/" + tok}.do(h)
-	c := cookieOf(w, guestCookie)
-	if w.Code != 303 || w.Header().Get("Location") != "/guest" || strings.Contains(w.Header().Get("Location"), tok) {
+	c := cookieOf(w, gName)
+	if w.Code != 303 || w.Header().Get("Location") != "/guest/"+hID1 || strings.Contains(w.Header().Get("Location"), tok) {
 		t.Fatalf("redirection : %d %q", w.Code, w.Header().Get("Location"))
 	}
 	if c == nil || !c.HttpOnly || c.SameSite != http.SameSiteStrictMode || c.Path != "/" || strings.Contains(c.Value, tok) || !strings.HasPrefix(c.Value, ".") {
@@ -91,15 +115,15 @@ func TestGuestRedeemSetsCookieAndHidesToken(t *testing.T) {
 	if w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("cache : %q", w.Header().Get("Cache-Control"))
 	}
-	if w := (gReq{method: "POST", path: "/invite/main/" + tok}).do(h); w.Code != 403 || cookieOf(w, guestCookie) != nil {
+	if w := (gReq{method: "POST", path: "/invite/main/" + tok}).do(h); w.Code != 403 || cookieOf(w, gName) != nil {
 		t.Fatalf("second usage : %d", w.Code)
 	}
 }
 
 func TestGuestReloadWorksOtherBrowserRefused(t *testing.T) {
 	h := guestWeb(t, nil, modeTok)
-	tok, _ := shareSt.Create(id1, "-p")
-	c := cookieOf(gReq{method: "POST", path: "/invite/main/" + tok}.do(h), guestCookie)
+	tok, _ := shareSt.Create(id1, "-p", "")
+	c := cookieOf(gReq{method: "POST", path: "/invite/main/" + tok}.do(h), gName)
 	for range 2 {
 		w := gReq{method: "GET", path: "/guest-me", cookie: c.Value}.do(h)
 		var me map[string]any
@@ -241,7 +265,7 @@ func TestEndedShareCookieFallsThroughToHost(t *testing.T) {
 	if w.Code != 200 {
 		t.Fatalf("hôte : %d %s", w.Code, w.Body)
 	}
-	if k := cookieOf(w, guestCookie); k == nil || k.MaxAge >= 0 {
+	if k := cookieOf(w, gName); k == nil || k.MaxAge >= 0 {
 		t.Fatalf("cookie non effacé : %+v", k)
 	}
 	if w := (gReq{method: "GET", path: "/api", cookie: "nimporte.quoi"}).do(h); w.Code != 401 {
@@ -300,12 +324,12 @@ func TestGuestRelayedToChildHome(t *testing.T) {
 	addHomes(t, "perso")
 	hm, _ := homeByName("perso")
 	cs, _ := openShares(hm.Dir)
-	tok, _ := cs.Create(id1, "-p")
+	tok, _ := cs.Create(id1, "-p", "")
 	sec, _, _ := cs.Redeem(tok)
-	type seen struct{ path, guest, cookie, https string }
+	type seen struct{ path, guest, cookie, https, share string }
 	var got []seen
 	child := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got = append(got, seen{r.URL.RequestURI(), r.Header.Get(guestHeader), r.Header.Get("Cookie"), r.Header.Get(guestHTTPSHeader)})
+		got = append(got, seen{r.URL.RequestURI(), r.Header.Get(guestHeader), r.Header.Get("Cookie"), r.Header.Get(guestHTTPSHeader), r.Header.Get(shareHeader)})
 		if strings.HasPrefix(r.URL.Path, "/invite/") {
 			w.WriteHeader(303)
 			return
@@ -329,7 +353,7 @@ func TestGuestRelayedToChildHome(t *testing.T) {
 	if w := (gReq{method: "POST", path: "/queue-add", body: `{}`, cookie: c, csrf: "faux"}).do(h); w.Code != 403 {
 		t.Fatalf("csrf : %d", w.Code)
 	}
-	if w := (gReq{method: "GET", path: "/api", cookie: "perso.faux", tokCookie: modeTok}).do(h); w.Code != 200 || cookieOf(w, guestCookie) == nil {
+	if w := (gReq{method: "GET", path: "/api", cookie: "perso.faux", tokCookie: modeTok}).do(h); w.Code != 200 || cookieOf(w, gName) == nil {
 		t.Fatalf("secret inconnu : %d", w.Code)
 	}
 	if w := (gReq{method: "GET", path: "/api", tokCookie: modeTok, hdr: map[string]string{guestHeader: sec}}).do(h); w.Code != 200 {
@@ -349,7 +373,7 @@ func TestGuestRelayedToChildHome(t *testing.T) {
 			t.Fatalf("invitation relayée %d : %d", i+1, w.Code)
 		}
 	}
-	if len(got) != 13 || got[0].guest != sec || got[0].cookie != "" || got[1].path != "/api" || got[1].guest != "" || got[1].https != "" || got[2].guest != "" || got[2].path != "/invite/perso/"+tok {
+	if len(got) != 13 || got[0].guest != sec || got[0].share != hID1 || got[0].cookie != "" || got[1].path != "/api" || got[1].guest != "" || got[1].https != "" || got[2].guest != "" || got[2].path != "/invite/perso/"+tok {
 		t.Fatalf("vu par l'enfant : %+v", got)
 	}
 	if w := (gReq{method: "POST", path: "/invite/inconnu/" + tok}).do(h); w.Code != 403 {
@@ -363,16 +387,21 @@ func TestGuestChildValidatesRelayedSecret(t *testing.T) {
 	oc := childToken
 	t.Cleanup(func() { childToken = oc })
 	childToken = "ctok"
-	tok, _ := shareSt.Create(id1, "-p")
+	tok, _ := shareSt.Create(id1, "-p", "")
 	w := gReq{method: "POST", path: "/invite/perso/" + tok, hdr: map[string]string{childHeader: "ctok"}}.do(h)
-	c := cookieOf(w, guestCookie)
-	if w.Code != 303 || c == nil || !strings.HasPrefix(c.Value, "perso.") {
+	c := cookieOf(w, gName)
+	if w.Code != 303 || c == nil || !strings.HasPrefix(c.Value, "perso.") || w.Header().Get("Location") != "/guest/"+hID1 {
 		t.Fatalf("invitation : %d %+v", w.Code, c)
 	}
 	_, sec, _ := strings.Cut(c.Value, ".")
-	w = gReq{method: "GET", path: "/guest-me", hdr: map[string]string{childHeader: "ctok", guestHeader: sec}}.do(h)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), id1) {
+	w = gReq{method: "GET", path: "/guest-me", hdr: map[string]string{childHeader: "ctok", guestHeader: sec, shareHeader: hID1}}.do(h)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), id1) || !strings.Contains(w.Body.String(), hID1) {
 		t.Fatalf("relayé : %d %s", w.Code, w.Body)
+	}
+	for _, hd := range []string{"", shareHandle(gOther), "nimporte"} {
+		if w := (gReq{method: "GET", path: "/guest-me", hdr: map[string]string{childHeader: "ctok", guestHeader: sec, shareHeader: hd}}).do(h); w.Code != 403 {
+			t.Fatalf("poignée %q : %d", hd, w.Code)
+		}
 	}
 	for _, p := range []string{"/api", "/conv"} {
 		if w := (gReq{method: "GET", path: p, hdr: map[string]string{childHeader: "ctok", guestHeader: "faux"}}).do(h); w.Code != 403 {
@@ -386,10 +415,10 @@ func TestGuestChildValidatesRelayedSecret(t *testing.T) {
 
 func TestInviteGetDoesNotRedeem(t *testing.T) {
 	h := guestWeb(t, nil, modeTok)
-	tok, _ := shareSt.Create(id1, "-p")
+	tok, _ := shareSt.Create(id1, "-p", "")
 	for range 2 {
 		w := gReq{method: "GET", path: "/invite/main/" + tok}.do(h)
-		if w.Code != 200 || cookieOf(w, guestCookie) != nil || w.Header().Get("Cache-Control") != "no-store" ||
+		if w.Code != 200 || cookieOf(w, gName) != nil || w.Header().Get("Cache-Control") != "no-store" ||
 			!strings.Contains(w.Body.String(), `method="post"`) || !strings.Contains(w.Body.String(), html.EscapeString(L("srv.share_guest.rejoindre"))) || strings.Contains(w.Body.String(), "<!--") {
 			t.Fatalf("page : %d %s", w.Code, w.Body)
 		}
@@ -397,15 +426,15 @@ func TestInviteGetDoesNotRedeem(t *testing.T) {
 	if sh, _ := shareSt.Get(id1); sh.CookieHash != "" {
 		t.Fatal("jeton consommé par un GET")
 	}
-	if w := (gReq{method: "POST", path: "/invite/main/" + tok}).do(h); w.Code != 303 || cookieOf(w, guestCookie) == nil {
+	if w := (gReq{method: "POST", path: "/invite/main/" + tok}).do(h); w.Code != 303 || cookieOf(w, gName) == nil {
 		t.Fatalf("POST : %d", w.Code)
 	}
 	if w := (gReq{method: "POST", path: "/invite/main/" + tok}).do(h); w.Code != 403 {
 		t.Fatalf("second POST : %d", w.Code)
 	}
-	tok2, _ := shareSt.Create(gOther, "-q")
+	tok2, _ := shareSt.Create(gOther, "-q", "")
 	w := gReq{method: "POST", path: "/invite/main/" + tok2, hdr: map[string]string{"Origin": "https://ailleurs.example", "Sec-Fetch-Site": "cross-site"}}.do(h)
-	if w.Code != 403 || cookieOf(w, guestCookie) != nil {
+	if w.Code != 403 || cookieOf(w, guestCookieName(shareHandle(gOther))) != nil {
 		t.Fatalf("autre origine : %d", w.Code)
 	}
 	w = gReq{method: "POST", path: "/invite/main/" + tok2, hdr: map[string]string{"Origin": "http://" + testHost, "Sec-Fetch-Site": "same-origin"}}.do(h)
@@ -417,10 +446,10 @@ func TestInviteGetDoesNotRedeem(t *testing.T) {
 func TestInviteHostCredentialDoesNotRedeem(t *testing.T) {
 	t.Run("jeton", func(t *testing.T) {
 		h := guestWeb(t, nil, modeTok)
-		tok, _ := shareSt.Create(id1, "-p")
+		tok, _ := shareSt.Create(id1, "-p", "")
 		for _, m := range []string{"GET", "POST"} {
 			w := gReq{method: m, path: "/invite/main/" + tok, tokCookie: modeTok}.do(h)
-			if w.Code != 200 || cookieOf(w, guestCookie) != nil || !strings.Contains(w.Body.String(), html.EscapeString(L("srv.share_guest.vousEtesHote"))) {
+			if w.Code != 200 || cookieOf(w, gName) != nil || !strings.Contains(w.Body.String(), html.EscapeString(L("srv.share_guest.vousEtesHote"))) {
 				t.Fatalf("%s hôte : %d %s", m, w.Code, w.Body)
 			}
 		}
@@ -436,13 +465,13 @@ func TestInviteHostCredentialDoesNotRedeem(t *testing.T) {
 			t.Fatal(err)
 		}
 		sess, _ := fullSession(t, s, id)
-		tok, _ := shareSt.Create(id1, "-p")
+		tok, _ := shareSt.Create(id1, "-p", "")
 		r := httptest.NewRequest("POST", "/invite/main/"+tok, nil)
 		r.Host = testHost
 		r.AddCookie(&http.Cookie{Name: sessCookie, Value: sess})
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
-		if w.Code != 200 || cookieOf(w, guestCookie) != nil || !strings.Contains(w.Body.String(), html.EscapeString(L("srv.share_guest.vousEtesHote"))) {
+		if w.Code != 200 || cookieOf(w, gName) != nil || !strings.Contains(w.Body.String(), html.EscapeString(L("srv.share_guest.vousEtesHote"))) {
 			t.Fatalf("hôte : %d %s", w.Code, w.Body)
 		}
 		if w := (gReq{method: "POST", path: "/invite/main/" + tok}).do(h); w.Code != 303 {
@@ -455,13 +484,13 @@ func TestInviteHostCredentialDoesNotRedeem(t *testing.T) {
 		id, _ := s.AddUser("collegue", testPw, false)
 		sess, _ := fullSession(t, s, id)
 		s.Revoke(id, mainHomeID, RightExec)
-		tok, _ := shareSt.Create(id1, "-p")
+		tok, _ := shareSt.Create(id1, "-p", "")
 		r := httptest.NewRequest("POST", "/invite/main/"+tok, nil)
 		r.Host = testHost
 		r.AddCookie(&http.Cookie{Name: sessCookie, Value: sess})
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
-		if w.Code != 303 || cookieOf(w, guestCookie) == nil {
+		if w.Code != 303 || cookieOf(w, gName) == nil {
 			t.Fatalf("collègue sans exec refusé : %d %s", w.Code, w.Body)
 		}
 	})
@@ -470,11 +499,11 @@ func TestInviteHostCredentialDoesNotRedeem(t *testing.T) {
 func TestGuestLeaveClearsCookie(t *testing.T) {
 	h := guestWeb(t, nil, modeTok)
 	c, csrf := guestIn(t, h)
-	if w := (gReq{method: "POST", path: "/guest-leave", cookie: c}).do(h); w.Code != 403 || cookieOf(w, guestCookie) != nil {
+	if w := (gReq{method: "POST", path: "/guest-leave", cookie: c}).do(h); w.Code != 403 || cookieOf(w, gName) != nil {
 		t.Fatalf("sans csrf : %d", w.Code)
 	}
 	w := gReq{method: "POST", path: "/guest-leave", cookie: c, csrf: csrf}.do(h)
-	if k := cookieOf(w, guestCookie); w.Code != 200 || !strings.Contains(w.Body.String(), `"ok":true`) || k == nil || k.MaxAge >= 0 {
+	if k := cookieOf(w, gName); w.Code != 200 || !strings.Contains(w.Body.String(), `"ok":true`) || k == nil || k.MaxAge >= 0 {
 		t.Fatalf("départ : %d %s %+v", w.Code, w.Body, k)
 	}
 	if _, ok := shareSt.Get(id1); !ok {
@@ -494,13 +523,269 @@ func TestGuestLeaveRelayedHandledByGateway(t *testing.T) {
 	addHomes(t, "perso")
 	hm, _ := homeByName("perso")
 	cs, _ := openShares(hm.Dir)
-	tok, _ := cs.Create(id1, "-p")
+	tok, _ := cs.Create(id1, "-p", "")
 	sec, _, _ := cs.Redeem(tok)
 	oldStart := homeStart
 	t.Cleanup(func() { homeStart = oldStart; stopHomes() })
 	homeStart = func(Home) (*homeProc, error) { t.Error("relayé"); return nil, http.ErrServerClosed }
 	w := gReq{method: "POST", path: "/guest-leave", cookie: "perso." + sec, csrf: guestCSRF(sec)}.do(h)
-	if k := cookieOf(w, guestCookie); w.Code != 200 || k == nil || k.MaxAge >= 0 {
+	if k := cookieOf(w, gName); w.Code != 200 || k == nil || k.MaxAge >= 0 {
 		t.Fatalf("départ : %d %+v", w.Code, k)
+	}
+}
+
+func TestShareHandleStable(t *testing.T) {
+	a := shareHandle(id1)
+	if a != shareHandle(id1) || !validHandle(a) || a == shareHandle(gOther) || shareHandle("") == a {
+		t.Fatalf("poignée : %q %q", a, shareHandle(gOther))
+	}
+	for _, bad := range []string{"", strings.ToUpper(a), a[:15], a + "0", "0123456789abcdeg", "../../../../../x", "0123456789abcdé"} {
+		if validHandle(bad) {
+			t.Errorf("poignée acceptée : %q", bad)
+		}
+	}
+}
+
+func TestGuestTwoSharesTwoCookiesIndependent(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	ca, _ := guestJoin(t, h, id1, "-p", "A")
+	cb, _ := guestJoin(t, h, gOther, "-q", "B")
+	hB := shareHandle(gOther)
+	jar := []*http.Cookie{{Name: gName, Value: ca}, {Name: guestCookieName(hB), Value: cb}}
+	w := gReq{method: "GET", path: "/conv", jar: jar, hdr: map[string]string{shareHeader: hID1}}.do(h)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "Déploie caddy") || strings.Contains(w.Body.String(), "SECRET") {
+		t.Fatalf("A : %d %s", w.Code, w.Body)
+	}
+	w = gReq{method: "GET", path: "/conv", jar: jar, hdr: map[string]string{shareHeader: hB}}.do(h)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "SECRET autre session") || strings.Contains(w.Body.String(), "Déploie caddy") {
+		t.Fatalf("B : %d %s", w.Code, w.Body)
+	}
+	// Cookie de A seul, en-tête de B : aucun cookie pour B, requête hôte (sans jeton : refusée), jamais les données de B.
+	w = gReq{method: "GET", path: "/conv", jar: jar[:1], hdr: map[string]string{shareHeader: hB}}.do(h)
+	if w.Code != 401 || strings.Contains(w.Body.String(), "SECRET") || cookieOf(w, gName) != nil {
+		t.Fatalf("A sous B : %d %s", w.Code, w.Body)
+	}
+}
+
+func TestGuestCookieSwapRejected(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	ca, _ := guestJoin(t, h, id1, "-p", "")
+	guestJoin(t, h, gOther, "-q", "")
+	hB := shareHandle(gOther)
+	w := gReq{method: "GET", path: "/conv", cookie: ca, share: hB}.do(h)
+	if w.Code != 401 || strings.Contains(w.Body.String(), "SECRET") || strings.Contains(w.Body.String(), "Déploie") {
+		t.Fatalf("secret de A sous le nom de B : %d %s", w.Code, w.Body)
+	}
+	if k := cookieOf(w, guestCookieName(hB)); k == nil || k.MaxAge >= 0 {
+		t.Fatalf("cookie échangé non effacé : %+v", k)
+	}
+	if w := (gReq{method: "GET", path: "/guest-me", cookie: ca, share: hB}).do(h); w.Code != 401 {
+		t.Fatalf("guest-me échangé : %d", w.Code)
+	}
+}
+
+func TestNoHeaderMeansHostEvenWithGuestCookies(t *testing.T) {
+	t.Run("jeton", func(t *testing.T) {
+		h := guestWeb(t, nil, modeTok)
+		c, _ := guestIn(t, h)
+		w := gReq{method: "GET", path: "/api", cookie: c, noShare: true, tokCookie: modeTok}.do(h)
+		if w.Code != 200 || cookieOf(w, gName) != nil {
+			t.Fatalf("hôte verrouillé : %d %s", w.Code, w.Body)
+		}
+		for _, p := range []string{"/conv", "/queue", "/api"} {
+			if w := (gReq{method: "GET", path: p, cookie: c, noShare: true}).do(h); w.Code != 401 {
+				t.Fatalf("%s sans en-tête ni jeton : %d", p, w.Code)
+			}
+		}
+		if w := (gReq{method: "GET", path: "/guest-me", cookie: c, noShare: true, tokCookie: modeTok}).do(h); w.Code != 403 {
+			t.Fatalf("guest-me sans en-tête : %d %s", w.Code, w.Body)
+		}
+	})
+	t.Run("ouvert", func(t *testing.T) {
+		h := guestWeb(t, nil, "")
+		c, _ := guestIn(t, h)
+		if w := (gReq{method: "GET", path: "/api", cookie: c, noShare: true}).do(h); w.Code != 200 {
+			t.Fatalf("hôte verrouillé : %d %s", w.Code, w.Body)
+		}
+		if w := (gReq{method: "GET", path: "/guest-me", cookie: c, noShare: true}).do(h); w.Code != 403 {
+			t.Fatalf("guest-me sans en-tête : %d", w.Code)
+		}
+	})
+}
+
+func TestGuestInvalidHeaderFormatIgnored(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	c, _ := guestIn(t, h)
+	jar := []*http.Cookie{{Name: gName, Value: c}}
+	for _, hd := range []string{strings.ToUpper(hID1), hID1 + "0", hID1[:15], "x", " " + hID1} {
+		w := gReq{method: "GET", path: "/conv", jar: jar, hdr: map[string]string{shareHeader: hd}}.do(h)
+		if w.Code != 401 || cookieOf(w, gName) != nil {
+			t.Fatalf("en-tête %q : %d", hd, w.Code)
+		}
+		if w := (gReq{method: "GET", path: "/api", jar: jar, tokCookie: modeTok, hdr: map[string]string{shareHeader: hd}}).do(h); w.Code != 200 {
+			t.Fatalf("hôte, en-tête %q : %d", hd, w.Code)
+		}
+	}
+}
+
+type gItem struct{ Handle, Title, Mode string }
+
+func TestGuestListReturnsOnlyValidAndClearsInvalid(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	ca, csrfA := guestJoin(t, h, id1, "-p", "Titre A")
+	cb, _ := guestJoin(t, h, gOther, "-q", "Titre B")
+	shareSt.SetMode(gOther, "ro")
+	hX := shareHandle("33333333-3333-3333-3333-333333333333")
+	jar := []*http.Cookie{{Name: gName, Value: ca}, {Name: guestCookieName(hX), Value: ca}, {Name: guestCookieName("pasunepoignee"), Value: "x"},
+		{Name: guestCookieName(shareHandle(gOther)), Value: cb}}
+	w := gReq{method: "GET", path: "/guest-list", jar: jar}.do(h)
+	var got []gItem
+	if w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" || json.Unmarshal(w.Body.Bytes(), &got) != nil {
+		t.Fatalf("liste : %d %s", w.Code, w.Body)
+	}
+	want := map[gItem]bool{{hID1, "Titre A", "rw"}: true, {shareHandle(gOther), "Titre B", "ro"}: true}
+	if len(got) != 2 || !want[got[0]] || !want[got[1]] || got[0] == got[1] {
+		t.Fatalf("liste : %+v", got)
+	}
+	_, secA, _ := strings.Cut(ca, ".")
+	_, secB, _ := strings.Cut(cb, ".")
+	for _, leak := range []string{secA, secB, csrfA, id1, gOther, "-p", "-q", "dir", "csrf", "session"} {
+		if strings.Contains(w.Body.String(), leak) {
+			t.Errorf("fuite %q : %s", leak, w.Body)
+		}
+	}
+	for _, n := range []string{guestCookieName(hX), guestCookieName("pasunepoignee")} {
+		if k := cookieOf(w, n); k == nil || k.MaxAge >= 0 {
+			t.Errorf("%s non effacé : %+v", n, k)
+		}
+	}
+	if cookieOf(w, gName) != nil || cookieOf(w, guestCookieName(shareHandle(gOther))) != nil {
+		t.Fatal("cookie valide effacé")
+	}
+	// Plafond : au-delà de guestListMax cookies invités, les suivants ne sont pas examinés.
+	var many []*http.Cookie
+	for i := range guestListMax + 5 {
+		many = append(many, &http.Cookie{Name: guestCookieName(shareHandle(strings.Repeat("9", i+1))), Value: ".faux"})
+	}
+	w = gReq{method: "GET", path: "/guest-list", jar: append(many, jar[0])}.do(h)
+	if w.Code != 403 || len(w.Result().Cookies()) != guestListMax {
+		t.Fatalf("plafond : %d, %d cookies", w.Code, len(w.Result().Cookies()))
+	}
+}
+
+func TestGuestListNoCookie403(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	for _, q := range []gReq{{method: "GET", path: "/guest-list"}, {method: "GET", path: "/guest-list", tokCookie: modeTok}} {
+		if w := q.do(h); w.Code != 403 || !strings.HasPrefix(w.Header().Get("Content-Type"), "application/json") {
+			t.Fatalf("sans cookie : %d %s", w.Code, w.Body)
+		}
+	}
+}
+
+func TestGuestMeHandleTitle(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	c, _ := guestJoin(t, h, id1, "-p", "Mon titre")
+	w := gReq{method: "GET", path: "/guest-me", cookie: c}.do(h)
+	var me map[string]any
+	json.Unmarshal(w.Body.Bytes(), &me)
+	if w.Code != 200 || me["handle"] != hID1 || me["title"] != "Mon titre" {
+		t.Fatalf("guest-me : %d %s", w.Code, w.Body)
+	}
+}
+
+func TestGuestLeaveClearsOnlyThatShare(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	ca, csrfA := guestJoin(t, h, id1, "-p", "")
+	cb, csrfB := guestJoin(t, h, gOther, "-q", "")
+	hB := shareHandle(gOther)
+	jar := []*http.Cookie{{Name: gName, Value: ca}, {Name: guestCookieName(hB), Value: cb}}
+	if w := (gReq{method: "POST", path: "/guest-leave", jar: jar, csrf: csrfB, hdr: map[string]string{shareHeader: hID1}}).do(h); w.Code != 403 {
+		t.Fatalf("csrf de B pour A : %d", w.Code)
+	}
+	w := gReq{method: "POST", path: "/guest-leave", jar: jar, csrf: csrfA, hdr: map[string]string{shareHeader: hID1}}.do(h)
+	if k := cookieOf(w, gName); w.Code != 200 || k == nil || k.MaxAge >= 0 || cookieOf(w, guestCookieName(hB)) != nil {
+		t.Fatalf("départ de A : %d %v", w.Code, w.Result().Cookies())
+	}
+	if w := (gReq{method: "GET", path: "/conv", cookie: cb, share: hB}).do(h); w.Code != 200 {
+		t.Fatalf("B après départ de A : %d", w.Code)
+	}
+}
+
+func TestEndedShareOnlyThatShareFallsThrough(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	ca, _ := guestJoin(t, h, id1, "-p", "")
+	cb, _ := guestJoin(t, h, gOther, "-q", "")
+	hB := shareHandle(gOther)
+	shareSt.End(id1)
+	jar := []*http.Cookie{{Name: gName, Value: ca}, {Name: guestCookieName(hB), Value: cb}}
+	w := gReq{method: "GET", path: "/api", jar: jar, tokCookie: modeTok, hdr: map[string]string{shareHeader: hID1}}.do(h)
+	if k := cookieOf(w, gName); w.Code != 200 || k == nil || k.MaxAge >= 0 || cookieOf(w, guestCookieName(hB)) != nil {
+		t.Fatalf("A terminé : %d %v", w.Code, w.Result().Cookies())
+	}
+	if w := (gReq{method: "GET", path: "/conv", jar: jar, hdr: map[string]string{shareHeader: hB}}).do(h); w.Code != 200 || !strings.Contains(w.Body.String(), "SECRET autre") {
+		t.Fatalf("B : %d", w.Code)
+	}
+}
+
+// L'interface invité (page et fichiers) se charge sans en-tête de partage ; en mode jeton, seul un cookie invité valide l'ouvre.
+func TestInviteRedirectsToHandleURL(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	c, _ := guestIn(t, h)
+	for _, p := range []string{"/guest/" + hID1, "/guest"} {
+		if w := (gReq{method: "GET", path: p, cookie: c, noShare: true}).do(h); w.Code != 200 || w.Header().Get("Content-Security-Policy") == "" {
+			t.Fatalf("%s invité : %d", p, w.Code)
+		}
+		if w := (gReq{method: "GET", path: p}).do(h); w.Code != 401 {
+			t.Fatalf("%s anonyme : %d", p, w.Code)
+		}
+		if w := (gReq{method: "GET", path: p, cookie: ".faux", noShare: true}).do(h); w.Code != 401 {
+			t.Fatalf("%s cookie faux : %d", p, w.Code)
+		}
+	}
+	if w := (gReq{method: "GET", path: "/guest/" + hID1, tokCookie: modeTok}).do(h); w.Code != 200 {
+		t.Fatalf("hôte : %d", w.Code)
+	}
+}
+
+// Passerelle : /guest-list juge un cookie de home enfant d'après son fichier, puis le fait revalider par l'enfant.
+func TestGuestListChildRevalidated(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	addHomes(t, "perso")
+	hm, _ := homeByName("perso")
+	cs, _ := openShares(hm.Dir)
+	tok, _ := cs.Create(id1, "-p", "Enfant")
+	sec, _, _ := cs.Redeem(tok)
+	tok2, _ := cs.Create(gOther, "-q", "")
+	sec2, _, _ := cs.Redeem(tok2)
+	refuse := false
+	child := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hd := r.Header.Get(shareHeader)
+		if refuse || r.URL.Path != "/guest-me" || r.Header.Get(guestHeader) == "" || r.Header.Get("Cookie") != "" {
+			w.WriteHeader(403)
+			return
+		}
+		w.Write([]byte(`{"handle":"` + hd + `","title":"Enfant","mode":"rw","id":"` + id1 + `","csrf":"c"}`))
+	}))
+	defer child.Close()
+	cu, _ := url.Parse(child.URL)
+	oldStart := homeStart
+	t.Cleanup(func() { homeStart = oldStart; stopHomes() })
+	homeStart = func(h Home) (*homeProc, error) {
+		return &homeProc{dir: h.Dir, proxy: childProxy(cu, "x"), done: make(chan struct{})}, nil
+	}
+	jar := []*http.Cookie{{Name: gName, Value: "perso." + sec}, {Name: guestCookieName(shareHandle(gOther)), Value: "perso." + sec}}
+	w := gReq{method: "GET", path: "/guest-list", jar: jar}.do(h)
+	var got []gItem
+	json.Unmarshal(w.Body.Bytes(), &got)
+	if w.Code != 200 || len(got) != 1 || got[0] != (gItem{hID1, "Enfant", "rw"}) || strings.Contains(w.Body.String(), id1) || strings.Contains(w.Body.String(), sec) {
+		t.Fatalf("liste : %d %s", w.Code, w.Body)
+	}
+	if k := cookieOf(w, guestCookieName(shareHandle(gOther))); k == nil || k.MaxAge >= 0 {
+		t.Fatalf("cookie échangé non effacé : %+v", k)
+	}
+	refuse = true
+	w = gReq{method: "GET", path: "/guest-list", jar: []*http.Cookie{{Name: guestCookieName(shareHandle(gOther)), Value: "perso." + sec2}}}.do(h)
+	if k := cookieOf(w, guestCookieName(shareHandle(gOther))); w.Code != 403 || k == nil || k.MaxAge >= 0 {
+		t.Fatalf("refus de l'enfant : %d %+v", w.Code, k)
 	}
 }
