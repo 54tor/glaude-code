@@ -73,7 +73,7 @@ type chatEvent struct {
 	Note  string  `json:"note,omitempty"`
 }
 
-var upstreamLimit = regexp.MustCompile(`\\b(429|529)\\b`)
+var upstreamLimit = regexp.MustCompile(`\b(429|529)\b`)
 
 // relay traduit la sortie stream-json de claude en événements pour le lecteur.
 func relay(out io.Reader, emit func(chatEvent)) (sawResult bool) {
