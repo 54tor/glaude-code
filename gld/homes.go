@@ -85,7 +85,7 @@ var (
 func readHomes() []Home { return readHomesFile(homesFile()) }
 
 func readHomesFile(f string) []Home {
-	b, err := os.ReadFile(f)
+	b, err := readTrusted(f)
 	if err != nil {
 		return []Home{}
 	}
