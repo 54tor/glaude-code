@@ -190,7 +190,8 @@ export const api = {
   fsIndex: (dir: string) => fsCall<{ state: string; files: { path: string; size: number; mtime: number }[] }>(`/fs-index?${fsq(dir)}`),
   fsFiles: (dir: string, paths: string[]) => fsCall<{ files: { path: string; content: string }[] }>("/fs-files", { dir, paths }),
   data: () => get<Data>("/api"),
-  banAlerts: (since: number) => get<{ ok: boolean; now: number; bans: { at: number; ip: string }[] }>(`/auth/alerts?since=${since}`),
+  banAlerts: (since: number) =>
+    get<{ ok: boolean; now: number; bans: { at: number; ip: string }[]; pairings: { at: number; ip: string }[] }>(`/auth/alerts?since=${since}`),
   cleanupWarning: () => get<{ days: number; sessions: { dir: string; id: string; title: string; cwd: string; expires: number }[] }>("/cleanup-warning"),
   sessionsStamp: () => get<{ stamp: number }>("/sessions-stamp"),
   sessionTrash: () => get<{ sessions: { dir: string; id: string; title: string; cwd: string; at: number; kb: number }[]; days: number }>("/session-trash"),

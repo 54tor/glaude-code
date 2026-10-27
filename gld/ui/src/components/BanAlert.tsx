@@ -6,11 +6,14 @@ import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescript
 
 type Ban = { at: number; ip: string }
 
-// Alerte dans chaque session connectée quand une adresse extérieure est bannie après des échecs de connexion répétés. Les bans
-// d'avant l'ouverture de l'onglet ne sont pas rejoués ; une alerte non acquittée est perdue au rechargement.
+// Alerte dans chaque session connectée quand une adresse extérieure est bannie après des échecs de connexion répétés, ou
+// qu'un appareil est jumelé sur mon compte via /pair-code (une session volée pourrait en créer une : l'alerte pousse à
+// vérifier /auth/sessions et à révoquer ce qui n'est pas de moi). Les événements d'avant l'ouverture de l'onglet ne sont pas
+// rejoués ; une alerte non acquittée est perdue au rechargement.
 export function BanAlert() {
   const { t } = useTranslation()
   const [bans, setBans] = useState<Ban[]>([])
+  const [pairings, setPairings] = useState<Ban[]>([])
   useEffect(() => {
     let live = true
     let since = -1 // -1 : pas encore calé sur l'horloge du serveur
@@ -19,11 +22,14 @@ export function BanAlert() {
       try {
         const r = await api.banAlerts(since < 0 ? 9_999_999_999 : since)
         if (!live || !r.ok) return
-        if (since < 0) since = r.now
-        else if (r.bans.length) {
-          since = r.bans[r.bans.length - 1].at
-          setBans((b) => [...b, ...r.bans])
+        if (since < 0) {
+          since = r.now
+          return
         }
+        const latest = [...r.bans, ...r.pairings].reduce((m, e) => Math.max(m, e.at), since)
+        since = latest
+        if (r.bans.length) setBans((b) => [...b, ...r.bans])
+        if (r.pairings.length) setPairings((p) => [...p, ...r.pairings])
       } catch {
         /* serveur injoignable ou mode sans comptes : on réessaie au prochain passage */
       }
@@ -35,20 +41,34 @@ export function BanAlert() {
       clearInterval(h)
     }
   }, [])
+  const open = bans.length > 0 || pairings.length > 0
+  const dismiss = () => {
+    setBans([])
+    setPairings([])
+  }
   return (
-    <AlertDialog open={bans.length > 0} onOpenChange={(o) => !o && setBans([])}>
+    <AlertDialog open={open} onOpenChange={(o) => !o && dismiss()}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
-            <ShieldAlert className="size-5 text-destructive" aria-hidden /> {t("shell.ban.title", { count: bans.length })}
+            <ShieldAlert className="size-5 text-destructive" aria-hidden /> {t("shell.securityAlerts.title")}
           </AlertDialogTitle>
-          <AlertDialogDescription>{t("shell.ban.body")}</AlertDialogDescription>
+          <AlertDialogDescription>
+            {bans.length > 0 && <div>{t("shell.ban.body")}</div>}
+            {pairings.length > 0 && <div>{t("shell.pair.body")}</div>}
+          </AlertDialogDescription>
         </AlertDialogHeader>
         <ul className="max-h-48 space-y-1 overflow-y-auto text-sm">
           {bans.map((b, i) => (
-            <li key={i} className="flex justify-between gap-3 rounded-md border px-3 py-1.5">
+            <li key={`ban-${i}`} className="flex justify-between gap-3 rounded-md border px-3 py-1.5">
               {b.ip ? <code>{b.ip}</code> : <span>{t("shell.ban.hidden")}</span>}
               <span className="text-muted-foreground tabular-nums">{new Date(b.at * 1000).toLocaleTimeString()}</span>
+            </li>
+          ))}
+          {pairings.map((p, i) => (
+            <li key={`pair-${i}`} className="flex justify-between gap-3 rounded-md border px-3 py-1.5">
+              <span>{t("shell.pair.item", { ip: p.ip })}</span>
+              <span className="text-muted-foreground tabular-nums">{new Date(p.at * 1000).toLocaleTimeString()}</span>
             </li>
           ))}
         </ul>

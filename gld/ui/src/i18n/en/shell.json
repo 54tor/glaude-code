@@ -429,11 +429,16 @@
       "lines": "{{count}} line(s)"
     },
     "ban": {
-      "title_other": "{{count}} addresses banned",
       "body": "Too many failed sign-ins from an external address: it is refused for 1 h. Details are in the authentication event log.",
       "ok": "Got it",
-      "title_one": "Address banned",
       "hidden": "Address visible to administrators only"
+    },
+    "pair": {
+      "body": "A device was paired to your account. If this wasn't you, revoke it from your sessions.",
+      "item": "Device paired from {{ip}}"
+    },
+    "securityAlerts": {
+      "title": "Security alerts"
     }
   }
 }
