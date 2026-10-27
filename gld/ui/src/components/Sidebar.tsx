@@ -87,7 +87,7 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
       if (!n.delete(id)) n.add(id)
       return n
     })
-  const item = (row: Row, kids: Row[] = [], child = false): React.ReactNode => {
+  const item = (row: Row, kids: Row[] = [], slot = false): React.ReactNode => {
     const { s } = row
     const open = opened.has(s.id)
     const cold = now - s.mtime >= ttl // ouverte mais cache expiré
@@ -95,18 +95,19 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
     const warn = !cold && left <= 10
     return (
       <Fragment key={s.id}>
-      <div className={cn("flex items-center", child && "ml-4")}>
+      <div className="flex items-center">
       {kids.length > 0 && (
         <button
           onClick={() => toggle(s.id)}
           aria-expanded={open}
           aria-label={t("shell.list.subSessions", { count: kids.length })}
-          className="flex h-8 shrink-0 items-center text-xs text-muted-foreground hover:text-foreground"
+          className="flex h-8 w-9 shrink-0 items-center text-xs text-muted-foreground hover:text-foreground"
         >
           <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} />
           <span className="tabular-nums">{kids.length}</span>
         </button>
       )}
+      {kids.length === 0 && slot && <span className="w-9 shrink-0" aria-hidden />}
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <button
@@ -142,7 +143,7 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
         </ContextMenuContent>
       </ContextMenu>
       </div>
-      {open && kids.map((c) => item(c, [], true))}
+      {open && <div className="ml-3 border-l pl-1">{kids.map((c) => item(c))}</div>}
       </Fragment>
     )
   }
@@ -179,7 +180,8 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
           <div className="ml-3 border-l pl-1">
             {(() => {
               const { tops, kids } = nest(rs)
-              return tops.map((r) => item(r, kids.get(r.s.id)))
+              const slot = tops.some((r) => kids.has(r.s.id))
+              return tops.map((r) => item(r, kids.get(r.s.id), slot))
             })()}
           </div>
         </details>
@@ -234,20 +236,21 @@ function FavSessions({ rows, read }: { rows: Row[]; read: (s: Session) => void }
       if (!n.delete(id)) n.add(id)
       return n
     })
-  const item = (row: Row, ks: Row[] = [], child = false): React.ReactNode => (
+  const item = (row: Row, ks: Row[] = [], slot = false): React.ReactNode => (
     <Fragment key={row.s.id}>
-      <div className={cn("flex items-center", child && "ml-4")}>
+      <div className="flex items-center">
         {ks.length > 0 && (
           <button
             onClick={() => toggle(row.s.id)}
             aria-expanded={opened.has(row.s.id)}
             aria-label={t("shell.list.subSessions", { count: ks.length })}
-            className="flex h-8 shrink-0 items-center text-xs text-muted-foreground hover:text-foreground"
+            className="flex h-8 w-9 shrink-0 items-center text-xs text-muted-foreground hover:text-foreground"
           >
             <ChevronRight className={cn("size-3.5 transition-transform", opened.has(row.s.id) && "rotate-90")} />
             <span className="tabular-nums">{ks.length}</span>
           </button>
         )}
+        {ks.length === 0 && slot && <span className="w-9 shrink-0" aria-hidden />}
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <div className="min-w-0 flex-1">
@@ -259,10 +262,11 @@ function FavSessions({ rows, read }: { rows: Row[]; read: (s: Session) => void }
           </ContextMenuContent>
         </ContextMenu>
       </div>
-      {opened.has(row.s.id) && ks.map((c) => item(c, [], true))}
+      {opened.has(row.s.id) && <div className="ml-3 border-l pl-1">{ks.map((c) => item(c))}</div>}
     </Fragment>
   )
-  return <>{tops.map((r) => item(r, kids.get(r.s.id)))}</>
+  const slot = tops.some((r) => kids.has(r.s.id))
+  return <>{tops.map((r) => item(r, kids.get(r.s.id), slot))}</>
 }
 
 export function Sidebar({ searchRef, ...p }: SidebarProps) {
