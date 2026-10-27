@@ -302,7 +302,7 @@ func clientIP(r *http.Request) string {
 			}
 		}
 	}
-	if a.Is6() {
+	if a.Is6() && !a.IsLoopback() { // ::1 réduit à ::/64 ne serait plus reconnu comme le poste, donc banni
 		p, _ := a.Prefix(64)
 		return p.String()
 	}

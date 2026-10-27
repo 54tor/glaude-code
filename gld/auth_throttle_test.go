@@ -336,7 +336,9 @@ func TestIPBan(t *testing.T) {
 		t.Fatal("ban non levé")
 	}
 	// Réseau local et poste : jamais bannis.
-	for _, ip := range []string{"127.0.0.1", "192.168.1.20", "10.0.0.5", "fd00::/64", "::1"} {
+	loop6 := httptest.NewRequest("GET", "/", nil)
+	loop6.RemoteAddr = "[::1]:4242" // tel que clientIP le réduit, pas l'adresse brute
+	for _, ip := range []string{"127.0.0.1", "192.168.1.20", "10.0.0.5", "fd00::/64", clientIP(loop6)} {
 		for n := 0; n < thBanAfter+2; n++ {
 			th.Fail("x", ip, "password")
 		}
