@@ -16,6 +16,20 @@ Pour vous si vous utilisez Claude Code tous les jours et que :
 
 ## Installation
 
+### Sans compiler (binaire de la release)
+
+Téléchargez le binaire de votre système sur [la dernière release](https://github.com/54tor/glaude-code/releases/latest) : `gld-linux-amd64`, `gld-linux-arm64`, `gld-darwin-arm64`, `gld-darwin-amd64`, `gld-windows-amd64.exe`… (liste complète et `SHA256SUMS` sur la page). Il embarque l'interface : ni Go, ni Node.js, ni `make`. Seul Claude Code doit déjà être installé.
+
+```sh
+curl -LO https://github.com/54tor/glaude-code/releases/latest/download/gld-linux-amd64
+curl -LO https://github.com/54tor/glaude-code/releases/latest/download/SHA256SUMS
+sha256sum --ignore-missing -c SHA256SUMS
+chmod +x gld-linux-amd64 && mv gld-linux-amd64 ~/.local/bin/gld
+gld --version
+```
+
+### Depuis les sources
+
 Il faut [Go](https://go.dev/dl/) 1.25 ou plus récent, [Node.js](https://nodejs.org/) et Claude Code déjà installé.
 
 ```sh
