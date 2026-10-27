@@ -82,6 +82,7 @@ func convPageMode(path string, tools, anchors bool, before int64, limit int) (ms
 	if pos == 0 && n < limit {
 		start = 0
 	}
+	msgs = []Msg{} // jamais nil : une session de seules commandes donnerait "msgs":null, pris par l'interface pour « pas chargé »
 	for i := len(groups) - 1; i >= 0; i-- {
 		msgs = append(msgs, groups[i]...)
 	}

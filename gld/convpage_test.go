@@ -120,3 +120,17 @@ func TestConvAnchorsEtOutils(t *testing.T) {
 		t.Fatalf("outils de la plage : %+v %v", tools, err)
 	}
 }
+
+// Une session de seules commandes (aucun échange) rend une liste vide, pas null : l'interface lit null comme « pas chargé ».
+func TestConvPageSeulesCommandes(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	l := `{"type":"user","message":{"content":"<command-name>/clear</command-name>"}}` + "\n" +
+		`{"type":"user","message":{"content":"<local-command-stdout></local-command-stdout>"}}` + "\n"
+	if err := os.WriteFile(p, []byte(l), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	msgs, _, more, err := convPage(p, false, 0, 50)
+	if err != nil || msgs == nil || len(msgs) != 0 || more {
+		t.Fatalf("msgs=%#v more=%v err=%v", msgs, more, err)
+	}
+}
