@@ -177,3 +177,22 @@ func TestReassignNeSuitPasLesLiens(t *testing.T) {
 		t.Fatalf("réécriture du cwd à travers un lien : %q", b)
 	}
 }
+
+func TestImagesEtSkillsNeSuiventPasLesLiens(t *testing.T) {
+	cfg, out := t.TempDir(), t.TempDir()
+	old := root
+	t.Cleanup(func() { root = old })
+	use(cfg)
+	os.Symlink(out, filepath.Join(cfg, "gld-web-images"))
+	png := []byte("\x89PNG\r\n\x1a\n0000")
+	if _, err := saveImage(png); err == nil {
+		t.Error("image écrite à travers un lien")
+	}
+	os.Symlink(out, filepath.Join(cfg, "skills"))
+	if err := saveSkill("u/neuf", "---\nname: neuf\ndescription: d\n---\n", true); err == nil {
+		t.Error("skill créé à travers un lien")
+	}
+	if ents, _ := os.ReadDir(out); len(ents) != 0 {
+		t.Fatalf("écrit hors de la config : %v", ents)
+	}
+}

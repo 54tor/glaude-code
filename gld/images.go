@@ -53,20 +53,20 @@ func saveImage(b []byte) (string, error) {
 		return "", terr("srv.images.formatNonReconnuPng")
 	}
 	dir := imagesDir()
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := rMkdirAll(cfgDir(), dir, 0o700); err != nil {
 		return "", err
 	}
 	if ents, err := os.ReadDir(dir); err == nil {
 		for _, e := range ents {
 			if fi, err := e.Info(); err == nil && fi.Mode().IsRegular() && time.Since(fi.ModTime()) > imgKeep {
-				os.Remove(filepath.Join(dir, e.Name()))
+				rRemove(cfgDir(), filepath.Join(dir, e.Name()))
 			}
 		}
 	}
 	var r [4]byte
 	rand.Read(r[:])
 	p := filepath.Join(dir, time.Now().Format("20060102-150405")+"-"+hex.EncodeToString(r[:])+ext)
-	f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	f, err := rOpenFile(cfgDir(), p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return "", err
 	}
@@ -75,7 +75,7 @@ func saveImage(b []byte) (string, error) {
 		err = cerr
 	}
 	if err != nil {
-		os.Remove(p)
+		rRemove(cfgDir(), p)
 		return "", err
 	}
 	return p, nil
