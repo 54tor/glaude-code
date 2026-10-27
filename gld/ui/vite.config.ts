@@ -66,7 +66,7 @@ export default defineConfig({
     // Jamais de data: dans la CSS (petites polices) : la CSP de gld n'autorise que les fichiers servis.
     assetsInlineLimit: 0,
     // Servi en local par le binaire Go : le poids du bundle principal (≈ 600 ko) ne coûte rien sur le réseau ; xterm est déjà chargé à la demande.
-    chunkSizeWarningLimit: 700,
+    chunkSizeWarningLimit: 750,
     // Noms hachés : servis sous /assets/ avec un cache permanent (navigateur, service worker, CDN) ; une nouvelle version change
     // les noms, index.html (jamais mis en cache) pointe vers les nouveaux.
     rolldownOptions: {
