@@ -60,3 +60,21 @@ func TestProjectTrusted(t *testing.T) {
 		t.Fatal("confiance héritée du parent, refusée sinon")
 	}
 }
+
+func TestProjectTrustedHomeSecondaire(t *testing.T) {
+	h, cfg := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", h)
+	old := root
+	t.Cleanup(func() { root = old })
+	use(cfg)
+	os.WriteFile(filepath.Join(h, ".claude.json"), []byte(`{"projects":{"/y":{"hasTrustDialogAccepted":true}},"mcpServers":{"autre":{}}}`), 0o600)
+	os.WriteFile(filepath.Join(cfg, ".claude.json"), []byte(`{"projects":{"/x":{"hasTrustDialogAccepted":true}},"mcpServers":{"moi":{}}}`), 0o600)
+	if !projectTrusted("/x") || projectTrusted("/y") {
+		t.Fatal("confiance lue dans le .claude.json d'un autre compte")
+	}
+	for _, s := range mcpServers() {
+		if s.Name == "autre" {
+			t.Fatal("serveur MCP d'un autre compte")
+		}
+	}
+}

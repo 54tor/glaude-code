@@ -369,8 +369,7 @@ func mcpFrom(servers any, scope, project string) []McpServer {
 // Seules les clés des serveurs sont lues : le reste de ~/.claude.json (compte, identifiants) n'est jamais exposé.
 func mcpServers() []McpServer {
 	var out []McpServer
-	home, _ := os.UserHomeDir()
-	if b, err := os.ReadFile(filepath.Join(home, ".claude.json")); err == nil {
+	if b, err := os.ReadFile(claudeJSON()); err == nil {
 		if v, err := parseOrdered(b); err == nil {
 			if s, ok := lookup(v, "mcpServers"); ok {
 				out = append(out, mcpFrom(s, "user", "")...)
