@@ -20,7 +20,6 @@ import { HomeSwitcher } from "./HomeSwitcher"
 import { ProjectList } from "./ProjectList"
 import { ProjectItems, ProjectTree } from "./ProjectTree"
 import { segs } from "@/lib/paths"
-import { NotesCount } from "./NotesCount"
 import { CM, GroupItems, SessionItems } from "./SessionMenu"
 import type { Session, VGroup } from "@/lib/api"
 import { useActions, type Row } from "./actions"
@@ -209,7 +208,6 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             <p className="text-xs text-muted-foreground tabular-nums">{p.loading ? t("common.loading") : t("shell.count.sessions", { count: p.total })}</p>
           </div>
           <div className="ml-auto flex items-center gap-0.5">
-            <NotesCount go={p.go} />
             <PairButton />
             <CreditsButton />
             <HomeSwitcher />

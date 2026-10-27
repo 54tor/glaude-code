@@ -9,6 +9,7 @@ import { sorted, type Node } from "@/lib/tree"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { useActions } from "./actions"
 import { GitMini, SessionCount } from "./GitBadge"
+import { NoteMark } from "./NoteMark"
 import { useGit } from "@/hooks/useGit"
 
 // Clic droit sur un dossier de projet : actions sur ses propres sessions.
@@ -199,6 +200,7 @@ function Item({
               <span className="truncate">{label ?? n.name}</span>
               {n.g?.missing && <TriangleAlert className="size-3.5 shrink-0 text-warning" aria-label={t("shell.tree.dirMissing")} />}
             </button>
+            {n.g && <NoteMark noteKey={"d/" + n.g.project} />}
             {n.g && <GitMini slot states={[git.status[n.g.project], ...repos.map((d) => git.status[d])]} />}
             {n.g && <SessionCount n={n.ss.length} active={sessionsOpen} />}
           </div>
