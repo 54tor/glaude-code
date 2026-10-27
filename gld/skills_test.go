@@ -205,3 +205,20 @@ func TestSkillsSymlink(t *testing.T) {
 	}
 	t.Fatal("skill lié absent de la liste")
 }
+
+func TestSkillsSymlinkProtected(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	ext := t.TempDir()
+	put(t, filepath.Join(ext, "lie", "SKILL.md"), "---\ndescription: via lien\n---\nx\n", old)
+	os.MkdirAll(filepath.Join(cfg, "skills"), 0o755)
+	if err := os.Symlink(filepath.Join(ext, "lie"), filepath.Join(cfg, "skills", "lie")); err != nil {
+		t.Fatal(err)
+	}
+	if removeSkill("u/lie") == nil || saveSkill("u/lie", "y", false) == nil {
+		t.Fatal("un skill lié doit être refusé en suppression et en écriture")
+	}
+	if _, err := os.Stat(filepath.Join(ext, "lie", "SKILL.md")); err != nil {
+		t.Fatal("le SKILL.md cible a été touché")
+	}
+}

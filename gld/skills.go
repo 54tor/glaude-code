@@ -421,6 +421,9 @@ func removeSkill(key string) error {
 	if readonly {
 		return terr("srv.skills.skillDePluginLecture2")
 	}
+	if st, err := os.Lstat(filepath.Join(base, name)); err == nil && !st.IsDir() { // lien symbolique : le dossier cible n'est pas à nous
+		return terr("srv.skills.nEstPasUn", "A1", name)
+	}
 	text, files, err := readSkill(key)
 	if err != nil {
 		return err
