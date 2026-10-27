@@ -46,6 +46,12 @@ export function ProjectOverview({ dirs, go }: { dirs: string[]; go: (r: Route) =
                     ? t("shell.head.missingSuffix").trim()
                     : [t("shell.count.sessions", { count: c.n }), c.last && ago(c.last), c.tok > 0 && tokens(c.tok)].filter(Boolean).join(" · ")}
                 </span>
+                {(git.repos[c.d] ?? []).map((r) => (
+                  <span key={r} className="flex items-center gap-2 text-xs" title={r}>
+                    <span className="min-w-0 flex-1 truncate pl-6 text-muted-foreground">{r.split("/").pop()}</span>
+                    {git.status[r] && <GitBadge st={git.status[r]} />}
+                  </span>
+                ))}
               </button>
             </li>
           )
