@@ -408,7 +408,7 @@
   "srv.skills.npxBadSource": "invalid source: \"owner/repo\" or an https URL",
   "srv.skills.npxBusy": "another npx skills action is already running",
   "srv.skills.npxMissing": "npx not found: install Node.js",
-  "srv.skills.npxNotLocked": "this skill was not installed by npx skills (not in the lock file)",
+  "srv.skills.npxNotLocked": "this skill was not installed by npx skills (not in the lock file, or not linked to .agents/skills)",
   "srv.skills.npxUnsafeProject": "this project contains node_modules/skills: npx would use it instead of the pinned package",
   "srv.skills.nomInvalideMinusculesChiffres": "invalid name: lowercase letters, digits and hyphens (64 characters at most)",
   "srv.plugins.projetRequis": "Project required for this scope",

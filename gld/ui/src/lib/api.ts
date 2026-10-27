@@ -59,7 +59,7 @@ export type Skill = {
   warn?: string
   lock?: SkillLock // posé par npx skills
 }
-export type SkillLock = { source: string; sourceType: string; skillPath: string; hash: string; installedAt: string; updatedAt: string; link: boolean; global: boolean }
+export type SkillLock = { source: string; sourceType: string; skillPath: string; hash: string; installedAt: string; updatedAt: string; link: boolean; global: boolean; managed: boolean }
 export type SkillHit = { ref: string; source: string; skill: string; installs: string; url: string }
 export type SkillFile = { rel: string; kb: number }
 

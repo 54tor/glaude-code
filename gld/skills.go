@@ -209,6 +209,7 @@ type SkillLock struct {
 	UpdatedAt   string `json:"updatedAt"`
 	Link        bool   `json:"link"`
 	Global      bool   `json:"global"`
+	Managed     bool   `json:"managed"` // lien vers le dossier canonique de `npx skills` : le seul cas où gld laisse mettre à jour ou retirer
 }
 
 func (e LockEntry) label() string {
@@ -309,10 +310,15 @@ func scanSkills(base, scope, project, plugin string, readonly bool, locks map[st
 			if src := installedFrom(e.Name(), locks, text); src != "" {
 				s.Origin, s.Source = "install", src
 				if l, ok := locks[e.Name()]; ok {
-					lk := SkillLock{l.Source, l.SourceType, l.SkillPath, l.Hash, l.InstalledAt, l.UpdatedAt, false, scope == "user"}
+					lk := SkillLock{l.Source, l.SourceType, l.SkillPath, l.Hash, l.InstalledAt, l.UpdatedAt, false, scope == "user", false}
 					if fi, err := os.Lstat(filepath.Join(base, e.Name())); err == nil {
 						lk.Link = fi.Mode()&os.ModeSymlink != 0
 					}
+					canon := filepath.Join(skillsHome(), ".agents", "skills")
+					if scope == "project" {
+						canon = filepath.Join(project, ".agents", "skills")
+					}
+					lk.Managed = managedByNpx(base, canon, e.Name())
 					s.Lock = &lk
 				}
 			} else {
@@ -331,8 +337,7 @@ func scanSkills(base, scope, project, plugin string, readonly bool, locks map[st
 
 // listSkills : tous les skills connus, personnels d'abord, puis de projet, puis de plugins.
 func listSkills() []Skill {
-	home, _ := os.UserHomeDir()
-	out := scanSkills(filepath.Join(cfgDir(), "skills"), "user", "", "", false, readLock(filepath.Join(home, ".agents", ".skill-lock.json")), func(n string) string { return "u/" + n })
+	out := scanSkills(filepath.Join(cfgDir(), "skills"), "user", "", "", false, readLock(personalLockPath()), func(n string) string { return "u/" + n })
 	for _, p := range liveProjects() {
 		dir := p.Dir
 		out = append(out, scanSkills(filepath.Join(p.Project, ".claude", "skills"), "project", p.Project, "", false, readLock(filepath.Join(p.Project, "skills-lock.json")), func(n string) string { return "p/" + dir + "/" + n })...)

@@ -6,6 +6,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ### Ajouté
 - Skills : prise en charge de `npx skills` (paquet `skills@1.7.4` épinglé). Les skills du fichier de verrouillage affichent leur source, leur mode (lien ou copie) et un badge « mise à jour » (comparaison du hash du dossier avec GitHub, sans jeton : 60 requêtes par heure, cache de 6 h) ; la page Skills cherche (`GET /skills-find`), installe, met à jour et retire (`POST /skill-npx`, `config_write`) après confirmation de la commande exacte. Une seule action à la fois, 5 min au plus.
+  Mettre à jour et Retirer ne sont proposés que pour un skill relié au dossier `.agents/skills` (un skill écrit à la main de même nom n'est jamais touché) ; `remove` passe `-a claude-code`. Le badge « mise à jour » n'existe qu'en portée globale (le verrou de projet ne porte pas de hash de dossier) ; « vérifier » forcé au plus une fois par 30 s.
 - Connexion : une adresse extérieure qui accumule 8 échecs en 15 min (tous noms confondus) est bannie 1 h ; le poste, les réseaux privés et le lien local en sont exempts.
 - Connexion : un ban ouvre une alerte dans chaque session connectée (`GET /auth/alerts`).
 - Mémoire : la fusion accepte jusqu'à 100 fichiers (20 auparavant) et le document de sortie se choisit parmi les fichiers sélectionnés, le `CLAUDE.md` global ou le `CLAUDE.md` / `AGENTS.md` du projet (`out` de `POST /memory-merge`).

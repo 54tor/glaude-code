@@ -28,7 +28,7 @@ export function npxCommand(
   const g = global ? " -g" : ""
   if (action === "add")
     return `npx --yes ${SKILLS_PKG} add ${source} -s ${skill} -a claude-code -y${g}`
-  return `npx --yes ${SKILLS_PKG} ${action} ${skill} -y${global ? " -g" : " -p"}`
+  return `npx --yes ${SKILLS_PKG} ${action} ${skill}${action === "remove" ? " -a claude-code" : ""} -y${global ? " -g" : " -p"}`
 }
 
 // scope : "user" ou "p/<dossier>" (la clé du projet).
@@ -78,15 +78,13 @@ export function SkillsNpxDialog({
     if (!q.trim() || busy) return
     setBusy(true)
     setErr("")
-    const r = await api
-      .skillsFind(q.trim())
-      .catch(
-        () =>
-          ({ error: t("skills.npx.searchFailed") }) as {
-            hits?: SkillHit[]
-            error?: string
-          }
-      )
+    const r = await api.skillsFind(q.trim()).catch(
+      () =>
+        ({ error: t("skills.npx.searchFailed") }) as {
+          hits?: SkillHit[]
+          error?: string
+        }
+    )
     setBusy(false)
     if (r.error) return void setErr(r.error)
     setHits(r.hits ?? [])

@@ -264,10 +264,10 @@ func TestSkillLockEnLien(t *testing.T) {
 	for _, s := range listSkills() {
 		by[s.Key] = s
 	}
-	if l := by["u/lie"].Lock; l == nil || !l.Link || !l.Global || l.Hash != "h" || by["u/lie"].Origin != "install" {
+	if l := by["u/lie"].Lock; l == nil || !l.Link || !l.Managed || !l.Global || l.Hash != "h" || by["u/lie"].Origin != "install" {
 		t.Errorf("lien : %+v", by["u/lie"])
 	}
-	if l := by["u/copie"].Lock; l == nil || l.Link {
+	if l := by["u/copie"].Lock; l == nil || l.Link || l.Managed {
 		t.Errorf("copie : %+v", by["u/copie"])
 	}
 	if by["u/maison"].Lock != nil || by["u/maison"].Origin != "custom" {

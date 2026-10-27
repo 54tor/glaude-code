@@ -24,12 +24,59 @@ import (
 const skillsPkg = "skills@1.7.4"
 
 var (
-	skillRepoRe = regexp.MustCompile(`^[A-Za-z0-9][\w.-]{0,99}/[A-Za-z0-9][\w.-]{0,99}$`)
-	skillURLRe  = regexp.MustCompile(`^https://[\w.-]+(:\d+)?/[\w./~%+-]{1,300}$`)
-	ansiRe      = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
-	npxTimeout  = 5 * time.Minute
-	npxMu       sync.Mutex // une seule action à la fois : le verrou est un fichier partagé dont gld ne maîtrise pas le format
+	skillRepoRe  = regexp.MustCompile(`^[A-Za-z0-9][\w.-]{0,99}/[A-Za-z0-9][\w.-]{0,99}$`)
+	skillURLRe   = regexp.MustCompile(`^https://[\w.-]+(:\d+)?/[\w./~%+-]{1,300}$`)
+	ansiRe       = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
+	npxTimeout   = 5 * time.Minute
+	npxWaitDelay = 5 * time.Second // npx lance sh puis node : un petit-enfant orphelin garderait le tube ouvert et le verrou pris
+	npxMu        sync.Mutex        // une seule action à la fois : le verrou est un fichier partagé dont gld ne maîtrise pas le format
 )
+
+// npxEnv : l'environnement de npx, sans les jetons de gld. Le dossier d'un projet peut porter son .npmrc : l'environnement
+// l'emporte sur lui, le paquet épinglé vient du registre public. Une base vide (Windows) reprend celle du processus.
+func npxEnv(base []string) []string {
+	if base == nil {
+		base = environNoAuth()
+	}
+	var out []string
+	for _, e := range base {
+		k, _, _ := strings.Cut(e, "=")
+		if strings.HasPrefix(k, "GLD_WEB_") || k == "GLD_AUTH_KEY" || k == "NODE_OPTIONS" || k == "npm_config_node_options" || k == "npm_config_registry" {
+			continue
+		}
+		out = append(out, e)
+	}
+	return append(out, "npm_config_registry=https://registry.npmjs.org/", "npm_config_node_options=", "NODE_OPTIONS=")
+}
+
+// skillsHome : le home où npx pose ses fichiers (celui du compte cible sous GLD_RUN_AS).
+func skillsHome() string {
+	if h := runAsHome(); h != "" {
+		return h
+	}
+	h, _ := os.UserHomeDir()
+	return h
+}
+
+// personalLockPath : le verrou personnel de `npx skills` ($XDG_STATE_HOME/skills/.skill-lock.json si la variable est définie).
+func personalLockPath() string {
+	if x := os.Getenv("XDG_STATE_HOME"); x != "" {
+		return filepath.Join(x, "skills", ".skill-lock.json")
+	}
+	return filepath.Join(skillsHome(), ".agents", ".skill-lock.json")
+}
+
+// managedByNpx : le skill est un lien vers le dossier canonique de `npx skills`. Le verrou personnel est partagé par tous les
+// agents et tous les homes : y figurer ne prouve pas que le dossier de ce home vient de lui.
+func managedByNpx(skillsDir, canonDir, name string) bool {
+	p := filepath.Join(skillsDir, name)
+	if fi, err := os.Lstat(p); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		return false
+	}
+	got, err1 := filepath.EvalSymlinks(p)
+	want, err2 := filepath.EvalSymlinks(filepath.Join(canonDir, name))
+	return err1 == nil && err2 == nil && got == want
+}
 
 func stripANSI(s string) string { return ansiRe.ReplaceAllString(s, "") }
 
@@ -53,8 +100,10 @@ func npxSkillsArgs(action, source, skill string, global bool) ([]string, error) 
 			args = append(args, scope)
 		}
 		return args, nil
-	case "update", "remove":
+	case "update":
 		return append(base, action, skill, "-y", scope), nil
+	case "remove": // sans -a, remove vise tous les agents, dont un skill de même nom écrit à la main chez un autre
+		return append(base, action, skill, "-a", "claude-code", "-y", scope), nil
 	}
 	return nil, terr("srv.skills.npxBadAction")
 }
@@ -62,8 +111,8 @@ func npxSkillsArgs(action, source, skill string, global bool) ([]string, error) 
 var runNpxSkills = func(ctx context.Context, dir string, args []string) (string, error) {
 	cmd := withPath(exec.CommandContext(ctx, "npx", args...))
 	cmd.Dir = dir
-	// Le dossier d'un projet peut porter son .npmrc : l'environnement l'emporte sur lui, le paquet épinglé vient du registre public.
-	cmd.Env = append(cmd.Env, "npm_config_registry=https://registry.npmjs.org/", "npm_config_node_options=", "NODE_OPTIONS=")
+	cmd.Env = npxEnv(cmd.Env)
+	cmd.WaitDelay = npxWaitDelay
 	b, err := cmd.CombinedOutput()
 	return stripANSI(string(b)), err
 }
@@ -71,11 +120,11 @@ var runNpxSkills = func(ctx context.Context, dir string, args []string) (string,
 // skillsAct : add, update ou remove, pour l'utilisateur ou pour un projet. Update et remove ne touchent que ce que le fichier de
 // verrouillage de la portée déclare : un skill écrit à la main ou venu d'un plugin n'est jamais modifié par `npx skills`.
 func skillsAct(ctx context.Context, action, source, skill, scope, project string) (string, error) {
-	var dir, lock string
+	var dir, lock, skillsDir, canon string
 	switch scope {
 	case "user":
-		home, _ := os.UserHomeDir()
-		dir, lock = home, filepath.Join(home, ".agents", ".skill-lock.json")
+		dir = skillsHome()
+		lock, skillsDir, canon = personalLockPath(), filepath.Join(cfgDir(), "skills"), filepath.Join(dir, ".agents", "skills")
 	case "project":
 		if !safeDir(project) {
 			return "", terr("srv.plugins.projetRequis")
@@ -84,7 +133,7 @@ func skillsAct(ctx context.Context, action, source, skill, scope, project string
 		if fi, e := os.Stat(dir); dir == "" || e != nil || !fi.IsDir() {
 			return "", terr("srv.memory.dossierDuProjetIntrouvable")
 		}
-		lock = filepath.Join(dir, "skills-lock.json")
+		lock, skillsDir, canon = filepath.Join(dir, "skills-lock.json"), filepath.Join(dir, ".claude", "skills"), filepath.Join(dir, ".agents", "skills")
 		if shadowsSkillsPkg(dir) {
 			return "", terr("srv.skills.npxUnsafeProject")
 		}
@@ -96,7 +145,7 @@ func skillsAct(ctx context.Context, action, source, skill, scope, project string
 		return "", err
 	}
 	if action != "add" {
-		if _, ok := readLock(lock)[skill]; !ok {
+		if _, ok := readLock(lock)[skill]; !ok || !managedByNpx(skillsDir, canon, skill) {
 			return "", terr("srv.skills.npxNotLocked")
 		}
 	}
@@ -156,8 +205,7 @@ func skillsFind(ctx context.Context, q string) ([]SkillHit, error) {
 	defer npxMu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	home, _ := os.UserHomeDir()
-	out, err := runNpxSkills(ctx, home, []string{"--yes", skillsPkg, "find", q})
+	out, err := runNpxSkills(ctx, skillsHome(), []string{"--yes", skillsPkg, "find", q})
 	if errors.Is(err, exec.ErrNotFound) {
 		return nil, terr("srv.skills.npxMissing")
 	}
@@ -245,8 +293,11 @@ type updRepo struct {
 
 var updCache struct {
 	sync.Mutex
-	m map[string]updRepo
+	m         map[string]updRepo
+	lastForce time.Time
 }
+
+const forceMin = 30 * time.Second // /skills-updates?force=1 ne demande que mem_read : sans plancher, il viderait le quota GitHub
 
 // checkSkillUpdates : l'état de chaque skill du verrou personnel et des verrous de projet, clé = celle de listSkills.
 // Une requête par dépôt, gardée 6 h (5 min après un échec : limite de débit, hors ligne).
@@ -256,8 +307,7 @@ func checkSkillUpdates(ctx context.Context, force bool) map[string]string {
 		e   LockEntry
 	}
 	var items []item
-	home, _ := os.UserHomeDir()
-	for n, e := range readLock(filepath.Join(home, ".agents", ".skill-lock.json")) {
+	for n, e := range readLock(personalLockPath()) {
 		items = append(items, item{"u/" + n, e})
 	}
 	for _, p := range liveProjects() {
@@ -269,6 +319,12 @@ func checkSkillUpdates(ctx context.Context, force bool) map[string]string {
 	defer updCache.Unlock()
 	if updCache.m == nil {
 		updCache.m = map[string]updRepo{}
+	}
+	if force && time.Since(updCache.lastForce) < forceMin {
+		force = false
+	}
+	if force {
+		updCache.lastForce = time.Now()
 	}
 	out := map[string]string{}
 	fetched := map[string]bool{}

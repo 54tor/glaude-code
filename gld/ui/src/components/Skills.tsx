@@ -346,12 +346,16 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
                   })}
                 </span>
                 {updates[skill.key] === "update" && <span className="rounded-sm bg-warning/10 px-1.5 py-px text-2xs font-medium text-warning">{t("skills.npx.updateBadge")}</span>}
-                <Button size="xs" variant="outline" onClick={() => npxAsk("update", skill)}>
-                  <RefreshCw /> {t("skills.npx.update")}
-                </Button>
-                <Button size="xs" variant="outline" onClick={() => npxAsk("remove", skill)}>
-                  <Trash2 /> {t("skills.npx.remove")}
-                </Button>
+                {skill.lock.managed && (
+                  <>
+                    <Button size="xs" variant="outline" onClick={() => npxAsk("update", skill)}>
+                      <RefreshCw /> {t("skills.npx.update")}
+                    </Button>
+                    <Button size="xs" variant="outline" onClick={() => npxAsk("remove", skill)}>
+                      <Trash2 /> {t("skills.npx.remove")}
+                    </Button>
+                  </>
+                )}
               </div>
             )}
             <p className="flex items-center gap-2 border-b px-6 py-1.5 text-xs text-muted-foreground">
