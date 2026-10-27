@@ -76,7 +76,7 @@ func mcpList(cwd string) ([]McpState, error) {
 // projectTrusted : Claude Code a déjà accepté la confiance de ce dossier (ou d'un parent) dans ~/.claude.json. `claude mcp list` démarre les
 // serveurs du .mcp.json du projet sans demander : on ne le lance donc jamais dans un dossier que l'utilisateur n'a pas approuvé.
 func projectTrusted(cwd string) bool {
-	b, err := os.ReadFile(claudeJSON())
+	b, err := readTrusted(claudeJSON())
 	if err != nil {
 		return false
 	}
