@@ -491,7 +491,11 @@
       "endBody": "The guest loses access immediately.",
       "endConfirm": "End",
       "endSaveFailed": "Share revoked, but saving failed: {{msg}}",
-      "createFailed": "Could not create the link: {{msg}}"
+      "createFailed": "Could not create the link: {{msg}}",
+      "loading": "Reading the sharing state…",
+      "loadFailed": "Could not read the sharing state.",
+      "retry": "Retry",
+      "homesFailed": "Could not read the config folder: link not generated."
     }
   }
 }

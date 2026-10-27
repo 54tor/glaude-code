@@ -491,7 +491,11 @@
       "endBody": "L'invité perd l'accès immédiatement.",
       "endConfirm": "Mettre fin",
       "endSaveFailed": "Partage révoqué, mais l'enregistrement a échoué : {{msg}}",
-      "createFailed": "Création du lien impossible : {{msg}}"
+      "createFailed": "Création du lien impossible : {{msg}}",
+      "loading": "Lecture de l'état du partage…",
+      "loadFailed": "État du partage illisible.",
+      "retry": "Réessayer",
+      "homesFailed": "Dossier de configuration illisible : lien non généré."
     }
   }
 }

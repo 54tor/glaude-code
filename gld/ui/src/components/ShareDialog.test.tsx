@@ -98,14 +98,68 @@ describe("ShareDialog", () => {
     expect(write).not.toHaveBeenCalled()
   })
 
-  it("avertit hors HTTPS seulement", async () => {
+  it.each([
+    ["http:", true],
+    ["https:", false],
+  ])("avertissement non-HTTPS avec %s : %s", async (protocol, shown) => {
+    vi.stubGlobal("location", { protocol, origin: `${protocol}//x` })
     await open()
-    expect(screen.queryByText(/non HTTPS/) !== null).toBe(location.protocol !== "https:")
-    cleanup()
-    vi.stubGlobal("location", { ...location, protocol: "https:", origin: "https://x" })
-    await open()
-    expect(screen.queryByText(/non HTTPS/)).toBeNull()
+    expect(screen.queryByText(/non HTTPS/) !== null).toBe(shown)
     vi.unstubAllGlobals()
+  })
+
+  it("avant la première réponse de shareInfo, aucune action n'est possible", async () => {
+    let res!: (v: Info) => void
+    vi.spyOn(api, "shareInfo").mockReturnValue(new Promise<Info>((r) => (res = r)))
+    const c = vi.spyOn(api, "shareCreate").mockResolvedValue({ ...ok, token: "t" })
+    render(<ShareDialog id="s1" dir="/d" onClose={() => {}} />)
+    await act(async () => {})
+    expect(screen.queryByRole("button", { name: /Générer|Régénérer/ })).toBeNull()
+    await act(async () => res({ shared: true, mode: "rw", connected: false }))
+    await click(/Régénérer le lien/)
+    expect(c).not.toHaveBeenCalled()
+    expect(screen.getByText(/ancien lien cessera/)).toBeTruthy()
+  })
+
+  it("si le premier shareInfo échoue : erreur et réessai, pas de « non partagé » supposé", async () => {
+    const s = vi.spyOn(api, "shareInfo").mockRejectedValueOnce(new Error("x"))
+    render(<ShareDialog id="s1" dir="/d" onClose={() => {}} />)
+    await act(async () => {})
+    expect(screen.queryByRole("button", { name: /Générer/ })).toBeNull()
+    s.mockResolvedValue({ shared: false, connected: false })
+    await click(/Réessayer/)
+    expect(screen.getByRole("button", { name: /Générer et copier/ })).toBeTruthy()
+  })
+
+  it("un double clic sur Générer n'appelle shareCreate qu'une fois", async () => {
+    vi.spyOn(api, "shareCreate").mockImplementation(() => new Promise((r) => setTimeout(() => r({ ...ok, token: "t" }), 10)))
+    await open()
+    const b = screen.getByRole("button", { name: /Générer et copier/ })
+    fireEvent.click(b)
+    fireEvent.click(b)
+    await act(async () => void (await new Promise((r) => setTimeout(r, 30))))
+    expect(api.shareCreate).toHaveBeenCalledTimes(1)
+  })
+
+  it("homes en échec : toast, pas de lien, rien de créé", async () => {
+    vi.spyOn(api, "homes").mockRejectedValue(new Error("x"))
+    const c = vi.spyOn(api, "shareCreate").mockResolvedValue({ ...ok, token: "t" })
+    const err = vi.spyOn(toast, "error")
+    await open()
+    await click(/Générer et copier/)
+    expect(err).toHaveBeenCalled()
+    expect(c).not.toHaveBeenCalled()
+    expect(screen.queryByRole("textbox")).toBeNull()
+  })
+
+  it("sans navigator.clipboard : lien affiché et toast de copie échouée", async () => {
+    Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true })
+    vi.spyOn(api, "shareCreate").mockResolvedValue({ ...ok, token: "tok" })
+    const err = vi.spyOn(toast, "error")
+    await open()
+    await click(/Générer et copier/)
+    expect((screen.getByRole("textbox") as HTMLInputElement).value).toBe(`${location.origin}/invite/main/tok`)
+    expect(err).toHaveBeenCalledWith(expect.stringContaining("Copie impossible"))
   })
 
   it("l'indicateur d'invité suit shareInfo (sondage 5 s)", async () => {
