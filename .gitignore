@@ -2,6 +2,9 @@ gld/gld
 gld/gld.exe
 gld/gld-darwin-arm64
 
+# clés et certificats locaux
+*.pem
+
 # L'interface compilée n'est pas versionnée (make install la construit) ; le dossier reste pour que go:embed compile
 gld/ui/dist/*
 !gld/ui/dist/.gitkeep
