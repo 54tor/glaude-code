@@ -16,18 +16,15 @@ export function BanAlert() {
   const [pairings, setPairings] = useState<Ban[]>([])
   useEffect(() => {
     let live = true
-    let since = -1 // -1 : pas encore calé sur l'horloge du serveur
+    let after = -1 // -1 : premier relevé, qui ne rend que le curseur courant (rien d'antérieur à l'ouverture)
     const poll = async () => {
       if (document.visibilityState !== "visible") return
       try {
-        const r = await api.banAlerts(since < 0 ? 9_999_999_999 : since)
+        const r = await api.banAlerts(after)
         if (!live || !r.ok) return
-        if (since < 0) {
-          since = r.now
-          return
-        }
-        const latest = [...r.bans, ...r.pairings].reduce((m, e) => Math.max(m, e.at), since)
-        since = latest
+        const first = after < 0
+        after = r.cursor
+        if (first) return
         if (r.bans.length) setBans((b) => [...b, ...r.bans])
         if (r.pairings.length) setPairings((p) => [...p, ...r.pairings])
       } catch {

@@ -14,8 +14,24 @@ func (a *authAPI) alerts(w http.ResponseWriter, r *http.Request) {
 	if p == nil {
 		return
 	}
-	since, _ := strconv.ParseInt(r.URL.Query().Get("since"), 10, 64)
-	bans, err := authEventRows(a.s, `SELECT at, ip FROM auth_events WHERE kind='lock' AND outcome='ban' AND at > ? ORDER BY at LIMIT 20`, since)
+	// after (rowid de la dernière ligne vue) plutôt que since (secondes) : deux évènements dans la même seconde, de part et d'autre
+	// d'un relevé, ne se perdent pas. after=-1 : premier appel, seul le curseur courant est rendu.
+	q := r.URL.Query()
+	since, _ := strconv.ParseInt(q.Get("since"), 10, 64)
+	after, err := strconv.ParseInt(q.Get("after"), 10, 64)
+	if err != nil {
+		after = 0
+	}
+	var cur int64 // lu avant les requêtes, qui s'y arrêtent : une ligne écrite entre-temps viendra au relevé suivant
+	if err := a.s.db.QueryRow(`SELECT COALESCE(MAX(rowid), 0) FROM auth_events`).Scan(&cur); err != nil {
+		authInternal(w, err)
+		return
+	}
+	if after < 0 {
+		writeJSON(w, 200, map[string]any{"ok": true, "now": authNow().Unix(), "cursor": cur, "bans": []any{}, "pairings": []any{}})
+		return
+	}
+	bans, bCur, err := authEventRows(a.s, cur, `SELECT rowid, at, ip FROM auth_events WHERE kind='lock' AND outcome='ban' AND at > ? AND rowid > ? AND rowid <= ? ORDER BY rowid LIMIT 20`, since, after, cur)
 	if err != nil {
 		authInternal(w, err)
 		return
@@ -25,29 +41,38 @@ func (a *authAPI) alerts(w http.ResponseWriter, r *http.Request) {
 			b["ip"] = "" // l'alerte vaut pour tous les comptes, l'adresse seulement pour les administrateurs
 		}
 	}
-	pairings, err := authEventRows(a.s, `SELECT at, ip FROM auth_events WHERE user_id = ? AND kind='login' AND outcome='pair' AND at > ? ORDER BY at LIMIT 20`, p.User.ID, since)
+	pairings, pCur, err := authEventRows(a.s, cur, `SELECT rowid, at, ip FROM auth_events WHERE user_id = ? AND kind='login' AND outcome='pair' AND at > ? AND rowid > ? AND rowid <= ? ORDER BY rowid LIMIT 20`, p.User.ID, since, after, cur)
 	if err != nil {
 		authInternal(w, err)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"ok": true, "now": authNow().Unix(), "bans": bans, "pairings": pairings})
+	writeJSON(w, 200, map[string]any{"ok": true, "now": authNow().Unix(), "cursor": min(bCur, pCur), "bans": bans, "pairings": pairings})
 }
 
-// authEventRows : lignes {at, ip} d'une requête auth_events, factorisé pour alerts (bannissements et jumelages).
-func authEventRows(s *authStore, query string, args ...any) ([]map[string]any, error) {
+// authEventRows : lignes {at, ip} d'une requête auth_events (rowid, at, ip), factorisé pour alerts. cursor : jusqu'où le prochain
+// relevé peut reprendre (cur, ou la dernière ligne d'une liste coupée par LIMIT : la suite viendra au relevé suivant).
+func authEventRows(s *authStore, cur int64, query string, args ...any) (out []map[string]any, cursor int64, err error) {
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
-	out := []map[string]any{}
+	out = []map[string]any{}
+	var last int64
 	for rows.Next() {
-		var at int64
+		var id, at int64
 		var ip string
-		if err := rows.Scan(&at, &ip); err != nil {
-			return nil, err
+		if err := rows.Scan(&id, &at, &ip); err != nil {
+			return nil, 0, err
 		}
+		last = id
 		out = append(out, map[string]any{"at": at, "ip": ip})
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	if len(out) == 20 {
+		return out, last, nil
+	}
+	return out, cur, nil
 }
