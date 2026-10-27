@@ -91,7 +91,7 @@ export function TeamRun({ name }: { name: string }) {
   useEffect(() => {
     // jeton propre à ce nom : une réponse de l'équipe précédente est jetée, et rien de son état ne survit
     const ctl = { alive: true, inflight: false }
-    setView(null)
+    setView(null) // eslint-disable-line react-hooks/set-state-in-effect
     setErr("")
     setActErr("")
     setTo("")

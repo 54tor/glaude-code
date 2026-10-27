@@ -43,6 +43,7 @@ export function TeamPicker({
   // une team supprimée ou renommée ailleurs ne reste pas sélectionnée
   useEffect(
     () =>
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSel((s) =>
         s.every((id) => catalog.teams.some((t) => t.ID === id))
           ? s
@@ -52,7 +53,7 @@ export function TeamPicker({
   )
   useEffect(() => {
     const n = ++seq.current // une réponse lente d'une sélection précédente est ignorée
-    if (!sel.length) return void setCompo(null)
+    if (!sel.length) return void setCompo(null) // eslint-disable-line react-hooks/set-state-in-effect
     void teamsCompose(sel).then((r) => {
       if (n === seq.current) setCompo(r.ok ? r : null)
     })

@@ -71,12 +71,6 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
   }
   useEffect(() => flush, []) // enregistre ce qui reste en quittant la vue
   const addRef = useRef<() => void>(() => {})
-  addRef.current = () => {
-    if (items === null) return
-    setOpen("n/" + noteKey, true)
-    focusNext.current = items.length
-    edit([...items, ""])
-  }
   useEffect(() => {
     const f = () => addRef.current()
     window.addEventListener("gld:note-add", f)
@@ -89,6 +83,14 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
     clearTimeout(timer.current)
     timer.current = setTimeout(flush, 700)
   }
+  useEffect(() => {
+    addRef.current = () => {
+      if (items === null) return
+      setOpen("n/" + noteKey, true)
+      focusNext.current = items.length
+      edit([...items, ""])
+    }
+  })
   useEffect(() => {
     if (focusNext.current !== null) fields.current[focusNext.current]?.focus()
     focusNext.current = null
