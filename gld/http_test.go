@@ -699,3 +699,22 @@ func TestHTTPTrashPurgeAllSparesSessionTrash(t *testing.T) {
 		t.Fatal("la corbeille mémoire n'a pas été vidée")
 	}
 }
+
+func TestDossiersEnfants(t *testing.T) {
+	h, _, _ := web(t)
+	racine := t.TempDir()
+	for _, n := range []string{"a", "b", ".cache"} {
+		if err := os.Mkdir(filepath.Join(racine, n), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(racine, "f.txt"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ok(t, h, "/dirs", `{"op":"addChildren","dir":"`+racine+`"}`, true, "")
+	ok(t, h, "/dirs", `{"op":"addChildren","dir":"`+racine+`"}`, true, "") // rejeu : pas de doublon
+	_, m, _ := call(t, h, "GET", "/api", "")
+	if d, _ := m["dirs"].([]any); len(d) != 2 || d[0] != filepath.Join(racine, "a") || d[1] != filepath.Join(racine, "b") {
+		t.Fatalf("dirs = %v", m["dirs"])
+	}
+}

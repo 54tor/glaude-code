@@ -41,26 +41,35 @@ func routesSessions(mux *http.ServeMux) {
 	// Dossiers enregistrés à la main (sans session) : ajout ou retrait.
 	mux.HandleFunc("POST /dirs", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Op, Dir string }
-		if json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req) != nil || (req.Op != "add" && req.Op != "remove") || !filepath.IsAbs(req.Dir) || strings.ContainsRune(req.Dir, 0) {
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req) != nil || (req.Op != "add" && req.Op != "remove" && req.Op != "addChildren") || !filepath.IsAbs(req.Dir) || strings.ContainsRune(req.Dir, 0) {
 			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
 			return
 		}
 		dir := filepath.Clean(req.Dir)
-		if fi, err := os.Stat(dir); req.Op == "add" && (err != nil || !fi.IsDir()) {
+		if fi, err := os.Stat(dir); req.Op != "remove" && (err != nil || !fi.IsDir()) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.routes_sessions.dossierIntrouvable", "A1", dir)})
 			return
+		}
+		add := []string{}
+		switch req.Op {
+		case "add":
+			add = append(add, dir)
+		case "addChildren":
+			add = childDirs(dir)
 		}
 		groupsMu.Lock()
 		st := loadStore()
 		next := []string{}
+		drop := map[string]bool{dir: req.Op != "addChildren"}
+		for _, d := range add {
+			drop[d] = true
+		}
 		for _, d := range st.Dirs {
-			if d != dir {
+			if !drop[d] {
 				next = append(next, d)
 			}
 		}
-		if req.Op == "add" {
-			next = append(next, dir)
-		}
+		next = append(next, add...)
 		st.Dirs = next
 		err := saveStore(st)
 		groupsMu.Unlock()
@@ -69,7 +78,7 @@ func routesSessions(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_sessions.enregistre")})
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_sessions.enregistre"), "n": len(add)})
 	})
 	// Date de modification la plus récente d'un transcript : l'interface relit la liste quand elle change (un prompt tapé dans un
 	// terminal fait remonter la session sans attendre le rafraîchissement périodique). ponytail: un stat par transcript à chaque appel,
@@ -512,4 +521,16 @@ func newestTranscript() int64 {
 	}
 	stampAt, stampRoot, stampVal = time.Now(), root, newest
 	return newest
+}
+
+// Sous-dossiers directs de dir, triés, sans les dossiers cachés ni les liens symboliques.
+func childDirs(dir string) []string {
+	es, _ := os.ReadDir(dir)
+	out := []string{}
+	for _, e := range es {
+		if e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
+			out = append(out, filepath.Join(dir, e.Name()))
+		}
+	}
+	return out
 }
