@@ -241,3 +241,20 @@ func TestMemResolveProjetExistant(t *testing.T) {
 		t.Fatalf("dossiers créés dans projects/ : %v", ents)
 	}
 }
+
+func TestSaveSnippetGardeUnFichierIllisible(t *testing.T) {
+	cfg := t.TempDir()
+	old := root
+	t.Cleanup(func() { root = old })
+	use(cfg)
+	snipDir = ""
+	p := filepath.Join(cfg, "commands", "x.md")
+	os.MkdirAll(filepath.Dir(p), 0o755)
+	os.WriteFile(p, []byte("\xff\xfe"), 0o644)
+	if err := saveSnippet("u/x.md", "nouveau", false); err == nil {
+		t.Fatal("snippet illisible écrasé")
+	}
+	if b, _ := os.ReadFile(p); string(b) != "\xff\xfe" {
+		t.Fatalf("contenu perdu : %q", b)
+	}
+}

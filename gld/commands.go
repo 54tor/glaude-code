@@ -171,7 +171,11 @@ func saveSnippet(key, text string, create bool) error {
 	if err != nil {
 		return err
 	}
-	if old, err := readSnippet(key); err == nil {
+	old, err := readSnippet(key)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err // trop gros ou pas en UTF-8 : le remplacer le perdrait sans passer par la corbeille
+	}
+	if err == nil {
 		if create {
 			return terr("srv.commands.ceSnippetExisteDeja", "A1", filepath.ToSlash(rel))
 		}
