@@ -188,7 +188,7 @@ func (s *shareStore) End(session string) error {
 	err := s.save()
 	s.mu.Unlock()
 	if queueSt != nil {
-		queueSt.RemoveByAuthor(session, "guest")
+		queueSt.RemoveByAuthor(session, "guest", false)
 	}
 	return err
 }
@@ -261,6 +261,12 @@ func routesShare(mux *http.ServeMux) {
 		case err != nil:
 			fail(w, 500, "srv.share.indisponible")
 			return
+		}
+		if req.Mode == "ro" && queueSt != nil {
+			if _, err := queueSt.RemoveByAuthor(req.ID, "guest", true); err != nil {
+				fail(w, 500, "srv.share.indisponible")
+				return
+			}
 		}
 		writeJSON(w, 200, map[string]any{"ok": true})
 	})

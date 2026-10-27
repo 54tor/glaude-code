@@ -347,3 +347,42 @@ func TestShareCreateRouteFailsOnWrite(t *testing.T) {
 		t.Fatalf("code %d %s", w.Code, w.Body)
 	}
 }
+
+func TestShareReadOnlyDropsQueuedGuestItems(t *testing.T) {
+	mux := shareMux(t)
+	oldSt := queueSt
+	qd := t.TempDir()
+	q, _ := openQueue(qd)
+	queueSt = q
+	t.Cleanup(func() { queueSt = oldSt })
+	post(mux, "/share-create", `{"id":"`+shSess+`","dir":"proj"}`)
+	s, _ := q.Add(shSess, "guest", "en cours")
+	q.MarkSending(shSess, s.ID)
+	q.Add(shSess, "guest", "g")
+	q.Add(shSess, "host", "h")
+	if w := post(mux, "/share-mode", `{"id":"`+shSess+`","mode":"ro"}`); w.Code != 200 {
+		t.Fatalf("code %d", w.Code)
+	}
+	l := q.List(shSess)
+	if len(l) != 2 || l[0].ID != s.ID || l[1].Author != "host" {
+		t.Fatalf("file : %+v", l)
+	}
+	q.Add(shSess, "host", "h2")
+	q.Add(shSess, "guest", "g2") // la garde refuse l'ajout invité en lecture seule ; ici on teste l'échec d'écriture
+	if os.Geteuid() == 0 {
+		return
+	}
+	os.Chmod(qd, 0o500)
+	t.Cleanup(func() { os.Chmod(qd, 0o700) })
+	if w := post(mux, "/share-mode", `{"id":"`+shSess+`","mode":"ro"}`); w.Code != 500 {
+		t.Fatalf("échec d'écriture de la file : %d", w.Code)
+	}
+	if sh, _ := shareSt.Get(shSess); sh.Mode != "ro" {
+		t.Fatalf("mode = %q", sh.Mode)
+	}
+	for _, it := range q.List(shSess) {
+		if it.Author == "guest" && it.State == "queued" {
+			t.Fatalf("item invité encore en file : %+v", it)
+		}
+	}
+}

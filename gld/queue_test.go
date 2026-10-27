@@ -350,7 +350,7 @@ func TestQueueRemoveByAuthor(t *testing.T) {
 	q.Add("s", "guest", "a")
 	q.Add("s", "host", "b")
 	q.Add("t", "guest", "c")
-	if n := q.RemoveByAuthor("s", "guest"); n != 1 {
+	if n, err := q.RemoveByAuthor("s", "guest", false); n != 1 || err != nil {
 		t.Fatalf("retirés : %d", n)
 	}
 	if l := q.List("s"); len(l) != 1 || l[0].Author != "host" {

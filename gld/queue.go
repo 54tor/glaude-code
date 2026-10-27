@@ -209,27 +209,27 @@ func (q *queueStore) Requeue(session, itemID string) bool {
 	return true
 }
 
-// RemoveByAuthor retire les items d'un auteur dans une session (fin de partage : les messages invités en file disparaissent).
-func (q *queueStore) RemoveByAuthor(session, author string) int {
+// RemoveByAuthor retire les items d'un auteur dans une session : tous à la fin du partage, seulement ceux encore « queued »
+// au passage en lecture seule (un item « sending » est peut-être déjà parti). Le retrait en mémoire tient même si l'écriture échoue.
+func (q *queueStore) RemoveByAuthor(session, author string, queuedOnly bool) (int, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	var keep []QItem
 	n := 0
 	for _, it := range q.sess[session] {
-		if it.Author == author {
+		if it.Author == author && (!queuedOnly || it.State == "queued") {
 			n++
 		} else {
 			keep = append(keep, it)
 		}
 	}
 	if n == 0 {
-		return 0
+		return 0, nil
 	}
 	if len(keep) == 0 {
 		delete(q.sess, session)
 	} else {
 		q.sess[session] = keep
 	}
-	q.save()
-	return n
+	return n, q.save()
 }
