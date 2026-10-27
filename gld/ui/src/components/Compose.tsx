@@ -22,9 +22,6 @@ import { ModelPicker } from "./ModelPicker"
 import { useMention } from "./Mention"
 import { Choose } from "./Choose"
 import { SnippetMenu } from "./SnippetMenu"
-import { GitBadge } from "./GitBadge"
-import { GitPush } from "./GitPush"
-import { useGit } from "@/hooks/useGit"
 
 // Dossier où lancer une nouvelle session : celui d'une de ses sessions (le serveur en tire le dossier de travail).
 export type Target = { label: string; project: string; dir: string; id: string; cwd?: string } // cwd : dossier choisi à la main (sans session existante)
@@ -61,9 +58,6 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
   const [custom, setCustom] = useState<Target | null>(null) // dossier choisi dans l'explorateur
   const tgt = custom ?? ask.targets?.[target]
   const project = tgt?.project ?? ask.project
-  // État git du dossier visé et de ses dépôts : on peut pousser sans quitter la fenêtre (le menu nomme le remote cible).
-  const git = useGit()
-  const gitDirs = [project, ...(git.repos[project] ?? [])].filter((d) => git.status[d])
   const [mem, setMem] = useState<{ global: MemFile[]; projects: MemProject[] } | null>(null)
   const area = useRef<HTMLTextAreaElement>(null)
   const ok = text.trim() !== ""
@@ -205,13 +199,6 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
             </DropdownMenuContent>
           </DropdownMenu>
           <SnippetMenu onInsert={insert} />
-          {gitDirs.map((d) => (
-            <span key={d} className="flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs" title={d}>
-              <span className="max-w-32 truncate text-muted-foreground">{d.split("/").filter(Boolean).pop()}</span>
-              <GitBadge st={git.status[d]} />
-              <GitPush dir={d} st={git.status[d]} />
-            </span>
-          ))}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <ModelPicker value={choice} onChange={setChoice} className="max-w-80" />
