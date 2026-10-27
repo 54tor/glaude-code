@@ -240,12 +240,7 @@ export function LiveAgents({ live: { st }, dir, id }: { live: Live; dir: string;
   const [sub, setSub] = useState<SubLive | null>(null)
   const subs = st?.subs ?? []
   const running = subs.filter((s) => s.running).length
-  if (!st || subs.length === 0)
-    return (
-      <Button size="xs" variant="ghost" disabled title={t("conversation.live.subagentsTitle")}>
-        <Bot /> {t("conversation.live.subagents", { n: 0 })}
-      </Button>
-    )
+  if (!st || subs.length === 0) return null
   return (
     <>
       <Button size="xs" variant="ghost" onClick={() => setShown(true)} title={t("conversation.live.subagentsTitle")}>
