@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react"
 import { setLang } from "@/i18n"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import * as teams from "@/lib/teams"
@@ -11,13 +17,34 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-const ag = (Name: string, Role: string): teams.Agent => ({ ID: Name.toLowerCase(), Name, Role, Access: "", Prompt: "", Model: "", Builtin: true, Base: "" })
+const ag = (Name: string, Role: string): teams.Agent => ({
+  ID: Name.toLowerCase(),
+  Name,
+  Role,
+  Access: "",
+  Prompt: "",
+  Model: "",
+  Builtin: true,
+  Base: "",
+})
 const atlas = ag("Atlas", "chef de projet")
 const catalog: teams.Catalog = {
   agents: [atlas, ag("Hugo", "testeur"), ag("Ada", "backend")],
   teams: [
-    { ID: "feat", Name: "Fonctionnalité", Members: ["ada", "hugo"], Builtin: true, Base: "" },
-    { ID: "bug", Name: "Correctif de bug", Members: ["hugo"], Builtin: true, Base: "" },
+    {
+      ID: "feat",
+      Name: "Fonctionnalité",
+      Members: ["ada", "hugo"],
+      Builtin: true,
+      Base: "",
+    },
+    {
+      ID: "bug",
+      Name: "Correctif de bug",
+      Members: ["hugo"],
+      Builtin: true,
+      Base: "",
+    },
   ],
 }
 const mockCompose = (tooMany = false) =>
@@ -28,7 +55,8 @@ const mockCompose = (tooMany = false) =>
     tooMany,
   }))
 const click = async (e: HTMLElement) => void fireEvent.click(e)
-const type = async (e: HTMLElement, v: string) => void fireEvent.change(e, { target: { value: v } })
+const type = async (e: HTMLElement, v: string) =>
+  void fireEvent.change(e, { target: { value: v } })
 const pickDir = vi.fn(async () => "/work")
 const setup = (onLaunch = vi.fn(async () => ({ ok: true }) as never)) => {
   render(<TeamPicker catalog={catalog} onLaunch={onLaunch} pickDir={pickDir} />)
@@ -52,12 +80,16 @@ describe("TeamPicker", () => {
     await type(screen.getByRole("textbox"), "x")
     await click(screen.getByRole("button", { name: "Choisir" }))
     await screen.findByText(/Plus de 5 coéquipiers/)
-    expect((screen.getByRole("button", { name: "Lancer" }) as HTMLButtonElement).disabled).toBe(false)
+    expect(
+      (screen.getByRole("button", { name: "Lancer" }) as HTMLButtonElement)
+        .disabled
+    ).toBe(false)
   })
   it("Lancer désactivé sans team, objectif ou dossier", async () => {
     mockCompose()
     setup()
-    const btn = () => screen.getByRole("button", { name: "Lancer" }) as HTMLButtonElement
+    const btn = () =>
+      screen.getByRole("button", { name: "Lancer" }) as HTMLButtonElement
     expect(btn().disabled).toBe(true)
     await click(screen.getByRole("checkbox", { name: /Fonctionnalité/ }))
     await type(screen.getByRole("textbox"), "x")
@@ -76,7 +108,20 @@ describe("TeamPicker", () => {
   })
   it("affiche out et Conflicts en texte", async () => {
     mockCompose()
-    const onLaunch = vi.fn(async () => ({ ok: false, out: "<b>boom</b>", run: { TeamName: "t", SessionID: "", Mates: [], Conflicts: ["ada.md"], TooMany: false } }) as never)
+    const onLaunch = vi.fn(
+      async () =>
+        ({
+          ok: false,
+          out: "<b>boom</b>",
+          run: {
+            TeamName: "t",
+            SessionID: "",
+            Mates: [],
+            Conflicts: ["ada.md"],
+            TooMany: false,
+          },
+        }) as never
+    )
     setup(onLaunch)
     await click(screen.getByRole("checkbox", { name: /Fonctionnalité/ }))
     await type(screen.getByRole("textbox"), "x")
@@ -94,5 +139,35 @@ describe("TeamPicker", () => {
     expect(cb.getAttribute("aria-checked")).toBe("true")
     fireEvent.keyDown(cb, { key: "Enter" })
     expect(cb.getAttribute("aria-checked")).toBe("false")
+  })
+  it("team retirée du catalogue : sélection purgée, composition vidée, Lancer désactivé", async () => {
+    mockCompose()
+    const onLaunch = vi.fn(async () => ({ ok: true }) as never)
+    const { rerender } = render(
+      <TeamPicker catalog={catalog} onLaunch={onLaunch} pickDir={pickDir} />
+    )
+    await click(screen.getByRole("checkbox", { name: /Fonctionnalité/ }))
+    await screen.findByText("1 team(s) · 2 coéquipier(s)")
+    await type(screen.getByRole("textbox"), "x")
+    await click(screen.getByRole("button", { name: "Choisir" }))
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: "Lancer" }) as HTMLButtonElement)
+          .disabled
+      ).toBe(false)
+    )
+    rerender(
+      <TeamPicker
+        catalog={{ ...catalog, teams: [catalog.teams[1]] }}
+        onLaunch={onLaunch}
+        pickDir={pickDir}
+      />
+    )
+    await screen.findByText("0 team(s) · 0 coéquipier(s)")
+    expect(screen.queryByText("Ada", { selector: "b" })).toBeNull()
+    expect(
+      (screen.getByRole("button", { name: "Lancer" }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true)
   })
 })

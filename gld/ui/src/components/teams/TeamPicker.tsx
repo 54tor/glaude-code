@@ -39,6 +39,16 @@ export function TeamPicker({
   const toggle = (id: string) =>
     setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]))
 
+  // une team supprimée ou renommée ailleurs ne reste pas sélectionnée
+  useEffect(
+    () =>
+      setSel((s) =>
+        s.every((id) => catalog.teams.some((t) => t.ID === id))
+          ? s
+          : s.filter((id) => catalog.teams.some((t) => t.ID === id))
+      ),
+    [catalog.teams]
+  )
   useEffect(() => {
     const n = ++seq.current // une réponse lente d'une sélection précédente est ignorée
     if (!sel.length) return void setCompo(null)
