@@ -90,4 +90,27 @@ describe("useShares", () => {
     await act(async () => void (await last().refresh()))
     expect(s).toHaveBeenCalledTimes(2)
   })
+
+  it("un sondage lent et ancien n'écrase pas une lecture plus récente", async () => {
+    let slow!: (v: { shares: ShareInfo[] }) => void
+    vi.spyOn(api, "shares")
+      .mockResolvedValueOnce({ shares: [] })
+      .mockReturnValueOnce(new Promise((r) => (slow = r)))
+      .mockResolvedValueOnce({ shares: [share("new")] })
+    render(<Probe />)
+    await act(async () => {})
+    await act(async () => void vi.advanceTimersByTime(10000))
+    await act(async () => void (await last().refresh()))
+    expect(last().shares?.[0].id).toBe("new")
+    await act(async () => slow({ shares: [share("old")] }))
+    expect(last().shares?.[0].id).toBe("new")
+  })
+
+  it("relit dès que l'onglet redevient visible", async () => {
+    const s = vi.spyOn(api, "shares").mockResolvedValue({ shares: [] })
+    render(<Probe />)
+    await act(async () => {})
+    await act(async () => void document.dispatchEvent(new Event("visibilitychange")))
+    expect(s).toHaveBeenCalledTimes(2)
+  })
 })

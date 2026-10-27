@@ -129,4 +129,34 @@ describe("InvitesOverlay", () => {
     await act(async () => void (await new Promise((r) => setTimeout(r, 30))))
     expect(c).toHaveBeenCalledTimes(1)
   })
+
+  it("le lien affiché porte le libellé de son invitation : le dernier régénéré seul", async () => {
+    vi.spyOn(api, "inviteRegen").mockResolvedValueOnce({ ...ok, token: "ta" }).mockResolvedValueOnce({ ...ok, token: "tb" })
+    await mount([sh([inv(), inv({ id: "i2", label: "Bob" })])])
+    await click(/Régénérer le lien/, 0)
+    await click(/^Régénérer$/)
+    expect(screen.getByLabelText("Lien de Léa")).toBeTruthy()
+    await click(/Régénérer le lien/, 1)
+    await click(/^Régénérer$/)
+    expect(screen.queryByLabelText("Lien de Léa")).toBeNull()
+    expect((screen.getByLabelText("Lien de Bob") as HTMLInputElement).value).toContain("/tb")
+  })
+
+  it("révoquer l'invitation du lien affiché l'efface", async () => {
+    vi.spyOn(api, "inviteRegen").mockResolvedValue({ ...ok, token: "tb" })
+    vi.spyOn(api, "inviteRevoke").mockResolvedValue(ok)
+    await mount([sh([inv()])])
+    await click(/Régénérer le lien/)
+    await click(/^Régénérer$/)
+    expect(screen.getByLabelText("Lien de Léa")).toBeTruthy()
+    await click(/Révoquer/)
+    await click(/^Révoquer$/)
+    expect(screen.queryByLabelText("Lien de Léa")).toBeNull()
+  })
+
+  it("à 10 invitations : la limite est dite, plus de champ d'invitation", async () => {
+    await mount([sh(Array.from({ length: 10 }, (_, k) => inv({ id: `i${k}`, label: `N${k}` })))])
+    expect(screen.getByText(/Dix invitations au plus/)).toBeTruthy()
+    expect(screen.queryByRole("button", { name: /Inviter quelqu'un/ })).toBeNull()
+  })
 })

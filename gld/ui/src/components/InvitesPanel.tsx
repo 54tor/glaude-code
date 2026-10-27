@@ -81,11 +81,11 @@ type Ctx = { busy: boolean; guard: (f: () => Promise<void>) => () => Promise<voi
 
 function SessionBlock({ s, bare, busy, guard, setAsk, refresh, onOpenSession }: Ctx & { s: ShareInfo; bare: boolean }) {
   const { t } = useTranslation()
-  const [link, setLink] = useState("")
+  const [link, setLink] = useState<{ invite: string; label: string; url: string } | null>(null)
   const [name, setName] = useState("")
 
-  const show = async (url: string) => {
-    setLink(url)
+  const show = async (invite: string, label: string, url: string) => {
+    setLink({ invite, label, url })
     try {
       await navigator.clipboard.writeText(url)
       toast.success(t("shell.share.copied"))
@@ -98,8 +98,9 @@ function SessionBlock({ s, bare, busy, guard, setAsk, refresh, onOpenSession }: 
     if (!mk) return
     const r = await api.inviteCreate(s.id, s.dir, cleanTitle(s.title), name.trim() || undefined)
     if (!r.ok || !r.token) return void toast.error(t("shell.share.createFailed", { msg: r.out }))
+    const typed = name
     setName("")
-    await show(mk(r.token))
+    await show(r.invite?.id ?? "", r.invite?.label ?? typed.trim(), mk(r.token))
     void refresh()
   }
   const regen = (i: InviteInfo) => async () => {
@@ -107,13 +108,14 @@ function SessionBlock({ s, bare, busy, guard, setAsk, refresh, onOpenSession }: 
     if (!mk) return
     const r = await api.inviteRegen(s.id, i.id)
     if (!r.ok || !r.token) return void toast.error(t("shell.invites.regenFailed", { msg: r.out }))
-    await show(mk(r.token))
+    await show(i.id, i.label, mk(r.token))
     void refresh()
   }
   const revoke = (i: InviteInfo) => async () => {
     const r = await api.inviteRevoke(s.id, i.id)
     // le serveur révoque en mémoire même quand l'écriture échoue
     if (!r.ok) toast.error(t("shell.invites.revokeFailed", { msg: r.out }))
+    setLink((l) => (l?.invite === i.id ? null : l))
     void refresh()
   }
   const mode = (i: InviteInfo) => async () => {
@@ -129,7 +131,7 @@ function SessionBlock({ s, bare, busy, guard, setAsk, refresh, onOpenSession }: 
   const end = async () => {
     const r = await api.shareEnd(s.id)
     if (!r.ok) toast.error(t("shell.share.endSaveFailed", { msg: r.out }))
-    setLink("")
+    setLink(null)
     void refresh()
   }
 
@@ -146,7 +148,12 @@ function SessionBlock({ s, bare, busy, guard, setAsk, refresh, onOpenSession }: 
         </div>
       )}
       {!s.open && <p className="text-xs text-warning">{t("shell.invites.closed")}</p>}
-      {link && <input readOnly value={link} onFocus={(e) => e.target.select()} className="w-full rounded-md border bg-muted px-2 py-1 font-mono text-xs" />}
+      {link && (
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">{link.label ? t("shell.invites.linkOf", { name: link.label }) : t("shell.invites.linkNew")}</p>
+          <input readOnly value={link.url} aria-label={link.label ? t("shell.invites.linkOf", { name: link.label }) : t("shell.invites.linkNew")} onFocus={(e) => e.target.select()} className="w-full rounded-md border bg-muted px-2 py-1 font-mono text-xs" />
+        </div>
+      )}
       <ul className="space-y-2">
         {s.invites.map((i) => (
           <li key={i.id} className="space-y-1">
@@ -201,7 +208,9 @@ function SessionBlock({ s, bare, busy, guard, setAsk, refresh, onOpenSession }: 
           </li>
         ))}
       </ul>
-      {s.invites.length < 10 && (
+      {s.invites.length >= 10 ? (
+        <p className="text-xs text-muted-foreground">{t("shell.invites.limit")}</p>
+      ) : (
         <div className="flex flex-wrap items-center gap-2">
           <Input value={name} maxLength={24} aria-label={t("shell.invites.nameAria")} placeholder={t("shell.invites.namePlaceholder")} onChange={(e) => setName(e.target.value)} className="h-7 max-w-52" />
           <Button size="sm" disabled={busy} onClick={() => void guard(create)()}>

@@ -43,7 +43,7 @@ describe("ShareDialog", () => {
     await click(/Inviter quelqu'un/)
     expect(c).toHaveBeenCalledWith("s1", "/d", "Ma session", "Léa")
     expect(write).toHaveBeenCalledWith(`${location.origin}/invite/main/tok`)
-    expect((screen.getByRole("textbox", { name: "" }) as HTMLInputElement).value).toBe(`${location.origin}/invite/main/tok`)
+    expect((screen.getByDisplayValue(/invite\/main\/tok/) as HTMLInputElement).value).toBe(`${location.origin}/invite/main/tok`)
   })
 
   it.each([["x".repeat(130), "x".repeat(120)], ["(sans titre)", undefined], ["", undefined]])("titre %#", async (given, sent) => {

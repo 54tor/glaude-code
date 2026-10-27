@@ -15,11 +15,16 @@ const set = (next: State) => {
   subs.forEach((f) => f())
 }
 
-const load = () =>
-  api.shares().then(
-    (r) => set({ shares: r.shares ?? [], error: false }),
-    (e) => set(e instanceof HttpError && (e.status === 403 || e.status === 404) ? { shares: [], error: false } : { shares: state.shares, error: true })
+// seq : seule la dernière lecture lancée compte, un sondage lent et ancien ne ressuscite pas une invitation révoquée.
+let seq = 0
+const load = () => {
+  const n = ++seq
+  return api.shares().then(
+    (r) => void (n === seq && set({ shares: r.shares ?? [], error: false })),
+    (e) => void (n === seq && set(e instanceof HttpError && (e.status === 403 || e.status === 404) ? { shares: [], error: false } : { shares: state.shares, error: true }))
   )
+}
+const onVisible = () => document.visibilityState === "visible" && void load()
 
 const arm = () => {
   clearInterval(timer)
@@ -34,6 +39,8 @@ const subscribe = (f: () => void) => {
 export function resetShares() {
   state = { shares: null, error: false }
   users = fasts = 0
+  seq = 0
+  document.removeEventListener("visibilitychange", onVisible)
   clearInterval(timer)
   timer = undefined
 }
@@ -43,11 +50,15 @@ export function useShares(fast = false) {
   useEffect(() => {
     users++
     if (fast) fasts++
-    if (users === 1) void load()
+    if (users === 1) {
+      void load()
+      document.addEventListener("visibilitychange", onVisible)
+    }
     arm()
     return () => {
       users--
       if (fast) fasts--
+      if (!users) document.removeEventListener("visibilitychange", onVisible)
       arm()
     }
   }, [fast])

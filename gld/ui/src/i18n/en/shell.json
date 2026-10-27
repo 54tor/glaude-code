@@ -494,7 +494,6 @@
       "invite": "Invite someone",
       "namePlaceholder": "Guest name (optional)",
       "nameAria": "Guest name",
-      "create": "Create link",
       "connected": "connected",
       "away": "away (seen {{ago}})",
       "pending": "link not used",
@@ -522,7 +521,9 @@
       "button": "Invitations",
       "buttonAria": "Invitations: {{connected}} connected, {{pending}} message(s) waiting",
       "none": "No shared session.",
-      "sessionUntitled": "Untitled session"
+      "sessionUntitled": "Untitled session",
+      "linkOf": "Link for {{name}}",
+      "linkNew": "New link"
     }
   }
 }

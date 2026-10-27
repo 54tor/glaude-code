@@ -494,7 +494,6 @@
       "invite": "Inviter quelqu'un",
       "namePlaceholder": "Nom de l'invité (facultatif)",
       "nameAria": "Nom de l'invité",
-      "create": "Créer le lien",
       "connected": "connecté",
       "away": "absent (vu {{ago}})",
       "pending": "lien non utilisé",
@@ -522,7 +521,9 @@
       "button": "Invitations",
       "buttonAria": "Invitations : {{connected}} connecté(s), {{pending}} message(s) en attente",
       "none": "Aucune session partagée.",
-      "sessionUntitled": "Session sans titre"
+      "sessionUntitled": "Session sans titre",
+      "linkOf": "Lien de {{name}}",
+      "linkNew": "Nouveau lien"
     }
   }
 }
