@@ -462,6 +462,10 @@ func (w *ideWorkspace) flushLocked(evs []ideEvent) {
 	}
 	w.applyLocked(evs)
 	for _, e := range evs {
+		if e.Type == "create" && w.declared[e.Path] > 0 && w.watcher != nil {
+			// inotify a lâché le dossier quand il a été supprimé : sans nouvel Add, sa recréation (git checkout, rm puis mkdir) reste muette.
+			ideWatchAdd(w.watcher, filepath.Join(w.dir, filepath.FromSlash(e.Path)))
+		}
 		parent := path.Dir(e.Path)
 		for s := range w.subs {
 			if s.dirs[parent] {

@@ -594,3 +594,32 @@ func TestWatchAddLimitFallsBackToPoll(t *testing.T) {
 		t.Fatal("ENOSPC sans repli au sondage")
 	}
 }
+
+func TestWatchDirRecreatedStillWatched(t *testing.T) {
+	_, _, proj := web(t)
+	wsTest(t)
+	sub := filepath.Join(proj, "sub")
+	os.Mkdir(sub, 0o755)
+	ws, err := ideWS(proj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch, cancel := ws.Subscribe([]string{"", "sub"})
+	defer cancel()
+	os.RemoveAll(sub)
+	time.Sleep(3 * ideDebounce)
+	os.Mkdir(sub, 0o755)
+	time.Sleep(3 * ideDebounce)
+	os.WriteFile(filepath.Join(sub, "a.txt"), []byte("1"), 0o644)
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case e := <-ch:
+			if e.Path == "sub/a.txt" {
+				return
+			}
+		case <-deadline:
+			t.Fatal("dossier recréé plus surveillé")
+		}
+	}
+}
