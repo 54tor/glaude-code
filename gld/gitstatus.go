@@ -227,7 +227,7 @@ func subRepos(dir string) []string {
 		return e.dirs
 	}
 	var out []string
-	ents, _ := os.ReadDir(dir)
+	ents, _ := readDirTrusted(dir)
 	for _, d := range ents {
 		n := d.Name()
 		if !d.IsDir() || strings.HasPrefix(n, ".") || n == "node_modules" || n == "vendor" {
