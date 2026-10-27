@@ -250,6 +250,14 @@ func childProxy(target *url.URL, token string) *httputil.ReverseProxy {
 			if g := gateFrom(r.In); g != nil && g.p != nil {
 				r.Out.Header.Set(userHeader, principalName(g))
 			}
+			r.Out.Header.Del(guestHeader)
+			r.Out.Header.Del(guestHTTPSHeader)
+			if sec, _ := r.In.Context().Value(guestRelayKey{}).(string); sec != "" {
+				r.Out.Header.Set(guestHeader, sec)
+			}
+			if requestHTTPS(r.In) { // l'enfant pose le cookie invité : il doit savoir s'il sera Secure
+				r.Out.Header.Set(guestHTTPSHeader, "1")
+			}
 			r.Out.Header.Set(childHeader, token)
 			r.Out = r.Out.WithContext(context.WithValue(r.Out.Context(), auditIPKey{}, clientIP(r.In)))
 		},

@@ -27,6 +27,7 @@ var routeRights = map[string]Right{
 	"GET /memoire": rightPublic, "GET /memoire/": rightPublic, "GET /onglets": rightPublic, "GET /configuration": rightPublic,
 	"GET /configuration/": rightPublic, "GET /skills": rightPublic, "GET /skills/": rightPublic, "GET /extensions": rightPublic, "GET /equipes": rightPublic, "GET /equipes/": rightPublic, "GET /espace/": rightPublic, "GET /reglages/": rightPublic, "GET /assets/": rightPublic,
 	"GET /icons/": rightPublic, "GET /favicon.ico": rightPublic, "GET /manifest.webmanifest": rightPublic, "GET /sw.js": rightPublic,
+	"GET /guest": rightPublic, "GET /guest-me": rightPublic, "GET /invite/{home}/{token}": rightPublic,
 
 	// Connexion et profil.
 	"POST /auth/login": rightPublic, "POST /auth/mfa/totp": rightPublic, "POST /auth/mfa/recovery": rightPublic,

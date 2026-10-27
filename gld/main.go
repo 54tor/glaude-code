@@ -109,12 +109,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.rulesFailed", map[string]any{"A1": err.Error()}))
 	}
 	tokenPrincipal = tokenForChildren(token, generated)
+	hostToken = token // obligatoire hors localhost ; en local, exigé dès que GLD_WEB_TOKEN est fixé (machine partagée)
 	h := handler()
 	if !local {
 		openHosts = true // hors localhost, le Host n'est plus limité : le jeton (mode ouvert) ou la session (comptes) protège du DNS-rebinding
-	}
-	if token != "" { // obligatoire hors localhost ; en local, exigé dès que GLD_WEB_TOKEN est fixé (machine partagée)
-		h = withTokenOpen(token, h)
 	}
 	srv := newServer(net.JoinHostPort(*listen, port), h)
 	srv.RegisterOnShutdown(ideCloseAll) // sinon un flux /fs-watch ouvert fait attendre Shutdown jusqu'à son délai
@@ -347,6 +345,7 @@ func handler() http.Handler {
 	routesPair(mux)
 	routesQueue(mux)
 	routesShare(mux)
+	routesGuest(mux)
 	routesTeams(mux)
 	// Conversation dans le navigateur (chat.go).
 	mux.HandleFunc("POST /chat", chatHandler)
@@ -394,15 +393,7 @@ func handler() http.Handler {
 		}
 	}
 	guarded := http.NewCrossOriginProtection().Handler(withHomes(mux))
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !openHosts && !hosts[r.Host] {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
-		if !childAuthorized(r) {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
+	var host http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r, d := reqMode(r)
 		if d.err != nil {
 			gateDeny(w, 503, "srv.auth.baseInutilisable")
@@ -418,7 +409,26 @@ func handler() http.Handler {
 		}
 		guarded.ServeHTTP(w, r)
 	})
+	if hostToken != "" {
+		host = withTokenOpen(hostToken, host)
+	}
+	// Le jeton hôte passe après la garde invité : un invité n'en a pas, et un cookie invité invalide retombe sur lui.
+	guest := guestGate(mux, host)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !openHosts && !hosts[r.Host] {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if !childAuthorized(r) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		guest.ServeHTTP(w, r)
+	})
 }
+
+// hostToken : le jeton hôte, vérifié par handler après les gardes Host et invité ("" : aucun).
+var hostToken string
 
 var readHeaderTimeout = 10 * time.Second
 
