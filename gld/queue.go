@@ -182,3 +182,17 @@ func (q *queueStore) Sessions() []string {
 	}
 	return out
 }
+
+// Requeue : sending -> queued après un envoi refusé (rien n'est parti, contrairement à « uncertain »).
+func (q *queueStore) Requeue(session, itemID string) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	i := q.find(session, itemID)
+	if i < 0 || q.sess[session][i].State != "sending" {
+		return false
+	}
+	q.sess[session][i].State = "queued"
+	q.sess[session][i].SentAt = 0
+	q.save()
+	return true
+}

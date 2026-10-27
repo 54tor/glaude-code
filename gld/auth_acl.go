@@ -86,7 +86,7 @@ var routeRights = map[string]Right{
 	"GET /conv-image": RightSessionsRead, "GET /conv-doc": RightSessionsRead, "GET /info": RightSessionsRead,
 	"GET /session-state": RightSessionsRead, "GET /session-live": RightSessionsRead, "GET /session-task-output": RightSessionsRead, "GET /session-screen": RightSessionsRead,
 	"GET /session-loaded": RightSessionsRead, "GET /session-loaded-file": RightSessionsRead, "GET /session-trash": RightSessionsRead, "GET /sessions-stamp": RightSessionsRead,
-	"GET /session-send-info": RightSessionsRead, "GET /search": RightSessionsRead,
+	"GET /session-send-info": RightSessionsRead, "GET /search": RightSessionsRead, "GET /queue": RightSessionsRead,
 	// Renvoie des extraits de commandes tirés des transcriptions.
 	"GET /config-perm-suggest": RightSessionsRead,
 
@@ -97,7 +97,7 @@ var routeRights = map[string]Right{
 	"POST /fs-save": RightFsWrite, "POST /fs-new": RightFsWrite, "POST /fs-rename": RightFsWrite, "POST /fs-rm": RightFsWrite,
 	"POST /fs-trash-restore": RightFsWrite, "POST /fs-trash-purge": RightFsWrite,
 	"GET /term-info": RightExec, "POST /term-open": RightExec, "GET /term-ws": RightExec,
-	"POST /session-send": RightExec, "POST /session-key": RightExec, "POST /session-close": RightExec,
+	"POST /session-send": RightExec, "POST /queue-add": RightExec, "POST /queue-rm": RightExec, "POST /queue-retry": RightExec, "POST /session-key": RightExec, "POST /session-close": RightExec,
 	"GET /trust-pending": RightExec, "POST /trust-answer": RightExec, "POST /open": RightExec, "POST /git-push": RightExec,
 	"GET /ls": RightExec, "POST /dirs": RightExec, "POST /image-upload": RightExec, "POST /file-upload": RightExec,
 	// Agissent sur les sessions : fermeture, suppression de transcriptions, tours de modèle.

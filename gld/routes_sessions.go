@@ -179,6 +179,7 @@ func routesSessions(mux *http.ServeMux) {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return
 		}
+		markSent(req.ID)
 		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_sessions.messageEnvoyeALa")})
 	})
 	// Explorateur de dossiers pour « Réassigner » / « Déplacer » : sous-dossiers d'un chemin.

@@ -135,6 +135,9 @@ func main() {
 	go autosaveTabs(2 * time.Minute)
 	go watchWaiting(20 * time.Second)
 	go keepWarmLoop(30 * time.Second)
+	if queueSt != nil {
+		go queueLoop(ctx, queueSt)
+	}
 	go expireTrashLoop(24 * time.Hour)
 	go func() { _ = syncIndex() }() // index de recherche prêt avant la première requête
 	if local && token == "" {
@@ -342,6 +345,7 @@ func handler() http.Handler {
 	routesImages(mux)
 	routesDocs(mux)
 	routesPair(mux)
+	routesQueue(mux)
 	routesTeams(mux)
 	// Conversation dans le navigateur (chat.go).
 	mux.HandleFunc("POST /chat", chatHandler)
