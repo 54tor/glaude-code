@@ -110,9 +110,16 @@ func journalAppend(cfgRoot, team string, m DirectMsg) error {
 	if ok && fst.Size()+int64(len(line)) > journalMax {
 		return terr("srv.teams_journal.journalPlein")
 	}
-	f, err := os.OpenFile(file, os.O_WRONLY|os.O_APPEND|os.O_CREATE|syscall.O_NOFOLLOW, 0o600)
+	f, err := os.OpenFile(file, os.O_RDWR|os.O_APPEND|os.O_CREATE|syscall.O_NOFOLLOW, 0o600)
 	if err != nil {
 		return err
+	}
+	// un fragment sans « \n » (arrêt brutal) ne doit pas absorber la ligne suivante
+	if ok && fst.Size() > 0 {
+		var last [1]byte
+		if _, e := f.ReadAt(last[:], fst.Size()-1); e == nil && last[0] != '\n' {
+			line = append([]byte{'\n'}, line...)
+		}
 	}
 	_, err = f.Write(line)
 	if cerr := f.Close(); err == nil {
@@ -164,6 +171,9 @@ func journalDrop(cfgRoot, team string) error {
 	}
 	teamsJournalMu.Lock()
 	defer teamsJournalMu.Unlock()
+	if _, _, err := lstatNoLink(dir); err != nil {
+		return err
+	}
 	if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
 		return err
 	}

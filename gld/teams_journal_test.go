@@ -182,3 +182,34 @@ func TestJournalReadLast500(t *testing.T) {
 		t.Fatal(len(ms), ms[0].Text)
 	}
 }
+
+func TestJournalRecoversAfterPartialLine(t *testing.T) {
+	root := t.TempDir()
+	journalAppend(root, jTeam, DirectMsg{Author: "a", Text: "un"})
+	p := filepath.Join(root, "gld-teams-journal", jTeam+".jsonl")
+	f, _ := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0o600)
+	f.WriteString(`{"Author":"x","Te`)
+	f.Close()
+	journalAppend(root, jTeam, DirectMsg{Author: "a", Text: "deux"})
+	ms, err := journalRead(root, jTeam)
+	if err != nil || len(ms) != 2 || ms[1].Text != "deux" {
+		t.Fatal(ms, err)
+	}
+}
+
+func TestJournalSymlinkedDirDropAndRead(t *testing.T) {
+	root := t.TempDir()
+	other := t.TempDir()
+	target := filepath.Join(other, jTeam+".jsonl")
+	os.WriteFile(target, []byte("{}\n"), 0o600)
+	os.Symlink(other, filepath.Join(root, "gld-teams-journal"))
+	if !isMsg(journalDrop(root, jTeam), "srv.teams_journal.lienRefuse") {
+		t.Fatal("drop")
+	}
+	if _, err := os.Stat(target); err != nil {
+		t.Fatal("cible supprimée")
+	}
+	if _, err := journalRead(root, jTeam); !isMsg(err, "srv.teams_journal.lienRefuse") {
+		t.Fatal(err)
+	}
+}
