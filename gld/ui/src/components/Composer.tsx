@@ -524,10 +524,14 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
     onSent()
   }
   const asking = !!prompt
+  const ask = useRef(onAsk) // le parent passe une flèche neuve à chaque rendu : l'effet ne doit suivre que asking
   useEffect(() => {
-    onAsk?.(asking)
-    return () => onAsk?.(false)
-  }, [asking, onAsk])
+    ask.current = onAsk
+  })
+  useEffect(() => {
+    ask.current?.(asking)
+    return () => ask.current?.(false)
+  }, [asking])
   return (
     <div className="space-y-2">
       {prompt && (
