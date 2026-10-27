@@ -175,3 +175,19 @@ func TestSameSet(t *testing.T) {
 		}
 	}
 }
+
+func TestSyncSkillGardeLeBitExecutable(t *testing.T) {
+	src, dst := syncEnv(t)
+	put(t, filepath.Join(src, "skills", "run", "SKILL.md"), "x\n", old)
+	put(t, filepath.Join(src, "skills", "run", "scripts", "go.sh"), "echo\n", old)
+	os.Chmod(filepath.Join(src, "skills", "run", "scripts", "go.sh"), 0o755)
+	if _, err := syncApply("Pro", "Perso", []SyncPick{{"skill:run", "replace"}}); err != nil {
+		t.Fatal(err)
+	}
+	if st, err := os.Stat(filepath.Join(dst, "skills", "run", "scripts", "go.sh")); err != nil || st.Mode()&0o100 == 0 {
+		t.Fatalf("script synchronisé sans bit exécutable : %v %v", st, err)
+	}
+	if st, _ := os.Stat(filepath.Join(dst, "skills", "run", "SKILL.md")); st.Mode()&0o111 != 0 {
+		t.Fatal("SKILL.md rendu exécutable")
+	}
+}

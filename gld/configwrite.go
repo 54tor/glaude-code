@@ -259,7 +259,11 @@ func writeSynced(name string, b []byte, mode os.FileMode) error {
 	return errors.Join(err, f.Sync(), f.Close())
 }
 
-func writeConfig(path string, content []byte) error {
+func writeConfig(path string, content []byte) error { return writeConfigExec(path, content, false) }
+
+// writeConfigExec : exec ajoute le bit exécutable du propriétaire, posé sur le fichier temporaire avant le renommage, jamais par nom
+// sur la cible.
+func writeConfigExec(path string, content []byte, exec bool) error {
 	if err := notSymlink(path); err != nil {
 		return err
 	}
@@ -269,6 +273,9 @@ func writeConfig(path string, content []byte) error {
 	mode := os.FileMode(0o600)
 	if st, err := os.Stat(path); err == nil {
 		mode = st.Mode().Perm()
+	}
+	if exec {
+		mode |= 0o100
 	}
 	f, err := os.CreateTemp(filepath.Dir(path), ".gld-web-*.tmp")
 	if err != nil {

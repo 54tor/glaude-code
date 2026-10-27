@@ -338,7 +338,10 @@ func syncApply(from, to string, picks []SyncPick) (string, error) {
 	sf, ss, tsk := syncFiles(fd), syncSkills(fd), syncSkills(td)
 	stamp := time.Now().Format("20060102-150405")
 	settingsTouched, n := false, 0
-	type fileOut struct{ rel, content string }
+	type fileOut struct {
+		rel, content string
+		exec         bool
+	}
 	var writes []fileOut
 	var removes []string // fichiers d'un skill remplacé absents de la source
 	for _, p := range picks {
@@ -384,10 +387,12 @@ func syncApply(from, to string, picks []SyncPick) (string, error) {
 			}
 			setRules(ts, name, next)
 		case "file":
-			writes = append(writes, fileOut{filepath.FromSlash(name), sf[filepath.FromSlash(name)]})
+			writes = append(writes, fileOut{filepath.FromSlash(name), sf[filepath.FromSlash(name)], false})
 		case "skill":
 			for rel, c := range ss[name] {
-				writes = append(writes, fileOut{filepath.Join("skills", name, rel), c})
+				p := filepath.Join("skills", name, rel)
+				fi, err := os.Lstat(filepath.Join(fd, p)) // Lstat : un lien n'apporte jamais son mode
+				writes = append(writes, fileOut{p, c, err == nil && fi.Mode().IsRegular() && fi.Mode()&0o111 != 0})
 			}
 			for rel := range tsk[name] {
 				if _, keep := ss[name][rel]; !keep {
@@ -417,7 +422,7 @@ func syncApply(from, to string, picks []SyncPick) (string, error) {
 		if err := syncBackup(td, stamp, w.rel); err != nil {
 			return "", terr("srv.homesync.sauvegardeImpossible", "A1", err.Error())
 		}
-		if err := writeConfig(filepath.Join(td, w.rel), []byte(w.content)); err != nil {
+		if err := writeConfigExec(filepath.Join(td, w.rel), []byte(w.content), w.exec); err != nil {
 			return "", err
 		}
 	}
