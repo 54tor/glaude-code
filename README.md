@@ -79,6 +79,7 @@ Rien n'est perdu : tout fichier supprimé ou remplacé passe d'abord par une **c
 ### Gérer skills, commandes et réglages
 
 - **Skills** : lire, créer, modifier, copier vers un projet ; la liste signale les skills mal décrits.
+- **npx skills** : les skills posés par `npx skills` sont reconnus (source, lien ou copie, mise à jour disponible) ; on peut en chercher, installer, mettre à jour et retirer depuis la page Skills. Chaque action affiche la commande exacte avant de la lancer ; elle exige `config_write`.
 - **Snippets** : vos commandes `/nom` de Claude Code, à créer, modifier, importer ou exporter, et à insérer dans un message.
 - **Configuration** : permissions, réglages et dossiers supplémentaires de Claude Code, en listes et cases à cocher.
   Chaque modification montre ce qui change avant d'être écrite, et une sauvegarde est faite à chaque fois.
