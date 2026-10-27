@@ -114,7 +114,7 @@ func walkCommands(base, scope, project string, out []Snippet) []Snippet {
 		rel, _ := filepath.Rel(base, p)
 		rel = filepath.ToSlash(rel)
 		desc := ""
-		if b, err := os.ReadFile(p); err == nil {
+		if b, err := readTrusted(p); err == nil {
 			desc = describe(string(b))
 		}
 		out = append(out, Snippet{prefix + rel, scope, project, rel, "/" + strings.ReplaceAll(strings.TrimSuffix(rel, ".md"), "/", ":"),
@@ -128,7 +128,7 @@ func walkCommands(base, scope, project string, out []Snippet) []Snippet {
 func listSnippets() (snips []Snippet, scopes []MemTarget) {
 	snips = walkCommands(userCmdDir(), "", "", []Snippet{})
 	scopes = []MemTarget{}
-	dirs, _ := os.ReadDir(root)
+	dirs, _ := readDirTrusted(root)
 	for _, d := range dirs {
 		c := projectCwd(d.Name())
 		if fi, err := os.Stat(c); !d.IsDir() || c == "" || err != nil || !fi.IsDir() {
