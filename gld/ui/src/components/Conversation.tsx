@@ -348,11 +348,6 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             <DropdownMenuCheckboxItem checked={tools} onCheckedChange={(c) => setTools(c === true)}>
               {t("conversation.view.showTools")}
             </DropdownMenuCheckboxItem>
-            {termOn && a.live.has(id) && (
-              <DropdownMenuItem onSelect={() => setView(inTerm ? "visuel" : "terminal")}>
-                {inTerm ? <MessagesSquare /> : <SquareTerminal />} {inTerm ? t("conversation.view.modeVisual") : t("conversation.view.modeTerminal")}
-              </DropdownMenuItem>
-            )}
             <DropdownMenuItem onSelect={() => setStatsOpen(true)}>
               <BarChart3 /> {t("conversation.live.stats")}
             </DropdownMenuItem>
@@ -426,14 +421,6 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             </Button>
           </div>
         )}
-        {/* Mode terminal : sur petit écran il est dans le menu « … » de l'en-tête. */}
-        {termOn && a.live.has(id) && (
-          <div className="flex items-center gap-1 border-b bg-muted/40 px-2 py-1.5 in-data-[kb]:hidden max-md:hidden md:px-4">
-            <Button variant="secondary" size="sm" onClick={() => setView(inTerm ? "visuel" : "terminal")} title={t("conversation.view.modeTitle")}>
-              {inTerm ? <MessagesSquare /> : <SquareTerminal />} {inTerm ? t("conversation.view.modeVisual") : t("conversation.view.modeTerminal")}
-            </Button>
-          </div>
-        )}
         {session && <LiveStats live={live} s={session} project={row?.g.project ?? session.cwd} detail={detail} shown={statsOpen} onShown={setStatsOpen} />}
         <div className="relative flex min-h-0 flex-1 flex-col">
           {fromTop && (
@@ -488,6 +475,11 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
         </div>
         {inTerm && (
           <div className="flex h-1/2 min-h-48 shrink-0 flex-col border-t">
+            <div className="flex items-center border-b bg-muted/40 px-2 py-1">
+              <Button variant="secondary" size="xs" onClick={() => setView("visuel")} title={t("conversation.view.modeTitle")}>
+                <MessagesSquare /> {t("conversation.view.modeVisual")}
+              </Button>
+            </div>
             <Suspense fallback={null}>
               <FullTerminal key={id} id={id} />
             </Suspense>
@@ -506,6 +498,11 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             compactHint={hint}
             extra={
               <>
+                {termOn && a.live.has(id) && (
+                  <Button variant="ghost" size="xs" className="text-muted-foreground" onClick={() => setView("terminal")} title={t("conversation.view.modeTitle")}>
+                    <SquareTerminal /> {t("conversation.view.modeTerminal")}
+                  </Button>
+                )}
                 {!a.live.has(id) && (
                   <Button size="xs" variant="ghost" disabled className="text-muted-foreground" title={t("conversation.composer.rawScreenTitle")}>
                     <Bug /> {t("conversation.composer.rawScreen")}
