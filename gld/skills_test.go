@@ -226,3 +226,51 @@ func TestSkillsSymlinkProtected(t *testing.T) {
 		t.Fatal("le SKILL.md cible a été touché")
 	}
 }
+
+func TestReadLock(t *testing.T) {
+	d := t.TempDir()
+	p := filepath.Join(d, "l.json")
+	put(t, p, `{"version":3,"skills":{"find-skills":{"source":"vercel-labs/skills","sourceType":"github","sourceUrl":"https://github.com/vercel-labs/skills.git","skillPath":"skills/find-skills/SKILL.md","skillFolderHash":"76a9","installedAt":"a","updatedAt":"b"}}}`, old)
+	e := readLock(p)["find-skills"]
+	want := LockEntry{"vercel-labs/skills", "github", "https://github.com/vercel-labs/skills.git", "skills/find-skills/SKILL.md", "76a9", "a", "b"}
+	if e != want {
+		t.Errorf("entrée : %+v", e)
+	}
+	for _, c := range []string{"{}", "not json", ""} {
+		put(t, p, c, old)
+		if len(readLock(p)) != 0 {
+			t.Errorf("%q : attendu vide", c)
+		}
+	}
+	if readLock(filepath.Join(d, "absent.json")) != nil {
+		t.Error("fichier absent : attendu nil")
+	}
+}
+
+func TestSkillLockEnLien(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	body := "---\ndescription: x\n---\nx\n"
+	put(t, filepath.Join(home, ".agents", "skills", "lie", "SKILL.md"), body, old)
+	put(t, filepath.Join(cfg, "skills", "copie", "SKILL.md"), body, old)
+	put(t, filepath.Join(cfg, "skills", "maison", "SKILL.md"), body, old)
+	if err := os.Symlink(filepath.Join(home, ".agents", "skills", "lie"), filepath.Join(cfg, "skills", "lie")); err != nil {
+		t.Fatal(err)
+	}
+	put(t, filepath.Join(home, ".agents", ".skill-lock.json"), `{"skills":{"lie":{"source":"o/r","sourceType":"github","skillFolderHash":"h"},"copie":{"source":"o/r","sourceType":"github"}}}`, old)
+	by := map[string]Skill{}
+	for _, s := range listSkills() {
+		by[s.Key] = s
+	}
+	if l := by["u/lie"].Lock; l == nil || !l.Link || !l.Global || l.Hash != "h" || by["u/lie"].Origin != "install" {
+		t.Errorf("lien : %+v", by["u/lie"])
+	}
+	if l := by["u/copie"].Lock; l == nil || l.Link {
+		t.Errorf("copie : %+v", by["u/copie"])
+	}
+	if by["u/maison"].Lock != nil || by["u/maison"].Origin != "custom" {
+		t.Errorf("maison : %+v", by["u/maison"])
+	}
+}

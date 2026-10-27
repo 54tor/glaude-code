@@ -21,27 +21,28 @@ import (
 )
 
 type Skill struct {
-	Key         string  `json:"key"` // u/<nom>, p/<dossier>/<nom>, x/<plugin>/<nom>, s/<lot>/<nom>
-	Name        string  `json:"name"`
-	Dir         string  `json:"dir"`              // nom du dossier
-	Scope       string  `json:"scope"`            // user, project, plugin, store
-	Origin      string  `json:"origin"`           // store, plugin, install, custom
-	Source      string  `json:"source,omitempty"` // d'où il vient : plugin, dépôt, page d'accueil indiquée dans le front matter
-	Project     string  `json:"project,omitempty"`
-	Plugin      string  `json:"plugin,omitempty"`
-	ReadOnly    bool    `json:"readOnly,omitempty"`
-	Description string  `json:"description"`
-	Chars       int     `json:"chars"`            // description + when_to_use : ce que la liste des skills coûte en contexte
-	DescTokens  int     `json:"descTokens"`       // estimation en tokens de la description (permanente en contexte, sauf Manual)
-	Tokens      int     `json:"tokens"`           // estimation en tokens du SKILL.md entier (chargé quand le skill est lancé)
-	Manual      bool    `json:"manual,omitempty"` // disable-model-invocation : Claude ne le lance pas seul (description hors contexte)
-	Hidden      bool    `json:"hidden,omitempty"` // user-invocable: false
-	Tools       string  `json:"tools,omitempty"`  // allowed-tools
-	Files       int     `json:"files"`            // fichiers du dossier, SKILL.md compris
-	KB          int64   `json:"kb"`
-	Mtime       float64 `json:"mtime"`
-	Path        string  `json:"path"`
-	Warn        string  `json:"warn,omitempty"`
+	Key         string     `json:"key"` // u/<nom>, p/<dossier>/<nom>, x/<plugin>/<nom>, s/<lot>/<nom>
+	Name        string     `json:"name"`
+	Dir         string     `json:"dir"`              // nom du dossier
+	Scope       string     `json:"scope"`            // user, project, plugin, store
+	Origin      string     `json:"origin"`           // store, plugin, install, custom
+	Source      string     `json:"source,omitempty"` // d'où il vient : plugin, dépôt, page d'accueil indiquée dans le front matter
+	Project     string     `json:"project,omitempty"`
+	Plugin      string     `json:"plugin,omitempty"`
+	ReadOnly    bool       `json:"readOnly,omitempty"`
+	Description string     `json:"description"`
+	Chars       int        `json:"chars"`            // description + when_to_use : ce que la liste des skills coûte en contexte
+	DescTokens  int        `json:"descTokens"`       // estimation en tokens de la description (permanente en contexte, sauf Manual)
+	Tokens      int        `json:"tokens"`           // estimation en tokens du SKILL.md entier (chargé quand le skill est lancé)
+	Manual      bool       `json:"manual,omitempty"` // disable-model-invocation : Claude ne le lance pas seul (description hors contexte)
+	Hidden      bool       `json:"hidden,omitempty"` // user-invocable: false
+	Tools       string     `json:"tools,omitempty"`  // allowed-tools
+	Files       int        `json:"files"`            // fichiers du dossier, SKILL.md compris
+	KB          int64      `json:"kb"`
+	Mtime       float64    `json:"mtime"`
+	Path        string     `json:"path"`
+	Warn        string     `json:"warn,omitempty"`
+	Lock        *SkillLock `json:"lock,omitempty"` // posé par `npx skills` : présent dans un fichier de verrouillage
 }
 
 type SkillFile struct {
@@ -195,38 +196,61 @@ func describeSkill(s *Skill, text string) {
 	}
 }
 
-// lockSources : les skills installés par `npx skills` (skills-lock.json d'un projet, ~/.agents/.skill-lock.json en personnel),
-// avec leur dépôt d'origine.
-func lockSources(path string) map[string]string {
+// LockEntry : un skill du fichier de verrouillage de `npx skills`.
+type LockEntry struct{ Source, SourceType, SourceURL, SkillPath, Hash, InstalledAt, UpdatedAt string }
+
+// SkillLock : ce que le verrou dit d'un skill installé par `npx skills`, et comment il est posé (lien ou copie).
+type SkillLock struct {
+	Source      string `json:"source"`
+	SourceType  string `json:"sourceType"`
+	SkillPath   string `json:"skillPath"`
+	Hash        string `json:"hash"`
+	InstalledAt string `json:"installedAt"`
+	UpdatedAt   string `json:"updatedAt"`
+	Link        bool   `json:"link"`
+	Global      bool   `json:"global"`
+}
+
+func (e LockEntry) label() string {
+	src := strings.TrimSpace(e.Source)
+	if e.SourceType != "" && src != "" {
+		src = e.SourceType + " : " + src
+	}
+	return cut(src, 200)
+}
+
+// readLock : le skills-lock.json d'un projet ou le ~/.agents/.skill-lock.json personnel ; nil si absent ou illisible.
+func readLock(path string) map[string]LockEntry {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil
 	}
 	var d struct {
 		Skills map[string]struct {
-			Source     string `json:"source"`
-			SourceType string `json:"sourceType"`
+			Source          string `json:"source"`
+			SourceType      string `json:"sourceType"`
+			SourceURL       string `json:"sourceUrl"`
+			SkillPath       string `json:"skillPath"`
+			SkillFolderHash string `json:"skillFolderHash"`
+			InstalledAt     string `json:"installedAt"`
+			UpdatedAt       string `json:"updatedAt"`
 		} `json:"skills"`
 	}
 	if json.Unmarshal(b, &d) != nil {
 		return nil
 	}
-	out := map[string]string{}
+	out := map[string]LockEntry{}
 	for n, s := range d.Skills {
-		src := strings.TrimSpace(s.Source)
-		if s.SourceType != "" && src != "" {
-			src = s.SourceType + " : " + src
-		}
-		out[n] = cut(src, 200)
+		out[n] = LockEntry{s.Source, s.SourceType, s.SourceURL, s.SkillPath, s.SkillFolderHash, s.InstalledAt, s.UpdatedAt}
 	}
 	return out
 }
 
 // installedFrom : la source d'un skill installé, d'après le fichier de verrouillage, sinon d'après le front matter (homepage,
 // repository ou source, ou un bloc metadata d'un outil d'installation). Vide pour un skill écrit à la main.
-func installedFrom(name string, locks map[string]string, text string) string {
-	if src, ok := locks[name]; ok {
-		return src
+func installedFrom(name string, locks map[string]LockEntry, text string) string {
+	if e, ok := locks[name]; ok {
+		return e.label()
 	}
 	m, _ := parseMeta(text)
 	for _, k := range []string{"homepage", "repository", "source"} {
@@ -250,7 +274,7 @@ func countSkillFiles(dir string) (n int, kb int64) {
 	return
 }
 
-func scanSkills(base, scope, project, plugin string, readonly bool, locks map[string]string, keyOf func(name string) string) []Skill {
+func scanSkills(base, scope, project, plugin string, readonly bool, locks map[string]LockEntry, keyOf func(name string) string) []Skill {
 	var out []Skill
 	ents, err := os.ReadDir(base)
 	if err != nil {
@@ -284,6 +308,13 @@ func scanSkills(base, scope, project, plugin string, readonly bool, locks map[st
 		default:
 			if src := installedFrom(e.Name(), locks, text); src != "" {
 				s.Origin, s.Source = "install", src
+				if l, ok := locks[e.Name()]; ok {
+					lk := SkillLock{l.Source, l.SourceType, l.SkillPath, l.Hash, l.InstalledAt, l.UpdatedAt, false, scope == "user"}
+					if fi, err := os.Lstat(filepath.Join(base, e.Name())); err == nil {
+						lk.Link = fi.Mode()&os.ModeSymlink != 0
+					}
+					s.Lock = &lk
+				}
 			} else {
 				s.Origin = "custom"
 			}
@@ -301,10 +332,10 @@ func scanSkills(base, scope, project, plugin string, readonly bool, locks map[st
 // listSkills : tous les skills connus, personnels d'abord, puis de projet, puis de plugins.
 func listSkills() []Skill {
 	home, _ := os.UserHomeDir()
-	out := scanSkills(filepath.Join(cfgDir(), "skills"), "user", "", "", false, lockSources(filepath.Join(home, ".agents", ".skill-lock.json")), func(n string) string { return "u/" + n })
+	out := scanSkills(filepath.Join(cfgDir(), "skills"), "user", "", "", false, readLock(filepath.Join(home, ".agents", ".skill-lock.json")), func(n string) string { return "u/" + n })
 	for _, p := range liveProjects() {
 		dir := p.Dir
-		out = append(out, scanSkills(filepath.Join(p.Project, ".claude", "skills"), "project", p.Project, "", false, lockSources(filepath.Join(p.Project, "skills-lock.json")), func(n string) string { return "p/" + dir + "/" + n })...)
+		out = append(out, scanSkills(filepath.Join(p.Project, ".claude", "skills"), "project", p.Project, "", false, readLock(filepath.Join(p.Project, "skills-lock.json")), func(n string) string { return "p/" + dir + "/" + n })...)
 	}
 	for _, pr := range pluginSkillRoots() {
 		id := pr.id
