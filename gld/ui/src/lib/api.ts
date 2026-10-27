@@ -131,7 +131,7 @@ export type Account = {
 // cut/len : texte coupé à l'octet cut d'un texte de len octets (message démesuré) ; la suite vient de api.convText.
 export type Msg = { r: "user" | "assistant" | "tool"; t: string; ts?: string; o?: number; n?: number; img?: string; k?: number; cut?: number; len?: number }
 export type Ls = { path: string; parent: string; dirs: string[]; sep: string; error?: string }
-export type Result = { ok: boolean; out: string }
+export type Result = { ok: boolean; out: string; net?: boolean } // net : pas de réponse (réseau, délai) ; l'action a pu avoir lieu
 // État git d'un dossier (gitstatus.go)
 export type GitState = { branch: string; detached?: boolean; upstream: boolean; ahead: number; behind: number; changed: number; untracked: number }
 // Maintien au chaud d'une session (keepwarm.go) : pings automatiques, comptés et plafonnés.
@@ -261,7 +261,7 @@ export const api = {
       const r = await authFetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined })
       return (await r.json()) as Result
     } catch (e) {
-      return { ok: false, out: i18n.t("shell.api.error", { msg: e instanceof Error ? e.message : String(e) }) }
+      return { ok: false, net: true, out: i18n.t("shell.api.error", { msg: e instanceof Error ? e.message : String(e) }) }
     }
   },
 }

@@ -9,7 +9,7 @@ import { type Live } from "./LiveStatus"
 import { toast } from "sonner"
 import { Bug, Copy, Minimize2, Power, Send, Square, SquareCheck, X } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
-import { draftOf, setDraft, useDraft } from "@/hooks/useDraft"
+import { draftOf, setDraft, useDraft, useUncertain } from "@/hooks/useDraft"
 import { efforts, models, withChoice, type Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
 import { useMention } from "./Mention"
@@ -98,7 +98,7 @@ export function Composer({
   // Annuler un message en file le remet dans la zone de saisie (à la suite de ce qui s'y trouve déjà).
   const unqueue = (i: number) => {
     const d = draftOf(id)
-    setDraft(id, { queue: d.queue.filter((_, j) => j !== i), text: d.text.trim() ? `${d.text}\n${d.queue[i]}` : d.queue[i] })
+    setDraft(id, { queue: d.queue.filter((_, j) => j !== i), text: d.text.trim() ? `${d.text}\n${d.queue[i]}` : d.queue[i], ...(i === 0 && { sending: undefined }) })
   }
   const stopped = useRef(false) // arrêt demandé par l'utilisateur : le message était bien parti
   const send = () => {
@@ -239,14 +239,16 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint }: { id: stri
   const a = useActions()
   const exec = useCan()("exec")
   const [info, setInfo] = useState<{ ids: string[]; why: string } | null>(null)
-  const { text, queue } = useDraft(id) // gardé par session : fermer la fenêtre ou un échec d'envoi ne le perd pas
+  const draft = useDraft(id) // gardé par session : fermer la fenêtre ou un échec d'envoi ne le perd pas
+  const { text, queue } = draft
+  const uncertain = useUncertain(draft)
   const setText = (t: string) => setDraft(id, { text: t })
   const mention = useMention(text, setText, id)
   const setQ = (q: string[]) => setDraft(id, { queue: q })
   // Annuler un message en file le remet dans la zone de saisie (à la suite de ce qui s'y trouve déjà).
   const unqueue = (i: number) => {
     const d = draftOf(id)
-    setDraft(id, { queue: d.queue.filter((_, j) => j !== i), text: d.text.trim() ? `${d.text}\n${d.queue[i]}` : d.queue[i] })
+    setDraft(id, { queue: d.queue.filter((_, j) => j !== i), text: d.text.trim() ? `${d.text}\n${d.queue[i]}` : d.queue[i], ...(i === 0 && { sending: undefined }) })
   }
   const [busy, setBusy] = useState(false)
   const [asking, setAsking] = useState(false) // une question attend une réponse dans le terminal : rien ne s'y écrit tant qu'elle est ouverte
@@ -374,7 +376,16 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint }: { id: stri
                 <span className="min-w-0 flex-1 truncate" title={q}>
                   {q}
                 </span>
-                {i === 0 && <span className="shrink-0">{asking ? t("conversation.composer.afterQuestion") : working ? t("conversation.composer.whenIdle") : t("conversation.composer.sending")}</span>}
+                {i === 0 && uncertain ? (
+                  <>
+                    <span className="shrink-0 text-amber-600 dark:text-amber-400">{t("conversation.composer.sendUncertain")}</span>
+                    <Button size="xs" variant="outline" onClick={() => setDraft(id, { sending: undefined })}>
+                      {t("conversation.composer.resend")}
+                    </Button>
+                  </>
+                ) : (
+                  i === 0 && <span className="shrink-0">{asking ? t("conversation.composer.afterQuestion") : working ? t("conversation.composer.whenIdle") : t("conversation.composer.sending")}</span>
+                )}
                 <Button size="icon-xs" variant="ghost" aria-label={t("conversation.composer.dequeue")} onClick={() => unqueue(i)}>
                   <X />
                 </Button>
