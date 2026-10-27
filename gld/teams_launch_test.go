@@ -50,6 +50,13 @@ func TestTeamBriefFencesGoal(t *testing.T) {
 	}
 }
 
+func TestTeamBriefLeadSentence(t *testing.T) {
+	b := teamBrief("x", testLead, testMates, testNames)
+	if !strings.Contains(b, "Tu es le chef de projet. Crée une équipe") || strings.Contains(b, "Chef de projet, chef") {
+		t.Fatalf("phrase du chef :\n%s", b)
+	}
+}
+
 type spawnRec struct{ args []string }
 
 func fakeLaunchEnv(t *testing.T) *spawnRec {
