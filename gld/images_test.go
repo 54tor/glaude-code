@@ -122,3 +122,11 @@ func getRaw(h http.Handler, path string) *httptest.ResponseRecorder {
 	h.ServeHTTP(w, r)
 	return w
 }
+
+func TestFileExt(t *testing.T) {
+	for in, want := range map[string]string{"a.PDF": ".pdf", "x": ".bin", "a/../b.t$t": ".bin", "r.tar.gz": ".gz", "n.averyveryl": ".bin"} {
+		if got := fileExt(in); got != want {
+			t.Errorf("fileExt(%q)=%q, want %q", in, got, want)
+		}
+	}
+}

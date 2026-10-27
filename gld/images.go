@@ -12,14 +12,17 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
 const (
 	imgMax    = 12 << 20 // taille d'une image déposée
+	fileMax   = 25 << 20 // taille d'un fichier joint
 	imgLine   = 48 << 20 // ligne de transcript lue pour en extraire une image
 	imgKeep   = 14 * 24 * time.Hour
 	imgPrefix = "gld-web-images"
@@ -52,6 +55,25 @@ func saveImage(b []byte) (string, error) {
 	if ext == "" {
 		return "", terr("srv.images.formatNonReconnuPng")
 	}
+	return saveBlob(b, ext)
+}
+
+// fileExt : l'extension d'un fichier joint d'après son nom, réduite à quelques caractères alphanumériques (jamais un chemin).
+func fileExt(name string) string {
+	e := strings.ToLower(filepath.Ext(filepath.Base(name)))
+	if len(e) < 2 || len(e) > 9 {
+		return ".bin"
+	}
+	for _, c := range e[1:] {
+		if (c < 'a' || c > 'z') && (c < '0' || c > '9') {
+			return ".bin"
+		}
+	}
+	return e
+}
+
+// saveBlob range des octets dans le dossier privé sous un nom aléatoire (le nom d'origine ne sert qu'à l'extension).
+func saveBlob(b []byte, ext string) (string, error) {
 	dir := imagesDir()
 	if err := rMkdirAll(cfgDir(), dir, 0o700); err != nil {
 		return "", err
@@ -145,6 +167,23 @@ func routesImages(mux *http.ServeMux) {
 			p, err = saveImage(b)
 		}
 		journal("image-upload (%d octets) : %v", len(b), errOr(err))
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "path": p, "out": L("srv.images.imageAjoutee")})
+	})
+	mux.HandleFunc("POST /file-upload", func(w http.ResponseWriter, r *http.Request) {
+		b, err := io.ReadAll(http.MaxBytesReader(w, r.Body, fileMax+1))
+		var p string
+		if err == nil && (len(b) == 0 || len(b) > fileMax) {
+			err = terr("srv.images.imageVideOuTrop")
+		}
+		if err == nil {
+			name, _ := url.QueryUnescape(r.Header.Get("X-File-Name"))
+			p, err = saveBlob(b, fileExt(name))
+		}
+		journal("file-upload (%d octets) : %v", len(b), errOr(err))
 		if err != nil {
 			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
 			return

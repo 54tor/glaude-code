@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react"
-import { Paperclip, X } from "lucide-react"
+import { FileText, Paperclip, X } from "lucide-react"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { i18n } from "@/i18n"
 import { authFetch } from "@/lib/auth"
 
-export type Img = { path: string; url: string; name: string }
+export type Img = { path: string; url: string; name: string; image: boolean }
 
 const OK = ["image/png", "image/jpeg", "image/gif", "image/webp"]
 
@@ -21,20 +21,22 @@ export function useImages() {
   }, [])
 
   const add = async (files: File[]) => {
-    const pics = files.filter((f) => OK.includes(f.type))
+    const pics = files
     if (!pics.length) return false
     setBusy(true)
     for (const f of pics) {
       try {
-        const r = await authFetch("/image-upload", { method: "POST", headers: { "Content-Type": f.type }, body: f })
+        const image = OK.includes(f.type)
+        const headers: Record<string, string> = image ? { "Content-Type": f.type } : { "X-File-Name": encodeURIComponent(f.name) }
+        const r = await authFetch(image ? "/image-upload" : "/file-upload", { method: "POST", headers, body: f })
         const j = (await r.json()) as { ok: boolean; path?: string; out: string }
         if (!j.ok || !j.path) {
           toast.error(j.out)
           continue
         }
-        const url = URL.createObjectURL(f)
-        live.current.push(url)
-        setImages((l) => [...l, { path: j.path!, url, name: f.name || i18n.t("shell.images.pasted") }])
+        const url = image ? URL.createObjectURL(f) : ""
+        if (url) live.current.push(url)
+        setImages((l) => [...l, { path: j.path!, url, image, name: f.name || i18n.t("shell.images.pasted") }])
       } catch (e) {
         toast.error(i18n.t("shell.images.uploadFailed", { msg: e instanceof Error ? e.message : String(e) }))
       }
@@ -46,16 +48,16 @@ export function useImages() {
   return {
     images,
     busy,
-    // Un collage d'image n'insère pas de texte : on le prend, le reste suit son cours normal.
+    // Un collage de fichier n'insère pas de texte : on le prend, le reste suit son cours normal.
     onPaste: (e: React.ClipboardEvent) => {
-      const files = fromEvent(e.clipboardData).filter((f) => OK.includes(f.type))
+      const files = fromEvent(e.clipboardData)
       if (files.length) {
         e.preventDefault()
         add(files)
       }
     },
     onDrop: (e: React.DragEvent) => {
-      const files = fromEvent(e.dataTransfer).filter((f) => OK.includes(f.type))
+      const files = fromEvent(e.dataTransfer)
       if (files.length) {
         e.preventDefault()
         add(files)
@@ -76,7 +78,14 @@ export function ImageChips({ images, busy, onRemove }: { images: Img[]; busy: bo
     <ul className="flex flex-wrap items-center gap-2" aria-label={t("shell.images.attached")}>
       {images.map((i) => (
         <li key={i.path} className="group relative">
-          <img src={i.url} alt={i.name} className="h-14 w-14 rounded-md border object-cover" />
+          {i.image ? (
+            <img src={i.url} alt={i.name} className="h-14 w-14 rounded-md border object-cover" />
+          ) : (
+            <span className="flex h-14 max-w-40 items-center gap-1.5 rounded-md border px-2 text-xs">
+              <FileText className="size-4 shrink-0" />
+              <span className="truncate">{i.name}</span>
+            </span>
+          )}
           <button
             type="button"
             onClick={() => onRemove(i.path)}
@@ -98,7 +107,7 @@ export function AttachButton({ onPick, disabled }: { onPick: (files: File[]) => 
   const ref = useRef<HTMLInputElement>(null)
   return (
     <>
-      <input ref={ref} type="file" accept={OK.join(",")} multiple hidden onChange={(e) => (onPick(Array.from(e.target.files ?? [])), (e.target.value = ""))} />
+      <input ref={ref} type="file" multiple hidden onChange={(e) => (onPick(Array.from(e.target.files ?? [])), (e.target.value = ""))} />
       <button
         type="button"
         disabled={disabled}
