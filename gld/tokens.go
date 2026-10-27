@@ -53,10 +53,7 @@ func tokens() *tokenStore {
 
 func saveTokens() {
 	b, _ := json.Marshal(tokLoaded)
-	tmp := tokenFile() + ".tmp"
-	if writeSynced(tmp, b, 0o600) == nil {
-		os.Rename(tmp, tokenFile())
-	}
+	rWriteAtomic(cfgDir(), tokenFile(), b, 0o600)
 }
 
 func textHash(s string) string {
