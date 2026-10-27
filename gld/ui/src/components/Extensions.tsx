@@ -66,7 +66,7 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
   const version = (id: string) => inst.find((p) => p.id === id)?.version
   const has = (f: string) => !dir || f === "u" || f === "p/" + dir || f === "l/" + dir // fichier qui s'applique à ce contexte
   const hooks = ov.hooks.filter((h) => has(h.file))
-  const mcpHere = mcp.filter((s) => s.scope === "user" || (dir && s.project && s.project === ov.projects.find((p) => p.dir === dir)?.project) || (dir && s.scope === "project"))
+  const mcpHere = mcp.filter((s) => s.scope === "user" || (dir && s.project && s.project === ov.projects.find((p) => p.dir === dir)?.project))
   const skillsHere = skills.filter((s) => s.scope === "user" || s.scope === "plugin" || (s.scope === "project" && (!dir || s.project === ov.projects.find((p) => p.dir === dir)?.project)))
   const known = new Set(mcp.map((m) => m.name))
   const others = Object.keys(status ?? {}).filter((n) => !known.has(n)).sort() // plugins et connecteurs claude.ai : pas dans ~/.claude.json
