@@ -48,7 +48,7 @@ var (
 	pairCodes = map[string]pairCode{}
 )
 
-// Codes en attente : au plus pairMaxPerSession par session émettrice et pairMaxTotal au total (deux minutes de vie).
+// Codes en attente : au plus pairMaxPerSession par compte (toutes sessions confondues, une seule file en mode jeton) et pairMaxTotal au total (deux minutes de vie).
 const (
 	pairMaxPerSession = 5
 	pairMaxTotal      = 200
@@ -63,7 +63,7 @@ func newPairCode(uid int64, sid string) string {
 	for k, v := range pairCodes {
 		if now.After(v.exp) {
 			delete(pairCodes, k)
-		} else if v.uid == uid && v.sid == sid {
+		} else if v.uid == uid {
 			mine++
 		}
 	}

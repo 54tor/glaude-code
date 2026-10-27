@@ -320,7 +320,10 @@ func TestPairCodeCap(t *testing.T) {
 	if newPairCode(1, "s") != "" {
 		t.Error("plafond par session dépassé")
 	}
-	if newPairCode(1, "autre") == "" {
-		t.Error("une autre session doit pouvoir émettre")
+	if newPairCode(1, "autre") != "" {
+		t.Error("le plafond vaut pour le compte, pas pour la session")
+	}
+	if newPairCode(2, "s") == "" {
+		t.Error("un autre compte doit pouvoir émettre")
 	}
 }
