@@ -127,6 +127,9 @@ func launchTeam(cfgRoot string, req LaunchReq) (Run, error) {
 	out, err := teamSpawn(ctx, args...)
 	journal("team %s dans %s (objectif de %d caractères) : %v", run.TeamName, dir, utf8.RuneCountInString(req.Goal), errOr(err))
 	if err != nil {
+		if lo := strings.ToLower(out); strings.Contains(lo, "unknown option") || strings.Contains(lo, "unknown argument") || strings.Contains(lo, "unrecognized") {
+			return run, terr("srv.teams_launch.fonctionAbsente")
+		}
 		return run, terr("srv.teams_launch.lancementEchoue", "A1", strings.TrimSpace(out))
 	}
 	return run, nil

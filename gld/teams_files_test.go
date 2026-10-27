@@ -140,6 +140,11 @@ func TestReadTeamIdleKind(t *testing.T) {
 	if idle != 1 || msg != 1 {
 		t.Fatalf("%+v", tf.Inbox)
 	}
+	for _, m := range tf.Inbox {
+		if m.Kind == "idle" && !strings.Contains(m.Text, "/tmp/gld-spike-perm.txt") {
+			t.Fatalf("texte idle : %q", m.Text)
+		}
+	}
 }
 
 func TestReadTeamWrongTypes(t *testing.T) {

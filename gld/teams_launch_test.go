@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -230,5 +231,20 @@ func TestMatinThreadsEnvToTab(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].Env[tabEnvKey] != "1" {
 		t.Fatalf("%+v", got)
+	}
+}
+
+func TestLaunchUnknownOptionIsUnavailable(t *testing.T) {
+	fakeLaunchEnv(t)
+	teamSpawn = func(ctx context.Context, args ...string) (string, error) {
+		return "error: unknown option '--teammate-mode'", errors.New("exit 1")
+	}
+	_, err := launchTeam(t.TempDir(), LaunchReq{TeamIDs: []string{"feature"}, Goal: "x", Dir: t.TempDir()})
+	if !isMsg(err, "srv.teams_launch.fonctionAbsente") {
+		t.Fatal(err)
+	}
+	teamSpawn = func(ctx context.Context, args ...string) (string, error) { return "boom", errors.New("exit 1") }
+	if _, err = launchTeam(t.TempDir(), LaunchReq{TeamIDs: []string{"feature"}, Goal: "x", Dir: t.TempDir()}); !isMsg(err, "srv.teams_launch.lancementEchoue") {
+		t.Fatal(err)
 	}
 }

@@ -81,6 +81,7 @@ var (
 type teamCtx struct {
 	tf       TeamFiles
 	leadPane string
+	panesErr error
 }
 
 func teamLoad(cfgRoot, name string) (teamCtx, error) {
@@ -91,9 +92,20 @@ func teamLoad(cfgRoot, name string) (teamCtx, error) {
 	if err != nil {
 		return teamCtx{}, err
 	}
-	panes, _ := teamPanes.Panes()
+	panes, perr := teamPanes.Panes()
 	logInbox(tf)
-	return teamCtx{tf: tf, leadPane: panes[tf.LeadSessionID]}, nil
+	return teamCtx{tf: tf, leadPane: panes[tf.LeadSessionID], panesErr: perr}, nil
+}
+
+// needLive : erreur si la team n'est pas pilotable ; tmux injoignable se distingue d'une team terminée.
+func (c teamCtx) needLive() error {
+	if c.panesErr != nil {
+		return terr("srv.teams_run.tmuxInutilisable", "W1", c.panesErr)
+	}
+	if c.leadPane == "" {
+		return terr("srv.teams_run.equipeInactive")
+	}
+	return nil
 }
 
 // logInbox garde les messages vus : Claude Code retire les messages lus de ses boîtes.
@@ -106,7 +118,7 @@ func logInbox(tf TeamFiles) {
 		seen[m.ID] = true
 	}
 	for _, m := range tf.Inbox {
-		if m.Kind == "idle" || m.ID == "" || seen[m.ID] {
+		if (m.Kind == "idle" && m.Text == "") || m.ID == "" || seen[m.ID] {
 			continue
 		}
 		seen[m.ID] = true
@@ -328,8 +340,8 @@ func teamSend(cfgRoot, name, author, to, text string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if c.leadPane == "" {
-		return false, terr("srv.teams_run.equipeInactive")
+	if err := c.needLive(); err != nil {
+		return false, err
 	}
 	pane, ok := c.target(to)
 	if !ok {
@@ -373,8 +385,8 @@ func teamKey(cfgRoot, name, agent, key, expect string) error {
 	if err != nil {
 		return err
 	}
-	if c.leadPane == "" {
-		return terr("srv.teams_run.equipeInactive")
+	if err := c.needLive(); err != nil {
+		return err
 	}
 	pane, ok := c.target(agent)
 	if !ok {
@@ -403,8 +415,8 @@ func teamScreen(cfgRoot, name, agent string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if c.leadPane == "" {
-		return "", terr("srv.teams_run.equipeInactive")
+	if err := c.needLive(); err != nil {
+		return "", err
 	}
 	pane, ok := c.target(agent)
 	if !ok {
@@ -432,8 +444,15 @@ func teamClose(cfgRoot, name string) error {
 	if err != nil {
 		return err
 	}
-	if err := teamPanes.Close(tf.LeadSessionID); err != nil {
-		return terr("srv.teams_run.fermetureImpossible", "W1", err)
+	panes, perr := teamPanes.Panes()
+	if perr != nil {
+		return terr("srv.teams_run.tmuxInutilisable", "W1", perr)
+	}
+	// team terminée (le chef a quitté) : plus de session à fermer, on nettoie quand même
+	if panes[tf.LeadSessionID] != "" {
+		if err := teamPanes.Close(tf.LeadSessionID); err != nil {
+			return terr("srv.teams_run.fermetureImpossible", "W1", err)
+		}
 	}
 	if err := journalDrop(cfgRoot, name); err != nil {
 		return err

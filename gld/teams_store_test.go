@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -152,5 +153,17 @@ func TestStoreCorruptFileKept(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(p); string(b) != "{pas du json" {
 		t.Fatal("fichier modifié")
+	}
+}
+
+func TestSaveAgentRejectsBadModel(t *testing.T) {
+	root := t.TempDir()
+	for _, m := range []string{"a b", "x\ny: z", strings.Repeat("a", 65), "é"} {
+		if _, err := saveAgent(root, Agent{Name: "Q", Role: "r", Access: "read", Model: m}); !isMsg(err, "srv.teams_store.modeleInvalide") {
+			t.Fatalf("%q: %v", m, err)
+		}
+	}
+	if _, err := saveAgent(root, Agent{Name: "Q", Role: "r", Access: "read", Model: "claude-sonnet-4.5"}); err != nil {
+		t.Fatal(err)
 	}
 }

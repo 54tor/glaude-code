@@ -18,24 +18,25 @@ const (
 )
 
 type fakeIO struct {
-	mu      sync.Mutex
-	panes   map[string]string
-	idle    []string
-	screens map[string]string
-	capErr  map[string]bool
-	script  map[string][]string // captures successives d'un pane avant de retomber sur screens
-	caps    int
-	pastes  [][2]string
-	keys    [][2]string
-	closed  []string
-	busy    int32
-	overlap bool
+	mu       sync.Mutex
+	panes    map[string]string
+	idle     []string
+	screens  map[string]string
+	capErr   map[string]bool
+	script   map[string][]string // captures successives d'un pane avant de retomber sur screens
+	caps     int
+	pastes   [][2]string
+	keys     [][2]string
+	closed   []string
+	panesErr error
+	busy     int32
+	overlap  bool
 }
 
 func (f *fakeIO) Panes() (map[string]string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.panes, nil
+	return f.panes, f.panesErr
 }
 func (f *fakeIO) Idle() []string { f.mu.Lock(); defer f.mu.Unlock(); return f.idle }
 func (f *fakeIO) Capture(p string) (string, error) {
@@ -246,13 +247,13 @@ func TestTeamViewPermissionDetected(t *testing.T) {
 func TestTeamViewMessagesAccumulate(t *testing.T) {
 	root, _ := setup(t)
 	v, _ := teamView(root, trName)
-	if len(v.Messages) != 1 || v.Messages[0].Kind == "idle" {
+	if len(v.Messages) != 2 {
 		t.Fatalf("messages : %+v", v.Messages)
 	}
 	os.WriteFile(filepath.Join(root, "teams", trName, "inboxes", "ada.json"), []byte("[]"), 0o644)
 	v, _ = teamView(root, trName)
 	v, _ = teamView(root, trName)
-	if len(v.Messages) != 1 {
+	if len(v.Messages) != 2 {
 		t.Fatalf("après vidage : %+v", v.Messages)
 	}
 }
@@ -400,5 +401,80 @@ func TestTeamKeyOKWhenExpectMatches(t *testing.T) {
 	_, txt := permText(f.screens[trLPane])
 	if err := teamKey(root, trName, "team-lead", "1", "  "+txt+"\n"); err != nil || len(f.keys) != 1 {
 		t.Fatal(err, f.keys)
+	}
+}
+
+func TestCloseFinishedTeamCleansUp(t *testing.T) {
+	root, f := setup(t)
+	setActive(t, root, "hugo", false)
+	teamSend(root, trName, "max", "hugo", "direct")
+	teamView(root, trName)
+	f.panes = map[string]string{}
+	if err := teamClose(root, trName); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.closed) != 0 {
+		t.Fatalf("Close appelé : %v", f.closed)
+	}
+	if d, _ := journalRead(root, trName); len(d) != 0 {
+		t.Fatalf("journal : %v", d)
+	}
+	if len(teamQueue[trName]) != 0 || len(teamLog[trName]) != 0 {
+		t.Fatal("file ou journal mémoire non vidés")
+	}
+}
+
+func TestCloseLiveTeamStillClosesFirst(t *testing.T) {
+	root, f := setup(t)
+	teamSend(root, trName, "max", "ada", "x")
+	if err := teamClose(root, trName); err != nil || len(f.closed) != 1 {
+		t.Fatalf("%v %v", err, f.closed)
+	}
+	if err := teamClose(root, "../x"); !isMsg(err, "srv.teams_run.nomInvalide") {
+		t.Fatal(err)
+	}
+}
+
+func TestLogKeepsIdleWithResult(t *testing.T) {
+	root, _ := setup(t)
+	teamView(root, trName)
+	var got *InboxMsg
+	for _, m := range teamLog[trName] {
+		if m.Kind == "idle" {
+			got = &m
+		}
+	}
+	if got == nil || got.From != "ada" || !strings.Contains(got.Text, "/tmp/gld-spike-perm.txt") {
+		t.Fatalf("%+v", teamLog[trName])
+	}
+}
+
+func TestLogDropsIdleWithoutResult(t *testing.T) {
+	tf := TeamFiles{Name: "t-vide", Inbox: []InboxMsg{{ID: "a", Kind: "idle"}, {ID: "b", Kind: "idle", Text: "fait"}}}
+	logInbox(tf)
+	l := teamLog["t-vide"]
+	if len(l) != 1 || l[0].ID != "b" {
+		t.Fatalf("%+v", l)
+	}
+}
+
+func TestTeamSendReportsTmuxError(t *testing.T) {
+	root, f := setup(t)
+	f.panesErr = errors.New("tmux gelé")
+	f.panes = nil
+	if _, err := teamSend(root, trName, "max", "ada", "x"); !isMsg(err, "srv.teams_run.tmuxInutilisable") {
+		t.Fatalf("send: %v", err)
+	}
+	if err := teamKey(root, trName, "ada", "1", ""); !isMsg(err, "srv.teams_run.tmuxInutilisable") {
+		t.Fatalf("key: %v", err)
+	}
+	if _, err := teamScreen(root, trName, "ada"); !isMsg(err, "srv.teams_run.tmuxInutilisable") {
+		t.Fatalf("screen: %v", err)
+	}
+	if err := teamClose(root, trName); !isMsg(err, "srv.teams_run.tmuxInutilisable") {
+		t.Fatalf("close: %v", err)
+	}
+	if v, err := teamView(root, trName); err != nil || v.Live {
+		t.Fatalf("view: %v %v", v.Live, err)
 	}
 }

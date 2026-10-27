@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io/fs"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 )
@@ -71,6 +72,8 @@ func newPersoID() string {
 	return "x-" + hex.EncodeToString(b[:])
 }
 
+var modelRe = regexp.MustCompile(`^[A-Za-z0-9._-]{0,64}$`)
+
 func saveAgent(cfgRoot string, a Agent) (Agent, error) {
 	teamsMu.Lock()
 	defer teamsMu.Unlock()
@@ -87,6 +90,8 @@ func saveAgent(cfgRoot string, a Agent) (Agent, error) {
 		return Agent{}, terr("srv.teams_store.roleVide")
 	case a.Access != "read" && a.Access != "write":
 		return Agent{}, terr("srv.teams_store.accesInvalide", "A1", a.Access)
+	case !modelRe.MatchString(a.Model):
+		return Agent{}, terr("srv.teams_store.modeleInvalide")
 	case len(a.Prompt) > maxPromptBytes:
 		return Agent{}, terr("srv.teams_store.promptTropLong")
 	}

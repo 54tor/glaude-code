@@ -219,6 +219,7 @@ func inboxMsg(m map[string]any, owner string) InboxMsg {
 		var inner map[string]any
 		if strings.HasPrefix(strings.TrimSpace(msg.Text), "{") && json.Unmarshal([]byte(msg.Text), &inner) == nil && str(inner, "type") == "idle_notification" {
 			msg.Kind = "idle"
+			msg.Text, _ = inner["result"].(string) // le compte rendu du coéquipier au chef
 		}
 	}
 	return msg
