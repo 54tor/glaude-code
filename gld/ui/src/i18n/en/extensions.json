@@ -42,6 +42,21 @@
     "tabActive": "Active",
     "tabInstall": "Install and marketplaces",
     "editor": "Skill editor",
-    "tabEditor": "Skill editor"
+    "tabEditor": "Skill editor",
+    "viewing": "Settings shown for",
+    "saveIn": "Save changes",
+    "whereU": "For me, in all my projects",
+    "whereP": "For this project (file shared with the team)",
+    "whereL": "For this project, privately (on this machine)",
+    "hintUser": "Each switch turns the item on or off for you, in all your projects.",
+    "hintProject": "Each switch shows the real state for this project. A higher-priority setting (private, then project, then personal) wins.",
+    "pluginsHelp": "Plugins add skills, hooks and MCP servers.",
+    "skillsHelp": "Skills are instructions Claude launches when they apply. Their description is always in its context.",
+    "mcpHelp": "MCP servers give Claude external tools (browser, database…).",
+    "setIn": "set in “{{scope}}”",
+    "byDefault": "default",
+    "toggleOne": "Turn {{id}} on or off",
+    "tokens": "≈ {{n}} tokens in context",
+    "pluginManaged": "Managed with the plugin"
   }
 }

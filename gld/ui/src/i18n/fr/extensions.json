@@ -42,6 +42,21 @@
     "tabActive": "Actifs",
     "tabInstall": "Installation et marketplaces",
     "editor": "Éditeur de skills",
-    "tabEditor": "Éditeur de skills"
+    "tabEditor": "Éditeur de skills",
+    "viewing": "Réglages affichés pour",
+    "saveIn": "Enregistrer les changements",
+    "whereU": "Pour moi, dans tous mes projets",
+    "whereP": "Pour ce projet (fichier partagé avec l'équipe)",
+    "whereL": "Pour ce projet, en privé (sur cette machine)",
+    "hintUser": "Chaque interrupteur active ou désactive l'élément pour toi, dans tous tes projets.",
+    "hintProject": "Chaque interrupteur montre l'état réel pour ce projet. Un réglage plus prioritaire (privé, puis projet, puis personnel) l'emporte.",
+    "pluginsHelp": "Les plugins ajoutent des skills, des hooks et des serveurs MCP.",
+    "skillsHelp": "Les skills sont des consignes que Claude lance quand elles s'appliquent. Leur description reste toujours dans son contexte.",
+    "mcpHelp": "Les serveurs MCP donnent à Claude des outils externes (navigateur, base de données…).",
+    "setIn": "réglé dans « {{scope}} »",
+    "byDefault": "par défaut",
+    "toggleOne": "Activer ou désactiver {{id}}",
+    "tokens": "≈ {{n}} tokens en contexte",
+    "pluginManaged": "Se règle avec le plugin"
   }
 }

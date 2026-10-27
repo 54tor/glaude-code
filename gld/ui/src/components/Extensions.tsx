@@ -6,7 +6,7 @@ import { api, type CfgOverview, type McpServer, type PluginInst, type Skill } fr
 import { tilde } from "@/lib/format"
 import { href } from "@/lib/route"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
+import { Switch } from "@/components/ui/switch"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -30,6 +30,7 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
   const [err, setErr] = useState("")
   const [dir, setDir] = useState("") // "" : utilisateur seul
   const [tab, setTab] = useState("active")
+  const [where, setWhere] = useState<"u" | "p" | "l">("u") // portée où un interrupteur écrit
   const [skillKey, setSkillKey] = useState("") // skill ouvert dans l'éditeur
   const openSkill = (key: string) => (setSkillKey(key), setTab("editor"))
   const [status, setStatus] = useState<Record<string, string> | null>(null) // `claude mcp list` : tous les serveurs vus par Claude Code, lent (quelques secondes)
@@ -77,17 +78,30 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
   const mcpOff = (f: string, name: string) => cfg(f)?.disabledMcpjsonServers?.includes(name) === true
   const mcpEff = (name: string) => [files.l, files.p, "u"].some((f) => f && mcpOff(f, name))
   const scopeName = { u: t("extensions.scopeU"), p: t("extensions.scopeP"), l: t("extensions.scopeL") }
-  const head = (
-    <thead className="text-xs text-muted-foreground">
-      <tr>
-        <th className="py-1 text-left font-normal" />
-        {(["u", "p", "l"] as const).map((k) => (
-          <th key={k} className="w-20 py-1 font-normal">{scopeName[k]}</th>
-        ))}
-        <th className="w-24 py-1 font-normal">{t("extensions.effective")}</th>
-      </tr>
-    </thead>
-  )
+  const to = dir ? where : "u" // sans projet choisi, seul le réglage personnel existe
+  const order = (["l", "p", "u"] as const).filter((k) => files[k]) // du plus prioritaire au moins prioritaire
+  const higher = order.slice(0, order.indexOf(to)) // portées qui l'emportent sur celle où l'on écrit
+  const src = (find: (f: string) => unknown) => order.find((k) => find(files[k] as string) !== undefined) // portée qui décide
+  const why = (k: "u" | "p" | "l" | undefined) => (k ? t("extensions.setIn", { scope: scopeName[k] }) : t("extensions.byDefault"))
+  const edit = (file: string, op: string, path: string[], value?: unknown) => propose({ file, op, path, value } as Parameters<typeof propose>[0])
+  // Interrupteur d'un plugin : écrit dans la portée choisie et retire les réglages contraires des portées plus prioritaires.
+  const setPlugin = async (id: string, on: boolean) => {
+    await edit(files[to] as string, "set", ["enabledPlugins", id], on)
+    for (const k of higher) if (doc[files[k] as string]?.[id] !== undefined) await edit(files[k] as string, "delete", ["enabledPlugins", id])
+  }
+  const setSkill = async (name: string, on: boolean) => {
+    if (on) {
+      for (const k of order) if (skillMode(files[k] as string, name) === "off") await edit(files[k] as string, "delete", ["skillOverrides", name])
+      return
+    }
+    await edit(files[to] as string, "set", ["skillOverrides", name], "off")
+    for (const k of higher) if (skillMode(files[k] as string, name) !== undefined) await edit(files[k] as string, "delete", ["skillOverrides", name])
+  }
+  const setMcp = async (name: string, on: boolean) => {
+    if (!on) return void (await edit(files[to] as string, "add", ["disabledMcpjsonServers"], name))
+    for (const k of order) if (mcpOff(files[k] as string, name)) await edit(files[k] as string, "remove", ["disabledMcpjsonServers"], name)
+  }
+  const row = "flex items-start gap-3 py-2"
   const sect = "text-md font-semibold border-b pb-1 mb-2 flex items-center gap-2"
 
   return (
@@ -103,10 +117,18 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
         <TabsContent value="active" className="min-h-0 flex-1">
           <ScrollArea className="h-full">
             <div className="mx-auto max-w-5xl space-y-8 px-3 py-4 md:px-6">
-        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
-          {t("extensions.context")}
-          <Choose value={dir} onChange={setDir} label={t("extensions.context")} className="min-w-0 max-w-md" options={[["", t("extensions.contextUser")], ...ov.projects.map((p) => [p.dir, tilde(p.project, home)] as const)]} />
-          <span className="text-xs text-muted-foreground">{t("extensions.contextHint")}</span>
+        <div className="space-y-2 rounded-md border bg-muted/30 px-3 py-3 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">{t("extensions.viewing")}</span>
+            <Choose value={dir} onChange={setDir} label={t("extensions.viewing")} className="min-w-0 max-w-md" options={[["", t("extensions.contextUser")], ...ov.projects.map((p) => [p.dir, tilde(p.project, home)] as const)]} />
+          </div>
+          {dir && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium">{t("extensions.saveIn")}</span>
+              <Choose value={where} onChange={(v) => setWhere(v as "u" | "p" | "l")} label={t("extensions.saveIn")} className="min-w-0 max-w-md" options={[["u", t("extensions.whereU")], ["p", t("extensions.whereP")], ["l", t("extensions.whereL")]]} />
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">{dir ? t("extensions.hintProject") : t("extensions.hintUser")}</p>
         </div>
 
         <section>
@@ -116,90 +138,61 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
               <Plug /> {t("extensions.manage")}
             </Button>
           </h3>
+          <p className="mb-1 text-xs text-muted-foreground">{t("extensions.pluginsHelp")}</p>
           {err && <p className="mb-2 text-xs text-warning">{t("extensions.loadError", { err })}</p>}
-          <table className="w-full text-sm">
-            <thead className="text-xs text-muted-foreground">
-              <tr>
-                <th className="py-1 text-left font-normal" />
-                {(["u", "p", "l"] as const).map((k) => (
-                  <th key={k} className="w-20 py-1 font-normal">{scopeName[k]}</th>
-                ))}
-                <th className="w-24 py-1 font-normal">{t("extensions.effective")}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {ids.map((id) => (
-                <tr key={id} className="hover:bg-muted/50">
-                  <td className="min-w-0 py-1 pr-2">
-                    <span className="break-all">{id}</span> {version(id) && <span className="text-xs text-muted-foreground">{version(id)}</span>}
-                    {!ov.plugins.find((p) => p.id === id)?.installed && !version(id) && <span className="ml-2 text-xs text-warning">{t("extensions.notInstalled")}</span>}
-                  </td>
-                  {(["u", "p", "l"] as const).map((k) => {
-                    const f = files[k]
-                    return (
-                      <td key={k} className="text-center">
-                        {f ? (
-                          <Checkbox
-                            checked={doc[f]?.[id] === true}
-                            className={doc[f]?.[id] === undefined ? "opacity-50" : undefined}
-                            aria-label={t("extensions.toggle", { id, scope: scopeName[k] })}
-                            onCheckedChange={(c) => propose({ file: f, op: "set", path: ["enabledPlugins", id], value: c === true })}
-                          />
-                        ) : (
-                          <span className="text-muted-foreground">·</span>
-                        )}
-                      </td>
-                    )
-                  })}
-                  <td className={`text-center text-xs ${eff(id) ? "text-success" : "text-muted-foreground"}`}>{eff(id) === undefined ? t("extensions.unset") : eff(id) ? t("extensions.on") : t("extensions.off")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <ul className="divide-y">
+            {ids.map((id) => {
+              const k = src((f) => doc[f]?.[id])
+              return (
+                <li key={id} className={row}>
+                  <Switch checked={eff(id) === true} aria-label={t("extensions.toggleOne", { id })} onCheckedChange={(c) => setPlugin(id, c)} className="mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <div className="break-all">{id} {version(id) && <span className="text-xs text-muted-foreground">{version(id)}</span>}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {eff(id) === true ? t("extensions.on") : t("extensions.off")} · {why(k)}
+                      {!ov.plugins.find((p) => p.id === id)?.installed && !version(id) && <span className="ml-2 text-warning">{t("extensions.notInstalled")}</span>}
+                    </div>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
           {!ids.length && <p className="py-3 text-sm text-muted-foreground">{t("extensions.noPlugins")}</p>}
           <p className="mt-2 text-xs text-muted-foreground">{t("extensions.sessionNote")}</p>
         </section>
+
 
         <section>
           <h3 className={sect}>
             {t("extensions.skills")} <span className="text-xs font-normal text-muted-foreground">{t("extensions.skillsTotal", { count: skillsHere.length, chars })}</span>
             <button type="button" onClick={() => openSkill("")} className="ml-auto text-xs font-normal text-muted-foreground underline">{t("extensions.editor")}</button>
           </h3>
-          <table className="w-full text-sm">
-            {head}
-            <tbody className="divide-y">
-              {skillsHere.map((s) => (
-                <tr key={s.key} className="hover:bg-muted/50">
-                  <td className="min-w-0 py-1 pr-2">
-                    <button type="button" onClick={() => openSkill(s.key)} className="break-all hover:underline">{s.name}</button>{" "}
-                    <span className="text-xs text-muted-foreground">{s.plugin ? t("extensions.fromPlugin", { name: s.plugin }) : s.scope === "project" ? t("extensions.fromProject") : t("extensions.fromUser")}</span>
-                    {(s.manual || s.hidden) && <span className="ml-2 text-xs text-warning">{s.manual ? t("extensions.manual") : t("extensions.hidden")}</span>}
-                  </td>
-                  {(["u", "p", "l"] as const).map((k) => {
-                    const f = files[k]
-                    const m = f && skillMode(f, s.name)
-                    return (
-                      <td key={k} className="text-center">
-                        {f && !s.plugin ? (
-                          <Checkbox
-                            checked={m !== "off"}
-                            className={m === undefined ? "opacity-50" : undefined}
-                            aria-label={t("extensions.toggle", { id: s.name, scope: scopeName[k] })}
-                            onCheckedChange={(c) => propose(c === true ? { file: f, op: "delete", path: ["skillOverrides", s.name] } : { file: f, op: "set", path: ["skillOverrides", s.name], value: "off" })}
-                          />
-                        ) : (
-                          <span className="text-muted-foreground">·</span>
-                        )}
-                      </td>
-                    )
-                  })}
-                  <td className={`text-center text-xs ${skillEff(s.name) === "off" ? "text-muted-foreground" : "text-success"}`}>{skillEff(s.name) === "on" ? t("extensions.on") : skillEff(s.name) === "off" ? t("extensions.off") : skillEff(s.name)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <p className="mb-1 text-xs text-muted-foreground">{t("extensions.skillsHelp")}</p>
+          <ul className="divide-y">
+            {skillsHere.map((s) => {
+              const k = src((f) => skillMode(f, s.name))
+              const off = skillEff(s.name) === "off"
+              return (
+                <li key={s.key} className={row}>
+                  {s.plugin ? <span className="mt-0.5 w-9 shrink-0 text-center text-muted-foreground" title={t("extensions.pluginManaged")}>·</span> : <Switch checked={!off} aria-label={t("extensions.toggleOne", { id: s.name })} onCheckedChange={(c) => setSkill(s.name, c)} className="mt-0.5" />}
+                  <div className="min-w-0 flex-1">
+                    <div>
+                      <button type="button" onClick={() => openSkill(s.key)} className="break-all hover:underline">{s.name}</button>{" "}
+                      <span className="text-xs text-muted-foreground">{s.plugin ? t("extensions.fromPlugin", { name: s.plugin }) : s.scope === "project" ? t("extensions.fromProject") : t("extensions.fromUser")}</span>
+                      {(s.manual || s.hidden) && <span className="ml-2 text-xs text-warning">{s.manual ? t("extensions.manual") : t("extensions.hidden")}</span>}
+                    </div>
+                    <div className="line-clamp-2 text-xs text-muted-foreground">{s.description}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {off ? t("extensions.off") : t("extensions.on")}{!s.plugin && ` · ${why(k)}`} · {t("extensions.tokens", { n: s.descTokens })}
+                    </div>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
           {!skillsHere.length && <p className="py-3 text-sm text-muted-foreground">{t("extensions.noSkills")}</p>}
         </section>
+
 
         <section>
           <h3 className={sect}>
@@ -227,52 +220,31 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
             {t("extensions.mcp")} ({mcpHere.length + others.length}){!status && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
             <Link href={href({ kind: "config", tab: "mcp" })} className="ml-auto text-xs font-normal text-muted-foreground underline">MCP</Link>
           </h3>
-          <table className="w-full text-sm">
-            {head}
-            <tbody className="divide-y">
-              {mcpHere.map((m, n) => (
-                <tr key={n} className="hover:bg-muted/50 align-top">
-                  <td className="min-w-0 py-1 pr-2">
-                    {status && <span className={up(m.name) ? "text-success" : "text-warning"} title={status[m.name]}>● </span>}<span className="font-medium">{m.name}</span> <span className="text-xs text-muted-foreground">{m.type} · {m.scope === "user" ? scopeName.u : m.scope === "project" ? ".mcp.json" : scopeName.l}</span>
-                    <code className="block text-xs break-all text-muted-foreground">{m.url || m.command}</code>
-                  </td>
-                  {(["u", "p", "l"] as const).map((k) => {
-                    const f = files[k]
-                    return (
-                      <td key={k} className="pt-1.5 text-center">
-                        {f && m.scope === "project" ? (
-                          <Checkbox
-                            checked={!mcpOff(f, m.name)}
-                            aria-label={t("extensions.toggle", { id: m.name, scope: scopeName[k] })}
-                            onCheckedChange={(c) => propose({ file: f, op: c === true ? "remove" : "add", path: ["disabledMcpjsonServers"], value: m.name })}
-                          />
-                        ) : (
-                          <span className="text-muted-foreground">·</span>
-                        )}
-                      </td>
-                    )
-                  })}
-                  <td className={`pt-1.5 text-center text-xs ${m.scope !== "project" ? "text-muted-foreground" : mcpEff(m.name) ? "text-muted-foreground" : "text-success"}`}>{m.scope !== "project" ? "—" : mcpEff(m.name) ? t("extensions.off") : t("extensions.on")}</td>
-                </tr>
-              ))}
-              {others.map((n) => (
-                <tr key={n} className="hover:bg-muted/50">
-                  <td className="py-1 pr-2">
-                    <span className={up(n) ? "text-success" : "text-warning"} title={status?.[n]}>● </span>
-                    <span className="font-medium">{n}</span>{" "}
-                    <span className="text-xs text-muted-foreground">{n.startsWith("plugin:") ? t("extensions.mcpPlugin") : n.startsWith("claude.ai ") ? t("extensions.mcpAccount") : t("extensions.mcpOther")}</span>
-                  </td>
-                  {[0, 1, 2].map((i) => (
-                    <td key={i} className="text-center text-muted-foreground">·</td>
-                  ))}
-                  <td className="text-center text-xs text-muted-foreground">—</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <p className="mb-1 text-xs text-muted-foreground">{t("extensions.mcpHelp")}</p>
+          <ul className="divide-y">
+            {mcpHere.map((m, n) => (
+              <li key={n} className={row}>
+                {m.scope === "project" ? <Switch checked={!mcpEff(m.name)} aria-label={t("extensions.toggleOne", { id: m.name })} onCheckedChange={(c) => setMcp(m.name, c)} className="mt-0.5" /> : <span className="mt-0.5 w-9 shrink-0 text-center text-muted-foreground" title={t("extensions.mcpManaged")}>·</span>}
+                <div className="min-w-0 flex-1">
+                  <div>{status && <span className={up(m.name) ? "text-success" : "text-warning"} title={status[m.name]}>● </span>}<span className="font-medium">{m.name}</span> <span className="text-xs text-muted-foreground">{m.type}</span></div>
+                  <code className="block text-xs break-all text-muted-foreground">{m.url || m.command}</code>
+                </div>
+              </li>
+            ))}
+            {others.map((n) => (
+              <li key={n} className={row}>
+                <span className="mt-0.5 w-9 shrink-0 text-center text-muted-foreground" title={t("extensions.mcpManaged")}>·</span>
+                <div className="min-w-0 flex-1">
+                  <span className={up(n) ? "text-success" : "text-warning"} title={status?.[n]}>● </span>
+                  <span className="font-medium">{n}</span>{" "}
+                  <span className="text-xs text-muted-foreground">{n.startsWith("plugin:") ? t("extensions.mcpPlugin") : n.startsWith("claude.ai ") ? t("extensions.mcpAccount") : t("extensions.mcpOther")}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
           {(others.length > 0 || mcpHere.some((m) => m.scope !== "project")) && <p className="mt-2 text-xs text-muted-foreground">{t("extensions.mcpManaged")}</p>}
-          <p className="mt-1 text-xs text-muted-foreground">{t("extensions.offWins")}</p>
           {!mcpHere.length && !others.length && <p className="py-3 text-sm text-muted-foreground">{t("extensions.noMcp")}</p>}
+
         </section>
             </div>
           </ScrollArea>
