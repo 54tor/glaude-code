@@ -676,3 +676,22 @@ func TestRelayUpstreamLimit(t *testing.T) {
 		t.Fatalf("%+v", evs)
 	}
 }
+
+func TestHTTPTrashPurgeAllSparesSessionTrash(t *testing.T) {
+	h, cfg, _ := web(t)
+	sess := filepath.Join(cfg, "gld-web-trash", "sessions", "dummy-id")
+	mem := filepath.Join(cfg, "gld-web-trash", "dummy-mem")
+	for _, d := range []string{sess, mem} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		os.WriteFile(filepath.Join(d, "f.txt"), []byte("x"), 0o600)
+	}
+	ok(t, h, "/trash-purge", `{"all":true}`, true, "Corbeille vidée")
+	if _, err := os.Stat(sess); err != nil {
+		t.Fatal("la corbeille de sessions (droit exec) a été vidée par /trash-purge :", err)
+	}
+	if _, err := os.Stat(mem); err == nil {
+		t.Fatal("la corbeille mémoire n'a pas été vidée")
+	}
+}
