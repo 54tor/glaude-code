@@ -85,7 +85,7 @@ func readTrashMeta(id string) (TrashedSession, bool) {
 	if !idRe.MatchString(id) {
 		return m, false
 	}
-	b, err := os.ReadFile(filepath.Join(trashSessionPath(id), "meta.json"))
+	b, err := readTrusted(filepath.Join(trashSessionPath(id), "meta.json"))
 	if err != nil || json.Unmarshal(b, &m) != nil || m.ID != id || !safeDir(m.Dir) {
 		return m, false
 	}
@@ -106,7 +106,7 @@ func listTrashedSessions() []TrashedSession {
 }
 
 func trashedMetas() []TrashedSession {
-	ents, _ := os.ReadDir(sessionTrashDir())
+	ents, _ := readDirTrusted(sessionTrashDir())
 	var out []TrashedSession
 	for _, e := range ents {
 		if m, ok := readTrashMeta(e.Name()); ok {
@@ -271,7 +271,7 @@ func routesTrashSessions(mux *http.ServeMux) {
 		expireTrashedSessions()
 		ids := req.IDs
 		if len(ids) == 0 {
-			ents, _ := os.ReadDir(sessionTrashDir())
+			ents, _ := readDirTrusted(sessionTrashDir())
 			for _, e := range ents {
 				ids = append(ids, e.Name())
 			}
