@@ -429,6 +429,8 @@
   "srv.tabs.fichierIllisible": "unreadable backups ({{.A1}}): nothing is rewritten",
   "srv.tabs.nomTropLong": "name too long",
   "srv.tabs.sauvegardeIntrouvable": "backup not found",
+  "srv.teams_agentfiles.ecriture": "cannot write the agent file: {{.W1}}",
+  "srv.teams_agentfiles.idInvalide": "invalid agent id: {{.A1}}",
   "srv.teams_catalog.selectionVide": "no team selected",
   "srv.teams_catalog.teamInconnue": "unknown team: {{.A1}}",
   "srv.term.interditDansLeChemin": "\";\" is not allowed in the gld path",

@@ -429,6 +429,8 @@
   "srv.tabs.fichierIllisible": "sauvegardes illisibles ({{.A1}}) : rien n'est réécrit",
   "srv.tabs.nomTropLong": "nom trop long",
   "srv.tabs.sauvegardeIntrouvable": "sauvegarde introuvable",
+  "srv.teams_agentfiles.ecriture": "écriture du fichier d'agent impossible : {{.W1}}",
+  "srv.teams_agentfiles.idInvalide": "identifiant d'agent invalide : {{.A1}}",
   "srv.teams_catalog.selectionVide": "aucune team sélectionnée",
   "srv.teams_catalog.teamInconnue": "team inconnue : {{.A1}}",
   "srv.term.interditDansLeChemin": "« ; » interdit dans le chemin de gld",
