@@ -25,6 +25,8 @@ type line struct {
 	Cwd         string `json:"cwd"`
 	GitBranch   string `json:"gitBranch"`
 	Timestamp   string `json:"timestamp"`
+	TeamName    string `json:"teamName"`
+	AgentName   string `json:"agentName"`
 	Message     struct {
 		ID      string          `json:"id"`
 		Model   string          `json:"model"`
@@ -109,6 +111,8 @@ type Session struct {
 	Mtime    float64 `json:"mtime"`
 	KB       int64   `json:"kb"`
 	Tok      Tokens  `json:"tok"`
+	Parent   string  `json:"parent,omitempty"` // session qui a lancé celle-ci (sous-agent d'un plan) ; vide si inconnue ou disparue
+	team     string  // « session-<8 premiers caractères de l'ID parent> », résolu en Parent par sessions()
 }
 
 // infoState : ce qu'on sait d'un transcript, et jusqu'où on l'a lu. Un transcript ne fait que grandir : à chaque
@@ -118,6 +122,7 @@ type infoState struct {
 	mtime             time.Time
 	off               int64 // octets déjà lus, toujours en fin de ligne complète
 	title, cwd, first string
+	team, agent       string    // sessions lancées par une équipe : le parent et le nom du rôle (aucun titre n'est écrit pour elles)
 	tok               Tokens    // total de la session
 	lastMsg           time.Time // horodatage du dernier message user/assistant : le mtime bouge aussi pour un titre ou un résumé
 	lastID            string    // un même message s'écrit sur plusieurs lignes qui répètent son usage : seul le dernier compte
@@ -166,10 +171,11 @@ func scanInfo(path string, c infoState) infoState {
 func (c *infoState) visit(b []byte) {
 	wantTitle := bytes.Contains(b, []byte(`"custom-title"`))
 	wantCwd := c.cwd == "" && bytes.Contains(b, []byte(`"cwd"`))
+	wantTeam := c.team == "" && bytes.Contains(b, []byte(`"teamName"`))
 	wantFirst := c.first == "" && bytes.Contains(b, []byte(`"type":"user"`))
 	wantUsage := bytes.Contains(b, []byte(`"usage"`)) && bytes.Contains(b, []byte(`"type":"assistant"`))
 	wantTS := bytes.Contains(b, []byte(`"timestamp"`)) && (bytes.Contains(b, []byte(`"type":"user"`)) || bytes.Contains(b, []byte(`"type":"assistant"`)))
-	if !wantTitle && !wantCwd && !wantFirst && !wantUsage && !wantTS {
+	if !wantTitle && !wantCwd && !wantTeam && !wantFirst && !wantUsage && !wantTS {
 		return
 	}
 	var l line
@@ -186,6 +192,9 @@ func (c *infoState) visit(b []byte) {
 	}
 	if wantCwd {
 		c.cwd = l.Cwd
+	}
+	if wantTeam {
+		c.team, c.agent = l.TeamName, l.AgentName
 	}
 	if wantFirst && l.Type == "user" && !l.IsMeta {
 		c.first = promptOf(&l)
@@ -230,10 +239,12 @@ func info(path string, st os.FileInfo) Session {
 		mt = c.lastMsg
 	}
 	s := Session{Provider: claudeID, ID: strings.TrimSuffix(filepath.Base(path), ".jsonl"), Dir: filepath.Base(filepath.Dir(path)),
-		Named: title != "", Cwd: cwd, Mtime: float64(mt.UnixNano()) / 1e9, KB: st.Size() / 1024, Tok: c.tok}
+		Named: title != "", Cwd: cwd, team: c.team, Mtime: float64(mt.UnixNano()) / 1e9, KB: st.Size() / 1024, Tok: c.tok}
 	if s.Title = title; title == "" {
-		if s.Title = cut(first, 100); first == "" {
-			s.Title = "(sans titre)"
+		if s.Title = c.agent; s.Title == "" {
+			if s.Title = cut(first, 100); first == "" {
+				s.Title = "(sans titre)"
+			}
 		}
 	}
 	return s
@@ -338,7 +349,18 @@ func sessions() []Group {
 		}
 		all = append(all, s)
 	}
+	byPrefix := map[string]string{} // dossier + « session-xxxxxxxx » -> ID complet
 	for _, s := range all {
+		if len(s.ID) >= 8 {
+			byPrefix[s.Dir+"/session-"+s.ID[:8]] = s.ID
+		}
+	}
+	for _, s := range all {
+		if s.team != "" {
+			if p := byPrefix[s.Dir+"/"+s.team]; p != s.ID {
+				s.Parent = p
+			}
+		}
 		if s.Cwd == "" { // session sans cwd : on la range avec ses voisines, sinon par décodage du nom du dossier
 			c, seen := dirCwd[s.Dir]
 			if !seen {

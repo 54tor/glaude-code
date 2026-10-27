@@ -1,7 +1,7 @@
 import { loc } from "@/i18n"
 import { useTranslation } from "react-i18next"
-import { memo, useCallback, useEffect, useRef, useState } from "react"
-import { Flame, MoreHorizontal, SquareTerminal, Star, Tag } from "lucide-react"
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { ChevronRight, Flame, MoreHorizontal, SquareTerminal, Star, Tag } from "lucide-react"
 import { ago, bucket, compact, full, tilde, tokTotal } from "@/lib/format"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
@@ -67,7 +67,23 @@ function Snip({ text }: { text: string }) {
 }
 
 // memo : une ligne ne se redessine que si sa session, ses options ou le contexte des actions changent.
-const Row = memo(function Row({ row, showProject, showCache }: { row: R; showProject: boolean; showCache?: boolean }) {
+const Row = memo(function Row({
+  row,
+  showProject,
+  showCache,
+  kids = 0,
+  open,
+  onToggle,
+  child,
+}: {
+  row: R
+  showProject: boolean
+  showCache?: boolean
+  kids?: number
+  open?: boolean
+  onToggle?: () => void
+  child?: boolean
+}) {
   const { t } = useTranslation()
   const a = useActions()
   const { s, g } = row
@@ -83,7 +99,8 @@ const Row = memo(function Row({ row, showProject, showCache }: { row: R; showPro
         <li
           className={cn(
             "group relative flex items-center gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-muted/70 has-[[data-state=open]]:bg-muted/70 data-[state=open]:bg-muted/70",
-            picked && "bg-accent hover:bg-accent"
+            picked && "bg-accent hover:bg-accent",
+            child && "ml-8"
           )}
         >
           <Checkbox
@@ -96,6 +113,17 @@ const Row = memo(function Row({ row, showProject, showCache }: { row: R; showPro
               !picked && a.selected.length === 0 && "md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
             )}
           />
+          {kids > 0 && (
+            <button
+              onClick={onToggle}
+              aria-expanded={open}
+              aria-label={t("shell.list.subSessions", { count: kids })}
+              className="relative z-10 flex shrink-0 items-center gap-0.5 rounded-sm text-xs text-muted-foreground hover:text-foreground"
+            >
+              <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} />
+              <span className="tabular-nums">{kids}</span>
+            </button>
+          )}
           <button
             data-row
             data-id={s.id}
@@ -205,18 +233,50 @@ function More({ onMore }: { onMore: () => void }) {
   return <li ref={ref} aria-hidden className="h-px" />
 }
 
-export function SessionList({ items: all, showProject, flat, showCache }: { items: R[]; showProject: boolean; flat?: boolean; showCache?: boolean }) {
+// Une session lancée par une autre (sous-agent d'un plan) se range sous sa parente, repliée par défaut.
+export function nest(all: R[]) {
+  const ids = new Set(all.map((r) => r.s.id))
+  const kids = new Map<string, R[]>()
+  const tops: R[] = []
+  for (const r of all) {
+    const p = r.s.parent
+    if (p && ids.has(p)) kids.set(p, [...(kids.get(p) ?? []), r])
+    else tops.push(r)
+  }
+  return { tops, kids }
+}
+
+export function SessionList({ items: every, showProject, flat, showCache }: { items: R[]; showProject: boolean; flat?: boolean; showCache?: boolean }) {
+  const { tops: all, kids } = useMemo(() => nest(every), [every])
+  const [opened, setOpened] = useState<Set<string>>(new Set())
+  const toggle = useCallback(
+    (id: string) =>
+      setOpened((o) => {
+        const n = new Set(o)
+        if (!n.delete(id)) n.add(id)
+        return n
+      }),
+    []
+  )
   // Chargement paresseux : seules les premières lignes sont rendues (milliers de sessions possibles).
   const [limit, setLimit] = useState(STEP)
   const more = useCallback(() => setLimit((n) => n + STEP), [])
   const items = all.slice(0, limit)
   const rest = all.length > limit
+  const line = (r: R) => {
+    const k = kids.get(r.s.id) ?? []
+    const open = opened.has(r.s.id)
+    return (
+      <Fragment key={r.s.id}>
+        <Row row={r} showProject={showProject} showCache={showCache} kids={k.length} open={open} onToggle={() => toggle(r.s.id)} />
+        {open && k.map((c) => <Row key={c.s.id} row={c} showProject={showProject} showCache={showCache} child />)}
+      </Fragment>
+    )
+  }
   if (flat)
     return (
       <ul className="space-y-px">
-        {items.map((r) => (
-          <Row key={r.s.id} row={r} showProject={showProject} showCache={showCache} />
-        ))}
+        {items.map(line)}
         {rest && <More onMore={more} />}
       </ul>
     )
@@ -232,9 +292,7 @@ export function SessionList({ items: all, showProject, flat, showCache }: { item
         <section key={b}>
           <h3 className="sticky top-0 z-20 border-b bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground">{b}</h3>
           <ul className="space-y-px">
-            {list.map((r) => (
-              <Row key={r.s.id} row={r} showProject={showProject} showCache={showCache} />
-            ))}
+            {list.map(line)}
           </ul>
         </section>
       ))}

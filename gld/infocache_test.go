@@ -71,3 +71,27 @@ func TestInfoTokens(t *testing.T) {
 }
 
 func itoa(n int) string { return strconv.Itoa(n) }
+
+// Une session lancée par une équipe prend le nom de son rôle comme titre et pointe vers sa parente.
+func TestSessionsTeamParent(t *testing.T) {
+	old := root
+	t.Cleanup(func() { root = old })
+	root = t.TempDir()
+	d := filepath.Join(root, "-p")
+	os.MkdirAll(d, 0o700)
+	par, kid := "dbaae837-e50f-4018-9940-09a76cd704db", "8f3f05e4-e61f-4ff3-844a-c62c939c6805"
+	os.WriteFile(filepath.Join(d, par+".jsonl"), []byte(`{"type":"user","cwd":"/x","message":{"content":"parent"}}`+"\n"), 0o600)
+	os.WriteFile(filepath.Join(d, kid+".jsonl"), []byte(`{"teamName":"session-dbaae837","agentName":"impl-task-4","type":"user","cwd":"/x","message":{"content":"tache"}}`+"\n"), 0o600)
+	got := map[string]Session{}
+	for _, g := range sessions() {
+		for _, s := range g.Sessions {
+			got[s.ID] = s
+		}
+	}
+	if k := got[kid]; k.Parent != par || k.Title != "impl-task-4" {
+		t.Fatalf("enfant : %+v", k)
+	}
+	if got[par].Parent != "" || got[par].Title != "parent" {
+		t.Fatalf("parent : %+v", got[par])
+	}
+}

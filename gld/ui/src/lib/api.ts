@@ -6,7 +6,7 @@ import { authFetch } from "@/lib/auth"
 // Fournisseurs d'agents de code (provider.go) : ce que chacun sait faire ; l'interface masque le reste.
 export type Caps = { hotCache: boolean; keepWarm: boolean; config: boolean; memory: boolean; tuiPrompts: boolean; resume: boolean }
 export type ProviderInfo = { id: string; name: string; caps: Caps }
-export type Session = { provider?: string; id: string; dir: string; title: string; named: boolean; cwd: string; mtime: number; kb: number; tok: Tokens }
+export type Session = { provider?: string; id: string; dir: string; title: string; named: boolean; cwd: string; mtime: number; kb: number; tok: Tokens; parent?: string }
 export type Tokens = { in: number; out: number; cr: number; cw: number }
 export type Group = { project: string; missing: boolean; sessions: Session[] }
 export type Project = { name: string; dirs: string[] } // ensemble nommé de dossiers de travail

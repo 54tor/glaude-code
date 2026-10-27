@@ -105,6 +105,8 @@
       "groups": "Groups: {{names}}",
       "resume": "Resume in a terminal",
       "resumeAnyway": "Already open: resume anyway",
+      "subSessions_one": "{{count}} sub-session",
+      "subSessions_other": "{{count}} sub-sessions",
       "moreActions": "More actions"
     },
     "pane": {
