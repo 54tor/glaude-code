@@ -86,6 +86,7 @@ Notes :
 - Les droits sont rattachés à l'**identifiant** d'un home, pas à son nom. Supprimer un home supprime ses droits en cascade. Renommer un home via `/homes-save` en omettant son identifiant en crée un nouveau, donc fait perdre ses droits. Échanger les dossiers de deux homes déplace les droits avec les noms.
 - Un administrateur gère les comptes et les droits mais n'a **aucun accès implicite** aux homes : il s'accorde les droits qu'il veut.
 - Le jeton (Bearer) donne tous les droits sur **chaque** home mais jamais l'administration, ni les routes `/auth/*` et `/admin/*`.
+- N'accordez pas `mem_write` (ni `config_write`) sans `mem_read` : `POST /memory-draft` et `POST /skill-draft` lisent côté serveur les fichiers que l'appelant désigne et renvoient la réponse du modèle, ce qui peut en restituer le contenu. Le serveur ne l'empêche pas ; `mem_write` seul ne cache donc pas la lecture.
 
 ### Ce que les droits protègent, et ce qu'ils ne protègent pas
 
