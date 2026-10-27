@@ -26,6 +26,7 @@ const (
 	guestHeader      = "X-Gld-Guest"
 	guestHTTPSHeader = "X-Gld-Guest-HTTPS"
 	invitePat        = "GET /invite/{home}/{token}"
+	invitePostPat    = "POST /invite/{home}/{token}"
 	guestAddMax      = 10
 	guestBodyMax     = sendMax + 1<<10
 )
@@ -33,7 +34,7 @@ const (
 var guestRoutes = map[string]bool{
 	"GET /conv": true, "GET /conv-text": true, "GET /conv-tools": true, "GET /conv-image": true,
 	"GET /session-live": true, "GET /session-state": true, "GET /session-task-output": true, "GET /session-screen": true,
-	"GET /queue": true, "POST /queue-add": true, "POST /queue-rm": true, "GET /guest-me": true,
+	"GET /queue": true, "POST /queue-add": true, "POST /queue-rm": true, "GET /guest-me": true, "POST /guest-leave": true,
 	"GET /guest": true, "GET /assets/": true, "GET /icons/": true, "GET /favicon.ico": true, "GET /manifest.webmanifest": true,
 }
 
@@ -73,11 +74,12 @@ func guestDeny(w http.ResponseWriter, code int, key string) {
 type noStoreWriter struct {
 	http.ResponseWriter
 	done bool
+	code int
 }
 
 func (n *noStoreWriter) WriteHeader(c int) {
 	if !n.done {
-		n.done = true
+		n.done, n.code = true, c
 		n.Header().Set("Cache-Control", "no-store")
 	}
 	n.ResponseWriter.WriteHeader(c)
@@ -142,8 +144,8 @@ func guestCSRFOK(r *http.Request, sec string) bool {
 func guestGate(mux *http.ServeMux, next http.Handler) http.Handler {
 	cop := http.NewCrossOriginProtection()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, pat := mux.Handler(r); pat == invitePat {
-			guestInvite(w, r)
+		if _, pat := mux.Handler(r); pat == invitePat || pat == invitePostPat {
+			cop.Handler(http.HandlerFunc(guestInvite)).ServeHTTP(w, r)
 			return
 		}
 		if childToken != "" { // enfant : seule la passerelle parle (childAuthorized), le secret arrive en en-tête
@@ -189,8 +191,13 @@ func guestGate(mux *http.ServeMux, next http.Handler) http.Handler {
 // guestRelay : passerelle, partage d'un home enfant ; liste blanche et CSRF jugés ici, le reste par l'enfant.
 func guestRelay(mux *http.ServeMux, home, sec string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if guestPattern(mux, r) == "" || !guestCSRFOK(r, sec) {
+		pat := guestPattern(mux, r)
+		if pat == "" || !guestCSRFOK(r, sec) {
 			guestDeny(w, 403, "srv.share_guest.refuse")
+			return
+		}
+		if pat == "POST /guest-leave" { // ici : un enfant qui refuse le secret (fin non écrite) ne doit pas l'empêcher
+			guestLeave(w, r)
 			return
 		}
 		p, err := homeProxy(home)
@@ -208,6 +215,10 @@ func guestServe(mux *http.ServeMux, sh Share, sec string) http.Handler {
 		pat := guestPattern(mux, r)
 		if pat == "" || !guestCSRFOK(r, sec) {
 			guestDeny(w, 403, "srv.share_guest.refuse")
+			return
+		}
+		if pat == "POST /guest-leave" {
+			guestLeave(w, r)
 			return
 		}
 		if pat == "GET /guest-me" {
@@ -259,8 +270,35 @@ func guestServe(mux *http.ServeMux, sh Share, sec string) http.Handler {
 	})
 }
 
-// guestInvite : GET /invite/{home}/{token} ; « main » désigne le home du processus principal. Chaque essai compte dans la
-// même limite que le jeton hôte (par adresse et pour tout le serveur), un succès est rendu.
+// guestLeave : efface le cookie invité sans toucher au partage ; l'issue d'un hôte qui a ouvert son propre lien.
+func guestLeave(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{Name: guestCookie, Path: "/", MaxAge: -1, HttpOnly: true, Secure: requestHTTPS(r), SameSite: http.SameSiteStrictMode})
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, 200, map[string]any{"ok": true})
+}
+
+// hostCredential : la requête porte un accès hôte valide (jeton, appareil jumelé, session de compte) ; jugée par la
+// passerelle, seule à voir les cookies.
+func hostCredential(r *http.Request) bool {
+	if hostToken != "" {
+		if c, err := r.Cookie(tokenCookie); err == nil && sameToken(c.Value, hostToken) {
+			return true
+		}
+		if c, err := r.Cookie(devCookie); err == nil && deviceOK(c.Value) {
+			return true
+		}
+	}
+	if _, d := reqMode(r); d.on && d.st != nil {
+		if p, _ := gatePrincipal(d.st, r, true); p != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// guestInvite : /invite/{home}/{token} ; « main » désigne le home du processus principal. Le GET n'affiche qu'un bouton :
+// un aperçu de lien (messagerie, antivirus de courriel) ne doit pas consommer le jeton à usage unique. Le POST l'échange ;
+// chaque essai compte dans la même limite que le jeton hôte (par adresse et pour tout le serveur), un succès est rendu.
 func guestInvite(w http.ResponseWriter, r *http.Request) {
 	refused := func(code int, key string) {
 		gatePage(w, code, gateData{Title: L("srv.share_guest.titre"), Text: L(key)})
@@ -271,8 +309,17 @@ func guestInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	gateway := childToken == ""
+	if gateway && hostCredential(r) {
+		refused(200, "srv.share_guest.vousEtesHote")
+		return
+	}
+	if r.Method != http.MethodPost {
+		gatePage(w, 200, gateData{Title: L("srv.share_guest.titre"), Text: L("srv.share_guest.invitation"), Action: r.URL.EscapedPath(), Button: L("srv.share_guest.rejoindre")})
+		return
+	}
 	if gateway {
-		if !tokenTry(clientIP(r)) {
+		ip := clientIP(r)
+		if !tokenTry(ip) {
 			w.Header().Set("Retry-After", "60")
 			refused(429, "srv.token.tooMany")
 			return
@@ -283,7 +330,11 @@ func guestInvite(w http.ResponseWriter, r *http.Request) {
 				refused(403, "srv.share_guest.lienInvalide")
 				return
 			}
-			p.ServeHTTP(&noStoreWriter{ResponseWriter: w}, r)
+			nw := &noStoreWriter{ResponseWriter: w}
+			p.ServeHTTP(nw, r)
+			if nw.code == http.StatusSeeOther {
+				tokenRefund(ip)
+			}
 			return
 		}
 	}
@@ -312,6 +363,10 @@ func guestInvite(w http.ResponseWriter, r *http.Request) {
 // Ces routes ne servent un invité que par la garde ; montées pour l'exhaustivité de routeRights et pour l'hôte.
 func routesGuest(mux *http.ServeMux) {
 	mux.HandleFunc(invitePat, guestInvite)
+	mux.HandleFunc(invitePostPat, guestInvite)
+	mux.HandleFunc("POST /guest-leave", func(w http.ResponseWriter, r *http.Request) {
+		guestDeny(w, 403, "srv.share_guest.refuse")
+	})
 	mux.HandleFunc("GET /guest-me", func(w http.ResponseWriter, r *http.Request) {
 		guestDeny(w, 403, "srv.share_guest.refuse")
 	})
