@@ -74,17 +74,20 @@ export function useAppActions(c: {
     return r.ok
   }
 
-  const pickDir = (title: string, start: string) =>
-    new Promise<string | null>((resolve) =>
+  // children : la modale propose aussi « ajouter tous les sous-dossiers » (alors children vaut true dans la réponse).
+  const pickWith = (title: string, start: string, children = false) =>
+    new Promise<{ path: string; children: boolean } | null>((resolve) =>
       setPicker({
         title,
         start,
-        done: (p) => {
+        children,
+        done: (p, c) => {
           setPicker(null)
-          resolve(p)
+          resolve(p ? { path: p, children: !!c } : null)
         },
       })
     )
+  const pickDir = (title: string, start: string) => pickWith(title, start).then((r) => r?.path ?? null)
 
   // Groupes virtuels et favoris : mise à jour immédiate de l'affichage, puis enregistrement côté serveur.
   const saveStore = async (groups: VGroup[], favList: string[]) => {
@@ -290,6 +293,13 @@ export function useAppActions(c: {
       return n
     })
 
+  const addChildDirs = async (p: string) => {
+    const r = await api.post("/dirs", { op: "addChildren", dir: p })
+    if (!r.ok) return void toast.error(r.out)
+    await reload()
+    toast.success(i18n.t("shell.act.childDirsAdded", { count: r.n ?? 0 }))
+  }
+
   const addDirPath = async (p: string) => {
     const r = await api.post("/dirs", { op: "add", dir: p })
     if (!r.ok) return void toast.error(r.out)
@@ -308,16 +318,11 @@ export function useAppActions(c: {
     asking: new Set(data?.asking),
     hit: (id) => hitMap?.get(id),
     registeredDirs: data?.dirs ?? [],
-    addDir: () => void pickDir(i18n.t("shell.act.addDirTitle"), home).then((p) => p && addDirPath(p)),
-    addDirPath,
-    addChildDirs: () =>
-      void pickDir(i18n.t("shell.act.addChildDirsTitle"), home).then(async (p) => {
-        if (!p) return
-        const r = await api.post("/dirs", { op: "addChildren", dir: p })
-        if (!r.ok) return void toast.error(r.out)
-        await reload()
-        toast.success(i18n.t("shell.act.childDirsAdded", { count: r.n ?? 0 }))
+    addDir: () =>
+      void pickWith(i18n.t("shell.act.addDirTitle"), home, true).then((r) => {
+        if (r) void (r.children ? addChildDirs(r.path) : addDirPath(r.path))
       }),
+    addDirPath,
     removeDir: async (project) => {
       const r = await api.post("/dirs", { op: "remove", dir: project })
       if (!r.ok) return void toast.error(r.out)

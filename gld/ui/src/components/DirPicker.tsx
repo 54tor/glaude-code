@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
-export type Pick = { title: string; start: string; done: (path: string | null) => void }
+export type Pick = { title: string; start: string; children?: boolean; done: (path: string | null, children?: boolean) => void }
 
 // Explorateur de dossiers (serveur : /ls). Un chemin disparu remonte au plus proche parent qui existe ;
 // sous Windows « ↑ » depuis la racine d'un lecteur affiche la liste des lecteurs.
@@ -63,6 +63,7 @@ export function DirPicker({ pick, home }: { pick: Pick | null; home: string }) {
 
   const f = filter.toLowerCase()
   const shown = dirs.filter((d) => (hidden || d === focus || !d.startsWith(".") || (f && d.toLowerCase().startsWith(f))) && d.toLowerCase().includes(f))
+  const visible = dirs.filter((d) => !d.startsWith(".")) // ceux que « ajouter les sous-dossiers » enregistre
   const isDrives = cur === ""
   const close = (path: string | null) => pick?.done(path)
   const target = focus ? join(cur, focus, sep) : cur
@@ -139,6 +140,11 @@ export function DirPicker({ pick, home }: { pick: Pick | null; home: string }) {
           <Button variant="outline" onClick={() => close(null)}>
             {t("common.cancel")}
           </Button>
+          {pick?.children && (
+            <Button variant="outline" onClick={() => pick.done(cur, true)} disabled={isDrives || visible.length === 0} title={t("shell.dirPicker.addChildrenHint")}>
+              {t("shell.dirPicker.addChildren", { count: visible.length })}
+            </Button>
+          )}
           <Button onClick={() => close(target)} disabled={isDrives}>
             {focus ? t("shell.dirPicker.chooseNamed", { name: focus }) : t("shell.dirPicker.choose")}
           </Button>
