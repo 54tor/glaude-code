@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowDown, ArrowUpToLine, BarChart3, Bug, FolderOpen, Power, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, Repeat, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
+import { ArrowDown, ArrowUpToLine, BarChart3, Bug, FolderOpen, Power, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, GalleryHorizontalEnd, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
@@ -412,7 +412,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
         {session && <KeepWarmBanner s={session} />}
         {carousel && (
           <div className="flex flex-wrap items-center gap-2 border-b bg-warning/10 px-4 py-1.5 text-sm">
-            <Repeat className="size-4 text-warning" aria-hidden /> {t("conversation.view.carousel", { count: carousel.n })}
+            <GalleryHorizontalEnd className="size-4 text-warning" aria-hidden /> {t("conversation.view.carousel", { count: carousel.n })}
             <Button variant="outline" size="sm" className="ml-auto" onClick={carousel.next}>
               {t("conversation.view.next")}
             </Button>

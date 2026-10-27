@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
-import { AlarmClock, ChevronRight, FolderPlus, Repeat, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Flame, Microwave, Snowflake, History, Clock, FileText, Inbox, Info, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
+import { AlarmClock, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Flame, Microwave, Snowflake, History, Clock, FileText, Inbox, Info, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
 import { size, tilde } from "@/lib/format"
 import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
@@ -253,7 +253,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
       <ScrollArea className="min-h-0 flex-1">
         <CleanupWarning />
         <nav className="px-2 pb-3" aria-label={t("shell.sidebar.navigation")}>
-          {(p.carousel.n > 0 || p.carousel.on) && <NavItem icon={Repeat} label={t("shell.sidebar.carousel")} n={p.carousel.n} active={p.carousel.on} onClick={p.carousel.start} />}
+          <NavItem icon={GalleryHorizontalEnd} label={t("shell.sidebar.carousel")} n={p.carousel.n} active={p.carousel.on} onClick={p.carousel.start} />
           <NavItem
             icon={Clock}
             label={t("shell.sidebar.recent")}
