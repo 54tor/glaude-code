@@ -87,12 +87,15 @@ export function Memory({
     if (!sel) return
     let live = true
     const get = inTrash ? api.trashFile(inTrash) : api.memoryFile(sel)
-    get.then((r) => {
-      if (!live) return
-      setLoaded(r.text === undefined ? { key: sel, text: "", error: r.error ?? "" } : { key: sel, text: r.text })
-      if (editNext.current === sel && r.text !== undefined) setDraft({ key: sel, text: r.text })
-      editNext.current = ""
-    })
+    get.then(
+      (r) => {
+        if (!live) return
+        setLoaded(r.text === undefined ? { key: sel, text: "", error: r.error ?? "" } : { key: sel, text: r.text })
+        if (editNext.current === sel && r.text !== undefined) setDraft({ key: sel, text: r.text })
+        editNext.current = ""
+      },
+      (e) => live && setLoaded({ key: sel, text: "", error: String(e) }) // sinon la vue reste sur « chargement »
+    )
     return () => {
       live = false
     }

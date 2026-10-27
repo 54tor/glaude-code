@@ -31,13 +31,16 @@ function EditDialog({ file, edit, onClose, onSaved }: { file: MemFile; edit: boo
   })
   useEffect(() => {
     let live = true
-    api.memoryFile(file.key).then((r) => {
-      if (!live) return
-      if (r.text === undefined) {
-        toast.error(r.error ?? i18n.t("memory.main.unreadable"))
-        close.current()
-      } else setText(r.text)
-    })
+    api.memoryFile(file.key).then(
+      (r) => {
+        if (!live) return
+        if (r.text === undefined) {
+          toast.error(r.error ?? i18n.t("memory.main.unreadable"))
+          close.current()
+        } else setText(r.text)
+      },
+      () => live && (toast.error(i18n.t("memory.main.unreadable")), close.current())
+    )
     return () => {
       live = false
     }

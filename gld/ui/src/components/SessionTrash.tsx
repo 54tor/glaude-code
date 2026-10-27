@@ -17,7 +17,7 @@ export function SessionTrash({ open, onClose, reload }: { open: boolean; onClose
   const [rows, setRows] = useState<Trashed[] | null>(null)
   const [days, setDays] = useState(30)
   const [confirm, setConfirm] = useState<string[] | null>(null) // ids à supprimer pour de bon, après confirmation
-  const load = useCallback(() => api.sessionTrash().then((r) => (setRows(r.sessions as Trashed[]), setDays(r.days))), [])
+  const load = useCallback(() => api.sessionTrash().then((r) => (setRows(r.sessions as Trashed[]), setDays(r.days)), (e) => toast.error(String(e))), [])
   useEffect(() => {
     if (open) void load()
   }, [open, load])

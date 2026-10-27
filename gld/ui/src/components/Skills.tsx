@@ -57,7 +57,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
   const [updates, setUpdates] = useState<Record<string, string>>({}) // clé du skill → update | current | unknown
   const [origin, setOrigin] = useState("all") // filtre sur l'origine
   const [writer, setWriter] = useState("") // clé du skill que le modèle rédige ; vide = fermé
-  const reload = useCallback(() => api.skills().then(setData), [])
+  const reload = useCallback(() => api.skills().then(setData, () => {}), [])
   useEffect(() => {
     reload()
   }, [reload])

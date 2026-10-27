@@ -60,7 +60,7 @@ export function useAppActions(c: {
     const r = await api.post(url, body)
     reportResult(r, { id, pick })
     if (r.ok && url === "/new-session") void watchTrust(home)
-    await reload()
+    await reload().catch(() => {}) // le résultat de l'action est déjà affiché ; un rechargement raté ne doit pas le masquer
     // Une session lancée met un instant à créer son transcript : on relit jusqu'à ce qu'elle apparaisse, sans retenir l'appelant
     // (la fenêtre de saisie se ferme dès le lancement).
     if (r.ok && (url === "/new-session" || url === "/open")) {

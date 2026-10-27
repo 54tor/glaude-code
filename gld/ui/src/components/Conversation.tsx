@@ -164,9 +164,9 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
     let live = true
     const t = setInterval(async () => {
       if (Date.now() - sentAt.at > 15 * 60_000) return setSentAt(null)
-      const [, st] = await Promise.all([reloadRef.current(), api.sessionIdle(id)])
+      const st = await Promise.all([reloadRef.current(), api.sessionIdle(id)]).then(([, s]) => s, () => null) // serveur coupé : on réessaie au tour suivant
       // Le premier relevé suit de près l'envoi : la session n'a pas encore commencé, on laisse quelques secondes.
-      if (live && st.idle && Date.now() - sentAt.at > 4000) {
+      if (live && st?.idle && Date.now() - sentAt.at > 4000) {
         setSentAt(null)
         // Le relevé a pu précéder l'écriture de la dernière réponse dans le transcript : une relecture de plus, juste après.
         setTimeout(() => void reloadRef.current(), 1500)
