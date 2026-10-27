@@ -52,7 +52,7 @@ Lecture seule, sans documentation officielle de Claude Code. Le lecteur tolère 
 Constats du spike (Claude Code 2.1.311, `gld/testdata/teams/NOTES.md`) :
 
 - Le pane du chef n'est pas dans `config.json` (`tmuxPaneId: "leader"`). Gld le retrouve par l'identifiant de session.
-- Les boîtes sont vides au repos : Claude Code retire les messages lus. Gld garde en mémoire ceux qu'il a vus, 500 par équipe.
+- Les boîtes sont vides au repos : Claude Code retire les messages lus. Gld garde en mémoire ceux qu'il a vus, 500 par équipe. Une notification `idle_notification` n'est gardée que si son champ `result` n'est pas vide : ce texte (compte rendu du coéquipier au chef) s'affiche comme un message de son auteur.
 - Le format des tâches n'a pas été observé (dossier resté vide) : la liste peut rester vide.
 - Un ancien dossier d'équipe peut survivre à sa session. `GET /teams` ne liste que les équipes dont la session du chef a un pane tmux.
 
@@ -67,7 +67,9 @@ Modifier un élément fourni crée une copie personnelle ; les éléments fourni
 
 La file de messages et le log des boîtes sont en mémoire : perdus au redémarrage de gld. La file n'est vidée que lorsque quelqu'un interroge `GET /team`.
 
-`POST /team-close` ferme la session du chef, puis supprime le journal, le log et la file de l'équipe.
+`POST /team-close` ferme la session du chef, puis supprime le journal, le log et la file de l'équipe. Si le chef a déjà quitté (équipe terminée), il n'y a rien à fermer : le nettoyage a lieu quand même, et le bouton reste actif. Si tmux est injoignable, `team-send`, `team-key`, `team-screen` et `team-close` répondent « tmux injoignable » (et non « team inactive ») ; `GET /team` et `GET /teams` répondent normalement, équipe non active.
+
+Agent : le champ `Model` se limite à 64 caractères parmi `A-Za-z0-9._-` (vide admis). Un lancement dont la sortie contient `unknown option`, `unknown argument` ou `unrecognized` est signalé « indisponible : cette version de claude ne gère pas les teams ». L'écran affiche « Répondre dans le terminal » quand le chef attend (ou n'est pas lisible) sans demande lisible.
 
 ## Limites de Claude Code
 
@@ -86,3 +88,8 @@ La file de messages et le log des boîtes sont en mémoire : perdus au redémarr
 - [ ] Le titre de permission `<Outil> · from the <nom> agent` n'est connu que par le spike.
 - [ ] `GET /teams` masque bien les équipes périmées : jamais vu dans un lancement réel.
 - [ ] Lancement complet de l'équipe `feature` sur un dépôt jetable : un onglet tmux s'ouvre, le chef crée les coéquipiers, leurs panes apparaissent, `~/.claude/teams/session-<8hex>` existe.
+- [ ] `claude agents --json` liste la session démarrée avec un `--session-id` explicite (kind interactive, pid dans le pane) ; sinon `sendable()` ne trouve pas le chef et toute team s'affiche non active.
+- [ ] `isActive:false` dans `config.json` veut dire « coéquipier vivant mais au repos » ; s'il veut dire « parti », les messages aux coéquipiers restent en file.
+- [ ] SIGTERM du chef ferme les panes des coéquipiers ; sinon des panes tmux orphelins restent.
+- [ ] Échap sur la demande d'un coéquipier (option 3, « No, and tell Claude what to do differently ») laisse le chef en attente d'instructions : vérifier que l'écran le montre alors au repos.
+- [ ] Les coéquipiers démarrés depuis `agents/<id>.md` respectent `tools: Read, Grep, Glob`.
