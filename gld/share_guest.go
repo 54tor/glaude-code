@@ -27,9 +27,11 @@ const (
 	guestCookiePrefix = "gld_guest_"
 	shareHeader       = "X-Gld-Share"
 	guestListMax      = 20
+	guestChildMax     = 3 // cookies de home enfant jugés par requête : chacun coûte une lecture de fichier
 	// Posés par la passerelle sur la requête relayée au gld enfant qui possède le partage (childProxy) ; jamais lus ailleurs.
 	guestHeader      = "X-Gld-Guest"
 	guestHTTPSHeader = "X-Gld-Guest-HTTPS"
+	guestQuietHeader = "X-Gld-Guest-Quiet" // vérification pour /guest-list : l'enfant ne touche pas LastSeen
 	invitePat        = "GET /invite/{home}/{token}"
 	invitePostPat    = "POST /invite/{home}/{token}"
 	guestAddMax      = 10
@@ -50,6 +52,9 @@ var guestRoutes = map[string]bool{
 }
 
 type guestRelayKey struct{}
+type guestQuietKey struct{}
+
+var guestOpenShares = openShares // les tests comptent les lectures
 
 func guestCookieName(handle string) string { return guestCookiePrefix + handle }
 
@@ -119,9 +124,12 @@ func (n *noStoreWriter) Write(b []byte) (int, error) {
 
 func (n *noStoreWriter) Unwrap() http.ResponseWriter { return n.ResponseWriter }
 
-func guestShare(sec string) (Share, bool) {
+func guestShare(sec string, touch bool) (Share, bool) {
 	if sec == "" || shareSt == nil {
 		return Share{}, false
+	}
+	if !touch {
+		return shareSt.ByCookieQuiet(sec)
 	}
 	return shareSt.ByCookie(sec)
 }
@@ -133,7 +141,7 @@ func guestKnown(home, sec string) (Share, bool) {
 	if !ok || sec == "" {
 		return Share{}, false
 	}
-	st, err := openShares(h.Dir)
+	st, err := guestOpenShares(h.Dir)
 	if err != nil {
 		return Share{}, false
 	}
@@ -148,37 +156,48 @@ func guestKnown(home, sec string) (Share, bool) {
 
 // guestPre : le cookie de la poignée hd, jugé par la passerelle (home enfant : d'après son fichier). Le partage trouvé doit
 // avoir cette poignée : un secret recopié sous le nom d'un autre cookie ne vaut rien.
-func guestPre(hd, val string) (home, sec string, sh Share, ok bool) {
+// touch : seule une requête invitée gardée met LastSeen à jour.
+func guestPre(hd, val string, touch bool) (home, sec string, sh Share, ok bool) {
 	if !validHandle(hd) {
 		return "", "", Share{}, false
 	}
-	if i := strings.LastIndexByte(val, '.'); i >= 0 {
-		home, _ = url.QueryUnescape(val[:i])
-		sec = val[i+1:]
-	}
+	home, sec = guestSplit(val)
 	if home == "" {
-		sh, ok = guestShare(sec)
+		sh, ok = guestShare(sec, touch)
 	} else {
 		sh, ok = guestKnown(home, sec)
 	}
 	return home, sec, sh, ok && shareHandle(sh.Session) == hd
 }
 
-// guestCookies : les cookies invités de la requête, un par nom, au plus guestListMax (borne le travail par requête).
+func guestSplit(val string) (home, sec string) {
+	if i := strings.LastIndexByte(val, '.'); i >= 0 {
+		home, _ = url.QueryUnescape(val[:i])
+		sec = val[i+1:]
+	}
+	return home, sec
+}
+
+// guestCookies : les cookies invités de la requête, un par nom, au plus guestListMax ; ceux du home principal (en mémoire)
+// d'abord, puis au plus guestChildMax de homes enfants. Borne le travail qu'un client impose avant toute garde.
 func guestCookies(r *http.Request) []*http.Cookie {
-	var out []*http.Cookie
+	var main, child []*http.Cookie
 	seen := map[string]bool{}
 	for _, c := range r.Cookies() {
 		if !strings.HasPrefix(c.Name, guestCookiePrefix) || seen[c.Name] {
 			continue
 		}
-		if len(out) == guestListMax {
+		if len(seen) == guestListMax {
 			break
 		}
 		seen[c.Name] = true
-		out = append(out, c)
+		if home, _ := guestSplit(c.Value); home == "" {
+			main = append(main, c)
+		} else if len(child) < guestChildMax {
+			child = append(child, c)
+		}
 	}
-	return out
+	return append(main, child...)
 }
 
 func guestClear(w http.ResponseWriter, r *http.Request, name string) {
@@ -193,7 +212,7 @@ func guestStatic(mux *http.ServeMux, r *http.Request) bool {
 		return false
 	}
 	for _, c := range guestCookies(r) {
-		if _, _, _, ok := guestPre(strings.TrimPrefix(c.Name, guestCookiePrefix), c.Value); ok {
+		if _, _, _, ok := guestPre(strings.TrimPrefix(c.Name, guestCookiePrefix), c.Value, false); ok {
 			return true
 		}
 	}
@@ -235,7 +254,7 @@ func guestGate(mux *http.ServeMux, next http.Handler) http.Handler {
 				return
 			}
 			// La passerelle n'a pas jugé ce client comme hôte : un secret refusé ici ne retombe jamais sur l'hôte.
-			sh, ok := guestShare(sec)
+			sh, ok := guestShare(sec, r.Header.Get(guestQuietHeader) != "1")
 			hd := r.Header.Get(shareHeader)
 			if !ok || shareHandle(sh.Session) != hd {
 				guestDeny(w, 403, "srv.share_guest.refuse")
@@ -262,7 +281,7 @@ func guestGate(mux *http.ServeMux, next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if home, sec, sh, ok := guestPre(hd, c.Value); ok {
+		if home, sec, sh, ok := guestPre(hd, c.Value, true); ok {
 			if home == "" {
 				cop.Handler(guestServe(mux, sh, sec, hd)).ServeHTTP(w, r)
 			} else {
@@ -484,7 +503,7 @@ func guestList(w http.ResponseWriter, r *http.Request) {
 	out := []guestItem{}
 	for _, c := range guestCookies(r) {
 		hd := strings.TrimPrefix(c.Name, guestCookiePrefix)
-		home, sec, sh, ok := guestPre(hd, c.Value)
+		home, sec, sh, ok := guestPre(hd, c.Value, false)
 		if !ok {
 			guestClear(w, r, c.Name)
 			continue
@@ -537,7 +556,7 @@ func guestChildMe(r *http.Request, home, sec, hd string) (guestItem, int) {
 		journal("homes %s : %v", home, err)
 		return guestItem{}, http.StatusServiceUnavailable
 	}
-	sr := r.Clone(context.WithValue(r.Context(), guestRelayKey{}, sec))
+	sr := r.Clone(context.WithValue(context.WithValue(r.Context(), guestRelayKey{}, sec), guestQuietKey{}, true))
 	sr.Method, sr.URL = http.MethodGet, &url.URL{Path: "/guest-me"}
 	sr.Body, sr.ContentLength = http.NoBody, 0
 	sr.Header.Set(shareHeader, hd)

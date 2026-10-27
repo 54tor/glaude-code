@@ -326,10 +326,10 @@ func TestGuestRelayedToChildHome(t *testing.T) {
 	cs, _ := openShares(hm.Dir)
 	tok, _ := cs.Create(id1, "-p", "")
 	sec, _, _ := cs.Redeem(tok)
-	type seen struct{ path, guest, cookie, https, share string }
+	type seen struct{ path, guest, cookie, https, share, quiet string }
 	var got []seen
 	child := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		got = append(got, seen{r.URL.RequestURI(), r.Header.Get(guestHeader), r.Header.Get("Cookie"), r.Header.Get(guestHTTPSHeader), r.Header.Get(shareHeader)})
+		got = append(got, seen{r.URL.RequestURI(), r.Header.Get(guestHeader), r.Header.Get("Cookie"), r.Header.Get(guestHTTPSHeader), r.Header.Get(shareHeader), r.Header.Get(guestQuietHeader)})
 		if strings.HasPrefix(r.URL.Path, "/invite/") {
 			w.WriteHeader(303)
 			return
@@ -344,7 +344,7 @@ func TestGuestRelayedToChildHome(t *testing.T) {
 		return &homeProc{dir: h.Dir, proxy: childProxy(cu, "x"), done: make(chan struct{})}, nil
 	}
 	c := "perso." + sec
-	if w := (gReq{method: "GET", path: "/conv?id=x", cookie: c}).do(h); w.Code != 200 || w.Body.String() != "enfant" || w.Header().Get("Cache-Control") != "no-store" {
+	if w := (gReq{method: "GET", path: "/conv?id=x", cookie: c, hdr: map[string]string{guestQuietHeader: "1"}}).do(h); w.Code != 200 || w.Body.String() != "enfant" || w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("relais : %d %s", w.Code, w.Body)
 	}
 	if w := (gReq{method: "GET", path: "/api", cookie: c}).do(h); w.Code != 403 {
@@ -373,7 +373,7 @@ func TestGuestRelayedToChildHome(t *testing.T) {
 			t.Fatalf("invitation relayée %d : %d", i+1, w.Code)
 		}
 	}
-	if len(got) != 13 || got[0].guest != sec || got[0].share != hID1 || got[0].cookie != "" || got[1].path != "/api" || got[1].guest != "" || got[1].https != "" || got[2].guest != "" || got[2].path != "/invite/perso/"+tok {
+	if len(got) != 13 || got[0].guest != sec || got[0].share != hID1 || got[0].quiet != "" || got[0].cookie != "" || got[1].path != "/api" || got[1].guest != "" || got[1].https != "" || got[2].guest != "" || got[2].path != "/invite/perso/"+tok {
 		t.Fatalf("vu par l'enfant : %+v", got)
 	}
 	if w := (gReq{method: "POST", path: "/invite/inconnu/" + tok}).do(h); w.Code != 403 {
@@ -397,6 +397,17 @@ func TestGuestChildValidatesRelayedSecret(t *testing.T) {
 	w = gReq{method: "GET", path: "/guest-me", hdr: map[string]string{childHeader: "ctok", guestHeader: sec, shareHeader: hID1}}.do(h)
 	if w.Code != 200 || !strings.Contains(w.Body.String(), id1) || !strings.Contains(w.Body.String(), hID1) {
 		t.Fatalf("relayé : %d %s", w.Code, w.Body)
+	}
+	shareSt.mu.Lock()
+	shareSt.m[id1].LastSeen = 1
+	shareSt.mu.Unlock()
+	gReq{method: "GET", path: "/guest-me", hdr: map[string]string{childHeader: "ctok", guestHeader: sec, shareHeader: hID1, guestQuietHeader: "1"}}.do(h)
+	if sh, _ := shareSt.Get(id1); sh.LastSeen != 1 {
+		t.Fatalf("vérification /guest-list : LastSeen touché")
+	}
+	gReq{method: "GET", path: "/guest-me", hdr: map[string]string{childHeader: "ctok", guestHeader: sec, shareHeader: hID1}}.do(h)
+	if sh, _ := shareSt.Get(id1); sh.LastSeen <= 1 {
+		t.Fatalf("requête invitée : LastSeen non mis à jour")
 	}
 	for _, hd := range []string{"", shareHandle(gOther), "nimporte"} {
 		if w := (gReq{method: "GET", path: "/guest-me", hdr: map[string]string{childHeader: "ctok", guestHeader: sec, shareHeader: hd}}).do(h); w.Code != 403 {
@@ -617,7 +628,7 @@ func TestGuestInvalidHeaderFormatIgnored(t *testing.T) {
 	h := guestWeb(t, nil, modeTok)
 	c, _ := guestIn(t, h)
 	jar := []*http.Cookie{{Name: gName, Value: c}}
-	for _, hd := range []string{strings.ToUpper(hID1), hID1 + "0", hID1[:15], "x", " " + hID1} {
+	for _, hd := range []string{strings.ToUpper(hID1), hID1 + "0", hID1[:15], "x", "-" + hID1[1:]} {
 		w := gReq{method: "GET", path: "/conv", jar: jar, hdr: map[string]string{shareHeader: hd}}.do(h)
 		if w.Code != 401 || cookieOf(w, gName) != nil {
 			t.Fatalf("en-tête %q : %d", hd, w.Code)
@@ -760,7 +771,7 @@ func TestGuestListChildRevalidated(t *testing.T) {
 	refuse := false
 	child := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hd := r.Header.Get(shareHeader)
-		if refuse || r.URL.Path != "/guest-me" || r.Header.Get(guestHeader) == "" || r.Header.Get("Cookie") != "" {
+		if refuse || r.URL.Path != "/guest-me" || r.Header.Get(guestHeader) == "" || r.Header.Get("Cookie") != "" || r.Header.Get(guestQuietHeader) != "1" {
 			w.WriteHeader(403)
 			return
 		}
@@ -787,5 +798,79 @@ func TestGuestListChildRevalidated(t *testing.T) {
 	w = gReq{method: "GET", path: "/guest-list", jar: []*http.Cookie{{Name: guestCookieName(shareHandle(gOther)), Value: "perso." + sec2}}}.do(h)
 	if k := cookieOf(w, guestCookieName(shareHandle(gOther))); w.Code != 403 || k == nil || k.MaxAge >= 0 {
 		t.Fatalf("refus de l'enfant : %d %+v", w.Code, k)
+	}
+}
+
+// Le statique sans en-tête n'est servi qu'aux motifs de guestStatics sur un chemin canonique ; le reste va au jeton (401).
+func TestGuestStaticExceptionTable(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	c, _ := guestIn(t, h)
+	asset, _ := filepath.Glob("ui/dist/assets/*.js")
+	if len(asset) == 0 {
+		t.Skip("ui/dist absent")
+	}
+	jar := []*http.Cookie{{Name: gName, Value: c}}
+	for _, p := range []string{"/sw.js", "/", "/guest/", "/assets/", "/guest/x/y", "/assets/%2e%2e/x", "/assets/../x", "/guest/..%2f", "/conv", "/api"} {
+		if w := (gReq{method: "GET", path: p, jar: jar}).do(h); w.Code != 401 {
+			t.Errorf("%s servi : %d", p, w.Code)
+		}
+	}
+	for _, p := range []string{"/guest", "/guest/" + hID1, "/assets/" + filepath.Base(asset[0]), "/icons/x", "/favicon.ico", "/manifest.webmanifest"} {
+		if w := (gReq{method: "GET", path: p, jar: jar}).do(h); w.Code == 401 {
+			t.Errorf("%s refusé", p)
+		}
+	}
+	if w := (gReq{method: "GET", path: "/assets/" + filepath.Base(asset[0])}).do(h); w.Code != 401 {
+		t.Fatalf("asset anonyme : %d", w.Code)
+	}
+}
+
+// Des cookies d'un home enfant forgés coûtent une lecture de fichier chacun : au plus guestChildMax par requête, après ceux du home principal.
+func TestGuestChildCookieChecksCapped(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	c, _ := guestIn(t, h)
+	addHomes(t, "perso")
+	n := 0
+	old := guestOpenShares
+	t.Cleanup(func() { guestOpenShares = old })
+	guestOpenShares = func(d string) (*shareStore, error) { n++; return old(d) }
+	var jar []*http.Cookie
+	for i := range guestListMax {
+		jar = append(jar, &http.Cookie{Name: guestCookieName(shareHandle(strings.Repeat("8", i+1))), Value: "perso.faux" + strings.Repeat("x", i)})
+	}
+	all := append([]*http.Cookie{jar[0], jar[1], {Name: gName, Value: c}}, jar[2:guestListMax-1]...)
+	w := gReq{method: "GET", path: "/guest-list", jar: all}.do(h)
+	var got []gItem
+	json.Unmarshal(w.Body.Bytes(), &got)
+	if w.Code != 200 || len(got) != 1 || got[0].Handle != hID1 || n > guestChildMax {
+		t.Fatalf("liste : %d %s, %d lectures", w.Code, w.Body, n)
+	}
+	n = 0
+	if w := (gReq{method: "GET", path: "/guest", jar: jar}).do(h); w.Code != 401 || n > guestChildMax {
+		t.Fatalf("statique : %d, %d lectures", w.Code, n)
+	}
+	n = 0
+	if w := (gReq{method: "GET", path: "/guest", jar: all}).do(h); w.Code != 200 || n != 0 {
+		t.Fatalf("statique, cookie principal d'abord : %d, %d lectures", w.Code, n)
+	}
+}
+
+// LastSeen ne bouge que sur une vraie requête invitée (en-tête de partage), jamais sur /guest-list ni le statique.
+func TestGuestLastSeenOnlyOnGuardedRequests(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	c, _ := guestIn(t, h)
+	shareSt.mu.Lock()
+	shareSt.m[id1].LastSeen = 1
+	shareSt.mu.Unlock()
+	jar := []*http.Cookie{{Name: gName, Value: c}}
+	for _, p := range []string{"/guest-list", "/guest", "/guest/" + hID1, "/favicon.ico"} {
+		gReq{method: "GET", path: p, jar: jar}.do(h)
+	}
+	if sh, _ := shareSt.Get(id1); sh.LastSeen != 1 {
+		t.Fatalf("LastSeen touché sans requête invitée : %d", sh.LastSeen)
+	}
+	gReq{method: "GET", path: "/conv", cookie: c}.do(h)
+	if sh, _ := shareSt.Get(id1); sh.LastSeen <= 1 {
+		t.Fatalf("LastSeen non mis à jour : %d", sh.LastSeen)
 	}
 }

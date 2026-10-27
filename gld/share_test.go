@@ -389,7 +389,16 @@ func TestShareReadOnlyDropsQueuedGuestItems(t *testing.T) {
 
 func TestShareTitleSanitized(t *testing.T) {
 	long := strings.Repeat("é", 130)
-	for in, want := range map[string]string{"": "", "  a\x00b\nc\u0085\u001b[31m  ": "abc[31m", "Titre": "Titre", long: long[:240]} {
+	for in, want := range map[string]string{
+		"": "", "Titre": "Titre", long: long[:240],
+		"  a\x00b\nc\u0085\u001b[31m  ": "ab c [31m", // contrôles retirés, NEL comme espace
+		"a\tb\r\nc  \n d":               "a b c d",   // espaces de contrôle : une seule espace
+		"x\u202Ey\u202Az\u202D":         "xyz",       // surcharges bidi
+		"x\u2066y\u2067z\u2068w\u2069":  "xyzw",      // isolats bidi
+		"x\u200By\u200Cz\u200Dw\u2060v": "xyzwv",     // largeur nulle
+		"\uFEFFtitre\u00AD":             "titre",     // BOM, trait d'union conditionnel
+		"\u202E   \t ":                  "",
+	} {
 		if got := shareTitle(in); got != want {
 			t.Errorf("%q : %q, attendu %q", in, got, want)
 		}
@@ -398,7 +407,7 @@ func TestShareTitleSanitized(t *testing.T) {
 	if w := post(mux, "/share-create", `{"id":"`+shSess+`","dir":"proj","title":"  Ma\tsession  "}`); w.Code != 200 {
 		t.Fatalf("create : %d %s", w.Code, w.Body)
 	}
-	if sh, _ := shareSt.Get(shSess); sh.Title != "Masession" {
+	if sh, _ := shareSt.Get(shSess); sh.Title != "Ma session" {
 		t.Fatalf("titre : %q", sh.Title)
 	}
 	if w := post(mux, "/share-create", `{"id":"`+shSess+`","dir":"proj"}`); w.Code != 200 {

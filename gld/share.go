@@ -68,14 +68,19 @@ func shareHandle(session string) string {
 	return hex.EncodeToString(h[:])[:16]
 }
 
+// shareTitle : affiché à l'invité ; sans contrôle ni caractère de format (surcharges bidi, largeur nulle) qui maquilleraient
+// le titre, espaces réduites à une seule.
 func shareTitle(s string) string {
 	s = strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
+		switch {
+		case unicode.IsSpace(r):
+			return ' '
+		case unicode.IsControl(r), unicode.Is(unicode.Cf, r):
 			return -1
 		}
 		return r
 	}, s)
-	r := []rune(strings.TrimSpace(s))
+	r := []rune(strings.Join(strings.Fields(s), " "))
 	if len(r) > shareTitleMax {
 		r = r[:shareTitleMax]
 	}
@@ -156,12 +161,20 @@ func (s *shareStore) Redeem(token string) (string, Share, bool) {
 	return "", Share{}, false
 }
 
-func (s *shareStore) ByCookie(cookie string) (Share, bool) {
+func (s *shareStore) ByCookie(cookie string) (Share, bool) { return s.byCookie(cookie, true) }
+
+// ByCookieQuiet : sans toucher LastSeen ; l'hôte ne doit voir « connecté » que sur une vraie requête invitée.
+func (s *shareStore) ByCookieQuiet(cookie string) (Share, bool) { return s.byCookie(cookie, false) }
+
+func (s *shareStore) byCookie(cookie string, touch bool) (Share, bool) {
 	h := hashSecret(cookie)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, sh := range s.m {
 		if hashEq(sh.CookieHash, h) {
+			if !touch {
+				return *sh, true
+			}
 			now := time.Now()
 			sh.LastSeen = now.Unix()
 			if now.Sub(s.lastSaved) >= shareSeenSave {
