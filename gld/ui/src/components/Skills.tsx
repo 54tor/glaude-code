@@ -1,7 +1,7 @@
 import { loc } from "@/i18n"
 import { useTranslation } from "react-i18next"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { AlertTriangle, ArrowLeft, BookOpen, Bot, ClipboardCopy, Copy, EyeOff, FileText, FolderInput, Hand, Pencil, Plug, Plus, Save, Sparkles, Trash2, X, Zap } from "lucide-react"
+import { AlertTriangle, ArrowLeft, BookOpen, Bot, ClipboardCopy, Copy, EyeOff, FileText, FolderInput, Hand, Package, Pencil, Plug, Plus, RefreshCw, Save, Sparkles, Trash2, X, Zap } from "lucide-react"
 import { toast } from "sonner"
 import { api, type Skill, type SkillFile } from "@/lib/api"
 import { ago, tilde } from "@/lib/format"
@@ -17,6 +17,7 @@ import { Choose } from "./Choose"
 import type { Ask } from "./Confirm"
 import { Markdown } from "./Message"
 import { PluginsDialog } from "./PluginsDialog"
+import { SkillsNpxDialog, npxAct, npxCommand } from "./SkillsNpxDialog"
 import { SkillWriter } from "./SkillWriter"
 import { split } from "./memoryLib"
 import { useEditorDraft, useLeaveGuard } from "@/hooks/useEditorDraft"
@@ -52,12 +53,28 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
   const [draft, setDraft] = useEditorDraft("skill")
   const [creating, setCreating] = useState(false)
   const [plugins, setPlugins] = useState(false)
+  const [npx, setNpx] = useState(false)
+  const [updates, setUpdates] = useState<Record<string, string>>({}) // clé du skill → update | current | unknown
   const [origin, setOrigin] = useState("all") // filtre sur l'origine
   const [writer, setWriter] = useState("") // clé du skill que le modèle rédige ; vide = fermé
   const reload = useCallback(() => api.skills().then(setData), [])
   useEffect(() => {
     reload()
   }, [reload])
+  const check = useCallback(
+    (force: boolean) =>
+      api
+        .skillsUpdates(force)
+        .then((r) => {
+          setUpdates(r.states ?? {})
+          if (force) toast.success(t("skills.npx.checked"))
+        })
+        .catch(() => {}),
+    [t],
+  )
+  useEffect(() => {
+    check(false)
+  }, [check])
   useEffect(() => {
     if (!sel) return
     let live = true
@@ -125,6 +142,21 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
     onPick(key)
     setDraft({ key, text: r.text })
   }
+  const npxAsk = (action: "update" | "remove", s: Skill) => {
+    const scope = s.scope === "user" ? "user" : "p/" + s.key.split("/")[1]
+    onAsk({
+      title: t(`skills.npx.${action}Title`, { name: s.name }),
+      body: t("skills.npx.actBody", { cmd: npxCommand(action, "", s.dir, s.scope === "user") }),
+      confirm: t(`skills.npx.${action}`),
+      run: async () => {
+        if (await npxAct(action, "", s.dir, scope)) {
+          if (action === "remove" && s.key === sel) onPick("")
+          reload()
+          check(true)
+        }
+      },
+    })
+  }
   const copyName = (s: Skill) => copyText("/" + s.dir).then(() => toast.success(t("skills.skills.nameCopied", { dir: s.dir })), () => toast.error(t("skills.skills.copyFailed")))
   const [fm, body] = split(cur?.text ?? "")
 
@@ -138,6 +170,12 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
             </Button>
             <Button size="xs" variant="outline" onClick={() => setPlugins(true)}>
               <Plug /> {t("skills.plugins.button")}
+            </Button>
+            <Button size="xs" variant="outline" onClick={() => setNpx(true)}>
+              <Package /> {t("skills.npx.button")}
+            </Button>
+            <Button size="xs" variant="ghost" onClick={() => check(true)} title={t("skills.npx.check")} aria-label={t("skills.npx.check")}>
+              <RefreshCw />
             </Button>
             <Choose
               value={origin}
@@ -172,6 +210,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
                               <Zap className="size-3.5 shrink-0 text-warning" />
                               <span className="min-w-0 flex-1 truncate font-medium">{s.name}</span>
                         <OriginBadge s={s} />
+                              {updates[s.key] === "update" && <span className="shrink-0 rounded-sm bg-warning/10 px-1.5 py-px text-2xs font-medium text-warning">{t("skills.npx.updateBadge")}</span>}
                               {s.manual && <Hand className="size-3.5 shrink-0 text-muted-foreground" aria-label={t("skills.skills.manualOnly")} />}
                               {s.hidden && <EyeOff className="size-3.5 shrink-0 text-muted-foreground" aria-label={t("skills.skills.hiddenInMenu")} />}
                               {s.warn && <AlertTriangle className="size-3.5 shrink-0 text-warning" aria-label={t("skills.skills.toCheck")} />}
@@ -297,6 +336,24 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
                 </>
               )}
             </div>
+            {skill.lock && (
+              <div className="flex flex-wrap items-center gap-2 border-b px-6 py-1.5 text-xs text-muted-foreground">
+                <span className="min-w-40 flex-1">
+                  {t("skills.npx.lockLine", {
+                    source: skill.lock.source,
+                    mode: skill.lock.link ? t("skills.npx.modeLink") : t("skills.npx.modeCopy"),
+                    date: new Date(skill.lock.installedAt).toLocaleDateString(loc()),
+                  })}
+                </span>
+                {updates[skill.key] === "update" && <span className="rounded-sm bg-warning/10 px-1.5 py-px text-2xs font-medium text-warning">{t("skills.npx.updateBadge")}</span>}
+                <Button size="xs" variant="outline" onClick={() => npxAsk("update", skill)}>
+                  <RefreshCw /> {t("skills.npx.update")}
+                </Button>
+                <Button size="xs" variant="outline" onClick={() => npxAsk("remove", skill)}>
+                  <Trash2 /> {t("skills.npx.remove")}
+                </Button>
+              </div>
+            )}
             <p className="flex items-center gap-2 border-b px-6 py-1.5 text-xs text-muted-foreground">
               <OriginBadge s={skill} /> {skill.source || t(`skills.origin.${skill.origin in ORIGINS ? skill.origin : "custom"}.hint`)}
               {skill.readOnly && t("skills.skills.readOnlyHint")}
@@ -357,6 +414,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
         )}
       </div>
       <SkillWriter open={!!writer} skillKey={writer} name={data?.skills.find((s) => s.key === writer)?.name ?? ""} onClose={() => setWriter("")} onDraft={(text) => setDraft({ key: writer, text })} />
+      <SkillsNpxDialog open={npx} projects={data?.projects ?? []} home={home} onClose={() => setNpx(false)} onChange={reload} />
       <PluginsDialog open={plugins} projects={data?.projects ?? []} home={home} onClose={() => setPlugins(false)} onChange={reload} />
       <NewSkill open={creating} projects={data?.projects ?? []} home={home} onClose={() => setCreating(false)} onCreated={async (key) => (await reload(), onPick(key))} />
     </div>

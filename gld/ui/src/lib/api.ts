@@ -57,7 +57,10 @@ export type Skill = {
   mtime: number
   path: string
   warn?: string
+  lock?: SkillLock // posé par npx skills
 }
+export type SkillLock = { source: string; sourceType: string; skillPath: string; hash: string; installedAt: string; updatedAt: string; link: boolean; global: boolean }
+export type SkillHit = { ref: string; source: string; skill: string; installs: string; url: string }
 export type SkillFile = { rel: string; kb: number }
 
 // Ce que chaque projet configure en propre (configproj.go)
@@ -223,6 +226,8 @@ export const api = {
   slashCommands: () => get<{ commands: { cmd: string; desc: string; origin: string }[] }>("/slash-commands"),
   skills: () => get<{ skills: Skill[]; projects: { dir: string; project: string }[] }>("/skills-list"),
   skill: (key: string) => get<{ text?: string; files?: SkillFile[]; error?: string }>(`/skill?key=${enc(key)}`),
+  skillsFind: (q: string) => get<{ hits?: SkillHit[]; error?: string }>(`/skills-find?q=${enc(q)}`),
+  skillsUpdates: (force = false) => get<{ states?: Record<string, string> }>(`/skills-updates${force ? "?force=1" : ""}`),
   marketplaces: () => get<{ marketplaces?: Marketplace[]; error?: string }>("/marketplaces"),
   plugins: (q = "") => get<{ installed?: PluginInst[]; available?: PluginAvail[]; error?: string }>(`/plugins?q=${enc(q)}`),
   configProjects: () => get<{ projects: ProjectCfg[] }>("/config-projects"),

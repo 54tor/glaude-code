@@ -156,6 +156,37 @@
     "snippetMenu": {
       "insert": "Insérer un snippet",
       "unreadable": "Snippet illisible"
+    },
+    "npx": {
+      "button": "Trouver et installer",
+      "title": "Skills npx",
+      "description": "Chercher des skills avec « npx skills » et les installer pour vous ou pour un projet.",
+      "search": "Rechercher un skill…",
+      "searchBtn": "Rechercher",
+      "searchFailed": "Recherche impossible",
+      "none": "Aucun résultat.",
+      "installs": "{{n}} installations",
+      "install": "Installer",
+      "confirmTitle": "Installer {{skill}} ?",
+      "confirmBody": "Le contenu d'un skill est lu et suivi par Claude : n'installez que des sources de confiance. La commande ci-dessous télécharge et exécute du code depuis npm et GitHub.",
+      "command": "Commande",
+      "scope": "Portée",
+      "scopeUser": "Global (vos skills)",
+      "scopeProject": "Projet : {{name}}",
+      "confirmInstall": "Confirmer l'installation",
+      "back": "Retour",
+      "running": "En cours…",
+      "updateBadge": "mise à jour",
+      "update": "Mettre à jour",
+      "remove": "Retirer",
+      "check": "Vérifier les mises à jour",
+      "checked": "Vérification terminée",
+      "lockLine": "Posé par npx skills · {{source}} · {{mode}} · installé le {{date}}",
+      "modeLink": "lien",
+      "modeCopy": "copie",
+      "updateTitle": "Mettre à jour {{name}} ?",
+      "removeTitle": "Retirer {{name}} ?",
+      "actBody": "Commande exécutée : {{cmd}}"
     }
   }
 }

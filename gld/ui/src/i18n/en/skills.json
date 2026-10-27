@@ -156,6 +156,37 @@
     "snippetMenu": {
       "insert": "Insert a snippet",
       "unreadable": "Cannot read snippet"
+    },
+    "npx": {
+      "button": "Find and install",
+      "title": "npx skills",
+      "description": "Search skills with “npx skills” and install them for yourself or for a project.",
+      "search": "Search for a skill…",
+      "searchBtn": "Search",
+      "searchFailed": "Search failed",
+      "none": "No results.",
+      "installs": "{{n}} installs",
+      "install": "Install",
+      "confirmTitle": "Install {{skill}}?",
+      "confirmBody": "A skill's content is read and followed by Claude: only install sources you trust. The command below downloads and runs code from npm and GitHub.",
+      "command": "Command",
+      "scope": "Scope",
+      "scopeUser": "Global (your skills)",
+      "scopeProject": "Project: {{name}}",
+      "confirmInstall": "Confirm installation",
+      "back": "Back",
+      "running": "Running…",
+      "updateBadge": "update",
+      "update": "Update",
+      "remove": "Remove",
+      "check": "Check for updates",
+      "checked": "Check complete",
+      "lockLine": "Installed by npx skills · {{source}} · {{mode}} · installed {{date}}",
+      "modeLink": "link",
+      "modeCopy": "copy",
+      "updateTitle": "Update {{name}}?",
+      "removeTitle": "Remove {{name}}?",
+      "actBody": "Command run: {{cmd}}"
     }
   }
 }
