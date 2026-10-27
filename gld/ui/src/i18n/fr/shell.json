@@ -176,6 +176,11 @@
       "repos": "{{n}} dépôts",
       "dirMissing": "dossier introuvable"
     },
+    "overview": {
+      "title": "Synthèse du projet",
+      "tokens": "{{n}} tokens",
+      "last": "dernière activité {{when}}"
+    },
     "head": {
       "sessionDir": "Dossier de la session :",
       "missingSuffix": " (introuvable)",

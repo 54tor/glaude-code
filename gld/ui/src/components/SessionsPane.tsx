@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Actions, Row } from "./actions"
 import { ProjectHead } from "./ProjectHead"
+import { ProjectOverview } from "./ProjectOverview"
 import { Notes } from "./Notes"
 import { ProjectMemory } from "./ProjectMemory"
 import { Live, SessionList } from "./SessionList"
@@ -91,6 +92,7 @@ export function SessionsPane({
         {!loading && route.kind === "dir" && project && <ProjectHead key={project} project={project} missing={dirMissing} />}
         {!loading && route.kind === "dir" && project && <Notes key={"notes:" + project} noteKey={"d/" + project} folder={dirMissing ? undefined : project} rows={rows} />}
         {!loading && route.kind === "project" && <ProjectHead key={"head-p:" + route.name} dirs={actions.projects.find((p) => p.name === route.name)?.dirs ?? []} />}
+        {!loading && route.kind === "project" && <ProjectOverview key={"ov-p:" + route.name} dirs={actions.projects.find((p) => p.name === route.name)?.dirs ?? []} go={go} />}
         {!loading && route.kind === "project" && (
           <Notes key={"notes-p:" + route.name} noteKey={"p/" + route.name} folder={actions.projects.find((p) => p.name === route.name)?.dirs[0]} rows={rows} />
         )}

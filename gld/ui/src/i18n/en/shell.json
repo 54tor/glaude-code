@@ -176,6 +176,11 @@
       "repos": "{{n}} repositories",
       "dirMissing": "folder not found"
     },
+    "overview": {
+      "title": "Project overview",
+      "tokens": "{{n}} tokens",
+      "last": "last activity {{when}}"
+    },
     "head": {
       "sessionDir": "Session folder:",
       "missingSuffix": " (not found)",
