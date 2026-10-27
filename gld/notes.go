@@ -77,7 +77,10 @@ func routesNotes(mux *http.ServeMux) {
 		case req.To != "":
 			if t, ok := m[req.Key]; ok && req.To != req.Key {
 				if d, has := m[req.To]; has {
-					t = mergeNotes(d, t)
+					if t = mergeNotes(d, t); len(t) > noteMax {
+						writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.notes.fusionTropLongue")})
+						return
+					}
 				}
 				m[req.To] = t
 				delete(m, req.Key)
@@ -116,6 +119,9 @@ func noteItems(s string) []string {
 
 // mergeNotes : un déplacement sur une clé déjà notée ajoute les items à la suite au lieu d'écraser la destination.
 func mergeNotes(dst, src string) string {
-	b, _ := json.Marshal(append(noteItems(dst), noteItems(src)...))
-	return string(b)
+	var b strings.Builder
+	e := json.NewEncoder(&b)
+	e.SetEscapeHTML(false) // sinon < > & triplent de taille à chaque fusion
+	e.Encode(append(noteItems(dst), noteItems(src)...))
+	return strings.TrimSuffix(b.String(), "\n")
 }

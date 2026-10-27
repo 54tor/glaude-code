@@ -39,6 +39,12 @@ func TestNotes(t *testing.T) {
 	if g := get(); !strings.Contains(g, "garder") || !strings.Contains(g, "à faire") {
 		t.Fatal("déplacement sur une note existante :", g)
 	}
+	big := `{"key":"p/Big","text":"` + strings.Repeat("x", noteMax-10) + `"}`
+	post(big)
+	post(`{"key":"p/Big2","text":"` + strings.Repeat("y", noteMax-10) + `"}`)
+	if _, out := post(`{"key":"p/Big2","to":"p/Big"}`); !strings.Contains(out, `"ok":false`) || !strings.Contains(get(), "p/Big2") {
+		t.Fatal("fusion au-delà de noteMax acceptée :", out)
+	}
 	post(`{"key":"p/Gamma","to":"p/Gamma"}`)
 	if !strings.Contains(get(), "p/Gamma") {
 		t.Fatal("déplacement sur soi-même : note supprimée")

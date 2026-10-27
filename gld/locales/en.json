@@ -291,6 +291,7 @@
   "srv.notes.fichierIllisible": "unreadable notes ({{.A1}}): nothing is rewritten",
   "srv.notes.noteEnregistree": "Note saved",
   "srv.notes.tropDeNotes": "too many notes",
+  "srv.notes.fusionTropLongue": "the merged notes exceed the maximum size",
   "srv.pair.back": "Back",
 
   "srv.pair.button": "Connect",

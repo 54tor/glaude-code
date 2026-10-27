@@ -291,6 +291,7 @@
   "srv.notes.fichierIllisible": "notes illisibles ({{.A1}}) : rien n'est réécrit",
   "srv.notes.noteEnregistree": "Note enregistrée",
   "srv.notes.tropDeNotes": "trop de notes",
+  "srv.notes.fusionTropLongue": "les deux notes réunies dépassent la taille maximale",
   "srv.pair.back": "Retour",
 
   "srv.pair.button": "Connecter",
