@@ -58,6 +58,14 @@ func grace() time.Duration {
 
 // safeRemove efface un chemin, avec garde-fou : rien hors de la config Claude, jamais un memory/
 // (la mémoire longue durée de Claude, qui survit aux sessions).
+// histMode : les droits de history.jsonl, lus par Lstat ; un lien ou un fichier spécial ne prête jamais les siens.
+func histMode(st os.FileInfo) os.FileMode {
+	if st.Mode().IsRegular() {
+		return st.Mode().Perm()
+	}
+	return 0o600
+}
+
 func safeRemove(p string) error {
 	cfg := cfgDir()
 	rel, err := filepath.Rel(cfg, p)
@@ -69,7 +77,7 @@ func safeRemove(p string) error {
 			return terr("srv.purge.cheminProtegeNonEfface", "A1", p)
 		}
 	}
-	return os.RemoveAll(p)
+	return rRemoveAll(cfg, p)
 }
 
 // satellites : tout ce qu'une session possède AILLEURS que dans son transcript.
@@ -250,22 +258,11 @@ func pruneHistory(deleted []string) (removed int, hashes map[string]bool, kept [
 			}
 		}
 		if removed > 0 { // fichier temporaire puis renommage : jamais de troncature si on est interrompu
-			tmp := hist + ".cc.tmp"
-			mode := os.FileMode(0o600)
-			if st, e := os.Stat(hist); e == nil {
-				mode = st.Mode()
-			}
-			if e := writeSynced(tmp, bytes.Join(kept, nil), mode); e == nil {
-				if st1, e := os.Stat(hist); e != nil || st0 == nil || st1.Size() != st0.Size() || !st1.ModTime().Equal(st0.ModTime()) {
-					// ponytail: fenêtre résiduelle entre ce contrôle et le renommage ; Claude Code n'offre aucun verrou
-					os.Remove(tmp)
-					removed = 0
-					notes = append(notes, L("srv.purge.historyChanged"))
-				} else if e := os.Rename(tmp, hist); e != nil {
-					os.Remove(tmp)
-					removed = 0
-				}
-			} else {
+			// ponytail: fenêtre résiduelle entre ce contrôle et le renommage ; Claude Code n'offre aucun verrou
+			if st1, e := os.Lstat(hist); e != nil || st0 == nil || st1.Size() != st0.Size() || !st1.ModTime().Equal(st0.ModTime()) {
+				removed = 0
+				notes = append(notes, L("srv.purge.historyChanged"))
+			} else if e := rWriteAtomic(cfg, hist, bytes.Join(kept, nil), histMode(st1)); e != nil {
 				removed = 0
 			}
 		}

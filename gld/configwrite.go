@@ -248,17 +248,6 @@ func notSymlink(path string) error {
 
 // writeConfig remplace le fichier de façon atomique, droits conservés (0600 par défaut). Le fichier temporaire a un nom
 // aléatoire et est créé en exclusivité : un lien déposé à sa place ne peut pas détourner l'écriture.
-// writeSynced : os.WriteFile suivi d'un fsync, pour un fichier temporaire qui remplacera l'original par renommage : sans
-// fsync, une coupure juste après le renommage peut laisser un fichier vide à la place de l'original.
-func writeSynced(name string, b []byte, mode os.FileMode) error {
-	f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
-	if err != nil {
-		return err
-	}
-	_, err = f.Write(b)
-	return errors.Join(err, f.Sync(), f.Close())
-}
-
 func writeConfig(path string, content []byte) error { return writeConfigExec(path, content, false) }
 
 // writeConfigExec : exec ajoute le bit exécutable du propriétaire, posé sur le fichier temporaire avant le renommage, jamais par nom
