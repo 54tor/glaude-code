@@ -152,7 +152,11 @@ func TestQueueMarkSendingRollsBackOnWriteFailure(t *testing.T) {
 
 func fakeDrainEnv(t *testing.T, open, idle, asking []string) (*[]string, *error) {
 	t.Helper()
-	oSend, oOpen, oAsk, oWait, oScreen := sendFn, openFn, askingFn, waiting, screenFn
+	oSend, oOpen, oAsk, oWait, oScreen, oShare := sendFn, openFn, askingFn, waiting, screenFn, shareSt
+	shareSt = &shareStore{m: map[string]*Share{}}
+	for _, id := range open {
+		shareSt.m[id] = &Share{Session: id, Mode: "rw"}
+	}
 	var sent []string
 	var fail error
 	sendFn = func(id, text string) error {
@@ -169,7 +173,9 @@ func fakeDrainEnv(t *testing.T, open, idle, asking []string) (*[]string, *error)
 	sentMu.Lock()
 	notBefore = map[string]time.Time{}
 	sentMu.Unlock()
-	t.Cleanup(func() { sendFn, openFn, askingFn, waiting, screenFn = oSend, oOpen, oAsk, oWait, oScreen })
+	t.Cleanup(func() {
+		sendFn, openFn, askingFn, waiting, screenFn, shareSt = oSend, oOpen, oAsk, oWait, oScreen, oShare
+	})
 	return &sent, &fail
 }
 
@@ -462,5 +468,89 @@ func TestQueueOpenNullFile(t *testing.T) {
 		if _, err := q.Add("s", "host", "x"); err != nil || len(q.List("s")) != 1 {
 			t.Fatalf("%s : %v", body, err)
 		}
+	}
+}
+
+func drainShareEnv(t *testing.T, mode string) *shareStore {
+	t.Helper()
+	old := shareSt
+	t.Cleanup(func() { shareSt = old })
+	shareSt = nil
+	if mode == "" {
+		return nil
+	}
+	s, _ := newShares(t)
+	if _, err := s.Create(shSess, "dir"); err != nil {
+		t.Fatal(err)
+	}
+	if mode != "rw" {
+		s.SetMode(shSess, mode)
+	}
+	shareSt = s
+	return s
+}
+
+func TestDrainDropsGuestItemWhenShareReadOnly(t *testing.T) {
+	q, _ := openQueue(t.TempDir())
+	sent, _ := fakeDrainEnv(t, []string{shSess}, []string{shSess}, nil)
+	drainShareEnv(t, "ro")
+	q.Add(shSess, "guest", "x")
+	drainOnce(q, time.Now())
+	if len(*sent) != 0 || len(q.List(shSess)) != 0 {
+		t.Fatalf("sent=%v list=%v", *sent, q.List(shSess))
+	}
+}
+
+func TestDrainDropsGuestItemWhenShareMissing(t *testing.T) {
+	for _, mode := range []string{"", "none"} {
+		q, _ := openQueue(t.TempDir())
+		sent, _ := fakeDrainEnv(t, []string{shSess}, []string{shSess}, nil)
+		if mode == "none" {
+			drainShareEnv(t, "rw")
+			shareSt.End(shSess)
+		} else {
+			drainShareEnv(t, "")
+		}
+		q.Add(shSess, "guest", "x")
+		drainOnce(q, time.Now())
+		if len(*sent) != 0 || len(q.List(shSess)) != 0 {
+			t.Fatalf("%q sent=%v list=%v", mode, *sent, q.List(shSess))
+		}
+	}
+}
+
+func TestDrainGuestItemSentWhenShareRw(t *testing.T) {
+	q, _ := openQueue(t.TempDir())
+	sent, _ := fakeDrainEnv(t, []string{shSess}, []string{shSess}, nil)
+	drainShareEnv(t, "rw")
+	q.Add(shSess, "guest", "x")
+	drainOnce(q, time.Now())
+	if len(*sent) != 1 || (*sent)[0] != shSess+"|"+guestLabel+"x" {
+		t.Fatalf("sent=%v", *sent)
+	}
+}
+
+func TestDrainHostItemUnaffectedByShareMode(t *testing.T) {
+	for _, mode := range []string{"", "ro"} {
+		q, _ := openQueue(t.TempDir())
+		sent, _ := fakeDrainEnv(t, []string{shSess}, []string{shSess}, nil)
+		drainShareEnv(t, mode)
+		q.Add(shSess, "host", "x")
+		drainOnce(q, time.Now())
+		if len(*sent) != 1 || (*sent)[0] != shSess+"|x" {
+			t.Fatalf("%q sent=%v", mode, *sent)
+		}
+	}
+}
+
+func TestDrainDropsGuestItemWhenModeFlipsBeforeSend(t *testing.T) {
+	q, _ := openQueue(t.TempDir())
+	sent, _ := fakeDrainEnv(t, []string{shSess}, []string{shSess}, nil)
+	s := drainShareEnv(t, "rw")
+	screenFn = func(string) (string, error) { s.SetMode(shSess, "ro"); return "", nil }
+	q.Add(shSess, "guest", "x")
+	drainOnce(q, time.Now())
+	if len(*sent) != 0 || len(q.List(shSess)) != 0 {
+		t.Fatalf("sent=%v list=%v", *sent, q.List(shSess))
 	}
 }

@@ -69,7 +69,10 @@ func drainOnce(q *queueStore, now time.Time) {
 			continue
 		}
 		head, ok := q.Head(id)
-		if !ok || q.MarkSending(id, head.ID) != nil {
+		if !ok {
+			continue
+		}
+		if dropRevokedGuest(q, id, head) || q.MarkSending(id, head.ID) != nil {
 			continue
 		}
 		text := head.Text
@@ -84,6 +87,9 @@ func drainOnce(q *queueStore, now time.Time) {
 		scr, err := screenFn(id)
 		if err == nil && screenAsks(scr) {
 			err = errQueueBusy
+		}
+		if err == nil && dropRevokedGuest(q, id, head) {
+			continue
 		}
 		if err == nil {
 			err = sendFn(id, text)
@@ -103,6 +109,22 @@ func drainOnce(q *queueStore, now time.Time) {
 		notBefore[id] = now.Add(queueSettle)
 		sentMu.Unlock()
 	}
+}
+
+// dropRevokedGuest retire un message invité dont le partage a disparu ou passé en lecture seule (reprise après écriture
+// ratée, bascule entre deux contrôles) ; le mode peut changer entre MarkSending et l'envoi, d'où le second appel.
+func dropRevokedGuest(q *queueStore, id string, head QItem) bool {
+	if head.Author != "guest" {
+		return false
+	}
+	if shareSt != nil {
+		if sh, ok := shareSt.Get(id); ok && sh.Mode == "rw" {
+			return false
+		}
+	}
+	q.Done(id, head.ID)
+	journal("file: message invité retiré (partage absent ou en lecture seule)")
+	return true
 }
 
 func toSet(l []string) map[string]bool {
