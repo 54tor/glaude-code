@@ -433,7 +433,7 @@ func syncApply(from, to string, picks []SyncPick) (string, error) {
 		if err := syncBackup(td, stamp, rel); err != nil {
 			return "", terr("srv.homesync.sauvegardeImpossible", "A1", err.Error())
 		}
-		if err := os.Remove(filepath.Join(td, rel)); err != nil {
+		if err := rRemove(td, filepath.Join(td, rel)); err != nil {
 			return "", err
 		}
 	}
