@@ -110,6 +110,8 @@ Le terminal web et `/chat` sont revérifiés pendant leur durée : session expir
 
 ## Anti essais répétés
 
+Le jeton opérateur est limité comme le formulaire de jeton : chaque jeton faux présenté (cookie `gld_token`, `Authorization: Bearer` ou `?token=`) compte pour l'adresse, 10 par minute, et 100 par minute pour tout le serveur ; au-delà, `429`. Un jeton valide ne consomme rien.
+
 Compteurs en base, clés par nom, par adresse (une adresse IPv6 est ramenée à son préfixe /64) et par couple nom + adresse ; la fenêtre est de 15 minutes. La réponse est la même quelle que soit la cause (« identifiants invalides ou compte temporairement bloqué ») avec un `Retry-After`, le détail va dans le journal d'événements.
 
 | Mesure | Valeur |

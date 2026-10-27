@@ -78,3 +78,33 @@ func TestTakeToken(t *testing.T) {
 		t.Fatal("un jeton trop court est refusé")
 	}
 }
+
+// Un jeton faux en Bearer, cookie ou ?token= use les essais de l'adresse ; le bon jeton n'en consomme aucun.
+func TestWithTokenThrottlesWrongTokens(t *testing.T) {
+	resetTokenTries()
+	t.Cleanup(resetTokenTries)
+	tok := "0123456789abcdef0123"
+	h := withToken(tok, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
+	do := func(set func(*http.Request)) int {
+		r := httptest.NewRequest("GET", "/api/x", nil)
+		r.RemoteAddr = "192.0.2.7:1234"
+		set(r)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w.Code
+	}
+	for i := 0; i < tokenMaxTries+5; i++ {
+		if c := do(func(r *http.Request) { r.Header.Set("Authorization", "Bearer bad") }); i < tokenMaxTries && c != 401 || i >= tokenMaxTries && c != 429 {
+			t.Fatalf("essai %d : %d", i, c)
+		}
+	}
+	if c := do(func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+tok) }); c != 200 {
+		t.Errorf("bon jeton après l'épuisement : %d", c)
+	}
+	if c := do(func(r *http.Request) { r.AddCookie(&http.Cookie{Name: tokenCookie, Value: "faux"}) }); c != 429 {
+		t.Errorf("cookie faux : %d", c)
+	}
+	if c := do(func(r *http.Request) {}); c != 401 {
+		t.Errorf("sans jeton : %d", c)
+	}
+}

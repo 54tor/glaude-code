@@ -67,6 +67,18 @@ func tokenShown(token string, generated bool) string {
 	return "$GLD_WEB_TOKEN"
 }
 
+// wrongTokenPresented : la requête porte un jeton (cookie, Bearer ou ?token=) que withToken vient de refuser.
+// Sans cela, seul le formulaire était limité : Bearer, cookie et ?token= se devinaient à la vitesse du réseau.
+func wrongTokenPresented(r *http.Request) bool {
+	if _, err := r.Cookie(tokenCookie); err == nil {
+		return true
+	}
+	if _, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
+		return true
+	}
+	return r.URL.Query().Has("token")
+}
+
 func sameToken(a, b string) bool { return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1 }
 
 // withToken : exige le jeton, en cookie (posé par ?token=…, puis la requête est redirigée sans le jeton dans l'adresse)
@@ -103,6 +115,12 @@ func withToken(token string, next http.Handler) http.Handler {
 			q.Del("token")
 			u := url.URL{Path: "/" + strings.TrimLeft(r.URL.Path, "/"), RawQuery: q.Encode()} // jamais « //hôte » : redirection locale seulement
 			http.Redirect(w, r, u.String(), http.StatusSeeOther)
+			return
+		}
+		if wrongTokenPresented(r) && !tokenTry(clientIP(r)) { // chaque jeton faux présenté compte, comme au formulaire
+			w.Header().Set("Retry-After", "60")
+			w.Header().Set("Cache-Control", "no-store")
+			http.Error(w, L("srv.token.tooMany"), http.StatusTooManyRequests)
 			return
 		}
 		if wantsPage(r) { // navigateur ou PWA sans cookie : saisir le jeton plutôt qu'un 401 en texte

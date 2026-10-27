@@ -9,6 +9,11 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Connexion : un ban ouvre une alerte dans chaque session connectée (`GET /auth/alerts`).
 - Mémoire : la fusion accepte jusqu'à 100 fichiers (20 auparavant) et le document de sortie se choisit parmi les fichiers sélectionnés, le `CLAUDE.md` global ou le `CLAUDE.md` / `AGENTS.md` du projet (`out` de `POST /memory-merge`).
 
+### Corrigé
+- Sécurité : `POST /memory-merge` avec `launch` exige `exec` en plus de `mem_write` ; `POST /vgroups` exige `exec` pour ajouter un dossier enregistré (racines de l'IDE).
+- Sécurité : `GLD_AUTH_KEY` n'est plus transmise aux sessions claude, au terminal web ni aux homes enfants ; le garde Bash refuse toute commande citant `GLD_AUTH_*`.
+- Sécurité : un jeton opérateur faux (cookie, Bearer, `?token=`) compte dans les essais par adresse, comme le formulaire.
+
 ## [0.4.7] - 2026-10-26
 
 ### Corrigé
