@@ -185,7 +185,7 @@ type Issue struct {
 }
 
 var (
-	mdLink    = regexp.MustCompile(`\]\(([^)\s]+\.md)\)`)
+	mdLink    = regexp.MustCompile(`\]\(([^)\s:]+\.md)\)`) // sans « : » : une URL (https:, mailto:) n'est pas un fichier de mémoire
 	wikiLink  = regexp.MustCompile(`\[\[([^\]\n]+)\]\]`)
 	importRef = regexp.MustCompile(`(?:^|\s)@([~./\w][^\s]*[./][^\s]*)`)
 )

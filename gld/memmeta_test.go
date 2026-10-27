@@ -233,3 +233,12 @@ func TestMetaString(t *testing.T) {
 		}
 	}
 }
+
+func TestMdLinkIgnoreLesURL(t *testing.T) {
+	if m := mdLink.FindStringSubmatch("- [Doc](https://x.y/readme.md)"); m != nil {
+		t.Fatalf("URL prise pour un fichier de mémoire : %v", m)
+	}
+	if m := mdLink.FindStringSubmatch("- [Note](note.md)"); m == nil || m[1] != "note.md" {
+		t.Fatalf("lien local manqué : %v", m)
+	}
+}
