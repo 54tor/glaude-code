@@ -10,7 +10,7 @@ const ok = { ok: true, out: "" }
 const inv = (o: Partial<InviteInfo> = {}): InviteInfo => ({ id: "i1", seq: 1, name: "", label: "Léa", mode: "rw", state: "connected", lastSeen: Date.now() / 1000, redeemed: true, queue: [], ...o })
 const sh = (invites: InviteInfo[], o: Partial<ShareInfo> = {}): ShareInfo => ({ id: "s1", dir: "/d", title: "Ma session", handle: "h", open: true, invites, ...o })
 let write: ReturnType<typeof vi.fn>
-let onOpen: ReturnType<typeof vi.fn>
+let onOpen: ReturnType<typeof vi.fn<(id: string) => void>>
 
 const mount = async (shares: ShareInfo[]) => {
   vi.spyOn(api, "shares").mockResolvedValue({ shares })

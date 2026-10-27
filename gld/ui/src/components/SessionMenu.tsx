@@ -1,7 +1,7 @@
 import { BookOpen, Check, CheckSquare, ClipboardList, Copy, Download, FolderInput, MessageSquarePlus, Info, MessageSquareReply, Pencil, Plus, Power, Share2, Shredder, Star, StarOff, Tag, Trash2, X, RefreshCcwDot } from "lucide-react"
-import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { api, type VGroup } from "@/lib/api"
+import type { VGroup } from "@/lib/api"
+import { useShares } from "@/hooks/useShares"
 import {
   ContextMenuItem,
   ContextMenuLabel,
@@ -206,17 +206,10 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
 }
 
 // Les entrées ne sont montées qu'à l'ouverture du menu : l'état du partage se lit alors.
-function ShareItem({ M, row }: { M: Kit; row: Row }) {
+export function ShareItem({ M, row }: { M: Kit; row: Row }) {
   const { t } = useTranslation()
   const a = useActions()
-  const [shared, setShared] = useState(false)
-  useEffect(() => {
-    let live = true
-    api.shareInfo(row.s.id).then((r) => live && setShared(r.shared), () => {})
-    return () => {
-      live = false
-    }
-  }, [row.s.id])
+  const shared = !!useShares().shares?.find((x) => x.id === row.s.id)?.invites.length
   return (
     <M.Item onSelect={() => a.share(row)}>
       <Share2 /> {shared ? t("shell.menu.shared") : t("shell.menu.share")}
