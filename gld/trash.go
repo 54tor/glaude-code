@@ -22,7 +22,7 @@ var journalMu sync.Mutex
 func journal(format string, a ...any) {
 	journalMu.Lock()
 	defer journalMu.Unlock()
-	f, err := os.OpenFile(filepath.Join(cfgDir(), "gld-web.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	f, err := rOpenFile(cfgDir(), filepath.Join(cfgDir(), "gld-web.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return
 	}
@@ -50,7 +50,7 @@ func migrateData() {
 			continue
 		}
 		if _, err := os.Stat(old); err == nil {
-			os.Rename(old, nw)
+			rRename(cfgDir(), old, nw)
 		}
 	}
 }
@@ -75,14 +75,14 @@ func saveTrash(key, path, reason, text string) error {
 	t := Trashed{time.Now().Format("20060102-150405") + "-" + hex.EncodeToString(b), key, path, reason,
 		float64(time.Now().UnixNano()) / 1e9, int64(len(text)) / 1024}
 	d := filepath.Join(trashDir(), t.ID)
-	if err := os.MkdirAll(d, 0o700); err != nil {
+	if err := rMkdirAll(cfgDir(), d, 0o700); err != nil {
 		return err
 	}
 	meta, _ := json.Marshal(t)
-	if err := os.WriteFile(filepath.Join(d, "content"), []byte(text), 0o600); err != nil {
+	if err := rWriteFile(cfgDir(), filepath.Join(d, "content"), []byte(text), 0o600); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(d, "meta.json"), meta, 0o600)
+	return rWriteFile(cfgDir(), filepath.Join(d, "meta.json"), meta, 0o600)
 }
 
 func trashList() []Trashed {
@@ -124,16 +124,16 @@ func trashRestore(id string) (Trashed, error) {
 	if err != nil {
 		return t, err
 	}
-	return t, os.RemoveAll(filepath.Join(trashDir(), id))
+	return t, rRemoveAll(cfgDir(), filepath.Join(trashDir(), id))
 }
 
 // trashPurge vide la corbeille (ou en retire un seul élément).
 func trashPurge(id string) error {
 	if id == "" {
-		return os.RemoveAll(trashDir())
+		return rRemoveAll(cfgDir(), trashDir())
 	}
 	if _, _, err := trashItem(id); err != nil {
 		return err
 	}
-	return os.RemoveAll(filepath.Join(trashDir(), id))
+	return rRemoveAll(cfgDir(), filepath.Join(trashDir(), id))
 }
