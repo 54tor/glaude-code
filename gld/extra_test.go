@@ -288,6 +288,9 @@ func TestMergePrompt(t *testing.T) {
 	if p, _, err = mergePrompt([]string{"m/-p/a.md", "m/-p/b.md"}, "m/-p/b.md"); err != nil || !strings.Contains(p, "dans "+b+",") {
 		t.Fatal("sortie choisie", p, err)
 	}
+	if p, _, err = mergePrompt([]string{"m/-p/a.md", "m/-p/b.md"}, "p/-p/AGENTS.md"); err != nil || !strings.Contains(p, "dans "+filepath.Join(proj, "AGENTS.md")+" (") {
+		t.Fatal("sortie AGENTS.md", p, err)
+	}
 	if _, _, err = mergePrompt([]string{"m/-p/a.md", "m/-p/b.md"}, "m/-p/c.md"); err == nil {
 		t.Fatal("sortie hors sélection acceptée")
 	}

@@ -358,10 +358,19 @@ func mergePrompt(keys []string, out string) (string, string, error) {
 	}
 	if out == "" {
 		out = keys[0]
-	} else if !slices.Contains(keys, out) {
-		return "", "", terr("srv.memory.documentDeSortieInvalide")
 	}
-	outPath := ""
+	// Hors sélection : CLAUDE.md global ou fichier du projet (CLAUDE.md, AGENTS.md…), à créer s'il n'existe pas.
+	outPath, extra := "", ""
+	if !slices.Contains(keys, out) {
+		if out != "g/CLAUDE.md" && !strings.HasPrefix(out, "p/") {
+			return "", "", terr("srv.memory.documentDeSortieInvalide")
+		}
+		base, rel, err := memResolve(out)
+		if err != nil {
+			return "", "", err
+		}
+		outPath, extra = filepath.Join(base, rel), L("prompt.mergeOutExtra")
+	}
 	home, _ := os.UserHomeDir()
 	cwd := ""
 	var b strings.Builder
@@ -387,7 +396,7 @@ func mergePrompt(keys []string, out string) (string, string, error) {
 			}
 		}
 	}
-	b.WriteString("\n" + L("prompt.mergeRules", "A1", outPath) + "\n")
+	b.WriteString("\n" + L("prompt.mergeRules", "A1", outPath, "A2", extra) + "\n")
 	if cwd == "" { // règles globales : le dossier de configuration, plutôt que ~ tout entier (autre dossier à approuver)
 		if c := filepath.Join(home, ".claude"); isDirPath(c) {
 			cwd = c

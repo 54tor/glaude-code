@@ -260,7 +260,13 @@ export function Memory({
       initial: r.prompt,
       send: t("memory.main.mergeSend"),
       choice: { model: "haiku", effort: "" }, // tâche mécanique
-      outputs: keys.map((k) => ({ key: k, label: all.find((x) => x.key === k)?.name ?? k })),
+      outputs: [
+        ...keys.map((k) => ({ key: k, label: all.find((x) => x.key === k)?.name ?? k })),
+        { key: "g/CLAUDE.md", label: "~/.claude/CLAUDE.md" },
+        ...[...new Set(keys.map((k) => /^[mpr]\/([^/]+)\//.exec(k)?.[1]).filter((d): d is string => !!d))].flatMap((d) =>
+          ["CLAUDE.md", "AGENTS.md"].map((f) => ({ key: `p/${d}/${f}`, label: `${tilde(list?.projects.find((p) => p.dir === d)?.project ?? d, homeDir)}/${f}` }))
+        ),
+      ].filter((o, i, a) => a.findIndex((x) => x.key === o.key) === i),
       reprompt: async (out) => {
         const d = await draft(out)
         if (!d.ok || !d.prompt) return void toast.error(d.out.trim() || t("memory.main.failed"))
