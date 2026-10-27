@@ -72,7 +72,7 @@ var (
 func pendingQueue(path string) []Queued {
 	pqMu.Lock()
 	defer pqMu.Unlock()
-	f, err := os.Open(path)
+	f, err := openTrusted(path)
 	if err != nil {
 		delete(pqSeen, path)
 		return []Queued{}
@@ -201,7 +201,7 @@ func readSpinnerVerbs(lang, settings string) []string {
 			Verbs []string `json:"verbs"`
 		} `json:"spinnerVerbs"`
 	}
-	if b, err := os.ReadFile(settings); err != nil || json.Unmarshal(b, &d) != nil || len(d.SpinnerVerbs.Verbs) == 0 {
+	if b, err := readTrusted(settings); err != nil || json.Unmarshal(b, &d) != nil || len(d.SpinnerVerbs.Verbs) == 0 {
 		return thinkingVerbs
 	}
 	var mine []string
@@ -223,7 +223,7 @@ func readSpinnerVerbs(lang, settings string) []string {
 func sessionStatus(id string) (status string, open bool) {
 	files, _ := filepath.Glob(filepath.Join(cfgDir(), "sessions", "*.json"))
 	for _, f := range files {
-		b, err := os.ReadFile(f)
+		b, err := readTrusted(f)
 		if err != nil {
 			continue
 		}
@@ -413,7 +413,7 @@ func subLives(dir string) []SubLive {
 			Description string `json:"description"`
 			Finished    bool   `json:"finished"`
 		}
-		if b, err := os.ReadFile(m); err != nil || json.Unmarshal(b, &meta) != nil {
+		if b, err := readTrusted(m); err != nil || json.Unmarshal(b, &meta) != nil {
 			continue
 		}
 		tp := filepath.Join(dir, "agent-"+id+".jsonl")
