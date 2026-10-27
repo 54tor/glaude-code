@@ -490,7 +490,7 @@
       "homesFailed": "Could not read the config folder: link not generated."
     },
     "invites": {
-      "title": "Invitations",
+      "title": "Shared session",
       "intro": "The guests of all your shared sessions, their links and their pending messages.",
       "invite": "Invite someone",
       "namePlaceholder": "Guest name (optional)",
@@ -519,8 +519,8 @@
       "revokeFailed": "Could not revoke: {{msg}}",
       "regenFailed": "Could not regenerate: {{msg}}",
       "limit": "At most ten invitations per session.",
-      "button": "Invitations",
-      "buttonAria": "Invitations: {{connected}} connected, {{pending}} message(s) waiting",
+      "button": "Shared session",
+      "buttonAria": "Shared session: {{connected}} connected, {{pending}} message(s) waiting",
       "none": "No shared session.",
       "sessionUntitled": "Untitled session",
       "linkOf": "Link for {{name}}",

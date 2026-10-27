@@ -490,7 +490,7 @@
       "homesFailed": "Dossier de configuration illisible : lien non généré."
     },
     "invites": {
-      "title": "Invitations",
+      "title": "Session partagée",
       "intro": "Les invités de toutes vos sessions partagées, leurs liens et leurs messages en attente.",
       "invite": "Inviter quelqu'un",
       "namePlaceholder": "Nom de l'invité (facultatif)",
@@ -519,8 +519,8 @@
       "revokeFailed": "Révocation impossible : {{msg}}",
       "regenFailed": "Régénération impossible : {{msg}}",
       "limit": "Dix invitations au plus par session.",
-      "button": "Invitations",
-      "buttonAria": "Invitations : {{connected}} connecté(s), {{pending}} message(s) en attente",
+      "button": "Session partagée",
+      "buttonAria": "Session partagée : {{connected}} connecté(s), {{pending}} message(s) en attente",
       "none": "Aucune session partagée.",
       "sessionUntitled": "Session sans titre",
       "linkOf": "Lien de {{name}}",

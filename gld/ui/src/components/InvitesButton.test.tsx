@@ -39,7 +39,7 @@ describe("InvitesButton", () => {
 
   it("ouvre l'overlay", async () => {
     await mount([sh("a", [inv()])])
-    fireEvent.click(screen.getByRole("button", { name: /Invitations/ }))
+    fireEvent.click(screen.getByRole("button", { name: /Session partagée/ }))
     await act(async () => {})
     expect(screen.getByRole("dialog")).toBeTruthy()
   })
