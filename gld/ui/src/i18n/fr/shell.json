@@ -433,7 +433,7 @@
       "ok": "Compris",
       "hidden": "Adresse réservée aux administrateurs"
     },
-    "pair": {
+    "pairAlert": {
       "body": "Un appareil a été jumelé sur votre compte. Si ce n'est pas vous, révoquez-le depuis vos sessions.",
       "item": "Appareil jumelé depuis {{ip}}"
     },

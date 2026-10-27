@@ -52,7 +52,7 @@ export function BanAlert() {
           </AlertDialogTitle>
           <AlertDialogDescription>
             {bans.length > 0 && <div>{t("shell.ban.body")}</div>}
-            {pairings.length > 0 && <div>{t("shell.pair.body")}</div>}
+            {pairings.length > 0 && <div>{t("shell.pairAlert.body")}</div>}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <ul className="max-h-48 space-y-1 overflow-y-auto text-sm">
@@ -64,7 +64,7 @@ export function BanAlert() {
           ))}
           {pairings.map((p, i) => (
             <li key={`pair-${i}`} className="flex justify-between gap-3 rounded-md border px-3 py-1.5">
-              <span>{t("shell.pair.item", { ip: p.ip })}</span>
+              <span>{t("shell.pairAlert.item", { ip: p.ip })}</span>
               <span className="text-muted-foreground tabular-nums">{new Date(p.at * 1000).toLocaleTimeString()}</span>
             </li>
           ))}

@@ -433,7 +433,7 @@
       "ok": "Got it",
       "hidden": "Address visible to administrators only"
     },
-    "pair": {
+    "pairAlert": {
       "body": "A device was paired to your account. If this wasn't you, revoke it from your sessions.",
       "item": "Device paired from {{ip}}"
     },
