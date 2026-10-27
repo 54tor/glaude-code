@@ -79,7 +79,8 @@ export function Memory({
   const { list, trash, issues, loads, refresh } = useMemoryData(() => {
     if (sel && !inTrash)
       api.memoryFile(sel).then(
-        (r) => r.text !== undefined && setLoaded((l) => (l?.key === sel && l.text === r.text ? l : { key: sel, text: r.text! })),
+        // l'utilisateur a pu ouvrir un autre fichier pendant la lecture : on ne rafraîchit que celui qui est encore affiché
+        (r) => r.text !== undefined && setLoaded((l) => (l?.key !== sel || l.text === r.text ? l : { key: sel, text: r.text! })),
         () => {}
       )
   })
