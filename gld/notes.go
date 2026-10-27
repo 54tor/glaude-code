@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -25,7 +24,7 @@ func notesFile() string { return filepath.Join(cfgDir(), "gld-web-notes.json") }
 // notesLoad : les notes ; un fichier absent est vide, un fichier illisible une erreur (on ne réécrit jamais par-dessus).
 func notesLoad() (map[string]string, error) {
 	m := map[string]string{}
-	b, err := os.ReadFile(notesFile())
+	b, err := readTrusted(notesFile())
 	if err != nil {
 		return m, nil
 	}
