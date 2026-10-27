@@ -73,7 +73,7 @@ func bgTasks(p string, open bool) []BgTask {
 }
 
 func scanBgTasks(p string) []BgTask {
-	f, err := os.Open(p)
+	f, err := openTrusted(p)
 	if err != nil {
 		return nil
 	}
