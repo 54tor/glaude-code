@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { BarChart3, Bot, Loader2, Wrench } from "lucide-react"
 import { api, type Detail, type LiveState, type Msg, type Session, type SubLive, type Tokens } from "@/lib/api"
-import { compact, full, size, tilde, tokTotal } from "@/lib/format"
+import { compact, full, tilde, tokTotal } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -134,7 +134,6 @@ export function LiveStats({ live: { st }, s, project, detail, shown, onShown }: 
     [t("shell.info.cwd"), tilde(s.cwd, a.home)],
     [t("shell.info.project"), tilde(project, a.home)],
     [t("shell.info.modified"), full(s.mtime)],
-    [t("shell.info.size"), size(s.kb)],
     [t("shell.info.state"), a.live.has(s.id) ? t("shell.info.open") : t("shell.info.closed")],
     d ? [t("shell.info.prompts"), String(d.n)] : null,
     d?.subagents ? [t("shell.info.subagents"), String(d.subagents)] : null,

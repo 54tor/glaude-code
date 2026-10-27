@@ -2,7 +2,7 @@ import { loc } from "@/i18n"
 import { useTranslation } from "react-i18next"
 import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { Flame, MoreHorizontal, SquareTerminal, Star, Tag } from "lucide-react"
-import { ago, bucket, compact, full, size, tilde, tokTotal } from "@/lib/format"
+import { ago, bucket, compact, full, tilde, tokTotal } from "@/lib/format"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -124,7 +124,6 @@ const Row = memo(function Row({ row, showProject, showCache }: { row: R; showPro
               <span title={full(s.mtime)} className="shrink-0">
                 {ago(s.mtime)}
               </span>
-              <span className="shrink-0 tabular-nums">{size(s.kb)}</span>
               {tokTotal(s.tok) > 0 && (
                 <>
                   <span
