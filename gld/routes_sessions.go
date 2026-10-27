@@ -205,7 +205,7 @@ func routesSessions(mux *http.ServeMux) {
 			}
 			p = up
 		}
-		ents, err := os.ReadDir(p)
+		ents, err := readDirTrusted(p)
 		if err != nil {
 			writeJSON(w, 403, map[string]any{"error": err.Error()})
 			return
