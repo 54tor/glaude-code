@@ -108,7 +108,7 @@ export type SubLive = { id: string; desc: string; type: string; running: boolean
 export type BgTask = { id: string; tool?: string; desc: string; status: string; summary?: string; start?: string; end?: string; hasOutput: boolean }
 export type LiveState = { said?: string; open: boolean; status: string; activity: string; thinking: boolean; generic?: boolean; exec?: boolean; since: number; context: number; out: number; model: string; tool?: string; toolRunning?: boolean; subs: SubLive[]; tasks?: BgTask[]; verbs?: string[]; queue?: { t: string; ts: string }[]; pending?: QItem[] }
 // File de messages côté serveur (queue.go) : auteur, et état d'envoi (uncertain : parti sans réponse, à trancher).
-export type QItem = { id: string; text: string; author: "host" | "guest"; state: "queued" | "sending" | "uncertain"; at: number; sentAt?: number }
+export type QItem = { id: string; text: string; author: "host" | "guest"; guest?: string; label?: string; state: "queued" | "sending" | "uncertain"; at: number; sentAt?: number }
 export type UsageLimit = { key: string; label: string; percent: number; resetsAt?: string; limitDollars?: number; usedDollars?: number; lockedWhy?: string }
 export type Account = {
   email: string
@@ -149,6 +149,9 @@ export type HomesInfo = { current: string; main: string; mainId?: string; homes:
 const enc = encodeURIComponent
 
 // status : 403 dit un droit manquant (mode multi-utilisateur), à distinguer d'un serveur injoignable.
+export type InviteQueued = { id: string; text: string; state: "queued" | "sending" | "uncertain"; at: number }
+export type InviteInfo = { id: string; seq: number; name: string; label: string; mode: "rw" | "ro"; state: "connected" | "away" | "pending"; lastSeen: number; redeemed: boolean; queue: InviteQueued[] }
+export type ShareInfo = { id: string; dir: string; title: string; handle: string; open: boolean; invites: InviteInfo[] }
 export type GuestShare = { handle: string; title: string; mode: "rw" | "ro" }
 export class HttpError extends Error {
   status: number
@@ -241,10 +244,12 @@ export const api = {
   queueAdd: (id: string, text: string) => api.post("/queue-add", { id, text }),
   queueRm: (id: string, item: string) => api.post("/queue-rm", { id, item }) as Promise<Result & { text?: string }>,
   queueRetry: (id: string, item: string) => api.post("/queue-retry", { id, item }),
-  shareCreate: (id: string, dir: string, title?: string) => api.post("/share-create", title ? { id, dir, title } : { id, dir }) as Promise<Result & { token?: string }>,
-  shareInfo: (id: string) => get<{ shared: boolean; mode?: "rw" | "ro"; connected: boolean }>(`/share-info?id=${enc(id)}`),
-  shareMode: (id: string, mode: "rw" | "ro") => api.post("/share-mode", { id, mode }),
-  guestMe: () => get<{ id: string; dir: string; mode: "rw" | "ro"; csrf: string; handle: string; title: string }>("/guest-me"),
+  inviteCreate: (id: string, dir: string, title?: string, name?: string) => api.post("/invite-create", { id, dir, ...(title ? { title } : {}), ...(name ? { name } : {}) }) as Promise<Result & { token?: string; invite?: { id: string; seq: number; label: string } }>,
+  inviteRegen: (id: string, invite: string) => api.post("/invite-regen", { id, invite }) as Promise<Result & { token?: string }>,
+  inviteMode: (id: string, invite: string, mode: "rw" | "ro") => api.post("/invite-mode", { id, invite, mode }),
+  inviteRevoke: (id: string, invite: string) => api.post("/invite-revoke", { id, invite }),
+  shares: () => get<{ shares: ShareInfo[] }>("/shares"),
+  guestMe: () => get<{ id: string; dir: string; mode: "rw" | "ro"; csrf: string; handle: string; title: string; invite: string; label: string }>("/guest-me"),
   // Sans X-Gld-Share : la liste concerne le navigateur entier, pas un partage.
   guestList: async (): Promise<GuestShare[]> => {
     const r = await fetch("/guest-list")
