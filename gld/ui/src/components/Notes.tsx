@@ -46,6 +46,7 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
         if (!live) return
         const t = r.notes[noteKey] ?? ""
         saved.current = pack(parse(t))
+        latest.current = { text: saved.current, key: noteKey } // sinon le flush de sortie croit la note vidée et la supprime
         setSavedList(parse(t))
         setItems(parse(t))
       },
