@@ -143,3 +143,56 @@ func walkRoot(p string) string {
 	}
 	return p
 }
+
+// Lectures : sous GLD_RUN_AS seulement, un lien posé par le compte cible ne doit pas faire lire un fichier de root (affiché ensuite
+// dans l'interface). Sous cfgDir(), tout le chemin est confiné ; ailleurs (dossier d'un projet), le dossier du fichier sert de
+// racine. Hors GLD_RUN_AS, lecture ordinaire : un CLAUDE.md ou des commandes liés à un dépôt de dotfiles restent lisibles.
+func trustBase(path string) string {
+	if _, err := relIn(cfgDir(), path); err == nil {
+		return cfgDir()
+	}
+	return filepath.Dir(path)
+}
+
+func readTrusted(path string) ([]byte, error) {
+	if !runAsOn() {
+		return os.ReadFile(path)
+	}
+	r, rel, err := confine(trustBase(path), path)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+	return r.ReadFile(rel)
+}
+
+func openTrusted(path string) (*os.File, error) {
+	if !runAsOn() {
+		return os.Open(path)
+	}
+	return rOpenFile(trustBase(path), path, os.O_RDONLY, 0)
+}
+
+func readDirTrusted(path string) ([]os.DirEntry, error) {
+	if !runAsOn() {
+		return os.ReadDir(path)
+	}
+	base, rel := trustBase(path), "."
+	if filepath.Clean(path) != filepath.Clean(base) {
+		var err error
+		if rel, err = relIn(base, path); err != nil {
+			return nil, err
+		}
+	}
+	r, err := os.OpenRoot(base)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+	f, err := r.Open(rel)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return f.ReadDir(-1)
+}
