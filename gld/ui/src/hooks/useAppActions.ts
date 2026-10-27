@@ -310,6 +310,14 @@ export function useAppActions(c: {
     registeredDirs: data?.dirs ?? [],
     addDir: () => void pickDir(i18n.t("shell.act.addDirTitle"), home).then((p) => p && addDirPath(p)),
     addDirPath,
+    addChildDirs: () =>
+      void pickDir(i18n.t("shell.act.addChildDirsTitle"), home).then(async (p) => {
+        if (!p) return
+        const r = await api.post("/dirs", { op: "addChildren", dir: p })
+        if (!r.ok) return void toast.error(r.out)
+        await reload()
+        toast.success(i18n.t("shell.act.childDirsAdded", { count: r.n ?? 0 }))
+      }),
     removeDir: async (project) => {
       const r = await api.post("/dirs", { op: "remove", dir: project })
       if (!r.ok) return void toast.error(r.out)

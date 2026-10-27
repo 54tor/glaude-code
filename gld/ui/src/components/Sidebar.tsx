@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
-import { AlarmClock, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, Flame, Microwave, Snowflake, History, Clock, FileText, Inbox, NotebookPen, Info, Loader2, Search, ShieldCheck, Tag, Users, X } from "lucide-react"
+import { AlarmClock, ChevronRight, FolderPlus, FolderTree, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, Flame, Microwave, Snowflake, History, Clock, FileText, Inbox, NotebookPen, Info, Loader2, Search, ShieldCheck, Tag, Users, X } from "lucide-react"
 import { tilde } from "@/lib/format"
 import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
@@ -329,11 +329,18 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           <DropZone onDir={a.addDirPath}>
           <Heading
             action={
-              <Tip label={t("shell.sidebar.addDirHint")}>
-                <Button variant="ghost" size="icon-xs" onClick={a.addDir} aria-label={t("shell.sidebar.addDir")}>
-                  <FolderPlus />
-                </Button>
-              </Tip>
+              <>
+                <Tip label={t("shell.sidebar.addChildDirsHint")}>
+                  <Button variant="ghost" size="icon-xs" onClick={a.addChildDirs} aria-label={t("shell.sidebar.addChildDirs")}>
+                    <FolderTree />
+                  </Button>
+                </Tip>
+                <Tip label={t("shell.sidebar.addDirHint")}>
+                  <Button variant="ghost" size="icon-xs" onClick={a.addDir} aria-label={t("shell.sidebar.addDir")}>
+                    <FolderPlus />
+                  </Button>
+                </Tip>
+              </>
             }
           >
             {t("shell.sidebar.local")}
