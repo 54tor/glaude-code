@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 )
 
@@ -80,7 +79,7 @@ func configRawRead(id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	b, err := os.ReadFile(path)
+	b, err := readTrusted(path)
 	if err != nil || strings.TrimSpace(string(b)) == "" {
 		return "{}\n", nil
 	}
@@ -100,7 +99,7 @@ func loadDoc(id string) (path string, orig []byte, exists bool, doc any, err err
 		return
 	}
 	var rerr error
-	orig, rerr = os.ReadFile(path)
+	orig, rerr = readTrusted(path)
 	exists = rerr == nil
 	doc = newOmap()
 	if exists && strings.TrimSpace(string(orig)) != "" {
