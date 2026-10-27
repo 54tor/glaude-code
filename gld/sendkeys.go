@@ -256,6 +256,10 @@ func sendToSession(id, text string) error {
 	if !ok {
 		return terr("srv.sendkeys.cetteSessionNEst")
 	}
+	// Un texte qui finit sur « @chemin » ouvre le menu de fichiers de Claude Code, qui avale Entrée : l'espace final le ferme.
+	if i := strings.LastIndexAny(text, " \n"); strings.HasPrefix(text[i+1:], "@") {
+		text += " "
+	}
 	buf := "gld-send-" + strconv.Itoa(os.Getpid()) + "-" + strconv.FormatUint(sendSeq.Add(1), 10)
 	if _, err := tmuxRun(text, "load-buffer", "-b", buf, "-"); err != nil {
 		return terr("srv.sendkeys.tmuxLoadBuffer", "W1", err)

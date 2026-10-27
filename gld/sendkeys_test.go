@@ -56,6 +56,18 @@ func TestEnvoiTmux(t *testing.T) {
 	}
 }
 
+func TestEnvoiMentionFinale(t *testing.T) {
+	calls := fakeTmux(t, "%3 100\n")
+	for in, want := range map[string]string{"voir\n@/x/a.png": "voir\n@/x/a.png ", "@/x/a.png": "@/x/a.png ", "écrit à @moi ok": "écrit à @moi ok"} {
+		if err := sendToSession(sid, in); err != nil {
+			t.Fatal(err)
+		}
+		if got := (*calls)[len(*calls)-3][0]; got != want {
+			t.Fatalf("%q envoyé comme %q, attendu %q", in, got, want)
+		}
+	}
+}
+
 func TestEnvoiRefuse(t *testing.T) {
 	fakeTmux(t, "%4 555\n") // la session n'est dans aucun panneau
 	if err := sendToSession(sid, "salut"); err == nil || !strings.Contains(err.Error(), "pas dans tmux") {
