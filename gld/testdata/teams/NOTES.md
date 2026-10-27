@@ -20,11 +20,11 @@ Lancé : `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude --teammate-mode tmux --s
 - `flagRe` (claude.go:65) : `^--?[a-zA-Z][a-zA-Z0-9-]*(=[A-Za-z0-9._:/-]+)?$`, appliquée à chaque mot de `strings.Fields(raw)` (claude.go:52-58).
 - `--teammate-mode=tmux` : passe (valeur `tmux` dans la classe). `--session-id=9d087000-13eb-4519-9823-771e3a943e4c` : passe (hex et tirets). Testé à la lecture seulement, non exécuté.
 - Forme à deux mots `--teammate-mode tmux` : REFUSÉE (`tmux` ne commence pas par `-`). Il faut la forme `=`. Non confirmé que claude accepte `--teammate-mode=tmux` (le spike a utilisé la forme à espace).
-- Chemin : `claudeArgs` -> `["--args", "a b"]` (claude.go:60) ; matin.go:68-69 `strings.Fields(v)` -> `o.args` ; matin.go:145 et 219 `claudeTabArgs(o.args, ...)` ; `--resume <id>` est ajouté après (matin.go claudeTabArgs) : `--session-id` et `--resume` ne doivent pas être combinés (non testé).
+- Chemin : `claudeArgs` -> `["--args", "a b"]` (claude.go:60) ; matin.go:68-69 `strings.Fields(v)` -> `o.args` ; matin.go:145 et 219 `claudeTabArgs(o.args, ...)` ; `--resume <id>` est ajouté après (term.go:210 claudeTabArgs (défini dans term.go)) : `--session-id` et `--resume` ne doivent pas être combinés (non testé).
 
 ## Variable d'environnement
 
-- `runTab` (term.go:169-180) lance `withPath(exec.Command("claude", s.Args...))` ; `withPath` écrase `c.Env = append(environNoAuth(), "PATH=...")` (claude.go:144) et `execClaude` fait `syscall.Exec(c.Path, c.Args, c.Env)` (term_unix.go:13). L'environnement du serveur gld ne passe donc pas tel quel, et `tabSpec` (term.go:19-22, `Cwd`, `Args`) n'a pas de champ d'environnement.
+- `runTab` (term.go:184-200) lance `withPath(exec.Command("claude", s.Args...))` ; `withPath` écrase `c.Env = append(environNoAuth(), "PATH=...")` (claude.go:144) et `execClaude` fait `syscall.Exec(c.Path, c.Args, c.Env)` (term_unix.go:13). L'environnement du serveur gld ne passe donc pas tel quel, et `tabSpec` (term.go:19-22, `Cwd`, `Args`) n'a pas de champ d'environnement.
 - Proposition confirmée par lecture : ajouter `Env map[string]string \`json:"env,omitempty"\`` à `tabSpec`, et dans `runTab`, après `withPath(...)` et avant `execClaude`, `for k, v := range s.Env { c.Env = append(c.Env, k+"="+v) }` (après withPath, sinon écrasé). Le spec est relu depuis un fichier JSON (writeSpec, term.go:152) donc le champ voyage sans autre changement. À valider : liste blanche côté serveur (seule `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`), `--args` ne devant jamais porter de variable.
 - Fichiers créés sous `~/.claude` : lecture de `CLAUDE_CONFIG_DIR` par claude : non testé.
 
