@@ -171,7 +171,6 @@ func keepHeader(orig, draft string) string {
 	return "---\n" + y + "\n---\n\n" + strings.TrimLeft(draft, "\n")
 }
 
-
 // memIndex ajoute à MEMORY.md la ligne d'une nouvelle entrée de mémoire de projet, si elle n'y est pas déjà.
 func memIndex(key, text string) error {
 	if !strings.HasPrefix(key, "m/") {
