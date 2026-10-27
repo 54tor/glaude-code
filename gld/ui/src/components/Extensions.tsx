@@ -97,7 +97,7 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
     await edit(files[to] as string, "set", ["skillOverrides", name], "off")
     for (const k of higher) if (skillMode(files[k] as string, name) !== undefined) await edit(files[k] as string, "delete", ["skillOverrides", name])
   }
-  const setMcp = async (name: string, on: boolean) => {
+  const toggleMcp = async (name: string, on: boolean) => {
     if (!on) return void (await edit(files[to] as string, "add", ["disabledMcpjsonServers"], name))
     for (const k of order) if (mcpOff(files[k] as string, name)) await edit(files[k] as string, "remove", ["disabledMcpjsonServers"], name)
   }
@@ -224,7 +224,7 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
           <ul className="divide-y">
             {mcpHere.map((m, n) => (
               <li key={n} className={row}>
-                {m.scope === "project" ? <Switch checked={!mcpEff(m.name)} aria-label={t("extensions.toggleOne", { id: m.name })} onCheckedChange={(c) => setMcp(m.name, c)} className="mt-0.5" /> : <span className="mt-0.5 w-9 shrink-0 text-center text-muted-foreground" title={t("extensions.mcpManaged")}>·</span>}
+                {m.scope === "project" ? <Switch checked={!mcpEff(m.name)} aria-label={t("extensions.toggleOne", { id: m.name })} onCheckedChange={(c) => toggleMcp(m.name, c)} className="mt-0.5" /> : <span className="mt-0.5 w-9 shrink-0 text-center text-muted-foreground" title={t("extensions.mcpManaged")}>·</span>}
                 <div className="min-w-0 flex-1">
                   <div>{status && <span className={up(m.name) ? "text-success" : "text-warning"} title={status[m.name]}>● </span>}<span className="font-medium">{m.name}</span> <span className="text-xs text-muted-foreground">{m.type}</span></div>
                   <code className="block text-xs break-all text-muted-foreground">{m.url || m.command}</code>
