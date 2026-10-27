@@ -218,7 +218,7 @@ func readConfig(id string) (ConfigFile, any) {
 	if f.Dir != "" {
 		f.Label = ".claude/" + filepath.Base(p)
 	}
-	b, err := os.ReadFile(p)
+	b, err := readTrusted(p)
 	if err != nil {
 		return f, nil
 	}
