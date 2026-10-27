@@ -475,7 +475,8 @@ func teamClose(cfgRoot, name string) error {
 		return err
 	}
 	panes, perr := teamPanes.Panes()
-	if perr != nil {
+	// serveur tmux disparu : plus aucun panneau, donc le chef a quitté
+	if perr != nil && !isMsg(perr, "srv.sendkeys.aucuneSessionNA") {
 		return terr("srv.teams_run.tmuxInutilisable", "W1", perr)
 	}
 	// sans panneau pour le chef, on ne conclut « terminée » que si la lecture des sessions est connue (sinon vide par erreur)

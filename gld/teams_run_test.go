@@ -595,6 +595,20 @@ func TestCloseFinishedTeamStillCleansWhenStateKnown(t *testing.T) {
 	}
 }
 
+func TestCloseFinishedTeamWhenTmuxServerGone(t *testing.T) {
+	root, f := seedClose(t)
+	f.panes, f.panesErr = nil, terr("srv.sendkeys.aucuneSessionNA")
+	if err := teamClose(root, trName); err != nil {
+		t.Fatal(err)
+	}
+	if d, _ := journalRead(root, trName); len(d) != 0 || len(f.closed) != 0 {
+		t.Fatal("nettoyage attendu")
+	}
+	if len(teamQueue[trName]) != 0 || len(teamLog[trName]) != 0 {
+		t.Fatal("file ou log non vidés")
+	}
+}
+
 func TestCloseStillAbortsOnRealTmuxError(t *testing.T) {
 	root, f := seedClose(t)
 	f.panes, f.panesErr = nil, errors.New("tmux gelé")
