@@ -5,8 +5,10 @@ package main
 // transcript et les fichiers du dossier subagents/. Rien n'est envoyé à Claude.
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -54,41 +56,79 @@ type Queued struct {
 
 // pendingQueue : les messages mis en file d'attente par Claude Code (« queue-operation » du transcript) et pas encore pris
 // en charge. « dequeue » retire le plus ancien ; « remove » (l'utilisateur reprend son message) retire celui du même texte.
+// La file se reconstruit depuis le début du transcript (un enqueue ancien, hors d'une fenêtre de fin, ferait retirer au dequeue
+// suivant le mauvais message) ; seules les lignes ajoutées depuis le passage précédent sont lues.
+// ponytail: un état par transcript relevé, jamais oublié ; borner si le nombre de sessions suivies devient grand.
+type pqState struct {
+	off int64
+	q   []Queued
+}
+
+var (
+	pqMu   sync.Mutex
+	pqSeen = map[string]pqState{}
+)
+
 func pendingQueue(path string) []Queued {
-	var q []Queued
-	for _, l := range tailLines(path, 512<<10) {
-		if !bytes.Contains(l, []byte(`"queue-operation"`)) {
-			continue
+	pqMu.Lock()
+	defer pqMu.Unlock()
+	f, err := os.Open(path)
+	if err != nil {
+		delete(pqSeen, path)
+		return []Queued{}
+	}
+	defer f.Close()
+	st := pqSeen[path]
+	if fi, err := f.Stat(); err != nil || fi.Size() < st.off { // raccourci : relu en entier
+		st = pqState{}
+	}
+	if _, err := f.Seek(st.off, io.SeekStart); err != nil {
+		return []Queued{}
+	}
+	r := bufio.NewReaderSize(f, 1<<20)
+	for {
+		l, err := r.ReadBytes('\n')
+		if err != nil {
+			break // ligne incomplète : relue au prochain passage
 		}
-		var o struct {
-			Type, Operation, Timestamp, Content string
-		}
-		if json.Unmarshal(l, &o) != nil || o.Type != "queue-operation" {
-			continue
-		}
-		switch o.Operation {
-		case "enqueue":
-			q = append(q, Queued{T: o.Content, Ts: o.Timestamp})
-		case "dequeue":
-			if len(q) > 0 {
-				q = q[1:]
-			}
-		case "remove":
-			for i := len(q) - 1; i >= 0; i-- {
-				if o.Content == "" || q[i].T == o.Content {
-					q = append(q[:i], q[i+1:]...)
-					break
-				}
-			}
+		st.off += int64(len(l))
+		if bytes.Contains(l, []byte(`"queue-operation"`)) {
+			st.q = applyQueueOp(st.q, l)
 		}
 	}
+	pqSeen[path] = st
 	out := []Queued{}
-	for _, m := range q {
+	for _, m := range st.q {
 		if t := strings.TrimSpace(m.T); t != "" && !strings.HasPrefix(t, "<task-notification") { // les notifications de tâche ne sont pas des messages
 			out = append(out, Queued{cut(t, 400), m.Ts})
 		}
 	}
 	return out
+}
+
+func applyQueueOp(q []Queued, l []byte) []Queued {
+	var o struct {
+		Type, Operation, Timestamp, Content string
+	}
+	if json.Unmarshal(l, &o) != nil || o.Type != "queue-operation" {
+		return q
+	}
+	switch o.Operation {
+	case "enqueue":
+		q = append(q, Queued{T: o.Content, Ts: o.Timestamp})
+	case "dequeue":
+		if len(q) > 0 {
+			q = q[1:]
+		}
+	case "remove":
+		for i := len(q) - 1; i >= 0; i-- {
+			if o.Content == "" || q[i].T == o.Content {
+				q = append(q[:i], q[i+1:]...)
+				break
+			}
+		}
+	}
+	return q
 }
 
 // Les états d'activité restent en français dans le code (comparaisons, tests) ; localizeActivity les traduit à la sortie.

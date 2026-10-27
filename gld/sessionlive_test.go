@@ -133,3 +133,21 @@ func TestMessagesEnAttente(t *testing.T) {
 		t.Fatalf("file d'attente : %v", q)
 	}
 }
+
+func TestFileDAttenteAuDelaDeLaFenetre(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	filler := strings.Repeat(`{"type":"assistant","message":"`+strings.Repeat("x", 1000)+`"}`+"\n", 600) // ~600 Ko
+	ev := `{"type":"queue-operation","operation":"enqueue","timestamp":"t1","content":"A"}` + "\n" + filler +
+		`{"type":"queue-operation","operation":"enqueue","timestamp":"t2","content":"B"}` + "\n" +
+		`{"type":"queue-operation","operation":"dequeue","timestamp":"t3"}` + "\n"
+	os.WriteFile(p, []byte(ev), 0o600)
+	if q := pendingQueue(p); len(q) != 1 || q[0].T != "B" {
+		t.Fatalf("file d'attente : %v", q)
+	}
+	f, _ := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0)
+	f.WriteString(`{"type":"queue-operation","operation":"enqueue","timestamp":"t4","content":"C"}` + "\n" + `{"type":"queue-op`)
+	f.Close()
+	if q := pendingQueue(p); len(q) != 2 || q[1].T != "C" {
+		t.Fatalf("après ajout : %v", q)
+	}
+}
