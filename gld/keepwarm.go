@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -45,7 +44,7 @@ var (
 func warmFile() string { return filepath.Join(cfgDir(), "gld-web-keepwarm.json") }
 
 func warmLoad() {
-	b, err := os.ReadFile(warmFile())
+	b, err := readTrusted(warmFile())
 	if err != nil {
 		return
 	}
