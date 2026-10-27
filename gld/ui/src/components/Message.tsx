@@ -3,10 +3,11 @@ import { memo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { ChevronRight, CornerDownRight, Wrench } from "lucide-react"
+import { ChevronRight, CornerDownRight, ExternalLink, Wrench } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { api, type Msg } from "@/lib/api"
+import { authFetch } from "@/lib/auth"
 import { size } from "@/lib/format"
 import { noBreak, rehypeNoBreak } from "@/lib/noBreak"
 import { CompactSummary, isCompactSummary, isTagged, Tagged } from "./Tagged"
@@ -92,6 +93,42 @@ function SuperpowersDoc({ dir, path }: { dir: string; path: string }) {
   )
 }
 
+// Fichier écrit par Claude (md, html, image, pdf) : relu à la demande par le serveur, qui ne sert que les chemins du transcript.
+function WrittenDoc({ conv, path }: { conv: Conv; path: string }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const [md, setMd] = useState<string | null>(null)
+  const src = `/conv-doc?dir=${encodeURIComponent(conv.dir)}&id=${encodeURIComponent(conv.id)}&path=${encodeURIComponent(path)}`
+  const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase()
+  const flip = () => {
+    setOpen(!open)
+    if (ext === "md" && md === null) {
+      const fail = () => (toast.error(t("conversation.message.docFail")), setOpen(false))
+      authFetch(src).then((r) => (r.ok ? r.text().then(setMd) : fail()), fail)
+    }
+  }
+  return (
+    <div className="msg">
+      <div className="flex items-center gap-2 text-xs">
+        <button type="button" onClick={flip} aria-expanded={open} className="flex min-w-0 cursor-pointer items-center gap-1 text-primary hover:underline">
+          <ChevronRight className={`size-3.5 shrink-0 transition-transform ${open ? "rotate-90" : ""}`} aria-hidden />
+          <span className="truncate" title={path}>{path.slice(path.lastIndexOf("/") + 1)}</span>
+        </button>
+        <a href={src} target="_blank" rel="noopener noreferrer" title={t("conversation.message.openImage")} className="text-muted-foreground hover:text-foreground">
+          <ExternalLink className="size-3.5" aria-hidden />
+        </a>
+      </div>
+      {open && ext === "md" && md !== null && (
+        <div className="mt-2 rounded-lg border bg-card px-4 py-3 leading-relaxed text-card-foreground">
+          <Markdown t={md} />
+        </div>
+      )}
+      {open && ["html", "htm", "pdf"].includes(ext) && <iframe src={src} sandbox="" title={path} className="mt-2 h-[32rem] w-full rounded-lg border bg-white" />}
+      {open && ["png", "jpg", "jpeg", "gif", "webp"].includes(ext) && <img src={src} alt={path} className="mt-2 max-h-96 max-w-full rounded-lg border object-contain" />}
+    </div>
+  )
+}
+
 // Mémoïsé (voir plus bas) : la conversation se redessine pour l'état de la session, pas pour chacun de ses messages.
 type Conv = { dir: string; id: string; tools?: boolean }
 
@@ -109,6 +146,7 @@ function MessageView({ m, conv }: { m: Msg; conv?: Conv }) {
       </div>
     )
   }
+  if (m.r === "doc") return conv ? <WrittenDoc conv={conv} path={m.t} /> : null
   if (m.r === "user" && isCompactSummary(m.t))
     return (
       <div title={title} className="msg mx-auto max-w-3xl">

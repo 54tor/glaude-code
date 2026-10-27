@@ -466,7 +466,7 @@ func computeDetail(path string) Detail {
 // --- lecture d'une conversation ---------------------------------------------
 
 type Msg struct {
-	R  string `json:"r"` // user | assistant | tool
+	R  string `json:"r"` // user | assistant | tool | doc (fichier écrit : T = chemin)
 	T  string `json:"t"`
 	Ts string `json:"ts,omitempty"`
 	// O/N : décalage de la ligne du transcript et rang du message dans cette ligne. Clé stable : quand on
@@ -565,6 +565,9 @@ func lineMsgsMode(b []byte, tools, anchors bool) []Msg {
 			}
 			out = append(out, Msg{R: l.Type, T: t, Ts: l.Timestamp})
 		case "tool_use":
+			if p := writtenPath(x.Name, x.Input); p != "" {
+				out = append(out, Msg{R: "doc", T: p, Ts: l.Timestamp})
+			}
 			if tools {
 				out = append(out, Msg{R: "tool", T: x.Name + "  " + toolArg(x.Input), Ts: l.Timestamp})
 			} else if anchors {

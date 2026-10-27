@@ -340,6 +340,7 @@ func handler() http.Handler {
 	routesIDE(mux)
 	routesSlash(mux)
 	routesImages(mux)
+	routesDocs(mux)
 	routesPair(mux)
 	routesTeams(mux)
 	// Conversation dans le navigateur (chat.go).

@@ -129,7 +129,7 @@ export type Account = {
   models: { model: string; in: number; out: number; cacheRead: number; cacheWrite: number }[]
 }
 // cut/len : texte coupé à l'octet cut d'un texte de len octets (message démesuré) ; la suite vient de api.convText.
-export type Msg = { r: "user" | "assistant" | "tool"; t: string; ts?: string; o?: number; n?: number; img?: string; k?: number; cut?: number; len?: number }
+export type Msg = { r: "user" | "assistant" | "tool" | "doc"; t: string; ts?: string; o?: number; n?: number; img?: string; k?: number; cut?: number; len?: number }
 export type Ls = { path: string; parent: string; dirs: string[]; sep: string; error?: string }
 export type Result = { ok: boolean; out: string; net?: boolean } // net : pas de réponse (réseau, délai) ; l'action a pu avoir lieu
 // État git d'un dossier (gitstatus.go)

@@ -83,7 +83,7 @@ var routeRights = map[string]Right{
 
 	// Transcriptions et état des sessions. /info renvoie les premiers messages d'une session : contenu, pas usage.
 	"GET /api": RightSessionsRead, "GET /conv": RightSessionsRead, "GET /conv-text": RightSessionsRead, "GET /conv-tools": RightSessionsRead,
-	"GET /conv-image": RightSessionsRead, "GET /info": RightSessionsRead,
+	"GET /conv-image": RightSessionsRead, "GET /conv-doc": RightSessionsRead, "GET /info": RightSessionsRead,
 	"GET /session-state": RightSessionsRead, "GET /session-live": RightSessionsRead, "GET /session-task-output": RightSessionsRead, "GET /session-screen": RightSessionsRead,
 	"GET /session-loaded": RightSessionsRead, "GET /session-loaded-file": RightSessionsRead, "GET /session-trash": RightSessionsRead, "GET /sessions-stamp": RightSessionsRead,
 	"GET /session-send-info": RightSessionsRead, "GET /search": RightSessionsRead,
@@ -99,7 +99,7 @@ var routeRights = map[string]Right{
 	"GET /term-info": RightExec, "POST /term-open": RightExec, "GET /term-ws": RightExec,
 	"POST /session-send": RightExec, "POST /session-key": RightExec, "POST /session-close": RightExec,
 	"GET /trust-pending": RightExec, "POST /trust-answer": RightExec, "POST /open": RightExec, "POST /git-push": RightExec,
-	"GET /ls": RightExec, "POST /dirs": RightExec, "POST /image-upload": RightExec,
+	"GET /ls": RightExec, "POST /dirs": RightExec, "POST /image-upload": RightExec, "POST /file-upload": RightExec,
 	// Agissent sur les sessions : fermeture, suppression de transcriptions, tours de modèle.
 	"POST /rm": RightExec, "POST /rename": RightExec, "POST /reassign": RightExec, "POST /keepwarm": RightExec,
 	"GET /teams-catalog": RightSessionsRead, "POST /teams-compose": RightSessionsRead, "GET /teams": RightSessionsRead,
