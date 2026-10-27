@@ -206,6 +206,21 @@ describe("GuestApp", () => {
     expect(calls.length).toBe(n)
   })
 
+  it("Chrome : scrollIntoView renvoie une Promise ; un nouveau message ne fait pas disparaître la transcription", async () => {
+    const proto = Element.prototype as { scrollIntoView?: unknown }
+    proto.scrollIntoView = vi.fn(() => Promise.resolve())
+    try {
+      await mount()
+      expect(screen.getByText("salut invité")).toBeTruthy()
+      all = [...all, msg(1)]
+      await tick(2100)
+      expect(screen.getByText("m1")).toBeTruthy()
+      expect(screen.getByText("salut invité")).toBeTruthy()
+    } finally {
+      delete proto.scrollIntoView
+    }
+  })
+
   it("double Entrée rapide : un seul envoi", async () => {
     await mount()
     fireEvent.change(box(), { target: { value: "une fois" } })

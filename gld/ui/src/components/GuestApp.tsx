@@ -103,7 +103,10 @@ export function GuestApp() {
     setLoadingOlder(false)
   }
 
-  useEffect(() => end.current?.scrollIntoView?.({ block: "end" }), [h.msgs.length])
+  // Corps en bloc : dans Chrome, scrollIntoView renvoie une Promise que React prendrait pour un nettoyage et appellerait au message suivant.
+  useEffect(() => {
+    end.current?.scrollIntoView?.({ block: "end" })
+  }, [h.msgs.length])
 
   const rw = me?.mode === "rw"
   const send = async () => {
