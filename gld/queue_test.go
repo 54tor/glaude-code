@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"os"
 	"strings"
 	"testing"
 )
@@ -66,7 +67,9 @@ func TestQueueRestartMarksUncertain(t *testing.T) {
 	q, _ := openQueue(dir)
 	a, _ := q.Add("s", "host", "un")
 	q.Add("s", "host", "deux")
-	q.MarkSending("s", a.ID)
+	if err := q.MarkSending("s", a.ID); err != nil {
+		t.Fatal(err)
+	}
 	if l := q.List("s"); l[0].State != "sending" || l[0].SentAt == 0 {
 		t.Fatalf("sending = %+v", l[0])
 	}
@@ -92,12 +95,52 @@ func TestQueueRetry(t *testing.T) {
 	if q.Retry("s", a.ID) {
 		t.Fatal("Retry sur queued")
 	}
-	q.MarkSending("s", a.ID)
+	if err := q.MarkSending("s", a.ID); err != nil {
+		t.Fatal(err)
+	}
 	q, _ = openQueue(dir)
 	if !q.Retry("s", a.ID) {
 		t.Fatal("Retry refusé")
 	}
 	if h, ok := q.Head("s"); !ok || h.ID != a.ID || h.State != "queued" {
 		t.Fatalf("Head = %+v %v", h, ok)
+	}
+}
+
+func TestQueueMarkSendingCAS(t *testing.T) {
+	q, _ := openQueue(t.TempDir())
+	a, _ := q.Add("s", "host", "un")
+	b, _ := q.Add("s", "host", "deux")
+	if err := q.MarkSending("s", a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.MarkSending("s", a.ID); !errors.Is(err, errQueueGone) {
+		t.Fatalf("second = %v", err)
+	}
+	q.Remove("s", b.ID)
+	if err := q.MarkSending("s", b.ID); !errors.Is(err, errQueueGone) {
+		t.Fatalf("après Remove = %v", err)
+	}
+}
+
+func TestQueueMarkSendingRollsBackOnWriteFailure(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignore les permissions")
+	}
+	dir := t.TempDir()
+	q, _ := openQueue(dir)
+	a, _ := q.Add("s", "host", "un")
+	os.Chmod(dir, 0o500)
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+	if err := q.MarkSending("s", a.ID); err == nil || errors.Is(err, errQueueGone) {
+		t.Fatalf("erreur attendue, reçu %v", err)
+	}
+	if l := q.List("s"); l[0].State != "queued" || l[0].SentAt != 0 {
+		t.Fatalf("pas de rollback : %+v", l[0])
+	}
+	os.Chmod(dir, 0o700)
+	q2, _ := openQueue(dir)
+	if l := q2.List("s"); l[0].State != "queued" {
+		t.Fatalf("réouverture = %+v", l[0])
 	}
 }

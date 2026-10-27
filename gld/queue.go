@@ -17,6 +17,7 @@ const queueMax = 50
 var (
 	errQueueFull = errors.New("file pleine")
 	errQueueText = errors.New("texte refusé")
+	errQueueGone = errors.New("item absent ou déjà pris")
 )
 
 type QItem struct {
@@ -101,7 +102,7 @@ func (q *queueStore) find(session, id string) int {
 	return -1
 }
 
-// remove retire l'item et la clé de session devenue vide ; l'échec d'écriture ne bloque pas : la mémoire reste la référence.
+// remove retire l'item et la clé de session devenue vide ; l'échec d'écriture est toléré (au pire l'item reparaît au redémarrage), contrairement à MarkSending dont la persistance garantit le au-plus-une-fois.
 func (q *queueStore) remove(session string, i int) QItem {
 	l := q.sess[session]
 	it := l[i]
@@ -151,14 +152,23 @@ func (q *queueStore) Head(session string) (QItem, bool) {
 	return QItem{}, false
 }
 
-func (q *queueStore) MarkSending(session, itemID string) {
+// MarkSending : compare-and-set queued -> sending. L'écriture précède l'envoi : si elle échoue, l'état revient à queued et
+// l'appelant ne doit pas envoyer, sinon un crash rejouerait le message.
+func (q *queueStore) MarkSending(session, itemID string) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if i := q.find(session, itemID); i >= 0 {
-		q.sess[session][i].State = "sending"
-		q.sess[session][i].SentAt = time.Now().Unix()
-		q.save()
+	i := q.find(session, itemID)
+	if i < 0 || q.sess[session][i].State != "queued" {
+		return errQueueGone
 	}
+	q.sess[session][i].State = "sending"
+	q.sess[session][i].SentAt = time.Now().Unix()
+	if err := q.save(); err != nil {
+		q.sess[session][i].State = "queued"
+		q.sess[session][i].SentAt = 0
+		return err
+	}
+	return nil
 }
 
 func (q *queueStore) Done(session, itemID string) { q.Remove(session, itemID) }
