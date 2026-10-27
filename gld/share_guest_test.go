@@ -432,6 +432,9 @@ func TestInviteHostCredentialDoesNotRedeem(t *testing.T) {
 		s := testStore(t)
 		h := guestWeb(t, s, modeTok)
 		id, _ := s.AddUser("hote", testPw, true)
+		if err := s.Grant(id, mainHomeID, allRights...); err != nil {
+			t.Fatal(err)
+		}
 		sess, _ := fullSession(t, s, id)
 		tok, _ := shareSt.Create(id1, "-p")
 		r := httptest.NewRequest("POST", "/invite/main/"+tok, nil)
@@ -444,6 +447,22 @@ func TestInviteHostCredentialDoesNotRedeem(t *testing.T) {
 		}
 		if w := (gReq{method: "POST", path: "/invite/main/" + tok}).do(h); w.Code != 303 {
 			t.Fatalf("jeton brûlé : %d", w.Code)
+		}
+	})
+	t.Run("compte sans exec", func(t *testing.T) {
+		s := testStore(t)
+		h := guestWeb(t, s, modeTok)
+		id, _ := s.AddUser("collegue", testPw, false)
+		sess, _ := fullSession(t, s, id)
+		s.Revoke(id, mainHomeID, RightExec)
+		tok, _ := shareSt.Create(id1, "-p")
+		r := httptest.NewRequest("POST", "/invite/main/"+tok, nil)
+		r.Host = testHost
+		r.AddCookie(&http.Cookie{Name: sessCookie, Value: sess})
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != 303 || cookieOf(w, guestCookie) == nil {
+			t.Fatalf("collègue sans exec refusé : %d %s", w.Code, w.Body)
 		}
 	})
 }

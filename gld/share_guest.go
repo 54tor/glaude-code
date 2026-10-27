@@ -277,9 +277,9 @@ func guestLeave(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"ok": true})
 }
 
-// hostCredential : la requête porte un accès hôte valide (jeton, appareil jumelé, session de compte) ; jugée par la
-// passerelle, seule à voir les cookies.
-func hostCredential(r *http.Request) bool {
+// hostCredential : la requête porte un accès hôte valide (jeton, appareil jumelé, compte ayant exec sur le home du partage) ;
+// jugée par la passerelle, seule à voir les cookies. Un compte sans exec sur ce home est un collègue : il peut être l'invité.
+func hostCredential(r *http.Request, home string) bool {
 	if hostToken != "" {
 		if c, err := r.Cookie(tokenCookie); err == nil && sameToken(c.Value, hostToken) {
 			return true
@@ -290,7 +290,15 @@ func hostCredential(r *http.Request) bool {
 	}
 	if _, d := reqMode(r); d.on && d.st != nil {
 		if p, _ := gatePrincipal(d.st, r, true); p != nil {
-			return true
+			if p.Token {
+				return true
+			}
+			id, ok := mainHomeID, true
+			if home != mainHomeID {
+				id, ok = homeIDFor(home)
+			}
+			m, err := d.st.Rights(p.User.ID, id)
+			return !ok || err != nil || m[RightExec] // droits illisibles ou home inconnu : on ne consomme pas le jeton
 		}
 	}
 	return false
@@ -309,7 +317,7 @@ func guestInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	gateway := childToken == ""
-	if gateway && hostCredential(r) {
+	if gateway && hostCredential(r, home) {
 		refused(200, "srv.share_guest.vousEtesHote")
 		return
 	}

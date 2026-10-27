@@ -328,7 +328,7 @@
   "srv.share_guest.tropDeMessages": "Too many messages: try again in a minute",
   "srv.share_guest.invitation": "You are invited to follow a Claude Code session and add messages to it.",
   "srv.share_guest.rejoindre": "Join the session",
-  "srv.share_guest.vousEtesHote": "You are the host of this share: this link is meant for your guest. Send it to them without opening it.",
+  "srv.share_guest.vousEtesHote": "You are the host of this share: this link is meant for your guest. Send it to them without opening it. To test the link, open it in a private browsing window.",
   "srv.reassign.dejaDansCeDossier": "already in this folder: {{.A1}}",
   "srv.reassign.existeDejaDansLa": "already exists in the target: {{.A1}}",
   "srv.reassign.leDossierCibleN": "the target folder does not exist: {{.A1}}",
