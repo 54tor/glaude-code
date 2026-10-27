@@ -116,7 +116,9 @@ func TestReadTeamSymlinkSkipped(t *testing.T) {
 	}
 	// config.json lui-même en lien
 	os.Remove(filepath.Join(d, "config.json"))
-	os.Symlink(out, filepath.Join(d, "config.json"))
+	cfg := filepath.Join(root, "cfg-dehors.json")
+	os.WriteFile(cfg, []byte(`{"members":[{"name":"intrus"}]}`), 0o644)
+	os.Symlink(cfg, filepath.Join(d, "config.json"))
 	tf, _ = readTeam(root, tName)
 	if len(tf.Members) != 0 {
 		t.Fatal("lien suivi")
