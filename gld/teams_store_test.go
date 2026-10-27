@@ -10,23 +10,23 @@ import (
 
 func TestEditBuiltinMakesCopy(t *testing.T) {
 	root := t.TempDir()
-	a, err := saveAgent(root, Agent{ID: "ada", Name: "Ada bis", Role: "r", Access: "write", Prompt: "p"})
+	a, err := saveAgent(root, Agent{ID: "backend", Name: "Backend bis", Role: "r", Access: "write", Prompt: "p"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.ID == "ada" || a.Builtin || a.Base != "ada" || len(a.ID) != 10 || a.ID[:2] != "x-" {
+	if a.ID == "backend" || a.Builtin || a.Base != "backend" || len(a.ID) != 10 || a.ID[:2] != "x-" {
 		t.Fatalf("copie = %+v", a)
 	}
 	c, _ := loadCatalog(root)
 	var orig Agent
 	for _, x := range builtinCatalog().Agents {
-		if x.ID == "ada" {
+		if x.ID == "backend" {
 			orig = x
 		}
 	}
 	found := false
 	for _, x := range c.Agents {
-		if x.ID == "ada" && x != orig {
+		if x.ID == "backend" && x != orig {
 			t.Fatal("fourni modifié")
 		}
 		found = found || x.ID == a.ID
@@ -43,7 +43,7 @@ func TestEditBuiltinMakesCopy(t *testing.T) {
 
 func TestRemoveBuiltinRefused(t *testing.T) {
 	root := t.TempDir()
-	if !isMsg(removeAgent(root, "ada"), "srv.teams_store.builtinRefuse") || !isMsg(removeTeam(root, "feature"), "srv.teams_store.builtinRefuse") {
+	if !isMsg(removeAgent(root, "backend"), "srv.teams_store.builtinRefuse") || !isMsg(removeTeam(root, "feature"), "srv.teams_store.builtinRefuse") {
 		t.Fatal("fourni supprimable")
 	}
 	if !isMsg(removeAgent(root, "x-nope"), "srv.teams_store.idInconnu") {
@@ -54,7 +54,7 @@ func TestRemoveBuiltinRefused(t *testing.T) {
 func TestRemoveAgentUsedByTeam(t *testing.T) {
 	root := t.TempDir()
 	a, _ := saveAgent(root, Agent{Name: "Zed", Role: "r", Access: "read"})
-	tm, err := saveTeam(root, Team{Name: "Mon équipe", Members: []string{a.ID, "ada"}})
+	tm, err := saveTeam(root, Team{Name: "Mon équipe", Members: []string{a.ID, "backend"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestCatalogSurvivesUpdate(t *testing.T) {
 	if err != nil || len(c.Agents) != len(builtinCatalog().Agents)+1 || c.Agents[len(c.Agents)-1].ID != a.ID {
 		t.Fatalf("catalogue: %v", err)
 	}
-	if c.Agents[0].ID != "atlas" {
+	if c.Agents[0].ID != "chef" {
 		t.Fatal("fournis d'abord")
 	}
 }
@@ -108,7 +108,7 @@ func TestSaveAgentRejectsBadAccess(t *testing.T) {
 			t.Fatalf("%q: %v", acc, err)
 		}
 	}
-	if _, err := saveAgent(root, Agent{Name: "ADA", Role: "r", Access: "read"}); !isMsg(err, "srv.teams_store.doublon") {
+	if _, err := saveAgent(root, Agent{Name: "DÉVELOPPEMENT BACKEND", Role: "r", Access: "read"}); !isMsg(err, "srv.teams_store.doublon") {
 		t.Fatalf("doublon: %v", err)
 	}
 	if _, err := saveAgent(root, Agent{Name: "", Role: "r", Access: "read"}); !isMsg(err, "srv.teams_store.nomVide") {
@@ -124,18 +124,18 @@ func TestSaveTeamRejectsUnknownMember(t *testing.T) {
 	cases := map[string]Team{
 		"srv.teams_store.membreInconnu": {Name: "T", Members: []string{"nope"}},
 		"srv.teams_store.membreVide":    {Name: "T"},
-		"srv.teams_store.membreDoublon": {Name: "T", Members: []string{"ada", "ada"}},
-		"srv.teams_store.nomVide":       {Members: []string{"ada"}},
+		"srv.teams_store.membreDoublon": {Name: "T", Members: []string{"backend", "backend"}},
+		"srv.teams_store.nomVide":       {Members: []string{"backend"}},
 	}
 	for k, tt := range cases {
 		if _, err := saveTeam(root, tt); !isMsg(err, k) {
 			t.Fatalf("%s: %v", k, err)
 		}
 	}
-	if _, err := saveTeam(root, Team{Name: "T", Members: []string{"atlas"}}); !isMsg(err, "srv.teams_store.membreInconnu") {
+	if _, err := saveTeam(root, Team{Name: "T", Members: []string{"chef"}}); !isMsg(err, "srv.teams_store.membreInconnu") {
 		t.Fatal("chef accepté comme membre")
 	}
-	b, err := saveTeam(root, Team{ID: "feature", Name: "F2", Members: []string{"ada"}})
+	b, err := saveTeam(root, Team{ID: "feature", Name: "F2", Members: []string{"backend"}})
 	if err != nil || b.Builtin || b.Base != "feature" {
 		t.Fatalf("copie team: %+v %v", b, err)
 	}

@@ -17,8 +17,8 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-const ag = (Name: string, Role: string): teams.Agent => ({
-  ID: Name.toLowerCase(),
+const ag = (ID: string, Name: string, Role: string): teams.Agent => ({
+  ID,
   Name,
   Role,
   Access: "",
@@ -27,21 +27,23 @@ const ag = (Name: string, Role: string): teams.Agent => ({
   Builtin: true,
   Base: "",
 })
-const atlas = ag("Atlas", "chef de projet")
+const chef = ag("chef", "Chef de projet", "chef de projet")
+const backend = ag("backend", "Développement backend", "backend")
+const testeur = ag("testeur", "Testeur", "testeur")
 const catalog: teams.Catalog = {
-  agents: [atlas, ag("Hugo", "testeur"), ag("Ada", "backend")],
+  agents: [chef, testeur, backend],
   teams: [
     {
       ID: "feat",
       Name: "Fonctionnalité",
-      Members: ["ada", "hugo"],
+      Members: ["backend", "testeur"],
       Builtin: true,
       Base: "",
     },
     {
       ID: "bug",
       Name: "Correctif de bug",
-      Members: ["hugo"],
+      Members: ["testeur"],
       Builtin: true,
       Base: "",
     },
@@ -50,8 +52,8 @@ const catalog: teams.Catalog = {
 const mockCompose = (tooMany = false) =>
   vi.spyOn(teams, "teamsCompose").mockImplementation(async (ids) => ({
     ok: true,
-    lead: atlas,
-    mates: ids.length ? [ag("Ada", "backend"), ag("Hugo", "testeur")] : [],
+    lead: chef,
+    mates: ids.length ? [backend, testeur] : [],
     tooMany,
   }))
 const click = async (e: HTMLElement) => void fireEvent.click(e)
@@ -70,8 +72,8 @@ describe("TeamPicker", () => {
     await click(screen.getByRole("checkbox", { name: /Fonctionnalité/ }))
     await click(screen.getByRole("checkbox", { name: /Correctif de bug/ }))
     await screen.findByText("2 team(s) · 2 coéquipier(s)")
-    expect(screen.getAllByText("Hugo", { selector: "b" })).toHaveLength(1)
-    expect(screen.getAllByText("Atlas", { selector: "b" })).toHaveLength(1)
+    expect(screen.getAllByText("Testeur", { selector: "b" })).toHaveLength(1)
+    expect(screen.getAllByText("Chef de projet", { selector: "b" })).toHaveLength(1)
   })
   it("tooMany avertit sans bloquer Lancer", async () => {
     mockCompose(true)
@@ -117,7 +119,7 @@ describe("TeamPicker", () => {
             TeamName: "t",
             SessionID: "",
             Mates: [],
-            Conflicts: ["ada.md"],
+            Conflicts: ["backend.md"],
             TooMany: false,
           },
         }) as never
@@ -128,7 +130,7 @@ describe("TeamPicker", () => {
     await click(screen.getByRole("button", { name: "Choisir" }))
     await click(await screen.findByRole("button", { name: "Lancer" }))
     expect(await screen.findByText("<b>boom</b>")).toBeTruthy()
-    expect(screen.getByText("ada.md")).toBeTruthy()
+    expect(screen.getByText("backend.md")).toBeTruthy()
   })
   it("bascule au clavier (espace)", async () => {
     mockCompose()
@@ -164,7 +166,7 @@ describe("TeamPicker", () => {
       />
     )
     await screen.findByText("0 team(s) · 0 coéquipier(s)")
-    expect(screen.queryByText("Ada", { selector: "b" })).toBeNull()
+    expect(screen.queryByText("Développement backend", { selector: "b" })).toBeNull()
     expect(
       (screen.getByRole("button", { name: "Lancer" }) as HTMLButtonElement)
         .disabled

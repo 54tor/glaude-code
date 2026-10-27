@@ -116,7 +116,7 @@ func TestTeamsLaunchConflictShape(t *testing.T) {
 	g.grant(t, u, "", RightExec)
 	// Un agent perso homonyme sans marqueur : conflit avant tout lancement.
 	os.MkdirAll(filepath.Join(g.cfg, "agents"), 0o755)
-	os.WriteFile(filepath.Join(g.cfg, "agents", "ada.md"), []byte("---\nname: ada\n---\nmien\n"), 0o644)
+	os.WriteFile(filepath.Join(g.cfg, "agents", "backend.md"), []byte("---\nname: backend\n---\nmien\n"), 0o644)
 	w := g.do("POST", "/teams-launch", &u, "", `{"teamIds":["feature"],"goal":"x","dir":"`+t.TempDir()+`"}`)
 	var out struct {
 		Ok  bool
@@ -124,7 +124,7 @@ func TestTeamsLaunchConflictShape(t *testing.T) {
 		Run Run
 	}
 	json.Unmarshal(w.Body.Bytes(), &out)
-	if out.Ok || out.Out == "" || len(out.Run.Conflicts) != 1 || out.Run.Conflicts[0] != "ada" {
+	if out.Ok || out.Out == "" || len(out.Run.Conflicts) != 1 || out.Run.Conflicts[0] != "backend" {
 		t.Fatalf("%d %s", w.Code, w.Body)
 	}
 }

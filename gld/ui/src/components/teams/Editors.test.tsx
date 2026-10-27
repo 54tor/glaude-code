@@ -39,13 +39,13 @@ const ag = (
   Base: "",
   ...o,
 })
-const atlas = ag("atlas", "Atlas", { Access: "lead" })
-const ada = ag("ada", "Ada")
+const chef = ag("chef", "Chef de projet", { Access: "lead" })
+const backend = ag("backend", "Développement backend")
 const perso = ag("p1", "Zoé", { Builtin: false })
 const bteam: teams.Team = {
   ID: "feat",
   Name: "Fonctionnalité",
-  Members: ["ada"],
+  Members: ["backend"],
   Builtin: true,
   Base: "",
 }
@@ -57,7 +57,7 @@ const pteam: teams.Team = {
   Base: "",
 }
 const cat: teams.Catalog = {
-  agents: [atlas, ada, perso],
+  agents: [chef, backend, perso],
   teams: [bteam, pteam],
 }
 const name = () => screen.getByLabelText("Nom") as HTMLInputElement
@@ -70,7 +70,7 @@ beforeEach(() => {
   rights.cfg = true
   vi.mocked(teams.teamsCatalog).mockResolvedValue({ ok: true, ...cat })
   vi.mocked(teams.teamsList).mockResolvedValue({ ok: true, teams: [] })
-  vi.mocked(teams.teamsAgentSave).mockResolvedValue({ ok: true, agent: ada })
+  vi.mocked(teams.teamsAgentSave).mockResolvedValue({ ok: true, agent: backend })
   vi.mocked(teams.teamsAgentRm).mockResolvedValue({ ok: true })
   vi.mocked(teams.teamsTeamSave).mockResolvedValue({ ok: true, team: bteam })
   vi.mocked(teams.teamsTeamRm).mockResolvedValue({ ok: true })
@@ -83,14 +83,14 @@ afterEach(() => {
 describe("AgentEditor", () => {
   it("agent fourni : nom différent, id de l'original, pas de suppression", async () => {
     const onSaved = vi.fn()
-    render(<AgentEditor agent={ada} onClose={vi.fn()} onSaved={onSaved} />)
-    expect(name().value).not.toBe("Ada")
-    expect(screen.getByText("Copie de Ada")).toBeTruthy()
+    render(<AgentEditor agent={backend} onClose={vi.fn()} onSaved={onSaved} />)
+    expect(name().value).not.toBe("Développement backend")
+    expect(screen.getByText("Copie de Développement backend")).toBeTruthy()
     expect(screen.queryByRole("button", { name: "Supprimer" })).toBeNull()
     fireEvent.click(saveBtn())
     await waitFor(() => expect(teams.teamsAgentSave).toHaveBeenCalled())
     expect(vi.mocked(teams.teamsAgentSave).mock.calls[0][0]).toMatchObject({
-      ID: "ada",
+      ID: "backend",
       Name: name().value,
     })
     await waitFor(() => expect(onSaved).toHaveBeenCalled())
@@ -150,7 +150,7 @@ describe("AgentEditor", () => {
       ok: false,
       out: "<b>doublon</b>",
     })
-    render(<AgentEditor agent={ada} onClose={vi.fn()} onSaved={vi.fn()} />)
+    render(<AgentEditor agent={backend} onClose={vi.fn()} onSaved={vi.fn()} />)
     fireEvent.click(saveBtn())
     expect(await screen.findByText("<b>doublon</b>")).toBeTruthy()
   })
@@ -167,17 +167,17 @@ describe("TeamEditor", () => {
         onSaved={onSaved}
       />
     )
-    expect(screen.queryByRole("checkbox", { name: /Atlas/ })).toBeNull()
+    expect(screen.queryByRole("checkbox", { name: /Chef de projet/ })).toBeNull()
     expect(screen.queryByRole("button", { name: "Supprimer" })).toBeNull()
     expect(name().value).not.toBe("Fonctionnalité")
-    fireEvent.click(screen.getByRole("checkbox", { name: /Ada/ }))
+    fireEvent.click(screen.getByRole("checkbox", { name: /Développement backend/ }))
     expect(saveBtn().disabled).toBe(true)
-    fireEvent.click(screen.getByRole("checkbox", { name: /Ada/ }))
+    fireEvent.click(screen.getByRole("checkbox", { name: /Développement backend/ }))
     fireEvent.click(saveBtn())
     await waitFor(() => expect(teams.teamsTeamSave).toHaveBeenCalled())
     expect(vi.mocked(teams.teamsTeamSave).mock.calls[0][0]).toMatchObject({
       ID: "feat",
-      Members: ["ada"],
+      Members: ["backend"],
     })
     await waitFor(() => expect(onSaved).toHaveBeenCalled())
   })
@@ -228,7 +228,7 @@ describe("TeamsPage", () => {
   it("liste des agents, Nouvel agent, agents chef non modifiables", async () => {
     render(<TeamsPage home="/h" />)
     await screen.findByText("perso")
-    expect(screen.queryByRole("button", { name: "Modifier Atlas" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "Modifier Chef de projet" })).toBeNull()
     expect(screen.getByRole("button", { name: "Nouvelle team" })).toBeTruthy()
     fireEvent.click(screen.getByRole("button", { name: "Nouvel agent" }))
     expect(await screen.findByLabelText("Nom")).toBeTruthy()
