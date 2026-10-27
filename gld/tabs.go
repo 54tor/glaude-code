@@ -86,11 +86,7 @@ func readTabs(b []byte) ([]TabSave, error) {
 
 func writeTabs(t []TabSave) error {
 	b, _ := json.MarshalIndent(t, "", "  ")
-	tmp := tabsFile() + ".tmp"
-	if err := writeSynced(tmp, b, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, tabsFile())
+	return rWriteAtomic(cfgDir(), tabsFile(), b, 0o600)
 }
 
 func sameIDs(a, b []TabSession) bool {
