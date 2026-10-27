@@ -409,6 +409,7 @@
   "srv.skills.npxBusy": "une autre action npx skills est déjà en cours",
   "srv.skills.npxMissing": "npx est introuvable : installez Node.js",
   "srv.skills.npxNotLocked": "ce skill n'a pas été posé par npx skills (absent du fichier de verrouillage)",
+  "srv.skills.npxUnsafeProject": "ce projet contient node_modules/skills : npx l'utiliserait à la place du paquet épinglé",
   "srv.skills.nomInvalideMinusculesChiffres": "nom invalide : minuscules, chiffres et tirets (64 caractères au plus)",
   "srv.plugins.projetRequis": "Projet requis pour cette portée",
   "srv.skills.pluginIntrouvable": "plugin introuvable",

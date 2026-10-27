@@ -267,3 +267,20 @@ func TestRouteSkillNpx(t *testing.T) {
 		t.Errorf("add : %v %v", m, calls)
 	}
 }
+
+func TestSkillsActRefuseProjetAvecSkillsLocal(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	t.Setenv("HOME", t.TempDir())
+	proj := t.TempDir()
+	put(t, filepath.Join(cfg, "projects", "-p", id1+".jsonl"), `{"cwd":"`+proj+`"}`+"\n", old)
+	n := 0
+	fakeNpx(t, func(context.Context, string, []string) (string, error) { n++; return "", nil })
+	if _, err := skillsAct(context.Background(), "add", "o/r", "x", "project", "-p"); err != nil || n != 1 {
+		t.Fatalf("projet sain refusé : %v, appels %d", err, n)
+	}
+	put(t, filepath.Join(proj, "node_modules", "skills", "package.json"), "{}", old)
+	if _, err := skillsAct(context.Background(), "add", "o/r", "x", "project", "-p"); err == nil || n != 1 {
+		t.Errorf("projet piégé accepté : %v, appels %d", err, n)
+	}
+}

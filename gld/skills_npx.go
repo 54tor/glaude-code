@@ -63,7 +63,7 @@ var runNpxSkills = func(ctx context.Context, dir string, args []string) (string,
 	cmd := withPath(exec.CommandContext(ctx, "npx", args...))
 	cmd.Dir = dir
 	// Le dossier d'un projet peut porter son .npmrc : l'environnement l'emporte sur lui, le paquet épinglé vient du registre public.
-	cmd.Env = append(cmd.Env, "npm_config_registry=https://registry.npmjs.org/")
+	cmd.Env = append(cmd.Env, "npm_config_registry=https://registry.npmjs.org/", "npm_config_node_options=", "NODE_OPTIONS=")
 	b, err := cmd.CombinedOutput()
 	return stripANSI(string(b)), err
 }
@@ -85,6 +85,9 @@ func skillsAct(ctx context.Context, action, source, skill, scope, project string
 			return "", terr("srv.memory.dossierDuProjetIntrouvable")
 		}
 		lock = filepath.Join(dir, "skills-lock.json")
+		if _, e := os.Lstat(filepath.Join(dir, "node_modules", "skills")); e == nil { // npx l'utiliserait à la place du paquet épinglé
+			return "", terr("srv.skills.npxUnsafeProject")
+		}
 	default:
 		return "", terr("srv.skills.npxBadScope")
 	}
