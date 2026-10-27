@@ -240,6 +240,10 @@ export const api = {
   queueAdd: (id: string, text: string) => api.post("/queue-add", { id, text }),
   queueRm: (id: string, item: string) => api.post("/queue-rm", { id, item }) as Promise<Result & { text?: string }>,
   queueRetry: (id: string, item: string) => api.post("/queue-retry", { id, item }),
+  shareCreate: (id: string, dir: string) => api.post("/share-create", { id, dir }) as Promise<Result & { token?: string }>,
+  shareInfo: (id: string) => get<{ shared: boolean; mode?: "rw" | "ro"; connected: boolean }>(`/share-info?id=${enc(id)}`),
+  shareMode: (id: string, mode: "rw" | "ro") => api.post("/share-mode", { id, mode }),
+  shareEnd: (id: string) => api.post("/share-end", { id }),
   sessionLive: (dir: string, id: string) => get<LiveState>(`/session-live?dir=${enc(dir)}&id=${enc(id)}`),
   // refresh : relevé demandé par un POST (un GET ne doit rien déclencher), puis lecture de l'état, qui dit « refreshing ».
   account: async (refresh = false) => {

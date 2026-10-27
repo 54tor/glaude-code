@@ -49,9 +49,10 @@ export function useAppActions(c: {
   setPrompt: (a: PromptAsk | null) => void
   setCompose: (a: ComposeAsk | null) => void
   setInfo: (r: Row | null) => void
+  setShare: (r: Row | null) => void
   setPicker: (p: Pick | null) => void
 }) {
-  const { data, setData, reload, home, q, go, read, now, live, waiting, hitMap, vgroups, favs, vg, picked, setPicked, selected, everyId, view, args, choice, snippets, setAsk, setPrompt, setCompose, setInfo, setPicker } = c
+  const { data, setData, reload, home, q, go, read, now, live, waiting, hitMap, vgroups, favs, vg, picked, setPicked, selected, everyId, view, args, choice, snippets, setAsk, setPrompt, setCompose, setInfo, setShare, setPicker } = c
   const lastPick = useRef<string | null>(null) // dernière case cochée, début d'une sélection de plage
   const gkey = (x: VGroup) => groupKey(x, home)
   // Une action : toast de progression puis de résultat, erreurs jamais muettes, liste rechargée.
@@ -447,6 +448,7 @@ export function useAppActions(c: {
         s.id
       ),
     info: setInfo,
+    share: setShare,
     exportMd: (r) => exportMarkdown([{ s: r.s, project: tilde(r.g.project, home) }]).catch(() => toast.error(i18n.t("shell.act.exportFailed"))),
     move: async (rs) => {
       const to = await pickDir(rs.length > 1 ? i18n.t("shell.act.moveMany", { sessions: ns(rs.length) }) : i18n.t("shell.act.moveOne", { title: rs[0].s.title }), rs[0].s.cwd)

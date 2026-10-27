@@ -158,7 +158,9 @@
       "copyRefs": "Copier les références",
       "selectSessions": "Sélectionner ses sessions",
       "deleteGroup": "Supprimer le groupe",
-      "info": "Informations…"
+      "info": "Informations…",
+      "share": "Partager…",
+      "shared": "Partage…"
     },
     "tree": {
       "collapse": "Replier",
@@ -466,6 +468,30 @@
     },
     "securityAlerts": {
       "title": "Alertes de sécurité"
+    },
+    "share": {
+      "title": "Partager la session",
+      "intro": "Un lien à usage unique donne accès à cette session à une personne invitée.",
+      "create": "Générer et copier le lien",
+      "regenerate": "Régénérer le lien",
+      "copied": "Lien copié.",
+      "copyFailed": "Copie impossible : sélectionnez le lien ci-dessous.",
+      "replaceTitle": "Remplacer le lien ?",
+      "replaceBody": "Un partage existe déjà : l'ancien lien cessera de fonctionner.",
+      "replaceConfirm": "Régénérer",
+      "singleUse": "Le premier à l'ouvrir le réserve. Ne l'ouvrez pas dans votre propre navigateur : vous seriez traité en invité.",
+      "insecure": "Connexion non HTTPS : le cookie de l'invité n'est pas sécurisé.",
+      "connected": "Invité connecté",
+      "notConnected": "Aucun invité connecté",
+      "toRo": "Passer en lecture seule",
+      "toRw": "Redonner l'écriture",
+      "modeFailed": "Changement de mode impossible : {{msg}}",
+      "end": "Mettre fin au partage",
+      "endTitle": "Mettre fin au partage ?",
+      "endBody": "L'invité perd l'accès immédiatement.",
+      "endConfirm": "Mettre fin",
+      "endSaveFailed": "Partage révoqué, mais l'enregistrement a échoué : {{msg}}",
+      "createFailed": "Création du lien impossible : {{msg}}"
     }
   }
 }

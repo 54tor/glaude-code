@@ -59,6 +59,7 @@ export type Actions = {
   touch: (id: string) => void // un prompt vient d'être envoyé à la session : elle remonte tout de suite (cache chaud), la liste se relit ensuite
   read: (s: Pick<Session, "id">) => void // seul l'id sert : on peut ouvrir une session absente de la liste chargée
   info: (r: Row) => void // fiche de la session
+  share: (r: Row) => void // fenêtre de partage par lien invité
   open: (body: { dir: string; id?: string }) => void
   resumeWith: (r: Row) => void // reprendre en envoyant un message
   resumeSend: (r: Row, text: string) => Promise<boolean> // reprendre une session fermée avec ce texte, sans fenêtre de saisie

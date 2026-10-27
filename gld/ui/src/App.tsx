@@ -27,6 +27,7 @@ import { Confirm, type Ask } from "@/components/Confirm"
 import { DirPicker, type Pick } from "@/components/DirPicker"
 import { PageHeader } from "@/components/PageHeader"
 import { SessionInfo } from "@/components/SessionInfo"
+import { ShareDialog } from "@/components/ShareDialog"
 import { Prompt, type Ask as PromptAsk } from "@/components/Prompt"
 import { SessionSelectionBar } from "@/components/SessionSelectionBar"
 import { SessionsPane } from "@/components/SessionsPane"
@@ -100,6 +101,7 @@ function Shell() {
   const [prompt, setPrompt] = useState<PromptAsk | null>(null)
   const [compose, setCompose] = useState<ComposeAsk | null>(null)
   const [info, setInfo] = useState<Row | null>(null)
+  const [share, setShare] = useState<Row | null>(null)
   const search = useRef<HTMLInputElement>(null)
 
   const setQ = (v: string) =>
@@ -265,6 +267,7 @@ function Shell() {
     setPrompt,
     setCompose,
     setInfo,
+    setShare,
     setPicker,
   })
   useShortcuts({ search, picked, clearPicked: () => setPicked(new Set()), byId: view.byId, actions })
@@ -480,6 +483,7 @@ function Shell() {
       <Prompt ask={prompt} onClose={() => setPrompt(null)} />
       <Compose ask={compose} onClose={() => setCompose(null)} />
       <SessionInfo row={info} onClose={() => setInfo(null)} />
+      {share && <ShareDialog key={share.s.id} id={share.s.id} dir={share.s.dir} onClose={() => setShare(null)} />}
     </ActionsCtx.Provider>
   )
 }

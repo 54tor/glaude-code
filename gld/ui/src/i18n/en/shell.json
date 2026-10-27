@@ -158,7 +158,9 @@
       "copyRefs": "Copy the references",
       "selectSessions": "Select its sessions",
       "deleteGroup": "Delete the group",
-      "info": "Info…"
+      "info": "Info…",
+      "share": "Share…",
+      "shared": "Sharing…"
     },
     "tree": {
       "collapse": "Collapse",
@@ -466,6 +468,30 @@
     },
     "securityAlerts": {
       "title": "Security alerts"
+    },
+    "share": {
+      "title": "Share session",
+      "intro": "A single-use link gives one invited person access to this session.",
+      "create": "Generate and copy link",
+      "regenerate": "Regenerate link",
+      "copied": "Link copied.",
+      "copyFailed": "Copy failed: select the link below.",
+      "replaceTitle": "Replace the link?",
+      "replaceBody": "A share already exists: the old link will stop working.",
+      "replaceConfirm": "Regenerate",
+      "singleUse": "Whoever opens it first reserves it. Do not open it in your own browser: you would be treated as a guest.",
+      "insecure": "Connection is not HTTPS: the guest cookie is not secure.",
+      "connected": "Guest connected",
+      "notConnected": "No guest connected",
+      "toRo": "Switch to read-only",
+      "toRw": "Give write access back",
+      "modeFailed": "Could not change mode: {{msg}}",
+      "end": "End sharing",
+      "endTitle": "End sharing?",
+      "endBody": "The guest loses access immediately.",
+      "endConfirm": "End",
+      "endSaveFailed": "Share revoked, but saving failed: {{msg}}",
+      "createFailed": "Could not create the link: {{msg}}"
     }
   }
 }
