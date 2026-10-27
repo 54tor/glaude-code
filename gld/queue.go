@@ -12,7 +12,10 @@ import (
 	"time"
 )
 
-const queueMax = 50
+const (
+	queueMax      = 50
+	queueGuestMax = 30 // éléments d'invités par session, toutes invitations confondues : l'hôte garde toujours de la place
+)
 
 var (
 	errQueueFull = errors.New("file pleine")
@@ -82,7 +85,7 @@ func (q *queueStore) Add(session, author, guest, text string) (QItem, error) {
 	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if len(q.sess[session]) >= queueMax {
+	if len(q.sess[session]) >= queueMax || author == "guest" && q.guests(session) >= queueGuestMax {
 		return QItem{}, errQueueFull
 	}
 	var r [8]byte
@@ -94,6 +97,16 @@ func (q *queueStore) Add(session, author, guest, text string) (QItem, error) {
 		return QItem{}, err
 	}
 	return it, nil
+}
+
+func (q *queueStore) guests(session string) int {
+	n := 0
+	for _, it := range q.sess[session] {
+		if it.Author == "guest" {
+			n++
+		}
+	}
+	return n
 }
 
 func (q *queueStore) List(session string) []QItem {

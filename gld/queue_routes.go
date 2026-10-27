@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -145,6 +146,16 @@ func dropRevokedGuest(q *queueStore, id string, head QItem) (Invite, bool) {
 	return Invite{}, true
 }
 
+// visibleQueue : un invité (en-têtes posés par sa garde) ne voit que les éléments de l'hôte et les siens, ni le texte, ni le
+// libellé, ni l'invitation d'un autre invité.
+func visibleQueue(r *http.Request, items []QItem) []QItem {
+	if r.Header.Get(authorHeader) != "guest" {
+		return items
+	}
+	me := r.Header.Get(inviteHeader)
+	return slices.DeleteFunc(items, func(it QItem) bool { return it.Author == "guest" && (me == "" || it.Guest != me) })
+}
+
 // guestLabels : libellés des invitations de la session, calculés à la réponse (jamais stockés dans la file).
 func guestLabels(id string) map[string]string {
 	m := map[string]string{}
@@ -216,7 +227,7 @@ func routesQueue(mux *http.ServeMux) {
 			Label string `json:"label,omitempty"`
 		}
 		labels, out := guestLabels(id), []item{}
-		for _, it := range queueSt.List(id) {
+		for _, it := range visibleQueue(r, queueSt.List(id)) {
 			v := item{QItem: it}
 			if it.Author == "guest" {
 				v.Label = cmp.Or(labels[it.Guest], "Invité")

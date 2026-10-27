@@ -161,26 +161,75 @@ func TestTwoInvitesIndependentCookiesAndModes(t *testing.T) {
 	if w := (gReq{method: "GET", path: "/conv", cookie: cb}).do(h); w.Code != 200 {
 		t.Fatalf("B lit : %d", w.Code)
 	}
-	var q struct{ Items []map[string]any }
-	w = gReq{method: "GET", path: "/queue", cookie: cb}.do(h)
-	json.Unmarshal(w.Body.Bytes(), &q)
-	labels := map[string]any{}
-	for _, it := range q.Items {
-		labels[it["text"].(string)] = it["label"]
+	// B ne voit que l'hôte et lui-même : ni texte, ni libellé, ni identifiant d'invitation de A, par aucune route.
+	seen := queueSeen(t, h, gReq{cookie: cb})
+	for _, p := range []string{"/queue", "/session-live"} {
+		got := seen[p]
+		if _, ok := got["de B"]; !ok || p == "/queue" && got["de B"] != "Invité 2" || got["de l'hôte"] != "" || len(got) != 2 {
+			t.Fatalf("%s vu par B : %v", p, got)
+		}
 	}
-	if labels["de B"] != "Invité 2" || labels["y"] != "Léa" || labels["de l'hôte"] != nil {
-		t.Fatalf("libellés de la file : %s", w.Body)
+	for p, raw := range queueRaw(h, gReq{cookie: cb}) {
+		for _, leak := range []string{`"y"`, "Léa", invA} {
+			if strings.Contains(raw, leak) {
+				t.Fatalf("%s : fuite %q : %s", p, leak, raw)
+			}
+		}
 	}
+	hostSeen := queueSeen(t, h, gReq{tokCookie: modeTok})
+	for _, p := range []string{"/queue", "/session-live"} {
+		if _, ok := hostSeen[p]["y"]; len(hostSeen[p]) != 3 || !ok || p == "/queue" && hostSeen[p]["y"] != "Léa" {
+			t.Fatalf("%s vu par l'hôte : %v", p, hostSeen[p])
+		}
+	}
+}
+
+func queueRaw(h http.Handler, base gReq) map[string]string {
+	out := map[string]string{}
+	for _, p := range []string{"/queue", "/session-live"} {
+		q := base
+		q.method, q.path = "GET", p+"?id="+id1+"&dir=-p"
+		out[p] = q.do(h).Body.String()
+	}
+	return out
+}
+
+// queueSeen : texte -> libellé des éléments rendus par /queue (items) et /session-live (pending).
+func queueSeen(t *testing.T, h http.Handler, base gReq) map[string]map[string]string {
+	t.Helper()
+	out := map[string]map[string]string{}
+	for p, raw := range queueRaw(h, base) {
+		var r struct {
+			Items, Pending []struct{ Text, Label string }
+		}
+		if json.Unmarshal([]byte(raw), &r) != nil {
+			t.Fatalf("%s : %s", p, raw)
+		}
+		m := map[string]string{}
+		for _, it := range append(r.Items, r.Pending...) {
+			m[it.Text] = it.Label
+		}
+		out[p] = m
+	}
+	return out
 }
 
 func TestRegenKillsOnlyThatInvite(t *testing.T) {
 	h := guestWeb(t, nil, modeTok)
-	ca, _, invA := joinAs(t, h, id1, "-p", "", "Léa")
-	cb, _, _ := joinAs(t, h, id1, "-p", "", "")
+	ca, csrfA, invA := joinAs(t, h, id1, "-p", "", "Léa")
+	cb, csrfB, _ := joinAs(t, h, id1, "-p", "", "")
+	sending := itemOf(t, addAs(h, ca, csrfA, "en cours", nil))
+	queueSt.MarkSending(id1, sending.ID)
+	itemOf(t, addAs(h, ca, csrfA, "fuité", nil))
+	kb := itemOf(t, addAs(h, cb, csrfB, "de B", nil))
 	shareSt.SetInviteMode(id1, invA, "ro")
 	tok, err := shareSt.Regen(id1, invA)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// Un lien régénéré est un lien fuité : les éléments encore en file de cette invitation partent avec lui.
+	if l := queueSt.List(id1); len(l) != 2 || l[0].ID != sending.ID || l[1].ID != kb.ID {
+		t.Fatalf("file après régénération : %+v", l)
 	}
 	w := gReq{method: "GET", path: "/conv", cookie: ca}.do(h)
 	if k := cookieOf(w, gName); w.Code != 401 || k == nil || k.MaxAge >= 0 {
@@ -655,6 +704,67 @@ func TestInviteRoutes(t *testing.T) {
 	for _, p := range []string{"/invite-create", "/invite-regen", "/invite-mode", "/invite-revoke", "/share-end"} {
 		if w := post(mux, p, `{"id":"`+shSess+`","dir":"proj","invite":"0123456789abcdef","mode":"ro"}`); w.Code != 503 {
 			t.Fatalf("%s : %d", p, w.Code)
+		}
+	}
+}
+
+// Fuite de lien ou invités multiples : les invités ne remplissent jamais toute la file, l'hôte peut toujours ajouter.
+func TestQueueGuestCapPerSession(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	ca, csrfA, invA := joinAs(t, h, id1, "-p", "", "")
+	cb, csrfB, _ := joinAs(t, h, id1, "-p", "", "")
+	for i := range queueGuestMax - 1 {
+		if _, err := queueSt.Add(id1, "guest", invA, "g"); err != nil {
+			t.Fatalf("élément invité %d : %v", i+1, err)
+		}
+	}
+	if w := addAs(h, cb, csrfB, "30e", nil); w.Code != 200 {
+		t.Fatalf("30e : %d", w.Code)
+	}
+	for _, q := range []struct{ c, csrf string }{{ca, csrfA}, {cb, csrfB}} {
+		if w := addAs(h, q.c, q.csrf, "31e", nil); w.Code != 409 || !strings.Contains(w.Body.String(), L("srv.queue.pleine")) {
+			t.Fatalf("31e invité : %d %s", w.Code, w.Body)
+		}
+	}
+	w := gReq{method: "POST", path: "/queue-add", body: `{"id":"` + id1 + `","text":"hôte"}`, tokCookie: modeTok}.do(h)
+	if it := itemOf(t, w); it.Author != "host" {
+		t.Fatalf("hôte : %+v", it)
+	}
+}
+
+// Requête hôte relayée à un enfant : le proxy retire lui-même les en-têtes internes, sans compter sur la garde de la passerelle.
+func TestChildProxyStripsInviteHeaders(t *testing.T) {
+	var got http.Header
+	child := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { got = r.Header.Clone() }))
+	defer child.Close()
+	cu, _ := url.Parse(child.URL)
+	r := httptest.NewRequest("POST", "/queue-add", strings.NewReader(`{}`))
+	r.Header.Set(authorHeader, "guest")
+	r.Header.Set(inviteHeader, "0123456789abcdef")
+	childProxy(cu, "x").ServeHTTP(httptest.NewRecorder(), r)
+	if got == nil || len(got.Values(authorHeader)) != 0 || len(got.Values(inviteHeader)) != 0 {
+		t.Fatalf("vu par l'enfant : %v", got)
+	}
+}
+
+// Côté enfant (invité relayé par la passerelle) : même filtrage, la garde de l'enfant pose les mêmes en-têtes.
+func TestChildGuestSeesOnlyOwnQueue(t *testing.T) {
+	h := guestWeb(t, nil, "")
+	oc := childToken
+	t.Cleanup(func() { childToken = oc })
+	childToken = "ctok"
+	_, a, _ := shareSt.CreateInvite(id1, "-p", "", "Léa")
+	tok, b, _ := shareSt.CreateInvite(id1, "-p", "", "")
+	sec, _, _, _ := shareSt.Redeem(tok)
+	queueSt.Add(id1, "guest", a.ID, "de A")
+	queueSt.Add(id1, "guest", b.ID, "de B")
+	queueSt.Add(id1, "host", "", "de l'hôte")
+	seen := queueSeen(t, h, gReq{hdr: map[string]string{childHeader: "ctok", guestHeader: sec, shareHeader: hID1}})
+	for _, p := range []string{"/queue", "/session-live"} {
+		_, b := seen[p]["de B"]
+		_, a := seen[p]["de A"]
+		if got := seen[p]; len(got) != 2 || !b || a || p == "/queue" && got["de B"] != "Invité 2" {
+			t.Fatalf("%s enfant : %v", p, got)
 		}
 	}
 }

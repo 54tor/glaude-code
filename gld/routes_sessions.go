@@ -89,7 +89,9 @@ func routesSessions(mux *http.ServeMux) {
 	// Envoi d'un message à une session ouverte dans tmux (sendkeys.go) : lesquelles le permettent, puis l'envoi.
 	// État en direct d'une session (sessionlive.go) et informations du compte (account.go).
 	mux.HandleFunc("GET /session-live", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, sessionLive(r.URL.Query().Get("dir"), r.URL.Query().Get("id")))
+		st := sessionLive(r.URL.Query().Get("dir"), r.URL.Query().Get("id"))
+		st.Pending = visibleQueue(r, st.Pending)
+		writeJSON(w, 200, st)
 	})
 	mux.HandleFunc("GET /session-task-output", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()

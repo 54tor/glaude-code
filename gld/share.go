@@ -252,12 +252,16 @@ func (s *shareStore) edit(session, invite string, f func(*Invite)) error {
 	return nil
 }
 
-// Regen : nouveau jeton ; l'ancien lien et le cookie de cette invitation meurent, mode et nom restent.
+// Regen : nouveau jeton ; l'ancien lien et le cookie de cette invitation meurent, mode et nom restent. Un lien régénéré est
+// souvent un lien fuité : ses éléments encore en file partent avec lui (pas ceux en cours d'envoi).
 func (s *shareStore) Regen(session, invite string) (string, error) {
 	tok := newSecret()
 	err := s.edit(session, invite, func(in *Invite) { in.TokenHash, in.CookieHash = hashSecret(tok), "" })
 	if err != nil {
 		return "", err
+	}
+	if queueSt != nil {
+		queueSt.RemoveByGuest(session, invite, true)
 	}
 	return tok, nil
 }
