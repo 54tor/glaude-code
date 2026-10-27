@@ -16,7 +16,7 @@ Le mode de permissions est celui par défaut de Claude Code : rien n'est approuv
 
 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` est posée dans l'environnement du chef par le champ `tabSpec.Env`. Seul ce couple exact est admis (`applyTabEnv`, `term.go`), et `--args` ne peut jamais porter de variable (`matin.go`).
 
-Un lanceur avec tmux est requis (`tmuxLauncher`, `claude.go`) ; sans lui le lancement est refusé. Sont retenus, dans cet ordre : `terminator-tmux` (`terminator` et `tmux` dans le PATH) ; sinon, si `tmux` est dans le PATH, le premier disponible parmi `kitty` (`KITTY_LISTEN_ON` posée), `wezterm` (`WEZTERM_PANE` posée), `gnome-terminal`, `konsole`, `xfce4-terminal`, `tilix` (dans le PATH), lancé avec tmux. Sans bureau sous le compte cible (`tmuxDetached`), aucun n'est retenu. Windows est refusé.
+Un lanceur avec tmux est requis (`tmuxLauncher`, `claude.go`) ; sans lui le lancement est refusé. Sont retenus, dans cet ordre : `terminator-tmux` (`terminator` et `tmux` dans le PATH) ; sinon, si `tmux` est dans le PATH, le premier disponible parmi `kitty` (dans le PATH, `KITTY_LISTEN_ON` posée), `wezterm` (dans le PATH, `WEZTERM_PANE` posée), `gnome-terminal`, `konsole`, `xfce4-terminal`, `tilix` (dans le PATH), lancé avec tmux. Sans bureau sous le compte cible (`tmuxDetached`), aucun n'est retenu. Windows est refusé.
 
 Chaque fichier d'agent commence, après le front matter, par la ligne `<!-- gld:managed -->`. Un fichier de même nom sans ce marqueur n'est jamais écrasé : l'identifiant est listé dans `conflicts` et le lancement est refusé.
 
