@@ -623,3 +623,35 @@ func TestWatchDirRecreatedStillWatched(t *testing.T) {
 		}
 	}
 }
+
+func TestWatchDirRecreatedAsSymlinkNotWatched(t *testing.T) {
+	_, _, proj := web(t)
+	wsTest(t)
+	sub := filepath.Join(proj, "sub")
+	os.Mkdir(sub, 0o755)
+	var adds atomic.Int32
+	old := ideWatchAdd
+	ideWatchAdd = func(fw *fsnotify.Watcher, p string) error {
+		if p == sub {
+			adds.Add(1)
+		}
+		return fw.Add(p)
+	}
+	t.Cleanup(func() { ideWatchAdd = old })
+	ws, err := ideWS(proj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch, cancel := ws.Subscribe([]string{"", "sub"})
+	defer cancel()
+	before := adds.Load()
+	os.RemoveAll(sub)
+	time.Sleep(3 * ideDebounce)
+	os.Symlink(t.TempDir(), sub)
+	for e := next(t, ch); e.Path != "sub" || e.Type != "create"; e = next(t, ch) {
+	}
+	time.Sleep(2 * ideDebounce)
+	if adds.Load() != before {
+		t.Fatal("lien symbolique ajouté à la veille")
+	}
+}

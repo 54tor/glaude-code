@@ -256,6 +256,11 @@ func (w *ideWorkspace) watchLocked(rel string) bool {
 	if w.idxDirs[rel] || w.declared[rel] > 0 {
 		return true
 	}
+	return w.addWatchLocked(rel)
+}
+
+// addWatchLocked : Add sur un vrai dossier de l'espace (jamais un lien symbolique), sans regarder s'il est déjà surveillé.
+func (w *ideWorkspace) addWatchLocked(rel string) bool {
 	fi, err := ideLstat(w.root, rel)
 	if err != nil || !fi.IsDir() {
 		return false
@@ -464,7 +469,7 @@ func (w *ideWorkspace) flushLocked(evs []ideEvent) {
 	for _, e := range evs {
 		if e.Type == "create" && w.declared[e.Path] > 0 && w.watcher != nil {
 			// inotify a lâché le dossier quand il a été supprimé : sans nouvel Add, sa recréation (git checkout, rm puis mkdir) reste muette.
-			ideWatchAdd(w.watcher, filepath.Join(w.dir, filepath.FromSlash(e.Path)))
+			w.addWatchLocked(e.Path)
 		}
 		parent := path.Dir(e.Path)
 		for s := range w.subs {
