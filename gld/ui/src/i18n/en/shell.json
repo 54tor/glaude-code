@@ -172,6 +172,7 @@
       "newSession": "New session…",
       "project": "Project",
       "newProject": "New project…",
+      "closeOpen": "Close open sessions ({{n}})",
       "reassign": "Reassign the {{n}} sessions…",
       "removeLabel": "the {{n}} session(s) of {{project}}",
       "deleteAll": "Delete the {{n}} sessions",

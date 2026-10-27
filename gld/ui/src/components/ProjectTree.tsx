@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { setOpen, useOpen, useOpenState } from "@/hooks/useOpen"
-import { Check, ChevronRight, FolderInput, FolderMinus, Layers, MessageSquarePlus, Plus, Shredder, Star, Tag, TriangleAlert, RefreshCcwDot } from "lucide-react"
+import { Check, ChevronRight, FolderInput, FolderMinus, Layers, MessageSquarePlus, Plus, Power, Shredder, Star, Tag, TriangleAlert, RefreshCcwDot } from "lucide-react"
 import type { GitState, Group, Session, VGroup } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { CM, GroupItems } from "./SessionMenu"
@@ -17,6 +17,7 @@ export function ProjectItems({ g, ss = g.sessions, extra }: { g: Group; ss?: Ses
   const { t } = useTranslation()
   const a = useActions()
   const own = ss.map((s) => ({ dir: s.dir, id: s.id }))
+  const live = own.filter((o) => a.live.has(o.id)).map((o) => o.id)
   return (
     <ContextMenuContent className="w-64">
       {extra}
@@ -54,6 +55,11 @@ export function ProjectItems({ g, ss = g.sessions, extra }: { g: Group; ss?: Ses
           <ContextMenuItem onSelect={() => a.moveGroup(g, own)}>
             <FolderInput /> {t("shell.tree.reassign", { n: own.length })}
           </ContextMenuItem>
+          {live.length > 0 && (
+            <ContextMenuItem onSelect={() => a.stop(live)}>
+              <Power /> {t("shell.tree.closeOpen", { n: live.length })}
+            </ContextMenuItem>
+          )}
           <ContextMenuSeparator />
           <ContextMenuItem variant="destructive" onSelect={() => a.remove(own, t("shell.tree.removeLabel", { n: own.length, project: g.project }))}>
             <Shredder /> {t("shell.tree.deleteAll", { n: own.length })}
