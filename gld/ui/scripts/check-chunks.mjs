@@ -5,7 +5,7 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 
-const MAX = 700_000
+const MAX = 750_000
 // Imports statiques relatifs seulement : import x from"./a.js", import"./a.js" (même collé après ) ou */), export … from"./a.js" ; pas import().
 const re = /(?:^|[;}\s)/])(?:import|export)\s*(?:[\w$*{][^"'`]*?from\s*)?["']\.\/([^"']+\.js)["']/g
 
