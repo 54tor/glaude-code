@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -25,6 +26,20 @@ type loadEvent struct {
 }
 
 const loadedMax = 4 << 20 // au-delà, on ne garde que les derniers 2 Mo
+
+// loadedReadable : le chemin réel (liens suivis) d'un fichier chargé se lit seulement dans les .md de la config Claude
+// ou sous un dossier connu de gld. Un @import de CLAUDE.md vers ~/.ssh/… figure dans le journal du hook sans en devenir lisible.
+func loadedReadable(real string) bool {
+	if cfg, err := filepath.EvalSymlinks(cfgDir()); err == nil && pathUnder(real, cfg) {
+		return strings.EqualFold(filepath.Ext(real), ".md")
+	}
+	for d := filepath.Dir(real); d != filepath.Dir(d); d = filepath.Dir(d) {
+		if _, ok := ideKnownDir(d); ok {
+			return true
+		}
+	}
+	return false
+}
 
 func loadedFile() string { return filepath.Join(cfgDir(), "gld-web-loaded.jsonl") }
 

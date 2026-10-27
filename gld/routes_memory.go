@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -246,7 +247,8 @@ func routesMemory(mux *http.ServeMux) {
 		for _, e := range loadsOfSession(readLoaded(), id) {
 			known = known || e.File == file
 		}
-		if !known {
+		real, rerr := filepath.EvalSymlinks(file)
+		if !known || rerr != nil || !loadedReadable(real) {
 			writeJSON(w, 404, map[string]any{})
 			return
 		}
