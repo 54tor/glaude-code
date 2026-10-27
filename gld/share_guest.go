@@ -268,6 +268,11 @@ func guestGate(mux *http.ServeMux, next http.Handler) http.Handler {
 			return
 		}
 		hd := r.Header.Get(shareHeader)
+		// <img> ne peut pas porter d'en-tête : pour /conv-image seulement, la poignée peut venir de ?share= (l'en-tête l'emporte).
+		fromQuery := hd == "" && r.Method == http.MethodGet && pat == "GET /conv-image"
+		if fromQuery {
+			hd = r.URL.Query().Get("share")
+		}
 		if !validHandle(hd) {
 			if guestStatic(mux, r) {
 				mux.ServeHTTP(w, r)
@@ -282,6 +287,13 @@ func guestGate(mux *http.ServeMux, next http.Handler) http.Handler {
 			return
 		}
 		if home, sec, sh, ok := guestPre(hd, c.Value, true); ok {
+			if fromQuery { // la suite (garde de l'enfant comprise) voit la requête comme si l'en-tête avait été envoyé
+				r = r.Clone(r.Context())
+				q := r.URL.Query()
+				q.Del("share")
+				r.URL.RawQuery = q.Encode()
+				r.Header.Set(shareHeader, hd)
+			}
 			if home == "" {
 				cop.Handler(guestServe(mux, sh, sec, hd)).ServeHTTP(w, r)
 			} else {

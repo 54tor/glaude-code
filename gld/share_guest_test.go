@@ -874,3 +874,74 @@ func TestGuestLastSeenOnlyOnGuardedRequests(t *testing.T) {
 		t.Fatalf("LastSeen non mis à jour : %d", sh.LastSeen)
 	}
 }
+
+// <img> ne peut pas porter d'en-tête : /conv-image seul accepte la poignée en paramètre share (l'en-tête l'emporte).
+func TestGuestConvImageShareQuery(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	ca, csrfA := guestJoin(t, h, id1, "-p", "")
+	cb, _ := guestJoin(t, h, gOther, "-q", "")
+	hB := shareHandle(gOther)
+	put(t, filepath.Join(root, "-q", gOther+".jsonl"), `{"type":"user","cwd":"/q","timestamp":"2026-01-01T00:00:00Z","message":{"role":"user","content":[{"type":"text","text":"x"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"`+png1+`"}}]}}`+"\n", old)
+	jar := []*http.Cookie{{Name: gName, Value: ca}, {Name: guestCookieName(hB), Value: cb}}
+	img := func(share string, hdr map[string]string, jar []*http.Cookie) *httptest.ResponseRecorder {
+		return gReq{method: "GET", path: "/conv-image?id=" + id1 + "&dir=-p&o=0&k=1&share=" + share, jar: jar, hdr: hdr}.do(h)
+	}
+	if w := img(hB, nil, jar); w.Code != 200 || w.Header().Get("Content-Type") != "image/png" || w.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("image de B : %d %v", w.Code, w.Header())
+	}
+	// Partage A choisi : id/dir imposés à A, dont la ligne 0 n'est pas une image (404 invité, pas 401 hôte).
+	if w := img(hID1, nil, jar); w.Code != 404 || w.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("image de A : %d", w.Code)
+	}
+	if w := img(hB, map[string]string{shareHeader: hID1}, jar); w.Code != 404 {
+		t.Fatalf("l'en-tête doit l'emporter : %d", w.Code)
+	}
+	for _, s := range []string{strings.ToUpper(hB), hB + "0", "x", shareHandle("33333333-3333-3333-3333-333333333333")} {
+		if w := img(s, nil, jar); w.Code != 401 {
+			t.Fatalf("share %q : %d", s, w.Code)
+		}
+	}
+	if w := img(hB, nil, jar[:1]); w.Code != 401 {
+		t.Fatalf("sans cookie de B : %d", w.Code)
+	}
+	w := img(hB, nil, []*http.Cookie{{Name: guestCookieName(hB), Value: ca}})
+	if k := cookieOf(w, guestCookieName(hB)); w.Code != 401 || k == nil || k.MaxAge >= 0 {
+		t.Fatalf("secret de A sous B : %d %+v", w.Code, k)
+	}
+	// Aucune autre route ne lit share.
+	for _, p := range []string{"/conv?share=" + hID1, "/queue?share=" + hID1, "/guest-me?share=" + hID1} {
+		if w := (gReq{method: "GET", path: p, jar: jar}).do(h); w.Code != 401 {
+			t.Fatalf("%s : %d", p, w.Code)
+		}
+	}
+	if w := (gReq{method: "POST", path: "/queue-add?share=" + hID1, body: `{"text":"m"}`, jar: jar, csrf: csrfA}).do(h); w.Code == 200 || len(queueSt.List(id1)) != 0 {
+		t.Fatalf("POST avec share : %d", w.Code)
+	}
+}
+
+// Passerelle : la poignée en paramètre suit le même relais que l'en-tête ; l'enfant reçoit l'en-tête, jamais share.
+func TestGuestConvImageShareQueryRelayed(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	addHomes(t, "perso")
+	hm, _ := homeByName("perso")
+	cs, _ := openShares(hm.Dir)
+	tok, _ := cs.Create(id1, "-p", "")
+	sec, _, _ := cs.Redeem(tok)
+	var path, share, guest string
+	child := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path, share, guest = r.URL.RequestURI(), r.Header.Get(shareHeader), r.Header.Get(guestHeader)
+		w.Write([]byte("img"))
+	}))
+	defer child.Close()
+	cu, _ := url.Parse(child.URL)
+	oldStart := homeStart
+	t.Cleanup(func() { homeStart = oldStart; stopHomes() })
+	homeStart = func(h Home) (*homeProc, error) {
+		return &homeProc{dir: h.Dir, proxy: childProxy(cu, "x"), done: make(chan struct{})}, nil
+	}
+	jar := []*http.Cookie{{Name: gName, Value: "perso." + sec}}
+	w := gReq{method: "GET", path: "/conv-image?o=0&k=1&share=" + hID1, jar: jar}.do(h)
+	if w.Code != 200 || w.Body.String() != "img" || share != hID1 || guest != sec || strings.Contains(path, "share=") || !strings.HasPrefix(path, "/conv-image?") {
+		t.Fatalf("relais : %d %q %q %q", w.Code, path, share, guest)
+	}
+}
