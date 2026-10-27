@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
+import { sameLabel } from "./editorBits"
 import {
   teamsCompose,
   type Catalog,
@@ -125,13 +126,17 @@ export function TeamPicker({
             <li>
               <b>{compo.lead.Name}</b>{" "}
               <span className="text-muted-foreground">
-                · {t("teams.lead")} · {compo.lead.Role}
+                · {t("teams.lead")}
+                {!sameLabel(compo.lead.Name, compo.lead.Role) &&
+                  ` · ${compo.lead.Role}`}
               </span>
             </li>
             {compo.mates.map((a) => (
               <li key={a.ID}>
                 <b>{a.Name}</b>{" "}
-                <span className="text-muted-foreground">· {a.Role}</span>
+                {!sameLabel(a.Name, a.Role) && (
+                  <span className="text-muted-foreground">· {a.Role}</span>
+                )}
               </li>
             ))}
           </ul>

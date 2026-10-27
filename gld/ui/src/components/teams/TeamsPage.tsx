@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button"
 import { AgentEditor } from "./AgentEditor"
 import { TeamEditor } from "./TeamEditor"
 import { TeamPicker } from "./TeamPicker"
+import { sameLabel } from "./editorBits"
 
 export function TeamsPage({ home }: { home: string }) {
   const { t } = useTranslation()
@@ -90,7 +91,7 @@ export function TeamsPage({ home }: { home: string }) {
                 <li key={ag.ID} className="flex items-center gap-2 px-3 py-2">
                   <span className="font-medium">{ag.Name}</span>
                   <span className="text-muted-foreground">
-                    {ag.Role} ·{" "}
+                    {!sameLabel(ag.Name, ag.Role) && `${ag.Role} · `}
                     {ag.Access === "lead"
                       ? t("teams.lead")
                       : t(

@@ -75,6 +75,15 @@ describe("TeamPicker", () => {
     expect(screen.getAllByText("Testeur", { selector: "b" })).toHaveLength(1)
     expect(screen.getAllByText("Chef de projet", { selector: "b" })).toHaveLength(1)
   })
+  it("masque la description qui répète le libellé, garde les autres", async () => {
+    mockCompose()
+    setup()
+    await click(screen.getByRole("checkbox", { name: /Fonctionnalité/ }))
+    await screen.findByText("Développement backend", { selector: "b" })
+    expect(screen.queryByText("· testeur")).toBeNull()
+    expect(screen.queryByText(/chef de projet/)).toBeNull()
+    expect(screen.getByText("· backend")).toBeTruthy()
+  })
   it("tooMany avertit sans bloquer Lancer", async () => {
     mockCompose(true)
     setup()

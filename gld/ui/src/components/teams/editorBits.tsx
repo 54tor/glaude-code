@@ -9,6 +9,9 @@ import {
 import { Button } from "@/components/ui/button"
 import { useTranslation } from "react-i18next"
 
+export const sameLabel = (a: string, b: string) =>
+  a.trim().toLowerCase() === b.trim().toLowerCase()
+
 export const bytes = (s: string) => new TextEncoder().encode(s).length
 
 export const fieldCls =
