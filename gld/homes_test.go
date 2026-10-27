@@ -243,10 +243,15 @@ func TestEnvironNoAuth(t *testing.T) {
 	t.Setenv("GLD_AUTH_KEY", "secret")
 	t.Setenv("GLD_AUTH_DIR", "/x")
 	for _, env := range [][]string{environNoAuth(), childEnv()} {
+		dir := false
 		for _, e := range env {
-			if strings.HasPrefix(e, "GLD_AUTH_") {
-				t.Errorf("variable d'authentification transmise : %.12s", e)
+			if strings.HasPrefix(e, "GLD_AUTH_KEY=") {
+				t.Error("clé maître transmise")
 			}
+			dir = dir || e == "GLD_AUTH_DIR=/x"
+		}
+		if !dir {
+			t.Error("GLD_AUTH_DIR perdu : le garde Bash en a besoin")
 		}
 	}
 }

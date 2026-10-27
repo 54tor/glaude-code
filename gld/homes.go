@@ -296,12 +296,13 @@ func startHomeProc(h Home) (*homeProc, error) {
 	return nil, terr("srv.homes.leProcessusEnfantNe")
 }
 
-// environNoAuth : l'environnement du processus sans GLD_AUTH_* (clé maître de la base d'authentification) :
+// environNoAuth : l'environnement du processus sans GLD_AUTH_KEY (clé maître de la base d'authentification) :
 // ni claude, ni le terminal web, ni un home enfant n'en héritent (un `env` exécuté par Claude finirait dans un transcript).
+// GLD_AUTH_DIR reste : ce n'est pas un secret, et le garde Bash s'en sert pour protéger le dossier.
 func environNoAuth() []string {
 	var out []string
 	for _, e := range os.Environ() {
-		if !strings.HasPrefix(e, "GLD_AUTH_") {
+		if !strings.HasPrefix(e, "GLD_AUTH_KEY=") {
 			out = append(out, e)
 		}
 	}
