@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
-import { AlarmClock, ChevronRight, FolderPlus, Repeat, FolderOpen, Star, Brain, SlidersHorizontal, Zap, Flame, Microwave, Snowflake, History, Clock, FileText, Inbox, Info, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
+import { AlarmClock, ChevronRight, FolderPlus, Repeat, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Zap, Flame, Microwave, Snowflake, History, Clock, FileText, Inbox, Info, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
 import { size, tilde } from "@/lib/format"
 import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
@@ -264,6 +264,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           <NavItem icon={Inbox} label={t("shell.app.title.all")} n={p.counts.all} active={r.kind === "all"} {...link({ kind: "all" })} />
           <NavItem icon={History} label={t("shell.app.title.tabs")} active={r.kind === "tabs"} {...link({ kind: "tabs" })} />
           <NavItem icon={Zap} label={t("shell.app.title.skills")} active={r.kind === "skills"} {...link({ kind: "skills", key: "" })} />
+          <NavItem icon={Puzzle} label={t("shell.app.title.extensions")} active={r.kind === "extensions"} {...link({ kind: "extensions" })} />
           <NavItem icon={SlidersHorizontal} label={t("shell.app.title.config")} active={r.kind === "config"} {...link({ kind: "config", tab: "" })} />
           <NavItem icon={Brain} label={t("shell.app.title.memory")} active={r.kind === "memory"} {...link({ kind: "memory", key: "" })} />
           {p.snippets !== null && (

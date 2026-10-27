@@ -38,6 +38,7 @@ import { boot, useAuth } from "@/lib/auth"
 // Les grandes vues se chargent à la demande : le premier chargement ne porte que la liste des sessions.
 const Conversation = lazy(() => import("@/components/Conversation").then((m) => ({ default: m.Conversation })))
 const Snippets = retryLazy(() => import("@/components/Snippets").then((m) => ({ default: m.Snippets })))
+const Extensions = retryLazy(() => import("@/components/Extensions").then((m) => ({ default: m.Extensions })))
 const Config = retryLazy(() => import("@/components/Config").then((m) => ({ default: m.Config })))
 const Skills = retryLazy(() => import("@/components/Skills").then((m) => ({ default: m.Skills })))
 const Memory = retryLazy(() => import("@/components/Memory").then((m) => ({ default: m.Memory })))
@@ -291,6 +292,7 @@ function Shell() {
     snippets: t("shell.app.title.snippets"),
     memory: t("shell.app.title.memory"),
     config: t("shell.app.title.config"),
+    extensions: t("shell.app.title.extensions"),
     skills: t("shell.app.title.skills"),
     tabs: t("shell.app.title.tabs"),
     workspace: t("ide.title"),
@@ -310,6 +312,8 @@ function Shell() {
           })
         : route.kind === "skills"
           ? t("shell.app.sub.skills")
+          : route.kind === "extensions"
+          ? t("shell.app.sub.extensions")
           : route.kind === "config"
           ? t("shell.app.sub.config")
           : route.kind === "snippets"
@@ -392,6 +396,8 @@ function Shell() {
             <Skills sel={route.key} home={home} q={qt} onPick={(key) => go({ kind: "skills", key })} onAsk={setAsk} />
           ) : route.kind === "projectConfig" ? (
             <Config key={route.dir} dir={route.dir} home={home} tab="" onTab={() => go({ kind: "config", tab: "permissions" })} ui={{ args, setArgs, choice, setChoice, font, setFont, fontSize, setFontSize }} />
+          ) : route.kind === "extensions" ? (
+            <Extensions home={home} />
           ) : route.kind === "config" ? (
             <Config home={home} tab={route.tab} onTab={(tab) => go({ kind: "config", tab })} ui={{ args, setArgs, choice, setChoice, font, setFont, fontSize, setFontSize }} />
           ) : route.kind === "memory" ? (
