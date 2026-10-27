@@ -102,6 +102,11 @@ var routeRights = map[string]Right{
 	"GET /ls": RightExec, "POST /dirs": RightExec, "POST /image-upload": RightExec,
 	// Agissent sur les sessions : fermeture, suppression de transcriptions, tours de modèle.
 	"POST /rm": RightExec, "POST /rename": RightExec, "POST /reassign": RightExec, "POST /keepwarm": RightExec,
+	"GET /teams-catalog": RightSessionsRead, "POST /teams-compose": RightSessionsRead, "GET /teams": RightSessionsRead,
+	"GET /team": RightSessionsRead, "GET /team-screen": RightSessionsRead,
+	"POST /teams-launch": RightExec, "POST /team-send": RightExec, "POST /team-key": RightExec, "POST /team-close": RightExec,
+	"POST /teams-agent-save": RightConfigWrite, "POST /teams-agent-rm": RightConfigWrite,
+	"POST /teams-team-save": RightConfigWrite, "POST /teams-team-rm": RightConfigWrite,
 	"POST /session-trash-add": RightExec, "POST /session-trash-restore": RightExec, "POST /session-trash-purge": RightExec,
 }
 
@@ -110,7 +115,7 @@ var passiveRoutes = map[string]bool{
 	"GET /api": true, "GET /sessions-stamp": true, "GET /session-live": true, "GET /session-state": true,
 	"GET /session-screen": true, "GET /conv": true, "GET /snippet-list": true, "GET /memory-list": true,
 	"GET /memory-health": true, "GET /memory-loaded": true, "GET /trash": true, "GET /keepwarm": true,
-	"GET /git-status": true, "GET /account": true, "GET /trust-pending": true, "GET /cleanup-warning": true,
+	"GET /git-status": true, "GET /team": true, "GET /teams": true, "GET /account": true, "GET /trust-pending": true, "GET /cleanup-warning": true,
 }
 
 // tokenPrincipal : principal d'une requête Bearer ; nil tant que les jetons ne sont pas branchés.
