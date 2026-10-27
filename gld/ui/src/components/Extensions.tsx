@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Link } from "wouter"
-import { Loader2, Plug } from "lucide-react"
+import { ChevronRight, Loader2, Plug } from "lucide-react"
 import { api, type CfgOverview, type McpServer, type PluginInst, type Skill } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { href } from "@/lib/route"
@@ -102,6 +102,29 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
     for (const k of order) if (mcpOff(files[k] as string, name)) await edit(files[k] as string, "remove", ["disabledMcpjsonServers"], name)
   }
   const row = "flex items-start gap-3 py-2"
+  const short = (v?: string) => (v && /^[0-9a-f]{12}/.test(v) ? v.slice(0, 7) : v) // empreinte git : 7 caractères suffisent
+  const ctx = (s: Skill[]) => s.filter((x) => !x.manual).reduce((n, x) => n + x.chars, 0)
+  const ownSkills = skillsHere.filter((s) => !s.plugin)
+  const byPlugin = Object.entries(skillsHere.reduce<Record<string, Skill[]>>((m, s) => (s.plugin && (m[s.plugin] ??= []).push(s), m), {})).sort(([a], [b]) => a.localeCompare(b))
+  const skillRow = (s: Skill) => {
+    const k = src((f) => skillMode(f, s.name))
+    const off = skillEff(s.name) === "off"
+    return (
+      <li key={s.key} className={row}>
+        {!s.plugin && <Switch checked={!off} aria-label={t("extensions.toggleOne", { id: s.name })} onCheckedChange={(c) => setSkill(s.name, c)} className="mt-0.5" />}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline gap-x-2">
+            <button type="button" onClick={() => openSkill(s.key)} className="font-medium break-all hover:underline">{s.name}</button>
+            {!s.plugin && <span className="text-xs text-muted-foreground">{s.scope === "project" ? t("extensions.fromProject") : t("extensions.fromUser")}</span>}
+            {(s.manual || s.hidden) && <span className="text-xs text-warning">{s.manual ? t("extensions.manual") : t("extensions.hidden")}</span>}
+            {!s.plugin && (dir || off) && <span className="text-xs text-muted-foreground">{why(k)}</span>}
+            <span className="ml-auto text-xs whitespace-nowrap text-muted-foreground tabular-nums">{t("extensions.tokens", { n: s.descTokens })}</span>
+          </div>
+          <div className="line-clamp-1 text-xs text-muted-foreground" title={s.description}>{s.description}</div>
+        </div>
+      </li>
+    )
+  }
   const sect = "text-md font-semibold border-b pb-2 mb-3 flex items-center gap-2"
 
   return (
@@ -140,17 +163,22 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
           </h3>
           <p className="mb-1 text-xs text-muted-foreground">{t("extensions.pluginsHelp")}</p>
           {err && <p className="mb-2 text-xs text-warning">{t("extensions.loadError", { err })}</p>}
-          <ul className="divide-y">
+          <ul className="grid gap-x-8 md:grid-cols-2">
             {ids.map((id) => {
               const k = src((f) => doc[f]?.[id])
+              const [name, market] = id.split("@")
+              const missing = !ov.plugins.find((p) => p.id === id)?.installed && !version(id)
               return (
-                <li key={id} className={row}>
+                <li key={id} className={row + " border-b"}>
                   <Switch checked={eff(id) === true} aria-label={t("extensions.toggleOne", { id })} onCheckedChange={(c) => setPlugin(id, c)} className="mt-0.5" />
                   <div className="min-w-0 flex-1">
-                    <div className="break-all">{id} {version(id) && <span className="text-xs text-muted-foreground">{version(id)}</span>}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {eff(id) === true ? t("extensions.on") : t("extensions.off")} · {why(k)}
-                      {!ov.plugins.find((p) => p.id === id)?.installed && !version(id) && <span className="ml-2 text-warning">{t("extensions.notInstalled")}</span>}
+                    <div className="flex items-baseline gap-2">
+                      <span className={"truncate font-medium" + (eff(id) === true ? "" : " text-muted-foreground")} title={id}>{name}</span>
+                      {version(id) && <span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums" title={version(id)}>{short(version(id))}</span>}
+                    </div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {market && "@" + market}{dir && ` · ${why(k)}`}
+                      {missing && <span className="ml-2 text-warning">{t("extensions.notInstalled")}</span>}
                     </div>
                   </div>
                 </li>
@@ -168,28 +196,19 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
             <button type="button" onClick={() => openSkill("")} className="ml-auto text-xs font-normal text-muted-foreground underline">{t("extensions.editor")}</button>
           </h3>
           <p className="mb-1 text-xs text-muted-foreground">{t("extensions.skillsHelp")}</p>
-          <ul className="divide-y">
-            {skillsHere.map((s) => {
-              const k = src((f) => skillMode(f, s.name))
-              const off = skillEff(s.name) === "off"
-              return (
-                <li key={s.key} className={row}>
-                  {s.plugin ? <span className="mt-0.5 w-9 shrink-0 text-center text-muted-foreground" title={t("extensions.pluginManaged")}>·</span> : <Switch checked={!off} aria-label={t("extensions.toggleOne", { id: s.name })} onCheckedChange={(c) => setSkill(s.name, c)} className="mt-0.5" />}
-                  <div className="min-w-0 flex-1">
-                    <div>
-                      <button type="button" onClick={() => openSkill(s.key)} className="break-all hover:underline">{s.name}</button>{" "}
-                      <span className="text-xs text-muted-foreground">{s.plugin ? t("extensions.fromPlugin", { name: s.plugin }) : s.scope === "project" ? t("extensions.fromProject") : t("extensions.fromUser")}</span>
-                      {(s.manual || s.hidden) && <span className="ml-2 text-xs text-warning">{s.manual ? t("extensions.manual") : t("extensions.hidden")}</span>}
-                    </div>
-                    <div className="line-clamp-2 text-xs text-muted-foreground">{s.description}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {off ? t("extensions.off") : t("extensions.on")}{!s.plugin && ` · ${why(k)}`} · {t("extensions.tokens", { n: s.descTokens })}
-                    </div>
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
+          <ul className="divide-y">{ownSkills.map(skillRow)}</ul>
+          <div className="mt-3 space-y-2">
+            {byPlugin.map(([p, list]) => (
+              <details key={p} className="group rounded-md border">
+                <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm [&::-webkit-details-marker]:hidden">
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
+                  <span className="truncate font-medium">{p.split("@")[0]}</span>
+                  <span className="ml-auto text-xs whitespace-nowrap text-muted-foreground">{t("extensions.skillsTotal", { count: list.length, chars: ctx(list) })}</span>
+                </summary>
+                <ul className="divide-y border-t px-3">{list.map(skillRow)}</ul>
+              </details>
+            ))}
+          </div>
           {!skillsHere.length && <p className="py-3 text-sm text-muted-foreground">{t("extensions.noSkills")}</p>}
         </section>
 
