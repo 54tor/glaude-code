@@ -435,12 +435,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
           </div>
         )}
         {session && <LiveStats live={live} s={session} project={row?.g.project ?? session.cwd} detail={detail} shown={statsOpen} onShown={setStatsOpen} />}
-        {inTerm && (
-          <Suspense fallback={null}>
-            <FullTerminal key={id} id={id} />
-          </Suspense>
-        )}
-        <div className={inTerm ? "hidden" : "relative flex min-h-0 flex-1 flex-col"}>
+        <div className="relative flex min-h-0 flex-1 flex-col">
           {fromTop && (
             <Button size="sm" variant="secondary" className="absolute top-3 right-4 z-10 rounded-full shadow-md" onClick={toTop} aria-label={t("conversation.view.toTop")}>
               <ArrowUpToLine /> {t("conversation.view.toTop")}
@@ -491,6 +486,13 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
           </Button>
         )}
         </div>
+        {inTerm && (
+          <div className="flex h-1/2 min-h-48 shrink-0 flex-col border-t">
+            <Suspense fallback={null}>
+              <FullTerminal key={id} id={id} />
+            </Suspense>
+          </div>
+        )}
         {session && !inTerm && (
           <Composer
             dir={dir}
