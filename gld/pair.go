@@ -146,7 +146,7 @@ func loadDevices() ([]device, error) {
 	if err != nil {
 		return nil, err
 	}
-	b, err := os.ReadFile(p)
+	b, err := readTrusted(p)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
