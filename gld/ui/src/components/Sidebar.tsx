@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useKeepWarm } from "@/hooks/useKeepWarm"
 import { CreditsButton } from "./Credits"
 import { PairButton } from "./PairDevice"
+import { InvitesButton } from "./InvitesButton"
 import { HomeSwitcher } from "./HomeSwitcher"
 import { DropZone } from "./DropZone"
 import { ProjectList } from "./ProjectList"
@@ -285,6 +286,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             <p className="text-xs text-muted-foreground tabular-nums">{p.loading ? t("common.loading") : t("shell.count.sessions", { count: p.total })}</p>
           </div>
           <div className="ml-auto flex items-center gap-0.5">
+            <InvitesButton />
             <PairButton />
             <CreditsButton />
             <HomeSwitcher />
