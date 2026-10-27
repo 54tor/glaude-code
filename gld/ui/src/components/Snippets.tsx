@@ -133,13 +133,14 @@ export function Snippets({
       run: async (name) => {
         const head = /^(u\/|p\/[^/]+\/)/.exec(sel)?.[0] ?? ""
         const to = head + (name.endsWith(".md") ? name : name + ".md")
-        if (to === sel) return
+        if (to === sel) return true
         const r = await api.post("/snippet-rename", { from: sel, to })
         reportResult(r)
         if (r.ok) {
           onPick(to)
           onChanged()
         }
+        return !!r.ok
       },
     })
   const remove = () =>
