@@ -3,7 +3,9 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestListPlugins(t *testing.T) {
@@ -76,5 +78,33 @@ func TestProjectTrustedHomeSecondaire(t *testing.T) {
 		if s.Name == "autre" {
 			t.Fatal("serveur MCP d'un autre compte")
 		}
+	}
+}
+
+// Un dossier dont `claude mcp list` traîne ne fait plus attendre les autres ; un échec est gardé comme un succès.
+func TestMcpParDossier(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bin := filepath.Join(home, ".local", "bin")
+	os.MkdirAll(bin, 0o755)
+	count := filepath.Join(home, "appels")
+	os.WriteFile(filepath.Join(bin, "claude"), []byte("#!/bin/sh\necho x >> "+count+"\ncase \"$PWD\" in *lent) sleep 2;; *echec) exit 1;; esac\necho 'srv: cmd - ✓ Connected'\n"), 0o755)
+	lent, vite, echec := filepath.Join(home, "lent"), filepath.Join(home, "vite"), filepath.Join(home, "echec")
+	for _, d := range []string{lent, vite, echec} {
+		os.Mkdir(d, 0o755)
+	}
+	done := make(chan struct{})
+	go func() { projectMcpStates(lent); close(done) }()
+	defer func() { <-done }() // le dossier temporaire ne disparaît pas sous le faux claude encore lancé
+	time.Sleep(200 * time.Millisecond)
+	start := time.Now()
+	if out, err := projectMcpStates(vite); err != nil || len(out) != 1 || time.Since(start) > time.Second {
+		t.Fatalf("dossier rapide : %v %v en %v", out, err, time.Since(start))
+	}
+	projectMcpStates(echec)
+	projectMcpStates(echec)
+	b, _ := os.ReadFile(count)
+	if n := strings.Count(string(b), "x"); n != 3 {
+		t.Fatalf("%d lancements de claude, attendu 3 (lent, vite, echec une seule fois)", n)
 	}
 }

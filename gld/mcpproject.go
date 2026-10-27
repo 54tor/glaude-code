@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 type McpState struct {
@@ -17,24 +19,42 @@ type McpState struct {
 	OK     bool   `json:"ok"`
 }
 
-var mcpCache = struct {
-	sync.Mutex
-	m map[string]struct {
-		at  time.Time
-		out []McpState
-	}
-}{m: map[string]struct {
+type mcpEntry struct {
 	at  time.Time
 	out []McpState
-}{}}
+	err error
+}
 
-// projectMcpStates : `claude mcp list` lancé dans le dossier du projet (serveurs du projet et personnels), gardé une minute par dossier.
+var (
+	mcpCache = struct {
+		sync.Mutex
+		m map[string]mcpEntry
+	}{m: map[string]mcpEntry{}}
+	mcpFlight singleflight.Group // un seul `claude mcp list` par dossier à la fois, sans faire attendre les autres dossiers
+)
+
+// projectMcpStates : `claude mcp list` lancé dans le dossier du projet (serveurs du projet et personnels), gardé une minute par
+// dossier, échec compris : chaque appel démarre les serveurs MCP du projet.
 var projectMcpStates = func(cwd string) ([]McpState, error) {
 	mcpCache.Lock()
-	defer mcpCache.Unlock()
-	if c, ok := mcpCache.m[cwd]; ok && time.Since(c.at) < time.Minute {
-		return c.out, nil
+	c, ok := mcpCache.m[cwd]
+	mcpCache.Unlock()
+	if ok && time.Since(c.at) < time.Minute {
+		return c.out, c.err
 	}
+	v, _, _ := mcpFlight.Do(cwd, func() (any, error) {
+		out, err := mcpList(cwd)
+		e := mcpEntry{time.Now(), out, err}
+		mcpCache.Lock()
+		mcpCache.m[cwd] = e
+		mcpCache.Unlock()
+		return e, nil
+	})
+	e := v.(mcpEntry)
+	return e.out, e.err
+}
+
+func mcpList(cwd string) ([]McpState, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	cmd := withPath(exec.CommandContext(ctx, "claude", "mcp", "list"))
@@ -50,10 +70,6 @@ var projectMcpStates = func(cwd string) ([]McpState, error) {
 			out = append(out, McpState{m[1], st, strings.Contains(st, "Connected")})
 		}
 	}
-	mcpCache.m[cwd] = struct {
-		at  time.Time
-		out []McpState
-	}{time.Now(), out}
 	return out, nil
 }
 
