@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -342,9 +343,10 @@ func mcpFrom(servers any, scope, project string) []McpServer {
 		m.Type, _ = s.m["type"].(string)
 		m.Command, _ = s.m["command"].(string)
 		if args := strList(s.m["args"]); len(args) > 0 {
-			m.Command = strings.TrimSpace(m.Command + " " + cut(strings.Join(args, " "), 80))
+			m.Command = strings.TrimSpace(m.Command + " " + cut(mcpMaskArgs(args), 80))
 		}
 		m.URL, _ = s.m["url"].(string)
+		m.URL = mcpMaskURL(m.URL)
 		if m.Type == "" {
 			if m.URL != "" {
 				m.Type = "http"
@@ -432,4 +434,38 @@ func expandDir(dir, fileID string) string {
 		}
 	}
 	return ""
+}
+
+// mcpMaskURL : identifiants et paramètres d'adresse masqués (un jeton passe souvent en ?key=…).
+func mcpMaskURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return raw
+	}
+	u.User = nil
+	if u.RawQuery != "" {
+		u.RawQuery = "…"
+	}
+	return u.String()
+}
+
+// mcpMaskArgs : la valeur qui suit un drapeau de type clé ou jeton, ou qui le suit après « = », est remplacée.
+func mcpMaskArgs(args []string) string {
+	out := make([]string, len(args))
+	hide := false
+	for i, a := range args {
+		switch {
+		case hide:
+			out[i], hide = "…", false
+		case strings.HasPrefix(a, "-") && secretKey.MatchString(a):
+			if k, _, ok := strings.Cut(a, "="); ok {
+				out[i] = k + "=…"
+			} else {
+				out[i], hide = a, true
+			}
+		default:
+			out[i] = a
+		}
+	}
+	return strings.Join(out, " ")
 }

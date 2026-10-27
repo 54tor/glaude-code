@@ -13,6 +13,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Sécurité : `POST /memory-merge` avec `launch` exige `exec` en plus de `mem_write` ; `POST /vgroups` exige `exec` pour ajouter un dossier enregistré (racines de l'IDE).
 - Sécurité : `GLD_AUTH_KEY` n'est plus transmise aux sessions claude, au terminal web ni aux homes enfants ; le garde Bash refuse toute commande citant `GLD_AUTH_*`.
 - Sécurité : écrire dans `.claude/`, `.git/`, `.mcp.json`, `.gitattributes` ou `.gitmodules` depuis l'IDE (`fs-save`, `fs-new`, `fs-rename`) exige `config_write` en plus de `fs_write` ; `GET /session-loaded-file` ne lit que les `.md` de la config Claude ou les fichiers d'un dossier connu.
+- Sécurité : la liste des serveurs MCP masque les paramètres d'adresse et les valeurs des drapeaux de type clé ou jeton ; `POST /pair-code` émet au plus 5 codes en attente par session (200 au total).
 - Sécurité : un jeton opérateur faux (cookie, Bearer, `?token=`) compte dans les essais par adresse, comme le formulaire.
 
 ## [0.4.7] - 2026-10-26

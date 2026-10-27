@@ -48,14 +48,27 @@ var (
 	pairCodes = map[string]pairCode{}
 )
 
+// Codes en attente : au plus pairMaxPerSession par session émettrice et pairMaxTotal au total (deux minutes de vie).
+const (
+	pairMaxPerSession = 5
+	pairMaxTotal      = 200
+)
+
+// newPairCode : "" quand le plafond est atteint.
 func newPairCode(uid int64, sid string) string {
 	now := authNow()
 	pairMu.Lock()
 	defer pairMu.Unlock()
+	mine := 0
 	for k, v := range pairCodes {
 		if now.After(v.exp) {
 			delete(pairCodes, k)
+		} else if v.uid == uid && v.sid == sid {
+			mine++
 		}
+	}
+	if mine >= pairMaxPerSession || len(pairCodes) >= pairMaxTotal {
+		return ""
 	}
 	for {
 		n, _ := rand.Int(rand.Reader, mbig.NewInt(1e8))
@@ -345,6 +358,11 @@ func routesPair(mux *http.ServeMux) {
 			uid, sid = g.p.User.ID, g.p.SessionID
 		}
 		c := newPairCode(uid, sid)
+		if c == "" {
+			w.Header().Set("Retry-After", "60")
+			writeJSON(w, 429, map[string]any{"ok": false, "out": L("srv.token.tooMany")})
+			return
+		}
 		writeJSON(w, 200, map[string]any{"ok": true, "code": c, "url": publicBase(r) + "/pair?c=" + c, "ttl": int(pairTTL / time.Second)})
 	})
 	// Mode comptes, ou sans jeton ; en mode jeton, withToken répond avant.

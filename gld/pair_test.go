@@ -306,3 +306,21 @@ func TestPairTyped(t *testing.T) {
 		t.Fatalf("après %d essais : %d", tokenMaxTries, w.Code)
 	}
 }
+
+func TestPairCodeCap(t *testing.T) {
+	pairMu.Lock()
+	pairCodes = map[string]pairCode{}
+	pairMu.Unlock()
+	t.Cleanup(func() { pairMu.Lock(); pairCodes = map[string]pairCode{}; pairMu.Unlock() })
+	for i := 0; i < pairMaxPerSession; i++ {
+		if newPairCode(1, "s") == "" {
+			t.Fatalf("code %d refusé", i)
+		}
+	}
+	if newPairCode(1, "s") != "" {
+		t.Error("plafond par session dépassé")
+	}
+	if newPairCode(1, "autre") == "" {
+		t.Error("une autre session doit pouvoir émettre")
+	}
+}
