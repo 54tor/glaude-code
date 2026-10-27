@@ -16,7 +16,7 @@ Le mode de permissions est celui par défaut de Claude Code : rien n'est approuv
 
 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` est posée dans l'environnement du chef par le champ `tabSpec.Env`. Seul ce couple exact est admis (`applyTabEnv`, `term.go`), et `--args` ne peut jamais porter de variable (`matin.go`).
 
-Un lanceur avec tmux est requis (`terminator-tmux`, ou tmux seul avec un émulateur pris en charge) ; sans lui le lancement est refusé. Windows est refusé.
+Un lanceur avec tmux est requis (`tmuxLauncher`, `claude.go`) ; sans lui le lancement est refusé. Sont retenus, dans cet ordre : `terminator-tmux` (`terminator` et `tmux` dans le PATH) ; sinon, si `tmux` est dans le PATH, le premier disponible parmi `kitty` (`KITTY_LISTEN_ON` posée), `wezterm` (`WEZTERM_PANE` posée), `gnome-terminal`, `konsole`, `xfce4-terminal`, `tilix` (dans le PATH), lancé avec tmux. Sans bureau sous le compte cible (`tmuxDetached`), aucun n'est retenu. Windows est refusé.
 
 Chaque fichier d'agent commence, après le front matter, par la ligne `<!-- gld:managed -->`. Un fichier de même nom sans ce marqueur n'est jamais écrasé : l'identifiant est listé dans `conflicts` et le lancement est refusé.
 
@@ -37,7 +37,7 @@ Table : `gld/auth_acl.go`.
 `POST /team-send` envoie un message direct au chef (par défaut) ou à un coéquipier. Il apparaît pour tous, avec son auteur humain.
 
 - Envoyé tout de suite seulement si la cible est inactive et qu'aucun dialogue n'est en attente dans son pane (l'écran est recontrôlé sous verrou juste avant le collage). Sinon le message est mis en file : 20 au plus par équipe, l'ordre d'envoi par cible est conservé.
-- Les demandes de permission d'un coéquipier s'affichent dans le pane du chef (titre `· from the <nom> agent`). `POST /team-key` y répond par une touche autorisée. Le client renvoie le texte affiché (`expect`) ; le serveur le compare à l'écran courant. Touche refusée s'il n'y a aucun dialogue en attente, ou si le dialogue a changé depuis.
+- Les demandes de permission d'un coéquipier s'affichent dans le pane du chef (titre `· from the <nom> agent`). `POST /team-key` y répond par une touche autorisée. Le serveur exige toujours un dialogue en attente dans le pane (`screenAsks`) : sans lui la touche est refusée. Le texte affiché (`expect`) n'est comparé à l'écran courant que si le client l'envoie non vide ; en cas de différence la touche est refusée. L'interface fournie envoie toujours `expect` (`teamKey(name, lead, k, view.Permission)`, `ui/src/components/teams/TeamRun.tsx`) et n'envoie rien quand aucune demande n'est affichée. Un client de l'API qui omet `expect` n'a pas la garde de texte.
 
 Auteur d'un message : le nom du principal authentifié (`token` pour un jeton, `local` sans garde), jamais lu dans le corps. Sur un home enfant, la passerelle pose l'en-tête `X-Gld-User` après avoir effacé celui du client. Un enfant ne le croit qu'avec son jeton d'enfant valide (`teamAuthor`, `routes_teams.go` ; pose dans `homes.go`).
 
@@ -83,4 +83,6 @@ La file de messages et le log des boîtes sont en mémoire : perdus au redémarr
 
 - [ ] Claude Code accepte `--teammate-mode=tmux` sous la forme avec `=` (le spike a utilisé la forme à espace, que `--args` refuse).
 - [ ] Les panes des coéquipiers héritent de la variable d'activation quand elle n'est posée que dans le processus du chef.
+- [ ] Le titre de permission `<Outil> · from the <nom> agent` n'est connu que par le spike.
+- [ ] `GET /teams` masque bien les équipes périmées : jamais vu dans un lancement réel.
 - [ ] Lancement complet de l'équipe `feature` sur un dépôt jetable : un onglet tmux s'ouvre, le chef crée les coéquipiers, leurs panes apparaissent, `~/.claude/teams/session-<8hex>` existe.
