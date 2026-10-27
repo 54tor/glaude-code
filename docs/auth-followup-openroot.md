@@ -25,7 +25,17 @@ Opérations dangereuses :
 
 Relevée par `grep` des appels `os.*` et `filepath.WalkDir` dans les fichiers non-test, hors `auth_*`, `runas_*`, `owner_*`, `i18n*`, `listen.go`, `notify.go`, au commit `cf8136a`. Les numéros de ligne dérivent avec le code : relancez le relevé avant de travailler, et vérifiez chaque site (le relevé a quelques faux positifs ; `trash.go:25` n'en est pas un, voir plus bas). Exclus car exécutés sous la cible ou hors des dossiers modifiables : `sendkeys.go:69` (/proc), `term.go:160,169`, `185,186`, `loaded.go:53,61,64`, `searchidx.go:46`, `term.go:143` (gardé par `specPath`).
 
-### Écritures, renommages et suppressions (prioritaires)
+### Écritures, renommages et suppressions (prioritaires) : faites
+
+Migrées le 2026-10-27 vers les aides de `gld/rootfs.go` (`rWriteFile`, `rWriteAtomic`, `rOpenFile`, `rRename`, `rRemove`, `rRemoveAll`, `rMkdirAll`, `mkdirTrusted`), qui passent par `os.Root` ouvert sur `cfgDir()` ou sur le home visé. Les fichiers temporaires ont un nom aléatoire créé en exclusivité ; le mode est posé sur le descripteur, jamais par nom. Tests avec liens plantés : `gld/rootfs_test.go`.
+
+Restes connus :
+
+- `writeConfigExec` hors de `cfgDir()` (réglages d'un projet, home secondaire) prend le parent du dossier du fichier comme racine : les dossiers au-dessus ne sont pas vérifiés.
+- `mkdirTrusted` hors de `cfgDir()` (skills, mémoire, snippets d'un projet) reste un `os.MkdirAll` : il crée des dossiers, n'écrit aucun contenu.
+- Faux positifs : `claude.go:91` (dossier temporaire créé par gld en 0700) ; `pair.go` (`authDir()`, privé et vérifié par `checkPrivate`) ; `loaded.go` (hook exécuté sous le compte cible).
+
+Liste d'origine :
 
 - trash.go:25 : `journal()` ouvre `gld-web.log` dans `cfgDir()` en suivant les liens symboliques ; un lien posé par la cible (vers `/etc/ld.so.preload` par exemple) fait écrire root où elle veut, jusqu'à l'exécution de code en root. Ce n'est pas un faux positif.
 - configwrite.go:191, 195, 218, 240, 252, 259, 267 (chmod après création : course), 268, 271, 272 : `writeConfig` et sauvegardes `gld-web-config-backups`
