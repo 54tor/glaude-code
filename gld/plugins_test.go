@@ -34,7 +34,7 @@ func TestPluginActRefuse(t *testing.T) {
 }
 
 func TestMarketplaceActRefuse(t *testing.T) {
-	for _, c := range [][3]string{{"add", "/etc", ""}, {"add", "../x", ""}, {"add", "http://a.b/c", ""}, {"add", "a/b;rm", ""}, {"remove", "", "a b"}, {"drop", "", "x"}} {
+	for _, c := range [][3]string{{"add", "/etc", ""}, {"add", "../x", ""}, {"add", "http://a.b/c", ""}, {"add", "a/b;rm", ""}, {"add", "https://127.0.0.1/x", ""}, {"add", "https://localhost:8080/x", ""}, {"add", "https://10.0.0.5/r", ""}, {"add", "https://169.254.169.254/latest", ""}, {"add", "https://api.localhost/x", ""}, {"add", "https://0.0.0.0/x", ""}, {"remove", "", "a b"}, {"drop", "", "x"}} {
 		if _, err := marketplaceAct(c[0], c[1], c[2]); err == nil {
 			t.Errorf("accepté : %v", c)
 		}

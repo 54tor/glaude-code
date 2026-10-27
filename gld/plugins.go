@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"net"
+	"net/netip"
 	"os"
 	"os/exec"
 	"regexp"
@@ -168,10 +170,29 @@ func listMarketplaces() ([]Marketplace, error) {
 }
 
 // marketplaceAct : add (source = dépôt « owner/repo » ou URL https), remove, update (name vide = tous).
+// marketInternal : une URL https vers la machine, un réseau privé ou le lien local (métadonnées cloud), écrite en clair.
+// ponytail: un nom DNS qui résout vers une adresse interne passe ; résoudre puis épingler l'adresse si cela devient un risque.
+func marketInternal(source string) bool {
+	host, ok := strings.CutPrefix(source, "https://")
+	if !ok {
+		return false
+	}
+	host, _, _ = strings.Cut(host, "/")
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	host = strings.ToLower(strings.TrimSuffix(host, "."))
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+		return true
+	}
+	a, err := netip.ParseAddr(host)
+	return err == nil && (a.IsUnspecified() || !externalIP(a.String()))
+}
+
 func marketplaceAct(act, source, name string) (string, error) {
 	var args []string
 	switch {
-	case act == "add" && marketSrcRe.MatchString(source):
+	case act == "add" && marketSrcRe.MatchString(source) && !marketInternal(source):
 		args = []string{"add", "--scope", "user", source}
 	case act == "remove" && marketNameRe.MatchString(name):
 		args = []string{"remove", name}
