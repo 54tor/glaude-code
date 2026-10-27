@@ -40,6 +40,8 @@ type shareStore struct {
 	lastSaved time.Time
 }
 
+var errShareNone = errors.New("aucun partage")
+
 var (
 	shareSt  *shareStore
 	shareDir = cfgDir // les tests pointent ailleurs
@@ -73,6 +75,14 @@ func openShares(dir string) (*shareStore, error) {
 	if err := json.Unmarshal(b, &s.m); err != nil {
 		return nil, err
 	}
+	if s.m == nil {
+		s.m = map[string]*Share{}
+	}
+	for k, v := range s.m {
+		if v == nil {
+			delete(s.m, k)
+		}
+	}
 	return s, nil
 }
 
@@ -85,13 +95,22 @@ func (s *shareStore) save() error {
 	return rWriteAtomic(s.dir, filepath.Join(s.dir, "shares.json"), b, 0o600)
 }
 
-func (s *shareStore) Create(session, dir string) string {
+// Create échoue fermé : si l'écriture échoue, l'ancien partage est rétabli et aucun jeton n'est rendu.
+func (s *shareStore) Create(session, dir string) (string, error) {
 	tok := newSecret()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	prev, had := s.m[session]
 	s.m[session] = &Share{Session: session, Dir: dir, Mode: "rw", TokenHash: hashSecret(tok), CreatedAt: time.Now().Unix()}
-	s.save()
-	return tok
+	if err := s.save(); err != nil {
+		if had {
+			s.m[session] = prev
+		} else {
+			delete(s.m, session)
+		}
+		return "", err
+	}
+	return tok, nil
 }
 
 func (s *shareStore) Redeem(token string) (string, Share, bool) {
@@ -122,7 +141,9 @@ func (s *shareStore) ByCookie(cookie string) (Share, bool) {
 			now := time.Now()
 			sh.LastSeen = now.Unix()
 			if now.Sub(s.lastSaved) >= shareSeenSave {
-				s.save()
+				if err := s.save(); err != nil {
+					journal("partages : écriture de LastSeen : %v", err)
+				}
 			}
 			return *sh, true
 		}
@@ -139,30 +160,37 @@ func (s *shareStore) Get(session string) (Share, bool) {
 	return Share{}, false
 }
 
-func (s *shareStore) SetMode(session, mode string) bool {
+func (s *shareStore) SetMode(session, mode string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sh, ok := s.m[session]
 	if !ok {
-		return false
+		return errShareNone
 	}
+	old := sh.Mode
 	sh.Mode = mode
-	s.save()
-	return true
+	if err := s.save(); err != nil {
+		sh.Mode = old
+		return err
+	}
+	return nil
 }
 
-func (s *shareStore) End(session string) bool {
+// End : la révocation en mémoire n'est jamais annulée, même si l'écriture échoue (l'erreur est rendue à l'appelant).
+func (s *shareStore) End(session string) error {
 	s.mu.Lock()
 	_, ok := s.m[session]
-	delete(s.m, session)
-	if ok {
-		s.save()
+	if !ok {
+		s.mu.Unlock()
+		return errShareNone
 	}
+	delete(s.m, session)
+	err := s.save()
 	s.mu.Unlock()
-	if ok && queueSt != nil {
+	if queueSt != nil {
 		queueSt.RemoveByAuthor(session, "guest")
 	}
-	return ok
+	return err
 }
 
 func routesShare(mux *http.ServeMux) {
@@ -196,7 +224,12 @@ func routesShare(mux *http.ServeMux) {
 			fail(w, 404, "srv.share.sessionIntrouvable")
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "token": shareSt.Create(req.ID, req.Dir)})
+		tok, err := shareSt.Create(req.ID, req.Dir)
+		if err != nil {
+			fail(w, 500, "srv.share.indisponible")
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "token": tok})
 	})
 	mux.HandleFunc("GET /share-info", func(w http.ResponseWriter, r *http.Request) {
 		id := r.URL.Query().Get("id")
@@ -221,8 +254,12 @@ func routesShare(mux *http.ServeMux) {
 			fail(w, 400, "srv.http_util.requeteInvalide")
 			return
 		}
-		if !shareSt.SetMode(req.ID, req.Mode) {
+		switch err := shareSt.SetMode(req.ID, req.Mode); {
+		case errors.Is(err, errShareNone):
 			fail(w, 404, "srv.share.introuvable")
+			return
+		case err != nil:
+			fail(w, 500, "srv.share.indisponible")
 			return
 		}
 		writeJSON(w, 200, map[string]any{"ok": true})
@@ -232,8 +269,12 @@ func routesShare(mux *http.ServeMux) {
 		if !ok {
 			return
 		}
-		if !shareSt.End(req.ID) {
+		switch err := shareSt.End(req.ID); {
+		case errors.Is(err, errShareNone):
 			fail(w, 404, "srv.share.introuvable")
+			return
+		case err != nil:
+			fail(w, 500, "srv.share.indisponible")
 			return
 		}
 		writeJSON(w, 200, map[string]any{"ok": true})
