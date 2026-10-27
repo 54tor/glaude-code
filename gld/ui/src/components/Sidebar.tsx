@@ -101,7 +101,7 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
           onClick={() => toggle(s.id)}
           aria-expanded={open}
           aria-label={t("shell.list.subSessions", { count: kids.length })}
-          className="flex h-8 w-9 shrink-0 items-center text-xs text-muted-foreground hover:text-foreground"
+          className="flex h-8 w-9 shrink-0 items-center justify-end pr-1 text-xs text-muted-foreground hover:text-foreground"
         >
           <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} />
           <span className="tabular-nums">{kids.length}</span>
@@ -244,7 +244,7 @@ function FavSessions({ rows, read }: { rows: Row[]; read: (s: Session) => void }
             onClick={() => toggle(row.s.id)}
             aria-expanded={opened.has(row.s.id)}
             aria-label={t("shell.list.subSessions", { count: ks.length })}
-            className="flex h-8 w-9 shrink-0 items-center text-xs text-muted-foreground hover:text-foreground"
+            className="flex h-8 w-9 shrink-0 items-center justify-end pr-1 text-xs text-muted-foreground hover:text-foreground"
           >
             <ChevronRight className={cn("size-3.5 transition-transform", opened.has(row.s.id) && "rotate-90")} />
             <span className="tabular-nums">{ks.length}</span>
