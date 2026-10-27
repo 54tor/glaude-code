@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { isTagged } from "./Tagged"
+import { isTagged, parseJsonBody } from "./Tagged"
 
 describe("isTagged", () => {
   it("détecte une balise connue après un tiret de liste", () => {
@@ -10,5 +10,15 @@ describe("isTagged", () => {
   })
   it("garde les messages commençant par une balise", () => {
     expect(isTagged("<task-notification><status>ok</status></task-notification>")).toBe(true)
+  })
+})
+
+describe("parseJsonBody", () => {
+  it("décode un objet JSON", () => {
+    expect(parseJsonBody('{"type":"idle_notification","result":"a\\nb"}')).toEqual({ type: "idle_notification", result: "a\nb" })
+  })
+  it("ignore le texte libre et le JSON invalide", () => {
+    expect(parseJsonBody("go")).toBeNull()
+    expect(parseJsonBody("{pas du json")).toBeNull()
   })
 })

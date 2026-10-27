@@ -14,6 +14,19 @@ const FIELDS: Record<string, string> = {
   note: "conversation.tagged.fields.note",
 }
 
+// Corps d'un message d'équipier qui est un objet JSON (ex. idle_notification) : décodé pour être listé champ par champ.
+export function parseJsonBody(body: string): Record<string, unknown> | null {
+  const b = body.trim()
+  if (!b.startsWith("{")) return null
+  try {
+    const v = JSON.parse(b)
+    return v && typeof v === "object" && !Array.isArray(v) ? v : null
+  } catch {
+    return null
+  }
+}
+const show = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v))
+
 const KNOWN = /<(?:teammate-message|task-notification)[\s>][\s\S]*?<\/(?:teammate-message|task-notification)>/
 // Début de message balisé quelconque, ou balise connue glissée plus loin dans le texte (ex. après un tiret de liste).
 export const isTagged = (t: string) => (/^\s*<[a-z][a-z-]*[\s>]/.test(t) && !/^\s*<pasted_content/.test(t)) || KNOWN.test(t)
@@ -26,6 +39,7 @@ function Card({ tag, attrs, body }: { tag: string; attrs: string; body: string }
   if (tag === "teammate-message") {
     const from = attr(attrs, "teammate_id")
     const summary = attr(attrs, "summary")
+    const json = parseJsonBody(body)
     return (
       <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
         <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
@@ -33,7 +47,18 @@ function Card({ tag, attrs, body }: { tag: string; attrs: string; body: string }
           {t("conversation.tagged.teammateMessage", { name: from ?? "?" })}
           {summary && <Badge variant="outline" className="ml-auto max-w-[60%] truncate font-normal">{summary}</Badge>}
         </div>
-        <p className="mt-1.5 break-words whitespace-pre-wrap">{body.trim()}</p>
+        {json ? (
+          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+            {Object.entries(json).map(([k, v]) => (
+              <div key={k} className="contents">
+                <dt className="text-muted-foreground">{k}</dt>
+                <dd className="min-w-0 break-words whitespace-pre-wrap">{show(v)}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : (
+          <p className="mt-1.5 break-words whitespace-pre-wrap">{body.trim()}</p>
+        )}
       </div>
     )
   }
