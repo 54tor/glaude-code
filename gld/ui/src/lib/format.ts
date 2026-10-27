@@ -27,6 +27,9 @@ export const full = (x: string | number) =>
     timeStyle: "short",
   })
 
+export const brief = (x: string | number) =>
+  new Date(typeof x === "number" ? x * 1000 : x).toLocaleString(loc(), { dateStyle: "medium", timeStyle: "short" })
+
 export const size = (kb: number) =>
   kb < 1024 ? `${kb} ${i18n.t("format.kb")}` : `${(kb / 1024).toLocaleString(loc(), { maximumFractionDigits: 1 })} ${i18n.t("format.mb")}`
 
