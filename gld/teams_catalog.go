@@ -88,6 +88,9 @@ func composeTeams(c Catalog, teamIDs []string) (lead Agent, mates []Agent, tooMa
 			lead = a
 		}
 	}
+	if lead.ID == "" {
+		return Agent{}, nil, false, terr("srv.teams_catalog.chefAbsent")
+	}
 	seen := map[string]bool{}
 	for _, id := range teamIDs {
 		found := false

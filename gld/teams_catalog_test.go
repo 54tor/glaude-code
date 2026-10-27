@@ -88,3 +88,11 @@ func TestComposeEmpty(t *testing.T) {
 		t.Fatal(lead, mates, tooMany, err)
 	}
 }
+
+func TestComposeNoLead(t *testing.T) {
+	c := builtinCatalog()
+	c.Agents = c.Agents[1:] // sans Atlas
+	if _, _, _, err := composeTeams(c, []string{"feature"}); !isMsg(err, "srv.teams_catalog.chefAbsent") {
+		t.Fatalf("err = %v", err)
+	}
+}
