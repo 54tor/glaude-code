@@ -106,7 +106,9 @@ export type Item = { dir: string; id: string }
 export type Detail = { prompts: string[]; n: number; branch: string; models: string[]; t0: string; t1: string; subagents: number }
 export type SubLive = { id: string; desc: string; type: string; running: boolean; activity: string; context: number; out: number; mtime: number }
 export type BgTask = { id: string; tool?: string; desc: string; status: string; summary?: string; start?: string; end?: string; hasOutput: boolean }
-export type LiveState = { said?: string; open: boolean; status: string; activity: string; thinking: boolean; generic?: boolean; exec?: boolean; since: number; context: number; out: number; model: string; tool?: string; toolRunning?: boolean; subs: SubLive[]; tasks?: BgTask[]; verbs?: string[]; queue?: { t: string; ts: string }[] }
+export type LiveState = { said?: string; open: boolean; status: string; activity: string; thinking: boolean; generic?: boolean; exec?: boolean; since: number; context: number; out: number; model: string; tool?: string; toolRunning?: boolean; subs: SubLive[]; tasks?: BgTask[]; verbs?: string[]; queue?: { t: string; ts: string }[]; pending?: QItem[] }
+// File de messages côté serveur (queue.go) : auteur, et état d'envoi (uncertain : parti sans réponse, à trancher).
+export type QItem = { id: string; text: string; author: "host" | "guest"; state: "queued" | "sending" | "uncertain"; at: number; sentAt?: number }
 export type UsageLimit = { key: string; label: string; percent: number; resetsAt?: string; limitDollars?: number; usedDollars?: number; lockedWhy?: string }
 export type Account = {
   email: string
@@ -234,6 +236,10 @@ export const api = {
   configProjects: () => get<{ projects: ProjectCfg[] }>("/config-projects"),
   sessionIdle: (id: string) => get<{ idle: boolean }>(`/session-state?id=${enc(id)}`),
   taskOutput: (dir: string, id: string, task: string) => get<{ ok: boolean; text?: string }>(`/session-task-output?dir=${enc(dir)}&id=${enc(id)}&task=${enc(task)}`),
+  queue: (id: string) => get<{ items: QItem[] }>(`/queue?id=${enc(id)}`),
+  queueAdd: (id: string, text: string) => api.post("/queue-add", { id, text }),
+  queueRm: (id: string, item: string) => api.post("/queue-rm", { id, item }) as Promise<Result & { text?: string }>,
+  queueRetry: (id: string, item: string) => api.post("/queue-retry", { id, item }),
   sessionLive: (dir: string, id: string) => get<LiveState>(`/session-live?dir=${enc(dir)}&id=${enc(id)}`),
   // refresh : relevé demandé par un POST (un GET ne doit rien déclencher), puis lecture de l'état, qui dit « refreshing ».
   account: async (refresh = false) => {

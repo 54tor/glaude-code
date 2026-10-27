@@ -83,6 +83,7 @@
       "messageAria": "Message to Claude",
       "queueAria": "Queued messages",
       "dequeue": "Remove from the queue",
+      "guest": "Guest",
       "sendUncertain": "Send uncertain: may already have arrived",
       "resend": "Resend",
       "queueSuspended": "Queue paused (the previous turn failed or was stopped).",

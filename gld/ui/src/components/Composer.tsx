@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
-import { withFollowUps, withoutFollowUps } from "@/lib/queue"
-import { markSent } from "@/hooks/useQueueDrain"
+import { usePending, refreshPending } from "@/hooks/usePending"
 import { Trans, useTranslation } from "react-i18next"
 import { i18n } from "@/i18n"
 import { cn, copyText, isSend, keyHint } from "@/lib/utils"
@@ -9,18 +8,44 @@ import { type Live } from "./LiveStatus"
 import { toast } from "sonner"
 import { Bug, Copy, Minimize2, Power, Snowflake, Send, Square, SquareCheck, X } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
-import { draftOf, setDraft, useDraft, useUncertain } from "@/hooks/useDraft"
+import { draftOf, setDraft, useDraft } from "@/hooks/useDraft"
 import { efforts, models, withChoice, type Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
 import { useMention } from "./Mention"
 import { Choose } from "./Choose"
-import { api, type Msg } from "@/lib/api"
+import { api, type Msg, type QItem } from "@/lib/api"
 import { useActions } from "./actions"
 import { AttachButton, ImageChips, useImages } from "@/hooks/useImages"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { readNdjson } from "@/lib/ndjson"
 import { authFetch, useCan } from "@/lib/auth"
+
+// File serveur : un refus (pleine, texte refusé) s'affiche et laisse le brouillon intact.
+async function addToQueue(id: string, text: string): Promise<boolean> {
+  const r = await api.queueAdd(id, text)
+  if (!r.ok) toast.error(r.out)
+  refreshPending()
+  return r.ok
+}
+// Retirer un message le remet dans la zone de saisie, à la suite de ce qui s'y trouve déjà.
+async function removeFromQueue(id: string, q: QItem) {
+  const r = await api.queueRm(id, q.id)
+  refreshPending()
+  if (!r.ok) return void toast.error(r.out)
+  const d = draftOf(id)
+  const back = r.text ?? q.text
+  setDraft(id, { text: d.text.trim() ? `${d.text}\n${back}` : back })
+}
+async function retryItem(id: string, q: QItem) {
+  const r = await api.queueRetry(id, q.id)
+  refreshPending()
+  if (!r.ok) toast.error(r.out)
+}
+function Author({ q }: { q: QItem }) {
+  const { t } = useTranslation()
+  return q.author === "guest" ? <span className="shrink-0 rounded bg-muted px-1 text-2xs uppercase">{t("conversation.composer.guest")}</span> : null
+}
 
 // Modes d'autorisation de claude -p : sans terminal, Claude ne peut pas demander la permission.
 const modes = () =>
@@ -83,7 +108,8 @@ export function Composer({
 }) {
   const { t } = useTranslation()
   const exec = useCan()("exec")
-  const { text, queue } = useDraft(id)
+  const { text } = useDraft(id)
+  const queue = usePending(id)
   const setText = (t: string) => setDraft(id, { text: t })
   const mention = useMention(text, setText, id)
   const [mode, setMode] = useLocal("ccChatMode", "")
@@ -96,14 +122,10 @@ export function Composer({
   // File d'attente : les messages écrits pendant que Claude répond partent l'un après l'autre à la fin du tour (sauf échec ou arrêt).
   // Brouillon et file vivent dans un magasin par session (useDraft) : fermer la fenêtre ne les perd pas, et l'envoi des messages
   // en file continue même fenêtre fermée.
-  const setQ = (q: string[]) => setDraft(id, { queue: q })
-  // Annuler un message en file le remet dans la zone de saisie (à la suite de ce qui s'y trouve déjà).
-  const unqueue = (i: number) => {
-    const d = draftOf(id)
-    setDraft(id, { queue: d.queue.filter((_, j) => j !== i), text: d.text.trim() ? `${d.text}\n${d.queue[i]}` : d.queue[i], ...(i === 0 && { sending: undefined }) })
-  }
+  const enqueue = (prompt: string) => addToQueue(id, prompt)
+  const unqueue = (item: QItem) => removeFromQueue(id, item)
   const stopped = useRef(false) // arrêt demandé par l'utilisateur : le message était bien parti
-  const send = () => {
+  const send = async () => {
     const rn = /^\/rename\s+(\S[\s\S]*)$/.exec(text.trim())
     if (rn) {
       setText("")
@@ -112,20 +134,22 @@ export function Composer({
     }
     const prompt = [text.trim(), pics.suffix()].filter(Boolean).join("\n\n")
     if (!prompt) return
+    keepFocus()
+    if (running) {
+      if (!(await enqueue(prompt))) return // refusé : le brouillon reste
+      if (draftOf(id).text === text) setText("")
+      return void pics.clear()
+    }
     setText("")
     pics.clear()
-    keepFocus()
-    if (running) setQ([...draftOf(id).queue, prompt])
-    else {
-      onWrite?.()
-      submit(prompt)
-    }
+    onWrite?.()
+    submit(prompt)
   }
   const submit = async (prompt: string) => {
     setOwn(true)
     setTurn(() => ({ id, msgs: [{ r: "user", t: prompt }], running: true }))
     // Un message non délivré n'est jamais perdu : il retourne en tête de la file (suspendue), à renvoyer d'un clic.
-    const keep = () => setQ([withoutFollowUps(prompt), ...draftOf(id).queue])
+    const keep = () => void addToQueue(id, prompt)
     const fail = (error: string) => (keep(), setOwn(false), setTurn((t) => t && { ...t, running: false, error }))
     stopped.current = false
     let failed = false
@@ -162,11 +186,12 @@ export function Composer({
     setTurn((t) => t && { ...t, running: false })
     await onDone() // le transcript est relu avant le tour suivant, qui efface sinon son propre affichage
     setTimeout(() => setOwn(false), 30_000)
-    const next = draftOf(id).queue[0]
-    if (next !== undefined && !failed) {
-      const more = draftOf(id).queue.length > 1
-      setQ(draftOf(id).queue.slice(1))
-      submit(withFollowUps(next, more))
+    if (failed) return
+    const head = (await api.queue(id).catch(() => ({ items: [] as QItem[] }))).items[0]
+    if (head) {
+      const r = await api.queueRm(id, head.id)
+      refreshPending()
+      if (r.ok && r.text !== undefined) submit(r.text)
     }
   }
   const stop = () => ((stopped.current = true), api.post("/chat-stop", { id }))
@@ -195,12 +220,13 @@ export function Composer({
         {queue.length > 0 && (
           <ul className="space-y-1 text-xs" aria-label={t("conversation.composer.queueAria")}>
             {queue.map((q, i) => (
-              <li key={i} className="flex items-center gap-2 rounded-md border border-dashed px-2 py-1 text-muted-foreground">
+              <li key={q.id} className="flex items-center gap-2 rounded-md border border-dashed px-2 py-1 text-muted-foreground">
                 <span className="shrink-0 tabular-nums">{i + 1}.</span>
-                <span className="min-w-0 flex-1 truncate" title={q}>
-                  {q}
+                <Author q={q} />
+                <span className="min-w-0 flex-1 truncate" title={q.text}>
+                  {q.text}
                 </span>
-                <Button size="icon-xs" variant="ghost" aria-label={t("conversation.composer.dequeue")} onClick={() => unqueue(i)}>
+                <Button size="icon-xs" variant="ghost" aria-label={t("conversation.composer.dequeue")} onClick={() => unqueue(q)}>
                   <X />
                 </Button>
               </li>
@@ -208,7 +234,15 @@ export function Composer({
             {!running && (
               <li className="flex items-center gap-2 text-muted-foreground">
                 {t("conversation.composer.queueSuspended")}
-                <Button size="xs" variant="outline" onClick={() => (setQ(queue.slice(1)), submit(queue[0]))}>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  onClick={async () => {
+                    const r = await api.queueRm(id, queue[0].id)
+                    refreshPending()
+                    if (r.ok && r.text !== undefined) submit(r.text)
+                  }}
+                >
                   {t("conversation.composer.sendNext")}
                 </Button>
               </li>
@@ -259,17 +293,12 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
   const a = useActions()
   const exec = useCan()("exec")
   const [info, setInfo] = useState<{ ids: string[]; why: string } | null>(null)
-  const draft = useDraft(id) // gardé par session : fermer la fenêtre ou un échec d'envoi ne le perd pas
-  const { text, queue } = draft
-  const uncertain = useUncertain(draft)
+  const { text } = useDraft(id) // gardé par session : fermer la fenêtre ou un échec d'envoi ne le perd pas
+  const queue = usePending(id)
   const setText = (t: string) => setDraft(id, { text: t })
   const mention = useMention(text, setText, id)
-  const setQ = (q: string[]) => setDraft(id, { queue: q })
-  // Annuler un message en file le remet dans la zone de saisie (à la suite de ce qui s'y trouve déjà).
-  const unqueue = (i: number) => {
-    const d = draftOf(id)
-    setDraft(id, { queue: d.queue.filter((_, j) => j !== i), text: d.text.trim() ? `${d.text}\n${d.queue[i]}` : d.queue[i], ...(i === 0 && { sending: undefined }) })
-  }
+  const enqueue = (prompt: string) => addToQueue(id, prompt)
+  const unqueue = (item: QItem) => removeFromQueue(id, item)
   const [busy, setBusy] = useState(false)
   const [asking, setAsking] = useState(false) // une question attend une réponse dans le terminal : rien ne s'y écrit tant qu'elle est ouverte
   const working = !!liveState.st?.thinking
@@ -293,9 +322,6 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
     const r = await api.post("/session-send", { id, text: full }, 20_000)
     setBusy(false)
     if (!r.ok) toast.error(r.out) // le succès se voit dans la session : pas de notification
-    else {
-      markSent(id)
-    }
     return r.ok
   }
   const send = async () => {
@@ -303,7 +329,7 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
     if (!full || busy) return
     keepFocus()
     if (working || asking) {
-      setQ([...draftOf(id).queue, full])
+      if (!(await enqueue(full))) return
       if (draftOf(id).text === text) setText("")
       pics.clear()
       return
@@ -392,22 +418,23 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
         {queue.length > 0 && (
           <ul className="space-y-1 text-xs" aria-label={t("conversation.composer.queueAria")}>
             {queue.map((q, i) => (
-              <li key={i} className="flex items-center gap-2 rounded-md border border-dashed px-2 py-1 text-muted-foreground">
+              <li key={q.id} className="flex items-center gap-2 rounded-md border border-dashed px-2 py-1 text-muted-foreground">
                 <span className="shrink-0 tabular-nums">{i + 1}.</span>
-                <span className="min-w-0 flex-1 truncate" title={q}>
-                  {q}
+                <Author q={q} />
+                <span className="min-w-0 flex-1 truncate" title={q.text}>
+                  {q.text}
                 </span>
-                {i === 0 && uncertain ? (
+                {q.state === "uncertain" ? (
                   <>
-                    <span className="shrink-0 text-amber-600 dark:text-amber-400">{t("conversation.composer.sendUncertain")}</span>
-                    <Button size="xs" variant="outline" onClick={() => setDraft(id, { sending: undefined })}>
+                    <span className="shrink-0 text-amber-600 dark:text-amber-400">{t("conversation.composer.queueSuspended")}</span>
+                    <Button size="xs" variant="outline" onClick={() => void retryItem(id, q)}>
                       {t("conversation.composer.resend")}
                     </Button>
                   </>
                 ) : (
                   i === 0 && <span className="shrink-0">{asking ? t("conversation.composer.afterQuestion") : working ? t("conversation.composer.whenIdle") : t("conversation.composer.sending")}</span>
                 )}
-                <Button size="icon-xs" variant="ghost" aria-label={t("conversation.composer.dequeue")} onClick={() => unqueue(i)}>
+                <Button size="icon-xs" variant="ghost" aria-label={t("conversation.composer.dequeue")} onClick={() => unqueue(q)}>
                   <X />
                 </Button>
               </li>

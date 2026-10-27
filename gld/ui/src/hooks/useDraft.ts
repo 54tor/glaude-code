@@ -1,26 +1,25 @@
-import { useEffect, useState, useSyncExternalStore } from "react"
+import { useSyncExternalStore } from "react"
 
-// Brouillon et messages en file d'attente d'une session, gardés hors du composant et dans le navigateur (localStorage) : fermer la
-// fenêtre, échouer à livrer un message ou recharger la page ne les perd pas. Le tour en cours et l'envoi des messages en file
-// continuent aussi fenêtre fermée, car ils ne dépendent pas de l'affichage ; après un rechargement, la file reste suspendue.
-// sending : heure (ms) où le premier message de la file est parti ; il n'en sort qu'une fois l'envoi confirmé.
-type Entry = { text: string; queue: string[]; sending?: number }
-const empty: Entry = { text: "", queue: [] }
+// Brouillon d'une session, gardé hors du composant et dans le navigateur (localStorage) : fermer la fenêtre ou recharger la page
+// ne le perd pas. La file des messages vit sur le serveur ; les anciennes files locales sont reprises une fois (importLocalQueues).
+type Entry = { text: string }
+type Legacy = { queue: string[]; sending?: number }
+const empty: Entry = { text: "" }
 const KEY = "gld.drafts"
 const MAX_SESSIONS = 50
 
+// Files locales d'avant le serveur, tenues de côté et réécrites telles quelles tant qu'elles ne sont pas importées.
+const legacy = new Map<string, Legacy>()
 const load = (): Map<string, Entry> => {
+  legacy.clear()
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Record<string, Partial<Entry>>
+    const raw = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Record<string, { text?: unknown; queue?: unknown; sending?: unknown }>
     return new Map(
-      Object.entries(raw).map(([id, e]) => [
-        id,
-        {
-          text: typeof e.text === "string" ? e.text : "",
-          queue: Array.isArray(e.queue) ? e.queue.filter((q): q is string => typeof q === "string") : [],
-          sending: typeof e.sending === "number" ? e.sending : undefined,
-        },
-      ])
+      Object.entries(raw).map(([id, e]) => {
+        const queue = Array.isArray(e.queue) ? e.queue.filter((q): q is string => typeof q === "string") : []
+        if (queue.length > 0) legacy.set(id, { queue, sending: typeof e.sending === "number" ? e.sending : undefined })
+        return [id, { text: typeof e.text === "string" ? e.text : "" }]
+      })
     )
   } catch {
     return new Map()
@@ -37,7 +36,9 @@ const save = () => {
   try {
     // les plus récemment modifiées en dernier : au-delà de la limite, les plus anciennes partent
     const kept = [...entries].slice(-MAX_SESSIONS)
-    localStorage.setItem(KEY, JSON.stringify(Object.fromEntries(kept)))
+    const out: Record<string, Entry & Partial<Legacy>> = Object.fromEntries(kept)
+    for (const [id, l] of legacy) out[id] = { ...(out[id] ?? empty), ...l }
+    localStorage.setItem(KEY, JSON.stringify(out))
   } catch {
     /* stockage plein ou indisponible : le magasin en mémoire continue de servir */
   }
@@ -60,14 +61,10 @@ export function clearDrafts() {
 
 export const draftOf = (id: string): Entry => entries.get(id) ?? empty
 
-// Envoi parti sans réponse (rechargement, réseau, délai de 20 s dépassé) : livré ou non, on ne sait pas. L'utilisateur tranche.
-export const SEND_TIMEOUT = 25_000
-export const sendUncertain = (e: Entry) => e.sending !== undefined && Date.now() - e.sending > SEND_TIMEOUT
-
 export function setDraft(id: string, patch: Partial<Entry>) {
   const next = { ...draftOf(id), ...patch }
   entries.delete(id) // ré-insérée à la fin
-  if (next.text || next.queue.length > 0) entries.set(id, next)
+  if (next.text) entries.set(id, next)
   save()
   subs.forEach((f) => f())
 }
@@ -77,20 +74,9 @@ export const subscribe = (f: () => void) => {
   return () => void subs.delete(f)
 }
 
-// Sessions qui ont des messages en file, en une chaîne (valeur stable pour useSyncExternalStore).
-export const queuedKey = () => [...entries].filter(([, e]) => e.queue.length > 0).map(([id]) => id).join(",")
-
 export const useDraft = (id: string): Entry => useSyncExternalStore(subscribe, () => draftOf(id))
 
-// sendUncertain qui se réévalue à l'échéance : sans nouveau rendu, « envoi incertain » n'apparaîtrait jamais.
-export function useUncertain(e: Entry): boolean {
-  const [, tick] = useState(0)
-  useEffect(() => {
-    if (e.sending === undefined) return
-    const left = e.sending + SEND_TIMEOUT - Date.now()
-    if (left < 0) return
-    const h = setTimeout(() => tick((n) => n + 1), left + 50)
-    return () => clearTimeout(h)
-  }, [e.sending])
-  return sendUncertain(e)
-}
+// Pour importLocalQueues (importQueues.ts, à part : api.ts importe ce module via auth.ts).
+export const legacyQueues = legacy
+export const SEND_TIMEOUT = 25_000
+export const saveDrafts = save

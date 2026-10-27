@@ -16,7 +16,6 @@ import { useSearchHits } from "@/hooks/useSearchHits"
 import { useShortcuts } from "@/hooks/useShortcuts"
 import { useWaitingNotice } from "@/hooks/useWaitingNotice"
 import { BanAlert } from "@/components/BanAlert"
-import { useQueueDrain } from "@/hooks/useQueueDrain"
 import { applyFont } from "@/lib/fonts"
 import { type Choice } from "@/lib/models"
 import { AUTO, buildView, byDate, groupKey, HOT, WEEK } from "@/lib/sessionsView"
@@ -36,6 +35,7 @@ import { segs } from "@/lib/paths"
 import { Compose, type ComposeAsk } from "@/components/Compose"
 import { AuthScreen } from "@/components/auth/Login"
 import { boot, useAuth } from "@/lib/auth"
+import { importLocalQueues } from "@/hooks/importQueues"
 
 // Les grandes vues se chargent à la demande : le premier chargement ne porte que la liste des sessions.
 const Conversation = lazy(() => import("@/components/Conversation").then((m) => ({ default: m.Conversation })))
@@ -93,6 +93,7 @@ function Shell() {
   const [font, setFont] = useLocal("ccFont", "geist")
   const [fontSize, setFontSize] = useLocal("ccFontSize", "15")
   useEffect(() => applyFont(font, fontSize), [font, fontSize])
+  useEffect(() => void importLocalQueues(), []) // anciennes files locales : reprises une fois par le serveur
   const [picker, setPicker] = useState<Pick | null>(null)
   const [navOpen, setNavOpen] = useState(false) // mobile : tiroir du menu
   const [ask, setAsk] = useState<Ask | null>(null)
@@ -153,7 +154,6 @@ function Shell() {
   const favs = useMemo(() => new Set(data?.favs), [data])
   const asking = useMemo(() => new Set(data?.asking), [data])
   useWaitingNotice(waiting, asking, everyId)
-  useQueueDrain(live, waiting, asking) // messages en file des sessions ouvertes : partent même fenêtre fermée
 
   const gkey = (x: VGroup) => groupKey(x, home)
   // Listes dérivées mémoïsées : un rendu sans nouvelles données (sélection, menu, saisie) ne les recalcule pas.
