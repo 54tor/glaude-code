@@ -59,3 +59,10 @@ export const compact = (n: number) =>
     : n < 999_950 // au-delà, l'arrondi au dixième afficherait « 1 000 k »
       ? `${(n / 1e3).toLocaleString(loc(), { maximumFractionDigits: 1 })} k`
       : `${(n / 1e6).toLocaleString(loc(), { maximumFractionDigits: 1 })} M`
+
+// Un document écrit puis cité n'apparaît qu'une fois : à sa dernière mention.
+export const dedupeDocs = <T extends { r: string; t: string }>(ms: T[]): T[] => {
+  const last = new Map<string, number>()
+  ms.forEach((m, i) => m.r === "doc" && last.set(m.t, i))
+  return ms.filter((m, i) => m.r !== "doc" || last.get(m.t) === i)
+}

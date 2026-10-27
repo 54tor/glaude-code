@@ -8,7 +8,9 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -36,9 +38,30 @@ func writtenPath(name string, in json.RawMessage) string {
 	return m.P
 }
 
-// wroteDoc : le transcript contient-il un Write de ce chemin ?
+// mentionedDocs : chemins absolus de documents cités dans un texte de Claude (le rapport écrit par un script ou une concaténation
+// n'est pas un Write, mais Claude en donne le chemin). Seuls les fichiers qui existent, 5 au plus.
+var docMention = regexp.MustCompile(`(?:^|[\s"'(\x60\[])((?:/[\w.@+~-]+)+\.(?i:md|html?|pdf|png|jpe?g|gif|webp))`)
+
+func mentionedDocs(text string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, m := range docMention.FindAllStringSubmatch(text, -1) {
+		p := m[1]
+		if seen[p] || len(out) == 5 {
+			continue
+		}
+		seen[p] = true
+		if st, err := os.Stat(p); err == nil && st.Mode().IsRegular() {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// wroteDoc : le transcript montre-t-il ce chemin comme écrit ou cité ?
 func wroteDoc(tr, path string) bool {
 	needle, _ := json.Marshal(path)
+	needle = needle[1 : len(needle)-1] // le chemin cité dans un texte n'est pas une chaîne JSON à lui seul
 	found := false
 	_ = scan(tr, func(b []byte) {
 		if found || !bytes.Contains(b, needle) {

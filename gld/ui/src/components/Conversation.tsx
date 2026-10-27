@@ -4,7 +4,7 @@ import { ArrowDown, ArrowUpToLine, BarChart3, Bug, FolderOpen, Power, FileText, 
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
-import { brief, compact, full, tilde } from "@/lib/format"
+import { brief, compact, dedupeDocs, full, tilde } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenuCheckboxItem, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
@@ -445,7 +445,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
               </div>
             )}
             {msgs &&
-              groupTools(msgs).map((x, i) =>
+              groupTools(dedupeDocs(msgs)).map((x, i) =>
                 "count" in x ? (
                   <ToolAnchor key={`a${x.from}`} dir={dir} id={id} g={x} />
                 ) : (

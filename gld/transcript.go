@@ -564,6 +564,11 @@ func lineMsgsMode(b []byte, tools, anchors bool) []Msg {
 				continue
 			}
 			out = append(out, Msg{R: l.Type, T: t, Ts: l.Timestamp})
+			if l.Type == "assistant" {
+				for _, p := range mentionedDocs(t) {
+					out = append(out, Msg{R: "doc", T: p, Ts: l.Timestamp})
+				}
+			}
 		case "tool_use":
 			if p := writtenPath(x.Name, x.Input); p != "" {
 				out = append(out, Msg{R: "doc", T: p, Ts: l.Timestamp})
