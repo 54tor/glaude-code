@@ -178,12 +178,6 @@
       "tokens": "{{amount}} tokens",
       "newEntry": "Nouvelle entrée",
       "newEntryAria": "Nouvelle entrée · {{title}}",
-      "sortTitle": "Tri par {{label}} (cliquer pour changer)",
-      "sortAria": "Trier {{title}} par : {{label}}",
-      "ascTitle": "Croissant (cliquer pour inverser)",
-      "descTitle": "Décroissant (cliquer pour inverser)",
-      "ascAria": "Ordre croissant · {{title}}",
-      "descAria": "Ordre décroissant · {{title}}",
       "menuNew": "Nouvelle entrée…",
       "menuNewRule": "Nouvelle règle du projet…",
       "menuNewHaiku": "Nouvelle entrée avec Haiku…",
@@ -195,7 +189,11 @@
       "typeAria": "type {{key}}",
       "ruleOff": "règle désactivée",
       "ruleScoped": "règle scopée",
-      "toCheck": "à vérifier"
+      "toCheck": "à vérifier",
+      "moreAria": "Actions et tri · {{title}}",
+      "sortBy": "Trier par",
+      "asc": "Croissant",
+      "desc": "Décroissant"
     },
     "trash": {
       "title": "Corbeille",

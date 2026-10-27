@@ -1,4 +1,4 @@
-import { type LucideIcon, AlertTriangle, ChevronRight, Calculator, ArrowDownWideNarrow, ArrowUpNarrowWide, CheckSquare, EyeOff, Filter, FileStack, FileText, Plus, ScrollText, Sparkles, Trash2 } from "lucide-react"
+import { type LucideIcon, AlertTriangle, MoreHorizontal, ChevronRight, Calculator, ArrowDownWideNarrow, ArrowUpNarrowWide, CheckSquare, EyeOff, Filter, FileStack, FileText, Plus, ScrollText, Sparkles, Trash2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { MemFile } from "@/lib/api"
 import { ago } from "@/lib/format"
@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 import { useLocal } from "@/hooks/useLocal"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { SORTS, type Sort } from "./memoryLib"
 import { typeOf } from "./MemoryTypes"
@@ -56,8 +57,6 @@ export function Section({
   issues: Map<string, number> // problèmes de santé par clé
 }) {
   const { t } = useTranslation()
-  const [, labelKey, SortIcon] = SORTS.find((s) => s[0] === sort.by) ?? SORTS[0]
-  const label = t(labelKey)
   // Repliée par défaut, sauf si elle contient le fichier ouvert ; le choix de l'utilisateur est gardé par section.
   const [pref, setPref] = useLocal(`gld.mem.open.${title}`, "")
   const open = pref ? pref === "1" : files.some((f) => f.key === sel)
@@ -81,30 +80,37 @@ export function Section({
                 {t("memory.section.tokens", { amount: budget >= 1000 ? `${(budget / 1000).toFixed(1)} k` : budget })}
               </span>
             )}
-            <Button variant="ghost" size="icon-xs" className={sortBtn} onClick={onNew} title={t("memory.section.newEntry")} aria-label={t("memory.section.newEntryAria", { title })}>
-              <Plus />
-            </Button>
-            {/* Deux icônes : le critère (un clic passe au suivant) et le sens, pour ce dossier. */}
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className={sortBtn}
-              onClick={() => onSort({ ...sort, by: SORTS[(SORTS.findIndex((s) => s[0] === sort.by) + 1) % SORTS.length][0] })}
-              title={t("memory.section.sortTitle", { label })}
-              aria-label={t("memory.section.sortAria", { title, label })}
-            >
-              <SortIcon />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className={sortBtn}
-              onClick={() => onSort({ ...sort, dir: sort.dir === "asc" ? "desc" : "asc" })}
-              title={sort.dir === "asc" ? t("memory.section.ascTitle") : t("memory.section.descTitle")}
-              aria-label={sort.dir === "asc" ? t("memory.section.ascAria", { title }) : t("memory.section.descAria", { title })}
-            >
-              {sort.dir === "asc" ? <ArrowUpNarrowWide /> : <ArrowDownWideNarrow />}
-            </Button>
+            {/* Ajout et tri regroupés : un seul bouton, au lieu de trois icônes côte à côte. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon-xs" className={sortBtn} aria-label={t("memory.section.moreAria", { title })}>
+                  <MoreHorizontal />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuItem onSelect={onNew}>
+                  <Plus /> {t("memory.section.newEntry")}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>{t("memory.section.sortBy")}</DropdownMenuLabel>
+                <DropdownMenuRadioGroup value={sort.by} onValueChange={(by) => onSort({ ...sort, by })}>
+                  {SORTS.map(([k, key, I]) => (
+                    <DropdownMenuRadioItem key={k} value={k}>
+                      <I /> {t(key)}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuRadioGroup value={sort.dir} onValueChange={(dir) => onSort({ ...sort, dir })}>
+                  <DropdownMenuRadioItem value="asc">
+                    <ArrowUpNarrowWide /> {t("memory.section.asc")}
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="desc">
+                    <ArrowDownWideNarrow /> {t("memory.section.desc")}
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-60">

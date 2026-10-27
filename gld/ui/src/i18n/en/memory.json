@@ -178,12 +178,6 @@
       "tokens": "{{amount}} tokens",
       "newEntry": "New entry",
       "newEntryAria": "New entry · {{title}}",
-      "sortTitle": "Sorted by {{label}} (click to change)",
-      "sortAria": "Sort {{title}} by: {{label}}",
-      "ascTitle": "Ascending (click to reverse)",
-      "descTitle": "Descending (click to reverse)",
-      "ascAria": "Ascending order · {{title}}",
-      "descAria": "Descending order · {{title}}",
       "menuNew": "New entry…",
       "menuNewRule": "New project rule…",
       "menuNewHaiku": "New entry with Haiku…",
@@ -195,7 +189,11 @@
       "typeAria": "type {{key}}",
       "ruleOff": "rule disabled",
       "ruleScoped": "scoped rule",
-      "toCheck": "to check"
+      "toCheck": "to check",
+      "moreAria": "Actions and sorting · {{title}}",
+      "sortBy": "Sort by",
+      "asc": "Ascending",
+      "desc": "Descending"
     },
     "trash": {
       "title": "Trash",
