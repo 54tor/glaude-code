@@ -29,6 +29,7 @@ type fakeIO struct {
 	keys     [][2]string
 	closed   []string
 	panesErr error
+	unknown  bool
 	busy     int32
 	overlap  bool
 }
@@ -38,6 +39,7 @@ func (f *fakeIO) Panes() (map[string]string, error) {
 	defer f.mu.Unlock()
 	return f.panes, f.panesErr
 }
+func (f *fakeIO) Known() bool    { f.mu.Lock(); defer f.mu.Unlock(); return !f.unknown }
 func (f *fakeIO) Idle() []string { f.mu.Lock(); defer f.mu.Unlock(); return f.idle }
 func (f *fakeIO) Capture(p string) (string, error) {
 	f.mu.Lock()
@@ -549,4 +551,55 @@ func TestUpFirstEmpty(t *testing.T) {
 	if upFirst("") != "" || upFirst("ada") != "Ada" {
 		t.Fatal("upFirst")
 	}
+}
+
+func seedClose(t *testing.T) (string, *fakeIO) {
+	t.Helper()
+	root, f := setup(t)
+	setActive(t, root, "hugo", false)
+	teamSend(root, trName, "max", "hugo", "direct")
+	teamView(root, trName)
+	f.panes = map[string]string{}
+	return root, f
+}
+
+func stateIntact(t *testing.T, root string, f *fakeIO) {
+	t.Helper()
+	if d, _ := journalRead(root, trName); len(d) == 0 {
+		t.Fatal("journal supprimé")
+	}
+	if len(teamQueue[trName]) == 0 && len(teamLog[trName]) == 0 {
+		t.Fatal("log et file vidés")
+	}
+	if len(f.closed) != 0 {
+		t.Fatalf("Close appelé : %v", f.closed)
+	}
+}
+
+func TestCloseAbortsWhenSessionStateUnknown(t *testing.T) {
+	root, f := seedClose(t)
+	f.unknown = true
+	if err := teamClose(root, trName); !isMsg(err, "srv.teams_run.etatInconnu") {
+		t.Fatalf("err : %v", err)
+	}
+	stateIntact(t, root, f)
+}
+
+func TestCloseFinishedTeamStillCleansWhenStateKnown(t *testing.T) {
+	root, f := seedClose(t)
+	if err := teamClose(root, trName); err != nil {
+		t.Fatal(err)
+	}
+	if d, _ := journalRead(root, trName); len(d) != 0 || len(f.closed) != 0 {
+		t.Fatal("nettoyage attendu")
+	}
+}
+
+func TestCloseStillAbortsOnRealTmuxError(t *testing.T) {
+	root, f := seedClose(t)
+	f.panes, f.panesErr = nil, errors.New("tmux gelé")
+	if err := teamClose(root, trName); !isMsg(err, "srv.teams_run.tmuxInutilisable") {
+		t.Fatalf("err : %v", err)
+	}
+	stateIntact(t, root, f)
 }

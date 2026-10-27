@@ -12,6 +12,7 @@ import (
 
 type paneIO interface {
 	Panes() (map[string]string, error) // id de session -> pane
+	Known() bool                       // vrai si la liste des sessions ouvertes a pu être lue, fraîche
 	Idle() []string
 	Capture(pane string) (string, error)
 	Paste(pane, text string) error
@@ -21,7 +22,11 @@ type paneIO interface {
 
 type realPanes struct{}
 
-func (realPanes) Panes() (map[string]string, error)   { return sendable() }
+func (realPanes) Panes() (map[string]string, error) { return sendable() }
+func (realPanes) Known() bool {
+	forgetAgents()
+	return alive() != nil
+}
 func (realPanes) Idle() []string                      { return waiting() }
 func (realPanes) Capture(pane string) (string, error) { return capturePane(pane) }
 func (realPanes) Paste(pane, text string) error       { return sendToPane(pane, text) }
@@ -472,6 +477,10 @@ func teamClose(cfgRoot, name string) error {
 	panes, perr := teamPanes.Panes()
 	if perr != nil {
 		return terr("srv.teams_run.tmuxInutilisable", "W1", perr)
+	}
+	// sans panneau pour le chef, on ne conclut « terminée » que si la lecture des sessions est connue (sinon vide par erreur)
+	if panes[tf.LeadSessionID] == "" && !teamPanes.Known() {
+		return terr("srv.teams_run.etatInconnu")
 	}
 	// team terminée (le chef a quitté) : plus de session à fermer, on nettoie quand même
 	if panes[tf.LeadSessionID] != "" {

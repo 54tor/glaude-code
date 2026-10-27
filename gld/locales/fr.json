@@ -452,6 +452,7 @@
   "srv.teams_run.dialogueEnCours": "un dialogue attend une réponse dans le terminal",
   "srv.teams_run.captureImpossible": "lecture du terminal impossible : {{.W1}}",
   "srv.teams_run.fermetureImpossible": "fermeture impossible : {{.W1}}",
+  "srv.teams_run.etatInconnu": "état des sessions inconnu, réessaie dans un instant",
   "srv.teams_run.tmuxInutilisable": "tmux injoignable : {{.W1}}",
   "srv.matin.envRefuse": "option --env refusée : seul CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 est admis",
   "srv.teams_launch.dossierInvalide": "dossier invalide (chemin absolu attendu)",
