@@ -144,7 +144,7 @@ func bashSegments(cmd string) []string {
 
 // tailLines : les lignes complètes des derniers n octets d'un fichier.
 func tailLines(path string, n int64) [][]byte {
-	f, err := os.Open(path)
+	f, err := openTrusted(path)
 	if err != nil {
 		return nil
 	}
@@ -186,7 +186,7 @@ func usageCounts() (map[string]int, map[string]string) {
 		t int64
 	}
 	var files []fileT
-	dirs, _ := os.ReadDir(root)
+	dirs, _ := readDirTrusted(root)
 	for _, d := range dirs {
 		ms, _ := filepath.Glob(filepath.Join(root, d.Name(), "*.jsonl"))
 		for _, p := range ms {
