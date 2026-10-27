@@ -49,6 +49,10 @@ var keyFromFile atomic.Bool
 // would silently orphan every signed row.
 func loadMasterKey(dir string, db *authDB) ([]byte, error) {
 	if e := strings.TrimSpace(os.Getenv("GLD_AUTH_KEY")); e != "" {
+		// La clé reste dans /proc/<gld>/environ, lisible par les sessions du même compte tant que gld est « dumpable ».
+		if err := hideEnviron(); err != nil {
+			journal("hideEnviron : %v", err)
+		}
 		return decodeKey(e)
 	}
 	s, gerr := keyringGet()

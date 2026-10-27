@@ -27,6 +27,9 @@ func TestGuardHookDenies(t *testing.T) {
 		`tar c "$HOME"/.config/gld`:         true,
 		`ls ` + dir:                         true,
 		`echo $GLD_AUTH_DIR`:                true,
+		`cat /proc/$PPID/environ`:           true,
+		`tr '\0' '\n' </proc/123/environ`:   true,
+		`grep environ notes.md`:             false,
 		`ls`:                                false,
 		`echo hello`:                        false,
 		`go test ./...`:                     false,
@@ -44,7 +47,7 @@ func TestGuardSettingsShape(t *testing.T) {
 	dir := "/srv/x/gld"
 	b, _ := json.Marshal(guardSettings(dir))
 	want := `{"hooks":{"PreToolUse":[{"hooks":[{"command":"CMD","onFailure":"block","type":"command"}],"matcher":"Bash|PowerShell|Monitor"}]},` +
-		`"permissions":{"deny":["Read(//srv/x/gld/**)","Edit(//srv/x/gld/**)","Read(//srv/x/gld/auth.db)","Edit(//srv/x/gld/auth.db)","Read(//srv/x/gld/auth.key)","Edit(//srv/x/gld/auth.key)"]},` +
+		`"permissions":{"deny":["Read(//srv/x/gld/**)","Edit(//srv/x/gld/**)","Read(//srv/x/gld/auth.db)","Edit(//srv/x/gld/auth.db)","Read(//srv/x/gld/auth.key)","Edit(//srv/x/gld/auth.key)","Read(//proc/*/environ)"]},` +
 		`"sandbox":{"filesystem":{"denyRead":["/srv/x/gld"],"denyWrite":["/srv/x/gld"]}}}`
 	cmd, _ := json.Marshal(guardCommand(dir))
 	if got := strings.Replace(string(b), string(cmd), `"CMD"`, 1); got != want {

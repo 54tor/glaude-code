@@ -57,7 +57,7 @@ Reste un cas **inévitable** : supprimer ensemble le témoin, le marqueur et tou
 
 Les secrets TOTP (et eux seuls) sont chiffrés (AES-256-GCM) ; les lignes sensibles sont signées (HMAC) avec une clé dérivée de la même clé maîtresse de 32 octets. Les autres colonnes restent en clair. Ordre de recherche :
 
-1. `GLD_AUTH_KEY` (64 caractères hexadécimaux) ;
+1. `GLD_AUTH_KEY` (64 caractères hexadécimaux) : la variable reste dans l'environnement initial de gld. Sous Linux, gld se marque alors non « dumpable » pour que les sessions du même compte ne la lisent pas dans `/proc/<pid>/environ`, et le garde refuse `Read(//proc/*/environ)`. En production, préférez le coffre-fort ou `auth.key` ;
 2. le coffre-fort de l'OS (service `gld`) ;
 3. sinon, un fichier `auth.key` (0600) à côté de la base, créé à la première utilisation. Il protège moins qu'un coffre-fort : qui lit le dossier lit la clé. gld l'écrit une fois sur la sortie d'erreur au démarrage quand la clé vient de ce fichier.
 

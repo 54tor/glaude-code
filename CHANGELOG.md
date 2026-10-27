@@ -17,6 +17,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Sécurité : la liste des serveurs MCP masque les paramètres d'adresse et les valeurs des drapeaux de type clé ou jeton ; `POST /pair-code` émet au plus 5 codes en attente par compte (200 au total).
 - Sécurité : un jeton opérateur faux (cookie, Bearer, `?token=`) compte dans les essais par adresse, comme le formulaire.
 - Sécurité : sous Linux, un gld enfant se marque non « dumpable » (`PR_SET_DUMPABLE`) : son jeton de passerelle n'est plus lisible dans `/proc/<pid>/environ` par les sessions du même compte.
+- Sécurité : quand `GLD_AUTH_KEY` vient de l'environnement, gld se marque non « dumpable » sous Linux ; le garde refuse la lecture de `/proc/*/environ`.
+- Synchronisation entre homes et copie de skills : les scripts gardent leur bit exécutable.
 - Connexion : les échecs de second facteur se comptent par compte et par adresse (5, remis à zéro par une connexion réussie) ; le plafond du compte toutes adresses confondues passe à 15 et n'est jamais remis à zéro.
 
 ## [0.4.7] - 2026-10-26

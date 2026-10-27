@@ -43,7 +43,7 @@ func guardDeny(authDir string) []string {
 	for _, p := range []string{rulePath(authDir) + "/**", rulePath(filepath.Join(authDir, "auth.db")), rulePath(filepath.Join(authDir, "auth.key"))} {
 		out = append(out, "Read("+p+")", "Edit("+p+")") // Edit couvre Write : une règle Write(chemin) n'est jamais appliquée
 	}
-	return out
+	return append(out, "Read(//proc/*/environ)") // GLD_AUTH_KEY y reste lisible quand elle vient de l'environnement de gld
 }
 
 func guardSelf() string {
@@ -90,6 +90,8 @@ func guardSettings(authDir string) map[string]any {
 	}
 }
 
+var procEnvironRe = regexp.MustCompile(`/proc/[^ ;|&]*/environ`)
+
 var sqliteRe = regexp.MustCompile(`(^|[^a-z0-9_.-])sqlite3?($|[^a-z0-9_-])`)
 
 // guardNorm retire guillemets et barres obliques inverses : `"auth"."db"` redevient auth.db.
@@ -102,7 +104,7 @@ func guardNorm(s string) string {
 func guardHook(cmd string, authDir string) (deny bool) {
 	// Deux lectures : barres obliques inverses retirées (au\th.db) ou lues comme séparateurs (C:\Users\...).
 	cs := []string{guardNorm(cmd), guardNorm(strings.ReplaceAll(cmd, `\`, "/"))}
-	if sqliteRe.MatchString(cs[0]) || strings.Contains(cs[0], "gld_auth_") {
+	if sqliteRe.MatchString(cs[0]) || strings.Contains(cs[0], "gld_auth_") || procEnvironRe.MatchString(cs[1]) {
 		return true
 	}
 	// -wal, -shm et -journal : les fichiers annexes de SQLite contiennent aussi les données.
