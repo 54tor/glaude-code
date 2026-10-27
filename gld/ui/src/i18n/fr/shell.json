@@ -85,7 +85,7 @@
       "addDirHint": "Ajouter un dossier sans session : on y lance un prompt sans mémoire Claude",
       "addDir": "Ajouter un dossier",
       "local": "Sessions locales",
-      "autoHidden": "{{n}} revues de sécurité masquées ({{size}})",
+      "autoHidden": "{{n}} revues de sécurité masquées",
       "clean": "Nettoyer",
       "argsHint": "options ajoutées à claude"
     },

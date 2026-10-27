@@ -358,7 +358,7 @@ function Shell() {
           now={now}
           ttl={HOT}
           snippets={snips ? snips.files.length : null}
-          auto={{ n: view.autoItems.length, kb: view.akb, purge: purgeAuto }}
+          auto={{ n: view.autoItems.length, purge: purgeAuto }}
           args={args}
         />
 

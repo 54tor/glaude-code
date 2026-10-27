@@ -85,7 +85,7 @@
       "addDirHint": "Add a folder without sessions: you can start a prompt there without Claude memory",
       "addDir": "Add a folder",
       "local": "Local sessions",
-      "autoHidden": "{{n}} security reviews hidden ({{size}})",
+      "autoHidden": "{{n}} security reviews hidden",
       "clean": "Clean up",
       "argsHint": "options added to claude"
     },

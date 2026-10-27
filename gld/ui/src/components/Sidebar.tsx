@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
 import { AlarmClock, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Flame, Microwave, Snowflake, History, Clock, FileText, Inbox, Info, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
-import { size, tilde } from "@/lib/format"
+import { tilde } from "@/lib/format"
 import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
 import { cn } from "@/lib/utils"
@@ -181,7 +181,7 @@ export type SidebarProps = {
   now: number
   ttl: number // durée du cache, en secondes
   snippets: number | null // null : bibliothèque non configurée
-  auto: { n: number; kb: number; purge: () => void }
+  auto: { n: number; purge: () => void }
   args: string // arguments de lancement des Réglages, rappelés en bas du menu
 }
 
@@ -358,7 +358,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           <div className="flex items-center gap-2 px-1 text-xs">
             <ShieldCheck className="size-4 shrink-0 text-muted-foreground" />
             <span className="flex-1 text-muted-foreground">
-              {t("shell.sidebar.autoHidden", { n: p.auto.n, size: size(p.auto.kb) })}
+              {t("shell.sidebar.autoHidden", { n: p.auto.n })}
             </span>
             <Button variant="ghost" size="xs" className="text-destructive hover:text-destructive" onClick={p.auto.purge}>
               {t("shell.sidebar.clean")}
