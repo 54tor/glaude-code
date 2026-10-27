@@ -23,12 +23,22 @@ type matinOpts struct {
 	min                         int64
 	pause                       time.Duration
 	exclure                     string
+	env                         map[string]string
 }
 
 func cliMatin(ctx context.Context, args []string, out io.Writer) error {
 	resume, resumeName := false, ""
 	var rest []string
+	var env map[string]string
 	for i := 0; i < len(args); i++ { // --resume prend un nom facultatif
+		if args[i] == "--env" { // seul le couple de tabEnvKey est admis ; jamais par --args
+			if i+1 >= len(args) || args[i+1] != tabEnvKey+"="+tabEnvVal {
+				return terr("srv.matin.envRefuse")
+			}
+			i++
+			env = map[string]string{tabEnvKey: tabEnvVal}
+			continue
+		}
 		if args[i] == "--resume" {
 			resume = true
 			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
@@ -58,6 +68,7 @@ func cliMatin(ctx context.Context, args []string, out io.Writer) error {
 		pause:   time.Duration(pause * float64(time.Second)),
 		exclure: envStr("", "GLD_MATIN_EXCLURE", "CC_MATIN_EXCLURE"),
 		args:    strings.Fields(envStr("", "GLD_MATIN_ARGS", "CC_MATIN_ARGS")),
+		env:     env,
 	}
 	if len(f.pos) > 0 {
 		o.project = f.pos[len(f.pos)-1]
@@ -142,7 +153,7 @@ func matinRun(ctx context.Context, o matinOpts, out io.Writer) error {
 		if launcher == "" {
 			return terr("srv.matin.aucunTerminalSupporteDetecte")
 		}
-		if err := openTab(launcher, "claude", tabSpec{Cwd: dir, Args: claudeTabArgs(o.args, "", o.prompt)}); err != nil {
+		if err := openTab(launcher, "claude", tabSpec{Cwd: dir, Args: claudeTabArgs(o.args, "", o.prompt), Env: o.env}); err != nil {
 			return err
 		}
 		fmt.Fprintln(out, L("cli.matin.openedNew", "A1", dir))

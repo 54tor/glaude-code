@@ -17,8 +17,21 @@ import (
 
 // tabSpec : ce que l'onglet doit lancer. Args sont les arguments de claude, prompt compris.
 type tabSpec struct {
-	Cwd  string   `json:"cwd"`
-	Args []string `json:"args"`
+	Cwd  string            `json:"cwd"`
+	Args []string          `json:"args"`
+	Env  map[string]string `json:"env,omitempty"`
+}
+
+// tabEnvAllowed : le seul couple que le fichier de spécification peut poser dans l'environnement de claude. Ce fichier est une
+// frontière de confiance (sous GLD_RUN_AS il est relu par le compte cible) : toute autre variable, LD_PRELOAD ou PATH
+// compris, est ignorée.
+const tabEnvKey, tabEnvVal = "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", "1"
+
+// applyTabEnv ajoute à c.Env les variables autorisées de env ; à appeler après withPath, qui écrase c.Env.
+func applyTabEnv(c *exec.Cmd, env map[string]string) {
+	if env[tabEnvKey] == tabEnvVal {
+		c.Env = append(c.Env, tabEnvKey+"="+tabEnvVal)
+	}
 }
 
 // launchers : ordre de préférence, le multiplexeur courant d'abord, puis les émulateurs. « wt » est Windows Terminal
@@ -194,6 +207,7 @@ func runTab(file string) int {
 	if err == nil {
 		// withPath cherche aussi dans ~/.local/bin, absent du PATH d'un onglet ouvert depuis un lanceur de bureau ou un service.
 		if c := withPath(exec.Command("claude", s.Args...)); c.Err == nil {
+			applyTabEnv(c, s.Env)
 			return execClaude(c)
 		} else {
 			err = c.Err
