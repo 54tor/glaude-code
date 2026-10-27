@@ -213,7 +213,7 @@ func groupsFile() string { return filepath.Join(cfgDir(), "gld-web-groups.json")
 
 func loadStore() Store {
 	st := Store{Groups: []VGroup{}, Favs: []string{}, Projects: []Project{}, Dirs: []string{}}
-	b, err := os.ReadFile(groupsFile())
+	b, err := readTrusted(groupsFile())
 	if err != nil {
 		return st
 	}
