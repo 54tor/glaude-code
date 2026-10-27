@@ -41,6 +41,7 @@
     "mcpOther": "other source",
     "tabActive": "Active",
     "tabInstall": "Install and marketplaces",
-    "editor": "Skill editor"
+    "editor": "Skill editor",
+    "tabEditor": "Skill editor"
   }
 }

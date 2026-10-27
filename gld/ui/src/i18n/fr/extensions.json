@@ -41,6 +41,7 @@
     "mcpOther": "autre source",
     "tabActive": "Actifs",
     "tabInstall": "Installation et marketplaces",
-    "editor": "Éditeur de skills"
+    "editor": "Éditeur de skills",
+    "tabEditor": "Éditeur de skills"
   }
 }

@@ -397,7 +397,7 @@ function Shell() {
           ) : route.kind === "projectConfig" ? (
             <Config key={route.dir} dir={route.dir} home={home} tab="" onTab={() => go({ kind: "config", tab: "permissions" })} ui={{ args, setArgs, choice, setChoice, font, setFont, fontSize, setFontSize }} />
           ) : route.kind === "extensions" ? (
-            <Extensions home={home} />
+            <Extensions home={home} onAsk={setAsk} />
           ) : route.kind === "config" ? (
             <Config home={home} tab={route.tab} onTab={(tab) => go({ kind: "config", tab })} ui={{ args, setArgs, choice, setChoice, font, setFont, fontSize, setFontSize }} />
           ) : route.kind === "memory" ? (

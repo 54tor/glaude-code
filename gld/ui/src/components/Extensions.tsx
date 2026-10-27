@@ -12,6 +12,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Choose } from "./Choose"
 import { PluginsPanel } from "./PluginsDialog"
+import { Skills } from "./Skills"
+import type { Ask } from "./Confirm"
 import { useActions } from "./actions"
 import { useConfigEdit } from "./configEdit"
 
@@ -19,7 +21,7 @@ type Enabled = Record<string, boolean>
 
 // Vue unique de ce que Claude Code charge : plugins (activables par portée), skills, hooks et serveurs MCP, pour l'utilisateur
 // seul ou pour le contexte d'un projet (utilisateur, puis projet, puis local). Les écritures passent par /config-edit.
-export function Extensions({ home }: { home: string }) {
+export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => void }) {
   const { t } = useTranslation()
   const [ov, setOv] = useState<CfgOverview | null>(null)
   const [skills, setSkills] = useState<Skill[]>([])
@@ -28,6 +30,8 @@ export function Extensions({ home }: { home: string }) {
   const [err, setErr] = useState("")
   const [dir, setDir] = useState("") // "" : utilisateur seul
   const [tab, setTab] = useState("active")
+  const [skillKey, setSkillKey] = useState("") // skill ouvert dans l'éditeur
+  const openSkill = (key: string) => (setSkillKey(key), setTab("editor"))
   const [status, setStatus] = useState<Record<string, string> | null>(null) // `claude mcp list` : tous les serveurs vus par Claude Code, lent (quelques secondes)
   const a = useActions()
   const reload = useCallback(
@@ -87,14 +91,18 @@ export function Extensions({ home }: { home: string }) {
   const sect = "text-md font-semibold border-b pb-1 mb-2 flex items-center gap-2"
 
   return (
-    <ScrollArea className="min-h-0 flex-1">
-      <div className="mx-auto max-w-5xl px-3 py-6 md:px-6">
-        <Tabs value={tab} onValueChange={setTab}>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col gap-0">
+        <div className="mx-auto w-full max-w-5xl px-3 pt-4 md:px-6">
           <TabsList>
             <TabsTrigger value="active">{t("extensions.tabActive")}</TabsTrigger>
             <TabsTrigger value="install">{t("extensions.tabInstall")}</TabsTrigger>
+            <TabsTrigger value="editor">{t("extensions.tabEditor")}</TabsTrigger>
           </TabsList>
-          <TabsContent value="active" className="space-y-8 pt-4">
+        </div>
+        <TabsContent value="active" className="min-h-0 flex-1">
+          <ScrollArea className="h-full">
+            <div className="mx-auto max-w-5xl space-y-8 px-3 py-4 md:px-6">
         <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
           {t("extensions.context")}
           <Choose value={dir} onChange={setDir} label={t("extensions.context")} className="min-w-0 max-w-md" options={[["", t("extensions.contextUser")], ...ov.projects.map((p) => [p.dir, tilde(p.project, home)] as const)]} />
@@ -155,7 +163,7 @@ export function Extensions({ home }: { home: string }) {
         <section>
           <h3 className={sect}>
             {t("extensions.skills")} <span className="text-xs font-normal text-muted-foreground">{t("extensions.skillsTotal", { count: skillsHere.length, chars })}</span>
-            <Link href={href({ kind: "skills", key: "" })} className="ml-auto text-xs font-normal text-muted-foreground underline">{t("extensions.editor")}</Link>
+            <button type="button" onClick={() => openSkill("")} className="ml-auto text-xs font-normal text-muted-foreground underline">{t("extensions.editor")}</button>
           </h3>
           <table className="w-full text-sm">
             {head}
@@ -163,7 +171,7 @@ export function Extensions({ home }: { home: string }) {
               {skillsHere.map((s) => (
                 <tr key={s.key} className="hover:bg-muted/50">
                   <td className="min-w-0 py-1 pr-2">
-                    <Link href={href({ kind: "skills", key: s.key })} className="break-all hover:underline">{s.name}</Link>{" "}
+                    <button type="button" onClick={() => openSkill(s.key)} className="break-all hover:underline">{s.name}</button>{" "}
                     <span className="text-xs text-muted-foreground">{s.plugin ? t("extensions.fromPlugin", { name: s.plugin }) : s.scope === "project" ? t("extensions.fromProject") : t("extensions.fromUser")}</span>
                     {(s.manual || s.hidden) && <span className="ml-2 text-xs text-warning">{s.manual ? t("extensions.manual") : t("extensions.hidden")}</span>}
                   </td>
@@ -266,13 +274,21 @@ export function Extensions({ home }: { home: string }) {
           <p className="mt-1 text-xs text-muted-foreground">{t("extensions.offWins")}</p>
           {!mcpHere.length && !others.length && <p className="py-3 text-sm text-muted-foreground">{t("extensions.noMcp")}</p>}
         </section>
-          </TabsContent>
-          <TabsContent value="install" className="pt-4">
-            <PluginsPanel inline projects={ov.projects} home={home} onChange={reload} />
-          </TabsContent>
-        </Tabs>
-      </div>
+            </div>
+          </ScrollArea>
+        </TabsContent>
+        <TabsContent value="install" className="min-h-0 flex-1">
+          <ScrollArea className="h-full">
+            <div className="mx-auto max-w-5xl px-3 py-4 md:px-6">
+              <PluginsPanel inline projects={ov.projects} home={home} onChange={reload} />
+            </div>
+          </ScrollArea>
+        </TabsContent>
+        <TabsContent value="editor" className="flex min-h-0 flex-1 flex-col">
+          <Skills sel={skillKey} home={home} q="" onPick={setSkillKey} onAsk={onAsk} />
+        </TabsContent>
+      </Tabs>
       {dialog}
-    </ScrollArea>
+    </div>
   )
 }
