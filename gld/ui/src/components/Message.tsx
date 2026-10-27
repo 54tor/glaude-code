@@ -14,10 +14,11 @@ import { CompactSummary, isCompactSummary, isTagged, Tagged } from "./Tagged"
 
 // Messages de Claude : Markdown (tableaux GFM compris). react-markdown n'interprète jamais de HTML brut
 // et filtre les URL dangereuses (javascript:) : rien de ce qui est affiché ne peut s'exécuter.
+// breaks : un retour à la ligne simple reste visible (texte tapé par l'utilisateur).
 // onLink : intercepte un lien relatif (ex. une autre entrée de mémoire) ; renvoie false pour le laisser faire.
-export function Markdown({ t, onLink }: { t: string; onLink?: (href: string) => boolean }) {
+export function Markdown({ t, onLink, breaks }: { t: string; onLink?: (href: string) => boolean; breaks?: boolean }) {
   return (
-    <div className="md">
+    <div className={breaks ? "md md-breaks" : "md"}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeNoBreak]}
@@ -48,7 +49,7 @@ function UserText({ t: text }: { t: string }) {
   let at = 0
   for (const m of text.matchAll(PASTED)) {
     const before = text.slice(at, m.index).trim()
-    if (before) parts.push(<span key={`t${at}`}>{noBreak(before)}</span>)
+    if (before) parts.push(<Markdown key={`t${at}`} t={before} breaks />)
     const lines = m[1].split("\n").length
     parts.push(
       <details key={m.index} className="group/paste my-1 rounded-md border bg-background/60">
@@ -61,7 +62,7 @@ function UserText({ t: text }: { t: string }) {
     at = m.index + m[0].length
   }
   const rest = text.slice(at).trim()
-  if (rest) parts.push(<span key="rest">{noBreak(rest)}</span>)
+  if (rest) parts.push(<Markdown key="rest" t={rest} breaks />)
   return <>{parts}</>
 }
 
@@ -159,13 +160,13 @@ function MessageView({ m, conv }: { m: Msg; conv?: Conv }) {
   if (m.r === "user" && isTagged(m.t))
     return (
       <div title={title} className="msg ml-auto max-w-[85%]">
-        <Tagged t={m.t} />
+        <Tagged t={m.t} md={(t) => <Markdown t={t} />} />
       </div>
     )
   if (m.r === "user")
     return (
       <div title={title} className="msg flex justify-end">
-        <div className="max-w-[85%] rounded-lg bg-accent px-4 py-2.5 break-words whitespace-pre-wrap text-accent-foreground">
+        <div className="max-w-[85%] rounded-lg bg-accent px-4 py-2.5 break-words text-accent-foreground">
           <UserText t={m.t} />
         </div>
       </div>

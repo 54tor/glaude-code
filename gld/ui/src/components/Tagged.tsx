@@ -31,7 +31,9 @@ const KNOWN = /<(?:teammate-message|task-notification)[\s>][\s\S]*?<\/(?:teammat
 // Début de message balisé quelconque, ou balise connue glissée plus loin dans le texte (ex. après un tiret de liste).
 export const isTagged = (t: string) => (/^\s*<[a-z][a-z-]*[\s>]/.test(t) && !/^\s*<pasted_content/.test(t)) || KNOWN.test(t)
 
-function Card({ tag, attrs, body }: { tag: string; attrs: string; body: string }) {
+type Md = (t: string) => React.ReactNode
+
+function Card({ tag, attrs, body, md }: { tag: string; attrs: string; body: string; md: Md }) {
   const { t } = useTranslation()
   const fields = [...body.matchAll(BLOCK)].map(([, k, , v]) => [k, v.trim()] as const)
   const get = (k: string) => fields.find(([f]) => f === k)?.[1]
@@ -57,7 +59,7 @@ function Card({ tag, attrs, body }: { tag: string; attrs: string; body: string }
             ))}
           </dl>
         ) : (
-          <p className="mt-1.5 break-words whitespace-pre-wrap">{body.trim()}</p>
+          <div className="mt-1.5 break-words">{md(body.trim())}</div>
         )}
       </div>
     )
@@ -74,10 +76,10 @@ function Card({ tag, attrs, body }: { tag: string; attrs: string; body: string }
         )}
       </div>
       {fields.length === 0 ? (
-        <p className="mt-1.5 break-words whitespace-pre-wrap">{body.trim()}</p>
+        <div className="mt-1.5 break-words">{md(body.trim())}</div>
       ) : (
         <>
-          {get("summary") && <p className="mt-1.5 break-words whitespace-pre-wrap">{get("summary")}</p>}
+          {get("summary") && <div className="mt-1.5 break-words">{md(get("summary")!)}</div>}
           <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
             {fields
               .filter(([k]) => k !== "summary" && k !== "status")
@@ -97,26 +99,26 @@ function Card({ tag, attrs, body }: { tag: string; attrs: string; body: string }
 }
 
 // Un message fait de blocs balisés et, éventuellement, de texte libre autour.
-export function Tagged({ t }: { t: string }) {
+export function Tagged({ t, md }: { t: string; md: Md }) {
   const parts: React.ReactNode[] = []
   let at = 0
   for (const m of t.matchAll(BLOCK)) {
     const before = t.slice(at, m.index).trim()
     if (before)
       parts.push(
-        <p key={`t${at}`} className="break-words whitespace-pre-wrap">
-          {before}
-        </p>
+        <div key={`t${at}`} className="break-words">
+          {md(before)}
+        </div>
       )
-    parts.push(<Card key={m.index} tag={m[1]} attrs={m[2]} body={m[3]} />)
+    parts.push(<Card key={m.index} tag={m[1]} attrs={m[2]} body={m[3]} md={md} />)
     at = m.index + m[0].length
   }
   const rest = t.slice(at).trim()
   if (rest)
     parts.push(
-      <p key="rest" className="break-words whitespace-pre-wrap">
-        {rest}
-      </p>
+      <div key="rest" className="break-words">
+        {md(rest)}
+      </div>
     )
   return <div className="space-y-2">{parts}</div>
 }
