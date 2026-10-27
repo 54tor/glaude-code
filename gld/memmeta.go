@@ -56,6 +56,13 @@ func parseMeta(text string) (map[string]any, error) {
 	return m, nil
 }
 
+// metaString : un champ texte du front matter, sur une ligne (une valeur repliée « >- » comprise) ; "" s'il manque.
+func metaString(text, key string) string {
+	m, _ := parseMeta(text)
+	s, _ := m[key].(string)
+	return strings.Join(strings.Fields(s), " ")
+}
+
 // globsOf : les motifs du champ `paths:` (liste ou chaîne, séparés par des virgules).
 func globsOf(m map[string]any) ([]string, error) {
 	var out []string
@@ -330,12 +337,12 @@ func memRepairIndex(dir string) (removed, added int, err error) {
 		}
 		text, _ := memRead("m/" + dir + "/" + n)
 		title := strings.TrimSuffix(n, ".md")
-		if m := nameRe.FindStringSubmatch(text); m != nil {
-			title = m[1]
+		if n := metaString(text, "name"); n != "" {
+			title = n
 		}
 		line := "- [" + title + "](" + n + ")"
-		if m := descRe.FindStringSubmatch(text); m != nil {
-			line += " — " + m[1]
+		if d := metaString(text, "description"); d != "" {
+			line += " — " + d
 		}
 		out += line + "\n"
 		added++

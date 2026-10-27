@@ -220,3 +220,16 @@ func TestFixFrontMatter(t *testing.T) {
 		t.Fatal("déjà valide : doit refuser")
 	}
 }
+
+func TestMetaString(t *testing.T) {
+	for text, want := range map[string]string{
+		"---\ndescription:\nname: x\n---\n":                 "",
+		"---\ndescription: >-\n  sur deux\n  lignes\n---\n": "sur deux lignes",
+		"---\ndescription: 'entre guillemets'\n---\n":       "entre guillemets",
+		"pas d'en-tête": "",
+	} {
+		if got := metaString(text, "description"); got != want {
+			t.Errorf("metaString(%q) = %q, attendu %q", text, got, want)
+		}
+	}
+}

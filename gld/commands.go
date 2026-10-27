@@ -11,7 +11,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -89,22 +88,8 @@ func cmdBase(key string) (string, string, error) {
 	return base, rel, err
 }
 
-var descLine = regexp.MustCompile(`(?m)^description:\s*["']?(.*?)["']?\s*$`)
-
-// frontmatter : la description de l'en-tête YAML, s'il y en a un.
-func describe(text string) string {
-	if !strings.HasPrefix(text, "---\n") {
-		return ""
-	}
-	end := strings.Index(text[4:], "\n---")
-	if end < 0 {
-		return ""
-	}
-	if m := descLine.FindStringSubmatch(text[4 : 4+end]); m != nil {
-		return m[1]
-	}
-	return ""
-}
+// describe : la description de l'en-tête YAML, s'il y en a un.
+func describe(text string) string { return metaString(text, "description") }
 
 func walkCommands(base, scope, project string, out []Snippet) []Snippet {
 	prefix := "u/"

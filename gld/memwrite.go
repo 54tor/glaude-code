@@ -171,8 +171,6 @@ func keepHeader(orig, draft string) string {
 	return "---\n" + y + "\n---\n\n" + strings.TrimLeft(draft, "\n")
 }
 
-var nameRe = regexp.MustCompile(`(?m)^name:\s*["']?([^"'\n]+?)["']?\s*$`)
-var descRe = regexp.MustCompile(`(?m)^description:\s*["']?([^\n]+?)["']?\s*$`)
 
 // memIndex ajoute à MEMORY.md la ligne d'une nouvelle entrée de mémoire de projet, si elle n'y est pas déjà.
 func memIndex(key, text string) error {
@@ -189,12 +187,12 @@ func memIndex(key, text string) error {
 		return nil
 	}
 	title := strings.TrimSuffix(file, ".md")
-	if m := nameRe.FindStringSubmatch(text); m != nil {
-		title = m[1]
+	if n := metaString(text, "name"); n != "" {
+		title = n
 	}
 	line := "- [" + title + "](" + file + ")"
-	if m := descRe.FindStringSubmatch(text); m != nil {
-		line += " — " + m[1]
+	if d := metaString(text, "description"); d != "" {
+		line += " — " + d
 	}
 	if idx != "" && !strings.HasSuffix(idx, "\n") {
 		idx += "\n"
