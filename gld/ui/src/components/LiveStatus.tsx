@@ -99,9 +99,11 @@ export function LiveBar({ live: { st, open }, id }: { live: Live; id: string }) 
           className={cn(
             "msg flex min-h-5 min-w-0 basis-full items-start gap-2 border-l-2 py-0.5 pl-3 text-left text-xs leading-4 text-muted-foreground",
             detail ? (isTool ? "" : "border-warning/60") : "border-transparent",
+            isTool && st.toolRunning && "animate-pulse rounded-r-md border-success bg-success/10 text-foreground",
             detail && "cursor-pointer hover:text-foreground"
           )}
         >
+          {isTool && st.toolRunning && <Loader2 className="mt-px size-3.5 shrink-0 animate-spin text-success" aria-hidden />}
           {isTool && <Wrench className="mt-px size-3.5 shrink-0" aria-label={st.toolRunning ? t("conversation.live.toolRunning") : t("conversation.live.lastTool")} />}
           <span className={cn("min-w-0 flex-1", expanded ? "max-h-60 overflow-y-auto break-words whitespace-pre-wrap" : "truncate")}>{detail || " "}</span>
         </button>
