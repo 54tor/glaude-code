@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react"
+import { Fragment, useState, useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
 import { AlarmClock, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, Flame, Microwave, Snowflake, History, Clock, FileText, Inbox, NotebookPen, Info, Loader2, Search, ShieldCheck, Tag, Users, X } from "lucide-react"
@@ -22,6 +22,7 @@ import { ProjectList } from "./ProjectList"
 import { ProjectItems, ProjectTree } from "./ProjectTree"
 import { segs } from "@/lib/paths"
 import { CM, GroupItems, SessionItems } from "./SessionMenu"
+import { nest } from "./SessionList"
 import type { Session, VGroup } from "@/lib/api"
 import { useActions, type Row } from "./actions"
 
@@ -79,13 +80,34 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
   // Un dossier par projet de travail, le plus récemment actif d'abord (les lignes arrivent déjà triées par date).
   const folders = new Map<string, Row[]>()
   for (const r of rows) folders.set(r.g.project, [...(folders.get(r.g.project) ?? []), r])
-  const item = (row: Row) => {
+  const [opened, setOpened] = useState<Set<string>>(new Set())
+  const toggle = (id: string) =>
+    setOpened((o) => {
+      const n = new Set(o)
+      if (!n.delete(id)) n.add(id)
+      return n
+    })
+  const item = (row: Row, kids: Row[] = [], child = false): React.ReactNode => {
     const { s } = row
+    const open = opened.has(s.id)
     const cold = now - s.mtime >= ttl // ouverte mais cache expiré
     const left = Math.max(1, Math.ceil((ttl - (now - s.mtime)) / 60))
     const warn = !cold && left <= 10
     return (
-      <ContextMenu key={s.id}>
+      <Fragment key={s.id}>
+      <div className={cn("flex items-center", child && "ml-4")}>
+      {kids.length > 0 && (
+        <button
+          onClick={() => toggle(s.id)}
+          aria-expanded={open}
+          aria-label={t("shell.list.subSessions", { count: kids.length })}
+          className="flex h-8 shrink-0 items-center text-xs text-muted-foreground hover:text-foreground"
+        >
+          <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} />
+          <span className="tabular-nums">{kids.length}</span>
+        </button>
+      )}
+      <ContextMenu>
         <ContextMenuTrigger asChild>
           <button
             onClick={() => a.read(s)}
@@ -119,6 +141,9 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
           <SessionItems M={CM} row={row} full />
         </ContextMenuContent>
       </ContextMenu>
+      </div>
+      {open && kids.map((c) => item(c, [], true))}
+      </Fragment>
     )
   }
   return (
@@ -151,7 +176,12 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
               }
             />
           </ContextMenu>
-          <div className="ml-3 border-l pl-1">{rs.map(item)}</div>
+          <div className="ml-3 border-l pl-1">
+            {(() => {
+              const { tops, kids } = nest(rs)
+              return tops.map((r) => item(r, kids.get(r.s.id)))
+            })()}
+          </div>
         </details>
       ))}
     </>
