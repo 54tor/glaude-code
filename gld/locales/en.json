@@ -434,6 +434,8 @@
   "srv.teams_catalog.chefAbsent": "no lead agent in the catalogue",
   "srv.teams_catalog.selectionVide": "no team selected",
   "srv.teams_catalog.teamInconnue": "unknown team: {{.A1}}",
+  "srv.teams_files.equipeIntrouvable": "team not found",
+  "srv.teams_files.nomInvalide": "invalid team name",
   "srv.teams_store.accesInvalide": "invalid access (read or write expected): {{.A1}}",
   "srv.teams_store.agentInconnu": "unknown agent: {{.A1}}",
   "srv.teams_store.agentUtilise": "agent {{.A1}} is used by team {{.A2}}",
