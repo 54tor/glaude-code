@@ -51,22 +51,22 @@ func trashSessions(items []item) (n, spared int, err error) {
 			meta.Title, meta.Cwd, meta.KB = s.Title, s.Cwd, s.KB
 		}
 		dst := trashSessionPath(it.ID)
-		if e := os.MkdirAll(dst, 0o700); e != nil {
+		if e := rMkdirAll(cfgDir(), dst, 0o700); e != nil {
 			return n, spared, e
 		}
 		// Le transcript d'abord, la fiche ensuite : une fiche sans transcript serait une entrée fantôme, impossible à purger.
 		moved := filepath.Join(dst, it.ID+".jsonl")
-		if e := os.Rename(p, moved); e != nil {
+		if e := rRename(cfgDir(), p, moved); e != nil {
 			err = errors.Join(err, e)
 			continue
 		}
 		b, _ := json.Marshal(meta)
-		if e := os.WriteFile(filepath.Join(dst, "meta.json"), b, 0o600); e != nil {
-			os.Rename(moved, p)
+		if e := rWriteFile(cfgDir(), filepath.Join(dst, "meta.json"), b, 0o600); e != nil {
+			rRename(cfgDir(), moved, p)
 			return n, spared, e
 		}
 		if sub := filepath.Join(root, it.Dir, it.ID); dirExists(sub) {
-			if e := os.Rename(sub, filepath.Join(dst, "sub")); e != nil {
+			if e := rRename(cfgDir(), sub, filepath.Join(dst, "sub")); e != nil {
 				err = errors.Join(err, e)
 			}
 		}
@@ -165,19 +165,19 @@ func restoreTrashed(id string) error {
 	if _, err := os.Lstat(dst); err == nil {
 		return terr("srv.trashsessions.unTranscriptDeCe")
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := rMkdirAll(cfgDir(), dir, 0o755); err != nil {
 		return err
 	}
 	src := trashSessionPath(id)
-	if err := os.Rename(filepath.Join(src, id+".jsonl"), dst); err != nil {
+	if err := rRename(cfgDir(), filepath.Join(src, id+".jsonl"), dst); err != nil {
 		return err
 	}
 	if sub := filepath.Join(src, "sub"); dirExists(sub) {
-		if err := os.Rename(sub, filepath.Join(dir, id)); err != nil {
+		if err := rRename(cfgDir(), sub, filepath.Join(dir, id)); err != nil {
 			return err // le transcript est revenu ; les sous-agents restent dans la corbeille plutôt que d'être effacés
 		}
 	}
-	return os.RemoveAll(src)
+	return rRemoveAll(cfgDir(), src)
 }
 
 // purgeTrashed supprime pour de bon : les fichiers reviennent à leur place le temps de la purge complète (purgeSessions retire
@@ -195,7 +195,7 @@ func purgeTrashed(ids []string) (int, error) {
 			continue
 		}
 		if _, err := os.Stat(filepath.Join(trashSessionPath(id), id+".jsonl")); err != nil {
-			os.RemoveAll(trashSessionPath(id)) // fiche sans transcript : rien à remettre en place
+			rRemoveAll(cfgDir(), trashSessionPath(id)) // fiche sans transcript : rien à remettre en place
 			continue
 		}
 		if err := restoreTrashed(id); err != nil {

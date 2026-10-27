@@ -126,3 +126,30 @@ func TestFichiersDeDonneesNeSuiventPasLesLiens(t *testing.T) {
 		t.Fatalf("transcript hors de la config modifié : %q", b)
 	}
 }
+
+func TestCorbeilleSessionsNeSuitPasLesLiens(t *testing.T) {
+	cfg, out := t.TempDir(), t.TempDir()
+	old := root
+	t.Cleanup(func() { root = old })
+	use(cfg)
+	p := filepath.Join(cfg, "projects", "-p", id1+".jsonl")
+	os.MkdirAll(filepath.Dir(p), 0o755)
+	os.WriteFile(p, []byte("{}\n"), 0o600)
+	os.Symlink(out, filepath.Join(cfg, "gld-web-trash")) // la corbeille pointe hors de la config
+	if n, _, _ := trashSessions([]item{{"-p", id1}}); n != 0 {
+		t.Fatal("session déplacée à travers un lien")
+	}
+	if ents, _ := os.ReadDir(out); len(ents) != 0 {
+		t.Fatalf("écrit hors de la config : %v", ents)
+	}
+	if _, err := os.Stat(p); err != nil {
+		t.Fatal("transcript perdu")
+	}
+	victim := filepath.Join(out, "history")
+	os.WriteFile(victim, []byte("intact"), 0o600)
+	os.Symlink(victim, filepath.Join(cfg, "history.jsonl"))
+	pruneHistory([]string{id1})
+	if b, _ := os.ReadFile(victim); string(b) != "intact" {
+		t.Fatalf("history réécrit à travers un lien : %q", b)
+	}
+}
