@@ -19,8 +19,18 @@ export function useQueueDrain(live: Set<string>, waiting: Set<string>, asking: S
     now.current = { live, waiting, asking, key }
   })
   useEffect(() => {
-    const drain = async (id: string) => {
+    // Un seul onglet vide la file d'une session : les autres sautent leur tour au lieu d'envoyer le même message.
+    const drain = (id: string) => {
       inflight.add(id)
+      const run = () => send(id).finally(() => inflight.delete(id))
+      if (!navigator.locks) return run()
+      return navigator.locks.request("gld.queue." + id, { ifAvailable: true }, (lock) => {
+        if (lock) return run()
+        inflight.delete(id)
+        markSent(id) // l'autre onglet envoie : on lui laisse le délai SETTLE avant de juger la session libre
+      })
+    }
+    const send = async (id: string) => {
       try {
         const info = await api.sendInfo()
         const q = draftOf(id).queue
@@ -33,8 +43,6 @@ export function useQueueDrain(live: Set<string>, waiting: Set<string>, asking: S
         toast.error(r.out)
       } catch {
         /* réseau coupé : la file reste, le prochain passage réessaie */
-      } finally {
-        inflight.delete(id)
       }
     }
     const h = setInterval(() => {

@@ -35,6 +35,15 @@ const save = () => {
   }
 }
 
+// Un autre onglet a réécrit le stockage : on repart de sa copie, sinon le prochain save de cet onglet l'écraserait.
+if (typeof window !== "undefined")
+  window.addEventListener("storage", (e) => {
+    if (e.key !== KEY || !writable()) return
+    entries.clear()
+    for (const [id, v] of load()) entries.set(id, v)
+    subs.forEach((f) => f())
+  })
+
 // Changement de compte : seule la copie en mémoire part ; le stockage est vidé par l'appelant, ou appartient déjà à un autre compte.
 export function clearDrafts() {
   entries.clear()
