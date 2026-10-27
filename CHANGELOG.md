@@ -23,6 +23,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Sécurité : une session ouverte par code de jumelage expire au plus tard avec la session émettrice et tombe avec elle (migration `auth.db` 0009, appliquée au démarrage).
 - Sécurité : une source de marketplace vers la machine, un réseau privé ou le lien local est refusée.
 - Sécurité (`GLD_RUN_AS`) : les écritures de la passerelle dans la config (journal, corbeilles, réglages, sauvegardes, fichiers de données, transcripts déplacés, images, skills) ne suivent plus un lien symbolique qui sort du dossier ; temporaires à nom aléatoire, mode posé sur le descripteur.
+- Sécurité (`GLD_RUN_AS`) : les lectures de la passerelle (réglages, mémoire, transcripts, corbeilles, gardes de droits) ne suivent plus un lien symbolique posé par le compte cible hors du dossier de confiance.
+- Connexion : un cookie de jeton périmé est effacé à son premier refus, au lieu d'épuiser les essais de l'adresse à chaque relevé de l'interface.
+- File d'envoi : un message ne quitte la file qu'une fois l'envoi confirmé ; un envoi sans réponse s'affiche « envoi incertain » avec Renvoyer.
 - Connexion : les échecs de second facteur se comptent par compte et par adresse (5, remis à zéro par une connexion réussie) ; le plafond du compte toutes adresses confondues passe à 15 et n'est jamais remis à zéro.
 
 ## [0.4.7] - 2026-10-26

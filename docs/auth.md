@@ -243,7 +243,7 @@ Non testé en réel : onglets tmux, envoi de touches et terminal web sous un aut
 - `/chat` local, terminal et chat relayés vers un home enfant : revérification toutes les 5 s (seul le terminal local est contrôlé par message). `/chat` vers un enfant est coupé par la passerelle puis arrêté par un appel `/chat-stop` à l'enfant ; le garde ne relit pas un corps de plus de 64 Kio (413).
 - Fenêtre de 2 s après la création du premier compte pendant laquelle le serveur reste ouvert.
 - Enrôlement au premier login protégé par le seul mot de passe ; aucun changement de mot de passe forcé ; aucune route de rétrogradation d'administrateur.
-- `GLD_RUN_AS` : la passerelle suit encore des liens symboliques posés par le compte cible ; pas une frontière de sécurité.
+- `GLD_RUN_AS` : les écritures et lectures de la passerelle ne suivent plus un lien posé par le compte cible hors du dossier de confiance ; restent les dossiers parents d'un projet et quelques `Stat` (détail dans [auth-followup-openroot.md](auth-followup-openroot.md)). Le mode reste expérimental.
 - Garde-fou : heuristique contournable, entrée de `Monitor` non vérifiée, `disableAllHooks`, Windows non testé, Claude Code 2.1.295 minimum pour le blocage en cas d'échec du hook.
 - `/admin/acl` : quand une requête accorde puis retire des droits, les deux se font en une seule transaction ; en cas d'échec, rien n'est modifié.
 - `/cleanup-warning` et `/git-status` exposent titres de sessions et dossiers aux comptes qui ont `mem_read`.

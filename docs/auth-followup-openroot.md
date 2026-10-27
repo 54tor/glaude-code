@@ -56,7 +56,18 @@ Liste d'origine :
 - skills.go:386, 426, 429, 494
 - trashsessions.go:54, 59, 64, 65, 69, 168, 172, 176, 180, 193
 
-### Lectures et parcours (fuite de fichiers de la passerelle par un lien posé par la cible)
+### Lectures et parcours (fuite de fichiers de la passerelle par un lien posé par la cible) : faites
+
+Migrées le 2026-10-27 vers `readTrusted`, `openTrusted`, `readDirTrusted` et `readTrustedIn` (`gld/rootfs.go`), actives sous `GLD_RUN_AS` seulement : hors de ce mode, un `CLAUDE.md` ou des commandes liés à un dépôt de dotfiles restent lisibles. Sous `cfgDir()`, tout le chemin est confiné ; dans le dossier d'un home (gardes de `auth_acl.go`), le home sert de racine ; ailleurs (dossier de projet), le dossier du fichier. Les parcours (`WalkDir`) ne suivent pas les liens, leur racine n'est jamais résolue sous `GLD_RUN_AS` (`walkRoot`). Tests : `gld/rootfs_unix_test.go`.
+
+Restes connus :
+
+- Lectures dans un dossier de projet : seul le dernier segment est vérifié, les dossiers au-dessus ne le sont pas.
+- `os.Stat` par nom suit encore les liens (taille et date seulement, pas de contenu).
+- `sendkeys.go` (`closeSession`) : la course entre la vérification du PID et le signal reste ouverte (`pidfd` hors périmètre).
+- Hors périmètre : `auth_crypto.go` et `pair.go` (`authDir()`, privé et vérifié), `auth_guard.go` (`managed-settings`, propriété de root), l'IDE (déjà sous `os.Root`), `term.go`, `loaded.go` et la CLI (exécutés sous le compte qui les lance).
+
+Liste d'origine :
 
 - configraw.go:83, 103 (`configRawRead`)
 - auth_acl.go:357 (garde de `POST /trash-restore`) : lit `meta.json` de l'élément dans la corbeille du home visé (`gld-web-trash/<id>/meta.json`) pour décider du droit exigé, en suivant les liens symboliques ; un lien posé par la cible fait lire un fichier arbitraire à la passerelle.
