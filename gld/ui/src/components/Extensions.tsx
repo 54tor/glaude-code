@@ -102,7 +102,7 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
     for (const k of order) if (mcpOff(files[k] as string, name)) await edit(files[k] as string, "remove", ["disabledMcpjsonServers"], name)
   }
   const row = "flex items-start gap-3 py-2"
-  const sect = "text-md font-semibold border-b pb-1 mb-2 flex items-center gap-2"
+  const sect = "text-md font-semibold border-b pb-2 mb-3 flex items-center gap-2"
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -116,7 +116,7 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
         </div>
         <TabsContent value="active" className="min-h-0 flex-1">
           <ScrollArea className="h-full">
-            <div className="mx-auto max-w-5xl space-y-8 px-3 py-4 md:px-6">
+            <div className="mx-auto max-w-5xl space-y-5 px-3 py-5 md:px-6">
         <div className="space-y-2 rounded-md border bg-muted/30 px-3 py-3 text-sm">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium">{t("extensions.viewing")}</span>
@@ -131,7 +131,7 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
           <p className="text-xs text-muted-foreground">{dir ? t("extensions.hintProject") : t("extensions.hintUser")}</p>
         </div>
 
-        <section>
+        <section className="rounded-xl border bg-card p-4 shadow-xs md:p-5">
           <h3 className={sect}>
             {t("extensions.plugins")} ({ids.length})
             <Button size="xs" variant="outline" className="ml-auto" onClick={() => setTab("install")}>
@@ -162,7 +162,7 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
         </section>
 
 
-        <section>
+        <section className="rounded-xl border bg-card p-4 shadow-xs md:p-5">
           <h3 className={sect}>
             {t("extensions.skills")} <span className="text-xs font-normal text-muted-foreground">{t("extensions.skillsTotal", { count: skillsHere.length, chars })}</span>
             <button type="button" onClick={() => openSkill("")} className="ml-auto text-xs font-normal text-muted-foreground underline">{t("extensions.editor")}</button>
@@ -194,7 +194,7 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
         </section>
 
 
-        <section>
+        <section className="rounded-xl border bg-card p-4 shadow-xs md:p-5">
           <h3 className={sect}>
             {t("extensions.hooks")} ({hooks.length})
             <Link href={href({ kind: "config", tab: "json" })} className="ml-auto text-xs font-normal text-muted-foreground underline">{t("extensions.editHooks")}</Link>
@@ -215,7 +215,7 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
           {!hooks.length && <p className="py-3 text-sm text-muted-foreground">{t("extensions.noHooks")}</p>}
         </section>
 
-        <section>
+        <section className="rounded-xl border bg-card p-4 shadow-xs md:p-5">
           <h3 className={sect}>
             {t("extensions.mcp")} ({mcpHere.length + others.length}){!status && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
             <Link href={href({ kind: "config", tab: "mcp" })} className="ml-auto text-xs font-normal text-muted-foreground underline">MCP</Link>
