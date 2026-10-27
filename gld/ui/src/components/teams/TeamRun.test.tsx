@@ -92,9 +92,9 @@ describe("TeamRun", () => {
     await screen.findByText(payload)
     expect(container.querySelector("img")).toBeNull()
     fireEvent.click(screen.getByRole("button", { name: "Oui" }))
-    await waitFor(() => expect(teams.teamKey).toHaveBeenCalledWith(NAME, "Atlas", "1"))
+    await waitFor(() => expect(teams.teamKey).toHaveBeenCalledWith(NAME, "Atlas", "1", expect.any(String)))
     fireEvent.click(screen.getByRole("button", { name: "Non" }))
-    await waitFor(() => expect(teams.teamKey).toHaveBeenCalledWith(NAME, "Atlas", "Escape"))
+    await waitFor(() => expect(teams.teamKey).toHaveBeenCalledWith(NAME, "Atlas", "Escape", expect.any(String)))
   })
   it("Unknown : marqueur format inconnu", async () => {
     mockGet(view({ Unknown: ["foo.json"] }))
@@ -162,5 +162,55 @@ describe("TeamRun", () => {
     unmount()
     await act(() => vi.advanceTimersByTimeAsync(10000))
     expect(teams.teamGet).toHaveBeenCalledTimes(2)
+  })
+  it("touche : expect = texte affiché, un seul envoi si double appel", async () => {
+    mockGet(view({ Permission: "dlg" }))
+    let done: (v: never) => void = () => {}
+    vi.mocked(teams.teamKey).mockImplementation(() => new Promise((r) => (done = r as never)))
+    render(<TeamRun name={NAME} />)
+    const oui = await screen.findByRole("button", { name: "Oui" })
+    fireEvent.click(oui)
+    fireEvent.click(oui)
+    expect(teams.teamKey).toHaveBeenCalledTimes(1)
+    expect(teams.teamKey).toHaveBeenCalledWith(NAME, "Atlas", "1", "dlg")
+    await act(async () => done({ ok: true } as never))
+  })
+  it("relève partie avant la touche : Oui/Non restent désactivés", async () => {
+    vi.useFakeTimers()
+    let slow: (v: never) => void = () => {}
+    let n = 0
+    vi.mocked(teams.teamGet).mockImplementation(() => {
+      n++
+      return n === 2 ? new Promise((r) => (slow = r as never)) : Promise.resolve({ ok: true, view: view({ Permission: "dlg" }) } as never)
+    })
+    render(<TeamRun name={NAME} />)
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    await act(() => vi.advanceTimersByTimeAsync(2100)) // relève 2, lente, partie avant la touche
+    fireEvent.click(screen.getByRole("button", { name: "Oui" }))
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    await act(async () => slow({ ok: true, view: view({ Permission: "dlg" }) } as never)) // réponse d'avant la touche
+    expect((screen.getByRole("button", { name: "Oui" }) as HTMLButtonElement).disabled).toBe(true)
+    await act(() => vi.advanceTimersByTimeAsync(2100)) // relève partie après
+    expect((screen.getByRole("button", { name: "Oui" }) as HTMLButtonElement).disabled).toBe(false)
+  })
+  it("touche refusée : erreur serveur en texte", async () => {
+    mockGet(view({ Permission: "dlg" }))
+    vi.mocked(teams.teamKey).mockResolvedValue({ ok: false, out: "<i>périmé</i>" })
+    render(<TeamRun name={NAME} />)
+    fireEvent.click(await screen.findByRole("button", { name: "Oui" }))
+    expect(await screen.findByText("<i>périmé</i>")).toBeTruthy()
+  })
+  it("changement de nom : réponse de l'ancienne team jetée, pas d'action avec l'ancien chef", async () => {
+    let relA: (v: never) => void = () => {}
+    const vB = view({ Name: "session-bbbbbbbb", Permission: "dlgB", Agents: [{ Name: "Zed", AgentID: "z", Role: "r", Pane: "%9", State: "idle", Lead: true }] })
+    vi.mocked(teams.teamGet).mockImplementation((n) => (n === NAME ? new Promise((r) => (relA = r as never)) : Promise.resolve({ ok: true, view: vB } as never)))
+    const { rerender } = render(<TeamRun name={NAME} />)
+    rerender(<TeamRun name="session-bbbbbbbb" />)
+    await screen.findByRole("heading", { name: "session-bbbbbbbb" })
+    await act(async () => relA({ ok: true, view: view({ Permission: "dlgA" }) } as never))
+    expect(screen.queryByText("dlgA")).toBeNull()
+    expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("session-bbbbbbbb")
+    fireEvent.click(screen.getByRole("button", { name: "Oui" }))
+    await waitFor(() => expect(teams.teamKey).toHaveBeenCalledWith("session-bbbbbbbb", "Zed", "1", "dlgB"))
   })
 })

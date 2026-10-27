@@ -44,7 +44,7 @@ export const teamsLaunch = (teamIds: string[], goal: string, dir: string) => cal
 export const teamsList = () => call<{ teams: TeamBrief[] }>("/teams")
 export const teamGet = (name: string) => call<{ view: TeamView }>(`/team?name=${q(name)}`)
 export const teamSend = (name: string, to: string, text: string) => call<{ queued: boolean }>("/team-send", { name, to, text })
-export const teamKey = (name: string, agent: string, key: string) => call("/team-key", { name, agent, key })
+export const teamKey = (name: string, agent: string, key: string, expect = "") => call("/team-key", { name, agent, key, expect })
 export const teamClose = (name: string) => call("/team-close", { name })
 export const teamScreen = (name: string, agent: string) => call<{ text: string }>(`/team-screen?name=${q(name)}&agent=${q(agent)}`)
 export const teamsAgentSave = (a: Partial<Agent>) => call<{ agent: Agent }>("/teams-agent-save", a)

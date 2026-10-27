@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Link } from "wouter"
 import { Confirm, type Ask } from "@/components/Confirm"
@@ -77,36 +77,53 @@ export function TeamRun({ name }: { name: string }) {
   const [sel, setSel] = useState("")
   const [mode, setMode] = useState<"mine" | "tasks" | "all" | "screen">("mine")
   const [screen, setScreen] = useState("")
-  const [keyBusy, setKeyBusy] = useState(false)
   const [ask, setAsk] = useState<Ask | null>(null)
   const root = useRef<HTMLDivElement>(null)
   const width = useWidth(root)
-  const inflight = useRef(false)
-  const alive = useRef(true)
+  const gen = useRef(0) // avance autour de chaque touche : une relève partie avant sa réponse montre l'écran d'avant
+  const pollRef = useRef<() => Promise<void>>(async () => {})
+  const keyBusy = useRef(false)
+  const screenBusy = useRef(false)
+  const [stale, setStale] = useState(false) // Oui/Non masqués jusqu'à une relève partie après la réponse à la touche
+  const [actErr, setActErr] = useState("")
 
-  const poll = useCallback(async () => {
-    if (inflight.current || document.visibilityState !== "visible") return
-    inflight.current = true
-    const r = await teamGet(name)
-    inflight.current = false
-    if (!alive.current) return
-    if (r.ok) {
-      setView(r.view)
-      setErr("")
-    } else setErr(r.out)
-  }, [name])
   useEffect(() => {
-    alive.current = true
+    // jeton propre à ce nom : une réponse de l'équipe précédente est jetée, et rien de son état ne survit
+    const ctl = { alive: true, inflight: false }
+    setView(null)
+    setErr("")
+    setActErr("")
+    setTo("")
+    setSel("")
+    setMode("mine")
+    setScreen("")
+    setStale(false)
+    const poll = async () => {
+      if (ctl.inflight || document.visibilityState !== "visible") return
+      ctl.inflight = true
+      const g = gen.current
+      const r = await teamGet(name)
+      ctl.inflight = false
+      if (!ctl.alive) return
+      if (r.ok) {
+        setView(r.view)
+        setErr("")
+        if (g === gen.current && !keyBusy.current) {
+          setStale(false)
+        }
+      } else setErr(r.out)
+    }
+    pollRef.current = poll
     void poll()
     const iv = setInterval(() => void poll(), POLL_MS)
     const vis = () => void poll()
     document.addEventListener("visibilitychange", vis)
     return () => {
-      alive.current = false
+      ctl.alive = false
       clearInterval(iv)
       document.removeEventListener("visibilitychange", vis)
     }
-  }, [poll])
+  }, [name])
 
   const lead = view?.Agents.find((a) => a.Lead)?.Name ?? view?.Agents[0]?.Name ?? ""
   const recipient = view?.Agents.some((a) => a.Name === to) ? to : lead
@@ -115,19 +132,28 @@ export function TeamRun({ name }: { name: string }) {
   const act = exec && live
 
   const key = async (k: string) => {
-    setKeyBusy(true)
-    const r = await teamKey(name, lead, k)
-    setKeyBusy(false)
-    if (!r.ok) setErr(r.out)
-    else void poll()
+    if (keyBusy.current || !view?.Permission) return
+    keyBusy.current = true
+    gen.current++
+    setStale(true)
+    setActErr("")
+    const r = await teamKey(name, lead, k, view.Permission)
+    gen.current++
+    keyBusy.current = false
+    if (!r.ok) setActErr(r.out)
+    void pollRef.current()
   }
   const pick = (n: string) => {
     setSel(n)
     setMode("mine")
   }
   const showScreen = async (agent: string) => {
+    if (screenBusy.current) return
+    screenBusy.current = true
     setMode("screen")
+    setScreen("")
     const r = await teamScreen(name, agent)
+    screenBusy.current = false
     setScreen(r.ok ? r.text : r.out)
   }
 
@@ -137,10 +163,10 @@ export function TeamRun({ name }: { name: string }) {
       <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-xs">{view.Permission}</pre>
       {exec && (
         <div className="flex gap-2">
-          <Button size="sm" disabled={!live || keyBusy} onClick={() => void key("1")}>
+          <Button size="sm" disabled={!live || stale} onClick={() => void key("1")}>
             {t("teams.yes")}
           </Button>
-          <Button size="sm" variant="outline" disabled={!live || keyBusy} onClick={() => void key("Escape")}>
+          <Button size="sm" variant="outline" disabled={!live || stale} onClick={() => void key("Escape")}>
             {t("teams.no")}
           </Button>
         </div>
@@ -175,13 +201,13 @@ export function TeamRun({ name }: { name: string }) {
             variant="outline"
             className="ml-auto"
             disabled={!live}
-            onClick={() => setAsk({ title: t("teams.close"), body: view.Name, confirm: t("teams.close"), run: () => void teamClose(name).then((r) => (r.ok ? void poll() : setErr(r.out))) })}
+            onClick={() => setAsk({ title: t("teams.close"), body: view.Name, confirm: t("teams.close"), run: () => void teamClose(name).then((r) => (r.ok ? void pollRef.current() : setActErr(r.out))) })}
           >
             {t("teams.close")}
           </Button>
         )}
       </div>
-      {err && <p className="text-sm text-destructive">{err}</p>}
+      {(actErr || err) && <p className="text-sm text-destructive">{actErr || err}</p>}
       {perm}
       {wide ? (
         <div className="grid min-h-0 flex-1 grid-cols-3 gap-3">

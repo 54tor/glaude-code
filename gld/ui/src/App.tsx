@@ -404,7 +404,7 @@ function Shell() {
           ) : route.kind === "teams" ? (
             <TeamsPage home={home} />
           ) : route.kind === "team" ? (
-            <TeamRun name={route.name} />
+            <TeamRun key={route.name} name={route.name} />
           ) : route.kind === "extensions" ? (
             <Extensions home={home} onAsk={setAsk} />
           ) : route.kind === "config" ? (
