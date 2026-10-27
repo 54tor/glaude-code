@@ -145,12 +145,18 @@ func search(q string) []Hit {
 
 // setTitle ajoute une ligne custom-title au transcript (la dernière fait foi), sans changer sa date.
 func setTitle(path, id, title string) error {
-	st, err := os.Stat(path)
+	r, rel, err := confine(cfgDir(), path)
 	if err != nil {
 		return err
 	}
-	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	defer r.Close()
+	f, err := r.OpenFile(rel, os.O_RDWR, 0)
 	if err != nil {
+		return err
+	}
+	st, err := f.Stat()
+	if err != nil {
+		f.Close()
 		return err
 	}
 	line, _ := json.Marshal(struct {
@@ -170,7 +176,7 @@ func setTitle(path, id, title string) error {
 		err = cerr
 	}
 	if err == nil {
-		err = os.Chtimes(path, st.ModTime(), st.ModTime())
+		err = r.Chtimes(rel, st.ModTime(), st.ModTime())
 	}
 	return err
 }
@@ -311,9 +317,5 @@ func saveStore(st Store) error {
 		}
 	}
 	b, _ := json.MarshalIndent(st, "", "  ")
-	tmp := groupsFile() + ".tmp"
-	if err := writeSynced(tmp, b, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, groupsFile())
+	return rWriteAtomic(cfgDir(), groupsFile(), b, 0o600)
 }
