@@ -65,7 +65,7 @@ func runLoaded(in io.Reader) int {
 func appendLoaded(line []byte) {
 	p := loadedFile()
 	if st, err := os.Stat(p); err == nil && st.Size() > loadedMax {
-		if b, err := os.ReadFile(p); err == nil {
+		if b, err := os.ReadFile(p); err == nil && len(b) > loadedMax/2 { // le fichier a pu raccourcir depuis le Stat
 			b = b[len(b)-loadedMax/2:]
 			for i, c := range b { // on repart au début d'une ligne
 				if c == '\n' {
