@@ -253,7 +253,8 @@ func (s *shareStore) edit(session, invite string, f func(*Invite)) error {
 }
 
 // Regen : nouveau jeton ; l'ancien lien et le cookie de cette invitation meurent, mode et nom restent. Un lien régénéré est
-// souvent un lien fuité : ses éléments encore en file partent avec lui (pas ceux en cours d'envoi).
+// souvent un lien fuité : ses éléments encore en file partent avec lui (pas ceux en cours d'envoi). Une purge non écrite
+// reparaîtrait au redémarrage : l'erreur est rendue (le jeton reste changé, la purge tient en mémoire) pour que l'hôte réessaie.
 func (s *shareStore) Regen(session, invite string) (string, error) {
 	tok := newSecret()
 	err := s.edit(session, invite, func(in *Invite) { in.TokenHash, in.CookieHash = hashSecret(tok), "" })
@@ -261,7 +262,10 @@ func (s *shareStore) Regen(session, invite string) (string, error) {
 		return "", err
 	}
 	if queueSt != nil {
-		queueSt.RemoveByGuest(session, invite, true)
+		if _, err := queueSt.RemoveByGuest(session, invite, true); err != nil {
+			journal("partages : purge de la file après régénération non écrite : %v", err)
+			return tok, err
+		}
 	}
 	return tok, nil
 }

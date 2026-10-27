@@ -768,3 +768,26 @@ func TestChildGuestSeesOnlyOwnQueue(t *testing.T) {
 		}
 	}
 }
+
+// Purge non écrite : la régénération reste appliquée et la purge tient en mémoire, mais l'hôte apprend l'échec (500).
+func TestRegenQueuePurgeWriteFailure(t *testing.T) {
+	mux := shareMux(t)
+	qd := roDir(t)
+	oq := queueSt
+	queueSt, _ = openQueue(qd)
+	t.Cleanup(func() { queueSt = oq })
+	_, in, _ := shareSt.CreateInvite(shSess, "proj", "", "")
+	queueSt.Add(shSess, "guest", in.ID, "fuité")
+	old := in.TokenHash
+	lock(t, qd)
+	w := post(mux, "/invite-regen", `{"id":"`+shSess+`","invite":"`+in.ID+`"}`)
+	if w.Code != 500 || !strings.Contains(w.Body.String(), `"ok":false`) {
+		t.Fatalf("régénération : %d %s", w.Code, w.Body)
+	}
+	if sh, _ := shareSt.Get(shSess); sh.Invites[0].TokenHash == old {
+		t.Fatal("jeton non changé")
+	}
+	if l := queueSt.List(shSess); len(l) != 0 {
+		t.Fatalf("purge annulée en mémoire : %+v", l)
+	}
+}
