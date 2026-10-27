@@ -59,7 +59,7 @@ func thKeys(user, ip string) (u, i, p, m string) {
 func streakKey(user string) string { return "streak:" + thName(user) }
 
 // mfaPairKey : les échecs de second facteur d'un compte depuis une adresse, remis à zéro par une connexion réussie depuis celle-ci.
-func mfaPairKey(user, ip string) string { return "mfa:" + thName(user) + "|" + ip }
+func mfaPairKey(user, ip string) string { return "mfapair:" + thName(user) + "|" + ip }
 
 // thName : la clé commune des noms trop longs n'est pas normalisée, pour qu'aucun nom tapé ne la rejoigne.
 func thName(user string) string {
