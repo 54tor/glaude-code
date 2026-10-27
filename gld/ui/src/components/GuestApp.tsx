@@ -217,6 +217,17 @@ function GuestSession({ handle }: { handle: string }) {
   useEffect(() => {
     if (stuck.current) end.current?.scrollIntoView?.({ block: "end" })
   }, [h.msgs.length])
+  // La bande d'état (outil, sous-agents, file d'attente) change de hauteur sans nouveau message : la vue reste collée à la fin.
+  useEffect(() => {
+    const vp = end.current?.closest<HTMLElement>('[data-slot="scroll-area-viewport"]')
+    const body = vp?.firstElementChild
+    if (!vp || !body) return
+    const ro = new ResizeObserver(() => {
+      if (stuck.current) vp.scrollTop = vp.scrollHeight
+    })
+    ro.observe(body)
+    return () => ro.disconnect()
+  }, [phase])
 
   const rw = me?.mode === "rw"
   const send = async () => {

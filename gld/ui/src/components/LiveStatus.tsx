@@ -1,5 +1,5 @@
 import { i18n, loc } from "@/i18n"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { BarChart3, Bot, Loader2, Wrench } from "lucide-react"
 import { api, type Detail, type LiveState, type Msg, type Session, type SubLive, type Tokens } from "@/lib/api"
@@ -63,6 +63,16 @@ export function LiveBar({ live: { st, open }, id }: { live: Live; id: string }) 
   const { t } = useTranslation()
   const now = useNow(open)
   const [expanded, setExpanded] = useState(false)
+  // Pendant un tour, la bande ne rétrécit jamais (lignes de sous-agents ou de tâches qui vont et viennent) : la vue collée à la fin ne
+  // fait pas de va-et-vient. Elle reprend sa taille quand Claude attend.
+  const bar = useRef<HTMLDivElement>(null)
+  const thinking = !!st?.thinking
+  useLayoutEffect(() => {
+    const el = bar.current
+    if (!el) return
+    if (!thinking) return void (el.style.minHeight = "")
+    if (el.offsetHeight > parseFloat(el.style.minHeight || "0")) el.style.minHeight = `${el.offsetHeight}px`
+  })
   if (!st) return null
   if (!(open && st.open)) return null // fermée : « Session fermée » est dans la barre d'outils (LiveStats), sans bande
   const isOpen = true
@@ -78,7 +88,7 @@ export function LiveBar({ live: { st, open }, id }: { live: Live; id: string }) 
           </div>
         </div>
       ))}
-      <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 bg-popover/95 py-2 text-sm backdrop-blur">
+      <div ref={bar} className="sticky bottom-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 bg-popover/95 py-2 text-sm backdrop-blur">
         {isOpen && (
           <span className={cn("flex min-w-0 items-center gap-1.5 font-medium", st.thinking ? "text-success" : "text-warning")}>
             {st.thinking ? <Loader2 className="size-3.5 shrink-0 animate-spin" /> : <span className="size-1.5 shrink-0 rounded-full bg-current" />}
