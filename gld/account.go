@@ -82,7 +82,7 @@ func fileExists(p string) bool { fi, err := os.Stat(p); return err == nil && fi.
 
 func accountInfo() Account {
 	a := Account{Limits: []UsageLimit{}, Days: []DayStat{}, Models: []ModelStat{}}
-	if b, err := os.ReadFile(claudeJSON()); err == nil {
+	if b, err := readTrusted(claudeJSON()); err == nil {
 		var d struct {
 			OAuth struct {
 				Email   string `json:"emailAddress"`
@@ -131,7 +131,7 @@ func accountInfo() Account {
 			sort.SliceStable(a.Limits, func(i, j int) bool { return limitRank(a.Limits[i].Key) < limitRank(a.Limits[j].Key) })
 		}
 	}
-	if b, err := os.ReadFile(filepath.Join(cfgDir(), "stats-cache.json")); err == nil {
+	if b, err := readTrusted(filepath.Join(cfgDir(), "stats-cache.json")); err == nil {
 		var s struct {
 			Last  string `json:"lastComputedDate"`
 			Daily []struct {
