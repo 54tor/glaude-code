@@ -30,8 +30,8 @@
         "branch": "branch {{name}}"
       },
       "description": "Full conversation of the session",
-      "carousel_one": "Carousel: {{count}} session waiting. The next one opens as soon as you reply.",
-      "carousel_other": "Carousel: {{count}} sessions waiting. The next one opens as soon as you reply.",
+      "carousel_one": "Carousel: {{count}} session waiting.",
+      "carousel_other": "Carousel: {{count}} sessions waiting.",
       "next": "Next",
       "quitCarousel": "Leave the carousel",
       "compactHint": "Context at {{ctx}} (≈ {{pct}} %): compacting is recommended. Any text in the input is used as instructions for the summary.",
