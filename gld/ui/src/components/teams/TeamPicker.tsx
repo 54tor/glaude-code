@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
-import { teamsCompose, type Catalog, type Composition, type Run } from "@/lib/teams"
+import {
+  teamsCompose,
+  type Catalog,
+  type Composition,
+  type Run,
+  type Team,
+} from "@/lib/teams"
 
 type Launched = { ok: boolean; out?: string; run?: Run }
 const MAX_MATES = 5 // même plafond que maxMates côté Go
@@ -11,11 +17,13 @@ export function TeamPicker({
   onLaunch,
   pickDir,
   home = "",
+  onEdit,
 }: {
   catalog: Catalog
   onLaunch: (ids: string[], goal: string, dir: string) => Promise<Launched>
   pickDir: (title: string, start: string) => Promise<string | null>
   home?: string
+  onEdit?: (tm: Team) => void
 }) {
   const { t } = useTranslation()
   const [sel, setSel] = useState<string[]>([])
@@ -28,7 +36,8 @@ export function TeamPicker({
   const seq = useRef(0)
 
   const names = new Map(catalog.agents.map((a) => [a.ID, a.Name]))
-  const toggle = (id: string) => setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]))
+  const toggle = (id: string) =>
+    setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]))
 
   useEffect(() => {
     const n = ++seq.current // une réponse lente d'une sélection précédente est ignorée
@@ -57,22 +66,36 @@ export function TeamPicker({
           {catalog.teams.map((tm) => {
             const on = sel.includes(tm.ID)
             return (
-              <div
-                key={tm.ID}
-                role="checkbox"
-                aria-checked={on}
-                tabIndex={0}
-                onClick={() => toggle(tm.ID)}
-                onKeyDown={(e) => {
-                  if (e.key === " " || e.key === "Enter") {
-                    e.preventDefault()
-                    toggle(tm.ID)
-                  }
-                }}
-                className={`cursor-pointer rounded-lg border p-3 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${on ? "border-primary bg-primary/10" : "border-border hover:bg-muted"}`}
-              >
-                <div className="text-sm font-medium">{tm.Name}</div>
-                <div className="text-xs text-muted-foreground">{tm.Members.map((m) => names.get(m) ?? m).join(" · ")}</div>
+              <div key={tm.ID} className="relative">
+                <div
+                  role="checkbox"
+                  aria-checked={on}
+                  tabIndex={0}
+                  onClick={() => toggle(tm.ID)}
+                  onKeyDown={(e) => {
+                    if (e.key === " " || e.key === "Enter") {
+                      e.preventDefault()
+                      toggle(tm.ID)
+                    }
+                  }}
+                  className={`cursor-pointer rounded-lg border p-3 pr-20 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${on ? "border-primary bg-primary/10" : "border-border hover:bg-muted"}`}
+                >
+                  <div className="text-sm font-medium">{tm.Name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {tm.Members.map((m) => names.get(m) ?? m).join(" · ")}
+                  </div>
+                </div>
+                {onEdit && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute top-2 right-2"
+                    aria-label={t("teams.edit.edit", { name: tm.Name })}
+                    onClick={() => onEdit(tm)}
+                  >
+                    {t("teams.edit.modify")}
+                  </Button>
+                )}
               </div>
             )
           })}
@@ -81,20 +104,33 @@ export function TeamPicker({
 
       <section className="rounded-lg border p-3">
         <h2 className="mb-2 text-sm font-semibold">{t("teams.composition")}</h2>
-        <p className="mb-2 text-sm text-muted-foreground">{t("teams.count", { teams: sel.length, mates: compo?.mates.length ?? 0 })}</p>
+        <p className="mb-2 text-sm text-muted-foreground">
+          {t("teams.count", {
+            teams: sel.length,
+            mates: compo?.mates.length ?? 0,
+          })}
+        </p>
         {compo && (
           <ul className="space-y-1 text-sm">
             <li>
-              <b>{compo.lead.Name}</b> <span className="text-muted-foreground">· {t("teams.lead")} · {compo.lead.Role}</span>
+              <b>{compo.lead.Name}</b>{" "}
+              <span className="text-muted-foreground">
+                · {t("teams.lead")} · {compo.lead.Role}
+              </span>
             </li>
             {compo.mates.map((a) => (
               <li key={a.ID}>
-                <b>{a.Name}</b> <span className="text-muted-foreground">· {a.Role}</span>
+                <b>{a.Name}</b>{" "}
+                <span className="text-muted-foreground">· {a.Role}</span>
               </li>
             ))}
           </ul>
         )}
-        {compo?.tooMany && <p className="mt-2 text-sm text-destructive">{t("teams.tooMany", { max: MAX_MATES })}</p>}
+        {compo?.tooMany && (
+          <p className="mt-2 text-sm text-destructive">
+            {t("teams.tooMany", { max: MAX_MATES })}
+          </p>
+        )}
       </section>
 
       <section className="space-y-3">
@@ -107,7 +143,12 @@ export function TeamPicker({
           className="w-full rounded-lg border bg-transparent p-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         />
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={async () => setDir((await pickDir(t("teams.pickDir"), dir || home)) ?? dir)}>
+          <Button
+            variant="outline"
+            onClick={async () =>
+              setDir((await pickDir(t("teams.pickDir"), dir || home)) ?? dir)
+            }
+          >
             {t("teams.choose")}
           </Button>
           <span className="truncate text-sm text-muted-foreground" title={dir}>

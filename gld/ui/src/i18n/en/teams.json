@@ -38,6 +38,24 @@
     "close": "Close team",
     "finished": "finished",
     "permission": "Permission",
-    "message": "Message"
+    "message": "Message",
+    "edit": {
+      "copyName": "{{name}} custom",
+      "copyOf": "Copy of {{name}}",
+      "edit": "Edit {{name}}",
+      "newAgent": "New agent",
+      "newTeam": "New team",
+      "name": "Name",
+      "role": "Role",
+      "access": "Access",
+      "read": "read",
+      "write": "write",
+      "model": "Model",
+      "prompt": "Prompt",
+      "members": "Members",
+      "deleteTitle": "Delete {{name}}",
+      "modify": "Edit",
+      "personal": "custom"
+    }
   }
 }

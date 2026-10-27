@@ -38,6 +38,24 @@
     "close": "Fermer la team",
     "finished": "terminée",
     "permission": "Permission",
-    "message": "Message"
+    "message": "Message",
+    "edit": {
+      "copyName": "{{name}} perso",
+      "copyOf": "Copie de {{name}}",
+      "edit": "Modifier {{name}}",
+      "newAgent": "Nouvel agent",
+      "newTeam": "Nouvelle team",
+      "name": "Nom",
+      "role": "Rôle",
+      "access": "Accès",
+      "read": "lecture",
+      "write": "écriture",
+      "model": "Modèle",
+      "prompt": "Prompt",
+      "members": "Membres",
+      "deleteTitle": "Supprimer {{name}}",
+      "modify": "Modifier",
+      "personal": "perso"
+    }
   }
 }
