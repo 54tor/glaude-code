@@ -5,6 +5,7 @@ import { tilde } from "@/lib/format"
 import { segs } from "@/lib/paths"
 import type { Route } from "@/lib/route"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Actions, Row } from "./actions"
@@ -42,6 +43,7 @@ export function SessionsPane({
   actions,
   go,
   clearSearch,
+  grouped,
   error,
   denied,
   retry,
@@ -65,6 +67,7 @@ export function SessionsPane({
   actions: Actions
   go: (r: Route) => void
   clearSearch: () => void
+  grouped: { n: number; hide: boolean; setHide: (v: boolean) => void } // sessions déjà groupées du dossier affiché
 }) {
   const { t } = useTranslation()
   return (
@@ -124,6 +127,13 @@ export function SessionsPane({
               </section>
             ))}
           </div>
+        )}
+
+        {!loading && route.kind === "dir" && grouped.n > 0 && (
+          <label className="mb-2 flex w-fit cursor-pointer items-center gap-2 px-3 text-xs text-muted-foreground select-none hover:text-foreground">
+            <Checkbox checked={grouped.hide} onCheckedChange={(c) => grouped.setHide(c === true)} />
+            {t("shell.header.hideGrouped", { n: grouped.n })}
+          </label>
         )}
 
         {!loading && route.kind !== "recent" && rows.length > 0 && (

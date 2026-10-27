@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next"
 import type { Group, Item, VGroup } from "@/lib/api"
 import type { Route } from "@/lib/route"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import type { Actions, GroupActions } from "./actions"
 import { AccountButton } from "./AccountDialog"
@@ -26,9 +25,6 @@ export function PageHeader({
   firstDir,
   own,
   rowCount,
-  nGrouped,
-  hideGrouped,
-  setHideGrouped,
   actions,
   groupActs,
   split,
@@ -45,9 +41,6 @@ export function PageHeader({
   firstDir: string | undefined // dossier de transcripts de la première session du dossier
   own: Item[] // sessions du dossier
   rowCount: number
-  nGrouped: number
-  hideGrouped: string
-  setHideGrouped: (v: string) => void
   actions: Actions
   groupActs: GroupActions
   reload: () => Promise<void>
@@ -80,12 +73,6 @@ export function PageHeader({
             <UserMenu />
           </div>
           {searchBox}
-          {g && nGrouped > 0 && (
-            <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground select-none hover:text-foreground">
-              <Checkbox checked={!!hideGrouped} onCheckedChange={(c) => setHideGrouped(c === true ? "1" : "")} />
-              {t("shell.header.hideGrouped", { n: nGrouped })}
-            </label>
-          )}
           {g && !g.missing && exec && (
             <Button size="sm" onClick={() => actions.newSession(g.project)} title={t("shell.header.newInDirHint")}>
               <MessageSquarePlus /> {t("shell.header.newSession")}

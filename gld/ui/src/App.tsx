@@ -374,9 +374,6 @@ function Shell() {
             firstDir={node?.ss[0]?.dir}
             own={own}
             rowCount={rows.length}
-            nGrouped={nGrouped}
-            hideGrouped={hideGrouped}
-            setHideGrouped={setHideGrouped}
             actions={actions}
             groupActs={groupActs}
             split={route.kind === "skills" || route.kind === "memory" || route.kind === "snippets"}
@@ -442,6 +439,7 @@ function Shell() {
               actions={actions}
               go={go}
               clearSearch={() => setQ("")}
+              grouped={{ n: nGrouped, hide: !!hideGrouped, setHide: (v) => setHideGrouped(v ? "1" : "") }}
               error={error}
               denied={denied}
               retry={() => void reload().catch(() => {})}
