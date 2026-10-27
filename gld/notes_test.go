@@ -34,6 +34,15 @@ func TestNotes(t *testing.T) {
 	if g := get(); strings.Contains(g, "p/Alpha") || !strings.Contains(g, "p/Beta") {
 		t.Fatal(g)
 	}
+	post(`{"key":"p/Gamma","text":"[\"garder\"]"}`)
+	post(`{"key":"p/Beta","to":"p/Gamma"}`)
+	if g := get(); !strings.Contains(g, "garder") || !strings.Contains(g, "à faire") {
+		t.Fatal("déplacement sur une note existante :", g)
+	}
+	post(`{"key":"p/Gamma","to":"p/Gamma"}`)
+	if !strings.Contains(get(), "p/Gamma") {
+		t.Fatal("déplacement sur soi-même : note supprimée")
+	}
 	post(`{"key":"p/Beta","text":"  "}`)
 	if strings.Contains(get(), "p/Beta") {
 		t.Fatal("note vide non supprimée")

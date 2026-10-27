@@ -75,7 +75,10 @@ func routesNotes(mux *http.ServeMux) {
 		}
 		switch {
 		case req.To != "":
-			if t, ok := m[req.Key]; ok {
+			if t, ok := m[req.Key]; ok && req.To != req.Key {
+				if d, has := m[req.To]; has {
+					t = mergeNotes(d, t)
+				}
 				m[req.To] = t
 				delete(m, req.Key)
 			}
@@ -94,4 +97,25 @@ func routesNotes(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.notes.noteEnregistree")})
 	})
+}
+
+// noteItems : les items d'une note, comme l'UI les lit (tableau JSON, sinon une ligne non vide par item).
+func noteItems(s string) []string {
+	var v []string
+	if json.Unmarshal([]byte(s), &v) == nil {
+		return v
+	}
+	var out []string
+	for _, l := range strings.Split(s, "\n") {
+		if strings.TrimSpace(l) != "" {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// mergeNotes : un déplacement sur une clé déjà notée ajoute les items à la suite au lieu d'écraser la destination.
+func mergeNotes(dst, src string) string {
+	b, _ := json.Marshal(append(noteItems(dst), noteItems(src)...))
+	return string(b)
 }
