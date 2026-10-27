@@ -274,3 +274,19 @@ func TestSkillLockEnLien(t *testing.T) {
 		t.Errorf("maison : %+v", by["u/maison"])
 	}
 }
+
+func TestRemoveSkillDossierAvecLien(t *testing.T) {
+	cfg := t.TempDir()
+	old := root
+	t.Cleanup(func() { root = old })
+	use(cfg)
+	d := filepath.Join(cfg, "skills", "lie")
+	os.MkdirAll(filepath.Join(d, "vide"), 0o755)
+	os.WriteFile(filepath.Join(d, "SKILL.md"), []byte("---\nname: lie\ndescription: d\n---\n"), 0o644)
+	if err := removeSkill("u/lie"); err == nil {
+		t.Fatal("dossier avec un sous-dossier supprimé")
+	}
+	if _, err := os.Stat(filepath.Join(d, "SKILL.md")); err != nil {
+		t.Fatal("SKILL.md supprimé alors que le dossier reste")
+	}
+}

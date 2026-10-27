@@ -464,10 +464,12 @@ func removeSkill(key string) error {
 	if err != nil {
 		return err
 	}
-	if len(files) > 1 {
+	dir := filepath.Join(base, name)
+	// readSkill ne compte que les fichiers réguliers : un lien ou un sous-dossier vide bloquerait la suppression du dossier
+	// après celle de SKILL.md, et le skill disparaîtrait en laissant son dossier.
+	if ents, err := os.ReadDir(dir); len(files) > 1 || err != nil || len(ents) != 1 {
 		return terr("srv.skills.ceSkillContientD")
 	}
-	dir := filepath.Join(base, name)
 	if err := saveTrash("k/"+key, filepath.Join(dir, skillFile), "supprimé", text); err != nil {
 		return err
 	}
