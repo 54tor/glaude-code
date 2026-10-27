@@ -62,12 +62,7 @@ func warmLoad() {
 
 func warmSave() {
 	b, _ := json.MarshalIndent(warmState, "", "  ")
-	tmp := warmFile() + ".tmp"
-	err := writeSynced(tmp, b, 0o600)
-	if err == nil {
-		err = os.Rename(tmp, warmFile())
-	}
-	if err != nil {
+	if err := rWriteAtomic(cfgDir(), warmFile(), b, 0o600); err != nil {
 		journal("keepwarm-save : %v", err)
 	}
 }
