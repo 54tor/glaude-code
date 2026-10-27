@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"embed"
-	"os"
 	"path/filepath"
 )
 
@@ -29,7 +28,7 @@ func installBuiltinRules() ([]string, error) {
 	var done []string
 	for _, n := range builtinRetired {
 		dst := filepath.Join(dir, n)
-		if cur, err := os.ReadFile(dst); err == nil && bytes.HasPrefix(cur, []byte(builtinMark)) {
+		if cur, err := readTrusted(dst); err == nil && bytes.HasPrefix(cur, []byte(builtinMark)) {
 			if err := rRemove(cfgDir(), dst); err != nil {
 				return done, err
 			}
@@ -42,7 +41,7 @@ func installBuiltinRules() ([]string, error) {
 			return done, err
 		}
 		dst := filepath.Join(dir, e.Name())
-		if cur, err := os.ReadFile(dst); err == nil && bytes.Equal(cur, want) {
+		if cur, err := readTrusted(dst); err == nil && bytes.Equal(cur, want) {
 			continue
 		}
 		if err := rMkdirAll(cfgDir(), dir, 0o755); err != nil {
