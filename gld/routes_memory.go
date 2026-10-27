@@ -252,7 +252,7 @@ func routesMemory(mux *http.ServeMux) {
 			writeJSON(w, 404, map[string]any{})
 			return
 		}
-		f, err := os.Open(file)
+		f, err := openTrusted(file)
 		if err != nil {
 			writeJSON(w, 404, map[string]any{})
 			return
