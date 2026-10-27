@@ -15,6 +15,7 @@ import { useAppData } from "@/hooks/useAppData"
 import { useSearchHits } from "@/hooks/useSearchHits"
 import { useShortcuts } from "@/hooks/useShortcuts"
 import { useWaitingNotice } from "@/hooks/useWaitingNotice"
+import { useQueueDrain } from "@/hooks/useQueueDrain"
 import { applyFont } from "@/lib/fonts"
 import { type Choice } from "@/lib/models"
 import { AUTO, buildView, byDate, groupKey, HOT, WEEK } from "@/lib/sessionsView"
@@ -147,7 +148,9 @@ function Shell() {
   const [carousel, setCarousel] = useState(false) // mode carrousel : on parcourt les sessions qui attendent une réponse
   const vgroups = useMemo(() => data?.vgroups ?? [], [data])
   const favs = useMemo(() => new Set(data?.favs), [data])
-  useWaitingNotice(waiting, useMemo(() => new Set(data?.asking), [data]), everyId)
+  const asking = useMemo(() => new Set(data?.asking), [data])
+  useWaitingNotice(waiting, asking, everyId)
+  useQueueDrain(live, waiting, asking) // messages en file des sessions ouvertes : partent même fenêtre fermée
 
   const gkey = (x: VGroup) => groupKey(x, home)
   // Listes dérivées mémoïsées : un rendu sans nouvelles données (sélection, menu, saisie) ne les recalcule pas.

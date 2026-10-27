@@ -51,9 +51,12 @@ export function setDraft(id: string, patch: Partial<Entry>) {
   subs.forEach((f) => f())
 }
 
-const subscribe = (f: () => void) => {
+export const subscribe = (f: () => void) => {
   subs.add(f)
   return () => void subs.delete(f)
 }
+
+// Sessions qui ont des messages en file, en une chaîne (valeur stable pour useSyncExternalStore).
+export const queuedKey = () => [...entries].filter(([, e]) => e.queue.length > 0).map(([id]) => id).join(",")
 
 export const useDraft = (id: string): Entry => useSyncExternalStore(subscribe, () => draftOf(id))

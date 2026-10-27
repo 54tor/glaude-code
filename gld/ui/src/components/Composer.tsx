@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
+import { withFollowUps, withoutFollowUps } from "@/lib/queue"
+import { markSent } from "@/hooks/useQueueDrain"
 import { Trans, useTranslation } from "react-i18next"
 import { i18n } from "@/i18n"
 import { cn, copyText, isSend, keyHint } from "@/lib/utils"
@@ -121,7 +123,7 @@ export function Composer({
     setOwn(true)
     setTurn(() => ({ id, msgs: [{ r: "user", t: prompt }], running: true }))
     // Un message non délivré n'est jamais perdu : il retourne en tête de la file (suspendue), à renvoyer d'un clic.
-    const keep = () => setQ([prompt, ...draftOf(id).queue])
+    const keep = () => setQ([withoutFollowUps(prompt), ...draftOf(id).queue])
     const fail = (error: string) => (keep(), setOwn(false), setTurn((t) => t && { ...t, running: false, error }))
     stopped.current = false
     let failed = false
@@ -160,8 +162,9 @@ export function Composer({
     setTimeout(() => setOwn(false), 30_000)
     const next = draftOf(id).queue[0]
     if (next !== undefined && !failed) {
+      const more = draftOf(id).queue.length > 1
       setQ(draftOf(id).queue.slice(1))
-      submit(next)
+      submit(withFollowUps(next, more))
     }
   }
   const stop = () => ((stopped.current = true), api.post("/chat-stop", { id }))
@@ -248,8 +251,6 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint }: { id: stri
   const [busy, setBusy] = useState(false)
   const [asking, setAsking] = useState(false) // une question attend une réponse dans le terminal : rien ne s'y écrit tant qu'elle est ouverte
   const working = !!liveState.st?.thinking
-  const lastSent = useRef(0)
-  const [tick, setTick] = useState(0)
   const [sel, setSel] = useState(0)
   const [extra, setExtra] = useState<(readonly [string, string])[]>([])
   const pics = useImages()
@@ -271,8 +272,7 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint }: { id: stri
     setBusy(false)
     if (!r.ok) toast.error(r.out) // le succès se voit dans la session : pas de notification
     else {
-      lastSent.current = Date.now()
-      setTimeout(() => setTick((n) => n + 1), 4500)
+      markSent(id)
     }
     return r.ok
   }
@@ -293,22 +293,6 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint }: { id: stri
       keepFocus()
     }
   }
-  // La session attend (ni au travail, ni en question) : le premier message de la file part. Un court délai laisse le message
-  // précédent démarrer un tour avant de juger la session libre.
-  useEffect(() => {
-    if (!ok || working || asking || busy || queue.length === 0) return
-    const wait = Math.max(0, 4000 - (Date.now() - lastSent.current))
-    const t = setTimeout(async () => {
-      const q = draftOf(id).queue
-      if (q.length === 0) return
-      setQ(q.slice(1))
-      if (await post(q[0])) onSent()
-      else setQ([q[0], ...draftOf(id).queue]) // non délivré : il retourne en tête de la file
-    }, wait + 300)
-    return () => clearTimeout(t)
-    // id : changer de session annule l'envoi programmé, qui partirait sinon vers la file de la nouvelle.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, ok, working, asking, busy, queue.length, tick])
   if (!ok)
     return (
       <div className="flex items-center gap-3 border-t px-6 py-3 text-xs text-muted-foreground">
