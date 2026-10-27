@@ -10,6 +10,8 @@ func TestMain(m *testing.M) {
 	agentsTTL = 0
 	os.Setenv("GLD_AUTH_DIR", "/nonexistent/gld-auth-test") // jamais la base réelle de l'utilisateur
 	stampTTL = 0
+	qd, _ := os.MkdirTemp("", "gld-queue-test")
+	queueDir = func() string { return qd }
 	// L'environnement du poste de développement ne doit pas changer l'adresse du QR ni la confiance aux proxys.
 	os.Unsetenv("GLD_PUBLIC_URL")
 	os.Unsetenv("GLD_TRUSTED_PROXIES")

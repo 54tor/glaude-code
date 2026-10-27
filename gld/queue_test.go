@@ -236,15 +236,33 @@ func TestDrainFailureKeepsItem(t *testing.T) {
 }
 
 func TestDrainSkipsWhenMarkSendingFails(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignore les permissions")
+	}
 	dir := t.TempDir()
 	q, _ := openQueue(dir)
 	sent, _ := fakeDrainEnv(t, []string{"s"}, []string{"s"}, nil)
-	it, _ := q.Add("s", "host", "x")
-	q.sess["s"][0].State = "uncertain" // pris ailleurs : MarkSending refuse
-	_ = it
+	q.Add("s", "host", "x")
+	os.Chmod(dir, 0o500)
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
 	drainOnce(q, time.Now())
 	if len(*sent) != 0 {
 		t.Fatalf("envoi malgré MarkSending en échec : %v", *sent)
+	}
+	if l := q.List("s"); len(l) != 1 || l[0].State != "queued" {
+		t.Fatalf("list=%+v", l)
+	}
+}
+
+func TestDrainOmitsPrefixWhenTooLong(t *testing.T) {
+	q, _ := openQueue(t.TempDir())
+	sent, _ := fakeDrainEnv(t, []string{"s"}, []string{"s"}, nil)
+	big := strings.Repeat("x", sendMax)
+	q.Add("s", "host", big)
+	q.Add("s", "host", "suite")
+	drainOnce(q, time.Now())
+	if len(*sent) != 1 || (*sent)[0] != "s|"+big || len(q.List("s")) != 1 {
+		t.Fatalf("sent=%d list=%d", len(*sent), len(q.List("s")))
 	}
 }
 
@@ -264,13 +282,12 @@ const qid = "11111111-1111-1111-1111-111111111111"
 
 func queueMux(t *testing.T) *http.ServeMux {
 	t.Helper()
-	old := queueSt
-	q, _ := openQueue(t.TempDir())
-	queueSt = q
-	t.Cleanup(func() { queueSt = old })
+	oldSt, oldDir := queueSt, queueDir
+	d := t.TempDir()
+	queueDir = func() string { return d }
+	t.Cleanup(func() { queueSt, queueDir = oldSt, oldDir })
 	mux := http.NewServeMux()
 	routesQueue(mux)
-	queueSt = q // routesQueue ouvre le vrai magasin : on remet celui du test
 	return mux
 }
 

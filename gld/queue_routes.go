@@ -23,9 +23,10 @@ const (
 
 // Points de substitution des tests : envoi, sessions ouvertes, sessions en question.
 var (
-	queueSt *queueStore
-	sendFn  = sendToSession
-	openFn  = func() map[string]bool {
+	queueSt  *queueStore
+	queueDir = cfgDir // les tests pointent ailleurs : jamais le vrai dossier de l'utilisateur
+	sendFn   = sendToSession
+	openFn   = func() map[string]bool {
 		m := map[string]bool{}
 		p, _ := sendable()
 		for id := range p {
@@ -66,7 +67,8 @@ func drainOnce(q *queueStore, now time.Time) {
 			continue
 		}
 		text := head.Text
-		if len(q.List(id)) > 1 && !strings.HasPrefix(text, followPrefix) {
+		// Un texte proche de sendMax ne supporte pas le préfixe : il part sans, sinon sendToSession le refuserait indéfiniment.
+		if len(q.List(id)) > 1 && !strings.HasPrefix(text, followPrefix) && len(followPrefix)+len(text) <= sendMax {
 			text = followPrefix + text
 		}
 		if err := sendFn(id, text); err != nil {
@@ -106,7 +108,7 @@ func queueLoop(ctx context.Context, q *queueStore) {
 }
 
 func routesQueue(mux *http.ServeMux) {
-	q, err := openQueue(cfgDir())
+	q, err := openQueue(queueDir())
 	if err != nil {
 		journal("queue : ouverture impossible : %v", err) // un fichier illisible n'est jamais écrasé : la file reste indisponible
 		q = nil
@@ -129,8 +131,12 @@ func routesQueue(mux *http.ServeMux) {
 	}
 	mux.HandleFunc("GET /queue", func(w http.ResponseWriter, r *http.Request) {
 		id := r.URL.Query().Get("id")
-		if !idRe.MatchString(id) || queueSt == nil {
+		if !idRe.MatchString(id) {
 			fail(w, 400, "srv.http_util.requeteInvalide")
+			return
+		}
+		if queueSt == nil {
+			fail(w, 503, "srv.queue.indisponible")
 			return
 		}
 		writeJSON(w, 200, map[string]any{"items": queueSt.List(id)})
