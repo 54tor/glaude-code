@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
-import { AlarmClock, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Flame, Microwave, Snowflake, History, Clock, FileText, Inbox, Info, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
+import { AlarmClock, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, Flame, Microwave, Snowflake, History, Clock, FileText, Inbox, Info, Loader2, Search, ShieldCheck, Tag, X } from "lucide-react"
 import { tilde } from "@/lib/format"
 import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
@@ -361,7 +361,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
               {t("shell.sidebar.autoHidden", { n: p.auto.n })}
             </span>
             <Button variant="ghost" size="xs" className="text-destructive hover:text-destructive" onClick={p.auto.purge}>
-              {t("shell.sidebar.clean")}
+              <Shredder /> {t("shell.sidebar.clean")}
             </Button>
           </div>
         )}

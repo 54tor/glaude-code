@@ -1,4 +1,4 @@
-import { BookOpen, Check, CheckSquare, ClipboardList, Copy, Download, FolderInput, MessageSquarePlus, Info, MessageSquareReply, Pencil, Plus, Power, Star, StarOff, Tag, Trash2, X, RefreshCcwDot } from "lucide-react"
+import { BookOpen, Check, CheckSquare, ClipboardList, Copy, Download, FolderInput, MessageSquarePlus, Info, MessageSquareReply, Pencil, Plus, Power, Shredder, Star, StarOff, Tag, Trash2, X, RefreshCcwDot } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { VGroup } from "@/lib/api"
 import {
@@ -135,7 +135,7 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
             )
           }
         >
-          <Trash2 /> {t("shell.menu.deleteN", { sessions: t("shell.count.sessions", { count: rows.length }) })}
+          <Shredder /> {t("shell.menu.deleteN", { sessions: t("shell.count.sessions", { count: rows.length }) })}
         </M.Item>
       </>
     )
@@ -197,7 +197,7 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
       )}
       <M.Sep />
       <M.Item variant="destructive" onSelect={() => a.remove([{ dir: s.dir, id: s.id }], t("shell.menu.quoted", { title: s.title }), after)}>
-        <Trash2 /> {t("common.delete")}
+        <Shredder /> {t("common.delete")}
       </M.Item>
     </>
   )

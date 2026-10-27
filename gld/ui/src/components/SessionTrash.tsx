@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { RotateCcw, Trash2 } from "lucide-react"
+import { RotateCcw, Shredder } from "lucide-react"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { api } from "@/lib/api"
@@ -55,7 +55,7 @@ export function SessionTrash({ open, onClose, reload }: { open: boolean; onClose
                     <RotateCcw /> {t("shell.trash.restore")}
                   </Button>
                   <Button size="icon-xs" variant="ghost" aria-label={t("shell.trash.purge")} title={t("shell.trash.purge")} onClick={() => setConfirm([r.id])}>
-                    <Trash2 />
+                    <Shredder />
                   </Button>
                 </li>
               ))}
@@ -76,7 +76,7 @@ export function SessionTrash({ open, onClose, reload }: { open: boolean; onClose
         <DialogFooter>
           {!!rows?.length && (
             <Button variant="outline" className="mr-auto" onClick={() => setConfirm(rows.map((r) => r.id))}>
-              {t("shell.trash.emptyAll")}
+              <Shredder /> {t("shell.trash.emptyAll")}
             </Button>
           )}
           <Button variant="ghost" onClick={onClose}>
