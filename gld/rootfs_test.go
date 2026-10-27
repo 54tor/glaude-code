@@ -68,3 +68,32 @@ func TestTrashNeSuitPasLesLiens(t *testing.T) {
 		t.Fatal("corbeille vidée à travers un lien")
 	}
 }
+
+func TestWriteConfigNeSuitPasLesLiens(t *testing.T) {
+	cfg, out := t.TempDir(), t.TempDir()
+	old := root
+	t.Cleanup(func() { root = old })
+	use(cfg)
+	os.Symlink(out, filepath.Join(cfg, "gld-web-config-backups"))
+	if err := saveBackup("u", []byte("x")); err == nil {
+		t.Error("sauvegarde écrite à travers un lien")
+	}
+	if ents, _ := os.ReadDir(out); len(ents) != 0 {
+		t.Fatalf("fichiers écrits hors de la config : %v", ents)
+	}
+	p := filepath.Join(cfg, "settings.json")
+	if err := writeConfig(p, []byte("{}\n")); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ := os.Stat(p); st.Mode().Perm() != 0o600 {
+		t.Fatalf("mode %v", st.Mode())
+	}
+	os.Chmod(p, 0o644)
+	writeConfig(p, []byte("{ }\n"))
+	if st, _ := os.Stat(p); st.Mode().Perm() != 0o644 {
+		t.Fatalf("mode non conservé : %v", st.Mode())
+	}
+	if m, _ := filepath.Glob(filepath.Join(cfg, ".gld-web-*.tmp")); len(m) != 0 {
+		t.Fatalf("temporaires restés : %v", m)
+	}
+}

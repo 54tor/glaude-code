@@ -202,11 +202,11 @@ func backupName(id string) string {
 var backupRe = regexp.MustCompile(`^(\d{8}-\d{6}\.\d{6})__([\w~.-]+)\.json$`)
 
 func saveBackup(id string, content []byte) error {
-	if err := os.MkdirAll(backupsDir(), 0o700); err != nil {
+	if err := rMkdirAll(cfgDir(), backupsDir(), 0o700); err != nil {
 		return err
 	}
 	for {
-		f, err := os.OpenFile(filepath.Join(backupsDir(), backupName(id)), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		f, err := rOpenFile(cfgDir(), filepath.Join(backupsDir(), backupName(id)), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 		if os.IsExist(err) { // même microseconde : on recommence, jamais d'écrasement d'une sauvegarde
 			continue
 		}
@@ -229,7 +229,7 @@ func saveBackup(id string, content []byte) error {
 	if len(ents) > 100 {
 		sort.Slice(ents, func(i, j int) bool { return ents[i].Name() < ents[j].Name() })
 		for _, e := range ents[:len(ents)-100] {
-			os.Remove(filepath.Join(backupsDir(), e.Name()))
+			rRemove(cfgDir(), filepath.Join(backupsDir(), e.Name()))
 		}
 	}
 	return nil
@@ -267,33 +267,29 @@ func writeConfigExec(path string, content []byte, exec bool) error {
 	if err := notSymlink(path); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	// Sous cfgDir(), tout le chemin est confiné ; ailleurs (réglages d'un projet), le dossier du fichier sert de racine.
+	base := cfgDir()
+	if _, err := relIn(base, path); err != nil {
+		base = filepath.Dir(path)
+		if err := os.MkdirAll(base, 0o755); err != nil {
+			return err
+		}
+		base = filepath.Dir(base) // .claude/ lui-même reste vérifié par la racine
+	}
+	if err := rMkdirAll(base, filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 	mode := os.FileMode(0o600)
-	if st, err := os.Stat(path); err == nil {
-		mode = st.Mode().Perm()
+	if r, rel, err := confine(base, path); err == nil {
+		if st, err := r.Lstat(rel); err == nil && st.Mode().IsRegular() {
+			mode = st.Mode().Perm() & 0o777
+		}
+		r.Close()
 	}
 	if exec {
 		mode |= 0o100
 	}
-	f, err := os.CreateTemp(filepath.Dir(path), ".gld-web-*.tmp")
-	if err != nil {
-		return err
-	}
-	tmp := f.Name()
-	_, werr := f.Write(content)
-	serr := f.Sync() // sans lui, une coupure juste après le renommage peut laisser un settings.json vide
-	cerr := f.Close()
-	if err := errors.Join(werr, serr, cerr, os.Chmod(tmp, mode)); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	return nil
+	return rWriteAtomic(base, path, content, mode)
 }
 
 // configEdit applique une modification : renvoie le texte avant et après ; n'écrit que si e.Dry est faux.
