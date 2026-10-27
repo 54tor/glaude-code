@@ -452,7 +452,7 @@
   "srv.teams_run.dialogueEnCours": "un dialogue attend une réponse dans le terminal",
   "srv.teams_run.captureImpossible": "lecture du terminal impossible : {{.W1}}",
   "srv.teams_run.fermetureImpossible": "fermeture impossible : {{.W1}}",
-  "srv.teams_run.chefOuvertSansTerminal": "le chef est encore ouvert mais aucun terminal tmux n'est joignable : rien n'a été supprimé",
+  "srv.teams_run.chefOuvertSansTerminal": "le chef est encore ouvert mais aucun terminal tmux n'est joignable : rien n'a été supprimé ; fermez la session du chef depuis la liste des sessions, puis réessayez",
   "srv.teams_run.etatInconnu": "état des sessions inconnu, réessaie dans un instant",
   "srv.teams_run.tmuxInutilisable": "tmux injoignable : {{.W1}}",
   "srv.matin.envRefuse": "option --env refusée : seul CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 est admis",

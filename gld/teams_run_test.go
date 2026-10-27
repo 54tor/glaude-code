@@ -30,7 +30,8 @@ type fakeIO struct {
 	closed   []string
 	panesErr error
 	unknown  bool
-	leadLive bool
+	live     map[string]bool
+	leadIDs  []string
 	order    []string
 	busy     int32
 	overlap  bool
@@ -42,11 +43,12 @@ func (f *fakeIO) Panes() (map[string]string, error) {
 	f.order = append(f.order, "panes")
 	return f.panes, f.panesErr
 }
-func (f *fakeIO) LeadState(string) (bool, bool) {
+func (f *fakeIO) LeadState(id string) (bool, bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.order = append(f.order, "lead")
-	return f.leadLive, !f.unknown
+	f.leadIDs = append(f.leadIDs, id)
+	return f.live[id], !f.unknown
 }
 func (f *fakeIO) Idle() []string { f.mu.Lock(); defer f.mu.Unlock(); return f.idle }
 func (f *fakeIO) Capture(p string) (string, error) {
@@ -613,7 +615,7 @@ func TestCloseAbortsWhenStateUnknown(t *testing.T) {
 
 func TestCloseAbortsWhenLeadAliveButNoPane(t *testing.T) {
 	root, f := seedClose(t)
-	f.leadLive = true
+	f.live = map[string]bool{trLead: true}
 	if err := teamClose(root, trName); !isMsg(err, "srv.teams_run.chefOuvertSansTerminal") {
 		t.Fatalf("err : %v", err)
 	}
@@ -622,7 +624,7 @@ func TestCloseAbortsWhenLeadAliveButNoPane(t *testing.T) {
 
 func TestCloseAbortsWhenLeadAliveAndTmuxUnreachable(t *testing.T) {
 	root, f := seedClose(t)
-	f.leadLive, f.panes, f.panesErr = true, nil, noServer
+	f.live, f.panes, f.panesErr = map[string]bool{trLead: true}, nil, noServer
 	if err := teamClose(root, trName); !isMsg(err, "srv.teams_run.chefOuvertSansTerminal") {
 		t.Fatalf("err : %v", err)
 	}
@@ -660,5 +662,17 @@ func TestCloseReadsLeadStateBeforePanes(t *testing.T) {
 	teamClose(root, trName)
 	if len(f.order) < 2 || f.order[0] != "lead" || f.order[1] != "panes" {
 		t.Fatalf("ordre : %v", f.order)
+	}
+}
+
+func TestCloseAsksLeadStateForTheLeadSessionID(t *testing.T) {
+	root, f := seedClose(t)
+	tf, err := readTeam(root, trName)
+	if err != nil || tf.LeadSessionID == "" {
+		t.Fatal(err, tf.LeadSessionID)
+	}
+	teamClose(root, trName)
+	if len(f.leadIDs) != 1 || f.leadIDs[0] != tf.LeadSessionID {
+		t.Fatalf("ids : %v, attendu %q", f.leadIDs, tf.LeadSessionID)
 	}
 }

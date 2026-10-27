@@ -452,7 +452,7 @@
   "srv.teams_run.dialogueEnCours": "a dialog is waiting for an answer in the terminal",
   "srv.teams_run.captureImpossible": "cannot read the terminal: {{.W1}}",
   "srv.teams_run.fermetureImpossible": "cannot close the team: {{.W1}}",
-  "srv.teams_run.chefOuvertSansTerminal": "the lead session is still open but no tmux terminal is reachable: nothing was removed",
+  "srv.teams_run.chefOuvertSansTerminal": "the lead session is still open but no tmux terminal is reachable: nothing was removed; close the lead session from the sessions list, then retry",
   "srv.teams_run.etatInconnu": "session state unknown, retry in a moment",
   "srv.teams_run.tmuxInutilisable": "tmux unreachable: {{.W1}}",
   "srv.matin.envRefuse": "--env refused: only CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 is allowed",
