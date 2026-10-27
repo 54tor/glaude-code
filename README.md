@@ -84,6 +84,11 @@ bouton **Envoyer à la session** écrit directement dedans, et vous voyez en dir
 - Depuis la session, vous pouvez **passer en lecture seule** (l'invité ne peut plus écrire et ses messages encore en file
   sont supprimés, sauf celui en cours d'envoi ; il peut toujours retirer les siens), **redonner l'écriture**, ou
   **Mettre fin au partage** : l'invité perd l'accès immédiatement et ses messages en file sont supprimés.
+- Un navigateur peut rejoindre **plusieurs sessions partagées** (une par session et par navigateur) : `/guest` les
+  liste (et redirige s'il n'y en a qu'une), un menu **Autres sessions partagées** de la vue invité permet de passer de
+  l'une à l'autre.
+- L'invité voit le **titre** de la session : il est repris tel quel du titre de la session et donc divulgué à
+  l'invité. Renommez la session avant de partager si besoin.
 - La file d'envoi est désormais sur le serveur, pour toutes les sessions : elle survit à la fermeture de l'onglet. Un
   message en cours d'envoi au moment d'un redémarrage de gld apparaît **incertain** et n'est jamais renvoyé
   automatiquement ; vous pouvez le relancer depuis la file. Limites : 50 messages par session, 32 Ko par message,
@@ -92,8 +97,9 @@ bouton **Envoyer à la session** écrit directement dedans, et vous voyez en dir
   - Sans HTTPS, le cookie de l'invité n'est pas marqué `Secure` : utilisez une adresse HTTPS si vous exposez gld.
   - Le cookie de l'invité dure 30 jours. Après **Quitter**, le lien est consommé : régénérez-en un.
   - Si vous ouvrez votre propre lien avec un accès hôte (jeton, appareil jumelé, compte ayant le droit `exec` sur ce
-    home), gld le refuse sans le consommer ; testez-le dans une fenêtre privée. En mode local ouvert sans jeton, vous
-    deviendriez l'invité : **Quitter** vous en sort, mais le lien est alors consommé.
+    home), gld le refuse sans le consommer ; testez-le dans une fenêtre privée. En mode local ouvert sans jeton, ouvrir
+    votre propre lien le consomme (ce navigateur reçoit un cookie d'invité) mais ne verrouille pas votre interface
+    d'hôte : les pages sans l'en-tête de partage restent servies comme des requêtes d'hôte.
   - gld ne crée aucun tunnel : le collègue doit déjà atteindre gld (`--listen`, reverse proxy ou VPN).
   - Fonctionne en mode local sans jeton, en mode jeton (un utilisateur) et en mode multi-utilisateur.
 
