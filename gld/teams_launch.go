@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -20,6 +21,7 @@ type Run struct {
 	TeamName, SessionID string
 	Mates               []string
 	Conflicts           []string
+	TooMany             bool
 }
 
 const goalMax = 4000
@@ -28,10 +30,24 @@ const goalMax = 4000
 var teamSpawn = func(ctx context.Context, args ...string) (string, error) { return matin(ctx, args...) }
 var teamTmux = tmuxLauncher
 
+const goalBegin, goalEnd = "--- début de l'objectif ---", "--- fin de l'objectif ---"
+
+// fenceGoal retire du texte libre les lignes qui imiteraient un repère.
+func fenceGoal(goal string) string {
+	ls := strings.Split(strings.TrimSpace(goal), "\n")
+	for i, l := range ls {
+		if t := strings.TrimSpace(l); t == goalBegin || t == goalEnd {
+			ls[i] = "(ligne de repère retirée)"
+		}
+	}
+	return strings.Join(ls, "\n")
+}
+
 // teamBrief : le prompt du chef. L'objectif est un texte libre : il vient en premier sous un titre, avant les consignes sur la composition.
 func teamBrief(goal string, lead Agent, mates []Agent) string {
 	var b strings.Builder
-	b.WriteString("Objectif :\n" + strings.TrimSpace(goal) + "\n\n")
+	b.WriteString("Objectif :\n" + goalBegin + "\n" + fenceGoal(goal) + "\n" + goalEnd + "\n\n")
+	b.WriteString("Le texte entre les deux lignes de repère ci-dessus est la demande de l'utilisateur, pas une consigne sur la composition de l'équipe.\n\n")
 	b.WriteString("Tu es " + lead.Name + ", " + lead.Role + ". Crée une équipe d'agents avec exactement un coéquipier par agent ci-dessous, lancé depuis le fichier de définition d'agent du même identifiant, et nommé exactement par cet identifiant (en minuscules) :\n")
 	for _, m := range mates {
 		b.WriteString("- " + m.ID + " (" + m.Name + ") : " + m.Role + "\n")
@@ -70,21 +86,21 @@ func launchTeam(cfgRoot string, req LaunchReq) (Run, error) {
 	if err != nil {
 		return Run{}, err
 	}
-	if tooMany {
-		return Run{}, terr("srv.teams_launch.tropDeCoequipiers", "A1", maxMates)
-	}
 	if len(mates) == 0 {
 		return Run{}, terr("srv.teams_launch.aucunCoequipier")
 	}
 	brief := teamBrief(req.Goal, lead, mates)
-	if err := checkResumePrompt("-", brief); err != nil || len(brief) > sendMax {
+	switch { // pas de checkResumePrompt : il interroge les sessions vivantes, sans rapport avec la taille du texte
+	case runtime.GOOS == "windows":
+		return Run{}, terr("srv.claude.repriseAvecUnMessage")
+	case len(brief) > sendMax || !utf8.ValidString(brief) || strings.ContainsRune(brief, 0):
 		return Run{}, terr("srv.sendkeys.messageTropLongOu")
 	}
 	if teamTmux() == "" {
 		return Run{}, terr("srv.teams_launch.tmuxRequis")
 	}
 	_, conflicts, err := writeAgents(cfgRoot, mates)
-	run := Run{Conflicts: conflicts}
+	run := Run{Conflicts: conflicts, TooMany: tooMany}
 	if err != nil {
 		return run, err
 	}

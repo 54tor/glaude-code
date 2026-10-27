@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 )
 
@@ -30,7 +31,7 @@ const tabEnvKey, tabEnvVal = "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", "1"
 // applyTabEnv ajoute à c.Env les variables autorisées de env ; à appeler après withPath, qui écrase c.Env.
 func applyTabEnv(c *exec.Cmd, env map[string]string) {
 	if env[tabEnvKey] == tabEnvVal {
-		c.Env = append(c.Env, tabEnvKey+"="+tabEnvVal)
+		c.Env = append(slices.DeleteFunc(c.Env, func(e string) bool { return strings.HasPrefix(e, tabEnvKey+"=") }), tabEnvKey+"="+tabEnvVal)
 	}
 }
 

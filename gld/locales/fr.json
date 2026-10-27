@@ -439,7 +439,6 @@
   "srv.teams_launch.dossierInvalide": "dossier invalide (chemin absolu attendu)",
   "srv.teams_launch.dossierIntrouvable": "dossier introuvable : {{.A1}}",
   "srv.teams_launch.objectifInvalide": "objectif vide ou trop long ({{.A1}} caractères au plus)",
-  "srv.teams_launch.tropDeCoequipiers": "trop de coéquipiers : {{.A1}} au plus",
   "srv.teams_launch.aucunCoequipier": "aucun coéquipier dans la sélection",
   "srv.teams_launch.tmuxRequis": "lancer une team demande un terminal avec tmux (kitty, wezterm, gnome-terminal, konsole, xfce4-terminal, tilix ou terminator)",
   "srv.teams_launch.conflitAgent": "un fichier d'agent existe déjà et n'est pas géré par gld : {{.A1}} ; aucune session lancée",
