@@ -38,15 +38,19 @@ type cwdRewrite struct {
 
 // commit remplace l'original par sa réécriture, en gardant la date de modification.
 func (c cwdRewrite) commit() error {
-	err := os.Rename(c.path+".tmp", c.path)
-	if err == nil {
+	r, rel, err := confine(cfgDir(), c.path)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+	if err = r.Rename(rel+".tmp", rel); err == nil {
 		forgetInfo(c.path)
-		err = os.Chtimes(c.path, c.mod, c.mod)
+		err = r.Chtimes(rel, c.mod, c.mod)
 	}
 	return err
 }
 
-func (c cwdRewrite) abort() { os.Remove(c.path + ".tmp") }
+func (c cwdRewrite) abort() { rRemove(cfgDir(), c.path+".tmp") }
 
 // prepareCwd écrit dans path.tmp le transcript au cwd remplacé (voir remapCwd) ; commit le met en place.
 func prepareCwd(path, old, nw string, sub bool) (cwdRewrite, error) {
@@ -63,18 +67,26 @@ func prepareCwd(path, old, nw string, sub bool) (cwdRewrite, error) {
 		q, _ := json.Marshal(nv)
 		return append(append([]byte{}, cwdKey...), q...)
 	}
-	st, err := os.Stat(path)
-	if err != nil {
-		return cwdRewrite{}, err
-	}
-	in, err := os.Open(path)
+	in, err := rOpenFile(cfgDir(), path, os.O_RDONLY, 0)
 	if err != nil {
 		return cwdRewrite{}, err
 	}
 	defer in.Close()
-	tmp := path + ".tmp"
-	out, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, st.Mode())
+	st, err := in.Stat()
 	if err != nil {
+		return cwdRewrite{}, err
+	}
+	tmp := path + ".tmp"
+	if fi, err := os.Lstat(tmp); err == nil && !fi.IsDir() {
+		rRemove(cfgDir(), tmp) // un reste d'un essai interrompu, ou un lien posé à sa place : retiré, jamais suivi
+	}
+	out, err := rOpenFile(cfgDir(), tmp, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
+	if err != nil {
+		return cwdRewrite{}, err
+	}
+	if err := out.Chmod(st.Mode().Perm()); err != nil {
+		out.Close()
+		rRemove(cfgDir(), tmp)
 		return cwdRewrite{}, err
 	}
 	w := bufio.NewWriterSize(out, 1<<20)
@@ -102,7 +114,7 @@ func prepareCwd(path, old, nw string, sub bool) (cwdRewrite, error) {
 		err = cerr
 	}
 	if err != nil {
-		os.Remove(tmp)
+		rRemove(cfgDir(), tmp)
 		return cwdRewrite{}, err
 	}
 	return cwdRewrite{path, st.ModTime()}, nil
@@ -174,7 +186,7 @@ func reassign(items []item, to string) (int, error) {
 			pending[i] = append(pending[i], c)
 		}
 	}
-	if err := os.MkdirAll(dst, 0o755); err != nil {
+	if err := rMkdirAll(cfgDir(), dst, 0o755); err != nil {
 		abort()
 		return 0, err
 	}
@@ -188,12 +200,12 @@ func reassign(items []item, to string) (int, error) {
 		}
 		src := filepath.Join(root, it.Dir)
 		for _, n := range []string{it.ID + ".jsonl", it.ID} {
-			if err := os.Rename(filepath.Join(src, n), filepath.Join(dst, n)); err != nil && !os.IsNotExist(err) {
+			if err := rRename(cfgDir(), filepath.Join(src, n), filepath.Join(dst, n)); err != nil && !os.IsNotExist(err) {
 				abort()
 				return i, err
 			}
 		}
-		os.Remove(src) // seulement s'il est devenu vide
+		rRemove(cfgDir(), src) // seulement s'il est devenu vide
 	}
 	return len(items), nil
 }

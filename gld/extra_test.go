@@ -160,7 +160,9 @@ func TestRewriteCwd(t *testing.T) {
 	if got := remapCwd("/old/src", "/old", "/new", true); got != "/new/src" {
 		t.Fatal("projet renommé :", got)
 	}
-	p := filepath.Join(t.TempDir(), "s.jsonl")
+	cfg := t.TempDir()
+	use(cfg)
+	p := filepath.Join(cfg, "projects", "-h", "s.jsonl")
 	put(t, p, `{"cwd":"/h","x":1}`+"\n"+`{"cwd":"/h/.local/bin"}`+"\n"+`{"cwd":"/h/P/tb"}`+"\n", old)
 	c, err := prepareCwd(p, "/h", "/h/P/tb", false)
 	if err == nil {

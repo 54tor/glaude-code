@@ -153,3 +153,27 @@ func TestCorbeilleSessionsNeSuitPasLesLiens(t *testing.T) {
 		t.Fatalf("history réécrit à travers un lien : %q", b)
 	}
 }
+
+func TestReassignNeSuitPasLesLiens(t *testing.T) {
+	cfg, out := t.TempDir(), t.TempDir()
+	old := root
+	t.Cleanup(func() { root = old })
+	use(cfg)
+	base := t.TempDir()
+	src, dst := filepath.Join(base, "src"), filepath.Join(base, "dst")
+	os.MkdirAll(src, 0o755)
+	os.MkdirAll(dst, 0o755)
+	encSrc := nonAlnum.ReplaceAllString(src, "-")
+	jl := filepath.Join(cfg, "projects", encSrc, id1+".jsonl")
+	os.MkdirAll(filepath.Dir(jl), 0o755)
+	os.WriteFile(jl, []byte(`{"cwd":"`+src+`"}`+"\n"), 0o600)
+	victim := filepath.Join(out, "victime")
+	os.WriteFile(victim, []byte("intact"), 0o600)
+	os.Symlink(victim, jl+".tmp")
+	if n, err := reassign([]item{{encSrc, id1}}, dst); n != 1 || err != nil {
+		t.Fatal(n, err)
+	}
+	if b, _ := os.ReadFile(victim); string(b) != "intact" {
+		t.Fatalf("réécriture du cwd à travers un lien : %q", b)
+	}
+}
