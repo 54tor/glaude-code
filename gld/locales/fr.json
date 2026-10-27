@@ -455,7 +455,7 @@
   "srv.teams_launch.tmuxRequis": "lancer une team demande un terminal avec tmux (kitty, wezterm, gnome-terminal, konsole, xfce4-terminal, tilix ou terminator)",
   "srv.teams_launch.conflitAgent": "un fichier d'agent existe déjà et n'est pas géré par gld : {{.A1}} ; aucune session lancée",
   "srv.teams_launch.lancementEchoue": "lancement de la session impossible : {{.A1}}",
-  "srv.teams_launch.fonctionAbsente": "cette version de claude ne gère pas les teams",
+  "srv.teams_launch.fonctionAbsente": "indisponible : cette version de claude ne gère pas les teams",
   "srv.teams_catalog.chefAbsent": "aucun chef de projet dans le catalogue",
   "srv.teams_catalog.selectionVide": "aucune team sélectionnée",
   "srv.teams_catalog.teamInconnue": "team inconnue : {{.A1}}",

@@ -38,6 +38,7 @@
     "close": "Fermer la team",
     "finished": "terminée",
     "permission": "Permission",
+    "permTerminal": "Répondre dans le terminal",
     "message": "Message",
     "edit": {
       "copyName": "{{name}} perso",

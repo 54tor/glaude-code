@@ -106,7 +106,7 @@ describe("TeamRun", () => {
     mockGet(view({ Live: false, Permission: "x" }))
     render(<TeamRun name={NAME} />)
     await screen.findByText("bonjour Ada")
-    for (const b of screen.getAllByRole("button")) expect((b as HTMLButtonElement).disabled).toBe(true)
+    for (const b of screen.getAllByRole("button", { name: (n) => n !== "Fermer la team" })) expect((b as HTMLButtonElement).disabled).toBe(true)
   })
   it("envoi : destinataire choisi, en file", async () => {
     mockGet()
@@ -148,6 +148,24 @@ describe("TeamRun", () => {
     expect(teams.teamClose).not.toHaveBeenCalled()
     fireEvent.click(await screen.findByRole("button", { name: "Fermer la team" }))
     await waitFor(() => expect(teams.teamClose).toHaveBeenCalledWith(NAME))
+  })
+  it("team terminée : Fermer reste actif et supprime après confirmation", async () => {
+    mockGet(view({ Live: false }))
+    render(<TeamRun name={NAME} />)
+    fireEvent.click(await screen.findByRole("button", { name: "Fermer la team" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Fermer la team" }))
+    await waitFor(() => expect(teams.teamClose).toHaveBeenCalledWith(NAME))
+  })
+  it("demande illisible : renvoie au terminal", async () => {
+    const a = view().Agents.map((x) => (x.Lead ? { ...x, State: "waiting" } : x))
+    mockGet(view({ Agents: a, Permission: "" }))
+    render(<TeamRun name={NAME} />)
+    expect(await screen.findByText("Répondre dans le terminal")).toBeTruthy()
+  })
+  it("compte rendu d'un coéquipier (idle avec texte) affiché comme un message", async () => {
+    mockGet(view({ Messages: [{ ID: "i1", From: "Ada", To: "Atlas", Text: "rapport final", Summary: "", Kind: "idle", At: 3000, Read: false }] }))
+    render(<TeamRun name={NAME} />)
+    expect(await screen.findByText("rapport final")).toBeTruthy()
   })
   it("polling sans chevauchement, arrêté au démontage", async () => {
     vi.useFakeTimers()

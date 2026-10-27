@@ -172,6 +172,8 @@ export function TeamRun({ name }: { name: string }) {
         </div>
       )}
     </div>
+  ) : live && ["waiting", "unknown"].includes(view?.Agents.find((a) => a.Lead)?.State ?? "") ? (
+    <p className="text-sm text-muted-foreground">{t("teams.permTerminal")}</p>
   ) : null
 
   if (!view) return <div ref={root}>{err && <p className="p-4 text-sm text-destructive">{err}</p>}</div>
@@ -200,7 +202,6 @@ export function TeamRun({ name }: { name: string }) {
             size="sm"
             variant="outline"
             className="ml-auto"
-            disabled={!live}
             onClick={() => setAsk({ title: t("teams.close"), body: view.Name, confirm: t("teams.close"), run: () => void teamClose(name).then((r) => (r.ok ? void pollRef.current() : setActErr(r.out))) })}
           >
             {t("teams.close")}
