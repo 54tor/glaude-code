@@ -230,6 +230,7 @@ Non testé en réel : onglets tmux, envoi de touches et terminal web sous un aut
 ## Limites connues
 
 - `exec` et `config_write` valent le compte OS de gld ; la séparation par compte est expérimentale.
+- Tous les homes et tous les utilisateurs tournent sous un même compte OS (y compris sous `GLD_RUN_AS`, qui n'a qu'un compte cible) : `home_acl` ne sépare pas deux utilisateurs qui ont `exec`, l'un peut lire et modifier les fichiers des homes de l'autre. Sous Linux, un gld enfant se marque non « dumpable », donc son jeton n'est pas lisible dans `/proc/<pid>/environ` ; macOS et Windows n'ont pas cette protection.
 - Séparation par compte OS : voir [auth-followup-openroot.md](auth-followup-openroot.md).
 - Rejeu d'une ligne signée ancienne non détecté ; signature inutile contre qui lit la clé. Le nombre de sessions affiché par `GET /admin/users` n'est pas vérifié (affichage seul).
 - Retour au mode ouvert possible si témoin, marqueur et lignes signées sont supprimés ensemble (voir « Où sont les données »).
