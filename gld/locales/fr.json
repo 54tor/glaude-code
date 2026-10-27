@@ -17,6 +17,7 @@
   "cli.main.plainHTTP": "⚠ gld écoute sur {{.A1}} : accès protégé par un jeton, mais en HTTP clair.",
   "cli.main.preferTunnel": "  Préférez un tunnel (SSH, Tailscale) ou un proxy TLS ; ne l'exposez pas sur Internet.",
   "cli.main.runAsOn": "GLD_RUN_AS (expérimental) : claude, tmux, git et les gld enfants tournent sous le compte cible (dossier personnel {{.A1}}), mais la passerelle lit et écrit encore ses dossiers de configuration en suivant les liens symboliques : ce n'est pas une frontière de sécurité.",
+  "cli.main.rulesFailed": "Règles intégrées non installées : {{.A1}}",
   "cli.main.runAsRefused": "GLD_RUN_AS : gld refuse de démarrer, la séparation par compte ne serait pas réelle ({{.A1}}).",
   "cli.main.runAsWindows": "GLD_RUN_AS ignoré : la séparation par compte n'existe pas sous Windows, les sessions tournent sous le compte de gld.",
   "cli.main.stopped": "arrêt.",

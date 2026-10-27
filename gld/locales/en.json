@@ -17,6 +17,7 @@
   "cli.main.plainHTTP": "⚠ gld is listening on {{.A1}}: access is protected by a token, but over plain HTTP.",
   "cli.main.preferTunnel": "  Prefer a tunnel (SSH, Tailscale) or a TLS proxy; do not expose it on the Internet.",
   "cli.main.runAsOn": "GLD_RUN_AS (experimental): claude, tmux, git and child gld processes run under the target account (home {{.A1}}), but the gateway still reads and writes its config folders following symlinks: this is not a security boundary.",
+  "cli.main.rulesFailed": "Built-in rules not installed: {{.A1}}",
   "cli.main.runAsRefused": "GLD_RUN_AS: gld refuses to start, account separation would not be real ({{.A1}}).",
   "cli.main.runAsWindows": "GLD_RUN_AS ignored: account separation does not exist on Windows, sessions run under gld's account.",
   "cli.main.stopped": "stopped.",

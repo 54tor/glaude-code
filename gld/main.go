@@ -105,6 +105,9 @@ func main() {
 	if runAsOn() {
 		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.runAsOn", map[string]any{"A1": runAsHome()}))
 	}
+	if _, err := installBuiltinRules(); err != nil { // non bloquant : le serveur marche sans, seules les règles manquent
+		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.rulesFailed", map[string]any{"A1": err.Error()}))
+	}
 	tokenPrincipal = tokenForChildren(token, generated)
 	h := handler()
 	if !local {
