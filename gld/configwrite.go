@@ -219,7 +219,7 @@ func saveBackup(id string, content []byte) error {
 		}
 		break
 	}
-	all, _ := os.ReadDir(backupsDir()) // les 100 dernières seulement ; un fichier étranger au dossier n'est jamais touché
+	all, _ := readDirTrusted(backupsDir()) // les 100 dernières seulement ; un fichier étranger au dossier n'est jamais touché
 	var ents []os.DirEntry
 	for _, e := range all {
 		if backupRe.MatchString(e.Name()) {
@@ -298,7 +298,7 @@ func configEdit(e CfgEdit) (before, after string, err error) {
 	if err = notSymlink(path); err != nil {
 		return
 	}
-	orig, rerr := os.ReadFile(path)
+	orig, rerr := readTrusted(path)
 	exists := rerr == nil
 	text := string(orig)
 	if !exists || strings.TrimSpace(text) == "" {
@@ -340,7 +340,7 @@ type BackupInfo struct {
 
 func listBackups() []BackupInfo {
 	out := []BackupInfo{}
-	ents, _ := os.ReadDir(backupsDir())
+	ents, _ := readDirTrusted(backupsDir())
 	for _, e := range ents {
 		if m := backupRe.FindStringSubmatch(e.Name()); m != nil {
 			st, _ := e.Info()
@@ -368,14 +368,14 @@ func restoreBackup(name string) error {
 	if err != nil {
 		return err
 	}
-	b, err := os.ReadFile(filepath.Join(backupsDir(), name))
+	b, err := readTrusted(filepath.Join(backupsDir(), name))
 	if err != nil {
 		return err
 	}
 	if _, err := parseOrdered(b); err != nil {
 		return terr("srv.configwrite.laSauvegardeNEst")
 	}
-	if cur, err := os.ReadFile(path); err == nil {
+	if cur, err := readTrusted(path); err == nil {
 		if err := saveBackup(id, cur); err != nil {
 			return err
 		}
