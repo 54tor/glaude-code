@@ -87,10 +87,10 @@ func saveTrash(key, path, reason, text string) error {
 
 func trashList() []Trashed {
 	out := []Trashed{}
-	ents, _ := os.ReadDir(trashDir())
+	ents, _ := readDirTrusted(trashDir())
 	for _, e := range ents {
 		var t Trashed
-		if b, err := os.ReadFile(filepath.Join(trashDir(), e.Name(), "meta.json")); err == nil && json.Unmarshal(b, &t) == nil && t.ID == e.Name() {
+		if b, err := readTrusted(filepath.Join(trashDir(), e.Name(), "meta.json")); err == nil && json.Unmarshal(b, &t) == nil && t.ID == e.Name() {
 			out = append(out, t)
 		}
 	}
@@ -101,7 +101,7 @@ func trashList() []Trashed {
 func trashItem(id string) (Trashed, string, error) {
 	for _, t := range trashList() {
 		if t.ID == id {
-			b, err := os.ReadFile(filepath.Join(trashDir(), id, "content"))
+			b, err := readTrusted(filepath.Join(trashDir(), id, "content"))
 			return t, string(b), err
 		}
 	}
