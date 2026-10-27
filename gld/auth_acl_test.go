@@ -586,3 +586,52 @@ func TestGateTrashRestoreNeedsConfig(t *testing.T) {
 		t.Errorf("identifiant hors corbeille : %d", w.Code)
 	}
 }
+
+// memory-merge avec launch ouvre une session claude aux arguments de l'appelant : exec exigé. Sans launch, mem_write suffit.
+func TestGateMemoryMergeLaunchNeedsExec(t *testing.T) {
+	g := newGateRig(t)
+	mw := g.user(t, "memoire", false)
+	g.grant(t, mw, "", RightMemWrite)
+	ex := g.user(t, "lanceur", false)
+	g.grant(t, ex, "", RightMemWrite, RightExec)
+	for _, c := range []struct {
+		u    *gateUser
+		body string
+		code int
+	}{
+		{&mw, `{"Launch":true,"Args":"--dangerously-skip-permissions"}`, 403},
+		{&mw, `{"Launch":false}`, 200},
+		{&ex, `{"Launch":true}`, 200},
+	} {
+		if w := g.do("POST", "/memory-merge", c.u, "", c.body); w.Code != c.code {
+			t.Errorf("%s : %d", c.body, w.Code)
+		}
+	}
+}
+
+// /vgroups remplace aussi les dossiers enregistrés, racines de l'IDE : en ajouter demande exec, comme POST /dirs.
+func TestGateVgroupsNewDirNeedsExec(t *testing.T) {
+	g := newGateRig(t)
+	known := t.TempDir()
+	if err := saveStore(Store{Groups: []VGroup{}, Favs: []string{}, Projects: []Project{}, Dirs: []string{known}}); err != nil {
+		t.Fatal(err)
+	}
+	mw := g.user(t, "memoire", false)
+	g.grant(t, mw, "", RightMemWrite)
+	ex := g.user(t, "lanceur", false)
+	g.grant(t, ex, "", RightMemWrite, RightExec)
+	keep := `{"groups":[],"favs":[],"dirs":["` + known + `"]}`
+	add := `{"groups":[],"favs":[],"dirs":["` + known + `","/etc"]}`
+	addProj := `{"groups":[],"favs":[],"projects":[{"name":"p","dirs":["/etc"]}]}`
+	for _, c := range []struct {
+		u    *gateUser
+		body string
+		code int
+	}{
+		{&mw, keep, 200}, {&mw, add, 403}, {&mw, addProj, 403}, {&ex, add, 200},
+	} {
+		if w := g.do("POST", "/vgroups", c.u, "", c.body); w.Code != c.code {
+			t.Errorf("%s : %d", c.body, w.Code)
+		}
+	}
+}

@@ -341,7 +341,66 @@ func gateCheck(g *gateInfo, r *http.Request, pat string, need Right) (int, strin
 			return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] && m[RightConfigWrite] })
 		}
 	}
+	if pat == "POST /memory-merge" {
+		var req struct{ Launch bool }
+		if err := peekJSON(r, &req); err != nil {
+			return peekErr(err)
+		}
+		// Lancer ouvre une session claude avec les arguments de l'appelant : même droit que /open.
+		if req.Launch {
+			return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] && m[RightExec] })
+		}
+	}
+	if pat == "POST /vgroups" {
+		var st Store
+		if err := peekJSON(r, &st); err != nil {
+			return peekErr(err)
+		}
+		if vgroupsAddsDirs(homeFrom(r), st) {
+			return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] && m[RightExec] })
+		}
+	}
 	return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] })
+}
+
+// vgroupsAddsDirs : les dossiers enregistrés servent de racines à l'IDE, et POST /dirs (exec) est le seul moyen
+// d'en ajouter. /vgroups renvoie l'ensemble : tout dossier absent du magasin actuel est un ajout.
+// Magasin illisible ou home inconnu : ajout, donc exec.
+func vgroupsAddsDirs(home string, st Store) bool {
+	dir := cfgDir()
+	if home != "" {
+		h, ok := homeByName(home)
+		if !ok {
+			return true
+		}
+		dir = h.Dir
+	}
+	var old Store
+	if b, err := os.ReadFile(filepath.Join(dir, "gld-web-groups.json")); err == nil {
+		json.Unmarshal(b, &old)
+	}
+	known := map[string]bool{}
+	for _, d := range old.Dirs {
+		known[filepath.Clean(d)] = true
+	}
+	for _, p := range old.Projects {
+		for _, d := range p.Dirs {
+			known[filepath.Clean(d)] = true
+		}
+	}
+	for _, d := range st.Dirs {
+		if !known[filepath.Clean(d)] {
+			return true
+		}
+	}
+	for _, p := range st.Projects {
+		for _, d := range p.Dirs {
+			if !known[filepath.Clean(d)] {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // memKeyPrefixes : les clés de mémoire (memResolve), qui ne mènent jamais à commands/, skills/ ni aux réglages.
