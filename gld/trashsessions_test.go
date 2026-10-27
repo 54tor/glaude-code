@@ -43,3 +43,25 @@ func TestCorbeilleSessions(t *testing.T) {
 	// un id invalide ne touche à rien
 	status(t, h, "POST", "/session-trash-restore", `{"ids":["../x"]}`, 200)
 }
+
+func TestPurgeCorbeilleSansEtatDesSessions(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	p := filepath.Join(cfg, "projects", "-p", id1+".jsonl")
+	os.MkdirAll(filepath.Dir(p), 0o755)
+	os.WriteFile(p, []byte("{}\n"), 0o600)
+	if n, _, err := trashSessions([]item{{"-p", id1}}); n != 1 || err != nil {
+		t.Fatal(n, err)
+	}
+	liveSessions = func() map[string]bool { return nil }
+	defer use(cfg)
+	if _, err := purgeTrashed([]string{id1}); err == nil {
+		t.Fatal("la purge aurait dû échouer")
+	}
+	if _, err := os.Stat(p); err == nil {
+		t.Fatal("la session est revenue dans les projets")
+	}
+	if _, ok := readTrashMeta(id1); !ok {
+		t.Fatal("la session a quitté la corbeille")
+	}
+}

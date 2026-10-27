@@ -183,10 +183,15 @@ func restoreTrashed(id string) error {
 // purgeTrashed supprime pour de bon : les fichiers reviennent à leur place le temps de la purge complète (purgeSessions retire
 // aussi les fichiers associés et les lignes de history.jsonl), puis la corbeille est vidée de ces entrées.
 func purgeTrashed(ids []string) (int, error) {
+	// Avant toute restauration : si purgeSessions renonçait ensuite, les sessions resteraient restaurées hors corbeille.
+	live, err := liveCheck()
+	if err != nil {
+		return 0, err
+	}
 	var items []item
 	for _, id := range ids {
 		m, ok := readTrashMeta(id)
-		if !ok {
+		if !ok || live[id] {
 			continue
 		}
 		if _, err := os.Stat(filepath.Join(trashSessionPath(id), id+".jsonl")); err != nil {
