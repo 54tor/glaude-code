@@ -62,7 +62,7 @@ var routeRights = map[string]Right{
 	"POST /snippet-draft": RightMemWrite,
 	"GET /notes":          RightMemRead, "POST /notes": RightMemWrite,
 	"GET /trash": RightMemRead, "GET /trash-file": RightMemRead, "POST /trash-restore": RightMemWrite, "POST /trash-purge": RightMemWrite,
-	"GET /skills-list": RightMemRead, "GET /skills-find": RightMemRead, "GET /skill": RightMemRead, "GET /plugins": RightMemRead, "GET /marketplaces": RightMemRead,
+	"GET /skills-list": RightMemRead, "GET /skills-find": RightMemRead, "GET /skills-updates": RightMemRead, "GET /skill": RightMemRead, "GET /plugins": RightMemRead, "GET /marketplaces": RightMemRead,
 
 	// Lecture du home et état d'interface par home.
 	"GET /config": RightMemRead, "GET /config-projects": RightMemRead, "GET /config-effective": RightMemRead,

@@ -6,9 +6,14 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -57,6 +62,8 @@ func npxSkillsArgs(action, source, skill string, global bool) ([]string, error) 
 var runNpxSkills = func(ctx context.Context, dir string, args []string) (string, error) {
 	cmd := withPath(exec.CommandContext(ctx, "npx", args...))
 	cmd.Dir = dir
+	// Le dossier d'un projet peut porter son .npmrc : l'environnement l'emporte sur lui, le paquet épinglé vient du registre public.
+	cmd.Env = append(cmd.Env, "npm_config_registry=https://registry.npmjs.org/")
 	b, err := cmd.CombinedOutput()
 	return stripANSI(string(b)), err
 }
@@ -140,6 +147,10 @@ func skillsFind(ctx context.Context, q string) ([]SkillHit, error) {
 	if q == "" || len([]rune(q)) > 80 || q[0] == '-' || strings.ContainsAny(q, "\r\n") {
 		return nil, terr("srv.http_util.requeteInvalide")
 	}
+	if !npxMu.TryLock() { // la route n'exige que le droit de lecture : pas de lancements en parallèle
+		return nil, terr("srv.skills.npxBusy")
+	}
+	defer npxMu.Unlock()
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	home, _ := os.UserHomeDir()
@@ -151,4 +162,135 @@ func skillsFind(ctx context.Context, q string) ([]SkillHit, error) {
 		return nil, err
 	}
 	return parseSkillHits(out), nil
+}
+
+// remoteTrees : les arbres git d'un dépôt GitHub (chemin → SHA, "" pour la racine). `skillFolderHash` du verrou est le SHA de
+// l'arbre du dossier du skill : l'égalité avec celui du dépôt dit si le skill a changé. Sans jeton : 60 requêtes par heure.
+var remoteTrees = func(ctx context.Context, owner, repo string) (map[string]string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.github.com/repos/"+owner+"/"+repo+"/git/trees/HEAD?recursive=1", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "gld")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	var d struct {
+		SHA       string `json:"sha"`
+		Truncated bool   `json:"truncated"`
+		Tree      []struct{ Path, Type, SHA string }
+	}
+	if json.NewDecoder(io.LimitReader(resp.Body, 32<<20)).Decode(&d) != nil || d.Truncated {
+		return nil, errors.New("arbre illisible ou tronqué")
+	}
+	out := map[string]string{"": d.SHA}
+	for _, e := range d.Tree {
+		if e.Type == "tree" {
+			out[e.Path] = e.SHA
+		}
+	}
+	return out, nil
+}
+
+var githubURLRe = regexp.MustCompile(`^https://github\.com/([\w.-]+)/([\w.-]+?)(\.git)?/?$`)
+
+func lockRepo(e LockEntry) (owner, repo string, ok bool) {
+	if e.SourceType != "github" {
+		return "", "", false
+	}
+	if skillRepoRe.MatchString(e.Source) {
+		o, r, _ := strings.Cut(e.Source, "/")
+		return o, r, true
+	}
+	if m := githubURLRe.FindStringSubmatch(e.SourceURL); m != nil {
+		return m[1], m[2], true
+	}
+	return "", "", false
+}
+
+// skillUpdateState : update, current ou unknown. Jamais « current » sans preuve.
+func skillUpdateState(e LockEntry, trees map[string]string) string {
+	if e.SourceType != "github" || trees == nil || e.Hash == "" || e.SkillPath == "" {
+		return "unknown"
+	}
+	dir := path.Dir(e.SkillPath)
+	if dir == "." {
+		dir = ""
+	}
+	sha, ok := trees[dir]
+	switch {
+	case !ok:
+		return "unknown"
+	case sha == e.Hash:
+		return "current"
+	}
+	return "update"
+}
+
+type updRepo struct {
+	at    time.Time
+	trees map[string]string // nil : la dernière tentative a échoué
+}
+
+var updCache struct {
+	sync.Mutex
+	m map[string]updRepo
+}
+
+// checkSkillUpdates : l'état de chaque skill du verrou personnel et des verrous de projet, clé = celle de listSkills.
+// Une requête par dépôt, gardée 6 h (5 min après un échec : limite de débit, hors ligne).
+func checkSkillUpdates(ctx context.Context, force bool) map[string]string {
+	type item struct {
+		key string
+		e   LockEntry
+	}
+	var items []item
+	home, _ := os.UserHomeDir()
+	for n, e := range readLock(filepath.Join(home, ".agents", ".skill-lock.json")) {
+		items = append(items, item{"u/" + n, e})
+	}
+	for _, p := range liveProjects() {
+		for n, e := range readLock(filepath.Join(p.Project, "skills-lock.json")) {
+			items = append(items, item{"p/" + p.Dir + "/" + n, e})
+		}
+	}
+	updCache.Lock()
+	defer updCache.Unlock()
+	if updCache.m == nil {
+		updCache.m = map[string]updRepo{}
+	}
+	out := map[string]string{}
+	fetched := map[string]bool{}
+	for _, it := range items {
+		o, r, ok := lockRepo(it.e)
+		if !ok {
+			out[it.key] = "unknown"
+			continue
+		}
+		k := o + "/" + r
+		c, hit := updCache.m[k]
+		ttl := 6 * time.Hour
+		if c.trees == nil {
+			ttl = 5 * time.Minute
+		}
+		if (force && !fetched[k]) || !hit || time.Since(c.at) > ttl {
+			fetched[k] = true
+			t, err := remoteTrees(ctx, o, r)
+			if err != nil {
+				t = nil
+			}
+			c = updRepo{time.Now(), t}
+			updCache.m[k] = c
+		}
+		out[it.key] = skillUpdateState(it.e, c.trees)
+	}
+	return out
 }

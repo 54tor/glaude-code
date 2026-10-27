@@ -101,6 +101,9 @@ func routesSkills(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"hits": hits})
 	})
+	mux.HandleFunc("GET /skills-updates", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"states": checkSkillUpdates(r.Context(), r.URL.Query().Get("force") == "1")})
+	})
 	mux.HandleFunc("POST /plugin-act", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Action, ID, Scope, Project string }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req) != nil {

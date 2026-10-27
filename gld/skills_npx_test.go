@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -157,5 +158,80 @@ func TestSkillsFindRequete(t *testing.T) {
 	}
 	if n != 1 {
 		t.Errorf("appels : %d", n)
+	}
+}
+
+func TestSkillUpdateState(t *testing.T) {
+	trees := map[string]string{"": "root", "skills/x": "h2", "y": "h1"}
+	gh := func(path, hash string) LockEntry {
+		return LockEntry{Source: "o/r", SourceType: "github", SkillPath: path, Hash: hash}
+	}
+	cases := []struct {
+		name  string
+		e     LockEntry
+		trees map[string]string
+		want  string
+	}{
+		{"égal", gh("skills/x/SKILL.md", "h2"), trees, "current"},
+		{"différent", gh("skills/x/SKILL.md", "old"), trees, "update"},
+		{"racine", gh("SKILL.md", "root"), trees, "current"},
+		{"autre source", LockEntry{Source: "o/r", SourceType: "local", SkillPath: "y/SKILL.md", Hash: "h1"}, trees, "unknown"},
+		{"sans arbre", gh("y/SKILL.md", "h1"), nil, "unknown"},
+		{"dossier absent", gh("z/SKILL.md", "h1"), trees, "unknown"},
+		{"sans hash", gh("y/SKILL.md", ""), trees, "unknown"},
+	}
+	for _, c := range cases {
+		if got := skillUpdateState(c.e, c.trees); got != c.want {
+			t.Errorf("%s : %s, attendu %s", c.name, got, c.want)
+		}
+	}
+}
+
+func fakeTrees(t *testing.T, f func(owner, repo string) (map[string]string, error)) {
+	old := remoteTrees
+	remoteTrees = func(_ context.Context, o, r string) (map[string]string, error) { return f(o, r) }
+	updCache.Lock()
+	updCache.m = nil
+	updCache.Unlock()
+	t.Cleanup(func() { remoteTrees = old })
+}
+
+const twoSkillsLock = `{"skills":{"a":{"source":"o/r","sourceType":"github","skillPath":"a/SKILL.md","skillFolderHash":"h1"},"b":{"source":"o/r","sourceType":"github","skillPath":"b/SKILL.md","skillFolderHash":"zz"}}}`
+
+func TestCheckSkillUpdatesCache(t *testing.T) {
+	lockHome(t, twoSkillsLock)
+	n := 0
+	fakeTrees(t, func(o, r string) (map[string]string, error) { n++; return map[string]string{"a": "h1", "b": "h2"}, nil })
+	st := checkSkillUpdates(context.Background(), false)
+	if st["u/a"] != "current" || st["u/b"] != "update" || n != 1 {
+		t.Errorf("%v, appels %d", st, n)
+	}
+	checkSkillUpdates(context.Background(), false)
+	if n != 1 {
+		t.Errorf("cache ignoré : %d appels", n)
+	}
+	checkSkillUpdates(context.Background(), true)
+	if n != 2 {
+		t.Errorf("force ignoré : %d appels", n)
+	}
+}
+
+func TestCheckSkillUpdatesLimite(t *testing.T) {
+	lockHome(t, twoSkillsLock)
+	fakeTrees(t, func(o, r string) (map[string]string, error) { return nil, errors.New("HTTP 403") })
+	st := checkSkillUpdates(context.Background(), false)
+	if st["u/a"] != "unknown" || st["u/b"] != "unknown" {
+		t.Errorf("%v", st)
+	}
+}
+
+func TestSkillsFindExclusion(t *testing.T) {
+	lockHome(t, "")
+	fakeNpx(t, func(context.Context, string, []string) (string, error) { return "", nil })
+	npxMu.Lock()
+	_, err := skillsFind(context.Background(), "pdf")
+	npxMu.Unlock()
+	if err == nil || !strings.Contains(err.Error(), L("srv.skills.npxBusy")) {
+		t.Errorf("find pendant une action : %v", err)
 	}
 }
