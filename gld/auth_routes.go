@@ -83,11 +83,20 @@ func (s *authStore) factors(uid int64) (factorState, error) {
 	return f, err
 }
 
-// mfaFails lit le compteur mfa: sans passer par Check, qui consommerait une place du plafond global.
+// mfaFails lit le compteur mfa: global du compte sans passer par Check, qui consommerait une place du plafond global.
 func (t *throttle) mfaFails(user string) int64 {
 	_, _, _, mk := thKeys(user, "")
+	return t.mfaCount(mk)
+}
+
+// mfaOver : le second facteur est bloqué pour ce compte depuis cette adresse, ou pour ce compte partout.
+func (t *throttle) mfaOver(user, ip string) bool {
+	return t.mfaCount(mfaPairKey(user, ip)) >= thMFALimit || t.mfaFails(user) >= thMFAGlobal
+}
+
+func (t *throttle) mfaCount(key string) int64 {
 	var fails, first int64
-	if t.db.QueryRow(`SELECT fails, first_at FROM throttle WHERE key=?`, mk).Scan(&fails, &first) != nil {
+	if t.db.QueryRow(`SELECT fails, first_at FROM throttle WHERE key=?`, key).Scan(&fails, &first) != nil {
 		return 0
 	}
 	if first <= t.now().Add(-thWindow).Unix() {
@@ -435,7 +444,7 @@ func (a *authAPI) second(w http.ResponseWriter, r *http.Request, p *Principal, m
 			journal("auth: throttle: %v", err)
 		}
 		a.log(uid, name, ip, kind, "failure")
-		if !p.MFA && a.th.mfaFails(name) >= thMFALimit {
+		if !p.MFA && a.th.mfaOver(name, ip) {
 			a.kill(w, p, ip)
 		}
 		wait, _ := a.th.Pending(name, ip)

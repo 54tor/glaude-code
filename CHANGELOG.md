@@ -15,6 +15,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Sécurité : écrire dans `.claude/`, `.git/`, `.mcp.json`, `.gitattributes` ou `.gitmodules` depuis l'IDE (`fs-save`, `fs-new`, `fs-rename`) exige `config_write` en plus de `fs_write` ; `GET /session-loaded-file` ne lit que les `.md` de la config Claude ou les fichiers d'un dossier connu.
 - Sécurité : la liste des serveurs MCP masque les paramètres d'adresse et les valeurs des drapeaux de type clé ou jeton ; `POST /pair-code` émet au plus 5 codes en attente par compte (200 au total).
 - Sécurité : un jeton opérateur faux (cookie, Bearer, `?token=`) compte dans les essais par adresse, comme le formulaire.
+- Connexion : les échecs de second facteur se comptent par compte et par adresse (5, remis à zéro par une connexion réussie) ; le plafond du compte toutes adresses confondues passe à 15 et n'est jamais remis à zéro.
 
 ## [0.4.7] - 2026-10-26
 

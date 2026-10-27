@@ -19,6 +19,7 @@ const (
 	thLockAfter = 10
 	thLockFor   = 30 * time.Minute
 	thMFALimit  = 5
+	thMFAGlobal = 15 // tous appareils confondus : jamais remis à zéro par une connexion, contre un attaquant qui change d'adresse
 	thKnownFor  = 30 * 24 * time.Hour
 	// Bannissement (à la fail2ban) d'une IP extérieure : trop d'échecs, tous noms confondus, dans la fenêtre.
 	// ponytail: durée fixe, sans escalade pour les récidivistes ; la ajouter si des IP reviennent après chaque ban.
@@ -57,6 +58,9 @@ func thKeys(user, ip string) (u, i, p, m string) {
 
 func streakKey(user string) string { return "streak:" + thName(user) }
 
+// mfaPairKey : les échecs de second facteur d'un compte depuis une adresse, remis à zéro par une connexion réussie depuis celle-ci.
+func mfaPairKey(user, ip string) string { return "mfa:" + thName(user) + "|" + ip }
+
 // thName : la clé commune des noms trop longs n'est pas normalisée, pour qu'aucun nom tapé ne la rejoigne.
 func thName(user string) string {
 	if user == oversizeName {
@@ -92,7 +96,8 @@ func (t *throttle) Pending(user, ip string) (wait time.Duration, blocked bool) {
 	cut := now.Add(-thWindow).Unix()
 	uk, ik, pk, mk := thKeys(user, ip)
 	kk, sk := knownKey(user, ip), streakKey(user)
-	rows, err := t.db.Query(`SELECT key, fails, first_at, locked_until, last_at FROM throttle WHERE key IN (?,?,?,?,?,?)`, uk, ik, pk, mk, kk, sk)
+	mpk := mfaPairKey(user, ip)
+	rows, err := t.db.Query(`SELECT key, fails, first_at, locked_until, last_at FROM throttle WHERE key IN (?,?,?,?,?,?,?)`, uk, ik, pk, mk, mpk, kk, sk)
 	if err != nil {
 		return thMaxDelay, true
 	}
@@ -118,8 +123,10 @@ func (t *throttle) Pending(user, ip string) (wait time.Duration, blocked bool) {
 		}
 		return 0
 	}
-	if inWin(mk) >= thMFALimit {
-		return min(time.Unix(got[mk].first, 0).Add(thWindow).Sub(now), thMaxDelay), true
+	for _, k := range []string{mpk, mk} {
+		if lim := map[string]int64{mpk: thMFALimit, mk: thMFAGlobal}[k]; inWin(k) >= lim {
+			return min(time.Unix(got[k].first, 0).Add(thWindow).Sub(now), thMaxDelay), true
+		}
 	}
 	u := got[uk]
 	lockEnd := max(u.locked, got[sk].locked)
@@ -160,7 +167,7 @@ func (t *throttle) Fail(user, ip string, stage string) error {
 	uk, ik, pk, mk := thKeys(user, ip)
 	keys := []string{uk, ik, pk}
 	if stage == "mfa" {
-		keys = append(keys, mk)
+		keys = append(keys, mk, mfaPairKey(user, ip))
 	}
 	ext := 0
 	if externalIP(ip) {
@@ -224,8 +231,9 @@ func lockEvent(tx *sql.Tx, now int64, user, ip, outcome string) error {
 func (t *throttle) Success(user, ip string) error {
 	now := t.now().Unix()
 	uk, _, pk, _ := thKeys(user, ip)
-	_, err := t.db.Exec(`DELETE FROM throttle WHERE key IN (?,?,?) OR (key LIKE 'known:%' AND first_at < ?)`,
-		uk, pk, streakKey(user), now-int64(thKnownFor/time.Second))
+	// Le compteur MFA de cette adresse repart de zéro, sauf s'il bloque déjà ; le compteur global du compte reste.
+	_, err := t.db.Exec(`DELETE FROM throttle WHERE key IN (?,?,?) OR (key = ? AND fails < ?) OR (key LIKE 'known:%' AND first_at < ?)`,
+		uk, pk, streakKey(user), mfaPairKey(user, ip), thMFALimit, now-int64(thKnownFor/time.Second))
 	if err != nil {
 		return err
 	}

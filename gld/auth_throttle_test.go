@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http/httptest"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -380,5 +381,26 @@ func TestBanAlerts(t *testing.T) {
 	now := int64(b["now"].(float64))
 	if b := jbody(t, g.do("GET", fmt.Sprintf("/auth/alerts?since=%d", now+1), c, "", nil)); len(b["bans"].([]any)) != 0 {
 		t.Fatalf("ban déjà vu : %v", b)
+	}
+}
+
+func TestMFAParAdresse(t *testing.T) {
+	th, _, _ := testThrottle(t)
+	for i := 0; i < 3; i++ {
+		th.Fail("eve", "203.0.113.4", "mfa")
+	}
+	th.Success("eve", "203.0.113.4")
+	for i := 0; i < 2; i++ {
+		th.Fail("eve", "203.0.113.4", "mfa")
+	}
+	if _, blocked := th.Pending("eve", "203.0.113.4"); blocked {
+		t.Fatal("fautes d'avant la connexion réussie encore comptées")
+	}
+	// Réparti sur plusieurs adresses, le compteur global du compte finit par bloquer partout.
+	for i := 0; i < thMFAGlobal; i++ {
+		th.Fail("eve", "198.51.100."+strconv.Itoa(i), "mfa")
+	}
+	if _, blocked := th.Pending("eve", "192.0.2.1"); !blocked {
+		t.Fatal("plafond global du second facteur non appliqué")
 	}
 }
