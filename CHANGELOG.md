@@ -19,6 +19,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Sécurité : sous Linux, un gld enfant se marque non « dumpable » (`PR_SET_DUMPABLE`) : son jeton de passerelle n'est plus lisible dans `/proc/<pid>/environ` par les sessions du même compte.
 - Sécurité : quand `GLD_AUTH_KEY` vient de l'environnement, gld se marque non « dumpable » sous Linux ; le garde refuse la lecture de `/proc/*/environ`.
 - Synchronisation entre homes et copie de skills : les scripts gardent leur bit exécutable.
+- Sécurité : une session ouverte par code de jumelage expire au plus tard avec la session émettrice et tombe avec elle (migration `auth.db` 0009, appliquée au démarrage).
+- Sécurité : une source de marketplace vers la machine, un réseau privé ou le lien local est refusée.
 - Connexion : les échecs de second facteur se comptent par compte et par adresse (5, remis à zéro par une connexion réussie) ; le plafond du compte toutes adresses confondues passe à 15 et n'est jamais remis à zéro.
 
 ## [0.4.7] - 2026-10-26

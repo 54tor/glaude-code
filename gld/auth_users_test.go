@@ -344,7 +344,8 @@ func TestMigration8ResignsACL(t *testing.T) {
 	old := func(home string, on ...string) []byte {
 		return rowSig(s.key, "home_acl", strconv.FormatInt(u, 10), append([]string{home}, on...)...)
 	}
-	for _, q := range []string{`ALTER TABLE home_acl DROP COLUMN fs_read`, `ALTER TABLE home_acl DROP COLUMN fs_write`, `DELETE FROM schema_version WHERE version=8`} {
+	for _, q := range []string{`ALTER TABLE home_acl DROP COLUMN fs_read`, `ALTER TABLE home_acl DROP COLUMN fs_write`,
+		`DROP TRIGGER sessions_cascade`, `DROP INDEX sessions_parent_idx`, `ALTER TABLE sessions DROP COLUMN parent_hash`, `DELETE FROM schema_version WHERE version>=8`} {
 		if _, err := s.db.Exec(q); err != nil {
 			t.Fatal(err)
 		}

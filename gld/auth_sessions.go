@@ -211,6 +211,46 @@ func (s *authStore) PromoteMFA(sessionID string) (cookie string, exp time.Time, 
 	return base64.RawURLEncoding.EncodeToString(raw), exp, nil
 }
 
+// NewPairedSession : une session complète ouverte par un code de jumelage. Elle reprend le created_at de l'émettrice (même
+// échéance absolue) et pointe vers l'émettrice d'origine : la supprimer supprime aussi ses sessions jumelées (trigger).
+func (s *authStore) NewPairedSession(uid int64, parentID, ip, ua string) (cookie string, exp time.Time, err error) {
+	parent, err := hex.DecodeString(parentID)
+	if err != nil {
+		return "", time.Time{}, errNoSession
+	}
+	raw, h := s.newSessionValue()
+	now := authNow().Unix()
+	err = s.inTx(func(tx *sql.Tx) error {
+		var puid, created int64
+		var mfa sql.NullInt64
+		var sig, root []byte
+		err := tx.QueryRow(`SELECT user_id,created_at,mfa_at,sig,parent_hash FROM sessions WHERE id_hash=? AND expires_at>?`, parent, now).
+			Scan(&puid, &created, &mfa, &sig, &root)
+		if errors.Is(err, sql.ErrNoRows) || err == nil && (puid != uid || !mfa.Valid) {
+			return errNoSession
+		}
+		if err != nil {
+			return err
+		}
+		if !s.sessOK(parent, puid, created, mfa, sig) {
+			return &tamperErr{uid, "sessions"}
+		}
+		if root == nil { // le trigger ne descend que d'un niveau : on rattache toujours à l'émettrice d'origine
+			root = parent
+		}
+		abs := created + int64(sessAbsolute/time.Second)
+		exp = time.Unix(abs, 0)
+		m := sql.NullInt64{Int64: now, Valid: true}
+		_, err = tx.Exec(`INSERT INTO sessions(id_hash,user_id,created_at,last_seen_at,expires_at,ip,ua,mfa_at,parent_hash,sig) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+			h, uid, created, now, min(now+int64(sessIdle/time.Second), abs), ip, ua, now, root, s.sessSig(h, uid, created, m))
+		return err
+	})
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	return base64.RawURLEncoding.EncodeToString(raw), exp, nil
+}
+
 type sessRow struct {
 	hash          []byte
 	created, seen int64

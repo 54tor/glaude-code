@@ -307,18 +307,13 @@ func pairEntry(w http.ResponseWriter, r *http.Request, st *authStore) {
 // redeemSession : la session naît complète (second facteur acquis), à condition que la session émettrice soit encore
 // ouverte et complète : la révoquer annule aussi ses codes en attente.
 func redeemSession(w http.ResponseWriter, r *http.Request, st *authStore, p pairCode, ip string) bool {
-	ss, err := st.userSessions(p.uid)
-	if err != nil || !slices.ContainsFunc(ss, func(x sessRow) bool { return x.mfa && hex.EncodeToString(x.hash) == p.sid }) {
-		return false
-	}
-	c, err := st.NewSession(p.uid, ip, r.UserAgent())
-	var pr *Principal
+	c, exp, err := st.NewPairedSession(p.uid, p.sid, ip, r.UserAgent())
 	if err == nil {
-		pr, err = st.Session(c) // refuse un compte désactivé depuis
-	}
-	var exp time.Time
-	if err == nil {
-		c, exp, err = st.PromoteMFA(pr.SessionID)
+		if _, err = st.Session(c); err != nil { // refuse un compte désactivé depuis
+			if h, e := base64.RawURLEncoding.DecodeString(c); e == nil {
+				st.RevokeSession(hex.EncodeToString(st.sessHash(h)))
+			}
+		}
 	}
 	if err != nil {
 		if !errors.Is(err, errNoSession) {

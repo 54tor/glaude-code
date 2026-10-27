@@ -200,6 +200,25 @@ func TestPairAccountMode(t *testing.T) {
 	if w := pairReq(srv, "GET", "/pair?c="+code, "", nil); w.Code != http.StatusGone {
 		t.Fatalf("code réutilisé : %d", w.Code)
 	}
+	if !np.Expires.Equal(p.Expires) {
+		t.Fatalf("échéance de la session jumelée %v, émettrice %v", np.Expires, p.Expires)
+	}
+	// Une session jumelée depuis la session jumelée dépend toujours de la première émettrice.
+	code = pairCodeFrom(t, ask(nc.Value, np.CSRF))
+	gc := cookieOf(confirm(t, srv, code), sessCookie)
+	if gc == nil {
+		t.Fatal("jumelage depuis une session jumelée refusé")
+	}
+	c0, p0 := fullSession(t, s, id) // nouvelle émettrice pour la suite du test
+	if err := s.RevokeSession(p.SessionID); err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range []string{nc.Value, gc.Value} {
+		if _, err := s.Session(v); err == nil {
+			t.Fatal("session jumelée encore valide après la révocation de l'émettrice")
+		}
+	}
+	c, p = c0, p0
 
 	// Révoquer la session émettrice annule ses codes en attente.
 	code = pairCodeFrom(t, ask(c, p.CSRF))
@@ -228,7 +247,8 @@ func TestPairAccountMode(t *testing.T) {
 	// Les appareils du mode jeton ne regardent pas le mode comptes.
 	r = httptest.NewRequest("GET", "/devices", nil)
 	r.Host = testHost
-	r.AddCookie(&http.Cookie{Name: sessCookie, Value: nc.Value})
+	fresh, _ := fullSession(t, s, id)
+	r.AddCookie(&http.Cookie{Name: sessCookie, Value: fresh})
 	rw = httptest.NewRecorder()
 	srv.ServeHTTP(rw, r)
 	if rw.Code != 404 {

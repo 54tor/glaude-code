@@ -100,6 +100,8 @@ Notes :
 
 Sessions : cookie `gld_session` (valeur aléatoire de 32 octets ; la base ne garde que son empreinte HMAC-SHA-256 et signe la ligne), `HttpOnly`, `SameSite=Strict`, `Secure` quand la requête arrive en HTTPS (directement, ou via un proxy listé dans `GLD_TRUSTED_PROXIES` qui envoie `X-Forwarded-Proto: https`). Expiration glissante de 12 h, absolue de 30 jours. Les requêtes qui modifient l'état exigent l'en-tête CSRF `X-Gld-CSRF`. Désactiver un compte, réinitialiser ses facteurs ou changer son mot de passe ferme ses sessions. Le cookie `gld_home` (home choisi) est effacé à la déconnexion et à chaque connexion réussie. Les mises à niveau de la base (migrations 0006 et 0007) ferment toutes les sessions.
 
+Jumelage (`POST /pair-code`, QR) : la session ouverte par le code dépend de la session qui l'a émis. Elle a la même échéance absolue, et révoquer, déconnecter ou laisser expirer l'émettrice la ferme aussi. Une session jumelée depuis une session jumelée dépend de l'émettrice d'origine (migration 0009).
+
 ### Le jeton en mode multi-utilisateur
 
 Le cookie `gld_token` et `?token=` ne servent plus au navigateur. Le jeton ne vaut qu'en en-tête `Authorization: Bearer …`, jamais dans l'URL, et **seulement s'il est fixé par l'opérateur** (`GLD_WEB_TOKEN`) : un jeton généré automatiquement (écoute hors localhost sans la variable) est refusé en mode multi-utilisateur et n'est plus imprimé dans l'adresse de démarrage. Il sert à l'automatisation et aux gld enfants (un home autre que le principal est servi par un gld enfant, joignable seulement par la passerelle : elle retire `Cookie` et `Authorization` avant de relayer).
