@@ -4,7 +4,6 @@ package main
 // ses serveurs MCP, ses règles (.claude/rules), ses skills et sa documentation. Lecture seule : un clic mène à l'édition.
 
 import (
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -48,13 +47,13 @@ type ProjectCfg struct {
 // projectRules : les règles Markdown de .claude/rules d'un projet (lecture seule), avec leur portée.
 func projectRules(cwd string) []ProjDocRule {
 	var out []ProjDocRule
-	ents, _ := os.ReadDir(filepath.Join(cwd, ".claude", "rules"))
+	ents, _ := readDirTrusted(filepath.Join(cwd, ".claude", "rules"))
 	for _, e := range ents {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
 			continue
 		}
 		r := ProjDocRule{Name: e.Name()}
-		if b, err := os.ReadFile(filepath.Join(cwd, ".claude", "rules", e.Name())); err == nil && len(b) < 1<<20 {
+		if b, err := readTrusted(filepath.Join(cwd, ".claude", "rules", e.Name())); err == nil && len(b) < 1<<20 {
 			if m, err := parseMeta(string(b)); err != nil {
 				r.Warn = err.Error()
 			} else if _, has := m["paths"]; has {
