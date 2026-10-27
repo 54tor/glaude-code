@@ -72,7 +72,7 @@ var pastedRe = regexp.MustCompile(`(?s)<pasted_content id="[^"]*">.*?(</pasted_c
 
 // scan appelle fn pour chaque ligne du transcript (les lignes peuvent être énormes).
 func scan(path string, fn func([]byte)) error {
-	f, err := os.Open(path)
+	f, err := openTrusted(path)
 	if err != nil {
 		return err
 	}
@@ -140,7 +140,7 @@ func forgetInfo(path string) {
 }
 
 func scanInfo(path string, c infoState) infoState {
-	f, err := os.Open(path)
+	f, err := openTrusted(path)
 	if err != nil {
 		return c
 	}
@@ -285,7 +285,7 @@ var skipRoots = map[string]bool{"/proc": true, "/sys": true, "/dev": true, "/run
 func decodeDirWalk(name string) string {
 	var walk func(p, rest string) string
 	walk = func(p, rest string) string {
-		ents, err := os.ReadDir(p)
+		ents, err := readDirTrusted(p)
 		if err != nil {
 			return ""
 		}
