@@ -69,6 +69,27 @@ bouton **Envoyer à la session** écrit directement dedans, et vous voyez en dir
 
 > Chaque message envoyé ainsi recharge tout le contexte : comptez environ 1 à 2 $ par message sur une session froide.
 
+### Partager une session avec un collègue
+
+- Ouvrez le menu de la session (**…**) et choisissez **Partager…**, puis **Générer et copier le lien**. Le lien se
+  colle dans la messagerie ; régénérer le lien rend l'ancien inutilisable.
+- Le lien est **à usage unique** : le premier qui l'ouvre et appuie sur le bouton le réserve. Tout autre navigateur ou
+  appareil est refusé.
+- L'invité voit toute la conversation, y compris les sorties d'outils déjà affichées, et la suit en direct. Il peut
+  écrire dans la **file d'envoi** : gld transmet ses messages quand la session est au repos. Il ne peut ni répondre aux
+  demandes de permission, ni ouvrir de documents ou de fichiers, ni voir vos autres sessions.
+- Depuis la session, vous pouvez **passer en lecture seule** (l'invité ne peut plus écrire), **redonner l'écriture**, ou
+  **Mettre fin au partage** : l'invité perd l'accès immédiatement.
+- La file d'envoi est désormais sur le serveur, pour toutes les sessions : elle survit à la fermeture de l'onglet. Un
+  message en cours d'envoi au moment d'un redémarrage de gld apparaît **incertain** et n'est jamais renvoyé
+  automatiquement. Limites : 50 messages par session, 32 Ko par message, 10 ajouts par minute pour l'invité.
+- Limites à connaître :
+  - Sans HTTPS, le cookie de l'invité n'est pas marqué `Secure` : utilisez une adresse HTTPS si vous exposez gld.
+  - N'ouvrez pas votre propre lien dans votre navigateur : vous seriez traité en invité. Pour en sortir, cliquez sur
+    **Quitter** dans la page invité.
+  - gld ne crée aucun tunnel : le collègue doit déjà atteindre gld (`--listen`, reverse proxy ou VPN).
+  - Fonctionne en mode jeton (un utilisateur) et en mode multi-utilisateur.
+
 ### Ne rien perdre au redémarrage
 
 Glaude Code note toutes les 2 minutes les sessions ouvertes. Après un redémarrage, **Tout rouvrir** les relance, chacune
