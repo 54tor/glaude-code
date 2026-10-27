@@ -99,7 +99,7 @@ func satellites(id string) []string {
 		var st struct {
 			SessionId string `json:"sessionId"`
 		}
-		if b, err := os.ReadFile(filepath.Join(job, "state.json")); err == nil {
+		if b, err := readTrusted(filepath.Join(job, "state.json")); err == nil {
 			json.Unmarshal(b, &st)
 		}
 		if st.SessionId == "" || st.SessionId == id {
@@ -239,7 +239,7 @@ func pruneHistory(deleted []string) (removed int, hashes map[string]bool, kept [
 		pats[i] = []byte(`"sessionId":"` + id + `"`)
 	}
 	st0, _ := os.Stat(hist) // pour détecter une session ouverte qui y ajouterait une ligne pendant la réécriture
-	if b, e := os.ReadFile(hist); e == nil && len(b) > 0 {
+	if b, e := readTrusted(hist); e == nil && len(b) > 0 {
 		for _, ln := range bytes.SplitAfter(b, []byte("\n")) {
 			drop := false
 			for _, p := range pats {
