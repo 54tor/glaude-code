@@ -347,3 +347,27 @@ func TestPairCodeCap(t *testing.T) {
 		t.Error("un autre compte doit pouvoir émettre")
 	}
 }
+
+func TestAppareilsDUnAutreJetonGardes(t *testing.T) {
+	t.Setenv("GLD_AUTH_DIR", t.TempDir())
+	devMu.Lock()
+	old := devKey
+	devMu.Unlock()
+	t.Cleanup(func() { devMu.Lock(); devKey = old; devMu.Unlock() })
+	setDevKey("jeton-a-xxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+	c, err := addDevice("ua", "203.0.113.1")
+	if err != nil || !deviceOK(c) {
+		t.Fatal("appareil non admis :", err)
+	}
+	setDevKey("jeton-b-xxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+	if deviceOK(c) {
+		t.Fatal("appareil d'un autre jeton admis")
+	}
+	if _, err := addDevice("ua2", "203.0.113.2"); err != nil {
+		t.Fatal(err)
+	}
+	setDevKey("jeton-a-xxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+	if !deviceOK(c) {
+		t.Fatal("appareil effacé pendant le passage sous un autre jeton")
+	}
+}

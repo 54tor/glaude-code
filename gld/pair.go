@@ -175,8 +175,15 @@ func saveDevices(ds []device) error {
 
 // liveDevices : les appareils du jeton courant vus depuis moins de devIdle (devMu tenu).
 func liveDevices(ds []device) []device {
-	limit, bind := authNow().Add(-devIdle).Unix(), devBind()
-	return slices.DeleteFunc(ds, func(d device) bool { return d.Seen < limit || d.Bind != bind })
+	bind := devBind()
+	return slices.DeleteFunc(unexpired(ds), func(d device) bool { return d.Bind != bind })
+}
+
+// unexpired : ce qui reste dans devices.json. Un appareil d'un autre jeton est refusé, pas effacé : un second gld lancé avec un
+// autre jeton sur le même dossier ne doit pas faire perdre ses appareils au premier. Il part seul après devIdle.
+func unexpired(ds []device) []device {
+	limit := authNow().Add(-devIdle).Unix()
+	return slices.DeleteFunc(ds, func(d device) bool { return d.Seen < limit })
 }
 
 func addDevice(ua, ip string) (string, error) {
@@ -196,7 +203,7 @@ func addDevice(ua, ip string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return c, saveDevices(append(liveDevices(ds), device{devMac(c), devBind(), ua, ip, now, now}))
+	return c, saveDevices(append(unexpired(ds), device{devMac(c), devBind(), ua, ip, now, now}))
 }
 
 // deviceOK admet un cookie d'appareil encore vivant et repousse son échéance (au plus une écriture par minute).
@@ -212,9 +219,9 @@ func deviceOK(cookie string) bool {
 		journal("pair: devices.json illisible : %v", err)
 		return false
 	}
-	n, id := len(ds), devMac(cookie)
-	ds = liveDevices(ds)
-	i := slices.IndexFunc(ds, func(d device) bool { return hmac.Equal([]byte(d.ID), []byte(id)) })
+	n, id, bind := len(ds), devMac(cookie), devBind()
+	ds = unexpired(ds)
+	i := slices.IndexFunc(ds, func(d device) bool { return d.Bind == bind && hmac.Equal([]byte(d.ID), []byte(id)) })
 	dirty := len(ds) != n
 	if i >= 0 && now-ds[i].Seen >= int64(devTouch/time.Second) {
 		ds[i].Seen, dirty = now, true
