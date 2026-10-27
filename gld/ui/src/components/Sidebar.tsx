@@ -143,7 +143,7 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
         </ContextMenuContent>
       </ContextMenu>
       </div>
-      {open && <div className="ml-4 border-l pl-[19px]">{kids.map((c) => item(c))}</div>}
+      {open && <div className="ml-7 border-l pl-[7px]">{kids.map((c) => item(c))}</div>}
       </Fragment>
     )
   }
@@ -262,7 +262,7 @@ function FavSessions({ rows, read }: { rows: Row[]; read: (s: Session) => void }
           </ContextMenuContent>
         </ContextMenu>
       </div>
-      {opened.has(row.s.id) && <div className="ml-4 border-l pl-[19px]">{ks.map((c) => item(c))}</div>}
+      {opened.has(row.s.id) && <div className="ml-7 border-l pl-[7px]">{ks.map((c) => item(c))}</div>}
     </Fragment>
   )
   const slot = tops.some((r) => kids.has(r.s.id))
