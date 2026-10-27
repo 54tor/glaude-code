@@ -60,7 +60,7 @@ func syncSettings(dir string) (*omap, []byte, error) {
 	if err := notSymlink(path); err != nil {
 		return nil, nil, err
 	}
-	b, err := os.ReadFile(path)
+	b, err := readTrusted(path)
 	if err != nil {
 		return newOmap(), nil, nil
 	}
@@ -104,7 +104,7 @@ func syncFiles(dir string) map[string]string {
 		if err != nil || !fi.Mode().IsRegular() || fi.Size() > syncFileMax {
 			return
 		}
-		if b, err := os.ReadFile(p); err == nil {
+		if b, err := readTrusted(p); err == nil {
 			out[rel] = string(b)
 		}
 	}
@@ -135,7 +135,7 @@ func syncFiles(dir string) map[string]string {
 // syncSkills : pour chaque skill (dossier de skills/), ses fichiers réguliers et leur contenu. Un skill trop gros est ignoré.
 func syncSkills(dir string) map[string]map[string]string {
 	out := map[string]map[string]string{}
-	ents, _ := os.ReadDir(filepath.Join(dir, "skills"))
+	ents, _ := readDirTrusted(filepath.Join(dir, "skills"))
 	for _, e := range ents {
 		if !e.IsDir() || !syncSegRe.MatchString(e.Name()) {
 			continue
@@ -155,7 +155,7 @@ func syncSkills(dir string) map[string]map[string]string {
 				return fs.SkipAll
 			}
 			rel, _ := filepath.Rel(root, p)
-			if b, err := os.ReadFile(p); err == nil && syncRelOK(rel) {
+			if b, err := readTrusted(p); err == nil && syncRelOK(rel) {
 				files[rel] = string(b)
 			}
 			return nil
@@ -306,7 +306,7 @@ func syncPlan(from, to string) ([]SyncItem, error) {
 
 // syncBackup copie le fichier existant dans <cible>/gld-web-sync-backups/<horodatage>/<chemin relatif> avant de le remplacer.
 func syncBackup(dir, stamp, rel string) error {
-	b, err := os.ReadFile(filepath.Join(dir, rel))
+	b, err := readTrusted(filepath.Join(dir, rel))
 	if err != nil {
 		return nil // rien à sauvegarder : le fichier n'existe pas
 	}
