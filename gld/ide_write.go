@@ -57,6 +57,40 @@ func ideExists(root *os.Root, rel string) bool {
 	return err == nil
 }
 
+// ideCodePath : un chemin que Claude Code ou git exécutent (hooks et MCP de .claude/, .git/config et hooks, filtres de
+// .gitattributes). L'écrire revient à exécuter du code sous le compte gld : config_write, comme /skill-save.
+func ideCodePath(rel string) bool {
+	for _, seg := range strings.Split(rel, "/") {
+		switch seg {
+		case ".git", ".claude", ".mcp.json", ".gitattributes", ".gitmodules":
+			return true
+		}
+	}
+	return false
+}
+
+// ideCodeDenied : répond 403 et renvoie true si rel est un chemin exécutable et que l'appelant n'a pas config_write.
+func ideCodeDenied(w http.ResponseWriter, r *http.Request, rels ...string) bool {
+	hit := false
+	for _, rel := range rels {
+		hit = hit || ideCodePath(rel)
+	}
+	if !hit {
+		return false
+	}
+	g := gateFrom(r)
+	if g == nil || g.p == nil {
+		return false
+	}
+	if id, ok := homeIDFor(homeFrom(r)); ok {
+		if m, err := g.rights(id); err == nil && m[RightConfigWrite] {
+			return false
+		}
+	}
+	writeJSON(w, 403, map[string]any{"ok": false, "out": L("srv.auth.droitRefuse")})
+	return true
+}
+
 func ideInTrash(rel string) bool { return rel == ideTrash || strings.HasPrefix(rel, ideTrash+"/") }
 
 // ideOpen ouvre la racine et valide un chemin non vide ; l'appelant ferme root.
@@ -209,6 +243,9 @@ func routesIDEWrite(mux *http.ServeMux) {
 			ideFail(w, errIdePath)
 			return
 		}
+		if ideCodeDenied(w, r, rel) {
+			return
+		}
 		if err := ideParentDir(root, rel); err != nil {
 			ideFail(w, err)
 			return
@@ -296,6 +333,9 @@ func routesIDEWrite(mux *http.ServeMux) {
 			ideFail(w, errIdePath)
 			return
 		}
+		if ideCodeDenied(w, r, rel) {
+			return
+		}
 		if err := ideParentDir(root, rel); err != nil {
 			ideFail(w, err)
 			return
@@ -334,6 +374,9 @@ func routesIDEWrite(mux *http.ServeMux) {
 		to, err := ideRel(req.To, false)
 		if err != nil || ideInTrash(from) || ideInTrash(to) {
 			ideFail(w, errIdePath)
+			return
+		}
+		if ideCodeDenied(w, r, from, to) {
 			return
 		}
 		if _, err := ideLstat(root, from); err != nil {

@@ -635,3 +635,39 @@ func TestGateVgroupsNewDirNeedsExec(t *testing.T) {
 		}
 	}
 }
+
+// fs_write écrit les fichiers du projet, mais ceux que Claude Code ou git exécutent (.claude/, .git/, .mcp.json…) exigent config_write.
+func TestFsWriteCodePathsNeedConfigWrite(t *testing.T) {
+	s := testStore(t)
+	cfg := t.TempDir()
+	use(cfg)
+	proj := t.TempDir()
+	if err := saveStore(Store{Groups: []VGroup{}, Favs: []string{}, Projects: []Project{}, Dirs: []string{proj}}); err != nil {
+		t.Fatal(err)
+	}
+	os.MkdirAll(filepath.Join(proj, ".claude"), 0o755)
+	mux := http.NewServeMux()
+	routesIDEWrite(mux)
+	g := &gateRig{s: s, h: authGate(mux, s, mux), cfg: cfg}
+	fw := g.user(t, "ecrit", false)
+	g.grant(t, fw, "", RightFsRead, RightFsWrite)
+	cw := g.user(t, "reglages", false)
+	g.grant(t, cw, "", RightFsRead, RightFsWrite, RightConfigWrite)
+	save := func(p string) string { return `{"dir":"` + proj + `","path":"` + p + `","content":"x","force":true}` }
+	for _, c := range []struct {
+		u    *gateUser
+		path string
+		code int
+	}{
+		{&fw, "a.txt", 200}, {&fw, ".claude/settings.json", 403}, {&fw, ".mcp.json", 403}, {&fw, "sub/.git/config", 403},
+		{&cw, ".mcp.json", 200}, {&cw, ".claude/settings.json", 200},
+	} {
+		if w := g.do("POST", "/fs-save", c.u, "", save(c.path)); w.Code != c.code {
+			t.Errorf("%s : %d %s", c.path, w.Code, w.Body.String())
+		}
+	}
+	rn := `{"dir":"` + proj + `","from":"a.txt","to":".git/config"}`
+	if w := g.do("POST", "/fs-rename", &fw, "", rn); w.Code != 403 {
+		t.Errorf("renommage vers .git : %d", w.Code)
+	}
+}
