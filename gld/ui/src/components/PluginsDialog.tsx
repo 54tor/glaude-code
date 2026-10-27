@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Download, Loader2, Plus, Power, RefreshCw, Search, Trash2 } from "lucide-react"
 import { api, type Marketplace, type PluginAvail, type PluginInst } from "@/lib/api"
 import { tilde } from "@/lib/format"
@@ -71,6 +71,11 @@ export function PluginsPanel({ projects, home, onChange, inline }: { projects: P
       onChange()
     }
   }
+  const byMarket = useMemo(() => {
+    const g = new Map<string, PluginAvail[]>()
+    for (const p of data?.available ?? []) g.set(p.marketplace, [...(g.get(p.marketplace) ?? []), p])
+    return [...g.entries()]
+  }, [data])
   const target = scope === "user" ? { scope: "user", project: "" } : { scope: "project", project: scope.slice(2) }
   const dirOf = (p: PluginInst) => (p.scope === "user" ? "" : (projects.find((x) => x.project === p.project)?.dir ?? null))
   const scopeLabel = (p: PluginInst) => (p.scope === "user" ? t("skills.plugins.scopeUser") : tilde(p.project ?? "", home))
@@ -153,25 +158,30 @@ export function PluginsPanel({ projects, home, onChange, inline }: { projects: P
               {sub === "available" && (
               <section>
                 <h3 className="mb-1 text-xs font-semibold text-muted-foreground">{t("skills.plugins.available")}</h3>
-                <ul className="divide-y rounded-md border">
-                  {data.available.map((p) => (
-                    <li key={p.id} className="flex items-center gap-2 px-3 py-1.5 text-sm">
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate font-medium">
-                          {p.name} <span className="font-normal text-muted-foreground">@{p.marketplace}</span>
-                        </div>
-                        <div className="line-clamp-2 text-xs text-muted-foreground">{p.description}</div>
-                      </div>
-                      <span className="shrink-0 text-2xs text-muted-foreground tabular-nums" title={t("skills.plugins.installs")}>
-                        {p.installs.toLocaleString()}
-                      </span>
-                      <Button size="xs" variant="outline" disabled={busy === p.id} onClick={() => run(p.id, "install", p.id, target.scope, target.project)}>
-                        {busy === p.id ? <Loader2 className="animate-spin" /> : <Download />} {t("skills.plugins.install")}
-                      </Button>
-                    </li>
-                  ))}
-                  {data.available.length === 0 && <li className="px-3 py-6 text-center text-sm text-muted-foreground">{t("skills.plugins.none")}</li>}
-                </ul>
+                {byMarket.map(([mk, list]) => (
+                  <div key={mk} className="mb-3">
+                    <h4 className="mb-1 flex items-center gap-2 text-sm font-medium">
+                      {mk} <span className="text-xs font-normal text-muted-foreground">({list.length})</span>
+                    </h4>
+                    <ul className="divide-y rounded-md border">
+                      {list.map((p) => (
+                        <li key={p.id} className="flex items-center gap-2 px-3 py-1.5 text-sm">
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate font-medium">{p.name}</div>
+                            <div className="line-clamp-2 text-xs text-muted-foreground">{p.description}</div>
+                          </div>
+                          <span className="shrink-0 text-2xs text-muted-foreground tabular-nums" title={t("skills.plugins.installs")}>
+                            {p.installs.toLocaleString()}
+                          </span>
+                          <Button size="xs" variant="outline" disabled={busy === p.id} onClick={() => run(p.id, "install", p.id, target.scope, target.project)}>
+                            {busy === p.id ? <Loader2 className="animate-spin" /> : <Download />} {t("skills.plugins.install")}
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+                {data.available.length === 0 && <p className="rounded-md border px-3 py-6 text-center text-sm text-muted-foreground">{t("skills.plugins.none")}</p>}
               </section>
               )}
             </div>
