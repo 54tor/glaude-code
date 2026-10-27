@@ -274,6 +274,7 @@
       "subNote": "Lecture seule : un sous-agent ne reçoit pas de message de l'extérieur, il rend son résultat à la session."
     },
     "tagged": {
+      "teammateMessage": "Message de {{name}}",
       "taskNotification": "Notification de tâche",
       "fields": {
         "task": "tâche",

@@ -1,10 +1,11 @@
-import { Bell, Minimize2 } from "lucide-react"
+import { Bell, Minimize2, Users } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { Badge } from "@/components/ui/badge"
 
 // Blocs balisés que Claude Code glisse dans les messages (<task-notification>…) : affichés en carte lisible.
-const BLOCK = /<([a-z][a-z-]*)>([\s\S]*?)<\/\1>/g
+const BLOCK = /<([a-z][a-z-]*)((?:\s[^<>]*)?)>([\s\S]*?)<\/\1>/g
 const NAMES: Record<string, string> = { "task-notification": "conversation.tagged.taskNotification" }
+const attr = (a: string, k: string) => a.match(new RegExp(`${k}="([^"]*)"`))?.[1]
 const FIELDS: Record<string, string> = {
   "task-id": "conversation.tagged.fields.task",
   "tool-use-id": "conversation.tagged.fields.call",
@@ -13,13 +14,27 @@ const FIELDS: Record<string, string> = {
   note: "conversation.tagged.fields.note",
 }
 
-export const isTagged = (t: string) => /^\s*<[a-z][a-z-]*>/.test(t) && !/^\s*<pasted_content/.test(t)
+export const isTagged = (t: string) => /^\s*<[a-z][a-z-]*[\s>]/.test(t) && !/^\s*<pasted_content/.test(t)
 
-function Card({ tag, body }: { tag: string; body: string }) {
+function Card({ tag, attrs, body }: { tag: string; attrs: string; body: string }) {
   const { t } = useTranslation()
-  const fields = [...body.matchAll(BLOCK)].map(([, k, v]) => [k, v.trim()] as const)
+  const fields = [...body.matchAll(BLOCK)].map(([, k, , v]) => [k, v.trim()] as const)
   const get = (k: string) => fields.find(([f]) => f === k)?.[1]
   const status = get("status")
+  if (tag === "teammate-message") {
+    const from = attr(attrs, "teammate_id")
+    const summary = attr(attrs, "summary")
+    return (
+      <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
+        <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <Users className="size-3.5" />
+          {t("conversation.tagged.teammateMessage", { name: from ?? "?" })}
+          {summary && <Badge variant="outline" className="ml-auto max-w-[60%] truncate font-normal">{summary}</Badge>}
+        </div>
+        <p className="mt-1.5 break-words whitespace-pre-wrap">{body.trim()}</p>
+      </div>
+    )
+  }
   return (
     <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
@@ -66,7 +81,7 @@ export function Tagged({ t }: { t: string }) {
           {before}
         </p>
       )
-    parts.push(<Card key={m.index} tag={m[1]} body={m[2]} />)
+    parts.push(<Card key={m.index} tag={m[1]} attrs={m[2]} body={m[3]} />)
     at = m.index + m[0].length
   }
   const rest = t.slice(at).trim()

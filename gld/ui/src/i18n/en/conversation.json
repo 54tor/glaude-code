@@ -274,6 +274,7 @@
       "subNote": "Read only: a subagent takes no outside messages, it hands its result back to the session."
     },
     "tagged": {
+      "teammateMessage": "Message from {{name}}",
       "taskNotification": "Task notification",
       "fields": {
         "task": "task",
