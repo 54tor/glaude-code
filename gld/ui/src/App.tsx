@@ -483,7 +483,7 @@ function Shell() {
       <Prompt ask={prompt} onClose={() => setPrompt(null)} />
       <Compose ask={compose} onClose={() => setCompose(null)} />
       <SessionInfo row={info} onClose={() => setInfo(null)} />
-      {share && <ShareDialog key={share.s.id} id={share.s.id} dir={share.s.dir} onClose={() => setShare(null)} />}
+      {share && <ShareDialog key={share.s.id} id={share.s.id} dir={share.s.dir} title={share.s.title} onClose={() => setShare(null)} />}
     </ActionsCtx.Provider>
   )
 }

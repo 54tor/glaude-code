@@ -11,7 +11,7 @@ type Info = { shared: boolean; mode?: "rw" | "ro"; connected: boolean }
 
 // Partage d'une session par lien invité à usage unique (share.go) : l'hôte génère le lien, voit si un invité est là,
 // bascule en lecture seule ou met fin au partage.
-export function ShareDialog({ id, dir, onClose }: { id: string; dir: string; onClose: () => void }) {
+export function ShareDialog({ id, dir, title, onClose }: { id: string; dir: string; title?: string; onClose: () => void }) {
   const { t } = useTranslation()
   const [info, setInfo] = useState<Info | null>(null)
   const [failed, setFailed] = useState(false)
@@ -30,7 +30,7 @@ export function ShareDialog({ id, dir, onClose }: { id: string; dir: string; onC
     // le home se lit avant de créer : sans lui, le lien serait faux et le partage précédent déjà remplacé
     const h = await api.homes().catch(() => null)
     if (!h) return void toast.error(t("shell.share.homesFailed"))
-    const r = await api.shareCreate(id, dir)
+    const r = await api.shareCreate(id, dir, title)
     if (!r.ok || !r.token) return void toast.error(t("shell.share.createFailed", { msg: r.out }))
     // « main » désigne le home du processus principal (share_guest.go)
     const url = `${location.origin}/invite/${encodeURIComponent(h.current || "main")}/${r.token}`

@@ -408,7 +408,12 @@
       "bye": "You left the shared session.",
       "ended": "Sharing has ended",
       "endedHint": "The host ended the share or the link is no longer valid.",
-      "loading": "Connecting to the share…"
+      "loading": "Connecting to the share…",
+      "others": "Other shared sessions",
+      "pick": "Choose a shared session",
+      "modeRw": "Read and write",
+      "modeRo": "Read-only",
+      "byeOthers": "Other shared sessions:"
     }
   }
 }

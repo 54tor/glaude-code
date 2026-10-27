@@ -408,7 +408,12 @@
       "bye": "Vous avez quitté la session partagée.",
       "ended": "Le partage est terminé",
       "endedHint": "L'hôte a mis fin au partage ou le lien n'est plus valide.",
-      "loading": "Connexion au partage…"
+      "loading": "Connexion au partage…",
+      "others": "Autres sessions partagées",
+      "pick": "Choisissez une session partagée",
+      "modeRw": "Lecture et écriture",
+      "modeRo": "Lecture seule",
+      "byeOthers": "Autres sessions partagées :"
     }
   }
 }

@@ -31,6 +31,7 @@ export type Auth = {
   owner?: string // compte dont l'application montée porte les données ; un autre compte la fait remonter à neuf
   rights?: Record<string, Right[]> // par identifiant de home, seulement ceux où le compte a un droit
   homes?: HomeRef[]
+  share?: string // invité : identifiant du partage ouvert dans cet onglet, joint à chaque requête (X-Gld-Share)
   home?: string // identifiant du home servi à cette page (le choix de home recharge la page)
 }
 
@@ -62,6 +63,11 @@ export async function authFetch(url: string, init: RequestInit = {}): Promise<Re
   if (snap.csrf && m !== "GET" && m !== "HEAD") {
     const h = new Headers(init.headers)
     h.set("X-Gld-CSRF", snap.csrf)
+    init = { ...init, headers: h }
+  }
+  if (snap.share) {
+    const h = new Headers(init.headers)
+    h.set("X-Gld-Share", snap.share)
     init = { ...init, headers: h }
   }
   const r = await fetch(url, init)

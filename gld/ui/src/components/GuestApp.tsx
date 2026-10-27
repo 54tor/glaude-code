@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowUpToLine, Loader2, LogOut, Send, Wrench, X } from "lucide-react"
+import { ArrowUpToLine, ChevronDown, Loader2, LogOut, Send, Wrench, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { api, HttpError, type LiveState, type Msg, type QItem } from "@/lib/api"
+import { api, HttpError, type GuestShare, type LiveState, type Msg, type QItem } from "@/lib/api"
 import { setAuth } from "@/lib/auth"
 import { LiveBar } from "./LiveStatus"
 import { Message } from "./Message"
 
 // Vue de l'invité (/guest) : transcript en lecture, file avec auteurs, composeur. Volontairement mince : aucune des routes
 // qu'utilisent la barre latérale, Conversation ou le composeur hôte (api, info, git, docs, envoi direct) n'est refusée sans être appelée.
-type Me = { id: string; dir: string; mode: "rw" | "ro" }
+type Me = { id: string; dir: string; mode: "rw" | "ro"; title: string }
 type Phase = "loading" | "on" | "ended" | "bye"
 type Hist = { msgs: Msg[]; start: number; more: boolean }
 const PAGE = 200
@@ -20,10 +21,86 @@ const PAGE = 200
 // 401/403 ou réponse non JSON : le serveur traite la requête comme celle d'un hôte, donc le partage n'existe plus.
 const over = (e: unknown) => (e instanceof HttpError && (e.status === 401 || e.status === 403)) || e instanceof SyntaxError
 
+const HANDLE = /^\/guest\/([0-9a-f]{16})\/?$/
+
+// Partages de ce navigateur (/guest-list), sans en-tête de partage : relu toutes les 30 s, sans bruit si ça échoue.
+function useShares(on: boolean): [GuestShare[] | null, () => Promise<void>] {
+  const [list, setList] = useState<GuestShare[] | null>(null)
+  const reload = useCallback(() => api.guestList().then(setList, (e) => (over(e) ? setList([]) : undefined)), [])
+  useEffect(() => {
+    if (!on) return
+    void reload()
+    const i = setInterval(() => void reload(), 30000)
+    return () => clearInterval(i)
+  }, [on, reload])
+  return [list, reload]
+}
+
+const OtherLinks = ({ list }: { list: GuestShare[] }) => {
+  const { t } = useTranslation()
+  return (
+    <ul className="space-y-2">
+      {list.map((s) => (
+        <li key={s.handle}>
+          <a href={`/guest/${s.handle}`} className="flex items-center gap-2 rounded-md border px-3 py-2 hover:bg-muted">
+            <span className="min-w-0 flex-1 truncate">{s.title || t("conversation.guest.title")}</span>
+            <span className="shrink-0 rounded bg-muted px-1 text-2xs uppercase">{s.mode === "rw" ? t("conversation.guest.modeRw") : t("conversation.guest.modeRo")}</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+const Ended = () => {
+  const { t } = useTranslation()
+  return (
+    <main className="flex min-h-svh flex-col items-center justify-center gap-2 p-6 text-center">
+      <h1 className="text-lg font-semibold">{t("conversation.guest.ended")}</h1>
+      <p className="text-sm text-muted-foreground">{t("conversation.guest.endedHint")}</p>
+    </main>
+  )
+}
+
+// /guest sans poignée : aucun partage = terminé, un seul = on y va, plusieurs = choix.
+function Chooser() {
+  const { t } = useTranslation()
+  const [list] = useShares(true)
+  useEffect(() => {
+    if (list?.length === 1) location.replace(`/guest/${list[0].handle}`)
+  }, [list])
+  if (!list || list.length === 1)
+    return (
+      <main className="flex min-h-svh items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" aria-hidden />
+        {t("conversation.guest.loading")}
+      </main>
+    )
+  if (!list.length) return <Ended />
+  return (
+    <main className="mx-auto flex min-h-svh max-w-md flex-col justify-center gap-4 p-6">
+      <h1 className="text-lg font-semibold">{t("conversation.guest.pick")}</h1>
+      <OtherLinks list={list} />
+    </main>
+  )
+}
+
 export function GuestApp() {
+  // Posé pendant le premier rendu : aucun effet, donc aucune requête, ne part avant.
+  const [handle] = useState(() => {
+    const h = HANDLE.exec(location.pathname)?.[1]
+    setAuth({ share: h })
+    return h
+  })
+  return handle ? <GuestSession handle={handle} /> : <Chooser />
+}
+
+function GuestSession({ handle }: { handle: string }) {
   const { t } = useTranslation()
   const [phase, setPhase] = useState<Phase>("loading")
   const [me, setMe] = useState<Me | null>(null)
+  const [shares, reloadShares] = useShares(true)
+  const others = (shares ?? []).filter((s) => s.handle !== handle)
   const [h, setH] = useState<Hist>({ msgs: [], start: 0, more: false })
   const [tools, setTools] = useState(false)
   const [loadingOlder, setLoadingOlder] = useState(false)
@@ -43,7 +120,7 @@ export function GuestApp() {
     try {
       const r = await api.guestMe()
       setAuth({ state: "open", csrf: r.csrf })
-      setMe((p) => (p && p.id === r.id && p.mode === r.mode ? p : { id: r.id, dir: r.dir, mode: r.mode }))
+      setMe((p) => (p && p.id === r.id && p.mode === r.mode && p.title === r.title ? p : { id: r.id, dir: r.dir, mode: r.mode, title: r.title }))
       setPhase((p) => (p === "loading" ? "on" : p))
       return false
     } catch (e) {
@@ -130,15 +207,24 @@ export function GuestApp() {
   }
   const leave = async () => {
     const r = await api.guestLeave()
-    if (r.ok) setPhase("bye")
+    if (r.ok) {
+      await reloadShares()
+      setPhase("bye")
+    }
     else if (!(await readMe())) toast.error(r.out)
   }
 
-  if (phase === "ended" || phase === "bye")
+  if (phase === "ended") return <Ended />
+  if (phase === "bye")
     return (
-      <main className="flex min-h-svh flex-col items-center justify-center gap-2 p-6 text-center">
-        <h1 className="text-lg font-semibold">{phase === "ended" ? t("conversation.guest.ended") : t("conversation.guest.bye")}</h1>
-        {phase === "ended" && <p className="text-sm text-muted-foreground">{t("conversation.guest.endedHint")}</p>}
+      <main className="flex min-h-svh flex-col items-center justify-center gap-4 p-6 text-center">
+        <h1 className="text-lg font-semibold">{t("conversation.guest.bye")}</h1>
+        {others.length > 0 && (
+          <div className="w-full max-w-md space-y-2 text-left">
+            <p className="text-sm text-muted-foreground">{t("conversation.guest.byeOthers")}</p>
+            <OtherLinks list={others} />
+          </div>
+        )}
       </main>
     )
   if (!me)
@@ -161,9 +247,25 @@ export function GuestApp() {
         <DialogHeader className="gap-1 border-b px-4 pt-2.5 pb-3 md:px-6 md:pb-4">
           <div className="flex items-start gap-4">
             <div className="min-w-0 flex-1 space-y-1">
-              <DialogTitle className="truncate text-lg tracking-tight">{t("conversation.guest.title")}</DialogTitle>
+              <DialogTitle className="truncate text-lg tracking-tight">{me.title || t("conversation.guest.title")}</DialogTitle>
               <DialogDescription className="sr-only">{t("conversation.view.description")}</DialogDescription>
             </div>
+            {others.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="xs" aria-label={t("conversation.guest.others")}>
+                    {t("conversation.guest.others")} <ChevronDown />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {others.map((s) => (
+                    <DropdownMenuItem key={s.handle} onSelect={() => location.assign(`/guest/${s.handle}`)}>
+                      {s.title || t("conversation.guest.title")}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             <Button variant="outline" size="xs" onClick={() => void leave()}>
               <LogOut /> {t("conversation.guest.leave")}
             </Button>

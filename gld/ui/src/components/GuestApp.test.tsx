@@ -3,9 +3,10 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { i18n } from "@/i18n"
 import type { Msg } from "@/lib/api"
+import { setAuth } from "@/lib/auth"
 import { GuestApp } from "./GuestApp"
 
-const WHITE = new Set(["GET /conv", "GET /conv-text", "GET /conv-tools", "GET /conv-image", "GET /session-live", "GET /session-state", "GET /session-task-output", "GET /session-screen", "GET /queue", "POST /queue-add", "POST /queue-rm", "GET /guest-me", "POST /guest-leave"])
+const WHITE = new Set(["GET /conv", "GET /conv-text", "GET /conv-tools", "GET /conv-image", "GET /session-live", "GET /session-state", "GET /session-task-output", "GET /session-screen", "GET /queue", "POST /queue-add", "POST /queue-rm", "GET /guest-me", "GET /guest-list", "POST /guest-leave"])
 const key = (c: { method: string; path: string }) => `${c.method} ${c.path}`
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } })
 const live = { open: true, status: "", activity: "", thinking: false, since: 0, context: 0, out: 0, model: "", subs: [] }
@@ -13,7 +14,12 @@ const live = { open: true, status: "", activity: "", thinking: false, since: 0, 
 let mode: "rw" | "ro"
 let ended: number | "html" | null
 let queue: unknown[]
-let calls: { path: string; method: string; csrf: string | null; body: string; search: string }[]
+let calls: { path: string; method: string; csrf: string | null; body: string; search: string; share: string | null }[]
+let shares: { handle: string; title: string; mode: "rw" | "ro" }[] | 403
+let title: string
+const H = "0123456789abcdef"
+const H2 = "fedcba9876543210"
+const go = (p: string) => window.history.pushState({}, "", p)
 let all: Msg[]
 let rich: boolean
 const msg = (i: number): Msg => ({ r: "assistant", t: `m${i}` })
@@ -26,15 +32,20 @@ beforeEach(() => {
   rich = false
   all = [{ r: "assistant", t: "salut invité" }, { r: "doc", t: "/d/a.md" }]
   calls = []
+  shares = [{ handle: H, title: "Ma session", mode: "rw" }]
+  title = "Ma session"
+  setAuth({ share: undefined, csrf: "" })
+  go(`/guest/${H}`)
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init: RequestInit = {}) => {
       const path = new URL(url, "http://x").pathname
       const search = new URL(url, "http://x").search
-      calls.push({ path, search, method: init.method ?? "GET", csrf: new Headers(init.headers).get("X-Gld-CSRF"), body: String(init.body ?? "") })
+      calls.push({ path, search, method: init.method ?? "GET", csrf: new Headers(init.headers).get("X-Gld-CSRF"), share: new Headers(init.headers).get("X-Gld-Share"), body: String(init.body ?? "") })
       if (ended === "html") return new Response("<html></html>", { status: 200, headers: { "Content-Type": "text/html" } })
       if (ended) return json({ ok: false }, ended)
-      if (path === "/guest-me") return json({ id: "s1", dir: "/d", mode, csrf: "tok" })
+      if (path === "/guest-list") return shares === 403 ? json({ ok: false }, 403) : json(shares)
+      if (path === "/guest-me") return json({ id: "s1", dir: "/d", mode, csrf: "tok", handle: H, title })
       if (path === "/conv") {
         const q = new URL(url, "http://x").searchParams
         const limit = Number(q.get("limit") ?? 1000)
@@ -229,5 +240,88 @@ describe("GuestApp", () => {
     fireEvent.keyDown(box(), { key: "Enter" })
     await tick(50)
     expect(calls.filter((c) => c.path === "/queue-add")).toHaveLength(1)
+  })
+
+  it("chaque requête porte X-Gld-Share (sauf /guest-list) et rien ne part avant", async () => {
+    await mount()
+    await send("x")
+    await tick(12000)
+    const own = calls.filter((c) => c.path !== "/guest-list")
+    expect(own.length).toBeGreaterThan(3)
+    expect(own.filter((c) => c.share !== H)).toEqual([])
+    expect(calls.filter((c) => c.path === "/guest-list").every((c) => c.share === null)).toBe(true)
+  })
+
+  it("poignée invalide dans l'URL : traitée comme /guest, aucune requête avec en-tête", async () => {
+    go("/guest/ZZ")
+    shares = 403
+    await mount()
+    expect(screen.getByText(i18n.t("conversation.guest.ended"))).toBeTruthy()
+    expect(calls.every((c) => c.share === null && c.path === "/guest-list")).toBe(true)
+  })
+
+  it("titre du partage dans l'en-tête", async () => {
+    title = "Refonte API"
+    await mount()
+    expect(screen.getByText("Refonte API")).toBeTruthy()
+  })
+
+  describe("/guest sans poignée", () => {
+    beforeEach(() => go("/guest"))
+    const loc = () => {
+      const replace = vi.fn()
+      vi.stubGlobal("location", { ...window.location, pathname: window.location.pathname, replace, assign: replace })
+      return replace
+    }
+    it("0 partage ou 403 : partage terminé", async () => {
+      shares = 403
+      await mount()
+      expect(screen.getByText(i18n.t("conversation.guest.ended"))).toBeTruthy()
+    })
+    it("0 entrée : partage terminé", async () => {
+      shares = []
+      await mount()
+      expect(screen.getByText(i18n.t("conversation.guest.ended"))).toBeTruthy()
+    })
+    it("1 partage : location.replace vers /guest/<handle>", async () => {
+      const replace = loc()
+      await mount()
+      expect(replace).toHaveBeenCalledWith(`/guest/${H}`)
+    })
+    it("plusieurs partages : sélecteur avec titres, mode et repli de titre", async () => {
+      shares = [{ handle: H, title: "Alpha", mode: "rw" }, { handle: H2, title: "", mode: "ro" }]
+      await mount()
+      expect(screen.getByText("Alpha")).toBeTruthy()
+      expect(screen.getByText(i18n.t("conversation.guest.title"))).toBeTruthy()
+      expect(screen.getByRole("link", { name: /Alpha/ }).getAttribute("href")).toBe(`/guest/${H}`)
+      expect(screen.getByText(i18n.t("conversation.guest.modeRo"))).toBeTruthy()
+    })
+  })
+
+  describe("autres sessions", () => {
+    const menu = () => screen.queryByRole("button", { name: i18n.t("conversation.guest.others") })
+    it("pas de menu avec un seul partage", async () => {
+      await mount()
+      expect(menu()).toBeNull()
+    })
+    it("menu avec plusieurs partages, navigue vers la poignée choisie", async () => {
+      shares = [{ handle: H, title: "Ma session", mode: "rw" }, { handle: H2, title: "Autre", mode: "ro" }]
+      const assign = vi.fn()
+      vi.stubGlobal("location", { ...window.location, pathname: window.location.pathname, assign })
+      await mount()
+      fireEvent.pointerDown(menu()!, { button: 0, ctrlKey: false })
+      await tick(50)
+      fireEvent.click(screen.getByRole("menuitem", { name: /Autre/ }))
+      expect(assign).toHaveBeenCalledWith(`/guest/${H2}`)
+      expect(screen.queryByRole("menuitem", { name: /Ma session/ })).toBeNull()
+    })
+    it("Quitter propose les autres partages", async () => {
+      shares = [{ handle: H, title: "Ma session", mode: "rw" }, { handle: H2, title: "Autre", mode: "ro" }]
+      await mount()
+      fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.guest.leave") }))
+      await tick(50)
+      expect(screen.getByText(i18n.t("conversation.guest.bye"))).toBeTruthy()
+      expect(screen.getByRole("link", { name: /Autre/ }).getAttribute("href")).toBe(`/guest/${H2}`)
+    })
   })
 })

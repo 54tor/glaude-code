@@ -33,11 +33,19 @@ const click = async (name: RegExp) => {
 }
 
 describe("ShareDialog", () => {
+  it("envoie le titre de la session à share-create", async () => {
+    vi.spyOn(api, "shareCreate").mockResolvedValue({ ...ok, token: "tok" })
+    render(<ShareDialog id="s1" dir="/d" title="Ma session" onClose={() => {}} />)
+    await act(async () => {})
+    await click(/générer|generate/i)
+    expect(api.shareCreate).toHaveBeenCalledWith("s1", "/d", "Ma session")
+  })
+
   it("génère le lien et le copie", async () => {
     vi.spyOn(api, "shareCreate").mockResolvedValue({ ...ok, token: "tok" })
     await open()
     await click(/Générer et copier/)
-    expect(api.shareCreate).toHaveBeenCalledWith("s1", "/d")
+    expect(api.shareCreate).toHaveBeenCalledWith("s1", "/d", undefined)
     expect(write).toHaveBeenCalledWith(`${location.origin}/invite/main/tok`)
   })
 

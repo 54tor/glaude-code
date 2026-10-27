@@ -31,7 +31,7 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider>
       <TooltipProvider>
-        {location.pathname === "/guest" ? <GuestApp /> : <App />}
+        {location.pathname === "/guest" || location.pathname.startsWith("/guest/") ? <GuestApp /> : <App />}
         <Toaster position="bottom-right" mobileOffset={{ bottom: "calc(16px + env(safe-area-inset-bottom))" }} richColors closeButton />
       </TooltipProvider>
     </ThemeProvider>

@@ -149,6 +149,7 @@ export type HomesInfo = { current: string; main: string; mainId?: string; homes:
 const enc = encodeURIComponent
 
 // status : 403 dit un droit manquant (mode multi-utilisateur), à distinguer d'un serveur injoignable.
+export type GuestShare = { handle: string; title: string; mode: "rw" | "ro" }
 export class HttpError extends Error {
   status: number
   constructor(status: number) {
@@ -240,10 +241,16 @@ export const api = {
   queueAdd: (id: string, text: string) => api.post("/queue-add", { id, text }),
   queueRm: (id: string, item: string) => api.post("/queue-rm", { id, item }) as Promise<Result & { text?: string }>,
   queueRetry: (id: string, item: string) => api.post("/queue-retry", { id, item }),
-  shareCreate: (id: string, dir: string) => api.post("/share-create", { id, dir }) as Promise<Result & { token?: string }>,
+  shareCreate: (id: string, dir: string, title?: string) => api.post("/share-create", title ? { id, dir, title } : { id, dir }) as Promise<Result & { token?: string }>,
   shareInfo: (id: string) => get<{ shared: boolean; mode?: "rw" | "ro"; connected: boolean }>(`/share-info?id=${enc(id)}`),
   shareMode: (id: string, mode: "rw" | "ro") => api.post("/share-mode", { id, mode }),
-  guestMe: () => get<{ id: string; dir: string; mode: "rw" | "ro"; csrf: string }>("/guest-me"),
+  guestMe: () => get<{ id: string; dir: string; mode: "rw" | "ro"; csrf: string; handle: string; title: string }>("/guest-me"),
+  // Sans X-Gld-Share : la liste concerne le navigateur entier, pas un partage.
+  guestList: async (): Promise<GuestShare[]> => {
+    const r = await fetch("/guest-list")
+    if (!r.ok) throw new HttpError(r.status)
+    return (await r.json()) as GuestShare[]
+  },
   guestLeave: () => api.post("/guest-leave", {}),
   shareEnd: (id: string) => api.post("/share-end", { id }),
   sessionLive: (dir: string, id: string) => get<LiveState>(`/session-live?dir=${enc(dir)}&id=${enc(id)}`),
