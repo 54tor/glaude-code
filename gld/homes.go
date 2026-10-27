@@ -130,11 +130,7 @@ func newHomeID() string {
 
 func writeHomes(hs []Home) error {
 	b, _ := json.MarshalIndent(map[string]any{"homes": hs}, "", "  ")
-	tmp := homesFile() + ".tmp"
-	if err := writeSynced(tmp, b, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, homesFile())
+	return rWriteAtomic(cfgDir(), homesFile(), b, 0o600)
 }
 
 // homeIDFor : "" désigne le home principal ; un home nommé « main » garde son propre identifiant.
