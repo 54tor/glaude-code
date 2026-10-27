@@ -56,7 +56,7 @@ func saveImage(b []byte) (string, error) {
 	if err := rMkdirAll(cfgDir(), dir, 0o700); err != nil {
 		return "", err
 	}
-	if ents, err := os.ReadDir(dir); err == nil {
+	if ents, err := readDirTrusted(dir); err == nil {
 		for _, e := range ents {
 			if fi, err := e.Info(); err == nil && fi.Mode().IsRegular() && time.Since(fi.ModTime()) > imgKeep {
 				rRemove(cfgDir(), filepath.Join(dir, e.Name()))
@@ -83,7 +83,7 @@ func saveImage(b []byte) (string, error) {
 
 // lineAt lit la ligne de transcript qui commence à l'octet o (au plus imgLine octets).
 func lineAt(path string, o int64) ([]byte, error) {
-	f, err := os.Open(path)
+	f, err := openTrusted(path)
 	if err != nil {
 		return nil, err
 	}
