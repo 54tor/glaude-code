@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Link } from "wouter"
-import { Plug } from "lucide-react"
+import { Loader2, Plug } from "lucide-react"
 import { api, type CfgOverview, type McpServer, type PluginInst, type Skill } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { href } from "@/lib/route"
@@ -27,6 +27,7 @@ export function Extensions({ home }: { home: string }) {
   const [err, setErr] = useState("")
   const [dir, setDir] = useState("") // "" : utilisateur seul
   const [dlg, setDlg] = useState(false)
+  const [status, setStatus] = useState<Record<string, string> | null>(null) // `claude mcp list` : tous les serveurs vus par Claude Code, lent (quelques secondes)
   const a = useActions()
   const reload = useCallback(
     () =>
@@ -39,6 +40,12 @@ export function Extensions({ home }: { home: string }) {
     [],
   )
   useEffect(() => void reload(), [reload])
+  useEffect(() => {
+    api.post("/config-mcp-status", {}).then((r) => {
+      const d = r as unknown as { ok: boolean; status?: Record<string, string> }
+      if (d.ok && d.status) setStatus(d.status)
+    })
+  }, [])
   const { propose, dialog } = useConfigEdit(reload, a.live.size)
   const doc = useMemo(() => {
     const m: Record<string, Enabled> = {}
@@ -55,6 +62,9 @@ export function Extensions({ home }: { home: string }) {
   const hooks = ov.hooks.filter((h) => has(h.file))
   const mcpHere = mcp.filter((s) => s.scope === "user" || (dir && s.project && s.project === ov.projects.find((p) => p.dir === dir)?.project) || (dir && s.scope === "project"))
   const skillsHere = skills.filter((s) => s.scope === "user" || s.scope === "plugin" || (s.scope === "project" && (!dir || s.project === ov.projects.find((p) => p.dir === dir)?.project)))
+  const known = new Set(mcp.map((m) => m.name))
+  const others = Object.keys(status ?? {}).filter((n) => !known.has(n)).sort() // plugins et connecteurs claude.ai : pas dans ~/.claude.json
+  const up = (n: string) => /✔|Connected/.test(status?.[n] ?? "")
   const chars = skillsHere.filter((s) => !s.manual).reduce((n, s) => n + s.chars, 0)
   const cfg = (f: string) => ov.files.find((x) => x.id === f)?.data as { skillOverrides?: Record<string, string>; disabledMcpjsonServers?: string[] } | undefined
   const skillMode = (f: string, name: string) => cfg(f)?.skillOverrides?.[name]
@@ -198,7 +208,7 @@ export function Extensions({ home }: { home: string }) {
 
         <section>
           <h3 className={sect}>
-            {t("extensions.mcp")} ({mcpHere.length})
+            {t("extensions.mcp")} ({mcpHere.length + others.length}){!status && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
             <Link href={href({ kind: "config", tab: "mcp" })} className="ml-auto text-xs font-normal text-muted-foreground underline">MCP</Link>
           </h3>
           <table className="w-full text-sm">
@@ -207,7 +217,7 @@ export function Extensions({ home }: { home: string }) {
               {mcpHere.map((m, n) => (
                 <tr key={n} className="hover:bg-muted/50 align-top">
                   <td className="min-w-0 py-1 pr-2">
-                    <span className="font-medium">{m.name}</span> <span className="text-xs text-muted-foreground">{m.type} · {m.scope === "user" ? scopeName.u : m.scope === "project" ? ".mcp.json" : scopeName.l}</span>
+                    {status && <span className={up(m.name) ? "text-success" : "text-warning"} title={status[m.name]}>● </span>}<span className="font-medium">{m.name}</span> <span className="text-xs text-muted-foreground">{m.type} · {m.scope === "user" ? scopeName.u : m.scope === "project" ? ".mcp.json" : scopeName.l}</span>
                     <code className="block text-xs break-all text-muted-foreground">{m.url || m.command}</code>
                   </td>
                   {(["u", "p", "l"] as const).map((k) => {
@@ -229,11 +239,24 @@ export function Extensions({ home }: { home: string }) {
                   <td className={`pt-1.5 text-center text-xs ${m.scope !== "project" ? "text-muted-foreground" : mcpEff(m.name) ? "text-muted-foreground" : "text-success"}`}>{m.scope !== "project" ? "—" : mcpEff(m.name) ? t("extensions.off") : t("extensions.on")}</td>
                 </tr>
               ))}
+              {others.map((n) => (
+                <tr key={n} className="hover:bg-muted/50">
+                  <td className="py-1 pr-2">
+                    <span className={up(n) ? "text-success" : "text-warning"} title={status?.[n]}>● </span>
+                    <span className="font-medium">{n}</span>{" "}
+                    <span className="text-xs text-muted-foreground">{n.startsWith("plugin:") ? t("extensions.mcpPlugin") : n.startsWith("claude.ai ") ? t("extensions.mcpAccount") : t("extensions.mcpOther")}</span>
+                  </td>
+                  {[0, 1, 2].map((i) => (
+                    <td key={i} className="text-center text-muted-foreground">·</td>
+                  ))}
+                  <td className="text-center text-xs text-muted-foreground">—</td>
+                </tr>
+              ))}
             </tbody>
           </table>
-          {mcpHere.some((m) => m.scope !== "project") && <p className="mt-2 text-xs text-muted-foreground">{t("extensions.mcpManaged")}</p>}
+          {(others.length > 0 || mcpHere.some((m) => m.scope !== "project")) && <p className="mt-2 text-xs text-muted-foreground">{t("extensions.mcpManaged")}</p>}
           <p className="mt-1 text-xs text-muted-foreground">{t("extensions.offWins")}</p>
-          {!mcpHere.length && <p className="py-3 text-sm text-muted-foreground">{t("extensions.noMcp")}</p>}
+          {!mcpHere.length && !others.length && <p className="py-3 text-sm text-muted-foreground">{t("extensions.noMcp")}</p>}
         </section>
       </div>
       <PluginsDialog open={dlg} projects={ov.projects} home={home} onClose={() => setDlg(false)} onChange={reload} />

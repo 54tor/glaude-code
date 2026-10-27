@@ -34,7 +34,10 @@
     "toggle": "{{id}} — {{scope}}",
     "skillsTotal": "{{count}} skills, {{chars}} chars in context",
     "from": "Source",
-    "mcpManaged": "Defined in ~/.claude.json (user or local): manage with `claude mcp`, gld does not write there.",
-    "offWins": "A disable in any scope wins over the others."
+    "mcpManaged": "Plugin servers, claude.ai connectors and `~/.claude.json` servers are not set here: use the plugin above, your claude.ai account, or `claude mcp`.",
+    "offWins": "A disable in any scope wins over the others.",
+    "mcpPlugin": "from a plugin: set with the plugin",
+    "mcpAccount": "claude.ai account connector: set in claude.ai",
+    "mcpOther": "other source"
   }
 }

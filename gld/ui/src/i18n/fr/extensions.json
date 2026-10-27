@@ -34,7 +34,10 @@
     "toggle": "{{id}} — {{scope}}",
     "skillsTotal": "{{count}} skills, {{chars}} car. dans le contexte",
     "from": "Source",
-    "mcpManaged": "Défini dans ~/.claude.json (utilisateur ou local) : à gérer avec `claude mcp`, gld n'y écrit pas.",
-    "offWins": "Une désactivation dans une portée l'emporte sur les autres."
+    "mcpManaged": "Plugins, connecteurs claude.ai et serveurs de `~/.claude.json` ne se règlent pas ici : plugin ci-dessus, compte claude.ai, `claude mcp`.",
+    "offWins": "Une désactivation dans une portée l'emporte sur les autres.",
+    "mcpPlugin": "via un plugin : à régler avec le plugin",
+    "mcpAccount": "connecteur du compte claude.ai : à régler dans claude.ai",
+    "mcpOther": "autre source"
   }
 }
