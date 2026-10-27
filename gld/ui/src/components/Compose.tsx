@@ -34,6 +34,7 @@ export type ComposeAsk = {
   project: string // pour proposer d'abord la mémoire de ce projet
   initial?: string
   send: string // libellé du bouton
+  warning?: string // avertissement affiché au-dessus de la saisie (ex. coût en tokens)
   choice: Choice // modèle et effort proposés par défaut (Réglages)
   outputs?: { key: string; label: string }[] // fusion : le document de sortie ; en changer régénère le texte par reprompt
   reprompt?: (output: string) => Promise<string | undefined>
@@ -124,6 +125,11 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
         <DialogTitle>{ask.title}</DialogTitle>
         <DialogDescription className="truncate">{ask.subtitle}</DialogDescription>
       </DialogHeader>
+      {ask.warning && (
+        <p role="alert" className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
+          {ask.warning}
+        </p>
+      )}
       {ask.outputs && (
         <div className="flex items-center gap-2 text-sm">
           <span className="shrink-0 text-muted-foreground">{tr("conversation.compose.output")}</span>

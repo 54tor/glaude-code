@@ -128,6 +128,28 @@ export function useAppActions(c: {
         })
     },
     remove: (dir, name) => saveProjects(projects.map((p) => (p.name === name ? { ...p, dirs: p.dirs.filter((d) => d !== dir) } : p))),
+    promptAll: (p) => {
+      const ts = targets().filter((x) => p.dirs.includes(x.project))
+      if (!ts.length) return void toast.error(i18n.t("shell.act.promptAllNone"))
+      const count = ts.length
+      setCompose({
+        id: "all:" + p.name,
+        title: i18n.t("shell.act.promptAllTitle", { name: p.name }),
+        subtitle: i18n.t("shell.act.promptAllSub", { count }),
+        project: ts[0].project,
+        warning: i18n.t("shell.act.promptAllWarning", { count }),
+        send: i18n.t("shell.act.promptAllSend", { count }),
+        choice,
+        run: async (prompt, c) => {
+          let started = 0
+          for (const t of ts) {
+            const ok = await act("/new-session", { ...(t.cwd ? { cwd: t.cwd } : { dir: t.dir, id: t.id }), prompt, args: withChoice(args, c) }, i18n.t("shell.act.starting"), "last")
+            if (ok) started++
+          }
+          return started > 0
+        },
+      })
+    },
     rename: (p) =>
       named(i18n.t("shell.act.renameProject", { name: p.name }), p.name, i18n.t("shell.act.rename"), (n) => {
         const t = n.trim()

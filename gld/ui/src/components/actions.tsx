@@ -24,6 +24,7 @@ export type ProjectActions = {
   remove: (dir: string, name: string) => void
   rename: (p: Project) => void
   delete: (p: Project) => void
+  promptAll: (p: Project) => void // un même prompt, une nouvelle session par dossier du projet
 }
 
 // État et actions partagés par la barre latérale, les listes, les menus et le lecteur.

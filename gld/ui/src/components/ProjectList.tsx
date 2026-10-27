@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { setOpen, useOpenState } from "@/hooks/useOpen"
-import { ChevronRight, Folder, Layers, Pencil, Trash2, X } from "lucide-react"
+import { ChevronRight, Folder, Layers, Pencil, Rocket, Trash2, X } from "lucide-react"
 import type { Route } from "@/lib/route"
 import { tilde } from "@/lib/format"
 import { segs } from "@/lib/paths"
@@ -59,6 +59,11 @@ export function ProjectList({ route, go }: { route: Route; go: (r: Route) => voi
                 <ContextMenuItem onSelect={() => a.projectActs.rename(p)}>
                   <Pencil /> {t("shell.menu.rename")}
                 </ContextMenuItem>
+                {p.dirs.length > 0 && (
+                  <ContextMenuItem onSelect={() => a.projectActs.promptAll(p)}>
+                    <Rocket /> {t("shell.tree.promptAll")}
+                  </ContextMenuItem>
+                )}
                 <ContextMenuSeparator />
                 <ContextMenuItem variant="destructive" onSelect={() => a.projectActs.delete(p)}>
                   <Trash2 /> {t("shell.tree.deleteProject")}
