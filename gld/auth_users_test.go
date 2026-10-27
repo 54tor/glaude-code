@@ -371,3 +371,29 @@ func TestMigration8ResignsACL(t *testing.T) {
 		t.Fatal("ligne altérée re-signée")
 	}
 }
+
+func TestMigration9KeepsSessions(t *testing.T) {
+	s := testStore(t)
+	u, err := s.AddUser("Alice", testPw, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie, err := s.NewSession(u, "203.0.113.5", "ua")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{`DROP TRIGGER sessions_cascade`, `DROP INDEX sessions_parent_idx`, `ALTER TABLE sessions DROP COLUMN parent_hash`, `DELETE FROM schema_version WHERE version>=9`} {
+		if _, err := s.db.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.db.Close()
+	s2, err := openAuthStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.db.Close()
+	if p, err := s2.Session(cookie); err != nil || p == nil {
+		t.Fatalf("session perdue par la migration 9 : %v %v", p, err)
+	}
+}
