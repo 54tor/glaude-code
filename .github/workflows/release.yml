@@ -4,6 +4,8 @@ on:
     tags: ["v*"]
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 jobs:
   release:
     if: github.server_url == 'https://github.com'
@@ -35,6 +37,9 @@ jobs:
             GOOS=$os GOARCH=$arch GOARM=$arm go build -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" -o ../out/$name .
           done
           cd ../out && sha256sum * > SHA256SUMS
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: out/*
       - run: gh release create "$GITHUB_REF_NAME" out/* --generate-notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

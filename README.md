@@ -23,6 +23,7 @@ Téléchargez le binaire de votre système sur [la dernière release](https://gi
 ```sh
 curl -LO https://github.com/54tor/glaude-code/releases/latest/download/gld-linux-amd64
 curl -LO https://github.com/54tor/glaude-code/releases/latest/download/SHA256SUMS
+gh attestation verify gld-linux-amd64 --repo 54tor/glaude-code
 sha256sum --ignore-missing -c SHA256SUMS
 chmod +x gld-linux-amd64 && mv gld-linux-amd64 ~/.local/bin/gld
 gld --version
