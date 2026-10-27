@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Choose } from "./Choose"
 
 const SOURCE_OK = /^([\w.-]+\/[\w.-]+|https:\/\/\S+)$/
@@ -35,6 +36,7 @@ export function PluginsDialog({ open, onClose, projects, home, onChange }: { ope
 export function PluginsPanel({ projects, home, onChange, inline }: { projects: Project[]; home: string; onChange: () => void; inline?: boolean }) {
   const { t } = useTranslation()
   const [q, setQ] = useState("")
+  const [sub, setSub] = useState("available") // available | installed | markets
   const [scope, setScope] = useState("user") // "user" ou "p/<dossier>"
   const [data, setData] = useState<{ installed: PluginInst[]; available: PluginAvail[]; error?: string } | null>(null)
   const [busy, setBusy] = useState("")
@@ -79,7 +81,7 @@ export function PluginsPanel({ projects, home, onChange, inline }: { projects: P
           {data?.error && <p className="p-4 text-sm text-destructive">{data.error}</p>}
           {data && !data.error && (
             <div className="space-y-4 pr-3">
-              {!q && (
+              {sub === "markets" && (
                 <section>
                   <h3 className="mb-1 flex items-center text-xs font-semibold text-muted-foreground">
                     <span className="flex-1">{t("skills.plugins.marketplaces", { count: markets.length })}</span>
@@ -117,7 +119,7 @@ export function PluginsPanel({ projects, home, onChange, inline }: { projects: P
                   </form>
                 </section>
               )}
-              {!q && (
+              {sub === "installed" && (
                 <section>
                   <h3 className="mb-1 text-xs font-semibold text-muted-foreground">{t("skills.plugins.installed", { count: data.installed.length })}</h3>
                   <ul className="divide-y rounded-md border">
@@ -148,6 +150,7 @@ export function PluginsPanel({ projects, home, onChange, inline }: { projects: P
                   </ul>
                 </section>
               )}
+              {sub === "available" && (
               <section>
                 <h3 className="mb-1 text-xs font-semibold text-muted-foreground">{t("skills.plugins.available")}</h3>
                 <ul className="divide-y rounded-md border">
@@ -170,19 +173,27 @@ export function PluginsPanel({ projects, home, onChange, inline }: { projects: P
                   {data.available.length === 0 && <li className="px-3 py-6 text-center text-sm text-muted-foreground">{t("skills.plugins.none")}</li>}
                 </ul>
               </section>
+              )}
             </div>
           )}
     </>
   )
   return (
     <>
-        <div className="flex flex-wrap items-center gap-2">
+        <Tabs value={sub} onValueChange={setSub} className="gap-0">
+          <TabsList>
+            <TabsTrigger value="available">{t("skills.plugins.tabAvailable")}</TabsTrigger>
+            <TabsTrigger value="installed">{t("skills.plugins.tabInstalled", { count: data?.installed.length ?? 0 })}</TabsTrigger>
+            <TabsTrigger value="markets">{t("skills.plugins.tabMarkets", { count: markets.length })}</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        {sub === "available" && <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-48 flex-1">
             <Search className="absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("skills.plugins.search")} className="pl-8" />
           </div>
           <Choose value={scope} onChange={setScope} options={[["user", t("skills.plugins.scopeUser")], ...projects.map((p) => [`p/${p.dir}`, tilde(p.project, home)] as const)]} label={t("skills.plugins.installFor")} />
-        </div>
+        </div>}
         {inline ? <div>{body}</div> : <ScrollArea className="min-h-0 flex-1">{body}</ScrollArea>}
     </>
   )
