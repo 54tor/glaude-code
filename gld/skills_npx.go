@@ -85,7 +85,7 @@ func skillsAct(ctx context.Context, action, source, skill, scope, project string
 			return "", terr("srv.memory.dossierDuProjetIntrouvable")
 		}
 		lock = filepath.Join(dir, "skills-lock.json")
-		if _, e := os.Lstat(filepath.Join(dir, "node_modules", "skills")); e == nil { // npx l'utiliserait à la place du paquet épinglé
+		if shadowsSkillsPkg(dir) {
 			return "", terr("srv.skills.npxUnsafeProject")
 		}
 	default:
@@ -296,4 +296,16 @@ func checkSkillUpdates(ctx context.Context, force bool) map[string]string {
 		out[it.key] = skillUpdateState(it.e, c.trees)
 	}
 	return out
+}
+
+// shadowsSkillsPkg : npx remonte les dossiers parents à la recherche d'un node_modules/skills et le préfère au paquet épinglé.
+func shadowsSkillsPkg(dir string) bool {
+	for d := filepath.Clean(dir); ; d = filepath.Dir(d) {
+		if _, err := os.Lstat(filepath.Join(d, "node_modules", "skills")); err == nil {
+			return true
+		}
+		if filepath.Dir(d) == d {
+			return false
+		}
+	}
 }

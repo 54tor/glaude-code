@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -282,5 +283,12 @@ func TestSkillsActRefuseProjetAvecSkillsLocal(t *testing.T) {
 	put(t, filepath.Join(proj, "node_modules", "skills", "package.json"), "{}", old)
 	if _, err := skillsAct(context.Background(), "add", "o/r", "x", "project", "-p"); err == nil || n != 1 {
 		t.Errorf("projet piégé accepté : %v, appels %d", err, n)
+	}
+	parent := t.TempDir()
+	put(t, filepath.Join(parent, "node_modules", "skills", "package.json"), "{}", old)
+	sub := filepath.Join(parent, "a", "b")
+	os.MkdirAll(sub, 0o755)
+	if !shadowsSkillsPkg(sub) || shadowsSkillsPkg(t.TempDir()) {
+		t.Error("recherche dans les dossiers parents")
 	}
 }
