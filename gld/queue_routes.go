@@ -40,6 +40,7 @@ var (
 		return m
 	}
 	askingFn = askingSessions
+	screenFn = sessionScreen
 )
 
 var (
@@ -79,12 +80,22 @@ func drainOnce(q *queueStore, now time.Time) {
 		if len(q.List(id)) > 1 && !strings.HasPrefix(text, followPrefix) && len(followPrefix)+len(text) <= sendMax {
 			text = followPrefix + text
 		}
-		if err := sendFn(id, text); err != nil {
+		// askingFn est gardé 3 s : un dialogue d'autorisation ouvert depuis prendrait le texte et Entrée comme réponse.
+		scr, err := screenFn(id)
+		if err == nil && screenAsks(scr) {
+			err = errQueueBusy
+		}
+		if err == nil {
+			err = sendFn(id, text)
+		}
+		if err != nil {
 			q.Requeue(id, head.ID)
 			sentMu.Lock()
 			notBefore[id] = now.Add(queueRetry)
 			sentMu.Unlock()
-			journal("queue %s : %v", id, err)
+			if err != errQueueBusy {
+				journal("queue %s : %v", id, err)
+			}
 			continue
 		}
 		q.Done(id, head.ID)

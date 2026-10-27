@@ -152,7 +152,7 @@ func TestQueueMarkSendingRollsBackOnWriteFailure(t *testing.T) {
 
 func fakeDrainEnv(t *testing.T, open, idle, asking []string) (*[]string, *error) {
 	t.Helper()
-	oSend, oOpen, oAsk, oWait := sendFn, openFn, askingFn, waiting
+	oSend, oOpen, oAsk, oWait, oScreen := sendFn, openFn, askingFn, waiting, screenFn
 	var sent []string
 	var fail error
 	sendFn = func(id, text string) error {
@@ -165,10 +165,11 @@ func fakeDrainEnv(t *testing.T, open, idle, asking []string) (*[]string, *error)
 	openFn = func() map[string]bool { return toSet(open) }
 	askingFn = func() []string { return asking }
 	waiting = func() []string { return idle }
+	screenFn = func(string) (string, error) { return "", nil }
 	sentMu.Lock()
 	notBefore = map[string]time.Time{}
 	sentMu.Unlock()
-	t.Cleanup(func() { sendFn, openFn, askingFn, waiting = oSend, oOpen, oAsk, oWait })
+	t.Cleanup(func() { sendFn, openFn, askingFn, waiting, screenFn = oSend, oOpen, oAsk, oWait, oScreen })
 	return &sent, &fail
 }
 
@@ -420,5 +421,32 @@ func TestQueueGuestTextLimit(t *testing.T) {
 	}
 	if _, err := q.Add("s", "host", strings.Repeat("x", sendMax)); err != nil {
 		t.Fatal("hôte limité comme un invité")
+	}
+}
+
+func TestDrainFreshScreenCheck(t *testing.T) {
+	dialog := "Bash command\n  rm -rf x\nDo you want to proceed?\n❯ 1. Yes\n  2. No\nEsc to cancel"
+	for name, scr := range map[string]struct {
+		text string
+		err  error
+	}{"question": {dialog, nil}, "erreur": {"", errors.New("tmux")}} {
+		q, _ := openQueue(t.TempDir())
+		sent, _ := fakeDrainEnv(t, []string{"s"}, []string{"s"}, nil)
+		screenFn = func(string) (string, error) { return scr.text, scr.err }
+		q.Add("s", "guest", "oui")
+		now := time.Now()
+		drainOnce(q, now)
+		if len(*sent) != 0 || q.List("s")[0].State != "queued" {
+			t.Fatalf("%s : envoi %v list=%+v", name, *sent, q.List("s"))
+		}
+		screenFn = func(string) (string, error) { return "> ", nil }
+		drainOnce(q, now.Add(9*time.Second))
+		if len(*sent) != 0 {
+			t.Fatalf("%s : nouvel essai avant 10 s", name)
+		}
+		drainOnce(q, now.Add(11*time.Second))
+		if len(*sent) != 1 {
+			t.Fatalf("%s : pas envoyé une fois l'écran libre", name)
+		}
 	}
 }
