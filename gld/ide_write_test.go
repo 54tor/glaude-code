@@ -552,3 +552,16 @@ func TestFsTrashRestoreRefusesSymlinks(t *testing.T) {
 		t.Fatal("moved")
 	}
 }
+
+func TestIdeCodePathCasse(t *testing.T) {
+	for _, p := range []string{".git/config", ".GIT/config", "a/.Claude/settings.json", ".git./config", ".mcp.json ", "GIT~1/config", "x/CLAUDE~1/hooks"} {
+		if !ideCodePath(p) {
+			t.Errorf("%q non reconnu", p)
+		}
+	}
+	for _, p := range []string{"src/git.go", "gitignore", "claude.md", "docs/.github/x"} {
+		if ideCodePath(p) {
+			t.Errorf("%q refusé à tort", p)
+		}
+	}
+}
