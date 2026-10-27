@@ -460,6 +460,7 @@
   "srv.teams_launch.tmuxRequis": "launching a team needs a terminal with tmux (kitty, wezterm, gnome-terminal, konsole, xfce4-terminal, tilix or terminator)",
   "srv.teams_launch.conflitAgent": "an agent file already exists and is not managed by gld: {{.A1}}; no session launched",
   "srv.teams_launch.lancementEchoue": "could not launch the session: {{.A1}}",
+  "srv.teams_launch.tropDeCoequipiers": "too many teammates to name: {{.A1}} at most; no session launched",
   "srv.teams_launch.fonctionAbsente": "unavailable: this claude version does not support teams",
   "srv.teams_catalog.chefAbsent": "no lead agent in the catalogue",
   "srv.teams_catalog.selectionVide": "no team selected",

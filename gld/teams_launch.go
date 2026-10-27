@@ -69,6 +69,15 @@ func teamBrief(goal string, lead Agent, mates []Agent, names []string) string {
 	return b.String()
 }
 
+// takenNames : les prénoms tirés ne doivent égaler ni un identifiant d'agent ni le nom du chef natif.
+func takenNames(cat Catalog) []string {
+	taken := []string{"team-lead"}
+	for _, a := range cat.Agents {
+		taken = append(taken, a.ID)
+	}
+	return taken
+}
+
 func newUUID4() (string, error) {
 	var u [16]byte
 	if _, err := rand.Read(u[:]); err != nil {
@@ -102,13 +111,15 @@ func launchTeam(cfgRoot string, req LaunchReq) (Run, error) {
 	if len(mates) == 0 {
 		return Run{}, terr("srv.teams_launch.aucunCoequipier")
 	}
-	taken := []string{"team-lead"}
-	for _, a := range cat.Agents {
-		taken = append(taken, a.ID)
+	if len(mates) > namesMax {
+		return Run{}, terr("srv.teams_launch.tropDeCoequipiers", "A1", namesMax)
 	}
-	names, err := drawNames(len(mates), taken, teamSeed())
+	names, err := drawNames(len(mates), takenNames(cat), teamSeed())
 	if err != nil {
 		return Run{}, err
+	}
+	if len(names) != len(mates) {
+		return Run{}, terr("srv.teams_launch.tropDeCoequipiers", "A1", namesMax)
 	}
 	brief := teamBrief(req.Goal, lead, mates, names)
 	switch { // pas de checkResumePrompt : il interroge les sessions vivantes, sans rapport avec la taille du texte

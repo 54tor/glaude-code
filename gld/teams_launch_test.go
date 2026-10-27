@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -340,8 +341,65 @@ func TestLaunchConflictWritesNoRoster(t *testing.T) {
 	root := t.TempDir()
 	os.MkdirAll(filepath.Join(root, "agents"), 0o755)
 	os.WriteFile(filepath.Join(root, "agents", "backend.md"), []byte("---\nname: backend\n---\nmien\n"), 0o644)
-	launchTeam(root, LaunchReq{TeamIDs: []string{"feature"}, Goal: "x", Dir: t.TempDir()})
+	if _, err := launchTeam(root, LaunchReq{TeamIDs: []string{"feature"}, Goal: "x", Dir: t.TempDir()}); !isMsg(err, "srv.teams_launch.conflitAgent") {
+		t.Fatalf("erreur : %v", err)
+	}
 	if files, _ := filepath.Glob(filepath.Join(root, journalDir, "*.roster.json")); len(files) != 0 {
 		t.Fatalf("roster écrit : %v", files)
+	}
+}
+
+func persoTeam(t *testing.T, root string, ids ...string) {
+	t.Helper()
+	var c Catalog
+	for _, id := range ids {
+		c.Agents = append(c.Agents, Agent{ID: id, Name: id, Role: "r", Access: "read", Prompt: "p"})
+	}
+	c.Teams = []Team{{ID: "gros", Name: "Gros", Members: ids}}
+	if err := persoSave(root, c); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLaunchRefusesMoreThanNamesMax(t *testing.T) {
+	rec := fakeLaunchEnv(t)
+	root := t.TempDir()
+	var ids []string
+	for i := 0; i <= namesMax; i++ {
+		ids = append(ids, fmt.Sprintf("agent-%c%c", 'a'+i/26, 'a'+i%26))
+	}
+	persoTeam(t, root, ids...)
+	_, err := launchTeam(root, LaunchReq{TeamIDs: []string{"gros"}, Goal: "x", Dir: t.TempDir()})
+	if !isMsg(err, "srv.teams_launch.tropDeCoequipiers") || rec.args != nil {
+		t.Fatalf("err=%v args=%v", err, rec.args)
+	}
+	for _, p := range []string{"agents", journalDir} {
+		if es, _ := os.ReadDir(filepath.Join(root, p)); len(es) != 0 {
+			t.Errorf("%s non vide : %v", p, es)
+		}
+	}
+}
+
+func TestLaunchNeverDrawsACatalogId(t *testing.T) {
+	fakeLaunchEnv(t)
+	fixedSeed(t)
+	first, err := drawNames(1, nil, 42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	persoTeam(t, root, first[0])
+	run, err := launchTeam(root, LaunchReq{TeamIDs: []string{"gros"}, Goal: "x", Dir: t.TempDir()})
+	if err != nil || len(run.Mates) != 1 || run.Mates[0].Name == first[0] {
+		t.Fatalf("%v %+v (id du catalogue %s)", err, run.Mates, first[0])
+	}
+}
+
+func TestTakenNamesHasLeadAndCatalog(t *testing.T) {
+	got := takenNames(builtinCatalog())
+	for _, w := range []string{"team-lead", "chef", "testeur"} {
+		if !slices.Contains(got, w) {
+			t.Errorf("%s absent de %v", w, got)
+		}
 	}
 }

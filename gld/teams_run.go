@@ -307,6 +307,9 @@ func identify(cat Catalog, roster map[string]string, m TeamMember) (display, age
 }
 
 func upFirst(s string) string {
+	if s == "" {
+		return ""
+	}
 	r, n := utf8.DecodeRuneInString(s)
 	return string(unicode.ToUpper(r)) + s[n:]
 }

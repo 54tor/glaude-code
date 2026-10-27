@@ -544,3 +544,9 @@ func TestCloseDropsRoster(t *testing.T) {
 		}
 	}
 }
+
+func TestUpFirstEmpty(t *testing.T) {
+	if upFirst("") != "" || upFirst("ada") != "Ada" {
+		t.Fatal("upFirst")
+	}
+}
