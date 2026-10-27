@@ -223,7 +223,7 @@ var broadRule = regexp.MustCompile(`^(\*|Bash|Bash\(\*\)|Bash\(:\*\)|Edit|Write|
 
 func installedPlugins() map[string]bool {
 	out := map[string]bool{}
-	b, err := os.ReadFile(filepath.Join(cfgDir(), "plugins", "installed_plugins.json"))
+	b, err := readTrusted(filepath.Join(cfgDir(), "plugins", "installed_plugins.json"))
 	if err != nil {
 		return nil
 	}
@@ -369,7 +369,7 @@ func mcpFrom(servers any, scope, project string) []McpServer {
 // Seules les clés des serveurs sont lues : le reste de ~/.claude.json (compte, identifiants) n'est jamais exposé.
 func mcpServers() []McpServer {
 	var out []McpServer
-	if b, err := os.ReadFile(claudeJSON()); err == nil {
+	if b, err := readTrusted(claudeJSON()); err == nil {
 		if v, err := parseOrdered(b); err == nil {
 			if s, ok := lookup(v, "mcpServers"); ok {
 				out = append(out, mcpFrom(s, "user", "")...)
@@ -386,7 +386,7 @@ func mcpServers() []McpServer {
 		}
 	}
 	for _, p := range liveProjects() {
-		if b, err := os.ReadFile(filepath.Join(p.Project, ".mcp.json")); err == nil {
+		if b, err := readTrusted(filepath.Join(p.Project, ".mcp.json")); err == nil {
 			if v, err := parseOrdered(b); err == nil {
 				if s, ok := lookup(v, "mcpServers"); ok {
 					out = append(out, mcpFrom(s, "project", p.Project)...)
