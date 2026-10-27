@@ -45,7 +45,7 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
       ]),
     [],
   )
-  useEffect(() => void reload(), [reload])
+  useEffect(() => void reload().catch((e) => setErr(String(e))), [reload]) // sinon la page reste sur le squelette
   useEffect(() => {
     api.post("/config-mcp-status", {}).then((r) => {
       const d = r as unknown as { ok: boolean; status?: Record<string, string> }
@@ -58,7 +58,7 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
     for (const f of ov?.files ?? []) m[f.id] = ((f.data as { enabledPlugins?: Enabled } | undefined)?.enabledPlugins ?? {}) as Enabled
     return m
   }, [ov])
-  if (!ov) return <Skeleton className="m-6 h-40" />
+  if (!ov) return err ? <p className="m-6 text-sm text-destructive">{err}</p> : <Skeleton className="m-6 h-40" />
 
   const files = { u: "u", p: dir && "p/" + dir, l: dir && "l/" + dir }
   const ids = [...new Set([...ov.plugins.map((p) => p.id), ...Object.values(doc).flatMap(Object.keys)])].sort()
