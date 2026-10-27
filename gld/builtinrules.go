@@ -13,7 +13,13 @@ import (
 //go:embed rules/*.md
 var builtinRules embed.FS
 
-// installBuiltinRules écrit les règles embarquées si elles manquent ou diffèrent ; renvoie les noms réécrits.
+// builtinRetired : noms des règles livrées autrefois et retirées depuis. Quand on retire une règle de rules/, ajouter son nom ici :
+// le fichier est supprimé du home, sauf s'il ne porte plus la marque de gld (l'utilisateur l'a repris à son compte).
+var builtinRetired = []string{}
+
+const builtinMark = "<!-- Managed by gld:"
+
+// installBuiltinRules écrit les règles embarquées si elles manquent ou diffèrent, supprime les retirées ; renvoie les noms touchés (préfixe - : supprimée).
 func installBuiltinRules() ([]string, error) {
 	dir := filepath.Join(cfgDir(), "rules")
 	ents, err := builtinRules.ReadDir("rules")
@@ -21,6 +27,15 @@ func installBuiltinRules() ([]string, error) {
 		return nil, err
 	}
 	var done []string
+	for _, n := range builtinRetired {
+		dst := filepath.Join(dir, n)
+		if cur, err := os.ReadFile(dst); err == nil && bytes.HasPrefix(cur, []byte(builtinMark)) {
+			if err := rRemove(cfgDir(), dst); err != nil {
+				return done, err
+			}
+			done = append(done, "-"+n)
+		}
+	}
 	for _, e := range ents {
 		want, err := builtinRules.ReadFile("rules/" + e.Name())
 		if err != nil {
