@@ -124,3 +124,38 @@ func TestStripANSI(t *testing.T) {
 		t.Error(got)
 	}
 }
+
+func TestParseSkillHits(t *testing.T) {
+	out := "\nInstall with npx skills add <owner/repo@skill>\n\nanthropics/skills@pdf 217.5K installs\n└ https://skills.sh/anthropics/skills/pdf\n\ncoreyhaines31/marketingskills@lead-magnets 113.4K installs\n└ https://skills.sh/coreyhaines31/marketingskills/lead-magnets\n"
+	got := parseSkillHits(out)
+	want := SkillHit{"anthropics/skills@pdf", "anthropics/skills", "pdf", "217.5K", "https://skills.sh/anthropics/skills/pdf"}
+	if len(got) != 2 || got[0] != want || got[1].Skill != "lead-magnets" {
+		t.Errorf("%+v", got)
+	}
+	if h := parseSkillHits("No skills found for \"zzz\"\n"); len(h) != 0 {
+		t.Errorf("sans résultat : %+v", h)
+	}
+}
+
+func TestSkillsFindRequete(t *testing.T) {
+	lockHome(t, "")
+	n := 0
+	fakeNpx(t, func(_ context.Context, _ string, args []string) (string, error) {
+		n++
+		if !slices.Equal(args, []string{"--yes", skillsPkg, "find", "pdf"}) {
+			t.Errorf("args %v", args)
+		}
+		return "a/b@c 1K installs\n└ https://skills.sh/a/b/c\n", nil
+	})
+	if h, err := skillsFind(context.Background(), " pdf "); err != nil || len(h) != 1 {
+		t.Errorf("%v %v", h, err)
+	}
+	for _, q := range []string{"", "  ", "-g", strings.Repeat("x", 81), "a\nb"} {
+		if _, err := skillsFind(context.Background(), q); err == nil {
+			t.Errorf("requête %q acceptée", q)
+		}
+	}
+	if n != 1 {
+		t.Errorf("appels : %d", n)
+	}
+}

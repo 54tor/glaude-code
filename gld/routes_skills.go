@@ -93,6 +93,14 @@ func routesSkills(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"installed": inst, "available": av})
 	})
+	mux.HandleFunc("GET /skills-find", func(w http.ResponseWriter, r *http.Request) {
+		hits, err := skillsFind(r.Context(), r.URL.Query().Get("q"))
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"hits": hits})
+	})
 	mux.HandleFunc("POST /plugin-act", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Action, ID, Scope, Project string }
 		if json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req) != nil {

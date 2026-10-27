@@ -103,3 +103,52 @@ func skillsAct(ctx context.Context, action, source, skill, scope, project string
 	}
 	return out, err
 }
+
+type SkillHit struct {
+	Ref      string `json:"ref"`
+	Source   string `json:"source"`
+	Skill    string `json:"skill"`
+	Installs string `json:"installs"`
+	URL      string `json:"url"`
+}
+
+// parseSkillHits : la sortie de `npx skills find` (ANSI déjà retiré) : « propriétaire/dépôt@skill N installs », puis « └ URL ».
+func parseSkillHits(out string) []SkillHit {
+	hits := []SkillHit{}
+	for _, l := range strings.Split(out, "\n") {
+		l = strings.TrimSpace(l)
+		if u, ok := strings.CutPrefix(l, "└"); ok && len(hits) > 0 && hits[len(hits)-1].URL == "" {
+			hits[len(hits)-1].URL = strings.TrimSpace(u)
+			continue
+		}
+		f := strings.Fields(l)
+		if len(f) != 3 || f[2] != "installs" {
+			continue
+		}
+		i := strings.LastIndex(f[0], "@")
+		if i < 1 || !skillRepoRe.MatchString(f[0][:i]) || !skillName.MatchString(f[0][i+1:]) {
+			continue
+		}
+		hits = append(hits, SkillHit{Ref: f[0], Source: f[0][:i], Skill: f[0][i+1:], Installs: f[1]})
+	}
+	return hits
+}
+
+// skillsFind : `npx skills find <q>`. Un q qui commencerait par « - » serait lu comme une option.
+func skillsFind(ctx context.Context, q string) ([]SkillHit, error) {
+	q = strings.TrimSpace(q)
+	if q == "" || len([]rune(q)) > 80 || q[0] == '-' || strings.ContainsAny(q, "\r\n") {
+		return nil, terr("srv.http_util.requeteInvalide")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	home, _ := os.UserHomeDir()
+	out, err := runNpxSkills(ctx, home, []string{"--yes", skillsPkg, "find", q})
+	if errors.Is(err, exec.ErrNotFound) {
+		return nil, terr("srv.skills.npxMissing")
+	}
+	if err != nil {
+		return nil, err
+	}
+	return parseSkillHits(out), nil
+}
