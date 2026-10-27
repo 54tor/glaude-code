@@ -321,6 +321,8 @@
   "srv.share.indisponible": "Unable to open the shares",
   "srv.share.sessionIntrouvable": "Session not found",
   "srv.share.introuvable": "No share for this session",
+  "srv.share.invitationIntrouvable": "Invitation not found",
+  "srv.share.tropDInvitations": "At most ten invitations per session: revoke one before creating another",
   "srv.share_guest.lectureSeule": "The share is read-only",
   "srv.share_guest.lienInvalide": "This invitation link is no longer valid. Ask the person who sent it for a new one.",
   "srv.share_guest.refuse": "Access denied to guest",

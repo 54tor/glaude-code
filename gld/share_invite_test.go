@@ -1,0 +1,660 @@
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+	"unicode/utf8"
+)
+
+// joinAs : invitation nommée créée sur sess, lien ouvert ; rend le cookie, l'en-tête CSRF et l'identifiant d'invitation.
+func joinAs(t *testing.T, h http.Handler, sess, dir, title, name string) (cookie, csrf, inv string) {
+	t.Helper()
+	tok, in, err := shareSt.CreateInvite(sess, dir, title, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hd := shareHandle(sess)
+	w := gReq{method: "POST", path: "/invite/main/" + tok}.do(h)
+	c := cookieOf(w, guestCookieName(hd))
+	if w.Code != 303 || c == nil {
+		t.Fatalf("invite : %d", w.Code)
+	}
+	w = gReq{method: "GET", path: "/guest-me", cookie: c.Value, share: hd}.do(h)
+	var me struct{ ID, CSRF, Invite, Label, Mode string }
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &me) != nil || me.Invite != in.ID || me.ID != sess {
+		t.Fatalf("guest-me : %d %s", w.Code, w.Body)
+	}
+	return c.Value, me.CSRF, in.ID
+}
+
+func addAs(h http.Handler, c, csrf, text string, hdr map[string]string) *httptest.ResponseRecorder {
+	b, _ := json.Marshal(map[string]string{"text": text})
+	return gReq{method: "POST", path: "/queue-add", body: string(b), cookie: c, csrf: csrf, hdr: hdr}.do(h)
+}
+
+func itemOf(t *testing.T, w *httptest.ResponseRecorder) QItem {
+	t.Helper()
+	var r struct{ Item QItem }
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &r) != nil {
+		t.Fatalf("ajout : %d %s", w.Code, w.Body)
+	}
+	return r.Item
+}
+
+func TestInviteNameSanitized(t *testing.T) {
+	long := strings.Repeat("é", 30)
+	for in, want := range map[string]string{
+		"": "", "Léa": "Léa", "  O'Neil-Jr_2.0  ": "O'Neil-Jr_2.0",
+		"[Hôte] x":        "Hôte x",
+		"a]\n[Invité b":   "a Invité b",
+		"a\r\n\tb":        "a b",
+		"x\u202Ey\u2066z": "xyz",
+		"x\u200Bw\uFEFF":  "xw",
+		"😀 Bob":           "Bob",
+		"😀":               "",
+		"<b>x</b>":        "bxb",
+		"\x00\x1b[31m":    "31m",
+		long:              strings.Repeat("é", inviteNameMax),
+	} {
+		if got := inviteName(in); got != want {
+			t.Errorf("%q : %q, attendu %q", in, got, want)
+		}
+	}
+	s, _ := newShares(t)
+	_, a, _ := s.CreateInvite(shSess, "dir", "", "[x]\n")
+	_, b, _ := s.CreateInvite(shSess, "dir", "", "😀")
+	if a.label() != "x" || b.label() != "Invité 2" || b.Name != "" {
+		t.Fatalf("libellés : %q %q", a.label(), b.label())
+	}
+}
+
+func TestInviteCap10(t *testing.T) {
+	mux := shareMux(t)
+	var first string
+	for i := range inviteMax {
+		w := post(mux, "/invite-create", `{"id":"`+shSess+`","dir":"proj"}`)
+		var r struct {
+			OK     bool
+			Token  string
+			Invite struct {
+				ID    string
+				Seq   int
+				Label string
+			}
+		}
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &r) != nil || !r.OK || r.Token == "" || r.Invite.Seq != i+1 || !validHandle(r.Invite.ID) {
+			t.Fatalf("invitation %d : %d %s", i+1, w.Code, w.Body)
+		}
+		if i == 0 {
+			first = r.Invite.ID
+		}
+	}
+	w := post(mux, "/invite-create", `{"id":"`+shSess+`","dir":"proj"}`)
+	if w.Code != 409 || !strings.Contains(w.Body.String(), `"ok":false`) || strings.Contains(w.Body.String(), "token") {
+		t.Fatalf("11e : %d %s", w.Code, w.Body)
+	}
+	if sh, _ := shareSt.Get(shSess); len(sh.Invites) != inviteMax {
+		t.Fatalf("%d invitations", len(sh.Invites))
+	}
+	if w := post(mux, "/invite-revoke", `{"id":"`+shSess+`","invite":"`+first+`"}`); w.Code != 200 {
+		t.Fatalf("révocation : %d", w.Code)
+	}
+	_, in, err := shareSt.CreateInvite(shSess, "proj", "", "")
+	if err != nil || in.Seq != inviteMax+1 || in.label() != "Invité 11" {
+		t.Fatalf("après révocation : %+v %v", in, err)
+	}
+}
+
+func TestTwoInvitesIndependentCookiesAndModes(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	ca, csrfA, invA := joinAs(t, h, id1, "-p", "", "Léa")
+	cb, csrfB, invB := joinAs(t, h, id1, "-p", "", "")
+	if invA == invB || ca == cb {
+		t.Fatal("invitations confondues")
+	}
+	for _, c := range []struct{ cookie, inv, label string }{{ca, invA, "Léa"}, {cb, invB, "Invité 2"}} {
+		w := gReq{method: "GET", path: "/guest-me", cookie: c.cookie}.do(h)
+		var me map[string]any
+		json.Unmarshal(w.Body.Bytes(), &me)
+		if me["invite"] != c.inv || me["label"] != c.label || me["mode"] != "rw" || me["id"] != id1 {
+			t.Fatalf("guest-me : %s", w.Body)
+		}
+	}
+	host, _ := queueSt.Add(id1, "host", "", "de l'hôte")
+	a := itemOf(t, addAs(h, ca, csrfA, "de A", nil))
+	b := itemOf(t, addAs(h, cb, csrfB, "de B", nil))
+	if a.Guest != invA || b.Guest != invB {
+		t.Fatalf("auteurs : %+v %+v", a, b)
+	}
+	for _, it := range []string{a.ID, host.ID} {
+		if w := (gReq{method: "POST", path: "/queue-rm", body: `{"item":"` + it + `"}`, cookie: cb, csrf: csrfB}).do(h); w.Code != 403 {
+			t.Fatalf("B retire %s : %d", it, w.Code)
+		}
+	}
+	if w := (gReq{method: "POST", path: "/queue-rm", body: `{"item":"` + a.ID + `"}`, cookie: ca, csrf: csrfB}).do(h); w.Code != 403 {
+		t.Fatalf("csrf de B pour A : %d", w.Code)
+	}
+	if w := (gReq{method: "POST", path: "/queue-rm", body: `{"item":"` + a.ID + `"}`, cookie: ca, csrf: csrfA}).do(h); w.Code != 200 {
+		t.Fatalf("A retire le sien : %d", w.Code)
+	}
+	if err := shareSt.SetInviteMode(id1, invB, "ro"); err != nil {
+		t.Fatal(err)
+	}
+	if w := addAs(h, cb, csrfB, "x", nil); w.Code != 403 {
+		t.Fatalf("B en lecture seule : %d", w.Code)
+	}
+	if w := addAs(h, ca, csrfA, "y", nil); w.Code != 200 {
+		t.Fatalf("A en écriture : %d", w.Code)
+	}
+	w := gReq{method: "GET", path: "/guest-me", cookie: cb}.do(h)
+	if !strings.Contains(w.Body.String(), `"mode":"ro"`) {
+		t.Fatalf("mode de B : %s", w.Body)
+	}
+	if w := (gReq{method: "GET", path: "/conv", cookie: cb}).do(h); w.Code != 200 {
+		t.Fatalf("B lit : %d", w.Code)
+	}
+	var q struct{ Items []map[string]any }
+	w = gReq{method: "GET", path: "/queue", cookie: cb}.do(h)
+	json.Unmarshal(w.Body.Bytes(), &q)
+	labels := map[string]any{}
+	for _, it := range q.Items {
+		labels[it["text"].(string)] = it["label"]
+	}
+	if labels["de B"] != "Invité 2" || labels["y"] != "Léa" || labels["de l'hôte"] != nil {
+		t.Fatalf("libellés de la file : %s", w.Body)
+	}
+}
+
+func TestRegenKillsOnlyThatInvite(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	ca, _, invA := joinAs(t, h, id1, "-p", "", "Léa")
+	cb, _, _ := joinAs(t, h, id1, "-p", "", "")
+	shareSt.SetInviteMode(id1, invA, "ro")
+	tok, err := shareSt.Regen(id1, invA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := gReq{method: "GET", path: "/conv", cookie: ca}.do(h)
+	if k := cookieOf(w, gName); w.Code != 401 || k == nil || k.MaxAge >= 0 {
+		t.Fatalf("ancien cookie de A : %d", w.Code)
+	}
+	if w := (gReq{method: "GET", path: "/conv", cookie: cb}).do(h); w.Code != 200 {
+		t.Fatalf("B : %d", w.Code)
+	}
+	sh, _ := shareSt.Get(id1)
+	in, _ := sh.invite(invA)
+	if in.Mode != "ro" || in.Name != "Léa" || in.CookieHash != "" {
+		t.Fatalf("après régénération : %+v", in)
+	}
+	w = gReq{method: "POST", path: "/invite/main/" + tok}.do(h)
+	if c := cookieOf(w, gName); w.Code != 303 || c == nil {
+		t.Fatalf("nouveau lien : %d", w.Code)
+	}
+	tokC, inC, _ := shareSt.CreateInvite(id1, "-p", "", "")
+	tokC2, _ := shareSt.Regen(id1, inC.ID)
+	if w := (gReq{method: "POST", path: "/invite/main/" + tokC}).do(h); w.Code != 403 {
+		t.Fatalf("ancien jeton : %d", w.Code)
+	}
+	if w := (gReq{method: "POST", path: "/invite/main/" + tokC2}).do(h); w.Code != 303 {
+		t.Fatalf("jeton régénéré : %d", w.Code)
+	}
+	if _, err := shareSt.Regen(id1, "0000000000000000"); !errors.Is(err, errInviteNone) {
+		t.Fatalf("invitation inconnue : %v", err)
+	}
+}
+
+func TestRevokeDropsItsQueueAndKeepsOthers(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	ca, csrfA, invA := joinAs(t, h, id1, "-p", "", "")
+	cb, csrfB, invB := joinAs(t, h, id1, "-p", "", "")
+	host, _ := queueSt.Add(id1, "host", "", "h")
+	itemOf(t, addAs(h, ca, csrfA, "a", nil))
+	b := itemOf(t, addAs(h, cb, csrfB, "b", nil))
+	if err := shareSt.Revoke(id1, invA); err != nil {
+		t.Fatal(err)
+	}
+	if l := queueSt.List(id1); len(l) != 2 || l[0].ID != host.ID || l[1].ID != b.ID {
+		t.Fatalf("file : %+v", l)
+	}
+	if w := (gReq{method: "GET", path: "/conv", cookie: ca}).do(h); w.Code != 401 {
+		t.Fatalf("A révoqué : %d", w.Code)
+	}
+	if w := (gReq{method: "GET", path: "/conv", cookie: cb}).do(h); w.Code != 200 {
+		t.Fatalf("B : %d", w.Code)
+	}
+	if !errors.Is(shareSt.Revoke(id1, invA), errInviteNone) {
+		t.Fatal("double révocation")
+	}
+	if err := shareSt.Revoke(id1, invB); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := shareSt.Get(id1); ok {
+		t.Fatal("partage sans invitation conservé")
+	}
+	if l := queueSt.List(id1); len(l) != 1 || l[0].ID != host.ID {
+		t.Fatalf("file : %+v", l)
+	}
+}
+
+func TestRevokeInMemoryOnWriteFailure(t *testing.T) {
+	d := roDir(t)
+	s, _ := openShares(d)
+	tok, in, _ := s.CreateInvite(shSess, "dir", "", "")
+	c, _, _, _ := s.Redeem(tok)
+	_, other, _ := s.CreateInvite(shSess, "dir", "", "")
+	lock(t, d)
+	if err := s.Revoke(shSess, in.ID); err == nil {
+		t.Fatal("erreur attendue")
+	}
+	if _, _, ok := s.ByCookie(c); ok {
+		t.Fatal("cookie révoqué encore valide en mémoire")
+	}
+	if _, err := s.Regen(shSess, other.ID); err == nil {
+		t.Fatal("régénération sans écriture acceptée")
+	}
+	if _, _, err := s.CreateInvite(shSess, "dir", "", ""); err == nil {
+		t.Fatal("création sans écriture acceptée")
+	}
+	if sh, _ := s.Get(shSess); len(sh.Invites) != 1 || sh.Invites[0].TokenHash != other.TokenHash || sh.Seq != 2 {
+		t.Fatalf("état après échecs : %+v", sh)
+	}
+}
+
+func TestInviteRoQueuedItemsRemoved(t *testing.T) {
+	mux := shareMux(t)
+	oq := queueSt
+	queueSt, _ = openQueue(t.TempDir())
+	t.Cleanup(func() { queueSt = oq })
+	_, a, _ := shareSt.CreateInvite(shSess, "proj", "", "")
+	_, b, _ := shareSt.CreateInvite(shSess, "proj", "", "")
+	s, _ := queueSt.Add(shSess, "guest", a.ID, "en cours")
+	queueSt.MarkSending(shSess, s.ID)
+	queueSt.Add(shSess, "guest", a.ID, "a")
+	kb, _ := queueSt.Add(shSess, "guest", b.ID, "b")
+	kh, _ := queueSt.Add(shSess, "host", "", "h")
+	if w := post(mux, "/invite-mode", `{"id":"`+shSess+`","invite":"`+a.ID+`","mode":"x"}`); w.Code != 400 {
+		t.Fatalf("mode invalide : %d", w.Code)
+	}
+	if w := post(mux, "/invite-mode", `{"id":"`+shSess+`","invite":"`+a.ID+`","mode":"ro"}`); w.Code != 200 {
+		t.Fatalf("mode : %d %s", w.Code, w.Body)
+	}
+	l := queueSt.List(shSess)
+	if len(l) != 3 || l[0].ID != s.ID || l[1].ID != kb.ID || l[2].ID != kh.ID {
+		t.Fatalf("file : %+v", l)
+	}
+	sh, _ := shareSt.Get(shSess)
+	if ia, _ := sh.invite(a.ID); ia.Mode != "ro" {
+		t.Fatal("mode non appliqué")
+	}
+	if ib, _ := sh.invite(b.ID); ib.Mode != "rw" {
+		t.Fatal("mode de B touché")
+	}
+	if w := post(mux, "/invite-mode", `{"id":"`+shSess+`","invite":"0000000000000000","mode":"ro"}`); w.Code != 404 {
+		t.Fatalf("invitation inconnue : %d", w.Code)
+	}
+}
+
+// drainInvites : partage de shSess avec Léa (rw) et une invitation sans nom (rw), sessions ouvertes et au repos.
+func drainInvites(t *testing.T) (*queueStore, *[]string, *shareStore, Invite, Invite) {
+	t.Helper()
+	q, _ := openQueue(t.TempDir())
+	sent, _ := fakeDrainEnv(t, []string{shSess}, []string{shSess}, nil)
+	s, _ := newShares(t)
+	_, a, _ := s.CreateInvite(shSess, "dir", "", "Léa")
+	_, b, _ := s.CreateInvite(shSess, "dir", "", "")
+	shareSt = s
+	return q, sent, s, a, b
+}
+
+func TestDrainLabelPerInvite(t *testing.T) {
+	q, sent, s, a, b := drainInvites(t)
+	q.Add(shSess, "guest", a.ID, "/exit")
+	q.Add(shSess, "guest", b.ID, "/clear")
+	q.Add(shSess, "host", "", "/compact")
+	now := time.Now()
+	for i := range 3 {
+		drainOnce(q, now.Add(time.Duration(i)*5*time.Second))
+	}
+	want := []string{shSess + "|" + followPrefix + "[Invité Léa] /exit", shSess + "|" + followPrefix + "[Invité 2] /clear", shSess + "|/compact"}
+	if strings.Join(*sent, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("envoyés : %q", *sent)
+	}
+	if _, err := q.Add(shSess, "guest", "", "x"); err != errQueueText {
+		t.Fatalf("élément invité sans invitation accepté : %v", err)
+	}
+	// Nom le plus long (24 caractères de 4 octets) et texte à la borne exacte : étiquette et préfixe tiennent dans sendMax.
+	big := strings.Repeat("\U00020000", inviteNameMax)
+	_, c, _ := s.CreateInvite(shSess, "dir", "", big)
+	if c.Name != big || len(guestTag(c)) != guestLabelMax {
+		t.Fatalf("nom long : %q %d/%d", c.Name, len(guestTag(c)), guestLabelMax)
+	}
+	max := sendMax - guestLabelMax - len(followPrefix)
+	if _, err := q.Add(shSess, "guest", c.ID, strings.Repeat("x", max+1)); err != errQueueText {
+		t.Fatalf("un octet de trop : %v", err)
+	}
+	text := strings.Repeat("x", max)
+	q.Add(shSess, "guest", c.ID, text)
+	q.Add(shSess, "host", "", "suite")
+	*sent = nil
+	drainOnce(q, now.Add(time.Minute))
+	got := strings.TrimPrefix((*sent)[0], shSess+"|")
+	if got != followPrefix+guestTag(c)+text || len(got) != sendMax || !utf8.ValidString(got) {
+		t.Fatalf("borne : %d octets", len(got))
+	}
+}
+
+// Une étiquette lue d'un fichier altéré est réassainie : jamais de crochet ni de saut de ligne, jamais plus que guestLabelMax.
+func TestDrainTagResanitized(t *testing.T) {
+	for _, n := range []string{"a]\n/exit", strings.Repeat("\U00020000", 200), "\u202E"} {
+		tag := guestTag(Invite{Seq: 3, Name: n})
+		if len(tag) > guestLabelMax || strings.ContainsAny(tag[1:len(tag)-2], "[]\n") || !strings.HasPrefix(tag, "[Invité ") {
+			t.Fatalf("%q : %q", n, tag)
+		}
+	}
+	if guestTag(Invite{Seq: 3, Name: "\u202E"}) != "[Invité 3] " {
+		t.Fatal("nom vide après assainissement")
+	}
+}
+
+func TestDrainDropsRevokedOrRoInvite(t *testing.T) {
+	for _, c := range []string{"révoquée", "lecture seule", "partage absent", "bascule"} {
+		q, sent, s, a, b := drainInvites(t)
+		q.Add(shSess, "guest", a.ID, "x")
+		switch c {
+		case "révoquée":
+			s.Revoke(shSess, a.ID)
+			q.Add(shSess, "guest", a.ID, "y") // ajouté après la révocation (reprise d'une écriture ratée)
+		case "lecture seule":
+			s.SetInviteMode(shSess, a.ID, "ro")
+		case "partage absent":
+			s.End(shSess)
+			q.Add(shSess, "guest", a.ID, "y")
+		case "bascule":
+			screenFn = func(string) (string, error) { s.SetInviteMode(shSess, a.ID, "ro"); return "", nil }
+		}
+		q.Add(shSess, "guest", b.ID, "de B")
+		for i := range 4 {
+			drainOnce(q, time.Now().Add(time.Duration(i)*20*time.Second))
+		}
+		for _, m := range *sent {
+			if !strings.Contains(m, "de B") {
+				t.Fatalf("%s : envoyé %q", c, m)
+			}
+		}
+		for _, it := range q.List(shSess) {
+			if it.Guest == a.ID {
+				t.Fatalf("%s : élément de A resté %+v", c, it)
+			}
+		}
+		if c != "partage absent" && len(*sent) != 1 {
+			t.Fatalf("%s : B non envoyé %q", c, *sent)
+		}
+	}
+}
+
+func TestGuestRateLimitPerInvite(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	ca, csrfA, _ := joinAs(t, h, id1, "-p", "", "")
+	cb, csrfB, _ := joinAs(t, h, id1, "-p", "", "")
+	for i := range guestAddMax + 1 {
+		want := map[bool]int{true: 429, false: 200}[i == guestAddMax]
+		if w := addAs(h, ca, csrfA, "m", nil); w.Code != want {
+			t.Fatalf("A ajout %d : %d", i+1, w.Code)
+		}
+	}
+	if w := addAs(h, cb, csrfB, "m", nil); w.Code != 200 {
+		t.Fatalf("B limité par A : %d", w.Code)
+	}
+}
+
+func TestSharesOverview(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	oo := shareOpen
+	t.Cleanup(func() { shareOpen = oo })
+	shareOpen = func(id string) bool { return id == id1 }
+	ca, csrfA, invA := joinAs(t, h, id1, "-p", "Titre", "Léa")
+	_, _, invB := joinAs(t, h, id1, "-p", "", "")
+	_, inC, _ := shareSt.CreateInvite(id1, "-p", "", "")
+	joinAs(t, h, gOther, "-q", "", "")
+	shareSt.mu.Lock()
+	sh := shareSt.m[id1]
+	sh.Invites[sh.inv(invB)].LastSeen = time.Now().Add(-time.Minute).Unix()
+	shareSt.mu.Unlock()
+	long := strings.Repeat("é", 250)
+	itemOf(t, addAs(h, ca, csrfA, long, nil))
+	queueSt.Add(id1, "host", "", "de l'hôte")
+	w := gReq{method: "GET", path: "/shares", tokCookie: modeTok}.do(h)
+	var r struct {
+		Shares []struct {
+			ID, Dir, Title, Handle string
+			Open                   bool
+			Invites                []struct {
+				ID, Name, Label, Mode, State string
+				Seq                          int
+				LastSeen                     int64
+				Redeemed                     bool
+				Queue                        []struct {
+					ID, Text, State string
+					At              int64
+				}
+			}
+		}
+	}
+	if w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" || json.Unmarshal(w.Body.Bytes(), &r) != nil || len(r.Shares) != 2 {
+		t.Fatalf("vue : %d %s", w.Code, w.Body)
+	}
+	s := r.Shares[0]
+	if s.ID != id1 {
+		s = r.Shares[1]
+	}
+	if s.Dir != "-p" || s.Title != "Titre" || s.Handle != hID1 || !s.Open || len(s.Invites) != 3 {
+		t.Fatalf("partage : %+v", s)
+	}
+	a, b, c := s.Invites[0], s.Invites[1], s.Invites[2]
+	if a.ID != invA || a.Label != "Léa" || a.Name != "Léa" || a.State != "connected" || !a.Redeemed || a.Mode != "rw" || a.Seq != 1 {
+		t.Fatalf("A : %+v", a)
+	}
+	if len(a.Queue) != 1 || a.Queue[0].Text != strings.Repeat("é", 200) || a.Queue[0].State != "queued" || a.Queue[0].At == 0 {
+		t.Fatalf("file de A : %+v", a.Queue)
+	}
+	if b.ID != invB || b.State != "away" || b.Label != "Invité 2" || len(b.Queue) != 0 {
+		t.Fatalf("B : %+v", b)
+	}
+	if c.ID != inC.ID || c.State != "pending" || c.Redeemed {
+		t.Fatalf("C : %+v", c)
+	}
+	if strings.Contains(w.Body.String(), "de l'hôte") || strings.Contains(w.Body.String(), "Hash") {
+		t.Fatalf("fuite : %s", w.Body)
+	}
+	for _, other := range r.Shares {
+		if other.ID == gOther && other.Open {
+			t.Fatal("open de l'autre session")
+		}
+	}
+	if w := (gReq{method: "GET", path: "/shares", cookie: ca}).do(h); w.Code != 403 || strings.Contains(w.Body.String(), long[:20]) {
+		t.Fatalf("invité : %d", w.Code)
+	}
+	if w := (gReq{method: "GET", path: "/shares"}).do(h); w.Code != 401 {
+		t.Fatalf("anonyme : %d", w.Code)
+	}
+	shareSt = nil
+	if w := (gReq{method: "GET", path: "/shares", tokCookie: modeTok}).do(h); w.Code != 503 {
+		t.Fatalf("magasin absent : %d", w.Code)
+	}
+}
+
+func TestHostRoutesNotInGuestWhitelist(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	c, csrf, inv := joinAs(t, h, id1, "-p", "", "")
+	body := `{"id":"` + id1 + `","dir":"-p","invite":"` + inv + `","mode":"rw"}`
+	for _, rt := range [][2]string{{"POST", "/invite-create"}, {"POST", "/invite-regen"}, {"POST", "/invite-mode"}, {"POST", "/invite-revoke"}, {"POST", "/share-end"}, {"GET", "/shares"}} {
+		if guestRoutes[rt[0]+" "+rt[1]] {
+			t.Errorf("%s %s dans la liste blanche", rt[0], rt[1])
+		}
+		if w := (gReq{method: rt[0], path: rt[1], body: body, cookie: c, csrf: csrf}).do(h); w.Code != 403 {
+			t.Errorf("%s %s invité : %d", rt[0], rt[1], w.Code)
+		}
+	}
+	if sh, _ := shareSt.Get(id1); len(sh.Invites) != 1 || sh.Invites[0].CookieHash == "" {
+		t.Fatalf("partage modifié par l'invité : %+v", sh)
+	}
+	for _, p := range []string{"POST /share-create", "GET /share-info", "POST /share-mode"} {
+		if _, ok := routeRights[p]; ok {
+			t.Errorf("%s encore déclarée", p)
+		}
+	}
+}
+
+func TestOldSharesFileIgnored(t *testing.T) {
+	d := t.TempDir()
+	c := "secret-ancien"
+	old := `{"` + shSess + `":{"session":"` + shSess + `","dir":"dir","mode":"rw","tokenHash":"` + hashSecret("tok") + `","cookieHash":"` + hashSecret(c) + `"},` +
+		`"` + gOther + `":{"session":"` + gOther + `","dir":"-p","seq":1,"invites":[{"id":"0123456789abcdef","seq":1,"mode":"rw","tokenHash":"x"}]},"z":null}`
+	os.WriteFile(filepath.Join(d, "shares.json"), []byte(old), 0o600)
+	s, err := openShares(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.Get(shSess); ok {
+		t.Fatal("ancien partage conservé")
+	}
+	if _, _, ok := s.ByCookie(c); ok {
+		t.Fatal("ancien cookie accepté")
+	}
+	if _, _, _, ok := s.Redeem("tok"); ok {
+		t.Fatal("ancien jeton accepté")
+	}
+	if sh, ok := s.Get(gOther); !ok || len(sh.Invites) != 1 {
+		t.Fatal("partage au nouveau format perdu")
+	}
+	if _, _, err := s.CreateInvite(shSess, "dir", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(d, "shares.json")); strings.Contains(string(b), hashSecret(c)) {
+		t.Fatal("ancienne entrée réécrite")
+	}
+}
+
+func TestInviteHeaderSpoofIgnored(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	ca, csrfA, invA := joinAs(t, h, id1, "-p", "", "")
+	_, _, invB := joinAs(t, h, id1, "-p", "", "")
+	a := itemOf(t, addAs(h, ca, csrfA, "a", map[string]string{authorHeader: "host", inviteHeader: invB}))
+	if a.Author != "guest" || a.Guest != invA {
+		t.Fatalf("invité forgé : %+v", a)
+	}
+	w := gReq{method: "POST", path: "/queue-add", body: `{"id":"` + id1 + `","text":"h"}`, tokCookie: modeTok, hdr: map[string]string{authorHeader: "guest", inviteHeader: invB}}.do(h)
+	if it := itemOf(t, w); it.Author != "host" || it.Guest != "" {
+		t.Fatalf("hôte forgé : %+v", it)
+	}
+}
+
+// Passerelle vers un home enfant : les en-têtes internes du client sont retirés ; l'enfant déduit l'invitation du secret.
+func TestInviteHeaderStrippedAtRelayAndChildDerivesInvite(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	addHomes(t, "perso")
+	hm, _ := homeByName("perso")
+	cs, _ := openShares(hm.Dir)
+	tok, _, _ := cs.CreateInvite(id1, "-p", "", "")
+	sec, _, _, _ := cs.Redeem(tok)
+	var author, invite []string
+	child := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		author, invite = append(author, r.Header.Get(authorHeader)), append(invite, r.Header.Get(inviteHeader))
+		w.Write([]byte(`{"ok":true,"item":{}}`))
+	}))
+	defer child.Close()
+	cu, _ := url.Parse(child.URL)
+	oldStart := homeStart
+	t.Cleanup(func() { homeStart = oldStart; stopHomes() })
+	homeStart = func(h Home) (*homeProc, error) {
+		return &homeProc{dir: h.Dir, proxy: childProxy(cu, "x"), done: make(chan struct{})}, nil
+	}
+	spoof := map[string]string{authorHeader: "guest", inviteHeader: "0123456789abcdef"}
+	addAs(h, "perso."+sec, guestCSRF(sec), "x", spoof)
+	r := httptest.NewRequest("POST", "/queue-add", strings.NewReader(`{"id":"`+id1+`","text":"h"}`))
+	r.Host = testHost
+	r.AddCookie(&http.Cookie{Name: tokenCookie, Value: modeTok})
+	r.AddCookie(&http.Cookie{Name: homeCookie, Value: "perso"})
+	for k, v := range spoof {
+		r.Header.Set(k, v)
+	}
+	h.ServeHTTP(httptest.NewRecorder(), r)
+	if len(author) != 2 || strings.Join(author, "") != "" || strings.Join(invite, "") != "" {
+		t.Fatalf("vu par l'enfant : %q %q", author, invite)
+	}
+
+	// Côté enfant : le secret relayé désigne l'invitation, l'ajout porte son identifiant.
+	hc := guestWeb(t, nil, "")
+	oc := childToken
+	t.Cleanup(func() { childToken = oc })
+	childToken = "ctok"
+	tok2, in2, _ := shareSt.CreateInvite(id1, "-p", "", "Léa")
+	sec2, _, _, _ := shareSt.Redeem(tok2)
+	hdr := map[string]string{childHeader: "ctok", guestHeader: sec2, shareHeader: hID1, csrfHeader: guestCSRF(sec2), inviteHeader: "0123456789abcdef", authorHeader: "host"}
+	w := gReq{method: "POST", path: "/queue-add", body: `{"text":"m"}`, hdr: hdr}.do(hc)
+	if it := itemOf(t, w); it.Author != "guest" || it.Guest != in2.ID {
+		t.Fatalf("enfant : %+v", it)
+	}
+}
+
+func TestInviteRoutes(t *testing.T) {
+	mux := shareMux(t)
+	for _, b := range []string{`{"id":"nope","dir":"proj"}`, `{"id":"` + shSess + `","dir":"proj","invite":"x"}`} {
+		if w := post(mux, "/invite-regen", b); w.Code != 400 {
+			t.Fatalf("%s : %d", b, w.Code)
+		}
+	}
+	if w := post(mux, "/invite-create", `{"id":"`+shSess+`","dir":"absent"}`); w.Code != 404 {
+		t.Fatalf("session absente : %d", w.Code)
+	}
+	if w := post(mux, "/invite-create", `{"id":"`+shSess+`","dir":"proj","name":"`+strings.Repeat("x", 5<<10)+`"}`); w.Code != 400 {
+		t.Fatalf("corps trop gros : %d", w.Code)
+	}
+	w := post(mux, "/invite-create", `{"id":"`+shSess+`","dir":"proj","title":" Ma\tsession ","name":"[Léa]"}`)
+	var r struct {
+		Token  string
+		Invite struct{ ID, Label string }
+	}
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &r) != nil || r.Invite.Label != "Léa" {
+		t.Fatalf("création : %d %s", w.Code, w.Body)
+	}
+	if sh, _ := shareSt.Get(shSess); sh.Title != "Ma session" || sh.Dir != "proj" {
+		t.Fatalf("partage : %+v", sh)
+	}
+	post(mux, "/invite-create", `{"id":"`+shSess+`","dir":"proj"}`)
+	if sh, _ := shareSt.Get(shSess); sh.Title != "Ma session" {
+		t.Fatalf("titre effacé sans titre fourni : %q", sh.Title)
+	}
+	w = post(mux, "/invite-regen", `{"id":"`+shSess+`","invite":"`+r.Invite.ID+`"}`)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"token":"`) || strings.Contains(w.Body.String(), r.Token) {
+		t.Fatalf("régénération : %d %s", w.Code, w.Body)
+	}
+	for _, p := range []string{"/invite-regen", "/invite-revoke"} {
+		if w := post(mux, p, `{"id":"`+gOther+`","invite":"`+r.Invite.ID+`"}`); w.Code != 404 {
+			t.Fatalf("%s autre session : %d", p, w.Code)
+		}
+	}
+	if w := post(mux, "/invite-revoke", `{"id":"`+shSess+`","invite":"`+r.Invite.ID+`"}`); w.Code != 200 {
+		t.Fatalf("révocation : %d", w.Code)
+	}
+	if w := post(mux, "/share-end", `{"id":"`+shSess+`"}`); w.Code != 200 {
+		t.Fatalf("fin : %d", w.Code)
+	}
+	if _, ok := shareSt.Get(shSess); ok {
+		t.Fatal("partage encore là")
+	}
+	shareSt = nil
+	for _, p := range []string{"/invite-create", "/invite-regen", "/invite-mode", "/invite-revoke", "/share-end"} {
+		if w := post(mux, p, `{"id":"`+shSess+`","dir":"proj","invite":"0123456789abcdef","mode":"ro"}`); w.Code != 503 {
+			t.Fatalf("%s : %d", p, w.Code)
+		}
+	}
+}

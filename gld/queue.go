@@ -25,6 +25,7 @@ type QItem struct {
 	ID     string `json:"id"`
 	Text   string `json:"text"`
 	Author string `json:"author"`
+	Guest  string `json:"guest,omitempty"` // invitation de l'auteur, seulement pour author == "guest"
 	State  string `json:"state"`
 	At     int64  `json:"at"`
 	SentAt int64  `json:"sentAt,omitempty"`
@@ -71,8 +72,12 @@ func (q *queueStore) save() error {
 	return rWriteAtomic(q.dir, filepath.Join(q.dir, "queue.json"), b, 0o600)
 }
 
-func (q *queueStore) Add(session, author, text string) (QItem, error) {
-	if checkSendText(text) != nil || strings.ContainsRune(text, 0) || author == "guest" && len(text) > sendMax-len(guestLabel)-len(followPrefix) {
+// Add : un élément d'invité porte toujours son invitation (le vidage en tire l'étiquette) et laisse la place à la plus longue.
+func (q *queueStore) Add(session, author, guest, text string) (QItem, error) {
+	if author != "guest" {
+		guest = ""
+	}
+	if checkSendText(text) != nil || strings.ContainsRune(text, 0) || author == "guest" && (guest == "" || len(text) > sendMax-guestLabelMax-len(followPrefix)) {
 		return QItem{}, errQueueText
 	}
 	q.mu.Lock()
@@ -82,7 +87,7 @@ func (q *queueStore) Add(session, author, text string) (QItem, error) {
 	}
 	var r [8]byte
 	rand.Read(r[:])
-	it := QItem{ID: hex.EncodeToString(r[:]), Text: text, Author: author, State: "queued", At: time.Now().Unix()}
+	it := QItem{ID: hex.EncodeToString(r[:]), Text: text, Author: author, Guest: guest, State: "queued", At: time.Now().Unix()}
 	q.sess[session] = append(q.sess[session], it)
 	if err := q.save(); err != nil {
 		q.sess[session] = q.sess[session][:len(q.sess[session])-1]
@@ -212,15 +217,16 @@ func (q *queueStore) Requeue(session, itemID string) bool {
 	return true
 }
 
-// RemoveByAuthor retire les items d'un auteur dans une session : tous à la fin du partage, seulement ceux encore « queued »
-// au passage en lecture seule (un item « sending » est peut-être déjà parti). Le retrait en mémoire tient même si l'écriture échoue.
-func (q *queueStore) RemoveByAuthor(session, author string, queuedOnly bool) (int, error) {
+// RemoveByGuest retire les items d'invités d'une session, ceux d'une invitation ou tous (invite vide, fin du partage) : tous
+// à la révocation, seulement ceux encore « queued » au passage en lecture seule (un item « sending » est peut-être déjà parti).
+// Le retrait en mémoire tient même si l'écriture échoue.
+func (q *queueStore) RemoveByGuest(session, invite string, queuedOnly bool) (int, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	var keep []QItem
 	n := 0
 	for _, it := range q.sess[session] {
-		if it.Author == author && (!queuedOnly || it.State == "queued") {
+		if it.Author == "guest" && (invite == "" || it.Guest == invite) && (!queuedOnly || it.State == "queued") {
 			n++
 		} else {
 			keep = append(keep, it)

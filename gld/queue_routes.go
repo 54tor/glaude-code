@@ -3,22 +3,34 @@ package main
 // Routes de la file de messages et boucle qui la vide dans les sessions ouvertes (tmux).
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // Identique à FOLLOW_PREFIX de gld/ui/src/lib/queue.ts (un test le vérifie).
 const followPrefix = "[Message en file d'attente : d'autres messages suivent. Ne t'arrête pas pour poser une question : note tes éventuelles questions et pose-les à la fin, une fois tous les messages traités.]\n\n"
 
-// Étiquette obligatoire des messages invités : le texte collé ne commence jamais par « / », « ! » ou « # » (commande Claude Code)
-// et l'auteur reste visible dans la conversation.
-const guestLabel = "[Invité] "
+// Étiquette obligatoire des messages invités, « [Invité <nom ou numéro>] » : le texte collé ne commence jamais par « / », « ! »
+// ou « # » (commande Claude Code) et l'auteur reste visible dans la conversation. guestLabelMax borne la plus longue.
+const guestLabelMax = len("[Invité ") + inviteNameMax*utf8.UTFMax + len("] ")
+
+// guestTag : le nom est réassaini (fichier altéré) ; il ne peut donc ni fermer le crochet ni dépasser guestLabelMax.
+func guestTag(in Invite) string {
+	n := inviteName(in.Name)
+	if n == "" {
+		n = strconv.Itoa(in.Seq)
+	}
+	return "[Invité " + n + "] "
+}
 
 const (
 	queueSettle = 4500 * time.Millisecond
@@ -72,12 +84,13 @@ func drainOnce(q *queueStore, now time.Time) {
 		if !ok {
 			continue
 		}
-		if dropRevokedGuest(q, id, head) || q.MarkSending(id, head.ID) != nil {
+		inv, drop := dropRevokedGuest(q, id, head)
+		if drop || q.MarkSending(id, head.ID) != nil {
 			continue
 		}
 		text := head.Text
 		if head.Author == "guest" {
-			text = guestLabel + text // Add borne le texte invité : étiquette et préfixe tiennent toujours dans sendMax
+			text = guestTag(inv) + text // Add borne le texte invité : étiquette et préfixe tiennent toujours dans sendMax
 		}
 		// Un texte hôte proche de sendMax ne supporte pas le préfixe : il part sans, sinon sendToSession le refuserait indéfiniment.
 		if len(q.List(id)) > 1 && !strings.HasPrefix(text, followPrefix) && len(followPrefix)+len(text) <= sendMax {
@@ -88,8 +101,10 @@ func drainOnce(q *queueStore, now time.Time) {
 		if err == nil && screenAsks(scr) {
 			err = errQueueBusy
 		}
-		if err == nil && dropRevokedGuest(q, id, head) {
-			continue
+		if err == nil {
+			if _, drop := dropRevokedGuest(q, id, head); drop {
+				continue
+			}
 		}
 		if err == nil {
 			err = sendFn(id, text)
@@ -111,20 +126,36 @@ func drainOnce(q *queueStore, now time.Time) {
 	}
 }
 
-// dropRevokedGuest retire un message invité dont le partage a disparu ou passé en lecture seule (reprise après écriture
-// ratée, bascule entre deux contrôles) ; le mode peut changer entre MarkSending et l'envoi, d'où le second appel.
-func dropRevokedGuest(q *queueStore, id string, head QItem) bool {
+// dropRevokedGuest retire un message invité dont le partage ou l'invitation a disparu, ou dont l'invitation est passée en
+// lecture seule (reprise après écriture ratée, bascule entre deux contrôles) ; le mode peut changer entre MarkSending et
+// l'envoi, d'où le second appel. Rend l'invitation de l'auteur, d'où vient l'étiquette.
+func dropRevokedGuest(q *queueStore, id string, head QItem) (Invite, bool) {
 	if head.Author != "guest" {
-		return false
+		return Invite{}, false
 	}
 	if shareSt != nil {
-		if sh, ok := shareSt.Get(id); ok && sh.Mode == "rw" {
-			return false
+		if sh, ok := shareSt.Get(id); ok {
+			if in, ok := sh.invite(head.Guest); ok && head.Guest != "" && in.Mode == "rw" {
+				return in, false
+			}
 		}
 	}
 	q.Done(id, head.ID)
-	journal("file: message invité retiré (partage absent ou en lecture seule)")
-	return true
+	journal("file: message invité retiré (partage ou invitation absent, ou en lecture seule)")
+	return Invite{}, true
+}
+
+// guestLabels : libellés des invitations de la session, calculés à la réponse (jamais stockés dans la file).
+func guestLabels(id string) map[string]string {
+	m := map[string]string{}
+	if shareSt != nil {
+		if sh, ok := shareSt.Get(id); ok {
+			for _, in := range sh.Invites {
+				m[in.ID] = in.label()
+			}
+		}
+	}
+	return m
 }
 
 func toSet(l []string) map[string]bool {
@@ -180,19 +211,31 @@ func routesQueue(mux *http.ServeMux) {
 			fail(w, 503, "srv.queue.indisponible")
 			return
 		}
-		writeJSON(w, 200, map[string]any{"items": queueSt.List(id)})
+		type item struct {
+			QItem
+			Label string `json:"label,omitempty"`
+		}
+		labels, out := guestLabels(id), []item{}
+		for _, it := range queueSt.List(id) {
+			v := item{QItem: it}
+			if it.Author == "guest" {
+				v.Label = cmp.Or(labels[it.Guest], "Invité")
+			}
+			out = append(out, v)
+		}
+		writeJSON(w, 200, map[string]any{"items": out})
 	})
 	mux.HandleFunc("POST /queue-add", func(w http.ResponseWriter, r *http.Request) {
 		req, ok := body(w, r)
 		if !ok {
 			return
 		}
-		// X-Gld-Author est posé par la garde invité (qui écrase toute valeur du client) : le corps ne peut pas choisir l'auteur.
+		// Auteur et invitation sont posés par la garde invité, qui retire toute valeur du client : le corps ne les choisit pas.
 		author := "host"
-		if r.Header.Get("X-Gld-Author") == "guest" {
+		if r.Header.Get(authorHeader) == "guest" {
 			author = "guest"
 		}
-		it, err := queueSt.Add(req.ID, author, req.Text)
+		it, err := queueSt.Add(req.ID, author, r.Header.Get(inviteHeader), req.Text)
 		switch err {
 		case nil:
 			writeJSON(w, 200, map[string]any{"ok": true, "item": it})

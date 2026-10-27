@@ -35,10 +35,14 @@ const (
 	guestHeader      = "X-Gld-Guest"
 	guestHTTPSHeader = "X-Gld-Guest-HTTPS"
 	guestQuietHeader = "X-Gld-Guest-Quiet" // vérification pour /guest-list : l'enfant ne touche pas LastSeen
-	invitePat        = "GET /invite/{home}/{token}"
-	invitePostPat    = "POST /invite/{home}/{token}"
-	guestAddMax      = 10
-	guestBodyMax     = sendMax + 1<<10
+	// Posés par la garde sur la requête invitée qu'elle sert elle-même (guestServe), après avoir retiré toute copie du client.
+	// L'invitation ne prend pas X-Gld-Guest, qui porte déjà le secret relayé à l'enfant.
+	authorHeader  = "X-Gld-Author"
+	inviteHeader  = "X-Gld-Invite"
+	invitePat     = "GET /invite/{home}/{token}"
+	invitePostPat = "POST /invite/{home}/{token}"
+	guestAddMax   = 10
+	guestBodyMax  = sendMax + 1<<10
 )
 
 // guestStatics : l'interface invité se charge par navigation, sans en-tête ; servie si un cookie invité est valide (en mode
@@ -78,13 +82,13 @@ var guestAdds = struct {
 	by map[string]*tryWin
 }{by: map[string]*tryWin{}}
 
-func guestAddTry(session string) bool {
+func guestAddTry(invite string) bool {
 	guestAdds.Lock()
 	defer guestAdds.Unlock()
-	w := guestAdds.by[session]
+	w := guestAdds.by[invite]
 	if w == nil {
 		w = &tryWin{}
-		guestAdds.by[session] = w
+		guestAdds.by[invite] = w
 	}
 	if w.at(time.Now()).n >= guestAddMax {
 		return false
@@ -139,19 +143,20 @@ func (n *noStoreWriter) Flush() {
 
 // Les juges du cookie rendent sure=false quand ils ne peuvent pas répondre (magasin absent, fichier illisible) : seul un
 // « secret invalide » certain efface le cookie, sinon une panne passagère perdrait pour de bon un lien à usage unique.
-func guestShare(sec string, touch bool) (sh Share, ok, sure bool) {
+// Le secret d'un cookie authentifie une seule invitation.
+func guestShare(sec string, touch bool) (sh Share, in Invite, ok, sure bool) {
 	if sec == "" {
-		return Share{}, false, true
+		return Share{}, Invite{}, false, true
 	}
 	if shareSt == nil {
-		return Share{}, false, false
+		return Share{}, Invite{}, false, false
 	}
 	if !touch {
-		sh, ok = shareSt.ByCookieQuiet(sec)
+		sh, in, ok = shareSt.ByCookieQuiet(sec)
 	} else {
-		sh, ok = shareSt.ByCookie(sec)
+		sh, in, ok = shareSt.ByCookie(sec)
 	}
-	return sh, ok, true
+	return sh, in, ok, true
 }
 
 var guestReadHomes = func() ([]byte, error) { return readTrusted(homesFile()) } // les tests simulent une lecture
@@ -172,45 +177,40 @@ func guestHomes() ([]Home, bool) {
 
 // guestKnown : la passerelle ne possède pas les partages d'un home enfant ; elle lit son fichier pour savoir si le cookie
 // mérite le relais (sinon : requête hôte). L'enfant revalide le secret dans sa propre mémoire, qui fait foi.
-func guestKnown(home, sec string) (Share, bool, bool) {
+func guestKnown(home, sec string) (Share, Invite, bool, bool) {
 	if sec == "" {
-		return Share{}, false, true
+		return Share{}, Invite{}, false, true
 	}
 	hs, readable := guestHomes()
 	if !readable {
-		return Share{}, false, false
+		return Share{}, Invite{}, false, false
 	}
 	i := slices.IndexFunc(hs, func(h Home) bool { return h.Name == home })
 	if i < 0 {
-		return Share{}, false, true
+		return Share{}, Invite{}, false, true
 	}
 	st, err := guestOpenShares(hs[i].Dir)
 	if err != nil {
-		return Share{}, false, false
+		return Share{}, Invite{}, false, false
 	}
-	h := hashSecret(sec)
-	for _, sh := range st.m {
-		if hashEq(sh.CookieHash, h) {
-			return *sh, true, true
-		}
-	}
-	return Share{}, false, true
+	sh, in, ok := st.ByCookieQuiet(sec)
+	return sh, in, ok, true
 }
 
 // guestPre : le cookie de la poignée hd, jugé par la passerelle (home enfant : d'après son fichier). Le partage trouvé doit
 // avoir cette poignée : un secret recopié sous le nom d'un autre cookie ne vaut rien.
 // touch : seule une requête invitée gardée met LastSeen à jour.
-func guestPre(hd, val string, touch bool) (home, sec string, sh Share, ok, sure bool) {
+func guestPre(hd, val string, touch bool) (home, sec string, sh Share, in Invite, ok, sure bool) {
 	if !validHandle(hd) {
-		return "", "", Share{}, false, true
+		return "", "", Share{}, Invite{}, false, true
 	}
 	home, sec = guestSplit(val)
 	if home == "" {
-		sh, ok, sure = guestShare(sec, touch)
+		sh, in, ok, sure = guestShare(sec, touch)
 	} else {
-		sh, ok, sure = guestKnown(home, sec)
+		sh, in, ok, sure = guestKnown(home, sec)
 	}
-	return home, sec, sh, ok && shareHandle(sh.Session) == hd, sure
+	return home, sec, sh, in, ok && shareHandle(sh.Session) == hd, sure
 }
 
 func guestSplit(val string) (home, sec string) {
@@ -260,7 +260,7 @@ func guestStatic(mux *http.ServeMux, w http.ResponseWriter, r *http.Request) (se
 	}
 	page := pat == "GET /guest" || pat == "GET /guest/{handle}"
 	judge := func(hd string, c *http.Cookie) bool {
-		_, _, _, ok, sure := guestPre(hd, c.Value, false)
+		_, _, _, _, ok, sure := guestPre(hd, c.Value, false)
 		if !ok && sure && page {
 			guestClear(w, r, c.Name)
 			cleared = true
@@ -307,6 +307,11 @@ func guestCSRFOK(r *http.Request, sec string) bool {
 func guestGate(mux *http.ServeMux, next http.Handler) http.Handler {
 	cop := http.NewCrossOriginProtection()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if len(r.Header.Values(authorHeader)) > 0 || len(r.Header.Values(inviteHeader)) > 0 {
+			r = r.Clone(r.Context())
+			r.Header.Del(authorHeader)
+			r.Header.Del(inviteHeader)
+		}
 		_, pat := mux.Handler(r)
 		if pat == invitePat || pat == invitePostPat {
 			cop.Handler(http.HandlerFunc(guestInvite)).ServeHTTP(w, r)
@@ -319,7 +324,7 @@ func guestGate(mux *http.ServeMux, next http.Handler) http.Handler {
 				return
 			}
 			// La passerelle n'a pas jugé ce client comme hôte : un secret refusé ici ne retombe jamais sur l'hôte.
-			sh, ok, sure := guestShare(sec, r.Header.Get(guestQuietHeader) != "1")
+			sh, in, ok, sure := guestShare(sec, r.Header.Get(guestQuietHeader) != "1")
 			if !sure { // pas un refus du secret : la passerelle ne doit pas effacer le cookie
 				guestDeny(w, 503, "srv.share.indisponible")
 				return
@@ -329,7 +334,7 @@ func guestGate(mux *http.ServeMux, next http.Handler) http.Handler {
 				guestDeny(w, 403, "srv.share_guest.refuse")
 				return
 			}
-			cop.Handler(guestServe(mux, sh, sec, hd)).ServeHTTP(w, r)
+			cop.Handler(guestServe(mux, sh, in, sec, hd)).ServeHTTP(w, r)
 			return
 		}
 		if pat == "GET /guest-list" {
@@ -359,7 +364,7 @@ func guestGate(mux *http.ServeMux, next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		home, sec, sh, ok, sure := guestPre(hd, c.Value, true)
+		home, sec, sh, in, ok, sure := guestPre(hd, c.Value, true)
 		if ok {
 			if fromQuery { // la suite (garde de l'enfant comprise) voit la requête comme si l'en-tête avait été envoyé
 				r = r.Clone(r.Context())
@@ -369,7 +374,7 @@ func guestGate(mux *http.ServeMux, next http.Handler) http.Handler {
 				r.Header.Set(shareHeader, hd)
 			}
 			if home == "" {
-				cop.Handler(guestServe(mux, sh, sec, hd)).ServeHTTP(w, r)
+				cop.Handler(guestServe(mux, sh, in, sec, hd)).ServeHTTP(w, r)
 			} else {
 				cop.Handler(guestRelay(mux, home, sec, hd)).ServeHTTP(w, r)
 			}
@@ -407,7 +412,7 @@ func guestRelay(mux *http.ServeMux, home, sec, hd string) http.Handler {
 	})
 }
 
-func guestServe(mux *http.ServeMux, sh Share, sec, hd string) http.Handler {
+func guestServe(mux *http.ServeMux, sh Share, in Invite, sec, hd string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		pat := guestPattern(mux, r)
 		if pat == "" || !guestCSRFOK(r, sec) {
@@ -420,7 +425,8 @@ func guestServe(mux *http.ServeMux, sh Share, sec, hd string) http.Handler {
 		}
 		if pat == "GET /guest-me" {
 			w.Header().Set("Cache-Control", "no-store")
-			writeJSON(w, 200, map[string]any{"id": sh.Session, "dir": sh.Dir, "mode": sh.Mode, "csrf": guestCSRF(sec), "handle": hd, "title": sh.Title})
+			writeJSON(w, 200, map[string]any{"id": sh.Session, "dir": sh.Dir, "mode": in.Mode, "csrf": guestCSRF(sec), "handle": hd, "title": sh.Title,
+				"invite": in.ID, "label": in.label()})
 			return
 		}
 		r2 := r.Clone(r.Context())
@@ -428,12 +434,13 @@ func guestServe(mux *http.ServeMux, sh Share, sec, hd string) http.Handler {
 		q.Set("id", sh.Session)
 		q.Set("dir", sh.Dir)
 		r2.URL.RawQuery = q.Encode()
-		r2.Header.Set("X-Gld-Author", "guest")
+		r2.Header.Set(authorHeader, "guest")
+		r2.Header.Set(inviteHeader, in.ID)
 		if r.Method == http.MethodPost {
 			// Corps reconstruit : seuls item et texte viennent du client, id choisi par le partage.
-			var in struct{ Item, Text string }
+			var body struct{ Item, Text string }
 			b, err := io.ReadAll(io.LimitReader(r.Body, guestBodyMax+1))
-			if err != nil || len(b) > guestBodyMax || json.Unmarshal(b, &in) != nil {
+			if err != nil || len(b) > guestBodyMax || json.Unmarshal(b, &body) != nil {
 				guestDeny(w, 400, "srv.http_util.requeteInvalide")
 				return
 			}
@@ -443,24 +450,24 @@ func guestServe(mux *http.ServeMux, sh Share, sec, hd string) http.Handler {
 			}
 			switch pat {
 			case "POST /queue-add":
-				if sh.Mode != "rw" {
+				if in.Mode != "rw" {
 					guestDeny(w, 403, "srv.share_guest.lectureSeule")
 					return
 				}
-				if !guestAddTry(sh.Session) {
+				if !guestAddTry(in.ID) {
 					w.Header().Set("Retry-After", "60")
 					guestDeny(w, 429, "srv.share_guest.tropDeMessages")
 					return
 				}
 			case "POST /queue-rm":
 				for _, it := range queueSt.List(sh.Session) {
-					if it.ID == in.Item && it.Author != "guest" {
+					if it.ID == body.Item && (it.Author != "guest" || it.Guest != in.ID) {
 						guestDeny(w, 403, "srv.share_guest.refuse")
 						return
 					}
 				}
 			}
-			nb, _ := json.Marshal(map[string]string{"id": sh.Session, "item": in.Item, "text": in.Text})
+			nb, _ := json.Marshal(map[string]string{"id": sh.Session, "item": body.Item, "text": body.Text})
 			r2.Body, r2.ContentLength = io.NopCloser(bytes.NewReader(nb)), int64(len(nb))
 		}
 		mux.ServeHTTP(&noStoreWriter{ResponseWriter: w}, r2)
@@ -547,7 +554,7 @@ func guestInvite(w http.ResponseWriter, r *http.Request) {
 		refused(403, "srv.share_guest.lienInvalide")
 		return
 	}
-	sec, sh, ok := shareSt.Redeem(tok)
+	sec, sh, _, ok := shareSt.Redeem(tok)
 	if !ok {
 		refused(403, "srv.share_guest.lienInvalide")
 		return
@@ -594,14 +601,14 @@ func guestList(w http.ResponseWriter, r *http.Request) {
 	out := []guestItem{}
 	for _, c := range guestCookies(r) {
 		hd := strings.TrimPrefix(c.Name, guestCookiePrefix)
-		home, sec, sh, ok, sure := guestPre(hd, c.Value, false)
+		home, sec, sh, in, ok, sure := guestPre(hd, c.Value, false)
 		if !ok {
 			if sure {
 				guestClear(w, r, c.Name)
 			}
 			continue
 		}
-		it := guestItem{Handle: hd, Title: sh.Title, Mode: sh.Mode}
+		it := guestItem{Handle: hd, Title: sh.Title, Mode: in.Mode}
 		if home != "" {
 			var st int
 			if it, st = guestChildMe(r, home, sec, hd); st == http.StatusForbidden {

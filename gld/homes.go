@@ -251,6 +251,8 @@ func childProxy(target *url.URL, token string) *httputil.ReverseProxy {
 				r.Out.Header.Set(userHeader, principalName(g))
 			}
 			r.Out.Header.Del(guestHeader)
+			r.Out.Header.Del(authorHeader)
+			r.Out.Header.Del(inviteHeader)
 			r.Out.Header.Del(guestHTTPSHeader)
 			r.Out.Header.Del(guestQuietHeader)
 			if sec, _ := r.In.Context().Value(guestRelayKey{}).(string); sec != "" {

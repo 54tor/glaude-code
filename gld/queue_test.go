@@ -20,11 +20,11 @@ func TestQueueAddListRemove(t *testing.T) {
 	if l := q.List("s"); l == nil || len(l) != 0 {
 		t.Fatalf("List vide = %#v", l)
 	}
-	a, err := q.Add("s", "host", "un")
+	a, err := q.Add("s", "host", "", "un")
 	if err != nil || a.ID == "" || a.State != "queued" || a.At == 0 {
 		t.Fatalf("Add = %+v %v", a, err)
 	}
-	b, _ := q.Add("s", "guest", "deux")
+	b, _ := q.Add("s", "guest", gInv, "deux")
 	if l := q.List("s"); len(l) != 2 || l[0].ID != a.ID || l[1].ID != b.ID {
 		t.Fatalf("List = %+v", l)
 	}
@@ -49,16 +49,16 @@ func TestQueueAddListRemove(t *testing.T) {
 func TestQueueLimits(t *testing.T) {
 	q, _ := openQueue(t.TempDir())
 	for i := 0; i < 50; i++ {
-		if _, err := q.Add("s", "host", "m"); err != nil {
+		if _, err := q.Add("s", "host", "", "m"); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := q.Add("s", "host", "m"); !errors.Is(err, errQueueFull) {
+	if _, err := q.Add("s", "host", "", "m"); !errors.Is(err, errQueueFull) {
 		t.Fatalf("51e = %v", err)
 	}
 	q2, _ := openQueue(t.TempDir())
 	for _, txt := range []string{strings.Repeat("x", sendMax+1), "\x00", "a\xffb"} {
-		if _, err := q2.Add("s", "host", txt); !errors.Is(err, errQueueText) {
+		if _, err := q2.Add("s", "host", "", txt); !errors.Is(err, errQueueText) {
 			t.Errorf("%q : %v", txt, err)
 		}
 	}
@@ -70,8 +70,8 @@ func TestQueueLimits(t *testing.T) {
 func TestQueueRestartMarksUncertain(t *testing.T) {
 	dir := t.TempDir()
 	q, _ := openQueue(dir)
-	a, _ := q.Add("s", "host", "un")
-	q.Add("s", "host", "deux")
+	a, _ := q.Add("s", "host", "", "un")
+	q.Add("s", "host", "", "deux")
 	if err := q.MarkSending("s", a.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestQueueRestartMarksUncertain(t *testing.T) {
 func TestQueueRetry(t *testing.T) {
 	dir := t.TempDir()
 	q, _ := openQueue(dir)
-	a, _ := q.Add("s", "host", "un")
+	a, _ := q.Add("s", "host", "", "un")
 	if q.Retry("s", a.ID) {
 		t.Fatal("Retry sur queued")
 	}
@@ -114,8 +114,8 @@ func TestQueueRetry(t *testing.T) {
 
 func TestQueueMarkSendingCAS(t *testing.T) {
 	q, _ := openQueue(t.TempDir())
-	a, _ := q.Add("s", "host", "un")
-	b, _ := q.Add("s", "host", "deux")
+	a, _ := q.Add("s", "host", "", "un")
+	b, _ := q.Add("s", "host", "", "deux")
 	if err := q.MarkSending("s", a.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestQueueMarkSendingRollsBackOnWriteFailure(t *testing.T) {
 	}
 	dir := t.TempDir()
 	q, _ := openQueue(dir)
-	a, _ := q.Add("s", "host", "un")
+	a, _ := q.Add("s", "host", "", "un")
 	os.Chmod(dir, 0o500)
 	t.Cleanup(func() { os.Chmod(dir, 0o700) })
 	if err := q.MarkSending("s", a.ID); err == nil || errors.Is(err, errQueueGone) {
@@ -150,12 +150,15 @@ func TestQueueMarkSendingRollsBackOnWriteFailure(t *testing.T) {
 	}
 }
 
+// gInv : l'invitation des partages posés par fakeDrainEnv.
+const gInv = "00000000000000aa"
+
 func fakeDrainEnv(t *testing.T, open, idle, asking []string) (*[]string, *error) {
 	t.Helper()
 	oSend, oOpen, oAsk, oWait, oScreen, oShare := sendFn, openFn, askingFn, waiting, screenFn, shareSt
 	shareSt = &shareStore{m: map[string]*Share{}}
 	for _, id := range open {
-		shareSt.m[id] = &Share{Session: id, Mode: "rw"}
+		shareSt.m[id] = &Share{Session: id, Seq: 1, Invites: []Invite{{ID: gInv, Seq: 1, Mode: "rw"}}}
 	}
 	var sent []string
 	var fail error
@@ -182,13 +185,13 @@ func fakeDrainEnv(t *testing.T, open, idle, asking []string) (*[]string, *error)
 func TestDrainSendsHeadWhenIdle(t *testing.T) {
 	q, _ := openQueue(t.TempDir())
 	sent, _ := fakeDrainEnv(t, []string{"s"}, []string{"s"}, nil)
-	q.Add("s", "host", "un")
+	q.Add("s", "host", "", "un")
 	drainOnce(q, time.Now())
 	if len(*sent) != 1 || (*sent)[0] != "s|un" || len(q.List("s")) != 0 {
 		t.Fatalf("sent=%v list=%v", *sent, q.List("s"))
 	}
-	q.Add("s", "host", "a")
-	q.Add("s", "host", "b")
+	q.Add("s", "host", "", "a")
+	q.Add("s", "host", "", "b")
 	drainOnce(q, time.Now()) // apaisement non écoulé
 	if len(*sent) != 1 {
 		t.Fatalf("envoi pendant l'apaisement : %v", *sent)
@@ -205,7 +208,7 @@ func TestDrainWaitsWhenBusyAsking(t *testing.T) {
 	} {
 		q, _ := openQueue(t.TempDir())
 		sent, _ := fakeDrainEnv(t, env[0], env[1], env[2])
-		q.Add("s", "host", "x")
+		q.Add("s", "host", "", "x")
 		drainOnce(q, time.Now())
 		if len(*sent) != 0 || len(q.List("s")) != 1 {
 			t.Fatalf("%s : envoi %v", name, *sent)
@@ -213,7 +216,7 @@ func TestDrainWaitsWhenBusyAsking(t *testing.T) {
 	}
 	q, _ := openQueue(t.TempDir())
 	sent, _ := fakeDrainEnv(t, []string{"s"}, []string{"s"}, nil)
-	q.Add("s", "host", "x")
+	q.Add("s", "host", "", "x")
 	markSent("s")
 	drainOnce(q, time.Now())
 	if len(*sent) != 0 {
@@ -225,7 +228,7 @@ func TestDrainFailureKeepsItem(t *testing.T) {
 	q, _ := openQueue(t.TempDir())
 	_, fail := fakeDrainEnv(t, []string{"s"}, []string{"s"}, nil)
 	*fail = errors.New("tmux")
-	q.Add("s", "host", "x")
+	q.Add("s", "host", "", "x")
 	now := time.Now()
 	drainOnce(q, now)
 	if l := q.List("s"); len(l) != 1 || l[0].State != "queued" {
@@ -249,7 +252,7 @@ func TestDrainSkipsWhenMarkSendingFails(t *testing.T) {
 	dir := t.TempDir()
 	q, _ := openQueue(dir)
 	sent, _ := fakeDrainEnv(t, []string{"s"}, []string{"s"}, nil)
-	q.Add("s", "host", "x")
+	q.Add("s", "host", "", "x")
 	os.Chmod(dir, 0o500)
 	t.Cleanup(func() { os.Chmod(dir, 0o700) })
 	drainOnce(q, time.Now())
@@ -265,8 +268,8 @@ func TestDrainOmitsPrefixWhenTooLong(t *testing.T) {
 	q, _ := openQueue(t.TempDir())
 	sent, _ := fakeDrainEnv(t, []string{"s"}, []string{"s"}, nil)
 	big := strings.Repeat("x", sendMax)
-	q.Add("s", "host", big)
-	q.Add("s", "host", "suite")
+	q.Add("s", "host", "", big)
+	q.Add("s", "host", "", "suite")
 	drainOnce(q, time.Now())
 	if len(*sent) != 1 || (*sent)[0] != "s|"+big || len(q.List("s")) != 1 {
 		t.Fatalf("sent=%d list=%d", len(*sent), len(q.List("s")))
@@ -275,7 +278,7 @@ func TestDrainOmitsPrefixWhenTooLong(t *testing.T) {
 
 func TestQueueRequeue(t *testing.T) {
 	q, _ := openQueue(t.TempDir())
-	it, _ := q.Add("s", "host", "x")
+	it, _ := q.Add("s", "host", "", "x")
 	if q.Requeue("s", it.ID) {
 		t.Fatal("Requeue d'un item queued")
 	}
@@ -314,7 +317,7 @@ func TestQueueAddHandlerRejectsOversize(t *testing.T) {
 	if w := post(mux, "/queue-add", string(big)); w.Code != 400 || len(queueSt.List(qid)) != 0 {
 		t.Fatalf("code=%d", w.Code)
 	}
-	if w := post(mux, "/queue-add", `{"id":"`+qid+`","text":"ok"}`, "X-Gld-Author", "guest"); w.Code != 200 || queueSt.List(qid)[0].Author != "guest" {
+	if w := post(mux, "/queue-add", `{"id":"`+qid+`","text":"ok"}`, authorHeader, "guest", inviteHeader, gInv); w.Code != 200 || queueSt.List(qid)[0].Guest != gInv {
 		t.Fatalf("code=%d", w.Code)
 	}
 	post(mux, "/queue-add", `{"id":"`+qid+`","text":"ok2","author":"guest"}`)
@@ -334,7 +337,7 @@ func TestSessionLiveHasPending(t *testing.T) {
 	if st := sessionLive("", qid); st.Pending == nil || len(st.Pending) != 0 {
 		t.Fatalf("pending vide = %#v", st.Pending)
 	}
-	queueSt.Add(qid, "host", "x")
+	queueSt.Add(qid, "host", "", "x")
 	if st := sessionLive("", qid); len(st.Pending) != 1 {
 		t.Fatalf("pending = %+v", st.Pending)
 	}
@@ -350,13 +353,17 @@ func TestFollowPrefixMatchesUI(t *testing.T) {
 	}
 }
 
-func TestQueueRemoveByAuthor(t *testing.T) {
+func TestQueueRemoveByGuest(t *testing.T) {
 	dir := t.TempDir()
 	q, _ := openQueue(dir)
-	q.Add("s", "guest", "a")
-	q.Add("s", "host", "b")
-	q.Add("t", "guest", "c")
-	if n, err := q.RemoveByAuthor("s", "guest", false); n != 1 || err != nil {
+	q.Add("s", "guest", gInv, "a")
+	q.Add("s", "guest", "00000000000000bb", "b2")
+	q.Add("s", "host", "", "b")
+	q.Add("t", "guest", gInv, "c")
+	if n, err := q.RemoveByGuest("s", gInv, false); n != 1 || err != nil {
+		t.Fatalf("retirés : %d", n)
+	}
+	if n, err := q.RemoveByGuest("s", "", false); n != 1 || err != nil {
 		t.Fatalf("retirés : %d", n)
 	}
 	if l := q.List("s"); len(l) != 1 || l[0].Author != "host" {
@@ -373,7 +380,7 @@ func TestQueueRemoveByAuthor(t *testing.T) {
 
 func TestQueueRemoveRefusesSending(t *testing.T) {
 	q, _ := openQueue(t.TempDir())
-	a, _ := q.Add("s", "host", "un")
+	a, _ := q.Add("s", "host", "", "un")
 	if err := q.MarkSending("s", a.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -395,16 +402,16 @@ func TestQueueRemoveRefusesSending(t *testing.T) {
 func TestDrainGuestLabel(t *testing.T) {
 	q, _ := openQueue(t.TempDir())
 	sent, _ := fakeDrainEnv(t, []string{"s"}, []string{"s"}, nil)
-	q.Add("s", "guest", "/exit")
+	q.Add("s", "guest", gInv, "/exit")
 	drainOnce(q, time.Now())
-	if len(*sent) != 1 || (*sent)[0] != "s|"+guestLabel+"/exit" {
+	if len(*sent) != 1 || (*sent)[0] != "s|[Invité 1] /exit" {
 		t.Fatalf("sent=%q", *sent)
 	}
-	q.Add("s", "guest", "/clear")
-	q.Add("s", "host", "/compact")
+	q.Add("s", "guest", gInv, "/clear")
+	q.Add("s", "host", "", "/compact")
 	drainOnce(q, time.Now().Add(5*time.Second))
 	drainOnce(q, time.Now().Add(10*time.Second))
-	if len(*sent) != 3 || (*sent)[1] != "s|"+followPrefix+guestLabel+"/clear" || (*sent)[2] != "s|/compact" {
+	if len(*sent) != 3 || (*sent)[1] != "s|"+followPrefix+"[Invité 1] /clear" || (*sent)[2] != "s|/compact" {
 		t.Fatalf("sent=%q", *sent)
 	}
 }
@@ -412,20 +419,20 @@ func TestDrainGuestLabel(t *testing.T) {
 func TestQueueGuestTextLimit(t *testing.T) {
 	q, _ := openQueue(t.TempDir())
 	sent, _ := fakeDrainEnv(t, []string{"s"}, []string{"s"}, nil)
-	max := sendMax - len(guestLabel) - len(followPrefix)
-	if _, err := q.Add("s", "guest", strings.Repeat("x", max+1)); err != errQueueText {
+	max := sendMax - guestLabelMax - len(followPrefix)
+	if _, err := q.Add("s", "guest", gInv, strings.Repeat("x", max+1)); err != errQueueText {
 		t.Fatalf("un octet de trop accepté : %v", err)
 	}
 	big := strings.Repeat("x", max)
-	if _, err := q.Add("s", "guest", big); err != nil {
+	if _, err := q.Add("s", "guest", gInv, big); err != nil {
 		t.Fatal(err)
 	}
-	q.Add("s", "host", "suite")
+	q.Add("s", "host", "", "suite")
 	drainOnce(q, time.Now())
-	if len(*sent) != 1 || (*sent)[0] != "s|"+followPrefix+guestLabel+big || len((*sent)[0])-2 > sendMax {
+	if len(*sent) != 1 || (*sent)[0] != "s|"+followPrefix+"[Invité 1] "+big || len((*sent)[0])-2 > sendMax {
 		t.Fatalf("envoi = %d octets", len((*sent)[0]))
 	}
-	if _, err := q.Add("s", "host", strings.Repeat("x", sendMax)); err != nil {
+	if _, err := q.Add("s", "host", "", strings.Repeat("x", sendMax)); err != nil {
 		t.Fatal("hôte limité comme un invité")
 	}
 }
@@ -439,7 +446,7 @@ func TestDrainFreshScreenCheck(t *testing.T) {
 		q, _ := openQueue(t.TempDir())
 		sent, _ := fakeDrainEnv(t, []string{"s"}, []string{"s"}, nil)
 		screenFn = func(string) (string, error) { return scr.text, scr.err }
-		q.Add("s", "guest", "oui")
+		q.Add("s", "guest", gInv, "oui")
 		now := time.Now()
 		drainOnce(q, now)
 		if len(*sent) != 0 || q.List("s")[0].State != "queued" {
@@ -465,7 +472,7 @@ func TestQueueOpenNullFile(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := q.Add("s", "host", "x"); err != nil || len(q.List("s")) != 1 {
+		if _, err := q.Add("s", "host", "", "x"); err != nil || len(q.List("s")) != 1 {
 			t.Fatalf("%s : %v", body, err)
 		}
 	}
@@ -480,12 +487,7 @@ func drainShareEnv(t *testing.T, mode string) *shareStore {
 		return nil
 	}
 	s, _ := newShares(t)
-	if _, err := s.Create(shSess, "dir", ""); err != nil {
-		t.Fatal(err)
-	}
-	if mode != "rw" {
-		s.SetMode(shSess, mode)
-	}
+	s.m[shSess] = &Share{Session: shSess, Seq: 1, Invites: []Invite{{ID: gInv, Seq: 1, Mode: mode}}}
 	shareSt = s
 	return s
 }
@@ -494,7 +496,7 @@ func TestDrainDropsGuestItemWhenShareReadOnly(t *testing.T) {
 	q, _ := openQueue(t.TempDir())
 	sent, _ := fakeDrainEnv(t, []string{shSess}, []string{shSess}, nil)
 	drainShareEnv(t, "ro")
-	q.Add(shSess, "guest", "x")
+	q.Add(shSess, "guest", gInv, "x")
 	drainOnce(q, time.Now())
 	if len(*sent) != 0 || len(q.List(shSess)) != 0 {
 		t.Fatalf("sent=%v list=%v", *sent, q.List(shSess))
@@ -511,7 +513,7 @@ func TestDrainDropsGuestItemWhenShareMissing(t *testing.T) {
 		} else {
 			drainShareEnv(t, "")
 		}
-		q.Add(shSess, "guest", "x")
+		q.Add(shSess, "guest", gInv, "x")
 		drainOnce(q, time.Now())
 		if len(*sent) != 0 || len(q.List(shSess)) != 0 {
 			t.Fatalf("%q sent=%v list=%v", mode, *sent, q.List(shSess))
@@ -523,9 +525,9 @@ func TestDrainGuestItemSentWhenShareRw(t *testing.T) {
 	q, _ := openQueue(t.TempDir())
 	sent, _ := fakeDrainEnv(t, []string{shSess}, []string{shSess}, nil)
 	drainShareEnv(t, "rw")
-	q.Add(shSess, "guest", "x")
+	q.Add(shSess, "guest", gInv, "x")
 	drainOnce(q, time.Now())
-	if len(*sent) != 1 || (*sent)[0] != shSess+"|"+guestLabel+"x" {
+	if len(*sent) != 1 || (*sent)[0] != shSess+"|[Invité 1] x" {
 		t.Fatalf("sent=%v", *sent)
 	}
 }
@@ -535,7 +537,7 @@ func TestDrainHostItemUnaffectedByShareMode(t *testing.T) {
 		q, _ := openQueue(t.TempDir())
 		sent, _ := fakeDrainEnv(t, []string{shSess}, []string{shSess}, nil)
 		drainShareEnv(t, mode)
-		q.Add(shSess, "host", "x")
+		q.Add(shSess, "host", "", "x")
 		drainOnce(q, time.Now())
 		if len(*sent) != 1 || (*sent)[0] != shSess+"|x" {
 			t.Fatalf("%q sent=%v", mode, *sent)
@@ -547,8 +549,8 @@ func TestDrainDropsGuestItemWhenModeFlipsBeforeSend(t *testing.T) {
 	q, _ := openQueue(t.TempDir())
 	sent, _ := fakeDrainEnv(t, []string{shSess}, []string{shSess}, nil)
 	s := drainShareEnv(t, "rw")
-	screenFn = func(string) (string, error) { s.SetMode(shSess, "ro"); return "", nil }
-	q.Add(shSess, "guest", "x")
+	screenFn = func(string) (string, error) { s.SetInviteMode(shSess, gInv, "ro"); return "", nil }
+	q.Add(shSess, "guest", gInv, "x")
 	drainOnce(q, time.Now())
 	if len(*sent) != 0 || len(q.List(shSess)) != 0 {
 		t.Fatalf("sent=%v list=%v", *sent, q.List(shSess))

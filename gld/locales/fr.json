@@ -321,6 +321,8 @@
   "srv.share.indisponible": "Impossible d'ouvrir les partages",
   "srv.share.sessionIntrouvable": "Session introuvable",
   "srv.share.introuvable": "Aucun partage pour cette session",
+  "srv.share.invitationIntrouvable": "Invitation introuvable",
+  "srv.share.tropDInvitations": "Dix invitations au plus par session : révoquez-en une avant d'en créer une autre",
   "srv.share_guest.lectureSeule": "Le partage est en lecture seule",
   "srv.share_guest.lienInvalide": "Ce lien d'invitation n'est plus valable. Demandez-en un nouveau à la personne qui vous l'a envoyé.",
   "srv.share_guest.refuse": "Accès refusé à l'invité",
