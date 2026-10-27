@@ -30,6 +30,8 @@ type fakeIO struct {
 	closed   []string
 	panesErr error
 	unknown  bool
+	leadLive bool
+	order    []string
 	busy     int32
 	overlap  bool
 }
@@ -37,9 +39,15 @@ type fakeIO struct {
 func (f *fakeIO) Panes() (map[string]string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.order = append(f.order, "panes")
 	return f.panes, f.panesErr
 }
-func (f *fakeIO) Known() bool    { f.mu.Lock(); defer f.mu.Unlock(); return !f.unknown }
+func (f *fakeIO) LeadState(string) (bool, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.order = append(f.order, "lead")
+	return f.leadLive, !f.unknown
+}
 func (f *fakeIO) Idle() []string { f.mu.Lock(); defer f.mu.Unlock(); return f.idle }
 func (f *fakeIO) Capture(p string) (string, error) {
 	f.mu.Lock()
@@ -559,6 +567,12 @@ func seedClose(t *testing.T) (string, *fakeIO) {
 	setActive(t, root, "hugo", false)
 	teamSend(root, trName, "max", "hugo", "direct")
 	teamView(root, trName)
+	teamRunMu.Lock()
+	teamQueue[trName] = []queuedMsg{{}}
+	teamRunMu.Unlock()
+	if len(teamLog[trName]) == 0 {
+		t.Fatal("log non amorcé")
+	}
 	f.panes = map[string]string{}
 	return root, f
 }
@@ -568,15 +582,27 @@ func stateIntact(t *testing.T, root string, f *fakeIO) {
 	if d, _ := journalRead(root, trName); len(d) == 0 {
 		t.Fatal("journal supprimé")
 	}
-	if len(teamQueue[trName]) == 0 && len(teamLog[trName]) == 0 {
-		t.Fatal("log et file vidés")
+	if len(teamQueue[trName]) == 0 || len(teamLog[trName]) == 0 {
+		t.Fatal("log ou file vidés")
 	}
 	if len(f.closed) != 0 {
 		t.Fatalf("Close appelé : %v", f.closed)
 	}
 }
 
-func TestCloseAbortsWhenSessionStateUnknown(t *testing.T) {
+func stateCleaned(t *testing.T, root string, f *fakeIO) {
+	t.Helper()
+	if d, _ := journalRead(root, trName); len(d) != 0 || len(f.closed) != 0 {
+		t.Fatal("nettoyage attendu")
+	}
+	if len(teamQueue[trName]) != 0 || len(teamLog[trName]) != 0 {
+		t.Fatal("file ou log non vidés")
+	}
+}
+
+var noServer = terr("srv.sendkeys.aucuneSessionNA")
+
+func TestCloseAbortsWhenStateUnknown(t *testing.T) {
 	root, f := seedClose(t)
 	f.unknown = true
 	if err := teamClose(root, trName); !isMsg(err, "srv.teams_run.etatInconnu") {
@@ -585,27 +611,37 @@ func TestCloseAbortsWhenSessionStateUnknown(t *testing.T) {
 	stateIntact(t, root, f)
 }
 
-func TestCloseFinishedTeamStillCleansWhenStateKnown(t *testing.T) {
+func TestCloseAbortsWhenLeadAliveButNoPane(t *testing.T) {
 	root, f := seedClose(t)
-	if err := teamClose(root, trName); err != nil {
-		t.Fatal(err)
+	f.leadLive = true
+	if err := teamClose(root, trName); !isMsg(err, "srv.teams_run.chefOuvertSansTerminal") {
+		t.Fatalf("err : %v", err)
 	}
-	if d, _ := journalRead(root, trName); len(d) != 0 || len(f.closed) != 0 {
-		t.Fatal("nettoyage attendu")
-	}
+	stateIntact(t, root, f)
 }
 
-func TestCloseFinishedTeamWhenTmuxServerGone(t *testing.T) {
+func TestCloseAbortsWhenLeadAliveAndTmuxUnreachable(t *testing.T) {
 	root, f := seedClose(t)
-	f.panes, f.panesErr = nil, terr("srv.sendkeys.aucuneSessionNA")
-	if err := teamClose(root, trName); err != nil {
-		t.Fatal(err)
+	f.leadLive, f.panes, f.panesErr = true, nil, noServer
+	if err := teamClose(root, trName); !isMsg(err, "srv.teams_run.chefOuvertSansTerminal") {
+		t.Fatalf("err : %v", err)
 	}
-	if d, _ := journalRead(root, trName); len(d) != 0 || len(f.closed) != 0 {
-		t.Fatal("nettoyage attendu")
-	}
-	if len(teamQueue[trName]) != 0 || len(teamLog[trName]) != 0 {
-		t.Fatal("file ou log non vidés")
+	stateIntact(t, root, f)
+}
+
+func TestCloseCleansWhenLeadNotAlive(t *testing.T) {
+	for name, set := range map[string]func(*fakeIO){
+		"vide":     func(f *fakeIO) {},
+		"sentinel": func(f *fakeIO) { f.panes, f.panesErr = nil, noServer },
+	} {
+		t.Run(name, func(t *testing.T) {
+			root, f := seedClose(t)
+			set(f)
+			if err := teamClose(root, trName); err != nil {
+				t.Fatal(err)
+			}
+			stateCleaned(t, root, f)
+		})
 	}
 }
 
@@ -616,4 +652,13 @@ func TestCloseStillAbortsOnRealTmuxError(t *testing.T) {
 		t.Fatalf("err : %v", err)
 	}
 	stateIntact(t, root, f)
+}
+
+func TestCloseReadsLeadStateBeforePanes(t *testing.T) {
+	root, f := seedClose(t)
+	f.order = nil
+	teamClose(root, trName)
+	if len(f.order) < 2 || f.order[0] != "lead" || f.order[1] != "panes" {
+		t.Fatalf("ordre : %v", f.order)
+	}
 }

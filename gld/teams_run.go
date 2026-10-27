@@ -11,8 +11,8 @@ import (
 )
 
 type paneIO interface {
-	Panes() (map[string]string, error) // id de session -> pane
-	Known() bool                       // vrai si la liste des sessions ouvertes a pu être lue, fraîche
+	Panes() (map[string]string, error)              // id de session -> pane
+	LeadState(sessionID string) (alive, known bool) // relevé frais des sessions ouvertes ; known=false s'il est illisible
 	Idle() []string
 	Capture(pane string) (string, error)
 	Paste(pane, text string) error
@@ -23,9 +23,10 @@ type paneIO interface {
 type realPanes struct{}
 
 func (realPanes) Panes() (map[string]string, error) { return sendable() }
-func (realPanes) Known() bool {
+func (realPanes) LeadState(id string) (isAlive, known bool) {
 	forgetAgents()
-	return alive() != nil
+	m := alive()
+	return m[id], m != nil
 }
 func (realPanes) Idle() []string                      { return waiting() }
 func (realPanes) Capture(pane string) (string, error) { return capturePane(pane) }
@@ -474,21 +475,24 @@ func teamClose(cfgRoot, name string) error {
 	if err != nil {
 		return err
 	}
+	// un seul relevé frais décide ; Panes() le réutilise (cache de 1,5 s). Illisible : on ne touche à rien.
+	leadAlive, known := teamPanes.LeadState(tf.LeadSessionID)
+	if !known {
+		return terr("srv.teams_run.etatInconnu")
+	}
 	panes, perr := teamPanes.Panes()
-	// serveur tmux disparu : plus aucun panneau, donc le chef a quitté
+	// serveur tmux disparu : plus aucun panneau
 	if perr != nil && !isMsg(perr, "srv.sendkeys.aucuneSessionNA") {
 		return terr("srv.teams_run.tmuxInutilisable", "W1", perr)
 	}
-	// sans panneau pour le chef, on ne conclut « terminée » que si la lecture des sessions est connue (sinon vide par erreur)
-	if panes[tf.LeadSessionID] == "" && !teamPanes.Known() {
-		return terr("srv.teams_run.etatInconnu")
-	}
-	// team terminée (le chef a quitté) : plus de session à fermer, on nettoie quand même
 	if panes[tf.LeadSessionID] != "" {
 		if err := teamPanes.Close(tf.LeadSessionID); err != nil {
 			return terr("srv.teams_run.fermetureImpossible", "W1", err)
 		}
+	} else if leadAlive {
+		return terr("srv.teams_run.chefOuvertSansTerminal")
 	}
+	// team terminée (le chef a quitté) : plus de session à fermer, on nettoie quand même
 	if err := journalDrop(cfgRoot, name); err != nil {
 		return err
 	}
