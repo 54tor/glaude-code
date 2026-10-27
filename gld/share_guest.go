@@ -33,7 +33,7 @@ const (
 
 var guestRoutes = map[string]bool{
 	"GET /conv": true, "GET /conv-text": true, "GET /conv-tools": true, "GET /conv-image": true,
-	"GET /session-live": true, "GET /session-state": true, "GET /session-task-output": true, "GET /session-screen": true,
+	"GET /session-live": true, "GET /session-state": true, "GET /session-task-output": true,
 	"GET /queue": true, "POST /queue-add": true, "POST /queue-rm": true, "GET /guest-me": true, "POST /guest-leave": true,
 	"GET /guest": true, "GET /assets/": true, "GET /icons/": true, "GET /favicon.ico": true, "GET /manifest.webmanifest": true,
 }

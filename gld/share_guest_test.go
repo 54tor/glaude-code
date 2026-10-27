@@ -147,7 +147,7 @@ func TestGuestNonWhitelistedForbidden(t *testing.T) {
 		{"GET", "/auth/me"}, {"GET", "/config"}, {"POST", "/queue-retry"}, {"POST", "/share-create"}, {"POST", "/share-end"},
 		{"GET", "/api"}, {"GET", "/conv-doc?path=/etc/x.md"}, {"POST", "/session-send"}, {"GET", "/homes"},
 		{"GET", "//conv"}, {"GET", "/conv/"}, {"GET", "/%63onv"}, {"GET", "/conv/../api"}, {"POST", "/conv"}, {"GET", "/queue-add"},
-		{"GET", "/invite/../api"},
+		{"GET", "/invite/../api"}, {"GET", "/session-screen"},
 	} {
 		w := gReq{method: rt[0], path: rt[1], body: `{"id":"` + id1 + `"}`, cookie: c, csrf: csrf}.do(h)
 		if w.Code != 403 || !strings.HasPrefix(w.Header().Get("Content-Type"), "application/json") {
