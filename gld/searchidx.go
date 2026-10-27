@@ -3,7 +3,9 @@
 package main
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -15,17 +17,22 @@ import (
 )
 
 var (
-	idxFile = func() string { // remplacé par les tests
-		d, err := os.UserCacheDir()
-		if err != nil {
-			d = os.TempDir()
-		}
-		return filepath.Join(d, "gld-web", "search.db")
-	}
-	idxMu  sync.Mutex // un seul synchroniseur à la fois
-	idxDB  *sql.DB
-	idxNow = time.Now // remplacé par les tests
+	idxFile = func() string { return idxFileFor(root) } // remplacé par les tests
+	idxMu   sync.Mutex                                  // un seul synchroniseur à la fois
+	idxDB   *sql.DB
+	idxNow  = time.Now // remplacé par les tests
 )
+
+// idxFileFor : un index par dossier de transcripts. Le gateway et chaque processus enfant (un par home) partagent le même
+// cache utilisateur ; un fichier commun laisserait la recherche d'un home lire les extraits d'un autre.
+func idxFileFor(root string) string {
+	d, err := os.UserCacheDir()
+	if err != nil {
+		d = os.TempDir()
+	}
+	sum := sha256.Sum256([]byte(filepath.Clean(root)))
+	return filepath.Join(d, "gld-web", "search-"+hex.EncodeToString(sum[:6])+".db")
+}
 
 // indexSettle : un transcript déjà indexé et modifié depuis moins longtemps n'est pas relu. Une session vivante écrit en
 // continu, et relire un gros transcript à chaque frappe de recherche coûtait plusieurs secondes.

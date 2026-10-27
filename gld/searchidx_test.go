@@ -95,3 +95,24 @@ func TestSearchIndexSettle(t *testing.T) {
 		t.Fatal("un transcript stabilisé doit être relu")
 	}
 }
+
+func TestSearchIndexPerHome(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	prev := idxFile
+	t.Cleanup(func() { idxFile = prev })
+	a, b := t.TempDir(), t.TempDir()
+	if idxFileFor(filepath.Join(a, "projects")) == idxFileFor(filepath.Join(b, "projects")) {
+		t.Fatal("deux homes partagent le même fichier d'index")
+	}
+	use(a)
+	idxFile = func() string { return idxFileFor(root) }
+	put(t, filepath.Join(a, "projects", "-p", id1+".jsonl"), `{"type":"user","cwd":"/p","message":{"content":"secretdehomea"}}`, old)
+	if h, err := searchIndex("secretdehomea"); err != nil || len(h) != 1 {
+		t.Fatalf("home A : %v %v", h, err)
+	}
+	use(b)
+	idxFile = func() string { return idxFileFor(root) }
+	if h, err := searchIndex("secretdehomea"); err != nil || len(h) != 0 {
+		t.Fatalf("la recherche du home B voit le home A : %v %v", h, err)
+	}
+}
