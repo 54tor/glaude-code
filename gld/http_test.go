@@ -413,6 +413,10 @@ func TestHTTPSnippets(t *testing.T) {
 	if m := ok(t, h, "/snippet-draft", `{"model":"haiku","text":"x"}`, true, "Mise en forme prête"); m["text"] != "mis en forme\n" || m["cost"] != 0.25 {
 		t.Fatalf("brouillon : %v", m)
 	}
+	ok(t, h, "/snippet-rename", `{"from":"u/revue.md","to":"u/revue2.md"}`, true, "Snippet renommé")
+	ok(t, h, "/snippet-rename", `{"from":"u/revue.md","to":"u/x.md"}`, false, "")
+	ok(t, h, "/snippet-rename", `{"from":"u/revue2.md","to":"p/a/x.md"}`, false, "")
+	ok(t, h, "/snippet-rename", `{"from":"u/revue2.md","to":"u/revue.md"}`, true, "Snippet renommé")
 	ok(t, h, "/snippet-rm", `{"key":"u/absent.md"}`, false, "")
 	ok(t, h, "/snippet-rm", `{"key":"u/revue.md"}`, true, "Snippet supprimé")
 

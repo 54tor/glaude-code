@@ -299,6 +299,7 @@ func TestGateRightsMatrix(t *testing.T) {
 		{&wr, "POST", "/session-trash-purge", false, 403},
 		{&wr, "POST", "/snippet-save", false, 403},
 		{&wr, "POST", "/snippet-rm", false, 403},
+		{&wr, "POST", "/snippet-rename", false, 403},
 		{&wr, "POST", "/snippets-import", false, 403},
 		{&wr, "POST", "/snippet-draft", true, 200},
 		{&r, "GET", "/snippet-list", true, 200},

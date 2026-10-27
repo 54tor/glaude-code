@@ -230,6 +230,38 @@ func removeSnippet(key string) error {
 	return r.Remove(rel)
 }
 
+// renameSnippet renomme un snippet dans son emplacement (personnel ou projet) ; refusé si la cible existe.
+func renameSnippet(from, to string) error {
+	base, rel, err := cmdBase(from)
+	if err != nil {
+		return err
+	}
+	base2, rel2, err := cmdBase(to)
+	if err != nil {
+		return err
+	}
+	if !sameDir(base, base2) {
+		return terr("srv.commands.snippetInvalide")
+	}
+	r, err := os.OpenRoot(base)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+	if _, err := r.Lstat(rel); err != nil {
+		return err
+	}
+	if _, err := r.Lstat(rel2); err == nil {
+		return terr("srv.commands.ceSnippetExisteDeja", "A1", filepath.ToSlash(rel2))
+	}
+	if d := filepath.Dir(rel2); d != "." {
+		if err := r.MkdirAll(d, 0o755); err != nil {
+			return err
+		}
+	}
+	return r.Rename(rel, rel2)
+}
+
 // exportSnippets : les snippets d'un scope ("" : personnels) dans une archive zip, chemins relatifs conservés.
 func exportSnippets(scope string) ([]byte, int, error) {
 	all, _ := listSnippets()

@@ -135,6 +135,8 @@
       "newPlaceholder": "name, or folder/name: becomes /name or /folder:name",
       "create": "Create",
       "exists": "This command already exists",
+      "renameTitle": "Rename {{name}}",
+      "rename": "Rename",
       "deleteTitle": "Delete {{name}}?",
       "deleteBody": "It is first copied to the trash (Memory area), from where it can be restored.",
       "importing": "Importing…",

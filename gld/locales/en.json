@@ -364,6 +364,7 @@
   "srv.routes_snippets.miseEnFormePrete": "Formatting ready",
   "srv.routes_snippets.scopeInvalide": "invalid scope",
   "srv.routes_snippets.snippetEnregistre": "Snippet saved",
+  "srv.routes_snippets.snippetRenomme": "Snippet renamed",
   "srv.routes_snippets.snippetSupprime": "Snippet deleted",
   "srv.routes_tabs.sauvegardeSupprimee": "Backup deleted",
   "srv.routes_tabs.sessionSSauvegardeeS": "{{.A1}} session(s) saved",

@@ -124,6 +124,24 @@ export function Snippets({
         onPick(key)
       },
     })
+  const rename = () =>
+    onPrompt({
+      title: t("skills.snippets.renameTitle", { name: snip?.command ?? sel }),
+      value: sel.replace(/^(u\/|p\/[^/]+\/)/, "").replace(/\.md$/, ""),
+      placeholder: t("skills.snippets.newPlaceholder"),
+      confirm: t("skills.snippets.rename"),
+      run: async (name) => {
+        const head = /^(u\/|p\/[^/]+\/)/.exec(sel)?.[0] ?? ""
+        const to = head + (name.endsWith(".md") ? name : name + ".md")
+        if (to === sel) return
+        const r = await api.post("/snippet-rename", { from: sel, to })
+        reportResult(r)
+        if (r.ok) {
+          onPick(to)
+          onChanged()
+        }
+      },
+    })
   const remove = () =>
     onAsk({
       title: t("skills.snippets.deleteTitle", { name: snip?.command ?? sel }),
@@ -294,6 +312,9 @@ export function Snippets({
                 </>
               ) : (
                 <>
+                  <Button variant="ghost" size="sm" onClick={rename} disabled={text === null}>
+                    <Pencil /> {t("skills.snippets.rename")}
+                  </Button>
                   <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={remove} disabled={text === null}>
                     <Trash2 /> {t("common.delete")}
                   </Button>

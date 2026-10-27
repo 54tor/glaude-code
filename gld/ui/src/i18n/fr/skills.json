@@ -135,6 +135,8 @@
       "newPlaceholder": "nom, ou dossier/nom : devient /nom ou /dossier:nom",
       "create": "Créer",
       "exists": "Cette commande existe déjà",
+      "renameTitle": "Renommer {{name}}",
+      "rename": "Renommer",
       "deleteTitle": "Supprimer {{name}} ?",
       "deleteBody": "Elle est d'abord copiée dans la corbeille (zone Mémoire), d'où elle peut être restaurée.",
       "importing": "Import…",

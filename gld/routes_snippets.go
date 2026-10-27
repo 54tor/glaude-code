@@ -60,6 +60,20 @@ func routesSnippets(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_snippets.miseEnFormePrete"), "text": text, "cost": cost})
 	})
+	mux.HandleFunc("POST /snippet-rename", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ From, To string }
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+			return
+		}
+		err := renameSnippet(req.From, req.To)
+		journal("snippet-rename %s -> %s : %v", req.From, req.To, errOr(err))
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_snippets.snippetRenomme")})
+	})
 	mux.HandleFunc("POST /snippet-rm", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Key string }
 		json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req)
