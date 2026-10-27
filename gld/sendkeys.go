@@ -256,6 +256,11 @@ func sendToSession(id, text string) error {
 	if !ok {
 		return terr("srv.sendkeys.cetteSessionNEst")
 	}
+	return sendToPane(pane, text)
+}
+
+// sendToPane colle le texte dans le panneau puis valide (le texte est déjà contrôlé par l'appelant).
+func sendToPane(pane, text string) error {
 	// Un texte qui finit sur « @chemin » ouvre le menu de fichiers de Claude Code, qui avale Entrée : l'espace final le ferme.
 	if i := strings.LastIndexAny(text, " \n"); strings.HasPrefix(text[i+1:], "@") {
 		text += " "
@@ -305,6 +310,10 @@ func sessionScreen(id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return capturePane(p)
+}
+
+func capturePane(p string) (string, error) {
 	out, err := tmuxRun("", "capture-pane", "-p", "-S", "-200", "-t", p)
 	if err != nil {
 		return "", err
