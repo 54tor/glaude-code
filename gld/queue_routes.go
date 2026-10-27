@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -168,8 +169,12 @@ func routesQueue(mux *http.ServeMux) {
 		if !ok {
 			return
 		}
-		it, found := queueSt.Remove(req.ID, req.Item)
-		if !found {
+		it, err := queueSt.Remove(req.ID, req.Item)
+		if errors.Is(err, errQueueBusy) {
+			fail(w, 409, "srv.queue.envoiEnCours")
+			return
+		}
+		if err != nil {
 			fail(w, 404, "srv.queue.introuvable")
 			return
 		}

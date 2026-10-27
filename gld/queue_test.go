@@ -31,10 +31,10 @@ func TestQueueAddListRemove(t *testing.T) {
 	if h, ok := q.Head("s"); !ok || h.ID != a.ID {
 		t.Fatalf("Head = %+v %v", h, ok)
 	}
-	if got, ok := q.Remove("s", a.ID); !ok || got.Text != "un" {
-		t.Fatalf("Remove = %+v %v", got, ok)
+	if got, err := q.Remove("s", a.ID); err != nil || got.Text != "un" {
+		t.Fatalf("Remove = %+v %v", got, err)
 	}
-	if _, ok := q.Remove("s", a.ID); ok {
+	if _, err := q.Remove("s", a.ID); err == nil {
 		t.Fatal("Remove deux fois")
 	}
 	if s := q.Sessions(); len(s) != 1 || s[0] != "s" {
@@ -361,5 +361,26 @@ func TestQueueRemoveByAuthor(t *testing.T) {
 	q2, _ := openQueue(dir)
 	if len(q2.List("s")) != 1 {
 		t.Fatal("non persisté")
+	}
+}
+
+func TestQueueRemoveRefusesSending(t *testing.T) {
+	q, _ := openQueue(t.TempDir())
+	a, _ := q.Add("s", "host", "un")
+	if err := q.MarkSending("s", a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.Remove("s", a.ID); !errors.Is(err, errQueueBusy) {
+		t.Fatalf("Remove d'un item en cours d'envoi = %v", err)
+	}
+	if len(q.List("s")) != 1 {
+		t.Fatal("l'item en cours d'envoi a disparu")
+	}
+	q.Done("s", a.ID) // le drain, lui, le retire une fois l'envoi fini
+	if len(q.List("s")) != 0 {
+		t.Fatal("Done n'a pas retiré l'item")
+	}
+	if _, err := q.Remove("s", a.ID); !errors.Is(err, errQueueGone) {
+		t.Fatalf("Remove absent = %v", err)
 	}
 }

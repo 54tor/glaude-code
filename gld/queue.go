@@ -18,6 +18,7 @@ var (
 	errQueueFull = errors.New("file pleine")
 	errQueueText = errors.New("texte refusé")
 	errQueueGone = errors.New("item absent ou déjà pris")
+	errQueueBusy = errors.New("envoi en cours")
 )
 
 type QItem struct {
@@ -115,14 +116,18 @@ func (q *queueStore) remove(session string, i int) QItem {
 	return it
 }
 
-func (q *queueStore) Remove(session, itemID string) (QItem, bool) {
+// Remove : retrait demandé par un utilisateur. Un item « sending » est refusé sous le verrou du magasin : il est peut-être déjà parti.
+func (q *queueStore) Remove(session, itemID string) (QItem, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	i := q.find(session, itemID)
 	if i < 0 {
-		return QItem{}, false
+		return QItem{}, errQueueGone
 	}
-	return q.remove(session, i), true
+	if q.sess[session][i].State == "sending" {
+		return QItem{}, errQueueBusy
+	}
+	return q.remove(session, i), nil
 }
 
 func (q *queueStore) Retry(session, itemID string) bool {
@@ -171,7 +176,14 @@ func (q *queueStore) MarkSending(session, itemID string) error {
 	return nil
 }
 
-func (q *queueStore) Done(session, itemID string) { q.Remove(session, itemID) }
+// Done : le drain retire l'item une fois l'envoi fini, quel que soit son état.
+func (q *queueStore) Done(session, itemID string) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if i := q.find(session, itemID); i >= 0 {
+		q.remove(session, i)
+	}
+}
 
 func (q *queueStore) Sessions() []string {
 	q.mu.Lock()

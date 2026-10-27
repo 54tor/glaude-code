@@ -313,6 +313,7 @@
   "srv.purge.refusDEffacerHors": "refus d'effacer hors de {{.A1}} : {{.A2}}",
   "srv.purge.sessionDejaOuverteEcris": "session déjà ouverte : écris le message dans son onglet",
   "srv.purge.shellSnapshots": "  shell-snapshots : {{.A1}} instantané(s) effacé(s)",
+  "srv.queue.envoiEnCours": "Envoi en cours : le message ne peut plus être retiré",
   "srv.queue.indisponible": "Impossible d'ouvrir la file de messages",
   "srv.queue.pleine": "File de messages pleine",
   "srv.queue.texteRefuse": "Message refusé (vide, trop long ou illisible)",

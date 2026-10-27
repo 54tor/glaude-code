@@ -313,6 +313,7 @@
   "srv.purge.refusDEffacerHors": "refusing to delete outside {{.A1}}: {{.A2}}",
   "srv.purge.sessionDejaOuverteEcris": "session already open: write the message in its tab",
   "srv.purge.shellSnapshots": "  shell-snapshots : {{.A1}} snapshot(s) deleted",
+  "srv.queue.envoiEnCours": "Sending in progress: the message can no longer be removed",
   "srv.queue.indisponible": "Message queue unavailable",
   "srv.queue.pleine": "Message queue is full",
   "srv.queue.texteRefuse": "Message refused (empty, too long or unreadable)",
