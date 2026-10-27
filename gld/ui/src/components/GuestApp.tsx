@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowUpToLine, Loader2, LogOut, Wrench, X } from "lucide-react"
+import { ArrowUpToLine, Loader2, LogOut, Send, Wrench, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { api, HttpError, type LiveState, type Msg, type QItem } from "@/lib/api"
 import { setAuth } from "@/lib/auth"
 import { LiveBar } from "./LiveStatus"
@@ -148,73 +150,95 @@ export function GuestApp() {
     )
 
   return (
-    <main className="mx-auto flex h-svh max-w-3xl flex-col px-4">
-      <header className="flex items-center justify-between gap-2 py-3">
-        <h1 className="min-w-0 flex-1 text-sm font-semibold">{t("conversation.guest.title")}</h1>
-        <Button size="sm" variant={tools ? "secondary" : "ghost"} aria-pressed={tools} onClick={() => setTools(!tools)}>
-          <Wrench /> {t("conversation.view.toolsShown")}
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => void leave()}>
-          <LogOut /> {t("conversation.guest.leave")}
-        </Button>
-      </header>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-3">
-        {h.more && (
-          <div className="flex justify-center">
-            <Button size="sm" variant="outline" disabled={loadingOlder} onClick={() => void older()}>
-              {loadingOlder ? <Loader2 className="animate-spin" /> : <ArrowUpToLine />} {t("conversation.view.loadOlder")}
+    <Dialog open>
+      <DialogContent
+        showCloseButton={false}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        className="safe-t safe-b flex h-[calc(var(--vvh,100dvh)*0.94)] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0 max-md:top-[var(--vvt,0px)] max-md:left-0 max-md:h-[var(--vvh,100dvh)] max-md:w-screen max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none max-md:border-0 sm:max-w-none"
+      >
+        <DialogHeader className="gap-1 border-b px-4 pt-2.5 pb-3 md:px-6 md:pb-4">
+          <div className="flex items-start gap-4">
+            <div className="min-w-0 flex-1 space-y-1">
+              <DialogTitle className="truncate text-lg tracking-tight">{t("conversation.guest.title")}</DialogTitle>
+              <DialogDescription className="sr-only">{t("conversation.view.description")}</DialogDescription>
+            </div>
+            <Button variant="outline" size="xs" onClick={() => void leave()}>
+              <LogOut /> {t("conversation.guest.leave")}
             </Button>
           </div>
-        )}
-        {h.msgs.map((m, i) => (
-          <Message key={`${m.o ?? i}-${i}`} m={m} conv={{ dir, id, tools, guest: true }} />
-        ))}
-        <LiveBar live={{ st, open: true }} id={id} />
-        <div ref={end} />
-      </div>
-      <section aria-label={t("conversation.guest.queue")} className="space-y-2 pb-3">
-        {queue.length > 0 && (
-          <ul className="space-y-1 text-sm" aria-label={t("conversation.composer.queueAria")}>
-            {queue.map((q, i) => (
-              <li key={q.id} className="flex items-center gap-2 rounded-md border border-dashed px-2 py-1 text-muted-foreground">
-                <span className="shrink-0 tabular-nums">{i + 1}.</span>
-                <span className="shrink-0 rounded bg-muted px-1 text-2xs uppercase">{q.author === "guest" ? t("conversation.composer.guest") : t("conversation.guest.host")}</span>
-                <span className="min-w-0 flex-1 truncate" title={q.text}>
-                  {q.text}
-                </span>
-                {q.state === "uncertain" && <span className="shrink-0 text-amber-600 dark:text-amber-400">{t("conversation.composer.sendUncertain")}</span>}
-                {q.state === "sending" && <span className="shrink-0">{t("conversation.composer.sending")}</span>}
-                {q.author === "guest" && q.state !== "sending" && (
-                  <Button size="icon-xs" variant="ghost" aria-label={t("conversation.composer.dequeue")} onClick={() => void remove(q)}>
-                    <X />
-                  </Button>
-                )}
-              </li>
+        </DialogHeader>
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="session-text mx-auto max-w-5xl space-y-6 px-3 py-4 md:px-8 md:py-6">
+            {h.more && (
+              <div className="text-center">
+                <Button variant="outline" size="sm" disabled={loadingOlder} onClick={() => void older()}>
+                  {loadingOlder ? <Loader2 className="animate-spin" /> : <ArrowUpToLine />} {t("conversation.view.loadOlder")}
+                </Button>
+              </div>
+            )}
+            {h.msgs.map((m, i) => (
+              <Message key={`${m.o ?? i}-${i}`} m={m} conv={{ dir, id, tools, guest: true }} />
             ))}
-          </ul>
-        )}
-        {!rw && <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">{t("conversation.guest.readOnly")}</p>}
-        <div className="flex items-end gap-2">
-          <textarea
-            value={text}
-            disabled={!rw}
-            rows={2}
-            aria-label={t("conversation.composer.messageAria")}
-            placeholder={t("conversation.guest.placeholder")}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault()
-                void send()
-              }
-            }}
-            className="min-h-10 flex-1 resize-none rounded-md border bg-background px-3 py-2 text-sm disabled:opacity-50"
-          />
-          <Button disabled={!rw || busy || !text.trim()} onClick={() => void send()}>
-            {t("conversation.composer.send")}
-          </Button>
+            <LiveBar live={{ st, open: true }} id={id} />
+            <div ref={end} />
+          </div>
+        </ScrollArea>
+        <div className="border-t bg-muted/20 px-4 py-3">
+          <section aria-label={t("conversation.guest.queue")} className="mx-auto max-w-7xl space-y-2">
+            <div className="flex justify-end">
+              <Button variant={tools ? "secondary" : "ghost"} size="xs" className="text-muted-foreground max-md:hidden" onClick={() => setTools(!tools)} aria-pressed={tools}>
+                <Wrench /> {tools ? t("conversation.view.toolsShown") : t("conversation.view.toolsHidden")}
+              </Button>
+            </div>
+            {!rw && <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">{t("conversation.guest.readOnly")}</p>}
+            <textarea
+              value={text}
+              disabled={!rw}
+              rows={2}
+              maxLength={32000}
+              aria-label={t("conversation.composer.messageAria")}
+              placeholder={t("conversation.guest.placeholder")}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault()
+                  void send()
+                }
+              }}
+              className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+            />
+            {queue.length > 0 && (
+              <ul className="space-y-1 text-xs" aria-label={t("conversation.composer.queueAria")}>
+                {queue.map((q, i) => (
+                  <li key={q.id} className="flex items-center gap-2 rounded-md border border-dashed px-2 py-1 text-muted-foreground">
+                    <span className="shrink-0 tabular-nums">{i + 1}.</span>
+                    <span className="shrink-0 rounded bg-muted px-1 text-2xs uppercase">{q.author === "guest" ? t("conversation.composer.guest") : t("conversation.guest.host")}</span>
+                    <span className="min-w-0 flex-1 truncate" title={q.text}>
+                      {q.text}
+                    </span>
+                    {q.state === "uncertain" && <span className="shrink-0 text-amber-600 dark:text-amber-400">{t("conversation.composer.sendUncertain")}</span>}
+                    {q.state === "sending" && <span className="shrink-0">{t("conversation.composer.sending")}</span>}
+                    {q.author === "guest" && q.state !== "sending" && (
+                      <Button size="icon-xs" variant="ghost" aria-label={t("conversation.composer.dequeue")} onClick={() => void remove(q)}>
+                        <X />
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <div className="ml-auto flex items-center gap-2">
+                <Button size="sm" disabled={!rw || busy || !text.trim()} onClick={() => void send()}>
+                  <Send /> <span className="max-md:sr-only">{t("conversation.composer.send")}</span>
+                </Button>
+              </div>
+            </div>
+          </section>
         </div>
-      </section>
-    </main>
+      </DialogContent>
+    </Dialog>
   )
 }

@@ -189,9 +189,10 @@ describe("GuestApp", () => {
   it("bascule des outils : redemande /conv avec tools=1", async () => {
     await mount()
     expect(calls.filter((c) => c.path === "/conv").every((c) => !c.search.includes("tools=1"))).toBe(true)
-    fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.view.toolsShown") }))
+    fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.view.toolsHidden") }))
     await tick(50)
     expect(calls.some((c) => c.path === "/conv" && c.search.includes("tools=1"))).toBe(true)
+    expect(screen.getByRole("button", { name: i18n.t("conversation.view.toolsShown") }).getAttribute("aria-pressed")).toBe("true")
   })
 
   it("l'hôte met fin au partage pendant la saisie : écran terminé après le POST refusé", async () => {
