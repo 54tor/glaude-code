@@ -115,6 +115,7 @@ Compteurs en base, clés par nom, par adresse (une adresse IPv6 est ramenée à 
 | Mesure | Valeur |
 |---|---|
 | Délai progressif | dès 3 échecs : 2^(n-3) s, plafonné à 900 s, avant même de vérifier le mot de passe |
+| Bannissement de l'adresse | 8 échecs en 15 min depuis une adresse extérieure, tous noms confondus : l'adresse (ou son /64) est refusée 1 h, y compris là où un compte s'est déjà connecté ; ligne `ban` dans le journal. Jamais appliqué à la machine, aux réseaux privés ni au lien local. Durée fixe, sans escalade |
 | Verrou du compte | 10 échecs : 30 min. Ne s'applique pas à une adresse d'où le compte s'est déjà connecté avec succès dans les 30 derniers jours (marqueur `known:` dans `throttle`) |
 | Suite d'échecs consécutifs | échecs de mot de passe **et** de second facteur comptés sans fenêtre, remis à zéro par une connexion réussie : au 10e, verrou de 30 min et ligne dans le journal de la passerelle ; au 20e, verrou de 24 h. Levée depuis une adresse connue |
 | Second facteur | 5 échecs : session partielle détruite, mot de passe à ressaisir. Ces 5 échecs bloquent aussi la connexion par mot de passe de ce compte, depuis toute adresse, jusqu'à la fin de la fenêtre de 15 min |

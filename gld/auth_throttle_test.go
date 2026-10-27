@@ -305,3 +305,48 @@ func TestThrottlePurge(t *testing.T) {
 		t.Fatalf("restant : %d", left)
 	}
 }
+
+func TestIPBan(t *testing.T) {
+	th, s, clock := testThrottle(t)
+	if _, err := s.AddUser("dave", testPw, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := th.Success("dave", "203.0.113.9"); err != nil {
+		t.Fatal(err)
+	}
+	// Une IP extérieure qui rate des noms différents est bannie, même si elle a déjà réussi une connexion.
+	for n := 0; n < thBanAfter; n++ {
+		if err := th.Fail(fmt.Sprintf("inconnu%d", n), "203.0.113.9", "password"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, blocked := th.Pending("dave", "203.0.113.9"); !blocked {
+		t.Fatal("IP extérieure non bannie")
+	}
+	if _, blocked := th.Pending("dave", "198.51.100.1"); blocked {
+		t.Fatal("une autre IP est bannie")
+	}
+	var bans int
+	s.db.QueryRow(`SELECT COUNT(*) FROM auth_events WHERE kind='lock' AND outcome='ban'`).Scan(&bans)
+	if bans != 1 {
+		t.Fatalf("bans journalisés : %d", bans)
+	}
+	*clock = clock.Add(thBanFor + time.Second)
+	if _, blocked := th.Pending("dave", "203.0.113.9"); blocked {
+		t.Fatal("ban non levé")
+	}
+	// Réseau local et poste : jamais bannis.
+	for _, ip := range []string{"127.0.0.1", "192.168.1.20", "10.0.0.5", "fd00::/64", "::1"} {
+		for n := 0; n < thBanAfter+2; n++ {
+			th.Fail("x", ip, "password")
+		}
+		if externalIP(ip) {
+			t.Fatalf("%s vue comme extérieure", ip)
+		}
+		var locked int64
+		s.db.QueryRow(`SELECT locked_until FROM throttle WHERE key=?`, "ip:"+ip).Scan(&locked)
+		if locked != 0 {
+			t.Fatalf("%s bannie", ip)
+		}
+	}
+}

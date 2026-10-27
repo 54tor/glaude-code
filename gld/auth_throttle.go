@@ -14,12 +14,16 @@ import (
 )
 
 const (
-	thWindow     = 15 * time.Minute
-	thMaxDelay   = 900 * time.Second
-	thLockAfter  = 10
-	thLockFor    = 30 * time.Minute
-	thMFALimit   = 5
-	thKnownFor   = 30 * 24 * time.Hour
+	thWindow    = 15 * time.Minute
+	thMaxDelay  = 900 * time.Second
+	thLockAfter = 10
+	thLockFor   = 30 * time.Minute
+	thMFALimit  = 5
+	thKnownFor  = 30 * 24 * time.Hour
+	// Bannissement (à la fail2ban) d'une IP extérieure : trop d'échecs, tous noms confondus, dans la fenêtre.
+	// ponytail: durée fixe, sans escalade pour les récidivistes ; la ajouter si des IP reviennent après chaque ban.
+	thBanAfter   = 8
+	thBanFor     = time.Hour
 	thGlobalMax  = 60
 	thGlobalSpan = time.Minute
 	// Suite d'échecs consécutifs par compte, hors fenêtre : un essai lent (quelques échecs par quart d'heure) finit verrouillé.
@@ -123,6 +127,7 @@ func (t *throttle) Pending(user, ip string) (wait time.Duration, blocked bool) {
 	if k, ok := got[kk]; ok && k.first >= now.Add(-thKnownFor).Unix() {
 		lockEnd, uFails = 0, 0
 	}
+	lockEnd = max(lockEnd, got[ik].locked) // bannissement de l'IP : même une IP où ce compte s'est déjà connecté n'y échappe pas
 	if lockEnd > now.Unix() {
 		return min(time.Unix(lockEnd, 0).Sub(now), thMaxDelay), true
 	}
@@ -157,6 +162,10 @@ func (t *throttle) Fail(user, ip string, stage string) error {
 	if stage == "mfa" {
 		keys = append(keys, mk)
 	}
+	ext := 0
+	if externalIP(ip) {
+		ext = 1
+	}
 	tx, err := t.db.Begin()
 	if err != nil {
 		return err
@@ -170,10 +179,17 @@ ON CONFLICT(key) DO UPDATE SET
   fails = CASE WHEN first_at <= ?3 THEN 1 ELSE fails + 1 END,
   first_at = CASE WHEN first_at <= ?3 THEN ?2 ELSE first_at END,
   locked_until = CASE WHEN ?1 LIKE 'user:%' AND (CASE WHEN first_at <= ?3 THEN 1 ELSE fails + 1 END) >= ?4
-    THEN ?2 + ?5 ELSE locked_until END
-RETURNING fails`, k, now, cut, thLockAfter, int64(thLockFor/time.Second)).Scan(&fails)
+    THEN ?2 + ?5
+    WHEN ?1 LIKE 'ip:%' AND ?6 = 1 AND (CASE WHEN first_at <= ?3 THEN 1 ELSE fails + 1 END) >= ?7
+    THEN ?2 + ?8 ELSE locked_until END
+RETURNING fails`, k, now, cut, thLockAfter, int64(thLockFor/time.Second), ext, thBanAfter, int64(thBanFor/time.Second)).Scan(&fails)
 		if err != nil {
 			return err
+		}
+		if k == ik && ext == 1 && fails == thBanAfter {
+			if err := lockEvent(tx, now, user, ip, "ban"); err != nil {
+				return err
+			}
 		}
 		if k == uk && fails == thLockAfter {
 			if err := lockEvent(tx, now, user, ip, "locked"); err != nil {
@@ -231,6 +247,18 @@ func (t *throttle) Purge() (int64, error) {
 		return 0, err
 	}
 	return res.RowsAffected()
+}
+
+// externalIP : l'IP (ou le préfixe /64 rendu par clientIP) ne vient ni de la machine, ni d'un réseau privé, ni du lien local :
+// seuls les accès extérieurs sont bannis, jamais le poste ni le réseau de l'utilisateur.
+func externalIP(ip string) bool {
+	h, _, _ := strings.Cut(ip, "/")
+	a, err := netip.ParseAddr(h)
+	if err != nil {
+		return true
+	}
+	a = a.Unmap()
+	return !(a.IsLoopback() || a.IsPrivate() || a.IsLinkLocalUnicast())
 }
 
 func trustedProxy(a netip.Addr) bool {
