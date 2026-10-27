@@ -47,7 +47,7 @@ beforeEach(() => {
       if (ended === "html") return new Response("<html></html>", { status: 200, headers: { "Content-Type": "text/html" } })
       if (ended) return json({ ok: false }, ended)
       if (path === "/guest-list") return shares === 403 ? json({ ok: false }, 403) : json(shares)
-      if (path === "/guest-me") return json({ id: "s1", dir: "/d", mode, csrf: "tok", handle: H, title })
+      if (path === "/guest-me") return json({ id: "s1", dir: "/d", mode, csrf: "tok", handle: H, title, invite: "inv1", label: "Léa" })
       if (path === "/conv") {
         const q = new URL(url, "http://x").searchParams
         const limit = Number(q.get("limit") ?? 1000)
@@ -60,7 +60,7 @@ beforeEach(() => {
       if (path === "/session-live") return json(live)
       if (path === "/queue") return json({ items: queue })
       if (path === "/queue-add") {
-        queue = [{ id: "q1", text: JSON.parse(String(init.body)).text, author: "guest", state: "queued", at: 1 }]
+        queue = [{ id: "q1", text: JSON.parse(String(init.body)).text, author: "guest", guest: "inv1", label: "Léa", state: "queued", at: 1 }]
         return json({ ok: true, out: "" })
       }
       if (path === "/queue-rm") {
@@ -100,7 +100,7 @@ describe("GuestApp", () => {
     expect(JSON.parse(add.body).text).toBe("coucou")
     await tick(2100)
     expect(screen.getByText("coucou")).toBeTruthy()
-    expect(screen.getByText(i18n.t("conversation.composer.guest"))).toBeTruthy()
+    expect(screen.getByText("Léa")).toBeTruthy()
   })
 
   it("ro : composeur désactivé avec bannière, et bascule rw→ro vue au sondage suivant", async () => {
@@ -141,18 +141,29 @@ describe("GuestApp", () => {
     expect(screen.queryByText("a.md")).toBeNull()
   })
 
-  it("retirer : seulement sur les éléments de l'invité, pas ceux de l'hôte ni en cours d'envoi", async () => {
+  it("retirer : seulement sur les éléments de cette invitation, pas ceux de l'hôte, d'un autre invité ni en cours d'envoi", async () => {
     queue = [
       { id: "h", text: "hôte", author: "host", state: "queued", at: 1 },
-      { id: "g1", text: "invité un", author: "guest", state: "queued", at: 2 },
-      { id: "g2", text: "invité deux", author: "guest", state: "sending", at: 3 },
-      { id: "g3", text: "invité trois", author: "guest", state: "uncertain", at: 4 },
+      { id: "g1", text: "invité un", author: "guest", guest: "inv1", label: "Léa", state: "queued", at: 2 },
+      { id: "g2", text: "invité deux", author: "guest", guest: "inv1", label: "Léa", state: "sending", at: 3 },
+      { id: "g3", text: "invité trois", author: "guest", guest: "inv1", label: "Léa", state: "uncertain", at: 4 },
+      { id: "g4", text: "autre invité", author: "guest", guest: "inv2", label: "Bob", state: "queued", at: 5 },
     ]
     await mount()
     expect(screen.getAllByRole("button", { name: i18n.t("conversation.composer.dequeue") })).toHaveLength(2)
     fireEvent.click(screen.getAllByRole("button", { name: i18n.t("conversation.composer.dequeue") })[0])
     await tick(50)
     expect(JSON.parse(calls.find((c) => c.path === "/queue-rm")!.body).item).toBe("g1")
+  })
+
+  it("la file nomme l'auteur : libellé de l'invité, Hôte pour l'hôte", async () => {
+    queue = [
+      { id: "h", text: "hôte", author: "host", state: "queued", at: 1 },
+      { id: "g4", text: "autre invité", author: "guest", guest: "inv2", label: "Bob", state: "queued", at: 5 },
+    ]
+    await mount()
+    expect(screen.getByText("Bob")).toBeTruthy()
+    expect(screen.getByText(i18n.t("conversation.guest.host"))).toBeTruthy()
   })
 
   it("Quitter : appelle /guest-leave, affiche l'au revoir et arrête les sondages", async () => {

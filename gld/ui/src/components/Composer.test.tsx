@@ -51,6 +51,11 @@ describe("Composer, file serveur", () => {
     mount([item({ author: "guest" })])
     await screen.findByText(/invité|guest/i)
   })
+  it("montre le libellé de l'invité quand il est connu", async () => {
+    mount([item({ author: "guest", guest: "i1", label: "Léa" })])
+    await screen.findByText("Léa")
+    expect(screen.queryByText(/^invité$|^guest$/i)).toBeNull()
+  })
   it("une erreur du serveur à l'ajout affiche un toast et garde le brouillon", async () => {
     mount([], true)
     vi.spyOn(api, "queueAdd").mockResolvedValue({ ok: false, out: "file pleine" })

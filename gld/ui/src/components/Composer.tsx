@@ -74,7 +74,7 @@ function QueueRow({ id, q, i, label }: { id: string; q: QItem; i: number; label?
 }
 function Author({ q }: { q: QItem }) {
   const { t } = useTranslation()
-  return q.author === "guest" ? <span className="shrink-0 rounded bg-muted px-1 text-2xs uppercase">{t("conversation.composer.guest")}</span> : null
+  return q.author === "guest" ? <span className="shrink-0 rounded bg-muted px-1 text-2xs uppercase">{q.label || t("conversation.composer.guest")}</span> : null
 }
 
 // Modes d'autorisation de claude -p : sans terminal, Claude ne peut pas demander la permission.

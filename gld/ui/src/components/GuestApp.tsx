@@ -13,7 +13,7 @@ import { Message } from "./Message"
 
 // Vue de l'invité (/guest) : transcript en lecture, file avec auteurs, composeur. Volontairement mince : aucune des routes
 // qu'utilisent la barre latérale, Conversation ou le composeur hôte (api, info, git, docs, envoi direct) n'est refusée sans être appelée.
-type Me = { id: string; dir: string; mode: "rw" | "ro"; title: string }
+type Me = { id: string; dir: string; mode: "rw" | "ro"; title: string; invite: string }
 type Phase = "loading" | "on" | "ended" | "bye"
 type Hist = { msgs: Msg[]; start: number; more: boolean }
 const PAGE = 200
@@ -143,7 +143,7 @@ function GuestSession({ handle }: { handle: string }) {
     try {
       const r = await api.guestMe()
       setAuth({ state: "open", csrf: r.csrf })
-      setMe((p) => (p && p.id === r.id && p.mode === r.mode && p.title === r.title ? p : { id: r.id, dir: r.dir, mode: r.mode, title: r.title }))
+      setMe((p) => (p && p.id === r.id && p.mode === r.mode && p.title === r.title && p.invite === r.invite ? p : { id: r.id, dir: r.dir, mode: r.mode, title: r.title, invite: r.invite }))
       setPhase((p) => (p === "loading" ? "on" : p))
       return false
     } catch (e) {
@@ -343,13 +343,13 @@ function GuestSession({ handle }: { handle: string }) {
                 {queue.map((q, i) => (
                   <li key={q.id} className="flex items-center gap-2 rounded-md border border-dashed px-2 py-1 text-muted-foreground">
                     <span className="shrink-0 tabular-nums">{i + 1}.</span>
-                    <span className="shrink-0 rounded bg-muted px-1 text-2xs uppercase">{q.author === "guest" ? t("conversation.composer.guest") : t("conversation.guest.host")}</span>
+                    <span className="shrink-0 rounded bg-muted px-1 text-2xs uppercase">{q.author === "guest" ? q.label || t("conversation.composer.guest") : t("conversation.guest.host")}</span>
                     <span className="min-w-0 flex-1 truncate" title={q.text}>
                       {q.text}
                     </span>
                     {q.state === "uncertain" && <span className="shrink-0 text-amber-600 dark:text-amber-400">{t("conversation.composer.sendUncertain")}</span>}
                     {q.state === "sending" && <span className="shrink-0">{t("conversation.composer.sending")}</span>}
-                    {q.author === "guest" && q.state !== "sending" && (
+                    {q.author === "guest" && q.guest === me.invite && q.state !== "sending" && (
                       <Button size="icon-xs" variant="ghost" aria-label={t("conversation.composer.dequeue")} onClick={() => void remove(q)}>
                         <X />
                       </Button>
