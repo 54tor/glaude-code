@@ -264,7 +264,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           <NavItem icon={Inbox} label={t("shell.app.title.all")} n={p.counts.all} active={r.kind === "all"} {...link({ kind: "all" })} />
           <NavItem icon={History} label={t("shell.app.title.tabs")} active={r.kind === "tabs"} {...link({ kind: "tabs" })} />
           <NavItem icon={Puzzle} label={t("shell.app.title.extensions")} active={r.kind === "extensions" || r.kind === "skills"} {...link({ kind: "extensions" })} />
-          <NavItem icon={Users} label={t("teams.title")} active={r.kind === "teams"} {...link({ kind: "teams" })} />
+          <NavItem icon={Users} label={t("teams.title")} active={r.kind === "teams" || r.kind === "team"} {...link({ kind: "teams" })} />
           <NavItem icon={SlidersHorizontal} label={t("shell.app.title.config")} active={r.kind === "config"} {...link({ kind: "config", tab: "" })} />
           <NavItem icon={Brain} label={t("shell.app.title.memory")} active={r.kind === "memory"} {...link({ kind: "memory", key: "" })} />
           {p.snippets !== null && (

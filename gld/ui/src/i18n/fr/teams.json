@@ -14,6 +14,31 @@
     "running": "En cours",
     "members": "{{count}} agents",
     "live": "live",
-    "none": "Aucune"
+    "none": "Aucune",
+    "back": "Équipes",
+    "agents": "Agents",
+    "messages": "Messages",
+    "tasks": "Tâches",
+    "state": {
+      "idle": "inactif",
+      "working": "actif",
+      "waiting": "attente",
+      "unknown": "inconnu"
+    },
+    "writeTo": "Écrire à",
+    "allMessages": "Tous les messages",
+    "screen": "Écran",
+    "yes": "Oui",
+    "no": "Non",
+    "send": "Envoyer",
+    "to": "À",
+    "queued": "en file",
+    "queuedN": "{{count}} en file",
+    "unknownFormat": "format inconnu",
+    "close": "Fermer la team",
+    "finished": "terminée",
+    "permission": "Permission",
+    "message": "Message",
+    "noName": "Nom invalide"
   }
 }

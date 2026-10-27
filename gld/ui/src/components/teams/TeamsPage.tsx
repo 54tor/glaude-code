@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { Link } from "wouter"
+import { href, TEAM_NAME } from "@/lib/route"
 import { useActions } from "@/components/actions"
 import { Badge } from "@/components/ui/badge"
 import { teamsCatalog, teamsLaunch, teamsList, type Catalog, type TeamBrief } from "@/lib/teams"
@@ -43,7 +45,13 @@ export function TeamsPage({ home }: { home: string }) {
           <ul className="divide-y rounded-lg border text-sm">
             {running.map((r) => (
               <li key={r.Name} className="flex items-center gap-2 px-3 py-2">
-                <span className="font-medium">{r.Name}</span>
+                {TEAM_NAME.test(r.Name) ? (
+                  <Link href={href({ kind: "team", name: r.Name })} className="font-medium hover:underline">
+                    {r.Name}
+                  </Link>
+                ) : (
+                  <span className="font-medium">{r.Name}</span>
+                )}
                 <span className="text-muted-foreground">{t("teams.members", { count: r.Members })}</span>
                 {r.Live && <Badge variant="secondary">{t("teams.live")}</Badge>}
               </li>

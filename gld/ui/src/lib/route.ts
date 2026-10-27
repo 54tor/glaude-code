@@ -13,9 +13,12 @@ export type Route =
   | { kind: "projectConfig"; dir: string } // permissions et réglages d'un projet (dossier de transcripts de ses sessions)
   | { kind: "skills"; key: string } // clé de skills.go, ex. « u/revue » ou « p/-home-moi-Projets-x/deploy »
   | { kind: "teams" } // équipes d'agents : composition et lancement
+  | { kind: "team"; name: string } // équipe en cours, nom « session-xxxxxxxx »
   | { kind: "extensions" } // plugins, skills, hooks et MCP actifs par portée
   | { kind: "config"; tab: string } // onglet affiché ("" : Santé) ; configuration de Claude Code (réglages, hooks, permissions, MCP)
   | { kind: "memory"; key: string } // clé de memory.go, ex. « m/-home-moi-Projets-x/MEMORY.md »
+
+export const TEAM_NAME = /^session-[0-9a-f]{8}$/
 
 const dec = (p: string) => p.split("/").map(decodeURIComponent).join("/")
 const enc = (p: string) => p.split("/").map(encodeURIComponent).join("/")
@@ -36,6 +39,7 @@ export function parse(loc: string): Route {
     if (loc === "/onglets") return { kind: "tabs" }
     if (loc === "/configuration" || loc.startsWith("/configuration/")) return { kind: "config", tab: decodeURIComponent(loc.slice(15)) }
     if (loc === "/equipes") return { kind: "teams" }
+    if (loc.startsWith("/equipes/") && TEAM_NAME.test(loc.slice(9))) return { kind: "team", name: loc.slice(9) }
     if (loc === "/extensions") return { kind: "extensions" }
     if (loc === "/skills" || loc.startsWith("/skills/")) return { kind: "skills", key: dec(loc.slice(8)) }
     if (loc === "/memoire" || loc.startsWith("/memoire/")) return { kind: "memory", key: dec(loc.slice(9)) }
@@ -66,6 +70,8 @@ export function href(r: Route): string {
       return "/reglages/" + encodeURIComponent(r.dir)
     case "teams":
       return "/equipes"
+    case "team":
+      return "/equipes/" + r.name
     case "extensions":
       return "/extensions"
     case "config":
