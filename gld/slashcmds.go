@@ -3,7 +3,6 @@ package main
 import (
 	"io"
 	"net/http"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -18,7 +17,7 @@ type slashCmd struct {
 // scanCommands : les commandes d'un dossier commands/ (un .md par commande, sous-dossiers ignorés).
 func scanCommands(base, prefix, origin string) []slashCmd {
 	var out []slashCmd
-	ents, _ := os.ReadDir(base)
+	ents, _ := readDirTrusted(base)
 	for _, e := range ents {
 		n := strings.TrimSuffix(e.Name(), ".md")
 		if e.IsDir() || n == e.Name() || !skillName.MatchString(n) {
@@ -36,7 +35,7 @@ func scanCommands(base, prefix, origin string) []slashCmd {
 
 // readSmall : le contenu d'un fichier régulier d'au plus skillMaxBytes (ni lien, ni tube, ni gros fichier), nil sinon.
 func readSmall(p string) []byte {
-	f, err := os.Open(p)
+	f, err := openTrusted(p)
 	if err != nil {
 		return nil
 	}
