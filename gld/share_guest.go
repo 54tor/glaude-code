@@ -684,12 +684,14 @@ func guestChildMe(r *http.Request, home, sec, hd string) (guestItem, int) {
 	return it, http.StatusOK
 }
 
-// guestSecretPath : un segment .git, .env*, clé ou certificat ferme le chemin à l'invité (lecture seule du dossier du partage).
+// guestSecretPath : défense en profondeur ; la confinement au dossier du partage est faite par ideRel/os.Root (absolu, « .. » et liens refusés). Un segment .git, .env*, clé ou certificat ferme le chemin à l'invité (lecture seule du dossier du partage).
 func guestSecretPath(p string) bool {
 	for _, seg := range strings.Split(p, "/") {
 		l := strings.ToLower(seg)
-		if l == ".git" || strings.HasPrefix(l, ".env") || strings.HasPrefix(l, "id_rsa") || strings.HasPrefix(l, "id_ed25519") ||
-			strings.HasSuffix(l, ".pem") || strings.HasSuffix(l, ".key") {
+		if l == ".git" || strings.HasPrefix(l, ".env") || strings.HasPrefix(l, "id_rsa") || strings.HasPrefix(l, "id_") ||
+			slices.Contains([]string{".ssh", ".aws", ".kube", ".docker", ".netrc", ".npmrc", ".pgpass"}, l) ||
+			strings.HasSuffix(l, ".pem") || strings.HasSuffix(l, ".key") || strings.HasSuffix(l, ".p12") || strings.HasSuffix(l, ".pfx") ||
+			strings.Contains(l, "credentials") || strings.Contains(l, "secret") {
 			return true
 		}
 	}

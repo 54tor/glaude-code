@@ -1165,9 +1165,20 @@ func TestNoStoreWriterFlushes(t *testing.T) {
 }
 
 func TestGuestSecretPath(t *testing.T) {
-	for p, want := range map[string]bool{"": false, "src/a.go": false, ".git/config": true, "a/.env.local": true, "k/server.PEM": true, "id_rsa": true, "envx": false} {
+	for p, want := range map[string]bool{"": false, "src/a.go": false, ".git/config": true, "a/.env.local": true, "k/server.PEM": true, "id_rsa": true, "envx": false, ".ssh/x": true, "a/my-secrets.txt": true, "b/.aws/credentials": true} {
 		if guestSecretPath(p) != want {
 			t.Errorf("%q: want %v", p, want)
+		}
+	}
+}
+
+func TestGuestFsEscapeNeverServed(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	c, csrf := guestIn(t, h)
+	for _, p := range []string{"/etc/passwd", "../x", "a/../../x", "%2e%2e/x"} {
+		w := gReq{method: "GET", path: "/fs-file?path=" + p, cookie: c, csrf: csrf}.do(h)
+		if w.Code == 200 {
+			t.Errorf("%s : %d %s", p, w.Code, w.Body)
 		}
 	}
 }
