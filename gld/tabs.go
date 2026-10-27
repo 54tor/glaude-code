@@ -69,7 +69,7 @@ func liveTabs() []TabSession {
 
 // loadTabs : les sauvegardes ; un fichier absent est une liste vide, un fichier illisible une erreur (on ne réécrit jamais par-dessus).
 func loadTabs() ([]TabSave, error) {
-	b, err := os.ReadFile(tabsFile())
+	b, err := readTrusted(tabsFile())
 	if err != nil {
 		return []TabSave{}, nil
 	}
