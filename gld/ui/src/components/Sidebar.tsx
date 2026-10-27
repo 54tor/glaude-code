@@ -223,6 +223,48 @@ const onWide = (cb: () => void) => {
   return () => m.removeEventListener("change", cb)
 }
 
+// Favoris : une sous-session favorite se range sous sa parente favorite, repliée par défaut.
+function FavSessions({ rows, read }: { rows: Row[]; read: (s: Session) => void }) {
+  const { t } = useTranslation()
+  const [opened, setOpened] = useState<Set<string>>(new Set())
+  const { tops, kids } = nest(rows)
+  const toggle = (id: string) =>
+    setOpened((o) => {
+      const n = new Set(o)
+      if (!n.delete(id)) n.add(id)
+      return n
+    })
+  const item = (row: Row, ks: Row[] = [], child = false): React.ReactNode => (
+    <Fragment key={row.s.id}>
+      <div className={cn("flex items-center", child && "ml-4")}>
+        {ks.length > 0 && (
+          <button
+            onClick={() => toggle(row.s.id)}
+            aria-expanded={opened.has(row.s.id)}
+            aria-label={t("shell.list.subSessions", { count: ks.length })}
+            className="flex h-8 shrink-0 items-center text-xs text-muted-foreground hover:text-foreground"
+          >
+            <ChevronRight className={cn("size-3.5 transition-transform", opened.has(row.s.id) && "rotate-90")} />
+            <span className="tabular-nums">{ks.length}</span>
+          </button>
+        )}
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <div className="min-w-0 flex-1">
+              <NavItem icon={Star} label={row.s.title} active={false} onClick={() => read(row.s)} />
+            </div>
+          </ContextMenuTrigger>
+          <ContextMenuContent className="w-64">
+            <SessionItems M={CM} row={row} full />
+          </ContextMenuContent>
+        </ContextMenu>
+      </div>
+      {opened.has(row.s.id) && ks.map((c) => item(c, [], true))}
+    </Fragment>
+  )
+  return <>{tops.map((r) => item(r, kids.get(r.s.id)))}</>
+}
+
 export function Sidebar({ searchRef, ...p }: SidebarProps) {
   const { t } = useTranslation()
   const r = p.route
@@ -334,18 +376,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
                   </ContextMenuContent>
                 </ContextMenu>
               ))}
-              {p.favRows.map((row) => (
-                <ContextMenu key={row.s.id}>
-                  <ContextMenuTrigger asChild>
-                    <div>
-                      <NavItem icon={Star} label={row.s.title} active={false} onClick={() => p.read(row.s)} />
-                    </div>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent className="w-64">
-                    <SessionItems M={CM} row={row} full />
-                  </ContextMenuContent>
-                </ContextMenu>
-              ))}
+              <FavSessions rows={p.favRows} read={p.read} />
             </>
           )}
 
