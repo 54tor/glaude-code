@@ -428,7 +428,7 @@ func saveSkill(key, text string, create bool) error {
 			}
 		}
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := mkdirTrusted(dir, 0o755); err != nil {
 		return err
 	}
 	root, err := os.OpenRoot(dir)
@@ -471,10 +471,10 @@ func removeSkill(key string) error {
 	if err := saveTrash("k/"+key, filepath.Join(dir, skillFile), "supprimé", text); err != nil {
 		return err
 	}
-	if err := os.Remove(filepath.Join(dir, skillFile)); err != nil {
+	if err := rRemove(base, filepath.Join(dir, skillFile)); err != nil {
 		return err
 	}
-	return os.Remove(dir)
+	return rRemove(base, dir)
 }
 
 const (
@@ -544,7 +544,7 @@ func copySkill(key, to string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := os.MkdirAll(target, 0o755); err != nil {
+	if err := mkdirTrusted(target, 0o755); err != nil {
 		return "", err
 	}
 	dst2, err := os.OpenRoot(target)
