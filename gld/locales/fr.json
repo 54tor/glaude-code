@@ -429,6 +429,8 @@
   "srv.tabs.fichierIllisible": "sauvegardes illisibles ({{.A1}}) : rien n'est réécrit",
   "srv.tabs.nomTropLong": "nom trop long",
   "srv.tabs.sauvegardeIntrouvable": "sauvegarde introuvable",
+  "srv.teams_catalog.selectionVide": "aucune team sélectionnée",
+  "srv.teams_catalog.teamInconnue": "team inconnue : {{.A1}}",
   "srv.term.interditDansLeChemin": "« ; » interdit dans le chemin de gld",
   "srv.term.lanceurInconnu": "lanceur inconnu : {{.A1}}",
   "srv.term.pressEnter": "[Entrée pour fermer]",

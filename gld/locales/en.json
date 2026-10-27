@@ -429,6 +429,8 @@
   "srv.tabs.fichierIllisible": "unreadable backups ({{.A1}}): nothing is rewritten",
   "srv.tabs.nomTropLong": "name too long",
   "srv.tabs.sauvegardeIntrouvable": "backup not found",
+  "srv.teams_catalog.selectionVide": "no team selected",
+  "srv.teams_catalog.teamInconnue": "unknown team: {{.A1}}",
   "srv.term.interditDansLeChemin": "\";\" is not allowed in the gld path",
   "srv.term.lanceurInconnu": "unknown launcher: {{.A1}}",
   "srv.term.pressEnter": "[Press Enter to close]",
