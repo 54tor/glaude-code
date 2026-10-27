@@ -769,7 +769,7 @@ func TestGuestListChildRevalidated(t *testing.T) {
 	sec, _, _ := cs.Redeem(tok)
 	tok2, _ := cs.Create(gOther, "-q", "")
 	sec2, _, _ := cs.Redeem(tok2)
-	refuse, plain := false, false
+	refuse, plain, down := false, false, false
 	child := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hd := r.Header.Get(shareHeader)
 		if plain { // refus de childAuthorized ou de la garde Host : pas un jugement du secret
@@ -778,6 +778,10 @@ func TestGuestListChildRevalidated(t *testing.T) {
 		}
 		if refuse {
 			guestDeny(w, 403, "srv.share_guest.refuse")
+			return
+		}
+		if down {
+			guestDeny(w, 503, "srv.share.indisponible")
 			return
 		}
 		if r.URL.Path != "/guest-me" || r.Header.Get(guestHeader) == "" || r.Header.Get("Cookie") != "" || r.Header.Get(guestQuietHeader) != "1" {
@@ -808,7 +812,12 @@ func TestGuestListChildRevalidated(t *testing.T) {
 	if w.Code != 403 || len(w.Result().Cookies()) != 0 {
 		t.Fatalf("403 brut de l'enfant : %d %v", w.Code, w.Result().Cookies())
 	}
-	plain, refuse = false, true
+	plain, down = false, true
+	w = gReq{method: "GET", path: "/guest-list", jar: []*http.Cookie{{Name: guestCookieName(shareHandle(gOther)), Value: "perso." + sec2}}}.do(h)
+	if w.Code != 403 || len(w.Result().Cookies()) != 0 {
+		t.Fatalf("partages indisponibles dans l'enfant : %d %v", w.Code, w.Result().Cookies())
+	}
+	down, refuse = false, true
 	w = gReq{method: "GET", path: "/guest-list", jar: []*http.Cookie{{Name: guestCookieName(shareHandle(gOther)), Value: "perso." + sec2}}}.do(h)
 	if k := cookieOf(w, guestCookieName(shareHandle(gOther))); w.Code != 403 || k == nil || k.MaxAge >= 0 {
 		t.Fatalf("refus de l'enfant : %d %+v", w.Code, k)
@@ -1076,12 +1085,14 @@ func TestGuestDefinitiveStillClears(t *testing.T) {
 // Les fichiers publics, mis en cache, ne portent jamais d'effacement ; les pages qui effacent sont no-store.
 func TestGuestStaticClearsOnlyOnPages(t *testing.T) {
 	h := guestWeb(t, nil, modeTok)
-	asset, _ := filepath.Glob("ui/dist/assets/*.js")
-	if len(asset) == 0 {
-		t.Skip("ui/dist absent")
-	}
 	jar := []*http.Cookie{{Name: gName, Value: ".mort"}}
-	for _, p := range []string{"/assets/" + filepath.Base(asset[0]), "/icons/x", "/favicon.ico", "/manifest.webmanifest"} {
+	paths := []string{"/icons/x", "/favicon.ico", "/manifest.webmanifest"}
+	if asset, _ := filepath.Glob("ui/dist/assets/*.js"); len(asset) > 0 {
+		paths = append(paths, "/assets/"+filepath.Base(asset[0]))
+	} else {
+		t.Log("ui/dist absent : /assets/ non vérifié")
+	}
+	for _, p := range paths {
 		if w := (gReq{method: "GET", path: p, jar: jar}).do(h); len(w.Result().Cookies()) != 0 {
 			t.Errorf("%s : %v", p, w.Result().Cookies())
 		}
@@ -1091,5 +1102,57 @@ func TestGuestStaticClearsOnlyOnPages(t *testing.T) {
 		if k := cookieOf(w, gName); k == nil || k.MaxAge >= 0 || w.Header().Get("Cache-Control") != "no-store" {
 			t.Errorf("%s : %+v %q", p, k, w.Header().Get("Cache-Control"))
 		}
+	}
+}
+
+// Une seule lecture du fichier des homes : une seconde lecture ratée (rendue vide par readHomesFile) ne doit pas faire croire
+// à un home inconnu et effacer un cookie valide.
+func TestGuestHomesReadOnce(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	addHomes(t, "perso")
+	hm, _ := homeByName("perso")
+	cs, _ := openShares(hm.Dir)
+	tok, _ := cs.Create(id1, "-p", "")
+	sec, _, _ := cs.Redeem(tok)
+	b, _ := json.Marshal(map[string]any{"homes": []Home{{Name: "perso", Dir: hm.Dir}}})
+	os.Remove(homesFile()) // toute autre lecture que la première ne verrait plus aucun home
+	n := 0
+	old := guestReadHomes
+	t.Cleanup(func() { guestReadHomes = old })
+	guestReadHomes = func() ([]byte, error) { n++; return b, nil }
+	w := gReq{method: "GET", path: "/guest/" + hID1, jar: []*http.Cookie{{Name: gName, Value: "perso." + sec}}}.do(h)
+	if w.Code != 200 || len(w.Result().Cookies()) != 0 || n != 1 {
+		t.Fatalf("page : %d %v, %d lectures", w.Code, w.Result().Cookies(), n)
+	}
+}
+
+// Enfant : un magasin de partages absent n'est pas un refus du secret (503) ; un magasin lu sans ce secret, si (403 ok:false).
+func TestGuestChildUnsureAnswers503(t *testing.T) {
+	h := guestWeb(t, nil, "")
+	oc := childToken
+	t.Cleanup(func() { childToken = oc })
+	childToken = "ctok"
+	hdr := map[string]string{childHeader: "ctok", guestHeader: "secret", shareHeader: hID1}
+	w := gReq{method: "GET", path: "/guest-me", hdr: hdr}.do(h)
+	if w.Code != 403 || !strings.Contains(w.Body.String(), `"ok":false`) {
+		t.Fatalf("secret inconnu : %d %s", w.Code, w.Body)
+	}
+	shareSt = nil
+	if w := (gReq{method: "GET", path: "/guest-me", hdr: hdr}).do(h); w.Code != 503 || !strings.Contains(w.Body.String(), `"ok":false`) {
+		t.Fatalf("magasin absent : %d %s", w.Code, w.Body)
+	}
+}
+
+// La garde efface en enveloppant la réponse : un handler hôte qui diffuse doit garder Flush.
+func TestNoStoreWriterFlushes(t *testing.T) {
+	rec := httptest.NewRecorder()
+	var w http.ResponseWriter = &noStoreWriter{ResponseWriter: rec}
+	f, ok := w.(http.Flusher)
+	if !ok {
+		t.Fatal("pas de Flush")
+	}
+	f.Flush()
+	if !rec.Flushed || rec.Header().Get("Cache-Control") != "no-store" || http.NewResponseController(w).Flush() != nil {
+		t.Fatalf("flush : %v %q", rec.Flushed, rec.Header().Get("Cache-Control"))
 	}
 }

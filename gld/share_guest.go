@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -126,6 +127,16 @@ func (n *noStoreWriter) Write(b []byte) (int, error) {
 
 func (n *noStoreWriter) Unwrap() http.ResponseWriter { return n.ResponseWriter }
 
+// Flush : la garde enveloppe aussi des réponses hôte, dont des flux (chat) qui exigent http.Flusher.
+func (n *noStoreWriter) Flush() {
+	if !n.done {
+		n.WriteHeader(http.StatusOK)
+	}
+	if f, ok := n.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 // Les juges du cookie rendent sure=false quand ils ne peuvent pas répondre (magasin absent, fichier illisible) : seul un
 // « secret invalide » certain efface le cookie, sinon une panne passagère perdrait pour de bon un lien à usage unique.
 func guestShare(sec string, touch bool) (sh Share, ok, sure bool) {
@@ -143,14 +154,20 @@ func guestShare(sec string, touch bool) (sh Share, ok, sure bool) {
 	return sh, ok, true
 }
 
-// guestHomesReadable : le fichier des homes absent vaut « aucun home » (réponse certaine) ; illisible ou corrompu, non.
-func guestHomesReadable() bool {
-	b, err := readTrusted(homesFile())
+var guestReadHomes = func() ([]byte, error) { return readTrusted(homesFile()) } // les tests simulent une lecture
+
+// guestHomes : lu une seule fois par jugement (readHomesFile rend une liste vide sur toute erreur, ce qui ferait croire à un
+// home inconnu). Fichier absent : aucun home, réponse certaine ; illisible ou corrompu : pas de réponse.
+func guestHomes() ([]Home, bool) {
+	b, err := guestReadHomes()
 	if errors.Is(err, os.ErrNotExist) {
-		return true
+		return nil, true
 	}
 	var st struct{ Homes []Home }
-	return err == nil && json.Unmarshal(b, &st) == nil
+	if err != nil || json.Unmarshal(b, &st) != nil {
+		return nil, false
+	}
+	return st.Homes, true
 }
 
 // guestKnown : la passerelle ne possède pas les partages d'un home enfant ; elle lit son fichier pour savoir si le cookie
@@ -159,20 +176,21 @@ func guestKnown(home, sec string) (Share, bool, bool) {
 	if sec == "" {
 		return Share{}, false, true
 	}
-	if !guestHomesReadable() {
+	hs, readable := guestHomes()
+	if !readable {
 		return Share{}, false, false
 	}
-	h, ok := homeByName(home)
-	if !ok {
+	i := slices.IndexFunc(hs, func(h Home) bool { return h.Name == home })
+	if i < 0 {
 		return Share{}, false, true
 	}
-	st, err := guestOpenShares(h.Dir)
+	st, err := guestOpenShares(hs[i].Dir)
 	if err != nil {
 		return Share{}, false, false
 	}
-	hs := hashSecret(sec)
+	h := hashSecret(sec)
 	for _, sh := range st.m {
-		if hashEq(sh.CookieHash, hs) {
+		if hashEq(sh.CookieHash, h) {
 			return *sh, true, true
 		}
 	}
@@ -301,7 +319,11 @@ func guestGate(mux *http.ServeMux, next http.Handler) http.Handler {
 				return
 			}
 			// La passerelle n'a pas jugé ce client comme hôte : un secret refusé ici ne retombe jamais sur l'hôte.
-			sh, ok, _ := guestShare(sec, r.Header.Get(guestQuietHeader) != "1")
+			sh, ok, sure := guestShare(sec, r.Header.Get(guestQuietHeader) != "1")
+			if !sure { // pas un refus du secret : la passerelle ne doit pas effacer le cookie
+				guestDeny(w, 503, "srv.share.indisponible")
+				return
+			}
 			hd := r.Header.Get(shareHeader)
 			if !ok || shareHandle(sh.Session) != hd {
 				guestDeny(w, 403, "srv.share_guest.refuse")
