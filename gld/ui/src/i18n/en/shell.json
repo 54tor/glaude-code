@@ -33,10 +33,10 @@
         "snippets": "Snippets",
         "memory": "Memory",
         "config": "Configuration",
-        "extensions": "Skills and plugins",
+        "extensions": "Skills, Extensions and Plugins",
         "projectConfig": "Project permissions and settings",
         "skills": "Skills",
-        "tabs": "Saved sessions",
+        "tabs": "Saved workspaces",
         "dir": "Folder"
       },
       "sub": {

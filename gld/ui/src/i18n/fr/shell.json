@@ -33,10 +33,10 @@
         "snippets": "Snippets",
         "memory": "Mémoire",
         "config": "Configuration",
-        "extensions": "Skills et plugins",
+        "extensions": "Skills, Extensions et Plugins",
         "projectConfig": "Permissions et réglages du projet",
         "skills": "Skills",
-        "tabs": "Sessions sauvegardées",
+        "tabs": "Workspaces sauvegardés",
         "dir": "Dossier"
       },
       "sub": {
