@@ -73,7 +73,7 @@ func ideCodePath(rel string) bool {
 		seg = strings.ToLower(strings.TrimRight(seg, ". "))
 		short, _, tilde := strings.Cut(seg, "~")
 		for _, n := range []string{".git", ".claude", ".mcp.json", ".gitattributes", ".gitmodules"} {
-			if seg == n || tilde && strings.HasPrefix(strings.ReplaceAll(n, ".", ""), short) {
+			if strings.EqualFold(seg, n) || tilde && strings.HasPrefix(strings.ReplaceAll(n, ".", ""), short) {
 				return true
 			}
 		}
