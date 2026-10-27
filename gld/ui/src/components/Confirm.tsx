@@ -37,7 +37,7 @@ export function Confirm({ ask, onClose }: { ask: Ask | null; onClose: () => void
       <AlertDialogContent onCloseAutoFocus={back}>
         <AlertDialogHeader>
           <AlertDialogTitle>{ask?.title}</AlertDialogTitle>
-          <AlertDialogDescription className="whitespace-pre-line">{ask?.body}</AlertDialogDescription>
+          <AlertDialogDescription className="min-w-0 whitespace-pre-line [overflow-wrap:anywhere]">{ask?.body}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
