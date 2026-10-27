@@ -15,6 +15,7 @@ import { useAppData } from "@/hooks/useAppData"
 import { useSearchHits } from "@/hooks/useSearchHits"
 import { useShortcuts } from "@/hooks/useShortcuts"
 import { useWaitingNotice } from "@/hooks/useWaitingNotice"
+import { BanAlert } from "@/components/BanAlert"
 import { useQueueDrain } from "@/hooks/useQueueDrain"
 import { applyFont } from "@/lib/fonts"
 import { type Choice } from "@/lib/models"
@@ -467,6 +468,7 @@ function Shell() {
       </Suspense>
       <DirPicker pick={picker} home={home} />
       <Confirm ask={ask} onClose={() => setAsk(null)} />
+      <BanAlert />
       <Prompt ask={prompt} onClose={() => setPrompt(null)} />
       <Compose ask={compose} onClose={() => setCompose(null)} />
       <SessionInfo row={info} onClose={() => setInfo(null)} />

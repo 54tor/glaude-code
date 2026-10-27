@@ -6,6 +6,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ### Ajouté
 - Connexion : une adresse extérieure qui accumule 8 échecs en 15 min (tous noms confondus) est bannie 1 h ; le poste, les réseaux privés et le lien local en sont exempts.
+- Connexion : un ban ouvre une alerte dans chaque session connectée (`GET /auth/alerts`).
 
 ## [0.4.7] - 2026-10-26
 

@@ -427,6 +427,12 @@
       "title": "Blocs-notes",
       "count": "{{count}} blocs-notes",
       "lines": "{{count}} ligne(s)"
+    },
+    "ban": {
+      "title_other": "{{count}} adresses bannies",
+      "body": "Trop d'échecs de connexion depuis une adresse extérieure : elle est refusée pendant 1 h. Les détails sont dans le journal des événements d'authentification.",
+      "ok": "Compris",
+      "title_one": "Adresse bannie"
     }
   }
 }

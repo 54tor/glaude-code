@@ -112,6 +112,7 @@ func routesAuth(mux *http.ServeMux, s *authStore, th *throttle) *authAPI {
 	mux.HandleFunc("POST /auth/factor/remove", a.factorRemove)
 	mux.HandleFunc("POST /auth/recovery/regenerate", a.recoveryRegenerate)
 	mux.HandleFunc("POST /auth/password", a.password)
+	mux.HandleFunc("GET /auth/alerts", a.alerts)
 	mux.HandleFunc("GET /auth/sessions", a.sessions)
 	mux.HandleFunc("POST /auth/sessions/revoke", a.sessionRevoke)
 	mux.HandleFunc("POST /auth/sessions/revoke-others", a.sessionRevokeOthers)

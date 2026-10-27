@@ -124,6 +124,8 @@ Compteurs en base, clés par nom, par adresse (une adresse IPv6 est ramenée à 
 | Plafond global | 60 tentatives par minute sur toute la passerelle, en mémoire |
 | Codes TOTP | dérive acceptée de ±1 pas (30 s) ; un code déjà accepté n'est pas rejouable |
 
+Chaque ban ouvre une alerte dans toutes les sessions connectées (l'interface interroge `GET /auth/alerts?since=` toutes les 15 s ; seuls les bans survenus après l'ouverture de l'onglet sont montrés).
+
 Un déluge de connexions sur un nom peut gêner ce compte (déni de service local, borné par le délai). Le compteur global repart à zéro au redémarrage. La fenêtre de 15 min est fixe (elle part du premier échec). Les lignes de `throttle` sans effet, les sessions échues et les événements de plus de 90 jours sont purgés à l'ouverture de la base puis au plus une fois par 24 h.
 
 **Journal d'événements** : le nom saisi est tronqué à 64 caractères. Les refus et contentions sans compte (`blocked`, `busy`, `denied`) sont limités à 5 par minute et par adresse et 200 par minute en tout (table de 1024 adresses, au-delà elles partagent un compte commun) ; ceux d'un compte, à un par minute et par type. Une ligne `suppressed` par minute donne les totaux perdus, écrite au prochain événement ou à la prochaine requête vérifiée. Les écritures de l'espace de travail réussies y figurent sous `ide_write` (opération, dossier, chemin relatif, octets ; jamais le contenu). Sont toujours écrits : altérations, verrous, échecs et succès du second facteur, succès de connexion, changements de droits, de facteurs et de mots de passe, révocations. Une inondation d'adresses peut donc taire d'autres refus anonymes pendant la minute.
