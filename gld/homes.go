@@ -296,10 +296,22 @@ func startHomeProc(h Home) (*homeProc, error) {
 	return nil, terr("srv.homes.leProcessusEnfantNe")
 }
 
+// environNoAuth : l'environnement du processus sans GLD_AUTH_* (clé maître de la base d'authentification) :
+// ni claude, ni le terminal web, ni un home enfant n'en héritent (un `env` exécuté par Claude finirait dans un transcript).
+func environNoAuth() []string {
+	var out []string
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, "GLD_AUTH_") {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
 // childEnv : l'environnement du processus principal, sans le jeton ni les réglages d'écoute du serveur.
 func childEnv() []string {
 	var out []string
-	for _, e := range os.Environ() {
+	for _, e := range environNoAuth() {
 		k, _, _ := strings.Cut(e, "=")
 		if k == "GLD_WEB_TOKEN" || k == "GLD_WEB_PORT" || k == "GLD_WEB_LISTEN" || k == "CLAUDE_CONFIG_DIR" || k == "CC_WEB_PORT" || k == childTokenEnv || k == ideMainCfgEnv {
 			continue

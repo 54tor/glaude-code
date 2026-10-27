@@ -102,7 +102,7 @@ func guardNorm(s string) string {
 func guardHook(cmd string, authDir string) (deny bool) {
 	// Deux lectures : barres obliques inverses retirées (au\th.db) ou lues comme séparateurs (C:\Users\...).
 	cs := []string{guardNorm(cmd), guardNorm(strings.ReplaceAll(cmd, `\`, "/"))}
-	if sqliteRe.MatchString(cs[0]) || strings.Contains(cs[0], "gld_auth_dir") {
+	if sqliteRe.MatchString(cs[0]) || strings.Contains(cs[0], "gld_auth_") {
 		return true
 	}
 	// -wal, -shm et -journal : les fichiers annexes de SQLite contiennent aussi les données.
