@@ -37,11 +37,7 @@ func notesLoad() (map[string]string, error) {
 
 func notesSave(m map[string]string) error {
 	b, _ := json.MarshalIndent(m, "", "  ")
-	tmp := notesFile() + ".tmp"
-	if err := writeSynced(tmp, b, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, notesFile())
+	return rWriteAtomic(cfgDir(), notesFile(), b, 0o600)
 }
 
 func noteKeyOK(k string) bool {

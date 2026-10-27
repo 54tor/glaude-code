@@ -97,3 +97,32 @@ func TestWriteConfigNeSuitPasLesLiens(t *testing.T) {
 		t.Fatalf("temporaires restés : %v", m)
 	}
 }
+
+func TestFichiersDeDonneesNeSuiventPasLesLiens(t *testing.T) {
+	cfg, out := t.TempDir(), t.TempDir()
+	old := root
+	t.Cleanup(func() { root = old })
+	use(cfg)
+	victim := filepath.Join(out, "victime")
+	os.WriteFile(victim, []byte("intact"), 0o600)
+	for _, f := range []string{"gld-web-notes.json.tmp", "gld-web-tabs.json.tmp", "gld-web-groups.json.tmp"} {
+		os.Symlink(victim, filepath.Join(cfg, f))
+	}
+	if err := notesSave(map[string]string{"p/x": "y"}); err != nil {
+		t.Fatal(err)
+	}
+	writeTabs(nil)
+	os.MkdirAll(filepath.Join(out, "-p"), 0o700)
+	os.WriteFile(filepath.Join(out, "-p", id1+".jsonl"), []byte("{}\n"), 0o600)
+	os.MkdirAll(filepath.Join(cfg, "projects"), 0o700)
+	os.Symlink(filepath.Join(out, "-p"), filepath.Join(cfg, "projects", "-p"))
+	if err := setTitle(filepath.Join(cfg, "projects", "-p", id1+".jsonl"), id1, "t"); err == nil {
+		t.Error("titre écrit à travers un lien")
+	}
+	if b, _ := os.ReadFile(victim); string(b) != "intact" {
+		t.Fatalf("fichier hors de la config écrasé : %q", b)
+	}
+	if b, _ := os.ReadFile(filepath.Join(out, "-p", id1+".jsonl")); string(b) != "{}\n" {
+		t.Fatalf("transcript hors de la config modifié : %q", b)
+	}
+}
