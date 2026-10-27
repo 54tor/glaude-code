@@ -40,6 +40,7 @@
     "mcpAccount": "claude.ai account connector: set in claude.ai",
     "mcpOther": "other source",
     "tabActive": "Active",
-    "tabInstall": "Install and marketplaces"
+    "tabInstall": "Install and marketplaces",
+    "editor": "Skill editor"
   }
 }

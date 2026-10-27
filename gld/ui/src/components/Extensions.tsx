@@ -155,6 +155,7 @@ export function Extensions({ home }: { home: string }) {
         <section>
           <h3 className={sect}>
             {t("extensions.skills")} <span className="text-xs font-normal text-muted-foreground">{t("extensions.skillsTotal", { count: skillsHere.length, chars })}</span>
+            <Link href={href({ kind: "skills", key: "" })} className="ml-auto text-xs font-normal text-muted-foreground underline">{t("extensions.editor")}</Link>
           </h3>
           <table className="w-full text-sm">
             {head}
