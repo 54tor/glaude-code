@@ -7,7 +7,7 @@ import { ChevronRight, CornerDownRight, ExternalLink, Wrench } from "lucide-reac
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { api, type Msg } from "@/lib/api"
-import { authFetch } from "@/lib/auth"
+import { authFetch, getAuth } from "@/lib/auth"
 import { size } from "@/lib/format"
 import { noBreak, rehypeNoBreak } from "@/lib/noBreak"
 import { CompactSummary, isCompactSummary, isTagged, Tagged } from "./Tagged"
@@ -138,7 +138,9 @@ function MessageView({ m, conv }: { m: Msg; conv?: Conv }) {
   const title = m.ts ? new Date(m.ts).toLocaleString(loc()) : undefined
   // Image de la conversation : relue à la demande dans le transcript (GET /conv-image), jamais embarquée dans la liste des messages.
   if (m.img && conv) {
-    const src = `/conv-image?dir=${encodeURIComponent(conv.dir)}&id=${encodeURIComponent(conv.id)}&o=${m.o ?? 0}&k=${m.k ?? 0}`
+    // Un <img> n'envoie pas X-Gld-Share : l'invité nomme son partage dans l'URL.
+    const sh = conv.guest ? getAuth().share : undefined
+    const src = `/conv-image?dir=${encodeURIComponent(conv.dir)}&id=${encodeURIComponent(conv.id)}&o=${m.o ?? 0}&k=${m.k ?? 0}${sh ? `&share=${sh}` : ""}`
     return (
       <div title={title} className={`msg flex ${m.r === "user" ? "justify-end" : ""}`}>
         <a href={src} target="_blank" rel="noopener noreferrer" title={t("conversation.message.openImage")}>

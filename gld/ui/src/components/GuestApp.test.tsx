@@ -5,6 +5,7 @@ import { i18n } from "@/i18n"
 import type { Msg } from "@/lib/api"
 import { setAuth } from "@/lib/auth"
 import { GuestApp } from "./GuestApp"
+import { Message } from "./Message"
 
 const WHITE = new Set(["GET /conv", "GET /conv-text", "GET /conv-tools", "GET /conv-image", "GET /session-live", "GET /session-state", "GET /session-task-output", "GET /session-screen", "GET /queue", "POST /queue-add", "POST /queue-rm", "GET /guest-me", "GET /guest-list", "POST /guest-leave"])
 const key = (c: { method: string; path: string }) => `${c.method} ${c.path}`
@@ -323,5 +324,18 @@ describe("GuestApp", () => {
       expect(screen.getByText(i18n.t("conversation.guest.bye"))).toBeTruthy()
       expect(screen.getByRole("link", { name: /Autre/ }).getAttribute("href")).toBe(`/guest/${H2}`)
     })
+  })
+
+  it("images : src et lien portent share=<poignée> en mode invité, rien côté hôte", async () => {
+    rich = true
+    await mount()
+    await tick(2100)
+    const img = document.querySelector("img")!
+    expect(img.getAttribute("src")).toContain(`share=${H}`)
+    expect(document.querySelector("a[href^='/conv-image']")!.getAttribute("href")).toContain(`share=${H}`)
+    cleanup()
+    setAuth({ share: undefined })
+    render(<Message m={{ r: "user", t: "", img: "1", o: 1, k: 0 }} conv={{ dir: "/d", id: "s1", tools: false }} />)
+    expect(document.querySelector("img")!.getAttribute("src")).not.toContain("share=")
   })
 })
