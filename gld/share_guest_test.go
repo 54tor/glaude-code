@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -768,10 +769,18 @@ func TestGuestListChildRevalidated(t *testing.T) {
 	sec, _, _ := cs.Redeem(tok)
 	tok2, _ := cs.Create(gOther, "-q", "")
 	sec2, _, _ := cs.Redeem(tok2)
-	refuse := false
+	refuse, plain := false, false
 	child := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hd := r.Header.Get(shareHeader)
-		if refuse || r.URL.Path != "/guest-me" || r.Header.Get(guestHeader) == "" || r.Header.Get("Cookie") != "" || r.Header.Get(guestQuietHeader) != "1" {
+		if plain { // refus de childAuthorized ou de la garde Host : pas un jugement du secret
+			http.Error(w, "forbidden", 403)
+			return
+		}
+		if refuse {
+			guestDeny(w, 403, "srv.share_guest.refuse")
+			return
+		}
+		if r.URL.Path != "/guest-me" || r.Header.Get(guestHeader) == "" || r.Header.Get("Cookie") != "" || r.Header.Get(guestQuietHeader) != "1" {
 			w.WriteHeader(403)
 			return
 		}
@@ -794,7 +803,12 @@ func TestGuestListChildRevalidated(t *testing.T) {
 	if k := cookieOf(w, guestCookieName(shareHandle(gOther))); k == nil || k.MaxAge >= 0 {
 		t.Fatalf("cookie échangé non effacé : %+v", k)
 	}
-	refuse = true
+	plain = true
+	w = gReq{method: "GET", path: "/guest-list", jar: []*http.Cookie{{Name: guestCookieName(shareHandle(gOther)), Value: "perso." + sec2}}}.do(h)
+	if w.Code != 403 || len(w.Result().Cookies()) != 0 {
+		t.Fatalf("403 brut de l'enfant : %d %v", w.Code, w.Result().Cookies())
+	}
+	plain, refuse = false, true
 	w = gReq{method: "GET", path: "/guest-list", jar: []*http.Cookie{{Name: guestCookieName(shareHandle(gOther)), Value: "perso." + sec2}}}.do(h)
 	if k := cookieOf(w, guestCookieName(shareHandle(gOther))); w.Code != 403 || k == nil || k.MaxAge >= 0 {
 		t.Fatalf("refus de l'enfant : %d %+v", w.Code, k)
@@ -986,5 +1000,96 @@ func TestGuestStaticHandleFirstAndClearsDead(t *testing.T) {
 	w = gReq{method: "GET", path: "/guest/" + hds[0], jar: jar}.do(h)
 	if k := cookieOf(w, jar[0].Name); w.Code != 401 || k == nil || k.MaxAge >= 0 || cookieOf(w, jar[3].Name) != nil {
 		t.Fatalf("page d'un partage mort : %d %v", w.Code, w.Result().Cookies())
+	}
+}
+
+func noClear(t *testing.T, what string, w *httptest.ResponseRecorder) {
+	t.Helper()
+	for _, k := range w.Result().Cookies() {
+		if k.MaxAge < 0 {
+			t.Errorf("%s : cookie %s effacé sans réponse certaine", what, k.Name)
+		}
+	}
+}
+
+// Ne pas pouvoir répondre n'est pas « secret invalide » : aucun effacement (le lien était à usage unique), aucun accès invité.
+func TestGuestUnsureNeverClears(t *testing.T) {
+	probe := func(t *testing.T, h http.Handler, c string) {
+		t.Helper()
+		jar := []*http.Cookie{{Name: gName, Value: c}}
+		for _, q := range []gReq{{method: "GET", path: "/guest/" + hID1, jar: jar}, {method: "GET", path: "/guest", jar: jar}, {method: "GET", path: "/guest-list", jar: jar}, {method: "GET", path: "/conv", cookie: c}} {
+			w := q.do(h)
+			noClear(t, q.path, w)
+			if w.Code == 200 {
+				t.Errorf("%s : servi sans réponse certaine", q.path)
+			}
+		}
+	}
+	t.Run("fichier des partages illisible", func(t *testing.T) {
+		h := guestWeb(t, nil, modeTok)
+		addHomes(t, "perso")
+		hm, _ := homeByName("perso")
+		cs, _ := openShares(hm.Dir)
+		tok, _ := cs.Create(id1, "-p", "")
+		sec, _, _ := cs.Redeem(tok)
+		old := guestOpenShares
+		t.Cleanup(func() { guestOpenShares = old })
+		guestOpenShares = func(string) (*shareStore, error) { return nil, os.ErrPermission }
+		probe(t, h, "perso."+sec)
+	})
+	t.Run("partages indisponibles", func(t *testing.T) {
+		h := guestWeb(t, nil, modeTok)
+		c, _ := guestIn(t, h)
+		shareSt = nil
+		probe(t, h, c)
+	})
+	t.Run("fichier des homes illisible", func(t *testing.T) {
+		h := guestWeb(t, nil, modeTok)
+		addHomes(t, "perso")
+		hm, _ := homeByName("perso")
+		cs, _ := openShares(hm.Dir)
+		tok, _ := cs.Create(id1, "-p", "")
+		sec, _, _ := cs.Redeem(tok)
+		if err := os.WriteFile(homesFile(), []byte("{"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		probe(t, h, "perso."+sec)
+	})
+}
+
+// Réponses certaines : partage terminé, remplacé, home inconnu, secret faux ; effacés sur les pages et la requête gardée.
+func TestGuestDefinitiveStillClears(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	c, _ := guestIn(t, h)
+	shareSt.Create(id1, "-p", "") // remplacé : l'ancien cookie meurt
+	for _, v := range []string{c, "inconnu." + strings.Split(c, ".")[1], ".faux"} {
+		jar := []*http.Cookie{{Name: gName, Value: v}}
+		for _, q := range []gReq{{method: "GET", path: "/guest/" + hID1, jar: jar}, {method: "GET", path: "/guest", jar: jar}, {method: "GET", path: "/guest-list", jar: jar}, {method: "GET", path: "/conv", cookie: v}} {
+			w := q.do(h)
+			if k := cookieOf(w, gName); k == nil || k.MaxAge >= 0 || w.Code == 200 {
+				t.Errorf("%s %q : %d %+v", q.path, v, w.Code, k)
+			}
+		}
+	}
+}
+
+// Les fichiers publics, mis en cache, ne portent jamais d'effacement ; les pages qui effacent sont no-store.
+func TestGuestStaticClearsOnlyOnPages(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	asset, _ := filepath.Glob("ui/dist/assets/*.js")
+	if len(asset) == 0 {
+		t.Skip("ui/dist absent")
+	}
+	jar := []*http.Cookie{{Name: gName, Value: ".mort"}}
+	for _, p := range []string{"/assets/" + filepath.Base(asset[0]), "/icons/x", "/favicon.ico", "/manifest.webmanifest"} {
+		if w := (gReq{method: "GET", path: p, jar: jar}).do(h); len(w.Result().Cookies()) != 0 {
+			t.Errorf("%s : %v", p, w.Result().Cookies())
+		}
+	}
+	for _, p := range []string{"/guest", "/guest/" + hID1} {
+		w := gReq{method: "GET", path: p, jar: jar, hdr: map[string]string{"Accept": "text/html"}}.do(h)
+		if k := cookieOf(w, gName); k == nil || k.MaxAge >= 0 || w.Header().Get("Cache-Control") != "no-store" {
+			t.Errorf("%s : %+v %q", p, k, w.Header().Get("Cache-Control"))
+		}
 	}
 }
