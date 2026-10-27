@@ -42,6 +42,36 @@ async function retryItem(id: string, q: QItem) {
   refreshPending()
   if (!r.ok) toast.error(r.out)
 }
+// Une ligne de la file. Un envoi incertain se tranche (renvoyer ou retirer) ; un envoi en cours ne se retire plus.
+function QueueRow({ id, q, i, label }: { id: string; q: QItem; i: number; label?: ReactNode }) {
+  const { t } = useTranslation()
+  return (
+    <li className="flex items-center gap-2 rounded-md border border-dashed px-2 py-1 text-muted-foreground">
+      <span className="shrink-0 tabular-nums">{i + 1}.</span>
+      <Author q={q} />
+      <span className="min-w-0 flex-1 truncate" title={q.text}>
+        {q.text}
+      </span>
+      {q.state === "uncertain" ? (
+        <>
+          <span className="shrink-0 text-amber-600 dark:text-amber-400">{t("conversation.composer.sendUncertain")}</span>
+          <Button size="xs" variant="outline" onClick={() => void retryItem(id, q)}>
+            {t("conversation.composer.resend")}
+          </Button>
+        </>
+      ) : q.state === "sending" ? (
+        <span className="shrink-0">{t("conversation.composer.sending")}</span>
+      ) : (
+        label && <span className="shrink-0">{label}</span>
+      )}
+      {q.state !== "sending" && (
+        <Button size="icon-xs" variant="ghost" aria-label={t("conversation.composer.dequeue")} onClick={() => void removeFromQueue(id, q)}>
+          <X />
+        </Button>
+      )}
+    </li>
+  )
+}
 function Author({ q }: { q: QItem }) {
   const { t } = useTranslation()
   return q.author === "guest" ? <span className="shrink-0 rounded bg-muted px-1 text-2xs uppercase">{t("conversation.composer.guest")}</span> : null
@@ -122,8 +152,15 @@ export function Composer({
   // File d'attente : les messages écrits pendant que Claude répond partent l'un après l'autre à la fin du tour (sauf échec ou arrêt).
   // Brouillon et file vivent dans un magasin par session (useDraft) : fermer la fenêtre ne les perd pas, et l'envoi des messages
   // en file continue même fenêtre fermée.
-  const enqueue = (prompt: string) => addToQueue(id, prompt)
-  const unqueue = (item: QItem) => removeFromQueue(id, item)
+  const adding = useRef(false) // un ajout est en vol : deux Entrée rapprochées ne mettent pas le texte deux fois en file
+  const enqueue = async (prompt: string) => {
+    adding.current = true
+    try {
+      return await addToQueue(id, prompt)
+    } finally {
+      adding.current = false
+    }
+  }
   const stopped = useRef(false) // arrêt demandé par l'utilisateur : le message était bien parti
   const send = async () => {
     const rn = /^\/rename\s+(\S[\s\S]*)$/.exec(text.trim())
@@ -136,6 +173,7 @@ export function Composer({
     if (!prompt) return
     keepFocus()
     if (running) {
+      if (adding.current) return
       if (!(await enqueue(prompt))) return // refusé : le brouillon reste
       if (draftOf(id).text === text) setText("")
       return void pics.clear()
@@ -143,14 +181,33 @@ export function Composer({
     setText("")
     pics.clear()
     onWrite?.()
-    submit(prompt)
+    if (!(await submit(prompt))) {
+      // non délivré : jamais perdu, il revient dans le brouillon
+      const d = draftOf(id).text
+      if (!d.includes(prompt)) setText(d.trim() ? `${d}\n${prompt}` : prompt)
+    }
   }
-  const submit = async (prompt: string) => {
+  // Envoyer la tête de la file suspendue : son texte passe d'abord dans le brouillon (enregistré), puis la file le lâche, puis
+  // l'envoi ; le brouillon d'origine n'est rendu qu'une fois l'envoi réussi, donc fermer l'onglet n'efface jamais le texte.
+  const sendHead = async (head: QItem) => {
+    if (head.state !== "queued") return
+    const before = draftOf(id).text
+    const merged = before.trim() ? `${before}\n${head.text}` : head.text
+    setText(merged)
+    const r = await api.queueRm(id, head.id)
+    refreshPending()
+    if (!r.ok) {
+      toast.error(r.out)
+      if (draftOf(id).text === merged) setText(before)
+      return
+    }
+    onWrite?.()
+    if ((await submit(r.text ?? head.text)) && draftOf(id).text === merged) setText(before)
+  }
+  const submit = async (prompt: string): Promise<boolean> => {
     setOwn(true)
     setTurn(() => ({ id, msgs: [{ r: "user", t: prompt }], running: true }))
-    // Un message non délivré n'est jamais perdu : il retourne en tête de la file (suspendue), à renvoyer d'un clic.
-    const keep = () => void addToQueue(id, prompt)
-    const fail = (error: string) => (keep(), setOwn(false), setTurn((t) => t && { ...t, running: false, error }))
+    const fail = (error: string) => (setOwn(false), setTurn((t) => t && { ...t, running: false, error }), false)
     stopped.current = false
     let failed = false
     let res: Response
@@ -182,17 +239,11 @@ export function Composer({
     } catch (e) {
       return fail(e instanceof Error ? e.message : String(e)) // connexion coupée en cours de réponse
     }
-    if (failed && !stopped.current) keep() // échec de claude (pas un arrêt demandé) : on ne sait pas si le message est parti
+    const delivered = !failed || stopped.current // échec de claude (pas un arrêt demandé) : on ne sait pas si le message est parti
     setTurn((t) => t && { ...t, running: false })
     await onDone() // le transcript est relu avant le tour suivant, qui efface sinon son propre affichage
     setTimeout(() => setOwn(false), 30_000)
-    if (failed) return
-    const head = (await api.queue(id).catch(() => ({ items: [] as QItem[] }))).items[0]
-    if (head) {
-      const r = await api.queueRm(id, head.id)
-      refreshPending()
-      if (r.ok && r.text !== undefined) submit(r.text)
-    }
+    return delivered
   }
   const stop = () => ((stopped.current = true), api.post("/chat-stop", { id }))
 
@@ -220,28 +271,15 @@ export function Composer({
         {queue.length > 0 && (
           <ul className="space-y-1 text-xs" aria-label={t("conversation.composer.queueAria")}>
             {queue.map((q, i) => (
-              <li key={q.id} className="flex items-center gap-2 rounded-md border border-dashed px-2 py-1 text-muted-foreground">
-                <span className="shrink-0 tabular-nums">{i + 1}.</span>
-                <Author q={q} />
-                <span className="min-w-0 flex-1 truncate" title={q.text}>
-                  {q.text}
-                </span>
-                <Button size="icon-xs" variant="ghost" aria-label={t("conversation.composer.dequeue")} onClick={() => unqueue(q)}>
-                  <X />
-                </Button>
-              </li>
+              <QueueRow key={q.id} id={id} q={q} i={i} />
             ))}
-            {!running && (
+            {!running && queue[0].state === "queued" && (
               <li className="flex items-center gap-2 text-muted-foreground">
                 {t("conversation.composer.queueSuspended")}
                 <Button
                   size="xs"
                   variant="outline"
-                  onClick={async () => {
-                    const r = await api.queueRm(id, queue[0].id)
-                    refreshPending()
-                    if (r.ok && r.text !== undefined) submit(r.text)
-                  }}
+                  onClick={() => void sendHead(queue[0])}
                 >
                   {t("conversation.composer.sendNext")}
                 </Button>
@@ -297,8 +335,15 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
   const queue = usePending(id)
   const setText = (t: string) => setDraft(id, { text: t })
   const mention = useMention(text, setText, id)
-  const enqueue = (prompt: string) => addToQueue(id, prompt)
-  const unqueue = (item: QItem) => removeFromQueue(id, item)
+  const adding = useRef(false)
+  const enqueue = async (prompt: string) => {
+    adding.current = true
+    try {
+      return await addToQueue(id, prompt)
+    } finally {
+      adding.current = false
+    }
+  }
   const [busy, setBusy] = useState(false)
   const [asking, setAsking] = useState(false) // une question attend une réponse dans le terminal : rien ne s'y écrit tant qu'elle est ouverte
   const working = !!liveState.st?.thinking
@@ -329,6 +374,7 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
     if (!full || busy) return
     keepFocus()
     if (working || asking) {
+      if (adding.current) return
       if (!(await enqueue(full))) return
       if (draftOf(id).text === text) setText("")
       pics.clear()
@@ -418,26 +464,7 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
         {queue.length > 0 && (
           <ul className="space-y-1 text-xs" aria-label={t("conversation.composer.queueAria")}>
             {queue.map((q, i) => (
-              <li key={q.id} className="flex items-center gap-2 rounded-md border border-dashed px-2 py-1 text-muted-foreground">
-                <span className="shrink-0 tabular-nums">{i + 1}.</span>
-                <Author q={q} />
-                <span className="min-w-0 flex-1 truncate" title={q.text}>
-                  {q.text}
-                </span>
-                {q.state === "uncertain" ? (
-                  <>
-                    <span className="shrink-0 text-amber-600 dark:text-amber-400">{t("conversation.composer.queueSuspended")}</span>
-                    <Button size="xs" variant="outline" onClick={() => void retryItem(id, q)}>
-                      {t("conversation.composer.resend")}
-                    </Button>
-                  </>
-                ) : (
-                  i === 0 && <span className="shrink-0">{asking ? t("conversation.composer.afterQuestion") : working ? t("conversation.composer.whenIdle") : t("conversation.composer.sending")}</span>
-                )}
-                <Button size="icon-xs" variant="ghost" aria-label={t("conversation.composer.dequeue")} onClick={() => unqueue(q)}>
-                  <X />
-                </Button>
-              </li>
+              <QueueRow key={q.id} id={id} q={q} i={i} label={i === 0 ? (asking ? t("conversation.composer.afterQuestion") : working ? t("conversation.composer.whenIdle") : undefined) : undefined} />
             ))}
           </ul>
         )}

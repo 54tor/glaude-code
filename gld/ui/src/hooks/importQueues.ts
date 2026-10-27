@@ -1,30 +1,52 @@
+import { toast } from "sonner"
+import { i18n } from "@/i18n"
 import { api } from "@/lib/api"
 import { withoutFollowUps } from "@/lib/queue"
-import { legacyQueues, saveDrafts, SEND_TIMEOUT } from "./useDraft"
+import { draftOf, legacyQueues, saveDrafts, SEND_TIMEOUT, setDraft } from "./useDraft"
 
-// Reprise unique des files locales : chaque texte part dans l'ordre vers la file du serveur. Un premier message dont l'envoi
-// local est incertain (marqueur « sending » trop ancien) n'est pas repris : il a pu arriver, le rejouer le dupliquerait.
-// Au moindre échec réseau, les données locales restent et le garde n'est pas posé : un prochain démarrage réessaie.
+// Reprise unique des files locales : chaque texte part dans l'ordre vers la file du serveur, et le stockage local est réécrit
+// après chaque envoi (une reprise après échec ne duplique rien). Un texte que le serveur refuse, ou dont l'envoi local est
+// incertain depuis trop longtemps (il a pu arriver : le rejouer le dupliquerait), revient dans le brouillon de sa session avec
+// une notification. Au moindre échec réseau, les données locales restent et le garde n'est pas posé.
 const DONE = "gld.queueImported"
-export async function importLocalQueues(): Promise<void> {
-  try {
-    if (localStorage.getItem(DONE)) return
-  } catch {
-    return
-  }
+let running: Promise<void> | null = null
+
+const toDraft = (id: string, text: string) => {
+  const d = draftOf(id)
+  setDraft(id, { text: d.text.trim() ? `${d.text}\n${text}` : text })
+  toast.error(i18n.t("conversation.composer.importRestored", { text: text.length > 60 ? text.slice(0, 60) + "…" : text }))
+}
+
+async function run(): Promise<void> {
+  if (localStorage.getItem(DONE)) return // relu sous le verrou : un autre onglet a pu finir entre-temps
   for (const [id, l] of [...legacyQueues]) {
-    const head = l.sending !== undefined && Date.now() - l.sending > SEND_TIMEOUT ? l.queue.slice(0, 1) : []
-    for (const text of l.queue.slice(head.length)) {
-      const r = await api.queueAdd(id, withoutFollowUps(text))
+    if (l.sending !== undefined && Date.now() - l.sending > SEND_TIMEOUT && l.queue.length > 0) {
+      const [stale, ...rest] = l.queue
+      l.queue = rest
+      l.sending = undefined
+      toDraft(id, withoutFollowUps(stale))
+    }
+    while (l.queue.length > 0) {
+      const text = withoutFollowUps(l.queue[0])
+      const r = await api.queueAdd(id, text)
       if (r.net) return
-      l.queue = [...head, ...l.queue.slice(head.length + 1)] // retiré au fur et à mesure ; refusé (file pleine) : inutile de rejouer à l'identique
+      if (!legacyQueues.has(id)) return // changement de compte pendant l'envoi
+      l.queue = l.queue.slice(1)
+      if (!r.ok) toDraft(id, text)
+      saveDrafts()
     }
     legacyQueues.delete(id)
   }
   saveDrafts()
+  localStorage.setItem(DONE, "1")
+}
+
+export function importLocalQueues(): Promise<void> {
   try {
-    localStorage.setItem(DONE, "1")
+    if (localStorage.getItem(DONE)) return Promise.resolve()
+    running ??= (navigator.locks ? navigator.locks.request(DONE, run) : run()).catch(() => {}).finally(() => void (running = null))
+    return running
   } catch {
-    /* stockage indisponible */
+    return Promise.resolve() // stockage indisponible
   }
 }

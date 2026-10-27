@@ -56,6 +56,7 @@ if (typeof window !== "undefined")
 // Changement de compte : seule la copie en mémoire part ; le stockage est vidé par l'appelant, ou appartient déjà à un autre compte.
 export function clearDrafts() {
   entries.clear()
+  legacy.clear() // la file locale du compte précédent ne part jamais vers la file serveur du suivant
   subs.forEach((f) => f())
 }
 

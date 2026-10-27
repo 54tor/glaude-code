@@ -83,6 +83,7 @@
       "messageAria": "Message to Claude",
       "queueAria": "Queued messages",
       "dequeue": "Remove from the queue",
+      "importRestored": "Queue full or message refused: “{{text}}” is back in the draft",
       "guest": "Guest",
       "sendUncertain": "Send uncertain: may already have arrived",
       "resend": "Resend",

@@ -83,6 +83,7 @@
       "messageAria": "Message à Claude",
       "queueAria": "Messages en file d'attente",
       "dequeue": "Retirer de la file",
+      "importRestored": "File pleine ou message refusé : « {{text}} » est revenu dans le brouillon",
       "guest": "Invité",
       "sendUncertain": "Envoi incertain : peut-être déjà reçu",
       "resend": "Renvoyer",

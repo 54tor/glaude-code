@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { toast } from "sonner"
 
 type D = typeof import("./useDraft") & typeof import("./importQueues") & { api: typeof import("@/lib/api").api }
 const ok = { ok: true, out: "" }
@@ -52,5 +53,45 @@ describe("importLocalQueues", () => {
     const add = vi.spyOn(d.api, "queueAdd").mockResolvedValue(ok)
     await d.importLocalQueues()
     expect(add.mock.calls).toEqual([["s1", "b"]])
+  })
+  it("sauvegarde après chaque envoi : une reprise après échec ne duplique rien", async () => {
+    const d = await fresh(stored)
+    vi.spyOn(d.api, "queueAdd").mockResolvedValueOnce(ok).mockResolvedValueOnce({ ok: false, out: "", net: true })
+    await d.importLocalQueues()
+    expect(JSON.parse(localStorage.getItem("gld.drafts") ?? "{}").s1.queue).toEqual(["b"])
+    const d2 = await fresh(JSON.parse(localStorage.getItem("gld.drafts") ?? "{}"))
+    const add = vi.spyOn(d2.api, "queueAdd").mockResolvedValue(ok)
+    await d2.importLocalQueues()
+    expect(add.mock.calls).toEqual([["s1", "b"], ["s2", "c"]])
+  })
+  it("un item refusé revient dans le brouillon avec un toast", async () => {
+    const d = await fresh({ s1: { text: "x", queue: ["a", "b"] } })
+    vi.spyOn(d.api, "queueAdd").mockResolvedValueOnce({ ok: false, out: "pleine" }).mockResolvedValueOnce(ok)
+    const err = vi.spyOn(toast, "error").mockImplementation(() => "")
+    await d.importLocalQueues()
+    expect(d.draftOf("s1").text).toBe("x\na")
+    expect(err).toHaveBeenCalled()
+    expect(localStorage.getItem("gld.queueImported")).toBe("1")
+  })
+  it("un marqueur d'envoi ancien : le texte revient dans le brouillon, avec un toast", async () => {
+    const d = await fresh({ s1: { text: "", queue: ["a", "b"], sending: Date.now() - 60_000 } })
+    vi.spyOn(d.api, "queueAdd").mockResolvedValue(ok)
+    const err = vi.spyOn(toast, "error").mockImplementation(() => "")
+    await d.importLocalQueues()
+    expect(d.draftOf("s1").text).toBe("a")
+    expect(err).toHaveBeenCalled()
+  })
+  it("deux imports simultanés n'envoient qu'une fois", async () => {
+    const d = await fresh(stored)
+    const add = vi.spyOn(d.api, "queueAdd").mockResolvedValue(ok)
+    await Promise.all([d.importLocalQueues(), d.importLocalQueues()])
+    expect(add).toHaveBeenCalledTimes(3)
+  })
+  it("un changement de compte abandonne les files locales", async () => {
+    const d = await fresh(stored)
+    d.clearDrafts()
+    const add = vi.spyOn(d.api, "queueAdd").mockResolvedValue(ok)
+    await d.importLocalQueues()
+    expect(add).not.toHaveBeenCalled()
   })
 })
