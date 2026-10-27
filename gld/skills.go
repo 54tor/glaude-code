@@ -257,7 +257,10 @@ func scanSkills(base, scope, project, plugin string, readonly bool, locks map[st
 		return nil
 	}
 	for _, e := range ents {
-		if !e.IsDir() || !skillName.MatchString(e.Name()) {
+		if !skillName.MatchString(e.Name()) {
+			continue
+		}
+		if d, err := os.Stat(filepath.Join(base, e.Name())); err != nil || !d.IsDir() { // suit les liens symboliques
 			continue
 		}
 		p := filepath.Join(base, e.Name(), skillFile)
@@ -288,7 +291,8 @@ func scanSkills(base, scope, project, plugin string, readonly bool, locks map[st
 		if s.Name == "" {
 			s.Name = s.Dir
 		}
-		s.Files, s.KB = countSkillFiles(filepath.Dir(p))
+		dir, _ := filepath.EvalSymlinks(filepath.Dir(p)) // WalkDir ne descend pas dans un lien
+		s.Files, s.KB = countSkillFiles(dir)
 		out = append(out, s)
 	}
 	return out

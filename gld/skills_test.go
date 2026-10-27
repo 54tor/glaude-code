@@ -182,3 +182,26 @@ func TestOrigineDesSkills(t *testing.T) {
 		t.Errorf("le store doit être en lecture seule (%d skills)", len(by))
 	}
 }
+
+func TestSkillsSymlink(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	ext := t.TempDir()
+	put(t, filepath.Join(ext, "lie", "SKILL.md"), "---\ndescription: via lien\n---\nx\n", old)
+	put(t, filepath.Join(ext, "lie", "refs", "a.md"), "a\n", old)
+	if err := os.MkdirAll(filepath.Join(cfg, "skills"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(ext, "lie"), filepath.Join(cfg, "skills", "lie")); err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range listSkills() {
+		if s.Key == "u/lie" {
+			if s.Files != 2 {
+				t.Fatalf("fichiers : %d", s.Files)
+			}
+			return
+		}
+	}
+	t.Fatal("skill lié absent de la liste")
+}
