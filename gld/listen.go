@@ -122,6 +122,11 @@ func withToken(token string, next http.Handler) http.Handler {
 			http.Redirect(w, r, u.String(), http.StatusSeeOther)
 			return
 		}
+		if _, err := r.Cookie(tokenCookie); err == nil {
+			// Jeton changé depuis : sans effacement, chaque requête de l'interface rouvrirait un essai et bloquerait l'adresse,
+			// /token-login compris.
+			http.SetCookie(w, &http.Cookie{Name: tokenCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: requestHTTPS(r), SameSite: http.SameSiteStrictMode})
+		}
 		if wrongTokenPresented(r) && !tokenTry(clientIP(r)) { // chaque jeton faux présenté compte, comme au formulaire
 			w.Header().Set("Retry-After", "60")
 			w.Header().Set("Cache-Control", "no-store")

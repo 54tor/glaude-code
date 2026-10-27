@@ -108,3 +108,23 @@ func TestWithTokenThrottlesWrongTokens(t *testing.T) {
 		t.Errorf("sans jeton : %d", c)
 	}
 }
+
+// Un cookie gld_token périmé (jeton changé) est effacé à son premier refus : le polling de l'interface ne doit pas épuiser
+// les essais de l'adresse, sans quoi le nouveau jeton ne pourrait plus être saisi.
+func TestCookiePerimeEfface(t *testing.T) {
+	resetTokenTries()
+	t.Cleanup(resetTokenTries)
+	h := withToken("0123456789abcdef0123", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
+	r := httptest.NewRequest("GET", "/api/x", nil)
+	r.RemoteAddr = "192.0.2.8:1234"
+	r.AddCookie(&http.Cookie{Name: tokenCookie, Value: "ancien-jeton"})
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	cleared := false
+	for _, c := range w.Result().Cookies() {
+		cleared = cleared || c.Name == tokenCookie && c.MaxAge < 0
+	}
+	if !cleared {
+		t.Fatalf("cookie périmé non effacé : %v", w.Result().Cookies())
+	}
+}
