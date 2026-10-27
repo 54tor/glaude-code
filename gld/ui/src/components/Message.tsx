@@ -3,7 +3,7 @@ import { memo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { CornerDownRight, Wrench } from "lucide-react"
+import { ChevronRight, CornerDownRight, Wrench } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { api, type Msg } from "@/lib/api"
@@ -64,6 +64,31 @@ function UserText({ t: text }: { t: string }) {
   return <>{parts}</>
 }
 
+// Spécification ou plan superpowers cité par un appel d'outil : lu à la demande dans le dossier de la session et rendu en Markdown.
+const SP_DOC = /docs\/superpowers\/(?:specs|plans)\/[^\s"']+\.md/
+function SuperpowersDoc({ dir, path }: { dir: string; path: string }) {
+  const { t } = useTranslation()
+  const [doc, setDoc] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
+  const flip = () => {
+    setOpen(!open)
+    if (doc === null) api.fsFile(dir, path).then((r) => setDoc(r.content), () => (toast.error(t("conversation.message.docFail")), setOpen(false)))
+  }
+  return (
+    <div className="mt-1">
+      <button type="button" onClick={flip} aria-expanded={open} className="flex cursor-pointer items-center gap-1 text-xs text-primary hover:underline">
+        <ChevronRight className={`size-3.5 transition-transform ${open ? "rotate-90" : ""}`} aria-hidden />
+        {t("conversation.message.showDoc")}
+      </button>
+      {open && doc !== null && (
+        <div className="mt-2 rounded-lg border bg-card px-4 py-3 leading-relaxed text-card-foreground">
+          <Markdown t={doc} />
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Mémoïsé (voir plus bas) : la conversation se redessine pour l'état de la session, pas pour chacun de ses messages.
 type Conv = { dir: string; id: string; tools?: boolean }
 
@@ -108,7 +133,10 @@ function MessageView({ m, conv }: { m: Msg; conv?: Conv }) {
     return (
       <div title={title} className="msg flex gap-2 border-l-2 border-primary/30 py-0.5 pl-3 text-muted-foreground">
         <Icon className="mt-0.5 size-3.5 shrink-0" aria-label={result ? t("conversation.message.toolResult") : t("conversation.message.toolCall")} />
-        <span className="min-w-0 break-words whitespace-pre-wrap">{noBreak(result ? m.t.slice(1).trimStart() : m.t)}</span>
+        <div className="min-w-0">
+          <span className="break-words whitespace-pre-wrap">{noBreak(result ? m.t.slice(1).trimStart() : m.t)}</span>
+          {!result && conv && SP_DOC.test(m.t) && <SuperpowersDoc dir={conv.dir} path={SP_DOC.exec(m.t)![0]} />}
+        </div>
       </div>
     )
   }

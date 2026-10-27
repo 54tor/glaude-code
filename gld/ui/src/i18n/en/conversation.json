@@ -63,6 +63,8 @@
       "openImage": "Open the image full size",
       "imageAlt": "Conversation image",
       "toolResult": "tool result",
+      "showDoc": "Show the document",
+      "docFail": "Could not read the document",
       "toolCall": "tool call",
       "readFail": "Could not read the rest of the message",
       "showMore": "Show more · {{size}} left"
@@ -80,6 +82,8 @@
       "messageAria": "Message to Claude",
       "queueAria": "Queued messages",
       "dequeue": "Remove from the queue",
+      "sendUncertain": "Send uncertain: may already have arrived",
+      "resend": "Resend",
       "queueSuspended": "Queue paused (the previous turn failed or was stopped).",
       "sendNext": "Send the next one",
       "permissions": "Permissions granted to Claude",

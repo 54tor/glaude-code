@@ -36,7 +36,7 @@ export function ToolAnchor({ dir, id, g }: { dir: string; id: string; g: ToolGro
       </button>
       {open && (
         <div className="mt-1 space-y-1">
-          {msgs === null ? <p className="pl-3 text-xs text-muted-foreground">…</p> : msgs.map((m, i) => <Message key={`${m.o}.${m.n ?? 0}.${i}`} m={m} />)}
+          {msgs === null ? <p className="pl-3 text-xs text-muted-foreground">…</p> : msgs.map((m, i) => <Message key={`${m.o}.${m.n ?? 0}.${i}`} m={m} conv={{ dir, id }} />)}
         </div>
       )}
     </div>

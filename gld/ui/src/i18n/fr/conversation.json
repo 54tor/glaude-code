@@ -63,6 +63,8 @@
       "openImage": "Ouvrir l'image en grand",
       "imageAlt": "Image de la conversation",
       "toolResult": "résultat d'outil",
+      "showDoc": "Afficher le document",
+      "docFail": "Document illisible",
       "toolCall": "appel d'outil",
       "readFail": "Suite du message illisible",
       "showMore": "Afficher la suite · {{size}} restants"
@@ -80,6 +82,8 @@
       "messageAria": "Message à Claude",
       "queueAria": "Messages en file d'attente",
       "dequeue": "Retirer de la file",
+      "sendUncertain": "Envoi incertain : peut-être déjà reçu",
+      "resend": "Renvoyer",
       "queueSuspended": "File suspendue (le tour précédent a échoué ou a été arrêté).",
       "sendNext": "Envoyer le suivant",
       "permissions": "Autorisations accordées à Claude",
