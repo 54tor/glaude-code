@@ -77,7 +77,7 @@ var routeRights = map[string]Right{
 	"POST /config-perm-explain": RightConfigWrite,
 	"POST /snippet-save":        RightConfigWrite, "POST /snippet-rm": RightConfigWrite, "POST /snippets-import": RightConfigWrite,
 	"POST /skill-save": RightConfigWrite, "POST /skill-copy": RightConfigWrite, "POST /skill-rm": RightConfigWrite,
-	"POST /skill-draft": RightConfigWrite, "POST /plugin-act": RightConfigWrite, "POST /marketplace-act": RightConfigWrite,
+	"POST /skill-draft": RightConfigWrite, "POST /skill-npx": RightConfigWrite, "POST /plugin-act": RightConfigWrite, "POST /marketplace-act": RightConfigWrite,
 
 	// Compte et usages.
 	"GET /account": RightUsageRead, "POST /account-refresh": RightUsageRead,

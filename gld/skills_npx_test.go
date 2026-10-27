@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -233,5 +236,34 @@ func TestSkillsFindExclusion(t *testing.T) {
 	npxMu.Unlock()
 	if err == nil || !strings.Contains(err.Error(), L("srv.skills.npxBusy")) {
 		t.Errorf("find pendant une action : %v", err)
+	}
+}
+
+func postSkillNpx(t *testing.T, body string) (int, map[string]any) {
+	mux := http.NewServeMux()
+	routesSkills(mux)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, httptest.NewRequest("POST", "/skill-npx", strings.NewReader(body)))
+	var m map[string]any
+	json.Unmarshal(w.Body.Bytes(), &m)
+	return w.Code, m
+}
+
+func TestRouteSkillNpx(t *testing.T) {
+	lockHome(t, "")
+	var calls [][]string
+	fakeNpx(t, func(_ context.Context, _ string, a []string) (string, error) {
+		calls = append(calls, a)
+		return "fait\n", nil
+	})
+	if code, _ := postSkillNpx(t, "pas du json"); code != 400 {
+		t.Errorf("corps invalide : %d", code)
+	}
+	if _, m := postSkillNpx(t, `{"Action":"exec","Source":"o/r","Skill":"x","Scope":"user"}`); m["ok"] != false {
+		t.Errorf("action inconnue : %v", m)
+	}
+	_, m := postSkillNpx(t, `{"Action":"add","Source":"o/r","Skill":"x","Scope":"user"}`)
+	if m["ok"] != true || m["out"] != "fait" || len(calls) != 1 || !slices.Contains(calls[0], "add") {
+		t.Errorf("add : %v %v", m, calls)
 	}
 }

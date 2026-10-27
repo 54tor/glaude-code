@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strings"
 )
 
 // routesSkills : les skills de Claude Code (skills.go).
@@ -103,6 +104,19 @@ func routesSkills(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("GET /skills-updates", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"states": checkSkillUpdates(r.Context(), r.URL.Query().Get("force") == "1")})
+	})
+	mux.HandleFunc("POST /skill-npx", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Action, Source, Skill, Scope, Project string }
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+			return
+		}
+		out, err := skillsAct(r.Context(), req.Action, req.Source, req.Skill, req.Scope, req.Project)
+		journal("skill-npx %s %s %s (%s %s) : %v", req.Action, req.Source, req.Skill, req.Scope, req.Project, errOr(err))
+		if err != nil {
+			out = strings.TrimSpace(out + "\n" + err.Error())
+		}
+		writeJSON(w, 200, map[string]any{"ok": err == nil, "out": out})
 	})
 	mux.HandleFunc("POST /plugin-act", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Action, ID, Scope, Project string }
