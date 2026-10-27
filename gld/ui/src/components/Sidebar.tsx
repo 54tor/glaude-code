@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
-import { AlarmClock, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, Flame, Microwave, Snowflake, History, Clock, FileText, Inbox, Info, Loader2, Search, ShieldCheck, Tag, Users, X } from "lucide-react"
+import { AlarmClock, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, Flame, Microwave, Snowflake, History, Clock, FileText, Inbox, NotebookPen, Info, Loader2, Search, ShieldCheck, Tag, Users, X } from "lucide-react"
 import { tilde } from "@/lib/format"
 import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
@@ -261,6 +261,9 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             active={r.kind === "recent"}
             {...link({ kind: "recent" })}
           />
+          {(r.kind === "dir" || r.kind === "project") && (
+            <NavItem icon={NotebookPen} label={t("shell.sidebar.addNote")} active={false} onClick={() => { window.dispatchEvent(new Event("gld:note-add")); p.onClose() }} />
+          )}
           <NavItem icon={Inbox} label={t("shell.app.title.all")} n={p.counts.all} active={r.kind === "all"} {...link({ kind: "all" })} />
           <NavItem icon={History} label={t("shell.app.title.tabs")} active={r.kind === "tabs"} {...link({ kind: "tabs" })} />
           <NavItem icon={Puzzle} label={t("shell.app.title.extensions")} active={r.kind === "extensions" || r.kind === "skills"} {...link({ kind: "extensions" })} />

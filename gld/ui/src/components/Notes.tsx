@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next"
 import { Check, ChevronRight, LoaderCircle, MessageSquarePlus, NotebookPen, Plus, Send, X } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/api"
-import { useOpen } from "@/hooks/useOpen"
+import { setOpen, useOpen } from "@/hooks/useOpen"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -70,6 +70,18 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
     })
   }
   useEffect(() => flush, []) // enregistre ce qui reste en quittant la vue
+  const addRef = useRef<() => void>(() => {})
+  addRef.current = () => {
+    if (items === null) return
+    setOpen("n/" + noteKey, true)
+    focusNext.current = items.length
+    edit([...items, ""])
+  }
+  useEffect(() => {
+    const f = () => addRef.current()
+    window.addEventListener("gld:note-add", f)
+    return () => window.removeEventListener("gld:note-add", f)
+  }, [])
 
   const edit = (next: string[]) => {
     setItems(next)
