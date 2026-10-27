@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -158,5 +160,53 @@ func TestRosterDrop(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, journalDir)); !os.IsNotExist(err) {
 		t.Fatal("empty dir kept")
+	}
+}
+
+// Roster et journal partagent le dossier : un seul verrou, sinon le rmdir de l'un casse l'écriture de l'autre.
+func TestRosterAndJournalShareOneLock(t *testing.T) {
+	root := t.TempDir()
+	const a, b = "session-0123abcd", "session-4567cdef"
+	const n = 200
+	var wg sync.WaitGroup
+	errs := make(chan error, 4*n)
+	run := func(f func(i int) error) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < n; i++ {
+				if err := f(i); err != nil {
+					errs <- err
+				}
+			}
+		}()
+	}
+	run(func(i int) error { // équipe A : journal, fermée à chaque tour
+		text := fmt.Sprint(i)
+		if err := journalAppend(root, a, DirectMsg{Author: "ada", To: "hugo", Text: text}); err != nil {
+			return err
+		}
+		ms, err := journalRead(root, a)
+		if err != nil || len(ms) != 1 || ms[0].Text != text {
+			return fmt.Errorf("ligne perdue : %v %v", ms, err)
+		}
+		if err := journalDrop(root, a); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	})
+	run(func(int) error { // équipe B : roster, fermée à chaque tour
+		if err := rosterWrite(root, b, map[string]string{"hugo": "testeur"}); err != nil {
+			return err
+		}
+		if err := rosterDrop(root, b); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	})
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Error(err)
 	}
 }

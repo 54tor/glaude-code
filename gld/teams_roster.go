@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sync"
 	"syscall"
 )
 
@@ -18,8 +17,6 @@ const (
 var (
 	rosterKeyRe = firstNameRe
 	rosterValRe = regexp.MustCompile("^[a-z0-9-]+$")
-	// verrou distinct du journal : les deux fichiers vivent dans le même dossier mais ne se partagent rien
-	teamsRosterMu sync.Mutex
 )
 
 func rosterPaths(cfgRoot, team string) (dir, file string, err error) {
@@ -58,8 +55,8 @@ func rosterWrite(cfgRoot, team string, roster map[string]string) error {
 	if err != nil {
 		return err
 	}
-	teamsRosterMu.Lock()
-	defer teamsRosterMu.Unlock()
+	teamsJournalMu.Lock()
+	defer teamsJournalMu.Unlock()
 	st, ok, err := lstatNoLink(dir)
 	if err != nil {
 		return err
@@ -97,8 +94,8 @@ func rosterRead(cfgRoot, team string) (map[string]string, error) {
 		return nil, err
 	}
 	empty := map[string]string{}
-	teamsRosterMu.Lock()
-	defer teamsRosterMu.Unlock()
+	teamsJournalMu.Lock()
+	defer teamsJournalMu.Unlock()
 	if _, _, err := lstatNoLink(dir); err != nil {
 		return empty, nil
 	}
@@ -129,8 +126,8 @@ func rosterDrop(cfgRoot, team string) error {
 	if err != nil {
 		return err
 	}
-	teamsRosterMu.Lock()
-	defer teamsRosterMu.Unlock()
+	teamsJournalMu.Lock()
+	defer teamsJournalMu.Unlock()
 	if _, _, err := lstatNoLink(dir); err != nil {
 		return err
 	}
