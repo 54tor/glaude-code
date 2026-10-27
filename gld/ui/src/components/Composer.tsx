@@ -7,7 +7,7 @@ import { cn, copyText, isSend, keyHint } from "@/lib/utils"
 import { modeOfScreen, parsePrompt, type Opt } from "@/lib/prompt"
 import { type Live } from "./LiveStatus"
 import { toast } from "sonner"
-import { Bug, Copy, Minimize2, Power, Send, Square, SquareCheck, X } from "lucide-react"
+import { Bug, Copy, Minimize2, Power, Snowflake, Send, Square, SquareCheck, X } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
 import { draftOf, setDraft, useDraft, useUncertain } from "@/hooks/useDraft"
 import { efforts, models, withChoice, type Choice } from "@/lib/models"
@@ -63,6 +63,7 @@ export function Composer({
   onWrite,
   extra,
   compactHint,
+  coldHint,
 }: {
   dir: string
   id: string
@@ -78,6 +79,7 @@ export function Composer({
   onWrite?: () => void // l'utilisateur envoie un message : la vue descend
   extra?: ReactNode // commandes de la vue, affichées au-dessus de la zone de saisie
   compactHint?: string | null // conseil de compacter, avec le bouton, au-dessus de la saisie d'une session ouverte
+  coldHint?: ColdHintProps | null // cache expiré : conseil de repartir sur une nouvelle session
 }) {
   const { t } = useTranslation()
   const exec = useCan()("exec")
@@ -169,11 +171,12 @@ export function Composer({
   }
   const stop = () => ((stopped.current = true), api.post("/chat-stop", { id }))
 
-  if (live && !running && !own) return <LiveSend id={id} onSent={onSent} liveState={liveState} onAsk={onAsk} bar={extra} compactHint={compactHint} />
+  if (live && !running && !own) return <LiveSend id={id} onSent={onSent} liveState={liveState} onAsk={onAsk} bar={extra} compactHint={compactHint} coldHint={coldHint} />
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-7xl space-y-2">
         {mention.list}
+        {coldHint && <ColdHint {...coldHint} />}
         {extra && <div className="flex justify-end">{extra}</div>}
         <textarea
           ref={fieldRef}
@@ -233,9 +236,25 @@ export function Composer({
   )
 }
 
+export type ColdHintProps = { text: string; onNew: () => void }
+
+// Cache des prompts expiré : reprendre la session réécrit tout son contexte au tarif plein.
+function ColdHint({ text, onNew }: ColdHintProps) {
+  const { t } = useTranslation()
+  return (
+    <p role="status" className="flex items-center gap-2 rounded-md bg-warning/10 px-3 py-1 text-xs text-warning">
+      <Snowflake className="size-3.5 shrink-0" aria-hidden />
+      <span className="min-w-0 flex-1">{text}</span>
+      <Button size="xs" variant="outline" title={t("conversation.composer.coldNewTitle")} onClick={onNew}>
+        {t("conversation.composer.coldNew")}
+      </Button>
+    </p>
+  )
+}
+
 // Session ouverte dans un terminal : deux processus ne peuvent pas écrire le même transcript, donc pas de claude -p ici. Si la session
 // tourne dans tmux, le message y est collé puis validé ; sinon on l'explique.
-function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint }: { id: string; onSent: () => void; liveState: Live; onAsk?: (asking: boolean) => void; bar?: ReactNode; compactHint?: string | null }) {
+function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: { id: string; onSent: () => void; liveState: Live; onAsk?: (asking: boolean) => void; bar?: ReactNode; compactHint?: string | null; coldHint?: ColdHintProps | null }) {
   const { t } = useTranslation()
   const a = useActions()
   const exec = useCan()("exec")
@@ -324,6 +343,7 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint }: { id: stri
             </Button>
           </p>
         )}
+        {coldHint && <ColdHint {...coldHint} />}
         <TerminalPanel id={id} onAsk={(a) => (setAsking(a), onAsk?.(a))} onSent={onSent} extra={bar} />
         {sugg.length > 0 && (
           <ul className="max-h-48 overflow-y-auto rounded-lg border bg-popover p-1 text-sm shadow-md" role="listbox" aria-label={t("conversation.composer.commandsAria")}>

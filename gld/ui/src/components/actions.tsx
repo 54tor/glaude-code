@@ -30,6 +30,7 @@ export type ProjectActions = {
 // État et actions partagés par la barre latérale, les listes, les menus et le lecteur.
 export type Actions = {
   home: string
+  now: number // heure du dernier chargement des sessions, en secondes
   q: string
   root: string // dossier des transcripts
   rows: Row[] // toutes les sessions, les plus récentes d'abord

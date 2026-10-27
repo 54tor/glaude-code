@@ -4,7 +4,8 @@ import { ArrowDown, ArrowUpToLine, BarChart3, Bug, FolderOpen, Power, FileText, 
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
-import { brief, compact, dedupeDocs, full, tilde } from "@/lib/format"
+import { HOT } from "@/lib/sessionsView"
+import { ago, brief, compact, dedupeDocs, full, tilde } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenuCheckboxItem, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
@@ -34,6 +35,7 @@ const PAGE = 200
 const COMPACT_WINDOW = 200_000
 // Fenêtre par modèle : la famille 5 en a une de 1 M ; le transcript ne porte jamais le suffixe « [1m] » des modèles plus anciens.
 const windowOf = (model: string, ctx: number) => (/-5-\d/.test(model) || model.includes("[1m]") || ctx > COMPACT_WINDOW ? 1_000_000 : COMPACT_WINDOW)
+const COLD_HINT_MIN_TOKENS = 50_000 // en dessous, reprendre une session froide coûte trop peu pour la signaler
 const COMPACT_HINT_AT = 0.6 // part de la fenêtre à partir de laquelle on conseille de compacter
 
 function Meta({ s, onFolder, extra }: { s: Session; onFolder?: () => void; extra?: React.ReactNode }) {
@@ -316,6 +318,11 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   const ctx = live.st?.context ?? 0
   const win = windowOf(live.st?.model ?? "", ctx)
   const hint = a.live.has(id) && ctx >= win * COMPACT_HINT_AT ? t("conversation.view.compactHint", { ctx: compact(ctx), pct: Math.round((ctx / win) * 100) }) : null
+  // Cache expiré (voir HOT) sur une session qui a déjà un gros contexte : la reprendre le réécrit entièrement au tarif plein.
+  const cold =
+    session && a.now > 0 && a.now - session.mtime >= HOT && session.tok.cr + session.tok.cw >= COLD_HINT_MIN_TOKENS
+      ? { text: t("conversation.view.coldHint", { when: ago(session.mtime) }), onNew: () => row && a.newSession(row.g.project) }
+      : null
   const metaExtra = session && (
     <>
       <LiveAgents live={live} dir={dir} id={id} />
@@ -496,6 +503,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             onSent={() => (a.touch(id), setSentAt({ id, at: Date.now() }), sentDown(), void reloadRef.current(), carousel?.next())}
             onWrite={sentDown}
             compactHint={hint}
+            coldHint={cold}
             extra={
               <>
                 {termOn && a.live.has(id) && (

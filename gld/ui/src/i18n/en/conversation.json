@@ -34,6 +34,7 @@
       "carousel_other": "Carousel: {{count}} sessions waiting.",
       "next": "Next",
       "quitCarousel": "Leave the carousel",
+      "coldHint": "Cache expired {{when}}: resuming this session rewrites its whole context at full price. A new session costs far less.",
       "compactHint": "Context at {{ctx}} (≈ {{pct}} %): compacting is recommended. Any text in the input is used as instructions for the summary.",
       "toolAnchor_one": "{{count}} tool",
       "toolAnchor_other": "{{count}} tools",
@@ -132,6 +133,8 @@
       "copyScreen": "Copy the screen",
       "commands": "Commands",
       "compact": "Compact",
+      "coldNew": "New session",
+      "coldNewTitle": "Opens a new session in this folder",
       "compactTitle": "Sends /compact to the session; any text in the input is added as instructions",
       "commandsTitle": "Claude Code commands",
       "mentionAria": "Mention a session"
