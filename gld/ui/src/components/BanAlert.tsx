@@ -47,7 +47,7 @@ export function BanAlert() {
         <ul className="max-h-48 space-y-1 overflow-y-auto text-sm">
           {bans.map((b, i) => (
             <li key={i} className="flex justify-between gap-3 rounded-md border px-3 py-1.5">
-              <code>{b.ip}</code>
+              {b.ip ? <code>{b.ip}</code> : <span>{t("shell.ban.hidden")}</span>}
               <span className="text-muted-foreground tabular-nums">{new Date(b.at * 1000).toLocaleTimeString()}</span>
             </li>
           ))}

@@ -6,9 +6,10 @@ import (
 )
 
 // Bannissements d'adresses survenus depuis `since` (secondes Unix) : l'interface les interroge et ouvre une alerte dans chaque
-// session connectée. `now` est l'horloge du serveur, à renvoyer comme `since` au prochain appel.
+// session connectée (l'adresse n'est donnée qu'aux administrateurs). `now` est l'horloge du serveur, à renvoyer comme `since` au prochain appel.
 func (a *authAPI) alerts(w http.ResponseWriter, r *http.Request) {
-	if a.need(w, r, true) == nil {
+	p := a.need(w, r, true)
+	if p == nil {
 		return
 	}
 	since, _ := strconv.ParseInt(r.URL.Query().Get("since"), 10, 64)
@@ -25,6 +26,9 @@ func (a *authAPI) alerts(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&at, &ip); err != nil {
 			authInternal(w, err)
 			return
+		}
+		if !p.User.Admin {
+			ip = "" // l'alerte vaut pour tous les comptes, l'adresse seulement pour les administrateurs
 		}
 		bans = append(bans, map[string]any{"at": at, "ip": ip})
 	}

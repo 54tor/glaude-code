@@ -354,7 +354,7 @@ func TestIPBan(t *testing.T) {
 func TestBanAlerts(t *testing.T) {
 	g := newAuthRig(t)
 	secret := g.enrolTOTP()
-	c, _ := g.full(secret)
+	c, _ := g.full(secret) // alice, compte ordinaire
 	if w := g.do("GET", "/auth/alerts", "", "", nil); w.Code == 200 {
 		t.Fatal("alertes servies sans session")
 	}
@@ -363,8 +363,17 @@ func TestBanAlerts(t *testing.T) {
 	}
 	b := jbody(t, g.do("GET", "/auth/alerts?since=0", c, "", nil))
 	bans, _ := b["bans"].([]any)
-	if len(bans) != 1 || bans[0].(map[string]any)["ip"] != "203.0.113.50" {
-		t.Fatalf("alertes : %v", b)
+	if len(bans) != 1 || bans[0].(map[string]any)["ip"] != "" {
+		t.Fatalf("un compte ordinaire voit l'adresse : %v", b)
+	}
+	admin, err := g.s.AddUser("root", testPw, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ac, _ := fullSession(t, g.s, admin)
+	ab := jbody(t, g.do("GET", "/auth/alerts?since=0", ac, "", nil))
+	if bans, _ := ab["bans"].([]any); len(bans) != 1 || bans[0].(map[string]any)["ip"] != "203.0.113.50" {
+		t.Fatalf("alertes admin : %v", ab)
 	}
 	now := int64(b["now"].(float64))
 	if b := jbody(t, g.do("GET", fmt.Sprintf("/auth/alerts?since=%d", now+1), c, "", nil)); len(b["bans"].([]any)) != 0 {

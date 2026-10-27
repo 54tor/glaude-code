@@ -124,7 +124,7 @@ Compteurs en base, clés par nom, par adresse (une adresse IPv6 est ramenée à 
 | Plafond global | 60 tentatives par minute sur toute la passerelle, en mémoire |
 | Codes TOTP | dérive acceptée de ±1 pas (30 s) ; un code déjà accepté n'est pas rejouable |
 
-Chaque ban ouvre une alerte dans toutes les sessions connectées (l'interface interroge `GET /auth/alerts?since=` toutes les 15 s ; seuls les bans survenus après l'ouverture de l'onglet sont montrés).
+Chaque ban ouvre une alerte dans toutes les sessions connectées (l'interface interroge `GET /auth/alerts?since=` toutes les 15 s ; seuls les bans survenus après l'ouverture de l'onglet sont montrés ; l'adresse n'est donnée qu'aux administrateurs, les autres comptes sont prévenus sans elle).
 
 Un déluge de connexions sur un nom peut gêner ce compte (déni de service local, borné par le délai). Le compteur global repart à zéro au redémarrage. La fenêtre de 15 min est fixe (elle part du premier échec). Les lignes de `throttle` sans effet, les sessions échues et les événements de plus de 90 jours sont purgés à l'ouverture de la base puis au plus une fois par 24 h.
 
