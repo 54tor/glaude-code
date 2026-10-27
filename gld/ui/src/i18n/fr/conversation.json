@@ -397,6 +397,18 @@
       "label": "Pousser « {{branch}} » vers :",
       "reading": "Lecture des remotes…",
       "none": "Aucun remote configuré"
+    },
+    "guest": {
+      "title": "Session partagée",
+      "readOnly": "Lecture seule : l'hôte n'autorise pas l'envoi de messages.",
+      "placeholder": "Écrire à Claude… (Entrée envoie, Maj+Entrée : saut de ligne)",
+      "host": "Hôte",
+      "queue": "File d'attente",
+      "leave": "Quitter",
+      "bye": "Vous avez quitté la session partagée.",
+      "ended": "Le partage est terminé",
+      "endedHint": "L'hôte a mis fin au partage ou le lien n'est plus valide.",
+      "loading": "Connexion au partage…"
     }
   }
 }

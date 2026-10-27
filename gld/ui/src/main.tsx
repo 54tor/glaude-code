@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client"
 import "./index.css"
 import "./i18n"
 import App from "./App.tsx"
+import { GuestApp } from "@/components/GuestApp.tsx"
 import { ThemeProvider } from "@/components/theme-provider.tsx"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -30,7 +31,7 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider>
       <TooltipProvider>
-        <App />
+        {location.pathname === "/guest" ? <GuestApp /> : <App />}
         <Toaster position="bottom-right" mobileOffset={{ bottom: "calc(16px + env(safe-area-inset-bottom))" }} richColors closeButton />
       </TooltipProvider>
     </ThemeProvider>

@@ -130,7 +130,8 @@ function WrittenDoc({ conv, path }: { conv: Conv; path: string }) {
 }
 
 // Mémoïsé (voir plus bas) : la conversation se redessine pour l'état de la session, pas pour chacun de ses messages.
-type Conv = { dir: string; id: string; tools?: boolean }
+// guest : vue invitée, sans document ni lecture de fichier (routes refusées à l'invité).
+type Conv = { dir: string; id: string; tools?: boolean; guest?: boolean }
 
 function MessageView({ m, conv }: { m: Msg; conv?: Conv }) {
   const { t } = useTranslation()
@@ -146,7 +147,7 @@ function MessageView({ m, conv }: { m: Msg; conv?: Conv }) {
       </div>
     )
   }
-  if (m.r === "doc") return conv ? <WrittenDoc conv={conv} path={m.t} /> : null
+  if (m.r === "doc") return conv && !conv.guest ? <WrittenDoc conv={conv} path={m.t} /> : null
   if (m.r === "user" && isCompactSummary(m.t))
     return (
       <div title={title} className="msg mx-auto max-w-3xl">
@@ -176,7 +177,7 @@ function MessageView({ m, conv }: { m: Msg; conv?: Conv }) {
         <Icon className="mt-0.5 size-3.5 shrink-0" aria-label={result ? t("conversation.message.toolResult") : t("conversation.message.toolCall")} />
         <div className="min-w-0">
           <span className="break-words whitespace-pre-wrap">{noBreak(result ? m.t.slice(1).trimStart() : m.t)}</span>
-          {!result && conv && SP_DOC.test(m.t) && <SuperpowersDoc dir={conv.dir} path={SP_DOC.exec(m.t)![0]} />}
+          {!result && conv && !conv.guest && SP_DOC.test(m.t) && <SuperpowersDoc dir={conv.dir} path={SP_DOC.exec(m.t)![0]} />}
         </div>
       </div>
     )

@@ -243,6 +243,8 @@ export const api = {
   shareCreate: (id: string, dir: string) => api.post("/share-create", { id, dir }) as Promise<Result & { token?: string }>,
   shareInfo: (id: string) => get<{ shared: boolean; mode?: "rw" | "ro"; connected: boolean }>(`/share-info?id=${enc(id)}`),
   shareMode: (id: string, mode: "rw" | "ro") => api.post("/share-mode", { id, mode }),
+  guestMe: () => get<{ id: string; dir: string; mode: "rw" | "ro"; csrf: string }>("/guest-me"),
+  guestLeave: () => api.post("/guest-leave", {}),
   shareEnd: (id: string) => api.post("/share-end", { id }),
   sessionLive: (dir: string, id: string) => get<LiveState>(`/session-live?dir=${enc(dir)}&id=${enc(id)}`),
   // refresh : relevé demandé par un POST (un GET ne doit rien déclencher), puis lecture de l'état, qui dit « refreshing ».

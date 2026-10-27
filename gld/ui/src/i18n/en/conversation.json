@@ -397,6 +397,18 @@
       "label": "Push “{{branch}}” to:",
       "reading": "Reading remotes…",
       "none": "No remote configured"
+    },
+    "guest": {
+      "title": "Shared session",
+      "readOnly": "Read-only: the host does not allow sending messages.",
+      "placeholder": "Write to Claude… (Enter sends, Shift+Enter: new line)",
+      "host": "Host",
+      "queue": "Queue",
+      "leave": "Leave",
+      "bye": "You left the shared session.",
+      "ended": "Sharing has ended",
+      "endedHint": "The host ended the share or the link is no longer valid.",
+      "loading": "Connecting to the share…"
     }
   }
 }
