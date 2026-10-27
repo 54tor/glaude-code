@@ -422,6 +422,11 @@
       "started": "Début",
       "last": "Dernier message",
       "description": "Informations sur la session"
+    },
+    "notes": {
+      "title": "Blocs-notes",
+      "count": "{{count}} blocs-notes",
+      "lines": "{{count}} ligne(s)"
     }
   }
 }

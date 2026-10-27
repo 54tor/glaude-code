@@ -422,6 +422,11 @@
       "started": "Started",
       "last": "Last message",
       "description": "Session information"
+    },
+    "notes": {
+      "title": "Notes",
+      "count": "{{count}} notes",
+      "lines": "{{count}} line(s)"
     }
   }
 }

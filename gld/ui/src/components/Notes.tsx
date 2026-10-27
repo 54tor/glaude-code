@@ -11,6 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { useActions, type Row } from "./actions"
 
 // Une note = une liste d'items, enregistrée en JSON ; un ancien texte libre devient un item par ligne non vide.
+export const notesOf = (raw: string): string[] => parse(raw)
 const parse = (raw: string): string[] => {
   try {
     const v: unknown = JSON.parse(raw)
@@ -62,7 +63,7 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
     const before = saved.current
     saved.current = t
     api.post("/notes", { key, text: t }).then((r) => {
-      if (r.ok) return setSavedList(parse(t))
+      if (r.ok) return (window.dispatchEvent(new Event("gld:notes")), setSavedList(parse(t)))
       saved.current = before
       toast.error(r.out)
     })
