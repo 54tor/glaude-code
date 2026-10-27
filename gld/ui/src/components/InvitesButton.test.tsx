@@ -34,7 +34,7 @@ describe("InvitesButton", () => {
 
   it("aucune pastille quand le compte est nul", async () => {
     await mount([sh("a", [inv({ state: "pending" })])])
-    expect(screen.getByRole("button", { name: /0 connecté/ }).textContent).toBe("")
+    expect(screen.getByRole("button", { name: /0 connecté/ }).textContent).not.toMatch(/\d/)
   })
 
   it("ouvre l'overlay", async () => {

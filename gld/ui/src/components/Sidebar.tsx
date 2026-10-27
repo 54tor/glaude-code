@@ -286,7 +286,6 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             <p className="text-xs text-muted-foreground tabular-nums">{p.loading ? t("common.loading") : t("shell.count.sessions", { count: p.total })}</p>
           </div>
           <div className="ml-auto flex items-center gap-0.5">
-            <InvitesButton />
             <PairButton />
             <CreditsButton />
             <HomeSwitcher />
@@ -347,6 +346,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           <NavItem icon={History} label={t("shell.app.title.tabs")} active={r.kind === "tabs"} {...link({ kind: "tabs" })} />
           <NavItem icon={Puzzle} label={t("shell.app.title.extensions")} active={r.kind === "extensions" || r.kind === "skills"} {...link({ kind: "extensions" })} />
           <NavItem icon={Users} label={t("teams.title")} active={r.kind === "teams" || r.kind === "team"} {...link({ kind: "teams" })} />
+          <InvitesButton />
           <NavItem icon={SlidersHorizontal} label={t("shell.app.title.config")} active={r.kind === "config"} {...link({ kind: "config", tab: "" })} />
           <NavItem icon={Brain} label={t("shell.app.title.memory")} active={r.kind === "memory"} {...link({ kind: "memory", key: "" })} />
           {p.snippets !== null && (

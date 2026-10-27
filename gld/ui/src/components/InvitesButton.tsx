@@ -3,10 +3,9 @@ import { useTranslation } from "react-i18next"
 import { Users } from "lucide-react"
 import { useSearchParams } from "wouter"
 import { useShares } from "@/hooks/useShares"
-import { Button } from "@/components/ui/button"
 import { InvitesOverlay } from "./InvitesOverlay"
 
-// Bouton de l'en-tête : visible seulement quand un partage existe ; la pastille compte invités connectés + messages d'invités en attente.
+// Entrée du menu latéral : visible seulement quand un partage existe ; la pastille compte invités connectés + messages d'invités en attente.
 export function InvitesButton() {
   const { t } = useTranslation()
   const { shares } = useShares()
@@ -26,10 +25,15 @@ export function InvitesButton() {
   }
   return (
     <>
-      <Button variant="ghost" size="icon-sm" className="relative" aria-label={t("shell.invites.buttonAria", { connected, pending })} title={t("shell.invites.button")} onClick={() => setOpen(true)}>
-        <Users />
-        {badge > 0 && <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-2xs text-primary-foreground tabular-nums">{badge}</span>}
-      </Button>
+      <button
+        aria-label={t("shell.invites.buttonAria", { connected, pending })}
+        onClick={() => setOpen(true)}
+        className="flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-sm text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+      >
+        <Users className="size-4 shrink-0 text-muted-foreground" />
+        <span className="flex-1 truncate text-left">{t("shell.invites.title")}</span>
+        {badge > 0 && <span className="text-xs text-muted-foreground tabular-nums">{badge}</span>}
+      </button>
       {open && <InvitesOverlay onClose={() => setOpen(false)} onOpenSession={read} />}
     </>
   )
