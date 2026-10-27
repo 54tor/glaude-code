@@ -554,7 +554,7 @@ func TestFsTrashRestoreRefusesSymlinks(t *testing.T) {
 }
 
 func TestIdeCodePathCasse(t *testing.T) {
-	for _, p := range []string{".git/config", ".GIT/config", "a/.Claude/settings.json", ".git./config", ".mcp.json ", "GIT~1/config", "x/CLAUDE~1/hooks"} {
+	for _, p := range []string{".git/config", ".GIT/config", "a/.Claude/settings.json", ".git./config", ".mcp.json ", "GIT~1/config", "x/CLAUDE~1/hooks", ".mcp.json::$DATA", ".gi\u200ct/config", "\ufeff.claude/settings.json"} {
 		if !ideCodePath(p) {
 			t.Errorf("%q non reconnu", p)
 		}

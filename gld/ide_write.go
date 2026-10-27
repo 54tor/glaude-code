@@ -59,10 +59,17 @@ func ideExists(root *os.Root, rel string) bool {
 
 // ideCodePath : un chemin que Claude Code ou git exécutent (hooks et MCP de .claude/, .git/config et hooks, filtres de
 // .gitattributes). L'écrire revient à exécuter du code sous le compte gld : config_write, comme /skill-save.
-// La comparaison ignore la casse, les points et espaces finaux et les noms courts 8.3 (GIT~1) : sur APFS, NTFS ou vfat,
-// .GIT/config ou .git./config désignent le même fichier.
+// La comparaison ignore la casse, les points et espaces finaux, les noms courts 8.3 (GIT~1), les flux NTFS (:$DATA) et les points
+// de code qu'HFS+ ignore : sur APFS, HFS+, NTFS ou vfat, ces variantes désignent le même fichier.
 func ideCodePath(rel string) bool {
 	for _, seg := range strings.Split(rel, "/") {
+		seg, _, _ = strings.Cut(seg, ":")
+		seg = strings.Map(func(r rune) rune {
+			if r >= 0x200c && r <= 0x200f || r >= 0x202a && r <= 0x202e || r >= 0x206a && r <= 0x206f || r == 0xfeff {
+				return -1
+			}
+			return r
+		}, seg)
 		seg = strings.ToLower(strings.TrimRight(seg, ". "))
 		short, _, tilde := strings.Cut(seg, "~")
 		for _, n := range []string{".git", ".claude", ".mcp.json", ".gitattributes", ".gitmodules"} {
