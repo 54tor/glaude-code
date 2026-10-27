@@ -272,11 +272,13 @@ func memWrite(key, text string, keep bool) error {
 	if err != nil {
 		return err
 	}
-	if keep {
-		if old, err := memRead(key); err == nil && old != text {
-			if err := toTrash(key, "remplacé"); err != nil {
-				return err
-			}
+	old, rerr := memRead(key)
+	if rerr != nil && !errors.Is(rerr, os.ErrNotExist) {
+		return rerr // trop gros ou pas en UTF-8 : le remplacer le perdrait sans passer par la corbeille
+	}
+	if keep && rerr == nil && old != text {
+		if err := toTrash(key, "remplacé"); err != nil {
+			return err
 		}
 	}
 	if err := mkdirTrusted(base, 0o755); err != nil {

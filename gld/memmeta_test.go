@@ -242,3 +242,18 @@ func TestMdLinkIgnoreLesURL(t *testing.T) {
 		t.Fatalf("lien local manqué : %v", m)
 	}
 }
+
+func TestMemWriteGardeUnFichierIllisible(t *testing.T) {
+	cfg := t.TempDir()
+	old := root
+	t.Cleanup(func() { root = old })
+	use(cfg)
+	p := filepath.Join(cfg, "CLAUDE.md")
+	os.WriteFile(p, []byte("\xff\xfe pas de l'UTF-8"), 0o644)
+	if err := memSave("g/CLAUDE.md", "nouveau"); err == nil {
+		t.Fatal("fichier illisible écrasé")
+	}
+	if b, _ := os.ReadFile(p); string(b) != "\xff\xfe pas de l'UTF-8" {
+		t.Fatalf("contenu perdu : %q", b)
+	}
+}
