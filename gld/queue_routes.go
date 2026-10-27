@@ -16,6 +16,10 @@ import (
 // Identique à FOLLOW_PREFIX de gld/ui/src/lib/queue.ts (un test le vérifie).
 const followPrefix = "[Message en file d'attente : d'autres messages suivent. Ne t'arrête pas pour poser une question : note tes éventuelles questions et pose-les à la fin, une fois tous les messages traités.]\n\n"
 
+// Étiquette obligatoire des messages invités : le texte collé ne commence jamais par « / », « ! » ou « # » (commande Claude Code)
+// et l'auteur reste visible dans la conversation.
+const guestLabel = "[Invité] "
+
 const (
 	queueSettle = 4500 * time.Millisecond
 	queueTick   = 1500 * time.Millisecond
@@ -68,7 +72,10 @@ func drainOnce(q *queueStore, now time.Time) {
 			continue
 		}
 		text := head.Text
-		// Un texte proche de sendMax ne supporte pas le préfixe : il part sans, sinon sendToSession le refuserait indéfiniment.
+		if head.Author == "guest" {
+			text = guestLabel + text // Add borne le texte invité : étiquette et préfixe tiennent toujours dans sendMax
+		}
+		// Un texte hôte proche de sendMax ne supporte pas le préfixe : il part sans, sinon sendToSession le refuserait indéfiniment.
 		if len(q.List(id)) > 1 && !strings.HasPrefix(text, followPrefix) && len(followPrefix)+len(text) <= sendMax {
 			text = followPrefix + text
 		}

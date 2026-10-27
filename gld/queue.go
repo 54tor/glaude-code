@@ -69,7 +69,7 @@ func (q *queueStore) save() error {
 }
 
 func (q *queueStore) Add(session, author, text string) (QItem, error) {
-	if checkSendText(text) != nil || strings.ContainsRune(text, 0) {
+	if checkSendText(text) != nil || strings.ContainsRune(text, 0) || author == "guest" && len(text) > sendMax-len(guestLabel)-len(followPrefix) {
 		return QItem{}, errQueueText
 	}
 	q.mu.Lock()

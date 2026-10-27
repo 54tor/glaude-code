@@ -384,3 +384,41 @@ func TestQueueRemoveRefusesSending(t *testing.T) {
 		t.Fatalf("Remove absent = %v", err)
 	}
 }
+
+func TestDrainGuestLabel(t *testing.T) {
+	q, _ := openQueue(t.TempDir())
+	sent, _ := fakeDrainEnv(t, []string{"s"}, []string{"s"}, nil)
+	q.Add("s", "guest", "/exit")
+	drainOnce(q, time.Now())
+	if len(*sent) != 1 || (*sent)[0] != "s|"+guestLabel+"/exit" {
+		t.Fatalf("sent=%q", *sent)
+	}
+	q.Add("s", "guest", "/clear")
+	q.Add("s", "host", "/compact")
+	drainOnce(q, time.Now().Add(5*time.Second))
+	drainOnce(q, time.Now().Add(10*time.Second))
+	if len(*sent) != 3 || (*sent)[1] != "s|"+followPrefix+guestLabel+"/clear" || (*sent)[2] != "s|/compact" {
+		t.Fatalf("sent=%q", *sent)
+	}
+}
+
+func TestQueueGuestTextLimit(t *testing.T) {
+	q, _ := openQueue(t.TempDir())
+	sent, _ := fakeDrainEnv(t, []string{"s"}, []string{"s"}, nil)
+	max := sendMax - len(guestLabel) - len(followPrefix)
+	if _, err := q.Add("s", "guest", strings.Repeat("x", max+1)); err != errQueueText {
+		t.Fatalf("un octet de trop accepté : %v", err)
+	}
+	big := strings.Repeat("x", max)
+	if _, err := q.Add("s", "guest", big); err != nil {
+		t.Fatal(err)
+	}
+	q.Add("s", "host", "suite")
+	drainOnce(q, time.Now())
+	if len(*sent) != 1 || (*sent)[0] != "s|"+followPrefix+guestLabel+big || len((*sent)[0])-2 > sendMax {
+		t.Fatalf("envoi = %d octets", len((*sent)[0]))
+	}
+	if _, err := q.Add("s", "host", strings.Repeat("x", sendMax)); err != nil {
+		t.Fatal("hôte limité comme un invité")
+	}
+}
