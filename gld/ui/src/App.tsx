@@ -342,7 +342,7 @@ function Shell() {
 
   return (
     <ActionsCtx.Provider value={actions}>
-      <div className="safe-t safe-b safe-x flex h-dvh flex-col md:flex-row">
+      <div className="safe-t safe-x flex h-dvh flex-col md:flex-row">
         <Sidebar
           open={navOpen}
           onClose={() => setNavOpen(false)}
