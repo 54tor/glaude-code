@@ -479,7 +479,7 @@
       "replaceTitle": "Remplacer le lien ?",
       "replaceBody": "Un partage existe déjà : l'ancien lien cessera de fonctionner.",
       "replaceConfirm": "Régénérer",
-      "singleUse": "Le premier à l'ouvrir le réserve. Ne l'ouvrez pas vous-même : avec un accès hôte, il est refusé sans être consommé ; en mode local sans jeton, vous deviendriez l'invité. Pour le tester, utilisez une fenêtre privée.",
+      "singleUse": "Le premier à l'ouvrir le réserve. Ne l'ouvrez pas vous-même : avec un accès hôte, il est refusé sans être consommé ; en mode local sans jeton, il est consommé (sans bloquer votre interface). Pour le tester, utilisez une fenêtre privée.",
       "insecure": "Connexion non HTTPS : le cookie de l'invité n'est pas sécurisé.",
       "connected": "Invité connecté",
       "notConnected": "Aucun invité connecté",

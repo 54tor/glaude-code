@@ -43,6 +43,7 @@ beforeEach(() => {
       const path = new URL(url, "http://x").pathname
       const search = new URL(url, "http://x").search
       calls.push({ path, search, method: init.method ?? "GET", csrf: new Headers(init.headers).get("X-Gld-CSRF"), share: new Headers(init.headers).get("X-Gld-Share"), body: String(init.body ?? "") })
+      if (path === "/guest-list") return shares === 403 ? json({ ok: false }, 403) : json(shares)
       if (ended === "html") return new Response("<html></html>", { status: 200, headers: { "Content-Type": "text/html" } })
       if (ended) return json({ ok: false }, ended)
       if (path === "/guest-list") return shares === 403 ? json({ ok: false }, 403) : json(shares)
@@ -337,5 +338,57 @@ describe("GuestApp", () => {
     setAuth({ share: undefined })
     render(<Message m={{ r: "user", t: "", img: "1", o: 1, k: 0 }} conv={{ dir: "/d", id: "s1", tools: false }} />)
     expect(document.querySelector("img")!.getAttribute("src")).not.toContain("share=")
+  })
+
+  it("poignée avec barre finale : retombe sur le sélecteur", async () => {
+    go(`/guest/${H}/`)
+    shares = 403
+    await mount()
+    expect(calls.every((c) => c.share === null)).toBe(true)
+  })
+
+  it("sélecteur : panne non 403 de /guest-list : message et Réessayer", async () => {
+    go("/guest")
+    const base = vi.mocked(fetch).getMockImplementation()!
+    let down = true
+    vi.mocked(fetch).mockImplementation(async (u, i) => (down && String(u).startsWith("/guest-list") ? new Response("x", { status: 500 }) : base(u, i)))
+    await mount()
+    expect(screen.getByText(i18n.t("conversation.guest.listFailed"))).toBeTruthy()
+    down = false
+    shares = [{ handle: H, title: "A", mode: "rw" }, { handle: H2, title: "B", mode: "rw" }]
+    fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.guest.retry") }))
+    await tick(50)
+    expect(screen.getByRole("link", { name: /B/ })).toBeTruthy()
+  })
+
+  it("sondage /guest-list : ignoré onglet caché, arrêté en phase terminée", async () => {
+    shares = [{ handle: H, title: "A", mode: "rw" }, { handle: H2, title: "B", mode: "rw" }]
+    await mount()
+    const n = () => calls.filter((c) => c.path === "/guest-list").length
+    const vis = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden")
+    const n0 = n()
+    await tick(31000)
+    expect(n()).toBe(n0)
+    vis.mockReturnValue("visible")
+    await tick(30000)
+    expect(n()).toBeGreaterThan(n0)
+    ended = 403
+    await tick(5100)
+    expect(screen.getByText(i18n.t("conversation.guest.ended"))).toBeTruthy()
+    await tick(100)
+    const n1 = n()
+    await tick(95000)
+    expect(n()).toBe(n1)
+    vis.mockRestore()
+  })
+
+  it("partage terminé : l'écran propose les autres partages valides", async () => {
+    shares = [{ handle: H, title: "A", mode: "rw" }, { handle: H2, title: "Autre B", mode: "rw" }]
+    await mount()
+    ended = 403
+    shares = [{ handle: H2, title: "Autre B", mode: "rw" }]
+    await tick(5100)
+    expect(screen.getByText(i18n.t("conversation.guest.ended"))).toBeTruthy()
+    expect(screen.getByRole("link", { name: /Autre B/ }).getAttribute("href")).toBe(`/guest/${H2}`)
   })
 })

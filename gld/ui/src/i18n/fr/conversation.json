@@ -413,6 +413,8 @@
       "pick": "Choisissez une session partagée",
       "modeRw": "Lecture et écriture",
       "modeRo": "Lecture seule",
+      "listFailed": "Impossible de charger vos sessions partagées.",
+      "retry": "Réessayer",
       "byeOthers": "Autres sessions partagées :"
     }
   }

@@ -41,6 +41,14 @@ describe("ShareDialog", () => {
     expect(api.shareCreate).toHaveBeenCalledWith("s1", "/d", "Ma session")
   })
 
+  it.each([["x".repeat(130), "x".repeat(120)], ["(sans titre)", undefined], ["", undefined]])("titre %#", async (given, sent) => {
+    vi.spyOn(api, "shareCreate").mockResolvedValue({ ...ok, token: "tok" })
+    render(<ShareDialog id="s1" dir="/d" title={given} onClose={() => {}} />)
+    await act(async () => {})
+    await click(/générer|generate/i)
+    expect(api.shareCreate).toHaveBeenCalledWith("s1", "/d", sent)
+  })
+
   it("génère le lien et le copie", async () => {
     vi.spyOn(api, "shareCreate").mockResolvedValue({ ...ok, token: "tok" })
     await open()

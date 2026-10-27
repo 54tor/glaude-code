@@ -21,19 +21,27 @@ const PAGE = 200
 // 401/403 ou réponse non JSON : le serveur traite la requête comme celle d'un hôte, donc le partage n'existe plus.
 const over = (e: unknown) => (e instanceof HttpError && (e.status === 401 || e.status === 403)) || e instanceof SyntaxError
 
-const HANDLE = /^\/guest\/([0-9a-f]{16})\/?$/
+const HANDLE = /^\/guest\/([0-9a-f]{16})$/
 
 // Partages de ce navigateur (/guest-list), sans en-tête de partage : relu toutes les 30 s, sans bruit si ça échoue.
-function useShares(on: boolean): [GuestShare[] | null, () => Promise<void>] {
+function useShares(on: boolean): [GuestShare[] | null, () => Promise<void>, boolean] {
   const [list, setList] = useState<GuestShare[] | null>(null)
-  const reload = useCallback(() => api.guestList().then(setList, (e) => (over(e) ? setList([]) : undefined)), [])
+  const [failed, setFailed] = useState(false)
+  const reload = useCallback(
+    () =>
+      api.guestList().then(
+        (l) => (setList(l), setFailed(false)),
+        (e) => (over(e) ? (setList([]), setFailed(false)) : setFailed(true))
+      ),
+    []
+  )
   useEffect(() => {
     if (!on) return
     void reload()
-    const i = setInterval(() => void reload(), 30000)
+    const i = setInterval(() => document.visibilityState === "visible" && void reload(), 30000)
     return () => clearInterval(i)
   }, [on, reload])
-  return [list, reload]
+  return [list, reload, failed]
 }
 
 const OtherLinks = ({ list }: { list: GuestShare[] }) => {
@@ -52,12 +60,18 @@ const OtherLinks = ({ list }: { list: GuestShare[] }) => {
   )
 }
 
-const Ended = () => {
+const Ended = ({ others = [] }: { others?: GuestShare[] }) => {
   const { t } = useTranslation()
   return (
     <main className="flex min-h-svh flex-col items-center justify-center gap-2 p-6 text-center">
       <h1 className="text-lg font-semibold">{t("conversation.guest.ended")}</h1>
       <p className="text-sm text-muted-foreground">{t("conversation.guest.endedHint")}</p>
+      {others.length > 0 && (
+        <div className="mt-2 w-full max-w-md space-y-2 text-left">
+          <p className="text-sm text-muted-foreground">{t("conversation.guest.byeOthers")}</p>
+          <OtherLinks list={others} />
+        </div>
+      )}
     </main>
   )
 }
@@ -65,10 +79,19 @@ const Ended = () => {
 // /guest sans poignée : aucun partage = terminé, un seul = on y va, plusieurs = choix.
 function Chooser() {
   const { t } = useTranslation()
-  const [list] = useShares(true)
+  const [list, reload, failed] = useShares(true)
   useEffect(() => {
     if (list?.length === 1) location.replace(`/guest/${list[0].handle}`)
   }, [list])
+  if (!list && failed)
+    return (
+      <main className="flex min-h-svh flex-col items-center justify-center gap-3 p-6 text-center">
+        <p className="text-sm text-muted-foreground">{t("conversation.guest.listFailed")}</p>
+        <Button variant="outline" size="sm" onClick={() => void reload()}>
+          {t("conversation.guest.retry")}
+        </Button>
+      </main>
+    )
   if (!list || list.length === 1)
     return (
       <main className="flex min-h-svh items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
@@ -99,7 +122,7 @@ function GuestSession({ handle }: { handle: string }) {
   const { t } = useTranslation()
   const [phase, setPhase] = useState<Phase>("loading")
   const [me, setMe] = useState<Me | null>(null)
-  const [shares, reloadShares] = useShares(true)
+  const [shares, reloadShares] = useShares(phase !== "ended")
   const others = (shares ?? []).filter((s) => s.handle !== handle)
   const [h, setH] = useState<Hist>({ msgs: [], start: 0, more: false })
   const [tools, setTools] = useState(false)
@@ -129,6 +152,10 @@ function GuestSession({ handle }: { handle: string }) {
       return true
     }
   }, [])
+
+  useEffect(() => {
+    if (phase === "ended") void reloadShares()
+  }, [phase, reloadShares])
 
   const active = phase === "loading" || phase === "on"
   useEffect(() => {
@@ -214,7 +241,7 @@ function GuestSession({ handle }: { handle: string }) {
     else if (!(await readMe())) toast.error(r.out)
   }
 
-  if (phase === "ended") return <Ended />
+  if (phase === "ended") return <Ended others={others} />
   if (phase === "bye")
     return (
       <main className="flex min-h-svh flex-col items-center justify-center gap-4 p-6 text-center">

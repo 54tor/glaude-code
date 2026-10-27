@@ -413,6 +413,8 @@
       "pick": "Choose a shared session",
       "modeRw": "Read and write",
       "modeRo": "Read-only",
+      "listFailed": "Could not load your shared sessions.",
+      "retry": "Retry",
       "byeOthers": "Other shared sessions:"
     }
   }
