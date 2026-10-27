@@ -51,3 +51,14 @@ func TestLecturesConfineesSousRunAs(t *testing.T) {
 		t.Fatalf("liste de la config : %v %v", ents, err)
 	}
 }
+
+func TestGardeTrashRestoreNeSuitPasLesLiens(t *testing.T) {
+	home, out := t.TempDir(), t.TempDir()
+	os.MkdirAll(filepath.Join(out, "x"), 0o700)
+	os.WriteFile(filepath.Join(out, "x", "meta.json"), []byte(`{"id":"x"}`), 0o600)
+	os.Symlink(out, filepath.Join(home, "gld-web-trash"))
+	fakeRunAs(t)
+	if _, err := readTrustedIn(home, filepath.Join(home, "gld-web-trash", "x", "meta.json")); err == nil {
+		t.Fatal("meta.json lu hors du home")
+	}
+}

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -376,7 +375,7 @@ func vgroupsAddsDirs(home string, st Store) bool {
 		dir = h.Dir
 	}
 	var old Store
-	if b, err := os.ReadFile(filepath.Join(dir, "gld-web-groups.json")); err == nil {
+	if b, err := readTrustedIn(dir, filepath.Join(dir, "gld-web-groups.json")); err == nil {
 		json.Unmarshal(b, &old)
 	}
 	known := map[string]bool{}
@@ -420,7 +419,7 @@ func trashNeedsConfig(home, id string) bool {
 	if id == "" || id == "." || id == ".." || strings.ContainsAny(id, `/\`) {
 		return true
 	}
-	b, err := os.ReadFile(filepath.Join(dir, "gld-web-trash", id, "meta.json"))
+	b, err := readTrustedIn(dir, filepath.Join(dir, "gld-web-trash", id, "meta.json")) // la garde ne lit jamais hors du home
 	var t Trashed
 	if err != nil || json.Unmarshal(b, &t) != nil || t.ID != id {
 		return true

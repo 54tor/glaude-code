@@ -154,11 +154,14 @@ func trustBase(path string) string {
 	return filepath.Dir(path)
 }
 
-func readTrusted(path string) ([]byte, error) {
+func readTrusted(path string) ([]byte, error) { return readTrustedIn(trustBase(path), path) }
+
+// readTrustedIn : readTrusted avec une racine explicite (le dossier d'un home, qui n'est pas forcément cfgDir()).
+func readTrustedIn(base, path string) ([]byte, error) {
 	if !runAsOn() {
 		return os.ReadFile(path)
 	}
-	r, rel, err := confine(trustBase(path), path)
+	r, rel, err := confine(base, path)
 	if err != nil {
 		return nil, err
 	}
