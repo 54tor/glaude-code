@@ -72,7 +72,10 @@ function SuperpowersDoc({ dir, path }: { dir: string; path: string }) {
   const [open, setOpen] = useState(false)
   const flip = () => {
     setOpen(!open)
-    if (doc === null) api.fsFile(dir, path).then((r) => setDoc(r.content), () => (toast.error(t("conversation.message.docFail")), setOpen(false)))
+    if (doc === null) {
+      const fail = () => (toast.error(t("conversation.message.docFail")), setOpen(false))
+      api.fsFile(dir, path).then((r) => (r.ok && r.body.content !== undefined ? setDoc(r.body.content) : fail()), fail)
+    }
   }
   return (
     <div className="mt-1">
