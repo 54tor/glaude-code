@@ -10,7 +10,7 @@ export function Choose({
   options,
   label,
   disabled,
-  size = "sm",
+  size = "default",
   className,
 }: {
   value: string
