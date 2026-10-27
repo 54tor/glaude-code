@@ -355,6 +355,11 @@ func gateCheck(g *gateInfo, r *http.Request, pat string, need Right) (int, strin
 			return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] && m[RightExec] })
 		}
 	}
+	// Les brouillons lisent côté serveur les fichiers désignés par l'appelant et renvoient la sortie du modèle : sans mem_read,
+	// ils contourneraient le droit de lecture.
+	if pat == "POST /memory-draft" || pat == "POST /skill-draft" {
+		return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] && m[RightMemRead] })
+	}
 	if pat == "POST /vgroups" {
 		var st Store
 		if err := peekJSON(r, &st); err != nil {

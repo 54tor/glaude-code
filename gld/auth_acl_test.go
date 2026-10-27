@@ -671,3 +671,24 @@ func TestFsWriteCodePathsNeedConfigWrite(t *testing.T) {
 		t.Errorf("renommage vers .git : %d", w.Code)
 	}
 }
+
+// Les brouillons de mémoire et de skill lisent des fichiers côté serveur : mem_read est exigé en plus du droit d'écriture.
+func TestGateDraftsNeedMemRead(t *testing.T) {
+	g := newGateRig(t)
+	w := g.user(t, "ecrivain", false)
+	g.grant(t, w, "", RightMemWrite, RightConfigWrite)
+	r := g.user(t, "lecteur", false)
+	g.grant(t, r, "", RightMemWrite, RightConfigWrite, RightMemRead)
+	for _, c := range []struct {
+		u    *gateUser
+		path string
+		code int
+	}{
+		{&w, "/memory-draft", 403}, {&w, "/skill-draft", 403},
+		{&r, "/memory-draft", 200}, {&r, "/skill-draft", 200},
+	} {
+		if got := g.do("POST", c.path, c.u, "", `{}`).Code; got != c.code {
+			t.Errorf("%s : %d, attendu %d", c.path, got, c.code)
+		}
+	}
+}
