@@ -479,7 +479,7 @@
       "replaceTitle": "Replace the link?",
       "replaceBody": "A share already exists: the old link will stop working.",
       "replaceConfirm": "Regenerate",
-      "singleUse": "Whoever opens it first reserves it. Do not open it in your own browser: you would be treated as a guest.",
+      "singleUse": "Whoever opens it first reserves it. Do not open it yourself: with host access it is refused without being spent; in local mode without a token, you would become the guest. To test it, use a private window.",
       "insecure": "Connection is not HTTPS: the guest cookie is not secure.",
       "connected": "Guest connected",
       "notConnected": "No guest connected",

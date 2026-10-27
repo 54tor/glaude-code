@@ -75,20 +75,27 @@ bouton **Envoyer à la session** écrit directement dedans, et vous voyez en dir
   colle dans la messagerie ; régénérer le lien rend l'ancien inutilisable.
 - Le lien est **à usage unique** : le premier qui l'ouvre et appuie sur le bouton le réserve. Tout autre navigateur ou
   appareil est refusé.
-- L'invité voit toute la conversation, y compris les sorties d'outils déjà affichées, et la suit en direct. Il peut
-  écrire dans la **file d'envoi** : gld transmet ses messages quand la session est au repos. Il ne peut ni répondre aux
-  demandes de permission, ni ouvrir de documents ou de fichiers, ni voir vos autres sessions.
-- Depuis la session, vous pouvez **passer en lecture seule** (l'invité ne peut plus écrire), **redonner l'écriture**, ou
-  **Mettre fin au partage** : l'invité perd l'accès immédiatement.
+- L'invité voit toute la conversation, y compris les sorties d'outils et des tâches de fond, et la suit en direct. Il
+  peut écrire dans la **file d'envoi** : gld transmet ses messages quand la session est au repos et qu'aucune question
+  n'est affichée à l'écran. Ils arrivent dans la session précédés de `[Invité]`. Il ne peut ni répondre aux demandes de
+  permission, ni ouvrir de documents, ni voir vos autres sessions, mais il peut citer des fichiers du projet avec `@`.
+- Une session lancée sans demandes de permission (acceptation automatique, bypass) exécute les messages de l'invité
+  directement : ne la partagez qu'avec quelqu'un de confiance.
+- Depuis la session, vous pouvez **passer en lecture seule** (l'invité ne peut plus écrire et ses messages encore en file
+  sont supprimés, sauf celui en cours d'envoi ; il peut toujours retirer les siens), **redonner l'écriture**, ou
+  **Mettre fin au partage** : l'invité perd l'accès immédiatement et ses messages en file sont supprimés.
 - La file d'envoi est désormais sur le serveur, pour toutes les sessions : elle survit à la fermeture de l'onglet. Un
   message en cours d'envoi au moment d'un redémarrage de gld apparaît **incertain** et n'est jamais renvoyé
-  automatiquement. Limites : 50 messages par session, 32 Ko par message, 10 ajouts par minute pour l'invité.
+  automatiquement ; vous pouvez le relancer depuis la file. Limites : 50 messages par session, 32 Ko par message,
+  10 ajouts par minute pour l'invité.
 - Limites à connaître :
   - Sans HTTPS, le cookie de l'invité n'est pas marqué `Secure` : utilisez une adresse HTTPS si vous exposez gld.
-  - N'ouvrez pas votre propre lien dans votre navigateur : vous seriez traité en invité. Pour en sortir, cliquez sur
-    **Quitter** dans la page invité.
+  - Le cookie de l'invité dure 30 jours. Après **Quitter**, le lien est consommé : régénérez-en un.
+  - Si vous ouvrez votre propre lien avec un accès hôte (jeton, appareil jumelé, compte ayant le droit `exec` sur ce
+    home), gld le refuse sans le consommer ; testez-le dans une fenêtre privée. En mode local ouvert sans jeton, vous
+    deviendriez l'invité : **Quitter** vous en sort, mais le lien est alors consommé.
   - gld ne crée aucun tunnel : le collègue doit déjà atteindre gld (`--listen`, reverse proxy ou VPN).
-  - Fonctionne en mode jeton (un utilisateur) et en mode multi-utilisateur.
+  - Fonctionne en mode local sans jeton, en mode jeton (un utilisateur) et en mode multi-utilisateur.
 
 ### Ne rien perdre au redémarrage
 
