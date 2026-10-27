@@ -137,6 +137,8 @@ function GuestSession({ handle }: { handle: string }) {
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
   const end = useRef<HTMLDivElement>(null)
+  // Suit la fin tant que l'invité y est ; dès qu'il remonte lire, la vue ne bouge plus jusqu'à ce qu'il redescende ou envoie un message.
+  const stuck = useRef(true)
   useEffect(() => {
     hRef.current = h
   })
@@ -213,7 +215,7 @@ function GuestSession({ handle }: { handle: string }) {
 
   // Corps en bloc : dans Chrome, scrollIntoView renvoie une Promise que React prendrait pour un nettoyage et appellerait au message suivant.
   useEffect(() => {
-    end.current?.scrollIntoView?.({ block: "end" })
+    if (stuck.current) end.current?.scrollIntoView?.({ block: "end" })
   }, [h.msgs.length])
 
   const rw = me?.mode === "rw"
@@ -221,6 +223,7 @@ function GuestSession({ handle }: { handle: string }) {
     const v = text.trim()
     if (!v || sending.current || !rw) return
     sending.current = true
+    stuck.current = true
     setBusy(true)
     const r = await api.queueAdd(id, v)
     sending.current = false
@@ -304,7 +307,13 @@ function GuestSession({ handle }: { handle: string }) {
           </div>
         </DialogHeader>
         {files && <GuestFiles dir={dir} />}
-        <ScrollArea className={files ? "hidden" : "min-h-0 flex-1"}>
+        <ScrollArea
+          className={files ? "hidden" : "min-h-0 flex-1"}
+          onScrollCapture={(e) => {
+            const v = e.target as HTMLElement
+            stuck.current = v.scrollHeight - v.scrollTop - v.clientHeight < 80
+          }}
+        >
           <div className="session-text mx-auto max-w-5xl space-y-6 px-3 py-4 md:px-8 md:py-6">
             {h.more && (
               <div className="text-center">
