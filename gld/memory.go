@@ -154,7 +154,7 @@ type MemTarget struct {
 
 // memTargets : un projet par dossier de transcripts, sans lire ses fichiers de mémoire (ce que memList fait en plus).
 func memTargets() []MemTarget {
-	dirs, _ := os.ReadDir(root)
+	dirs, _ := readDirTrusted(root)
 	targets := []MemTarget{}
 	for _, d := range dirs {
 		if d.IsDir() {
@@ -192,7 +192,7 @@ func memList() ([]MemFile, []MemProject, []MemTarget) {
 	}
 	projects := []MemProject{}
 	targets := []MemTarget{}
-	dirs, _ := os.ReadDir(root)
+	dirs, _ := readDirTrusted(root)
 	for _, d := range dirs {
 		if !d.IsDir() {
 			continue
