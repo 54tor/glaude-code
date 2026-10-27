@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -110,7 +109,7 @@ func journalAppend(cfgRoot, team string, m DirectMsg) error {
 	if ok && fst.Size()+int64(len(line)) > journalMax {
 		return terr("srv.teams_journal.journalPlein")
 	}
-	f, err := os.OpenFile(file, os.O_RDWR|os.O_APPEND|os.O_CREATE|syscall.O_NOFOLLOW, 0o600)
+	f, err := os.OpenFile(file, os.O_RDWR|os.O_APPEND|os.O_CREATE|oNoFollow, 0o600)
 	if err != nil {
 		return err
 	}
@@ -141,7 +140,7 @@ func journalRead(cfgRoot, team string) ([]DirectMsg, error) {
 	if _, ok, err := lstatNoLink(file); err != nil || !ok {
 		return nil, err
 	}
-	f, err := os.OpenFile(file, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	f, err := os.OpenFile(file, os.O_RDONLY|oNoFollow, 0)
 	if err != nil {
 		return nil, err
 	}

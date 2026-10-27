@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"syscall"
 )
 
 const (
@@ -102,7 +101,7 @@ func rosterRead(cfgRoot, team string) (map[string]string, error) {
 	if _, ok, err := lstatNoLink(file); err != nil || !ok {
 		return empty, nil
 	}
-	f, err := os.OpenFile(file, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	f, err := os.OpenFile(file, os.O_RDONLY|oNoFollow, 0)
 	if err != nil {
 		return empty, nil
 	}
