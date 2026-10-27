@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -37,8 +38,8 @@ func (realPanes) Key(pane, key string) error {
 var teamPanes paneIO = realPanes{}
 
 type AgentView struct {
-	Name, AgentID, Role, Pane, State string
-	Lead                             bool
+	Name, Display, AgentID, Role, Pane, State string
+	Lead                                      bool
 }
 
 type TeamView struct {
@@ -281,14 +282,33 @@ func (c teamCtx) flush(cfgRoot string, st map[string]string) {
 	teamQueue[c.tf.Name] = keep
 }
 
-func (c teamCtx) role(cat Catalog, m TeamMember) string {
-	id, _, _ := strings.Cut(m.AgentID, "@")
-	for _, a := range cat.Agents {
-		if a.ID == id || a.ID == m.Name {
-			return a.Role
+// identify : prénom d'affichage, identifiant et libellé de rôle d'un membre, d'après le roster (prénom -> slug). Le nom brut reste la clé des envois.
+func identify(cat Catalog, roster map[string]string, m TeamMember) (display, agentID, role string) {
+	byID := func(id string) (Agent, bool) {
+		for _, a := range cat.Agents {
+			if a.ID == id {
+				return a, true
+			}
 		}
+		return Agent{}, false
 	}
-	return ""
+	if m.Lead {
+		if a, ok := byID("chef"); ok {
+			return a.Name, m.AgentID, ""
+		}
+		return upFirst(m.Name), m.AgentID, ""
+	}
+	slug, known := roster[m.Name]
+	if !known {
+		return upFirst(m.Name), m.AgentID, ""
+	}
+	a, _ := byID(slug)
+	return upFirst(m.Name), slug, a.Name
+}
+
+func upFirst(s string) string {
+	r, n := utf8.DecodeRuneInString(s)
+	return string(unicode.ToUpper(r)) + s[n:]
 }
 
 func teamView(cfgRoot, name string) (TeamView, error) {
@@ -299,6 +319,7 @@ func teamView(cfgRoot, name string) (TeamView, error) {
 	st, perm := c.states()
 	c.flush(cfgRoot, st)
 	cat, _ := loadCatalog(cfgRoot)
+	roster, _ := rosterRead(cfgRoot, name)
 	v := TeamView{Name: name, LeadSessionID: c.tf.LeadSessionID, Live: c.leadPane != "", Tasks: c.tf.Tasks,
 		Permission: perm, Unknown: c.tf.Unknown}
 	for _, m := range c.tf.Members {
@@ -306,7 +327,8 @@ func teamView(cfgRoot, name string) (TeamView, error) {
 		if m.Lead {
 			pane = c.leadPane
 		}
-		v.Agents = append(v.Agents, AgentView{Name: m.Name, AgentID: m.AgentID, Role: c.role(cat, m), Pane: pane, State: st[m.Name], Lead: m.Lead})
+		disp, aid, role := identify(cat, roster, m)
+		v.Agents = append(v.Agents, AgentView{Name: m.Name, Display: disp, AgentID: aid, Role: role, Pane: pane, State: st[m.Name], Lead: m.Lead})
 	}
 	teamRunMu.Lock()
 	v.Messages = append([]InboxMsg(nil), teamLog[name]...)
@@ -455,6 +477,9 @@ func teamClose(cfgRoot, name string) error {
 		}
 	}
 	if err := journalDrop(cfgRoot, name); err != nil {
+		return err
+	}
+	if err := rosterDrop(cfgRoot, name); err != nil {
 		return err
 	}
 	teamRunMu.Lock()

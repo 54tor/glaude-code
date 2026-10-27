@@ -246,3 +246,25 @@ func TestTeamsComposeDedup(t *testing.T) {
 		t.Fatalf("%s / %s", w1.Body, w2.Body)
 	}
 }
+
+func TestRoutesRunMatesShape(t *testing.T) {
+	g, _ := teamsRig(t)
+	fakeLaunchEnv(t)
+	u := g.user(t, "admin", true)
+	g.grant(t, u, "", RightExec)
+	w := g.do("POST", "/teams-launch", &u, "", `{"teamIds":["feature"],"goal":"x","dir":"`+t.TempDir()+`"}`)
+	var out struct {
+		Ok  bool
+		Run struct{ Mates []map[string]any }
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || !out.Ok || len(out.Run.Mates) == 0 {
+		t.Fatalf("%v %s", err, w.Body)
+	}
+	for _, m := range out.Run.Mates {
+		id, _ := m["ID"].(string)
+		nm, _ := m["Name"].(string)
+		if len(m) != 2 || id == "" || nm == "" {
+			t.Errorf("forme : %v", m)
+		}
+	}
+}

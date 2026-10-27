@@ -478,3 +478,69 @@ func TestTeamSendReportsTmuxError(t *testing.T) {
 		t.Fatalf("view: %v %v", v.Live, err)
 	}
 }
+
+func TestTeamViewUsesRoster(t *testing.T) {
+	root, _ := setup(t)
+	if err := rosterWrite(root, trName, map[string]string{"ada": "backend", "hugo": "testeur"}); err != nil {
+		t.Fatal(err)
+	}
+	v, err := teamView(root, trName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	by := map[string]AgentView{}
+	for _, a := range v.Agents {
+		by[a.Name] = a
+	}
+	if a := by["ada"]; a.Display != "Ada" || a.Role != "Développement backend" || a.AgentID != "backend" {
+		t.Errorf("ada : %+v", a)
+	}
+	if a := by["hugo"]; a.Display != "Hugo" || a.Role != "Testeur" || a.AgentID != "testeur" {
+		t.Errorf("hugo : %+v", a)
+	}
+	if a := by["zoe"]; a.Display != "Zoe" || a.Role != "" {
+		t.Errorf("zoe : %+v", a)
+	}
+	if a := by["team-lead"]; a.Display != "Chef de projet" || a.Role != "" || !a.Lead {
+		t.Errorf("chef : %+v", a)
+	}
+}
+
+func TestTeamViewWithoutRoster(t *testing.T) {
+	root, _ := setup(t)
+	v, err := teamView(root, trName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range v.Agents {
+		if !a.Lead && (a.Role != "" || a.Display != upFirst(a.Name)) {
+			t.Errorf("%+v", a)
+		}
+	}
+}
+
+func TestTeamViewCorruptRoster(t *testing.T) {
+	root, _ := setup(t)
+	os.MkdirAll(filepath.Join(root, journalDir), 0o700)
+	os.WriteFile(filepath.Join(root, journalDir, trName+".roster.json"), []byte("{pas du json"), 0o600)
+	v, err := teamView(root, trName)
+	if err != nil || len(v.Agents) == 0 {
+		t.Fatal(v, err)
+	}
+}
+
+func TestCloseDropsRoster(t *testing.T) {
+	for _, live := range []bool{true, false} {
+		root, f := setup(t)
+		rosterWrite(root, trName, map[string]string{"ada": "backend"})
+		if !live {
+			f.panes = map[string]string{}
+		}
+		if err := teamClose(root, trName); err != nil {
+			t.Fatal(live, err)
+		}
+		if m, _ := rosterRead(root, trName); len(m) != 0 {
+			t.Errorf("live=%v roster : %v", live, m)
+		}
+	}
+}
