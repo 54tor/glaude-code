@@ -38,6 +38,8 @@
     "offWins": "A disable in any scope wins over the others.",
     "mcpPlugin": "from a plugin: set with the plugin",
     "mcpAccount": "claude.ai account connector: set in claude.ai",
-    "mcpOther": "other source"
+    "mcpOther": "other source",
+    "tabActive": "Active",
+    "tabInstall": "Install and marketplaces"
   }
 }

@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Choose } from "./Choose"
-import { PluginsDialog } from "./PluginsDialog"
+import { PluginsPanel } from "./PluginsDialog"
 import { useActions } from "./actions"
 import { useConfigEdit } from "./configEdit"
 
@@ -26,7 +27,7 @@ export function Extensions({ home }: { home: string }) {
   const [inst, setInst] = useState<PluginInst[]>([])
   const [err, setErr] = useState("")
   const [dir, setDir] = useState("") // "" : utilisateur seul
-  const [dlg, setDlg] = useState(false)
+  const [tab, setTab] = useState("active")
   const [status, setStatus] = useState<Record<string, string> | null>(null) // `claude mcp list` : tous les serveurs vus par Claude Code, lent (quelques secondes)
   const a = useActions()
   const reload = useCallback(
@@ -87,7 +88,13 @@ export function Extensions({ home }: { home: string }) {
 
   return (
     <ScrollArea className="min-h-0 flex-1">
-      <div className="mx-auto max-w-5xl space-y-8 px-3 py-6 md:px-6">
+      <div className="mx-auto max-w-5xl px-3 py-6 md:px-6">
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList>
+            <TabsTrigger value="active">{t("extensions.tabActive")}</TabsTrigger>
+            <TabsTrigger value="install">{t("extensions.tabInstall")}</TabsTrigger>
+          </TabsList>
+          <TabsContent value="active" className="space-y-8 pt-4">
         <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
           {t("extensions.context")}
           <Choose value={dir} onChange={setDir} label={t("extensions.context")} className="min-w-0 max-w-md" options={[["", t("extensions.contextUser")], ...ov.projects.map((p) => [p.dir, tilde(p.project, home)] as const)]} />
@@ -97,7 +104,7 @@ export function Extensions({ home }: { home: string }) {
         <section>
           <h3 className={sect}>
             {t("extensions.plugins")} ({ids.length})
-            <Button size="xs" variant="outline" className="ml-auto" onClick={() => setDlg(true)}>
+            <Button size="xs" variant="outline" className="ml-auto" onClick={() => setTab("install")}>
               <Plug /> {t("extensions.manage")}
             </Button>
           </h3>
@@ -258,8 +265,12 @@ export function Extensions({ home }: { home: string }) {
           <p className="mt-1 text-xs text-muted-foreground">{t("extensions.offWins")}</p>
           {!mcpHere.length && !others.length && <p className="py-3 text-sm text-muted-foreground">{t("extensions.noMcp")}</p>}
         </section>
+          </TabsContent>
+          <TabsContent value="install" className="pt-4">
+            <PluginsPanel inline projects={ov.projects} home={home} onChange={reload} />
+          </TabsContent>
+        </Tabs>
       </div>
-      <PluginsDialog open={dlg} projects={ov.projects} home={home} onClose={() => setDlg(false)} onChange={reload} />
       {dialog}
     </ScrollArea>
   )

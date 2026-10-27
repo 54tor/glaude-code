@@ -18,6 +18,22 @@ type Project = { dir: string; project: string }
 // pour l'utilisateur ou pour un projet. Tout passe par `claude plugin` côté serveur.
 export function PluginsDialog({ open, onClose, projects, home, onChange }: { open: boolean; onClose: () => void; projects: Project[]; home: string; onChange: () => void }) {
   const { t } = useTranslation()
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="flex h-[85vh] max-h-[85vh] flex-col sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{t("skills.plugins.title")}</DialogTitle>
+          <DialogDescription>{t("skills.plugins.description")}</DialogDescription>
+        </DialogHeader>
+        <PluginsPanel projects={projects} home={home} onChange={onChange} />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// Le corps de la fenêtre, utilisable seul : dans la page Extensions (inline : défile avec la page).
+export function PluginsPanel({ projects, home, onChange, inline }: { projects: Project[]; home: string; onChange: () => void; inline?: boolean }) {
+  const { t } = useTranslation()
   const [q, setQ] = useState("")
   const [scope, setScope] = useState("user") // "user" ou "p/<dossier>"
   const [data, setData] = useState<{ installed: PluginInst[]; available: PluginAvail[]; error?: string } | null>(null)
@@ -27,11 +43,10 @@ export function PluginsDialog({ open, onClose, projects, home, onChange }: { ope
   const loadMarkets = useCallback(() => api.marketplaces().then((r) => setMarkets(r.marketplaces ?? [])), [])
   const load = useCallback((query: string) => api.plugins(query).then((r) => setData({ installed: r.installed ?? [], available: r.available ?? [], error: r.error })), [])
   useEffect(() => {
-    if (!open) return
     loadMarkets()
     const h = setTimeout(() => load(q), q ? 300 : 0)
     return () => clearTimeout(h)
-  }, [open, q, load, loadMarkets])
+  }, [q, load, loadMarkets])
 
   const run = async (key: string, action: string, id: string, sc: string, project: string) => {
     setBusy(key)
@@ -58,21 +73,8 @@ export function PluginsDialog({ open, onClose, projects, home, onChange }: { ope
   const dirOf = (p: PluginInst) => (p.scope === "user" ? "" : (projects.find((x) => x.project === p.project)?.dir ?? null))
   const scopeLabel = (p: PluginInst) => (p.scope === "user" ? t("skills.plugins.scopeUser") : tilde(p.project ?? "", home))
 
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="flex h-[85vh] max-h-[85vh] flex-col sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{t("skills.plugins.title")}</DialogTitle>
-          <DialogDescription>{t("skills.plugins.description")}</DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-48 flex-1">
-            <Search className="absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("skills.plugins.search")} className="pl-8" />
-          </div>
-          <Choose value={scope} onChange={setScope} options={[["user", t("skills.plugins.scopeUser")], ...projects.map((p) => [`p/${p.dir}`, tilde(p.project, home)] as const)]} label={t("skills.plugins.installFor")} />
-        </div>
-        <ScrollArea className="min-h-0 flex-1">
+  const body = (
+    <>
           {!data && <Loader2 className="m-6 size-5 animate-spin text-muted-foreground" />}
           {data?.error && <p className="p-4 text-sm text-destructive">{data.error}</p>}
           {data && !data.error && (
@@ -170,8 +172,18 @@ export function PluginsDialog({ open, onClose, projects, home, onChange }: { ope
               </section>
             </div>
           )}
-        </ScrollArea>
-      </DialogContent>
-    </Dialog>
+    </>
+  )
+  return (
+    <>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-48 flex-1">
+            <Search className="absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("skills.plugins.search")} className="pl-8" />
+          </div>
+          <Choose value={scope} onChange={setScope} options={[["user", t("skills.plugins.scopeUser")], ...projects.map((p) => [`p/${p.dir}`, tilde(p.project, home)] as const)]} label={t("skills.plugins.installFor")} />
+        </div>
+        {inline ? <div>{body}</div> : <ScrollArea className="min-h-0 flex-1">{body}</ScrollArea>}
+    </>
   )
 }

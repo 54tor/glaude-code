@@ -38,6 +38,8 @@
     "offWins": "Une désactivation dans une portée l'emporte sur les autres.",
     "mcpPlugin": "via un plugin : à régler avec le plugin",
     "mcpAccount": "connecteur du compte claude.ai : à régler dans claude.ai",
-    "mcpOther": "autre source"
+    "mcpOther": "autre source",
+    "tabActive": "Actifs",
+    "tabInstall": "Installation et marketplaces"
   }
 }
