@@ -346,6 +346,7 @@ func handler() http.Handler {
 	routesDocs(mux)
 	routesPair(mux)
 	routesQueue(mux)
+	routesShare(mux)
 	routesTeams(mux)
 	// Conversation dans le navigateur (chat.go).
 	mux.HandleFunc("POST /chat", chatHandler)

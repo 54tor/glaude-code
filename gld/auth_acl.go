@@ -97,7 +97,7 @@ var routeRights = map[string]Right{
 	"POST /fs-save": RightFsWrite, "POST /fs-new": RightFsWrite, "POST /fs-rename": RightFsWrite, "POST /fs-rm": RightFsWrite,
 	"POST /fs-trash-restore": RightFsWrite, "POST /fs-trash-purge": RightFsWrite,
 	"GET /term-info": RightExec, "POST /term-open": RightExec, "GET /term-ws": RightExec,
-	"POST /session-send": RightExec, "POST /queue-add": RightExec, "POST /queue-rm": RightExec, "POST /queue-retry": RightExec, "POST /session-key": RightExec, "POST /session-close": RightExec,
+	"POST /session-send": RightExec, "POST /queue-add": RightExec, "POST /queue-rm": RightExec, "POST /queue-retry": RightExec, "POST /share-create": RightExec, "GET /share-info": RightExec, "POST /share-mode": RightExec, "POST /share-end": RightExec, "POST /session-key": RightExec, "POST /session-close": RightExec,
 	"GET /trust-pending": RightExec, "POST /trust-answer": RightExec, "POST /open": RightExec, "POST /git-push": RightExec,
 	"GET /ls": RightExec, "POST /dirs": RightExec, "POST /image-upload": RightExec, "POST /file-upload": RightExec,
 	// Agissent sur les sessions : fermeture, suppression de transcriptions, tours de modèle.

@@ -342,3 +342,24 @@ func TestFollowPrefixMatchesUI(t *testing.T) {
 		t.Fatal("followPrefix diffère de FOLLOW_PREFIX")
 	}
 }
+
+func TestQueueRemoveByAuthor(t *testing.T) {
+	dir := t.TempDir()
+	q, _ := openQueue(dir)
+	q.Add("s", "guest", "a")
+	q.Add("s", "host", "b")
+	q.Add("t", "guest", "c")
+	if n := q.RemoveByAuthor("s", "guest"); n != 1 {
+		t.Fatalf("retirés : %d", n)
+	}
+	if l := q.List("s"); len(l) != 1 || l[0].Author != "host" {
+		t.Fatalf("s : %+v", l)
+	}
+	if len(q.List("t")) != 1 {
+		t.Fatal("autre session touchée")
+	}
+	q2, _ := openQueue(dir)
+	if len(q2.List("s")) != 1 {
+		t.Fatal("non persisté")
+	}
+}

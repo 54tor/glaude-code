@@ -12,6 +12,8 @@ func TestMain(m *testing.M) {
 	stampTTL = 0
 	qd, _ := os.MkdirTemp("", "gld-queue-test")
 	queueDir = func() string { return qd }
+	sd, _ := os.MkdirTemp("", "gld-share-test")
+	shareDir = func() string { return sd }
 	// L'environnement du poste de développement ne doit pas changer l'adresse du QR ni la confiance aux proxys.
 	os.Unsetenv("GLD_PUBLIC_URL")
 	os.Unsetenv("GLD_TRUSTED_PROXIES")

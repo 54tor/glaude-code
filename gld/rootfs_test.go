@@ -226,3 +226,21 @@ func TestQueueNeSuitPasLesLiens(t *testing.T) {
 		t.Fatalf("queue.json reste un lien : %v", err)
 	}
 }
+
+func TestSharesNeSuitPasLesLiens(t *testing.T) {
+	dir, out := t.TempDir(), t.TempDir()
+	s, err := openShares(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	victim := filepath.Join(out, "victime")
+	os.WriteFile(victim, []byte("intact"), 0o600)
+	os.Symlink(victim, filepath.Join(dir, "shares.json"))
+	s.Create("s", "d")
+	if b, _ := os.ReadFile(victim); string(b) != "intact" {
+		t.Fatalf("fichier hors de la base écrasé : %q", b)
+	}
+	if fi, err := os.Lstat(filepath.Join(dir, "shares.json")); err != nil || fi.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("shares.json reste un lien : %v", err)
+	}
+}
