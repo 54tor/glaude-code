@@ -292,6 +292,12 @@
       "server": "Côté serveur (Go)",
       "browser": "Côté navigateur"
     },
+    "tunnel": {
+      "loopback": "gld est ouvert sur une adresse locale à cet ordinateur : un autre appareil ne peut pas l'atteindre.",
+      "lan": "Sur le réseau local : lancez gld avec --listen 0.0.0.0 et ouvrez-le par l'IP de la machine (192.168.…).",
+      "cloudflared": "Depuis un autre réseau, un tunnel rapide trycloudflare (sans compte), puis relancez gld avec --public-url sur l'adresse https://….trycloudflare.com affichée :",
+      "warning": "Tout gld devient joignable depuis Internet : activez d'abord un jeton ou les comptes, et arrêtez le tunnel après usage. L'adresse change à chaque lancement."
+    },
     "pair": {
       "title": "Connecter un appareil",
       "intro": "Sur le téléphone ou la tablette, saisissez ce code : l'appareil se connecte sans jeton ni mot de passe. Le code ne sert qu'une fois.",

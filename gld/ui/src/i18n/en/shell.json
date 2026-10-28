@@ -292,6 +292,12 @@
       "server": "Server side (Go)",
       "browser": "Browser side"
     },
+    "tunnel": {
+      "loopback": "gld is open on an address local to this computer: another device cannot reach it.",
+      "lan": "On the local network: start gld with --listen 0.0.0.0 and open it through the machine's IP (192.168.…).",
+      "cloudflared": "From another network, a quick trycloudflare tunnel (no account), then restart gld with --public-url set to the https://….trycloudflare.com address it shows:",
+      "warning": "All of gld becomes reachable from the Internet: turn on a token or accounts first, and stop the tunnel afterwards. The address changes on every run."
+    },
     "pair": {
       "title": "Connect a device",
       "intro": "On the phone or tablet, enter this code: the device signs in without a token or password. The code works only once.",

@@ -12,6 +12,25 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 
 // Connecter un appareil : code à usage unique (pair.go), en chiffres à saisir sur « Connecter cet appareil » et en QR. Mode jeton : liste et révocation des appareils jumelés ;
 // mode comptes : les sessions du profil en tiennent lieu.
+// Adresse de bouclage : un autre appareil ne l'atteint pas. Une IP du réseau local, elle, marche telle quelle.
+export const loopback = (u: string) => {
+  const h = new URL(u, location.href).hostname
+  return h === "localhost" || h.endsWith(".localhost") || h.startsWith("127.") || h === "[::1]"
+}
+
+export function TunnelHint({ origin }: { origin: string }) {
+  const { t } = useTranslation()
+  return (
+    <div className="space-y-2 text-sm">
+      <p>{t("shell.tunnel.loopback")}</p>
+      <p className="text-muted-foreground">{t("shell.tunnel.lan")}</p>
+      <p className="text-muted-foreground">{t("shell.tunnel.cloudflared")}</p>
+      <pre className="overflow-x-auto rounded-md border bg-muted px-2 py-1 font-mono text-xs select-all">cloudflared tunnel --url {origin}</pre>
+      <p className="text-warning">{t("shell.tunnel.warning")}</p>
+    </div>
+  )
+}
+
 export function PairButton() {
   const { t } = useTranslation()
   const a = useAuth()
@@ -73,15 +92,19 @@ export function PairButton() {
               {code.code.slice(0, 4)} {code.code.slice(4)}
             </p>
           )}
-          <div className="grid size-56 place-items-center rounded-lg bg-white p-3">
-            {code && left > 0 ? (
-              <QRCode value={code.url} size={200} level="M" title={t("shell.pair.qr")} />
-            ) : (
-              <Button variant="outline" size="sm" onClick={() => void fresh()}>
-                <RefreshCw /> {t("shell.pair.renew")}
-              </Button>
-            )}
-          </div>
+          {code && left > 0 && loopback(code.url) ? (
+            <TunnelHint origin={new URL(code.url).origin} />
+          ) : (
+            <div className="grid size-56 place-items-center rounded-lg bg-white p-3">
+              {code && left > 0 ? (
+                <QRCode value={code.url} size={200} level="M" title={t("shell.pair.qr")} />
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => void fresh()}>
+                  <RefreshCw /> {t("shell.pair.renew")}
+                </Button>
+              )}
+            </div>
+          )}
           <p className="text-sm text-muted-foreground" aria-live="polite">
             {code && left > 0 ? t("shell.pair.expires", { s: left }) : t("shell.pair.expired")}
           </p>
