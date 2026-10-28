@@ -780,7 +780,7 @@ func TestGuestListChildRevalidated(t *testing.T) {
 	child := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hd := r.Header.Get(shareHeader)
 		if plain { // refus de childAuthorized ou de la garde Host : pas un jugement du secret
-			http.Error(w, "forbidden", 403)
+			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
 		if refuse {
