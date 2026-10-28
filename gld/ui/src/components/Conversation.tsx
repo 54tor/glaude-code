@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowDown, ArrowUpToLine, Undo2, BarChart3, Bug, ChevronLeft, ChevronRight, FolderOpen, Power, FileText, LoaderPinwheel, MessageSquarePlus, MoreHorizontal, MessagesSquare, GalleryHorizontalEnd, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
+import { ArrowDown, ArrowUpToLine, Copy, TextSelect, Undo2, BarChart3, Bug, ChevronLeft, ChevronRight, FolderOpen, Power, FileText, LoaderPinwheel, MessageSquarePlus, MoreHorizontal, MessagesSquare, GalleryHorizontalEnd, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
@@ -10,8 +10,9 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenuCheckboxItem, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { toast } from "sonner"
+import { copyText } from "@/lib/utils"
 import { Confirm, type Ask } from "./Confirm"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useActions } from "./actions"
@@ -80,6 +81,8 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   // État git du dossier de la session et de ses dépôts, si ce sont des dépôts : on peut voir les changements et pousser d'ici.
   const git = useGit()
   const gitDirs = row ? [row.g.project, ...(git.repos[row.g.project] ?? [])].filter((d) => git.status[d]) : []
+  const picked = useRef("") // sélection de texte au moment du clic droit
+  const copy = (text: string) => copyText(text).then(() => toast.success(t("common.copied")), () => toast.error(t("conversation.view.copyFail")))
   const lastId = useRef("") // à la fermeture, session vaut déjà null : le focus revient à la ligne de cette session
   useEffect(() => {
     if (id) lastId.current = id
@@ -479,11 +482,20 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
                   ) : (
                     <ContextMenu key={`${x.o}.${x.n ?? 0}`}>
                       <ContextMenuTrigger asChild className="select-text">
-                        <div>
+                        <div onContextMenu={() => (picked.current = window.getSelection()?.toString() ?? "")}>
                           <Message m={x} conv={{ dir, id, tools }} />
                         </div>
                       </ContextMenuTrigger>
                       <ContextMenuContent>
+                        {picked.current.trim() && (
+                          <ContextMenuItem onSelect={() => copy(picked.current)}>
+                            <TextSelect /> {t("conversation.view.copySelection")}
+                          </ContextMenuItem>
+                        )}
+                        <ContextMenuItem onSelect={() => copy(x.t)}>
+                          <Copy /> {t("conversation.view.copyMessage")}
+                        </ContextMenuItem>
+                        <ContextMenuSeparator />
                         <ContextMenuItem variant="destructive" onSelect={() => rewind(x.o!)}>
                           <Undo2 /> {t("conversation.view.rewind")}
                         </ContextMenuItem>
