@@ -38,3 +38,13 @@ describe("cross-session-message", () => {
     expect(onReply).toHaveBeenCalledWith("uds:/x.sock", "b7")
   })
 })
+
+describe("agent-message", () => {
+  it("est reconnu et rendu en carte avec l'expéditeur", () => {
+    const t = '<agent-message from="a93586">[Subagent hand-back] rapport</agent-message>'
+    expect(isTagged(`texte\n${t}`)).toBe(true)
+    render(createElement(Tagged, { t, md: (x: string) => x }))
+    expect(screen.getByText(/a93586/)).toBeTruthy()
+    expect(screen.getByText(/rapport/)).toBeTruthy()
+  })
+})

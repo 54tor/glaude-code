@@ -291,6 +291,7 @@
     "tagged": {
       "teammateMessage": "Message from {{name}}",
       "crossSessionMessage": "Message from session {{name}}",
+      "agentMessage": "Message from subagent {{name}}",
       "reply": "Reply to this session",
       "replyDraft": "Reply to session {{name}} with SendMessage (to: \"{{to}}\"): ",
       "taskNotification": "Task notification",

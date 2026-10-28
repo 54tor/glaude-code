@@ -27,7 +27,7 @@ export function parseJsonBody(body: string): Record<string, unknown> | null {
 }
 const show = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v))
 
-const KNOWN = /<(?:teammate-message|task-notification|cross-session-message)[\s>][\s\S]*?<\/(?:teammate-message|task-notification|cross-session-message)>/
+const KNOWN = /<(?:teammate-message|task-notification|cross-session-message|agent-message)[\s>][\s\S]*?<\/(?:teammate-message|task-notification|cross-session-message|agent-message)>/
 // Début de message balisé quelconque, ou balise connue glissée plus loin dans le texte (ex. après un tiret de liste).
 export const isTagged = (t: string) => (/^\s*<[a-z][a-z-]*[\s>]/.test(t) && !/^\s*<pasted_content/.test(t)) || KNOWN.test(t)
 
@@ -40,9 +40,10 @@ function Card({ tag, attrs, body, md, onReply }: { tag: string; attrs: string; b
   const fields = [...body.matchAll(BLOCK)].map(([, k, , v]) => [k, v.trim()] as const)
   const get = (k: string) => fields.find(([f]) => f === k)?.[1]
   const status = get("status")
-  if (tag === "teammate-message" || tag === "cross-session-message") {
+  if (tag === "teammate-message" || tag === "cross-session-message" || tag === "agent-message") {
     const cross = tag === "cross-session-message"
-    const from = cross ? attr(attrs, "from-name") ?? attr(attrs, "from") : attr(attrs, "teammate_id")
+    const agent = tag === "agent-message"
+    const from = cross ? attr(attrs, "from-name") ?? attr(attrs, "from") : agent ? attr(attrs, "from") : attr(attrs, "teammate_id")
     const summary = cross ? attr(attrs, "from-mode") : attr(attrs, "summary")
     const json = parseJsonBody(body)
     const Icon = cross ? Send : Users
@@ -50,7 +51,7 @@ function Card({ tag, attrs, body, md, onReply }: { tag: string; attrs: string; b
       <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
         <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
           <Icon className="size-3.5" />
-          {t(cross ? "conversation.tagged.crossSessionMessage" : "conversation.tagged.teammateMessage", { name: from ?? "?" })}
+          {t(cross ? "conversation.tagged.crossSessionMessage" : agent ? "conversation.tagged.agentMessage" : "conversation.tagged.teammateMessage", { name: from ?? "?" })}
           {summary && <Badge variant="outline" className="ml-auto max-w-[60%] truncate font-normal">{summary}</Badge>}
           {cross && onReply && attr(attrs, "from") && (
             <button type="button" onClick={() => onReply(attr(attrs, "from")!, from ?? "?")} title={t("conversation.tagged.reply")} aria-label={t("conversation.tagged.reply")} className={`${summary ? "" : "ml-auto "}rounded p-0.5 hover:bg-muted hover:text-foreground`}>
