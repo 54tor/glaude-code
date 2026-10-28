@@ -291,7 +291,7 @@ func sendToPane(pane, text string) error {
 // (le texte passe par sendToSession).
 var allowedKeys = map[string]string{
 	"Enter": "Enter", "Escape": "Escape", "Up": "Up", "Down": "Down", "Left": "Left", "Right": "Right",
-	"Tab": "Tab", "ShiftTab": "BTab", "Space": "Space", "CtrlC": "C-c",
+	"Tab": "Tab", "ShiftTab": "BTab", "Backspace": "BSpace", "Space": "Space", "CtrlC": "C-c",
 	"1": "1", "2": "2", "3": "3", "4": "4", "5": "5", "6": "6", "7": "7", "8": "8", "9": "9", "y": "y", "n": "n",
 }
 

@@ -437,4 +437,33 @@ describe("modeOfScreen", () => {
     expect(modeOfScreen("…\n  ? for shortcuts")).toBe("default")
     expect(modeOfScreen("  ")).toBeNull()
   })
+
+  describe("question à onglets déjà répondue (captures réelles Claude Code 2.1.312)", () => {
+    const sep = "─".repeat(60)
+    const body = (cursor: 1 | 3) =>
+      [
+        "❯ Use the AskUserQuestion tool once.",
+        sep,
+        "←  ☒ Q1  ☐ Q2  ✔ Submit  →",
+        "Quelle suite donner à cette demande ?",
+        `${cursor === 1 ? "❯" : " "} 1. Continuer (Recommandé)`,
+        "     Poursuivre avec l'option la plus directe.",
+        "  2. Arrêter ici",
+        "     Ne rien modifier.",
+        cursor === 3 ? "❯ 3. abc  ✔" : "  3. abc ✔",
+        sep,
+        "  4. Chat about this",
+        "Enter to select · Tab/Arrow keys to navigate · Esc to cancel",
+      ].join("\n")
+    it("la réponse libre donnée est éditable : le curseur la rejoint sans valider", () => {
+      const o = parsePrompt(body(1))!.options[2]
+      expect(o).toMatchObject({ label: "3. abc ✔", text: true, edit: "abc", reach: ["Down", "Down"] })
+    })
+    it("le libellé ne change pas quand le curseur arrive sur la ligne", () => {
+      expect(parsePrompt(body(3))!.options[2]).toMatchObject({ label: "3. abc ✔", edit: "abc", reach: [] })
+    })
+    it("le contexte ne reprend pas la saisie ni le tour d'avant", () => {
+      expect(parsePrompt(body(1))!.context).toBeUndefined()
+    })
+  })
 })

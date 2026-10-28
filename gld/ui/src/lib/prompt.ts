@@ -1,8 +1,9 @@
 // Questions du terminal. Deux formes : une liste numérotée sous une phrase (autorisation d'un outil, choix d'un plan) : le bouton envoie
 // le chiffre ; une liste à sélection (« ❯ option » suivie des autres, sans numéro) : le bouton déplace la sélection puis valide.
 // checked : case d'une question à choix multiples (la touche chiffre la coche ou la décoche sans bouger le curseur) ; reach : touches
-// pour amener le curseur sur l'option sans la valider (nécessaire avant d'écrire dans une option « Type something »).
-export type Opt = { label: string; keys: string[]; detail?: string; text?: boolean; chat?: boolean; checked?: boolean; reach?: string[] }
+// pour amener le curseur sur l'option sans la valider (nécessaire avant d'écrire dans une option « Type something ») ; edit : réponse libre
+// déjà donnée (« 3. texte ✔ »), à modifier : le curseur sur la ligne rouvre l'édition du texte.
+export type Opt = { label: string; keys: string[]; detail?: string; text?: boolean; chat?: boolean; checked?: boolean; reach?: string[]; edit?: string }
 export type Prompt = { question: string; context?: string; preview?: string; options: Opt[]; submit?: string[]; tabs?: { label: string; done: boolean }[] } // tabs : onglets de la question (☒ répondu) ; context : la commande ou le diff d'une demande d'autorisation
 // Options qui attendent une réponse libre (« Type something. », « Chat about this », « No, and tell Claude what to do differently »…).
 const CHAT = /chat about this/i
@@ -141,7 +142,11 @@ function parseLines(src: string[]): Prompt | null {
     // Question à onglets à choix unique (« ← ☐ Q1 ☐ Q2 ✔ Submit → ») : le message de Claude au-dessus et l'état des onglets.
     const head = lines.findIndex((l) => /^\s*←.*Submit.*→\s*$/.test(l))
     const tabbed = head >= 0 && head < nums[0].at
-    return { question, context: contextOf(nums[0].at, question) ?? (tabbed ? recap(all, tailStart + head) : undefined), tabs: tabbed ? tabsOf(lines[head]) : undefined, options: nums.map((o, i) => ({ label: `${o.n}. ${o.label}`, detail: detail(i) || undefined, keys: [o.n], text: FREE.test(o.label), chat: CHAT.test(o.label), ...(CHAT.test(o.label) && { keys: [o.n, "Enter"] }) })) }
+    const cursor = nums.findIndex((o) => /^\s*[❯>›]/.test(lines[o.at]))
+    // Question à onglets déjà répondue en réponse libre : « 3. texte ✔ » juste avant « Chat about this ». Le chiffre la revaliderait ; le curseur
+    // sur la ligne rouvre l'édition du texte.
+    const answered = (i: number) => tabbed && cursor >= 0 && /\s✔$/.test(nums[i].label) && CHAT.test(nums[i + 1]?.label ?? "")
+    return { question, context: contextOf(nums[0].at, question) ?? (tabbed ? recap(all, tailStart + head) : undefined), tabs: tabbed ? tabsOf(lines[head]) : undefined, options: nums.map((o, i) => ({ label: `${o.n}. ${o.label}`.replace(/\s+/g, " "), detail: detail(i) || undefined, keys: [o.n], text: FREE.test(o.label) || answered(i), chat: CHAT.test(o.label), ...(CHAT.test(o.label) && { keys: [o.n, "Enter"] }), ...(answered(i) && { edit: o.label.replace(/\s✔$/, "").trim(), reach: Array<string>(Math.abs(i - cursor)).fill(i < cursor ? "Up" : "Down") }) })) }
   }
   const sel = lines.findIndex((l) => /^\s{0,3}❯ \S/.test(l))
   if (sel < 0) return null
@@ -210,7 +215,8 @@ function multiSelect(lines: string[], above: (at: number) => string, recapAt: (h
 // l'écran visible s'il est déjà remonté.
 function recap(all: string[], head: number): string | undefined {
   let from = head
-  while (from > 0 && head - from < 200 && !/^\s*●/.test(all[from])) from--
+  while (from > 0 && head - from < 200 && !/^\s*●/.test(all[from]) && !/^\s*❯/.test(all[from])) from--
+  if (/^\s*❯/.test(all[from] ?? "")) from++ // la saisie de l'utilisateur ouvre le tour : ce qui précède est le tour d'avant
   const text = all.slice(from, head).filter((l) => !/^[─━╌▔\s]+$/.test(l)).join("\n").trim()
   return text || undefined
 }

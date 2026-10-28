@@ -593,9 +593,12 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
   const prompt = parsePrompt(screen)
   const [typing, setTyping] = useState<string | null>(null) // option à réponse libre en cours de saisie
   const [answer, setAnswer] = useState("")
+  const editLen = useRef(0) // réponse libre déjà saisie dans le terminal : à effacer avant de renvoyer le texte modifié
   const choose = async (o: Opt) => {
     if (!o.text && !o.chat) return press(...o.keys)
     setTyping(o.label)
+    setAnswer(o.edit ?? "")
+    editLen.current = o.edit?.length ?? 0
     if (o.chat) return press(...o.keys) // quitte la question : le texte part ensuite dans la zone de saisie normale
     // Champ libre : le curseur doit être sur la ligne sans la valider (case à cocher : chiffre = coche ; liste simple : chiffre = saut).
     await press(...(o.reach ?? (o.keys[o.keys.length - 1] === "Enter" ? o.keys.slice(0, -1) : o.keys)))
@@ -604,6 +607,8 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
     const text = answer.trim()
     if (!text) return
     if (prompt?.options.find((o) => o.label === typing)?.chat) await new Promise((x) => setTimeout(x, 800)) // laisse la question se fermer
+    for (let i = 0; i < editLen.current; i++) await api.post("/session-key", { id, key: "Backspace" })
+    editLen.current = 0
     const r = await api.post("/session-send", { id, text })
     if (!r.ok) return void toast.error(r.out)
     setAnswer("")
