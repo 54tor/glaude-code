@@ -1,7 +1,7 @@
 import { Fragment, useState, useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
-import { AlarmClock, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, Flame, Microwave, Snowflake, History, Clock, FileText, Inbox, NotebookPen, Info, LoaderPinwheel, Search, ShieldCheck, Tag, Users, X } from "lucide-react"
+import { AlarmClock, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, Flame, Microwave, Snowflake, History, FileText, Inbox, NotebookPen, Info, LoaderPinwheel, Search, ShieldCheck, Tag, Users, X } from "lucide-react"
 import { tilde } from "@/lib/format"
 import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
@@ -206,7 +206,7 @@ export type SidebarProps = {
   searching: boolean
   route: Route
   go: (r: Route) => void
-  counts: { recent: number; all: number; active: number }
+  counts: { all: number; active: number }
   reload: () => Promise<void>
   carousel: { n: number; on: boolean; start: () => void } // sessions en attente de réponse, parcourues l'une après l'autre
   favRows: Row[] // sessions favorites
@@ -323,13 +323,6 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
         <CleanupWarning />
         <nav className="px-2 pb-3" aria-label={t("shell.sidebar.navigation")}>
           <NavItem icon={GalleryHorizontalEnd} label={t("shell.sidebar.carousel")} n={p.carousel.n} active={p.carousel.on} onClick={p.carousel.start} />
-          <NavItem
-            icon={Clock}
-            label={t("shell.sidebar.recent")}
-            n={p.counts.recent}
-            active={r.kind === "recent"}
-            {...link({ kind: "recent" })}
-          />
           {(r.kind === "dir" || r.kind === "project") && (
             <NavItem icon={NotebookPen} label={t("shell.sidebar.addNote")} active={false} onClick={() => { window.dispatchEvent(new Event("gld:note-add")); p.onClose() }} />
           )}
