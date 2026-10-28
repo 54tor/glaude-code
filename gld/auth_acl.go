@@ -25,7 +25,7 @@ var routeRights = map[string]Right{
 	"GET /{$}": rightPublic, "GET /toutes": rightPublic, "GET /en-cours": rightPublic, "GET /dossier/": rightPublic,
 	"GET /groupe/": rightPublic, "GET /projet/": rightPublic, "GET /snippets": rightPublic, "GET /snippets/": rightPublic,
 	"GET /memoire": rightPublic, "GET /memoire/": rightPublic, "GET /onglets": rightPublic, "GET /configuration": rightPublic,
-	"GET /configuration/": rightPublic, "GET /skills": rightPublic, "GET /skills/": rightPublic, "GET /extensions": rightPublic, "GET /equipes": rightPublic, "GET /equipes/": rightPublic, "GET /espace/": rightPublic, "GET /reglages/": rightPublic, "GET /assets/": rightPublic,
+	"GET /configuration/": rightPublic, "GET /skills": rightPublic, "GET /skills/": rightPublic, "GET /extensions": rightPublic, "GET /equipes": rightPublic, "GET /equipes/": rightPublic, "GET /revues": rightPublic, "GET /espace/": rightPublic, "GET /reglages/": rightPublic, "GET /assets/": rightPublic,
 	"GET /icons/": rightPublic, "GET /favicon.ico": rightPublic, "GET /manifest.webmanifest": rightPublic, "GET /sw.js": rightPublic,
 	"GET /guest": rightPublic, "GET /guest/{handle}": rightPublic, "GET /guest-list": rightPublic, "GET /guest-me": rightPublic, "GET /invite/{home}/{token}": rightPublic, "POST /invite/{home}/{token}": rightPublic, "POST /guest-leave": rightPublic,
 
@@ -102,7 +102,7 @@ var routeRights = map[string]Right{
 	"GET /trust-pending": RightExec, "POST /trust-answer": RightExec, "POST /open": RightExec, "POST /git-push": RightExec,
 	"GET /ls": RightExec, "POST /dirs": RightExec, "POST /image-upload": RightExec, "POST /file-upload": RightExec,
 	// Agissent sur les sessions : fermeture, suppression de transcriptions, tours de modèle.
-	"POST /rm": RightExec, "POST /rename": RightExec, "POST /reassign": RightExec, "POST /keepwarm": RightExec,
+	"POST /rm": RightExec, "POST /conv-rewind": RightExec, "POST /rename": RightExec, "POST /reassign": RightExec, "POST /keepwarm": RightExec,
 	"GET /teams-catalog": RightSessionsRead, "POST /teams-compose": RightSessionsRead, "GET /teams": RightSessionsRead,
 	"GET /team": RightSessionsRead, "GET /team-screen": RightSessionsRead,
 	"POST /teams-launch": RightExec, "POST /team-send": RightExec, "POST /team-key": RightExec, "POST /team-close": RightExec,
