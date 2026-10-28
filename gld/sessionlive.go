@@ -101,7 +101,10 @@ func pendingQueue(path string) []Queued {
 	out := []Queued{}
 	for _, m := range st.q {
 		if t := strings.TrimSpace(m.T); t != "" && !strings.HasPrefix(t, "<task-notification") { // les notifications de tâche ne sont pas des messages
-			if !strings.HasPrefix(t, "<") { // un message balisé (agent, session) garde sa balise de fermeture : l'UI en fait une carte
+			// Un message balisé (agent, session) garde sa balise de fermeture : l'UI en fait une carte. Plafond large : relevé toutes les 2 s.
+			if strings.HasPrefix(t, "<") {
+				t = cut(t, 64000)
+			} else {
 				t = cut(t, 400)
 			}
 			out = append(out, Queued{t, m.Ts})

@@ -134,6 +134,15 @@ func TestMessagesEnAttente(t *testing.T) {
 	}
 }
 
+func TestMessageBaliseEnAttenteNonCoupe(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	body := "<agent-message from=\\\"a1\\\">" + strings.Repeat("x", 2000) + "</agent-message>"
+	os.WriteFile(p, []byte(`{"type":"queue-operation","operation":"enqueue","timestamp":"t1","content":"`+body+`"}`+"\n"), 0o600)
+	if q := pendingQueue(p); len(q) != 1 || !strings.HasSuffix(q[0].T, "</agent-message>") {
+		t.Fatalf("message balisé coupé : %d", len(q))
+	}
+}
+
 func TestFileDAttenteAuDelaDeLaFenetre(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "s.jsonl")
 	filler := strings.Repeat(`{"type":"assistant","message":"`+strings.Repeat("x", 1000)+`"}`+"\n", 600) // ~600 Ko
