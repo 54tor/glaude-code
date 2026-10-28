@@ -233,7 +233,7 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
         <AttachButton onPick={pics.pick} />
       </div>
       <DialogFooter className="items-stretch sm:items-center">
-        <ModelPicker value={choice} onChange={setChoice} className="min-w-0 sm:mr-auto sm:max-w-96" />
+        <ModelPicker value={choice} onChange={setChoice} className="min-w-0 flex-nowrap sm:mr-auto" />
         <div className="flex items-center justify-end gap-2">
           <Button variant="outline" onClick={onClose}>
             {tr("common.cancel")}
