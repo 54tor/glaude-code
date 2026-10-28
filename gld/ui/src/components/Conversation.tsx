@@ -478,7 +478,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
                     <Message key={x.o === undefined ? i : `${x.o}.${x.n ?? 0}`} m={x} conv={{ dir, id, tools }} />
                   ) : (
                     <ContextMenu key={`${x.o}.${x.n ?? 0}`}>
-                      <ContextMenuTrigger asChild>
+                      <ContextMenuTrigger asChild className="select-text">
                         <div>
                           <Message m={x} conv={{ dir, id, tools }} />
                         </div>
