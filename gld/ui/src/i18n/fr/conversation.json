@@ -286,7 +286,7 @@
       "subContext": "· contexte {{n}}",
       "subOpen": "Ouvrir la conversation de ce sous-agent",
       "subEmpty": "Aucun message.",
-      "subNote": "Lecture seule : un sous-agent ne reçoit pas de message de l'extérieur, il rend son résultat à la session."
+      "subNote": "Lecture seule"
     },
     "tagged": {
       "teammateMessage": "Message de {{name}}",

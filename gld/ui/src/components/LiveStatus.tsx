@@ -324,7 +324,7 @@ function SubView({ dir, id, sub, running, onClose }: { dir: string; id: string; 
       <DialogContent className="flex h-[85vh] max-h-[85vh] min-w-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
         <DialogHeader className="border-b px-6 py-4">
           <DialogTitle className="truncate pr-6">{sub?.desc || sub?.type}</DialogTitle>
-          <DialogDescription className="text-xs">{t("conversation.live.subNote")}</DialogDescription>
+          <DialogDescription className="sr-only">{t("conversation.live.subNote")}</DialogDescription>
           <div>
             <Button size="sm" variant={tools ? "secondary" : "ghost"} onClick={() => setTools(!tools)} aria-pressed={tools}>
               <Wrench /> {tools ? t("conversation.view.toolsShown") : t("conversation.view.toolsHidden")}
@@ -341,6 +341,7 @@ function SubView({ dir, id, sub, running, onClose }: { dir: string; id: string; 
             </div>
           </ScrollArea>
         </div>
+        <p className="border-t px-6 py-2 text-xs text-muted-foreground">{t("conversation.live.subNote")}</p>
       </DialogContent>
     </Dialog>
   )

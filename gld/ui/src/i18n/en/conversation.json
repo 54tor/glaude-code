@@ -286,7 +286,7 @@
       "subContext": "· context {{n}}",
       "subOpen": "Open this subagent's conversation",
       "subEmpty": "No messages.",
-      "subNote": "Read only: a subagent takes no outside messages, it hands its result back to the session."
+      "subNote": "Read only"
     },
     "tagged": {
       "teammateMessage": "Message from {{name}}",
