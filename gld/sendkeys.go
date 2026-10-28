@@ -266,6 +266,12 @@ func sendToPane(pane, text string) error {
 	if i := strings.LastIndexAny(text, " \n"); strings.HasPrefix(text[i+1:], "@") {
 		text += " "
 	}
+	// Une commande « /… » collée derrière un texte déjà tapé dans la TUI s'y ajouterait (« abc/model opus ») et ne s'appliquerait pas : on vide la ligne d'abord (Ctrl+U).
+	if strings.HasPrefix(text, "/") {
+		if _, err := tmuxRun("", "send-keys", "-t", pane, "C-u"); err != nil {
+			return terr("srv.sendkeys.tmuxSendKeys", "W1", err)
+		}
+	}
 	buf := "gld-send-" + strconv.Itoa(os.Getpid()) + "-" + strconv.FormatUint(sendSeq.Add(1), 10)
 	if _, err := tmuxRun(text, "load-buffer", "-b", buf, "-"); err != nil {
 		return terr("srv.sendkeys.tmuxLoadBuffer", "W1", err)

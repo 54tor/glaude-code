@@ -193,3 +193,17 @@ func TestCloseBackgroundSession(t *testing.T) {
 		t.Fatal("session inconnue acceptée")
 	}
 }
+
+func TestEnvoiCommandeVideLaLigne(t *testing.T) {
+	calls := fakeTmux(t, "%3 100\n")
+	if err := sendToSession(sid, "/model opus"); err != nil {
+		t.Fatal(err)
+	}
+	var seq []string
+	for _, c := range (*calls)[1:] {
+		seq = append(seq, strings.Join(c[1:2], "")+":"+c[len(c)-1])
+	}
+	if got := strings.Join(seq, " "); !strings.Contains(got, "send-keys:C-u load-buffer") {
+		t.Fatalf("la ligne n'est pas vidée avant la commande : %s", got)
+	}
+}
