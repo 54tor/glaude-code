@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest"
-import { isTagged, parseJsonBody } from "./Tagged"
+// @vitest-environment jsdom
+import { fireEvent, render, screen } from "@testing-library/react"
+import { createElement } from "react"
+import { describe, expect, it, vi } from "vitest"
+import { isTagged, parseJsonBody, Tagged } from "./Tagged"
 
 describe("isTagged", () => {
   it("détecte une balise connue après un tiret de liste", () => {
@@ -26,5 +29,12 @@ describe("parseJsonBody", () => {
 describe("cross-session-message", () => {
   it("est reconnu même sans être en tête du message", () => {
     expect(isTagged('le support\n<cross-session-message from="uds:/x.sock" from-name="b7" from-mode="prompting">hi</cross-session-message>')).toBe(true)
+  })
+  it("le bouton Répondre transmet l'adresse et le nom de l'expéditeur", () => {
+    const onReply = vi.fn()
+    const t = '<cross-session-message from="uds:/x.sock" from-name="b7" from-mode="prompting">hi</cross-session-message>'
+    render(createElement(Tagged, { t, md: (x: string) => x, onReply }))
+    fireEvent.click(screen.getByRole("button"))
+    expect(onReply).toHaveBeenCalledWith("uds:/x.sock", "b7")
   })
 })

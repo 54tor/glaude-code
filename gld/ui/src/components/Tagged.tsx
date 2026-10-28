@@ -1,4 +1,4 @@
-import { Bell, Minimize2, Send, Users } from "lucide-react"
+import { Bell, Minimize2, Reply, Send, Users } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { Badge } from "@/components/ui/badge"
 
@@ -32,8 +32,10 @@ const KNOWN = /<(?:teammate-message|task-notification|cross-session-message)[\s>
 export const isTagged = (t: string) => (/^\s*<[a-z][a-z-]*[\s>]/.test(t) && !/^\s*<pasted_content/.test(t)) || KNOWN.test(t)
 
 type Md = (t: string) => React.ReactNode
+// Répondre à une session : la consigne part dans le composer, Claude l'envoie avec SendMessage.
+export type OnReply = (to: string, name: string) => void
 
-function Card({ tag, attrs, body, md }: { tag: string; attrs: string; body: string; md: Md }) {
+function Card({ tag, attrs, body, md, onReply }: { tag: string; attrs: string; body: string; md: Md; onReply?: OnReply }) {
   const { t } = useTranslation()
   const fields = [...body.matchAll(BLOCK)].map(([, k, , v]) => [k, v.trim()] as const)
   const get = (k: string) => fields.find(([f]) => f === k)?.[1]
@@ -50,6 +52,11 @@ function Card({ tag, attrs, body, md }: { tag: string; attrs: string; body: stri
           <Icon className="size-3.5" />
           {t(cross ? "conversation.tagged.crossSessionMessage" : "conversation.tagged.teammateMessage", { name: from ?? "?" })}
           {summary && <Badge variant="outline" className="ml-auto max-w-[60%] truncate font-normal">{summary}</Badge>}
+          {cross && onReply && attr(attrs, "from") && (
+            <button type="button" onClick={() => onReply(attr(attrs, "from")!, from ?? "?")} title={t("conversation.tagged.reply")} aria-label={t("conversation.tagged.reply")} className={`${summary ? "" : "ml-auto "}rounded p-0.5 hover:bg-muted hover:text-foreground`}>
+              <Reply className="size-3.5" />
+            </button>
+          )}
         </div>
         {json ? (
           <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
@@ -101,7 +108,7 @@ function Card({ tag, attrs, body, md }: { tag: string; attrs: string; body: stri
 }
 
 // Un message fait de blocs balisés et, éventuellement, de texte libre autour.
-export function Tagged({ t, md }: { t: string; md: Md }) {
+export function Tagged({ t, md, onReply }: { t: string; md: Md; onReply?: OnReply }) {
   const parts: React.ReactNode[] = []
   let at = 0
   for (const m of t.matchAll(BLOCK)) {
@@ -112,7 +119,7 @@ export function Tagged({ t, md }: { t: string; md: Md }) {
           {md(before)}
         </div>
       )
-    parts.push(<Card key={m.index} tag={m[1]} attrs={m[2]} body={m[3]} md={md} />)
+    parts.push(<Card key={m.index} tag={m[1]} attrs={m[2]} body={m[3]} md={md} onReply={onReply} />)
     at = m.index + m[0].length
   }
   const rest = t.slice(at).trim()

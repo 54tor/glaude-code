@@ -11,6 +11,7 @@ import { authFetch, getAuth } from "@/lib/auth"
 import { size } from "@/lib/format"
 import { noBreak, rehypeNoBreak } from "@/lib/noBreak"
 import { CompactSummary, isCompactSummary, isTagged, Tagged } from "./Tagged"
+import { setDraft } from "@/hooks/useDraft"
 
 // Messages de Claude : Markdown (tableaux GFM compris). react-markdown n'interprète jamais de HTML brut
 // et filtre les URL dangereuses (javascript:) : rien de ce qui est affiché ne peut s'exécuter.
@@ -160,7 +161,11 @@ function MessageView({ m, conv }: { m: Msg; conv?: Conv }) {
   if (m.r === "user" && isTagged(m.t))
     return (
       <div title={title} className="msg ml-auto max-w-[85%]">
-        <Tagged t={m.t} md={(t) => <Markdown t={t} />} />
+        <Tagged
+          t={m.t}
+          md={(t) => <Markdown t={t} />}
+          onReply={conv && !conv.guest ? (to, name) => setDraft(conv.id, { text: t("conversation.tagged.replyDraft", { name, to }) }) : undefined}
+        />
       </div>
     )
   if (m.r === "user")
