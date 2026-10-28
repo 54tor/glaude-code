@@ -48,13 +48,33 @@ const PASTED = /<pasted_content id="[^"]*">\n?([\s\S]*?)\n?<\/pasted_content(?: 
 const HOME_PREFIX = /(^|[\s@("'`])(?:\/home\/[^/\s]+|\/Users\/[^/\s]+|[A-Za-z]:[\\/]Users[\\/][^\\/\s]+)(?=[\\/])/g
 export const hideHome = (s: string) => s.replace(HOME_PREFIX, "$1~")
 
-function UserText({ t: text }: { t: string }) {
+// Image déposée par l'interface (« @/…/.claude/gld-web-images/<nom> ») : affichée au lieu du chemin, relue par son seul nom (GET /conv-upload).
+const UPLOADED = /@\S*\/gld-web-images\/([A-Za-z0-9][\w.-]*\.(?:png|jpe?g|gif|webp))/g
+
+function UserText({ t: text, conv }: { t: string; conv?: Conv }) {
   const { t } = useTranslation()
   const parts: React.ReactNode[] = []
+  const md = (s: string, key: string) => {
+    if (!conv || conv.guest) return parts.push(<Markdown key={key} t={s} breaks />)
+    let from = 0
+    for (const m of s.matchAll(UPLOADED)) {
+      const before = s.slice(from, m.index).trim()
+      if (before) parts.push(<Markdown key={`${key}t${from}`} t={before} breaks />)
+      const src = `/conv-upload?dir=${encodeURIComponent(conv.dir)}&id=${encodeURIComponent(conv.id)}&name=${encodeURIComponent(m[1])}`
+      parts.push(
+        <a key={`${key}i${m.index}`} href={src} target="_blank" rel="noopener noreferrer" title={t("conversation.message.openImage")} className="my-1 block w-fit">
+          <img src={src} loading="lazy" alt={t("conversation.message.imageAlt")} className="max-h-80 max-w-full rounded-lg border bg-muted/30 object-contain" />
+        </a>
+      )
+      from = m.index + m[0].length
+    }
+    const rest = s.slice(from).trim()
+    if (rest) parts.push(<Markdown key={`${key}r`} t={rest} breaks />)
+  }
   let at = 0
   for (const m of text.matchAll(PASTED)) {
     const before = text.slice(at, m.index).trim()
-    if (before) parts.push(<Markdown key={`t${at}`} t={before} breaks />)
+    if (before) md(before, `t${at}`)
     const lines = m[1].split("\n").length
     parts.push(
       <details key={m.index} className="group/paste my-1 rounded-md border bg-background/60">
@@ -67,7 +87,7 @@ function UserText({ t: text }: { t: string }) {
     at = m.index + m[0].length
   }
   const rest = text.slice(at).trim()
-  if (rest) parts.push(<Markdown key="rest" t={rest} breaks />)
+  if (rest) md(rest, "rest")
   return <>{parts}</>
 }
 
@@ -176,7 +196,7 @@ function MessageView({ m, conv }: { m: Msg; conv?: Conv }) {
     return (
       <div title={title} className="msg flex justify-end">
         <div className="max-w-[85%] rounded-lg bg-accent px-4 py-2.5 break-words text-accent-foreground">
-          <UserText t={m.t} />
+          <UserText t={m.t} conv={conv} />
         </div>
       </div>
     )
