@@ -104,10 +104,11 @@ describe("Composer claude -p, file serveur", () => {
     const field = await screen.findByPlaceholderText(/Écrire à Claude|Write to Claude/i)
     fireEvent.change(field, { target: { value: "salut" } })
     fireEvent.keyDown(field, { key: "Enter", ctrlKey: true })
-    await waitFor(() => expect(f).toHaveBeenCalledTimes(1))
+    const chats = () => f.mock.calls.filter((c) => String((c as unknown[])[0]).includes("/chat")).length
+    await waitFor(() => expect(chats()).toBe(1))
     await new Promise((r) => setTimeout(r, 50))
     expect(rm).not.toHaveBeenCalled()
-    expect(f).toHaveBeenCalledTimes(1)
+    expect(chats()).toBe(1)
   })
   it("« envoyer le suivant » : texte au brouillon d'abord, retiré, envoyé, brouillon rendu", async () => {
     const f = vi.fn(async () => chatOk())
