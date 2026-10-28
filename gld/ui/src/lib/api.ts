@@ -244,6 +244,7 @@ export const api = {
   queueAdd: (id: string, text: string) => api.post("/queue-add", { id, text }),
   queueRm: (id: string, item: string) => api.post("/queue-rm", { id, item }) as Promise<Result & { text?: string }>,
   queueRetry: (id: string, item: string) => api.post("/queue-retry", { id, item }),
+  convRewind: (dir: string, id: string, o: number) => api.post("/conv-rewind", { dir, id, o }),
   inviteCreate: (id: string, dir: string, title?: string, name?: string) => api.post("/invite-create", { id, dir, ...(title ? { title } : {}), ...(name ? { name } : {}) }) as Promise<Result & { token?: string; invite?: { id: string; seq: number; label: string } }>,
   inviteRegen: (id: string, invite: string) => api.post("/invite-regen", { id, invite }) as Promise<Result & { token?: string }>,
   inviteMode: (id: string, invite: string, mode: "rw" | "ro") => api.post("/invite-mode", { id, invite, mode }),

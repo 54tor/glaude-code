@@ -550,5 +550,7 @@
   "test.items": {
     "one": "{{.Count}} élément",
     "other": "{{.Count}} éléments"
-  }
+  },
+  "srv.rewind.fait": "Session ramenée à ce message : {{.A1}} message(s) retiré(s)",
+  "srv.rewind.sessionOuverte": "session ouverte : ferme-la avant de revenir en arrière"
 }

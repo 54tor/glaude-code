@@ -408,6 +408,43 @@ func routesSessions(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_sessions.renommee", "A1", title)})
 	})
+	mux.HandleFunc("POST /conv-rewind", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Dir, ID string
+			O       int64
+		}
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+			return
+		}
+		p, ok := transcript(req.Dir, req.ID)
+		if !ok {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+			return
+		}
+		sessionsMu.Lock()
+		defer sessionsMu.Unlock()
+		// Un processus qui écrit ce transcript le rallongerait depuis sa propre mémoire de la conversation.
+		live, err := liveCheck()
+		if err == nil && live[req.ID] {
+			err = terr("srv.rewind.sessionOuverte")
+		}
+		chatMu.Lock()
+		if err == nil && chatRun[req.ID] != nil {
+			err = terr("srv.chat.claudeRepondDejaDans")
+		}
+		var n int
+		if err == nil {
+			n, err = rewind(p, req.O)
+		}
+		chatMu.Unlock()
+		journal("conv-rewind %s @%d : %d message(s), %v", req.ID, req.O, n, errOr(err))
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "n": n, "out": L("srv.rewind.fait", "A1", n)})
+	})
 	// Snippets = commandes Claude Code (commands.go) : personnelles (~/.claude/commands, ou GLD_WEB_SNIPPETS) et de projet.
 	mux.HandleFunc("POST /vgroups", func(w http.ResponseWriter, r *http.Request) {
 		var st Store

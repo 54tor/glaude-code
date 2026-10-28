@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowDown, ArrowUpToLine, BarChart3, Bug, ChevronLeft, ChevronRight, FolderOpen, Power, FileText, LoaderPinwheel, MessageSquarePlus, MoreHorizontal, MessagesSquare, GalleryHorizontalEnd, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
+import { ArrowDown, ArrowUpToLine, Undo2, BarChart3, Bug, ChevronLeft, ChevronRight, FolderOpen, Power, FileText, LoaderPinwheel, MessageSquarePlus, MoreHorizontal, MessagesSquare, GalleryHorizontalEnd, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
@@ -10,6 +10,9 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenuCheckboxItem, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
+import { toast } from "sonner"
+import { Confirm, type Ask } from "./Confirm"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useActions } from "./actions"
 import { SessionDropdown } from "./SessionMenu"
@@ -108,6 +111,18 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   const detail = info && info.id === id ? info.d : null
   // Tour en cours (ou dernier tour) écrit depuis le navigateur, affiché à la suite de la conversation.
   const [chat, setChat] = useState<Turn | null>(null)
+  const [ask, setAsk] = useState<Ask | null>(null)
+  const rewind = (o: number) =>
+    setAsk({
+      title: t("conversation.view.rewind"),
+      body: t("conversation.view.rewindBody"),
+      confirm: t("conversation.view.rewind"),
+      run: () =>
+        void api.convRewind(dir, id, o).then(
+          (r) => (r.ok ? (toast.success(r.out), setChat(null), void reloadRef.current()) : toast.error(r.out)),
+          () => toast.error(t("conversation.view.rewindFail"))
+        ),
+    })
   const turn = chat?.id === id ? chat : null
   // Message envoyé à une session ouverte (tmux) : on relit son transcript tant qu'elle travaille, pour montrer la réponse au fil de l'eau.
   const [sentAt, setSentAt] = useState<{ id: string; at: number } | null>(null)
@@ -459,7 +474,22 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
                 "count" in x ? (
                   <ToolAnchor key={`a${x.from}`} dir={dir} id={id} g={x} />
                 ) : (
-                  <Message key={x.o === undefined ? i : `${x.o}.${x.n ?? 0}`} m={x} conv={{ dir, id, tools }} />
+                  x.o === undefined ? (
+                    <Message key={x.o === undefined ? i : `${x.o}.${x.n ?? 0}`} m={x} conv={{ dir, id, tools }} />
+                  ) : (
+                    <ContextMenu key={`${x.o}.${x.n ?? 0}`}>
+                      <ContextMenuTrigger asChild>
+                        <div>
+                          <Message m={x} conv={{ dir, id, tools }} />
+                        </div>
+                      </ContextMenuTrigger>
+                      <ContextMenuContent>
+                        <ContextMenuItem variant="destructive" onSelect={() => rewind(x.o!)}>
+                          <Undo2 /> {t("conversation.view.rewind")}
+                        </ContextMenuItem>
+                      </ContextMenuContent>
+                    </ContextMenu>
+                  )
                 )
               )}
             {msgs?.length === 0 && !turn && <p className="text-center text-muted-foreground">{t("conversation.view.empty")}</p>}
@@ -540,6 +570,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             }}
           />
         )}
+        <Confirm ask={ask} onClose={() => setAsk(null)} />
         <LoadedDialog id={id} home={a.home} open={loadedOpen} onClose={() => setLoadedOpen(false)} />
       </DialogContent>
     </Dialog>
