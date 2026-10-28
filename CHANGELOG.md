@@ -2,6 +2,11 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [SemVer](https://semver.org/lang/fr/).
 
+## [0.6.1] - 2026-10-28
+
+### Corrigé
+- Le test de la file suspendue du composeur comptait l'appel `/config` comme un envoi : la CI de release de 0.6.0 échouait, aucun binaire n'a été publié. Aucun changement de comportement.
+
 ## [0.6.0] - 2026-10-28
 
 ### Ajouté
