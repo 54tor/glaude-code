@@ -43,14 +43,22 @@ async function retryItem(id: string, q: QItem) {
   if (!r.ok) toast.error(r.out)
 }
 // Une ligne de la file. Un envoi incertain se tranche (renvoyer ou retirer) ; un envoi en cours ne se retire plus.
+// Un message d'agent en file (balise tronquée côté serveur) : une étiquette lisible plutôt que la balise brute.
+function queueText(t: (k: string, o?: Record<string, string>) => string, text: string) {
+  const m = text.match(/^\s*<(agent-message|cross-session-message|teammate-message)\s+[^>]*?(?:from|from-name|teammate_id)="([^"]*)"/)
+  if (!m) return text
+  const key = m[1] === "agent-message" ? "agentMessage" : m[1] === "cross-session-message" ? "crossSessionMessage" : "teammateMessage"
+  return t(`conversation.tagged.${key}`, { name: m[2] })
+}
 function QueueRow({ id, q, i, label }: { id: string; q: QItem; i: number; label?: ReactNode }) {
   const { t } = useTranslation()
+  const text = queueText(t, q.text)
   return (
     <li className="flex items-center gap-2 rounded-md border border-dashed px-2 py-1 text-muted-foreground">
       <span className="shrink-0 tabular-nums">{i + 1}.</span>
       <Author q={q} />
       <span className="min-w-0 flex-1 truncate" title={q.text}>
-        {q.text}
+        {text}
       </span>
       {q.state === "uncertain" ? (
         <>
