@@ -34,6 +34,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Sessions de revue de sécurité acceptées depuis les onglets sauvegardés (`isAuto`).
 - Une commande slash vide d'abord la ligne de saisie du TUI avant l'envoi.
 - Les sessions tmux détachées prennent une taille de 160x48.
+- Un prompt déjà pris par Claude ne reste plus épinglé comme « en file ».
+- Le texte des messages de la transcription est de nouveau sélectionnable.
 
 ## [0.5.0] - 2026-10-27
 
