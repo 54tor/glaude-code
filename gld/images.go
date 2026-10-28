@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -181,7 +182,59 @@ func convImage(path string, o int64, k int) ([]byte, string, error) {
 	return data, http.DetectContentType(data[:min(len(data), 512)]), nil
 }
 
+// uploadName : nom d'un fichier déposé (saveBlob) ; ni séparateur ni point de tête, donc jamais un chemin.
+var uploadName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$`)
+
+// uploadImage ouvre une image déposée par son seul nom, dans le dossier privé : os.Root refuse tout lien symbolique qui en sortirait.
+// Le type vient du contenu (imageExt), pas du nom.
+func uploadImage(name string) (*os.File, string, error) {
+	bad := terr("srv.images.imageIntrouvable")
+	if !uploadName.MatchString(name) {
+		return nil, "", bad
+	}
+	r, err := os.OpenRoot(imagesDir())
+	if err != nil {
+		return nil, "", bad
+	}
+	defer r.Close()
+	f, err := r.Open(name)
+	if err != nil {
+		return nil, "", bad
+	}
+	st, err := f.Stat()
+	head := make([]byte, 512)
+	n, _ := io.ReadFull(f, head)
+	if err != nil || !st.Mode().IsRegular() || st.Size() > imgMax || imageExt(head[:n]) == "" {
+		f.Close()
+		return nil, "", bad
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		f.Close()
+		return nil, "", bad
+	}
+	return f, http.DetectContentType(head[:n]), nil
+}
+
 func routesImages(mux *http.ServeMux) {
+	mux.HandleFunc("GET /conv-upload", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if _, ok := transcript(q.Get("dir"), q.Get("id")); !ok {
+			http.NotFound(w, r)
+			return
+		}
+		f, typ, err := uploadImage(q.Get("name"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer f.Close()
+		h := w.Header()
+		h.Set("Content-Type", typ)
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Content-Security-Policy", "default-src 'none'; sandbox")
+		h.Set("Cache-Control", "private, max-age=3600")
+		io.Copy(w, f)
+	})
 	mux.HandleFunc("POST /image-upload", func(w http.ResponseWriter, r *http.Request) {
 		b, err := io.ReadAll(http.MaxBytesReader(w, r.Body, imgMax+1))
 		var p string

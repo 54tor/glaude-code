@@ -151,3 +151,29 @@ func TestImageDeposeSousSessionEstRetireeAvecElle(t *testing.T) {
 		t.Fatal("l'image d'une autre session a été retirée")
 	}
 }
+
+func TestUploadImageConfinee(t *testing.T) {
+	use(t.TempDir())
+	b, _ := base64.StdEncoding.DecodeString(png1)
+	p, err := saveImage(b, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, typ, err := uploadImage(filepath.Base(p))
+	if err != nil || typ != "image/png" {
+		t.Fatal(typ, err)
+	}
+	f.Close()
+	out := t.TempDir()
+	os.WriteFile(filepath.Join(out, "secret.png"), b, 0o600)
+	os.WriteFile(filepath.Join(out, "texte.txt"), []byte("pas une image"), 0o600)
+	os.Symlink(filepath.Join(out, "secret.png"), filepath.Join(imagesDir(), "lien.png"))
+	os.Symlink(out, filepath.Join(imagesDir(), "dossier"))
+	os.WriteFile(filepath.Join(imagesDir(), "faux.png"), []byte("pas une image"), 0o600)
+	for _, name := range []string{"lien.png", "dossier/secret.png", "../secret.png", "/etc/passwd", ".cache", "faux.png", "absent.png", ""} {
+		if f, _, err := uploadImage(name); err == nil {
+			f.Close()
+			t.Errorf("%q servi", name)
+		}
+	}
+}
