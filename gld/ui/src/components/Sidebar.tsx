@@ -63,6 +63,22 @@ function NavItem({ icon: Icon, label, n, active, onClick, to }: { icon: typeof I
   )
 }
 
+function KidsBadge({ n, open, live, onClick }: { n: number; open: boolean; live?: boolean; onClick: () => void }) {
+  const { t } = useTranslation()
+  return (
+    <button
+      onClick={onClick}
+      aria-expanded={open}
+      aria-label={t("shell.list.subSessions", { count: n })}
+      className="flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1 text-xs tabular-nums text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
+    >
+      ×{n}
+      <ChevronRight className={cn("size-3 transition-transform", open && "rotate-90")} />
+      {live && <span className="ml-0.5 size-1.5 rounded-full bg-success" aria-label={t("shell.sidebar.open")} />}
+    </button>
+  )
+}
+
 function Heading({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="mt-5 mb-1 flex items-center px-2">
@@ -88,7 +104,7 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
       if (!n.delete(id)) n.add(id)
       return n
     })
-  const item = (row: Row, kids: Row[] = [], slot = false): React.ReactNode => {
+  const item = (row: Row, kids: Row[] = []): React.ReactNode => {
     const { s } = row
     const open = opened.has(s.id)
     const cold = now - s.mtime >= ttl // ouverte mais cache expiré
@@ -97,18 +113,6 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
     return (
       <Fragment key={s.id}>
       <div className="flex items-center">
-      {kids.length > 0 && (
-        <button
-          onClick={() => toggle(s.id)}
-          aria-expanded={open}
-          aria-label={t("shell.list.subSessions", { count: kids.length })}
-          className="flex h-8 w-9 shrink-0 items-center justify-end pr-1 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} />
-          <span className="tabular-nums">{kids.length}</span>
-        </button>
-      )}
-      {kids.length === 0 && slot && <span className="w-9 shrink-0" aria-hidden />}
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <button
@@ -143,8 +147,9 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
           <SessionItems M={CM} row={row} full />
         </ContextMenuContent>
       </ContextMenu>
+      {kids.length > 0 && <KidsBadge n={kids.length} open={open} live={kids.some((c) => a.live.has(c.s.id))} onClick={() => toggle(s.id)} />}
       </div>
-      {open && <div className="ml-7 border-l pl-[7px]">{kids.map((c) => item(c))}</div>}
+      {open && <div className="ml-4 border-l pl-[7px]">{kids.map((c) => item(c))}</div>}
       </Fragment>
     )
   }
@@ -181,8 +186,7 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
           <div className="ml-3 border-l pl-1">
             {(() => {
               const { tops, kids } = nest(rs)
-              const slot = tops.some((r) => kids.has(r.s.id))
-              return tops.map((r) => item(r, kids.get(r.s.id), slot))
+              return tops.map((r) => item(r, kids.get(r.s.id)))
             })()}
           </div>
         </details>
@@ -228,7 +232,6 @@ const onWide = (cb: () => void) => {
 
 // Favoris : une sous-session favorite se range sous sa parente favorite, repliée par défaut.
 function FavSessions({ rows, read }: { rows: Row[]; read: (s: Session) => void }) {
-  const { t } = useTranslation()
   const [opened, setOpened] = useState<Set<string>>(new Set())
   const { tops, kids } = nest(rows)
   const toggle = (id: string) =>
@@ -237,21 +240,9 @@ function FavSessions({ rows, read }: { rows: Row[]; read: (s: Session) => void }
       if (!n.delete(id)) n.add(id)
       return n
     })
-  const item = (row: Row, ks: Row[] = [], slot = false): React.ReactNode => (
+  const item = (row: Row, ks: Row[] = []): React.ReactNode => (
     <Fragment key={row.s.id}>
       <div className="flex items-center">
-        {ks.length > 0 && (
-          <button
-            onClick={() => toggle(row.s.id)}
-            aria-expanded={opened.has(row.s.id)}
-            aria-label={t("shell.list.subSessions", { count: ks.length })}
-            className="flex h-8 w-9 shrink-0 items-center justify-end pr-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <ChevronRight className={cn("size-3.5 transition-transform", opened.has(row.s.id) && "rotate-90")} />
-            <span className="tabular-nums">{ks.length}</span>
-          </button>
-        )}
-        {ks.length === 0 && slot && <span className="w-9 shrink-0" aria-hidden />}
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <div className="min-w-0 flex-1">
@@ -262,12 +253,12 @@ function FavSessions({ rows, read }: { rows: Row[]; read: (s: Session) => void }
             <SessionItems M={CM} row={row} full />
           </ContextMenuContent>
         </ContextMenu>
+        {ks.length > 0 && <KidsBadge n={ks.length} open={opened.has(row.s.id)} onClick={() => toggle(row.s.id)} />}
       </div>
-      {opened.has(row.s.id) && <div className="ml-7 border-l pl-[7px]">{ks.map((c) => item(c))}</div>}
+      {opened.has(row.s.id) && <div className="ml-4 border-l pl-[7px]">{ks.map((c) => item(c))}</div>}
     </Fragment>
   )
-  const slot = tops.some((r) => kids.has(r.s.id))
-  return <>{tops.map((r) => item(r, kids.get(r.s.id), slot))}</>
+  return <>{tops.map((r) => item(r, kids.get(r.s.id)))}</>
 }
 
 export function Sidebar({ searchRef, ...p }: SidebarProps) {
