@@ -15,6 +15,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Écran de connexion sur le lien local : un indice `cloudflared` remplace le QR code.
 - IDE : `.git` masqué dans l'arbre de fichiers.
 - Carrousel : flèches précédent et suivant dans la barre.
+- Menu contextuel d'un message : copier le message, un bloc de code ou un lien.
+- Images jointes : affichées dans les messages utilisateur à la place de leur chemin, servies par nom et confinées au dossier privé.
 - Sélecteur de modèle : affiche le modèle par défaut effectivement utilisé.
 - Chemins affichés : le dossier personnel est masqué.
 - README : tunnel rapide `trycloudflare` pour essayer le partage de session.
