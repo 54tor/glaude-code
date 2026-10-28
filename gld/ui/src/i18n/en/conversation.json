@@ -1,7 +1,8 @@
 {
   "conversation": {
     "models": {
-      "default": "Default model"
+      "default": "Default model",
+      "defaultIs": "Default ({{model}})"
     },
     "efforts": {
       "default": "Default effort",
