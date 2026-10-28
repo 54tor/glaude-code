@@ -254,6 +254,15 @@ func TestTabs(t *testing.T) {
 	if len(l) != 3 || l[2].Name != "vieille manuelle" {
 		t.Fatalf("pruneAuto : %+v", l)
 	}
+	review := "00000000-0000-4000-8000-0000000000aa"
+	put(t, filepath.Join(cfg, "projects", "-p", review+".jsonl"), `{"cwd":"/p","type":"user","message":{"content":"Perform a read-only security review of this codebase. Do not edit."}}`+"\n", old)
+	if l := func() []TabSession {
+		open = []string{review}
+		defer func() { open = []string{id1} }()
+		return liveTabs()
+	}(); len(l) != 0 {
+		t.Fatalf("revue de sécurité sauvegardée pour la restauration : %+v", l)
+	}
 	open = []string{id1, id2}
 	saveTabs("", true)
 	all, _ := loadTabs()

@@ -19,7 +19,7 @@ import { useWaitingNotice } from "@/hooks/useWaitingNotice"
 import { BanAlert } from "@/components/BanAlert"
 import { applyFont } from "@/lib/fonts"
 import { type Choice } from "@/lib/models"
-import { AUTO, buildView, byDate, groupKey, HOT, WEEK } from "@/lib/sessionsView"
+import { buildView, byDate, groupKey, HOT, isAuto, WEEK } from "@/lib/sessionsView"
 import { RouteErrorBoundary } from "@/components/RouteErrorBoundary"
 import { retryLazy } from "@/lib/retryLazy"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -164,7 +164,7 @@ function Shell() {
   const hot = useMemo(
     () =>
       (data?.groups ?? [])
-        .flatMap((g) => g.sessions.filter((s) => (live.has(s.id) || now - s.mtime < HOT) && !AUTO.some((p) => s.title.includes(p))).map((s) => ({ s, g })))
+        .flatMap((g) => g.sessions.filter((s) => (live.has(s.id) || now - s.mtime < HOT) && !isAuto(s)).map((s) => ({ s, g })))
         .sort(byDate),
     [data, now, live]
   )

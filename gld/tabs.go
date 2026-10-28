@@ -61,6 +61,9 @@ func liveTabs() []TabSession {
 			continue
 		}
 		s := info(ps[0], st)
+		if s.autoReview() {
+			continue
+		}
 		out = append(out, TabSession{id, s.Dir, s.Cwd, s.Title})
 	}
 	slices.SortFunc(out, func(a, b TabSession) int { return strings.Compare(a.ID, b.ID) })

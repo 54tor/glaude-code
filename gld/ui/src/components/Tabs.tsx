@@ -14,7 +14,7 @@ import type { Ask } from "./Confirm"
 import type { Ask as PromptAsk } from "./Prompt"
 import { Live } from "./SessionList"
 import { reportResult } from "@/lib/report"
-import { AUTO } from "@/lib/sessionsView"
+import { isAuto } from "@/lib/sessionsView"
 
 // Sessions ouvertes sauvegardées (automatiquement toutes les 2 min, ou à la main avec un nom), à rouvrir d'un coup.
 export function Tabs({ args, onAsk, onPrompt }: { args: string; onAsk: (a: Ask) => void; onPrompt: (a: PromptAsk) => void }) {
@@ -47,7 +47,7 @@ export function Tabs({ args, onAsk, onPrompt }: { args: string; onAsk: (a: Ask) 
 
   // Rouvre les sessions de la sauvegarde qui ne sont pas déjà ouvertes, l'une après l'autre.
   const reopen = async (ss: TabSession[]) => {
-    const todo = ss.filter((s) => !a.live.has(s.id) && !AUTO.some((p) => s.title.includes(p)))
+    const todo = ss.filter((s) => !a.live.has(s.id) && !isAuto(s))
     if (!todo.length) return void toast.info(t("shell.tabs.allOpen"))
     const id = toast.loading(t("shell.tabs.opening", { sessions: t("shell.count.sessions", { count: todo.length }) }))
     let n = 0

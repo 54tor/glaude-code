@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -248,6 +249,14 @@ func info(path string, st os.FileInfo) Session {
 		}
 	}
 	return s
+}
+
+// autoReviews : débuts de prompt des revues de sécurité lancées par des skills (même liste que AUTO, ui/src/lib/sessionsView.ts).
+// Ces sessions ne sont ni sauvegardées pour la restauration ni rouvertes par gld-matin.
+var autoReviews = []string{"Review this change for security vulnerabilities", "You previously flagged these candidate vulnerabilities", "Perform a read-only security review of this codebase"}
+
+func (s Session) autoReview() bool {
+	return !s.Named && slices.ContainsFunc(autoReviews, func(p string) bool { return strings.HasPrefix(s.Title, p) })
 }
 
 type Group struct {
