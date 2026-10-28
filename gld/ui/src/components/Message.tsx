@@ -35,7 +35,7 @@ export function Markdown({ t, onLink, breaks }: { t: string; onLink?: (href: str
             ),
         }}
       >
-        {t}
+        {hideHome(t)}
       </ReactMarkdown>
     </div>
   )
@@ -43,6 +43,10 @@ export function Markdown({ t, onLink, breaks }: { t: string; onLink?: (href: str
 
 // Texte collé dans Claude Code (<pasted_content id="…">…</pasted_content id="…">) : un bloc repliable.
 const PASTED = /<pasted_content id="[^"]*">\n?([\s\S]*?)\n?<\/pasted_content(?: id="[^"]*")?>/g
+
+// Le dossier personnel (et donc l'identifiant du compte) ne s'affiche pas : « @/home/nom/x.png » devient « @~/x.png ».
+const HOME_PREFIX = /(^|[\s@("'`])(?:\/home\/[^/\s]+|\/Users\/[^/\s]+|[A-Za-z]:[\\/]Users[\\/][^\\/\s]+)(?=[\\/])/g
+export const hideHome = (s: string) => s.replace(HOME_PREFIX, "$1~")
 
 function UserText({ t: text }: { t: string }) {
   const { t } = useTranslation()
@@ -184,7 +188,7 @@ function MessageView({ m, conv }: { m: Msg; conv?: Conv }) {
       <div title={title} className="msg flex gap-2 border-l-2 border-primary/30 py-0.5 pl-3 text-muted-foreground">
         <Icon className="mt-0.5 size-3.5 shrink-0" aria-label={result ? t("conversation.message.toolResult") : t("conversation.message.toolCall")} />
         <div className="min-w-0">
-          <span className="break-words whitespace-pre-wrap">{noBreak(result ? m.t.slice(1).trimStart() : m.t)}</span>
+          <span className="break-words whitespace-pre-wrap">{noBreak(hideHome(result ? m.t.slice(1).trimStart() : m.t))}</span>
           {!result && conv && !conv.guest && SP_DOC.test(m.t) && <SuperpowersDoc dir={conv.dir} path={SP_DOC.exec(m.t)![0]} />}
         </div>
       </div>

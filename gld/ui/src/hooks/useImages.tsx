@@ -1,3 +1,4 @@
+import { hideHome } from "@/components/Message"
 import { useEffect, useRef, useState } from "react"
 import { FileText, Paperclip, X } from "lucide-react"
 import { toast } from "sonner"
@@ -66,8 +67,8 @@ export function useImages(sid?: string) {
     pick: (files: File[]) => add(files),
     remove: (path: string) => setImages((l) => l.filter((i) => i.path !== path)),
     clear: () => setImages([]),
-    // À ajouter au message : une mention « @chemin » par image.
-    suffix: () => images.map((i) => "@" + i.path).join("\n"),
+    // À ajouter au message : une mention « @chemin » par image. Sous Unix le home devient « ~ » (Claude Code le résout) : le terminal n'affiche pas l'identifiant du compte.
+    suffix: () => images.map((i) => "@" + (i.path.startsWith("/") ? hideHome(i.path) : i.path)).join("\n"),
   }
 }
 
