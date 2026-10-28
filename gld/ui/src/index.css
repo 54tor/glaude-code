@@ -240,3 +240,7 @@
     input, textarea, select { font-size: 16px !important; }
   }
 }
+
+/* Trait du spinner en pixels d'écran, quelle que soit la taille de l'icône. */
+.lucide-loader-pinwheel { stroke-width: 0.5px; }
+.lucide-loader-pinwheel * { vector-effect: non-scaling-stroke; }
