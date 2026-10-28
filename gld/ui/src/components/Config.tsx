@@ -71,7 +71,7 @@ export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: strin
             : [["u", t("config.main.userFile")], ...(ov.projects.length ? ([["p", t("config.main.optProject")], ["l", t("config.main.optLocal")]] as const) : [])]
         }
         label={t("config.main.locationAria")}
-        className="min-w-0 max-w-xs"
+        size="sm" className="min-w-0 max-w-xs"
       />
       {dir && (
         <Button size="sm" variant="outline" className="ml-auto" onClick={() => onTab("permissions")} title={t("config.main.globalPermsHint")}>
@@ -79,7 +79,7 @@ export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: strin
         </Button>
       )}
       {!dir && scope !== "u" && (
-        <Choose value={dirOf} onChange={(d) => setFileId(scope + "/" + d)} options={ov.projects.map((p) => [p.dir, tilde(p.project, home)] as const)} label={t("config.main.projectDirAria")} className="min-w-0 max-w-md" />
+        <Choose value={dirOf} onChange={(d) => setFileId(scope + "/" + d)} options={ov.projects.map((p) => [p.dir, tilde(p.project, home)] as const)} label={t("config.main.projectDirAria")} size="sm" className="min-w-0 max-w-md" />
       )}
       {!file && <span className="text-xs text-warning">{t("config.main.toCreate")}</span>}
       <span className="text-xs text-muted-foreground">{t("config.main.applyNote")}</span>

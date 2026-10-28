@@ -99,12 +99,12 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTran
                         saveEdit()
                       }}
                     >
-                      <Input value={edit.text} onChange={(e) => setEdit({ ...edit, text: e.target.value })} onKeyDown={(e) => e.key === "Escape" && setEdit(null)} autoFocus className="h-8 flex-1 font-mono text-xs" aria-label={t("config.perms.editRule", { rule: r })} />
-                      {kind !== DIRS && <Choose value={edit.to} onChange={(to) => setEdit({ ...edit, to })} options={RULE_KINDS.map((k) => [k, t(`config.perms.kind.${k}`)] as const)} label={t("config.perms.category")} className="w-36" />}
-                      <Button size="icon-xs" variant="ghost" type="submit" aria-label={t("config.perms.saveRule")}>
+                      <Input value={edit.text} onChange={(e) => setEdit({ ...edit, text: e.target.value })} onKeyDown={(e) => e.key === "Escape" && setEdit(null)} autoFocus className="h-7 flex-1 font-mono text-xs" aria-label={t("config.perms.editRule", { rule: r })} />
+                      {kind !== DIRS && <Choose value={edit.to} onChange={(to) => setEdit({ ...edit, to })} options={RULE_KINDS.map((k) => [k, t(`config.perms.kind.${k}`)] as const)} label={t("config.perms.category")} size="sm" className="w-36" />}
+                      <Button size="icon-sm" variant="ghost" type="submit" aria-label={t("config.perms.saveRule")}>
                         <Check />
                       </Button>
-                      <Button size="icon-xs" variant="ghost" type="button" aria-label={t("common.cancel")} onClick={() => setEdit(null)}>
+                      <Button size="icon-sm" variant="ghost" type="button" aria-label={t("common.cancel")} onClick={() => setEdit(null)}>
                         <X />
                       </Button>
                     </form>
@@ -178,7 +178,7 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTran
                 if (draft[kind]?.trim()) add(kind, draft[kind]).then(() => setDraft({ ...draft, [kind]: "" }))
               }}
             >
-              <Input value={draft[kind] ?? ""} onChange={(e) => setDraft({ ...draft, [kind]: e.target.value })} placeholder={kind === DIRS ? t("config.perms.dirPlaceholder") : "Bash(git status:*)"} className="h-8 font-mono text-xs" aria-label={t("config.perms.newRule", { label })} />
+              <Input value={draft[kind] ?? ""} onChange={(e) => setDraft({ ...draft, [kind]: e.target.value })} placeholder={kind === DIRS ? t("config.perms.dirPlaceholder") : "Bash(git status:*)"} className="h-7 font-mono text-xs" aria-label={t("config.perms.newRule", { label })} />
               {kind === DIRS && (
                 <Button
                   size="sm"
@@ -303,7 +303,7 @@ function Row({ f, value, file, propose }: { f: Field; value: unknown; file: stri
       {f.kind === "bool" ? (
         <Checkbox checked={value === true} onCheckedChange={(c) => set(c === true)} aria-label={f.label} />
       ) : f.kind === "enum" ? (
-        <Choose value={current} onChange={(v) => (v === "" ? propose({ file, op: "delete", path }) : v !== current && set(v))} options={options} label={f.label} className="w-72" />
+        <Choose value={current} onChange={(v) => (v === "" ? propose({ file, op: "delete", path }) : v !== current && set(v))} options={options} label={f.label} size="sm" className="w-72" />
       ) : (
         <>
           <Input
@@ -312,10 +312,10 @@ function Row({ f, value, file, propose }: { f: Field; value: unknown; file: stri
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && text.trim() && set(Number(text))}
             placeholder={t("config.settings.default")}
-            className="h-8 w-56 text-xs"
+            className="h-7 w-56 text-xs"
             aria-label={f.label}
           />
-          <Button size="xs" variant="outline" disabled={!text.trim() || text === current} onClick={() => set(Number(text))}>
+          <Button size="sm" variant="outline" disabled={!text.trim() || text === current} onClick={() => set(Number(text))}>
             {t("common.apply")}
           </Button>
         </>
@@ -369,8 +369,8 @@ export function SettingsTab({ file, doc, plugins, propose }: { file: string; doc
             if (name.trim()) propose({ file, op: "set", path: ["env", name.trim()], value: val }).then(() => (setName(""), setVal("")))
           }}
         >
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("config.settings.envName")} className="h-8 w-48 font-mono text-xs" aria-label={t("config.settings.envNameAria")} />
-          <Input value={val} onChange={(e) => setVal(e.target.value)} placeholder={t("config.settings.envValue")} className="h-8 flex-1 font-mono text-xs" aria-label={t("config.settings.envValueAria")} />
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("config.settings.envName")} className="h-7 w-48 font-mono text-xs" aria-label={t("config.settings.envNameAria")} />
+          <Input value={val} onChange={(e) => setVal(e.target.value)} placeholder={t("config.settings.envValue")} className="h-7 flex-1 font-mono text-xs" aria-label={t("config.settings.envValueAria")} />
           <Button size="sm" variant="outline" type="submit">
             <Plus /> {t("config.perms.add")}
           </Button>

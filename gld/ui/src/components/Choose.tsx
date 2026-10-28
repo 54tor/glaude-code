@@ -18,7 +18,7 @@ export function Choose({
   options: readonly (readonly [string, string])[]
   label: string
   disabled?: boolean
-  size?: "sm" | "default"
+  size?: "xs" | "sm" | "default"
   className?: string
 }) {
   return (

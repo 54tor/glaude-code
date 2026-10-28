@@ -182,6 +182,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
               onChange={setOrigin}
               options={[["all", t("skills.origin.all")], ...Object.keys(ORIGINS).map((k) => [k, t(`skills.origin.${k}.label`)] as const)]}
               label={t("skills.origin.label")}
+              size="xs"
               className="min-w-0"
             />
             {data && (
