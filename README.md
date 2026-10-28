@@ -108,6 +108,12 @@ bouton **Envoyer à la session** écrit directement dedans, et vous voyez en dir
     votre propre lien le consomme (ce navigateur reçoit un cookie d'invité) mais ne verrouille pas votre interface
     d'hôte : les pages sans l'en-tête de partage restent servies comme des requêtes d'hôte.
   - gld ne crée aucun tunnel : le collègue doit déjà atteindre gld (`--listen`, reverse proxy ou VPN).
+  - Pour essayer le partage sans rien configurer, un tunnel rapide
+    [trycloudflare](https://try.cloudflare.com/) (sans compte) suffit : `cloudflared tunnel --url http://127.0.0.1:8799`
+    affiche une adresse `https://….trycloudflare.com`, à donner aussi à gld (`--public-url`) pour que les liens
+    d'invitation la reprennent. L'adresse change à chaque lancement (les liens déjà envoyés cessent de marcher) et tout
+    gld devient joignable depuis Internet : activez d'abord un jeton ou les comptes, et arrêtez le tunnel après le test.
+    Cette piste est un essai, pas une installation : elle n'a pas été validée avec gld.
   - Fonctionne en mode local sans jeton, en mode jeton (un utilisateur) et en mode multi-utilisateur.
 
 ### Ne rien perdre au redémarrage
