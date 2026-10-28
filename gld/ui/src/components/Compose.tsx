@@ -22,6 +22,7 @@ import { ModelPicker } from "./ModelPicker"
 import { useMention } from "./Mention"
 import { Choose } from "./Choose"
 import { SnippetMenu } from "./SnippetMenu"
+import { AttachButton, ImageChips, useImages } from "@/hooks/useImages"
 
 // Dossier où lancer une nouvelle session : celui d'une de ses sessions (le serveur en tire le dossier de travail).
 export type Target = { label: string; project: string; dir: string; id: string; cwd?: string } // cwd : dossier choisi à la main (sans session existante)
@@ -64,7 +65,8 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
   const project = tgt?.project ?? ask.project
   const [mem, setMem] = useState<{ global: MemFile[]; projects: MemProject[] } | null>(null)
   const area = useRef<HTMLTextAreaElement>(null)
-  const ok = text.trim() !== ""
+  const pics = useImages()
+  const ok = text.trim() !== "" || pics.images.length > 0
   useEffect(() => {
     let live = true
     api.memory().then((m) => live && setMem(m))
@@ -81,7 +83,7 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
   const send = async () => {
     if (!ok || busy) return
     setBusy(true)
-    const done = await ask.run(text.trim(), choice, tgt, output)
+    const done = await ask.run([text.trim(), pics.suffix()].filter(Boolean).join("\n\n"), choice, tgt, output)
     setBusy(false)
     if (done) onClose()
   }
@@ -177,6 +179,8 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
         value={text}
         onChange={(e) => (setText(e.target.value), mention.track(e.target))}
         onKeyDown={(e) => !mention.onKey(e) && isSend(e) && (e.preventDefault(), send())}
+        onPaste={pics.onPaste}
+        onDrop={pics.onDrop}
         placeholder={keyHint(tr("conversation.compose.placeholder"))}
         autoFocus
         onFocus={(e) => {
@@ -190,45 +194,47 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
         className="session-text w-full resize-y rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         aria-label={tr("conversation.compose.messageAria")}
       />
-      <DialogFooter className="flex-wrap items-center gap-2 sm:justify-between">
-        <div className="flex flex-wrap gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" disabled={!mem}>
-                <Brain /> {tr("conversation.compose.insertMemory")}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent onCloseAutoFocus={(e) => e.preventDefault()} align="start" className="max-h-80 w-80 overflow-y-auto">
-              {own.map((p) => (
-                <div key={p.dir}>
-                  <DropdownMenuLabel className="flex items-center gap-1.5">
-                    <Brain className="size-3.5" /> {tr("conversation.compose.thisProject")}
-                  </DropdownMenuLabel>
-                  {memItems(p.files, tilde(p.project, a.home))}
-                  <DropdownMenuSeparator />
-                </div>
-              ))}
-              {!!mem?.global.length && (
-                <>
-                  <DropdownMenuLabel className="flex items-center gap-1.5">
-                    <Globe className="size-3.5" /> {tr("conversation.compose.global")}
-                  </DropdownMenuLabel>
-                  {memItems(mem.global, "~/.claude")}
-                </>
-              )}
-              {others.map((p) => (
-                <div key={p.dir}>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="truncate">{tilde(p.project, a.home)}</DropdownMenuLabel>
-                  {memItems(p.files, tilde(p.project, a.home))}
-                </div>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <SnippetMenu onInsert={insert} />
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <ModelPicker value={choice} onChange={setChoice} className="max-w-80" />
+      <ImageChips images={pics.images} busy={pics.busy} onRemove={pics.remove} />
+      <div className="flex flex-wrap items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" disabled={!mem}>
+              <Brain /> {tr("conversation.compose.insertMemory")}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent onCloseAutoFocus={(e) => e.preventDefault()} align="start" className="max-h-80 w-80 overflow-y-auto">
+            {own.map((p) => (
+              <div key={p.dir}>
+                <DropdownMenuLabel className="flex items-center gap-1.5">
+                  <Brain className="size-3.5" /> {tr("conversation.compose.thisProject")}
+                </DropdownMenuLabel>
+                {memItems(p.files, tilde(p.project, a.home))}
+                <DropdownMenuSeparator />
+              </div>
+            ))}
+            {!!mem?.global.length && (
+              <>
+                <DropdownMenuLabel className="flex items-center gap-1.5">
+                  <Globe className="size-3.5" /> {tr("conversation.compose.global")}
+                </DropdownMenuLabel>
+                {memItems(mem.global, "~/.claude")}
+              </>
+            )}
+            {others.map((p) => (
+              <div key={p.dir}>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="truncate">{tilde(p.project, a.home)}</DropdownMenuLabel>
+                {memItems(p.files, tilde(p.project, a.home))}
+              </div>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <SnippetMenu onInsert={insert} />
+        <AttachButton onPick={pics.pick} />
+      </div>
+      <DialogFooter className="items-stretch sm:items-center">
+        <ModelPicker value={choice} onChange={setChoice} className="min-w-0 sm:mr-auto sm:max-w-96" />
+        <div className="flex items-center justify-end gap-2">
           <Button variant="outline" onClick={onClose}>
             {tr("common.cancel")}
           </Button>
