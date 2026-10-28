@@ -1,4 +1,4 @@
-import { Bell, Minimize2, Users } from "lucide-react"
+import { Bell, Minimize2, Send, Users } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { Badge } from "@/components/ui/badge"
 
@@ -27,7 +27,7 @@ export function parseJsonBody(body: string): Record<string, unknown> | null {
 }
 const show = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v))
 
-const KNOWN = /<(?:teammate-message|task-notification)[\s>][\s\S]*?<\/(?:teammate-message|task-notification)>/
+const KNOWN = /<(?:teammate-message|task-notification|cross-session-message)[\s>][\s\S]*?<\/(?:teammate-message|task-notification|cross-session-message)>/
 // Début de message balisé quelconque, ou balise connue glissée plus loin dans le texte (ex. après un tiret de liste).
 export const isTagged = (t: string) => (/^\s*<[a-z][a-z-]*[\s>]/.test(t) && !/^\s*<pasted_content/.test(t)) || KNOWN.test(t)
 
@@ -38,15 +38,17 @@ function Card({ tag, attrs, body, md }: { tag: string; attrs: string; body: stri
   const fields = [...body.matchAll(BLOCK)].map(([, k, , v]) => [k, v.trim()] as const)
   const get = (k: string) => fields.find(([f]) => f === k)?.[1]
   const status = get("status")
-  if (tag === "teammate-message") {
-    const from = attr(attrs, "teammate_id")
-    const summary = attr(attrs, "summary")
+  if (tag === "teammate-message" || tag === "cross-session-message") {
+    const cross = tag === "cross-session-message"
+    const from = cross ? attr(attrs, "from-name") ?? attr(attrs, "from") : attr(attrs, "teammate_id")
+    const summary = cross ? attr(attrs, "from-mode") : attr(attrs, "summary")
     const json = parseJsonBody(body)
+    const Icon = cross ? Send : Users
     return (
       <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
         <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-          <Users className="size-3.5" />
-          {t("conversation.tagged.teammateMessage", { name: from ?? "?" })}
+          <Icon className="size-3.5" />
+          {t(cross ? "conversation.tagged.crossSessionMessage" : "conversation.tagged.teammateMessage", { name: from ?? "?" })}
           {summary && <Badge variant="outline" className="ml-auto max-w-[60%] truncate font-normal">{summary}</Badge>}
         </div>
         {json ? (

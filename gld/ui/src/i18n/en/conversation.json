@@ -280,6 +280,7 @@
     },
     "tagged": {
       "teammateMessage": "Message from {{name}}",
+      "crossSessionMessage": "Message from session {{name}}",
       "taskNotification": "Task notification",
       "fields": {
         "task": "task",

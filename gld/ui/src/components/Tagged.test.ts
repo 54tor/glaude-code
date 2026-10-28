@@ -22,3 +22,9 @@ describe("parseJsonBody", () => {
     expect(parseJsonBody("{pas du json")).toBeNull()
   })
 })
+
+describe("cross-session-message", () => {
+  it("est reconnu même sans être en tête du message", () => {
+    expect(isTagged('le support\n<cross-session-message from="uds:/x.sock" from-name="b7" from-mode="prompting">hi</cross-session-message>')).toBe(true)
+  })
+})
