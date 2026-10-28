@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -102,7 +103,7 @@ func pendingQueue(path string) []Queued {
 	for _, m := range st.q {
 		if t := strings.TrimSpace(m.T); t != "" && !strings.HasPrefix(t, "<task-notification") { // les notifications de tâche ne sont pas des messages
 			// Un message balisé (agent, session) garde sa balise de fermeture : l'UI en fait une carte. Plafond large : relevé toutes les 2 s.
-			if strings.HasPrefix(t, "<") {
+			if serviceMsg.MatchString(t) {
 				t = cut(t, 64000)
 			} else {
 				t = cut(t, 400)
@@ -112,6 +113,9 @@ func pendingQueue(path string) []Queued {
 	}
 	return out
 }
+
+// serviceMsg : messages de service d'agents (balises connues du transcript), à ne pas confondre avec un prompt qui commencerait par « < ».
+var serviceMsg = regexp.MustCompile(`^<(?:agent-message|cross-session-message|teammate-message)[\s>]`)
 
 func parseTs(s string) time.Time {
 	t, _ := time.Parse(time.RFC3339Nano, s)

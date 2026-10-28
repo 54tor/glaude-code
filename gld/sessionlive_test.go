@@ -141,6 +141,12 @@ func TestMessageBaliseEnAttenteNonCoupe(t *testing.T) {
 	if q := pendingQueue(p); len(q) != 1 || !strings.HasSuffix(q[0].T, "</agent-message>") {
 		t.Fatalf("message balisé coupé : %d", len(q))
 	}
+	long := "<div>" + strings.Repeat("y", 2000)
+	p = filepath.Join(t.TempDir(), "s2.jsonl")
+	os.WriteFile(p, []byte(`{"type":"queue-operation","operation":"enqueue","timestamp":"t1","content":"`+long+`"}`+"\n"), 0o600)
+	if q := pendingQueue(p); len(q) != 1 || len([]rune(q[0].T)) != 400 {
+		t.Fatalf("un prompt commençant par < doit rester coupé : %v", q)
+	}
 }
 
 func TestFileDAttenteAuDelaDeLaFenetre(t *testing.T) {

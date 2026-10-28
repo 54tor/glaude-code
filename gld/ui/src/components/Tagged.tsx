@@ -31,6 +31,9 @@ const KNOWN = /<(?:teammate-message|task-notification|cross-session-message|agen
 // Début de message balisé quelconque, ou balise connue glissée plus loin dans le texte (ex. après un tiret de liste).
 export const isTagged = (t: string) => (/^\s*<[a-z][a-z-]*[\s>]/.test(t) && !/^\s*<pasted_content/.test(t)) || KNOWN.test(t)
 
+// Message de service d'un agent ou d'une session (pas un prompt qui commencerait par « < »).
+export const isServiceMsg = (t: string) => /^\s*<(?:agent-message|cross-session-message|teammate-message)[\s>]/.test(t)
+
 type Md = (t: string) => React.ReactNode
 // Répondre à une session : la consigne part dans le composer, Claude l'envoie avec SendMessage.
 export type OnReply = (to: string, name: string) => void
