@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Download, Loader2, Plus, Power, RefreshCw, Search, Trash2 } from "lucide-react"
+import { Download, LoaderPinwheel, Plus, Power, RefreshCw, Search, Trash2 } from "lucide-react"
 import { api, type Marketplace, type PluginAvail, type PluginInst } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { reportResult } from "@/lib/report"
@@ -90,7 +90,7 @@ export function PluginsPanel({ projects, home, onChange, inline }: { projects: P
 
   const body = (
     <>
-          {!data && <Loader2 className="m-6 size-5 animate-spin text-muted-foreground" />}
+          {!data && <LoaderPinwheel className="m-6 size-5 animate-spin text-muted-foreground" />}
           {data?.error && <p className="p-4 text-sm text-destructive">{data.error}</p>}
           {data && !data.error && (
             <div className="space-y-4 pr-3">
@@ -99,7 +99,7 @@ export function PluginsPanel({ projects, home, onChange, inline }: { projects: P
                   <h3 className="mb-1 flex items-center text-xs font-semibold text-muted-foreground">
                     <span className="flex-1">{t("skills.plugins.marketplaces", { count: markets.length })}</span>
                     <Button size="xs" variant="ghost" disabled={busy === "mk:*"} onClick={() => market("mk:*", "update")}>
-                      {busy === "mk:*" ? <Loader2 className="animate-spin" /> : <RefreshCw />} {t("skills.plugins.marketUpdateAll")}
+                      {busy === "mk:*" ? <LoaderPinwheel className="animate-spin" /> : <RefreshCw />} {t("skills.plugins.marketUpdateAll")}
                     </Button>
                   </h3>
                   <ul className="divide-y rounded-md border">
@@ -127,7 +127,7 @@ export function PluginsPanel({ projects, home, onChange, inline }: { projects: P
                   >
                     <Input value={src} onChange={(e) => setSrc(e.target.value)} placeholder={t("skills.plugins.marketAdd")} />
                     <Button type="submit" size="sm" variant="outline" disabled={busy === "mk:add" || !SOURCE_OK.test(src.trim())}>
-                      {busy === "mk:add" ? <Loader2 className="animate-spin" /> : <Plus />} {t("skills.plugins.marketAddBtn")}
+                      {busy === "mk:add" ? <LoaderPinwheel className="animate-spin" /> : <Plus />} {t("skills.plugins.marketAddBtn")}
                     </Button>
                   </form>
                 </section>
@@ -182,7 +182,7 @@ export function PluginsPanel({ projects, home, onChange, inline }: { projects: P
                             {p.installs.toLocaleString()}
                           </span>
                           <Button size="xs" variant="outline" disabled={busy === p.id} onClick={() => run(p.id, "install", p.id, target.scope, target.project)}>
-                            {busy === p.id ? <Loader2 className="animate-spin" /> : <Download />} {t("skills.plugins.install")}
+                            {busy === p.id ? <LoaderPinwheel className="animate-spin" /> : <Download />} {t("skills.plugins.install")}
                           </Button>
                         </li>
                       ))}

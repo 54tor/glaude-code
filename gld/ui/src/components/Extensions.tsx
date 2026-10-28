@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Link } from "wouter"
-import { ChevronRight, Loader2, Plug } from "lucide-react"
+import { ChevronRight, LoaderPinwheel, Plug } from "lucide-react"
 import { api, type CfgOverview, type McpServer, type PluginInst, type Skill } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { href } from "@/lib/route"
@@ -236,7 +236,7 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
 
         <section className="rounded-xl border bg-card p-4 shadow-xs md:p-5">
           <h3 className={sect}>
-            {t("extensions.mcp")} ({mcpHere.length + others.length}){!status && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
+            {t("extensions.mcp")} ({mcpHere.length + others.length}){!status && <LoaderPinwheel className="size-3.5 animate-spin text-muted-foreground" />}
             <Link href={href({ kind: "config", tab: "mcp" })} className="ml-auto text-xs font-normal text-muted-foreground underline">MCP</Link>
           </h3>
           <p className="mb-1 text-xs text-muted-foreground">{t("extensions.mcpHelp")}</p>

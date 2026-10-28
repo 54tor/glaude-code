@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ChevronRight, File, Folder, Loader2 } from "lucide-react"
+import { ChevronRight, File, Folder, LoaderPinwheel } from "lucide-react"
 import { cn } from "cn"
 import { api, type FsEntry } from "@/lib/api"
 
@@ -47,7 +47,7 @@ export function GuestFiles({ dir }: { dir: string }) {
 
   const rows = (path: string, depth: number) => {
     const l = lists[path]
-    if (l === undefined || l === "loading") return <li className="px-2 py-1 text-muted-foreground" style={{ paddingLeft: 8 + depth * 14 }}><Loader2 className="size-3.5 animate-spin" aria-hidden /></li>
+    if (l === undefined || l === "loading") return <li className="px-2 py-1 text-muted-foreground" style={{ paddingLeft: 8 + depth * 14 }}><LoaderPinwheel className="size-3.5 animate-spin" aria-hidden /></li>
     if (l === "failed") return <li className="px-2 py-1 text-xs text-destructive" style={{ paddingLeft: 8 + depth * 14 }}>{t("conversation.guest.filesDirFailed")}</li>
     return (
       <>
@@ -85,7 +85,7 @@ export function GuestFiles({ dir }: { dir: string }) {
         {!view && <p className="text-sm text-muted-foreground">{t("conversation.guest.filePick")}</p>}
         {view && <p className="mb-2 truncate text-xs text-muted-foreground">{view.path}</p>}
         {view?.error && <p className="text-sm text-destructive">{view.error}</p>}
-        {view && view.text === undefined && !view.error && <Loader2 className="size-4 animate-spin" aria-hidden />}
+        {view && view.text === undefined && !view.error && <LoaderPinwheel className="size-4 animate-spin" aria-hidden />}
         {view?.text !== undefined && <pre className="session-text text-xs whitespace-pre-wrap break-words">{view.text}</pre>}
       </div>
     </div>

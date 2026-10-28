@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowLeft, Bot, Check, ClipboardCopy, Copy, Download, Link, Loader2, MessageSquarePlus, Pencil, Plus, Save, Sparkles, Terminal, Trash2, Undo2, Upload, X } from "lucide-react"
+import { ArrowLeft, Bot, Check, ClipboardCopy, Copy, Download, Link, LoaderPinwheel, MessageSquarePlus, Pencil, Plus, Save, Sparkles, Terminal, Trash2, Undo2, Upload, X } from "lucide-react"
 import { toast } from "sonner"
 import { api, type SnipScope, type Snippet } from "@/lib/api"
 import { ago, size, tilde } from "@/lib/format"
@@ -416,7 +416,7 @@ function HaikuFormat({ open, text, onClose, onDone }: { open: boolean; text: str
               {t("common.cancel")}
             </Button>
             <Button onClick={run} disabled={busy || (!text.trim() && !instruction.trim())} title={t("skills.format.shortcut")}>
-              {busy ? <Loader2 className="animate-spin" /> : <Sparkles />} {t("skills.format.run")}
+              {busy ? <LoaderPinwheel className="animate-spin" /> : <Sparkles />} {t("skills.format.run")}
             </Button>
           </div>
         </DialogFooter>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from "lucide-react"
+import { AlertTriangle, CheckCircle2, LoaderPinwheel, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
@@ -178,7 +178,7 @@ export function McpTab({ home }: { home: string }) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" variant="outline" onClick={check} disabled={busy}>
-          {busy ? <Loader2 className="animate-spin" /> : <RefreshCw />} {t("config.mcp.check")}
+          {busy ? <LoaderPinwheel className="animate-spin" /> : <RefreshCw />} {t("config.mcp.check")}
         </Button>
         <span className="text-xs text-muted-foreground">{t("config.mcp.readOnly")}</span>
       </div>

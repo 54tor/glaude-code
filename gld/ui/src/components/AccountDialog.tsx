@@ -1,7 +1,7 @@
 import { i18n, loc } from "@/i18n"
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { CircleUser, Loader2 } from "lucide-react"
+import { CircleUser, LoaderPinwheel } from "lucide-react"
 import { api, type Account } from "@/lib/api"
 import { compact } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -85,7 +85,7 @@ export function AccountButton() {
           <CircleUser />
           {shown.map((l) =>
             stale(l, now) ? (
-              <Loader2 key={l.key} className="size-3 animate-spin text-muted-foreground" aria-label={t("config.account.updating")} />
+              <LoaderPinwheel key={l.key} className="size-3 animate-spin text-muted-foreground" aria-label={t("config.account.updating")} />
             ) : (
               <span key={l.key} title={l.label} className={cn("text-xs tabular-nums", l.percent >= 90 ? "text-destructive" : l.percent >= 70 ? "text-warning" : "text-muted-foreground")}>
                 {Math.round(l.percent)} %
@@ -142,7 +142,7 @@ function Body({ a, updating, onRefresh }: { a: Account; updating: boolean; onRef
                       {t("config.account.money", { used: l.usedDollars.toLocaleString(loc(), { maximumFractionDigits: 2 }), limit: l.limitDollars.toLocaleString(loc()) })}
                     </span>
                   )}
-                  {l.resetsAt && !isNaN(Date.parse(l.resetsAt)) && (stale(l, now) ? <Loader2 className="ml-auto size-3.5 animate-spin text-muted-foreground" aria-label={t("config.account.updating")} /> : <span className="ml-auto text-xs text-muted-foreground">{t("config.account.resets", { delay: delay(Date.parse(l.resetsAt) / 1000 - now) })}</span>)}
+                  {l.resetsAt && !isNaN(Date.parse(l.resetsAt)) && (stale(l, now) ? <LoaderPinwheel className="ml-auto size-3.5 animate-spin text-muted-foreground" aria-label={t("config.account.updating")} /> : <span className="ml-auto text-xs text-muted-foreground">{t("config.account.resets", { delay: delay(Date.parse(l.resetsAt) / 1000 - now) })}</span>)}
                 </div>
                 <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={Math.round(l.percent)} aria-valuemin={0} aria-valuemax={100} aria-label={l.label}>
                   <div className={cn("h-full rounded-full", l.percent >= 90 ? "bg-destructive" : l.percent >= 70 ? "bg-warning" : "bg-success")} style={{ width: `${Math.min(100, l.percent)}%` }} />

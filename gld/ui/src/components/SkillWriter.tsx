@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Loader2, Sparkles } from "lucide-react"
+import { LoaderPinwheel, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/api"
 import { Button } from "@/components/ui/button"
@@ -64,7 +64,7 @@ function Form({ skillKey, name, onClose, onDraft }: { skillKey: string; name: st
           {t("common.cancel")}
         </Button>
         <Button onClick={run} disabled={!instruction.trim() || busy}>
-          {busy ? <Loader2 className="animate-spin" /> : <Sparkles />} {t("skills.writer.write")}
+          {busy ? <LoaderPinwheel className="animate-spin" /> : <Sparkles />} {t("skills.writer.write")}
         </Button>
       </DialogFooter>
     </div>

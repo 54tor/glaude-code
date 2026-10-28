@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowDown, ArrowUpToLine, BarChart3, Bug, FolderOpen, Power, FileText, Loader2, MessageSquarePlus, MoreHorizontal, MessagesSquare, GalleryHorizontalEnd, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
+import { ArrowDown, ArrowUpToLine, BarChart3, Bug, FolderOpen, Power, FileText, LoaderPinwheel, MessageSquarePlus, MoreHorizontal, MessagesSquare, GalleryHorizontalEnd, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
@@ -447,7 +447,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             {loadedNow?.more && (
               <div ref={top} className="text-center">
                 <Button variant="outline" size="sm" onClick={older} disabled={loadingOlder}>
-                  {loadingOlder ? <Loader2 className="animate-spin" /> : <ArrowUpToLine />} {t("conversation.view.loadOlder")}
+                  {loadingOlder ? <LoaderPinwheel className="animate-spin" /> : <ArrowUpToLine />} {t("conversation.view.loadOlder")}
                 </Button>
               </div>
             )}
@@ -467,7 +467,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
               ))}
             {turn?.running && (
               <p role="status" className="flex items-center gap-2 text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" aria-hidden /> {t("conversation.view.replying")}
+                <LoaderPinwheel className="size-4 animate-spin" aria-hidden /> {t("conversation.view.replying")}
               </p>
             )}
             <LiveBar live={live} id={id} />

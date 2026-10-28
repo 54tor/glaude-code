@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Loader2, Sparkles } from "lucide-react"
+import { LoaderPinwheel, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { api, type MemFile } from "@/lib/api"
@@ -128,7 +128,7 @@ function Form({
             {t("memory.writer.cancel")}
           </Button>
           <Button onClick={run} disabled={!instruction.trim() || busy} title={t("memory.writer.shortcut")}>
-            {busy ? <Loader2 className="animate-spin" /> : <Sparkles />} {t("memory.writer.write")}
+            {busy ? <LoaderPinwheel className="animate-spin" /> : <Sparkles />} {t("memory.writer.write")}
           </Button>
         </div>
       </DialogFooter>
