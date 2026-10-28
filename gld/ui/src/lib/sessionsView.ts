@@ -6,7 +6,7 @@ import type { Row } from "@/components/actions"
 // Sessions lancées automatiquement (revues de sécurité) : leur titre est leur premier prompt. Elles sont masquées
 // de l'arbre, comptées dans la barre latérale, et se suppriment d'un coup avec le bouton dédié.
 export const AUTO = ["Review this change for security vulnerabilities", "You previously flagged these candidate vulnerabilities", "Perform a read-only security review of this codebase"]
-export const isAuto = (s: Session) => !s.named && AUTO.some((p) => s.title.startsWith(p))
+export const isAuto = (s: Pick<Session, "title"> & { named?: boolean }) => !s.named && AUTO.some((p) => s.title.startsWith(p))
 export const WEEK = 7 * 86400
 export const REFRESH = 15_000 // rafraîchissement de la liste, onglet visible seulement
 export const HOT = 3600 // durée du cache des prompts : une session active depuis moins longtemps reprend à moindre coût
