@@ -2,6 +2,33 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [SemVer](https://semver.org/lang/fr/).
 
+## [0.6.0] - 2026-10-28
+
+### Ajouté
+- Partage de session avec des invités : lien d'invitation à usage unique, cookie d'invité par partage (en-tête `X-Gld-Share`, plusieurs sessions partagées dans un même navigateur), plusieurs invitations par session avec libellé, mode et file propres, accès lecture seule ou écriture. Vue `/guest` : conversation avec historique complet, navigateur de fichiers en lecture seule du dossier de la session (liste de refus des secrets élargie, évasions de chemin testées), écran brut jamais exposé. Côté hôte : entrée « Session partagée » dans la barre latérale (pastille de compteur), panneau d'invitations par session, menu « Partager… ».
+- File d'envoi côté serveur : le serveur vide la file des messages (messages d'invités étiquetés pour ne jamais lancer une commande Claude, recontrôle de l'écran sans cache avant d'appuyer sur Entrée), compare-and-set persistant pour l'état « envoi en cours », file en pause pour `claude -p`, éléments « incertains ».
+- Vue d'ensemble d'un projet : une carte par dossier avec totaux et dépôts git de chaque dossier ; envoi d'un même prompt à tous les dossiers d'un projet depuis son menu ; ajout d'un dossier par glisser-déposer sur les sessions locales, bouton « ajouter tous les sous-dossiers » (`POST` côté serveur) dans le sélecteur de dossier.
+- Sessions : menu de dossier « Fermer les sessions ouvertes (N) » ; clic droit sur un message « Supprimer la suite de la conversation » (`POST /conv-rewind`, tronque le transcript) ; invite à ouvrir une nouvelle session quand le cache de prompt a expiré ; sous-sessions d'équipe imbriquées sous leur session parente (sessions ouvertes et favoris).
+- Conversation : Markdown rendu dans les messages utilisateur, les messages d'équipe et les notifications de tâche ; messages d'équipe JSON décodés en liste de champs ; messages entre sessions rendus en carte d'expéditeur avec réponse depuis la carte ; balises `teammate` et `task` trouvées en milieu de message rendues.
+- Pièces jointes nommées `<id-session>-<date>-<aléa>` et supprimées à la purge de la session.
+- Revues de sécurité automatiques : vue dédiée en bas de la barre latérale, masquées des listes de sessions, exclues de la restauration des onglets et de `gld-matin`.
+- Écran de connexion sur le lien local : un indice `cloudflared` remplace le QR code.
+- IDE : `.git` masqué dans l'arbre de fichiers.
+- Carrousel : flèches précédent et suivant dans la barre.
+- Documentation : installation depuis le binaire de release dans le README.
+- CI : les binaires de release portent une attestation de provenance GitHub.
+
+### Modifié
+- Spinners : icône `LoaderPinwheel` partout, trait de 1 px.
+- `check-ui` vérifie les types avec `tsc -b`.
+- Indice « cache froid » en bleu.
+
+### Corrigé
+- Invités : cookie effacé seulement sur refus définitif et jamais sur un fichier statique cacheable, contrôles de cookie bornés, `LastSeen` silencieux, caractères de format retirés des titres de partage, fichier de file contenant `null` rouvert sans panique, file purgée quand le partage passe en lecture seule, disparaît ou que le lien est régénéré, plafond d'éléments par invité, éléments des autres invités masqués, 503 quand un enfant ne peut pas juger, `Flush` conservé sous `no-store`, seuls les comptes avec `exec` sur le home du partage comptent comme hôte, une invitation exige un `POST`.
+- Vue invité : plus d'écran blanc avec `scrollIntoView` de Chrome, fin de partage détectée sur un envoi en échec, images chargées par la poignée du partage, scroll qui ne saute plus vers la fin pendant la lecture, vue collée à la fin quand la barre d'état change de hauteur.
+- Barre latérale : sessions chaudes contenues dans la largeur, bascule des sous-sessions près de l'icône, titres et icônes alignés.
+- Sessions de revue de sécurité acceptées depuis les onglets sauvegardés (`isAuto`).
+
 ## [0.5.0] - 2026-10-27
 
 ### Ajouté
