@@ -5,6 +5,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useSearchParams } from "wouter"
 import { SessionSearch } from "@/components/SessionSearch"
 import { type Group, type VGroup } from "@/lib/api"
+import { stepIn } from "@/lib/carousel"
 import { body } from "@/lib/commands"
 import { href, parse, type Route } from "@/lib/route"
 import { buildTree, find, under } from "@/lib/tree"
@@ -207,14 +208,14 @@ function Shell() {
     })
   // Sessions ouvertes et au cache chaud (actives) qui attendent, depuis le plus longtemps d'abord ; les froides sont écartées.
   const waitingRows = [...waiting].filter((id) => live.has(id)).map((id) => everyId.get(id)).filter((r): r is Row => !!r && now - r.s.mtime < HOT).sort((x, y) => x.s.mtime - y.s.mtime)
-  const nextWaiting = () => waitingRows.find((r) => r.s.id !== reading)
+  const stepWaiting = (d: 1 | -1) => stepIn(waitingRows, (r) => r.s.id === reading, d)
   const startCarousel = () => {
     if (!waitingRows.length) return void toast.info(t("shell.app.noneWaiting"))
     setCarousel(true)
     read(waitingRows[0].s)
   }
-  const advanceCarousel = () => {
-    const n = nextWaiting()
+  const advanceCarousel = (d: 1 | -1 = 1) => {
+    const n = stepWaiting(d)
     if (n) read(n.s)
     else {
       setCarousel(false)
@@ -225,7 +226,7 @@ function Shell() {
   const gone = !!data && !!reading && !everyId.has(reading)
   useEffect(() => {
     if (!carousel || !gone) return
-    const t = setTimeout(advanceCarousel, 0)
+    const t = setTimeout(() => advanceCarousel(1), 0)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carousel, gone])
@@ -475,7 +476,7 @@ function Shell() {
       </div>
 
       <Suspense fallback={null}>
-        <Conversation row={reader} onClose={closeReader} onFolder={reader ? () => go({ kind: "dir", key: segs(reader.g.project, home).join("/") }) : undefined} args={args} choice={choice} carousel={carousel ? { n: waitingRows.length, next: advanceCarousel, stop: () => setCarousel(false) } : undefined} />
+        <Conversation row={reader} onClose={closeReader} onFolder={reader ? () => go({ kind: "dir", key: segs(reader.g.project, home).join("/") }) : undefined} args={args} choice={choice} carousel={carousel ? { n: waitingRows.length, next: () => advanceCarousel(1), prev: () => advanceCarousel(-1), stop: () => setCarousel(false) } : undefined} />
       </Suspense>
       <DirPicker pick={picker} home={home} />
       <Confirm ask={ask} onClose={() => setAsk(null)} />

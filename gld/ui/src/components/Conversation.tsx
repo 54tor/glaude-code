@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowDown, ArrowUpToLine, BarChart3, Bug, FolderOpen, Power, FileText, LoaderPinwheel, MessageSquarePlus, MoreHorizontal, MessagesSquare, GalleryHorizontalEnd, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
+import { ArrowDown, ArrowUpToLine, BarChart3, Bug, ChevronLeft, ChevronRight, FolderOpen, Power, FileText, LoaderPinwheel, MessageSquarePlus, MoreHorizontal, MessagesSquare, GalleryHorizontalEnd, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
@@ -65,7 +65,7 @@ function Meta({ s, onFolder, extra }: { s: Session; onFolder?: () => void; extra
 // Position de lecture par session, gardée à la fermeture de la fenêtre : `end` vaut vrai quand on était à moins d'une demi-page de la fin.
 const scrollMem = new Map<string, { top: number; end: boolean }>()
 
-export function Conversation({ row, onClose, onFolder, args, choice, carousel }: { row: Row | null; onClose: () => void; onFolder?: () => void; args: string; choice: Choice; carousel?: { n: number; next: () => void; stop: () => void } }) {
+export function Conversation({ row, onClose, onFolder, args, choice, carousel }: { row: Row | null; onClose: () => void; onFolder?: () => void; args: string; choice: Choice; carousel?: { n: number; next: () => void; prev: () => void; stop: () => void } }) {
   const { t } = useTranslation()
   const a = useActions()
   const session = row?.s ?? null
@@ -420,8 +420,11 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
         {carousel && (
           <div className="flex flex-wrap items-center gap-2 border-b bg-warning/10 px-4 py-1.5 text-sm">
             <GalleryHorizontalEnd className="size-4 text-warning" aria-hidden /> {t("conversation.view.carousel", { count: carousel.n })}
-            <Button variant="outline" size="sm" className="ml-auto" onClick={carousel.next}>
-              {t("conversation.view.next")}
+            <Button variant="outline" size="icon-sm" className="ml-auto" onClick={carousel.prev} title={t("conversation.view.prev")} aria-label={t("conversation.view.prev")}>
+              <ChevronLeft />
+            </Button>
+            <Button variant="outline" size="icon-sm" onClick={carousel.next} title={t("conversation.view.next")} aria-label={t("conversation.view.next")}>
+              <ChevronRight />
             </Button>
             <Button variant="ghost" size="sm" onClick={carousel.stop}>
               {t("conversation.view.quitCarousel")}

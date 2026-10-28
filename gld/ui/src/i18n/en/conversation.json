@@ -33,6 +33,7 @@
       "carousel_one": "Carousel: {{count}} session waiting.",
       "carousel_other": "Carousel: {{count}} sessions waiting.",
       "next": "Next",
+      "prev": "Previous",
       "quitCarousel": "Leave the carousel",
       "coldHint": "Cache expired {{when}}: resuming this session rewrites its whole context at full price. A new session costs far less.",
       "compactHint": "Context at {{ctx}} (≈ {{pct}} %): compacting is recommended. Any text in the input is used as instructions for the summary.",

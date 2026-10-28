@@ -33,6 +33,7 @@
       "carousel_one": "Carrousel : {{count}} session en attente.",
       "carousel_other": "Carrousel : {{count}} sessions en attente.",
       "next": "Suivante",
+      "prev": "Précédente",
       "quitCarousel": "Quitter le carrousel",
       "coldHint": "Cache expiré depuis {{when}} : reprendre cette session réécrit tout son contexte au tarif plein. Une nouvelle session coûte bien moins.",
       "compactHint": "Contexte à {{ctx}} (≈ {{pct}} %) : il est recommandé de compacter. Le texte de la saisie sert de consigne au résumé.",
