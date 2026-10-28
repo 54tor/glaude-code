@@ -21,11 +21,13 @@ export function ModelPicker({
   value,
   onChange,
   disabled,
+  size,
   className,
 }: {
   value: Choice
   onChange: (c: Choice) => void
   disabled?: boolean
+  size?: "sm" | "default"
   className?: string
 }) {
   const { t } = useTranslation()
@@ -34,8 +36,8 @@ export function ModelPicker({
   const opts = models().map(([v, l]) => (v || !def ? [v, l] : [v, t("conversation.models.defaultIs", { model: models().find(([a]) => a && def.toLowerCase().includes(a))?.[1] ?? def })])) as unknown as ReturnType<typeof models>
   return (
     <div className={cn("flex min-w-0 flex-wrap gap-2 max-md:flex-1 max-md:flex-nowrap", className)}>
-      <Choose value={value.model} onChange={(model) => onChange({ ...value, model })} options={opts} label={t("conversation.modelPicker.model")} disabled={disabled} className="max-md:min-w-0 max-md:flex-1" />
-      <Choose value={value.effort} onChange={(effort) => onChange({ ...value, effort })} options={efforts()} label={t("conversation.modelPicker.effort")} disabled={disabled} className="max-md:min-w-0 max-md:flex-1" />
+      <Choose value={value.model} onChange={(model) => onChange({ ...value, model })} options={opts} label={t("conversation.modelPicker.model")} disabled={disabled} size={size} className="max-md:min-w-0 max-md:flex-1" />
+      <Choose value={value.effort} onChange={(effort) => onChange({ ...value, effort })} options={efforts()} label={t("conversation.modelPicker.effort")} disabled={disabled} size={size} className="max-md:min-w-0 max-md:flex-1" />
     </div>
   )
 }

@@ -296,8 +296,8 @@ export function Composer({
           </ul>
         )}
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <Choose value={mode} onChange={setMode} options={modes()} label={t("conversation.composer.permissions")} disabled={running} className="max-w-full min-w-0" />
-          <ModelPicker value={choice} onChange={setChoice} disabled={running} />
+          <Choose value={mode} onChange={setMode} options={modes()} label={t("conversation.composer.permissions")} disabled={running} size="sm" className="max-w-full min-w-0" />
+          <ModelPicker value={choice} onChange={setChoice} disabled={running} size="sm" />
           {turn?.cost ? <span className="text-muted-foreground">{t("conversation.composer.cost", { cost: turn.cost.toFixed(2) })}</span> : null}
           <span className="ml-auto max-md:hidden" />
           <AttachButton onPick={pics.pick} disabled={running} />
@@ -483,6 +483,7 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
             onChange={async (m) => m && (await post(`/model ${m}`)) && onSent()}
             options={[["", t("conversation.composer.modelEllipsis")], ...models().slice(1)]}
             label={t("conversation.composer.sessionModel")}
+            size="sm"
             disabled={working || asking || busy}
           />
           <Choose
@@ -490,6 +491,7 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
             onChange={async (e) => e && (await post(`/effort ${e}`)) && onSent()}
             options={[["", t("conversation.composer.effortEllipsis")], ...efforts().slice(1)]}
             label={t("conversation.composer.sessionEffort")}
+            size="sm"
             disabled={working || asking || busy}
           />
           <span className="ml-auto" />
