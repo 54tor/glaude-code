@@ -97,7 +97,7 @@ func launcherCmd(name, title string, argv []string) (*exec.Cmd, error) {
 	switch name {
 	case "tmux":
 		if tmuxDetached() {
-			return exec.Command("tmux", "new-session", "-d", "-n", strings.ReplaceAll(title, "#", "##"), shJoin(argv)), nil
+			return exec.Command("tmux", "new-session", "-d", "-x", "160", "-y", "48", "-n", strings.ReplaceAll(title, "#", "##"), shJoin(argv)), nil
 		}
 		// -n passe par l'expansion de formats de tmux : « #(commande) » d'un titre s'exécuterait. « ## » est un « # » littéral.
 		return exec.Command("tmux", "new-window", "-n", strings.ReplaceAll(title, "#", "##"), shJoin(argv)), nil

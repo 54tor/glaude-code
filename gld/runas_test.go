@@ -259,7 +259,7 @@ func TestRunAsLauncherIsDetachedTmux(t *testing.T) {
 		t.Error("un émulateur de bureau est proposé sous GLD_RUN_AS")
 	}
 	c, err := launcherCmd("tmux", "a#b", []string{"/usr/bin/gld", "_run", "/tmp/x.json"})
-	if err != nil || !slices.Equal(c.Args[:5], []string{"tmux", "new-session", "-d", "-n", "a##b"}) {
+	if err != nil || !slices.Equal(c.Args[:9], []string{"tmux", "new-session", "-d", "-x", "160", "-y", "48", "-n", "a##b"}) {
 		t.Errorf("lanceur : %v %v", c, err)
 	}
 	runAsAcct = nil
