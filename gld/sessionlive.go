@@ -107,6 +107,11 @@ func pendingQueue(path string) []Queued {
 	return out
 }
 
+func parseTs(s string) time.Time {
+	t, _ := time.Parse(time.RFC3339Nano, s)
+	return t
+}
+
 func applyQueueOp(q []Queued, l []byte) []Queued {
 	var o struct {
 		Type, Operation, Timestamp, Content string
@@ -118,7 +123,12 @@ func applyQueueOp(q []Queued, l []byte) []Queued {
 	case "enqueue":
 		q = append(q, Queued{T: o.Content, Ts: o.Timestamp})
 	case "dequeue":
-		if len(q) > 0 {
+		if n := len(q); n > 0 {
+			// Un dequeue collé à son enqueue (< 5 ms) retire celui-ci : Claude Code prend le message aussitôt, sans file. Retirer le plus
+			// ancien laissait un résidu, puis chaque paire suivante retirait ce résidu et laissait le dernier prompt affiché à jamais.
+			if a, b := parseTs(q[n-1].Ts), parseTs(o.Timestamp); !a.IsZero() && !b.IsZero() && b.Sub(a) >= 0 && b.Sub(a) < 5*time.Millisecond {
+				return q[:n-1]
+			}
 			q = q[1:]
 		}
 	case "remove":

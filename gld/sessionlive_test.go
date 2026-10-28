@@ -151,3 +151,22 @@ func TestFileDAttenteAuDelaDeLaFenetre(t *testing.T) {
 		t.Fatalf("après ajout : %v", q)
 	}
 }
+
+// Deux notifications et un prompt en file, puis des dequeue : le prompt pris aussitôt (même milliseconde) ne doit pas rester affiché.
+func TestPendingQueueImmediateDequeue(t *testing.T) {
+	var q []Queued
+	for _, l := range []string{
+		`{"type":"queue-operation","operation":"enqueue","timestamp":"2026-10-28T03:27:44.579Z","content":"N1"}`,
+		`{"type":"queue-operation","operation":"enqueue","timestamp":"2026-10-28T03:27:48.809Z","content":"N2"}`,
+		`{"type":"queue-operation","operation":"enqueue","timestamp":"2026-10-28T03:27:48.831Z","content":"U"}`,
+		`{"type":"queue-operation","operation":"dequeue","timestamp":"2026-10-28T03:27:48.832Z"}`,
+		`{"type":"queue-operation","operation":"dequeue","timestamp":"2026-10-28T03:27:50.937Z"}`,
+		`{"type":"queue-operation","operation":"enqueue","timestamp":"2026-10-28T03:29:34.480Z","content":"V"}`,
+		`{"type":"queue-operation","operation":"dequeue","timestamp":"2026-10-28T03:29:34.481Z"}`,
+	} {
+		q = applyQueueOp(q, []byte(l))
+	}
+	if len(q) != 1 || q[0].T != "N2" {
+		t.Fatalf("file = %+v, veut seulement N2 (aucun prompt résiduel)", q)
+	}
+}
