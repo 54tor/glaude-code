@@ -15,11 +15,15 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Écran de connexion sur le lien local : un indice `cloudflared` remplace le QR code.
 - IDE : `.git` masqué dans l'arbre de fichiers.
 - Carrousel : flèches précédent et suivant dans la barre.
+- Sélecteur de modèle : affiche le modèle par défaut effectivement utilisé.
+- Chemins affichés : le dossier personnel est masqué.
+- README : tunnel rapide `trycloudflare` pour essayer le partage de session.
 - Documentation : installation depuis le binaire de release dans le README.
 - CI : les binaires de release portent une attestation de provenance GitHub.
 
 ### Modifié
 - Spinners : icône `LoaderPinwheel` partout, trait de 1 px.
+- Barre latérale : l'entrée « Récents » est retirée ; la pastille de sous-sessions passe à droite de la session.
 - `check-ui` vérifie les types avec `tsc -b`.
 - Indice « cache froid » en bleu.
 
@@ -28,6 +32,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Vue invité : plus d'écran blanc avec `scrollIntoView` de Chrome, fin de partage détectée sur un envoi en échec, images chargées par la poignée du partage, scroll qui ne saute plus vers la fin pendant la lecture, vue collée à la fin quand la barre d'état change de hauteur.
 - Barre latérale : sessions chaudes contenues dans la largeur, bascule des sous-sessions près de l'icône, titres et icônes alignés.
 - Sessions de revue de sécurité acceptées depuis les onglets sauvegardés (`isAuto`).
+- Une commande slash vide d'abord la ligne de saisie du TUI avant l'envoi.
+- Les sessions tmux détachées prennent une taille de 160x48.
 
 ## [0.5.0] - 2026-10-27
 
