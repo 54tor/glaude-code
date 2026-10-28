@@ -7,7 +7,8 @@ import { compact, full, tilde, tokTotal } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Message } from "./Message"
+import { Markdown, Message } from "./Message"
+import { Tagged, isTagged } from "./Tagged"
 import { CacheState, KeepWarmButton } from "./KeepWarm"
 import { useActions } from "./actions"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -83,7 +84,7 @@ export function LiveBar({ live: { st, open }, id }: { live: Live; id: string }) 
       {st.queue?.map((m) => (
         <div key={m.ts + m.t} className="mb-3 flex justify-end" title={new Date(m.ts).toLocaleString(loc())}>
           <div className="msg relative max-w-[85%] rounded-lg bg-muted/30 px-4 py-2.5 break-words whitespace-pre-wrap text-muted-foreground outline-1 -outline-offset-1 outline-dashed outline-border">
-            {m.t}
+            {isTagged(m.t) ? <Tagged t={m.t} md={(x) => <Markdown t={x} />} /> : m.t}
             <span className="absolute top-full right-2 mt-0.5 text-2xs font-medium tracking-wide whitespace-nowrap uppercase">{t("conversation.live.queued")}</span>
           </div>
         </div>
