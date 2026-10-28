@@ -30,6 +30,7 @@
         "recent": "Récentes",
         "all": "Toutes les sessions",
         "active": "Sessions ouvertes",
+        "auto": "Revues de sécurité",
         "snippets": "Snippets",
         "memory": "Mémoire",
         "config": "Configuration",
@@ -43,6 +44,7 @@
         "recent": "7 derniers jours, {{sessions}} dans {{projects}}",
         "project": "{{dirs}}, {{sessions}}",
         "active": "{{open}}, {{warm}}",
+        "auto": "Lancées par des skills, masquées des autres vues et des sauvegardes",
         "skills": "Skills personnels, de projet et de plugins : lire, modifier, créer, copier",
         "config": "Réglages, permissions, hooks et serveurs MCP de Claude Code",
         "extensions": "Skills, plugins, hooks et serveurs MCP actifs, par portée",
@@ -86,7 +88,6 @@
       "addDirHint": "Ajouter un dossier sans session : on y lance un prompt sans mémoire Claude",
       "addDir": "Ajouter un dossier",
       "local": "Sessions locales",
-      "autoHidden": "{{n}} revues de sécurité masquées",
       "clean": "Nettoyer",
       "argsHint": "options ajoutées à claude"
     },

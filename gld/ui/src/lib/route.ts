@@ -4,6 +4,7 @@ export type Route =
   | { kind: "recent" }
   | { kind: "all" }
   | { kind: "active" } // sessions ouvertes ou au cache chaud
+  | { kind: "auto" } // revues de sécurité lancées par des skills, masquées ailleurs
   | { kind: "group"; name: string; key: string } // groupe virtuel du dossier de clé key
   | { kind: "project"; name: string } // projet : ensemble de dossiers de travail
   | { kind: "dir"; key: string } // clé d'un nœud de l'arbre, ex. « ~/Projets/caddy »
@@ -27,6 +28,7 @@ export function parse(loc: string): Route {
   try {
     if (loc === "/toutes") return { kind: "all" }
     if (loc === "/en-cours") return { kind: "active" }
+    if (loc === "/revues") return { kind: "auto" }
     if (loc.startsWith("/groupe/")) {
       const rest = loc.slice(8)
       const i = rest.indexOf("/")
@@ -56,6 +58,8 @@ export function href(r: Route): string {
       return "/toutes"
     case "active":
       return "/en-cours"
+    case "auto":
+      return "/revues"
     case "group":
       return "/groupe/" + encodeURIComponent(r.name) + "/" + enc(r.key)
     case "project":

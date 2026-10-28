@@ -551,3 +551,12 @@ func TestTextCacheBornee(t *testing.T) {
 		t.Fatalf("le cache plein n'a pas été vidé : %d", n)
 	}
 }
+
+func TestReadTabsDropsAutoReviews(t *testing.T) {
+	b := []byte(`[{"at":"1","sessions":[{"id":"a","title":"Perform a read-only security review of this codebase. x"},{"id":"b","title":"travail"}]},
+	{"at":"2","sessions":[{"id":"c","title":"You previously flagged these candidate vulnerabilities: ["}]}]`)
+	got, err := readTabs(b)
+	if err != nil || len(got) != 1 || len(got[0].Sessions) != 1 || got[0].Sessions[0].ID != "b" {
+		t.Fatalf("readTabs = %+v, %v", got, err)
+	}
+}

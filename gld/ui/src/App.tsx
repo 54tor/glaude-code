@@ -197,7 +197,9 @@ function Shell() {
             ? view.rows
             : route.kind === "active"
               ? active
-              : []
+              : route.kind === "auto"
+                ? view.autoRows
+                : []
   // Sessions des sous-dossiers : affichées à part, sous la liste du dossier sélectionné.
   const subs = node ? [...node.kids.values()].flatMap(under).sort(byDate) : []
 
@@ -297,6 +299,7 @@ function Shell() {
     recent: t("shell.app.title.recent"),
     all: t("shell.app.title.all"),
     active: t("shell.app.title.active"),
+    auto: t("shell.app.title.auto"),
     group: route.kind === "group" ? route.name : "",
     project: route.kind === "project" ? route.name : "",
     snippets: t("shell.app.title.snippets"),
@@ -322,6 +325,8 @@ function Shell() {
             open: t("shell.count.open", { count: active.filter((r) => live.has(r.s.id)).length }),
             warm: t("shell.count.warm", { count: active.filter((r) => !live.has(r.s.id)).length }),
           })
+        : route.kind === "auto"
+          ? t("shell.app.sub.auto")
         : route.kind === "skills"
           ? t("shell.app.sub.skills")
           : route.kind === "extensions"
@@ -370,7 +375,7 @@ function Shell() {
           now={now}
           ttl={HOT}
           snippets={snips ? snips.files.length : null}
-          auto={{ n: view.autoItems.length, purge: purgeAuto }}
+          auto={{ n: view.autoItems.length, purge: purgeAuto, on: route.kind === "auto" }}
           args={args}
         />
 
@@ -391,7 +396,7 @@ function Shell() {
             split={route.kind === "skills" || route.kind === "memory" || route.kind === "snippets"}
             reload={reload}
             searchBox={
-              ["recent", "all", "active", "project", "group", "dir", "memory"].includes(route.kind) ? <SessionSearch q={q} setQ={setQ} adv={adv} setAdv={setAdv} searching={searching} /> : undefined
+              ["recent", "all", "active", "auto", "project", "group", "dir", "memory"].includes(route.kind) ? <SessionSearch q={q} setQ={setQ} adv={adv} setAdv={setAdv} searching={searching} /> : undefined
             }
           />
 

@@ -21,14 +21,14 @@ export const groupKey = (vg: VGroup, home: string) => segs(vg.project, home).joi
 export function buildView(data: Data | null, qt: string, hitMap: Map<string, Hit> | null, adv = false) {
   const f = qt.toLowerCase()
   const entries: Entry[] = []
-  const autoItems: Item[] = []
+  const autoRows: Row[] = []
   let akb = 0
   let total = 0
   for (const g of data?.groups ?? []) {
     const vis: Session[] = []
     for (const s of g.sessions) {
       if (isAuto(s)) {
-        autoItems.push({ dir: s.dir, id: s.id })
+        autoRows.push({ s, g })
         akb += s.kb
       } else vis.push(s)
     }
@@ -38,6 +38,8 @@ export function buildView(data: Data | null, qt: string, hitMap: Map<string, Hit
     if (ss.length || (g.sessions.length === 0 && (!f || (adv && g.project.toLowerCase().includes(f))))) entries.push({ g, ss })
   }
   const rows = entries.flatMap(({ g, ss }) => ss.map((s) => ({ s, g }))).sort(byDate)
-  return { entries, rows, byId: new Map(rows.map((r) => [r.s.id, r])), autoItems, akb, total }
+  autoRows.sort(byDate)
+  const autoItems: Item[] = autoRows.map(({ s }) => ({ dir: s.dir, id: s.id }))
+  return { entries, rows, byId: new Map(rows.map((r) => [r.s.id, r])), autoRows, autoItems, akb, total }
 }
 export type View = ReturnType<typeof buildView>

@@ -84,6 +84,11 @@ func readTabs(b []byte) ([]TabSave, error) {
 	if err := json.Unmarshal(b, &t); err != nil {
 		return nil, terr("srv.tabs.fichierIllisible", "A1", err.Error())
 	}
+	// Les sauvegardes d'avant le filtre de liveTabs contiennent encore des revues automatiques : on les écarte à la lecture.
+	for i := range t {
+		t[i].Sessions = slices.DeleteFunc(t[i].Sessions, func(s TabSession) bool { return Session{Title: s.Title}.autoReview() })
+	}
+	t = slices.DeleteFunc(t, func(x TabSave) bool { return len(x.Sessions) == 0 })
 	return t, nil
 }
 

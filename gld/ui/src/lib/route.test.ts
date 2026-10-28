@@ -10,6 +10,7 @@ const route: fc.Arbitrary<Route> = fc.oneof(
   fc.constant({ kind: "recent" as const }),
   fc.constant({ kind: "all" as const }),
   fc.constant({ kind: "active" as const }),
+  fc.constant({ kind: "auto" as const }),
   fc.constant({ kind: "tabs" as const }),
   fc.record({
     kind: fc.constant("group" as const),

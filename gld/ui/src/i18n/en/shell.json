@@ -30,6 +30,7 @@
         "recent": "Recent",
         "all": "All sessions",
         "active": "Open sessions",
+        "auto": "Security reviews",
         "snippets": "Snippets",
         "memory": "Memory",
         "config": "Configuration",
@@ -43,6 +44,7 @@
         "recent": "Last 7 days, {{sessions}} in {{projects}}",
         "project": "{{dirs}}, {{sessions}}",
         "active": "{{open}}, {{warm}}",
+        "auto": "Launched by skills, hidden from other views and from saved workspaces",
         "skills": "Personal, project and plugin skills: read, edit, create, copy",
         "config": "Claude Code settings, permissions, hooks and MCP servers",
         "extensions": "Active skills, plugins, hooks and MCP servers, by scope",
@@ -86,7 +88,6 @@
       "addDirHint": "Add a folder without sessions: you can start a prompt there without Claude memory",
       "addDir": "Add a folder",
       "local": "Local sessions",
-      "autoHidden": "{{n}} security reviews hidden",
       "clean": "Clean up",
       "argsHint": "options added to claude"
     },
