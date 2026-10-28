@@ -2,6 +2,16 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [SemVer](https://semver.org/lang/fr/).
 
+## [0.6.2] - 2026-10-29
+
+### Ajouté
+- Les blocs `<agent-message>` (rapport d'un sous-agent) s'affichent en carte « Message du sous-agent ».
+- Touche `Backspace` ajoutée aux touches permises de `POST /session-key`.
+
+### Corrigé
+- Question du terminal à onglets : une réponse libre déjà donnée (« 3. texte ✔ ») se modifie au retour, le curseur rejoint la ligne sans valider et le champ reprend l'ancien texte ; le chiffre revalidait la réponse et passait à l'onglet suivant.
+- Question du terminal : le contexte affiché ne reprend plus le bandeau de Claude ni la saisie du tour précédent.
+
 ## [0.6.1] - 2026-10-28
 
 ### Corrigé
