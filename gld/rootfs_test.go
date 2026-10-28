@@ -185,7 +185,7 @@ func TestImagesEtSkillsNeSuiventPasLesLiens(t *testing.T) {
 	use(cfg)
 	os.Symlink(out, filepath.Join(cfg, "gld-web-images"))
 	png := []byte("\x89PNG\r\n\x1a\n0000")
-	if _, err := saveImage(png); err == nil {
+	if _, err := saveImage(png, ""); err == nil {
 		t.Error("image écrite à travers un lien")
 	}
 	os.Symlink(out, filepath.Join(cfg, "skills"))

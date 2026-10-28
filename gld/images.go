@@ -47,7 +47,7 @@ func imageExt(b []byte) string {
 }
 
 // saveImage range une image dans le dossier privé et renvoie son chemin ; les images de plus de 14 jours sont retirées au passage.
-func saveImage(b []byte) (string, error) {
+func saveImage(b []byte, sid string) (string, error) {
 	if len(b) == 0 || len(b) > imgMax {
 		return "", terr("srv.images.imageVideOuTrop")
 	}
@@ -55,7 +55,7 @@ func saveImage(b []byte) (string, error) {
 	if ext == "" {
 		return "", terr("srv.images.formatNonReconnuPng")
 	}
-	return saveBlob(b, ext)
+	return saveBlob(b, ext, sid)
 }
 
 // fileExt : l'extension d'un fichier joint d'après son nom, réduite à quelques caractères alphanumériques (jamais un chemin).
@@ -72,8 +72,13 @@ func fileExt(name string) string {
 	return e
 }
 
-// saveBlob range des octets dans le dossier privé sous un nom aléatoire (le nom d'origine ne sert qu'à l'extension).
-func saveBlob(b []byte, ext string) (string, error) {
+// saveBlob range des octets dans le dossier privé sous un nom aléatoire, préfixé par l'id de session quand il est connu (dropSessionFiles) (le nom d'origine ne sert qu'à l'extension).
+func saveBlob(b []byte, ext, sid string) (string, error) {
+	if !idRe.MatchString(sid) {
+		sid = "" // sans session (nouvelle session, ou id invalide) : le fichier n'est retiré que par la purge de 14 jours
+	} else {
+		sid += "-"
+	}
 	dir := imagesDir()
 	if err := rMkdirAll(cfgDir(), dir, 0o700); err != nil {
 		return "", err
@@ -87,7 +92,7 @@ func saveBlob(b []byte, ext string) (string, error) {
 	}
 	var r [4]byte
 	rand.Read(r[:])
-	p := filepath.Join(dir, time.Now().Format("20060102-150405")+"-"+hex.EncodeToString(r[:])+ext)
+	p := filepath.Join(dir, sid+time.Now().Format("20060102-150405")+"-"+hex.EncodeToString(r[:])+ext)
 	f, err := rOpenFile(cfgDir(), p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return "", err
@@ -101,6 +106,23 @@ func saveBlob(b []byte, ext string) (string, error) {
 		return "", err
 	}
 	return p, nil
+}
+
+// dropSessionFiles retire les images et fichiers joints déposés pour ces sessions (préfixe « <id>- »).
+func dropSessionFiles(ids []string) {
+	dir := imagesDir()
+	ents, err := readDirTrusted(dir)
+	if err != nil {
+		return
+	}
+	for _, e := range ents {
+		for _, id := range ids {
+			if idRe.MatchString(id) && strings.HasPrefix(e.Name(), id+"-") {
+				rRemove(cfgDir(), filepath.Join(dir, e.Name()))
+				break
+			}
+		}
+	}
 }
 
 // lineAt lit la ligne de transcript qui commence à l'octet o (au plus imgLine octets).
@@ -164,7 +186,7 @@ func routesImages(mux *http.ServeMux) {
 		b, err := io.ReadAll(http.MaxBytesReader(w, r.Body, imgMax+1))
 		var p string
 		if err == nil {
-			p, err = saveImage(b)
+			p, err = saveImage(b, r.URL.Query().Get("id"))
 		}
 		journal("image-upload (%d octets) : %v", len(b), errOr(err))
 		if err != nil {
@@ -181,7 +203,7 @@ func routesImages(mux *http.ServeMux) {
 		}
 		if err == nil {
 			name, _ := url.QueryUnescape(r.Header.Get("X-File-Name"))
-			p, err = saveBlob(b, fileExt(name))
+			p, err = saveBlob(b, fileExt(name), r.URL.Query().Get("id"))
 		}
 		journal("file-upload (%d octets) : %v", len(b), errOr(err))
 		if err != nil {

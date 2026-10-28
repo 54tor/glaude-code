@@ -349,7 +349,7 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
   const working = !!liveState.st?.thinking
   const [sel, setSel] = useState(0)
   const [extra, setExtra] = useState<(readonly [string, string])[]>([])
-  const pics = useImages()
+  const pics = useImages(id)
   useEffect(() => {
     let live = true
     api.sendInfo().then((r) => live && setInfo(r), () => {})

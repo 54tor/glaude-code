@@ -11,7 +11,7 @@ const OK = ["image/png", "image/jpeg", "image/gif", "image/webp"]
 
 // Images collées (Ctrl+V) ou déposées dans un champ d'envoi : chacune est envoyée au serveur, qui la range dans un dossier privé
 // et renvoie son chemin ; le message part avec « @chemin », que Claude Code sait lire. L'aperçu vient du fichier local (URL d'objet).
-export function useImages() {
+export function useImages(sid?: string) {
   const [images, setImages] = useState<Img[]>([])
   const [busy, setBusy] = useState(false)
   const live = useRef<string[]>([]) // URL d'objet à libérer en quittant
@@ -28,7 +28,7 @@ export function useImages() {
       try {
         const image = OK.includes(f.type)
         const headers: Record<string, string> = image ? { "Content-Type": f.type } : { "X-File-Name": encodeURIComponent(f.name) }
-        const r = await authFetch(image ? "/image-upload" : "/file-upload", { method: "POST", headers, body: f })
+        const r = await authFetch((image ? "/image-upload" : "/file-upload") + (sid ? `?id=${encodeURIComponent(sid)}` : ""), { method: "POST", headers, body: f })
         const j = (await r.json()) as { ok: boolean; path?: string; out: string }
         if (!j.ok || !j.path) {
           toast.error(j.out)

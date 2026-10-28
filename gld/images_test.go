@@ -19,7 +19,7 @@ func TestDepotImage(t *testing.T) {
 	cfg := t.TempDir()
 	use(cfg)
 	b, _ := base64.StdEncoding.DecodeString(png1)
-	p, err := saveImage(b)
+	p, err := saveImage(b, "")
 	if err != nil || !strings.HasPrefix(p, imagesDir()+string(filepath.Separator)) || !strings.HasSuffix(p, ".png") {
 		t.Fatal(p, err)
 	}
@@ -36,7 +36,7 @@ func TestDepotImage(t *testing.T) {
 		"html":  []byte("<html><script>x</script></html>"),
 		"gros":  append(slices.Clone(b), make([]byte, imgMax)...),
 	} {
-		if _, err := saveImage(data); err == nil {
+		if _, err := saveImage(data, ""); err == nil {
 			t.Errorf("%s accepté", name)
 		}
 	}
@@ -44,7 +44,7 @@ func TestDepotImage(t *testing.T) {
 	old := filepath.Join(imagesDir(), "ancienne.png")
 	os.WriteFile(old, b, 0o600)
 	os.Chtimes(old, time.Now().Add(-15*24*time.Hour), time.Now().Add(-15*24*time.Hour))
-	if _, err := saveImage(b); err != nil {
+	if _, err := saveImage(b, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(old); !os.IsNotExist(err) {
@@ -128,5 +128,26 @@ func TestFileExt(t *testing.T) {
 		if got := fileExt(in); got != want {
 			t.Errorf("fileExt(%q)=%q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestImageDeposeSousSessionEstRetireeAvecElle(t *testing.T) {
+	use(t.TempDir())
+	b, _ := base64.StdEncoding.DecodeString(png1)
+	other := "11111111-1111-1111-1111-111111111111"
+	p1, err := saveImage(b, sid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p2, _ := saveImage(b, other)
+	if !strings.HasPrefix(filepath.Base(p1), sid+"-") {
+		t.Fatalf("nom sans préfixe : %s", p1)
+	}
+	dropSessionFiles([]string{sid})
+	if _, err := os.Stat(p1); err == nil {
+		t.Fatal("l'image de la session est restée")
+	}
+	if _, err := os.Stat(p2); err != nil {
+		t.Fatal("l'image d'une autre session a été retirée")
 	}
 }

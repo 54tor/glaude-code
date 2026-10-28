@@ -219,6 +219,7 @@ func purgeSessions(items []item) (n, spared int, notes []string, err error) {
 		n++
 	}
 	if n > 0 {
+		dropSessionFiles(deleted)
 		notes = solder(deleted, snaps)
 	}
 	if len(fails) > 0 {
