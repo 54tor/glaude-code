@@ -56,6 +56,8 @@
       "resume": "Reprendre dans un terminal",
       "moreActions": "Plus d'actions",
       "copySelection": "Copier la sélection",
+      "copyBlock": "Copier le bloc de code",
+      "copyLink": "Copier le lien",
       "copyMessage": "Copier le message",
       "copyFail": "Copie impossible",
       "rewind": "Supprimer la suite de la conversation",

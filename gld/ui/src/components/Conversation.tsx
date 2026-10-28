@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowDown, ArrowUpToLine, Copy, TextSelect, Undo2, BarChart3, Bug, ChevronLeft, ChevronRight, FolderOpen, Power, FileText, LoaderPinwheel, MessageSquarePlus, MoreHorizontal, MessagesSquare, GalleryHorizontalEnd, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
+import { ArrowDown, ArrowUpToLine, Copy, Link2, SquareCode, TextSelect, Undo2, BarChart3, Bug, ChevronLeft, ChevronRight, FolderOpen, Power, FileText, LoaderPinwheel, MessageSquarePlus, MoreHorizontal, MessagesSquare, GalleryHorizontalEnd, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
@@ -81,7 +81,8 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   // État git du dossier de la session et de ses dépôts, si ce sont des dépôts : on peut voir les changements et pousser d'ici.
   const git = useGit()
   const gitDirs = row ? [row.g.project, ...(git.repos[row.g.project] ?? [])].filter((d) => git.status[d]) : []
-  const picked = useRef("") // sélection de texte au moment du clic droit
+  // Ce qui se trouvait sous le clic droit : sélection, bloc de code, lien.
+  const [hit, setHit] = useState({ sel: "", code: "", link: "" })
   const copy = (text: string) => copyText(text).then(() => toast.success(t("common.copied")), () => toast.error(t("conversation.view.copyFail")))
   const lastId = useRef("") // à la fermeture, session vaut déjà null : le focus revient à la ligne de cette session
   useEffect(() => {
@@ -482,14 +483,27 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
                   ) : (
                     <ContextMenu key={`${x.o}.${x.n ?? 0}`}>
                       <ContextMenuTrigger asChild className="select-text">
-                        <div onContextMenu={() => (picked.current = window.getSelection()?.toString() ?? "")}>
+                        <div onContextMenu={(e) => {
+                          const el = e.target as HTMLElement
+                          setHit({ sel: window.getSelection()?.toString() ?? "", code: el.closest("pre")?.textContent ?? "", link: el.closest("a")?.href ?? "" })
+                        }}>
                           <Message m={x} conv={{ dir, id, tools }} />
                         </div>
                       </ContextMenuTrigger>
                       <ContextMenuContent>
-                        {picked.current.trim() && (
-                          <ContextMenuItem onSelect={() => copy(picked.current)}>
+                        {hit.sel.trim() && (
+                          <ContextMenuItem onSelect={() => copy(hit.sel)}>
                             <TextSelect /> {t("conversation.view.copySelection")}
+                          </ContextMenuItem>
+                        )}
+                        {hit.code && (
+                          <ContextMenuItem onSelect={() => copy(hit.code.replace(/\n$/, ""))}>
+                            <SquareCode /> {t("conversation.view.copyBlock")}
+                          </ContextMenuItem>
+                        )}
+                        {hit.link && (
+                          <ContextMenuItem onSelect={() => copy(hit.link)}>
+                            <Link2 /> {t("conversation.view.copyLink")}
                           </ContextMenuItem>
                         )}
                         <ContextMenuItem onSelect={() => copy(x.t)}>
