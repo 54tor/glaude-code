@@ -79,7 +79,7 @@ func routesSnippets(mux *http.ServeMux) {
 			return
 		}
 		if len(keys) > itemMax {
-			writeErr(w, http.StatusBadRequest, "too_many", L("srv.http_util.tropDElements"))
+			writeErr(w, http.StatusBadRequest, "too_many_items", L("srv.http_util.tropDElements"))
 			return
 		}
 		for _, key := range keys {

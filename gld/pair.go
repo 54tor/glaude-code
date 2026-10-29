@@ -361,7 +361,7 @@ func routesPair(mux *http.ServeMux) {
 		c := newPairCode(uid, sid)
 		if c == "" {
 			w.Header().Set("Retry-After", "60")
-			writeErr(w, 429, "too_many", L("srv.token.tooMany"))
+			writeErr(w, 429, "rate_limited", L("srv.token.tooMany"))
 			return
 		}
 		writeJSON(w, 201, map[string]any{"code": c, "url": publicBase(r) + "/pair?c=" + c, "ttl": int(pairTTL / time.Second)})

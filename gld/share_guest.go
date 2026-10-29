@@ -106,25 +106,9 @@ func guestCSRF(secret string) string {
 	return hex.EncodeToString(h[:])
 }
 
-func guestCode(status int) string {
-	switch status {
-	case 400:
-		return "bad_request"
-	case 401:
-		return "unauthorized"
-	case 403:
-		return "forbidden"
-	case 429:
-		return "too_many"
-	case 503:
-		return "unavailable"
-	}
-	return "error"
-}
-
 func guestDeny(w http.ResponseWriter, code int, key string) {
 	w.Header().Set("Cache-Control", "no-store")
-	writeErr(w, code, guestCode(code), L(key))
+	writeErr(w, code, statusCode(code), L(key))
 }
 
 type noStoreWriter struct {

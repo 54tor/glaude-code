@@ -282,9 +282,6 @@ func routesSessions(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"path": p, "parent": parent, "dirs": dirs, "sep": sep})
 	})
-	notFound := func(w http.ResponseWriter) {
-		writeErr(w, http.StatusNotFound, "not_found", L("srv.http_util.introuvable"))
-	}
 	mux.HandleFunc("GET /v1/sessions/{id}/conversation", func(w http.ResponseWriter, r *http.Request) {
 		id, ok := pathID(w, r, "id")
 		if !ok {

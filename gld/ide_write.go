@@ -470,7 +470,7 @@ func routesIDEWrite(mux *http.ServeMux) {
 			return
 		}
 		if len(paths) > itemMax {
-			writeErr(w, http.StatusBadRequest, "too_many", L("srv.http_util.tropDElements"))
+			writeErr(w, http.StatusBadRequest, "too_many_items", L("srv.http_util.tropDElements"))
 			return
 		}
 		root, err := ideOpenRoot(dir)
@@ -612,7 +612,7 @@ func routesIDEWrite(mux *http.ServeMux) {
 			return
 		}
 		if len(items) > itemMax {
-			writeErr(w, http.StatusBadRequest, "too_many", L("srv.http_util.tropDElements"))
+			writeErr(w, http.StatusBadRequest, "too_many_items", L("srv.http_util.tropDElements"))
 			return
 		}
 		root, ok := ideTrashRoot(w, dir, items[0])

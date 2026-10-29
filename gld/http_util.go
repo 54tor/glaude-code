@@ -15,6 +15,21 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
+// statusCodes : code par défaut d'un statut ; les codes métier ne s'ajoutent que s'ils apportent un sens.
+var statusCodes = map[int]string{400: "bad_request", 401: "unauthorized", 403: "forbidden", 404: "not_found", 409: "conflict", 413: "too_large", 415: "unsupported", 429: "rate_limited", 500: "internal", 503: "unavailable"}
+
+func statusCode(status int) string {
+	if c, ok := statusCodes[status]; ok {
+		return c
+	}
+	return "error"
+}
+
+// notFound : 404 uniforme.
+func notFound(w http.ResponseWriter) {
+	writeErr(w, http.StatusNotFound, "not_found", L("srv.http_util.introuvable"))
+}
+
 // writeErr : seul format d'erreur de l'API /v1, avec le vrai statut HTTP.
 func writeErr(w http.ResponseWriter, status int, code, msg string) {
 	writeJSON(w, status, map[string]any{"error": map[string]string{"code": code, "message": msg}})
@@ -60,7 +75,7 @@ func validItems(w http.ResponseWriter, items []item) bool {
 		return false
 	}
 	if len(items) > itemMax {
-		writeErr(w, http.StatusBadRequest, "too_many", L("srv.http_util.tropDElements"))
+		writeErr(w, http.StatusBadRequest, "too_many_items", L("srv.http_util.tropDElements"))
 		return false
 	}
 	for _, it := range items {

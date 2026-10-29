@@ -216,9 +216,6 @@ func uploadImage(name string) (*os.File, string, error) {
 }
 
 func routesImages(mux *http.ServeMux) {
-	notFound := func(w http.ResponseWriter) {
-		writeErr(w, http.StatusNotFound, "not_found", L("srv.http_util.introuvable"))
-	}
 	mux.HandleFunc("GET /v1/sessions/{id}/conversation/uploads/{up}", func(w http.ResponseWriter, r *http.Request) {
 		id, ok := pathID(w, r, "id")
 		if !ok {

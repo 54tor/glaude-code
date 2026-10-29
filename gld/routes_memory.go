@@ -159,7 +159,7 @@ func routesMemory(mux *http.ServeMux) {
 			return
 		}
 		if len(keys) > itemMax {
-			writeErr(w, http.StatusBadRequest, "too_many", L("srv.http_util.tropDElements"))
+			writeErr(w, http.StatusBadRequest, "too_many_items", L("srv.http_util.tropDElements"))
 			return
 		}
 		for _, key := range keys {
@@ -309,7 +309,6 @@ func routesMemory(mux *http.ServeMux) {
 			return
 		}
 		file := r.PathValue("file")
-		notFound := func() { writeErr(w, http.StatusNotFound, "not_found", L("srv.http_util.introuvable")) }
 		// Seuls les fichiers que le hook a vus charger dans cette session se lisent : pas de lecture de chemin arbitraire.
 		known := false
 		for _, e := range loadsOfSession(readLoaded(), id) {
@@ -317,23 +316,23 @@ func routesMemory(mux *http.ServeMux) {
 		}
 		real, rerr := filepath.EvalSymlinks(file)
 		if !known || rerr != nil || !loadedReadable(real) {
-			notFound()
+			notFound(w)
 			return
 		}
 		f, err := openTrusted(file)
 		if err != nil {
-			notFound()
+			notFound(w)
 			return
 		}
 		defer f.Close()
 		st, err := f.Stat()
 		if err != nil || !st.Mode().IsRegular() || st.Size() > memMax {
-			notFound()
+			notFound(w)
 			return
 		}
 		b, err := io.ReadAll(io.LimitReader(f, memMax+1))
 		if err != nil || len(b) > memMax || !utf8.Valid(b) {
-			notFound()
+			notFound(w)
 			return
 		}
 		writeJSON(w, 200, map[string]any{"text": string(b)})

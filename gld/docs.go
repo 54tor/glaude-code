@@ -86,19 +86,18 @@ func routesDocs(mux *http.ServeMux) {
 		tr, ok := transcript(q.Get("dir"), id)
 		path := q.Get("path")
 		typ := docType(path)
-		notFound := func() { writeErr(w, http.StatusNotFound, "not_found", L("srv.http_util.introuvable")) }
 		if !ok || typ == "" || !filepath.IsAbs(path) || !wroteDoc(tr, path) {
-			notFound()
+			notFound(w)
 			return
 		}
 		f, err := openTrusted(path)
 		if err != nil {
-			notFound()
+			notFound(w)
 			return
 		}
 		defer f.Close()
 		if st, err := f.Stat(); err != nil || !st.Mode().IsRegular() || st.Size() > docMax {
-			notFound()
+			notFound(w)
 			return
 		}
 		h := w.Header()

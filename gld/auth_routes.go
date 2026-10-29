@@ -140,11 +140,9 @@ func authInternal(w http.ResponseWriter, err error) {
 	authMsg(w, 500, L("srv.auth.erreur"))
 }
 
-var errCodes = map[int]string{400: "bad_request", 401: "unauthorized", 403: "forbidden", 404: "not_found", 409: "conflict", 413: "too_large", 415: "unsupported", 429: "rate_limited", 500: "internal", 503: "unavailable"}
-
 // authMsg : réponse d'erreur uniforme de l'API /v1, le code découlant du statut.
 func authMsg(w http.ResponseWriter, status int, msg string) {
-	writeErr(w, status, errCodes[status], msg)
+	writeErr(w, status, statusCode(status), msg)
 }
 
 // authUserErr ne montre que les erreurs du catalogue ; le reste part au journal.

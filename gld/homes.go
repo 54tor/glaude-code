@@ -576,7 +576,7 @@ func routesHomes(mux *http.ServeMux) {
 			return
 		}
 		if len(req.Picks) > 2000 {
-			writeErr(w, 400, "too_many", L("srv.http_util.requeteInvalide"))
+			writeErr(w, 400, "too_many_items", L("srv.http_util.requeteInvalide"))
 			return
 		}
 		out, err := syncApply(req.From, req.To, req.Picks)
