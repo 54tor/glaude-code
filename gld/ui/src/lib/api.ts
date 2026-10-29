@@ -1,5 +1,6 @@
 import { i18n } from "@/i18n"
 import { readResponse } from "@/lib/apiError"
+import { authFetch } from "@/lib/auth"
 import { http, qs, seg, v1 } from "@/lib/http"
 
 // Accès aux routes du serveur Go (gld/main.go).
@@ -188,7 +189,9 @@ export type GitChange = { path: string; status: string; from?: string } // statu
 // main "" et mainId : mode multi-utilisateur, le principal sans droit dessus ; id : clé des droits, connue du serveur.
 // Appareil jumelé par QR code en mode jeton (pair.go) ; seen : dernière visite, en secondes Unix.
 export type Device = { id: string; name: string; ip: string; created: number; seen: number }
-export type SyncItem = { id: string; kind: string; label: string; status: "new" | "diff" | "same"; risk?: string; merge: boolean; from: string; to: string }
+export type BackupPlan = { id: string; manifest: { format: number; gld: string; date: string; cats: string[] }; items: SyncItem[]; targets: MemTarget[]; skipped: string[] }
+export type BackupResult = { id: string; status: "ok" | "failed" | "skipped"; message?: string }
+export type SyncItem = { id: string; kind: string; label: string; status: "new" | "diff" | "same"; risk?: string; merge: boolean; cat?: string; from: string; to: string }
 export type HomesInfo = { current: string; main: string; mainId?: string; homes: { name: string; dir: string; id?: string; running: boolean }[] }
 
 // status : 403 dit un droit manquant (mode multi-utilisateur), à distinguer d'un serveur injoignable.
@@ -336,6 +339,14 @@ export const api = {
   inviteRevoke: (id: string, invite: string) => http.del(`/invites/${seg(invite)}${qs({ id })}`),
   homesSave: (b: { homes: { name: string; dir: string }[]; removed?: string[] }) => http.put("/homes", b),
   homeSelect: (name: string) => http.put("/homes/current", { name }),
+  backupExportUrl: (cats: string[]) => v1(`/backup/export${qs({ cats: cats.join(",") })}`),
+  backupStage: async (file: File) => {
+    const fd = new FormData()
+    fd.set("file", file)
+    return readResponse<BackupPlan>(await authFetch(v1("/backup/imports"), { method: "POST", body: fd }))
+  },
+  backupApply: (id: string, picks: { id: string; mode: string }[], targets: Record<string, string>) => http.post<{ results: BackupResult[] }>(`/backup/imports/${seg(id)}/applications`, { picks, targets }),
+  backupDrop: (id: string) => http.del(`/backup/imports/${seg(id)}`),
   syncPlan: (from: string, to: string) => http.post<{ items: SyncItem[] }>("/homes/sync-plans", { from, to }),
   syncApply: (from: string, to: string, picks: { id: string; mode: string }[]) => http.post<Said>("/homes/syncs", { from, to, picks }),
   pairCode: () => http.post<{ code: string; url: string; ttl: number }>("/pairing/codes", {}),

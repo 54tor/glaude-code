@@ -1,0 +1,21 @@
+{
+  "backup": {
+    "export": "Export",
+    "exportHint": "Choose what the archive should contain.",
+    "download": "Download",
+    "import": "Import",
+    "importHint": "Pick an archive: nothing is written until you confirm.",
+    "choose": "Choose an archive",
+    "staging": "Reading the archive…",
+    "apply": "Apply",
+    "applyCount": "Apply ({{count}})",
+    "cancel": "Cancel",
+    "none": "Nothing to import in this archive.",
+    "skipped": "Skipped in the archive: {{list}}",
+    "project": "Target project",
+    "report": "Result",
+    "again": "Done",
+    "status": { "ok": "Applied", "failed": "Failed", "skipped": "Skipped" },
+    "cat": { "skills": "Skills and commands", "plugins": "Plugins and marketplaces", "settings": "Settings", "memory": "Memory", "mcp": "MCP servers" }
+  }
+}

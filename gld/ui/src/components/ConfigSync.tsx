@@ -1,21 +1,16 @@
 import { useCallback, useEffect, useState } from "react"
-import { ArrowRight, ChevronRight, TriangleAlert } from "lucide-react"
+import { ArrowRight } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { api, type HomesInfo, type SyncItem } from "@/lib/api"
 import { tilde } from "@/lib/format"
-import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Choose } from "./Choose"
+import { SyncItems, type Mode } from "./SyncItems"
 import { useActions } from "./actions"
 import { reportAction } from "@/lib/report"
 import { errMsg } from "@/lib/apiError"
 
 type Item = SyncItem
-type Mode = "merge" | "replace"
-
-const KINDS = ["setting", "perm", "file", "skill"]
-const STATUS = { new: "text-success", diff: "text-warning", same: "text-muted-foreground" } as const
 
 // Copie des réglages d'un dossier de configuration Claude vers un autre : chaque élément se compare, se prévisualise et se choisit
 // (fusionner ou remplacer). Le plan vient du serveur, qui revérifie chaque choix avant d'écrire et sauvegarde ce qu'il remplace.
@@ -27,7 +22,6 @@ export function SyncTab() {
   const [to, setTo] = useState("")
   const [items, setItems] = useState<Item[] | null>(null)
   const [picks, setPicks] = useState<Record<string, Mode>>({})
-  const [open, setOpen] = useState<Set<string>>(new Set())
   const [error, setError] = useState("")
   const [busy, setBusy] = useState(false)
 
@@ -61,13 +55,6 @@ export function SyncTab() {
   const todo = (items ?? []).filter((i) => i.status !== "same")
   const chosen = Object.keys(picks)
   const setAll = (f: (i: Item) => Mode | null) => setPicks(Object.fromEntries(todo.flatMap((i) => (f(i) ? [[i.id, f(i)!]] : []))))
-  const toggle = (i: Item, on: boolean) =>
-    setPicks((p) => {
-      const n = { ...p }
-      if (on) n[i.id] = i.merge ? "merge" : "replace"
-      else delete n[i.id]
-      return n
-    })
   const apply = async () => {
     setBusy(true)
     const ok = await reportAction(() => api.syncApply(from, to, chosen.map((id) => ({ id, mode: picks[id] }))))
@@ -104,71 +91,7 @@ export function SyncTab() {
             </Button>
           </div>
           {todo.length === 0 && <p className="text-sm text-muted-foreground">{t("config.sync.nothingToCopy")}</p>}
-          {KINDS.map((kind) => {
-            const rows = items.filter((i) => i.kind === kind)
-            if (rows.length === 0) return null
-            return (
-              <section key={kind}>
-                <h3 className="text-sm font-medium">{t(`config.sync.kind.${kind}`)}</h3>
-                <ul className="mt-1 space-y-px">
-                  {rows.map((i) => {
-                    const label = t(`config.sync.status.${i.status}`)
-                    const tone = STATUS[i.status]
-                    const isOpen = open.has(i.id)
-                    return (
-                      <li key={i.id} className="rounded-md px-2 py-1 text-sm hover:bg-muted">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Checkbox checked={i.id in picks} disabled={i.status === "same"} onCheckedChange={(v) => toggle(i, v === true)} aria-label={t("config.sync.copyItem", { label: i.label })} />
-                          <button
-                            className="flex min-w-0 flex-1 items-center gap-1 text-left"
-                            onClick={() =>
-                              setOpen((o) => {
-                                const n = new Set(o)
-                                if (!n.delete(i.id)) n.add(i.id)
-                                return n
-                              })
-                            }
-                            aria-expanded={isOpen}
-                          >
-                            <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", isOpen && "rotate-90")} />
-                            <code className="truncate text-xs">{i.label}</code>
-                          </button>
-                          {i.risk === "exec" && (
-                            <span className="flex items-center gap-1 text-xs text-warning" title={t("config.sync.riskTitle")}>
-                              <TriangleAlert className="size-3.5" /> {t("config.sync.risk")}
-                            </span>
-                          )}
-                          <span className={cn("shrink-0 text-xs", tone)}>{label}</span>
-                          {i.id in picks && i.merge && i.status === "diff" && (
-                            <span className="flex shrink-0 gap-1" role="radiogroup" aria-label={t("config.sync.modeAria")}>
-                              {(["merge", "replace"] as const).map((m) => (
-                                <Button key={m} size="xs" variant={picks[i.id] === m ? "secondary" : "ghost"} role="radio" aria-checked={picks[i.id] === m} onClick={() => setPicks((p) => ({ ...p, [i.id]: m }))}>
-                                  {m === "merge" ? t("config.shared.merge") : t("config.shared.replace")}
-                                </Button>
-                              ))}
-                            </span>
-                          )}
-                        </div>
-                        {isOpen && (
-                          <div className="mt-1 grid gap-2 md:grid-cols-2">
-                            {[
-                              ["source", i.from],
-                              ["target", i.to],
-                            ].map(([side, text]) => (
-                              <div key={side}>
-                                <p className="text-xs text-muted-foreground">{t(`config.sync.${side}`)}</p>
-                                <pre className="max-h-56 overflow-auto rounded-md border bg-background p-2 font-mono text-xs whitespace-pre-wrap">{text || t("config.sync.absent")}</pre>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </li>
-                    )
-                  })}
-                </ul>
-              </section>
-            )
-          })}
+          <SyncItems items={items} picks={picks} setPicks={setPicks} />
         </>
       )}
     </div>

@@ -44,6 +44,7 @@ import { importLocalQueues } from "@/hooks/importQueues"
 const Conversation = lazy(() => import("@/components/Conversation").then((m) => ({ default: m.Conversation })))
 const Snippets = retryLazy(() => import("@/components/Snippets").then((m) => ({ default: m.Snippets })))
 const Extensions = retryLazy(() => import("@/components/Extensions").then((m) => ({ default: m.Extensions })))
+const Backup = retryLazy(() => import("@/components/Backup").then((m) => ({ default: m.Backup })))
 const Plugins = retryLazy(() => import("@/components/Plugins").then((m) => ({ default: m.Plugins })))
 const TeamRun = retryLazy(() => import("@/components/teams/TeamRun").then((m) => ({ default: m.TeamRun })))
 const TeamsPage = retryLazy(() => import("@/components/teams/TeamsPage").then((m) => ({ default: m.TeamsPage })))
@@ -428,7 +429,7 @@ function Shell() {
           ) : route.kind === "plugins" ? (
             <Plugins home={home} />
           ) : route.kind === "backup" ? (
-            <div />
+            <Backup home={home} />
           ) : route.kind === "config" ? (
             <Config home={home} tab={route.tab} onTab={(tab) => go({ kind: "config", tab })} ui={{ args, setArgs, choice, setChoice, font, setFont, fontSize, setFontSize }} />
           ) : route.kind === "memory" ? (
