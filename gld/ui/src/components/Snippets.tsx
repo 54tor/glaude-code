@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowLeft, Bot, Check, ClipboardCopy, Copy, Download, Link, Fan, MessageSquarePlus, Pencil, Plus, Save, Sparkles, Terminal, Trash2, Undo2, Upload, X } from "lucide-react"
+import { ArrowLeft, Bot, Check, ClipboardCopy, Copy, Download, Link, Fan, Merge, MessageSquarePlus, Pencil, Plus, Save, Sparkles, Terminal, Trash2, Undo2, Upload, X } from "lucide-react"
 import { toast } from "sonner"
 import { api, type SnipScope, type Snippet } from "@/lib/api"
 import { ago, size, tilde } from "@/lib/format"
@@ -11,6 +11,8 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Choose } from "./Choose"
+import type { ComposeAsk } from "./Compose"
+import { withChoice } from "@/lib/models"
 import type { Ask } from "./Confirm"
 import { Markdown } from "./Message"
 import type { Ask as PromptAsk } from "./Prompt"
@@ -33,6 +35,8 @@ export function Snippets({
   onChanged,
   onAsk,
   onPrompt,
+  onCompose,
+  args,
 }: {
   files: Snippet[]
   scopes: SnipScope[]
@@ -45,6 +49,8 @@ export function Snippets({
   onChanged: () => void
   onAsk: (a: Ask) => void
   onPrompt: (a: PromptAsk) => void
+  onCompose: (a: ComposeAsk) => void
+  args: string
 }) {
   const { t } = useTranslation()
   const f = q.toLowerCase()
@@ -56,6 +62,7 @@ export function Snippets({
   const [copied, setCopied] = useState(false)
   const [haiku, setHaiku] = useState(false) // fenêtre de mise en forme ouverte
   const [before, setBefore] = useState<{ key: string; text: string } | null>(null) // texte d'avant la mise en forme
+  const [picked, setPicked] = useState<Set<string>>(new Set()) // cochés pour la fusion
   const upload = useRef<HTMLInputElement>(null)
   // Erreur de lecture gardée à part : affichée, jamais éditée ni lancée comme une commande.
   const failed = loaded?.key === sel ? loaded.error : undefined
@@ -155,6 +162,51 @@ export function Snippets({
         }
       },
     })
+  const toggle = (key: string) =>
+    setPicked((p) => {
+      const n = new Set(p)
+      if (!n.delete(key)) n.add(key)
+      return n
+    })
+  // Fusion par Claude : le serveur rédige le prompt ; la fenêtre de saisie le fait relire avant de lancer la session.
+  const merge = async () => {
+    const keys = files.filter((s) => picked.has(s.key)).map((s) => s.key)
+    const draft = (out?: string) => api.snippetMerge({ keys, out, launch: false })
+    let r
+    try {
+      r = await draft()
+    } catch (e) {
+      return void toast.error(errMsg(e).trim() || t("skills.snippets.mergeFailed"))
+    }
+    onCompose({
+      id: "snippet-merge:" + keys.join(","),
+      title: t("skills.snippets.mergeTitle"),
+      subtitle: t("skills.snippets.mergeSubtitle", { n: keys.length }),
+      project: "",
+      initial: r.prompt,
+      send: t("skills.snippets.mergeSend"),
+      choice: { model: "haiku", effort: "" }, // tâche mécanique
+      outputs: keys.map((k) => ({ key: k, label: files.find((x) => x.key === k)?.command ?? k })),
+      reprompt: async (out) => {
+        try {
+          return (await draft(out)).prompt
+        } catch (e) {
+          return void toast.error(errMsg(e).trim() || t("skills.snippets.mergeFailed"))
+        }
+      },
+      run: async (text, c, _t, out) => {
+        try {
+          const m = await api.snippetMerge({ keys, out, launch: true, prompt: text, args: withChoice(args, c) })
+          toast.success(m.message.trim() || t("skills.snippets.mergeStarted"))
+          setPicked(new Set())
+          return true
+        } catch (e) {
+          toast.error(errMsg(e).trim() || t("skills.snippets.mergeFailed"))
+          return false
+        }
+      },
+    })
+  }
   // Import : fichiers .md ou archives .zip ; un snippet déjà présent est laissé tel quel.
   const importFiles = async (list: FileList | null) => {
     if (!list?.length) return
@@ -219,10 +271,11 @@ export function Snippets({
                               title={s.description || s.path}
                               className={cn(
                                 "flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
-                                s.key === sel ? "bg-accent text-accent-foreground" : "hover:bg-muted"
+                                s.key === sel ? "bg-accent text-accent-foreground" : "hover:bg-muted",
+                                picked.has(s.key) && "ring-1 ring-primary"
                               )}
                             >
-                              <Terminal className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                              {picked.has(s.key) ? <Check className="mt-0.5 size-4 shrink-0 text-primary" /> : <Terminal className="mt-0.5 size-4 shrink-0 text-muted-foreground" />}
                               <span className="min-w-0">
                                 <span className="block truncate font-mono text-sm">{s.command}</span>
                                 <span className="block truncate text-xs font-normal text-muted-foreground">
@@ -232,6 +285,9 @@ export function Snippets({
                             </button>
                           </ContextMenuTrigger>
                           <ContextMenuContent>
+                            <ContextMenuItem onSelect={() => toggle(s.key)}>
+                              <Merge /> {picked.has(s.key) ? t("skills.snippets.unmerge") : t("skills.snippets.mergePick")}
+                            </ContextMenuItem>
                             <ContextMenuItem onSelect={() => copyContent(s)}>
                               <ClipboardCopy /> {t("skills.snippets.copyContent")}
                             </ContextMenuItem>
@@ -251,6 +307,17 @@ export function Snippets({
             })}
           </nav>
         </ScrollArea>
+        {picked.size > 0 && (
+          <div className="flex flex-wrap items-center gap-1 border-t bg-popover px-3 py-2 text-xs">
+            <span className="mr-auto font-medium">{t("skills.snippets.picked", { count: picked.size })}</span>
+            <Button size="xs" onClick={merge} disabled={picked.size < 2} title={t("skills.snippets.mergeTitleBar")}>
+              <Merge /> {t("skills.snippets.merge")}
+            </Button>
+            <Button variant="ghost" size="xs" onClick={() => setPicked(new Set())}>
+              <X /> {t("skills.snippets.clear")}
+            </Button>
+          </div>
+        )}
       </div>
       <div className={cn("min-h-0 min-w-0 flex-1 flex-col lg:flex", sel ? "flex" : "hidden")}>
         {sel && (

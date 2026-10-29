@@ -435,6 +435,8 @@ function Shell() {
                 onChanged={reload}
                 onAsk={setAsk}
                 onPrompt={setPrompt}
+                onCompose={setCompose}
+                args={args}
               />
             ) : (
               <Skeleton className="m-6 h-32" />

@@ -103,6 +103,18 @@
       "write": "Write"
     },
     "snippets": {
+      "mergePick": "Check to merge",
+      "unmerge": "Uncheck",
+      "picked_one": "{{count}} command",
+      "picked_other": "{{count}} commands",
+      "merge": "Merge",
+      "mergeTitleBar": "New Claude session that merges these commands",
+      "clear": "Clear",
+      "mergeTitle": "Merge commands",
+      "mergeSubtitle": "{{n}} commands · the session is interactive: you approve before anything is written",
+      "mergeSend": "Start the merge",
+      "mergeStarted": "Session started",
+      "mergeFailed": "Merge failed",
       "personal": "Personal",
       "location": "Location",
       "newTitle": "New command at this location",

@@ -243,6 +243,7 @@ export const api = {
   snippetSave: (key: string, text: string, create: boolean) => http.put<Said>(`/snippets/${seg(key)}`, { text, create }),
   snippetRename: (from: string, to: string) => http.patch<Said>(`/snippets/${seg(from)}`, { to }),
   snippetRemove: (keys: string[]) => inBatches(keys, (b) => http.del<Said & Bulk>(`/snippets${qs({ item: b })}`), itemLen),
+  snippetMerge: (body: { keys: string[]; out?: string; launch: boolean; prompt?: string; args?: string }) => http.post<Said & { prompt: string }>("/snippets/merges", body),
   snippetDraft: (body: { model: string; instruction: string; text: string }) => http.post<Said & { text: string; cost?: number }>("/snippets/drafts", body),
   memory: () => http.get<{ global: MemFile[]; projects: MemProject[]; targets: MemTarget[] }>("/memory/files"),
   memoryFile: (key: string) => http.get<{ text: string; missing?: boolean }>(`/memory/files/${seg(key)}`),

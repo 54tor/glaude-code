@@ -103,6 +103,18 @@
       "write": "Rédiger"
     },
     "snippets": {
+      "mergePick": "Cocher pour fusionner",
+      "unmerge": "Décocher",
+      "picked_one": "{{count}} commande",
+      "picked_other": "{{count}} commandes",
+      "merge": "Fusionner",
+      "mergeTitleBar": "Nouvelle session Claude qui fusionne ces commandes",
+      "clear": "Vider",
+      "mergeTitle": "Fusionner des commandes",
+      "mergeSubtitle": "{{n}} commandes · la session est interactive : tu valideras avant toute écriture",
+      "mergeSend": "Lancer la fusion",
+      "mergeStarted": "Session lancée",
+      "mergeFailed": "Fusion impossible",
       "personal": "Personnelles",
       "location": "Emplacement",
       "newTitle": "Nouvelle commande à cet emplacement",

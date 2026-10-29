@@ -4,6 +4,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+### Ajouté
+- Snippets : cocher plusieurs commandes puis les fusionner dans une session Claude (`POST /v1/snippets/merges`), comme la fusion de mémoire.
+
 ### Modifié
 - **Rupture** : toute l'API passe en REST sous `/v1` (ressources au pluriel, `GET`/`POST`/`PUT`/`PATCH`/`DELETE`, identifiants en chemin, suppressions multiples par `?item=` répété). Les anciennes routes (`/api`, `/session-send`, `/fs-save`, `/auth/login`, `/admin/users`…) sont supprimées, sans alias. La correspondance complète est dans `docs/reference/openapi.yaml`.
 - **Rupture** : les réponses perdent l'enveloppe `{ok, out}`. Un succès renvoie la ressource en JSON (ou `204`), un échec renvoie `{"error":{"code","message"}}` avec le vrai statut HTTP (400, 401, 403, 404, 409, 413, 415, 429, 5xx). Les flux gardent leur type (NDJSON du chat, SSE de `/v1/fs/watch`, WebSocket du terminal).
