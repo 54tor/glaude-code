@@ -136,8 +136,8 @@ func routesSessions(mux *http.ServeMux) {
 		a.Refreshing = refreshUsage(a.LimitsAt, force)
 		writeJSON(w, 200, a)
 	}
-	mux.HandleFunc("GET /account", func(w http.ResponseWriter, r *http.Request) { account(w, false) })
-	mux.HandleFunc("POST /account-refresh", func(w http.ResponseWriter, r *http.Request) { account(w, true) })
+	mux.HandleFunc("GET /v1/account", func(w http.ResponseWriter, r *http.Request) { account(w, false) })
+	mux.HandleFunc("POST /v1/account/refreshes", func(w http.ResponseWriter, r *http.Request) { account(w, true) })
 	// Envoi d'un message à une session ouverte dans tmux (sendkeys.go) : lesquelles le permettent, puis l'envoi.
 	mux.HandleFunc("GET /v1/sessions/send-info", func(w http.ResponseWriter, r *http.Request) {
 		ids, err := sendable()

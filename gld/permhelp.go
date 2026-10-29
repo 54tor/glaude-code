@@ -77,17 +77,16 @@ func permHelp(kind, rule string) (string, error) {
 }
 
 func routesPermHelp(mux *http.ServeMux) {
-	mux.HandleFunc("POST /config-perm-explain", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /v1/config/permissions/explanations", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Kind, Rule string }
-		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+		if !decodeBody(w, r, &req, 4<<10) {
 			return
 		}
 		t, err := permHelp(req.Kind, req.Rule)
 		if err != nil {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			writeErr(w, http.StatusServiceUnavailable, "unavailable", err.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": t})
+		writeJSON(w, 200, map[string]any{"out": t})
 	})
 }

@@ -65,24 +65,24 @@ var routeRights = map[string]Right{
 	"GET /v1/skills": RightMemRead, "GET /v1/skills/catalog": RightMemRead, "GET /v1/skills/updates": RightMemRead, "GET /v1/skills/{key}": RightMemRead, "GET /v1/plugins": RightMemRead, "GET /v1/marketplaces": RightMemRead,
 
 	// Lecture du home et état d'interface par home.
-	"GET /config": RightMemRead, "GET /config-projects": RightMemRead, "GET /config-effective": RightMemRead,
-	"GET /config-mcp": RightMemRead, "GET /v1/slash-commands": RightMemRead,
+	"GET /v1/config": RightMemRead, "GET /v1/config/projects": RightMemRead, "GET /v1/config/effective": RightMemRead,
+	"GET /v1/config/mcp": RightMemRead, "GET /v1/slash-commands": RightMemRead,
 	"GET /v1/git/status": RightMemRead, "GET /v1/git/changes": RightMemRead, "GET /v1/git/remotes": RightMemRead,
 	"GET /v1/cleanup-warning": RightMemRead, "GET /v1/tabs": RightMemRead, "GET /v1/keepwarm": RightMemRead,
 	"PUT /v1/tabs": RightMemWrite, "DELETE /v1/tabs/{tab}": RightMemWrite, "PUT /v1/vgroups": RightMemWrite,
 
 	// Réglages et skills : font exécuter du code par Claude Code.
-	"POST /config-edit": RightConfigWrite, "GET /config-raw": RightConfigWrite, "POST /config-raw": RightConfigWrite,
-	"POST /config-restore": RightConfigWrite, "POST /config-perm-import": RightConfigWrite, "POST /config-mcp-status": RightConfigWrite, "POST /project-mcp": RightConfigWrite,
-	"POST /config-perm-explain": RightConfigWrite,
-	"PUT /v1/snippets/{key}":    RightConfigWrite, "DELETE /v1/snippets": RightConfigWrite, "PATCH /v1/snippets/{key}": RightConfigWrite, "POST /v1/snippets/imports": RightConfigWrite,
+	"POST /v1/config/edits": RightConfigWrite, "GET /v1/config/raw": RightConfigWrite, "PUT /v1/config/raw": RightConfigWrite,
+	"POST /v1/config/restorations": RightConfigWrite, "POST /v1/config/permissions/imports": RightConfigWrite, "POST /v1/config/mcp/checks": RightConfigWrite, "PUT /v1/config/projects/mcp": RightConfigWrite,
+	"POST /v1/config/permissions/explanations": RightConfigWrite,
+	"PUT /v1/snippets/{key}":                   RightConfigWrite, "DELETE /v1/snippets": RightConfigWrite, "PATCH /v1/snippets/{key}": RightConfigWrite, "POST /v1/snippets/imports": RightConfigWrite,
 	"PUT /v1/skills/{key}": RightConfigWrite, "POST /v1/skills/copies": RightConfigWrite, "DELETE /v1/skills": RightConfigWrite,
 	"POST /v1/skills/drafts": RightConfigWrite, "POST /v1/skills/installations": RightConfigWrite,
 	"PUT /v1/plugins/{plugin}": RightConfigWrite, "DELETE /v1/plugins/{plugin}": RightConfigWrite, "PATCH /v1/plugins/{plugin}": RightConfigWrite, "POST /v1/plugins/{plugin}/updates": RightConfigWrite,
 	"POST /v1/marketplaces": RightConfigWrite, "DELETE /v1/marketplaces/{name}": RightConfigWrite, "POST /v1/marketplaces/{name}/updates": RightConfigWrite, "POST /v1/marketplaces/updates": RightConfigWrite,
 
 	// Compte et usages.
-	"GET /account": RightUsageRead, "POST /account-refresh": RightUsageRead,
+	"GET /v1/account": RightUsageRead, "POST /v1/account/refreshes": RightUsageRead,
 
 	// Transcriptions et état des sessions. /info renvoie les premiers messages d'une session : contenu, pas usage.
 	"GET /v1/state": RightSessionsRead, "GET /v1/sessions/{id}/conversation": RightSessionsRead, "GET /v1/sessions/{id}/conversation/text": RightSessionsRead, "GET /v1/sessions/{id}/conversation/tools": RightSessionsRead,
@@ -91,7 +91,7 @@ var routeRights = map[string]Right{
 	"GET /v1/sessions/{id}/loaded": RightSessionsRead, "GET /v1/sessions/{id}/loaded/files/{file}": RightSessionsRead, "GET /v1/trash/sessions": RightSessionsRead, "GET /v1/state/stamp": RightSessionsRead,
 	"GET /v1/sessions/send-info": RightSessionsRead, "GET /v1/sessions": RightSessionsRead, "GET /v1/sessions/{id}/queue": RightSessionsRead,
 	// Renvoie des extraits de commandes tirés des transcriptions.
-	"GET /config-perm-suggest": RightSessionsRead,
+	"GET /v1/config/permissions/suggestions": RightSessionsRead,
 
 	// Exécution.
 	"POST /v1/sessions/{id}/chat": RightExec, "DELETE /v1/sessions/{id}/chat": RightExec, "POST /v1/sessions": RightExec,
@@ -118,7 +118,7 @@ var passiveRoutes = map[string]bool{
 	"GET /v1/state": true, "GET /v1/state/stamp": true, "GET /v1/sessions/{id}/live": true, "GET /v1/sessions/{id}/state": true,
 	"GET /v1/sessions/{id}/screen": true, "GET /v1/sessions/{id}/conversation": true, "GET /v1/snippets": true, "GET /v1/memory/files": true,
 	"GET /v1/memory/health": true, "GET /v1/memory/loaded": true, "GET /v1/trash/memory": true, "GET /v1/keepwarm": true,
-	"GET /v1/git/status": true, "GET /team": true, "GET /teams": true, "GET /account": true, "GET /v1/trust/pending": true, "GET /v1/cleanup-warning": true,
+	"GET /v1/git/status": true, "GET /team": true, "GET /teams": true, "GET /v1/account": true, "GET /v1/trust/pending": true, "GET /v1/cleanup-warning": true,
 }
 
 // tokenPrincipal : principal d'une requête Bearer ; nil tant que les jetons ne sont pas branchés.

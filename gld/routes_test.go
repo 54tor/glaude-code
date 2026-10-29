@@ -95,40 +95,38 @@ func TestHTTPTrust(t *testing.T) {
 func TestHTTPConfigJournalSansValeur(t *testing.T) {
 	h, cfg, _ := web(t)
 	const secret = "sk-ant-SECRET-0123456789"
-	status(t, h, "POST", "/config-edit", `{"file":"u","op":"set","path":[]}`, 400)
-	status(t, h, "POST", "/config-edit", `{`, 400)
-	ok(t, h, "/config-edit", `{"file":"u","op":"set","path":["env","CLE"],"value":"`+secret+`","dry":true}`, true, "Aperçu")
+	status(t, h, "POST", "/v1/config/edits", `{"file":"u","op":"set","path":[]}`, 400)
+	status(t, h, "POST", "/v1/config/edits", `{`, 400)
+	v1ok(t, h, "POST", "/v1/config/edits", `{"file":"u","op":"set","path":["env","CLE"],"value":"`+secret+`","dry":true}`, "Aperçu")
 	if b, _ := os.ReadFile(filepath.Join(cfg, "settings.json")); strings.Contains(string(b), secret) {
 		t.Fatal("aperçu écrit sur disque")
 	}
-	ok(t, h, "/config-edit", `{"file":"u","op":"set","path":["env","CLE"],"value":"`+secret+`"}`, true, "Enregistré")
-	ok(t, h, "/config-edit", `{"file":"u","op":"set","path":["env","CLE"],"value":"`+secret+`"}`, true, "Aucun changement")
-	ok(t, h, "/config-edit", `{"file":"u","op":"set","path":["apiKeyHelper"],"value":"x"}`, false, "pas permise")
-	ok(t, h, "/config-raw", `{"file":"u","text":"{\"env\":{\"API_KEY\":\"`+secret+`\",\"B\":\"1\"}}"}`, true, "Enregistré")
-	status(t, h, "POST", "/config-raw", `[`, 400)
+	v1ok(t, h, "POST", "/v1/config/edits", `{"file":"u","op":"set","path":["env","CLE"],"value":"`+secret+`"}`, "Enregistré")
+	v1ok(t, h, "POST", "/v1/config/edits", `{"file":"u","op":"set","path":["env","CLE"],"value":"`+secret+`"}`, "Aucun changement")
+	v1err(t, h, "POST", "/v1/config/edits", `{"file":"u","op":"set","path":["apiKeyHelper"],"value":"x"}`, 400, "pas permise")
+	v1ok(t, h, "PUT", "/v1/config/raw", `{"file":"u","text":"{\"env\":{\"API_KEY\":\"`+secret+`\",\"B\":\"1\"}}"}`, "Enregistré")
+	status(t, h, "PUT", "/v1/config/raw", `[`, 400)
 	// Relu masqué, puis renvoyé tel quel avec le masque : le secret reste sur disque, jamais dans une réponse.
-	_, m, raw := call(t, h, "GET", "/config-raw?file=u", "")
-	if m["ok"] != true || strings.Contains(raw, secret) || !strings.Contains(raw, "••••••••") {
+	_, m, raw := call(t, h, "GET", "/v1/config/raw?file=u", "")
+	if strings.Contains(raw, secret) || !strings.Contains(raw, "••••••••") {
 		t.Fatalf("config-raw : %s", raw)
 	}
-	_, _, raw = call(t, h, "POST", "/config-raw", `{"file":"u","text":`+jsonStr(m["text"].(string)+"")+`}`)
+	_, _, raw = call(t, h, "PUT", "/v1/config/raw", `{"file":"u","text":`+jsonStr(m["text"].(string)+"")+`}`)
 	if strings.Contains(raw, secret) {
 		t.Fatalf("secret renvoyé : %s", raw)
 	}
 	if b, _ := os.ReadFile(filepath.Join(cfg, "settings.json")); !strings.Contains(string(b), secret) {
 		t.Fatalf("secret perdu à l'aller-retour du masque :\n%s", b)
 	}
-	if _, _, raw := call(t, h, "GET", "/config-effective", ""); strings.Contains(raw, secret) {
+	if _, _, raw := call(t, h, "GET", "/v1/config/effective", ""); strings.Contains(raw, secret) {
 		t.Fatalf("config-effective expose le secret : %s", raw)
 	}
-	if _, m, _ := call(t, h, "GET", "/config-raw?file=../../etc/passwd", ""); m["ok"] != false {
-		t.Fatalf("fichier hors liste lu : %v", m)
-	}
-	ok(t, h, "/config-perm-import", `{"file":"u","text":"{\"permissions\":{\"allow\":[\"Bash(ls)\"]}}","mode":"merge"}`, true, "Importé")
-	status(t, h, "POST", "/config-perm-import", `"`, 400)
-	ok(t, h, "/config-restore", `{"name":"../settings.json"}`, false, "")
-	status(t, h, "POST", "/config-restore", `x`, 400)
-	status(t, h, "GET", "/config-effective?dir=a/b", "", 400)
+	v1err(t, h, "GET", "/v1/config/raw?file=../../etc/passwd", "", 400, "")
+	v1ok(t, h, "POST", "/v1/config/permissions/imports", `{"file":"u","text":"{\"permissions\":{\"allow\":[\"Bash(ls)\"]}}","mode":"merge"}`, "Importé")
+	status(t, h, "POST", "/v1/config/permissions/imports", `"`, 400)
+	v1err(t, h, "POST", "/v1/config/restorations", `{"name":"../settings.json"}`, 400, "")
+	status(t, h, "POST", "/v1/config/restorations", `x`, 400)
+	status(t, h, "GET", "/v1/config/effective?dir=a/b", "", 400)
 
 	log, err := os.ReadFile(filepath.Join(cfg, "gld-web.log"))
 	if err != nil || !strings.Contains(string(log), "config-edit u set [env CLE]") {
@@ -137,10 +135,10 @@ func TestHTTPConfigJournalSansValeur(t *testing.T) {
 	if strings.Contains(string(log), secret) {
 		t.Fatalf("secret journalisé :\n%s", log)
 	}
-	_, m, raw = call(t, h, "GET", "/config", "")
+	_, m, raw = call(t, h, "GET", "/v1/config", "")
 	for _, k := range []string{"files", "hooks", "issues", "plugins", "projects"} {
 		if _, isList := m[k].([]any); !isList {
-			t.Fatalf("/config %s n'est pas une liste : %s", k, cut(raw, 300))
+			t.Fatalf("/v1/config %s n'est pas une liste : %s", k, cut(raw, 300))
 		}
 	}
 }
@@ -174,8 +172,8 @@ func TestHTTPSkills(t *testing.T) {
 // Les corps trop gros sont refusés avant tout appel au modèle.
 func TestHTTPPermExplainLimite(t *testing.T) {
 	h, _, _ := web(t)
-	status(t, h, "POST", "/config-perm-explain", `{"kind":"allow","rule":"`+strings.Repeat("x", 5000)+`"}`, 400)
-	status(t, h, "POST", "/config-perm-explain", `{`, 400)
+	status(t, h, "POST", "/v1/config/permissions/explanations", `{"kind":"allow","rule":"`+strings.Repeat("x", 5000)+`"}`, 400)
+	status(t, h, "POST", "/v1/config/permissions/explanations", `{`, 400)
 }
 
 func jsonStr(s string) string {

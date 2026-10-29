@@ -279,7 +279,7 @@ func TestGateRightsMatrix(t *testing.T) {
 		{&r, "PUT", "/v1/memory/files/x", false, 403},
 		{&r, "POST", "/v1/sessions/x/chat", false, 403},
 		{&r, "POST", "/homes-save", false, 403},
-		{&u, "GET", "/account", true, 200},
+		{&u, "GET", "/v1/account", true, 200},
 		{&u, "GET", "/v1/sessions/x/conversation", false, 403},
 		{&u, "GET", "/v1/info", false, 403},
 		{&a, "GET", "/v1/memory/files", false, 403}, // pas de super-droit implicite
@@ -303,9 +303,9 @@ func TestGateRightsMatrix(t *testing.T) {
 		{&wr, "POST", "/v1/snippets/imports", false, 403},
 		{&wr, "POST", "/v1/snippets/drafts", true, 200},
 		{&r, "GET", "/v1/snippets", true, 200},
-		{&r, "GET", "/config-perm-suggest", false, 403},
+		{&r, "GET", "/v1/config/permissions/suggestions", false, 403},
 		{&cw, "PUT", "/v1/snippets/u%2Fa.md", true, 200},
-		{&sr, "GET", "/config-perm-suggest", true, 200},
+		{&sr, "GET", "/v1/config/permissions/suggestions", true, 200},
 	}
 	for _, c := range cases {
 		w := g.do(c.m, c.p, c.u, "", "{}")

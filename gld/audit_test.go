@@ -145,14 +145,14 @@ func TestCompteRafraichirEnPOST(t *testing.T) {
 	}
 	defer func() { usageWG.Wait(); usageStart = old; reset() }()
 	reset()
-	if _, m, _ := call(t, h, "POST", "/account-refresh", "{}"); m["refreshing"] != true {
-		t.Fatalf("POST /account-refresh : %v", m)
+	if _, m, _ := call(t, h, "POST", "/v1/account/refreshes", "{}"); m["refreshing"] != true {
+		t.Fatalf("POST /v1/account/refreshes : %v", m)
 	}
 	<-calls
 	usageWG.Wait()
-	status(t, h, "GET", "/account-refresh", "", 405)
-	if _, m, _ := call(t, h, "GET", "/account?refresh=1", ""); m["refreshing"] == true {
-		t.Fatalf("GET /account?refresh=1 force encore le relevé : %v", m)
+	status(t, h, "GET", "/v1/account/refreshes", "", 405)
+	if _, m, _ := call(t, h, "GET", "/v1/account?refresh=1", ""); m["refreshing"] == true {
+		t.Fatalf("GET /v1/account?refresh=1 force encore le relevé : %v", m)
 	}
 }
 
