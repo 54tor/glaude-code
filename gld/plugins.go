@@ -160,8 +160,12 @@ var (
 	marketSrcRe  = regexp.MustCompile(`^([\w.-]{1,100}/[\w.-]{1,100}|https://[\w.-]+(:\d+)?/[\w./~%+-]{1,300})$`) // dépôt GitHub ou URL https ; jamais un chemin local
 )
 
+var marketRaw = func() ([]byte, error) {
+	return runPlugin("", 30*time.Second, "marketplace", "list", "--json")
+}
+
 func listMarketplaces() ([]Marketplace, error) {
-	b, err := runPlugin("", 30*time.Second, "marketplace", "list", "--json")
+	b, err := marketRaw()
 	if err != nil {
 		return nil, err
 	}

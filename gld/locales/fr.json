@@ -568,5 +568,7 @@
   "srv.backup_zip.tropVolumineuse": "archive : contenu décompressé trop volumineux",
   "srv.backup_zip.manifesteInvalide": "archive : manifeste invalide : {{.A1}}",
   "srv.backup_zip.formatTropRecent": "archive de format {{.A1}}, plus récent que le format {{.A2}} géré ici",
-  "srv.backup_zip.sansManifeste": "archive : manifeste absent"
+  "srv.backup_zip.sansManifeste": "archive : manifeste absent",
+  "srv.backup_export.catsVides": "aucune catégorie choisie",
+  "srv.backup_export.catInconnue": "catégorie inconnue : {{.A1}}"
 }
