@@ -1,7 +1,8 @@
-import { useLayoutEffect, useRef, useState } from "react"
+import { useContext, useLayoutEffect, useRef, useState } from "react"
 import { Bell, Minimize2, Reply, Send, Users } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { Badge } from "@/components/ui/badge"
+import { ActionsCtx } from "./actions"
 
 // Blocs balisés que Claude Code glisse dans les messages (<task-notification>…) : affichés en carte lisible.
 const BLOCK = /<([a-z][a-z-]*)((?:\s[^<>]*)?)>([\s\S]*?)<\/\1>/g
@@ -66,6 +67,7 @@ function Card({ tag, attrs, body, md, onReply }: { tag: string; attrs: string; b
   const fields = [...body.matchAll(BLOCK)].map(([, k, , v]) => [k, v.trim()] as const)
   const get = (k: string) => fields.find(([f]) => f === k)?.[1]
   const status = get("status")
+  const acts = useContext(ActionsCtx) // absent côté invité
   if (tag === "teammate-message" || tag === "cross-session-message" || tag === "agent-message") {
     const cross = tag === "cross-session-message"
     const agent = tag === "agent-message"
@@ -73,11 +75,19 @@ function Card({ tag, attrs, body, md, onReply }: { tag: string; attrs: string; b
     const summary = cross ? attr(attrs, "from-mode") : attr(attrs, "summary")
     const json = parseJsonBody(body)
     const Icon = cross ? Send : Users
+    const peer = cross && from ? acts?.rows.find((r) => r.s.title === from) : undefined
     return (
       <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
         <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
           <Icon className="size-3.5" />
-          {t(cross ? "conversation.tagged.crossSessionMessage" : agent ? "conversation.tagged.agentMessage" : "conversation.tagged.teammateMessage", { name: from ?? "?" })}
+          {peer && acts ? (
+            <>
+              {t("conversation.tagged.crossSessionMessage", { name: "" }).trim()}
+              <button type="button" onClick={() => acts.read(peer.s)} title={peer.g.project} className="rounded bg-muted px-1.5 py-0.5 font-mono text-foreground hover:bg-accent">{from}</button>
+            </>
+          ) : (
+            t(cross ? "conversation.tagged.crossSessionMessage" : agent ? "conversation.tagged.agentMessage" : "conversation.tagged.teammateMessage", { name: from ?? "?" })
+          )}
           {summary && <Badge variant="outline" className="ml-auto max-w-[60%] truncate font-normal">{summary}</Badge>}
           {cross && onReply && attr(attrs, "from") && (
             <button type="button" onClick={() => onReply(attr(attrs, "from")!, from ?? "?")} title={t("conversation.tagged.reply")} aria-label={t("conversation.tagged.reply")} className={`${summary ? "" : "ml-auto "}rounded p-0.5 hover:bg-muted hover:text-foreground`}>
@@ -94,7 +104,7 @@ function Card({ tag, attrs, body, md, onReply }: { tag: string; attrs: string; b
               </div>
             ))}
           </dl>
-        ) : agent ? (
+        ) : agent || cross ? (
           <Clamp>{md(body.trim())}</Clamp>
         ) : (
           <div className="mt-1.5 break-words">{md(body.trim())}</div>
