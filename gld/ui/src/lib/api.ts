@@ -106,6 +106,8 @@ export type Hit = { dir: string; id: string; n: number; snip: string }
 export type Item = { dir: string; id: string }
 export type Detail = { prompts: string[]; n: number; branch: string; models: string[]; t0: string; t1: string; subagents: number }
 export type SubLive = { id: string; desc: string; type: string; running: boolean; activity: string; context: number; out: number; mtime: number }
+export type WfAgent = { label: string; phase: string; state: string; model: string; tokens: number; toolCalls: number; durationMs: number; lastTool: string }
+export type Workflow = { runId: string; taskId: string; name: string; summary: string; status: string; startTime: number; durationMs: number; totalTokens: number; totalToolCalls: number; phases: { title: string; detail: string }[]; agents: WfAgent[]; logs: string[] }
 export type BgTask = { id: string; tool?: string; desc: string; status: string; summary?: string; start?: string; end?: string; hasOutput: boolean }
 export type LiveState = { said?: string; open: boolean; status: string; activity: string; thinking: boolean; generic?: boolean; exec?: boolean; since: number; context: number; out: number; model: string; tool?: string; toolRunning?: boolean; subs: SubLive[]; tasks?: BgTask[]; verbs?: string[]; queue?: { t: string; ts: string }[]; pending?: QItem[] }
 // File de messages côté serveur (queue.go) : auteur, et état d'envoi (uncertain : parti sans réponse, à trancher).
@@ -293,6 +295,7 @@ export const api = {
     action === "add" ? http.post<Said>("/marketplaces", { source }) : action === "remove" ? http.del<Said>(`/marketplaces/${seg(name)}`) : http.post<Said>(name ? `/marketplaces/${seg(name)}/updates` : "/marketplaces/updates"),
   configProjects: () => http.get<{ projects: ProjectCfg[] }>("/config/projects"),
   sessionIdle: (id: string) => http.get<{ idle: boolean }>(`/sessions/${seg(id)}/state`),
+  workflows: (dir: string, id: string) => http.get<{ workflows: Workflow[] }>(`/sessions/${seg(id)}/workflows${qs({ dir })}`),
   taskOutput: (dir: string, id: string, task: string) => http.get<{ text?: string }>(`/sessions/${seg(id)}/tasks/${seg(task)}/output${qs({ dir })}`),
   queue: (id: string) => http.get<{ items: QItem[] }>(`/sessions/${seg(id)}/queue`),
   queueAdd: (id: string, text: string) => http.post<{ item: QItem }>(`/sessions/${seg(id)}/queue`, { text }),

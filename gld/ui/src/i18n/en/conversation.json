@@ -151,6 +151,13 @@
       "mentionAria": "Mention a session"
     },
     "tasks": {
+      "workflow": {
+        "title": "Workflow",
+        "agents": "{{n}} agent(s)",
+        "tokens": "{{n}} tokens",
+        "noPhase": "(no phase)",
+        "state": { "running": "running", "done": "done", "failed": "failed", "queued": "queued" }
+      },
       "stop": "Stop the task",
       "stopSent": "Stop requested from the session",
       "title": "Session background tasks (background commands, Monitor, workflows)",

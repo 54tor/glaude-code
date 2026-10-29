@@ -151,6 +151,13 @@
       "mentionAria": "Mentionner une session"
     },
     "tasks": {
+      "workflow": {
+        "title": "Workflow",
+        "agents": "{{n}} agent(s)",
+        "tokens": "{{n}} jetons",
+        "noPhase": "(sans phase)",
+        "state": { "running": "en cours", "done": "terminé", "failed": "échoué", "queued": "en attente" }
+      },
       "stop": "Arrêter la tâche",
       "stopSent": "Arrêt demandé à la session",
       "title": "Tâches de fond de la session (commandes en arrière-plan, Monitor, workflows)",
