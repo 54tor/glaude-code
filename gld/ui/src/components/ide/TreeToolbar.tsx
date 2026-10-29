@@ -54,7 +54,7 @@ export function TreeToolbar({ dir, tree, ctx, filter, onFilter, onRestored }: Pr
             placeholder={t("ide.toolbar.filterPlaceholder")}
             onChange={(e) => onFilter(e.target.value)}
             onKeyDown={(e) => e.key === "Escape" && filter && (e.preventDefault(), onFilter(""))}
-            className="h-7 w-full rounded-md border bg-background px-2 pr-7 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/80 [&::-webkit-search-cancel-button]:hidden"
+            className="h-7 w-full rounded-md border border-input bg-background px-2 pr-7 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/80 [&::-webkit-search-cancel-button]:hidden"
           />
           {filter && (
             <button type="button" aria-label={t("ide.toolbar.clearFilter")} onClick={() => (onFilter(""), input.current?.focus())} className="absolute right-1 grid size-5 place-items-center rounded-sm text-muted-foreground hover:bg-muted">

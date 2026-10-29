@@ -10,6 +10,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 ### Corrigé
 - Accessibilité : contrastes relevés au niveau WCAG AA. Texte atténué du thème sombre plus clair (4,4:1 → 5,5:1 sur les panneaux), onglets inactifs du thème clair (3,9:1 → 5,2:1), bordures des champs et cases à cocher à 3:1 au moins, anneau de focus plus marqué (opacité 80 %, teinte du thème clair assombrie : 1,3:1 → 4,1:1), boutons désactivés à 70 % d'opacité au lieu de 50 %, zone de clic des cases à cocher et petits boutons portée à 24 px pour tous les pointeurs.
 - Accessibilité : les onglets de la page Skills, Extensions et Plugins défilent sur petit écran au lieu d'élargir la page ; le bouton d'ouverture du menu ne référence plus un tiroir absent (`aria-controls`).
+- Accessibilité : lien « Aller au contenu » en tête de page pour sauter la navigation au clavier ; bordure du filtre de fichiers de l'IDE et des zones de texte à 3:1.
 - Accessibilité : page de saisie du jeton, bouton « Ouvrir » (3,4:1 → 5,2:1), bordures du champ et lien du thème clair relevés à plus de 3:1.
 - Sécurité : en mode multi-utilisateur, un jeton `Authorization: Bearer` faux compte désormais pour l'adresse (10 par minute, puis `429`), comme en mode ouvert ; il se devinait auparavant sans limite.
 - Sécurité : `/assets/` et `/icons/` ne listent plus leur contenu (`404`) ; les fichiers restent servis.
