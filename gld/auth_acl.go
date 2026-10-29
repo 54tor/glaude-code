@@ -105,11 +105,11 @@ var routeRights = map[string]Right{
 	"GET /v1/directories": RightExec, "POST /v1/directories": RightExec, "DELETE /v1/directories": RightExec, "POST /v1/uploads/images": RightExec, "POST /v1/uploads/files": RightExec,
 	// Agissent sur les sessions : fermeture, suppression de transcriptions, tours de modèle.
 	"DELETE /v1/sessions": RightExec, "DELETE /v1/sessions/{id}/conversation": RightExec, "PATCH /v1/sessions/{id}": RightExec, "PATCH /v1/sessions": RightExec, "PUT /v1/keepwarm": RightExec,
-	"GET /teams-catalog": RightSessionsRead, "POST /teams-compose": RightSessionsRead, "GET /teams": RightSessionsRead,
-	"GET /team": RightSessionsRead, "GET /team-screen": RightSessionsRead,
-	"POST /teams-launch": RightExec, "POST /team-send": RightExec, "POST /team-key": RightExec, "POST /team-close": RightExec,
-	"POST /teams-agent-save": RightConfigWrite, "POST /teams-agent-rm": RightConfigWrite,
-	"POST /teams-team-save": RightConfigWrite, "POST /teams-team-rm": RightConfigWrite,
+	"GET /v1/teams/catalog": RightSessionsRead, "POST /v1/teams/compositions": RightSessionsRead, "GET /v1/teams": RightSessionsRead,
+	"GET /v1/teams/{team}/run": RightSessionsRead, "GET /v1/teams/{team}/run/screen": RightSessionsRead,
+	"POST /v1/teams/{team}/runs": RightExec, "POST /v1/teams/{team}/run/messages": RightExec, "POST /v1/teams/{team}/run/keystrokes": RightExec, "DELETE /v1/teams/{team}/run": RightExec,
+	"PUT /v1/agents/{agent}": RightConfigWrite, "DELETE /v1/agents/{agent}": RightConfigWrite,
+	"PUT /v1/teams/{team}": RightConfigWrite, "DELETE /v1/teams/{team}": RightConfigWrite,
 	"POST /v1/trash/sessions": RightExec, "PATCH /v1/trash/sessions": RightExec, "DELETE /v1/trash/sessions": RightExec,
 }
 
@@ -118,7 +118,7 @@ var passiveRoutes = map[string]bool{
 	"GET /v1/state": true, "GET /v1/state/stamp": true, "GET /v1/sessions/{id}/live": true, "GET /v1/sessions/{id}/state": true,
 	"GET /v1/sessions/{id}/screen": true, "GET /v1/sessions/{id}/conversation": true, "GET /v1/snippets": true, "GET /v1/memory/files": true,
 	"GET /v1/memory/health": true, "GET /v1/memory/loaded": true, "GET /v1/trash/memory": true, "GET /v1/keepwarm": true,
-	"GET /v1/git/status": true, "GET /team": true, "GET /teams": true, "GET /v1/account": true, "GET /v1/trust/pending": true, "GET /v1/cleanup-warning": true,
+	"GET /v1/git/status": true, "GET /v1/teams/{team}/run": true, "GET /v1/teams": true, "GET /v1/account": true, "GET /v1/trust/pending": true, "GET /v1/cleanup-warning": true,
 }
 
 // tokenPrincipal : principal d'une requête Bearer ; nil tant que les jetons ne sont pas branchés.

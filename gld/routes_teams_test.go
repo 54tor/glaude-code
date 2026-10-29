@@ -28,16 +28,16 @@ func TestTeamsActionNeedsExec(t *testing.T) {
 	u := g.user(t, "lecteur", false)
 	g.grant(t, u, "", RightSessionsRead)
 	for _, c := range []struct{ m, p, body string }{
-		{"POST", "/team-send", `{"name":"` + trName + `","to":"ada","text":"x"}`},
-		{"POST", "/team-key", `{"name":"` + trName + `","agent":"ada","key":"Enter"}`},
-		{"POST", "/team-close", `{"name":"` + trName + `"}`},
-		{"POST", "/teams-launch", `{"teamIds":["a"],"goal":"x","dir":"/tmp"}`},
+		{"POST", "/v1/teams/" + trName + "/run/messages", `{"to":"ada","text":"x"}`},
+		{"POST", "/v1/teams/" + trName + "/run/keystrokes", `{"agent":"ada","key":"Enter"}`},
+		{"DELETE", "/v1/teams/" + trName + "/run", ``},
+		{"POST", "/v1/teams/a/runs", `{"goal":"x","dir":"/tmp"}`},
 	} {
 		if w := g.do(c.m, c.p, &u, "", c.body); w.Code != 403 {
 			t.Errorf("%s : %d", c.p, w.Code)
 		}
 	}
-	for _, p := range []string{"/team?name=" + trName, "/teams-catalog", "/teams"} {
+	for _, p := range []string{"/v1/teams/" + trName + "/run", "/v1/teams/catalog", "/v1/teams"} {
 		if w := g.do("GET", p, &u, "", ""); w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" {
 			t.Errorf("%s : %d %q", p, w.Code, w.Header().Get("Cache-Control"))
 		}
@@ -48,9 +48,9 @@ func TestTeamsEditNeedsConfigWrite(t *testing.T) {
 	g, _ := teamsRig(t)
 	u := g.user(t, "lanceur", false)
 	g.grant(t, u, "", RightExec)
-	for _, p := range []string{"/teams-agent-save", "/teams-agent-rm", "/teams-team-save", "/teams-team-rm"} {
-		if w := g.do("POST", p, &u, "", `{}`); w.Code != 403 {
-			t.Errorf("%s : %d", p, w.Code)
+	for _, c := range [][2]string{{"PUT", "/v1/agents/x"}, {"DELETE", "/v1/agents/x"}, {"PUT", "/v1/teams/x"}, {"DELETE", "/v1/teams/x"}} {
+		if w := g.do(c[0], c[1], &u, "", `{}`); w.Code != 403 {
+			t.Errorf("%s : %d", c[1], w.Code)
 		}
 	}
 }
@@ -59,16 +59,16 @@ func TestTeamBadNameRejected(t *testing.T) {
 	g, f := teamsRig(t)
 	u := g.user(t, "admin", true)
 	g.grant(t, u, "", RightExec, RightSessionsRead)
-	for _, n := range []string{"../x", ""} {
+	for _, n := range []string{"a%2F..%2Fb", "a"} {
 		for _, c := range []struct{ m, p, body string }{
-			{"GET", "/team?name=" + n, ""},
-			{"GET", "/team-screen?agent=ada&name=" + n, ""},
-			{"POST", "/team-send", `{"name":"` + n + `","to":"ada","text":"x"}`},
-			{"POST", "/team-key", `{"name":"` + n + `","agent":"ada","key":"Enter"}`},
-			{"POST", "/team-close", `{"name":"` + n + `"}`},
+			{"GET", "/v1/teams/" + n + "/run", ""},
+			{"GET", "/v1/teams/" + n + "/run/screen?agent=ada", ""},
+			{"POST", "/v1/teams/" + n + "/run/messages", `{"to":"ada","text":"x"}`},
+			{"POST", "/v1/teams/" + n + "/run/keystrokes", `{"agent":"ada","key":"Enter"}`},
+			{"DELETE", "/v1/teams/" + n + "/run", ""},
 		} {
 			w := g.do(c.m, c.p, &u, "", c.body)
-			if w.Code != 400 || !strings.Contains(w.Body.String(), `"ok":false`) {
+			if w.Code != 400 || !strings.Contains(w.Body.String(), `"bad_name"`) {
 				t.Errorf("%s %q : %d %s", c.p, n, w.Code, w.Body)
 			}
 		}
@@ -82,8 +82,8 @@ func TestTeamSendUsesPrincipalName(t *testing.T) {
 	g, f := teamsRig(t)
 	u := g.user(t, "alice", false)
 	g.grant(t, u, "", RightExec)
-	w := g.do("POST", "/team-send", &u, "", `{"name":"`+trName+`","to":"ada","text":"salut","author":"mallory"}`)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), `"ok":true`) {
+	w := g.do("POST", "/v1/teams/"+trName+"/run/messages", &u, "", `{"to":"ada","text":"salut","author":"mallory"}`)
+	if w.Code != 200 {
 		t.Fatal(w.Code, w.Body)
 	}
 	d, _ := journalRead(g.cfg, trName)
@@ -93,7 +93,7 @@ func TestTeamSendUsesPrincipalName(t *testing.T) {
 	// Sans garde : mode mono-utilisateur.
 	mux := http.NewServeMux()
 	routesTeams(mux)
-	r := httptest.NewRequest("POST", "/team-send", strings.NewReader(`{"name":"`+trName+`","to":"ada","text":"b","author":"mallory"}`))
+	r := httptest.NewRequest("POST", "/v1/teams/"+trName+"/run/messages", strings.NewReader(`{"to":"ada","text":"b","author":"mallory"}`))
 	mux.ServeHTTP(httptest.NewRecorder(), r)
 	d, _ = journalRead(g.cfg, trName)
 	if len(d) != 2 || d[1].Author != "local" {
@@ -102,7 +102,7 @@ func TestTeamSendUsesPrincipalName(t *testing.T) {
 }
 
 func TestTeamsPassiveRoutes(t *testing.T) {
-	for _, p := range []string{"GET /team", "GET /teams"} {
+	for _, p := range []string{"GET /v1/teams/{team}/run", "GET /v1/teams"} {
 		if !passiveRoutes[p] {
 			t.Errorf("%s non passive", p)
 		}
@@ -117,14 +117,13 @@ func TestTeamsLaunchConflictShape(t *testing.T) {
 	// Un agent perso homonyme sans marqueur : conflit avant tout lancement.
 	os.MkdirAll(filepath.Join(g.cfg, "agents"), 0o755)
 	os.WriteFile(filepath.Join(g.cfg, "agents", "backend.md"), []byte("---\nname: backend\n---\nmien\n"), 0o644)
-	w := g.do("POST", "/teams-launch", &u, "", `{"teamIds":["feature"],"goal":"x","dir":"`+t.TempDir()+`"}`)
+	w := g.do("POST", "/v1/teams/feature/runs", &u, "", `{"goal":"x","dir":"`+t.TempDir()+`"}`)
 	var out struct {
-		Ok  bool
-		Out string
-		Run Run
+		Error struct{ Code, Message string }
+		Run   Run
 	}
 	json.Unmarshal(w.Body.Bytes(), &out)
-	if out.Ok || out.Out == "" || len(out.Run.Conflicts) != 1 || out.Run.Conflicts[0] != "backend" {
+	if w.Code != 409 || out.Error.Code != "conflict" || len(out.Run.Conflicts) != 1 || out.Run.Conflicts[0] != "backend" {
 		t.Fatalf("%d %s", w.Code, w.Body)
 	}
 }
@@ -133,17 +132,17 @@ func TestTeamsRightsMatrix(t *testing.T) {
 	g, _ := teamsRig(t)
 	cw := g.user(t, "editeur", false)
 	g.grant(t, cw, "", RightConfigWrite)
-	if w := g.do("POST", "/teams-agent-rm", &cw, "", `{"id":"x"}`); w.Code == 403 {
+	if w := g.do("DELETE", "/v1/agents/x", &cw, "", ``); w.Code == 403 {
 		t.Errorf("config_write refusé : %d", w.Code)
 	}
 	rd := g.user(t, "lecteur", false)
 	g.grant(t, rd, "", RightSessionsRead)
-	for _, p := range []string{"/teams-agent-save", "/teams-agent-rm", "/teams-team-save", "/teams-team-rm"} {
-		if w := g.do("POST", p, &rd, "", `{}`); w.Code != 403 {
-			t.Errorf("%s : %d", p, w.Code)
+	for _, c := range [][2]string{{"PUT", "/v1/agents/x"}, {"DELETE", "/v1/agents/x"}, {"PUT", "/v1/teams/x"}, {"DELETE", "/v1/teams/x"}} {
+		if w := g.do(c[0], c[1], &rd, "", `{}`); w.Code != 403 {
+			t.Errorf("%s : %d", c[1], w.Code)
 		}
 	}
-	if w := g.do("GET", "/team-screen?name="+trName+"&agent=ada", &rd, "", ""); w.Code != 200 {
+	if w := g.do("GET", "/v1/teams/"+trName+"/run/screen?agent=ada", &rd, "", ""); w.Code != 200 {
 		t.Errorf("team-screen : %d", w.Code)
 	}
 }
@@ -153,7 +152,7 @@ func TestTeamSendBearerIsToken(t *testing.T) {
 	old := tokenPrincipal
 	tokenPrincipal = func(*http.Request) *Principal { return &Principal{Token: true, MFA: true} }
 	t.Cleanup(func() { tokenPrincipal = old })
-	r := g.req("POST", "/team-send", nil, "", `{"name":"`+trName+`","to":"ada","text":"x"}`)
+	r := g.req("POST", "/v1/teams/"+trName+"/run/messages", nil, "", `{"to":"ada","text":"x"}`)
 	r.Header.Set("Authorization", "Bearer abc")
 	w := httptest.NewRecorder()
 	g.h.ServeHTTP(w, r)
@@ -165,7 +164,7 @@ func TestTeamSendBearerIsToken(t *testing.T) {
 
 func TestAuthorHonoursHeaderOnlyWithChildToken(t *testing.T) {
 	mk := func(tok string) *http.Request {
-		r := httptest.NewRequest("POST", "/team-send", nil)
+		r := httptest.NewRequest("POST", "/v1/teams/"+trName+"/run/messages", nil)
 		r.Header.Set(userHeader, "bob\x07"+strings.Repeat("é", 80))
 		if tok != "" {
 			r.Header.Set(childHeader, tok)
@@ -234,15 +233,14 @@ func TestTeamsComposeDedup(t *testing.T) {
 		t.Skip("catalogue vide")
 	}
 	id := cat.Teams[0].ID
-	w1 := g.do("POST", "/teams-compose", &u, "", `{"teamIds":["`+id+`"]}`)
-	w2 := g.do("POST", "/teams-compose", &u, "", `{"teamIds":["`+id+`","`+id+`"]}`)
+	w1 := g.do("POST", "/v1/teams/compositions", &u, "", `{"teamIds":["`+id+`"]}`)
+	w2 := g.do("POST", "/v1/teams/compositions", &u, "", `{"teamIds":["`+id+`","`+id+`"]}`)
 	var a, b struct {
-		Ok    bool
 		Mates []Agent
 	}
 	json.Unmarshal(w1.Body.Bytes(), &a)
 	json.Unmarshal(w2.Body.Bytes(), &b)
-	if !a.Ok || !b.Ok || len(a.Mates) != len(b.Mates) {
+	if w1.Code != 200 || w2.Code != 200 || len(a.Mates) != len(b.Mates) {
 		t.Fatalf("%s / %s", w1.Body, w2.Body)
 	}
 }
@@ -252,19 +250,36 @@ func TestRoutesRunMatesShape(t *testing.T) {
 	fakeLaunchEnv(t)
 	u := g.user(t, "admin", true)
 	g.grant(t, u, "", RightExec)
-	w := g.do("POST", "/teams-launch", &u, "", `{"teamIds":["feature"],"goal":"x","dir":"`+t.TempDir()+`"}`)
+	w := g.do("POST", "/v1/teams/feature/runs", &u, "", `{"goal":"x","dir":"`+t.TempDir()+`"}`)
 	var out struct {
-		Ok  bool
-		Run struct{ Mates []map[string]any }
+		Mates []map[string]any
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || !out.Ok || len(out.Run.Mates) == 0 {
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || w.Code != 201 || len(out.Mates) == 0 {
 		t.Fatalf("%v %s", err, w.Body)
 	}
-	for _, m := range out.Run.Mates {
+	for _, m := range out.Mates {
 		id, _ := m["ID"].(string)
 		nm, _ := m["Name"].(string)
 		if len(m) != 2 || id == "" || nm == "" {
 			t.Errorf("forme : %v", m)
 		}
+	}
+}
+
+func TestTeamsAgentCreateAndRemove(t *testing.T) {
+	g, _ := teamsRig(t)
+	u := g.user(t, "editeur", true)
+	g.grant(t, u, "", RightConfigWrite)
+	w := g.do("PUT", "/v1/agents/new", &u, "", `{"Name":"zed","Role":"qa","Access":"read"}`)
+	var a Agent
+	json.Unmarshal(w.Body.Bytes(), &a)
+	if w.Code != 201 || a.ID == "" || a.ID == "new" {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	if w := g.do("DELETE", "/v1/agents/"+a.ID, &u, "", ""); w.Code != 204 {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	if w := g.do("DELETE", "/v1/agents/"+a.ID, &u, "", ""); w.Code != 400 || !strings.Contains(w.Body.String(), `"error"`) {
+		t.Fatalf("%d %s", w.Code, w.Body)
 	}
 }

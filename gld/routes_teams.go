@@ -1,8 +1,6 @@
 package main
 
 import (
-	"encoding/json"
-	"io"
 	"net/http"
 	"strings"
 	"unicode"
@@ -44,40 +42,30 @@ func teamAuthor(r *http.Request) string {
 }
 
 func routesTeams(mux *http.ServeMux) {
-	reply := func(w http.ResponseWriter, code int, v map[string]any) {
+	reply := func(w http.ResponseWriter, code int, v any) {
 		w.Header().Set("Cache-Control", "no-store")
 		writeJSON(w, code, v)
 	}
 	fail := func(w http.ResponseWriter, err error) {
-		reply(w, 200, map[string]any{"ok": false, "out": err.Error()})
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 	}
-	bad := func(w http.ResponseWriter) {
-		reply(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
-	}
-	// body décode le JSON ; name (si non nil) reçoit un nom d'équipe déjà validé.
-	body := func(w http.ResponseWriter, r *http.Request, v any) bool {
-		if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(v) != nil {
-			bad(w)
-			return false
-		}
-		return true
-	}
+	body := func(w http.ResponseWriter, r *http.Request, v any) bool { return decodeBody(w, r, v, 1<<16) }
 	okName := func(w http.ResponseWriter, name string) bool {
 		if !teamNameRe.MatchString(name) {
-			reply(w, 400, map[string]any{"ok": false, "out": L("srv.teams_run.nomInvalide")})
+			writeErr(w, http.StatusBadRequest, "bad_name", L("srv.teams_run.nomInvalide"))
 			return false
 		}
 		return true
 	}
-	mux.HandleFunc("GET /teams-catalog", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/teams/catalog", func(w http.ResponseWriter, r *http.Request) {
 		c, err := loadCatalog(cfgDir())
 		if err != nil {
 			fail(w, err)
 			return
 		}
-		reply(w, 200, map[string]any{"ok": true, "agents": c.Agents, "teams": c.Teams})
+		reply(w, 200, map[string]any{"agents": c.Agents, "teams": c.Teams})
 	})
-	mux.HandleFunc("POST /teams-compose", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /v1/teams/compositions", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ TeamIDs []string }
 		if !body(w, r, &req) {
 			return
@@ -92,13 +80,13 @@ func routesTeams(mux *http.ServeMux) {
 			fail(w, err)
 			return
 		}
-		reply(w, 200, map[string]any{"ok": true, "lead": lead, "mates": mates, "tooMany": tooMany})
+		reply(w, 200, map[string]any{"lead": lead, "mates": mates, "tooMany": tooMany})
 	})
-	mux.HandleFunc("GET /teams", func(w http.ResponseWriter, r *http.Request) {
-		reply(w, 200, map[string]any{"ok": true, "teams": teamList(cfgDir())})
+	mux.HandleFunc("GET /v1/teams", func(w http.ResponseWriter, r *http.Request) {
+		reply(w, 200, map[string]any{"teams": teamList(cfgDir())})
 	})
-	mux.HandleFunc("GET /team", func(w http.ResponseWriter, r *http.Request) {
-		name := r.URL.Query().Get("name")
+	mux.HandleFunc("GET /v1/teams/{team}/run", func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("team")
 		if !okName(w, name) {
 			return
 		}
@@ -107,10 +95,10 @@ func routesTeams(mux *http.ServeMux) {
 			fail(w, err)
 			return
 		}
-		reply(w, 200, map[string]any{"ok": true, "view": v})
+		reply(w, 200, v)
 	})
-	mux.HandleFunc("GET /team-screen", func(w http.ResponseWriter, r *http.Request) {
-		name := r.URL.Query().Get("name")
+	mux.HandleFunc("GET /v1/teams/{team}/run/screen", func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("team")
 		if !okName(w, name) {
 			return
 		}
@@ -119,97 +107,113 @@ func routesTeams(mux *http.ServeMux) {
 			fail(w, err)
 			return
 		}
-		reply(w, 200, map[string]any{"ok": true, "text": text})
+		reply(w, 200, map[string]any{"text": text})
 	})
-	mux.HandleFunc("POST /teams-launch", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /v1/teams/{team}/runs", func(w http.ResponseWriter, r *http.Request) {
 		var req LaunchReq
 		if !body(w, r, &req) {
 			return
 		}
+		if len(req.TeamIDs) == 0 {
+			req.TeamIDs = []string{r.PathValue("team")}
+		}
 		run, err := launchTeam(cfgDir(), req)
 		journal("teams-launch : %d équipe(s), objectif de %d caractères : %v", len(req.TeamIDs), utf8.RuneCountInString(req.Goal), errOr(err))
 		if err != nil {
-			reply(w, 200, map[string]any{"ok": false, "out": err.Error(), "run": run})
+			st, code := http.StatusBadRequest, "bad_request"
+			if len(run.Conflicts) > 0 {
+				st, code = http.StatusConflict, "conflict"
+			}
+			reply(w, st, map[string]any{"error": map[string]string{"code": code, "message": err.Error()}, "run": run})
 			return
 		}
-		reply(w, 200, map[string]any{"ok": true, "run": run})
+		reply(w, 201, run)
 	})
-	mux.HandleFunc("POST /team-send", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Name, To, Text string }
-		if !body(w, r, &req) || !okName(w, req.Name) {
+	mux.HandleFunc("POST /v1/teams/{team}/run/messages", func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("team")
+		var req struct{ To, Text string }
+		if !okName(w, name) || !body(w, r, &req) {
 			return
 		}
-		queued, err := teamSend(cfgDir(), req.Name, teamAuthor(r), req.To, req.Text)
-		journal("team-send %s -> %s (%d caractères) : %v", req.Name, req.To, utf8.RuneCountInString(req.Text), errOr(err))
+		queued, err := teamSend(cfgDir(), name, teamAuthor(r), req.To, req.Text)
+		journal("team-send %s -> %s (%d caractères) : %v", name, req.To, utf8.RuneCountInString(req.Text), errOr(err))
 		if err != nil {
 			fail(w, err)
 			return
 		}
-		reply(w, 200, map[string]any{"ok": true, "queued": queued})
+		reply(w, 200, map[string]any{"queued": queued})
 	})
-	mux.HandleFunc("POST /team-key", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Name, Agent, Key, Expect string }
-		if !body(w, r, &req) || !okName(w, req.Name) {
+	mux.HandleFunc("POST /v1/teams/{team}/run/keystrokes", func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("team")
+		var req struct{ Agent, Key, Expect string }
+		if !okName(w, name) || !body(w, r, &req) {
 			return
 		}
-		err := teamKey(cfgDir(), req.Name, req.Agent, req.Key, req.Expect)
-		journal("team-key %s -> %s : %v", req.Name, req.Agent, errOr(err))
+		err := teamKey(cfgDir(), name, req.Agent, req.Key, req.Expect)
+		journal("team-key %s -> %s : %v", name, req.Agent, errOr(err))
 		if err != nil {
 			fail(w, err)
 			return
 		}
-		reply(w, 200, map[string]any{"ok": true})
+		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("POST /team-close", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Name string }
-		if !body(w, r, &req) || !okName(w, req.Name) {
+	mux.HandleFunc("DELETE /v1/teams/{team}/run", func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("team")
+		if !okName(w, name) {
 			return
 		}
-		err := teamClose(cfgDir(), req.Name)
-		journal("team-close %s : %v", req.Name, errOr(err))
+		err := teamClose(cfgDir(), name)
+		journal("team-close %s : %v", name, errOr(err))
 		if err != nil {
 			fail(w, err)
 			return
 		}
-		reply(w, 200, map[string]any{"ok": true})
+		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("POST /teams-agent-save", func(w http.ResponseWriter, r *http.Request) {
+	// « new » à la place de l'id crée l'entrée : l'id est attribué par le serveur.
+	mux.HandleFunc("PUT /v1/agents/{agent}", func(w http.ResponseWriter, r *http.Request) {
 		var a Agent
 		if !body(w, r, &a) {
 			return
+		}
+		a.ID = r.PathValue("agent")
+		code := 200
+		if a.ID == "new" {
+			a.ID, code = "", 201
 		}
 		a, err := saveAgent(cfgDir(), a)
 		if err != nil {
 			fail(w, err)
 			return
 		}
-		reply(w, 200, map[string]any{"ok": true, "agent": a})
+		reply(w, code, a)
 	})
-	mux.HandleFunc("POST /teams-team-save", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("PUT /v1/teams/{team}", func(w http.ResponseWriter, r *http.Request) {
 		var t Team
 		if !body(w, r, &t) {
 			return
+		}
+		t.ID = r.PathValue("team")
+		code := 200
+		if t.ID == "new" {
+			t.ID, code = "", 201
 		}
 		t, err := saveTeam(cfgDir(), t)
 		if err != nil {
 			fail(w, err)
 			return
 		}
-		reply(w, 200, map[string]any{"ok": true, "team": t})
+		reply(w, code, t)
 	})
-	rm := func(del func(string, string) error) http.HandlerFunc {
+	rm := func(key string, del func(string, string) error) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			var req struct{ ID string }
-			if !body(w, r, &req) {
-				return
-			}
-			if err := del(cfgDir(), req.ID); err != nil {
+			if err := del(cfgDir(), r.PathValue(key)); err != nil {
 				fail(w, err)
 				return
 			}
-			reply(w, 200, map[string]any{"ok": true})
+			w.WriteHeader(http.StatusNoContent)
 		}
 	}
-	mux.HandleFunc("POST /teams-agent-rm", rm(removeAgent))
-	mux.HandleFunc("POST /teams-team-rm", rm(removeTeam))
+	mux.HandleFunc("DELETE /v1/agents/{agent}", rm("agent", removeAgent))
+	mux.HandleFunc("DELETE /v1/teams/{team}", rm("team", removeTeam))
 }
