@@ -51,11 +51,13 @@ function useNow(active: boolean) {
   return now
 }
 
-// Les états génériques (réflexion, travail) changent de verbe toutes les 6 s, l'un après l'autre, décalés d'une session à l'autre ;
-// un outil en cours ou une attente se lisent tels quels.
+// Les états génériques (réflexion, travail) et les outils en cours tirent une formule au hasard toutes les 6 s : le tirage dépend
+// de la tranche de 6 s et de la session, donc il est stable entre deux rendus et diffère d'une session à l'autre.
 function rotate(list: string[], id: string, now: number) {
-  const seed = [...id].reduce((n, c) => n + c.charCodeAt(0), 0)
-  return list[(Math.floor(now / 6) + seed) % list.length] + "…"
+  let h = [...id].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, Math.floor(now / 6) >>> 0)
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b)
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b)
+  return list[((h ^ (h >>> 16)) >>> 0) % list.length] + "…"
 }
 
 function label(st: LiveState, id: string, now: number) {
