@@ -108,8 +108,12 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
   }
   // Une entrée de mémoire, citée telle quelle ; il reste à écrire la demande à la suite.
   const insertMemory = async (f: MemFile, scope: string) => {
-    const r = await api.memoryFile(f.key)
-    if (r.text === undefined) return void toast.error(r.error ?? tr("conversation.compose.memoryUnreadable"))
+    let r
+    try {
+      r = await api.memoryFile(f.key)
+    } catch {
+      return void toast.error(tr("conversation.compose.memoryUnreadable"))
+    }
     const fence = r.text.includes("```") ? "~~~~" : "```"
     const where = f.key.startsWith("m/") ? tr("conversation.compose.memoryScope", { scope, name: f.name }) : `${scope}/${f.name}`
     put(`${tr("conversation.compose.memoryIntro", { where })}\n\n${fence}markdown\n${r.text.trim()}\n${fence}\n\n`)

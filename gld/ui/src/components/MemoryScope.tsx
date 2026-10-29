@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { api, type MemFile, type MemProject } from "@/lib/api"
+import { errMsg } from "@/lib/apiError"
 import { tilde } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,7 +41,10 @@ export function ScopeBar({ file, projects, home, onSaved }: { file: MemFile; pro
   useEffect(() => {
     if (!scoped || !dir) return
     let live = true
-    api.memoryMatches(file.key, dir).then((r) => live && setRes(r))
+    api.memoryMatches(file.key, dir).then(
+      (r) => live && setRes(r),
+      (e) => live && setRes({ error: errMsg(e) })
+    )
     return () => {
       live = false
     }
@@ -48,10 +52,13 @@ export function ScopeBar({ file, projects, home, onSaved }: { file: MemFile; pro
 
   const save = async () => {
     setBusy(true)
-    const r = await api.post("/memory-paths", { key: file.key, paths: wanted })
+    try {
+      await api.memoryPaths(file.key, wanted)
+      onSaved()
+    } catch (e) {
+      setRes({ error: errMsg(e) })
+    }
     setBusy(false)
-    if (r.ok) onSaved()
-    else setRes({ error: r.out })
   }
   return (
     <div className="space-y-2 border-b bg-muted/30 px-6 py-2 text-xs">

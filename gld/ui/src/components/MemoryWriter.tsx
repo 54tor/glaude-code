@@ -3,6 +3,7 @@ import { LoaderPinwheel, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { api, type MemFile } from "@/lib/api"
+import { errMsg } from "@/lib/apiError"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -63,14 +64,14 @@ function Form({
   const run = async () => {
     if (!instruction.trim() || busy) return
     setBusy(true)
-    const r = (await api.post("/memory-draft", {
-      model,
-      instruction,
-      key: target.kind === "rewrite" ? target.key : "",
-      refs: [...on],
-    })) as { ok: boolean; out: string; text?: string; cost?: number }
+    let r
+    try {
+      r = await api.memoryDraft({ model, instruction, key: target.kind === "rewrite" ? target.key : "", refs: [...on] })
+    } catch (e) {
+      return void (setBusy(false), toast.error(errMsg(e)))
+    }
     setBusy(false)
-    if (!r.ok || !r.text) return void toast.error(r.out)
+    if (!r.text) return void toast.error(r.message)
     toast.success(t("memory.writer.draftReady"), { description: r.cost ? t("memory.writer.cost", { cost: r.cost.toFixed(4) }) : undefined })
     onClose()
     onDraft(target, r.text)

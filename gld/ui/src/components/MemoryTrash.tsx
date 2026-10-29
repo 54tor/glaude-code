@@ -70,7 +70,10 @@ export function TrashViewer({
   useEffect(() => {
     if (!diff || !key) return
     let live = true
-    api.memoryFile(key).then((r) => live && setCurrent(r.text ?? ""))
+    api.memoryFile(key).then(
+      (r) => live && setCurrent(r.text),
+      () => live && setCurrent("")
+    )
     return () => {
       live = false
     }

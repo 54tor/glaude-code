@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { useLocal } from "@/hooks/useLocal"
-import { api, type Finding, type MemFile, type Trashed } from "@/lib/api"
+import { api, type MemFile, type Trashed } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"
 import { tilde } from "@/lib/format"
 import { withChoice } from "@/lib/models"
@@ -27,7 +27,7 @@ import { Prompt, type Ask as PromptAsk } from "./Prompt"
 import { MemoryWriter, type WriteTarget } from "./MemoryWriter"
 import { useMemoryData } from "./useMemoryData"
 import { useEditorDraft, useLeaveGuard } from "@/hooks/useEditorDraft"
-import { reportAction, reportResult } from "@/lib/report"
+import { reportAction } from "@/lib/report"
 
 // Mémoire de Claude : globale (CLAUDE.md, rules/) et par projet (memory/, CLAUDE.md et AGENTS.md du projet), lecture et édition.
 export function Memory({
@@ -82,7 +82,7 @@ export function Memory({
     if (sel && !inTrash)
       api.memoryFile(sel).then(
         // l'utilisateur a pu ouvrir un autre fichier pendant la lecture : on ne rafraîchit que celui qui est encore affiché
-        (r) => r.text !== undefined && setLoaded((l) => (l?.key !== sel || l.text === r.text ? l : { key: sel, text: r.text! })),
+        (r) => setLoaded((l) => (l?.key !== sel || l.text === r.text ? l : { key: sel, text: r.text })),
         () => {}
       )
   })
@@ -114,7 +114,7 @@ export function Memory({
     const t = q.trim()
     if (t.length < 2) return
     let live = true
-    const h = setTimeout(() => api.memorySearch(t).then((r) => live && setHits({ q: t, keys: new Set(Object.keys(r.hits)) })), 250)
+    const h = setTimeout(() => api.memorySearch(t).then((r) => live && setHits({ q: t, keys: new Set(Object.keys(r.hits)) }), () => {}), 250)
     return () => {
       live = false
       clearTimeout(h)
@@ -136,7 +136,7 @@ export function Memory({
     const m = /^(m\/[^/]+|r\/[^/]+|g\/rules)\/[^/]+$/.exec(sel)
     const scopeOf = (p: string) => (p === "g/rules" ? "global" : p[0] === "r" ? "r:" + p.slice(2) : p.slice(2))
     const key = !file && m ? newKey(all, scopeOf(m[1]), editing.text) : sel
-    if (reportResult(await api.post("/memory-save", { key, text: editing.text, index: !file }))) {
+    if (await reportAction(() => api.memorySave(key, editing.text, !file))) {
       setLoaded({ key, text: editing.text })
       setDraft(null)
       if (key !== sel) onPick(key)
@@ -161,7 +161,7 @@ export function Memory({
     const key = tg.kind === "rewrite" ? tg.key : newKey(all, tg.scope, body)
     if (tg.kind === "rewrite") {
       // Un brouillon identique au fichier n'a rien à enregistrer : on le dit plutôt que d'ouvrir un éditeur sans changement.
-      const cur = (await api.memoryFile(key)).text
+      const cur = await api.memoryFile(key).then((r) => r.text, () => undefined)
       if (cur !== undefined && cur.trimEnd() === body.trimEnd()) return void toast.info(t("memory.main.haikuSame"))
     }
     setDraft({ key, text: body })
@@ -182,42 +182,60 @@ export function Memory({
       confirm: t("memory.fileMenu.rename"),
       run: async (name) => {
         if (name === x.name) return true
-        const r = (await api.post("/memory-rename", { key: x.key, name })) as { ok: boolean; out: string; key?: string }
-        if (reportResult(r) && r.key) {
+        let nk = ""
+        const ok = await reportAction(async () => {
+          const r = await api.memoryRename(x.key, name)
+          nk = r.key
+          return r
+        })
+        if (ok) {
           refresh()
-          if (x.key === sel) onPick(r.key)
+          if (x.key === sel) onPick(nk)
         }
-        return !!r.ok
+        return ok
       },
     })
   const move = async (key: string, to: string, copyIt = false) => {
-    const r = (await api.post("/memory-move", { key, to, copy: copyIt })) as { ok: boolean; out: string; key?: string }
-    if (reportResult(r) && r.key) {
+    let nk = ""
+    const ok = await reportAction(async () => {
+      const r = await api.memoryMove(key, to, copyIt)
+      nk = r.key
+      return r
+    })
+    if (ok) {
       refresh()
-      if (key === sel && !copyIt) onPick(r.key)
+      if (key === sel && !copyIt) onPick(nk)
     }
   }
   // Règle globale désactivée : fichier renommé en .md.off, Claude ne la charge plus.
   const toggleRule = async (key: string) => {
-    const r = (await api.post("/memory-toggle", { key })) as { ok: boolean; out: string; key?: string }
-    if (reportResult(r) && r.key) {
+    let nk = ""
+    const ok = await reportAction(async () => {
+      const r = await api.memoryToggle(key, key.endsWith(".off"))
+      nk = r.key
+      return r
+    })
+    if (ok) {
       refresh()
-      if (key === sel) onPick(r.key)
+      if (key === sel) onPick(nk)
     }
   }
   const setType = async (key: string, type: string) => {
-    if (reportResult(await api.post("/memory-type", { key, type }))) {
+    if (await reportAction(() => api.memoryType(key, type))) {
       await refresh()
-      if (key === sel) setLoaded({ key, text: (await api.memoryFile(key)).text ?? "" })
+      if (key === sel) setLoaded({ key, text: await api.memoryFile(key).then((r) => r.text, () => "") })
     }
   }
   const fix = async (keys: string[]) => {
     let ok = 0
     const fails: string[] = []
     for (const key of keys) {
-      const r = (await api.post("/memory-fix", { key })) as { ok: boolean; out: string }
-      if (r.ok) ok++
-      else fails.push(`${key} : ${r.out}`)
+      try {
+        await api.memoryFix(key)
+        ok++
+      } catch (e) {
+        fails.push(`${key} : ${errMsg(e)}`)
+      }
     }
     if (fails.length)
       toast.error(t("memory.main.fixPartial", { done: t("memory.main.fixedCount", { count: ok }), failed: t("memory.main.failCount", { count: fails.length }), first: fails[0] }))
@@ -225,7 +243,7 @@ export function Memory({
     refresh()
   }
   const repair = async (dir: string) => {
-    reportResult(await api.post("/memory-repair", { dir }))
+    await reportAction(() => api.memoryRepair(dir))
     refresh()
   }
   const remove = (x: MemFile) =>
@@ -234,7 +252,7 @@ export function Memory({
       body: x.key.startsWith("m/") ? t("memory.main.deleteBodyMemory") : t("memory.main.deleteBodyFile"),
       confirm: t("common.delete"),
       run: async () => {
-        if (reportResult(await api.post("/memory-rm", { key: x.key }))) {
+        if (await reportAction(() => api.memoryRemove([x.key]))) {
           if (x.key === sel) onPick("")
           refresh()
         }
@@ -250,9 +268,12 @@ export function Memory({
         let ok = 0
         const fails: string[] = []
         for (const key of keys) {
-          const r = await api.post("/memory-rm", { key })
-          if (r.ok) ok++
-          else fails.push(r.out)
+          try {
+            await api.memoryRemove([key])
+            ok++
+          } catch (e) {
+            fails.push(errMsg(e))
+          }
         }
         if (fails.length)
           toast.error(t("memory.main.fixPartial", { done: t("memory.main.removedCount", { count: ok }), failed: t("memory.main.failCount", { count: fails.length }), first: fails[0] }))
@@ -263,16 +284,22 @@ export function Memory({
       },
     })
   const copyContent = async (x: MemFile) => {
-    const r = await api.memoryFile(x.key)
-    if (r.text === undefined) return void toast.error(r.error ?? t("memory.main.unreadable"))
-    copy(r.text, "memory.lib.copiedContent")
+    try {
+      copy((await api.memoryFile(x.key)).text, "memory.lib.copiedContent")
+    } catch (e) {
+      toast.error(errMsg(e))
+    }
   }
   // Fusion par Claude : le serveur rédige le prompt ; on le copie, ou on l'ouvre dans la fenêtre de saisie (relecture, modèle) avant de lancer la session.
   const merge = async (launch: boolean) => {
     const keys = [...picked]
-    const draft = async (out?: string) => (await api.post("/memory-merge", { keys, out, launch: false })) as { ok: boolean; out: string; prompt?: string }
-    const r = await draft()
-    if (!r.ok || !r.prompt) return void toast.error(r.out.trim() || t("memory.main.failed"))
+    const draft = (out?: string) => api.memoryMerge({ keys, out, launch: false })
+    let r
+    try {
+      r = await draft()
+    } catch (e) {
+      return void toast.error(errMsg(e).trim() || t("memory.main.failed"))
+    }
     if (!launch) return void copy(r.prompt, "memory.lib.copiedMergePrompt")
     onCompose({
       id: "merge:" + keys.join(","),
@@ -290,15 +317,22 @@ export function Memory({
         ),
       ].filter((o, i, a) => a.findIndex((x) => x.key === o.key) === i),
       reprompt: async (out) => {
-        const d = await draft(out)
-        if (!d.ok || !d.prompt) return void toast.error(d.out.trim() || t("memory.main.failed"))
-        return d.prompt
+        try {
+          return (await draft(out)).prompt
+        } catch (e) {
+          return void toast.error(errMsg(e).trim() || t("memory.main.failed"))
+        }
       },
       run: async (text, c, _t, out) => {
-        const m = (await api.post("/memory-merge", { keys, out, launch: true, prompt: text, args: withChoice(args, c) })) as { ok: boolean; out: string }
-        ;(m.ok ? toast.success : toast.error)(m.out.trim() || (m.ok ? t("memory.main.mergeStarted") : t("memory.main.failed")))
-        if (m.ok) setPicked(new Set())
-        return m.ok
+        try {
+          const m = await api.memoryMerge({ keys, out, launch: true, prompt: text, args: withChoice(args, c) })
+          toast.success(m.message.trim() || t("memory.main.mergeStarted"))
+          setPicked(new Set())
+          return true
+        } catch (e) {
+          toast.error(errMsg(e).trim() || t("memory.main.failed"))
+          return false
+        }
       },
     })
   }
@@ -309,9 +343,13 @@ export function Memory({
     let cost = 0
     let failed = ""
     for (let i = 0; i < keys.length; i += 4) {
-      const r = (await api.post("/memory-tokens", { keys: keys.slice(i, i + 4) })) as { out?: string; cost?: number; errors?: Record<string, string> }
-      cost += r.cost ?? 0
-      failed ||= Object.values(r.errors ?? {})[0] ?? r.out ?? ""
+      try {
+        const r = await api.memoryTokens(keys.slice(i, i + 4))
+        cost += r.cost
+        failed ||= Object.values(r.errors)[0] ?? ""
+      } catch (e) {
+        failed ||= errMsg(e)
+      }
       await refresh()
     }
     ;(failed ? toast.error : toast.success)(failed ? t("memory.main.countFailed", { error: failed }) : t("memory.main.counted", { cost: cost.toFixed(4) }), { id })
@@ -546,8 +584,11 @@ export function Memory({
         onFix={fix}
         scopes={[["global", t("memory.main.scopeGlobal")], ...(list?.projects ?? []).filter((p) => p.files.some((x) => x.key.startsWith("m/"))).map((p) => [p.dir, tilde(p.project, homeDir)] as const)]}
         onLint={async (scope) => {
-          const r = (await api.post("/memory-lint", { scope })) as { ok: boolean; out?: string; findings?: Finding[]; cost?: number }
-          return r.ok ? { findings: r.findings, cost: r.cost } : { error: r.out, cost: r.cost }
+          try {
+            return await api.memoryLint(scope)
+          } catch (e) {
+            return { error: errMsg(e) }
+          }
         }}
       />
       <Prompt ask={prompt} onClose={() => setPrompt(null)} />

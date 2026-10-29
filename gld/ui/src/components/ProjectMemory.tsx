@@ -5,6 +5,7 @@ import { BookOpen, Brain, ChevronRight, ClipboardCopy, Copy, FileText, Globe, Li
 import { useLocation } from "wouter"
 import { toast } from "sonner"
 import { api, type MemFile } from "@/lib/api"
+import { errMsg } from "@/lib/apiError"
 import { href } from "@/lib/route"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -14,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { TYPES, typeOf } from "./MemoryTypes"
 import { Markdown } from "./Message"
 import { copy, movable, split } from "./memoryLib"
-import { reportResult } from "@/lib/report"
+import { reportAction } from "@/lib/report"
 
 const icon = (key: string) => (key.startsWith("m/") ? Brain : key.startsWith("r/") ? ScrollText : FileText)
 
@@ -32,13 +33,7 @@ function EditDialog({ file, edit, onClose, onSaved }: { file: MemFile; edit: boo
   useEffect(() => {
     let live = true
     api.memoryFile(file.key).then(
-      (r) => {
-        if (!live) return
-        if (r.text === undefined) {
-          toast.error(r.error ?? i18n.t("memory.main.unreadable"))
-          close.current()
-        } else setText(r.text)
-      },
+      (r) => live && setText(r.text),
       () => live && (toast.error(i18n.t("memory.main.unreadable")), close.current())
     )
     return () => {
@@ -48,7 +43,7 @@ function EditDialog({ file, edit, onClose, onSaved }: { file: MemFile; edit: boo
   const save = async () => {
     if (text === null) return
     setBusy(true)
-    const ok = reportResult(await api.post("/memory-save", { key: file.key, text }))
+    const ok = await reportAction(() => api.memorySave(file.key, text))
     setBusy(false)
     if (ok) {
       onSaved()
@@ -139,17 +134,19 @@ export function ProjectMemory({ dir }: { dir: string }) {
   const tokens = files.filter((f) => f.always).reduce((n, f) => n + f.tokens, 0)
   const sorted = [...files].sort((a, b) => +!!b.always - +!!a.always || a.name.localeCompare(b.name, loc()))
 
-  const setType = async (f: MemFile, type: string) => reportResult(await api.post("/memory-type", { key: f.key, type })) && refresh()
-  const toGlobal = async (f: MemFile, copyIt: boolean) => reportResult((await api.post("/memory-move", { key: f.key, to: "global", copy: copyIt })) as { ok: boolean; out: string }) && refresh()
+  const setType = async (f: MemFile, type: string) => (await reportAction(() => api.memoryType(f.key, type))) && refresh()
+  const toGlobal = async (f: MemFile, copyIt: boolean) => (await reportAction(() => api.memoryMove(f.key, "global", copyIt))) && refresh()
   const copyContent = async (f: MemFile) => {
-    const r = await api.memoryFile(f.key)
-    if (r.text === undefined) return void toast.error(r.error ?? t("memory.main.unreadable"))
-    copy(r.text, "memory.lib.copiedContent")
+    try {
+      copy((await api.memoryFile(f.key)).text, "memory.lib.copiedContent")
+    } catch (e) {
+      toast.error(errMsg(e))
+    }
   }
   const remove = async () => {
     const f = removing
     setRemoving(null)
-    if (f && reportResult(await api.post("/memory-rm", { key: f.key }))) refresh()
+    if (f && (await reportAction(() => api.memoryRemove([f.key])))) refresh()
   }
   const canType = (f: MemFile) => f.key.startsWith("m/") && !f.key.endsWith("/MEMORY.md")
 
