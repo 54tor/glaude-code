@@ -181,7 +181,7 @@ func TestGuestNonWhitelistedForbidden(t *testing.T) {
 		{"GET", "//v1/sessions/" + id1 + "/conversation"}, {"GET", "/v1/sessions/" + id1 + "/conversation/"}, {"GET", "/v1/sessions/" + id1 + "/%63onversation"},
 		{"GET", "/v1/sessions/" + id1 + "/conversation/../../../state"}, {"POST", "/v1/sessions/" + id1 + "/conversation"}, {"GET", "/v1/sessions/" + id1 + "/queue/x"},
 		{"DELETE", "/v1/sessions/" + id1 + "/conversation"}, {"PUT", "/v1/sessions/" + id1 + "/process"}, {"DELETE", "/v1/sessions"}, {"GET", "/v1/sessions"},
-		{"GET", "/invite/../v1/state"}, {"GET", "/v1/sessions/" + id1 + "/screen"}, {"POST", "/fs-file"}, {"GET", "/fs-file?path=.env"}, {"GET", "/fs-tree?path=.git"}, {"GET", "/ide-search"},
+		{"GET", "/invite/../v1/state"}, {"GET", "/v1/sessions/" + id1 + "/screen"}, {"POST", "/v1/fs/entries/content"}, {"GET", "/v1/fs/entries/content?path=.env"}, {"GET", "/v1/fs/tree?path=.git"}, {"GET", "/ide-search"},
 	} {
 		w := gReq{method: rt[0], path: rt[1], body: `{"id":"` + id1 + `"}`, cookie: c, csrf: csrf}.do(h)
 		if w.Code != 403 || !strings.HasPrefix(w.Header().Get("Content-Type"), "application/json") {
@@ -1178,7 +1178,7 @@ func TestGuestFsEscapeNeverServed(t *testing.T) {
 	h := guestWeb(t, nil, modeTok)
 	c, csrf := guestIn(t, h)
 	for _, p := range []string{"/etc/passwd", "../x", "a/../../x", "%2e%2e/x"} {
-		w := gReq{method: "GET", path: "/fs-file?path=" + p, cookie: c, csrf: csrf}.do(h)
+		w := gReq{method: "GET", path: "/v1/fs/entries/content?path=" + p, cookie: c, csrf: csrf}.do(h)
 		if w.Code == 200 {
 			t.Errorf("%s : %d %s", p, w.Code, w.Body)
 		}

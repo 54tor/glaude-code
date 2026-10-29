@@ -191,6 +191,7 @@
   "srv.ide.tropGros": "File too large",
   "srv.ide.binaire": "Binary file",
   "srv.ide.conflit": "The file changed in the meantime",
+  "srv.ide.supprime": "The file was deleted in the meantime",
   "srv.ide.existeDeja": "Already exists",
   "srv.ide.erreur": "File access error",
   "srv.homes.dossierDeConfigurationChoisi": "Configuration folder selected",

@@ -39,7 +39,7 @@ func TestFsRenameTrashRefused(t *testing.T) {
 	mk(t, proj, "a.txt", "b.txt")
 	id := trashOne(t, h, proj, "b.txt")
 	for _, c := range [][2]string{{"a.txt", ideTrash + "/x"}, {ideTrash + "/" + id + "/item", "back.txt"}, {ideTrash, "t2"}, {"a.txt", ideTrash}} {
-		if code, _, raw := jpost(t, h, "/fs-rename", map[string]any{"dir": proj, "from": c[0], "to": c[1]}); code != 400 {
+		if code, _, raw := fsop(t, h, "rename", map[string]any{"dir": proj, "from": c[0], "to": c[1]}); code != 400 {
 			t.Errorf("%v : %d %s", c, code, raw)
 		}
 	}
@@ -59,8 +59,8 @@ func TestWatchRemovedDirNoGhosts(t *testing.T) {
 	if err := os.Rename(filepath.Join(proj, "d"), filepath.Join(t.TempDir(), "d")); err != nil {
 		t.Fatal(err)
 	}
-	until(t, "fantômes dans /fs-index", func() bool {
-		_, _, raw := call(t, h, "GET", "/fs-index?dir="+proj, "")
+	until(t, "fantômes dans /v1/fs/index", func() bool {
+		_, _, raw := call(t, h, "GET", "/v1/fs/index?dir="+proj, "")
 		return !strings.Contains(raw, `"d/`) && strings.Contains(raw, "keep.go")
 	})
 	cancel()
@@ -78,7 +78,7 @@ func TestWatchRemovedDirNoGhosts(t *testing.T) {
 
 func TestFsAuditBytesNotRunes(t *testing.T) {
 	a := newAuditRig(t)
-	if c := a.post("/fs-save", map[string]any{"path": "u.txt", "content": "ééé"}); c != 200 {
+	if c := a.post("save", map[string]any{"path": "u.txt", "content": "ééé"}); c != 200 {
 		t.Fatal(c)
 	}
 	a.want(t, "create "+filepath.Base(a.proj)+":u.txt 6")
@@ -87,7 +87,7 @@ func TestFsAuditBytesNotRunes(t *testing.T) {
 func TestFsTrashPurgeWithoutFrom(t *testing.T) {
 	a := newAuditRig(t)
 	mk(t, a.proj, "f.txt")
-	if c := a.post("/fs-rm", map[string]any{"path": "f.txt"}); c != 200 {
+	if c := a.post("rm", map[string]any{"path": "f.txt"}); c != 200 {
 		t.Fatal(c)
 	}
 	ents, _ := os.ReadDir(filepath.Join(a.proj, ideTrash))
@@ -98,7 +98,7 @@ func TestFsTrashPurgeWithoutFrom(t *testing.T) {
 		}
 	}
 	os.Remove(filepath.Join(a.proj, ideTrash, id, "from"))
-	if c := a.post("/fs-trash-purge", map[string]any{"id": id}); c != 200 {
+	if c := a.post("purge", map[string]any{"id": id}); c != 204 {
 		t.Fatal(c)
 	}
 	if _, err := os.Stat(filepath.Join(a.proj, ideTrash, id)); !errors.Is(err, os.ErrNotExist) {
@@ -128,7 +128,7 @@ func TestFsFilesSwappedForSymlink(t *testing.T) {
 	if !indexHas(ws, "a.go") {
 		t.Fatal("préalable : l'index devait garder a.go")
 	}
-	_, m, raw := jpost(t, h, "/fs-files", map[string]any{"dir": proj, "paths": []string{"a.go"}})
+	_, m, raw := fsop(t, h, "files", map[string]any{"dir": proj, "paths": []string{"a.go"}})
 	if len(m["files"].([]any)) != 0 || strings.Contains(raw, "SECRET") {
 		t.Fatal(raw)
 	}

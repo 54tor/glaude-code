@@ -113,7 +113,7 @@ func ideWS(dir string) (*ideWorkspace, error) {
 	return w, nil
 }
 
-// ideCloseAll ferme tous les espaces (arrêt du serveur, fin de test) : leurs flux /fs-watch se terminent.
+// ideCloseAll ferme tous les espaces (arrêt du serveur, fin de test) : leurs flux /v1/fs/watch se terminent.
 func ideCloseAll() {
 	ideWSMu.Lock()
 	defer ideWSMu.Unlock()
@@ -281,7 +281,7 @@ func (w *ideWorkspace) unwatchLocked(rel string) {
 	}
 }
 
-// lostLocked : des changements ont pu échapper ; les abonnés relisent et le prochain /fs-index reconstruit.
+// lostLocked : des changements ont pu échapper ; les abonnés relisent et le prochain /v1/fs/index reconstruit.
 func (w *ideWorkspace) lostLocked() {
 	w.ix = nil
 	w.gen++
@@ -533,7 +533,7 @@ func (w *ideWorkspace) applyLocked(evs []ideEvent) {
 	st := w.ix.state
 	old := w.ix.entries // trié : les descendants d'un dossier y forment une plage contiguë
 	added := map[string]bool{}
-	// ponytail: parcours sous verrou borné par ideTreeBudget et par lot ; un gros dossier déplacé fait attendre /fs-index d'autant
+	// ponytail: parcours sous verrou borné par ideTreeBudget et par lot ; un gros dossier déplacé fait attendre /v1/fs/index d'autant
 	deadline := time.Now().Add(ideTreeBudget)
 	for _, e := range evs {
 		if !ideIndexable(e.Path) {
@@ -636,7 +636,7 @@ func (w *ideWorkspace) Subscribe(paths []string) (<-chan ideEvent, func()) {
 }
 
 func routesIDEWatch(mux *http.ServeMux) {
-	mux.HandleFunc("GET /fs-watch", func(rw http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/fs/watch", func(rw http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		dir, ok := ideKnownDir(q.Get("dir"))
 		if !ok {

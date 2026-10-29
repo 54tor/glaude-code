@@ -115,7 +115,7 @@ func main() {
 		openHosts = true // hors localhost, le Host n'est plus limité : le jeton (mode ouvert) ou la session (comptes) protège du DNS-rebinding
 	}
 	srv := newServer(net.JoinHostPort(*listen, port), h)
-	srv.RegisterOnShutdown(ideCloseAll) // sinon un flux /fs-watch ouvert fait attendre Shutdown jusqu'à son délai
+	srv.RegisterOnShutdown(ideCloseAll) // sinon un flux /v1/fs/watch ouvert fait attendre Shutdown jusqu'à son délai
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	homeCtx = ctx

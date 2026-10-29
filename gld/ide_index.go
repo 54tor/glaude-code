@@ -124,7 +124,7 @@ func ideIndexGet(dir string) ideIdx {
 }
 
 func routesIDEIndex(mux *http.ServeMux) {
-	mux.HandleFunc("GET /fs-index", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/fs/index", func(w http.ResponseWriter, r *http.Request) {
 		dir, ok := ideKnownDir(r.URL.Query().Get("dir"))
 		if !ok {
 			ideFail(w, errIdeDir)
@@ -138,15 +138,15 @@ func routesIDEIndex(mux *http.ServeMux) {
 		writeJSON(w, 200, map[string]any{"state": ix.state, "files": files})
 	})
 
-	mux.HandleFunc("POST /fs-files", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /v1/fs/files", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
-			Dir   string   `json:"dir"`
 			Paths []string `json:"paths"`
 		}
 		if !ideBody(w, r, 64<<10, &in) {
 			return
 		}
-		root, err := ideOpenRoot(in.Dir)
+		dir := r.URL.Query().Get("dir")
+		root, err := ideOpenRoot(dir)
 		if err != nil {
 			ideFail(w, err)
 			return
@@ -157,7 +157,7 @@ func routesIDEIndex(mux *http.ServeMux) {
 			Content string `json:"content"`
 		}
 		out := []file{}
-		ix := ideIndexGet(in.Dir)
+		ix := ideIndexGet(dir)
 		if len(in.Paths) > ideFeedPaths {
 			in.Paths = in.Paths[:ideFeedPaths]
 		}

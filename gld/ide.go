@@ -47,7 +47,7 @@ func routesIDE(mux *http.ServeMux) {
 	routesIDEWrite(mux)
 	routesIDEIndex(mux)
 	routesIDEWatch(mux)
-	mux.HandleFunc("GET /fs-tree", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/fs/tree", func(w http.ResponseWriter, r *http.Request) {
 		root, rel, fi, err := ideResolve(r, true)
 		if err != nil {
 			ideFail(w, err)
@@ -104,7 +104,7 @@ func routesIDE(mux *http.ServeMux) {
 		writeJSON(w, 200, map[string]any{"entries": entries, "truncated": truncated})
 	})
 
-	mux.HandleFunc("GET /fs-file", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/fs/entries/content", func(w http.ResponseWriter, r *http.Request) {
 		root, rel, fi, err := ideResolve(r, false)
 		if err != nil {
 			ideFail(w, err)

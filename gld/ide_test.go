@@ -26,7 +26,7 @@ func TestFsTreeListsDirsFirst(t *testing.T) {
 	os.Mkdir(filepath.Join(proj, "Adir"), 0o755)
 	os.WriteFile(filepath.Join(proj, "b.txt"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(proj, "A.txt"), []byte("x"), 0o644)
-	code, m, raw := call(t, h, "GET", fsq("/fs-tree", proj, ""), "")
+	code, m, raw := call(t, h, "GET", fsq("/v1/fs/tree", proj, ""), "")
 	if code != 200 {
 		t.Fatal(code, raw)
 	}
@@ -34,11 +34,11 @@ func TestFsTreeListsDirsFirst(t *testing.T) {
 		t.Fatal(got, raw)
 	}
 	os.WriteFile(filepath.Join(proj, "Adir", "in.txt"), nil, 0o644)
-	_, m, _ = call(t, h, "GET", fsq("/fs-tree", proj, "Adir"), "")
+	_, m, _ = call(t, h, "GET", fsq("/v1/fs/tree", proj, "Adir"), "")
 	if got := strings.Join(names(m), ","); got != "file:in.txt" {
 		t.Fatal(got)
 	}
-	if c, _, _ := call(t, h, "GET", fsq("/fs-tree", proj, "b.txt"), ""); c != 400 {
+	if c, _, _ := call(t, h, "GET", fsq("/v1/fs/tree", proj, "b.txt"), ""); c != 400 {
 		t.Fatal("file as dir", c)
 	}
 }
@@ -50,15 +50,15 @@ func TestFsTreeSymlinkListedAsSymlink(t *testing.T) {
 	os.WriteFile(filepath.Join(proj, "plain.txt"), []byte("x"), 0o644)
 	os.Symlink("real", filepath.Join(proj, "lnkdir"))
 	os.Symlink("plain.txt", filepath.Join(proj, "lnkfile"))
-	_, m, raw := call(t, h, "GET", fsq("/fs-tree", proj, ""), "")
+	_, m, raw := call(t, h, "GET", fsq("/v1/fs/tree", proj, ""), "")
 	got := strings.Join(names(m), ",")
 	if !strings.Contains(got, "symlink:lnkdir") || !strings.Contains(got, "symlink:lnkfile") {
 		t.Fatal(got)
 	}
-	if c, _, _ := call(t, h, "GET", fsq("/fs-tree", proj, "lnkdir"), ""); c != 403 {
+	if c, _, _ := call(t, h, "GET", fsq("/v1/fs/tree", proj, "lnkdir"), ""); c != 403 {
 		t.Fatal("tree through link", c, raw)
 	}
-	if c, _, raw := call(t, h, "GET", fsq("/fs-file", proj, "lnkfile"), ""); c != 403 || strings.Contains(raw, "content") {
+	if c, _, raw := call(t, h, "GET", fsq("/v1/fs/entries/content", proj, "lnkfile"), ""); c != 403 || strings.Contains(raw, "content") {
 		t.Fatal("file through link", c, raw)
 	}
 }
@@ -71,7 +71,7 @@ func TestFsTreeTruncates(t *testing.T) {
 	for _, n := range []string{"a", "b", "c", "d", "e"} {
 		os.WriteFile(filepath.Join(proj, n), nil, 0o644)
 	}
-	_, m, _ := call(t, h, "GET", fsq("/fs-tree", proj, ""), "")
+	_, m, _ := call(t, h, "GET", fsq("/v1/fs/tree", proj, ""), "")
 	if len(m["entries"].([]any)) != 3 || m["truncated"] != true {
 		t.Fatal(m)
 	}
@@ -81,11 +81,11 @@ func TestFsFileRoundTrip(t *testing.T) {
 	h, _, proj := web(t)
 	os.MkdirAll(filepath.Join(proj, "d"), 0o755)
 	os.WriteFile(filepath.Join(proj, "d", "é.txt"), []byte("héllo"), 0o644)
-	_, m1, raw := call(t, h, "GET", fsq("/fs-file", proj, "d/é.txt"), "")
+	_, m1, raw := call(t, h, "GET", fsq("/v1/fs/entries/content", proj, "d/é.txt"), "")
 	if m1["content"] != "héllo" || m1["etag"] == "" || m1["size"].(float64) != 6 {
 		t.Fatal(raw)
 	}
-	_, m2, _ := call(t, h, "GET", fsq("/fs-file", proj, "d/é.txt"), "")
+	_, m2, _ := call(t, h, "GET", fsq("/v1/fs/entries/content", proj, "d/é.txt"), "")
 	if m1["etag"] != m2["etag"] {
 		t.Fatal("etag unstable")
 	}
@@ -106,8 +106,8 @@ func TestFsFileRefusals(t *testing.T) {
 		{proj, "../x", 400}, {proj, "/etc/passwd", 400}, {proj, "", 400}, {proj, "sub", 400},
 		{proj, "absent", 404}, {t.TempDir(), "x", 404},
 	} {
-		code, m, raw := call(t, h, "GET", fsq("/fs-file", c.dir, c.p), "")
-		if code != c.want || m["ok"] != false || strings.Contains(raw, proj) {
+		code, m, raw := call(t, h, "GET", fsq("/v1/fs/entries/content", c.dir, c.p), "")
+		if code != c.want || errCode(m) == "" || strings.Contains(raw, proj) {
 			t.Errorf("%q: %d %s", c.p, code, raw)
 		}
 	}
@@ -116,7 +116,7 @@ func TestFsFileRefusals(t *testing.T) {
 func TestFsFileCRLFExact(t *testing.T) {
 	h, _, proj := web(t)
 	os.WriteFile(filepath.Join(proj, "w.txt"), []byte("a\r\nb\r\n"), 0o644)
-	_, m, _ := call(t, h, "GET", fsq("/fs-file", proj, "w.txt"), "")
+	_, m, _ := call(t, h, "GET", fsq("/v1/fs/entries/content", proj, "w.txt"), "")
 	if m["content"] != "a\r\nb\r\n" {
 		t.Fatalf("%q", m["content"])
 	}
@@ -128,7 +128,7 @@ func TestFsReadRequiresFsRead(t *testing.T) {
 	g.grant(t, no, "", RightMemRead)
 	yes := g.user(t, "avec", false)
 	g.grant(t, yes, "", RightFsRead)
-	for _, p := range []string{"/fs-tree", "/fs-file"} {
+	for _, p := range []string{"/v1/fs/tree", "/v1/fs/entries/content"} {
 		if w := g.do("GET", p, &no, "", ""); w.Code != 403 {
 			t.Errorf("%s sans fs_read : %d", p, w.Code)
 		}
@@ -142,7 +142,7 @@ func TestFsTreeHidesDotGit(t *testing.T) {
 	h, _, proj := web(t)
 	os.Mkdir(filepath.Join(proj, ".git"), 0o755)
 	os.WriteFile(filepath.Join(proj, "a.txt"), []byte("x"), 0o644)
-	_, m, raw := call(t, h, "GET", fsq("/fs-tree", proj, ""), "")
+	_, m, raw := call(t, h, "GET", fsq("/v1/fs/tree", proj, ""), "")
 	if got := strings.Join(names(m), ","); got != "file:a.txt" {
 		t.Fatal(got, raw)
 	}

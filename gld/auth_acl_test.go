@@ -676,7 +676,10 @@ func TestFsWriteCodePathsNeedConfigWrite(t *testing.T) {
 	g.grant(t, fw, "", RightFsRead, RightFsWrite)
 	cw := g.user(t, "reglages", false)
 	g.grant(t, cw, "", RightFsRead, RightFsWrite, RightConfigWrite)
-	save := func(p string) string { return `{"dir":"` + proj + `","path":"` + p + `","content":"x","force":true}` }
+	save := func(p string) string {
+		return "/v1/fs/entries/content?dir=" + url.QueryEscape(proj) + "&path=" + url.QueryEscape(p)
+	}
+	const saveBody = `{"content":"x","force":true}`
 	for _, c := range []struct {
 		u    *gateUser
 		path string
@@ -685,12 +688,12 @@ func TestFsWriteCodePathsNeedConfigWrite(t *testing.T) {
 		{&fw, "a.txt", 200}, {&fw, ".claude/settings.json", 403}, {&fw, ".mcp.json", 403}, {&fw, "sub/.git/config", 403},
 		{&cw, ".mcp.json", 200}, {&cw, ".claude/settings.json", 200},
 	} {
-		if w := g.do("POST", "/fs-save", c.u, "", save(c.path)); w.Code != c.code {
+		if w := g.do("PUT", save(c.path), c.u, "", saveBody); w.Code != c.code {
 			t.Errorf("%s : %d %s", c.path, w.Code, w.Body.String())
 		}
 	}
-	rn := `{"dir":"` + proj + `","from":"a.txt","to":".git/config"}`
-	if w := g.do("POST", "/fs-rename", &fw, "", rn); w.Code != 403 {
+	rn := `{"from":"a.txt","to":".git/config"}`
+	if w := g.do("PATCH", "/v1/fs/entries?dir="+url.QueryEscape(proj), &fw, "", rn); w.Code != 403 {
 		t.Errorf("renommage vers .git : %d", w.Code)
 	}
 }

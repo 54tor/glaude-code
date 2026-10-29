@@ -161,28 +161,28 @@ func ideLstat(root *os.Root, rel string) (fs.FileInfo, error) {
 }
 
 func ideFail(w http.ResponseWriter, err error) {
-	code, e := http.StatusInternalServerError, errIdeNotFound
+	code, slug, e := http.StatusInternalServerError, "internal", errIdeNotFound
 	switch {
 	case errors.Is(err, errIdeDir):
-		code, e = 404, errIdeDir
+		code, slug, e = 404, "not_found", errIdeDir
 	case errors.Is(err, errIdePath):
-		code, e = 400, errIdePath
+		code, slug, e = 400, "bad_request", errIdePath
 	case errors.Is(err, errIdeSymlink), strings.Contains(err.Error(), "path escapes from parent"):
-		code, e = 403, errIdeSymlink
+		code, slug, e = 403, "forbidden", errIdeSymlink
 	case errors.Is(err, errIdeNotFound):
-		code, e = 404, errIdeNotFound
+		code, slug, e = 404, "not_found", errIdeNotFound
 	case errors.Is(err, errIdeTooBig):
-		code, e = 413, errIdeTooBig
+		code, slug, e = 413, "too_large", errIdeTooBig
 	case errors.Is(err, errIdeBinary):
-		code, e = 415, errIdeBinary
+		code, slug, e = 415, "unsupported", errIdeBinary
 	case errors.Is(err, errIdeConflict):
-		code, e = 409, errIdeConflict
+		code, slug, e = 409, "conflict", errIdeConflict
 	case errors.Is(err, errIdeExists):
-		code, e = 409, errIdeExists
+		code, slug, e = 409, "exists", errIdeExists
 	}
 	out := e.Error()
 	if code == 500 {
 		out = L("srv.ide.erreur")
 	}
-	writeJSON(w, code, map[string]any{"ok": false, "out": out})
+	writeErr(w, code, slug, out)
 }

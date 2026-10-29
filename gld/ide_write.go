@@ -99,7 +99,7 @@ func ideCodeDenied(w http.ResponseWriter, r *http.Request, rels ...string) bool 
 			return false
 		}
 	}
-	writeJSON(w, 403, map[string]any{"ok": false, "out": L("srv.auth.droitRefuse")})
+	writeErr(w, 403, "forbidden", L("srv.auth.droitRefuse"))
 	return true
 }
 
@@ -119,8 +119,13 @@ func ideOpen(dir, p string) (*os.Root, string, error) {
 	return root, rel, nil
 }
 
-func ideConflict(w http.ResponseWriter, deleted bool, etag string) {
-	writeJSON(w, 409, map[string]any{"ok": false, "conflict": true, "deleted": deleted, "etag": etag})
+// ideConflict : 409 « conflict » (le fichier a changé) ou « deleted » (il a disparu) ; le client relit le disque pour l'etag.
+func ideConflict(w http.ResponseWriter, deleted bool) {
+	if deleted {
+		writeErr(w, 409, "deleted", L("srv.ide.supprime"))
+		return
+	}
+	writeErr(w, 409, "conflict", L("srv.ide.conflit"))
 }
 
 // ideAtomicWrite : le temporaire reste dans le dossier cible pour que Rename ne change pas de volume.
@@ -231,12 +236,55 @@ func ideTrashRoot(w http.ResponseWriter, dir, id string) (*os.Root, bool) {
 	return root, true
 }
 
+// ideTrashMove range rel dans la corbeille du projet et renvoie l'identifiant de l'entrée.
+func ideTrashMove(root *os.Root, rel string) (string, error) {
+	if err := ideTrashDir(root); errors.Is(err, errIdeNotFound) {
+		if err := root.Mkdir(ideTrash, 0o755); err != nil {
+			return "", err
+		}
+	} else if err != nil {
+		return "", err
+	}
+	if f, err := root.OpenFile(ideTrash+"/.gitignore", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644); err == nil {
+		_, werr := f.WriteString("*\n")
+		if cerr := f.Close(); werr == nil {
+			werr = cerr
+		}
+		if werr != nil {
+			return "", werr
+		}
+	}
+	id := strconv.FormatInt(time.Now().UnixNano(), 10)
+	base := ideTrash + "/" + id
+	if err := root.Mkdir(base, 0o755); err != nil {
+		return "", err
+	}
+	f, err := root.OpenFile(base+"/from", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err == nil {
+		_, err = f.WriteString(rel)
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
+		if err == nil {
+			err = root.Rename(rel, base+"/item")
+		}
+	}
+	if err != nil {
+		root.Remove(base + "/from")
+		root.Remove(base)
+		return "", err
+	}
+	return id, nil
+}
+
 // Le plafond de corps couvre le pire cas d'échappement JSON (\u00XX, 6 octets par octet).
 func routesIDEWrite(mux *http.ServeMux) {
-	mux.HandleFunc("POST /fs-save", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("PUT /v1/fs/entries/content", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		dir := q.Get("dir")
 		var req struct {
-			Dir, Path, Content, Etag string
-			Force                    bool
+			Content, Etag string
+			Force         bool
 		}
 		if !ideBody(w, r, 6*ideMaxFile+64<<10, &req) {
 			return
@@ -245,7 +293,7 @@ func routesIDEWrite(mux *http.ServeMux) {
 			ideFail(w, errIdeTooBig)
 			return
 		}
-		root, rel, err := ideOpen(req.Dir, req.Path)
+		root, rel, err := ideOpen(dir, q.Get("path"))
 		if err != nil {
 			ideFail(w, err)
 			return
@@ -271,13 +319,13 @@ func routesIDEWrite(mux *http.ServeMux) {
 				return
 			}
 			if cur := ideEtag(fi); !req.Force && req.Etag != cur {
-				ideConflict(w, false, cur)
+				ideConflict(w, false)
 				return
 			}
 			mode = fi.Mode().Perm()
 		case errors.Is(err, errIdeNotFound):
 			if req.Etag != "" && !req.Force {
-				ideConflict(w, true, "")
+				ideConflict(w, true)
 				return
 			}
 		default:
@@ -307,7 +355,7 @@ func routesIDEWrite(mux *http.ServeMux) {
 		}
 		if err := ideAtomicWrite(root, rel, []byte(req.Content), mode, verify); err != nil {
 			if errors.Is(err, errIdeConflict) {
-				ideConflict(w, existed && cur == "", cur)
+				ideConflict(w, existed && cur == "")
 				return
 			}
 			ideFail(w, err)
@@ -322,12 +370,13 @@ func routesIDEWrite(mux *http.ServeMux) {
 		if !existed {
 			op = "create"
 		}
-		ideAudit(w, r, op, req.Dir, rel, int64(len(req.Content)))
-		writeJSON(w, 200, map[string]any{"ok": true, "etag": ideEtag(nfi)})
+		ideAudit(w, r, op, dir, rel, int64(len(req.Content)))
+		writeJSON(w, 200, map[string]any{"etag": ideEtag(nfi)})
 	})
 
-	mux.HandleFunc("POST /fs-new", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Dir, Path, Kind string }
+	mux.HandleFunc("POST /v1/fs/entries", func(w http.ResponseWriter, r *http.Request) {
+		dir := r.URL.Query().Get("dir")
+		var req struct{ Path, Kind string }
 		if !ideBody(w, r, 64<<10, &req) {
 			return
 		}
@@ -335,7 +384,7 @@ func routesIDEWrite(mux *http.ServeMux) {
 			ideFail(w, errIdePath)
 			return
 		}
-		root, rel, err := ideOpen(req.Dir, req.Path)
+		root, rel, err := ideOpen(dir, req.Path)
 		if err != nil {
 			ideFail(w, err)
 			return
@@ -368,16 +417,17 @@ func routesIDEWrite(mux *http.ServeMux) {
 			ideFail(w, err)
 			return
 		}
-		ideAudit(w, r, "new", req.Dir, rel, -1)
-		writeJSON(w, 200, map[string]any{"ok": true})
+		ideAudit(w, r, "new", dir, rel, -1)
+		writeJSON(w, 201, map[string]any{"path": rel})
 	})
 
-	mux.HandleFunc("POST /fs-rename", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Dir, From, To string }
+	mux.HandleFunc("PATCH /v1/fs/entries", func(w http.ResponseWriter, r *http.Request) {
+		dir := r.URL.Query().Get("dir")
+		var req struct{ From, To string }
 		if !ideBody(w, r, 64<<10, &req) {
 			return
 		}
-		root, from, err := ideOpen(req.Dir, req.From)
+		root, from, err := ideOpen(dir, req.From)
 		if err != nil {
 			ideFail(w, err)
 			return
@@ -408,81 +458,54 @@ func routesIDEWrite(mux *http.ServeMux) {
 			ideFail(w, err)
 			return
 		}
-		ideAudit(w, r, "rename", req.Dir, from+" -> "+to, -1)
-		writeJSON(w, 200, map[string]any{"ok": true})
+		ideAudit(w, r, "rename", dir, from+" -> "+to, -1)
+		w.WriteHeader(http.StatusNoContent)
 	})
 
-	mux.HandleFunc("POST /fs-rm", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Dir, Path string }
-		if !ideBody(w, r, 64<<10, &req) {
+	mux.HandleFunc("DELETE /v1/fs/entries", func(w http.ResponseWriter, r *http.Request) {
+		dir := r.URL.Query().Get("dir")
+		paths := r.URL.Query()["item"]
+		if len(paths) == 0 {
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
 			return
 		}
-		root, rel, err := ideOpen(req.Dir, req.Path)
+		if len(paths) > itemMax {
+			writeErr(w, http.StatusBadRequest, "too_many", L("srv.http_util.tropDElements"))
+			return
+		}
+		root, err := ideOpenRoot(dir)
 		if err != nil {
 			ideFail(w, err)
 			return
 		}
 		defer root.Close()
-		if ideInTrash(rel) {
-			ideFail(w, errIdePath)
-			return
+		rels := make([]string, len(paths))
+		for i, p := range paths {
+			rel, err := ideRel(p, false)
+			if err != nil || ideInTrash(rel) {
+				ideFail(w, errIdePath)
+				return
+			}
+			if _, err := ideLstat(root, rel); err != nil {
+				ideFail(w, err)
+				return
+			}
+			rels[i] = rel
 		}
-		if _, err := ideLstat(root, rel); err != nil {
-			ideFail(w, err)
-			return
-		}
-		if err := ideTrashDir(root); errors.Is(err, errIdeNotFound) {
-			err = root.Mkdir(ideTrash, 0o755)
+		ids := make([]string, 0, len(rels))
+		for _, rel := range rels {
+			id, err := ideTrashMove(root, rel)
 			if err != nil {
 				ideFail(w, err)
 				return
 			}
-		} else if err != nil {
-			ideFail(w, err)
-			return
+			ids = append(ids, id)
 		}
-		if f, err := root.OpenFile(ideTrash+"/.gitignore", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644); err == nil {
-			_, werr := f.WriteString("*\n")
-			if cerr := f.Close(); werr == nil {
-				werr = cerr
-			}
-			if werr != nil {
-				ideFail(w, werr)
-				return
-			}
-		}
-		id := strconv.FormatInt(time.Now().UnixNano(), 10)
-		base := ideTrash + "/" + id
-		if err := root.Mkdir(base, 0o755); err != nil {
-			ideFail(w, err)
-			return
-		}
-		fail := func(err error) {
-			root.Remove(base + "/from")
-			root.Remove(base)
-			ideFail(w, err)
-		}
-		f, err := root.OpenFile(base+"/from", os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
-		if err != nil {
-			fail(err)
-			return
-		}
-		_, err = f.WriteString(rel)
-		if cerr := f.Close(); err == nil {
-			err = cerr
-		}
-		if err == nil {
-			err = root.Rename(rel, base+"/item")
-		}
-		if err != nil {
-			fail(err)
-			return
-		}
-		ideAudit(w, r, "rm", req.Dir, rel, -1)
-		writeJSON(w, 200, map[string]any{"ok": true, "id": id})
+		ideAudit(w, r, "rm", dir, strings.Join(rels, ","), -1)
+		writeJSON(w, 200, map[string]any{"ids": ids})
 	})
 
-	mux.HandleFunc("GET /fs-trash", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/fs/trash", func(w http.ResponseWriter, r *http.Request) {
 		root, err := ideOpenRoot(r.URL.Query().Get("dir"))
 		if err != nil {
 			ideFail(w, err)
@@ -532,18 +555,23 @@ func routesIDEWrite(mux *http.ServeMux) {
 		writeJSON(w, 200, map[string]any{"items": items})
 	})
 
-	mux.HandleFunc("POST /fs-trash-restore", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Dir, ID string }
+	mux.HandleFunc("PATCH /v1/fs/trash/{entry}", func(w http.ResponseWriter, r *http.Request) {
+		dir, id := r.URL.Query().Get("dir"), r.PathValue("entry")
+		var req struct{ Trashed *bool }
 		if !ideBody(w, r, 64<<10, &req) {
 			return
 		}
-		root, ok := ideTrashRoot(w, req.Dir, req.ID)
+		if req.Trashed == nil || *req.Trashed {
+			ideFail(w, errIdePath)
+			return
+		}
+		root, ok := ideTrashRoot(w, dir, id)
 		if !ok {
 			return
 		}
 		defer root.Close()
-		base := ideTrash + "/" + req.ID
-		fromRaw, err := ideReadFrom(root, req.ID)
+		base := ideTrash + "/" + id
+		fromRaw, err := ideReadFrom(root, id)
 		if err != nil {
 			ideFail(w, err)
 			return
@@ -572,34 +600,50 @@ func routesIDEWrite(mux *http.ServeMux) {
 		}
 		root.Remove(base + "/from")
 		root.Remove(base)
-		ideAudit(w, r, "restore", req.Dir, from, -1)
-		writeJSON(w, 200, map[string]any{"ok": true})
+		ideAudit(w, r, "restore", dir, from, -1)
+		w.WriteHeader(http.StatusNoContent)
 	})
 
-	mux.HandleFunc("POST /fs-trash-purge", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Dir, ID string }
-		if !ideBody(w, r, 64<<10, &req) {
+	mux.HandleFunc("DELETE /v1/fs/trash", func(w http.ResponseWriter, r *http.Request) {
+		dir := r.URL.Query().Get("dir")
+		items := r.URL.Query()["item"]
+		if len(items) == 0 {
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
 			return
 		}
-		root, ok := ideTrashRoot(w, req.Dir, req.ID)
+		if len(items) > itemMax {
+			writeErr(w, http.StatusBadRequest, "too_many", L("srv.http_util.tropDElements"))
+			return
+		}
+		root, ok := ideTrashRoot(w, dir, items[0])
 		if !ok {
 			return
 		}
 		defer root.Close()
-		base := ideTrash + "/" + req.ID
-		if _, err := ideLstat(root, base); err != nil {
-			ideFail(w, err)
-			return
+		for _, id := range items {
+			if !ideTrashID.MatchString(id) {
+				ideFail(w, errIdePath)
+				return
+			}
+			if _, err := ideLstat(root, ideTrash+"/"+id); err != nil {
+				ideFail(w, err)
+				return
+			}
 		}
-		what, _ := ideReadFrom(root, req.ID)
-		if what == "" {
-			what = base
+		whats := make([]string, 0, len(items))
+		for _, id := range items {
+			base := ideTrash + "/" + id
+			what, _ := ideReadFrom(root, id)
+			if what == "" {
+				what = base
+			}
+			if err := root.RemoveAll(base); err != nil {
+				ideFail(w, err)
+				return
+			}
+			whats = append(whats, what)
 		}
-		if err := root.RemoveAll(base); err != nil {
-			ideFail(w, err)
-			return
-		}
-		ideAudit(w, r, "purge", req.Dir, what, -1)
-		writeJSON(w, 200, map[string]any{"ok": true})
+		ideAudit(w, r, "purge", dir, strings.Join(whats, ","), -1)
+		w.WriteHeader(http.StatusNoContent)
 	})
 }

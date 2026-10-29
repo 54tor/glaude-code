@@ -32,9 +32,17 @@ func newAuditRig(t *testing.T) *auditRig {
 	return &auditRig{g, proj, u}
 }
 
-func (a *auditRig) post(path string, body map[string]any) int {
+func (a *auditRig) post(op string, body map[string]any) int {
 	body["dir"] = a.proj
-	return a.do("POST", path, &a.u, body).Code
+	return a.fsDo(op, &a.u, body).Code
+}
+
+func (a *auditRig) fsDo(op string, u *adminUser, body map[string]any) *httptest.ResponseRecorder {
+	m, target, b := fsReq(op, body)
+	if b == nil {
+		return a.do(m, target, u, nil)
+	}
+	return a.do(m, target, u, b)
 }
 
 func (a *auditRig) events() []string {
@@ -63,21 +71,21 @@ func (a *auditRig) want(t *testing.T, w ...string) {
 func TestFsAuditWrites(t *testing.T) {
 	a := newAuditRig(t)
 	b := filepath.Base(a.proj)
-	if c := a.post("/fs-save", map[string]any{"path": "a.txt", "content": "SECRET-CONTENT"}); c != 200 {
+	if c := a.post("save", map[string]any{"path": "a.txt", "content": "SECRET-CONTENT"}); c != 200 {
 		t.Fatal(c)
 	}
 	a.want(t, "create "+b+":a.txt 14")
 	fi, _ := os.Lstat(filepath.Join(a.proj, "a.txt"))
-	if c := a.post("/fs-save", map[string]any{"path": "a.txt", "content": "xy", "etag": ideEtag(fi)}); c != 200 {
+	if c := a.post("save", map[string]any{"path": "a.txt", "content": "xy", "etag": ideEtag(fi)}); c != 200 {
 		t.Fatal(c)
 	}
-	if c := a.post("/fs-new", map[string]any{"path": "d", "kind": "dir"}); c != 200 {
+	if c := a.post("new", map[string]any{"path": "d", "kind": "dir"}); c != 201 {
 		t.Fatal(c)
 	}
-	if c := a.post("/fs-rename", map[string]any{"from": "a.txt", "to": "d/b.txt"}); c != 200 {
+	if c := a.post("rename", map[string]any{"from": "a.txt", "to": "d/b.txt"}); c != 204 {
 		t.Fatal(c)
 	}
-	if c := a.post("/fs-rm", map[string]any{"path": "d/b.txt"}); c != 200 {
+	if c := a.post("rm", map[string]any{"path": "d/b.txt"}); c != 200 {
 		t.Fatal(c)
 	}
 	ents, _ := os.ReadDir(filepath.Join(a.proj, ideTrash))
@@ -87,17 +95,17 @@ func TestFsAuditWrites(t *testing.T) {
 			id = de.Name()
 		}
 	}
-	if c := a.post("/fs-trash-restore", map[string]any{"id": id}); c != 200 {
+	if c := a.post("restore", map[string]any{"id": id}); c != 204 {
 		t.Fatal(c)
 	}
-	a.post("/fs-rm", map[string]any{"path": "d/b.txt"})
+	a.post("rm", map[string]any{"path": "d/b.txt"})
 	ents, _ = os.ReadDir(filepath.Join(a.proj, ideTrash))
 	for _, de := range ents {
 		if de.IsDir() {
 			id = de.Name()
 		}
 	}
-	if c := a.post("/fs-trash-purge", map[string]any{"id": id}); c != 200 {
+	if c := a.post("purge", map[string]any{"id": id}); c != 204 {
 		t.Fatal(c)
 	}
 	got := a.events()
@@ -116,13 +124,13 @@ func TestFsAuditWrites(t *testing.T) {
 func TestFsAuditNotOnFailure(t *testing.T) {
 	a := newAuditRig(t)
 	os.WriteFile(filepath.Join(a.proj, "a.txt"), []byte("old"), 0o644)
-	if c := a.post("/fs-save", map[string]any{"path": "a.txt", "content": "n", "etag": "stale"}); c != 409 {
+	if c := a.post("save", map[string]any{"path": "a.txt", "content": "n", "etag": "stale"}); c != 409 {
 		t.Fatal(c)
 	}
-	a.post("/fs-save", map[string]any{"path": "../x", "content": "n"})
+	a.post("save", map[string]any{"path": "../x", "content": "n"})
 	bob := a.login("bob", false)
 	a.s.Grant(bob.id, mainHomeID, RightFsRead)
-	if c := a.do("POST", "/fs-save", &bob, map[string]any{"dir": a.proj, "path": "b.txt", "content": "n"}).Code; c != 403 {
+	if c := a.fsDo("save", &bob, map[string]any{"dir": a.proj, "path": "b.txt", "content": "n"}).Code; c != 403 {
 		t.Fatal(c)
 	}
 	a.want(t)
@@ -130,13 +138,13 @@ func TestFsAuditNotOnFailure(t *testing.T) {
 
 func TestFsAuditSanitised(t *testing.T) {
 	a := newAuditRig(t)
-	if c := a.post("/fs-new", map[string]any{"path": "x\ny", "kind": "file"}); c != 200 {
+	if c := a.post("new", map[string]any{"path": "x\ny", "kind": "file"}); c != 201 {
 		t.Fatal(c)
 	}
 	seg := strings.Repeat("é", 80)
 	long := strings.TrimSuffix(strings.Repeat(seg+"/", 20), "/")
 	os.MkdirAll(filepath.Join(a.proj, long), 0o755)
-	if c := a.post("/fs-new", map[string]any{"path": long + "/f", "kind": "file"}); c != 200 {
+	if c := a.post("new", map[string]any{"path": long + "/f", "kind": "file"}); c != 201 {
 		t.Fatal(c)
 	}
 	ev := a.events()
@@ -155,7 +163,7 @@ func TestFsAuditSanitised(t *testing.T) {
 
 func TestFsAuditVisibleToAdmin(t *testing.T) {
 	a := newAuditRig(t)
-	a.post("/fs-new", map[string]any{"path": "z", "kind": "file"})
+	a.post("new", map[string]any{"path": "z", "kind": "file"})
 	r := a.ok(a.do("GET", "/admin/events?kind=ide_write", &a.u, nil))["events"].([]any)
 	if len(r) != 1 || r[0].(map[string]any)["user"] != "root" {
 		t.Fatal(r)
@@ -164,7 +172,7 @@ func TestFsAuditVisibleToAdmin(t *testing.T) {
 
 func TestFsAuditOpenMode(t *testing.T) {
 	h, _, proj := web(t)
-	if c, _, raw := jpost(t, h, "/fs-new", map[string]any{"dir": proj, "path": "a", "kind": "file"}); c != 200 {
+	if c, _, raw := fsop(t, h, "new", map[string]any{"dir": proj, "path": "a", "kind": "file"}); c != 201 {
 		t.Fatal(c, raw)
 	}
 }
@@ -175,8 +183,9 @@ func TestFsAuditChildHeader(t *testing.T) {
 	childToken = "tok"
 	t.Cleanup(func() { childToken = "" })
 	post := func(body map[string]any) *httptest.ResponseRecorder {
-		b, _ := json.Marshal(body)
-		r := httptest.NewRequest("POST", "/fs-new", bytes.NewReader(b))
+		m, target, nb := fsReq("new", body)
+		b, _ := json.Marshal(nb)
+		r := httptest.NewRequest(m, target, bytes.NewReader(b))
 		r.Host = testHost
 		r.Header.Set(childHeader, "tok")
 		w := httptest.NewRecorder()
@@ -184,7 +193,7 @@ func TestFsAuditChildHeader(t *testing.T) {
 		return w
 	}
 	w := post(map[string]any{"dir": proj, "path": "x\ny", "kind": "file"})
-	if w.Code != 200 {
+	if w.Code != 201 {
 		t.Fatal(w.Code, w.Body)
 	}
 	got, err := url.QueryUnescape(w.Header().Get(ideAuditHeader))
@@ -212,11 +221,11 @@ func TestFsAuditRelayedFromChild(t *testing.T) {
 		if r.Header.Get(ideAuditHeader) != "" {
 			forged.Add(1)
 		}
-		switch r.URL.Path {
-		case "/fs-save":
+		switch m := r.Method + " " + r.URL.Path; m {
+		case "PUT /v1/fs/entries/content":
 			w.Header().Set(ideAuditHeader, url.QueryEscape("save pro:a.txt 6"))
 			w.WriteHeader(200)
-		case "/fs-new":
+		case "POST /v1/fs/entries":
 			w.Header().Set(ideAuditHeader, url.QueryEscape("new pro:refusé"))
 			w.WriteHeader(409)
 		default:
@@ -231,9 +240,10 @@ func TestFsAuditRelayedFromChild(t *testing.T) {
 	homeStart = func(h Home) (*homeProc, error) {
 		return &homeProc{dir: h.Dir, proxy: childProxy(u, "tok"), done: make(chan struct{})}, nil
 	}
-	do := func(path string, forge bool) *httptest.ResponseRecorder {
-		b, _ := json.Marshal(map[string]any{"dir": pro, "path": "a.txt", "content": "ééé", "kind": "file"})
-		r := httptest.NewRequest("POST", path, bytes.NewReader(b))
+	do := func(op string, forge bool) *httptest.ResponseRecorder {
+		m, target, nb := fsReq(op, map[string]any{"dir": pro, "path": "a.txt", "content": "ééé", "kind": "file"})
+		b, _ := json.Marshal(nb)
+		r := httptest.NewRequest(m, target, bytes.NewReader(b))
 		r.Host = testHost
 		r.Header.Set("Content-Type", "application/json")
 		r.AddCookie(&http.Cookie{Name: sessCookie, Value: a.u.cookie})
@@ -246,13 +256,13 @@ func TestFsAuditRelayedFromChild(t *testing.T) {
 		a.h.ServeHTTP(w, r)
 		return w
 	}
-	if w := do("/fs-save", false); w.Code != 200 || w.Header().Get(ideAuditHeader) != "" {
+	if w := do("save", false); w.Code != 200 || w.Header().Get(ideAuditHeader) != "" {
 		t.Fatal(w.Code, w.Header())
 	}
-	if w := do("/fs-new", false); w.Code != 409 || w.Header().Get(ideAuditHeader) != "" {
+	if w := do("new", false); w.Code != 409 || w.Header().Get(ideAuditHeader) != "" {
 		t.Fatal(w.Code, w.Header())
 	}
-	if w := do("/fs-rm", true); w.Code != 200 {
+	if w := do("rm", true); w.Code != 200 {
 		t.Fatal(w.Code)
 	}
 	a.want(t, "save pro:a.txt 6")

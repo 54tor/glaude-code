@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
 	"os"
 	"os/exec"
@@ -10,15 +9,9 @@ import (
 	"testing"
 )
 
-func jpost(t *testing.T, h http.Handler, p string, v map[string]any) (int, map[string]any, string) {
-	t.Helper()
-	b, _ := json.Marshal(v)
-	return call(t, h, "POST", p, string(b))
-}
-
 func etagOf(t *testing.T, h http.Handler, dir, p string) string {
 	t.Helper()
-	_, m, raw := call(t, h, "GET", fsq("/fs-file", dir, p), "")
+	_, m, raw := call(t, h, "GET", fsq("/v1/fs/entries/content", dir, p), "")
 	e, _ := m["etag"].(string)
 	if e == "" {
 		t.Fatal(raw)
@@ -41,8 +34,8 @@ func TestFsSaveAtomicAndMode(t *testing.T) {
 	os.WriteFile(f, []byte("old"), 0o600)
 	os.Chmod(f, 0o600)
 	e := etagOf(t, h, proj, "a.sh")
-	code, m, raw := jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "a.sh", "content": "new", "etag": e})
-	if code != 200 || m["ok"] != true || m["etag"] == "" {
+	code, m, raw := fsop(t, h, "save", map[string]any{"dir": proj, "path": "a.sh", "content": "new", "etag": e})
+	if code != 200 || m["etag"] == "" {
 		t.Fatal(code, raw)
 	}
 	fi, _ := os.Stat(f)
@@ -64,8 +57,8 @@ func TestFsSaveConflictChanged(t *testing.T) {
 	os.WriteFile(f, []byte("v1"), 0o644)
 	e := etagOf(t, h, proj, "a.txt")
 	os.WriteFile(f, []byte("v2-longer"), 0o644)
-	code, m, raw := jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "a.txt", "content": "mine", "etag": e})
-	if code != 409 || m["ok"] != false || m["conflict"] != true || m["deleted"] != false || m["etag"] != etagOf(t, h, proj, "a.txt") {
+	code, m, raw := fsop(t, h, "save", map[string]any{"dir": proj, "path": "a.txt", "content": "mine", "etag": e})
+	if code != 409 || errCode(m) != "conflict" {
 		t.Fatal(code, raw)
 	}
 	if readF(t, f) != "v2-longer" {
@@ -79,8 +72,8 @@ func TestFsSaveConflictDeleted(t *testing.T) {
 	os.WriteFile(f, []byte("v1"), 0o644)
 	e := etagOf(t, h, proj, "a.txt")
 	os.Remove(f)
-	code, m, raw := jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "a.txt", "content": "mine", "etag": e})
-	if code != 409 || m["conflict"] != true || m["deleted"] != true {
+	code, m, raw := fsop(t, h, "save", map[string]any{"dir": proj, "path": "a.txt", "content": "mine", "etag": e})
+	if code != 409 || errCode(m) != "deleted" {
 		t.Fatal(code, raw)
 	}
 	if _, err := os.Stat(f); err == nil {
@@ -92,12 +85,12 @@ func TestFsSaveForce(t *testing.T) {
 	h, _, proj := web(t)
 	f := filepath.Join(proj, "a.txt")
 	os.WriteFile(f, []byte("v1"), 0o644)
-	code, _, raw := jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "a.txt", "content": "forced", "etag": "stale", "force": true})
+	code, _, raw := fsop(t, h, "save", map[string]any{"dir": proj, "path": "a.txt", "content": "forced", "etag": "stale", "force": true})
 	if code != 200 || readF(t, f) != "forced" {
 		t.Fatal(code, raw)
 	}
 	os.Remove(f)
-	code, _, raw = jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "a.txt", "content": "back", "etag": "stale", "force": true})
+	code, _, raw = fsop(t, h, "save", map[string]any{"dir": proj, "path": "a.txt", "content": "back", "etag": "stale", "force": true})
 	if code != 200 || readF(t, f) != "back" {
 		t.Fatal(code, raw)
 	}
@@ -106,7 +99,7 @@ func TestFsSaveForce(t *testing.T) {
 func TestFsSaveCreate(t *testing.T) {
 	h, _, proj := web(t)
 	os.Mkdir(filepath.Join(proj, "d"), 0o755)
-	code, m, raw := jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "d/n.txt", "content": "hi", "etag": ""})
+	code, m, raw := fsop(t, h, "save", map[string]any{"dir": proj, "path": "d/n.txt", "content": "hi", "etag": ""})
 	if code != 200 || m["etag"] == "" {
 		t.Fatal(code, raw)
 	}
@@ -115,15 +108,15 @@ func TestFsSaveCreate(t *testing.T) {
 		t.Fatal(fi.Mode())
 	}
 	// existing file with an empty etag is a conflict, not an overwrite
-	code, m, _ = jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "d/n.txt", "content": "x", "etag": ""})
-	if code != 409 || m["deleted"] != false {
+	code, m, _ = fsop(t, h, "save", map[string]any{"dir": proj, "path": "d/n.txt", "content": "x", "etag": ""})
+	if code != 409 || errCode(m) != "conflict" {
 		t.Fatal(code, m)
 	}
 }
 
 func TestFsSaveCRLFExact(t *testing.T) {
 	h, _, proj := web(t)
-	jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "w.txt", "content": "a\r\nb\r\n", "etag": ""})
+	fsop(t, h, "save", map[string]any{"dir": proj, "path": "w.txt", "content": "a\r\nb\r\n", "etag": ""})
 	if readF(t, filepath.Join(proj, "w.txt")) != "a\r\nb\r\n" {
 		t.Fatalf("%q", readF(t, filepath.Join(proj, "w.txt")))
 	}
@@ -133,7 +126,7 @@ func TestFsSaveRefusesSymlink(t *testing.T) {
 	h, _, proj := web(t)
 	os.WriteFile(filepath.Join(proj, "real.txt"), []byte("keep"), 0o644)
 	os.Symlink("real.txt", filepath.Join(proj, "lnk"))
-	code, _, raw := jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "lnk", "content": "x", "force": true})
+	code, _, raw := fsop(t, h, "save", map[string]any{"dir": proj, "path": "lnk", "content": "x", "force": true})
 	if code != 403 || readF(t, filepath.Join(proj, "real.txt")) != "keep" {
 		t.Fatal(code, raw)
 	}
@@ -143,7 +136,7 @@ func TestFsSaveRefusesSymlinkedParent(t *testing.T) {
 	h, _, proj := web(t)
 	os.Mkdir(filepath.Join(proj, "real"), 0o755)
 	os.Symlink("real", filepath.Join(proj, "lnk"))
-	code, _, raw := jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "lnk/f.txt", "content": "x", "etag": ""})
+	code, _, raw := fsop(t, h, "save", map[string]any{"dir": proj, "path": "lnk/f.txt", "content": "x", "etag": ""})
 	if code != 403 {
 		t.Fatal(code, raw)
 	}
@@ -154,11 +147,11 @@ func TestFsSaveRefusesSymlinkedParent(t *testing.T) {
 
 func TestFsSaveTooBig(t *testing.T) {
 	h, _, proj := web(t)
-	code, _, raw := jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "b.txt", "content": strings.Repeat("a", ideMaxFile+1), "etag": ""})
+	code, _, raw := fsop(t, h, "save", map[string]any{"dir": proj, "path": "b.txt", "content": strings.Repeat("a", ideMaxFile+1), "etag": ""})
 	if code != 413 {
 		t.Fatal(code, raw[:min(len(raw), 200)])
 	}
-	code, _, _ = jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "b.txt", "content": strings.Repeat("a", ideMaxFile+(100<<10)), "etag": ""})
+	code, _, _ = fsop(t, h, "save", map[string]any{"dir": proj, "path": "b.txt", "content": strings.Repeat("a", ideMaxFile+(100<<10)), "etag": ""})
 	if code != 413 {
 		t.Fatal("huge body", code)
 	}
@@ -177,8 +170,8 @@ func TestFsSaveFailureLeavesNoTemp(t *testing.T) {
 	os.WriteFile(filepath.Join(d, "f.txt"), []byte("keep"), 0o644)
 	os.Chmod(d, 0o555)
 	t.Cleanup(func() { os.Chmod(d, 0o755) })
-	code, m, raw := jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "ro/f.txt", "content": "x", "force": true})
-	if code == 200 || m["ok"] != false || strings.Contains(raw, proj) {
+	code, m, raw := fsop(t, h, "save", map[string]any{"dir": proj, "path": "ro/f.txt", "content": "x", "force": true})
+	if code == 200 || errCode(m) == "" || strings.Contains(raw, proj) {
 		t.Fatal(code, raw)
 	}
 	ents, _ := os.ReadDir(d)
@@ -189,19 +182,19 @@ func TestFsSaveFailureLeavesNoTemp(t *testing.T) {
 
 func TestFsNewAndRename(t *testing.T) {
 	h, _, proj := web(t)
-	if c, _, raw := jpost(t, h, "/fs-new", map[string]any{"dir": proj, "path": "f.txt", "kind": "file"}); c != 200 {
+	if c, _, raw := fsop(t, h, "new", map[string]any{"dir": proj, "path": "f.txt", "kind": "file"}); c != 201 {
 		t.Fatal(c, raw)
 	}
-	if c, _, raw := jpost(t, h, "/fs-new", map[string]any{"dir": proj, "path": "sub", "kind": "dir"}); c != 200 {
+	if c, _, raw := fsop(t, h, "new", map[string]any{"dir": proj, "path": "sub", "kind": "dir"}); c != 201 {
 		t.Fatal(c, raw)
 	}
-	if c, _, _ := jpost(t, h, "/fs-new", map[string]any{"dir": proj, "path": "f.txt", "kind": "file"}); c != 409 {
+	if c, _, _ := fsop(t, h, "new", map[string]any{"dir": proj, "path": "f.txt", "kind": "file"}); c != 409 {
 		t.Fatal("exists", c)
 	}
-	if c, _, _ := jpost(t, h, "/fs-new", map[string]any{"dir": proj, "path": "x", "kind": "bogus"}); c != 400 {
+	if c, _, _ := fsop(t, h, "new", map[string]any{"dir": proj, "path": "x", "kind": "bogus"}); c != 400 {
 		t.Fatal("kind", c)
 	}
-	if c, _, raw := jpost(t, h, "/fs-rename", map[string]any{"dir": proj, "from": "f.txt", "to": "sub/g.txt"}); c != 200 {
+	if c, _, raw := fsop(t, h, "rename", map[string]any{"dir": proj, "from": "f.txt", "to": "sub/g.txt"}); c != 204 {
 		t.Fatal(c, raw)
 	}
 	if _, err := os.Stat(filepath.Join(proj, "sub", "g.txt")); err != nil {
@@ -213,8 +206,8 @@ func TestFsRenameNoOverwrite(t *testing.T) {
 	h, _, proj := web(t)
 	os.WriteFile(filepath.Join(proj, "a"), []byte("A"), 0o644)
 	os.WriteFile(filepath.Join(proj, "b"), []byte("B"), 0o644)
-	c, m, raw := jpost(t, h, "/fs-rename", map[string]any{"dir": proj, "from": "a", "to": "b"})
-	if c != 409 || m["ok"] != false {
+	c, m, raw := fsop(t, h, "rename", map[string]any{"dir": proj, "from": "a", "to": "b"})
+	if c != 409 || errCode(m) != "exists" {
 		t.Fatal(c, raw)
 	}
 	if readF(t, filepath.Join(proj, "a")) != "A" || readF(t, filepath.Join(proj, "b")) != "B" {
@@ -227,17 +220,17 @@ func TestFsWriteRefusesSymlinkedParent(t *testing.T) {
 	os.Mkdir(filepath.Join(proj, "real"), 0o755)
 	os.WriteFile(filepath.Join(proj, "a"), nil, 0o644)
 	os.Symlink("real", filepath.Join(proj, "lnk"))
-	if c, _, _ := jpost(t, h, "/fs-new", map[string]any{"dir": proj, "path": "lnk/n", "kind": "file"}); c != 403 {
+	if c, _, _ := fsop(t, h, "new", map[string]any{"dir": proj, "path": "lnk/n", "kind": "file"}); c != 403 {
 		t.Fatal("new", c)
 	}
-	if c, _, _ := jpost(t, h, "/fs-rename", map[string]any{"dir": proj, "from": "a", "to": "lnk/a"}); c != 403 {
+	if c, _, _ := fsop(t, h, "rename", map[string]any{"dir": proj, "from": "a", "to": "lnk/a"}); c != 403 {
 		t.Fatal("rename to", c)
 	}
 	os.WriteFile(filepath.Join(proj, "real", "in"), nil, 0o644)
-	if c, _, _ := jpost(t, h, "/fs-rename", map[string]any{"dir": proj, "from": "lnk/in", "to": "out"}); c != 403 {
+	if c, _, _ := fsop(t, h, "rename", map[string]any{"dir": proj, "from": "lnk/in", "to": "out"}); c != 403 {
 		t.Fatal("rename from", c)
 	}
-	if c, _, _ := jpost(t, h, "/fs-rm", map[string]any{"dir": proj, "path": "lnk/in"}); c != 403 {
+	if c, _, _ := fsop(t, h, "rm", map[string]any{"dir": proj, "path": "lnk/in"}); c != 403 {
 		t.Fatal("rm", c)
 	}
 	if _, err := os.Stat(filepath.Join(proj, "real", "in")); err != nil {
@@ -256,7 +249,7 @@ func TestFsRmMovesToTrash(t *testing.T) {
 	}
 	os.MkdirAll(filepath.Join(proj, "d", "e"), 0o755)
 	os.WriteFile(filepath.Join(proj, "d", "e", "f.txt"), []byte("x"), 0o644)
-	if c, _, raw := jpost(t, h, "/fs-rm", map[string]any{"dir": proj, "path": "d/e"}); c != 200 {
+	if c, _, raw := fsop(t, h, "rm", map[string]any{"dir": proj, "path": "d/e"}); c != 200 {
 		t.Fatal(c, raw)
 	}
 	if _, err := os.Stat(filepath.Join(proj, "d", "e")); err == nil {
@@ -265,7 +258,7 @@ func TestFsRmMovesToTrash(t *testing.T) {
 	if readF(t, filepath.Join(proj, ".gld-trash", ".gitignore")) != "*\n" {
 		t.Fatal("gitignore")
 	}
-	_, m, raw := call(t, h, "GET", "/fs-trash?dir="+proj, "")
+	_, m, raw := call(t, h, "GET", "/v1/fs/trash?dir="+proj, "")
 	items := m["items"].([]any)
 	if len(items) != 1 {
 		t.Fatal(raw)
@@ -287,8 +280,8 @@ func TestFsRmMovesToTrash(t *testing.T) {
 	}
 	// second deletion keeps the .gitignore and gets its own id
 	os.WriteFile(filepath.Join(proj, "z"), nil, 0o644)
-	jpost(t, h, "/fs-rm", map[string]any{"dir": proj, "path": "z"})
-	_, m, _ = call(t, h, "GET", "/fs-trash?dir="+proj, "")
+	fsop(t, h, "rm", map[string]any{"dir": proj, "path": "z"})
+	_, m, _ = call(t, h, "GET", "/v1/fs/trash?dir="+proj, "")
 	if len(m["items"].([]any)) != 2 {
 		t.Fatal(m)
 	}
@@ -297,9 +290,9 @@ func TestFsRmMovesToTrash(t *testing.T) {
 func TestFsRmRefusals(t *testing.T) {
 	h, _, proj := web(t)
 	os.WriteFile(filepath.Join(proj, "r.txt"), nil, 0o644)
-	jpost(t, h, "/fs-rm", map[string]any{"dir": proj, "path": "r.txt"})
+	fsop(t, h, "rm", map[string]any{"dir": proj, "path": "r.txt"})
 	for _, p := range []string{"", ".", ".gld-trash", ".gld-trash/.gitignore", "../x", "absent"} {
-		c, _, raw := jpost(t, h, "/fs-rm", map[string]any{"dir": proj, "path": p})
+		c, _, raw := fsop(t, h, "rm", map[string]any{"dir": proj, "path": p})
 		if c == 200 {
 			t.Errorf("%q accepted: %s", p, raw)
 		}
@@ -311,10 +304,10 @@ func TestFsRmRefusals(t *testing.T) {
 
 func trashOne(t *testing.T, h http.Handler, proj, p string) string {
 	t.Helper()
-	if c, _, raw := jpost(t, h, "/fs-rm", map[string]any{"dir": proj, "path": p}); c != 200 {
+	if c, _, raw := fsop(t, h, "rm", map[string]any{"dir": proj, "path": p}); c != 200 {
 		t.Fatal(c, raw)
 	}
-	_, m, raw := call(t, h, "GET", "/fs-trash?dir="+proj, "")
+	_, m, raw := call(t, h, "GET", "/v1/fs/trash?dir="+proj, "")
 	items := m["items"].([]any)
 	if len(items) == 0 {
 		t.Fatal(raw)
@@ -338,7 +331,7 @@ func TestFsTrashRestore(t *testing.T) {
 	os.WriteFile(filepath.Join(proj, "deep", "er", "f.txt"), []byte("x"), 0o644)
 	id := trashOne(t, h, proj, "deep/er/f.txt")
 	os.RemoveAll(filepath.Join(proj, "deep"))
-	if c, _, raw := jpost(t, h, "/fs-trash-restore", map[string]any{"dir": proj, "id": id}); c != 200 {
+	if c, _, raw := fsop(t, h, "restore", map[string]any{"dir": proj, "id": id}); c != 204 {
 		t.Fatal(c, raw)
 	}
 	if readF(t, filepath.Join(proj, "deep", "er", "f.txt")) != "x" {
@@ -354,8 +347,8 @@ func TestFsTrashRestoreRefusesOverwrite(t *testing.T) {
 	os.WriteFile(filepath.Join(proj, "f.txt"), []byte("old"), 0o644)
 	id := trashOne(t, h, proj, "f.txt")
 	os.WriteFile(filepath.Join(proj, "f.txt"), []byte("new"), 0o644)
-	c, m, raw := jpost(t, h, "/fs-trash-restore", map[string]any{"dir": proj, "id": id})
-	if c != 409 || m["ok"] != false {
+	c, m, raw := fsop(t, h, "restore", map[string]any{"dir": proj, "id": id})
+	if c != 409 || errCode(m) != "exists" {
 		t.Fatal(c, raw)
 	}
 	if readF(t, filepath.Join(proj, "f.txt")) != "new" || readF(t, filepath.Join(proj, ".gld-trash", id, "item")) != "old" {
@@ -367,13 +360,13 @@ func TestFsTrashPurge(t *testing.T) {
 	h, _, proj := web(t)
 	os.WriteFile(filepath.Join(proj, "f.txt"), nil, 0o644)
 	id := trashOne(t, h, proj, "f.txt")
-	if c, _, raw := jpost(t, h, "/fs-trash-purge", map[string]any{"dir": proj, "id": id}); c != 200 {
+	if c, _, raw := fsop(t, h, "purge", map[string]any{"dir": proj, "id": id}); c != 204 {
 		t.Fatal(c, raw)
 	}
 	if _, err := os.Stat(filepath.Join(proj, ".gld-trash", id)); err == nil {
 		t.Fatal("kept")
 	}
-	_, m, _ := call(t, h, "GET", "/fs-trash?dir="+proj, "")
+	_, m, _ := call(t, h, "GET", "/v1/fs/trash?dir="+proj, "")
 	if len(m["items"].([]any)) != 0 {
 		t.Fatal(m)
 	}
@@ -385,8 +378,9 @@ func TestFsTrashPurgeRejectsBadID(t *testing.T) {
 	trashOne(t, h, proj, "keep.txt")
 	os.WriteFile(filepath.Join(proj, "victim"), []byte("v"), 0o644)
 	for _, id := range []string{"../victim", "..", ".", "", "1/2", "12a", ".gitignore"} {
-		for _, r := range []string{"/fs-trash-purge", "/fs-trash-restore"} {
-			if c, _, _ := jpost(t, h, r, map[string]any{"dir": proj, "id": id}); c != 400 {
+		for _, r := range []string{"purge", "restore"} {
+			// le mux normalise « . » et « .. » avant le handler (redirection ou 404) : aucun ne doit réussir
+			if c, _, _ := fsop(t, h, r, map[string]any{"dir": proj, "id": id}); c != 400 && c != 404 && c != 307 {
 				t.Errorf("%s %q: %d", r, id, c)
 			}
 		}
@@ -394,14 +388,14 @@ func TestFsTrashPurgeRejectsBadID(t *testing.T) {
 	if readF(t, filepath.Join(proj, "victim")) != "v" {
 		t.Fatal("victim touched")
 	}
-	if c, _, _ := jpost(t, h, "/fs-trash-purge", map[string]any{"dir": proj, "id": "123"}); c != 404 {
+	if c, _, _ := fsop(t, h, "purge", map[string]any{"dir": proj, "id": "123"}); c != 404 {
 		t.Fatal("unknown id", c)
 	}
 }
 
 func TestFsTrashListEmpty(t *testing.T) {
 	h, _, proj := web(t)
-	c, m, raw := call(t, h, "GET", "/fs-trash?dir="+proj, "")
+	c, m, raw := call(t, h, "GET", "/v1/fs/trash?dir="+proj, "")
 	if c != 200 || len(m["items"].([]any)) != 0 {
 		t.Fatal(c, raw)
 	}
@@ -413,16 +407,17 @@ func TestFsWriteRequiresFsWrite(t *testing.T) {
 	g.grant(t, ro, "", RightFsRead)
 	rw := g.user(t, "ecrivain", false)
 	g.grant(t, rw, "", RightFsWrite)
-	for _, p := range []string{"/fs-save", "/fs-new", "/fs-rename", "/fs-rm", "/fs-trash-restore", "/fs-trash-purge"} {
-		if w := g.do("POST", p, &ro, "", "{}"); w.Code != 403 {
+	for _, p := range []string{"PUT /v1/fs/entries/content", "POST /v1/fs/entries", "PATCH /v1/fs/entries", "DELETE /v1/fs/entries", "PATCH /v1/fs/trash/1", "DELETE /v1/fs/trash"} {
+		m, u, _ := strings.Cut(p, " ")
+		if w := g.do(m, u, &ro, "", "{}"); w.Code != 403 {
 			t.Errorf("%s avec fs_read seul : %d", p, w.Code)
 		}
-		if w := g.do("POST", p, &rw, "", "{}"); w.Code != 200 || !reached(w) {
+		if w := g.do(m, u, &rw, "", "{}"); w.Code != 200 || !reached(w) {
 			t.Errorf("%s avec fs_write : %d", p, w.Code)
 		}
 	}
-	if w := g.do("GET", "/fs-trash", &ro, "", ""); w.Code != 200 || !reached(w) {
-		t.Errorf("/fs-trash avec fs_read : %d", w.Code)
+	if w := g.do("GET", "/v1/fs/trash", &ro, "", ""); w.Code != 200 || !reached(w) {
+		t.Errorf("/v1/fs/trash avec fs_read : %d", w.Code)
 	}
 }
 
@@ -431,7 +426,7 @@ func TestFsSaveRefusesTrash(t *testing.T) {
 	os.WriteFile(filepath.Join(proj, "f"), nil, 0o644)
 	id := trashOne(t, h, proj, "f")
 	for _, p := range []string{".gld-trash/" + id + "/from", ".gld-trash/.gitignore", ".gld-trash/new"} {
-		if c, _, _ := jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": p, "content": "x", "force": true}); c != 400 {
+		if c, _, _ := fsop(t, h, "save", map[string]any{"dir": proj, "path": p, "content": "x", "force": true}); c != 400 {
 			t.Errorf("%s: %d", p, c)
 		}
 	}
@@ -443,13 +438,13 @@ func TestFsSaveRefusesTrash(t *testing.T) {
 func TestFsSaveJSONEscapedBodyAtLimit(t *testing.T) {
 	h, _, proj := web(t)
 	body := strings.Repeat("\n\"", ideMaxFile/2)
-	if c, _, raw := jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "e.txt", "content": body, "etag": ""}); c != 200 {
+	if c, _, raw := fsop(t, h, "save", map[string]any{"dir": proj, "path": "e.txt", "content": body, "etag": ""}); c != 200 {
 		t.Fatal(c, raw[:min(len(raw), 200)])
 	}
 	if readF(t, filepath.Join(proj, "e.txt")) != body {
 		t.Fatal("content differs")
 	}
-	if c, _, _ := jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "e2.txt", "content": body + "x", "etag": ""}); c != 413 {
+	if c, _, _ := fsop(t, h, "save", map[string]any{"dir": proj, "path": "e2.txt", "content": body + "x", "etag": ""}); c != 413 {
 		t.Fatal(c)
 	}
 }
@@ -461,8 +456,8 @@ func TestFsSaveEtagRecheckBeforeRename(t *testing.T) {
 	e := etagOf(t, h, proj, "a.txt")
 	t.Cleanup(func() { ideBeforeRename = func() {} })
 	ideBeforeRename = func() { os.WriteFile(f, []byte("agent-wrote-this"), 0o644) }
-	c, m, raw := jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "a.txt", "content": "mine", "etag": e})
-	if c != 409 || m["conflict"] != true || m["deleted"] != false || m["etag"] == "" {
+	c, m, raw := fsop(t, h, "save", map[string]any{"dir": proj, "path": "a.txt", "content": "mine", "etag": e})
+	if c != 409 || errCode(m) != "conflict" {
 		t.Fatal(c, raw)
 	}
 	if readF(t, f) != "agent-wrote-this" {
@@ -472,8 +467,8 @@ func TestFsSaveEtagRecheckBeforeRename(t *testing.T) {
 	os.WriteFile(f, []byte("v1"), 0o644)
 	e = etagOf(t, h, proj, "a.txt")
 	ideBeforeRename = func() { os.Remove(f) }
-	c, m, _ = jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "a.txt", "content": "mine", "etag": e})
-	if c != 409 || m["deleted"] != true {
+	c, m, _ = fsop(t, h, "save", map[string]any{"dir": proj, "path": "a.txt", "content": "mine", "etag": e})
+	if c != 409 || errCode(m) != "deleted" {
 		t.Fatal(c, m)
 	}
 	if _, err := os.Stat(f); err == nil {
@@ -481,8 +476,8 @@ func TestFsSaveEtagRecheckBeforeRename(t *testing.T) {
 	}
 	// creation raced by a new file
 	ideBeforeRename = func() { os.WriteFile(f, []byte("theirs"), 0o644) }
-	c, m, _ = jpost(t, h, "/fs-save", map[string]any{"dir": proj, "path": "a.txt", "content": "mine", "etag": ""})
-	if c != 409 || m["deleted"] != false || readF(t, f) != "theirs" {
+	c, m, _ = fsop(t, h, "save", map[string]any{"dir": proj, "path": "a.txt", "content": "mine", "etag": ""})
+	if c != 409 || errCode(m) != "conflict" || readF(t, f) != "theirs" {
 		t.Fatal(c, m)
 	}
 	ents, _ := os.ReadDir(proj)
@@ -500,7 +495,7 @@ func TestFsTrashRestoreTamperedFrom(t *testing.T) {
 	fromF := filepath.Join(proj, ".gld-trash", id, "from")
 	for _, bad := range []string{"../x", "/etc/x", ".gld-trash/foo", ""} {
 		os.WriteFile(fromF, []byte(bad), 0o644)
-		if c, _, raw := jpost(t, h, "/fs-trash-restore", map[string]any{"dir": proj, "id": id}); c != 400 {
+		if c, _, raw := fsop(t, h, "restore", map[string]any{"dir": proj, "id": id}); c != 400 {
 			t.Errorf("%q: %d %s", bad, c, raw)
 		}
 		if readF(t, filepath.Join(proj, ".gld-trash", id, "item")) != "x" {
@@ -521,7 +516,7 @@ func TestFsTrashRestoreRefusesSymlinks(t *testing.T) {
 	// symlinked from
 	os.Rename(filepath.Join(base, "from"), filepath.Join(proj, "realfrom"))
 	os.Symlink("../../realfrom", filepath.Join(base, "from"))
-	if c, _, _ := jpost(t, h, "/fs-trash-restore", map[string]any{"dir": proj, "id": id}); c != 403 {
+	if c, _, _ := fsop(t, h, "restore", map[string]any{"dir": proj, "id": id}); c != 403 {
 		t.Fatal("from", c)
 	}
 	os.Remove(filepath.Join(base, "from"))
@@ -530,7 +525,7 @@ func TestFsTrashRestoreRefusesSymlinks(t *testing.T) {
 	// symlinked item
 	os.Rename(filepath.Join(base, "item"), filepath.Join(proj, "realitem"))
 	os.Symlink("../../realitem", filepath.Join(base, "item"))
-	if c, _, _ := jpost(t, h, "/fs-trash-restore", map[string]any{"dir": proj, "id": id}); c != 403 {
+	if c, _, _ := fsop(t, h, "restore", map[string]any{"dir": proj, "id": id}); c != 403 {
 		t.Fatal("item", c)
 	}
 	if _, err := os.Stat(filepath.Join(proj, "f")); err == nil {
@@ -542,7 +537,7 @@ func TestFsTrashRestoreRefusesSymlinks(t *testing.T) {
 	// symlinked id
 	os.Rename(base, filepath.Join(proj, "realid"))
 	os.Symlink("../realid", base)
-	if c, _, _ := jpost(t, h, "/fs-trash-restore", map[string]any{"dir": proj, "id": id}); c != 403 {
+	if c, _, _ := fsop(t, h, "restore", map[string]any{"dir": proj, "id": id}); c != 403 {
 		t.Fatal("id", c)
 	}
 	if _, err := os.Stat(filepath.Join(proj, "f")); err == nil {

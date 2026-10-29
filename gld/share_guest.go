@@ -55,7 +55,7 @@ var guestRoutes = map[string]bool{
 	"GET /v1/sessions/{id}/conversation": true, "GET /v1/sessions/{id}/conversation/text": true, "GET /v1/sessions/{id}/conversation/tools": true,
 	"GET /v1/sessions/{id}/conversation/images/{img}": true,
 	"GET /v1/sessions/{id}/live":                      true, "GET /v1/sessions/{id}/state": true, "GET /v1/sessions/{id}/tasks/{task}/output": true,
-	"GET /fs-tree": true, "GET /fs-file": true,
+	"GET /v1/fs/tree": true, "GET /v1/fs/entries/content": true,
 	"GET /v1/sessions/{id}/queue": true, "POST /v1/sessions/{id}/queue": true, "DELETE /v1/sessions/{id}/queue/{qid}": true,
 	"GET /guest-me": true, "POST /guest-leave": true,
 	"GET /guest": true, "GET /assets/": true, "GET /icons/": true, "GET /favicon.ico": true, "GET /manifest.webmanifest": true,
@@ -432,7 +432,7 @@ func guestServe(mux *http.ServeMux, sh Share, in Invite, sec, hd string) http.Ha
 				"invite": in.ID, "label": in.label()})
 			return
 		}
-		if (pat == "GET /fs-tree" || pat == "GET /fs-file") && guestSecretPath(r.URL.Query().Get("path")) {
+		if (pat == "GET /v1/fs/tree" || pat == "GET /v1/fs/entries/content") && guestSecretPath(r.URL.Query().Get("path")) {
 			guestDeny(w, 403, "srv.share_guest.refuse")
 			return
 		}

@@ -143,7 +143,7 @@ func TestFsIndexEndpoint(t *testing.T) {
 	mk(t, proj, "src/a.go", "node_modules/x.js", ".env")
 	var m map[string]any
 	for i := 0; i < 200; i++ {
-		_, m, _ = call(t, h, "GET", "/fs-index?dir="+proj, "")
+		_, m, _ = call(t, h, "GET", "/v1/fs/index?dir="+proj, "")
 		if m["state"] != "building" {
 			break
 		}
@@ -153,7 +153,7 @@ func TestFsIndexEndpoint(t *testing.T) {
 	if m["state"] != "ready" || len(fs) != 1 || fs[0].(map[string]any)["path"] != "src/a.go" {
 		t.Fatal(m)
 	}
-	if c, _, _ := call(t, h, "GET", "/fs-index?dir=/nope", ""); c != 404 {
+	if c, _, _ := call(t, h, "GET", "/v1/fs/index?dir=/nope", ""); c != 404 {
 		t.Fatal(c)
 	}
 }
@@ -168,11 +168,11 @@ func TestIndexSingleBuild(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
-		go func() { defer wg.Done(); call(t, h, "GET", "/fs-index?dir="+proj, "") }()
+		go func() { defer wg.Done(); call(t, h, "GET", "/v1/fs/index?dir="+proj, "") }()
 	}
 	wg.Wait()
 	time.Sleep(150 * time.Millisecond)
-	call(t, h, "GET", "/fs-index?dir="+proj, "")
+	call(t, h, "GET", "/v1/fs/index?dir="+proj, "")
 	if n.Load() != 1 {
 		t.Fatal("constructions:", n.Load())
 	}
@@ -184,13 +184,13 @@ func TestFsFilesOnlyIndexed(t *testing.T) {
 	os.WriteFile(filepath.Join(proj, "bin.dat"), []byte{0, 1, 2}, 0o644)
 	os.WriteFile(filepath.Join(proj, "huge.txt"), []byte(strings.Repeat("a", ideFeedMax+1)), 0o644)
 	for i := 0; i < 200; i++ {
-		_, m, _ := call(t, h, "GET", "/fs-index?dir="+proj, "")
+		_, m, _ := call(t, h, "GET", "/v1/fs/index?dir="+proj, "")
 		if m["state"] != "building" {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	c, m, raw := jpost(t, h, "/fs-files", map[string]any{"dir": proj, "paths": []string{"a.go", ".env", "node_modules/x.js", "../x", "bin.dat", "huge.txt", "absent"}})
+	c, m, raw := fsop(t, h, "files", map[string]any{"dir": proj, "paths": []string{"a.go", ".env", "node_modules/x.js", "../x", "bin.dat", "huge.txt", "absent"}})
 	fs := m["files"].([]any)
 	if c != 200 || len(fs) != 1 || fs[0].(map[string]any)["path"] != "a.go" || fs[0].(map[string]any)["content"] != "x" {
 		t.Fatal(c, raw)
@@ -206,13 +206,13 @@ func TestFsFilesBudget(t *testing.T) {
 		paths = append(paths, n)
 	}
 	for i := 0; i < 200; i++ {
-		_, m, _ := call(t, h, "GET", "/fs-index?dir="+proj, "")
+		_, m, _ := call(t, h, "GET", "/v1/fs/index?dir="+proj, "")
 		if m["state"] != "building" {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	_, m, _ := jpost(t, h, "/fs-files", map[string]any{"dir": proj, "paths": paths})
+	_, m, _ := fsop(t, h, "files", map[string]any{"dir": proj, "paths": paths})
 	if len(m["files"].([]any)) != ideFeedPaths {
 		t.Fatal(len(m["files"].([]any)))
 	}
@@ -224,7 +224,7 @@ func TestFsIndexRequiresFsRead(t *testing.T) {
 	g.grant(t, no, "", RightMemRead)
 	yes := g.user(t, "avec", false)
 	g.grant(t, yes, "", RightFsRead)
-	for _, c := range [][2]string{{"GET", "/fs-index"}, {"POST", "/fs-files"}} {
+	for _, c := range [][2]string{{"GET", "/v1/fs/index"}, {"POST", "/v1/fs/files"}} {
 		if w := g.do(c[0], c[1], &no, "", "{}"); w.Code != 403 {
 			t.Errorf("%s sans fs_read : %d", c[1], w.Code)
 		}

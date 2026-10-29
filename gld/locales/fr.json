@@ -191,6 +191,7 @@
   "srv.ide.tropGros": "Fichier trop volumineux",
   "srv.ide.binaire": "Fichier binaire",
   "srv.ide.conflit": "Le fichier a changé entre-temps",
+  "srv.ide.supprime": "Le fichier a été supprimé entre-temps",
   "srv.ide.existeDeja": "Existe déjà",
   "srv.ide.erreur": "Erreur d'accès au fichier",
   "srv.homes.dossierDeConfigurationChoisi": "Dossier de configuration choisi",

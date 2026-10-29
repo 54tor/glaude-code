@@ -126,7 +126,7 @@ func TestIdeOpenRootAndFail(t *testing.T) {
 		code, e := c.code, c.e
 		w := httptest.NewRecorder()
 		ideFail(w, e)
-		if w.Code != code || strings.Contains(w.Body.String(), "/secret") || !strings.Contains(w.Body.String(), `"ok":false`) ||
+		if w.Code != code || strings.Contains(w.Body.String(), "/secret") || !strings.Contains(w.Body.String(), `"error":{"code"`) ||
 			(code != 500 && !strings.Contains(w.Body.String(), e.Error())) {
 			t.Errorf("%d: got %d %s", code, w.Code, w.Body)
 		}

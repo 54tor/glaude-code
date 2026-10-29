@@ -95,10 +95,10 @@ var routeRights = map[string]Right{
 
 	// Exécution.
 	"POST /v1/sessions/{id}/chat": RightExec, "DELETE /v1/sessions/{id}/chat": RightExec, "POST /v1/sessions": RightExec,
-	"GET /fs-tree": RightFsRead, "GET /fs-file": RightFsRead, "GET /fs-trash": RightFsRead,
-	"GET /fs-index": RightFsRead, "POST /fs-files": RightFsRead, "GET /fs-watch": RightFsRead,
-	"POST /fs-save": RightFsWrite, "POST /fs-new": RightFsWrite, "POST /fs-rename": RightFsWrite, "POST /fs-rm": RightFsWrite,
-	"POST /fs-trash-restore": RightFsWrite, "POST /fs-trash-purge": RightFsWrite,
+	"GET /v1/fs/tree": RightFsRead, "GET /v1/fs/entries/content": RightFsRead, "GET /v1/fs/trash": RightFsRead,
+	"GET /v1/fs/index": RightFsRead, "POST /v1/fs/files": RightFsRead, "GET /v1/fs/watch": RightFsRead,
+	"PUT /v1/fs/entries/content": RightFsWrite, "POST /v1/fs/entries": RightFsWrite, "PATCH /v1/fs/entries": RightFsWrite, "DELETE /v1/fs/entries": RightFsWrite,
+	"PATCH /v1/fs/trash/{entry}": RightFsWrite, "DELETE /v1/fs/trash": RightFsWrite,
 	"GET /v1/terminal": RightExec, "POST /v1/terminal": RightExec, "GET /v1/terminal/ws": RightExec,
 	"POST /v1/sessions/{id}/messages": RightExec, "POST /v1/sessions/{id}/queue": RightExec, "DELETE /v1/sessions/{id}/queue/{qid}": RightExec, "PATCH /v1/sessions/{id}/queue/{qid}": RightExec, "POST /invite-create": RightExec, "POST /invite-regen": RightExec, "POST /invite-mode": RightExec, "POST /invite-revoke": RightExec, "POST /share-end": RightExec, "GET /shares": RightExec, "POST /v1/sessions/{id}/keystrokes": RightExec, "DELETE /v1/sessions/{id}/process": RightExec,
 	"GET /v1/trust/pending": RightExec, "POST /v1/trust/answers": RightExec, "PUT /v1/sessions/{id}/process": RightExec, "PUT /v1/projects/{dir}/process": RightExec, "POST /v1/git/pushes": RightExec,
@@ -471,7 +471,7 @@ func rightsErr(g *gateInfo, homeID string, ok func(map[Right]bool) bool) (int, s
 // Flux longs : le garde ne juge qu'à l'ouverture, une session révoquée ou un droit retiré doit aussi couper un flux déjà ouvert.
 var (
 	authWatchEvery = 5 * time.Second
-	watchedRoutes  = map[string]bool{"GET /v1/terminal/ws": true, "POST /v1/sessions/{id}/chat": true, "GET /fs-watch": true}
+	watchedRoutes  = map[string]bool{"GET /v1/terminal/ws": true, "POST /v1/sessions/{id}/chat": true, "GET /v1/fs/watch": true}
 	errAuthRevoked = errors.New("auth: access revoked")
 )
 

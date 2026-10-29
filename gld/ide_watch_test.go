@@ -227,7 +227,7 @@ func TestFsWatchSSE(t *testing.T) {
 	srv := httptest.NewServer(h)
 	tr := &http.Transport{}
 	ctx, stop := context.WithCancel(context.Background())
-	req, _ := http.NewRequestWithContext(ctx, "GET", srv.URL+"/fs-watch?dir="+proj+"&paths=", nil)
+	req, _ := http.NewRequestWithContext(ctx, "GET", srv.URL+"/v1/fs/watch?dir="+proj+"&paths=", nil)
 	req.Host = testHost
 	resp, err := (&http.Client{Transport: tr}).Do(req)
 	if err != nil {
@@ -269,7 +269,7 @@ func TestFsWatchSSE(t *testing.T) {
 		return len(ideWorkspaces) == 0
 	})
 	until(t, "goroutines qui fuient", func() bool { return runtime.NumGoroutine() <= before })
-	if c, _, _ := call(t, h, "GET", "/fs-watch?dir=/nope", ""); c != 404 {
+	if c, _, _ := call(t, h, "GET", "/v1/fs/watch?dir=/nope", ""); c != 404 {
 		t.Fatal(c)
 	}
 }
@@ -278,7 +278,7 @@ func TestFsWatchRequiresFsRead(t *testing.T) {
 	g := newGateRig(t)
 	no := g.user(t, "sans", false)
 	g.grant(t, no, "", RightMemRead)
-	if w := g.do("GET", "/fs-watch", &no, "", ""); w.Code != 403 {
+	if w := g.do("GET", "/v1/fs/watch", &no, "", ""); w.Code != 403 {
 		t.Fatal(w.Code)
 	}
 }
@@ -374,11 +374,11 @@ func TestWatchFallbackResyncAndRebuild(t *testing.T) {
 	if e := next(t, ch); e != ideResync {
 		t.Fatal(e)
 	}
-	if _, m, _ := call(t, h, "GET", "/fs-index?dir="+proj, ""); m["state"] != "building" {
+	if _, m, _ := call(t, h, "GET", "/v1/fs/index?dir="+proj, ""); m["state"] != "building" {
 		t.Fatal(m)
 	}
 	until(t, "pas reconstruit", func() bool {
-		_, m, _ := call(t, h, "GET", "/fs-index?dir="+proj, "")
+		_, m, _ := call(t, h, "GET", "/v1/fs/index?dir="+proj, "")
 		return m["state"] == "partial" && len(m["files"].([]any)) == 1
 	})
 }
@@ -421,7 +421,7 @@ func TestFsWatchCutOnRevoke(t *testing.T) {
 	u := g.user(t, "alice", false)
 	g.grant(t, u, "", RightFsRead)
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /fs-watch", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/fs/watch", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Write([]byte(": ok\n\n"))
 		w.(http.Flusher).Flush()
@@ -431,7 +431,7 @@ func TestFsWatchCutOnRevoke(t *testing.T) {
 	defer srv.Close()
 	ctx, stop := context.WithTimeout(context.Background(), 10*time.Second)
 	defer stop()
-	req, _ := http.NewRequestWithContext(ctx, "GET", srv.URL+"/fs-watch", nil)
+	req, _ := http.NewRequestWithContext(ctx, "GET", srv.URL+"/v1/fs/watch", nil)
 	req.Header.Set("Cookie", (&http.Cookie{Name: sessCookie, Value: u.cookie}).String())
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil || resp.StatusCode != 200 {
@@ -459,7 +459,7 @@ func TestFsWatchRepeatedPathsKeepCommas(t *testing.T) {
 	defer srv.Close()
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
-	req, _ := http.NewRequestWithContext(ctx, "GET", srv.URL+"/fs-watch?dir="+proj+"&paths=a%2Cb", nil)
+	req, _ := http.NewRequestWithContext(ctx, "GET", srv.URL+"/v1/fs/watch?dir="+proj+"&paths=a%2Cb", nil)
 	req.Host = testHost
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -523,13 +523,13 @@ func TestWatchMassRemoveFast(t *testing.T) {
 	}
 }
 
-// À l'arrêt du serveur, un flux /fs-watch ouvert se termine dès la fermeture des espaces, sans attendre le délai de Shutdown.
+// À l'arrêt du serveur, un flux /v1/fs/watch ouvert se termine dès la fermeture des espaces, sans attendre le délai de Shutdown.
 func TestFsWatchEndsOnClose(t *testing.T) {
 	h, _, proj := web(t)
 	wsTest(t)
 	srv := httptest.NewServer(h)
 	defer srv.Close()
-	req, _ := http.NewRequest("GET", srv.URL+"/fs-watch?dir="+proj+"&paths=", nil)
+	req, _ := http.NewRequest("GET", srv.URL+"/v1/fs/watch?dir="+proj+"&paths=", nil)
 	req.Host = testHost
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil || resp.StatusCode != 200 {
