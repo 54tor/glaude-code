@@ -33,13 +33,13 @@ func routesAdmin(mux *http.ServeMux, a *authAPI) {
 	mux.HandleFunc("GET /v1/admin/users", d.users)
 	mux.HandleFunc("POST /v1/admin/users", d.userAdd)
 	mux.HandleFunc("PATCH /v1/admin/users/{user}", d.userDisable)
-	mux.HandleFunc("DELETE /v1/admin/users/{user}/mfa", d.userResetMFA)
+	mux.HandleFunc("POST /v1/admin/users/{user}/mfa-resets", d.userResetMFA)
 	mux.HandleFunc("PUT /v1/admin/users/{user}/password", d.userPassword)
 	mux.HandleFunc("PUT /v1/admin/acl", d.acl)
 	mux.HandleFunc("GET /v1/admin/events", d.events)
 	mux.HandleFunc("GET /v1/admin/homes", d.homes)
 	mux.HandleFunc("GET /v1/admin/sessions", d.sessionsList)
-	mux.HandleFunc("DELETE /v1/admin/sessions", d.sessionsRevoke)
+	mux.HandleFunc("POST /v1/admin/sessions/revocations", d.sessionsRevoke)
 }
 
 // userParam lit le segment {user} (identifiant numérique du compte) ; false après avoir répondu 400.

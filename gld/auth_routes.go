@@ -119,13 +119,13 @@ func routesAuth(mux *http.ServeMux, s *authStore, th *throttle) *authAPI {
 	mux.HandleFunc("PUT /v1/auth/totp/enrollments/current", a.totpConfirm)
 	mux.HandleFunc("POST /v1/auth/webauthn/registrations", a.waRegisterBegin)
 	mux.HandleFunc("PUT /v1/auth/webauthn/registrations/current", a.waRegisterFinish)
-	mux.HandleFunc("DELETE /v1/auth/factors/{factor}", a.factorRemove)
+	mux.HandleFunc("POST /v1/auth/factors/{factor}/removals", a.factorRemove)
 	mux.HandleFunc("PUT /v1/auth/recovery-codes", a.recoveryRegenerate)
 	mux.HandleFunc("PUT /v1/auth/password", a.password)
 	mux.HandleFunc("GET /v1/auth/alerts", a.alerts)
 	mux.HandleFunc("GET /v1/auth/sessions", a.sessions)
-	mux.HandleFunc("DELETE /v1/auth/sessions/{sid}", a.sessionRevoke)
-	mux.HandleFunc("DELETE /v1/auth/sessions", a.sessionRevokeOthers)
+	mux.HandleFunc("POST /v1/auth/sessions/{sid}/revocations", a.sessionRevoke)
+	mux.HandleFunc("POST /v1/auth/sessions/revocations", a.sessionRevokeOthers)
 	return a
 }
 
@@ -948,10 +948,6 @@ func (a *authAPI) sessionRevokeOthers(w http.ResponseWriter, r *http.Request) {
 	p := a.need(w, r, true)
 	var req reauthReq
 	if p == nil || !decodeAuth(w, r, &req) {
-		return
-	}
-	if r.URL.Query().Get("others") != "1" {
-		authMsg(w, 400, L("srv.http_util.requeteInvalide"))
 		return
 	}
 	if !a.reauth(w, r, p, req) {

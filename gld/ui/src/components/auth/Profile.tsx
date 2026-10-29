@@ -4,7 +4,7 @@ import { CircleUserRound, KeyRound, LogOut, ShieldCheck, Users } from "lucide-re
 import { toast } from "sonner"
 import { loc } from "@/i18n"
 import { boot, logout, signedOut, useAuth, type Reauth } from "@/lib/auth"
-import { http, qs, seg } from "@/lib/http"
+import { http, seg } from "@/lib/http"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -97,12 +97,12 @@ export function Profile() {
   const run = async (r: Reauth) => {
     const p = pending!
     let rec: string[] | undefined
-    if (p.kind === "rmTotp") await http.del("/auth/factors/totp", r)
-    else if (p.kind === "rmKey") await http.del(`/auth/factors/webauthn-${p.key}`, r)
+    if (p.kind === "rmTotp") await http.post("/auth/factors/totp/removals", r)
+    else if (p.kind === "rmKey") await http.post(`/auth/factors/webauthn-${p.key}/removals`, r)
     else if (p.kind === "regen") rec = (await http.put<{ recovery: string[] }>("/auth/recovery-codes", r)).recovery
     else if (p.kind === "password") await http.put("/auth/password", { ...r, new: pw1 })
-    else if (p.kind === "revokeOthers") await http.del(`/auth/sessions${qs({ others: true })}`, r)
-    else await http.del(`/auth/sessions/${seg(p.id!)}`, r)
+    else if (p.kind === "revokeOthers") await http.post("/auth/sessions/revocations", r)
+    else await http.post(`/auth/sessions/${seg(p.id!)}/revocations`, r)
     close()
     if (rec) setCodes(rec)
     if (p.kind === "password" || (p.kind === "revoke" && sessions?.find((s) => s.id === p.id)?.current)) {

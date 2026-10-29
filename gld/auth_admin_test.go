@@ -100,9 +100,9 @@ func (g *adminRig) aclRows(home string) int {
 }
 
 var adminRoutes = [][2]string{
-	{"GET", "/v1/admin/users"}, {"POST", "/v1/admin/users"}, {"PATCH", "/v1/admin/users/1"}, {"DELETE", "/v1/admin/users/1/mfa"},
+	{"GET", "/v1/admin/users"}, {"POST", "/v1/admin/users"}, {"PATCH", "/v1/admin/users/1"}, {"POST", "/v1/admin/users/1/mfa-resets"},
 	{"PUT", "/v1/admin/users/1/password"}, {"PUT", "/v1/admin/acl"}, {"GET", "/v1/admin/events"}, {"GET", "/v1/admin/homes"}, {"GET", "/v1/admin/sessions?user_id=1"},
-	{"DELETE", "/v1/admin/sessions?user_id=1"},
+	{"POST", "/v1/admin/sessions/revocations?user_id=1"},
 }
 
 func TestAdminOnly(t *testing.T) {
@@ -130,7 +130,7 @@ func TestAdminOnly(t *testing.T) {
 		}
 	}
 	root.csrf = "faux"
-	if w := g.do("DELETE", "/v1/admin/sessions?user_id="+fid(bob.id), &root, map[string]any{}); w.Code != 403 {
+	if w := g.do("POST", "/v1/admin/sessions/revocations?user_id="+fid(bob.id), &root, map[string]any{}); w.Code != 403 {
 		t.Errorf("CSRF faux : %d", w.Code)
 	}
 }
@@ -228,16 +228,16 @@ func TestDisableAdminNeedsReauth(t *testing.T) {
 	if w := g.do("PATCH", "/v1/admin/users/"+fid(other.id), &root, map[string]any{"disabled": true}); w.Code != 403 {
 		t.Fatalf("désactiver un admin sans réauth : %d", w.Code)
 	}
-	if w := g.do("DELETE", "/v1/admin/sessions?user_id="+fid(other.id), &root, map[string]any{}); w.Code != 403 {
+	if w := g.do("POST", "/v1/admin/sessions/revocations?user_id="+fid(other.id), &root, map[string]any{}); w.Code != 403 {
 		t.Fatalf("révoquer un admin sans réauth : %d", w.Code)
 	}
 	if w := g.do("GET", "/v1/admin/users", &other, nil); w.Code != 200 {
 		t.Fatalf("l'autre admin a été écarté : %d", w.Code)
 	}
-	g.ok(g.do("DELETE", "/v1/admin/sessions?user_id="+fid(bob.id), &root, map[string]any{}))
+	g.ok(g.do("POST", "/v1/admin/sessions/revocations?user_id="+fid(bob.id), &root, map[string]any{}))
 	bob = g.session(bob.id)
 	g.ok(g.do("PATCH", "/v1/admin/users/"+fid(bob.id), &root, map[string]any{"disabled": true}))
-	g.ok(g.do("DELETE", "/v1/admin/sessions?user_id="+fid(other.id), &root, map[string]any{"reauth": root.reauth()}))
+	g.ok(g.do("POST", "/v1/admin/sessions/revocations?user_id="+fid(other.id), &root, map[string]any{"reauth": root.reauth()}))
 	g.ok(g.do("PATCH", "/v1/admin/users/"+fid(other.id), &root, map[string]any{"disabled": true, "reauth": root.reauth()}))
 	if u, _ := g.s.UserByName("other"); !u.Disabled {
 		t.Fatal("admin non désactivé après réauth")
@@ -410,10 +410,10 @@ func TestAdminResetMFAAndPassword(t *testing.T) {
 	g := newAdminRig(t)
 	root := g.login("root", true)
 	bob := g.login("bob", false)
-	if w := g.do("DELETE", "/v1/admin/users/"+fid(bob.id)+"/mfa", &root, map[string]any{}); w.Code != 403 {
+	if w := g.do("POST", "/v1/admin/users/"+fid(bob.id)+"/mfa-resets", &root, map[string]any{}); w.Code != 403 {
 		t.Fatalf("reset-mfa sans réauth : %d", w.Code)
 	}
-	g.ok(g.do("DELETE", "/v1/admin/users/"+fid(bob.id)+"/mfa", &root, map[string]any{"reauth": root.reauth()}))
+	g.ok(g.do("POST", "/v1/admin/users/"+fid(bob.id)+"/mfa-resets", &root, map[string]any{"reauth": root.reauth()}))
 	if f, _ := g.s.factors(bob.id); !f.none() || f.Recovery != 0 {
 		t.Fatalf("facteurs après reset : %+v", f)
 	}
@@ -446,7 +446,7 @@ func TestAdminSessions(t *testing.T) {
 	if len(ss) != 1 || len(ss[0].(map[string]any)["id"].(string)) != 8 {
 		t.Fatalf("sessions : %v", ss)
 	}
-	g.ok(g.do("DELETE", "/v1/admin/sessions?user_id="+fid(bob.id), &root, map[string]any{}))
+	g.ok(g.do("POST", "/v1/admin/sessions/revocations?user_id="+fid(bob.id), &root, map[string]any{}))
 	if w := g.do("GET", "/v1/homes", &bob, nil); w.Code != 401 {
 		t.Fatalf("session révoquée : %d", w.Code)
 	}

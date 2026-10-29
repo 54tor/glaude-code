@@ -321,7 +321,7 @@ describe("base64url", () => {
 
 describe("Profile", () => {
   it("liste les clés par libellé, marque une clé altérée et retire une clé par son identifiant", async () => {
-    const calls = server({ "/v1/auth/sessions": { body: { sessions: [] } }, "/v1/auth/factors/webauthn-7": { status: 204 }, "/v1/auth/me": { status: 401 } })
+    const calls = server({ "/v1/auth/sessions": { body: { sessions: [] } }, "/v1/auth/factors/webauthn-7/removals": { status: 204 }, "/v1/auth/me": { status: 401 } })
     const keys = [
       { id: 7, label: "clé USB", created: 0, bad: false },
       { id: 9, label: EVIL, created: 0, bad: true },
@@ -336,8 +336,8 @@ describe("Profile", () => {
     fireEvent.change(screen.getByLabelText("Mot de passe actuel"), { target: { value: "pw" } })
     fireEvent.change(screen.getByLabelText("Code (application ou secours)"), { target: { value: "123456" } })
     await act(async () => void fireEvent.click(screen.getByRole("button", { name: "Confirmer" })))
-    const rm = calls.find((c) => c.url === "/v1/auth/factors/webauthn-7")!
-    expect(rm.init.method).toBe("DELETE")
+    const rm = calls.find((c) => c.url === "/v1/auth/factors/webauthn-7/removals")!
+    expect(rm.init.method).toBe("POST")
     expect(bodyOf(rm)).toEqual({ password: "pw", code: "123456" })
   })
 })
@@ -514,7 +514,7 @@ describe("AdminUsers", () => {
     const calls = server({
       "/v1/admin/users": { body: { users: [{ ...USER, id: 1, name: "root", admin: true }] } },
       "/v1/admin/homes": { body: { homes: [{ id: "main", name: "main" }] } },
-      "/v1/admin/sessions": { status: 204 },
+      "/v1/admin/sessions/revocations": { status: 204 },
     })
     setAuth({ state: "ok", csrf: "tok", user: { name: "root", admin: true }, owner: "root" })
     render(<AdminUsers />)
@@ -522,8 +522,8 @@ describe("AdminUsers", () => {
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: "mouse" })
     await act(async () => void fireEvent.click(await screen.findByRole("menuitem", { name: "Fermer toutes ses sessions" })))
     await waitFor(() => expect(getAuth()).toMatchObject({ state: "anon", owner: undefined, expired: false }))
-    const rev = calls.find((c) => c.url === "/v1/admin/sessions?user_id=1")!
-    expect(rev.init.method).toBe("DELETE")
+    const rev = calls.find((c) => c.url === "/v1/admin/sessions/revocations?user_id=1")!
+    expect(rev.init.method).toBe("POST")
     expect(localStorage.getItem("gld.owner")).toBeNull()
     expect(localStorage.getItem("gld.drafts")).toBeNull()
   })

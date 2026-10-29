@@ -6,7 +6,8 @@ info:
     responses are the resource JSON (no ok envelope); every failure is {"error":{"code","message"}} with the real HTTP status. Request
     and response bodies are described as generic objects: the exact fields live in the handlers and in gld/ui/src/lib/api.ts. Parameters
     and status codes are extracted from the handlers. x-gld-right is the right required in multi-user mode; x-gld-guest marks routes
-    a shared-session guest may call (the session id in the path is rewritten from the share, never read from the client). Multi-item
+    a shared-session guest may call (the session id in the path is rewritten from the share, never read from the client). Re-authenticated account actions (factor removal, session revocation, admin MFA reset) are POST sub-resources on purpose: the
+    re-authentication is a JSON body, and proxies or WAFs may strip DELETE bodies. Multi-item
     requests (repeated item query parameter, or items in the body) accept at most 100 items, error code too_many_items beyond; the web UI sends
     larger lists in successive batches so the URL stays under about 8 KB behind proxies.'
 servers:
@@ -124,26 +125,6 @@ paths:
         '403':
           $ref: '#/components/responses/Error'
   /v1/admin/sessions:
-    delete:
-      tags:
-      - admin
-      operationId: deleteAdminSessions
-      parameters:
-      - name: user_id
-        in: query
-        required: false
-        schema:
-          type: string
-      x-gld-right: admin
-      responses:
-        '204':
-          description: No content
-        '400':
-          $ref: '#/components/responses/Error'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
     get:
       tags:
       - admin
@@ -167,6 +148,36 @@ paths:
         '401':
           $ref: '#/components/responses/Error'
         '403':
+          $ref: '#/components/responses/Error'
+  /v1/admin/sessions/revocations:
+    post:
+      tags:
+      - admin
+      operationId: postAdminSessionsRevocations
+      description: 'Deliberate POST action instead of DELETE: the re-authentication travels in the body, which proxies and WAFs may strip from DELETE requests.'
+      parameters:
+      - name: user_id
+        in: query
+        required: true
+        schema:
+          type: string
+      requestBody:
+        description: Re-authentication (password, plus a TOTP code or recovery code when MFA is enabled) in the JSON body.
+        content:
+          application/json:
+            schema:
+              type: object
+      x-gld-right: admin
+      responses:
+        '204':
+          description: No content
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
           $ref: '#/components/responses/Error'
   /v1/admin/users:
     get:
@@ -246,17 +257,24 @@ paths:
           $ref: '#/components/responses/Error'
         '409':
           $ref: '#/components/responses/Error'
-  /v1/admin/users/{user}/mfa:
-    delete:
+  /v1/admin/users/{user}/mfa-resets:
+    post:
       tags:
       - admin
-      operationId: deleteAdminUsersUserMfa
+      operationId: postAdminUsersUserMfaResets
+      description: 'Deliberate POST action instead of DELETE: the re-authentication travels in the body, which proxies and WAFs may strip from DELETE requests.'
       parameters:
       - name: user
         in: path
         required: true
         schema:
           type: string
+      requestBody:
+        description: Re-authentication (password, plus a TOTP code or recovery code when MFA is enabled) in the JSON body.
+        content:
+          application/json:
+            schema:
+              type: object
       x-gld-right: admin
       responses:
         '204':
@@ -266,6 +284,8 @@ paths:
         '401':
           $ref: '#/components/responses/Error'
         '403':
+          $ref: '#/components/responses/Error'
+        '404':
           $ref: '#/components/responses/Error'
   /v1/admin/users/{user}/password:
     put:
@@ -355,22 +375,33 @@ paths:
               schema:
                 type: object
       security: []
-  /v1/auth/factors/{factor}:
-    delete:
+  /v1/auth/factors/{factor}/removals:
+    post:
       tags:
       - auth
-      operationId: deleteAuthFactorsFactor
+      operationId: postAuthFactorsFactorRemovals
+      description: 'Deliberate POST action instead of DELETE: the re-authentication travels in the body, which proxies and WAFs may strip from DELETE requests.'
       parameters:
       - name: factor
         in: path
         required: true
         schema:
           type: string
+      requestBody:
+        description: Re-authentication (password, plus a TOTP code or recovery code when MFA is enabled) in the JSON body.
+        content:
+          application/json:
+            schema:
+              type: object
       x-gld-right: public
       responses:
         '204':
           description: No content
         '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
@@ -505,23 +536,6 @@ paths:
           $ref: '#/components/responses/Error'
       security: []
   /v1/auth/sessions:
-    delete:
-      tags:
-      - auth
-      operationId: deleteAuthSessions
-      parameters:
-      - name: others
-        in: query
-        required: false
-        schema:
-          type: string
-      x-gld-right: public
-      responses:
-        '204':
-          description: No content
-        '400':
-          $ref: '#/components/responses/Error'
-      security: []
     get:
       tags:
       - auth
@@ -572,22 +586,58 @@ paths:
         '204':
           description: No content
       security: []
-  /v1/auth/sessions/{sid}:
-    delete:
+  /v1/auth/sessions/revocations:
+    post:
       tags:
       - auth
-      operationId: deleteAuthSessionsSid
+      operationId: postAuthSessionsRevocations
+      description: 'Deliberate POST action instead of DELETE: the re-authentication travels in the body, which proxies and WAFs may strip from DELETE requests.'
+      requestBody:
+        description: Re-authentication (password, plus a TOTP code or recovery code when MFA is enabled) in the JSON body.
+        content:
+          application/json:
+            schema:
+              type: object
+      x-gld-right: public
+      responses:
+        '204':
+          description: No content
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+      security: []
+  /v1/auth/sessions/{sid}/revocations:
+    post:
+      tags:
+      - auth
+      operationId: postAuthSessionsSidRevocations
+      description: 'Deliberate POST action instead of DELETE: the re-authentication travels in the body, which proxies and WAFs may strip from DELETE requests.'
       parameters:
       - name: sid
         in: path
         required: true
         schema:
           type: string
+      requestBody:
+        description: Re-authentication (password, plus a TOTP code or recovery code when MFA is enabled) in the JSON body.
+        content:
+          application/json:
+            schema:
+              type: object
       x-gld-right: public
       responses:
         '204':
           description: No content
         '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'

@@ -281,7 +281,7 @@ func TestLoginThenMFAGate(t *testing.T) {
 		t.Fatalf("me = %d %v", me.Code, mb)
 	}
 	for _, p := range []struct{ m, path string }{
-		{"PUT", "/v1/auth/password"}, {"GET", "/v1/auth/sessions"}, {"DELETE", "/v1/auth/sessions/x"}, {"DELETE", "/v1/auth/factors/totp"},
+		{"PUT", "/v1/auth/password"}, {"GET", "/v1/auth/sessions"}, {"POST", "/v1/auth/sessions/x/revocations"}, {"POST", "/v1/auth/factors/totp/removals"},
 		{"POST", "/v1/auth/totp/enrollments"}, {"POST", "/v1/auth/webauthn/registrations"}, {"PUT", "/v1/auth/totp/enrollments/current"},
 	} {
 		if w := g.do(p.m, p.path, c, csrf, map[string]string{}); w.Code != 403 {
@@ -484,7 +484,7 @@ func TestFactorRemoveLast(t *testing.T) {
 	g := newAuthRig(t)
 	secret := g.enrolTOTP()
 	c, csrf := g.full(secret)
-	w := g.do("DELETE", "/v1/auth/factors/totp", c, csrf, map[string]any{"password": testPw, "code": g.code(secret)})
+	w := g.do("POST", "/v1/auth/factors/totp/removals", c, csrf, map[string]any{"password": testPw, "code": g.code(secret)})
 	if w.Code != 409 || errMsg(t, w) != L("srv.auth.dernierFacteur") {
 		t.Fatalf("retrait du dernier facteur : %d %s", w.Code, w.Body)
 	}
@@ -492,12 +492,12 @@ func TestFactorRemoveLast(t *testing.T) {
 	if err := waRegister(t, g.s, g.uid, k, "x"); err != nil {
 		t.Fatal(err)
 	}
-	if w := g.do("DELETE", "/v1/auth/factors/totp", c, csrf, map[string]any{"password": testPw, "code": g.code(secret)}); w.Code != 204 {
+	if w := g.do("POST", "/v1/auth/factors/totp/removals", c, csrf, map[string]any{"password": testPw, "code": g.code(secret)}); w.Code != 204 {
 		t.Fatalf("retrait TOTP : %d %s", w.Code, w.Body)
 	}
 	creds, _ := g.s.WebAuthnList(g.uid)
 	g.waReauth(k, c, csrf)
-	w = g.do("DELETE", "/v1/auth/factors/webauthn-"+strconv.FormatInt(creds[0].ID, 10), c, csrf, map[string]any{"password": testPw})
+	w = g.do("POST", "/v1/auth/factors/webauthn-"+strconv.FormatInt(creds[0].ID, 10)+"/removals", c, csrf, map[string]any{"password": testPw})
 	if w.Code != 409 {
 		t.Fatalf("retrait de la dernière clé : %d %s", w.Code, w.Body)
 	}
@@ -540,11 +540,11 @@ func TestSessionsListRevoke(t *testing.T) {
 	if w.Code != 200 || len(b.Sessions) != 2 {
 		t.Fatalf("sessions : %d %s", w.Code, w.Body)
 	}
-	if w := g.do("DELETE", "/v1/auth/sessions/"+other.SessionID, c, csrf, map[string]string{"password": testPw}); w.Code != 401 {
+	if w := g.do("POST", "/v1/auth/sessions/"+other.SessionID+"/revocations", c, csrf, map[string]string{"password": testPw}); w.Code != 401 {
 		t.Fatalf("révocation sans facteur : %d", w.Code)
 	}
 	g.tick(time.Minute)
-	if w := g.do("DELETE", "/v1/auth/sessions/"+other.SessionID, c, csrf, map[string]string{"password": testPw, "code": g.code(secret)}); w.Code != 204 {
+	if w := g.do("POST", "/v1/auth/sessions/"+other.SessionID+"/revocations", c, csrf, map[string]string{"password": testPw, "code": g.code(secret)}); w.Code != 204 {
 		t.Fatalf("révocation : %d %s", w.Code, w.Body)
 	}
 	if _, err := g.s.Session(c); err != nil {
@@ -555,20 +555,20 @@ func TestSessionsListRevoke(t *testing.T) {
 		t.Fatal(err)
 	}
 	bc, bp := fullSession(t, g.s, bob)
-	if w := g.do("DELETE", "/v1/auth/sessions/"+bp.SessionID, c, csrf, map[string]string{"password": testPw, "code": g.code(secret)}); w.Code != 404 {
+	if w := g.do("POST", "/v1/auth/sessions/"+bp.SessionID+"/revocations", c, csrf, map[string]string{"password": testPw, "code": g.code(secret)}); w.Code != 404 {
 		t.Fatalf("révocation de la session d'autrui : %d", w.Code)
 	}
 	if _, err := g.s.Session(bc); err != nil {
 		t.Fatal("session d'autrui révoquée")
 	}
 	thirdC, _ := fullSession(t, g.s, g.uid)
-	if w := g.do("DELETE", "/v1/auth/sessions", c, csrf, map[string]string{"password": testPw}); w.Code != 400 || errCode(jbody(t, w)) != "bad_request" {
-		t.Fatalf("nettoyage sans others=1 : %d %s", w.Code, w.Body)
+	if w := g.do("DELETE", "/v1/auth/sessions", c, csrf, map[string]string{"password": testPw}); w.Code != 405 {
+		t.Fatalf("l'ancienne route DELETE ne répond plus : %d %s", w.Code, w.Body)
 	}
-	if w := g.do("DELETE", "/v1/auth/sessions?others=1", c, csrf, map[string]string{"password": testPw}); w.Code != 401 {
+	if w := g.do("POST", "/v1/auth/sessions/revocations", c, csrf, map[string]string{"password": testPw}); w.Code != 401 {
 		t.Fatalf("nettoyage sans facteur : %d", w.Code)
 	}
-	if w := g.do("DELETE", "/v1/auth/sessions?others=1", c, csrf, map[string]string{"password": testPw, "code": g.code(secret)}); w.Code != 204 {
+	if w := g.do("POST", "/v1/auth/sessions/revocations", c, csrf, map[string]string{"password": testPw, "code": g.code(secret)}); w.Code != 204 {
 		t.Fatalf("nettoyage : %d %s", w.Code, w.Body)
 	}
 	if _, err := g.s.Session(c); err != nil {
@@ -783,7 +783,7 @@ func TestFactorRemoveTamperedTOTP(t *testing.T) {
 	}
 	before := tamperEvents(t, g.s)
 	g.waReauth(k, c, csrf)
-	w := g.do("DELETE", "/v1/auth/factors/totp", c, csrf, map[string]any{"password": testPw})
+	w := g.do("POST", "/v1/auth/factors/totp/removals", c, csrf, map[string]any{"password": testPw})
 	if w.Code != 409 || errMsg(t, w) != L("srv.auth.tamper") {
 		t.Fatalf("retrait d'un TOTP altéré : %d %s", w.Code, w.Body)
 	}

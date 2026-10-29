@@ -97,10 +97,10 @@ export function AdminUsers() {
     try {
       if (p.kind === "add") await http.post("/admin/users", { ...r, name: form.name, password: form.password, admin: form.admin })
       else if (p.kind === "enable" || p.kind === "disable") await http.patch(`/admin/users/${p.user.id}`, { ...r, disabled: p.kind === "disable" })
-      else if (p.kind === "resetMfa") await http.del(`/admin/users/${p.user.id}/mfa`, r)
+      else if (p.kind === "resetMfa") await http.post(`/admin/users/${p.user.id}/mfa-resets`, r)
       else if (p.kind === "password") await http.put(`/admin/users/${p.user.id}/password`, { ...r, password: form.password })
       else if (p.kind === "grant") await http.put("/admin/acl", { ...r, user_id: p.user.id, home_id: p.home, grant: [p.right], ...(DANGEROUS.includes(p.right) ? { confirm: true } : {}) })
-      else await http.del(`/admin/sessions${qs({ user_id: p.user.id })}`, r)
+      else await http.post(`/admin/sessions/revocations${qs({ user_id: p.user.id })}`, r)
     } catch (e) {
       if (!reauth) toast.error(msgOf(e, t("auth.admin.failed")))
       throw e

@@ -35,13 +35,13 @@ var routeRights = map[string]Right{
 	"POST /v1/auth/mfa/webauthn/challenges": rightPublic, "POST /v1/auth/mfa/webauthn/assertions": rightPublic, "DELETE /v1/auth/sessions/current": rightPublic,
 	"GET /v1/auth/me": rightPublic, "POST /v1/auth/totp/enrollments": rightPublic, "PUT /v1/auth/totp/enrollments/current": rightPublic,
 	"POST /v1/auth/webauthn/registrations": rightPublic, "PUT /v1/auth/webauthn/registrations/current": rightPublic,
-	"DELETE /v1/auth/factors/{factor}": rightPublic, "PUT /v1/auth/recovery-codes": rightPublic, "PUT /v1/auth/password": rightPublic,
-	"GET /v1/auth/alerts": rightPublic, "GET /v1/auth/sessions": rightPublic, "DELETE /v1/auth/sessions/{sid}": rightPublic, "DELETE /v1/auth/sessions": rightPublic,
+	"POST /v1/auth/factors/{factor}/removals": rightPublic, "PUT /v1/auth/recovery-codes": rightPublic, "PUT /v1/auth/password": rightPublic,
+	"GET /v1/auth/alerts": rightPublic, "GET /v1/auth/sessions": rightPublic, "POST /v1/auth/sessions/{sid}/revocations": rightPublic, "POST /v1/auth/sessions/revocations": rightPublic,
 
 	// Administration des comptes et des droits.
 	"GET /v1/admin/users": rightAdmin, "POST /v1/admin/users": rightAdmin, "PATCH /v1/admin/users/{user}": rightAdmin,
-	"DELETE /v1/admin/users/{user}/mfa": rightAdmin, "PUT /v1/admin/users/{user}/password": rightAdmin, "PUT /v1/admin/acl": rightAdmin,
-	"GET /v1/admin/events": rightAdmin, "GET /v1/admin/homes": rightAdmin, "GET /v1/admin/sessions": rightAdmin, "DELETE /v1/admin/sessions": rightAdmin,
+	"POST /v1/admin/users/{user}/mfa-resets": rightAdmin, "PUT /v1/admin/users/{user}/password": rightAdmin, "PUT /v1/admin/acl": rightAdmin,
+	"GET /v1/admin/events": rightAdmin, "GET /v1/admin/homes": rightAdmin, "GET /v1/admin/sessions": rightAdmin, "POST /v1/admin/sessions/revocations": rightAdmin,
 
 	// Jumelage d'un appareil par QR code (pair.go).
 	"POST /v1/pairing/codes": rightAny, "GET /pair": rightPublic, "POST /pair": rightPublic, "GET /v1/devices": rightAny, "DELETE /v1/devices/{device}": rightAny,
