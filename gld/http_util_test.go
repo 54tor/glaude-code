@@ -11,7 +11,9 @@ import (
 func TestWriteErrShape(t *testing.T) {
 	w := httptest.NewRecorder()
 	writeErr(w, http.StatusConflict, "conflict", "boom")
-	var got struct{ Error struct{ Code, Message string } }
+	var got struct {
+		Error struct{ Code, Message string }
+	}
 	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
