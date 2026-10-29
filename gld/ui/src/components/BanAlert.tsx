@@ -8,7 +8,7 @@ type Ban = { at: number; ip: string }
 
 // Alerte dans chaque session connectée quand une adresse extérieure est bannie après des échecs de connexion répétés, ou
 // qu'un appareil est jumelé sur mon compte via POST /v1/pairing/codes (une session volée pourrait en créer une : l'alerte pousse à
-// vérifier /auth/sessions et à révoquer ce qui n'est pas de moi). Les événements d'avant l'ouverture de l'onglet ne sont pas
+// vérifier /v1/auth/sessions et à révoquer ce qui n'est pas de moi). Les événements d'avant l'ouverture de l'onglet ne sont pas
 // rejoués ; une alerte non acquittée est perdue au rechargement.
 export function BanAlert() {
   const { t } = useTranslation()
@@ -21,7 +21,7 @@ export function BanAlert() {
       if (document.visibilityState !== "visible") return
       try {
         const r = await api.banAlerts(after)
-        if (!live || !r.ok) return
+        if (!live) return
         const first = after < 0
         after = r.cursor
         if (first) return

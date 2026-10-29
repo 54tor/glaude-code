@@ -5,7 +5,8 @@ import { useTranslation } from "react-i18next"
 import { api, type HomesInfo } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"
 import { tilde } from "@/lib/format"
-import { authCall, useAuth } from "@/lib/auth"
+import { useAuth } from "@/lib/auth"
+import { http } from "@/lib/http"
 import { Button } from "@/components/ui/button"
 import { Tip } from "@/components/ui/tooltip"
 import {
@@ -65,7 +66,7 @@ export function HomeSwitcher() {
     const dir = await a.pickDir(t("shell.home.pickTitle"), info.main)
     if (!dir) return
     // Multi-utilisateur : le nom doit éviter aussi les homes invisibles de l'admin, que le serveur refuserait.
-    const taken = multi ? ((await authCall<{ homes: { name: string }[] }>("/admin/homes", undefined, "GET")).body.homes ?? info.homes) : info.homes
+    const taken = multi ? await http.get<{ homes: { name: string }[] }>("/admin/homes").then((r) => r.homes, () => info.homes) : info.homes
     let name = base(dir)
     for (let i = 2; taken.some((h) => h.name === name); i++) name = `${base(dir)} ${i}`
     await save({ homes: multi ? [{ name, dir }] : [...info.homes.map(({ name, dir }) => ({ name, dir })), { name, dir }] })

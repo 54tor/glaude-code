@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next"
 import { CircleUserRound, KeyRound, LogOut, ShieldCheck, Users } from "lucide-react"
 import { toast } from "sonner"
 import { loc } from "@/i18n"
-import { authCall, boot, logout, signedOut, useAuth, type AuthRes, type Reauth } from "@/lib/auth"
+import { boot, logout, signedOut, useAuth, type Reauth } from "@/lib/auth"
+import { http, qs, seg } from "@/lib/http"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -86,41 +87,31 @@ export function Profile() {
   const [pw1, setPw1] = useState("")
   const [pw2, setPw2] = useState("")
   const loadSessions = useCallback(async () => {
-    const r = await authCall<{ sessions: Sess[] }>("/auth/sessions", undefined, "GET")
-    setSessions(r.ok ? (r.body.sessions ?? []) : [])
+    setSessions(await http.get<{ sessions: Sess[] }>("/auth/sessions").then((r) => r.sessions ?? [], () => []))
   }, [])
   useEffect(() => {
     void Promise.resolve().then(loadSessions)
   }, [loadSessions])
   const close = () => (setPending(null), setPw1(""), setPw2(""))
 
-  const run = async (r: Reauth): Promise<AuthRes> => {
+  const run = async (r: Reauth) => {
     const p = pending!
-    const res =
-      p.kind === "rmTotp"
-        ? await authCall("/auth/factor/remove", { ...r, kind: "totp", id: 0 })
-        : p.kind === "rmKey"
-          ? await authCall("/auth/factor/remove", { ...r, kind: "webauthn", id: p.key })
-        : p.kind === "regen"
-          ? await authCall<{ recovery: string[] }>("/auth/recovery/regenerate", r)
-          : p.kind === "password"
-            ? await authCall("/auth/password", { ...r, new: pw1 })
-            : p.kind === "revokeOthers"
-              ? await authCall("/auth/sessions/revoke-others", r)
-              : await authCall("/auth/sessions/revoke", { ...r, id: p.id })
-    if (!res.ok) return res
+    let rec: string[] | undefined
+    if (p.kind === "rmTotp") await http.del("/auth/factors/totp", r)
+    else if (p.kind === "rmKey") await http.del(`/auth/factors/webauthn-${p.key}`, r)
+    else if (p.kind === "regen") rec = (await http.put<{ recovery: string[] }>("/auth/recovery-codes", r)).recovery
+    else if (p.kind === "password") await http.put("/auth/password", { ...r, new: pw1 })
+    else if (p.kind === "revokeOthers") await http.del(`/auth/sessions${qs({ others: true })}`, r)
+    else await http.del(`/auth/sessions/${seg(p.id!)}`, r)
     close()
-    const rec = (res.body as { recovery?: string[] }).recovery
     if (rec) setCodes(rec)
     if (p.kind === "password" || (p.kind === "revoke" && sessions?.find((s) => s.id === p.id)?.current)) {
       toast.success(t("auth.profile.reconnect"))
-      signedOut()
-      return res
+      return signedOut()
     }
     toast.success(t("auth.profile.done"))
     await boot()
     if (p.kind === "revoke" || p.kind === "revokeOthers") await loadSessions()
-    return res
   }
 
   const titles: Record<Pending["kind"], string> = {

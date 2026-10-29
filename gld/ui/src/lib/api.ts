@@ -165,13 +165,6 @@ export class HttpError extends Error {
   }
 }
 
-// Une réponse d'erreur (serveur arrêté, 500, jeton expiré) lève au lieu d'être prise pour des données.
-async function get<T>(url: string): Promise<T> {
-  const r = await authFetch(url)
-  if (!r.ok) throw new HttpError(r.status)
-  return (await r.json()) as T
-}
-
 export type FsTrashItem = { id: string; path: string; mtime: number }
 export type FsEntry = { name: string; type: "dir" | "file" | "symlink"; size: number; mtime: number }
 export type FsFile = { content: string; etag: string; size: number; mtime: number }
@@ -190,7 +183,7 @@ export const api = {
   fsFiles: (dir: string, paths: string[]) => http.post<{ files: { path: string; content: string }[] }>(`/fs/files${qs({ dir })}`, { paths }),
   data: () => http.get<Data>("/state"),
   banAlerts: (after: number) =>
-    get<{ ok: boolean; cursor: number; bans: { at: number; ip: string }[]; pairings: { at: number; ip: string }[] }>(`/auth/alerts?after=${after}`),
+    http.get<{ cursor: number; bans: { at: number; ip: string }[]; pairings: { at: number; ip: string }[] }>(`/auth/alerts${qs({ after })}`),
   cleanupWarning: () => http.get<{ days: number; sessions: { dir: string; id: string; title: string; cwd: string; expires: number }[] }>("/cleanup-warning"),
   sessionsStamp: () => http.get<{ stamp: number }>("/state/stamp"),
   sessionTrash: () => http.get<{ sessions: { dir: string; id: string; title: string; cwd: string; at: number; kb: number }[]; days: number }>("/trash/sessions"),

@@ -1,7 +1,8 @@
 import { useState, type FormEvent, type ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { LockKeyhole, ServerCrash } from "lucide-react"
-import { authCall, boot, setAuth, useAuth, useWait } from "@/lib/auth"
+import { boot, setAuth, useAuth, useWait } from "@/lib/auth"
+import { ApiError, http } from "@/lib/http"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -64,15 +65,17 @@ export function Login() {
     if (busy || left) return
     setBusy(true)
     setErr(false)
-    const r = await authCall<{ mfa: string[]; enroll: boolean; csrf: string }>("/auth/login", { name, password: pw })
-    setBusy(false)
-    if (!r.ok || !r.body.csrf) {
+    try {
+      const r = await http.post<{ mfa: string[]; enroll: boolean; csrf: string }>("/auth/sessions", { name, password: pw })
+      setBusy(false)
+      if (!r.csrf) return setErr(true)
+      setPw("")
+      setAuth({ state: "mfa", csrf: r.csrf, methods: r.mfa ?? [], enroll: !!r.enroll, user: undefined })
+    } catch (e) {
+      setBusy(false)
       setErr(true)
-      wait(r.retry)
-      return
+      wait(e instanceof ApiError ? e.retry : 0)
     }
-    setPw("")
-    setAuth({ state: "mfa", csrf: r.body.csrf, methods: r.body.mfa ?? [], enroll: !!r.body.enroll, user: undefined })
   }
   return (
     <form onSubmit={submit} className="space-y-4" noValidate>

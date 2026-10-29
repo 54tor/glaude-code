@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next"
 import QRCode from "react-qr-code"
 import { Copy, Download, KeyRound, Smartphone } from "lucide-react"
 import { toast } from "sonner"
-import { abandon, authCall, boot, setAuth, useAuth, useWait, waAssert, waAvailable, waRegister, type AuthRes, type Reauth } from "@/lib/auth"
+import { abandon, boot, setAuth, useAuth, useWait, waAssert, waAvailable, waRegister, type Reauth } from "@/lib/auth"
+import { ApiError, http, v1 } from "@/lib/http"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -43,24 +44,29 @@ export function Mfa() {
   const [err, setErr] = useState(false)
   const [busy, setBusy] = useState(false)
   const [left, wait] = useWait()
-  const done = async (r: AuthRes<{ csrf: string }>) => {
+  const fail = async (e: unknown) => {
     setBusy(false)
-    // Le jeton promu arrive par boot(), en même temps que l'état « ok » : avant, l'application encore montée n'envoie rien.
-    if (r.ok) return boot()
     // Trop d'échecs détruisent la session partielle, Retry-After compris : sans elle, inutile d'attendre, retour au mot de passe.
-    if (r.status === 401 && (await fetch("/auth/me").then((m) => m.status, () => 0)) === 401) return setAuth({ state: "anon", csrf: "", user: undefined, factors: undefined })
+    if (e instanceof ApiError && e.status === 401 && (await fetch(v1("/auth/me")).then((m) => m.status, () => 0)) === 401) return setAuth({ state: "anon", csrf: "", user: undefined, factors: undefined })
     setErr(true)
-    wait(r.retry)
+    wait(retryOf(e))
   }
-  const run = async (f: () => Promise<AuthRes<{ csrf: string }>>) => {
+  const run = async (f: () => Promise<unknown>) => {
     if (busy || left) return
     setBusy(true)
     setErr(false)
-    await done(await f())
+    try {
+      await f()
+    } catch (e) {
+      return fail(e)
+    }
+    setBusy(false)
+    // Le jeton promu arrive par boot(), en même temps que l'état « ok » : avant, l'application encore montée n'envoie rien.
+    return boot()
   }
-  const submit = (url: string, value: string, clear: () => void) => (e: FormEvent) => {
+  const submit = (path: string, value: string, clear: () => void) => (e: FormEvent) => {
     e.preventDefault()
-    void run(() => authCall(url, { code: value.trim() })).then(clear)
+    void run(() => http.post(path, { code: value.trim() })).then(clear)
   }
   const off = busy || left > 0
   return (
@@ -160,7 +166,7 @@ export function ReauthForm({
   extraOk?: boolean
   focusPassword?: boolean // faux quand un champ propre à l'action vient en premier
   danger?: boolean
-  onSubmit: (r: Reauth) => Promise<AuthRes>
+  onSubmit: (r: Reauth) => Promise<unknown> // lève ApiError
   onCancel: () => void
 }) {
   const { t } = useTranslation()
@@ -173,13 +179,16 @@ export function ReauthForm({
   const send = async (r: Reauth) => {
     setBusy(true)
     setErr(undefined)
-    const res = await onSubmit(r)
-    setBusy(false)
-    if (res.ok) return
-    // Un code accepté ne resert pas : on le redemande à chaque essai.
-    setCode("")
-    setErr(outOf(res, t("auth.reauth.invalid")))
-    wait(res.retry)
+    try {
+      await onSubmit(r)
+      setBusy(false)
+    } catch (e) {
+      setBusy(false)
+      // Un code accepté ne resert pas : on le redemande à chaque essai.
+      setCode("")
+      setErr(outOf(e, t("auth.reauth.invalid")))
+      wait(retryOf(e))
+    }
   }
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -188,12 +197,14 @@ export function ReauthForm({
   // L'assertion validée sur la session vaut code pendant cinq minutes.
   const withKey = async () => {
     setBusy(true)
-    const a = await waAssert()
-    setBusy(false)
-    if (!a.ok) {
+    try {
+      await waAssert()
+    } catch (e) {
+      setBusy(false)
       setErr(t("auth.reauth.invalid"))
-      return wait(a.retry)
+      return wait(retryOf(e))
     }
+    setBusy(false)
     await send({ password: pw, code: "" })
   }
   const off = busy || left > 0 || !pw || !extraOk
@@ -225,8 +236,9 @@ export function ReauthForm({
   )
 }
 
-// Réponse d'une action protégée : échec de vérification (401, ou 403 sans réauth) en message générique, sinon le message du serveur.
-export const outOf = (r: AuthRes, generic: string) => (r.status === 401 || r.status === 403 || !r.body.out ? generic : r.body.out)
+// Échec d'une action protégée : vérification (401, ou 403 sans réauth) et pannes en message générique, sinon le message du serveur.
+export const outOf = (e: unknown, generic: string) => (e instanceof ApiError && e.status >= 400 && e.status !== 401 && e.status !== 403 && e.message ? e.message : generic)
+export const retryOf = (e: unknown) => (e instanceof ApiError ? e.retry : 0)
 
 // Enrôlement d'un facteur : obligatoire à la première connexion (session partielle), ou depuis le profil (reauth). Depuis le profil,
 // chaque début d'enrôlement porte sa propre réauthentification, vérifiée par le serveur avant le QR code ou la clé : un code TOTP ne
@@ -242,47 +254,45 @@ export function Enrol({ reauth, hasTotp, onDone, onCancel }: { reauth?: boolean;
   const [left, wait] = useWait()
   const [codes, setCodes] = useState<string[] | null>(null)
   const first = !reauth
-  const fail = (r: AuthRes) => {
-    setErr(outOf(r, t("auth.enrol.failed")))
-    wait(r.retry)
+  const fail = (e: unknown) => {
+    setErr(outOf(e, t("auth.enrol.failed")))
+    wait(retryOf(e))
   }
-  const finish = (r: AuthRes<{ recovery: string[] }>) => {
-    if (!r.ok) return fail(r)
-    if (r.body.recovery?.length) setCodes(r.body.recovery)
+  const finish = (r: { recovery?: string[] }) => {
+    if (r.recovery?.length) setCodes(r.recovery)
     else onDone()
   }
-  const call = async <T,>(f: () => Promise<AuthRes<T>>) => {
+  // Exécute l'appel avec l'état « occupé » ; l'échec s'affiche ici.
+  const call = async <T,>(f: () => Promise<T>) => {
     setBusy(true)
     setErr(undefined)
-    const r = await f()
-    setBusy(false)
-    return r
+    try {
+      return await f()
+    } catch (e) {
+      fail(e)
+    } finally {
+      setBusy(false)
+    }
   }
-  const beginTotp = async (r?: Reauth): Promise<AuthRes> => {
-    const res = await authCall<{ secret: string; uri: string }>("/auth/totp/begin", r ?? {})
-    if (!res.ok || !res.body.secret || !res.body.uri) return { ...res, ok: false }
-    setTotp({ secret: res.body.secret, uri: res.body.uri })
+  const beginTotp = async (r?: Reauth) => {
+    const res = await http.post<{ secret: string; uri: string }>("/auth/totp/enrollments", r ?? {})
+    if (!res.secret || !res.uri) throw new ApiError(0, "bad_response", "")
+    setTotp({ secret: res.secret, uri: res.uri })
     setStep("totp")
-    return res
   }
-  const startTotp = async () => {
-    const r = await call(() => beginTotp())
-    if (!r.ok) fail(r)
-  }
+  const startTotp = () => call(() => beginTotp())
   const confirm = async (e: FormEvent) => {
     e.preventDefault()
-    finish(await call(() => authCall<{ recovery: string[] }>("/auth/totp/confirm", { code })))
+    const r = await call(() => http.put<{ recovery?: string[] }>("/auth/totp/enrollments/current", { code }))
+    if (r) finish(r)
     setCode("")
   }
   const register = async (e: FormEvent) => {
     e.preventDefault()
-    finish(await call(() => waRegister(label.trim())))
+    const r = await call(() => waRegister(label.trim()))
+    if (r) finish(r)
   }
-  const registerWith = async (r: Reauth): Promise<AuthRes> => {
-    const res = await waRegister(label.trim(), r)
-    if (res.ok) finish(res)
-    return res
-  }
+  const registerWith = async (r: Reauth) => finish(await waRegister(label.trim(), r))
   const back = () => (setStep("choose"), setErr(undefined))
   const off = busy || left > 0
   const labelField = (

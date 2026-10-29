@@ -2,7 +2,8 @@ import { useCallback, useEffect, useId, useState, type FormEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { MoreHorizontal, TriangleAlert, UserPlus } from "lucide-react"
 import { toast } from "sonner"
-import { authCall, boot, DANGEROUS, RIGHTS, signedOut, useAuth, type AuthRes, type Factors, type Reauth, type Right } from "@/lib/auth"
+import { boot, DANGEROUS, RIGHTS, signedOut, useAuth, type Factors, type Reauth, type Right } from "@/lib/auth"
+import { ApiError, http, qs } from "@/lib/http"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -24,6 +25,8 @@ type Pending =
   | { kind: "grant"; user: User; home: string; right: Right }
 
 const PAGE = 100
+
+const msgOf = (e: unknown, fallback: string) => (e instanceof ApiError && e.message ? e.message : fallback)
 
 // Avant une action, la même règle que le serveur : réauthentification pour tout ce qui rend un accès ou écarte un admin.
 // Désactiver un compte ordinaire ou couper ses sessions reste immédiat (mesure d'urgence).
@@ -77,13 +80,10 @@ export function AdminUsers() {
   const confirmId = useId()
 
   const load = useCallback(async () => {
-    const [u, h] = await Promise.all([
-      authCall<{ users: User[] }>("/admin/users", undefined, "GET"),
-      authCall<{ homes: Home[] }>("/admin/homes", undefined, "GET"),
-    ])
-    if (u.ok) setUsers(u.body.users ?? [])
-    else toast.error(u.body.out ?? t("auth.admin.loadFailed"))
-    setHomes((h.body.homes ?? []).map((x) => (x.id === "main" ? { id: x.id, name: t("auth.admin.mainHome") } : x)))
+    const [u, h] = await Promise.allSettled([http.get<{ users: User[] }>("/admin/users"), http.get<{ homes: Home[] }>("/admin/homes")])
+    if (u.status === "fulfilled") setUsers(u.value.users ?? [])
+    else toast.error(msgOf(u.reason, t("auth.admin.loadFailed")))
+    setHomes(((h.status === "fulfilled" ? h.value.homes : null) ?? []).map((x) => (x.id === "main" ? { id: x.id, name: t("auth.admin.mainHome") } : x)))
   }, [t])
   useEffect(() => {
     void Promise.resolve().then(load)
@@ -91,45 +91,41 @@ export function AdminUsers() {
 
   const reset = () => (setPending(null), setConfirmed(false), setForm({ name: "", password: "", admin: false }))
 
-  const perform = async (p: Pending, reauth?: Reauth): Promise<AuthRes> => {
+  // Lève ApiError ; sans réauthentification (action immédiate), l'échec s'affiche ici, sinon dans le formulaire.
+  const perform = async (p: Pending, reauth?: Reauth) => {
     const r = reauth ? { reauth } : {}
-    const res =
-      p.kind === "add"
-        ? await authCall("/admin/users", { ...r, name: form.name, password: form.password, admin: form.admin })
-        : p.kind === "enable" || p.kind === "disable"
-          ? await authCall("/admin/users/disable", { ...r, id: p.user.id, disabled: p.kind === "disable" })
-          : p.kind === "resetMfa"
-            ? await authCall("/admin/users/reset-mfa", { ...r, id: p.user.id })
-            : p.kind === "password"
-              ? await authCall("/admin/users/password", { ...r, id: p.user.id, password: form.password })
-              : p.kind === "grant"
-                ? await authCall("/admin/acl", { ...r, user_id: p.user.id, home_id: p.home, grant: [p.right], ...(DANGEROUS.includes(p.right) ? { confirm: true } : {}) })
-                : await authCall("/admin/sessions/revoke", { ...r, user_id: p.user.id })
-    if (!res.ok) {
-      if (!reauth) toast.error(res.body.out ?? t("auth.admin.failed"))
-      return res
+    try {
+      if (p.kind === "add") await http.post("/admin/users", { ...r, name: form.name, password: form.password, admin: form.admin })
+      else if (p.kind === "enable" || p.kind === "disable") await http.patch(`/admin/users/${p.user.id}`, { ...r, disabled: p.kind === "disable" })
+      else if (p.kind === "resetMfa") await http.del(`/admin/users/${p.user.id}/mfa`, r)
+      else if (p.kind === "password") await http.put(`/admin/users/${p.user.id}/password`, { ...r, password: form.password })
+      else if (p.kind === "grant") await http.put("/admin/acl", { ...r, user_id: p.user.id, home_id: p.home, grant: [p.right], ...(DANGEROUS.includes(p.right) ? { confirm: true } : {}) })
+      else await http.del(`/admin/sessions${qs({ user_id: p.user.id })}`, r)
+    } catch (e) {
+      if (!reauth) toast.error(msgOf(e, t("auth.admin.failed")))
+      throw e
     }
     toast.success(t("auth.admin.done"))
     reset()
     // Le serveur a fermé ses propres sessions (ou effacé son cookie) : l'interface se ferme proprement, comme depuis le profil.
-    if ("user" in p && p.user.name === me && (p.kind === "revoke" || p.kind === "resetMfa" || p.kind === "password")) {
-      signedOut()
-      return res
-    }
+    if ("user" in p && p.user.name === me && (p.kind === "revoke" || p.kind === "resetMfa" || p.kind === "password")) return signedOut()
     // Ses propres droits changés : useCan suit (boot garde les données, même compte).
     if (p.kind === "grant" && p.user.name === me) await boot()
     await load()
-    return res
   }
-  const ask = (p: Pending) => (needsReauth(p, me) ? (setConfirmed(false), setPending(p)) : void perform(p))
+  const ask = (p: Pending) => (needsReauth(p, me) ? (setConfirmed(false), setPending(p)) : void perform(p).catch(() => {}))
 
   // Retirer un droit, ou accorder un droit ordinaire à autrui : immédiat. exec, config_write et fs_write : confirmation puis réauthentification ;
   // sessions_read, fs_read et tout droit qu'on s'accorde : réauthentification.
   const toggle = async (u: User, home: string, right: Right, on: boolean) => {
     if (on && (DANGEROUS.includes(right) || right === "sessions_read" || right === "fs_read" || u.name === me)) return ask({ kind: "grant", user: u, home, right })
-    const res = await authCall<{ rights: Right[] }>("/admin/acl", { user_id: u.id, home_id: home, [on ? "grant" : "revoke"]: [right] })
-    if (!res.ok) return void toast.error(res.body.out ?? t("auth.admin.failed"))
-    setUsers((l) => l && l.map((x) => (x.id !== u.id ? x : { ...x, acl: [...x.acl.filter((a) => a.home_id !== home), { home_id: home, home_name: "", rights: res.body.rights ?? [] }] })))
+    let res: { rights: Right[] }
+    try {
+      res = await http.put<{ rights: Right[] }>("/admin/acl", { user_id: u.id, home_id: home, [on ? "grant" : "revoke"]: [right] })
+    } catch (e) {
+      return void toast.error(msgOf(e, t("auth.admin.failed")))
+    }
+    setUsers((l) => l && l.map((x) => (x.id !== u.id ? x : { ...x, acl: [...x.acl.filter((a) => a.home_id !== home), { home_id: home, home_name: "", rights: res.rights ?? [] }] })))
     if (u.name === me) await boot()
   }
 
@@ -305,12 +301,12 @@ export function AdminEvents() {
   const [events, setEvents] = useState<Event[] | null>(null)
   const [more, setMore] = useState(false)
   const fetchPage = useCallback(async (k: string, before?: number) => {
-    const q = new URLSearchParams({ limit: String(PAGE) })
-    if (k) q.set("kind", k)
-    if (before) q.set("before", String(before))
-    const r = await authCall<{ events: Event[] }>(`/admin/events?${q}`, undefined, "GET")
-    if (!r.ok) toast.error(r.body.out ?? t("auth.admin.loadFailed"))
-    const list = r.body.events ?? []
+    let list: Event[] = []
+    try {
+      list = (await http.get<{ events: Event[] }>(`/admin/events${qs({ limit: PAGE, kind: k, before })}`)).events ?? []
+    } catch (e) {
+      toast.error(msgOf(e, t("auth.admin.loadFailed")))
+    }
     setMore(list.length === PAGE)
     return list
   }, [t])

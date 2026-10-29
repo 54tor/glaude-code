@@ -5,10 +5,11 @@ import { clearDrafts, guardDrafts } from "@/hooks/useDraft"
 import { resetGit } from "@/hooks/useGit"
 import { resetWarm } from "@/hooks/useKeepWarm"
 import { resetOpen } from "@/hooks/useOpen"
-import { v1 } from "@/lib/apiError"
+import { ApiError, netError, qs, readResponse, v1 } from "@/lib/apiError"
+import { http } from "@/lib/http"
 import { resetTrust } from "@/lib/trust"
 
-// Mode multi-utilisateur (auth_routes.go, auth_admin.go) : état de connexion partagé, appels vers /auth/* et /admin/*, WebAuthn.
+// Mode multi-utilisateur (auth_routes.go, auth_admin.go) : état de connexion partagé, appels vers /v1/auth/* et /v1/admin/*, WebAuthn.
 
 export const RIGHTS = ["mem_read", "mem_write", "config_write", "mem_sync", "usage_read", "sessions_read", "exec", "fs_read", "fs_write"] as const
 export type Right = (typeof RIGHTS)[number]
@@ -76,39 +77,19 @@ export async function authFetch(url: string, init: RequestInit = {}): Promise<Re
   return r
 }
 
-export type AuthRes<T = object> = { status: number; ok: boolean; body: { ok?: boolean; out?: string } & Partial<T>; retry: number }
-
-export async function authCall<T = object>(url: string, body?: unknown, method = "POST"): Promise<AuthRes<T>> {
-  try {
-    const r = await authFetch(url, { method, headers: body === undefined ? undefined : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) })
-    const b = (await r.json().catch(() => ({}))) as AuthRes<T>["body"]
-    return { status: r.status, ok: r.ok && b.ok !== false, body: b, retry: Number(r.headers.get("Retry-After")) || 0 }
-  } catch {
-    return { status: 0, ok: false, body: {}, retry: 0 }
-  }
-}
-
 const methodsOf = (f: Factors) => [...(f.totp ? ["totp"] : []), ...(f.webauthn ? ["webauthn"] : []), ...(f.recovery ? ["recovery"] : [])]
 
 // Au démarrage et après chaque étape de connexion. 404 : mode ouvert, l'application s'affiche comme sans comptes.
 // Une panne pendant un rafraîchissement (session établie) laisse l'application en place : seul un démarrage mène à « indisponible ».
 export async function boot(): Promise<void> {
   const down = () => (snap.state === "ok" ? void toast.error(i18n.t("auth.refreshFailed")) : setAuth({ state: "unavailable" }))
-  let r: Response
-  try {
-    r = await fetch("/auth/me")
-  } catch {
-    return down()
-  }
-  if (r.status === 404) return setAuth({ state: "open" })
-  if (r.status === 401) {
-    return setAuth({ state: "anon", csrf: "", user: undefined })
-  }
-  if (!r.ok) return down()
   let b: { user: AuthUser; mfa: boolean; csrf: string; factors: Factors; rights?: Record<string, Right[]>; homes?: HomeRef[] }
   try {
-    b = await r.json()
-  } catch {
+    b = await readResponse<typeof b>(await fetch(v1("/auth/me")))
+  } catch (e) {
+    const st = e instanceof ApiError ? e.status : 0
+    if (st === 404) return setAuth({ state: "open" })
+    if (st === 401) return setAuth({ state: "anon", csrf: "", user: undefined })
     return down()
   }
   const f = b.factors
@@ -203,14 +184,14 @@ export function signedOut() {
 }
 
 export async function logout(): Promise<void> {
-  await authCall("/auth/logout")
+  await http.del("/auth/sessions/current").catch(() => {})
   signedOut()
 }
 
 // Abandon d'une connexion en cours (retour depuis le second facteur) : la session partielle tombe, les données locales restent,
 // car elles appartiennent au compte propriétaire, que la prochaine connexion départagera.
 export async function abandon(): Promise<void> {
-  await authCall("/auth/logout")
+  await http.del("/auth/sessions/current").catch(() => {})
   setAuth({ state: "anon", csrf: "", user: undefined, factors: undefined })
 }
 
@@ -294,25 +275,26 @@ async function waGet(o: { publicKey: PKOptions }) {
   }
 }
 
-const failed: AuthRes = { status: 0, ok: false, body: {}, retry: 0 }
-
+// Les deux cérémonies lèvent ApiError ; un refus ou une annulation côté navigateur devient une ApiError sans statut (réseau).
 // Assertion sur la session courante : second facteur à la connexion, ou réauthentification sans code (cinq minutes).
-export async function waAssert(): Promise<AuthRes<{ csrf: string }>> {
-  const b = await authCall<{ options: { publicKey: PKOptions } }>("/auth/mfa/webauthn/begin")
-  if (!b.ok || !b.body.options) return b
+export async function waAssert(): Promise<{ csrf: string }> {
+  const b = await http.post<{ options: { publicKey: PKOptions } }>("/auth/mfa/webauthn/challenges")
+  let cred: Awaited<ReturnType<typeof waGet>>
   try {
-    return await authCall("/auth/mfa/webauthn/finish", await waGet(b.body.options))
-  } catch {
-    return failed
+    cred = await waGet(b.options)
+  } catch (e) {
+    throw netError(e)
   }
+  return http.post("/auth/mfa/webauthn/assertions", cred)
 }
 
-export async function waRegister(label: string, reauth?: Reauth): Promise<AuthRes<{ csrf: string; recovery: string[] }>> {
-  const b = await authCall<{ options: { publicKey: PKOptions } }>("/auth/webauthn/register/begin", reauth ?? {})
-  if (!b.ok || !b.body.options) return b
+export async function waRegister(label: string, reauth?: Reauth): Promise<{ csrf: string; recovery?: string[] }> {
+  const b = await http.post<{ options: { publicKey: PKOptions } }>("/auth/webauthn/registrations", reauth ?? {})
+  let cred: Awaited<ReturnType<typeof waCreate>>
   try {
-    return await authCall(`/auth/webauthn/register/finish?label=${encodeURIComponent(label)}`, await waCreate(b.body.options))
-  } catch {
-    return failed
+    cred = await waCreate(b.options)
+  } catch (e) {
+    throw netError(e)
   }
+  return http.put(`/auth/webauthn/registrations/current${qs({ label })}`, cred)
 }

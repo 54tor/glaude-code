@@ -625,8 +625,8 @@ func TestAuthRoutesHiddenWithoutUsers(t *testing.T) {
 	if w.Code != 404 || w.Body.String() != u.Body.String() {
 		t.Fatalf("/v1/auth/me sans compte : %d %q", w.Code, w.Body)
 	}
-	if w := (modeReq{method: "POST", path: "/v1/auth/login", tokCookie: modeTok}).do(srv); w.Code != 404 {
-		t.Fatalf("/v1/auth/login sans compte : %d", w.Code)
+	if w := (modeReq{method: "POST", path: "/v1/auth/sessions", tokCookie: modeTok}).do(srv); w.Code != 404 {
+		t.Fatalf("/v1/auth/sessions sans compte : %d", w.Code)
 	}
 	if _, err := s.AddUser("alice", testPw, true); err != nil {
 		t.Fatal(err)
