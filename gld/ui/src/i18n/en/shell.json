@@ -24,6 +24,8 @@
     },
     "app": {
       "noneWaiting": "No session is waiting for a reply",
+      "updateAvailable": "New version available: {{latest}} (you have {{current}})",
+      "updateOpen": "View",
       "noMoreWaiting": "No more sessions waiting",
       "snippetSession": "New session with this snippet",
       "title": {

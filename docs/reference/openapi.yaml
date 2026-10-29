@@ -1901,6 +1901,23 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
+  /v1/update:
+    get:
+      tags:
+      - update
+      operationId: getUpdate
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
   /v1/keepwarm:
     get:
       tags:

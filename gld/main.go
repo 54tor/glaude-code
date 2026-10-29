@@ -332,6 +332,7 @@ func handler() http.Handler {
 	routesHomes(mux)
 	routesGit(mux)
 	routesGitPush(mux)
+	routesUpdate(mux)
 	routesTrust(mux)
 	routesTrashSessions(mux)
 	routesCleanupWarn(mux)

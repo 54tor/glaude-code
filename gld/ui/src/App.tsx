@@ -16,6 +16,7 @@ import { useAppData } from "@/hooks/useAppData"
 import { useSearchHits } from "@/hooks/useSearchHits"
 import { useShortcuts } from "@/hooks/useShortcuts"
 import { useWaitingNotice } from "@/hooks/useWaitingNotice"
+import { useUpdateNotice } from "@/hooks/useUpdateNotice"
 import { BanAlert } from "@/components/BanAlert"
 import { applyFont } from "@/lib/fonts"
 import { type Choice } from "@/lib/models"
@@ -157,6 +158,7 @@ function Shell() {
   const favs = useMemo(() => new Set(data?.favs), [data])
   const asking = useMemo(() => new Set(data?.asking), [data])
   useWaitingNotice(waiting, asking, everyId)
+  useUpdateNotice()
 
   const gkey = (x: VGroup) => groupKey(x, home)
   // Listes dérivées mémoïsées : un rendu sans nouvelles données (sélection, menu, saisie) ne les recalcule pas.
