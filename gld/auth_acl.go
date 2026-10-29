@@ -76,6 +76,7 @@ var routeRights = map[string]Right{
 	"POST /v1/config/restorations": RightConfigWrite, "POST /v1/config/permissions/imports": RightConfigWrite, "POST /v1/config/mcp/checks": RightConfigWrite, "PUT /v1/config/projects/mcp": RightConfigWrite,
 	"POST /v1/config/permissions/explanations": RightConfigWrite,
 	"PUT /v1/snippets/{key}":                   RightConfigWrite, "DELETE /v1/snippets": RightConfigWrite, "PATCH /v1/snippets/{key}": RightConfigWrite, "POST /v1/snippets/imports": RightConfigWrite,
+	"GET /v1/backup/export": RightConfigWrite, "POST /v1/backup/imports": RightConfigWrite, "POST /v1/backup/imports/{id}/applications": RightConfigWrite, "DELETE /v1/backup/imports/{id}": RightConfigWrite,
 	"PUT /v1/skills/{key}": RightConfigWrite, "POST /v1/skills/copies": RightConfigWrite, "DELETE /v1/skills": RightConfigWrite,
 	"POST /v1/skills/drafts": RightConfigWrite, "POST /v1/skills/installations": RightConfigWrite,
 	"PUT /v1/plugins/{plugin}": RightConfigWrite, "DELETE /v1/plugins/{plugin}": RightConfigWrite, "PATCH /v1/plugins/{plugin}": RightConfigWrite, "POST /v1/plugins/{plugin}/updates": RightConfigWrite,

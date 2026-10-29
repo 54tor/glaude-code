@@ -713,6 +713,117 @@ paths:
         '400':
           $ref: '#/components/responses/Error'
       security: []
+  /v1/backup/export:
+    get:
+      tags:
+      - backup
+      operationId: getBackupExport
+      parameters:
+      - name: cats
+        in: query
+        required: true
+        schema:
+          type: string
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/backup/imports:
+    post:
+      tags:
+      - backup
+      operationId: postBackupImports
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/backup/imports/{id}:
+    delete:
+      tags:
+      - backup
+      operationId: deleteBackupImports
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: config_write
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/backup/imports/{id}/applications:
+    post:
+      tags:
+      - backup
+      operationId: postBackupImportsApplications
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                picks:
+                  type: array
+                  items: {}
+                targets:
+                  type: object
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
   /v1/cleanup-warning:
     get:
       tags:

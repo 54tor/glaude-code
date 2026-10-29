@@ -384,6 +384,7 @@
   "srv.routes_skills.supprimeCopieALa": "Deleted (copy in the trash)",
   "srv.routes_snippets.envoiInvalideOuTrop": "upload invalid or too large (16 MB at most)",
   "srv.routes_snippets.miseEnFormePrete": "Formatting ready",
+  "srv.routes_backup.envoiInvalideOuTrop": "invalid or oversized upload",
   "srv.routes_snippets.scopeInvalide": "invalid scope",
   "srv.routes_snippets.snippetEnregistre": "Snippet saved",
   "srv.routes_snippets.snippetRenomme": "Snippet renamed",

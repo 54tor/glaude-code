@@ -384,6 +384,7 @@
   "srv.routes_skills.supprimeCopieALa": "Supprimé (copie à la corbeille)",
   "srv.routes_snippets.envoiInvalideOuTrop": "envoi invalide ou trop gros (16 Mo au plus)",
   "srv.routes_snippets.miseEnFormePrete": "Mise en forme prête",
+  "srv.routes_backup.envoiInvalideOuTrop": "envoi invalide ou trop volumineux",
   "srv.routes_snippets.scopeInvalide": "scope invalide",
   "srv.routes_snippets.snippetEnregistre": "Snippet enregistré",
   "srv.routes_snippets.snippetRenomme": "Snippet renommé",
