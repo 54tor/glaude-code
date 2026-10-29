@@ -33,6 +33,9 @@ const buttonVariants = cva(
         "icon-lg": "size-9",
       },
     },
+    compoundVariants: [
+      { variant: "ghost", size: ["default", "xs", "sm", "lg"], className: "border-border" },
+    ],
     defaultVariants: {
       variant: "default",
       size: "default",
