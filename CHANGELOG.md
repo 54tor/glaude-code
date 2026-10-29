@@ -4,9 +4,14 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.7.0] - 2026-10-29
+
 ### Ajouté
 - Workflows : le détail d'une tâche de workflow affiche ses phases, ses agents (état, tokens, durée, dernier outil) et ses totaux, relus par `GET /v1/sessions/{id}/workflows`.
 - Snippets : cocher plusieurs commandes puis les fusionner dans une session Claude (`POST /v1/snippets/merges`), comme la fusion de mémoire.
+- Mémoire : renommer un fichier depuis son menu contextuel.
+- Notes : clic droit sur l'en-tête pour changer le dossier de notes ; le menu d'envoi se limite aux sessions de ce dossier.
+- Tâches de fond et sous-agents : bouton d'arrêt dans les listes en direct ; les messages de sous-agent se replient à 5 lignes ; les messages entre sessions renvoient vers la session émettrice.
 
 ### Modifié
 - **Rupture** : toute l'API passe en REST sous `/v1` (ressources au pluriel, `GET`/`POST`/`PUT`/`PATCH`/`DELETE`, identifiants en chemin, suppressions multiples par `?item=` répété). Les anciennes routes (`/api`, `/session-send`, `/fs-save`, `/auth/login`, `/admin/users`…) sont supprimées, sans alias. La correspondance complète est dans `docs/reference/openapi.yaml`.
@@ -22,6 +27,12 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 ### Ajouté
 - `docs/reference/openapi.yaml` : contrat OpenAPI 3 de l'API `/v1`, vérifié contre les routes enregistrées et leurs droits par un test.
 - Tests de contrat : toute route hors pages est sous `/v1`, les erreurs d'un échantillon de routes ont la forme uniforme, aucun `http.Error` ne subsiste dans un handler `/v1`.
+
+### Corrigé
+- Un lien de session partagée déjà utilisé rouvre la session sur le navigateur autorisé.
+- La reprise des sessions coupées en plein tour envoie un message « continue ».
+- La recherche de la barre latérale ne filtre plus que ses propres entrées, indépendamment de la barre du haut.
+- Les infobulles de la barre d'outils de l'IDE s'affichent sous les boutons ; l'indication de compaction se place entre la barre de session et le champ de saisie.
 
 ## [0.6.3] - 2026-10-29
 
