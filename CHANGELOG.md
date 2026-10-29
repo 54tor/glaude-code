@@ -13,6 +13,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Sécurité : en mode multi-utilisateur, un jeton `Authorization: Bearer` faux compte désormais pour l'adresse (10 par minute, puis `429`), comme en mode ouvert ; il se devinait auparavant sans limite.
 - Sécurité : `/assets/` et `/icons/` ne listent plus leur contenu (`404`) ; les fichiers restent servis.
 - Sécurité : le plafond global de 60 tentatives de connexion par minute n'arrête plus un compte qui revient depuis une adresse où il s'est déjà connecté ; des noms inventés envoyés depuis de nombreuses adresses bloquaient toutes les connexions.
+- Sécurité (`GLD_RUN_AS`, expérimental) : les fichiers d'agents des équipes (`agents/<id>.md`) sont écrits sans suivre de lien symbolique posé par le compte cible. Le suivi `docs/auth-followup-openroot.md` liste quatre autres sites relevés par l'audit.
+- Documentation : `mem_write` permet d'orienter les sessions des autres comptes du home (CLAUDE.md et règles chargés par toutes les sessions).
 
 ## [0.7.1] - 2026-10-29
 
