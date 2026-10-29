@@ -41,6 +41,17 @@ sessions = {
             ("tool", "Grep", {"pattern": "vatRate", "path": "src"}, "src/Pricing/VatCalculator.php:42"),
             ("text", "Le taux est pris sur le pays de facturation, pas sur celui de livraison. Je corrige `VatCalculator` et j'ajoute un test pour la Belgique."),
         ]),
+        ("", 30, [
+            ("user", "Perform a read-only security review of this codebase and report confirmed vulnerabilities only."),
+            ("tool", "Grep", {"pattern": "createQueryBuilder|executeQuery", "path": "src"}, "src/Repository/OrderRepository.php:58"),
+            ("text", "**1 constat confirmé** — `src/Repository/OrderRepository.php:58` : le filtre `status` est concaténé dans la requête DQL (injection SQL, gravité haute). Correctif : paramètre nommé `:status`.\n\n2 pistes écartées : le webhook Stripe vérifie bien la signature, et l'upload d'images valide le type MIME."),
+        ]),
+        ("Découper PaymentService et committer", 4, [
+            ("user", "Découpe PaymentService en deux classes puis commite."),
+            ("tool", "Task", {"description": "Chercher les usages de PaymentService", "subagent_type": "Explore", "prompt": "Liste les appels à PaymentService"}, "7 usages dans 4 fichiers"),
+            ("tool", "Bash", {"command": "git add -A && git commit -m \"refactor(payment): split PaymentService\"", "description": "Commit"}, "[main 3fa91c2] refactor(payment): split PaymentService\n 3 files changed, 84 insertions(+), 51 deletions(-)"),
+            ("text", "Le service est découpé en `CheckoutSession` et `PaymentWebhook`, et le commit est fait (3 fichiers). Il reste deux commits à pousser."),
+        ]),
         ("Migrer vers PostgreSQL 17", 70, [
             ("user", "Prépare la migration de MySQL vers PostgreSQL 17 : liste ce qui casse."),
             ("text", "Je passe en revue les requêtes natives et les types de colonnes. Trois points à traiter : les `GROUP BY` implicites, `ENUM`, et les `LIMIT` dans les sous-requêtes."),
@@ -63,6 +74,10 @@ sessions = {
         ("Passer les images en AVIF", 9, [
             ("user", "Convertis les images du site en AVIF avec un repli WebP."),
             ("text", "Astro sait le faire à la construction avec `<Picture>`. Je remplace les `<img>` de la page d'accueil et je règle les largeurs."),
+        ]),
+        ("", 200, [
+            ("user", "Review this change for security vulnerabilities in the diff below."),
+            ("text", "Aucun problème confirmé : les liens externes portent `rel=\"noopener\"` et le formulaire de contact est protégé par un jeton CSRF."),
         ]),
         ("Rédiger la page « À propos »", 120, [
             ("user", "Écris la page « À propos » : deux paragraphes, ton chaleureux."),
@@ -118,7 +133,8 @@ for name, label in projects.items():
                 add({"type": "assistant", "message": {"role": "assistant", "model": "claude-opus-5-5", "content": [{"type": "tool_use", "id": tid, "name": s[1], "input": s[2]}], "stop_reason": "tool_use",
                                                      "usage": {"input_tokens": 900, "output_tokens": 80, "cache_read_input_tokens": 40000, "cache_creation_input_tokens": 600}}})
                 add({"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": tid, "content": s[3]}]}})
-        lines.append(json.dumps({"type": "custom-title", "customTitle": title, "sessionId": sid}, ensure_ascii=False, separators=(",", ":")))
+        if title:
+            lines.append(json.dumps({"type": "custom-title", "customTitle": title, "sessionId": sid}, ensure_ascii=False, separators=(",", ":")))
         w(os.path.join(pdir, sid + ".jsonl"), "\n".join(lines) + "\n")
         os.utime(os.path.join(pdir, sid + ".jsonl"), (t + 120, t + 120))
     for fname, typ, body in memory[name]:
@@ -132,6 +148,7 @@ for name, label in projects.items():
 # réglages personnels et de projet
 w(os.path.join(CL, "settings.json"), json.dumps({
     "model": "opus",
+    "enabledPlugins": {"outils-revue@atelier": True, "doc-express@atelier": False},
     "permissions": {
         "allow": ["Bash(git status:*)", "Bash(git diff:*)", "Bash(ls:*)", "Read(~/Projets/**)"],
         "ask": ["Bash(git push:*)"],
@@ -155,4 +172,53 @@ w(os.path.join(CL, "skills", "notes-de-version", "SKILL.md"), "---\nname: notes-
 w(os.path.join(CL, "CLAUDE.md"), "# Règles personnelles\n\nRépondre en français, de façon concise.\n")
 w(os.path.join(CL, "rules", "commits.md"), "Messages de commit en français, format conventionnel, sans ligne d'attribution.\n")
 w(os.path.join(CL, "rules", "tests.md"), "Lancer les tests ciblés avant de proposer un commit.\n")
+# git : un dépôt par projet (remote local, commits en avance, fichiers modifiés et non suivis)
+import subprocess
+GE = dict(os.environ, GIT_AUTHOR_NAME="alice", GIT_AUTHOR_EMAIL="alice@example.com", GIT_COMMITTER_NAME="alice", GIT_COMMITTER_EMAIL="alice@example.com", HOME=HOME)
+
+
+def git(cwd, *a):
+    subprocess.run(["git", *a], cwd=cwd, env=GE, check=True, capture_output=True)
+
+
+for name, ahead, dirty, untracked in (("boutique", 2, 3, 2), ("api-meteo", 1, 1, 0), ("site-vitrine", 0, 0, 0)):
+    cwd = os.path.join(HOME, "Projets", name)
+    rem = os.path.join(HOME, "remotes", name + ".git")
+    os.makedirs(rem, exist_ok=True)
+    git(rem, "init", "--bare", "-b", "main")
+    git(cwd, "init", "-b", "main")
+    for f in ("README.md", "src/app.txt", "src/a.txt", "src/b.txt"):
+        w(os.path.join(cwd, f), f"{f}\n")
+    git(cwd, "add", "-A")
+    git(cwd, "commit", "-m", "chore(init): first commit")
+    git(cwd, "remote", "add", "origin", rem)
+    git(cwd, "push", "-u", "origin", "main")
+    for i in range(ahead):
+        w(os.path.join(cwd, f"src/feat{i}.txt"), "x\n")
+        git(cwd, "add", "-A")
+        git(cwd, "commit", "-m", f"feat(app): step {i + 1}")
+    for f in ("README.md", "src/app.txt", "src/a.txt")[:dirty]:
+        w(os.path.join(cwd, f), "modifié\n")
+    for i in range(untracked):
+        w(os.path.join(cwd, f"notes{i}.txt"), "à trier\n")
+
+# notes de projet (bloc-notes) et commandes personnalisées (snippets)
+w(os.path.join(CL, "gld-web-notes.json"), json.dumps({
+    "d/" + os.path.join(HOME, "Projets", "boutique"): json.dumps(["Relire le webhook Stripe avant la mise en production", "Demander à Marc la date de bascule PostgreSQL", "Ajouter un test pour les remboursements partiels"], ensure_ascii=False),
+    "d/" + os.path.join(HOME, "Projets", "api-meteo"): json.dumps(["Limite fournisseur : 60 appels par minute"], ensure_ascii=False),
+}, indent=2, ensure_ascii=False))
+for n, d, b in (("deploiement", "Prépare le déploiement : tests, tag, notes de version", "Lance les tests, crée le tag et rédige les notes de version."),
+                ("explique", "Explique un fichier en trois phrases", "Explique le fichier donné en trois phrases, sans jargon.")):
+    w(os.path.join(CL, "commands", n + ".md"), f"---\ndescription: {d}\n---\n\n{b}\n")
+w(os.path.join(HOME, "Projets", "boutique", ".claude", "commands", "migration.md"), "---\ndescription: Génère une migration Doctrine à partir du diff des entités\n---\n\nGénère la migration sans l'exécuter.\n")
+
+# plugin installé depuis une place de marché fictive
+pl = os.path.join(CL, "plugins", "cache", "atelier", "outils-revue", "1.2.0")
+w(os.path.join(pl, "skills", "revue-securite", "SKILL.md"), "---\nname: revue-securite\ndescription: Revue de sécurité en lecture seule d'un diff ou d'un dépôt\n---\n\nLis le code sans le modifier et signale seulement les failles confirmées.\n")
+w(os.path.join(CL, "plugins", "installed_plugins.json"), json.dumps({"version": 2, "plugins": {"outils-revue@atelier": [{"scope": "user", "installPath": pl, "version": "1.2.0"}]}}, indent=2))
+w(os.path.join(CL, "plugins", "known_marketplaces.json"), json.dumps({"atelier": {"source": {"source": "github", "repo": "atelier/plugins"}, "installLocation": os.path.join(CL, "plugins", "marketplaces", "atelier"), "lastUpdated": iso(now - 86400)}}, indent=2))
+
+# serveurs MCP et workspace sauvegardé
+w(os.path.join(HOME, ".claude.json"), json.dumps({"mcpServers": {"documentation": {"type": "http", "url": "https://docs.example.com/mcp"}}}, indent=2))
+w(os.path.join(HOME, "Projets", "boutique", ".mcp.json"), json.dumps({"mcpServers": {"base-de-test": {"command": "npx", "args": ["-y", "serveur-sql-lecture-seule"]}}}, indent=2))
 print("ok", HOME)
