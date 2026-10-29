@@ -23,6 +23,10 @@ var mcpAddJSON = func(name string, doc []byte) error {
 	if !mcpNameRe.MatchString(name) || name[0] == '-' {
 		return terr("srv.backup_cmds.nomMcpRefuse", "A1", name)
 	}
+	var obj map[string]json.RawMessage
+	if json.Unmarshal(doc, &obj) != nil || obj == nil {
+		return terr("srv.backup_cmds.mcpPasUnObjet", "A1", name)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cmd := withPath(exec.CommandContext(ctx, "claude", "mcp", "add-json", name, string(doc), "-s", "user"))
@@ -40,6 +44,9 @@ func cmdErr(out string, err error) error {
 	}
 	return err
 }
+
+// dashArg : une valeur de l'archive qui commencerait par « - » serait lue comme une option de claude.
+func dashArg(v string) bool { return strings.HasPrefix(v, "-") }
 
 func readStaged(s *stage, name string, v any) bool {
 	b, err := os.ReadFile(filepath.Join(s.dir, name))
@@ -68,6 +75,9 @@ func planMarkets(s *stage) ([]SyncItem, error) {
 	}
 	var items []SyncItem
 	for _, m := range d.Marketplaces {
+		if dashArg(marketSource(m)) {
+			continue
+		}
 		st := "new"
 		if have[m.Name] {
 			st = "same"
@@ -87,6 +97,10 @@ func applyMarkets(s *stage, picks []SyncPick, _ map[string]string) []BackupResul
 		for _, m := range d.Marketplaces {
 			if m.Name != name {
 				continue
+			}
+			if dashArg(marketSource(m)) {
+				r = BackupResult{ID: p.ID, Status: "failed", Message: L("srv.backup_cmds.valeurRefusee", "A1", marketSource(m))}
+				break
 			}
 			out, err := marketplaceAct("add", marketSource(m), "")
 			r = BackupResult{ID: p.ID, Status: "ok"}
@@ -127,7 +141,7 @@ func planPlugins(s *stage) ([]SyncItem, error) {
 	}
 	var items []SyncItem
 	for _, p := range d.Plugins {
-		if p.Scope != "user" && !isDirPath(p.Project) {
+		if dashArg(p.ID) || (p.Scope != "user" && !isDirPath(p.Project)) {
 			continue
 		}
 		st := "new"
@@ -177,6 +191,10 @@ func applyPlugins(s *stage, picks []SyncPick, _ map[string]string) []BackupResul
 		}
 		if p == nil {
 			res = append(res, BackupResult{ID: pk.ID, Status: "skipped"})
+			continue
+		}
+		if dashArg(p.ID) {
+			res = append(res, BackupResult{ID: pk.ID, Status: "failed", Message: L("srv.backup_cmds.valeurRefusee", "A1", p.ID)})
 			continue
 		}
 		proj := ""

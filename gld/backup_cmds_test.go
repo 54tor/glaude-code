@@ -187,3 +187,34 @@ func TestApplyBackupUnownedPickSkipped(t *testing.T) {
 		t.Fatalf("%+v", res)
 	}
 }
+
+func TestApplyDashValuesRefused(t *testing.T) {
+	log := cmdEnv(t, `[]`, `[]`)
+	doc := `{"marketplaces":[{"name":"x","source":"github","repo":"-x/y"}],"plugins":[{"id":"--help","scope":"user","enabled":true}]}`
+	p, err := stageBackup(cmdArchive(t, map[string]string{"plugins.json": doc}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Items) != 0 {
+		t.Fatalf("plan : %+v", p.Items)
+	}
+	res, _ := applyBackup(p.ID, []SyncPick{{"market:x", "replace"}, {"plugin:user:--help", "replace"}}, nil)
+	if resOf(res, "market:x").Status != "failed" || resOf(res, "plugin:user:--help").Status != "failed" {
+		t.Fatalf("%+v", res)
+	}
+	if _, err := os.Stat(log); err == nil {
+		t.Fatal("claude lancé")
+	}
+}
+
+func TestMcpAddDocNotObject(t *testing.T) {
+	log := cmdEnv(t, `[]`, `[]`)
+	for _, d := range []string{`-1`, `null`, `[]`, `"x"`, ``} {
+		if err := mcpAddJSON("gh", []byte(d)); err == nil {
+			t.Errorf("accepté : %q", d)
+		}
+	}
+	if _, err := os.Stat(log); err == nil {
+		t.Fatal("claude lancé")
+	}
+}

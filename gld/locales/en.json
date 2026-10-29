@@ -573,5 +573,7 @@
   "srv.backup_export.catsVides": "no categories selected",
   "srv.backup_export.catInconnue": "unknown category: {{.A1}}",
   "srv.backup_cmds.nomMcpRefuse": "MCP server name refused: {{.A1}}",
-  "srv.backup_cmds.aSaisir": "to re-enter: {{.A1}}"
+  "srv.backup_cmds.aSaisir": "to re-enter: {{.A1}}",
+  "srv.backup_cmds.valeurRefusee": "value refused (starts with a dash): {{.A1}}",
+  "srv.backup_cmds.mcpPasUnObjet": "MCP server {{.A1}} is not a JSON object"
 }
