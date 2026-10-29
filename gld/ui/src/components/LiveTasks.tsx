@@ -91,7 +91,7 @@ export function LiveTasks({ live: { st }, dir, id }: { live: Live; dir: string; 
       )
       if (pick.tool === "Workflow")
         void api.workflows(dir, id).then(
-          (r) => live && setWf({ id: pick.id, w: r.workflows.find((x) => x.taskId === pick.id) }),
+          (r) => live && setWf({ id: pick.id, w: r.workflows.find((x) => x.taskId === pick.id) ?? (pick.status === "running" ? r.workflows.find((x) => !x.taskId && x.status === "running") : undefined) }),
           () => {}
         )
     }
