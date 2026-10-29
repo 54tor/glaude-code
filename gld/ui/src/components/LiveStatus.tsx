@@ -1,5 +1,5 @@
 import { i18n, loc } from "@/i18n"
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { BarChart3, Bot, LoaderPinwheel, Wrench } from "lucide-react"
 import { api, type Detail, type LiveState, type Msg, type Session, type SubLive, type Tokens } from "@/lib/api"
@@ -64,16 +64,6 @@ export function LiveBar({ live: { st, open }, id }: { live: Live; id: string }) 
   const { t } = useTranslation()
   const now = useNow(open)
   const [expanded, setExpanded] = useState(false)
-  // Pendant un tour, la bande ne rétrécit jamais (lignes de sous-agents ou de tâches qui vont et viennent) : la vue collée à la fin ne
-  // fait pas de va-et-vient. Elle reprend sa taille quand Claude attend.
-  const bar = useRef<HTMLDivElement>(null)
-  const thinking = !!st?.thinking
-  useLayoutEffect(() => {
-    const el = bar.current
-    if (!el) return
-    if (!thinking) return void (el.style.minHeight = "")
-    if (el.offsetHeight > parseFloat(el.style.minHeight || "0")) el.style.minHeight = `${el.offsetHeight}px`
-  })
   if (!st) return null
   if (!(open && st.open)) return null // fermée : « Session fermée » est dans la barre d'outils (LiveStats), sans bande
   const isOpen = true
@@ -89,7 +79,7 @@ export function LiveBar({ live: { st, open }, id }: { live: Live; id: string }) 
           </div>
         </div>
       ))}
-      <div ref={bar} className="sticky bottom-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 bg-popover/95 py-2 text-sm backdrop-blur">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 py-1 text-sm">
         {isOpen && (
           <span className={cn("flex min-w-0 items-center gap-1.5 font-medium", st.thinking ? "text-success" : "text-warning")}>
             {st.thinking ? <LoaderPinwheel className="size-3.5 shrink-0 animate-spin" /> : <span className="size-1.5 shrink-0 rounded-full bg-current" />}
@@ -101,23 +91,22 @@ export function LiveBar({ live: { st, open }, id }: { live: Live; id: string }) 
         )}
         {/* Un seul emplacement d'une ligne : l'outil en cours, ou le dernier message de Claude quand il attend. Sa hauteur est toujours
             réservée (même sans rien à montrer) pour que la page ne saute pas ; un clic le déplie. */}
-        <button
+        {detail && <button
           type="button"
-          disabled={!detail}
           onClick={() => setExpanded((e) => !e)}
-          aria-expanded={detail ? expanded : undefined}
+          aria-expanded={expanded}
           title={detail}
           className={cn(
-            "msg flex min-h-5 min-w-0 basis-full items-start gap-2 border-l-2 py-0.5 pl-3 text-left text-xs leading-4 text-muted-foreground",
-            detail ? (isTool ? "" : "border-warning/60") : "border-transparent",
+            "msg flex min-w-0 basis-full items-start gap-2 border-l-2 py-0.5 pl-3 text-left text-xs leading-4 text-muted-foreground",
+            isTool ? "" : "border-warning/60",
             isTool && st.toolRunning && "animate-pulse rounded-r-md border-success bg-success/10 text-foreground",
-            detail && "cursor-pointer hover:text-foreground"
+            "cursor-pointer hover:text-foreground"
           )}
         >
           {isTool && st.toolRunning && <LoaderPinwheel className="mt-px size-3.5 shrink-0 animate-spin text-success" aria-hidden />}
           {isTool && <Wrench className="mt-px size-3.5 shrink-0" aria-label={st.toolRunning ? t("conversation.live.toolRunning") : t("conversation.live.lastTool")} />}
-          <span className={cn("min-w-0 flex-1", expanded ? "max-h-60 overflow-y-auto break-words whitespace-pre-wrap" : "truncate")}>{detail || " "}</span>
-        </button>
+          <span className={cn("min-w-0 flex-1", expanded ? "max-h-60 overflow-y-auto break-words whitespace-pre-wrap" : "truncate")}>{detail}</span>
+        </button>}
         {st.subs
           .filter((s) => s.running)
           .map((s) => (
