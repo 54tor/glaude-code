@@ -128,6 +128,17 @@ func scanBgTasks(p string) []BgTask {
 					byID[t.ID] = t
 					order = append(order, t.ID)
 				}
+			case bytes.Contains(l, []byte(`Successfully stopped task: `)) && bytes.Contains(l, []byte(`"tool_result"`)):
+				// TaskStop ne met aucune <task-notification> en file : son résultat est la seule trace de la fin
+				var o struct{ Timestamp string }
+				if json.Unmarshal(l, &o) != nil {
+					break
+				}
+				if m := bgStoppedRe.FindSubmatch(l); m != nil {
+					if t := byID[string(m[1])]; t != nil && t.Status == "running" {
+						t.Status, t.End = "killed", o.Timestamp
+					}
+				}
 			case bytes.Contains(l, []byte(`"queue-operation"`)) && bytes.Contains(l, []byte(`<task-id>`)):
 				var o struct {
 					Operation, Timestamp, Content string
@@ -168,6 +179,8 @@ func scanBgTasks(p string) []BgTask {
 	}
 	return out
 }
+
+var bgStoppedRe = regexp.MustCompile(`Successfully stopped task: ([A-Za-z0-9]{1,40})\b`)
 
 var bgSafeID = regexp.MustCompile(`^[A-Za-z0-9]{1,40}$`)
 

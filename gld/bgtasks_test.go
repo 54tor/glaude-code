@@ -13,17 +13,15 @@ func TestBgTasks(t *testing.T) {
 	lines := `{"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"sleep 9","description":"Attente","run_in_background":true}}]}}
 {"type":"user","timestamp":"T1","message":{"content":[{"tool_use_id":"tu1","type":"tool_result"}]},"toolUseResult":{"backgroundTaskId":"abc1"}}
 {"type":"user","timestamp":"T2","message":{"content":[{"tool_use_id":"tu2","type":"tool_result"}]},"toolUseResult":{"backgroundTaskId":"abc2"}}
+{"type":"user","timestamp":"T5","message":{"content":[{"tool_use_id":"tu9","type":"tool_result","content":"{\"message\":\"Successfully stopped task: abc2 (sleep 9)\"}"}]}}
 {"type":"queue-operation","operation":"enqueue","timestamp":"T3","content":"<task-notification>\n<task-id>abc1</task-id>\n<status>completed</status>\n<summary>fini</summary>\n</task-notification>"}
 {"type":"queue-operation","operation":"enqueue","timestamp":"T4","content":"<task-notification>\n<task-id>mon9</task-id>\n<status>failed</status>\n<summary>Monitor KO</summary>\n</task-notification>"}
 `
 	os.WriteFile(p, []byte(lines), 0o600)
 	got := bgTasks(p, true)
 	if len(got) != 3 || got[0].ID != "abc1" || got[0].Status != "completed" || got[0].Desc != "Attente" || got[0].End != "T3" ||
-		got[1].ID != "abc2" || got[1].Status != "running" || got[2].ID != "mon9" || got[2].Status != "failed" || got[2].Desc != "Monitor KO" {
+		got[1].ID != "abc2" || got[1].Status != "killed" || got[1].End != "T5" || got[2].ID != "mon9" || got[2].Status != "failed" || got[2].Desc != "Monitor KO" {
 		t.Fatalf("%+v", got)
-	}
-	if g := bgTasks(p, false); g[1].Status != "unknown" {
-		t.Fatalf("session fermée : %+v", g[1])
 	}
 	if _, ok := bgOutput(p, "abc1"); ok {
 		t.Fatal("sortie lue sans fichier au chemin attendu")
