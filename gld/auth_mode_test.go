@@ -127,8 +127,8 @@ func TestNoAuthDBNoSideEffects(t *testing.T) {
 		if w := (modeReq{method: "GET", path: "/v1/state", tokCookie: modeTok}).do(srv); w.Code != 200 {
 			t.Fatalf("mode ouvert : %d", w.Code)
 		}
-		if w := (modeReq{method: "GET", path: "/auth/me", tokCookie: modeTok}).do(srv); w.Code != 404 {
-			t.Fatalf("/auth/me sans base : %d", w.Code)
+		if w := (modeReq{method: "GET", path: "/v1/auth/me", tokCookie: modeTok}).do(srv); w.Code != 404 {
+			t.Fatalf("/v1/auth/me sans base : %d", w.Code)
 		}
 	}
 	if _, err := os.Lstat(dir); !errors.Is(err, fs.ErrNotExist) {
@@ -153,8 +153,8 @@ func TestNoAuthDBNoSideEffects(t *testing.T) {
 	if w := q.do(srv); w.Code != 401 {
 		t.Fatalf("après la fenêtre : %d", w.Code)
 	}
-	if w := (modeReq{method: "GET", path: "/auth/me"}).do(srv); w.Code != 401 {
-		t.Fatalf("/auth/me monté : %d", w.Code)
+	if w := (modeReq{method: "GET", path: "/v1/auth/me"}).do(srv); w.Code != 401 {
+		t.Fatalf("/v1/auth/me monté : %d", w.Code)
 	}
 }
 
@@ -280,8 +280,8 @@ func TestBearerStillWorks(t *testing.T) {
 	if w := (modeReq{method: "GET", path: "/v1/state", bearer: "faux-jeton-de-vingt-car"}).do(h); w.Code != 401 {
 		t.Fatalf("mauvais Bearer : %d", w.Code)
 	}
-	if w := (modeReq{method: "GET", path: "/auth/me", bearer: modeTok}).do(h); w.Code != 401 {
-		t.Fatalf("/auth/me avec Bearer : %d %s", w.Code, w.Body)
+	if w := (modeReq{method: "GET", path: "/v1/auth/me", bearer: modeTok}).do(h); w.Code != 401 {
+		t.Fatalf("/v1/auth/me avec Bearer : %d %s", w.Code, w.Body)
 	}
 	if w := (modeReq{method: "PUT", path: "/v1/homes", bearer: modeTok}).do(h); w.Code != 403 {
 		t.Fatalf("route admin avec Bearer : %d %s", w.Code, w.Body)
@@ -619,20 +619,20 @@ func TestPeekJSONBodyTooBig(t *testing.T) {
 // Base présente sans compte : /auth/* répond comme une route inconnue ; le premier compte l'ouvre dans la fenêtre du cache.
 func TestAuthRoutesHiddenWithoutUsers(t *testing.T) {
 	s, srv, tick := authWeb(t)
-	me := modeReq{method: "GET", path: "/auth/me", tokCookie: modeTok}
+	me := modeReq{method: "GET", path: "/v1/auth/me", tokCookie: modeTok}
 	unknown := modeReq{method: "GET", path: "/inexistant", tokCookie: modeTok}
 	w, u := me.do(srv), unknown.do(srv)
 	if w.Code != 404 || w.Body.String() != u.Body.String() {
-		t.Fatalf("/auth/me sans compte : %d %q", w.Code, w.Body)
+		t.Fatalf("/v1/auth/me sans compte : %d %q", w.Code, w.Body)
 	}
-	if w := (modeReq{method: "POST", path: "/auth/login", tokCookie: modeTok}).do(srv); w.Code != 404 {
-		t.Fatalf("/auth/login sans compte : %d", w.Code)
+	if w := (modeReq{method: "POST", path: "/v1/auth/login", tokCookie: modeTok}).do(srv); w.Code != 404 {
+		t.Fatalf("/v1/auth/login sans compte : %d", w.Code)
 	}
 	if _, err := s.AddUser("alice", testPw, true); err != nil {
 		t.Fatal(err)
 	}
 	tick()
-	if w := (modeReq{method: "GET", path: "/auth/me"}).do(srv); w.Code != 401 {
-		t.Fatalf("/auth/me après le premier compte : %d", w.Code)
+	if w := (modeReq{method: "GET", path: "/v1/auth/me"}).do(srv); w.Code != 401 {
+		t.Fatalf("/v1/auth/me après le premier compte : %d", w.Code)
 	}
 }

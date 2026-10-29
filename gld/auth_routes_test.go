@@ -75,6 +75,20 @@ func (g *authRig) do(method, path, cookie, csrf string, body any) *httptest.Resp
 	return w
 }
 
+// errMsg lit le message du corps d'erreur uniforme {"error":{"code","message"}}.
+func errBody(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
+	t.Helper()
+	e, _ := jbody(t, w)["error"].(map[string]any)
+	return e
+}
+
+func errMsg(t *testing.T, w *httptest.ResponseRecorder) any {
+	t.Helper()
+	return errBody(t, w)["message"]
+}
+
+func fid(n int64) string { return strconv.FormatInt(n, 10) }
+
 func jbody(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
 	t.Helper()
 	m := map[string]any{}
@@ -96,7 +110,7 @@ func newCookie(w *httptest.ResponseRecorder) (v string, cleared bool) {
 
 func (g *authRig) login(name, pw string) *httptest.ResponseRecorder {
 	g.t.Helper()
-	return g.do("POST", "/auth/login", "", "", map[string]string{"name": name, "password": pw})
+	return g.do("POST", "/v1/auth/sessions", "", "", map[string]string{"name": name, "password": pw})
 }
 
 // partial ouvre une session après le mot de passe seul et renvoie cookie et jeton CSRF.
@@ -135,7 +149,7 @@ func (g *authRig) code(secret string) string {
 func (g *authRig) full(secret string) (string, string) {
 	g.t.Helper()
 	c, csrf, _ := g.partial()
-	w := g.do("POST", "/auth/mfa/totp", c, csrf, map[string]string{"code": g.code(secret)})
+	w := g.do("POST", "/v1/auth/mfa/totp", c, csrf, map[string]string{"code": g.code(secret)})
 	if w.Code != 200 {
 		g.t.Fatalf("mfa : %d %s", w.Code, w.Body)
 	}
@@ -145,7 +159,7 @@ func (g *authRig) full(secret string) (string, string) {
 
 func assertGenericFail(t *testing.T, w *httptest.ResponseRecorder) {
 	t.Helper()
-	if w.Code != 401 || w.Header().Get("Retry-After") == "" || jbody(t, w)["out"] != L("srv.auth.invalide") {
+	if w.Code != 401 || w.Header().Get("Retry-After") == "" || errMsg(t, w) != L("srv.auth.invalide") {
 		t.Fatalf("échec non générique : %d %v %s", w.Code, w.Header(), w.Body)
 	}
 }
@@ -246,10 +260,10 @@ func TestLoginPasswordLimits(t *testing.T) {
 		t.Fatalf("échecs comptés = %d (%v)", fails, err)
 	}
 	big := []byte(`{"name":"alice","password":"` + strings.Repeat("a", authBodyMax) + `"}`)
-	if w := g.do("POST", "/auth/login", "", "", big); w.Code != 400 || n.Load() != 0 {
+	if w := g.do("POST", "/v1/auth/sessions", "", "", big); w.Code != 400 || n.Load() != 0 {
 		t.Fatalf("corps trop gros : %d", w.Code)
 	}
-	if w := g.do("POST", "/auth/login", "", "", []byte(`{"name":"alice","password":"x","extra":1}`)); w.Code != 400 {
+	if w := g.do("POST", "/v1/auth/sessions", "", "", []byte(`{"name":"alice","password":"x","extra":1}`)); w.Code != 400 {
 		t.Fatalf("champ inconnu : %d", w.Code)
 	}
 }
@@ -261,20 +275,20 @@ func TestLoginThenMFAGate(t *testing.T) {
 	if !reflect.DeepEqual(m["mfa"], []any{"totp"}) || m["enroll"] != false {
 		t.Fatalf("login = %v", m)
 	}
-	me := g.do("GET", "/auth/me", c, "", nil)
+	me := g.do("GET", "/v1/auth/me", c, "", nil)
 	mb := jbody(t, me)
-	if me.Code != 200 || mb["mfa"] != false || mb["out"] != L("srv.auth.mfaRequis") || mb["csrf"] != csrf {
+	if me.Code != 200 || mb["mfa"] != false || mb["csrf"] != csrf {
 		t.Fatalf("me = %d %v", me.Code, mb)
 	}
 	for _, p := range []struct{ m, path string }{
-		{"POST", "/auth/password"}, {"GET", "/auth/sessions"}, {"POST", "/auth/sessions/revoke"}, {"POST", "/auth/factor/remove"},
-		{"POST", "/auth/totp/begin"}, {"POST", "/auth/webauthn/register/begin"}, {"POST", "/auth/totp/confirm"},
+		{"PUT", "/v1/auth/password"}, {"GET", "/v1/auth/sessions"}, {"DELETE", "/v1/auth/sessions/x"}, {"DELETE", "/v1/auth/factors/totp"},
+		{"POST", "/v1/auth/totp/enrollments"}, {"POST", "/v1/auth/webauthn/registrations"}, {"PUT", "/v1/auth/totp/enrollments/current"},
 	} {
 		if w := g.do(p.m, p.path, c, csrf, map[string]string{}); w.Code != 403 {
 			t.Fatalf("%s %s en session partielle : %d %s", p.m, p.path, w.Code, w.Body)
 		}
 	}
-	if w := g.do("GET", "/auth/me", "", "", nil); w.Code != 401 || jbody(t, w)["ok"] != false {
+	if w := g.do("GET", "/v1/auth/me", "", "", nil); w.Code != 401 || errCode(jbody(t, w)) != "unauthorized" {
 		t.Fatalf("me sans session : %d", w.Code)
 	}
 }
@@ -283,10 +297,10 @@ func TestLoginFullTOTP(t *testing.T) {
 	g := newAuthRig(t)
 	secret := g.enrolTOTP()
 	c1, csrf, _ := g.partial()
-	if w := g.do("POST", "/auth/mfa/totp", c1, csrf, map[string]string{"code": "000000"}); w.Code != 401 {
+	if w := g.do("POST", "/v1/auth/mfa/totp", c1, csrf, map[string]string{"code": "000000"}); w.Code != 401 {
 		t.Fatalf("faux code : %d", w.Code)
 	}
-	w := g.do("POST", "/auth/mfa/totp", c1, csrf, map[string]string{"code": g.code(secret)})
+	w := g.do("POST", "/v1/auth/mfa/totp", c1, csrf, map[string]string{"code": g.code(secret)})
 	if w.Code != 200 {
 		t.Fatalf("mfa : %d %s", w.Code, w.Body)
 	}
@@ -294,11 +308,11 @@ func TestLoginFullTOTP(t *testing.T) {
 	if c2 == "" || c2 == c1 {
 		t.Fatal("cookie non renouvelé")
 	}
-	me := jbody(t, g.do("GET", "/auth/me", c2, "", nil))
+	me := jbody(t, g.do("GET", "/v1/auth/me", c2, "", nil))
 	if me["mfa"] != true || me["user"].(map[string]any)["name"] != "alice" {
 		t.Fatalf("me = %v", me)
 	}
-	if w := g.do("GET", "/auth/me", c1, "", nil); w.Code != 401 {
+	if w := g.do("GET", "/v1/auth/me", c1, "", nil); w.Code != 401 {
 		t.Fatal("ancien cookie encore valide")
 	}
 	var n int
@@ -319,12 +333,12 @@ func TestLoginRecovery(t *testing.T) {
 	if !reflect.DeepEqual(m["mfa"], []any{"totp", "recovery"}) {
 		t.Fatalf("méthodes = %v", m["mfa"])
 	}
-	w := g.do("POST", "/auth/mfa/recovery", c, csrf, map[string]string{"code": codes[3]})
+	w := g.do("POST", "/v1/auth/mfa/recovery", c, csrf, map[string]string{"code": codes[3]})
 	if w.Code != 200 {
 		t.Fatalf("secours : %d %s", w.Code, w.Body)
 	}
 	nc, _ := newCookie(w)
-	if jbody(t, g.do("GET", "/auth/me", nc, "", nil))["mfa"] != true {
+	if jbody(t, g.do("GET", "/v1/auth/me", nc, "", nil))["mfa"] != true {
 		t.Fatal("session non complète")
 	}
 }
@@ -337,7 +351,7 @@ func TestMFAFailuresKillSession(t *testing.T) {
 	ra := 0
 	for i := 1; i <= thMFALimit; i++ {
 		g.tick(time.Duration(ra) * time.Second)
-		w := g.do("POST", "/auth/mfa/totp", c, csrf, map[string]string{"code": "000000"})
+		w := g.do("POST", "/v1/auth/mfa/totp", c, csrf, map[string]string{"code": "000000"})
 		assertGenericFail(t, w)
 		ra, _ = strconv.Atoi(w.Header().Get("Retry-After"))
 		_, cleared := newCookie(w)
@@ -349,11 +363,11 @@ func TestMFAFailuresKillSession(t *testing.T) {
 	if f := g.th.mfaFails("alice"); f != thMFALimit {
 		t.Fatalf("échecs mfa comptés = %d", f)
 	}
-	if w := g.do("GET", "/auth/me", c, "", nil); w.Code != 401 {
+	if w := g.do("GET", "/v1/auth/me", c, "", nil); w.Code != 401 {
 		t.Fatalf("session partielle survivante : %d", w.Code)
 	}
 	// Au-delà du seuil, même un bon code sur une autre session partielle n'est pas vérifié.
-	w := g.do("POST", "/auth/mfa/totp", c2, csrf2, map[string]string{"code": g.code(secret)})
+	w := g.do("POST", "/v1/auth/mfa/totp", c2, csrf2, map[string]string{"code": g.code(secret)})
 	assertGenericFail(t, w)
 	if _, cleared := newCookie(w); !cleared {
 		t.Fatal("cookie non effacé")
@@ -364,17 +378,17 @@ func TestAuthCSRFMissing(t *testing.T) {
 	g := newAuthRig(t)
 	secret := g.enrolTOTP()
 	c, _, _ := g.partial()
-	if w := g.do("POST", "/auth/mfa/totp", c, "", map[string]string{"code": "000000"}); w.Code != 403 {
+	if w := g.do("POST", "/v1/auth/mfa/totp", c, "", map[string]string{"code": "000000"}); w.Code != 403 {
 		t.Fatalf("mfa sans CSRF : %d", w.Code)
 	}
-	if w := g.do("POST", "/auth/mfa/totp", c, "bad", map[string]string{"code": "000000"}); w.Code != 403 {
+	if w := g.do("POST", "/v1/auth/mfa/totp", c, "bad", map[string]string{"code": "000000"}); w.Code != 403 {
 		t.Fatalf("mfa CSRF faux : %d", w.Code)
 	}
 	fc, _ := g.full(secret)
-	if w := g.do("POST", "/auth/logout", fc, "", nil); w.Code != 403 {
+	if w := g.do("DELETE", "/v1/auth/sessions/current", fc, "", nil); w.Code != 403 {
 		t.Fatalf("logout sans CSRF : %d", w.Code)
 	}
-	if w := g.do("POST", "/auth/logout", "", "x", nil); w.Code != 401 {
+	if w := g.do("DELETE", "/v1/auth/sessions/current", "", "x", nil); w.Code != 401 {
 		t.Fatalf("logout sans session : %d", w.Code)
 	}
 }
@@ -383,11 +397,11 @@ func TestLogout(t *testing.T) {
 	g := newAuthRig(t)
 	secret := g.enrolTOTP()
 	c, csrf := g.full(secret)
-	w := g.do("POST", "/auth/logout", c, csrf, nil)
-	if _, cleared := newCookie(w); w.Code != 200 || !cleared {
+	w := g.do("DELETE", "/v1/auth/sessions/current", c, csrf, nil)
+	if _, cleared := newCookie(w); w.Code != 204 || !cleared {
 		t.Fatalf("logout : %d", w.Code)
 	}
-	if w := g.do("GET", "/auth/me", c, "", nil); w.Code != 401 {
+	if w := g.do("GET", "/v1/auth/me", c, "", nil); w.Code != 401 {
 		t.Fatal("session survivante")
 	}
 }
@@ -398,18 +412,18 @@ func TestEnrollFirstLogin(t *testing.T) {
 	if m["enroll"] != true || len(m["mfa"].([]any)) != 0 {
 		t.Fatalf("login = %v", m)
 	}
-	if w := g.do("GET", "/auth/sessions", c, "", nil); w.Code != 403 {
+	if w := g.do("GET", "/v1/auth/sessions", c, "", nil); w.Code != 403 {
 		t.Fatalf("sessions avant enrôlement : %d", w.Code)
 	}
-	w := g.do("POST", "/auth/totp/begin", c, csrf, map[string]string{})
+	w := g.do("POST", "/v1/auth/totp/enrollments", c, csrf, map[string]string{})
 	if w.Code != 200 {
 		t.Fatalf("begin : %d %s", w.Code, w.Body)
 	}
 	secret := jbody(t, w)["secret"].(string)
-	if w := g.do("POST", "/auth/totp/confirm", c, csrf, map[string]string{"code": "000000"}); w.Code != 400 {
+	if w := g.do("PUT", "/v1/auth/totp/enrollments/current", c, csrf, map[string]string{"code": "000000"}); w.Code != 400 {
 		t.Fatalf("faux code : %d", w.Code)
 	}
-	w = g.do("POST", "/auth/totp/confirm", c, csrf, map[string]string{"code": codeAt(t, secret, *g.clock)})
+	w = g.do("PUT", "/v1/auth/totp/enrollments/current", c, csrf, map[string]string{"code": codeAt(t, secret, *g.clock)})
 	if w.Code != 200 {
 		t.Fatalf("confirm : %d %s", w.Code, w.Body)
 	}
@@ -418,12 +432,12 @@ func TestEnrollFirstLogin(t *testing.T) {
 		t.Fatalf("codes de secours = %v", b["recovery"])
 	}
 	nc, _ := newCookie(w)
-	if nc == "" || nc == c || jbody(t, g.do("GET", "/auth/me", nc, "", nil))["mfa"] != true {
+	if nc == "" || nc == c || jbody(t, g.do("GET", "/v1/auth/me", nc, "", nil))["mfa"] != true {
 		t.Fatal("session non promue")
 	}
 	// Un facteur existe désormais : une nouvelle session partielle ne peut plus enrôler.
 	c2, csrf2, _ := g.partial()
-	if w := g.do("POST", "/auth/totp/begin", c2, csrf2, map[string]string{}); w.Code != 403 {
+	if w := g.do("POST", "/v1/auth/totp/enrollments", c2, csrf2, map[string]string{}); w.Code != 403 {
 		t.Fatalf("enrôlement partiel avec facteur : %d", w.Code)
 	}
 }
@@ -432,18 +446,18 @@ func TestEnrollRequiresReauth(t *testing.T) {
 	g := newAuthRig(t)
 	secret := g.enrolTOTP()
 	c, csrf := g.full(secret)
-	assertGenericFail(t, g.do("POST", "/auth/webauthn/register/begin", c, csrf, map[string]string{}))
+	assertGenericFail(t, g.do("POST", "/v1/auth/webauthn/registrations", c, csrf, map[string]string{}))
 	g.tick(time.Minute)
-	assertGenericFail(t, g.do("POST", "/auth/webauthn/register/begin", c, csrf, map[string]string{"password": testPw}))
+	assertGenericFail(t, g.do("POST", "/v1/auth/webauthn/registrations", c, csrf, map[string]string{"password": testPw}))
 	g.tick(time.Minute)
-	assertGenericFail(t, g.do("POST", "/auth/webauthn/register/begin", c, csrf, map[string]string{"password": "wrong password here", "code": g.code(secret)}))
+	assertGenericFail(t, g.do("POST", "/v1/auth/webauthn/registrations", c, csrf, map[string]string{"password": "wrong password here", "code": g.code(secret)}))
 	g.tick(thWindow + time.Minute)
-	w := g.do("POST", "/auth/webauthn/register/begin", c, csrf, map[string]string{"password": testPw, "code": g.code(secret)})
+	w := g.do("POST", "/v1/auth/webauthn/registrations", c, csrf, map[string]string{"password": testPw, "code": g.code(secret)})
 	if w.Code != 200 || jbody(t, w)["options"] == nil {
 		t.Fatalf("begin réauthentifié : %d %s", w.Code, w.Body)
 	}
-	w = g.do("POST", "/auth/totp/begin", c, csrf, map[string]string{"password": testPw, "code": g.code(secret)})
-	if w.Code != 409 || jbody(t, w)["out"] != L("srv.auth.totpDejaActif") {
+	w = g.do("POST", "/v1/auth/totp/enrollments", c, csrf, map[string]string{"password": testPw, "code": g.code(secret)})
+	if w.Code != 409 || errMsg(t, w) != L("srv.auth.totpDejaActif") {
 		t.Fatalf("second TOTP : %d %s", w.Code, w.Body)
 	}
 }
@@ -451,7 +465,7 @@ func TestEnrollRequiresReauth(t *testing.T) {
 // waReauth signe une assertion WebAuthn sur une session complète via les routes.
 func (g *authRig) waReauth(k *softKey, c, csrf string) {
 	g.t.Helper()
-	w := g.do("POST", "/auth/mfa/webauthn/begin", c, csrf, nil)
+	w := g.do("POST", "/v1/auth/mfa/webauthn/challenges", c, csrf, nil)
 	if w.Code != 200 {
 		g.t.Fatalf("begin : %d %s", w.Code, w.Body)
 	}
@@ -461,7 +475,7 @@ func (g *authRig) waReauth(k *softKey, c, csrf string) {
 	}
 	k.count++
 	raw, _ := io.ReadAll(k.assert(g.t, &b.Options).Body)
-	if w := g.do("POST", "/auth/mfa/webauthn/finish", c, csrf, raw); w.Code != 200 {
+	if w := g.do("POST", "/v1/auth/mfa/webauthn/assertions", c, csrf, raw); w.Code != 200 {
 		g.t.Fatalf("finish : %d %s", w.Code, w.Body)
 	}
 }
@@ -470,20 +484,20 @@ func TestFactorRemoveLast(t *testing.T) {
 	g := newAuthRig(t)
 	secret := g.enrolTOTP()
 	c, csrf := g.full(secret)
-	w := g.do("POST", "/auth/factor/remove", c, csrf, map[string]any{"kind": "totp", "password": testPw, "code": g.code(secret)})
-	if w.Code != 409 || jbody(t, w)["out"] != L("srv.auth.dernierFacteur") {
+	w := g.do("DELETE", "/v1/auth/factors/totp", c, csrf, map[string]any{"password": testPw, "code": g.code(secret)})
+	if w.Code != 409 || errMsg(t, w) != L("srv.auth.dernierFacteur") {
 		t.Fatalf("retrait du dernier facteur : %d %s", w.Code, w.Body)
 	}
 	k := newSoftKey(t)
 	if err := waRegister(t, g.s, g.uid, k, "x"); err != nil {
 		t.Fatal(err)
 	}
-	if w := g.do("POST", "/auth/factor/remove", c, csrf, map[string]any{"kind": "totp", "password": testPw, "code": g.code(secret)}); w.Code != 200 {
+	if w := g.do("DELETE", "/v1/auth/factors/totp", c, csrf, map[string]any{"password": testPw, "code": g.code(secret)}); w.Code != 204 {
 		t.Fatalf("retrait TOTP : %d %s", w.Code, w.Body)
 	}
 	creds, _ := g.s.WebAuthnList(g.uid)
 	g.waReauth(k, c, csrf)
-	w = g.do("POST", "/auth/factor/remove", c, csrf, map[string]any{"kind": "webauthn", "id": creds[0].ID, "password": testPw})
+	w = g.do("DELETE", "/v1/auth/factors/webauthn-"+strconv.FormatInt(creds[0].ID, 10), c, csrf, map[string]any{"password": testPw})
 	if w.Code != 409 {
 		t.Fatalf("retrait de la dernière clé : %d %s", w.Code, w.Body)
 	}
@@ -498,11 +512,11 @@ func TestPasswordChangeRevokes(t *testing.T) {
 	other, _ := fullSession(t, g.s, g.uid)
 	c, csrf := g.full(secret)
 	const newPw = "a much better passphrase"
-	if w := g.do("POST", "/auth/password", c, csrf, map[string]string{"password": testPw, "code": g.code(secret), "new": "short"}); w.Code != 400 {
+	if w := g.do("PUT", "/v1/auth/password", c, csrf, map[string]string{"password": testPw, "code": g.code(secret), "new": "short"}); w.Code != 400 {
 		t.Fatalf("mot de passe court : %d", w.Code)
 	}
-	w := g.do("POST", "/auth/password", c, csrf, map[string]string{"password": testPw, "code": g.code(secret), "new": newPw})
-	if _, cleared := newCookie(w); w.Code != 200 || !cleared {
+	w := g.do("PUT", "/v1/auth/password", c, csrf, map[string]string{"password": testPw, "code": g.code(secret), "new": newPw})
+	if _, cleared := newCookie(w); w.Code != 204 || !cleared {
 		t.Fatalf("changement : %d %s", w.Code, w.Body)
 	}
 	for _, s := range []string{c, other} {
@@ -520,17 +534,17 @@ func TestSessionsListRevoke(t *testing.T) {
 	secret := g.enrolTOTP()
 	_, other := fullSession(t, g.s, g.uid)
 	c, csrf := g.full(secret)
-	w := g.do("GET", "/auth/sessions", c, "", nil)
+	w := g.do("GET", "/v1/auth/sessions", c, "", nil)
 	var b struct{ Sessions []map[string]any }
 	json.Unmarshal(w.Body.Bytes(), &b)
 	if w.Code != 200 || len(b.Sessions) != 2 {
 		t.Fatalf("sessions : %d %s", w.Code, w.Body)
 	}
-	if w := g.do("POST", "/auth/sessions/revoke", c, csrf, map[string]string{"id": other.SessionID, "password": testPw}); w.Code != 401 {
+	if w := g.do("DELETE", "/v1/auth/sessions/"+other.SessionID, c, csrf, map[string]string{"password": testPw}); w.Code != 401 {
 		t.Fatalf("révocation sans facteur : %d", w.Code)
 	}
 	g.tick(time.Minute)
-	if w := g.do("POST", "/auth/sessions/revoke", c, csrf, map[string]string{"id": other.SessionID, "password": testPw, "code": g.code(secret)}); w.Code != 200 {
+	if w := g.do("DELETE", "/v1/auth/sessions/"+other.SessionID, c, csrf, map[string]string{"password": testPw, "code": g.code(secret)}); w.Code != 204 {
 		t.Fatalf("révocation : %d %s", w.Code, w.Body)
 	}
 	if _, err := g.s.Session(c); err != nil {
@@ -541,17 +555,20 @@ func TestSessionsListRevoke(t *testing.T) {
 		t.Fatal(err)
 	}
 	bc, bp := fullSession(t, g.s, bob)
-	if w := g.do("POST", "/auth/sessions/revoke", c, csrf, map[string]string{"id": bp.SessionID, "password": testPw, "code": g.code(secret)}); w.Code != 404 {
+	if w := g.do("DELETE", "/v1/auth/sessions/"+bp.SessionID, c, csrf, map[string]string{"password": testPw, "code": g.code(secret)}); w.Code != 404 {
 		t.Fatalf("révocation de la session d'autrui : %d", w.Code)
 	}
 	if _, err := g.s.Session(bc); err != nil {
 		t.Fatal("session d'autrui révoquée")
 	}
 	thirdC, _ := fullSession(t, g.s, g.uid)
-	if w := g.do("POST", "/auth/sessions/revoke-others", c, csrf, map[string]string{"password": testPw}); w.Code != 401 {
+	if w := g.do("DELETE", "/v1/auth/sessions", c, csrf, map[string]string{"password": testPw}); w.Code != 400 || errCode(jbody(t, w)) != "bad_request" {
+		t.Fatalf("nettoyage sans others=1 : %d %s", w.Code, w.Body)
+	}
+	if w := g.do("DELETE", "/v1/auth/sessions?others=1", c, csrf, map[string]string{"password": testPw}); w.Code != 401 {
 		t.Fatalf("nettoyage sans facteur : %d", w.Code)
 	}
-	if w := g.do("POST", "/auth/sessions/revoke-others", c, csrf, map[string]string{"password": testPw, "code": g.code(secret)}); w.Code != 200 {
+	if w := g.do("DELETE", "/v1/auth/sessions?others=1", c, csrf, map[string]string{"password": testPw, "code": g.code(secret)}); w.Code != 204 {
 		t.Fatalf("nettoyage : %d %s", w.Code, w.Body)
 	}
 	if _, err := g.s.Session(c); err != nil {
@@ -588,10 +605,10 @@ func TestRecoveryConcurrentSerialised(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		first = g.do("POST", "/auth/mfa/recovery", c, csrf, map[string]string{"code": codes[0]})
+		first = g.do("POST", "/v1/auth/mfa/recovery", c, csrf, map[string]string{"code": codes[0]})
 	}()
 	<-entered
-	assertGenericFail(t, g.do("POST", "/auth/mfa/recovery", c, csrf, map[string]string{"code": codes[1]}))
+	assertGenericFail(t, g.do("POST", "/v1/auth/mfa/recovery", c, csrf, map[string]string{"code": codes[1]}))
 	if calls.Load() != 1 {
 		t.Fatalf("vérifications simultanées = %d", calls.Load())
 	}
@@ -610,13 +627,13 @@ func TestRecoveryRegenerate(t *testing.T) {
 		t.Fatal(err)
 	}
 	pc, pcsrf, _ := g.partial()
-	if w := g.do("POST", "/auth/recovery/regenerate", pc, pcsrf, map[string]string{"password": testPw, "code": g.code(secret)}); w.Code != 403 {
+	if w := g.do("PUT", "/v1/auth/recovery-codes", pc, pcsrf, map[string]string{"password": testPw, "code": g.code(secret)}); w.Code != 403 {
 		t.Fatalf("session partielle : %d", w.Code)
 	}
 	c, csrf := g.full(secret)
-	assertGenericFail(t, g.do("POST", "/auth/recovery/regenerate", c, csrf, map[string]string{"password": testPw}))
+	assertGenericFail(t, g.do("PUT", "/v1/auth/recovery-codes", c, csrf, map[string]string{"password": testPw}))
 	g.tick(2 * time.Second)
-	w := g.do("POST", "/auth/recovery/regenerate", c, csrf, map[string]string{"password": testPw, "code": g.code(secret)})
+	w := g.do("PUT", "/v1/auth/recovery-codes", c, csrf, map[string]string{"password": testPw, "code": g.code(secret)})
 	if w.Code != 200 {
 		t.Fatalf("régénération : %d %s", w.Code, w.Body)
 	}
@@ -665,11 +682,11 @@ func TestMFAParallelSerialised(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				g.do("POST", "/auth/mfa/totp", c, csrf, map[string]string{"code": "000000"})
+				g.do("POST", "/v1/auth/mfa/totp", c, csrf, map[string]string{"code": "000000"})
 			}()
 		}
 		wg.Wait()
-		if g.do("GET", "/auth/me", c, "", nil).Code == 401 {
+		if g.do("GET", "/v1/auth/me", c, "", nil).Code == 401 {
 			break
 		}
 		g.tick(10 * time.Second)
@@ -680,7 +697,7 @@ func TestMFAParallelSerialised(t *testing.T) {
 	if total.Load() != thMFALimit || g.th.mfaFails("alice") != thMFALimit {
 		t.Fatalf("vérifications %d, échecs comptés %d", total.Load(), g.th.mfaFails("alice"))
 	}
-	if g.do("GET", "/auth/me", c, "", nil).Code != 401 {
+	if g.do("GET", "/v1/auth/me", c, "", nil).Code != 401 {
 		t.Fatal("session partielle survivante")
 	}
 }
@@ -717,9 +734,9 @@ func TestFirstEnrolRace(t *testing.T) {
 	g := newAuthRig(t)
 	c1, csrf1, _ := g.partial()
 	c2, csrf2, _ := g.partial()
-	w := g.do("POST", "/auth/totp/begin", c1, csrf1, map[string]string{})
+	w := g.do("POST", "/v1/auth/totp/enrollments", c1, csrf1, map[string]string{})
 	secret := jbody(t, w)["secret"].(string)
-	w = g.do("POST", "/auth/webauthn/register/begin", c2, csrf2, map[string]string{})
+	w = g.do("POST", "/v1/auth/webauthn/registrations", c2, csrf2, map[string]string{})
 	if w.Code != 200 {
 		t.Fatalf("webauthn begin : %d %s", w.Code, w.Body)
 	}
@@ -734,11 +751,11 @@ func TestFirstEnrolRace(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		codes[0] = g.do("POST", "/auth/totp/confirm", c1, csrf1, map[string]string{"code": codeAt(t, secret, *g.clock)}).Code
+		codes[0] = g.do("PUT", "/v1/auth/totp/enrollments/current", c1, csrf1, map[string]string{"code": codeAt(t, secret, *g.clock)}).Code
 	}()
 	go func() {
 		defer wg.Done()
-		codes[1] = g.do("POST", "/auth/webauthn/register/finish?label=cle", c2, csrf2, att).Code
+		codes[1] = g.do("PUT", "/v1/auth/webauthn/registrations/current?label=cle", c2, csrf2, att).Code
 	}()
 	wg.Wait()
 	sort.Ints(codes)
@@ -766,8 +783,8 @@ func TestFactorRemoveTamperedTOTP(t *testing.T) {
 	}
 	before := tamperEvents(t, g.s)
 	g.waReauth(k, c, csrf)
-	w := g.do("POST", "/auth/factor/remove", c, csrf, map[string]any{"kind": "totp", "password": testPw})
-	if w.Code != 409 || jbody(t, w)["out"] != L("srv.auth.tamper") {
+	w := g.do("DELETE", "/v1/auth/factors/totp", c, csrf, map[string]any{"password": testPw})
+	if w.Code != 409 || errMsg(t, w) != L("srv.auth.tamper") {
 		t.Fatalf("retrait d'un TOTP altéré : %d %s", w.Code, w.Body)
 	}
 	if tamperEvents(t, g.s) <= before {
@@ -783,18 +800,18 @@ func TestAuthDeniedLogged(t *testing.T) {
 		return n
 	}
 	for i := 0; i < 2*rateBudget; i++ {
-		g.do("POST", "/auth/logout", "", "", nil)
+		g.do("DELETE", "/v1/auth/sessions/current", "", "", nil)
 	}
 	if count("auth") != rateBudget {
 		t.Fatalf("refus journalisés = %d", count("auth"))
 	}
 	g.tick(time.Minute)
-	g.do("GET", "/auth/sessions", "", "", nil)
+	g.do("GET", "/v1/auth/sessions", "", "", nil)
 	if count("auth") != rateBudget+1 {
 		t.Fatalf("après une minute = %d", count("auth"))
 	}
 	c, _, _ := g.partial()
-	g.do("POST", "/auth/logout", c, "bad", nil)
+	g.do("DELETE", "/v1/auth/sessions/current", c, "bad", nil)
 	if count("csrf") != 1 {
 		t.Fatalf("refus CSRF journalisés = %d", count("csrf"))
 	}
@@ -820,14 +837,14 @@ func TestFirstEnrolStalledBody(t *testing.T) {
 		t.Fatal(err)
 	}
 	c, csrf, _ := g.partial()
-	w := g.do("POST", "/auth/webauthn/register/begin", c, csrf, map[string]string{})
+	w := g.do("POST", "/v1/auth/webauthn/registrations", c, csrf, map[string]string{})
 	var b struct{ Options protocol.CredentialCreation }
 	if err := json.Unmarshal(w.Body.Bytes(), &b); err != nil {
 		t.Fatal(err)
 	}
 	att, _ := io.ReadAll(newSoftKey(t).attest(t, &b.Options).Body)
 	sr := &stallReader{started: make(chan struct{}), gate: make(chan struct{}), r: bytes.NewReader(att)}
-	r := httptest.NewRequest("POST", "/auth/webauthn/register/finish?label=cle", sr)
+	r := httptest.NewRequest("PUT", "/v1/auth/webauthn/registrations/current?label=cle", sr)
 	r.AddCookie(&http.Cookie{Name: sessCookie, Value: c})
 	r.Header.Set(csrfHeader, csrf)
 	slow := httptest.NewRecorder()
@@ -840,9 +857,9 @@ func TestFirstEnrolStalledBody(t *testing.T) {
 		lw := g.login("bob", testPw)
 		bc, _ := newCookie(lw)
 		bcsrf, _ := jbody(t, lw)["csrf"].(string)
-		bw := g.do("POST", "/auth/totp/begin", bc, bcsrf, map[string]string{})
+		bw := g.do("POST", "/v1/auth/totp/enrollments", bc, bcsrf, map[string]string{})
 		secret, _ := jbody(t, bw)["secret"].(string)
-		fast <- g.do("POST", "/auth/totp/confirm", bc, bcsrf, map[string]string{"code": codeAt(t, secret, *g.clock)}).Code
+		fast <- g.do("PUT", "/v1/auth/totp/enrollments/current", bc, bcsrf, map[string]string{"code": codeAt(t, secret, *g.clock)}).Code
 	}()
 	select {
 	case code := <-fast:
@@ -868,13 +885,13 @@ func TestEnrollFailedConfirmNoArgon(t *testing.T) {
 	t.Cleanup(func() { genRecovery = orig })
 	n := argonCalls(t)
 	c, csrf, _ := g.partial()
-	secret := jbody(t, g.do("POST", "/auth/totp/begin", c, csrf, map[string]string{}))["secret"].(string)
+	secret := jbody(t, g.do("POST", "/v1/auth/totp/enrollments", c, csrf, map[string]string{}))["secret"].(string)
 	before := n.Load()
-	w := g.do("POST", "/auth/totp/confirm", c, csrf, map[string]string{"code": "000000"})
-	if w.Code != 400 || jbody(t, w)["out"] != L("srv.auth.codeInvalide") || gens.Load() != 0 || n.Load() != before {
+	w := g.do("PUT", "/v1/auth/totp/enrollments/current", c, csrf, map[string]string{"code": "000000"})
+	if w.Code != 400 || errMsg(t, w) != L("srv.auth.codeInvalide") || gens.Load() != 0 || n.Load() != before {
 		t.Fatalf("faux code : %d %s, générations %d", w.Code, w.Body, gens.Load())
 	}
-	if w := g.do("POST", "/auth/totp/confirm", c, csrf, map[string]string{"code": codeAt(t, secret, *g.clock)}); w.Code != 200 || gens.Load() != 1 {
+	if w := g.do("PUT", "/v1/auth/totp/enrollments/current", c, csrf, map[string]string{"code": codeAt(t, secret, *g.clock)}); w.Code != 200 || gens.Load() != 1 {
 		t.Fatalf("bon code : %d, générations %d", w.Code, gens.Load())
 	}
 }
@@ -901,7 +918,7 @@ func TestMeRightsHomesKeys(t *testing.T) {
 	me := func(uid int64) map[string]any {
 		t.Helper()
 		c, _ := fullSession(t, g.s, uid)
-		w := g.do("GET", "/auth/me", c, "", nil)
+		w := g.do("GET", "/v1/auth/me", c, "", nil)
 		if w.Code != 200 {
 			t.Fatalf("me : %d %s", w.Code, w.Body)
 		}
@@ -938,13 +955,13 @@ func TestMeRightsHomesKeys(t *testing.T) {
 		t.Fatal("altération non journalisée")
 	}
 	c, _, _ := g.partial()
-	pm := jbody(t, g.do("GET", "/auth/me", c, "", nil))
+	pm := jbody(t, g.do("GET", "/v1/auth/me", c, "", nil))
 	var got []string
 	for k := range pm {
 		got = append(got, k)
 	}
 	sort.Strings(got)
-	if !reflect.DeepEqual(got, []string{"csrf", "factors", "mfa", "ok", "out", "user"}) {
+	if !reflect.DeepEqual(got, []string{"csrf", "factors", "mfa", "user"}) {
 		t.Fatalf("forme partielle : %v", got)
 	}
 	if _, has := pm["factors"].(map[string]any)["keys"]; has {
@@ -1010,7 +1027,7 @@ func TestEnrolledFactorsDeleted(t *testing.T) {
 	if tamperEvents(t, g.s) <= before {
 		t.Fatal("altération non journalisée")
 	}
-	if w := g.do("POST", "/auth/totp/begin", c, csrf, map[string]string{}); w.Code == 200 {
+	if w := g.do("POST", "/v1/auth/totp/enrollments", c, csrf, map[string]string{}); w.Code == 200 {
 		t.Fatalf("enrôlement rouvert : %d %s", w.Code, w.Body)
 	}
 	if err := g.s.ResetMFA(g.uid); err != nil {
@@ -1021,7 +1038,7 @@ func TestEnrolledFactorsDeleted(t *testing.T) {
 	if m["enroll"] != true {
 		t.Fatalf("après ResetMFA : %v", m)
 	}
-	if w := g.do("POST", "/auth/totp/begin", c, csrf, map[string]string{}); w.Code != 200 {
+	if w := g.do("POST", "/v1/auth/totp/enrollments", c, csrf, map[string]string{}); w.Code != 200 {
 		t.Fatalf("enrôlement après ResetMFA : %d %s", w.Code, w.Body)
 	}
 }
@@ -1160,7 +1177,7 @@ func TestRateLogUIDDedup(t *testing.T) {
 	g.enrolTOTP()
 	c, csrf, _ := g.partial()
 	for range 3 {
-		g.do("POST", "/auth/mfa/totp", c, csrf, map[string]string{"code": "000000"})
+		g.do("POST", "/v1/auth/mfa/totp", c, csrf, map[string]string{"code": "000000"})
 		g.tick(time.Minute)
 	}
 	if n := count(`kind='mfa_totp' AND outcome='failure'`); n != 3 {
@@ -1194,4 +1211,17 @@ func TestRateLogNoDBUnderLock(t *testing.T) {
 		t.Fatal("limiteur bloqué par la base")
 	}
 	tx.Rollback()
+}
+
+func TestParseFactor(t *testing.T) {
+	for in, want := range map[string]struct {
+		kind string
+		id   int64
+		ok   bool
+	}{"totp": {"totp", 0, true}, "webauthn-12": {"webauthn", 12, true}, "webauthn-x": {"", 0, false}, "sms": {"", 0, false}, "": {"", 0, false}} {
+		k, id, ok := parseFactor(in)
+		if ok != want.ok || (ok && (k != want.kind || id != want.id)) {
+			t.Errorf("parseFactor(%q) = %q %d %v", in, k, id, ok)
+		}
+	}
 }

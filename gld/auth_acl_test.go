@@ -288,7 +288,7 @@ func TestGateRightsMatrix(t *testing.T) {
 		{nil, "PUT", "/v1/homes", false, 401},
 		{nil, "GET", "/", true, 200},
 		{nil, "GET", "/assets/x.js", true, 200},
-		{nil, "POST", "/auth/login", true, 200},
+		{nil, "POST", "/v1/auth/sessions", true, 200},
 		{&r, "GET", "/v1/homes", true, 200},
 		{&r, "GET", "/v1/sessions", false, 403},
 		{&wr, "PUT", "/v1/tabs", true, 200},

@@ -82,6 +82,9 @@ func (g *adminRig) do(method, path string, u *adminUser, body any) *httptest.Res
 
 func (g *adminRig) ok(w *httptest.ResponseRecorder) map[string]any {
 	g.t.Helper()
+	if w.Code == 204 {
+		return map[string]any{}
+	}
 	if w.Code != 200 {
 		g.t.Fatalf("%d %s", w.Code, w.Body)
 	}
@@ -97,9 +100,9 @@ func (g *adminRig) aclRows(home string) int {
 }
 
 var adminRoutes = [][2]string{
-	{"GET", "/admin/users"}, {"POST", "/admin/users"}, {"POST", "/admin/users/disable"}, {"POST", "/admin/users/reset-mfa"},
-	{"POST", "/admin/users/password"}, {"POST", "/admin/acl"}, {"GET", "/admin/events"}, {"GET", "/admin/homes"}, {"GET", "/admin/sessions?user_id=1"},
-	{"POST", "/admin/sessions/revoke"},
+	{"GET", "/v1/admin/users"}, {"POST", "/v1/admin/users"}, {"PATCH", "/v1/admin/users/1"}, {"DELETE", "/v1/admin/users/1/mfa"},
+	{"PUT", "/v1/admin/users/1/password"}, {"PUT", "/v1/admin/acl"}, {"GET", "/v1/admin/events"}, {"GET", "/v1/admin/homes"}, {"GET", "/v1/admin/sessions?user_id=1"},
+	{"DELETE", "/v1/admin/sessions?user_id=1"},
 }
 
 func TestAdminOnly(t *testing.T) {
@@ -127,7 +130,7 @@ func TestAdminOnly(t *testing.T) {
 		}
 	}
 	root.csrf = "faux"
-	if w := g.do("POST", "/admin/sessions/revoke", &root, map[string]any{"user_id": bob.id}); w.Code != 403 {
+	if w := g.do("DELETE", "/v1/admin/sessions?user_id="+fid(bob.id), &root, map[string]any{}); w.Code != 403 {
 		t.Errorf("CSRF faux : %d", w.Code)
 	}
 }
@@ -146,17 +149,17 @@ func TestAdminRoutesLazy(t *testing.T) {
 func TestAdminCreateUserThenLogin(t *testing.T) {
 	g := newAdminRig(t)
 	root := g.login("root", true)
-	if w := g.do("POST", "/admin/users", &root, map[string]any{"name": "carol", "password": "court"}); w.Code != 400 || jbody(t, w)["out"] != L("srv.user.mdpCourt") {
+	if w := g.do("POST", "/v1/admin/users", &root, map[string]any{"name": "carol", "password": "court"}); w.Code != 400 || errMsg(t, w) != L("srv.user.mdpCourt") {
 		t.Fatalf("mot de passe court : %d %s", w.Code, w.Body)
 	}
-	if w := g.do("POST", "/admin/users", &root, map[string]any{"name": "carol", "password": testPw}); w.Code != 403 {
+	if w := g.do("POST", "/v1/admin/users", &root, map[string]any{"name": "carol", "password": testPw}); w.Code != 403 {
 		t.Fatalf("sans réauth : %d", w.Code)
 	}
-	g.ok(g.do("POST", "/admin/users", &root, map[string]any{"name": "carol", "password": testPw, "reauth": root.reauth()}))
-	if w := g.do("POST", "/admin/users", &root, map[string]any{"name": "Carol", "password": testPw, "reauth": root.reauth()}); w.Code != 409 {
+	g.ok(g.do("POST", "/v1/admin/users", &root, map[string]any{"name": "carol", "password": testPw, "reauth": root.reauth()}))
+	if w := g.do("POST", "/v1/admin/users", &root, map[string]any{"name": "Carol", "password": testPw, "reauth": root.reauth()}); w.Code != 409 {
 		t.Fatalf("nom pris : %d", w.Code)
 	}
-	m := g.ok(g.do("POST", "/auth/login", nil, map[string]string{"name": "carol", "password": testPw}))
+	m := g.ok(g.do("POST", "/v1/auth/sessions", nil, map[string]string{"name": "carol", "password": testPw}))
 	if m["enroll"] != true {
 		t.Fatalf("premier login : %v", m)
 	}
@@ -171,18 +174,18 @@ func TestDisableRevokesSessions(t *testing.T) {
 	g := newAdminRig(t)
 	root := g.login("root", true)
 	bob := g.login("bob", false)
-	if w := g.do("POST", "/admin/users/disable", &root, map[string]any{"id": root.id, "disabled": true}); w.Code != 400 {
+	if w := g.do("PATCH", "/v1/admin/users/"+fid(root.id), &root, map[string]any{"disabled": true}); w.Code != 400 {
 		t.Fatalf("se désactiver soi-même : %d", w.Code)
 	}
-	g.ok(g.do("POST", "/admin/users/disable", &root, map[string]any{"id": bob.id, "disabled": true}))
+	g.ok(g.do("PATCH", "/v1/admin/users/"+fid(bob.id), &root, map[string]any{"disabled": true}))
 	if w := g.do("GET", "/v1/homes", &bob, nil); w.Code != 401 {
 		t.Fatalf("session de bob après désactivation : %d", w.Code)
 	}
-	if w := g.do("POST", "/admin/users/disable", &root, map[string]any{"id": bob.id, "disabled": false}); w.Code != 403 {
+	if w := g.do("PATCH", "/v1/admin/users/"+fid(bob.id), &root, map[string]any{"disabled": false}); w.Code != 403 {
 		t.Fatalf("réactiver sans réauth : %d", w.Code)
 	}
-	g.ok(g.do("POST", "/admin/users/disable", &root, map[string]any{"id": bob.id, "disabled": false, "reauth": root.reauth()}))
-	if w := g.do("POST", "/admin/users/disable", &root, map[string]any{"id": 999, "disabled": true}); w.Code != 404 {
+	g.ok(g.do("PATCH", "/v1/admin/users/"+fid(bob.id), &root, map[string]any{"disabled": false, "reauth": root.reauth()}))
+	if w := g.do("PATCH", "/v1/admin/users/"+fid(999), &root, map[string]any{"disabled": true}); w.Code != 404 {
 		t.Fatalf("compte inconnu : %d", w.Code)
 	}
 }
@@ -222,20 +225,20 @@ func TestDisableAdminNeedsReauth(t *testing.T) {
 	root := g.login("root", true)
 	other := g.login("other", true)
 	bob := g.login("bob", false)
-	if w := g.do("POST", "/admin/users/disable", &root, map[string]any{"id": other.id, "disabled": true}); w.Code != 403 {
+	if w := g.do("PATCH", "/v1/admin/users/"+fid(other.id), &root, map[string]any{"disabled": true}); w.Code != 403 {
 		t.Fatalf("désactiver un admin sans réauth : %d", w.Code)
 	}
-	if w := g.do("POST", "/admin/sessions/revoke", &root, map[string]any{"user_id": other.id}); w.Code != 403 {
+	if w := g.do("DELETE", "/v1/admin/sessions?user_id="+fid(other.id), &root, map[string]any{}); w.Code != 403 {
 		t.Fatalf("révoquer un admin sans réauth : %d", w.Code)
 	}
-	if w := g.do("GET", "/admin/users", &other, nil); w.Code != 200 {
+	if w := g.do("GET", "/v1/admin/users", &other, nil); w.Code != 200 {
 		t.Fatalf("l'autre admin a été écarté : %d", w.Code)
 	}
-	g.ok(g.do("POST", "/admin/sessions/revoke", &root, map[string]any{"user_id": bob.id}))
+	g.ok(g.do("DELETE", "/v1/admin/sessions?user_id="+fid(bob.id), &root, map[string]any{}))
 	bob = g.session(bob.id)
-	g.ok(g.do("POST", "/admin/users/disable", &root, map[string]any{"id": bob.id, "disabled": true}))
-	g.ok(g.do("POST", "/admin/sessions/revoke", &root, map[string]any{"user_id": other.id, "reauth": root.reauth()}))
-	g.ok(g.do("POST", "/admin/users/disable", &root, map[string]any{"id": other.id, "disabled": true, "reauth": root.reauth()}))
+	g.ok(g.do("PATCH", "/v1/admin/users/"+fid(bob.id), &root, map[string]any{"disabled": true}))
+	g.ok(g.do("DELETE", "/v1/admin/sessions?user_id="+fid(other.id), &root, map[string]any{"reauth": root.reauth()}))
+	g.ok(g.do("PATCH", "/v1/admin/users/"+fid(other.id), &root, map[string]any{"disabled": true, "reauth": root.reauth()}))
 	if u, _ := g.s.UserByName("other"); !u.Disabled {
 		t.Fatal("admin non désactivé après réauth")
 	}
@@ -250,7 +253,7 @@ func TestACLAtomic(t *testing.T) {
 	if _, err := g.s.db.Exec(`CREATE TRIGGER no_final BEFORE INSERT ON home_acl WHEN NEW.mem_read=1 AND NEW.mem_write=0 BEGIN SELECT RAISE(ABORT,'refus'); END`); err != nil {
 		t.Fatal(err)
 	}
-	w := g.do("POST", "/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"mem_read"}, "revoke": []string{"mem_write"}})
+	w := g.do("PUT", "/v1/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"mem_read"}, "revoke": []string{"mem_write"}})
 	if w.Code != 500 {
 		t.Fatalf("écriture refusée : %d %s", w.Code, w.Body)
 	}
@@ -258,7 +261,7 @@ func TestACLAtomic(t *testing.T) {
 		t.Fatalf("application partielle : %v %v", m, err)
 	}
 	g.s.db.Exec(`DROP TRIGGER no_final`)
-	m := g.ok(g.do("POST", "/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"mem_read"}, "revoke": []string{"mem_write"}}))
+	m := g.ok(g.do("PUT", "/v1/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"mem_read"}, "revoke": []string{"mem_write"}}))
 	if got := m["rights"].([]any); len(got) != 1 || got[0] != "mem_read" {
 		t.Fatalf("droits : %v", got)
 	}
@@ -275,22 +278,22 @@ func TestGrantExecNeedsConfirm(t *testing.T) {
 	bob := g.login("bob", false)
 	grant := func(body map[string]any) *httptest.ResponseRecorder {
 		body["user_id"], body["home_id"], body["grant"] = bob.id, mainHomeID, []string{"exec", "mem_read"}
-		return g.do("POST", "/admin/acl", &root, body)
+		return g.do("PUT", "/v1/admin/acl", &root, body)
 	}
-	if w := grant(map[string]any{"reauth": root.reauth()}); w.Code != 400 || jbody(t, w)["out"] != L("srv.admin.confirmerExec") {
+	if w := grant(map[string]any{"reauth": root.reauth()}); w.Code != 400 || errMsg(t, w) != L("srv.admin.confirmerExec") {
 		t.Fatalf("sans confirm : %d %s", w.Code, w.Body)
 	}
 	if w := grant(map[string]any{"confirm": true}); w.Code != 403 {
 		t.Fatalf("sans réauth : %d", w.Code)
 	}
 	// Second facteur validé sur la session : réauth fraîche cinq minutes, mot de passe toujours exigé.
-	g.ok(g.do("POST", "/auth/mfa/recovery", &root, map[string]string{"code": root.codes[0]}))
+	g.ok(g.do("POST", "/v1/auth/mfa/recovery", &root, map[string]string{"code": root.codes[0]}))
 	root.codes = root.codes[1:]
 	*g.clock = g.clock.Add(reauthFor + time.Second)
 	if w := grant(map[string]any{"confirm": true, "reauth": map[string]string{"password": testPw}}); w.Code != 403 {
 		t.Fatalf("réauth périmée : %d", w.Code)
 	}
-	g.ok(g.do("POST", "/auth/mfa/recovery", &root, map[string]string{"code": root.codes[0]}))
+	g.ok(g.do("POST", "/v1/auth/mfa/recovery", &root, map[string]string{"code": root.codes[0]}))
 	root.codes = root.codes[1:]
 	if w := grant(map[string]any{"confirm": true, "reauth": map[string]string{"password": "mauvais mot de passe"}}); w.Code != 401 {
 		t.Fatalf("mauvais mot de passe : %d", w.Code)
@@ -308,11 +311,11 @@ func TestACLChangeLogged(t *testing.T) {
 	g := newAdminRig(t)
 	root := g.login("root", true)
 	bob := g.login("bob", false)
-	m := g.ok(g.do("POST", "/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"mem_read", "mem_write"}}))
+	m := g.ok(g.do("PUT", "/v1/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"mem_read", "mem_write"}}))
 	if len(m["rights"].([]any)) != 2 {
 		t.Fatalf("après grant : %v", m)
 	}
-	m = g.ok(g.do("POST", "/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "revoke": []string{"mem_write"}}))
+	m = g.ok(g.do("PUT", "/v1/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "revoke": []string{"mem_write"}}))
 	if got := m["rights"].([]any); len(got) != 1 || got[0] != "mem_read" {
 		t.Fatalf("après revoke : %v", got)
 	}
@@ -328,11 +331,11 @@ func TestACLChangeLogged(t *testing.T) {
 		{"user_id": bob.id, "home_id": mainHomeID},
 		{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"mem_read"}, "revoke": []string{"mem_read"}},
 	} {
-		if w := g.do("POST", "/admin/acl", &root, body); w.Code != 400 {
+		if w := g.do("PUT", "/v1/admin/acl", &root, body); w.Code != 400 {
 			t.Errorf("%v : %d %s", body, w.Code, w.Body)
 		}
 	}
-	if w := g.do("POST", "/admin/acl", &root, map[string]any{"user_id": 999, "home_id": mainHomeID, "grant": []string{"mem_read"}}); w.Code != 404 {
+	if w := g.do("PUT", "/v1/admin/acl", &root, map[string]any{"user_id": 999, "home_id": mainHomeID, "grant": []string{"mem_read"}}); w.Code != 404 {
 		t.Errorf("compte inconnu : %d", w.Code)
 	}
 }
@@ -342,13 +345,13 @@ func TestGrantSessionsReadNeedsReauth(t *testing.T) {
 	root := g.login("root", true)
 	bob := g.login("bob", false)
 	body := map[string]any{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"sessions_read"}}
-	if w := g.do("POST", "/admin/acl", &root, body); w.Code != 403 {
+	if w := g.do("PUT", "/v1/admin/acl", &root, body); w.Code != 403 {
 		t.Fatalf("sessions_read sans réauth : %d", w.Code)
 	}
 	body["reauth"] = root.reauth()
-	g.ok(g.do("POST", "/admin/acl", &root, body))
+	g.ok(g.do("PUT", "/v1/admin/acl", &root, body))
 	// Retirer reste immédiat.
-	g.ok(g.do("POST", "/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "revoke": []string{"sessions_read"}}))
+	g.ok(g.do("PUT", "/v1/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "revoke": []string{"sessions_read"}}))
 }
 
 func TestAdminNoImplicitHomeAccess(t *testing.T) {
@@ -360,10 +363,10 @@ func TestAdminNoImplicitHomeAccess(t *testing.T) {
 	if m := g.ok(g.do("GET", "/v1/homes", &root, nil)); m["main"] != "" {
 		t.Fatalf("home principal visible sans droit : %v", m)
 	}
-	if w := g.do("POST", "/admin/acl", &root, map[string]any{"user_id": root.id, "home_id": mainHomeID, "grant": []string{"mem_read"}}); w.Code != 403 {
+	if w := g.do("PUT", "/v1/admin/acl", &root, map[string]any{"user_id": root.id, "home_id": mainHomeID, "grant": []string{"mem_read"}}); w.Code != 403 {
 		t.Fatalf("octroi à soi-même sans réauth : %d", w.Code)
 	}
-	g.ok(g.do("POST", "/admin/acl", &root, map[string]any{"user_id": root.id, "home_id": mainHomeID, "grant": []string{"mem_read"}, "reauth": root.reauth()}))
+	g.ok(g.do("PUT", "/v1/admin/acl", &root, map[string]any{"user_id": root.id, "home_id": mainHomeID, "grant": []string{"mem_read"}, "reauth": root.reauth()}))
 	if w := g.do("GET", "/v1/memory/files", &root, nil); w.Code != 200 {
 		t.Fatalf("après /admin/acl : %d %s", w.Code, w.Body)
 	}
@@ -375,7 +378,7 @@ func TestAdminUsersList(t *testing.T) {
 	bob := g.login("bob", false)
 	g.s.Grant(bob.id, mainHomeID, RightMemRead)
 	g.s.db.Exec(`UPDATE users SET is_admin=1 WHERE id=?`, bob.id)
-	m := g.ok(g.do("GET", "/admin/users", &root, nil))
+	m := g.ok(g.do("GET", "/v1/admin/users", &root, nil))
 	body, _ := json.Marshal(m)
 	for _, secret := range []string{"pw_hash", "argon2", "secret"} {
 		if strings.Contains(string(body), secret) {
@@ -407,10 +410,10 @@ func TestAdminResetMFAAndPassword(t *testing.T) {
 	g := newAdminRig(t)
 	root := g.login("root", true)
 	bob := g.login("bob", false)
-	if w := g.do("POST", "/admin/users/reset-mfa", &root, map[string]any{"id": bob.id}); w.Code != 403 {
+	if w := g.do("DELETE", "/v1/admin/users/"+fid(bob.id)+"/mfa", &root, map[string]any{}); w.Code != 403 {
 		t.Fatalf("reset-mfa sans réauth : %d", w.Code)
 	}
-	g.ok(g.do("POST", "/admin/users/reset-mfa", &root, map[string]any{"id": bob.id, "reauth": root.reauth()}))
+	g.ok(g.do("DELETE", "/v1/admin/users/"+fid(bob.id)+"/mfa", &root, map[string]any{"reauth": root.reauth()}))
 	if f, _ := g.s.factors(bob.id); !f.none() || f.Recovery != 0 {
 		t.Fatalf("facteurs après reset : %+v", f)
 	}
@@ -419,7 +422,7 @@ func TestAdminResetMFAAndPassword(t *testing.T) {
 	}
 	bob = g.session(bob.id)
 	const newPw = "un tout autre mot de passe"
-	g.ok(g.do("POST", "/admin/users/password", &root, map[string]any{"id": bob.id, "password": newPw, "reauth": root.reauth()}))
+	g.ok(g.do("PUT", "/v1/admin/users/"+fid(bob.id)+"/password", &root, map[string]any{"password": newPw, "reauth": root.reauth()}))
 	if w := g.do("GET", "/v1/homes", &bob, nil); w.Code != 401 {
 		t.Fatalf("session après changement de mot de passe : %d", w.Code)
 	}
@@ -438,16 +441,16 @@ func TestAdminSessions(t *testing.T) {
 	g := newAdminRig(t)
 	root := g.login("root", true)
 	bob := g.login("bob", false)
-	m := g.ok(g.do("GET", "/admin/sessions?user_id="+strconv.FormatInt(bob.id, 10), &root, nil))
+	m := g.ok(g.do("GET", "/v1/admin/sessions?user_id="+strconv.FormatInt(bob.id, 10), &root, nil))
 	ss := m["sessions"].([]any)
 	if len(ss) != 1 || len(ss[0].(map[string]any)["id"].(string)) != 8 {
 		t.Fatalf("sessions : %v", ss)
 	}
-	g.ok(g.do("POST", "/admin/sessions/revoke", &root, map[string]any{"user_id": bob.id}))
+	g.ok(g.do("DELETE", "/v1/admin/sessions?user_id="+fid(bob.id), &root, map[string]any{}))
 	if w := g.do("GET", "/v1/homes", &bob, nil); w.Code != 401 {
 		t.Fatalf("session révoquée : %d", w.Code)
 	}
-	if w := g.do("GET", "/admin/sessions?user_id=x", &root, nil); w.Code != 400 {
+	if w := g.do("GET", "/v1/admin/sessions?user_id=x", &root, nil); w.Code != 400 {
 		t.Fatalf("user_id invalide : %d", w.Code)
 	}
 }
@@ -462,7 +465,7 @@ func TestAdminEvents(t *testing.T) {
 	tx.Exec(`INSERT INTO auth_events(at,user_id,kind,outcome) VALUES(1,NULL,'tamper','users')`)
 	tx.Commit()
 	events := func(q string) []any {
-		return g.ok(g.do("GET", "/admin/events"+q, &root, nil))["events"].([]any)
+		return g.ok(g.do("GET", "/v1/admin/events"+q, &root, nil))["events"].([]any)
 	}
 	if n := len(events("")); n != eventsDefault {
 		t.Fatalf("défaut : %d", n)
@@ -484,7 +487,7 @@ func TestAdminEvents(t *testing.T) {
 		t.Fatalf("pagination : %v", next)
 	}
 	for _, q := range []string{"?limit=0", "?limit=x", "?before=-1"} {
-		if w := g.do("GET", "/admin/events"+q, &root, nil); w.Code != 400 {
+		if w := g.do("GET", "/v1/admin/events"+q, &root, nil); w.Code != 400 {
 			t.Errorf("%s : %d", q, w.Code)
 		}
 	}
@@ -525,7 +528,7 @@ func TestHomesSaveCascadeACL(t *testing.T) {
 	if n != 1 {
 		t.Fatalf("événement de cascade : %d", n)
 	}
-	if w := g.do("POST", "/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": idb, "grant": []string{"mem_read"}}); w.Code != 400 {
+	if w := g.do("PUT", "/v1/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": idb, "grant": []string{"mem_read"}}); w.Code != 400 {
 		t.Fatalf("home retiré : %d", w.Code)
 	}
 }
@@ -574,7 +577,7 @@ func TestAdminHomesAll(t *testing.T) {
 	if err := saveHomes([]Home{{Name: "a", Dir: da}, {Name: "b", Dir: db}}); err != nil {
 		t.Fatal(err)
 	}
-	w := g.do("GET", "/admin/homes", &root, nil)
+	w := g.do("GET", "/v1/admin/homes", &root, nil)
 	m := g.ok(w)
 	if strings.Contains(w.Body.String(), da) || strings.Contains(w.Body.String(), db) {
 		t.Fatalf("chemin exposé : %s", w.Body)
@@ -596,17 +599,17 @@ func TestAdminGrantFsRules(t *testing.T) {
 	g := newAdminRig(t)
 	root := g.login("root", true)
 	bob := g.login("bob", false)
-	w := g.do("POST", "/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"fs_write"}, "reauth": root.reauth()})
+	w := g.do("PUT", "/v1/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"fs_write"}, "reauth": root.reauth()})
 	if w.Code != 400 {
 		t.Fatalf("fs_write sans confirm : %d", w.Code)
 	}
-	w = g.do("POST", "/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"fs_write"}, "confirm": true})
+	w = g.do("PUT", "/v1/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"fs_write"}, "confirm": true})
 	if w.Code != 403 {
 		t.Fatalf("fs_write sans réauth : %d", w.Code)
 	}
-	w = g.do("POST", "/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"fs_read"}})
+	w = g.do("PUT", "/v1/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"fs_read"}})
 	if w.Code != 403 {
 		t.Fatalf("fs_read sans réauth : %d", w.Code)
 	}
-	g.ok(g.do("POST", "/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"fs_read", "fs_write"}, "confirm": true, "reauth": root.reauth()}))
+	g.ok(g.do("PUT", "/v1/admin/acl", &root, map[string]any{"user_id": bob.id, "home_id": mainHomeID, "grant": []string{"fs_read", "fs_write"}, "confirm": true, "reauth": root.reauth()}))
 }

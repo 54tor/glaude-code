@@ -30,16 +30,26 @@ type adminReq struct {
 
 func routesAdmin(mux *http.ServeMux, a *authAPI) {
 	d := &adminAPI{authAPI: a}
-	mux.HandleFunc("GET /admin/users", d.users)
-	mux.HandleFunc("POST /admin/users", d.userAdd)
-	mux.HandleFunc("POST /admin/users/disable", d.userDisable)
-	mux.HandleFunc("POST /admin/users/reset-mfa", d.userResetMFA)
-	mux.HandleFunc("POST /admin/users/password", d.userPassword)
-	mux.HandleFunc("POST /admin/acl", d.acl)
-	mux.HandleFunc("GET /admin/events", d.events)
-	mux.HandleFunc("GET /admin/homes", d.homes)
-	mux.HandleFunc("GET /admin/sessions", d.sessionsList)
-	mux.HandleFunc("POST /admin/sessions/revoke", d.sessionsRevoke)
+	mux.HandleFunc("GET /v1/admin/users", d.users)
+	mux.HandleFunc("POST /v1/admin/users", d.userAdd)
+	mux.HandleFunc("PATCH /v1/admin/users/{user}", d.userDisable)
+	mux.HandleFunc("DELETE /v1/admin/users/{user}/mfa", d.userResetMFA)
+	mux.HandleFunc("PUT /v1/admin/users/{user}/password", d.userPassword)
+	mux.HandleFunc("PUT /v1/admin/acl", d.acl)
+	mux.HandleFunc("GET /v1/admin/events", d.events)
+	mux.HandleFunc("GET /v1/admin/homes", d.homes)
+	mux.HandleFunc("GET /v1/admin/sessions", d.sessionsList)
+	mux.HandleFunc("DELETE /v1/admin/sessions", d.sessionsRevoke)
+}
+
+// userParam lit le segment {user} (identifiant numérique du compte) ; false après avoir répondu 400.
+func userParam(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	id, err := strconv.ParseInt(r.PathValue("user"), 10, 64)
+	if err != nil || id < 1 {
+		authMsg(w, 400, L("srv.http_util.requeteInvalide"))
+		return 0, false
+	}
+	return id, true
 }
 
 // admin : session complète, CSRF, compte admin vérifié. Le garde l'exige déjà ; le refaire ici couvre une base sans compte
@@ -51,7 +61,7 @@ func (d *adminAPI) admin(w http.ResponseWriter, r *http.Request) *Principal {
 	}
 	if !p.User.Admin {
 		d.deniedLog(p.User.ID, clientIP(r), "admin")
-		writeJSON(w, 403, map[string]any{"ok": false, "out": L("srv.auth.droitRefuse")})
+		authMsg(w, 403, L("srv.auth.droitRefuse"))
 		return nil
 	}
 	return p
@@ -61,7 +71,7 @@ func (d *adminAPI) admin(w http.ResponseWriter, r *http.Request) *Principal {
 // reauthFor. Sans l'un ou l'autre, refus sans rien vérifier : aucun essai de mot de passe n'est consommé.
 func (d *adminAPI) fresh(w http.ResponseWriter, r *http.Request, p *Principal, q reauthReq) bool {
 	if q.Password == "" || (q.Code == "" && !d.reauthFresh(p.SessionID)) {
-		writeJSON(w, 403, map[string]any{"ok": false, "out": L("srv.admin.reauthRequise")})
+		authMsg(w, 403, L("srv.admin.reauthRequise"))
 		return false
 	}
 	return d.reauth(w, r, p, q)
@@ -98,7 +108,7 @@ func (d *adminAPI) homes(w http.ResponseWriter, r *http.Request) {
 	for _, h := range loadHomes() {
 		out = append(out, map[string]string{"id": h.ID, "name": h.Name})
 	}
-	writeJSON(w, 200, map[string]any{"ok": true, "homes": out})
+	writeJSON(w, 200, map[string]any{"homes": out})
 }
 
 func (d *adminAPI) users(w http.ResponseWriter, r *http.Request) {
@@ -134,7 +144,7 @@ func (d *adminAPI) users(w http.ResponseWriter, r *http.Request) {
 		out = append(out, map[string]any{"id": u.ID, "name": u.Name, "admin": u.Admin, "disabled": u.Disabled, "created": u.CreatedAt,
 			"factors": f, "sessions": n, "acl": acl, "tampered": tampered || aclBad})
 	}
-	writeJSON(w, 200, map[string]any{"ok": true, "users": out})
+	writeJSON(w, 200, map[string]any{"users": out})
 }
 
 // userACL lit chaque ligne par Rights (signature vérifiée) ; une ligne altérée est montrée sans droits, marquée.
@@ -190,7 +200,7 @@ func (d *adminAPI) userAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := validPassword(req.Password); err != nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "out": pwError(err).Error()})
+		authMsg(w, 400, pwError(err).Error())
 		return
 	}
 	if !d.fresh(w, r, p, req.Reauth) {
@@ -206,11 +216,11 @@ func (d *adminAPI) userAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.audit(p, r, "admin_user", fmt.Sprintf("add id=%d name=%s admin=%t", id, normName(req.Name), req.Admin))
-	writeJSON(w, 200, map[string]any{"ok": true, "id": id})
+	writeJSON(w, 200, map[string]any{"id": id})
 }
 
 // lastAdmin : target est le seul admin actif à signature valide. Ne journalise pas les lignes altérées : appelé à chaque
-// désactivation, il remplirait auth_events ; GET /admin/users les signale.
+// désactivation, il remplirait auth_events ; GET /v1/admin/users les signale.
 func (s *authStore) lastAdmin(target int64) (bool, error) {
 	rows, err := s.db.Query(`SELECT `+userCols+` FROM users WHERE id<>? AND is_admin=1 AND disabled=0`, target)
 	if err != nil {
@@ -249,39 +259,42 @@ func (d *adminAPI) userDisable(w http.ResponseWriter, r *http.Request) {
 	p := d.admin(w, r)
 	var req struct {
 		adminReq
-		ID       int64 `json:"id"`
-		Disabled bool  `json:"disabled"`
+		Disabled bool `json:"disabled"`
 	}
 	if p == nil || !decodeAuth(w, r, &req) {
 		return
 	}
-	if req.ID == p.User.ID {
-		writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.admin.soiMeme")})
+	id, ok := userParam(w, r)
+	if !ok {
 		return
 	}
-	admin, ok := d.adminTarget(w, req.ID)
+	if id == p.User.ID {
+		authMsg(w, 400, L("srv.admin.soiMeme"))
+		return
+	}
+	admin, ok := d.adminTarget(w, id)
 	if !ok || ((!req.Disabled || admin) && !d.fresh(w, r, p, req.Reauth)) {
 		return
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if req.Disabled {
-		last, err := d.s.lastAdmin(req.ID)
+		last, err := d.s.lastAdmin(id)
 		if err != nil {
 			authInternal(w, err)
 			return
 		}
 		if last {
-			writeJSON(w, 409, map[string]any{"ok": false, "out": L("srv.admin.dernierAdmin")})
+			authMsg(w, 409, L("srv.admin.dernierAdmin"))
 			return
 		}
 	}
-	if err := d.s.SetDisabled(req.ID, req.Disabled); err != nil {
+	if err := d.s.SetDisabled(id, req.Disabled); err != nil {
 		d.userErr(w, err)
 		return
 	}
-	d.audit(p, r, "admin_user", fmt.Sprintf("disabled=%t id=%d", req.Disabled, req.ID))
-	writeJSON(w, 200, map[string]any{"ok": true})
+	d.audit(p, r, "admin_user", fmt.Sprintf("disabled=%t id=%d", req.Disabled, id))
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (d *adminAPI) userErr(w http.ResponseWriter, err error) {
@@ -304,44 +317,50 @@ func (d *adminAPI) userResetMFA(w http.ResponseWriter, r *http.Request) {
 	p := d.admin(w, r)
 	var req struct {
 		adminReq
-		ID int64 `json:"id"`
 	}
-	if p == nil || !decodeAuth(w, r, &req) || !d.fresh(w, r, p, req.Reauth) {
+	if p == nil || !decodeAuth(w, r, &req) {
 		return
 	}
-	if err := d.s.ResetMFA(req.ID); err != nil {
+	id, ok := userParam(w, r)
+	if !ok || !d.fresh(w, r, p, req.Reauth) {
+		return
+	}
+	if err := d.s.ResetMFA(id); err != nil {
 		d.userErr(w, err)
 		return
 	}
-	d.selfOut(w, p, req.ID)
-	d.audit(p, r, "mfa_reset", fmt.Sprintf("id=%d", req.ID))
-	writeJSON(w, 200, map[string]any{"ok": true})
+	d.selfOut(w, p, id)
+	d.audit(p, r, "mfa_reset", fmt.Sprintf("id=%d", id))
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (d *adminAPI) userPassword(w http.ResponseWriter, r *http.Request) {
 	p := d.admin(w, r)
 	var req struct {
 		adminReq
-		ID       int64  `json:"id"`
 		Password string `json:"password"`
 	}
 	if p == nil || !decodeAuth(w, r, &req) {
 		return
 	}
+	id, ok := userParam(w, r)
+	if !ok {
+		return
+	}
 	if err := validPassword(req.Password); err != nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "out": pwError(err).Error()})
+		authMsg(w, 400, pwError(err).Error())
 		return
 	}
 	if !d.fresh(w, r, p, req.Reauth) {
 		return
 	}
-	if err := d.s.SetPassword(req.ID, req.Password); err != nil {
+	if err := d.s.SetPassword(id, req.Password); err != nil {
 		d.userErr(w, err)
 		return
 	}
-	d.selfOut(w, p, req.ID)
-	d.audit(p, r, "admin_user", fmt.Sprintf("password id=%d", req.ID))
-	writeJSON(w, 200, map[string]any{"ok": true})
+	d.selfOut(w, p, id)
+	d.audit(p, r, "admin_user", fmt.Sprintf("password id=%d", id))
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func homeExists(id string) bool {
@@ -371,7 +390,7 @@ func (d *adminAPI) acl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bad := func(key string, kv ...any) {
-		writeJSON(w, 400, map[string]any{"ok": false, "out": L(key, kv...)})
+		authMsg(w, 400, L(key, kv...))
 	}
 	switch {
 	case len(grant) == 0 && len(revoke) == 0:
@@ -408,7 +427,7 @@ func (d *adminAPI) acl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.audit(p, r, "acl", fmt.Sprintf("user=%d home=%s grant=%s revoke=%s", req.UserID, req.HomeID, strings.Join(req.Grant, ","), strings.Join(req.Revoke, ",")))
-	writeJSON(w, 200, map[string]any{"ok": true, "rights": rightNames(m)})
+	writeJSON(w, 200, map[string]any{"rights": rightNames(m)})
 }
 
 // events : les plus récents d'abord ; before est l'identifiant (rowid) du dernier événement déjà vu, pour paginer sans
@@ -422,7 +441,7 @@ func (d *adminAPI) events(w http.ResponseWriter, r *http.Request) {
 	if v := q.Get("limit"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 1 {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+			authMsg(w, 400, L("srv.http_util.requeteInvalide"))
 			return
 		}
 		limit = min(n, eventsMax)
@@ -431,7 +450,7 @@ func (d *adminAPI) events(w http.ResponseWriter, r *http.Request) {
 	if v := q.Get("before"); v != "" {
 		n, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || n < 1 {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+			authMsg(w, 400, L("srv.http_util.requeteInvalide"))
 			return
 		}
 		before = n
@@ -459,7 +478,7 @@ func (d *adminAPI) events(w http.ResponseWriter, r *http.Request) {
 		authInternal(w, err)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"ok": true, "events": out})
+	writeJSON(w, 200, map[string]any{"events": out})
 }
 
 func (d *adminAPI) sessionsList(w http.ResponseWriter, r *http.Request) {
@@ -468,7 +487,7 @@ func (d *adminAPI) sessionsList(w http.ResponseWriter, r *http.Request) {
 	}
 	uid, err := strconv.ParseInt(r.URL.Query().Get("user_id"), 10, 64)
 	if err != nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+		authMsg(w, 400, L("srv.http_util.requeteInvalide"))
 		return
 	}
 	list, err := d.s.userSessions(uid)
@@ -481,32 +500,36 @@ func (d *adminAPI) sessionsList(w http.ResponseWriter, r *http.Request) {
 		// Un préfixe suffit à reconnaître une session ; l'identifiant entier permettrait de la révoquer ailleurs.
 		out = append(out, map[string]any{"id": hex.EncodeToString(x.hash)[:8], "created": x.created, "seen": x.seen, "ip": x.ip, "ua": x.ua, "mfa": x.mfa})
 	}
-	writeJSON(w, 200, map[string]any{"ok": true, "sessions": out})
+	writeJSON(w, 200, map[string]any{"sessions": out})
 }
 
 func (d *adminAPI) sessionsRevoke(w http.ResponseWriter, r *http.Request) {
 	p := d.admin(w, r)
 	var req struct {
 		adminReq
-		UserID int64 `json:"user_id"`
 	}
 	if p == nil || !decodeAuth(w, r, &req) {
 		return
 	}
+	uid, err := strconv.ParseInt(r.URL.Query().Get("user_id"), 10, 64)
+	if err != nil {
+		authMsg(w, 400, L("srv.http_util.requeteInvalide"))
+		return
+	}
 	// Ses propres sessions : pas de pair à écarter.
-	if req.UserID != p.User.ID {
-		admin, ok := d.adminTarget(w, req.UserID)
+	if uid != p.User.ID {
+		admin, ok := d.adminTarget(w, uid)
 		if !ok || (admin && !d.fresh(w, r, p, req.Reauth)) {
 			return
 		}
 	}
-	if err := d.s.RevokeUser(req.UserID); err != nil {
+	if err := d.s.RevokeUser(uid); err != nil {
 		authInternal(w, err)
 		return
 	}
-	d.selfOut(w, p, req.UserID)
-	d.audit(p, r, "session_revoke", fmt.Sprintf("user=%d all", req.UserID))
-	writeJSON(w, 200, map[string]any{"ok": true})
+	d.selfOut(w, p, uid)
+	d.audit(p, r, "session_revoke", fmt.Sprintf("user=%d all", uid))
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // DeleteHomesACL retire les droits des homes supprimés : un identifiant ne revient jamais, mais une ligne orpheline

@@ -164,7 +164,7 @@ func TestFsAuditSanitised(t *testing.T) {
 func TestFsAuditVisibleToAdmin(t *testing.T) {
 	a := newAuditRig(t)
 	a.post("new", map[string]any{"path": "z", "kind": "file"})
-	r := a.ok(a.do("GET", "/admin/events?kind=ide_write", &a.u, nil))["events"].([]any)
+	r := a.ok(a.do("GET", "/v1/admin/events?kind=ide_write", &a.u, nil))["events"].([]any)
 	if len(r) != 1 || r[0].(map[string]any)["user"] != "root" {
 		t.Fatal(r)
 	}

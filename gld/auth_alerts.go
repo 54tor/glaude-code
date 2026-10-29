@@ -8,7 +8,7 @@ import (
 // Bannissements d'adresses survenus depuis `since` (secondes Unix) : l'interface les interroge et ouvre une alerte dans chaque
 // session connectée (l'adresse n'est donnée qu'aux administrateurs). `now` est l'horloge du serveur, à renvoyer comme `since` au
 // prochain appel. Les jumelages, eux, sont propres au compte : une session volée qui en crée une nouvelle via POST /v1/pairing/codes le
-// révèle ici, pour révocation depuis /auth/sessions (device_id non journalisé : on ne pointe pas la session, on alerte).
+// révèle ici, pour révocation depuis /v1/auth/sessions (device_id non journalisé : on ne pointe pas la session, on alerte).
 func (a *authAPI) alerts(w http.ResponseWriter, r *http.Request) {
 	p := a.need(w, r, true)
 	if p == nil {
@@ -28,7 +28,7 @@ func (a *authAPI) alerts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if after < 0 {
-		writeJSON(w, 200, map[string]any{"ok": true, "now": authNow().Unix(), "cursor": cur, "bans": []any{}, "pairings": []any{}})
+		writeJSON(w, 200, map[string]any{"now": authNow().Unix(), "cursor": cur, "bans": []any{}, "pairings": []any{}})
 		return
 	}
 	bans, bCur, err := authEventRows(a.s, cur, `SELECT rowid, at, ip FROM auth_events WHERE kind='lock' AND outcome='ban' AND at > ? AND rowid > ? AND rowid <= ? ORDER BY rowid LIMIT 20`, since, after, cur)
@@ -46,7 +46,7 @@ func (a *authAPI) alerts(w http.ResponseWriter, r *http.Request) {
 		authInternal(w, err)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"ok": true, "now": authNow().Unix(), "cursor": min(bCur, pCur), "bans": bans, "pairings": pairings})
+	writeJSON(w, 200, map[string]any{"now": authNow().Unix(), "cursor": min(bCur, pCur), "bans": bans, "pairings": pairings})
 }
 
 // authEventRows : lignes {at, ip} d'une requête auth_events (rowid, at, ip), factorisé pour alerts. cursor : jusqu'où le prochain

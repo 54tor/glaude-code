@@ -20,7 +20,7 @@ func TestAlertsPairing(t *testing.T) {
 	g.s.eventIP(g.uid, evLogin, "pair", "203.0.113.9")
 	g.s.eventIP(bob, evLogin, "pair", "203.0.113.10")
 
-	w := g.do("GET", "/auth/alerts?since=0", c, "", nil)
+	w := g.do("GET", "/v1/auth/alerts?since=0", c, "", nil)
 	var b struct {
 		Pairings []map[string]any `json:"pairings"`
 	}
@@ -46,7 +46,7 @@ func TestAlertsMemeSeconde(t *testing.T) {
 	}
 	get := func(after int64) res {
 		var r res
-		w := g.do("GET", "/auth/alerts?after="+strconv.FormatInt(after, 10), c, "", nil)
+		w := g.do("GET", "/v1/auth/alerts?after="+strconv.FormatInt(after, 10), c, "", nil)
 		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &r) != nil {
 			t.Fatalf("alertes : %d %s", w.Code, w.Body)
 		}

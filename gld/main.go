@@ -355,7 +355,7 @@ func handler() http.Handler {
 	// multi-utilisateur, le remplace).
 	// Anti CSRF : http.CrossOriginProtection (bibliothèque standard) refuse toute requête modifiante venue d'une autre origine.
 	// Le choix de dossier de configuration (homes.go) vient après ces gardes : la passerelle juge la requête d'origine avant de la transmettre.
-	// En mode multi-utilisateur, le garde des comptes s'insère entre ces gardes et le choix du dossier. Les routes /auth/* ne
+	// En mode multi-utilisateur, le garde des comptes s'insère entre ces gardes et le choix du dossier. Les routes /v1/auth/* et /v1/admin/* ne
 	// sont montées qu'une fois la base trouvée, et suivent la base ouverte (rouverte si le fichier est remplacé).
 	type authChain struct {
 		api   *http.ServeMux
@@ -380,9 +380,9 @@ func handler() http.Handler {
 	}
 	mountAuth := func() {
 		for pat := range routeRights {
-			if strings.Contains(pat, " /auth/") || strings.Contains(pat, " /admin/") {
+			if strings.Contains(pat, " /v1/auth/") || strings.Contains(pat, " /v1/admin/") {
 				mux.HandleFunc(pat, func(w http.ResponseWriter, r *http.Request) {
-					// Sans compte, /auth/* n'existe pas : l'interface n'affiche pas de connexion que personne ne peut passer.
+					// Sans compte, /v1/auth/* n'existe pas : l'interface n'affiche pas de connexion que personne ne peut passer.
 					if _, d := reqMode(r); d.on {
 						chainFor(d.st).api.ServeHTTP(w, r)
 						return

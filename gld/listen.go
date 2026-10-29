@@ -130,6 +130,10 @@ func withToken(token string, next http.Handler) http.Handler {
 		if wrongTokenPresented(r) && !tokenTry(clientIP(r)) { // chaque jeton faux présenté compte, comme au formulaire
 			w.Header().Set("Retry-After", "60")
 			w.Header().Set("Cache-Control", "no-store")
+			if strings.HasPrefix(r.URL.Path, "/v1/") {
+				authMsg(w, http.StatusTooManyRequests, L("srv.token.tooMany"))
+				return
+			}
 			http.Error(w, L("srv.token.tooMany"), http.StatusTooManyRequests)
 			return
 		}
@@ -138,6 +142,10 @@ func withToken(token string, next http.Handler) http.Handler {
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
+		if strings.HasPrefix(r.URL.Path, "/v1/") {
+			authMsg(w, http.StatusUnauthorized, L("srv.listen.tokenRequired"))
+			return
+		}
 		http.Error(w, L("srv.listen.tokenRequired"), http.StatusUnauthorized)
 	})
 }

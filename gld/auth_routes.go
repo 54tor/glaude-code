@@ -11,6 +11,7 @@ import (
 	"mime"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -107,43 +108,50 @@ func (t *throttle) mfaCount(key string) int64 {
 
 func routesAuth(mux *http.ServeMux, s *authStore, th *throttle) *authAPI {
 	a := &authAPI{s: s, th: th, reauthAt: map[string]time.Time{}, busy: map[string]bool{}}
-	mux.HandleFunc("POST /auth/login", a.login)
-	mux.HandleFunc("POST /auth/mfa/totp", a.mfaTOTP)
-	mux.HandleFunc("POST /auth/mfa/recovery", a.mfaRecovery)
-	mux.HandleFunc("POST /auth/mfa/webauthn/begin", a.mfaWebAuthnBegin)
-	mux.HandleFunc("POST /auth/mfa/webauthn/finish", a.mfaWebAuthnFinish)
-	mux.HandleFunc("POST /auth/logout", a.logout)
-	mux.HandleFunc("GET /auth/me", a.me)
-	mux.HandleFunc("POST /auth/totp/begin", a.totpBegin)
-	mux.HandleFunc("POST /auth/totp/confirm", a.totpConfirm)
-	mux.HandleFunc("POST /auth/webauthn/register/begin", a.waRegisterBegin)
-	mux.HandleFunc("POST /auth/webauthn/register/finish", a.waRegisterFinish)
-	mux.HandleFunc("POST /auth/factor/remove", a.factorRemove)
-	mux.HandleFunc("POST /auth/recovery/regenerate", a.recoveryRegenerate)
-	mux.HandleFunc("POST /auth/password", a.password)
-	mux.HandleFunc("GET /auth/alerts", a.alerts)
-	mux.HandleFunc("GET /auth/sessions", a.sessions)
-	mux.HandleFunc("POST /auth/sessions/revoke", a.sessionRevoke)
-	mux.HandleFunc("POST /auth/sessions/revoke-others", a.sessionRevokeOthers)
+	mux.HandleFunc("POST /v1/auth/sessions", a.login)
+	mux.HandleFunc("POST /v1/auth/mfa/totp", a.mfaTOTP)
+	mux.HandleFunc("POST /v1/auth/mfa/recovery", a.mfaRecovery)
+	mux.HandleFunc("POST /v1/auth/mfa/webauthn/challenges", a.mfaWebAuthnBegin)
+	mux.HandleFunc("POST /v1/auth/mfa/webauthn/assertions", a.mfaWebAuthnFinish)
+	mux.HandleFunc("DELETE /v1/auth/sessions/current", a.logout)
+	mux.HandleFunc("GET /v1/auth/me", a.me)
+	mux.HandleFunc("POST /v1/auth/totp/enrollments", a.totpBegin)
+	mux.HandleFunc("PUT /v1/auth/totp/enrollments/current", a.totpConfirm)
+	mux.HandleFunc("POST /v1/auth/webauthn/registrations", a.waRegisterBegin)
+	mux.HandleFunc("PUT /v1/auth/webauthn/registrations/current", a.waRegisterFinish)
+	mux.HandleFunc("DELETE /v1/auth/factors/{factor}", a.factorRemove)
+	mux.HandleFunc("PUT /v1/auth/recovery-codes", a.recoveryRegenerate)
+	mux.HandleFunc("PUT /v1/auth/password", a.password)
+	mux.HandleFunc("GET /v1/auth/alerts", a.alerts)
+	mux.HandleFunc("GET /v1/auth/sessions", a.sessions)
+	mux.HandleFunc("DELETE /v1/auth/sessions/{sid}", a.sessionRevoke)
+	mux.HandleFunc("DELETE /v1/auth/sessions", a.sessionRevokeOthers)
 	return a
 }
 
 // authFail est l'unique réponse d'échec : même statut, même corps, mêmes en-têtes quelle que soit la cause.
 func authFail(w http.ResponseWriter, wait time.Duration) {
 	w.Header().Set("Retry-After", strconv.Itoa(max(1, int(math.Ceil(wait.Seconds())))))
-	writeJSON(w, 401, map[string]any{"ok": false, "out": L("srv.auth.invalide")})
+	authMsg(w, 401, L("srv.auth.invalide"))
 }
 
 func authInternal(w http.ResponseWriter, err error) {
 	journal("auth: %v", err)
-	writeJSON(w, 500, map[string]any{"ok": false, "out": L("srv.auth.erreur")})
+	authMsg(w, 500, L("srv.auth.erreur"))
+}
+
+var errCodes = map[int]string{400: "bad_request", 401: "unauthorized", 403: "forbidden", 404: "not_found", 409: "conflict", 413: "too_large", 415: "unsupported", 429: "rate_limited", 500: "internal", 503: "unavailable"}
+
+// authMsg : réponse d'erreur uniforme de l'API /v1, le code découlant du statut.
+func authMsg(w http.ResponseWriter, status int, msg string) {
+	writeErr(w, status, errCodes[status], msg)
 }
 
 // authUserErr ne montre que les erreurs du catalogue ; le reste part au journal.
 func authUserErr(w http.ResponseWriter, code int, err error) {
 	var m *msgErr
 	if errors.As(err, &m) {
-		writeJSON(w, code, map[string]any{"ok": false, "out": err.Error()})
+		authMsg(w, code, err.Error())
 		return
 	}
 	authInternal(w, err)
@@ -154,7 +162,7 @@ func decodeAuth(w http.ResponseWriter, r *http.Request, v any) bool {
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if dec.Decode(v) != nil || dec.Decode(&struct{}{}) != io.EOF {
-		writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+		authMsg(w, 400, L("srv.http_util.requeteInvalide"))
 		return false
 	}
 	return true
@@ -208,7 +216,7 @@ func (a *authAPI) throttled(w http.ResponseWriter, uid int64, name, ip, kind str
 func (a *authAPI) login(w http.ResponseWriter, r *http.Request) {
 	// Exiger JSON interdit le formulaire HTML intersite, seule voie d'une connexion forcée sans pré-vol.
 	if mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mt != "application/json" {
-		writeJSON(w, 415, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+		authMsg(w, 415, L("srv.http_util.requeteInvalide"))
 		return
 	}
 	var req struct {
@@ -285,7 +293,7 @@ func (a *authAPI) login(w http.ResponseWriter, r *http.Request) {
 		methods = append(methods, "recovery")
 	}
 	a.log(u.ID, name, ip, evLogin, "password_ok")
-	writeJSON(w, 200, map[string]any{"ok": true, "mfa": methods, "enroll": f.none(), "csrf": p.CSRF, "out": L("srv.auth.mfaRequis")})
+	writeJSON(w, 200, map[string]any{"mfa": methods, "enroll": f.none(), "csrf": p.CSRF})
 }
 
 // need exige une session valide et, hors GET, le jeton CSRF ; full exige en plus le second facteur.
@@ -301,16 +309,16 @@ func (a *authAPI) need(w http.ResponseWriter, r *http.Request, full bool) *Princ
 			journal("auth: session: %v", err)
 		}
 		a.deniedLog(0, clientIP(r), "auth")
-		writeJSON(w, 401, map[string]any{"ok": false, "out": L("srv.auth.sessionRequise")})
+		authMsg(w, 401, L("srv.auth.sessionRequise"))
 		return nil
 	}
 	if !csrfOK(r, p) {
 		a.deniedLog(p.User.ID, clientIP(r), "csrf")
-		writeJSON(w, 403, map[string]any{"ok": false, "out": L("srv.auth.csrf")})
+		authMsg(w, 403, L("srv.auth.csrf"))
 		return nil
 	}
 	if full && !p.MFA {
-		writeJSON(w, 403, map[string]any{"ok": false, "out": L("srv.auth.mfaRequis")})
+		authMsg(w, 403, L("srv.auth.mfaRequis"))
 		return nil
 	}
 	return p
@@ -454,7 +462,7 @@ func (a *authAPI) second(w http.ResponseWriter, r *http.Request, p *Principal, m
 	a.log(uid, name, ip, kind, evSuccess)
 	if p.MFA {
 		a.markReauth(p.SessionID)
-		writeJSON(w, 200, map[string]any{"ok": true, "csrf": p.CSRF})
+		writeJSON(w, 200, map[string]any{"csrf": p.CSRF})
 		return
 	}
 	csrf, ok := a.promote(w, r, p, ip)
@@ -462,7 +470,7 @@ func (a *authAPI) second(w http.ResponseWriter, r *http.Request, p *Principal, m
 		authFail(w, 0)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"ok": true, "csrf": csrf})
+	writeJSON(w, 200, map[string]any{"csrf": csrf})
 }
 
 // promote achève la connexion : compteurs remis à zéro, nouvelle valeur de cookie, événement login/success.
@@ -546,7 +554,7 @@ func (a *authAPI) mfaWebAuthnBegin(w http.ResponseWriter, r *http.Request) {
 		authUserErr(w, 400, err)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"ok": true, "options": opts})
+	writeJSON(w, 200, map[string]any{"options": opts})
 }
 
 func (a *authAPI) mfaWebAuthnFinish(w http.ResponseWriter, r *http.Request) {
@@ -556,7 +564,7 @@ func (a *authAPI) mfaWebAuthnFinish(w http.ResponseWriter, r *http.Request) {
 	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, waBodyMax))
 	if err != nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+		authMsg(w, 400, L("srv.http_util.requeteInvalide"))
 		return
 	}
 	r.Body = io.NopCloser(bytes.NewReader(body))
@@ -576,7 +584,7 @@ func (a *authAPI) logout(w http.ResponseWriter, r *http.Request) {
 	clearSessionCookie(w)
 	clearHomeCookie(w)
 	a.log(p.User.ID, p.User.Name, clientIP(r), "logout", "ok")
-	writeJSON(w, 200, map[string]any{"ok": true})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (a *authAPI) me(w http.ResponseWriter, r *http.Request) {
@@ -586,7 +594,7 @@ func (a *authAPI) me(w http.ResponseWriter, r *http.Request) {
 		p, err = a.s.Session(c.Value)
 	}
 	if err != nil {
-		writeJSON(w, 401, map[string]any{"ok": false})
+		authMsg(w, 401, L("srv.auth.sessionRequise"))
 		return
 	}
 	f, err := a.s.factors(p.User.ID)
@@ -594,9 +602,8 @@ func (a *authAPI) me(w http.ResponseWriter, r *http.Request) {
 		authInternal(w, err)
 		return
 	}
-	out := map[string]any{"ok": true, "user": map[string]any{"name": p.User.Name, "admin": p.User.Admin}, "mfa": p.MFA, "csrf": p.CSRF, "factors": f}
+	out := map[string]any{"user": map[string]any{"name": p.User.Name, "admin": p.User.Admin}, "mfa": p.MFA, "csrf": p.CSRF, "factors": f}
 	if !p.MFA {
-		out["out"] = L("srv.auth.mfaRequis")
 		writeJSON(w, 200, out)
 		return
 	}
@@ -653,7 +660,7 @@ func (a *authAPI) myHomes(uid int64) (map[string][]Right, []map[string]string, e
 }
 
 // reauthReq : mot de passe, plus un code (TOTP ou secours) ou, à défaut, une assertion WebAuthn
-// réussie sur cette session depuis moins de cinq minutes (/auth/mfa/webauthn/*).
+// réussie sur cette session depuis moins de cinq minutes (/v1/auth/mfa/webauthn/*).
 type reauthReq struct {
 	Password string `json:"password"`
 	Code     string `json:"code"`
@@ -701,7 +708,7 @@ func (a *authAPI) enrolSession(w http.ResponseWriter, r *http.Request) (*Princip
 		return nil, f, false
 	}
 	if !p.MFA && !f.none() {
-		writeJSON(w, 403, map[string]any{"ok": false, "out": L("srv.auth.mfaRequis")})
+		authMsg(w, 403, L("srv.auth.mfaRequis"))
 		return nil, f, false
 	}
 	return p, f, true
@@ -729,7 +736,7 @@ func (a *authAPI) enrolCommit(w http.ResponseWriter, r *http.Request, p *Princip
 		release, ok := a.claim("first:" + strconv.FormatInt(p.User.ID, 10))
 		if !ok {
 			a.rateLog(p.User.ID, p.User.Name, clientIP(r), "enrol", what+"_busy")
-			writeJSON(w, 409, map[string]any{"ok": false, "out": L("srv.auth.enrolementEnCours")})
+			authMsg(w, 409, L("srv.auth.enrolementEnCours"))
 			return
 		}
 		defer release()
@@ -740,7 +747,7 @@ func (a *authAPI) enrolCommit(w http.ResponseWriter, r *http.Request, p *Princip
 		return
 	}
 	if !p.MFA && !f.none() {
-		writeJSON(w, 403, map[string]any{"ok": false, "out": L("srv.auth.mfaRequis")})
+		authMsg(w, 403, L("srv.auth.mfaRequis"))
 		return
 	}
 	if err := write(); err != nil {
@@ -750,7 +757,7 @@ func (a *authAPI) enrolCommit(w http.ResponseWriter, r *http.Request, p *Princip
 	}
 	ip := clientIP(r)
 	a.log(p.User.ID, p.User.Name, ip, "enrol", what)
-	out := map[string]any{"ok": true, "csrf": p.CSRF}
+	out := map[string]any{"csrf": p.CSRF}
 	if f.none() {
 		codes, hashes, err := genRecovery()
 		if err != nil {
@@ -786,7 +793,7 @@ func (a *authAPI) totpBegin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.log(p.User.ID, p.User.Name, clientIP(r), "enrol", "totp_begin")
-	writeJSON(w, 200, map[string]any{"ok": true, "secret": secret, "uri": uri})
+	writeJSON(w, 200, map[string]any{"secret": secret, "uri": uri})
 }
 
 func (a *authAPI) totpConfirm(w http.ResponseWriter, r *http.Request) {
@@ -809,7 +816,7 @@ func (a *authAPI) waRegisterBegin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.log(p.User.ID, p.User.Name, clientIP(r), "enrol", "webauthn_begin")
-	writeJSON(w, 200, map[string]any{"ok": true, "options": opts})
+	writeJSON(w, 200, map[string]any{"options": opts})
 }
 
 // Le corps est la réponse brute du navigateur, lue par la bibliothèque : le libellé passe en paramètre d'URL.
@@ -821,7 +828,7 @@ func (a *authAPI) waRegisterFinish(w http.ResponseWriter, r *http.Request) {
 	// Lu en entier avant tout verrou : un client lent ne doit rien bloquer.
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, waBodyMax))
 	if err != nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+		authMsg(w, 400, L("srv.http_util.requeteInvalide"))
 		return
 	}
 	r.Body = io.NopCloser(bytes.NewReader(body))
@@ -830,37 +837,47 @@ func (a *authAPI) waRegisterFinish(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// parseFactor lit le segment {factor} : « totp » ou « webauthn-<id> ».
+func parseFactor(s string) (kind string, id int64, ok bool) {
+	if s == "totp" {
+		return s, 0, true
+	}
+	n, found := strings.CutPrefix(s, "webauthn-")
+	if !found {
+		return "", 0, false
+	}
+	id, err := strconv.ParseInt(n, 10, 64)
+	return "webauthn", id, err == nil
+}
+
 func (a *authAPI) factorRemove(w http.ResponseWriter, r *http.Request) {
 	p := a.need(w, r, true)
-	var req struct {
-		reauthReq
-		Kind string `json:"kind"`
-		ID   int64  `json:"id"`
-	}
+	var req reauthReq
 	if p == nil || !decodeAuth(w, r, &req) {
 		return
 	}
-	if req.Kind != "totp" && req.Kind != "webauthn" {
-		writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.auth.facteurInconnu")})
+	kind, id, ok := parseFactor(r.PathValue("factor"))
+	if !ok {
+		authMsg(w, 400, L("srv.auth.facteurInconnu"))
 		return
 	}
-	if !a.reauth(w, r, p, req.reauthReq) {
+	if !a.reauth(w, r, p, req) {
 		return
 	}
 	var err error
-	if req.Kind == "totp" {
+	if kind == "totp" {
 		err = a.s.TOTPRemove(p.User.ID)
 	} else {
-		err = a.s.WebAuthnRemove(p.User.ID, req.ID)
+		err = a.s.WebAuthnRemove(p.User.ID, id)
 	}
 	ip := clientIP(r)
 	switch {
 	case err == nil:
-		a.log(p.User.ID, p.User.Name, ip, "factor_remove", req.Kind)
-		writeJSON(w, 200, map[string]any{"ok": true})
+		a.log(p.User.ID, p.User.Name, ip, "factor_remove", kind)
+		w.WriteHeader(http.StatusNoContent)
 	case errors.Is(err, errNoTOTP) || errors.Is(err, errWebAuthnFailed):
 		a.log(p.User.ID, p.User.Name, ip, "factor_remove", "unknown")
-		writeJSON(w, 404, map[string]any{"ok": false, "out": L("srv.auth.facteurInconnu")})
+		authMsg(w, 404, L("srv.auth.facteurInconnu"))
 	default:
 		a.log(p.User.ID, p.User.Name, ip, "factor_remove", "refused")
 		authUserErr(w, 409, err)
@@ -880,7 +897,7 @@ func (a *authAPI) recoveryRegenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.log(p.User.ID, p.User.Name, clientIP(r), "recovery", "regenerated")
-	writeJSON(w, 200, map[string]any{"ok": true, "recovery": codes})
+	writeJSON(w, 200, map[string]any{"recovery": codes})
 }
 
 func (a *authAPI) password(w http.ResponseWriter, r *http.Request) {
@@ -894,7 +911,7 @@ func (a *authAPI) password(w http.ResponseWriter, r *http.Request) {
 	}
 	// Valider avant la réauthentification évite de consommer un code pour un mot de passe refusé.
 	if err := validPassword(req.New); err != nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "out": pwError(err).Error()})
+		authMsg(w, 400, pwError(err).Error())
 		return
 	}
 	if !a.reauth(w, r, p, req.reauthReq) {
@@ -907,7 +924,7 @@ func (a *authAPI) password(w http.ResponseWriter, r *http.Request) {
 	a.forgetReauth(p.SessionID)
 	clearSessionCookie(w)
 	a.log(p.User.ID, p.User.Name, clientIP(r), "password", "changed")
-	writeJSON(w, 200, map[string]any{"ok": true})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (a *authAPI) sessions(w http.ResponseWriter, r *http.Request) {
@@ -925,14 +942,21 @@ func (a *authAPI) sessions(w http.ResponseWriter, r *http.Request) {
 		id := hex.EncodeToString(x.hash)
 		out = append(out, map[string]any{"id": id, "created": x.created, "seen": x.seen, "ip": x.ip, "ua": x.ua, "mfa": x.mfa, "current": id == p.SessionID})
 	}
-	writeJSON(w, 200, map[string]any{"ok": true, "sessions": out})
+	writeJSON(w, 200, map[string]any{"sessions": out})
 }
 
 // sessionRevokeOthers : nettoyage à la demande des autres sessions ouvertes du compte, la courante reste.
 func (a *authAPI) sessionRevokeOthers(w http.ResponseWriter, r *http.Request) {
 	p := a.need(w, r, true)
 	var req reauthReq
-	if p == nil || !decodeAuth(w, r, &req) || !a.reauth(w, r, p, req) {
+	if p == nil || !decodeAuth(w, r, &req) {
+		return
+	}
+	if r.URL.Query().Get("others") != "1" {
+		authMsg(w, 400, L("srv.http_util.requeteInvalide"))
+		return
+	}
+	if !a.reauth(w, r, p, req) {
 		return
 	}
 	if err := a.s.RevokeOthers(p.User.ID, p.SessionID); err != nil {
@@ -940,43 +964,41 @@ func (a *authAPI) sessionRevokeOthers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.log(p.User.ID, p.User.Name, clientIP(r), "session_revoke", "others")
-	writeJSON(w, 200, map[string]any{"ok": true})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (a *authAPI) sessionRevoke(w http.ResponseWriter, r *http.Request) {
 	p := a.need(w, r, true)
-	var req struct {
-		reauthReq
-		ID string `json:"id"`
-	}
+	var req reauthReq
+	sid := r.PathValue("sid")
 	if p == nil || !decodeAuth(w, r, &req) {
 		return
 	}
-	h, err := hex.DecodeString(req.ID)
+	h, err := hex.DecodeString(sid)
 	if err != nil || len(h) != 32 {
-		writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.auth.sessionInconnue")})
+		authMsg(w, 400, L("srv.auth.sessionInconnue"))
 		return
 	}
-	if !a.reauth(w, r, p, req.reauthReq) {
+	if !a.reauth(w, r, p, req) {
 		return
 	}
 	// user_id est signé : vérifier puis révoquer ne laisse pas de fenêtre.
 	owner, err := a.s.sessionOwner(h)
 	if errors.Is(err, errNoSession) || (err == nil && owner != p.User.ID) {
-		writeJSON(w, 404, map[string]any{"ok": false, "out": L("srv.auth.sessionInconnue")})
+		authMsg(w, 404, L("srv.auth.sessionInconnue"))
 		return
 	}
 	if err == nil {
-		err = a.s.RevokeSession(req.ID)
+		err = a.s.RevokeSession(sid)
 	}
 	if err != nil {
 		authInternal(w, err)
 		return
 	}
-	a.forgetReauth(req.ID)
-	if req.ID == p.SessionID {
+	a.forgetReauth(sid)
+	if sid == p.SessionID {
 		clearSessionCookie(w)
 	}
 	a.log(p.User.ID, p.User.Name, clientIP(r), "session_revoke", "ok")
-	writeJSON(w, 200, map[string]any{"ok": true})
+	w.WriteHeader(http.StatusNoContent)
 }

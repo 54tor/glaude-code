@@ -202,7 +202,7 @@ func TestThrottleConcurrent(t *testing.T) {
 }
 
 func TestClientIPXFF(t *testing.T) {
-	r := httptest.NewRequest("POST", "/auth/login", nil)
+	r := httptest.NewRequest("POST", "/v1/auth/sessions", nil)
 	r.RemoteAddr = "10.1.2.3:4567"
 	r.Header.Set("X-Forwarded-For", "6.6.6.6, 203.0.113.5")
 	t.Setenv("GLD_TRUSTED_PROXIES", "")
@@ -221,7 +221,7 @@ func TestClientIPXFF(t *testing.T) {
 
 func TestClientIPXFFSpoof(t *testing.T) {
 	t.Setenv("GLD_TRUSTED_PROXIES", "192.0.2.1,192.0.2.2")
-	r := httptest.NewRequest("POST", "/auth/login", nil)
+	r := httptest.NewRequest("POST", "/v1/auth/sessions", nil)
 	r.RemoteAddr = "198.51.100.9:1234"
 	r.Header.Set("X-Forwarded-For", "1.2.3.4")
 	if got := clientIP(r); got != "198.51.100.9" {
@@ -358,13 +358,13 @@ func TestBanAlerts(t *testing.T) {
 	g := newAuthRig(t)
 	secret := g.enrolTOTP()
 	c, _ := g.full(secret) // alice, compte ordinaire
-	if w := g.do("GET", "/auth/alerts", "", "", nil); w.Code == 200 {
+	if w := g.do("GET", "/v1/auth/alerts", "", "", nil); w.Code == 200 {
 		t.Fatal("alertes servies sans session")
 	}
 	for n := 0; n < thBanAfter; n++ {
 		g.th.Fail(fmt.Sprintf("x%d", n), "203.0.113.50", "password")
 	}
-	b := jbody(t, g.do("GET", "/auth/alerts?since=0", c, "", nil))
+	b := jbody(t, g.do("GET", "/v1/auth/alerts?since=0", c, "", nil))
 	bans, _ := b["bans"].([]any)
 	if len(bans) != 1 || bans[0].(map[string]any)["ip"] != "" {
 		t.Fatalf("un compte ordinaire voit l'adresse : %v", b)
@@ -374,12 +374,12 @@ func TestBanAlerts(t *testing.T) {
 		t.Fatal(err)
 	}
 	ac, _ := fullSession(t, g.s, admin)
-	ab := jbody(t, g.do("GET", "/auth/alerts?since=0", ac, "", nil))
+	ab := jbody(t, g.do("GET", "/v1/auth/alerts?since=0", ac, "", nil))
 	if bans, _ := ab["bans"].([]any); len(bans) != 1 || bans[0].(map[string]any)["ip"] != "203.0.113.50" {
 		t.Fatalf("alertes admin : %v", ab)
 	}
 	now := int64(b["now"].(float64))
-	if b := jbody(t, g.do("GET", fmt.Sprintf("/auth/alerts?since=%d", now+1), c, "", nil)); len(b["bans"].([]any)) != 0 {
+	if b := jbody(t, g.do("GET", fmt.Sprintf("/v1/auth/alerts?since=%d", now+1), c, "", nil)); len(b["bans"].([]any)) != 0 {
 		t.Fatalf("ban déjà vu : %v", b)
 	}
 }

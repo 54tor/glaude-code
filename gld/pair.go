@@ -377,7 +377,7 @@ func routesPair(mux *http.ServeMux) {
 	}
 	mux.HandleFunc("GET /pair", entry)
 	mux.HandleFunc("POST /pair", entry)
-	// Mode jeton seulement : en mode comptes, les sessions du compte (/auth/sessions) en tiennent lieu.
+	// Mode jeton seulement : en mode comptes, les sessions du compte (/v1/auth/sessions) en tiennent lieu.
 	mux.HandleFunc("GET /v1/devices", func(w http.ResponseWriter, r *http.Request) {
 		if _, d := reqMode(r); d.on {
 			http.NotFound(w, r)

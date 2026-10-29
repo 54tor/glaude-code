@@ -15,7 +15,7 @@ import (
 
 // Valeurs propres au garde, hors allRights : Grant les refuse, aucune ligne home_acl ne peut les porter.
 const (
-	rightPublic Right = "public" // servie sans session ; les routes /auth/* vérifient elles-mêmes la session
+	rightPublic Right = "public" // servie sans session ; les routes /v1/auth/* vérifient elles-mêmes la session
 	rightAny    Right = "any"    // session complète, sans droit sur un home (la route filtre elle-même)
 	rightAdmin  Right = "admin"
 )
@@ -31,17 +31,17 @@ var routeRights = map[string]Right{
 	"GET /guest": rightPublic, "GET /guest/{handle}": rightPublic, "GET /v1/guest/sessions": rightPublic, "GET /v1/guest/me": rightPublic, "GET /invite/{home}/{token}": rightPublic, "POST /invite/{home}/{token}": rightPublic, "DELETE /v1/guest/me": rightPublic,
 
 	// Connexion et profil.
-	"POST /auth/login": rightPublic, "POST /auth/mfa/totp": rightPublic, "POST /auth/mfa/recovery": rightPublic,
-	"POST /auth/mfa/webauthn/begin": rightPublic, "POST /auth/mfa/webauthn/finish": rightPublic, "POST /auth/logout": rightPublic,
-	"GET /auth/me": rightPublic, "POST /auth/totp/begin": rightPublic, "POST /auth/totp/confirm": rightPublic,
-	"POST /auth/webauthn/register/begin": rightPublic, "POST /auth/webauthn/register/finish": rightPublic,
-	"POST /auth/factor/remove": rightPublic, "POST /auth/recovery/regenerate": rightPublic, "POST /auth/password": rightPublic,
-	"GET /auth/alerts": rightPublic, "GET /auth/sessions": rightPublic, "POST /auth/sessions/revoke": rightPublic, "POST /auth/sessions/revoke-others": rightPublic,
+	"POST /v1/auth/sessions": rightPublic, "POST /v1/auth/mfa/totp": rightPublic, "POST /v1/auth/mfa/recovery": rightPublic,
+	"POST /v1/auth/mfa/webauthn/challenges": rightPublic, "POST /v1/auth/mfa/webauthn/assertions": rightPublic, "DELETE /v1/auth/sessions/current": rightPublic,
+	"GET /v1/auth/me": rightPublic, "POST /v1/auth/totp/enrollments": rightPublic, "PUT /v1/auth/totp/enrollments/current": rightPublic,
+	"POST /v1/auth/webauthn/registrations": rightPublic, "PUT /v1/auth/webauthn/registrations/current": rightPublic,
+	"DELETE /v1/auth/factors/{factor}": rightPublic, "PUT /v1/auth/recovery-codes": rightPublic, "PUT /v1/auth/password": rightPublic,
+	"GET /v1/auth/alerts": rightPublic, "GET /v1/auth/sessions": rightPublic, "DELETE /v1/auth/sessions/{sid}": rightPublic, "DELETE /v1/auth/sessions": rightPublic,
 
 	// Administration des comptes et des droits.
-	"GET /admin/users": rightAdmin, "POST /admin/users": rightAdmin, "POST /admin/users/disable": rightAdmin,
-	"POST /admin/users/reset-mfa": rightAdmin, "POST /admin/users/password": rightAdmin, "POST /admin/acl": rightAdmin,
-	"GET /admin/events": rightAdmin, "GET /admin/homes": rightAdmin, "GET /admin/sessions": rightAdmin, "POST /admin/sessions/revoke": rightAdmin,
+	"GET /v1/admin/users": rightAdmin, "POST /v1/admin/users": rightAdmin, "PATCH /v1/admin/users/{user}": rightAdmin,
+	"DELETE /v1/admin/users/{user}/mfa": rightAdmin, "PUT /v1/admin/users/{user}/password": rightAdmin, "PUT /v1/admin/acl": rightAdmin,
+	"GET /v1/admin/events": rightAdmin, "GET /v1/admin/homes": rightAdmin, "GET /v1/admin/sessions": rightAdmin, "DELETE /v1/admin/sessions": rightAdmin,
 
 	// Jumelage d'un appareil par QR code (pair.go).
 	"POST /v1/pairing/codes": rightAny, "GET /pair": rightPublic, "POST /pair": rightPublic, "GET /v1/devices": rightAny, "DELETE /v1/devices/{device}": rightAny,
@@ -179,7 +179,7 @@ func anyRight(m map[Right]bool) bool {
 
 func gateDeny(w http.ResponseWriter, code int, key string) {
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, code, map[string]any{"ok": false, "out": L(key)})
+	authMsg(w, code, L(key))
 }
 
 func gatePrincipal(s *authStore, r *http.Request, passive bool) (p *Principal, bearer bool) {
