@@ -17,6 +17,7 @@ export type FileActions = {
   open: (key: string) => void
   edit: (key: string) => void
   rewrite: (x: MemFile) => void // réécriture par Haiku
+  rename: (x: MemFile) => void
   copyContent: (x: MemFile) => void
   toggle: (key: string) => void // coche pour une fusion
   move: (key: string, to: string, copy?: boolean) => void
@@ -75,6 +76,11 @@ export function FileMenu({ x, picked, targets, homeDir, a }: { x: MemFile; picke
       <ContextMenuItem onSelect={() => a.edit(x.key)}>
         <Pencil /> {t("memory.fileMenu.edit")}
       </ContextMenuItem>
+      {!x.key.endsWith("/MEMORY.md") && (x.key.startsWith("m/") || x.key.startsWith("g/rules/") || x.key.startsWith("r/")) && (
+        <ContextMenuItem onSelect={() => a.rename(x)}>
+          <Pencil /> {t("memory.fileMenu.rename")}
+        </ContextMenuItem>
+      )}
       <ContextMenuItem onSelect={() => a.rewrite(x)}>
         <Bot /> {t("memory.fileMenu.improve")}
       </ContextMenuItem>

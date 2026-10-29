@@ -120,6 +120,8 @@
       "projectMemory": "Mémoire du projet",
       "open": "Ouvrir",
       "edit": "Modifier",
+      "rename": "Renommer…",
+      "renameTitle": "Renommer {{name}}",
       "improve": "Améliorer avec un modèle…",
       "type": "Type",
       "noType": "Sans type",

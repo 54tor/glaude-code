@@ -22,6 +22,7 @@ import { HealthDialog } from "./MemoryHealth"
 import { ScopeBar } from "./MemoryScope"
 import { TypeHelp } from "./MemoryTypes"
 import { TrashList, TrashViewer } from "./MemoryTrash"
+import { Prompt, type Ask as PromptAsk } from "./Prompt"
 import { MemoryWriter, type WriteTarget } from "./MemoryWriter"
 import { useMemoryData } from "./useMemoryData"
 import { useEditorDraft, useLeaveGuard } from "@/hooks/useEditorDraft"
@@ -172,6 +173,22 @@ export function Memory({
     editNext.current = key
     onPick(key)
   }
+  const [prompt, setPrompt] = useState<PromptAsk | null>(null)
+  const rename = (x: MemFile) =>
+    setPrompt({
+      title: t("memory.fileMenu.renameTitle", { name: x.name }),
+      value: x.name,
+      confirm: t("memory.fileMenu.rename"),
+      run: async (name) => {
+        if (name === x.name) return true
+        const r = (await api.post("/memory-rename", { key: x.key, name })) as { ok: boolean; out: string; key?: string }
+        if (reportResult(r) && r.key) {
+          refresh()
+          if (x.key === sel) onPick(r.key)
+        }
+        return !!r.ok
+      },
+    })
   const move = async (key: string, to: string, copyIt = false) => {
     const r = (await api.post("/memory-move", { key, to, copy: copyIt })) as { ok: boolean; out: string; key?: string }
     if (reportResult(r) && r.key) {
@@ -337,7 +354,7 @@ export function Memory({
       picked={picked.has(x.key)}
       targets={targets(x.key)}
       homeDir={homeDir}
-      a={{ open: onPick, edit, rewrite: (y) => setWriter({ kind: "rewrite", key: y.key, name: y.name }), copyContent, toggle, move, toggleRule, setType, remove }}
+      a={{ open: onPick, edit, rewrite: (y) => setWriter({ kind: "rewrite", key: y.key, name: y.name }), rename, copyContent, toggle, move, toggleRule, setType, remove }}
     />
   )
   const section = (key: string, icon: typeof Globe, title: string, files: MemFile[], onWrite?: () => void, onConsolidate?: (file: string) => void, onNewRule?: () => void) => (
@@ -527,6 +544,7 @@ export function Memory({
           return r.ok ? { findings: r.findings, cost: r.cost } : { error: r.out, cost: r.cost }
         }}
       />
+      <Prompt ask={prompt} onClose={() => setPrompt(null)} />
       <MemoryWriter target={writer} refs={writeRefs} onClose={() => setWriter(null)} onDraft={onDraft} />
     </div>
   )

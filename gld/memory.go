@@ -487,3 +487,56 @@ func isDirPath(p string) bool {
 	fi, err := os.Stat(p)
 	return err == nil && fi.IsDir()
 }
+
+// memRename renomme un fichier dans son dossier ; la ligne d'index d'une entrée de projet suit.
+func memRename(key, name string) (string, error) {
+	_, rel, err := memResolve(key)
+	if err != nil {
+		return "", err
+	}
+	if rel == "MEMORY.md" || !(strings.HasPrefix(key, "m/") || strings.HasPrefix(key, "g/rules/") || strings.HasPrefix(key, "r/")) {
+		return "", terr("srv.memory.seulesLesEntreesDe")
+	}
+	dst := key[:strings.LastIndex(key, "/")+1] + name
+	if dst == key {
+		return "", terr("srv.memory.dejaACetEndroit")
+	}
+	if _, _, err := memResolve(dst); err != nil || name == "MEMORY.md" {
+		return "", terr("srv.memory.destinationInvalide")
+	}
+	if _, err := memRead(dst); err == nil || !errors.Is(err, os.ErrNotExist) {
+		return "", terr("srv.memory.unFichierDuMeme")
+	}
+	text, err := memRead(key)
+	if err != nil {
+		return "", err
+	}
+	line := "- [" + strings.TrimSuffix(name, ".md") + "](" + name + ")\n"
+	ik := key[:strings.LastIndex(key, "/")+1] + "MEMORY.md"
+	if strings.HasPrefix(key, "m/") {
+		if idx, err := memRead(ik); err == nil {
+			for _, l := range strings.SplitAfter(idx, "\n") {
+				if strings.Contains(l, "]("+rel+")") {
+					line = strings.ReplaceAll(strings.TrimRight(l, "\n"), "]("+rel+")", "]("+name+")") + "\n"
+					break
+				}
+			}
+		}
+	}
+	if err := memSave(dst, text); err != nil {
+		return "", err
+	}
+	if err := memDelete(key, false); err != nil {
+		return "", err
+	}
+	if strings.HasPrefix(key, "m/") {
+		idx, _ := memRead(ik)
+		if idx != "" && !strings.HasSuffix(idx, "\n") {
+			idx += "\n"
+		}
+		if err := memWrite(ik, idx+line, false); err != nil {
+			return "", err
+		}
+	}
+	return dst, nil
+}

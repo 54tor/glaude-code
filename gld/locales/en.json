@@ -353,6 +353,7 @@
   "srv.routes_memory.frontMatterCorrige": "Front matter fixed",
   "srv.routes_memory.indexRepareLigneS": "Index repaired: {{.A1}} line(s) removed, {{.A2}} added",
   "srv.routes_memory.moved": "Moved",
+  "srv.routes_memory.renamed": "Renamed",
   "srv.routes_memory.porteeEnregistree": "Scope saved",
   "srv.routes_memory.preciseUnElementOu": "specify an item, or all: true to empty everything",
   "srv.routes_memory.promptCopie": "Prompt copied",

@@ -120,6 +120,8 @@
       "projectMemory": "Project memory",
       "open": "Open",
       "edit": "Edit",
+      "rename": "Rename…",
+      "renameTitle": "Rename {{name}}",
       "improve": "Improve with a model…",
       "type": "Type",
       "noType": "No type",

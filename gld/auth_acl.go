@@ -52,7 +52,7 @@ var routeRights = map[string]Right{
 	// Mémoire, règles, snippets, notes, corbeille, recherche.
 	"GET /memory-list": RightMemRead, "GET /memory-file": RightMemRead, "GET /memory-health": RightMemRead,
 	"GET /memory-matches": RightMemRead, "GET /memory-loaded": RightMemRead, "GET /memory-search": RightMemRead,
-	"POST /memory-save": RightMemWrite, "POST /memory-move": RightMemWrite, "POST /memory-draft": RightMemWrite,
+	"POST /memory-save": RightMemWrite, "POST /memory-move": RightMemWrite, "POST /memory-rename": RightMemWrite, "POST /memory-draft": RightMemWrite,
 	"POST /memory-repair": RightMemWrite, "POST /memory-paths": RightMemWrite, "POST /memory-type": RightMemWrite,
 	"POST /memory-fix": RightMemWrite, "POST /memory-tokens": RightMemWrite, "POST /memory-lint": RightMemWrite,
 	"POST /memory-toggle": RightMemWrite, "POST /memory-rm": RightMemWrite, "POST /memory-merge": RightMemWrite,

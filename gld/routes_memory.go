@@ -72,6 +72,20 @@ func routesMemory(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "out": out, "key": dst})
 	})
+	mux.HandleFunc("POST /memory-rename", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Key, Name string }
+		if json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req) != nil {
+			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+			return
+		}
+		dst, err := memRename(req.Key, req.Name)
+		journal("memory-rename %s vers %s : %v", req.Key, dst, errOr(err))
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_memory.renamed"), "key": dst})
+	})
 	// Brouillon rédigé par un petit modèle (memwrite.go) : rien n'est enregistré, l'éditeur s'ouvre avec le texte.
 	mux.HandleFunc("POST /memory-draft", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {

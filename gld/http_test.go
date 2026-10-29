@@ -499,6 +499,15 @@ func TestHTTPMemoire(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(cfg, "projects", "-p", "memory", "MEMORY.md")); strings.Contains(string(b), "c.md") {
 		t.Fatal("indexé sans index: true")
 	}
+	if m := ok(t, h, "/memory-rename", `{"key":"m/-p/b.md","name":"bb.md"}`, true, "Renommé"); m["key"] != "m/-p/bb.md" {
+		t.Fatal(m)
+	}
+	if b, _ := os.ReadFile(filepath.Join(cfg, "projects", "-p", "memory", "MEMORY.md")); !strings.Contains(string(b), "[B](bb.md) — bé") || strings.Contains(string(b), "(b.md)") {
+		t.Fatalf("index après renommage : %s", b)
+	}
+	ok(t, h, "/memory-rename", `{"key":"m/-p/bb.md","name":"../x.md"}`, false, "")
+	ok(t, h, "/memory-rename", `{"key":"m/-p/bb.md","name":"MEMORY.md"}`, false, "")
+	ok(t, h, "/memory-rename", `{"key":"m/-p/bb.md","name":"b.md"}`, true, "Renommé")
 	status(t, h, "POST", "/memory-move", "{", 400)
 	ok(t, h, "/memory-move", `{"key":"m/-p/a.md","to":"../x"}`, false, "")
 	if m := ok(t, h, "/memory-move", `{"key":"m/-p/a.md","to":"global"}`, true, "Déplacé"); m["key"] != "g/rules/a.md" {
