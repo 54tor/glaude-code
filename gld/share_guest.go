@@ -559,6 +559,14 @@ func guestInvite(w http.ResponseWriter, r *http.Request) {
 		refused(403, "srv.share_guest.lienInvalide")
 		return
 	}
+	for _, c := range guestCookies(r) { // lien déjà échangé, rouvert dans le navigateur autorisé : retour à la session
+		_, sec := guestSplit(c.Value)
+		if id, ok := shareSt.Reopened(tok, sec); ok {
+			w.Header().Set("Cache-Control", "no-store")
+			http.Redirect(w, r, "/guest/"+shareHandle(id), http.StatusSeeOther)
+			return
+		}
+	}
 	sec, sh, _, ok := shareSt.Redeem(tok)
 	if !ok {
 		refused(403, "srv.share_guest.lienInvalide")

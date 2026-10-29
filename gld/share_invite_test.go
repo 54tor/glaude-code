@@ -791,3 +791,24 @@ func TestRegenQueuePurgeWriteFailure(t *testing.T) {
 		t.Fatalf("purge annulée en mémoire : %+v", l)
 	}
 }
+
+func TestRedeemedLinkReopensOnSameBrowser(t *testing.T) {
+	h := guestWeb(t, nil, modeTok)
+	tok, _, err := shareSt.CreateInvite(id1, "-p", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hd := shareHandle(id1)
+	w := gReq{method: "POST", path: "/invite/main/" + tok}.do(h)
+	c := cookieOf(w, guestCookieName(hd))
+	if w.Code != 303 || c == nil {
+		t.Fatalf("invite : %d", w.Code)
+	}
+	w = gReq{method: "POST", path: "/invite/main/" + tok, jar: []*http.Cookie{c}}.do(h)
+	if w.Code != 303 || w.Header().Get("Location") != "/guest/"+hd {
+		t.Fatalf("même navigateur : %d %q", w.Code, w.Header().Get("Location"))
+	}
+	if w = (gReq{method: "POST", path: "/invite/main/" + tok}).do(h); w.Code != 403 {
+		t.Fatalf("autre navigateur : %d", w.Code)
+	}
+}

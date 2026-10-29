@@ -296,6 +296,21 @@ func (s *shareStore) Redeem(token string) (string, Share, Invite, bool) {
 	return "", Share{}, Invite{}, false
 }
 
+// Reopened : le jeton déjà échangé, présenté avec le cookie de son invitation (même navigateur), rend la session partagée.
+func (s *shareStore) Reopened(token, cookie string) (string, bool) {
+	th, ch := hashSecret(token), hashSecret(cookie)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, sh := range s.m {
+		for _, in := range sh.Invites {
+			if in.CookieHash != "" && hashEq(in.TokenHash, th) && hashEq(in.CookieHash, ch) {
+				return sh.Session, true
+			}
+		}
+	}
+	return "", false
+}
+
 func (s *shareStore) ByCookie(cookie string) (Share, Invite, bool) { return s.byCookie(cookie, true) }
 
 // ByCookieQuiet : sans toucher LastSeen ; l'hôte ne doit voir « connecté » que sur une vraie requête invitée.
