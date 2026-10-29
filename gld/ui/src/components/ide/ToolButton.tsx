@@ -29,7 +29,7 @@ export function ToolButton({ label, shortcut, reason, pressed, onClick, children
             {children}
           </Toolbar.Button>
         </TooltipTrigger>
-        <TooltipContent>
+        <TooltipContent side="bottom">
           <span>{label}</span>
           {shortcut && <kbd data-slot="kbd" className="text-[10px] opacity-70">{showKeys(shortcut, t)}</kbd>}
           {off && <span className="opacity-80">({reason})</span>}
