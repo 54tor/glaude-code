@@ -1,7 +1,7 @@
 import { loc } from "@/i18n"
 import { useTranslation } from "react-i18next"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { AlertTriangle, ArrowLeft, BookOpen, Bot, ClipboardCopy, Copy, EyeOff, FileText, FolderInput, Hand, Package, Pencil, Plug, Plus, RefreshCw, Save, Sparkles, Trash2, X, Zap } from "lucide-react"
+import { AlertTriangle, ArrowLeft, BookOpen, Bot, Copy, EyeOff, FileText, Hand, Package, Pencil, Plug, Plus, RefreshCw, Save, Sparkles, Trash2, X, Zap } from "lucide-react"
 import { toast } from "sonner"
 import { api, type Skill, type SkillFile } from "@/lib/api"
 import { ago, tilde } from "@/lib/format"
@@ -228,22 +228,13 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
                         <ContextMenuItem onSelect={() => onPick(s.key)}>
                           <BookOpen /> {t("skills.skills.open")}
                         </ContextMenuItem>
-                        {!s.readOnly && (
-                          <>
-                            <ContextMenuItem onSelect={() => edit(s.key)}>
-                              <Pencil /> {t("skills.skills.edit")}
-                            </ContextMenuItem>
-                            <ContextMenuItem onSelect={() => (onPick(s.key), setWriter(s.key))}>
-                              <Sparkles /> {t("skills.skills.writeWithModel")}
-                            </ContextMenuItem>
-                          </>
-                        )}
+                        <ContextMenuSeparator />
                         <ContextMenuItem onSelect={() => copyName(s)}>
-                          <ClipboardCopy /> {t("skills.skills.copyName", { dir: s.dir })}
+                          <Copy /> {t("skills.skills.copyName", { dir: s.dir })}
                         </ContextMenuItem>
                         <ContextMenuSub>
                           <ContextMenuSubTrigger>
-                            <FolderInput /> {t("skills.skills.copyTo")}
+                            <Copy /> {t("skills.skills.copyTo")}
                           </ContextMenuSubTrigger>
                           <ContextMenuSubContent className="max-h-80 w-72 overflow-y-auto">
                             {s.scope !== "user" && (
@@ -261,6 +252,13 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
                         </ContextMenuSub>
                         {!s.readOnly && (
                           <>
+                            <ContextMenuSeparator />
+                            <ContextMenuItem onSelect={() => edit(s.key)}>
+                              <Pencil /> {t("skills.skills.edit")}
+                            </ContextMenuItem>
+                            <ContextMenuItem onSelect={() => (onPick(s.key), setWriter(s.key))}>
+                              <Sparkles /> {t("skills.skills.writeWithModel")}
+                            </ContextMenuItem>
                             <ContextMenuSeparator />
                             <ContextMenuItem variant="destructive" onSelect={() => remove(s)}>
                               <Trash2 /> {t("common.delete")}

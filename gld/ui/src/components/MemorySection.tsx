@@ -1,4 +1,4 @@
-import { type LucideIcon, AlertTriangle, MoreHorizontal, ChevronRight, Calculator, ArrowDownWideNarrow, ArrowUpNarrowWide, CheckSquare, EyeOff, Filter, FileStack, FileText, Plus, ScrollText, Sparkles, Trash2 } from "lucide-react"
+import { type LucideIcon, AlertTriangle, MoreHorizontal, ChevronRight, Calculator, ArrowDownWideNarrow, ArrowUpNarrowWide, CheckSquare, EyeOff, Filter, FileStack, FileText, Plus, Sparkles, Trash2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { MemFile } from "@/lib/api"
 import { ago } from "@/lib/format"
@@ -7,7 +7,7 @@ import { useLocal } from "@/hooks/useLocal"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { SORTS, type Sort } from "./memoryLib"
 import { typeOf } from "./MemoryTypes"
 
@@ -119,7 +119,7 @@ export function Section({
           </ContextMenuItem>
           {onNewRule && (
             <ContextMenuItem onSelect={onNewRule}>
-              <ScrollText /> {t("memory.section.menuNewRule")}
+              <Plus /> {t("memory.section.menuNewRule")}
             </ContextMenuItem>
           )}
           {onWrite && (
@@ -137,12 +137,14 @@ export function Section({
               <FileStack /> {t("memory.section.menuConsolidate", { file: "AGENTS.md" })}
             </ContextMenuItem>
           )}
+          <ContextMenuSeparator />
           <ContextMenuItem onSelect={onCount}>
             <Calculator /> {t("memory.section.menuCount")}
           </ContextMenuItem>
           <ContextMenuItem onSelect={() => onPickAll(files.map((f) => f.key))}>
             <CheckSquare /> {t("memory.section.menuSelectAll")}
           </ContextMenuItem>
+          <ContextMenuSeparator />
           <ContextMenuItem variant="destructive" onSelect={() => onRemoveAll(files.map((f) => f.key))}>
             <Trash2 /> {t("memory.section.menuRemoveAll")}
           </ContextMenuItem>

@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowLeft, Bot, Check, ClipboardCopy, Copy, Download, Link, Fan, Merge, MessageSquarePlus, Pencil, Plus, Save, Sparkles, Terminal, Trash2, Undo2, Upload, X } from "lucide-react"
+import { ArrowLeft, Bot, Check, Copy, Download, Fan, Merge, MessageSquarePlus, Pencil, Plus, Save, Sparkles, Trash2, Undo2, Unlink, Upload, X } from "lucide-react"
 import { toast } from "sonner"
 import { api, type SnipScope, type Snippet } from "@/lib/api"
 import { ago, size, tilde } from "@/lib/format"
 import { cn, copyText } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -285,17 +285,18 @@ export function Snippets({
                             </button>
                           </ContextMenuTrigger>
                           <ContextMenuContent>
-                            <ContextMenuItem onSelect={() => toggle(s.key)}>
-                              <Merge /> {picked.has(s.key) ? t("skills.snippets.unmerge") : t("skills.snippets.mergePick")}
-                            </ContextMenuItem>
                             <ContextMenuItem onSelect={() => copyContent(s)}>
-                              <ClipboardCopy /> {t("skills.snippets.copyContent")}
+                              <Copy /> {t("skills.snippets.copyContent")}
                             </ContextMenuItem>
                             <ContextMenuItem onSelect={() => copyAs(s.command, "Command")}>
-                              <Terminal /> {t("skills.snippets.copyCommand")}
+                              <Copy /> {t("skills.snippets.copyCommand")}
                             </ContextMenuItem>
                             <ContextMenuItem onSelect={() => copyAs(s.path, "Path")}>
-                              <Link /> {t("skills.snippets.copyPath")}
+                              <Copy /> {t("skills.snippets.copyPath")}
+                            </ContextMenuItem>
+                            <ContextMenuSeparator />
+                            <ContextMenuItem onSelect={() => toggle(s.key)}>
+                              {picked.has(s.key) ? <Unlink /> : <Merge />} {picked.has(s.key) ? t("skills.snippets.unmerge") : t("skills.snippets.mergePick")}
                             </ContextMenuItem>
                           </ContextMenuContent>
                         </ContextMenu>

@@ -1,6 +1,6 @@
 import { cloneElement, useEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react"
 import { useTranslation } from "react-i18next"
-import { ChevronRight, File, FilePlus, Folder, FolderPlus, Link2, Pencil, Trash2 } from "lucide-react"
+import { ChevronRight, File, FilePlus, Folder, FolderPlus, Link2, TextCursorInput, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "cn"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
@@ -207,8 +207,9 @@ export function FileTree({ dir, tree, canWrite, selected, marks, dirs, filter = 
                   </>
                 )}
                 <ContextMenuItem onSelect={() => onAction("rename", r)}>
-                  <Pencil /> {t("ide.menu.rename")}
+                  <TextCursorInput /> {t("ide.menu.rename")}
                 </ContextMenuItem>
+                <ContextMenuSeparator />
                 <ContextMenuItem variant="destructive" onSelect={() => onAction("delete", r)}>
                   <Trash2 /> {t("ide.menu.delete")}
                 </ContextMenuItem>

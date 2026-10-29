@@ -1,4 +1,4 @@
-import { BookOpen, Check, CheckSquare, ClipboardList, Copy, Download, FolderInput, MessageSquarePlus, Info, MessageSquareReply, Pencil, Plus, Power, Share2, Shredder, Star, StarOff, Tag, Trash2, X, RefreshCcwDot } from "lucide-react"
+import { BookOpen, Check, CheckSquare, Copy, Download, FolderInput, Info, MessageSquareReply, Plus, Power, Share2, Star, StarOff, Tag, TextCursorInput, Trash2, X, RefreshCcwDot } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { VGroup } from "@/lib/api"
 import { useShares } from "@/hooks/useShares"
@@ -136,7 +136,7 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
             )
           }
         >
-          <Shredder /> {t("shell.menu.deleteN", { sessions: t("shell.count.sessions", { count: rows.length }) })}
+          <Trash2 /> {t("shell.menu.deleteN", { sessions: t("shell.count.sessions", { count: rows.length }) })}
         </M.Item>
       </>
     )
@@ -160,24 +160,25 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
       )}
       {!g.missing && (
         <M.Item onSelect={() => a.newSession(g.project)}>
-          <MessageSquarePlus /> {t("shell.menu.newInProject")}
+          <Plus /> {t("shell.menu.newInProject")}
         </M.Item>
       )}
-      {full && <M.Sep />}
       <M.Item onSelect={() => a.info(row)}>
         <Info /> {t("shell.menu.info")}
       </M.Item>
-      <Fav M={M} ids={[s.id]} />
-      <M.Item onSelect={() => a.rename(s)}>
-        <Pencil /> {t("shell.menu.rename")}
-      </M.Item>
-      <ShareItem M={M} row={row} />
+      <M.Sep />
       <M.Item onSelect={() => a.copy(s)}>
         <Copy /> {t("shell.menu.copyId")}
       </M.Item>
       <M.Item onSelect={() => a.exportMd(row)}>
         <Download /> {t("shell.menu.exportMd")}
       </M.Item>
+      <M.Sep />
+      <Fav M={M} ids={[s.id]} />
+      <M.Item onSelect={() => a.rename(s)}>
+        <TextCursorInput /> {t("shell.menu.rename")}
+      </M.Item>
+      <ShareItem M={M} row={row} />
       <Groups M={M} rows={[row]} />
       {a.inGroup && (
         <M.Item onSelect={() => a.ungroup([s.id])}>
@@ -199,7 +200,7 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
       )}
       <M.Sep />
       <M.Item variant="destructive" onSelect={() => a.remove([{ dir: s.dir, id: s.id }], t("shell.menu.quoted", { title: s.title }), after)}>
-        <Shredder /> {t("common.delete")}
+        <Trash2 /> {t("common.delete")}
       </M.Item>
     </>
   )
@@ -235,24 +236,26 @@ export function GroupItems({ M, vg, page }: { M: Kit; vg: VGroup; page?: boolean
         <RefreshCcwDot /> {t("shell.menu.resumeAll", { sessions: t("shell.count.sessions", { count: n }) })}
       </M.Item>
       <M.Item onSelect={() => ga.prompt(vg)} disabled={!n}>
-        <MessageSquarePlus /> {t("shell.menu.newWithRefs")}
+        <Plus /> {t("shell.menu.newWithRefs")}
       </M.Item>
+      <M.Sep />
       <M.Item onSelect={() => ga.refs(vg)} disabled={!n}>
-        <ClipboardList /> {t("shell.menu.copyRefs")}
+        <Copy /> {t("shell.menu.copyRefs")}
       </M.Item>
       <M.Item onSelect={() => ga.export(vg)} disabled={!n}>
         <Download /> {t("shell.menu.exportMd")}
-      </M.Item>
-      <M.Item onSelect={() => ga.select(vg)} disabled={!n}>
-        <CheckSquare /> {t("shell.menu.selectSessions")}
       </M.Item>
       <M.Sep />
       <M.Item onSelect={() => ga.fav(vg)}>
         {vg.fav ? <StarOff /> : <Star />} {vg.fav ? t("shell.menu.unfav") : t("shell.menu.fav")}
       </M.Item>
       <M.Item onSelect={() => ga.rename(vg)}>
-        <Pencil /> {t("shell.menu.rename")}
+        <TextCursorInput /> {t("shell.menu.rename")}
       </M.Item>
+      <M.Item onSelect={() => ga.select(vg)} disabled={!n}>
+        <CheckSquare /> {t("shell.menu.selectSessions")}
+      </M.Item>
+      <M.Sep />
       <M.Item variant="destructive" onSelect={() => ga.remove(vg)}>
         <Trash2 /> {t("shell.menu.deleteGroup")}
       </M.Item>

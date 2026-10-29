@@ -2,7 +2,7 @@ import { loc } from "@/i18n"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
-import { Check, ClipboardCopy, FolderOpen, Globe, Pencil, Plus, RotateCcw, Sparkles, Trash2, X } from "lucide-react"
+import { Check, Copy, FolderOpen, Globe, Pencil, Plus, RotateCcw, Sparkles, Trash2, X } from "lucide-react"
 import type { BackupInfo, CfgEdit, CfgOverview, PermSuggest } from "@/lib/api"
 import { api } from "@/lib/api"
 import { describeKey } from "@/lib/configKeys"
@@ -135,11 +135,12 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTran
                 </li>
                 </ContextMenuTrigger>
                 <ContextMenuContent className="w-64">
+                  <ContextMenuItem onSelect={() => copyText(r).then(() => toast.success(t("config.shared.ruleCopied")), () => toast.error(t("config.shared.copyFailed")))}>
+                    <Copy /> {t("config.perms.copyRule")}
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
                   <ContextMenuItem onSelect={() => setEdit({ kind, rule: r, text: r, to: kind })}>
                     <Pencil /> {t("config.perms.edit")}
-                  </ContextMenuItem>
-                  <ContextMenuItem onSelect={() => copyText(r).then(() => toast.success(t("config.shared.ruleCopied")), () => toast.error(t("config.shared.copyFailed")))}>
-                    <ClipboardCopy /> {t("config.perms.copyRule")}
                   </ContextMenuItem>
                   {kind !== DIRS && (
                   <ContextMenuSub>
@@ -158,7 +159,6 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTran
                   )}
                   {file !== "u" && kind !== DIRS && (
                     <>
-                      <ContextMenuSeparator />
                       <ContextMenuItem onSelect={() => onTransfer(file, kind, r, false)}>
                         <Globe /> {t("config.perms.copyGlobal")}
                       </ContextMenuItem>
@@ -169,7 +169,7 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTran
                   )}
                   <ContextMenuSeparator />
                   <ContextMenuItem variant="destructive" onSelect={() => propose({ file, op: "remove", path: ["permissions", kind], value: r })}>
-                    <X /> {t("common.delete")}
+                    <Trash2 /> {t("common.delete")}
                   </ContextMenuItem>
                 </ContextMenuContent>
                 </ContextMenu>

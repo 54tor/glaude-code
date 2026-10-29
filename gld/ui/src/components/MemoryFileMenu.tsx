@@ -1,4 +1,4 @@
-import { BookOpen, Bot, Zap, ZapOff, Brain, ClipboardCopy, Copy, Eye, EyeOff, FolderInput, Globe, Link, Merge, Pencil, ScrollText, Tag, Trash2 } from "lucide-react"
+import { BookOpen, Bot, Zap, ZapOff, Brain, Copy, Eye, EyeOff, FolderInput, Globe, Merge, Pencil, ScrollText, Tag, TextCursorInput, Trash2, Unlink } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { MemFile, MemTarget } from "@/lib/api"
 import { tilde } from "@/lib/format"
@@ -73,12 +73,20 @@ export function FileMenu({ x, picked, targets, homeDir, a }: { x: MemFile; picke
       <ContextMenuItem onSelect={() => a.open(x.key)}>
         <BookOpen /> {t("memory.fileMenu.open")}
       </ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem onSelect={() => a.copyContent(x)}>
+        <Copy /> {t("memory.fileMenu.copyContent")}
+      </ContextMenuItem>
+      <ContextMenuItem onSelect={() => copy(x.path, "memory.lib.copiedPath")}>
+        <Copy /> {t("memory.fileMenu.copyPath")}
+      </ContextMenuItem>
+      <ContextMenuSeparator />
       <ContextMenuItem onSelect={() => a.edit(x.key)}>
         <Pencil /> {t("memory.fileMenu.edit")}
       </ContextMenuItem>
       {!x.key.endsWith("/MEMORY.md") && (x.key.startsWith("m/") || x.key.startsWith("g/rules/") || x.key.startsWith("r/")) && (
         <ContextMenuItem onSelect={() => a.rename(x)}>
-          <Pencil /> {t("memory.fileMenu.rename")}
+          <TextCursorInput /> {t("memory.fileMenu.rename")}
         </ContextMenuItem>
       )}
       <ContextMenuItem onSelect={() => a.rewrite(x)}>
@@ -100,15 +108,8 @@ export function FileMenu({ x, picked, targets, homeDir, a }: { x: MemFile; picke
           </ContextMenuSubContent>
         </ContextMenuSub>
       )}
-      <ContextMenuItem onSelect={() => a.copyContent(x)}>
-        <ClipboardCopy /> {t("memory.fileMenu.copyContent")}
-      </ContextMenuItem>
-      <ContextMenuItem onSelect={() => copy(x.path, "memory.lib.copiedPath")}>
-        <Link /> {t("memory.fileMenu.copyPath")}
-      </ContextMenuItem>
-      <ContextMenuSeparator />
       <ContextMenuItem onSelect={() => a.toggle(x.key)}>
-        <Merge /> {picked ? t("memory.fileMenu.unmerge") : t("memory.fileMenu.merge")}
+        {picked ? <Unlink /> : <Merge />} {picked ? t("memory.fileMenu.unmerge") : t("memory.fileMenu.merge")}
       </ContextMenuItem>
       {movable(x.key) && (
         <>

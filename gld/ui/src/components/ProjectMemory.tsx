@@ -1,7 +1,7 @@
 import { i18n, loc } from "@/i18n"
 import { useTranslation } from "react-i18next"
 import { useEffect, useRef, useState } from "react"
-import { BookOpen, Brain, ChevronRight, ClipboardCopy, Copy, FileText, Globe, Link as LinkIcon, ExternalLink, Pencil, ScrollText, Tag, Trash2 } from "lucide-react"
+import { BookOpen, Brain, ChevronRight, Copy, FileText, Globe, ExternalLink, Pencil, ScrollText, Tag, Trash2 } from "lucide-react"
 import { useLocation } from "wouter"
 import { toast } from "sonner"
 import { api, type MemFile } from "@/lib/api"
@@ -191,6 +191,19 @@ export function ProjectMemory({ dir }: { dir: string }) {
                     <ContextMenuItem onSelect={() => go(href({ kind: "memory", key: f.key }))}>
                       <ExternalLink /> {t("memory.project.openPage")}
                     </ContextMenuItem>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem onSelect={() => copyContent(f)}>
+                      <Copy /> {t("memory.project.copyContent")}
+                    </ContextMenuItem>
+                    <ContextMenuItem onSelect={() => copy(f.path, "memory.lib.copiedPath")}>
+                      <Copy /> {t("memory.project.copyPath")}
+                    </ContextMenuItem>
+                    {movable(f.key) && !f.key.endsWith("/MEMORY.md") && ( // l'index MEMORY.md reste dans son projet
+                      <ContextMenuItem onSelect={() => toGlobal(f, true)}>
+                        <Copy /> {t("memory.project.copyGlobal")}
+                      </ContextMenuItem>
+                    )}
+                    <ContextMenuSeparator />
                     <ContextMenuItem onSelect={() => setShown({ f, edit: true })}>
                       <Pencil /> {t("memory.project.editHere")}
                     </ContextMenuItem>
@@ -210,22 +223,10 @@ export function ProjectMemory({ dir }: { dir: string }) {
                         </ContextMenuSubContent>
                       </ContextMenuSub>
                     )}
-                    <ContextMenuItem onSelect={() => copyContent(f)}>
-                      <ClipboardCopy /> {t("memory.project.copyContent")}
-                    </ContextMenuItem>
-                    <ContextMenuItem onSelect={() => copy(f.path, "memory.lib.copiedPath")}>
-                      <LinkIcon /> {t("memory.project.copyPath")}
-                    </ContextMenuItem>
-                    {movable(f.key) && !f.key.endsWith("/MEMORY.md") && ( // l'index MEMORY.md reste dans son projet
-                      <>
-                        <ContextMenuSeparator />
-                        <ContextMenuItem onSelect={() => toGlobal(f, false)}>
-                          <Globe /> {t("memory.project.moveGlobal")}
-                        </ContextMenuItem>
-                        <ContextMenuItem onSelect={() => toGlobal(f, true)}>
-                          <Copy /> {t("memory.project.copyGlobal")}
-                        </ContextMenuItem>
-                      </>
+                    {movable(f.key) && !f.key.endsWith("/MEMORY.md") && (
+                      <ContextMenuItem onSelect={() => toGlobal(f, false)}>
+                        <Globe /> {t("memory.project.moveGlobal")}
+                      </ContextMenuItem>
                     )}
                     <ContextMenuSeparator />
                     <ContextMenuItem variant="destructive" onSelect={() => setRemoving(f)}>

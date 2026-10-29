@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { setOpen, useOpen, useOpenState } from "@/hooks/useOpen"
-import { Check, ChevronRight, FolderInput, FolderMinus, Layers, MessageSquarePlus, Plus, Power, Shredder, Star, Tag, TriangleAlert, RefreshCcwDot } from "lucide-react"
+import { Check, ChevronRight, FolderInput, FolderMinus, Layers, Plus, Power, Star, Tag, Trash2, TriangleAlert, RefreshCcwDot } from "lucide-react"
 import type { GitState, Group, Session, VGroup } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { CM, GroupItems } from "./SessionMenu"
@@ -28,9 +28,10 @@ export function ProjectItems({ g, ss = g.sessions, extra }: { g: Group; ss?: Ses
       )}
       {!g.missing && (
         <ContextMenuItem onSelect={() => a.newSession(g.project)}>
-          <MessageSquarePlus /> {t("shell.tree.newSession")}
+          <Plus /> {t("shell.tree.newSession")}
         </ContextMenuItem>
       )}
+      {!g.missing && <ContextMenuSeparator />}
       <ContextMenuSub>
         <ContextMenuSubTrigger>
           <Layers /> {t("shell.tree.project")}
@@ -62,7 +63,7 @@ export function ProjectItems({ g, ss = g.sessions, extra }: { g: Group; ss?: Ses
           )}
           <ContextMenuSeparator />
           <ContextMenuItem variant="destructive" onSelect={() => a.remove(own, t("shell.tree.removeLabel", { n: own.length, project: g.project }))}>
-            <Shredder /> {t("shell.tree.deleteAll", { n: own.length })}
+            <Trash2 /> {t("shell.tree.deleteAll", { n: own.length })}
           </ContextMenuItem>
         </>
       )}
