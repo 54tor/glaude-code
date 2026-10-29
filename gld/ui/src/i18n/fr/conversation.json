@@ -312,6 +312,9 @@
       "summary": "Résumé"
     },
     "notes": {
+      "folderTitle": "Dossier de la note",
+      "changeFolder": "Changer de dossier…",
+      "resetFolder": "Dossier d'origine",
       "sent": "Note envoyée à « {{title}} »",
       "title": "Bloc-notes",
       "placeholder": "Idées, TODO, consignes à garder sous la main… (enregistré automatiquement)",

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Check, ChevronRight, Fan, MessageSquarePlus, NotebookPen, Plus, Send, X } from "lucide-react"
+import { Check, ChevronRight, Fan, FolderOpen, Undo2, MessageSquarePlus, NotebookPen, Plus, Send, X } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"
@@ -8,6 +8,7 @@ import { setOpen, useOpen } from "@/hooks/useOpen"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useActions, type Row } from "./actions"
 
@@ -26,9 +27,26 @@ const pack = (items: string[]) => (items.some((i) => i.trim()) ? JSON.stringify(
 
 // Bloc-notes d'un projet ou d'un dossier, enregistré tout seul. Le texte peut partir vers une nouvelle session (dans folder) ou vers
 // une session ouverte dans tmux parmi celles de la vue.
-export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: string; rows: Row[] }) {
+export function Notes({ noteKey, folder: base, rows }: { noteKey: string; folder?: string; rows: Row[] }) {
   const { t: tr } = useTranslation()
   const a = useActions()
+  const dirKey = "gld.notes.dir/" + noteKey
+  const [custom, setCustom] = useState(() => {
+    try {
+      return localStorage.getItem(dirKey) ?? ""
+    } catch {
+      return ""
+    }
+  })
+  const folder = custom || base
+  const setFolder = (d: string) => {
+    setCustom(d)
+    try {
+      d ? localStorage.setItem(dirKey, d) : localStorage.removeItem(dirKey)
+    } catch {
+      /* préférence locale seulement */
+    }
+  }
   const [items, setItems] = useState<string[] | null>(null) // null : pas encore lu
   const [open, flip] = useOpen("n/" + noteKey, true)
   const [sendable, setSendable] = useState<Set<string>>(new Set())
@@ -127,12 +145,27 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
   }
   return (
     <div className="mb-4 rounded-lg border">
-      <button onClick={flip} aria-expanded={open} className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium">
-        <ChevronRight className={cn("size-4 transition-transform", open && "rotate-90")} />
-        <NotebookPen className="size-4 text-muted-foreground" />
-        {tr("conversation.notes.title")}
-        {count > 0 && <span className="text-xs font-normal text-muted-foreground">{count}</span>}
-      </button>
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <button onClick={flip} aria-expanded={open} className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium">
+            <ChevronRight className={cn("size-4 transition-transform", open && "rotate-90")} />
+            <NotebookPen className="size-4 text-muted-foreground" />
+            {tr("conversation.notes.title")}
+            {count > 0 && <span className="text-xs font-normal text-muted-foreground">{count}</span>}
+            {custom && <span className="truncate text-xs font-normal text-muted-foreground" title={custom}>{custom}</span>}
+          </button>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem onSelect={() => void a.pickDir(tr("conversation.notes.folderTitle"), folder ?? "").then((d) => d && setFolder(d))}>
+            <FolderOpen /> {tr("conversation.notes.changeFolder")}
+          </ContextMenuItem>
+          {custom && (
+            <ContextMenuItem onSelect={() => setFolder("")}>
+              <Undo2 /> {tr("conversation.notes.resetFolder")}
+            </ContextMenuItem>
+          )}
+        </ContextMenuContent>
+      </ContextMenu>
       {open && (
         <div className="space-y-2 border-t p-3">
           {filled.length > 1 && (

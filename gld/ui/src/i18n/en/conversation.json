@@ -312,6 +312,9 @@
       "summary": "Summary"
     },
     "notes": {
+      "folderTitle": "Notes folder",
+      "changeFolder": "Change folder…",
+      "resetFolder": "Original folder",
       "sent": "Note sent to “{{title}}”",
       "title": "Notepad",
       "placeholder": "Ideas, TODOs, instructions to keep at hand… (saved automatically)",
