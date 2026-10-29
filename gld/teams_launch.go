@@ -123,8 +123,8 @@ func launchTeam(cfgRoot string, req LaunchReq) (Run, error) {
 	}
 	brief := teamBrief(req.Goal, lead, mates, names)
 	switch { // pas de checkResumePrompt : il interroge les sessions vivantes, sans rapport avec la taille du texte
-	case runtime.GOOS == "windows":
-		return Run{}, terr("srv.claude.repriseAvecUnMessage")
+	case runtime.GOOS == "windows": // tmux et /proc, qu'exige l'envoi aux coéquipiers, n'existent pas sous Windows
+		return Run{}, terr("srv.teams_launch.tmuxRequis")
 	case len(brief) > sendMax || !utf8.ValidString(brief) || strings.ContainsRune(brief, 0):
 		return Run{}, terr("srv.sendkeys.messageTropLongOu")
 	}
