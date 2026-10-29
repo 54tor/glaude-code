@@ -429,6 +429,7 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-7xl space-y-2">
+        <TerminalPanel id={id} onAsk={(a) => (setAsking(a), onAsk?.(a))} onSent={onSent} extra={bar} />
         {compactHint && (
           <p role="status" className="flex items-center gap-2 rounded-md bg-warning/10 px-3 py-1 text-xs text-warning">
             <Minimize2 className="size-3.5 shrink-0" aria-hidden />
@@ -439,7 +440,6 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
           </p>
         )}
         {coldHint && <ColdHint {...coldHint} />}
-        <TerminalPanel id={id} onAsk={(a) => (setAsking(a), onAsk?.(a))} onSent={onSent} extra={bar} />
         {sugg.length > 0 && (
           <ul className="max-h-48 overflow-y-auto rounded-lg border bg-popover p-1 text-sm shadow-md" role="listbox" aria-label={t("conversation.composer.commandsAria")}>
             {sugg.map(([cmd, label], i) => (
