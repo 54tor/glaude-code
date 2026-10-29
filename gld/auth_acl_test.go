@@ -170,7 +170,7 @@ func TestGateDeniesByDefault(t *testing.T) {
 	if w := g.do("GET", "/absente", &a, "", ""); w.Code != 404 || reached(w) {
 		t.Errorf("route inconnue : %d", w.Code)
 	}
-	if w := g.do("PUT", "/memory-save", &a, "", ""); w.Code != 404 || reached(w) {
+	if w := g.do("DELETE", "/v1/memory/files/x", &a, "", ""); w.Code != 404 || reached(w) {
 		t.Errorf("méthode inconnue : %d", w.Code)
 	}
 }
@@ -179,17 +179,17 @@ func TestGatePathVariants(t *testing.T) {
 	g := newGateRig(t)
 	u := g.user(t, "lecteur", false)
 	g.grant(t, u, "", RightMemRead)
-	if w := g.do("POST", "/memory-save", &u, "", "{}"); w.Code != 403 {
+	if w := g.do("PUT", "/v1/memory/files/x", &u, "", "{}"); w.Code != 403 {
 		t.Fatalf("témoin : %d", w.Code)
 	}
-	for _, p := range []string{"//memory-save", "/MEMORY-SAVE", "/memory-save/", "/./memory-save", "/x/../memory-save",
-		"/memory%2Dsave", "/memory%2dsave", "/%6Demory-save", "/memory-save%2F", "/memory-save?x=1", "/memory-save%00"} {
-		w := g.do("POST", p, &u, "", "{}") // cible lue comme une ligne de requête : « //x » reste un chemin
+	for _, p := range []string{"//v1/memory/files/x", "/V1/MEMORY/FILES/x", "/v1/memory/files/x/", "/v1/./memory/files/x", "/v1/y/../memory/files/x",
+		"/v1/memory/files%2Fx", "/v1/%6Demory/files/x", "/v1/memory/files/x%00", "/v1/memory/files/x/y", "/v1/memory/files/x/../y"} {
+		w := g.do("PUT", p, &u, "", "{}") // cible lue comme une ligne de requête : « //x » reste un chemin
 		if reached(w) || w.Code < 400 {
 			t.Errorf("%s : %d %q obtenu sans mem_write", p, w.Code, w.Body)
 		}
 	}
-	if w := g.do("GET", "/memory-list", &u, "", ""); !reached(w) {
+	if w := g.do("GET", "/v1/memory/files", &u, "", ""); !reached(w) {
 		t.Fatalf("lecture refusée : %d", w.Code)
 	}
 }
@@ -200,7 +200,7 @@ func TestGateHomeCookieNoRights(t *testing.T) {
 	u := g.user(t, "alice", false)
 	g.grant(t, u, "", RightMemRead)
 	for _, home := range []string{"Pro", "inconnu"} {
-		if w := g.do("GET", "/memory-list", &u, home, ""); w.Code != 403 || reached(w) {
+		if w := g.do("GET", "/v1/memory/files", &u, home, ""); w.Code != 403 || reached(w) {
 			t.Errorf("cookie %q : %d %s", home, w.Code, w.Body)
 		}
 	}
@@ -217,10 +217,10 @@ func TestGateHomeCookieNoRights(t *testing.T) {
 	t.Cleanup(func() { homeStart = old })
 	homeStart = func(Home) (*homeProc, error) { return nil, errors.New("panne") }
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /memory-list", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok principal")) })
+	mux.HandleFunc("GET /v1/memory/files", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok principal")) })
 	h := authGate(mux, g.s, withHomes(mux))
 	w := httptest.NewRecorder()
-	h.ServeHTTP(w, g.req("GET", "/memory-list", &u, "Pro", ""))
+	h.ServeHTTP(w, g.req("GET", "/v1/memory/files", &u, "Pro", ""))
 	if w.Code != 503 || reached(w) {
 		t.Fatalf("repli sur le home principal : %d %s", w.Code, w.Body)
 	}
@@ -275,16 +275,16 @@ func TestGateRightsMatrix(t *testing.T) {
 		reach  bool
 		status int
 	}{
-		{&r, "GET", "/memory-list", true, 200},
-		{&r, "POST", "/memory-save", false, 403},
+		{&r, "GET", "/v1/memory/files", true, 200},
+		{&r, "PUT", "/v1/memory/files/x", false, 403},
 		{&r, "POST", "/v1/sessions/x/chat", false, 403},
 		{&r, "POST", "/homes-save", false, 403},
 		{&u, "GET", "/account", true, 200},
 		{&u, "GET", "/v1/sessions/x/conversation", false, 403},
 		{&u, "GET", "/v1/info", false, 403},
-		{&a, "GET", "/memory-list", false, 403}, // pas de super-droit implicite
+		{&a, "GET", "/v1/memory/files", false, 403}, // pas de super-droit implicite
 		{&a, "POST", "/homes-save", true, 200},
-		{nil, "GET", "/memory-list", false, 401},
+		{nil, "GET", "/v1/memory/files", false, 401},
 		{nil, "POST", "/homes-save", false, 401},
 		{nil, "GET", "/", true, 200},
 		{nil, "GET", "/assets/x.js", true, 200},
@@ -319,12 +319,12 @@ func TestGateRightsMatrix(t *testing.T) {
 	g.s.Grant(id, mainHomeID, RightMemRead)
 	c, _ := g.s.NewSession(id, "127.0.0.1", "test")
 	p, _ := g.s.Session(c)
-	if w := g.do("GET", "/memory-list", &gateUser{id, c, p.CSRF}, "", ""); w.Code != 401 {
+	if w := g.do("GET", "/v1/memory/files", &gateUser{id, c, p.CSRF}, "", ""); w.Code != 401 {
 		t.Errorf("session partielle : %d", w.Code)
 	}
 	// Révocation immédiate : aucun cache.
 	g.s.Revoke(r.id, mainHomeID, RightMemRead)
-	if w := g.do("GET", "/memory-list", &r, "", ""); w.Code != 403 {
+	if w := g.do("GET", "/v1/memory/files", &r, "", ""); w.Code != 403 {
 		t.Errorf("droit révoqué encore accepté : %d", w.Code)
 	}
 }
@@ -334,7 +334,7 @@ func TestGateCSRF(t *testing.T) {
 	u := g.user(t, "alice", false)
 	g.grant(t, u, "", RightMemWrite)
 	for name, tok := range map[string]string{"absent": "", "faux": strings.Repeat("0", 64)} {
-		r := g.req("POST", "/memory-save", &u, "", "{}")
+		r := g.req("PUT", "/v1/memory/files/x", &u, "", "{}")
 		r.Header.Set(csrfHeader, tok)
 		w := httptest.NewRecorder()
 		g.h.ServeHTTP(w, r)
@@ -342,7 +342,7 @@ func TestGateCSRF(t *testing.T) {
 			t.Errorf("CSRF %s : %d", name, w.Code)
 		}
 	}
-	if w := g.do("POST", "/memory-save", &u, "", "{}"); !reached(w) {
+	if w := g.do("PUT", "/v1/memory/files/x", &u, "", "{}"); !reached(w) {
 		t.Fatalf("CSRF valide refusé : %d", w.Code)
 	}
 
@@ -353,13 +353,13 @@ func TestGateCSRF(t *testing.T) {
 		g.h.ServeHTTP(w, r)
 		return w
 	}
-	if w := bearer("POST", "/memory-save"); w.Code != 401 {
+	if w := bearer("PUT", "/v1/memory/files/x"); w.Code != 401 {
 		t.Fatalf("Bearer sans jeton branché : %d", w.Code)
 	}
 	old := tokenPrincipal
 	t.Cleanup(func() { tokenPrincipal = old })
 	tokenPrincipal = func(*http.Request) *Principal { return &Principal{Token: true} }
-	if w := bearer("POST", "/memory-save"); !reached(w) {
+	if w := bearer("PUT", "/v1/memory/files/x"); !reached(w) {
 		t.Errorf("Bearer : CSRF exigé à tort : %d", w.Code)
 	}
 	if w := bearer("POST", "/homes-save"); w.Code != 403 {
@@ -372,7 +372,7 @@ func TestGateTamperedRights(t *testing.T) {
 	u := g.user(t, "alice", false)
 	g.grant(t, u, "", RightMemRead)
 	g.s.db.Exec(`UPDATE home_acl SET exec=1 WHERE user_id=?`, u.id)
-	w := g.do("GET", "/memory-list", &u, "", "")
+	w := g.do("GET", "/v1/memory/files", &u, "", "")
 	if w.Code != 403 || reached(w) || !strings.Contains(w.Body.String(), L("srv.auth.tamper")) {
 		t.Fatalf("ligne altérée : %d %s", w.Code, w.Body)
 	}
@@ -610,7 +610,7 @@ func TestGateTrashRestoreNeedsConfig(t *testing.T) {
 	}
 }
 
-// memory-merge avec launch ouvre une session claude aux arguments de l'appelant : exec exigé. Sans launch, mem_write suffit.
+// POST /v1/memory/merges avec launch ouvre une session claude aux arguments de l'appelant : exec exigé. Sans launch, mem_write suffit.
 func TestGateMemoryMergeLaunchNeedsExec(t *testing.T) {
 	g := newGateRig(t)
 	mw := g.user(t, "memoire", false)
@@ -626,7 +626,7 @@ func TestGateMemoryMergeLaunchNeedsExec(t *testing.T) {
 		{&mw, `{"Launch":false}`, 200},
 		{&ex, `{"Launch":true}`, 200},
 	} {
-		if w := g.do("POST", "/memory-merge", c.u, "", c.body); w.Code != c.code {
+		if w := g.do("POST", "/v1/memory/merges", c.u, "", c.body); w.Code != c.code {
 			t.Errorf("%s : %d", c.body, w.Code)
 		}
 	}
@@ -707,8 +707,8 @@ func TestGateDraftsNeedMemRead(t *testing.T) {
 		path string
 		code int
 	}{
-		{&w, "/memory-draft", 403}, {&w, "/skill-draft", 403},
-		{&r, "/memory-draft", 200}, {&r, "/skill-draft", 200},
+		{&w, "/v1/memory/drafts", 403}, {&w, "/skill-draft", 403},
+		{&r, "/v1/memory/drafts", 200}, {&r, "/skill-draft", 200},
 	} {
 		if got := g.do("POST", c.path, c.u, "", `{}`).Code; got != c.code {
 			t.Errorf("%s : %d, attendu %d", c.path, got, c.code)

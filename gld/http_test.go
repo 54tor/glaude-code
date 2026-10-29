@@ -307,15 +307,13 @@ func TestHTTPLancements(t *testing.T) {
 	put(t, filepath.Join(cfg, "projects", "-p", "memory", "a.md"), "a", old)
 	put(t, filepath.Join(cfg, "projects", "-p", "memory", "b.md"), "b", old)
 	keys := `"keys":["m/-p/a.md","m/-p/b.md"]`
-	status(t, h, "POST", "/memory-merge", "{", 400)
-	ok(t, h, "/memory-merge", `{"keys":["m/-p/a.md"]}`, false, "")
-	if m := ok(t, h, "/memory-merge", `{`+keys+`}`, true, "Prompt copié"); !strings.Contains(m["prompt"].(string), "b.md") {
+	v1err(t, h, "POST", "/v1/memory/merges", "{", 400, "")
+	v1err(t, h, "POST", "/v1/memory/merges", `{"keys":["m/-p/a.md"]}`, 400, "")
+	if m := v1ok(t, h, "POST", "/v1/memory/merges", `{`+keys+`}`, "Prompt copié"); !strings.Contains(m["prompt"].(string), "b.md") {
 		t.Fatal("prompt de fusion :", m)
 	}
-	if m := ok(t, h, "/memory-merge", `{`+keys+`,"launch":true,"args":"a;b"}`, false, "option refusée"); m["prompt"] == "" {
-		t.Fatal("le prompt doit rester copiable")
-	}
-	ok(t, h, "/memory-merge", `{`+keys+`,"launch":true,"args":"--model=haiku"}`, true, "gld-matin --args --model=haiku --prompt")
+	v1err(t, h, "POST", "/v1/memory/merges", `{`+keys+`,"launch":true,"args":"a;b"}`, 400, "option refusée")
+	v1ok(t, h, "POST", "/v1/memory/merges", `{`+keys+`,"launch":true,"args":"--model=haiku"}`, "gld-matin --args --model=haiku --prompt")
 }
 
 func TestHTTPChat(t *testing.T) {
@@ -477,49 +475,49 @@ func TestHTTPMemoire(t *testing.T) {
 	put(t, filepath.Join(cfg, "CLAUDE.md"), "global", old)
 	put(t, filepath.Join(cfg, "projects", "-p", "memory", "MEMORY.md"), "- [A](a.md) — a\n", old)
 	put(t, filepath.Join(cfg, "projects", "-p", "memory", "a.md"), "entrée a", old)
-	if m := status(t, h, "GET", "/memory-list", "", 200); len(m["global"].([]any)) != 1 || len(m["projects"].([]any)) != 1 {
+	if m := status(t, h, "GET", "/v1/memory/files", "", 200); len(m["global"].([]any)) != 1 || len(m["projects"].([]any)) != 1 {
 		t.Fatalf("liste : %v", m)
 	}
-	if m := status(t, h, "GET", "/memory-file?key=m/-p/b.md", "", 200); m["missing"] != true {
+	if m := status(t, h, "GET", "/v1/memory/files/m%2F-p%2Fb.md", "", 200); m["missing"] != true {
 		t.Fatal("entrée absente :", m)
 	}
-	status(t, h, "GET", "/memory-file?key=g/settings.json", "", 404)
-	if m := status(t, h, "GET", "/memory-file?key=g/CLAUDE.md", "", 200); m["text"] != "global" {
+	status(t, h, "GET", "/v1/memory/files/g%2Fsettings.json", "", 404)
+	if m := status(t, h, "GET", "/v1/memory/files/g%2FCLAUDE.md", "", 200); m["text"] != "global" {
 		t.Fatal(m)
 	}
-	status(t, h, "POST", "/memory-save", "{", 400)
-	ok(t, h, "/memory-save", `{"key":"g/settings.json","text":"x"}`, false, "")
-	ok(t, h, "/memory-save", `{"key":"m/-p/b.md","text":"---\nname: B\ndescription: bé\n---\nB","index":true}`, true, "Enregistré")
+	v1err(t, h, "PUT", "/v1/memory/files/m%2F-p%2Fb.md", "{", 400, "")
+	v1err(t, h, "PUT", "/v1/memory/files/g%2Fsettings.json", `{"text":"x"}`, 400, "")
+	v1ok(t, h, "PUT", "/v1/memory/files/m%2F-p%2Fb.md", `{"text":"---\nname: B\ndescription: bé\n---\nB","index":true}`, "Enregistré")
 	if b, _ := os.ReadFile(filepath.Join(cfg, "projects", "-p", "memory", "MEMORY.md")); !strings.Contains(string(b), "[B](b.md) — bé") {
 		t.Fatalf("index : %s", b)
 	}
-	ok(t, h, "/memory-save", `{"key":"m/-p/c.md","text":"c"}`, true, "Enregistré")
+	v1ok(t, h, "PUT", "/v1/memory/files/m%2F-p%2Fc.md", `{"text":"c"}`, "Enregistré")
 	if b, _ := os.ReadFile(filepath.Join(cfg, "projects", "-p", "memory", "MEMORY.md")); strings.Contains(string(b), "c.md") {
 		t.Fatal("indexé sans index: true")
 	}
-	if m := ok(t, h, "/memory-rename", `{"key":"m/-p/b.md","name":"bb.md"}`, true, "Renommé"); m["key"] != "m/-p/bb.md" {
+	if m := v1ok(t, h, "PATCH", "/v1/memory/files/m%2F-p%2Fb.md", `{"name":"bb.md"}`, "Renommé"); m["key"] != "m/-p/bb.md" {
 		t.Fatal(m)
 	}
 	if b, _ := os.ReadFile(filepath.Join(cfg, "projects", "-p", "memory", "MEMORY.md")); !strings.Contains(string(b), "[B](bb.md) — bé") || strings.Contains(string(b), "(b.md)") {
 		t.Fatalf("index après renommage : %s", b)
 	}
-	ok(t, h, "/memory-rename", `{"key":"m/-p/bb.md","name":"../x.md"}`, false, "")
-	ok(t, h, "/memory-rename", `{"key":"m/-p/bb.md","name":"MEMORY.md"}`, false, "")
-	ok(t, h, "/memory-rename", `{"key":"m/-p/bb.md","name":"b.md"}`, true, "Renommé")
-	status(t, h, "POST", "/memory-move", "{", 400)
-	ok(t, h, "/memory-move", `{"key":"m/-p/a.md","to":"../x"}`, false, "")
-	if m := ok(t, h, "/memory-move", `{"key":"m/-p/a.md","to":"global"}`, true, "Déplacé"); m["key"] != "g/rules/a.md" {
+	v1err(t, h, "PATCH", "/v1/memory/files/m%2F-p%2Fbb.md", `{"name":"../x.md"}`, 409, "")
+	v1err(t, h, "PATCH", "/v1/memory/files/m%2F-p%2Fbb.md", `{"name":"MEMORY.md"}`, 409, "")
+	v1ok(t, h, "PATCH", "/v1/memory/files/m%2F-p%2Fbb.md", `{"name":"b.md"}`, "Renommé")
+	v1err(t, h, "PATCH", "/v1/memory/files/m%2F-p%2Fa.md", "{", 400, "")
+	v1err(t, h, "PATCH", "/v1/memory/files/m%2F-p%2Fa.md", `{"to":"../x"}`, 409, "")
+	if m := v1ok(t, h, "PATCH", "/v1/memory/files/m%2F-p%2Fa.md", `{"to":"global"}`, "Déplacé"); m["key"] != "g/rules/a.md" {
 		t.Fatal(m)
 	}
-	status(t, h, "POST", "/memory-draft", "{", 400)
-	ok(t, h, "/memory-draft", `{"model":"gpt","instruction":"x"}`, false, "")
+	v1err(t, h, "POST", "/v1/memory/drafts", "{", 400, "")
+	v1err(t, h, "POST", "/v1/memory/drafts", `{"model":"gpt","instruction":"x"}`, 500, "")
 	t.Setenv("FAKE_DRAFT", `{"result":"brouillon","total_cost_usd":0.1}`)
-	if m := ok(t, h, "/memory-draft", `{"model":"haiku","instruction":"écris","refs":["m/-p/b.md"]}`, true, "Brouillon prêt"); m["text"] != "brouillon\n" {
+	if m := v1ok(t, h, "POST", "/v1/memory/drafts", `{"model":"haiku","instruction":"écris","refs":["m/-p/b.md"]}`, "Brouillon prêt"); m["text"] != "brouillon\n" {
 		t.Fatal(m)
 	}
-	status(t, h, "POST", "/memory-rm", "{", 400)
-	ok(t, h, "/memory-rm", `{"key":"m/-p/absent.md"}`, false, "")
-	ok(t, h, "/memory-rm", `{"key":"m/-p/b.md"}`, true, "Supprimé")
+	v1err(t, h, "DELETE", "/v1/memory/files", "", 400, "")
+	v1err(t, h, "DELETE", "/v1/memory/files?item=m%2F-p%2Fabsent.md", "", 404, "")
+	v1ok(t, h, "DELETE", "/v1/memory/files?item=m%2F-p%2Fb.md", "", "Supprimé")
 
 	// Corbeille.
 	l := status(t, h, "GET", "/v1/trash/memory", "", 200)["items"].([]any)
@@ -535,7 +533,7 @@ func TestHTTPMemoire(t *testing.T) {
 	if m := v1ok(t, h, "PATCH", "/v1/trash/memory/"+id, `{"trashed":false}`, "Restauré"); m["key"] != "m/-p/b.md" {
 		t.Fatal(m)
 	}
-	ok(t, h, "/memory-rm", `{"key":"m/-p/b.md"}`, true, "Supprimé")
+	v1ok(t, h, "DELETE", "/v1/memory/files?item=m%2F-p%2Fb.md", "", "Supprimé")
 	if code, m, _ := call(t, h, "DELETE", "/v1/trash/memory", ""); code != 400 || m["error"] == nil {
 		t.Fatal("corps vide : la corbeille ne se vide jamais implicitement")
 	}

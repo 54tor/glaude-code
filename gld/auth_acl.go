@@ -51,14 +51,13 @@ var routeRights = map[string]Right{
 	"POST /homes-sync-plan": RightMemSync, "POST /homes-sync-apply": RightMemSync,
 
 	// Mémoire, règles, snippets, notes, corbeille, recherche.
-	"GET /memory-list": RightMemRead, "GET /memory-file": RightMemRead, "GET /memory-health": RightMemRead,
-	"GET /memory-matches": RightMemRead, "GET /memory-loaded": RightMemRead, "GET /memory-search": RightMemRead,
-	"POST /memory-save": RightMemWrite, "POST /memory-move": RightMemWrite, "POST /memory-rename": RightMemWrite, "POST /memory-draft": RightMemWrite,
-	"POST /memory-repair": RightMemWrite, "POST /memory-paths": RightMemWrite, "POST /memory-type": RightMemWrite,
-	"POST /memory-fix": RightMemWrite, "POST /memory-tokens": RightMemWrite, "POST /memory-lint": RightMemWrite,
-	"POST /memory-toggle": RightMemWrite, "POST /memory-rm": RightMemWrite, "POST /memory-merge": RightMemWrite,
+	"GET /v1/memory/files": RightMemRead, "GET /v1/memory/files/{key}": RightMemRead, "GET /v1/memory/health": RightMemRead,
+	"GET /v1/memory/matches": RightMemRead, "GET /v1/memory/loaded": RightMemRead,
+	"PUT /v1/memory/files/{key}": RightMemWrite, "PATCH /v1/memory/files/{key}": RightMemWrite, "DELETE /v1/memory/files": RightMemWrite,
+	"POST /v1/memory/drafts": RightMemWrite, "POST /v1/memory/repairs": RightMemWrite, "POST /v1/memory/fixes": RightMemWrite,
+	"POST /v1/memory/token-counts": RightMemWrite, "POST /v1/memory/lints": RightMemWrite, "POST /v1/memory/merges": RightMemWrite,
 	"GET /snippet-list": RightMemRead, "GET /snippet": RightMemRead, "GET /snippets-export": RightMemRead,
-	// /snippet-draft ne fait qu'un brouillon (même appel de modèle que /memory-draft) ; écrire un snippet, c'est écrire
+	// /snippet-draft ne fait qu'un brouillon (même appel de modèle que POST /v1/memory/drafts) ; écrire un snippet, c'est écrire
 	// une commande slash de Claude Code (commands/*.md), donc config_write.
 	"POST /snippet-draft": RightMemWrite,
 	"GET /v1/notes":       RightMemRead, "PUT /v1/notes": RightMemWrite,
@@ -115,8 +114,8 @@ var routeRights = map[string]Right{
 // Routes de sondage : ne prolongent pas la session, sans quoi un onglet ouvert ne l'expirerait jamais.
 var passiveRoutes = map[string]bool{
 	"GET /v1/state": true, "GET /v1/state/stamp": true, "GET /v1/sessions/{id}/live": true, "GET /v1/sessions/{id}/state": true,
-	"GET /v1/sessions/{id}/screen": true, "GET /v1/sessions/{id}/conversation": true, "GET /snippet-list": true, "GET /memory-list": true,
-	"GET /memory-health": true, "GET /memory-loaded": true, "GET /v1/trash/memory": true, "GET /v1/keepwarm": true,
+	"GET /v1/sessions/{id}/screen": true, "GET /v1/sessions/{id}/conversation": true, "GET /snippet-list": true, "GET /v1/memory/files": true,
+	"GET /v1/memory/health": true, "GET /v1/memory/loaded": true, "GET /v1/trash/memory": true, "GET /v1/keepwarm": true,
 	"GET /v1/git/status": true, "GET /team": true, "GET /teams": true, "GET /account": true, "GET /v1/trust/pending": true, "GET /v1/cleanup-warning": true,
 }
 
@@ -357,7 +356,7 @@ func gateCheck(g *gateInfo, r *http.Request, pat string, need Right) (int, strin
 			return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] && m[RightConfigWrite] })
 		}
 	}
-	if pat == "POST /memory-merge" {
+	if pat == "POST /v1/memory/merges" {
 		var req struct{ Launch bool }
 		if err := peekJSON(r, &req); err != nil {
 			return peekErr(err)
@@ -369,7 +368,7 @@ func gateCheck(g *gateInfo, r *http.Request, pat string, need Right) (int, strin
 	}
 	// Les brouillons lisent côté serveur les fichiers désignés par l'appelant et renvoient la sortie du modèle : sans mem_read,
 	// ils contourneraient le droit de lecture.
-	if pat == "POST /memory-draft" || pat == "POST /skill-draft" {
+	if pat == "POST /v1/memory/drafts" || pat == "POST /skill-draft" {
 		return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] && m[RightMemRead] })
 	}
 	if pat == "PUT /v1/vgroups" {

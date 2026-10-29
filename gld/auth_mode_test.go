@@ -87,7 +87,7 @@ func TestOpenModeUnchanged(t *testing.T) {
 		{method: "GET", path: "/", tokCookie: modeTok, accept: "text/html"},
 		{method: "GET", path: "/homes", tokCookie: modeTok},
 		{method: "GET", path: "/inexistant", tokCookie: modeTok},
-		{method: "POST", path: "/memory-save", tokCookie: modeTok, origin: "https://ailleurs.example"},
+		{method: "PUT", path: "/v1/memory/files/x", tokCookie: modeTok, origin: "https://ailleurs.example"},
 		{method: "POST", path: "/homes-save", bearer: modeTok, origin: "http://" + testHost},
 	}
 	var before []*httptest.ResponseRecorder

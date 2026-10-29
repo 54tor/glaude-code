@@ -25,7 +25,7 @@ func TestLimitesHTTP(t *testing.T) {
 	if m := ok(t, h, "/snippet-draft", `{"model":"haiku","instruction":"x","text":"`+pile+`"}`, true, "Mise en forme prête"); m["text"] != "Consigne : x\n" {
 		t.Fatalf("prompt reçu : %v", m["text"])
 	}
-	ok(t, h, "/memory-save", `{"key":"m/-p/max.md","text":"`+strings.Repeat("a", memMax)+`"}`, true, "Enregistré")
+	v1ok(t, h, "PUT", "/v1/memory/files/m%2F-p%2Fmax.md", `{"text":"`+strings.Repeat("a", memMax)+`"}`, "Enregistré")
 
 	// Le compte rendu de suppression est joint au message.
 	put(t, filepath.Join(cfg, "history.jsonl"), `{"sessionId":"`+id1+`"}`+"\n", old)

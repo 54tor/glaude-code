@@ -195,46 +195,48 @@ func TestHTTPMemoireEcritures(t *testing.T) {
 	put(t, filepath.Join(cfg, "projects", "-p", "memory", "MEMORY.md"), "- [Fantôme](fantome.md) — absent\n", old)
 	lire := func(p string) string { b, _ := os.ReadFile(p); return string(b) }
 
-	status(t, h, "POST", "/memory-paths", `{"key":"m/-p/x.md","paths":["src/**"]}`, 400)
-	ok(t, h, "/memory-paths", `{"key":"g/rules/a.md","paths":["src/**","*.go"]}`, true, "Portée")
+	status(t, h, "PATCH", "/v1/memory/files/m%2F-p%2Fx.md", `{"paths":["src/**"]}`, 400)
+	v1ok(t, h, "PATCH", "/v1/memory/files/g%2Frules%2Fa.md", `{"paths":["src/**","*.go"]}`, "Portée")
 	if s := lire(regle); !strings.Contains(s, "paths:") || !strings.Contains(s, "src/**") || !strings.Contains(s, "corps") {
 		t.Fatalf("portée : %q", s)
 	}
-	status(t, h, "POST", "/memory-type", `{"key":"g/CLAUDE.md","type":"user"}`, 400)
-	ok(t, h, "/memory-type", `{"key":"m/-p/x.md","type":"feedback"}`, true, "Type")
+	status(t, h, "PATCH", "/v1/memory/files/g%2FCLAUDE.md", `{"type":"user"}`, 400)
+	v1ok(t, h, "PATCH", "/v1/memory/files/m%2F-p%2Fx.md", `{"type":"feedback"}`, "Type")
+	status(t, h, "PATCH", "/v1/memory/files/m%2F-p%2Fx.md", `{"type":"user","name":"y.md"}`, 400)
 	if s := lire(entree); !strings.Contains(s, "type: feedback") || strings.Contains(s, "type: user") {
 		t.Fatalf("type : %q", s)
 	}
-	status(t, h, "POST", "/memory-fix", `{"key":"p/-p/CLAUDE.md"}`, 400)
-	ok(t, h, "/memory-fix", `{"key":"m/-p/absent.md"}`, false, "")
+	status(t, h, "POST", "/v1/memory/fixes", `{"key":"p/-p/CLAUDE.md"}`, 400)
+	v1err(t, h, "POST", "/v1/memory/fixes", `{"key":"m/-p/absent.md"}`, 400, "")
 
-	m := ok(t, h, "/memory-toggle", `{"key":"g/rules/a.md"}`, true, "désactivée")
+	m := v1ok(t, h, "PATCH", "/v1/memory/files/g%2Frules%2Fa.md", `{"enabled":false}`, "désactivée")
 	if _, err := os.Stat(regle + ".off"); err != nil || m["key"] != "g/rules/a.md.off" {
 		t.Fatalf("désactivation : %v %v", err, m)
 	}
-	ok(t, h, "/memory-toggle", `{"key":"g/rules/a.md.off"}`, true, "réactivée")
+	v1ok(t, h, "PATCH", "/v1/memory/files/g%2Frules%2Fa.md.off", `{"enabled":true}`, "réactivée")
+	v1ok(t, h, "PATCH", "/v1/memory/files/g%2Frules%2Fa.md", `{"enabled":true}`, "réactivée")
 	if _, err := os.Stat(regle); err != nil {
 		t.Fatal("règle non réactivée")
 	}
-	ok(t, h, "/memory-toggle", `{"key":"g/CLAUDE.md"}`, false, "")
+	v1err(t, h, "PATCH", "/v1/memory/files/g%2FCLAUDE.md", `{"enabled":false}`, 409, "")
 
-	ok(t, h, "/memory-repair", `{"dir":"-p"}`, true, "1 ligne(s) retirée(s), 1 ajoutée(s)")
+	v1ok(t, h, "POST", "/v1/memory/repairs", `{"dir":"-p"}`, "1 ligne(s) retirée(s), 1 ajoutée(s)")
 	if s := lire(filepath.Join(cfg, "projects", "-p", "memory", "MEMORY.md")); strings.Contains(s, "fantome") || !strings.Contains(s, "x.md") {
 		t.Fatalf("index réparé : %q", s)
 	}
-	ok(t, h, "/memory-repair", `{"dir":"../x"}`, false, "")
-	for _, p := range []string{"/memory-paths", "/memory-type", "/memory-fix", "/memory-toggle", "/memory-repair", "/memory-rm", "/memory-lint", "/memory-tokens"} {
-		status(t, h, "POST", p, `{`, 400)
+	v1err(t, h, "POST", "/v1/memory/repairs", `{"dir":"../x"}`, 400, "")
+	for _, p := range [][2]string{{"PATCH", "/v1/memory/files/g%2Frules%2Fa.md"}, {"POST", "/v1/memory/fixes"}, {"POST", "/v1/memory/repairs"}, {"POST", "/v1/memory/lints"}, {"POST", "/v1/memory/token-counts"}} {
+		status(t, h, p[0], p[1], `{`, 400)
 	}
-	status(t, h, "POST", "/memory-tokens", `{"keys":["a","b","c","d","e","f","g"]}`, 400)
-	status(t, h, "POST", "/memory-lint", `{"scope":""}`, 400)
+	status(t, h, "POST", "/v1/memory/token-counts", `{"keys":["a","b","c","d","e","f","g"]}`, 400)
+	status(t, h, "POST", "/v1/memory/lints", `{"scope":""}`, 400)
 	status(t, h, "GET", "/v1/sessions/..%2Fx/loaded", "", 400)
 	status(t, h, "GET", "/v1/sessions/..%2Fx/loaded/files/%2Fetc%2Fpasswd", "", 400)
 	status(t, h, "GET", "/v1/sessions/11111111-1111-1111-1111-111111111111/loaded/files/%2Fetc%2Fpasswd", "", 404) // chemin jamais chargé par la session
-	if _, m, _ := call(t, h, "GET", "/memory-health", ""); m["issues"] == nil {
+	if _, m, _ := call(t, h, "GET", "/v1/memory/health", ""); m["issues"] == nil {
 		t.Fatalf("santé : %v", m)
 	}
-	if _, m, _ := call(t, h, "GET", "/memory-search?q=corps", ""); m["hits"].(map[string]any)["m/-p/x.md"] == nil {
+	if _, m, _ := call(t, h, "GET", "/v1/memory/files?q=corps", ""); m["hits"].(map[string]any)["m/-p/x.md"] == nil {
 		t.Fatalf("recherche : %v", m)
 	}
 }

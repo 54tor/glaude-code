@@ -354,7 +354,7 @@ func TestGrantSessionsReadNeedsReauth(t *testing.T) {
 func TestAdminNoImplicitHomeAccess(t *testing.T) {
 	g := newAdminRig(t)
 	root := g.login("root", true)
-	if w := g.do("GET", "/memory-list", &root, nil); w.Code != 403 {
+	if w := g.do("GET", "/v1/memory/files", &root, nil); w.Code != 403 {
 		t.Fatalf("admin sans ligne home_acl : %d", w.Code)
 	}
 	if m := g.ok(g.do("GET", "/homes", &root, nil)); m["main"] != "" {
@@ -364,7 +364,7 @@ func TestAdminNoImplicitHomeAccess(t *testing.T) {
 		t.Fatalf("octroi à soi-même sans réauth : %d", w.Code)
 	}
 	g.ok(g.do("POST", "/admin/acl", &root, map[string]any{"user_id": root.id, "home_id": mainHomeID, "grant": []string{"mem_read"}, "reauth": root.reauth()}))
-	if w := g.do("GET", "/memory-list", &root, nil); w.Code != 200 {
+	if w := g.do("GET", "/v1/memory/files", &root, nil); w.Code != 200 {
 		t.Fatalf("après /admin/acl : %d %s", w.Code, w.Body)
 	}
 }
