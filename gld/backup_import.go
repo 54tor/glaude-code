@@ -92,8 +92,15 @@ type backupApplier struct {
 }
 
 var (
-	backupPlanners = []backupPlanner{planHomeItems, planProjectItems}
-	backupAppliers = []backupApplier{{isHomeItem, applyHomeItems}, {isProjectItem, applyProjectItems}}
+	// ordre d'application : fichiers, marketplaces, plugins, MCP, projets
+	backupPlanners = []backupPlanner{planHomeItems, planMarkets, planPlugins, planMcp, planProjectItems}
+	backupAppliers = []backupApplier{
+		{isHomeItem, applyHomeItems},
+		{func(id string) bool { return strings.HasPrefix(id, "market:") }, applyMarkets},
+		{func(id string) bool { return strings.HasPrefix(id, "plugin:") }, applyPlugins},
+		{func(id string) bool { return strings.HasPrefix(id, "mcp:") }, applyMcp},
+		{isProjectItem, applyProjectItems},
+	}
 )
 
 func stageBackup(b []byte) (BackupPlan, error) {
@@ -114,6 +121,7 @@ func stageBackup(b []byte) (BackupPlan, error) {
 		}
 		p.Items = append(p.Items, items...)
 	}
+	p.Skipped = append(p.Skipped, skippedPlugins(s)...)
 	stagesMu.Lock()
 	reapStages(1)
 	stages[id] = s
@@ -128,15 +136,22 @@ func applyBackup(id string, picks []SyncPick, targets map[string]string) ([]Back
 	}
 	defer os.RemoveAll(s.dir)
 	res := []BackupResult{}
+	owned := map[string]bool{}
 	for _, a := range backupAppliers {
 		var mine []SyncPick
 		for _, p := range picks {
 			if a.owns(p.ID) {
 				mine = append(mine, p)
+				owned[p.ID] = true
 			}
 		}
 		if len(mine) > 0 {
 			res = append(res, a.apply(s, mine, targets)...)
+		}
+	}
+	for _, p := range picks {
+		if !owned[p.ID] {
+			res = append(res, BackupResult{ID: p.ID, Status: "skipped"})
 		}
 	}
 	return res, nil
