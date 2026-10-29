@@ -479,30 +479,31 @@ func routesIDEWrite(mux *http.ServeMux) {
 			return
 		}
 		defer root.Close()
-		rels := make([]string, len(paths))
-		for i, p := range paths {
+		var b bulk
+		var rels []string
+		for _, p := range paths {
 			rel, err := ideRel(p, false)
-			if err != nil || ideInTrash(rel) {
-				ideFail(w, errIdePath)
-				return
+			if err == nil && ideInTrash(rel) {
+				err = errIdePath
 			}
-			if _, err := ideLstat(root, rel); err != nil {
-				ideFail(w, err)
-				return
+			if err == nil {
+				_, err = ideLstat(root, rel)
 			}
-			rels[i] = rel
+			if err == nil {
+				var id string
+				if id, err = ideTrashMove(root, rel); err == nil {
+					b.ok(id)
+					rels = append(rels, rel)
+					continue
+				}
+			}
+			st, code, msg := ideErr(err)
+			b.fail(p, st, code, msg)
 		}
-		ids := make([]string, 0, len(rels))
-		for _, rel := range rels {
-			id, err := ideTrashMove(root, rel)
-			if err != nil {
-				ideFail(w, err)
-				return
-			}
-			ids = append(ids, id)
+		if len(rels) > 0 {
+			ideAudit(w, r, "rm", dir, strings.Join(rels, ","), -1)
 		}
-		ideAudit(w, r, "rm", dir, strings.Join(rels, ","), -1)
-		writeJSON(w, 200, map[string]any{"ids": ids})
+		b.reply(w, "")
 	})
 
 	mux.HandleFunc("GET /v1/fs/trash", func(w http.ResponseWriter, r *http.Request) {
@@ -615,35 +616,42 @@ func routesIDEWrite(mux *http.ServeMux) {
 			writeErr(w, http.StatusBadRequest, "too_many_items", L("srv.http_util.tropDElements"))
 			return
 		}
-		root, ok := ideTrashRoot(w, dir, items[0])
-		if !ok {
+		root, err := ideOpenRoot(dir)
+		if err == nil {
+			err = ideTrashDir(root)
+			if err != nil {
+				root.Close()
+			}
+		}
+		if err != nil {
+			ideFail(w, err)
 			return
 		}
 		defer root.Close()
-		for _, id := range items {
-			if !ideTrashID.MatchString(id) {
-				ideFail(w, errIdePath)
-				return
-			}
-			if _, err := ideLstat(root, ideTrash+"/"+id); err != nil {
-				ideFail(w, err)
-				return
-			}
-		}
+		var b bulk
 		whats := make([]string, 0, len(items))
 		for _, id := range items {
 			base := ideTrash + "/" + id
-			what, _ := ideReadFrom(root, id)
-			if what == "" {
-				what = base
+			var err error
+			if !ideTrashID.MatchString(id) {
+				err = errIdePath
+			} else if _, err = ideLstat(root, base); err == nil {
+				what, _ := ideReadFrom(root, id)
+				if what == "" {
+					what = base
+				}
+				if err = root.RemoveAll(base); err == nil {
+					whats = append(whats, what)
+					b.ok(id)
+					continue
+				}
 			}
-			if err := root.RemoveAll(base); err != nil {
-				ideFail(w, err)
-				return
-			}
-			whats = append(whats, what)
+			st, code, msg := ideErr(err)
+			b.fail(id, st, code, msg)
 		}
-		ideAudit(w, r, "purge", dir, strings.Join(whats, ","), -1)
-		w.WriteHeader(http.StatusNoContent)
+		if len(whats) > 0 {
+			ideAudit(w, r, "purge", dir, strings.Join(whats, ","), -1)
+		}
+		b.reply(w, "")
 	})
 }

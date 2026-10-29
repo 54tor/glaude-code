@@ -367,7 +367,7 @@ func TestFsTrashPurge(t *testing.T) {
 	h, _, proj := web(t)
 	os.WriteFile(filepath.Join(proj, "f.txt"), nil, 0o644)
 	id := trashOne(t, h, proj, "f.txt")
-	if c, _, raw := fsop(t, h, "purge", map[string]any{"dir": proj, "id": id}); c != 204 {
+	if c, _, raw := fsop(t, h, "purge", map[string]any{"dir": proj, "id": id}); c != 200 {
 		t.Fatal(c, raw)
 	}
 	if _, err := os.Stat(filepath.Join(proj, ".gld-trash", id)); err == nil {

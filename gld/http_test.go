@@ -508,7 +508,9 @@ func TestHTTPMemoire(t *testing.T) {
 	}
 	v1err(t, h, "DELETE", "/v1/memory/files", "", 400, "")
 	v1err(t, h, "DELETE", "/v1/memory/files?item=m%2F-p%2Fabsent.md", "", 404, "")
-	v1ok(t, h, "DELETE", "/v1/memory/files?item=m%2F-p%2Fb.md", "", "Supprimé")
+	if m := v1ok(t, h, "DELETE", "/v1/memory/files?item=m%2F-p%2Fabsent.md&item=m%2F-p%2Fb.md", "", "Supprimé"); len(m["done"].([]any)) != 1 || len(m["failed"].([]any)) != 1 {
+		t.Fatal("rapport partiel", m)
+	}
 
 	// Corbeille.
 	l := status(t, h, "GET", "/v1/trash/memory", "", 200)["items"].([]any)

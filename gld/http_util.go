@@ -72,6 +72,47 @@ func pathID(w http.ResponseWriter, r *http.Request, name string) (string, bool) 
 	return id, true
 }
 
+// bulk accumule le résultat d'une suppression multiple : chaque élément réussit ou échoue seul.
+type bulk struct {
+	done   []string
+	failed []bulkFail
+	first  bulkFail
+}
+
+type bulkFail struct {
+	Item   string        `json:"item"`
+	Error  bulkFailError `json:"error"`
+	status int
+}
+
+type bulkFailError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+func (b *bulk) ok(id string) { b.done = append(b.done, id) }
+
+func (b *bulk) fail(item string, status int, code, msg string) {
+	f := bulkFail{Item: item, Error: bulkFailError{code, msg}, status: status}
+	if len(b.failed) == 0 {
+		b.first = f
+	}
+	b.failed = append(b.failed, f)
+}
+
+// reply : 200 {done, failed[, message]} dès qu'un élément a abouti ; sinon l'erreur uniforme du premier échec.
+func (b *bulk) reply(w http.ResponseWriter, msg string) {
+	if len(b.done) == 0 && len(b.failed) > 0 {
+		writeErr(w, b.first.status, b.first.Error.Code, b.first.Error.Message)
+		return
+	}
+	out := map[string]any{"done": append([]string{}, b.done...), "failed": append([]bulkFail{}, b.failed...)}
+	if msg != "" {
+		out["message"] = msg
+	}
+	writeJSON(w, 200, out)
+}
+
 type item struct{ Dir, ID string }
 
 // itemMax : plafond d'éléments d'une requête multiple (?item=… répété, ou items du corps).

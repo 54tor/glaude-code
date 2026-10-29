@@ -98,7 +98,7 @@ func TestFsTrashPurgeWithoutFrom(t *testing.T) {
 		}
 	}
 	os.Remove(filepath.Join(a.proj, ideTrash, id, "from"))
-	if c := a.post("purge", map[string]any{"id": id}); c != 204 {
+	if c := a.post("purge", map[string]any{"id": id}); c != 200 {
 		t.Fatal(c)
 	}
 	if _, err := os.Stat(filepath.Join(a.proj, ideTrash, id)); !errors.Is(err, os.ErrNotExist) {

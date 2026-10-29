@@ -161,6 +161,7 @@ func routesMemory(mux *http.ServeMux) {
 			writeErr(w, http.StatusBadRequest, "too_many_items", L("srv.http_util.tropDElements"))
 			return
 		}
+		var b bulk
 		for _, key := range keys {
 			err := memRemove(key)
 			journal("memory-rm %s (copie à la corbeille) : %v", key, errOr(err))
@@ -169,11 +170,12 @@ func routesMemory(mux *http.ServeMux) {
 				if errors.Is(err, os.ErrNotExist) {
 					status, code = http.StatusNotFound, "not_found"
 				}
-				writeErr(w, status, code, err.Error())
-				return
+				b.fail(key, status, code, err.Error())
+				continue
 			}
+			b.ok(key)
 		}
-		writeJSON(w, 200, map[string]any{"message": L("srv.routes_memory.supprime")})
+		b.reply(w, L("srv.routes_memory.supprime"))
 	})
 	// Brouillon rédigé par un petit modèle (memwrite.go) : rien n'est enregistré, l'éditeur s'ouvre avec le texte.
 	mux.HandleFunc("POST /v1/memory/drafts", func(w http.ResponseWriter, r *http.Request) {

@@ -105,7 +105,7 @@ func TestFsAuditWrites(t *testing.T) {
 			id = de.Name()
 		}
 	}
-	if c := a.post("purge", map[string]any{"id": id}); c != 204 {
+	if c := a.post("purge", map[string]any{"id": id}); c != 200 {
 		t.Fatal(c)
 	}
 	got := a.events()

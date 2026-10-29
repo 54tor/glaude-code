@@ -48,15 +48,17 @@ func routesSkills(mux *http.ServeMux) {
 			writeErr(w, http.StatusBadRequest, "too_many_items", L("srv.http_util.tropDElements"))
 			return
 		}
+		var b bulk
 		for _, key := range keys {
 			err := removeSkill(key)
 			journal("skill-rm %s (copie à la corbeille) : %v", key, errOr(err))
 			if err != nil {
-				writeErr(w, http.StatusConflict, "conflict", err.Error())
-				return
+				b.fail(key, http.StatusConflict, "conflict", err.Error())
+				continue
 			}
+			b.ok(key)
 		}
-		writeJSON(w, 200, map[string]any{"message": L("srv.routes_skills.supprimeCopieALa")})
+		b.reply(w, L("srv.routes_skills.supprimeCopieALa"))
 	})
 	mux.HandleFunc("POST /v1/skills/copies", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Key, To string }

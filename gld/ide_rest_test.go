@@ -66,18 +66,29 @@ func TestFsRmAndPurgeSeveralItems(t *testing.T) {
 	}
 	q := "dir=" + url.QueryEscape(proj)
 	c, m, raw := call(t, h, "DELETE", "/v1/fs/entries?"+q+"&item=a.txt&item=b.txt", "")
-	ids, _ := m["ids"].([]any)
+	ids, _ := m["done"].([]any)
 	if c != 200 || len(ids) != 2 {
 		t.Fatal(c, raw)
 	}
 	if c, _, _ := call(t, h, "DELETE", "/v1/fs/entries?"+q+"&item=gone.txt&item=x.txt", ""); c != 404 {
-		t.Fatal("missing item", c)
+		t.Fatal("nothing valid must give the uniform error", c)
 	}
+	os.WriteFile(filepath.Join(proj, "c.txt"), nil, 0o644)
+	c, m, raw = call(t, h, "DELETE", "/v1/fs/entries?"+q+"&item=gone.txt&item=c.txt", "")
+	done, _ := m["done"].([]any)
+	failed, _ := m["failed"].([]any)
+	if c != 200 || len(done) != 1 || len(failed) != 1 || failed[0].(map[string]any)["item"] != "gone.txt" {
+		t.Fatal("partial report", c, raw)
+	}
+	if f0, _ := failed[0].(map[string]any)["error"].(map[string]any); f0["code"] != "not_found" {
+		t.Fatal(raw)
+	}
+	ids = append(ids, done[0])
 	if c, _, _ := call(t, h, "DELETE", "/v1/fs/entries?"+q, ""); c != 400 {
 		t.Fatal("no item", c)
 	}
-	p := "/v1/fs/trash?" + q + "&item=" + ids[0].(string) + "&item=" + ids[1].(string)
-	if c, _, raw := call(t, h, "DELETE", p, ""); c != 204 {
+	p := "/v1/fs/trash?" + q + "&item=" + ids[0].(string) + "&item=" + ids[1].(string) + "&item=" + ids[2].(string) + "&item=bad"
+	if c, m, raw := call(t, h, "DELETE", p, ""); c != 200 || len(m["done"].([]any)) != 3 || len(m["failed"].([]any)) != 1 {
 		t.Fatal(c, raw)
 	}
 	if _, m, _ := call(t, h, "GET", "/v1/fs/trash?"+q, ""); len(m["items"].([]any)) != 0 {

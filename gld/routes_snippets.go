@@ -82,15 +82,17 @@ func routesSnippets(mux *http.ServeMux) {
 			writeErr(w, http.StatusBadRequest, "too_many_items", L("srv.http_util.tropDElements"))
 			return
 		}
+		var b bulk
 		for _, key := range keys {
 			err := removeSnippet(key)
 			journal("snippet-rm %s (copie à la corbeille) : %v", key, errOr(err))
 			if err != nil {
-				writeErr(w, http.StatusConflict, "conflict", err.Error())
-				return
+				b.fail(key, http.StatusConflict, "conflict", err.Error())
+				continue
 			}
+			b.ok(key)
 		}
-		writeJSON(w, 200, map[string]any{"message": L("srv.routes_snippets.snippetSupprime")})
+		b.reply(w, L("srv.routes_snippets.snippetSupprime"))
 	})
 	// Export : les snippets d'un scope en archive zip ; import : fichiers .md ou archives .zip (multipart).
 	mux.HandleFunc("GET /v1/snippets/export", func(w http.ResponseWriter, r *http.Request) {

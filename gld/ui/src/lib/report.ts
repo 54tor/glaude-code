@@ -16,10 +16,13 @@ function show(ok: boolean, text: string, o: Show) {
   return ok
 }
 // Action de l'API /v1 : le message de la réponse (succès) ou de l'ApiError (échec) s'affiche de la même façon. Renvoie le succès.
-export async function reportAction(run: () => Promise<{ message?: string } | void>, o: Show = {}) {
+export type Reported = { message?: string; failed?: { item: string; error: { message: string } }[] }
+export async function reportAction(run: () => Promise<Reported | void>, o: Show = {}) {
   try {
     const r = await run()
-    return show(true, r?.message ?? "", o)
+    const ok = show(true, r?.message ?? "", o)
+    if (r?.failed?.length) show(false, r.failed.map((f) => `${f.item} : ${f.error.message}`).join("\n"), {})
+    return ok
   } catch (e) {
     return show(false, errMsg(e), o)
   }

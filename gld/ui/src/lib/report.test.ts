@@ -25,6 +25,11 @@ describe("reportAction", () => {
     expect(await reportAction(async () => ({ message: "Fait\ndétail" }))).toBe(true)
     expect(success).toHaveBeenCalledWith("Fait", { id: undefined, description: "détail" })
   })
+  it("suppression partielle : succès puis erreur pour les éléments refusés", async () => {
+    expect(await reportAction(async () => ({ message: "Supprimé", failed: [{ item: "a.md", error: { message: "absent" } }] }))).toBe(true)
+    expect(success).toHaveBeenCalledWith("Supprimé", { id: undefined, description: undefined })
+    expect(error).toHaveBeenCalledWith("a.md : absent", { id: undefined, description: undefined })
+  })
   it("échec : le message de l'ApiError", async () => {
     expect(await reportAction(async () => Promise.reject(new ApiError(409, "conflict", "déjà là")), { id: 3 })).toBe(false)
     expect(error).toHaveBeenCalledWith("déjà là", { id: 3, description: undefined })

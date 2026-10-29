@@ -161,6 +161,12 @@ func ideLstat(root *os.Root, rel string) (fs.FileInfo, error) {
 }
 
 func ideFail(w http.ResponseWriter, err error) {
+	code, slug, out := ideErr(err)
+	writeErr(w, code, slug, out)
+}
+
+// ideErr : statut, code et texte d'une erreur de l'IDE.
+func ideErr(err error) (int, string, string) {
 	code, slug, e := http.StatusInternalServerError, "internal", errIdeNotFound
 	switch {
 	case errors.Is(err, errIdeDir):
@@ -184,5 +190,5 @@ func ideFail(w http.ResponseWriter, err error) {
 	if code == 500 {
 		out = L("srv.ide.erreur")
 	}
-	writeErr(w, code, slug, out)
+	return code, slug, out
 }
