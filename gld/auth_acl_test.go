@@ -738,3 +738,17 @@ func TestSetRightsWriteNeedsRead(t *testing.T) {
 		}
 	}
 }
+
+func TestChatStopPathRejectsTraversal(t *testing.T) {
+	if p, ok := chatStopPath("0123abcd-0123-4abc-8def-0123456789ab"); !ok || p != "/v1/sessions/0123abcd-0123-4abc-8def-0123456789ab/chat" {
+		t.Fatalf("valid id refused: %q %v", p, ok)
+	}
+	r := httptest.NewRequest("POST", "/v1/sessions/..%2F..%2Fv1%2Ffs%2Fentries%3Fdir%3DX%26item%3Dy/chat", nil)
+	id := pathSeg(r, 2)
+	if id == "" {
+		t.Fatal("pathSeg did not decode the segment")
+	}
+	if p, ok := chatStopPath(id); ok {
+		t.Fatalf("malicious id accepted: %q", p)
+	}
+}

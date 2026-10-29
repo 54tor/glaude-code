@@ -545,8 +545,21 @@ func withAuthWatch(next http.Handler) http.Handler {
 	})
 }
 
+// chatStopPath : l'identifiant vient d'un segment décodé (%2F possible) et la requête part avec l'autorité de la passerelle.
+func chatStopPath(id string) (string, bool) {
+	if !idRe.MatchString(id) {
+		return "", false
+	}
+	return "/v1/sessions/" + id + "/chat", true
+}
+
 // stopChildChat envoie DELETE /v1/sessions/{id}/chat à l'enfant du home, par son proxy (en-tête X-Gld-Child compris).
 func stopChildChat(home, id string) {
+	path, ok := chatStopPath(id)
+	if !ok {
+		journal("auth: arrêt du tour sur %s ignoré : identifiant invalide", home)
+		return
+	}
 	p, err := homeProxy(home)
 	if err != nil {
 		journal("auth: arrêt du tour %s sur %s : %v", id, home, err)
@@ -554,7 +567,7 @@ func stopChildChat(home, id string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, "DELETE", "/v1/sessions/"+id+"/chat", nil)
+	req, _ := http.NewRequestWithContext(ctx, "DELETE", path, nil)
 	w := &discardWriter{h: http.Header{}}
 	p.ServeHTTP(w, req)
 	journal("auth: arrêt du tour %s sur %s demandé : %d", id, home, w.code)
