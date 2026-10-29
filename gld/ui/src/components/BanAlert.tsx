@@ -7,7 +7,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescript
 type Ban = { at: number; ip: string }
 
 // Alerte dans chaque session connectée quand une adresse extérieure est bannie après des échecs de connexion répétés, ou
-// qu'un appareil est jumelé sur mon compte via /pair-code (une session volée pourrait en créer une : l'alerte pousse à
+// qu'un appareil est jumelé sur mon compte via POST /v1/pairing/codes (une session volée pourrait en créer une : l'alerte pousse à
 // vérifier /auth/sessions et à révoquer ce qui n'est pas de moi). Les événements d'avant l'ouverture de l'onglet ne sont pas
 // rejoués ; une alerte non acquittée est perdue au rechargement.
 export function BanAlert() {

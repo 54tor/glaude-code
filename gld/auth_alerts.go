@@ -7,7 +7,7 @@ import (
 
 // Bannissements d'adresses survenus depuis `since` (secondes Unix) : l'interface les interroge et ouvre une alerte dans chaque
 // session connectée (l'adresse n'est donnée qu'aux administrateurs). `now` est l'horloge du serveur, à renvoyer comme `since` au
-// prochain appel. Les jumelages, eux, sont propres au compte : une session volée qui en crée une nouvelle via /pair-code le
+// prochain appel. Les jumelages, eux, sont propres au compte : une session volée qui en crée une nouvelle via POST /v1/pairing/codes le
 // révèle ici, pour révocation depuis /auth/sessions (device_id non journalisé : on ne pointe pas la session, on alerte).
 func (a *authAPI) alerts(w http.ResponseWriter, r *http.Request) {
 	p := a.need(w, r, true)
