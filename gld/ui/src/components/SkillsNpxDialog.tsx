@@ -68,12 +68,51 @@ export function SkillsNpxDialog({
   onChange: () => void
 }) {
   const { t } = useTranslation()
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="flex h-[80vh] max-h-[80vh] flex-col sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{t("skills.npx.title")}</DialogTitle>
+          <DialogDescription>{t("skills.npx.description")}</DialogDescription>
+        </DialogHeader>
+        <ScrollArea className="min-h-0 flex-1">
+          <SkillsNpxPanel projects={projects} home={home} onChange={onChange} />
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// fixed : portée imposée par la page ("user" ou "p/<dossier>") ; sinon elle se choisit à la confirmation.
+export function SkillsNpxPanel({
+  projects,
+  home,
+  onChange,
+  fixed,
+}: {
+  projects: Project[]
+  home: string
+  onChange: () => void
+  fixed?: string
+}) {
+  const { t } = useTranslation()
   const [q, setQ] = useState("")
   const [hits, setHits] = useState<SkillHit[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [pick, setPick] = useState<SkillHit | null>(null)
-  const [scope, setScope] = useState("user")
+  const [chosen, setScope] = useState("user")
   const [err, setErr] = useState("")
+  const scope = fixed ?? chosen
+  const scopes = [
+    ["user", t("skills.npx.scopeUser")],
+    ...projects.map(
+      (p) =>
+        [
+          "p/" + p.dir,
+          t("skills.npx.scopeProject", { name: tilde(p.project, home) }),
+        ] as const
+    ),
+  ] as const
 
   const search = async () => {
     if (!q.trim() || busy) return
@@ -94,123 +133,96 @@ export function SkillsNpxDialog({
     }
   }
 
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="flex h-[80vh] max-h-[80vh] flex-col sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{t("skills.npx.title")}</DialogTitle>
-          <DialogDescription>{t("skills.npx.description")}</DialogDescription>
-        </DialogHeader>
-        {pick ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-3">
-            <h3 className="text-sm font-semibold">
-              {t("skills.npx.confirmTitle", { skill: pick.skill })}
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              {t("skills.npx.confirmBody")}
-            </p>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">
-                {t("skills.npx.scope")}
-              </span>
-              <Choose
-                value={scope}
-                onChange={setScope}
-                options={[
-                  ["user", t("skills.npx.scopeUser")],
-                  ...projects.map(
-                    (p) =>
-                      [
-                        "p/" + p.dir,
-                        t("skills.npx.scopeProject", {
-                          name: tilde(p.project, home),
-                        }),
-                      ] as const
-                  ),
-                ]}
-                label={t("skills.npx.scope")}
-                className="min-w-0"
-              />
-            </div>
-            <div>
-              <div className="mb-1 text-xs text-muted-foreground">
-                {t("skills.npx.command")}
-              </div>
-              <code className="block rounded-md bg-muted px-2 py-1.5 text-xs break-all">
-                {npxCommand("add", pick.source, pick.skill, scope === "user")}
-              </code>
-            </div>
-            <div className="mt-auto flex justify-end gap-2">
-              <Button
-                variant="ghost"
-                onClick={() => setPick(null)}
-                disabled={busy}
-              >
-                {t("skills.npx.back")}
-              </Button>
-              <Button onClick={install} disabled={busy}>
-                {busy ? <Fan className="animate-spin" /> : <Download />}{" "}
-                {busy
-                  ? t("skills.npx.running")
-                  : t("skills.npx.confirmInstall")}
-              </Button>
-            </div>
+  if (pick)
+    return (
+      <div className="flex flex-col gap-3 rounded-md border p-3">
+        <h3 className="text-sm font-semibold">
+          {t("skills.npx.confirmTitle", { skill: pick.skill })}
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          {t("skills.npx.confirmBody")}
+        </p>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            {t("skills.npx.scope")}
+          </span>
+          {fixed !== undefined ? (
+            <span className="text-sm font-medium">
+              {scopes.find(([k]) => k === fixed)?.[1]}
+            </span>
+          ) : (
+            <Choose
+              value={scope}
+              onChange={setScope}
+              options={scopes}
+              label={t("skills.npx.scope")}
+              className="min-w-0"
+            />
+          )}
+        </div>
+        <div>
+          <div className="mb-1 text-xs text-muted-foreground">
+            {t("skills.npx.command")}
           </div>
-        ) : (
-          <>
-            <form
-              className="flex gap-2"
-              onSubmit={(e) => {
-                e.preventDefault()
-                search()
-              }}
-            >
-              <Input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder={t("skills.npx.search")}
-                maxLength={80}
-              />
-              <Button type="submit" disabled={busy || !q.trim()}>
-                {busy ? <Fan className="animate-spin" /> : <Search />}{" "}
-                {t("skills.npx.searchBtn")}
+          <code className="block rounded-md bg-muted px-2 py-1.5 text-xs break-all">
+            {npxCommand("add", pick.source, pick.skill, scope === "user")}
+          </code>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setPick(null)} disabled={busy}>
+            {t("skills.npx.back")}
+          </Button>
+          <Button onClick={install} disabled={busy}>
+            {busy ? <Fan className="animate-spin" /> : <Download />}{" "}
+            {busy ? t("skills.npx.running") : t("skills.npx.confirmInstall")}
+          </Button>
+        </div>
+      </div>
+    )
+  return (
+    <div className="space-y-2">
+      <form
+        className="flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault()
+          search()
+        }}
+      >
+        <Input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={t("skills.npx.search")}
+          aria-label={t("skills.npx.search")}
+          maxLength={80}
+        />
+        <Button type="submit" variant="outline" disabled={busy || !q.trim()}>
+          {busy ? <Fan className="animate-spin" /> : <Search />}{" "}
+          {t("skills.npx.searchBtn")}
+        </Button>
+      </form>
+      {err && <p className="text-sm text-destructive">{err}</p>}
+      {!!hits?.length && (
+        <ul className="divide-y rounded-md border">
+          {hits.map((h) => (
+            <li key={h.ref} className="flex items-center gap-2 px-3 py-1.5">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium">{h.ref}</div>
+                <div className="text-xs text-muted-foreground">
+                  {t("skills.npx.installs", { n: h.installs })}
+                </div>
+              </div>
+              <Button size="xs" variant="outline" onClick={() => setPick(h)}>
+                <Download /> {t("skills.npx.install")}
               </Button>
-            </form>
-            {err && <p className="text-sm text-destructive">{err}</p>}
-            <ScrollArea className="min-h-0 flex-1">
-              <ul className="space-y-1">
-                {hits?.map((h) => (
-                  <li
-                    key={h.ref}
-                    className="flex items-center gap-2 rounded-md border px-2 py-1.5"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium">
-                        {h.ref}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {t("skills.npx.installs", { n: h.installs })}
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setPick(h)}
-                    >
-                      {t("skills.npx.install")}
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-              {hits?.length === 0 && (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  {t("skills.npx.none")}
-                </p>
-              )}
-            </ScrollArea>
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
+            </li>
+          ))}
+        </ul>
+      )}
+      {hits?.length === 0 && (
+        <p className="rounded-md border px-3 py-6 text-center text-sm text-muted-foreground">
+          {t("skills.npx.none")}
+        </p>
+      )}
+    </div>
   )
 }

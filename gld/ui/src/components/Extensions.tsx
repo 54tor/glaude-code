@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Link } from "wouter"
-import { ChevronRight, Fan, Plug } from "lucide-react"
+import { ArchiveRestore, ChevronRight, Fan, RefreshCw, Trash2 } from "lucide-react"
 import { api, type CfgOverview, type McpServer, type PluginInst, type Skill } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"
 import { tilde } from "@/lib/format"
@@ -12,7 +12,8 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Choose } from "./Choose"
-import { PluginsPanel } from "./PluginsDialog"
+import { PluginsCatalog, pluginKey, usePluginRun } from "./PluginsDialog"
+import { SkillsNpxPanel } from "./SkillsNpxDialog"
 import { Skills } from "./Skills"
 import type { Ask } from "./Confirm"
 import { useActions } from "./actions"
@@ -51,6 +52,7 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
     api.configMcpCheck().then((d) => setStatus(d.status), () => {})
   }, [])
   const { propose, dialog } = useConfigEdit(reload, a.live.size)
+  const plug = usePluginRun(ov?.projects ?? [], reload)
   const doc = useMemo(() => {
     const m: Record<string, Enabled> = {}
     for (const f of ov?.files ?? []) m[f.id] = ((f.data as { enabledPlugins?: Enabled } | undefined)?.enabledPlugins ?? {}) as Enabled
@@ -99,6 +101,13 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
     if (!on) return void (await edit(files[to] as string, "add", ["disabledMcpjsonServers"], name))
     for (const k of order) if (mcpOff(files[k] as string, name)) await edit(files[k] as string, "remove", ["disabledMcpjsonServers"], name)
   }
+  const here = dir ? "p/" + dir : "user" // portée d'installation : le contexte affiché
+  // L'installation sur laquelle portent mise à jour et désinstallation : celle du contexte, sinon la première trouvée.
+  const record = (id: string) => {
+    const recs = inst.filter((p) => p.id === id)
+    return { recs, rec: recs.find((p) => (dir ? p.scope !== "user" && plug.dirOf(p) === dir : p.scope === "user")) ?? recs[0] }
+  }
+  const instLabel = (p: PluginInst) => (p.scope === "user" ? t("extensions.fromUser") : tilde(p.project ?? "", home))
   const row = "flex items-start gap-3 py-2"
   const short = (v?: string) => (v && /^[0-9a-f]{12}/.test(v) ? v.slice(0, 7) : v) // empreinte git : 7 caractères suffisent
   const ctx = (s: Skill[]) => s.filter((x) => !x.manual).reduce((n, x) => n + x.chars, 0)
@@ -133,7 +142,6 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
             <div className="pb-2">
               <TabsList className="w-max justify-start">
                 <TabsTrigger value="active">{t("extensions.tabActive")}</TabsTrigger>
-                <TabsTrigger value="install">{t("extensions.tabInstall")}</TabsTrigger>
                 <TabsTrigger value="editor">{t("extensions.tabEditor")}</TabsTrigger>
               </TabsList>
             </div>
@@ -160,8 +168,8 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
           <h3 className={sect}>
             {t("extensions.plugins")} ({ids.length})
             <Button size="xs" variant="outline" className="ml-auto" asChild>
-              <Link to={href({ kind: "plugins" })}>
-                <Plug /> {t("extensions.manage")}
+              <Link to="/sauvegarde?cats=plugins">
+                <ArchiveRestore /> {t("extensions.exportImport")}
               </Link>
             </Button>
           </h3>
@@ -172,6 +180,11 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
               const k = src((f) => doc[f]?.[id])
               const [name, market] = id.split("@")
               const missing = !ov.plugins.find((p) => p.id === id)?.installed && !version(id)
+              const { recs, rec } = record(id)
+              const rdir = rec && plug.dirOf(rec)
+              const key = rec ? pluginKey(rec) : id
+              const off = plug.busy === key || rdir === null || rdir === undefined
+              const act = (action: "update" | "uninstall") => rec && plug.run(key, action, rec.id, rec.scope, rdir ?? "")
               return (
                 <li key={id} className={row + " border-b"}>
                   <Switch checked={eff(id) === true} aria-label={t("extensions.toggleOne", { id })} onCheckedChange={(c) => setPlugin(id, c)} className="mt-0.5" />
@@ -183,14 +196,26 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
                     <div className="truncate text-xs text-muted-foreground">
                       {market && "@" + market}{dir && ` · ${why(k)}`}
                       {missing && <span className="ml-2 text-warning">{t("extensions.notInstalled")}</span>}
+                      {(recs.length > 1 || rec?.scope === "project") && <span className="ml-2">{t("extensions.installedIn", { where: recs.map(instLabel).join(", ") })}</span>}
                     </div>
                   </div>
+                  {rec && (
+                    <div className="flex shrink-0 gap-0.5">
+                      <Button size="icon-xs" variant="ghost" disabled={off} title={t("skills.plugins.update")} aria-label={t("extensions.pluginAct", { act: t("skills.plugins.update"), id })} onClick={() => act("update")}>
+                        {plug.busy === key ? <Fan className="animate-spin" /> : <RefreshCw />}
+                      </Button>
+                      <Button size="icon-xs" variant="ghost" disabled={off} title={t("skills.plugins.uninstall")} aria-label={t("extensions.pluginAct", { act: t("skills.plugins.uninstall"), id })} onClick={() => act("uninstall")}>
+                        <Trash2 />
+                      </Button>
+                    </div>
+                  )}
                 </li>
               )
             })}
           </ul>
           {!ids.length && <p className="py-3 text-sm text-muted-foreground">{t("extensions.noPlugins")}</p>}
-          <p className="mt-2 text-xs text-muted-foreground">{t("extensions.sessionNote")}</p>
+          <p className="mt-2 mb-4 text-xs text-muted-foreground">{t("extensions.sessionNote")}</p>
+          <PluginsCatalog projects={ov.projects} home={home} scope={here} installed={inst} onChange={reload} />
         </section>
 
 
@@ -214,6 +239,8 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
             ))}
           </div>
           {!skillsHere.length && <p className="py-3 text-sm text-muted-foreground">{t("extensions.noSkills")}</p>}
+          <h4 className="mt-5 mb-2 text-sm font-medium">{t("extensions.skillsAvailable")}</h4>
+          <SkillsNpxPanel projects={ov.projects} home={home} onChange={reload} fixed={here} />
         </section>
 
 
@@ -269,13 +296,6 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
           {!mcpHere.length && !others.length && <p className="py-3 text-sm text-muted-foreground">{t("extensions.noMcp")}</p>}
 
         </section>
-            </div>
-          </ScrollArea>
-        </TabsContent>
-        <TabsContent value="install" className="min-h-0 flex-1">
-          <ScrollArea className="h-full">
-            <div className="mx-auto max-w-page px-3 py-4 md:px-6">
-              <PluginsPanel inline projects={ov.projects} home={home} onChange={reload} />
             </div>
           </ScrollArea>
         </TabsContent>

@@ -45,7 +45,6 @@ const Conversation = lazy(() => import("@/components/Conversation").then((m) => 
 const Snippets = retryLazy(() => import("@/components/Snippets").then((m) => ({ default: m.Snippets })))
 const Extensions = retryLazy(() => import("@/components/Extensions").then((m) => ({ default: m.Extensions })))
 const Backup = retryLazy(() => import("@/components/Backup").then((m) => ({ default: m.Backup })))
-const Plugins = retryLazy(() => import("@/components/Plugins").then((m) => ({ default: m.Plugins })))
 const TeamRun = retryLazy(() => import("@/components/teams/TeamRun").then((m) => ({ default: m.TeamRun })))
 const TeamsPage = retryLazy(() => import("@/components/teams/TeamsPage").then((m) => ({ default: m.TeamsPage })))
 const Config = retryLazy(() => import("@/components/Config").then((m) => ({ default: m.Config })))
@@ -310,7 +309,6 @@ function Shell() {
     memory: t("shell.app.title.memory"),
     config: t("shell.app.title.config"),
     extensions: t("shell.app.title.extensions"),
-    plugins: t("shell.app.title.plugins"),
     backup: t("shell.app.title.backup"),
     teams: t("teams.title"),
     team: t("teams.title"),
@@ -337,8 +335,6 @@ function Shell() {
           ? t("shell.app.sub.skills")
           : route.kind === "extensions"
           ? t("shell.app.sub.extensions")
-          : route.kind === "plugins"
-          ? t("shell.app.sub.plugins")
           : route.kind === "backup"
           ? t("shell.app.sub.backup")
           : route.kind === "config"
@@ -426,8 +422,6 @@ function Shell() {
             <TeamRun key={route.name} name={route.name} />
           ) : route.kind === "extensions" ? (
             <Extensions home={home} onAsk={setAsk} />
-          ) : route.kind === "plugins" ? (
-            <Plugins home={home} />
           ) : route.kind === "backup" ? (
             <Backup home={home} />
           ) : route.kind === "config" ? (

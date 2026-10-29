@@ -296,9 +296,9 @@ describe("tirets insécables", () => {
 
 describe("routes plugins et sauvegarde", () => {
   it("parse et href sont inverses", () => {
-    expect(parse("/plugins")).toEqual({ kind: "plugins" })
+    expect(parse("/plugins")).toEqual({ kind: "extensions" })
+    expect(href({ kind: "extensions" })).toBe("/extensions")
     expect(parse("/sauvegarde")).toEqual({ kind: "backup" })
-    expect(href({ kind: "plugins" })).toBe("/plugins")
     expect(href({ kind: "backup" })).toBe("/sauvegarde")
   })
 })

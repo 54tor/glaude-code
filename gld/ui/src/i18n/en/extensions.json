@@ -17,7 +17,6 @@
     "off": "off",
     "unset": "unset",
     "notInstalled": "not installed",
-    "manage": "Install or update",
     "exportImport": "Export / import",
     "noPlugins": "No plugins.",
     "noSkills": "No skills.",
@@ -40,8 +39,7 @@
     "mcpPlugin": "from a plugin: set with the plugin",
     "mcpAccount": "claude.ai account connector: set in claude.ai",
     "mcpOther": "other source",
-    "tabActive": "Active",
-    "tabInstall": "Install and marketplaces",
+    "tabActive": "Installed and available",
     "editor": "Skill editor",
     "tabEditor": "Skill editor",
     "viewing": "Settings shown for",
@@ -58,6 +56,9 @@
     "byDefault": "default",
     "toggleOne": "Turn {{id}} on or off",
     "tokens": "≈ {{n}} tokens in context",
-    "pluginManaged": "Managed with the plugin"
+    "pluginManaged": "Managed with the plugin",
+    "installedIn": "installed: {{where}}",
+    "pluginAct": "{{act}} {{id}}",
+    "skillsAvailable": "Find skills (npx skills)"
   }
 }
