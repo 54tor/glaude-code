@@ -2,6 +2,7 @@
   "backup": {
     "export": "Exporter",
     "exportHint": "Choisissez ce que l'archive doit contenir.",
+    "secretsHint": "Les hooks et commandes sont exportés tels quels : relisez-les avant de partager l'archive.",
     "download": "Télécharger",
     "import": "Importer",
     "importHint": "Choisissez une archive : rien n'est écrit avant que vous ne validiez.",

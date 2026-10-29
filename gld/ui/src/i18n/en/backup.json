@@ -2,6 +2,7 @@
   "backup": {
     "export": "Export",
     "exportHint": "Choose what the archive should contain.",
+    "secretsHint": "Hooks and commands are exported as-is: review them before sharing the archive.",
     "download": "Download",
     "import": "Import",
     "importHint": "Pick an archive: nothing is written until you confirm.",

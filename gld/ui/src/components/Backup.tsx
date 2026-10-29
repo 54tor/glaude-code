@@ -71,6 +71,7 @@ export function Backup({ home }: { home: string }) {
       <section className="space-y-3">
         <h2 className="text-base font-medium">{t("backup.export")}</h2>
         <p className="text-sm text-muted-foreground">{t("backup.exportHint")}</p>
+        <p className="text-sm text-muted-foreground">{t("backup.secretsHint")}</p>
         <div className="flex flex-wrap gap-4">
           {CATS.map((c) => (
             <label key={c} className="flex items-center gap-2 text-sm">

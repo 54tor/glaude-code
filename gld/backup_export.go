@@ -39,6 +39,7 @@ func exportBackup(cats []string) ([]byte, int, error) {
 				o.del(k)
 			}
 		}
+		dropSecrets(o)
 		if len(o.keys) > 0 {
 			files["home/settings.json"] = []byte(formatOrdered(o))
 		}
@@ -121,6 +122,13 @@ func exportMcp() ([]byte, error) {
 							stripped[name] = append(stripped[name], k)
 						}
 					}
+					dropSecrets(o)
+					for _, k := range []string{"args", "url"} {
+						if hasSecretString(o.m[k]) {
+							o.del(k)
+							stripped[name] = append(stripped[name], k)
+						}
+					}
 					servers.set(name, o)
 				}
 			}
@@ -130,4 +138,33 @@ func exportMcp() ([]byte, error) {
 		Servers  *omap               `json:"servers"`
 		Stripped map[string][]string `json:"stripped"`
 	}{servers, stripped})
+}
+
+// dropSecrets retire à toute profondeur les clés dont le nom ressemble à un secret.
+func dropSecrets(v any) {
+	switch x := v.(type) {
+	case *omap:
+		for _, k := range slices.Clone(x.keys) {
+			if secretKey.MatchString(k) {
+				x.del(k)
+			} else {
+				dropSecrets(x.m[k])
+			}
+		}
+	case []any:
+		for _, e := range x {
+			dropSecrets(e)
+		}
+	}
+}
+
+// hasSecretString : une chaîne (ou un élément de liste) qui ressemble à un secret, p. ex. « --api-key » ou « ?token=… ».
+func hasSecretString(v any) bool {
+	switch x := v.(type) {
+	case string:
+		return secretKey.MatchString(x)
+	case []any:
+		return slices.ContainsFunc(x, hasSecretString)
+	}
+	return false
 }
