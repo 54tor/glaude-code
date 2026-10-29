@@ -72,7 +72,7 @@ describe("FileTree", () => {
 
   it("création à la racine via la poignée exposée : flux de création existant", async () => {
     const spy = tree()
-    const fsNew = vi.spyOn(api, "fsNew").mockResolvedValue({ status: 200, ok: true, body: { ok: true } })
+    const fsNew = vi.spyOn(api, "fsNew").mockResolvedValue(undefined)
     const actions: { current: TreeActions | null } = { current: null }
     mount({ canWrite: true, actionsRef: actions })
     await screen.findByText("src")

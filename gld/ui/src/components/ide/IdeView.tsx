@@ -2,7 +2,8 @@ import { Suspense, useEffect, useReducer, useRef, useState, type KeyboardEvent }
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { cn } from "cn"
-import { api, type FsRes } from "@/lib/api"
+import { api, type FsFile } from "@/lib/api"
+import { ApiError } from "@/lib/apiError"
 import { useCan } from "@/lib/auth"
 import { useLocal } from "@/hooks/useLocal"
 import { retryLazy } from "@/lib/retryLazy"
@@ -29,6 +30,9 @@ import { commands, type CmdCtx, type EditorHandle } from "./commands"
 import { useViewPrefs } from "./useViewPrefs"
 import { MenuBar } from "./MenuBar"
 import { WorkspaceStatus } from "./StatusBar"
+
+// Lecture d'un fichier : le contenu, ou l'erreur levée par l'API (jamais les deux).
+type Read = { file: FsFile; err?: undefined } | { file?: undefined; err: unknown }
 
 const CodeEditor = retryLazy(() => import("./CodeEditor"))
 
@@ -83,34 +87,36 @@ function Workspace({ dir }: { dir: string }) {
 
   const tabOf = (p: string) => ide.tabs.find((x) => x.path === p)
   const active = tabOf(ide.active)
-  const fail = (r: FsRes) => toast.error(r.body.error || t("shell.act.failed"))
+  const fail = (e: unknown) => toast.error(e instanceof ApiError ? e.message : t("shell.act.failed"))
+  const read = (path: string): Promise<Read> => api.fsFile(dir, path).then((file) => ({ file }), (err) => ({ err }))
 
   const open = async (path: string) => {
     if (tabOf(path)) return dispatch({ t: "focus", path })
-    show(path, await api.fsFile(dir, path))
+    show(path, await read(path))
   }
   const dropped = (path: string) => toast(t("ide.drafts.dropped", { name: nameOf(path) }), { id: "ide-draft:" + path })
   // quiet : restauration au chargement, tout fichier devenu illisible (supprimé, refusé, panne) est sauté sans message.
   // draft : brouillon de la session, repris seulement si le disque n'a pas bougé depuis (même etag).
-  const show = (path: string, r: Awaited<ReturnType<typeof api.fsFile>>, quiet?: boolean, draft?: Draft) => {
-    const c = r.ok ? r.body.content : undefined
+  const show = (path: string, r: Read, quiet?: boolean, draft?: Draft) => {
+    const c = r.file?.content
+    const status = r.err instanceof ApiError ? r.err.status : 0
     const mixed = c !== undefined && mixedEol(c)
     const readOnly = mixed || !can("fs_write")
-    const keep = !!draft && c !== undefined && !readOnly && draft.baseEtag === (r.body.etag ?? "")
+    const keep = !!draft && c !== undefined && !readOnly && draft.baseEtag === (r.file?.etag ?? "")
     if (draft && !keep) dropped(path)
-    if (r.status === 413 || r.status === 415)
-      return dispatch({ t: "open", tab: { path, content: "", saved: "", etag: "", readOnly: true, notice: r.status === 413 ? "tooBig" : "binary" } })
-    if (c === undefined) return quiet ? undefined : fail(r)
-    dispatch({ t: "open", tab: { path, content: keep ? draft.content : c, saved: c, etag: r.body.etag ?? "", readOnly, ...(mixed && { notice: "mixedEol" as const }) } })
+    if (status === 413 || status === 415)
+      return dispatch({ t: "open", tab: { path, content: "", saved: "", etag: "", readOnly: true, notice: status === 413 ? "tooBig" : "binary" } })
+    if (c === undefined) return quiet ? undefined : fail(r.err)
+    dispatch({ t: "open", tab: { path, content: keep ? draft.content : c, saved: c, etag: r.file?.etag ?? "", readOnly, ...(mixed && { notice: "mixedEol" as const }) } })
   }
   // Lectures en parallèle, onglets posés dans l'ordre mémorisé ; aucun focus pris, le premier rendu n'attend pas.
   useEffect(() => {
     const { paths, active } = parseTabs(savedTabs)
     const drafts = readDrafts(dir)
     let gone = false
-    Promise.all(paths.map((p) => api.fsFile(dir, p).catch(() => null))).then((rs) => {
+    Promise.all(paths.map(read)).then((rs) => {
       if (gone) return
-      rs.forEach((r, i) => (r ? show(paths[i], r, true, drafts[paths[i]]) : drafts[paths[i]] && dropped(paths[i])))
+      rs.forEach((r, i) => show(paths[i], r, true, drafts[paths[i]]))
       if (active) dispatch({ t: "focus", path: active })
       setRestored(true)
     })
@@ -125,11 +131,11 @@ function Workspace({ dir }: { dir: string }) {
   }, [restored, tabsSnap, savedTabs, setSavedTabs])
   useDrafts(dir, ide.tabs, restored)
   // force : « Recharger » de l'utilisateur, qui écarte exprès ses modifications.
-  const reload = async (path: string, pre?: Awaited<ReturnType<typeof api.fsFile>>, force?: boolean) => {
+  const reload = async (path: string, pre?: Read, force?: boolean) => {
     setDiff((d) => (d?.path === path ? null : d))
-    const r = pre ?? (await api.fsFile(dir, path))
-    if (r.ok && r.body.content !== undefined) dispatch({ t: "reloaded", path, content: r.body.content, etag: r.body.etag ?? "", force, ...(mixedEol(r.body.content) && { notice: "mixedEol" as const }) })
-    else fail(r)
+    const r = pre ?? (await read(path))
+    if (r.file) dispatch({ t: "reloaded", path, content: r.file.content, etag: r.file.etag, force, ...(mixedEol(r.file.content) && { notice: "mixedEol" as const }) })
+    else fail(r.err)
   }
   // force : écraser la version du disque ; create : recréer un fichier supprimé (etag vide).
   // Une sauvegarde à la fois par fichier : la suivante partirait avec l'ancien etag et lèverait un faux conflit contre la nôtre.
@@ -148,31 +154,35 @@ function Workspace({ dir }: { dir: string }) {
     let touched = false
     try {
       for (;;) {
-        const r = await api.fsSave(dir, path, content, etag, force)
-        if (!r.ok) {
-          if (r.status !== 409) return fail(r)
-          if (r.body.deleted) return dispatch({ t: "disk", path, kind: "deleted" })
+        let r: { etag: string } | undefined
+        try {
+          r = await api.fsSave(dir, path, content, etag, force)
+        } catch (e) {
+          if (!(e instanceof ApiError) || e.status !== 409) return fail(e)
+          if (e.code === "deleted") return dispatch({ t: "disk", path, kind: "deleted" })
+        }
+        if (!r) {
           // Décision sur l'onglet tel qu'il est maintenant : une frappe pendant l'aller-retour le rend sale.
-          const d = await api.fsFile(dir, path)
+          const d = await read(path)
           const now = live.current.tabs.find((x) => x.path === path)
           if (!now) return
-          const disk = d.ok ? d.body.content : undefined
+          const disk = d.file?.content
           // Simple touch ou réécriture identique : on adopte le nouvel etag et on réessaie une fois.
-          if (!touched && disk === now.saved && d.body.etag) {
+          if (!touched && disk === now.saved && d.file?.etag) {
             touched = true
-            etag = d.body.etag
+            etag = d.file.etag
             continue
           }
           if (!isDirty(now) && disk !== undefined) return reload(path, d)
           return dispatch({ t: "disk", path, kind: "changed", always: true })
         }
-        dispatch({ t: "saved", path, etag: r.body.etag ?? "", content })
+        dispatch({ t: "saved", path, etag: r.etag, content })
         later("git", 1000, git.refresh)
         const next = live.current.tabs.find((x) => x.path === path)
         if (!saving.current.get(path) || !next || next.content === content) return
         saving.current.set(path, false)
         content = next.content
-        etag = r.body.etag ?? ""
+        etag = r.etag
         force = undefined
       }
     } finally {
@@ -185,17 +195,18 @@ function Workspace({ dir }: { dir: string }) {
     if (saving.current.has(path)) return later("f:" + path, 300, () => check(path))
     const n = (seq.current.get(path) ?? 0) + 1
     seq.current.set(path, n)
-    const r = await api.fsFile(dir, path)
+    const r = await read(path)
     if (seq.current.get(path) !== n) return
     if (saving.current.has(path)) return later("f:" + path, 300, () => check(path))
     const tab = live.current.tabs.find((x) => x.path === path)
     if (!tab) return
-    if (r.status === 404) return dispatch({ t: "disk", path, kind: "deleted" })
-    if (r.status === 0 || tab.notice === "tooBig" || tab.notice === "binary") return
+    const status = r.err instanceof ApiError ? r.err.status : 0
+    if (status === 404) return dispatch({ t: "disk", path, kind: "deleted" })
+    if ((r.err && (!(r.err instanceof ApiError) || r.err.net)) || tab.notice === "tooBig" || tab.notice === "binary") return
     // Relecture refusée (fichier devenu trop gros, panne) : l'onglet ne reflète plus le disque, on le dit au lieu de se taire.
-    if (!r.ok || r.body.content === undefined) return dispatch({ t: "disk", path, kind: "changed", always: true })
-    if (r.body.etag === tab.etag) return
-    if (r.body.content === tab.content) return dispatch({ t: "saved", path, etag: r.body.etag ?? "", content: tab.content })
+    if (!r.file) return dispatch({ t: "disk", path, kind: "changed", always: true })
+    if (r.file.etag === tab.etag) return
+    if (r.file.content === tab.content) return dispatch({ t: "saved", path, etag: r.file.etag, content: tab.content })
     if (isDirty(tab)) return dispatch({ t: "disk", path, kind: "changed" })
     await reload(path, r)
     reloaded.current.add(path)
@@ -227,9 +238,9 @@ function Workspace({ dir }: { dir: string }) {
   useTsFeed(dir, index.files, index.state, live)
 
   const showDiff = async (path: string) => {
-    const r = await api.fsFile(dir, path)
-    if (r.ok && r.body.content !== undefined) setDiff({ path, original: r.body.content })
-    else fail(r)
+    const r = await read(path)
+    if (r.file) setDiff({ path, original: r.file.content })
+    else fail(r.err)
   }
   const close = (path: string) => {
     const tab = tabOf(path)

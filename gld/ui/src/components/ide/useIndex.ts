@@ -12,12 +12,12 @@ export function useIndex(dir: string) {
     let off = false
     let timer: ReturnType<typeof setTimeout> | undefined
     const poll = async () => {
-      const r = await api.fsIndex(dir)
+      const r = await api.fsIndex(dir).catch(() => null)
       if (off) return
-      const s = r.body.state
-      if (r.ok && (s === "ready" || s === "partial")) return setIx({ files: r.body.files ?? [], state: s })
+      const s = r?.state
+      if (r && (s === "ready" || s === "partial")) return setIx({ files: r.files ?? [], state: s })
       setIx((p) => (p.state === "building" ? p : { ...p, state: "building" }))
-      timer = setTimeout(poll, r.ok ? 1000 : 5000)
+      timer = setTimeout(poll, r ? 1000 : 5000)
     }
     poll()
     return () => {

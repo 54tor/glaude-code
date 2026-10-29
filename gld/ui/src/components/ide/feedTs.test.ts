@@ -25,7 +25,7 @@ describe("runFeed", () => {
     const ac = new AbortController()
     const files = vi.spyOn(api, "fsFiles").mockImplementation(async (_d, ps) => {
       if (files.mock.calls.length === 2) ac.abort()
-      return { status: 200, ok: true, body: { files: ps.map((path) => ({ path, content: "x" })) } }
+      return { files: ps.map((path) => ({ path, content: "x" })) }
     })
     const sink = vi.fn()
     await runFeed("/p", paths, sink, ac.signal)
@@ -36,7 +36,7 @@ describe("runFeed", () => {
   })
   it("s'arrête au-delà de 5 Mo de contenu cumulé", async () => {
     const big = "x".repeat(2 * 1024 * 1024)
-    vi.spyOn(api, "fsFiles").mockImplementation(async (_d, ps) => ({ status: 200, ok: true, body: { files: ps.map((path) => ({ path, content: big })) } }))
+    vi.spyOn(api, "fsFiles").mockImplementation(async (_d, ps) => ({ files: ps.map((path) => ({ path, content: big })) }))
     const sink = vi.fn()
     await runFeed("/p", ["a.ts", "b.ts", "c.ts", "d.ts"], sink, new AbortController().signal)
     expect(sink).toHaveBeenCalledTimes(2)

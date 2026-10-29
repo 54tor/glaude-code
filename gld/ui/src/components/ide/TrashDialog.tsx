@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { RotateCcw, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { api, type FsTrashItem } from "@/lib/api"
+import { ApiError } from "@/lib/apiError"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -55,9 +56,8 @@ function Body({ dir, canWrite, onRestored }: Omit<Props, "open" | "onClose">) {
       api
         .fsTrash(dir)
         .then(
-          (r) =>
-            alive.current &&
-            setItems(r.ok && r.body.items ? r.body.items : "failed")
+          (r) => alive.current && setItems(r.items),
+          () => alive.current && setItems("failed")
         ),
     [dir]
   )
@@ -77,18 +77,22 @@ function Body({ dir, canWrite, onRestored }: Omit<Props, "open" | "onClose">) {
     }
   }
 
+  const failMsg = (e: unknown) => (e instanceof ApiError ? e.message : t("shell.act.failed"))
   const restore = (x: FsTrashItem) =>
     exclusive(x.id, async () => {
-      const r = await api.fsTrashRestore(dir, x.id)
-      // Le fichier est revenu sur le disque même si la fenêtre a été fermée entre-temps : l'arbre doit le montrer.
-      if (r.ok) onRestored()
-      if (!alive.current) return
-      if (!r.ok)
+      try {
+        await api.fsTrashRestore(dir, x.id)
+      } catch (e) {
+        if (!alive.current) return
         return setError(
-          r.status === 409
+          e instanceof ApiError && e.status === 409
             ? t("ide.trash.exists", { path: x.path })
-            : r.body.error || t("shell.act.failed")
+            : failMsg(e)
         )
+      }
+      // Le fichier est revenu sur le disque même si la fenêtre a été fermée entre-temps : l'arbre doit le montrer.
+      onRestored()
+      if (!alive.current) return
       toast(t("ide.trash.restored", { path: x.path }))
       void load()
     })
@@ -99,9 +103,13 @@ function Body({ dir, canWrite, onRestored }: Omit<Props, "open" | "onClose">) {
       confirm: t("ide.trash.purgeConfirm"),
       run: () =>
         void exclusive(x.id, async () => {
-          const r = await api.fsTrashPurge(dir, x.id)
+          try {
+            await api.fsTrashPurge(dir, x.id)
+          } catch (e) {
+            if (alive.current) setError(failMsg(e))
+            return
+          }
           if (!alive.current) return
-          if (!r.ok) return setError(r.body.error || t("shell.act.failed"))
           void load()
         }),
     })

@@ -2,15 +2,15 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { setLang } from "@/i18n"
-import { api, type FsRes } from "@/lib/api"
+import { api } from "@/lib/api"
+import { ApiError } from "@/lib/apiError"
 import { TrashDialog } from "./TrashDialog"
 
-const res = (status: number, body: object = {}): FsRes => ({ status, ok: status < 300, body })
 const items = [
   { id: "2", path: "src/b.ts", mtime: 1_700_000_100 },
   { id: "1", path: "a.txt", mtime: 1_700_000_000 },
 ]
-const list = () => vi.spyOn(api, "fsTrash").mockResolvedValue({ status: 200, ok: true, body: { items } })
+const list = () => vi.spyOn(api, "fsTrash").mockResolvedValue({ items })
 const mount = (canWrite = true, onRestored = vi.fn()) => render(<TrashDialog dir="/p" open onClose={() => {}} canWrite={canWrite} onRestored={onRestored} />)
 
 beforeEach(() => setLang("fr"))
@@ -27,20 +27,20 @@ describe("TrashDialog", () => {
   })
 
   it("état vide", async () => {
-    vi.spyOn(api, "fsTrash").mockResolvedValue({ status: 200, ok: true, body: { items: [] } })
+    vi.spyOn(api, "fsTrash").mockResolvedValue({ items: [] })
     mount()
     expect(await screen.findByText("La corbeille est vide.")).toBeTruthy()
   })
 
   it("état d'erreur", async () => {
-    vi.spyOn(api, "fsTrash").mockResolvedValue(res(500, { error: "boom" }))
+    vi.spyOn(api, "fsTrash").mockRejectedValue(new ApiError(500, "internal", "boom"))
     mount()
     expect(await screen.findByRole("alert")).toBeTruthy()
   })
 
   it("restaurer : appel exact, liste relue, arbre actualisé", async () => {
     const spy = list()
-    const restore = vi.spyOn(api, "fsTrashRestore").mockResolvedValue(res(200, { ok: true }))
+    const restore = vi.spyOn(api, "fsTrashRestore").mockResolvedValue(undefined)
     const onRestored = vi.fn()
     mount(true, onRestored)
     await screen.findByText("a.txt")
@@ -52,7 +52,7 @@ describe("TrashDialog", () => {
 
   it("restaurer en 409 : message « existe déjà »", async () => {
     list()
-    vi.spyOn(api, "fsTrashRestore").mockResolvedValue(res(409, { error: "exists" }))
+    vi.spyOn(api, "fsTrashRestore").mockRejectedValue(new ApiError(409, "exists", "exists"))
     const onRestored = vi.fn()
     mount(true, onRestored)
     await screen.findByText("a.txt")
@@ -63,7 +63,7 @@ describe("TrashDialog", () => {
 
   it("purger demande confirmation", async () => {
     list()
-    const purge = vi.spyOn(api, "fsTrashPurge").mockResolvedValue(res(200, { ok: true }))
+    const purge = vi.spyOn(api, "fsTrashPurge").mockResolvedValue(undefined)
     mount()
     await screen.findByText("a.txt")
     fireEvent.click(screen.getByRole("button", { name: "Supprimer définitivement a.txt" }))
@@ -86,8 +86,8 @@ describe("TrashDialog", () => {
   })
   it("une requête à la fois : pendant une restauration, restaurer et purger sont désactivés", async () => {
     list()
-    let done!: (v: FsRes) => void
-    const restore = vi.spyOn(api, "fsTrashRestore").mockReturnValue(new Promise<FsRes>((r) => (done = r)))
+    let done!: (v: void) => void
+    const restore = vi.spyOn(api, "fsTrashRestore").mockReturnValue(new Promise<void>((r) => (done = r)))
     const purge = vi.spyOn(api, "fsTrashPurge")
     mount()
     await screen.findByText("a.txt")
@@ -99,13 +99,13 @@ describe("TrashDialog", () => {
     fireEvent.click(p)
     expect(restore).toHaveBeenCalledTimes(1)
     expect(purge).not.toHaveBeenCalled()
-    await act(async () => done(res(200, { ok: true })))
+    await act(async () => done())
     await waitFor(() => expect(p.disabled).toBe(false))
   })
   it("une requête à la fois : pendant une purge, restaurer et purger sont désactivés", async () => {
     list()
-    let done!: (v: FsRes) => void
-    const purge = vi.spyOn(api, "fsTrashPurge").mockReturnValue(new Promise<FsRes>((r) => (done = r)))
+    let done!: (v: void) => void
+    const purge = vi.spyOn(api, "fsTrashPurge").mockReturnValue(new Promise<void>((r) => (done = r)))
     const restore = vi.spyOn(api, "fsTrashRestore")
     mount()
     await screen.findByText("a.txt")
@@ -116,13 +116,13 @@ describe("TrashDialog", () => {
     await waitFor(() => expect(r.disabled).toBe(true))
     fireEvent.click(r)
     expect(restore).not.toHaveBeenCalled()
-    await act(async () => done(res(200, { ok: true })))
+    await act(async () => done())
     await waitFor(() => expect(r.disabled).toBe(false))
   })
   it("fenêtre fermée pendant une restauration : l'arbre est quand même actualisé, une seule fois", async () => {
     list()
-    let done!: (v: FsRes) => void
-    vi.spyOn(api, "fsTrashRestore").mockReturnValue(new Promise<FsRes>((r) => (done = r)))
+    let done!: (v: void) => void
+    vi.spyOn(api, "fsTrashRestore").mockReturnValue(new Promise<void>((r) => (done = r)))
     const err = vi.spyOn(console, "error")
     const onRestored = vi.fn()
     const { rerender } = mount(true, onRestored)
@@ -130,7 +130,7 @@ describe("TrashDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Restaurer a.txt" }))
     rerender(<TrashDialog dir="/p" open={false} onClose={() => {}} canWrite onRestored={onRestored} />)
     await waitFor(() => expect(screen.queryByText("a.txt")).toBeNull())
-    await act(async () => done(res(200, { ok: true })))
+    await act(async () => done())
     expect(onRestored).toHaveBeenCalledTimes(1)
     expect(err).not.toHaveBeenCalled()
   })

@@ -15,7 +15,7 @@ test("liste le dossier, déplie un sous-dossier et lit un fichier", async () => 
     entries: p === "" ? [{ name: "src", type: "dir", size: 0, mtime: 0 }, { name: "a.txt", type: "file", size: 1, mtime: 0 }] : [{ name: "b.go", type: "file", size: 1, mtime: 0 }],
     truncated: false,
   }))
-  vi.spyOn(api, "fsFile").mockResolvedValue({ status: 200, ok: true, body: { content: "bonjour" } })
+  vi.spyOn(api, "fsFile").mockResolvedValue({ content: "bonjour", etag: "e", size: 7, mtime: 0 })
   render(<GuestFiles dir="/p" />)
   fireEvent.click(await screen.findByText("src"))
   expect(await screen.findByText("b.go")).toBeTruthy()

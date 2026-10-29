@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import { createRef } from "react"
 import { setLang } from "@/i18n"
 import { setAuth } from "@/lib/auth"
-import { api, type FsRes } from "@/lib/api"
+import { api, type FsFile } from "@/lib/api"
 import { IdeView } from "./IdeView"
 import type { EditorHandle, EditorStatus } from "./commands"
 
@@ -248,16 +248,16 @@ describe("DiffView", () => {
 
 // Espace complet avec le vrai CodeEditor (Monaco simulé) : le Ctrl+S de l'éditeur ne doit pas être repris par la racine de l'espace.
 describe("IdeView + CodeEditor : Ctrl+S", () => {
-  const res = <T,>(status: number, body: object): FsRes<T> => ({ status, ok: status < 300, body: body as FsRes<T>["body"] })
+  const f = (b: { content: string; etag: string; size: number; mtime: number }): FsFile => b
   let save: MockInstance<typeof api.fsSave>
   beforeEach(() => {
     setLang("fr")
     localStorage.clear()
     vi.stubGlobal("EventSource", class { close() {} })
-    vi.spyOn(api, "fsIndex").mockResolvedValue(res(200, { state: "ready", files: [] }))
+    vi.spyOn(api, "fsIndex").mockResolvedValue({ state: "ready", files: [] })
     vi.spyOn(api, "fsTree").mockResolvedValue({ entries: ["a.txt", "mix.txt"].map((name) => ({ name, type: "file" as const, size: 1, mtime: 1 })), truncated: false })
-    vi.spyOn(api, "fsFile").mockImplementation(async (_d, p) => res(200, { content: p === "mix.txt" ? "a\r\nb\n" : "x\n", etag: "e1", size: 2, mtime: 1 }))
-    save = vi.spyOn(api, "fsSave").mockResolvedValue(res(200, { ok: true, etag: "e2" }))
+    vi.spyOn(api, "fsFile").mockImplementation(async (_d, p) => f({ content: p === "mix.txt" ? "a\r\nb\n" : "x\n", etag: "e1", size: 2, mtime: 1 }))
+    save = vi.spyOn(api, "fsSave").mockResolvedValue({ etag: "e2" })
   })
   const openEditor = async (name: string) => {
     fireEvent.click(await screen.findByText(name, { selector: "[role=treeitem] span" }))

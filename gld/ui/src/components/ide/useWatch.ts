@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { v1 } from "@/lib/apiError"
 
 export type WatchEvent = { path: string; type: "create" | "write" | "remove" | "rename" | "resync" }
 
@@ -38,7 +39,7 @@ export function useWatch(dir: string, declaredDirs: string[], onEvent: (e: Watch
     let tries = 0
     const connect = (ms: number) => {
       timer = setTimeout(() => {
-        const s = new EventSource(`/fs-watch${query}`)
+        const s = new EventSource(v1(`/fs/watch${query}`))
         es = s
         s.onopen = () => {
           tries = 0

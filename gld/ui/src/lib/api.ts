@@ -173,31 +173,20 @@ async function get<T>(url: string): Promise<T> {
 
 export type FsTrashItem = { id: string; path: string; mtime: number }
 export type FsEntry = { name: string; type: "dir" | "file" | "symlink"; size: number; mtime: number }
-// Réponse d'un appel fs-* : le statut (409, 413, 415…) arrive comme donnée, jamais comme exception ; 0 = réseau.
-export type FsRes<T = object> = { status: number; ok: boolean; body: Partial<T> & { ok?: boolean; error?: string } }
-async function fsCall<T = object>(url: string, body?: unknown): Promise<FsRes<T>> {
-  try {
-    const r = await authFetch(url, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
-    const b = (await r.json().catch(() => ({}))) as FsRes<T>["body"]
-    return { status: r.status, ok: r.ok && b.ok !== false, body: b }
-  } catch {
-    return { status: 0, ok: false, body: {} }
-  }
-}
-const fsq = (dir: string, path?: string) => `dir=${enc(dir)}${path === undefined ? "" : `&path=${enc(path)}`}`
+export type FsFile = { content: string; etag: string; size: number; mtime: number }
 
 export const api = {
-  fsTree: (dir: string, path: string) => get<{ entries: FsEntry[]; truncated: boolean }>(`/fs-tree?${fsq(dir, path)}`),
-  fsFile: (dir: string, path: string) => fsCall<{ content: string; etag: string; size: number; mtime: number }>(`/fs-file?${fsq(dir, path)}`),
-  fsSave: (dir: string, path: string, content: string, etag: string, force?: boolean) => fsCall<{ etag: string; conflict: boolean; deleted: boolean }>("/fs-save", { dir, path, content, etag, force }),
-  fsNew: (dir: string, path: string, kind: "file" | "dir") => fsCall("/fs-new", { dir, path, kind }),
-  fsRename: (dir: string, from: string, to: string) => fsCall("/fs-rename", { dir, from, to }),
-  fsRm: (dir: string, path: string) => fsCall("/fs-rm", { dir, path }),
-  fsTrash: (dir: string) => fsCall<{ items: FsTrashItem[] }>(`/fs-trash?${fsq(dir)}`),
-  fsTrashRestore: (dir: string, id: string) => fsCall("/fs-trash-restore", { dir, id }),
-  fsTrashPurge: (dir: string, id: string) => fsCall("/fs-trash-purge", { dir, id }),
-  fsIndex: (dir: string) => fsCall<{ state: string; files: { path: string; size: number; mtime: number }[] }>(`/fs-index?${fsq(dir)}`),
-  fsFiles: (dir: string, paths: string[]) => fsCall<{ files: { path: string; content: string }[] }>("/fs-files", { dir, paths }),
+  fsTree: (dir: string, path: string) => http.get<{ entries: FsEntry[]; truncated: boolean }>(`/fs/tree${qs({ dir, path })}`),
+  fsFile: (dir: string, path: string) => http.get<FsFile>(`/fs/entries/content${qs({ dir, path })}`),
+  fsSave: (dir: string, path: string, content: string, etag: string, force?: boolean) => http.put<{ etag: string }>(`/fs/entries/content${qs({ dir, path })}`, { content, etag, force }),
+  fsNew: (dir: string, path: string, kind: "file" | "dir") => http.post(`/fs/entries${qs({ dir })}`, { path, kind }),
+  fsRename: (dir: string, from: string, to: string) => http.patch(`/fs/entries${qs({ dir })}`, { from, to }),
+  fsRm: (dir: string, path: string) => http.del(`/fs/entries${qs({ dir, item: path })}`),
+  fsTrash: (dir: string) => http.get<{ items: FsTrashItem[] }>(`/fs/trash${qs({ dir })}`),
+  fsTrashRestore: (dir: string, id: string) => http.patch(`/fs/trash/${seg(id)}${qs({ dir })}`, { trashed: false }),
+  fsTrashPurge: (dir: string, id: string) => http.del(`/fs/trash${qs({ dir, item: id })}`),
+  fsIndex: (dir: string) => http.get<{ state: string; files: { path: string; size: number; mtime: number }[] }>(`/fs/index${qs({ dir })}`),
+  fsFiles: (dir: string, paths: string[]) => http.post<{ files: { path: string; content: string }[] }>(`/fs/files${qs({ dir })}`, { paths }),
   data: () => http.get<Data>("/state"),
   banAlerts: (after: number) =>
     get<{ ok: boolean; cursor: number; bans: { at: number; ip: string }[]; pairings: { at: number; ip: string }[] }>(`/auth/alerts?after=${after}`),

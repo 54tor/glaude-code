@@ -89,7 +89,7 @@ describe("TreeToolbar", () => {
   })
 
   it("Corbeille ouvre le dialogue de la corbeille", async () => {
-    const trash = vi.spyOn(api, "fsTrash").mockResolvedValue({ status: 200, ok: true, body: { items: [] } })
+    const trash = vi.spyOn(api, "fsTrash").mockResolvedValue({ items: [] })
     render(<TreeToolbar dir="/p" tree={tree()} ctx={ctx()} filter="" onFilter={() => {}} onRestored={() => {}} />)
     fireEvent.click(btn("Corbeille"))
     expect(await screen.findByText("La corbeille est vide.")).toBeTruthy()

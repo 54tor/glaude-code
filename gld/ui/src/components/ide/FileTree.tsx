@@ -4,7 +4,8 @@ import { ChevronRight, File, FilePlus, Folder, FolderPlus, Link2, Pencil, Trash2
 import { toast } from "sonner"
 import { cn } from "cn"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
-import { api, type FsEntry, type FsRes } from "@/lib/api"
+import { api, type FsEntry } from "@/lib/api"
+import { ApiError } from "@/lib/apiError"
 import { Confirm, type Ask } from "@/components/Confirm"
 import { Prompt, type Ask as PromptAsk } from "@/components/Prompt"
 import { tone } from "../GitChanges"
@@ -32,7 +33,15 @@ export function FileTree({ dir, tree, canWrite, selected, marks, dirs, filter = 
   const [confirm, setConfirm] = useState<Ask | null>(null)
 
   // Échec : le message du serveur en toast ; le dialogue reste ouvert.
-  const done = (r: FsRes): boolean => (r.ok ? true : (toast.error(r.body.error || t("shell.act.failed")), false))
+  const done = async (call: Promise<unknown>): Promise<boolean> => {
+    try {
+      await call
+      return true
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : t("shell.act.failed"))
+      return false
+    }
+  }
   const onAction = (a: TreeAction, r: TreeTarget) => {
     const parent = r.path.includes("/") ? r.path.slice(0, r.path.lastIndexOf("/")) : ""
     if (a === "newFile" || a === "newDir") {
@@ -43,7 +52,7 @@ export function FileTree({ dir, tree, canWrite, selected, marks, dirs, filter = 
         placeholder: t("ide.ask.name"),
         confirm: t("ide.ask.confirm"),
         run: async (name) => {
-          if (!done(await api.fsNew(dir, join(r.path, name.trim()), kind))) return false
+          if (!(await done(api.fsNew(dir, join(r.path, name.trim()), kind)))) return false
           // La racine ("") est toujours affichée : on la relit sans l'ajouter aux dossiers dépliés.
           if (r.path === "" || tree.open.has(r.path)) tree.refresh(r.path)
           else tree.setOpen(r.path, true)
@@ -58,7 +67,7 @@ export function FileTree({ dir, tree, canWrite, selected, marks, dirs, filter = 
         confirm: t("ide.ask.confirm"),
         run: async (name) => {
           const to = join(parent, name.trim())
-          if (!done(await api.fsRename(dir, r.path, to))) return false
+          if (!(await done(api.fsRename(dir, r.path, to)))) return false
           tree.refresh(parent)
           onRenamed?.(r.path, to)
           return true
@@ -69,7 +78,7 @@ export function FileTree({ dir, tree, canWrite, selected, marks, dirs, filter = 
       body: t("ide.ask.deleteBody"),
       confirm: t("ide.ask.deleteConfirm"),
       run: async () => {
-        if (done(await api.fsRm(dir, r.path))) tree.refresh(parent)
+        if (await done(api.fsRm(dir, r.path))) tree.refresh(parent)
       },
     })
   }

@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { setLang } from "@/i18n"
-import { api, type FsRes } from "@/lib/api"
+import { api, type FsFile } from "@/lib/api"
 import type { EditorStatus } from "./commands"
 import { IdeView } from "./IdeView"
 
@@ -26,15 +26,15 @@ vi.mock("./CodeEditor", async () => {
   return { default: Editor, setTsLib: () => {}, clearTsLibs: () => {} }
 })
 
-const res = <T,>(status: number, body: object): FsRes<T> => ({ status, ok: status < 300, body: body as FsRes<T>["body"] })
+const f = (b: FsFile): FsFile => b
 const st = (line: number): EditorStatus => ({ line, col: 1, selected: 0, eol: "LF", language: "plaintext", indent: "spaces:2", readOnly: false })
 
 beforeEach(() => {
   setLang("fr")
   localStorage.clear()
-  vi.spyOn(api, "fsIndex").mockResolvedValue(res(200, { state: "ready", files: [] }))
+  vi.spyOn(api, "fsIndex").mockResolvedValue({ state: "ready", files: [] })
   vi.spyOn(api, "fsTree").mockResolvedValue({ entries: [{ name: "a.txt", type: "file", size: 1, mtime: 1 }], truncated: false })
-  vi.spyOn(api, "fsFile").mockResolvedValue(res(200, { content: "x", etag: "e1", size: 1, mtime: 1 }))
+  vi.spyOn(api, "fsFile").mockResolvedValue(f({ content: "x", etag: "e1", size: 1, mtime: 1 }))
 })
 afterEach(() => {
   cleanup()

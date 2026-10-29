@@ -36,9 +36,9 @@ export async function runFeed(dir: string, paths: string[], sink: (path: string,
   let total = 0
   for (let i = 0; i < paths.length; i += BATCH) {
     if (signal.aborted) return
-    const r = await api.fsFiles(dir, paths.slice(i, i + BATCH))
-    if (signal.aborted || !r.ok) return
-    for (const f of r.body.files ?? []) {
+    const r = await api.fsFiles(dir, paths.slice(i, i + BATCH)).catch(() => null)
+    if (signal.aborted || !r) return
+    for (const f of r.files ?? []) {
       total += f.content.length
       if (total > MAX_TOTAL) return
       sink(f.path, f.content)

@@ -3,8 +3,9 @@ import { useTranslation } from "react-i18next"
 import { ChevronRight, File, Folder, LoaderPinwheel } from "lucide-react"
 import { cn } from "cn"
 import { api, type FsEntry } from "@/lib/api"
+import { ApiError } from "@/lib/apiError"
 
-// Dossier du partage en lecture seule (/fs-tree, /fs-file) : le serveur impose le dossier et refuse les fichiers secrets.
+// Dossier du partage en lecture seule (/v1/fs/tree, /v1/fs/entries/content) : le serveur impose le dossier et refuse les fichiers secrets.
 type Listing = { entries: FsEntry[]; truncated: boolean } | "loading" | "failed"
 const join = (p: string, n: string) => (p ? p + "/" : "") + n
 
@@ -41,8 +42,11 @@ export function GuestFiles({ dir }: { dir: string }) {
     setSel(path)
     const n = ++seq.current
     setView({ path })
-    const r = await api.fsFile(dir, path)
-    if (n === seq.current) setView({ path, ...(r.ok ? { text: r.body.content ?? "" } : { error: r.body.error || t("conversation.guest.fileFailed") }) })
+    const r = await api.fsFile(dir, path).then(
+      (f) => ({ text: f.content }),
+      (e: unknown) => ({ error: e instanceof ApiError ? e.message : t("conversation.guest.fileFailed") })
+    )
+    if (n === seq.current) setView({ path, ...r })
   }
 
   const rows = (path: string, depth: number) => {
