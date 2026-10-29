@@ -56,13 +56,13 @@ var routeRights = map[string]Right{
 	"PUT /v1/memory/files/{key}": RightMemWrite, "PATCH /v1/memory/files/{key}": RightMemWrite, "DELETE /v1/memory/files": RightMemWrite,
 	"POST /v1/memory/drafts": RightMemWrite, "POST /v1/memory/repairs": RightMemWrite, "POST /v1/memory/fixes": RightMemWrite,
 	"POST /v1/memory/token-counts": RightMemWrite, "POST /v1/memory/lints": RightMemWrite, "POST /v1/memory/merges": RightMemWrite,
-	"GET /snippet-list": RightMemRead, "GET /snippet": RightMemRead, "GET /snippets-export": RightMemRead,
+	"GET /v1/snippets": RightMemRead, "GET /v1/snippets/{key}": RightMemRead, "GET /v1/snippets/export": RightMemRead,
 	// /snippet-draft ne fait qu'un brouillon (même appel de modèle que POST /v1/memory/drafts) ; écrire un snippet, c'est écrire
 	// une commande slash de Claude Code (commands/*.md), donc config_write.
-	"POST /snippet-draft": RightMemWrite,
-	"GET /v1/notes":       RightMemRead, "PUT /v1/notes": RightMemWrite,
+	"POST /v1/snippets/drafts": RightMemWrite,
+	"GET /v1/notes":            RightMemRead, "PUT /v1/notes": RightMemWrite,
 	"GET /v1/trash/memory": RightMemRead, "GET /v1/trash/memory/{id}/file": RightMemRead, "PATCH /v1/trash/memory/{id}": RightMemWrite, "DELETE /v1/trash/memory": RightMemWrite,
-	"GET /skills-list": RightMemRead, "GET /skills-find": RightMemRead, "GET /skills-updates": RightMemRead, "GET /skill": RightMemRead, "GET /plugins": RightMemRead, "GET /marketplaces": RightMemRead,
+	"GET /v1/skills": RightMemRead, "GET /v1/skills/catalog": RightMemRead, "GET /v1/skills/updates": RightMemRead, "GET /v1/skills/{key}": RightMemRead, "GET /v1/plugins": RightMemRead, "GET /v1/marketplaces": RightMemRead,
 
 	// Lecture du home et état d'interface par home.
 	"GET /config": RightMemRead, "GET /config-projects": RightMemRead, "GET /config-effective": RightMemRead,
@@ -75,9 +75,11 @@ var routeRights = map[string]Right{
 	"POST /config-edit": RightConfigWrite, "GET /config-raw": RightConfigWrite, "POST /config-raw": RightConfigWrite,
 	"POST /config-restore": RightConfigWrite, "POST /config-perm-import": RightConfigWrite, "POST /config-mcp-status": RightConfigWrite, "POST /project-mcp": RightConfigWrite,
 	"POST /config-perm-explain": RightConfigWrite,
-	"POST /snippet-save":        RightConfigWrite, "POST /snippet-rm": RightConfigWrite, "POST /snippet-rename": RightConfigWrite, "POST /snippets-import": RightConfigWrite,
-	"POST /skill-save": RightConfigWrite, "POST /skill-copy": RightConfigWrite, "POST /skill-rm": RightConfigWrite,
-	"POST /skill-draft": RightConfigWrite, "POST /skill-npx": RightConfigWrite, "POST /plugin-act": RightConfigWrite, "POST /marketplace-act": RightConfigWrite,
+	"PUT /v1/snippets/{key}":    RightConfigWrite, "DELETE /v1/snippets": RightConfigWrite, "PATCH /v1/snippets/{key}": RightConfigWrite, "POST /v1/snippets/imports": RightConfigWrite,
+	"PUT /v1/skills/{key}": RightConfigWrite, "POST /v1/skills/copies": RightConfigWrite, "DELETE /v1/skills": RightConfigWrite,
+	"POST /v1/skills/drafts": RightConfigWrite, "POST /v1/skills/installations": RightConfigWrite,
+	"PUT /v1/plugins/{plugin}": RightConfigWrite, "DELETE /v1/plugins/{plugin}": RightConfigWrite, "PATCH /v1/plugins/{plugin}": RightConfigWrite, "POST /v1/plugins/{plugin}/updates": RightConfigWrite,
+	"POST /v1/marketplaces": RightConfigWrite, "DELETE /v1/marketplaces/{name}": RightConfigWrite, "POST /v1/marketplaces/{name}/updates": RightConfigWrite, "POST /v1/marketplaces/updates": RightConfigWrite,
 
 	// Compte et usages.
 	"GET /account": RightUsageRead, "POST /account-refresh": RightUsageRead,
@@ -114,7 +116,7 @@ var routeRights = map[string]Right{
 // Routes de sondage : ne prolongent pas la session, sans quoi un onglet ouvert ne l'expirerait jamais.
 var passiveRoutes = map[string]bool{
 	"GET /v1/state": true, "GET /v1/state/stamp": true, "GET /v1/sessions/{id}/live": true, "GET /v1/sessions/{id}/state": true,
-	"GET /v1/sessions/{id}/screen": true, "GET /v1/sessions/{id}/conversation": true, "GET /snippet-list": true, "GET /v1/memory/files": true,
+	"GET /v1/sessions/{id}/screen": true, "GET /v1/sessions/{id}/conversation": true, "GET /v1/snippets": true, "GET /v1/memory/files": true,
 	"GET /v1/memory/health": true, "GET /v1/memory/loaded": true, "GET /v1/trash/memory": true, "GET /v1/keepwarm": true,
 	"GET /v1/git/status": true, "GET /team": true, "GET /teams": true, "GET /account": true, "GET /v1/trust/pending": true, "GET /v1/cleanup-warning": true,
 }
@@ -368,7 +370,7 @@ func gateCheck(g *gateInfo, r *http.Request, pat string, need Right) (int, strin
 	}
 	// Les brouillons lisent côté serveur les fichiers désignés par l'appelant et renvoient la sortie du modèle : sans mem_read,
 	// ils contourneraient le droit de lecture.
-	if pat == "POST /v1/memory/drafts" || pat == "POST /skill-draft" {
+	if pat == "POST /v1/memory/drafts" || pat == "POST /v1/skills/drafts" {
 		return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] && m[RightMemRead] })
 	}
 	if pat == "PUT /v1/vgroups" {

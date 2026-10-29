@@ -390,37 +390,38 @@ func TestHTTPChat(t *testing.T) {
 func TestHTTPSnippets(t *testing.T) {
 	h, cfg, _ := web(t)
 	put(t, filepath.Join(cfg, "commands", "revue.md"), "---\ndescription: Revue\n---\nFais une revue", old)
-	if m := status(t, h, "GET", "/snippet-list", "", 200); m["dir"] != filepath.Join(cfg, "commands") || len(m["files"].([]any)) != 1 {
+	if m := status(t, h, "GET", "/v1/snippets", "", 200); m["dir"] != filepath.Join(cfg, "commands") || len(m["files"].([]any)) != 1 {
 		t.Fatalf("liste : %v", m)
 	}
-	if m := status(t, h, "GET", "/snippet?key=u/nouveau.md", "", 200); m["missing"] != true {
+	if m := status(t, h, "GET", "/v1/snippets/u%2Fnouveau.md", "", 200); m["missing"] != true {
 		t.Fatalf("snippet absent : %v", m)
 	}
-	status(t, h, "GET", "/snippet?key=u/../x.md", "", 404)
-	if m := status(t, h, "GET", "/snippet?key=u/revue.md", "", 200); !strings.Contains(m["text"].(string), "Fais une revue") {
+	status(t, h, "GET", "/v1/snippets/u%2F..%2Fx.md", "", 404)
+	if m := status(t, h, "GET", "/v1/snippets/u%2Frevue.md", "", 200); !strings.Contains(m["text"].(string), "Fais une revue") {
 		t.Fatalf("snippet : %v", m)
 	}
-	status(t, h, "POST", "/snippet-save", "{", 400)
-	ok(t, h, "/snippet-save", `{"key":"u/revue.md","text":"x","create":true}`, false, "")
-	ok(t, h, "/snippet-save", `{"key":"u/revue.md","text":"v2"}`, true, "Snippet enregistré")
-	status(t, h, "POST", "/snippet-draft", "{", 400)
-	ok(t, h, "/snippet-draft", `{"model":"gpt","text":"x"}`, false, "")
+	v1err(t, h, "PUT", "/v1/snippets/u%2Frevue.md", "{", 400, "")
+	v1err(t, h, "PUT", "/v1/snippets/u%2Frevue.md", `{"text":"x","create":true}`, 400, "")
+	v1ok(t, h, "PUT", "/v1/snippets/u%2Frevue.md", `{"text":"v2"}`, "Snippet enregistré")
+	v1err(t, h, "POST", "/v1/snippets/drafts", "{", 400, "")
+	v1err(t, h, "POST", "/v1/snippets/drafts", `{"model":"gpt","text":"x"}`, 500, "")
 	t.Setenv("FAKE_DRAFT", `{"result":"`+"```md\\nmis en forme\\n```"+`","total_cost_usd":0.25}`)
-	if m := ok(t, h, "/snippet-draft", `{"model":"haiku","text":"x"}`, true, "Mise en forme prête"); m["text"] != "mis en forme\n" || m["cost"] != 0.25 {
+	if m := v1ok(t, h, "POST", "/v1/snippets/drafts", `{"model":"haiku","text":"x"}`, "Mise en forme prête"); m["text"] != "mis en forme\n" || m["cost"] != 0.25 {
 		t.Fatalf("brouillon : %v", m)
 	}
-	ok(t, h, "/snippet-rename", `{"from":"u/revue.md","to":"u/revue2.md"}`, true, "Snippet renommé")
-	ok(t, h, "/snippet-rename", `{"from":"u/revue.md","to":"u/x.md"}`, false, "")
-	ok(t, h, "/snippet-rename", `{"from":"u/revue2.md","to":"p/a/x.md"}`, false, "")
-	ok(t, h, "/snippet-rename", `{"from":"u/revue2.md","to":"u/revue.md"}`, true, "Snippet renommé")
-	ok(t, h, "/snippet-rm", `{"key":"u/absent.md"}`, false, "")
-	ok(t, h, "/snippet-rm", `{"key":"u/revue.md"}`, true, "Snippet supprimé")
+	v1ok(t, h, "PATCH", "/v1/snippets/u%2Frevue.md", `{"to":"u/revue2.md"}`, "Snippet renommé")
+	v1err(t, h, "PATCH", "/v1/snippets/u%2Frevue.md", `{"to":"u/x.md"}`, 400, "")
+	v1err(t, h, "PATCH", "/v1/snippets/u%2Frevue2.md", `{"to":"p/a/x.md"}`, 400, "")
+	v1ok(t, h, "PATCH", "/v1/snippets/u%2Frevue2.md", `{"to":"u/revue.md"}`, "Snippet renommé")
+	v1err(t, h, "DELETE", "/v1/snippets?item=u/absent.md", "", 409, "")
+	v1err(t, h, "DELETE", "/v1/snippets", "", 400, "")
+	v1ok(t, h, "DELETE", "/v1/snippets?item=u/revue.md", "", "Snippet supprimé")
 
 	// Export et import.
 	put(t, filepath.Join(cfg, "commands", "a.md"), "A", old)
-	status(t, h, "GET", "/snippets-export?scope=../x", "", 400)
+	status(t, h, "GET", "/v1/snippets/export?scope=../x", "", 400)
 	r := httptest.NewRecorder()
-	q := httptest.NewRequest("GET", "/snippets-export", nil)
+	q := httptest.NewRequest("GET", "/v1/snippets/export", nil)
 	q.Host = testHost
 	h.ServeHTTP(r, q)
 	zr, err := zip.NewReader(bytes.NewReader(r.Body.Bytes()), int64(r.Body.Len()))
@@ -429,7 +430,7 @@ func TestHTTPSnippets(t *testing.T) {
 	}
 	put(t, filepath.Join(cfg, "projects", "-p", "x"), "", old) // le dossier -p existe : scope valide
 	r = httptest.NewRecorder()
-	q = httptest.NewRequest("GET", "/snippets-export?scope=-p", nil)
+	q = httptest.NewRequest("GET", "/v1/snippets/export?scope=-p", nil)
 	q.Host = testHost
 	h.ServeHTTP(r, q)
 	if !strings.Contains(r.Header().Get("Content-Disposition"), `filename=commandes-p.zip`) {
@@ -446,14 +447,14 @@ func TestHTTPSnippets(t *testing.T) {
 			fw.Write([]byte(c))
 		}
 		mw.Close()
-		q := httptest.NewRequest("POST", "/snippets-import", &b)
+		q := httptest.NewRequest("POST", "/v1/snippets/imports", &b)
 		q.Host = testHost
 		q.Header.Set("Content-Type", mw.FormDataContentType())
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, q)
 		return w.Code, w.Body.String()
 	}
-	if code, _, _ := call(t, h, "POST", "/snippets-import", "pas du multipart"); code != 400 {
+	if code, _, _ := call(t, h, "POST", "/v1/snippets/imports", "pas du multipart"); code != 400 {
 		t.Fatal("import invalide :", code)
 	}
 	if code, raw := imp("../x", "", nil); code != 400 || !strings.Contains(raw, "scope invalide") {
@@ -462,10 +463,10 @@ func TestHTTPSnippets(t *testing.T) {
 	if code, raw := imp("", "", map[string]string{"a.md": "autre", "b.md": "B"}); code != 200 || !strings.Contains(raw, "1 importé(s), 1 déjà présent(s), laissé(s) tel(s) quel(s) : a.md") {
 		t.Fatal(code, raw)
 	}
-	if code, raw := imp("", "1", map[string]string{"a.md": "remplacé"}); code != 200 || !strings.Contains(raw, `"ok":true,"out":"1 importé(s)"`) {
+	if code, raw := imp("", "1", map[string]string{"a.md": "remplacé"}); code != 200 || !strings.Contains(raw, `{"message":"1 importé(s)"}`) {
 		t.Fatal(code, raw)
 	}
-	if code, raw := imp("", "", map[string]string{"x.txt": "pas une commande"}); code != 200 || !strings.Contains(raw, `"ok":false`) {
+	if code, raw := imp("", "", map[string]string{"x.txt": "pas une commande"}); code != 400 || !strings.Contains(raw, `"error"`) {
 		t.Fatal(code, raw)
 	}
 }

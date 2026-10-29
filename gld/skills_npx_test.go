@@ -249,7 +249,7 @@ func postSkillNpx(t *testing.T, body string) (int, map[string]any) {
 	mux := http.NewServeMux()
 	routesSkills(mux)
 	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, httptest.NewRequest("POST", "/skill-npx", strings.NewReader(body)))
+	mux.ServeHTTP(w, httptest.NewRequest("POST", "/v1/skills/installations", strings.NewReader(body)))
 	var m map[string]any
 	json.Unmarshal(w.Body.Bytes(), &m)
 	return w.Code, m
@@ -265,11 +265,11 @@ func TestRouteSkillNpx(t *testing.T) {
 	if code, _ := postSkillNpx(t, "pas du json"); code != 400 {
 		t.Errorf("corps invalide : %d", code)
 	}
-	if _, m := postSkillNpx(t, `{"Action":"exec","Source":"o/r","Skill":"x","Scope":"user"}`); m["ok"] != false {
+	if _, m := postSkillNpx(t, `{"Action":"exec","Source":"o/r","Skill":"x","Scope":"user"}`); m["error"] == nil {
 		t.Errorf("action inconnue : %v", m)
 	}
 	_, m := postSkillNpx(t, `{"Action":"add","Source":"o/r","Skill":"x","Scope":"user"}`)
-	if m["ok"] != true || m["out"] != "fait" || len(calls) != 1 || !slices.Contains(calls[0], "add") {
+	if m["message"] != "fait" || len(calls) != 1 || !slices.Contains(calls[0], "add") {
 		t.Errorf("add : %v %v", m, calls)
 	}
 }

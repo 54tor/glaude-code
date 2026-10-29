@@ -297,7 +297,7 @@ var updCache struct {
 	lastForce time.Time
 }
 
-const forceMin = 30 * time.Second // /skills-updates?force=1 ne demande que mem_read : sans plancher, il viderait le quota GitHub
+const forceMin = 30 * time.Second // /v1/skills/updates?force=1 ne demande que mem_read : sans plancher, il viderait le quota GitHub
 
 // checkSkillUpdates : l'état de chaque skill du verrou personnel et des verrous de projet, clé = celle de listSkills.
 // Une requête par dépôt, gardée 6 h (5 min après un échec : limite de débit, hors ligne).

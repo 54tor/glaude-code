@@ -148,29 +148,27 @@ func TestHTTPConfigJournalSansValeur(t *testing.T) {
 // Skills par HTTP : création, lecture, copie vers un projet, suppression ; une clé qui sort du dossier est refusée.
 func TestHTTPSkills(t *testing.T) {
 	h, cfg, _ := web(t)
-	status(t, h, "POST", "/skill-save", `{`, 400)
-	ok(t, h, "/skill-save", `{"key":"u/revue","text":"---\nname: revue\ndescription: Relit\n---\nx\n","create":true}`, true, "Enregistré")
-	ok(t, h, "/skill-save", `{"key":"u/../evade","text":"x\n","create":true}`, false, "")
+	status(t, h, "PUT", "/v1/skills/u%2Frevue", `{`, 400)
+	v1ok(t, h, "PUT", "/v1/skills/u%2Frevue", `{"text":"---\nname: revue\ndescription: Relit\n---\nx\n","create":true}`, "Enregistré")
+	v1err(t, h, "PUT", "/v1/skills/u%2F..%2Fevade", `{"text":"x\n","create":true}`, 400, "")
 	if _, err := os.Stat(filepath.Join(cfg, "evade")); err == nil {
 		t.Fatal("skill écrit hors du dossier skills")
 	}
-	_, m, _ := call(t, h, "GET", "/skill?key=u/revue", "")
+	_, m, _ := call(t, h, "GET", "/v1/skills/u%2Frevue", "")
 	if !strings.Contains(m["text"].(string), "Relit") {
 		t.Fatalf("lecture : %v", m)
 	}
-	if _, m, _ := call(t, h, "GET", "/skill?key=u/../../x", ""); m["error"] == nil {
-		t.Fatalf("clé hors dossier lue : %v", m)
-	}
-	_, m, raw := call(t, h, "GET", "/skills-list", "")
+	v1err(t, h, "GET", "/v1/skills/u%2F..%2F..%2Fx", "", 404, "")
+	_, m, raw := call(t, h, "GET", "/v1/skills", "")
 	if !strings.Contains(raw, "revue") || m["projects"] == nil {
 		t.Fatalf("liste : %s", cut(raw, 300))
 	}
-	ok(t, h, "/skill-copy", `{"key":"u/revue","to":"/nulle/part"}`, false, "")
-	status(t, h, "POST", "/skill-copy", `{`, 400)
-	ok(t, h, "/skill-rm", `{"key":"u/revue"}`, true, "corbeille")
-	ok(t, h, "/skill-rm", `{"key":"u/revue"}`, false, "")
-	status(t, h, "POST", "/skill-rm", `{`, 400)
-	status(t, h, "POST", "/skill-draft", `{`, 400)
+	v1err(t, h, "POST", "/v1/skills/copies", `{"key":"u/revue","to":"/nulle/part"}`, 400, "")
+	status(t, h, "POST", "/v1/skills/copies", `{`, 400)
+	v1ok(t, h, "DELETE", "/v1/skills?item=u/revue", "", "corbeille")
+	v1err(t, h, "DELETE", "/v1/skills?item=u/revue", "", 409, "")
+	status(t, h, "DELETE", "/v1/skills", "", 400)
+	status(t, h, "POST", "/v1/skills/drafts", `{`, 400)
 }
 
 // Les corps trop gros sont refusés avant tout appel au modèle.
@@ -239,4 +237,18 @@ func TestHTTPMemoireEcritures(t *testing.T) {
 	if _, m, _ := call(t, h, "GET", "/v1/memory/files?q=corps", ""); m["hits"].(map[string]any)["m/-p/x.md"] == nil {
 		t.Fatalf("recherche : %v", m)
 	}
+}
+
+// Plugins et marketplaces : une opération par méthode ; les entrées invalides sont refusées avant tout appel au CLI.
+func TestHTTPPluginsMarketplaces(t *testing.T) {
+	h, _, _ := web(t)
+	v1err(t, h, "PUT", "/v1/plugins/bad%20id", `{"scope":"user"}`, 422, "")
+	v1err(t, h, "PUT", "/v1/plugins/a@b", `{`, 400, "")
+	v1err(t, h, "PATCH", "/v1/plugins/a@b", `{"scope":"user"}`, 400, "")
+	v1err(t, h, "DELETE", "/v1/plugins/a@b?scope=nope", "", 422, "")
+	v1err(t, h, "POST", "/v1/plugins/a@b/updates", `{"scope":"project"}`, 422, "")
+	v1err(t, h, "POST", "/v1/marketplaces", `{"source":"/etc"}`, 422, "")
+	v1err(t, h, "POST", "/v1/marketplaces", `{`, 400, "")
+	v1err(t, h, "DELETE", "/v1/marketplaces/bad%20name", "", 422, "")
+	v1err(t, h, "POST", "/v1/marketplaces/bad%20name/updates", "", 422, "")
 }

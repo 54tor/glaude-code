@@ -297,14 +297,14 @@ func TestGateRightsMatrix(t *testing.T) {
 		{&wr, "PATCH", "/v1/sessions", false, 403},
 		{&wr, "PUT", "/v1/keepwarm", false, 403},
 		{&wr, "DELETE", "/v1/trash/sessions", false, 403},
-		{&wr, "POST", "/snippet-save", false, 403},
-		{&wr, "POST", "/snippet-rm", false, 403},
-		{&wr, "POST", "/snippet-rename", false, 403},
-		{&wr, "POST", "/snippets-import", false, 403},
-		{&wr, "POST", "/snippet-draft", true, 200},
-		{&r, "GET", "/snippet-list", true, 200},
+		{&wr, "PUT", "/v1/snippets/u%2Fa.md", false, 403},
+		{&wr, "DELETE", "/v1/snippets", false, 403},
+		{&wr, "PATCH", "/v1/snippets/u%2Fa.md", false, 403},
+		{&wr, "POST", "/v1/snippets/imports", false, 403},
+		{&wr, "POST", "/v1/snippets/drafts", true, 200},
+		{&r, "GET", "/v1/snippets", true, 200},
 		{&r, "GET", "/config-perm-suggest", false, 403},
-		{&cw, "POST", "/snippet-save", true, 200},
+		{&cw, "PUT", "/v1/snippets/u%2Fa.md", true, 200},
 		{&sr, "GET", "/config-perm-suggest", true, 200},
 	}
 	for _, c := range cases {
@@ -707,8 +707,8 @@ func TestGateDraftsNeedMemRead(t *testing.T) {
 		path string
 		code int
 	}{
-		{&w, "/v1/memory/drafts", 403}, {&w, "/skill-draft", 403},
-		{&r, "/v1/memory/drafts", 200}, {&r, "/skill-draft", 200},
+		{&w, "/v1/memory/drafts", 403}, {&w, "/v1/skills/drafts", 403},
+		{&r, "/v1/memory/drafts", 200}, {&r, "/v1/skills/drafts", 200},
 	} {
 		if got := g.do("POST", c.path, c.u, "", `{}`).Code; got != c.code {
 			t.Errorf("%s : %d, attendu %d", c.path, got, c.code)

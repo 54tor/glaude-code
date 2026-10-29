@@ -20,9 +20,9 @@ import (
 func TestLimitesHTTP(t *testing.T) {
 	h, cfg, _ := web(t)
 	pile := strings.Repeat("a", snippetMax)
-	ok(t, h, "/snippet-save", `{"key":"u/max.md","text":"`+pile+`"}`, true, "Snippet enregistré")
+	v1ok(t, h, "PUT", "/v1/snippets/u%2Fmax.md", `{"text":"`+pile+`"}`, "Snippet enregistré")
 	t.Setenv("FAKE_DRAFT", "stdin") // le prompt arrive sur stdin, quelle que soit sa taille
-	if m := ok(t, h, "/snippet-draft", `{"model":"haiku","instruction":"x","text":"`+pile+`"}`, true, "Mise en forme prête"); m["text"] != "Consigne : x\n" {
+	if m := v1ok(t, h, "POST", "/v1/snippets/drafts", `{"model":"haiku","instruction":"x","text":"`+pile+`"}`, "Mise en forme prête"); m["text"] != "Consigne : x\n" {
 		t.Fatalf("prompt reçu : %v", m["text"])
 	}
 	v1ok(t, h, "PUT", "/v1/memory/files/m%2F-p%2Fmax.md", `{"text":"`+strings.Repeat("a", memMax)+`"}`, "Enregistré")
