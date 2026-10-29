@@ -257,8 +257,32 @@ traduit.
 
 ## Windows
 
-`make windows` produit `gld.exe`. Le support Windows est compilé mais pas encore testé sur une vraie machine. Sous
-WSL2, la version Linux fonctionne telle quelle.
+`make windows` produit `gld.exe`. Le support Windows est compilé mais pas encore testé sur une vraie machine. Sans
+tmux, `gld.exe` ne peut pas écrire dans une session déjà ouverte (seule la reprise avec un message marche) et les
+équipes d'agents sont refusées.
+
+### Avec WSL2 (recommandé)
+
+Sous WSL2, la version Linux fonctionne telle quelle, tmux compris. Tout s'installe dans la distribution Linux, pas côté
+Windows :
+
+1. Dans PowerShell : `wsl --install`, puis redémarrez.
+2. Dans WSL, installez Claude Code (l'installeur natif ne demande ni Node.js ni Python) et tmux :
+   `sudo apt install tmux`.
+3. Installez le binaire `gld-linux-amd64` comme dans [Installation](#installation) et vérifiez que `~/.local/bin` est
+   dans le `PATH`.
+4. Lancez `gld` dans WSL, puis ouvrez **http://127.0.0.1:8799** dans le navigateur Windows (WSL2 redirige `localhost`).
+
+Python, Node.js et Go ne sont pas nécessaires : Node.js et Go ne servent qu'à compiler depuis les sources.
+
+Points d'attention :
+
+- gld lit `~/.claude` de la distribution. Les sessions créées côté Windows (`C:\Users\<vous>\.claude`) n'y sont pas ; pour
+  les voir, copiez le dossier ou lancez `CLAUDE_CONFIG_DIR=/mnt/c/Users/<vous>/.claude gld` (accès plus lent).
+- « Envoyer à la session » exige que la session tourne dans un tmux de WSL ; celles lancées depuis l'interface web s'y
+  ouvrent déjà.
+- Si `localhost` ne répond pas, changez de port (`GLD_WEB_PORT=8800 gld`) ou activez `networkingMode=mirrored` dans
+  `.wslconfig`.
 
 ## Questions fréquentes
 
