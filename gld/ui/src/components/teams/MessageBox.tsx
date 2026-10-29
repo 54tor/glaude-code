@@ -46,7 +46,7 @@ export function MessageBox({ name, agents, to, setTo, queued, disabled }: { name
           rows={2}
           disabled={disabled}
           aria-label={t("teams.message")}
-          className="field-sizing-content max-h-40 min-h-12 flex-1 resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+          className="field-sizing-content max-h-40 min-h-12 flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/80 disabled:opacity-60"
         />
         <Button size="sm" onClick={() => void send()} disabled={disabled || busy || !text.trim()}>
           {t("teams.send")}

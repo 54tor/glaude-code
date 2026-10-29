@@ -92,7 +92,7 @@ function Form({
         rows={4}
         maxLength={8000}
         disabled={busy}
-        className="session-text w-full resize-y rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="session-text w-full resize-y rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/80"
         aria-label={t("memory.writer.instructionAria")}
       />
       {refs.length > 0 && (

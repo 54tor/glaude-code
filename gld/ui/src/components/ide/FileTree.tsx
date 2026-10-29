@@ -167,7 +167,7 @@ export function FileTree({ dir, tree, canWrite, selected, marks, dirs, filter = 
               onFocus={() => setFocus(r.path)}
               onClick={(e) => (e.stopPropagation(), activate(r))}
               className={cn(
-                "flex h-7 cursor-default items-center gap-1 rounded-md pr-2 outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                "flex h-7 cursor-default items-center gap-1 rounded-md pr-2 outline-none focus-visible:ring-2 focus-visible:ring-ring/80",
                 r.path === selected ? "bg-accent text-accent-foreground" : "hover:bg-muted",
                 r.type === "symlink" && "text-muted-foreground"
               )}

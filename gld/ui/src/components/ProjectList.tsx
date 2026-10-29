@@ -44,7 +44,7 @@ export function ProjectList({ route, go, q = "" }: { route: Route; go: (r: Route
                     <ChevronRight className={cn("size-3.5 transition-transform", isOpen && "rotate-90")} />
                   </button>
                   <button
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left outline-none after:absolute after:inset-0 after:rounded-md focus-visible:after:ring-2 focus-visible:after:ring-ring/50"
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left outline-none after:absolute after:inset-0 after:rounded-md focus-visible:after:ring-2 focus-visible:after:ring-ring/80"
                     onClick={() => go({ kind: "project", name: p.name })}
                     aria-current={active}
                     title={p.name}

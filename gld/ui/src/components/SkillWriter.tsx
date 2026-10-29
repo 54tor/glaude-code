@@ -54,7 +54,7 @@ function Form({ skillKey, name, onClose, onDraft }: { skillKey: string; name: st
         rows={5}
         maxLength={8000}
         disabled={busy}
-        className="session-text w-full resize-y rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="session-text w-full resize-y rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/80"
         aria-label={t("skills.writer.instruction")}
       />
       <div className="flex items-center gap-2 text-sm">

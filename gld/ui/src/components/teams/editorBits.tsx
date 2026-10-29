@@ -15,7 +15,7 @@ export const sameLabel = (a: string, b: string) =>
 export const bytes = (s: string) => new TextEncoder().encode(s).length
 
 export const fieldCls =
-  "w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+  "w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/80"
 
 export function Field({
   label,

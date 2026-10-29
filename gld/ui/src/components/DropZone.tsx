@@ -8,7 +8,7 @@ export function DropZone({ onDir, children }: { onDir: (dir: string) => void; ch
   const has = (e: React.DragEvent) => e.dataTransfer.types.includes(DIR_MIME)
   return (
     <div
-      className={cn("rounded-md transition-shadow", over && "ring-2 ring-ring/50")}
+      className={cn("rounded-md transition-shadow", over && "ring-2 ring-ring/80")}
       onDragOver={(e) => {
         if (!has(e)) return
         e.preventDefault()

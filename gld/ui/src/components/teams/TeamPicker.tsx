@@ -95,7 +95,7 @@ export function TeamPicker({
                       toggle(tm.ID)
                     }
                   }}
-                  className={`cursor-pointer rounded-lg border p-3 pr-20 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${on ? "border-primary bg-primary/10" : "border-border hover:bg-muted"}`}
+                  className={`cursor-pointer rounded-lg border p-3 pr-20 outline-none focus-visible:ring-3 focus-visible:ring-ring/80 ${on ? "border-primary bg-primary/10" : "border-border hover:bg-muted"}`}
                 >
                   <div className="text-sm font-medium">{tm.Name}</div>
                   <div className="text-xs text-muted-foreground">
@@ -161,7 +161,7 @@ export function TeamPicker({
           placeholder={t("teams.goal")}
           aria-label={t("teams.goal")}
           rows={4}
-          className="w-full rounded-lg border bg-transparent p-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="w-full rounded-lg border bg-transparent p-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/80"
         />
         <div className="flex items-center gap-2">
           <Button

@@ -45,7 +45,7 @@ export function Tabs({ tabs, active, onFocus, onClose }: { tabs: Tab[]; active: 
           onKeyDown={(e) => key(e, i)}
           onAuxClick={(e) => e.button === 1 && onClose(tab.path)}
           className={cn(
-            "group flex max-w-56 shrink-0 cursor-default items-center gap-1.5 border-r pr-1 pl-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+            "group flex max-w-56 shrink-0 cursor-default items-center gap-1.5 border-r pr-1 pl-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/80",
             tab.path === active ? "bg-background text-foreground" : "bg-muted/40 text-muted-foreground hover:bg-muted"
           )}
         >

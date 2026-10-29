@@ -199,7 +199,7 @@ function Item({
               <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} />
             </button>
             <button
-              className="flex min-w-0 flex-1 items-center gap-2 text-left outline-none after:absolute after:inset-0 after:rounded-md focus-visible:after:ring-2 focus-visible:after:ring-ring/50"
+              className="flex min-w-0 flex-1 items-center gap-2 text-left outline-none after:absolute after:inset-0 after:rounded-md focus-visible:after:ring-2 focus-visible:after:ring-ring/80"
               onClick={() => (kids && !open && setOpen("t/" + n.key, true), onSel(n.key))}
               title={n.g?.project ?? label ?? n.name}
               aria-current={active}

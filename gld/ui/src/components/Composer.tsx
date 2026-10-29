@@ -282,7 +282,7 @@ export function Composer({
           placeholder={keyHint(running ? t("conversation.composer.placeholderRunning") : t("conversation.composer.placeholder"))}
           rows={2}
           maxLength={32000}
-          className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+          className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border border-input bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/80 disabled:opacity-60"
           aria-label={t("conversation.composer.messageAria")}
         />
         <ImageChips images={pics.images} busy={pics.busy} onRemove={pics.remove} />
@@ -480,7 +480,7 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
           placeholder={keyHint(t("conversation.composer.sessionPlaceholder"))}
           rows={2}
           maxLength={32000}
-          className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border border-input bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/80"
           aria-label={t("conversation.composer.sessionAria")}
         />
         <ImageChips images={pics.images} busy={pics.busy} onRemove={pics.remove} />
@@ -697,7 +697,7 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
                       rows={2}
                       maxLength={32000}
                       placeholder={keyHint(t("conversation.composer.answerPlaceholder"))}
-                      className="field-sizing-content max-h-40 min-h-12 flex-1 resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                      className="field-sizing-content max-h-40 min-h-12 flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/80"
                       aria-label={t("conversation.composer.answerAria")}
                     />
                     <Button size="sm" onClick={reply} disabled={!answer.trim()}>

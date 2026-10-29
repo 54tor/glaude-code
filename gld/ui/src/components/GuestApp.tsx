@@ -373,7 +373,7 @@ function GuestSession({ handle }: { handle: string }) {
                   void send()
                 }
               }}
-              className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+              className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border border-input bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/80 disabled:opacity-60"
             />
             {queue.length > 0 && (
               <ul className="space-y-1 text-xs" aria-label={t("conversation.composer.queueAria")}>
