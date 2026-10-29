@@ -367,6 +367,32 @@ func TestGateCSRF(t *testing.T) {
 	}
 }
 
+// En mode comptes, un Bearer faux use les essais de l'adresse comme en mode ouvert ; le bon jeton passe encore.
+func TestGateThrottlesWrongBearer(t *testing.T) {
+	resetTokenTries()
+	t.Cleanup(resetTokenTries)
+	g := newGateRig(t)
+	do := func(tok string) int {
+		r := httptest.NewRequest("GET", "/v1/memory/files", nil)
+		r.RemoteAddr = "192.0.2.9:1234"
+		r.Header.Set("Authorization", "Bearer "+tok)
+		w := httptest.NewRecorder()
+		g.h.ServeHTTP(w, r)
+		return w.Code
+	}
+	for i := 0; i < tokenMaxTries+3; i++ {
+		if c := do("faux"); i < tokenMaxTries && c != 401 || i >= tokenMaxTries && c != 429 {
+			t.Fatalf("essai %d : %d", i, c)
+		}
+	}
+	old := tokenPrincipal
+	t.Cleanup(func() { tokenPrincipal = old })
+	tokenPrincipal = func(*http.Request) *Principal { return &Principal{Token: true} }
+	if c := do("bon"); c == 401 || c == 429 {
+		t.Errorf("bon jeton après l'épuisement : %d", c)
+	}
+}
+
 func TestGateTamperedRights(t *testing.T) {
 	g := newGateRig(t)
 	u := g.user(t, "alice", false)

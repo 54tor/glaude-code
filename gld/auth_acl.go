@@ -271,6 +271,11 @@ func authGate(mux *http.ServeMux, s *authStore, next http.Handler) http.Handler 
 		g := &gateInfo{s: s, local: need == rightPublic || need == rightAny || need == rightAdmin, pat: pat, need: need}
 		if need != rightPublic {
 			p, bearer := gatePrincipal(s, r, passiveRoutes[pat])
+			if p == nil && bearer && !tokenTry(clientIP(r)) { // même plafond qu'en mode ouvert : un Bearer faux se devinait sans frein
+				w.Header().Set("Retry-After", "60")
+				gateDeny(w, http.StatusTooManyRequests, "srv.token.tooMany")
+				return
+			}
 			if p == nil {
 				gateDeny(w, 401, "srv.auth.sessionRequise")
 				return

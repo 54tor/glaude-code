@@ -10,6 +10,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 ### Corrigé
 - Accessibilité : contrastes relevés au niveau WCAG AA. Texte atténué du thème sombre plus clair (4,4:1 → 5,5:1 sur les panneaux), onglets inactifs du thème clair (3,9:1 → 5,2:1), bordures des champs et cases à cocher à 3:1 au moins, anneau de focus du thème clair assombri, boutons désactivés à 70 % d'opacité au lieu de 50 %, zone de clic des cases à cocher et petits boutons portée à 24 px pour tous les pointeurs.
 - Accessibilité : page de saisie du jeton, bouton « Ouvrir » (3,4:1 → 5,2:1), bordures du champ et lien du thème clair relevés à plus de 3:1.
+- Sécurité : en mode multi-utilisateur, un jeton `Authorization: Bearer` faux compte désormais pour l'adresse (10 par minute, puis `429`), comme en mode ouvert ; il se devinait auparavant sans limite.
 
 ## [0.7.1] - 2026-10-29
 
