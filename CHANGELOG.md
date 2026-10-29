@@ -4,6 +4,15 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.7.1] - 2026-10-29
+
+### Corrigé
+- Windows : la reprise d'une session avec un message fonctionne quand `claude` est un exécutable natif (`.exe`).
+- Équipes d'agents : sous Windows, gld indique que tmux est requis au lieu d'afficher l'erreur de reprise.
+
+### Documentation
+- Captures d'écran rafraîchies en 1920×1080 (git, revues, notes, plugins, snippets) et ajout des vues session partagée, multi-home et multi-utilisateur.
+
 ## [0.7.0] - 2026-10-29
 
 ### Ajouté
