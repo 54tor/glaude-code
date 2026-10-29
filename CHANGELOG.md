@@ -5,6 +5,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 ## [Non publié]
 
 ### Ajouté
+- Page Plugins dédiée (`/plugins`), avec ses entrées dans la barre latérale.
+- Sauvegarde (`/sauvegarde`) : exporter la configuration Claude en zip (skills, commandes et snippets, plugins et marketplaces, réglages et permissions, mémoire et serveurs MCP) et l'importer par catégories, avec un aperçu avant application. Les secrets sont exclus de l'export.
 - Mémoire : exporter une entrée, une sélection ou toutes les entrées de mémoire des projets en JSON, et les importer en choisissant le projet cible de chaque groupe et la résolution de chaque conflit de nom.
 
 ### Corrigé
