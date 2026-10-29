@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Download, LoaderPinwheel, Plus, Power, RefreshCw, Search, Trash2 } from "lucide-react"
 import { api, type Marketplace, type PluginAvail, type PluginInst } from "@/lib/api"
 import { tilde } from "@/lib/format"
-import { reportResult } from "@/lib/report"
+import { reportAction } from "@/lib/report"
+import { errMsg } from "@/lib/apiError"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -42,13 +43,18 @@ export function PluginsPanel({ projects, home, onChange, inline }: { projects: P
   const [busy, setBusy] = useState("")
   const [markets, setMarkets] = useState<Marketplace[]>([])
   const [src, setSrc] = useState("")
-  const loadMarkets = useCallback(() => api.marketplaces().then((r) => setMarkets(r.marketplaces ?? [])), [])
+  const loadMarkets = useCallback(() => api.marketplaces().then((r) => setMarkets(r.marketplaces ?? []), () => {}), [])
   const seq = useRef(0) // seule la dernière recherche s'affiche : une réponse lente pour « a » n'écrase pas celle de « ab »
   const load = useCallback((query: string) => {
     const n = ++seq.current
-    return api.plugins(query).then((r) => {
-      if (n === seq.current) setData({ installed: r.installed ?? [], available: r.available ?? [], error: r.error })
-    })
+    return api.plugins(query).then(
+      (r) => {
+        if (n === seq.current) setData({ installed: r.installed ?? [], available: r.available ?? [] })
+      },
+      (e) => {
+        if (n === seq.current) setData({ installed: [], available: [], error: errMsg(e) })
+      }
+    )
   }, [])
   useEffect(() => {
     loadMarkets()
@@ -58,22 +64,20 @@ export function PluginsPanel({ projects, home, onChange, inline }: { projects: P
     return () => clearTimeout(h)
   }, [q, load])
 
-  const run = async (key: string, action: string, id: string, sc: string, project: string) => {
+  const run = async (key: string, action: Parameters<typeof api.pluginAct>[0], id: string, sc: string, project: string) => {
     setBusy(key)
-    const r = await api.post("/plugin-act", { action, id, scope: sc, project })
+    const ok = await reportAction(() => api.pluginAct(action, id, sc, project))
     setBusy("")
-    reportResult(r)
-    if (r.ok) {
+    if (ok) {
       await load(q)
       onChange()
     }
   }
-  const market = async (key: string, action: string, source = "", name = "") => {
+  const market = async (key: string, action: Parameters<typeof api.marketAct>[0], source = "", name = "") => {
     setBusy(key)
-    const r = await api.post("/marketplace-act", { action, source, name })
+    const ok = await reportAction(() => api.marketAct(action, source, name))
     setBusy("")
-    reportResult(r)
-    if (r.ok) {
+    if (ok) {
       if (action === "add") setSrc("")
       await Promise.all([loadMarkets(), load(q)])
       onChange()

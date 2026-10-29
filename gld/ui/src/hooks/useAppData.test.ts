@@ -12,7 +12,7 @@ const { setAuth } = await import("@/lib/auth")
 const DATA = { home: "/h", root: "/h/.claude", groups: [], dirs: [], live: [], waiting: [], vgroups: [], favs: [], projects: [], providers: [] }
 const SNIPS = { dir: "/h/s", files: [], scopes: [] }
 
-// Faux serveur : /v1/state, /snippet-list et /v1/state/stamp ; down rend des 502.
+// Faux serveur : /v1/state, /v1/snippets et /v1/state/stamp ; down rend des 502.
 function server() {
   const st = { down: false, stamp: 1, calls: { api: 0, stamp: 0 } }
   const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }))
@@ -21,7 +21,7 @@ function server() {
     vi.fn((url: string) => {
       if (st.down) return json({}, 502)
       if (url === "/v1/state") return st.calls.api++, json(DATA)
-      if (url === "/snippet-list") return json(SNIPS)
+      if (url === "/v1/snippets") return json(SNIPS)
       if (url === "/v1/state/stamp") return st.calls.stamp++, json({ stamp: st.stamp })
       return json({}, 404)
     })
@@ -64,8 +64,8 @@ describe("useAppData", () => {
     const { result } = renderHook(() => useAppData())
     await flush()
     expect(result.current.data).toBeNull()
-    expect(result.current.error).toBe("HTTP 502")
-    expect(toastError).toHaveBeenCalledWith(expect.stringContaining("HTTP 502"), expect.objectContaining({ id: "server-down" }))
+    expect(result.current.error).toBe("Erreur : 502")
+    expect(toastError).toHaveBeenCalledWith(expect.stringContaining("Erreur : 502"), expect.objectContaining({ id: "server-down" }))
     st.down = false
     await act(() => result.current.reload())
     expect(result.current.error).toBeNull()
@@ -108,8 +108,8 @@ describe("useAppData", () => {
     const open = renderHook(() => useAppData())
     await flush()
     expect(open.result.current.denied).toBe(false)
-    expect(open.result.current.error).toBe("HTTP 403")
-    expect(toastError).toHaveBeenCalledWith(expect.stringContaining("HTTP 403"), expect.objectContaining({ id: "server-down" }))
+    expect(open.result.current.error).toBe("Erreur : 403")
+    expect(toastError).toHaveBeenCalledWith(expect.stringContaining("Erreur : 403"), expect.objectContaining({ id: "server-down" }))
     open.unmount()
     toastError.mockClear()
     setAuth({ state: "ok" })

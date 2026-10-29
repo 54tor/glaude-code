@@ -3,7 +3,8 @@ import { useState } from "react"
 import { Download, LoaderPinwheel, Search } from "lucide-react"
 import { api, type SkillHit } from "@/lib/api"
 import { tilde } from "@/lib/format"
-import { reportResult } from "@/lib/report"
+import { reportAction } from "@/lib/report"
+import { errMsg } from "@/lib/apiError"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -39,15 +40,15 @@ export async function npxAct(
   scope: string
 ) {
   const project = scope.startsWith("p/") ? scope.slice(2) : ""
-  const r = await api.post("/skill-npx", {
-    Action: action,
-    Source: source,
-    Skill: skill,
-    Scope: project ? "project" : "user",
-    Project: project,
-  })
-  reportResult(r)
-  return r.ok
+  return reportAction(() =>
+    api.skillNpx({
+      Action: action,
+      Source: source,
+      Skill: skill,
+      Scope: project ? "project" : "user",
+      Project: project,
+    })
+  )
 }
 
 type Project = { dir: string; project: string }
@@ -78,16 +79,9 @@ export function SkillsNpxDialog({
     if (!q.trim() || busy) return
     setBusy(true)
     setErr("")
-    const r = await api.skillsFind(q.trim()).catch(
-      () =>
-        ({ error: t("skills.npx.searchFailed") }) as {
-          hits?: SkillHit[]
-          error?: string
-        }
-    )
+    const r = await api.skillsFind(q.trim()).catch((e) => void setErr(errMsg(e) || t("skills.npx.searchFailed")))
     setBusy(false)
-    if (r.error) return void setErr(r.error)
-    setHits(r.hits ?? [])
+    if (r) setHits(r.hits ?? [])
   }
   const install = async () => {
     if (!pick || busy) return

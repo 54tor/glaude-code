@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { Link } from "wouter"
 import { ChevronRight, LoaderPinwheel, Plug } from "lucide-react"
 import { api, type CfgOverview, type McpServer, type PluginInst, type Skill } from "@/lib/api"
+import { errMsg } from "@/lib/apiError"
 import { tilde } from "@/lib/format"
 import { href } from "@/lib/route"
 import { Button } from "@/components/ui/button"
@@ -41,7 +42,7 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
         api.config().then(setOv),
         api.skills().then((r) => setSkills(r.skills)),
         api.configMcp().then((r) => setMcp(r.servers)),
-        api.plugins().then((r) => (setInst(r.installed ?? []), setErr(r.error ?? ""))),
+        api.plugins().then((r) => setInst(r.installed ?? []), (e) => setErr(errMsg(e))),
       ]),
     [],
   )

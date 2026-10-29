@@ -2,6 +2,7 @@ import { FileText } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/lib/api"
+import { errMsg } from "@/lib/apiError"
 import { tilde } from "@/lib/format"
 import { body } from "@/lib/commands"
 import { Button } from "@/components/ui/button"
@@ -14,9 +15,8 @@ export function SnippetMenu({ onInsert }: { onInsert: (text: string) => void }) 
   const a = useActions()
   if (a.snippets.length === 0) return null
   const pick = async (key: string) => {
-    const r = await api.snippet(key)
-    if (r.text === undefined) return void toast.error(r.error ?? t("skills.snippetMenu.unreadable"))
-    onInsert(body(r.text))
+    const r = await api.snippet(key).catch((e) => void toast.error(errMsg(e) || t("skills.snippetMenu.unreadable")))
+    if (r) onInsert(body(r.text))
   }
   return (
     <DropdownMenu>

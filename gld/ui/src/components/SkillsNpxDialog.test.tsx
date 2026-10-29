@@ -25,11 +25,7 @@ const hit = {
 
 async function searched() {
   vi.spyOn(api, "skillsFind").mockResolvedValue({ hits: [hit] })
-  const post = vi
-    .spyOn(api, "post")
-    .mockResolvedValue({ ok: true, out: "fait" } as Awaited<
-      ReturnType<typeof api.post>
-    >)
+  const post = vi.spyOn(api, "skillNpx").mockResolvedValue({ message: "fait" })
   const onChange = vi.fn()
   render(
     <SkillsNpxDialog
@@ -71,7 +67,7 @@ describe("SkillsNpxDialog", () => {
       screen.getByRole("button", { name: "Confirmer l'installation" })
     )
     await waitFor(() => expect(onChange).toHaveBeenCalled())
-    expect(post).toHaveBeenCalledWith("/skill-npx", {
+    expect(post).toHaveBeenCalledWith({
       Action: "add",
       Source: "anthropics/skills",
       Skill: "pdf",

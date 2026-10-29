@@ -225,8 +225,12 @@ export const api = {
   trustPending: () => http.get<{ dirs: string[] }>("/trust/pending"),
   gitRemotes: (dir: string) => http.get<{ remotes: GitRemote[] }>(`/git/remotes${qs({ dir })}`),
   gitStatus: () => http.get<{ status: Record<string, GitState>; repos: Record<string, string[]> }>("/git/status"),
-  snippets: () => get<{ dir: string; files: Snippet[]; scopes: SnipScope[] }>("/snippet-list"),
-  snippet: (key: string) => get<{ text?: string; error?: string; missing?: boolean }>(`/snippet?key=${enc(key)}`),
+  snippets: () => http.get<{ dir: string; files: Snippet[]; scopes: SnipScope[] }>("/snippets"),
+  snippet: (key: string) => http.get<{ text: string; missing?: boolean }>(`/snippets/${seg(key)}`),
+  snippetSave: (key: string, text: string, create: boolean) => http.put<Said>(`/snippets/${seg(key)}`, { text, create }),
+  snippetRename: (from: string, to: string) => http.patch<Said>(`/snippets/${seg(from)}`, { to }),
+  snippetRemove: (keys: string[]) => http.del<Said>(`/snippets${qs({ item: keys })}`),
+  snippetDraft: (body: { model: string; instruction: string; text: string }) => http.post<Said & { text: string; cost?: number }>("/snippets/drafts", body),
   memory: () => http.get<{ global: MemFile[]; projects: MemProject[]; targets: MemTarget[] }>("/memory/files"),
   memoryFile: (key: string) => http.get<{ text: string; missing?: boolean }>(`/memory/files/${seg(key)}`),
   memoryLoaded: () => http.get<{ hook: boolean; files: Record<string, FileLoads> }>("/memory/loaded"),
@@ -247,12 +251,32 @@ export const api = {
   sessionLoadedFile: (id: string, file: string) => http.get<{ text?: string }>(`/sessions/${seg(id)}/loaded/files/${seg(file)}`),
   configRaw: (file: string) => get<{ ok: boolean; text?: string; out?: string }>(`/config-raw?file=${enc(file)}`),
   slashCommands: () => http.get<{ commands: { cmd: string; desc: string; origin: string }[] }>("/slash-commands"),
-  skills: () => get<{ skills: Skill[]; projects: { dir: string; project: string }[] }>("/skills-list"),
-  skill: (key: string) => get<{ text?: string; files?: SkillFile[]; error?: string }>(`/skill?key=${enc(key)}`),
-  skillsFind: (q: string) => get<{ hits?: SkillHit[]; error?: string }>(`/skills-find?q=${enc(q)}`),
-  skillsUpdates: (force = false) => get<{ states?: Record<string, string> }>(`/skills-updates${force ? "?force=1" : ""}`),
-  marketplaces: () => get<{ marketplaces?: Marketplace[]; error?: string }>("/marketplaces"),
-  plugins: (q = "") => get<{ installed?: PluginInst[]; available?: PluginAvail[]; error?: string }>(`/plugins?q=${enc(q)}`),
+  skills: () => http.get<{ skills: Skill[]; projects: { dir: string; project: string }[] }>("/skills"),
+  skill: (key: string) => http.get<{ text: string; files?: SkillFile[] }>(`/skills/${seg(key)}`),
+  skillSave: (key: string, text: string, create: boolean) => http.put<Said>(`/skills/${seg(key)}`, { text, create }),
+  skillRemove: (keys: string[]) => http.del<Said>(`/skills${qs({ item: keys })}`),
+  skillCopy: (key: string, to: string) => http.post<Said & { key: string }>("/skills/copies", { key, to }),
+  skillDraft: (body: { model: string; instruction: string; key: string }) => http.post<Said & { text: string; cost?: number }>("/skills/drafts", body),
+  skillNpx: (body: { Action: string; Source: string; Skill: string; Scope: string; Project: string }) => http.post<Said>("/skills/installations", body),
+  skillsFind: (q: string) => http.get<{ hits?: SkillHit[] }>(`/skills/catalog${qs({ q })}`),
+  skillsUpdates: (force = false) => http.get<{ states?: Record<string, string> }>(`/skills/updates${qs({ force })}`),
+  marketplaces: () => http.get<{ marketplaces?: Marketplace[] }>("/marketplaces"),
+  plugins: (q = "") => http.get<{ installed?: PluginInst[]; available?: PluginAvail[] }>(`/plugins${qs({ q })}`),
+  pluginAct: (action: "install" | "uninstall" | "enable" | "disable" | "update", id: string, scope: string, project: string) => {
+    const p = `/plugins/${seg(id)}`
+    switch (action) {
+      case "install":
+        return http.put<Said>(p, { scope, project })
+      case "uninstall":
+        return http.del<Said>(`${p}${qs({ scope, project })}`)
+      case "update":
+        return http.post<Said>(`${p}/updates`, { scope, project })
+      default:
+        return http.patch<Said>(p, { enabled: action === "enable", scope, project })
+    }
+  },
+  marketAct: (action: "add" | "remove" | "update", source: string, name: string) =>
+    action === "add" ? http.post<Said>("/marketplaces", { source }) : action === "remove" ? http.del<Said>(`/marketplaces/${seg(name)}`) : http.post<Said>(name ? `/marketplaces/${seg(name)}/updates` : "/marketplaces/updates"),
   configProjects: () => get<{ projects: ProjectCfg[] }>("/config-projects"),
   sessionIdle: (id: string) => http.get<{ idle: boolean }>(`/sessions/${seg(id)}/state`),
   taskOutput: (dir: string, id: string, task: string) => http.get<{ text?: string }>(`/sessions/${seg(id)}/tasks/${seg(task)}/output${qs({ dir })}`),

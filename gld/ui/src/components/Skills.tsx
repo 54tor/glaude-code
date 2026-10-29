@@ -21,7 +21,8 @@ import { SkillsNpxDialog, npxAct, npxCommand } from "./SkillsNpxDialog"
 import { SkillWriter } from "./SkillWriter"
 import { split } from "./memoryLib"
 import { useEditorDraft, useLeaveGuard } from "@/hooks/useEditorDraft"
-import { reportResult } from "@/lib/report"
+import { reportAction } from "@/lib/report"
+import { errMsg } from "@/lib/apiError"
 
 // Origine d'un skill : badge court et explication.
 const ORIGINS = {
@@ -78,7 +79,10 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
   useEffect(() => {
     if (!sel) return
     let live = true
-    api.skill(sel).then((r) => live && setLoaded({ key: sel, text: r.text ?? "", files: r.files ?? [], error: r.error }))
+    api.skill(sel).then(
+      (r) => live && setLoaded({ key: sel, text: r.text, files: r.files ?? [] }),
+      (e) => live && setLoaded({ key: sel, text: "", files: [], error: errMsg(e) })
+    )
     return () => {
       live = false
     }
@@ -104,9 +108,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
 
   const save = async () => {
     if (!editing) return
-    const r = await api.post("/skill-save", { key: sel, text: editing.text, create: false })
-    reportResult(r)
-    if (r.ok) {
+    if (await reportAction(() => api.skillSave(sel, editing.text, false))) {
       setDraft(null)
       reload()
     }
@@ -119,26 +121,28 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
       body: t("skills.skills.deleteBody"),
       confirm: t("common.delete"),
       run: async () => {
-        const r = await api.post("/skill-rm", { key: skill.key })
-        reportResult(r)
-        if (r.ok) {
+        if (await reportAction(() => api.skillRemove([skill.key]))) {
           if (skill.key === sel) onPick("")
           reload()
         }
       },
     })
   const copyTo = async (to: string, key = sel) => {
-    const r = (await api.post("/skill-copy", { key, to })) as { ok: boolean; out: string; key?: string }
-    reportResult(r)
-    if (r.ok && r.key) {
+    let nk = ""
+    const ok = await reportAction(async () => {
+      const r = await api.skillCopy(key, to)
+      nk = r.key
+      return r
+    })
+    if (ok) {
       await reload()
-      onPick(r.key)
+      onPick(nk)
     }
   }
   // Modifier depuis le menu : ouvre le skill, charge son texte et passe en édition.
   const edit = async (key: string) => {
-    const r = await api.skill(key)
-    if (r.error || r.text === undefined) return void toast.error(r.error ?? t("skills.skills.readFailed"))
+    const r = await api.skill(key).catch((e) => void toast.error(errMsg(e)))
+    if (!r) return
     onPick(key)
     setDraft({ key, text: r.text })
   }
@@ -435,9 +439,7 @@ function NewSkill({ open, projects, home, onClose, onCreated }: { open: boolean;
   const create = async () => {
     const key = where === "u" ? `u/${name}` : `p/${where}/${name}`
     const text = `---\nname: ${name}\ndescription: \n---\n\n# ${name}\n\nInstructions du skill.\n`
-    const r = await api.post("/skill-save", { key, text, create: true })
-    reportResult(r)
-    if (r.ok) {
+    if (await reportAction(() => api.skillSave(key, text, true))) {
       setName("")
       onClose()
       onCreated(key)

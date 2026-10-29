@@ -15,7 +15,8 @@ import type { Ask } from "./Confirm"
 import { Markdown } from "./Message"
 import type { Ask as PromptAsk } from "./Prompt"
 import { useEditorDraft, useLeaveGuard } from "@/hooks/useEditorDraft"
-import { reportResult } from "@/lib/report"
+import { reportAction } from "@/lib/report"
+import { errMsg, qs, readResponse, v1 } from "@/lib/apiError"
 import { authFetch } from "@/lib/auth"
 
 // Snippets = commandes Claude Code (/nom) : personnelles (~/.claude/commands) et de chaque projet (.claude/commands).
@@ -66,7 +67,10 @@ export function Snippets({
   useEffect(() => {
     if (!sel || sel === creating) return
     let live = true
-    api.snippet(sel).then((r) => live && setLoaded(r.text === undefined ? { key: sel, text: "", error: r.error ?? "" } : { key: sel, text: r.text }))
+    api.snippet(sel).then(
+      (r) => live && setLoaded({ key: sel, text: r.text }),
+      (e) => live && setLoaded({ key: sel, text: "", error: errMsg(e) })
+    )
     return () => {
       live = false
     }
@@ -87,9 +91,8 @@ export function Snippets({
       () => toast.error(t("skills.snippets.copyFailed"))
     )
   const copyContent = async (s: Snippet) => {
-    const r = await api.snippet(s.key)
-    if (r.text === undefined) return void toast.error(r.error ?? t("skills.snippets.unreadable"))
-    copyAs(r.text, "Content")
+    const r = await api.snippet(s.key).catch((e) => void toast.error(errMsg(e) || t("skills.snippets.unreadable")))
+    if (r) copyAs(r.text, "Content")
   }
   const copy = () =>
     text !== null &&
@@ -102,9 +105,7 @@ export function Snippets({
     )
   const save = async () => {
     if (!editing) return
-    const r = await api.post("/snippet-save", { key: sel, text: editing.text, create: sel === creating })
-    reportResult(r)
-    if (!r.ok) return
+    if (!(await reportAction(() => api.snippetSave(sel, editing.text, sel === creating)))) return
     setLoaded({ key: sel, text: editing.text })
     setDraft(null)
     setCreating("")
@@ -134,13 +135,12 @@ export function Snippets({
         const head = /^(u\/|p\/[^/]+\/)/.exec(sel)?.[0] ?? ""
         const to = head + (name.endsWith(".md") ? name : name + ".md")
         if (to === sel) return true
-        const r = await api.post("/snippet-rename", { from: sel, to })
-        reportResult(r)
-        if (r.ok) {
+        const ok = await reportAction(() => api.snippetRename(sel, to))
+        if (ok) {
           onPick(to)
           onChanged()
         }
-        return !!r.ok
+        return ok
       },
     })
   const remove = () =>
@@ -149,9 +149,7 @@ export function Snippets({
       body: t("skills.snippets.deleteBody"),
       confirm: t("common.delete"),
       run: async () => {
-        const r = await api.post("/snippet-rm", { key: sel })
-        reportResult(r)
-        if (r.ok) {
+        if (await reportAction(() => api.snippetRemove([sel]))) {
           onPick("")
           onChanged()
         }
@@ -164,12 +162,7 @@ export function Snippets({
     fd.set("scope", scope)
     for (const file of list) fd.append("files", file)
     const id = toast.loading(t("skills.snippets.importing"))
-    try {
-      const r = (await (await authFetch("/snippets-import", { method: "POST", body: fd })).json()) as { ok: boolean; out: string }
-      reportResult(r, { id })
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e), { id })
-    }
+    await reportAction(async () => readResponse<{ message: string }>(await authFetch(v1("/snippets/imports"), { method: "POST", body: fd })), { id })
     if (upload.current) upload.current.value = ""
     onChanged()
   }
@@ -196,7 +189,7 @@ export function Snippets({
               <Upload /> {t("skills.snippets.import")}
             </Button>
             <Button variant="ghost" size="xs" asChild title={t("skills.snippets.exportTitle")}>
-              <a href={`/snippets-export?scope=${encodeURIComponent(scope)}`} download>
+              <a href={v1(`/snippets/export${qs({ scope })}`)} download>
                 <Download /> {t("skills.snippets.export")}
               </a>
             </Button>
@@ -383,9 +376,9 @@ function HaikuFormat({ open, text, onClose, onDone }: { open: boolean; text: str
   const [busy, setBusy] = useState(false)
   const run = async () => {
     setBusy(true)
-    const r = (await api.post("/snippet-draft", { model, instruction, text })) as { ok: boolean; out: string; text?: string; cost?: number }
+    const r = await api.snippetDraft({ model, instruction, text }).catch((e) => void toast.error(errMsg(e)))
     setBusy(false)
-    if (!r.ok || !r.text) return void toast.error(r.out)
+    if (!r) return
     toast.success(t("skills.format.formatReady"), { description: r.cost ? t("skills.format.cost", { cost: r.cost.toFixed(4) }) : undefined })
     setInstruction("")
     onClose()

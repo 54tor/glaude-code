@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { LoaderPinwheel, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/api"
+import { errMsg } from "@/lib/apiError"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Choose } from "./Choose"
@@ -31,9 +32,9 @@ function Form({ skillKey, name, onClose, onDraft }: { skillKey: string; name: st
   const run = async () => {
     if (!instruction.trim() || busy) return
     setBusy(true)
-    const r = (await api.post("/skill-draft", { model, instruction, key: skillKey })) as { ok: boolean; out: string; text?: string; cost?: number }
+    const r = await api.skillDraft({ model, instruction, key: skillKey }).catch((e) => void toast.error(errMsg(e)))
     setBusy(false)
-    if (!r.ok || !r.text) return void toast.error(r.out)
+    if (!r) return
     toast.success(t("skills.writer.draftReady"), { description: r.cost ? t("skills.writer.cost", { cost: r.cost.toFixed(4) }) : undefined })
     onClose()
     onDraft(r.text)
