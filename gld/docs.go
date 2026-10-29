@@ -77,23 +77,28 @@ func wroteDoc(tr, path string) bool {
 }
 
 func routesDocs(mux *http.ServeMux) {
-	mux.HandleFunc("GET /conv-doc", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/sessions/{id}/conversation/document", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
 		q := r.URL.Query()
-		tr, ok := transcript(q.Get("dir"), q.Get("id"))
+		tr, ok := transcript(q.Get("dir"), id)
 		path := q.Get("path")
 		typ := docType(path)
+		notFound := func() { writeErr(w, http.StatusNotFound, "not_found", L("srv.http_util.introuvable")) }
 		if !ok || typ == "" || !filepath.IsAbs(path) || !wroteDoc(tr, path) {
-			http.NotFound(w, r)
+			notFound()
 			return
 		}
 		f, err := openTrusted(path)
 		if err != nil {
-			http.NotFound(w, r)
+			notFound()
 			return
 		}
 		defer f.Close()
 		if st, err := f.Stat(); err != nil || !st.Mode().IsRegular() || st.Size() > docMax {
-			http.NotFound(w, r)
+			notFound()
 			return
 		}
 		h := w.Header()

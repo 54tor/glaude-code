@@ -37,13 +37,13 @@ func joinAs(t *testing.T, h http.Handler, sess, dir, title, name string) (cookie
 
 func addAs(h http.Handler, c, csrf, text string, hdr map[string]string) *httptest.ResponseRecorder {
 	b, _ := json.Marshal(map[string]string{"text": text})
-	return gReq{method: "POST", path: "/queue-add", body: string(b), cookie: c, csrf: csrf, hdr: hdr}.do(h)
+	return gReq{method: "POST", path: "/v1/sessions/" + id1 + "/queue", body: string(b), cookie: c, csrf: csrf, hdr: hdr}.do(h)
 }
 
 func itemOf(t *testing.T, w *httptest.ResponseRecorder) QItem {
 	t.Helper()
 	var r struct{ Item QItem }
-	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &r) != nil {
+	if w.Code != 201 || json.Unmarshal(w.Body.Bytes(), &r) != nil {
 		t.Fatalf("ajout : %d %s", w.Code, w.Body)
 	}
 	return r.Item
@@ -135,14 +135,14 @@ func TestTwoInvitesIndependentCookiesAndModes(t *testing.T) {
 		t.Fatalf("auteurs : %+v %+v", a, b)
 	}
 	for _, it := range []string{a.ID, host.ID} {
-		if w := (gReq{method: "POST", path: "/queue-rm", body: `{"item":"` + it + `"}`, cookie: cb, csrf: csrfB}).do(h); w.Code != 403 {
+		if w := (gReq{method: "DELETE", path: "/v1/sessions/" + id1 + "/queue/" + it, cookie: cb, csrf: csrfB}).do(h); w.Code != 403 {
 			t.Fatalf("B retire %s : %d", it, w.Code)
 		}
 	}
-	if w := (gReq{method: "POST", path: "/queue-rm", body: `{"item":"` + a.ID + `"}`, cookie: ca, csrf: csrfB}).do(h); w.Code != 403 {
+	if w := (gReq{method: "DELETE", path: "/v1/sessions/" + id1 + "/queue/" + a.ID, cookie: ca, csrf: csrfB}).do(h); w.Code != 403 {
 		t.Fatalf("csrf de B pour A : %d", w.Code)
 	}
-	if w := (gReq{method: "POST", path: "/queue-rm", body: `{"item":"` + a.ID + `"}`, cookie: ca, csrf: csrfA}).do(h); w.Code != 200 {
+	if w := (gReq{method: "DELETE", path: "/v1/sessions/" + id1 + "/queue/" + a.ID, cookie: ca, csrf: csrfA}).do(h); w.Code != 200 {
 		t.Fatalf("A retire le sien : %d", w.Code)
 	}
 	if err := shareSt.SetInviteMode(id1, invB, "ro"); err != nil {
@@ -151,19 +151,19 @@ func TestTwoInvitesIndependentCookiesAndModes(t *testing.T) {
 	if w := addAs(h, cb, csrfB, "x", nil); w.Code != 403 {
 		t.Fatalf("B en lecture seule : %d", w.Code)
 	}
-	if w := addAs(h, ca, csrfA, "y", nil); w.Code != 200 {
+	if w := addAs(h, ca, csrfA, "y", nil); w.Code != 201 {
 		t.Fatalf("A en écriture : %d", w.Code)
 	}
 	w := gReq{method: "GET", path: "/guest-me", cookie: cb}.do(h)
 	if !strings.Contains(w.Body.String(), `"mode":"ro"`) {
 		t.Fatalf("mode de B : %s", w.Body)
 	}
-	if w := (gReq{method: "GET", path: "/conv", cookie: cb}).do(h); w.Code != 200 {
+	if w := (gReq{method: "GET", path: "/v1/sessions/" + id1 + "/conversation", cookie: cb}).do(h); w.Code != 200 {
 		t.Fatalf("B lit : %d", w.Code)
 	}
 	// B ne voit que l'hôte et lui-même : ni texte, ni libellé, ni identifiant d'invitation de A, par aucune route.
 	seen := queueSeen(t, h, gReq{cookie: cb})
-	for _, p := range []string{"/queue", "/session-live"} {
+	for _, p := range []string{"/queue", "/live"} {
 		got := seen[p]
 		if _, ok := got["de B"]; !ok || p == "/queue" && got["de B"] != "Invité 2" || got["de l'hôte"] != "" || len(got) != 2 {
 			t.Fatalf("%s vu par B : %v", p, got)
@@ -177,7 +177,7 @@ func TestTwoInvitesIndependentCookiesAndModes(t *testing.T) {
 		}
 	}
 	hostSeen := queueSeen(t, h, gReq{tokCookie: modeTok})
-	for _, p := range []string{"/queue", "/session-live"} {
+	for _, p := range []string{"/queue", "/live"} {
 		if _, ok := hostSeen[p]["y"]; len(hostSeen[p]) != 3 || !ok || p == "/queue" && hostSeen[p]["y"] != "Léa" {
 			t.Fatalf("%s vu par l'hôte : %v", p, hostSeen[p])
 		}
@@ -186,15 +186,15 @@ func TestTwoInvitesIndependentCookiesAndModes(t *testing.T) {
 
 func queueRaw(h http.Handler, base gReq) map[string]string {
 	out := map[string]string{}
-	for _, p := range []string{"/queue", "/session-live"} {
+	for _, p := range []string{"/queue", "/live"} {
 		q := base
-		q.method, q.path = "GET", p+"?id="+id1+"&dir=-p"
+		q.method, q.path = "GET", "/v1/sessions/"+id1+p+"?dir=-p"
 		out[p] = q.do(h).Body.String()
 	}
 	return out
 }
 
-// queueSeen : texte -> libellé des éléments rendus par /queue (items) et /session-live (pending).
+// queueSeen : texte -> libellé des éléments rendus par /queue (items) et /live (pending).
 func queueSeen(t *testing.T, h http.Handler, base gReq) map[string]map[string]string {
 	t.Helper()
 	out := map[string]map[string]string{}
@@ -231,11 +231,11 @@ func TestRegenKillsOnlyThatInvite(t *testing.T) {
 	if l := queueSt.List(id1); len(l) != 2 || l[0].ID != sending.ID || l[1].ID != kb.ID {
 		t.Fatalf("file après régénération : %+v", l)
 	}
-	w := gReq{method: "GET", path: "/conv", cookie: ca}.do(h)
+	w := gReq{method: "GET", path: "/v1/sessions/" + id1 + "/conversation", cookie: ca}.do(h)
 	if k := cookieOf(w, gName); w.Code != 401 || k == nil || k.MaxAge >= 0 {
 		t.Fatalf("ancien cookie de A : %d", w.Code)
 	}
-	if w := (gReq{method: "GET", path: "/conv", cookie: cb}).do(h); w.Code != 200 {
+	if w := (gReq{method: "GET", path: "/v1/sessions/" + id1 + "/conversation", cookie: cb}).do(h); w.Code != 200 {
 		t.Fatalf("B : %d", w.Code)
 	}
 	sh, _ := shareSt.Get(id1)
@@ -273,10 +273,10 @@ func TestRevokeDropsItsQueueAndKeepsOthers(t *testing.T) {
 	if l := queueSt.List(id1); len(l) != 2 || l[0].ID != host.ID || l[1].ID != b.ID {
 		t.Fatalf("file : %+v", l)
 	}
-	if w := (gReq{method: "GET", path: "/conv", cookie: ca}).do(h); w.Code != 401 {
+	if w := (gReq{method: "GET", path: "/v1/sessions/" + id1 + "/conversation", cookie: ca}).do(h); w.Code != 401 {
 		t.Fatalf("A révoqué : %d", w.Code)
 	}
-	if w := (gReq{method: "GET", path: "/conv", cookie: cb}).do(h); w.Code != 200 {
+	if w := (gReq{method: "GET", path: "/v1/sessions/" + id1 + "/conversation", cookie: cb}).do(h); w.Code != 200 {
 		t.Fatalf("B : %d", w.Code)
 	}
 	if !errors.Is(shareSt.Revoke(id1, invA), errInviteNone) {
@@ -454,12 +454,12 @@ func TestGuestRateLimitPerInvite(t *testing.T) {
 	ca, csrfA, _ := joinAs(t, h, id1, "-p", "", "")
 	cb, csrfB, _ := joinAs(t, h, id1, "-p", "", "")
 	for i := range guestAddMax + 1 {
-		want := map[bool]int{true: 429, false: 200}[i == guestAddMax]
+		want := map[bool]int{true: 429, false: 201}[i == guestAddMax]
 		if w := addAs(h, ca, csrfA, "m", nil); w.Code != want {
 			t.Fatalf("A ajout %d : %d", i+1, w.Code)
 		}
 	}
-	if w := addAs(h, cb, csrfB, "m", nil); w.Code != 200 {
+	if w := addAs(h, cb, csrfB, "m", nil); w.Code != 201 {
 		t.Fatalf("B limité par A : %d", w.Code)
 	}
 }
@@ -600,7 +600,7 @@ func TestInviteHeaderSpoofIgnored(t *testing.T) {
 	if a.Author != "guest" || a.Guest != invA {
 		t.Fatalf("invité forgé : %+v", a)
 	}
-	w := gReq{method: "POST", path: "/queue-add", body: `{"id":"` + id1 + `","text":"h"}`, tokCookie: modeTok, hdr: map[string]string{authorHeader: "guest", inviteHeader: invB}}.do(h)
+	w := gReq{method: "POST", path: "/v1/sessions/" + id1 + "/queue", body: `{"id":"` + id1 + `","text":"h"}`, tokCookie: modeTok, hdr: map[string]string{authorHeader: "guest", inviteHeader: invB}}.do(h)
 	if it := itemOf(t, w); it.Author != "host" || it.Guest != "" {
 		t.Fatalf("hôte forgé : %+v", it)
 	}
@@ -617,7 +617,7 @@ func TestInviteHeaderStrippedAtRelayAndChildDerivesInvite(t *testing.T) {
 	var author, invite []string
 	child := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		author, invite = append(author, r.Header.Get(authorHeader)), append(invite, r.Header.Get(inviteHeader))
-		w.Write([]byte(`{"ok":true,"item":{}}`))
+		w.Write([]byte(`{"item":{}}`))
 	}))
 	defer child.Close()
 	cu, _ := url.Parse(child.URL)
@@ -628,7 +628,7 @@ func TestInviteHeaderStrippedAtRelayAndChildDerivesInvite(t *testing.T) {
 	}
 	spoof := map[string]string{authorHeader: "guest", inviteHeader: "0123456789abcdef"}
 	addAs(h, "perso."+sec, guestCSRF(sec), "x", spoof)
-	r := httptest.NewRequest("POST", "/queue-add", strings.NewReader(`{"id":"`+id1+`","text":"h"}`))
+	r := httptest.NewRequest("POST", "/v1/sessions/"+id1+"/queue", strings.NewReader(`{"text":"h"}`))
 	r.Host = testHost
 	r.AddCookie(&http.Cookie{Name: tokenCookie, Value: modeTok})
 	r.AddCookie(&http.Cookie{Name: homeCookie, Value: "perso"})
@@ -648,7 +648,7 @@ func TestInviteHeaderStrippedAtRelayAndChildDerivesInvite(t *testing.T) {
 	tok2, in2, _ := shareSt.CreateInvite(id1, "-p", "", "Léa")
 	sec2, _, _, _ := shareSt.Redeem(tok2)
 	hdr := map[string]string{childHeader: "ctok", guestHeader: sec2, shareHeader: hID1, csrfHeader: guestCSRF(sec2), inviteHeader: "0123456789abcdef", authorHeader: "host"}
-	w := gReq{method: "POST", path: "/queue-add", body: `{"text":"m"}`, hdr: hdr}.do(hc)
+	w := gReq{method: "POST", path: "/v1/sessions/" + id1 + "/queue", body: `{"text":"m"}`, hdr: hdr}.do(hc)
 	if it := itemOf(t, w); it.Author != "guest" || it.Guest != in2.ID {
 		t.Fatalf("enfant : %+v", it)
 	}
@@ -718,7 +718,7 @@ func TestQueueGuestCapPerSession(t *testing.T) {
 			t.Fatalf("élément invité %d : %v", i+1, err)
 		}
 	}
-	if w := addAs(h, cb, csrfB, "30e", nil); w.Code != 200 {
+	if w := addAs(h, cb, csrfB, "30e", nil); w.Code != 201 {
 		t.Fatalf("30e : %d", w.Code)
 	}
 	for _, q := range []struct{ c, csrf string }{{ca, csrfA}, {cb, csrfB}} {
@@ -726,7 +726,7 @@ func TestQueueGuestCapPerSession(t *testing.T) {
 			t.Fatalf("31e invité : %d %s", w.Code, w.Body)
 		}
 	}
-	w := gReq{method: "POST", path: "/queue-add", body: `{"id":"` + id1 + `","text":"hôte"}`, tokCookie: modeTok}.do(h)
+	w := gReq{method: "POST", path: "/v1/sessions/" + id1 + "/queue", body: `{"id":"` + id1 + `","text":"hôte"}`, tokCookie: modeTok}.do(h)
 	if it := itemOf(t, w); it.Author != "host" {
 		t.Fatalf("hôte : %+v", it)
 	}
@@ -738,7 +738,7 @@ func TestChildProxyStripsInviteHeaders(t *testing.T) {
 	child := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { got = r.Header.Clone() }))
 	defer child.Close()
 	cu, _ := url.Parse(child.URL)
-	r := httptest.NewRequest("POST", "/queue-add", strings.NewReader(`{}`))
+	r := httptest.NewRequest("POST", "/v1/sessions/"+id1+"/queue", strings.NewReader(`{}`))
 	r.Header.Set(authorHeader, "guest")
 	r.Header.Set(inviteHeader, "0123456789abcdef")
 	childProxy(cu, "x").ServeHTTP(httptest.NewRecorder(), r)
@@ -760,7 +760,7 @@ func TestChildGuestSeesOnlyOwnQueue(t *testing.T) {
 	queueSt.Add(id1, "guest", b.ID, "de B")
 	queueSt.Add(id1, "host", "", "de l'hôte")
 	seen := queueSeen(t, h, gReq{hdr: map[string]string{childHeader: "ctok", guestHeader: sec, shareHeader: hID1}})
-	for _, p := range []string{"/queue", "/session-live"} {
+	for _, p := range []string{"/queue", "/live"} {
 		_, b := seen[p]["de B"]
 		_, a := seen[p]["de A"]
 		if got := seen[p]; len(got) != 2 || !b || a || p == "/queue" && got["de B"] != "Invité 2" {

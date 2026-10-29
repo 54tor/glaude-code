@@ -51,14 +51,14 @@ func TestTerminalWeb(t *testing.T) {
 
 	token := func() string {
 		t.Helper()
-		m := ok(t, h, "/term-open", `{"id":"`+sid+`"}`, true, "token")
+		m := v1ok(t, h, "POST", "/v1/terminal", `{"id":"`+sid+`"}`, "token")
 		return m["token"].(string)
 	}
 	dial := func(tok, origin string) (*websocket.Conn, int) {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		c, resp, err := websocket.Dial(ctx, "ws://"+host+"/term-ws?t="+tok, &websocket.DialOptions{HTTPHeader: http.Header{"Origin": {origin}}})
+		c, resp, err := websocket.Dial(ctx, "ws://"+host+"/v1/terminal/ws?t="+tok, &websocket.DialOptions{HTTPHeader: http.Header{"Origin": {origin}}})
 		if err != nil {
 			if resp == nil {
 				t.Fatal(err)
@@ -69,8 +69,8 @@ func TestTerminalWeb(t *testing.T) {
 	}
 	self := "http://" + host
 
-	status(t, h, "POST", "/term-open", `{"id":"pas-un-id"}`, 400)
-	ok(t, h, "/term-open", `{"id":"99999999-2222-3333-4444-555555555555"}`, false, "pas dans tmux")
+	status(t, h, "POST", "/v1/terminal", `{"id":"pas-un-id"}`, 400)
+	v1err(t, h, "POST", "/v1/terminal", `{"id":"99999999-2222-3333-4444-555555555555"}`, 409, "pas dans tmux")
 	if _, code := dial("inconnu", self); code != 403 {
 		t.Fatalf("jeton inconnu : %d", code)
 	}

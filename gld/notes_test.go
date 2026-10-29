@@ -15,12 +15,12 @@ func TestNotes(t *testing.T) {
 	routesNotes(mux)
 	post := func(body string) (int, string) {
 		w := httptest.NewRecorder()
-		mux.ServeHTTP(w, httptest.NewRequest("POST", "/notes", strings.NewReader(body)))
+		mux.ServeHTTP(w, httptest.NewRequest("PUT", "/v1/notes", strings.NewReader(body)))
 		return w.Code, w.Body.String()
 	}
 	get := func() string {
 		w := httptest.NewRecorder()
-		mux.ServeHTTP(w, httptest.NewRequest("GET", "/notes", nil))
+		mux.ServeHTTP(w, httptest.NewRequest("GET", "/v1/notes", nil))
 		return w.Body.String()
 	}
 	if c, _ := post(`{"key":"x/abc","text":"t"}`); c != 400 {
@@ -42,7 +42,7 @@ func TestNotes(t *testing.T) {
 	big := `{"key":"p/Big","text":"` + strings.Repeat("x", noteMax-10) + `"}`
 	post(big)
 	post(`{"key":"p/Big2","text":"` + strings.Repeat("y", noteMax-10) + `"}`)
-	if _, out := post(`{"key":"p/Big2","to":"p/Big"}`); !strings.Contains(out, `"ok":false`) || !strings.Contains(get(), "p/Big2") {
+	if c, out := post(`{"key":"p/Big2","to":"p/Big"}`); c != 413 || !strings.Contains(out, `"too_large"`) || !strings.Contains(get(), "p/Big2") {
 		t.Fatal("fusion au-delà de noteMax acceptée :", out)
 	}
 	post(`{"key":"p/Gamma","to":"p/Gamma"}`)

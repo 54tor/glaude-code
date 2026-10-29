@@ -5,9 +5,7 @@ package main
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"slices"
 	"strconv"
@@ -197,29 +195,24 @@ func routesQueue(mux *http.ServeMux) {
 		q = nil
 	}
 	queueSt = q
-	fail := func(w http.ResponseWriter, code int, key string) {
-		writeJSON(w, code, map[string]any{"ok": false, "out": L(key)})
+	fail := func(w http.ResponseWriter, code int, slug, key string) {
+		writeErr(w, code, slug, L(key))
 	}
-	body := func(w http.ResponseWriter, r *http.Request) (struct{ ID, Item, Text string }, bool) {
-		var req struct{ ID, Item, Text string }
-		if json.NewDecoder(io.LimitReader(r.Body, sendMax+1<<10)).Decode(&req) != nil || !idRe.MatchString(req.ID) {
-			fail(w, 400, "srv.http_util.requeteInvalide")
-			return req, false
+	// ready : l'identifiant de session du chemin, et la file ouverte.
+	ready := func(w http.ResponseWriter, r *http.Request) (string, bool) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
+			return "", false
 		}
 		if queueSt == nil {
-			fail(w, 503, "srv.queue.indisponible")
-			return req, false
+			fail(w, 503, "unavailable", "srv.queue.indisponible")
+			return "", false
 		}
-		return req, true
+		return id, true
 	}
-	mux.HandleFunc("GET /queue", func(w http.ResponseWriter, r *http.Request) {
-		id := r.URL.Query().Get("id")
-		if !idRe.MatchString(id) {
-			fail(w, 400, "srv.http_util.requeteInvalide")
-			return
-		}
-		if queueSt == nil {
-			fail(w, 503, "srv.queue.indisponible")
+	mux.HandleFunc("GET /v1/sessions/{id}/queue", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := ready(w, r)
+		if !ok {
 			return
 		}
 		type item struct {
@@ -236,9 +229,13 @@ func routesQueue(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"items": out})
 	})
-	mux.HandleFunc("POST /queue-add", func(w http.ResponseWriter, r *http.Request) {
-		req, ok := body(w, r)
+	mux.HandleFunc("POST /v1/sessions/{id}/queue", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := ready(w, r)
 		if !ok {
+			return
+		}
+		var req struct{ Text string }
+		if !decodeBody(w, r, &req, sendMax+1<<10) {
 			return
 		}
 		// Auteur et invitation sont posés par la garde invité, qui retire toute valeur du client : le corps ne les choisit pas.
@@ -246,43 +243,51 @@ func routesQueue(mux *http.ServeMux) {
 		if r.Header.Get(authorHeader) == "guest" {
 			author = "guest"
 		}
-		it, err := queueSt.Add(req.ID, author, r.Header.Get(inviteHeader), req.Text)
+		it, err := queueSt.Add(id, author, r.Header.Get(inviteHeader), req.Text)
 		switch err {
 		case nil:
-			writeJSON(w, 200, map[string]any{"ok": true, "item": it})
+			writeJSON(w, 201, map[string]any{"item": it})
 		case errQueueFull:
-			fail(w, 409, "srv.queue.pleine")
+			fail(w, 409, "conflict", "srv.queue.pleine")
 		case errQueueText:
-			fail(w, 400, "srv.queue.texteRefuse")
+			fail(w, 400, "bad_request", "srv.queue.texteRefuse")
 		default:
-			fail(w, 500, "srv.queue.indisponible")
+			fail(w, 500, "internal", "srv.queue.indisponible")
 		}
 	})
-	mux.HandleFunc("POST /queue-rm", func(w http.ResponseWriter, r *http.Request) {
-		req, ok := body(w, r)
+	mux.HandleFunc("DELETE /v1/sessions/{id}/queue/{qid}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := ready(w, r)
 		if !ok {
 			return
 		}
-		it, err := queueSt.Remove(req.ID, req.Item)
+		it, err := queueSt.Remove(id, r.PathValue("qid"))
 		if errors.Is(err, errQueueBusy) {
-			fail(w, 409, "srv.queue.envoiEnCours")
+			fail(w, 409, "conflict", "srv.queue.envoiEnCours")
 			return
 		}
 		if err != nil {
-			fail(w, 404, "srv.queue.introuvable")
+			fail(w, 404, "not_found", "srv.queue.introuvable")
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "text": it.Text})
+		writeJSON(w, 200, map[string]any{"text": it.Text})
 	})
-	mux.HandleFunc("POST /queue-retry", func(w http.ResponseWriter, r *http.Request) {
-		req, ok := body(w, r)
+	mux.HandleFunc("PATCH /v1/sessions/{id}/queue/{qid}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := ready(w, r)
 		if !ok {
 			return
 		}
-		if !queueSt.Retry(req.ID, req.Item) {
-			fail(w, 404, "srv.queue.introuvable")
+		var req struct{ State string }
+		if !decodeBody(w, r, &req, 1<<10) {
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true})
+		if req.State != "queued" {
+			fail(w, 400, "bad_request", "srv.http_util.requeteInvalide")
+			return
+		}
+		if !queueSt.Retry(id, r.PathValue("qid")) {
+			fail(w, 404, "not_found", "srv.queue.introuvable")
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	})
 }

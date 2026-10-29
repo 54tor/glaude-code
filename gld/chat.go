@@ -4,6 +4,7 @@ package main
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -123,44 +124,48 @@ func relay(out io.Reader, emit func(chatEvent)) (sawResult bool) {
 }
 
 func chatHandler(w http.ResponseWriter, r *http.Request) {
-	var req struct{ Dir, ID, Prompt, Args, Mode string }
-	if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil {
-		writeJSON(w, 400, map[string]any{"error": L("srv.http_util.requeteInvalide")})
+	id, ok := pathID(w, r, "id")
+	if !ok {
 		return
 	}
-	p, ok := transcript(req.Dir, req.ID)
+	var req struct{ Prompt, Args, Mode string }
+	if !decodeBody(w, r, &req, 1<<16) {
+		return
+	}
+	p, found := transcript(r.URL.Query().Get("dir"), id)
 	flags, ignored, err := claudeFlags(req.Args)
+	status := http.StatusBadRequest
 	switch {
-	case !ok:
-		err = terr("srv.chat.sessionInvalide")
+	case !found:
+		err, status = terr("srv.chat.sessionInvalide"), http.StatusNotFound
 	case err != nil:
 	case strings.TrimSpace(req.Prompt) == "":
 		err = terr("srv.chat.messageVide")
 	case !slices.Contains(chatModes, req.Mode):
 		err = terr("srv.chat.modeDAutorisationInconnu")
 	default:
-		err = checkPrompt(req.ID, req.Prompt) // aucun shell ici : le message est un simple argument, Windows compris
+		err = checkPrompt(id, req.Prompt) // aucun shell ici : le message est un simple argument, Windows compris
 	}
 	if err != nil {
-		writeJSON(w, 400, map[string]any{"error": err.Error()})
+		writeErr(w, status, "bad_request", err.Error())
 		return
 	}
 	st, _ := os.Stat(p)
 	cwd := info(p, st).Cwd
 	if fi, err := os.Stat(cwd); cwd == "" || err != nil || !fi.IsDir() {
-		writeJSON(w, 400, map[string]any{"error": L("srv.routes_sessions.dossierDuProjetIntrouvable", "A1", cwd)})
+		writeErr(w, http.StatusNotFound, "not_found", L("srv.routes_sessions.dossierDuProjetIntrouvable", "A1", cwd))
 		return
 	}
 
 	chatMu.Lock()
-	if chatRun[req.ID] != nil {
+	if chatRun[id] != nil {
 		chatMu.Unlock()
-		writeJSON(w, 409, map[string]any{"error": L("srv.chat.claudeRepondDejaDans")})
+		writeErr(w, http.StatusConflict, "conflict", L("srv.chat.claudeRepondDejaDans"))
 		return
 	}
 	// Pas lié à la requête : fermer l'onglet ne coupe pas Claude au milieu d'un tour (seul « Arrêter » le fait).
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-	cmd := withPath(exec.CommandContext(ctx, "claude", withGuard(chatArgs(flags, req.ID, req.Mode, req.Prompt))...))
+	cmd := withPath(exec.CommandContext(ctx, "claude", withGuard(chatArgs(flags, id, req.Mode, req.Prompt))...))
 	cmd.Dir = cwd
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
@@ -171,10 +176,10 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		chatMu.Unlock()
 		cancel()
-		writeJSON(w, 500, map[string]any{"error": err.Error()})
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
-	chatRun[req.ID] = cmd
+	chatRun[id] = cmd
 	chatMu.Unlock()
 	// Session révoquée ou droit retiré (withAuthWatch) : le tour s'arrête, contrairement à un onglet fermé.
 	stopRevoked := context.AfterFunc(r.Context(), func() {
@@ -183,11 +188,11 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	})
 	defer stopRevoked()
-	journal("chat %s mode=%q options=%v ignorées=%v (%d caractères)", req.ID, req.Mode, flags, ignored, len(req.Prompt))
+	journal("chat %s mode=%q options=%v ignorées=%v (%d caractères)", id, req.Mode, flags, ignored, len(req.Prompt))
 	defer func() {
 		cancel()
 		chatMu.Lock()
-		delete(chatRun, req.ID)
+		delete(chatRun, id)
 		chatMu.Unlock()
 	}()
 
@@ -215,19 +220,21 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func chatStopHandler(w http.ResponseWriter, r *http.Request) {
-	var req struct{ ID string }
-	json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req)
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
 	chatMu.Lock()
-	cmd := chatRun[req.ID]
+	cmd := chatRun[id]
 	chatMu.Unlock()
 	if cmd == nil || cmd.Process == nil {
-		writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.chat.rienEnCours")})
+		writeErr(w, http.StatusNotFound, "not_found", L("srv.chat.rienEnCours"))
 		return
 	}
 	if cmd.Process.Signal(os.Interrupt) != nil { // Windows : pas de signal, on termine le processus
 		cmd.Process.Kill()
 	}
-	writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.chat.arretDemande")})
+	writeJSON(w, 200, map[string]any{"message": L("srv.chat.arretDemande")})
 }
 
 // newSessionHandler ouvre une nouvelle session claude, dans le dossier de travail d'une session existante (dir/id) ou dans un dossier
@@ -235,8 +242,7 @@ func chatStopHandler(w http.ResponseWriter, r *http.Request) {
 // avec un prompt (ex. les références des sessions d'un groupe). Via gld-matin (matin.go), qui passe le prompt par un fichier temporaire.
 func newSessionHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct{ Dir, ID, Prompt, Args, Cwd string }
-	if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+	if !decodeBody(w, r, &req, 1<<16) {
 		return
 	}
 	p, ok := transcript(req.Dir, req.ID)
@@ -263,7 +269,7 @@ func newSessionHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err != nil {
-		writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
 	cwd := filepath.Clean(req.Cwd)
@@ -272,12 +278,16 @@ func newSessionHandler(w http.ResponseWriter, r *http.Request) {
 		cwd = info(p, st).Cwd
 	}
 	if fi, err := os.Stat(cwd); cwd == "" || err != nil || !fi.IsDir() {
-		writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.routes_sessions.dossierDuProjetIntrouvable", "A1", cwd)})
+		writeErr(w, http.StatusNotFound, "not_found", L("srv.routes_sessions.dossierDuProjetIntrouvable", "A1", cwd))
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 	out, err := matin(ctx, append(args, "--prompt", req.Prompt, cwd)...)
 	journal("new-session dans %s (%d caractères) : %v", cwd, len(req.Prompt), errOr(err))
-	writeJSON(w, 200, map[string]any{"ok": err == nil, "out": out})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "launch_failed", cmp.Or(out, err.Error()))
+		return
+	}
+	writeJSON(w, 201, map[string]any{"message": out})
 }

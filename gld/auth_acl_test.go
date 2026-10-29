@@ -277,11 +277,11 @@ func TestGateRightsMatrix(t *testing.T) {
 	}{
 		{&r, "GET", "/memory-list", true, 200},
 		{&r, "POST", "/memory-save", false, 403},
-		{&r, "POST", "/chat", false, 403},
+		{&r, "POST", "/v1/sessions/x/chat", false, 403},
 		{&r, "POST", "/homes-save", false, 403},
 		{&u, "GET", "/account", true, 200},
-		{&u, "GET", "/conv", false, 403},
-		{&u, "GET", "/info", false, 403},
+		{&u, "GET", "/v1/sessions/x/conversation", false, 403},
+		{&u, "GET", "/v1/info", false, 403},
 		{&a, "GET", "/memory-list", false, 403}, // pas de super-droit implicite
 		{&a, "POST", "/homes-save", true, 200},
 		{nil, "GET", "/memory-list", false, 401},
@@ -290,13 +290,13 @@ func TestGateRightsMatrix(t *testing.T) {
 		{nil, "GET", "/assets/x.js", true, 200},
 		{nil, "POST", "/auth/login", true, 200},
 		{&r, "GET", "/homes", true, 200},
-		{&r, "GET", "/search", false, 403},
-		{&wr, "POST", "/tabs-save", true, 200},
-		{&wr, "POST", "/rm", false, 403},
-		{&wr, "POST", "/rename", false, 403},
-		{&wr, "POST", "/reassign", false, 403},
-		{&wr, "POST", "/keepwarm", false, 403},
-		{&wr, "POST", "/session-trash-purge", false, 403},
+		{&r, "GET", "/v1/sessions", false, 403},
+		{&wr, "PUT", "/v1/tabs", true, 200},
+		{&wr, "DELETE", "/v1/sessions", false, 403},
+		{&wr, "PATCH", "/v1/sessions/x", false, 403},
+		{&wr, "PATCH", "/v1/sessions", false, 403},
+		{&wr, "PUT", "/v1/keepwarm", false, 403},
+		{&wr, "DELETE", "/v1/trash/sessions", false, 403},
 		{&wr, "POST", "/snippet-save", false, 403},
 		{&wr, "POST", "/snippet-rm", false, 403},
 		{&wr, "POST", "/snippet-rename", false, 403},
@@ -376,7 +376,7 @@ func TestGateTamperedRights(t *testing.T) {
 	if w.Code != 403 || reached(w) || !strings.Contains(w.Body.String(), L("srv.auth.tamper")) {
 		t.Fatalf("ligne altérée : %d %s", w.Code, w.Body)
 	}
-	if w := g.do("POST", "/chat", &u, "", "{}"); w.Code != 403 {
+	if w := g.do("POST", "/v1/sessions/x/chat", &u, "", "{}"); w.Code != 403 {
 		t.Fatalf("droit ajouté par SQL accepté : %d", w.Code)
 	}
 }
@@ -393,15 +393,15 @@ func TestGatePassiveNoTouch(t *testing.T) {
 	old := authNow
 	t.Cleanup(func() { authNow = old })
 	authNow = func() time.Time { return old().Add(5 * time.Minute) }
-	if w := g.do("GET", "/sessions-stamp", &u, "", ""); !reached(w) || seen() != before {
+	if w := g.do("GET", "/v1/state/stamp", &u, "", ""); !reached(w) || seen() != before {
 		t.Fatalf("sondage compté comme activité : %d", w.Code)
 	}
-	for _, p := range []string{"/api", "/conv", "/session-screen"} {
+	for _, p := range []string{"/v1/state", "/v1/sessions/x/conversation", "/v1/sessions/x/screen"} {
 		if w := g.do("GET", p, &u, "", ""); !reached(w) || seen() != before {
 			t.Fatalf("%s compté comme activité : %d", p, w.Code)
 		}
 	}
-	if w := g.do("GET", "/info", &u, "", ""); !reached(w) || seen() == before {
+	if w := g.do("GET", "/v1/info", &u, "", ""); !reached(w) || seen() == before {
 		t.Fatalf("activité non comptée : %d", w.Code)
 	}
 }
@@ -601,11 +601,11 @@ func TestGateTrashRestoreNeedsConfig(t *testing.T) {
 		{&mw, "s/u/x.md", 403}, {&mw, "k/outil/SKILL.md", 403}, {&mw, "z/inconnu", 403}, {&mw, "m/projet/note.md", 200},
 		{&cw, "s/u/x.md", 200}, {&cw, "k/outil/SKILL.md", 200},
 	} {
-		if w := g.do("POST", "/trash-restore", c.u, "", `{"ID":"`+ids[c.key]+`"}`); w.Code != c.code {
+		if w := g.do("PATCH", "/v1/trash/memory/"+ids[c.key], c.u, "", `{"trashed":false}`); w.Code != c.code {
 			t.Errorf("%s : %d", c.key, w.Code)
 		}
 	}
-	if w := g.do("POST", "/trash-restore", &mw, "", `{"ID":"../x"}`); w.Code != 403 {
+	if w := g.do("PATCH", "/v1/trash/memory/..%2Fx", &mw, "", `{"trashed":false}`); w.Code != 403 {
 		t.Errorf("identifiant hors corbeille : %d", w.Code)
 	}
 }
@@ -632,7 +632,7 @@ func TestGateMemoryMergeLaunchNeedsExec(t *testing.T) {
 	}
 }
 
-// /vgroups remplace aussi les dossiers enregistrés, racines de l'IDE : en ajouter demande exec, comme POST /dirs.
+// PUT /v1/vgroups remplace aussi les dossiers enregistrés, racines de l'IDE : en ajouter demande exec, comme POST /dirs.
 func TestGateVgroupsNewDirNeedsExec(t *testing.T) {
 	g := newGateRig(t)
 	known := t.TempDir()
@@ -653,7 +653,7 @@ func TestGateVgroupsNewDirNeedsExec(t *testing.T) {
 	}{
 		{&mw, keep, 200}, {&mw, add, 403}, {&mw, addProj, 403}, {&ex, add, 200},
 	} {
-		if w := g.do("POST", "/vgroups", c.u, "", c.body); w.Code != c.code {
+		if w := g.do("PUT", "/v1/vgroups", c.u, "", c.body); w.Code != c.code {
 			t.Errorf("%s : %d", c.body, w.Code)
 		}
 	}

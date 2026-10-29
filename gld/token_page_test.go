@@ -48,7 +48,7 @@ func TestTokenPage(t *testing.T) {
 	if strings.Contains(body, modeTok) {
 		t.Fatal("la page contient le jeton")
 	}
-	if w := (modeReq{method: "GET", path: "/api"}).do(srv); w.Code != 401 {
+	if w := (modeReq{method: "GET", path: "/v1/state"}).do(srv); w.Code != 401 {
 		t.Fatalf("API sans cookie : %d", w.Code)
 	}
 

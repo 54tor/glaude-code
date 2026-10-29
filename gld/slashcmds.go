@@ -82,7 +82,7 @@ func slashCommands() []slashCmd {
 }
 
 func routesSlash(mux *http.ServeMux) {
-	mux.HandleFunc("GET /slash-commands", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/slash-commands", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"commands": slashCommands()})
 	})
 }

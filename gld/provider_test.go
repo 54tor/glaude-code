@@ -21,7 +21,7 @@ func TestProviderClaude(t *testing.T) {
 // Les sessions et la réponse de /api portent leur fournisseur ; les identifiants ne changent pas.
 func TestSessionPorteSonFournisseur(t *testing.T) {
 	h, _, _ := web(t)
-	m := status(t, h, "GET", "/api", "", 200)
+	m := status(t, h, "GET", "/v1/state", "", 200)
 	pv, _ := m["providers"].([]any)
 	if len(pv) != 1 || pv[0].(map[string]any)["id"] != "claude" {
 		t.Fatalf("%v", m["providers"])

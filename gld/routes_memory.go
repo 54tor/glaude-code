@@ -238,10 +238,9 @@ func routesMemory(mux *http.ServeMux) {
 		ev := readLoaded()
 		writeJSON(w, 200, map[string]any{"hook": len(ev) > 0, "files": loadsByFile(ev)})
 	})
-	mux.HandleFunc("GET /session-loaded", func(w http.ResponseWriter, r *http.Request) {
-		id := r.URL.Query().Get("id")
-		if !idRe.MatchString(id) {
-			writeJSON(w, 400, map[string]any{})
+	mux.HandleFunc("GET /v1/sessions/{id}/loaded", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
 			return
 		}
 		ev := loadsOfSession(readLoaded(), id)
@@ -250,12 +249,13 @@ func routesMemory(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"files": ev})
 	})
-	mux.HandleFunc("GET /session-loaded-file", func(w http.ResponseWriter, r *http.Request) {
-		id, file := r.URL.Query().Get("id"), r.URL.Query().Get("file")
-		if !idRe.MatchString(id) {
-			writeJSON(w, 400, map[string]any{})
+	mux.HandleFunc("GET /v1/sessions/{id}/loaded/files/{file}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
 			return
 		}
+		file := r.PathValue("file")
+		notFound := func() { writeErr(w, http.StatusNotFound, "not_found", L("srv.http_util.introuvable")) }
 		// Seuls les fichiers que le hook a vus charger dans cette session se lisent : pas de lecture de chemin arbitraire.
 		known := false
 		for _, e := range loadsOfSession(readLoaded(), id) {
@@ -263,23 +263,23 @@ func routesMemory(mux *http.ServeMux) {
 		}
 		real, rerr := filepath.EvalSymlinks(file)
 		if !known || rerr != nil || !loadedReadable(real) {
-			writeJSON(w, 404, map[string]any{})
+			notFound()
 			return
 		}
 		f, err := openTrusted(file)
 		if err != nil {
-			writeJSON(w, 404, map[string]any{})
+			notFound()
 			return
 		}
 		defer f.Close()
 		st, err := f.Stat()
 		if err != nil || !st.Mode().IsRegular() || st.Size() > memMax {
-			writeJSON(w, 404, map[string]any{})
+			notFound()
 			return
 		}
 		b, err := io.ReadAll(io.LimitReader(f, memMax+1))
 		if err != nil || len(b) > memMax || !utf8.Valid(b) {
-			writeJSON(w, 404, map[string]any{})
+			notFound()
 			return
 		}
 		writeJSON(w, 200, map[string]any{"text": string(b)})
@@ -359,45 +359,49 @@ func routesMemory(mux *http.ServeMux) {
 		writeJSON(w, 200, map[string]any{"ok": err == nil, "out": out, "prompt": prompt})
 	})
 	// Conversation dans le navigateur (chat.go).
-	mux.HandleFunc("GET /trash", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/trash/memory", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"items": trashList()})
 	})
-	mux.HandleFunc("GET /trash-file", func(w http.ResponseWriter, r *http.Request) {
-		_, text, err := trashItem(r.URL.Query().Get("id"))
+	mux.HandleFunc("GET /v1/trash/memory/{id}/file", func(w http.ResponseWriter, r *http.Request) {
+		_, text, err := trashItem(r.PathValue("id"))
 		if err != nil {
-			writeJSON(w, 404, map[string]any{"error": err.Error()})
+			writeErr(w, http.StatusNotFound, "not_found", err.Error())
 			return
 		}
 		writeJSON(w, 200, map[string]any{"text": text})
 	})
-	mux.HandleFunc("POST /trash-restore", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ ID string }
-		json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req)
-		t, err := trashRestore(req.ID)
-		journal("trash-restore %s → %s : %v", req.ID, t.Key, errOr(err))
-		if err != nil {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+	mux.HandleFunc("PATCH /v1/trash/memory/{id}", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Trashed *bool }
+		if !decodeBody(w, r, &req, 1<<12) {
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_memory.restaure", "A1", t.Path), "key": t.Key})
+		if req.Trashed == nil || *req.Trashed {
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
+			return
+		}
+		id := r.PathValue("id")
+		t, err := trashRestore(id)
+		journal("trash-restore %s → %s : %v", id, t.Key, errOr(err))
+		if err != nil {
+			writeErr(w, http.StatusConflict, "conflict", err.Error())
+			return
+		}
+		writeJSON(w, 200, map[string]any{"message": L("srv.routes_memory.restaure", "A1", t.Path), "key": t.Key})
 	})
-	mux.HandleFunc("POST /trash-purge", func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			ID  string
-			All bool // vider toute la corbeille : jamais implicite
-		}
-		json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req)
-		if req.ID == "" && !req.All {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.routes_memory.preciseUnElementOu")})
+	// ?item=<id> : un élément ; ?all=1 : toute la corbeille, jamais implicite.
+	mux.HandleFunc("DELETE /v1/trash/memory", func(w http.ResponseWriter, r *http.Request) {
+		id, all := r.URL.Query().Get("item"), r.URL.Query().Get("all") == "1"
+		if (id == "") == !all {
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.routes_memory.preciseUnElementOu"))
 			return
 		}
-		err := trashPurge(req.ID)
-		journal("trash-purge %q : %v", req.ID, errOr(err))
+		err := trashPurge(id)
+		journal("trash-purge %q : %v", id, errOr(err))
 		if err != nil {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			writeErr(w, http.StatusConflict, "conflict", err.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_memory.corbeilleVidee")})
+		writeJSON(w, 200, map[string]any{"message": L("srv.routes_memory.corbeilleVidee")})
 	})
 	// Groupes virtuels et favoris : le navigateur envoie l'ensemble, le serveur le valide et le remplace.
 }

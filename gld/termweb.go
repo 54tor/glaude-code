@@ -11,7 +11,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -70,29 +69,32 @@ func termGeometry(pane string) (sess, win string, cols, rows int, err error) {
 }
 
 func routesTerm(mux *http.ServeMux) {
-	mux.HandleFunc("GET /term-info", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/terminal", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"enabled": termEnabled()})
 	})
-	mux.HandleFunc("POST /term-open", func(w http.ResponseWriter, r *http.Request) {
-		fail := func(code int, msg string) { writeJSON(w, code, map[string]any{"ok": false, "out": msg}) }
+	mux.HandleFunc("POST /v1/terminal", func(w http.ResponseWriter, r *http.Request) {
+		fail := func(code int, slug, msg string) { writeErr(w, code, slug, msg) }
 		if !termEnabled() {
-			fail(403, L("srv.termweb.disabled"))
+			fail(403, "forbidden", L("srv.termweb.disabled"))
 			return
 		}
 		var req struct{ ID string }
-		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil || !idRe.MatchString(req.ID) {
-			fail(400, L("srv.http_util.requeteInvalide"))
+		if !decodeBody(w, r, &req, 1<<10) {
+			return
+		}
+		if !idRe.MatchString(req.ID) {
+			fail(400, "bad_id", L("srv.http_util.idInvalide"))
 			return
 		}
 		ids, err := sendable()
 		pane, ok := ids[req.ID]
 		if err != nil || !ok || !paneRe.MatchString(pane) {
-			fail(200, L("srv.sendkeys.cetteSessionNEst2"))
+			fail(409, "conflict", L("srv.sendkeys.cetteSessionNEst2"))
 			return
 		}
 		sess, win, cols, rows, err := termGeometry(pane)
 		if err != nil {
-			fail(200, err.Error())
+			fail(409, "conflict", err.Error())
 			return
 		}
 		t := termToken()
@@ -104,19 +106,19 @@ func routesTerm(mux *http.ServeMux) {
 		}
 		termToks[t] = termTok{pane, sess, win, cols, rows, req.ID, time.Now().Add(30 * time.Second)}
 		termMu.Unlock()
-		writeJSON(w, 200, map[string]any{"ok": true, "token": t, "cols": cols, "rows": rows})
+		writeJSON(w, 201, map[string]any{"token": t, "cols": cols, "rows": rows})
 	})
-	mux.HandleFunc("GET /term-ws", termWS)
+	mux.HandleFunc("GET /v1/terminal/ws", termWS)
 }
 
 func termWS(w http.ResponseWriter, r *http.Request) {
 	if !termEnabled() {
-		http.NotFound(w, r)
+		writeErr(w, http.StatusNotFound, "not_found", L("srv.http_util.introuvable"))
 		return
 	}
 	behindGateway := childToken != ""                   // la passerelle a vérifié l'Origin puis l'a retiré (homes.go)
 	if !behindGateway && r.Header.Get("Origin") == "" { // un navigateur l'envoie toujours ; Accept vérifie ensuite qu'elle correspond au Host
-		http.Error(w, "forbidden", http.StatusForbidden)
+		writeErr(w, http.StatusForbidden, "forbidden", L("srv.share_guest.refuse"))
 		return
 	}
 	termMu.Lock()
@@ -128,11 +130,11 @@ func termWS(w http.ResponseWriter, r *http.Request) {
 	}
 	termMu.Unlock()
 	if !ok || time.Now().After(t.exp) {
-		http.Error(w, L("srv.termweb.badToken"), http.StatusForbidden)
+		writeErr(w, http.StatusForbidden, "forbidden", L("srv.termweb.badToken"))
 		return
 	}
 	if busy {
-		http.Error(w, L("srv.termweb.alreadyOpen"), http.StatusConflict)
+		writeErr(w, http.StatusConflict, "conflict", L("srv.termweb.alreadyOpen"))
 		return
 	}
 	defer func() { termMu.Lock(); delete(termBusy, t.id); termMu.Unlock() }()

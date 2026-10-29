@@ -52,10 +52,12 @@ var guestStatics = map[string]bool{
 }
 
 var guestRoutes = map[string]bool{
-	"GET /conv": true, "GET /conv-text": true, "GET /conv-tools": true, "GET /conv-image": true,
-	"GET /session-live": true, "GET /session-state": true, "GET /session-task-output": true,
+	"GET /v1/sessions/{id}/conversation": true, "GET /v1/sessions/{id}/conversation/text": true, "GET /v1/sessions/{id}/conversation/tools": true,
+	"GET /v1/sessions/{id}/conversation/images/{img}": true,
+	"GET /v1/sessions/{id}/live": true, "GET /v1/sessions/{id}/state": true, "GET /v1/sessions/{id}/tasks/{task}/output": true,
 	"GET /fs-tree": true, "GET /fs-file": true,
-	"GET /queue": true, "POST /queue-add": true, "POST /queue-rm": true, "GET /guest-me": true, "POST /guest-leave": true,
+	"GET /v1/sessions/{id}/queue": true, "POST /v1/sessions/{id}/queue": true, "DELETE /v1/sessions/{id}/queue/{qid}": true,
+	"GET /guest-me": true, "POST /guest-leave": true,
 	"GET /guest": true, "GET /assets/": true, "GET /icons/": true, "GET /favicon.ico": true, "GET /manifest.webmanifest": true,
 }
 
@@ -295,14 +297,14 @@ func guestPattern(mux *http.ServeMux, r *http.Request) string {
 	if !guestRoutes[pat] {
 		return ""
 	}
-	if _, p, _ := strings.Cut(pat, " "); !strings.HasSuffix(p, "/") && p != r.URL.Path {
+	if _, p, _ := strings.Cut(pat, " "); !strings.HasSuffix(p, "/") && !strings.Contains(p, "{") && p != r.URL.Path {
 		return ""
 	}
 	return pat
 }
 
 func guestCSRFOK(r *http.Request, sec string) bool {
-	return r.Method != http.MethodPost || subtle.ConstantTimeCompare([]byte(r.Header.Get(csrfHeader)), []byte(guestCSRF(sec))) == 1
+	return r.Method == http.MethodGet || subtle.ConstantTimeCompare([]byte(r.Header.Get(csrfHeader)), []byte(guestCSRF(sec))) == 1
 }
 
 func guestGate(mux *http.ServeMux, next http.Handler) http.Handler {
@@ -343,8 +345,8 @@ func guestGate(mux *http.ServeMux, next http.Handler) http.Handler {
 			return
 		}
 		hd := r.Header.Get(shareHeader)
-		// <img> ne peut pas porter d'en-tête : pour /conv-image seulement, la poignée peut venir de ?share= (l'en-tête l'emporte).
-		fromQuery := hd == "" && r.Method == http.MethodGet && pat == "GET /conv-image"
+		// <img> ne peut pas porter d'en-tête : pour les images de la conversation seulement, la poignée peut venir de ?share= (l'en-tête l'emporte).
+		fromQuery := hd == "" && r.Method == http.MethodGet && pat == "GET /v1/sessions/{id}/conversation/images/{img}"
 		if fromQuery {
 			hd = r.URL.Query().Get("share")
 		}
@@ -442,9 +444,10 @@ func guestServe(mux *http.ServeMux, sh Share, in Invite, sec, hd string) http.Ha
 		guestSessionPath(r2.URL, sh.Session)
 		r2.Header.Set(authorHeader, "guest")
 		r2.Header.Set(inviteHeader, in.ID)
-		if r.Method == http.MethodPost {
-			// Corps reconstruit : seuls item et texte viennent du client, id choisi par le partage.
-			var body struct{ Item, Text string }
+		switch pat {
+		case "POST /v1/sessions/{id}/queue":
+			// Corps reconstruit : seul le texte vient du client, la session est celle du partage.
+			var body struct{ Text string }
 			b, err := io.ReadAll(io.LimitReader(r.Body, guestBodyMax+1))
 			if err != nil || len(b) > guestBodyMax || json.Unmarshal(b, &body) != nil {
 				guestDeny(w, 400, "srv.http_util.requeteInvalide")
@@ -454,27 +457,29 @@ func guestServe(mux *http.ServeMux, sh Share, in Invite, sec, hd string) http.Ha
 				guestDeny(w, 503, "srv.queue.indisponible")
 				return
 			}
-			switch pat {
-			case "POST /queue-add":
-				if in.Mode != "rw" {
-					guestDeny(w, 403, "srv.share_guest.lectureSeule")
+			if in.Mode != "rw" {
+				guestDeny(w, 403, "srv.share_guest.lectureSeule")
+				return
+			}
+			if !guestAddTry(in.ID) {
+				w.Header().Set("Retry-After", "60")
+				guestDeny(w, 429, "srv.share_guest.tropDeMessages")
+				return
+			}
+			nb, _ := json.Marshal(map[string]string{"text": body.Text})
+			r2.Body, r2.ContentLength = io.NopCloser(bytes.NewReader(nb)), int64(len(nb))
+		case "DELETE /v1/sessions/{id}/queue/{qid}":
+			if queueSt == nil {
+				guestDeny(w, 503, "srv.queue.indisponible")
+				return
+			}
+			qid := path.Base(r2.URL.Path)
+			for _, it := range queueSt.List(sh.Session) {
+				if it.ID == qid && (it.Author != "guest" || it.Guest != in.ID) {
+					guestDeny(w, 403, "srv.share_guest.refuse")
 					return
-				}
-				if !guestAddTry(in.ID) {
-					w.Header().Set("Retry-After", "60")
-					guestDeny(w, 429, "srv.share_guest.tropDeMessages")
-					return
-				}
-			case "POST /queue-rm":
-				for _, it := range queueSt.List(sh.Session) {
-					if it.ID == body.Item && (it.Author != "guest" || it.Guest != in.ID) {
-						guestDeny(w, 403, "srv.share_guest.refuse")
-						return
-					}
 				}
 			}
-			nb, _ := json.Marshal(map[string]string{"id": sh.Session, "item": body.Item, "text": body.Text})
-			r2.Body, r2.ContentLength = io.NopCloser(bytes.NewReader(nb)), int64(len(nb))
 		}
 		mux.ServeHTTP(&noStoreWriter{ResponseWriter: w}, r2)
 	})

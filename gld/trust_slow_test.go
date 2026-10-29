@@ -36,7 +36,7 @@ func TestTrustRedessinLent(t *testing.T) {
 		}
 		return "", nil
 	}
-	ok(t, h, "/trust-answer", `{"dir":"/home/u/neuf","yes":true}`, true, "")
+	v1ok(t, h, "POST", "/v1/trust/answers", `{"dir":"/home/u/neuf","yes":true}`, "")
 	if got := strings.Join(sent, " "); got != "Down Enter" {
 		t.Fatalf("touches envoyées : %q", got)
 	}

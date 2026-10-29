@@ -19,9 +19,9 @@ import (
 func TestCorbeillePurgeCorpsInvalide(t *testing.T) {
 	h, cfg, _ := web(t)
 	body := `{"items":[{"dir":"-p","id":"` + id1 + `"}]}`
-	ok(t, h, "/session-trash-add", body, true, "")
-	status(t, h, "POST", "/session-trash-purge", `{`, 400)
-	_, m, _ := call(t, h, "GET", "/session-trash", "")
+	v1ok(t, h, "POST", "/v1/trash/sessions", body, "")
+	status(t, h, "DELETE", "/v1/trash/sessions", "", 400)
+	_, m, _ := call(t, h, "GET", "/v1/trash/sessions", "")
 	if l, _ := m["sessions"].([]any); len(l) != 1 {
 		t.Fatalf("corbeille vidée par un corps invalide : %v", m)
 	}
@@ -36,9 +36,9 @@ func TestCorbeilleRestaurationSousAgentsPreserves(t *testing.T) {
 	sub := filepath.Join(cfg, "projects", "-p", id1)
 	os.MkdirAll(sub, 0o755)
 	os.WriteFile(filepath.Join(sub, "agent.jsonl"), []byte("{}\n"), 0o600)
-	ok(t, h, "/session-trash-add", `{"items":[{"dir":"-p","id":"`+id1+`"}]}`, true, "")
+	v1ok(t, h, "POST", "/v1/trash/sessions", `{"items":[{"dir":"-p","id":"`+id1+`"}]}`, "")
 	os.MkdirAll(filepath.Join(sub, "autre"), 0o755) // un dossier du même nom réapparaît
-	ok(t, h, "/session-trash-restore", `{"ids":["`+id1+`"]}`, false, "")
+	v1err(t, h, "PATCH", "/v1/trash/sessions?item="+id1, `{"trashed":false}`, 409, "")
 	if _, err := os.Stat(filepath.Join(cfg, "gld-web-trash", "sessions", id1, "sub", "agent.jsonl")); err != nil {
 		t.Fatal("les sous-agents ont été effacés")
 	}
@@ -47,9 +47,9 @@ func TestCorbeilleRestaurationSousAgentsPreserves(t *testing.T) {
 // Une fiche sans transcript (déplacement interrompu) se purge au lieu de rester listée pour toujours.
 func TestCorbeilleFicheFantome(t *testing.T) {
 	h, cfg, _ := web(t)
-	ok(t, h, "/session-trash-add", `{"items":[{"dir":"-p","id":"`+id1+`"}]}`, true, "")
+	v1ok(t, h, "POST", "/v1/trash/sessions", `{"items":[{"dir":"-p","id":"`+id1+`"}]}`, "")
 	os.Remove(filepath.Join(cfg, "gld-web-trash", "sessions", id1, id1+".jsonl"))
-	ok(t, h, "/session-trash-purge", `{"ids":["`+id1+`"]}`, true, "")
+	v1ok(t, h, "DELETE", "/v1/trash/sessions?item="+id1, "", "")
 	if _, err := os.Stat(filepath.Join(cfg, "gld-web-trash", "sessions", id1)); err == nil {
 		t.Fatal("fiche fantôme toujours là")
 	}
@@ -74,7 +74,7 @@ func TestOngletsFichierIllisible(t *testing.T) {
 func TestNotesFichierIllisible(t *testing.T) {
 	h, cfg, _ := web(t)
 	os.WriteFile(filepath.Join(cfg, "gld-web-notes.json"), []byte("["), 0o600)
-	status(t, h, "POST", "/notes", `{"key":"d//tmp/x","text":"bonjour"}`, 500)
+	status(t, h, "PUT", "/v1/notes", `{"key":"d//tmp/x","text":"bonjour"}`, 500)
 	if b, _ := os.ReadFile(filepath.Join(cfg, "gld-web-notes.json")); string(b) != "[" {
 		t.Fatal("fichier réécrit")
 	}
@@ -107,7 +107,7 @@ func TestVerbesEnCache(t *testing.T) {
 // Une lecture de la corbeille ne purge rien ; l'expiration passe par un POST (ou la boucle quotidienne).
 func TestCorbeilleExpirationHorsGET(t *testing.T) {
 	h, cfg, _ := web(t)
-	ok(t, h, "/session-trash-add", `{"items":[{"dir":"-p","id":"`+id1+`"}]}`, true, "")
+	v1ok(t, h, "POST", "/v1/trash/sessions", `{"items":[{"dir":"-p","id":"`+id1+`"}]}`, "")
 	dir := filepath.Join(cfg, "gld-web-trash", "sessions", id1)
 	b, _ := os.ReadFile(filepath.Join(dir, "meta.json"))
 	var m TrashedSession
@@ -115,15 +115,15 @@ func TestCorbeilleExpirationHorsGET(t *testing.T) {
 	m.At = float64(time.Now().Add(-31 * 24 * time.Hour).Unix())
 	b, _ = json.Marshal(m)
 	os.WriteFile(filepath.Join(dir, "meta.json"), b, 0o600)
-	_, got, _ := call(t, h, "GET", "/session-trash", "")
+	_, got, _ := call(t, h, "GET", "/v1/trash/sessions", "")
 	if l, _ := got["sessions"].([]any); len(l) != 0 {
 		t.Fatalf("session expirée encore listée : %v", got)
 	}
 	if _, err := os.Stat(filepath.Join(dir, id1+".jsonl")); err != nil {
-		t.Fatal("GET /session-trash a purgé")
+		t.Fatal("GET /v1/trash/sessions a purgé")
 	}
 	// Une purge d'un autre id expire au passage la session trop vieille.
-	ok(t, h, "/session-trash-purge", `{"ids":["`+id2+`"]}`, true, "")
+	v1ok(t, h, "DELETE", "/v1/trash/sessions?item="+id2, "", "")
 	if _, err := os.Stat(dir); err == nil {
 		t.Fatal("session expirée toujours dans la corbeille")
 	}
@@ -165,11 +165,11 @@ func TestCorbeilleAjoutsConcurrents(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			r := httptest.NewRequest("POST", "/session-trash-add", strings.NewReader(`{"items":[{"dir":"-p","id":"`+id+`"}]}`))
+			r := httptest.NewRequest("POST", "/v1/trash/sessions", strings.NewReader(`{"items":[{"dir":"-p","id":"`+id+`"}]}`))
 			r.Host = testHost
 			w := httptest.NewRecorder()
 			h.ServeHTTP(w, r)
-			if !strings.Contains(w.Body.String(), `"ok":true`) {
+			if w.Code != 201 {
 				t.Errorf("%s : %s", id, w.Body.String())
 			}
 		}()
@@ -213,7 +213,7 @@ func TestConvSansLimitePagine(t *testing.T) {
 		b.WriteString(`{"type":"user","cwd":"` + proj + `","message":{"content":"` + txt + `"}}` + "\n")
 	}
 	put(t, filepath.Join(cfg, "projects", "-p", id2+".jsonl"), b.String(), old)
-	m := status(t, h, "GET", "/conv?dir=-p&id="+id2, "", 200)
+	m := status(t, h, "GET", "/v1/sessions/"+id2+"/conversation?dir=-p", "", 200)
 	msgs, _ := m["msgs"].([]any)
 	if len(msgs) != 1000 || m["more"] != true {
 		t.Fatalf("première page : %d messages, more %v", len(msgs), m["more"])
@@ -222,7 +222,7 @@ func TestConvSansLimitePagine(t *testing.T) {
 		t.Fatal("texte coupé sans limit : l'export perdrait la fin")
 	}
 	start := int64(m["start"].(float64))
-	m = status(t, h, "GET", "/conv?dir=-p&id="+id2+"&before="+strconv.FormatInt(start, 10), "", 200)
+	m = status(t, h, "GET", "/v1/sessions/"+id2+"/conversation?dir=-p&before="+strconv.FormatInt(start, 10), "", 200)
 	if msgs, _ := m["msgs"].([]any); len(msgs) != 200 || m["more"] != false {
 		t.Fatalf("seconde page : %d messages, more %v", len(msgs), m["more"])
 	}

@@ -96,7 +96,7 @@ func TestPairTokenMode(t *testing.T) {
 	if w := pairReq(srv, "GET", "/pair?c="+code, "", nil); w.Code != http.StatusGone {
 		t.Fatalf("code réutilisé : %d", w.Code)
 	}
-	if w := pairReq(srv, "GET", "/api", "", dev); w.Code != 200 {
+	if w := pairReq(srv, "GET", "/v1/state", "", dev); w.Code != 200 {
 		t.Fatalf("appareil jumelé refusé : %d", w.Code)
 	}
 
@@ -111,11 +111,11 @@ func TestPairTokenMode(t *testing.T) {
 
 	// 90 jours sans visite : la session tombe ; une visite avant la repousse.
 	now = now.Add(89 * 24 * time.Hour)
-	if w := pairReq(srv, "GET", "/api", "", dev); w.Code != 200 {
+	if w := pairReq(srv, "GET", "/v1/state", "", dev); w.Code != 200 {
 		t.Fatalf("à 89 jours : %d", w.Code)
 	}
 	now = now.Add(89 * 24 * time.Hour)
-	if w := pairReq(srv, "GET", "/api", "", dev); w.Code != 200 {
+	if w := pairReq(srv, "GET", "/v1/state", "", dev); w.Code != 200 {
 		t.Fatalf("visite récente, fenêtre glissante : %d", w.Code)
 	}
 
@@ -123,7 +123,7 @@ func TestPairTokenMode(t *testing.T) {
 	if w := pairReq(srv, "POST", "/devices-revoke", `{"id":"`+id+`"}`, tok); w.Code != 200 {
 		t.Fatalf("révocation : %d %s", w.Code, w.Body)
 	}
-	if w := pairReq(srv, "GET", "/api", "", dev); w.Code != 401 {
+	if w := pairReq(srv, "GET", "/v1/state", "", dev); w.Code != 401 {
 		t.Fatalf("appareil révoqué encore admis : %d", w.Code)
 	}
 
@@ -137,11 +137,11 @@ func TestPairTokenMode(t *testing.T) {
 	// Changer de jeton coupe les appareils jumelés sous l'ancien.
 	code = pairCodeFrom(t, pairReq(srv, "POST", "/pair-code", "{}", tok))
 	dev = cookieOf(confirm(t, srv, code), devCookie)
-	if w := pairReq(srv, "GET", "/api", "", dev); w.Code != 200 {
+	if w := pairReq(srv, "GET", "/v1/state", "", dev); w.Code != 200 {
 		t.Fatalf("appareil neuf : %d", w.Code)
 	}
 	srv2 := withTokenOpen("fedcba9876543210fedc", h)
-	if w := pairReq(srv2, "GET", "/api", "", dev); w.Code != 401 {
+	if w := pairReq(srv2, "GET", "/v1/state", "", dev); w.Code != 401 {
 		t.Fatalf("appareil admis sous un autre jeton : %d", w.Code)
 	}
 }

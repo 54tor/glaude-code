@@ -5,8 +5,6 @@ package main
 // question, et on n'envoie la réponse (1 ou 2) qu'à un panneau dont l'écran porte bien ce dialogue, dans le dossier demandé.
 
 import (
-	"encoding/json"
-	"io"
 	"net/http"
 	"path/filepath"
 	"regexp"
@@ -101,20 +99,23 @@ func trustOnWant(screen string, yes bool) bool {
 }
 
 func routesTrust(mux *http.ServeMux) {
-	mux.HandleFunc("GET /trust-pending", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/trust/pending", func(w http.ResponseWriter, r *http.Request) {
 		dirs := []string{}
 		for _, p := range trustPanes() {
 			dirs = append(dirs, p.dir)
 		}
 		writeJSON(w, 200, map[string]any{"dirs": dirs})
 	})
-	mux.HandleFunc("POST /trust-answer", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /v1/trust/answers", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Dir string
 			Yes bool
 		}
-		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil || !filepath.IsAbs(req.Dir) {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+		if !decodeBody(w, r, &req, 1<<10) {
+			return
+		}
+		if !filepath.IsAbs(req.Dir) {
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
 			return
 		}
 		n := 0
@@ -149,9 +150,9 @@ func routesTrust(mux *http.ServeMux) {
 		}
 		journal("trust-answer %s oui=%v : %d panneau(x)", req.Dir, req.Yes, n)
 		if n == 0 {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.trust.plusAucuneQuestionDe")})
+			writeErr(w, http.StatusConflict, "conflict", L("srv.trust.plusAucuneQuestionDe"))
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.trust.reponseEnvoyee")})
+		writeJSON(w, 201, map[string]any{"message": L("srv.trust.reponseEnvoyee")})
 	})
 }

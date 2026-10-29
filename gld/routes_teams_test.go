@@ -203,18 +203,18 @@ func withPrincipal(r *http.Request, p *Principal) *http.Request {
 }
 
 func TestChildProxySetsUserHeader(t *testing.T) {
-	r := withPrincipal(httptest.NewRequest("GET", "/api", nil), &Principal{User: &User{Name: "alice"}})
+	r := withPrincipal(httptest.NewRequest("GET", "/v1/state", nil), &Principal{User: &User{Name: "alice"}})
 	if h := proxyHeader(t, r); h.Get(userHeader) != "alice" {
 		t.Fatalf("%q", h.Get(userHeader))
 	}
-	r = withPrincipal(httptest.NewRequest("GET", "/api", nil), &Principal{Token: true})
+	r = withPrincipal(httptest.NewRequest("GET", "/v1/state", nil), &Principal{Token: true})
 	if h := proxyHeader(t, r); h.Get(userHeader) != "token" {
 		t.Fatalf("%q", h.Get(userHeader))
 	}
 }
 
 func TestChildProxyOverwritesClientUserHeader(t *testing.T) {
-	r := httptest.NewRequest("GET", "/api", nil)
+	r := httptest.NewRequest("GET", "/v1/state", nil)
 	r.Header.Set(userHeader, "mallory")
 	if h := proxyHeader(t, r); h.Get(userHeader) != "" { // sans principal : effacé
 		t.Fatalf("sans principal : %q", h.Get(userHeader))

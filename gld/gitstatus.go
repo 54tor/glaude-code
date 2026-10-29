@@ -274,7 +274,7 @@ func knownRepo(dir string) bool {
 const maxChanges = 300
 
 func routesGit(mux *http.ServeMux) {
-	mux.HandleFunc("GET /git-changes", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/git/changes", func(w http.ResponseWriter, r *http.Request) {
 		dir := r.URL.Query().Get("dir")
 		if !knownRepo(dir) {
 			writeJSON(w, 200, map[string]any{"files": []GitChange{}, "prefix": ""})
@@ -295,7 +295,7 @@ func routesGit(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"files": cs, "more": max(more, 0), "prefix": gitPrefix(dir)})
 	})
-	mux.HandleFunc("GET /git-status", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/git/status", func(w http.ResponseWriter, r *http.Request) {
 		var dirs []string
 		repos := map[string][]string{}
 		for _, g := range sessions() {

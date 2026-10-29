@@ -91,7 +91,7 @@ func TestImagesDesConversations(t *testing.T) {
 	// route : les paramètres invalides ne passent pas, le type est fixé par le contenu
 	hosts[testHost] = true
 	h := handler()
-	w := getRaw(h, "/conv-image?dir=-p&id="+id1+"&o=0&k=1")
+	w := getRaw(h, "/v1/sessions/"+id1+"/conversation/images/0-1?dir=-p")
 	if w.Code != 200 || w.Header().Get("Content-Type") != "image/png" || w.Header().Get("X-Content-Type-Options") != "nosniff" {
 		t.Fatalf("route : %d %v", w.Code, w.Header())
 	}

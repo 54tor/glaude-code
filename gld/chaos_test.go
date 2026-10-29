@@ -31,14 +31,14 @@ func TestPanneClaudeBloque(t *testing.T) {
 	t.Cleanup(func() { agentsTTL = oldTTL })
 
 	t0 := time.Now()
-	_, m, _ := call(t, h, "GET", "/api", "")
+	_, m, _ := call(t, h, "GET", "/v1/state", "")
 	if d := time.Since(t0); d > 4*time.Second {
-		t.Fatalf("/api a attendu %v", d)
+		t.Fatalf("/v1/state a attendu %v", d)
 	}
 	if len(m["live"].([]any)) != 0 || len(m["groups"].([]any)) != 1 {
-		t.Fatalf("/api : %v", m)
+		t.Fatalf("/v1/state : %v", m)
 	}
-	ok(t, h, "/rm", `{"items":[{"dir":"-p","id":"`+id1+`"}]}`, false, "action refusée")
+	v1err(t, h, "DELETE", "/v1/sessions?item=-p:"+id1, "", 500, "action refusée")
 	if !exists(filepath.Join(cfg, "projects", "-p", id1+".jsonl")) {
 		t.Fatal("session supprimée sans savoir si elle était ouverte")
 	}
@@ -57,7 +57,7 @@ func TestPanneTmuxBloque(t *testing.T) {
 	old := cmdTimeout
 	cmdTimeout = 300 * time.Millisecond
 	t.Cleanup(func() { cmdTimeout = old })
-	for _, p := range []string{"/trust-pending", "/session-send-info"} {
+	for _, p := range []string{"/v1/trust/pending", "/v1/sessions/send-info"} {
 		t0 := time.Now()
 		code, _, raw := call(t, h, "GET", p, "")
 		if d := time.Since(t0); code != 200 || d > 4*time.Second {
@@ -80,9 +80,9 @@ func TestPanneGitBloque(t *testing.T) {
 	cmdTimeout = 300 * time.Millisecond
 	t.Cleanup(func() { cmdTimeout = old })
 	t0 := time.Now()
-	_, m, raw := call(t, h, "GET", "/git-remotes?dir="+proj, "")
+	_, m, raw := call(t, h, "GET", "/v1/git/remotes?dir="+proj, "")
 	if d := time.Since(t0); d > 4*time.Second || len(m["remotes"].([]any)) != 0 {
-		t.Fatalf("/git-remotes : %v %s", d, raw)
+		t.Fatalf("/v1/git/remotes : %v %s", d, raw)
 	}
 }
 

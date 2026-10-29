@@ -1,9 +1,8 @@
 package main
 
 import (
+	"cmp"
 	"context"
-	"encoding/json"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -23,7 +22,7 @@ var subRe = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 func routesSessions(mux *http.ServeMux) {
 	routesTerm(mux)
 	home, _ := os.UserHomeDir()
-	mux.HandleFunc("GET /api", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/state", func(w http.ResponseWriter, r *http.Request) {
 		lastAPI.Store(time.Now().UnixNano())
 		live := []string{}
 		for id := range liveSessions() {
@@ -38,29 +37,12 @@ func routesSessions(mux *http.ServeMux) {
 		groupsMu.Unlock()
 		writeJSON(w, 200, map[string]any{"home": home, "root": root, "groups": withEmptyDirs(sessions(), st.Dirs), "dirs": st.Dirs, "live": live, "background": background, "waiting": waiting(), "asking": askingSessions(), "vgroups": st.Groups, "favs": st.Favs, "projects": st.Projects, "providers": providerInfos(), "lang": normalizeLang(userLanguageRaw())})
 	})
-	// Dossiers enregistrés à la main (sans session) : ajout ou retrait.
-	mux.HandleFunc("POST /dirs", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Op, Dir string }
-		if json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req) != nil || (req.Op != "add" && req.Op != "remove" && req.Op != "addChildren") || !filepath.IsAbs(req.Dir) || strings.ContainsRune(req.Dir, 0) {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
-			return
-		}
-		dir := filepath.Clean(req.Dir)
-		if fi, err := os.Stat(dir); req.Op != "remove" && (err != nil || !fi.IsDir()) {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.routes_sessions.dossierIntrouvable", "A1", dir)})
-			return
-		}
-		add := []string{}
-		switch req.Op {
-		case "add":
-			add = append(add, dir)
-		case "addChildren":
-			add = childDirs(dir)
-		}
+	// Dossiers enregistrés à la main (sans session) : ajout (children : ses sous-dossiers) ou retrait.
+	saveDirs := func(w http.ResponseWriter, op, dir string, add []string) {
 		groupsMu.Lock()
 		st := loadStore()
 		next := []string{}
-		drop := map[string]bool{dir: req.Op != "addChildren"}
+		drop := map[string]bool{dir: op != "addChildren"}
 		for _, d := range add {
 			drop[d] = true
 		}
@@ -73,35 +55,79 @@ func routesSessions(mux *http.ServeMux) {
 		st.Dirs = next
 		err := saveStore(st)
 		groupsMu.Unlock()
-		journal("dirs %s %s : %v", req.Op, dir, errOr(err))
+		journal("dirs %s %s : %v", op, dir, errOr(err))
 		if err != nil {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_sessions.enregistre"), "n": len(add)})
+		writeJSON(w, 200, map[string]any{"message": L("srv.routes_sessions.enregistre"), "n": len(add)})
+	}
+	absDir := func(w http.ResponseWriter, d string) (string, bool) {
+		if !filepath.IsAbs(d) || strings.ContainsRune(d, 0) {
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
+			return "", false
+		}
+		return filepath.Clean(d), true
+	}
+	mux.HandleFunc("POST /v1/directories", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Dir      string
+			Children bool // ajoute les sous-dossiers directs plutôt que le dossier
+		}
+		if !decodeBody(w, r, &req, 1<<12) {
+			return
+		}
+		dir, ok := absDir(w, req.Dir)
+		if !ok {
+			return
+		}
+		if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
+			writeErr(w, http.StatusNotFound, "not_found", L("srv.routes_sessions.dossierIntrouvable", "A1", dir))
+			return
+		}
+		if req.Children {
+			saveDirs(w, "addChildren", dir, childDirs(dir))
+			return
+		}
+		saveDirs(w, "add", dir, []string{dir})
+	})
+	mux.HandleFunc("DELETE /v1/directories", func(w http.ResponseWriter, r *http.Request) {
+		if dir, ok := absDir(w, r.URL.Query().Get("dir")); ok {
+			saveDirs(w, "remove", dir, []string{})
+		}
 	})
 	// Date de modification la plus récente d'un transcript : l'interface relit la liste quand elle change (un prompt tapé dans un
 	// terminal fait remonter la session sans attendre le rafraîchissement périodique). ponytail: un stat par transcript à chaque appel,
 	// à remplacer par une surveillance de fichiers si les transcripts se comptent en dizaines de milliers.
-	mux.HandleFunc("GET /sessions-stamp", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/state/stamp", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"stamp": newestTranscript()})
 	})
-	// Envoi d'un message à une session ouverte dans tmux (sendkeys.go) : lesquelles le permettent, puis l'envoi.
 	// État en direct d'une session (sessionlive.go) et informations du compte (account.go).
-	mux.HandleFunc("GET /session-live", func(w http.ResponseWriter, r *http.Request) {
-		st := sessionLive(r.URL.Query().Get("dir"), r.URL.Query().Get("id"))
+	mux.HandleFunc("GET /v1/sessions/{id}/live", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		st := sessionLive(r.URL.Query().Get("dir"), id)
 		st.Pending = visibleQueue(r, st.Pending)
 		writeJSON(w, 200, st)
 	})
-	mux.HandleFunc("GET /session-task-output", func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		p, ok := transcript(q.Get("dir"), q.Get("id"))
+	mux.HandleFunc("GET /v1/sessions/{id}/tasks/{task}/output", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
 		if !ok {
-			writeJSON(w, 400, map[string]any{})
 			return
 		}
-		out, ok := bgOutput(p, q.Get("task"))
-		writeJSON(w, 200, map[string]any{"ok": ok, "text": out})
+		p, ok := transcript(r.URL.Query().Get("dir"), id)
+		if !ok {
+			writeErr(w, http.StatusNotFound, "not_found", L("srv.http_util.introuvable"))
+			return
+		}
+		out, ok := bgOutput(p, r.PathValue("task"))
+		if !ok {
+			writeErr(w, http.StatusNotFound, "not_found", L("srv.http_util.introuvable"))
+			return
+		}
+		writeJSON(w, 200, map[string]any{"text": out})
 	})
 	// Relevé trop vieux : on le rafraîchit en arrière-plan (la page relit toutes les minutes). Le forcer lance claude :
 	// c'est un POST, que CrossOriginProtection garde (un GET serait déclenchable par une image sur un site tiers).
@@ -112,7 +138,8 @@ func routesSessions(mux *http.ServeMux) {
 	}
 	mux.HandleFunc("GET /account", func(w http.ResponseWriter, r *http.Request) { account(w, false) })
 	mux.HandleFunc("POST /account-refresh", func(w http.ResponseWriter, r *http.Request) { account(w, true) })
-	mux.HandleFunc("GET /session-send-info", func(w http.ResponseWriter, r *http.Request) {
+	// Envoi d'un message à une session ouverte dans tmux (sendkeys.go) : lesquelles le permettent, puis l'envoi.
+	mux.HandleFunc("GET /v1/sessions/send-info", func(w http.ResponseWriter, r *http.Request) {
 		ids, err := sendable()
 		why := ""
 		if err != nil {
@@ -125,68 +152,80 @@ func routesSessions(mux *http.ServeMux) {
 		writeJSON(w, 200, map[string]any{"ids": keys, "why": why})
 	})
 	// État d'une session ouverte : attend-elle votre message (idle) ou travaille-t-elle ?
-	mux.HandleFunc("GET /session-state", func(w http.ResponseWriter, r *http.Request) {
-		id := r.URL.Query().Get("id")
+	mux.HandleFunc("GET /v1/sessions/{id}/state", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
 		idle := false
 		for _, x := range waiting() {
 			idle = idle || x == id
 		}
 		writeJSON(w, 200, map[string]any{"idle": idle})
 	})
-	mux.HandleFunc("POST /session-close", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ ID string }
-		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+	mux.HandleFunc("DELETE /v1/sessions/{id}/process", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
 			return
 		}
-		err := closeSession(req.ID)
-		journal("session-close %s : %v", req.ID, errOr(err))
+		err := closeSession(id)
+		journal("session-close %s : %v", id, errOr(err))
 		if err != nil {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			writeErr(w, http.StatusConflict, "conflict", err.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_sessions.sessionFermee")})
+		writeJSON(w, 200, map[string]any{"message": L("srv.routes_sessions.sessionFermee")})
 	})
-	mux.HandleFunc("GET /session-screen", func(w http.ResponseWriter, r *http.Request) {
-		text, err := sessionScreen(r.URL.Query().Get("id"))
-		if err != nil {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+	mux.HandleFunc("GET /v1/sessions/{id}/screen", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "text": text})
+		text, err := sessionScreen(id)
+		if err != nil {
+			writeErr(w, http.StatusConflict, "conflict", err.Error())
+			return
+		}
+		writeJSON(w, 200, map[string]any{"text": text})
 	})
-	mux.HandleFunc("POST /session-key", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ ID, Key string }
-		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+	mux.HandleFunc("POST /v1/sessions/{id}/keystrokes", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
 			return
 		}
-		err := sendKey(req.ID, req.Key)
-		journal("session-key %s %s : %v", req.ID, req.Key, errOr(err))
+		var req struct{ Key string }
+		if !decodeBody(w, r, &req, 1<<10) {
+			return
+		}
+		err := sendKey(id, req.Key)
+		journal("session-key %s %s : %v", id, req.Key, errOr(err))
 		if err != nil {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			writeErr(w, http.StatusConflict, "conflict", err.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_sessions.toucheEnvoyee")})
+		writeJSON(w, 201, map[string]any{"message": L("srv.routes_sessions.toucheEnvoyee")})
 	})
-	mux.HandleFunc("POST /session-send", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ ID, Text string }
-		if json.NewDecoder(io.LimitReader(r.Body, sendMax+1<<10)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+	mux.HandleFunc("POST /v1/sessions/{id}/messages", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
 			return
 		}
-		err := sendToSession(req.ID, req.Text)
-		journal("session-send %s (%d caractères) : %v", req.ID, len(req.Text), errOr(err)) // jamais le texte
+		var req struct{ Text string }
+		if !decodeBody(w, r, &req, sendMax+1<<10) {
+			return
+		}
+		err := sendToSession(id, req.Text)
+		journal("session-send %s (%d caractères) : %v", id, len(req.Text), errOr(err)) // jamais le texte
 		if err != nil {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			writeErr(w, http.StatusConflict, "conflict", err.Error())
 			return
 		}
-		markSent(req.ID)
-		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_sessions.messageEnvoyeALa")})
+		markSent(id)
+		writeJSON(w, 201, map[string]any{"message": L("srv.routes_sessions.messageEnvoyeALa")})
 	})
 	// Explorateur de dossiers pour « Réassigner » / « Déplacer » : sous-dossiers d'un chemin.
 	// Un chemin disparu remonte au plus proche parent qui existe.
-	mux.HandleFunc("GET /ls", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/directories", func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Query().Get("path")
 		if p == "" {
 			p = home
@@ -203,7 +242,7 @@ func routesSessions(mux *http.ServeMux) {
 			return
 		}
 		if !filepath.IsAbs(p) {
-			writeJSON(w, 400, map[string]any{"error": L("srv.routes_sessions.cheminAbsoluRequis")})
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.routes_sessions.cheminAbsoluRequis"))
 			return
 		}
 		p = filepath.Clean(p)
@@ -219,7 +258,7 @@ func routesSessions(mux *http.ServeMux) {
 		}
 		ents, err := readDirTrusted(p)
 		if err != nil {
-			writeJSON(w, 403, map[string]any{"error": err.Error()})
+			writeErr(w, http.StatusForbidden, "forbidden", err.Error())
 			return
 		}
 		dirs := []string{}
@@ -243,21 +282,28 @@ func routesSessions(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"path": p, "parent": parent, "dirs": dirs, "sep": sep})
 	})
-	mux.HandleFunc("GET /conv", func(w http.ResponseWriter, r *http.Request) {
-		p, ok := transcript(r.URL.Query().Get("dir"), r.URL.Query().Get("id"))
+	notFound := func(w http.ResponseWriter) {
+		writeErr(w, http.StatusNotFound, "not_found", L("srv.http_util.introuvable"))
+	}
+	mux.HandleFunc("GET /v1/sessions/{id}/conversation", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
 		if !ok {
-			writeJSON(w, 404, map[string]any{})
 			return
 		}
 		q := r.URL.Query()
+		p, ok := transcript(q.Get("dir"), id)
+		if !ok {
+			notFound(w)
+			return
+		}
 		if sub := q.Get("sub"); sub != "" { // transcript d'un sous-agent de cette session
 			if !subRe.MatchString(sub) {
-				writeJSON(w, 404, map[string]any{})
+				notFound(w)
 				return
 			}
 			p = filepath.Join(strings.TrimSuffix(p, ".jsonl"), "subagents", "agent-"+sub+".jsonl")
 			if st, err := os.Stat(p); err != nil || !st.Mode().IsRegular() {
-				writeJSON(w, 404, map[string]any{})
+				notFound(w)
 				return
 			}
 		}
@@ -271,7 +317,7 @@ func routesSessions(mux *http.ServeMux) {
 		before, _ := strconv.ParseInt(q.Get("before"), 10, 64)
 		msgs, start, more, err := convPageMode(p, q.Get("tools") == "1", q.Get("anchors") == "1", before, min(lim, 5000))
 		if err != nil {
-			writeJSON(w, 500, map[string]any{})
+			writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 			return
 		}
 		if !whole {
@@ -280,49 +326,57 @@ func routesSessions(mux *http.ServeMux) {
 		writeJSON(w, 200, map[string]any{"msgs": msgs, "start": start, "more": more})
 	})
 	// Outils d'une ancre dépliée : lignes du transcript dans [from, until).
-	mux.HandleFunc("GET /conv-tools", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/sessions/{id}/conversation/tools", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
 		q := r.URL.Query()
-		p, ok := transcript(q.Get("dir"), q.Get("id"))
+		p, ok := transcript(q.Get("dir"), id)
 		from, e1 := strconv.ParseInt(q.Get("from"), 10, 64)
 		until, e2 := strconv.ParseInt(q.Get("until"), 10, 64)
 		if !ok || e1 != nil || e2 != nil || from < 0 || until < 0 {
-			writeJSON(w, 404, map[string]any{})
+			notFound(w)
 			return
 		}
 		msgs, err := convTools(p, from, until)
 		if err != nil {
-			writeJSON(w, 500, map[string]any{})
+			writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 			return
 		}
 		writeJSON(w, 200, map[string]any{"msgs": msgs})
 	})
-	mux.HandleFunc("GET /conv-text", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/sessions/{id}/conversation/text", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
 		q := r.URL.Query()
-		p, ok := transcript(q.Get("dir"), q.Get("id"))
+		p, ok := transcript(q.Get("dir"), id)
 		o, e1 := strconv.ParseInt(q.Get("o"), 10, 64)
 		n, e2 := strconv.Atoi(q.Get("n"))
 		from, e3 := strconv.Atoi(q.Get("from"))
 		if !ok || e1 != nil || e2 != nil || e3 != nil {
-			writeJSON(w, 404, map[string]any{})
+			notFound(w)
 			return
 		}
 		t, next, err := convText(p, o, n, q.Get("tools") == "1", from)
 		if err != nil {
-			writeJSON(w, 404, map[string]any{})
+			notFound(w)
 			return
 		}
 		writeJSON(w, 200, map[string]any{"t": t, "cut": next})
 	})
-	mux.HandleFunc("GET /info", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/info", func(w http.ResponseWriter, r *http.Request) {
 		p, ok := transcript(r.URL.Query().Get("dir"), r.URL.Query().Get("id"))
 		if !ok {
-			writeJSON(w, 404, map[string]any{})
+			notFound(w)
 			return
 		}
 		writeJSON(w, 200, detail(p))
 	})
-	mux.HandleFunc("POST /rm", func(w http.ResponseWriter, r *http.Request) {
-		items, _, ok := readItems(w, r)
+	mux.HandleFunc("DELETE /v1/sessions", func(w http.ResponseWriter, r *http.Request) {
+		items, ok := itemsQuery(w, r)
 		if !ok {
 			return
 		}
@@ -340,13 +394,22 @@ func routesSessions(mux *http.ServeMux) {
 			msg += "\n" + strings.Join(notes, "\n")
 		}
 		if err != nil {
-			msg += "\n" + err.Error()
+			writeErr(w, http.StatusInternalServerError, "internal", msg+"\n"+err.Error())
+			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": err == nil && (n > 0 || spared == 0), "out": msg})
+		if n == 0 && spared > 0 {
+			writeErr(w, http.StatusConflict, "conflict", msg)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"deleted": n, "spared": spared, "message": msg})
 	})
-	mux.HandleFunc("POST /reassign", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("PATCH /v1/sessions", func(w http.ResponseWriter, r *http.Request) {
 		items, to, ok := readItems(w, r)
 		if !ok {
+			return
+		}
+		if !filepath.IsAbs(to) {
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.routes_sessions.cheminAbsoluRequis"))
 			return
 		}
 		sessionsMu.Lock()
@@ -354,102 +417,105 @@ func routesSessions(mux *http.ServeMux) {
 		sessionsMu.Unlock()
 		journal("reassign %v vers %s : %v", ids(items), to, errOr(err))
 		if err != nil {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			writeErr(w, http.StatusConflict, "conflict", err.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_sessions.sessionSReassigneeS", "A1", n, "A2", to)})
+		writeJSON(w, 200, map[string]any{"n": n, "message": L("srv.routes_sessions.sessionSReassigneeS", "A1", n, "A2", to)})
 	})
 	// Recherche dans le texte des conversations (au moins 2 caractères).
-	mux.HandleFunc("GET /search", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/sessions", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query().Get("q")
 		if n := utf8.RuneCountInString(strings.TrimSpace(q)); n < 2 || n > 200 {
-			writeJSON(w, 400, map[string]any{"hits": []Hit{}})
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
 			return
 		}
 		writeJSON(w, 200, map[string]any{"hits": searchAll(q)})
 	})
-	mux.HandleFunc("POST /rename", func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			Dir, ID, Title string
-			Auto           bool
-		}
-		if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+	mux.HandleFunc("PATCH /v1/sessions/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
 			return
 		}
-		p, ok := transcript(req.Dir, req.ID)
+		var req struct {
+			Title string
+			Auto  bool
+		}
+		if !decodeBody(w, r, &req, 1<<16) {
+			return
+		}
+		p, ok := transcript(r.URL.Query().Get("dir"), id)
 		title := strings.TrimSpace(spaceRe.ReplaceAllString(req.Title, " "))
 		if !ok || (title == "" && !req.Auto) || utf8.RuneCountInString(title) > 200 {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.routes_sessions.titreOuSessionInvalide")})
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.routes_sessions.titreOuSessionInvalide"))
 			return
 		}
 		// Une session ouverte réécrit son propre titre : le nôtre serait écrasé.
 		live, lerr := liveCheck()
 		if lerr != nil {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": lerr.Error()})
+			writeErr(w, http.StatusServiceUnavailable, "unavailable", lerr.Error())
 			return
 		}
-		if live[req.ID] {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.routes_sessions.sessionOuverteRenommeLa")})
+		if live[id] {
+			writeErr(w, http.StatusConflict, "conflict", L("srv.routes_sessions.sessionOuverteRenommeLa"))
 			return
 		}
 		if req.Auto {
 			var terr error
 			if title, terr = autoTitle(p); terr != nil {
-				writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.routes_sessions.titreAutomatiqueImpossible", "A1", terr.Error())})
+				writeErr(w, http.StatusBadGateway, "upstream_failed", L("srv.routes_sessions.titreAutomatiqueImpossible", "A1", terr.Error()))
 				return
 			}
 		}
-		err := setTitle(p, req.ID, title)
-		journal("rename %s « %s » : %v", req.ID, title, errOr(err))
+		err := setTitle(p, id, title)
+		journal("rename %s « %s » : %v", id, title, errOr(err))
 		if err != nil {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_sessions.renommee", "A1", title)})
+		writeJSON(w, 200, map[string]any{"title": title, "message": L("srv.routes_sessions.renommee", "A1", title)})
 	})
-	mux.HandleFunc("POST /conv-rewind", func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			Dir, ID string
-			O       int64
-		}
-		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+	mux.HandleFunc("DELETE /v1/sessions/{id}/conversation", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
 			return
 		}
-		p, ok := transcript(req.Dir, req.ID)
-		if !ok {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+		after, perr := strconv.ParseInt(r.URL.Query().Get("after"), 10, 64)
+		p, ok := transcript(r.URL.Query().Get("dir"), id)
+		if perr != nil || !ok {
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
 			return
 		}
 		sessionsMu.Lock()
 		defer sessionsMu.Unlock()
 		// Un processus qui écrit ce transcript le rallongerait depuis sa propre mémoire de la conversation.
 		live, err := liveCheck()
-		if err == nil && live[req.ID] {
+		if err == nil && live[id] {
 			err = terr("srv.rewind.sessionOuverte")
 		}
 		chatMu.Lock()
-		if err == nil && chatRun[req.ID] != nil {
+		if err == nil && chatRun[id] != nil {
 			err = terr("srv.chat.claudeRepondDejaDans")
 		}
 		var n int
 		if err == nil {
-			n, err = rewind(p, req.O)
+			n, err = rewind(p, after)
 		}
 		chatMu.Unlock()
-		journal("conv-rewind %s @%d : %d message(s), %v", req.ID, req.O, n, errOr(err))
+		journal("conv-rewind %s @%d : %d message(s), %v", id, after, n, errOr(err))
 		if err != nil {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			writeErr(w, http.StatusConflict, "conflict", err.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "n": n, "out": L("srv.rewind.fait", "A1", n)})
+		writeJSON(w, 200, map[string]any{"n": n, "message": L("srv.rewind.fait", "A1", n)})
 	})
 	// Snippets = commandes Claude Code (commands.go) : personnelles (~/.claude/commands, ou GLD_WEB_SNIPPETS) et de projet.
-	mux.HandleFunc("POST /vgroups", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("PUT /v1/vgroups", func(w http.ResponseWriter, r *http.Request) {
 		var st Store
-		if json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&st) != nil || st.Groups == nil || st.Favs == nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+		if !decodeBody(w, r, &st, 1<<20) {
+			return
+		}
+		if st.Groups == nil || st.Favs == nil {
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
 			return
 		}
 		groupsMu.Lock()
@@ -466,58 +532,69 @@ func routesSessions(mux *http.ServeMux) {
 		groupsMu.Unlock()
 		journal("vgroups %d groupe(s), %d favori(s) : %v", len(st.Groups), len(st.Favs), errOr(err))
 		if err != nil {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.routes_sessions.groupesEnregistres")})
+		w.WriteHeader(http.StatusNoContent)
 	})
-	// Rouvre dans un onglet de terminal via gld-matin : une session (id) ou les récentes du projet.
+	// Rouvre dans un onglet de terminal via gld-matin : une session (id) ou les récentes du projet (dir seul).
 	// Le cwd vient du transcript côté serveur, jamais du navigateur.
-	mux.HandleFunc("POST /open", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Dir, ID, Args, Prompt string }
-		if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+	openIn := func(w http.ResponseWriter, r *http.Request, id, dir string) {
+		var req struct{ Args, Prompt string }
+		if !decodeBody(w, r, &req, 1<<16) {
 			return
 		}
 		var p string
 		args, err := claudeArgs(req.Args)
 		if err == nil {
-			err = checkResumePrompt(req.ID, req.Prompt)
+			err = checkResumePrompt(id, req.Prompt)
 		}
 		if err != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": err.Error()})
+			writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 			return
 		}
-		if req.ID != "" {
+		if id != "" {
 			var ok bool
-			if p, ok = transcript(req.Dir, req.ID); !ok {
-				writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.idInvalide")})
+			if p, ok = transcript(dir, id); !ok {
+				notFound(w)
 				return
 			}
-			args = append(args, "--id", req.ID)
+			args = append(args, "--id", id)
 			if req.Prompt != "" { // reprise avec un message : transmis tel quel, gld-matin l'échappe pour le shell
 				args = append(args, "--prompt", req.Prompt)
 			}
-		} else if strings.ContainsAny(req.Dir, "/\\") || req.Dir == "" || req.Dir == ".." {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.routes_sessions.dossierInvalide")})
+		} else if strings.ContainsAny(dir, "/\\") || dir == "" || dir == ".." {
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.routes_sessions.dossierInvalide"))
 			return
-		} else if fs, _ := filepath.Glob(filepath.Join(root, req.Dir, "*.jsonl")); len(fs) > 0 {
+		} else if fs, _ := filepath.Glob(filepath.Join(root, dir, "*.jsonl")); len(fs) > 0 {
 			p = fs[0]
 		}
 		st, err := os.Stat(p)
 		if err != nil {
-			writeJSON(w, 404, map[string]any{"ok": false, "out": L("srv.routes_sessions.aucuneSession")})
+			writeErr(w, http.StatusNotFound, "not_found", L("srv.routes_sessions.aucuneSession"))
 			return
 		}
 		cwd := info(p, st).Cwd
 		if fi, err := os.Stat(cwd); cwd == "" || err != nil || !fi.IsDir() {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.routes_sessions.dossierDuProjetIntrouvable", "A1", cwd)})
+			writeErr(w, http.StatusNotFound, "not_found", L("srv.routes_sessions.dossierDuProjetIntrouvable", "A1", cwd))
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 		defer cancel()
 		out, err := matin(ctx, append(args, cwd)...)
-		writeJSON(w, 200, map[string]any{"ok": err == nil, "out": out})
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "launch_failed", cmp.Or(out, err.Error()))
+			return
+		}
+		writeJSON(w, 200, map[string]any{"message": out})
+	}
+	mux.HandleFunc("PUT /v1/sessions/{id}/process", func(w http.ResponseWriter, r *http.Request) {
+		if id, ok := pathID(w, r, "id"); ok {
+			openIn(w, r, id, r.URL.Query().Get("dir"))
+		}
+	})
+	mux.HandleFunc("PUT /v1/projects/{dir}/process", func(w http.ResponseWriter, r *http.Request) {
+		openIn(w, r, "", r.PathValue("dir"))
 	})
 
 	// Anti DNS-rebinding : seul le Host local est servi. Anti CSRF : http.CrossOriginProtection

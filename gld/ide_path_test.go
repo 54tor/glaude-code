@@ -61,7 +61,7 @@ func TestIdeKnownDir(t *testing.T) {
 	if _, ok := ideKnownDir(extra); ok {
 		t.Fatal("unregistered dir accepted")
 	}
-	ok(t, h, "/dirs", `{"op":"add","dir":"`+extra+`"}`, true, "")
+	v1ok(t, h, "POST", "/v1/directories", `{"dir":"`+extra+`"}`, "")
 	if _, ok := ideKnownDir(extra); !ok {
 		t.Fatal("added dir refused")
 	}

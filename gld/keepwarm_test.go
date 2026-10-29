@@ -22,8 +22,8 @@ func openAndIdle(t *testing.T, ids ...string) {
 func TestKeepWarm(t *testing.T) {
 	h, cfg, _ := web(t)
 	openAndIdle(t, id1)
-	ok(t, h, "/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true,"max":2}`, true, "activé")
-	ok(t, h, "/keepwarm", `{"dir":"-p","id":"`+id2+`","on":true}`, false, "") // session inexistante
+	v1ok(t, h, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true,"max":2}`, "activé")
+	v1err(t, h, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id2+`","on":true}`, 404, "") // session inexistante
 	if _, err := os.Stat(filepath.Join(cfg, "gld-web-keepwarm.json")); err != nil {
 		t.Fatal("état non enregistré")
 	}
@@ -66,7 +66,7 @@ func TestKeepWarm(t *testing.T) {
 	}
 
 	// une session déjà froide arrête le maintien sans rien envoyer
-	ok(t, h, "/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true}`, true, "activé")
+	v1ok(t, h, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true}`, "activé")
 	mtime(now, 2*time.Hour)
 	warmTick(now)
 	if pings != 2 || warmState[id1].On || warmState[id1].Note == "" {
@@ -85,7 +85,7 @@ func TestKeepWarmStoppedDuringTick(t *testing.T) {
 		os.WriteFile(p, []byte(`{"type":"user","cwd":"/p","timestamp":"`+at.UTC().Format(time.RFC3339Nano)+`","message":{"content":"x"}}`+"\n"), 0o600)
 		os.Chtimes(p, at, at)
 		forgetInfo(p)
-		ok(t, h, "/keepwarm", `{"dir":"-p","id":"`+id+`","on":true}`, true, "activé")
+		v1ok(t, h, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id+`","on":true}`, "activé")
 	}
 	var pinged []string
 	old := warmPing
@@ -93,7 +93,7 @@ func TestKeepWarmStoppedDuringTick(t *testing.T) {
 	warmPing = func(id string) error {
 		pinged = append(pinged, id)
 		other := map[string]string{id1: id3, id3: id1}[id]
-		ok(t, h, "/keepwarm", `{"dir":"-p","id":"`+other+`","on":false}`, true, "arrêté")
+		v1ok(t, h, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+other+`","on":false}`, "arrêté")
 		return nil
 	}
 	warmTick(now)
@@ -106,10 +106,10 @@ func TestKeepWarmStoppedDuringTick(t *testing.T) {
 func TestKeepWarmSessionFermee(t *testing.T) {
 	h, cfg, _ := web(t)
 	openAndIdle(t)
-	ok(t, h, "/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true}`, false, "session fermée")
+	v1err(t, h, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true}`, 409, "session fermée")
 
 	openAndIdle(t, id1)
-	ok(t, h, "/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true}`, true, "activé")
+	v1ok(t, h, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true}`, "activé")
 	openAndIdle(t) // fermée ensuite
 	pings := 0
 	old := warmPing
@@ -139,11 +139,11 @@ func TestKeepWarmReheatFroid(t *testing.T) {
 	old := warmPing
 	defer func() { warmPing = old }()
 	warmPing = func(id string) error { pings++; return nil }
-	ok(t, h, "/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true}`, true, "") // froid sans demande de réchauffage : aucun ping
+	v1ok(t, h, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true}`, "") // froid sans demande de réchauffage : aucun ping
 	if pings != 0 {
 		t.Fatal("ping sans accord")
 	}
-	ok(t, h, "/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true,"reheat":true}`, true, "")
+	v1ok(t, h, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true,"reheat":true}`, "")
 	if pings != 1 || warmState[id1].Pings != 1 {
 		t.Fatalf("réchauffage : %d ping(s), état %+v", pings, warmState[id1])
 	}

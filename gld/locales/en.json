@@ -554,5 +554,7 @@
     "other": "{{.Count}} items"
   },
   "srv.rewind.fait": "Session rewound to this message: {{.A1}} message(s) removed",
-  "srv.rewind.sessionOuverte": "session is open: close it before rewinding"
+  "srv.rewind.sessionOuverte": "session is open: close it before rewinding",
+  "srv.http_util.tropDElements": "too many items in the request",
+  "srv.http_util.introuvable": "not found"
 }

@@ -216,15 +216,21 @@ func uploadImage(name string) (*os.File, string, error) {
 }
 
 func routesImages(mux *http.ServeMux) {
-	mux.HandleFunc("GET /conv-upload", func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		if _, ok := transcript(q.Get("dir"), q.Get("id")); !ok {
-			http.NotFound(w, r)
+	notFound := func(w http.ResponseWriter) {
+		writeErr(w, http.StatusNotFound, "not_found", L("srv.http_util.introuvable"))
+	}
+	mux.HandleFunc("GET /v1/sessions/{id}/conversation/uploads/{up}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
 			return
 		}
-		f, typ, err := uploadImage(q.Get("name"))
+		if _, ok := transcript(r.URL.Query().Get("dir"), id); !ok {
+			notFound(w)
+			return
+		}
+		f, typ, err := uploadImage(r.PathValue("up"))
 		if err != nil {
-			http.NotFound(w, r)
+			notFound(w)
 			return
 		}
 		defer f.Close()
@@ -235,48 +241,63 @@ func routesImages(mux *http.ServeMux) {
 		h.Set("Cache-Control", "private, max-age=3600")
 		io.Copy(w, f)
 	})
-	mux.HandleFunc("POST /image-upload", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /v1/uploads/images", func(w http.ResponseWriter, r *http.Request) {
 		b, err := io.ReadAll(http.MaxBytesReader(w, r.Body, imgMax+1))
-		var p string
-		if err == nil {
-			p, err = saveImage(b, r.URL.Query().Get("id"))
+		switch {
+		case err != nil || len(b) > imgMax:
+			writeErr(w, http.StatusRequestEntityTooLarge, "too_large", L("srv.images.imageVideOuTrop"))
+			return
+		case len(b) == 0:
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.images.imageVideOuTrop"))
+			return
+		case imageExt(b) == "":
+			writeErr(w, http.StatusUnsupportedMediaType, "unsupported", L("srv.images.formatNonReconnuPng"))
+			return
 		}
+		p, err := saveImage(b, r.URL.Query().Get("id"))
 		journal("image-upload (%d octets) : %v", len(b), errOr(err))
 		if err != nil {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "path": p, "out": L("srv.images.imageAjoutee")})
+		writeJSON(w, 201, map[string]any{"path": p, "message": L("srv.images.imageAjoutee")})
 	})
-	mux.HandleFunc("POST /file-upload", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /v1/uploads/files", func(w http.ResponseWriter, r *http.Request) {
 		b, err := io.ReadAll(http.MaxBytesReader(w, r.Body, fileMax+1))
-		var p string
-		if err == nil && (len(b) == 0 || len(b) > fileMax) {
-			err = terr("srv.images.imageVideOuTrop")
+		switch {
+		case err != nil || len(b) > fileMax:
+			writeErr(w, http.StatusRequestEntityTooLarge, "too_large", L("srv.images.imageVideOuTrop"))
+			return
+		case len(b) == 0:
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.images.imageVideOuTrop"))
+			return
 		}
-		if err == nil {
-			name, _ := url.QueryUnescape(r.Header.Get("X-File-Name"))
-			p, err = saveBlob(b, fileExt(name), r.URL.Query().Get("id"))
-		}
+		name, _ := url.QueryUnescape(r.Header.Get("X-File-Name"))
+		p, err := saveBlob(b, fileExt(name), r.URL.Query().Get("id"))
 		journal("file-upload (%d octets) : %v", len(b), errOr(err))
 		if err != nil {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "path": p, "out": L("srv.images.imageAjoutee")})
+		writeJSON(w, 201, map[string]any{"path": p, "message": L("srv.images.imageAjoutee")})
 	})
-	mux.HandleFunc("GET /conv-image", func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		p, ok := transcript(q.Get("dir"), q.Get("id"))
-		o, e1 := strconv.ParseInt(q.Get("o"), 10, 64)
-		k, e2 := strconv.Atoi(q.Get("k"))
-		if !ok || e1 != nil || e2 != nil {
-			http.NotFound(w, r)
+	// {img} : « <décalage du message>-<rang de l'image> ».
+	mux.HandleFunc("GET /v1/sessions/{id}/conversation/images/{img}", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathID(w, r, "id")
+		if !ok {
+			return
+		}
+		p, ok := transcript(r.URL.Query().Get("dir"), id)
+		oStr, kStr, cut := strings.Cut(r.PathValue("img"), "-")
+		o, e1 := strconv.ParseInt(oStr, 10, 64)
+		k, e2 := strconv.Atoi(kStr)
+		if !ok || !cut || e1 != nil || e2 != nil {
+			notFound(w)
 			return
 		}
 		data, typ, err := convImage(p, o, k)
 		if err != nil {
-			http.NotFound(w, r)
+			notFound(w)
 			return
 		}
 		h := w.Header()

@@ -211,10 +211,10 @@ func purgeTrashed(ids []string) (int, error) {
 }
 
 func routesTrashSessions(mux *http.ServeMux) {
-	mux.HandleFunc("GET /session-trash", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/trash/sessions", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"sessions": listTrashedSessions(), "days": int(trashKeep / (24 * time.Hour))})
 	})
-	mux.HandleFunc("POST /session-trash-add", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /v1/trash/sessions", func(w http.ResponseWriter, r *http.Request) {
 		items, _, ok := readItems(w, r)
 		if !ok {
 			return
@@ -228,20 +228,30 @@ func routesTrashSessions(mux *http.ServeMux) {
 		journal("trash %d session(s) : %d déplacée(s), %d épargnée(s) %v : %v", len(items), n, spared, ids(items), errOr(err))
 		out := rmSummary(n, spared)
 		if err != nil {
-			out += "\n" + err.Error()
+			writeErr(w, http.StatusInternalServerError, "internal", out+"\n"+err.Error())
+			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": err == nil && (n > 0 || spared == 0), "out": out})
+		if n == 0 && spared > 0 {
+			writeErr(w, http.StatusConflict, "conflict", out)
+			return
+		}
+		writeJSON(w, 201, map[string]any{"moved": n, "spared": spared, "message": out})
 	})
-	mux.HandleFunc("POST /session-trash-restore", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ IDs []string }
-		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req) != nil || len(req.IDs) == 0 {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+	// ?item=<id> répété : sessions à remettre en place.
+	mux.HandleFunc("PATCH /v1/trash/sessions", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Trashed *bool }
+		ids := r.URL.Query()["item"]
+		if !decodeBody(w, r, &req, 1<<10) {
+			return
+		}
+		if req.Trashed == nil || *req.Trashed || len(ids) == 0 || len(ids) > itemMax {
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
 			return
 		}
 		n := 0
 		var err error
 		sessionsMu.Lock()
-		for _, id := range req.IDs {
+		for _, id := range ids {
 			if !idRe.MatchString(id) {
 				continue
 			}
@@ -257,20 +267,28 @@ func routesTrashSessions(mux *http.ServeMux) {
 		if err != nil {
 			out += "\n" + err.Error()
 		}
-		writeJSON(w, 200, map[string]any{"ok": err == nil && n > 0, "out": out})
+		if n == 0 {
+			writeErr(w, http.StatusConflict, "conflict", out)
+			return
+		}
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "internal", out)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"restored": n, "message": out})
 	})
-	// ids absent ou vide : toute la corbeille. Un corps illisible n'est pas une demande de tout vider.
-	mux.HandleFunc("POST /session-trash-purge", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ IDs []string }
-		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+	// ?item=<id> répété : ces sessions ; ?all=1 : toute la corbeille. Ni l'un ni l'autre n'est pas une demande de tout vider.
+	mux.HandleFunc("DELETE /v1/trash/sessions", func(w http.ResponseWriter, r *http.Request) {
+		ids := r.URL.Query()["item"]
+		all := r.URL.Query().Get("all") == "1"
+		if (len(ids) == 0) == !all || len(ids) > itemMax {
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
 			return
 		}
 		sessionsMu.Lock()
 		defer sessionsMu.Unlock()
 		expireTrashedSessions()
-		ids := req.IDs
-		if len(ids) == 0 {
+		if all {
 			ents, _ := readDirTrusted(sessionTrashDir())
 			for _, e := range ents {
 				ids = append(ids, e.Name())
@@ -286,8 +304,9 @@ func routesTrashSessions(mux *http.ServeMux) {
 		journal("trash-purge %d session(s) : %v", n, errOr(err))
 		out := L("srv.trashsessions.purged", "A1", n)
 		if err != nil {
-			out += "\n" + err.Error()
+			writeErr(w, http.StatusInternalServerError, "internal", out+"\n"+err.Error())
+			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": err == nil, "out": out})
+		writeJSON(w, 200, map[string]any{"purged": n, "message": out})
 	})
 }

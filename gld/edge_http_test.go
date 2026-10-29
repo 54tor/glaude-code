@@ -29,12 +29,12 @@ func TestLimitesHTTP(t *testing.T) {
 
 	// Le compte rendu de suppression est joint au message.
 	put(t, filepath.Join(cfg, "history.jsonl"), `{"sessionId":"`+id1+`"}`+"\n", old)
-	ok(t, h, "/rm", `{"items":[{"dir":"-p","id":"`+id1+`"}]}`, true, "1 session supprimée\\n  history.jsonl   : 1 ligne(s)")
+	v1ok(t, h, "DELETE", "/v1/sessions?item=-p:"+id1, "", "1 session supprimée\\n  history.jsonl   : 1 ligne(s)")
 
 	// Réponse du chat poussée au fil de l'eau.
 	put(t, filepath.Join(cfg, "projects", "-p", id2+".jsonl"), `{"cwd":"`+filepath.Join(cfg, "..", "p")+`"}`+"\n", old)
 	t.Setenv("FAKE_CHAT", `{"type":"result","subtype":"success"}`)
-	r := httptest.NewRequest("POST", "/chat", strings.NewReader(`{"dir":"-p","id":"`+id2+`","prompt":"x"}`))
+	r := httptest.NewRequest("POST", "/v1/sessions/"+id2+"/chat?dir=-p", strings.NewReader(`{"prompt":"x"}`))
 	r.Host = testHost
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
@@ -56,7 +56,7 @@ func TestArretSansSignal(t *testing.T) {
 	chatMu.Unlock()
 	defer func() { chatMu.Lock(); delete(chatRun, id1); chatMu.Unlock() }()
 	time.Sleep(100 * time.Millisecond) // le temps que trap soit posé
-	ok(t, h, "/chat-stop", `{"id":"`+id1+`"}`, true, "Arrêt demandé")
+	v1ok(t, h, "DELETE", "/v1/sessions/"+id1+"/chat", "", "Arrêt demandé")
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
 	select {
@@ -89,7 +89,7 @@ func TestMainServeur(t *testing.T) {
 	defer cmd.Process.Kill()
 	var resp *http.Response
 	for range 300 {
-		if resp, err = http.Get("http://127.0.0.1:" + p + "/api"); err == nil {
+		if resp, err = http.Get("http://127.0.0.1:" + p + "/v1/state"); err == nil {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -103,7 +103,7 @@ func TestMainServeur(t *testing.T) {
 	if !strings.Contains(b.String(), `"root":"`+filepath.Join(home, ".claude", "projects")+`"`) {
 		t.Fatal("root :", b)
 	}
-	req, _ := http.NewRequest("GET", "http://127.0.0.1:"+p+"/api", nil)
+	req, _ := http.NewRequest("GET", "http://127.0.0.1:"+p+"/v1/state", nil)
 	req.Host = "localhost:" + p
 	if resp, err := http.DefaultClient.Do(req); err != nil || resp.StatusCode != 200 {
 		t.Fatal("localhost refusé :", err)

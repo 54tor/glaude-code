@@ -5,7 +5,6 @@ package main
 
 import (
 	"encoding/json"
-	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -44,28 +43,31 @@ func noteKeyOK(k string) bool {
 }
 
 func routesNotes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /notes", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/notes", func(w http.ResponseWriter, r *http.Request) {
 		notesMu.Lock()
 		defer notesMu.Unlock()
 		m, err := notesLoad()
 		if err != nil {
-			writeJSON(w, 500, map[string]any{"ok": false, "out": err.Error()})
+			writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 			return
 		}
 		writeJSON(w, 200, map[string]any{"notes": m})
 	})
 	// {key, text} : enregistre (texte vide : supprime) ; {key, to} : déplace la note (renommage d'un projet).
-	mux.HandleFunc("POST /notes", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("PUT /v1/notes", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Key, Text, To string }
-		if json.NewDecoder(io.LimitReader(r.Body, noteMax+1<<10)).Decode(&req) != nil || !noteKeyOK(req.Key) || len(req.Text) > noteMax || (req.To != "" && !noteKeyOK(req.To)) {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+		if !decodeBody(w, r, &req, noteMax+1<<10) {
+			return
+		}
+		if !noteKeyOK(req.Key) || len(req.Text) > noteMax || (req.To != "" && !noteKeyOK(req.To)) {
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
 			return
 		}
 		notesMu.Lock()
 		defer notesMu.Unlock()
 		m, err := notesLoad()
 		if err != nil {
-			writeJSON(w, 500, map[string]any{"ok": false, "out": err.Error()})
+			writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 			return
 		}
 		switch {
@@ -73,7 +75,7 @@ func routesNotes(mux *http.ServeMux) {
 			if t, ok := m[req.Key]; ok && req.To != req.Key {
 				if d, has := m[req.To]; has {
 					if t = mergeNotes(d, t); len(t) > noteMax {
-						writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.notes.fusionTropLongue")})
+						writeErr(w, http.StatusRequestEntityTooLarge, "too_large", L("srv.notes.fusionTropLongue"))
 						return
 					}
 				}
@@ -84,16 +86,16 @@ func routesNotes(mux *http.ServeMux) {
 			delete(m, req.Key)
 		default:
 			if _, has := m[req.Key]; !has && len(m) >= notesMax {
-				writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.notes.tropDeNotes")})
+				writeErr(w, http.StatusConflict, "conflict", L("srv.notes.tropDeNotes"))
 				return
 			}
 			m[req.Key] = req.Text
 		}
 		if err := notesSave(m); err != nil {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			writeErr(w, http.StatusInternalServerError, "internal", err.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.notes.noteEnregistree")})
+		writeJSON(w, 200, map[string]any{"message": L("srv.notes.noteEnregistree")})
 	})
 }
 

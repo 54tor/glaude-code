@@ -348,9 +348,9 @@ func handler() http.Handler {
 	routesGuest(mux)
 	routesTeams(mux)
 	// Conversation dans le navigateur (chat.go).
-	mux.HandleFunc("POST /chat", chatHandler)
-	mux.HandleFunc("POST /chat-stop", chatStopHandler)
-	mux.HandleFunc("POST /new-session", newSessionHandler)
+	mux.HandleFunc("POST /v1/sessions/{id}/chat", chatHandler)
+	mux.HandleFunc("DELETE /v1/sessions/{id}/chat", chatStopHandler)
+	mux.HandleFunc("POST /v1/sessions", newSessionHandler)
 	// Anti DNS-rebinding : seul le Host local est servi (sauf écoute hors localhost, où le jeton, ou la session en mode
 	// multi-utilisateur, le remplace).
 	// Anti CSRF : http.CrossOriginProtection (bibliothèque standard) refuse toute requête modifiante venue d'une autre origine.

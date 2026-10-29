@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -60,16 +61,16 @@ var routeRights = map[string]Right{
 	// /snippet-draft ne fait qu'un brouillon (même appel de modèle que /memory-draft) ; écrire un snippet, c'est écrire
 	// une commande slash de Claude Code (commands/*.md), donc config_write.
 	"POST /snippet-draft": RightMemWrite,
-	"GET /notes":          RightMemRead, "POST /notes": RightMemWrite,
-	"GET /trash": RightMemRead, "GET /trash-file": RightMemRead, "POST /trash-restore": RightMemWrite, "POST /trash-purge": RightMemWrite,
+	"GET /v1/notes":       RightMemRead, "PUT /v1/notes": RightMemWrite,
+	"GET /v1/trash/memory": RightMemRead, "GET /v1/trash/memory/{id}/file": RightMemRead, "PATCH /v1/trash/memory/{id}": RightMemWrite, "DELETE /v1/trash/memory": RightMemWrite,
 	"GET /skills-list": RightMemRead, "GET /skills-find": RightMemRead, "GET /skills-updates": RightMemRead, "GET /skill": RightMemRead, "GET /plugins": RightMemRead, "GET /marketplaces": RightMemRead,
 
 	// Lecture du home et état d'interface par home.
 	"GET /config": RightMemRead, "GET /config-projects": RightMemRead, "GET /config-effective": RightMemRead,
-	"GET /config-mcp": RightMemRead, "GET /slash-commands": RightMemRead,
-	"GET /git-status": RightMemRead, "GET /git-changes": RightMemRead, "GET /git-remotes": RightMemRead,
-	"GET /cleanup-warning": RightMemRead, "GET /tabs": RightMemRead, "GET /keepwarm": RightMemRead,
-	"POST /tabs-save": RightMemWrite, "POST /tabs-rm": RightMemWrite, "POST /vgroups": RightMemWrite,
+	"GET /config-mcp": RightMemRead, "GET /v1/slash-commands": RightMemRead,
+	"GET /v1/git/status": RightMemRead, "GET /v1/git/changes": RightMemRead, "GET /v1/git/remotes": RightMemRead,
+	"GET /v1/cleanup-warning": RightMemRead, "GET /v1/tabs": RightMemRead, "GET /v1/keepwarm": RightMemRead,
+	"PUT /v1/tabs": RightMemWrite, "DELETE /v1/tabs/{tab}": RightMemWrite, "PUT /v1/vgroups": RightMemWrite,
 
 	// Réglages et skills : font exécuter du code par Claude Code.
 	"POST /config-edit": RightConfigWrite, "GET /config-raw": RightConfigWrite, "POST /config-raw": RightConfigWrite,
@@ -83,40 +84,40 @@ var routeRights = map[string]Right{
 	"GET /account": RightUsageRead, "POST /account-refresh": RightUsageRead,
 
 	// Transcriptions et état des sessions. /info renvoie les premiers messages d'une session : contenu, pas usage.
-	"GET /api": RightSessionsRead, "GET /conv": RightSessionsRead, "GET /conv-text": RightSessionsRead, "GET /conv-tools": RightSessionsRead,
-	"GET /conv-image": RightSessionsRead, "GET /conv-upload": RightSessionsRead, "GET /conv-doc": RightSessionsRead, "GET /info": RightSessionsRead,
-	"GET /session-state": RightSessionsRead, "GET /session-live": RightSessionsRead, "GET /session-task-output": RightSessionsRead, "GET /session-screen": RightSessionsRead,
-	"GET /session-loaded": RightSessionsRead, "GET /session-loaded-file": RightSessionsRead, "GET /session-trash": RightSessionsRead, "GET /sessions-stamp": RightSessionsRead,
-	"GET /session-send-info": RightSessionsRead, "GET /search": RightSessionsRead, "GET /queue": RightSessionsRead,
+	"GET /v1/state": RightSessionsRead, "GET /v1/sessions/{id}/conversation": RightSessionsRead, "GET /v1/sessions/{id}/conversation/text": RightSessionsRead, "GET /v1/sessions/{id}/conversation/tools": RightSessionsRead,
+	"GET /v1/sessions/{id}/conversation/images/{img}": RightSessionsRead, "GET /v1/sessions/{id}/conversation/uploads/{up}": RightSessionsRead, "GET /v1/sessions/{id}/conversation/document": RightSessionsRead, "GET /v1/info": RightSessionsRead,
+	"GET /v1/sessions/{id}/state": RightSessionsRead, "GET /v1/sessions/{id}/live": RightSessionsRead, "GET /v1/sessions/{id}/tasks/{task}/output": RightSessionsRead, "GET /v1/sessions/{id}/screen": RightSessionsRead,
+	"GET /v1/sessions/{id}/loaded": RightSessionsRead, "GET /v1/sessions/{id}/loaded/files/{file}": RightSessionsRead, "GET /v1/trash/sessions": RightSessionsRead, "GET /v1/state/stamp": RightSessionsRead,
+	"GET /v1/sessions/send-info": RightSessionsRead, "GET /v1/sessions": RightSessionsRead, "GET /v1/sessions/{id}/queue": RightSessionsRead,
 	// Renvoie des extraits de commandes tirés des transcriptions.
 	"GET /config-perm-suggest": RightSessionsRead,
 
 	// Exécution.
-	"POST /chat": RightExec, "POST /chat-stop": RightExec, "POST /new-session": RightExec,
+	"POST /v1/sessions/{id}/chat": RightExec, "DELETE /v1/sessions/{id}/chat": RightExec, "POST /v1/sessions": RightExec,
 	"GET /fs-tree": RightFsRead, "GET /fs-file": RightFsRead, "GET /fs-trash": RightFsRead,
 	"GET /fs-index": RightFsRead, "POST /fs-files": RightFsRead, "GET /fs-watch": RightFsRead,
 	"POST /fs-save": RightFsWrite, "POST /fs-new": RightFsWrite, "POST /fs-rename": RightFsWrite, "POST /fs-rm": RightFsWrite,
 	"POST /fs-trash-restore": RightFsWrite, "POST /fs-trash-purge": RightFsWrite,
-	"GET /term-info": RightExec, "POST /term-open": RightExec, "GET /term-ws": RightExec,
-	"POST /session-send": RightExec, "POST /queue-add": RightExec, "POST /queue-rm": RightExec, "POST /queue-retry": RightExec, "POST /invite-create": RightExec, "POST /invite-regen": RightExec, "POST /invite-mode": RightExec, "POST /invite-revoke": RightExec, "POST /share-end": RightExec, "GET /shares": RightExec, "POST /session-key": RightExec, "POST /session-close": RightExec,
-	"GET /trust-pending": RightExec, "POST /trust-answer": RightExec, "POST /open": RightExec, "POST /git-push": RightExec,
-	"GET /ls": RightExec, "POST /dirs": RightExec, "POST /image-upload": RightExec, "POST /file-upload": RightExec,
+	"GET /v1/terminal": RightExec, "POST /v1/terminal": RightExec, "GET /v1/terminal/ws": RightExec,
+	"POST /v1/sessions/{id}/messages": RightExec, "POST /v1/sessions/{id}/queue": RightExec, "DELETE /v1/sessions/{id}/queue/{qid}": RightExec, "PATCH /v1/sessions/{id}/queue/{qid}": RightExec, "POST /invite-create": RightExec, "POST /invite-regen": RightExec, "POST /invite-mode": RightExec, "POST /invite-revoke": RightExec, "POST /share-end": RightExec, "GET /shares": RightExec, "POST /v1/sessions/{id}/keystrokes": RightExec, "DELETE /v1/sessions/{id}/process": RightExec,
+	"GET /v1/trust/pending": RightExec, "POST /v1/trust/answers": RightExec, "PUT /v1/sessions/{id}/process": RightExec, "PUT /v1/projects/{dir}/process": RightExec, "POST /v1/git/pushes": RightExec,
+	"GET /v1/directories": RightExec, "POST /v1/directories": RightExec, "DELETE /v1/directories": RightExec, "POST /v1/uploads/images": RightExec, "POST /v1/uploads/files": RightExec,
 	// Agissent sur les sessions : fermeture, suppression de transcriptions, tours de modèle.
-	"POST /rm": RightExec, "POST /conv-rewind": RightExec, "POST /rename": RightExec, "POST /reassign": RightExec, "POST /keepwarm": RightExec,
+	"DELETE /v1/sessions": RightExec, "DELETE /v1/sessions/{id}/conversation": RightExec, "PATCH /v1/sessions/{id}": RightExec, "PATCH /v1/sessions": RightExec, "PUT /v1/keepwarm": RightExec,
 	"GET /teams-catalog": RightSessionsRead, "POST /teams-compose": RightSessionsRead, "GET /teams": RightSessionsRead,
 	"GET /team": RightSessionsRead, "GET /team-screen": RightSessionsRead,
 	"POST /teams-launch": RightExec, "POST /team-send": RightExec, "POST /team-key": RightExec, "POST /team-close": RightExec,
 	"POST /teams-agent-save": RightConfigWrite, "POST /teams-agent-rm": RightConfigWrite,
 	"POST /teams-team-save": RightConfigWrite, "POST /teams-team-rm": RightConfigWrite,
-	"POST /session-trash-add": RightExec, "POST /session-trash-restore": RightExec, "POST /session-trash-purge": RightExec,
+	"POST /v1/trash/sessions": RightExec, "PATCH /v1/trash/sessions": RightExec, "DELETE /v1/trash/sessions": RightExec,
 }
 
 // Routes de sondage : ne prolongent pas la session, sans quoi un onglet ouvert ne l'expirerait jamais.
 var passiveRoutes = map[string]bool{
-	"GET /api": true, "GET /sessions-stamp": true, "GET /session-live": true, "GET /session-state": true,
-	"GET /session-screen": true, "GET /conv": true, "GET /snippet-list": true, "GET /memory-list": true,
-	"GET /memory-health": true, "GET /memory-loaded": true, "GET /trash": true, "GET /keepwarm": true,
-	"GET /git-status": true, "GET /team": true, "GET /teams": true, "GET /account": true, "GET /trust-pending": true, "GET /cleanup-warning": true,
+	"GET /v1/state": true, "GET /v1/state/stamp": true, "GET /v1/sessions/{id}/live": true, "GET /v1/sessions/{id}/state": true,
+	"GET /v1/sessions/{id}/screen": true, "GET /v1/sessions/{id}/conversation": true, "GET /snippet-list": true, "GET /memory-list": true,
+	"GET /memory-health": true, "GET /memory-loaded": true, "GET /v1/trash/memory": true, "GET /v1/keepwarm": true,
+	"GET /v1/git/status": true, "GET /team": true, "GET /teams": true, "GET /account": true, "GET /v1/trust/pending": true, "GET /v1/cleanup-warning": true,
 }
 
 // tokenPrincipal : principal d'une requête Bearer ; nil tant que les jetons ne sont pas branchés.
@@ -206,6 +207,20 @@ func gatePrincipal(s *authStore, r *http.Request, passive bool) (p *Principal, b
 		return nil, false
 	}
 	return p, false
+}
+
+// pathSeg : le i-ième segment (0 = « v1 ») du chemin, décodé comme le fait le mux ; les PathValue ne sont posées qu'au
+// dispatch, après le garde.
+func pathSeg(r *http.Request, i int) string {
+	parts := strings.Split(strings.TrimPrefix(r.URL.EscapedPath(), "/"), "/")
+	if i >= len(parts) {
+		return ""
+	}
+	v, err := url.PathUnescape(parts[i])
+	if err != nil {
+		return ""
+	}
+	return v
 }
 
 const peekMax = 1 << 16 // la limite de lecture des handlers concernés
@@ -337,12 +352,8 @@ func gateCheck(g *gateInfo, r *http.Request, pat string, need Right) (int, strin
 	if !ok {
 		return 403, "srv.auth.droitRefuse"
 	}
-	if pat == "POST /trash-restore" {
-		var req struct{ ID string }
-		if err := peekJSON(r, &req); err != nil {
-			return peekErr(err)
-		}
-		if trashNeedsConfig(homeFrom(r), req.ID) {
+	if pat == "PATCH /v1/trash/memory/{id}" {
+		if trashNeedsConfig(homeFrom(r), pathSeg(r, 3)) {
 			return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] && m[RightConfigWrite] })
 		}
 	}
@@ -351,7 +362,7 @@ func gateCheck(g *gateInfo, r *http.Request, pat string, need Right) (int, strin
 		if err := peekJSON(r, &req); err != nil {
 			return peekErr(err)
 		}
-		// Lancer ouvre une session claude avec les arguments de l'appelant : même droit que /open.
+		// Lancer ouvre une session claude avec les arguments de l'appelant : même droit que l'ouverture d'une session.
 		if req.Launch {
 			return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] && m[RightExec] })
 		}
@@ -361,7 +372,7 @@ func gateCheck(g *gateInfo, r *http.Request, pat string, need Right) (int, strin
 	if pat == "POST /memory-draft" || pat == "POST /skill-draft" {
 		return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] && m[RightMemRead] })
 	}
-	if pat == "POST /vgroups" {
+	if pat == "PUT /v1/vgroups" {
 		var st Store
 		if err := peekJSON(r, &st); err != nil {
 			return peekErr(err)
@@ -373,8 +384,8 @@ func gateCheck(g *gateInfo, r *http.Request, pat string, need Right) (int, strin
 	return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] })
 }
 
-// vgroupsAddsDirs : les dossiers enregistrés servent de racines à l'IDE, et POST /dirs (exec) est le seul moyen
-// d'en ajouter. /vgroups renvoie l'ensemble : tout dossier absent du magasin actuel est un ajout.
+// vgroupsAddsDirs : les dossiers enregistrés servent de racines à l'IDE, et POST /v1/directories (exec) est le seul moyen
+// d'en ajouter. PUT /v1/vgroups renvoie l'ensemble : tout dossier absent du magasin actuel est un ajout.
 // Magasin illisible ou home inconnu : ajout, donc exec.
 func vgroupsAddsDirs(home string, st Store) bool {
 	dir := cfgDir()
@@ -459,7 +470,7 @@ func rightsErr(g *gateInfo, homeID string, ok func(map[Right]bool) bool) (int, s
 // Flux longs : le garde ne juge qu'à l'ouverture, une session révoquée ou un droit retiré doit aussi couper un flux déjà ouvert.
 var (
 	authWatchEvery = 5 * time.Second
-	watchedRoutes  = map[string]bool{"GET /term-ws": true, "POST /chat": true, "GET /fs-watch": true}
+	watchedRoutes  = map[string]bool{"GET /v1/terminal/ws": true, "POST /v1/sessions/{id}/chat": true, "GET /fs-watch": true}
 	errAuthRevoked = errors.New("auth: access revoked")
 )
 
@@ -504,13 +515,8 @@ func withAuthWatch(next http.Handler) http.Handler {
 		// /chat relayé à un enfant : la coupure ne lui parvient que comme un client parti, et un tour continue alors (onglet
 		// fermé). La passerelle lui demande donc l'arrêt explicitement, avec l'identifiant lu ici (l'enfant n'en lit pas plus).
 		var chatID, child string
-		if g.pat == "POST /chat" && homeFrom(r) != "" {
-			var req struct{ ID string }
-			if errors.Is(peekJSON(r, &req), errBodyTooBig) {
-				gateDeny(w, 413, "srv.http_util.requeteTropGrosse")
-				return
-			}
-			chatID, child = req.ID, homeFrom(r)
+		if g.pat == "POST /v1/sessions/{id}/chat" && homeFrom(r) != "" {
+			chatID, child = pathSeg(r, 2), homeFrom(r)
 		}
 		ctx, cancel := context.WithCancelCause(r.Context())
 		defer cancel(nil)
@@ -538,18 +544,16 @@ func withAuthWatch(next http.Handler) http.Handler {
 	})
 }
 
-// stopChildChat envoie POST /chat-stop à l'enfant du home, par son proxy (en-tête X-Gld-Child compris).
+// stopChildChat envoie DELETE /v1/sessions/{id}/chat à l'enfant du home, par son proxy (en-tête X-Gld-Child compris).
 func stopChildChat(home, id string) {
 	p, err := homeProxy(home)
 	if err != nil {
 		journal("auth: arrêt du tour %s sur %s : %v", id, home, err)
 		return
 	}
-	b, _ := json.Marshal(map[string]string{"ID": id})
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, "POST", "/chat-stop", bytes.NewReader(b))
-	req.Header.Set("Content-Type", "application/json")
+	req, _ := http.NewRequestWithContext(ctx, "DELETE", "/v1/sessions/"+id+"/chat", nil)
 	w := &discardWriter{h: http.Header{}}
 	p.ServeHTTP(w, req)
 	journal("auth: arrêt du tour %s sur %s demandé : %d", id, home, w.code)

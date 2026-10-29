@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 )
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
@@ -40,21 +41,50 @@ func pathID(w http.ResponseWriter, r *http.Request, name string) (string, bool) 
 
 type item struct{ Dir, ID string }
 
-// readItems décode {items:[{dir,id}], to} et n'accepte que des sessions qui existent vraiment.
+// itemMax : plafond d'éléments d'une requête multiple (?item=… répété, ou items du corps).
+const itemMax = 400
+
+// validItems n'accepte que des sessions qui existent vraiment ; false après avoir répondu.
+func validItems(w http.ResponseWriter, items []item) bool {
+	if len(items) == 0 {
+		writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
+		return false
+	}
+	if len(items) > itemMax {
+		writeErr(w, http.StatusBadRequest, "too_many", L("srv.http_util.tropDElements"))
+		return false
+	}
+	for _, it := range items {
+		if _, ok := transcript(it.Dir, it.ID); !ok {
+			writeErr(w, http.StatusBadRequest, "bad_id", L("srv.http_util.idInvalide"))
+			return false
+		}
+	}
+	return true
+}
+
+// itemsQuery lit ?item=<dossier>:<id> répété : l'identifiant ne contient jamais « : », le nom de dossier peut en porter.
+func itemsQuery(w http.ResponseWriter, r *http.Request) ([]item, bool) {
+	var items []item
+	for _, v := range r.URL.Query()["item"] {
+		i := strings.LastIndex(v, ":")
+		if i < 0 {
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
+			return nil, false
+		}
+		items = append(items, item{v[:i], v[i+1:]})
+	}
+	return items, validItems(w, items)
+}
+
+// readItems décode {items:[{dir,id}], to} (PATCH /v1/sessions, POST /v1/trash/sessions).
 func readItems(w http.ResponseWriter, r *http.Request) ([]item, string, bool) {
 	var req struct {
 		Items []item
 		To    string
 	}
-	if json.NewDecoder(io.LimitReader(r.Body, 1<<22)).Decode(&req) != nil || len(req.Items) == 0 {
-		writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+	if !decodeBody(w, r, &req, 1<<22) || !validItems(w, req.Items) {
 		return nil, "", false
-	}
-	for _, it := range req.Items {
-		if _, ok := transcript(it.Dir, it.ID); !ok {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.idInvalide")})
-			return nil, "", false
-		}
 	}
 	return req.Items, req.To, true
 }

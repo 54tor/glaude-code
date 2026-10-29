@@ -190,7 +190,7 @@ func TestApiLang(t *testing.T) {
 	noOverride(t)
 	h, _, _ := web(t)
 	withSettings(t, `{"language":"Spanish"}`)
-	if got := status(t, h, "GET", "/api", "", 200)["lang"]; got != "other" {
+	if got := status(t, h, "GET", "/v1/state", "", 200)["lang"]; got != "other" {
 		t.Fatalf("lang = %v", got)
 	}
 }
@@ -347,7 +347,7 @@ func TestInvalidRequestLang(t *testing.T) {
 	h, _, _ := web(t)
 	for lang, want := range map[string]string{"fr": "requête invalide", "en": "invalid request"} {
 		setLangT(t, lang)
-		if got := status(t, h, "POST", "/rm", "pas du json", 400)["out"]; got != want {
+		if got := v1err(t, h, "POST", "/v1/trust/answers", "pas du json", 400, "")["message"]; got != want {
 			t.Errorf("%s : %v", lang, got)
 		}
 	}

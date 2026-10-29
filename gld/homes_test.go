@@ -75,7 +75,7 @@ func TestHomesAiguillage(t *testing.T) {
 		t.Fatalf("le processus enfant doit répondre et n'être lancé qu'une fois (%d)", starts)
 	}
 	ws := func(origin string) *httptest.ResponseRecorder {
-		r := httptest.NewRequest("GET", "/term-ws?t=x", nil)
+		r := httptest.NewRequest("GET", "/v1/terminal/ws?t=x", nil)
 		r.Host = "127.0.0.1:8799"
 		r.Header.Set("Upgrade", "websocket")
 		if origin != "" {
@@ -105,7 +105,7 @@ func TestHomesAiguillage(t *testing.T) {
 
 func TestEnfantExigeLeJetonDeLaPasserelle(t *testing.T) {
 	req := func(tok string) *http.Request {
-		r := httptest.NewRequest("GET", "/api", nil)
+		r := httptest.NewRequest("GET", "/v1/state", nil)
 		if tok != "" {
 			r.Header.Set(childHeader, tok)
 		}

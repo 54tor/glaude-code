@@ -14,16 +14,16 @@ func TestCorbeilleSessions(t *testing.T) {
 	os.WriteFile(filepath.Join(sub, "agent.jsonl"), []byte("{}\n"), 0o600)
 	body := `{"items":[{"dir":"-p","id":"` + id1 + `"}]}`
 
-	ok(t, h, "/session-trash-add", body, true, "")
+	v1ok(t, h, "POST", "/v1/trash/sessions", body, "")
 	if _, err := os.Stat(p); err == nil {
 		t.Fatal("transcript encore en place")
 	}
-	_, m, _ := call(t, h, "GET", "/session-trash", "")
+	_, m, _ := call(t, h, "GET", "/v1/trash/sessions", "")
 	if l, _ := m["sessions"].([]any); len(l) != 1 {
 		t.Fatalf("corbeille : %v", m)
 	}
 	// restauration : transcript et sous-agents reviennent
-	ok(t, h, "/session-trash-restore", `{"ids":["`+id1+`"]}`, true, "")
+	v1ok(t, h, "PATCH", "/v1/trash/sessions?item="+id1, `{"trashed":false}`, "")
 	if _, err := os.Stat(p); err != nil {
 		t.Fatal("transcript non restauré")
 	}
@@ -31,17 +31,17 @@ func TestCorbeilleSessions(t *testing.T) {
 		t.Fatal("sous-agents non restaurés")
 	}
 	// suppression définitive depuis la corbeille : tout part
-	ok(t, h, "/session-trash-add", body, true, "")
-	ok(t, h, "/session-trash-purge", `{"ids":["`+id1+`"]}`, true, "")
+	v1ok(t, h, "POST", "/v1/trash/sessions", body, "")
+	v1ok(t, h, "DELETE", "/v1/trash/sessions?item="+id1, "", "")
 	if _, err := os.Stat(p); err == nil {
 		t.Fatal("transcript encore là après la purge")
 	}
-	_, m, _ = call(t, h, "GET", "/session-trash", "")
+	_, m, _ = call(t, h, "GET", "/v1/trash/sessions", "")
 	if l, _ := m["sessions"].([]any); len(l) != 0 {
 		t.Fatalf("corbeille non vidée : %v", m)
 	}
 	// un id invalide ne touche à rien
-	status(t, h, "POST", "/session-trash-restore", `{"ids":["../x"]}`, 200)
+	v1err(t, h, "PATCH", "/v1/trash/sessions?item=..%2Fx", `{"trashed":false}`, 409, "")
 }
 
 func TestPurgeCorbeilleSansEtatDesSessions(t *testing.T) {

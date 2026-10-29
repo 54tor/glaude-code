@@ -24,7 +24,7 @@ func TestWithToken(t *testing.T) {
 		h.ServeHTTP(w, r)
 		return w
 	}
-	if w := do(httptest.NewRequest("GET", "/api", nil)); w.Code != 401 {
+	if w := do(httptest.NewRequest("GET", "/v1/state", nil)); w.Code != 401 {
 		t.Fatal("sans jeton :", w.Code)
 	}
 	if w := do(httptest.NewRequest("GET", "/?token=faux", nil)); w.Code != 401 {
@@ -41,12 +41,12 @@ func TestWithToken(t *testing.T) {
 	if len(c) != 1 || !c[0].HttpOnly || c[0].SameSite != http.SameSiteStrictMode {
 		t.Fatalf("cookie : %+v", c)
 	}
-	r := httptest.NewRequest("GET", "/api", nil)
+	r := httptest.NewRequest("GET", "/v1/state", nil)
 	r.AddCookie(c[0])
 	if w := do(r); w.Code != 200 {
 		t.Fatal("avec cookie :", w.Code)
 	}
-	r = httptest.NewRequest("GET", "/api", nil)
+	r = httptest.NewRequest("GET", "/v1/state", nil)
 	r.Header.Set("Authorization", "Bearer "+tok)
 	if w := do(r); w.Code != 200 {
 		t.Fatal("avec Bearer :", w.Code)

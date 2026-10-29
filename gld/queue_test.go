@@ -302,7 +302,11 @@ func queueMux(t *testing.T) *http.ServeMux {
 }
 
 func post(mux *http.ServeMux, path, body string, hdr ...string) *httptest.ResponseRecorder {
-	r := httptest.NewRequest("POST", path, strings.NewReader(body))
+	return send(mux, "POST", path, body, hdr...)
+}
+
+func send(mux *http.ServeMux, method, path, body string, hdr ...string) *httptest.ResponseRecorder {
+	r := httptest.NewRequest(method, path, strings.NewReader(body))
 	for i := 0; i+1 < len(hdr); i += 2 {
 		r.Header.Set(hdr[i], hdr[i+1])
 	}
@@ -313,18 +317,18 @@ func post(mux *http.ServeMux, path, body string, hdr ...string) *httptest.Respon
 
 func TestQueueAddHandlerRejectsOversize(t *testing.T) {
 	mux := queueMux(t)
-	big, _ := json.Marshal(map[string]string{"id": qid, "text": strings.Repeat("x", sendMax+1)})
-	if w := post(mux, "/queue-add", string(big)); w.Code != 400 || len(queueSt.List(qid)) != 0 {
+	big, _ := json.Marshal(map[string]string{"text": strings.Repeat("x", sendMax+1)})
+	if w := post(mux, "/v1/sessions/"+qid+"/queue", string(big)); w.Code != 400 || len(queueSt.List(qid)) != 0 {
 		t.Fatalf("code=%d", w.Code)
 	}
-	if w := post(mux, "/queue-add", `{"id":"`+qid+`","text":"ok"}`, authorHeader, "guest", inviteHeader, gInv); w.Code != 200 || queueSt.List(qid)[0].Guest != gInv {
+	if w := post(mux, "/v1/sessions/"+qid+"/queue", `{"text":"ok"}`, authorHeader, "guest", inviteHeader, gInv); w.Code != 201 || queueSt.List(qid)[0].Guest != gInv {
 		t.Fatalf("code=%d", w.Code)
 	}
-	post(mux, "/queue-add", `{"id":"`+qid+`","text":"ok2","author":"guest"}`)
+	post(mux, "/v1/sessions/"+qid+"/queue", `{"text":"ok2","author":"guest"}`)
 	if l := queueSt.List(qid); l[1].Author != "host" {
 		t.Fatalf("auteur du corps pris en compte : %+v", l[1])
 	}
-	w := post(mux, "/queue-rm", `{"id":"`+qid+`","item":"`+queueSt.List(qid)[1].ID+`"}`)
+	w := send(mux, "DELETE", "/v1/sessions/"+qid+"/queue/"+queueSt.List(qid)[1].ID, "")
 	if !strings.Contains(w.Body.String(), `"text":"ok2"`) {
 		t.Fatalf("rm = %s", w.Body)
 	}

@@ -76,14 +76,14 @@ func TestOpenModeUnchanged(t *testing.T) {
 	h, _, _ := web(t)
 	srv := withTokenOpen(modeTok, h)
 	reqs := []modeReq{
-		{method: "GET", path: "/api"},
-		{method: "GET", path: "/api?token=" + modeTok},
+		{method: "GET", path: "/v1/state"},
+		{method: "GET", path: "/v1/state?token=" + modeTok},
 		{method: "GET", path: "/memoire?token=" + modeTok + "&x=1"},
-		{method: "GET", path: "/api?token=faux"},
-		{method: "GET", path: "/api", tokCookie: modeTok},
-		{method: "GET", path: "/api", tokCookie: "faux"},
-		{method: "GET", path: "/api", bearer: modeTok},
-		{method: "GET", path: "/api", bearer: "faux"},
+		{method: "GET", path: "/v1/state?token=faux"},
+		{method: "GET", path: "/v1/state", tokCookie: modeTok},
+		{method: "GET", path: "/v1/state", tokCookie: "faux"},
+		{method: "GET", path: "/v1/state", bearer: modeTok},
+		{method: "GET", path: "/v1/state", bearer: "faux"},
 		{method: "GET", path: "/", tokCookie: modeTok, accept: "text/html"},
 		{method: "GET", path: "/homes", tokCookie: modeTok},
 		{method: "GET", path: "/inexistant", tokCookie: modeTok},
@@ -124,7 +124,7 @@ func TestNoAuthDBNoSideEffects(t *testing.T) {
 	srv := withTokenOpen(modeTok, h)
 	for range 3 {
 		tick()
-		if w := (modeReq{method: "GET", path: "/api", tokCookie: modeTok}).do(srv); w.Code != 200 {
+		if w := (modeReq{method: "GET", path: "/v1/state", tokCookie: modeTok}).do(srv); w.Code != 200 {
 			t.Fatalf("mode ouvert : %d", w.Code)
 		}
 		if w := (modeReq{method: "GET", path: "/auth/me", tokCookie: modeTok}).do(srv); w.Code != 404 {
@@ -145,7 +145,7 @@ func TestNoAuthDBNoSideEffects(t *testing.T) {
 	if _, err := s.AddUser("alice", testPw, true); err != nil {
 		t.Fatal(err)
 	}
-	q := modeReq{method: "GET", path: "/api", tokCookie: modeTok}
+	q := modeReq{method: "GET", path: "/v1/state", tokCookie: modeTok}
 	if w := q.do(srv); w.Code != 200 {
 		t.Fatalf("dans la fenêtre du cache : %d", w.Code)
 	}
@@ -172,7 +172,7 @@ func TestAuthFailClosed(t *testing.T) {
 			t.Fatal("démarrage accepté")
 		}
 		tick()
-		w := (modeReq{method: "GET", path: "/api", tokCookie: modeTok}).do(srv)
+		w := (modeReq{method: "GET", path: "/v1/state", tokCookie: modeTok}).do(srv)
 		if w.Code != 503 || !strings.Contains(w.Body.String(), jsonEsc(L("srv.auth.baseInutilisable"))) {
 			t.Fatalf("service : %d %s", w.Code, w.Body)
 		}
@@ -180,7 +180,7 @@ func TestAuthFailClosed(t *testing.T) {
 	t.Run("base fermée", func(t *testing.T) {
 		s, srv, tick := authWeb(t)
 		s.AddUser("alice", testPw, true)
-		q := modeReq{method: "GET", path: "/api", tokCookie: modeTok}
+		q := modeReq{method: "GET", path: "/v1/state", tokCookie: modeTok}
 		if w := q.do(srv); w.Code != 401 {
 			t.Fatalf("mode actif : %d", w.Code)
 		}
@@ -193,7 +193,7 @@ func TestAuthFailClosed(t *testing.T) {
 	t.Run("fichier supprimé", func(t *testing.T) {
 		s, srv, tick := authWeb(t)
 		s.AddUser("alice", testPw, true)
-		q := modeReq{method: "GET", path: "/api", tokCookie: modeTok}
+		q := modeReq{method: "GET", path: "/v1/state", tokCookie: modeTok}
 		if w := q.do(srv); w.Code != 401 {
 			t.Fatalf("mode actif : %d", w.Code)
 		}
@@ -210,7 +210,7 @@ func TestAuthFailClosed(t *testing.T) {
 	t.Run("table vidée", func(t *testing.T) {
 		s, srv, tick := authWeb(t)
 		s.AddUser("alice", testPw, true)
-		q := modeReq{method: "GET", path: "/api", tokCookie: modeTok}
+		q := modeReq{method: "GET", path: "/v1/state", tokCookie: modeTok}
 		if w := q.do(srv); w.Code != 401 {
 			t.Fatalf("mode actif : %d", w.Code)
 		}
@@ -230,12 +230,12 @@ func TestAuthFailClosed(t *testing.T) {
 		s.AddUser("alice", testPw, true)
 		s.db.Exec(`UPDATE meta SET value=x'00' WHERE key=?`, accountsKey)
 		tick()
-		if w := (modeReq{method: "GET", path: "/api", tokCookie: modeTok}).do(srv); w.Code != 503 {
+		if w := (modeReq{method: "GET", path: "/v1/state", tokCookie: modeTok}).do(srv); w.Code != 503 {
 			t.Fatalf("marqueur altéré : %d", w.Code)
 		}
 		s.db.Exec(`DELETE FROM users`)
 		tick()
-		if w := (modeReq{method: "GET", path: "/api", tokCookie: modeTok}).do(srv); w.Code != 503 {
+		if w := (modeReq{method: "GET", path: "/v1/state", tokCookie: modeTok}).do(srv); w.Code != 503 {
 			t.Fatalf("marqueur altéré sans compte : %d", w.Code)
 		}
 	})
@@ -252,9 +252,9 @@ func TestTokenIgnoredInURLWhenAuth(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, q := range []modeReq{
-		{method: "GET", path: "/api?token=" + modeTok},
+		{method: "GET", path: "/v1/state?token=" + modeTok},
 		{method: "GET", path: "/memoire?token=" + modeTok + "&x=1", accept: "application/json"},
-		{method: "GET", path: "/api", tokCookie: modeTok},
+		{method: "GET", path: "/v1/state", tokCookie: modeTok},
 	} {
 		w := q.do(h)
 		if q.path[1] == 'm' { // page publique : servie, mais sans cookie de jeton ni redirection
@@ -274,10 +274,10 @@ func TestBearerStillWorks(t *testing.T) {
 	if _, err := s.AddUser("alice", testPw, true); err != nil {
 		t.Fatal(err)
 	}
-	if w := (modeReq{method: "GET", path: "/api", bearer: modeTok}).do(h); w.Code != 200 {
+	if w := (modeReq{method: "GET", path: "/v1/state", bearer: modeTok}).do(h); w.Code != 200 {
 		t.Fatalf("Bearer sur une route de home : %d %s", w.Code, w.Body)
 	}
-	if w := (modeReq{method: "GET", path: "/api", bearer: "faux-jeton-de-vingt-car"}).do(h); w.Code != 401 {
+	if w := (modeReq{method: "GET", path: "/v1/state", bearer: "faux-jeton-de-vingt-car"}).do(h); w.Code != 401 {
 		t.Fatalf("mauvais Bearer : %d", w.Code)
 	}
 	if w := (modeReq{method: "GET", path: "/auth/me", bearer: modeTok}).do(h); w.Code != 401 {
@@ -295,7 +295,7 @@ func TestGeneratedTokenNoBearer(t *testing.T) {
 		t.Fatal(err)
 	}
 	tokenPrincipal = tokenForChildren(modeTok, true)
-	if w := (modeReq{method: "GET", path: "/api", bearer: modeTok}).do(h); w.Code != 401 {
+	if w := (modeReq{method: "GET", path: "/v1/state", bearer: modeTok}).do(h); w.Code != 401 {
 		t.Fatalf("Bearer d'un jeton généré : %d %s", w.Code, w.Body)
 	}
 	for _, u := range urlsFor("http", "192.0.2.1", "8799", "") {
@@ -317,7 +317,7 @@ func TestChildHasNoGate(t *testing.T) {
 		t.Fatalf("un enfant n'ouvre pas la base : %v %v %v", st, on, err)
 	}
 	h, _, _ := web(t)
-	r := httptest.NewRequest("GET", "/api", nil)
+	r := httptest.NewRequest("GET", "/v1/state", nil)
 	r.Host = testHost
 	r.Header.Set(childHeader, "secret-enfant")
 	w := httptest.NewRecorder()
@@ -329,7 +329,7 @@ func TestChildHasNoGate(t *testing.T) {
 
 func TestAuthModeSwitchPerRequest(t *testing.T) {
 	s, h, tick := authWeb(t)
-	q := modeReq{method: "GET", path: "/api", tokCookie: modeTok}
+	q := modeReq{method: "GET", path: "/v1/state", tokCookie: modeTok}
 	if w := q.do(h); w.Code != 200 {
 		t.Fatalf("mode ouvert : %d", w.Code)
 	}
@@ -353,7 +353,7 @@ func TestUnauthShellServed(t *testing.T) {
 			t.Errorf("%s : %d %q", p, w.Code, w.Header().Get("Content-Type"))
 		}
 	}
-	w := (modeReq{method: "GET", path: "/api", accept: "text/html"}).do(h)
+	w := (modeReq{method: "GET", path: "/v1/state", accept: "text/html"}).do(h)
 	if w.Code != 401 || !strings.HasPrefix(w.Header().Get("Content-Type"), "application/json") {
 		t.Fatalf("API sans session : %d %q", w.Code, w.Header().Get("Content-Type"))
 	}
@@ -364,7 +364,7 @@ func TestChildProxyStripsAuthorization(t *testing.T) {
 	back := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { got = r.Header.Clone() }))
 	defer back.Close()
 	u, _ := url.Parse(back.URL)
-	r := httptest.NewRequest("GET", "/api", nil)
+	r := httptest.NewRequest("GET", "/v1/state", nil)
 	r.Header.Set("Authorization", "Bearer "+modeTok)
 	r.Header.Set("Cookie", sessCookie+"=x; "+tokenCookie+"=y")
 	r.Header.Set("Origin", "http://"+testHost)
@@ -409,7 +409,7 @@ func wsCut(t *testing.T, srv *httptest.Server, u gateUser, home string, revoke f
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	c, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/term-ws", &websocket.DialOptions{HTTPHeader: hd})
+	c, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http")+"/v1/terminal/ws", &websocket.DialOptions{HTTPHeader: hd})
 	if err != nil {
 		code := 0
 		if resp != nil {
@@ -435,7 +435,7 @@ func TestWSCutOnRevoke(t *testing.T) {
 		u := g.user(t, "alice", false)
 		g.grant(t, u, "", RightExec)
 		mux := http.NewServeMux()
-		mux.HandleFunc("GET /term-ws", wsHold(false))
+		mux.HandleFunc("GET /v1/terminal/ws", wsHold(false))
 		srv := httptest.NewServer(authGate(mux, g.s, withAuthWatch(withHomes(mux))))
 		defer srv.Close()
 		if d := wsCut(t, srv, u, "", func() { g.s.RevokeUser(u.id) }); d > 6*time.Second {
@@ -459,7 +459,7 @@ func TestWSCutOnRevoke(t *testing.T) {
 			return &homeProc{dir: h.Dir, proxy: childProxy(cu, "x"), done: make(chan struct{})}, nil
 		}
 		mux := http.NewServeMux()
-		mux.HandleFunc("GET /term-ws", func(w http.ResponseWriter, r *http.Request) { t.Error("servi par la passerelle") })
+		mux.HandleFunc("GET /v1/terminal/ws", func(w http.ResponseWriter, r *http.Request) { t.Error("servi par la passerelle") })
 		srv := httptest.NewServer(authGate(mux, g.s, withAuthWatch(withHomes(mux))))
 		defer srv.Close()
 		pro, _ := homeIDFor("Pro")
@@ -480,7 +480,7 @@ func TestChildChatStoppedOnRevoke(t *testing.T) {
 	g.grant(t, u, "Pro", RightExec)
 	stopped, quit := make(chan string, 1), make(chan struct{})
 	cm := http.NewServeMux()
-	cm.HandleFunc("POST /chat", func(w http.ResponseWriter, r *http.Request) {
+	cm.HandleFunc("POST /v1/sessions/{id}/chat", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("{\"text\":\"début\"}\n"))
 		w.(http.Flusher).Flush()
 		select { // un tour d'enfant ne suit pas le contexte de la requête
@@ -488,13 +488,11 @@ func TestChildChatStoppedOnRevoke(t *testing.T) {
 		case <-quit:
 		}
 	})
-	cm.HandleFunc("POST /chat-stop", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ ID string }
-		json.NewDecoder(r.Body).Decode(&req)
+	cm.HandleFunc("DELETE /v1/sessions/{id}/chat", func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get(childHeader) != "x" {
 			t.Error("arrêt envoyé sans le jeton de la passerelle")
 		}
-		stopped <- req.ID
+		stopped <- r.PathValue("id")
 		close(quit)
 	})
 	child := httptest.NewServer(cm)
@@ -506,11 +504,11 @@ func TestChildChatStoppedOnRevoke(t *testing.T) {
 		return &homeProc{dir: h.Dir, proxy: childProxy(cu, "x"), done: make(chan struct{})}, nil
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /chat", func(w http.ResponseWriter, r *http.Request) { t.Error("servi par la passerelle") })
+	mux.HandleFunc("POST /v1/sessions/{id}/chat", func(w http.ResponseWriter, r *http.Request) { t.Error("servi par la passerelle") })
 	srv := httptest.NewServer(authGate(mux, g.s, withAuthWatch(withHomes(mux))))
 	defer srv.Close()
 
-	r, _ := http.NewRequest("POST", srv.URL+"/chat", strings.NewReader(`{"ID":"`+id1+`","Prompt":"x"}`))
+	r, _ := http.NewRequest("POST", srv.URL+"/v1/sessions/"+id1+"/chat", strings.NewReader(`{"Prompt":"x"}`))
 	r.AddCookie(&http.Cookie{Name: sessCookie, Value: u.cookie})
 	r.AddCookie(&http.Cookie{Name: homeCookie, Value: "Pro"})
 	r.Header.Set(csrfHeader, u.csrf)
@@ -554,7 +552,7 @@ func TestModeDecidedOncePerRequest(t *testing.T) {
 			n++
 			return s, first == (n%2 == 1), nil
 		}
-		w := (modeReq{method: "GET", path: "/api"}).do(srv)
+		w := (modeReq{method: "GET", path: "/v1/state"}).do(srv)
 		if w.Code != 401 || n != 1 {
 			t.Fatalf("premier état %v : %d, %d évaluation(s)", first, w.Code, n)
 		}
@@ -570,7 +568,7 @@ func TestAuthDBReplaced(t *testing.T) {
 	tick := resetAuth(t, nil)
 	h, _, _ := web(t)
 	srv := withTokenOpen(modeTok, h)
-	q := modeReq{method: "GET", path: "/api", tokCookie: modeTok}
+	q := modeReq{method: "GET", path: "/v1/state", tokCookie: modeTok}
 	if w := q.do(srv); w.Code != 401 {
 		t.Fatalf("mode actif : %d", w.Code)
 	}
@@ -604,30 +602,9 @@ func TestAuthDBReplaced(t *testing.T) {
 	}
 }
 
-// /chat vers un home enfant au-delà de la limite de lecture : refusé, jamais relayé tronqué.
-func TestChildChatBodyTooBig(t *testing.T) {
-	g := newGateRig(t)
-	addHomes(t, "Pro")
-	u := g.user(t, "bob", false)
-	g.grant(t, u, "Pro", RightExec)
-	child := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { t.Error("relayé à l'enfant") }))
-	defer child.Close()
-	cu, _ := url.Parse(child.URL)
-	oldStart := homeStart
-	t.Cleanup(func() { homeStart = oldStart; stopHomes() })
-	homeStart = func(h Home) (*homeProc, error) {
-		return &homeProc{dir: h.Dir, proxy: childProxy(cu, "x"), done: make(chan struct{})}, nil
-	}
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /chat", func(w http.ResponseWriter, r *http.Request) {})
-	h := authGate(mux, g.s, withAuthWatch(withHomes(mux)))
+// Un corps lu pour décider (peekJSON) au-delà de la limite : signalé, et le handler le reçoit en entier.
+func TestPeekJSONBodyTooBig(t *testing.T) {
 	body := `{"ID":"` + id1 + `","Prompt":"` + strings.Repeat("a", 70<<10) + `"}`
-	r := g.req("POST", "/chat", &u, "Pro", body)
-	w := httptest.NewRecorder()
-	h.ServeHTTP(w, r)
-	if w.Code != 413 {
-		t.Fatalf("corps de 70 Kio : %d %s", w.Code, w.Body)
-	}
 	// Corps restitué en entier quand il n'est pas lu jusqu'au bout pour décider.
 	rr := httptest.NewRequest("POST", "/", strings.NewReader(body))
 	var v struct{ ID string }

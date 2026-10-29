@@ -27,28 +27,28 @@ func TestHTTPGit(t *testing.T) {
 	etranger := t.TempDir()
 	git(t, etranger, "init", "-q")
 	os.WriteFile(filepath.Join(etranger, "secret.txt"), []byte("x"), 0o644)
-	if _, m, _ := call(t, h, "GET", "/git-remotes?dir="+etranger, ""); len(m["remotes"].([]any)) != 0 {
+	if _, m, _ := call(t, h, "GET", "/v1/git/remotes?dir="+etranger, ""); len(m["remotes"].([]any)) != 0 {
 		t.Fatalf("remotes d'un dossier inconnu : %v", m)
 	}
-	if _, m, _ := call(t, h, "GET", "/git-changes?dir="+etranger, ""); len(m["files"].([]any)) != 0 {
+	if _, m, _ := call(t, h, "GET", "/v1/git/changes?dir="+etranger, ""); len(m["files"].([]any)) != 0 {
 		t.Fatalf("changements d'un dossier inconnu : %v", m)
 	}
-	_, m, _ := call(t, h, "GET", "/git-remotes?dir="+proj, "")
+	_, m, _ := call(t, h, "GET", "/v1/git/remotes?dir="+proj, "")
 	if rs := m["remotes"].([]any); len(rs) != 1 || rs[0].(map[string]any)["name"] != "origin" {
 		t.Fatalf("remotes : %v", m)
 	}
-	_, m, raw := call(t, h, "GET", "/git-changes?dir="+proj, "")
+	_, m, raw := call(t, h, "GET", "/v1/git/changes?dir="+proj, "")
 	if fs := m["files"].([]any); len(fs) != 1 || !strings.Contains(raw, "neuf.txt") {
 		t.Fatalf("changements : %s", raw)
 	}
-	if _, m, _ := call(t, h, "GET", "/git-status", ""); m["status"] == nil {
+	if _, m, _ := call(t, h, "GET", "/v1/git/status", ""); m["status"] == nil {
 		t.Fatalf("git-status : %v", m)
 	}
 
-	status(t, h, "POST", "/git-push", `pas du json`, 400)
-	status(t, h, "POST", "/git-push", `{"dir":"`+etranger+`","remote":"origin"}`, 400)
-	ok(t, h, "/git-push", `{"dir":"`+proj+`","remote":"--force"}`, false, "remote inconnu")
-	ok(t, h, "/git-push", `{"dir":"`+proj+`","remote":"origin"}`, true, "")
+	status(t, h, "POST", "/v1/git/pushes", `pas du json`, 400)
+	status(t, h, "POST", "/v1/git/pushes", `{"dir":"`+etranger+`","remote":"origin"}`, 400)
+	v1err(t, h, "POST", "/v1/git/pushes", `{"dir":"`+proj+`","remote":"--force"}`, 502, "remote inconnu")
+	v1ok(t, h, "POST", "/v1/git/pushes", `{"dir":"`+proj+`","remote":"origin"}`, "")
 	if git(t, bare, "rev-parse", "main") != git(t, proj, "rev-parse", "HEAD") {
 		t.Fatal("rien poussé")
 	}
@@ -76,15 +76,15 @@ func TestHTTPTrust(t *testing.T) {
 		}
 		return "", nil
 	}
-	_, m, _ := call(t, h, "GET", "/trust-pending", "")
+	_, m, _ := call(t, h, "GET", "/v1/trust/pending", "")
 	if d := strs(m["dirs"]); len(d) != 2 {
 		t.Fatalf("en attente : %v", m)
 	}
-	status(t, h, "POST", "/trust-answer", `{"dir":"relatif","yes":true}`, 400)
-	status(t, h, "POST", "/trust-answer", `{`, 400)
-	ok(t, h, "/trust-answer", `{"dir":"/home/u/ailleurs","yes":true}`, false, "plus aucune question")
-	ok(t, h, "/trust-answer", `{"dir":"/home/u/neuf/","yes":true}`, true, "")
-	ok(t, h, "/trust-answer", `{"dir":"/home/u/autre","yes":false}`, true, "")
+	status(t, h, "POST", "/v1/trust/answers", `{"dir":"relatif","yes":true}`, 400)
+	status(t, h, "POST", "/v1/trust/answers", `{`, 400)
+	v1err(t, h, "POST", "/v1/trust/answers", `{"dir":"/home/u/ailleurs","yes":true}`, 409, "plus aucune question")
+	v1ok(t, h, "POST", "/v1/trust/answers", `{"dir":"/home/u/neuf/","yes":true}`, "")
+	v1ok(t, h, "POST", "/v1/trust/answers", `{"dir":"/home/u/autre","yes":false}`, "")
 	// oui : curseur sur « No, exit » → Bas, puis Entrée une fois le curseur revu sur « Yes » ; non : le curseur y est déjà → Entrée
 	if strings.Join(sent, " ") != "%1=Down %1=Enter %2=Enter" {
 		t.Fatalf("touches envoyées : %v", sent)
@@ -228,9 +228,9 @@ func TestHTTPMemoireEcritures(t *testing.T) {
 	}
 	status(t, h, "POST", "/memory-tokens", `{"keys":["a","b","c","d","e","f","g"]}`, 400)
 	status(t, h, "POST", "/memory-lint", `{"scope":""}`, 400)
-	status(t, h, "GET", "/session-loaded?id=../x", "", 400)
-	status(t, h, "GET", "/session-loaded-file?id=../x&file=/etc/passwd", "", 400)
-	status(t, h, "GET", "/session-loaded-file?id=11111111-1111-1111-1111-111111111111&file=/etc/passwd", "", 404) // chemin jamais chargé par la session
+	status(t, h, "GET", "/v1/sessions/..%2Fx/loaded", "", 400)
+	status(t, h, "GET", "/v1/sessions/..%2Fx/loaded/files/%2Fetc%2Fpasswd", "", 400)
+	status(t, h, "GET", "/v1/sessions/11111111-1111-1111-1111-111111111111/loaded/files/%2Fetc%2Fpasswd", "", 404) // chemin jamais chargé par la session
 	if _, m, _ := call(t, h, "GET", "/memory-health", ""); m["issues"] == nil {
 		t.Fatalf("santé : %v", m)
 	}

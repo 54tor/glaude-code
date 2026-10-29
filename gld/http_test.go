@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -119,14 +120,14 @@ func agents(t *testing.T, ids ...string) {
 
 func TestHTTPGardes(t *testing.T) {
 	h, _, _ := web(t)
-	r := httptest.NewRequest("GET", "/api", nil)
+	r := httptest.NewRequest("GET", "/v1/state", nil)
 	r.Host = "evil.com"
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
 	if w.Code != 403 {
 		t.Fatal("Host étranger servi :", w.Code)
 	}
-	r = httptest.NewRequest("POST", "/vgroups", strings.NewReader(`{"groups":[],"favs":[]}`))
+	r = httptest.NewRequest("PUT", "/v1/vgroups", strings.NewReader(`{"groups":[],"favs":[]}`))
 	r.Host = testHost
 	r.Header.Set("Sec-Fetch-Site", "cross-site")
 	w = httptest.NewRecorder()
@@ -152,85 +153,85 @@ func TestHTTPGardes(t *testing.T) {
 func TestHTTPSessions(t *testing.T) {
 	h, cfg, proj := web(t)
 	agents(t, id2)
-	m := status(t, h, "GET", "/api", "", 200)
+	m := status(t, h, "GET", "/v1/state", "", 200)
 	if m["root"] != filepath.Join(cfg, "projects") || len(m["groups"].([]any)) != 1 || m["live"].([]any)[0] != id2 || m["waiting"].([]any)[0] != id2 {
-		t.Fatalf("/api : %v", m)
+		t.Fatalf("/v1/state : %v", m)
 	}
 	t.Setenv("FAKE_AGENTS", "illisible")
-	if m := status(t, h, "GET", "/api", "", 200); len(m["live"].([]any)) != 0 || len(m["waiting"].([]any)) != 0 {
-		t.Fatalf("/api sans claude agents : %v", m)
+	if m := status(t, h, "GET", "/v1/state", "", 200); len(m["live"].([]any)) != 0 || len(m["waiting"].([]any)) != 0 {
+		t.Fatalf("/v1/state sans claude agents : %v", m)
 	}
 	t.Setenv("FAKE_AGENTS", "[]")
 
 	// Explorateur : chemin relatif refusé, chemin disparu remonté au parent, liens vers des dossiers suivis.
-	status(t, h, "GET", "/ls?path=relatif", "", 400)
+	status(t, h, "GET", "/v1/directories?path=relatif", "", 400)
 	os.MkdirAll(filepath.Join(proj, "b"), 0o755)
 	os.MkdirAll(filepath.Join(proj, "a"), 0o755)
 	os.WriteFile(filepath.Join(proj, "f.txt"), nil, 0o644)
 	os.Symlink(filepath.Join(proj, "a"), filepath.Join(proj, "lien"))
 	os.Symlink(filepath.Join(proj, "f.txt"), filepath.Join(proj, "lienf"))
-	m = status(t, h, "GET", "/ls?path="+proj+"/disparu/plus", "", 200)
+	m = status(t, h, "GET", "/v1/directories?path="+proj+"/disparu/plus", "", 200)
 	if m["path"] != proj || m["parent"] != filepath.Dir(proj) || strings.Join(strs(m["dirs"]), ",") != "a,b,lien" {
-		t.Fatalf("/ls : %v", m)
+		t.Fatalf("/v1/directories : %v", m)
 	}
-	if m := status(t, h, "GET", "/ls", "", 200); m["path"] != filepath.Dir(proj) {
-		t.Fatalf("/ls sans chemin : %v", m)
+	if m := status(t, h, "GET", "/v1/directories", "", 200); m["path"] != filepath.Dir(proj) {
+		t.Fatalf("/v1/directories sans chemin : %v", m)
 	}
-	if m := status(t, h, "GET", "/ls?path=/", "", 200); m["parent"] != "" || m["path"] != "/" {
-		t.Fatalf("/ls racine : %v", m)
+	if m := status(t, h, "GET", "/v1/directories?path=/", "", 200); m["parent"] != "" || m["path"] != "/" {
+		t.Fatalf("/v1/directories racine : %v", m)
 	}
 	os.MkdirAll(filepath.Join(proj, "fermé"), 0o000)
 	defer os.Chmod(filepath.Join(proj, "fermé"), 0o755)
 	if os.Getuid() != 0 {
-		status(t, h, "GET", "/ls?path="+filepath.Join(proj, "fermé"), "", 403)
+		status(t, h, "GET", "/v1/directories?path="+filepath.Join(proj, "fermé"), "", 403)
 	}
 
 	// Lecture d'une conversation et de son détail.
-	status(t, h, "GET", "/conv?dir=-p&id=../x", "", 404)
-	status(t, h, "GET", "/info?dir=-p&id="+id2, "", 404)
-	if m := status(t, h, "GET", "/conv?dir=-p&id="+id1, "", 200); len(m["msgs"].([]any)) != 2 {
-		t.Fatalf("/conv : %v", m)
+	status(t, h, "GET", "/v1/sessions/..%2Fx/conversation?dir=-p", "", 400)
+	status(t, h, "GET", "/v1/info?dir=-p&id="+id2, "", 404)
+	if m := status(t, h, "GET", "/v1/sessions/"+id1+"/conversation?dir=-p", "", 200); len(m["msgs"].([]any)) != 2 {
+		t.Fatalf("conversation : %v", m)
 	}
-	if m := status(t, h, "GET", "/conv?dir=-p&id="+id1+"&tools=1", "", 200); len(m["msgs"].([]any)) != 3 {
-		t.Fatalf("/conv avec outils : %v", m)
+	if m := status(t, h, "GET", "/v1/sessions/"+id1+"/conversation?dir=-p&tools=1", "", 200); len(m["msgs"].([]any)) != 3 {
+		t.Fatalf("conversation avec outils : %v", m)
 	}
-	if m := status(t, h, "GET", "/info?dir=-p&id="+id1, "", 200); m["branch"] != "main" {
-		t.Fatalf("/info : %v", m)
+	if m := status(t, h, "GET", "/v1/info?dir=-p&id="+id1, "", 200); m["branch"] != "main" {
+		t.Fatalf("/v1/info : %v", m)
 	}
 
 	// Recherche : de 2 à 200 caractères.
-	status(t, h, "GET", "/search?q=a", "", 400)
-	status(t, h, "GET", "/search?q="+strings.Repeat("a", 201), "", 400)
-	status(t, h, "GET", "/search?q=ab", "", 200)
-	if m := status(t, h, "GET", "/search?q="+strings.Repeat("é", 200), "", 200); len(m["hits"].([]any)) != 0 {
+	status(t, h, "GET", "/v1/sessions?q=a", "", 400)
+	status(t, h, "GET", "/v1/sessions?q="+strings.Repeat("a", 201), "", 400)
+	status(t, h, "GET", "/v1/sessions?q=ab", "", 200)
+	if m := status(t, h, "GET", "/v1/sessions?q="+strings.Repeat("é", 200), "", 200); len(m["hits"].([]any)) != 0 {
 		t.Fatal("200 caractères : la limite compte des caractères, pas des octets")
 	}
-	if m := status(t, h, "GET", "/search?q=caddy", "", 200); len(m["hits"].([]any)) != 1 {
-		t.Fatalf("/search : %v", m)
+	if m := status(t, h, "GET", "/v1/sessions?q=caddy", "", 200); len(m["hits"].([]any)) != 1 {
+		t.Fatalf("recherche : %v", m)
 	}
 
 	// Renommage : requête, titre, session ouverte, sessions ouvertes inconnues, puis succès.
-	status(t, h, "POST", "/rename", "{", 400)
-	status(t, h, "POST", "/rename", `{"dir":"-p","id":"`+id1+`","title":"  "}`, 400)
-	status(t, h, "POST", "/rename", `{"dir":"-p","id":"`+id1+`","title":"`+strings.Repeat("é", 201)+`"}`, 400)
+	status(t, h, "PATCH", "/v1/sessions/"+id1+"?dir=-p", "{", 400)
+	status(t, h, "PATCH", "/v1/sessions/"+id1+"?dir=-p", `{"title":"  "}`, 400)
+	status(t, h, "PATCH", "/v1/sessions/"+id1+"?dir=-p", `{"title":"`+strings.Repeat("é", 201)+`"}`, 400)
 	agents(t, id1)
-	ok(t, h, "/rename", `{"dir":"-p","id":"`+id1+`","title":"x"}`, false, "session ouverte")
+	v1err(t, h, "PATCH", "/v1/sessions/"+id1+"?dir=-p", `{"title":"x"}`, 409, "session ouverte")
 	t.Setenv("FAKE_AGENTS", "illisible")
-	ok(t, h, "/rename", `{"dir":"-p","id":"`+id1+`","title":"x"}`, false, "action refusée")
+	v1err(t, h, "PATCH", "/v1/sessions/"+id1+"?dir=-p", `{"title":"x"}`, 503, "action refusée")
 	t.Setenv("FAKE_AGENTS", "[]")
-	ok(t, h, "/rename", `{"dir":"-p","id":"`+id1+`","title":"`+strings.Repeat("é", 200)+`"}`, true, "Renommée")
-	ok(t, h, "/rename", `{"dir":"-p","id":"`+id1+`","title":" Caddy \n prod "}`, true, "Renommée : Caddy prod")
+	v1ok(t, h, "PATCH", "/v1/sessions/"+id1+"?dir=-p", `{"title":"`+strings.Repeat("é", 200)+`"}`, "Renommée")
+	v1ok(t, h, "PATCH", "/v1/sessions/"+id1+"?dir=-p", `{"title":" Caddy \n prod "}`, "Renommée : Caddy prod")
 	os.Chmod(filepath.Join(cfg, "projects", "-p", id1+".jsonl"), 0o400)
 	if os.Getuid() != 0 {
-		ok(t, h, "/rename", `{"dir":"-p","id":"`+id1+`","title":"y"}`, false, "")
+		v1err(t, h, "PATCH", "/v1/sessions/"+id1+"?dir=-p", `{"title":"y"}`, 500, "")
 	}
 	os.Chmod(filepath.Join(cfg, "projects", "-p", id1+".jsonl"), 0o644)
 
 	// Réassignation.
-	status(t, h, "POST", "/reassign", `{"items":[]}`, 400)
-	status(t, h, "POST", "/reassign", `{"items":[{"dir":"-p","id":"`+id2+`"}]}`, 400)
-	ok(t, h, "/reassign", `{"items":[{"dir":"-p","id":"`+id1+`"}],"to":"/nexiste/pas"}`, false, "n'existe pas")
-	ok(t, h, "/reassign", `{"items":[{"dir":"-p","id":"`+id1+`"}],"to":"`+filepath.Join(proj, "a")+`"}`, true, "1 session(s) réassignée(s)")
+	status(t, h, "PATCH", "/v1/sessions", `{"items":[]}`, 400)
+	status(t, h, "PATCH", "/v1/sessions", `{"items":[{"dir":"-p","id":"`+id2+`"}]}`, 400)
+	v1err(t, h, "PATCH", "/v1/sessions", `{"items":[{"dir":"-p","id":"`+id1+`"}],"to":"/nexiste/pas"}`, 409, "n'existe pas")
+	v1ok(t, h, "PATCH", "/v1/sessions", `{"items":[{"dir":"-p","id":"`+id1+`"}],"to":"`+filepath.Join(proj, "a")+`"}`, "1 session(s) réassignée(s)")
 }
 
 func strs(v any) []string {
@@ -244,12 +245,12 @@ func strs(v any) []string {
 func TestHTTPRm(t *testing.T) {
 	h, cfg, _ := web(t)
 	put(t, filepath.Join(cfg, "projects", "-p", id2+".jsonl"), `{"cwd":"/p"}`+"\n", old)
-	status(t, h, "POST", "/rm", "{", 400)
+	status(t, h, "DELETE", "/v1/sessions", "", 400)
 	t.Setenv("FAKE_AGENTS", "illisible")
-	ok(t, h, "/rm", `{"items":[{"dir":"-p","id":"`+id1+`"}]}`, false, "action refusée")
+	v1err(t, h, "DELETE", "/v1/sessions?item=-p:"+id1, "", 500, "action refusée")
 	agents(t, id1)
-	ok(t, h, "/rm", `{"items":[{"dir":"-p","id":"`+id1+`"}]}`, false, "Aucune session supprimée ; 1 session ouverte épargnée")
-	ok(t, h, "/rm", `{"items":[{"dir":"-p","id":"`+id1+`"},{"dir":"-p","id":"`+id2+`"}]}`, true, "1 session supprimée ; 1 session ouverte épargnée")
+	v1err(t, h, "DELETE", "/v1/sessions?item=-p:"+id1, "", 409, "Aucune session supprimée ; 1 session ouverte épargnée")
+	v1ok(t, h, "DELETE", "/v1/sessions?item=-p:"+id1+"&item=-p:"+id2, "", "1 session supprimée ; 1 session ouverte épargnée")
 	if exists(filepath.Join(cfg, "projects", "-p", id2+".jsonl")) || !exists(filepath.Join(cfg, "projects", "-p", id1+".jsonl")) {
 		t.Fatal("mauvaise session effacée")
 	}
@@ -261,30 +262,30 @@ func TestHTTPLancements(t *testing.T) {
 	os.MkdirAll(filepath.Join(cfg, "projects", "-vide"), 0o755)
 
 	// Ouverture dans un terminal (gld-matin).
-	status(t, h, "POST", "/open", "{", 400)
-	status(t, h, "POST", "/open", `{"dir":"-p","args":"--x;rm"}`, 400)
-	status(t, h, "POST", "/open", `{"dir":"-p","prompt":"sans session"}`, 400)
-	status(t, h, "POST", "/open", `{"dir":"-p","id":"`+id3+`"}`, 400)
-	for _, d := range []string{"", "a/b", `a\b`, ".."} {
-		status(t, h, "POST", "/open", `{"dir":"`+strings.ReplaceAll(d, `\`, `\\`)+`"}`, 400)
+	status(t, h, "PUT", "/v1/sessions/"+id1+"/process?dir=-p", "{", 400)
+	status(t, h, "PUT", "/v1/projects/-p/process", `{"args":"--x;rm"}`, 400)
+	status(t, h, "PUT", "/v1/projects/-p/process", `{"prompt":"sans session"}`, 400)
+	status(t, h, "PUT", "/v1/sessions/"+id3+"/process?dir=-p", `{}`, 404)
+	for _, d := range []string{"a/b", `a\b`} {
+		status(t, h, "PUT", "/v1/projects/"+url.PathEscape(d)+"/process", `{}`, 400)
 	}
-	status(t, h, "POST", "/open", `{"dir":"-vide"}`, 404)
-	ok(t, h, "/open", `{"dir":"-q"}`, false, "dossier du projet introuvable : /nexiste/pas")
-	ok(t, h, "/open", `{"dir":"-p","args":"--model=opus"}`, true, "gld-matin --args --model=opus "+proj)
-	ok(t, h, "/open", `{"dir":"-p","id":"`+id1+`","prompt":"continue"}`, true, "--id "+id1+" --prompt continue "+proj)
+	status(t, h, "PUT", "/v1/projects/-vide/process", `{}`, 404)
+	v1err(t, h, "PUT", "/v1/projects/-q/process", `{}`, 404, "dossier du projet introuvable : /nexiste/pas")
+	v1ok(t, h, "PUT", "/v1/projects/-p/process", `{"args":"--model=opus"}`, "gld-matin --args --model=opus "+proj)
+	v1ok(t, h, "PUT", "/v1/sessions/"+id1+"/process?dir=-p", `{"prompt":"continue"}`, "--id "+id1+" --prompt continue "+proj)
 	t.Setenv("FAKE_MATIN_RC", "1")
-	ok(t, h, "/open", `{"dir":"-p","id":"`+id1+`"}`, false, "gld-matin --id")
+	v1err(t, h, "PUT", "/v1/sessions/"+id1+"/process?dir=-p", `{}`, 500, "gld-matin --id")
 	t.Setenv("FAKE_MATIN_RC", "0")
 
 	// Nouvelle session à côté d'une autre.
-	status(t, h, "POST", "/new-session", "{", 400)
-	ok(t, h, "/new-session", `{"dir":"-p","id":"../x","prompt":"p"}`, false, "session invalide")
-	ok(t, h, "/new-session", `{"dir":"-p","id":"`+id1+`","prompt":"p","args":"a;b"}`, false, "option refusée")
-	ok(t, h, "/new-session", `{"cwd":"relatif","prompt":"p"}`, false, "dossier invalide")
-	ok(t, h, "/new-session", `{"cwd":"/n/existe/pas/xyz","prompt":"p"}`, false, "dossier du projet introuvable")
-	ok(t, h, "/new-session", `{"dir":"-p","id":"`+id1+`","prompt":" "}`, false, "prompt vide")
-	ok(t, h, "/new-session", `{"dir":"-p","id":"`+id1+`","prompt":"`+strings.Repeat("x", 33<<10)+`"}`, false, "trop long")
-	ok(t, h, "/new-session", `{"dir":"-q","id":"`+id2+`","prompt":"p"}`, false, "introuvable")
+	status(t, h, "POST", "/v1/sessions", "{", 400)
+	v1err(t, h, "POST", "/v1/sessions", `{"dir":"-p","id":"../x","prompt":"p"}`, 400, "session invalide")
+	v1err(t, h, "POST", "/v1/sessions", `{"dir":"-p","id":"`+id1+`","prompt":"p","args":"a;b"}`, 400, "option refusée")
+	v1err(t, h, "POST", "/v1/sessions", `{"cwd":"relatif","prompt":"p"}`, 400, "dossier invalide")
+	v1err(t, h, "POST", "/v1/sessions", `{"cwd":"/n/existe/pas/xyz","prompt":"p"}`, 404, "dossier du projet introuvable")
+	v1err(t, h, "POST", "/v1/sessions", `{"dir":"-p","id":"`+id1+`","prompt":" "}`, 400, "prompt vide")
+	v1err(t, h, "POST", "/v1/sessions", `{"dir":"-p","id":"`+id1+`","prompt":"`+strings.Repeat("x", 33<<10)+`"}`, 400, "trop long")
+	v1err(t, h, "POST", "/v1/sessions", `{"dir":"-q","id":"`+id2+`","prompt":"p"}`, 404, "introuvable")
 	agents(t, id1)         // ouverte : n'empêche pas d'en démarrer une autre
 	var left time.Duration // le lancement est borné : un terminal qui ne rend pas la main n'immobilise pas la requête
 	fm := matin
@@ -294,13 +295,13 @@ func TestHTTPLancements(t *testing.T) {
 		}
 		return fm(ctx, args...)
 	}
-	ok(t, h, "/new-session", `{"dir":"-p","id":"`+id1+`","prompt":"suite"}`, true, "gld-matin --prompt suite "+proj)
+	v1ok(t, h, "POST", "/v1/sessions", `{"dir":"-p","id":"`+id1+`","prompt":"suite"}`, "gld-matin --prompt suite "+proj)
 	matin = fm
 	if left < 25*time.Second || left > 30*time.Second {
 		t.Fatalf("délai du lancement : %v", left)
 	}
 	t.Setenv("FAKE_AGENTS", "illisible")
-	ok(t, h, "/new-session", `{"dir":"-p","id":"`+id1+`","prompt":"suite"}`, true, "gld-matin")
+	v1ok(t, h, "POST", "/v1/sessions", `{"dir":"-p","id":"`+id1+`","prompt":"suite"}`, "gld-matin")
 	t.Setenv("FAKE_AGENTS", "[]")
 	// Fusion de mémoire : prompt seul, ou lancé dans une nouvelle session.
 	put(t, filepath.Join(cfg, "projects", "-p", "memory", "a.md"), "a", old)
@@ -320,27 +321,24 @@ func TestHTTPLancements(t *testing.T) {
 func TestHTTPChat(t *testing.T) {
 	h, cfg, _ := web(t)
 	put(t, filepath.Join(cfg, "projects", "-q", id2+".jsonl"), `{"cwd":"/nexiste/pas"}`+"\n", old)
-	for _, c := range [][2]string{
-		{"{", "requête invalide"},
-		{`{"dir":"-p","id":"` + id3 + `","prompt":"x"}`, "session invalide"},
-		{`{"dir":"-p","id":"` + id1 + `","prompt":"x","args":"a;b"}`, "option refusée"},
-		{`{"dir":"-p","id":"` + id1 + `","prompt":" "}`, "message vide"},
-		{`{"dir":"-p","id":"` + id1 + `","prompt":"x","mode":"bypassPermissions"}`, "mode d'autorisation inconnu"},
-		{`{"dir":"-q","id":"` + id2 + `","prompt":"x"}`, "introuvable"},
+	for _, c := range [][3]string{
+		{id1, "{", "requête invalide"},
+		{id1, `{"prompt":"x","args":"a;b"}`, "option refusée"},
+		{id1, `{"prompt":" "}`, "message vide"},
+		{id1, `{"prompt":"x","mode":"bypassPermissions"}`, "mode d'autorisation inconnu"},
 	} {
-		if code, _, raw := call(t, h, "POST", "/chat", c[0]); code != 400 || !strings.Contains(raw, c[1]) {
-			t.Fatalf("%s : %d %s", c[0], code, raw)
-		}
+		v1err(t, h, "POST", "/v1/sessions/"+c[0]+"/chat?dir=-p", c[1], 400, c[2])
 	}
+	v1err(t, h, "POST", "/v1/sessions/"+id2+"/chat?dir=-q", `{"prompt":"x"}`, 404, "introuvable")
+	v1err(t, h, "POST", "/v1/sessions/"+id3+"/chat?dir=-p", `{"prompt":"x"}`, 404, "session invalide")
+	v1err(t, h, "POST", "/v1/sessions/..%2Fx/chat?dir=-p", `{"prompt":"x"}`, 400, "id invalide")
 	agents(t, id1)
-	if code, _, raw := call(t, h, "POST", "/chat", `{"dir":"-p","id":"`+id1+`","prompt":"x"}`); code != 400 || !strings.Contains(raw, "déjà ouverte") {
-		t.Fatal("session ouverte :", code, raw)
-	}
+	v1err(t, h, "POST", "/v1/sessions/"+id1+"/chat?dir=-p", `{"prompt":"x"}`, 400, "déjà ouverte")
 	t.Setenv("FAKE_AGENTS", "[]")
 
 	// Réponse relayée ; option non permise au chat signalée.
 	t.Setenv("FAKE_CHAT", `{"type":"assistant","message":{"content":[{"type":"text","text":"Bonjour"}]}}`+"\n"+`{"type":"result","subtype":"success","total_cost_usd":0.5}`)
-	code, _, raw := call(t, h, "POST", "/chat", `{"dir":"-p","id":"`+id1+`","prompt":"salut","args":"--model=opus --add-dir=/x","mode":"plan"}`)
+	code, _, raw := call(t, h, "POST", "/v1/sessions/"+id1+"/chat?dir=-p", `{"prompt":"salut","args":"--model=opus --add-dir=/x","mode":"plan"}`)
 	if code != 200 || strings.Count(raw, "\n") != 3 || !strings.Contains(raw, `"note":"Options de Réglages non transmises au chat : --add-dir=/x`) ||
 		!strings.Contains(raw, `"t":"Bonjour"`) || !strings.Contains(raw, `"done":true,"ok":true,"cost":0.5`) {
 		t.Fatalf("chat : %d %s", code, raw)
@@ -349,27 +347,27 @@ func TestHTTPChat(t *testing.T) {
 	t.Setenv("FAKE_CHAT", "")
 	t.Setenv("FAKE_ERR", "option inconnue")
 	t.Setenv("FAKE_RC", "1")
-	if _, _, raw := call(t, h, "POST", "/chat", `{"dir":"-p","id":"`+id1+`","prompt":"salut"}`); raw != `{"done":true,"error":"option inconnue"}`+"\n" {
+	if _, _, raw := call(t, h, "POST", "/v1/sessions/"+id1+"/chat?dir=-p", `{"prompt":"salut"}`); raw != `{"done":true,"error":"option inconnue"}`+"\n" {
 		t.Fatalf("chat en échec : %s", raw)
 	}
 	t.Setenv("FAKE_ERR", "")
-	if _, _, raw := call(t, h, "POST", "/chat", `{"dir":"-p","id":"`+id1+`","prompt":"salut"}`); !strings.Contains(raw, `"error":"exit status 1"`) {
+	if _, _, raw := call(t, h, "POST", "/v1/sessions/"+id1+"/chat?dir=-p", `{"prompt":"salut"}`); !strings.Contains(raw, `"error":"exit status 1"`) {
 		t.Fatalf("chat en échec muet : %s", raw)
 	}
 	// Résultat en erreur.
 	t.Setenv("FAKE_RC", "0")
 	t.Setenv("FAKE_CHAT", `{"type":"result","subtype":"error_max_turns","is_error":true,"result":"trop de tours"}`)
-	if _, _, raw := call(t, h, "POST", "/chat", `{"dir":"-p","id":"`+id1+`","prompt":"salut"}`); !strings.Contains(raw, `"error":"error_max_turns trop de tours"`) {
+	if _, _, raw := call(t, h, "POST", "/v1/sessions/"+id1+"/chat?dir=-p", `{"prompt":"salut"}`); !strings.Contains(raw, `"error":"error_max_turns trop de tours"`) {
 		t.Fatalf("résultat en erreur : %s", raw)
 	}
 	// Un résultat qui n'est ni en erreur ni un succès (sous-type inconnu) n'est pas présenté comme réussi.
 	t.Setenv("FAKE_CHAT", `{"type":"result","subtype":"error_during_execution","is_error":false}`)
-	if _, _, raw := call(t, h, "POST", "/chat", `{"dir":"-p","id":"`+id1+`","prompt":"salut"}`); strings.Contains(raw, `"ok":true`) || !strings.Contains(raw, `"error":"error_during_execution"`) {
+	if _, _, raw := call(t, h, "POST", "/v1/sessions/"+id1+"/chat?dir=-p", `{"prompt":"salut"}`); strings.Contains(raw, `"ok":true`) || !strings.Contains(raw, `"error":"error_during_execution"`) {
 		t.Fatalf("résultat ambigu présenté comme réussi : %s", raw)
 	}
 
 	// Un seul tour à la fois par session ; arrêt.
-	ok(t, h, "/chat-stop", `{"id":"`+id1+`"}`, false, "rien en cours")
+	v1err(t, h, "DELETE", "/v1/sessions/"+id1+"/chat", "", 404, "rien en cours")
 	sleep, err := exec.LookPath("/bin/sleep")
 	if err != nil {
 		t.Skip("pas de /bin/sleep")
@@ -382,10 +380,10 @@ func TestHTTPChat(t *testing.T) {
 	chatRun[id1] = cmd
 	chatMu.Unlock()
 	defer func() { chatMu.Lock(); delete(chatRun, id1); chatMu.Unlock() }()
-	if code, _, _ := call(t, h, "POST", "/chat", `{"dir":"-p","id":"`+id1+`","prompt":"x"}`); code != 409 {
+	if code, _, _ := call(t, h, "POST", "/v1/sessions/"+id1+"/chat?dir=-p", `{"prompt":"x"}`); code != 409 {
 		t.Fatal("deuxième tour simultané :", code)
 	}
-	ok(t, h, "/chat-stop", `{"id":"`+id1+`"}`, true, "Arrêt demandé")
+	v1ok(t, h, "DELETE", "/v1/sessions/"+id1+"/chat", "", "Arrêt demandé")
 	if cmd.Wait() == nil {
 		t.Fatal("le processus devait être interrompu")
 	}
@@ -524,55 +522,55 @@ func TestHTTPMemoire(t *testing.T) {
 	ok(t, h, "/memory-rm", `{"key":"m/-p/b.md"}`, true, "Supprimé")
 
 	// Corbeille.
-	l := status(t, h, "GET", "/trash", "", 200)["items"].([]any)
+	l := status(t, h, "GET", "/v1/trash/memory", "", 200)["items"].([]any)
 	if len(l) != 1 {
 		t.Fatalf("corbeille : %v", l)
 	}
 	id := l[0].(map[string]any)["id"].(string)
-	status(t, h, "GET", "/trash-file?id=../x", "", 404)
-	if m := status(t, h, "GET", "/trash-file?id="+id, "", 200); !strings.Contains(m["text"].(string), "name: B") {
+	status(t, h, "GET", "/v1/trash/memory/..%2Fx/file", "", 404)
+	if m := status(t, h, "GET", "/v1/trash/memory/"+id+"/file", "", 200); !strings.Contains(m["text"].(string), "name: B") {
 		t.Fatal(m)
 	}
-	ok(t, h, "/trash-restore", `{"id":"../x"}`, false, "")
-	if m := ok(t, h, "/trash-restore", `{"id":"`+id+`"}`, true, "Restauré"); m["key"] != "m/-p/b.md" {
+	v1err(t, h, "PATCH", "/v1/trash/memory/..%2Fx", `{"trashed":false}`, 409, "")
+	if m := v1ok(t, h, "PATCH", "/v1/trash/memory/"+id, `{"trashed":false}`, "Restauré"); m["key"] != "m/-p/b.md" {
 		t.Fatal(m)
 	}
 	ok(t, h, "/memory-rm", `{"key":"m/-p/b.md"}`, true, "Supprimé")
-	if code, m, _ := call(t, h, "POST", "/trash-purge", `{}`); code != 400 || m["ok"] != false {
+	if code, m, _ := call(t, h, "DELETE", "/v1/trash/memory", ""); code != 400 || m["error"] == nil {
 		t.Fatal("corps vide : la corbeille ne se vide jamais implicitement")
 	}
-	ok(t, h, "/trash-purge", `{"id":"../x"}`, false, "")
-	ok(t, h, "/trash-purge", `{"all":true}`, true, "Corbeille vidée")
-	if l := status(t, h, "GET", "/trash", "", 200)["items"].([]any); len(l) != 0 {
+	v1err(t, h, "DELETE", "/v1/trash/memory?item=..%2Fx", "", 409, "")
+	v1ok(t, h, "DELETE", "/v1/trash/memory?all=1", "", "Corbeille vidée")
+	if l := status(t, h, "GET", "/v1/trash/memory", "", 200)["items"].([]any); len(l) != 0 {
 		t.Fatal("corbeille non vidée")
 	}
 }
 
 func TestHTTPOngletsGroupes(t *testing.T) {
 	h, _, _ := web(t)
-	if m := status(t, h, "GET", "/tabs", "", 200); len(m["saves"].([]any)) != 0 {
+	if m := status(t, h, "GET", "/v1/tabs", "", 200); len(m["saves"].([]any)) != 0 {
 		t.Fatal(m)
 	}
-	ok(t, h, "/tabs-save", `{"name":"x"}`, false, "")
+	v1err(t, h, "PUT", "/v1/tabs", `{"name":"x"}`, 500, "")
 	t.Setenv("FAKE_AGENTS", `[{"sessionId":"`+id1+`","kind":"interactive"},{"sessionId":"`+id2+`","kind":"background"},{"sessionId":"../x","kind":"interactive"}]`)
-	ok(t, h, "/tabs-save", `{"name":"soir"}`, true, "1 session(s) sauvegardée(s)")
-	saves := status(t, h, "GET", "/tabs", "", 200)["saves"].([]any)
-	ok(t, h, "/tabs-rm", `{"at":"jamais"}`, false, "")
-	ok(t, h, "/tabs-rm", `{"at":"`+saves[0].(map[string]any)["at"].(string)+`"}`, true, "Sauvegarde supprimée")
+	v1ok(t, h, "PUT", "/v1/tabs", `{"name":"soir"}`, "1 session(s) sauvegardée(s)")
+	saves := status(t, h, "GET", "/v1/tabs", "", 200)["saves"].([]any)
+	v1err(t, h, "DELETE", "/v1/tabs/jamais", "", 404, "")
+	v1ok(t, h, "DELETE", "/v1/tabs/"+url.PathEscape(saves[0].(map[string]any)["at"].(string)), "", "Sauvegarde supprimée")
 
-	status(t, h, "POST", "/vgroups", "{", 400)
-	status(t, h, "POST", "/vgroups", `{"groups":[]}`, 400)
-	ok(t, h, "/vgroups", `{"groups":[{"name":"a"}],"favs":[]}`, false, "")
-	ok(t, h, "/vgroups", `{"groups":[{"name":"Infra","project":"/p","ids":["`+id1+`"]}],"favs":["`+id1+`"]}`, true, "Groupes enregistrés")
-	if m := status(t, h, "GET", "/api", "", 200); len(m["vgroups"].([]any)) != 1 || m["favs"].([]any)[0] != id1 {
+	status(t, h, "PUT", "/v1/vgroups", "{", 400)
+	status(t, h, "PUT", "/v1/vgroups", `{"groups":[]}`, 400)
+	v1err(t, h, "PUT", "/v1/vgroups", `{"groups":[{"name":"a"}],"favs":[]}`, 500, "")
+	status(t, h, "PUT", "/v1/vgroups", `{"groups":[{"name":"Infra","project":"/p","ids":["`+id1+`"]}],"favs":["`+id1+`"]}`, 204)
+	if m := status(t, h, "GET", "/v1/state", "", 200); len(m["vgroups"].([]any)) != 1 || m["favs"].([]any)[0] != id1 {
 		t.Fatal(m)
 	}
 
-	ok(t, h, "/vgroups", `{"groups":[],"favs":[],"projects":[{"name":"Site","dirs":["/a","/b/"]}]}`, true, "Groupes enregistrés")
-	ok(t, h, "/vgroups", `{"groups":[],"favs":[],"projects":[{"name":"Site","dirs":["rel"]}]}`, false, "")
-	ok(t, h, "/vgroups", `{"groups":[],"favs":[],"projects":[{"name":"X","dirs":[]},{"name":"X","dirs":[]}]}`, false, "")
-	ok(t, h, "/vgroups", `{"groups":[],"favs":[]}`, true, "Groupes enregistrés") // sans « projects » : conservés
-	m := status(t, h, "GET", "/api", "", 200)["projects"].([]any)
+	status(t, h, "PUT", "/v1/vgroups", `{"groups":[],"favs":[],"projects":[{"name":"Site","dirs":["/a","/b/"]}]}`, 204)
+	v1err(t, h, "PUT", "/v1/vgroups", `{"groups":[],"favs":[],"projects":[{"name":"Site","dirs":["rel"]}]}`, 500, "")
+	v1err(t, h, "PUT", "/v1/vgroups", `{"groups":[],"favs":[],"projects":[{"name":"X","dirs":[]},{"name":"X","dirs":[]}]}`, 500, "")
+	status(t, h, "PUT", "/v1/vgroups", `{"groups":[],"favs":[]}`, 204) // sans « projects » : conservés
+	m := status(t, h, "GET", "/v1/state", "", 200)["projects"].([]any)
 	if len(m) != 1 || m[0].(map[string]any)["dirs"].([]any)[1] != "/b" {
 		t.Fatal(m)
 	}
@@ -599,13 +597,13 @@ func TestSlashCommands(t *testing.T) {
 func TestTerminalDesactiveParDefaut(t *testing.T) {
 	t.Setenv("GLD_WEB_TERMINAL", "")
 	h, _, _ := web(t)
-	if r := getRaw(h, "/term-info"); !strings.Contains(r.Body.String(), `"enabled":false`) {
+	if r := getRaw(h, "/v1/terminal"); !strings.Contains(r.Body.String(), `"enabled":false`) {
 		t.Fatalf("term-info : %s", r.Body.String())
 	}
-	if r := getRaw(h, "/term-ws?t=x"); r.Code != 404 {
+	if r := getRaw(h, "/v1/terminal/ws?t=x"); r.Code != 404 {
 		t.Fatalf("term-ws actif sans réglage : %d", r.Code)
 	}
-	req := httptest.NewRequest("POST", "/term-open", strings.NewReader(`{"id":"`+id1+`"}`))
+	req := httptest.NewRequest("POST", "/v1/terminal", strings.NewReader(`{"id":"`+id1+`"}`))
 	req.Host = testHost
 	req.Header.Set("Origin", "http://"+testHost)
 	rec := httptest.NewRecorder()
@@ -614,13 +612,13 @@ func TestTerminalDesactiveParDefaut(t *testing.T) {
 		t.Fatalf("term-open actif sans réglage : %d %s", rec.Code, rec.Body.String())
 	}
 	t.Setenv("GLD_WEB_TERMINAL", "1")
-	if r := getRaw(h, "/term-ws?t=x"); r.Code != 403 || !strings.Contains(r.Body.String(), "forbidden") { // sans Origin
+	if r := getRaw(h, "/v1/terminal/ws?t=x"); r.Code != 403 || !strings.Contains(r.Body.String(), "forbidden") { // sans Origin
 		t.Fatalf("term-ws sans Origin : %d %s", r.Code, r.Body.String())
 	}
 	// Derrière la passerelle, l'Origin a été vérifié puis retiré : seul le jeton du terminal compte encore.
 	childToken = "secret"
 	t.Cleanup(func() { childToken = "" })
-	req = httptest.NewRequest("GET", "/term-ws?t=x", nil)
+	req = httptest.NewRequest("GET", "/v1/terminal/ws?t=x", nil)
 	req.Host = testHost
 	req.Header.Set(childHeader, "secret")
 	rec = httptest.NewRecorder()
@@ -632,7 +630,7 @@ func TestTerminalDesactiveParDefaut(t *testing.T) {
 
 func TestSessionsStamp(t *testing.T) {
 	h, cfg, _ := web(t)
-	_, m, _ := call(t, h, "GET", "/sessions-stamp", "")
+	_, m, _ := call(t, h, "GET", "/v1/state/stamp", "")
 	first, _ := m["stamp"].(float64)
 	if first == 0 {
 		t.Fatal("tampon vide")
@@ -640,7 +638,7 @@ func TestSessionsStamp(t *testing.T) {
 	p := filepath.Join(cfg, "projects", "-p", id1+".jsonl")
 	later := time.Now().Add(time.Hour)
 	os.Chtimes(p, later, later)
-	_, m, _ = call(t, h, "GET", "/sessions-stamp", "")
+	_, m, _ = call(t, h, "GET", "/v1/state/stamp", "")
 	if second, _ := m["stamp"].(float64); second <= first {
 		t.Fatalf("le tampon n'a pas bougé : %v -> %v", first, second)
 	}
@@ -649,12 +647,12 @@ func TestSessionsStamp(t *testing.T) {
 func TestDossiersEnregistres(t *testing.T) {
 	h, _, _ := web(t)
 	vide := t.TempDir()
-	status(t, h, "POST", "/dirs", `{"op":"add","dir":"relatif"}`, 400)
-	status(t, h, "POST", "/dirs", `{"op":"x","dir":"`+vide+`"}`, 400)
-	ok(t, h, "/dirs", `{"op":"add","dir":"`+vide+`/inconnu"}`, false, "introuvable")
-	ok(t, h, "/dirs", `{"op":"add","dir":"`+vide+`"}`, true, "")
-	ok(t, h, "/dirs", `{"op":"add","dir":"`+vide+`/"}`, true, "") // doublon : un seul exemplaire
-	_, m, _ := call(t, h, "GET", "/api", "")
+	status(t, h, "POST", "/v1/directories", `{"dir":"relatif"}`, 400)
+	status(t, h, "DELETE", "/v1/directories?dir=relatif", "", 400)
+	v1err(t, h, "POST", "/v1/directories", `{"dir":"`+vide+`/inconnu"}`, 404, "introuvable")
+	v1ok(t, h, "POST", "/v1/directories", `{"dir":"`+vide+`"}`, "")
+	v1ok(t, h, "POST", "/v1/directories", `{"dir":"`+vide+`/"}`, "") // doublon : un seul exemplaire
+	_, m, _ := call(t, h, "GET", "/v1/state", "")
 	n := 0
 	for _, g := range m["groups"].([]any) {
 		if g.(map[string]any)["project"] == vide {
@@ -668,13 +666,13 @@ func TestDossiersEnregistres(t *testing.T) {
 		t.Fatalf("dossier vide présent %d fois", n)
 	}
 	// un client qui ne connaît pas le champ ne l'efface pas
-	status(t, h, "POST", "/vgroups", `{"groups":[],"favs":[]}`, 200)
-	_, m, _ = call(t, h, "GET", "/api", "")
+	status(t, h, "PUT", "/v1/vgroups", `{"groups":[],"favs":[]}`, 204)
+	_, m, _ = call(t, h, "GET", "/v1/state", "")
 	if d, _ := m["dirs"].([]any); len(d) != 1 {
 		t.Fatalf("dossiers perdus : %v", m["dirs"])
 	}
-	ok(t, h, "/dirs", `{"op":"remove","dir":"`+vide+`"}`, true, "")
-	_, m, _ = call(t, h, "GET", "/api", "")
+	v1ok(t, h, "DELETE", "/v1/directories?dir="+url.QueryEscape(vide), "", "")
+	_, m, _ = call(t, h, "GET", "/v1/state", "")
 	if d, _ := m["dirs"].([]any); len(d) != 0 {
 		t.Fatalf("retrait sans effet : %v", m["dirs"])
 	}
@@ -700,7 +698,7 @@ func TestHTTPTrashPurgeAllSparesSessionTrash(t *testing.T) {
 		}
 		os.WriteFile(filepath.Join(d, "f.txt"), []byte("x"), 0o600)
 	}
-	ok(t, h, "/trash-purge", `{"all":true}`, true, "Corbeille vidée")
+	v1ok(t, h, "DELETE", "/v1/trash/memory?all=1", "", "Corbeille vidée")
 	if _, err := os.Stat(sess); err != nil {
 		t.Fatal("la corbeille de sessions (droit exec) a été vidée par /trash-purge :", err)
 	}
@@ -720,9 +718,9 @@ func TestDossiersEnfants(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(racine, "f.txt"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	ok(t, h, "/dirs", `{"op":"addChildren","dir":"`+racine+`"}`, true, "")
-	ok(t, h, "/dirs", `{"op":"addChildren","dir":"`+racine+`"}`, true, "") // rejeu : pas de doublon
-	_, m, _ := call(t, h, "GET", "/api", "")
+	v1ok(t, h, "POST", "/v1/directories", `{"dir":"`+racine+`","children":true}`, "")
+	v1ok(t, h, "POST", "/v1/directories", `{"dir":"`+racine+`","children":true}`, "") // rejeu : pas de doublon
+	_, m, _ := call(t, h, "GET", "/v1/state", "")
 	if d, _ := m["dirs"].([]any); len(d) != 2 || d[0] != filepath.Join(racine, "a") || d[1] != filepath.Join(racine, "b") {
 		t.Fatalf("dirs = %v", m["dirs"])
 	}

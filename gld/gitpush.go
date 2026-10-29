@@ -4,9 +4,8 @@ package main
 // un identifiant demandé fait échouer le push avec le message de git au lieu de bloquer.
 
 import (
+	"cmp"
 	"context"
-	"encoding/json"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -102,7 +101,7 @@ func gitPush(dir, remote string) (string, error) {
 }
 
 func routesGitPush(mux *http.ServeMux) {
-	mux.HandleFunc("GET /git-remotes", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/git/remotes", func(w http.ResponseWriter, r *http.Request) {
 		dir := r.URL.Query().Get("dir")
 		rs := []GitRemote{}
 		if knownRepo(dir) {
@@ -110,16 +109,20 @@ func routesGitPush(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"remotes": rs})
 	})
-	mux.HandleFunc("POST /git-push", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /v1/git/pushes", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Dir, Remote string }
-		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil || !knownRepo(req.Dir) {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.routes_sessions.dossierInvalide")})
+		if !decodeBody(w, r, &req, 1<<10) {
+			return
+		}
+		if !knownRepo(req.Dir) {
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.routes_sessions.dossierInvalide"))
 			return
 		}
 		out, err := gitPush(req.Dir, req.Remote)
-		if out == "" && err == nil {
-			out = L("srv.gitpush.pushed")
+		if err != nil {
+			writeErr(w, http.StatusBadGateway, "push_failed", cmp.Or(out, err.Error()))
+			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": err == nil, "out": out})
+		writeJSON(w, 201, map[string]any{"message": cmp.Or(out, L("srv.gitpush.pushed"))})
 	})
 }

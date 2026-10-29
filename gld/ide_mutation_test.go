@@ -28,7 +28,7 @@ func TestGitChangesPrefixJSON(t *testing.T) {
 	other := t.TempDir()
 	git(t, other, "init", "-q")
 	for dir, want := range map[string]string{proj: `"prefix":""`, sub: `"prefix":"sub/dir/"`, other: `"prefix":""`} {
-		if _, _, raw := call(t, h, "GET", "/git-changes?dir="+dir, ""); !strings.Contains(raw, want) {
+		if _, _, raw := call(t, h, "GET", "/v1/git/changes?dir="+dir, ""); !strings.Contains(raw, want) {
 			t.Errorf("%s : %s", dir, raw)
 		}
 	}

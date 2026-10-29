@@ -151,21 +151,21 @@ func TestGuestReloadWorksOtherBrowserRefused(t *testing.T) {
 func TestGuestCannotChangeSession(t *testing.T) {
 	h := guestWeb(t, nil, modeTok)
 	c, csrf := guestIn(t, h)
-	for _, p := range []string{"/conv?id=" + gOther + "&dir=-q", "/conv?dir=-q", "/conv?id=" + gOther + "&dir=-q&id=" + gOther} {
+	for _, p := range []string{"/v1/sessions/" + gOther + "/conversation?dir=-q", "/v1/sessions/" + id1 + "/conversation?dir=-q", "/v1/sessions/" + gOther + "/conversation?id=" + gOther + "&dir=-q&id=" + gOther} {
 		w := gReq{method: "GET", path: p, cookie: c}.do(h)
 		if w.Code != 200 || !strings.Contains(w.Body.String(), "Déploie caddy") || strings.Contains(w.Body.String(), "SECRET") {
 			t.Fatalf("%s : %d %s", p, w.Code, w.Body)
 		}
 	}
 	for _, b := range []string{`{"id":"` + gOther + `","text":"a"}`, `{"ID":"` + gOther + `","Id":"` + gOther + `","dir":"-q","text":"b"}`} {
-		if w := (gReq{method: "POST", path: "/queue-add?id=" + gOther, body: b, cookie: c, csrf: csrf}).do(h); w.Code != 200 {
+		if w := (gReq{method: "POST", path: "/v1/sessions/" + gOther + "/queue?id=" + gOther, body: b, cookie: c, csrf: csrf}).do(h); w.Code != 201 {
 			t.Fatalf("%s : %d %s", b, w.Code, w.Body)
 		}
 	}
 	if n, m := len(queueSt.List(id1)), len(queueSt.List(gOther)); n != 2 || m != 0 {
 		t.Fatalf("partagée %d, autre %d", n, m)
 	}
-	w := gReq{method: "GET", path: "/queue?id=" + gOther, cookie: c}.do(h)
+	w := gReq{method: "GET", path: "/v1/sessions/" + gOther + "/queue", cookie: c}.do(h)
 	if !strings.Contains(w.Body.String(), `"text":"a"`) {
 		t.Fatalf("file : %s", w.Body)
 	}
@@ -175,11 +175,13 @@ func TestGuestNonWhitelistedForbidden(t *testing.T) {
 	h := guestWeb(t, nil, modeTok)
 	c, csrf := guestIn(t, h)
 	for _, rt := range [][2]string{
-		{"POST", "/session-key"}, {"POST", "/trust-answer"}, {"POST", "/chat"},
-		{"GET", "/auth/me"}, {"GET", "/config"}, {"POST", "/queue-retry"}, {"POST", "/invite-create"}, {"POST", "/share-end"},
-		{"GET", "/api"}, {"GET", "/conv-doc?path=/etc/x.md"}, {"POST", "/session-send"}, {"GET", "/homes"},
-		{"GET", "//conv"}, {"GET", "/conv/"}, {"GET", "/%63onv"}, {"GET", "/conv/../api"}, {"POST", "/conv"}, {"GET", "/queue-add"},
-		{"GET", "/invite/../api"}, {"GET", "/session-screen"}, {"POST", "/fs-file"}, {"GET", "/fs-file?path=.env"}, {"GET", "/fs-tree?path=.git"}, {"GET", "/ide-search"},
+		{"POST", "/v1/sessions/" + id1 + "/keystrokes"}, {"POST", "/v1/trust/answers"}, {"POST", "/v1/sessions/" + id1 + "/chat"},
+		{"GET", "/auth/me"}, {"GET", "/config"}, {"PATCH", "/v1/sessions/" + id1 + "/queue/x"}, {"POST", "/invite-create"}, {"POST", "/share-end"},
+		{"GET", "/v1/state"}, {"GET", "/v1/sessions/" + id1 + "/conversation/document?path=/etc/x.md"}, {"POST", "/v1/sessions/" + id1 + "/messages"}, {"GET", "/homes"},
+		{"GET", "//v1/sessions/" + id1 + "/conversation"}, {"GET", "/v1/sessions/" + id1 + "/conversation/"}, {"GET", "/v1/sessions/" + id1 + "/%63onversation"},
+		{"GET", "/v1/sessions/" + id1 + "/conversation/../../../state"}, {"POST", "/v1/sessions/" + id1 + "/conversation"}, {"GET", "/v1/sessions/" + id1 + "/queue/x"},
+		{"DELETE", "/v1/sessions/" + id1 + "/conversation"}, {"PUT", "/v1/sessions/" + id1 + "/process"}, {"DELETE", "/v1/sessions"}, {"GET", "/v1/sessions"},
+		{"GET", "/invite/../v1/state"}, {"GET", "/v1/sessions/" + id1 + "/screen"}, {"POST", "/fs-file"}, {"GET", "/fs-file?path=.env"}, {"GET", "/fs-tree?path=.git"}, {"GET", "/ide-search"},
 	} {
 		w := gReq{method: rt[0], path: rt[1], body: `{"id":"` + id1 + `"}`, cookie: c, csrf: csrf}.do(h)
 		if w.Code != 403 || !strings.HasPrefix(w.Header().Get("Content-Type"), "application/json") {
@@ -192,13 +194,13 @@ func TestGuestReadOnlyCannotQueue(t *testing.T) {
 	h := guestWeb(t, nil, modeTok)
 	c, csrf := guestIn(t, h)
 	shareSt.SetInviteMode(id1, inv0(id1), "ro")
-	if w := (gReq{method: "POST", path: "/queue-add", body: `{"text":"x"}`, cookie: c, csrf: csrf}).do(h); w.Code != 403 {
+	if w := (gReq{method: "POST", path: "/v1/sessions/" + id1 + "/queue", body: `{"text":"x"}`, cookie: c, csrf: csrf}).do(h); w.Code != 403 {
 		t.Fatalf("lecture seule : %d", w.Code)
 	}
 	if len(queueSt.List(id1)) != 0 {
 		t.Fatal("file modifiée")
 	}
-	if w := (gReq{method: "GET", path: "/conv", cookie: c}).do(h); w.Code != 200 {
+	if w := (gReq{method: "GET", path: "/v1/sessions/" + id1 + "/conversation", cookie: c}).do(h); w.Code != 200 {
 		t.Fatalf("lecture : %d", w.Code)
 	}
 }
@@ -207,13 +209,13 @@ func TestGuestCanRemoveOnlyOwnItems(t *testing.T) {
 	h := guestWeb(t, nil, modeTok)
 	c, csrf := guestIn(t, h)
 	host, _ := queueSt.Add(id1, "host", "", "de l'hôte")
-	w := gReq{method: "POST", path: "/queue-add", body: `{"text":"de l'invité"}`, cookie: c, csrf: csrf}.do(h)
+	w := gReq{method: "POST", path: "/v1/sessions/" + id1 + "/queue", body: `{"text":"de l'invité"}`, cookie: c, csrf: csrf}.do(h)
 	var mine struct{ Item QItem }
 	json.Unmarshal(w.Body.Bytes(), &mine)
-	if w := (gReq{method: "POST", path: "/queue-rm", body: `{"item":"` + host.ID + `"}`, cookie: c, csrf: csrf}).do(h); w.Code != 403 {
+	if w := (gReq{method: "DELETE", path: "/v1/sessions/" + id1 + "/queue/" + host.ID, cookie: c, csrf: csrf}).do(h); w.Code != 403 {
 		t.Fatalf("item de l'hôte : %d", w.Code)
 	}
-	if w := (gReq{method: "POST", path: "/queue-rm", body: `{"item":"` + mine.Item.ID + `"}`, cookie: c, csrf: csrf}).do(h); w.Code != 200 {
+	if w := (gReq{method: "DELETE", path: "/v1/sessions/" + id1 + "/queue/" + mine.Item.ID, cookie: c, csrf: csrf}).do(h); w.Code != 200 {
 		t.Fatalf("son item : %d %s", w.Code, w.Body)
 	}
 	if l := queueSt.List(id1); len(l) != 1 || l[0].ID != host.ID {
@@ -225,8 +227,8 @@ func TestGuestRateLimit(t *testing.T) {
 	h := guestWeb(t, nil, modeTok)
 	c, csrf := guestIn(t, h)
 	for i := range 11 {
-		w := gReq{method: "POST", path: "/queue-add", body: `{"text":"m"}`, cookie: c, csrf: csrf}.do(h)
-		if want := map[bool]int{true: 429, false: 200}[i == 10]; w.Code != want {
+		w := gReq{method: "POST", path: "/v1/sessions/" + id1 + "/queue", body: `{"text":"m"}`, cookie: c, csrf: csrf}.do(h)
+		if want := map[bool]int{true: 429, false: 201}[i == 10]; w.Code != want {
 			t.Fatalf("ajout %d : %d", i+1, w.Code)
 		}
 	}
@@ -235,7 +237,7 @@ func TestGuestRateLimit(t *testing.T) {
 func TestGuestAuthorForgedOverwritten(t *testing.T) {
 	h := guestWeb(t, nil, modeTok)
 	c, csrf := guestIn(t, h)
-	gReq{method: "POST", path: "/queue-add", body: `{"text":"m","author":"host"}`, cookie: c, csrf: csrf, hdr: map[string]string{"X-Gld-Author": "host"}}.do(h)
+	gReq{method: "POST", path: "/v1/sessions/" + id1 + "/queue", body: `{"text":"m","author":"host"}`, cookie: c, csrf: csrf, hdr: map[string]string{"X-Gld-Author": "host"}}.do(h)
 	if l := queueSt.List(id1); len(l) != 1 || l[0].Author != "guest" {
 		t.Fatalf("auteur : %+v", l)
 	}
@@ -245,11 +247,11 @@ func TestGuestPostNeedsCSRF(t *testing.T) {
 	h := guestWeb(t, nil, modeTok)
 	c, csrf := guestIn(t, h)
 	for _, bad := range []string{"", "faux", strings.ToUpper(csrf)} {
-		if w := (gReq{method: "POST", path: "/queue-add", body: `{"text":"m"}`, cookie: c, csrf: bad}).do(h); w.Code != 403 {
+		if w := (gReq{method: "POST", path: "/v1/sessions/" + id1 + "/queue", body: `{"text":"m"}`, cookie: c, csrf: bad}).do(h); w.Code != 403 {
 			t.Fatalf("csrf %q : %d", bad, w.Code)
 		}
 	}
-	w := gReq{method: "POST", path: "/queue-add", body: `{"text":"m"}`, cookie: c, csrf: csrf, hdr: map[string]string{"Origin": "https://ailleurs.example", "Sec-Fetch-Site": "cross-site"}}.do(h)
+	w := gReq{method: "POST", path: "/v1/sessions/" + id1 + "/queue", body: `{"text":"m"}`, cookie: c, csrf: csrf, hdr: map[string]string{"Origin": "https://ailleurs.example", "Sec-Fetch-Site": "cross-site"}}.do(h)
 	if w.Code != 403 || len(queueSt.List(id1)) != 0 {
 		t.Fatalf("autre origine : %d", w.Code)
 	}
@@ -269,17 +271,17 @@ func TestEndedShareCookieFallsThroughToHost(t *testing.T) {
 	h := guestWeb(t, nil, modeTok)
 	c, _ := guestIn(t, h)
 	shareSt.End(id1)
-	w := gReq{method: "GET", path: "/api", cookie: c, tokCookie: modeTok}.do(h)
+	w := gReq{method: "GET", path: "/v1/state", cookie: c, tokCookie: modeTok}.do(h)
 	if w.Code != 200 {
 		t.Fatalf("hôte : %d %s", w.Code, w.Body)
 	}
 	if k := cookieOf(w, gName); k == nil || k.MaxAge >= 0 {
 		t.Fatalf("cookie non effacé : %+v", k)
 	}
-	if w := (gReq{method: "GET", path: "/api", cookie: "nimporte.quoi"}).do(h); w.Code != 401 {
+	if w := (gReq{method: "GET", path: "/v1/state", cookie: "nimporte.quoi"}).do(h); w.Code != 401 {
 		t.Fatalf("cookie invalide sans jeton : %d", w.Code)
 	}
-	if w := (gReq{method: "GET", path: "/conv", cookie: c}).do(h); w.Code != 401 {
+	if w := (gReq{method: "GET", path: "/v1/sessions/" + id1 + "/conversation", cookie: c}).do(h); w.Code != 401 {
 		t.Fatalf("partage terminé : %d", w.Code)
 	}
 }
@@ -287,13 +289,13 @@ func TestEndedShareCookieFallsThroughToHost(t *testing.T) {
 func TestGuestWorksInSingleUserTokenMode(t *testing.T) {
 	h := guestWeb(t, nil, modeTok)
 	c, _ := guestIn(t, h)
-	if w := (gReq{method: "GET", path: "/conv", cookie: c}).do(h); w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" {
+	if w := (gReq{method: "GET", path: "/v1/sessions/" + id1 + "/conversation", cookie: c}).do(h); w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("invité : %d %q", w.Code, w.Header().Get("Cache-Control"))
 	}
-	if w := (gReq{method: "GET", path: "/api"}).do(h); w.Code != 401 {
+	if w := (gReq{method: "GET", path: "/v1/state"}).do(h); w.Code != 401 {
 		t.Fatalf("hôte sans jeton : %d", w.Code)
 	}
-	if w := (gReq{method: "GET", path: "/api", tokCookie: modeTok}).do(h); w.Code != 200 {
+	if w := (gReq{method: "GET", path: "/v1/state", tokCookie: modeTok}).do(h); w.Code != 200 {
 		t.Fatalf("hôte : %d", w.Code)
 	}
 }
@@ -307,10 +309,10 @@ func TestGuestWorksInMultiUserMode(t *testing.T) {
 	}
 	sess, _ := fullSession(t, s, id)
 	c, _ := guestIn(t, h)
-	if w := (gReq{method: "GET", path: "/conv", cookie: c}).do(h); w.Code != 200 || !strings.Contains(w.Body.String(), "Déploie caddy") {
+	if w := (gReq{method: "GET", path: "/v1/sessions/" + id1 + "/conversation", cookie: c}).do(h); w.Code != 200 || !strings.Contains(w.Body.String(), "Déploie caddy") {
 		t.Fatalf("invité : %d %s", w.Code, w.Body)
 	}
-	if w := (gReq{method: "GET", path: "/api", cookie: c}).do(h); w.Code != 403 {
+	if w := (gReq{method: "GET", path: "/v1/state", cookie: c}).do(h); w.Code != 403 {
 		t.Fatalf("invité hors liste : %d", w.Code)
 	}
 	if w := (gReq{method: "GET", path: "/admin/users"}).do(h); w.Code != 401 {
@@ -352,23 +354,23 @@ func TestGuestRelayedToChildHome(t *testing.T) {
 		return &homeProc{dir: h.Dir, proxy: childProxy(cu, "x"), done: make(chan struct{})}, nil
 	}
 	c := "perso." + sec
-	if w := (gReq{method: "GET", path: "/conv?id=x", cookie: c, hdr: map[string]string{guestQuietHeader: "1"}}).do(h); w.Code != 200 || w.Body.String() != "enfant" || w.Header().Get("Cache-Control") != "no-store" {
+	if w := (gReq{method: "GET", path: "/v1/sessions/x/conversation", cookie: c, hdr: map[string]string{guestQuietHeader: "1"}}).do(h); w.Code != 200 || w.Body.String() != "enfant" || w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("relais : %d %s", w.Code, w.Body)
 	}
-	if w := (gReq{method: "GET", path: "/api", cookie: c}).do(h); w.Code != 403 {
+	if w := (gReq{method: "GET", path: "/v1/state", cookie: c}).do(h); w.Code != 403 {
 		t.Fatalf("hors liste : %d", w.Code)
 	}
-	if w := (gReq{method: "POST", path: "/queue-add", body: `{}`, cookie: c, csrf: "faux"}).do(h); w.Code != 403 {
+	if w := (gReq{method: "POST", path: "/v1/sessions/" + id1 + "/queue", body: `{}`, cookie: c, csrf: "faux"}).do(h); w.Code != 403 {
 		t.Fatalf("csrf : %d", w.Code)
 	}
-	if w := (gReq{method: "GET", path: "/api", cookie: "perso.faux", tokCookie: modeTok}).do(h); w.Code != 200 || cookieOf(w, gName) == nil {
+	if w := (gReq{method: "GET", path: "/v1/state", cookie: "perso.faux", tokCookie: modeTok}).do(h); w.Code != 200 || cookieOf(w, gName) == nil {
 		t.Fatalf("secret inconnu : %d", w.Code)
 	}
-	if w := (gReq{method: "GET", path: "/api", tokCookie: modeTok, hdr: map[string]string{guestHeader: sec}}).do(h); w.Code != 200 {
+	if w := (gReq{method: "GET", path: "/v1/state", tokCookie: modeTok, hdr: map[string]string{guestHeader: sec}}).do(h); w.Code != 200 {
 		t.Fatalf("hôte : %d", w.Code)
 	}
 	// Requête hôte relayée (gld_home) : en-têtes invité fournis par le client retirés par le proxy.
-	r := httptest.NewRequest("GET", "/api", nil)
+	r := httptest.NewRequest("GET", "/v1/state", nil)
 	r.Host = testHost
 	r.AddCookie(&http.Cookie{Name: tokenCookie, Value: modeTok})
 	r.AddCookie(&http.Cookie{Name: homeCookie, Value: "perso"})
@@ -381,7 +383,7 @@ func TestGuestRelayedToChildHome(t *testing.T) {
 			t.Fatalf("invitation relayée %d : %d", i+1, w.Code)
 		}
 	}
-	if len(got) != 13 || got[0].guest != sec || got[0].share != hID1 || got[0].quiet != "" || got[0].cookie != "" || got[1].path != "/api" || got[1].guest != "" || got[1].https != "" || got[2].guest != "" || got[2].path != "/invite/perso/"+tok {
+	if len(got) != 13 || got[0].guest != sec || got[0].share != hID1 || got[0].quiet != "" || got[0].cookie != "" || got[1].path != "/v1/state" || got[1].guest != "" || got[1].https != "" || got[2].guest != "" || got[2].path != "/invite/perso/"+tok {
 		t.Fatalf("vu par l'enfant : %+v", got)
 	}
 	if w := (gReq{method: "POST", path: "/invite/inconnu/" + tok}).do(h); w.Code != 403 {
@@ -422,12 +424,12 @@ func TestGuestChildValidatesRelayedSecret(t *testing.T) {
 			t.Fatalf("poignée %q : %d", hd, w.Code)
 		}
 	}
-	for _, p := range []string{"/api", "/conv"} {
+	for _, p := range []string{"/v1/state", "/v1/sessions/" + id1 + "/conversation"} {
 		if w := (gReq{method: "GET", path: p, hdr: map[string]string{childHeader: "ctok", guestHeader: "faux"}}).do(h); w.Code != 403 {
 			t.Fatalf("%s secret faux : %d", p, w.Code)
 		}
 	}
-	if w := (gReq{method: "GET", path: "/api", hdr: map[string]string{guestHeader: sec}}).do(h); w.Code != 403 {
+	if w := (gReq{method: "GET", path: "/v1/state", hdr: map[string]string{guestHeader: sec}}).do(h); w.Code != 403 {
 		t.Fatalf("sans la passerelle : %d", w.Code)
 	}
 }
@@ -528,7 +530,7 @@ func TestGuestLeaveClearsCookie(t *testing.T) {
 	if _, ok := shareSt.Get(id1); !ok {
 		t.Fatal("partage supprimé")
 	}
-	if w := (gReq{method: "GET", path: "/api", tokCookie: modeTok}).do(h); w.Code != 200 {
+	if w := (gReq{method: "GET", path: "/v1/state", tokCookie: modeTok}).do(h); w.Code != 200 {
 		t.Fatalf("hôte : %d", w.Code)
 	}
 	if w := (gReq{method: "POST", path: "/guest-leave", tokCookie: modeTok}).do(h); w.Code != 403 {
@@ -571,16 +573,16 @@ func TestGuestTwoSharesTwoCookiesIndependent(t *testing.T) {
 	cb, _ := guestJoin(t, h, gOther, "-q", "B")
 	hB := shareHandle(gOther)
 	jar := []*http.Cookie{{Name: gName, Value: ca}, {Name: guestCookieName(hB), Value: cb}}
-	w := gReq{method: "GET", path: "/conv", jar: jar, hdr: map[string]string{shareHeader: hID1}}.do(h)
+	w := gReq{method: "GET", path: "/v1/sessions/" + id1 + "/conversation", jar: jar, hdr: map[string]string{shareHeader: hID1}}.do(h)
 	if w.Code != 200 || !strings.Contains(w.Body.String(), "Déploie caddy") || strings.Contains(w.Body.String(), "SECRET") {
 		t.Fatalf("A : %d %s", w.Code, w.Body)
 	}
-	w = gReq{method: "GET", path: "/conv", jar: jar, hdr: map[string]string{shareHeader: hB}}.do(h)
+	w = gReq{method: "GET", path: "/v1/sessions/" + id1 + "/conversation", jar: jar, hdr: map[string]string{shareHeader: hB}}.do(h)
 	if w.Code != 200 || !strings.Contains(w.Body.String(), "SECRET autre session") || strings.Contains(w.Body.String(), "Déploie caddy") {
 		t.Fatalf("B : %d %s", w.Code, w.Body)
 	}
 	// Cookie de A seul, en-tête de B : aucun cookie pour B, requête hôte (sans jeton : refusée), jamais les données de B.
-	w = gReq{method: "GET", path: "/conv", jar: jar[:1], hdr: map[string]string{shareHeader: hB}}.do(h)
+	w = gReq{method: "GET", path: "/v1/sessions/" + id1 + "/conversation", jar: jar[:1], hdr: map[string]string{shareHeader: hB}}.do(h)
 	if w.Code != 401 || strings.Contains(w.Body.String(), "SECRET") || cookieOf(w, gName) != nil {
 		t.Fatalf("A sous B : %d %s", w.Code, w.Body)
 	}
@@ -591,7 +593,7 @@ func TestGuestCookieSwapRejected(t *testing.T) {
 	ca, _ := guestJoin(t, h, id1, "-p", "")
 	guestJoin(t, h, gOther, "-q", "")
 	hB := shareHandle(gOther)
-	w := gReq{method: "GET", path: "/conv", cookie: ca, share: hB}.do(h)
+	w := gReq{method: "GET", path: "/v1/sessions/" + id1 + "/conversation", cookie: ca, share: hB}.do(h)
 	if w.Code != 401 || strings.Contains(w.Body.String(), "SECRET") || strings.Contains(w.Body.String(), "Déploie") {
 		t.Fatalf("secret de A sous le nom de B : %d %s", w.Code, w.Body)
 	}
@@ -607,11 +609,11 @@ func TestNoHeaderMeansHostEvenWithGuestCookies(t *testing.T) {
 	t.Run("jeton", func(t *testing.T) {
 		h := guestWeb(t, nil, modeTok)
 		c, _ := guestIn(t, h)
-		w := gReq{method: "GET", path: "/api", cookie: c, noShare: true, tokCookie: modeTok}.do(h)
+		w := gReq{method: "GET", path: "/v1/state", cookie: c, noShare: true, tokCookie: modeTok}.do(h)
 		if w.Code != 200 || cookieOf(w, gName) != nil {
 			t.Fatalf("hôte verrouillé : %d %s", w.Code, w.Body)
 		}
-		for _, p := range []string{"/conv", "/queue", "/api"} {
+		for _, p := range []string{"/v1/sessions/" + id1 + "/conversation", "/v1/sessions/" + id1 + "/queue", "/v1/state"} {
 			if w := (gReq{method: "GET", path: p, cookie: c, noShare: true}).do(h); w.Code != 401 {
 				t.Fatalf("%s sans en-tête ni jeton : %d", p, w.Code)
 			}
@@ -623,7 +625,7 @@ func TestNoHeaderMeansHostEvenWithGuestCookies(t *testing.T) {
 	t.Run("ouvert", func(t *testing.T) {
 		h := guestWeb(t, nil, "")
 		c, _ := guestIn(t, h)
-		if w := (gReq{method: "GET", path: "/api", cookie: c, noShare: true}).do(h); w.Code != 200 {
+		if w := (gReq{method: "GET", path: "/v1/state", cookie: c, noShare: true}).do(h); w.Code != 200 {
 			t.Fatalf("hôte verrouillé : %d %s", w.Code, w.Body)
 		}
 		if w := (gReq{method: "GET", path: "/guest-me", cookie: c, noShare: true}).do(h); w.Code != 403 {
@@ -637,11 +639,11 @@ func TestGuestInvalidHeaderFormatIgnored(t *testing.T) {
 	c, _ := guestIn(t, h)
 	jar := []*http.Cookie{{Name: gName, Value: c}}
 	for _, hd := range []string{strings.ToUpper(hID1), hID1 + "0", hID1[:15], "x", "-" + hID1[1:]} {
-		w := gReq{method: "GET", path: "/conv", jar: jar, hdr: map[string]string{shareHeader: hd}}.do(h)
+		w := gReq{method: "GET", path: "/v1/sessions/" + id1 + "/conversation", jar: jar, hdr: map[string]string{shareHeader: hd}}.do(h)
 		if w.Code != 401 || cookieOf(w, gName) != nil {
 			t.Fatalf("en-tête %q : %d", hd, w.Code)
 		}
-		if w := (gReq{method: "GET", path: "/api", jar: jar, tokCookie: modeTok, hdr: map[string]string{shareHeader: hd}}).do(h); w.Code != 200 {
+		if w := (gReq{method: "GET", path: "/v1/state", jar: jar, tokCookie: modeTok, hdr: map[string]string{shareHeader: hd}}).do(h); w.Code != 200 {
 			t.Fatalf("hôte, en-tête %q : %d", hd, w.Code)
 		}
 	}
@@ -725,7 +727,7 @@ func TestGuestLeaveClearsOnlyThatShare(t *testing.T) {
 	if k := cookieOf(w, gName); w.Code != 200 || k == nil || k.MaxAge >= 0 || cookieOf(w, guestCookieName(hB)) != nil {
 		t.Fatalf("départ de A : %d %v", w.Code, w.Result().Cookies())
 	}
-	if w := (gReq{method: "GET", path: "/conv", cookie: cb, share: hB}).do(h); w.Code != 200 {
+	if w := (gReq{method: "GET", path: "/v1/sessions/" + id1 + "/conversation", cookie: cb, share: hB}).do(h); w.Code != 200 {
 		t.Fatalf("B après départ de A : %d", w.Code)
 	}
 }
@@ -737,11 +739,11 @@ func TestEndedShareOnlyThatShareFallsThrough(t *testing.T) {
 	hB := shareHandle(gOther)
 	shareSt.End(id1)
 	jar := []*http.Cookie{{Name: gName, Value: ca}, {Name: guestCookieName(hB), Value: cb}}
-	w := gReq{method: "GET", path: "/api", jar: jar, tokCookie: modeTok, hdr: map[string]string{shareHeader: hID1}}.do(h)
+	w := gReq{method: "GET", path: "/v1/state", jar: jar, tokCookie: modeTok, hdr: map[string]string{shareHeader: hID1}}.do(h)
 	if k := cookieOf(w, gName); w.Code != 200 || k == nil || k.MaxAge >= 0 || cookieOf(w, guestCookieName(hB)) != nil {
 		t.Fatalf("A terminé : %d %v", w.Code, w.Result().Cookies())
 	}
-	if w := (gReq{method: "GET", path: "/conv", jar: jar, hdr: map[string]string{shareHeader: hB}}).do(h); w.Code != 200 || !strings.Contains(w.Body.String(), "SECRET autre") {
+	if w := (gReq{method: "GET", path: "/v1/sessions/" + id1 + "/conversation", jar: jar, hdr: map[string]string{shareHeader: hB}}).do(h); w.Code != 200 || !strings.Contains(w.Body.String(), "SECRET autre") {
 		t.Fatalf("B : %d", w.Code)
 	}
 }
@@ -840,7 +842,7 @@ func TestGuestStaticExceptionTable(t *testing.T) {
 		t.Skip("ui/dist absent")
 	}
 	jar := []*http.Cookie{{Name: gName, Value: c}}
-	for _, p := range []string{"/sw.js", "/", "/guest/", "/assets/", "/guest/x/y", "/assets/%2e%2e/x", "/assets/../x", "/guest/..%2f", "/conv", "/api"} {
+	for _, p := range []string{"/sw.js", "/", "/guest/", "/assets/", "/guest/x/y", "/assets/%2e%2e/x", "/assets/../x", "/guest/..%2f", "/v1/sessions/" + id1 + "/conversation", "/v1/state"} {
 		if w := (gReq{method: "GET", path: p, jar: jar}).do(h); w.Code != 401 {
 			t.Errorf("%s servi : %d", p, w.Code)
 		}
@@ -899,13 +901,13 @@ func TestGuestLastSeenOnlyOnGuardedRequests(t *testing.T) {
 	if sh, _ := shareSt.Get(id1); sh.Invites[0].LastSeen != 1 {
 		t.Fatalf("LastSeen touché sans requête invitée : %d", sh.Invites[0].LastSeen)
 	}
-	gReq{method: "GET", path: "/conv", cookie: c}.do(h)
+	gReq{method: "GET", path: "/v1/sessions/" + id1 + "/conversation", cookie: c}.do(h)
 	if sh, _ := shareSt.Get(id1); sh.Invites[0].LastSeen <= 1 {
 		t.Fatalf("LastSeen non mis à jour : %d", sh.Invites[0].LastSeen)
 	}
 }
 
-// <img> ne peut pas porter d'en-tête : /conv-image seul accepte la poignée en paramètre share (l'en-tête l'emporte).
+// <img> ne peut pas porter d'en-tête : seules les images de la conversation acceptent la poignée en paramètre share (l'en-tête l'emporte).
 func TestGuestConvImageShareQuery(t *testing.T) {
 	h := guestWeb(t, nil, modeTok)
 	ca, csrfA := guestJoin(t, h, id1, "-p", "")
@@ -914,7 +916,7 @@ func TestGuestConvImageShareQuery(t *testing.T) {
 	put(t, filepath.Join(root, "-q", gOther+".jsonl"), `{"type":"user","cwd":"/q","timestamp":"2026-01-01T00:00:00Z","message":{"role":"user","content":[{"type":"text","text":"x"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"`+png1+`"}}]}}`+"\n", old)
 	jar := []*http.Cookie{{Name: gName, Value: ca}, {Name: guestCookieName(hB), Value: cb}}
 	img := func(share string, hdr map[string]string, jar []*http.Cookie) *httptest.ResponseRecorder {
-		return gReq{method: "GET", path: "/conv-image?id=" + id1 + "&dir=-p&o=0&k=1&share=" + share, jar: jar, hdr: hdr}.do(h)
+		return gReq{method: "GET", path: "/v1/sessions/" + id1 + "/conversation/images/0-1?dir=-p&share=" + share, jar: jar, hdr: hdr}.do(h)
 	}
 	if w := img(hB, nil, jar); w.Code != 200 || w.Header().Get("Content-Type") != "image/png" || w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("image de B : %d %v", w.Code, w.Header())
@@ -939,12 +941,12 @@ func TestGuestConvImageShareQuery(t *testing.T) {
 		t.Fatalf("secret de A sous B : %d %+v", w.Code, k)
 	}
 	// Aucune autre route ne lit share.
-	for _, p := range []string{"/conv?share=" + hID1, "/queue?share=" + hID1, "/guest-me?share=" + hID1} {
+	for _, p := range []string{"/v1/sessions/" + id1 + "/conversation?share=" + hID1, "/v1/sessions/" + id1 + "/queue?share=" + hID1, "/guest-me?share=" + hID1} {
 		if w := (gReq{method: "GET", path: p, jar: jar}).do(h); w.Code != 401 {
 			t.Fatalf("%s : %d", p, w.Code)
 		}
 	}
-	if w := (gReq{method: "POST", path: "/queue-add?share=" + hID1, body: `{"text":"m"}`, jar: jar, csrf: csrfA}).do(h); w.Code == 200 || len(queueSt.List(id1)) != 0 {
+	if w := (gReq{method: "POST", path: "/v1/sessions/" + id1 + "/queue?share=" + hID1, body: `{"text":"m"}`, jar: jar, csrf: csrfA}).do(h); w.Code == 201 || len(queueSt.List(id1)) != 0 {
 		t.Fatalf("POST avec share : %d", w.Code)
 	}
 }
@@ -970,8 +972,8 @@ func TestGuestConvImageShareQueryRelayed(t *testing.T) {
 		return &homeProc{dir: h.Dir, proxy: childProxy(cu, "x"), done: make(chan struct{})}, nil
 	}
 	jar := []*http.Cookie{{Name: gName, Value: "perso." + sec}}
-	w := gReq{method: "GET", path: "/conv-image?o=0&k=1&share=" + hID1, jar: jar}.do(h)
-	if w.Code != 200 || w.Body.String() != "img" || share != hID1 || guest != sec || strings.Contains(path, "share=") || !strings.HasPrefix(path, "/conv-image?") {
+	w := gReq{method: "GET", path: "/v1/sessions/" + id1 + "/conversation/images/0-1?share=" + hID1, jar: jar}.do(h)
+	if w.Code != 200 || w.Body.String() != "img" || share != hID1 || guest != sec || strings.Contains(path, "share=") || path != "/v1/sessions/"+id1+"/conversation/images/0-1" {
 		t.Fatalf("relais : %d %q %q %q", w.Code, path, share, guest)
 	}
 }
@@ -1033,7 +1035,7 @@ func TestGuestUnsureNeverClears(t *testing.T) {
 	probe := func(t *testing.T, h http.Handler, c string) {
 		t.Helper()
 		jar := []*http.Cookie{{Name: gName, Value: c}}
-		for _, q := range []gReq{{method: "GET", path: "/guest/" + hID1, jar: jar}, {method: "GET", path: "/guest", jar: jar}, {method: "GET", path: "/guest-list", jar: jar}, {method: "GET", path: "/conv", cookie: c}} {
+		for _, q := range []gReq{{method: "GET", path: "/guest/" + hID1, jar: jar}, {method: "GET", path: "/guest", jar: jar}, {method: "GET", path: "/guest-list", jar: jar}, {method: "GET", path: "/v1/sessions/" + id1 + "/conversation", cookie: c}} {
 			w := q.do(h)
 			noClear(t, q.path, w)
 			if w.Code == 200 {
@@ -1080,7 +1082,7 @@ func TestGuestDefinitiveStillClears(t *testing.T) {
 	shareSt.Regen(id1, inv0(id1)) // régénéré : l'ancien cookie meurt
 	for _, v := range []string{c, "inconnu." + strings.Split(c, ".")[1], ".faux"} {
 		jar := []*http.Cookie{{Name: gName, Value: v}}
-		for _, q := range []gReq{{method: "GET", path: "/guest/" + hID1, jar: jar}, {method: "GET", path: "/guest", jar: jar}, {method: "GET", path: "/guest-list", jar: jar}, {method: "GET", path: "/conv", cookie: v}} {
+		for _, q := range []gReq{{method: "GET", path: "/guest/" + hID1, jar: jar}, {method: "GET", path: "/guest", jar: jar}, {method: "GET", path: "/guest-list", jar: jar}, {method: "GET", path: "/v1/sessions/" + id1 + "/conversation", cookie: v}} {
 			w := q.do(h)
 			if k := cookieOf(w, gName); k == nil || k.MaxAge >= 0 || w.Code == 200 {
 				t.Errorf("%s %q : %d %+v", q.path, v, w.Code, k)

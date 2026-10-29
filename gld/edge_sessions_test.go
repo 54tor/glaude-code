@@ -137,7 +137,7 @@ func TestOuvertsEtRecents(t *testing.T) {
 	if w := waiting(); strings.Join(w, ",") != "a,c" {
 		t.Fatalf("en attente : %v", w)
 	}
-	status(t, h, "GET", "/ls?path=::drives", "", 400) // la liste des lecteurs n'existe que sous Windows
+	status(t, h, "GET", "/v1/directories?path=::drives", "", 400) // la liste des lecteurs n'existe que sous Windows
 
 }
 

@@ -61,7 +61,7 @@ func expiringSessions(now time.Time, days int) []Expiring {
 }
 
 func routesCleanupWarn(mux *http.ServeMux) {
-	mux.HandleFunc("GET /cleanup-warning", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/cleanup-warning", func(w http.ResponseWriter, r *http.Request) {
 		days := cleanupDays()
 		list := expiringSessions(time.Now(), days)
 		if len(list) > 200 {

@@ -10,7 +10,6 @@ package main
 
 import (
 	"encoding/json"
-	"io"
 	"net/http"
 	"path/filepath"
 	"sync"
@@ -179,30 +178,29 @@ func routesKeepWarm(mux *http.ServeMux) {
 		warmLoad()
 		warmMu.Unlock()
 	})
-	mux.HandleFunc("GET /keepwarm", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/keepwarm", func(w http.ResponseWriter, r *http.Request) {
 		warmMu.Lock()
 		defer warmMu.Unlock()
 		writeJSON(w, 200, map[string]any{"items": warmState, "ttl": int(cacheTTL / time.Second), "below": int(warmBelow / time.Second)})
 	})
-	mux.HandleFunc("POST /keepwarm", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("PUT /v1/keepwarm", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Dir, ID string
 			On      bool
 			Max     int
 			Reheat  bool // session au cache froid : accepte d'en payer la reconstruction par un premier ping
 		}
-		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+		if !decodeBody(w, r, &req, 1<<10) {
 			return
 		}
 		if _, ok := transcript(req.Dir, req.ID); !ok {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.chat.sessionInvalide")})
+			writeErr(w, http.StatusNotFound, "not_found", L("srv.chat.sessionInvalide"))
 			return
 		}
 		reheated := false
 		if req.On { // hors verrou : `claude agents` prend du temps
 			if open := liveSessions(); open != nil && !open[req.ID] {
-				writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.keepwarm.sessionFermeeRouvrezLa")})
+				writeErr(w, http.StatusConflict, "conflict", L("srv.keepwarm.sessionFermeeRouvrezLa"))
 				return
 			}
 			// Reconstruire un cache froid coûte cher : le premier ping n'est envoyé que sur demande explicite (Reheat).
@@ -210,7 +208,7 @@ func routesKeepWarm(mux *http.ServeMux) {
 				err := warmPing(req.ID) // le premier tour reconstruit le cache, le maintien prend ensuite le relais
 				journal("keepwarm-reheat %s : %v", req.ID, errOr(err))
 				if err != nil {
-					writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.keepwarm.pingFailed", "A1", cut(err.Error(), 200))})
+					writeErr(w, http.StatusBadGateway, "upstream_failed", L("srv.keepwarm.pingFailed", "A1", cut(err.Error(), 200)))
 					return
 				}
 				reheated = true
@@ -224,7 +222,7 @@ func routesKeepWarm(mux *http.ServeMux) {
 				s.On, s.Note = false, ""
 				warmSave()
 			}
-			writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.keepwarm.maintienAuChaudArrete")})
+			writeJSON(w, 200, map[string]any{"message": L("srv.keepwarm.maintienAuChaudArrete")})
 			return
 		}
 		if req.Max <= 0 {
@@ -237,6 +235,6 @@ func routesKeepWarm(mux *http.ServeMux) {
 		}
 		warmState[req.ID] = ns
 		warmSave()
-		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.keepwarm.maintienAuChaudActive")})
+		writeJSON(w, 200, map[string]any{"message": L("srv.keepwarm.maintienAuChaudActive")})
 	})
 }
