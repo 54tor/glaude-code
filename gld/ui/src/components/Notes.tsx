@@ -42,7 +42,8 @@ export function Notes({ noteKey, folder: base, rows }: { noteKey: string; folder
   const setFolder = (d: string) => {
     setCustom(d)
     try {
-      d ? localStorage.setItem(dirKey, d) : localStorage.removeItem(dirKey)
+      if (d) localStorage.setItem(dirKey, d)
+      else localStorage.removeItem(dirKey)
     } catch {
       /* préférence locale seulement */
     }

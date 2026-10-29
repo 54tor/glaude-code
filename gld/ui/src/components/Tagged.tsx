@@ -45,7 +45,7 @@ function Clamp({ children }: { children: React.ReactNode }) {
   useLayoutEffect(() => {
     const el = ref.current
     if (el && !open) setOver(el.scrollHeight > el.clientHeight + 1)
-  })
+  }, [open])
   return (
     <div className="mt-1.5">
       <div ref={ref} className={`break-words ${open ? "" : "line-clamp-5"}`}>{children}</div>
