@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowLeft, Bot, Check, Copy, Download, Fan, Merge, MessageSquarePlus, Pencil, Plus, Save, Sparkles, Trash2, Undo2, Unlink, Upload, X } from "lucide-react"
+import { ArrowLeft, Bot, Check, Copy, Download, Fan, Merge, MessageSquarePlus, Pencil, Plus, Save, Sparkles, Terminal, Trash2, Undo2, Unlink, Upload, X } from "lucide-react"
 import { toast } from "sonner"
 import { api, type SnipScope, type Snippet } from "@/lib/api"
 import { ago, size, tilde } from "@/lib/format"

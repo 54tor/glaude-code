@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { ChevronRight, Copy, FolderPlus, Globe, Trash2 } from "lucide-react"
+import { ChevronRight, Copy, FolderPlus, Globe, Trash2, X } from "lucide-react"
 import { Link, useSearchParams } from "wouter"
 import { api, type ProjectCfg } from "@/lib/api"
 import { describeKey } from "@/lib/configKeys"
