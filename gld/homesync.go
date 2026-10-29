@@ -26,6 +26,7 @@ type SyncItem struct {
 	Status string `json:"status"`         // new (absent de la cible), diff, same
 	Risk   string `json:"risk,omitempty"` // exec : contient des commandes qui s'exécuteront
 	Merge  bool   `json:"merge"`          // « fusionner » possible (listes, objets) en plus de « remplacer »
+	Cat    string `json:"cat,omitempty"`
 	From   string `json:"from"`
 	To     string `json:"to"`
 }
@@ -37,6 +38,8 @@ var (
 	syncSkip     = map[string]bool{"env": true, "apiKeyHelper": true, "awsAuthRefresh": true, "awsCredentialExport": true, "otelHeadersHelper": true, "permissions": true}
 	syncPermKind = []string{"allow", "ask", "deny", "additionalDirectories"}
 	syncSegRe    = regexp.MustCompile(`^[\w][\w. -]*$`)
+	// clés de settings.json gérées à part quand skipPlugin est actif
+	syncPluginKeys = map[string]bool{"enabledPlugins": true, "extraKnownMarketplaces": true}
 )
 
 const (
@@ -222,6 +225,11 @@ func syncPlan(from, to string) ([]SyncItem, error) {
 	if err != nil {
 		return nil, err
 	}
+	return syncPlanDirs(fd, td, false)
+}
+
+// syncPlanDirs est syncPlan sur deux dossiers déjà résolus ; skipPlugin écarte syncPluginKeys.
+func syncPlanDirs(fd, td string, skipPlugin bool) ([]SyncItem, error) {
 	if fd == td {
 		return nil, terr("srv.homesync.laSourceEtLa")
 	}
@@ -235,7 +243,7 @@ func syncPlan(from, to string) ([]SyncItem, error) {
 	}
 	items := []SyncItem{}
 	for _, k := range fs.keys {
-		if syncSkip[k] || secretKey.MatchString(k) {
+		if syncSkip[k] || secretKey.MatchString(k) || (skipPlugin && syncPluginKeys[k]) {
 			continue
 		}
 		sv, _ := fs.get(k)
@@ -316,9 +324,22 @@ func syncBackup(dir, stamp, rel string) error {
 // syncApply copie les éléments choisis de from vers to. Chaque élément est revalidé côté serveur (le navigateur ne désigne que des
 // identifiants du plan). Renvoie un résumé.
 func syncApply(from, to string, picks []SyncPick) (string, error) {
+	fd, err := homeDir(from)
+	if err != nil {
+		return "", err
+	}
+	td, err := homeDir(to)
+	if err != nil {
+		return "", err
+	}
+	return syncApplyDirs(fd, td, picks, false)
+}
+
+// syncApplyDirs est syncApply sur deux dossiers déjà résolus.
+func syncApplyDirs(fd, td string, picks []SyncPick, skipPlugin bool) (string, error) {
 	cfgMu.Lock()
 	defer cfgMu.Unlock()
-	plan, err := syncPlan(from, to)
+	plan, err := syncPlanDirs(fd, td, skipPlugin)
 	if err != nil {
 		return "", err
 	}
@@ -326,8 +347,6 @@ func syncApply(from, to string, picks []SyncPick) (string, error) {
 	for _, it := range plan {
 		byID[it.ID] = it
 	}
-	fd, _ := homeDir(from)
-	td, _ := homeDir(to)
 	fs, _, _ := syncSettings(fd)
 	ts, torig, err := syncSettings(td)
 	if err != nil {

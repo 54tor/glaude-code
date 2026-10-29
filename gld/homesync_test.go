@@ -212,3 +212,40 @@ func TestSyncDeuxFoisLaMemeSeconde(t *testing.T) {
 		t.Fatalf("sauvegardes : %v, original gardé : %v", saved, found)
 	}
 }
+
+func TestSyncPlanDirsSkipPlugin(t *testing.T) {
+	src, dst := t.TempDir(), t.TempDir()
+	put(t, filepath.Join(src, "settings.json"), "{\n  \"enabledPlugins\": {\n    \"a@m\": true\n  },\n  \"extraKnownMarketplaces\": {\n    \"m\": {}\n  },\n  \"theme\": \"light\"\n}\n", old)
+	items, err := syncPlanDirs(src, dst, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := syncItem(items, "set:theme"); !ok {
+		t.Error("set:theme attendu")
+	}
+	for _, id := range []string{"set:enabledPlugins", "set:extraKnownMarketplaces"} {
+		if _, ok := syncItem(items, id); ok {
+			t.Errorf("%s ne doit pas être planifié", id)
+		}
+	}
+	items, err = syncPlanDirs(src, dst, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"set:theme", "set:enabledPlugins", "set:extraKnownMarketplaces"} {
+		if _, ok := syncItem(items, id); !ok {
+			t.Errorf("%s attendu sans skipPlugin", id)
+		}
+	}
+}
+
+func TestSyncApplyDirsRefusesSkippedKey(t *testing.T) {
+	src, dst := t.TempDir(), t.TempDir()
+	put(t, filepath.Join(src, "settings.json"), "{\n  \"enabledPlugins\": {\n    \"a@m\": true\n  }\n}\n", old)
+	if _, err := syncApplyDirs(src, dst, []SyncPick{{"set:enabledPlugins", "replace"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(filepath.Join(dst, "settings.json")); err == nil && strings.Contains(string(b), "enabledPlugins") {
+		t.Errorf("clé écrite malgré skipPlugin: %s", b)
+	}
+}
