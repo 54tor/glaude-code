@@ -11,6 +11,10 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Les onglets déjà ouverts et les PWA installées doivent être rechargés (Ctrl+Maj+R) : l'ancienne interface appelle des routes qui n'existent plus.
 - L'interface lève une `ApiError` (statut, code, message) au lieu de lire `{ok, out}` ; la couche de compatibilité `Result`, `HttpError` et `api.post` est supprimée.
 
+- Les suppressions multiples (`DELETE /v1/fs/entries`, `/v1/fs/trash`, `/v1/memory/files`, `/v1/skills`, `/v1/snippets`) traitent chaque élément seul et répondent `{done, failed}` (200 dès qu'un élément a abouti, l'erreur uniforme sinon) ; le plafond d'une requête multiple passe à 100 éléments et l'interface découpe les grandes listes en lots.
+- La recherche mémoire passe de `GET /v1/memory/files?q=` à `GET /v1/memory/search?q=` ; le 409 de `PUT /v1/fs/entries/content` renvoie aussi `etag` et `deleted`.
+- Les actions qui demandent une réauthentification dans un corps deviennent des `POST` : `/v1/auth/factors/{factor}/removals`, `/v1/auth/sessions/{sid}/revocations`, `/v1/auth/sessions/revocations`, `/v1/admin/users/{user}/mfa-resets`, `/v1/admin/sessions/revocations` (des proxys retirent le corps des `DELETE`).
+
 ### Ajouté
 - `docs/reference/openapi.yaml` : contrat OpenAPI 3 de l'API `/v1`, vérifié contre les routes enregistrées et leurs droits par un test.
 - Tests de contrat : toute route hors pages est sous `/v1`, les erreurs d'un échantillon de routes ont la forme uniforme, aucun `http.Error` ne subsiste dans un handler `/v1`.

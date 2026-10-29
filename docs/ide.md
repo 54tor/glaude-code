@@ -74,10 +74,10 @@ Toutes prennent `dir`, le dossier racine (chemin absolu). `path` est relatif à 
 | `PUT /v1/fs/entries/content` | `fs_write` | `dir`, `path` en paramètres ; corps `{content, etag, force}` | `{etag}` ; `409 {error: {code: "conflict" | "deleted"}}` si l'`etag` ne correspond plus (voir Conflits). Contenu de 2 Mio au plus. Écriture atomique (temporaire puis renommage), mode du fichier conservé |
 | `POST /v1/fs/entries` | `fs_write` | `dir` en paramètre ; corps `{path, kind}` (`file` ou `dir`) | `201 {path}` ; `409` si l'élément existe |
 | `PATCH /v1/fs/entries` | `fs_write` | `dir` en paramètre ; corps `{from, to}` | `204` ; `409` si la cible existe (jamais d'écrasement) |
-| `DELETE /v1/fs/entries` | `fs_write` | `dir`, `item` répété (chemins) | `{ids}` : les éléments partent dans la corbeille |
+| `DELETE /v1/fs/entries` | `fs_write` | `dir`, `item` répété (chemins) | `{done, failed}` : `done` liste les identifiants de corbeille des éléments déplacés (pour annuler), `failed` les éléments refusés avec leur erreur |
 | `GET /v1/fs/trash` | `fs_read` | `dir` | `{items: [{id, path, mtime}]}` |
 | `PATCH /v1/fs/trash/{entry}` | `fs_write` | `dir` en paramètre ; corps `{trashed: false}` | `204` ; `409` si le chemin d'origine est occupé (jamais d'écrasement) |
-| `DELETE /v1/fs/trash` | `fs_write` | `dir`, `item` répété (identifiants) | `204` : suppression définitive de ces entrées |
+| `DELETE /v1/fs/trash` | `fs_write` | `dir`, `item` répété (identifiants) | `{done, failed}` : suppression définitive de ces entrées ; chaque entrée réussit ou échoue seule |
 | `GET /v1/fs/index` | `fs_read` | `dir` | `{state, files: [{path, size, mtime}]}` ; `state` = `building`, `ready` ou `partial` |
 | `POST /v1/fs/files` | `fs_read` | `{dir, paths}` | `{files: [{path, content}]}` : contenu de fichiers **de l'index** seulement, **300 chemins** par requête, **100 Kio** par fichier (les autres sont omis) |
 | `GET /v1/fs/watch` | `fs_read` | `dir`, `paths` répété (un par dossier observé ; `paths=` avec une valeur vide = racine ; **aucun** `paths` = rien n'est observé) | flux SSE (voir Observation) |
