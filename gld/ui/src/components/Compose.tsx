@@ -195,7 +195,7 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
         }}
         rows={8}
         maxLength={32000}
-        className="session-text w-full resize-y rounded-lg border bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/80"
+        className="session-text w-full resize-y rounded-lg border border-input bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/80"
         aria-label={tr("conversation.compose.messageAria")}
       />
       <ImageChips images={pics.images} busy={pics.busy} onRemove={pics.remove} />

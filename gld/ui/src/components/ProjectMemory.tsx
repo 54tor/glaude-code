@@ -67,7 +67,7 @@ function EditDialog({ file, edit, onClose, onSaved }: { file: MemFile; edit: boo
             spellCheck={false}
             autoFocus
             aria-label={t("memory.project.contentAria", { name: file.name })}
-            className="field-sizing-content min-h-64 w-full flex-1 resize-none overflow-y-auto rounded-lg border bg-background px-3 py-2 font-mono text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/80"
+            className="field-sizing-content min-h-64 w-full flex-1 resize-none overflow-y-auto rounded-lg border border-input bg-background px-3 py-2 font-mono text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/80"
           />
         ) : (
           <div className="min-h-32 flex-1 overflow-y-auto rounded-lg border px-4 py-3 text-sm leading-relaxed">

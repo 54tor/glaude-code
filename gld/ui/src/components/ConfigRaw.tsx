@@ -40,7 +40,7 @@ export function RawTab({ file, version, proposeRaw }: { file: string; version: n
         aria-label={t("config.raw.aria")}
         aria-invalid={!!error || undefined}
         aria-describedby={error ? "raw-error" : undefined}
-        className="h-[28rem] w-full resize-y rounded-md border bg-background p-3 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/80"
+        className="h-[28rem] w-full resize-y rounded-md border border-input bg-background p-3 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/80"
       />
       {error && (
         <p id="raw-error" role="alert" className="text-sm text-destructive">

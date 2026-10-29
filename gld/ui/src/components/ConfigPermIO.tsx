@@ -98,7 +98,7 @@ export function PermImportDialog({
           placeholder={t("config.permIO.pastePlaceholder")}
           spellCheck={false}
           aria-label={t("config.permIO.textAria")}
-          className="h-56 w-full resize-y rounded-md border bg-background p-3 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/80"
+          className="h-56 w-full resize-y rounded-md border border-input bg-background p-3 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/80"
         />
         <div className="flex flex-wrap items-center gap-2 text-sm" role="radiogroup" aria-label={t("config.permIO.modeAria")}>
           <Button size="sm" variant={mode === "merge" ? "secondary" : "ghost"} role="radio" aria-checked={mode === "merge"} onClick={() => setMode("merge")}>

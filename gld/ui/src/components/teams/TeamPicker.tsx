@@ -161,7 +161,7 @@ export function TeamPicker({
           placeholder={t("teams.goal")}
           aria-label={t("teams.goal")}
           rows={4}
-          className="w-full rounded-lg border bg-transparent p-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/80"
+          className="w-full rounded-lg border border-input bg-transparent p-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/80"
         />
         <div className="flex items-center gap-2">
           <Button

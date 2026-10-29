@@ -467,7 +467,7 @@ function HaikuFormat({ open, text, onClose, onDone }: { open: boolean; text: str
           autoFocus
           rows={3}
           disabled={busy}
-          className="w-full resize-y rounded-lg border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/80"
+          className="w-full resize-y rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/80"
           aria-label={t("skills.format.instruction")}
         />
         <DialogFooter className="flex-wrap items-center gap-2 sm:justify-between">

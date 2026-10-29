@@ -59,7 +59,7 @@ function Editor({ file, label, doc, propose, onClose }: { file: string; label: s
         onChange={(e) => (setText(e.target.value), setError(""))}
         spellCheck={false}
         aria-label={t("config.permRaw.textAria")}
-        className="h-72 w-full resize-y rounded-md border bg-background p-3 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/80"
+        className="h-72 w-full resize-y rounded-md border border-input bg-background p-3 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/80"
       />
       <ul className="max-h-32 space-y-0.5 overflow-y-auto text-xs" aria-label={t("config.permRaw.lintAria")}>
         {lint.map((l, i) => (
