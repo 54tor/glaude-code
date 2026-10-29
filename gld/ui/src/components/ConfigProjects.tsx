@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { ChevronRight, ClipboardCopy, FolderPlus, Globe, X } from "lucide-react"
+import { ChevronRight, Copy, FolderPlus, Globe, Trash2 } from "lucide-react"
 import { Link, useSearchParams } from "wouter"
 import { api, type ProjectCfg } from "@/lib/api"
 import { describeKey } from "@/lib/configKeys"
@@ -138,7 +138,7 @@ export function ProjectsTab({ home, version, gone, onAddDir, suggest, onEdit, on
                               </ContextMenuTrigger>
                               <ContextMenuContent className="w-60">
                                 <ContextMenuItem onSelect={() => copyText(r.rule).then(() => toast.success(t("config.shared.ruleCopied")), () => toast.error(t("config.shared.copyFailed")))}>
-                                  <ClipboardCopy /> {t("config.perms.copyRule")}
+                                  <Copy /> {t("config.perms.copyRule")}
                                 </ContextMenuItem>
                                 <ContextMenuItem onSelect={() => onTransfer(`${r.scope}/${p.dir}`, k, r.rule, false)}>
                                   <Globe /> {t("config.perms.copyGlobal")}
@@ -148,7 +148,7 @@ export function ProjectsTab({ home, version, gone, onAddDir, suggest, onEdit, on
                                 </ContextMenuItem>
                                 <ContextMenuSeparator />
                                 <ContextMenuItem variant="destructive" onSelect={() => onRemove(`${r.scope}/${p.dir}`, k, r.rule)}>
-                                  <X /> {t("common.delete")}
+                                  <Trash2 /> {t("common.delete")}
                                 </ContextMenuItem>
                               </ContextMenuContent>
                               </ContextMenu>

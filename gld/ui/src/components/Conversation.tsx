@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowDown, ArrowUpToLine, Copy, Link2, SquareCode, TextSelect, Undo2, BarChart3, Bug, ChevronLeft, ChevronRight, FolderOpen, Power, FileText, Fan, MessageSquarePlus, MoreHorizontal, MessagesSquare, GalleryHorizontalEnd, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
+import { ArrowDown, ArrowUpToLine, Copy, Undo2, BarChart3, Bug, ChevronLeft, ChevronRight, FolderOpen, Power, FileText, Fan, MessageSquarePlus, MoreHorizontal, MessagesSquare, GalleryHorizontalEnd, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
@@ -494,17 +494,17 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
                       <ContextMenuContent>
                         {hit.sel.trim() && (
                           <ContextMenuItem onSelect={() => copy(hit.sel)}>
-                            <TextSelect /> {t("conversation.view.copySelection")}
+                            <Copy /> {t("conversation.view.copySelection")}
                           </ContextMenuItem>
                         )}
                         {hit.code && (
                           <ContextMenuItem onSelect={() => copy(hit.code.replace(/\n$/, ""))}>
-                            <SquareCode /> {t("conversation.view.copyBlock")}
+                            <Copy /> {t("conversation.view.copyBlock")}
                           </ContextMenuItem>
                         )}
                         {hit.link && (
                           <ContextMenuItem onSelect={() => copy(hit.link)}>
-                            <Link2 /> {t("conversation.view.copyLink")}
+                            <Copy /> {t("conversation.view.copyLink")}
                           </ContextMenuItem>
                         )}
                         <ContextMenuItem onSelect={() => copy(x.t)}>
