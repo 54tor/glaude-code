@@ -65,7 +65,9 @@ func bgTasks(p string, open bool) []BgTask {
 	out := make([]BgTask, len(c.tasks))
 	copy(out, c.tasks)
 	for i := range out {
-		if out[i].Status == "running" && !open {
+		if out[i].Status == "running" && out[i].HasOut && bgKilled(out[i].Output) {
+			out[i].Status = "killed"
+		} else if out[i].Status == "running" && !open {
 			out[i].Status = "unknown"
 		}
 	}
@@ -201,6 +203,23 @@ func bgOutputOK(path string) bool {
 		return false
 	}
 	return ownedByMe(fi)
+}
+
+// bgKilled : Claude Code termine par « [killed] » la sortie d'une commande de fond tuée, même sans <task-notification> (kill du processus).
+// Les agents n'ont pas ce marqueur : leur sortie est leur transcript.
+func bgKilled(path string) bool {
+	f, err := os.OpenFile(path, os.O_RDONLY|oNoFollow, 0)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil || !fi.Mode().IsRegular() {
+		return false
+	}
+	b := make([]byte, min(fi.Size(), 32))
+	n, _ := f.ReadAt(b, fi.Size()-int64(len(b)))
+	return bytes.HasSuffix(bytes.TrimSpace(b[:n]), []byte("[killed]"))
 }
 
 // bgOutput : les 64 derniers Kio de la sortie d'une tâche de ce transcript. L'identifiant doit être une tâche relevée dans le transcript

@@ -42,3 +42,14 @@ func TestBgOutputOKRefuse(t *testing.T) {
 		}
 	}
 }
+
+func TestBgKilled(t *testing.T) {
+	d := t.TempDir()
+	for body, want := range map[string]bool{"ok\n\n[killed]\n": true, "[killed]": true, "fin": false, "": false} {
+		p := filepath.Join(d, "o")
+		os.WriteFile(p, []byte(body), 0o600)
+		if bgKilled(p) != want {
+			t.Fatalf("%q", body)
+		}
+	}
+}
