@@ -35,6 +35,13 @@ Restes connus :
 - `mkdirTrusted` hors de `cfgDir()` (skills, mémoire, snippets d'un projet) reste un `os.MkdirAll` : il crée des dossiers, n'écrit aucun contenu.
 - Faux positifs : `claude.go:91` (dossier temporaire créé par gld en 0700) ; `pair.go` (`authDir()`, privé et vérifié par `checkPrivate`) ; `loaded.go` (hook exécuté sous le compte cible).
 
+Sites relevés par l'audit du 2026-10-29 (commit `d9f6ef3`) :
+
+- teams_agentfiles.go (`writeAgents`, écriture de `cfgDir()/agents/<id>.md`) : `os.MkdirAll`, `ReadFile`, `CreateTemp`, `Chmod` par nom puis `Rename` dans `cfgDir()`. Migré vers `rMkdirAll`, `readTrustedIn` et `rWriteAtomic` ; test : `TestAgentsNeSuiventPasLesLiens`.
+- ide_path.go:90, gitstatus.go:257-263, transcript.go:356-381 : la racine `os.Root` de l'IDE est un dossier tiré du `cwd` d'un transcript, que la cible écrit. Un `cwd` forgé (`/etc` par exemple) fait servir à root l'IDE sur ce dossier, en lecture comme en écriture. L'IDE est confiné **dans** sa racine, mais la racine elle-même n'est pas digne de confiance : à traiter avant toute sortie de l'expérimental (n'accepter que des racines appartenant à la cible, ou ouvrir l'IDE sous la cible).
+- memory.go:102-113, 284-305, skills.go:75-80, 431-445 : les clés `p/` (CLAUDE.md, README.md, skills, snippets, réglages de projet) écrivent dans le dossier du même `cwd` forgé ; `mkdirTrusted` hors de `cfgDir()` reste un `os.MkdirAll` (voir plus haut).
+- docs.go:84-108 : lecture par `os.Open`, sans racine, de tout `.md`, `.html`, `.pdf` ou image dont un transcript cite le chemin absolu.
+
 Liste d'origine :
 
 - trash.go:25 : `journal()` ouvre `gld-web.log` dans `cfgDir()` en suivant les liens symboliques ; un lien posé par la cible (vers `/etc/ld.so.preload` par exemple) fait écrire root où elle veut, jusqu'à l'exécution de code en root. Ce n'est pas un faux positif.

@@ -43,12 +43,13 @@ func writeAgents(cfgRoot string, as []Agent) (written, conflicts []string, err e
 		}
 	}
 	dir := filepath.Join(cfgRoot, "agents")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	// cfgRoot est inscriptible par le compte cible sous GLD_RUN_AS : création, lecture et écriture confinées (rootfs.go).
+	if err := rMkdirAll(cfgRoot, dir, 0o755); err != nil {
 		return nil, nil, terr("srv.teams_agentfiles.ecriture", "W1", err)
 	}
 	for _, a := range as {
 		p := filepath.Join(dir, a.ID+".md")
-		if old, e := os.ReadFile(p); e == nil {
+		if old, e := readTrustedIn(cfgRoot, p); e == nil {
 			_, body, _ := frontMatter(string(old))
 			if !bytes.HasPrefix([]byte(body), []byte(agentMarker)) {
 				conflicts = append(conflicts, a.ID)
@@ -57,29 +58,10 @@ func writeAgents(cfgRoot string, as []Agent) (written, conflicts []string, err e
 		} else if !os.IsNotExist(e) {
 			return written, conflicts, terr("srv.teams_agentfiles.ecriture", "W1", e)
 		}
-		if e := writeAtomic(dir, p, agentFile(a)); e != nil {
+		if e := rWriteAtomic(cfgRoot, p, agentFile(a), 0o644); e != nil {
 			return written, conflicts, terr("srv.teams_agentfiles.ecriture", "W1", e)
 		}
 		written = append(written, a.ID)
 	}
 	return written, conflicts, nil
-}
-
-func writeAtomic(dir, dst string, data []byte) error {
-	f, err := os.CreateTemp(dir, ".gld-*.tmp")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-	if _, err := f.Write(data); err != nil {
-		f.Close()
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	if err := os.Chmod(f.Name(), 0o644); err != nil {
-		return err
-	}
-	return os.Rename(f.Name(), dst)
 }

@@ -244,3 +244,24 @@ func TestSharesNeSuitPasLesLiens(t *testing.T) {
 		t.Fatalf("shares.json reste un lien : %v", err)
 	}
 }
+
+// Équipes : un dossier agents/ remplacé par un lien sortant ne fait rien écrire ailleurs ; un fichier d'agent lié reste intact.
+func TestAgentsNeSuiventPasLesLiens(t *testing.T) {
+	root, out := t.TempDir(), t.TempDir()
+	os.Symlink(out, filepath.Join(root, "agents"))
+	if _, _, err := writeAgents(root, []Agent{{ID: "rex", Role: "r", Access: "read"}}); err == nil {
+		t.Error("dossier agents/ lié : écriture acceptée")
+	}
+	if es, _ := os.ReadDir(out); len(es) != 0 {
+		t.Fatalf("écrit hors de la racine : %v", es)
+	}
+	root2 := t.TempDir()
+	os.Mkdir(filepath.Join(root2, "agents"), 0o755)
+	victim := filepath.Join(out, "victime")
+	os.WriteFile(victim, []byte("intact"), 0o600)
+	os.Symlink(victim, filepath.Join(root2, "agents", "rex.md"))
+	writeAgents(root2, []Agent{{ID: "rex", Role: "r", Access: "read"}})
+	if b, _ := os.ReadFile(victim); string(b) != "intact" {
+		t.Fatalf("fichier lié modifié : %q", b)
+	}
+}
