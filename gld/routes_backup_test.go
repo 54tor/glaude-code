@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -80,4 +81,13 @@ func TestRoutesBackupTooManyPicks(t *testing.T) {
 	picks := make([]SyncPick, 2001)
 	body, _ := json.Marshal(map[string]any{"picks": picks})
 	v1err(t, h, "POST", "/v1/backup/imports/"+plan.ID+"/applications", string(body), 400, "")
+}
+
+func TestRoutesBackupExportServerError(t *testing.T) {
+	h, _, _ := web(t)
+	exportEnv(t)
+	op := pluginRaw
+	defer func() { pluginRaw = op }()
+	pluginRaw = func() ([]byte, error) { return nil, errors.New("boom") }
+	v1err(t, h, "GET", "/v1/backup/export?cats=plugins", "", 500, "")
 }

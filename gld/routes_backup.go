@@ -23,7 +23,11 @@ func routesBackup(mux *http.ServeMux) {
 		}
 		b, n, err := exportBackup(cats)
 		if err != nil {
-			writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+			if isMsg(err, "srv.backup_export.catsVides") || isMsg(err, "srv.backup_export.catInconnue") {
+				writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+			} else {
+				writeErr(w, http.StatusInternalServerError, "internal", err.Error())
+			}
 			return
 		}
 		journal("backup-export %s : %d fichier(s)", strings.Join(cats, ","), n)
