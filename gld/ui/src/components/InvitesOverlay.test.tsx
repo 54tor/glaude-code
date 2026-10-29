@@ -93,7 +93,7 @@ describe("InvitesOverlay", () => {
   })
 
   it.each([["", undefined], ["Léa", "Léa"]])("inviter avec le nom %j", async (typed, sent) => {
-    const c = vi.spyOn(api, "inviteCreate").mockResolvedValue({ token: "tok" })
+    const c = vi.spyOn(api, "inviteCreate").mockResolvedValue({ token: "tok", invite: { id: "i1", seq: 1, label: "Léa" } })
     await mount([sh([inv()])])
     if (typed) fireEvent.change(screen.getByLabelText(/Nom de l'invité/), { target: { value: typed } })
     await click(/Inviter quelqu'un/)
@@ -121,7 +121,7 @@ describe("InvitesOverlay", () => {
   })
 
   it("double clic sur Inviter : un seul appel", async () => {
-    const c = vi.spyOn(api, "inviteCreate").mockImplementation(() => new Promise((r) => setTimeout(() => r({ token: "t" }), 10)))
+    const c = vi.spyOn(api, "inviteCreate").mockImplementation(() => new Promise((r) => setTimeout(() => r({ token: "t", invite: { id: "i1", seq: 1, label: "Léa" } }), 10)))
     await mount([sh([inv()])])
     const b = screen.getByRole("button", { name: /Inviter quelqu'un/ })
     fireEvent.click(b)
