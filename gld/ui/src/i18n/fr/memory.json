@@ -279,6 +279,35 @@
       "preview": "Aperçu",
       "shortcut": "Ctrl+Entrée",
       "edit": "Modifier"
+    },
+    "pack": {
+      "export": "Exporter",
+      "exportAll": "Tout exporter",
+      "exportAllTitle": "Exporter toutes les entrées de mémoire des projets dans un fichier",
+      "exportSelTitle": "Exporter les entrées de mémoire cochées dans un fichier",
+      "import": "Importer",
+      "importTitle": "Importer des entrées de mémoire depuis un fichier exporté",
+      "none": "Aucune entrée de mémoire de projet à exporter",
+      "exportTitle_one": "Exporter {{count}} entrée de mémoire ?",
+      "exportTitle_other": "Exporter {{count}} entrées de mémoire ?",
+      "warn": "Les mémoires peuvent contenir des données sensibles (noms, chemins, consignes privées). Relisez le fichier avant de le partager.",
+      "dialogTitle": "Importer des mémoires",
+      "dialogDesc": "Choisissez un fichier exporté, désignez le projet qui reçoit chaque groupe, puis cochez les entrées voulues.",
+      "fileAria": "Fichier de mémoires exporté",
+      "invalid": "Fichier invalide : ce n'est pas un export de mémoires gld.",
+      "tooBig": "Fichier trop volumineux",
+      "noProject": "(sans projet)",
+      "ignore": "Ignorer ce projet",
+      "destAria": "Projet qui reçoit « {{name}} »",
+      "clashAria": "Si {{name}} existe déjà",
+      "skip": "Déjà présent : ignorer",
+      "replace": "Remplacer (l'ancien va à la corbeille)",
+      "both": "Garder les deux",
+      "run_one": "Importer {{count}} entrée",
+      "run_other": "Importer {{count}} entrées",
+      "imported_one": "{{count}} entrée importée",
+      "imported_other": "{{count}} entrées importées",
+      "partial": "{{ok}} importée(s), {{failed}} en échec : {{first}}"
     }
   }
 }

@@ -15,6 +15,8 @@ import type { Ask } from "./Confirm"
 import type { ComposeAsk } from "./Compose"
 import { Markdown } from "./Message"
 import { BLANK_ENTRY, blankRule, cmpFiles, copy, DEFAULT_SORT, home, newKey, split, type Sort } from "./memoryLib"
+import { downloadPack, projectLabel } from "@/lib/memoryPack"
+import { MemoryImport } from "./MemoryImport"
 import { Toolbar, SelectionBar } from "./MemoryBars"
 import { FileBar } from "./MemoryFileBar"
 import { FileMenu } from "./MemoryFileMenu"
@@ -291,6 +293,32 @@ export function Memory({
     }
   }
   // Fusion par Claude : le serveur rédige le prompt ; on le copie, ou on l'ouvre dans la fenêtre de saisie (relecture, modèle) avant de lancer la session.
+  // Export : seules les entrées de mémoire de projet (hors index) ; un avertissement précède le téléchargement.
+  const [importing, setImporting] = useState(false)
+  const exportKeys = (keys: string[]) => {
+    const files = all.filter((x) => keys.includes(x.key) && x.key.startsWith("m/") && x.name !== "MEMORY.md")
+    if (!files.length) return void toast.info(t("memory.pack.none"))
+    onAsk({
+      title: t("memory.pack.exportTitle", { count: files.length }),
+      body: t("memory.pack.warn"),
+      confirm: t("memory.pack.export"),
+      run: async () => {
+        try {
+          const entries = await Promise.all(
+            files.map(async (x) => ({
+              project: projectLabel(list?.projects.find((p) => p.dir === home(x.key))?.project ?? ""),
+              name: x.name,
+              text: (await api.memoryFile(x.key)).text,
+            }))
+          )
+          downloadPack(entries)
+          setPicked(new Set())
+        } catch (e) {
+          toast.error(errMsg(e).trim() || t("memory.main.failed"))
+        }
+      },
+    })
+  }
   const merge = async (launch: boolean) => {
     const keys = [...picked]
     const draft = (out?: string) => api.memoryMerge({ keys, out, launch: false })
@@ -398,7 +426,7 @@ export function Memory({
       picked={picked.has(x.key)}
       targets={targets(x.key)}
       homeDir={homeDir}
-      a={{ open: onPick, edit, rewrite: (y) => setWriter({ kind: "rewrite", key: y.key, name: y.name }), rename, copyContent, toggle, move, toggleRule, setType, remove }}
+      a={{ open: onPick, edit, rewrite: (y) => setWriter({ kind: "rewrite", key: y.key, name: y.name }), rename, copyContent, toggle, move, toggleRule, setType, remove, exportOne: (y) => exportKeys([y.key]) }}
     />
   )
   const section = (key: string, icon: typeof Globe, title: string, files: MemFile[], onWrite?: () => void, onConsolidate?: (file: string) => void, onNewRule?: () => void) => (
@@ -444,6 +472,8 @@ export function Memory({
               onType={setTypeFilter}
               onTypeHelp={() => setTypeHelp(true)}
               onCleanOrphans={() => removeMany(orphans, t("memory.main.orphansOf", { count: gone.length }))}
+              onExportAll={() => exportKeys(all.map((x) => x.key))}
+              onImport={() => setImporting(true)}
             />
           )}
           {list &&
@@ -485,6 +515,7 @@ export function Memory({
           onHaiku={haikuFromSelection}
           onRemove={() => removeMany([...picked], t("memory.main.selection"))}
           onMerge={() => merge(true)}
+          onExport={() => exportKeys([...picked])}
           onClear={() => setPicked(new Set())}
         />
       )}
@@ -591,6 +622,7 @@ export function Memory({
           }
         }}
       />
+      {list && <MemoryImport open={importing} list={list} homeDir={homeDir} onClose={() => setImporting(false)} onDone={refresh} />}
       <Prompt ask={prompt} onClose={() => setPrompt(null)} />
       <MemoryWriter target={writer} refs={writeRefs} onClose={() => setWriter(null)} onDraft={onDraft} />
     </div>

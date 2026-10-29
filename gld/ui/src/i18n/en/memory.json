@@ -279,6 +279,35 @@
       "preview": "Preview",
       "shortcut": "Ctrl+Enter",
       "edit": "Edit"
+    },
+    "pack": {
+      "export": "Export",
+      "exportAll": "Export all",
+      "exportAllTitle": "Export every project memory entry to a file",
+      "exportSelTitle": "Export the checked memory entries to a file",
+      "import": "Import",
+      "importTitle": "Import memory entries from an exported file",
+      "none": "No project memory entry to export",
+      "exportTitle_one": "Export {{count}} memory entry?",
+      "exportTitle_other": "Export {{count}} memory entries?",
+      "warn": "Memories may contain sensitive data (names, paths, private instructions). Review the file before sharing it.",
+      "dialogTitle": "Import memories",
+      "dialogDesc": "Pick an exported file, choose the project that receives each group, then tick the entries you want.",
+      "fileAria": "Exported memories file",
+      "invalid": "Invalid file: this is not a gld memory export.",
+      "tooBig": "File too large",
+      "noProject": "(no project)",
+      "ignore": "Ignore this project",
+      "destAria": "Project receiving “{{name}}”",
+      "clashAria": "If {{name}} already exists",
+      "skip": "Already there: skip",
+      "replace": "Replace (the old one goes to the trash)",
+      "both": "Keep both",
+      "run_one": "Import {{count}} entry",
+      "run_other": "Import {{count}} entries",
+      "imported_one": "{{count}} entry imported",
+      "imported_other": "{{count}} entries imported",
+      "partial": "{{ok}} imported, {{failed}} failed: {{first}}"
     }
   }
 }

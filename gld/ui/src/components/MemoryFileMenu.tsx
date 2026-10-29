@@ -1,4 +1,4 @@
-import { BookOpen, Bot, Zap, ZapOff, Brain, Copy, Eye, EyeOff, FolderInput, Globe, Merge, Pencil, ScrollText, Tag, TextCursorInput, Trash2, Unlink } from "lucide-react"
+import { BookOpen, Bot, Download, Zap, ZapOff, Brain, Copy, Eye, EyeOff, FolderInput, Globe, Merge, Pencil, ScrollText, Tag, TextCursorInput, Trash2, Unlink } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { MemFile, MemTarget } from "@/lib/api"
 import { tilde } from "@/lib/format"
@@ -24,6 +24,7 @@ export type FileActions = {
   toggleRule: (key: string) => void
   setType: (key: string, type: string) => void
   remove: (x: MemFile) => void
+  exportOne: (x: MemFile) => void
 }
 
 // Sous-menu « Déplacer vers » / « Copier vers » : les règles globales, puis la mémoire de chaque autre projet.
@@ -125,6 +126,11 @@ export function FileMenu({ x, picked, targets, homeDir, a }: { x: MemFile; picke
       {x.key.startsWith("g/rules/") && (
         <ContextMenuItem onSelect={() => a.toggleRule(x.key)}>
           {x.off ? <Eye /> : <EyeOff />} {x.off ? t("memory.fileMenu.reactivateRule") : t("memory.fileMenu.deactivateRule")}
+        </ContextMenuItem>
+      )}
+      {x.key.startsWith("m/") && !x.key.endsWith("/MEMORY.md") && (
+        <ContextMenuItem onSelect={() => a.exportOne(x)}>
+          <Download /> {t("memory.pack.export")}
         </ContextMenuItem>
       )}
       <ContextMenuSeparator />

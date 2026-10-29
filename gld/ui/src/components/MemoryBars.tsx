@@ -1,4 +1,4 @@
-import { Bot, CircleHelp, Copy, HeartPulse, Merge, Trash2, X } from "lucide-react"
+import { Bot, CircleHelp, Copy, Download, HeartPulse, Merge, Trash2, Upload, X } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { MemFile } from "@/lib/api"
 import { Button } from "@/components/ui/button"
@@ -14,6 +14,8 @@ export function Toolbar({
   onType,
   onTypeHelp,
   onCleanOrphans,
+  onExportAll,
+  onImport,
 }: {
   issues: number
   all: MemFile[]
@@ -23,6 +25,8 @@ export function Toolbar({
   onType: (t: string) => void
   onTypeHelp: () => void
   onCleanOrphans: () => void
+  onExportAll: () => void
+  onImport: () => void
 }) {
   const { t } = useTranslation()
   return (
@@ -52,6 +56,14 @@ export function Toolbar({
           <CircleHelp />
         </Button>
       </div>
+      <div className="mb-2 flex flex-wrap items-center gap-1 px-1">
+        <Button variant="ghost" size="xs" onClick={onExportAll} title={t("memory.pack.exportAllTitle")}>
+          <Download /> {t("memory.pack.exportAll")}
+        </Button>
+        <Button variant="ghost" size="xs" onClick={onImport} title={t("memory.pack.importTitle")}>
+          <Upload /> {t("memory.pack.import")}
+        </Button>
+      </div>
       {orphanProjects > 0 && (
         <Button
           variant="outline"
@@ -74,6 +86,7 @@ export function SelectionBar({
   onHaiku,
   onRemove,
   onMerge,
+  onExport,
   onClear,
 }: {
   count: number
@@ -81,6 +94,7 @@ export function SelectionBar({
   onHaiku: () => void
   onRemove: () => void
   onMerge: () => void
+  onExport: () => void
   onClear: () => void
 }) {
   const { t } = useTranslation()
@@ -92,6 +106,9 @@ export function SelectionBar({
       </Button>
       <Button variant="ghost" size="xs" onClick={onHaiku} title={t("memory.bars.writeTitle")}>
         <Bot /> {t("memory.bars.write")}
+      </Button>
+      <Button variant="ghost" size="xs" onClick={onExport} title={t("memory.pack.exportSelTitle")}>
+        <Download /> {t("memory.pack.export")}
       </Button>
       <Button variant="ghost" size="xs" onClick={onRemove} title={t("memory.bars.removeTitle")}>
         <Trash2 /> {t("memory.bars.remove")}

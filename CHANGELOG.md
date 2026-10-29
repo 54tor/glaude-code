@@ -4,6 +4,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+### Ajouté
+- Mémoire : exporter une entrée, une sélection ou toutes les entrées de mémoire des projets en JSON, et les importer en choisissant le projet cible de chaque groupe et la résolution de chaque conflit de nom.
+
 ## [0.7.1] - 2026-10-29
 
 ### Corrigé

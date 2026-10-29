@@ -133,7 +133,8 @@ La page **Mémoire** regroupe vos `CLAUDE.md`, vos règles et la mémoire de cha
 - lire, modifier, déplacer, copier, désactiver une règle sans la supprimer ;
 - voir **combien de tokens** chaque fichier ajoute à chaque session ;
 - l'onglet **Santé** repère les liens cassés, les index trop longs, les doublons et les contradictions ;
-- demander à Claude (modèle Haiku, quelques dixièmes de centime) de réécrire ou de fusionner des entrées.
+- demander à Claude (modèle Haiku, quelques dixièmes de centime) de réécrire ou de fusionner des entrées ;
+- **exporter** une entrée, une sélection ou toutes les entrées de mémoire des projets dans un fichier JSON, et l'**importer** chez quelqu'un d'autre : le destinataire choisit le projet qui reçoit chaque groupe, coche les entrées et tranche chaque conflit de nom (ignorer, remplacer, garder les deux).
 
 Rien n'est perdu : tout fichier supprimé ou remplacé passe d'abord par une **corbeille** d'où il se restaure en un clic.
 
