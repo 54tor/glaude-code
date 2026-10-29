@@ -439,6 +439,7 @@ func guestServe(mux *http.ServeMux, sh Share, in Invite, sec, hd string) http.Ha
 		q.Set("id", sh.Session)
 		q.Set("dir", sh.Dir)
 		r2.URL.RawQuery = q.Encode()
+		guestSessionPath(r2.URL, sh.Session)
 		r2.Header.Set(authorHeader, "guest")
 		r2.Header.Set(inviteHeader, in.ID)
 		if r.Method == http.MethodPost {
@@ -477,6 +478,19 @@ func guestServe(mux *http.ServeMux, sh Share, in Invite, sec, hd string) http.Ha
 		}
 		mux.ServeHTTP(&noStoreWriter{ResponseWriter: w}, r2)
 	})
+}
+
+// guestSessionPath réécrit le segment {id} de /v1/sessions/{id}/... avec la session du partage : l'identifiant du client
+// n'est jamais lu. guestPattern a déjà refusé RawPath et chemins non canoniques, donc Path suffit.
+func guestSessionPath(u *url.URL, session string) {
+	const pre = "/v1/sessions/"
+	if rest, ok := strings.CutPrefix(u.Path, pre); ok {
+		_, tail, _ := strings.Cut(rest, "/")
+		u.Path = pre + session
+		if tail != "" || strings.HasSuffix(rest, "/") {
+			u.Path += "/" + tail
+		}
+	}
 }
 
 // guestLeave : efface le cookie de ce partage sans toucher au partage ; l'issue d'un hôte qui a ouvert son propre lien.

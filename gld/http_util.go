@@ -28,6 +28,16 @@ func decodeBody(w http.ResponseWriter, r *http.Request, v any, limit int64) bool
 	return true
 }
 
+// pathID lit un segment {name} qui doit être un identifiant de session ; false après avoir répondu 400.
+func pathID(w http.ResponseWriter, r *http.Request, name string) (string, bool) {
+	id := r.PathValue(name)
+	if !idRe.MatchString(id) {
+		writeErr(w, http.StatusBadRequest, "bad_id", L("srv.http_util.idInvalide"))
+		return "", false
+	}
+	return id, true
+}
+
 type item struct{ Dir, ID string }
 
 // readItems décode {items:[{dir,id}], to} et n'accepte que des sessions qui existent vraiment.

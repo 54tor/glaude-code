@@ -1182,3 +1182,19 @@ func TestGuestFsEscapeNeverServed(t *testing.T) {
 		}
 	}
 }
+
+func TestGuestSessionPath(t *testing.T) {
+	const sid = "11111111-1111-1111-1111-111111111111"
+	for in, want := range map[string]string{
+		"/v1/sessions/other/conversation":      "/v1/sessions/" + sid + "/conversation",
+		"/v1/sessions/other":                   "/v1/sessions/" + sid,
+		"/v1/sessions/other/loaded/files/a.md": "/v1/sessions/" + sid + "/loaded/files/a.md",
+		"/v1/queue/x":                          "/v1/queue/x",
+	} {
+		u := &url.URL{Path: in}
+		guestSessionPath(u, sid)
+		if u.Path != want {
+			t.Errorf("%s: got %s, want %s", in, u.Path, want)
+		}
+	}
+}
