@@ -3,10 +3,10 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { toast } from "sonner"
 import { api, type InviteInfo, type ShareInfo } from "@/lib/api"
+import { ApiError } from "@/lib/apiError"
 import { resetShares } from "@/hooks/useShares"
 import { InvitesOverlay } from "./InvitesOverlay"
 
-const ok = { ok: true, out: "" }
 const inv = (o: Partial<InviteInfo> = {}): InviteInfo => ({ id: "i1", seq: 1, name: "", label: "Léa", mode: "rw", state: "connected", lastSeen: Date.now() / 1000, redeemed: true, queue: [], ...o })
 const sh = (invites: InviteInfo[], o: Partial<ShareInfo> = {}): ShareInfo => ({ id: "s1", dir: "/d", title: "Ma session", handle: "h", open: true, invites, ...o })
 let write: ReturnType<typeof vi.fn>
@@ -65,7 +65,7 @@ describe("InvitesOverlay", () => {
   })
 
   it("la bascule appelle inviteMode avec l'autre mode", async () => {
-    const m = vi.spyOn(api, "inviteMode").mockResolvedValue(ok)
+    const m = vi.spyOn(api, "inviteMode").mockResolvedValue(undefined)
     await mount([sh([inv()])])
     fireEvent.click(screen.getByRole("switch", { name: /Écriture pour Léa/ }))
     await act(async () => {})
@@ -73,7 +73,7 @@ describe("InvitesOverlay", () => {
   })
 
   it("régénérer : confirmation, puis lien affiché et copié", async () => {
-    const r = vi.spyOn(api, "inviteRegen").mockResolvedValue({ ...ok, token: "t2" })
+    const r = vi.spyOn(api, "inviteRegen").mockResolvedValue({ token: "t2" })
     await mount([sh([inv()])])
     await click(/Régénérer le lien/)
     expect(r).not.toHaveBeenCalled()
@@ -84,7 +84,7 @@ describe("InvitesOverlay", () => {
   })
 
   it("révoquer demande confirmation", async () => {
-    const r = vi.spyOn(api, "inviteRevoke").mockResolvedValue(ok)
+    const r = vi.spyOn(api, "inviteRevoke").mockResolvedValue(undefined)
     await mount([sh([inv()])])
     await click(/Révoquer/)
     expect(r).not.toHaveBeenCalled()
@@ -93,7 +93,7 @@ describe("InvitesOverlay", () => {
   })
 
   it.each([["", undefined], ["Léa", "Léa"]])("inviter avec le nom %j", async (typed, sent) => {
-    const c = vi.spyOn(api, "inviteCreate").mockResolvedValue({ ...ok, token: "tok" })
+    const c = vi.spyOn(api, "inviteCreate").mockResolvedValue({ token: "tok" })
     await mount([sh([inv()])])
     if (typed) fireEvent.change(screen.getByLabelText(/Nom de l'invité/), { target: { value: typed } })
     await click(/Inviter quelqu'un/)
@@ -112,7 +112,7 @@ describe("InvitesOverlay", () => {
   })
 
   it("erreur de création : toast", async () => {
-    vi.spyOn(api, "inviteCreate").mockResolvedValue({ ok: false, out: "dix" })
+    vi.spyOn(api, "inviteCreate").mockRejectedValue(new ApiError(500, "internal", "dix"))
     const err = vi.spyOn(toast, "error")
     await mount([sh([inv()])])
     await click(/Inviter quelqu'un/)
@@ -121,7 +121,7 @@ describe("InvitesOverlay", () => {
   })
 
   it("double clic sur Inviter : un seul appel", async () => {
-    const c = vi.spyOn(api, "inviteCreate").mockImplementation(() => new Promise((r) => setTimeout(() => r({ ...ok, token: "t" }), 10)))
+    const c = vi.spyOn(api, "inviteCreate").mockImplementation(() => new Promise((r) => setTimeout(() => r({ token: "t" }), 10)))
     await mount([sh([inv()])])
     const b = screen.getByRole("button", { name: /Inviter quelqu'un/ })
     fireEvent.click(b)
@@ -131,7 +131,7 @@ describe("InvitesOverlay", () => {
   })
 
   it("le lien affiché porte le libellé de son invitation : le dernier régénéré seul", async () => {
-    vi.spyOn(api, "inviteRegen").mockResolvedValueOnce({ ...ok, token: "ta" }).mockResolvedValueOnce({ ...ok, token: "tb" })
+    vi.spyOn(api, "inviteRegen").mockResolvedValueOnce({ token: "ta" }).mockResolvedValueOnce({ token: "tb" })
     await mount([sh([inv(), inv({ id: "i2", label: "Bob" })])])
     await click(/Régénérer le lien/, 0)
     await click(/^Régénérer$/)
@@ -143,8 +143,8 @@ describe("InvitesOverlay", () => {
   })
 
   it("révoquer l'invitation du lien affiché l'efface", async () => {
-    vi.spyOn(api, "inviteRegen").mockResolvedValue({ ...ok, token: "tb" })
-    vi.spyOn(api, "inviteRevoke").mockResolvedValue(ok)
+    vi.spyOn(api, "inviteRegen").mockResolvedValue({ token: "tb" })
+    vi.spyOn(api, "inviteRevoke").mockResolvedValue(undefined)
     await mount([sh([inv()])])
     await click(/Régénérer le lien/)
     await click(/^Régénérer$/)

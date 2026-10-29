@@ -143,7 +143,7 @@ describe("jeton CSRF et session", () => {
   it("session complète : droits, homes et home courant exposés ; useCan suit le home courant", async () => {
     server({
       "/auth/me": { body: { ok: true, user: { name: "alice", admin: false }, mfa: true, csrf: "c", factors: { totp: true, webauthn: 0, recovery: 9, keys: [] }, rights: { h1: ["mem_read"], main: ["exec"] }, homes: [{ id: "h1", name: "perso" }, { id: "main", name: "main" }] } },
-      "/homes": { body: { current: "perso", mainId: "main", homes: [{ name: "perso", id: "h1" }] } },
+      "/v1/homes": { body: { current: "perso", mainId: "main", homes: [{ name: "perso", id: "h1" }] } },
     })
     await boot()
     expect(getAuth()).toMatchObject({ state: "ok", home: "h1", rights: { h1: ["mem_read"] } })
@@ -235,7 +235,7 @@ describe("propriétaire des données locales", () => {
 
   it("rechargement puis autre compte : données effacées, nouveau propriétaire enregistré, préférences gardées", async () => {
     seed("alice")
-    server({ "/auth/me": me("bob"), "/homes": { body: { current: "", homes: [] } } })
+    server({ "/auth/me": me("bob"), "/v1/homes": { body: { current: "", homes: [] } } })
     await boot()
     for (const k of userKeys) expect(localStorage.getItem(k)).toBeNull()
     expect(localStorage.getItem("gld.owner")).toBe("bob")
@@ -244,7 +244,7 @@ describe("propriétaire des données locales", () => {
 
   it("rechargement puis même compte : données gardées", async () => {
     seed("alice")
-    server({ "/auth/me": me("alice"), "/homes": { body: { current: "", homes: [] } } })
+    server({ "/auth/me": me("alice"), "/v1/homes": { body: { current: "", homes: [] } } })
     await boot()
     for (const k of userKeys) expect(localStorage.getItem(k)).not.toBeNull()
     expect(localStorage.getItem("gld.owner")).toBe("alice")
@@ -252,7 +252,7 @@ describe("propriétaire des données locales", () => {
 
   it("données sans propriétaire en mode authentifié : effacées", async () => {
     seed()
-    server({ "/auth/me": me("alice"), "/homes": { body: { current: "", homes: [] } } })
+    server({ "/auth/me": me("alice"), "/v1/homes": { body: { current: "", homes: [] } } })
     await boot()
     for (const k of userKeys) expect(localStorage.getItem(k)).toBeNull()
     expect(localStorage.getItem("gld.owner")).toBe("alice")
@@ -262,7 +262,7 @@ describe("propriétaire des données locales", () => {
     seed("bob")
     setDraft("s1", { text: "secret d'alice en mémoire" })
     setAuth({ owner: "alice" })
-    server({ "/auth/me": me("bob"), "/homes": { body: { current: "", homes: [] } } })
+    server({ "/auth/me": me("bob"), "/v1/homes": { body: { current: "", homes: [] } } })
     await boot()
     expect(draftOf("s1").text).toBe("")
     for (const k of userKeys) expect(localStorage.getItem(k)).toBeNull()
@@ -274,7 +274,7 @@ describe("propriétaire des données locales", () => {
     seed("alice")
     setDraft("s1", { text: "brouillon d'alice" })
     setAuth({ owner: "alice" })
-    server({ "/auth/me": me("alice"), "/homes": { body: { current: "", homes: [] } } })
+    server({ "/auth/me": me("alice"), "/v1/homes": { body: { current: "", homes: [] } } })
     await boot()
     expect(draftOf("s1").text).toBe("brouillon d'alice")
     for (const k of userKeys) expect(localStorage.getItem(k)).not.toBeNull()
@@ -345,7 +345,7 @@ describe("changement de compte dans l'onglet", () => {
   const setup = async () => {
     vi.spyOn(navigator, "language", "get").mockReturnValue("fr-FR")
     vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }))
-    server({ "/auth/me": () => me(who), "/homes": { body: { current: "", mainId: "main", homes: [] } }, "/gone": { status: 401 } })
+    server({ "/auth/me": () => me(who), "/v1/homes": { body: { current: "", mainId: "main", homes: [] } }, "/gone": { status: 401 } })
     who = "alice"
     localStorage.clear()
     setAuth({ state: "loading", owner: undefined })
@@ -555,51 +555,50 @@ describe("HomeSwitcher", () => {
     const trigger = await screen.findByRole("button", { name: "Dossier de configuration Claude" })
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: "mouse" })
   }
-  const saved = (calls: Call[]) => bodyOf(calls.find((c) => c.url === "/homes-save")!)
+  const saved = (calls: Call[]) => bodyOf(calls.find((c) => c.url === "/v1/homes" && c.init.method === "PUT")!)
 
   it("mode authentifié (admin) : un ajout n'envoie que le nouveau home", async () => {
-    const calls = server({ "/homes": { body: HOMES }, "/homes-save": { body: { ok: true, out: "" } } })
+    const calls = server({ "/v1/homes": { body: HOMES } })
     setAuth({ state: "ok", csrf: "tok", user: { name: "root", admin: true } })
     await mount()
     await act(async () => void fireEvent.click(await screen.findByRole("menuitem", { name: "Ajouter un dossier…" })))
-    await waitFor(() => expect(calls.some((c) => c.url === "/homes-save")).toBe(true))
+    await waitFor(() => expect(calls.some((c) => c.url === "/v1/homes" && c.init.method === "PUT")).toBe(true))
     expect(saved(calls)).toEqual({ homes: [{ name: ".claude-pro", dir: "/h/.claude-pro" }] })
   })
 
   it("mode authentifié (admin) : le nom évite aussi les homes invisibles (/admin/homes)", async () => {
     const calls = server({
-      "/homes": { body: HOMES },
+      "/v1/homes": { body: HOMES },
       "/admin/homes": { body: { ok: true, homes: [{ id: "main", name: "main" }, { id: "h9", name: ".claude-pro" }] } },
-      "/homes-save": { body: { ok: true, out: "" } },
     })
     setAuth({ state: "ok", csrf: "tok", user: { name: "root", admin: true } })
     await mount()
     await act(async () => void fireEvent.click(await screen.findByRole("menuitem", { name: "Ajouter un dossier…" })))
-    await waitFor(() => expect(calls.some((c) => c.url === "/homes-save")).toBe(true))
+    await waitFor(() => expect(calls.some((c) => c.url === "/v1/homes" && c.init.method === "PUT")).toBe(true))
     expect(saved(calls)).toEqual({ homes: [{ name: ".claude-pro 2", dir: "/h/.claude-pro" }] })
   })
 
   it("mode authentifié (admin) : un retrait envoie l'identifiant, jamais la liste", async () => {
-    const calls = server({ "/homes": { body: HOMES }, "/homes-save": { body: { ok: true, out: "" } } })
+    const calls = server({ "/v1/homes": { body: HOMES } })
     setAuth({ state: "ok", csrf: "tok", user: { name: "root", admin: true } })
     await mount()
     fireEvent.click(await screen.findByRole("menuitem", { name: "Retirer de la liste" }))
     await act(async () => void fireEvent.click(await screen.findByRole("menuitem", { name: "perso" })))
-    await waitFor(() => expect(calls.some((c) => c.url === "/homes-save")).toBe(true))
+    await waitFor(() => expect(calls.some((c) => c.url === "/v1/homes" && c.init.method === "PUT")).toBe(true))
     expect(saved(calls)).toEqual({ homes: [], removed: ["h1"] })
   })
 
   it("mode ouvert : la liste complète part comme avant", async () => {
-    const calls = server({ "/homes": { body: { current: "", main: "/h/.claude", homes: [{ name: "perso", dir: "/p", running: false }] } }, "/homes-save": { body: { ok: true, out: "" } } })
+    const calls = server({ "/v1/homes": { body: { current: "", main: "/h/.claude", homes: [{ name: "perso", dir: "/p", running: false }] } } })
     setAuth({ state: "open" })
     await mount()
     await act(async () => void fireEvent.click(await screen.findByRole("menuitem", { name: "Ajouter un dossier…" })))
-    await waitFor(() => expect(calls.some((c) => c.url === "/homes-save")).toBe(true))
+    await waitFor(() => expect(calls.some((c) => c.url === "/v1/homes" && c.init.method === "PUT")).toBe(true))
     expect(saved(calls)).toEqual({ homes: [{ name: "perso", dir: "/p" }, { name: ".claude-pro", dir: "/h/.claude-pro" }] })
   })
 
   it("non admin : sélection seulement ; principal sans droit nommé plutôt que vide", async () => {
-    server({ "/homes": { body: { ...HOMES, main: "" } } })
+    server({ "/v1/homes": { body: { ...HOMES, main: "" } } })
     setAuth({ state: "ok", csrf: "tok", user: { name: "bob", admin: false } })
     await mount()
     expect(await screen.findByRole("menuitem", { name: "Dossier principal" })).toBeTruthy()
@@ -670,7 +669,7 @@ describe("fenêtre entre second facteur et boot", () => {
     const calls = server({
       "/auth/mfa/totp": { body: { ok: true, csrf: "c-new" } },
       "/auth/me": () => (meReady ? me : { status: 503 }),
-      "/homes": { body: { current: "", homes: [] } },
+      "/v1/homes": { body: { current: "", homes: [] } },
       "/v1/sessions/s/messages": { body: { message: "" } },
     })
     setAuth({ state: "mfa", methods: ["totp"], expired: true, owner: "alice", csrf: "c-partial" })
@@ -780,7 +779,7 @@ describe("droits de l'admin sur lui-même", () => {
       "/admin/homes": { body: { ok: true, homes: [{ id: "main", name: "main" }] } },
       "/admin/acl": { body: { ok: true, rights: ["mem_read", "mem_write"] } },
       "/auth/me": { body: { ok: true, user: { name: "root", admin: true }, mfa: true, csrf: "tok", factors: { totp: true, webauthn: 0, recovery: 9, keys: [] }, rights: { main: ["mem_read", "mem_write"] }, homes: [] } },
-      "/homes": { body: { current: "", mainId: "main", homes: [] } },
+      "/v1/homes": { body: { current: "", mainId: "main", homes: [] } },
     })
     setAuth({ state: "ok", csrf: "tok", user: { name: "root", admin: true }, owner: "root", rights: { main: ["mem_read"] }, home: "main" })
     setDraft("s1", { text: "brouillon de root" })

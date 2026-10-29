@@ -3,11 +3,11 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { toast } from "sonner"
 import { api, type InviteInfo, type ShareInfo } from "@/lib/api"
+import { ApiError } from "@/lib/apiError"
 import { resetShares } from "@/hooks/useShares"
 import { ShareDialog } from "./ShareDialog"
 
 const homes = (current: string) => ({ current, main: "/m", homes: [] })
-const ok = { ok: true, out: "" }
 let write: ReturnType<typeof vi.fn>
 const inv = (o: Partial<InviteInfo> = {}): InviteInfo => ({ id: "i1", seq: 1, name: "", label: "Invité 1", mode: "rw", state: "pending", lastSeen: 0, redeemed: false, queue: [], ...o })
 const sh = (invites: InviteInfo[]): ShareInfo => ({ id: "s1", dir: "/d", title: "T", handle: "h", open: true, invites })
@@ -37,7 +37,7 @@ const click = async (name: RegExp) => {
 
 describe("ShareDialog", () => {
   it("inviter : titre de la session, nom, lien copié", async () => {
-    const c = vi.spyOn(api, "inviteCreate").mockResolvedValue({ ...ok, token: "tok", invite: { id: "i1", seq: 1, label: "Léa" } })
+    const c = vi.spyOn(api, "inviteCreate").mockResolvedValue({ token: "tok", invite: { id: "i1", seq: 1, label: "Léa" } })
     await open(undefined, "Ma session")
     fireEvent.change(screen.getByLabelText(/Nom de l'invité/), { target: { value: " Léa " } })
     await click(/Inviter quelqu'un/)
@@ -47,7 +47,7 @@ describe("ShareDialog", () => {
   })
 
   it.each([["x".repeat(130), "x".repeat(120)], ["(sans titre)", undefined], ["", undefined]])("titre %#", async (given, sent) => {
-    const c = vi.spyOn(api, "inviteCreate").mockResolvedValue({ ...ok, token: "tok" })
+    const c = vi.spyOn(api, "inviteCreate").mockResolvedValue({ token: "tok" })
     await open(undefined, given)
     await click(/Inviter quelqu'un/)
     expect(c).toHaveBeenCalledWith("s1", "/d", sent, undefined)
@@ -55,14 +55,14 @@ describe("ShareDialog", () => {
 
   it("utilise le nom du home courant, échappé", async () => {
     vi.spyOn(api, "homes").mockResolvedValue(homes("a b"))
-    vi.spyOn(api, "inviteCreate").mockResolvedValue({ ...ok, token: "tok" })
+    vi.spyOn(api, "inviteCreate").mockResolvedValue({ token: "tok" })
     await open()
     await click(/Inviter quelqu'un/)
     expect(write).toHaveBeenCalledWith(`${location.origin}/invite/a%20b/tok`)
   })
 
   it("mettre fin demande confirmation puis appelle shareEnd", async () => {
-    vi.spyOn(api, "shareEnd").mockResolvedValue(ok)
+    vi.spyOn(api, "shareEnd").mockResolvedValue(undefined)
     await open([sh([inv()])])
     await click(/Mettre fin au partage/)
     expect(api.shareEnd).not.toHaveBeenCalled()
@@ -71,7 +71,7 @@ describe("ShareDialog", () => {
   })
 
   it("une erreur à la fin dit que le partage est révoqué", async () => {
-    vi.spyOn(api, "shareEnd").mockResolvedValue({ ok: false, out: "boom" })
+    vi.spyOn(api, "shareEnd").mockRejectedValue(new ApiError(500, "internal", "boom"))
     const err = vi.spyOn(toast, "error")
     await open([sh([inv()])])
     await click(/Mettre fin au partage/)
@@ -80,7 +80,7 @@ describe("ShareDialog", () => {
   })
 
   it("erreur de création : toast, pas de copie", async () => {
-    vi.spyOn(api, "inviteCreate").mockResolvedValue({ ok: false, out: "non" })
+    vi.spyOn(api, "inviteCreate").mockRejectedValue(new ApiError(500, "internal", "non"))
     const err = vi.spyOn(toast, "error")
     await open()
     await click(/Inviter quelqu'un/)
@@ -117,7 +117,7 @@ describe("ShareDialog", () => {
   })
 
   it("un double clic sur Inviter n'appelle inviteCreate qu'une fois", async () => {
-    const c = vi.spyOn(api, "inviteCreate").mockImplementation(() => new Promise((r) => setTimeout(() => r({ ...ok, token: "t" }), 10)))
+    const c = vi.spyOn(api, "inviteCreate").mockImplementation(() => new Promise((r) => setTimeout(() => r({ token: "t" }), 10)))
     await open()
     const b = screen.getByRole("button", { name: /Inviter quelqu'un/ })
     fireEvent.click(b)
@@ -128,7 +128,7 @@ describe("ShareDialog", () => {
 
   it("homes en échec : toast, rien de créé", async () => {
     vi.spyOn(api, "homes").mockRejectedValue(new Error("x"))
-    const c = vi.spyOn(api, "inviteCreate").mockResolvedValue({ ...ok, token: "t" })
+    const c = vi.spyOn(api, "inviteCreate").mockResolvedValue({ token: "t" })
     const err = vi.spyOn(toast, "error")
     await open()
     await click(/Inviter quelqu'un/)
@@ -138,7 +138,7 @@ describe("ShareDialog", () => {
 
   it("sans navigator.clipboard : lien affiché et toast de copie échouée", async () => {
     Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true })
-    vi.spyOn(api, "inviteCreate").mockResolvedValue({ ...ok, token: "tok" })
+    vi.spyOn(api, "inviteCreate").mockResolvedValue({ token: "tok" })
     const err = vi.spyOn(toast, "error")
     await open()
     await click(/Inviter quelqu'un/)

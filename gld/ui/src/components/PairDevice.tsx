@@ -5,6 +5,7 @@ import { RefreshCw, Smartphone } from "lucide-react"
 import { toast } from "sonner"
 import { api, type Device } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
+import { errMsg } from "@/lib/apiError"
 import { ago } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Tip } from "@/components/ui/tooltip"
@@ -41,9 +42,12 @@ export function PairButton() {
   const open_ = a.state === "open"
 
   const fresh = useCallback(async () => {
-    const r = (await api.post("/pair-code", {})) as { ok: boolean; out?: string; code?: string; url?: string; ttl?: number }
-    if (!r.ok || !r.url || !r.code) return void toast.error(r.out ?? t("shell.pair.failed"))
-    setCode({ code: r.code, url: r.url, until: Date.now() + (r.ttl ?? 120) * 1000 })
+    try {
+      const r = await api.pairCode()
+      setCode({ code: r.code, url: r.url, until: Date.now() + (r.ttl ?? 120) * 1000 })
+    } catch (e) {
+      toast.error(errMsg(e) || t("shell.pair.failed"))
+    }
   }, [t])
   const list = useCallback(() => {
     if (open_) api.devices().then((r) => setDevices(r.devices ?? []), () => setDevices([]))
@@ -62,9 +66,12 @@ export function PairButton() {
   }
 
   const revoke = async (d: Device) => {
-    const r = await api.post("/devices-revoke", { id: d.id })
-    if (!r.ok) return void toast.error(r.out)
-    list()
+    try {
+      await api.deviceRevoke(d.id)
+      list()
+    } catch (e) {
+      toast.error(errMsg(e))
+    }
   }
 
   if (a.state !== "open" && a.state !== "ok") return null

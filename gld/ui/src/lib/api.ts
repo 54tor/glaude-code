@@ -1,6 +1,7 @@
 import { i18n } from "@/i18n"
 import { authFetch } from "@/lib/auth"
-import { http, qs, seg } from "@/lib/http"
+import { readResponse } from "@/lib/apiError"
+import { http, qs, seg, v1 } from "@/lib/http"
 
 // Accès aux routes du serveur Go (gld/main.go).
 
@@ -148,6 +149,7 @@ export type GitChange = { path: string; status: string; from?: string } // statu
 // main "" et mainId : mode multi-utilisateur, le principal sans droit dessus ; id : clé des droits, connue du serveur.
 // Appareil jumelé par QR code en mode jeton (pair.go) ; seen : dernière visite, en secondes Unix.
 export type Device = { id: string; name: string; ip: string; created: number; seen: number }
+export type SyncItem = { id: string; kind: string; label: string; status: "new" | "diff" | "same"; risk?: string; merge: boolean; from: string; to: string }
 export type HomesInfo = { current: string; main: string; mainId?: string; homes: { name: string; dir: string; id?: string; running: boolean }[] }
 
 // status : 403 dit un droit manquant (mode multi-utilisateur), à distinguer d'un serveur injoignable.
@@ -205,8 +207,8 @@ export const api = {
   convText: (s: Item, tools: boolean, m: Msg, from: number) =>
     http.get<{ t: string; cut: number }>(`/sessions/${seg(s.id)}/conversation/text${qs({ dir: s.dir, o: m.o ?? 0, n: m.n ?? 0, from, tools })}`),
   ls: (path: string) => http.get<Ls>(`/directories${qs({ path })}`),
-  homes: () => get<HomesInfo>("/homes"),
-  devices: () => get<{ devices: Device[] | null }>("/devices"),
+  homes: () => http.get<HomesInfo>("/homes"),
+  devices: () => http.get<{ devices: Device[] | null }>("/devices"),
   keepWarm: () => http.get<{ items: Record<string, WarmState>; ttl: number; below: number }>("/keepwarm"),
   gitChanges: (dir: string) => http.get<{ files: GitChange[]; more?: number; prefix?: string }>(`/git/changes${qs({ dir })}`),
   notes: () => http.get<{ notes: Record<string, string> }>("/notes"),
@@ -298,20 +300,23 @@ export const api = {
   gitPush: (dir: string, remote: string) => http.post<Said>("/git/pushes", { dir, remote }, 90_000),
   trashRestore: (id: string) => http.patch<Said & { key: string }>(`/trash/memory/${seg(id)}`, { trashed: false }),
   trashPurge: (id?: string) => http.del<Said>(`/trash/memory${qs(id ? { item: id } : { all: true })}`),
-  inviteCreate: (id: string, dir: string, title?: string, name?: string) => api.post("/invite-create", { id, dir, ...(title ? { title } : {}), ...(name ? { name } : {}) }) as Promise<Result & { token?: string; invite?: { id: string; seq: number; label: string } }>,
-  inviteRegen: (id: string, invite: string) => api.post("/invite-regen", { id, invite }) as Promise<Result & { token?: string }>,
-  inviteMode: (id: string, invite: string, mode: "rw" | "ro") => api.post("/invite-mode", { id, invite, mode }),
-  inviteRevoke: (id: string, invite: string) => api.post("/invite-revoke", { id, invite }),
-  shares: () => get<{ shares: ShareInfo[] }>("/shares"),
-  guestMe: () => get<{ id: string; dir: string; mode: "rw" | "ro"; csrf: string; handle: string; title: string; invite: string; label: string }>("/guest-me"),
+  inviteCreate: (id: string, dir: string, title?: string, name?: string) =>
+    http.post<{ token: string; invite: { id: string; seq: number; label: string } }>("/invites", { id, dir, ...(title ? { title } : {}), ...(name ? { name } : {}) }),
+  inviteRegen: (id: string, invite: string) => http.put<{ token: string }>(`/invites/${seg(invite)}/token`, { id }),
+  inviteMode: (id: string, invite: string, mode: "rw" | "ro") => http.patch(`/invites/${seg(invite)}`, { id, mode }),
+  inviteRevoke: (id: string, invite: string) => http.del(`/invites/${seg(invite)}${qs({ id })}`),
+  homesSave: (b: { homes: { name: string; dir: string }[]; removed?: string[] }) => http.put("/homes", b),
+  homeSelect: (name: string) => http.put("/homes/current", { name }),
+  syncPlan: (from: string, to: string) => http.post<{ items: SyncItem[] }>("/homes/sync-plans", { from, to }),
+  syncApply: (from: string, to: string, picks: { id: string; mode: string }[]) => http.post<Said>("/homes/syncs", { from, to, picks }),
+  pairCode: () => http.post<{ code: string; url: string; ttl: number }>("/pairing/codes", {}),
+  deviceRevoke: (id: string) => http.del(`/devices/${seg(id)}`),
+  shares: () => http.get<{ shares: ShareInfo[] }>("/shares"),
+  guestMe: () => http.get<{ id: string; dir: string; mode: "rw" | "ro"; csrf: string; handle: string; title: string; invite: string; label: string }>("/guest/me"),
   // Sans X-Gld-Share : la liste concerne le navigateur entier, pas un partage.
-  guestList: async (): Promise<GuestShare[]> => {
-    const r = await fetch("/guest-list")
-    if (!r.ok) throw new HttpError(r.status)
-    return (await r.json()) as GuestShare[]
-  },
-  guestLeave: () => api.post("/guest-leave", {}),
-  shareEnd: (id: string) => api.post("/share-end", { id }),
+  guestList: async (): Promise<GuestShare[]> => readResponse<GuestShare[]>(await fetch(v1("/guest/sessions"))),
+  guestLeave: () => http.del("/guest/me"),
+  shareEnd: (id: string) => http.del(`/shares/${seg(id)}`),
   sessionLive: (dir: string, id: string) => http.get<LiveState>(`/sessions/${seg(id)}/live${qs({ dir })}`),
   // refresh : relevé demandé par un POST (un GET ne doit rien déclencher), puis lecture de l'état, qui dit « refreshing ».
   account: async (refresh = false) => {

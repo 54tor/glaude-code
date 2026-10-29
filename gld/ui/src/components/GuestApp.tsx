@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { api, HttpError, type GuestShare, type LiveState, type Msg, type QItem } from "@/lib/api"
+import { api, type GuestShare, type LiveState, type Msg, type QItem } from "@/lib/api"
 import { ApiError, errMsg } from "@/lib/apiError"
 import { setAuth } from "@/lib/auth"
 import { GuestFiles } from "./GuestFiles"
@@ -21,11 +21,11 @@ type Hist = { msgs: Msg[]; start: number; more: boolean }
 const PAGE = 200
 
 // 401/403 ou réponse non JSON : le serveur traite la requête comme celle d'un hôte, donc le partage n'existe plus.
-const over = (e: unknown) => ((e instanceof HttpError || e instanceof ApiError) && (e.status === 401 || e.status === 403)) || (e instanceof ApiError && e.code === "bad_response") || e instanceof SyntaxError
+const over = (e: unknown) => (e instanceof ApiError && (e.status === 401 || e.status === 403 || e.code === "bad_response")) || e instanceof SyntaxError
 
 const HANDLE = /^\/guest\/([0-9a-f]{16})$/
 
-// Partages de ce navigateur (/guest-list), sans en-tête de partage : relu toutes les 30 s, sans bruit si ça échoue.
+// Partages de ce navigateur (/v1/guest/sessions), sans en-tête de partage : relu toutes les 30 s, sans bruit si ça échoue.
 function useShares(on: boolean): [GuestShare[] | null, () => Promise<void>, boolean] {
   const [list, setList] = useState<GuestShare[] | null>(null)
   const [failed, setFailed] = useState(false)
@@ -259,12 +259,13 @@ function GuestSession({ handle }: { handle: string }) {
     api.queue(id).then((x) => setQueue(x.items ?? []), () => {})
   }
   const leave = async () => {
-    const r = await api.guestLeave()
-    if (r.ok) {
+    try {
+      await api.guestLeave()
       await reloadShares()
       setPhase("bye")
+    } catch (e) {
+      if (!(await readMe())) toast.error(errMsg(e))
     }
-    else if (!(await readMe())) toast.error(r.out)
   }
 
   if (phase === "ended") return <Ended others={others} />

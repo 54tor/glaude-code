@@ -1,7 +1,8 @@
 import { useEffect, useSyncExternalStore } from "react"
-import { api, HttpError, type ShareInfo } from "@/lib/api"
+import { api, type ShareInfo } from "@/lib/api"
+import { ApiError } from "@/lib/apiError"
 
-// Partages de l'hôte (GET /shares), lus par un seul sondage commun : 10 s onglet visible, 5 s tant qu'un overlay est ouvert.
+// Partages de l'hôte (GET /v1/shares), lus par un seul sondage commun : 10 s onglet visible, 5 s tant qu'un overlay est ouvert.
 type State = { shares: ShareInfo[] | null; error: boolean }
 let state: State = { shares: null, error: false }
 const subs = new Set<() => void>()
@@ -21,7 +22,7 @@ const load = () => {
   const n = ++seq
   return api.shares().then(
     (r) => void (n === seq && set({ shares: r.shares ?? [], error: false })),
-    (e) => void (n === seq && set(e instanceof HttpError && (e.status === 403 || e.status === 404) ? { shares: [], error: false } : { shares: state.shares, error: true }))
+    (e) => void (n === seq && set(e instanceof ApiError && (e.status === 403 || e.status === 404) ? { shares: [], error: false } : { shares: state.shares, error: true }))
   )
 }
 const onVisible = () => document.visibilityState === "visible" && void load()

@@ -97,8 +97,12 @@ function SessionBlock({ s, bare, busy, guard, setAsk, refresh, onOpenSession }: 
   const create = async () => {
     const mk = await linkBase(t)
     if (!mk) return
-    const r = await api.inviteCreate(s.id, s.dir, cleanTitle(s.title), name.trim() || undefined)
-    if (!r.ok || !r.token) return void toast.error(t("shell.share.createFailed", { msg: r.out }))
+    let r: Awaited<ReturnType<typeof api.inviteCreate>>
+    try {
+      r = await api.inviteCreate(s.id, s.dir, cleanTitle(s.title), name.trim() || undefined)
+    } catch (e) {
+      return void toast.error(t("shell.share.createFailed", { msg: errMsg(e) }))
+    }
     const typed = name
     setName("")
     await show(r.invite?.id ?? "", r.invite?.label ?? typed.trim(), mk(r.token))
@@ -107,21 +111,31 @@ function SessionBlock({ s, bare, busy, guard, setAsk, refresh, onOpenSession }: 
   const regen = (i: InviteInfo) => async () => {
     const mk = await linkBase(t)
     if (!mk) return
-    const r = await api.inviteRegen(s.id, i.id)
-    if (!r.ok || !r.token) return void toast.error(t("shell.invites.regenFailed", { msg: r.out }))
+    let r: { token: string }
+    try {
+      r = await api.inviteRegen(s.id, i.id)
+    } catch (e) {
+      return void toast.error(t("shell.invites.regenFailed", { msg: errMsg(e) }))
+    }
     await show(i.id, i.label, mk(r.token))
     void refresh()
   }
   const revoke = (i: InviteInfo) => async () => {
-    const r = await api.inviteRevoke(s.id, i.id)
-    // le serveur révoque en mémoire même quand l'écriture échoue
-    if (!r.ok) toast.error(t("shell.invites.revokeFailed", { msg: r.out }))
+    try {
+      await api.inviteRevoke(s.id, i.id)
+    } catch (e) {
+      // le serveur révoque en mémoire même quand l'écriture échoue
+      toast.error(t("shell.invites.revokeFailed", { msg: errMsg(e) }))
+    }
     setLink((l) => (l?.invite === i.id ? null : l))
     void refresh()
   }
   const mode = (i: InviteInfo) => async () => {
-    const r = await api.inviteMode(s.id, i.id, i.mode === "rw" ? "ro" : "rw")
-    if (!r.ok) return void toast.error(t("shell.share.modeFailed", { msg: r.out }))
+    try {
+      await api.inviteMode(s.id, i.id, i.mode === "rw" ? "ro" : "rw")
+    } catch (e) {
+      return void toast.error(t("shell.share.modeFailed", { msg: errMsg(e) }))
+    }
     void refresh()
   }
   const rmMsg = (item: string) => async () => {
@@ -133,8 +147,11 @@ function SessionBlock({ s, bare, busy, guard, setAsk, refresh, onOpenSession }: 
     void refresh()
   }
   const end = async () => {
-    const r = await api.shareEnd(s.id)
-    if (!r.ok) toast.error(t("shell.share.endSaveFailed", { msg: r.out }))
+    try {
+      await api.shareEnd(s.id)
+    } catch (e) {
+      toast.error(t("shell.share.endSaveFailed", { msg: errMsg(e) }))
+    }
     setLink(null)
     void refresh()
   }

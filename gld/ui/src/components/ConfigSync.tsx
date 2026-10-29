@@ -1,24 +1,21 @@
 import { useCallback, useEffect, useState } from "react"
 import { ArrowRight, ChevronRight, TriangleAlert } from "lucide-react"
 import { useTranslation } from "react-i18next"
-import { api, type HomesInfo } from "@/lib/api"
+import { api, type HomesInfo, type SyncItem } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Choose } from "./Choose"
 import { useActions } from "./actions"
-import { reportResult } from "@/lib/report"
-import { authFetch } from "@/lib/auth"
+import { reportAction } from "@/lib/report"
+import { errMsg } from "@/lib/apiError"
 
-type Item = { id: string; kind: string; label: string; status: "new" | "diff" | "same"; risk?: string; merge: boolean; from: string; to: string }
+type Item = SyncItem
 type Mode = "merge" | "replace"
 
 const KINDS = ["setting", "perm", "file", "skill"]
 const STATUS = { new: "text-success", diff: "text-warning", same: "text-muted-foreground" } as const
-
-const post = (url: string, body: unknown) =>
-  authFetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json() as Promise<{ ok: boolean; out: string; items?: Item[] }>)
 
 // Copie des réglages d'un dossier de configuration Claude vers un autre : chaque élément se compare, se prévisualise et se choisit
 // (fusionner ou remplacer). Le plan vient du serveur, qui revérifie chaque choix avant d'écrire et sauvegarde ce qu'il remplace.
@@ -46,9 +43,11 @@ export function SyncTab() {
     setPicks({})
     setError("")
     if (f === dest) return setError(t("config.sync.pickTwo"))
-    const r = await post("/homes-sync-plan", { from: f, to: dest })
-    if (r.ok) setItems(r.items ?? [])
-    else setError(r.out)
+    try {
+      setItems((await api.syncPlan(f, dest)).items ?? [])
+    } catch (e) {
+      setError(errMsg(e))
+    }
   }, [t])
   useEffect(() => {
     if (info) load(from, to) // eslint-disable-line react-hooks/set-state-in-effect
@@ -71,10 +70,9 @@ export function SyncTab() {
     })
   const apply = async () => {
     setBusy(true)
-    const r = await post("/homes-sync-apply", { from, to, picks: chosen.map((id) => ({ id, mode: picks[id] })) })
+    const ok = await reportAction(() => api.syncApply(from, to, chosen.map((id) => ({ id, mode: picks[id] }))))
     setBusy(false)
-    reportResult(r)
-    if (r.ok) load(from, to)
+    if (ok) load(from, to)
   }
 
   return (

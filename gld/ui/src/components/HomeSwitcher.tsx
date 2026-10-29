@@ -3,6 +3,7 @@ import { Check, FolderCog, Plus, X } from "lucide-react"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { api, type HomesInfo } from "@/lib/api"
+import { errMsg } from "@/lib/apiError"
 import { tilde } from "@/lib/format"
 import { authCall, useAuth } from "@/lib/auth"
 import { Button } from "@/components/ui/button"
@@ -45,14 +46,20 @@ export function HomeSwitcher() {
   const label = info.current || main
   const select = async (name: string) => {
     if (name === info.current) return
-    const r = await api.post("/homes-select", { name })
-    if (r.ok) location.reload()
-    else toast.error(r.out)
+    try {
+      await api.homeSelect(name)
+      location.reload()
+    } catch (e) {
+      toast.error(errMsg(e))
+    }
   }
   const save = async (body: { homes: { name: string; dir: string }[]; removed?: string[] }) => {
-    const r = await api.post("/homes-save", body)
-    if (!r.ok) return void toast.error(r.out)
-    setInfo(await api.homes())
+    try {
+      await api.homesSave(body)
+      setInfo(await api.homes())
+    } catch (e) {
+      toast.error(errMsg(e))
+    }
   }
   const add = async () => {
     const dir = await a.pickDir(t("shell.home.pickTitle"), info.main)

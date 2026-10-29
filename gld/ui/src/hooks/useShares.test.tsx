@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, render } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { api, HttpError, type ShareInfo } from "@/lib/api"
+import { api, type ShareInfo } from "@/lib/api"
+import { ApiError } from "@/lib/apiError"
 import { resetShares, useShares } from "./useShares"
 
 const share = (id: string): ShareInfo => ({ id, dir: "/d", title: "t", handle: "h", open: true, invites: [] })
@@ -68,7 +69,7 @@ describe("useShares", () => {
   })
 
   it("403 et 404 : rien partagé, sans erreur", async () => {
-    vi.spyOn(api, "shares").mockRejectedValue(new HttpError(403))
+    vi.spyOn(api, "shares").mockRejectedValue(new ApiError(403, "forbidden", "x"))
     render(<Probe />)
     await act(async () => {})
     expect(last().shares).toEqual([])
@@ -76,7 +77,7 @@ describe("useShares", () => {
   })
 
   it("autre erreur : error, shares reste nul", async () => {
-    vi.spyOn(api, "shares").mockRejectedValue(new HttpError(500))
+    vi.spyOn(api, "shares").mockRejectedValue(new ApiError(500, "internal", "x"))
     render(<Probe />)
     await act(async () => {})
     expect(last().shares).toBeNull()

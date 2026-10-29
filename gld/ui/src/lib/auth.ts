@@ -5,6 +5,7 @@ import { clearDrafts, guardDrafts } from "@/hooks/useDraft"
 import { resetGit } from "@/hooks/useGit"
 import { resetWarm } from "@/hooks/useKeepWarm"
 import { resetOpen } from "@/hooks/useOpen"
+import { v1 } from "@/lib/apiError"
 import { resetTrust } from "@/lib/trust"
 
 // Mode multi-utilisateur (auth_routes.go, auth_admin.go) : état de connexion partagé, appels vers /auth/* et /admin/*, WebAuthn.
@@ -120,7 +121,7 @@ export async function boot(): Promise<void> {
 // /homes donne le nom du home servi ("" : le principal) ; les droits sont rangés par identifiant.
 async function currentHome(): Promise<string | undefined> {
   try {
-    const r = await fetch("/homes")
+    const r = await fetch(v1("/homes"))
     if (!r.ok) return undefined
     const h = (await r.json()) as { current: string; mainId?: string; homes: { name: string; id?: string }[] }
     return h.current ? h.homes.find((x) => x.name === h.current)?.id : (h.mainId ?? "main")
