@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
+import { errMsg } from "@/lib/apiError"
 import { sameLabel } from "./editorBits"
 import {
+  LaunchError,
   teamsCompose,
   type Catalog,
   type Composition,
-  type Run,
   type Team,
 } from "@/lib/teams"
 
-type Launched = { ok: boolean; out?: string; run?: Run }
 const MAX_MATES = 5 // même plafond que maxMates côté Go
 
 export function TeamPicker({
@@ -21,7 +21,7 @@ export function TeamPicker({
   onEdit,
 }: {
   catalog: Catalog
-  onLaunch: (ids: string[], goal: string, dir: string) => Promise<Launched>
+  onLaunch: (ids: string[], goal: string, dir: string) => Promise<void>
   pickDir: (title: string, start: string) => Promise<string | null>
   home?: string
   onEdit?: (tm: Team) => void
@@ -54,19 +54,24 @@ export function TeamPicker({
   useEffect(() => {
     const n = ++seq.current // une réponse lente d'une sélection précédente est ignorée
     if (!sel.length) return void setCompo(null) // eslint-disable-line react-hooks/set-state-in-effect
-    void teamsCompose(sel).then((r) => {
-      if (n === seq.current) setCompo(r.ok ? r : null)
-    })
+    teamsCompose(sel).then(
+      (r) => n === seq.current && setCompo(r),
+      () => n === seq.current && setCompo(null)
+    )
   }, [sel])
 
   const launch = async () => {
     setBusy(true)
     setErr("")
     setConflicts([])
-    const r = await onLaunch(sel, goal.trim(), dir)
-    setBusy(false)
-    if (!r.ok) setErr(r.out ?? "")
-    setConflicts(r.run?.Conflicts ?? [])
+    try {
+      await onLaunch(sel, goal.trim(), dir)
+    } catch (e) {
+      setErr(errMsg(e))
+      setConflicts(e instanceof LaunchError ? (e.run?.Conflicts ?? []) : [])
+    } finally {
+      setBusy(false)
+    }
   }
   const ready = sel.length > 0 && goal.trim() !== "" && dir !== "" && !busy
 

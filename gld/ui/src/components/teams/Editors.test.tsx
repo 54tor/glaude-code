@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react"
 import { setLang } from "@/i18n"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { ApiError } from "@/lib/apiError"
 import * as teams from "@/lib/teams"
 import { AgentEditor } from "./AgentEditor"
 import { TeamEditor } from "./TeamEditor"
@@ -68,12 +69,12 @@ const saveBtn = () =>
 
 beforeEach(() => {
   rights.cfg = true
-  vi.mocked(teams.teamsCatalog).mockResolvedValue({ ok: true, ...cat })
-  vi.mocked(teams.teamsList).mockResolvedValue({ ok: true, teams: [] })
-  vi.mocked(teams.teamsAgentSave).mockResolvedValue({ ok: true, agent: backend })
-  vi.mocked(teams.teamsAgentRm).mockResolvedValue({ ok: true })
-  vi.mocked(teams.teamsTeamSave).mockResolvedValue({ ok: true, team: bteam })
-  vi.mocked(teams.teamsTeamRm).mockResolvedValue({ ok: true })
+  vi.mocked(teams.teamsCatalog).mockResolvedValue(cat)
+  vi.mocked(teams.teamsList).mockResolvedValue({ teams: [] })
+  vi.mocked(teams.teamsAgentSave).mockResolvedValue(backend)
+  vi.mocked(teams.teamsAgentRm).mockResolvedValue(undefined)
+  vi.mocked(teams.teamsTeamSave).mockResolvedValue(bteam)
+  vi.mocked(teams.teamsTeamRm).mockResolvedValue(undefined)
 })
 afterEach(() => {
   cleanup()
@@ -112,10 +113,9 @@ describe("AgentEditor", () => {
     await waitFor(() => expect(teams.teamsAgentRm).toHaveBeenCalledWith("p1"))
   })
   it("suppression refusée : texte du serveur affiché", async () => {
-    vi.mocked(teams.teamsAgentRm).mockResolvedValue({
-      ok: false,
-      out: "utilisé par la team Mienne",
-    })
+    vi.mocked(teams.teamsAgentRm).mockRejectedValue(
+      new ApiError(400, "bad_request", "utilisé par la team Mienne")
+    )
     render(<AgentEditor agent={perso} onClose={vi.fn()} onSaved={vi.fn()} />)
     fireEvent.click(screen.getByRole("button", { name: "Supprimer" }))
     fireEvent.click(
@@ -146,10 +146,9 @@ describe("AgentEditor", () => {
     expect(saveBtn().disabled).toBe(true)
   })
   it("erreur serveur à l'enregistrement en texte", async () => {
-    vi.mocked(teams.teamsAgentSave).mockResolvedValue({
-      ok: false,
-      out: "<b>doublon</b>",
-    })
+    vi.mocked(teams.teamsAgentSave).mockRejectedValue(
+      new ApiError(400, "bad_request", "<b>doublon</b>")
+    )
     render(<AgentEditor agent={backend} onClose={vi.fn()} onSaved={vi.fn()} />)
     fireEvent.click(saveBtn())
     expect(await screen.findByText("<b>doublon</b>")).toBeTruthy()

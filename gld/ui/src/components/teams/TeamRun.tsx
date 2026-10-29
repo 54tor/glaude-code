@@ -4,6 +4,7 @@ import { Link } from "wouter"
 import { Confirm, type Ask } from "@/components/Confirm"
 import { Button } from "@/components/ui/button"
 import { useCan } from "@/lib/auth"
+import { errMsg } from "@/lib/apiError"
 import { teamClose, teamGet, teamKey, teamScreen, type TeamView } from "@/lib/teams"
 import { AgentList, agentLabel } from "./AgentList"
 import { MessageBox } from "./MessageBox"
@@ -103,16 +104,22 @@ export function TeamRun({ name }: { name: string }) {
       if (ctl.inflight || document.visibilityState !== "visible") return
       ctl.inflight = true
       const g = gen.current
-      const r = await teamGet(name)
+      let v: TeamView | undefined
+      let msg = ""
+      try {
+        v = await teamGet(name)
+      } catch (e) {
+        msg = errMsg(e)
+      }
       ctl.inflight = false
       if (!ctl.alive) return
-      if (r.ok) {
-        setView(r.view)
+      if (v) {
+        setView(v)
         setErr("")
         if (g === gen.current && !keyBusy.current) {
           setStale(false)
         }
-      } else setErr(r.out)
+      } else setErr(msg)
     }
     pollRef.current = poll
     void poll()
@@ -138,10 +145,15 @@ export function TeamRun({ name }: { name: string }) {
     gen.current++
     setStale(true)
     setActErr("")
-    const r = await teamKey(name, lead, k, view.Permission)
+    let msg = ""
+    try {
+      await teamKey(name, lead, k, view.Permission)
+    } catch (e) {
+      msg = errMsg(e)
+    }
     gen.current++
     keyBusy.current = false
-    if (!r.ok) setActErr(r.out)
+    if (msg) setActErr(msg)
     void pollRef.current()
   }
   const pick = (n: string) => {
@@ -153,9 +165,14 @@ export function TeamRun({ name }: { name: string }) {
     screenBusy.current = true
     setMode("screen")
     setScreen("")
-    const r = await teamScreen(name, agent)
+    let text: string
+    try {
+      text = (await teamScreen(name, agent)).text
+    } catch (e) {
+      text = errMsg(e)
+    }
     screenBusy.current = false
-    setScreen(r.ok ? r.text : r.out)
+    setScreen(text)
   }
 
   const perm = view?.Permission ? (
@@ -203,7 +220,7 @@ export function TeamRun({ name }: { name: string }) {
             size="sm"
             variant="outline"
             className="ml-auto"
-            onClick={() => setAsk({ title: t("teams.close"), body: view.Name, confirm: t("teams.close"), run: () => void teamClose(name).then((r) => (r.ok ? void pollRef.current() : setActErr(r.out))) })}
+            onClick={() => setAsk({ title: t("teams.close"), body: view.Name, confirm: t("teams.close"), run: () => void teamClose(name).then(() => void pollRef.current(), (e) => setActErr(errMsg(e))) })}
           >
             {t("teams.close")}
           </Button>

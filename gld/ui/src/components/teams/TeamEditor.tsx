@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Confirm } from "@/components/Confirm"
 import { Input } from "@/components/ui/input"
+import { errMsg } from "@/lib/apiError"
 import { teamsTeamRm, teamsTeamSave, type Agent, type Team } from "@/lib/teams"
 import { EditorDialog, Field } from "./editorBits"
 
@@ -37,10 +38,14 @@ export function TeamEditor({
   ) => {
     setBusy(true)
     setErr("")
-    const r = await p
-    setBusy(false)
-    if (r.ok) onSaved()
-    else setErr(r.out)
+    try {
+      await p
+      onSaved()
+    } catch (e) {
+      setErr(errMsg(e))
+    } finally {
+      setBusy(false)
+    }
   }
   const toggle = (id: string) =>
     setMembers((m) => (m.includes(id) ? m.filter((x) => x !== id) : [...m, id]))

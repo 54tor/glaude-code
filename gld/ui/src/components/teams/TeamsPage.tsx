@@ -4,6 +4,7 @@ import { Link } from "wouter"
 import { href, TEAM_NAME } from "@/lib/route"
 import { useActions } from "@/components/actions"
 import { Badge } from "@/components/ui/badge"
+import { errMsg } from "@/lib/apiError"
 import { useCan } from "@/lib/auth"
 import {
   teamsCatalog,
@@ -35,7 +36,7 @@ export function TeamsPage({ home }: { home: string }) {
   const [editTeam, setEditTeam] = useState<Team | null | undefined>(undefined)
   const load = useCallback(
     () =>
-      void teamsCatalog().then((r) => (r.ok ? setCatalog(r) : setErr(r.out))),
+      void teamsCatalog().then(setCatalog, (e) => setErr(errMsg(e))),
     []
   )
   const saved = () => {
@@ -46,7 +47,7 @@ export function TeamsPage({ home }: { home: string }) {
 
   const refresh = useCallback(() => {
     if (document.visibilityState !== "visible") return
-    void teamsList().then((r) => r.ok && setRunning(r.teams))
+    teamsList().then((r) => setRunning(r.teams), () => {})
   }, [])
   useEffect(() => {
     load()
@@ -65,9 +66,11 @@ export function TeamsPage({ home }: { home: string }) {
         onEdit={canEdit ? setEditTeam : undefined}
         pickDir={a.pickDir}
         onLaunch={async (ids, goal, dir) => {
-          const r = await teamsLaunch(ids, goal, dir)
-          refresh()
-          return r.ok ? r : { ok: false, out: r.out, run: r.run }
+          try {
+            await teamsLaunch(ids, goal, dir)
+          } finally {
+            refresh()
+          }
         }}
       />
       {canEdit && (

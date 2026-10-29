@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { agentLabel } from "./AgentList"
 import { teamSend, type AgentView } from "@/lib/teams"
+import { errMsg } from "@/lib/apiError"
 import { isSend } from "@/lib/utils"
 
 export function MessageBox({ name, agents, to, setTo, queued, disabled }: { name: string; agents: AgentView[]; to: string; setTo: (n: string) => void; queued: number; disabled: boolean }) {
@@ -14,12 +15,16 @@ export function MessageBox({ name, agents, to, setTo, queued, disabled }: { name
   const send = async () => {
     if (busy || disabled || !text.trim()) return
     setBusy(true)
-    const r = await teamSend(name, to, text)
-    setBusy(false)
-    if (!r.ok) return setErr(r.out)
-    setErr("")
-    setWasQueued(r.queued)
-    setText("")
+    try {
+      const r = await teamSend(name, to, text)
+      setErr("")
+      setWasQueued(r.queued)
+      setText("")
+    } catch (e) {
+      setErr(errMsg(e))
+    } finally {
+      setBusy(false)
+    }
   }
   return (
     <div className="space-y-2 border-t p-3">

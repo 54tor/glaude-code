@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { setLang } from "@/i18n"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { ApiError } from "@/lib/apiError"
 import * as teams from "@/lib/teams"
 import { TeamRun } from "./TeamRun"
 
@@ -39,15 +40,15 @@ const view = (o: Partial<teams.TeamView> = {}): teams.TeamView => ({
   Unknown: [],
   ...o,
 })
-const mockGet = (v = view()) => vi.mocked(teams.teamGet).mockResolvedValue({ ok: true, view: v })
+const mockGet = (v = view()) => vi.mocked(teams.teamGet).mockResolvedValue(v)
 
 beforeEach(() => {
   rights.exec = true
   width = 1200
   vi.stubGlobal("ResizeObserver", RO)
-  vi.mocked(teams.teamSend).mockResolvedValue({ ok: true, queued: false })
-  vi.mocked(teams.teamKey).mockResolvedValue({ ok: true })
-  vi.mocked(teams.teamClose).mockResolvedValue({ ok: true })
+  vi.mocked(teams.teamSend).mockResolvedValue({ queued: false })
+  vi.mocked(teams.teamKey).mockResolvedValue(undefined)
+  vi.mocked(teams.teamClose).mockResolvedValue(undefined)
 })
 afterEach(() => {
   cleanup()
@@ -150,7 +151,7 @@ describe("TeamRun", () => {
   })
   it("envoi : destinataire choisi, en file", async () => {
     mockGet()
-    vi.mocked(teams.teamSend).mockResolvedValue({ ok: true, queued: true })
+    vi.mocked(teams.teamSend).mockResolvedValue({ queued: true })
     render(<TeamRun name={NAME} />)
     await screen.findByRole("heading", { name: NAME })
     const send = screen.getByRole("button", { name: "Envoyer" }) as HTMLButtonElement
@@ -163,7 +164,7 @@ describe("TeamRun", () => {
   })
   it("envoi refusé : out en texte", async () => {
     mockGet()
-    vi.mocked(teams.teamSend).mockResolvedValue({ ok: false, out: "<b>trop long</b>" })
+    vi.mocked(teams.teamSend).mockRejectedValue(new ApiError(400, "bad_request", "<b>trop long</b>"))
     render(<TeamRun name={NAME} />)
     await screen.findByRole("heading", { name: NAME })
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "x" } })
@@ -214,7 +215,7 @@ describe("TeamRun", () => {
     const { unmount } = render(<TeamRun name={NAME} />)
     await act(() => vi.advanceTimersByTimeAsync(4100))
     expect(teams.teamGet).toHaveBeenCalledTimes(1)
-    await act(async () => release({ ok: true, view: view() } as never))
+    await act(async () => release(view() as never))
     await act(() => vi.advanceTimersByTimeAsync(2100))
     expect(teams.teamGet).toHaveBeenCalledTimes(2)
     unmount()
@@ -231,7 +232,7 @@ describe("TeamRun", () => {
     fireEvent.click(oui)
     expect(teams.teamKey).toHaveBeenCalledTimes(1)
     expect(teams.teamKey).toHaveBeenCalledWith(NAME, "team-lead", "1", "dlg")
-    await act(async () => done({ ok: true } as never))
+    await act(async () => done(undefined as never))
   })
   it("relève partie avant la touche : Oui/Non restent désactivés", async () => {
     vi.useFakeTimers()
@@ -239,21 +240,21 @@ describe("TeamRun", () => {
     let n = 0
     vi.mocked(teams.teamGet).mockImplementation(() => {
       n++
-      return n === 2 ? new Promise((r) => (slow = r as never)) : Promise.resolve({ ok: true, view: view({ Permission: "dlg" }) } as never)
+      return n === 2 ? new Promise((r) => (slow = r as never)) : Promise.resolve(view({ Permission: "dlg" }) as never)
     })
     render(<TeamRun name={NAME} />)
     await act(() => vi.advanceTimersByTimeAsync(0))
     await act(() => vi.advanceTimersByTimeAsync(2100)) // relève 2, lente, partie avant la touche
     fireEvent.click(screen.getByRole("button", { name: "Oui" }))
     await act(() => vi.advanceTimersByTimeAsync(0))
-    await act(async () => slow({ ok: true, view: view({ Permission: "dlg" }) } as never)) // réponse d'avant la touche
+    await act(async () => slow(view({ Permission: "dlg" }) as never)) // réponse d'avant la touche
     expect((screen.getByRole("button", { name: "Oui" }) as HTMLButtonElement).disabled).toBe(true)
     await act(() => vi.advanceTimersByTimeAsync(2100)) // relève partie après
     expect((screen.getByRole("button", { name: "Oui" }) as HTMLButtonElement).disabled).toBe(false)
   })
   it("touche refusée : erreur serveur en texte", async () => {
     mockGet(view({ Permission: "dlg" }))
-    vi.mocked(teams.teamKey).mockResolvedValue({ ok: false, out: "<i>périmé</i>" })
+    vi.mocked(teams.teamKey).mockRejectedValue(new ApiError(400, "bad_request", "<i>périmé</i>"))
     render(<TeamRun name={NAME} />)
     fireEvent.click(await screen.findByRole("button", { name: "Oui" }))
     expect(await screen.findByText("<i>périmé</i>")).toBeTruthy()
@@ -261,11 +262,11 @@ describe("TeamRun", () => {
   it("changement de nom : réponse de l'ancienne team jetée, pas d'action avec l'ancien chef", async () => {
     let relA: (v: never) => void = () => {}
     const vB = view({ Name: "session-bbbbbbbb", Permission: "dlgB", Agents: [{ Name: "zed", Display: "Zed", AgentID: "z", Role: "R", Pane: "%9", State: "idle", Lead: true }] })
-    vi.mocked(teams.teamGet).mockImplementation((n) => (n === NAME ? new Promise((r) => (relA = r as never)) : Promise.resolve({ ok: true, view: vB } as never)))
+    vi.mocked(teams.teamGet).mockImplementation((n) => (n === NAME ? new Promise((r) => (relA = r as never)) : Promise.resolve(vB as never)))
     const { rerender } = render(<TeamRun name={NAME} />)
     rerender(<TeamRun name="session-bbbbbbbb" />)
     await screen.findByRole("heading", { name: "session-bbbbbbbb" })
-    await act(async () => relA({ ok: true, view: view({ Permission: "dlgA" }) } as never))
+    await act(async () => relA(view({ Permission: "dlgA" }) as never))
     expect(screen.queryByText("dlgA")).toBeNull()
     expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("session-bbbbbbbb")
     fireEvent.click(screen.getByRole("button", { name: "Oui" }))

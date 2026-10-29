@@ -51,7 +51,6 @@ const catalog: teams.Catalog = {
 }
 const mockCompose = (tooMany = false) =>
   vi.spyOn(teams, "teamsCompose").mockImplementation(async (ids) => ({
-    ok: true,
     lead: chef,
     mates: ids.length ? [backend, testeur] : [],
     tooMany,
@@ -60,7 +59,7 @@ const click = async (e: HTMLElement) => void fireEvent.click(e)
 const type = async (e: HTMLElement, v: string) =>
   void fireEvent.change(e, { target: { value: v } })
 const pickDir = vi.fn(async () => "/work")
-const setup = (onLaunch = vi.fn(async () => ({ ok: true }) as never)) => {
+const setup = (onLaunch = vi.fn(async () => {})) => {
   render(<TeamPicker catalog={catalog} onLaunch={onLaunch} pickDir={pickDir} />)
   return onLaunch
 }
@@ -119,20 +118,15 @@ describe("TeamPicker", () => {
   })
   it("affiche out et Conflicts en texte", async () => {
     mockCompose()
-    const onLaunch = vi.fn(
-      async () =>
-        ({
-          ok: false,
-          out: "<b>boom</b>",
-          run: {
-            TeamName: "t",
-            SessionID: "",
-            Mates: [],
-            Conflicts: ["backend.md"],
-            TooMany: false,
-          },
-        }) as never
-    )
+    const e = new teams.LaunchError(409, "conflict", "<b>boom</b>")
+    e.run = {
+      TeamName: "t",
+      SessionID: "",
+      Mates: [],
+      Conflicts: ["backend.md"],
+      TooMany: false,
+    }
+    const onLaunch = vi.fn(async () => Promise.reject(e))
     setup(onLaunch)
     await click(screen.getByRole("checkbox", { name: /Fonctionnalité/ }))
     await type(screen.getByRole("textbox"), "x")
@@ -153,7 +147,7 @@ describe("TeamPicker", () => {
   })
   it("team retirée du catalogue : sélection purgée, composition vidée, Lancer désactivé", async () => {
     mockCompose()
-    const onLaunch = vi.fn(async () => ({ ok: true }) as never)
+    const onLaunch = vi.fn(async () => {})
     const { rerender } = render(
       <TeamPicker catalog={catalog} onLaunch={onLaunch} pickDir={pickDir} />
     )

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { Confirm } from "@/components/Confirm"
 import { Input } from "@/components/ui/input"
 import { models } from "@/lib/models"
+import { errMsg } from "@/lib/apiError"
 import { teamsAgentRm, teamsAgentSave, type Agent } from "@/lib/teams"
 import { bytes, EditorDialog, Field, fieldCls, Select } from "./editorBits"
 
@@ -43,10 +44,14 @@ export function AgentEditor({
   ) => {
     setBusy(true)
     setErr("")
-    const r = await p
-    setBusy(false)
-    if (r.ok) onSaved()
-    else setErr(r.out)
+    try {
+      await p
+      onSaved()
+    } catch (e) {
+      setErr(errMsg(e))
+    } finally {
+      setBusy(false)
+    }
   }
   return (
     <>

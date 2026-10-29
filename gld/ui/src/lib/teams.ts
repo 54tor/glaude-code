@@ -1,5 +1,6 @@
-import { i18n } from "@/i18n"
+import { ApiError, http, qs, seg } from "@/lib/http"
 import { authFetch } from "@/lib/auth"
+import { netError, readResponse, v1 } from "@/lib/apiError"
 
 // Équipes d'agents (gld/routes_teams.go). Les structs Go n'ont pas de balises json : les champs gardent leur majuscule.
 export type Agent = { ID: string; Name: string; Role: string; Access: string; Prompt: string; Model: string; Builtin: boolean; Base: string }
@@ -25,30 +26,41 @@ export type TeamView = {
   Permission: string
   Unknown: string[]
 }
-// ok=false : out porte le message du serveur (ou l'erreur réseau).
-export type Res<T = object> = ({ ok: true } & T) | { ok: false; out: string; run?: Run }
+// Échec d'un lancement : conflicts vient du corps 409 (agents perso homonymes).
+export class LaunchError extends ApiError {
+  run?: Run
+}
 
-async function call<T = object>(url: string, body?: unknown): Promise<Res<T>> {
+export const teamsCatalog = () => http.get<Catalog>("/teams/catalog")
+export const teamsCompose = (teamIds: string[]) => http.post<Composition>("/teams/compositions", { teamIds })
+export async function teamsLaunch(teamIds: string[], goal: string, dir: string): Promise<Run> {
+  let r: Response
   try {
-    const r = await authFetch(url, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
-    const j = (await r.json()) as Res<T>
-    return j.ok ? j : { ...j, ok: false, out: j.out || i18n.t("shell.api.error", { msg: String(r.status) }) }
+    r = await authFetch(v1(`/teams/${seg(teamIds[0] ?? "")}/runs`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ teamIds, goal, dir }),
+    })
   } catch (e) {
-    return { ok: false, out: i18n.t("shell.api.error", { msg: e instanceof Error ? e.message : String(e) }) }
+    throw netError(e)
+  }
+  const run = r.ok ? undefined : ((await r.clone().json().catch(() => null)) as { run?: Run } | null)?.run
+  try {
+    return await readResponse<Run>(r)
+  } catch (e) {
+    if (!(e instanceof ApiError)) throw e
+    const le = new LaunchError(e.status, e.code, e.message)
+    le.run = run
+    throw le
   }
 }
-const q = encodeURIComponent
-
-export const teamsCatalog = () => call<Catalog>("/teams-catalog")
-export const teamsCompose = (teamIds: string[]) => call<Composition>("/teams-compose", { teamIds })
-export const teamsLaunch = (teamIds: string[], goal: string, dir: string) => call<{ run: Run }>("/teams-launch", { teamIds, goal, dir })
-export const teamsList = () => call<{ teams: TeamBrief[] }>("/teams")
-export const teamGet = (name: string) => call<{ view: TeamView }>(`/team?name=${q(name)}`)
-export const teamSend = (name: string, to: string, text: string) => call<{ queued: boolean }>("/team-send", { name, to, text })
-export const teamKey = (name: string, agent: string, key: string, expect = "") => call("/team-key", { name, agent, key, expect })
-export const teamClose = (name: string) => call("/team-close", { name })
-export const teamScreen = (name: string, agent: string) => call<{ text: string }>(`/team-screen?name=${q(name)}&agent=${q(agent)}`)
-export const teamsAgentSave = (a: Partial<Agent>) => call<{ agent: Agent }>("/teams-agent-save", a)
-export const teamsAgentRm = (id: string) => call("/teams-agent-rm", { id })
-export const teamsTeamSave = (t: Partial<Team>) => call<{ team: Team }>("/teams-team-save", t)
-export const teamsTeamRm = (id: string) => call("/teams-team-rm", { id })
+export const teamsList = () => http.get<{ teams: TeamBrief[] }>("/teams")
+export const teamGet = (name: string) => http.get<TeamView>(`/teams/${seg(name)}/run`)
+export const teamSend = (name: string, to: string, text: string) => http.post<{ queued: boolean }>(`/teams/${seg(name)}/run/messages`, { to, text })
+export const teamKey = (name: string, agent: string, key: string, expect = "") => http.post(`/teams/${seg(name)}/run/keystrokes`, { agent, key, expect })
+export const teamClose = (name: string) => http.del(`/teams/${seg(name)}/run`)
+export const teamScreen = (name: string, agent: string) => http.get<{ text: string }>(`/teams/${seg(name)}/run/screen${qs({ agent })}`)
+export const teamsAgentSave = (a: Partial<Agent>) => http.put<Agent>(`/agents/${seg(a.ID || "new")}`, a)
+export const teamsAgentRm = (id: string) => http.del(`/agents/${seg(id)}`)
+export const teamsTeamSave = (t: Partial<Team>) => http.put<Team>(`/teams/${seg(t.ID || "new")}`, t)
+export const teamsTeamRm = (id: string) => http.del(`/teams/${seg(id)}`)
