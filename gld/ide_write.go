@@ -119,13 +119,13 @@ func ideOpen(dir, p string) (*os.Root, string, error) {
 	return root, rel, nil
 }
 
-// ideConflict : 409 « conflict » (le fichier a changé) ou « deleted » (il a disparu) ; le client relit le disque pour l'etag.
-func ideConflict(w http.ResponseWriter, deleted bool) {
+// ideConflict : 409 « conflict » (le fichier a changé) ou « deleted » (il a disparu) ; etag est celui du disque, vide si supprimé.
+func ideConflict(w http.ResponseWriter, deleted bool, etag string) {
+	code, key := "conflict", "srv.ide.conflit"
 	if deleted {
-		writeErr(w, 409, "deleted", L("srv.ide.supprime"))
-		return
+		code, key = "deleted", "srv.ide.supprime"
 	}
-	writeErr(w, 409, "conflict", L("srv.ide.conflit"))
+	writeErrExtra(w, 409, code, L(key), map[string]any{"etag": etag, "deleted": deleted})
 }
 
 // ideAtomicWrite : le temporaire reste dans le dossier cible pour que Rename ne change pas de volume.
@@ -319,13 +319,13 @@ func routesIDEWrite(mux *http.ServeMux) {
 				return
 			}
 			if cur := ideEtag(fi); !req.Force && req.Etag != cur {
-				ideConflict(w, false)
+				ideConflict(w, false, cur)
 				return
 			}
 			mode = fi.Mode().Perm()
 		case errors.Is(err, errIdeNotFound):
 			if req.Etag != "" && !req.Force {
-				ideConflict(w, true)
+				ideConflict(w, true, "")
 				return
 			}
 		default:
@@ -355,7 +355,7 @@ func routesIDEWrite(mux *http.ServeMux) {
 		}
 		if err := ideAtomicWrite(root, rel, []byte(req.Content), mode, verify); err != nil {
 			if errors.Is(err, errIdeConflict) {
-				ideConflict(w, existed && cur == "")
+				ideConflict(w, existed && cur == "", cur)
 				return
 			}
 			ideFail(w, err)

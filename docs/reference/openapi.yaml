@@ -1252,6 +1252,13 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
+        '409':
+          description: 'conflict (the file changed) or deleted (it disappeared). The error object also carries etag (the current disk etag, empty
+            when deleted) and deleted (boolean), so the client can retry without a second read.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /v1/fs/files:
     post:
       tags:
@@ -4826,3 +4833,9 @@ components:
             message:
               type: string
               description: Localized human text.
+            etag:
+              type: string
+              description: Only on the 409 of PUT /v1/fs/entries/content. Current disk etag, empty when the file is gone.
+            deleted:
+              type: boolean
+              description: Only on the 409 of PUT /v1/fs/entries/content. True when the file no longer exists.

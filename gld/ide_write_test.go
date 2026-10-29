@@ -64,6 +64,10 @@ func TestFsSaveConflictChanged(t *testing.T) {
 	if readF(t, f) != "v2-longer" {
 		t.Fatal("disk modified")
 	}
+	ee, _ := m["error"].(map[string]any)
+	if ee["etag"] != etagOf(t, h, proj, "a.txt") || ee["deleted"] != false {
+		t.Fatal("conflict must carry the disk etag", raw)
+	}
 }
 
 func TestFsSaveConflictDeleted(t *testing.T) {
@@ -75,6 +79,9 @@ func TestFsSaveConflictDeleted(t *testing.T) {
 	code, m, raw := fsop(t, h, "save", map[string]any{"dir": proj, "path": "a.txt", "content": "mine", "etag": e})
 	if code != 409 || errCode(m) != "deleted" {
 		t.Fatal(code, raw)
+	}
+	if ee, _ := m["error"].(map[string]any); ee["etag"] != "" || ee["deleted"] != true {
+		t.Fatal("deleted flag", raw)
 	}
 	if _, err := os.Stat(f); err == nil {
 		t.Fatal("recreated")

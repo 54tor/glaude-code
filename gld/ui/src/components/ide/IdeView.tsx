@@ -155,11 +155,13 @@ function Workspace({ dir }: { dir: string }) {
     try {
       for (;;) {
         let r: { etag: string } | undefined
+        let diskEtag: string | undefined
         try {
           r = await api.fsSave(dir, path, content, etag, force)
         } catch (e) {
           if (!(e instanceof ApiError) || e.status !== 409) return fail(e)
           if (e.code === "deleted") return dispatch({ t: "disk", path, kind: "deleted" })
+          diskEtag = e.etag
         }
         if (!r) {
           // Décision sur l'onglet tel qu'il est maintenant : une frappe pendant l'aller-retour le rend sale.
@@ -168,7 +170,7 @@ function Workspace({ dir }: { dir: string }) {
           if (!now) return
           const disk = d.file?.content
           // Simple touch ou réécriture identique : on adopte le nouvel etag et on réessaie une fois.
-          if (!touched && disk === now.saved && d.file?.etag) {
+          if (!touched && disk === now.saved && d.file?.etag && d.file.etag === (diskEtag ?? d.file.etag)) {
             touched = true
             etag = d.file.etag
             continue

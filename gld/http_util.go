@@ -35,6 +35,15 @@ func writeErr(w http.ResponseWriter, status int, code, msg string) {
 	writeJSON(w, status, map[string]any{"error": map[string]string{"code": code, "message": msg}})
 }
 
+// writeErrExtra : l'enveloppe d'erreur plus des champs propres à un cas (rétrocompatible : code et message restent).
+func writeErrExtra(w http.ResponseWriter, status int, code, msg string, extra map[string]any) {
+	e := map[string]any{"code": code, "message": msg}
+	for k, v := range extra {
+		e[k] = v
+	}
+	writeJSON(w, status, map[string]any{"error": e})
+}
+
 // forbid refuse une requête avant routage : erreur JSON sur /v1, texte brut pour les pages.
 func forbid(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/v1/") {

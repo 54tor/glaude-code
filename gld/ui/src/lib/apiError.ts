@@ -6,12 +6,14 @@ export class ApiError extends Error {
   code: string
   retry: number // Retry-After en secondes, 0 si absent
   net: boolean // pas de réponse (réseau, délai) : l'action a pu avoir lieu
-  constructor(status: number, code: string, message: string, o: { retry?: number; net?: boolean } = {}) {
+  etag?: string // 409 d'une sauvegarde : etag du disque (vide si supprimé)
+  constructor(status: number, code: string, message: string, o: { retry?: number; net?: boolean; etag?: string } = {}) {
     super(message)
     this.status = status
     this.code = code
     this.retry = o.retry ?? 0
     this.net = o.net ?? false
+    this.etag = o.etag
   }
 }
 
@@ -48,8 +50,8 @@ export async function readResponse<T>(r: Response): Promise<T> {
     if (bad) throw new ApiError(r.status, "bad_response", i18n.t("shell.api.error", { msg: "JSON" })) // page HTML d'une passerelle, pas la réponse de l'API
     return j as T
   }
-  const e = (j as { error?: { code?: string; message?: string } } | undefined)?.error
-  throw new ApiError(r.status, e?.code || `http_${r.status}`, e?.message || i18n.t("shell.api.error", { msg: String(r.status) }), { retry })
+  const e = (j as { error?: { code?: string; message?: string; etag?: string } } | undefined)?.error
+  throw new ApiError(r.status, e?.code || `http_${r.status}`, e?.message || i18n.t("shell.api.error", { msg: String(r.status) }), { retry, etag: e?.etag })
 }
 
 export function netError(e: unknown): ApiError {
