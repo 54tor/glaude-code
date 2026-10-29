@@ -169,3 +169,20 @@ func TestStageEviction(t *testing.T) {
 		t.Error("étape évincée appliquée")
 	}
 }
+
+func TestApplyBackupConcurrentClaim(t *testing.T) {
+	z, _ := importArchive(t)
+	p, err := stageBackup(z)
+	if err != nil {
+		t.Fatal(err)
+	}
+	picks := []SyncPick{{"file:CLAUDE.md", "replace"}, {"projmem:-home-bob-p", "replace"}}
+	errs := make(chan error, 2)
+	for i := 0; i < 2; i++ {
+		go func() { _, e := applyBackup(p.ID, picks, nil); errs <- e }()
+	}
+	e1, e2 := <-errs, <-errs
+	if (e1 == nil) == (e2 == nil) {
+		t.Fatalf("exactement une application attendue : %v / %v", e1, e2)
+	}
+}

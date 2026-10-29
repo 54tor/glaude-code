@@ -70,6 +70,7 @@ func dropStage(id string) {
 	}
 }
 
+// takeStage : revendique l'étape (retirée de la carte) pour que ni une autre application ni l'éviction ne touche à son dossier.
 func takeStage(id string) (*stage, error) {
 	stagesMu.Lock()
 	defer stagesMu.Unlock()
@@ -78,6 +79,7 @@ func takeStage(id string) (*stage, error) {
 	if !ok {
 		return nil, terr("srv.backup_import.etapeInconnue")
 	}
+	delete(stages, id)
 	return s, nil
 }
 
@@ -124,7 +126,7 @@ func applyBackup(id string, picks []SyncPick, targets map[string]string) ([]Back
 	if err != nil {
 		return nil, err
 	}
-	defer dropStage(id)
+	defer os.RemoveAll(s.dir)
 	res := []BackupResult{}
 	for _, a := range backupAppliers {
 		var mine []SyncPick
