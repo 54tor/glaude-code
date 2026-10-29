@@ -34,7 +34,7 @@ const (
 	// Posés par la passerelle sur la requête relayée au gld enfant qui possède le partage (childProxy) ; jamais lus ailleurs.
 	guestHeader      = "X-Gld-Guest"
 	guestHTTPSHeader = "X-Gld-Guest-HTTPS"
-	guestQuietHeader = "X-Gld-Guest-Quiet" // vérification pour /guest-list : l'enfant ne touche pas LastSeen
+	guestQuietHeader = "X-Gld-Guest-Quiet" // vérification pour /v1/guest/sessions : l'enfant ne touche pas LastSeen
 	// Posés par la garde sur la requête invitée qu'elle sert elle-même (guestServe), après avoir retiré toute copie du client.
 	// L'invitation ne prend pas X-Gld-Guest, qui porte déjà le secret relayé à l'enfant.
 	authorHeader  = "X-Gld-Author"
@@ -57,7 +57,7 @@ var guestRoutes = map[string]bool{
 	"GET /v1/sessions/{id}/live":                      true, "GET /v1/sessions/{id}/state": true, "GET /v1/sessions/{id}/tasks/{task}/output": true,
 	"GET /v1/fs/tree": true, "GET /v1/fs/entries/content": true,
 	"GET /v1/sessions/{id}/queue": true, "POST /v1/sessions/{id}/queue": true, "DELETE /v1/sessions/{id}/queue/{qid}": true,
-	"GET /guest-me": true, "POST /guest-leave": true,
+	"GET /v1/guest/me": true, "DELETE /v1/guest/me": true,
 	"GET /guest": true, "GET /assets/": true, "GET /icons/": true, "GET /favicon.ico": true, "GET /manifest.webmanifest": true,
 }
 
@@ -100,15 +100,31 @@ func guestAddTry(invite string) bool {
 	return true
 }
 
-// guestCSRF : dérivé du secret, rendu à la page par /guest-me ; une autre origine ne peut ni le lire ni le calculer.
+// guestCSRF : dérivé du secret, rendu à la page par /v1/guest/me ; une autre origine ne peut ni le lire ni le calculer.
 func guestCSRF(secret string) string {
 	h := sha256.Sum256([]byte("gld-guest-csrf\x00" + secret))
 	return hex.EncodeToString(h[:])
 }
 
+func guestCode(status int) string {
+	switch status {
+	case 400:
+		return "bad_request"
+	case 401:
+		return "unauthorized"
+	case 403:
+		return "forbidden"
+	case 429:
+		return "too_many"
+	case 503:
+		return "unavailable"
+	}
+	return "error"
+}
+
 func guestDeny(w http.ResponseWriter, code int, key string) {
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, code, map[string]any{"ok": false, "out": L(key)})
+	writeErr(w, code, guestCode(code), L(key))
 }
 
 type noStoreWriter struct {
@@ -340,7 +356,7 @@ func guestGate(mux *http.ServeMux, next http.Handler) http.Handler {
 			cop.Handler(guestServe(mux, sh, in, sec, hd)).ServeHTTP(w, r)
 			return
 		}
-		if pat == "GET /guest-list" {
+		if pat == "GET /v1/guest/sessions" {
 			guestList(w, r)
 			return
 		}
@@ -401,7 +417,7 @@ func guestRelay(mux *http.ServeMux, home, sec, hd string) http.Handler {
 			guestDeny(w, 403, "srv.share_guest.refuse")
 			return
 		}
-		if pat == "POST /guest-leave" { // ici : un enfant qui refuse le secret (fin non écrite) ne doit pas l'empêcher
+		if pat == "DELETE /v1/guest/me" { // ici : un enfant qui refuse le secret (fin non écrite) ne doit pas l'empêcher
 			guestLeave(w, r, hd)
 			return
 		}
@@ -422,11 +438,11 @@ func guestServe(mux *http.ServeMux, sh Share, in Invite, sec, hd string) http.Ha
 			guestDeny(w, 403, "srv.share_guest.refuse")
 			return
 		}
-		if pat == "POST /guest-leave" {
+		if pat == "DELETE /v1/guest/me" {
 			guestLeave(w, r, hd)
 			return
 		}
-		if pat == "GET /guest-me" {
+		if pat == "GET /v1/guest/me" {
 			w.Header().Set("Cache-Control", "no-store")
 			writeJSON(w, 200, map[string]any{"id": sh.Session, "dir": sh.Dir, "mode": in.Mode, "csrf": guestCSRF(sec), "handle": hd, "title": sh.Title,
 				"invite": in.ID, "label": in.label()})
@@ -502,7 +518,7 @@ func guestSessionPath(u *url.URL, session string) {
 func guestLeave(w http.ResponseWriter, r *http.Request, hd string) {
 	guestClear(w, r, guestCookieName(hd))
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, 200, map[string]any{"ok": true})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // hostCredential : la requête porte un accès hôte valide (jeton, appareil jumelé, compte ayant exec sur le home du partage) ;
@@ -609,13 +625,13 @@ func guestInvite(w http.ResponseWriter, r *http.Request) {
 func routesGuest(mux *http.ServeMux) {
 	mux.HandleFunc(invitePat, guestInvite)
 	mux.HandleFunc(invitePostPat, guestInvite)
-	mux.HandleFunc("POST /guest-leave", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("DELETE /v1/guest/me", func(w http.ResponseWriter, r *http.Request) {
 		guestDeny(w, 403, "srv.share_guest.refuse")
 	})
-	mux.HandleFunc("GET /guest-me", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/guest/me", func(w http.ResponseWriter, r *http.Request) {
 		guestDeny(w, 403, "srv.share_guest.refuse")
 	})
-	mux.HandleFunc("GET /guest-list", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/guest/sessions", func(w http.ResponseWriter, r *http.Request) {
 		guestDeny(w, 403, "srv.share_guest.refuse")
 	})
 }
@@ -680,7 +696,7 @@ func (b *bufWriter) Write(p []byte) (int, error) {
 	return b.b.Write(p)
 }
 
-// guestChildMe : l'enfant revalide le secret dans sa mémoire (qui fait foi) par son /guest-me, relayé comme une requête
+// guestChildMe : l'enfant revalide le secret dans sa mémoire (qui fait foi) par son /v1/guest/me, relayé comme une requête
 // invitée ; la passerelle ne garde que poignée, titre et mode.
 func guestChildMe(r *http.Request, home, sec, hd string) (guestItem, int) {
 	p, err := homeProxy(home)
@@ -689,7 +705,7 @@ func guestChildMe(r *http.Request, home, sec, hd string) (guestItem, int) {
 		return guestItem{}, http.StatusServiceUnavailable
 	}
 	sr := r.Clone(context.WithValue(context.WithValue(r.Context(), guestRelayKey{}, sec), guestQuietKey{}, true))
-	sr.Method, sr.URL = http.MethodGet, &url.URL{Path: "/guest-me"}
+	sr.Method, sr.URL = http.MethodGet, &url.URL{Path: "/v1/guest/me"}
 	sr.Body, sr.ContentLength = http.NoBody, 0
 	sr.Header.Set(shareHeader, hd)
 	sr.Header.Del("Accept-Encoding") // corps lu ici : le transport décompresse seul s'il a négocié lui-même
@@ -697,8 +713,8 @@ func guestChildMe(r *http.Request, home, sec, hd string) (guestItem, int) {
 	p.ServeHTTP(bw, sr)
 	var it guestItem
 	if bw.code == http.StatusForbidden {
-		var d struct{ OK *bool }
-		if json.Unmarshal(bw.b.Bytes(), &d) != nil || d.OK == nil || *d.OK {
+		var d struct{ Error *struct{ Code string } }
+		if json.Unmarshal(bw.b.Bytes(), &d) != nil || d.Error == nil {
 			return it, http.StatusBadGateway // pas un jugement du secret par la garde invitée de l'enfant
 		}
 	}

@@ -17,7 +17,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	mbig "math/big"
 	"net/http"
@@ -347,14 +346,14 @@ func publicBase(r *http.Request) string {
 }
 
 func routesPair(mux *http.ServeMux) {
-	mux.HandleFunc("POST /pair-code", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /v1/pairing/codes", func(w http.ResponseWriter, r *http.Request) {
 		r, d := reqMode(r)
 		var uid int64
 		var sid string
 		if d.on {
 			g, _ := r.Context().Value(gateKey{}).(*gateInfo)
 			if g == nil || g.p == nil || g.p.User == nil || !g.p.MFA {
-				writeJSON(w, 403, map[string]any{"ok": false, "out": L("srv.auth.droitRefuse")})
+				writeErr(w, 403, "forbidden", L("srv.auth.droitRefuse"))
 				return
 			}
 			uid, sid = g.p.User.ID, g.p.SessionID
@@ -362,10 +361,10 @@ func routesPair(mux *http.ServeMux) {
 		c := newPairCode(uid, sid)
 		if c == "" {
 			w.Header().Set("Retry-After", "60")
-			writeJSON(w, 429, map[string]any{"ok": false, "out": L("srv.token.tooMany")})
+			writeErr(w, 429, "too_many", L("srv.token.tooMany"))
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "code": c, "url": publicBase(r) + "/pair?c=" + c, "ttl": int(pairTTL / time.Second)})
+		writeJSON(w, 201, map[string]any{"code": c, "url": publicBase(r) + "/pair?c=" + c, "ttl": int(pairTTL / time.Second)})
 	})
 	// Mode comptes, ou sans jeton ; en mode jeton, withToken répond avant.
 	entry := func(w http.ResponseWriter, r *http.Request) {
@@ -379,7 +378,7 @@ func routesPair(mux *http.ServeMux) {
 	mux.HandleFunc("GET /pair", entry)
 	mux.HandleFunc("POST /pair", entry)
 	// Mode jeton seulement : en mode comptes, les sessions du compte (/auth/sessions) en tiennent lieu.
-	mux.HandleFunc("GET /devices", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/devices", func(w http.ResponseWriter, r *http.Request) {
 		if _, d := reqMode(r); d.on {
 			http.NotFound(w, r)
 			return
@@ -391,32 +390,28 @@ func routesPair(mux *http.ServeMux) {
 		}
 		devMu.Unlock()
 		if err != nil {
-			writeJSON(w, 500, map[string]any{"ok": false, "out": err.Error()})
+			writeErr(w, 500, "internal", err.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "devices": ds})
+		writeJSON(w, 200, map[string]any{"devices": ds})
 	})
-	mux.HandleFunc("POST /devices-revoke", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("DELETE /v1/devices/{device}", func(w http.ResponseWriter, r *http.Request) {
 		if _, d := reqMode(r); d.on {
 			http.NotFound(w, r)
 			return
 		}
-		var req struct{ ID string }
-		if json.NewDecoder(io.LimitReader(r.Body, 1<<12)).Decode(&req) != nil || req.ID == "" {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
-			return
-		}
+		id := r.PathValue("device")
 		devMu.Lock()
 		defer devMu.Unlock()
 		ds, err := loadDevices()
 		if err == nil {
-			err = saveDevices(slices.DeleteFunc(ds, func(d device) bool { return d.ID == req.ID }))
+			err = saveDevices(slices.DeleteFunc(ds, func(d device) bool { return d.ID == id }))
 		}
 		if err != nil {
-			writeJSON(w, 500, map[string]any{"ok": false, "out": err.Error()})
+			writeErr(w, 500, "internal", err.Error())
 			return
 		}
-		journal("pair: appareil %s révoqué", cut(req.ID, 8))
-		writeJSON(w, 200, map[string]any{"ok": true})
+		journal("pair: appareil %s révoqué", cut(id, 8))
+		w.WriteHeader(http.StatusNoContent)
 	})
 }

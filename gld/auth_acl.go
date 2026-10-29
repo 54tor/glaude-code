@@ -28,7 +28,7 @@ var routeRights = map[string]Right{
 	"GET /memoire": rightPublic, "GET /memoire/": rightPublic, "GET /onglets": rightPublic, "GET /configuration": rightPublic,
 	"GET /configuration/": rightPublic, "GET /skills": rightPublic, "GET /skills/": rightPublic, "GET /extensions": rightPublic, "GET /equipes": rightPublic, "GET /equipes/": rightPublic, "GET /revues": rightPublic, "GET /espace/": rightPublic, "GET /reglages/": rightPublic, "GET /assets/": rightPublic,
 	"GET /icons/": rightPublic, "GET /favicon.ico": rightPublic, "GET /manifest.webmanifest": rightPublic, "GET /sw.js": rightPublic,
-	"GET /guest": rightPublic, "GET /guest/{handle}": rightPublic, "GET /guest-list": rightPublic, "GET /guest-me": rightPublic, "GET /invite/{home}/{token}": rightPublic, "POST /invite/{home}/{token}": rightPublic, "POST /guest-leave": rightPublic,
+	"GET /guest": rightPublic, "GET /guest/{handle}": rightPublic, "GET /v1/guest/sessions": rightPublic, "GET /v1/guest/me": rightPublic, "GET /invite/{home}/{token}": rightPublic, "POST /invite/{home}/{token}": rightPublic, "DELETE /v1/guest/me": rightPublic,
 
 	// Connexion et profil.
 	"POST /auth/login": rightPublic, "POST /auth/mfa/totp": rightPublic, "POST /auth/mfa/recovery": rightPublic,
@@ -44,11 +44,11 @@ var routeRights = map[string]Right{
 	"GET /admin/events": rightAdmin, "GET /admin/homes": rightAdmin, "GET /admin/sessions": rightAdmin, "POST /admin/sessions/revoke": rightAdmin,
 
 	// Jumelage d'un appareil par QR code (pair.go).
-	"POST /pair-code": rightAny, "GET /pair": rightPublic, "POST /pair": rightPublic, "GET /devices": rightAny, "POST /devices-revoke": rightAny,
+	"POST /v1/pairing/codes": rightAny, "GET /pair": rightPublic, "POST /pair": rightPublic, "GET /v1/devices": rightAny, "DELETE /v1/devices/{device}": rightAny,
 
 	// Homes.
-	"GET /homes": rightAny, "POST /homes-select": rightAny, "POST /homes-save": rightAdmin,
-	"POST /homes-sync-plan": RightMemSync, "POST /homes-sync-apply": RightMemSync,
+	"GET /v1/homes": rightAny, "PUT /v1/homes/current": rightAny, "PUT /v1/homes": rightAdmin,
+	"POST /v1/homes/sync-plans": RightMemSync, "POST /v1/homes/syncs": RightMemSync,
 
 	// Mémoire, règles, snippets, notes, corbeille, recherche.
 	"GET /v1/memory/files": RightMemRead, "GET /v1/memory/files/{key}": RightMemRead, "GET /v1/memory/health": RightMemRead,
@@ -100,7 +100,7 @@ var routeRights = map[string]Right{
 	"PUT /v1/fs/entries/content": RightFsWrite, "POST /v1/fs/entries": RightFsWrite, "PATCH /v1/fs/entries": RightFsWrite, "DELETE /v1/fs/entries": RightFsWrite,
 	"PATCH /v1/fs/trash/{entry}": RightFsWrite, "DELETE /v1/fs/trash": RightFsWrite,
 	"GET /v1/terminal": RightExec, "POST /v1/terminal": RightExec, "GET /v1/terminal/ws": RightExec,
-	"POST /v1/sessions/{id}/messages": RightExec, "POST /v1/sessions/{id}/queue": RightExec, "DELETE /v1/sessions/{id}/queue/{qid}": RightExec, "PATCH /v1/sessions/{id}/queue/{qid}": RightExec, "POST /invite-create": RightExec, "POST /invite-regen": RightExec, "POST /invite-mode": RightExec, "POST /invite-revoke": RightExec, "POST /share-end": RightExec, "GET /shares": RightExec, "POST /v1/sessions/{id}/keystrokes": RightExec, "DELETE /v1/sessions/{id}/process": RightExec,
+	"POST /v1/sessions/{id}/messages": RightExec, "POST /v1/sessions/{id}/queue": RightExec, "DELETE /v1/sessions/{id}/queue/{qid}": RightExec, "PATCH /v1/sessions/{id}/queue/{qid}": RightExec, "POST /v1/invites": RightExec, "PUT /v1/invites/{invite}/token": RightExec, "PATCH /v1/invites/{invite}": RightExec, "DELETE /v1/invites/{invite}": RightExec, "DELETE /v1/shares/{share}": RightExec, "GET /v1/shares": RightExec, "POST /v1/sessions/{id}/keystrokes": RightExec, "DELETE /v1/sessions/{id}/process": RightExec,
 	"GET /v1/trust/pending": RightExec, "POST /v1/trust/answers": RightExec, "PUT /v1/sessions/{id}/process": RightExec, "PUT /v1/projects/{dir}/process": RightExec, "POST /v1/git/pushes": RightExec,
 	"GET /v1/directories": RightExec, "POST /v1/directories": RightExec, "DELETE /v1/directories": RightExec, "POST /v1/uploads/images": RightExec, "POST /v1/uploads/files": RightExec,
 	// Agissent sur les sessions : fermeture, suppression de transcriptions, tours de modèle.
@@ -301,7 +301,7 @@ func gateCheck(g *gateInfo, r *http.Request, pat string, need Right) (int, strin
 			return 403, "srv.auth.droitRefuse"
 		}
 		return 0, ""
-	case pat == "POST /homes-select":
+	case pat == "PUT /v1/homes/current":
 		var req struct{ Name string }
 		if err := peekJSON(r, &req); err != nil {
 			return peekErr(err)
@@ -313,7 +313,7 @@ func gateCheck(g *gateInfo, r *http.Request, pat string, need Right) (int, strin
 		return rightsErr(g, id, func(m map[Right]bool) bool { return anyRight(m) })
 	case need == rightAny:
 		return 0, ""
-	case pat == "POST /homes-sync-plan" || pat == "POST /homes-sync-apply":
+	case pat == "POST /v1/homes/sync-plans" || pat == "POST /v1/homes/syncs":
 		var req struct {
 			From, To string
 			Picks    []SyncPick
@@ -323,7 +323,7 @@ func gateCheck(g *gateInfo, r *http.Request, pat string, need Right) (int, strin
 		}
 		// Le plan renvoie des aperçus de la destination ; appliquer un réglage, une skill ou une commande y fait exécuter du code.
 		destNeeds := []Right{RightMemSync, RightMemWrite}
-		if pat == "POST /homes-sync-plan" {
+		if pat == "POST /v1/homes/sync-plans" {
 			destNeeds = append(destNeeds, RightMemRead)
 		}
 		for _, p := range req.Picks {

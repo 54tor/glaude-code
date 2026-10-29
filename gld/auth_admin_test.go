@@ -175,7 +175,7 @@ func TestDisableRevokesSessions(t *testing.T) {
 		t.Fatalf("se désactiver soi-même : %d", w.Code)
 	}
 	g.ok(g.do("POST", "/admin/users/disable", &root, map[string]any{"id": bob.id, "disabled": true}))
-	if w := g.do("GET", "/homes", &bob, nil); w.Code != 401 {
+	if w := g.do("GET", "/v1/homes", &bob, nil); w.Code != 401 {
 		t.Fatalf("session de bob après désactivation : %d", w.Code)
 	}
 	if w := g.do("POST", "/admin/users/disable", &root, map[string]any{"id": bob.id, "disabled": false}); w.Code != 403 {
@@ -357,7 +357,7 @@ func TestAdminNoImplicitHomeAccess(t *testing.T) {
 	if w := g.do("GET", "/v1/memory/files", &root, nil); w.Code != 403 {
 		t.Fatalf("admin sans ligne home_acl : %d", w.Code)
 	}
-	if m := g.ok(g.do("GET", "/homes", &root, nil)); m["main"] != "" {
+	if m := g.ok(g.do("GET", "/v1/homes", &root, nil)); m["main"] != "" {
 		t.Fatalf("home principal visible sans droit : %v", m)
 	}
 	if w := g.do("POST", "/admin/acl", &root, map[string]any{"user_id": root.id, "home_id": mainHomeID, "grant": []string{"mem_read"}}); w.Code != 403 {
@@ -414,13 +414,13 @@ func TestAdminResetMFAAndPassword(t *testing.T) {
 	if f, _ := g.s.factors(bob.id); !f.none() || f.Recovery != 0 {
 		t.Fatalf("facteurs après reset : %+v", f)
 	}
-	if w := g.do("GET", "/homes", &bob, nil); w.Code != 401 {
+	if w := g.do("GET", "/v1/homes", &bob, nil); w.Code != 401 {
 		t.Fatalf("session après reset-mfa : %d", w.Code)
 	}
 	bob = g.session(bob.id)
 	const newPw = "un tout autre mot de passe"
 	g.ok(g.do("POST", "/admin/users/password", &root, map[string]any{"id": bob.id, "password": newPw, "reauth": root.reauth()}))
-	if w := g.do("GET", "/homes", &bob, nil); w.Code != 401 {
+	if w := g.do("GET", "/v1/homes", &bob, nil); w.Code != 401 {
 		t.Fatalf("session après changement de mot de passe : %d", w.Code)
 	}
 	u, _ := g.s.UserByName("bob")
@@ -444,7 +444,7 @@ func TestAdminSessions(t *testing.T) {
 		t.Fatalf("sessions : %v", ss)
 	}
 	g.ok(g.do("POST", "/admin/sessions/revoke", &root, map[string]any{"user_id": bob.id}))
-	if w := g.do("GET", "/homes", &bob, nil); w.Code != 401 {
+	if w := g.do("GET", "/v1/homes", &bob, nil); w.Code != 401 {
 		t.Fatalf("session révoquée : %d", w.Code)
 	}
 	if w := g.do("GET", "/admin/sessions?user_id=x", &root, nil); w.Code != 400 {
@@ -490,7 +490,7 @@ func TestAdminEvents(t *testing.T) {
 	}
 }
 
-// Retirer un home par /homes-save supprime ses lignes home_acl, et seulement les siennes.
+// Retirer un home par PUT /v1/homes supprime ses lignes home_acl, et seulement les siennes.
 func TestHomesSaveCascadeACL(t *testing.T) {
 	g := newAdminRig(t)
 	root := g.login("root", true)
@@ -505,11 +505,18 @@ func TestHomesSaveCascadeACL(t *testing.T) {
 		g.s.Grant(root.id, id, RightMemRead)
 	}
 	// Liste partielle sans Removed (l'admin ne voit pas tous les homes) : rien n'est perdu.
-	g.ok(g.do("POST", "/homes-save", &root, map[string]any{"Homes": []Home{{Name: "a", Dir: da, ID: ida}}}))
+	save := func(body map[string]any) *httptest.ResponseRecorder {
+		w := g.do("PUT", "/v1/homes", &root, body)
+		if w.Code != 204 {
+			t.Fatalf("PUT /v1/homes : %d %s", w.Code, w.Body)
+		}
+		return w
+	}
+	save(map[string]any{"Homes": []Home{{Name: "a", Dir: da, ID: ida}}})
 	if len(readHomes()) != 2 || g.aclRows(idb) != 2 || g.aclRows(ida) != 2 {
 		t.Fatalf("liste partielle : homes=%d b=%d a=%d", len(readHomes()), g.aclRows(idb), g.aclRows(ida))
 	}
-	g.ok(g.do("POST", "/homes-save", &root, map[string]any{"Homes": []Home{{Name: "a", Dir: da, ID: ida}}, "Removed": []string{idb}}))
+	save(map[string]any{"Homes": []Home{{Name: "a", Dir: da, ID: ida}}, "Removed": []string{idb}})
 	if len(readHomes()) != 1 || g.aclRows(idb) != 0 || g.aclRows(ida) != 2 || g.aclRows(mainHomeID) != 2 {
 		t.Fatalf("cascade : b=%d a=%d main=%d", g.aclRows(idb), g.aclRows(ida), g.aclRows(mainHomeID))
 	}
@@ -539,21 +546,21 @@ func TestHomesSaveNomPris(t *testing.T) {
 		{"homes": []Home{{Name: " foo ", Dir: dx}}},
 		{"homes": []Home{{Name: "foo", Dir: dx, ID: "autre"}}},
 	} {
-		if m := g.ok(g.do("POST", "/homes-save", &root, body)); m["ok"] != false || !strings.Contains(m["out"].(string), "foo") {
-			t.Fatalf("%v : %v", body, m)
+		if w := g.do("PUT", "/v1/homes", &root, body); w.Code != 409 || !strings.Contains(w.Body.String(), "foo") {
+			t.Fatalf("%v : %d %s", body, w.Code, w.Body)
 		}
 	}
 	if hs := readHomes(); len(hs) != 1 || hs[0].ID != h1 || hs[0].Dir != dfoo || g.aclRows(h1) != 1 {
 		t.Fatalf("home touché : %+v acl=%d", hs, g.aclRows(h1))
 	}
-	if m := g.ok(g.do("POST", "/homes-save", &root, map[string]any{"homes": []Home{{Name: "foo", Dir: dx, ID: h1}}})); m["ok"] != true {
-		t.Fatalf("mise à jour : %v", m)
+	if w := g.do("PUT", "/v1/homes", &root, map[string]any{"homes": []Home{{Name: "foo", Dir: dx, ID: h1}}}); w.Code != 204 {
+		t.Fatalf("mise à jour : %d %s", w.Code, w.Body)
 	}
 	if h, _ := homeByName("foo"); h.ID != h1 || h.Dir != dx {
 		t.Fatalf("mise à jour : %+v", h)
 	}
-	if m := g.ok(g.do("POST", "/homes-save", &root, map[string]any{"homes": []Home{{Name: "bar", Dir: dfoo}}})); m["ok"] != true {
-		t.Fatalf("création : %v", m)
+	if w := g.do("PUT", "/v1/homes", &root, map[string]any{"homes": []Home{{Name: "bar", Dir: dfoo}}}); w.Code != 204 {
+		t.Fatalf("création : %d %s", w.Code, w.Body)
 	}
 	if id := mustHomeID(t, "bar"); id == h1 || len(readHomes()) != 2 || g.aclRows(h1) != 1 {
 		t.Fatalf("création : %s %+v", id, readHomes())

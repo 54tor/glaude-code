@@ -11,7 +11,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -29,7 +28,7 @@ const (
 	shareTitleMax = 120
 	inviteMax     = 10
 	inviteNameMax = 24
-	shareTextMax  = 200 // texte d'un message d'invité dans GET /shares
+	shareTextMax  = 200 // texte d'un message d'invité dans GET /v1/shares
 )
 
 // Un partage par session, porteur de N invitations ; chaque invitation a son lien, son cookie et son mode.
@@ -475,102 +474,110 @@ func routesShare(mux *http.ServeMux) {
 		st = nil
 	}
 	shareSt = st
-	fail := func(w http.ResponseWriter, code int, key string) {
-		writeJSON(w, code, map[string]any{"ok": false, "out": L(key)})
+	fail := func(w http.ResponseWriter, status int, code, key string) {
+		writeErr(w, status, code, L(key))
 	}
-	type req struct{ ID, Dir, Title, Name, Invite, Mode string }
-	// body : withInvite exige un identifiant d'invitation (même format qu'une poignée : 16 hex).
-	body := func(w http.ResponseWriter, r *http.Request, withInvite bool) (req, bool) {
-		var q req
-		if json.NewDecoder(io.LimitReader(r.Body, 4<<10)).Decode(&q) != nil || !idRe.MatchString(q.ID) || withInvite && !validHandle(q.Invite) {
-			fail(w, 400, "srv.http_util.requeteInvalide")
-			return q, false
+	type req struct{ ID, Dir, Title, Name, Mode string }
+	// body : la session vient du corps (ou de ?id= pour un DELETE) ; withInvite exige l'invitation du chemin (16 hex).
+	body := func(w http.ResponseWriter, r *http.Request, withInvite bool) (q req, invite string, ok bool) {
+		if r.Method == http.MethodDelete {
+			q.ID = r.URL.Query().Get("id")
+		} else if !decodeBody(w, r, &q, 4<<10) {
+			return q, "", false
+		}
+		if sh := r.PathValue("share"); sh != "" {
+			q.ID = sh
+		}
+		invite = r.PathValue("invite")
+		if !idRe.MatchString(q.ID) || withInvite && !validHandle(invite) {
+			fail(w, 400, "bad_request", "srv.http_util.requeteInvalide")
+			return q, "", false
 		}
 		if shareSt == nil {
-			fail(w, 503, "srv.share.indisponible")
-			return q, false
+			fail(w, 503, "unavailable", "srv.share.indisponible")
+			return q, "", false
 		}
-		return q, true
+		return q, invite, true
 	}
 	storeErr := func(w http.ResponseWriter, err error) bool {
 		switch {
 		case err == nil:
 			return false
 		case errors.Is(err, errInviteNone):
-			fail(w, 404, "srv.share.invitationIntrouvable")
+			fail(w, 404, "not_found", "srv.share.invitationIntrouvable")
 		case errors.Is(err, errShareNone):
-			fail(w, 404, "srv.share.introuvable")
+			fail(w, 404, "not_found", "srv.share.introuvable")
 		case errors.Is(err, errInviteMax):
-			fail(w, 409, "srv.share.tropDInvitations")
+			fail(w, 409, "conflict", "srv.share.tropDInvitations")
 		default:
-			fail(w, 500, "srv.share.indisponible")
+			fail(w, 500, "internal", "srv.share.indisponible")
 		}
 		return true
 	}
-	mux.HandleFunc("POST /invite-create", func(w http.ResponseWriter, r *http.Request) {
-		q, ok := body(w, r, false)
+	mux.HandleFunc("POST /v1/invites", func(w http.ResponseWriter, r *http.Request) {
+		q, _, ok := body(w, r, false)
 		if !ok {
 			return
 		}
 		if _, found := transcript(q.Dir, q.ID); !found {
-			fail(w, 404, "srv.share.sessionIntrouvable")
+			fail(w, 404, "not_found", "srv.share.sessionIntrouvable")
 			return
 		}
 		tok, in, err := shareSt.CreateInvite(q.ID, q.Dir, q.Title, q.Name)
 		if storeErr(w, err) {
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "token": tok, "invite": map[string]any{"id": in.ID, "seq": in.Seq, "label": in.label()}})
+		writeJSON(w, 201, map[string]any{"token": tok, "invite": map[string]any{"id": in.ID, "seq": in.Seq, "label": in.label()}})
 	})
-	mux.HandleFunc("POST /invite-regen", func(w http.ResponseWriter, r *http.Request) {
-		q, ok := body(w, r, true)
+	mux.HandleFunc("PUT /v1/invites/{invite}/token", func(w http.ResponseWriter, r *http.Request) {
+		q, inv, ok := body(w, r, true)
 		if !ok {
 			return
 		}
-		tok, err := shareSt.Regen(q.ID, q.Invite)
+		tok, err := shareSt.Regen(q.ID, inv)
 		if storeErr(w, err) {
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "token": tok})
+		writeJSON(w, 200, map[string]any{"token": tok})
 	})
-	mux.HandleFunc("POST /invite-mode", func(w http.ResponseWriter, r *http.Request) {
-		q, ok := body(w, r, true)
+	mux.HandleFunc("PATCH /v1/invites/{invite}", func(w http.ResponseWriter, r *http.Request) {
+		q, inv, ok := body(w, r, true)
 		if !ok {
 			return
 		}
 		if q.Mode != "rw" && q.Mode != "ro" {
-			fail(w, 400, "srv.http_util.requeteInvalide")
+			fail(w, 400, "bad_request", "srv.http_util.requeteInvalide")
 			return
 		}
-		if storeErr(w, shareSt.SetInviteMode(q.ID, q.Invite, q.Mode)) {
+		if storeErr(w, shareSt.SetInviteMode(q.ID, inv, q.Mode)) {
 			return
 		}
 		if q.Mode == "ro" && queueSt != nil {
-			if _, err := queueSt.RemoveByGuest(q.ID, q.Invite, true); err != nil {
-				fail(w, 500, "srv.share.indisponible")
+			if _, err := queueSt.RemoveByGuest(q.ID, inv, true); err != nil {
+				fail(w, 500, "internal", "srv.share.indisponible")
 				return
 			}
 		}
-		writeJSON(w, 200, map[string]any{"ok": true})
+		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("POST /invite-revoke", func(w http.ResponseWriter, r *http.Request) {
-		q, ok := body(w, r, true)
-		if !ok || storeErr(w, shareSt.Revoke(q.ID, q.Invite)) {
+	mux.HandleFunc("DELETE /v1/invites/{invite}", func(w http.ResponseWriter, r *http.Request) {
+		q, inv, ok := body(w, r, true)
+		if !ok || storeErr(w, shareSt.Revoke(q.ID, inv)) {
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true})
+		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("POST /share-end", func(w http.ResponseWriter, r *http.Request) {
-		q, ok := body(w, r, false)
+	mux.HandleFunc("DELETE /v1/shares/{share}", func(w http.ResponseWriter, r *http.Request) {
+		q, _, ok := body(w, r, false)
 		if !ok || storeErr(w, shareSt.End(q.ID)) {
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true})
+		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("GET /shares", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/shares", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		if shareSt == nil {
-			fail(w, 503, "srv.share.indisponible")
+			fail(w, 503, "unavailable", "srv.share.indisponible")
 			return
 		}
 		writeJSON(w, 200, map[string]any{"shares": sharesView()})

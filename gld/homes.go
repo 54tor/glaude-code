@@ -425,7 +425,7 @@ func stopHomes() {
 	}
 }
 
-// withHomes : les requêtes d'un navigateur qui a choisi un autre dossier vont à l'enfant correspondant ; /homes* reste local.
+// withHomes : les requêtes d'un navigateur qui a choisi un autre dossier vont à l'enfant correspondant ; /v1/homes* reste local.
 func withHomes(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		g := gateFrom(r)
@@ -433,13 +433,13 @@ func withHomes(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if name := homeFrom(r); name != "" && !strings.HasPrefix(r.URL.Path, "/homes") {
+		if name := homeFrom(r); name != "" && !strings.HasPrefix(r.URL.Path, "/v1/homes") {
 			p, err := homeProxy(name)
 			if err != nil {
 				journal("homes %s : %v", name, err)
 				// Garde active : le droit a été vérifié pour ce home, servir un autre home le contournerait.
 				if g != nil || gateActive(r) {
-					writeJSON(w, 503, map[string]any{"ok": false, "out": L("srv.homes.indisponible")})
+					writeErr(w, 503, "unavailable", L("srv.homes.indisponible"))
 					return
 				}
 				// dossier retiré ou enfant en panne : retour au dossier courant
@@ -466,7 +466,7 @@ func originIsHost(r *http.Request) bool {
 }
 
 func routesHomes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /homes", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/homes", func(w http.ResponseWriter, r *http.Request) {
 		cur := homeFrom(r)
 		homesMu.Lock()
 		running := map[string]bool{}
@@ -495,13 +495,16 @@ func routesHomes(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"current": cur, "main": main, "mainId": mainHomeID, "homes": rows})
 	})
-	mux.HandleFunc("POST /homes-save", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("PUT /v1/homes", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Homes   []Home
 			Removed []string
 		}
-		if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil || req.Homes == nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+		if !decodeBody(w, r, &req, 1<<16) {
+			return
+		}
+		if req.Homes == nil {
+			writeErr(w, 400, "bad_request", L("srv.http_util.requeteInvalide"))
 			return
 		}
 		before := readHomes()
@@ -512,7 +515,7 @@ func routesHomes(mux *http.ServeMux) {
 			for _, s := range req.Homes {
 				name := strings.TrimSpace(spaceRe.ReplaceAllString(s.Name, " "))
 				if slices.ContainsFunc(before, func(b Home) bool { return b.Name == name && (s.ID == "" || s.ID != b.ID) }) {
-					writeJSON(w, 200, map[string]any{"ok": false, "out": L("srv.homes.nomDejaPris", "A1", name)})
+					writeErr(w, 409, "conflict", L("srv.homes.nomDejaPris", "A1", name))
 					return
 				}
 			}
@@ -521,7 +524,7 @@ func routesHomes(mux *http.ServeMux) {
 		err := saveHomes(list)
 		journal("homes-save %d dossier(s) : %v", len(list), errOr(err))
 		if err != nil {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			writeErr(w, 400, "bad_request", err.Error())
 			return
 		}
 		if onHomesRemoved != nil {
@@ -550,47 +553,48 @@ func routesHomes(mux *http.ServeMux) {
 			}
 		}
 		homesMu.Unlock()
-		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.homes.dossiersDeConfigurationEnregistres")})
+		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("POST /homes-sync-plan", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /v1/homes/sync-plans", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ From, To string }
-		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+		if !decodeBody(w, r, &req, 1<<10) {
 			return
 		}
 		items, err := syncPlan(req.From, req.To)
 		if err != nil {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			writeErr(w, 400, "bad_request", err.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": "", "items": items})
+		writeJSON(w, 200, map[string]any{"items": items})
 	})
-	mux.HandleFunc("POST /homes-sync-apply", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /v1/homes/syncs", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			From, To string
 			Picks    []SyncPick
 		}
-		if json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req) != nil || len(req.Picks) > 2000 {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+		if !decodeBody(w, r, &req, 1<<16) {
+			return
+		}
+		if len(req.Picks) > 2000 {
+			writeErr(w, 400, "too_many", L("srv.http_util.requeteInvalide"))
 			return
 		}
 		out, err := syncApply(req.From, req.To, req.Picks)
 		journal("homes-sync %q → %q : %d élément(s) : %v", req.From, req.To, len(req.Picks), errOr(err))
 		if err != nil {
-			writeJSON(w, 200, map[string]any{"ok": false, "out": err.Error()})
+			writeErr(w, 400, "bad_request", err.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"ok": true, "out": out})
+		writeJSON(w, 200, map[string]any{"message": out})
 	})
-	mux.HandleFunc("POST /homes-select", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("PUT /v1/homes/current", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ Name string }
-		if json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&req) != nil {
-			writeJSON(w, 400, map[string]any{"ok": false, "out": L("srv.http_util.requeteInvalide")})
+		if !decodeBody(w, r, &req, 1<<10) {
 			return
 		}
 		if req.Name != "" {
 			if _, err := homeProxy(req.Name); err != nil {
-				writeJSON(w, 200, map[string]any{"ok": false, "out": fmt.Sprint(err)})
+				writeErr(w, 404, "not_found", fmt.Sprint(err))
 				return
 			}
 		}
@@ -599,6 +603,6 @@ func routesHomes(mux *http.ServeMux) {
 			c.MaxAge = -1
 		}
 		http.SetCookie(w, c)
-		writeJSON(w, 200, map[string]any{"ok": true, "out": L("srv.homes.dossierDeConfigurationChoisi")})
+		w.WriteHeader(http.StatusNoContent)
 	})
 }

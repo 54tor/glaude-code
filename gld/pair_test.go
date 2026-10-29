@@ -48,12 +48,12 @@ func confirm(t *testing.T, h http.Handler, code string) *httptest.ResponseRecord
 	return w
 }
 
-// pairCodeFrom : le code porté par l'adresse du QR renvoyée par POST /pair-code.
+// pairCodeFrom : le code porté par l'adresse du QR renvoyée par POST /v1/pairing/codes.
 func pairCodeFrom(t *testing.T, w *httptest.ResponseRecorder) string {
 	t.Helper()
 	var out struct{ URL string }
-	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &out) != nil {
-		t.Fatalf("POST /pair-code : %d %s", w.Code, w.Body)
+	if w.Code != 201 || json.Unmarshal(w.Body.Bytes(), &out) != nil {
+		t.Fatalf("POST /v1/pairing/codes : %d %s", w.Code, w.Body)
 	}
 	u, err := url.Parse(out.URL)
 	if err != nil || u.Host != testHost || u.Path != "/pair" || u.Query().Get("c") == "" {
@@ -73,10 +73,10 @@ func TestPairTokenMode(t *testing.T) {
 	srv := withTokenOpen(modeTok, h)
 	tok := &http.Cookie{Name: tokenCookie, Value: modeTok}
 
-	if w := pairReq(srv, "POST", "/pair-code", "{}", nil); w.Code != 401 {
+	if w := pairReq(srv, "POST", "/v1/pairing/codes", "{}", nil); w.Code != 401 {
 		t.Fatalf("code demandé sans jeton : %d", w.Code)
 	}
-	code := pairCodeFrom(t, pairReq(srv, "POST", "/pair-code", "{}", tok))
+	code := pairCodeFrom(t, pairReq(srv, "POST", "/v1/pairing/codes", "{}", tok))
 
 	// Un POST venu d'une autre origine ne consomme rien.
 	r := httptest.NewRequest("POST", "/pair", strings.NewReader("c="+code))
@@ -100,7 +100,7 @@ func TestPairTokenMode(t *testing.T) {
 		t.Fatalf("appareil jumelé refusé : %d", w.Code)
 	}
 
-	w = pairReq(srv, "GET", "/devices", "", tok)
+	w = pairReq(srv, "GET", "/v1/devices", "", tok)
 	var list struct{ Devices []device }
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &list) != nil || len(list.Devices) != 1 {
 		t.Fatalf("liste des appareils : %d %s", w.Code, w.Body)
@@ -120,7 +120,7 @@ func TestPairTokenMode(t *testing.T) {
 	}
 
 	id := list.Devices[0].ID
-	if w := pairReq(srv, "POST", "/devices-revoke", `{"id":"`+id+`"}`, tok); w.Code != 200 {
+	if w := pairReq(srv, "DELETE", "/v1/devices/"+id, "", tok); w.Code != 204 {
 		t.Fatalf("révocation : %d %s", w.Code, w.Body)
 	}
 	if w := pairReq(srv, "GET", "/v1/state", "", dev); w.Code != 401 {
@@ -128,14 +128,14 @@ func TestPairTokenMode(t *testing.T) {
 	}
 
 	// Code échu au bout de deux minutes.
-	code = pairCodeFrom(t, pairReq(srv, "POST", "/pair-code", "{}", tok))
+	code = pairCodeFrom(t, pairReq(srv, "POST", "/v1/pairing/codes", "{}", tok))
 	now = now.Add(pairTTL + time.Second)
 	if w := pairReq(srv, "GET", "/pair?c="+code, "", nil); w.Code != http.StatusGone {
 		t.Fatalf("code échu accepté : %d", w.Code)
 	}
 
 	// Changer de jeton coupe les appareils jumelés sous l'ancien.
-	code = pairCodeFrom(t, pairReq(srv, "POST", "/pair-code", "{}", tok))
+	code = pairCodeFrom(t, pairReq(srv, "POST", "/v1/pairing/codes", "{}", tok))
 	dev = cookieOf(confirm(t, srv, code), devCookie)
 	if w := pairReq(srv, "GET", "/v1/state", "", dev); w.Code != 200 {
 		t.Fatalf("appareil neuf : %d", w.Code)
@@ -175,7 +175,7 @@ func TestPairAccountMode(t *testing.T) {
 	}
 	c, p := fullSession(t, s, id)
 	ask := func(cookie, csrf string) *httptest.ResponseRecorder {
-		r := httptest.NewRequest("POST", "/pair-code", strings.NewReader("{}"))
+		r := httptest.NewRequest("POST", "/v1/pairing/codes", strings.NewReader("{}"))
 		r.Host = testHost
 		r.Header.Set("Origin", "http://"+testHost)
 		r.Header.Set(csrfHeader, csrf)
@@ -245,14 +245,14 @@ func TestPairAccountMode(t *testing.T) {
 		t.Fatal("code délivré à une session partielle")
 	}
 	// Les appareils du mode jeton ne regardent pas le mode comptes.
-	r = httptest.NewRequest("GET", "/devices", nil)
+	r = httptest.NewRequest("GET", "/v1/devices", nil)
 	r.Host = testHost
 	fresh, _ := fullSession(t, s, id)
 	r.AddCookie(&http.Cookie{Name: sessCookie, Value: fresh})
 	rw = httptest.NewRecorder()
 	srv.ServeHTTP(rw, r)
 	if rw.Code != 404 {
-		t.Fatalf("GET /devices en mode comptes : %d", rw.Code)
+		t.Fatalf("GET /v1/devices en mode comptes : %d", rw.Code)
 	}
 }
 
@@ -271,7 +271,7 @@ func TestPairPublicURL(t *testing.T) {
 	} {
 		t.Setenv("GLD_PUBLIC_URL", c.env)
 		var out struct{ URL string }
-		w := pairReq(srv, "POST", "/pair-code", "{}", tok)
+		w := pairReq(srv, "POST", "/v1/pairing/codes", "{}", tok)
 		if json.Unmarshal(w.Body.Bytes(), &out) != nil || !strings.HasPrefix(out.URL, c.want) {
 			t.Errorf("GLD_PUBLIC_URL=%q : %q, attendu %q…", c.env, out.URL, c.want)
 		}
@@ -308,7 +308,7 @@ func TestPairTyped(t *testing.T) {
 	if w := pairReq(srv, "GET", "/pair", "", nil); w.Code != 200 || !strings.Contains(w.Body.String(), `name="c"`) {
 		t.Fatalf("formulaire du code : %d", w.Code)
 	}
-	code := pairCodeFrom(t, pairReq(srv, "POST", "/pair-code", "{}", tok))
+	code := pairCodeFrom(t, pairReq(srv, "POST", "/v1/pairing/codes", "{}", tok))
 	if len(code) != 8 || pairDigits(code) != code {
 		t.Fatalf("code : %q", code)
 	}
@@ -321,7 +321,7 @@ func TestPairTyped(t *testing.T) {
 			t.Fatalf("code faux n°%d : %d", i+1, w.Code)
 		}
 	}
-	code = pairCodeFrom(t, pairReq(srv, "POST", "/pair-code", "{}", tok))
+	code = pairCodeFrom(t, pairReq(srv, "POST", "/v1/pairing/codes", "{}", tok))
 	if w := post(code); w.Code != http.StatusTooManyRequests || cookieOf(w, devCookie) != nil {
 		t.Fatalf("après %d essais : %d", tokenMaxTries, w.Code)
 	}

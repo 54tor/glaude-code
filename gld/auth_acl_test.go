@@ -204,10 +204,10 @@ func TestGateHomeCookieNoRights(t *testing.T) {
 			t.Errorf("cookie %q : %d %s", home, w.Code, w.Body)
 		}
 	}
-	if w := g.do("POST", "/homes-select", &u, "", `{"name":"Pro"}`); w.Code != 403 {
+	if w := g.do("PUT", "/v1/homes/current", &u, "", `{"name":"Pro"}`); w.Code != 403 {
 		t.Errorf("choix d'un home sans droit : %d", w.Code)
 	}
-	if w := g.do("POST", "/homes-select", &u, "", `{"name":""}`); !reached(w) {
+	if w := g.do("PUT", "/v1/homes/current", &u, "", `{"name":""}`); !reached(w) {
 		t.Errorf("choix du home principal : %d", w.Code)
 	}
 
@@ -233,25 +233,25 @@ func TestGateMemSyncNeedsBoth(t *testing.T) {
 	g.grant(t, u, "", RightMemSync, RightMemRead)
 	g.grant(t, u, "Pro", RightMemWrite)
 	body := `{"from":"","to":"Pro"}`
-	for _, p := range []string{"/homes-sync-plan", "/homes-sync-apply"} {
+	for _, p := range []string{"/v1/homes/sync-plans", "/v1/homes/syncs"} {
 		if w := g.do("POST", p, &u, "", body); w.Code != 403 {
 			t.Errorf("%s sans mem_sync sur la destination : %d", p, w.Code)
 		}
 	}
 	g.grant(t, u, "Pro", RightMemSync, RightMemRead)
-	if w := g.do("POST", "/homes-sync-plan", &u, "", body); !reached(w) {
+	if w := g.do("POST", "/v1/homes/sync-plans", &u, "", body); !reached(w) {
 		t.Fatalf("synchro permise refusée : %d %s", w.Code, w.Body)
 	}
-	if w := g.do("POST", "/homes-sync-plan", &u, "", `{"from":"Pro","to":""}`); w.Code != 403 {
+	if w := g.do("POST", "/v1/homes/sync-plans", &u, "", `{"from":"Pro","to":""}`); w.Code != 403 {
 		t.Errorf("sens inverse sans mem_read sur la source ni mem_write sur la destination : %d", w.Code)
 	}
 	if err := g.s.Revoke(u.id, mainHomeID, RightMemRead); err != nil {
 		t.Fatal(err)
 	}
-	if w := g.do("POST", "/homes-sync-apply", &u, "", body); w.Code != 403 {
+	if w := g.do("POST", "/v1/homes/syncs", &u, "", body); w.Code != 403 {
 		t.Errorf("source sans mem_read : %d", w.Code)
 	}
-	if w := g.do("POST", "/homes-sync-plan", &u, "", `{"from":"","to":"absent"}`); w.Code != 403 {
+	if w := g.do("POST", "/v1/homes/sync-plans", &u, "", `{"from":"","to":"absent"}`); w.Code != 403 {
 		t.Errorf("home inconnu : %d", w.Code)
 	}
 }
@@ -278,18 +278,18 @@ func TestGateRightsMatrix(t *testing.T) {
 		{&r, "GET", "/v1/memory/files", true, 200},
 		{&r, "PUT", "/v1/memory/files/x", false, 403},
 		{&r, "POST", "/v1/sessions/x/chat", false, 403},
-		{&r, "POST", "/homes-save", false, 403},
+		{&r, "PUT", "/v1/homes", false, 403},
 		{&u, "GET", "/v1/account", true, 200},
 		{&u, "GET", "/v1/sessions/x/conversation", false, 403},
 		{&u, "GET", "/v1/info", false, 403},
 		{&a, "GET", "/v1/memory/files", false, 403}, // pas de super-droit implicite
-		{&a, "POST", "/homes-save", true, 200},
+		{&a, "PUT", "/v1/homes", true, 200},
 		{nil, "GET", "/v1/memory/files", false, 401},
-		{nil, "POST", "/homes-save", false, 401},
+		{nil, "PUT", "/v1/homes", false, 401},
 		{nil, "GET", "/", true, 200},
 		{nil, "GET", "/assets/x.js", true, 200},
 		{nil, "POST", "/auth/login", true, 200},
-		{&r, "GET", "/homes", true, 200},
+		{&r, "GET", "/v1/homes", true, 200},
 		{&r, "GET", "/v1/sessions", false, 403},
 		{&wr, "PUT", "/v1/tabs", true, 200},
 		{&wr, "DELETE", "/v1/sessions", false, 403},
@@ -362,7 +362,7 @@ func TestGateCSRF(t *testing.T) {
 	if w := bearer("PUT", "/v1/memory/files/x"); !reached(w) {
 		t.Errorf("Bearer : CSRF exigé à tort : %d", w.Code)
 	}
-	if w := bearer("POST", "/homes-save"); w.Code != 403 {
+	if w := bearer("PUT", "/v1/homes"); w.Code != 403 {
 		t.Errorf("Bearer sur une route admin : %d", w.Code)
 	}
 }
@@ -466,7 +466,7 @@ func TestHomesListFiltered(t *testing.T) {
 	}
 	list := func(h http.Handler) {
 		w := httptest.NewRecorder()
-		h.ServeHTTP(w, g.req("GET", "/homes", &u, "", ""))
+		h.ServeHTTP(w, g.req("GET", "/v1/homes", &u, "", ""))
 		out.Homes = nil
 		var raw map[string]json.RawMessage
 		json.Unmarshal(w.Body.Bytes(), &raw)
@@ -496,7 +496,7 @@ func TestGateSyncApplyConfigItems(t *testing.T) {
 			picks = append(picks, map[string]string{"id": id, "mode": "replace"})
 		}
 		b, _ := json.Marshal(map[string]any{"from": "", "to": "Pro", "picks": picks})
-		return g.do("POST", "/homes-sync-apply", &u, "", string(b)).Code
+		return g.do("POST", "/v1/homes/syncs", &u, "", string(b)).Code
 	}
 	for _, ok := range [][]string{{"file:CLAUDE.md"}, {"file:rules/a.md", "file:rules/sous/b.md"}, nil} {
 		if c := apply(ok...); c != 200 {
@@ -515,7 +515,7 @@ func TestGateSyncApplyConfigItems(t *testing.T) {
 	}
 	// Le plan exige mem_read sur la destination (il en renvoie des aperçus).
 	g.s.SetRights(u.id, mustHomeID(t, "Pro"), nil, []Right{RightMemRead, RightMemWrite, RightConfigWrite})
-	if w := g.do("POST", "/homes-sync-plan", &u, "", `{"from":"","to":"Pro"}`); w.Code != 403 {
+	if w := g.do("POST", "/v1/homes/sync-plans", &u, "", `{"from":"","to":"Pro"}`); w.Code != 403 {
 		t.Errorf("plan sans mem_read sur la destination : %d", w.Code)
 	}
 }
@@ -539,9 +539,9 @@ func TestHomeNameMainReserved(t *testing.T) {
 	mux := http.NewServeMux()
 	routesHomes(mux)
 	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, httptest.NewRequest("POST", "/homes-save", strings.NewReader(`{"homes":[{"name":"main","dir":"`+t.TempDir()+`"}]}`)))
-	if !strings.Contains(w.Body.String(), `"ok":false`) {
-		t.Fatalf("/homes-save : %s", w.Body)
+	mux.ServeHTTP(w, httptest.NewRequest("PUT", "/v1/homes", strings.NewReader(`{"homes":[{"name":"main","dir":"`+t.TempDir()+`"}]}`)))
+	if w.Code != 400 {
+		t.Fatalf("PUT /v1/homes : %d %s", w.Code, w.Body)
 	}
 }
 

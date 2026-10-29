@@ -38,7 +38,7 @@ func TestHomesEnregistrement(t *testing.T) {
 	}
 }
 
-// Le cookie choisit le processus qui répond ; sans cookie, ou pour /homes, c'est le processus principal.
+// Le cookie choisit le processus qui répond ; sans cookie, ou pour /v1/homes, c'est le processus principal.
 func TestHomesAiguillage(t *testing.T) {
 	cfg := t.TempDir()
 	use(cfg)
@@ -95,8 +95,8 @@ func TestHomesAiguillage(t *testing.T) {
 	if w := ws("http://127.0.0.1:8799"); w.Body.String() != "enfant" {
 		t.Fatalf("WebSocket de la page refusé : %d %s", w.Code, w.Body.String())
 	}
-	if get("/homes", enc) != "principal" {
-		t.Fatal("/homes doit rester local")
+	if get("/v1/homes", enc) != "principal" {
+		t.Fatal("/v1/homes doit rester local")
 	}
 	if get("/data", url.QueryEscape("inconnu")) != "principal" {
 		t.Fatal("un dossier inconnu retombe sur le principal")
@@ -127,24 +127,24 @@ func TestHomesRoutes(t *testing.T) {
 	pro := t.TempDir()
 	mux := http.NewServeMux()
 	routesHomes(mux)
-	post := func(path, body string) *httptest.ResponseRecorder {
-		r := httptest.NewRequest("POST", path, strings.NewReader(body))
+	put := func(path, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("PUT", path, strings.NewReader(body))
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, r)
 		return w
 	}
-	if w := post("/homes-save", `{"homes":[{"name":"Pro","dir":"`+pro+`"}]}`); !strings.Contains(w.Body.String(), `"ok":true`) {
+	if w := put("/v1/homes", `{"homes":[{"name":"Pro","dir":"`+pro+`"}]}`); w.Code != 204 {
 		t.Fatal(w.Body.String())
 	}
 	// Mode ouvert : la liste complète renvoyée sans identifiant garde celui du home du même nom.
 	id := mustHomeID(t, "Pro")
-	if w := post("/homes-save", `{"homes":[{"name":"Pro","dir":"`+pro+`"}]}`); !strings.Contains(w.Body.String(), `"ok":true`) || mustHomeID(t, "Pro") != id {
+	if w := put("/v1/homes", `{"homes":[{"name":"Pro","dir":"`+pro+`"}]}`); w.Code != 204 || mustHomeID(t, "Pro") != id {
 		t.Fatal(w.Body.String())
 	}
-	if w := post("/homes-select", `{"name":"absent"}`); !strings.Contains(w.Body.String(), `"ok":false`) {
+	if w := put("/v1/homes/current", `{"name":"absent"}`); w.Code != 404 || !strings.Contains(w.Body.String(), `"error"`) {
 		t.Fatal("dossier inconnu choisi")
 	}
-	if w := post("/homes-select", `{"name":""}`); !strings.Contains(w.Header().Get("Set-Cookie"), "Max-Age=0") && !strings.Contains(w.Header().Get("Set-Cookie"), "gld_home=;") {
+	if w := put("/v1/homes/current", `{"name":""}`); !strings.Contains(w.Header().Get("Set-Cookie"), "Max-Age=0") && !strings.Contains(w.Header().Get("Set-Cookie"), "gld_home=;") {
 		t.Fatalf("retour au dossier principal : %q", w.Header().Get("Set-Cookie"))
 	}
 	if _, err := os.Stat(homesFile()); err != nil {
@@ -199,9 +199,9 @@ func TestHomesDemarrageHorsVerrou(t *testing.T) {
 		w := httptest.NewRecorder()
 		mux := http.NewServeMux()
 		routesHomes(mux)
-		mux.ServeHTTP(w, httptest.NewRequest("GET", "/homes", nil))
+		mux.ServeHTTP(w, httptest.NewRequest("GET", "/v1/homes", nil))
 		if w.Code != 200 {
-			t.Errorf("/homes : %d", w.Code)
+			t.Errorf("/v1/homes : %d", w.Code)
 		}
 	}()
 	<-done

@@ -85,10 +85,10 @@ func TestOpenModeUnchanged(t *testing.T) {
 		{method: "GET", path: "/v1/state", bearer: modeTok},
 		{method: "GET", path: "/v1/state", bearer: "faux"},
 		{method: "GET", path: "/", tokCookie: modeTok, accept: "text/html"},
-		{method: "GET", path: "/homes", tokCookie: modeTok},
+		{method: "GET", path: "/v1/homes", tokCookie: modeTok},
 		{method: "GET", path: "/inexistant", tokCookie: modeTok},
 		{method: "PUT", path: "/v1/memory/files/x", tokCookie: modeTok, origin: "https://ailleurs.example"},
-		{method: "POST", path: "/homes-save", bearer: modeTok, origin: "http://" + testHost},
+		{method: "PUT", path: "/v1/homes", bearer: modeTok, origin: "http://" + testHost},
 	}
 	var before []*httptest.ResponseRecorder
 	for _, q := range reqs {
@@ -283,7 +283,7 @@ func TestBearerStillWorks(t *testing.T) {
 	if w := (modeReq{method: "GET", path: "/auth/me", bearer: modeTok}).do(h); w.Code != 401 {
 		t.Fatalf("/auth/me avec Bearer : %d %s", w.Code, w.Body)
 	}
-	if w := (modeReq{method: "POST", path: "/homes-save", bearer: modeTok}).do(h); w.Code != 403 {
+	if w := (modeReq{method: "PUT", path: "/v1/homes", bearer: modeTok}).do(h); w.Code != 403 {
 		t.Fatalf("route admin avec Bearer : %d %s", w.Code, w.Body)
 	}
 }

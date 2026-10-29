@@ -241,7 +241,7 @@ func TestShareCorruptedFile(t *testing.T) {
 	t.Cleanup(func() { shareSt, shareDir = oldSt, oldDir })
 	mux := http.NewServeMux()
 	routesShare(mux)
-	if w := post(mux, "/share-end", `{"id":"`+shSess+`"}`); w.Code != 503 {
+	if w := send(mux, "DELETE", "/v1/shares/"+shSess, ""); w.Code != 503 {
 		t.Fatalf("code %d", w.Code)
 	}
 	if b, _ := os.ReadFile(p); string(b) != "{pas du json" {
@@ -258,7 +258,7 @@ func TestShareEndRouteDropsGuestItems(t *testing.T) {
 	_, in, _ := shareSt.CreateInvite(shSess, "proj", "", "")
 	q.Add(shSess, "guest", in.ID, "g")
 	q.Add(shSess, "host", "", "h")
-	if w := post(mux, "/share-end", `{"id":"`+shSess+`"}`); w.Code != 200 {
+	if w := send(mux, "DELETE", "/v1/shares/"+shSess, ""); w.Code != 204 {
 		t.Fatalf("code %d", w.Code)
 	}
 	if l := q.List(shSess); len(l) != 1 || l[0].Author != "host" {
@@ -272,7 +272,7 @@ func TestShareCreateRouteFailsOnWrite(t *testing.T) {
 	shareDir = func() string { return d }
 	routesShare(http.NewServeMux())
 	lock(t, d)
-	if w := post(mux, "/invite-create", `{"id":"`+shSess+`","dir":"proj"}`); w.Code != 500 || strings.Contains(w.Body.String(), "token") {
+	if w := post(mux, "/v1/invites", `{"id":"`+shSess+`","dir":"proj"}`); w.Code != 500 || strings.Contains(w.Body.String(), "token") {
 		t.Fatalf("code %d %s", w.Code, w.Body)
 	}
 }
@@ -285,12 +285,13 @@ func TestShareReadOnlyDropsQueuedGuestItems(t *testing.T) {
 	queueSt = q
 	t.Cleanup(func() { queueSt = oldSt })
 	_, in, _ := shareSt.CreateInvite(shSess, "proj", "", "")
-	mode := `{"id":"` + shSess + `","invite":"` + in.ID + `","mode":"ro"}`
+	mode := `{"id":"` + shSess + `","mode":"ro"}`
+	modePath := "/v1/invites/" + in.ID
 	s, _ := q.Add(shSess, "guest", in.ID, "en cours")
 	q.MarkSending(shSess, s.ID)
 	q.Add(shSess, "guest", in.ID, "g")
 	q.Add(shSess, "host", "", "h")
-	if w := post(mux, "/invite-mode", mode); w.Code != 200 {
+	if w := send(mux, "PATCH", modePath, mode); w.Code != 204 {
 		t.Fatalf("code %d", w.Code)
 	}
 	l := q.List(shSess)
@@ -304,7 +305,7 @@ func TestShareReadOnlyDropsQueuedGuestItems(t *testing.T) {
 	}
 	os.Chmod(qd, 0o500)
 	t.Cleanup(func() { os.Chmod(qd, 0o700) })
-	if w := post(mux, "/invite-mode", mode); w.Code != 500 {
+	if w := send(mux, "PATCH", modePath, mode); w.Code != 500 {
 		t.Fatalf("échec d'écriture de la file : %d", w.Code)
 	}
 	if sh, _ := shareSt.Get(shSess); sh.Invites[0].Mode != "ro" {
