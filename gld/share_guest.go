@@ -54,7 +54,7 @@ var guestStatics = map[string]bool{
 var guestRoutes = map[string]bool{
 	"GET /v1/sessions/{id}/conversation": true, "GET /v1/sessions/{id}/conversation/text": true, "GET /v1/sessions/{id}/conversation/tools": true,
 	"GET /v1/sessions/{id}/conversation/images/{img}": true,
-	"GET /v1/sessions/{id}/live":                      true, "GET /v1/sessions/{id}/state": true, "GET /v1/sessions/{id}/tasks/{task}/output": true,
+	"GET /v1/sessions/{id}/live":                      true, "GET /v1/sessions/{id}/state": true, "GET /v1/sessions/{id}/tasks/{task}/output": true, "GET /v1/sessions/{id}/workflows": true,
 	"GET /v1/fs/tree": true, "GET /v1/fs/entries/content": true,
 	"GET /v1/sessions/{id}/queue": true, "POST /v1/sessions/{id}/queue": true, "DELETE /v1/sessions/{id}/queue/{qid}": true,
 	"GET /v1/guest/me": true, "DELETE /v1/guest/me": true,

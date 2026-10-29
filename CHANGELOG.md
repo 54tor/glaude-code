@@ -5,6 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 ## [Non publié]
 
 ### Ajouté
+- Workflows : le détail d'une tâche de workflow affiche ses phases, ses agents (état, tokens, durée, dernier outil) et ses totaux, relus par `GET /v1/sessions/{id}/workflows`.
 - Snippets : cocher plusieurs commandes puis les fusionner dans une session Claude (`POST /v1/snippets/merges`), comme la fusion de mémoire.
 
 ### Modifié

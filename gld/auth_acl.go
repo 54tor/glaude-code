@@ -87,7 +87,7 @@ var routeRights = map[string]Right{
 	// Transcriptions et état des sessions. /info renvoie les premiers messages d'une session : contenu, pas usage.
 	"GET /v1/state": RightSessionsRead, "GET /v1/sessions/{id}/conversation": RightSessionsRead, "GET /v1/sessions/{id}/conversation/text": RightSessionsRead, "GET /v1/sessions/{id}/conversation/tools": RightSessionsRead,
 	"GET /v1/sessions/{id}/conversation/images/{img}": RightSessionsRead, "GET /v1/sessions/{id}/conversation/uploads/{up}": RightSessionsRead, "GET /v1/sessions/{id}/conversation/document": RightSessionsRead, "GET /v1/info": RightSessionsRead,
-	"GET /v1/sessions/{id}/state": RightSessionsRead, "GET /v1/sessions/{id}/live": RightSessionsRead, "GET /v1/sessions/{id}/tasks/{task}/output": RightSessionsRead, "GET /v1/sessions/{id}/screen": RightSessionsRead,
+	"GET /v1/sessions/{id}/state": RightSessionsRead, "GET /v1/sessions/{id}/live": RightSessionsRead, "GET /v1/sessions/{id}/tasks/{task}/output": RightSessionsRead, "GET /v1/sessions/{id}/workflows": RightSessionsRead, "GET /v1/sessions/{id}/screen": RightSessionsRead,
 	"GET /v1/sessions/{id}/loaded": RightSessionsRead, "GET /v1/sessions/{id}/loaded/files/{file}": RightSessionsRead, "GET /v1/trash/sessions": RightSessionsRead, "GET /v1/state/stamp": RightSessionsRead,
 	"GET /v1/sessions/send-info": RightSessionsRead, "GET /v1/sessions": RightSessionsRead, "GET /v1/sessions/{id}/queue": RightSessionsRead,
 	// Renvoie des extraits de commandes tirés des transcriptions.
