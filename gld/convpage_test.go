@@ -57,7 +57,7 @@ func TestConvPage(t *testing.T) {
 	}
 }
 
-// Message démesuré : la page n'en donne que le début, et les morceaux de /conv-text mis bout à bout redonnent le texte
+// Message démesuré : la page n'en donne que le début, et les morceaux de GET .../conversation/text mis bout à bout redonnent le texte
 // exact, sans couper un caractère multioctet.
 func TestConvTextChunks(t *testing.T) {
 	defer func(old int) { msgCap = old }(msgCap)

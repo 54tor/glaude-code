@@ -10,7 +10,7 @@ export type TermState = "loading" | "disabled" | "forbidden" | "nosessions" | "u
 const bare = (p: string) => p.replace(/[/\\]+$/, "")
 
 // Sans le droit exec, ni /v1/terminal ni sondage : l'état est « forbidden » sans aucun appel.
-// GET /api demande sessions_read : sans lui, aucune lecture ; après un 403, le sondage s'arrête (relu au retour sur l'onglet).
+// GET /v1/state demande sessions_read : sans lui, aucune lecture ; après un 403, le sondage s'arrête (relu au retour sur l'onglet).
 // useCan répond oui tant que l'authentification charge : on attend que les droits soient connus avant tout appel.
 export function useTerminalAvailability(dir: string): { state: TermState; sessions: Session[] } {
   const auth = useAuth().state

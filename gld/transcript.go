@@ -504,10 +504,10 @@ type Msg struct {
 	// charge des messages plus anciens, ceux déjà affichés gardent la leur (pas de réutilisation de nœuds).
 	O int64 `json:"o,omitempty"`
 	N int   `json:"n,omitempty"`
-	// Img : type d'une image du message (le texte est alors vide) ; K : rang du bloc dans le message, pour la relire (GET /conv-image).
+	// Img : type d'une image du message (le texte est alors vide) ; K : rang du bloc dans le message, pour la relire (GET /v1/sessions/{id}/conversation/images/{img}).
 	Img string `json:"img,omitempty"`
 	K   int    `json:"k,omitempty"`
-	// Cut/Len : texte coupé à l'octet Cut d'un texte de Len octets ; la suite se lit par morceaux (GET /conv-text).
+	// Cut/Len : texte coupé à l'octet Cut d'un texte de Len octets ; la suite se lit par morceaux (GET /v1/sessions/{id}/conversation/text).
 	Cut int `json:"cut,omitempty"`
 	Len int `json:"len,omitempty"`
 }

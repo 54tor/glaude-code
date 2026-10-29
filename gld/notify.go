@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-var lastAPI atomic.Int64 // dernier /api servi (UnixNano) : un onglet ouvert le redemande toutes les 15 s
+var lastAPI atomic.Int64 // dernier GET /v1/state servi (UnixNano) : un onglet ouvert le redemande toutes les 15 s
 
 // newWaiting : ids présents dans cur et absents de prev.
 func newWaiting(prev map[string]bool, cur []string) (out []string) {

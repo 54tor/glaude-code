@@ -12,7 +12,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-// Le champ prefix de /git-changes ramène les chemins de git (relatifs à la racine du dépôt) au dossier ouvert.
+// Le champ prefix de GET /v1/git/changes ramène les chemins de git (relatifs à la racine du dépôt) au dossier ouvert.
 func TestGitChangesPrefixJSON(t *testing.T) {
 	gitBin, err := exec.LookPath("git")
 	if err != nil {

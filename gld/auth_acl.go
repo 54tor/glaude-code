@@ -57,7 +57,7 @@ var routeRights = map[string]Right{
 	"POST /v1/memory/drafts": RightMemWrite, "POST /v1/memory/repairs": RightMemWrite, "POST /v1/memory/fixes": RightMemWrite,
 	"POST /v1/memory/token-counts": RightMemWrite, "POST /v1/memory/lints": RightMemWrite, "POST /v1/memory/merges": RightMemWrite,
 	"GET /v1/snippets": RightMemRead, "GET /v1/snippets/{key}": RightMemRead, "GET /v1/snippets/export": RightMemRead,
-	// /snippet-draft ne fait qu'un brouillon (même appel de modèle que POST /v1/memory/drafts) ; écrire un snippet, c'est écrire
+	// POST /v1/snippets/drafts ne fait qu'un brouillon (même appel de modèle que POST /v1/memory/drafts) ; écrire un snippet, c'est écrire
 	// une commande slash de Claude Code (commands/*.md), donc config_write.
 	"POST /v1/snippets/drafts": RightMemWrite,
 	"GET /v1/notes":            RightMemRead, "PUT /v1/notes": RightMemWrite,
@@ -505,7 +505,7 @@ func authWS(r *http.Request, right Right) error {
 }
 
 // withAuthWatch annule le contexte d'un flux long dès que authWS échoue : le WebSocket local se ferme (sa lecture suit ce
-// contexte), le proxy d'un home enfant coupe l'amont et le client, /chat arrête le tour en cours.
+// contexte), le proxy d'un home enfant coupe l'amont et le client, POST .../chat arrête le tour en cours.
 func withAuthWatch(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		g := gateFrom(r)
@@ -513,7 +513,7 @@ func withAuthWatch(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		// /chat relayé à un enfant : la coupure ne lui parvient que comme un client parti, et un tour continue alors (onglet
+		// POST .../chat relayé à un enfant : la coupure ne lui parvient que comme un client parti, et un tour continue alors (onglet
 		// fermé). La passerelle lui demande donc l'arrêt explicitement, avec l'identifiant lu ici (l'enfant n'en lit pas plus).
 		var chatID, child string
 		if g.pat == "POST /v1/sessions/{id}/chat" && homeFrom(r) != "" {

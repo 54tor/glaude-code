@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// Un jumelage sur mon compte doit apparaître dans mes alertes (pour révocation depuis /auth/sessions), jamais
+// Un jumelage sur mon compte doit apparaître dans mes alertes (pour révocation depuis /v1/auth/sessions), jamais
 // un jumelage sur un autre compte.
 func TestAlertsPairing(t *testing.T) {
 	g := newAuthRig(t)

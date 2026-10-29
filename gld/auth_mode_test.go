@@ -469,7 +469,7 @@ func TestWSCutOnRevoke(t *testing.T) {
 	})
 }
 
-// /chat relayé à un home enfant : la révocation coupe le client et demande l'arrêt du tour à l'enfant.
+// POST .../chat relayé à un home enfant : la révocation coupe le client et demande l'arrêt du tour à l'enfant.
 func TestChildChatStoppedOnRevoke(t *testing.T) {
 	old := authWatchEvery
 	t.Cleanup(func() { authWatchEvery = old })

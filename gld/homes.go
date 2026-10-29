@@ -363,7 +363,7 @@ type homeStarting struct {
 }
 
 // homeProxy : le proxy de l'enfant de ce dossier, lancé au besoin. Le démarrage (jusqu'à dix secondes) se fait hors de
-// homesMu, que /homes et l'enregistrement des dossiers prennent aussi.
+// homesMu, que GET /v1/homes et l'enregistrement des dossiers prennent aussi.
 func homeProxy(name string) (http.Handler, error) {
 	h, ok := homeByName(name)
 	if !ok {

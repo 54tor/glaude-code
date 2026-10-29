@@ -17,7 +17,7 @@ const pick = (s: string): Lang | "" => {
   return v.startsWith("fr") ? "fr" : v.startsWith("en") ? "en" : ""
 }
 
-// server : le champ « lang » de /api (fr, en, other ou vide). nav : la langue du navigateur.
+// server : le champ « lang » de GET /v1/state (fr, en, other ou vide). nav : la langue du navigateur.
 export function resolveFront(server: string | undefined, nav: string): Lang {
   if (server === "fr" || server === "en") return server
   if (server === "other") return "en"

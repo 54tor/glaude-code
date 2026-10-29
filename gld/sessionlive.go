@@ -193,7 +193,7 @@ func defaultVerbs(lang string) []string {
 	return v
 }
 
-// verbsCache : /session-live est relu toutes les 2 s par le navigateur ; la liste ne change qu'avec settings.json ou la langue.
+// verbsCache : GET /v1/sessions/{id}/live est relu toutes les 2 s par le navigateur ; la liste ne change qu'avec settings.json ou la langue.
 var verbsCache struct {
 	sync.Mutex
 	key   string

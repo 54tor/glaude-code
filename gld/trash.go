@@ -130,7 +130,7 @@ func trashRestore(id string) (Trashed, error) {
 // trashPurge vide la corbeille (ou en retire un seul élément).
 func trashPurge(id string) error {
 	if id == "" {
-		// sessions/ appartient à la corbeille de sessions (droit exec) : /trash-purge ne l'efface pas.
+		// sessions/ appartient à la corbeille de sessions (droit exec) : DELETE /v1/trash/sessions ne l'efface pas.
 		ents, err := readDirTrusted(trashDir())
 		if err != nil {
 			if os.IsNotExist(err) {

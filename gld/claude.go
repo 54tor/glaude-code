@@ -187,7 +187,7 @@ func tmuxLauncher() string {
 var cmdTimeout = 10 * time.Second // claude agents et tmux : ~130 ms et quelques ms en temps normal
 
 // claudeAgents : la sortie de `claude agents --json`, bornée dans le temps : un claude bloqué (mise à jour, invite) ne fige ni
-// /api ni les boucles de fond, et n'empile pas un processus par rafraîchissement. Une erreur vaut « on ne sait pas ».
+// /v1/state ni les boucles de fond, et n'empile pas un processus par rafraîchissement. Une erreur vaut « on ne sait pas ».
 func claudeAgents() ([]byte, error) {
 	agentsMu.Lock()
 	defer agentsMu.Unlock()
@@ -199,7 +199,7 @@ func claudeAgents() ([]byte, error) {
 	return agentsOut, agentsErr
 }
 
-// Un relevé vaut agentsTTL, et un seul claude tourne à la fois : /api demandait deux relevés d'affilée, l'écran tmux un toutes
+// Un relevé vaut agentsTTL, et un seul claude tourne à la fois : /v1/state demandait deux relevés d'affilée, l'écran tmux un toutes
 // les 1,5 s, closeAndWait un tous les 200 ms ; chaque relevé est un processus Node de 130 ms et 210 Mo (mesuré).
 // forgetAgents : avant une action qui écrit ou supprime (liveCheck), le prochain relevé est frais.
 var (

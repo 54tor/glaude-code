@@ -18,7 +18,7 @@ func TestProviderClaude(t *testing.T) {
 	}
 }
 
-// Les sessions et la réponse de /api portent leur fournisseur ; les identifiants ne changent pas.
+// Les sessions et la réponse de /v1/state portent leur fournisseur ; les identifiants ne changent pas.
 func TestSessionPorteSonFournisseur(t *testing.T) {
 	h, _, _ := web(t)
 	m := status(t, h, "GET", "/v1/state", "", 200)
