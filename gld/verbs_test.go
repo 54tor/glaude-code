@@ -10,8 +10,8 @@ import (
 	"unicode/utf8"
 )
 
-// Effectif attendu par langue : 124 verbes d'origine, puis +500 (français), puis +500 (anglais).
-var wantVerbs = map[string]int{"fr": 624, "en": 624}
+// Effectif attendu par langue : 124 verbes d'origine, +500 (français), +500 (anglais), puis +1000 de situations cocasses par langue.
+var wantVerbs = map[string]int{"fr": 1624, "en": 1624}
 
 var forbiddenVerbWords = regexp.MustCompile(`(?i)\b(heures?|sommeil|fatigue|dormir|bonne nuit|sleep|tired|bedtime|o'clock)\b`)
 
