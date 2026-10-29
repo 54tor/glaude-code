@@ -18,12 +18,11 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: gld/go.mod
-          cache-dependency-path: gld/go.sum
+          cache: false # un cache écrit par une autre branche ne doit pas entrer dans les binaires publiés
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: gld/ui/package-lock.json
+          package-manager-cache: false
       - run: make check
       - run: make ui
       - name: Binaires
