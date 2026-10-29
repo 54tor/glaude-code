@@ -18,6 +18,7 @@
     "unset": "non défini",
     "notInstalled": "non installé",
     "manage": "Installer ou mettre à jour",
+    "exportImport": "Exporter / importer",
     "noPlugins": "Aucun plugin.",
     "noSkills": "Aucun skill.",
     "noHooks": "Aucun hook.",

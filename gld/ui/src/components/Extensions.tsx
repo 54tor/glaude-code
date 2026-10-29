@@ -159,8 +159,10 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
         <section className="rounded-xl border bg-card p-4 shadow-xs md:p-5">
           <h3 className={sect}>
             {t("extensions.plugins")} ({ids.length})
-            <Button size="xs" variant="outline" className="ml-auto" onClick={() => setTab("install")}>
-              <Plug /> {t("extensions.manage")}
+            <Button size="xs" variant="outline" className="ml-auto" asChild>
+              <Link to={href({ kind: "plugins" })}>
+                <Plug /> {t("extensions.manage")}
+              </Link>
             </Button>
           </h3>
           <p className="mb-1 text-xs text-muted-foreground">{t("extensions.pluginsHelp")}</p>

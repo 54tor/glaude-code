@@ -18,6 +18,7 @@
     "unset": "unset",
     "notInstalled": "not installed",
     "manage": "Install or update",
+    "exportImport": "Export / import",
     "noPlugins": "No plugins.",
     "noSkills": "No skills.",
     "noHooks": "No hooks.",

@@ -8,6 +8,7 @@ import { withChoice } from "./models"
 import { join, segs } from "./paths"
 import { AUTO, buildView, cut, plural } from "./sessionsView"
 import { buildTree, find, under } from "./tree"
+import { href, parse } from "./route"
 import {
   cmpFiles,
   home,
@@ -290,5 +291,14 @@ describe("tirets insécables", () => {
     const p = tree.children[0].children as { type: string; value?: string; tagName?: string }[]
     expect(p.map((n) => n.value ?? n.tagName)).toEqual(["voir ", "span", " et un-identifiant-vraiment-beaucoup-trop-long fin"])
     expect(tree.children[1].children[0].type).toBe("text")
+  })
+})
+
+describe("routes plugins et sauvegarde", () => {
+  it("parse et href sont inverses", () => {
+    expect(parse("/plugins")).toEqual({ kind: "plugins" })
+    expect(parse("/sauvegarde")).toEqual({ kind: "backup" })
+    expect(href({ kind: "plugins" })).toBe("/plugins")
+    expect(href({ kind: "backup" })).toBe("/sauvegarde")
   })
 })

@@ -44,6 +44,7 @@ import { importLocalQueues } from "@/hooks/importQueues"
 const Conversation = lazy(() => import("@/components/Conversation").then((m) => ({ default: m.Conversation })))
 const Snippets = retryLazy(() => import("@/components/Snippets").then((m) => ({ default: m.Snippets })))
 const Extensions = retryLazy(() => import("@/components/Extensions").then((m) => ({ default: m.Extensions })))
+const Plugins = retryLazy(() => import("@/components/Plugins").then((m) => ({ default: m.Plugins })))
 const TeamRun = retryLazy(() => import("@/components/teams/TeamRun").then((m) => ({ default: m.TeamRun })))
 const TeamsPage = retryLazy(() => import("@/components/teams/TeamsPage").then((m) => ({ default: m.TeamsPage })))
 const Config = retryLazy(() => import("@/components/Config").then((m) => ({ default: m.Config })))
@@ -308,6 +309,8 @@ function Shell() {
     memory: t("shell.app.title.memory"),
     config: t("shell.app.title.config"),
     extensions: t("shell.app.title.extensions"),
+    plugins: t("shell.app.title.plugins"),
+    backup: t("shell.app.title.backup"),
     teams: t("teams.title"),
     team: t("teams.title"),
     skills: t("shell.app.title.skills"),
@@ -333,6 +336,10 @@ function Shell() {
           ? t("shell.app.sub.skills")
           : route.kind === "extensions"
           ? t("shell.app.sub.extensions")
+          : route.kind === "plugins"
+          ? t("shell.app.sub.plugins")
+          : route.kind === "backup"
+          ? t("shell.app.sub.backup")
           : route.kind === "config"
           ? t("shell.app.sub.config")
           : route.kind === "snippets"
@@ -354,6 +361,9 @@ function Shell() {
   return (
     <ActionsCtx.Provider value={actions}>
       <div className="safe-t safe-x flex h-dvh flex-col md:flex-row">
+        <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:ring-3 focus:ring-ring/80">
+          {t("shell.header.skipToContent")}
+        </a>
         <Sidebar
           open={navOpen}
           onClose={() => setNavOpen(false)}
@@ -378,7 +388,7 @@ function Shell() {
           args={args}
         />
 
-        <main className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        <main id="main" tabIndex={-1} className="relative flex min-h-0 min-w-0 flex-1 flex-col outline-none">
           <PageHeader
             onMenu={() => setNavOpen(true)}
             title={title}
@@ -415,6 +425,10 @@ function Shell() {
             <TeamRun key={route.name} name={route.name} />
           ) : route.kind === "extensions" ? (
             <Extensions home={home} onAsk={setAsk} />
+          ) : route.kind === "plugins" ? (
+            <Plugins home={home} />
+          ) : route.kind === "backup" ? (
+            <div />
           ) : route.kind === "config" ? (
             <Config home={home} tab={route.tab} onTab={(tab) => go({ kind: "config", tab })} ui={{ args, setArgs, choice, setChoice, font, setFont, fontSize, setFontSize }} />
           ) : route.kind === "memory" ? (

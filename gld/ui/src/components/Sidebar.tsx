@@ -1,7 +1,7 @@
 import { Fragment, useState, useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
-import { AlarmClock, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, Flame, Microwave, Snowflake, History, FileText, Inbox, NotebookPen, Info, Fan, Search, ShieldCheck, Tag, Users, X } from "lucide-react"
+import { AlarmClock, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, Plug, ArchiveRestore, SlidersHorizontal, Shredder, Flame, Microwave, Snowflake, History, FileText, Inbox, NotebookPen, Info, Fan, Search, ShieldCheck, Tag, Users, X } from "lucide-react"
 import { tilde } from "@/lib/format"
 import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
@@ -337,6 +337,8 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           {show(t("shell.app.title.all")) && <NavItem icon={Inbox} label={t("shell.app.title.all")} n={p.counts.all} active={r.kind === "all"} {...link({ kind: "all" })} />}
           {show(t("shell.app.title.tabs")) && <NavItem icon={History} label={t("shell.app.title.tabs")} active={r.kind === "tabs"} {...link({ kind: "tabs" })} />}
           {show(t("shell.app.title.extensions")) && <NavItem icon={Puzzle} label={t("shell.app.title.extensions")} active={r.kind === "extensions" || r.kind === "skills"} {...link({ kind: "extensions" })} />}
+          {show(t("shell.app.title.plugins")) && <NavItem icon={Plug} label={t("shell.app.title.plugins")} active={r.kind === "plugins"} {...link({ kind: "plugins" })} />}
+          {show(t("shell.app.title.backup")) && <NavItem icon={ArchiveRestore} label={t("shell.app.title.backup")} active={r.kind === "backup"} {...link({ kind: "backup" })} />}
           {show(t("teams.title")) && <NavItem icon={Users} label={t("teams.title")} active={r.kind === "teams" || r.kind === "team"} {...link({ kind: "teams" })} />}
           {!nqt && <InvitesButton />}
           {show(t("shell.app.title.config")) && <NavItem icon={SlidersHorizontal} label={t("shell.app.title.config")} active={r.kind === "config"} {...link({ kind: "config", tab: "" })} />}
