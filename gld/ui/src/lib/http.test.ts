@@ -33,6 +33,10 @@ describe("http", () => {
     vi.stubGlobal("fetch", reply(502, "bad gateway"))
     expect(await http.get("/x").catch((x) => x)).toMatchObject({ status: 502, code: "http_502" })
   })
+  it("2xx non JSON : bad_response", async () => {
+    vi.stubGlobal("fetch", reply(200, "<html></html>"))
+    expect(await http.get("/x").catch((x) => x)).toMatchObject({ status: 200, code: "bad_response" })
+  })
   it("réseau : status 0 et net", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("down"))))
     expect(await http.get("/x").catch((x) => x)).toMatchObject({ status: 0, net: true })

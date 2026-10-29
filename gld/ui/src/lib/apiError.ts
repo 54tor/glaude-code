@@ -15,6 +15,8 @@ export class ApiError extends Error {
   }
 }
 
+export const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e))
+
 export const V1 = "/v1"
 export const v1 = (path: string) => (path.startsWith(V1 + "/") ? path : V1 + path)
 // Segment de chemin : encode aussi « / » (clés mémoire u/…, p/<dossier>/…).
@@ -36,12 +38,16 @@ export async function readResponse<T>(r: Response): Promise<T> {
   const retry = Number(r.headers.get("Retry-After")) || 0
   const text = r.status === 204 ? "" : await r.text().catch(() => "")
   let j: unknown
+  let bad = false
   try {
     j = text ? JSON.parse(text) : undefined
   } catch {
-    j = undefined
+    bad = true
   }
-  if (r.ok) return j as T
+  if (r.ok) {
+    if (bad) throw new ApiError(r.status, "bad_response", i18n.t("shell.api.error", { msg: "JSON" })) // page HTML d'une passerelle, pas la réponse de l'API
+    return j as T
+  }
   const e = (j as { error?: { code?: string; message?: string } } | undefined)?.error
   throw new ApiError(r.status, e?.code || `http_${r.status}`, e?.message || i18n.t("shell.api.error", { msg: String(r.status) }), { retry })
 }
