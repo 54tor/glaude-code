@@ -213,6 +213,7 @@
   "srv.homesync.sauvegardeImpossible": "backup failed: {{.A1}}",
   "srv.homesync.unObjetJsonEst": "{{.A1}}: a JSON object is expected",
   "srv.http_util.idInvalide": "invalid id",
+  "srv.http_util.refuse": "access denied",
   "srv.http_util.requeteInvalide": "invalid request",
   "srv.http_util.requeteTropGrosse": "request too large (64 KiB at most)",
   "srv.images.decalageNegatif": "negative offset",

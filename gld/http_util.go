@@ -20,6 +20,15 @@ func writeErr(w http.ResponseWriter, status int, code, msg string) {
 	writeJSON(w, status, map[string]any{"error": map[string]string{"code": code, "message": msg}})
 }
 
+// forbid refuse une requête avant routage : erreur JSON sur /v1, texte brut pour les pages.
+func forbid(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/v1/") {
+		writeErr(w, http.StatusForbidden, "forbidden", L("srv.http_util.refuse"))
+		return
+	}
+	http.Error(w, "forbidden", http.StatusForbidden)
+}
+
 // decodeBody lit un corps JSON borné ; false après avoir répondu 400.
 func decodeBody(w http.ResponseWriter, r *http.Request, v any, limit int64) bool {
 	if json.NewDecoder(io.LimitReader(r.Body, limit)).Decode(v) != nil {

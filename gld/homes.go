@@ -448,7 +448,7 @@ func withHomes(next http.Handler) http.Handler {
 				return
 			}
 			if strings.Contains(strings.ToLower(r.Header.Get("Upgrade")), "websocket") && !originIsHost(r) {
-				http.Error(w, "forbidden", http.StatusForbidden)
+				writeErr(w, 403, "forbidden", L("srv.http_util.refuse"))
 				return
 			}
 			p.ServeHTTP(w, r)

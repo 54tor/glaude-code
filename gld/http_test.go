@@ -89,16 +89,6 @@ func call(t *testing.T, h http.Handler, method, path, body string) (int, map[str
 	return w.Code, m, w.Body.String()
 }
 
-// ok : réponse {ok, out} attendue ; out doit contenir want.
-func ok(t *testing.T, h http.Handler, path, body string, wantOK bool, want string) map[string]any {
-	t.Helper()
-	code, m, raw := call(t, h, "POST", path, body)
-	if code != 200 || m["ok"] != wantOK || !strings.Contains(raw, want) {
-		t.Fatalf("%s %s : %d %s", path, cut(body, 200), code, cut(raw, 300))
-	}
-	return m
-}
-
 // status : seul le code HTTP compte.
 func status(t *testing.T, h http.Handler, method, path, body string, want int) map[string]any {
 	t.Helper()

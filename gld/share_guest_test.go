@@ -176,7 +176,7 @@ func TestGuestNonWhitelistedForbidden(t *testing.T) {
 	c, csrf := guestIn(t, h)
 	for _, rt := range [][2]string{
 		{"POST", "/v1/sessions/" + id1 + "/keystrokes"}, {"POST", "/v1/trust/answers"}, {"POST", "/v1/sessions/" + id1 + "/chat"},
-		{"GET", "/v1/auth/me"}, {"GET", "/config"}, {"PATCH", "/v1/sessions/" + id1 + "/queue/x"}, {"POST", "/v1/invites"}, {"DELETE", "/v1/shares/" + id1},
+		{"GET", "/v1/auth/me"}, {"GET", "/v1/config"}, {"PATCH", "/v1/sessions/" + id1 + "/queue/x"}, {"POST", "/v1/invites"}, {"DELETE", "/v1/shares/" + id1},
 		{"GET", "/v1/state"}, {"GET", "/v1/sessions/" + id1 + "/conversation/document?path=/etc/x.md"}, {"POST", "/v1/sessions/" + id1 + "/messages"}, {"GET", "/v1/homes"},
 		{"GET", "//v1/sessions/" + id1 + "/conversation"}, {"GET", "/v1/sessions/" + id1 + "/conversation/"}, {"GET", "/v1/sessions/" + id1 + "/%63onversation"},
 		{"GET", "/v1/sessions/" + id1 + "/conversation/../../../state"}, {"POST", "/v1/sessions/" + id1 + "/conversation"}, {"GET", "/v1/sessions/" + id1 + "/queue/x"},

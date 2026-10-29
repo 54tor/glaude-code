@@ -416,11 +416,11 @@ func handler() http.Handler {
 	guest := guestGate(mux, host)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !openHosts && !hosts[r.Host] {
-			http.Error(w, "forbidden", http.StatusForbidden)
+			forbid(w, r)
 			return
 		}
 		if !childAuthorized(r) {
-			http.Error(w, "forbidden", http.StatusForbidden)
+			forbid(w, r)
 			return
 		}
 		guest.ServeHTTP(w, r)

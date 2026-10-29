@@ -213,6 +213,7 @@
   "srv.homesync.sauvegardeImpossible": "sauvegarde impossible : {{.A1}}",
   "srv.homesync.unObjetJsonEst": "{{.A1}} : un objet JSON est attendu",
   "srv.http_util.idInvalide": "id invalide",
+  "srv.http_util.refuse": "accès refusé",
   "srv.http_util.requeteInvalide": "requête invalide",
   "srv.http_util.requeteTropGrosse": "requête trop grosse (64 Kio au plus)",
   "srv.images.decalageNegatif": "décalage négatif",
