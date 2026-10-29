@@ -53,10 +53,20 @@ function useNow(active: boolean) {
 
 // Les états génériques (réflexion, travail) changent de verbe toutes les 6 s, l'un après l'autre, décalés d'une session à l'autre ;
 // un outil en cours ou une attente se lisent tels quels.
+function rotate(list: string[], id: string, now: number) {
+  const seed = [...id].reduce((n, c) => n + c.charCodeAt(0), 0)
+  return list[(Math.floor(now / 6) + seed) % list.length] + "…"
+}
+
 function label(st: LiveState, id: string, now: number) {
   if (!st.thinking || !st.generic || !st.verbs?.length) return st.activity || (st.thinking ? i18n.t("conversation.live.working") : i18n.t("conversation.live.open"))
-  const seed = [...id].reduce((n, c) => n + c.charCodeAt(0), 0)
-  return st.verbs[(Math.floor(now / 6) + seed) % st.verbs.length] + "…"
+  return rotate(st.verbs, id, now)
+}
+
+// Un outil en cours : une des formules de « conversation.live.execTools », à défaut « exécute un outil… ».
+function execLabel(id: string, now: number) {
+  const list = i18n.t("conversation.live.execTools", { returnObjects: true })
+  return Array.isArray(list) && list.length ? rotate(list as string[], id, now) : i18n.t("conversation.live.execTool")
 }
 
 // Ce que Claude fait en ce moment, en dernière ligne de la transcription. `open` (la liste des sessions ouvertes, mise à jour dès la fermeture) prime sur le relevé :
@@ -85,7 +95,7 @@ export function LiveBar({ live: { st, open }, id }: { live: Live; id: string }) 
           <span className={cn("flex min-w-0 items-center gap-1.5 font-medium", st.thinking ? "text-success" : "text-warning")}>
             {st.thinking ? <Fan className="size-3.5 shrink-0 animate-spin" /> : <span className="size-1.5 shrink-0 rounded-full bg-current" />}
             <span className="truncate" title={st.activity}>
-              {st.tool && st.exec ? t("conversation.live.execTool") : label(st, id, now)}
+              {st.tool && st.exec ? execLabel(id, now) : label(st, id, now)}
             </span>
             {st.since > 0 && st.thinking && <span className="shrink-0 font-normal text-muted-foreground">{t("conversation.live.since", { time: secs(now - st.since) })}</span>}
           </span>
