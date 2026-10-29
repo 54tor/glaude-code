@@ -86,7 +86,7 @@ func TestWithTokenThrottlesWrongTokens(t *testing.T) {
 	tok := "0123456789abcdef0123"
 	h := withToken(tok, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
 	do := func(set func(*http.Request)) int {
-		r := httptest.NewRequest("GET", "/api/x", nil)
+		r := httptest.NewRequest("GET", "/v1/x", nil)
 		r.RemoteAddr = "192.0.2.7:1234"
 		set(r)
 		w := httptest.NewRecorder()
@@ -115,7 +115,7 @@ func TestCookiePerimeEfface(t *testing.T) {
 	resetTokenTries()
 	t.Cleanup(resetTokenTries)
 	h := withToken("0123456789abcdef0123", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
-	r := httptest.NewRequest("GET", "/api/x", nil)
+	r := httptest.NewRequest("GET", "/v1/x", nil)
 	r.RemoteAddr = "192.0.2.8:1234"
 	r.AddCookie(&http.Cookie{Name: tokenCookie, Value: "ancien-jeton"})
 	w := httptest.NewRecorder()

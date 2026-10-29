@@ -95,9 +95,13 @@ func TestImagesDesConversations(t *testing.T) {
 	if w.Code != 200 || w.Header().Get("Content-Type") != "image/png" || w.Header().Get("X-Content-Type-Options") != "nosniff" {
 		t.Fatalf("route : %d %v", w.Code, w.Header())
 	}
-	for _, q := range []string{"dir=..&id=" + id1 + "&o=0&k=1", "dir=-p&id=" + id1 + "&o=x&k=1", "dir=-p&id=%2e%2e&o=0&k=1"} {
-		if w := getRaw(h, "/conv-image?"+q); w.Code != 404 {
-			t.Errorf("%s : %d", q, w.Code)
+	for u, want := range map[string]int{
+		"/v1/sessions/" + id1 + "/conversation/images/0-1?dir=..": 404,
+		"/v1/sessions/" + id1 + "/conversation/images/x-1?dir=-p": 404,
+		"/v1/sessions/%2e%2e/conversation/images/0-1?dir=-p":      400,
+	} {
+		if w := getRaw(h, u); w.Code != want {
+			t.Errorf("%s : %d", u, w.Code)
 		}
 	}
 }
