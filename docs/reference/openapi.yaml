@@ -2073,12 +2073,6 @@ paths:
       tags:
       - memory
       operationId: getMemoryFiles
-      parameters:
-      - name: q
-        in: query
-        required: false
-        schema:
-          type: string
       x-gld-right: mem_read
       responses:
         '200':
@@ -2374,6 +2368,29 @@ paths:
                 type: object
         '400':
           $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/memory/search:
+    get:
+      tags:
+      - memory
+      operationId: getMemorySearch
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
         '401':
           $ref: '#/components/responses/Error'
         '403':

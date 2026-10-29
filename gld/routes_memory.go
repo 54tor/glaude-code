@@ -15,12 +15,11 @@ import (
 // routesMemory : la zone Mémoire et sa corbeille.
 func routesMemory(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/memory/files", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Has("q") {
-			writeJSON(w, 200, map[string]any{"hits": memSearch(r.URL.Query().Get("q"))})
-			return
-		}
 		g, p, t := memList()
 		writeJSON(w, 200, map[string]any{"global": g, "projects": p, "targets": t})
+	})
+	mux.HandleFunc("GET /v1/memory/search", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"hits": memSearch(r.URL.Query().Get("q"))})
 	})
 	mux.HandleFunc("GET /v1/memory/files/{key}", func(w http.ResponseWriter, r *http.Request) {
 		t, err := memRead(r.PathValue("key"))

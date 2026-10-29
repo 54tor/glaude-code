@@ -51,7 +51,7 @@ var routeRights = map[string]Right{
 	"POST /v1/homes/sync-plans": RightMemSync, "POST /v1/homes/syncs": RightMemSync,
 
 	// Mémoire, règles, snippets, notes, corbeille, recherche.
-	"GET /v1/memory/files": RightMemRead, "GET /v1/memory/files/{key}": RightMemRead, "GET /v1/memory/health": RightMemRead,
+	"GET /v1/memory/files": RightMemRead, "GET /v1/memory/search": RightMemRead, "GET /v1/memory/files/{key}": RightMemRead, "GET /v1/memory/health": RightMemRead,
 	"GET /v1/memory/matches": RightMemRead, "GET /v1/memory/loaded": RightMemRead,
 	"PUT /v1/memory/files/{key}": RightMemWrite, "PATCH /v1/memory/files/{key}": RightMemWrite, "DELETE /v1/memory/files": RightMemWrite,
 	"POST /v1/memory/drafts": RightMemWrite, "POST /v1/memory/repairs": RightMemWrite, "POST /v1/memory/fixes": RightMemWrite,

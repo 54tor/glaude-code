@@ -232,7 +232,7 @@ func TestHTTPMemoireEcritures(t *testing.T) {
 	if _, m, _ := call(t, h, "GET", "/v1/memory/health", ""); m["issues"] == nil {
 		t.Fatalf("santé : %v", m)
 	}
-	if _, m, _ := call(t, h, "GET", "/v1/memory/files?q=corps", ""); m["hits"].(map[string]any)["m/-p/x.md"] == nil {
+	if _, m, _ := call(t, h, "GET", "/v1/memory/search?q=corps", ""); m["hits"].(map[string]any)["m/-p/x.md"] == nil {
 		t.Fatalf("recherche : %v", m)
 	}
 }
