@@ -354,34 +354,7 @@ func routesMemory(mux *http.ServeMux) {
 			writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 			return
 		}
-		if req.Prompt != "" {
-			if len(req.Prompt) > 32<<10 || !utf8.ValidString(req.Prompt) || strings.ContainsRune(req.Prompt, 0) {
-				writeErr(w, http.StatusBadRequest, "bad_request", L("srv.routes_memory.promptTropLongOu"))
-				return
-			}
-			prompt = req.Prompt
-		}
-		if !req.Launch {
-			writeJSON(w, 200, map[string]any{"message": L("srv.routes_memory.promptCopie"), "prompt": prompt})
-			return
-		}
-		args, err := claudeArgs(req.Args)
-		if err != nil {
-			writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
-			return
-		}
-		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-		defer cancel()
-		out, err := matin(ctx, append(args, "--prompt", prompt, cwd)...)
-		if err != nil {
-			msg := strings.TrimSpace(out)
-			if msg == "" {
-				msg = err.Error()
-			}
-			writeErr(w, http.StatusInternalServerError, "internal", msg)
-			return
-		}
-		writeJSON(w, 200, map[string]any{"message": out, "prompt": prompt})
+		mergeReply(w, r, prompt, cwd, req.Prompt, req.Launch, req.Args)
 	})
 	// Conversation dans le navigateur (chat.go).
 	mux.HandleFunc("GET /v1/trash/memory", func(w http.ResponseWriter, r *http.Request) {
@@ -429,4 +402,36 @@ func routesMemory(mux *http.ServeMux) {
 		writeJSON(w, 200, map[string]any{"message": L("srv.routes_memory.corbeilleVidee")})
 	})
 	// Groupes virtuels et favoris : le navigateur envoie l'ensemble, le serveur le valide et le remplace.
+}
+
+// mergeReply : renvoie le prompt de fusion, ou le lance dans une nouvelle session (mémoire et snippets).
+func mergeReply(w http.ResponseWriter, r *http.Request, prompt, cwd, override string, launch bool, rawArgs string) {
+	if override != "" {
+		if len(override) > 32<<10 || !utf8.ValidString(override) || strings.ContainsRune(override, 0) {
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.routes_memory.promptTropLongOu"))
+			return
+		}
+		prompt = override
+	}
+	if !launch {
+		writeJSON(w, 200, map[string]any{"message": L("srv.routes_memory.promptCopie"), "prompt": prompt})
+		return
+	}
+	args, err := claudeArgs(rawArgs)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	out, err := matin(ctx, append(args, "--prompt", prompt, cwd)...)
+	if err != nil {
+		msg := strings.TrimSpace(out)
+		if msg == "" {
+			msg = err.Error()
+		}
+		writeErr(w, http.StatusInternalServerError, "internal", msg)
+		return
+	}
+	writeJSON(w, 200, map[string]any{"message": out, "prompt": prompt})
 }

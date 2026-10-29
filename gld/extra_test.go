@@ -560,3 +560,25 @@ func TestReadTabsDropsAutoReviews(t *testing.T) {
 		t.Fatalf("readTabs = %+v, %v", got, err)
 	}
 }
+
+func TestSnippetMergePrompt(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	snipDir = filepath.Join(cfg, "commands")
+	t.Cleanup(func() { snipDir = "" })
+	put(t, filepath.Join(cfg, "commands", "a.md"), "---\ndescription: A\n---\na", old)
+	put(t, filepath.Join(cfg, "commands", "b.md"), "b", old)
+	p, cwd, err := snippetMergePrompt([]string{"u/a.md", "u/b.md"}, "u/b.md")
+	b := filepath.Join(cfg, "commands", "b.md")
+	if err != nil || cwd != cfg || !strings.Contains(p, "- "+filepath.Join(cfg, "commands", "a.md")) || !strings.Contains(p, "dans "+b+",") {
+		t.Fatal(p, cwd, err)
+	}
+	for _, c := range []struct {
+		keys []string
+		out  string
+	}{{[]string{"u/a.md"}, ""}, {[]string{"u/a.md", "u/b.md"}, "u/c.md"}, {[]string{"u/a.md", "u/absent.md"}, ""}} {
+		if _, _, err := snippetMergePrompt(c.keys, c.out); err == nil {
+			t.Error("refus attendu :", c)
+		}
+	}
+}

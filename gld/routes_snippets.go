@@ -58,6 +58,24 @@ func routesSnippets(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"message": L("srv.routes_snippets.miseEnFormePrete"), "text": text, "cost": cost})
 	})
+	mux.HandleFunc("POST /v1/snippets/merges", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Keys   []string
+			Out    string // document de sortie : l'une des clés (vide : la première)
+			Launch bool
+			Args   string
+			Prompt string
+		}
+		if !decodeBody(w, r, &req, 1<<16) {
+			return
+		}
+		prompt, cwd, err := snippetMergePrompt(req.Keys, req.Out)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+			return
+		}
+		mergeReply(w, r, prompt, cwd, req.Prompt, req.Launch, req.Args)
+	})
 	mux.HandleFunc("PATCH /v1/snippets/{key}", func(w http.ResponseWriter, r *http.Request) {
 		var req struct{ To string }
 		if !decodeBody(w, r, &req, 1<<12) {

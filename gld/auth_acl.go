@@ -59,8 +59,8 @@ var routeRights = map[string]Right{
 	"GET /v1/snippets": RightMemRead, "GET /v1/snippets/{key}": RightMemRead, "GET /v1/snippets/export": RightMemRead,
 	// POST /v1/snippets/drafts ne fait qu'un brouillon (même appel de modèle que POST /v1/memory/drafts) ; écrire un snippet, c'est écrire
 	// une commande slash de Claude Code (commands/*.md), donc config_write.
-	"POST /v1/snippets/drafts": RightMemWrite,
-	"GET /v1/notes":            RightMemRead, "PUT /v1/notes": RightMemWrite,
+	"POST /v1/snippets/drafts": RightMemWrite, "POST /v1/snippets/merges": RightMemWrite,
+	"GET /v1/notes": RightMemRead, "PUT /v1/notes": RightMemWrite,
 	"GET /v1/trash/memory": RightMemRead, "GET /v1/trash/memory/{id}/file": RightMemRead, "PATCH /v1/trash/memory/{id}": RightMemWrite, "DELETE /v1/trash/memory": RightMemWrite,
 	"GET /v1/skills": RightMemRead, "GET /v1/skills/catalog": RightMemRead, "GET /v1/skills/updates": RightMemRead, "GET /v1/skills/{key}": RightMemRead, "GET /v1/plugins": RightMemRead, "GET /v1/marketplaces": RightMemRead,
 
@@ -358,7 +358,7 @@ func gateCheck(g *gateInfo, r *http.Request, pat string, need Right) (int, strin
 			return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] && m[RightConfigWrite] })
 		}
 	}
-	if pat == "POST /v1/memory/merges" {
+	if pat == "POST /v1/memory/merges" || pat == "POST /v1/snippets/merges" {
 		var req struct{ Launch bool }
 		if err := peekJSON(r, &req); err != nil {
 			return peekErr(err)

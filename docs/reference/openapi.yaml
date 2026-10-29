@@ -3942,6 +3942,44 @@ paths:
           $ref: '#/components/responses/Error'
         '500':
           $ref: '#/components/responses/Error'
+  /v1/snippets/merges:
+    post:
+      tags:
+      - snippets
+      operationId: postSnippetsMerges
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                keys:
+                  type: array
+                  items: {}
+                out:
+                  type: string
+                launch:
+                  type: boolean
+                args:
+                  type: string
+                prompt:
+                  type: string
+      x-gld-right: mem_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /v1/snippets/export:
     get:
       tags:

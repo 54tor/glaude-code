@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -143,6 +144,44 @@ func listSnippets() (snips []Snippet, scopes []MemTarget) {
 	}
 	sort.Slice(scopes, func(i, j int) bool { return scopes[i].Project < scopes[j].Project })
 	return snips, scopes
+}
+
+// snippetMergePrompt : la demande de fusion de snippets faite à Claude, et le dossier où la lancer (le projet d'une clé p/, sinon ~/.claude).
+func snippetMergePrompt(keys []string, out string) (string, string, error) {
+	if len(keys) < 2 || len(keys) > mergeMax {
+		return "", "", terr("srv.memory.choisisDeAFichiers", "A1", mergeMax)
+	}
+	if out == "" {
+		out = keys[0]
+	}
+	if !slices.Contains(keys, out) {
+		return "", "", terr("srv.memory.documentDeSortieInvalide")
+	}
+	cwd, outPath := "", ""
+	var b strings.Builder
+	b.WriteString(L("prompt.snippetMergeHeader") + "\n")
+	for _, k := range keys {
+		base, rel, err := cmdBase(k)
+		if err != nil {
+			return "", "", err
+		}
+		p := filepath.Join(base, rel)
+		if _, err := os.Stat(p); err != nil {
+			return "", "", terr("srv.memory.introuvable", "A1", p)
+		}
+		b.WriteString("- " + p + "\n")
+		if k == out {
+			outPath = p
+		}
+		if d, _, ok := strings.Cut(k[2:], "/"); cwd == "" && k[0] == 'p' && ok {
+			cwd = projectCwd(d)
+		}
+	}
+	b.WriteString("\n" + L("prompt.snippetMergeRules", "A1", outPath) + "\n")
+	if cwd == "" {
+		cwd = cfgDir()
+	}
+	return b.String(), cwd, nil
 }
 
 func readSnippet(key string) (string, error) {
