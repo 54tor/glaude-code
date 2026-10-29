@@ -4,6 +4,7 @@ import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
 import { api, type CfgIssue, type EffRow, type HookInfo, type McpServer } from "@/lib/api"
+import { ApiError } from "@/lib/apiError"
 import { describeKey } from "@/lib/configKeys"
 import { tilde } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -166,10 +167,12 @@ export function McpTab({ home }: { home: string }) {
   }, [])
   const check = async () => {
     setBusy(true)
-    const r = (await api.post("/config-mcp-status", {})) as { ok: boolean; out?: string; status?: Record<string, string> }
+    try {
+      setStatus((await api.configMcpCheck()).status ?? {})
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : t("config.mcp.failed"))
+    }
     setBusy(false)
-    if (r.ok) setStatus(r.status ?? {})
-    else toast.error(r.out ?? t("config.mcp.failed"))
   }
   const known = new Set((servers ?? []).map((s) => s.name))
   const others = Object.keys(status ?? {}).filter((n) => !known.has(n))

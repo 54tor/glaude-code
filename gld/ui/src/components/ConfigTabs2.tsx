@@ -18,7 +18,8 @@ import { Choose } from "./Choose"
 import { useActions } from "./actions"
 import { toast } from "sonner"
 import { useEffect } from "react"
-import { reportResult } from "@/lib/report"
+import { reportAction } from "@/lib/report"
+import { errMsg } from "@/lib/apiError"
 
 type Doc = Record<string, unknown> | undefined
 type Propose = (e: CfgEdit) => Promise<void>
@@ -46,8 +47,13 @@ export function PermsTab({ file, label, doc, propose, proposePerms, gone, onTran
     const k = kind + "\0" + rule
     if (help[k]) return setHelp((h) => Object.fromEntries(Object.entries(h).filter(([x]) => x !== k))) // deuxième clic : replie
     setHelp((h) => ({ ...h, [k]: "…" }))
-    const r = await api.post("/config-perm-explain", { kind, rule })
-    setHelp((h) => ({ ...h, [k]: r.ok ? r.out : t("config.perms.explainFailed", { out: r.out }) }))
+    let text: string
+    try {
+      text = (await api.configPermExplain(kind, rule)).out
+    } catch (e) {
+      text = t("config.perms.explainFailed", { out: errMsg(e) })
+    }
+    setHelp((h) => ({ ...h, [k]: text }))
   }
   const [draft, setDraft] = useState<Record<string, string>>({})
   const [sug, setSug] = useState<PermSuggest[] | null>(null)
@@ -401,9 +407,7 @@ export function SettingsTab({ file, doc, plugins, propose }: { file: string; doc
 export function BackupsTab({ backups, onRestored, label }: { backups: BackupInfo[]; onRestored: () => void; label: (id: string) => string }) {
   const { t } = useTranslation()
   const restore = async (b: BackupInfo) => {
-    const r = await api.post("/config-restore", { name: b.name })
-    reportResult(r)
-    if (r.ok) onRestored()
+    if (await reportAction(() => api.configRestore(b.name).then((r) => ({ message: r.out })))) onRestored()
   }
   if (!backups.length) return <p className="py-8 text-sm text-muted-foreground">{t("config.backups.none")}</p>
   return (

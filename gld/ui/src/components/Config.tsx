@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { api, type CfgOverview } from "@/lib/api"
+import { errMsg } from "@/lib/apiError"
 import { tilde } from "@/lib/format"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -41,8 +42,11 @@ export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: strin
       if (move) await propose({ file, op: "remove", path: ["permissions", kind], value: rule })
       return
     }
-    const r = (await api.post("/config-perm-import", { file: "u", text: JSON.stringify({ permissions: { [kind]: [rule] } }), mode: "merge", dry: false })) as { ok: boolean; out: string }
-    if (!r.ok) return void toast.error(r.out)
+    try {
+      await api.configPermImport({ file: "u", text: JSON.stringify({ permissions: { [kind]: [rule] } }), mode: "merge", dry: false })
+    } catch (e) {
+      return void toast.error(errMsg(e))
+    }
     if (move) await propose({ file, op: "remove", path: ["permissions", kind], value: rule })
     else {
       toast.success(t("config.main.copiedToUser"))

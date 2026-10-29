@@ -136,6 +136,7 @@ export type Msg = { r: "user" | "assistant" | "tool" | "doc"; t: string; ts?: st
 export type Ls = { path: string; parent: string; dirs: string[]; sep: string; error?: string }
 // Réponse textuelle d'une action de l'API /v1 (toast).
 export type Said = { message: string }
+export type CfgReply = { out: string; before: string; after: string; warnings?: CfgIssue[] }
 export type Result = { ok: boolean; out: string; net?: boolean; n?: number } // net : pas de réponse (réseau, délai) ; l'action a pu avoir lieu
 // État git d'un dossier (gitstatus.go)
 export type GitState = { branch: string; detached?: boolean; upstream: boolean; ahead: number; behind: number; changed: number; untracked: number }
@@ -148,8 +149,6 @@ export type GitChange = { path: string; status: string; from?: string } // statu
 // Appareil jumelé par QR code en mode jeton (pair.go) ; seen : dernière visite, en secondes Unix.
 export type Device = { id: string; name: string; ip: string; created: number; seen: number }
 export type HomesInfo = { current: string; main: string; mainId?: string; homes: { name: string; dir: string; id?: string; running: boolean }[] }
-
-const enc = encodeURIComponent
 
 // status : 403 dit un droit manquant (mode multi-utilisateur), à distinguer d'un serveur injoignable.
 export type InviteQueued = { id: string; text: string; state: "queued" | "sending" | "uncertain"; at: number }
@@ -238,7 +237,7 @@ export const api = {
   memoryLint: (scope: string) => http.post<{ findings: Finding[]; cost?: number }>("/memory/lints", { scope }),
   sessionLoaded: (id: string) => http.get<{ files: LoadEvent[] }>(`/sessions/${seg(id)}/loaded`),
   sessionLoadedFile: (id: string, file: string) => http.get<{ text?: string }>(`/sessions/${seg(id)}/loaded/files/${seg(file)}`),
-  configRaw: (file: string) => get<{ ok: boolean; text?: string; out?: string }>(`/config-raw?file=${enc(file)}`),
+  configRaw: (file: string) => http.get<{ text: string }>(`/config/raw${qs({ file })}`),
   slashCommands: () => http.get<{ commands: { cmd: string; desc: string; origin: string }[] }>("/slash-commands"),
   skills: () => http.get<{ skills: Skill[]; projects: { dir: string; project: string }[] }>("/skills"),
   skill: (key: string) => http.get<{ text: string; files?: SkillFile[] }>(`/skills/${seg(key)}`),
@@ -266,7 +265,7 @@ export const api = {
   },
   marketAct: (action: "add" | "remove" | "update", source: string, name: string) =>
     action === "add" ? http.post<Said>("/marketplaces", { source }) : action === "remove" ? http.del<Said>(`/marketplaces/${seg(name)}`) : http.post<Said>(name ? `/marketplaces/${seg(name)}/updates` : "/marketplaces/updates"),
-  configProjects: () => get<{ projects: ProjectCfg[] }>("/config-projects"),
+  configProjects: () => http.get<{ projects: ProjectCfg[] }>("/config/projects"),
   sessionIdle: (id: string) => http.get<{ idle: boolean }>(`/sessions/${seg(id)}/state`),
   taskOutput: (dir: string, id: string, task: string) => http.get<{ text?: string }>(`/sessions/${seg(id)}/tasks/${seg(task)}/output${qs({ dir })}`),
   queue: (id: string) => http.get<{ items: QItem[] }>(`/sessions/${seg(id)}/queue`),
@@ -316,16 +315,22 @@ export const api = {
   sessionLive: (dir: string, id: string) => http.get<LiveState>(`/sessions/${seg(id)}/live${qs({ dir })}`),
   // refresh : relevé demandé par un POST (un GET ne doit rien déclencher), puis lecture de l'état, qui dit « refreshing ».
   account: async (refresh = false) => {
-    if (refresh) await api.post("/account-refresh", {})
-    return get<Account>("/account")
+    if (refresh) await http.post("/account/refreshes")
+    return http.get<Account>("/account")
   },
   screen: (id: string) => http.get<{ text: string }>(`/sessions/${seg(id)}/screen`),
   termInfo: () => http.get<{ enabled: boolean }>("/terminal"),
   sendInfo: () => http.get<{ ids: string[]; why: string }>("/sessions/send-info"),
-  config: () => get<CfgOverview>("/config"),
-  configEffective: (dir: string) => get<{ rows: EffRow[] }>(`/config-effective?dir=${enc(dir)}`),
-  configMcp: () => get<{ servers: McpServer[] }>("/config-mcp"),
-  configPermSuggest: () => get<{ suggestions: PermSuggest[] }>("/config-perm-suggest"),
+  config: () => http.get<CfgOverview>("/config"),
+  configEffective: (dir: string) => http.get<{ rows: EffRow[] }>(`/config/effective${qs({ dir })}`),
+  configMcp: () => http.get<{ servers: McpServer[] }>("/config/mcp"),
+  configPermSuggest: () => http.get<{ suggestions: PermSuggest[] }>("/config/permissions/suggestions"),
+  configEdit: (e: CfgEdit) => http.post<CfgReply>("/config/edits", e),
+  configRawEdit: (b: { file: string; text: string; dry: boolean }) => http.put<CfgReply>("/config/raw", b),
+  configPermImport: (b: { file: string; text: string; mode: string; dry: boolean }) => http.post<CfgReply>("/config/permissions/imports", b),
+  configPermExplain: (kind: string, rule: string) => http.post<{ out: string }>("/config/permissions/explanations", { kind, rule }),
+  configRestore: (name: string) => http.post<{ out: string }>("/config/restorations", { name }),
+  configMcpCheck: () => http.post<{ status: Record<string, string> }>("/config/mcp/checks"),
   memoryHealth: () => http.get<{ issues: Issue[] }>("/memory/health"),
   memoryMatches: (key: string, dir: string) => http.get<{ files?: string[]; total?: number; truncated?: boolean }>(`/memory/matches${qs({ key, dir })}`),
   memorySearch: (q: string) => http.get<{ hits: Record<string, string> }>(`/memory/files${qs({ q })}`),

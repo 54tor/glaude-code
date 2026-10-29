@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { api } from "@/lib/api"
+import { errMsg } from "@/lib/apiError"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useEditorDraft, useLeaveGuard } from "@/hooks/useEditorDraft"
@@ -15,7 +16,10 @@ export function RawTab({ file, version, proposeRaw }: { file: string; version: n
   const key = `${file}#${version}`
   useEffect(() => {
     let live = true
-    api.configRaw(file).then((r) => live && setLoaded({ key, text: r.text ?? "", err: r.ok ? undefined : r.out }))
+    api.configRaw(file).then(
+      (r) => live && setLoaded({ key, text: r.text }),
+      (e) => live && setLoaded({ key, text: "", err: errMsg(e) }),
+    )
     return () => {
       live = false
     }

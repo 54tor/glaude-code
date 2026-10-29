@@ -21,7 +21,7 @@ import { useConfigEdit } from "./configEdit"
 type Enabled = Record<string, boolean>
 
 // Vue unique de ce que Claude Code charge : plugins (activables par portée), skills, hooks et serveurs MCP, pour l'utilisateur
-// seul ou pour le contexte d'un projet (utilisateur, puis projet, puis local). Les écritures passent par /config-edit.
+// seul ou pour le contexte d'un projet (utilisateur, puis projet, puis local). Les écritures passent par /config/edits.
 export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => void }) {
   const { t } = useTranslation()
   const [ov, setOv] = useState<CfgOverview | null>(null)
@@ -48,10 +48,7 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
   )
   useEffect(() => void reload().catch((e) => setErr(String(e))), [reload]) // sinon la page reste sur le squelette
   useEffect(() => {
-    api.post("/config-mcp-status", {}).then((r) => {
-      const d = r as unknown as { ok: boolean; status?: Record<string, string> }
-      if (d.ok && d.status) setStatus(d.status)
-    })
+    api.configMcpCheck().then((d) => setStatus(d.status), () => {})
   }, [])
   const { propose, dialog } = useConfigEdit(reload, a.live.size)
   const doc = useMemo(() => {

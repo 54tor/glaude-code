@@ -3,6 +3,7 @@ import { CircleAlert, TriangleAlert } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { formatRaw, parseRaw, type RawPerms } from "@/lib/permLint"
 import { api, type CfgIssue } from "@/lib/api"
+import { errMsg } from "@/lib/apiError"
 import { DiffView } from "./MemoryDiff"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -29,10 +30,12 @@ function Editor({ file, label, doc, propose, onClose }: { file: string; label: s
     if (errors > 0) return
     let live = true
     const t = setTimeout(async () => {
-      const r = (await api.post("/config-perm-import", { file, text: body, mode: "replace", dry: true })) as { ok: boolean; out: string; before: string; after: string; warnings?: CfgIssue[] }
-      if (!live) return
-      if (r.ok) setPv({ before: r.before, after: r.after, warns: r.warnings ?? [] })
-      else setError(r.out)
+      try {
+        const r = await api.configPermImport({ file, text: body, mode: "replace", dry: true })
+        if (live) setPv({ before: r.before, after: r.after, warns: r.warnings ?? [] })
+      } catch (e) {
+        if (live) setError(errMsg(e))
+      }
     }, 400)
     return () => {
       live = false

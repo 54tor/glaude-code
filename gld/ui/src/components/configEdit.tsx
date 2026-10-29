@@ -2,7 +2,8 @@ import { useState, type ReactNode } from "react"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { i18n } from "@/i18n"
-import { api, type CfgEdit, type CfgIssue } from "@/lib/api"
+import { api, type CfgEdit, type CfgIssue, type CfgReply } from "@/lib/api"
+import { errMsg } from "@/lib/apiError"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -25,7 +26,6 @@ export function liveNotice(before: string, after: string, sessions: number): str
 }
 
 type Preview = { then?: () => void; edit?: CfgEdit; raw?: { file: string; text: string }; perm?: { file: string; text: string; mode: string }; summary?: string; before: string; after: string; warnings: CfgIssue[] }
-type Reply = { ok: boolean; out: string; before: string; after: string; warnings?: CfgIssue[] }
 
 // Toute modification d'un fichier de réglages passe par ici : aperçu des différences, confirmation, puis écriture
 // (le serveur fait une sauvegarde avant). Renvoie propose() et le dialogue à afficher.
@@ -61,13 +61,19 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
       hide(old, false)
       setPending((p) => p.filter((k) => k !== neu))
     }
-    const a = (await api.post("/config-edit", { file, op: "add", path: ["permissions", to], value: text })) as Reply
-    if (!a.ok) return void (undo(), toast.error(a.out))
-    const r = (await api.post("/config-edit", { file, op: "remove", path: ["permissions", from], value: rule })) as Reply
-    if (!r.ok) {
+    let a: CfgReply
+    try {
+      a = await api.configEdit({ file, op: "add", path: ["permissions", to], value: text })
+    } catch (e) {
+      return void (undo(), toast.error(errMsg(e)))
+    }
+    try {
+      const r = await api.configEdit({ file, op: "remove", path: ["permissions", from], value: rule })
+      toast.success(t("config.edit.ruleEdited"), { description: liveNotice(a.before, r.after, sessions), duration: 6000 })
+    } catch (e) {
       hide(old, false) // l'ancienne règle existe toujours
-      toast.error(r.out)
-    } else toast.success(t("config.edit.ruleEdited"), { description: liveNotice(a.before, r.after, sessions), duration: 6000 })
+      toast.error(errMsg(e))
+    }
     await onDone()
     // L'ancienne place reste masquée : d'autres vues (onglet Projets) se relisent à part et la montreraient encore un instant.
     setPending((p) => p.filter((k) => k !== neu))
@@ -76,18 +82,28 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
     const rule = edit.op === "remove" && edit.path[0] === "permissions" && typeof edit.value === "string" ? ruleKey(edit.file, edit.path[1], edit.value) : ""
     if (rule) hide(rule, true)
     if (edit.op === "add" && edit.path[0] === "permissions" && typeof edit.value === "string") hide(ruleKey(edit.file, edit.path[1], edit.value), false)
-    const r = (await api.post("/config-edit", edit)) as Reply
-    if (!r.ok || r.before === r.after) {
+    let r: CfgReply
+    try {
+      r = await api.configEdit(edit)
+    } catch (e) {
       if (rule) hide(rule, false)
-      return void (r.ok ? toast.info(t("config.shared.noChange")) : toast.error(r.out))
+      return void toast.error(errMsg(e))
+    }
+    if (r.before === r.after) {
+      if (rule) hide(rule, false)
+      return void toast.info(t("config.shared.noChange"))
     }
     toast.success(r.out, { description: liveNotice(r.before, r.after, sessions), duration: 6000 })
     await onDone() // la règle reste masquée : les vues qui se relisent à part la montreraient encore un instant
   }
   // JSON brut : renvoie le message d'erreur (avec ligne et colonne) ou null si l'aperçu s'ouvre.
   const proposeRaw = async (file: string, text: string) => {
-    const r = (await api.post("/config-raw", { file, text, dry: true })) as Reply
-    if (!r.ok) return r.out
+    let r: CfgReply
+    try {
+      r = await api.configRawEdit({ file, text, dry: true })
+    } catch (e) {
+      return errMsg(e)
+    }
     if (r.before === r.after) {
       toast.info(t("config.shared.noChange"))
       return null
@@ -99,15 +115,23 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
   // then : lancé après l'enregistrement réussi (abandonné si on annule), par exemple pour retirer la règle de son fichier d'origine.
   // now : l'aperçu a déjà été vu (éditeur texte) ; on écrit sans second dialogue.
   const proposePerms = async (file: string, text: string, mode: string, then?: () => void, now?: boolean) => {
-    const r = (await api.post("/config-perm-import", { file, text, mode, dry: true })) as Reply
-    if (!r.ok) return r.out
+    let r: CfgReply
+    try {
+      r = await api.configPermImport({ file, text, mode, dry: true })
+    } catch (e) {
+      return errMsg(e)
+    }
     if (r.before === r.after) {
       toast.info(t("config.edit.alreadyThere"))
       return null
     }
     if (now) {
-      const w = (await api.post("/config-perm-import", { file, text, mode, dry: false })) as Reply
-      if (!w.ok) return w.out
+      let w: CfgReply
+      try {
+        w = await api.configPermImport({ file, text, mode, dry: false })
+      } catch (e) {
+        return errMsg(e)
+      }
       toast.success(w.out, { description: liveNotice(w.before, w.after, sessions), duration: 9000 })
       onDone()
       then?.()
@@ -119,14 +143,16 @@ export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 
   const apply = async () => {
     if (!pv) return
     setBusy(true)
-    const r = (pv.perm ? await api.post("/config-perm-import", { ...pv.perm, dry: false }) : pv.raw ? await api.post("/config-raw", { ...pv.raw, dry: false }) : await api.post("/config-edit", pv.edit)) as Reply
-    setBusy(false)
-    if (r.ok) toast.success(r.out, { description: liveNotice(r.before, r.after, sessions), duration: 9000 })
-    else toast.error(r.out)
-    if (r.ok) {
+    try {
+      const r = pv.perm ? await api.configPermImport({ ...pv.perm, dry: false }) : pv.raw ? await api.configRawEdit({ ...pv.raw, dry: false }) : await api.configEdit(pv.edit!)
+      toast.success(r.out, { description: liveNotice(r.before, r.after, sessions), duration: 9000 })
       setPv(null)
       onDone()
       pv.then?.()
+    } catch (e) {
+      toast.error(errMsg(e))
+    } finally {
+      setBusy(false)
     }
   }
   const dialog = (

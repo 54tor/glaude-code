@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { setLang, type Lang } from "@/i18n"
 import { api } from "@/lib/api"
+import { errMsg } from "@/lib/apiError"
 import { FONTS, SIZES } from "@/lib/fonts"
 import type { Choice } from "@/lib/models"
 import { Choose } from "./Choose"
@@ -155,8 +156,11 @@ export function SettingsPanel(fonts: Fonts) {
   // La langue est le réglage « language » de Claude Code (settings.json) : l'interface change tout de suite, le serveur et les commandes la lisent au prochain appel.
   const pickLang = async (lang: Lang, claude: string) => {
     setLang(lang)
-    const r = (await api.post("/config-edit", { file: "u", op: "set", path: ["language"], value: claude })) as { ok: boolean; out: string }
-    if (!r.ok) toast.error(r.out)
+    try {
+      await api.configEdit({ file: "u", op: "set", path: ["language"], value: claude })
+    } catch (e) {
+      toast.error(errMsg(e))
+    }
   }
   return (
     <div className="space-y-8">
