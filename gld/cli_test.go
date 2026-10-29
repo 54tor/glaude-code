@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -167,6 +168,7 @@ func TestMatinResume(t *testing.T) {
 	b, _ := json.Marshal([]TabSave{
 		{Name: "", Auto: true, At: "2026-10-21T09:00:00.123Z", Sessions: []TabSession{{ID: id1, Project: proj}}},
 		{Name: "soir", At: "2026-10-20T18:00:00Z", Sessions: []TabSession{{ID: id2, Project: proj}}},
+		{Name: "coupee", At: "2026-10-19T18:00:00Z", Sessions: []TabSession{{ID: id2, Project: proj, Busy: true}}},
 	})
 	os.WriteFile(filepath.Join(cfg, "gld-web-tabs.json"), b, 0o644)
 	var ids []string
@@ -182,6 +184,11 @@ func TestMatinResume(t *testing.T) {
 	ids = nil
 	if _, err = run(t, cliMatin, "--term", "tmux", "--resume", "soir"); err != nil || strings.Join(ids, ",") != id2 {
 		t.Fatalf("%v %v", err, ids)
+	}
+	var args []string
+	openTab = func(l, title string, s tabSpec) error { args = s.Args; return nil }
+	if _, err = run(t, cliMatin, "--term", "tmux", "--resume", "coupee"); err != nil || !slices.Contains(args, id2) || !slices.Contains(args, "continue") {
+		t.Fatalf("session coupée en plein tour : pas de message de reprise : %v %v", err, args)
 	}
 	if _, err = run(t, cliMatin, "--term", "tmux", "--resume", "inconnue"); err == nil {
 		t.Error("sauvegarde inconnue acceptée")

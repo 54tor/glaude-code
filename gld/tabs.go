@@ -18,6 +18,7 @@ type TabSession struct {
 	Dir     string `json:"dir"`
 	Project string `json:"project"` // dossier de projet du transcript (celui que gld-matin attend)
 	Title   string `json:"title"`
+	Busy    bool   `json:"busy,omitempty"` // travaillait à la sauvegarde : le redémarrage l'a coupée en plein tour
 }
 
 type TabSave struct {
@@ -64,7 +65,8 @@ func liveTabs() []TabSession {
 		if s.autoReview() || s.team != "" { // ni revue automatique ni équipier : ils appartiennent à leur session parente
 			continue
 		}
-		out = append(out, TabSession{id, s.Dir, s.Cwd, s.Title})
+		st2, _ := sessionStatus(id)
+		out = append(out, TabSession{id, s.Dir, s.Cwd, s.Title, st2 == "busy"})
 	}
 	slices.SortFunc(out, func(a, b TabSession) int { return strings.Compare(a.ID, b.ID) })
 	return out
@@ -108,7 +110,7 @@ func writeTabs(t []TabSave) error {
 }
 
 func sameIDs(a, b []TabSession) bool {
-	return slices.EqualFunc(a, b, func(x, y TabSession) bool { return x.ID == y.ID })
+	return slices.EqualFunc(a, b, func(x, y TabSession) bool { return x.ID == y.ID && x.Busy == y.Busy })
 }
 
 // saveTabs enregistre les sessions ouvertes. Une sauvegarde automatique est sautée si rien n'a changé

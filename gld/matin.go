@@ -118,6 +118,9 @@ func matinResume(ctx context.Context, o matinOpts, name string, out io.Writer) e
 		fmt.Fprintln(out)
 		one := o
 		one.id, one.project, one.prompt = s.ID, s.Project, ""
+		if s.Busy { // coupée en plein tour : sans message, Claude affiche « Interrupted » et attend
+			one.prompt = L("cli.matin.continuePrompt")
+		}
 		if err := matinRun(ctx, one, out); err != nil {
 			fmt.Fprintln(out, "gld-matin :", err)
 		}
