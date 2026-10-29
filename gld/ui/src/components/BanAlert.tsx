@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { ShieldAlert } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { api } from "@/lib/api"
+import { ApiError } from "@/lib/http"
 import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 
 type Ban = { at: number; ip: string }
@@ -18,7 +19,7 @@ export function BanAlert() {
     let live = true
     let after = -1 // -1 : premier relevé, qui ne rend que le curseur courant (rien d'antérieur à l'ouverture)
     const poll = async () => {
-      if (document.visibilityState !== "visible") return
+      if (!live || document.visibilityState !== "visible") return
       try {
         const r = await api.banAlerts(after)
         if (!live) return
@@ -27,8 +28,9 @@ export function BanAlert() {
         if (first) return
         if (r.bans.length) setBans((b) => [...b, ...r.bans])
         if (r.pairings.length) setPairings((p) => [...p, ...r.pairings])
-      } catch {
-        /* serveur injoignable ou mode sans comptes : on réessaie au prochain passage */
+      } catch (e) {
+        // 404 : mode sans comptes, la route n'existe pas ; sinon serveur injoignable, on réessaie au prochain passage.
+        if (e instanceof ApiError && e.status === 404) live = false
       }
     }
     void poll()
