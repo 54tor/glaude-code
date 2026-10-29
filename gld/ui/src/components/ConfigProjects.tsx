@@ -188,7 +188,7 @@ export function ProjectsTab({ home, version, gone, onAddDir, suggest, onEdit, on
                   {p.files.length === 0 && (
                     <p className="text-xs text-muted-foreground">
                       {t("config.projects.noFile")}{" "}
-                      <button className="underline" onClick={() => onEdit("l/" + p.dir, "reglages")}>
+                      <button className="text-primary underline underline-offset-2 hover:decoration-2" onClick={() => onEdit("l/" + p.dir, "reglages")}>
                         {t("config.projects.createLocal")}
                       </button>
                     </p>

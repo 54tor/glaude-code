@@ -105,7 +105,7 @@ export function SessionsPane({
               <section key={project}>
                 <div className="mb-1 flex items-center gap-3 border-b px-3 py-1.5">
                   <button
-                    className="min-w-0 truncate text-sm font-semibold hover:text-primary"
+                    className="min-w-0 truncate text-sm font-semibold text-primary underline underline-offset-2 hover:decoration-2"
                     onClick={() => go({ kind: "dir", key: segs(project, home).join("/") })}
                     title={t("shell.common.showFolder")}
                   >

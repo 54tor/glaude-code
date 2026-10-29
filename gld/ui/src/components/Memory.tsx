@@ -571,7 +571,7 @@ export function Memory({
             {file?.off && sel.startsWith("g/rules/") && (
               <p className="border-b bg-muted/30 px-6 py-2 text-xs text-muted-foreground">
                 {t("memory.main.ruleOff")}{" "}
-                <button className="underline" onClick={() => toggleRule(file.key)}>
+                <button className="text-primary underline underline-offset-2 hover:decoration-2" onClick={() => toggleRule(file.key)}>
                   {t("memory.main.reactivate")}
                 </button>
               </p>

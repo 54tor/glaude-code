@@ -50,7 +50,7 @@ function Clamp({ children }: { children: React.ReactNode }) {
     <div className="mt-1.5">
       <div ref={ref} className={`break-words ${open ? "" : "line-clamp-5"}`}>{children}</div>
       {(over || open) && (
-        <button type="button" onClick={() => setOpen(!open)} className="mt-1 text-xs text-muted-foreground hover:text-foreground">
+        <button type="button" onClick={() => setOpen(!open)} className="mt-1 text-xs text-primary underline underline-offset-2 hover:decoration-2">
           {t(open ? "conversation.tagged.less" : "conversation.tagged.more")}
         </button>
       )}

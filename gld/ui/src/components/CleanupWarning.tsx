@@ -39,7 +39,7 @@ export function CleanupWarning() {
       <ul className="mt-1.5 space-y-0.5 pl-6">
         {w.sessions.slice(0, 3).map((s) => (
           <li key={s.id}>
-            <button className="max-w-full truncate text-left underline-offset-2 hover:underline" onClick={() => a.read(s)} title={s.title}>
+            <button className="max-w-full truncate text-left text-primary underline underline-offset-2 hover:decoration-2" onClick={() => a.read(s)} title={s.title}>
               {s.title}
             </button>{" "}
             <span className="text-muted-foreground">· {left(s.expires)}</span>

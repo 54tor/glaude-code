@@ -58,7 +58,7 @@ export function LoadedDialog({ id, home, open, onClose }: { id: string; home: st
             <ul className="space-y-1 pr-3 text-sm">
               {files.map((f, i) => (
                 <li key={i} className="rounded-md px-2 py-1 hover:bg-muted">
-                  <button type="button" onClick={() => openFile(f.file)} title={t("conversation.loaded.openFile")} className="flex cursor-pointer items-start gap-1.5 text-left break-all hover:underline">
+                  <button type="button" onClick={() => openFile(f.file)} title={t("conversation.loaded.openFile")} className="flex cursor-pointer items-start gap-1.5 text-left break-all text-primary underline underline-offset-2 hover:decoration-2">
                     <FileText className="mt-0.5 size-3.5 shrink-0" /> {tilde(f.file, home)}
                   </button>
                   <span className="block text-xs text-muted-foreground">

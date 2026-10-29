@@ -121,7 +121,7 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
         {!s.plugin && <Switch checked={!off} aria-label={t("extensions.toggleOne", { id: s.name })} onCheckedChange={(c) => setSkill(s.name, c)} className="mt-0.5" />}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline gap-x-2">
-            <button type="button" onClick={() => openSkill(s.key)} className="font-medium break-all hover:underline">{s.name}</button>
+            <button type="button" onClick={() => openSkill(s.key)} className="font-medium break-all text-primary underline underline-offset-2 hover:decoration-2">{s.name}</button>
             {!s.plugin && <span className="text-xs text-muted-foreground">{s.scope === "project" ? t("extensions.fromProject") : t("extensions.fromUser")}</span>}
             {(s.manual || s.hidden) && <span className="text-xs text-warning">{s.manual ? t("extensions.manual") : t("extensions.hidden")}</span>}
             {!s.plugin && (dir || off) && <span className="text-xs text-muted-foreground">{why(k)}</span>}
@@ -222,7 +222,7 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
         <section className="rounded-xl border bg-card p-4 shadow-xs md:p-5">
           <h3 className={sect}>
             {t("extensions.skills")} <span className="text-xs font-normal text-muted-foreground">{t("extensions.skillsTotal", { count: skillsHere.length, chars })}</span>
-            <button type="button" onClick={() => openSkill("")} className="ml-auto text-xs font-normal text-muted-foreground underline">{t("extensions.editor")}</button>
+            <button type="button" onClick={() => openSkill("")} className="ml-auto text-xs font-normal text-primary underline underline-offset-2 hover:decoration-2">{t("extensions.editor")}</button>
           </h3>
           <p className="mb-1 text-xs text-muted-foreground">{t("extensions.skillsHelp")}</p>
           <ul className="divide-y">{ownSkills.map(skillRow)}</ul>
