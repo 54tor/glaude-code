@@ -151,6 +151,8 @@
       "mentionAria": "Mention a session"
     },
     "tasks": {
+      "stop": "Stop the task",
+      "stopSent": "Stop requested from the session",
       "title": "Session background tasks (background commands, Monitor, workflows)",
       "count": "{{n}} task(s)",
       "dialogTitle": "Background tasks ({{n}})",
@@ -249,6 +251,8 @@
       "failed": "Failed: details are in the notification. Your input is kept."
     },
     "live": {
+      "subStop": "Stop this subagent",
+      "subStopSent": "Subagent stop requested from the session",
       "working": "working",
       "open": "open",
       "execTool": "running a tool…",

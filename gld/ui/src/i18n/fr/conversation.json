@@ -151,6 +151,8 @@
       "mentionAria": "Mentionner une session"
     },
     "tasks": {
+      "stop": "Arrêter la tâche",
+      "stopSent": "Arrêt demandé à la session",
       "title": "Tâches de fond de la session (commandes en arrière-plan, Monitor, workflows)",
       "count": "{{n}} tâche(s)",
       "dialogTitle": "Tâches de fond ({{n}})",
@@ -249,6 +251,8 @@
       "failed": "Échec : le détail est dans la notification. La saisie est conservée."
     },
     "live": {
+      "subStop": "Arrêter ce sous-agent",
+      "subStopSent": "Arrêt du sous-agent demandé à la session",
       "working": "travaille",
       "open": "ouverte",
       "execTool": "exécute un outil…",

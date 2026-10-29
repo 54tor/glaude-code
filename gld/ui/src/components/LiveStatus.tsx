@@ -1,7 +1,7 @@
 import { i18n, loc } from "@/i18n"
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { BarChart3, Bot, Fan, Wrench } from "lucide-react"
+import { BarChart3, Bot, Fan, Square, Wrench } from "lucide-react"
 import { api, type Detail, type LiveState, type Msg, type Session, type SubLive, type Tokens } from "@/lib/api"
 import { compact, full, tilde, tokTotal } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Markdown, Message } from "./Message"
 import { Tagged, isServiceMsg } from "./Tagged"
+import { stopTask } from "./LiveTasks"
 import { CacheState, KeepWarmButton } from "./KeepWarm"
 import { useActions } from "./actions"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -219,7 +220,7 @@ export function LiveStats({ live: { st }, s, project, detail, shown, onShown }: 
             {st && st.subs.length > 0 && (
               <section>
                 <h3 className="mb-1 font-medium">{t("conversation.live.subagents", { n: st.subs.length })}</h3>
-                <SubList subs={st.subs} onPick={setSub} />
+                <SubList subs={st.subs} onPick={setSub} session={s.id} />
               </section>
             )}
           </div>
@@ -231,13 +232,13 @@ export function LiveStats({ live: { st }, s, project, detail, shown, onShown }: 
 }
 
 // Liste des sous-agents ; un clic en ouvre la conversation.
-function SubList({ subs, onPick }: { subs: SubLive[]; onPick: (s: SubLive) => void }) {
+function SubList({ subs, onPick, session }: { subs: SubLive[]; onPick: (s: SubLive) => void; session: string }) {
   const { t } = useTranslation()
   return (
     <ul className="space-y-1.5">
       {subs.map((s) => (
-        <li key={s.id}>
-          <button type="button" onClick={() => onPick(s)} title={t("conversation.live.subOpen")} className="flex w-full flex-wrap items-center gap-x-2 rounded-md px-1.5 py-1 text-left hover:bg-muted">
+        <li key={s.id} className="flex items-center gap-1">
+          <button type="button" onClick={() => onPick(s)} title={t("conversation.live.subOpen")} className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 rounded-md px-1.5 py-1 text-left hover:bg-muted">
             {s.running ? <Fan className="size-3.5 animate-spin text-success" /> : <span className="size-1.5 rounded-full bg-muted-foreground/50" />}
             <span className="font-medium">{s.desc || s.type}</span>
             <span className="text-xs text-muted-foreground">{s.type}</span>
@@ -246,6 +247,11 @@ function SubList({ subs, onPick }: { subs: SubLive[]; onPick: (s: SubLive) => vo
             </span>
             {s.context > 0 && <span className="text-xs text-muted-foreground">{t("conversation.live.subContext", { n: compact(s.context) })}</span>}
           </button>
+          {s.running && (
+            <Button size="icon-xs" variant="ghost" title={t("conversation.live.subStop")} aria-label={t("conversation.live.subStop")} onClick={() => void stopTask(session, s.id, s.desc || s.type, t("conversation.live.subStopSent"))}>
+              <Square />
+            </Button>
+          )}
         </li>
       ))}
     </ul>
@@ -273,7 +279,7 @@ export function LiveAgents({ live: { st }, dir, id }: { live: Live; dir: string;
             <DialogDescription className="sr-only">{t("conversation.live.dialogDescription")}</DialogDescription>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-6 py-5 text-sm">
-            <SubList subs={st.subs} onPick={setSub} />
+            <SubList subs={st.subs} onPick={setSub} session={id} />
           </div>
         </DialogContent>
       </Dialog>

@@ -1,13 +1,21 @@
 import { useTranslation } from "react-i18next"
 import { useEffect, useState } from "react"
-import { CircleAlert, CircleCheck, CircleHelp, ListChecks, Fan } from "lucide-react"
+import { CircleAlert, CircleCheck, CircleHelp, ListChecks, Fan, Square } from "lucide-react"
+import { toast } from "sonner"
 import { api, type BgTask } from "@/lib/api"
-import { ApiError } from "@/lib/apiError"
+import { ApiError, errMsg } from "@/lib/apiError"
 import { ago } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import type { Live } from "./LiveStatus"
+
+// Arrêt demandé à la session elle-même : Claude Code n'expose l'arrêt (TaskStop) qu'à son modèle.
+export const stopTask = (id: string, task: string, desc: string, ok: string) =>
+  api.sessionSend(id, `Arrête avec l'outil TaskStop la tâche ${task} (${desc}), sans autre commentaire.`).then(
+    () => toast.success(ok),
+    (e) => toast.error(errMsg(e))
+  )
 
 function Icon({ s }: { s: BgTask["status"] }) {
   if (s === "running") return <Fan className="size-3.5 shrink-0 animate-spin text-success" />
@@ -58,13 +66,18 @@ export function LiveTasks({ live: { st }, dir, id }: { live: Live; dir: string; 
           <ScrollArea className="min-h-0 flex-1">
           <ul className="space-y-1 px-4 py-4 text-sm">
             {[...tasks].reverse().map((x) => (
-              <li key={x.id}>
-                <button type="button" onClick={() => setPick(x)} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted" title={t("conversation.tasks.open")}>
+              <li key={x.id} className="flex items-center gap-1">
+                <button type="button" onClick={() => setPick(x)} className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted" title={t("conversation.tasks.open")}>
                   <Icon s={x.status} />
                   <span className="min-w-0 flex-1 truncate font-medium">{x.desc || x.id}</span>
                   <span className="shrink-0 text-xs text-muted-foreground">{t(`conversation.tasks.status.${x.status}`, { defaultValue: x.status })}</span>
                   {x.start && <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{ago(Date.parse(x.start) / 1000)}</span>}
                 </button>
+                {x.status === "running" && (
+                  <Button size="icon-xs" variant="ghost" title={t("conversation.tasks.stop")} aria-label={t("conversation.tasks.stop")} onClick={() => void stopTask(id, x.id, x.desc || x.id, t("conversation.tasks.stopSent"))}>
+                    <Square />
+                  </Button>
+                )}
               </li>
             ))}
           </ul>
