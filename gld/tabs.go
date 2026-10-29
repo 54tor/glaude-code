@@ -61,7 +61,7 @@ func liveTabs() []TabSession {
 			continue
 		}
 		s := info(ps[0], st)
-		if s.autoReview() {
+		if s.autoReview() || s.team != "" { // ni revue automatique ni équipier : ils appartiennent à leur session parente
 			continue
 		}
 		out = append(out, TabSession{id, s.Dir, s.Cwd, s.Title})
@@ -84,12 +84,22 @@ func readTabs(b []byte) ([]TabSave, error) {
 	if err := json.Unmarshal(b, &t); err != nil {
 		return nil, terr("srv.tabs.fichierIllisible", "A1", err.Error())
 	}
-	// Les sauvegardes d'avant le filtre de liveTabs contiennent encore des revues automatiques : on les écarte à la lecture.
+	// Les sauvegardes d'avant le filtre de liveTabs contiennent encore des revues automatiques et des équipiers : on les écarte à la lecture.
 	for i := range t {
-		t[i].Sessions = slices.DeleteFunc(t[i].Sessions, func(s TabSession) bool { return Session{Title: s.Title}.autoReview() })
+		t[i].Sessions = slices.DeleteFunc(t[i].Sessions, func(s TabSession) bool { return Session{Title: s.Title}.autoReview() || isTeammate(s) })
 	}
 	t = slices.DeleteFunc(t, func(x TabSave) bool { return len(x.Sessions) == 0 })
 	return t, nil
+}
+
+// isTeammate : la session sauvegardée est celle d'un équipier (transcript introuvable : non).
+func isTeammate(s TabSession) bool {
+	if !idRe.MatchString(s.ID) || strings.ContainsAny(s.Dir, "/\\") || s.Dir == "" || s.Dir == ".." {
+		return false
+	}
+	p := filepath.Join(root, s.Dir, s.ID+".jsonl")
+	st, err := os.Stat(p)
+	return err == nil && info(p, st).team != ""
 }
 
 func writeTabs(t []TabSave) error {

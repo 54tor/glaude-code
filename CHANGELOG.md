@@ -12,7 +12,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Messages d'agent ou de session en file d'attente : rendus en carte au lieu de la balise brute, sans coupe à 400 caractères (plafond de 64 000) ; un prompt qui commence par `<` reste du texte brut, coupé comme avant ; le cadre pointillé ne double plus celui de la carte.
 - Hauteurs alignées entre listes déroulantes, champs et boutons dans le composeur, Config et Skills (nouvelle taille `xs` des listes).
 - Fenêtre d'un sous-agent : la note devient « Lecture seule », en bas.
-- « Reprendre les récentes » (`gld-matin`) ne rouvre plus les sessions d'équipiers, qui restent ouvrables par leur identifiant.
+- « Reprendre les récentes » (`gld-matin`) ne rouvre plus les sessions d'équipiers, qui restent ouvrables par leur identifiant ; la sauvegarde des onglets (`--resume`, « Rouvrir les dernières ») les écarte aussi, y compris dans les sauvegardes existantes.
+- Barre d'état de la session : plus collée en bas au défilement, sans espace réservé quand il n'y a rien à montrer.
 
 ## [0.6.2] - 2026-10-29
 

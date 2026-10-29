@@ -284,3 +284,21 @@ func TestLanceurTerminatorTmux(t *testing.T) {
 		t.Errorf("\n%s\n%s", e, want)
 	}
 }
+
+func TestSauvegardeTabsIgnoreLesEquipiers(t *testing.T) {
+	_, proj, dir := cliEnv(t)
+	session(t, dir, id1, "Alpha", "a", time.Hour)
+	put(t, filepath.Join(dir, id2+".jsonl"), `{"type":"user","cwd":"`+proj+`","teamName":"session-11111111","agentName":"impl-task-1","message":{"content":"travail"}}`+"\n", time.Hour)
+	real := openSessions
+	openSessions = func() []string { return []string{id1, id2} }
+	t.Cleanup(func() { openSessions = real })
+	if got := liveTabs(); len(got) != 1 || got[0].ID != id1 {
+		t.Fatalf("liveTabs : %v", got)
+	}
+	d := filepath.Base(dir)
+	old := `[{"name":"","sessions":[{"id":"` + id1 + `","dir":"` + d + `","title":"Alpha"},{"id":"` + id2 + `","dir":"` + d + `","title":"impl-task-1"}]}]`
+	got, err := readTabs([]byte(old))
+	if err != nil || len(got) != 1 || len(got[0].Sessions) != 1 || got[0].Sessions[0].ID != id1 {
+		t.Fatalf("readTabs : %v %v", got, err)
+	}
+}
