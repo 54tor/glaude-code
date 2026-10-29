@@ -200,10 +200,7 @@ export type SidebarProps = {
   onClose: () => void
   loading: boolean
   total: number
-  q: string
-  setQ: (v: string) => void
   searchRef: React.RefObject<HTMLInputElement | null>
-  searching: boolean
   route: Route
   go: (r: Route) => void
   counts: { all: number; active: number }
@@ -261,8 +258,24 @@ function FavSessions({ rows, read }: { rows: Row[]; read: (s: Session) => void }
   return <>{tops.map((r) => item(r, kids.get(r.s.id)))}</>
 }
 
+// Garde un nœud dont le nom correspond (avec tout son sous-arbre) ou dont un descendant correspond.
+function filterTree(nodes: Node[], q: string): Node[] {
+  return nodes.flatMap((n) => {
+    if (n.name.toLowerCase().includes(q)) return [n]
+    const kids = filterTree([...n.kids.values()], q)
+    return kids.length ? [{ ...n, kids: new Map(kids.map((k) => [k.name, k])) }] : []
+  })
+}
+
 export function Sidebar({ searchRef, ...p }: SidebarProps) {
   const { t } = useTranslation()
+  // Recherche propre à la navbar : indépendante de celle de la barre du haut (paramètre d'URL q).
+  const [nq, setNq] = useState("")
+  const nqt = nq.trim().toLowerCase()
+  const show = (label: string) => !nqt || label.toLowerCase().includes(nqt)
+  const tree = nqt ? filterTree(p.tree, nqt) : p.tree
+  const favGroups = p.favGroups.filter(({ vg }) => show(vg.name))
+  const favRows = p.favRows.filter((r) => show(r.s.title))
   const r = p.route
   const link = (to: Route) => ({ to, onClick: () => p.go(to) })
   const a = useActions()
@@ -286,27 +299,22 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             ref={searchRef}
-            value={p.q}
-            onChange={(e) => p.setQ(e.target.value)}
+            value={nq}
+            onChange={(e) => setNq(e.target.value)}
             // Échap vide la recherche et rend le focus à la page : j/k/t/d reprennent leur rôle de raccourcis.
             onKeyDown={(e) => {
               if (e.key !== "Escape") return
-              p.setQ("")
+              setNq("")
               e.currentTarget.blur()
             }}
             placeholder={t("shell.sidebar.searchPlaceholder")}
             className="bg-background pr-8 pl-8 shadow-none"
             aria-label={t("shell.sidebar.searchLabel")}
           />
-          {p.searching ? (
-            <LoaderPinwheel
-              className="absolute top-1/2 right-2.5 size-4 -translate-y-1/2 animate-spin text-muted-foreground"
-              aria-label={t("shell.sidebar.searching")}
-            />
-          ) : p.q ? (
+          {nq ? (
             <button
               className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              onClick={() => p.setQ("")}
+              onClick={() => setNq("")}
               aria-label={t("shell.sidebar.clearSearch")}
             >
               <X className="size-4" />
@@ -322,18 +330,18 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
       <ScrollArea className="min-h-0 flex-1">
         <CleanupWarning />
         <nav className="px-2 pb-3" aria-label={t("shell.sidebar.navigation")}>
-          <NavItem icon={GalleryHorizontalEnd} label={t("shell.sidebar.carousel")} n={p.carousel.n} active={p.carousel.on} onClick={p.carousel.start} />
-          {(r.kind === "dir" || r.kind === "project") && (
+          {show(t("shell.sidebar.carousel")) && <NavItem icon={GalleryHorizontalEnd} label={t("shell.sidebar.carousel")} n={p.carousel.n} active={p.carousel.on} onClick={p.carousel.start} />}
+          {!nqt && (r.kind === "dir" || r.kind === "project") && (
             <NavItem icon={NotebookPen} label={t("shell.sidebar.addNote")} active={false} onClick={() => { window.dispatchEvent(new Event("gld:note-add")); p.onClose() }} />
           )}
-          <NavItem icon={Inbox} label={t("shell.app.title.all")} n={p.counts.all} active={r.kind === "all"} {...link({ kind: "all" })} />
-          <NavItem icon={History} label={t("shell.app.title.tabs")} active={r.kind === "tabs"} {...link({ kind: "tabs" })} />
-          <NavItem icon={Puzzle} label={t("shell.app.title.extensions")} active={r.kind === "extensions" || r.kind === "skills"} {...link({ kind: "extensions" })} />
-          <NavItem icon={Users} label={t("teams.title")} active={r.kind === "teams" || r.kind === "team"} {...link({ kind: "teams" })} />
-          <InvitesButton />
-          <NavItem icon={SlidersHorizontal} label={t("shell.app.title.config")} active={r.kind === "config"} {...link({ kind: "config", tab: "" })} />
-          <NavItem icon={Brain} label={t("shell.app.title.memory")} active={r.kind === "memory"} {...link({ kind: "memory", key: "" })} />
-          {p.snippets !== null && (
+          {show(t("shell.app.title.all")) && <NavItem icon={Inbox} label={t("shell.app.title.all")} n={p.counts.all} active={r.kind === "all"} {...link({ kind: "all" })} />}
+          {show(t("shell.app.title.tabs")) && <NavItem icon={History} label={t("shell.app.title.tabs")} active={r.kind === "tabs"} {...link({ kind: "tabs" })} />}
+          {show(t("shell.app.title.extensions")) && <NavItem icon={Puzzle} label={t("shell.app.title.extensions")} active={r.kind === "extensions" || r.kind === "skills"} {...link({ kind: "extensions" })} />}
+          {show(t("teams.title")) && <NavItem icon={Users} label={t("teams.title")} active={r.kind === "teams" || r.kind === "team"} {...link({ kind: "teams" })} />}
+          {!nqt && <InvitesButton />}
+          {show(t("shell.app.title.config")) && <NavItem icon={SlidersHorizontal} label={t("shell.app.title.config")} active={r.kind === "config"} {...link({ kind: "config", tab: "" })} />}
+          {show(t("shell.app.title.memory")) && <NavItem icon={Brain} label={t("shell.app.title.memory")} active={r.kind === "memory"} {...link({ kind: "memory", key: "" })} />}
+          {p.snippets !== null && show(t("shell.app.title.snippets")) && (
             <NavItem
               icon={FileText}
               label={t("shell.app.title.snippets")}
@@ -343,12 +351,12 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             />
           )}
 
-          {p.hot.length > 0 && <Hot rows={p.hot} now={p.now} ttl={p.ttl} go={p.go} />}
+          {!nqt && p.hot.length > 0 && <Hot rows={p.hot} now={p.now} ttl={p.ttl} go={p.go} />}
 
-          {(p.favRows.length > 0 || p.favGroups.length > 0) && (
+          {(favRows.length > 0 || favGroups.length > 0) && (
             <>
               <Heading>{t("shell.sidebar.favorites")}</Heading>
-              {p.favGroups.map(({ vg, key }) => (
+              {favGroups.map(({ vg, key }) => (
                 <ContextMenu key={key + "\0" + vg.name}>
                   <ContextMenuTrigger asChild>
                     <div>
@@ -366,14 +374,14 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
                   </ContextMenuContent>
                 </ContextMenu>
               ))}
-              <FavSessions rows={p.favRows} read={p.read} />
+              <FavSessions rows={favRows} read={p.read} />
             </>
           )}
 
-          {a.projects.length > 0 && (
+          {a.projects.some((x) => show(x.name)) && (
             <>
               <Heading>{t("shell.sidebar.projects")}</Heading>
-              <ProjectList route={r} go={p.go} />
+              <ProjectList route={r} go={p.go} q={nqt} />
             </>
           )}
 
@@ -397,7 +405,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             </div>
           ) : (
             <ProjectTree
-              nodes={p.tree}
+              nodes={tree}
               sel={r.kind === "dir" ? r.key : ""}
               onSel={(key) => p.go({ kind: "dir", key })}
               selGroup={r.kind === "group" ? r.key + "\0" + r.name : ""}

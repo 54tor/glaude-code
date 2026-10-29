@@ -14,7 +14,7 @@ import { useGit } from "@/hooks/useGit"
 
 // Projets : ensembles nommés de dossiers de travail, affichés au-dessus de l'arbre des dossiers.
 // Un clic sur un projet affiche les sessions de tous ses dossiers ; ses dossiers se déplient dessous.
-export function ProjectList({ route, go }: { route: Route; go: (r: Route) => void }) {
+export function ProjectList({ route, go, q = "" }: { route: Route; go: (r: Route) => void; q?: string }) {
   const { t } = useTranslation()
   const a = useActions()
   const git = useGit()
@@ -22,7 +22,7 @@ export function ProjectList({ route, go }: { route: Route; go: (r: Route) => voi
   const toggle = (name: string) => setOpen("p/" + name, !opened["p/" + name])
   return (
     <ul className="space-y-px">
-      {a.projects.map((p) => {
+      {a.projects.filter((p) => p.name.toLowerCase().includes(q)).map((p) => {
         const active = route.kind === "project" && route.name === p.name
         const isOpen = !!opened["p/" + p.name]
         return (

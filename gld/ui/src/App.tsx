@@ -357,10 +357,7 @@ function Shell() {
           onClose={() => setNavOpen(false)}
           loading={data === null}
           total={view.total}
-          q={q}
-          setQ={setQ}
           searchRef={search}
-          searching={searching}
           route={route}
           go={(r) => (setNavOpen(false), go(r))}
           counts={{ all: base.rows.length, active: base.rows.filter((r) => live.has(r.s.id) || now - r.s.mtime < HOT).length }}
