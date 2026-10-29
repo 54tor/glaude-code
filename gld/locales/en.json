@@ -559,6 +559,7 @@
   "srv.rewind.sessionOuverte": "session is open: close it before rewinding",
   "srv.http_util.tropDElements": "too many items in the request",
   "srv.http_util.introuvable": "not found",
+  "srv.backup_import.etapeInconnue": "import not found or expired",
   "srv.backup_zip.tropGrosse": "archive too large",
   "srv.backup_zip.illisible": "unreadable archive: {{.A1}}",
   "srv.backup_zip.tropDEntrees": "archive: too many entries",
