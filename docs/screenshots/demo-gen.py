@@ -4,7 +4,9 @@ des skills et des réglages. Rien ne vient des vrais fichiers de l'utilisateur."
 import json, os, sys, time, uuid, datetime
 
 HOME = sys.argv[1]
+ONLY = sys.argv[2].split(",") if len(sys.argv) > 2 else ["boutique", "api-meteo", "site-vitrine"]  # « compta-interne » : second home
 CL = os.path.join(HOME, ".claude")
+CWD_HOME = os.environ.get("DEMO_CWD_HOME", HOME)  # base des dossiers de projet (second home : celle du home principal)
 now = time.time()
 
 
@@ -21,9 +23,22 @@ projects = {
     "boutique": "Boutique en ligne (Symfony)",
     "api-meteo": "API météo (Go)",
     "site-vitrine": "Site vitrine (Astro)",
+    "compta-interne": "Outil de comptabilité interne (Rails)",
 }
 
 sessions = {
+    "compta-interne": [
+        ("Générer le rapport de TVA trimestriel", 6, [
+            ("user", "Génère le rapport de TVA du trimestre au format CSV, une ligne par taux."),
+            ("text", "Je regroupe les écritures par taux et par pays, puis j'exporte avec le séparateur attendu par le comptable."),
+            ("tool", "Bash", {"command": "bin/rails reports:vat QUARTER=2026-Q3", "description": "Génère le rapport"}, "Rapport écrit : tmp/tva-2026-Q3.csv (214 lignes)"),
+            ("text", "Le rapport est prêt : 214 lignes, totaux cohérents avec le grand livre."),
+        ]),
+        ("Rapprochement bancaire automatique", 30, [
+            ("user", "Propose un rapprochement automatique entre relevés bancaires et factures."),
+            ("text", "Je rapproche par montant et référence, puis par date à trois jours près, et je laisse le reste à valider à la main."),
+        ]),
+    ],
     "boutique": [
         ("Ajouter le paiement par carte avec Stripe", 3, [
             ("user", "Ajoute le paiement par carte avec Stripe sur la page de commande. Il faut gérer l'échec et le retour sur la boutique."),
@@ -98,6 +113,10 @@ memory = {
         ("MEMORY.md", None, "# Mémoire du projet\n\n- [Fournisseur météo](fournisseur.md)\n"),
         ("fournisseur", "reference", "Documentation du fournisseur : https://exemple.test/docs. Limite : 60 appels par minute."),
     ],
+    "compta-interne": [
+        ("MEMORY.md", None, "# Mémoire du projet\n\n- [Clôture](cloture.md)\n"),
+        ("cloture", "project", "La clôture mensuelle se fait le 3 de chaque mois ouvré.\n\n**Why:** le comptable externe exporte ce jour-là.\n\n**How to apply:** ne jamais lancer de migration de données comptables entre le 1er et le 3."),
+    ],
     "site-vitrine": [
         ("MEMORY.md", None, "# Mémoire du projet\n\n- [Ton éditorial](ton-editorial.md)\n"),
         ("ton-editorial", "feedback", "Tutoyer les visiteurs, phrases courtes, pas de jargon.\n\n**Why:** public d'artisans, peu à l'aise avec le vocabulaire technique.\n\n**How to apply:** relire chaque texte à voix haute."),
@@ -105,7 +124,9 @@ memory = {
 }
 
 for name, label in projects.items():
-    cwd = os.path.join(HOME, "Projets", name)
+    if name not in ONLY:
+        continue
+    cwd = os.path.join(CWD_HOME, "Projets", name)
     os.makedirs(os.path.join(cwd, ".claude"), exist_ok=True)
     enc = "-" + cwd.strip("/").replace("/", "-").replace(".", "-").replace("_", "-")
     pdir = os.path.join(CL, "projects", enc)
@@ -156,10 +177,12 @@ w(os.path.join(CL, "settings.json"), json.dumps({
     },
     "hooks": {"PostToolUse": [{"matcher": "Edit|Write", "hooks": [{"type": "command", "command": "gofmt -l ."}]}]},
 }, indent=2, ensure_ascii=False))
-w(os.path.join(HOME, "Projets", "boutique", ".claude", "settings.json"), json.dumps({
+if "boutique" in ONLY:
+  w(os.path.join(CWD_HOME, "Projets", "boutique", ".claude", "settings.json"), json.dumps({
     "permissions": {"allow": ["Bash(php bin/phpunit:*)", "Bash(composer install:*)", "Bash(php bin/console cache:clear:*)"], "deny": ["Bash(php bin/console doctrine:schema:drop:*)"]}
 }, indent=2))
-w(os.path.join(HOME, "Projets", "api-meteo", ".claude", "settings.json"), json.dumps({
+if "api-meteo" in ONLY:
+  w(os.path.join(CWD_HOME, "Projets", "api-meteo", ".claude", "settings.json"), json.dumps({
     "permissions": {"allow": ["Bash(go test:*)", "Bash(go vet:*)"], "additionalDirectories": ["../shared-proto"]}
 }, indent=2))
 
@@ -181,9 +204,11 @@ def git(cwd, *a):
     subprocess.run(["git", *a], cwd=cwd, env=GE, check=True, capture_output=True)
 
 
-for name, ahead, dirty, untracked in (("boutique", 2, 3, 2), ("api-meteo", 1, 1, 0), ("site-vitrine", 0, 0, 0)):
-    cwd = os.path.join(HOME, "Projets", name)
-    rem = os.path.join(HOME, "remotes", name + ".git")
+for name, ahead, dirty, untracked in (("boutique", 2, 3, 2), ("api-meteo", 1, 1, 0), ("site-vitrine", 0, 0, 0), ("compta-interne", 0, 2, 0)):
+    if name not in ONLY:
+        continue
+    cwd = os.path.join(CWD_HOME, "Projets", name)
+    rem = os.path.join(CWD_HOME, "remotes", name + ".git")
     os.makedirs(rem, exist_ok=True)
     git(rem, "init", "--bare", "-b", "main")
     git(cwd, "init", "-b", "main")
@@ -204,13 +229,14 @@ for name, ahead, dirty, untracked in (("boutique", 2, 3, 2), ("api-meteo", 1, 1,
 
 # notes de projet (bloc-notes) et commandes personnalisées (snippets)
 w(os.path.join(CL, "gld-web-notes.json"), json.dumps({
-    "d/" + os.path.join(HOME, "Projets", "boutique"): json.dumps(["Relire le webhook Stripe avant la mise en production", "Demander à Marc la date de bascule PostgreSQL", "Ajouter un test pour les remboursements partiels"], ensure_ascii=False),
-    "d/" + os.path.join(HOME, "Projets", "api-meteo"): json.dumps(["Limite fournisseur : 60 appels par minute"], ensure_ascii=False),
+    "d/" + os.path.join(CWD_HOME, "Projets", "boutique"): json.dumps(["Relire le webhook Stripe avant la mise en production", "Demander à Marc la date de bascule PostgreSQL", "Ajouter un test pour les remboursements partiels"], ensure_ascii=False),
+    "d/" + os.path.join(CWD_HOME, "Projets", "api-meteo"): json.dumps(["Limite fournisseur : 60 appels par minute"], ensure_ascii=False),
 }, indent=2, ensure_ascii=False))
 for n, d, b in (("deploiement", "Prépare le déploiement : tests, tag, notes de version", "Lance les tests, crée le tag et rédige les notes de version."),
                 ("explique", "Explique un fichier en trois phrases", "Explique le fichier donné en trois phrases, sans jargon.")):
     w(os.path.join(CL, "commands", n + ".md"), f"---\ndescription: {d}\n---\n\n{b}\n")
-w(os.path.join(HOME, "Projets", "boutique", ".claude", "commands", "migration.md"), "---\ndescription: Génère une migration Doctrine à partir du diff des entités\n---\n\nGénère la migration sans l'exécuter.\n")
+if "boutique" in ONLY:
+  w(os.path.join(CWD_HOME, "Projets", "boutique", ".claude", "commands", "migration.md"), "---\ndescription: Génère une migration Doctrine à partir du diff des entités\n---\n\nGénère la migration sans l'exécuter.\n")
 
 # plugin installé depuis une place de marché fictive
 pl = os.path.join(CL, "plugins", "cache", "atelier", "outils-revue", "1.2.0")
@@ -220,5 +246,6 @@ w(os.path.join(CL, "plugins", "known_marketplaces.json"), json.dumps({"atelier":
 
 # serveurs MCP et workspace sauvegardé
 w(os.path.join(HOME, ".claude.json"), json.dumps({"mcpServers": {"documentation": {"type": "http", "url": "https://docs.example.com/mcp"}}}, indent=2))
-w(os.path.join(HOME, "Projets", "boutique", ".mcp.json"), json.dumps({"mcpServers": {"base-de-test": {"command": "npx", "args": ["-y", "serveur-sql-lecture-seule"]}}}, indent=2))
+if "boutique" in ONLY:
+  w(os.path.join(CWD_HOME, "Projets", "boutique", ".mcp.json"), json.dumps({"mcpServers": {"base-de-test": {"command": "npx", "args": ["-y", "serveur-sql-lecture-seule"]}}}, indent=2))
 print("ok", HOME)
