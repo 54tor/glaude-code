@@ -6,6 +6,7 @@ import (
 	"mime"
 	"net/http"
 	"os"
+	"strings"
 )
 
 // routesStatic : la page de l'interface, ses ressources (embarquées dans le binaire) et leurs types MIME.
@@ -15,7 +16,15 @@ func routesStatic(mux *http.ServeMux) {
 		mime.AddExtensionType(ext, typ)
 	}
 	dist, _ := fs.Sub(uiFS, "ui/dist")
-	files := http.FileServerFS(dist)
+	fsrv := http.FileServerFS(dist)
+	// FileServer liste un dossier demandé avec « / » final : la liste des bundles n'a rien à faire en public.
+	files := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/") {
+			http.NotFound(w, r)
+			return
+		}
+		fsrv.ServeHTTP(w, r)
+	})
 	// La page de l'interface, servie aussi pour ses chemins (routage côté navigateur).
 	index, err := fs.ReadFile(dist, "index.html")
 	if err != nil { // binaire compilé sans `make ui` : on le dit plutôt que de servir une page vide

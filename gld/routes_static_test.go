@@ -35,3 +35,22 @@ func seen(t *testing.T, m [][]string) [][]string {
 	}
 	return m
 }
+
+// Un dossier de ressources ne se liste pas ; ses fichiers restent servis.
+func TestStaticNoDirListing(t *testing.T) {
+	mux := http.NewServeMux()
+	routesStatic(mux)
+	get := func(p string) int {
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, httptest.NewRequest("GET", p, nil))
+		return w.Code
+	}
+	for _, p := range []string{"/assets/", "/icons/"} {
+		if c := get(p); c != http.StatusNotFound {
+			t.Errorf("%s : %d", p, c)
+		}
+	}
+	if c := get("/icons/icon-192.png"); c != http.StatusOK {
+		t.Errorf("fichier d'icône : %d", c)
+	}
+}
