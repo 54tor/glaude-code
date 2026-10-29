@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { api, type BackupPlan } from "@/lib/api"
+import { ApiError } from "@/lib/apiError"
 import { Backup } from "./Backup"
 
 afterEach(() => {
@@ -69,5 +70,23 @@ describe("Backup", () => {
     const drop = vi.spyOn(api, "backupDrop").mockResolvedValue()
     fireEvent.click(screen.getByRole("button", { name: /annuler/i }))
     await waitFor(() => expect(drop).toHaveBeenCalledWith("s1"))
+  })
+
+  it("une erreur d'application est annoncée", async () => {
+    await staged()
+    vi.spyOn(api, "backupApply").mockRejectedValue(new ApiError(500, "internal", "boom"))
+    fireEvent.click(screen.getByRole("checkbox", { name: /copier.*a$/i }))
+    fireEvent.click(screen.getByRole("button", { name: /appliquer/i }))
+    expect((await screen.findByRole("alert")).textContent).toContain("boom")
+  })
+
+  it("une étape perdue (404) ramène au choix du fichier", async () => {
+    await staged()
+    vi.spyOn(api, "backupApply").mockRejectedValue(new ApiError(404, "not_found", "gone"))
+    fireEvent.click(screen.getByRole("checkbox", { name: /copier.*a$/i }))
+    fireEvent.click(screen.getByRole("button", { name: /appliquer/i }))
+    expect((await screen.findByRole("alert")).textContent).toContain("gone")
+    expect(screen.getByRole("button", { name: /choisir une archive/i })).toBeTruthy()
+    expect(screen.queryByRole("button", { name: /appliquer/i })).toBeNull()
   })
 })

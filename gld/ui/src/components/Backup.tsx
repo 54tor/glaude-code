@@ -2,7 +2,7 @@ import { useRef, useState } from "react"
 import { Download, TriangleAlert, Upload } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { api, type BackupPlan, type BackupResult } from "@/lib/api"
-import { errMsg } from "@/lib/apiError"
+import { ApiError, errMsg } from "@/lib/apiError"
 import { tilde } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -60,6 +60,7 @@ export function Backup({ home }: { home: string }) {
       setResults(r.results)
     } catch (e) {
       setError(errMsg(e))
+      if (e instanceof ApiError && e.status === 404) reset()
     }
     setBusy(false)
   }
@@ -104,7 +105,7 @@ export function Backup({ home }: { home: string }) {
           </>
         )}
         <input ref={file} type="file" accept=".zip" className="hidden" onChange={(e) => stage(e.target.files?.[0])} />
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         {plan && !results && (
           <div className="space-y-4">
             {plan.items.length === 0 && <p className="text-sm text-muted-foreground">{t("backup.none")}</p>}
@@ -147,7 +148,7 @@ export function Backup({ home }: { home: string }) {
           </div>
         )}
         {results && (
-          <div className="space-y-3">
+          <div role="status" className="space-y-3">
             <h3 className="text-sm font-medium">{t("backup.report")}</h3>
             <ul className="space-y-1 text-sm">
               {results.map((r) => (
