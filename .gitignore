@@ -11,3 +11,6 @@ gld/ui/dist/*
 gld/cover.out
 gld/cover.txt
 gld/ui/coverage/
+
+# Cache Vite
+.vite/
