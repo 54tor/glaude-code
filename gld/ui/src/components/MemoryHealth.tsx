@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { AlertTriangle, LoaderPinwheel, Sparkles, Wrench } from "lucide-react"
+import { AlertTriangle, Fan, Sparkles, Wrench } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { Finding, Issue } from "@/lib/api"
 import { cn } from "@/lib/utils"
@@ -84,7 +84,7 @@ export function HealthDialog({
           <span className="font-medium">{t("memory.health.lintHeading")}</span>
           <Choose value={scope} onChange={setScope} options={scopes} label={t("memory.health.scopeAria")} className="min-w-0 max-w-64" />
           <Button size="xs" onClick={analyse} disabled={busy} title={t("memory.health.analyzeTitle")}>
-            {busy ? <LoaderPinwheel className="animate-spin" /> : <Sparkles />} {t("memory.health.analyze")}
+            {busy ? <Fan className="animate-spin" /> : <Sparkles />} {t("memory.health.analyze")}
           </Button>
         </div>
         {lint && (

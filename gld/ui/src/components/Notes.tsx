@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Check, ChevronRight, LoaderPinwheel, MessageSquarePlus, NotebookPen, Plus, Send, X } from "lucide-react"
+import { Check, ChevronRight, Fan, MessageSquarePlus, NotebookPen, Plus, Send, X } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"
@@ -166,7 +166,7 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
                   (savedList[i] === it ? (
                     <Check className="mt-1.5 size-3.5 shrink-0 text-success" aria-label={tr("conversation.notes.saved")} />
                   ) : (
-                    <LoaderPinwheel className="mt-1.5 size-3.5 shrink-0 animate-spin text-muted-foreground" aria-label={tr("conversation.notes.saving")} />
+                    <Fan className="mt-1.5 size-3.5 shrink-0 animate-spin text-muted-foreground" aria-label={tr("conversation.notes.saving")} />
                   ))}
                 <Button variant="ghost" size="icon-xs" onClick={() => { setPicked(new Set()); edit(items.filter((_, j) => j !== i)) }} aria-label={tr("conversation.notes.remove")}>
                   <X />

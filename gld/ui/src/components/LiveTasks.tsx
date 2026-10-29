@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { useEffect, useState } from "react"
-import { CircleAlert, CircleCheck, CircleHelp, ListChecks, LoaderPinwheel } from "lucide-react"
+import { CircleAlert, CircleCheck, CircleHelp, ListChecks, Fan } from "lucide-react"
 import { api, type BgTask } from "@/lib/api"
 import { ApiError } from "@/lib/apiError"
 import { ago } from "@/lib/format"
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import type { Live } from "./LiveStatus"
 
 function Icon({ s }: { s: BgTask["status"] }) {
-  if (s === "running") return <LoaderPinwheel className="size-3.5 shrink-0 animate-spin text-success" />
+  if (s === "running") return <Fan className="size-3.5 shrink-0 animate-spin text-success" />
   if (s === "completed") return <CircleCheck className="size-3.5 shrink-0 text-success" />
   if (s === "unknown") return <CircleHelp className="size-3.5 shrink-0 text-muted-foreground" />
   return <CircleAlert className="size-3.5 shrink-0 text-warning" />

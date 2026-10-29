@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowDown, ArrowUpToLine, Copy, Link2, SquareCode, TextSelect, Undo2, BarChart3, Bug, ChevronLeft, ChevronRight, FolderOpen, Power, FileText, LoaderPinwheel, MessageSquarePlus, MoreHorizontal, MessagesSquare, GalleryHorizontalEnd, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
+import { ArrowDown, ArrowUpToLine, Copy, Link2, SquareCode, TextSelect, Undo2, BarChart3, Bug, ChevronLeft, ChevronRight, FolderOpen, Power, FileText, Fan, MessageSquarePlus, MoreHorizontal, MessagesSquare, GalleryHorizontalEnd, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
@@ -470,7 +470,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             {loadedNow?.more && (
               <div ref={top} className="text-center">
                 <Button variant="outline" size="sm" onClick={older} disabled={loadingOlder}>
-                  {loadingOlder ? <LoaderPinwheel className="animate-spin" /> : <ArrowUpToLine />} {t("conversation.view.loadOlder")}
+                  {loadingOlder ? <Fan className="animate-spin" /> : <ArrowUpToLine />} {t("conversation.view.loadOlder")}
                 </Button>
               </div>
             )}
@@ -527,7 +527,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
               ))}
             {turn?.running && (
               <p role="status" className="flex items-center gap-2 text-muted-foreground">
-                <LoaderPinwheel className="size-4 animate-spin" aria-hidden /> {t("conversation.view.replying")}
+                <Fan className="size-4 animate-spin" aria-hidden /> {t("conversation.view.replying")}
               </p>
             )}
             <LiveBar live={live} id={id} />

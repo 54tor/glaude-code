@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowUpToLine, ChevronDown, FolderOpen, LoaderPinwheel, LogOut, MessageSquare, Send, Wrench, X } from "lucide-react"
+import { ArrowUpToLine, ChevronDown, FolderOpen, Fan, LogOut, MessageSquare, Send, Wrench, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -97,7 +97,7 @@ function Chooser() {
   if (!list || list.length === 1)
     return (
       <main className="flex min-h-svh items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
-        <LoaderPinwheel className="size-4 animate-spin" aria-hidden />
+        <Fan className="size-4 animate-spin" aria-hidden />
         {t("conversation.guest.loading")}
       </main>
     )
@@ -284,7 +284,7 @@ function GuestSession({ handle }: { handle: string }) {
   if (!me)
     return (
       <main className="flex min-h-svh items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
-        <LoaderPinwheel className="size-4 animate-spin" aria-hidden />
+        <Fan className="size-4 animate-spin" aria-hidden />
         {t("conversation.guest.loading")}
       </main>
     )
@@ -340,7 +340,7 @@ function GuestSession({ handle }: { handle: string }) {
             {h.more && (
               <div className="text-center">
                 <Button variant="outline" size="sm" disabled={loadingOlder} onClick={() => void older()}>
-                  {loadingOlder ? <LoaderPinwheel className="animate-spin" /> : <ArrowUpToLine />} {t("conversation.view.loadOlder")}
+                  {loadingOlder ? <Fan className="animate-spin" /> : <ArrowUpToLine />} {t("conversation.view.loadOlder")}
                 </Button>
               </div>
             )}

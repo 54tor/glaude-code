@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { useState } from "react"
-import { Download, LoaderPinwheel, Search } from "lucide-react"
+import { Download, Fan, Search } from "lucide-react"
 import { api, type SkillHit } from "@/lib/api"
 import { tilde } from "@/lib/format"
 import { reportAction } from "@/lib/report"
@@ -149,7 +149,7 @@ export function SkillsNpxDialog({
                 {t("skills.npx.back")}
               </Button>
               <Button onClick={install} disabled={busy}>
-                {busy ? <LoaderPinwheel className="animate-spin" /> : <Download />}{" "}
+                {busy ? <Fan className="animate-spin" /> : <Download />}{" "}
                 {busy
                   ? t("skills.npx.running")
                   : t("skills.npx.confirmInstall")}
@@ -172,7 +172,7 @@ export function SkillsNpxDialog({
                 maxLength={80}
               />
               <Button type="submit" disabled={busy || !q.trim()}>
-                {busy ? <LoaderPinwheel className="animate-spin" /> : <Search />}{" "}
+                {busy ? <Fan className="animate-spin" /> : <Search />}{" "}
                 {t("skills.npx.searchBtn")}
               </Button>
             </form>

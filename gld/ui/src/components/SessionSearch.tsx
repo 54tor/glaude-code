@@ -1,4 +1,4 @@
-import { FileText, LoaderPinwheel, Search, X } from "lucide-react"
+import { FileText, Fan, Search, X } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,7 +19,7 @@ export function SessionSearch({ q, setQ, adv, setAdv, searching }: { q: string; 
       />
       <div className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-1">
         {searching ? (
-          <LoaderPinwheel className="size-4 animate-spin text-muted-foreground" aria-label={t("shell.sidebar.searching")} />
+          <Fan className="size-4 animate-spin text-muted-foreground" aria-label={t("shell.sidebar.searching")} />
         ) : (
           q && (
             <button className="text-muted-foreground hover:text-foreground" onClick={() => setQ("")} aria-label={t("shell.sidebar.clearSearch")}>

@@ -1,7 +1,7 @@
 import { Fragment, useState, useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
-import { AlarmClock, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, Flame, Microwave, Snowflake, History, FileText, Inbox, NotebookPen, Info, LoaderPinwheel, Search, ShieldCheck, Tag, Users, X } from "lucide-react"
+import { AlarmClock, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, Flame, Microwave, Snowflake, History, FileText, Inbox, NotebookPen, Info, Fan, Search, ShieldCheck, Tag, Users, X } from "lucide-react"
 import { tilde } from "@/lib/format"
 import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
@@ -124,7 +124,7 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
             {a.asking.has(s.id) ? (
               <Info className="size-4 shrink-0 animate-pulse text-warning" aria-label={t("shell.sidebar.asking")} />
             ) : a.live.has(s.id) && !a.waiting.has(s.id) ? (
-              <LoaderPinwheel className="size-4 shrink-0 animate-spin text-success" aria-label={t("shell.sidebar.working")} />
+              <Fan className="size-4 shrink-0 animate-spin text-success" aria-label={t("shell.sidebar.working")} />
             ) : warn ? (
               <AlarmClock className="size-4 shrink-0 text-warning" aria-label={t("shell.sidebar.cacheExpiring")} />
             ) : warm[s.id]?.on ? (
