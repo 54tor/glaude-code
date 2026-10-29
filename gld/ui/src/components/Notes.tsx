@@ -104,8 +104,9 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
   const count = items.filter((i) => i.trim()).length
   const togglePick = (i: number) => setPicked((p) => (p.has(i) ? new Set([...p].filter((x) => x !== i)) : new Set(p).add(i)))
   const dropIdx = new Set(chosen.map((x) => x.i))
-  const targets = rows.filter((r) => sendable.has(r.s.id) && a.live.has(r.s.id))
-  const closed = rows.filter((r) => !a.live.has(r.s.id)).slice(0, 30)
+  const here = folder ? rows.filter((r) => r.s.cwd === folder) : rows
+  const targets = here.filter((r) => sendable.has(r.s.id) && a.live.has(r.s.id))
+  const closed = here.filter((r) => !a.live.has(r.s.id)).slice(0, 30)
   const filled = items.map((x, i) => (x.trim() ? i : -1)).filter((i) => i >= 0)
   const allPicked = filled.length > 0 && filled.every((i) => picked.has(i))
   const sendTo = async (r: Row) => {
