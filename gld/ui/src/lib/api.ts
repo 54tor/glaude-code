@@ -307,7 +307,7 @@ export const api = {
   rename: (s: Item, b: { title?: string; auto?: boolean }) => http.patch<Said & { title: string }>(`/sessions/${seg(s.id)}${qs({ dir: s.dir })}`, b),
   reassign: (items: Item[], to: string) => inBatches(items, (b) => http.patch<Said & { n: number }>("/sessions", { items: b, to })),
   rmSessions: (items: Item[]) =>
-    inBatches(items, (b) => http.del<Said>(`/sessions${qs({ item: b.map((i) => `${i.dir}:${i.id}`) })}`), (i) => itemLen(`${i.dir}:${i.id}`)),
+    inBatches(items, (b) => http.del<Said & { deleted: number; spared: number }>(`/sessions${qs({ item: b.map((i) => `${i.dir}:${i.id}`) })}`), (i) => itemLen(`${i.dir}:${i.id}`)),
   trashSessionsAdd: (items: Item[]) => inBatches(items, (b) => http.post<Said>(`/trash/sessions${qs({ close: true })}`, { items: b })),
   trashSessionsRestore: (ids: string[]) => inBatches(ids, (b) => http.patch<Said>(`/trash/sessions${qs({ item: b })}`, { trashed: false }), itemLen),
   trashSessionsPurge: (ids: string[]) => inBatches(ids, (b) => http.del<Said>(`/trash/sessions${qs({ item: b })}`), itemLen),

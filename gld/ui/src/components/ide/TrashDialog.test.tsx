@@ -63,7 +63,7 @@ describe("TrashDialog", () => {
 
   it("purger demande confirmation", async () => {
     list()
-    const purge = vi.spyOn(api, "fsTrashPurge").mockResolvedValue(undefined)
+    const purge = vi.spyOn(api, "fsTrashPurge").mockResolvedValue({ done: [], failed: [] })
     mount()
     await screen.findByText("a.txt")
     fireEvent.click(screen.getByRole("button", { name: "Supprimer définitivement a.txt" }))
@@ -104,8 +104,8 @@ describe("TrashDialog", () => {
   })
   it("une requête à la fois : pendant une purge, restaurer et purger sont désactivés", async () => {
     list()
-    let done!: (v: void) => void
-    const purge = vi.spyOn(api, "fsTrashPurge").mockReturnValue(new Promise<void>((r) => (done = r)))
+    let done!: (v: { done: string[]; failed: [] }) => void
+    const purge = vi.spyOn(api, "fsTrashPurge").mockReturnValue(new Promise<{ done: string[]; failed: [] }>((r) => (done = r)))
     const restore = vi.spyOn(api, "fsTrashRestore")
     mount()
     await screen.findByText("a.txt")
@@ -116,7 +116,7 @@ describe("TrashDialog", () => {
     await waitFor(() => expect(r.disabled).toBe(true))
     fireEvent.click(r)
     expect(restore).not.toHaveBeenCalled()
-    await act(async () => done())
+    await act(async () => done({ done: [], failed: [] }))
     await waitFor(() => expect(r.disabled).toBe(false))
   })
   it("fenêtre fermée pendant une restauration : l'arbre est quand même actualisé, une seule fois", async () => {
