@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from "react"
 import { Bell, Minimize2, Reply, Send, Users } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { Badge } from "@/components/ui/badge"
@@ -33,6 +34,28 @@ export const isTagged = (t: string) => (/^\s*<[a-z][a-z-]*[\s>]/.test(t) && !/^\
 
 // Message de service d'un agent ou d'une session (pas un prompt qui commencerait par « < »).
 export const isServiceMsg = (t: string) => /^\s*<(?:agent-message|cross-session-message|teammate-message)[\s>]/.test(t)
+
+// Corps replié à 5 lignes avec ellipse ; le bouton n'apparaît que si le texte déborde.
+function Clamp({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation()
+  const ref = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false)
+  const [over, setOver] = useState(false)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (el && !open) setOver(el.scrollHeight > el.clientHeight + 1)
+  })
+  return (
+    <div className="mt-1.5">
+      <div ref={ref} className={`break-words ${open ? "" : "line-clamp-5"}`}>{children}</div>
+      {(over || open) && (
+        <button type="button" onClick={() => setOpen(!open)} className="mt-1 text-xs text-muted-foreground hover:text-foreground">
+          {t(open ? "conversation.tagged.less" : "conversation.tagged.more")}
+        </button>
+      )}
+    </div>
+  )
+}
 
 type Md = (t: string) => React.ReactNode
 // Répondre à une session : la consigne part dans le composer, Claude l'envoie avec SendMessage.
@@ -71,6 +94,8 @@ function Card({ tag, attrs, body, md, onReply }: { tag: string; attrs: string; b
               </div>
             ))}
           </dl>
+        ) : agent ? (
+          <Clamp>{md(body.trim())}</Clamp>
         ) : (
           <div className="mt-1.5 break-words">{md(body.trim())}</div>
         )}

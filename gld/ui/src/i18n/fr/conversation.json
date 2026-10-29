@@ -291,6 +291,8 @@
       "teammateMessage": "Message de {{name}}",
       "crossSessionMessage": "Message de la session {{name}}",
       "agentMessage": "Message du sous-agent {{name}}",
+      "more": "Voir tout",
+      "less": "Réduire",
       "reply": "Répondre à cette session",
       "replyDraft": "Réponds à la session {{name}} avec SendMessage (to: \"{{to}}\") : ",
       "taskNotification": "Notification de tâche",
