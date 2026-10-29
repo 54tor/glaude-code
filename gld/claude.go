@@ -38,13 +38,19 @@ func checkPrompt(id, prompt string) error {
 	return nil
 }
 
-// checkResumePrompt : comme checkPrompt, et jamais sous Windows, où le message passerait par cmd.exe
-// (qui ne sait pas l'échapper sûrement).
+// checkResumePrompt : comme checkPrompt, et jamais quand claude est un script .cmd ou .bat (installation npm sous Windows) :
+// le message passerait par cmd.exe, qui ne sait pas l'échapper sûrement. Le claude.exe de l'installateur natif reçoit ses
+// arguments tels quels.
 func checkResumePrompt(id, prompt string) error {
-	if prompt != "" && runtime.GOOS == "windows" {
+	if prompt != "" && viaCmdExe(withPath(exec.Command("claude")).Path) {
 		return terr("srv.claude.repriseAvecUnMessage")
 	}
 	return checkPrompt(id, prompt)
+}
+
+func viaCmdExe(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	return ext == ".cmd" || ext == ".bat"
 }
 
 // claudeArgs valide les options de claude (seulement des drapeaux simples : --x, -x, --x=valeur, jamais du shell)
@@ -133,19 +139,19 @@ func lastLine(b []byte) string {
 }
 
 func withPath(c *exec.Cmd) *exec.Cmd {
-	if runtime.GOOS == "windows" {
-		return c
-	}
 	home := runAsHome()
 	if home == "" {
 		home, _ = os.UserHomeDir()
 	}
-	local := filepath.Join(home, ".local/bin")
-	c.Env = append(environNoAuth(), "PATH="+local+":"+os.Getenv("PATH"))
+	local := filepath.Join(home, ".local", "bin") // aussi celui de l'installateur natif de claude sous Windows
+	c.Env = append(environNoAuth(), "PATH="+local+string(os.PathListSeparator)+os.Getenv("PATH"))
 	// exec.Command a déjà cherché le programme dans le PATH du serveur, où ~/.local/bin peut manquer
 	// (service, lanceur de bureau) : on le reprend ici, avec la même priorité que le PATH ci-dessus.
-	if name := c.Args[0]; !strings.ContainsRune(name, '/') {
-		if fi, err := os.Stat(filepath.Join(local, name)); err == nil && fi.Mode().IsRegular() && fi.Mode()&0o111 != 0 {
+	if name := c.Args[0]; !strings.ContainsAny(name, `/\`) {
+		if runtime.GOOS == "windows" && filepath.Ext(name) == "" {
+			name += ".exe"
+		}
+		if fi, err := os.Stat(filepath.Join(local, name)); err == nil && fi.Mode().IsRegular() && (runtime.GOOS == "windows" || fi.Mode()&0o111 != 0) {
 			c.Path, c.Err = filepath.Join(local, name), nil
 		}
 	}

@@ -374,6 +374,9 @@ func TestResumePrompt(t *testing.T) {
 			t.Fatalf("accepté : %q", c[1][:min(len(c[1]), 20)])
 		}
 	}
+	if !viaCmdExe(`C:\npm\claude.CMD`) || !viaCmdExe("claude.bat") || viaCmdExe(`C:\u\.local\bin\claude.exe`) {
+		t.Fatal("viaCmdExe")
+	}
 }
 
 func TestChat(t *testing.T) {

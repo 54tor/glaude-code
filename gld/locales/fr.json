@@ -117,7 +117,7 @@
   "srv.chat.promptVide": "prompt vide",
   "srv.chat.rienEnCours": "rien en cours",
   "srv.chat.sessionInvalide": "session invalide",
-  "srv.claude.repriseAvecUnMessage": "reprise avec un message non prise en charge sous Windows",
+  "srv.claude.repriseAvecUnMessage": "reprise avec un message impossible quand claude est un script .cmd (installation npm) : installez claude.exe avec l'installateur natif",
   "srv.claude.unMessageNeS": "un message ne s'envoie qu'à une session précise",
   "srv.cli.aide": "aide",
   "srv.cli.aucuneSessionClaudePour": "aucune session Claude pour {{.A1}}\n          (cherché dans {{.A2}})",

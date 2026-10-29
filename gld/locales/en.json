@@ -117,7 +117,7 @@
   "srv.chat.promptVide": "empty prompt",
   "srv.chat.rienEnCours": "nothing running",
   "srv.chat.sessionInvalide": "invalid session",
-  "srv.claude.repriseAvecUnMessage": "resuming with a message is not supported on Windows",
+  "srv.claude.repriseAvecUnMessage": "resuming with a message is not possible when claude is a .cmd script (npm install): install claude.exe with the native installer",
   "srv.claude.unMessageNeS": "a message can only be sent to a specific session",
   "srv.cli.aide": "help",
   "srv.cli.aucuneSessionClaudePour": "no Claude session for {{.A1}}\n          (looked in {{.A2}})",
