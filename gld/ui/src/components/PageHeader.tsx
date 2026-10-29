@@ -52,7 +52,7 @@ export function PageHeader({
   const can = useCan()
   const exec = can("exec") // sans ce droit sur le home, sessions et terminal sont refusés : on ne les propose pas
   // Même axe que le contenu de la vue : le titre ne reste pas collé à gauche quand la liste est centrée sur grand écran.
-  const box = cn("flex flex-wrap items-center gap-x-3 px-3 md:px-6", !split && "mx-auto w-full max-w-7xl")
+  const box = cn("flex flex-wrap items-center gap-x-3 px-3 md:px-6", !split && "mx-auto w-full max-w-page")
   return (
     <>
       <header className="border-b bg-background">

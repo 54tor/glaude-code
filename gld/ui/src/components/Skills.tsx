@@ -382,7 +382,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
               />
             ) : (
               <ScrollArea className="min-h-0 flex-1">
-                <div className="mx-auto max-w-5xl px-6 py-6 text-sm leading-relaxed">
+                <div className="mx-auto max-w-page px-6 py-6 text-sm leading-relaxed">
                   {!cur ? (
                     <Skeleton className="h-32 w-full" />
                   ) : cur.error ? (

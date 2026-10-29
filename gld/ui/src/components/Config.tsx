@@ -92,7 +92,7 @@ export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: strin
 
   return (
     <ScrollArea className="min-h-0 flex-1">
-      <div className="mx-auto max-w-7xl px-3 py-6 md:px-6">
+      <div className="mx-auto max-w-page px-3 py-6 md:px-6">
         <Tabs value={dir ? projTab : tab || "sante"} onValueChange={dir ? setProjTab : onTab}>
           {/* Le soulignement de l'onglet actif (::after, 5 px sous le bouton, même invisible) déborde de la liste : sans ce bas de marge il crée un défilement vertical. */}
           {/* ponytail: fondu fixe, même une fois au bout du défilement ; un vrai indicateur demanderait d'écouter le scroll. */}

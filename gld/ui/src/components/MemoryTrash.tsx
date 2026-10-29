@@ -105,7 +105,7 @@ export function TrashViewer({
         {diff && current !== null ? (
           <DiffView old={text ?? ""} cur={current} />
         ) : (
-          <pre className="session-text mx-auto max-w-7xl px-6 py-6 whitespace-pre-wrap">{text ?? ""}</pre>
+          <pre className="session-text mx-auto max-w-page px-6 py-6 whitespace-pre-wrap">{text ?? ""}</pre>
         )}
       </ScrollArea>
     </>

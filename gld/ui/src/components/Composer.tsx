@@ -268,7 +268,7 @@ export function Composer({
   if (live && !running && !own) return <LiveSend id={id} onSent={onSent} liveState={liveState} onAsk={onAsk} bar={extra} compactHint={compactHint} coldHint={coldHint} />
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
-      <div className="mx-auto max-w-7xl space-y-2">
+      <div className="mx-auto max-w-page space-y-2">
         {mention.list}
         {coldHint && <ColdHint {...coldHint} />}
         {extra && <div className="flex justify-end">{extra}</div>}
@@ -428,7 +428,7 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
     )
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
-      <div className="mx-auto max-w-7xl space-y-2">
+      <div className="mx-auto max-w-page space-y-2">
         <TerminalPanel id={id} onAsk={(a) => (setAsking(a), onAsk?.(a))} onSent={onSent} extra={bar} />
         {compactHint && (
           <p role="status" className="flex items-center gap-2 rounded-md bg-warning/10 px-3 py-1 text-xs text-warning">

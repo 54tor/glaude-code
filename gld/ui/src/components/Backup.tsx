@@ -68,7 +68,7 @@ export function Backup({ home }: { home: string }) {
   const label = (id: string) => plan?.items.find((i) => i.id === id)?.label ?? id
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-8 overflow-y-auto px-4 py-6">
+    <div className="mx-auto w-full max-w-page space-y-8 overflow-y-auto px-4 py-6">
       <section className="space-y-3">
         <h2 className="text-base font-medium">{t("backup.export")}</h2>
         <p className="text-sm text-muted-foreground">{t("backup.exportHint")}</p>

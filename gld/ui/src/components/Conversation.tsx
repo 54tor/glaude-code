@@ -459,7 +459,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             </Button>
           )}
         <ScrollArea ref={area} className="min-h-0 flex-1">
-          <div className="session-text mx-auto max-w-5xl space-y-6 px-3 py-4 md:px-8 md:py-6">
+          <div className="session-text mx-auto max-w-page space-y-6 px-3 py-4 md:px-8 md:py-6">
             {msgs === null && (
               <>
                 <Skeleton className="ml-auto h-10 w-2/3" />

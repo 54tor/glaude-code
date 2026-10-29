@@ -407,7 +407,7 @@ export function Snippets({
               />
             ) : (
               <ScrollArea className="min-h-0 flex-1">
-                <div className="mx-auto max-w-5xl px-6 py-6 text-sm leading-relaxed">
+                <div className="mx-auto max-w-page px-6 py-6 text-sm leading-relaxed">
                   {failed !== undefined ? <p className="text-destructive">{failed || t("skills.snippets.unreadable")}</p> : text === null ? <Skeleton className="h-32 w-full" /> : <CommandView text={text} />}
                 </div>
               </ScrollArea>

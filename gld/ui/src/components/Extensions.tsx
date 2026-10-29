@@ -128,7 +128,7 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col gap-0">
-        <div className="mx-auto w-full max-w-5xl px-3 pt-4 md:px-6">
+        <div className="mx-auto w-full max-w-page px-3 pt-4 md:px-6">
           <ScrollArea className="w-full [mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)]">
             <div className="pb-2">
               <TabsList className="w-max justify-start">
@@ -141,7 +141,7 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
         </div>
         <TabsContent value="active" className="min-h-0 flex-1">
           <ScrollArea className="h-full">
-            <div className="mx-auto max-w-5xl space-y-5 px-3 py-5 md:px-6">
+            <div className="mx-auto max-w-page space-y-5 px-3 py-5 md:px-6">
         <div className="space-y-2 rounded-md border bg-muted/30 px-3 py-3 text-sm">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium">{t("extensions.viewing")}</span>
@@ -274,7 +274,7 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
         </TabsContent>
         <TabsContent value="install" className="min-h-0 flex-1">
           <ScrollArea className="h-full">
-            <div className="mx-auto max-w-5xl px-3 py-4 md:px-6">
+            <div className="mx-auto max-w-page px-3 py-4 md:px-6">
               <PluginsPanel inline projects={ov.projects} home={home} onChange={reload} />
             </div>
           </ScrollArea>

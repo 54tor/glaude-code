@@ -37,7 +37,7 @@ export function DiffView({ old, cur, compact }: { old: string; cur: string; comp
   const rows = useMemo(() => lineDiff(old, cur), [old, cur])
   const same = rows.every((r) => r.op === " ")
   return (
-    <div className={compact ? "p-2 text-xs" : "session-text mx-auto max-w-7xl px-6 py-6"}>
+    <div className={compact ? "p-2 text-xs" : "session-text mx-auto max-w-page px-6 py-6"}>
       {!compact && (
         <p className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground">
           {t("memory.diff.old")} <ArrowRight className="size-3" /> {t("memory.diff.current")} {same && t("memory.diff.same")}

@@ -12,7 +12,7 @@ export function Plugins({ home }: { home: string }) {
   const reload = useCallback(() => api.config().then((o) => setProjects(o.projects), () => {}), [])
   useEffect(() => void reload(), [reload])
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-4 p-4 md:p-6">
+    <div className="mx-auto w-full max-w-page space-y-4 p-4 md:p-6">
       <div className="flex justify-end">
         <Button size="xs" variant="outline" asChild>
           <Link to="/sauvegarde?cats=plugins">

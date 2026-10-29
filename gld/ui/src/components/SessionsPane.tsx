@@ -73,7 +73,7 @@ export function SessionsPane({
   const { t } = useTranslation()
   return (
     <ScrollArea className="min-h-0 flex-1">
-      <div className="mx-auto max-w-7xl px-3 py-4 pb-24 md:px-6">
+      <div className="mx-auto max-w-page px-3 py-4 pb-24 md:px-6">
         {loading && error && (
           <Empty icon={denied ? Lock : WifiOff} title={denied ? t("auth.denied.title") : t("shell.pane.unreachable")} text={error}>
             <Button variant="outline" size="sm" className="mt-2" onClick={retry}>

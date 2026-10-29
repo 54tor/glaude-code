@@ -336,7 +336,7 @@ function GuestSession({ handle }: { handle: string }) {
             stuck.current = v.scrollHeight - v.scrollTop - v.clientHeight < 80
           }}
         >
-          <div className="session-text mx-auto max-w-5xl space-y-6 px-3 py-4 md:px-8 md:py-6">
+          <div className="session-text mx-auto max-w-page space-y-6 px-3 py-4 md:px-8 md:py-6">
             {h.more && (
               <div className="text-center">
                 <Button variant="outline" size="sm" disabled={loadingOlder} onClick={() => void older()}>
@@ -352,7 +352,7 @@ function GuestSession({ handle }: { handle: string }) {
           </div>
         </ScrollArea>
         <div className="border-t bg-muted/20 px-4 py-3">
-          <section aria-label={t("conversation.guest.queue")} className="mx-auto max-w-7xl space-y-2">
+          <section aria-label={t("conversation.guest.queue")} className="mx-auto max-w-page space-y-2">
             <div className="flex justify-end">
               <Button variant={tools ? "secondary" : "ghost"} size="xs" className="text-muted-foreground max-md:hidden" onClick={() => setTools(!tools)} aria-pressed={tools}>
                 <Wrench /> {tools ? t("conversation.view.toolsShown") : t("conversation.view.toolsHidden")}
