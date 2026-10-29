@@ -129,11 +129,15 @@ export function Extensions({ home, onAsk }: { home: string; onAsk: (a: Ask) => v
     <div className="flex min-h-0 flex-1 flex-col">
       <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col gap-0">
         <div className="mx-auto w-full max-w-5xl px-3 pt-4 md:px-6">
-          <TabsList>
-            <TabsTrigger value="active">{t("extensions.tabActive")}</TabsTrigger>
-            <TabsTrigger value="install">{t("extensions.tabInstall")}</TabsTrigger>
-            <TabsTrigger value="editor">{t("extensions.tabEditor")}</TabsTrigger>
-          </TabsList>
+          <ScrollArea className="w-full [mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)]">
+            <div className="pb-2">
+              <TabsList className="w-max justify-start">
+                <TabsTrigger value="active">{t("extensions.tabActive")}</TabsTrigger>
+                <TabsTrigger value="install">{t("extensions.tabInstall")}</TabsTrigger>
+                <TabsTrigger value="editor">{t("extensions.tabEditor")}</TabsTrigger>
+              </TabsList>
+            </div>
+          </ScrollArea>
         </div>
         <TabsContent value="active" className="min-h-0 flex-1">
           <ScrollArea className="h-full">
