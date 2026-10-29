@@ -49,7 +49,7 @@ const PASTED = /<pasted_content id="[^"]*">\n?([\s\S]*?)\n?<\/pasted_content(?: 
 const HOME_PREFIX = /(^|[\s@("'`])(?:\/home\/[^/\s]+|\/Users\/[^/\s]+|[A-Za-z]:[\\/]Users[\\/][^\\/\s]+)(?=[\\/])/g
 export const hideHome = (s: string) => s.replace(HOME_PREFIX, "$1~")
 
-// Image déposée par l'interface (« @/…/.claude/gld-web-images/<nom> ») : affichée au lieu du chemin, relue par son seul nom (GET /conv-upload).
+// Image déposée par l'interface (« @/…/.claude/gld-web-images/<nom> ») : affichée au lieu du chemin, relue par son seul nom (GET /v1/sessions/{id}/conversation/uploads/{up}).
 const UPLOADED = /@\S*\/gld-web-images\/([A-Za-z0-9][\w.-]*\.(?:png|jpe?g|gif|webp))/g
 
 function UserText({ t: text, conv }: { t: string; conv?: Conv }) {

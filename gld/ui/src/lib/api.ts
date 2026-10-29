@@ -1,5 +1,3 @@
-import { i18n } from "@/i18n"
-import { authFetch } from "@/lib/auth"
 import { readResponse } from "@/lib/apiError"
 import { http, qs, seg, v1 } from "@/lib/http"
 
@@ -138,7 +136,6 @@ export type Ls = { path: string; parent: string; dirs: string[]; sep: string; er
 // Réponse textuelle d'une action de l'API /v1 (toast).
 export type Said = { message: string }
 export type CfgReply = { out: string; before: string; after: string; warnings?: CfgIssue[] }
-export type Result = { ok: boolean; out: string; net?: boolean; n?: number } // net : pas de réponse (réseau, délai) ; l'action a pu avoir lieu
 // État git d'un dossier (gitstatus.go)
 export type GitState = { branch: string; detached?: boolean; upstream: boolean; ahead: number; behind: number; changed: number; untracked: number }
 // Maintien au chaud d'une session (keepwarm.go) : pings automatiques, comptés et plafonnés.
@@ -157,13 +154,6 @@ export type InviteQueued = { id: string; text: string; state: "queued" | "sendin
 export type InviteInfo = { id: string; seq: number; name: string; label: string; mode: "rw" | "ro"; state: "connected" | "away" | "pending"; lastSeen: number; redeemed: boolean; queue: InviteQueued[] }
 export type ShareInfo = { id: string; dir: string; title: string; handle: string; open: boolean; invites: InviteInfo[] }
 export type GuestShare = { handle: string; title: string; mode: "rw" | "ro" }
-export class HttpError extends Error {
-  status: number
-  constructor(status: number) {
-    super(`HTTP ${status}`)
-    this.status = status
-  }
-}
 
 export type FsTrashItem = { id: string; path: string; mtime: number }
 export type FsEntry = { name: string; type: "dir" | "file" | "symlink"; size: number; mtime: number }
@@ -336,14 +326,4 @@ export const api = {
   trash: () => http.get<{ items: Trashed[] }>("/trash/memory"),
   trashFile: (id: string) => http.get<{ text?: string }>(`/trash/memory/${seg(id)}/file`),
   search: (q: string) => http.get<{ hits: Hit[] }>(`/sessions${qs({ q })}`),
-  // Une action ne lève jamais : toute erreur (réseau, HTTP) devient un Result visible.
-  // timeoutMs : abandonne la requête au bout de ce délai (sinon elle attend le serveur indéfiniment).
-  async post(url: string, body: unknown, timeoutMs?: number): Promise<Result> {
-    try {
-      const r = await authFetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined })
-      return (await r.json()) as Result
-    } catch (e) {
-      return { ok: false, net: true, out: i18n.t("shell.api.error", { msg: e instanceof Error ? e.message : String(e) }) }
-    }
-  },
 }

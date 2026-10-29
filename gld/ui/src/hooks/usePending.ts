@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { api, type QItem } from "@/lib/api"
 
-// File serveur d'une session, relue toutes les 2 s tant qu'un composeur la montre (le sondage de /session-live ne vit que dans
+// File serveur d'une session, relue toutes les 2 s tant qu'un composeur la montre (le sondage de /v1/sessions/{id}/live ne vit que dans
 // la conversation ouverte, pas dans le composeur). refreshPending : relecture immédiate après une action.
 const listeners = new Set<() => void>()
 export const refreshPending = () => listeners.forEach((f) => f())

@@ -61,7 +61,7 @@ export function useAuth(): Auth {
 // avec le jeton d'un compte en cours de connexion.
 export async function authFetch(url: string, init: RequestInit = {}): Promise<Response> {
   const m = (init.method ?? "GET").toUpperCase()
-  if (m !== "GET" && m !== "HEAD" && snap.state !== "ok" && snap.state !== "open" && !url.startsWith("/v1/auth/") && !url.startsWith("/auth/")) throw new Error(i18n.t("auth.notReady"))
+  if (m !== "GET" && m !== "HEAD" && snap.state !== "ok" && snap.state !== "open" && !url.startsWith("/v1/auth/")) throw new Error(i18n.t("auth.notReady"))
   if (snap.csrf && m !== "GET" && m !== "HEAD") {
     const h = new Headers(init.headers)
     h.set("X-Gld-CSRF", snap.csrf)

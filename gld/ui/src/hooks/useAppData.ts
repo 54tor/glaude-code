@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { i18n } from "@/i18n"
-import { api, HttpError, type Data, type SnipScope, type Snippet } from "@/lib/api"
+import { api, type Data, type SnipScope, type Snippet } from "@/lib/api"
 import { ApiError } from "@/lib/apiError"
 import { getAuth } from "@/lib/auth"
 import { REFRESH } from "@/lib/sessionsView"
@@ -28,7 +28,7 @@ export function useAppData() {
       setDenied(false)
       toast.dismiss("server-down")
     } catch (e) {
-      if ((e instanceof HttpError || e instanceof ApiError) && e.status === 403 && getAuth().state === "ok") {
+      if (e instanceof ApiError && e.status === 403 && getAuth().state === "ok") {
         setDenied(true)
         setError(i18n.t("auth.denied.sessions"))
         throw e

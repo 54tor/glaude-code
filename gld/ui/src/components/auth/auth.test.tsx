@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/lib/api"
+import { http } from "@/lib/http"
 import { setLang } from "@/i18n"
 import { authFetch, b64u, boot, getAuth, logout, setAuth, useCan, waAvailable } from "@/lib/auth"
 import { draftOf, setDraft } from "@/hooks/useDraft"
@@ -118,9 +119,9 @@ describe("Mfa", () => {
 
 describe("jeton CSRF et session", () => {
   it("part sur les POST une fois connecté, jamais sur les GET", async () => {
-    const calls = server({ "/x": { body: { out: "" } }, "/v1/state": { body: {} } })
+    const calls = server({ "/v1/x": { body: {} }, "/v1/state": { body: {} } })
     setAuth({ state: "ok", csrf: "tok-1" })
-    await api.post("/x", {})
+    await http.post("/x", {})
     await authFetch("/v1/state")
     expect(headerOf(calls[0], "X-Gld-CSRF")).toBe("tok-1")
     expect(headerOf(calls[1], "X-Gld-CSRF")).toBeNull()

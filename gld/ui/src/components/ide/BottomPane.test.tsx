@@ -3,7 +3,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { setLang } from "@/i18n"
 import { setAuth } from "@/lib/auth"
-import { api, HttpError, type Data } from "@/lib/api"
+import { api, type Data } from "@/lib/api"
+import { ApiError } from "@/lib/apiError"
 import { BottomPane } from "./BottomPane"
 import { DEFAULT_PREFS, type ViewPrefs } from "./useViewPrefs"
 
@@ -80,7 +81,7 @@ describe("BottomPane", () => {
   it("liste des sessions refusée (403) : raison explicite, plus aucun sondage", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.spyOn(api, "termInfo").mockResolvedValue({ enabled: true })
-    vi.spyOn(api, "data").mockRejectedValue(new HttpError(403))
+    vi.spyOn(api, "data").mockRejectedValue(new ApiError(403, "forbidden", "x"))
     render(<BottomPane dir="/p" prefs={opened()} />)
     expect(await screen.findByText(/sessions_read/)).toBeTruthy()
     expect(screen.queryByText(/GLD_WEB_TERMINAL/)).toBeNull()
@@ -91,7 +92,7 @@ describe("BottomPane", () => {
   it("liste des sessions en panne : raison générique, le sondage continue", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.spyOn(api, "termInfo").mockResolvedValue({ enabled: true })
-    vi.spyOn(api, "data").mockRejectedValue(new HttpError(500))
+    vi.spyOn(api, "data").mockRejectedValue(new ApiError(500, "internal", "x"))
     render(<BottomPane dir="/p" prefs={opened()} />)
     expect(await screen.findByText("Liste des sessions indisponible")).toBeTruthy()
     vi.spyOn(api, "data").mockResolvedValue(data(["a"], [s("a", "/p", 1)]))

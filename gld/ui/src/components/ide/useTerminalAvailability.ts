@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { api, HttpError, type Data } from "@/lib/api"
+import { api, type Data } from "@/lib/api"
 import { ApiError } from "@/lib/apiError"
 import { useAuth, useCan } from "@/lib/auth"
 
@@ -9,7 +9,7 @@ export type TermState = "loading" | "disabled" | "forbidden" | "nosessions" | "u
 
 const bare = (p: string) => p.replace(/[/\\]+$/, "")
 
-// Sans le droit exec, ni /term-info ni sondage : l'état est « forbidden » sans aucun appel.
+// Sans le droit exec, ni /v1/terminal ni sondage : l'état est « forbidden » sans aucun appel.
 // GET /api demande sessions_read : sans lui, aucune lecture ; après un 403, le sondage s'arrête (relu au retour sur l'onglet).
 // useCan répond oui tant que l'authentification charge : on attend que les droits soient connus avant tout appel.
 export function useTerminalAvailability(dir: string): { state: TermState; sessions: Session[] } {
@@ -51,7 +51,7 @@ export function useTerminalAvailability(dir: string): { state: TermState; sessio
         },
         (e) => {
           if (!alive) return
-          const st = e instanceof HttpError || e instanceof ApiError ? e.status : -1
+          const st = e instanceof ApiError ? e.status : -1
           setFail(st)
           if (st === 403) stop()
         }

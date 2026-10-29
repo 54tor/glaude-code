@@ -1,9 +1,8 @@
 import { toast } from "sonner"
 import { i18n } from "@/i18n"
 import { errMsg } from "./apiError"
-import type { Result } from "./api"
 
-// Réponse {ok, out} du serveur : une ligne en titre du toast (la première, ou la dernière avec pick "last"), le reste en
+// Une ligne en titre du toast (la première, ou la dernière avec pick "last"), le reste en
 // description. Un `out` de plusieurs lignes ne s'affiche plus en bloc brut. Renvoie r.ok.
 type Show = { id?: string | number; pick?: "first" | "last" }
 function show(ok: boolean, text: string, o: Show) {
@@ -16,10 +15,6 @@ function show(ok: boolean, text: string, o: Show) {
   ;(ok ? toast.success : toast.error)(main, { id: o.id, description: rest || undefined })
   return ok
 }
-export function reportResult(r: Result, o: Show = {}) {
-  return show(r.ok, r.out, o)
-}
-
 // Action de l'API /v1 : le message de la réponse (succès) ou de l'ApiError (échec) s'affiche de la même façon. Renvoie le succès.
 export async function reportAction(run: () => Promise<{ message?: string } | void>, o: Show = {}) {
   try {
