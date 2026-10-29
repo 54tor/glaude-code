@@ -2,18 +2,19 @@ name: Release
 on:
   push:
     tags: ["v*"]
-permissions:
-  contents: write
-  id-token: write
-  attestations: write
+permissions: {}
 jobs:
-  release:
+  # Tests et build exécutent le code des dépendances npm et Go : ce job n'a qu'un jeton en lecture, non persisté.
+  build:
     if: github.server_url == 'https://github.com'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: gld/go.mod
@@ -37,9 +38,28 @@ jobs:
             GOOS=$os GOARCH=$arch GOARM=$arm go build -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" -o ../out/$name .
           done
           cd ../out && sha256sum * > SHA256SUMS
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: binaires
+          path: out/
+          if-no-files-found: error
+          retention-days: 1
+  # Seul ce job écrit : il n'exécute aucun code du dépôt ni de ses dépendances.
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: binaires
+          path: out
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-path: out/*
-      - run: gh release create "$GITHUB_REF_NAME" out/* --generate-notes
+      - run: gh release create "$GITHUB_REF_NAME" out/* --generate-notes --repo "$GITHUB_REPOSITORY"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
