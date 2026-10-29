@@ -558,5 +558,15 @@
   "srv.rewind.fait": "Session ramenée à ce message : {{.A1}} message(s) retiré(s)",
   "srv.rewind.sessionOuverte": "session ouverte : ferme-la avant de revenir en arrière",
   "srv.http_util.tropDElements": "trop d'éléments dans la requête",
-  "srv.http_util.introuvable": "introuvable"
+  "srv.http_util.introuvable": "introuvable",
+  "srv.backup_zip.tropGrosse": "archive trop volumineuse",
+  "srv.backup_zip.illisible": "archive illisible : {{.A1}}",
+  "srv.backup_zip.tropDEntrees": "archive : trop d'entrées",
+  "srv.backup_zip.nomRefuse": "archive : nom d'entrée refusé : {{.A1}}",
+  "srv.backup_zip.entreeNonRegulier": "archive : entrée qui n'est pas un fichier régulier : {{.A1}}",
+  "srv.backup_zip.entreeTropGrosse": "archive : entrée trop volumineuse : {{.A1}}",
+  "srv.backup_zip.tropVolumineuse": "archive : contenu décompressé trop volumineux",
+  "srv.backup_zip.manifesteInvalide": "archive : manifeste invalide : {{.A1}}",
+  "srv.backup_zip.formatTropRecent": "archive de format {{.A1}}, plus récent que le format {{.A2}} géré ici",
+  "srv.backup_zip.sansManifeste": "archive : manifeste absent"
 }

@@ -558,5 +558,15 @@
   "srv.rewind.fait": "Session rewound to this message: {{.A1}} message(s) removed",
   "srv.rewind.sessionOuverte": "session is open: close it before rewinding",
   "srv.http_util.tropDElements": "too many items in the request",
-  "srv.http_util.introuvable": "not found"
+  "srv.http_util.introuvable": "not found",
+  "srv.backup_zip.tropGrosse": "archive too large",
+  "srv.backup_zip.illisible": "unreadable archive: {{.A1}}",
+  "srv.backup_zip.tropDEntrees": "archive: too many entries",
+  "srv.backup_zip.nomRefuse": "archive: entry name refused: {{.A1}}",
+  "srv.backup_zip.entreeNonRegulier": "archive: entry is not a regular file: {{.A1}}",
+  "srv.backup_zip.entreeTropGrosse": "archive: entry too large: {{.A1}}",
+  "srv.backup_zip.tropVolumineuse": "archive: decompressed content too large",
+  "srv.backup_zip.manifesteInvalide": "archive: invalid manifest: {{.A1}}",
+  "srv.backup_zip.formatTropRecent": "archive format {{.A1}} is newer than the supported format {{.A2}}",
+  "srv.backup_zip.sansManifeste": "archive: manifest missing"
 }
