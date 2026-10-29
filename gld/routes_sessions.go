@@ -389,6 +389,7 @@ func routesSessions(mux *http.ServeMux) {
 		if !ok {
 			return
 		}
+		items = withChildren(items)
 		if r.URL.Query().Get("close") == "1" { // suppression voulue d'une session ouverte : on la ferme d'abord
 			closeAndWait(items)
 		}

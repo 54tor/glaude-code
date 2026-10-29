@@ -137,6 +137,27 @@ func validItems(w http.ResponseWriter, items []item) bool {
 	return true
 }
 
+// withChildren ajoute aux éléments les sessions qu'ils ont lancées (Parent), récursivement : supprimer une session emporte ses sous-sessions.
+func withChildren(items []item) []item {
+	have := map[string]bool{}
+	for _, it := range items {
+		have[it.ID] = true
+	}
+	for grew := true; grew; {
+		grew = false
+		for _, g := range sessions() {
+			for _, s := range g.Sessions {
+				if s.Parent != "" && have[s.Parent] && !have[s.ID] {
+					have[s.ID] = true
+					items = append(items, item{s.Dir, s.ID})
+					grew = true
+				}
+			}
+		}
+	}
+	return items
+}
+
 // itemsQuery lit ?item=<dossier>:<id> répété : l'identifiant ne contient jamais « : », le nom de dossier peut en porter.
 func itemsQuery(w http.ResponseWriter, r *http.Request) ([]item, bool) {
 	var items []item

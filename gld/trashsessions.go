@@ -219,6 +219,7 @@ func routesTrashSessions(mux *http.ServeMux) {
 		if !ok {
 			return
 		}
+		items = withChildren(items)
 		if r.URL.Query().Get("close") == "1" {
 			closeAndWait(items)
 		}

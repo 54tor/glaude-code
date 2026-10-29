@@ -65,3 +65,15 @@ func TestPurgeCorbeilleSansEtatDesSessions(t *testing.T) {
 		t.Fatal("la session a quitté la corbeille")
 	}
 }
+
+func TestCorbeilleEmporteSousSessions(t *testing.T) {
+	h, cfg, _ := web(t)
+	dir := filepath.Join(cfg, "projects", "-p")
+	child := "33333333-2222-3333-4444-555555555555"
+	line := `{"type":"user","teamName":"session-` + id1[:8] + `","agentName":"w","message":{"role":"user","content":"x"}}` + "\n"
+	os.WriteFile(filepath.Join(dir, child+".jsonl"), []byte(line), 0o600)
+	v1ok(t, h, "POST", "/v1/trash/sessions", `{"items":[{"dir":"-p","id":"`+id1+`"}]}`, "")
+	if _, err := os.Stat(filepath.Join(dir, child+".jsonl")); err == nil {
+		t.Fatal("sous-session non supprimée avec sa parente")
+	}
+}
