@@ -6,7 +6,9 @@ info:
     responses are the resource JSON (no ok envelope); every failure is {"error":{"code","message"}} with the real HTTP status. Request
     and response bodies are described as generic objects: the exact fields live in the handlers and in gld/ui/src/lib/api.ts. Parameters
     and status codes are extracted from the handlers. x-gld-right is the right required in multi-user mode; x-gld-guest marks routes
-    a shared-session guest may call (the session id in the path is rewritten from the share, never read from the client).'
+    a shared-session guest may call (the session id in the path is rewritten from the share, never read from the client). Multi-item
+    requests (repeated item query parameter, or items in the body) accept at most 100 items, error code too_many_items beyond; the web UI sends
+    larger lists in successive batches so the URL stays under about 8 KB behind proxies.'
 servers:
 - url: /
 security:

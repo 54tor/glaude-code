@@ -1,3 +1,4 @@
+import { i18n } from "@/i18n"
 import { readResponse } from "@/lib/apiError"
 import { http, qs, seg, v1 } from "@/lib/http"
 
@@ -135,6 +136,44 @@ export type Msg = { r: "user" | "assistant" | "tool" | "doc"; t: string; ts?: st
 export type Ls = { path: string; parent: string; dirs: string[]; sep: string; error?: string }
 // Réponse textuelle d'une action de l'API /v1 (toast).
 export type Said = { message: string }
+// Le serveur plafonne une requête multiple à 100 éléments ; les ?item= restent sous ~6 Ko d'URL pour les proxys.
+export const BULK_MAX = 100
+const BULK_URL = 6000
+export function batches<T>(list: T[], size: (t: T) => number = () => 0): T[][] {
+  const out: T[][] = []
+  let cur: T[] = []
+  let n = 0
+  for (const x of list) {
+    const s = size(x)
+    if (cur.length && (cur.length >= BULK_MAX || n + s > BULK_URL)) {
+      out.push(cur)
+      cur = []
+      n = 0
+    }
+    cur.push(x)
+    n += s
+  }
+  if (cur.length) out.push(cur)
+  return out
+}
+const itemLen = (v: string) => encodeURIComponent(v).length + 6
+// Lots à la suite ; les compteurs et les listes des réponses s'additionnent, et un lot en échec arrête la suite.
+export async function inBatches<T, R extends { message?: string }>(list: T[], run: (b: T[]) => Promise<R>, size?: (t: T) => number): Promise<R> {
+  const bs = batches(list, size)
+  if (bs.length <= 1) return run(bs[0] ?? [])
+  const rs: R[] = []
+  for (const b of bs) rs.push(await run(b))
+  const out: Record<string, unknown> = {}
+  for (const r of rs)
+    for (const [k, v] of Object.entries(r)) {
+      if (typeof v === "number") out[k] = ((out[k] as number) ?? 0) + v
+      else if (Array.isArray(v)) out[k] = [...((out[k] as unknown[]) ?? []), ...v]
+      else if (k !== "message") out[k] = v
+    }
+  const lines = rs.map((r) => (r.message ?? "").split("\n")[0]).filter(Boolean)
+  out.message = [i18n.t("shell.act.batches", { n: rs.length }), ...lines].join("\n")
+  return out as R
+}
 export type Bulk = { done: string[]; failed: { item: string; error: { code: string; message: string } }[] }
 export type CfgReply = { out: string; before: string; after: string; warnings?: CfgIssue[] }
 // État git d'un dossier (gitstatus.go)
@@ -203,7 +242,7 @@ export const api = {
   snippet: (key: string) => http.get<{ text: string; missing?: boolean }>(`/snippets/${seg(key)}`),
   snippetSave: (key: string, text: string, create: boolean) => http.put<Said>(`/snippets/${seg(key)}`, { text, create }),
   snippetRename: (from: string, to: string) => http.patch<Said>(`/snippets/${seg(from)}`, { to }),
-  snippetRemove: (keys: string[]) => http.del<Said & Bulk>(`/snippets${qs({ item: keys })}`),
+  snippetRemove: (keys: string[]) => inBatches(keys, (b) => http.del<Said & Bulk>(`/snippets${qs({ item: b })}`), itemLen),
   snippetDraft: (body: { model: string; instruction: string; text: string }) => http.post<Said & { text: string; cost?: number }>("/snippets/drafts", body),
   memory: () => http.get<{ global: MemFile[]; projects: MemProject[]; targets: MemTarget[] }>("/memory/files"),
   memoryFile: (key: string) => http.get<{ text: string; missing?: boolean }>(`/memory/files/${seg(key)}`),
@@ -214,7 +253,7 @@ export const api = {
   memoryToggle: (key: string, enabled: boolean) => http.patch<Said & { key: string }>(`/memory/files/${seg(key)}`, { enabled }),
   memoryType: (key: string, type: string) => http.patch<Said>(`/memory/files/${seg(key)}`, { type }),
   memoryPaths: (key: string, paths: string[]) => http.patch<Said>(`/memory/files/${seg(key)}`, { paths }),
-  memoryRemove: (keys: string[]) => http.del<Said & Bulk>(`/memory/files${qs({ item: keys })}`),
+  memoryRemove: (keys: string[]) => inBatches(keys, (b) => http.del<Said & Bulk>(`/memory/files${qs({ item: b })}`), itemLen),
   memoryFix: (key: string) => http.post<Said>("/memory/fixes", { key }),
   memoryRepair: (dir: string) => http.post<Said>("/memory/repairs", { dir }),
   memoryDraft: (body: { model: string; instruction: string; key: string; refs: string[] }) => http.post<Said & { text: string; cost?: number }>("/memory/drafts", body),
@@ -228,7 +267,7 @@ export const api = {
   skills: () => http.get<{ skills: Skill[]; projects: { dir: string; project: string }[] }>("/skills"),
   skill: (key: string) => http.get<{ text: string; files?: SkillFile[] }>(`/skills/${seg(key)}`),
   skillSave: (key: string, text: string, create: boolean) => http.put<Said>(`/skills/${seg(key)}`, { text, create }),
-  skillRemove: (keys: string[]) => http.del<Said & Bulk>(`/skills${qs({ item: keys })}`),
+  skillRemove: (keys: string[]) => inBatches(keys, (b) => http.del<Said & Bulk>(`/skills${qs({ item: b })}`), itemLen),
   skillCopy: (key: string, to: string) => http.post<Said & { key: string }>("/skills/copies", { key, to }),
   skillDraft: (body: { model: string; instruction: string; key: string }) => http.post<Said & { text: string; cost?: number }>("/skills/drafts", body),
   skillNpx: (body: { Action: string; Source: string; Skill: string; Scope: string; Project: string }) => http.post<Said>("/skills/installations", body),
@@ -266,11 +305,12 @@ export const api = {
     b.id ? http.put<Said>(`/sessions/${seg(b.id)}/process${qs({ dir: b.dir })}`, { args: b.args, prompt: b.prompt }) : http.put<Said>(`/projects/${seg(b.dir)}/process`, { args: b.args, prompt: b.prompt }),
   newSession: (b: { dir?: string; id?: string; cwd?: string; prompt: string; args?: string }) => http.post<Said>("/sessions", b),
   rename: (s: Item, b: { title?: string; auto?: boolean }) => http.patch<Said & { title: string }>(`/sessions/${seg(s.id)}${qs({ dir: s.dir })}`, b),
-  reassign: (items: Item[], to: string) => http.patch<Said & { n: number }>("/sessions", { items, to }),
-  rmSessions: (items: Item[]) => http.del<Said>(`/sessions${qs({ item: items.map((i) => `${i.dir}:${i.id}`) })}`),
-  trashSessionsAdd: (items: Item[]) => http.post<Said>(`/trash/sessions${qs({ close: true })}`, { items }),
-  trashSessionsRestore: (ids: string[]) => http.patch<Said>(`/trash/sessions${qs({ item: ids })}`, { trashed: false }),
-  trashSessionsPurge: (ids: string[]) => http.del<Said>(`/trash/sessions${qs({ item: ids })}`),
+  reassign: (items: Item[], to: string) => inBatches(items, (b) => http.patch<Said & { n: number }>("/sessions", { items: b, to })),
+  rmSessions: (items: Item[]) =>
+    inBatches(items, (b) => http.del<Said>(`/sessions${qs({ item: b.map((i) => `${i.dir}:${i.id}`) })}`), (i) => itemLen(`${i.dir}:${i.id}`)),
+  trashSessionsAdd: (items: Item[]) => inBatches(items, (b) => http.post<Said>(`/trash/sessions${qs({ close: true })}`, { items: b })),
+  trashSessionsRestore: (ids: string[]) => inBatches(ids, (b) => http.patch<Said>(`/trash/sessions${qs({ item: b })}`, { trashed: false }), itemLen),
+  trashSessionsPurge: (ids: string[]) => inBatches(ids, (b) => http.del<Said>(`/trash/sessions${qs({ item: b })}`), itemLen),
   vgroups: (b: { groups: VGroup[]; favs: string[]; projects?: Project[] }) => http.put("/vgroups", b),
   dirsAdd: (dir: string, children = false) => http.post<Said & { n: number }>("/directories", { dir, children }),
   dirsRemove: (dir: string) => http.del<Said>(`/directories${qs({ dir })}`),

@@ -115,8 +115,8 @@ func (b *bulk) reply(w http.ResponseWriter, msg string) {
 
 type item struct{ Dir, ID string }
 
-// itemMax : plafond d'éléments d'une requête multiple (?item=… répété, ou items du corps).
-const itemMax = 400
+// itemMax : plafond d'éléments d'une requête multiple (?item=… répété, ou items du corps) ; le client découpe en lots (100 éléments, URL sous ~6 Ko).
+const itemMax = 100
 
 // validItems n'accepte que des sessions qui existent vraiment ; false après avoir répondu.
 func validItems(w http.ResponseWriter, items []item) bool {
