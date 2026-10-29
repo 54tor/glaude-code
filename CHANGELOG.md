@@ -2,6 +2,19 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [SemVer](https://semver.org/lang/fr/).
 
+## [Non publié]
+
+### Modifié
+- **Rupture** : toute l'API passe en REST sous `/v1` (ressources au pluriel, `GET`/`POST`/`PUT`/`PATCH`/`DELETE`, identifiants en chemin, suppressions multiples par `?item=` répété). Les anciennes routes (`/api`, `/session-send`, `/fs-save`, `/auth/login`, `/admin/users`…) sont supprimées, sans alias. La correspondance complète est dans `docs/reference/openapi.yaml`.
+- **Rupture** : les réponses perdent l'enveloppe `{ok, out}`. Un succès renvoie la ressource en JSON (ou `204`), un échec renvoie `{"error":{"code","message"}}` avec le vrai statut HTTP (400, 401, 403, 404, 409, 413, 415, 429, 5xx). Les flux gardent leur type (NDJSON du chat, SSE de `/v1/fs/watch`, WebSocket du terminal).
+- **Rupture** : un home enfant (gld d'une version antérieure) n'est plus joignable depuis une passerelle à jour, et inversement : mettre à jour tous les gld d'un même ensemble en même temps.
+- Les onglets déjà ouverts et les PWA installées doivent être rechargés (Ctrl+Maj+R) : l'ancienne interface appelle des routes qui n'existent plus.
+- L'interface lève une `ApiError` (statut, code, message) au lieu de lire `{ok, out}` ; la couche de compatibilité `Result`, `HttpError` et `api.post` est supprimée.
+
+### Ajouté
+- `docs/reference/openapi.yaml` : contrat OpenAPI 3 de l'API `/v1`, vérifié contre les routes enregistrées et leurs droits par un test.
+- Tests de contrat : toute route hors pages est sous `/v1`, les erreurs d'un échantillon de routes ont la forme uniforme, aucun `http.Error` ne subsiste dans un handler `/v1`.
+
 ## [0.6.3] - 2026-10-29
 
 ### Ajouté

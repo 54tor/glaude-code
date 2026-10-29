@@ -244,6 +244,8 @@ et aux droits que vous lui donnez (`gld user grant`, ou l'écran Utilisateurs). 
 fait tourner gld, et les snippets (commandes slash) demandent `config_write`. Ne les donnez qu'à des personnes de confiance. Guide complet, variables, limites :
 [docs/auth.md](docs/auth.md).
 
+L'API HTTP (REST sous `/v1`, erreurs `{"error":{"code","message"}}`) est décrite dans [docs/reference/openapi.yaml](docs/reference/openapi.yaml).
+
 ## Langue
 
 Glaude Code parle français et anglais. La langue vient du réglage `language` de `~/.claude/settings.json`, le même que
