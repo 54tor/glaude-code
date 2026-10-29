@@ -186,3 +186,31 @@ func TestApplyBackupConcurrentClaim(t *testing.T) {
 		t.Fatalf("exactement une application attendue : %v / %v", e1, e2)
 	}
 }
+
+func TestBackupSkillExecBitRoundTrip(t *testing.T) {
+	a := exportEnv(t)
+	put(t, filepath.Join(a, "skills", "deploy", "run.sh"), "#!/bin/sh\n", old)
+	if err := os.Chmod(filepath.Join(a, "skills", "deploy", "run.sh"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	z, _, err := exportBackup([]string{"skills"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := t.TempDir()
+	use(b)
+	t.Setenv("CLAUDE_CONFIG_DIR", b)
+	p, err := stageBackup(z)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := applyBackup(p.ID, []SyncPick{{"skill:deploy", "replace"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	for f, want := range map[string]bool{"run.sh": true, "SKILL.md": false} {
+		fi, err := os.Stat(filepath.Join(b, "skills", "deploy", f))
+		if err != nil || (fi.Mode()&0o111 != 0) != want {
+			t.Errorf("%s : %v exec=%v", f, err, want)
+		}
+	}
+}

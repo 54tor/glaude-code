@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -26,7 +27,7 @@ func exportBackup(cats []string) ([]byte, int, error) {
 		}
 	}
 	has := func(c string) bool { return slices.Contains(cats, c) }
-	files := map[string][]byte{}
+	files, exec := map[string][]byte{}, map[string]bool{}
 	dir := cfgDir()
 
 	if has("settings") {
@@ -55,7 +56,11 @@ func exportBackup(cats []string) ([]byte, int, error) {
 	if has("skills") {
 		for n, fs := range syncSkills(dir) {
 			for rel, c := range fs {
-				files["home/skills/"+n+"/"+filepath.ToSlash(rel)] = []byte(c)
+				name := "home/skills/" + n + "/" + filepath.ToSlash(rel)
+				files[name] = []byte(c)
+				if fi, err := os.Lstat(filepath.Join(dir, "skills", n, rel)); err == nil && fi.Mode().IsRegular() && fi.Mode()&0o111 != 0 {
+					exec[name] = true
+				}
 			}
 		}
 		snips, _ := listSnippets()
@@ -101,7 +106,7 @@ func exportBackup(cats []string) ([]byte, int, error) {
 		}
 		files["mcp.json"] = b
 	}
-	z, err := writeBackupZip(files, BackupManifest{Format: backupFormat, Gld: version, Date: time.Now().UTC().Format(time.RFC3339), Cats: cats})
+	z, err := writeBackupZipExec(files, exec, BackupManifest{Format: backupFormat, Gld: version, Date: time.Now().UTC().Format(time.RFC3339), Cats: cats})
 	return z, len(files), err
 }
 

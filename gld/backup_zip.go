@@ -31,6 +31,11 @@ type BackupManifest struct {
 
 // writeBackupZip : files = chemin en « / » → contenu ; le manifeste est ajouté.
 func writeBackupZip(files map[string][]byte, m BackupManifest) ([]byte, error) {
+	return writeBackupZipExec(files, nil, m)
+}
+
+// writeBackupZipExec : les entrées de exec sont écrites en 0755 pour que le bit exécutable (scripts de skills) survive.
+func writeBackupZipExec(files map[string][]byte, exec map[string]bool, m BackupManifest) ([]byte, error) {
 	mj, err := json.Marshal(m)
 	if err != nil {
 		return nil, err
@@ -38,7 +43,11 @@ func writeBackupZip(files map[string][]byte, m BackupManifest) ([]byte, error) {
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 	add := func(name string, b []byte) error {
-		w, err := zw.Create(name)
+		h := &zip.FileHeader{Name: name, Method: zip.Deflate}
+		if exec[name] {
+			h.SetMode(0o755)
+		}
+		w, err := zw.CreateHeader(h)
 		if err != nil {
 			return err
 		}
@@ -133,7 +142,7 @@ func extractBackup(b []byte) (dir string, m BackupManifest, err error) {
 			}
 			seen = true
 		}
-		if e := writeConfig(filepath.Join(dir, filepath.FromSlash(f.Name)), data); e != nil {
+		if e := writeConfigExec(filepath.Join(dir, filepath.FromSlash(f.Name)), data, f.Mode()&0o111 != 0); e != nil {
 			return dir, m, e
 		}
 	}
