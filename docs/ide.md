@@ -46,7 +46,7 @@ Retour à la ligne, minimap, taille du texte (10 à 28, 13 par défaut) et visib
 | `fs_read` | arborescence, lecture des fichiers, index, flux d'évènements, liste de la corbeille |
 | `fs_write` | enregistrer, créer, renommer, supprimer (vers la corbeille), restaurer et purger la corbeille. **N'implique pas** `fs_read` : accorder les deux ensemble (sans `fs_read`, l'espace ne s'ouvre pas, l'écriture par l'API reste possible) |
 | `exec` | le terminal de l'espace de travail (sans `exec`, la barre Terminal reste visible et dit pourquoi, la zone ne s'ouvre pas) |
-| `sessions_read` | avec `exec`, la liste des sessions vivantes du dossier, à laquelle la zone terminal s'attache (`GET /api`) ; sans lui, la barre le dit et rien n'est demandé au serveur |
+| `sessions_read` | avec `exec`, la liste des sessions vivantes du dossier, à laquelle la zone terminal s'attache (`GET /v1/state`) ; sans lui, la barre le dit et rien n'est demandé au serveur |
 
 En mode multi-utilisateur, **aucun de ces droits n'est accordé par défaut**. Les accorder demande une réauthentification, et `fs_write` une confirmation explicite. En mode ouvert (sans compte), tout est ouvert, comme le reste de gld. Voir [auth.md](auth.md).
 
@@ -60,31 +60,31 @@ Les garde-fous sont structurels :
 - Chaque chemin est résolu dans un `os.Root` ouvert sur la racine : `..`, chemin absolu, `\` et NUL sont refusés.
 - **Aucun lien symbolique n'est suivi**, même vers l'intérieur de la racine : listé comme tel dans l'arbre, jamais ouvert, jamais écrasé.
 - Aucun parcours récursif déclenché par une requête : l'arbre se charge un dossier à la fois. La seule descente récursive est l'indexeur, bornée (voir plus bas).
-- Le contenu des fichiers n'est jamais journalisé. Avec les comptes activés, chaque écriture réussie (`save`, `create`, `new`, `rename`, `rm`, `restore`, `purge`) ajoute un événement `ide_write` au journal d'`/admin/events` : `<op> <dossier>:<chemin> [octets]` (nom du dossier racine seul, jamais le chemin disque ; octets pour `save`/`create`), plafonné à 300 octets. Un refus ou un conflit n'y figure pas ; un jeton porteur est écrit sans compte. Pour un home autre que le principal, le gld enfant renvoie la ligne déjà nettoyée à la passerelle dans un en-tête interne de réponse, que la passerelle écrit pour l'utilisateur de la requête puis retire avant de répondre ; un client ne peut ni la voir ni la forger. Sans comptes, aucun journal.
+- Le contenu des fichiers n'est jamais journalisé. Avec les comptes activés, chaque écriture réussie (`save`, `create`, `new`, `rename`, `rm`, `restore`, `purge`) ajoute un événement `ide_write` au journal d'`/v1/admin/events` : `<op> <dossier>:<chemin> [octets]` (nom du dossier racine seul, jamais le chemin disque ; octets pour `save`/`create`), plafonné à 300 octets. Un refus ou un conflit n'y figure pas ; un jeton porteur est écrit sans compte. Pour un home autre que le principal, le gld enfant renvoie la ligne déjà nettoyée à la passerelle dans un en-tête interne de réponse, que la passerelle écrit pour l'utilisateur de la requête puis retire avant de répondre ; un client ne peut ni la voir ni la forger. Sans comptes, aucun journal.
 - La CSP de gld est inchangée : Monaco et ses workers sont servis par gld (`/assets/`), **jamais par un CDN**.
 
 ## Routes
 
-Toutes prennent `dir`, le dossier racine (chemin absolu). `path` est relatif à cette racine, séparé par `/`. Les `POST` prennent un corps JSON et suivent les règles CSRF et d'origine habituelles de gld.
+Toutes prennent `dir`, le dossier racine (chemin absolu). `path` est relatif à cette racine, séparé par `/`. Les `PUT`, `POST` et `PATCH` prennent un corps JSON, les `DELETE` des paramètres de requête (`item` répété pour les suppressions multiples) ; tous suivent les règles CSRF et d'origine habituelles de gld.
 
 | Route | Droit | Requête | Réponse |
 |---|---|---|---|
-| `GET /fs-tree` | `fs_read` | `dir`, `path` (vide = racine) | `{entries: [{name, type, size, mtime}], truncated}` ; `type` = `dir`, `file` ou `symlink` ; dossiers d'abord ; au plus **5000 entrées par dossier** (`truncated: true` au-delà) |
-| `GET /fs-file` | `fs_read` | `dir`, `path` | `{content, etag, size, mtime}` ; **2 Mio au plus** (`413` au-delà), `415` si binaire (NUL dans les 8 premiers Kio ou UTF-8 invalide) |
-| `POST /fs-save` | `fs_write` | `{dir, path, content, etag, force}` | `{ok, etag}` ; `409 {conflict, deleted, etag}` si l'`etag` ne correspond plus (voir Conflits). Contenu de 2 Mio au plus. Écriture atomique (temporaire puis renommage), mode du fichier conservé |
-| `POST /fs-new` | `fs_write` | `{dir, path, kind}` (`file` ou `dir`) | `{ok}` ; `409` si l'élément existe |
-| `POST /fs-rename` | `fs_write` | `{dir, from, to}` | `{ok}` ; `409` si la cible existe (jamais d'écrasement) |
-| `POST /fs-rm` | `fs_write` | `{dir, path}` | `{ok, id}` : l'élément part dans la corbeille |
-| `GET /fs-trash` | `fs_read` | `dir` | `{items: [{id, path, mtime}]}` |
-| `POST /fs-trash-restore` | `fs_write` | `{dir, id}` | `{ok}` ; `409` si le chemin d'origine est occupé (jamais d'écrasement) |
-| `POST /fs-trash-purge` | `fs_write` | `{dir, id}` | `{ok}` : suppression définitive de cette entrée |
-| `GET /fs-index` | `fs_read` | `dir` | `{state, files: [{path, size, mtime}]}` ; `state` = `building`, `ready` ou `partial` |
-| `POST /fs-files` | `fs_read` | `{dir, paths}` | `{files: [{path, content}]}` : contenu de fichiers **de l'index** seulement, **300 chemins** par requête, **100 Kio** par fichier (les autres sont omis) |
-| `GET /fs-watch` | `fs_read` | `dir`, `paths` répété (un par dossier observé ; `paths=` avec une valeur vide = racine ; **aucun** `paths` = rien n'est observé) | flux SSE (voir Observation) |
+| `GET /v1/fs/tree` | `fs_read` | `dir`, `path` (vide = racine) | `{entries: [{name, type, size, mtime}], truncated}` ; `type` = `dir`, `file` ou `symlink` ; dossiers d'abord ; au plus **5000 entrées par dossier** (`truncated: true` au-delà) |
+| `GET /v1/fs/entries/content` | `fs_read` | `dir`, `path` | `{content, etag, size, mtime}` ; **2 Mio au plus** (`413` au-delà), `415` si binaire (NUL dans les 8 premiers Kio ou UTF-8 invalide) |
+| `PUT /v1/fs/entries/content` | `fs_write` | `dir`, `path` en paramètres ; corps `{content, etag, force}` | `{etag}` ; `409 {error: {code: "conflict" | "deleted"}}` si l'`etag` ne correspond plus (voir Conflits). Contenu de 2 Mio au plus. Écriture atomique (temporaire puis renommage), mode du fichier conservé |
+| `POST /v1/fs/entries` | `fs_write` | `dir` en paramètre ; corps `{path, kind}` (`file` ou `dir`) | `201 {path}` ; `409` si l'élément existe |
+| `PATCH /v1/fs/entries` | `fs_write` | `dir` en paramètre ; corps `{from, to}` | `204` ; `409` si la cible existe (jamais d'écrasement) |
+| `DELETE /v1/fs/entries` | `fs_write` | `dir`, `item` répété (chemins) | `{ids}` : les éléments partent dans la corbeille |
+| `GET /v1/fs/trash` | `fs_read` | `dir` | `{items: [{id, path, mtime}]}` |
+| `PATCH /v1/fs/trash/{entry}` | `fs_write` | `dir` en paramètre ; corps `{trashed: false}` | `204` ; `409` si le chemin d'origine est occupé (jamais d'écrasement) |
+| `DELETE /v1/fs/trash` | `fs_write` | `dir`, `item` répété (identifiants) | `204` : suppression définitive de ces entrées |
+| `GET /v1/fs/index` | `fs_read` | `dir` | `{state, files: [{path, size, mtime}]}` ; `state` = `building`, `ready` ou `partial` |
+| `POST /v1/fs/files` | `fs_read` | `{dir, paths}` | `{files: [{path, content}]}` : contenu de fichiers **de l'index** seulement, **300 chemins** par requête, **100 Kio** par fichier (les autres sont omis) |
+| `GET /v1/fs/watch` | `fs_read` | `dir`, `paths` répété (un par dossier observé ; `paths=` avec une valeur vide = racine ; **aucun** `paths` = rien n'est observé) | flux SSE (voir Observation) |
 
 Erreurs : `404` dossier inconnu ou refusé comme racine, élément absent ; `400` chemin invalide ; `403` lien symbolique ; `409` conflit ou élément existant ; `413` trop gros ; `415` binaire. La raison exacte d'un refus de confinement n'est pas donnée.
 
-`GET /git-changes` renvoie aussi `prefix` : le chemin du dossier demandé relativement à la racine du dépôt (`git rev-parse --show-prefix`), pour placer les marqueurs git quand l'espace de travail est un sous-dossier du dépôt.
+`GET /v1/git/changes` renvoie aussi `prefix` : le chemin du dossier demandé relativement à la racine du dépôt (`git rev-parse --show-prefix`), pour placer les marqueurs git quand l'espace de travail est un sous-dossier du dépôt.
 
 ## Index
 
@@ -92,16 +92,16 @@ L'index sert à l'ouverture rapide (`Ctrl+P`) et à donner à Monaco les sources
 
 - **Ignorés** : tout élément dont le nom commence par `.` (`.git`, `.env`, `.gld-trash`…), `vendor`, `node_modules`, et les liens symboliques. Ils restent visibles et ouvrables dans l'arbre ; ils sont seulement hors index.
 - **Bornes** : **20 000 entrées, profondeur 12, 5 s**. Au-delà, l'index est marqué `partial` et l'interface le signale.
-- Une construction par dossier ; après un resync, la reconstruction peut chevaucher l'ancienne, dont le résultat périmé est écarté. Jamais déclenchée par `/fs-tree` ni `/fs-file`.
+- Une construction par dossier ; après un resync, la reconstruction peut chevaucher l'ancienne, dont le résultat périmé est écarté. Jamais déclenchée par `/v1/fs/tree` ni `/v1/fs/entries/content`.
 - **Alimentation de Monaco** (côté navigateur) : fichiers `.ts .tsx .js .jsx .json` de l'index, **300 fichiers, 100 Kio chacun, 5 Mio au total** au plus, les plus proches du fichier ouvert d'abord.
 
 ## Observation du disque
 
-`/fs-watch` utilise `fsnotify` sur les dossiers dépliés dans l'arbre (et ceux de l'index), avec regroupement des rafales (~150 ms). Si inotify échoue ou sature, gld bascule sur un sondage toutes les 3 s.
+`/v1/fs/watch` utilise `fsnotify` sur les dossiers dépliés dans l'arbre (et ceux de l'index), avec regroupement des rafales (~150 ms). Si inotify échoue ou sature, gld bascule sur un sondage toutes les 3 s.
 
 - Au plus **200 dossiers** par abonnement (`paths` répété). Le navigateur garde l'adresse sous **~6000 octets** : au-delà, il observe moins de dossiers.
 - Chaque évènement est `data: {"path": "...", "type": "create|write|remove|rename"}`, jamais le contenu.
-- `{"path": "", "type": "resync"}` signifie que des évènements ont pu être perdus (tampon plein, débordement d'inotify, passage au sondage) : le client relit tout ce qu'il affiche (dossiers dépliés, onglets propres), et le prochain `/fs-index` reconstruit l'index.
+- `{"path": "", "type": "resync"}` signifie que des évènements ont pu être perdus (tampon plein, débordement d'inotify, passage au sondage) : le client relit tout ce qu'il affiche (dossiers dépliés, onglets propres), et le prochain `/v1/fs/index` reconstruit l'index.
 - Le flux est coupé à la révocation des droits ou de la session, et se termine aussitôt à l'arrêt du serveur.
 - Un dossier illisible (droits) est seulement sauté ; seules les limites d'inotify (`ENOSPC`, `EMFILE`, `ENFILE`) font passer au sondage.
 - **Reconnexion** : coupure réseau, le navigateur réessaie seul (« Surveillance interrompue » dans la barre d'état). Si le flux est fermé pour de bon (serveur arrêté, réponse autre que `200`, session expirée), l'espace le rouvre lui-même après 5 s, puis 15 s, puis toutes les 30 s ; la barre d'état affiche « Surveillance coupée, reconnexion dans N s » (attente prévue, non décomptée), puis « Surveillance active ». Chaque réouverture vaut resync : l'arbre et les onglets propres sont relus, un onglet modifié dont le fichier a changé affiche le bandeau de conflit.
@@ -119,7 +119,7 @@ Supprimer déplace l'élément dans `<racine>/.gld-trash/<id>/item`, avec son ch
 
 ## Limites connues
 
-- Pas de marqueurs git pour une racine connue seulement par les dossiers ajoutés à la main ou ceux d'un projet (`/git-changes` n'accepte que les dépôts des sessions).
+- Pas de marqueurs git pour une racine connue seulement par les dossiers ajoutés à la main ou ceux d'un projet (`/v1/git/changes` n'accepte que les dépôts des sessions).
 - Une instance inotify par espace de travail vivant, gardée jusqu'à 2 minutes après le dernier usage ; la limite par défaut du noyau est de 128 instances par utilisateur (`fs.inotify.max_user_instances`).
 - Les changements faits pendant la toute première construction de l'index n'y figurent qu'au prochain resync ou à la prochaine reconstruction.
 - Le filtre de l'arborescence ne cherche que dans les dossiers déjà chargés ; pour chercher un fichier n'importe où, utiliser `Ctrl+P`.
@@ -129,7 +129,7 @@ Supprimer déplace l'élément dans `<racine>/.gld-trash/<id>/item`, avec son ch
 
 ## Terminal
 
-gld **ne propose volontairement aucun shell libre** : pas de `bash`, pas de pty ouvert pour l'utilisateur, pas de fenêtre tmux créée à sa demande, aucune route qui lance un processus depuis l'espace de travail. Le terminal réutilise `/term-open` et `/term-ws` et s'attache au terminal d'une session Claude **vivante** dont le dossier est celui de l'espace de travail ; pour un shell, ouvrez votre propre terminal.
+gld **ne propose volontairement aucun shell libre** : pas de `bash`, pas de pty ouvert pour l'utilisateur, pas de fenêtre tmux créée à sa demande, aucune route qui lance un processus depuis l'espace de travail. Le terminal réutilise `/v1/terminal` et `/v1/terminal/ws` et s'attache au terminal d'une session Claude **vivante** dont le dossier est celui de l'espace de travail ; pour un shell, ouvrez votre propre terminal.
 
 Une barre « Terminal » est toujours visible au-dessus de la barre d'état, avec l'état de la zone :
 
@@ -143,7 +143,7 @@ Une barre « Terminal » est toujours visible au-dessus de la barre d'état, ave
 | une ou plusieurs sessions vivantes, zone jamais ouverte | N session(s) en direct — ouvrir le terminal | **repliée**, rien n'est attaché |
 | une ou plusieurs sessions vivantes, zone ouverte | N session(s) en direct (sélecteur si plusieurs, choix gardé par dossier) | ouverte, en lecture seule |
 
-Règle d'ouverture : la zone ne s'ouvre **jamais seule**. Tant que l'utilisateur ne l'a pas ouverte (bouton de la barre Terminal, menu Terminal ou Affichage, bouton de la barre d'état, « Aller au terminal de session »), elle reste repliée et rien ne s'attache à la session (pas de `/term-open`). Dès qu'il l'a ouverte ou repliée, ce choix est gardé (`gld.ide.view.showTerminal`) et vaut aux visites suivantes. Ouverte, la zone est **en lecture seule** : elle ne prend pas le focus (la frappe reste dans l'éditeur) et n'envoie pas de taille à la fenêtre tmux de l'hôte (l'attache elle-même peut toutefois la réduire de quelques lignes, voir Limites connues) ; le bouton « Lecture seule · prendre la main » donne la main (frappes, taille de la fenêtre, focus). En lecture seule, le terminal garde la taille de l'hôte et peut donc s'afficher tronqué. La liste des sessions vivantes est relue toutes les 10 s, et pas du tout quand l'onglet du navigateur est en arrière-plan.
+Règle d'ouverture : la zone ne s'ouvre **jamais seule**. Tant que l'utilisateur ne l'a pas ouverte (bouton de la barre Terminal, menu Terminal ou Affichage, bouton de la barre d'état, « Aller au terminal de session »), elle reste repliée et rien ne s'attache à la session (pas de `/v1/terminal`). Dès qu'il l'a ouverte ou repliée, ce choix est gardé (`gld.ide.view.showTerminal`) et vaut aux visites suivantes. Ouverte, la zone est **en lecture seule** : elle ne prend pas le focus (la frappe reste dans l'éditeur) et n'envoie pas de taille à la fenêtre tmux de l'hôte (l'attache elle-même peut toutefois la réduire de quelques lignes, voir Limites connues) ; le bouton « Lecture seule · prendre la main » donne la main (frappes, taille de la fenêtre, focus). En lecture seule, le terminal garde la taille de l'hôte et peut donc s'afficher tronqué. La liste des sessions vivantes est relue toutes les 10 s, et pas du tout quand l'onglet du navigateur est en arrière-plan.
 
 ## Poids et dépendances
 

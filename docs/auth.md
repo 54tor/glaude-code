@@ -70,23 +70,23 @@ Neuf droits, indépendants, par couple (compte, home). Un droit absent vaut refu
 | Droit | Ouvre |
 |---|---|
 | `mem_read` | mémoire, règles, snippets (lecture), notes, corbeille (lecture), santé, lecture du home (configuration, état git, onglets, commandes) |
-| `mem_write` | écrire, déplacer, fusionner, supprimer CLAUDE.md, règles, mémoire, notes, et purger la corbeille. Ne crée aucun contenu exécutable : les snippets (commandes slash) et la restauration d'un snippet ou d'un skill exigent `config_write`. `POST /snippet-draft` (simple brouillon, rien n'est écrit) reste en `mem_write` |
+| `mem_write` | écrire, déplacer, fusionner, supprimer CLAUDE.md, règles, mémoire, notes, et purger la corbeille. Ne crée aucun contenu exécutable : les snippets (commandes slash) et la restauration d'un snippet ou d'un skill exigent `config_write`. `POST /v1/snippets/drafts` (simple brouillon, rien n'est écrit) reste en `mem_write` |
 | `mem_sync` | prévisualiser et appliquer la synchronisation entre homes ; exige `mem_read` sur la source et `mem_write` sur la destination, vérifiés home par home. Appliquer un élément autre que CLAUDE.md et les règles (réglages, permissions, skills, commandes) exige en plus `config_write` sur la destination |
 | `usage_read` | compte et usages, jamais le contenu des conversations |
-| `sessions_read` | transcriptions et état des sessions, recherche (`/search`), `/info` et `/config-perm-suggest` (qui renvoient des extraits de prompts ou de transcriptions) |
+| `sessions_read` | transcriptions et état des sessions, recherche (`/v1/sessions?q=`), `/v1/info` et `/v1/config/permissions/suggestions` (qui renvoient des extraits de prompts ou de transcriptions) |
 | `config_write` | réglages et skills (hooks, serveurs MCP, permissions), snippets (écriture, suppression, import), édition brute, restauration d'une sauvegarde, restauration d'un snippet ou d'un skill depuis la corbeille |
-| `exec` | chat, nouvelle session, terminal web, envoi de touches, confiance d'un dossier, push git, fermeture, renommage, suppression et corbeille de **sessions**, et `/ls`, `/dirs` (parcours du disque) |
+| `exec` | chat, nouvelle session, terminal web, envoi de touches, confiance d'un dossier, push git, fermeture, renommage, suppression et corbeille de **sessions**, et `/v1/directories` (parcours du disque) |
 | `fs_read` | lire l'arborescence et les fichiers d'un projet, y compris `.env` et clés. La racine doit être un dossier de travail connu de gld ; `$HOME`, ses ancêtres, la config Claude de chaque home et le dossier d'auth de gld sont refusés (voir [ide.md](ide.md)) |
 | `fs_write` | écrire, créer, renommer et supprimer (vers `.gld-trash/`) des fichiers d'un projet. **N'implique pas** `fs_read` : accorder les deux ensemble. L'espace de travail complet exige en plus `exec` pour le terminal |
 
 Notes :
 
-- `GET /homes` et `POST /homes-select` ne montrent que les homes où le compte a au moins un droit.
-- Créer ou retirer un home (`/homes-save`) est réservé aux administrateurs. Le nom `main` est réservé. En mode multi-utilisateur, le serveur conserve les homes que la requête ne cite pas : seuls les identifiants du champ `removed` sont retirés (avec leurs droits, en cascade). Une entrée sans identifiant (ou avec un autre) qui porte le nom d'un home existant, même invisible de l'admin, est refusée (« nom déjà pris ») ; seule l'entrée qui porte l'identifiant de ce home le modifie.
-- Les droits sont rattachés à l'**identifiant** d'un home, pas à son nom. Supprimer un home supprime ses droits en cascade. Renommer un home via `/homes-save` en omettant son identifiant en crée un nouveau, donc fait perdre ses droits. Échanger les dossiers de deux homes déplace les droits avec les noms.
+- `GET /v1/homes` et `PUT /v1/homes/current` ne montrent que les homes où le compte a au moins un droit.
+- Créer ou retirer un home (`/v1/homes`) est réservé aux administrateurs. Le nom `main` est réservé. En mode multi-utilisateur, le serveur conserve les homes que la requête ne cite pas : seuls les identifiants du champ `removed` sont retirés (avec leurs droits, en cascade). Une entrée sans identifiant (ou avec un autre) qui porte le nom d'un home existant, même invisible de l'admin, est refusée (« nom déjà pris ») ; seule l'entrée qui porte l'identifiant de ce home le modifie.
+- Les droits sont rattachés à l'**identifiant** d'un home, pas à son nom. Supprimer un home supprime ses droits en cascade. Renommer un home via `/v1/homes` en omettant son identifiant en crée un nouveau, donc fait perdre ses droits. Échanger les dossiers de deux homes déplace les droits avec les noms.
 - Un administrateur gère les comptes et les droits mais n'a **aucun accès implicite** aux homes : il s'accorde les droits qu'il veut.
 - Le jeton (Bearer) donne tous les droits sur **chaque** home mais jamais l'administration, ni les routes `/auth/*` et `/admin/*`.
-- `POST /memory-draft` et `POST /skill-draft` lisent côté serveur les fichiers que l'appelant désigne et renvoient la réponse du modèle, ce qui peut en restituer le contenu : elles exigent donc `mem_read` en plus de `mem_write` (respectivement `config_write`). Plus généralement, le serveur refuse d'accorder `mem_write` ou `config_write` à un compte sans `mem_read` sur le même home (`gld user grant` comme l'écran d'administration), et de retirer `mem_read` tant que l'un des deux reste ; les lignes déjà enregistrées qui ne respectent pas cette règle continuent de fonctionner, mais les brouillons leur sont refusés.
+- `POST /v1/memory/drafts` et `POST /v1/skills/drafts` lisent côté serveur les fichiers que l'appelant désigne et renvoient la réponse du modèle, ce qui peut en restituer le contenu : elles exigent donc `mem_read` en plus de `mem_write` (respectivement `config_write`). Plus généralement, le serveur refuse d'accorder `mem_write` ou `config_write` à un compte sans `mem_read` sur le même home (`gld user grant` comme l'écran d'administration), et de retirer `mem_read` tant que l'un des deux reste ; les lignes déjà enregistrées qui ne respectent pas cette règle continuent de fonctionner, mais les brouillons leur sont refusés.
 
 ### Ce que les droits protègent, et ce qu'ils ne protègent pas
 
@@ -94,14 +94,14 @@ Notes :
 
 ## Connexion
 
-1. `POST /auth/login` : nom et mot de passe, vérifiés en temps constant (un nom inconnu coûte autant qu'un nom existant, réponse identique).
+1. `POST /v1/auth/sessions` : nom et mot de passe, vérifiés en temps constant (un nom inconnu coûte autant qu'un nom existant, réponse identique).
 2. Second facteur, **obligatoire** : code TOTP, clé de sécurité WebAuthn (clé matérielle, passkey) ou l'un des 10 codes de secours (à usage unique, affichés une fois). Tant qu'il manque, seules les routes `/auth/*` répondent.
 3. Un compte sans aucun facteur en enrôle un à la première connexion (TOTP ou clé de sécurité), et reçoit ses codes de secours. **Attention** : cet enrôlement n'exige que le mot de passe. Quiconque connaît le mot de passe d'un compte encore sans facteur peut y enrôler le sien. Le bit `mfa_enrolled` du compte est signé et posé avec le premier facteur : supprimer les lignes de facteurs en SQL ne rouvre pas cet enrôlement (la connexion est refusée et un événement `tamper` est écrit) ; seul `gld user reset-mfa` le rouvre. Créez donc le compte juste avant la première connexion de la personne (ou enrôlez-la vous-même), et ne laissez pas traîner un compte sans facteur. `gld user reset-mfa` ramène un compte à cet état.
-4. Ajouter ou retirer un facteur (un compte garde toujours au moins un facteur), changer son mot de passe ou régénérer ses codes demande une réauthentification : le mot de passe **et** un code (TOTP ou de secours), à chaque action dangereuse. Seule une assertion de clé de sécurité (qui n'a pas de code à saisir) est retenue 5 minutes sur la session, avec le mot de passe toujours redemandé. Révoquer une session en demande aussi une. La liste des sessions du compte (`GET /auth/sessions`) n'en demande pas.
+4. Ajouter ou retirer un facteur (un compte garde toujours au moins un facteur), changer son mot de passe ou régénérer ses codes demande une réauthentification : le mot de passe **et** un code (TOTP ou de secours), à chaque action dangereuse. Seule une assertion de clé de sécurité (qui n'a pas de code à saisir) est retenue 5 minutes sur la session, avec le mot de passe toujours redemandé. Révoquer une session en demande aussi une. La liste des sessions du compte (`GET /v1/auth/sessions`) n'en demande pas.
 
 Sessions : cookie `gld_session` (valeur aléatoire de 32 octets ; la base ne garde que son empreinte HMAC-SHA-256 et signe la ligne), `HttpOnly`, `SameSite=Strict`, `Secure` quand la requête arrive en HTTPS (directement, ou via un proxy listé dans `GLD_TRUSTED_PROXIES` qui envoie `X-Forwarded-Proto: https`). Expiration glissante de 12 h, absolue de 30 jours. Les requêtes qui modifient l'état exigent l'en-tête CSRF `X-Gld-CSRF`. Désactiver un compte, réinitialiser ses facteurs ou changer son mot de passe ferme ses sessions. Le cookie `gld_home` (home choisi) est effacé à la déconnexion et à chaque connexion réussie. Les mises à niveau de la base (migrations 0006 et 0007) ferment toutes les sessions.
 
-Jumelage (`POST /pair-code`, QR) : la session ouverte par le code dépend de la session qui l'a émis. Elle a la même échéance absolue, et révoquer, déconnecter ou laisser expirer l'émettrice la ferme aussi. Une session jumelée depuis une session jumelée dépend de l'émettrice d'origine (migration 0009).
+Jumelage (`POST /v1/pairing/codes`, QR) : la session ouverte par le code dépend de la session qui l'a émis. Elle a la même échéance absolue, et révoquer, déconnecter ou laisser expirer l'émettrice la ferme aussi. Une session jumelée depuis une session jumelée dépend de l'émettrice d'origine (migration 0009).
 
 ### Le jeton en mode multi-utilisateur
 
@@ -109,7 +109,7 @@ Le cookie `gld_token` et `?token=` ne servent plus au navigateur. Le jeton ne va
 
 ### Coupure des flux longs
 
-Le terminal web et `/chat` sont revérifiés pendant leur durée : session expirée, révoquée, compte désactivé ou droit retiré coupent le flux, et un tour de chat en cours est arrêté. Seul le terminal web **local** est contrôlé à chaque message reçu ; `/chat` local et les flux relayés vers un home enfant (terminal, chat) le sont toutes les 5 s : un utilisateur révoqué peut encore agir jusqu'à environ 5 s.
+Le terminal web et `/v1/sessions/{id}/chat` sont revérifiés pendant leur durée : session expirée, révoquée, compte désactivé ou droit retiré coupent le flux, et un tour de chat en cours est arrêté. Seul le terminal web **local** est contrôlé à chaque message reçu ; `/v1/sessions/{id}/chat` local et les flux relayés vers un home enfant (terminal, chat) le sont toutes les 5 s : un utilisateur révoqué peut encore agir jusqu'à environ 5 s.
 
 ## Anti essais répétés
 
@@ -129,7 +129,7 @@ Compteurs en base, clés par nom, par adresse (une adresse IPv6 est ramenée à 
 | Plafond global | 60 tentatives par minute sur toute la passerelle, en mémoire |
 | Codes TOTP | dérive acceptée de ±1 pas (30 s) ; un code déjà accepté n'est pas rejouable |
 
-Chaque ban ouvre une alerte dans toutes les sessions connectées (l'interface interroge `GET /auth/alerts?since=` toutes les 15 s ; seuls les bans survenus après l'ouverture de l'onglet sont montrés ; l'adresse n'est donnée qu'aux administrateurs, les autres comptes sont prévenus sans elle).
+Chaque ban ouvre une alerte dans toutes les sessions connectées (l'interface interroge `GET /v1/auth/alerts?since=` toutes les 15 s ; seuls les bans survenus après l'ouverture de l'onglet sont montrés ; l'adresse n'est donnée qu'aux administrateurs, les autres comptes sont prévenus sans elle).
 
 Un déluge de connexions sur un nom peut gêner ce compte (déni de service local, borné par le délai). Le compteur global repart à zéro au redémarrage. La fenêtre de 15 min est fixe (elle part du premier échec). Les lignes de `throttle` sans effet, les sessions échues et les événements de plus de 90 jours sont purgés à l'ouverture de la base puis au plus une fois par 24 h.
 
@@ -184,12 +184,12 @@ Il vise l'accident ou la dérive de Claude, pas un utilisateur malveillant qui a
 
 ## Administration
 
-Routes `/admin/*` (administrateurs avec second facteur validé) : comptes (création, désactivation, mot de passe, réinitialisation des facteurs), droits (`/admin/acl`), journal d'événements, sessions d'un compte et leur révocation, liste des homes. Points d'attention :
+Routes `/v1/admin/*` (administrateurs avec second facteur validé) : comptes (création, désactivation, mot de passe, réinitialisation des facteurs), droits (`/v1/admin/acl`), journal d'événements, sessions d'un compte et leur révocation, liste des homes. Points d'attention :
 
 - Les opérations sensibles demandent une réauthentification (mot de passe plus code ; une assertion de clé de sécurité reste valable 5 minutes) : création de compte, réinitialisation de facteurs, changement de mot de passe, attribution de `exec`, de `config_write` ou de `fs_write` (avec confirmation explicite), de `sessions_read` ou de `fs_read`, tout octroi de droits à soi-même, réactivation, désactivation d'un administrateur, révocation des sessions d'un administrateur. Les retraits de droits restent immédiats. Désactiver un compte ordinaire est immédiat. On ne peut ni se désactiver soi-même ni désactiver le dernier administrateur actif. Il n'y a pas de route de rétrogradation d'un administrateur.
 - Un mot de passe défini par un administrateur est temporaire par intention, mais **rien ne force son changement** à la première connexion.
-- `GET /admin/sessions` (adresse IP et navigateur d'un autre compte) et `GET /auth/sessions` (ses propres sessions) ne demandent pas de réauthentification.
-- Le journal d'événements est purgé au-delà de 90 jours (à l'ouverture de la base, puis au plus une fois par 24 h). Chaque action administrative l'écrit (compte visé, administrateur, adresse). `GET /account` (usages) peut déclencher un relevé.
+- `GET /v1/admin/sessions` (adresse IP et navigateur d'un autre compte) et `GET /v1/auth/sessions` (ses propres sessions) ne demandent pas de réauthentification.
+- Le journal d'événements est purgé au-delà de 90 jours (à l'ouverture de la base, puis au plus une fois par 24 h). Chaque action administrative l'écrit (compte visé, administrateur, adresse). `GET /v1/account` (usages) peut déclencher un relevé.
 
 ## `GLD_RUN_AS` : séparation par compte OS (expérimental)
 
@@ -235,17 +235,17 @@ Non testé en réel : onglets tmux, envoi de touches et terminal web sous un aut
 - `exec` et `config_write` valent le compte OS de gld ; la séparation par compte est expérimentale.
 - Tous les homes et tous les utilisateurs tournent sous un même compte OS (y compris sous `GLD_RUN_AS`, qui n'a qu'un compte cible) : `home_acl` ne sépare pas deux utilisateurs qui ont `exec`, l'un peut lire et modifier les fichiers des homes de l'autre. Sous Linux, un gld enfant se marque non « dumpable », donc son jeton n'est pas lisible dans `/proc/<pid>/environ` ; macOS et Windows n'ont pas cette protection.
 - Séparation par compte OS : voir [auth-followup-openroot.md](auth-followup-openroot.md).
-- Rejeu d'une ligne signée ancienne non détecté ; signature inutile contre qui lit la clé. Le nombre de sessions affiché par `GET /admin/users` n'est pas vérifié (affichage seul).
+- Rejeu d'une ligne signée ancienne non détecté ; signature inutile contre qui lit la clé. Le nombre de sessions affiché par `GET /v1/admin/users` n'est pas vérifié (affichage seul).
 - Retour au mode ouvert possible si témoin, marqueur et lignes signées sont supprimés ensemble (voir « Où sont les données »).
 - Un déluge d'adresses peut taire d'autres refus anonymes dans le journal pendant une minute (le résumé `suppressed` en garde le total).
 - Une base créée par un état intermédiaire de développement du schéma 7 est refusée et doit être recréée ; les bases des schémas 5 et 6 se mettent à niveau seules.
-- `GET /auth/me` et l'enrôlement répondent 500 (et non 403) sur un compte altéré.
+- `GET /v1/auth/me` et l'enrôlement répondent 500 (et non 403) sur un compte altéré.
 - Clé maîtresse en fichier (`auth.key`) : protégée seulement par les droits du dossier.
-- `/chat` local, terminal et chat relayés vers un home enfant : revérification toutes les 5 s (seul le terminal local est contrôlé par message). `/chat` vers un enfant est coupé par la passerelle puis arrêté par un appel `/chat-stop` à l'enfant ; le garde ne relit pas un corps de plus de 64 Kio (413).
+- `/v1/sessions/{id}/chat` local, terminal et chat relayés vers un home enfant : revérification toutes les 5 s (seul le terminal local est contrôlé par message). `/v1/sessions/{id}/chat` vers un enfant est coupé par la passerelle puis arrêté par un appel `/v1/sessions/{id}/chat` à l'enfant ; le garde ne relit pas un corps de plus de 64 Kio (413).
 - Fenêtre de 2 s après la création du premier compte pendant laquelle le serveur reste ouvert.
 - Enrôlement au premier login protégé par le seul mot de passe ; aucun changement de mot de passe forcé ; aucune route de rétrogradation d'administrateur.
 - `GLD_RUN_AS` : les écritures et lectures de la passerelle ne suivent plus un lien posé par le compte cible hors du dossier de confiance ; restent les dossiers parents d'un projet et quelques `Stat` (détail dans [auth-followup-openroot.md](auth-followup-openroot.md)). Le mode reste expérimental.
 - Garde-fou : heuristique contournable, entrée de `Monitor` non vérifiée, `disableAllHooks`, Windows non testé, Claude Code 2.1.295 minimum pour le blocage en cas d'échec du hook.
-- `/admin/acl` : quand une requête accorde puis retire des droits, les deux se font en une seule transaction ; en cas d'échec, rien n'est modifié.
-- `/cleanup-warning` et `/git-status` exposent titres de sessions et dossiers aux comptes qui ont `mem_read`.
+- `/v1/admin/acl` : quand une requête accorde puis retire des droits, les deux se font en une seule transaction ; en cas d'échec, rien n'est modifié.
+- `/v1/cleanup-warning` et `/v1/git/status` exposent titres de sessions et dossiers aux comptes qui ont `mem_read`.
 - Si `auth.db` est remplacée pendant que le serveur tourne, il refuse le service puis rouvre la nouvelle base ; les requêtes en cours peuvent échouer.

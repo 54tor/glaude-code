@@ -70,7 +70,7 @@ Restes connus :
 Liste d'origine :
 
 - configraw.go:83, 103 (`configRawRead`)
-- auth_acl.go:357 (garde de `POST /trash-restore`) : lit `meta.json` de l'élément dans la corbeille du home visé (`gld-web-trash/<id>/meta.json`) pour décider du droit exigé, en suivant les liens symboliques ; un lien posé par la cible fait lire un fichier arbitraire à la passerelle.
+- auth_acl.go:357 (garde de `PATCH /v1/trash/sessions/{id}`) : lit `meta.json` de l'élément dans la corbeille du home visé (`gld-web-trash/<id>/meta.json`) pour décider du droit exigé, en suivant les liens symboliques ; un lien posé par la cible fait lire un fichier arbitraire à la passerelle.
 - sendkeys.go:158 (`closeSession`) : le PID vient d'un relevé de `claude agents --json`. `runAsOwns(pid)` (runas_unix.go) refuse un processus qui n'appartient pas au compte cible (quatre uid de `/proc/<pid>/status`, Linux seulement), mais la course entre cette lecture et le signal n'est pas fermée (`pidfd` hors périmètre).
 - configwrite.go:208, 295, 337, 365, 372 (restauration d'une sauvegarde)
 - account.go:85, 134
