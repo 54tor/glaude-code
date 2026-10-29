@@ -2,6 +2,18 @@
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [SemVer](https://semver.org/lang/fr/).
 
+## [0.6.3] - 2026-10-29
+
+### Ajouté
+- Fenêtre « Nouvelle session » (et toutes les fenêtres de saisie : reprise, groupe, envoi à tous les dossiers) : pièces jointes par collage, glisser-déposer ou bouton trombone, avec vignettes.
+
+### Corrigé
+- Fenêtre « Nouvelle session » : boutons réorganisés (outils sous le champ, modèle et effort sur une ligne, Annuler et Lancer à droite).
+- Messages d'agent ou de session en file d'attente : rendus en carte au lieu de la balise brute, sans coupe à 400 caractères (plafond de 64 000) ; un prompt qui commence par `<` reste du texte brut, coupé comme avant ; le cadre pointillé ne double plus celui de la carte.
+- Hauteurs alignées entre listes déroulantes, champs et boutons dans le composeur, Config et Skills (nouvelle taille `xs` des listes).
+- Fenêtre d'un sous-agent : la note devient « Lecture seule », en bas.
+- « Reprendre les récentes » (`gld-matin`) ne rouvre plus les sessions d'équipiers, qui restent ouvrables par leur identifiant.
+
 ## [0.6.2] - 2026-10-29
 
 ### Ajouté
