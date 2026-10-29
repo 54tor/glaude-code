@@ -14,6 +14,20 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
+// writeErr : seul format d'erreur de l'API /v1, avec le vrai statut HTTP.
+func writeErr(w http.ResponseWriter, status int, code, msg string) {
+	writeJSON(w, status, map[string]any{"error": map[string]string{"code": code, "message": msg}})
+}
+
+// decodeBody lit un corps JSON borné ; false après avoir répondu 400.
+func decodeBody(w http.ResponseWriter, r *http.Request, v any, limit int64) bool {
+	if json.NewDecoder(io.LimitReader(r.Body, limit)).Decode(v) != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
+		return false
+	}
+	return true
+}
+
 type item struct{ Dir, ID string }
 
 // readItems décode {items:[{dir,id}], to} et n'accepte que des sessions qui existent vraiment.
