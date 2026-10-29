@@ -84,7 +84,8 @@ func backoff(fails int64) time.Duration {
 }
 
 func (t *throttle) Check(user, ip string) (wait time.Duration, blocked bool) {
-	if wait, blocked = t.Pending(user, ip); blocked || wait > 0 {
+	wait, blocked, known := t.pending(user, ip)
+	if blocked || wait > 0 || known { // un couple déjà connu ne puise pas dans le plafond global : des noms inventés ne le bloquent plus
 		return wait, blocked
 	}
 	return t.globalSlot(t.now()), false
@@ -92,6 +93,12 @@ func (t *throttle) Check(user, ip string) (wait time.Duration, blocked bool) {
 
 // Pending est Check sans le plafond global : il sert à annoncer le Retry-After d'un échec sans consommer de place.
 func (t *throttle) Pending(user, ip string) (wait time.Duration, blocked bool) {
+	wait, blocked, _ = t.pending(user, ip)
+	return wait, blocked
+}
+
+// pending : known vaut true si ce compte s'est connecté depuis cette adresse dans les thKnownFor.
+func (t *throttle) pending(user, ip string) (wait time.Duration, blocked, known bool) {
 	now := t.now()
 	cut := now.Add(-thWindow).Unix()
 	uk, ik, pk, mk := thKeys(user, ip)
@@ -99,7 +106,7 @@ func (t *throttle) Pending(user, ip string) (wait time.Duration, blocked bool) {
 	mpk := mfaPairKey(user, ip)
 	rows, err := t.db.Query(`SELECT key, fails, first_at, locked_until, last_at FROM throttle WHERE key IN (?,?,?,?,?,?,?)`, uk, ik, pk, mk, mpk, kk, sk)
 	if err != nil {
-		return thMaxDelay, true
+		return thMaxDelay, true, false
 	}
 	type row struct{ fails, first, locked, last int64 }
 	got := map[string]row{}
@@ -108,14 +115,14 @@ func (t *throttle) Pending(user, ip string) (wait time.Duration, blocked bool) {
 		var r row
 		if err := rows.Scan(&k, &r.fails, &r.first, &r.locked, &r.last); err != nil {
 			rows.Close()
-			return thMaxDelay, true
+			return thMaxDelay, true, false
 		}
 		got[k] = r
 	}
 	err = rows.Err()
 	rows.Close()
 	if err != nil {
-		return thMaxDelay, true
+		return thMaxDelay, true, false
 	}
 	inWin := func(k string) int64 {
 		if r, ok := got[k]; ok && r.first > cut {
@@ -125,24 +132,24 @@ func (t *throttle) Pending(user, ip string) (wait time.Duration, blocked bool) {
 	}
 	for _, k := range []string{mpk, mk} {
 		if lim := map[string]int64{mpk: thMFALimit, mk: thMFAGlobal}[k]; inWin(k) >= lim {
-			return min(time.Unix(got[k].first, 0).Add(thWindow).Sub(now), thMaxDelay), true
+			return min(time.Unix(got[k].first, 0).Add(thWindow).Sub(now), thMaxDelay), true, false
 		}
 	}
 	u := got[uk]
 	lockEnd := max(u.locked, got[sk].locked)
 	uFails := inWin(uk)
 	if k, ok := got[kk]; ok && k.first >= now.Add(-thKnownFor).Unix() {
-		lockEnd, uFails = 0, 0
+		lockEnd, uFails, known = 0, 0, true
 	}
 	lockEnd = max(lockEnd, got[ik].locked) // bannissement de l'IP : même une IP où ce compte s'est déjà connecté n'y échappe pas
 	if lockEnd > now.Unix() {
-		return min(time.Unix(lockEnd, 0).Sub(now), thMaxDelay), true
+		return min(time.Unix(lockEnd, 0).Sub(now), thMaxDelay), true, known
 	}
 	// Le délai court depuis le dernier échec : un nouvel essai après Retry-After est réellement vérifié.
 	left := func(k string, fails int64) time.Duration {
 		return max(0, backoff(fails)-now.Sub(time.Unix(got[k].last, 0)))
 	}
-	return max(left(uk, uFails), left(ik, inWin(ik)), left(pk, inWin(pk))), false
+	return max(left(uk, uFails), left(ik, inWin(ik)), left(pk, inWin(pk))), false, known
 }
 
 func (t *throttle) globalSlot(now time.Time) time.Duration {

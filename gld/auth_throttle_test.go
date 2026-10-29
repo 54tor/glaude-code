@@ -186,6 +186,26 @@ func TestGlobalCap(t *testing.T) {
 	}
 }
 
+// Des noms inventés venus de nombreuses adresses saturent le plafond global, sans bloquer un compte déjà connecté depuis son adresse.
+func TestGlobalCapSparesKnownPair(t *testing.T) {
+	th, _, _ := testThrottle(t)
+	if err := th.Success("grace", "10.0.0.9"); err != nil {
+		t.Fatal(err)
+	}
+	for n := 0; n < thGlobalMax; n++ {
+		th.Check(fmt.Sprintf("inconnu%d", n), fmt.Sprintf("192.0.2.%d", n))
+	}
+	if w, _ := th.Check("x", "10.0.0.2"); w == 0 {
+		t.Fatal("plafond global non atteint")
+	}
+	if w, blocked := th.Check("grace", "10.0.0.9"); w != 0 || blocked {
+		t.Fatalf("couple connu bloqué par le plafond global : %v %v", w, blocked)
+	}
+	if w, _ := th.Check("grace", "10.0.0.10"); w == 0 {
+		t.Error("même compte, autre adresse : le plafond global doit s'appliquer")
+	}
+}
+
 func TestThrottleConcurrent(t *testing.T) {
 	th, _, _ := testThrottle(t)
 	var wg sync.WaitGroup

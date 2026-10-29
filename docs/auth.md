@@ -126,7 +126,7 @@ Compteurs en base, clés par nom, par adresse (une adresse IPv6 est ramenée à 
 | Second facteur | 5 échecs depuis une même adresse : session partielle détruite, mot de passe à ressaisir, et connexion de ce compte bloquée depuis cette adresse jusqu'à la fin de la fenêtre de 15 min. Une connexion réussie depuis cette adresse remet ce compteur à zéro. 15 échecs du compte, toutes adresses confondues, bloquent sa connexion partout jusqu'à la fin de la fenêtre ; ce compteur-là n'est jamais remis à zéro par une connexion |
 | Noms trop longs | un nom de plus de 64 caractères est compté sous une clé commune et refusé sans calcul argon2 |
 | Argon2 | 4 calculs simultanés au plus sur toute la passerelle |
-| Plafond global | 60 tentatives par minute sur toute la passerelle, en mémoire |
+| Plafond global | 60 tentatives par minute sur toute la passerelle, en mémoire. Un compte déjà connecté depuis la même adresse (moins de 30 jours) n'y puise pas : une inondation de noms inventés ne bloque pas les habitués |
 | Codes TOTP | dérive acceptée de ±1 pas (30 s) ; un code déjà accepté n'est pas rejouable |
 
 Chaque ban ouvre une alerte dans toutes les sessions connectées (l'interface interroge `GET /v1/auth/alerts?since=` toutes les 15 s ; seuls les bans survenus après l'ouverture de l'onglet sont montrés ; l'adresse n'est donnée qu'aux administrateurs, les autres comptes sont prévenus sans elle).

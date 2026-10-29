@@ -12,6 +12,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Accessibilité : page de saisie du jeton, bouton « Ouvrir » (3,4:1 → 5,2:1), bordures du champ et lien du thème clair relevés à plus de 3:1.
 - Sécurité : en mode multi-utilisateur, un jeton `Authorization: Bearer` faux compte désormais pour l'adresse (10 par minute, puis `429`), comme en mode ouvert ; il se devinait auparavant sans limite.
 - Sécurité : `/assets/` et `/icons/` ne listent plus leur contenu (`404`) ; les fichiers restent servis.
+- Sécurité : le plafond global de 60 tentatives de connexion par minute n'arrête plus un compte qui revient depuis une adresse où il s'est déjà connecté ; des noms inventés envoyés depuis de nombreuses adresses bloquaient toutes les connexions.
 
 ## [0.7.1] - 2026-10-29
 
