@@ -1,0 +1,4828 @@
+openapi: 3.0.3
+info:
+  title: gld API
+  version: v1
+  description: 'Contract of the gld HTTP API, served under /v1. Breaking change from the former RPC routes: no alias remains. Success
+    responses are the resource JSON (no ok envelope); every failure is {"error":{"code","message"}} with the real HTTP status. Request
+    and response bodies are described as generic objects: the exact fields live in the handlers and in gld/ui/src/lib/api.ts. Parameters
+    and status codes are extracted from the handlers. x-gld-right is the right required in multi-user mode; x-gld-guest marks routes
+    a shared-session guest may call (the session id in the path is rewritten from the share, never read from the client).'
+servers:
+- url: /
+security:
+- cookieAuth: []
+  csrfHeader: []
+- bearerAuth: []
+paths:
+  /v1/account:
+    get:
+      tags:
+      - account
+      operationId: getAccount
+      x-gld-right: usage_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/account/refreshes:
+    post:
+      tags:
+      - account
+      operationId: postAccountRefreshes
+      x-gld-right: usage_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/admin/acl:
+    put:
+      tags:
+      - admin
+      operationId: putAdminAcl
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: integer
+                home_id:
+                  type: string
+                grant:
+                  type: array
+                  items: {}
+                revoke:
+                  type: array
+                  items: {}
+                confirm:
+                  type: boolean
+      x-gld-right: admin
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/admin/events:
+    get:
+      tags:
+      - admin
+      operationId: getAdminEvents
+      x-gld-right: admin
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/admin/homes:
+    get:
+      tags:
+      - admin
+      operationId: getAdminHomes
+      x-gld-right: admin
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/admin/sessions:
+    delete:
+      tags:
+      - admin
+      operationId: deleteAdminSessions
+      parameters:
+      - name: user_id
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: admin
+      responses:
+        '204':
+          description: No content
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    get:
+      tags:
+      - admin
+      operationId: getAdminSessions
+      parameters:
+      - name: user_id
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: admin
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/admin/users:
+    get:
+      tags:
+      - admin
+      operationId: getAdminUsers
+      x-gld-right: admin
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    post:
+      tags:
+      - admin
+      operationId: postAdminUsers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                password:
+                  type: string
+                admin:
+                  type: boolean
+      x-gld-right: admin
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/admin/users/{user}:
+    patch:
+      tags:
+      - admin
+      operationId: patchAdminUsersUser
+      parameters:
+      - name: user
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                disabled:
+                  type: boolean
+      x-gld-right: admin
+      responses:
+        '204':
+          description: No content
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /v1/admin/users/{user}/mfa:
+    delete:
+      tags:
+      - admin
+      operationId: deleteAdminUsersUserMfa
+      parameters:
+      - name: user
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: admin
+      responses:
+        '204':
+          description: No content
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/admin/users/{user}/password:
+    put:
+      tags:
+      - admin
+      operationId: putAdminUsersUserPassword
+      parameters:
+      - name: user
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password:
+                  type: string
+      x-gld-right: admin
+      responses:
+        '204':
+          description: No content
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/agents/{agent}:
+    delete:
+      tags:
+      - agents
+      operationId: deleteAgentsAgent
+      parameters:
+      - name: agent
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    put:
+      tags:
+      - agents
+      operationId: putAgentsAgent
+      parameters:
+      - name: agent
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/auth/alerts:
+    get:
+      tags:
+      - auth
+      operationId: getAuthAlerts
+      x-gld-right: public
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+      security: []
+  /v1/auth/factors/{factor}:
+    delete:
+      tags:
+      - auth
+      operationId: deleteAuthFactorsFactor
+      parameters:
+      - name: factor
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: public
+      responses:
+        '204':
+          description: No content
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+      security: []
+  /v1/auth/me:
+    get:
+      tags:
+      - auth
+      operationId: getAuthMe
+      x-gld-right: public
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+      security: []
+  /v1/auth/mfa/recovery:
+    post:
+      tags:
+      - auth
+      operationId: postAuthMfaRecovery
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      x-gld-right: public
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+      security: []
+  /v1/auth/mfa/totp:
+    post:
+      tags:
+      - auth
+      operationId: postAuthMfaTotp
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      x-gld-right: public
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+      security: []
+  /v1/auth/mfa/webauthn/assertions:
+    post:
+      tags:
+      - auth
+      operationId: postAuthMfaWebauthnAssertions
+      x-gld-right: public
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+      security: []
+  /v1/auth/mfa/webauthn/challenges:
+    post:
+      tags:
+      - auth
+      operationId: postAuthMfaWebauthnChallenges
+      x-gld-right: public
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+      security: []
+  /v1/auth/password:
+    put:
+      tags:
+      - auth
+      operationId: putAuthPassword
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                new:
+                  type: string
+      x-gld-right: public
+      responses:
+        '204':
+          description: No content
+        '400':
+          $ref: '#/components/responses/Error'
+      security: []
+  /v1/auth/recovery-codes:
+    put:
+      tags:
+      - auth
+      operationId: putAuthRecoveryCodes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      x-gld-right: public
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+      security: []
+  /v1/auth/sessions:
+    delete:
+      tags:
+      - auth
+      operationId: deleteAuthSessions
+      parameters:
+      - name: others
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: public
+      responses:
+        '204':
+          description: No content
+        '400':
+          $ref: '#/components/responses/Error'
+      security: []
+    get:
+      tags:
+      - auth
+      operationId: getAuthSessions
+      x-gld-right: public
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+      security: []
+    post:
+      tags:
+      - auth
+      operationId: postAuthSessions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                password:
+                  type: string
+      x-gld-right: public
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+      security: []
+  /v1/auth/sessions/current:
+    delete:
+      tags:
+      - auth
+      operationId: deleteAuthSessionsCurrent
+      x-gld-right: public
+      responses:
+        '204':
+          description: No content
+      security: []
+  /v1/auth/sessions/{sid}:
+    delete:
+      tags:
+      - auth
+      operationId: deleteAuthSessionsSid
+      parameters:
+      - name: sid
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: public
+      responses:
+        '204':
+          description: No content
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+      security: []
+  /v1/auth/totp/enrollments:
+    post:
+      tags:
+      - auth
+      operationId: postAuthTotpEnrollments
+      x-gld-right: public
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+      security: []
+  /v1/auth/totp/enrollments/current:
+    put:
+      tags:
+      - auth
+      operationId: putAuthTotpEnrollmentsCurrent
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      x-gld-right: public
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+      security: []
+  /v1/auth/webauthn/registrations:
+    post:
+      tags:
+      - auth
+      operationId: postAuthWebauthnRegistrations
+      x-gld-right: public
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+      security: []
+  /v1/auth/webauthn/registrations/current:
+    put:
+      tags:
+      - auth
+      operationId: putAuthWebauthnRegistrationsCurrent
+      parameters:
+      - name: label
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: public
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+      security: []
+  /v1/cleanup-warning:
+    get:
+      tags:
+      - cleanup-warning
+      operationId: getCleanupWarning
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/config:
+    get:
+      tags:
+      - config
+      operationId: getConfig
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/config/edits:
+    post:
+      tags:
+      - config
+      operationId: postConfigEdits
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/config/effective:
+    get:
+      tags:
+      - config
+      operationId: getConfigEffective
+      parameters:
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/config/mcp:
+    get:
+      tags:
+      - config
+      operationId: getConfigMcp
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/config/mcp/checks:
+    post:
+      tags:
+      - config
+      operationId: postConfigMcpChecks
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+  /v1/config/permissions/explanations:
+    post:
+      tags:
+      - config
+      operationId: postConfigPermissionsExplanations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                kind:
+                  type: string
+                rule:
+                  type: string
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+  /v1/config/permissions/imports:
+    post:
+      tags:
+      - config
+      operationId: postConfigPermissionsImports
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                text:
+                  type: string
+                mode:
+                  type: string
+                dry:
+                  type: boolean
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/config/permissions/suggestions:
+    get:
+      tags:
+      - config
+      operationId: getConfigPermissionsSuggestions
+      x-gld-right: sessions_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/config/projects:
+    get:
+      tags:
+      - config
+      operationId: getConfigProjects
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/config/projects/mcp:
+    put:
+      tags:
+      - config
+      operationId: putConfigProjectsMcp
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dir:
+                  type: string
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/config/raw:
+    get:
+      tags:
+      - config
+      operationId: getConfigRaw
+      parameters:
+      - name: file
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    put:
+      tags:
+      - config
+      operationId: putConfigRaw
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                text:
+                  type: string
+                dry:
+                  type: boolean
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/config/restorations:
+    post:
+      tags:
+      - config
+      operationId: postConfigRestorations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/devices:
+    get:
+      tags:
+      - devices
+      operationId: getDevices
+      x-gld-right: any
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /v1/devices/{device}:
+    delete:
+      tags:
+      - devices
+      operationId: deleteDevicesDevice
+      parameters:
+      - name: device
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: any
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /v1/directories:
+    delete:
+      tags:
+      - directories
+      operationId: deleteDirectories
+      parameters:
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    get:
+      tags:
+      - directories
+      operationId: getDirectories
+      parameters:
+      - name: path
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    post:
+      tags:
+      - directories
+      operationId: postDirectories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dir:
+                  type: string
+                children bool // ajoute les sous-dossiers directs plutôt que le:
+                  type: object
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /v1/fs/entries:
+    delete:
+      tags:
+      - fs
+      operationId: deleteFsEntries
+      parameters:
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: item
+        in: query
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+        style: form
+        explode: true
+      x-gld-right: fs_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    patch:
+      tags:
+      - fs
+      operationId: patchFsEntries
+      parameters:
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                from:
+                  type: string
+                to:
+                  type: string
+      x-gld-right: fs_write
+      responses:
+        '204':
+          description: No content
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    post:
+      tags:
+      - fs
+      operationId: postFsEntries
+      parameters:
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+                kind:
+                  type: string
+      x-gld-right: fs_write
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/fs/entries/content:
+    get:
+      tags:
+      - fs
+      operationId: getFsEntriesContent
+      x-gld-right: fs_read
+      x-gld-guest: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    put:
+      tags:
+      - fs
+      operationId: putFsEntriesContent
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+                etag:
+                  type: string
+                force:
+                  type: boolean
+      x-gld-right: fs_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/fs/files:
+    post:
+      tags:
+      - fs
+      operationId: postFsFiles
+      parameters:
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      x-gld-right: fs_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/fs/index:
+    get:
+      tags:
+      - fs
+      operationId: getFsIndex
+      parameters:
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: fs_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/fs/trash:
+    delete:
+      tags:
+      - fs
+      operationId: deleteFsTrash
+      parameters:
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: item
+        in: query
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+        style: form
+        explode: true
+      x-gld-right: fs_write
+      responses:
+        '204':
+          description: No content
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    get:
+      tags:
+      - fs
+      operationId: getFsTrash
+      parameters:
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: fs_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/fs/trash/{entry}:
+    patch:
+      tags:
+      - fs
+      operationId: patchFsTrashEntry
+      parameters:
+      - name: entry
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                trashed:
+                  type: boolean
+      x-gld-right: fs_write
+      responses:
+        '204':
+          description: No content
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/fs/tree:
+    get:
+      tags:
+      - fs
+      operationId: getFsTree
+      x-gld-right: fs_read
+      x-gld-guest: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/fs/watch:
+    get:
+      tags:
+      - fs
+      operationId: getFsWatch
+      x-gld-right: fs_read
+      responses:
+        '200':
+          description: Stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/git/changes:
+    get:
+      tags:
+      - git
+      operationId: getGitChanges
+      parameters:
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/git/pushes:
+    post:
+      tags:
+      - git
+      operationId: postGitPushes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dir:
+                  type: string
+                remote:
+                  type: string
+      x-gld-right: exec
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/git/remotes:
+    get:
+      tags:
+      - git
+      operationId: getGitRemotes
+      parameters:
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/git/status:
+    get:
+      tags:
+      - git
+      operationId: getGitStatus
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/guest/me:
+    delete:
+      tags:
+      - guest
+      operationId: deleteGuestMe
+      parameters:
+      - name: path
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: share
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: public
+      x-gld-guest: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '204':
+          description: No content
+      security: []
+    get:
+      tags:
+      - guest
+      operationId: getGuestMe
+      parameters:
+      - name: path
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: share
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: public
+      x-gld-guest: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '204':
+          description: No content
+      security: []
+  /v1/guest/sessions:
+    get:
+      tags:
+      - guest
+      operationId: getGuestSessions
+      parameters:
+      - name: path
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: share
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: public
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '204':
+          description: No content
+      security: []
+  /v1/homes:
+    get:
+      tags:
+      - homes
+      operationId: getHomes
+      x-gld-right: any
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    put:
+      tags:
+      - homes
+      operationId: putHomes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                homes:
+                  type: array
+                  items: {}
+                removed:
+                  type: array
+                  items: {}
+      x-gld-right: admin
+      responses:
+        '204':
+          description: No content
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /v1/homes/current:
+    put:
+      tags:
+      - homes
+      operationId: putHomesCurrent
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      x-gld-right: any
+      responses:
+        '204':
+          description: No content
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /v1/homes/sync-plans:
+    post:
+      tags:
+      - homes
+      operationId: postHomesSyncPlans
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                from:
+                  type: string
+                to:
+                  type: string
+      x-gld-right: mem_sync
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/homes/syncs:
+    post:
+      tags:
+      - homes
+      operationId: postHomesSyncs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                from:
+                  type: string
+                to:
+                  type: string
+                picks:
+                  type: array
+                  items: {}
+      x-gld-right: mem_sync
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/info:
+    get:
+      tags:
+      - info
+      operationId: getInfo
+      parameters:
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: id
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: sessions_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/invites:
+    post:
+      tags:
+      - invites
+      operationId: postInvites
+      x-gld-right: exec
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/invites/{invite}:
+    delete:
+      tags:
+      - invites
+      operationId: deleteInvitesInvite
+      parameters:
+      - name: invite
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: exec
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    patch:
+      tags:
+      - invites
+      operationId: patchInvitesInvite
+      parameters:
+      - name: invite
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: exec
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/invites/{invite}/token:
+    put:
+      tags:
+      - invites
+      operationId: putInvitesInviteToken
+      parameters:
+      - name: invite
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/keepwarm:
+    get:
+      tags:
+      - keepwarm
+      operationId: getKeepwarm
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    put:
+      tags:
+      - keepwarm
+      operationId: putKeepwarm
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dir:
+                  type: string
+                iD:
+                  type: string
+                'on':
+                  type: boolean
+                max:
+                  type: integer
+                'reheat  bool // session au cache froid : accepte d''en payer la reconstruction par un premier':
+                  type: object
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /v1/marketplaces:
+    get:
+      tags:
+      - marketplaces
+      operationId: getMarketplaces
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    post:
+      tags:
+      - marketplaces
+      operationId: postMarketplaces
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                source:
+                  type: string
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/marketplaces/updates:
+    post:
+      tags:
+      - marketplaces
+      operationId: postMarketplacesUpdates
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/marketplaces/{name}:
+    delete:
+      tags:
+      - marketplaces
+      operationId: deleteMarketplacesName
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/marketplaces/{name}/updates:
+    post:
+      tags:
+      - marketplaces
+      operationId: postMarketplacesNameUpdates
+      parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/memory/drafts:
+    post:
+      tags:
+      - memory
+      operationId: postMemoryDrafts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                model:
+                  type: string
+                instruction:
+                  type: string
+                key:
+                  type: string
+                refs:
+                  type: array
+                  items: {}
+      x-gld-right: mem_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /v1/memory/files:
+    delete:
+      tags:
+      - memory
+      operationId: deleteMemoryFiles
+      parameters:
+      - name: item
+        in: query
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+        style: form
+        explode: true
+      x-gld-right: mem_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    get:
+      tags:
+      - memory
+      operationId: getMemoryFiles
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/memory/files/{key}:
+    get:
+      tags:
+      - memory
+      operationId: getMemoryFilesKey
+      parameters:
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    patch:
+      tags:
+      - memory
+      operationId: patchMemoryFilesKey
+      parameters:
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                to:
+                  type: string
+                type:
+                  type: string
+                copy:
+                  type: boolean
+                enabled:
+                  type: boolean
+                paths:
+                  type: array
+                  items: {}
+      x-gld-right: mem_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    put:
+      tags:
+      - memory
+      operationId: putMemoryFilesKey
+      parameters:
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+                'index bool // nouvelle entrée : l''ajouter aussi à':
+                  type: object
+      x-gld-right: mem_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/memory/fixes:
+    post:
+      tags:
+      - memory
+      operationId: postMemoryFixes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+      x-gld-right: mem_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/memory/health:
+    get:
+      tags:
+      - memory
+      operationId: getMemoryHealth
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/memory/lints:
+    post:
+      tags:
+      - memory
+      operationId: postMemoryLints
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scope:
+                  type: string
+      x-gld-right: mem_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /v1/memory/loaded:
+    get:
+      tags:
+      - memory
+      operationId: getMemoryLoaded
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/memory/matches:
+    get:
+      tags:
+      - memory
+      operationId: getMemoryMatches
+      parameters:
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: key
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/memory/merges:
+    post:
+      tags:
+      - memory
+      operationId: postMemoryMerges
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                keys:
+                  type: array
+                  items: {}
+                'out    string // document de sortie : l''une des clés (vide : la':
+                  type: object
+                launch:
+                  type: boolean
+                args:
+                  type: string
+                'prompt string // texte relu et modifié dans la fenêtre de saisie : remplace celui du':
+                  type: object
+      x-gld-right: mem_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /v1/memory/repairs:
+    post:
+      tags:
+      - memory
+      operationId: postMemoryRepairs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dir:
+                  type: string
+      x-gld-right: mem_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/memory/token-counts:
+    post:
+      tags:
+      - memory
+      operationId: postMemoryTokenCounts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                keys:
+                  type: array
+                  items: {}
+      x-gld-right: mem_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/notes:
+    get:
+      tags:
+      - notes
+      operationId: getNotes
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+    put:
+      tags:
+      - notes
+      operationId: putNotes
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+                text:
+                  type: string
+                to:
+                  type: string
+      x-gld-right: mem_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /v1/pairing/codes:
+    post:
+      tags:
+      - pairing
+      operationId: postPairingCodes
+      x-gld-right: any
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+  /v1/plugins:
+    get:
+      tags:
+      - plugins
+      operationId: getPlugins
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/plugins/{plugin}:
+    delete:
+      tags:
+      - plugins
+      operationId: deletePluginsPlugin
+      parameters:
+      - name: plugin
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    patch:
+      tags:
+      - plugins
+      operationId: patchPluginsPlugin
+      parameters:
+      - name: plugin
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    put:
+      tags:
+      - plugins
+      operationId: putPluginsPlugin
+      parameters:
+      - name: plugin
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/plugins/{plugin}/updates:
+    post:
+      tags:
+      - plugins
+      operationId: postPluginsPluginUpdates
+      parameters:
+      - name: plugin
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/projects/{dir}/process:
+    put:
+      tags:
+      - projects
+      operationId: putProjectsDirProcess
+      parameters:
+      - name: dir
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/sessions:
+    delete:
+      tags:
+      - sessions
+      operationId: deleteSessions
+      parameters:
+      - name: close
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+    get:
+      tags:
+      - sessions
+      operationId: getSessions
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: sessions_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    patch:
+      tags:
+      - sessions
+      operationId: patchSessions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+    post:
+      tags:
+      - sessions
+      operationId: postSessions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dir:
+                  type: string
+                iD:
+                  type: string
+                prompt:
+                  type: string
+                args:
+                  type: string
+                cwd:
+                  type: string
+      x-gld-right: exec
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /v1/sessions/send-info:
+    get:
+      tags:
+      - sessions
+      operationId: getSessionsSendInfo
+      x-gld-right: sessions_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/sessions/{id}:
+    patch:
+      tags:
+      - sessions
+      operationId: patchSessionsId
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                auto:
+                  type: boolean
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+  /v1/sessions/{id}/chat:
+    delete:
+      tags:
+      - sessions
+      operationId: deleteSessionsIdChat
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    post:
+      tags:
+      - sessions
+      operationId: postSessionsIdChat
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                prompt:
+                  type: string
+                args:
+                  type: string
+                mode:
+                  type: string
+      x-gld-right: exec
+      responses:
+        '200':
+          description: Stream
+          content:
+            application/x-ndjson:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /v1/sessions/{id}/conversation:
+    delete:
+      tags:
+      - sessions
+      operationId: deleteSessionsIdConversation
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: after
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+    get:
+      tags:
+      - sessions
+      operationId: getSessionsIdConversation
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: sessions_read
+      x-gld-guest: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /v1/sessions/{id}/conversation/document:
+    get:
+      tags:
+      - sessions
+      operationId: getSessionsIdConversationDocument
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: sessions_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /v1/sessions/{id}/conversation/images/{img}:
+    get:
+      tags:
+      - sessions
+      operationId: getSessionsIdConversationImagesImg
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: img
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: sessions_read
+      x-gld-guest: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/sessions/{id}/conversation/text:
+    get:
+      tags:
+      - sessions
+      operationId: getSessionsIdConversationText
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: sessions_read
+      x-gld-guest: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/sessions/{id}/conversation/tools:
+    get:
+      tags:
+      - sessions
+      operationId: getSessionsIdConversationTools
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: sessions_read
+      x-gld-guest: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /v1/sessions/{id}/conversation/uploads/{up}:
+    get:
+      tags:
+      - sessions
+      operationId: getSessionsIdConversationUploadsUp
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: up
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: sessions_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/sessions/{id}/keystrokes:
+    post:
+      tags:
+      - sessions
+      operationId: postSessionsIdKeystrokes
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+      x-gld-right: exec
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /v1/sessions/{id}/live:
+    get:
+      tags:
+      - sessions
+      operationId: getSessionsIdLive
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: sessions_read
+      x-gld-guest: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/sessions/{id}/loaded:
+    get:
+      tags:
+      - sessions
+      operationId: getSessionsIdLoaded
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: sessions_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/sessions/{id}/loaded/files/{file}:
+    get:
+      tags:
+      - sessions
+      operationId: getSessionsIdLoadedFilesFile
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: file
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: sessions_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /v1/sessions/{id}/messages:
+    post:
+      tags:
+      - sessions
+      operationId: postSessionsIdMessages
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+      x-gld-right: exec
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /v1/sessions/{id}/process:
+    delete:
+      tags:
+      - sessions
+      operationId: deleteSessionsIdProcess
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+    put:
+      tags:
+      - sessions
+      operationId: putSessionsIdProcess
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/sessions/{id}/queue:
+    get:
+      tags:
+      - sessions
+      operationId: getSessionsIdQueue
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: sessions_read
+      x-gld-guest: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    post:
+      tags:
+      - sessions
+      operationId: postSessionsIdQueue
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+      x-gld-right: exec
+      x-gld-guest: true
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/sessions/{id}/queue/{qid}:
+    delete:
+      tags:
+      - sessions
+      operationId: deleteSessionsIdQueueQid
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: qid
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: exec
+      x-gld-guest: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    patch:
+      tags:
+      - sessions
+      operationId: patchSessionsIdQueueQid
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: qid
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                state:
+                  type: string
+      x-gld-right: exec
+      responses:
+        '204':
+          description: No content
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/sessions/{id}/screen:
+    get:
+      tags:
+      - sessions
+      operationId: getSessionsIdScreen
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: sessions_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /v1/sessions/{id}/state:
+    get:
+      tags:
+      - sessions
+      operationId: getSessionsIdState
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: sessions_read
+      x-gld-guest: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/sessions/{id}/tasks/{task}/output:
+    get:
+      tags:
+      - sessions
+      operationId: getSessionsIdTasksTaskOutput
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: task
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: sessions_read
+      x-gld-guest: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /v1/shares:
+    get:
+      tags:
+      - shares
+      operationId: getShares
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/shares/{share}:
+    delete:
+      tags:
+      - shares
+      operationId: deleteSharesShare
+      parameters:
+      - name: share
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: exec
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/skills:
+    delete:
+      tags:
+      - skills
+      operationId: deleteSkills
+      parameters:
+      - name: item
+        in: query
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+        style: form
+        explode: true
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+    get:
+      tags:
+      - skills
+      operationId: getSkills
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/skills/catalog:
+    get:
+      tags:
+      - skills
+      operationId: getSkillsCatalog
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/skills/copies:
+    post:
+      tags:
+      - skills
+      operationId: postSkillsCopies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+                to:
+                  type: string
+      x-gld-right: config_write
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/skills/drafts:
+    post:
+      tags:
+      - skills
+      operationId: postSkillsDrafts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                model:
+                  type: string
+                instruction:
+                  type: string
+                key:
+                  type: string
+                refs:
+                  type: array
+                  items: {}
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /v1/skills/installations:
+    post:
+      tags:
+      - skills
+      operationId: postSkillsInstallations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                source:
+                  type: string
+                skill:
+                  type: string
+                scope:
+                  type: string
+                project:
+                  type: string
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/skills/updates:
+    get:
+      tags:
+      - skills
+      operationId: getSkillsUpdates
+      parameters:
+      - name: force
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/skills/{key}:
+    get:
+      tags:
+      - skills
+      operationId: getSkillsKey
+      parameters:
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    put:
+      tags:
+      - skills
+      operationId: putSkillsKey
+      parameters:
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+                create:
+                  type: boolean
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/slash-commands:
+    get:
+      tags:
+      - slash-commands
+      operationId: getSlashCommands
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/snippets:
+    delete:
+      tags:
+      - snippets
+      operationId: deleteSnippets
+      parameters:
+      - name: item
+        in: query
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+        style: form
+        explode: true
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+    get:
+      tags:
+      - snippets
+      operationId: getSnippets
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/snippets/drafts:
+    post:
+      tags:
+      - snippets
+      operationId: postSnippetsDrafts
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                model:
+                  type: string
+                instruction:
+                  type: string
+                text:
+                  type: string
+      x-gld-right: mem_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /v1/snippets/export:
+    get:
+      tags:
+      - snippets
+      operationId: getSnippetsExport
+      parameters:
+      - name: scope
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /v1/snippets/imports:
+    post:
+      tags:
+      - snippets
+      operationId: postSnippetsImports
+      parameters:
+      - name: overwrite
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: scope
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/snippets/{key}:
+    get:
+      tags:
+      - snippets
+      operationId: getSnippetsKey
+      parameters:
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    patch:
+      tags:
+      - snippets
+      operationId: patchSnippetsKey
+      parameters:
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                to:
+                  type: string
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    put:
+      tags:
+      - snippets
+      operationId: putSnippetsKey
+      parameters:
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+                'create bool // nouveau snippet : refusé s''il existe':
+                  type: object
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/state:
+    get:
+      tags:
+      - state
+      operationId: getState
+      x-gld-right: sessions_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /v1/state/stamp:
+    get:
+      tags:
+      - state
+      operationId: getStateStamp
+      x-gld-right: sessions_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/tabs:
+    get:
+      tags:
+      - tabs
+      operationId: getTabs
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+    put:
+      tags:
+      - tabs
+      operationId: putTabs
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+      x-gld-right: mem_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /v1/tabs/{tab}:
+    delete:
+      tags:
+      - tabs
+      operationId: deleteTabsTab
+      parameters:
+      - name: tab
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: mem_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /v1/teams:
+    get:
+      tags:
+      - teams
+      operationId: getTeams
+      x-gld-right: sessions_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/teams/catalog:
+    get:
+      tags:
+      - teams
+      operationId: getTeamsCatalog
+      x-gld-right: sessions_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/teams/compositions:
+    post:
+      tags:
+      - teams
+      operationId: postTeamsCompositions
+      x-gld-right: sessions_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/teams/{team}:
+    delete:
+      tags:
+      - teams
+      operationId: deleteTeamsTeam
+      parameters:
+      - name: team
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    put:
+      tags:
+      - teams
+      operationId: putTeamsTeam
+      parameters:
+      - name: team
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: config_write
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/teams/{team}/run:
+    delete:
+      tags:
+      - teams
+      operationId: deleteTeamsTeamRun
+      parameters:
+      - name: team
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: exec
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    get:
+      tags:
+      - teams
+      operationId: getTeamsTeamRun
+      parameters:
+      - name: team
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: sessions_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/teams/{team}/run/keystrokes:
+    post:
+      tags:
+      - teams
+      operationId: postTeamsTeamRunKeystrokes
+      parameters:
+      - name: team
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: exec
+      responses:
+        '204':
+          description: No content
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/teams/{team}/run/messages:
+    post:
+      tags:
+      - teams
+      operationId: postTeamsTeamRunMessages
+      parameters:
+      - name: team
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/teams/{team}/run/screen:
+    get:
+      tags:
+      - teams
+      operationId: getTeamsTeamRunScreen
+      parameters:
+      - name: team
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: agent
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: sessions_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/teams/{team}/runs:
+    post:
+      tags:
+      - teams
+      operationId: postTeamsTeamRuns
+      parameters:
+      - name: team
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/terminal:
+    get:
+      tags:
+      - terminal
+      operationId: getTerminal
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    post:
+      tags:
+      - terminal
+      operationId: postTerminal
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                iD:
+                  type: string
+      x-gld-right: exec
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/terminal/ws:
+    get:
+      tags:
+      - terminal
+      operationId: getTerminalWs
+      parameters:
+      - name: t
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: exec
+      responses:
+        '101':
+          description: WebSocket upgrade
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /v1/trash/memory:
+    delete:
+      tags:
+      - trash
+      operationId: deleteTrashMemory
+      parameters:
+      - name: all
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: item
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: mem_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+    get:
+      tags:
+      - trash
+      operationId: getTrashMemory
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/trash/memory/{id}:
+    patch:
+      tags:
+      - trash
+      operationId: patchTrashMemoryId
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                trashed:
+                  type: boolean
+      x-gld-right: mem_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /v1/trash/memory/{id}/file:
+    get:
+      tags:
+      - trash
+      operationId: getTrashMemoryIdFile
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /v1/trash/sessions:
+    delete:
+      tags:
+      - trash
+      operationId: deleteTrashSessions
+      parameters:
+      - name: all
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: item
+        in: query
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+        style: form
+        explode: true
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+    get:
+      tags:
+      - trash
+      operationId: getTrashSessions
+      x-gld-right: sessions_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    patch:
+      tags:
+      - trash
+      operationId: patchTrashSessions
+      parameters:
+      - name: item
+        in: query
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+        style: form
+        explode: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                trashed:
+                  type: boolean
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+    post:
+      tags:
+      - trash
+      operationId: postTrashSessions
+      parameters:
+      - name: close
+        in: query
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      x-gld-right: exec
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /v1/trust/answers:
+    post:
+      tags:
+      - trust
+      operationId: postTrustAnswers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dir:
+                  type: string
+                'yes':
+                  type: boolean
+      x-gld-right: exec
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /v1/trust/pending:
+    get:
+      tags:
+      - trust
+      operationId: getTrustPending
+      x-gld-right: exec
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /v1/uploads/files:
+    post:
+      tags:
+      - uploads
+      operationId: postUploadsFiles
+      parameters:
+      - name: id
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: exec
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /v1/uploads/images:
+    post:
+      tags:
+      - uploads
+      operationId: postUploadsImages
+      parameters:
+      - name: id
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: exec
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /v1/vgroups:
+    put:
+      tags:
+      - vgroups
+      operationId: putVgroups
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                args:
+                  type: string
+                prompt:
+                  type: string
+      x-gld-right: mem_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '204':
+          description: No content
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: gld_session
+      description: Multi-user mode session cookie. Unsafe methods must also send the X-Gld-CSRF header returned at login.
+    csrfHeader:
+      type: apiKey
+      in: header
+      name: X-Gld-CSRF
+      description: CSRF token paired with the session cookie, required on POST, PUT, PATCH and DELETE.
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Host token (single-user token mode) or API token; a shared-session guest uses its own cookie plus the X-Gld-Share
+        header.
+  responses:
+    Error:
+      description: Uniform error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      required:
+      - error
+      properties:
+        error:
+          type: object
+          required:
+          - code
+          - message
+          properties:
+            code:
+              type: string
+              description: Stable snake_case slug, e.g. bad_request, bad_id, unauthorized, forbidden, not_found, conflict, too_large,
+                unsupported, rate_limited, internal, unavailable.
+            message:
+              type: string
+              description: Localized human text.

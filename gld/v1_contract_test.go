@@ -6,9 +6,12 @@ import (
 	"go/parser"
 	"go/token"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"go.yaml.in/yaml/v3"
 )
 
 // Pages et jetons d'entrée qui restent hors /v1 (navigateur, PWA, liens partagés).
@@ -96,5 +99,43 @@ func TestNoHTTPErrorInV1Handlers(t *testing.T) {
 			}
 			return true
 		})
+	}
+}
+
+// docs/reference/openapi.yaml décrit exactement les routes /v1 enregistrées, avec leur droit.
+func TestOpenAPIMatchesRoutes(t *testing.T) {
+	b, err := os.ReadFile("../docs/reference/openapi.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Paths map[string]map[string]struct {
+			OperationID string `yaml:"operationId"`
+			Right       string `yaml:"x-gld-right"`
+		} `yaml:"paths"`
+	}
+	if err := yaml.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	seen, ids := map[string]bool{}, map[string]bool{}
+	for p, ms := range doc.Paths {
+		for m, op := range ms {
+			pat := strings.ToUpper(m) + " " + p
+			seen[pat] = true
+			if ids[op.OperationID] || op.OperationID == "" {
+				t.Errorf("%s : operationId %q vide ou en double", pat, op.OperationID)
+			}
+			ids[op.OperationID] = true
+			if want, ok := routeRights[pat]; !ok {
+				t.Errorf("openapi : %q n'existe pas dans routeRights", pat)
+			} else if string(want) != op.Right {
+				t.Errorf("openapi : %q droit %q, routeRights %q", pat, op.Right, want)
+			}
+		}
+	}
+	for pat := range routeRights {
+		if _, path, _ := strings.Cut(pat, " "); strings.HasPrefix(path, "/v1/") && !seen[pat] {
+			t.Errorf("openapi : %q manque", pat)
+		}
 	}
 }
