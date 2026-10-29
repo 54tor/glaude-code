@@ -26,7 +26,7 @@ var routeRights = map[string]Right{
 	"GET /{$}": rightPublic, "GET /toutes": rightPublic, "GET /en-cours": rightPublic, "GET /dossier/": rightPublic,
 	"GET /groupe/": rightPublic, "GET /projet/": rightPublic, "GET /snippets": rightPublic, "GET /snippets/": rightPublic,
 	"GET /memoire": rightPublic, "GET /memoire/": rightPublic, "GET /onglets": rightPublic, "GET /configuration": rightPublic,
-	"GET /configuration/": rightPublic, "GET /skills": rightPublic, "GET /skills/": rightPublic, "GET /extensions": rightPublic, "GET /equipes": rightPublic, "GET /equipes/": rightPublic, "GET /revues": rightPublic, "GET /espace/": rightPublic, "GET /reglages/": rightPublic, "GET /assets/": rightPublic,
+	"GET /configuration/": rightPublic, "GET /skills": rightPublic, "GET /skills/": rightPublic, "GET /extensions": rightPublic, "GET /plugins": rightPublic, "GET /sauvegarde": rightPublic, "GET /equipes": rightPublic, "GET /equipes/": rightPublic, "GET /revues": rightPublic, "GET /espace/": rightPublic, "GET /reglages/": rightPublic, "GET /assets/": rightPublic,
 	"GET /icons/": rightPublic, "GET /favicon.ico": rightPublic, "GET /manifest.webmanifest": rightPublic, "GET /sw.js": rightPublic,
 	"GET /guest": rightPublic, "GET /guest/{handle}": rightPublic, "GET /v1/guest/sessions": rightPublic, "GET /v1/guest/me": rightPublic, "GET /invite/{home}/{token}": rightPublic, "POST /invite/{home}/{token}": rightPublic, "DELETE /v1/guest/me": rightPublic,
 
