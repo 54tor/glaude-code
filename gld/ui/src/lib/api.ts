@@ -1,5 +1,6 @@
 import { i18n } from "@/i18n"
 import { authFetch } from "@/lib/auth"
+import { http, qs, seg } from "@/lib/http"
 
 // Accès aux routes du serveur Go (gld/main.go).
 
@@ -133,6 +134,8 @@ export type Account = {
 // cut/len : texte coupé à l'octet cut d'un texte de len octets (message démesuré) ; la suite vient de api.convText.
 export type Msg = { r: "user" | "assistant" | "tool" | "doc"; t: string; ts?: string; o?: number; n?: number; img?: string; k?: number; cut?: number; len?: number }
 export type Ls = { path: string; parent: string; dirs: string[]; sep: string; error?: string }
+// Réponse textuelle d'une action de l'API /v1 (toast).
+export type Said = { message: string }
 export type Result = { ok: boolean; out: string; net?: boolean; n?: number } // net : pas de réponse (réseau, délai) ; l'action a pu avoir lieu
 // État git d'un dossier (gitstatus.go)
 export type GitState = { branch: string; detached?: boolean; upstream: boolean; ahead: number; behind: number; changed: number; untracked: number }
@@ -195,42 +198,42 @@ export const api = {
   fsTrashPurge: (dir: string, id: string) => fsCall("/fs-trash-purge", { dir, id }),
   fsIndex: (dir: string) => fsCall<{ state: string; files: { path: string; size: number; mtime: number }[] }>(`/fs-index?${fsq(dir)}`),
   fsFiles: (dir: string, paths: string[]) => fsCall<{ files: { path: string; content: string }[] }>("/fs-files", { dir, paths }),
-  data: () => get<Data>("/api"),
+  data: () => http.get<Data>("/state"),
   banAlerts: (after: number) =>
     get<{ ok: boolean; cursor: number; bans: { at: number; ip: string }[]; pairings: { at: number; ip: string }[] }>(`/auth/alerts?after=${after}`),
-  cleanupWarning: () => get<{ days: number; sessions: { dir: string; id: string; title: string; cwd: string; expires: number }[] }>("/cleanup-warning"),
-  sessionsStamp: () => get<{ stamp: number }>("/sessions-stamp"),
-  sessionTrash: () => get<{ sessions: { dir: string; id: string; title: string; cwd: string; at: number; kb: number }[]; days: number }>("/session-trash"),
-  info: (s: Item) => get<Detail>(`/info?dir=${enc(s.dir)}&id=${s.id}`),
+  cleanupWarning: () => http.get<{ days: number; sessions: { dir: string; id: string; title: string; cwd: string; expires: number }[] }>("/cleanup-warning"),
+  sessionsStamp: () => http.get<{ stamp: number }>("/state/stamp"),
+  sessionTrash: () => http.get<{ sessions: { dir: string; id: string; title: string; cwd: string; at: number; kb: number }[]; days: number }>("/trash/sessions"),
+  info: (s: Item) => http.get<Detail>(`/info${qs({ dir: s.dir, id: s.id })}`),
   // Lecture par la fin, `before` = « start » rendu par la page précédente. Avec `limit` : autant de messages, textes coupés à
   // 64 Kio (le lecteur). Sans `limit` : pages de 1000 messages aux textes entiers (l'export).
   conv: (s: Item & { sub?: string }, tools: boolean, page?: { limit?: number; before?: number; anchors?: boolean }) =>
-    get<{ msgs: Msg[]; start?: number; more?: boolean }>(
-      `/conv?dir=${enc(s.dir)}&id=${s.id}${s.sub ? `&sub=${enc(s.sub)}` : ""}${tools ? "&tools=1" : ""}${page?.limit ? `&limit=${page.limit}` : ""}${page ? `&before=${page.before ?? 0}` : ""}${page?.anchors && !tools ? "&anchors=1" : ""}`
+    http.get<{ msgs: Msg[]; start?: number; more?: boolean }>(
+      `/sessions/${seg(s.id)}/conversation${qs({ dir: s.dir, sub: s.sub, tools, limit: page?.limit || undefined, before: page ? (page.before ?? 0) : undefined, anchors: !!page?.anchors && !tools })}`
     ),
   // Messages d'outil des lignes [from, until) du transcript, pour déplier une ancre.
-  convTools: (s: Item, from: number, until: number) => get<{ msgs: Msg[] }>(`/conv-tools?dir=${enc(s.dir)}&id=${s.id}&from=${from}&until=${until}`),
+  convTools: (s: Item, from: number, until: number) => http.get<{ msgs: Msg[] }>(`/sessions/${seg(s.id)}/conversation/tools${qs({ dir: s.dir, from, until })}`),
   // Suite d'un message coupé, à partir de l'octet from ; cut = 0 : fin du texte.
   convText: (s: Item, tools: boolean, m: Msg, from: number) =>
-    get<{ t: string; cut: number }>(`/conv-text?dir=${enc(s.dir)}&id=${s.id}&o=${m.o ?? 0}&n=${m.n ?? 0}&from=${from}${tools ? "&tools=1" : ""}`),
-  ls: (path: string) => get<Ls>(`/ls?path=${enc(path)}`),
+    http.get<{ t: string; cut: number }>(`/sessions/${seg(s.id)}/conversation/text${qs({ dir: s.dir, o: m.o ?? 0, n: m.n ?? 0, from, tools })}`),
+  ls: (path: string) => http.get<Ls>(`/directories${qs({ path })}`),
   homes: () => get<HomesInfo>("/homes"),
   devices: () => get<{ devices: Device[] | null }>("/devices"),
-  keepWarm: () => get<{ items: Record<string, WarmState>; ttl: number; below: number }>("/keepwarm"),
-  gitChanges: (dir: string) => get<{ files: GitChange[]; more?: number; prefix?: string }>(`/git-changes?dir=${enc(dir)}`),
-  notes: () => get<{ notes: Record<string, string> }>("/notes"),
-  trustPending: () => get<{ dirs: string[] }>("/trust-pending"),
-  gitRemotes: (dir: string) => get<{ remotes: GitRemote[] }>(`/git-remotes?dir=${enc(dir)}`),
-  gitStatus: () => get<{ status: Record<string, GitState>; repos: Record<string, string[]> }>("/git-status"),
+  keepWarm: () => http.get<{ items: Record<string, WarmState>; ttl: number; below: number }>("/keepwarm"),
+  gitChanges: (dir: string) => http.get<{ files: GitChange[]; more?: number; prefix?: string }>(`/git/changes${qs({ dir })}`),
+  notes: () => http.get<{ notes: Record<string, string> }>("/notes"),
+  trustPending: () => http.get<{ dirs: string[] }>("/trust/pending"),
+  gitRemotes: (dir: string) => http.get<{ remotes: GitRemote[] }>(`/git/remotes${qs({ dir })}`),
+  gitStatus: () => http.get<{ status: Record<string, GitState>; repos: Record<string, string[]> }>("/git/status"),
   snippets: () => get<{ dir: string; files: Snippet[]; scopes: SnipScope[] }>("/snippet-list"),
   snippet: (key: string) => get<{ text?: string; error?: string; missing?: boolean }>(`/snippet?key=${enc(key)}`),
   memory: () => get<{ global: MemFile[]; projects: MemProject[]; targets: MemTarget[] }>("/memory-list"),
   memoryFile: (key: string) => get<{ text?: string; error?: string }>(`/memory-file?key=${enc(key)}`),
   memoryLoaded: () => get<{ hook: boolean; files: Record<string, FileLoads> }>("/memory-loaded"),
-  sessionLoaded: (id: string) => get<{ files: LoadEvent[] }>(`/session-loaded?id=${id}`),
-  sessionLoadedFile: (id: string, file: string) => get<{ text?: string }>(`/session-loaded-file?id=${id}&file=${enc(file)}`),
+  sessionLoaded: (id: string) => http.get<{ files: LoadEvent[] }>(`/sessions/${seg(id)}/loaded`),
+  sessionLoadedFile: (id: string, file: string) => http.get<{ text?: string }>(`/sessions/${seg(id)}/loaded/files/${seg(file)}`),
   configRaw: (file: string) => get<{ ok: boolean; text?: string; out?: string }>(`/config-raw?file=${enc(file)}`),
-  slashCommands: () => get<{ commands: { cmd: string; desc: string; origin: string }[] }>("/slash-commands"),
+  slashCommands: () => http.get<{ commands: { cmd: string; desc: string; origin: string }[] }>("/slash-commands"),
   skills: () => get<{ skills: Skill[]; projects: { dir: string; project: string }[] }>("/skills-list"),
   skill: (key: string) => get<{ text?: string; files?: SkillFile[]; error?: string }>(`/skill?key=${enc(key)}`),
   skillsFind: (q: string) => get<{ hits?: SkillHit[]; error?: string }>(`/skills-find?q=${enc(q)}`),
@@ -238,13 +241,38 @@ export const api = {
   marketplaces: () => get<{ marketplaces?: Marketplace[]; error?: string }>("/marketplaces"),
   plugins: (q = "") => get<{ installed?: PluginInst[]; available?: PluginAvail[]; error?: string }>(`/plugins?q=${enc(q)}`),
   configProjects: () => get<{ projects: ProjectCfg[] }>("/config-projects"),
-  sessionIdle: (id: string) => get<{ idle: boolean }>(`/session-state?id=${enc(id)}`),
-  taskOutput: (dir: string, id: string, task: string) => get<{ ok: boolean; text?: string }>(`/session-task-output?dir=${enc(dir)}&id=${enc(id)}&task=${enc(task)}`),
-  queue: (id: string) => get<{ items: QItem[] }>(`/queue?id=${enc(id)}`),
-  queueAdd: (id: string, text: string) => api.post("/queue-add", { id, text }),
-  queueRm: (id: string, item: string) => api.post("/queue-rm", { id, item }) as Promise<Result & { text?: string }>,
-  queueRetry: (id: string, item: string) => api.post("/queue-retry", { id, item }),
-  convRewind: (dir: string, id: string, o: number) => api.post("/conv-rewind", { dir, id, o }),
+  sessionIdle: (id: string) => http.get<{ idle: boolean }>(`/sessions/${seg(id)}/state`),
+  taskOutput: (dir: string, id: string, task: string) => http.get<{ text?: string }>(`/sessions/${seg(id)}/tasks/${seg(task)}/output${qs({ dir })}`),
+  queue: (id: string) => http.get<{ items: QItem[] }>(`/sessions/${seg(id)}/queue`),
+  queueAdd: (id: string, text: string) => http.post<{ item: QItem }>(`/sessions/${seg(id)}/queue`, { text }),
+  queueRm: (id: string, item: string) => http.del<{ text: string }>(`/sessions/${seg(id)}/queue/${seg(item)}`),
+  queueRetry: (id: string, item: string) => http.patch(`/sessions/${seg(id)}/queue/${seg(item)}`, { state: "queued" }),
+  convRewind: (dir: string, id: string, o: number) => http.del<{ n: number; message: string }>(`/sessions/${seg(id)}/conversation${qs({ dir, after: o })}`),
+  sessionSend: (id: string, text: string, timeoutMs?: number) => http.post<Said>(`/sessions/${seg(id)}/messages`, { text }, timeoutMs),
+  sessionKey: (id: string, key: string) => http.post<Said>(`/sessions/${seg(id)}/keystrokes`, { key }),
+  sessionClose: (id: string) => http.del<Said>(`/sessions/${seg(id)}/process`),
+  open: (b: { dir: string; id?: string; args?: string; prompt?: string }) =>
+    b.id ? http.put<Said>(`/sessions/${seg(b.id)}/process${qs({ dir: b.dir })}`, { args: b.args, prompt: b.prompt }) : http.put<Said>(`/projects/${seg(b.dir)}/process`, { args: b.args, prompt: b.prompt }),
+  newSession: (b: { dir?: string; id?: string; cwd?: string; prompt: string; args?: string }) => http.post<Said>("/sessions", b),
+  rename: (s: Item, b: { title?: string; auto?: boolean }) => http.patch<Said & { title: string }>(`/sessions/${seg(s.id)}${qs({ dir: s.dir })}`, b),
+  reassign: (items: Item[], to: string) => http.patch<Said & { n: number }>("/sessions", { items, to }),
+  rmSessions: (items: Item[]) => http.del<Said>(`/sessions${qs({ item: items.map((i) => `${i.dir}:${i.id}`) })}`),
+  trashSessionsAdd: (items: Item[]) => http.post<Said>(`/trash/sessions${qs({ close: true })}`, { items }),
+  trashSessionsRestore: (ids: string[]) => http.patch<Said>(`/trash/sessions${qs({ item: ids })}`, { trashed: false }),
+  trashSessionsPurge: (ids: string[]) => http.del<Said>(`/trash/sessions${qs({ item: ids })}`),
+  vgroups: (b: { groups: VGroup[]; favs: string[]; projects?: Project[] }) => http.put("/vgroups", b),
+  dirsAdd: (dir: string, children = false) => http.post<Said & { n: number }>("/directories", { dir, children }),
+  dirsRemove: (dir: string) => http.del<Said>(`/directories${qs({ dir })}`),
+  keepWarmSet: (b: { dir: string; id: string; on: boolean; max?: number; reheat?: boolean }) => http.put<Said>("/keepwarm", b),
+  trustAnswer: (dir: string, yes: boolean) => http.post<Said>("/trust/answers", { dir, yes }),
+  termOpen: (id: string) => http.post<{ token: string; cols: number; rows: number }>("/terminal", { id }),
+  chatStop: (id: string) => http.del<Said>(`/sessions/${seg(id)}/chat`),
+  notesSave: (b: { key: string; text?: string; to?: string }) => http.put<Said>("/notes", b),
+  tabsSave: (name: string) => http.put<Said & { n: number }>("/tabs", { name }),
+  tabsRm: (at: string) => http.del<Said>(`/tabs/${seg(at)}`),
+  gitPush: (dir: string, remote: string) => http.post<Said>("/git/pushes", { dir, remote }, 90_000),
+  trashRestore: (id: string) => http.patch<Said & { key: string }>(`/trash/memory/${seg(id)}`, { trashed: false }),
+  trashPurge: (id?: string) => http.del<Said>(`/trash/memory${qs(id ? { item: id } : { all: true })}`),
   inviteCreate: (id: string, dir: string, title?: string, name?: string) => api.post("/invite-create", { id, dir, ...(title ? { title } : {}), ...(name ? { name } : {}) }) as Promise<Result & { token?: string; invite?: { id: string; seq: number; label: string } }>,
   inviteRegen: (id: string, invite: string) => api.post("/invite-regen", { id, invite }) as Promise<Result & { token?: string }>,
   inviteMode: (id: string, invite: string, mode: "rw" | "ro") => api.post("/invite-mode", { id, invite, mode }),
@@ -259,15 +287,15 @@ export const api = {
   },
   guestLeave: () => api.post("/guest-leave", {}),
   shareEnd: (id: string) => api.post("/share-end", { id }),
-  sessionLive: (dir: string, id: string) => get<LiveState>(`/session-live?dir=${enc(dir)}&id=${enc(id)}`),
+  sessionLive: (dir: string, id: string) => http.get<LiveState>(`/sessions/${seg(id)}/live${qs({ dir })}`),
   // refresh : relevé demandé par un POST (un GET ne doit rien déclencher), puis lecture de l'état, qui dit « refreshing ».
   account: async (refresh = false) => {
     if (refresh) await api.post("/account-refresh", {})
     return get<Account>("/account")
   },
-  screen: (id: string) => get<{ ok: boolean; out?: string; text?: string }>(`/session-screen?id=${enc(id)}`),
-  termInfo: () => get<{ enabled: boolean }>("/term-info"),
-  sendInfo: () => get<{ ids: string[]; why: string }>("/session-send-info"),
+  screen: (id: string) => http.get<{ text: string }>(`/sessions/${seg(id)}/screen`),
+  termInfo: () => http.get<{ enabled: boolean }>("/terminal"),
+  sendInfo: () => http.get<{ ids: string[]; why: string }>("/sessions/send-info"),
   config: () => get<CfgOverview>("/config"),
   configEffective: (dir: string) => get<{ rows: EffRow[] }>(`/config-effective?dir=${enc(dir)}`),
   configMcp: () => get<{ servers: McpServer[] }>("/config-mcp"),
@@ -275,10 +303,10 @@ export const api = {
   memoryHealth: () => get<{ issues: Issue[] }>("/memory-health"),
   memoryMatches: (key: string, dir: string) => get<{ files?: string[]; total?: number; truncated?: boolean; error?: string }>(`/memory-matches?key=${enc(key)}&dir=${enc(dir)}`),
   memorySearch: (q: string) => get<{ hits: Record<string, string> }>(`/memory-search?q=${enc(q)}`),
-  tabs: () => get<{ saves: TabSave[] }>("/tabs"),
-  trash: () => get<{ items: Trashed[] }>("/trash"),
-  trashFile: (id: string) => get<{ text?: string; error?: string }>(`/trash-file?id=${enc(id)}`),
-  search: (q: string) => get<{ hits: Hit[] }>(`/search?q=${enc(q)}`),
+  tabs: () => http.get<{ saves: TabSave[] }>("/tabs"),
+  trash: () => http.get<{ items: Trashed[] }>("/trash/memory"),
+  trashFile: (id: string) => http.get<{ text?: string }>(`/trash/memory/${seg(id)}/file`),
+  search: (q: string) => http.get<{ hits: Hit[] }>(`/sessions${qs({ q })}`),
   // Une action ne lève jamais : toute erreur (réseau, HTTP) devient un Result visible.
   // timeoutMs : abandonne la requête au bout de ce délai (sinon elle attend le serveur indéfiniment).
   async post(url: string, body: unknown, timeoutMs?: number): Promise<Result> {

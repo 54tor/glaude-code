@@ -102,7 +102,7 @@ describe("InvitesOverlay", () => {
   })
 
   it("messages en attente : texte, état, retrait via queueRm", async () => {
-    const rm = vi.spyOn(api, "queueRm").mockResolvedValue(ok)
+    const rm = vi.spyOn(api, "queueRm").mockResolvedValue({ text: "" })
     await mount([sh([inv({ queue: [{ id: "q1", text: "bonjour", state: "queued", at: 1 }, { id: "q2", text: "en cours", state: "sending", at: 2 }] })])])
     expect(screen.getByText("bonjour")).toBeTruthy()
     const list = screen.getByRole("list", { name: "Léa" })

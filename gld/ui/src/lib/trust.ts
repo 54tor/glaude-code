@@ -1,5 +1,6 @@
 import { toast } from "sonner"
 import { api } from "@/lib/api"
+import { errMsg } from "@/lib/apiError"
 import { tilde } from "@/lib/format"
 import { i18n } from "@/i18n"
 
@@ -16,10 +17,10 @@ export async function watchTrust(home: string) {
     for (const dir of dirs.filter((d) => !asked.has(d))) {
       asked.add(dir)
       const answer = (yes: boolean) =>
-        api.post("/trust-answer", { dir, yes }).then((r) => {
-          asked.delete(dir)
-          if (!r.ok) toast.error(r.out)
-        })
+        api.trustAnswer(dir, yes).then(
+          () => void asked.delete(dir),
+          (e) => (asked.delete(dir), toast.error(errMsg(e)))
+        )
       toast(i18n.t("conversation.trust.title", { dir: tilde(dir, home) }), {
         description: i18n.t("conversation.trust.description"),
         duration: Infinity,

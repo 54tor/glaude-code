@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { toast } from "sonner"
 import { i18n } from "@/i18n"
 import { api, type QItem } from "@/lib/api"
+import { ApiError } from "@/lib/apiError"
 import { setAuth } from "@/lib/auth"
 import { draftOf, setDraft } from "@/hooks/useDraft"
 import { Composer } from "./Composer"
@@ -12,13 +13,13 @@ vi.mock("./actions", () => ({ useActions: () => ({ background: new Set(), live: 
 vi.mock("@/lib/auth", async (orig) => ({ ...(await orig<typeof import("@/lib/auth")>()), useCan: () => () => true }))
 
 const item = (o: Partial<QItem>): QItem => ({ id: "i1", text: "bonjour", author: "host", state: "queued", at: 1, ...o })
-const rmOk = (text: string) => ({ ok: true, out: "", text }) as Awaited<ReturnType<typeof api.queueRm>>
+const rmOk = (text: string) => ({ text }) as Awaited<ReturnType<typeof api.queueRm>>
 
 function mount(items: QItem[], thinking = false) {
   vi.spyOn(api, "queue").mockResolvedValue({ items })
   vi.spyOn(api, "sendInfo").mockResolvedValue({ ids: ["s1"], why: "" })
   vi.spyOn(api, "slashCommands").mockResolvedValue({ commands: [] })
-  vi.spyOn(api, "screen").mockResolvedValue({ ok: true, text: "" })
+  vi.spyOn(api, "screen").mockResolvedValue({ text: "" })
   const st = { open: true, thinking } as never
   return render(<Composer dir="/d" id="s1" args="" defaultChoice={{ model: "", effort: "" } as never} live liveState={{ st, open: true }} onSent={() => {}} turn={null} setTurn={() => {}} onDone={() => {}} />)
 }
@@ -33,7 +34,7 @@ describe("Composer, file serveur", () => {
   it("montre un item incertain avec renvoyer et retirer", async () => {
     mount([item({ state: "uncertain" })])
     await screen.findByText(i18n.t("conversation.composer.sendUncertain"))
-    const retry = vi.spyOn(api, "queueRetry").mockResolvedValue({ ok: true, out: "" })
+    const retry = vi.spyOn(api, "queueRetry").mockResolvedValue(undefined)
     fireEvent.click(screen.getByRole("button", { name: /renvoyer|resend/i }))
     await waitFor(() => expect(retry).toHaveBeenCalledWith("s1", "i1"))
     expect(screen.getByRole("button", { name: /retirer|remove/i })).toBeTruthy()
@@ -58,7 +59,7 @@ describe("Composer, file serveur", () => {
   })
   it("une erreur du serveur à l'ajout affiche un toast et garde le brouillon", async () => {
     mount([], true)
-    vi.spyOn(api, "queueAdd").mockResolvedValue({ ok: false, out: "file pleine" })
+    vi.spyOn(api, "queueAdd").mockRejectedValue(new ApiError(409, "conflict", "file pleine"))
     const err = vi.spyOn(toast, "error").mockImplementation(() => "")
     const field = await screen.findByPlaceholderText(/Écrire à la session|Write to the session/i)
     fireEvent.change(field, { target: { value: "salut" } })
@@ -76,7 +77,7 @@ describe("Composer, file serveur", () => {
   it("deux Entrée rapprochées ne mettent le message qu'une fois en file", async () => {
     mount([], true)
     let release = () => {}
-    const add = vi.spyOn(api, "queueAdd").mockImplementation(() => new Promise((r) => (release = () => r({ ok: true, out: "" }))))
+    const add = vi.spyOn(api, "queueAdd").mockImplementation(() => new Promise((r) => (release = () => r({ item: item({}) }))))
     const field = await screen.findByPlaceholderText(/Écrire à la session|Write to the session/i)
     fireEvent.change(field, { target: { value: "salut" } })
     fireEvent.keyDown(field, { key: "Enter", ctrlKey: true })

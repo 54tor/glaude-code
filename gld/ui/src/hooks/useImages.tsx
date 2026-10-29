@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { i18n } from "@/i18n"
 import { authFetch } from "@/lib/auth"
+import { errMsg, qs, readResponse, v1 } from "@/lib/apiError"
 
 export type Img = { path: string; url: string; name: string; image: boolean }
 
@@ -29,17 +30,14 @@ export function useImages(sid?: string) {
       try {
         const image = OK.includes(f.type)
         const headers: Record<string, string> = image ? { "Content-Type": f.type } : { "X-File-Name": encodeURIComponent(f.name) }
-        const r = await authFetch((image ? "/image-upload" : "/file-upload") + (sid ? `?id=${encodeURIComponent(sid)}` : ""), { method: "POST", headers, body: f })
-        const j = (await r.json()) as { ok: boolean; path?: string; out: string }
-        if (!j.ok || !j.path) {
-          toast.error(j.out)
-          continue
-        }
+        const r = await authFetch(v1(`/uploads/${image ? "images" : "files"}${qs({ id: sid })}`), { method: "POST", headers, body: f })
+        const j = await readResponse<{ path: string }>(r)
+        if (!j.path) continue
         const url = image ? URL.createObjectURL(f) : ""
         if (url) live.current.push(url)
         setImages((l) => [...l, { path: j.path!, url, image, name: f.name || i18n.t("shell.images.pasted") }])
       } catch (e) {
-        toast.error(i18n.t("shell.images.uploadFailed", { msg: e instanceof Error ? e.message : String(e) }))
+        toast.error(i18n.t("shell.images.uploadFailed", { msg: errMsg(e) }))
       }
     }
     setBusy(false)

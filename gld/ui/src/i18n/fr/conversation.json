@@ -62,7 +62,6 @@
       "copyFail": "Copie impossible",
       "rewind": "Supprimer la suite de la conversation",
       "rewindBody": "Tout ce qui suit ce message est retiré du transcript : la session reprendra à partir d'ici. Les fichiers modifiés par Claude ne sont pas restaurés.",
-      "rewindFail": "Retour en arrière impossible",
       "loadOlder": "Charger les messages plus anciens",
       "empty": "Aucun message dans cette session.",
       "replying": "Claude répond…",

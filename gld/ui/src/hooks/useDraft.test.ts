@@ -2,8 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { toast } from "sonner"
 
-type D = typeof import("./useDraft") & typeof import("./importQueues") & { api: typeof import("@/lib/api").api }
-const ok = { ok: true, out: "" }
+type D = typeof import("./useDraft") & typeof import("./importQueues") & { api: typeof import("@/lib/api").api; ApiError: typeof import("@/lib/apiError").ApiError }
+const ok = { item: {} as never }
 
 // Le magasin lit le stockage à l'import : chaque test repart d'un module neuf.
 async function fresh(stored: unknown): Promise<D> {
@@ -13,7 +13,7 @@ async function fresh(stored: unknown): Promise<D> {
   const api = (await import("@/lib/api")).api
   const u = await import("./useDraft")
   u.guardDrafts(() => true) // auth.ts le ferme tant qu'aucun compte n'est ouvert
-  return { ...u, ...(await import("./importQueues")), api }
+  return { ...u, ...(await import("./importQueues")), api, ApiError: (await import("@/lib/apiError")).ApiError }
 }
 afterEach(() => vi.restoreAllMocks())
 beforeEach(() => localStorage.clear())
@@ -42,7 +42,7 @@ describe("importLocalQueues", () => {
   })
   it("laisse tout en place et sans garde si le réseau échoue", async () => {
     const d = await fresh(stored)
-    vi.spyOn(d.api, "queueAdd").mockResolvedValue({ ok: false, out: "", net: true })
+    vi.spyOn(d.api, "queueAdd").mockRejectedValue(new d.ApiError(0, "net", "réseau", { net: true }))
     await d.importLocalQueues()
     expect(localStorage.getItem("gld.queueImported")).toBeNull()
     d.setDraft("s1", { text: "y" }) // une sauvegarde ne doit pas effacer la file locale
@@ -56,7 +56,7 @@ describe("importLocalQueues", () => {
   })
   it("sauvegarde après chaque envoi : une reprise après échec ne duplique rien", async () => {
     const d = await fresh(stored)
-    vi.spyOn(d.api, "queueAdd").mockResolvedValueOnce(ok).mockResolvedValueOnce({ ok: false, out: "", net: true })
+    vi.spyOn(d.api, "queueAdd").mockResolvedValueOnce(ok).mockRejectedValueOnce(new d.ApiError(0, "net", "réseau", { net: true }))
     await d.importLocalQueues()
     expect(JSON.parse(localStorage.getItem("gld.drafts") ?? "{}").s1.queue).toEqual(["b"])
     const d2 = await fresh(JSON.parse(localStorage.getItem("gld.drafts") ?? "{}"))
@@ -66,7 +66,7 @@ describe("importLocalQueues", () => {
   })
   it("un item refusé revient dans le brouillon avec un toast", async () => {
     const d = await fresh({ s1: { text: "x", queue: ["a", "b"] } })
-    vi.spyOn(d.api, "queueAdd").mockResolvedValueOnce({ ok: false, out: "pleine" }).mockResolvedValueOnce(ok)
+    vi.spyOn(d.api, "queueAdd").mockRejectedValueOnce(new d.ApiError(409, "conflict", "pleine")).mockResolvedValueOnce(ok)
     const err = vi.spyOn(toast, "error").mockImplementation(() => "")
     await d.importLocalQueues()
     expect(d.draftOf("s1").text).toBe("x\na")

@@ -10,7 +10,7 @@ test("un chemin gld-web-images devient une image relue par son seul nom", () => 
   const m = { r: "user" as const, t: "voir\n@/home/bob/.claude/gld-web-images/abc-1.png\nmerci" }
   const { container } = render(<Message m={m} conv={{ dir: "d", id: "i" }} />)
   const img = container.querySelector("img")
-  expect(img?.getAttribute("src")).toBe("/conv-upload?dir=d&id=i&name=abc-1.png")
+  expect(img?.getAttribute("src")).toBe("/v1/sessions/i/conversation/uploads/abc-1.png?dir=d")
   expect(container.textContent).not.toContain("gld-web-images")
   expect(container.textContent).toContain("merci")
 })

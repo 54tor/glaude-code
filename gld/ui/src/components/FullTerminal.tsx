@@ -6,6 +6,7 @@ import { Eye, Pencil } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { i18n } from "@/i18n"
 import { api } from "@/lib/api"
+import { errMsg, v1 } from "@/lib/apiError"
 import { Button } from "@/components/ui/button"
 
 // Terminal complet de la session (tmux) : lecture seule tant qu'on ne « prend pas la main » ; le serveur ignore toute frappe avant.
@@ -26,10 +27,9 @@ export default function FullTerminal({ id, takeHand = true }: { id: string; take
     let dead = false
     let t: Terminal | null = null
     let ro: ResizeObserver | null = null
-    api.post("/term-open", { id }).then((r) => {
-      const o = r as unknown as { ok: boolean; out: string; token?: string }
+    api.termOpen(id).then((o) => {
       if (dead) return
-      if (!o.ok || !o.token || !box.current) return setError(o.out || i18n.t("conversation.terminal.openFailed"))
+      if (!o.token || !box.current) return setError(i18n.t("conversation.terminal.openFailed"))
       t = new Terminal({ fontSize: 13, cursorBlink: true, scrollback: 0, convertEol: false })
       const fit = new FitAddon()
       t.loadAddon(fit)
@@ -40,7 +40,7 @@ export default function FullTerminal({ id, takeHand = true }: { id: string; take
       sizeRef.current = sendSize
       ro = new ResizeObserver(() => (fit.fit(), sendSize()))
       ro.observe(box.current)
-      const sock = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/term-ws?t=${o.token}`)
+      const sock = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${v1("/terminal/ws")}?t=${o.token}`)
       sock.binaryType = "arraybuffer"
       ws.current = sock
       sock.onopen = () => {
@@ -54,7 +54,7 @@ export default function FullTerminal({ id, takeHand = true }: { id: string; take
       sock.onclose = () => !dead && setState("fermé")
       const enc = new TextEncoder()
       t.onData((d) => writableRef.current && sock.readyState === WebSocket.OPEN && sock.send(enc.encode(d)))
-    })
+    }, (e) => !dead && setError(errMsg(e) || i18n.t("conversation.terminal.openFailed")))
     return () => {
       dead = true
       ro?.disconnect()

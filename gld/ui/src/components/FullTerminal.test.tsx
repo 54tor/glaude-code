@@ -43,7 +43,7 @@ beforeEach(() => {
   x.focus.mockReset()
   vi.stubGlobal("WebSocket", FakeWS)
   vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} })
-  vi.spyOn(api, "post").mockResolvedValue({ ok: true, out: "", token: "tk" } as never)
+  vi.spyOn(api, "termOpen").mockResolvedValue({ token: "tk", cols: 80, rows: 24 })
 })
 afterEach(() => (cleanup(), vi.unstubAllGlobals(), vi.restoreAllMocks()))
 

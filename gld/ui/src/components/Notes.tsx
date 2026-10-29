@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { Check, ChevronRight, LoaderPinwheel, MessageSquarePlus, NotebookPen, Plus, Send, X } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/api"
+import { errMsg } from "@/lib/apiError"
 import { setOpen, useOpen } from "@/hooks/useOpen"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -63,11 +64,13 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
     if (t === saved.current) return
     const before = saved.current
     saved.current = t
-    api.post("/notes", { key, text: t }).then((r) => {
-      if (r.ok) return (window.dispatchEvent(new Event("gld:notes")), setSavedList(parse(t)))
-      saved.current = before
-      toast.error(r.out)
-    })
+    api.notesSave({ key, text: t }).then(
+      () => (window.dispatchEvent(new Event("gld:notes")), setSavedList(parse(t))),
+      (e) => {
+        saved.current = before
+        toast.error(errMsg(e))
+      }
+    )
   }
   useEffect(() => flush, []) // enregistre ce qui reste en quittant la vue
   const addRef = useRef<() => void>(() => {})
@@ -107,14 +110,19 @@ export function Notes({ noteKey, folder, rows }: { noteKey: string; folder?: str
   const allPicked = filled.length > 0 && filled.every((i) => picked.has(i))
   const sendTo = async (r: Row) => {
     const live = a.live.has(r.s.id)
-    const res = live ? await api.post("/session-send", { id: r.s.id, text: body }, 20_000) : { ok: await a.resumeSend(r, body), out: "" }
-    if (res.ok) {
+    let sent = false
+    try {
+      if (live) await api.sessionSend(r.s.id, body, 20_000)
+      sent = live || (await a.resumeSend(r, body))
+    } catch (e) {
+      toast.error(errMsg(e))
+    }
+    if (sent) {
       toast.success(tr("conversation.notes.sent", { title: r.s.title || r.s.id.slice(0, 8) }))
       edit(items.filter((_, j) => !dropIdx.has(j)))
       setPicked(new Set())
       flush()
     }
-    else if (res.out) toast.error(res.out)
   }
   return (
     <div className="mb-4 rounded-lg border">

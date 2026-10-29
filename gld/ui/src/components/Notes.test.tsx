@@ -14,10 +14,10 @@ afterEach(() => {
 describe("Notes", () => {
   it("ne réécrit pas la note en quittant sans l'avoir modifiée", async () => {
     vi.spyOn(api, "notes").mockResolvedValue({ notes: { "p/x": JSON.stringify(["garder"]) } } as Awaited<ReturnType<typeof api.notes>>)
-    const post = vi.spyOn(api, "post").mockResolvedValue({ ok: true, out: "" } as Awaited<ReturnType<typeof api.post>>)
+    const save = vi.spyOn(api, "notesSave").mockResolvedValue({ message: "" })
     const { unmount } = render(<Notes noteKey="p/x" rows={[]} />)
     await screen.findByDisplayValue("garder")
     unmount()
-    expect(post).not.toHaveBeenCalled()
+    expect(save).not.toHaveBeenCalled()
   })
 })

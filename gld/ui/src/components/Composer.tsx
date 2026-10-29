@@ -14,6 +14,7 @@ import { ModelPicker } from "./ModelPicker"
 import { useMention } from "./Mention"
 import { Choose } from "./Choose"
 import { api, type Msg, type QItem } from "@/lib/api"
+import { errMsg, qs, readResponse, seg, v1 } from "@/lib/apiError"
 import { useActions } from "./actions"
 import { AttachButton, ImageChips, useImages } from "@/hooks/useImages"
 import { Button } from "@/components/ui/button"
@@ -23,24 +24,37 @@ import { authFetch, useCan } from "@/lib/auth"
 
 // File serveur : un refus (pleine, texte refusé) s'affiche et laisse le brouillon intact.
 async function addToQueue(id: string, text: string): Promise<boolean> {
-  const r = await api.queueAdd(id, text)
-  if (!r.ok) toast.error(r.out)
-  refreshPending()
-  return r.ok
+  try {
+    await api.queueAdd(id, text)
+    return true
+  } catch (e) {
+    toast.error(errMsg(e))
+    return false
+  } finally {
+    refreshPending()
+  }
 }
 // Retirer un message le remet dans la zone de saisie, à la suite de ce qui s'y trouve déjà.
 async function removeFromQueue(id: string, q: QItem) {
-  const r = await api.queueRm(id, q.id)
-  refreshPending()
-  if (!r.ok) return void toast.error(r.out)
-  const d = draftOf(id)
-  const back = r.text ?? q.text
-  setDraft(id, { text: d.text.trim() ? `${d.text}\n${back}` : back })
+  try {
+    const r = await api.queueRm(id, q.id)
+    const d = draftOf(id)
+    const back = r.text ?? q.text
+    setDraft(id, { text: d.text.trim() ? `${d.text}\n${back}` : back })
+  } catch (e) {
+    toast.error(errMsg(e))
+  } finally {
+    refreshPending()
+  }
 }
 async function retryItem(id: string, q: QItem) {
-  const r = await api.queueRetry(id, q.id)
-  refreshPending()
-  if (!r.ok) toast.error(r.out)
+  try {
+    await api.queueRetry(id, q.id)
+  } catch (e) {
+    toast.error(errMsg(e))
+  } finally {
+    refreshPending()
+  }
 }
 // Une ligne de la file. Un envoi incertain se tranche (renvoyer ou retirer) ; un envoi en cours ne se retire plus.
 function QueueRow({ id, q, i, label }: { id: string; q: QItem; i: number; label?: ReactNode }) {
@@ -166,7 +180,7 @@ export function Composer({
     const rn = /^\/rename\s+(\S[\s\S]*)$/.exec(text.trim())
     if (rn) {
       setText("")
-      api.post("/rename", { dir, id, title: rn[1] }).then((r) => (r.ok ? toast.success(r.out) : toast.error(r.out)), () => toast.error(t("conversation.composer.failed")))
+      api.rename({ dir, id }, { title: rn[1] }).then((r) => toast.success(r.message), (e) => toast.error(errMsg(e)))
       return void onDone()
     }
     const prompt = [text.trim(), pics.suffix()].filter(Boolean).join("\n\n")
@@ -194,15 +208,18 @@ export function Composer({
     const before = draftOf(id).text
     const merged = before.trim() ? `${before}\n${head.text}` : head.text
     setText(merged)
-    const r = await api.queueRm(id, head.id)
-    refreshPending()
-    if (!r.ok) {
-      toast.error(r.out)
+    let back: string
+    try {
+      back = (await api.queueRm(id, head.id)).text ?? head.text
+    } catch (e) {
+      toast.error(errMsg(e))
       if (draftOf(id).text === merged) setText(before)
       return
+    } finally {
+      refreshPending()
     }
     onWrite?.()
-    if ((await submit(r.text ?? head.text)) && draftOf(id).text === merged) setText(before)
+    if ((await submit(back)) && draftOf(id).text === merged) setText(before)
   }
   const submit = async (prompt: string): Promise<boolean> => {
     setOwn(true)
@@ -212,15 +229,16 @@ export function Composer({
     let failed = false
     let res: Response
     try {
-      res = await authFetch("/chat", {
+      res = await authFetch(v1(`/sessions/${seg(id)}/chat${qs({ dir })}`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dir, id, prompt, args: withChoice(args, choice), mode }),
+        body: JSON.stringify({ prompt, args: withChoice(args, choice), mode }),
       })
+      if (!res.ok) await readResponse(res)
     } catch (e) {
-      return fail(e instanceof Error ? e.message : String(e))
+      return fail(errMsg(e))
     }
-    if (!res.ok || !res.body) return fail(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `HTTP ${res.status}`)
+    if (!res.body) return fail(`HTTP ${res.status}`)
     try {
       for await (const e of readNdjson<{ msgs?: Msg[]; done?: boolean; ok?: boolean; error?: string; cost?: number; note?: string }>(res.body)) {
         if (e.note) toast.info(e.note)
@@ -245,7 +263,7 @@ export function Composer({
     setTimeout(() => setOwn(false), 30_000)
     return delivered
   }
-  const stop = () => ((stopped.current = true), api.post("/chat-stop", { id }))
+  const stop = () => ((stopped.current = true), void api.chatStop(id).catch(() => {}))
 
   if (live && !running && !own) return <LiveSend id={id} onSent={onSent} liveState={liveState} onAsk={onAsk} bar={extra} compactHint={compactHint} coldHint={coldHint} />
   return (
@@ -364,10 +382,15 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
   // (jamais dans une question, où il répondrait à sa place).
   const post = async (full: string) => {
     setBusy(true)
-    const r = await api.post("/session-send", { id, text: full }, 20_000)
-    setBusy(false)
-    if (!r.ok) toast.error(r.out) // le succès se voit dans la session : pas de notification
-    return r.ok
+    try {
+      await api.sessionSend(id, full, 20_000)
+      return true
+    } catch (e) {
+      toast.error(errMsg(e)) // le succès se voit dans la session : pas de notification
+      return false
+    } finally {
+      setBusy(false)
+    }
   }
   const send = async () => {
     const full = [text.trim(), pics.suffix()].filter(Boolean).join("\n")
@@ -495,8 +518,7 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
               variant="outline"
               title={t("conversation.composer.interruptTitle")}
               onClick={async () => {
-                const r = await api.post("/session-key", { id, key: "Escape" })
-                if (!r.ok) toast.error(r.out)
+                await api.sessionKey(id, "Escape").catch((e) => toast.error(errMsg(e)))
               }}
             >
               <Square className="max-md:hidden" /> {t("conversation.composer.interrupt")}
@@ -515,7 +537,7 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
 function LiveModeButton({ id, disabled }: { id: string; disabled: boolean }) {
   const { t } = useTranslation()
   const [mode, setMode] = useState<ReturnType<typeof modeOfScreen>>(null)
-  const read = () => api.screen(id).then((r) => r.ok && setMode(modeOfScreen(r.text ?? "")), () => {})
+  const read = () => api.screen(id).then((r) => setMode(modeOfScreen(r.text)), () => {})
   useEffect(() => {
     read()
     const iv = setInterval(() => document.visibilityState === "visible" && read(), 3000)
@@ -523,8 +545,11 @@ function LiveModeButton({ id, disabled }: { id: string; disabled: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
   const next = async () => {
-    const r = await api.post("/session-key", { id, key: "ShiftTab" })
-    if (!r.ok) return void toast.error(r.out)
+    try {
+      await api.sessionKey(id, "ShiftTab")
+    } catch (e) {
+      return void toast.error(errMsg(e))
+    }
     setTimeout(read, 400)
   }
   return (
@@ -553,7 +578,7 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
   const busy = useRef(false) // une touche vient d'être envoyée : l'écran affiché peut être périmé
   useEffect(() => {
     let live = true
-    const load = () => !busy.current && api.screen(id).then((r) => live && !busy.current && r.ok && setScreen(r.text ?? ""), () => {})
+    const load = () => !busy.current && api.screen(id).then((r) => live && !busy.current && setScreen(r.text), () => {})
     load()
     const t = setInterval(() => document.visibilityState === "visible" && load(), 1500)
     return () => {
@@ -572,21 +597,22 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
     const before = screen
     try {
       for (const key of keys) {
-        const r = await api.post("/session-key", { id, key })
-        if (!r.ok) return void toast.error(r.out)
+        await api.sessionKey(id, key)
         await new Promise((x) => setTimeout(x, 120))
       }
       for (let i = 0; i < 10; i++) {
         await new Promise((x) => setTimeout(x, 400))
-        const s = await api.screen(id)
-        if (s.ok) {
-          setScreen(s.text ?? "")
-          if ((s.text ?? "") !== before) {
-            if (!parsePrompt(s.text ?? "")) onSent() // dialogue terminé : la suite arrive, on la suit tout de suite
+        const s = await api.screen(id).catch(() => null)
+        if (s) {
+          setScreen(s.text)
+          if (s.text !== before) {
+            if (!parsePrompt(s.text)) onSent() // dialogue terminé : la suite arrive, on la suit tout de suite
             break
           }
         }
       }
+    } catch (e) {
+      toast.error(errMsg(e))
     } finally {
       busy.current = false
       setPressing(false)
@@ -609,10 +635,13 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
     const text = answer.trim()
     if (!text) return
     if (prompt?.options.find((o) => o.label === typing)?.chat) await new Promise((x) => setTimeout(x, 800)) // laisse la question se fermer
-    for (let i = 0; i < editLen.current; i++) await api.post("/session-key", { id, key: "Backspace" })
-    editLen.current = 0
-    const r = await api.post("/session-send", { id, text })
-    if (!r.ok) return void toast.error(r.out)
+    try {
+      for (let i = 0; i < editLen.current; i++) await api.sessionKey(id, "Backspace")
+      editLen.current = 0
+      await api.sessionSend(id, text)
+    } catch (e) {
+      return void toast.error(errMsg(e))
+    }
     setAnswer("")
     setTyping(null)
     onSent()
@@ -721,9 +750,12 @@ const slash = () => {
 
 async function sendSlash(id: string, cmd: string, text: string, onSent: () => void) {
   const full = cmd === "/compact" && text.trim() ? `${cmd} ${text.trim().replace(/\s+/g, " ")}` : cmd
-  const r = await api.post("/session-send", { id, text: full })
-  if (!r.ok) toast.error(r.out)
-  else onSent()
+  try {
+    await api.sessionSend(id, full)
+    onSent()
+  } catch (e) {
+    toast.error(errMsg(e))
+  }
 }
 
 function SlashMenu({ id, text, onSent }: { id: string; text: string; onSent: () => void }) {

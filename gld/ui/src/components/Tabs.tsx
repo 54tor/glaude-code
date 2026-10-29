@@ -13,7 +13,8 @@ import { useActions } from "./actions"
 import type { Ask } from "./Confirm"
 import type { Ask as PromptAsk } from "./Prompt"
 import { Live } from "./SessionList"
-import { reportResult } from "@/lib/report"
+import { reportAction } from "@/lib/report"
+import { errMsg } from "@/lib/apiError"
 import { isAuto } from "@/lib/sessionsView"
 
 // Sessions ouvertes sauvegardées (automatiquement toutes les 2 min, ou à la main avec un nom), à rouvrir d'un coup.
@@ -38,10 +39,9 @@ export function Tabs({ args, onAsk, onPrompt }: { args: string; onAsk: (a: Ask) 
       optional: true,
       confirm: t("common.save"),
       run: async (name) => {
-        const r = await api.post("/tabs-save", { name })
-        reportResult(r)
+        const ok = await reportAction(() => api.tabsSave(name))
         refresh()
-        return r.ok
+        return ok
       },
     })
 
@@ -51,15 +51,18 @@ export function Tabs({ args, onAsk, onPrompt }: { args: string; onAsk: (a: Ask) 
     if (!todo.length) return void toast.info(t("shell.tabs.allOpen"))
     const id = toast.loading(t("shell.tabs.opening", { sessions: t("shell.count.sessions", { count: todo.length }) }))
     let n = 0
-    for (const s of todo) if ((await api.post("/open", { dir: s.dir, id: s.id, args })).ok) n++
+    for (const s of todo) if (await api.open({ dir: s.dir, id: s.id, args }).then(() => true, () => false)) n++
     ;(n === todo.length ? toast.success : toast.error)(t("shell.tabs.reopened", { n, total: todo.length }), { id })
   }
 
   // Sauvegarde d'abord (la sauvegarde automatique saute les listes vides), puis ferme : « Tout rouvrir » reprend ce point.
   const closeAll = async () => {
     const ids = [...a.live]
-    const r = await api.post("/tabs-save", { name: t("shell.tabs.beforeClose") })
-    if (!r.ok) return void reportResult(r)
+    try {
+      await api.tabsSave(t("shell.tabs.beforeClose"))
+    } catch (e) {
+      return void toast.error(errMsg(e))
+    }
     await refresh()
     a.stop(ids, refresh)
   }
@@ -70,10 +73,9 @@ export function Tabs({ args, onAsk, onPrompt }: { args: string; onAsk: (a: Ask) 
       body: t("shell.tabs.deleteBody"),
       confirm: t("common.delete"),
       run: async () => {
-        const r = await api.post("/tabs-rm", { at: s.at })
-        reportResult(r)
+        const ok = await reportAction(() => api.tabsRm(s.at))
         refresh()
-        return r.ok
+        return ok
       },
     })
 

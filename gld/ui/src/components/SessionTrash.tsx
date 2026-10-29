@@ -3,6 +3,8 @@ import { RotateCcw, Shredder } from "lucide-react"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { api } from "@/lib/api"
+import { errMsg } from "@/lib/apiError"
+import { reportAction } from "@/lib/report"
 import { ago, size, tilde } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -17,13 +19,12 @@ export function SessionTrash({ open, onClose, reload }: { open: boolean; onClose
   const [rows, setRows] = useState<Trashed[] | null>(null)
   const [days, setDays] = useState(30)
   const [confirm, setConfirm] = useState<string[] | null>(null) // ids à supprimer pour de bon, après confirmation
-  const load = useCallback(() => api.sessionTrash().then((r) => (setRows(r.sessions as Trashed[]), setDays(r.days)), (e) => toast.error(String(e))), [])
+  const load = useCallback(() => api.sessionTrash().then((r) => (setRows(r.sessions as Trashed[]), setDays(r.days)), (e) => toast.error(errMsg(e))), [])
   useEffect(() => {
     if (open) void load()
   }, [open, load])
-  const act = async (url: string, ids: string[]) => {
-    const r = await api.post(url, { ids })
-    ;(r.ok ? toast.success : toast.error)(r.out.split("\n")[0])
+  const act = async (run: () => Promise<{ message: string }>) => {
+    await reportAction(run)
     setConfirm(null)
     await Promise.all([load(), reload()])
   }
@@ -51,7 +52,7 @@ export function SessionTrash({ open, onClose, reload }: { open: boolean; onClose
                       {r.cwd ? tilde(r.cwd, a.home) : r.dir} · {t("shell.trash.deleted", { ago: ago(r.at) })} · {size(r.kb)}
                     </p>
                   </div>
-                  <Button size="xs" variant="outline" onClick={() => act("/session-trash-restore", [r.id])}>
+                  <Button size="xs" variant="outline" onClick={() => act(() => api.trashSessionsRestore([r.id]))}>
                     <RotateCcw /> {t("shell.trash.restore")}
                   </Button>
                   <Button size="icon-xs" variant="ghost" aria-label={t("shell.trash.purge")} title={t("shell.trash.purge")} onClick={() => setConfirm([r.id])}>
@@ -68,7 +69,7 @@ export function SessionTrash({ open, onClose, reload }: { open: boolean; onClose
             <Button size="xs" variant="ghost" className="ml-auto" onClick={() => setConfirm(null)}>
               {t("common.cancel")}
             </Button>
-            <Button size="xs" variant="destructive" onClick={() => act("/session-trash-purge", confirm)}>
+            <Button size="xs" variant="destructive" onClick={() => act(() => api.trashSessionsPurge(confirm))}>
               {t("common.delete")}
             </Button>
           </div>

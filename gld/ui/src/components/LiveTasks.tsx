@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next"
 import { useEffect, useState } from "react"
 import { CircleAlert, CircleCheck, CircleHelp, ListChecks, LoaderPinwheel } from "lucide-react"
 import { api, type BgTask } from "@/lib/api"
+import { ApiError } from "@/lib/apiError"
 import { ago } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -29,7 +30,10 @@ export function LiveTasks({ live: { st }, dir, id }: { live: Live; dir: string; 
   useEffect(() => {
     if (!pick) return
     let live = true
-    const load = () => api.taskOutput(dir, id, pick.id).then((r) => live && setOut({ id: pick.id, text: r.text ?? "", ok: r.ok }), () => {})
+    const load = () => api.taskOutput(dir, id, pick.id).then(
+        (r) => live && setOut({ id: pick.id, text: r.text ?? "", ok: true }),
+        (e) => live && e instanceof ApiError && e.status === 404 && setOut({ id: pick.id, text: "", ok: false })
+      )
     load()
     if (!watch) return () => void (live = false)
     const iv = setInterval(() => document.visibilityState === "visible" && load(), 3000)

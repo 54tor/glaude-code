@@ -118,10 +118,10 @@ describe("Mfa", () => {
 
 describe("jeton CSRF et session", () => {
   it("part sur les POST une fois connecté, jamais sur les GET", async () => {
-    const calls = server({ "/x": { body: { ok: true, out: "" } }, "/api": { body: {} } })
+    const calls = server({ "/x": { body: { ok: true, out: "" } }, "/v1/state": { body: {} } })
     setAuth({ state: "ok", csrf: "tok-1" })
     await api.post("/x", {})
-    await authFetch("/api")
+    await authFetch("/v1/state")
     expect(headerOf(calls[0], "X-Gld-CSRF")).toBe("tok-1")
     expect(headerOf(calls[1], "X-Gld-CSRF")).toBeNull()
   })
@@ -166,11 +166,11 @@ describe("jeton CSRF et session", () => {
   })
 
   it("un 401 en cours de session ramène à la connexion, sans démonter l'application", async () => {
-    server({ "/api": { status: 401, body: { ok: false } }, "/auth/password": { status: 401, headers: { "Retry-After": "2" } } })
+    server({ "/v1/state": { status: 401, body: { ok: false } }, "/auth/password": { status: 401, headers: { "Retry-After": "2" } } })
     setAuth({ state: "ok", csrf: "tok", user: { name: "alice", admin: false } })
     await authFetch("/auth/password", { method: "POST" })
     expect(getAuth().state).toBe("ok") // un échec de vérification n'est pas une session perdue
-    await authFetch("/api")
+    await authFetch("/v1/state")
     expect(getAuth()).toMatchObject({ state: "anon", expired: true, csrf: "" })
     render(<AuthScreen />)
     expect(screen.getByText(/Session expirée/)).toBeTruthy()
@@ -671,21 +671,20 @@ describe("fenêtre entre second facteur et boot", () => {
       "/auth/mfa/totp": { body: { ok: true, csrf: "c-new" } },
       "/auth/me": () => (meReady ? me : { status: 503 }),
       "/homes": { body: { current: "", homes: [] } },
-      "/session-send": { body: { ok: true, out: "" } },
+      "/v1/sessions/s/messages": { body: { message: "" } },
     })
     setAuth({ state: "mfa", methods: ["totp"], expired: true, owner: "alice", csrf: "c-partial" })
     render(<Mfa />)
     fireEvent.change(screen.getByLabelText("Code de l'application (6 chiffres)"), { target: { value: "123456" } })
     await act(async () => void fireEvent.click(screen.getByRole("button", { name: "Vérifier" })))
     expect(getAuth().csrf).not.toBe("c-new")
-    const r = await api.post("/session-send", { id: "s", text: "file" })
-    expect(r.ok).toBe(false)
-    expect(calls.some((c) => c.url === "/session-send")).toBe(false)
+    await expect(api.sessionSend("s", "file")).rejects.toMatchObject({ net: true })
+    expect(calls.some((c) => c.url === "/v1/sessions/s/messages")).toBe(false)
     meReady = true
     await boot()
     expect(getAuth()).toMatchObject({ state: "ok", csrf: "c-ok" })
-    await api.post("/session-send", { id: "s", text: "file" })
-    expect(headerOf(calls.find((c) => c.url === "/session-send")!, "X-Gld-CSRF")).toBe("c-ok")
+    await api.sessionSend("s", "file")
+    expect(headerOf(calls.find((c) => c.url === "/v1/sessions/s/messages")!, "X-Gld-CSRF")).toBe("c-ok")
   })
 
   it("401 avec attente et session partielle détruite : retour immédiat au mot de passe", async () => {

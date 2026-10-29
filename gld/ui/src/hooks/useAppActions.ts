@@ -14,7 +14,8 @@ import type { Ask } from "@/components/Confirm"
 import type { ComposeAsk, Target } from "@/components/Compose"
 import type { Pick } from "@/components/DirPicker"
 import type { Ask as PromptAsk } from "@/components/Prompt"
-import { reportResult } from "@/lib/report"
+import { reportAction } from "@/lib/report"
+import { errMsg } from "@/lib/apiError"
 import { copyText } from "@/lib/utils"
 
 const ns = (count: number) => i18n.t("shell.count.sessions", { count })
@@ -56,15 +57,14 @@ export function useAppActions(c: {
   const lastPick = useRef<string | null>(null) // dernière case cochée, début d'une sélection de plage
   const gkey = (x: VGroup) => groupKey(x, home)
   // Une action : toast de progression puis de résultat, erreurs jamais muettes, liste rechargée.
-  const act = async (url: string, body: unknown, busy: string, pick: "first" | "last" = "first") => {
+  const act = async (run: () => Promise<{ message?: string } | void>, busy: string, pick: "first" | "last" = "first", launch?: "new" | "open") => {
     const id = toast.loading(busy)
-    const r = await api.post(url, body)
-    reportResult(r, { id, pick })
-    if (r.ok && url === "/new-session") void watchTrust(home)
+    const ok = await reportAction(run, { id, pick })
+    if (ok && launch === "new") void watchTrust(home)
     await reload().catch(() => {}) // le résultat de l'action est déjà affiché ; un rechargement raté ne doit pas le masquer
     // Une session lancée met un instant à créer son transcript : on relit jusqu'à ce qu'elle apparaisse, sans retenir l'appelant
     // (la fenêtre de saisie se ferme dès le lancement).
-    if (r.ok && (url === "/new-session" || url === "/open")) {
+    if (ok && launch) {
       void (async () => {
         for (let i = 0; i < 8; i++) {
           await new Promise((res) => setTimeout(res, 700))
@@ -72,7 +72,7 @@ export function useAppActions(c: {
         }
       })()
     }
-    return r.ok
+    return ok
   }
 
   // children : la modale propose aussi « ajouter tous les sous-dossiers » (alors children vaut true dans la réponse).
@@ -93,12 +93,10 @@ export function useAppActions(c: {
   // Groupes virtuels et favoris : mise à jour immédiate de l'affichage, puis enregistrement côté serveur.
   const saveStore = async (groups: VGroup[], favList: string[]) => {
     setData((d) => d && { ...d, vgroups: groups, favs: favList })
-    const r = await api.post("/vgroups", {
-      groups,
-      favs: favList,
-    })
-    if (!r.ok) {
-      toast.error(r.out)
+    try {
+      await api.vgroups({ groups, favs: favList })
+    } catch (e) {
+      toast.error(errMsg(e))
       await reload()
     }
   }
@@ -107,9 +105,10 @@ export function useAppActions(c: {
   const projects = data?.projects ?? []
   const saveProjects = async (next: Project[]) => {
     setData((d) => d && { ...d, projects: next })
-    const r = await api.post("/vgroups", { groups: vgroups, favs: [...favs], projects: next })
-    if (!r.ok) {
-      toast.error(r.out)
+    try {
+      await api.vgroups({ groups: vgroups, favs: [...favs], projects: next })
+    } catch (e) {
+      toast.error(errMsg(e))
       await reload()
     }
   }
@@ -144,7 +143,7 @@ export function useAppActions(c: {
         run: async (prompt, c) => {
           let started = 0
           for (const t of ts) {
-            const ok = await act("/new-session", { ...(t.cwd ? { cwd: t.cwd } : { dir: t.dir, id: t.id }), prompt, args: withChoice(args, c) }, i18n.t("shell.act.starting"), "last")
+            const ok = await act(() => api.newSession({ ...(t.cwd ? { cwd: t.cwd } : { dir: t.dir, id: t.id }), prompt, args: withChoice(args, c) }), i18n.t("shell.act.starting"), "last", "new")
             if (ok) started++
           }
           return started > 0
@@ -157,7 +156,7 @@ export function useAppActions(c: {
         if (t === p.name) return
         if (projects.some((x) => x.name === t)) return void toast.error(i18n.t("shell.act.projectExists", { name: t }))
         saveProjects(projects.map((x) => (x.name === p.name ? { ...x, name: t } : x)))
-        void api.post("/notes", { key: "p/" + p.name, to: "p/" + t }) // la note suit le projet
+        void api.notesSave({ key: "p/" + p.name, to: "p/" + t }).catch(() => {}) // la note suit le projet
         go({ kind: "project", name: t })
       }),
     delete: (p) =>
@@ -217,7 +216,7 @@ export function useAppActions(c: {
       choice,
       targets: ts,
       run: (prompt, c, t = ts[0]) =>
-        act("/new-session", { ...(t.cwd ? { cwd: t.cwd } : { dir: t.dir, id: t.id }), prompt, args: withChoice(args, c) }, i18n.t("shell.act.starting"), "last").then((ok) => {
+        act(() => api.newSession({ ...(t.cwd ? { cwd: t.cwd } : { dir: t.dir, id: t.id }), prompt, args: withChoice(args, c) }), i18n.t("shell.act.starting"), "last", "new").then((ok) => {
           if (ok) onSent?.()
           return ok
         }),
@@ -259,15 +258,16 @@ export function useAppActions(c: {
         choice,
         run: (prompt, c) =>
           act(
-            "/new-session",
-            {
-              dir: first.s.dir,
-              id: first.s.id,
-              prompt,
-              args: withChoice(args, c),
-            },
+            () =>
+              api.newSession({
+                dir: first.s.dir,
+                id: first.s.id,
+                prompt,
+                args: withChoice(args, c),
+              }),
             i18n.t("shell.act.starting"),
-            "last"
+            "last",
+            "new"
           ),
       })
     },
@@ -304,7 +304,7 @@ export function useAppActions(c: {
   const openMany = async (rs: Row[]) => {
     const id = toast.loading(i18n.t("shell.tabs.opening", { sessions: ns(rs.length) }))
     let n = 0
-    for (const r of rs) if ((await api.post("/open", { dir: r.s.dir, id: r.s.id, args })).ok) n++
+    for (const r of rs) if (await api.open({ dir: r.s.dir, id: r.s.id, args }).then(() => true, () => false)) n++
     ;(n === rs.length ? toast.success : toast.error)(i18n.t("shell.act.opened", { n, total: rs.length }), { id })
   }
 
@@ -317,15 +317,22 @@ export function useAppActions(c: {
     })
 
   const addChildDirs = async (p: string) => {
-    const r = await api.post("/dirs", { op: "addChildren", dir: p })
-    if (!r.ok) return void toast.error(r.out)
+    let n: number
+    try {
+      n = (await api.dirsAdd(p, true)).n
+    } catch (e) {
+      return void toast.error(errMsg(e))
+    }
     await reload()
-    toast.success(i18n.t("shell.act.childDirsAdded", { count: r.n ?? 0 }))
+    toast.success(i18n.t("shell.act.childDirsAdded", { count: n }))
   }
 
   const addDirPath = async (p: string) => {
-    const r = await api.post("/dirs", { op: "add", dir: p })
-    if (!r.ok) return void toast.error(r.out)
+    try {
+      await api.dirsAdd(p)
+    } catch (e) {
+      return void toast.error(errMsg(e))
+    }
     await reload()
     go({ kind: "dir", key: segs(p, home).join("/") })
   }
@@ -348,8 +355,11 @@ export function useAppActions(c: {
       }),
     addDirPath,
     removeDir: async (project) => {
-      const r = await api.post("/dirs", { op: "remove", dir: project })
-      if (!r.ok) return void toast.error(r.out)
+      try {
+        await api.dirsRemove(project)
+      } catch (e) {
+        return void toast.error(errMsg(e))
+      }
       await reload()
     },
     openPerms: (project) => {
@@ -391,7 +401,7 @@ export function useAppActions(c: {
       setTimeout(() => reload().catch(() => {}), 2000) // le transcript a enregistré le prompt : on prend l'heure réelle
     },
     read,
-    open: (b) => act("/open", { ...b, args }, i18n.t("shell.act.openingTerminal"), "last"),
+    open: (b) => act(() => api.open({ ...b, args }), i18n.t("shell.act.openingTerminal"), "last", "open"),
     // Un fournisseur inconnu ou une réponse ancienne : aucune fonction optionnelle (l'interface reste sobre plutôt que fausse).
     caps: (s) => data?.providers?.find((p) => p.id === (s.provider ?? "claude"))?.caps ?? NO_CAPS,
     defaultChoice: choice,
@@ -399,7 +409,7 @@ export function useAppActions(c: {
     startSession: async (project, prompt, c) => {
       const t = targets().find((x) => x.project === project)
       if (!t) return false
-      await act("/new-session", { ...(t.cwd ? { cwd: t.cwd } : { dir: t.dir, id: t.id }), prompt, args: withChoice(args, c) }, i18n.t("shell.act.starting"), "last")
+      await act(() => api.newSession({ ...(t.cwd ? { cwd: t.cwd } : { dir: t.dir, id: t.id }), prompt, args: withChoice(args, c) }), i18n.t("shell.act.starting"), "last", "new")
       return true
     },
     newSession: (project, initial, onSent) => {
@@ -418,18 +428,19 @@ export function useAppActions(c: {
             choice,
             run: (text, c) =>
               act(
-                "/open",
-                {
-                  dir: r.s.dir,
-                  id: r.s.id,
-                  args: withChoice(args, c),
-                  prompt: text,
-                },
+                () =>
+                  api.open({
+                    dir: r.s.dir,
+                    id: r.s.id,
+                    args: withChoice(args, c),
+                    prompt: text,
+                  }),
                 i18n.t("shell.act.resuming"),
-                "last"
+                "last",
+                "open"
               ),
           }),
-    resumeSend: (r, text) => act("/open", { dir: r.s.dir, id: r.s.id, args: withChoice(args, choice), prompt: text }, i18n.t("shell.act.resuming"), "last"),
+    resumeSend: (r, text) => act(() => api.open({ dir: r.s.dir, id: r.s.id, args: withChoice(args, choice), prompt: text }), i18n.t("shell.act.resuming"), "last", "open"),
     copy: (s) =>
       copyText(s.id).then(
         () =>
@@ -443,8 +454,8 @@ export function useAppActions(c: {
         i18n.t("shell.act.renameSession"),
         s.named ? s.title : "",
         i18n.t("shell.act.rename"),
-        (title) => act("/rename", { dir: s.dir, id: s.id, title }, i18n.t("shell.act.renaming")),
-        { label: i18n.t("shell.act.autoTitle"), hint: i18n.t("shell.act.autoTitleHint"), run: () => act("/rename", { dir: s.dir, id: s.id, auto: true }, i18n.t("shell.act.autoTitling")) },
+        (title) => act(() => api.rename(s, { title }), i18n.t("shell.act.renaming")),
+        { label: i18n.t("shell.act.autoTitle"), hint: i18n.t("shell.act.autoTitleHint"), run: () => act(() => api.rename(s, { auto: true }), i18n.t("shell.act.autoTitling")) },
         s.id
       ),
     info: setInfo,
@@ -453,11 +464,11 @@ export function useAppActions(c: {
     move: async (rs) => {
       const to = await pickDir(rs.length > 1 ? i18n.t("shell.act.moveMany", { sessions: ns(rs.length) }) : i18n.t("shell.act.moveOne", { title: rs[0].s.title }), rs[0].s.cwd)
       const items = rs.filter((r) => r.s.cwd !== to).map((r) => ({ dir: r.s.dir, id: r.s.id }))
-      if (to && items.length && (await act("/reassign", { items, to }, i18n.t("shell.act.moving")))) unpick(items)
+      if (to && items.length && (await act(() => api.reassign(items, to), i18n.t("shell.act.moving")))) unpick(items)
     },
     moveGroup: async (g: Group, items: Item[]) => {
       const to = await pickDir(i18n.t("shell.act.reassignTo", { sessions: ns(items.length) }), g.project)
-      if (to) act("/reassign", { items, to }, i18n.t("shell.act.reassigning"))
+      if (to) act(() => api.reassign(items, to), i18n.t("shell.act.reassigning"))
     },
     group: (ids, project, name) => (name === null ? newGroup(ids, project) : addTo(ids, project, name)),
     ungroup: (ids, x = vg) => {
@@ -471,11 +482,11 @@ export function useAppActions(c: {
         body: i18n.t("shell.act.closeBody"),
         confirm: i18n.t("common.close"),
         run: async () => {
-          const rs = await Promise.all(ids.map((id) => api.post("/session-close", { id })))
-          const bad = rs.find((r) => !r.ok)
-          ;(bad ? toast.error : toast.success)(bad ? bad.out : ids.length > 1 ? i18n.t("shell.act.closedMany") : i18n.t("shell.act.closedOne"))
+          const rs = await Promise.allSettled(ids.map((id) => api.sessionClose(id)))
+          const bad = rs.find((r): r is PromiseRejectedResult => r.status === "rejected")
+          ;(bad ? toast.error : toast.success)(bad ? errMsg(bad.reason) : ids.length > 1 ? i18n.t("shell.act.closedMany") : i18n.t("shell.act.closedOne"))
           // Le processus met un instant à finir : on retire les sessions tout de suite, puis on relit jusqu'à confirmation.
-          const done = new Set(ids.filter((_, i) => rs[i].ok))
+          const done = new Set(ids.filter((_, i) => rs[i].status === "fulfilled"))
           if (!bad) onDone?.()
           setData((d) => d && { ...d, live: d.live.filter((x) => !done.has(x)), waiting: d.waiting.filter((x) => !done.has(x)) })
           for (let i = 0; i < 4; i++) {
@@ -494,15 +505,19 @@ export function useAppActions(c: {
         run: async () => {
           after?.()
           unpick(items)
-          const r = await api.post("/session-trash-add?close=1", { items })
+          let r: { message: string }
+          try {
+            r = await api.trashSessionsAdd(items)
+          } catch (e) {
+            await reload()
+            return void toast.error(errMsg(e))
+          }
           await reload()
-          if (!r.ok) return void toast.error(r.out)
-          toast.success(r.out.split("\n")[0], {
+          toast.success(r.message.split("\n")[0], {
             action: {
               label: i18n.t("common.cancel"),
               onClick: async () => {
-                const b = await api.post("/session-trash-restore", { ids: items.map((x) => x.id) })
-                ;(b.ok ? toast.success : toast.error)(b.out.split("\n")[0])
+                await reportAction(() => api.trashSessionsRestore(items.map((x) => x.id)).then((b) => ({ message: b.message.split("\n")[0] })))
                 await reload()
               },
             },
@@ -518,7 +533,7 @@ export function useAppActions(c: {
       title: i18n.t("shell.act.purgeTitle", { n }),
       body: i18n.t("shell.act.purgeBody", { size: size(view.akb) }),
       confirm: i18n.t("shell.act.purgeConfirm", { n }),
-      run: () => act("/rm", { items: view.autoItems }, i18n.t("shell.act.purging", { n })),
+      run: () => act(() => api.rmSessions(view.autoItems), i18n.t("shell.act.purging", { n })),
     })
   }
   return { actions, groupActs, groupRows, targets, newSession, purgeAuto }

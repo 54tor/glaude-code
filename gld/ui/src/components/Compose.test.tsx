@@ -9,7 +9,7 @@ vi.mock("./ModelPicker", () => ({ ModelPicker: () => null }))
 vi.mock("./SnippetMenu", () => ({ SnippetMenu: () => null }))
 vi.mock("@/lib/auth", async (orig) => ({
   ...(await orig<typeof import("@/lib/auth")>()),
-  authFetch: async () => ({ json: async () => ({ ok: true, path: "/home/u/.claude/gld-web-images/p.png", out: "" }) }),
+  authFetch: async () => new Response(JSON.stringify({ path: "/home/u/.claude/gld-web-images/p.png", message: "" }), { status: 201 }),
 }))
 
 afterEach(() => {

@@ -12,7 +12,7 @@ const { setAuth } = await import("@/lib/auth")
 const DATA = { home: "/h", root: "/h/.claude", groups: [], dirs: [], live: [], waiting: [], vgroups: [], favs: [], projects: [], providers: [] }
 const SNIPS = { dir: "/h/s", files: [], scopes: [] }
 
-// Faux serveur : /api, /snippet-list et /sessions-stamp ; down rend des 502.
+// Faux serveur : /v1/state, /snippet-list et /v1/state/stamp ; down rend des 502.
 function server() {
   const st = { down: false, stamp: 1, calls: { api: 0, stamp: 0 } }
   const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }))
@@ -20,9 +20,9 @@ function server() {
     "fetch",
     vi.fn((url: string) => {
       if (st.down) return json({}, 502)
-      if (url === "/api") return st.calls.api++, json(DATA)
+      if (url === "/v1/state") return st.calls.api++, json(DATA)
       if (url === "/snippet-list") return json(SNIPS)
-      if (url === "/sessions-stamp") return st.calls.stamp++, json({ stamp: st.stamp })
+      if (url === "/v1/state/stamp") return st.calls.stamp++, json({ stamp: st.stamp })
       return json({}, 404)
     })
   )

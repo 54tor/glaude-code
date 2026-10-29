@@ -62,7 +62,6 @@
       "copyFail": "Copy failed",
       "rewind": "Delete the rest of the conversation",
       "rewindBody": "Everything after this message is removed from the transcript: the session will resume from here. Files changed by Claude are not restored.",
-      "rewindFail": "Could not rewind",
       "loadOlder": "Load older messages",
       "empty": "No messages in this session.",
       "replying": "Claude is replying…",

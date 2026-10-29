@@ -8,6 +8,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { api, type Msg } from "@/lib/api"
 import { authFetch, getAuth } from "@/lib/auth"
+import { qs, seg, v1 } from "@/lib/apiError"
 import { size } from "@/lib/format"
 import { noBreak, rehypeNoBreak } from "@/lib/noBreak"
 import { CompactSummary, isCompactSummary, isTagged, Tagged } from "./Tagged"
@@ -60,7 +61,7 @@ function UserText({ t: text, conv }: { t: string; conv?: Conv }) {
     for (const m of s.matchAll(UPLOADED)) {
       const before = s.slice(from, m.index).trim()
       if (before) parts.push(<Markdown key={`${key}t${from}`} t={before} breaks />)
-      const src = `/conv-upload?dir=${encodeURIComponent(conv.dir)}&id=${encodeURIComponent(conv.id)}&name=${encodeURIComponent(m[1])}`
+      const src = v1(`/sessions/${seg(conv.id)}/conversation/uploads/${seg(m[1])}${qs({ dir: conv.dir })}`)
       parts.push(
         <a key={`${key}i${m.index}`} href={src} target="_blank" rel="noopener noreferrer" title={t("conversation.message.openImage")} className="my-1 block w-fit">
           <img src={src} loading="lazy" alt={t("conversation.message.imageAlt")} className="max-h-80 max-w-full rounded-lg border bg-muted/30 object-contain" />
@@ -124,7 +125,7 @@ function WrittenDoc({ conv, path }: { conv: Conv; path: string }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [md, setMd] = useState<string | null>(null)
-  const src = `/conv-doc?dir=${encodeURIComponent(conv.dir)}&id=${encodeURIComponent(conv.id)}&path=${encodeURIComponent(path)}`
+  const src = v1(`/sessions/${seg(conv.id)}/conversation/document${qs({ dir: conv.dir, path })}`)
   const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase()
   const flip = () => {
     setOpen(!open)
@@ -162,11 +163,11 @@ type Conv = { dir: string; id: string; tools?: boolean; guest?: boolean }
 function MessageView({ m, conv }: { m: Msg; conv?: Conv }) {
   const { t } = useTranslation()
   const title = m.ts ? new Date(m.ts).toLocaleString(loc()) : undefined
-  // Image de la conversation : relue à la demande dans le transcript (GET /conv-image), jamais embarquée dans la liste des messages.
+  // Image de la conversation : relue à la demande dans le transcript (GET /v1/sessions/{id}/conversation/images/{img}), jamais embarquée dans la liste des messages.
   if (m.img && conv) {
     // Un <img> n'envoie pas X-Gld-Share : l'invité nomme son partage dans l'URL.
     const sh = conv.guest ? getAuth().share : undefined
-    const src = `/conv-image?dir=${encodeURIComponent(conv.dir)}&id=${encodeURIComponent(conv.id)}&o=${m.o ?? 0}&k=${m.k ?? 0}${sh ? `&share=${sh}` : ""}`
+    const src = v1(`/sessions/${seg(conv.id)}/conversation/images/${m.o ?? 0}-${m.k ?? 0}${qs({ dir: conv.dir, share: sh })}`)
     return (
       <div title={title} className={`msg flex ${m.r === "user" ? "justify-end" : ""}`}>
         <a href={src} target="_blank" rel="noopener noreferrer" title={t("conversation.message.openImage")}>

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { ArrowUpFromLine } from "lucide-react"
 import { toast } from "sonner"
 import { api, type GitRemote, type GitState } from "@/lib/api"
+import { errMsg } from "@/lib/apiError"
 import { refreshGit } from "@/hooks/useGit"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -17,11 +18,16 @@ export function GitPush({ dir, st }: { dir: string; st: GitState | undefined }) 
   const push = async (r: GitRemote) => {
     setBusy(true)
     const id = toast.loading(t("conversation.gitPush.pushing", { branch: st.branch, remote: r.name }))
-    const res = await api.post("/git-push", { dir, remote: r.name }, 90_000)
-    setBusy(false)
-    toast.dismiss(id)
-    if (res.ok) toast.success(t("conversation.gitPush.pushed", { branch: st.branch, remote: r.name }), { description: res.out })
-    else toast.error(t("conversation.gitPush.failed", { remote: r.name }), { description: res.out })
+    try {
+      const res = await api.gitPush(dir, r.name)
+      setBusy(false)
+      toast.dismiss(id)
+      toast.success(t("conversation.gitPush.pushed", { branch: st.branch, remote: r.name }), { description: res.message })
+    } catch (e) {
+      setBusy(false)
+      toast.dismiss(id)
+      toast.error(t("conversation.gitPush.failed", { remote: r.name }), { description: errMsg(e) })
+    }
     refreshGit()
   }
   return (

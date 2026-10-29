@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { useLocal } from "@/hooks/useLocal"
 import { api, type Finding, type MemFile, type Trashed } from "@/lib/api"
+import { errMsg } from "@/lib/apiError"
 import { tilde } from "@/lib/format"
 import { withChoice } from "@/lib/models"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -26,7 +27,7 @@ import { Prompt, type Ask as PromptAsk } from "./Prompt"
 import { MemoryWriter, type WriteTarget } from "./MemoryWriter"
 import { useMemoryData } from "./useMemoryData"
 import { useEditorDraft, useLeaveGuard } from "@/hooks/useEditorDraft"
-import { reportResult } from "@/lib/report"
+import { reportAction, reportResult } from "@/lib/report"
 
 // Mémoire de Claude : globale (CLAUDE.md, rules/) et par projet (memory/, CLAUDE.md et AGENTS.md du projet), lecture et édition.
 export function Memory({
@@ -88,7 +89,7 @@ export function Memory({
   useEffect(() => {
     if (!sel) return
     let live = true
-    const get = inTrash ? api.trashFile(inTrash) : api.memoryFile(sel)
+    const get: Promise<{ text?: string; error?: string }> = inTrash ? api.trashFile(inTrash) : api.memoryFile(sel)
     get.then(
       (r) => {
         if (!live) return
@@ -96,7 +97,7 @@ export function Memory({
         if (editNext.current === sel && r.text !== undefined) setDraft({ key: sel, text: r.text })
         editNext.current = ""
       },
-      (e) => live && setLoaded({ key: sel, text: "", error: String(e) }) // sinon la vue reste sur « chargement »
+      (e) => live && setLoaded({ key: sel, text: "", error: errMsg(e) }) // sinon la vue reste sur « chargement »
     )
     return () => {
       live = false
@@ -324,10 +325,15 @@ export function Memory({
   // --- corbeille ----------------------------------------------------------------------------------------------
   const trashed = trash.find((t) => t.id === inTrash)
   const restore = async (t: Trashed) => {
-    const r = (await api.post("/trash-restore", { id: t.id })) as { ok: boolean; out: string; key?: string }
-    if (reportResult(r)) {
+    let key = ""
+    const ok = await reportAction(async () => {
+      const r = await api.trashRestore(t.id)
+      key = r.key
+      return r
+    })
+    if (ok) {
       await refresh()
-      if (r.key) onPick(r.key)
+      if (key) onPick(key)
     }
   }
   const purge = (item?: Trashed) =>
@@ -336,7 +342,7 @@ export function Memory({
       body: t("memory.main.purgeBody"),
       confirm: item ? t("common.delete") : t("memory.trash.empty"),
       run: async () => {
-        if (reportResult(await api.post("/trash-purge", item ? { id: item.id } : { all: true }))) {
+        if (await reportAction(() => api.trashPurge(item?.id))) {
           if (!item || item.id === inTrash) onPick("")
           refresh()
         }

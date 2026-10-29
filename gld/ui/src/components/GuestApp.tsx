@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { api, HttpError, type GuestShare, type LiveState, type Msg, type QItem } from "@/lib/api"
+import { ApiError, errMsg } from "@/lib/apiError"
 import { setAuth } from "@/lib/auth"
 import { GuestFiles } from "./GuestFiles"
 import { LiveBar } from "./LiveStatus"
@@ -20,7 +21,7 @@ type Hist = { msgs: Msg[]; start: number; more: boolean }
 const PAGE = 200
 
 // 401/403 ou réponse non JSON : le serveur traite la requête comme celle d'un hôte, donc le partage n'existe plus.
-const over = (e: unknown) => (e instanceof HttpError && (e.status === 401 || e.status === 403)) || e instanceof SyntaxError
+const over = (e: unknown) => ((e instanceof HttpError || e instanceof ApiError) && (e.status === 401 || e.status === 403)) || (e instanceof ApiError && e.code === "bad_response") || e instanceof SyntaxError
 
 const HANDLE = /^\/guest\/([0-9a-f]{16})$/
 
@@ -236,16 +237,25 @@ function GuestSession({ handle }: { handle: string }) {
     sending.current = true
     stuck.current = true
     setBusy(true)
-    const r = await api.queueAdd(id, v)
-    sending.current = false
-    setBusy(false)
-    if (!r.ok) return void ((await readMe()) || toast.error(r.out))
+    let fail: string | null = null
+    try {
+      await api.queueAdd(id, v)
+    } catch (e) {
+      fail = errMsg(e)
+    } finally {
+      sending.current = false
+      setBusy(false)
+    }
+    if (fail !== null) return void ((await readMe()) || toast.error(fail))
     setText("")
     api.queue(id).then((q) => setQueue(q.items ?? []), () => {})
   }
   const remove = async (q: QItem) => {
-    const r = await api.queueRm(id, q.id)
-    if (!r.ok && !(await readMe())) toast.error(r.out)
+    try {
+      await api.queueRm(id, q.id)
+    } catch (e) {
+      if (!(await readMe())) toast.error(errMsg(e))
+    }
     api.queue(id).then((x) => setQueue(x.items ?? []), () => {})
   }
   const leave = async () => {

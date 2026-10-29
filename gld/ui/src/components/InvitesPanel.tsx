@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { ExternalLink, X } from "lucide-react"
 import { toast } from "sonner"
 import { api, type InviteInfo, type ShareInfo } from "@/lib/api"
+import { errMsg } from "@/lib/apiError"
 import { ago } from "@/lib/format"
 import { useShares } from "@/hooks/useShares"
 import { Button } from "@/components/ui/button"
@@ -124,8 +125,11 @@ function SessionBlock({ s, bare, busy, guard, setAsk, refresh, onOpenSession }: 
     void refresh()
   }
   const rmMsg = (item: string) => async () => {
-    const r = await api.queueRm(s.id, item)
-    if (!r.ok) toast.error(t("shell.invites.removeFailed", { msg: r.out }))
+    try {
+      await api.queueRm(s.id, item)
+    } catch (e) {
+      toast.error(t("shell.invites.removeFailed", { msg: errMsg(e) }))
+    }
     void refresh()
   }
   const end = async () => {

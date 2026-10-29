@@ -7,7 +7,10 @@ import { setAuth } from "@/lib/auth"
 import { GuestApp } from "./GuestApp"
 import { Message } from "./Message"
 
-const WHITE = new Set(["GET /conv", "GET /conv-text", "GET /conv-tools", "GET /conv-image", "GET /session-live", "GET /session-state", "GET /session-task-output", "GET /session-screen", "GET /queue", "POST /queue-add", "POST /queue-rm", "GET /guest-me", "GET /guest-list", "POST /guest-leave"])
+const S = "/v1/sessions/{id}"
+const WHITE = new Set([`GET ${S}/conversation`, `GET ${S}/conversation/text`, `GET ${S}/conversation/tools`, `GET ${S}/conversation/images/{img}`, `GET ${S}/live`, `GET ${S}/state`, `GET ${S}/tasks/{task}/output`, `GET ${S}/queue`, `POST ${S}/queue`, `DELETE ${S}/queue/{qid}`, "GET /guest-me", "GET /guest-list", "POST /guest-leave"])
+// Les segments variables d'une route, comme dans les motifs du serveur.
+const norm = (p: string) => p.replace(/^\/v1\/sessions\/[^/]+/, S).replace(/\/images\/[^/]+$/, "/images/{img}").replace(/\/queue\/[^/]+$/, "/queue/{qid}").replace(/\/tasks\/[^/]+\/output$/, "/tasks/{task}/output")
 const key = (c: { method: string; path: string }) => `${c.method} ${c.path}`
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } })
 const live = { open: true, status: "", activity: "", thinking: false, since: 0, context: 0, out: 0, model: "", subs: [] }
@@ -15,7 +18,7 @@ const live = { open: true, status: "", activity: "", thinking: false, since: 0, 
 let mode: "rw" | "ro"
 let ended: number | "html" | null
 let queue: unknown[]
-let calls: { path: string; method: string; csrf: string | null; body: string; search: string; share: string | null }[]
+let calls: { path: string; raw: string; method: string; csrf: string | null; body: string; search: string; share: string | null }[]
 let shares: { handle: string; title: string; mode: "rw" | "ro" }[] | 403
 let title: string
 const H = "0123456789abcdef"
@@ -40,15 +43,17 @@ beforeEach(() => {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init: RequestInit = {}) => {
-      const path = new URL(url, "http://x").pathname
+      const raw = new URL(url, "http://x").pathname
+      const path = norm(raw)
       const search = new URL(url, "http://x").search
-      calls.push({ path, search, method: init.method ?? "GET", csrf: new Headers(init.headers).get("X-Gld-CSRF"), share: new Headers(init.headers).get("X-Gld-Share"), body: String(init.body ?? "") })
+      const method = init.method ?? "GET"
+      calls.push({ path, raw, search, method: init.method ?? "GET", csrf: new Headers(init.headers).get("X-Gld-CSRF"), share: new Headers(init.headers).get("X-Gld-Share"), body: String(init.body ?? "") })
       if (path === "/guest-list") return shares === 403 ? json({ ok: false }, 403) : json(shares)
       if (ended === "html") return new Response("<html></html>", { status: 200, headers: { "Content-Type": "text/html" } })
       if (ended) return json({ ok: false }, ended)
       if (path === "/guest-list") return shares === 403 ? json({ ok: false }, 403) : json(shares)
       if (path === "/guest-me") return json({ id: "s1", dir: "/d", mode, csrf: "tok", handle: H, title, invite: "inv1", label: "Léa" })
-      if (path === "/conv") {
+      if (path === `${S}/conversation`) {
         const q = new URL(url, "http://x").searchParams
         const limit = Number(q.get("limit") ?? 1000)
         const end = q.has("before") && Number(q.get("before")) > 0 ? Number(q.get("before")) : all.length
@@ -56,16 +61,17 @@ beforeEach(() => {
         const base = rich ? [{ r: "assistant", t: "[lien](https://ex.org/x)" }, { r: "user", t: "", img: "1", o: 1, k: 0 }, { r: "assistant", t: "coupé", cut: 5, len: 9000, o: 2, n: 1 }, { r: "tool", t: "Bash  ls" }] : []
         return json({ msgs: [...base, ...all.slice(start, end)], start, more: start > 0 })
       }
-      if (path === "/conv-text") return json({ t: "suite", cut: 0 })
-      if (path === "/session-live") return json(live)
-      if (path === "/queue") return json({ items: queue })
-      if (path === "/queue-add") {
+      if (path === `${S}/conversation/text`) return json({ t: "suite", cut: 0 })
+      if (path === `${S}/live`) return json(live)
+      if (path === `${S}/queue` && method === "GET") return json({ items: queue })
+      if (path === `${S}/queue` && method === "POST") {
         queue = [{ id: "q1", text: JSON.parse(String(init.body)).text, author: "guest", guest: "inv1", label: "Léa", state: "queued", at: 1 }]
-        return json({ ok: true, out: "" })
+        return json({ item: queue[0] }, 201)
       }
-      if (path === "/queue-rm") {
+      if (path === `${S}/queue/{qid}` && method === "DELETE") {
+        const text = (queue[0] as { text?: string } | undefined)?.text ?? ""
         queue = []
-        return json({ ok: true, out: "" })
+        return json({ text })
       }
       if (path === "/guest-leave") return json({ ok: true })
       return json({ ok: false }, 403)
@@ -95,7 +101,7 @@ describe("GuestApp", () => {
     await mount()
     expect(screen.getByText("salut invité")).toBeTruthy()
     await send("coucou")
-    const add = calls.find((c) => c.path === "/queue-add")!
+    const add = calls.find((c) => c.path === `${S}/queue` && c.method === "POST")!
     expect(add.csrf).toBe("tok")
     expect(JSON.parse(add.body).text).toBe("coucou")
     await tick(2100)
@@ -153,7 +159,7 @@ describe("GuestApp", () => {
     expect(screen.getAllByRole("button", { name: i18n.t("conversation.composer.dequeue") })).toHaveLength(2)
     fireEvent.click(screen.getAllByRole("button", { name: i18n.t("conversation.composer.dequeue") })[0])
     await tick(50)
-    expect(JSON.parse(calls.find((c) => c.path === "/queue-rm")!.body).item).toBe("g1")
+    expect(calls.find((c) => c.method === "DELETE")!.raw.split("/").pop()).toBe("g1")
   })
 
   it("la file nomme l'auteur : libellé de l'invité, Hôte pour l'hôte", async () => {
@@ -183,12 +189,12 @@ describe("GuestApp", () => {
     fireEvent.click(screen.getByRole("button", { name: /suite|more/i }))
     await tick(50)
     await tick(2100)
-    expect(document.querySelector("img")!.getAttribute("src")).toMatch(/^\/conv-image\?/)
+    expect(document.querySelector("img")!.getAttribute("src")).toMatch(/^\/v1\/sessions\/s1\/conversation\/images\/1-0\?/)
     const link = document.querySelector("a[href='https://ex.org/x']")!
     expect(link.getAttribute("rel")).toContain("noopener")
     expect(link.getAttribute("rel")).toContain("noreferrer")
     expect(screen.getByText(/Bash/)).toBeTruthy()
-    expect(calls.some((c) => c.path === "/conv-text")).toBe(true)
+    expect(calls.some((c) => c.path === `${S}/conversation/text`)).toBe(true)
     expect([...new Set(calls.map(key))].filter((p) => !WHITE.has(p))).toEqual([])
   })
 
@@ -212,10 +218,10 @@ describe("GuestApp", () => {
 
   it("bascule des outils : redemande /conv avec tools=1", async () => {
     await mount()
-    expect(calls.filter((c) => c.path === "/conv").every((c) => !c.search.includes("tools=1"))).toBe(true)
+    expect(calls.filter((c) => c.path === `${S}/conversation`).every((c) => !c.search.includes("tools=1"))).toBe(true)
     fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.view.toolsHidden") }))
     await tick(50)
-    expect(calls.some((c) => c.path === "/conv" && c.search.includes("tools=1"))).toBe(true)
+    expect(calls.some((c) => c.path === `${S}/conversation` && c.search.includes("tools=1"))).toBe(true)
     expect(screen.getByRole("button", { name: i18n.t("conversation.view.toolsShown") }).getAttribute("aria-pressed")).toBe("true")
   })
 
@@ -252,7 +258,7 @@ describe("GuestApp", () => {
     fireEvent.keyDown(box(), { key: "Enter" })
     fireEvent.keyDown(box(), { key: "Enter" })
     await tick(50)
-    expect(calls.filter((c) => c.path === "/queue-add")).toHaveLength(1)
+    expect(calls.filter((c) => c.path === `${S}/queue` && c.method === "POST")).toHaveLength(1)
   })
 
   it("chaque requête porte X-Gld-Share (sauf /guest-list) et rien ne part avant", async () => {
@@ -344,7 +350,7 @@ describe("GuestApp", () => {
     await tick(2100)
     const img = document.querySelector("img")!
     expect(img.getAttribute("src")).toContain(`share=${H}`)
-    expect(document.querySelector("a[href^='/conv-image']")!.getAttribute("href")).toContain(`share=${H}`)
+    expect(document.querySelector("a[href*='/conversation/images/']")!.getAttribute("href")).toContain(`share=${H}`)
     cleanup()
     setAuth({ share: undefined })
     render(<Message m={{ r: "user", t: "", img: "1", o: 1, k: 0 }} conv={{ dir: "/d", id: "s1", tools: false }} />)

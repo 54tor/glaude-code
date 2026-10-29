@@ -12,12 +12,12 @@ const sent = () => new Headers((vi.mocked(fetch).mock.calls[0][1] as RequestInit
 
 describe("authFetch X-Gld-Share", () => {
   it("absent sans partage", async () => {
-    await authFetch("/conv")
+    await authFetch("/v1/sessions/s/conversation")
     expect(sent().has("X-Gld-Share")).toBe(false)
   })
   it.each(["GET", "POST"])("présent sur %s quand share est posé", async (method) => {
     setAuth({ share: "0123456789abcdef", csrf: "c" })
-    await authFetch("/queue", { method })
+    await authFetch("/v1/sessions/s/queue", { method })
     expect(sent().get("X-Gld-Share")).toBe("0123456789abcdef")
   })
 })

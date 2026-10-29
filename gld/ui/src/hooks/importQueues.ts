@@ -1,6 +1,7 @@
 import { toast } from "sonner"
 import { i18n } from "@/i18n"
 import { api } from "@/lib/api"
+import { ApiError } from "@/lib/apiError"
 import { withoutFollowUps } from "@/lib/queue"
 import { draftOf, legacyQueues, saveDrafts, SEND_TIMEOUT, setDraft } from "./useDraft"
 
@@ -28,11 +29,16 @@ async function run(): Promise<void> {
     }
     while (l.queue.length > 0) {
       const text = withoutFollowUps(l.queue[0])
-      const r = await api.queueAdd(id, text)
-      if (r.net) return
+      let refused = false
+      try {
+        await api.queueAdd(id, text)
+      } catch (e) {
+        if (e instanceof ApiError && (e.net || e.code.startsWith("http_"))) return // pas de réponse JSON du serveur : la reprise rejouera
+        refused = true
+      }
       if (!legacyQueues.has(id)) return // changement de compte pendant l'envoi
       l.queue = l.queue.slice(1)
-      if (!r.ok) toDraft(id, text)
+      if (refused) toDraft(id, text)
       saveDrafts()
     }
     legacyQueues.delete(id)

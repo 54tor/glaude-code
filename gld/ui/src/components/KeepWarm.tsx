@@ -2,6 +2,7 @@ import { Coins, Flame, Microwave, Snowflake } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api, type Session } from "@/lib/api"
+import { errMsg } from "@/lib/apiError"
 import { cn } from "@/lib/utils"
 import { refreshWarm, useKeepWarm } from "@/hooks/useKeepWarm"
 import { Button } from "@/components/ui/button"
@@ -9,8 +10,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { useActions } from "./actions"
 
 const set = async (s: Session, on: boolean, max?: number, reheat?: boolean) => {
-  const r = await api.post("/keepwarm", { dir: s.dir, id: s.id, on, max, reheat })
-  if (!r.ok) toast.error(r.out)
+  try {
+    await api.keepWarmSet({ dir: s.dir, id: s.id, on, max, reheat })
+  } catch (e) {
+    toast.error(errMsg(e))
+  }
   refreshWarm()
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { api, HttpError, type Data } from "@/lib/api"
+import { ApiError } from "@/lib/apiError"
 import { useAuth, useCan } from "@/lib/auth"
 
 export type Session = Data["groups"][number]["sessions"][number]
@@ -50,7 +51,7 @@ export function useTerminalAvailability(dir: string): { state: TermState; sessio
         },
         (e) => {
           if (!alive) return
-          const st = e instanceof HttpError ? e.status : -1
+          const st = e instanceof HttpError || e instanceof ApiError ? e.status : -1
           setFail(st)
           if (st === 403) stop()
         }

@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUpToLine, Copy, Link2, SquareCode, TextSelect, Undo2, B
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
+import { errMsg } from "@/lib/apiError"
 import { HOT } from "@/lib/sessionsView"
 import { ago, brief, compact, dedupeDocs, full, tilde } from "@/lib/format"
 import { Button } from "@/components/ui/button"
@@ -123,8 +124,8 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
       confirm: t("conversation.view.rewind"),
       run: () =>
         void api.convRewind(dir, id, o).then(
-          (r) => (r.ok ? (toast.success(r.out), setChat(null), void reloadRef.current()) : toast.error(r.out)),
-          () => toast.error(t("conversation.view.rewindFail"))
+          (r) => (toast.success(r.message), setChat(null), void reloadRef.current()),
+          (e) => toast.error(errMsg(e))
         ),
     })
   const turn = chat?.id === id ? chat : null
