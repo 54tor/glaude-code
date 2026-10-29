@@ -56,3 +56,21 @@ func TestSessionWorkflows(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+func TestRunningWorkflowUsesJournal(t *testing.T) {
+	_, base := wfFixture(t)
+	ad := filepath.Join(base, "subagents/workflows/wf_run-2")
+	for _, id := range []string{"a1", "b2"} {
+		os.WriteFile(filepath.Join(ad, "agent-"+id+".meta.json"), []byte(`{"description":"job `+id+`","workflowPhase":"P"}`), 0o600)
+		os.WriteFile(filepath.Join(ad, "agent-"+id+".jsonl"), []byte("{}"), 0o600) // récents tous les deux
+	}
+	os.WriteFile(filepath.Join(ad, "journal.jsonl"), []byte(`{"type":"launched"}
+{"type":"started","agentId":"a1"}
+{"type":"result","agentId":"a1","result":{}}
+{"type":"started","agentId":"b2"}
+`), 0o600)
+	w, ok := runningWorkflow(base, "wf_run-2")
+	if !ok || w.Status != "running" || w.Agents[0].State != "done" || w.Agents[1].State != "running" {
+		t.Fatalf("%+v", w)
+	}
+}

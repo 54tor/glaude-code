@@ -193,6 +193,8 @@ func runningWorkflow(base, run string) (Workflow, bool) {
 	w := Workflow{RunID: run, Status: "unknown", Phases: []WfPhase{}, Agents: []WfAgent{}, Logs: []string{}}
 	phases := map[string]bool{}
 	var first, last time.Time
+	// Le journal du run dit quels agents ont rendu leur résultat ; l'âge du transcript ne sert que sans journal.
+	finished, hasJournal := wfJournalDone(filepath.Join(dir, "journal.jsonl"))
 	for _, n := range names {
 		m := wfAgentRe.FindStringSubmatch(n)
 		if m == nil || len(w.Agents) >= wfMaxAgents {
@@ -218,8 +220,14 @@ func runningWorkflow(base, run string) (Workflow, bool) {
 			if mt.After(last) {
 				last = mt
 			}
-			if time.Since(mt) < wfRunning {
+			if hasJournal {
+				if !finished[m[1]] {
+					a.State = "running"
+				}
+			} else if time.Since(mt) < wfRunning {
 				a.State = "running"
+			}
+			if a.State == "running" {
 				w.Status = "running"
 			}
 		}
@@ -237,4 +245,23 @@ func runningWorkflow(base, run string) (Workflow, bool) {
 		w.DurationMs = last.Sub(first).Milliseconds()
 	}
 	return w, true
+}
+
+// wfJournalDone : ids des agents dont le journal du run porte une ligne « result ». ok faux : journal absent ou illisible.
+func wfJournalDone(path string) (map[string]bool, bool) {
+	b, _, ok := wfRead(path, 4<<20)
+	if !ok {
+		return nil, false
+	}
+	done := map[string]bool{}
+	for _, l := range strings.Split(string(b), "\n") {
+		var e struct {
+			Type    string `json:"type"`
+			AgentID string `json:"agentId"`
+		}
+		if json.Unmarshal([]byte(l), &e) == nil && e.Type == "result" && e.AgentID != "" {
+			done[e.AgentID] = true
+		}
+	}
+	return done, true
 }
