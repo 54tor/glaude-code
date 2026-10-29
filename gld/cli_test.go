@@ -60,6 +60,21 @@ func TestDispatch(t *testing.T) {
 	}
 }
 
+func TestMatinIgnoreLesEquipiers(t *testing.T) {
+	_, proj, dir := cliEnv(t)
+	session(t, dir, id1, "Alpha", "a", time.Hour)
+	put(t, filepath.Join(dir, id2+".jsonl"), `{"type":"user","cwd":"/p","teamName":"session-11111111","agentName":"impl-task-1","message":{"content":"travail"}}`+"\n", time.Hour)
+	liveSessions = func() map[string]bool { return map[string]bool{} }
+	out, err := run(t, cliMatin, "-n", "--min", "0", proj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contains(t, out, "Alpha", "1 sujet(s) seraient rouverts")
+	if strings.Contains(out, "impl-task-1") {
+		t.Errorf("une session d'équipier a été proposée :\n%s", out)
+	}
+}
+
 func TestMatin(t *testing.T) {
 	_, proj, dir := cliEnv(t)
 	session(t, dir, id1, "Alpha", "a", time.Hour)

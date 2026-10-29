@@ -199,7 +199,7 @@ func matinRun(ctx context.Context, o matinOpts, out io.Writer) error {
 	n := 0
 	opened := false // la session demandée est déjà ouverte dans un terminal
 	for _, t := range recent {
-		if o.id != "" && t.S.ID != o.id || t.Info.Size() < o.min || o.id == "" && t.S.autoReview() {
+		if o.id != "" && t.S.ID != o.id || t.Info.Size() < o.min || o.id == "" && (t.S.autoReview() || t.S.team != "") { // ni revues automatiques ni sessions d'équipiers : elles appartiennent à leur session parente
 			continue
 		}
 		title, mark := t.label()
