@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -656,5 +657,35 @@ func TestUnauthNonPublicRoutes401(t *testing.T) {
 		if w := (modeReq{method: m, path: path}).do(h); w.Code != 401 {
 			t.Errorf("%s sans session : %d", pat, w.Code)
 		}
+	}
+}
+
+// Épingle ce que le garde laisse passer sans session (rightPublic) et ce qu'un invité atteint (guestRoutes) : ajouter une
+// entrée oblige à toucher ce test, donc à relire l'exposition.
+func TestPublicAndGuestSurfacePinned(t *testing.T) {
+	var pub, guest []string
+	for p, n := range routeRights {
+		page := strings.HasPrefix(p, "GET /") && !strings.HasPrefix(p, "GET /v1/") // pages et statiques : HTML fixe
+		if n == rightPublic && !page {
+			pub = append(pub, p)
+		}
+	}
+	for p := range guestRoutes {
+		guest = append(guest, p)
+	}
+	sort.Strings(pub)
+	sort.Strings(guest)
+	wantPub := "DELETE /v1/auth/sessions/current|DELETE /v1/guest/me|GET /v1/auth/alerts|GET /v1/auth/me|GET /v1/auth/sessions|GET /v1/guest/me|GET /v1/guest/sessions|" +
+		"POST /invite/{home}/{token}|POST /pair|POST /v1/auth/factors/{factor}/removals|POST /v1/auth/mfa/recovery|POST /v1/auth/mfa/totp|POST /v1/auth/mfa/webauthn/assertions|" +
+		"POST /v1/auth/mfa/webauthn/challenges|POST /v1/auth/sessions|POST /v1/auth/sessions/revocations|POST /v1/auth/sessions/{sid}/revocations|POST /v1/auth/totp/enrollments|" +
+		"POST /v1/auth/webauthn/registrations|PUT /v1/auth/password|PUT /v1/auth/recovery-codes|PUT /v1/auth/totp/enrollments/current|PUT /v1/auth/webauthn/registrations/current"
+	wantGuest := "DELETE /v1/guest/me|DELETE /v1/sessions/{id}/queue/{qid}|GET /assets/|GET /favicon.ico|GET /guest|GET /icons/|GET /manifest.webmanifest|GET /v1/fs/entries/content|GET /v1/fs/tree|" +
+		"GET /v1/guest/me|GET /v1/sessions/{id}/conversation|GET /v1/sessions/{id}/conversation/images/{img}|GET /v1/sessions/{id}/conversation/text|GET /v1/sessions/{id}/conversation/tools|" +
+		"GET /v1/sessions/{id}/live|GET /v1/sessions/{id}/queue|GET /v1/sessions/{id}/state|GET /v1/sessions/{id}/tasks/{task}/output|GET /v1/sessions/{id}/workflows|POST /v1/sessions/{id}/queue"
+	if got := strings.Join(pub, "|"); got != wantPub {
+		t.Errorf("routes publiques (hors pages) modifiées :\n%s", got)
+	}
+	if got := strings.Join(guest, "|"); got != wantGuest {
+		t.Errorf("guestRoutes modifié :\n%s", got)
 	}
 }
