@@ -56,7 +56,7 @@ export function PageHeader({
   return (
     <>
       <header className="border-b bg-background">
-        <div className={cn(box, "gap-y-2 pt-[max(0.5rem,calc(0.75rem-env(safe-area-inset-top)))] pb-3 md:py-4")}>
+        <div className={cn(box, "gap-y-2 pt-[13px] pb-3 md:py-4")}>
           <Button variant="ghost" size="icon-sm" className="md:hidden" onClick={onMenu} aria-label={t("shell.header.openMenu")} data-menu-trigger>
             <Menu />
           </Button>
