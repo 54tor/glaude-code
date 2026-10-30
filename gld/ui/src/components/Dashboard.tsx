@@ -28,6 +28,11 @@ export function Dashboard({ open, closed, waiting, now, home, go, read }: { open
     api.updateInfo().then(setU, () => {})
     void check()
   }, [])
+  const [checkingUpd, setCheckingUpd] = useState(false)
+  const recheckUpd = () => {
+    setCheckingUpd(true)
+    api.updateInfo(true).then(setU, () => {}).finally(() => setCheckingUpd(false))
+  }
   const up = (n: string) => /✔|Connected/.test(status?.[n] ?? "")
   const names = [...new Set([...(mcp ?? []).map((m) => m.name), ...Object.keys(status ?? {})])].sort()
   const card = "rounded-xl border bg-card p-4 shadow-xs md:p-5"
@@ -92,6 +97,9 @@ export function Dashboard({ open, closed, waiting, now, home, go, read }: { open
         <section className={card}>
           <h3 className={head}>
             <ArrowUpCircle className="size-4" /> {t("shell.dash.update")}
+            <Button size="xs" variant="ghost" className="ml-auto" disabled={checkingUpd} onClick={recheckUpd}>
+              <RefreshCw className={checkingUpd ? "animate-spin" : ""} /> {t("shell.dash.updateCheck")}
+            </Button>
           </h3>
           {!u ? (
             <p className="py-3 text-sm text-muted-foreground">{t("shell.dash.updateUnknown")}</p>

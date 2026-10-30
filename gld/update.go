@@ -83,10 +83,14 @@ func verParts(v string) []int {
 }
 
 // checkUpdate : l'échec réseau est mis en cache comme un succès (sans « newer ») pour ne pas marteler GitHub (60 requêtes/h sans jeton).
-func checkUpdate(ctx context.Context) updateInfo {
+func checkUpdate(ctx context.Context, force bool) updateInfo {
 	updMu.Lock()
 	defer updMu.Unlock()
-	if !updAt.IsZero() && time.Since(updAt) < 6*time.Hour {
+	ttl := 6 * time.Hour
+	if force {
+		ttl = 30 * time.Second // plancher : un clic répété ne doit pas vider le quota GitHub
+	}
+	if !updAt.IsZero() && time.Since(updAt) < ttl {
 		return updInfo
 	}
 	info := updateInfo{Current: version}
@@ -99,6 +103,6 @@ func checkUpdate(ctx context.Context) updateInfo {
 
 func routesUpdate(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/update", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, checkUpdate(r.Context()))
+		writeJSON(w, 200, checkUpdate(r.Context(), r.URL.Query().Get("force") == "1"))
 	})
 }
