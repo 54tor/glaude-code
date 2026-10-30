@@ -556,6 +556,13 @@
       "more_one": "… et {{count}} autre",
       "more_other": "… et {{count}} autres"
     },
+    "gitRepos": {
+      "title": "Dépôts des dossiers ajoutés",
+      "repos_one": "{{count}} dépôt",
+      "repos_other": "{{count}} dépôts",
+      "toPush_one": "{{count}} à pousser",
+      "toPush_other": "{{count}} à pousser"
+    },
     "gitPush": {
       "pushing": "Poussée de {{branch}} vers {{remote}}…",
       "pushed": "{{branch}} poussée vers {{remote}}",

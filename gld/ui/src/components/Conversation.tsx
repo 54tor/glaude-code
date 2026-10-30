@@ -33,6 +33,7 @@ import { GitBadge } from "./GitBadge"
 import { groupTools, ToolAnchor } from "./ToolAnchor"
 import { GitChanges } from "./GitChanges"
 import { GitPush } from "./GitPush"
+import { GitRepos } from "./GitRepos"
 
 const FullTerminal = lazy(() => import("./FullTerminal")) // xterm n'est chargé qu'à l'ouverture du terminal
 
@@ -82,7 +83,8 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   const live = useLive(dir, id, a.live.has(id))
   // État git du dossier de la session et de ses dépôts, si ce sont des dépôts : on peut voir les changements et pousser d'ici.
   const git = useGit()
-  const gitDirs = row ? [row.g.project, ...(git.repos[row.g.project] ?? [])].filter((d) => git.status[d]) : []
+  const gitDirs = row ? [row.g.project].filter((d) => git.status[d]) : []
+  const gitSubs = row ? (git.repos[row.g.project] ?? []).filter((d) => git.status[d]) : []
   // Ce qui se trouvait sous le clic droit : sélection, bloc de code, lien.
   const [hit, setHit] = useState({ sel: "", code: "", link: "" })
   const copy = (text: string) => copyText(text).then(() => toast.success(t("common.copied")), () => toast.error(t("conversation.view.copyFail")))
@@ -362,6 +364,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
           <GitChanges dir={d} count={git.status[d] ? git.status[d].changed + git.status[d].untracked : 0} />
         </span>
       ))}
+      <GitRepos dirs={gitSubs} status={git.status} />
     </>
   )
   const moreMenu = row && (

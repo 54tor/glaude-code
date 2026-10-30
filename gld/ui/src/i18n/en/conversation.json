@@ -556,6 +556,13 @@
       "more_one": "… and {{count}} more",
       "more_other": "… and {{count}} more"
     },
+    "gitRepos": {
+      "title": "Repositories of the added folders",
+      "repos_one": "{{count}} repository",
+      "repos_other": "{{count}} repositories",
+      "toPush_one": "{{count}} to push",
+      "toPush_other": "{{count}} to push"
+    },
     "gitPush": {
       "pushing": "Pushing {{branch}} to {{remote}}…",
       "pushed": "{{branch}} pushed to {{remote}}",
