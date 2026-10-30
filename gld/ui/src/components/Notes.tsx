@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Check, ChevronRight, Fan, FolderOpen, Undo2, MessageSquarePlus, NotebookPen, Plus, Send, X } from "lucide-react"
+import { Check, ChevronRight, Fan, FolderOpen, History, Undo2, MessageSquarePlus, NotebookPen, Plus, Send, X } from "lucide-react"
 import { toast } from "sonner"
-import { api } from "@/lib/api"
+import { api, type SentNote } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"
 import { setOpen, useOpen } from "@/hooks/useOpen"
 import { cn } from "@/lib/utils"
@@ -53,6 +53,8 @@ export function Notes({ noteKey, folder: base, rows }: { noteKey: string; folder
   const [sendable, setSendable] = useState<Set<string>>(new Set())
   const saved = useRef("")
   const [savedList, setSavedList] = useState<string[]>([]) // ce que le serveur a : une ligne différente est encore en attente
+  const [sent, setSent] = useState<SentNote[]>([]) // historique des envois : filet si la session ne reçoit jamais le texte
+  const [sentOpen, flipSent] = useOpen("ns/" + noteKey, false)
   const [picked, setPicked] = useState<Set<number>>(new Set()) // lignes cochées ; aucune cochée = tout part
   const fields = useRef<(HTMLTextAreaElement | null)[]>([])
   const focusNext = useRef<number | null>(null)
@@ -72,6 +74,7 @@ export function Notes({ noteKey, folder: base, rows }: { noteKey: string; folder
       },
       () => live && setItems([])
     )
+    api.notesSent(noteKey).then((r) => live && setSent(r.sent), () => {})
     return () => {
       live = false
     }
@@ -128,7 +131,32 @@ export function Notes({ noteKey, folder: base, rows }: { noteKey: string; folder
   const closed = here.filter((r) => !a.live.has(r.s.id)).slice(0, 30)
   const filled = items.map((x, i) => (x.trim() ? i : -1)).filter((i) => i >= 0)
   const allPicked = filled.length > 0 && filled.every((i) => picked.has(i))
+  // écrit l'historique avant tout envoi ; sans trace côté serveur, l'envoi n'a pas lieu
+  const record = async (to: string) => {
+    try {
+      const e = await api.notesSentAdd({ key: noteKey, text: body, to })
+      setSent((l) => [...l, e.entry].slice(-50))
+      return true
+    } catch (e) {
+      toast.error(errMsg(e))
+      return false
+    }
+  }
+  const restore = (e: SentNote) => {
+    const lines = e.text.split("\n").map((l) => l.replace(/^- /, ""))
+    edit([...items.filter((i) => i.trim()), ...lines])
+    void forget(e)
+  }
+  const forget = async (e: SentNote) => {
+    try {
+      await api.notesSentRemove(noteKey, e.id)
+      setSent((l) => l.filter((x) => x.id !== e.id))
+    } catch (err) {
+      toast.error(errMsg(err))
+    }
+  }
   const sendTo = async (r: Row) => {
+    if (!(await record(r.s.title || r.s.id.slice(0, 8)))) return
     const live = a.live.has(r.s.id)
     let sent = false
     try {
@@ -214,8 +242,9 @@ export function Notes({ noteKey, folder: base, rows }: { noteKey: string; folder
           </Button>
           <div className="flex flex-wrap items-center gap-2">
             {folder && (
-              <Button size="sm" variant="outline" disabled={!body} onClick={() => {
-                  a.newSession(folder, body, () => { edit([]); flush() })
+              <Button size="sm" variant="outline" disabled={!body} onClick={async () => {
+                  if (!(await record(tr("conversation.notes.newTarget") + " · " + folder))) return
+                  a.newSession(folder, body)
                   edit(items.filter((_, j) => !dropIdx.has(j)))
                   setPicked(new Set())
                   flush()
@@ -247,6 +276,35 @@ export function Notes({ noteKey, folder: base, rows }: { noteKey: string; folder
             </DropdownMenu>
             <span className="ml-auto text-xs text-muted-foreground tabular-nums">{tr("conversation.notes.count", { count })}</span>
           </div>
+          {sent.length > 0 && (
+            <div>
+              <button onClick={flipSent} aria-expanded={sentOpen} className="flex items-center gap-1.5 px-1 py-1 text-xs text-muted-foreground">
+                <ChevronRight className={cn("size-3.5 transition-transform", sentOpen && "rotate-90")} />
+                <History className="size-3.5" />
+                {tr("conversation.notes.sentTitle")} <span className="tabular-nums">{sent.length}</span>
+              </button>
+              {sentOpen && (
+                <ul className="mt-1 space-y-1.5">
+                  {[...sent].reverse().map((e) => (
+                    <li key={e.id} className="flex items-start gap-1.5 rounded-lg border bg-background px-2 py-1">
+                      <div className="min-w-0 flex-1 py-1">
+                        <div className="session-text whitespace-pre-wrap break-words">{e.text}</div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {new Date(e.at).toLocaleString()} · {e.to}
+                        </div>
+                      </div>
+                      <Button variant="ghost" size="icon-xs" onClick={() => restore(e)} aria-label={tr("conversation.notes.restore")} title={tr("conversation.notes.restore")}>
+                        <Undo2 />
+                      </Button>
+                      <Button variant="ghost" size="icon-xs" onClick={() => void forget(e)} aria-label={tr("conversation.notes.forget")} title={tr("conversation.notes.forget")}>
+                        <X />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

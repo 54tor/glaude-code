@@ -472,7 +472,11 @@
       "saving": "Enregistrement…",
       "remove": "Supprimer l'item",
       "add": "Ajouter un item",
-      "count": "{{count}} item(s)"
+      "count": "{{count}} item(s)",
+      "sentTitle": "Envoyées",
+      "restore": "Remettre dans la note",
+      "forget": "Supprimer de l'historique",
+      "newTarget": "nouvelle session"
     },
     "terminal": {
       "openFailed": "ouverture impossible",

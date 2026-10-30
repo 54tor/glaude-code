@@ -472,7 +472,11 @@
       "saving": "Saving…",
       "remove": "Remove item",
       "add": "Add item",
-      "count": "{{count}} item(s)"
+      "count": "{{count}} item(s)",
+      "sentTitle": "Sent",
+      "restore": "Put back in the note",
+      "forget": "Remove from history",
+      "newTarget": "new session"
     },
     "terminal": {
       "openFailed": "could not open",

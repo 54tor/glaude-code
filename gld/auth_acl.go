@@ -61,6 +61,7 @@ var routeRights = map[string]Right{
 	// une commande slash de Claude Code (commands/*.md), donc config_write.
 	"POST /v1/snippets/drafts": RightMemWrite, "POST /v1/snippets/merges": RightMemWrite,
 	"GET /v1/notes": RightMemRead, "PUT /v1/notes": RightMemWrite,
+	"GET /v1/notes/sent": RightMemRead, "POST /v1/notes/sent": RightMemWrite, "DELETE /v1/notes/sent": RightMemWrite,
 	"GET /v1/trash/memory": RightMemRead, "GET /v1/trash/memory/{id}/file": RightMemRead, "PATCH /v1/trash/memory/{id}": RightMemWrite, "DELETE /v1/trash/memory": RightMemWrite,
 	"GET /v1/skills": RightMemRead, "GET /v1/skills/catalog": RightMemRead, "GET /v1/skills/updates": RightMemRead, "GET /v1/skills/{key}": RightMemRead, "GET /v1/plugins": RightMemRead, "GET /v1/marketplaces": RightMemRead,
 

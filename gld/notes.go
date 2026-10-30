@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -43,6 +45,7 @@ func noteKeyOK(k string) bool {
 }
 
 func routesNotes(mux *http.ServeMux) {
+	routesNotesSent(mux)
 	mux.HandleFunc("GET /v1/notes", func(w http.ResponseWriter, r *http.Request) {
 		notesMu.Lock()
 		defer notesMu.Unlock()
@@ -121,4 +124,117 @@ func mergeNotes(dst, src string) string {
 	e.SetEscapeHTML(false) // sinon < > & triplent de taille à chaque fusion
 	e.Encode(append(noteItems(dst), noteItems(src)...))
 	return strings.TrimSuffix(b.String(), "\n")
+}
+
+const sentMax = 50
+
+type sentEntry struct {
+	ID   string `json:"id"`
+	At   int64  `json:"at"`
+	Text string `json:"text"`
+	To   string `json:"to"`
+}
+
+func sentFile() string { return filepath.Join(cfgDir(), "gld-web-notes-history.json") }
+
+func sentLoad() (map[string][]sentEntry, error) {
+	m := map[string][]sentEntry{}
+	b, err := readTrusted(sentFile())
+	if err != nil {
+		return m, nil
+	}
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, terr("srv.notes.fichierIllisible", "A1", err.Error())
+	}
+	return m, nil
+}
+
+func sentSave(m map[string][]sentEntry) error {
+	b, _ := json.MarshalIndent(m, "", "  ")
+	return rWriteAtomic(cfgDir(), sentFile(), b, 0o600)
+}
+
+// routesNotesSent : historique des items envoyés à une session, écrit avant l'envoi pour qu'un envoi perdu ne perde pas le texte.
+func routesNotesSent(mux *http.ServeMux) {
+	fail := func(w http.ResponseWriter, err error) {
+		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
+	}
+	mux.HandleFunc("GET /v1/notes/sent", func(w http.ResponseWriter, r *http.Request) {
+		k := r.URL.Query().Get("key")
+		if !noteKeyOK(k) {
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
+			return
+		}
+		notesMu.Lock()
+		defer notesMu.Unlock()
+		m, err := sentLoad()
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"sent": append([]sentEntry{}, m[k]...)})
+	})
+	mux.HandleFunc("POST /v1/notes/sent", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Key, Text, To string }
+		if !decodeBody(w, r, &req, noteMax+2<<10) {
+			return
+		}
+		if !noteKeyOK(req.Key) || strings.TrimSpace(req.Text) == "" || len(req.Text) > noteMax || len(req.To) > 600 {
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
+			return
+		}
+		notesMu.Lock()
+		defer notesMu.Unlock()
+		m, err := sentLoad()
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		if _, has := m[req.Key]; !has && len(m) >= notesMax {
+			writeErr(w, http.StatusConflict, "conflict", L("srv.notes.tropDeNotes"))
+			return
+		}
+		now := time.Now()
+		e := sentEntry{ID: strconv.FormatInt(now.UnixNano(), 36), At: now.UnixMilli(), Text: req.Text, To: req.To}
+		l := append(m[req.Key], e)
+		if len(l) > sentMax {
+			l = l[len(l)-sentMax:]
+		}
+		m[req.Key] = l
+		if err := sentSave(m); err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"entry": e})
+	})
+	mux.HandleFunc("DELETE /v1/notes/sent", func(w http.ResponseWriter, r *http.Request) {
+		k, id := r.URL.Query().Get("key"), r.URL.Query().Get("id")
+		if !noteKeyOK(k) || id == "" {
+			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
+			return
+		}
+		notesMu.Lock()
+		defer notesMu.Unlock()
+		m, err := sentLoad()
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		l := m[k][:0:0]
+		for _, e := range m[k] {
+			if e.ID != id {
+				l = append(l, e)
+			}
+		}
+		if len(l) == 0 {
+			delete(m, k)
+		} else {
+			m[k] = l
+		}
+		if err := sentSave(m); err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"message": L("srv.notes.noteEnregistree")})
+	})
 }
