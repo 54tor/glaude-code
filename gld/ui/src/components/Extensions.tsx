@@ -682,6 +682,13 @@ export function Extensions({
                     <code className="block text-xs break-all text-muted-foreground">
                       {m.url || m.command}
                     </code>
+                    {!!m.envKeys?.length && (
+                      <span className="block text-xs text-muted-foreground">
+                        {t("extensions.mcpVars", {
+                          list: m.envKeys.join(", "),
+                        })}
+                      </span>
+                    )}
                   </div>
                 </li>
               ))}

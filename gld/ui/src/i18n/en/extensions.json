@@ -40,6 +40,7 @@
     "mcpAccount": "claude.ai account connector: set in claude.ai",
     "mcpOther": "other source",
     "searchPlugins": "Search installed or available plugins…",
+    "mcpVars": "variables: {{list}}",
     "searchSkills": "Search installed skills or npx…",
     "noMatch": "No match.",
     "editor": "Skill editor",
