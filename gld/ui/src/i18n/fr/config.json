@@ -25,6 +25,8 @@
       "locationAria": "Emplacement des réglages",
       "projectDirAria": "Dossier du projet",
       "toCreate": "fichier à créer à la première modification",
+      "doctor": "Lancer /doctor",
+      "doctorHint": "Ouvre une session qui exécute /doctor (diagnostic de l'installation Claude Code)",
       "applyNote": "Chaque modification est appliquée tout de suite, après une sauvegarde (onglet Historique). Les sessions ouvertes rechargent seules les réglages (sauf model, effort et plugins : /model, /effort, /reload-plugins).",
       "copiedToUser": "Règle copiée dans vos réglages",
       "pickDir": "Ajouter un dossier à {{dir}}",
@@ -33,7 +35,7 @@
         "projects": "Projets",
         "precedence": "Précédence",
         "permissions": "Permissions",
-        "settings": "Réglages",
+        "settings": "Claude CLI",
         "backups": "Historique",
         "interface": "Interface",
         "sync": "Synchroniser"

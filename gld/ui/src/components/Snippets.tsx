@@ -101,6 +101,18 @@ export function Snippets({
     const r = await api.snippet(s.key).catch((e) => void toast.error(errMsg(e) || t("skills.snippets.unreadable")))
     if (r) copyAs(r.text, "Content")
   }
+  const readOf = (s: Snippet) => api.snippet(s.key).catch((e) => void toast.error(errMsg(e) || t("skills.snippets.unreadable")))
+  const launchOf = async (s: Snippet) => {
+    const r = await readOf(s)
+    if (r) onLaunch(s, r.text)
+  }
+  const editOf = async (s: Snippet, improve = false) => {
+    const r = await readOf(s)
+    if (!r) return
+    onPick(s.key)
+    setDraft({ key: s.key, text: r.text })
+    if (improve) setHaiku(true)
+  }
   const copy = () =>
     text !== null &&
     copyText(text).then(
@@ -132,32 +144,32 @@ export function Snippets({
         onPick(key)
       },
     })
-  const rename = () =>
+  const rename = (key = sel) =>
     onPrompt({
-      title: t("skills.snippets.renameTitle", { name: snip?.command ?? sel }),
-      value: sel.replace(/^(u\/|p\/[^/]+\/)/, "").replace(/\.md$/, ""),
+      title: t("skills.snippets.renameTitle", { name: files.find((x) => x.key === key)?.command ?? key }),
+      value: key.replace(/^(u\/|p\/[^/]+\/)/, "").replace(/\.md$/, ""),
       placeholder: t("skills.snippets.newPlaceholder"),
       confirm: t("skills.snippets.rename"),
       run: async (name) => {
-        const head = /^(u\/|p\/[^/]+\/)/.exec(sel)?.[0] ?? ""
+        const head = /^(u\/|p\/[^/]+\/)/.exec(key)?.[0] ?? ""
         const to = head + (name.endsWith(".md") ? name : name + ".md")
-        if (to === sel) return true
-        const ok = await reportAction(() => api.snippetRename(sel, to))
+        if (to === key) return true
+        const ok = await reportAction(() => api.snippetRename(key, to))
         if (ok) {
-          onPick(to)
+          if (key === sel) onPick(to)
           onChanged()
         }
         return ok
       },
     })
-  const remove = () =>
+  const remove = (key = sel) =>
     onAsk({
-      title: t("skills.snippets.deleteTitle", { name: snip?.command ?? sel }),
+      title: t("skills.snippets.deleteTitle", { name: files.find((x) => x.key === key)?.command ?? key }),
       body: t("skills.snippets.deleteBody"),
       confirm: t("common.delete"),
       run: async () => {
-        if (await reportAction(() => api.snippetRemove([sel]))) {
-          onPick("")
+        if (await reportAction(() => api.snippetRemove([key]))) {
+          if (key === sel) onPick("")
           onChanged()
         }
       },
@@ -295,6 +307,22 @@ export function Snippets({
                               <Copy /> {t("skills.snippets.copyPath")}
                             </ContextMenuItem>
                             <ContextMenuSeparator />
+                            <ContextMenuItem onSelect={() => launchOf(s)}>
+                              <MessageSquarePlus /> {t("skills.snippets.launch")}
+                            </ContextMenuItem>
+                            <ContextMenuItem onSelect={() => editOf(s)}>
+                              <Pencil /> {t("skills.snippets.edit")}
+                            </ContextMenuItem>
+                            <ContextMenuItem onSelect={() => editOf(s, true)}>
+                              <Bot /> {t("skills.snippets.improve")}
+                            </ContextMenuItem>
+                            <ContextMenuItem onSelect={() => rename(s.key)}>
+                              <Pencil /> {t("skills.snippets.rename")}
+                            </ContextMenuItem>
+                            <ContextMenuItem variant="destructive" onSelect={() => remove(s.key)}>
+                              <Trash2 /> {t("common.delete")}
+                            </ContextMenuItem>
+                            <ContextMenuSeparator />
                             <ContextMenuItem onSelect={() => toggle(s.key)}>
                               {picked.has(s.key) ? <Unlink /> : <Merge />} {picked.has(s.key) ? t("skills.snippets.unmerge") : t("skills.snippets.mergePick")}
                             </ContextMenuItem>
@@ -374,10 +402,10 @@ export function Snippets({
                 </>
               ) : (
                 <>
-                  <Button variant="ghost" size="sm" onClick={rename} disabled={text === null}>
+                  <Button variant="ghost" size="sm" onClick={() => rename()} disabled={text === null}>
                     <Pencil /> {t("skills.snippets.rename")}
                   </Button>
-                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={remove} disabled={text === null}>
+                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => remove()} disabled={text === null}>
                     <Trash2 /> {t("common.delete")}
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => text !== null && setDraft({ key: sel, text })} disabled={text === null}>

@@ -1,4 +1,4 @@
-import { Fragment, useState, useSyncExternalStore } from "react"
+import { Fragment, useEffect, useState, useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
 import { AlarmClock, LayoutDashboard, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, Coffee, Microwave, Snowflake, History, FileText, Inbox, NotebookPen, Info, Fan, Search, ShieldCheck, Tag, Users, X } from "lucide-react"
@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useKeepWarm } from "@/hooks/useKeepWarm"
+import { useLocal } from "@/hooks/useLocal"
 import { CreditsButton } from "./Credits"
 import { PairButton } from "./PairDevice"
 import { InvitesButton } from "./InvitesButton"
@@ -25,6 +26,7 @@ import { ProjectItems, ProjectTree } from "./ProjectTree"
 import { segs } from "@/lib/paths"
 import { CM, GroupItems, SessionItems } from "./SessionMenu"
 import { nest } from "./SessionList"
+import { api } from "@/lib/api"
 import type { Session, VGroup } from "@/lib/api"
 import { useActions, type Row } from "./actions"
 
@@ -80,10 +82,19 @@ function KidsBadge({ n, open, live, onClick }: { n: number; open: boolean; live?
   )
 }
 
-function Heading({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
+function Heading({ children, action, fold }: { children: React.ReactNode; action?: React.ReactNode; fold?: { folded: boolean; toggle: () => void } }) {
   return (
     <div className="mt-5 mb-1 flex items-center px-2">
-      <h2 className="flex-1 text-xs font-semibold text-muted-foreground">{children}</h2>
+      <h2 className="flex-1 text-xs font-semibold text-muted-foreground">
+        {fold ? (
+          <button onClick={fold.toggle} aria-expanded={!fold.folded} className="flex items-center gap-1 hover:text-foreground">
+            <ChevronRight className={cn("size-3.5 transition-transform", !fold.folded && "rotate-90")} aria-hidden />
+            {children}
+          </button>
+        ) : (
+          children
+        )}
+      </h2>
       {action}
     </div>
   )
@@ -91,13 +102,17 @@ function Heading({ children, action }: { children: React.ReactNode; action?: Rea
 
 // Sessions actives depuis moins d'une heure : leur cache est chaud, les reprendre coûte peu.
 // En orange, celles dont le cache expire dans moins de 10 minutes.
-function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go: (r: Route) => void }) {
+function Hot({ rows, now, ttl, go, title, hint, foldKey }: { rows: Row[]; now: number; ttl: number; go: (r: Route) => void; title: string; hint: string; foldKey?: string }) {
   const { t } = useTranslation()
   const a = useActions()
+  const [folded, setFolded] = useLocal(foldKey ?? "gld.hot.unfoldable", "")
+  const fold = !!foldKey && folded === "1"
   const warm = useKeepWarm()
-  // Un dossier par projet de travail, le plus récemment actif d'abord (les lignes arrivent déjà triées par date).
+  // Un dossier par projet de travail, par ordre alphabétique ; dans un dossier, les sessions restent triées par date.
   const folders = new Map<string, Row[]>()
   for (const r of rows) folders.set(r.g.project, [...(folders.get(r.g.project) ?? []), r])
+  const label = (p: string) => p.split("/").filter(Boolean).pop() ?? p
+  const ordered = [...folders].sort(([x], [y]) => label(x).localeCompare(label(y)) || x.localeCompare(y))
   const [opened, setOpened] = useState<Set<string>>(new Set())
   const toggle = (id: string) =>
     setOpened((o) => {
@@ -157,11 +172,16 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
   return (
     <>
       <Heading>
-        <span title={t("shell.sidebar.hotHint")}>
-          {t("shell.sidebar.hot")}
-        </span>
+        {foldKey ? (
+          <button onClick={() => setFolded(fold ? "" : "1")} aria-expanded={!fold} title={hint} className="flex items-center gap-1 hover:text-foreground">
+            <ChevronRight className={cn("size-3.5 transition-transform", !fold && "rotate-90")} aria-hidden />
+            {title} <span className="tabular-nums">{rows.length}</span>
+          </button>
+        ) : (
+          <span title={hint}>{title}</span>
+        )}
       </Heading>
-      {[...folders].map(([project, rs]) => (
+      {!fold && ordered.map(([project, rs]) => (
         <details key={project} open className="group/hot">
           <ContextMenu>
             <ContextMenuTrigger asChild>
@@ -170,7 +190,7 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
                 className="flex h-7 cursor-pointer list-none items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted [&::-webkit-details-marker]:hidden"
               >
                 <ChevronRight className="size-3.5 shrink-0 transition-transform group-open/hot:rotate-90" aria-hidden />
-                <span className="flex-1 truncate">{project.split("/").filter(Boolean).pop() ?? project}</span>
+                <span className="flex-1 truncate">{label(project)}</span>
                 <span className="tabular-nums">{rs.length}</span>
               </summary>
             </ContextMenuTrigger>
@@ -268,6 +288,26 @@ function filterTree(nodes: Node[], q: string): Node[] {
   })
 }
 
+// Pied de navbar : version courante (un build de travail affiche son `git describe`) et lien vers la release plus récente.
+function VersionFooter() {
+  const { t } = useTranslation()
+  const [u, setU] = useState<{ current: string; latest: string; url: string; newer: boolean }>()
+  useEffect(() => {
+    api.updateInfo().then(setU, () => {})
+  }, [])
+  if (!u) return null
+  return (
+    <div className="flex items-center gap-2 border-t px-4 py-2 text-xs text-muted-foreground tabular-nums">
+      <span className="truncate" title={u.current}>{u.current}</span>
+      {u.newer && (
+        <a href={u.url} target="_blank" rel="noopener noreferrer" className="ml-auto shrink-0 font-medium text-primary hover:underline">
+          {t("shell.sidebar.updateTo", { latest: u.latest })}
+        </a>
+      )}
+    </div>
+  )
+}
+
 export function Sidebar({ searchRef, ...p }: SidebarProps) {
   const { t } = useTranslation()
   // Recherche propre à la navbar : indépendante de celle de la barre du haut (paramètre d'URL q).
@@ -276,6 +316,11 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
   const show = (label: string) => !nqt || label.toLowerCase().includes(nqt)
   const tree = nqt ? filterTree(p.tree, nqt) : p.tree
   const favGroups = p.favGroups.filter(({ vg }) => show(vg.name))
+  const actions = useActions()
+  const [projFold, setProjFold] = useLocal("gld.projects.folded", "")
+  const [localFold, setLocalFold] = useLocal("gld.local.folded", "")
+  const openRows = p.hot.filter((r) => actions.live.has(r.s.id))
+  const warmRows = p.hot.filter((r) => !actions.live.has(r.s.id) && p.now - r.s.mtime < p.ttl)
   const favRows = p.favRows.filter((r) => show(r.s.title))
   const r = p.route
   const link = (to: Route) => ({ to, onClick: () => p.go(to) })
@@ -331,6 +376,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
       <ScrollArea className="min-h-0 flex-1">
         <CleanupWarning />
         <nav className="px-2 pb-3" aria-label={t("shell.sidebar.navigation")}>
+          {show(t("shell.app.title.home")) && <NavItem icon={LayoutDashboard} label={t("shell.app.title.home")} active={r.kind === "home"} {...link({ kind: "home" })} />}
           {show(t("shell.sidebar.carousel")) && <NavItem icon={GalleryHorizontalEnd} label={t("shell.sidebar.carousel")} n={p.carousel.n} active={p.carousel.on} onClick={p.carousel.start} />}
           {!nqt && (r.kind === "dir" || r.kind === "project") && (
             <NavItem icon={NotebookPen} label={t("shell.sidebar.addNote")} active={false} onClick={() => { window.dispatchEvent(new Event("gld:note-add")); p.onClose() }} />
@@ -338,7 +384,6 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           {show(t("shell.app.title.all")) && <NavItem icon={Inbox} label={t("shell.app.title.all")} n={p.counts.all} active={r.kind === "all"} {...link({ kind: "all" })} />}
           {show(t("shell.app.title.tabs")) && <NavItem icon={History} label={t("shell.app.title.tabs")} active={r.kind === "tabs"} {...link({ kind: "tabs" })} />}
           {show(t("shell.app.title.extensions")) && <NavItem icon={Puzzle} label={t("shell.app.title.extensions")} active={r.kind === "extensions" || r.kind === "skills"} {...link({ kind: "extensions" })} />}
-          {show(t("shell.app.title.backup")) && <NavItem icon={ArchiveRestore} label={t("shell.app.title.backup")} active={r.kind === "backup"} {...link({ kind: "backup" })} />}
           {show(t("teams.title")) && <NavItem icon={Users} label={t("teams.title")} active={r.kind === "teams" || r.kind === "team"} {...link({ kind: "teams" })} />}
           {!nqt && <InvitesButton />}
           {show(t("shell.app.title.config")) && <NavItem icon={SlidersHorizontal} label={t("shell.app.title.config")} active={r.kind === "config"} {...link({ kind: "config", tab: "" })} />}
@@ -353,7 +398,8 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
             />
           )}
 
-          {!nqt && p.hot.length > 0 && <Hot rows={p.hot} now={p.now} ttl={p.ttl} go={p.go} />}
+          {!nqt && openRows.length > 0 && <Hot rows={openRows} now={p.now} ttl={p.ttl} go={p.go} title={t("shell.sidebar.hot")} hint={t("shell.sidebar.hotHint")} foldKey="gld.hot.openFolded" />}
+          {!nqt && warmRows.length > 0 && <Hot rows={warmRows} now={p.now} ttl={p.ttl} go={p.go} title={t("shell.sidebar.warmClosed")} hint={t("shell.sidebar.warmClosedHint")} foldKey="gld.hot.warmFolded" />}
 
           {(favRows.length > 0 || favGroups.length > 0) && (
             <>
@@ -367,7 +413,6 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
                         label={vg.name}
                         n={p.groupCount(vg)}
                         active={r.kind === "group" && r.name === vg.name && r.key === key}
-          {show(t("shell.app.title.home")) && <NavItem icon={LayoutDashboard} label={t("shell.app.title.home")} active={r.kind === "home"} {...link({ kind: "home" })} />}
                         {...link({ kind: "group", name: vg.name, key })}
                       />
                     </div>
@@ -383,13 +428,14 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
 
           {a.projects.some((x) => show(x.name)) && (
             <>
-              <Heading>{t("shell.sidebar.projects")}</Heading>
-              <ProjectList route={r} go={p.go} q={nqt} />
+              <Heading fold={{ folded: projFold === "1", toggle: () => setProjFold(projFold ? "" : "1") }}>{t("shell.sidebar.projects")}</Heading>
+              {projFold !== "1" && <ProjectList route={r} go={p.go} q={nqt} />}
             </>
           )}
 
           <DropZone onDir={a.addDirPath}>
           <Heading
+            fold={{ folded: localFold === "1", toggle: () => setLocalFold(localFold ? "" : "1") }}
             action={
               <Tip label={t("shell.sidebar.addDirHint")}>
                 <Button variant="ghost" size="icon-xs" onClick={a.addDir} aria-label={t("shell.sidebar.addDir")}>
@@ -400,7 +446,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           >
             {t("shell.sidebar.local")}
           </Heading>
-          {p.loading ? (
+          {localFold === "1" ? null : p.loading ? (
             <div className="space-y-2 px-2">
               <Skeleton className="h-6 w-full" />
               <Skeleton className="h-6 w-4/5" />
@@ -438,6 +484,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
         )}
       </div>
       )}
+      <VersionFooter />
     </>
   )
   if (wide)
@@ -453,6 +500,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
         id="menu"
         aria-describedby={undefined}
         showCloseButton={false}
+        {...swipeHandlers((d) => d === "left" && p.onClose())}
         // Focus sur le tiroir lui-même, pas sur son premier bouton : sinon l'infobulle de ce bouton s'ouvre sur la recherche.
         onOpenAutoFocus={(e) => (e.preventDefault(), (e.currentTarget as HTMLElement).focus())}
         // Le tiroir s'ouvre depuis le bouton de l'en-tête, hors de tout DialogTrigger : on lui rend le focus à la main.
@@ -468,4 +516,3 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
     </Dialog>
   )
 }
-        {...swipeHandlers((d) => d === "left" && p.onClose())}

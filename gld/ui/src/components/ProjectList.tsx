@@ -22,7 +22,7 @@ export function ProjectList({ route, go, q = "" }: { route: Route; go: (r: Route
   const toggle = (name: string) => setOpen("p/" + name, !opened["p/" + name])
   return (
     <ul className="space-y-px">
-      {a.projects.filter((p) => p.name.toLowerCase().includes(q)).map((p) => {
+      {[...a.projects].sort((x, y) => x.name.localeCompare(y.name)).filter((p) => p.name.toLowerCase().includes(q)).map((p) => {
         const active = route.kind === "project" && route.name === p.name
         const isOpen = !!opened["p/" + p.name]
         return (

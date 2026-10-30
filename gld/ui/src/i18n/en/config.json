@@ -25,6 +25,8 @@
       "locationAria": "Settings location",
       "projectDirAria": "Project folder",
       "toCreate": "file will be created on the first change",
+      "doctor": "Run /doctor",
+      "doctorHint": "Opens a session that runs /doctor (Claude Code installation diagnostic)",
       "applyNote": "Each change is applied immediately, after a backup (History tab). Open sessions reload settings on their own (except model, effort and plugins: /model, /effort, /reload-plugins).",
       "copiedToUser": "Rule copied to your settings",
       "pickDir": "Add a folder to {{dir}}",
@@ -33,7 +35,7 @@
         "projects": "Projects",
         "precedence": "Precedence",
         "permissions": "Permissions",
-        "settings": "Settings",
+        "settings": "Claude CLI",
         "backups": "History",
         "interface": "Interface",
         "sync": "Sync"

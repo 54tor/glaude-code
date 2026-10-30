@@ -169,7 +169,7 @@ function Item({
   const { t } = useTranslation()
   const a = useActions()
   const git = useGit()
-  const groups = n.g ? a.vgroups.filter((vg) => vg.project === n.g!.project) : []
+  const groups = n.g ? a.vgroups.filter((vg) => vg.project === n.g!.project).sort((x, y) => x.name.localeCompare(y.name)) : []
   const repos = n.g ? (git.repos[n.g.project] ?? []) : []
   const kids = (!leaf && n.kids.size > 0) || groups.length > 0 || repos.length > 0
   const open = isOpen(n)

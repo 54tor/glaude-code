@@ -346,6 +346,11 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
       : null
   const metaExtra = session && (
     <>
+      {(live.st?.model || detail?.models.at(-1)) && (
+        <code className="shrink-0 rounded-md border px-2 py-0.5 text-xs" title={t("conversation.live.model")}>
+          {live.st?.model || detail?.models.at(-1)}
+        </code>
+      )}
       <LiveAgents live={live} dir={dir} id={id} />
       <LiveTasks live={live} dir={dir} id={id} />
       {gitDirs.map((d) => (
@@ -566,12 +571,12 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             onWrite={sentDown}
             compactHint={hint}
             coldHint={cold}
+            first={msgs?.length === 0}
             extra={
               <>
                 {termOn && a.live.has(id) && (
                   <Button variant="ghost" size="xs" className="text-muted-foreground max-md:[&>svg]:hidden" onClick={() => setView("terminal")} title={t("conversation.view.modeTitle")}>
                     <SquareTerminal /> {t("conversation.view.modeTerminal")}
-            first={msgs?.length === 0}
                   </Button>
                 )}
                 {!a.live.has(id) && (
