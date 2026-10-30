@@ -255,7 +255,7 @@ func childProxy(target *url.URL, token string) *httputil.ReverseProxy {
 			r.Out.Header.Del(rightsHeader)
 			if g := gateFrom(r.In); g != nil && g.p != nil {
 				var list []string
-				if id, ok := homeIDFor(homeFrom(r.In)); ok {
+				if id, ok := homeIDFor(homeFrom(r.In)); ok && (g.p.Token || g.s != nil) {
 					if m, err := g.rights(id); err == nil {
 						for _, x := range allRights {
 							if m[x] {
