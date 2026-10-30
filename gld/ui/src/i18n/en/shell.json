@@ -371,6 +371,8 @@
       "description": "A session can be restored for {{days}} days, then it is permanently deleted with its associated files.",
       "empty": "The trash is empty.",
       "deleted": "deleted {{ago}}",
+      "search": "Search (title, folder, id)",
+      "noMatch": "No matching session.",
       "restore": "Restore",
       "purge": "Delete permanently",
       "confirm_one": "Permanently delete {{count}} session? Transcript, subagents and associated files are removed.",

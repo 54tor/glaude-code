@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { RotateCcw, Shredder } from "lucide-react"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
@@ -7,6 +7,7 @@ import { errMsg } from "@/lib/apiError"
 import { reportAction } from "@/lib/report"
 import { ago, size, tilde } from "@/lib/format"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useActions } from "./actions"
 
@@ -18,11 +19,17 @@ export function SessionTrash({ open, onClose, reload }: { open: boolean; onClose
   const a = useActions()
   const [rows, setRows] = useState<Trashed[] | null>(null)
   const [days, setDays] = useState(30)
+  const [q, setQ] = useState("")
   const [confirm, setConfirm] = useState<string[] | null>(null) // ids à supprimer pour de bon, après confirmation
   const load = useCallback(() => api.sessionTrash().then((r) => (setRows(r.sessions as Trashed[]), setDays(r.days)), (e) => toast.error(errMsg(e))), [])
   useEffect(() => {
     if (open) void load()
   }, [open, load])
+  const shown = useMemo(() => {
+    const n = q.trim().toLowerCase()
+    const sorted = [...(rows ?? [])].sort((x, y) => y.at - x.at)
+    return n ? sorted.filter((r) => `${r.title} ${r.cwd} ${r.dir} ${r.id}`.toLowerCase().includes(n)) : sorted
+  }, [rows, q])
   const act = async (run: () => Promise<{ message: string }>) => {
     await reportAction(run)
     setConfirm(null)
@@ -40,9 +47,14 @@ export function SessionTrash({ open, onClose, reload }: { open: boolean; onClose
         ) : rows.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">{t("shell.trash.empty")}</p>
         ) : (
+          <>
+            <Input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("shell.trash.search")} aria-label={t("shell.trash.search")} />
+            {shown.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">{t("shell.trash.noMatch")}</p>
+            ) : (
           <div className="max-h-[50vh] min-w-0 overflow-y-auto rounded-md border">
             <ul className="divide-y">
-              {rows.map((r) => (
+              {shown.map((r) => (
                 <li key={r.id} className="flex items-center gap-2 px-3 py-2">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium" title={r.title}>
@@ -62,6 +74,8 @@ export function SessionTrash({ open, onClose, reload }: { open: boolean; onClose
               ))}
             </ul>
           </div>
+            )}
+          </>
         )}
         {confirm && (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm">
@@ -75,8 +89,8 @@ export function SessionTrash({ open, onClose, reload }: { open: boolean; onClose
           </div>
         )}
         <DialogFooter>
-          {!!rows?.length && (
-            <Button variant="outline" className="mr-auto" onClick={() => setConfirm(rows.map((r) => r.id))}>
+          {!!shown.length && (
+            <Button variant="outline" className="mr-auto" onClick={() => setConfirm(shown.map((r) => r.id))}>
               <Shredder /> {t("shell.trash.emptyAll")}
             </Button>
           )}
