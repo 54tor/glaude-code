@@ -261,6 +261,11 @@ func sendToSession(id, text string) error {
 
 // sendToPane colle le texte dans le panneau puis valide (le texte est déjà contrôlé par l'appelant).
 func sendToPane(pane, text string) error {
+	// La surcouche de /btw intercepte les touches jusqu'à Échap : sans elle, le texte ne parviendrait pas au prompt.
+	if scr, err := capturePane(pane); err == nil && btwOpen(scr) {
+		tmuxRun("", "send-keys", "-t", pane, "Escape")
+		time.Sleep(150 * time.Millisecond)
+	}
 	// ponytail: fenêtre résiduelle de 200 ms entre le collage et l'Entrée, pendant laquelle un dialogue pourrait apparaître ; pas de parade côté tmux
 	// Un texte qui finit sur « @chemin » ouvre le menu de fichiers de Claude Code, qui avale Entrée : l'espace final le ferme.
 	if i := strings.LastIndexAny(text, " \n"); strings.HasPrefix(text[i+1:], "@") {
@@ -292,7 +297,7 @@ func sendToPane(pane, text string) error {
 var allowedKeys = map[string]string{
 	"Enter": "Enter", "Escape": "Escape", "Up": "Up", "Down": "Down", "Left": "Left", "Right": "Right",
 	"Tab": "Tab", "ShiftTab": "BTab", "Backspace": "BSpace", "Space": "Space", "CtrlC": "C-c",
-	"1": "1", "2": "2", "3": "3", "4": "4", "5": "5", "6": "6", "7": "7", "8": "8", "9": "9", "y": "y", "n": "n",
+	"1": "1", "2": "2", "3": "3", "4": "4", "5": "5", "6": "6", "7": "7", "8": "8", "9": "9", "y": "y", "n": "n", "f": "f",
 }
 
 func paneFor(id string) (string, error) {
@@ -344,4 +349,15 @@ func sendKey(id, key string) error {
 	}
 	_, err = tmuxRun("", "send-keys", "-t", p, k)
 	return err
+}
+
+var btwFoot = regexp.MustCompile(`to scroll · c to copy · f to fork · Esc to close`)
+
+// btwOpen : l'écran montre la surcouche d'une question /btw (pied d'aide dans les dernières lignes).
+func btwOpen(screen string) bool {
+	lines := strings.Split(strings.TrimRight(screen, "\n "), "\n")
+	if len(lines) > 4 {
+		lines = lines[len(lines)-4:]
+	}
+	return btwFoot.MatchString(strings.Join(lines, "\n"))
 }

@@ -207,3 +207,12 @@ func TestEnvoiCommandeVideLaLigne(t *testing.T) {
 		t.Fatalf("la ligne n'est pas vidée avant la commande : %s", got)
 	}
 }
+
+func TestBtwOpen(t *testing.T) {
+	if !btwOpen("  /btw q\n\n  réponse\n\n  ↑/↓ to scroll · c to copy · f to fork · Esc to close\n") {
+		t.Fatal("surcouche non détectée")
+	}
+	if btwOpen("❯ \n  ⏵⏵ auto mode on\n") {
+		t.Fatal("faux positif")
+	}
+}
