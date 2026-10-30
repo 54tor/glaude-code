@@ -3073,6 +3073,10 @@ paths:
                   type: string
                 auto:
                   type: boolean
+                  description: Génère le titre à partir de la conversation (remplace title).
+                keep:
+                  type: boolean
+                  description: Avec auto, ne fait rien (200, title vide) si un titre est déjà posé.
       x-gld-right: exec
       responses:
         '200':
