@@ -1,12 +1,23 @@
+import { useSyncExternalStore } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"
 import { tilde } from "@/lib/format"
-import { i18n } from "@/i18n"
 
 const asked = new Set<string>() // dossiers dont la question est déjà affichée
 
 export const resetTrust = () => asked.clear()
+
+// Dossiers en attente de réponse, affichés par TrustDialog (modale plein écran, une question à la fois).
+export type TrustAsk = { dir: string; label: string; answer: (yes: boolean) => void }
+let pending: TrustAsk[] = []
+const subs = new Set<() => void>()
+const set = (next: TrustAsk[]) => ((pending = next), subs.forEach((f) => f()))
+export const useTrustAsk = () =>
+  useSyncExternalStore(
+    (f) => (subs.add(f), () => void subs.delete(f)),
+    () => pending
+  )
 
 // Une session lancée dans un dossier neuf attend, dans son terminal, la réponse au dialogue de confiance de Claude Code. On guette
 // ce dialogue quelques secondes et on pose la question ici ; la réponse est envoyée au terminal.
@@ -21,13 +32,8 @@ export async function watchTrust(home: string) {
           () => void asked.delete(dir),
           (e) => (asked.delete(dir), toast.error(errMsg(e)))
         )
-      toast(i18n.t("conversation.trust.title", { dir: tilde(dir, home) }), {
-        description: i18n.t("conversation.trust.description"),
-        duration: Infinity,
-        action: { label: i18n.t("conversation.trust.accept"), onClick: () => void answer(true) },
-        cancel: { label: i18n.t("conversation.trust.refuse"), onClick: () => void answer(false) },
-        onDismiss: () => asked.delete(dir),
-      })
+      const label = tilde(dir, home)
+      set([...pending, { dir, label, answer: (yes) => (set(pending.filter((p) => p.dir !== dir)), void answer(yes)) }])
     }
     if (dirs.length > 0) return
   }
