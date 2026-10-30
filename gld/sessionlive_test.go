@@ -185,3 +185,18 @@ func TestPendingQueueImmediateDequeue(t *testing.T) {
 		t.Fatalf("file = %+v, veut seulement N2 (aucun prompt résiduel)", q)
 	}
 }
+
+// Hand-back de sous-agent : dequeue 12 ms après l'enqueue, pris avec un résidu plus ancien en file.
+func TestPendingQueueServiceMessageDequeue(t *testing.T) {
+	var q []Queued
+	for _, l := range []string{
+		`{"type":"queue-operation","operation":"enqueue","timestamp":"2026-10-30T00:50:00.000Z","content":"X"}`,
+		`{"type":"queue-operation","operation":"enqueue","timestamp":"2026-10-30T00:59:55.968Z","content":"<agent-message from=\"a2\">r</agent-message>"}`,
+		`{"type":"queue-operation","operation":"dequeue","timestamp":"2026-10-30T00:59:55.981Z"}`,
+	} {
+		q = applyQueueOp(q, []byte(l))
+	}
+	if len(q) != 1 || q[0].T != "X" {
+		t.Fatalf("résidu : %v", q)
+	}
+}

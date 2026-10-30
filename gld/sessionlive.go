@@ -136,7 +136,13 @@ func applyQueueOp(q []Queued, l []byte) []Queued {
 		if n := len(q); n > 0 {
 			// Un dequeue collé à son enqueue (< 5 ms) retire celui-ci : Claude Code prend le message aussitôt, sans file. Retirer le plus
 			// ancien laissait un résidu, puis chaque paire suivante retirait ce résidu et laissait le dernier prompt affiché à jamais.
-			if a, b := parseTs(q[n-1].Ts), parseTs(o.Timestamp); !a.IsZero() && !b.IsZero() && b.Sub(a) >= 0 && b.Sub(a) < 5*time.Millisecond {
+			// Un message de service (hand-back de sous-agent) est repris 12 à 14 ms après son enqueue : seuil à la seconde pour lui.
+			a, b := parseTs(q[n-1].Ts), parseTs(o.Timestamp)
+			lim := 5 * time.Millisecond
+			if serviceMsg.MatchString(strings.TrimSpace(q[n-1].T)) {
+				lim = time.Second
+			}
+			if !a.IsZero() && !b.IsZero() && b.Sub(a) >= 0 && b.Sub(a) < lim {
 				return q[:n-1]
 			}
 			q = q[1:]
