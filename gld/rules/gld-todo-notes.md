@@ -1,12 +1,29 @@
 <!-- Managed by gld: overwritten at every gld startup. Do not edit; add your own rules under another name. -->
 # Todos in gld notes
 
-When the user asks to note something "en todo" / as a todo, store it in gld's notepad file `${CLAUDE_CONFIG_DIR:-~/.claude}/gld-web-notes.json` (a JSON map `key -> text`).
+gld has a notepad per folder and per project, shown next to the sessions in its web UI. It is one JSON file, `${CLAUDE_CONFIG_DIR:-~/.claude}/gld-web-notes.json`: a map `key -> text`. Todos live there.
 
-- If the current project has a `todo.md` (repo root, any case), write nothing: ask with `AskUserQuestion` whether to add it to `todo.md` or to the gld notepad.
-- Otherwise the key is `p/<project name>` when the user names a project, else `d/<absolute working directory>`.
-- The text of a note is a JSON array of strings, serialized as a string (one item per todo). Append to the existing items; never touch other keys.
-- Write atomically (temp file, then `mv`), mode `0600`, with `jq`:
+## When it applies
+
+The user asks to note something as a todo: "note en todo", "ajoute aux todos", "à faire : …", "add a todo", "remind me to …" (as a to-do, not a time-based reminder). Several items in one message are several todos. It also covers reading ("what are my todos?"), ticking off and removing items.
+
+## Where to write (in this order)
+
+1. The current project has a `todo.md` (repo root, any case): write nothing. Ask with `AskUserQuestion` whether to add the item to `todo.md` or to the gld notepad (2 options, recommend `todo.md`). Apply the answer to this request only.
+2. The user names a project ("dans le projet X"): key `p/<X>`, exactly as named.
+3. Otherwise: key `d/<absolute working directory>` (no trailing slash).
+
+## Format
+
+The value is a JSON array of strings, serialized as a string, one item per todo, e.g. `"[\"fix login\",\"bump deps\"]"`. This is what the UI reads and writes. A legacy value with one item per line is also read; rewrite it as an array when you touch it.
+
+- Item text: the user's own words, trimmed, one line, in the user's language. No checkbox syntax, no date, no prefix.
+- Append at the end. Skip an item that is already present (exact match) and say so.
+- Never touch other keys. Never delete a note unless the user asked to clear it; an empty note is removed by the UI, so to clear one delete its key.
+
+## How to write
+
+Atomic (temp file, then `mv`), mode `0600`, with `jq`. Append:
 
 ```bash
 f="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/gld-web-notes.json"
@@ -16,5 +33,17 @@ jq --arg k "d/$PWD" --arg i "todo text" \
   "$f" > "$f.tmp" && chmod 600 "$f.tmp" && mv "$f.tmp" "$f"
 ```
 
-- If the file is not valid JSON, do not overwrite it; tell the user.
-- Limits: 64 KB per note, 500 notes. Confirm in one line with the key and the item added.
+Read the items of a key: `jq -r --arg k "d/$PWD" '.[$k] // "[]" | fromjson? // empty | .[]' "$f"`.
+
+Remove an item (exact text): same pipeline with `| map(select(. != $i))`; when nothing is left, `del(.[$k])` instead.
+
+## Safety
+
+- If the file exists but is not valid JSON, do not overwrite it: tell the user.
+- If `jq` is missing, say so and stop; do not hand-edit the JSON.
+- Limits: 64 KB per note, 500 notes. Above that, say so instead of truncating.
+- gld holds a lock while saving from the UI and this write does not; run the command once, never in a loop.
+
+## Reply
+
+One line: the key used and the item added (or removed). For a read, list the items as bullets. Nothing else.
