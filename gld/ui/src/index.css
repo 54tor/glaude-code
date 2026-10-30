@@ -254,6 +254,8 @@
     }
   }
 }
+/* Tactile : les méta à 11 px (text-2xs) passent à 12 px. Le thème est « inline », la variable seule n'y suffirait pas. */
+@media (pointer: coarse) { .text-2xs { font-size: 0.75rem; } }
 
 /* Trait du spinner en pixels d'écran, quelle que soit la taille de l'icône. */
 .lucide-fan { stroke-width: 1px; }
