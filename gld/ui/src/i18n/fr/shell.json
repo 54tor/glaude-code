@@ -118,6 +118,7 @@
       "resumeFolderHint": "Un onglet de terminal par session des 7 derniers jours (hors sessions ouvertes)",
       "resumeFolder": "Reprendre le dossier",
       "subfolders": "Sessions des sous-dossiers",
+      "pullRefresh": "Recharger",
       "groupMissing": "Groupe introuvable",
       "dirMissing": "Dossier introuvable",
       "noSession": "Aucune session",

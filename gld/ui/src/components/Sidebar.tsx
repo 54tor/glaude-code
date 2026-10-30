@@ -8,6 +8,7 @@ import type { Node } from "@/lib/tree"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { swipeHandlers } from "@/lib/swipe"
 import { Tip } from "@/components/ui/tooltip"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { Input } from "@/components/ui/input"
@@ -220,7 +221,7 @@ export type SidebarProps = {
 }
 
 // Seuil md de Tailwind : en dessous, le menu est un tiroir.
-const MD = "(min-width: 768px)"
+export const MD = "(min-width: 768px)"
 const onWide = (cb: () => void) => {
   const m = matchMedia(MD)
   m.addEventListener("change", cb)
@@ -467,3 +468,4 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
     </Dialog>
   )
 }
+        {...swipeHandlers((d) => d === "left" && p.onClose())}

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { swipeHandlers } from "@/lib/swipe"
 import { ArrowDown, ArrowUpToLine, Copy, Undo2, BarChart3, Bug, ChevronLeft, ChevronRight, FolderOpen, Power, FileText, Fan, MessageSquarePlus, MoreHorizontal, MessagesSquare, GalleryHorizontalEnd, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
@@ -398,6 +399,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   return (
     <Dialog open={!!session} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
+        {...swipeHandlers((d) => d === "right" && onClose(), true)}
         className="safe-t safe-b flex h-[calc(var(--vvh,100dvh)*0.94)] max-md:[&>[data-slot=dialog-close]]:top-[calc(env(safe-area-inset-top)+0.625rem)] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0 max-md:top-[var(--vvt,0px)] max-md:left-0 max-md:h-[var(--vvh,100dvh)] max-md:w-screen max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none max-md:border-0 sm:max-w-none"
         onCloseAutoFocus={(e) => focusRow(lastId.current) && e.preventDefault()}
       >

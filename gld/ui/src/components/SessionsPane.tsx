@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { ChevronRight, Lock, Search, WifiOff, RefreshCcwDot } from "lucide-react"
 import type { VGroup } from "@/lib/api"
@@ -48,11 +49,13 @@ export function SessionsPane({
   error,
   denied,
   retry,
+  onRefresh,
 }: {
   loading: boolean
   error: string | null // dernier chargement en échec (serveur arrêté, HTTP 5xx)
   denied?: boolean // droit sessions_read absent sur ce home
   retry: () => void
+  onRefresh: () => Promise<unknown> | void // tirer vers le bas en haut de liste (tactile)
   route: Route
   rows: Row[]
   subs: Row[] // sessions des sous-dossiers
@@ -71,8 +74,35 @@ export function SessionsPane({
   grouped: { n: number; hide: boolean; setHide: (v: boolean) => void } // sessions déjà groupées du dossier affiché
 }) {
   const { t } = useTranslation()
+  // Tirer vers le bas depuis le haut de la liste : au-delà de 70 px, on recharge. Suivi en pixels pour l'indicateur.
+  const [pull, setPull] = useState(0)
+  const [refreshing, setRefreshing] = useState(false)
+  const [startY, setStartY] = useState(-1)
+  const viewport = (el: Element) => el.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')
+  const onTouchStart = (e: React.TouchEvent) => setStartY(e.touches.length === 1 && (viewport(e.currentTarget)?.scrollTop ?? 1) === 0 ? e.touches[0].clientY : -1)
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (startY < 0 || refreshing) return
+    setPull(Math.min(100, Math.max(0, (e.touches[0].clientY - startY) / 2)))
+  }
+  const onTouchEnd = async () => {
+    const go = pull >= 70
+    setPull(0)
+    setStartY(-1)
+    if (!go) return
+    setRefreshing(true)
+    try {
+      await onRefresh()
+    } finally {
+      setRefreshing(false)
+    }
+  }
   return (
-    <ScrollArea className="min-h-0 flex-1">
+    <ScrollArea className="min-h-0 flex-1" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={() => (setPull(0), setStartY(-1))}>
+      {(pull > 0 || refreshing) && (
+        <div className="flex items-center justify-center overflow-hidden text-muted-foreground" style={{ height: refreshing ? 40 : pull }} aria-live="polite">
+          <RefreshCcwDot className={"size-4 " + (refreshing ? "animate-spin" : pull >= 70 ? "text-primary" : "")} aria-label={t("shell.pane.pullRefresh")} />
+        </div>
+      )}
       <div className="mx-auto max-w-page px-3 py-4 pb-24 md:px-6">
         {loading && error && (
           <Empty icon={denied ? Lock : WifiOff} title={denied ? t("auth.denied.title") : t("shell.pane.unreachable")} text={error}>

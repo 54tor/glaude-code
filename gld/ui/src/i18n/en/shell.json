@@ -118,6 +118,7 @@
       "resumeFolderHint": "One terminal tab per session of the last 7 days (excluding open sessions)",
       "resumeFolder": "Resume folder",
       "subfolders": "Sessions in subfolders",
+      "pullRefresh": "Refresh",
       "groupMissing": "Group not found",
       "dirMissing": "Folder not found",
       "noSession": "No sessions",

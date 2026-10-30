@@ -33,7 +33,8 @@ import { ShareDialog } from "@/components/ShareDialog"
 import { Prompt, type Ask as PromptAsk } from "@/components/Prompt"
 import { SessionSelectionBar } from "@/components/SessionSelectionBar"
 import { SessionsPane } from "@/components/SessionsPane"
-import { Sidebar } from "@/components/Sidebar"
+import { MD, Sidebar } from "@/components/Sidebar"
+import { swipeHandlers } from "@/lib/swipe"
 import { Palette } from "@/components/Palette"
 import { Dashboard } from "@/components/Dashboard"
 import { segs } from "@/lib/paths"
@@ -398,7 +399,7 @@ function Shell() {
           args={args}
         />
 
-        <main id="main" tabIndex={-1} className="relative flex min-h-0 min-w-0 flex-1 flex-col outline-none">
+        <main id="main" tabIndex={-1} className="relative flex min-h-0 min-w-0 flex-1 flex-col outline-none" {...swipeHandlers((d) => d === "right" && !matchMedia(MD).matches && setNavOpen(true), true)}>
           <PageHeader
             onMenu={() => setNavOpen(true)}
             title={title}
@@ -483,6 +484,7 @@ function Shell() {
               live={live}
               waiting={waiting}
               actions={actions}
+              onRefresh={() => reload().catch(() => {})}
               go={go}
               clearSearch={() => setQ("")}
               grouped={{ n: nGrouped, hide: !!hideGrouped, setHide: (v) => setHideGrouped(v ? "1" : "") }}
