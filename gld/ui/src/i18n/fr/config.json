@@ -71,15 +71,6 @@
       "none": "Rien ne correspond.",
       "note": "Une valeur barrée est écrasée par un niveau plus prioritaire. Les secrets sont masqués."
     },
-    "mcp": {
-      "check": "Vérifier l'état",
-      "failed": "Échec",
-      "readOnly": "Lecture seule : la configuration MCP se modifie avec `claude mcp`. Les secrets sont masqués.",
-      "unknownState": "état inconnu",
-      "variables": "variables : {{list}}",
-      "none": "Aucun serveur déclaré dans ~/.claude.json ni dans un .mcp.json.",
-      "others": "Autres serveurs (plugins, claude.ai)"
-    },
     "perms": {
       "kind": {
         "allow": "Autorisées",

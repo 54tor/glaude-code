@@ -1,26 +1,46 @@
 import { useEffect, useState } from "react"
-import { AlertTriangle, CheckCircle2, Fan, RefreshCw } from "lucide-react"
-import { toast } from "sonner"
+import { AlertTriangle, CheckCircle2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
-import { api, type CfgIssue, type EffRow, type HookInfo, type McpServer } from "@/lib/api"
-import { ApiError } from "@/lib/apiError"
+import { api, type CfgIssue, type EffRow, type HookInfo } from "@/lib/api"
 import { describeKey } from "@/lib/configKeys"
 import { tilde } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Choose } from "./Choose"
 
 const LV: Record<string, string> = { u: "user", p: "project", l: "local" }
 const KIND = new Set(["json", "hook", "permission", "plugin", "secret"])
-const fileLabel = (t: TFunction, id: string, home: string, projects: { dir: string; project: string }[]) =>
-  id === "u" ? "~/.claude/settings.json" : t(id[0] === "p" ? "config.health.fileProject" : "config.health.fileLocal", { dir: tilde(projects.find((p) => p.dir === id.slice(2))?.project ?? id.slice(2), home) })
+const fileLabel = (
+  t: TFunction,
+  id: string,
+  home: string,
+  projects: { dir: string; project: string }[]
+) =>
+  id === "u"
+    ? "~/.claude/settings.json"
+    : t(
+        id[0] === "p" ? "config.health.fileProject" : "config.health.fileLocal",
+        {
+          dir: tilde(
+            projects.find((p) => p.dir === id.slice(2))?.project ?? id.slice(2),
+            home
+          ),
+        }
+      )
 
 // --- santé ---------------------------------------------------------------------------------------------------
 
-export function HealthTab({ issues, home, projects }: { issues: CfgIssue[]; home: string; projects: { dir: string; project: string }[] }) {
+export function HealthTab({
+  issues,
+  home,
+  projects,
+}: {
+  issues: CfgIssue[]
+  home: string
+  projects: { dir: string; project: string }[]
+}) {
   const { t } = useTranslation()
   if (!issues.length)
     return (
@@ -31,11 +51,15 @@ export function HealthTab({ issues, home, projects }: { issues: CfgIssue[]; home
   return (
     <ul className="space-y-1">
       {issues.map((i, n) => (
-        <li key={n} className="flex items-start gap-2 rounded-md border px-3 py-2 text-sm">
+        <li
+          key={n}
+          className="flex items-start gap-2 rounded-md border px-3 py-2 text-sm"
+        >
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
           <span className="min-w-0">
             <span className="block text-xs font-medium text-muted-foreground">
-              {KIND.has(i.kind) ? t(`config.issueKind.${i.kind}`) : i.kind} · {fileLabel(t, i.file, home, projects)}
+              {KIND.has(i.kind) ? t(`config.issueKind.${i.kind}`) : i.kind} ·{" "}
+              {fileLabel(t, i.file, home, projects)}
             </span>
             <span className="break-words">{i.msg}</span>
           </span>
@@ -49,20 +73,39 @@ export function HealthTab({ issues, home, projects }: { issues: CfgIssue[]; home
 
 export function HooksTab({ hooks }: { hooks: HookInfo[] }) {
   const { t } = useTranslation()
-  if (!hooks.length) return <p className="py-8 text-sm text-muted-foreground">{t("config.hooks.none")}</p>
+  if (!hooks.length)
+    return (
+      <p className="py-8 text-sm text-muted-foreground">
+        {t("config.hooks.none")}
+      </p>
+    )
   return (
     <div className="space-y-2">
-      <p className="text-xs text-muted-foreground">{t("config.hooks.readOnly")}</p>
+      <p className="text-xs text-muted-foreground">
+        {t("config.hooks.readOnly")}
+      </p>
       <ul className="space-y-1">
         {hooks.map((h, n) => (
           <li key={n} className="rounded-md border px-3 py-2 text-sm">
             <p className="flex flex-wrap items-center gap-2">
               <span className="font-medium">{h.event}</span>
-              {h.matcher && <code className="rounded-sm bg-muted px-1 text-xs">{h.matcher}</code>}
-              <span className="text-xs text-muted-foreground">{LV[h.scope] ? t(`config.scope.${LV[h.scope]}`) : undefined}</span>
-              {h.missing && <span className="text-xs text-warning">{t("config.hooks.missing", { path: h.missing })}</span>}
+              {h.matcher && (
+                <code className="rounded-sm bg-muted px-1 text-xs">
+                  {h.matcher}
+                </code>
+              )}
+              <span className="text-xs text-muted-foreground">
+                {LV[h.scope] ? t(`config.scope.${LV[h.scope]}`) : undefined}
+              </span>
+              {h.missing && (
+                <span className="text-xs text-warning">
+                  {t("config.hooks.missing", { path: h.missing })}
+                </span>
+              )}
             </p>
-            <code className="mt-1 block text-xs break-all text-muted-foreground">{h.command || `(${h.type})`}</code>
+            <code className="mt-1 block text-xs break-all text-muted-foreground">
+              {h.command || `(${h.type})`}
+            </code>
           </li>
         ))}
       </ul>
@@ -72,9 +115,19 @@ export function HooksTab({ hooks }: { hooks: HookInfo[] }) {
 
 // --- précédence ----------------------------------------------------------------------------------------------
 
-const LEVEL = { u: "config.precedence.colUser", p: "config.precedence.colProject", l: "config.precedence.colLocal" } as const
+const LEVEL = {
+  u: "config.precedence.colUser",
+  p: "config.precedence.colProject",
+  l: "config.precedence.colLocal",
+} as const
 
-export function PrecedenceTab({ projects, home }: { projects: { dir: string; project: string }[]; home: string }) {
+export function PrecedenceTab({
+  projects,
+  home,
+}: {
+  projects: { dir: string; project: string }[]
+  home: string
+}) {
   const { t } = useTranslation()
   const [dir, setDir] = useState("")
   const [q, setQ] = useState("")
@@ -87,14 +140,36 @@ export function PrecedenceTab({ projects, home }: { projects: { dir: string; pro
     }
   }, [dir])
   const f = q.toLowerCase()
-  const shown = (rows ?? []).filter((r) => !f || r.path.toLowerCase().includes(f) || Object.values(r.values).some((v) => v.toLowerCase().includes(f)))
+  const shown = (rows ?? []).filter(
+    (r) =>
+      !f ||
+      r.path.toLowerCase().includes(f) ||
+      Object.values(r.values).some((v) => v.toLowerCase().includes(f))
+  )
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm">{t("config.precedence.seenFrom")}</span>
-        <Choose value={dir} onChange={setDir} options={[["", t("config.precedence.userOnly")], ...projects.map((p) => [p.dir, tilde(p.project, home)] as const)]} label={t("config.precedence.project")} className="min-w-0 max-w-80" />
-        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("config.precedence.filterPlaceholder")} className="h-8 w-48" aria-label={t("config.precedence.filterAria")} />
-        <span className="text-xs text-muted-foreground">{t("config.precedence.hint")}</span>
+        <Choose
+          value={dir}
+          onChange={setDir}
+          options={[
+            ["", t("config.precedence.userOnly")],
+            ...projects.map((p) => [p.dir, tilde(p.project, home)] as const),
+          ]}
+          label={t("config.precedence.project")}
+          className="max-w-80 min-w-0"
+        />
+        <Input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={t("config.precedence.filterPlaceholder")}
+          className="h-8 w-48"
+          aria-label={t("config.precedence.filterAria")}
+        />
+        <span className="text-xs text-muted-foreground">
+          {t("config.precedence.hint")}
+        </span>
       </div>
       {/* Sous sm, chaque réglage devient une carte : les trois niveaux s'empilent sous son nom, chacun avec son libellé. */}
       {rows === null ? (
@@ -110,18 +185,35 @@ export function PrecedenceTab({ projects, home }: { projects: { dir: string; pro
             </colgroup>
             <thead className="bg-muted/50 text-left text-xs font-semibold text-muted-foreground max-sm:hidden">
               <tr>
-                <th className="px-3 py-1.5">{t("config.precedence.colSetting")}</th>
-                <th className="px-3 py-1.5">{t("config.precedence.colUser")}</th>
-                <th className="px-3 py-1.5">{t("config.precedence.colProject")}</th>
-                <th className="px-3 py-1.5">{t("config.precedence.colLocal")}</th>
+                <th className="px-3 py-1.5">
+                  {t("config.precedence.colSetting")}
+                </th>
+                <th className="px-3 py-1.5">
+                  {t("config.precedence.colUser")}
+                </th>
+                <th className="px-3 py-1.5">
+                  {t("config.precedence.colProject")}
+                </th>
+                <th className="px-3 py-1.5">
+                  {t("config.precedence.colLocal")}
+                </th>
               </tr>
             </thead>
             <tbody className="max-sm:block">
               {shown.map((r) => (
-                <tr key={r.path} className="border-t align-top max-sm:block max-sm:py-1.5 max-sm:first:border-t-0">
+                <tr
+                  key={r.path}
+                  className="border-t align-top max-sm:block max-sm:py-1.5 max-sm:first:border-t-0"
+                >
                   <td className="px-3 py-1.5 max-sm:block">
-                    <span className="font-mono text-xs break-all">{r.path}</span>
-                    {describeKey(r.path) && <span className="mt-0.5 block text-2xs leading-snug text-muted-foreground">{describeKey(r.path)}</span>}
+                    <span className="font-mono text-xs break-all">
+                      {r.path}
+                    </span>
+                    {describeKey(r.path) && (
+                      <span className="mt-0.5 block text-2xs leading-snug text-muted-foreground">
+                        {describeKey(r.path)}
+                      </span>
+                    )}
                   </td>
                   {(["u", "p", "l"] as const).map((lv) => (
                     <td
@@ -131,17 +223,33 @@ export function PrecedenceTab({ projects, home }: { projects: { dir: string; pro
                       className={cn(
                         "px-3 py-1.5 text-xs break-words max-sm:block max-sm:py-0.5 max-sm:before:text-2xs max-sm:before:text-muted-foreground max-sm:before:content-[attr(data-label)]",
                         r.values[lv] === undefined && "max-sm:hidden",
-                        r.values[lv] !== undefined && (r.merged || r.winner === lv) ? "font-medium" : "text-muted-foreground"
+                        r.values[lv] !== undefined &&
+                          (r.merged || r.winner === lv)
+                          ? "font-medium"
+                          : "text-muted-foreground"
                       )}
                     >
-                      <span className={cn("line-clamp-3", !(r.values[lv] !== undefined && (r.merged || r.winner === lv)) && "line-through decoration-muted-foreground/40")}>{r.values[lv] ?? ""}</span>
+                      <span
+                        className={cn(
+                          "line-clamp-3",
+                          !(
+                            r.values[lv] !== undefined &&
+                            (r.merged || r.winner === lv)
+                          ) && "line-through decoration-muted-foreground/40"
+                        )}
+                      >
+                        {r.values[lv] ?? ""}
+                      </span>
                     </td>
                   ))}
                 </tr>
               ))}
               {shown.length === 0 && (
                 <tr className="max-sm:block">
-                  <td colSpan={4} className="px-3 py-6 text-center text-muted-foreground max-sm:block">
+                  <td
+                    colSpan={4}
+                    className="px-3 py-6 text-center text-muted-foreground max-sm:block"
+                  >
                     {t("config.precedence.none")}
                   </td>
                 </tr>
@@ -150,71 +258,9 @@ export function PrecedenceTab({ projects, home }: { projects: { dir: string; pro
           </table>
         </div>
       )}
-      <p className="text-xs text-muted-foreground">{t("config.precedence.note")}</p>
-    </div>
-  )
-}
-
-// --- MCP (lecture seule) -------------------------------------------------------------------------------------
-
-export function McpTab({ home }: { home: string }) {
-  const { t } = useTranslation()
-  const [servers, setServers] = useState<McpServer[] | null>(null)
-  const [status, setStatus] = useState<Record<string, string> | null>(null)
-  const [busy, setBusy] = useState(false)
-  useEffect(() => {
-    api.configMcp().then((r) => setServers(r.servers))
-  }, [])
-  const check = async () => {
-    setBusy(true)
-    try {
-      setStatus((await api.configMcpCheck()).status ?? {})
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : t("config.mcp.failed"))
-    }
-    setBusy(false)
-  }
-  const known = new Set((servers ?? []).map((s) => s.name))
-  const others = Object.keys(status ?? {}).filter((n) => !known.has(n))
-  const ok = (s?: string) => s && /✔|Connected/.test(s)
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="outline" onClick={check} disabled={busy}>
-          {busy ? <Fan className="animate-spin" /> : <RefreshCw />} {t("config.mcp.check")}
-        </Button>
-        <span className="text-xs text-muted-foreground">{t("config.mcp.readOnly")}</span>
-      </div>
-      <ul className="space-y-1">
-        {(servers ?? []).map((s, n) => (
-          <li key={n} className="rounded-md border px-3 py-2 text-sm">
-            <p className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">{s.name}</span>
-              <span className="text-xs text-muted-foreground">
-                {s.type} · {s.scope === "user" ? t("config.scope.user") : s.scope === "project" ? ".mcp.json" : t("config.scope.local")}
-                {s.project ? ` · ${tilde(s.project, home)}` : ""}
-              </span>
-              {status && <span className={cn("text-xs", ok(status[s.name]) ? "text-success" : "text-warning")}>{status[s.name] ?? t("config.mcp.unknownState")}</span>}
-            </p>
-            <code className="mt-1 block text-xs break-all text-muted-foreground">{s.url || s.command}</code>
-            {!!s.envKeys?.length && <p className="text-xs text-muted-foreground">{t("config.mcp.variables", { list: s.envKeys.join(", ") })}</p>}
-          </li>
-        ))}
-        {servers?.length === 0 && <li className="py-4 text-sm text-muted-foreground">{t("config.mcp.none")}</li>}
-      </ul>
-      {others.length > 0 && (
-        <div>
-          <p className="mb-1 text-xs font-medium text-muted-foreground">{t("config.mcp.others")}</p>
-          <ul className="space-y-1">
-            {others.map((n) => (
-              <li key={n} className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm">
-                <span className="min-w-0 flex-1 truncate">{n}</span>
-                <span className={cn("shrink-0 text-xs", ok(status![n]) ? "text-success" : "text-warning")}>{status![n]}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <p className="text-xs text-muted-foreground">
+        {t("config.precedence.note")}
+      </p>
     </div>
   )
 }

@@ -71,15 +71,6 @@
       "none": "No match.",
       "note": "A struck-through value is overridden by a higher-priority level. Secrets are masked."
     },
-    "mcp": {
-      "check": "Check status",
-      "failed": "Failed",
-      "readOnly": "Read-only: MCP configuration is changed with `claude mcp`. Secrets are masked.",
-      "unknownState": "unknown status",
-      "variables": "variables: {{list}}",
-      "none": "No servers declared in ~/.claude.json or in a .mcp.json.",
-      "others": "Other servers (plugins, claude.ai)"
-    },
     "perms": {
       "kind": {
         "allow": "Allowed",

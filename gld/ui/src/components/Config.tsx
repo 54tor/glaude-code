@@ -11,7 +11,7 @@ import { ClaudeOptions, SettingsPanel, type UiSettings } from "./SettingsDialog"
 import { useActions } from "./actions"
 import { Choose } from "./Choose"
 import { useConfigEdit } from "./configEdit"
-import { HealthTab, HooksTab, McpTab, PrecedenceTab } from "./ConfigTabs1"
+import { HealthTab, HooksTab, PrecedenceTab } from "./ConfigTabs1"
 import { ProjectsTab } from "./ConfigProjects"
 import { RawTab } from "./ConfigRaw"
 import { BackupsTab, PermsTab, SettingsTab } from "./ConfigTabs2"
@@ -19,7 +19,7 @@ import { SyncTab } from "./ConfigSync"
 import { takeConfigFile } from "@/lib/wantConfigFile"
 import { Button } from "@/components/ui/button"
 
-// Configuration de Claude Code : réglages utilisateur, de projet et locaux. Lecture (précédence, santé, hooks, MCP) et
+// Configuration de Claude Code : réglages utilisateur, de projet et locaux. Lecture (précédence, santé, hooks) et
 // modifications limitées aux réglages simples, variables d'environnement, plugins et permissions, avec aperçu et sauvegarde.
 // dir : écran d'un seul projet (permissions et réglages de ses fichiers partagé et local), avec un lien vers les permissions globales.
 export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: string; onTab: (t: string) => void; ui: UiSettings; dir?: string }) {
@@ -110,7 +110,6 @@ export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: strin
                 <TabsTrigger value="projets">{t("config.main.tabs.projects")}</TabsTrigger>
                 <TabsTrigger value="precedence">{t("config.main.tabs.precedence")}</TabsTrigger>
                 <TabsTrigger value="hooks">{t("config.main.tabs.hooks")} ({ov.hooks.length})</TabsTrigger>
-                <TabsTrigger value="mcp">MCP</TabsTrigger>
                 <TabsTrigger value="permissions">{t("config.main.tabs.permissions")}</TabsTrigger>
                 <TabsTrigger value="reglages">{t("config.main.tabs.settings")}</TabsTrigger>
                 <TabsTrigger value="json">JSON</TabsTrigger>
@@ -154,9 +153,6 @@ export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: strin
           </TabsContent>
           <TabsContent value="hooks">
             <HooksTab hooks={ov.hooks} />
-          </TabsContent>
-          <TabsContent value="mcp">
-            <McpTab home={home} />
           </TabsContent>
           <TabsContent value="permissions">
             {fileSelect}
