@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
+import { Stethoscope } from "lucide-react"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
 import { api, type CfgOverview } from "@/lib/api"
@@ -16,6 +17,7 @@ import { ProjectsTab } from "./ConfigProjects"
 import { RawTab } from "./ConfigRaw"
 import { BackupsTab, PermsTab, SettingsTab } from "./ConfigTabs2"
 import { SyncTab } from "./ConfigSync"
+import { Backup } from "./Backup"
 import { takeConfigFile } from "@/lib/wantConfigFile"
 import { Button } from "@/components/ui/button"
 
@@ -90,13 +92,13 @@ export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: strin
     </div>
   )
 
-  return (
   // Trois groupes : ce qu'on édite dans Claude Code, ce qu'on lit pour comprendre, et gld lui-même.
   const groups: [string, [string, string][]][] = [
     ["claude", [["reglages", t("config.main.tabs.settings")], ["permissions", t("config.main.tabs.permissions")], ["json", "JSON"], ["sauvegardes", `${t("config.main.tabs.backups")} (${ov.backups.length})`]]],
     ["diagnostic", [["sante", t("config.main.tabs.health") + (ov.issues.length > 0 ? ` (${ov.issues.length})` : "")], ["projets", t("config.main.tabs.projects")], ["precedence", t("config.main.tabs.precedence")]]],
     ["gld", [["interface", t("config.main.tabs.interface")], ["export", t("shell.app.title.backup")], ["sync", t("config.main.tabs.sync")]]],
   ]
+  return (
     <ScrollArea className="min-h-0 flex-1">
       <div className="mx-auto max-w-page px-3 py-6 md:px-6">
         <Tabs value={dir ? projTab : tab || "sante"} onValueChange={dir ? setProjTab : onTab}>
@@ -155,6 +157,9 @@ export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: strin
           <TabsContent value="reglages">
             {!dir && (
               <div className="mb-6">
+                <Button size="sm" variant="outline" className="mb-3" onClick={() => a.newSession(ov.projects[0]?.dir ?? home, "/doctor")} title={t("config.main.doctorHint")}>
+                  <Stethoscope /> {t("config.main.doctor")}
+                </Button>
                 <ClaudeOptions args={ui.args} setArgs={ui.setArgs} choice={ui.choice} setChoice={ui.setChoice} />
               </div>
             )}
@@ -167,6 +172,9 @@ export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: strin
           <TabsContent value="json">
             {fileSelect}
             <RawTab file={fileId} version={ov.backups.length} proposeRaw={proposeRaw} />
+          </TabsContent>
+          <TabsContent value="export">
+            <Backup home={home} />
           </TabsContent>
           <TabsContent value="sync">
             <SyncTab />

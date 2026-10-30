@@ -21,7 +21,7 @@ import { useUpdateNotice } from "@/hooks/useUpdateNotice"
 import { BanAlert } from "@/components/BanAlert"
 import { applyFont } from "@/lib/fonts"
 import { type Choice } from "@/lib/models"
-import { buildView, byDate, groupKey, HOT, isAuto, WEEK } from "@/lib/sessionsView"
+import { asked, buildView, byDate, groupKey, HOT, isAuto, WEEK } from "@/lib/sessionsView"
 import { RouteErrorBoundary } from "@/components/RouteErrorBoundary"
 import { retryLazy } from "@/lib/retryLazy"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -48,7 +48,6 @@ import { importLocalQueues } from "@/hooks/importQueues"
 const Conversation = lazy(() => import("@/components/Conversation").then((m) => ({ default: m.Conversation })))
 const Snippets = retryLazy(() => import("@/components/Snippets").then((m) => ({ default: m.Snippets })))
 const Extensions = retryLazy(() => import("@/components/Extensions").then((m) => ({ default: m.Extensions })))
-const Backup = retryLazy(() => import("@/components/Backup").then((m) => ({ default: m.Backup })))
 const TeamRun = retryLazy(() => import("@/components/teams/TeamRun").then((m) => ({ default: m.TeamRun })))
 const TeamsPage = retryLazy(() => import("@/components/teams/TeamsPage").then((m) => ({ default: m.TeamsPage })))
 const Config = retryLazy(() => import("@/components/Config").then((m) => ({ default: m.Config })))
@@ -177,7 +176,7 @@ function Shell() {
   )
   // Ouvertes d'abord, puis au cache chaud (récentes d'abord) ; la recherche s'applique comme ailleurs.
   const active = useMemo(
-    () => view.rows.filter((r) => live.has(r.s.id) || now - r.s.mtime < HOT).sort((a, b) => +live.has(b.s.id) - +live.has(a.s.id) || b.s.mtime - a.s.mtime),
+    () => view.rows.filter((r) => live.has(r.s.id) || now - r.s.mtime < HOT).sort((a, b) => +live.has(b.s.id) - +live.has(a.s.id) || asked(b.s) - asked(a.s)),
     [view.rows, live, now]
   )
   const selected = [...picked].map((id) => view.byId.get(id)).filter((r): r is Row => !!r)
@@ -216,12 +215,12 @@ function Shell() {
       return p
     })
   // Sessions ouvertes et au cache chaud (actives) qui attendent, depuis le plus longtemps d'abord ; les froides sont écartées.
+  const waitingRows = [...waiting].filter((id) => live.has(id)).map((id) => everyId.get(id)).filter((r): r is Row => !!r && now - r.s.mtime < HOT).sort((x, y) => x.s.mtime - y.s.mtime)
   useCacheWarning(
     [...live].map((id) => everyId.get(id)).filter((r): r is Row => !!r).map((r) => r.s),
     now,
     (id) => read({ id })
   )
-  const waitingRows = [...waiting].filter((id) => live.has(id)).map((id) => everyId.get(id)).filter((r): r is Row => !!r && now - r.s.mtime < HOT).sort((x, y) => x.s.mtime - y.s.mtime)
   const stepWaiting = (d: 1 | -1) => stepIn(waitingRows, (r) => r.s.id === reading, d)
   const startCarousel = () => {
     if (!waitingRows.length) return void toast.info(t("shell.app.noneWaiting"))
@@ -285,6 +284,7 @@ function Shell() {
     setShare,
     setPicker,
   })
+  useShortcuts({ search, picked, clearPicked: () => setPicked(new Set()), byId: view.byId, actions })
   const [palette, setPalette] = useState(false)
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
@@ -295,7 +295,6 @@ function Shell() {
     window.addEventListener("keydown", k)
     return () => window.removeEventListener("keydown", k)
   }, [])
-  useShortcuts({ search, picked, clearPicked: () => setPicked(new Set()), byId: view.byId, actions })
 
   const g: Group | null = node?.g ?? null
   const own = g ? node!.ss.map((s) => ({ dir: s.dir, id: s.id })) : []
@@ -307,7 +306,7 @@ function Shell() {
   if (found && found !== kept) setKept(found)
   const reader = reading ? (found ?? (kept?.s.id === reading ? kept : null)) : null
   const favRows = useMemo(() => [...favs].map((id) => everyId.get(id)).filter((r): r is Row => !!r), [favs, everyId])
-  const favGroups = vgroups.filter((x) => x.fav).map((x) => ({ vg: x, key: gkey(x) }))
+  const favGroups = vgroups.filter((x) => x.fav).sort((x, y) => x.name.localeCompare(y.name)).map((x) => ({ vg: x, key: gkey(x) }))
 
   // Récentes : regroupées par projet, chaque projet pouvant être repris d'un coup.
   const isRecent = route.kind === "recent"
@@ -318,8 +317,8 @@ function Shell() {
   }, [isRecent, recent])
 
   const title = {
-    home: t("shell.app.title.home"),
     recent: t("shell.app.title.recent"),
+    home: t("shell.app.title.home"),
     all: t("shell.app.title.all"),
     active: t("shell.app.title.active"),
     auto: t("shell.app.title.auto"),
@@ -329,7 +328,6 @@ function Shell() {
     memory: t("shell.app.title.memory"),
     config: t("shell.app.title.config"),
     extensions: t("shell.app.title.extensions"),
-    backup: t("shell.app.title.backup"),
     teams: t("teams.title"),
     team: t("teams.title"),
     skills: t("shell.app.title.skills"),
@@ -355,8 +353,6 @@ function Shell() {
           ? t("shell.app.sub.skills")
           : route.kind === "extensions"
           ? t("shell.app.sub.extensions")
-          : route.kind === "backup"
-          ? t("shell.app.sub.backup")
           : route.kind === "config"
           ? t("shell.app.sub.config")
           : route.kind === "snippets"
@@ -444,8 +440,6 @@ function Shell() {
             <TeamRun key={route.name} name={route.name} />
           ) : route.kind === "extensions" ? (
             <Extensions home={home} onAsk={setAsk} />
-          ) : route.kind === "backup" ? (
-            <Backup home={home} />
           ) : route.kind === "config" ? (
             <Config home={home} tab={route.tab} onTab={(tab) => go({ kind: "config", tab })} ui={{ args, setArgs, choice, setChoice, font, setFont, fontSize, setFontSize }} />
           ) : route.kind === "memory" ? (
@@ -490,13 +484,13 @@ function Shell() {
               live={live}
               waiting={waiting}
               actions={actions}
-              onRefresh={() => reload().catch(() => {})}
               go={go}
               clearSearch={() => setQ("")}
               grouped={{ n: nGrouped, hide: !!hideGrouped, setHide: (v) => setHideGrouped(v ? "1" : "") }}
               error={error}
               denied={denied}
               retry={() => void reload().catch(() => {})}
+              onRefresh={() => reload().catch(() => {})}
             />
           )}
 
@@ -517,13 +511,13 @@ function Shell() {
         <Conversation row={reader} onClose={closeReader} onFolder={reader ? () => go({ kind: "dir", key: segs(reader.g.project, home).join("/") }) : undefined} args={args} choice={choice} carousel={carousel ? { n: waitingRows.length, next: () => advanceCarousel(1), prev: () => advanceCarousel(-1), stop: () => setCarousel(false) } : undefined} />
       </Suspense>
       <DirPicker pick={picker} home={home} />
-      <Palette open={palette} onOpenChange={setPalette} rows={[...everyId.values()]} home={home} go={go} read={read} />
       <Confirm ask={ask} onClose={() => setAsk(null)} />
       <BanAlert />
       <Prompt ask={prompt} onClose={() => setPrompt(null)} />
       <Compose ask={compose} onClose={() => setCompose(null)} />
       <SessionInfo row={info} onClose={() => setInfo(null)} />
       {share && <ShareDialog key={share.s.id} id={share.s.id} dir={share.s.dir} title={share.s.title} onClose={() => setShare(null)} />}
+      <Palette open={palette} onOpenChange={setPalette} rows={[...everyId.values()]} home={home} go={go} read={read} />
     </ActionsCtx.Provider>
   )
 }
