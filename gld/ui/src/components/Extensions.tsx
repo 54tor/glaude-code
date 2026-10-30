@@ -408,7 +408,7 @@ export function Extensions({
                   {t("extensions.loadError", { err })}
                 </p>
               )}
-              <ul className="grid gap-x-8 md:grid-cols-2">
+              <ul className="grid grid-cols-1 gap-x-8 md:grid-cols-2">
                 {ids.map((id) => {
                   const k = src((f) => doc[f]?.[id])
                   const [name, market] = id.split("@")
