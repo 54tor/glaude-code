@@ -100,7 +100,7 @@ func withToken(token string, next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if r.Method == "GET" && publicAsset(r.URL.Path) {
+		if (r.Method == "GET" || r.Method == "HEAD") && publicAsset(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}

@@ -63,6 +63,11 @@ func TestPublicAssetsWithoutToken(t *testing.T) {
 		}
 	}
 	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("HEAD", "/site.webmanifest", nil)) // iOS sonde le manifeste en HEAD
+	if w.Code != 200 {
+		t.Errorf("HEAD sur le manifeste : %d", w.Code)
+	}
+	w = httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest("POST", "/site.webmanifest", nil))
 	if w.Code != 401 {
 		t.Errorf("POST sur un fichier public : %d", w.Code)
