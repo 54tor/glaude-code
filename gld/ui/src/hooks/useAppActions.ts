@@ -7,7 +7,7 @@ import { segs } from "@/lib/paths"
 import { exportMarkdown } from "@/lib/export"
 import { size, tilde } from "@/lib/format"
 import { withChoice, type Choice } from "@/lib/models"
-import { byDate, groupKey, HOT, type View } from "@/lib/sessionsView"
+import { asked, byDate, groupKey, HOT, type View } from "@/lib/sessionsView"
 import type { Route } from "@/lib/route"
 import type { Actions, GroupActions, ProjectActions, Row } from "@/components/actions"
 import type { Ask } from "@/components/Confirm"
@@ -187,16 +187,16 @@ export function useAppActions(c: {
   }
   const newGroup = (ids: string[], project: string) =>
     named(i18n.t("shell.act.newGroup", { dir: tilde(project, home) }), "", i18n.t("shell.act.create"), (n) => addTo(ids, project, n))
-  // Dossiers où lancer une nouvelle session : ceux qui existent encore, le plus récemment utilisé d'abord.
-  // Un dossier enregistré sans session se lance par son chemin (cwd), en dernier.
+  // Dossiers où lancer une nouvelle session : ceux qui existent encore, triés par nom.
+  // Un dossier enregistré sans session se lance par son chemin (cwd).
   const targets = (): Target[] =>
     (data?.groups ?? [])
       .filter((x) => !x.missing)
       .map((x) => ({
         x,
-        s: [...x.sessions].sort((p, q) => q.mtime - p.mtime)[0],
+        s: [...x.sessions].sort((p, q) => asked(q) - asked(p))[0],
       }))
-      .sort((p, q) => (q.s?.mtime ?? 0) - (p.s?.mtime ?? 0))
+      .sort((p, q) => tilde(p.x.project, home).localeCompare(tilde(q.x.project, home)))
       .map(({ x, s }) => ({
         label: tilde(x.project, home),
         project: x.project,
@@ -341,7 +341,7 @@ export function useAppActions(c: {
     home,
     now,
     root: data?.root ?? "~/.claude/projects",
-    rows: [...everyId.values()].sort((x, y) => y.s.mtime - x.s.mtime),
+    rows: [...everyId.values()].sort((x, y) => asked(y.s) - asked(x.s)),
     q,
     live,
     background: new Set(data?.background),
@@ -398,7 +398,16 @@ export function useAppActions(c: {
     hotLeft: (s) => (now && now - s.mtime < HOT ? Math.min(HOT / 60, Math.max(1, Math.ceil((HOT - (now - s.mtime)) / 60))) : null),
     touch: (id) => {
       const t = Date.now() / 1000
-      setData((d) => d && { ...d, groups: d.groups.map((g) => ({ ...g, sessions: g.sessions.map((s) => (s.id === id ? { ...s, mtime: t } : s)) })) })
+      // Optimiste : la session travaille dès l'envoi (icône de la barre latérale), la relecture corrige si le prompt n'est pas parti.
+      setData(
+        (d) =>
+          d && {
+            ...d,
+            live: d.live.includes(id) ? d.live : [...d.live, id],
+            waiting: d.waiting.filter((x) => x !== id),
+            groups: d.groups.map((g) => ({ ...g, sessions: g.sessions.map((s) => (s.id === id ? { ...s, mtime: t, ask: t } : s)) })),
+          }
+      )
       setTimeout(() => reload().catch(() => {}), 2000) // le transcript a enregistré le prompt : on prend l'heure réelle
     },
     read,

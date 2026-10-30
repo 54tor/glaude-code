@@ -1,3 +1,4 @@
+import { asked } from "@/lib/sessionsView"
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { BookOpen, FileText, MessageSquare, Settings2 } from "lucide-react"
@@ -29,7 +30,7 @@ export function Palette({ open, onOpenChange, rows, home, go, read }: { open: bo
     if (open && !skills.length) api.skills().then((r) => setSkills(r.skills), () => {})
   }, [open, skills.length])
   const pick = (f: () => void) => () => (onOpenChange(false), f())
-  const sessions = [...rows].sort((a, b) => b.s.mtime - a.s.mtime).slice(0, MAX_SESSIONS)
+  const sessions = [...rows].sort((a, b) => asked(b.s) - asked(a.s)).slice(0, MAX_SESSIONS)
   const fields = (i18n.getResourceBundle(i18n.language, "config") as { settings?: { field?: Record<string, string> } } | undefined)?.settings?.field ?? {}
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange} title={t("shell.palette.title")} description={t("shell.palette.description")}>

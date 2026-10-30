@@ -11,7 +11,9 @@ export const WEEK = 7 * 86400
 export const REFRESH = 15_000 // rafraîchissement de la liste, onglet visible seulement
 export const HOT = 3600 // durée du cache des prompts : une session active depuis moins longtemps reprend à moindre coût
 
-export const byDate = (a: Row, b: Row) => b.s.mtime - a.s.mtime
+// Tri par dernier message de l'utilisateur (le mtime bouge aussi à chaque réponse de l'agent et réordonnerait la liste).
+export const asked = (s: Pick<Session, "ask" | "mtime">) => s.ask ?? s.mtime
+export const byDate = (a: Row, b: Row) => asked(b.s) - asked(a.s)
 export const plural = (n: number, w = "session") => `${n} ${w}${n > 1 ? "s" : ""}`
 export const cut = (t: string, n: number) => (t.length > n ? t.slice(0, n) + "…" : t)
 // Clé du dossier d'un groupe dans l'arbre et l'URL.

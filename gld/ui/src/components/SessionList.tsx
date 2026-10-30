@@ -1,3 +1,4 @@
+import { asked } from "@/lib/sessionsView"
 import { loc } from "@/i18n"
 import { useTranslation } from "react-i18next"
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -137,8 +138,8 @@ const Row = memo(function Row({
             <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
               {live && <Live waiting={a.waiting.has(s.id)} />}
               {live && <BgBadge id={s.id} />}
-              {left !== null && (
               {live && a.rc.has(s.id) && <Globe className="size-3.5 shrink-0 text-success" aria-label={t("shell.list.remoteControl")} />}
+              {left !== null && (
                 <>
                   <span
                     className={cn(
@@ -283,7 +284,7 @@ export function SessionList({ items: every, showProject, flat, showCache }: { it
     )
   const groups: [string, R[]][] = []
   for (const it of items) {
-    const b = bucket(it.s.mtime)
+    const b = bucket(asked(it.s))
     if (groups.at(-1)?.[0] !== b) groups.push([b, []])
     groups.at(-1)![1].push(it)
   }

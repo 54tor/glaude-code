@@ -110,6 +110,7 @@ type Session struct {
 	Named    bool    `json:"named"`
 	Cwd      string  `json:"cwd"`
 	Mtime    float64 `json:"mtime"`
+	Ask      float64 `json:"ask,omitempty"` // dernier message de l'utilisateur : clé de tri des listes (le mtime bouge aussi à chaque réponse)
 	KB       int64   `json:"kb"`
 	Tok      Tokens  `json:"tok"`
 	Parent   string  `json:"parent,omitempty"` // session qui a lancé celle-ci (sous-agent d'un plan) ; vide si inconnue ou disparue
@@ -126,6 +127,7 @@ type infoState struct {
 	team, agent       string    // sessions lancées par une équipe : le parent et le nom du rôle (aucun titre n'est écrit pour elles)
 	tok               Tokens    // total de la session
 	lastMsg           time.Time // horodatage du dernier message user/assistant : le mtime bouge aussi pour un titre ou un résumé
+	lastAsk           time.Time // horodatage du dernier vrai message utilisateur
 	lastID            string    // un même message s'écrit sur plusieurs lignes qui répètent son usage : seul le dernier compte
 	last              Tokens
 }
@@ -187,6 +189,9 @@ func (c *infoState) visit(b []byte) {
 		if t, err := time.Parse(time.RFC3339Nano, l.Timestamp); err == nil && t.After(c.lastMsg) {
 			c.lastMsg = t
 		}
+		if t, err := time.Parse(time.RFC3339Nano, l.Timestamp); err == nil && l.Type == "user" && !l.IsMeta && t.After(c.lastAsk) && promptOf(&l) != "" {
+			c.lastAsk = t
+		}
 	}
 	if wantTitle && l.CustomTitle != "" {
 		c.title = l.CustomTitle
@@ -241,6 +246,9 @@ func info(path string, st os.FileInfo) Session {
 	}
 	s := Session{Provider: claudeID, ID: strings.TrimSuffix(filepath.Base(path), ".jsonl"), Dir: filepath.Base(filepath.Dir(path)),
 		Named: title != "", Cwd: cwd, team: c.team, Mtime: float64(mt.UnixNano()) / 1e9, KB: st.Size() / 1024, Tok: c.tok}
+	if !c.lastAsk.IsZero() {
+		s.Ask = float64(c.lastAsk.UnixNano()) / 1e9
+	}
 	if s.Title = title; title == "" {
 		if s.Title = c.agent; s.Title == "" {
 			if s.Title = cut(first, 100); first == "" {
@@ -386,7 +394,7 @@ func sessions() []Group {
 	}
 	out := []Group{}
 	for k, v := range groups {
-		sort.Slice(v, func(i, j int) bool { return v[i].Mtime > v[j].Mtime })
+		sort.Slice(v, func(i, j int) bool { return askOr(v[i]) > askOr(v[j]) })
 		fi, err := os.Stat(k)
 		out = append(out, Group{k, err != nil || !fi.IsDir(), v})
 	}
@@ -663,4 +671,12 @@ func withEmptyDirs(groups []Group, dirs []string) []Group {
 	}
 	sort.Slice(groups, func(i, j int) bool { return groups[i].Project < groups[j].Project })
 	return groups
+}
+
+// askOr : clé de tri d'une session, son dernier message utilisateur, à défaut son mtime.
+func askOr(s Session) float64 {
+	if s.Ask > 0 {
+		return s.Ask
+	}
+	return s.Mtime
 }
