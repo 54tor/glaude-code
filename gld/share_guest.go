@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -436,6 +437,10 @@ func guestServe(mux *http.ServeMux, sh Share, in Invite, sec, hd string) http.Ha
 			guestDeny(w, 403, "srv.share_guest.refuse")
 			return
 		}
+		if pat == "GET /v1/fs/entries/content" && !guestMayRead(sh, r.URL.Query().Get("path")) {
+			guestDeny(w, 403, "srv.share_guest.refuse")
+			return
+		}
 		r2 := r.Clone(r.Context())
 		q := r2.URL.Query()
 		q.Set("id", sh.Session)
@@ -723,4 +728,45 @@ func guestSecretPath(p string) bool {
 		}
 	}
 	return false
+}
+
+// guestMayRead : un invité ne lit que les fichiers que le transcript cite par leur chemin absolu (lus, écrits ou mentionnés par la
+// session), donc déjà visibles dans la conversation partagée ; la liste d'exclusion de guestSecretPath ne suffit pas seule.
+func guestMayRead(sh Share, rel string) bool {
+	tr, ok := transcript(sh.Dir, sh.Session)
+	if !ok || rel == "" {
+		return false
+	}
+	return pathInTranscript(tr, filepath.Join(sh.Dir, rel))
+}
+
+func pathInTranscript(tr, abs string) bool {
+	needle, _ := json.Marshal(abs)
+	needle = needle[1 : len(needle)-1]
+	found := false
+	_ = scan(tr, func(b []byte) {
+		for rest := b; !found; {
+			i := bytes.Index(rest, needle)
+			if i < 0 {
+				return
+			}
+			rest = rest[i+len(needle):]
+			// « /p/a » ne doit pas valider « /p/a.go » ni « /p/a/b » ; un point final de phrase ne compte pas.
+			if len(rest) > 1 && rest[0] == '.' {
+				rest = rest[1:]
+				if !pathByte(rest[0]) {
+					found = true
+				}
+				continue
+			}
+			if len(rest) == 0 || !pathByte(rest[0]) {
+				found = true
+			}
+		}
+	})
+	return found
+}
+
+func pathByte(c byte) bool {
+	return c == '.' || c == '_' || c == '-' || c == '/' || c == '@' || c == '+' || c == '~' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
 }

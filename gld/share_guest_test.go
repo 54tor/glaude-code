@@ -1200,3 +1200,13 @@ func TestGuestSessionPath(t *testing.T) {
 		}
 	}
 }
+
+func TestPathInTranscript(t *testing.T) {
+	tr := filepath.Join(t.TempDir(), "s.jsonl")
+	os.WriteFile(tr, []byte(`{"input":{"file_path":"/p/src/a.go"}}`+"\n"+`{"text":"voir /p/b.md."}`+"\n"), 0o600)
+	for p, want := range map[string]bool{"/p/src/a.go": true, "/p/src/a": false, "/p/src": false, "/p/b.md": true, "/p/c.go": false} {
+		if pathInTranscript(tr, p) != want {
+			t.Errorf("%s: want %v", p, want)
+		}
+	}
+}
