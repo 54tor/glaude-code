@@ -239,6 +239,9 @@
 /* iOS zoome la page au focus de tout champ écrit en moins de 16 px (Monaco et xterm compris, d'où !important sur leur style en ligne). */
 @supports (-webkit-touch-callout: none) {
   @media (pointer: coarse) {
+/* Pas de rebond élastique (iOS) : il tirait la page sous la barre d'état et son flou. Le « tirer pour rafraîchir » des listes
+   reste actif : il lit touchmove, pas le défilement. */
+html, body, [data-slot="scroll-area-viewport"] { overscroll-behavior: none; }
     input, textarea, select { font-size: 16px !important; }
   }
 }
