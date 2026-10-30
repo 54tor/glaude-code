@@ -210,3 +210,16 @@ func TestRosterAndJournalShareOneLock(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestRosterWriteLeavesNoTemp(t *testing.T) {
+	root := t.TempDir()
+	for i := 0; i < 2; i++ {
+		if err := rosterWrite(root, rosterTeam, map[string]string{"ana": "dev"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ents, _ := os.ReadDir(filepath.Join(root, journalDir))
+	if len(ents) != 1 || ents[0].Name() != rosterTeam+".roster.json" {
+		t.Fatalf("entries: %v", ents)
+	}
+}

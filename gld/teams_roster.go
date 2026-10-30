@@ -61,7 +61,7 @@ func rosterWrite(cfgRoot, team string, roster map[string]string) error {
 		return err
 	}
 	if !ok {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
+		if err := rMkdirAll(cfgRoot, dir, 0o700); err != nil {
 			return err
 		}
 	} else if !st.IsDir() {
@@ -70,20 +70,7 @@ func rosterWrite(cfgRoot, team string, roster map[string]string) error {
 	if _, _, err := lstatNoLink(file); err != nil {
 		return err
 	}
-	// CreateTemp crée en 0600 ; le rename ne suit pas de lien
-	f, err := os.CreateTemp(dir, ".roster-*.tmp")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-	if _, err := f.Write(b); err != nil {
-		f.Close()
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	return os.Rename(f.Name(), file)
+	return rWriteAtomic(cfgRoot, file, b, 0o600)
 }
 
 // rosterRead ne renvoie jamais d'erreur sur le contenu : la vue doit rester utilisable.
@@ -130,9 +117,9 @@ func rosterDrop(cfgRoot, team string) error {
 	if _, _, err := lstatNoLink(dir); err != nil {
 		return err
 	}
-	if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
+	if err := rRemove(cfgRoot, file); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	_ = os.Remove(dir) // ne réussit que si le dossier est vide
+	_ = rRemove(cfgRoot, dir) // ne réussit que si le dossier est vide
 	return nil
 }
