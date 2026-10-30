@@ -725,14 +725,19 @@ export function Extensions({
             )}
           </section>
         )}
-        <TabsContent value="editor" className="flex min-h-0 flex-1 flex-col">
-          <Skills
-            sel={skillKey}
-            home={home}
-            q=""
-            onPick={setSkillKey}
-            onAsk={onAsk}
-          />
+        <TabsContent
+          value="editor"
+          className="mx-auto flex min-h-0 w-full max-w-page flex-1 flex-col px-3 pb-5 md:px-6"
+        >
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card shadow-xs">
+            <Skills
+              sel={skillKey}
+              home={home}
+              q=""
+              onPick={setSkillKey}
+              onAsk={onAsk}
+            />
+          </div>
         </TabsContent>
       </Tabs>
       {dialog}
