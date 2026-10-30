@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -453,6 +454,10 @@ func guestServe(mux *http.ServeMux, sh Share, in Invite, sec, hd string) http.Ha
 				guestDeny(w, 403, "srv.share_guest.refuse")
 				return
 			}
+			if !guestInside(abs, q.Get("path")) {
+				guestDeny(w, 403, "srv.share_guest.refuse")
+				return
+			}
 			q.Set("dir", abs)
 		}
 		r2.URL.RawQuery = q.Encode()
@@ -812,4 +817,19 @@ func (g *guestTree) flush(w http.ResponseWriter, cited map[string]bool, dir stri
 	}
 	out.Entries = keep
 	writeJSON(w, 200, out)
+}
+
+// guestInside : le chemin, une fois les liens résolus, reste sous le dossier du partage (ideLstat refuse déjà les liens ; cette
+// vérification tient même si ce garde change).
+func guestInside(abs, rel string) bool {
+	base, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return false
+	}
+	full, err := filepath.EvalSymlinks(filepath.Join(base, filepath.FromSlash(rel)))
+	if err != nil {
+		return false
+	}
+	back, err := filepath.Rel(base, full)
+	return err == nil && back != ".." && !strings.HasPrefix(back, ".."+string(filepath.Separator))
 }

@@ -1242,3 +1242,16 @@ func TestGuestTreeFilter(t *testing.T) {
 		t.Fatalf("erreur relayée : %d %s", w.Code, w.Body)
 	}
 }
+
+func TestGuestInside(t *testing.T) {
+	dir, out := t.TempDir(), t.TempDir()
+	os.WriteFile(filepath.Join(dir, "a.go"), nil, 0o600)
+	os.WriteFile(filepath.Join(out, "x"), nil, 0o600)
+	os.Symlink(out, filepath.Join(dir, "lnk"))
+	os.Symlink(filepath.Join(dir, "a.go"), filepath.Join(dir, "ok"))
+	for rel, want := range map[string]bool{"": true, "a.go": true, "ok": true, "lnk": false, "lnk/x": false, "../x": false, "absent": false} {
+		if guestInside(dir, rel) != want {
+			t.Errorf("%q: want %v", rel, want)
+		}
+	}
+}
