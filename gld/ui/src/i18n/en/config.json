@@ -205,6 +205,7 @@
         "30m": "30 minutes",
         "1h": "1 hour"
       },
+      "search": "Search a setting…",
       "envTitle": "Environment variables",
       "envHint": "secret values are masked",
       "envName": "NAME",

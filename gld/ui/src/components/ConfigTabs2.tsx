@@ -2,7 +2,7 @@ import { loc } from "@/i18n"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
-import { Check, Copy, FolderOpen, Globe, Pencil, Plus, RotateCcw, Sparkles, Trash2, X } from "lucide-react"
+import { Check, Copy, FolderOpen, Globe, Pencil, Plus, RotateCcw, Search, Sparkles, Trash2, X } from "lucide-react"
 import type { BackupInfo, CfgEdit, CfgOverview, PermSuggest } from "@/lib/api"
 import { api } from "@/lib/api"
 import { describeKey } from "@/lib/configKeys"
@@ -341,9 +341,17 @@ export function SettingsTab({ file, doc, plugins, propose }: { file: string; doc
   const [val, setVal] = useState("")
   const env = (at(doc, "env") ?? {}) as Record<string, string>
   const enabled = (at(doc, "enabledPlugins") ?? {}) as Record<string, boolean>
+  const [q, setQ] = useState("")
+  const f = q.trim().toLowerCase()
+  const hit = (...xs: string[]) => !f || xs.some((x) => x.toLowerCase().includes(f))
+  const groups = fieldGroups(t).map((g) => ({ ...g, fields: g.fields.filter((x) => hit(x.label, x.key, describeKey(x.key) ?? "")) })).filter((g) => g.fields.length)
   return (
     <div className="space-y-6">
-      {fieldGroups(t).map((g) => (
+      <div className="relative">
+        <Search className="absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("config.settings.search")} aria-label={t("config.settings.search")} className="pl-8" />
+      </div>
+      {groups.map((g) => (
         <section key={g.title}>
           <h3 className="text-sm font-medium">{g.title}</h3>
           <ul className="mt-1 divide-y">
@@ -358,7 +366,7 @@ export function SettingsTab({ file, doc, plugins, propose }: { file: string; doc
           {t("config.settings.envTitle")} <span className="text-xs font-normal text-muted-foreground">· {t("config.settings.envHint")}</span>
         </h3>
         <ul className="mt-1 space-y-px">
-          {Object.entries(env).map(([k, v]) => (
+          {Object.entries(env).filter(([k]) => hit(k)).map(([k, v]) => (
             <li key={k} className="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted">
               <code className="text-xs">{k}</code>
               <code className="min-w-0 flex-1 truncate text-xs text-muted-foreground">= {String(v)}</code>
