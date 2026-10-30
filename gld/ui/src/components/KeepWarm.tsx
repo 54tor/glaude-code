@@ -1,4 +1,4 @@
-import { Coins, Flame, Microwave, Snowflake } from "lucide-react"
+import { Coins, Coffee, Microwave, Snowflake } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api, type Session } from "@/lib/api"
@@ -135,7 +135,7 @@ export function CacheState({ s }: { s: Session }) {
   if (!a.caps(s).hotCache) return null
   return (
     <span className={cn("flex items-center gap-1 font-medium", left === null ? "text-sky-600 dark:text-sky-300" : "text-warning")} title={t("conversation.keepWarm.hotTitle")}>
-      {left === null ? <Snowflake className="size-3.5" /> : <Flame className="size-3.5" />}
+      {left === null ? <Snowflake className="size-3.5" /> : <Coffee className="size-3.5" />}
       {left === null ? t("conversation.keepWarm.cold") : t("conversation.keepWarm.left", { min: left })}
       {warm?.on && <Microwave className="warm-wave size-3.5" aria-label={t("conversation.keepWarm.warmAria")} />}
     </span>

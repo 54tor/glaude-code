@@ -1,7 +1,7 @@
 import { Fragment, useState, useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
-import { AlarmClock, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, ArchiveRestore, SlidersHorizontal, Shredder, Flame, Microwave, Snowflake, History, FileText, Inbox, NotebookPen, Info, Fan, Search, ShieldCheck, Tag, Users, X } from "lucide-react"
+import { AlarmClock, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, ArchiveRestore, SlidersHorizontal, Shredder, Coffee, Microwave, Snowflake, History, FileText, Inbox, NotebookPen, Info, Fan, Search, ShieldCheck, Tag, Users, X } from "lucide-react"
 import { tilde } from "@/lib/format"
 import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
@@ -132,7 +132,7 @@ function Hot({ rows, now, ttl, go }: { rows: Row[]; now: number; ttl: number; go
             ) : cold ? (
               <Snowflake className="size-4 shrink-0 text-info" aria-label={t("shell.sidebar.cold")} />
             ) : (
-              <Flame className="size-4 shrink-0 text-warning" aria-hidden />
+              <Coffee className="size-4 shrink-0 text-warning" aria-hidden />
             )}
             <span className="flex-1 truncate text-left">{s.title}</span>
             {!cold && (

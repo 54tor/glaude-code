@@ -1,7 +1,7 @@
 import { loc } from "@/i18n"
 import { useTranslation } from "react-i18next"
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ChevronRight, Flame, MoreHorizontal, SquareTerminal, Star, Tag } from "lucide-react"
+import { ChevronRight, Coffee, MoreHorizontal, SquareTerminal, Star, Tag } from "lucide-react"
 import { ago, bucket, compact, full, tilde, tokTotal } from "@/lib/format"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
@@ -145,7 +145,7 @@ const Row = memo(function Row({
                       left <= 10 ? "font-medium text-warning" : "text-warning"
                     )}
                   >
-                    <Flame className="size-3.5" aria-hidden /> {t("shell.list.cache", { left })}
+                    <Coffee className="size-3.5" aria-hidden /> {t("shell.list.cache", { left })}
                   </span>
                 </>
               )}
