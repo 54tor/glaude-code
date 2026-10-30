@@ -301,7 +301,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
       const gap = vp.scrollHeight - vp.scrollTop - vp.clientHeight
       stuck = gap < 80
       flags()
-      if (idRef.current && !restoring.current) scrollMem.set(idRef.current, { top: vp.scrollTop, end: gap < vp.clientHeight / 2 })
+      if (idRef.current && !restoring.current) scrollMem.set(idRef.current, { top: vp.scrollTop, end: gap < vp.clientHeight }) // à moins d'une page de la fin : la réouverture redescend à la fin
     }
     vp.addEventListener("scroll", on, { passive: true })
     const ro = new ResizeObserver(() => {
