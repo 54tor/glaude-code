@@ -30,8 +30,14 @@ func TestSearchRenameGroups(t *testing.T) {
 
 	// Renommage : la dernière ligne custom-title fait foi, la date du fichier ne bouge pas.
 	before, _ := os.Stat(p)
+	if hasTitle(p) {
+		t.Fatal("titre détecté avant tout renommage")
+	}
 	if err := setTitle(p, id1, "Caddy prod"); err != nil {
 		t.Fatal(err)
+	}
+	if !hasTitle(p) {
+		t.Fatal("titre posé non détecté")
 	}
 	st, _ := os.Stat(p)
 	if s := info(p, st); s.Title != "Caddy prod" || !s.Named {

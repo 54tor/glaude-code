@@ -2,7 +2,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -141,6 +143,22 @@ func search(q string) []Hit {
 		}
 	}
 	return out
+}
+
+// hasTitle dit si le transcript porte déjà un titre posé (custom-title).
+func hasTitle(path string) bool {
+	r, rel, err := confine(cfgDir(), path)
+	if err != nil {
+		return false
+	}
+	defer r.Close()
+	f, err := r.Open(rel)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	b, _ := io.ReadAll(f)
+	return bytes.Contains(b, []byte(`"custom-title"`))
 }
 
 // setTitle ajoute une ligne custom-title au transcript (la dernière fait foi), sans changer sa date.

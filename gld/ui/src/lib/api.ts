@@ -313,7 +313,7 @@ export const api = {
   open: (b: { dir: string; id?: string; args?: string; prompt?: string }) =>
     b.id ? http.put<Said>(`/sessions/${seg(b.id)}/process${qs({ dir: b.dir })}`, { args: b.args, prompt: b.prompt }) : http.put<Said>(`/projects/${seg(b.dir)}/process`, { args: b.args, prompt: b.prompt }),
   newSession: (b: { dir?: string; id?: string; cwd?: string; prompt: string; args?: string }) => http.post<Said>("/sessions", b),
-  rename: (s: Item, b: { title?: string; auto?: boolean }) => http.patch<Said & { title: string }>(`/sessions/${seg(s.id)}${qs({ dir: s.dir })}`, b),
+  rename: (s: Item, b: { title?: string; auto?: boolean; keep?: boolean }) => http.patch<Said & { title: string }>(`/sessions/${seg(s.id)}${qs({ dir: s.dir })}`, b),
   reassign: (items: Item[], to: string) => inBatches(items, (b) => http.patch<Said & { n: number }>("/sessions", { items: b, to })),
   rmSessions: (items: Item[]) =>
     inBatches(items, (b) => http.del<Said & { deleted: number; spared: number }>(`/sessions${qs({ item: b.map((i) => `${i.dir}:${i.id}`) })}`), (i) => itemLen(`${i.dir}:${i.id}`)),

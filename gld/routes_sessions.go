@@ -453,6 +453,7 @@ func routesSessions(mux *http.ServeMux) {
 		var req struct {
 			Title string
 			Auto  bool
+			Keep  bool // avec Auto : ne touche pas à un titre déjà posé
 		}
 		if !decodeBody(w, r, &req, 1<<16) {
 			return
@@ -471,6 +472,10 @@ func routesSessions(mux *http.ServeMux) {
 		}
 		if live[id] {
 			writeErr(w, http.StatusConflict, "conflict", L("srv.routes_sessions.sessionOuverteRenommeLa"))
+			return
+		}
+		if req.Auto && req.Keep && hasTitle(p) {
+			writeJSON(w, 200, map[string]any{"title": "", "message": ""})
 			return
 		}
 		if req.Auto {
