@@ -395,9 +395,11 @@ func routesSessions(mux *http.ServeMux) {
 		}
 		// Pas de contexte lié à la requête : un navigateur qui se déconnecte ne doit pas
 		// interrompre une suppression en cours (sessions à moitié purgées).
-		sessionsMu.Lock()
-		n, spared, notes, err := purgeSessions(items)
-		sessionsMu.Unlock()
+		n, spared, notes, err := func() (int, int, []string, error) {
+			sessionsMu.Lock()
+			defer sessionsMu.Unlock()
+			return purgeSessions(items)
+		}()
 		journal("rm %d session(s) : %d supprimée(s), %d épargnée(s) %v", len(items), n, spared, ids(items))
 		msg := rmSummary(n, spared)
 		if len(notes) > 0 {
@@ -422,9 +424,11 @@ func routesSessions(mux *http.ServeMux) {
 			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.routes_sessions.cheminAbsoluRequis"))
 			return
 		}
-		sessionsMu.Lock()
-		n, err := reassign(items, to)
-		sessionsMu.Unlock()
+		n, err := func() (int, error) {
+			sessionsMu.Lock()
+			defer sessionsMu.Unlock()
+			return reassign(items, to)
+		}()
 		journal("reassign %v vers %s : %v", ids(items), to, errOr(err))
 		if err != nil {
 			writeErr(w, http.StatusConflict, "conflict", err.Error())

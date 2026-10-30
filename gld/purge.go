@@ -83,6 +83,9 @@ func safeRemove(p string) error {
 // satellites : tout ce qu'une session possède AILLEURS que dans son transcript.
 // file-history, session-env, uploads, debug portent l'id entier ; tasks, teams, jobs les huit premiers caractères.
 func satellites(id string) []string {
+	if !idRe.MatchString(id) {
+		return nil
+	}
 	cfg, short := cfgDir(), id[:8]
 	l := []string{
 		filepath.Join(cfg, "file-history", id),

@@ -143,3 +143,30 @@ func TestSafeRemove(t *testing.T) {
 		}
 	}
 }
+
+func TestSatellitesRejectsShortID(t *testing.T) {
+	use(t.TempDir())
+	for _, id := range []string{"a", "", "../../etc"} {
+		if got := satellites(id); got != nil {
+			t.Fatalf("satellites(%q) = %v", id, got)
+		}
+	}
+	if len(satellites(id1)) == 0 {
+		t.Fatal("valid id lost")
+	}
+}
+
+func TestWithChildrenSkipsBadIDs(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	p := filepath.Join(cfg, "projects", "-p")
+	put(t, filepath.Join(p, id1+".jsonl"), `{"cwd":"/p"}`+"\n", old)
+	put(t, filepath.Join(p, "a.jsonl"), `{"cwd":"/p","teamName":"session-11111111"}`+"\n", old)
+	out := withChildren([]item{{"-p", id1}})
+	for _, it := range out {
+		if !idRe.MatchString(it.ID) {
+			t.Fatalf("bad id kept: %q", it.ID)
+		}
+	}
+	_ = ids(out)
+}

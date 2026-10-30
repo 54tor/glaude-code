@@ -147,7 +147,7 @@ func withChildren(items []item) []item {
 		grew = false
 		for _, g := range sessions() {
 			for _, s := range g.Sessions {
-				if s.Parent != "" && have[s.Parent] && !have[s.ID] {
+				if s.Parent != "" && have[s.Parent] && !have[s.ID] && idRe.MatchString(s.ID) {
 					have[s.ID] = true
 					items = append(items, item{s.Dir, s.ID})
 					grew = true
@@ -188,7 +188,7 @@ func readItems(w http.ResponseWriter, r *http.Request) ([]item, string, bool) {
 func ids(items []item) []string {
 	out := make([]string, len(items))
 	for i, it := range items {
-		out[i] = it.ID[:8]
+		out[i] = short(it.ID)
 	}
 	return out
 }
