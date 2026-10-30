@@ -8,13 +8,16 @@ import { refreshGit } from "@/hooks/useGit"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
+// À pousser : des commits en avance, ou une branche sans amont (jamais un HEAD détaché).
+export const needsPush = (st: GitState | undefined): st is GitState => !!st && !st.detached && (!st.upstream || st.ahead > 0)
+
 // Pousse la branche courante vers un remote du dépôt. Le menu nomme la cible : choisir un remote est la confirmation.
 // Proposé quand il y a des commits à pousser, ou que la branche n'a pas encore d'amont.
 export function GitPush({ dir, st }: { dir: string; st: GitState | undefined }) {
   const { t } = useTranslation()
   const [remotes, setRemotes] = useState<GitRemote[] | null>(null)
   const [busy, setBusy] = useState(false)
-  if (!st || st.detached || (st.upstream && st.ahead === 0)) return null
+  if (!needsPush(st)) return null
   const push = async (r: GitRemote) => {
     setBusy(true)
     const id = toast.loading(t("conversation.gitPush.pushing", { branch: st.branch, remote: r.name }))

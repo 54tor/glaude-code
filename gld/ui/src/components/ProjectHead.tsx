@@ -6,9 +6,7 @@ import { useGit } from "@/hooks/useGit"
 import { Button } from "@/components/ui/button"
 import { useActions } from "./actions"
 import { WorkspaceButton } from "./ide/WorkspaceButton"
-import { GitBadge } from "./GitBadge"
-import { GitChanges } from "./GitChanges"
-import { GitPush } from "./GitPush"
+import { GitRepo } from "./GitRepo"
 import { Choose } from "./Choose"
 
 // En tête d'un dossier : l'état git (branche, changements en attente, avance et retard) du dossier et de ses dépôts, puis ses raccourcis.
@@ -37,9 +35,7 @@ export function ProjectHead({ project: fixed, missing: fixedMissing, dirs }: { p
               <span className="min-w-0 flex-1 truncate" title={project}>
                 {tilde(project, a.home)}
               </span>
-              <GitBadge st={own} />
-              <GitPush dir={project} st={own} />
-              <GitChanges dir={project} count={own.changed + own.untracked} />
+              <GitRepo dir={project} st={own} />
             </li>
           )}
           {repos.map((d) => (
@@ -47,9 +43,7 @@ export function ProjectHead({ project: fixed, missing: fixedMissing, dirs }: { p
               <span className="min-w-0 flex-1 truncate" title={d}>
                 {tilde(d, a.home)}
               </span>
-              <GitBadge st={git.status[d]} />
-              <GitPush dir={d} st={git.status[d]} />
-              <GitChanges dir={d} count={git.status[d] ? git.status[d].changed + git.status[d].untracked : 0} />
+              <GitRepo dir={d} st={git.status[d]} />
             </li>
           ))}
         </ul>

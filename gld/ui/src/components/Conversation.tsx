@@ -29,10 +29,8 @@ import { LoadedDialog } from "./LoadedDialog"
 import { CacheState, KeepWarmBanner, KeepWarmButton, KeepWarmItem } from "./KeepWarm"
 import { useLocal } from "@/hooks/useLocal"
 import { useGit } from "@/hooks/useGit"
-import { GitBadge } from "./GitBadge"
 import { groupTools, ToolAnchor } from "./ToolAnchor"
-import { GitChanges } from "./GitChanges"
-import { GitPush } from "./GitPush"
+import { GitRepo } from "./GitRepo"
 import { GitRepos } from "./GitRepos"
 
 const FullTerminal = lazy(() => import("./FullTerminal")) // xterm n'est chargé qu'à l'ouverture du terminal
@@ -358,11 +356,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
       <LiveTasks live={live} dir={dir} id={id} />
       {gitDirs.map((d) => (
         <span key={d} className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs md:shrink-0" title={d}>
-          <span className="flex h-6 items-center rounded-md border px-2">
-            <GitBadge st={git.status[d]} />
-          </span>
-          <GitPush dir={d} st={git.status[d]} />
-          <GitChanges dir={d} count={git.status[d] ? git.status[d].changed + git.status[d].untracked : 0} />
+          <GitRepo dir={d} st={git.status[d]} chip />
         </span>
       ))}
       <GitRepos dirs={gitSubs} status={git.status} />

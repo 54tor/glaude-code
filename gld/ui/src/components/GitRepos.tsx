@@ -4,12 +4,8 @@ import type { GitState } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { GitBadge } from "./GitBadge"
-import { GitChanges } from "./GitChanges"
-import { GitPush } from "./GitPush"
-
-// À pousser : des commits en avance, ou une branche sans amont.
-const needsPush = (st: GitState | undefined) => !!st && !st.detached && (!st.upstream || st.ahead > 0)
+import { GitRepo } from "./GitRepo"
+import { needsPush } from "./GitPush"
 
 // Les dépôts des dossiers ajoutés à la session : une pastille résumé, et une liste à l'ouverture avec, par dépôt, la branche, les
 // changements et le bouton Pousser. Les dépôts à pousser sont en tête.
@@ -30,9 +26,7 @@ export function GitRepos({ dirs, status }: { dirs: string[]; status: Record<stri
           {sorted.map((d) => (
             <li key={d} className="flex flex-wrap items-center gap-1.5 text-xs" title={d}>
               <span className="max-w-32 truncate font-medium">{d.split("/").filter(Boolean).pop()}</span>
-              <GitBadge st={status[d]} />
-              <GitPush dir={d} st={status[d]} />
-              <GitChanges dir={d} count={status[d] ? status[d].changed + status[d].untracked : 0} />
+              <GitRepo dir={d} st={status[d]} chip />
             </li>
           ))}
         </ul>
