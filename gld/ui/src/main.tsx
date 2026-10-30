@@ -8,6 +8,7 @@ import { GuestApp } from "@/components/GuestApp.tsx"
 import { ThemeProvider } from "@/components/theme-provider.tsx"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { EDGE } from "@/lib/swipe"
 
 // Hauteur réellement visible (clavier virtuel ouvert ou non) : les fenêtres plein écran s'y calent, et on replie l'en-tête quand
 // le clavier mange la moitié de l'écran.
@@ -23,6 +24,16 @@ if (vv) {
   vv.addEventListener("scroll", fit)
   fit()
 }
+
+// PWA iPhone : un balayage depuis le bord gauche déclenche le retour arrière de WebKit au lieu d'ouvrir le tiroir. Annuler le
+// touchstart dans la bande du bord l'en empêche ; les contrôles y gardent leur toucher (le bouton du menu est tout près du bord).
+document.addEventListener(
+  "touchstart",
+  (e) => {
+    if (e.touches.length === 1 && e.touches[0].clientX <= EDGE && !(e.target as Element).closest?.("button,a,input,textarea,select,label,[role=button]")) e.preventDefault()
+  },
+  { passive: false }
+)
 
 // Service worker : cache des ressources statiques et clic sur les notifications (contexte sécurisé : HTTPS ou localhost).
 if (import.meta.env.PROD && "serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {})
