@@ -117,6 +117,7 @@ func TestReassignation(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.Remove(filepath.Join(cfg, "projects", encDst, id1+".jsonl"))
+	put(t, filepath.Join(cfg, "projects", encDst, id1, "subagents", "b.jsonl"), "{}\n", old) // reste d'un /cd interrompu
 	if n, err := reassign([]item{{encSrc, id1}}, dst); n != 1 || err != nil {
 		t.Fatal(n, err)
 	}
@@ -125,6 +126,12 @@ func TestReassignation(t *testing.T) {
 	sub, _ := os.ReadFile(filepath.Join(cfg, "projects", encDst, id1, "subagents", "a.jsonl"))
 	if !strings.Contains(string(b), `"cwd":"`+dst+`"`) || !strings.Contains(string(sub), `"cwd":"`+dst+`"`) {
 		t.Fatalf("cwd non réécrit :\n%s\n%s", b, sub)
+	}
+	if _, err := os.Stat(filepath.Join(cfg, "projects", encDst, id1, "subagents", "b.jsonl")); err != nil {
+		t.Fatal("dossier fusionné : b.jsonl perdu")
+	}
+	if _, err := os.Stat(filepath.Join(cfg, "projects", encSrc, id1)); err == nil {
+		t.Fatal("dossier source non vidé")
 	}
 	if !near(mtimeOf(t, moved), before) {
 		t.Fatal("la date du transcript a changé")

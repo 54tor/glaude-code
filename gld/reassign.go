@@ -142,10 +142,9 @@ func reassign(items []item, to string) (int, error) {
 		if filepath.Join(root, it.Dir) == dst {
 			return 0, terr("srv.reassign.dejaDansCeDossier", "A1", it.ID[:8])
 		}
-		for _, n := range []string{it.ID + ".jsonl", it.ID} {
-			if _, err := os.Lstat(filepath.Join(dst, n)); err == nil {
-				return 0, terr("srv.reassign.existeDejaDansLa", "A1", n)
-			}
+		// Seul le transcript en conflit bloque : un dossier ID déjà là (reste d'un /cd interrompu) est fusionné.
+		if n := it.ID + ".jsonl"; lexists(filepath.Join(dst, n)) {
+			return 0, terr("srv.reassign.existeDejaDansLa", "A1", n)
 		}
 	}
 	// Toutes les réécritures (transcripts et sous-agents de chaque session) sont écrites avant le premier renommage : un
@@ -199,8 +198,10 @@ func reassign(items []item, to string) (int, error) {
 			pending[i] = pending[i][1:]
 		}
 		src := filepath.Join(root, it.Dir)
-		for _, n := range []string{it.ID + ".jsonl", it.ID} {
-			if err := rRename(cfgDir(), filepath.Join(src, n), filepath.Join(dst, n)); err != nil && !os.IsNotExist(err) {
+		// Le dossier d'abord, le transcript en dernier : c'est lui qui rend la session visible, donc un échec
+		// intermédiaire ne laisse jamais une session apparente à moitié déplacée.
+		for _, n := range []string{it.ID, it.ID + ".jsonl"} {
+			if err := mergeMove(filepath.Join(src, n), filepath.Join(dst, n)); err != nil && !os.IsNotExist(err) {
 				abort()
 				return i, err
 			}
@@ -208,4 +209,34 @@ func reassign(items []item, to string) (int, error) {
 		rRemove(cfgDir(), src) // seulement s'il est devenu vide
 	}
 	return len(items), nil
+}
+
+func lexists(p string) bool { _, err := os.Lstat(p); return err == nil }
+
+// mergeMove déplace from vers to. Si to existe déjà, deux dossiers se fusionnent enfant par enfant ; pour un fichier en
+// conflit la version de to l'emporte et celle de from reste en place (rien n'est perdu, le dossier source n'est alors
+// pas retiré).
+func mergeMove(from, to string) error {
+	fi, err := os.Lstat(from)
+	if err != nil {
+		return err
+	}
+	ti, err := os.Lstat(to)
+	if os.IsNotExist(err) {
+		return rRename(cfgDir(), from, to)
+	}
+	if err != nil || !fi.IsDir() || !ti.IsDir() {
+		return err
+	}
+	ents, err := os.ReadDir(from)
+	if err != nil {
+		return err
+	}
+	for _, e := range ents {
+		if err := mergeMove(filepath.Join(from, e.Name()), filepath.Join(to, e.Name())); err != nil {
+			return err
+		}
+	}
+	rRemove(cfgDir(), from) // seulement s'il est devenu vide
+	return nil
 }
