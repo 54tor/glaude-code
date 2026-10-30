@@ -20,8 +20,8 @@ var gateTmpl = template.Must(template.New("gate").Parse(`<!doctype html>
 <link rel="icon" href="/favicon.ico" sizes="any"><meta name="theme-color" content="#111418">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:17px -apple-system,system-ui,sans-serif;background:#111418;color:#e8eaed;padding:env(safe-area-inset-top) 1rem env(safe-area-inset-bottom)}
-main{width:100%;max-width:22rem;text-align:center}p{color:#a0a4ab;line-height:1.5}.err{color:#f87171}
-form{display:grid;gap:.75rem;margin-top:1.25rem}input{font:inherit;font-size:16px;min-height:44px;padding:0 .75rem;border:1px solid #6f7681;border-radius:.6rem;background:#1b1f25;color:inherit}
+*{box-sizing:border-box}main{width:100%;max-width:22rem;text-align:center}p{color:#a0a4ab;line-height:1.5}.err{color:#f87171}
+form{display:grid;gap:.75rem;margin-top:1.25rem}input{width:100%;min-width:0;font:inherit;font-size:16px;min-height:44px;padding:0 .75rem;border:1px solid #6f7681;border-radius:.6rem;background:#1b1f25;color:inherit}
 .code{font:600 1.6rem ui-monospace,monospace;letter-spacing:.15em;text-align:center}a{color:#7cc15a}
 button{font:inherit;font-weight:600;min-height:44px;padding:.75rem 1.75rem;border:0;border-radius:.6rem;background:#3f7a2a;color:#fff}
 @media (prefers-color-scheme:light){body{background:#fff;color:#111418}p{color:#555}a{color:#3f7a2a}input{background:#fff;border-color:#8a8a8a}}</style></head>
