@@ -13,7 +13,7 @@ func TestInstallBuiltinRules(t *testing.T) {
 	p := filepath.Join(cfgDir(), "rules", "gld-askuser.md")
 
 	done, err := installBuiltinRules()
-	if err != nil || len(done) != 3 {
+	if err != nil || len(done) != 4 {
 		t.Fatalf("première installation : %v %v", done, err)
 	}
 	if err := os.WriteFile(p, []byte("retouché"), 0o644); err != nil {
