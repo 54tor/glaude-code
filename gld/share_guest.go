@@ -438,7 +438,7 @@ func guestServe(mux *http.ServeMux, sh Share, in Invite, sec, hd string) http.Ha
 			return
 		}
 		if pat == "GET /v1/fs/entries/content" {
-			if rel := path.Clean(r.URL.Query().Get("path")); !guestCited(sh)[rel] {
+			if rel := path.Clean(r.URL.Query().Get("path")); rel == ".." || strings.HasPrefix(rel, "../") || path.IsAbs(rel) || !guestCited(sh)[rel] {
 				guestDeny(w, 403, "srv.share_guest.refuse")
 				return
 			}
@@ -763,7 +763,7 @@ func guestCited(sh Share) map[string]bool {
 	re := regexp.MustCompile(regexp.QuoteMeta(string(d[1:len(d)-1])) + `/([A-Za-z0-9._@+~/-]+)`)
 	_ = scan(tr, func(b []byte) {
 		for _, m := range re.FindAllSubmatch(b, -1) {
-			if rel := strings.TrimRight(string(m[1]), "./"); rel != "" {
+			if rel := path.Clean(strings.TrimRight(string(m[1]), "./")); rel != "." && rel != ".." && !strings.HasPrefix(rel, "../") {
 				out[rel] = true
 			}
 		}

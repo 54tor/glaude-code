@@ -1209,9 +1209,9 @@ func TestGuestCited(t *testing.T) {
 	root = filepath.Join(t.TempDir(), "projects")
 	t.Cleanup(func() { root = old })
 	os.MkdirAll(filepath.Join(root, enc), 0o700)
-	os.WriteFile(filepath.Join(root, enc, sid+".jsonl"), []byte(`{"input":{"file_path":"`+dir+`/src/a.go"}}`+"\n"+`{"text":"voir `+dir+`/b.md."}`+"\n"), 0o600)
+	os.WriteFile(filepath.Join(root, enc, sid+".jsonl"), []byte(`{"input":{"file_path":"`+dir+`/src/a.go"}}`+"\n"+`{"text":"voir `+dir+`/b.md."}`+"\n"+`{"text":"`+dir+`/../etc/passwd"}`+"\n"), 0o600)
 	c := guestCited(Share{Dir: enc, Session: sid})
-	for p, want := range map[string]bool{"src/a.go": true, "b.md": true, "src/a": false, "c.go": false} {
+	for p, want := range map[string]bool{"src/a.go": true, "b.md": true, "src/a": false, "c.go": false, "../etc/passwd": false, "etc/passwd": false} {
 		if c[p] != want {
 			t.Errorf("%s: want %v (%v)", p, want, c)
 		}
