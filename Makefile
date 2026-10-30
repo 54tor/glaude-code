@@ -34,7 +34,7 @@ test:
 
 COVER_MIN ?= 80
 cover: ui
-	cd gld && go test -race -count=1 -covermode=atomic -coverprofile=cover.out . | tee cover.txt
+	cd gld && go test -race -count=1 -covermode=atomic -coverprofile=cover.out . > cover.txt 2>&1; st=$$?; cat cover.txt; exit $$st
 	@awk -v min=$(COVER_MIN) 'match($$0, /coverage: [0-9.]+%/) { c = substr($$0, RSTART + 10, RLENGTH - 11) } END { print "couverture : " c " % (plancher " min " %)"; exit (c == "" || c + 0 < min + 0) }' gld/cover.txt
 
 FUZZTIME ?= 60s
