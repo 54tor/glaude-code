@@ -571,6 +571,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
                 {termOn && a.live.has(id) && (
                   <Button variant="ghost" size="xs" className="text-muted-foreground max-md:[&>svg]:hidden" onClick={() => setView("terminal")} title={t("conversation.view.modeTitle")}>
                     <SquareTerminal /> {t("conversation.view.modeTerminal")}
+            first={msgs?.length === 0}
                   </Button>
                 )}
                 {!a.live.has(id) && (

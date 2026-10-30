@@ -133,6 +133,7 @@ export function Composer({
   extra,
   compactHint,
   coldHint,
+  first,
 }: {
   dir: string
   id: string
@@ -149,6 +150,7 @@ export function Composer({
   extra?: ReactNode // commandes de la vue, affichées au-dessus de la zone de saisie
   compactHint?: string | null // conseil de compacter, avec le bouton, au-dessus de la saisie d'une session ouverte
   coldHint?: ColdHintProps | null // cache expiré : conseil de repartir sur une nouvelle session
+  first?: boolean // conversation vide : le premier message déclenche le titre automatique
 }) {
   const { t } = useTranslation()
   const exec = useCan()("exec")
@@ -260,6 +262,7 @@ export function Composer({
     const delivered = !failed || stopped.current // échec de claude (pas un arrêt demandé) : on ne sait pas si le message est parti
     setTurn((t) => t && { ...t, running: false })
     await onDone() // le transcript est relu avant le tour suivant, qui efface sinon son propre affichage
+    if (first && delivered) api.rename({ dir, id }, { auto: true }).then(() => onDone(), () => {}) // échec (session ouverte, IA indisponible) : le titre par défaut reste
     setTimeout(() => setOwn(false), 30_000)
     return delivered
   }
