@@ -8,6 +8,10 @@
 @import "@fontsource-variable/jetbrains-mono";
 @import "@fontsource-variable/ibm-plex-sans";
 @import "@fontsource-variable/fira-code";
+@import "@fontsource/comic-relief/latin-400.css";
+@import "@fontsource/comic-relief/latin-700.css";
+@import "@fontsource/comic-relief/cyrillic-400.css";
+@import "@fontsource/comic-relief/cyrillic-700.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -235,13 +239,13 @@
 .safe-b { padding-bottom: env(safe-area-inset-bottom); }
 [data-kb] .safe-b { padding-bottom: 0; }
 .safe-x { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+/* Pas de rebond élastique (iOS) : il tirait la page sous la barre d'état et son flou. Le « tirer pour rafraîchir » des listes
+   reste actif : il lit touchmove, pas le défilement. */
+html, body, [data-slot="scroll-area-viewport"] { overscroll-behavior: none; }
 
 /* iOS zoome la page au focus de tout champ écrit en moins de 16 px (Monaco et xterm compris, d'où !important sur leur style en ligne). */
 @supports (-webkit-touch-callout: none) {
   @media (pointer: coarse) {
-/* Pas de rebond élastique (iOS) : il tirait la page sous la barre d'état et son flou. Le « tirer pour rafraîchir » des listes
-   reste actif : il lit touchmove, pas le défilement. */
-html, body, [data-slot="scroll-area-viewport"] { overscroll-behavior: none; }
     input, textarea, select { font-size: 16px !important; }
   }
 }

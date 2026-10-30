@@ -6,6 +6,7 @@ export const FONTS = {
   inter: { label: "Inter · JetBrains Mono", text: '"Inter Variable", sans-serif', mono: '"JetBrains Mono Variable", monospace' },
   plex: { label: "IBM Plex Sans · Fira Code", text: '"IBM Plex Sans Variable", sans-serif', mono: '"Fira Code Variable", monospace' },
   jetbrains: { label: "JetBrains Mono", text: '"JetBrains Mono Variable", monospace', mono: '"JetBrains Mono Variable", monospace' },
+  comic: { label: "Comic Sans (Comic Relief)", text: '"Comic Relief", "Comic Sans MS", cursive, sans-serif', mono: '"Geist Mono Variable", monospace' },
   adwaita: { get label() { return i18n.t("shell.fonts.adwaita") }, text: '"Adwaita Mono", ui-monospace, monospace', mono: '"Adwaita Mono", ui-monospace, monospace' },
 } as const
 
@@ -17,5 +18,8 @@ export function applyFont(id: string, size: string) {
   const st = document.documentElement.style
   st.setProperty("--reader-font", f.text)
   st.setProperty("--reader-mono", f.mono)
-  st.setProperty("--reader-size", `${SIZES.includes(size) ? size : "15"}px`)
+  const px = SIZES.includes(size) ? size : "15"
+  st.setProperty("--reader-size", `${px}px`)
+  // Tailwind compte en rem : changer la base agrandit toute l'app, pas seulement les conversations.
+  st.fontSize = `${(Number(px) / 15) * 16}px`
 }
