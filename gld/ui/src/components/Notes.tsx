@@ -160,7 +160,9 @@ export function Notes({ noteKey, folder: base, rows }: { noteKey: string; folder
     const live = a.live.has(r.s.id)
     let sent = false
     try {
-      if (live) await api.sessionSend(r.s.id, body, 20_000)
+      // Session en cours de réponse : le texte entre dans la file serveur (envoyé à la fin du tour) au lieu d'être tapé dans son terminal.
+      if (live && !a.waiting.has(r.s.id)) await api.queueAdd(r.s.id, body)
+      else if (live) await api.sessionSend(r.s.id, body, 20_000)
       sent = live || (await a.resumeSend(r, body))
     } catch (e) {
       toast.error(errMsg(e))
