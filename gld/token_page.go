@@ -17,7 +17,7 @@ var gateTmpl = template.Must(template.New("gate").Parse(`<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>{{.Title}}</title>
 <link rel="manifest" href="/site.webmanifest"><link rel="apple-touch-icon" href="/icons/gld-touch-1024.png">
-<link rel="icon" type="image/png" href="/icons/gld-touch-180.png" sizes="180x180"><meta name="theme-color" content="#111418">
+<link rel="icon" type="image/png" href="/icons/gld-favicon.png" sizes="96x96"><meta name="theme-color" content="#111418">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Glaude">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
