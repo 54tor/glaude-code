@@ -41,7 +41,7 @@ func TestEnvoiTmux(t *testing.T) {
 	for _, c := range (*calls)[1:] { // le premier appel est la liste des panneaux
 		seq = append(seq, c[1])
 	}
-	if strings.Join(seq, " ") != "list-panes load-buffer paste-buffer send-keys" && strings.Join(seq, " ") != "load-buffer paste-buffer send-keys" {
+	if got := strings.Join(seq, " "); got != "list-panes capture-pane load-buffer paste-buffer send-keys" && got != "capture-pane load-buffer paste-buffer send-keys" {
 		t.Fatalf("séquence : %v", seq)
 	}
 	last := (*calls)[len(*calls)-3:]
