@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react"
 import { useLeaveGuard } from "@/hooks/useEditorDraft"
+import { getAuth } from "@/lib/auth"
 import { isDirty, type Tab } from "./ideState"
 
 // Brouillons des onglets sales, en sessionStorage seulement : un .env ou une clé ouverts ne doivent pas survivre à l'onglet du navigateur.
@@ -22,6 +23,9 @@ export function readDrafts(dir: string): Record<string, Draft> {
 
 // Au-delà du plafond, le brouillon de trop est sauté : la garde de sortie reste le filet.
 export function writeDrafts(dir: string, tabs: Tab[]) {
+  // Après déconnexion, le démontage de l'IDE ne doit pas réécrire ce que signedOut vient d'effacer.
+  const a = getAuth()
+  if (a.state === "anon" && !a.owner) return
   const out: Record<string, Draft> = {}
   let total = 0
   for (const t of tabs) {

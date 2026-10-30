@@ -114,7 +114,7 @@ async function currentHome(): Promise<string | undefined> {
 // Ce que ce navigateur garde d'un compte : brouillons (texte de conversation), et état d'affichage qui nomme ses dossiers et sa mémoire.
 const OWNER = "gld.owner"
 const userKey = (k: string) =>
-  k === "gld.drafts" || k.startsWith("gld.editor.") || k === "gld.open" || k.startsWith("gld.mem.open.") || k === "ccMemSorts" || k === "gld.session-view"
+  k === "gld.drafts" || k.startsWith("gld.editor.") || k === "gld.open" || k.startsWith("gld.mem.open.") || k === "ccMemSorts" || k === "gld.session-view" || k.startsWith("gld.ide.")
 const storedKeys = (): string[] => {
   try {
     return Object.keys(localStorage)
@@ -170,6 +170,11 @@ export function clearUserData() {
   resetOpen()
   resetTrust()
   for (const k of storedKeys()) if (userKey(k)) localStorage.removeItem(k)
+  try {
+    for (const k of Object.keys(sessionStorage)) if (k.startsWith("gld.ide.")) sessionStorage.removeItem(k)
+  } catch {
+    /* stockage indisponible */
+  }
 }
 
 // Fin de session voulue (déconnexion, mot de passe changé, session courante révoquée) : l'application est démontée et vidée.
