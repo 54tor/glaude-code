@@ -136,6 +136,8 @@
   "srv.config.preview": "Aperçu",
   "srv.config.savedBackup": "Enregistré (sauvegarde faite)",
   "srv.config.texteApresLaFin": "texte après la fin du document",
+  "srv.config.fichierTropGros": "fichier de réglages trop volumineux (4 Mio maximum)",
+  "srv.config.imbricationTropProfonde": "JSON trop imbriqué (64 niveaux maximum)",
   "srv.configcheck.allowAndDeny": "« {{.A1}} » est à la fois autorisée et refusée (le refus l'emporte)",
   "srv.configcheck.broadRule": "règle trop large dans allow : « {{.A1}} » autorise tout l'outil",
   "srv.configcheck.dirMissing": "dossier supplémentaire introuvable : {{.A1}}",

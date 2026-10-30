@@ -79,7 +79,10 @@ func configRawRead(id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	b, err := readTrusted(path)
+	b, err := readConfigFile(path)
+	if errors.Is(err, errConfigTooBig) {
+		return "", err
+	}
 	if err != nil || strings.TrimSpace(string(b)) == "" {
 		return "{}\n", nil
 	}

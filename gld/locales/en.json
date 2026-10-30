@@ -136,6 +136,8 @@
   "srv.config.preview": "Preview",
   "srv.config.savedBackup": "Saved (backup made)",
   "srv.config.texteApresLaFin": "text after the end of the document",
+  "srv.config.fichierTropGros": "settings file too large (4 MiB maximum)",
+  "srv.config.imbricationTropProfonde": "JSON nested too deeply (64 levels maximum)",
   "srv.configcheck.allowAndDeny": "\"{{.A1}}\" is both allowed and denied (deny wins)",
   "srv.configcheck.broadRule": "rule too broad in allow: \"{{.A1}}\" allows the whole tool",
   "srv.configcheck.dirMissing": "additional folder not found: {{.A1}}",

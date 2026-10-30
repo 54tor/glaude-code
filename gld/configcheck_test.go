@@ -6,7 +6,7 @@ import (
 )
 
 func TestMcpMask(t *testing.T) {
-	if got := mcpMaskURL("https://u:p@h.example/x?key=SECRET"); strings.Contains(got, "SECRET") || strings.Contains(got, "u:p") {
+	if got := mcpMaskURL("https://u:p@h.example/x?key=SECRET", false); strings.Contains(got, "SECRET") || strings.Contains(got, "u:p") {
 		t.Errorf("url : %s", got)
 	}
 	got := mcpMaskArgs([]string{"-y", "srv", "--api-key", "SECRET", "--token=TOP", "--port", "80"})

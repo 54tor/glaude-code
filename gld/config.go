@@ -7,6 +7,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -50,7 +51,7 @@ func (o *omap) del(k string) {
 func parseOrdered(b []byte) (any, error) {
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.UseNumber()
-	v, err := decodeValue(dec)
+	v, err := decodeValue(dec, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +61,24 @@ func parseOrdered(b []byte) (any, error) {
 	return v, nil
 }
 
-func decodeValue(dec *json.Decoder) (any, error) {
+// maxJSONDepth borne la récursion : un fichier de réglages hostile ne doit pas épuiser la pile (erreur fatale, non rattrapable).
+const maxJSONDepth = 64
+
+// maxConfigBytes borne la taille d'un fichier de réglages ou .mcp.json avant analyse.
+const maxConfigBytes = 4 << 20
+
+var errConfigTooBig = terr("srv.config.fichierTropGros")
+
+// readConfigFile lit un fichier de réglages en refusant ceux qui dépassent maxConfigBytes.
+func readConfigFile(p string) ([]byte, error) {
+	b, err := readTrusted(p)
+	if err == nil && len(b) > maxConfigBytes {
+		return nil, errConfigTooBig
+	}
+	return b, err
+}
+
+func decodeValue(dec *json.Decoder, depth int) (any, error) {
 	t, err := dec.Token()
 	if err != nil {
 		return nil, err
@@ -69,6 +87,9 @@ func decodeValue(dec *json.Decoder) (any, error) {
 	if !ok {
 		return t, nil
 	}
+	if depth >= maxJSONDepth {
+		return nil, terr("srv.config.imbricationTropProfonde")
+	}
 	if d == '{' {
 		o := newOmap()
 		for dec.More() {
@@ -76,7 +97,7 @@ func decodeValue(dec *json.Decoder) (any, error) {
 			if err != nil {
 				return nil, err
 			}
-			v, err := decodeValue(dec)
+			v, err := decodeValue(dec, depth+1)
 			if err != nil {
 				return nil, err
 			}
@@ -87,7 +108,7 @@ func decodeValue(dec *json.Decoder) (any, error) {
 	}
 	arr := []any{}
 	for dec.More() {
-		v, err := decodeValue(dec)
+		v, err := decodeValue(dec, depth+1)
 		if err != nil {
 			return nil, err
 		}
@@ -175,24 +196,37 @@ func configPath(id string) (string, error) {
 
 var secretKey = regexp.MustCompile(`(?i)(key|token|secret|passw|credential|auth|cookie|bearer)`)
 
-// maskSecrets remplace par des points la valeur texte de toute clé qui ressemble à un secret.
+// Contextes de masquage strict (appelant sans config_write) : env et commandes de hooks sont des secrets par défaut.
+var credInRule = regexp.MustCompile(`(?i)(authorization|bearer|passw|secret|token|://[^/\s:@]+:[^@\s]*@)`)
+
+// maskSecrets remplace par des points la valeur texte de toute clé qui ressemble à un secret ; le drapeau se propage
+// aux objets et tableaux imbriqués sous cette clé.
 func maskSecrets(v any, key string) any {
+	return maskWalk(v, key, secretKey.MatchString(key), false, false, false)
+}
+
+// maskSettings : maskSecrets, et si strict (appelant sans config_write) env, commandes de hooks et règles de
+// permission contenant des identifiants sont masqués aussi.
+func maskSettings(v any, strict bool) any { return maskWalk(v, "", false, strict, false, false) }
+
+func maskWalk(v any, key string, sec, strict, hooks, perms bool) any {
 	switch x := v.(type) {
 	case *omap:
 		out := newOmap()
 		for _, k := range x.keys {
-			out.set(k, maskSecrets(x.m[k], k))
+			s := sec || secretKey.MatchString(k) || (strict && k == "env") || (strict && hooks && k == "command")
+			out.set(k, maskWalk(x.m[k], k, s, strict, hooks || k == "hooks", perms || k == "permissions"))
 		}
 		return out
 	case []any:
 		out := make([]any, len(x))
 		for i, e := range x {
-			out[i] = maskSecrets(e, key)
+			out[i] = maskWalk(e, key, sec, strict, hooks, perms)
 		}
 		return out
 	case string:
-		if secretKey.MatchString(key) && x != "" {
-			return "••••••••"
+		if x != "" && (sec || (strict && perms && credInRule.MatchString(x))) {
+			return maskText
 		}
 	}
 	return v
@@ -218,8 +252,11 @@ func readConfig(id string) (ConfigFile, any) {
 	if f.Dir != "" {
 		f.Label = ".claude/" + filepath.Base(p)
 	}
-	b, err := readTrusted(p)
+	b, err := readConfigFile(p)
 	if err != nil {
+		if errors.Is(err, errConfigTooBig) {
+			f.Exists, f.Error = true, err.Error()
+		}
 		return f, nil
 	}
 	f.Exists = true
@@ -237,7 +274,10 @@ func readConfig(id string) (ConfigFile, any) {
 
 // allConfigs : le fichier utilisateur, puis, pour chaque projet dont le dossier existe, ses fichiers de projet et local
 // quand ils existent. raw garde les secrets (pour les analyses), data les masque (pour l'affichage).
-func allConfigs() (files []ConfigFile, raw map[string]any) {
+func allConfigs() (files []ConfigFile, raw map[string]any) { return allConfigsFor(false) }
+
+// allConfigsFor : allConfigs, avec le masquage strict pour un appelant sans config_write.
+func allConfigsFor(strict bool) (files []ConfigFile, raw map[string]any) {
 	raw = map[string]any{}
 	add := func(id string, onlyExisting bool) {
 		f, v := readConfig(id)
@@ -246,7 +286,7 @@ func allConfigs() (files []ConfigFile, raw map[string]any) {
 		}
 		if v != nil {
 			raw[id] = v
-			f.Data = maskSecrets(v, "")
+			f.Data = maskSettings(v, strict)
 		}
 		files = append(files, f)
 	}

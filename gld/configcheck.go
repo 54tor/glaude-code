@@ -72,7 +72,10 @@ func summarize(v any) string {
 
 // effective : les réglages vus d'un projet (dir vide : utilisateur seul). Une liste s'additionne d'un niveau à l'autre ;
 // pour le reste, le niveau le plus prioritaire l'emporte.
-func effective(raw map[string]any, dir string) []EffRow {
+func effective(raw map[string]any, dir string) []EffRow { return effectiveFor(raw, dir, false) }
+
+// effectiveFor : effective, avec le masquage strict pour un appelant sans config_write.
+func effectiveFor(raw map[string]any, dir string, strict bool) []EffRow {
 	ids := []string{"u"}
 	if dir != "" {
 		ids = append(ids, "p/"+dir, "l/"+dir)
@@ -85,7 +88,7 @@ func effective(raw map[string]any, dir string) []EffRow {
 			continue
 		}
 		flat := map[string][]string{}
-		flatten("", masked(doc), 0, flat)
+		flatten("", maskSettings(doc, strict), 0, flat)
 		for path, vals := range flat {
 			if cells[path] == nil {
 				cells[path] = &cell{map[string][]string{}}
@@ -109,9 +112,20 @@ func effective(raw map[string]any, dir string) []EffRow {
 	return rows
 }
 
-func masked(v any) any { return maskSecrets(v, "") }
-
 // --- hooks -------------------------------------------------------------------------------------------
+
+// hooksFor : hooksOf, commandes masquées pour un appelant sans config_write.
+func hooksFor(raw map[string]any, strict bool) []HookInfo {
+	hs := hooksOf(raw)
+	if strict {
+		for i := range hs {
+			if hs[i].Command != "" {
+				hs[i].Command = maskText
+			}
+		}
+	}
+	return hs
+}
 
 type HookInfo struct {
 	Scope   string `json:"scope"` // niveau : u, p, l
@@ -319,16 +333,18 @@ func configHealth(files []ConfigFile, raw map[string]any) []CfgIssue {
 // --- serveurs MCP (lecture seule) ----------------------------------------------------------------------
 
 type McpServer struct {
-	Name    string   `json:"name"`
-	Scope   string   `json:"scope"` // user, project (.mcp.json), local (~/.claude.json, par projet)
-	Project string   `json:"project,omitempty"`
-	Type    string   `json:"type"`
-	Command string   `json:"command,omitempty"`
-	URL     string   `json:"url,omitempty"`
-	EnvKeys []string `json:"envKeys,omitempty"`
+	Name     string   `json:"name"`
+	Scope    string   `json:"scope"` // user, project (.mcp.json), local (~/.claude.json, par projet)
+	Project  string   `json:"project,omitempty"`
+	Type     string   `json:"type"`
+	Command  string   `json:"command,omitempty"`
+	URL      string   `json:"url,omitempty"`
+	EnvKeys  []string `json:"envKeys,omitempty"`
+	ArgCount int      `json:"argCount,omitempty"`
 }
 
-func mcpFrom(servers any, scope, project string) []McpServer {
+// mcpFrom : strict (appelant sans config_write) ne montre que l'exécutable, le nombre d'arguments et l'hôte.
+func mcpFrom(servers any, scope, project string, strict bool) []McpServer {
 	o := asMap(servers)
 	if o == nil {
 		return nil
@@ -343,10 +359,14 @@ func mcpFrom(servers any, scope, project string) []McpServer {
 		m.Type, _ = s.m["type"].(string)
 		m.Command, _ = s.m["command"].(string)
 		if args := strList(s.m["args"]); len(args) > 0 {
-			m.Command = strings.TrimSpace(m.Command + " " + cut(mcpMaskArgs(args), 80))
+			if strict {
+				m.ArgCount = len(args)
+			} else {
+				m.Command = strings.TrimSpace(m.Command + " " + cut(mcpMaskArgs(args), 80))
+			}
 		}
 		m.URL, _ = s.m["url"].(string)
-		m.URL = mcpMaskURL(m.URL)
+		m.URL = mcpMaskURL(m.URL, strict)
 		if m.Type == "" {
 			if m.URL != "" {
 				m.Type = "http"
@@ -367,18 +387,20 @@ func mcpFrom(servers any, scope, project string) []McpServer {
 
 // mcpServers : les serveurs déclarés dans ~/.claude.json (utilisateur, puis par projet) et dans les .mcp.json des projets.
 // Seules les clés des serveurs sont lues : le reste de ~/.claude.json (compte, identifiants) n'est jamais exposé.
-func mcpServers() []McpServer {
+func mcpServers() []McpServer { return mcpServersFor(false) }
+
+func mcpServersFor(strict bool) []McpServer {
 	var out []McpServer
-	if b, err := readTrusted(claudeJSON()); err == nil {
+	if b, err := readConfigFile(claudeJSON()); err == nil {
 		if v, err := parseOrdered(b); err == nil {
 			if s, ok := lookup(v, "mcpServers"); ok {
-				out = append(out, mcpFrom(s, "user", "")...)
+				out = append(out, mcpFrom(s, "user", "", strict)...)
 			}
 			if p, ok := lookup(v, "projects"); ok {
 				if po := asMap(p); po != nil {
 					for _, path := range po.keys {
 						if s, ok := lookup(po.m[path], "mcpServers"); ok {
-							out = append(out, mcpFrom(s, "local", path)...)
+							out = append(out, mcpFrom(s, "local", path, strict)...)
 						}
 					}
 				}
@@ -386,10 +408,10 @@ func mcpServers() []McpServer {
 		}
 	}
 	for _, p := range liveProjects() {
-		if b, err := readTrusted(filepath.Join(p.Project, ".mcp.json")); err == nil {
+		if b, err := readConfigFile(filepath.Join(p.Project, ".mcp.json")); err == nil {
 			if v, err := parseOrdered(b); err == nil {
 				if s, ok := lookup(v, "mcpServers"); ok {
-					out = append(out, mcpFrom(s, "project", p.Project)...)
+					out = append(out, mcpFrom(s, "project", p.Project, strict)...)
 				}
 			}
 		}
@@ -436,12 +458,16 @@ func expandDir(dir, fileID string) string {
 }
 
 // mcpMaskURL : identifiants et paramètres d'adresse masqués (un jeton passe souvent en ?key=…).
-func mcpMaskURL(raw string) string {
+// Illisible ou sans hôte : l'adresse est supprimée. strict : seuls schéma et hôte restent (un jeton peut loger dans le chemin).
+func mcpMaskURL(raw string, strict bool) string {
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" {
-		return raw
+		return ""
 	}
 	u.User = nil
+	if strict {
+		return u.Scheme + "://" + u.Host
+	}
 	if u.RawQuery != "" {
 		u.RawQuery = "…"
 	}

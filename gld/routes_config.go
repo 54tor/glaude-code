@@ -5,10 +5,29 @@ import (
 	"sort"
 )
 
+// canSeeConfigSecrets : sans garde (mode ouvert ou jeton) tout est visible ; avec, il faut config_write sur le home de la requête.
+func canSeeConfigSecrets(r *http.Request) bool { return callerHas(r, RightConfigWrite) }
+
+// healthFor : configHealth ; sans config_write, les alertes de hook et de permission (qui citent commande ou règle) sont retirées.
+func healthFor(files []ConfigFile, raw map[string]any, strict bool) []CfgIssue {
+	is := configHealth(files, raw)
+	if !strict {
+		return is
+	}
+	out := is[:0]
+	for _, i := range is {
+		if i.Kind != "hook" && i.Kind != "permission" {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
 // routesConfig : la configuration de Claude Code (config*.go) : lecture, analyses, modifications permises, sauvegardes.
 func routesConfig(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/config", func(w http.ResponseWriter, r *http.Request) {
-		files, raw := allConfigs()
+		strict := !canSeeConfigSecrets(r)
+		files, raw := allConfigsFor(strict)
 		type plugin struct {
 			ID        string `json:"id"`
 			Enabled   bool   `json:"enabled"`
@@ -27,12 +46,12 @@ func routesConfig(mux *http.ServeMux) {
 		sort.Slice(plugins, func(i, j int) bool { return plugins[i].ID < plugins[j].ID })
 		ps := liveProjects()
 		writeJSON(w, 200, map[string]any{
-			"files": nz(files), "hooks": nz(hooksOf(raw)), "issues": nz(configHealth(files, raw)), "backups": listBackups(),
+			"files": nz(files), "hooks": nz(hooksFor(raw, strict)), "issues": nz(healthFor(files, raw, strict)), "backups": listBackups(),
 			"plugins": nz(plugins), "projects": nz(ps),
 		})
 	})
 	mux.HandleFunc("GET /v1/config/projects", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"projects": projectConfigs()})
+		writeJSON(w, 200, map[string]any{"projects": projectConfigsFor(!canSeeConfigSecrets(r))})
 	})
 	mux.HandleFunc("GET /v1/config/effective", func(w http.ResponseWriter, r *http.Request) {
 		dir := r.URL.Query().Get("dir")
@@ -40,11 +59,12 @@ func routesConfig(mux *http.ServeMux) {
 			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
 			return
 		}
-		_, raw := allConfigs()
-		writeJSON(w, 200, map[string]any{"rows": nz(effective(raw, dir))})
+		strict := !canSeeConfigSecrets(r)
+		_, raw := allConfigsFor(strict)
+		writeJSON(w, 200, map[string]any{"rows": nz(effectiveFor(raw, dir, strict))})
 	})
 	mux.HandleFunc("GET /v1/config/mcp", func(w http.ResponseWriter, r *http.Request) {
-		s := mcpServers()
+		s := mcpServersFor(!canSeeConfigSecrets(r))
 		if s == nil {
 			s = []McpServer{}
 		}

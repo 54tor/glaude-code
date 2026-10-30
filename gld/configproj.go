@@ -69,10 +69,13 @@ func projectRules(cwd string) []ProjDocRule {
 	return out
 }
 
-func projectConfigs() []ProjectCfg {
-	_, raw := allConfigs()
-	hooks := hooksOf(raw)
-	mcp := mcpServers()
+func projectConfigs() []ProjectCfg { return projectConfigsFor(false) }
+
+// projectConfigsFor : projectConfigs, avec le masquage strict pour un appelant sans config_write.
+func projectConfigsFor(strict bool) []ProjectCfg {
+	_, raw := allConfigsFor(strict)
+	hooks := hooksFor(raw, strict)
+	mcp := mcpServersFor(strict)
 	skills := listSkills()
 	_, mem, _ := memList()
 	docs := map[string][]string{}
@@ -97,7 +100,7 @@ func projectConfigs() []ProjectCfg {
 				label = "settings.local.json"
 			}
 			flat := map[string][]string{}
-			flatten("", maskSecrets(doc, ""), 0, flat)
+			flatten("", maskSettings(doc, strict), 0, flat)
 			pf := ProjFile{ID: id, Label: label, Rows: []ProjRow{}}
 			for path, vals := range flat {
 				pf.Rows = append(pf.Rows, ProjRow{path, strings.Join(vals, " · ")})
