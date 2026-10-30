@@ -1,7 +1,7 @@
 export { cn } from "cn"
 
 // Écran tactile sans souris (iPhone) : pas de Maj+Entrée sur le clavier virtuel.
-const touchOnly = () => typeof matchMedia === "function" && matchMedia("(hover: none) and (pointer: coarse)").matches
+export const touchOnly = () => typeof matchMedia === "function" && matchMedia("(hover: none) and (pointer: coarse)").matches
 
 // Entrée envoie (Maj+Entrée va à la ligne, Ctrl/Cmd+Entrée envoie aussi) ; pas pendant une composition (IME). Au clavier tactile,
 // Entrée va à la ligne comme dans Messages : on envoie par le bouton.

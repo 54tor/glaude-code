@@ -110,7 +110,7 @@ const Row = memo(function Row({
             aria-label={t("shell.list.select")}
             className={cn(
               "relative z-10 transition-opacity",
-              !picked && a.selected.length === 0 && "md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+              !picked && a.selected.length === 0 && "md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 pointer-coarse:hidden"
             )}
           />
           {kids > 0 && (

@@ -22,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useActions, type Row } from "./actions"
+import { touchOnly } from "@/lib/utils"
 
 // Les mêmes entrées servent au menu « ⋯ » et au clic droit : seules les briques shadcn changent.
 export type Kit = {
@@ -185,7 +186,7 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
           <X /> {t("shell.menu.ungroup")}
         </M.Item>
       )}
-      {full && (
+      {(full || touchOnly()) && (
         <M.Item onSelect={() => a.pick(s.id)}>
           <CheckSquare /> {a.picked.has(s.id) ? t("shell.menu.deselect") : t("shell.menu.select")}
         </M.Item>
