@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
@@ -612,3 +613,28 @@ type discardWriter struct {
 func (d *discardWriter) Header() http.Header         { return d.h }
 func (d *discardWriter) Write(b []byte) (int, error) { return len(b), nil }
 func (d *discardWriter) WriteHeader(c int)           { d.code = c }
+
+// callerHas : l'appelant a ce droit sur le home de la requête. Sans garde ni passerelle (mode ouvert ou jeton) tout est permis ;
+// un home enfant lit les droits que sa passerelle a posés dans rightsHeader (absent : mode ouvert côté passerelle).
+func callerHas(r *http.Request, right Right) bool {
+	if g := gateFrom(r); g != nil {
+		if g.p == nil {
+			return false
+		}
+		id, ok := homeIDFor(homeFrom(r))
+		if !ok {
+			return false
+		}
+		m, err := g.rights(id)
+		return err == nil && m[right]
+	}
+	if childToken != "" {
+		if !childAuthorized(r) {
+			return false
+		}
+		if v := r.Header.Values(rightsHeader); len(v) > 0 {
+			return slices.Contains(strings.Split(v[0], ","), string(right))
+		}
+	}
+	return true
+}

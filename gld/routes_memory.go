@@ -439,16 +439,5 @@ func mergeReply(w http.ResponseWriter, r *http.Request, prompt, cwd, override st
 	writeJSON(w, 200, map[string]any{"message": out, "prompt": prompt})
 }
 
-// canFsRead : sans garde (mode ouvert ou jeton), tout est permis ; sinon le droit fs_read du home courant est requis.
-func canFsRead(r *http.Request) bool {
-	g := gateFrom(r)
-	if g == nil || g.p == nil {
-		return true
-	}
-	id, ok := homeIDFor(homeFrom(r))
-	if !ok {
-		return false
-	}
-	m, err := g.rights(id)
-	return err == nil && m[RightFsRead]
-}
+// canFsRead : sans garde (mode ouvert ou jeton) tout est permis ; sinon le droit fs_read du home courant est requis.
+func canFsRead(r *http.Request) bool { return callerHas(r, RightFsRead) }

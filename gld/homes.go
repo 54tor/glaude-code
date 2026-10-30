@@ -31,6 +31,7 @@ const (
 	homeCookie    = "gld_home"
 	childHeader   = "X-Gld-Child"
 	userHeader    = "X-Gld-User"
+	rightsHeader  = "X-Gld-Rights"
 	childTokenEnv = "GLD_WEB_CHILD_TOKEN"
 	// ideMainCfgEnv : la config du processus principal, qu'un enfant doit aussi refuser comme racine de l'espace.
 	ideMainCfgEnv = "GLD_WEB_MAIN_CONFIG"
@@ -249,6 +250,21 @@ func childProxy(target *url.URL, token string) *httputil.ReverseProxy {
 			r.Out.Header.Del(userHeader)
 			if g := gateFrom(r.In); g != nil && g.p != nil {
 				r.Out.Header.Set(userHeader, principalName(g))
+			}
+			// Droits de l'appelant sur ce home : l'enfant n'a pas de garde et ne croit cet en-tête qu'avec le jeton d'enfant.
+			r.Out.Header.Del(rightsHeader)
+			if g := gateFrom(r.In); g != nil && g.p != nil {
+				var list []string
+				if id, ok := homeIDFor(homeFrom(r.In)); ok {
+					if m, err := g.rights(id); err == nil {
+						for _, x := range allRights {
+							if m[x] {
+								list = append(list, string(x))
+							}
+						}
+					}
+				}
+				r.Out.Header.Set(rightsHeader, strings.Join(list, ","))
 			}
 			r.Out.Header.Del(guestHeader)
 			r.Out.Header.Del(authorHeader)
