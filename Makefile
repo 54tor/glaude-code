@@ -33,7 +33,7 @@ test:
 	cd gld && go test -count=1 .
 
 COVER_MIN ?= 80
-cover:
+cover: ui
 	cd gld && go test -race -count=1 -covermode=atomic -coverprofile=cover.out . | tee cover.txt
 	@awk -v min=$(COVER_MIN) 'match($$0, /coverage: [0-9.]+%/) { c = substr($$0, RSTART + 10, RLENGTH - 11) } END { print "couverture : " c " % (plancher " min " %)"; exit (c == "" || c + 0 < min + 0) }' gld/cover.txt
 
@@ -41,7 +41,7 @@ FUZZTIME ?= 60s
 fuzz:
 	cd gld && for f in $$(go test -list '^Fuzz' . | grep '^Fuzz'); do go test -run '^$$' -fuzz "^$$f$$" -fuzztime $(FUZZTIME) -parallel 4 . || exit 1; done
 
-check: check-ui
+check: ui check-ui
 	cd gld && go vet ./... && go test -race -count=1 .
 
 # La partie interface de check (la CI la lance seule : les tests Go y passent déjà sous -race dans cover).
