@@ -50,7 +50,7 @@ const (
 // guestStatics : l'interface invité se charge par navigation, sans en-tête ; servie si un cookie invité est valide (en mode
 // jeton, l'hôte les refuserait à l'invité). Contenu public identique pour l'hôte.
 var guestStatics = map[string]bool{
-	"GET /guest": true, "GET /guest/{handle}": true, "GET /assets/": true, "GET /icons/": true, "GET /favicon.ico": true, "GET /manifest.webmanifest": true,
+	"GET /guest": true, "GET /guest/{handle}": true, "GET /assets/": true, "GET /icons/": true, "GET /favicon.ico": true, "GET /site.webmanifest": true,
 }
 
 var guestRoutes = map[string]bool{
@@ -60,7 +60,7 @@ var guestRoutes = map[string]bool{
 	"GET /v1/fs/tree": true, "GET /v1/fs/entries/content": true,
 	"GET /v1/sessions/{id}/queue": true, "POST /v1/sessions/{id}/queue": true, "DELETE /v1/sessions/{id}/queue/{qid}": true,
 	"GET /v1/guest/me": true, "DELETE /v1/guest/me": true,
-	"GET /guest": true, "GET /assets/": true, "GET /icons/": true, "GET /favicon.ico": true, "GET /manifest.webmanifest": true,
+	"GET /guest": true, "GET /assets/": true, "GET /icons/": true, "GET /favicon.ico": true, "GET /site.webmanifest": true,
 }
 
 type guestRelayKey struct{}

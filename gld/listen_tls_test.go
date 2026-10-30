@@ -53,7 +53,7 @@ func TestTokenCookieSecure(t *testing.T) {
 func TestPublicAssetsWithoutToken(t *testing.T) {
 	h := withToken("0123456789abcdef0123", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
 	for path, want := range map[string]int{
-		"/manifest.webmanifest": 200, "/icons/apple-touch-icon.png": 200, "/favicon.ico": 200, "/apple-touch-icon.png": 200, "/apple-touch-icon-precomposed.png": 200,
+		"/site.webmanifest": 200, "/icons/apple-touch-icon.png": 200, "/favicon.ico": 200, "/apple-touch-icon.png": 200, "/apple-touch-icon-precomposed.png": 200, "/web-app-manifest-512x512.png": 200,
 		"/v1/state": 401, "/x": 401, "/icons/../v1/state": 401, "/sw.js": 401, "/assets/app.js": 401,
 	} {
 		w := httptest.NewRecorder()
@@ -63,7 +63,7 @@ func TestPublicAssetsWithoutToken(t *testing.T) {
 		}
 	}
 	w := httptest.NewRecorder()
-	h.ServeHTTP(w, httptest.NewRequest("POST", "/manifest.webmanifest", nil))
+	h.ServeHTTP(w, httptest.NewRequest("POST", "/site.webmanifest", nil))
 	if w.Code != 401 {
 		t.Errorf("POST sur un fichier public : %d", w.Code)
 	}

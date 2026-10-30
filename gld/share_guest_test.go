@@ -851,7 +851,7 @@ func TestGuestStaticExceptionTable(t *testing.T) {
 			t.Errorf("%s servi : %d", p, w.Code)
 		}
 	}
-	for _, p := range []string{"/guest", "/guest/" + hID1, "/assets/" + filepath.Base(asset[0]), "/icons/x", "/favicon.ico", "/manifest.webmanifest"} {
+	for _, p := range []string{"/guest", "/guest/" + hID1, "/assets/" + filepath.Base(asset[0]), "/icons/x", "/favicon.ico", "/site.webmanifest"} {
 		if w := (gReq{method: "GET", path: p, jar: jar}).do(h); w.Code == 401 {
 			t.Errorf("%s refusé", p)
 		}
@@ -1099,7 +1099,7 @@ func TestGuestDefinitiveStillClears(t *testing.T) {
 func TestGuestStaticClearsOnlyOnPages(t *testing.T) {
 	h := guestWeb(t, nil, modeTok)
 	jar := []*http.Cookie{{Name: gName, Value: ".mort"}}
-	paths := []string{"/icons/x", "/favicon.ico", "/manifest.webmanifest"}
+	paths := []string{"/icons/x", "/favicon.ico", "/site.webmanifest"}
 	if asset, _ := filepath.Glob("ui/dist/assets/*.js"); len(asset) > 0 {
 		paths = append(paths, "/assets/"+filepath.Base(asset[0]))
 	} else {

@@ -679,7 +679,7 @@ func TestPublicAndGuestSurfacePinned(t *testing.T) {
 		"POST /invite/{home}/{token}|POST /pair|POST /v1/auth/factors/{factor}/removals|POST /v1/auth/mfa/recovery|POST /v1/auth/mfa/totp|POST /v1/auth/mfa/webauthn/assertions|" +
 		"POST /v1/auth/mfa/webauthn/challenges|POST /v1/auth/sessions|POST /v1/auth/sessions/revocations|POST /v1/auth/sessions/{sid}/revocations|POST /v1/auth/totp/enrollments|" +
 		"POST /v1/auth/webauthn/registrations|PUT /v1/auth/password|PUT /v1/auth/recovery-codes|PUT /v1/auth/totp/enrollments/current|PUT /v1/auth/webauthn/registrations/current"
-	wantGuest := "DELETE /v1/guest/me|DELETE /v1/sessions/{id}/queue/{qid}|GET /assets/|GET /favicon.ico|GET /guest|GET /icons/|GET /manifest.webmanifest|GET /v1/fs/entries/content|GET /v1/fs/tree|" +
+	wantGuest := "DELETE /v1/guest/me|DELETE /v1/sessions/{id}/queue/{qid}|GET /assets/|GET /favicon.ico|GET /guest|GET /icons/|GET /site.webmanifest|GET /v1/fs/entries/content|GET /v1/fs/tree|" +
 		"GET /v1/guest/me|GET /v1/sessions/{id}/conversation|GET /v1/sessions/{id}/conversation/images/{img}|GET /v1/sessions/{id}/conversation/text|GET /v1/sessions/{id}/conversation/tools|" +
 		"GET /v1/sessions/{id}/live|GET /v1/sessions/{id}/queue|GET /v1/sessions/{id}/state|GET /v1/sessions/{id}/tasks/{task}/output|GET /v1/sessions/{id}/workflows|POST /v1/sessions/{id}/queue"
 	if got := strings.Join(pub, "|"); got != wantPub {

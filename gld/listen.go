@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"slices"
 	"strings"
 )
 
@@ -154,8 +155,14 @@ func withToken(token string, next http.Handler) http.Handler {
 
 // publicAsset : manifeste et icônes, chargés par le navigateur sans cookie (manifeste, icône d'écran d'accueil d'iOS) ;
 // fichiers fixes de l'interface, sans donnée. Le chemin doit être déjà propre : « /icons/../x » ne passe pas.
+// rootIcons : icônes du manifeste et favicon PNG, à la racine comme les génère RealFaviconGenerator.
+var rootIcons = []string{"/favicon-96x96.png", "/web-app-manifest-192x192.png", "/web-app-manifest-512x512.png"}
+
 func publicAsset(p string) bool {
-	return path.Clean(p) == p && (p == "/manifest.webmanifest" || p == "/favicon.ico" || p == "/apple-touch-icon.png" || p == "/apple-touch-icon-precomposed.png" || strings.HasPrefix(p, "/icons/"))
+	if slices.Contains(rootIcons, p) {
+		return true
+	}
+	return path.Clean(p) == p && (p == "/site.webmanifest" || p == "/favicon.ico" || p == "/apple-touch-icon.png" || p == "/apple-touch-icon-precomposed.png" || strings.HasPrefix(p, "/icons/"))
 }
 
 // withTokenOpen : en mode ouvert, withToken tel quel. En mode multi-utilisateur, le login remplace le jeton pour le navigateur :

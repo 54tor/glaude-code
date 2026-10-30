@@ -47,7 +47,14 @@ func routesStatic(mux *http.ServeMux) {
 	// Icônes et manifeste (ui/public) : favicon, icônes d'application.
 	mux.Handle("GET /icons/", files)
 	mux.Handle("GET /favicon.ico", files)
-	mux.Handle("GET /manifest.webmanifest", files)
+	// Servi comme chez crawl-center (application/octet-stream) : c'est la configuration dont l'icône iOS d'écran d'accueil marche.
+	mux.HandleFunc("GET /site.webmanifest", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		files.ServeHTTP(w, r)
+	})
+	mux.Handle("GET /favicon-96x96.png", files)
+	mux.Handle("GET /web-app-manifest-192x192.png", files)
+	mux.Handle("GET /web-app-manifest-512x512.png", files)
 	// iOS (feuille de partage, écran d'accueil) relit la page sans cookie : la 401 n'a pas de <link>, il cherche alors ces noms
 	// à la racine, puis se rabat sur le favicon de 48 px.
 	touch := func(w http.ResponseWriter, r *http.Request) {
