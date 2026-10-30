@@ -1,7 +1,7 @@
 import { loc } from "@/i18n"
 import { useTranslation } from "react-i18next"
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ChevronRight, Coffee, MoreHorizontal, SquareTerminal, Star, Tag } from "lucide-react"
+import { ChevronRight, Coffee, Globe, MoreHorizontal, SquareTerminal, Star, Tag } from "lucide-react"
 import { ago, bucket, compact, full, tilde, tokTotal } from "@/lib/format"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
@@ -138,6 +138,7 @@ const Row = memo(function Row({
               {live && <Live waiting={a.waiting.has(s.id)} />}
               {live && <BgBadge id={s.id} />}
               {left !== null && (
+              {live && a.rc.has(s.id) && <Globe className="size-3.5 shrink-0 text-success" aria-label={t("shell.list.remoteControl")} />}
                 <>
                   <span
                     className={cn(

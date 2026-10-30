@@ -35,6 +35,7 @@ export type Actions = {
   root: string // dossier des transcripts
   rows: Row[] // toutes les sessions, les plus récentes d'abord
   live: Set<string>
+  rc: Set<string> // parmi `live`, les sessions reliées à claude.ai (remote control)
   background: Set<string> // parmi `live`, les tâches de fond (sans terminal)
   waiting: Set<string> // ouvertes, en attente de votre message
   asking: Set<string> // ouvertes, avec une question ou une demande d'autorisation ouverte dans leur terminal

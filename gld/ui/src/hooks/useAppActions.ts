@@ -345,6 +345,7 @@ export function useAppActions(c: {
     q,
     live,
     background: new Set(data?.background),
+    rc: new Set(data?.rc),
     waiting,
     asking: new Set(data?.asking),
     hit: (id) => hitMap?.get(id),

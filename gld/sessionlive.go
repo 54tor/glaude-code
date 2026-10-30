@@ -270,6 +270,31 @@ func sessionStatus(id string) (status string, open bool) {
 	return "", false
 }
 
+// rcSessions : ids des sessions ouvertes reliées à claude.ai (remote control), d'après bridgeSessionId dans ~/.claude/sessions/*.json.
+func rcSessions() []string {
+	out := []string{}
+	files, _ := filepath.Glob(filepath.Join(cfgDir(), "sessions", "*.json"))
+	for _, f := range files {
+		b, err := readTrusted(f)
+		if err != nil {
+			continue
+		}
+		var s struct {
+			Pid       int    `json:"pid"`
+			SessionId string `json:"sessionId"`
+			Bridge    string `json:"bridgeSessionId"`
+		}
+		if json.Unmarshal(b, &s) != nil || s.SessionId == "" || s.Bridge == "" || s.Pid <= 0 {
+			continue
+		}
+		if _, err := os.Stat("/proc/" + strconv.Itoa(s.Pid)); err != nil && pidProbe {
+			continue
+		}
+		out = append(out, s.SessionId)
+	}
+	return out
+}
+
 // pidProbe : sous Linux on vérifie que le processus vit (/proc) ; ailleurs on s'en remet au fichier (remplaçable dans les tests).
 var pidProbe = func() bool { _, err := os.Stat("/proc/self"); return err == nil }()
 

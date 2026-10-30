@@ -105,6 +105,7 @@
       "select": "Sélectionner",
       "favorite": "favori",
       "cache": "cache {{left}} min",
+      "remoteControl": "Remote control actif",
       "tokensDetail": "Entrée {{in}} · sortie {{out}} · cache écrit {{cw}} · cache lu {{cr}}",
       "tokens": "{{n}} tokens",
       "messages_one": "{{count}} message",
