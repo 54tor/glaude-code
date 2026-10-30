@@ -4,14 +4,14 @@ import { useTranslation } from "react-i18next"
 import { api, type CfgOverview } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"
 import { tilde } from "@/lib/format"
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ClaudeOptions, SettingsPanel, type UiSettings } from "./SettingsDialog"
 import { useActions } from "./actions"
 import { Choose } from "./Choose"
 import { useConfigEdit } from "./configEdit"
-import { HealthTab, HooksTab, PrecedenceTab } from "./ConfigTabs1"
+import { HealthTab, PrecedenceTab } from "./ConfigTabs1"
 import { ProjectsTab } from "./ConfigProjects"
 import { RawTab } from "./ConfigRaw"
 import { BackupsTab, PermsTab, SettingsTab } from "./ConfigTabs2"
@@ -91,37 +91,34 @@ export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: strin
   )
 
   return (
+  // Trois groupes : ce qu'on édite dans Claude Code, ce qu'on lit pour comprendre, et gld lui-même.
+  const groups: [string, [string, string][]][] = [
+    ["claude", [["reglages", t("config.main.tabs.settings")], ["permissions", t("config.main.tabs.permissions")], ["json", "JSON"], ["sauvegardes", `${t("config.main.tabs.backups")} (${ov.backups.length})`]]],
+    ["diagnostic", [["sante", t("config.main.tabs.health") + (ov.issues.length > 0 ? ` (${ov.issues.length})` : "")], ["projets", t("config.main.tabs.projects")], ["precedence", t("config.main.tabs.precedence")]]],
+    ["gld", [["interface", t("config.main.tabs.interface")], ["export", t("shell.app.title.backup")], ["sync", t("config.main.tabs.sync")]]],
+  ]
     <ScrollArea className="min-h-0 flex-1">
       <div className="mx-auto max-w-page px-3 py-6 md:px-6">
         <Tabs value={dir ? projTab : tab || "sante"} onValueChange={dir ? setProjTab : onTab}>
-          {/* Le soulignement de l'onglet actif (::after, 5 px sous le bouton, même invisible) déborde de la liste : sans ce bas de marge il crée un défilement vertical. */}
-          {/* ponytail: fondu fixe, même une fois au bout du défilement ; un vrai indicateur demanderait d'écouter le scroll. */}
-          <ScrollArea className="mb-2 w-full [mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)]">
-            <div className="pb-2">
-              <TabsList className="w-max justify-start">
-                {dir ? (
-                  <>
-                    <TabsTrigger value="permissions">{t("config.main.tabs.permissions")}</TabsTrigger>
-                    <TabsTrigger value="reglages">{t("config.main.tabs.settings")}</TabsTrigger>
-                  </>
-                ) : (
-                  <>
-                <TabsTrigger value="sante">{t("config.main.tabs.health")}{ov.issues.length > 0 && ` (${ov.issues.length})`}</TabsTrigger>
-                <TabsTrigger value="projets">{t("config.main.tabs.projects")}</TabsTrigger>
-                <TabsTrigger value="precedence">{t("config.main.tabs.precedence")}</TabsTrigger>
-                <TabsTrigger value="hooks">{t("config.main.tabs.hooks")} ({ov.hooks.length})</TabsTrigger>
-                <TabsTrigger value="permissions">{t("config.main.tabs.permissions")}</TabsTrigger>
-                <TabsTrigger value="reglages">{t("config.main.tabs.settings")}</TabsTrigger>
-                <TabsTrigger value="json">JSON</TabsTrigger>
-                <TabsTrigger value="sauvegardes">{t("config.main.tabs.backups")} ({ov.backups.length})</TabsTrigger>
-                <TabsTrigger value="interface">{t("config.main.tabs.interface")}</TabsTrigger>
-                <TabsTrigger value="sync">{t("config.main.tabs.sync")}</TabsTrigger>
-                  </>
-                )}
-              </TabsList>
+          {dir ? (
+            <TabsList className="mb-4 w-max">
+              <TabsTrigger value="permissions">{t("config.main.tabs.permissions")}</TabsTrigger>
+              <TabsTrigger value="reglages">{t("config.main.tabs.settings")}</TabsTrigger>
+            </TabsList>
+          ) : (
+            <div className="mb-4 flex flex-wrap gap-x-6 gap-y-3">
+              {groups.map(([g, items]) => (
+                <div key={g}>
+                  <p className="mb-1 px-1 text-2xs font-medium tracking-wide text-muted-foreground uppercase">{t(`config.main.groups.${g}`)}</p>
+                  <TabsList className="w-max">
+                    {items.map(([v, label]) => (
+                      <TabsTrigger key={v} value={v}>{label}</TabsTrigger>
+                    ))}
+                  </TabsList>
+                </div>
+              ))}
             </div>
-            <ScrollBar orientation="horizontal" />
-          </ScrollArea>
+          )}
           <TabsContent value="sante">
             <HealthTab issues={ov.issues} home={home} projects={ov.projects} />
           </TabsContent>
@@ -150,9 +147,6 @@ export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: strin
           </TabsContent>
           <TabsContent value="precedence">
             <PrecedenceTab projects={ov.projects} home={home} />
-          </TabsContent>
-          <TabsContent value="hooks">
-            <HooksTab hooks={ov.hooks} />
           </TabsContent>
           <TabsContent value="permissions">
             {fileSelect}

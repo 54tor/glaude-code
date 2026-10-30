@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { AlertTriangle, CheckCircle2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
-import { api, type CfgIssue, type EffRow, type HookInfo } from "@/lib/api"
+import { api, type CfgIssue, type EffRow } from "@/lib/api"
 import { describeKey } from "@/lib/configKeys"
 import { tilde } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Choose } from "./Choose"
 
-const LV: Record<string, string> = { u: "user", p: "project", l: "local" }
 const KIND = new Set(["json", "hook", "permission", "plugin", "secret"])
 const fileLabel = (
   t: TFunction,
@@ -66,50 +65,6 @@ export function HealthTab({
         </li>
       ))}
     </ul>
-  )
-}
-
-// --- hooks ---------------------------------------------------------------------------------------------------
-
-export function HooksTab({ hooks }: { hooks: HookInfo[] }) {
-  const { t } = useTranslation()
-  if (!hooks.length)
-    return (
-      <p className="py-8 text-sm text-muted-foreground">
-        {t("config.hooks.none")}
-      </p>
-    )
-  return (
-    <div className="space-y-2">
-      <p className="text-xs text-muted-foreground">
-        {t("config.hooks.readOnly")}
-      </p>
-      <ul className="space-y-1">
-        {hooks.map((h, n) => (
-          <li key={n} className="rounded-md border px-3 py-2 text-sm">
-            <p className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">{h.event}</span>
-              {h.matcher && (
-                <code className="rounded-sm bg-muted px-1 text-xs">
-                  {h.matcher}
-                </code>
-              )}
-              <span className="text-xs text-muted-foreground">
-                {LV[h.scope] ? t(`config.scope.${LV[h.scope]}`) : undefined}
-              </span>
-              {h.missing && (
-                <span className="text-xs text-warning">
-                  {t("config.hooks.missing", { path: h.missing })}
-                </span>
-              )}
-            </p>
-            <code className="mt-1 block text-xs break-all text-muted-foreground">
-              {h.command || `(${h.type})`}
-            </code>
-          </li>
-        ))}
-      </ul>
-    </div>
   )
 }
 

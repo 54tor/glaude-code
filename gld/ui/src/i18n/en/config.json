@@ -25,19 +25,23 @@
       "locationAria": "Settings location",
       "projectDirAria": "Project folder",
       "toCreate": "file will be created on the first change",
-      "applyNote": "Each change is applied immediately, after a backup (Backups tab). Open sessions reload settings on their own (except model, effort and plugins: /model, /effort, /reload-plugins).",
+      "applyNote": "Each change is applied immediately, after a backup (History tab). Open sessions reload settings on their own (except model, effort and plugins: /model, /effort, /reload-plugins).",
       "copiedToUser": "Rule copied to your settings",
       "pickDir": "Add a folder to {{dir}}",
       "tabs": {
         "health": "Health",
         "projects": "Projects",
         "precedence": "Precedence",
-        "hooks": "Hooks",
         "permissions": "Permissions",
         "settings": "Settings",
         "backups": "Backups",
         "interface": "Interface",
         "sync": "Sync"
+      },
+      "groups": {
+        "claude": "Claude Code",
+        "diagnostic": "Diagnostics",
+        "gld": "Glaude Code"
       }
     },
     "issueKind": {
@@ -53,8 +57,6 @@
       "fileLocal": "local · {{dir}}"
     },
     "hooks": {
-      "none": "No hooks declared.",
-      "readOnly": "Read-only: a hook is edited in the settings file. A missing file or program is flagged.",
       "missing": "not found: {{path}}"
     },
     "precedence": {

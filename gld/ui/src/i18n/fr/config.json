@@ -25,19 +25,23 @@
       "locationAria": "Emplacement des réglages",
       "projectDirAria": "Dossier du projet",
       "toCreate": "fichier à créer à la première modification",
-      "applyNote": "Chaque modification est appliquée tout de suite, après une sauvegarde (onglet Sauvegardes). Les sessions ouvertes rechargent seules les réglages (sauf model, effort et plugins : /model, /effort, /reload-plugins).",
+      "applyNote": "Chaque modification est appliquée tout de suite, après une sauvegarde (onglet Historique). Les sessions ouvertes rechargent seules les réglages (sauf model, effort et plugins : /model, /effort, /reload-plugins).",
       "copiedToUser": "Règle copiée dans vos réglages",
       "pickDir": "Ajouter un dossier à {{dir}}",
       "tabs": {
         "health": "Santé",
         "projects": "Projets",
         "precedence": "Précédence",
-        "hooks": "Hooks",
         "permissions": "Permissions",
         "settings": "Réglages",
         "backups": "Sauvegardes",
         "interface": "Interface",
         "sync": "Synchroniser"
+      },
+      "groups": {
+        "claude": "Claude Code",
+        "diagnostic": "Diagnostic",
+        "gld": "Glaude Code"
       }
     },
     "issueKind": {
@@ -53,8 +57,6 @@
       "fileLocal": "local · {{dir}}"
     },
     "hooks": {
-      "none": "Aucun hook déclaré.",
-      "readOnly": "Lecture seule : un hook s'édite dans le fichier de réglages. Un fichier ou un programme introuvable est signalé.",
       "missing": "introuvable : {{path}}"
     },
     "precedence": {
