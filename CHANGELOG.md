@@ -13,6 +13,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Extensions : un onglet par type (Plugins, Skills, Hooks, MCP, Éditeur) avec compteurs, et une seule recherche par onglet qui couvre les installés et le catalogue (marketplaces, npx). Les variables d'environnement des serveurs MCP sont affichées.
 - Configuration : onglets regroupés en trois groupes (Claude Code, Diagnostic, Glaude Code), recherche d'un réglage par nom dans l'onglet Claude CLI, onglet « Sauvegardes » renommé « Historique ». Les onglets Hooks et MCP, doublons d'Extensions, sont retirés.
 - Session partagée en invité : badge « Lecture seule » dans l'en-tête quand l'accès ne permet pas d'écrire.
+- Gestes tactiles : balayer depuis le bord gauche ouvre le menu sur petit écran, ou referme la session ouverte ; balayer le menu vers la gauche le referme ; tirer une liste de sessions vers le bas la recharge.
 - Tâches de fond : les sous-agents lancés en arrière-plan sont listés, et marqués terminés même sans notification, d'après leur fichier de métadonnées.
 
 ### Corrigé
