@@ -350,16 +350,17 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   const metaExtra = session && (
     <>
       {(live.st?.model || detail?.models.at(-1)) && (
-        <code className="shrink-0 rounded-md border px-2 py-0.5 text-xs" title={t("conversation.live.model")}>
+        <code className="inline-flex h-6 shrink-0 items-center rounded-md border px-2 text-xs" title={t("conversation.live.model")}>
           {live.st?.model || detail?.models.at(-1)}
         </code>
       )}
       <LiveAgents live={live} dir={dir} id={id} />
       <LiveTasks live={live} dir={dir} id={id} />
       {gitDirs.map((d) => (
-        <span key={d} className="flex min-w-0 flex-wrap items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs md:shrink-0" title={d}>
-          {d !== row?.g.project && <span className="max-w-32 truncate text-muted-foreground">{d.split("/").filter(Boolean).pop()}</span>}
-          <GitBadge st={git.status[d]} />
+        <span key={d} className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs md:shrink-0" title={d}>
+          <span className="flex h-6 items-center rounded-md border px-2">
+            <GitBadge st={git.status[d]} />
+          </span>
           <GitPush dir={d} st={git.status[d]} />
           <GitChanges dir={d} count={git.status[d] ? git.status[d].changed + git.status[d].untracked : 0} />
         </span>
