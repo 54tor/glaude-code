@@ -291,7 +291,7 @@ function GuestSession({ handle }: { handle: string }) {
 
   return (
     <Dialog open>
-      <DialogContent
+      <DialogContent sheet={false}
         showCloseButton={false}
         onOpenAutoFocus={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}

@@ -398,7 +398,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
 
   return (
     <Dialog open={!!session} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent
+      <DialogContent sheet={false}
         {...swipeHandlers((d) => d === "right" && onClose(), true)}
         className="safe-t safe-b top-[var(--vvt,0px)] left-0 flex h-[var(--vvh,100dvh)] w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-0 [&>[data-slot=dialog-close]]:top-[calc(env(safe-area-inset-top)+0.625rem)] sm:max-w-none"
         onCloseAutoFocus={(e) => focusRow(lastId.current) && e.preventDefault()}

@@ -449,7 +449,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
   // Petit écran : tiroir modal (focus piégé, Échap, page derrière inerte) au lieu d'une colonne translatée hors de l'écran.
   return (
     <Dialog open={p.open} onOpenChange={(o) => !o && p.onClose()}>
-      <DialogContent
+      <DialogContent sheet={false}
         id="menu"
         aria-describedby={undefined}
         showCloseButton={false}
