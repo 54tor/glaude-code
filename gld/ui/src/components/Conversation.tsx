@@ -309,6 +309,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
       flags()
     })
     if (vp.firstElementChild) ro.observe(vp.firstElementChild)
+    ro.observe(vp) // la fenêtre, la zone de saisie ou le clavier changent la hauteur visible sans toucher au contenu
     return () => {
       vp.removeEventListener("scroll", on)
       ro.disconnect()
