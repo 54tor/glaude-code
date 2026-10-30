@@ -8,12 +8,15 @@ import (
 
 func TestMaskURL(t *testing.T) {
 	for in, want := range map[string]string{
-		"https://u:secret@github.com/a/b.git":  "https://github.com/a/b.git",
-		"https://ghp_jeton@github.com/a/b.git": "https://github.com/a/b.git",
-		"ssh://git:secret@host/a/b.git":        "ssh://git@host/a/b.git",
-		"ssh://git@host/a/b.git":               "ssh://git@host/a/b.git",
-		"https://github.com/a/b.git":           "https://github.com/a/b.git",
-		"git@github.com:a/b.git":               "git@github.com:a/b.git",
+		"https://u:secret@github.com/a/b.git":         "https://github.com/a/b.git",
+		"https://ghp_jeton@github.com/a/b.git":        "https://github.com/a/b.git",
+		"ssh://git:secret@host/a/b.git":               "ssh://git@host/a/b.git",
+		"ssh://git@host/a/b.git":                      "ssh://git@host/a/b.git",
+		"https://github.com/a/b.git":                  "https://github.com/a/b.git",
+		"git@github.com:a/b.git":                      "git@github.com:a/b.git",
+		"https://alice:p^w%@git.example.com/o/r.git":  "https://git.example.com/o/r.git",
+		"https://alice:pa|ss@git.example.com/o/r.git": "https://git.example.com/o/r.git",
+		"https://a:b@c@git.example.com/o/r@x.git":     "https://git.example.com/o/r@x.git",
 	} {
 		if got := maskURL(in); got != want {
 			t.Errorf("maskURL(%q) = %q, attendu %q", in, got, want)

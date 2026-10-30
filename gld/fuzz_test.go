@@ -94,13 +94,22 @@ func FuzzMaskRestore(f *testing.F) {
 // maskURL ne laisse jamais passer un mot de passe, ni un nom d'utilisateur en http(s).
 func FuzzMaskURL(f *testing.F) {
 	for _, s := range []string{"https://u:p@h/x", "https://ghp_x@github.com/a", "ssh://git:pw@h/a", "git@h:a/b.git",
-		"HTTPS://u:p@h", "http://%41:%42@h", "file:///x", "https://u:p@[::1]:80/x?q=1#f", "ftp://a:b@c"} {
+		"https://a:p^w%@h/x", "HTTPS://u:p@h", "http://%41:%42@h", "file:///x", "https://u:p@[::1]:80/x?q=1#f", "ftp://a:b@c"} {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, raw string) {
 		got := maskURL(raw)
 		u, err := url.Parse(raw)
-		if err != nil || u.User == nil {
+		if err != nil {
+			if i := strings.Index(raw, "://"); i >= 0 {
+				auth := strings.SplitN(got[i+3:], "/", 2)[0]
+				if strings.Contains(auth, "@") {
+					t.Fatalf("userinfo gardé sur une URL illisible : %q -> %q", raw, got)
+				}
+			}
+			return
+		}
+		if u.User == nil {
 			if got != raw {
 				t.Fatalf("URL sans identifiants modifiée : %q -> %q", raw, got)
 			}

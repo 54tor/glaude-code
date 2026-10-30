@@ -24,7 +24,10 @@ type GitRemote struct {
 // bien à la place du nom (https://<jeton>@github.com/…) qu'à celle du mot de passe. En ssh, seul le mot de passe part.
 func maskURL(raw string) string {
 	u, err := url.Parse(raw)
-	if err != nil || u.User == nil {
+	if err != nil {
+		return stripUserinfo(raw)
+	}
+	if u.User == nil {
 		return raw
 	}
 	if u.Scheme == "http" || u.Scheme == "https" {
@@ -33,6 +36,24 @@ func maskURL(raw string) string {
 		u.User = url.User(u.User.Username())
 	}
 	return u.String()
+}
+
+// stripUserinfo : repli quand net/url refuse l'adresse (git accepte des mots de passe que Go rejette) : tout ce qui
+// précède le dernier « @ » de l'autorité est retiré.
+func stripUserinfo(raw string) string {
+	i := strings.Index(raw, "://")
+	if i < 0 {
+		return raw // forme scp (git@hote:chemin) : pas de mot de passe possible
+	}
+	rest := raw[i+3:]
+	auth := rest
+	if j := strings.IndexByte(rest, '/'); j >= 0 {
+		auth = rest[:j]
+	}
+	if k := strings.LastIndexByte(auth, '@'); k >= 0 {
+		return raw[:i+3] + rest[k+1:]
+	}
+	return raw
 }
 
 func gitOut(dir string, args ...string) (string, error) {
