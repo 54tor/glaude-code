@@ -301,7 +301,10 @@ function GuestSession({ handle }: { handle: string }) {
         <DialogHeader className="gap-1 border-b px-4 pt-2.5 pb-3 md:px-6 md:pb-4">
           <div className="flex items-start gap-4">
             <div className="min-w-0 flex-1 space-y-1">
-              <DialogTitle className="truncate text-lg tracking-tight">{me.title || t("conversation.guest.title")}</DialogTitle>
+              <DialogTitle className="flex items-center gap-2 text-lg tracking-tight">
+                <span className="truncate">{me.title || t("conversation.guest.title")}</span>
+                {!rw && <span className="shrink-0 rounded bg-muted px-1 text-2xs font-normal uppercase">{t("conversation.guest.modeRo")}</span>}
+              </DialogTitle>
               <DialogDescription className="sr-only">{t("conversation.view.description")}</DialogDescription>
             </div>
             {others.length > 0 && (
