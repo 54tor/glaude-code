@@ -13,10 +13,10 @@ func TestConfigSansDossierDeConfiguration(t *testing.T) {
 	cfg := t.TempDir()
 	use(cfg)
 	put(t, filepath.Join(cfg, "projects", "-c", id1+".jsonl"), `{"cwd":"`+cfg+`"}`+"\n", old)
-	if len(liveProjects()) != 1 {
+	if len(memTargets()) != 1 {
 		t.Fatal("le projet de test n'existe pas")
 	}
-	if len(configProjects()) != 0 || len(projectConfigs()) != 0 {
+	if len(liveProjects()) != 0 || len(projectConfigs()) != 0 {
 		t.Fatal("~/.claude listé comme projet de configuration")
 	}
 }

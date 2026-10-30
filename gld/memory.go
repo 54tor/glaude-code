@@ -166,12 +166,17 @@ func memTargets() []MemTarget {
 }
 
 // liveProjects : les projets dont le dossier de travail existe encore, avec ou sans fichier de mémoire. Les réglages, skills et
-// .mcp.json d'un projet vivent dans son dossier, pas dans ~/.claude.
+// .mcp.json d'un projet vivent dans son dossier, pas dans ~/.claude. ~ et ~/.claude n'en sont pas : leur .claude/ est le
+// dossier de configuration lui-même, déjà lu comme utilisateur.
 func liveProjects() []MemTarget {
+	home, _ := os.UserHomeDir()
 	targets := memTargets()
 	out := []MemTarget{}
 	for _, t := range targets {
-		if fi, err := os.Stat(t.Project); t.Project != "" && err == nil && fi.IsDir() {
+		if t.Project == "" || t.Project == cfgDir() || (home != "" && t.Project == home) {
+			continue
+		}
+		if fi, err := os.Stat(t.Project); err == nil && fi.IsDir() {
 			out = append(out, t)
 		}
 	}
