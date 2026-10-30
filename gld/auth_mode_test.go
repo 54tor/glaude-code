@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -634,5 +635,26 @@ func TestAuthRoutesHiddenWithoutUsers(t *testing.T) {
 	tick()
 	if w := (modeReq{method: "GET", path: "/v1/auth/me"}).do(srv); w.Code != 401 {
 		t.Fatalf("/v1/auth/me après le premier compte : %d", w.Code)
+	}
+}
+
+// Sans cookie ni jeton, toute route non publique répond 401 : le garde ne dépend pas de ce que le handler ferait.
+func TestUnauthNonPublicRoutes401(t *testing.T) {
+	s, h, _ := authWeb(t)
+	if _, err := s.AddUser("alice", testPw, true); err != nil {
+		t.Fatal(err)
+	}
+	for pat, need := range routeRights {
+		if need == rightPublic {
+			continue
+		}
+		m, path, _ := strings.Cut(pat, " ")
+		path = strings.TrimSuffix(path, "{$}")
+		for _, seg := range regexp.MustCompile(`\{[^}]+\}`).FindAllString(path, -1) {
+			path = strings.Replace(path, seg, "x", 1)
+		}
+		if w := (modeReq{method: m, path: path}).do(h); w.Code != 401 {
+			t.Errorf("%s sans session : %d", pat, w.Code)
+		}
 	}
 }
