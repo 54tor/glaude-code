@@ -67,6 +67,8 @@ func bgTasks(p string, open bool) []BgTask {
 	for i := range out {
 		if out[i].Status == "running" && out[i].HasOut && bgKilled(out[i].Output) {
 			out[i].Status = "killed"
+		} else if out[i].Status == "running" && out[i].Tool == "Agent" && agentFinished(p, out[i].ID) {
+			out[i].Status = "completed"
 		} else if out[i].Status == "running" && !open {
 			out[i].Status = "unknown"
 		}
@@ -110,6 +112,17 @@ func scanBgTasks(p string) []BgTask {
 							uses[b.ID] = use{b.Name, d}
 						}
 					}
+				}
+			case bytes.Contains(l, []byte(`"async_launched"`)) && bytes.Contains(l, []byte(`"agentId"`)):
+				// Agent lancé en fond : son identifiant est la task-id de la notification de fin
+				var o struct {
+					Timestamp string
+					Result    struct{ Status, AgentId, Description string } `json:"toolUseResult"`
+				}
+				if json.Unmarshal(l, &o) == nil && o.Result.Status == "async_launched" && bgSafeID.MatchString(o.Result.AgentId) && byID[o.Result.AgentId] == nil {
+					t := &BgTask{ID: o.Result.AgentId, Tool: "Agent", Desc: cut(o.Result.Description, 200), Status: "running", Start: o.Timestamp}
+					byID[t.ID] = t
+					order = append(order, t.ID)
 				}
 			case bytes.Contains(l, []byte(`"backgroundTaskId"`)):
 				var o struct {
@@ -220,6 +233,17 @@ func bgKilled(path string) bool {
 	b := make([]byte, min(fi.Size(), 32))
 	n, _ := f.ReadAt(b, fi.Size()-int64(len(b)))
 	return bytes.HasSuffix(bytes.TrimSpace(b[:n]), []byte("[killed]"))
+}
+
+// agentFinished : Claude Code pose <session>/subagents/agent-<id>.meta.json avec finished à vrai quand un sous-agent se termine,
+// même si la <task-notification> n'a jamais été mise en file (session fermée entre-temps).
+func agentFinished(transcript, id string) bool {
+	b, err := readTrusted(filepath.Join(strings.TrimSuffix(transcript, ".jsonl"), "subagents", "agent-"+id+".meta.json"))
+	if err != nil {
+		return false
+	}
+	var m struct{ Finished bool }
+	return json.Unmarshal(b, &m) == nil && m.Finished
 }
 
 // bgOutput : les 64 derniers Kio de la sortie d'une tâche de ce transcript. L'identifiant doit être une tâche relevée dans le transcript
