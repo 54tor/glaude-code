@@ -4,6 +4,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.7.2] - 2026-10-30
+
 ### Ajouté
 - Page Plugins dédiée (`/plugins`), avec ses entrées dans la barre latérale.
 - Sauvegarde (`/sauvegarde`) : exporter la configuration Claude en zip (skills, commandes et snippets, plugins et marketplaces, réglages et permissions, mémoire et serveurs MCP) et l'importer par catégories, avec un aperçu avant application. Les secrets sont exclus de l'export.
@@ -14,9 +16,15 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Configuration : onglets regroupés en trois groupes (Claude Code, Diagnostic, Glaude Code), recherche d'un réglage par nom dans l'onglet Claude CLI, onglet « Sauvegardes » renommé « Historique ». Les onglets Hooks et MCP, doublons d'Extensions, sont retirés.
 - Session partagée en invité : badge « Lecture seule » dans l'en-tête quand l'accès ne permet pas d'écrire.
 - Gestes tactiles : balayer depuis le bord gauche ouvre le menu sur petit écran, ou referme la session ouverte ; balayer le menu vers la gauche le referme ; tirer une liste de sessions vers le bas la recharge.
+- Réponses `/btw` affichées dans le panneau de la session, avec copie, bifurcation et fermeture ; la surcouche est fermée avant l'envoi d'un message.
+- Notification quand une version plus récente est publiée sur GitHub.
+- Pendant un outil en cours, libellés d'attente variés (1000 statuts par langue), tirés au hasard par créneau de 6 secondes.
 - Tâches de fond : les sous-agents lancés en arrière-plan sont listés, et marqués terminés même sans notification, d'après leur fichier de métadonnées.
 
 ### Corrigé
+- Les sous-sessions sont supprimées avec leur session parente.
+- Les commandes de fond tuées hors `TaskStop` sont signalées d'après leur marqueur de sortie ; celles arrêtées par `TaskStop` sont marquées tuées.
+- La page occupe jusqu'à 1920 px de large ; l'éditeur de skills reste dans la largeur de la page.
 - Le dossier personnel (`~`) et `~/.claude` ne sont plus traités comme des projets : leurs skills, commandes et réglages apparaissaient en double sous un groupe sans nom.
 - Accessibilité : contrastes relevés au niveau WCAG AA. Texte atténué du thème sombre plus clair (4,4:1 → 5,5:1 sur les panneaux), onglets inactifs du thème clair (3,9:1 → 5,2:1), bordures des champs et cases à cocher à 3:1 au moins, anneau de focus plus marqué (opacité 80 %, teinte du thème clair assombrie : 1,3:1 → 4,1:1), boutons désactivés à 70 % d'opacité au lieu de 50 %, zone de clic des cases à cocher et petits boutons portée à 24 px pour tous les pointeurs.
 - Accessibilité : les onglets de la page Skills, Extensions et Plugins défilent sur petit écran au lieu d'élargir la page ; le bouton d'ouverture du menu ne référence plus un tiroir absent (`aria-controls`).
