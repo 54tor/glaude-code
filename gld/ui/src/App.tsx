@@ -12,6 +12,7 @@ import { buildTree, find, under } from "@/lib/tree"
 import { tilde } from "@/lib/format"
 import { useLocal } from "@/hooks/useLocal"
 import { useAppActions } from "@/hooks/useAppActions"
+import { useCacheWarning } from "@/hooks/useCacheWarning"
 import { useAppData } from "@/hooks/useAppData"
 import { useSearchHits } from "@/hooks/useSearchHits"
 import { useShortcuts } from "@/hooks/useShortcuts"
@@ -215,6 +216,11 @@ function Shell() {
       return p
     })
   // Sessions ouvertes et au cache chaud (actives) qui attendent, depuis le plus longtemps d'abord ; les froides sont écartées.
+  useCacheWarning(
+    [...live].map((id) => everyId.get(id)).filter((r): r is Row => !!r).map((r) => r.s),
+    now,
+    (id) => read({ id })
+  )
   const waitingRows = [...waiting].filter((id) => live.has(id)).map((id) => everyId.get(id)).filter((r): r is Row => !!r && now - r.s.mtime < HOT).sort((x, y) => x.s.mtime - y.s.mtime)
   const stepWaiting = (d: 1 | -1) => stepIn(waitingRows, (r) => r.s.id === reading, d)
   const startCarousel = () => {

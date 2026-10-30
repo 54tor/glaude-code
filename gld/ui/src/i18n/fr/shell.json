@@ -23,6 +23,8 @@
       "older": "Plus ancien"
     },
     "app": {
+      "cacheExpiring": "La session « {{title}} » est ouverte et son cache expire dans {{left}} min : la reprendre ensuite coûtera plein tarif.",
+      "cacheOpen": "Ouvrir",
       "noneWaiting": "Aucune session n'attend de réponse",
       "updateAvailable": "Nouvelle version disponible : {{latest}} (vous avez {{current}})",
       "updateOpen": "Voir",
