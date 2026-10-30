@@ -16,7 +16,7 @@ import (
 
 // Pages et jetons d'entrée qui restent hors /v1 (navigateur, PWA, liens partagés).
 var pageRoutes = map[string]bool{
-	"GET /{$}": true, "GET /toutes": true, "GET /en-cours": true, "GET /dossier/": true, "GET /groupe/": true, "GET /projet/": true,
+	"GET /{$}": true, "GET /accueil": true, "GET /toutes": true, "GET /en-cours": true, "GET /dossier/": true, "GET /groupe/": true, "GET /projet/": true,
 	"GET /snippets": true, "GET /snippets/": true, "GET /memoire": true, "GET /memoire/": true, "GET /onglets": true,
 	"GET /configuration": true, "GET /configuration/": true, "GET /skills": true, "GET /skills/": true, "GET /extensions": true, "GET /plugins": true, "GET /sauvegarde": true,
 	"GET /equipes": true, "GET /equipes/": true, "GET /revues": true, "GET /espace/": true, "GET /reglages/": true,

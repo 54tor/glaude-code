@@ -35,6 +35,7 @@ import { SessionSelectionBar } from "@/components/SessionSelectionBar"
 import { SessionsPane } from "@/components/SessionsPane"
 import { Sidebar } from "@/components/Sidebar"
 import { Palette } from "@/components/Palette"
+import { Dashboard } from "@/components/Dashboard"
 import { segs } from "@/lib/paths"
 import { Compose, type ComposeAsk } from "@/components/Compose"
 import { AuthScreen } from "@/components/auth/Login"
@@ -310,6 +311,7 @@ function Shell() {
   }, [isRecent, recent])
 
   const title = {
+    home: t("shell.app.title.home"),
     recent: t("shell.app.title.recent"),
     all: t("shell.app.title.all"),
     active: t("shell.app.title.active"),
@@ -419,7 +421,9 @@ function Shell() {
 
           <RouteErrorBoundary key={route.kind}>
           <Suspense fallback={<Skeleton className="m-6 h-32" />}>
-          {route.kind === "workspace" ? (
+          {route.kind === "home" ? (
+            <Dashboard open={active.filter((r) => live.has(r.s.id))} closed={active.filter((r) => !live.has(r.s.id))} waiting={waiting} now={now} home={home} go={go} read={read} />
+          ) : route.kind === "workspace" ? (
             <IdeView key={route.dir} dir={route.dir} />
           ) : route.kind === "tabs" ? (
             <Tabs args={args} onAsk={setAsk} onPrompt={setPrompt} />

@@ -36,7 +36,7 @@ func routesStatic(mux *http.ServeMux) {
 		w.Header().Set("Cache-Control", "no-cache") // elle désigne les /assets/ de la version servie
 		w.Write(index)
 	}
-	for _, p := range []string{"GET /{$}", "GET /toutes", "GET /en-cours", "GET /dossier/", "GET /groupe/", "GET /projet/", "GET /snippets", "GET /snippets/", "GET /memoire", "GET /memoire/", "GET /onglets", "GET /configuration", "GET /configuration/", "GET /skills", "GET /skills/", "GET /extensions", "GET /plugins", "GET /sauvegarde", "GET /equipes", "GET /equipes/", "GET /revues", "GET /espace/", "GET /reglages/", "GET /guest", "GET /guest/{handle}"} {
+	for _, p := range []string{"GET /{$}", "GET /accueil", "GET /toutes", "GET /en-cours", "GET /dossier/", "GET /groupe/", "GET /projet/", "GET /snippets", "GET /snippets/", "GET /memoire", "GET /memoire/", "GET /onglets", "GET /configuration", "GET /configuration/", "GET /skills", "GET /skills/", "GET /extensions", "GET /plugins", "GET /sauvegarde", "GET /equipes", "GET /equipes/", "GET /revues", "GET /espace/", "GET /reglages/", "GET /guest", "GET /guest/{handle}"} {
 		mux.HandleFunc(p, page)
 	}
 	// Noms hachés par le build : un fichier de /assets/ ne change jamais, navigateur et CDN le gardent un an.

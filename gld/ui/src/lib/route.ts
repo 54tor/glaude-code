@@ -2,6 +2,7 @@
 
 export type Route =
   | { kind: "recent" }
+  | { kind: "home" } // accueil : sessions ouvertes, dernières fermées, MCP, mise à jour
   | { kind: "all" }
   | { kind: "active" } // sessions ouvertes ou au cache chaud
   | { kind: "auto" } // revues de sécurité lancées par des skills, masquées ailleurs
@@ -26,6 +27,7 @@ const dec = (p: string) => p.split("/").map(decodeURIComponent).join("/")
 const enc = (p: string) => p.split("/").map(encodeURIComponent).join("/")
 
 export function parse(loc: string): Route {
+    if (loc === "/accueil") return { kind: "home" }
   try {
     if (loc === "/toutes") return { kind: "all" }
     if (loc === "/en-cours") return { kind: "active" }
@@ -74,6 +76,8 @@ export function href(r: Route): string {
     case "workspace":
       return "/espace/" + encodeURIComponent(r.dir)
     case "projectConfig":
+    case "home":
+      return "/accueil"
       return "/reglages/" + encodeURIComponent(r.dir)
     case "teams":
       return "/equipes"

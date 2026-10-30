@@ -1,7 +1,7 @@
 import { Fragment, useState, useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
-import { AlarmClock, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, ArchiveRestore, SlidersHorizontal, Shredder, Coffee, Microwave, Snowflake, History, FileText, Inbox, NotebookPen, Info, Fan, Search, ShieldCheck, Tag, Users, X } from "lucide-react"
+import { AlarmClock, LayoutDashboard, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, Coffee, Microwave, Snowflake, History, FileText, Inbox, NotebookPen, Info, Fan, Search, ShieldCheck, Tag, Users, X } from "lucide-react"
 import { tilde } from "@/lib/format"
 import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
@@ -366,6 +366,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
                         label={vg.name}
                         n={p.groupCount(vg)}
                         active={r.kind === "group" && r.name === vg.name && r.key === key}
+          {show(t("shell.app.title.home")) && <NavItem icon={LayoutDashboard} label={t("shell.app.title.home")} active={r.kind === "home"} {...link({ kind: "home" })} />}
                         {...link({ kind: "group", name: vg.name, key })}
                       />
                     </div>

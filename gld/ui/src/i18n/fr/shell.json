@@ -29,6 +29,7 @@
       "noMoreWaiting": "Plus aucune session en attente",
       "snippetSession": "Nouvelle session avec ce snippet",
       "title": {
+        "home": "Accueil",
         "recent": "Récentes",
         "all": "Toutes les sessions",
         "active": "Sessions ouvertes",
@@ -203,9 +204,21 @@
       "perms": "Permissions",
       "start": "Lancer la session"
     },
-    "header": {
-      "skipToContent": "Aller au contenu",
-      "openMenu": "Ouvrir le menu",
+    "dash": {
+      "open": "Sessions ouvertes",
+      "closed": "Dernières fermées",
+      "waiting": "attend",
+      "all": "Tout voir",
+      "noOpen": "Aucune session ouverte.",
+      "noClosed": "Aucune session récente au cache.",
+      "mcp": "Serveurs MCP",
+      "recheck": "Revérifier l'état",
+      "noMcp": "Aucun serveur MCP.",
+      "update": "Mise à jour",
+      "updateUnknown": "Version non vérifiée.",
+      "upToDate": "À jour : {{current}}",
+      "paletteHint": "Ctrl+K : aller à une page, une session, un skill ou un réglage."
+    },
     "palette": {
       "title": "Palette de commandes",
       "description": "Aller à une page, une session, un skill ou un réglage",
@@ -216,6 +229,9 @@
       "skills": "Skills",
       "settings": "Réglages"
     },
+    "header": {
+      "skipToContent": "Aller au contenu",
+      "openMenu": "Ouvrir le menu",
       "search": ", recherche « {{q}} »",
       "hideGrouped": "Masquer les sessions groupées ({{n}})",
       "settingsHint": "Réglages, permissions, hooks et MCP propres à ce projet",

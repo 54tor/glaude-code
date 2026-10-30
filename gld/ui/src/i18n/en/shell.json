@@ -29,6 +29,7 @@
       "noMoreWaiting": "No more sessions waiting",
       "snippetSession": "New session with this snippet",
       "title": {
+        "home": "Home",
         "recent": "Recent",
         "all": "All sessions",
         "active": "Open sessions",
@@ -203,9 +204,21 @@
       "perms": "Permissions",
       "start": "Start the session"
     },
-    "header": {
-      "skipToContent": "Skip to content",
-      "openMenu": "Open the menu",
+    "dash": {
+      "open": "Open sessions",
+      "closed": "Recently closed",
+      "waiting": "waiting",
+      "all": "See all",
+      "noOpen": "No open session.",
+      "noClosed": "No recent session in cache.",
+      "mcp": "MCP servers",
+      "recheck": "Check again",
+      "noMcp": "No MCP server.",
+      "update": "Update",
+      "updateUnknown": "Version not checked.",
+      "upToDate": "Up to date: {{current}}",
+      "paletteHint": "Ctrl+K: jump to a page, a session, a skill or a setting."
+    },
     "palette": {
       "title": "Command palette",
       "description": "Jump to a page, a session, a skill or a setting",
@@ -216,6 +229,9 @@
       "skills": "Skills",
       "settings": "Settings"
     },
+    "header": {
+      "skipToContent": "Skip to content",
+      "openMenu": "Open the menu",
       "search": ", search “{{q}}”",
       "hideGrouped": "Hide grouped sessions ({{n}})",
       "settingsHint": "Settings, permissions, hooks and MCP specific to this project",
