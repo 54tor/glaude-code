@@ -243,6 +243,18 @@
   }
 }
 
+/* Tactile : zone de toucher portée à 44 px (recommandation d'Apple) par un ::before invisible, sans changer le rendu. Dans
+   @layer components pour que les utilitaires (absolute, fixed…) l'emportent sur position: relative.
+   ponytail: deux boutons icône voisins à moins de 44 px se partagent la zone commune (le second l'emporte) ; espacer si gênant. */
+@layer components {
+  @media (pointer: coarse) {
+    :is([data-slot="button"], [data-slot="checkbox"], [data-slot="switch"], [data-slot="tabs-trigger"]) { position: relative; }
+    :is([data-slot="button"], [data-slot="checkbox"], [data-slot="switch"], [data-slot="tabs-trigger"])::before {
+      content: ""; position: absolute; inset: min(0px, calc((100% - 44px) / 2));
+    }
+  }
+}
+
 /* Trait du spinner en pixels d'écran, quelle que soit la taille de l'icône. */
 .lucide-fan { stroke-width: 1px; }
 .lucide-fan * { vector-effect: non-scaling-stroke; }
