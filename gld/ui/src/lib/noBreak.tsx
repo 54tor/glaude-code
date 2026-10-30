@@ -1,7 +1,7 @@
 // Le navigateur coupe volontiers après un tiret (« UI-01 » → « UI- » / « 01 ») : les mots courts à tirets restent d'un bloc, sans
 // changer le texte (la copie est intacte). Au-delà de 24 caractères ils restent coupables, sinon un identifiant long ferait déborder
 // la ligne.
-const HYPHENATED = /[\p{L}\p{N}_]+(?:-[\p{L}\p{N}_]+)+/gu
+const HYPHENATED = /(?<![\p{L}\p{N}_])[\p{L}\p{N}_]{1,24}(?:-[\p{L}\p{N}_]{1,24}){1,8}/gu
 const NOBREAK = "whitespace-nowrap"
 const MAX = 24
 
