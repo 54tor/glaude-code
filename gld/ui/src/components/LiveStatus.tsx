@@ -167,6 +167,7 @@ export function LiveStats({ live: { st }, s, project, detail, shown, onShown }: 
     [t("shell.info.project"), tilde(project, a.home)],
     [t("shell.info.modified"), full(s.mtime)],
     [t("shell.info.state"), a.live.has(s.id) ? t("shell.info.open") : t("shell.info.closed")],
+    a.live.has(s.id) ? [t("shell.info.remote"), a.rc.has(s.id) ? t("shell.info.remoteOn") : t("shell.info.remoteOff")] : null,
     d ? [t("shell.info.prompts"), String(d.n)] : null,
     d?.subagents ? [t("shell.info.subagents"), String(d.subagents)] : null,
     d?.branch ? [t("shell.info.branch"), d.branch] : null,

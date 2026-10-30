@@ -491,6 +491,9 @@
       "subagents": "Subagents",
       "branch": "Branch",
       "models": "Models",
+      "remote": "Remote control",
+      "remoteOn": "On",
+      "remoteOff": "Off",
       "started": "Started",
       "last": "Last message",
       "description": "Session information"
