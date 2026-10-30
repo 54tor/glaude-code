@@ -54,7 +54,7 @@ func TestPublicAssetsWithoutToken(t *testing.T) {
 	h := withToken("0123456789abcdef0123", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
 	for path, want := range map[string]int{
 		"/manifest.webmanifest": 200, "/icons/apple-touch-icon.png": 200, "/favicon.ico": 200, "/apple-touch-icon.png": 200, "/apple-touch-icon-precomposed.png": 200,
-		"/": 401, "/v1/state": 401, "/icons/../v1/state": 401, "/sw.js": 401, "/assets/app.js": 401,
+		"/v1/state": 401, "/x": 401, "/icons/../v1/state": 401, "/sw.js": 401, "/assets/app.js": 401,
 	} {
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
@@ -66,5 +66,11 @@ func TestPublicAssetsWithoutToken(t *testing.T) {
 	h.ServeHTTP(w, httptest.NewRequest("POST", "/manifest.webmanifest", nil))
 	if w.Code != 401 {
 		t.Errorf("POST sur un fichier public : %d", w.Code)
+	}
+	// iOS lit la racine sans Accept text/html pour l'icône d'écran d'accueil : il lui faut la page du jeton, pas un 401.
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `rel="apple-touch-icon"`) {
+		t.Errorf("GET / sans jeton : %d, page du jeton attendue", w.Code)
 	}
 }

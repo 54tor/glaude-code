@@ -842,7 +842,11 @@ func TestGuestStaticExceptionTable(t *testing.T) {
 		t.Skip("ui/dist absent")
 	}
 	jar := []*http.Cookie{{Name: gName, Value: c}}
-	for _, p := range []string{"/sw.js", "/", "/guest/", "/assets/", "/guest/x/y", "/assets/%2e%2e/x", "/assets/../x", "/guest/..%2f", "/v1/sessions/" + id1 + "/conversation", "/v1/state"} {
+	// La racine nue sert la page du jeton à tout anonyme (icône iOS) : jamais l'interface de l'hôte.
+	if w := (gReq{method: "GET", path: "/", jar: jar}).do(h); w.Code != 200 || !strings.Contains(w.Body.String(), `action="/token-login"`) {
+		t.Errorf("/ : %d, page du jeton attendue", w.Code)
+	}
+	for _, p := range []string{"/sw.js", "/guest/", "/assets/", "/guest/x/y", "/assets/%2e%2e/x", "/assets/../x", "/guest/..%2f", "/v1/sessions/" + id1 + "/conversation", "/v1/state"} {
 		if w := (gReq{method: "GET", path: p, jar: jar}).do(h); w.Code != 401 {
 			t.Errorf("%s servi : %d", p, w.Code)
 		}

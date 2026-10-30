@@ -137,7 +137,9 @@ func withToken(token string, next http.Handler) http.Handler {
 			http.Error(w, L("srv.token.tooMany"), http.StatusTooManyRequests)
 			return
 		}
-		if wantsPage(r) { // navigateur ou PWA sans cookie : saisir le jeton plutôt qu'un 401 en texte
+		// Navigateur ou PWA sans cookie : saisir le jeton plutôt qu'un 401 en texte. La racine sert toujours la page : iOS relit
+		// ses métadonnées sans Accept text/html (feuille de partage, écran d'accueil) et, sur un 401, dessine une lettre en guise d'icône.
+		if wantsPage(r) || (r.Method == "GET" && r.URL.Path == "/" && r.URL.RawQuery == "") {
 			tokenPage(w, http.StatusOK, "")
 			return
 		}
