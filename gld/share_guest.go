@@ -448,7 +448,7 @@ func guestServe(mux *http.ServeMux, sh Share, in Invite, sec, hd string) http.Ha
 		q := r2.URL.Query()
 		q.Set("id", sh.Session)
 		q.Set("dir", sh.Dir)
-		if strings.HasPrefix(pat, "GET /v1/fs/") { // l'IDE attend le chemin réel, sh.Dir est le nom du dossier de transcripts
+		if pat == "GET /v1/fs/tree" || pat == "GET /v1/fs/entries/content" { // l'IDE attend le chemin réel, sh.Dir est le nom du dossier de transcripts
 			abs := decodeDir(sh.Dir)
 			if abs == "" {
 				guestDeny(w, 403, "srv.share_guest.refuse")
