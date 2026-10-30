@@ -113,3 +113,16 @@ func TestLoadedReadable(t *testing.T) {
 		}
 	}
 }
+
+// Un journal remplacé par un lien vers un fichier spécial ou un dossier ne doit rien renvoyer ni bloquer.
+func TestReadLoadedIgnoresNonRegular(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	loadedCache.size, loadedCache.ev = 0, nil
+	if err := os.Symlink(t.TempDir(), loadedFile()); err != nil {
+		t.Fatal(err)
+	}
+	if ev := readLoaded(); len(ev) != 0 {
+		t.Fatalf("events: %v", ev)
+	}
+}

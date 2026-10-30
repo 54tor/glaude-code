@@ -97,14 +97,19 @@ var (
 func readLoaded() []loadEvent {
 	loadedMu.Lock()
 	defer loadedMu.Unlock()
-	st, err := os.Stat(loadedFile())
+	f, err := openTrusted(loadedFile())
 	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil || !st.Mode().IsRegular() {
 		return nil
 	}
 	if loadedCache.size == st.Size() && loadedCache.mtime.Equal(st.ModTime()) {
 		return loadedCache.ev
 	}
-	b, err := os.ReadFile(loadedFile())
+	b, err := io.ReadAll(io.LimitReader(f, loadedMax+1))
 	if err != nil {
 		return nil
 	}
