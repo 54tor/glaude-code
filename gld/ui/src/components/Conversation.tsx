@@ -8,6 +8,7 @@ import { api, type Detail, type Msg, type Session } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"
 import { HOT } from "@/lib/sessionsView"
 import { ago, brief, compact, dedupeDocs, full, tilde } from "@/lib/format"
+import { Chip } from "@/components/ui/chip"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenuCheckboxItem, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
@@ -348,9 +349,9 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   const metaExtra = session && (
     <>
       {(live.st?.model || detail?.models.at(-1)) && (
-        <code className="inline-flex h-6 shrink-0 items-center rounded-md border px-2 text-xs" title={t("conversation.live.model")}>
-          {live.st?.model || detail?.models.at(-1)}
-        </code>
+        <Chip asChild>
+          <code title={t("conversation.live.model")}>{live.st?.model || detail?.models.at(-1)}</code>
+        </Chip>
       )}
       <LiveAgents live={live} dir={dir} id={id} />
       <LiveTasks live={live} dir={dir} id={id} />
