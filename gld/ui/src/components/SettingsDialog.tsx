@@ -90,7 +90,7 @@ function FontPicker({ font, setFont, fontSize, setFontSize }: Fonts) {
             onClick={() => setFontSize(v)}
             aria-pressed={fontSize === v}
             className={cn(
-              "rounded-md py-1 text-xs tabular-nums transition-colors",
+              "rounded-md py-1 text-xs tabular-nums transition-colors pointer-coarse:min-h-8",
               fontSize === v
                 ? "bg-background font-medium shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
@@ -211,7 +211,7 @@ export function SettingsPanel(fonts: Fonts) {
                 onClick={() => setTheme(v)}
                 aria-pressed={theme === v}
                 className={cn(
-                  "flex items-center justify-center gap-1.5 rounded-md py-1 text-xs transition-colors",
+                  "flex items-center justify-center gap-1.5 rounded-md py-1 text-xs transition-colors pointer-coarse:min-h-8",
                   theme === v
                     ? "bg-background font-medium shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
@@ -239,7 +239,7 @@ export function SettingsPanel(fonts: Fonts) {
                   aria-checked={palette === id}
                   onClick={() => setPalette(id)}
                   className={cn(
-                    "flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors",
+                    "flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors pointer-coarse:min-h-8",
                     palette === id
                       ? "border-primary bg-accent font-medium"
                       : "hover:bg-muted"

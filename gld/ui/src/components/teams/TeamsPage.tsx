@@ -147,7 +147,7 @@ export function TeamsPage({ home }: { home: string }) {
                 {TEAM_NAME.test(r.Name) ? (
                   <Link
                     href={href({ kind: "team", name: r.Name })}
-                    className="font-medium hover:underline"
+                    className="font-medium hover:underline pointer-coarse:inline-flex pointer-coarse:min-h-8 pointer-coarse:items-center"
                   >
                     {r.Name}
                   </Link>
