@@ -5,7 +5,7 @@ gld has a notepad per folder and per project, shown next to the sessions in its 
 
 ## When it applies
 
-The user asks to note something as a todo: "note en todo", "ajoute aux todos", "à faire : …", "add a todo", "remind me to …" (as a to-do, not a time-based reminder). Several items in one message are several todos. It also covers reading ("what are my todos?"), ticking off and removing items.
+The user asks to note something as a todo: "note en todo", "ajoute aux todos", "à faire : …", "add a todo", "remind me to …" (as a to-do, not a time-based reminder). Several unrelated items in one message are several todos; related ones are merged into one (see Format). It also covers reading ("what are my todos?"), ticking off and removing items.
 
 ## Where to write (in this order)
 
@@ -17,7 +17,9 @@ The user asks to note something as a todo: "note en todo", "ajoute aux todos", "
 
 The value is a JSON array of strings, serialized as a string, one item per todo, e.g. `"[\"fix login\",\"bump deps\"]"`. This is what the UI reads and writes. A legacy value with one item per line is also read; rewrite it as an array when you touch it.
 
-- Item text: the user's own words, trimmed, one line, in the user's language. No checkbox syntax, no date, no prefix.
+- Each todo is self-contained and independent of every other todo. The user later picks a few of them for a work session ("crunch"), in any order, possibly in a fresh session with no memory of this one. So a todo must be understandable and doable on its own: what to do, where (files, commands, URLs), why, and how to tell it is done. No "see above", no "after the previous one".
+- Prefer one long todo over many small ones. Steps of the same task, or a task and its follow-ups, are one todo, not a list. Split only when the parts can be picked up separately; if one needs another, merge them.
+- Wording: the user's own words and language, enriched with the context needed to meet the rule above, without inventing requirements. A todo may span several sentences. No checkbox syntax, no date, no numbering, no prefix.
 - Append at the end. Skip an item that is already present (exact match) and say so.
 - Never touch other keys. Never delete a note unless the user asked to clear it; an empty note is removed by the UI, so to clear one delete its key.
 
