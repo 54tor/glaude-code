@@ -8,8 +8,15 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Page Plugins dédiée (`/plugins`), avec ses entrées dans la barre latérale.
 - Sauvegarde (`/sauvegarde`) : exporter la configuration Claude en zip (skills, commandes et snippets, plugins et marketplaces, réglages et permissions, mémoire et serveurs MCP) et l'importer par catégories, avec un aperçu avant application. Les secrets sont exclus de l'export.
 - Mémoire : exporter une entrée, une sélection ou toutes les entrées de mémoire des projets en JSON, et les importer en choisissant le projet cible de chaque groupe et la résolution de chaque conflit de nom.
+- Accueil (`/accueil`) : sessions ouvertes (celles qui attendent d'abord), dernières fermées encore au cache, état des serveurs MCP et mise à jour disponible.
+- Palette de commandes (Ctrl+K) : aller à une page, une session, un skill ou un réglage.
+- Extensions : un onglet par type (Plugins, Skills, Hooks, MCP, Éditeur) avec compteurs, et une seule recherche par onglet qui couvre les installés et le catalogue (marketplaces, npx). Les variables d'environnement des serveurs MCP sont affichées.
+- Configuration : onglets regroupés en trois groupes (Claude Code, Diagnostic, Glaude Code), recherche d'un réglage par nom dans l'onglet Claude CLI, onglet « Sauvegardes » renommé « Historique ». Les onglets Hooks et MCP, doublons d'Extensions, sont retirés.
+- Session partagée en invité : badge « Lecture seule » dans l'en-tête quand l'accès ne permet pas d'écrire.
+- Tâches de fond : les sous-agents lancés en arrière-plan sont listés, et marqués terminés même sans notification, d'après leur fichier de métadonnées.
 
 ### Corrigé
+- Le dossier personnel (`~`) et `~/.claude` ne sont plus traités comme des projets : leurs skills, commandes et réglages apparaissaient en double sous un groupe sans nom.
 - Accessibilité : contrastes relevés au niveau WCAG AA. Texte atténué du thème sombre plus clair (4,4:1 → 5,5:1 sur les panneaux), onglets inactifs du thème clair (3,9:1 → 5,2:1), bordures des champs et cases à cocher à 3:1 au moins, anneau de focus plus marqué (opacité 80 %, teinte du thème clair assombrie : 1,3:1 → 4,1:1), boutons désactivés à 70 % d'opacité au lieu de 50 %, zone de clic des cases à cocher et petits boutons portée à 24 px pour tous les pointeurs.
 - Accessibilité : les onglets de la page Skills, Extensions et Plugins défilent sur petit écran au lieu d'élargir la page ; le bouton d'ouverture du menu ne référence plus un tiroir absent (`aria-controls`).
 - Accessibilité : lien « Aller au contenu » en tête de page pour sauter la navigation au clavier ; bordure du filtre de fichiers de l'IDE et des zones de texte à 3:1.
