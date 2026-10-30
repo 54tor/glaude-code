@@ -1201,12 +1201,44 @@ func TestGuestSessionPath(t *testing.T) {
 	}
 }
 
-func TestPathInTranscript(t *testing.T) {
-	tr := filepath.Join(t.TempDir(), "s.jsonl")
-	os.WriteFile(tr, []byte(`{"input":{"file_path":"/p/src/a.go"}}`+"\n"+`{"text":"voir /p/b.md."}`+"\n"), 0o600)
-	for p, want := range map[string]bool{"/p/src/a.go": true, "/p/src/a": false, "/p/src": false, "/p/b.md": true, "/p/c.go": false} {
-		if pathInTranscript(tr, p) != want {
-			t.Errorf("%s: want %v", p, want)
+func TestGuestCited(t *testing.T) {
+	dir := t.TempDir()
+	enc := strings.NewReplacer("/", "-", ".", "-", "_", "-").Replace(dir)
+	sid := "11111111-1111-1111-1111-111111111111"
+	old := root
+	root = filepath.Join(t.TempDir(), "projects")
+	t.Cleanup(func() { root = old })
+	os.MkdirAll(filepath.Join(root, enc), 0o700)
+	os.WriteFile(filepath.Join(root, enc, sid+".jsonl"), []byte(`{"input":{"file_path":"`+dir+`/src/a.go"}}`+"\n"+`{"text":"voir `+dir+`/b.md."}`+"\n"), 0o600)
+	c := guestCited(Share{Dir: enc, Session: sid})
+	for p, want := range map[string]bool{"src/a.go": true, "b.md": true, "src/a": false, "c.go": false} {
+		if c[p] != want {
+			t.Errorf("%s: want %v (%v)", p, want, c)
 		}
+	}
+	if !citedDir(c, "src") || citedDir(c, "lib") {
+		t.Error("citedDir")
+	}
+}
+
+func TestGuestTreeFilter(t *testing.T) {
+	cited := map[string]bool{"src/a.go": true, "b.md": true}
+	run := func(dir, body string, code int) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		gt := &guestTree{ResponseWriter: w, code: code}
+		gt.buf.WriteString(body)
+		gt.flush(w, cited, dir)
+		return w
+	}
+	w := run("", `{"entries":[{"name":"src","type":"dir"},{"name":"lib","type":"dir"},{"name":"b.md","type":"file"},{"name":"c.go","type":"file"}],"truncated":false}`, 200)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"src"`) || !strings.Contains(w.Body.String(), `"b.md"`) || strings.Contains(w.Body.String(), `"lib"`) || strings.Contains(w.Body.String(), `"c.go"`) {
+		t.Fatalf("racine : %d %s", w.Code, w.Body)
+	}
+	w = run("src", `{"entries":[{"name":"a.go","type":"file"},{"name":"z.go","type":"file"}]}`, 200)
+	if strings.Contains(w.Body.String(), "z.go") || !strings.Contains(w.Body.String(), "a.go") {
+		t.Fatalf("src : %s", w.Body)
+	}
+	if w = run("", `{"error":{}}`, 404); w.Code != 404 || strings.Contains(w.Body.String(), "entries") {
+		t.Fatalf("erreur relayée : %d %s", w.Code, w.Body)
 	}
 }

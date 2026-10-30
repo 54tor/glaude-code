@@ -18,7 +18,7 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -437,18 +437,34 @@ func guestServe(mux *http.ServeMux, sh Share, in Invite, sec, hd string) http.Ha
 			guestDeny(w, 403, "srv.share_guest.refuse")
 			return
 		}
-		if pat == "GET /v1/fs/entries/content" && !guestMayRead(sh, r.URL.Query().Get("path")) {
-			guestDeny(w, 403, "srv.share_guest.refuse")
-			return
+		if pat == "GET /v1/fs/entries/content" {
+			if rel := path.Clean(r.URL.Query().Get("path")); !guestCited(sh)[rel] {
+				guestDeny(w, 403, "srv.share_guest.refuse")
+				return
+			}
 		}
 		r2 := r.Clone(r.Context())
 		q := r2.URL.Query()
 		q.Set("id", sh.Session)
 		q.Set("dir", sh.Dir)
+		if strings.HasPrefix(pat, "GET /v1/fs/") { // l'IDE attend le chemin réel, sh.Dir est le nom du dossier de transcripts
+			abs := decodeDir(sh.Dir)
+			if abs == "" {
+				guestDeny(w, 403, "srv.share_guest.refuse")
+				return
+			}
+			q.Set("dir", abs)
+		}
 		r2.URL.RawQuery = q.Encode()
 		guestSessionPath(r2.URL, sh.Session)
 		r2.Header.Set(authorHeader, "guest")
 		r2.Header.Set(inviteHeader, in.ID)
+		if pat == "GET /v1/fs/tree" {
+			gt := &guestTree{ResponseWriter: w}
+			mux.ServeHTTP(gt, r2)
+			gt.flush(&noStoreWriter{ResponseWriter: w}, guestCited(sh), strings.Trim(path.Clean("/"+r.URL.Query().Get("path")), "/"))
+			return
+		}
 		switch pat {
 		case "POST /v1/sessions/{id}/queue":
 			// Corps reconstruit : seul le texte vient du client, la session est celle du partage.
@@ -730,43 +746,70 @@ func guestSecretPath(p string) bool {
 	return false
 }
 
-// guestMayRead : un invité ne lit que les fichiers que le transcript cite par leur chemin absolu (lus, écrits ou mentionnés par la
-// session), donc déjà visibles dans la conversation partagée ; la liste d'exclusion de guestSecretPath ne suffit pas seule.
-func guestMayRead(sh Share, rel string) bool {
+// guestCited : les chemins (relatifs au dossier du partage) que le transcript cite en absolu (lus, écrits ou mentionnés par la
+// session), donc déjà visibles dans la conversation. Un invité ne lit que ceux-là ; l'arbre n'affiche qu'eux et leurs dossiers.
+// Un chemin avec espace n'est pas reconnu : le refus est le bon défaut.
+func guestCited(sh Share) map[string]bool {
+	out := map[string]bool{}
 	tr, ok := transcript(sh.Dir, sh.Session)
-	if !ok || rel == "" {
-		return false
+	if !ok {
+		return out
 	}
-	return pathInTranscript(tr, filepath.Join(sh.Dir, rel))
-}
-
-func pathInTranscript(tr, abs string) bool {
-	needle, _ := json.Marshal(abs)
-	needle = needle[1 : len(needle)-1]
-	found := false
+	abs := decodeDir(sh.Dir)
+	if abs == "" {
+		return out
+	}
+	d, _ := json.Marshal(strings.TrimSuffix(abs, "/"))
+	re := regexp.MustCompile(regexp.QuoteMeta(string(d[1:len(d)-1])) + `/([A-Za-z0-9._@+~/-]+)`)
 	_ = scan(tr, func(b []byte) {
-		for rest := b; !found; {
-			i := bytes.Index(rest, needle)
-			if i < 0 {
-				return
-			}
-			rest = rest[i+len(needle):]
-			// « /p/a » ne doit pas valider « /p/a.go » ni « /p/a/b » ; un point final de phrase ne compte pas.
-			if len(rest) > 1 && rest[0] == '.' {
-				rest = rest[1:]
-				if !pathByte(rest[0]) {
-					found = true
-				}
-				continue
-			}
-			if len(rest) == 0 || !pathByte(rest[0]) {
-				found = true
+		for _, m := range re.FindAllSubmatch(b, -1) {
+			if rel := strings.TrimRight(string(m[1]), "./"); rel != "" {
+				out[rel] = true
 			}
 		}
 	})
-	return found
+	return out
 }
 
-func pathByte(c byte) bool {
-	return c == '.' || c == '_' || c == '-' || c == '/' || c == '@' || c == '+' || c == '~' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+// citedDir : un dossier est visible s'il contient un chemin cité.
+func citedDir(c map[string]bool, rel string) bool {
+	for p := range c {
+		if rel == "" || strings.HasPrefix(p, rel+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// guestTree filtre la réponse de /v1/fs/tree : fichiers cités, dossiers qui en contiennent.
+type guestTree struct {
+	http.ResponseWriter
+	buf  bytes.Buffer
+	code int
+}
+
+func (g *guestTree) WriteHeader(c int)           { g.code = c }
+func (g *guestTree) Write(b []byte) (int, error) { return g.buf.Write(b) }
+
+func (g *guestTree) flush(w http.ResponseWriter, cited map[string]bool, dir string) {
+	var out struct {
+		Entries   []ideEntry `json:"entries"`
+		Truncated bool       `json:"truncated"`
+	}
+	if g.code >= 300 || json.Unmarshal(g.buf.Bytes(), &out) != nil {
+		if g.code == 0 || g.code < 300 {
+			g.code = 403
+		}
+		guestDeny(w, g.code, "srv.share_guest.refuse")
+		return
+	}
+	keep := out.Entries[:0]
+	for _, e := range out.Entries {
+		p := path.Join(dir, e.Name)
+		if e.Type == "dir" && citedDir(cited, p) || e.Type == "file" && cited[p] {
+			keep = append(keep, e)
+		}
+	}
+	out.Entries = keep
+	writeJSON(w, 200, out)
 }

@@ -5,7 +5,7 @@ import { cn } from "cn"
 import { api, type FsEntry } from "@/lib/api"
 import { ApiError } from "@/lib/apiError"
 
-// Dossier du partage en lecture seule (/v1/fs/tree, /v1/fs/entries/content) : le serveur impose le dossier et refuse les fichiers secrets.
+// Dossier du partage en lecture seule (/v1/fs/tree, /v1/fs/entries/content) : le serveur impose le dossier et ne montre que les fichiers cités par la session.
 type Listing = { entries: FsEntry[]; truncated: boolean } | "loading" | "failed"
 const join = (p: string, n: string) => (p ? p + "/" : "") + n
 
