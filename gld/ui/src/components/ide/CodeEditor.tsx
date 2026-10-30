@@ -5,6 +5,7 @@ import "./monacoSetup"
 import { FONTS } from "@/lib/fonts"
 import type { EditorHandle, EditorStatus } from "./commands"
 import { zoomed } from "./useViewPrefs"
+import { touchOnly } from "@/lib/utils"
 
 type Theme = "light" | "dark"
 const themeOf = (t: Theme) => (t === "dark" ? "vs-dark" : "vs")
@@ -61,7 +62,7 @@ export default function CodeEditor({ path, value, readOnly, theme, focus, wordWr
     const uri = monaco.Uri.file(path)
     monaco.editor.getModel(uri)?.dispose()
     const m = monaco.editor.createModel(value, undefined, uri)
-    const e = monaco.editor.create(box.current!, { ...base(theme), ...view(wordWrap, minimap, fontSize), model: m, readOnly })
+    const e = monaco.editor.create(box.current!, { ...base(theme), ...view(wordWrap, minimap, fontSize), model: m, readOnly: readOnly || touchOnly() })
     // Pas addCommand : ce raccourci est global à Monaco, le dernier éditeur créé l'emporterait et Ctrl+S enregistrerait un autre onglet.
     const keys = e.onKeyDown((k) => {
       if (!(k.ctrlKey || k.metaKey) || k.altKey || k.shiftKey || k.keyCode !== monaco.KeyCode.KeyS) return
@@ -149,7 +150,7 @@ export default function CodeEditor({ path, value, readOnly, theme, focus, wordWr
     if (focus) ed.current?.focus()
   }, [focus])
   useEffect(() => {
-    ed.current?.updateOptions({ readOnly })
+    ed.current?.updateOptions({ readOnly: readOnly || touchOnly() })
     handle.current?.notify()
   }, [readOnly])
   useEffect(() => {
