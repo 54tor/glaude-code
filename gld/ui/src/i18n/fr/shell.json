@@ -206,6 +206,16 @@
     "header": {
       "skipToContent": "Aller au contenu",
       "openMenu": "Ouvrir le menu",
+    "palette": {
+      "title": "Palette de commandes",
+      "description": "Aller à une page, une session, un skill ou un réglage",
+      "placeholder": "Page, session, skill, réglage… (Ctrl+K)",
+      "empty": "Aucun résultat.",
+      "pages": "Pages",
+      "sessions": "Sessions",
+      "skills": "Skills",
+      "settings": "Réglages"
+    },
       "search": ", recherche « {{q}} »",
       "hideGrouped": "Masquer les sessions groupées ({{n}})",
       "settingsHint": "Réglages, permissions, hooks et MCP propres à ce projet",

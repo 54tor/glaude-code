@@ -206,6 +206,16 @@
     "header": {
       "skipToContent": "Skip to content",
       "openMenu": "Open the menu",
+    "palette": {
+      "title": "Command palette",
+      "description": "Jump to a page, a session, a skill or a setting",
+      "placeholder": "Page, session, skill, setting… (Ctrl+K)",
+      "empty": "No match.",
+      "pages": "Pages",
+      "sessions": "Sessions",
+      "skills": "Skills",
+      "settings": "Settings"
+    },
       "search": ", search “{{q}}”",
       "hideGrouped": "Hide grouped sessions ({{n}})",
       "settingsHint": "Settings, permissions, hooks and MCP specific to this project",

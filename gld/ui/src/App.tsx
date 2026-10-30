@@ -34,6 +34,7 @@ import { Prompt, type Ask as PromptAsk } from "@/components/Prompt"
 import { SessionSelectionBar } from "@/components/SessionSelectionBar"
 import { SessionsPane } from "@/components/SessionsPane"
 import { Sidebar } from "@/components/Sidebar"
+import { Palette } from "@/components/Palette"
 import { segs } from "@/lib/paths"
 import { Compose, type ComposeAsk } from "@/components/Compose"
 import { AuthScreen } from "@/components/auth/Login"
@@ -276,6 +277,16 @@ function Shell() {
     setShare,
     setPicker,
   })
+  const [palette, setPalette] = useState(false)
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.key.toLowerCase() !== "k") return
+      e.preventDefault()
+      setPalette((o) => !o)
+    }
+    window.addEventListener("keydown", k)
+    return () => window.removeEventListener("keydown", k)
+  }, [])
   useShortcuts({ search, picked, clearPicked: () => setPicked(new Set()), byId: view.byId, actions })
 
   const g: Group | null = node?.g ?? null
@@ -494,6 +505,7 @@ function Shell() {
         <Conversation row={reader} onClose={closeReader} onFolder={reader ? () => go({ kind: "dir", key: segs(reader.g.project, home).join("/") }) : undefined} args={args} choice={choice} carousel={carousel ? { n: waitingRows.length, next: () => advanceCarousel(1), prev: () => advanceCarousel(-1), stop: () => setCarousel(false) } : undefined} />
       </Suspense>
       <DirPicker pick={picker} home={home} />
+      <Palette open={palette} onOpenChange={setPalette} rows={[...everyId.values()]} home={home} go={go} read={read} />
       <Confirm ask={ask} onClose={() => setAsk(null)} />
       <BanAlert />
       <Prompt ask={prompt} onClose={() => setPrompt(null)} />
