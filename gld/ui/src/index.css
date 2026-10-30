@@ -244,12 +244,13 @@
 }
 
 /* Tactile : zone de toucher portée à 44 px (recommandation d'Apple) par un ::before invisible, sans changer le rendu. Dans
+   button/a[data-size] : Button garde data-size même rendu en asChild (déclencheurs de menu, d'infobulle) ; Card l'a aussi, d'où la balise.
    @layer components pour que les utilitaires (absolute, fixed…) l'emportent sur position: relative.
    ponytail: deux boutons icône voisins à moins de 44 px se partagent la zone commune (le second l'emporte) ; espacer si gênant. */
 @layer components {
   @media (pointer: coarse) {
-    :is([data-slot="button"], [data-slot="checkbox"], [data-slot="switch"], [data-slot="tabs-trigger"]) { position: relative; }
-    :is([data-slot="button"], [data-slot="checkbox"], [data-slot="switch"], [data-slot="tabs-trigger"])::before {
+    :is(button[data-size], a[data-size], [role="checkbox"], [role="switch"], [role="tab"]) { position: relative; }
+    :is(button[data-size], a[data-size], [role="checkbox"], [role="switch"], [role="tab"])::before {
       content: ""; position: absolute; inset: min(0px, calc((100% - 44px) / 2));
     }
   }
