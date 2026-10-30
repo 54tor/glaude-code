@@ -572,7 +572,6 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             onWrite={sentDown}
             compactHint={hint}
             coldHint={cold}
-            first={msgs?.length === 0}
             extra={
               <>
                 {termOn && a.live.has(id) && (
