@@ -32,9 +32,12 @@ describe("catalogues", () => {
     expect(flat(bundle("en")).sort()).toEqual(flat(bundle("fr")).sort())
     for (const v of [...leaves(bundle("fr")), ...leaves(bundle("en"))]) expect(v.trim()).not.toBe("")
   })
-  it("le premier niveau de chaque fichier porte son nom", () => {
+  it("le premier niveau de chaque fichier porte son nom", async () => {
     for (const lang of ["fr", "en"] as const)
-      for (const [p, m] of Object.entries(catalogFiles[lang])) expect(Object.keys(m.default)).toEqual([p.split("/").pop()!.replace(".json", "")])
+      for (const [p, load] of Object.entries(catalogFiles[lang])) {
+        const m = typeof load === "function" ? await load() : load
+        expect(Object.keys(m.default)).toEqual([p.split("/").pop()!.replace(".json", "")])
+      }
   })
 })
 
