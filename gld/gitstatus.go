@@ -219,6 +219,68 @@ type reposEntry struct {
 	at   time.Time
 }
 
+func isRepoDir(d string) bool {
+	fi, err := os.Lstat(filepath.Join(d, ".git"))
+	return err == nil && fi.IsDir() && ownedByMe(fi)
+}
+
+// addDirRepos : les dépôts des additionalDirectories de la session (réglages utilisateur, projet et local), au niveau 0 (le
+// dossier lui-même) et au niveau 1 (ses sous-dossiers directs). Les chemins relatifs se lisent depuis le dossier du projet.
+func addDirRepos(project string) []string {
+	home, _ := os.UserHomeDir()
+	var out []string
+	seen := map[string]bool{}
+	add := func(d string) {
+		if !seen[d] {
+			seen[d] = true
+			out = append(out, d)
+		}
+	}
+	for _, f := range []string{filepath.Join(cfgDir(), "settings.json"), filepath.Join(project, ".claude", "settings.json"), filepath.Join(project, ".claude", "settings.local.json")} {
+		b, err := readConfigFile(f)
+		if err != nil {
+			continue
+		}
+		doc, err := parseOrdered(b)
+		if err != nil {
+			continue
+		}
+		v, _ := lookup(doc, "permissions", "additionalDirectories")
+		for _, d := range strList(v) {
+			switch {
+			case d == "~" || strings.HasPrefix(d, "~/"):
+				d = filepath.Join(home, d[1:])
+			case !filepath.IsAbs(d):
+				d = filepath.Join(project, d)
+			}
+			d = filepath.Clean(d)
+			if isRepoDir(d) {
+				add(d)
+			}
+			for _, s := range subRepos(d) {
+				add(s)
+			}
+			if len(out) >= 40 {
+				return out
+			}
+		}
+	}
+	return out
+}
+
+// sessionRepos : les dépôts connus sous le dossier d'une session, hors le dossier lui-même : sous-dossiers directs et add-dir.
+func sessionRepos(project string) []string {
+	seen := map[string]bool{project: true}
+	var out []string
+	for _, d := range append(subRepos(project), addDirRepos(project)...) {
+		if !seen[d] {
+			seen[d] = true
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
 func subRepos(dir string) []string {
 	reposMu.Lock()
 	e, ok := reposCache[dir]
@@ -235,7 +297,7 @@ func subRepos(dir string) []string {
 		}
 		// Un vrai dépôt : « .git » est un dossier (pas un fichier qui renverrait ailleurs) et appartient à l'utilisateur de gld ;
 		// un dépôt découvert au hasard d'un dossier n'est pas interrogé s'il vient de quelqu'un d'autre.
-		if fi, err := os.Lstat(filepath.Join(dir, n, ".git")); err == nil && fi.IsDir() && ownedByMe(fi) {
+		if isRepoDir(filepath.Join(dir, n)) {
 			out = append(out, filepath.Join(dir, n))
 		}
 		if len(out) >= 40 {
@@ -262,7 +324,7 @@ func knownRepo(dir string) bool {
 		if g.Project == dir {
 			return true
 		}
-		for _, s := range subRepos(g.Project) {
+		for _, s := range sessionRepos(g.Project) {
 			if s == dir {
 				return true
 			}
@@ -303,7 +365,7 @@ func routesGit(mux *http.ServeMux) {
 				continue
 			}
 			dirs = append(dirs, g.Project)
-			if sub := subRepos(g.Project); len(sub) > 0 {
+			if sub := sessionRepos(g.Project); len(sub) > 0 {
 				repos[g.Project] = sub
 				dirs = append(dirs, sub...)
 			}

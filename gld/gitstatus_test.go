@@ -3,6 +3,9 @@ package main
 import (
 	"errors"
 	"os/exec"
+	"path/filepath"
+	"slices"
+	"sort"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -99,6 +102,25 @@ func TestSubRepos(t *testing.T) {
 	got := subRepos(d)
 	if len(got) != 2 || got[0] != d+"/8.1" || got[1] != d+"/8.2" {
 		t.Fatalf("%v", got)
+	}
+}
+
+// Les add-dir des réglages donnent leurs dépôts au niveau 0 (le dossier) et au niveau 1 (ses sous-dossiers), chemins relatifs et ~ compris.
+func TestAddDirRepos(t *testing.T) {
+	oldRoot := root
+	t.Cleanup(func() { root = oldRoot })
+	root = filepath.Join(t.TempDir(), "projects")
+	proj, ext := t.TempDir(), t.TempDir()
+	for _, n := range []string{ext + "/.git", ext + "/sub/.git", ext + "/deep/x/.git", proj + "/rel/.git"} {
+		put(t, n+"/x", "x\n", old)
+	}
+	put(t, proj+"/.claude/settings.json", `{"permissions":{"additionalDirectories":["`+ext+`","rel","/absent"]}}`, old)
+	got := sessionRepos(proj)
+	want := []string{ext, ext + "/sub", proj + "/rel"}
+	sort.Strings(want)
+	sort.Strings(got)
+	if !slices.Equal(got, want) {
+		t.Fatalf("%v, attendu %v", got, want)
 	}
 }
 
