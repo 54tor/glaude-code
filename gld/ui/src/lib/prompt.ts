@@ -240,3 +240,15 @@ export function modeOfScreen(screen: string): LiveMode | null {
   if (foot.includes("auto mode on")) return "auto"
   return "default"
 }
+
+// Surcouche d'une question /btw : la réponse entre la ligne « /btw … » et le pied d'aide, sans l'indentation commune.
+export function parseBtw(screen: string): { question: string; answer: string } | null {
+  const lines = screen.replace(/\s+$/, "").split("\n")
+  const foot = lines.findLastIndex((l) => l.includes("Esc to close") && l.includes("to scroll"))
+  if (foot < 0 || foot < lines.length - 4) return null
+  const start = lines.findLastIndex((l, i) => i < foot && /^\s*\/btw\b/.test(l))
+  if (start < 0) return null
+  const body = lines.slice(start + 1, foot)
+  const ind = Math.min(...body.filter((l) => l.trim()).map((l) => l.length - l.trimStart().length), 99)
+  return { question: lines[start].trim().replace(/^\/btw\s*/, ""), answer: body.map((l) => l.slice(ind)).join("\n").trim() }
+}

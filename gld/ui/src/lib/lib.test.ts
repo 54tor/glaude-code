@@ -302,3 +302,12 @@ describe("routes plugins et sauvegarde", () => {
     expect(href({ kind: "backup" })).toBe("/sauvegarde")
   })
 })
+
+describe("parseBtw", () => {
+  it("extrait la réponse de la surcouche", async () => {
+    const { parseBtw } = await import("./prompt")
+    const scr = "x\n    /btw ma question\n\n      Une réponse\n      - point\n\n    ↑/↓ to scroll · c to copy · f to fork · Esc to close\n"
+    expect(parseBtw(scr)).toEqual({ question: "ma question", answer: "Une réponse\n- point" })
+    expect(parseBtw("❯ \n")).toBeNull()
+  })
+})

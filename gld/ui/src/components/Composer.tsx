@@ -3,10 +3,10 @@ import { usePending, refreshPending } from "@/hooks/usePending"
 import { Trans, useTranslation } from "react-i18next"
 import { i18n } from "@/i18n"
 import { cn, copyText, isSend, keyHint } from "@/lib/utils"
-import { modeOfScreen, parsePrompt, type Opt } from "@/lib/prompt"
+import { modeOfScreen, parseBtw, parsePrompt, type Opt } from "@/lib/prompt"
 import { type Live } from "./LiveStatus"
 import { toast } from "sonner"
-import { Bug, Copy, Minimize2, Power, Snowflake, Send, Square, SquareCheck, X } from "lucide-react"
+import { Bug, Copy, GitFork, Minimize2, Power, Snowflake, Send, Square, SquareCheck, X } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
 import { draftOf, setDraft, useDraft } from "@/hooks/useDraft"
 import { efforts, models, withChoice, type Choice } from "@/lib/models"
@@ -377,7 +377,7 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
     }
   }, [id])
   const ok = info?.ids.includes(id)
-  const sugg =/^\/\S*$/.test(text) ? [...slash().map(([c, l]) => [c, l] as const), ...extra].filter(([c]) => c.startsWith(text) && c !== text) : []
+  const sugg =/^\/\S*$/.test(text) ? [...slash().map(([c, l]) => [c, l] as const), ["/btw", i18n.t("conversation.slash.btw.hint")] as const, ...extra].filter(([c]) => c.startsWith(text) && c !== text) : []
   // Un message écrit pendant que Claude travaille, ou qu'une question attend, est mis en file : il part dès que la session attend
   // (jamais dans une question, où il répondrait à sa place).
   const post = async (full: string) => {
@@ -396,7 +396,7 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
     const full = [text.trim(), pics.suffix()].filter(Boolean).join("\n")
     if (!full || busy) return
     keepFocus()
-    if (working || asking) {
+    if ((working || asking) && !(/^\/btw\s/.test(full) && !asking)) {
       if (adding.current) return
       if (!(await enqueue(full))) return
       if (draftOf(id).text === text) setText("")
@@ -619,6 +619,7 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
     }
   }
   const prompt = parsePrompt(screen)
+  const btw = parseBtw(screen)
   const [typing, setTyping] = useState<string | null>(null) // option à réponse libre en cours de saisie
   const [answer, setAnswer] = useState("")
   const editLen = useRef(0) // réponse libre déjà saisie dans le terminal : à effacer avant de renvoyer le texte modifié
@@ -714,6 +715,23 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
             )}
             <Button size="sm" disabled={pressing} variant="ghost" className="justify-start" onClick={() => press("Escape")}>
               {t("conversation.composer.escape")}
+            </Button>
+          </div>
+        </div>
+      )}
+      {btw && (
+        <div className="space-y-1.5 rounded-lg border bg-background p-3 text-sm">
+          <p className="text-xs font-medium text-muted-foreground">/btw {btw.question}</p>
+          <pre className="max-h-72 overflow-auto font-sans break-words whitespace-pre-wrap">{btw.answer}</pre>
+          <div className="flex flex-wrap gap-1.5">
+            <Button size="xs" variant="outline" onClick={() => copyText(btw.answer).then(() => toast.success(t("conversation.composer.screenCopied")), () => toast.error(t("conversation.composer.copyFailed")))}>
+              <Copy /> {t("conversation.composer.btwCopy")}
+            </Button>
+            <Button size="xs" variant="outline" disabled={pressing} onClick={() => press("f")} title={t("conversation.composer.btwForkTitle")}>
+              <GitFork /> {t("conversation.composer.btwFork")}
+            </Button>
+            <Button size="xs" variant="outline" disabled={pressing} onClick={() => press("Escape")}>
+              {t("conversation.composer.btwClose")}
             </Button>
           </div>
         </div>

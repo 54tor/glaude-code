@@ -132,6 +132,10 @@
       "answerAria": "Réponse à la question du terminal",
       "validate": "Valider",
       "validateTitle": "Valide les cases cochées. Touches envoyées : {{keys}}",
+      "btwCopy": "Copier",
+      "btwFork": "Dupliquer",
+      "btwForkTitle": "Ouvre cette question dans une nouvelle session (touche f du terminal)",
+      "btwClose": "Fermer",
       "escape": "Échap",
       "rawScreen": "Écran brut",
       "rawScreenTitle": "Écran du terminal tel que gld le lit, et ce que le détecteur en tire",
@@ -231,6 +235,10 @@
       "doctor": {
         "label": "Diagnostic",
         "hint": "Vérifie l'installation"
+      },
+      "btw": {
+        "label": "Question en passant",
+        "hint": "Pose une question sans l'ajouter à la conversation : /btw ta question"
       },
       "help": {
         "label": "Aide",

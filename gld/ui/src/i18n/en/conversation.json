@@ -132,6 +132,10 @@
       "answerAria": "Answer to the terminal question",
       "validate": "Confirm",
       "validateTitle": "Confirms the ticked boxes. Keys sent: {{keys}}",
+      "btwCopy": "Copy",
+      "btwFork": "Fork",
+      "btwForkTitle": "Opens this question in a new session (terminal key f)",
+      "btwClose": "Close",
       "escape": "Esc",
       "rawScreen": "Raw screen",
       "rawScreenTitle": "The terminal screen as gld reads it, and what the detector makes of it",
@@ -231,6 +235,10 @@
       "doctor": {
         "label": "Diagnostics",
         "hint": "Checks the installation"
+      },
+      "btw": {
+        "label": "Side question",
+        "hint": "Ask a question without adding it to the conversation: /btw your question"
       },
       "help": {
         "label": "Help",
