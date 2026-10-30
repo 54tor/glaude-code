@@ -153,7 +153,7 @@ func withToken(token string, next http.Handler) http.Handler {
 // publicAsset : manifeste et icônes, chargés par le navigateur sans cookie (manifeste, icône d'écran d'accueil d'iOS) ;
 // fichiers fixes de l'interface, sans donnée. Le chemin doit être déjà propre : « /icons/../x » ne passe pas.
 func publicAsset(p string) bool {
-	return path.Clean(p) == p && (p == "/manifest.webmanifest" || p == "/favicon.ico" || strings.HasPrefix(p, "/icons/"))
+	return path.Clean(p) == p && (p == "/manifest.webmanifest" || p == "/favicon.ico" || p == "/apple-touch-icon.png" || p == "/apple-touch-icon-precomposed.png" || strings.HasPrefix(p, "/icons/"))
 }
 
 // withTokenOpen : en mode ouvert, withToken tel quel. En mode multi-utilisateur, le login remplace le jeton pour le navigateur :

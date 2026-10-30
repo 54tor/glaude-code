@@ -138,6 +138,7 @@ func TestHTTPGardes(t *testing.T) {
 		}
 	}
 	status(t, h, "GET", "/favicon.ico", "", 200)
+	status(t, h, "GET", "/apple-touch-icon.png", "", 200)
 }
 
 func TestHTTPSessions(t *testing.T) {

@@ -21,6 +21,7 @@ var pageRoutes = map[string]bool{
 	"GET /configuration": true, "GET /configuration/": true, "GET /skills": true, "GET /skills/": true, "GET /extensions": true, "GET /plugins": true, "GET /sauvegarde": true,
 	"GET /equipes": true, "GET /equipes/": true, "GET /revues": true, "GET /espace/": true, "GET /reglages/": true,
 	"GET /assets/": true, "GET /icons/": true, "GET /favicon.ico": true, "GET /manifest.webmanifest": true, "GET /sw.js": true,
+	"GET /apple-touch-icon.png": true, "GET /apple-touch-icon-precomposed.png": true,
 	"GET /guest": true, "GET /guest/{handle}": true, "GET /invite/{home}/{token}": true, "POST /invite/{home}/{token}": true,
 	"GET /pair": true, "POST /pair": true,
 }
