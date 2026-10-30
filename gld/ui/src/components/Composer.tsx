@@ -492,41 +492,46 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
           </ul>
         )}
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <LiveModeButton id={id} disabled={working || asking || busy} />
-          <Choose
-            value={models().find(([a]) => a && liveState.st?.model?.toLowerCase().includes(a))?.[0] ?? ""}
-            onChange={async (m) => m && (await post(`/model ${m}`)) && onSent()}
-            options={[["", t("conversation.composer.modelEllipsis")], ...models().slice(1)]}
-            label={t("conversation.composer.sessionModel")}
-            size="sm"
-            disabled={working || asking || busy}
-          />
-          <Choose
-            value=""
-            onChange={async (e) => e && (await post(`/effort ${e}`)) && onSent()}
-            options={[["", t("conversation.composer.effortEllipsis")], ...efforts().slice(1)]}
-            label={t("conversation.composer.sessionEffort")}
-            size="sm"
-            disabled={working || asking || busy}
-          />
-          <span className="ml-auto" />
-          <SlashMenu id={id} text={text} onSent={onSent} />
-          <AttachButton onPick={pics.pick} />
-          {liveState.st?.thinking && (
-            <Button
+          {/* Téléphone : réglages sur une ligne à parts égales, actions sur la suivante avec l'envoi en largeur restante. */}
+          <div className="flex min-w-0 items-center gap-2 max-md:w-full max-md:[&>*]:min-w-0 max-md:[&>*]:flex-1">
+            <LiveModeButton id={id} disabled={working || asking || busy} />
+            <Choose
+              value={models().find(([a]) => a && liveState.st?.model?.toLowerCase().includes(a))?.[0] ?? ""}
+              onChange={async (m) => m && (await post(`/model ${m}`)) && onSent()}
+              options={[["", t("conversation.composer.modelEllipsis")], ...models().slice(1)]}
+              label={t("conversation.composer.sessionModel")}
               size="sm"
-              variant="outline"
-              title={t("conversation.composer.interruptTitle")}
-              onClick={async () => {
-                await api.sessionKey(id, "Escape").catch((e) => toast.error(errMsg(e)))
-              }}
-            >
-              <Square className="max-md:hidden" /> {t("conversation.composer.interrupt")}
+              disabled={working || asking || busy}
+            />
+            <Choose
+              value=""
+              onChange={async (e) => e && (await post(`/effort ${e}`)) && onSent()}
+              options={[["", t("conversation.composer.effortEllipsis")], ...efforts().slice(1)]}
+              label={t("conversation.composer.sessionEffort")}
+              size="sm"
+              disabled={working || asking || busy}
+            />
+          </div>
+          <span className="ml-auto max-md:hidden" />
+          <div className="flex items-center gap-2 max-md:w-full">
+            <SlashMenu id={id} text={text} onSent={onSent} />
+            <AttachButton onPick={pics.pick} />
+            {liveState.st?.thinking && (
+              <Button
+                size="sm"
+                variant="outline"
+                title={t("conversation.composer.interruptTitle")}
+                onClick={async () => {
+                  await api.sessionKey(id, "Escape").catch((e) => toast.error(errMsg(e)))
+                }}
+              >
+                <Square className="max-md:hidden" /> {t("conversation.composer.interrupt")}
+              </Button>
+            )}
+            <Button size="sm" className="max-md:flex-1" onClick={send} disabled={(!text.trim() && !pics.images.length) || busy || !exec}>
+              <Send /> {t("conversation.composer.sendToSession")}
             </Button>
-          )}
-          <Button size="sm" onClick={send} disabled={(!text.trim() && !pics.images.length) || busy || !exec}>
-            <Send /> {t("conversation.composer.sendToSession")}
-          </Button>
+          </div>
         </div>
       </div>
     </div>
