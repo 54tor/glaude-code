@@ -51,7 +51,7 @@ func routesStatic(mux *http.ServeMux) {
 	// iOS (feuille de partage, écran d'accueil) relit la page sans cookie : la 401 n'a pas de <link>, il cherche alors ces noms
 	// à la racine, puis se rabat sur le favicon de 48 px.
 	touch := func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFileFS(w, r, dist, "icons/apple-touch-icon-1024.png")
+		http.ServeFileFS(w, r, dist, "icons/apple-touch-icon.png")
 	}
 	mux.HandleFunc("GET /apple-touch-icon.png", touch)
 	mux.HandleFunc("GET /apple-touch-icon-precomposed.png", touch)
