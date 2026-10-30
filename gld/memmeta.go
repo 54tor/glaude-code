@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -83,7 +84,7 @@ func globsOf(m map[string]any) ([]string, error) {
 		return nil, terr("srv.memmeta.pathsDoitEtreUne")
 	}
 	for _, g := range out {
-		if !doublestar.ValidatePattern(g) {
+		if !globOK(g) {
 			return nil, terr("srv.memmeta.motifInvalide", "A1", g)
 		}
 	}
@@ -91,6 +92,11 @@ func globsOf(m map[string]any) ([]string, error) {
 		return nil, terr("srv.memmeta.pathsEstVideLa")
 	}
 	return out, nil
+}
+
+// globOK : motif valide et borné. doublestar recurse à chaque alternative d'accolade : n groupes coûtent 2^n appels.
+func globOK(g string) bool {
+	return len(g) <= 200 && strings.Count(g, "{") <= 4 && doublestar.ValidatePattern(g)
 }
 
 // splitGlobs sépare des motifs par des virgules, hors accolades : « a/*.{ts,tsx}, b/** » donne deux motifs.
@@ -364,10 +370,17 @@ func memMatches(key, dir string) (files []string, total int, truncated bool, err
 	if !safeDir(dir) {
 		return nil, 0, false, terr("srv.memmeta.projetInvalide")
 	}
-	cwd := projectCwd(dir)
-	if fi, e := os.Stat(cwd); cwd == "" || e != nil || !fi.IsDir() {
+	cwd := ""
+	for _, t := range liveProjects() {
+		if t.Dir == dir {
+			cwd = t.Project
+		}
+	}
+	if cwd == "" {
 		return nil, 0, false, terr("srv.memory.dossierDuProjetIntrouvable")
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	visited := 0
 	skip := map[string]bool{".git": true, "node_modules": true, "vendor": true, "dist": true, ".venv": true, "target": true}
 	cwd = walkRoot(cwd)
@@ -381,7 +394,7 @@ func memMatches(key, dir string) (files []string, total int, truncated bool, err
 		if d.IsDir() {
 			return nil
 		}
-		if visited++; visited > 50000 {
+		if visited++; visited > 50000 || ctx.Err() != nil {
 			truncated = true
 			return filepath.SkipAll
 		}
@@ -416,7 +429,7 @@ func setPaths(text string, paths []string) (string, error) {
 	if len(paths) > 0 {
 		blk.WriteString("paths:\n")
 		for _, g := range paths {
-			if !doublestar.ValidatePattern(g) || strings.ContainsAny(g, "\n\"") {
+			if !globOK(g) || strings.ContainsAny(g, "\n\"") {
 				return "", terr("srv.memmeta.motifInvalide", "A1", g)
 			}
 			blk.WriteString("  - \"" + g + "\"\n")

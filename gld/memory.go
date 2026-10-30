@@ -49,17 +49,50 @@ var (
 
 // globalClaude : ce chemin est le CLAUDE.md global (~/.claude/CLAUDE.md), même atteint comme fichier d'un projet
 // (le projet « ~ » a pour .claude/CLAUDE.md… le fichier global). Il n'est alors géré que dans la section Globale.
-func globalClaude(path string) bool {
-	g := filepath.Join(cfgDir(), "CLAUDE.md")
-	if filepath.Clean(path) == filepath.Clean(g) {
-		return true
+func globalClaude(path string) bool { return isCfgEntry(path, "CLAUDE.md") }
+
+// cfgDirs : le dossier de config de ce processus, la config principale (vue d'un home enfant) et celle de chaque home connu.
+func cfgDirs() []string {
+	out := []string{cfgDir()}
+	homes := readHomes()
+	if m := os.Getenv(ideMainCfgEnv); m != "" && filepath.IsAbs(m) {
+		out = append(out, m)
+		homes = append(homes, readHomesFile(filepath.Join(m, homesFileName))...)
 	}
-	a, err1 := os.Stat(path)
-	b, err2 := os.Stat(g)
-	return err1 == nil && err2 == nil && os.SameFile(a, b)
+	for _, h := range homes {
+		if filepath.IsAbs(h.Dir) {
+			out = append(out, h.Dir)
+		}
+	}
+	return out
+}
+
+// isCfgEntry : path est <config d'un home>/<name> (même fichier ou dossier, liens suivis).
+func isCfgEntry(path, name string) bool {
+	a, errA := os.Stat(path)
+	for _, c := range cfgDirs() {
+		g := filepath.Join(c, name)
+		if filepath.Clean(path) == g {
+			return true
+		}
+		if b, err := os.Stat(g); errA == nil && err == nil && os.SameFile(a, b) {
+			return true
+		}
+	}
+	return false
 }
 
 func safeDir(d string) bool { return d != "" && d != "." && d != ".." && !strings.ContainsAny(d, `/\`) }
+
+// knownProjectCwd : le dossier de travail d'un projet dont le dossier de transcripts existe sous projects/ (un nom reçu
+// d'un client ne se décode jamais vers un dossier arbitraire du disque).
+func knownProjectCwd(d string) (string, bool) {
+	if !safeDir(d) || !isDirPath(filepath.Join(root, d)) {
+		return "", false
+	}
+	c := projectCwd(d)
+	return c, c != "" && isDirPath(c)
+}
 
 // projectCwd : le dossier de travail d'un dossier de transcripts (sa session la plus récente, sinon son nom décodé).
 func projectCwd(dir string) string {
@@ -96,15 +129,19 @@ func memResolve(key string) (string, string, error) {
 		}
 	case strings.HasPrefix(key, "r/"): // règle d'un projet : <dossier du projet>/.claude/rules/<nom>
 		if d, n, ok := strings.Cut(key[2:], "/"); ok && safeDir(d) && ruleName.MatchString(n) {
-			base, err := projectRulesDir(projectCwd(d))
+			c, ok := knownProjectCwd(d)
+			if !ok {
+				return "", "", terr("srv.memory.dossierDuProjetIntrouvable")
+			}
+			base, err := projectRulesDir(c)
 			return base, n, err
 		}
 	case strings.HasPrefix(key, "p/"):
 		if d, f, ok := strings.Cut(key[2:], "/"); ok && safeDir(d) {
 			for _, a := range projectFiles {
 				if f == a {
-					c := projectCwd(d)
-					if fi, err := os.Stat(c); c == "" || err != nil || !fi.IsDir() {
+					c, ok := knownProjectCwd(d)
+					if !ok {
 						return "", "", terr("srv.memory.dossierDuProjetIntrouvable")
 					}
 					if globalClaude(filepath.Join(c, filepath.FromSlash(f))) {
@@ -125,7 +162,7 @@ func projectRulesDir(cwd string) (string, error) {
 		return "", terr("srv.memory.dossierDuProjetIntrouvable")
 	}
 	rules := filepath.Join(cwd, ".claude", "rules")
-	if rules == filepath.Join(cfgDir(), "rules") {
+	if isCfgEntry(rules, "rules") {
 		return "", terr("srv.memory.ceSontLesRegles")
 	}
 	for _, p := range []string{filepath.Join(cwd, ".claude"), rules} {

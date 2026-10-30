@@ -217,6 +217,9 @@ func routesMemory(mux *http.ServeMux) {
 			writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 			return
 		}
+		if !canFsRead(r) {
+			files = []string{} // sans fs_read, le nombre seul : pas de noms de fichiers
+		}
 		writeJSON(w, 200, map[string]any{"files": files, "total": total, "truncated": trunc})
 	})
 	mux.HandleFunc("POST /v1/memory/fixes", func(w http.ResponseWriter, r *http.Request) {
@@ -434,4 +437,18 @@ func mergeReply(w http.ResponseWriter, r *http.Request, prompt, cwd, override st
 		return
 	}
 	writeJSON(w, 200, map[string]any{"message": out, "prompt": prompt})
+}
+
+// canFsRead : sans garde (mode ouvert ou jeton), tout est permis ; sinon le droit fs_read du home courant est requis.
+func canFsRead(r *http.Request) bool {
+	g := gateFrom(r)
+	if g == nil || g.p == nil {
+		return true
+	}
+	id, ok := homeIDFor(homeFrom(r))
+	if !ok {
+		return false
+	}
+	m, err := g.rights(id)
+	return err == nil && m[RightFsRead]
 }

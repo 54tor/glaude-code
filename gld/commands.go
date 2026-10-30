@@ -74,8 +74,8 @@ func cmdBase(key string) (string, string, error) {
 		if !ok || !safeDir(d) {
 			return "", "", terr("srv.memmeta.projetInvalide")
 		}
-		c := projectCwd(d)
-		if fi, err := os.Stat(c); c == "" || err != nil || !fi.IsDir() {
+		c, ok := knownProjectCwd(d)
+		if !ok {
 			return "", "", terr("srv.memory.dossierDuProjetIntrouvable")
 		}
 		base, rel = filepath.Join(c, ".claude", "commands"), r

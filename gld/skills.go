@@ -73,8 +73,8 @@ func skillBase(key string) (base, name string, readonly bool, err error) {
 	case len(parts) == 2 && parts[0] == "u":
 		return filepath.Join(cfgDir(), "skills"), parts[1], false, nilIf(skillName.MatchString(parts[1]), bad)
 	case len(parts) == 3 && parts[0] == "p" && safeDir(parts[1]):
-		cwd := projectCwd(parts[1])
-		if fi, e := os.Stat(cwd); cwd == "" || e != nil || !fi.IsDir() {
+		cwd, ok := knownProjectCwd(parts[1])
+		if !ok {
 			return "", "", false, terr("srv.memory.dossierDuProjetIntrouvable")
 		}
 		return filepath.Join(cwd, ".claude", "skills"), parts[2], false, nilIf(skillName.MatchString(parts[2]), bad)
