@@ -8,7 +8,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ### Ajouté
 - Page Plugins dédiée (`/plugins`), avec ses entrées dans la barre latérale.
-- Sauvegarde (`/sauvegarde`) : exporter la configuration Claude en zip (skills, commandes et snippets, plugins et marketplaces, réglages et permissions, mémoire et serveurs MCP) et l'importer par catégories, avec un aperçu avant application. Les secrets sont exclus de l'export.
+- Sauvegarde (onglet « Export » de Configuration ; `/sauvegarde` y redirige) : exporter la configuration Claude en zip (skills, commandes et snippets, plugins et marketplaces, réglages et permissions, mémoire et serveurs MCP) et l'importer par catégories, avec un aperçu avant application. Les secrets sont exclus de l'export.
 - Mémoire : exporter une entrée, une sélection ou toutes les entrées de mémoire des projets en JSON, et les importer en choisissant le projet cible de chaque groupe et la résolution de chaque conflit de nom.
 - Accueil (`/accueil`) : sessions ouvertes (celles qui attendent d'abord), dernières fermées encore au cache, état des serveurs MCP et mise à jour disponible.
 - Palette de commandes (Ctrl+K) : aller à une page, une session, un skill ou un réglage.
@@ -22,9 +22,24 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Alerte (toast) quand le cache de prompt d'une session ouverte est sur le point d'expirer.
 - Règle intégrée qui range les tâches à faire dans le bloc-notes de gld.
 - IDE : l'éditeur Monaco s'ouvre en lecture seule sur écran tactile.
+- Notes : historique par note des éléments envoyés à une session.
+- Session : modèle affiché dans l'en-tête, état du Remote control dans la fenêtre d'informations, globe vert sur les sessions liées à claude.ai, titre automatique après le premier message (un titre choisi n'est jamais écrasé).
+- Accueil : bouton « Vérifier » pour interroger GitHub tout de suite (au plus une fois toutes les 30 s) ; la version courante et le lien de mise à jour s'affichent en pied de barre latérale.
+- Barre latérale : sections « Projets » et « Local » repliables, sessions tièdes (fermées mais au cache chaud) séparées des sessions ouvertes, projets et dossiers triés par nom.
+- Les listes de sessions se trient sur le dernier message de l'utilisateur et non sur la dernière écriture, qui bouge aussi à chaque réponse de l'agent.
+- Configuration : bouton « Lancer /doctor » ; l'onglet des réglages s'appelle « Claude CLI ».
+- Snippets : lancer, modifier, améliorer, renommer et supprimer depuis le menu contextuel d'une ligne.
+- Police « Comic Sans (Comic Relief) » ; la taille de police choisie agrandit toute l'interface et non plus seulement les conversations.
 - Tâches de fond : les sous-agents lancés en arrière-plan sont listés, et marqués terminés même sans notification, d'après leur fichier de métadonnées.
 
 ### Corrigé
+- Sécurité : les chemins de code de l'IDE exigent `config_write` à la passerelle, à la suppression et à la restauration depuis la corbeille ; les clés de projet de la mémoire sont limitées aux projets connus (globs bornés, noms de correspondances masqués sans `fs_read`) ; les arguments, variables d'environnement et commandes de hooks MCP sont masqués sans `config_write`, la profondeur et la taille des JSON sont bornées ; les URL de dépôt illisibles sont masquées par défaut ; les droits de l'appelant sont transmis aux homes enfants (`fs_read`, `config_write`) et vides quand la passerelle n'a pas de magasin.
+- Sécurité : le journal des fichiers chargés de la mémoire est lu en fichier ordinaire de taille bornée ; la liste des équipes est écrite par les fonctions sûres face aux liens symboliques ; les identifiants de sessions enfants sont validés ; les brouillons de l'IDE sont effacés à la déconnexion et au changement de compte.
+- Équipes : une boîte de dialogue de permission tronquée est signalée et son approbation depuis le web refusée.
+- Réaffectation d'une session (`/cd`) : un dossier de session déjà présent à destination (reste d'un déplacement interrompu) est fusionné au lieu de bloquer.
+- iOS : icône d'écran d'accueil et de partage servie à la racine (`apple-touch-icon`, 180 px et 1024 px), manifeste à icônes opaques et couleur de thème sombre pour que l'icône ne soit plus verte, plus de rebond élastique, balayage du bord gauche qui ouvre le menu dans la PWA, contrôles de saisie de session sur deux rangées sur téléphone.
+- Page de saisie du jeton : le champ respecte la largeur du conteneur.
+- Deux expressions régulières de l'interface (mots avec trait d'union, images envoyées) bornées contre un retour arrière quadratique.
 - Sécurité : un invité ne lit que les fichiers cités par le transcript de la session partagée ; l'arborescence n'affiche que ces fichiers, les segments `..` sont refusés et les liens symboliques résolus avant la lecture.
 - Tactile : zones de clic de 44 px, texte secondaire à 12 px, cases de sélection des sessions masquées jusqu'au début d'une sélection, boutons de menus et d'info-bulles élargis, lecteur de session en plein écran seulement sur téléphone, en-tête sous la barre d'état de l'iPhone, boîtes de dialogue et tiroir pleine hauteur, lignes de plugins contenues dans la carte Extensions.
 - Un retour de sous-agent quitte la file d'attente dès que son retrait aboutit.
@@ -41,6 +56,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Sécurité : `/assets/` et `/icons/` ne listent plus leur contenu (`404`) ; les fichiers restent servis.
 - Sécurité : le plafond global de 60 tentatives de connexion par minute n'arrête plus un compte qui revient depuis une adresse où il s'est déjà connecté ; des noms inventés envoyés depuis de nombreuses adresses bloquaient toutes les connexions.
 - Sécurité (`GLD_RUN_AS`, expérimental) : les fichiers d'agents des équipes (`agents/<id>.md`) sont écrits sans suivre de lien symbolique posé par le compte cible. Le suivi `docs/auth-followup-openroot.md` liste quatre autres sites relevés par l'audit.
+- Documentation : `auto` et `keep` sur `PATCH /v1/sessions/{id}` ; remerciements à jour (dépendances Go et web, RealFaviconGenerator pour les icônes).
 - Documentation : `mem_write` permet d'orienter les sessions des autres comptes du home (CLAUDE.md et règles chargés par toutes les sessions).
 
 ## [0.7.1] - 2026-10-29
