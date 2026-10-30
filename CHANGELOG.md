@@ -4,7 +4,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
-## [0.7.2] - 2026-10-30
+## [0.8.0] - 2026-10-30
 
 ### Ajouté
 - Page Plugins dédiée (`/plugins`), avec ses entrées dans la barre latérale.
