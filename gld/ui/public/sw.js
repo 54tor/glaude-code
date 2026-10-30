@@ -1,7 +1,7 @@
 // Service worker : cache des ressources statiques de l'interface et clic sur les notifications.
-// Jamais d'API ici : seules les ressources versionnées (/assets/, icônes, manifeste) passent par le cache.
-const CACHE = "gld-static-v3" // v1 gardait des /assets/ sans hash : le changer purge ce cache à l'activation
-const STATIC = (u) => u.pathname.startsWith("/assets/") || u.pathname.startsWith("/icons/") || u.pathname === "/favicon.ico" || u.pathname === "/manifest.webmanifest"
+// Jamais d'API ici : seules les ressources versionnées (/assets/, icônes) passent par le cache ; le manifeste va au réseau, iOS en lit les icônes.
+const CACHE = "gld-static-v4" // le changer purge l'ancien cache à l'activation (v4 : icônes PWA remplacées)
+const STATIC = (u) => u.pathname.startsWith("/assets/") || u.pathname.startsWith("/icons/") || u.pathname === "/favicon.ico"
 
 self.addEventListener("install", () => self.skipWaiting())
 self.addEventListener("activate", (e) => e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())))
