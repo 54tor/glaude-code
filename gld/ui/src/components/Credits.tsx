@@ -30,6 +30,7 @@ const WEB = [
   ["xterm.js", "https://xtermjs.org"],
   ["sonner", "https://sonner.emilkowal.ski"],
   ["Geist, Inter, IBM Plex, JetBrains Mono, Fira Code", "https://fontsource.org"],
+  ["RealFaviconGenerator", "https://realfavicongenerator.net"],
 ]
 
 const link = "underline-offset-2 hover:underline"
