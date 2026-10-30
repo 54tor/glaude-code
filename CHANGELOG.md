@@ -19,9 +19,15 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Réponses `/btw` affichées dans le panneau de la session, avec copie, bifurcation et fermeture ; la surcouche est fermée avant l'envoi d'un message.
 - Notification quand une version plus récente est publiée sur GitHub.
 - Pendant un outil en cours, libellés d'attente variés (1000 statuts par langue), tirés au hasard par créneau de 6 secondes.
+- Alerte (toast) quand le cache de prompt d'une session ouverte est sur le point d'expirer.
+- Règle intégrée qui range les tâches à faire dans le bloc-notes de gld.
+- IDE : l'éditeur Monaco s'ouvre en lecture seule sur écran tactile.
 - Tâches de fond : les sous-agents lancés en arrière-plan sont listés, et marqués terminés même sans notification, d'après leur fichier de métadonnées.
 
 ### Corrigé
+- Sécurité : un invité ne lit que les fichiers cités par le transcript de la session partagée ; l'arborescence n'affiche que ces fichiers, les segments `..` sont refusés et les liens symboliques résolus avant la lecture.
+- Tactile : zones de clic de 44 px, texte secondaire à 12 px, cases de sélection des sessions masquées jusqu'au début d'une sélection, boutons de menus et d'info-bulles élargis, lecteur de session en plein écran seulement sur téléphone, en-tête sous la barre d'état de l'iPhone, boîtes de dialogue et tiroir pleine hauteur, lignes de plugins contenues dans la carte Extensions.
+- Un retour de sous-agent quitte la file d'attente dès que son retrait aboutit.
 - Les sous-sessions sont supprimées avec leur session parente.
 - Les commandes de fond tuées hors `TaskStop` sont signalées d'après leur marqueur de sortie ; celles arrêtées par `TaskStop` sont marquées tuées.
 - La page occupe jusqu'à 1920 px de large ; l'éditeur de skills reste dans la largeur de la page.
