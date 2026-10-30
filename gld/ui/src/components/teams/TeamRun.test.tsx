@@ -37,6 +37,7 @@ const view = (o: Partial<teams.TeamView> = {}): teams.TeamView => ({
   Direct: [{ Author: "Max", To: "ada", Text: "bonjour Ada", At: 1000 }],
   Queued: 0,
   Permission: "",
+  PermissionTruncated: false,
   Unknown: [],
   ...o,
 })
@@ -136,6 +137,14 @@ describe("TeamRun", () => {
     await waitFor(() => expect(teams.teamKey).toHaveBeenCalledWith(NAME, "team-lead", "1", expect.any(String)))
     fireEvent.click(screen.getByRole("button", { name: "Non" }))
     await waitFor(() => expect(teams.teamKey).toHaveBeenCalledWith(NAME, "team-lead", "Escape", expect.any(String)))
+  })
+  it("permission tronquée : avertissement, Oui désactivé, Non actif", async () => {
+    mockGet(view({ Permission: "dlg", PermissionTruncated: true }))
+    render(<TeamRun name={NAME} />)
+    await screen.findByText("dlg")
+    expect(screen.getByText(/ouvrez l'écran/i)).toBeTruthy()
+    expect((screen.getByRole("button", { name: "Oui" }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole("button", { name: "Non" }) as HTMLButtonElement).disabled).toBe(false)
   })
   it("Unknown : marqueur format inconnu", async () => {
     mockGet(view({ Unknown: ["foo.json"] }))

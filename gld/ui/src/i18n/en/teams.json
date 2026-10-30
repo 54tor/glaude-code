@@ -39,6 +39,7 @@
     "finished": "finished",
     "permission": "Permission",
     "permTerminal": "Answer in the terminal",
+    "permTruncated": "Request truncated: open the screen to read it in full before answering.",
     "message": "Message",
     "edit": {
       "copyName": "{{name}} custom",

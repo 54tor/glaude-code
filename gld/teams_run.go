@@ -57,6 +57,7 @@ type TeamView struct {
 	Direct              []DirectMsg
 	Queued              int
 	Permission          string
+	PermissionTruncated bool
 	Unknown             []string
 }
 
@@ -152,23 +153,24 @@ func (c teamCtx) target(agent string) (pane string, ok bool) {
 
 // permission : l'écran du chef attend une réponse (screenAsks attrape aussi sa propre demande et les longues demandes) ; agent
 // nomme le coéquipier demandeur quand le titre « · from the X agent » est visible. captured faux : écran illisible.
-func (c teamCtx) permission() (agent, text string, asking, captured bool) {
+func (c teamCtx) permission() (agent, text string, trunc, asking, captured bool) {
 	if c.leadPane == "" {
-		return "", "", false, false
+		return "", "", false, false, false
 	}
 	scr, err := teamPanes.Capture(c.leadPane)
 	if err != nil {
-		return "", "", false, false
+		return "", "", false, false, false
 	}
 	if !screenAsks(scr) {
-		return "", "", false, true
+		return "", "", false, false, true
 	}
-	agent, text = permText(scr)
-	return agent, text, true, true
+	agent, text, trunc = permText(scr)
+	return agent, text, trunc, true, true
 }
 
 // permText : le texte de la demande visible à l'écran (même coupe que la vue), et le coéquipier demandeur si le titre est lisible.
-func permText(scr string) (agent, t string) {
+// trunc : des lignes ou des octets de la demande n'ont pas été gardés ; l'humain ne l'a pas vue en entier.
+func permText(scr string) (agent, t string, trunc bool) {
 	lines := strings.Split(strings.TrimRight(scr, " \n"), "\n")
 	if len(lines) > 80 {
 		lines = lines[len(lines)-80:]
@@ -177,26 +179,29 @@ func permText(scr string) (agent, t string) {
 	if from < 0 {
 		from = 0
 	}
+	titled := false
 	for i := len(lines) - 1; i >= 0; i-- {
 		if m := permTitleRe.FindStringSubmatch(lines[i]); m != nil {
-			agent, from = m[1], i
+			agent, from, titled = m[1], i, true
 			break
 		}
 	}
+	trunc = !titled && strings.TrimSpace(strings.Join(lines[:from], "")) != ""
 	t = strings.TrimRight(strings.Join(lines[from:], "\n"), " \n")
 	if len(t) > permCut {
+		trunc = true
 		t = t[:permCut]
 		for !utf8.ValidString(t) {
 			t = t[:len(t)-1]
 		}
 	}
-	return agent, t
+	return agent, t, trunc
 }
 
 // states : état de chaque agent par nom, et le texte d'une demande de permission en attente.
-func (c teamCtx) states() (map[string]string, string) {
+func (c teamCtx) states() (map[string]string, string, bool) {
 	st := map[string]string{}
-	who, ptxt, asking, captured := c.permission()
+	who, ptxt, trunc, asking, captured := c.permission()
 	idle := false
 	for _, id := range teamPanes.Idle() {
 		if id == c.tf.LeadSessionID {
@@ -225,7 +230,7 @@ func (c teamCtx) states() (map[string]string, string) {
 			st[m.Name] = "idle"
 		}
 	}
-	return st, ptxt
+	return st, ptxt, trunc
 }
 
 func paneMu(pane string) *sync.Mutex {
@@ -316,12 +321,12 @@ func teamView(cfgRoot, name string) (TeamView, error) {
 	if err != nil {
 		return TeamView{}, err
 	}
-	st, perm := c.states()
+	st, perm, trunc := c.states()
 	c.flush(cfgRoot, st)
 	cat, _ := loadCatalog(cfgRoot)
 	roster, _ := rosterRead(cfgRoot, name)
 	v := TeamView{Name: name, LeadSessionID: c.tf.LeadSessionID, Live: c.leadPane != "", Tasks: c.tf.Tasks,
-		Permission: perm, Unknown: c.tf.Unknown}
+		Permission: perm, PermissionTruncated: trunc, Unknown: c.tf.Unknown}
 	for _, m := range c.tf.Members {
 		pane := m.Pane
 		if m.Lead {
@@ -372,7 +377,7 @@ func teamSend(cfgRoot, name, author, to, text string) (bool, error) {
 	if pane == "" {
 		return false, terr("srv.teams_run.paneAbsent")
 	}
-	st, _ := c.states()
+	st, _, _ := c.states()
 	m := queuedMsg{author, to, text}
 	teamRunMu.Lock()
 	pending := false
@@ -396,6 +401,9 @@ func teamSend(cfgRoot, name, author, to, text string) (bool, error) {
 
 // teamKey : expect est la demande que l'humain a vue (vide : pas de comparaison). Sous le verrou du pane, rien ne part sans
 // dialogue en attente, ni si l'écran a changé depuis : une réponse ne valide jamais un dialogue non vu.
+// declineKeys : les touches qui refusent ou interrompent ; seules permises quand la demande n'a pas été vue en entier.
+var declineKeys = map[string]bool{"Escape": true, "n": true, "CtrlC": true}
+
 func teamKey(cfgRoot, name, agent, key, expect string) error {
 	if !teamNameRe.MatchString(name) {
 		return terr("srv.teams_run.nomInvalide")
@@ -424,8 +432,12 @@ func teamKey(cfgRoot, name, agent, key, expect string) error {
 	if cerr != nil || !screenAsks(scr) {
 		return terr("srv.teams_run.aucunDialogue")
 	}
+	_, fresh, trunc := permText(scr)
+	if trunc && !declineKeys[key] {
+		return terr("srv.teams_run.dialogueTronque")
+	}
 	if expect != "" {
-		if _, fresh := permText(scr); strings.TrimSpace(fresh) != strings.TrimSpace(expect) {
+		if strings.TrimSpace(fresh) != strings.TrimSpace(expect) {
 			return terr("srv.teams_run.dialogueChange")
 		}
 	}

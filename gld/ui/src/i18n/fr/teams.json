@@ -39,6 +39,7 @@
     "finished": "terminée",
     "permission": "Permission",
     "permTerminal": "Répondre dans le terminal",
+    "permTruncated": "Demande tronquée : ouvrez l'écran pour la lire en entier avant de répondre.",
     "message": "Message",
     "edit": {
       "copyName": "{{name}} perso",

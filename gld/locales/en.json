@@ -472,6 +472,7 @@
   "srv.teams_run.envoiImpossible": "send failed: {{.W1}}",
   "srv.teams_run.aucunDialogue": "no dialog is waiting for an answer in the terminal",
   "srv.teams_run.dialogueChange": "the dialog changed: read it again before answering",
+  "srv.teams_run.dialogueTronque": "the dialog is too long to be shown in full: open the screen to answer",
   "srv.teams_run.dialogueEnCours": "a dialog is waiting for an answer in the terminal",
   "srv.teams_run.captureImpossible": "cannot read the terminal: {{.W1}}",
   "srv.teams_run.fermetureImpossible": "cannot close the team: {{.W1}}",

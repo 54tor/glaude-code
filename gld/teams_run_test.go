@@ -410,7 +410,7 @@ func TestTeamKeyRefusesWhenDialogChanged(t *testing.T) {
 func TestTeamKeyOKWhenExpectMatches(t *testing.T) {
 	root, f := setup(t)
 	f.screens[trLPane] = permFixture(t)
-	_, txt := permText(f.screens[trLPane])
+	_, txt, _ := permText(f.screens[trLPane])
 	if err := teamKey(root, trName, "team-lead", "1", "  "+txt+"\n"); err != nil || len(f.keys) != 1 {
 		t.Fatal(err, f.keys)
 	}
@@ -674,5 +674,35 @@ func TestCloseAsksLeadStateForTheLeadSessionID(t *testing.T) {
 	teamClose(root, trName)
 	if len(f.leadIDs) != 1 || f.leadIDs[0] != tf.LeadSessionID {
 		t.Fatalf("ids : %v, attendu %q", f.leadIDs, tf.LeadSessionID)
+	}
+}
+
+func TestPermTextTruncated(t *testing.T) {
+	if _, _, tr := permText(permFixture(t)); tr {
+		t.Fatal("fixture should fit")
+	}
+	if _, _, tr := permText("x · from the yan agent\n" + strings.Repeat("a", permCut+10)); !tr {
+		t.Fatal("byte cut must be flagged")
+	}
+	if _, _, tr := permText(strings.Repeat("echo line\n", 40)); !tr {
+		t.Fatal("line cut must be flagged")
+	}
+	if _, _, tr := permText(strings.Repeat("echo line\n", 10)); tr {
+		t.Fatal("short screen is not truncated")
+	}
+}
+
+func TestTeamKeyRefusesApprovalWhenTruncated(t *testing.T) {
+	root, f := setup(t)
+	scr := permFixture(t)
+	f.screens[trLPane] = strings.Replace(scr, "Fetch · from the yan agent", strings.Repeat("a", permCut+10), 1)
+	if _, _, tr := permText(f.screens[trLPane]); !tr {
+		t.Fatal("setup: screen should be truncated")
+	}
+	if err := teamKey(root, trName, "team-lead", "1", ""); err == nil || len(f.keys) != 0 {
+		t.Fatal(err, f.keys)
+	}
+	if err := teamKey(root, trName, "team-lead", "Escape", ""); err != nil || len(f.keys) != 1 {
+		t.Fatal(err, f.keys)
 	}
 }

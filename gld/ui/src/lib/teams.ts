@@ -24,6 +24,7 @@ export type TeamView = {
   Direct: DirectMsg[]
   Queued: number
   Permission: string
+  PermissionTruncated: boolean
   Unknown: string[]
 }
 // Échec d'un lancement : conflicts vient du corps 409 (agents perso homonymes).

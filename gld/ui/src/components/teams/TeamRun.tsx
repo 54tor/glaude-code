@@ -179,9 +179,10 @@ export function TeamRun({ name }: { name: string }) {
     <div className="space-y-2 rounded-lg border border-amber-500/60 p-3">
       <div className="text-xs font-semibold uppercase text-muted-foreground">{t("teams.permission")}</div>
       <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-xs">{view.Permission}</pre>
+      {view.PermissionTruncated && <p className="text-xs text-destructive">{t("teams.permTruncated")}</p>}
       {exec && (
         <div className="flex gap-2">
-          <Button size="sm" disabled={!live || stale} onClick={() => void key("1")}>
+          <Button size="sm" disabled={!live || stale || view.PermissionTruncated} onClick={() => void key("1")}>
             {t("teams.yes")}
           </Button>
           <Button size="sm" variant="outline" disabled={!live || stale} onClick={() => void key("Escape")}>
