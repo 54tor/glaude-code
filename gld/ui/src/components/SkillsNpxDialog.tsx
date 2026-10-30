@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Download, Fan, Search } from "lucide-react"
 import { api, type SkillHit } from "@/lib/api"
 import { tilde } from "@/lib/format"
@@ -89,14 +89,17 @@ export function SkillsNpxPanel({
   home,
   onChange,
   fixed,
+  query,
 }: {
   projects: Project[]
   home: string
   onChange: () => void
   fixed?: string
+  query?: string // recherche portée par le parent : lancée après une pause de frappe, sans champ ni bouton ici
 }) {
   const { t } = useTranslation()
-  const [q, setQ] = useState("")
+  const [own, setQ] = useState("")
+  const q = query ?? own
   const [hits, setHits] = useState<SkillHit[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [pick, setPick] = useState<SkillHit | null>(null)
@@ -114,14 +117,34 @@ export function SkillsNpxPanel({
     ),
   ] as const
 
+  const seq = useRef(0) // seule la dernière recherche s'affiche
   const search = async () => {
-    if (!q.trim() || busy) return
+    if (!q.trim()) return
+    const n = ++seq.current
     setBusy(true)
     setErr("")
-    const r = await api.skillsFind(q.trim()).catch((e) => void setErr(errMsg(e) || t("skills.npx.searchFailed")))
+    const r = await api
+      .skillsFind(q.trim())
+      .catch(
+        (e) =>
+          void (
+            n === seq.current &&
+            setErr(errMsg(e) || t("skills.npx.searchFailed"))
+          )
+      )
+    if (n !== seq.current) return
     setBusy(false)
     if (r) setHits(r.hits ?? [])
   }
+  useEffect(() => {
+    if (query === undefined) return
+    const h = setTimeout(
+      () => (query.trim().length < 2 ? setHits(null) : search()),
+      500
+    )
+    return () => clearTimeout(h)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query])
   const install = async () => {
     if (!pick || busy) return
     setBusy(true)
@@ -181,25 +204,30 @@ export function SkillsNpxPanel({
     )
   return (
     <div className="space-y-2">
-      <form
-        className="flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault()
-          search()
-        }}
-      >
-        <Input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder={t("skills.npx.search")}
-          aria-label={t("skills.npx.search")}
-          maxLength={80}
-        />
-        <Button type="submit" variant="outline" disabled={busy || !q.trim()}>
-          {busy ? <Fan className="animate-spin" /> : <Search />}{" "}
-          {t("skills.npx.searchBtn")}
-        </Button>
-      </form>
+      {query === undefined && (
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            search()
+          }}
+        >
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={t("skills.npx.search")}
+            aria-label={t("skills.npx.search")}
+            maxLength={80}
+          />
+          <Button type="submit" variant="outline" disabled={busy || !q.trim()}>
+            {busy ? <Fan className="animate-spin" /> : <Search />}{" "}
+            {t("skills.npx.searchBtn")}
+          </Button>
+        </form>
+      )}
+      {query !== undefined && busy && (
+        <Fan className="size-4 animate-spin text-muted-foreground" />
+      )}
       {err && <p className="text-sm text-destructive">{err}</p>}
       {!!hits?.length && (
         <ul className="divide-y rounded-md border">
