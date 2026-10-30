@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -63,22 +64,45 @@ func ideExists(root *os.Root, rel string) bool {
 // de code qu'HFS+ ignore : sur APFS, HFS+, NTFS ou vfat, ces variantes désignent le même fichier.
 func ideCodePath(rel string) bool {
 	for _, seg := range strings.Split(rel, "/") {
-		seg, _, _ = strings.Cut(seg, ":")
-		seg = strings.Map(func(r rune) rune {
-			if r >= 0x200c && r <= 0x200f || r >= 0x202a && r <= 0x202e || r >= 0x206a && r <= 0x206f || r == 0xfeff {
-				return -1
-			}
-			return r
-		}, seg)
-		seg = strings.ToLower(strings.TrimRight(seg, ". "))
-		short, _, tilde := strings.Cut(seg, "~")
-		for _, n := range []string{".git", ".claude", ".mcp.json", ".gitattributes", ".gitmodules"} {
-			if strings.EqualFold(seg, n) || tilde && strings.HasPrefix(strings.ReplaceAll(n, ".", ""), short) {
-				return true
-			}
+		if ideSegIs(seg, ".git", ".claude", ".mcp.json", ".gitattributes", ".gitmodules") {
+			return true
 		}
 	}
 	return false
+}
+
+// ideSegIs : seg désigne l'un des noms, avec la même normalisation que ideCodePath.
+func ideSegIs(seg string, names ...string) bool {
+	seg, _, _ = strings.Cut(seg, ":")
+	seg = strings.Map(func(r rune) rune {
+		if r >= 0x200c && r <= 0x200f || r >= 0x202a && r <= 0x202e || r >= 0x206a && r <= 0x206f || r == 0xfeff {
+			return -1
+		}
+		return r
+	}, seg)
+	seg = strings.ToLower(strings.TrimRight(seg, ". "))
+	short, _, tilde := strings.Cut(seg, "~")
+	for _, n := range names {
+		if strings.EqualFold(seg, n) || tilde && strings.HasPrefix(strings.ReplaceAll(n, ".", ""), short) {
+			return true
+		}
+	}
+	return false
+}
+
+// ideCodeRestore : le from d'une entrée de corbeille (lu par la passerelle, qui ne voit pas le corps du handler) est un chemin
+// exécutable. Entrée illisible : false, le handler échoue lui aussi.
+func ideCodeRestore(dir, id string) bool {
+	if !ideTrashID.MatchString(id) || dir == "" || strings.ContainsRune(dir, 0) || !filepath.IsAbs(dir) {
+		return false
+	}
+	root, err := os.OpenRoot(filepath.Clean(dir))
+	if err != nil {
+		return false
+	}
+	defer root.Close()
+	from, err := ideReadFrom(root, id)
+	return err == nil && ideCodePath(from)
 }
 
 // ideCodeDenied : répond 403 et renvoie true si rel est un chemin exécutable et que l'appelant n'a pas config_write.
@@ -103,7 +127,10 @@ func ideCodeDenied(w http.ResponseWriter, r *http.Request, rels ...string) bool 
 	return true
 }
 
-func ideInTrash(rel string) bool { return rel == ideTrash || strings.HasPrefix(rel, ideTrash+"/") }
+func ideInTrash(rel string) bool {
+	first, _, _ := strings.Cut(rel, "/")
+	return ideSegIs(first, ideTrash)
+}
 
 // ideOpen ouvre la racine et valide un chemin non vide ; l'appelant ferme root.
 func ideOpen(dir, p string) (*os.Root, string, error) {
@@ -473,6 +500,9 @@ func routesIDEWrite(mux *http.ServeMux) {
 			writeErr(w, http.StatusBadRequest, "too_many_items", L("srv.http_util.tropDElements"))
 			return
 		}
+		if ideCodeDenied(w, r, paths...) {
+			return
+		}
 		root, err := ideOpenRoot(dir)
 		if err != nil {
 			ideFail(w, err)
@@ -580,6 +610,9 @@ func routesIDEWrite(mux *http.ServeMux) {
 		from, err := ideRel(fromRaw, false)
 		if err != nil || ideInTrash(from) {
 			ideFail(w, errIdePath)
+			return
+		}
+		if ideCodeDenied(w, r, from) {
 			return
 		}
 		if _, err := ideLstat(root, base+"/item"); err != nil {

@@ -365,6 +365,10 @@ func gateCheck(g *gateInfo, r *http.Request, pat string, need Right) (int, strin
 			return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] && m[RightConfigWrite] })
 		}
 	}
+	// Le home enfant ne voit aucune passerelle (ideCodeDenied n'y décide rien) : config_write sur les chemins exécutables se tranche ici.
+	if fsCodeWrite(r, pat) {
+		return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] && m[RightConfigWrite] })
+	}
 	if pat == "POST /v1/memory/merges" || pat == "POST /v1/snippets/merges" {
 		var req struct{ Launch bool }
 		if err := peekJSON(r, &req); err != nil {
@@ -390,6 +394,26 @@ func gateCheck(g *gateInfo, r *http.Request, pat string, need Right) (int, strin
 		}
 	}
 	return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] })
+}
+
+// fsCodeWrite : la requête d'écriture de l'IDE touche un chemin exécutable (ideCodePath). Corps illisible ou trop gros : oui.
+func fsCodeWrite(r *http.Request, pat string) bool {
+	q := r.URL.Query()
+	switch pat {
+	case "PUT /v1/fs/entries/content":
+		return ideCodePath(q.Get("path"))
+	case "DELETE /v1/fs/entries":
+		return ideCodePath(strings.Join(q["item"], "/"))
+	case "POST /v1/fs/entries":
+		var req struct{ Path string }
+		return peekJSON(r, &req) != nil || ideCodePath(req.Path)
+	case "PATCH /v1/fs/entries":
+		var req struct{ From, To string }
+		return peekJSON(r, &req) != nil || ideCodePath(req.From) || ideCodePath(req.To)
+	case "PATCH /v1/fs/trash/{entry}":
+		return ideCodeRestore(q.Get("dir"), pathSeg(r, 3))
+	}
+	return false
 }
 
 // vgroupsAddsDirs : les dossiers enregistrés servent de racines à l'IDE, et POST /v1/directories (exec) est le seul moyen
