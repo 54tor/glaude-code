@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
 // Recherche d'une vue de sessions : par nom, ou (mode avancé) aussi dans le texte des conversations.
-export function SessionSearch({ q, setQ, adv, setAdv, searching }: { q: string; setQ: (v: string) => void; adv: boolean; setAdv: (v: boolean) => void; searching: boolean }) {
+export function SessionSearch({ q, setQ, adv, setAdv, searching, memory }: { q: string; setQ: (v: string) => void; adv: boolean; setAdv: (v: boolean) => void; searching: boolean; memory?: boolean }) {
   const { t } = useTranslation()
   const clearAndBlurOnEscape = (keyboardEvent: React.KeyboardEvent<HTMLInputElement>) => {
     if (keyboardEvent.key !== "Escape") return
@@ -18,7 +18,7 @@ export function SessionSearch({ q, setQ, adv, setAdv, searching }: { q: string; 
         value={q}
         onChange={(changeEvent) => setQ(changeEvent.target.value)}
         onKeyDown={clearAndBlurOnEscape}
-        placeholder={adv ? t("shell.search.placeholderContent") : t("shell.search.placeholder")}
+        placeholder={memory ? t("shell.search.placeholderMemory") : adv ? t("shell.search.placeholderContent") : t("shell.search.placeholder")}
         aria-label={t("shell.search.label")}
         className="h-7 bg-background pr-12 pl-8 shadow-none md:pr-28"
       />
@@ -32,9 +32,9 @@ export function SessionSearch({ q, setQ, adv, setAdv, searching }: { q: string; 
             </button>
           )
         )}
-        <Button size="xs" variant={adv ? "secondary" : "ghost"} aria-pressed={adv} onClick={() => setAdv(!adv)} title={t("shell.search.contentHint")}>
+        {!memory && <Button size="xs" variant={adv ? "secondary" : "ghost"} aria-pressed={adv} onClick={() => setAdv(!adv)} title={t("shell.search.contentHint")}>
           <FileText /> <span className="max-md:sr-only">{t("shell.search.content")}</span>
-        </Button>
+        </Button>}
       </div>
     </div>
   )
