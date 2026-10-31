@@ -6,7 +6,7 @@ import { cn, copyText, isSend, keyHint } from "@/lib/utils"
 import { modeOfScreen, parseBtw, parsePrompt, type Opt } from "@/lib/prompt"
 import { type Live } from "./LiveStatus"
 import { toast } from "sonner"
-import { Bug, Copy, GitFork, Minimize2, Power, Snowflake, Send, Square, SquareCheck, X } from "lucide-react"
+import { Bug, Copy, GitFork, Minimize2, Power, Snowflake, Send, SendHorizontal, Square, SquareCheck, X } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
 import { draftOf, setDraft, useDraft } from "@/hooks/useDraft"
 import { efforts, models, withChoice, type Choice } from "@/lib/models"
@@ -26,6 +26,7 @@ const MAX_MESSAGE_LENGTH = 32000
 const KEEP_FOCUS_WINDOW_MS = 8000
 const OWN_TURN_GRACE_MS = 30_000
 const LIVE_SEND_TIMEOUT_MS = 20_000
+const INTERRUPT_SETTLE_MS = 400
 const LIVE_MODE_POLL_MS = 3000
 const LIVE_MODE_REREAD_DELAY_MS = 400
 const SCREEN_POLL_MS = 1500
@@ -71,7 +72,7 @@ async function retryItem(id: string, item: QItem) {
   }
 }
 // Une ligne de la file. Un envoi incertain se tranche (renvoyer ou retirer) ; un envoi en cours ne se retire plus.
-function QueueRow({ id, item, index, label }: { id: string; item: QItem; index: number; label?: ReactNode }) {
+function QueueRow({ id, item, index, label, onSendNow }: { id: string; item: QItem; index: number; label?: ReactNode; onSendNow?: (item: QItem) => void }) {
   const { t } = useTranslation()
   let status: ReactNode
   if (item.state === "uncertain") {
@@ -96,6 +97,11 @@ function QueueRow({ id, item, index, label }: { id: string; item: QItem; index: 
         {item.text}
       </span>
       {status}
+      {onSendNow && item.state === "queued" && (
+        <Button size="xs" variant="outline" title={t("conversation.composer.sendNowTitle")} onClick={() => onSendNow(item)}>
+          <SendHorizontal /> {t("conversation.composer.sendNow")}
+        </Button>
+      )}
       {item.state !== "sending" && (
         <Button size="icon-xs" variant="ghost" aria-label={t("conversation.composer.dequeue")} onClick={() => void removeFromQueue(id, item)}>
           <X />
@@ -127,16 +133,16 @@ const fieldRef = (element: HTMLTextAreaElement | null) => {
   field = element
   if (element && Date.now() < focusUntil) element.focus()
 }
+export const focusComposer = () => {
+  if (window.matchMedia("(pointer: coarse)").matches) return // pas de clavier virtuel qui jaillit à l'ouverture
+  keepFocus()
+}
 const keepFocus = () => {
   focusUntil = Date.now() + KEEP_FOCUS_WINDOW_MS
   field?.focus()
   requestAnimationFrame(() => field?.focus()) // après le rendu qui suit l'envoi
 }
 
-export const focusComposer = () => {
-  if (window.matchMedia("(pointer: coarse)").matches) return // pas de clavier virtuel qui jaillit à l'ouverture
-  keepFocus()
-}
 export type Turn = { id: string; msgs: Msg[]; running: boolean; error?: string; cost?: number }
 
 // Écrire dans la session depuis le navigateur : claude -p --resume, réponse relayée au fil de l'eau (NDJSON).
@@ -478,6 +484,22 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
     onSent()
     keepFocus()
   }
+  // Envoi avec interruption : le message sort de la file, Échap coupe la réponse en cours, puis il part.
+  const sendNow = async (item: QItem) => {
+    let queuedText: string
+    try {
+      queuedText = (await api.queueRm(id, item.id)).text ?? item.text
+    } catch (error) {
+      toast.error(errMsg(error))
+      return
+    } finally {
+      refreshPending()
+    }
+    await api.sessionKey(id, "Escape").catch((error) => toast.error(errMsg(error)))
+    await new Promise((resolve) => setTimeout(resolve, INTERRUPT_SETTLE_MS))
+    if (!(await post(queuedText))) setText(appendToDraft(draftOf(id).text, queuedText))
+    else onSent()
+  }
   let headOfQueueLabel: string | undefined
   if (asking) headOfQueueLabel = t("conversation.composer.afterQuestion")
   else if (working) headOfQueueLabel = t("conversation.composer.whenIdle")
@@ -593,7 +615,7 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
         {queue.length > 0 && (
           <ul className="space-y-1 text-xs" aria-label={t("conversation.composer.queueAria")}>
             {queue.map((queueItem, queueIndex) => (
-              <QueueRow key={queueItem.id} id={id} item={queueItem} index={queueIndex} label={queueIndex === 0 ? headOfQueueLabel : undefined} />
+              <QueueRow key={queueItem.id} id={id} item={queueItem} index={queueIndex} label={queueIndex === 0 ? headOfQueueLabel : undefined} onSendNow={working && !asking ? sendNow : undefined} />
             ))}
           </ul>
         )}
