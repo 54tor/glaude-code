@@ -11,20 +11,20 @@ const tName = "session-9d087000"
 
 func teamRoot(t *testing.T, fixtures bool) (string, string) {
 	root := t.TempDir()
-	d := filepath.Join(root, "teams", tName)
-	if err := os.MkdirAll(filepath.Join(d, "inboxes"), 0o755); err != nil {
+	dir := filepath.Join(root, "teams", tName)
+	if err := os.MkdirAll(filepath.Join(dir, "inboxes"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if fixtures {
 		for src, dst := range map[string]string{"config.json": "config.json", "inbox-ada.json": "inboxes/ada.json", "inbox-team-lead.json": "inboxes/team-lead.json"} {
-			b, err := os.ReadFile(filepath.Join("testdata", "teams", src))
+			data, err := os.ReadFile(filepath.Join("testdata", "teams", src))
 			if err != nil {
 				t.Fatal(err)
 			}
-			os.WriteFile(filepath.Join(d, dst), b, 0o644)
+			os.WriteFile(filepath.Join(dir, dst), data, 0o644)
 		}
 	}
-	return root, d
+	return root, dir
 }
 
 func TestReadTeamFixture(t *testing.T) {
@@ -43,16 +43,16 @@ func TestReadTeamFixture(t *testing.T) {
 	if len(tf.Inbox) != 2 {
 		t.Fatalf("%+v", tf.Inbox)
 	}
-	m := tf.Inbox[0]
-	if m.From != "team-lead" || m.To != "ada" || m.Kind != "message" || m.At == 0 || m.ID == "" || m.Summary == "" || m.Read || tf.Inbox[1].At < m.At {
-		t.Fatalf("%+v", m)
+	inboxMsg := tf.Inbox[0]
+	if inboxMsg.From != "team-lead" || inboxMsg.To != "ada" || inboxMsg.Kind != "message" || inboxMsg.At == 0 || inboxMsg.ID == "" || inboxMsg.Summary == "" || inboxMsg.Read || tf.Inbox[1].At < inboxMsg.At {
+		t.Fatalf("%+v", inboxMsg)
 	}
 }
 
 func TestReadTeamBadName(t *testing.T) {
-	for _, n := range []string{"../x", "session-ZZ", ""} {
-		if _, err := readTeam(t.TempDir(), n); !isMsg(err, "srv.teams_files.nomInvalide") {
-			t.Fatalf("%q: %v", n, err)
+	for _, name := range []string{"../x", "session-ZZ", ""} {
+		if _, err := readTeam(t.TempDir(), name); !isMsg(err, "srv.teams_files.nomInvalide") {
+			t.Fatalf("%q: %v", name, err)
 		}
 	}
 	if _, err := readTeam(t.TempDir(), tName); !isMsg(err, "srv.teams_files.equipeIntrouvable") {
@@ -61,8 +61,8 @@ func TestReadTeamBadName(t *testing.T) {
 }
 
 func TestReadTeamTruncatedJSON(t *testing.T) {
-	root, d := teamRoot(t, true)
-	os.WriteFile(filepath.Join(d, "config.json"), []byte(`{"name": "x", "members": [{"na`), 0o644)
+	root, dir := teamRoot(t, true)
+	os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"name": "x", "members": [{"na`), 0o644)
 	tf, err := readTeam(root, tName)
 	if err != nil || len(tf.Unknown) != 1 || tf.Unknown[0] != "teams/"+tName+"/config.json" || len(tf.Inbox) != 2 {
 		t.Fatalf("%v %+v", err, tf)
@@ -70,8 +70,8 @@ func TestReadTeamTruncatedJSON(t *testing.T) {
 }
 
 func TestReadTeamExtraFields(t *testing.T) {
-	root, d := teamRoot(t, false)
-	os.WriteFile(filepath.Join(d, "config.json"), []byte(`{"futur":{"a":1},"members":[{"name":"a","tmuxPaneId":"%3","zzz":[1]}]}`), 0o644)
+	root, dir := teamRoot(t, false)
+	os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"futur":{"a":1},"members":[{"name":"a","tmuxPaneId":"%3","zzz":[1]}]}`), 0o644)
 	tf, err := readTeam(root, tName)
 	if err != nil || len(tf.Unknown) != 0 || len(tf.Members) != 1 || tf.Members[0].Pane != "%3" {
 		t.Fatalf("%v %+v", err, tf)
@@ -80,8 +80,8 @@ func TestReadTeamExtraFields(t *testing.T) {
 
 func TestListTeamsIgnoresStrangeDirs(t *testing.T) {
 	root := t.TempDir()
-	for _, n := range []string{"session-bbbbbbbb", "session-aaaaaaaa", "session-ZZ", "autre", "session-cccccccc"} {
-		os.MkdirAll(filepath.Join(root, "teams", n), 0o755)
+	for _, name := range []string{"session-bbbbbbbb", "session-aaaaaaaa", "session-ZZ", "autre", "session-cccccccc"} {
+		os.MkdirAll(filepath.Join(root, "teams", name), 0o755)
 	}
 	os.WriteFile(filepath.Join(root, "teams", "session-dddddddd"), nil, 0o644)
 	os.Symlink(root, filepath.Join(root, "teams", "session-eeeeeeee"))
@@ -95,8 +95,8 @@ func TestListTeamsIgnoresStrangeDirs(t *testing.T) {
 }
 
 func TestReadTeamPaneValidated(t *testing.T) {
-	root, d := teamRoot(t, false)
-	os.WriteFile(filepath.Join(d, "config.json"), []byte(`{"members":[{"name":"a","tmuxPaneId":"%1; rm -rf"},{"name":"b","tmuxPaneId":"%12"}]}`), 0o644)
+	root, dir := teamRoot(t, false)
+	os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"members":[{"name":"a","tmuxPaneId":"%1; rm -rf"},{"name":"b","tmuxPaneId":"%12"}]}`), 0o644)
 	tf, _ := readTeam(root, tName)
 	if tf.Members[0].Pane != "" || tf.Members[1].Pane != "%12" {
 		t.Fatalf("%+v", tf.Members)
@@ -104,10 +104,10 @@ func TestReadTeamPaneValidated(t *testing.T) {
 }
 
 func TestReadTeamSymlinkSkipped(t *testing.T) {
-	root, d := teamRoot(t, true)
+	root, dir := teamRoot(t, true)
 	out := filepath.Join(root, "dehors.json")
 	os.WriteFile(out, []byte(`[{"from":"x","msg_id":"z"}]`), 0o644)
-	os.Symlink(out, filepath.Join(d, "inboxes", "evil.json"))
+	os.Symlink(out, filepath.Join(dir, "inboxes", "evil.json"))
 	os.MkdirAll(filepath.Join(root, "tasks"), 0o755)
 	os.Symlink(root, filepath.Join(root, "tasks", tName))
 	tf, err := readTeam(root, tName)
@@ -115,10 +115,10 @@ func TestReadTeamSymlinkSkipped(t *testing.T) {
 		t.Fatalf("%v %+v", err, tf)
 	}
 	// config.json lui-même en lien
-	os.Remove(filepath.Join(d, "config.json"))
+	os.Remove(filepath.Join(dir, "config.json"))
 	cfg := filepath.Join(root, "cfg-dehors.json")
 	os.WriteFile(cfg, []byte(`{"members":[{"name":"intrus"}]}`), 0o644)
-	os.Symlink(cfg, filepath.Join(d, "config.json"))
+	os.Symlink(cfg, filepath.Join(dir, "config.json"))
 	tf, _ = readTeam(root, tName)
 	if len(tf.Members) != 0 {
 		t.Fatal("lien suivi")
@@ -129,8 +129,8 @@ func TestReadTeamIdleKind(t *testing.T) {
 	root, _ := teamRoot(t, true)
 	tf, _ := readTeam(root, tName)
 	var idle, msg int
-	for _, m := range tf.Inbox {
-		switch m.Kind {
+	for _, inboxMsg := range tf.Inbox {
+		switch inboxMsg.Kind {
 		case "idle":
 			idle++
 		case "message":
@@ -140,18 +140,18 @@ func TestReadTeamIdleKind(t *testing.T) {
 	if idle != 1 || msg != 1 {
 		t.Fatalf("%+v", tf.Inbox)
 	}
-	for _, m := range tf.Inbox {
-		if m.Kind == "idle" && !strings.Contains(m.Text, "/tmp/gld-spike-perm.txt") {
-			t.Fatalf("texte idle : %q", m.Text)
+	for _, inboxMsg := range tf.Inbox {
+		if inboxMsg.Kind == "idle" && !strings.Contains(inboxMsg.Text, "/tmp/gld-spike-perm.txt") {
+			t.Fatalf("texte idle : %q", inboxMsg.Text)
 		}
 	}
 }
 
 func TestReadTeamWrongTypes(t *testing.T) {
-	root, d := teamRoot(t, false)
-	os.WriteFile(filepath.Join(d, "config.json"), []byte(`{"members":{"a":1},"leadProcess":"x","leadSessionId":5}`), 0o644)
-	os.WriteFile(filepath.Join(d, "inboxes", "a.json"), []byte(`[{"from":3,"timestamp":12,"text":null,"read":"oui","msg_id":[]}, 7, null]`), 0o644)
-	os.WriteFile(filepath.Join(d, "inboxes", "b.json"), []byte(`{"pas":"un tableau"}`), 0o644)
+	root, dir := teamRoot(t, false)
+	os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"members":{"a":1},"leadProcess":"x","leadSessionId":5}`), 0o644)
+	os.WriteFile(filepath.Join(dir, "inboxes", "a.json"), []byte(`[{"from":3,"timestamp":12,"text":null,"read":"oui","msg_id":[]}, 7, null]`), 0o644)
+	os.WriteFile(filepath.Join(dir, "inboxes", "b.json"), []byte(`{"pas":"un tableau"}`), 0o644)
 	tf, err := readTeam(root, tName)
 	if err != nil || len(tf.Inbox) != 1 || tf.Inbox[0].At != 0 || tf.Inbox[0].Kind != "message" || len(tf.Unknown) != 1 {
 		t.Fatalf("%v %+v", err, tf)

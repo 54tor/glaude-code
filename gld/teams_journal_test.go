@@ -34,15 +34,15 @@ func TestJournalRoundTrip(t *testing.T) {
 
 func TestJournalBadTeamName(t *testing.T) {
 	root := t.TempDir()
-	for _, n := range []string{"../x", "session-ZZ", ""} {
-		if journalAppend(root, n, DirectMsg{Author: "a", Text: "b"}) == nil {
-			t.Fatal(n)
+	for _, name := range []string{"../x", "session-ZZ", ""} {
+		if journalAppend(root, name, DirectMsg{Author: "a", Text: "b"}) == nil {
+			t.Fatal(name)
 		}
-		if _, err := journalRead(root, n); err == nil {
-			t.Fatal(n)
+		if _, err := journalRead(root, name); err == nil {
+			t.Fatal(name)
 		}
-		if journalDrop(root, n) == nil {
-			t.Fatal(n)
+		if journalDrop(root, name) == nil {
+			t.Fatal(name)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(root, "gld-teams-journal")); !os.IsNotExist(err) {
@@ -71,19 +71,19 @@ func TestJournalDrop(t *testing.T) {
 func TestJournalConcurrentAppend(t *testing.T) {
 	root := t.TempDir()
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
+	for index := 0; index < 50; index++ {
 		wg.Add(1)
-		go func(i int) {
+		go func(index int) {
 			defer wg.Done()
-			if err := journalAppend(root, jTeam, DirectMsg{Author: "a", Text: fmt.Sprint(i)}); err != nil {
+			if err := journalAppend(root, jTeam, DirectMsg{Author: "a", Text: fmt.Sprint(index)}); err != nil {
 				t.Error(err)
 			}
-		}(i)
+		}(index)
 	}
 	wg.Wait()
-	b, _ := os.ReadFile(filepath.Join(root, "gld-teams-journal", jTeam+".jsonl"))
-	if n := strings.Count(string(b), "\n"); n != 50 {
-		t.Fatal(n)
+	data, _ := os.ReadFile(filepath.Join(root, "gld-teams-journal", jTeam+".jsonl"))
+	if count := strings.Count(string(data), "\n"); count != 50 {
+		t.Fatal(count)
 	}
 	ms, _ := journalRead(root, jTeam)
 	if len(ms) != 50 {
@@ -94,10 +94,10 @@ func TestJournalConcurrentAppend(t *testing.T) {
 func TestJournalSkipsMalformedLine(t *testing.T) {
 	root := t.TempDir()
 	journalAppend(root, jTeam, DirectMsg{Author: "a", Text: "un"})
-	p := filepath.Join(root, "gld-teams-journal", jTeam+".jsonl")
-	f, _ := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0o600)
-	f.WriteString("{\"Author\":\"x\",\"Te\n")
-	f.Close()
+	path := filepath.Join(root, "gld-teams-journal", jTeam+".jsonl")
+	file, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
+	file.WriteString("{\"Author\":\"x\",\"Te\n")
+	file.Close()
 	journalAppend(root, jTeam, DirectMsg{Author: "a", Text: "deux"})
 	ms, err := journalRead(root, jTeam)
 	if err != nil || len(ms) != 2 {
@@ -111,12 +111,12 @@ func TestJournalSanitises(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := mustOne(t, root)
-	if strings.ContainsAny(m.Author+m.To, "\x00\n\x07") || []rune(m.Author)[0] != 'a' {
-		t.Fatalf("%q %q", m.Author, m.To)
+	directMsg := mustOne(t, root)
+	if strings.ContainsAny(directMsg.Author+directMsg.To, "\x00\n\x07") || []rune(directMsg.Author)[0] != 'a' {
+		t.Fatalf("%q %q", directMsg.Author, directMsg.To)
 	}
-	if len([]rune(m.Author)) != 64 || m.To != "bob" || len(m.Text) != 8000 {
-		t.Fatal(len([]rune(m.Author)), m.To, len(m.Text))
+	if len([]rune(directMsg.Author)) != 64 || directMsg.To != "bob" || len(directMsg.Text) != 8000 {
+		t.Fatal(len([]rune(directMsg.Author)), directMsg.To, len(directMsg.Text))
 	}
 	for _, bad := range []DirectMsg{{Author: " ", Text: "x"}, {Author: "a"}} {
 		if !isMsg(journalAppend(root, jTeam, bad), "srv.teams_journal.messageInvalide") {
@@ -136,14 +136,14 @@ func mustOne(t *testing.T, root string) DirectMsg {
 func TestJournalFull(t *testing.T) {
 	root := t.TempDir()
 	journalAppend(root, jTeam, DirectMsg{Author: "a", Text: "x"})
-	p := filepath.Join(root, "gld-teams-journal", jTeam+".jsonl")
-	if err := os.Truncate(p, journalMax); err != nil {
+	path := filepath.Join(root, "gld-teams-journal", jTeam+".jsonl")
+	if err := os.Truncate(path, journalMax); err != nil {
 		t.Fatal(err)
 	}
 	if !isMsg(journalAppend(root, jTeam, DirectMsg{Author: "a", Text: "y"}), "srv.teams_journal.journalPlein") {
 		t.Fatal("pas d'erreur")
 	}
-	if st, _ := os.Stat(p); st.Size() != journalMax {
+	if st, _ := os.Stat(path); st.Size() != journalMax {
 		t.Fatal("modifié")
 	}
 }
@@ -167,15 +167,15 @@ func TestJournalSymlinkRefused(t *testing.T) {
 	if _, err := journalRead(root, jTeam); !isMsg(err, "srv.teams_journal.lienRefuse") {
 		t.Fatal(err)
 	}
-	if b, _ := os.ReadFile(target); len(b) != 0 {
+	if data, _ := os.ReadFile(target); len(data) != 0 {
 		t.Fatal("cible écrite")
 	}
 }
 
 func TestJournalReadLast500(t *testing.T) {
 	root := t.TempDir()
-	for i := 0; i < 520; i++ {
-		journalAppend(root, jTeam, DirectMsg{Author: "a", Text: fmt.Sprint(i)})
+	for index := 0; index < 520; index++ {
+		journalAppend(root, jTeam, DirectMsg{Author: "a", Text: fmt.Sprint(index)})
 	}
 	ms, _ := journalRead(root, jTeam)
 	if len(ms) != 500 || ms[0].Text != "20" || ms[499].Text != "519" {
@@ -186,10 +186,10 @@ func TestJournalReadLast500(t *testing.T) {
 func TestJournalRecoversAfterPartialLine(t *testing.T) {
 	root := t.TempDir()
 	journalAppend(root, jTeam, DirectMsg{Author: "a", Text: "un"})
-	p := filepath.Join(root, "gld-teams-journal", jTeam+".jsonl")
-	f, _ := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0o600)
-	f.WriteString(`{"Author":"x","Te`)
-	f.Close()
+	path := filepath.Join(root, "gld-teams-journal", jTeam+".jsonl")
+	file, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
+	file.WriteString(`{"Author":"x","Te`)
+	file.Close()
 	journalAppend(root, jTeam, DirectMsg{Author: "a", Text: "deux"})
 	ms, err := journalRead(root, jTeam)
 	if err != nil || len(ms) != 2 || ms[1].Text != "deux" {
