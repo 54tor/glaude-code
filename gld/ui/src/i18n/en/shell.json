@@ -227,6 +227,10 @@
       "updateUnknown": "Version not checked.",
       "upToDate": "Up to date: {{current}}",
       "claudeUpToDate": "Claude Code up to date: {{current}}",
+      "openExtensions": "Open in Extensions",
+      "copyName": "Copy name",
+      "copied": "Copied",
+      "copyClaudeUpdate": "Copy \"claude update\"",
       "paletteHint": "Ctrl+K: jump to a page, a session, a skill or a setting."
     },
     "palette": {

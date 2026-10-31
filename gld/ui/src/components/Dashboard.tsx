@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowUpCircle, Fan, Keyboard, MessageSquare, Plug, RefreshCw } from "lucide-react"
+import { ArrowUpCircle, ExternalLink, Fan, Keyboard, MessageSquare, Plug, RefreshCw } from "lucide-react"
 import { api, type McpServer } from "@/lib/api"
 import { ago, tilde } from "@/lib/format"
 import type { Route } from "@/lib/route"
 import { Button } from "@/components/ui/button"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
+import { toast } from "sonner"
+import { copyText } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import type { Row } from "./actions"
+import { CM, SessionItems } from "./SessionMenu"
 
 const MAX = 8
 
@@ -41,14 +45,21 @@ export function Dashboard({ open, closed, waiting, now, home, go, read }: { open
     rows.length ? (
       <ul className="divide-y">
         {rows.slice(0, MAX).map((r) => (
-          <li key={r.s.id}>
-            <button type="button" onClick={() => read(r.s)} className="flex w-full items-center gap-2 py-1.5 text-left text-sm hover:bg-muted/50">
-              <span className="min-w-0 flex-1 truncate">{r.s.title}</span>
-              {waiting.has(r.s.id) && <span className="shrink-0 rounded bg-warning/15 px-1 text-2xs text-warning uppercase">{t("shell.dash.waiting")}</span>}
-              <span className="shrink-0 text-xs text-muted-foreground">{tilde(r.g.project, home)}</span>
-              <span className="w-14 shrink-0 text-right text-xs text-muted-foreground tabular-nums">{ago(now - r.s.mtime)}</span>
-            </button>
-          </li>
+          <ContextMenu key={r.s.id}>
+            <ContextMenuTrigger asChild>
+              <li>
+                <button type="button" onClick={() => read(r.s)} className="flex w-full items-center gap-2 py-1.5 text-left text-sm hover:bg-muted/50">
+                  <span className="min-w-0 flex-1 truncate">{r.s.title}</span>
+                  {waiting.has(r.s.id) && <span className="shrink-0 rounded bg-warning/15 px-1 text-2xs text-warning uppercase">{t("shell.dash.waiting")}</span>}
+                  <span className="shrink-0 text-xs text-muted-foreground">{tilde(r.g.project, home)}</span>
+                  <span className="w-14 shrink-0 text-right text-xs text-muted-foreground tabular-nums">{ago(now - r.s.mtime)}</span>
+                </button>
+              </li>
+            </ContextMenuTrigger>
+            <ContextMenuContent className="w-64">
+              <SessionItems M={CM} row={r} full />
+            </ContextMenuContent>
+          </ContextMenu>
         ))}
       </ul>
     ) : (
@@ -84,16 +95,32 @@ export function Dashboard({ open, closed, waiting, now, home, go, read }: { open
           ) : names.length ? (
             <ul className="grid gap-x-4 sm:grid-cols-2">
               {names.map((n) => (
-                <li key={n} className="flex items-center gap-2 py-1 text-sm" title={status?.[n]}>
-                  <span className={status ? (up(n) ? "text-success" : "text-warning") : "text-muted-foreground"}>●</span>
-                  <span className="truncate">{n}</span>
-                </li>
+                <ContextMenu key={n}>
+                  <ContextMenuTrigger asChild>
+                    <li className="flex items-center gap-2 py-1 text-sm" title={status?.[n]}>
+                      <span className={status ? (up(n) ? "text-success" : "text-warning") : "text-muted-foreground"}>●</span>
+                      <span className="truncate">{n}</span>
+                    </li>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent className="w-56">
+                    <ContextMenuItem onSelect={recheck} disabled={checking}>
+                      <RefreshCw /> {t("shell.dash.recheck")}
+                    </ContextMenuItem>
+                    <ContextMenuItem onSelect={() => go({ kind: "extensions" })}>
+                      <Plug /> {t("shell.dash.openExtensions")}
+                    </ContextMenuItem>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem onSelect={() => void copyText(n).then(() => toast.success(t("shell.dash.copied")))}>{t("shell.dash.copyName")}</ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
               ))}
             </ul>
           ) : (
             <p className="py-3 text-sm text-muted-foreground">{t("shell.dash.noMcp")}</p>
           )}
         </section>
+        <ContextMenu>
+        <ContextMenuTrigger asChild>
         <section className={card}>
           <h3 className={head}>
             <ArrowUpCircle className="size-4" /> {t("shell.dash.update")}
@@ -121,6 +148,23 @@ export function Dashboard({ open, closed, waiting, now, home, go, read }: { open
             <Keyboard className="size-3.5" /> {t("shell.dash.paletteHint")}
           </p>
         </section>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-64">
+          <ContextMenuItem onSelect={recheckUpd} disabled={checkingUpd}>
+            <RefreshCw /> {t("shell.dash.updateCheck")}
+          </ContextMenuItem>
+          {u?.newer && (
+            <ContextMenuItem onSelect={() => window.open(u.url, "_blank", "noopener")}>
+              <ExternalLink /> {t("shell.app.updateOpen")}
+            </ContextMenuItem>
+          )}
+          {u?.claudeNewer && (
+            <ContextMenuItem onSelect={() => void copyText("claude update").then(() => toast.success(t("shell.dash.copied")))}>
+              {t("shell.dash.copyClaudeUpdate")}
+            </ContextMenuItem>
+          )}
+        </ContextMenuContent>
+        </ContextMenu>
       </div>
     </ScrollArea>
   )
