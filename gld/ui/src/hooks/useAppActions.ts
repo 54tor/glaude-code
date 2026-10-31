@@ -64,6 +64,7 @@ export function useAppActions(context: {
   setInfo: (localRow: Row | null) => void
   setShare: (anotherRow: Row | null) => void
   setPicker: (localPick: Pick | null) => void
+  onSessionsClosed?: (closedSessionIds: Set<string>) => void
 }) {
   const {
     data,
@@ -94,6 +95,7 @@ export function useAppActions(context: {
     setInfo,
     setShare,
     setPicker,
+    onSessionsClosed,
   } = context
   const lastPick = useRef<string | null>(null) // dernière case cochée, début d'une sélection de plage
   const projectsRoot = data?.root ?? DEFAULT_PROJECTS_ROOT
@@ -600,6 +602,7 @@ export function useAppActions(context: {
           // Le processus met un instant à finir : on retire les sessions tout de suite, puis on relit jusqu'à confirmation.
           const closedIds = new Set(ids.filter((_, index) => results[index].status === "fulfilled"))
           markClosing([...closedIds])
+          onSessionsClosed?.(closedIds)
           if (!firstFailure) onDone?.()
           setData(
             (currentData) =>

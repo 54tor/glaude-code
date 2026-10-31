@@ -323,6 +323,9 @@ function Shell() {
     setInfo,
     setShare,
     setPicker,
+    onSessionsClosed: (closedSessionIds) => {
+      if (readingSessionId && closedSessionIds.has(readingSessionId)) closeReader()
+    },
   })
   useShortcuts({ search: searchInputRef, picked, clearPicked: () => setPicked(new Set()), byId: view.byId, actions })
   const [palette, setPalette] = useState(false)
