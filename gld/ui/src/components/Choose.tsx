@@ -14,7 +14,7 @@ export function Choose({
   className,
 }: {
   value: string
-  onChange: (v: string) => void
+  onChange: (localValue: string) => void
   options: readonly (readonly [string, string])[]
   label: string
   disabled?: boolean

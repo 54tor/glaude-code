@@ -19,22 +19,22 @@ type Reply = { status?: number; body?: unknown; headers?: Record<string, string>
 type Call = { url: string; init: RequestInit }
 
 // Faux serveur : une table url → réponse (ou fonction), et la liste des appels reçus.
-function server(routes: Record<string, Reply | ((c: Call) => Reply)>) {
+function server(routes: Record<string, Reply | ((call: Call) => Reply)>) {
   const calls: Call[] = []
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init: RequestInit = {}) => {
-      const c = { url, init }
-      calls.push(c)
-      const key = Object.keys(routes).find((k) => url === k || url.startsWith(k + "?"))
-      const r = key ? (typeof routes[key] === "function" ? (routes[key] as (c: Call) => Reply)(c) : (routes[key] as Reply)) : { status: 404, body: {} }
-      return new Response(r.status === 204 ? null : JSON.stringify(r.body ?? {}), { status: r.status ?? 200, headers: r.headers })
+      const record = { url, init }
+      calls.push(record)
+      const key = Object.keys(routes).find((key) => url === key || url.startsWith(key + "?"))
+      const reply = key ? (typeof routes[key] === "function" ? (routes[key] as (call: Call) => Reply)(record) : (routes[key] as Reply)) : { status: 404, body: {} }
+      return new Response(reply.status === 204 ? null : JSON.stringify(reply.body ?? {}), { status: reply.status ?? 200, headers: reply.headers })
     })
   )
   return calls
 }
-const bodyOf = (c: Call) => JSON.parse(String(c.init.body ?? "{}")) as Record<string, unknown>
-const headerOf = (c: Call, h: string) => new Headers(c.init.headers).get(h)
+const bodyOf = (call: Call) => JSON.parse(String(call.init.body ?? "{}")) as Record<string, unknown>
+const headerOf = (call: Call, header: string) => new Headers(call.init.headers).get(header)
 
 beforeEach(() => {
   setAuth({ state: "anon", csrf: "", user: undefined, factors: undefined, methods: [], enroll: false, expired: false, owner: undefined })
@@ -64,11 +64,11 @@ const login = async (name = "alice", pw = "mot de passe") => {
 describe("Login", () => {
   it("affiche une seule erreur générique, quel que soit le corps du 401", async () => {
     const bodies = [{ error: { code: "unauthorized", message: "utilisateur inconnu" } }, { error: { code: "unauthorized", message: "mauvais mot de passe" } }, {}]
-    let i = 0
-    server({ "/v1/auth/sessions": () => ({ status: 401, body: bodies[i++] }) })
+    let index = 0
+    server({ "/v1/auth/sessions": () => ({ status: 401, body: bodies[index++] }) })
     render(<Login />)
     const seen: string[] = []
-    for (let n = 0; n < bodies.length; n++) {
+    for (let count = 0; count < bodies.length; count++) {
       await login()
       seen.push(screen.getByRole("alert").textContent ?? "")
     }
@@ -138,7 +138,7 @@ describe("jeton CSRF et session", () => {
     const calls = server({ "/v1/auth/me": { status: 401 } })
     await boot()
     expect(getAuth().state).toBe("anon")
-    expect(calls.map((c) => c.url)).toEqual(["/v1/auth/me"])
+    expect(calls.map((call) => call.url)).toEqual(["/v1/auth/me"])
   })
 
   it("session complète : droits, homes et home courant exposés ; useCan suit le home courant", async () => {
@@ -148,7 +148,7 @@ describe("jeton CSRF et session", () => {
     })
     await boot()
     expect(getAuth()).toMatchObject({ state: "ok", home: "h1", rights: { h1: ["mem_read"] } })
-    let can: (r: "exec" | "mem_read") => boolean = () => true
+    let can: (raw: "exec" | "mem_read") => boolean = () => true
     function Probe() {
       can = useCan()
       return null
@@ -201,7 +201,7 @@ describe("App", () => {
         <App />
       </TooltipProvider>
     )
-    await act(() => new Promise((r) => setTimeout(r, 30)))
+    await act(() => new Promise((callback) => setTimeout(callback, 30)))
   }
 
   it("/v1/auth/me en 404 : l'application s'affiche comme avant, sans connexion ni menu de compte", async () => {
@@ -238,7 +238,7 @@ describe("propriétaire des données locales", () => {
     seed("alice")
     server({ "/v1/auth/me": me("bob"), "/v1/homes": { body: { current: "", homes: [] } } })
     await boot()
-    for (const k of userKeys) expect(localStorage.getItem(k)).toBeNull()
+    for (const key of userKeys) expect(localStorage.getItem(key)).toBeNull()
     expect(localStorage.getItem("gld.owner")).toBe("bob")
     expect(localStorage.getItem("ccFont")).toBe("inter")
   })
@@ -247,7 +247,7 @@ describe("propriétaire des données locales", () => {
     seed("alice")
     server({ "/v1/auth/me": me("alice"), "/v1/homes": { body: { current: "", homes: [] } } })
     await boot()
-    for (const k of userKeys) expect(localStorage.getItem(k)).not.toBeNull()
+    for (const key of userKeys) expect(localStorage.getItem(key)).not.toBeNull()
     expect(localStorage.getItem("gld.owner")).toBe("alice")
   })
 
@@ -255,7 +255,7 @@ describe("propriétaire des données locales", () => {
     seed()
     server({ "/v1/auth/me": me("alice"), "/v1/homes": { body: { current: "", homes: [] } } })
     await boot()
-    for (const k of userKeys) expect(localStorage.getItem(k)).toBeNull()
+    for (const key of userKeys) expect(localStorage.getItem(key)).toBeNull()
     expect(localStorage.getItem("gld.owner")).toBe("alice")
   })
 
@@ -266,7 +266,7 @@ describe("propriétaire des données locales", () => {
     server({ "/v1/auth/me": me("bob"), "/v1/homes": { body: { current: "", homes: [] } } })
     await boot()
     expect(draftOf("s1").text).toBe("")
-    for (const k of userKeys) expect(localStorage.getItem(k)).toBeNull()
+    for (const key of userKeys) expect(localStorage.getItem(key)).toBeNull()
     expect(getAuth().owner).toBe("bob")
     expect(localStorage.getItem("gld.owner")).toBe("bob")
   })
@@ -278,7 +278,7 @@ describe("propriétaire des données locales", () => {
     server({ "/v1/auth/me": me("alice"), "/v1/homes": { body: { current: "", homes: [] } } })
     await boot()
     expect(draftOf("s1").text).toBe("brouillon d'alice")
-    for (const k of userKeys) expect(localStorage.getItem(k)).not.toBeNull()
+    for (const key of userKeys) expect(localStorage.getItem(key)).not.toBeNull()
   })
 
   it("mode ouvert : rien lu, rien écrit, rien effacé", async () => {
@@ -287,7 +287,7 @@ describe("propriétaire des données locales", () => {
     const get = vi.spyOn(Storage.prototype, "getItem")
     await boot()
     expect(get).not.toHaveBeenCalledWith("gld.owner")
-    for (const k of userKeys) expect(localStorage.getItem(k)).not.toBeNull()
+    for (const key of userKeys) expect(localStorage.getItem(key)).not.toBeNull()
     expect(localStorage.getItem("gld.owner")).toBeNull()
   })
 
@@ -295,7 +295,7 @@ describe("propriétaire des données locales", () => {
     seed("alice")
     server({ "/v1/auth/sessions/current": { status: 204 } })
     await logout()
-    for (const k of [...userKeys, "gld.owner"]) expect(localStorage.getItem(k)).toBeNull()
+    for (const key of [...userKeys, "gld.owner"]) expect(localStorage.getItem(key)).toBeNull()
   })
 
   it("retour depuis le second facteur pendant une reconnexion : la session partielle tombe, les brouillons restent", async () => {
@@ -304,18 +304,18 @@ describe("propriétaire des données locales", () => {
     setAuth({ state: "mfa", methods: ["totp"], expired: true, owner: "alice", csrf: "c" })
     render(<Mfa />)
     await act(async () => void fireEvent.click(screen.getByRole("button", { name: "Revenir à la connexion" })))
-    expect(calls.some((c) => c.url === "/v1/auth/sessions/current")).toBe(true)
+    expect(calls.some((call) => call.url === "/v1/auth/sessions/current")).toBe(true)
     expect(getAuth()).toMatchObject({ state: "anon", expired: true, owner: "alice" })
-    for (const k of userKeys) expect(localStorage.getItem(k)).not.toBeNull()
+    for (const key of userKeys) expect(localStorage.getItem(key)).not.toBeNull()
   })
 })
 
 describe("base64url", () => {
   it("aller-retour d'un tampon de plus de 200 Ko", () => {
-    const u = new Uint8Array(256 * 1024).map((_, i) => (i * 31 + 7) & 255)
-    const s = b64u.enc(u.buffer)
-    expect(s).not.toMatch(/[+/=]/)
-    expect(new Uint8Array(b64u.dec(s))).toEqual(u)
+    const uint8Array = new Uint8Array(256 * 1024).map((_, index) => (index * 31 + 7) & 255)
+    const text = b64u.enc(uint8Array.buffer)
+    expect(text).not.toMatch(/[+/=]/)
+    expect(new Uint8Array(b64u.dec(text))).toEqual(uint8Array)
   })
 })
 
@@ -336,7 +336,7 @@ describe("Profile", () => {
     fireEvent.change(screen.getByLabelText("Mot de passe actuel"), { target: { value: "pw" } })
     fireEvent.change(screen.getByLabelText("Code (application ou secours)"), { target: { value: "123456" } })
     await act(async () => void fireEvent.click(screen.getByRole("button", { name: "Confirmer" })))
-    const rm = calls.find((c) => c.url === "/v1/auth/factors/webauthn-7/removals")!
+    const rm = calls.find((call) => call.url === "/v1/auth/factors/webauthn-7/removals")!
     expect(rm.init.method).toBe("POST")
     expect(bodyOf(rm)).toEqual({ password: "pw", code: "123456" })
   })
@@ -357,7 +357,7 @@ describe("changement de compte dans l'onglet", () => {
         <App />
       </TooltipProvider>
     )
-    await act(() => new Promise((r) => setTimeout(r, 30)))
+    await act(() => new Promise((callback) => setTimeout(callback, 30)))
     setDraft("s1", { text: "secret d'alice" })
     localStorage.setItem("gld.editor.memory", JSON.stringify({ key: "k", text: "brouillon" }))
     localStorage.setItem("ccFont", "inter")
@@ -369,7 +369,7 @@ describe("changement de compte dans l'onglet", () => {
     expect(screen.getByText(/Session expirée/)).toBeTruthy()
     who = name
     await act(() => boot())
-    await act(() => new Promise((r) => setTimeout(r, 30)))
+    await act(() => new Promise((callback) => setTimeout(callback, 30)))
   }
 
   it("même compte après expiration : l'application et les brouillons sont conservés", async () => {
@@ -414,7 +414,7 @@ describe("AdminUsers", () => {
     fireEvent.click(await screen.findByRole("button", { name: "bob" }))
     expect(screen.getByText(/exec, config_write et fs_write équivalent au compte système de gld/)).toBeTruthy()
     await act(async () => void fireEvent.click(screen.getByRole("checkbox", { name: "exec sur Dossier principal" })))
-    expect(calls.some((c) => c.url === "/v1/admin/acl")).toBe(false)
+    expect(calls.some((call) => call.url === "/v1/admin/acl")).toBe(false)
     expect(screen.getByText("exec sur Dossier principal équivaut au compte système de gld.")).toBeTruthy()
 
     fireEvent.change(screen.getByLabelText("Mot de passe actuel"), { target: { value: "pw-admin" } })
@@ -423,7 +423,7 @@ describe("AdminUsers", () => {
     expect(ok).toHaveProperty("disabled", true) // case de confirmation non cochée
     fireEvent.click(screen.getByRole("checkbox", { name: "Je confirme accorder ce droit en connaissance de cause" }))
     await act(async () => void fireEvent.click(ok))
-    const acl = calls.find((c) => c.url === "/v1/admin/acl")!
+    const acl = calls.find((call) => call.url === "/v1/admin/acl")!
     expect(bodyOf(acl)).toEqual({ reauth: { password: "pw-admin", code: "123456" }, user_id: 2, home_id: "main", grant: ["exec"], confirm: true })
     expect(headerOf(acl, "X-Gld-CSRF")).toBe("tok")
   })
@@ -438,7 +438,7 @@ describe("AdminUsers", () => {
     render(<AdminUsers />)
     fireEvent.click(await screen.findByRole("button", { name: "bob" }))
     await act(async () => void fireEvent.click(screen.getByRole("checkbox", { name: "mem_write sur Dossier principal" })))
-    expect(bodyOf(calls.find((c) => c.url === "/v1/admin/acl")!)).toEqual({ user_id: 2, home_id: "main", grant: ["mem_write"] })
+    expect(bodyOf(calls.find((call) => call.url === "/v1/admin/acl")!)).toEqual({ user_id: 2, home_id: "main", grant: ["mem_write"] })
   })
 
   it("sessions_read demande la réauthentification, sans confirmation exec", async () => {
@@ -451,12 +451,12 @@ describe("AdminUsers", () => {
     render(<AdminUsers />)
     fireEvent.click(await screen.findByRole("button", { name: "bob" }))
     await act(async () => void fireEvent.click(screen.getByRole("checkbox", { name: "sessions_read sur Dossier principal" })))
-    expect(calls.some((c) => c.url === "/v1/admin/acl")).toBe(false)
+    expect(calls.some((call) => call.url === "/v1/admin/acl")).toBe(false)
     expect(screen.queryByRole("checkbox", { name: "Je confirme accorder ce droit en connaissance de cause" })).toBeNull()
     fireEvent.change(screen.getByLabelText("Mot de passe actuel"), { target: { value: "pw-admin" } })
     fireEvent.change(screen.getByLabelText("Code (application ou secours)"), { target: { value: "123456" } })
     await act(async () => void fireEvent.click(screen.getByRole("button", { name: "Confirmer" })))
-    expect(bodyOf(calls.find((c) => c.url === "/v1/admin/acl")!)).toEqual({ reauth: { password: "pw-admin", code: "123456" }, user_id: 2, home_id: "main", grant: ["sessions_read"] })
+    expect(bodyOf(calls.find((call) => call.url === "/v1/admin/acl")!)).toEqual({ reauth: { password: "pw-admin", code: "123456" }, user_id: 2, home_id: "main", grant: ["sessions_read"] })
   })
 
   it("fs_write demande confirmation et réauthentification", async () => {
@@ -469,12 +469,12 @@ describe("AdminUsers", () => {
     render(<AdminUsers />)
     fireEvent.click(await screen.findByRole("button", { name: "bob" }))
     await act(async () => void fireEvent.click(screen.getByRole("checkbox", { name: "fs_write sur Dossier principal" })))
-    expect(calls.some((c) => c.url === "/v1/admin/acl")).toBe(false)
+    expect(calls.some((call) => call.url === "/v1/admin/acl")).toBe(false)
     fireEvent.change(screen.getByLabelText("Mot de passe actuel"), { target: { value: "pw-admin" } })
     fireEvent.change(screen.getByLabelText("Code (application ou secours)"), { target: { value: "123456" } })
     fireEvent.click(screen.getByRole("checkbox", { name: "Je confirme accorder ce droit en connaissance de cause" }))
     await act(async () => void fireEvent.click(screen.getByRole("button", { name: "Confirmer" })))
-    expect(bodyOf(calls.find((c) => c.url === "/v1/admin/acl")!)).toEqual({ reauth: { password: "pw-admin", code: "123456" }, user_id: 2, home_id: "main", grant: ["fs_write"], confirm: true })
+    expect(bodyOf(calls.find((call) => call.url === "/v1/admin/acl")!)).toEqual({ reauth: { password: "pw-admin", code: "123456" }, user_id: 2, home_id: "main", grant: ["fs_write"], confirm: true })
   })
 
   it("fs_read demande la réauthentification, sans confirmation", async () => {
@@ -491,7 +491,7 @@ describe("AdminUsers", () => {
     fireEvent.change(screen.getByLabelText("Mot de passe actuel"), { target: { value: "pw-admin" } })
     fireEvent.change(screen.getByLabelText("Code (application ou secours)"), { target: { value: "123456" } })
     await act(async () => void fireEvent.click(screen.getByRole("button", { name: "Confirmer" })))
-    expect(bodyOf(calls.find((c) => c.url === "/v1/admin/acl")!)).toEqual({ reauth: { password: "pw-admin", code: "123456" }, user_id: 2, home_id: "main", grant: ["fs_read"] })
+    expect(bodyOf(calls.find((call) => call.url === "/v1/admin/acl")!)).toEqual({ reauth: { password: "pw-admin", code: "123456" }, user_id: 2, home_id: "main", grant: ["fs_read"] })
   })
 
   it("retirer un droit ne demande rien", async () => {
@@ -505,7 +505,7 @@ describe("AdminUsers", () => {
     fireEvent.click(await screen.findByRole("button", { name: "bob" }))
     await act(async () => void fireEvent.click(screen.getByRole("checkbox", { name: "mem_read sur Dossier principal" })))
     expect(screen.queryByLabelText("Mot de passe actuel")).toBeNull()
-    expect(bodyOf(calls.find((c) => c.url === "/v1/admin/acl")!)).toEqual({ user_id: 2, home_id: "main", revoke: ["mem_read"] })
+    expect(bodyOf(calls.find((call) => call.url === "/v1/admin/acl")!)).toEqual({ user_id: 2, home_id: "main", revoke: ["mem_read"] })
   })
 
   it("fermer ses propres sessions déconnecte proprement l'interface", async () => {
@@ -522,7 +522,7 @@ describe("AdminUsers", () => {
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: "mouse" })
     await act(async () => void fireEvent.click(await screen.findByRole("menuitem", { name: "Fermer toutes ses sessions" })))
     await waitFor(() => expect(getAuth()).toMatchObject({ state: "anon", owner: undefined, expired: false }))
-    const rev = calls.find((c) => c.url === "/v1/admin/sessions/revocations?user_id=1")!
+    const rev = calls.find((call) => call.url === "/v1/admin/sessions/revocations?user_id=1")!
     expect(rev.init.method).toBe("POST")
     expect(localStorage.getItem("gld.owner")).toBeNull()
     expect(localStorage.getItem("gld.drafts")).toBeNull()
@@ -560,14 +560,14 @@ describe("HomeSwitcher", () => {
     const trigger = await screen.findByRole("button", { name: "Dossier de configuration Claude" })
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: "mouse" })
   }
-  const saved = (calls: Call[]) => bodyOf(calls.find((c) => c.url === "/v1/homes" && c.init.method === "PUT")!)
+  const saved = (calls: Call[]) => bodyOf(calls.find((call) => call.url === "/v1/homes" && call.init.method === "PUT")!)
 
   it("mode authentifié (admin) : un ajout n'envoie que le nouveau home", async () => {
     const calls = server({ "/v1/homes": { body: HOMES } })
     setAuth({ state: "ok", csrf: "tok", user: { name: "root", admin: true } })
     await mount()
     await act(async () => void fireEvent.click(await screen.findByRole("menuitem", { name: "Ajouter un dossier…" })))
-    await waitFor(() => expect(calls.some((c) => c.url === "/v1/homes" && c.init.method === "PUT")).toBe(true))
+    await waitFor(() => expect(calls.some((call) => call.url === "/v1/homes" && call.init.method === "PUT")).toBe(true))
     expect(saved(calls)).toEqual({ homes: [{ name: ".claude-pro", dir: "/h/.claude-pro" }] })
   })
 
@@ -579,7 +579,7 @@ describe("HomeSwitcher", () => {
     setAuth({ state: "ok", csrf: "tok", user: { name: "root", admin: true } })
     await mount()
     await act(async () => void fireEvent.click(await screen.findByRole("menuitem", { name: "Ajouter un dossier…" })))
-    await waitFor(() => expect(calls.some((c) => c.url === "/v1/homes" && c.init.method === "PUT")).toBe(true))
+    await waitFor(() => expect(calls.some((call) => call.url === "/v1/homes" && call.init.method === "PUT")).toBe(true))
     expect(saved(calls)).toEqual({ homes: [{ name: ".claude-pro 2", dir: "/h/.claude-pro" }] })
   })
 
@@ -589,7 +589,7 @@ describe("HomeSwitcher", () => {
     await mount()
     fireEvent.click(await screen.findByRole("menuitem", { name: "Retirer de la liste" }))
     await act(async () => void fireEvent.click(await screen.findByRole("menuitem", { name: "perso" })))
-    await waitFor(() => expect(calls.some((c) => c.url === "/v1/homes" && c.init.method === "PUT")).toBe(true))
+    await waitFor(() => expect(calls.some((call) => call.url === "/v1/homes" && call.init.method === "PUT")).toBe(true))
     expect(saved(calls)).toEqual({ homes: [], removed: ["h1"] })
   })
 
@@ -598,7 +598,7 @@ describe("HomeSwitcher", () => {
     setAuth({ state: "open" })
     await mount()
     await act(async () => void fireEvent.click(await screen.findByRole("menuitem", { name: "Ajouter un dossier…" })))
-    await waitFor(() => expect(calls.some((c) => c.url === "/v1/homes" && c.init.method === "PUT")).toBe(true))
+    await waitFor(() => expect(calls.some((call) => call.url === "/v1/homes" && call.init.method === "PUT")).toBe(true))
     expect(saved(calls)).toEqual({ homes: [{ name: "perso", dir: "/p" }, { name: ".claude-pro", dir: "/h/.claude-pro" }] })
   })
 
@@ -614,10 +614,10 @@ describe("HomeSwitcher", () => {
 })
 
 describe("plusieurs onglets", () => {
-  const ownerEvent = (v: string | null) => {
-    if (v === null) localStorage.removeItem("gld.owner")
-    else localStorage.setItem("gld.owner", v)
-    window.dispatchEvent(new StorageEvent("storage", { key: "gld.owner", newValue: v }))
+  const ownerEvent = (value: string | null) => {
+    if (value === null) localStorage.removeItem("gld.owner")
+    else localStorage.setItem("gld.owner", value)
+    window.dispatchEvent(new StorageEvent("storage", { key: "gld.owner", newValue: value }))
   }
 
   it("autre propriétaire inscrit ailleurs : mémoire vidée sans réécriture, retour à la connexion, plus aucune écriture", () => {
@@ -683,12 +683,12 @@ describe("fenêtre entre second facteur et boot", () => {
     await act(async () => void fireEvent.click(screen.getByRole("button", { name: "Vérifier" })))
     expect(getAuth().csrf).not.toBe("c-new")
     await expect(api.sessionSend("s", "file")).rejects.toMatchObject({ net: true })
-    expect(calls.some((c) => c.url === "/v1/sessions/s/messages")).toBe(false)
+    expect(calls.some((call) => call.url === "/v1/sessions/s/messages")).toBe(false)
     meReady = true
     await boot()
     expect(getAuth()).toMatchObject({ state: "ok", csrf: "c-ok" })
     await api.sessionSend("s", "file")
-    expect(headerOf(calls.find((c) => c.url === "/v1/sessions/s/messages")!, "X-Gld-CSRF")).toBe("c-ok")
+    expect(headerOf(calls.find((call) => call.url === "/v1/sessions/s/messages")!, "X-Gld-CSRF")).toBe("c-ok")
   })
 
   it("401 avec attente et session partielle détruite : retour immédiat au mot de passe", async () => {
@@ -740,20 +740,20 @@ describe("WebAuthn", () => {
 
 describe("ajout d'un facteur depuis le profil", () => {
   it("la réauthentification est vérifiée avant le QR code, et redemandée après un retour", async () => {
-    let n = 0
+    let count = 0
     const calls = server({
       "/v1/auth/sessions": { body: { sessions: [] } },
-      "/v1/auth/totp/enrollments": () => (n++ === 0 ? { status: 401, body: { error: { code: "unauthorized", message: "refus" } } } : { body: { secret: "SECRET", uri: "otpauth://totp/x?secret=SECRET" } }),
+      "/v1/auth/totp/enrollments": () => (count++ === 0 ? { status: 401, body: { error: { code: "unauthorized", message: "refus" } } } : { body: { secret: "SECRET", uri: "otpauth://totp/x?secret=SECRET" } }),
     })
     setAuth({ state: "ok", csrf: "tok", user: { name: "alice", admin: false }, factors: { totp: false, webauthn: 0, recovery: 9, keys: [] } })
     render(<Profile />)
     fireEvent.click(screen.getByRole("button", { name: "Ajouter un facteur" }))
     fireEvent.click(screen.getByRole("button", { name: "Application d'authentification (TOTP)" }))
-    expect(calls.some((c) => c.url === "/v1/auth/totp/enrollments")).toBe(false)
+    expect(calls.some((call) => call.url === "/v1/auth/totp/enrollments")).toBe(false)
     fireEvent.change(screen.getByLabelText("Mot de passe actuel"), { target: { value: "pw" } })
     fireEvent.change(screen.getByLabelText("Code (application ou secours)"), { target: { value: "111111" } })
     await act(async () => void fireEvent.click(screen.getByRole("button", { name: "Confirmer" })))
-    expect(bodyOf(calls.find((c) => c.url === "/v1/auth/totp/enrollments")!)).toEqual({ password: "pw", code: "111111" })
+    expect(bodyOf(calls.find((call) => call.url === "/v1/auth/totp/enrollments")!)).toEqual({ password: "pw", code: "111111" })
     expect(screen.queryByText("SECRET")).toBeNull()
     expect(screen.getByRole("alert").textContent).toContain("Vérification refusée")
     expect((screen.getByLabelText("Code (application ou secours)") as HTMLInputElement).value).toBe("")
@@ -791,13 +791,13 @@ describe("droits de l'admin sur lui-même", () => {
     render(<AdminUsers />)
     fireEvent.click(await screen.findByRole("button", { name: "root" }))
     await act(async () => void fireEvent.click(screen.getByRole("checkbox", { name: "mem_write sur Dossier principal" })))
-    expect(calls.some((c) => c.url === "/v1/admin/acl")).toBe(false)
+    expect(calls.some((call) => call.url === "/v1/admin/acl")).toBe(false)
     fireEvent.change(screen.getByLabelText("Mot de passe actuel"), { target: { value: "pw-admin" } })
     fireEvent.change(screen.getByLabelText("Code (application ou secours)"), { target: { value: "123456" } })
     await act(async () => void fireEvent.click(screen.getByRole("button", { name: "Confirmer" })))
-    expect(bodyOf(calls.find((c) => c.url === "/v1/admin/acl")!)).toEqual({ reauth: { password: "pw-admin", code: "123456" }, user_id: 1, home_id: "main", grant: ["mem_write"] })
+    expect(bodyOf(calls.find((call) => call.url === "/v1/admin/acl")!)).toEqual({ reauth: { password: "pw-admin", code: "123456" }, user_id: 1, home_id: "main", grant: ["mem_write"] })
     await waitFor(() => expect(getAuth().rights).toEqual({ main: ["mem_read", "mem_write"] }))
-    expect(calls.some((c) => c.url === "/v1/auth/me")).toBe(true)
+    expect(calls.some((call) => call.url === "/v1/auth/me")).toBe(true)
     expect(draftOf("s1").text).toBe("brouillon de root")
   })
 })
