@@ -36,7 +36,12 @@ export class RouteErrorBoundary extends Component<{ children: ReactNode }, { err
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("route en erreur", error, info.componentStack)
   }
+  retry = () => {
+    retryFailedImports()
+    this.setState({ error: null })
+  }
   render() {
-    return this.state.error ? <Fallback error={this.state.error} onRetry={() => (retryFailedImports(), this.setState({ error: null }))} /> : this.props.children
+    if (!this.state.error) return this.props.children
+    return <Fallback error={this.state.error} onRetry={this.retry} />
   }
 }

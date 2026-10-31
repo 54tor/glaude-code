@@ -11,6 +11,17 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { SORTS, type Sort } from "./memoryLib"
 import { typeOf } from "./MemoryTypes"
 
+const TOKENS_PER_THOUSAND = 1000
+
+const formatTokenAmount = (tokens: number) => (tokens >= TOKENS_PER_THOUSAND ? `${(tokens / TOKENS_PER_THOUSAND).toFixed(1)} k` : tokens)
+
+function FileTypeIcon({ file }: { file: MemFile }) {
+  const { t } = useTranslation()
+  const memoryType = typeOf(file.type)
+  if (!memoryType) return <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+  return <memoryType.icon className={cn("size-3.5 shrink-0", memoryType.color)} aria-label={t("memory.section.typeAria", { key: memoryType.key })} />
+}
+
 export function Section({
   icon: Icon,
   title,
@@ -38,9 +49,9 @@ export function Section({
   title: string
   files: MemFile[]
   sel: string
-  onPick: (k: string) => void
+  onPick: (key: string) => void
   picked: Set<string>
-  onToggle: (k: string) => void
+  onToggle: (key: string) => void
   onPickAll: (keys: string[]) => void
   onNew: () => void // nouvelle entrée écrite à la main
   onNewRule?: () => void // nouvelle règle du projet (.claude/rules), sections de projet existantes seulement
@@ -48,9 +59,9 @@ export function Section({
   onConsolidate?: (file: string) => void // consolider dans le CLAUDE.md (ou l'AGENTS.md, projets seulement) correspondant
   agents?: boolean // propose aussi AGENTS.md
   onRemoveAll: (keys: string[]) => void
-  menu: (f: MemFile) => React.ReactNode
+  menu: (file: MemFile) => React.ReactNode
   sort: Sort
-  onSort: (s: Sort) => void
+  onSort: (nextSort: Sort) => void
   budget: number // tokens chargés à chaque session par cette section
   exact: boolean // tous les fichiers comptés l'ont été réellement (sinon estimation)
   onCount: () => void // décompte réel des tokens de la section
@@ -59,8 +70,8 @@ export function Section({
   const { t } = useTranslation()
   // Repliée par défaut, sauf si elle contient le fichier ouvert ; le choix de l'utilisateur est gardé par section.
   const [pref, setPref] = useLocal(`gld.mem.open.${title}`, "")
-  const open = pref ? pref === "1" : files.some((f) => f.key === sel)
-  const sortBtn = "size-5 md:opacity-0 md:group-hover/sec:opacity-100 md:focus-visible:opacity-100"
+  const open = pref ? pref === "1" : files.some((file) => file.key === sel)
+  const sortButtonClassName = "size-5 md:opacity-0 md:group-hover/sec:opacity-100 md:focus-visible:opacity-100"
   return (
     <section className="group/sec mb-2">
       <ContextMenu>
@@ -77,13 +88,13 @@ export function Section({
                 title={exact ? t("memory.section.tokensExact") : t("memory.section.tokensEstimate")}
               >
                 {exact ? "" : "≈ "}
-                {t("memory.section.tokens", { amount: budget >= 1000 ? `${(budget / 1000).toFixed(1)} k` : budget })}
+                {t("memory.section.tokens", { amount: formatTokenAmount(budget) })}
               </span>
             )}
             {/* Ajout et tri regroupés : un seul bouton, au lieu de trois icônes côte à côte. */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon-xs" className={sortBtn} aria-label={t("memory.section.moreAria", { title })}>
+                <Button variant="ghost" size="icon-xs" className={sortButtonClassName} aria-label={t("memory.section.moreAria", { title })}>
                   <MoreHorizontal />
                 </Button>
               </DropdownMenuTrigger>
@@ -94,9 +105,9 @@ export function Section({
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel>{t("memory.section.sortBy")}</DropdownMenuLabel>
                 <DropdownMenuRadioGroup value={sort.by} onValueChange={(by) => onSort({ ...sort, by })}>
-                  {SORTS.map(([k, key, I]) => (
-                    <DropdownMenuRadioItem key={k} value={k}>
-                      <I /> {t(key)}
+                  {SORTS.map(([sortKey, labelKey, SortIcon]) => (
+                    <DropdownMenuRadioItem key={sortKey} value={sortKey}>
+                      <SortIcon /> {t(labelKey)}
                     </DropdownMenuRadioItem>
                   ))}
                 </DropdownMenuRadioGroup>
@@ -141,61 +152,54 @@ export function Section({
           <ContextMenuItem onSelect={onCount}>
             <Calculator /> {t("memory.section.menuCount")}
           </ContextMenuItem>
-          <ContextMenuItem onSelect={() => onPickAll(files.map((f) => f.key))}>
+          <ContextMenuItem onSelect={() => onPickAll(files.map((file) => file.key))}>
             <CheckSquare /> {t("memory.section.menuSelectAll")}
           </ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem variant="destructive" onSelect={() => onRemoveAll(files.map((f) => f.key))}>
+          <ContextMenuItem variant="destructive" onSelect={() => onRemoveAll(files.map((file) => file.key))}>
             <Trash2 /> {t("memory.section.menuRemoveAll")}
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
       {/* Trait de filiation comme dans l'arbre de la nav : les fichiers sont rattachés à leur section. */}
       <ul className={cn("ml-[15px] space-y-px border-l pl-1", !open && "hidden")}>
-        {files.map((f) => (
-          <ContextMenu key={f.key}>
+        {files.map((file) => (
+          <ContextMenu key={file.key}>
             <ContextMenuTrigger asChild>
               <li className="group flex items-center gap-1.5 rounded-md data-[state=open]:bg-muted">
                 <Checkbox
-                  checked={picked.has(f.key)}
-                  onCheckedChange={() => onToggle(f.key)}
-                  aria-label={t("memory.section.selectAria", { name: f.name })}
+                  checked={picked.has(file.key)}
+                  onCheckedChange={() => onToggle(file.key)}
+                  aria-label={t("memory.section.selectAria", { name: file.name })}
                   className={cn(
                     "transition-opacity",
                     picked.size === 0 && "md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
                   )}
                 />
                 <button
-                  onClick={() => onPick(f.key)}
+                  onClick={() => onPick(file.key)}
                   className={cn(
                     "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors",
-                    f.key === sel ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    file.key === sel ? "bg-accent font-medium text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
                 >
-                  {typeOf(f.type) ? (
-                    (() => {
-                      const T = typeOf(f.type)!
-                      return <T.icon className={cn("size-3.5 shrink-0", T.color)} aria-label={t("memory.section.typeAria", { key: T.key })} />
-                    })()
-                  ) : (
-                    <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-                  )}
-                  <span className={cn("min-w-0 flex-1 truncate", f.off && "text-muted-foreground line-through")}>{f.name}</span>
-                  {f.off && <EyeOff className="size-3.5 shrink-0 text-muted-foreground" aria-label={t("memory.section.ruleOff")} />}
-                  {f.paths && (
+                  <FileTypeIcon file={file} />
+                  <span className={cn("min-w-0 flex-1 truncate", file.off && "text-muted-foreground line-through")}>{file.name}</span>
+                  {file.off && <EyeOff className="size-3.5 shrink-0 text-muted-foreground" aria-label={t("memory.section.ruleOff")} />}
+                  {file.paths && (
                     <Filter className="size-3.5 shrink-0 text-info" aria-label={t("memory.section.ruleScoped")} />
                   )}
-                  {(f.warn || issues.has(f.key)) && (
+                  {(file.warn || issues.has(file.key)) && (
                     <AlertTriangle className="size-3.5 shrink-0 text-warning" aria-label={t("memory.section.toCheck")} />
                   )}
                   <span className="flex shrink-0 flex-col items-end text-xs font-normal leading-tight text-muted-foreground">
-                    <span>{ago(f.mtime)}</span>
-                    <span className="text-2xs tabular-nums">{f.tokens} tok</span>
+                    <span>{ago(file.mtime)}</span>
+                    <span className="text-2xs tabular-nums">{file.tokens} tok</span>
                   </span>
                 </button>
               </li>
             </ContextMenuTrigger>
-            <ContextMenuContent className="w-64">{menu(f)}</ContextMenuContent>
+            <ContextMenuContent className="w-64">{menu(file)}</ContextMenuContent>
           </ContextMenu>
         ))}
       </ul>

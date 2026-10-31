@@ -13,10 +13,20 @@ import { Choose } from "./Choose"
 // dirs : vue d'un projet (ensemble de dossiers) : la nouvelle session (en modale) part dans le dossier choisi dans la liste.
 export function ProjectHead({ project: fixed, missing: fixedMissing, dirs }: { project?: string; missing?: boolean; dirs?: string[] }) {
   const { t } = useTranslation()
-  const a = useActions()
+  const actions = useActions()
   const [dir, setDir] = useState("")
-  const project = dirs ? (dirs.includes(dir) ? dir : (dirs.find((d) => !a.folder(d)?.missing) ?? dirs[0] ?? "")) : (fixed ?? "")
-  const missing = dirs ? (a.folder(project)?.missing ?? false) : !!fixedMissing
+  const isMissingFolder = (directory: string) => actions.folder(directory)?.missing
+  const chooseProject = () => {
+    if (!dirs) return fixed ?? ""
+    if (dirs.includes(dir)) return dir
+    return dirs.find((directory) => !isMissingFolder(directory)) ?? dirs[0] ?? ""
+  }
+  const project = chooseProject()
+  const missing = dirs ? (isMissingFolder(project) ?? false) : !!fixedMissing
+  const directoryOption = (directory: string) => {
+    const missingSuffix = isMissingFolder(directory) ? t("shell.head.missingSuffix") : ""
+    return [directory, tilde(directory, actions.home) + missingSuffix] as const
+  }
   const git = useGit()
   const repos = git.repos[project] ?? []
   const own = git.status[project]
@@ -25,7 +35,7 @@ export function ProjectHead({ project: fixed, missing: fixedMissing, dirs }: { p
       {dirs && (
         <div className="flex flex-wrap items-center gap-2 text-sm">
           {t("shell.head.sessionDir")}
-          <Choose value={project} onChange={setDir} options={dirs.map((d) => [d, tilde(d, a.home) + (a.folder(d)?.missing ? t("shell.head.missingSuffix") : "")] as const)} label={t("shell.head.newSessionDir")} className="min-w-0 max-w-xl" />
+          <Choose value={project} onChange={setDir} options={dirs.map(directoryOption)} label={t("shell.head.newSessionDir")} className="min-w-0 max-w-xl" />
         </div>
       )}
       {(own || repos.length > 0) && (
@@ -33,17 +43,17 @@ export function ProjectHead({ project: fixed, missing: fixedMissing, dirs }: { p
           {own && (
             <li className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="min-w-0 flex-1 truncate" title={project}>
-                {tilde(project, a.home)}
+                {tilde(project, actions.home)}
               </span>
               <GitRepo dir={project} st={own} />
             </li>
           )}
-          {repos.map((d) => (
-            <li key={d} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="min-w-0 flex-1 truncate" title={d}>
-                {tilde(d, a.home)}
+          {repos.map((repoDir) => (
+            <li key={repoDir} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="min-w-0 flex-1 truncate" title={repoDir}>
+                {tilde(repoDir, actions.home)}
               </span>
-              <GitRepo dir={d} st={git.status[d]} />
+              <GitRepo dir={repoDir} st={git.status[repoDir]} />
             </li>
           ))}
         </ul>
@@ -51,11 +61,11 @@ export function ProjectHead({ project: fixed, missing: fixedMissing, dirs }: { p
       {!missing && (
         <div className="flex flex-wrap items-center gap-2 text-xs">
           {dirs && (
-            <Button size="sm" onClick={() => a.newSession(project)} title={t("shell.header.newInDirHint")}>
+            <Button size="sm" onClick={() => actions.newSession(project)} title={t("shell.header.newInDirHint")}>
               <MessageSquarePlus /> {t("shell.header.newSession")}
             </Button>
           )}
-          <Button size="sm" variant="outline" onClick={() => a.openPerms(project)} title={t("shell.head.permsHint")}>
+          <Button size="sm" variant="outline" onClick={() => actions.openPerms(project)} title={t("shell.head.permsHint")}>
             <ShieldCheck /> {t("shell.head.perms")}
           </Button>
           <WorkspaceButton dir={project} />

@@ -17,8 +17,13 @@ import { Markdown } from "./Message"
 import { copy, movable, split } from "./memoryLib"
 import { reportAction } from "@/lib/report"
 
-const icon = (key: string) => (key.startsWith("m/") ? Brain : key.startsWith("r/") ? ScrollText : FileText)
+const MEMORY_INDEX_SUFFIX = "/MEMORY.md"
 
+function icon(key: string) {
+  if (key.startsWith("m/")) return Brain
+  if (key.startsWith("r/")) return ScrollText
+  return FileText
+}
 
 // Édition d'un fichier sur place : le texte brut, enregistré tel quel (comme dans la page Mémoire).
 function EditDialog({ file, edit, onClose, onSaved }: { file: MemFile; edit: boolean; onClose: () => void; onSaved: () => void }) {
@@ -31,13 +36,17 @@ function EditDialog({ file, edit, onClose, onSaved }: { file: MemFile; edit: boo
     close.current = onClose
   })
   useEffect(() => {
-    let live = true
+    let isMounted = true
     api.memoryFile(file.key).then(
-      (r) => live && setText(r.text),
-      () => live && (toast.error(i18n.t("memory.main.unreadable")), close.current())
+      (memoryFile) => isMounted && setText(memoryFile.text),
+      () => {
+        if (!isMounted) return
+        toast.error(i18n.t("memory.main.unreadable"))
+        close.current()
+      }
     )
     return () => {
-      live = false
+      isMounted = false
     }
   }, [file.key])
   const save = async () => {
@@ -45,14 +54,13 @@ function EditDialog({ file, edit, onClose, onSaved }: { file: MemFile; edit: boo
     setBusy(true)
     const ok = await reportAction(() => api.memorySave(file.key, text))
     setBusy(false)
-    if (ok) {
-      onSaved()
-      setEditing(false)
-    }
+    if (!ok) return
+    onSaved()
+    setEditing(false)
   }
-  const [fm, body] = split(text ?? "")
+  const [frontMatter, body] = split(text ?? "")
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
+    <Dialog open onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="flex max-h-[90vh] flex-col gap-3 sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="truncate">{file.name}</DialogTitle>
@@ -61,8 +69,13 @@ function EditDialog({ file, edit, onClose, onSaved }: { file: MemFile; edit: boo
         {editing ? (
           <textarea
             value={text ?? ""}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "Enter" && (e.preventDefault(), save())}
+            onChange={(event) => setText(event.target.value)}
+            onKeyDown={(event) => {
+              const isSaveShortcut = (event.ctrlKey || event.metaKey) && event.key === "Enter"
+              if (!isSaveShortcut) return
+              event.preventDefault()
+              save()
+            }}
             disabled={text === null || busy}
             spellCheck={false}
             autoFocus
@@ -75,7 +88,7 @@ function EditDialog({ file, edit, onClose, onSaved }: { file: MemFile; edit: boo
               <p className="text-muted-foreground">{t("common.loading")}</p>
             ) : (
               <>
-                {fm && <pre className="mb-3 rounded-lg border bg-muted/40 px-3 py-2 text-xs whitespace-pre-wrap text-muted-foreground">{fm}</pre>}
+                {frontMatter && <pre className="mb-3 rounded-lg border bg-muted/40 px-3 py-2 text-xs whitespace-pre-wrap text-muted-foreground">{frontMatter}</pre>}
                 <Markdown t={body} />
               </>
             )}
@@ -114,41 +127,54 @@ export function ProjectMemory({ dir }: { dir: string }) {
   const { t } = useTranslation()
   const [files, setFiles] = useState<MemFile[] | null>(null)
   const [open, setOpen] = useState(false)
-  const [shown, setShown] = useState<{ f: MemFile; edit: boolean } | null>(null)
+  const [shown, setShown] = useState<{ file: MemFile; edit: boolean } | null>(null)
   const [removing, setRemoving] = useState<MemFile | null>(null)
   const [, go] = useLocation()
   const [tick, setTick] = useState(0)
   useEffect(() => {
-    let live = true
-    const load = () => api.memory().then((r) => live && setFiles(r.projects.find((p) => p.dir === dir)?.files ?? []), () => {})
+    let isMounted = true
+    const load = () =>
+      api.memory().then((memory) => {
+        if (!isMounted) return
+        setFiles(memory.projects.find((project) => project.dir === dir)?.files ?? [])
+      }, () => {})
     load()
-    const on = () => document.visibilityState === "visible" && load()
-    document.addEventListener("visibilitychange", on)
+    const onVisibilityChange = () => document.visibilityState === "visible" && load()
+    document.addEventListener("visibilitychange", onVisibilityChange)
     return () => {
-      live = false
-      document.removeEventListener("visibilitychange", on)
+      isMounted = false
+      document.removeEventListener("visibilitychange", onVisibilityChange)
     }
   }, [dir, tick])
-  const refresh = () => setTick((t) => t + 1)
+  const refresh = () => setTick((currentTick) => currentTick + 1)
   if (!files || files.length === 0) return null
-  const tokens = files.filter((f) => f.always).reduce((n, f) => n + f.tokens, 0)
-  const sorted = [...files].sort((a, b) => +!!b.always - +!!a.always || a.name.localeCompare(b.name, loc()))
+  const tokens = files.filter((file) => file.always).reduce((total, file) => total + file.tokens, 0)
+  const alwaysLoadedFirstThenByName = (left: MemFile, right: MemFile) => +!!right.always - +!!left.always || left.name.localeCompare(right.name, loc())
+  const sorted = [...files].sort(alwaysLoadedFirstThenByName)
 
-  const setType = async (f: MemFile, type: string) => (await reportAction(() => api.memoryType(f.key, type))) && refresh()
-  const toGlobal = async (f: MemFile, copyIt: boolean) => (await reportAction(() => api.memoryMove(f.key, "global", copyIt))) && refresh()
-  const copyContent = async (f: MemFile) => {
+  const setType = async (file: MemFile, type: string) => {
+    if (await reportAction(() => api.memoryType(file.key, type))) refresh()
+  }
+  const toGlobal = async (file: MemFile, copyIt: boolean) => {
+    if (await reportAction(() => api.memoryMove(file.key, "global", copyIt))) refresh()
+  }
+  const copyContent = async (file: MemFile) => {
     try {
-      copy((await api.memoryFile(f.key)).text, "memory.lib.copiedContent")
-    } catch (e) {
-      toast.error(errMsg(e))
+      copy((await api.memoryFile(file.key)).text, "memory.lib.copiedContent")
+    } catch (copyError) {
+      toast.error(errMsg(copyError))
     }
   }
   const remove = async () => {
-    const f = removing
+    const fileToRemove = removing
     setRemoving(null)
-    if (f && (await reportAction(() => api.memoryRemove([f.key])))) refresh()
+    if (!fileToRemove) return
+    if (await reportAction(() => api.memoryRemove([fileToRemove.key]))) refresh()
   }
-  const canType = (f: MemFile) => f.key.startsWith("m/") && !f.key.endsWith("/MEMORY.md")
+  const isIndex = (file: MemFile) => file.key.endsWith(MEMORY_INDEX_SUFFIX)
+  const canType = (file: MemFile) => file.key.startsWith("m/") && !isIndex(file)
+  // l'index MEMORY.md reste dans son projet
+  const canMoveToGlobal = (file: MemFile) => movable(file.key) && !isIndex(file)
 
   return (
     <section className="mb-4 rounded-lg border">
@@ -163,73 +189,73 @@ export function ProjectMemory({ dir }: { dir: string }) {
       </button>
       {open && (
         <ul className="grid gap-px border-t p-1 md:grid-cols-2">
-          {sorted.map((f) => {
-            const ty = typeOf(f.type)
-            const Icon = ty?.icon ?? icon(f.key)
+          {sorted.map((file) => {
+            const fileType = typeOf(file.type)
+            const Icon = fileType?.icon ?? icon(file.key)
             return (
-              <li key={f.key}>
+              <li key={file.key}>
                 <ContextMenu>
                   <ContextMenuTrigger asChild>
                     <div className="group/row flex items-center rounded-md hover:bg-muted">
-                      <button onClick={() => setShown({ f, edit: false })} className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-sm" title={f.path}>
-                        <Icon className={cn("size-3.5 shrink-0", ty?.color ?? "text-muted-foreground")} />
-                        <span className={cn("min-w-0 flex-1 truncate", f.off && "line-through opacity-60")}>{f.name}</span>
-                        {ty && <span className={cn("shrink-0 rounded-sm bg-muted px-1.5 text-2xs", ty.color)}>{ty.label}</span>}
-                        {f.paths && <span className="shrink-0 text-2xs text-muted-foreground">{t("memory.project.scoped")}</span>}
-                        {f.always && <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">{t("memory.project.tokens", { n: f.tokens })}</span>}
+                      <button onClick={() => setShown({ file, edit: false })} className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-sm" title={file.path}>
+                        <Icon className={cn("size-3.5 shrink-0", fileType?.color ?? "text-muted-foreground")} />
+                        <span className={cn("min-w-0 flex-1 truncate", file.off && "line-through opacity-60")}>{file.name}</span>
+                        {fileType && <span className={cn("shrink-0 rounded-sm bg-muted px-1.5 text-2xs", fileType.color)}>{fileType.label}</span>}
+                        {file.paths && <span className="shrink-0 text-2xs text-muted-foreground">{t("memory.project.scoped")}</span>}
+                        {file.always && <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">{t("memory.project.tokens", { n: file.tokens })}</span>}
                       </button>
-                      <Button size="icon-xs" variant="ghost" className="mr-1 shrink-0 md:opacity-0 md:group-focus-within/row:opacity-100 md:group-hover/row:opacity-100" onClick={() => go(href({ kind: "memory", key: f.key }))} aria-label={t("memory.project.openAria", { name: f.name })} title={t("memory.project.openTitle")}>
+                      <Button size="icon-xs" variant="ghost" className="mr-1 shrink-0 md:opacity-0 md:group-focus-within/row:opacity-100 md:group-hover/row:opacity-100" onClick={() => go(href({ kind: "memory", key: file.key }))} aria-label={t("memory.project.openAria", { name: file.name })} title={t("memory.project.openTitle")}>
                         <ExternalLink />
                       </Button>
                     </div>
                   </ContextMenuTrigger>
                   <ContextMenuContent className="w-60">
-                    <ContextMenuLabel className="truncate">{f.name}</ContextMenuLabel>
-                    <ContextMenuItem onSelect={() => setShown({ f, edit: false })}>
+                    <ContextMenuLabel className="truncate">{file.name}</ContextMenuLabel>
+                    <ContextMenuItem onSelect={() => setShown({ file, edit: false })}>
                       <BookOpen /> {t("memory.project.show")}
                     </ContextMenuItem>
-                    <ContextMenuItem onSelect={() => go(href({ kind: "memory", key: f.key }))}>
+                    <ContextMenuItem onSelect={() => go(href({ kind: "memory", key: file.key }))}>
                       <ExternalLink /> {t("memory.project.openPage")}
                     </ContextMenuItem>
                     <ContextMenuSeparator />
-                    <ContextMenuItem onSelect={() => copyContent(f)}>
+                    <ContextMenuItem onSelect={() => copyContent(file)}>
                       <Copy /> {t("memory.project.copyContent")}
                     </ContextMenuItem>
-                    <ContextMenuItem onSelect={() => copy(f.path, "memory.lib.copiedPath")}>
+                    <ContextMenuItem onSelect={() => copy(file.path, "memory.lib.copiedPath")}>
                       <Copy /> {t("memory.project.copyPath")}
                     </ContextMenuItem>
-                    {movable(f.key) && !f.key.endsWith("/MEMORY.md") && ( // l'index MEMORY.md reste dans son projet
-                      <ContextMenuItem onSelect={() => toGlobal(f, true)}>
+                    {canMoveToGlobal(file) && (
+                      <ContextMenuItem onSelect={() => toGlobal(file, true)}>
                         <Copy /> {t("memory.project.copyGlobal")}
                       </ContextMenuItem>
                     )}
                     <ContextMenuSeparator />
-                    <ContextMenuItem onSelect={() => setShown({ f, edit: true })}>
+                    <ContextMenuItem onSelect={() => setShown({ file, edit: true })}>
                       <Pencil /> {t("memory.project.editHere")}
                     </ContextMenuItem>
-                    {canType(f) && (
+                    {canType(file) && (
                       <ContextMenuSub>
                         <ContextMenuSubTrigger>
                           <Tag /> {t("memory.project.type")}
                         </ContextMenuSubTrigger>
                         <ContextMenuSubContent>
-                          {TYPES.map((ty) => (
-                            <ContextMenuItem key={ty.key} onSelect={() => setType(f, ty.key)}>
-                              <ty.icon /> {ty.key} <span className="text-xs text-muted-foreground">({ty.label}){f.type === ty.key && " ✓"}</span>
+                          {TYPES.map((memoryType) => (
+                            <ContextMenuItem key={memoryType.key} onSelect={() => setType(file, memoryType.key)}>
+                              <memoryType.icon /> {memoryType.key} <span className="text-xs text-muted-foreground">({memoryType.label}){file.type === memoryType.key && " ✓"}</span>
                             </ContextMenuItem>
                           ))}
                           <ContextMenuSeparator />
-                          <ContextMenuItem onSelect={() => setType(f, "")}>{t("memory.project.noType")}{!f.type && " ✓"}</ContextMenuItem>
+                          <ContextMenuItem onSelect={() => setType(file, "")}>{t("memory.project.noType")}{!file.type && " ✓"}</ContextMenuItem>
                         </ContextMenuSubContent>
                       </ContextMenuSub>
                     )}
-                    {movable(f.key) && !f.key.endsWith("/MEMORY.md") && (
-                      <ContextMenuItem onSelect={() => toGlobal(f, false)}>
+                    {canMoveToGlobal(file) && (
+                      <ContextMenuItem onSelect={() => toGlobal(file, false)}>
                         <Globe /> {t("memory.project.moveGlobal")}
                       </ContextMenuItem>
                     )}
                     <ContextMenuSeparator />
-                    <ContextMenuItem variant="destructive" onSelect={() => setRemoving(f)}>
+                    <ContextMenuItem variant="destructive" onSelect={() => setRemoving(file)}>
                       <Trash2 /> {t("memory.project.remove")}
                     </ContextMenuItem>
                   </ContextMenuContent>
@@ -239,8 +265,8 @@ export function ProjectMemory({ dir }: { dir: string }) {
           })}
         </ul>
       )}
-      {shown && <EditDialog key={shown.f.key} file={shown.f} edit={shown.edit} onClose={() => setShown(null)} onSaved={refresh} />}
-      <AlertDialog open={!!removing} onOpenChange={(o) => !o && setRemoving(null)}>
+      {shown && <EditDialog key={shown.file.key} file={shown.file} edit={shown.edit} onClose={() => setShown(null)} onSaved={refresh} />}
+      <AlertDialog open={!!removing} onOpenChange={(isOpen) => !isOpen && setRemoving(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("memory.project.deleteTitle", { name: removing?.name ?? "" })}</AlertDialogTitle>

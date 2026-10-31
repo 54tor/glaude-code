@@ -35,6 +35,12 @@ const SOURCE_OK = /^([\w.-]+\/[\w.-]+|https:\/\/\S+)$/
 
 type Project = { dir: string; project: string }
 
+const SEARCH_DEBOUNCE_MS = 300
+const MARKET_KEY_PREFIX = "mk:"
+const UPDATE_ALL_MARKETS_KEY = "mk:*"
+const ADD_MARKET_KEY = "mk:add"
+const PROJECT_SCOPE_PREFIX_LENGTH = "p/".length
+
 // Plugins de Claude Code : installés (activer, désactiver, mettre à jour, désinstaller) et installables depuis les marketplaces,
 // pour l'utilisateur ou pour un projet. Tout passe par `claude plugin` côté serveur.
 export function PluginsDialog({
@@ -52,7 +58,7 @@ export function PluginsDialog({
 }) {
   const { t } = useTranslation()
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="flex h-[85vh] max-h-[85vh] flex-col sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t("skills.plugins.title")}</DialogTitle>
@@ -68,16 +74,16 @@ export function PluginsDialog({
   )
 }
 
-export const pluginKey = (p: PluginInst) =>
-  `${p.id}|${p.scope}|${p.project ?? ""}`
+export const pluginKey = (plugin: PluginInst) =>
+  `${plugin.id}|${plugin.scope}|${plugin.project ?? ""}`
 
 // Actions sur une installation : le projet est désigné par son dossier, null quand ce projet n'est plus connu.
 export function usePluginRun(projects: Project[], after: () => unknown) {
   const [busy, setBusy] = useState("")
-  const dirOf = (p: PluginInst) =>
-    p.scope === "user"
-      ? ""
-      : (projects.find((x) => x.project === p.project)?.dir ?? null)
+  const dirOf = (plugin: PluginInst) => {
+    if (plugin.scope === "user") return ""
+    return projects.find((candidate) => candidate.project === plugin.project)?.dir ?? null
+  }
   const run = async (
     key: string,
     action: Parameters<typeof api.pluginAct>[0],
@@ -111,18 +117,21 @@ export function PluginsPanel({
   const load = useCallback(
     () =>
       api.plugins().then(
-        (r) => setInst(r.installed ?? []),
+        (response) => setInst(response.installed ?? []),
         () => setInst([])
       ),
     []
   )
   useEffect(() => void load(), [load])
-  const changed = () => (load(), onChange())
+  const changed = () => {
+    load()
+    onChange()
+  }
   const { busy, dirOf, run } = usePluginRun(projects, changed)
-  const scopeLabel = (p: PluginInst) =>
-    p.scope === "user"
-      ? t("skills.plugins.scopeUser")
-      : tilde(p.project ?? "", home)
+  const scopeLabel = (plugin: PluginInst) => {
+    if (plugin.scope === "user") return t("skills.plugins.scopeUser")
+    return tilde(plugin.project ?? "", home)
+  }
   return (
     <div className="space-y-4 pr-3">
       <section>
@@ -133,69 +142,62 @@ export function PluginsPanel({
           <Fan className="m-3 size-4 animate-spin text-muted-foreground" />
         ) : (
           <ul className="divide-y rounded-md border">
-            {inst.map((p) => {
-              const dir = dirOf(p)
-              const key = pluginKey(p)
-              const off = busy === key || dir === null
+            {inst.map((plugin) => {
+              const dir = dirOf(plugin)
+              const key = pluginKey(plugin)
+              const isDisabled = busy === key || dir === null
+              const toggleLabel = t(plugin.enabled ? "skills.plugins.disable" : "skills.plugins.enable")
               return (
                 <li
                   key={key}
                   className="flex items-center gap-2 px-3 py-1.5 text-sm"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-medium">{p.id}</div>
+                    <div className="truncate font-medium">{plugin.id}</div>
                     <div className="truncate text-xs text-muted-foreground">
-                      v{p.version} · {scopeLabel(p)}
+                      v{plugin.version} · {scopeLabel(plugin)}
                     </div>
                   </div>
                   <Button
                     size="icon-xs"
                     variant="ghost"
-                    disabled={off}
-                    title={t(
-                      p.enabled
-                        ? "skills.plugins.disable"
-                        : "skills.plugins.enable"
-                    )}
-                    aria-label={t(
-                      p.enabled
-                        ? "skills.plugins.disable"
-                        : "skills.plugins.enable"
-                    )}
+                    disabled={isDisabled}
+                    title={toggleLabel}
+                    aria-label={toggleLabel}
                     onClick={() =>
                       run(
                         key,
-                        p.enabled ? "disable" : "enable",
-                        p.id,
-                        p.scope,
+                        plugin.enabled ? "disable" : "enable",
+                        plugin.id,
+                        plugin.scope,
                         dir ?? ""
                       )
                     }
                   >
                     <Power
                       className={
-                        p.enabled ? "text-success" : "text-muted-foreground"
+                        plugin.enabled ? "text-success" : "text-muted-foreground"
                       }
                     />
                   </Button>
                   <Button
                     size="icon-xs"
                     variant="ghost"
-                    disabled={off}
+                    disabled={isDisabled}
                     title={t("skills.plugins.update")}
                     aria-label={t("skills.plugins.update")}
-                    onClick={() => run(key, "update", p.id, p.scope, dir ?? "")}
+                    onClick={() => run(key, "update", plugin.id, plugin.scope, dir ?? "")}
                   >
                     <RefreshCw />
                   </Button>
                   <Button
                     size="icon-xs"
                     variant="ghost"
-                    disabled={off}
+                    disabled={isDisabled}
                     title={t("skills.plugins.uninstall")}
                     aria-label={t("skills.plugins.uninstall")}
                     onClick={() =>
-                      run(key, "uninstall", p.id, p.scope, dir ?? "")
+                      run(key, "uninstall", plugin.id, plugin.scope, dir ?? "")
                     }
                   >
                     <Trash2 />
@@ -233,14 +235,14 @@ export function PluginsCatalog({
   projects: Project[]
   home: string
   scope: string
-  onScope?: (s: string) => void
+  onScope?: (scope: string) => void
   installed?: PluginInst[]
   onChange: () => void
   query?: string
 }) {
   const { t } = useTranslation()
-  const [own, setQ] = useState("")
-  const q = query ?? own
+  const [ownQuery, setOwnQuery] = useState("")
+  const searchQuery = query ?? ownQuery
   const [data, setData] = useState<{
     available: PluginAvail[]
     error?: string
@@ -251,20 +253,21 @@ export function PluginsCatalog({
   const loadMarkets = useCallback(
     () =>
       api.marketplaces().then(
-        (r) => setMarkets(r.marketplaces ?? []),
+        (response) => setMarkets(response.marketplaces ?? []),
         () => {}
       ),
     []
   )
   const seq = useRef(0) // seule la dernière recherche s'affiche : une réponse lente pour « a » n'écrase pas celle de « ab »
   const load = useCallback((query: string) => {
-    const n = ++seq.current
+    const requestNumber = ++seq.current
+    const isLatestRequest = () => requestNumber === seq.current
     return api.plugins(query).then(
-      (r) => {
-        if (n === seq.current) setData({ available: r.available ?? [] })
+      (response) => {
+        if (isLatestRequest()) setData({ available: response.available ?? [] })
       },
-      (e) => {
-        if (n === seq.current) setData({ available: [], error: errMsg(e) })
+      (searchError) => {
+        if (isLatestRequest()) setData({ available: [], error: errMsg(searchError) })
       }
     )
   }, [])
@@ -272,21 +275,21 @@ export function PluginsCatalog({
     loadMarkets()
   }, [loadMarkets])
   useEffect(() => {
-    const h = setTimeout(() => load(q), q ? 300 : 0)
-    return () => clearTimeout(h)
-  }, [q, load])
+    const debounceDelay = searchQuery ? SEARCH_DEBOUNCE_MS : 0
+    const searchTimeout = setTimeout(() => load(searchQuery), debounceDelay)
+    return () => clearTimeout(searchTimeout)
+  }, [searchQuery, load])
 
   const install = async (id: string) => {
     setBusy(id)
-    const target = scope === "user" ? ["user", ""] : ["project", scope.slice(2)]
+    const [targetScope, targetProject] = scope === "user" ? ["user", ""] : ["project", scope.slice(PROJECT_SCOPE_PREFIX_LENGTH)]
     const ok = await reportAction(() =>
-      api.pluginAct("install", id, target[0], target[1])
+      api.pluginAct("install", id, targetScope, targetProject)
     )
     setBusy("")
-    if (ok) {
-      await load(q)
-      onChange()
-    }
+    if (!ok) return
+    await load(searchQuery)
+    onChange()
   }
   const market = async (
     key: string,
@@ -297,29 +300,32 @@ export function PluginsCatalog({
     setBusy(key)
     const ok = await reportAction(() => api.marketAct(action, source, name))
     setBusy("")
-    if (ok) {
-      if (action === "add") setSrc("")
-      await Promise.all([loadMarkets(), load(q)])
-      onChange()
-    }
+    if (!ok) return
+    if (action === "add") setSrc("")
+    await Promise.all([loadMarkets(), load(searchQuery)])
+    onChange()
   }
   // La liste des installés vient du parent quand il l'a : elle suit ses désinstallations sans relancer la recherche.
   const ids = useMemo(
-    () => (installed ? new Set(installed.map((p) => p.id)) : null),
+    () => (installed ? new Set(installed.map((plugin) => plugin.id)) : null),
     [installed]
   )
   const byMarket = useMemo(() => {
-    const g = new Map<string, PluginAvail[]>()
-    for (const p of data?.available ?? [])
-      if (!(ids ? ids.has(p.id) : p.installed))
-        g.set(p.marketplace, [...(g.get(p.marketplace) ?? []), p])
-    return [...g.entries()]
+    const pluginsByMarket = new Map<string, PluginAvail[]>()
+    for (const plugin of data?.available ?? []) {
+      const isInstalled = ids ? ids.has(plugin.id) : plugin.installed
+      if (isInstalled) continue
+      pluginsByMarket.set(plugin.marketplace, [...(pluginsByMarket.get(plugin.marketplace) ?? []), plugin])
+    }
+    return [...pluginsByMarket.entries()]
   }, [data, ids])
   const scopes = [
     ["user", t("skills.plugins.scopeUser")],
-    ...projects.map((p) => [`p/${p.dir}`, tilde(p.project, home)] as const),
+    ...projects.map((project) => [`p/${project.dir}`, tilde(project.project, home)] as const),
   ] as const
-  const count = byMarket.reduce((n, [, l]) => n + l.length, 0)
+  const count = byMarket.reduce((total, [, marketPlugins]) => total + marketPlugins.length, 0)
+  const trimmedSource = src.trim()
+  const isValidSource = SOURCE_OK.test(trimmedSource)
 
   return (
     <section className="space-y-2">
@@ -336,8 +342,8 @@ export function PluginsCatalog({
           <div className="relative min-w-48 flex-1">
             <Search className="absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
             <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
+              value={searchQuery}
+              onChange={(event) => setOwnQuery(event.target.value)}
               placeholder={t("skills.plugins.search")}
               aria-label={t("skills.plugins.search")}
               className="pl-8"
@@ -355,7 +361,7 @@ export function PluginsCatalog({
           <span className="text-xs text-muted-foreground">
             {t("skills.plugins.installFor")} :{" "}
             <span className="font-medium text-foreground">
-              {scopes.find(([k]) => k === scope)?.[1]}
+              {scopes.find(([scopeKey]) => scopeKey === scope)?.[1]}
             </span>
           </span>
         )}
@@ -366,44 +372,44 @@ export function PluginsCatalog({
       {data?.error && <p className="text-sm text-destructive">{data.error}</p>}
       {data && !data.error && (
         <div className="space-y-2">
-          {byMarket.map(([mk, list], i) => (
+          {byMarket.map(([marketName, marketPlugins], marketIndex) => (
             <details
-              key={mk}
-              open={i === 0 || !!q}
+              key={marketName}
+              open={marketIndex === 0 || !!searchQuery}
               className="group rounded-md border"
             >
               <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm [&::-webkit-details-marker]:hidden">
                 <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
-                <span className="truncate font-medium">{mk}</span>
+                <span className="truncate font-medium">{marketName}</span>
                 <span className="ml-auto text-xs text-muted-foreground tabular-nums">
-                  {list.length}
+                  {marketPlugins.length}
                 </span>
               </summary>
               <ul className="divide-y border-t">
-                {list.map((p) => (
+                {marketPlugins.map((plugin) => (
                   <li
-                    key={p.id}
+                    key={plugin.id}
                     className="flex items-center gap-2 px-3 py-1.5 text-sm"
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="truncate font-medium">{p.name}</div>
+                      <div className="truncate font-medium">{plugin.name}</div>
                       <div className="line-clamp-2 text-xs text-muted-foreground">
-                        {p.description}
+                        {plugin.description}
                       </div>
                     </div>
                     <span
                       className="shrink-0 text-2xs text-muted-foreground tabular-nums"
                       title={t("skills.plugins.installs")}
                     >
-                      {p.installs.toLocaleString()}
+                      {plugin.installs.toLocaleString()}
                     </span>
                     <Button
                       size="xs"
                       variant="outline"
-                      disabled={busy === p.id}
-                      onClick={() => install(p.id)}
+                      disabled={busy === plugin.id}
+                      onClick={() => install(plugin.id)}
                     >
-                      {busy === p.id ? (
+                      {busy === plugin.id ? (
                         <Fan className="animate-spin" />
                       ) : (
                         <Download />
@@ -434,10 +440,10 @@ export function PluginsCatalog({
             <Button
               size="xs"
               variant="ghost"
-              disabled={busy === "mk:*"}
-              onClick={() => market("mk:*", "update")}
+              disabled={busy === UPDATE_ALL_MARKETS_KEY}
+              onClick={() => market(UPDATE_ALL_MARKETS_KEY, "update")}
             >
-              {busy === "mk:*" ? (
+              {busy === UPDATE_ALL_MARKETS_KEY ? (
                 <Fan className="animate-spin" />
               ) : (
                 <RefreshCw />
@@ -446,34 +452,34 @@ export function PluginsCatalog({
             </Button>
           </div>
           <ul className="divide-y rounded-md border">
-            {markets.map((m) => (
+            {markets.map((marketplace) => (
               <li
-                key={m.name}
+                key={marketplace.name}
                 className="flex items-center gap-2 px-3 py-1.5 text-sm"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{m.name}</div>
+                  <div className="truncate font-medium">{marketplace.name}</div>
                   <div className="truncate text-xs text-muted-foreground">
-                    {m.repo ?? m.url ?? m.source}
+                    {marketplace.repo ?? marketplace.url ?? marketplace.source}
                   </div>
                 </div>
                 <Button
                   size="icon-xs"
                   variant="ghost"
-                  disabled={busy === "mk:" + m.name}
+                  disabled={busy === MARKET_KEY_PREFIX + marketplace.name}
                   title={t("skills.plugins.marketUpdate")}
                   aria-label={t("skills.plugins.marketUpdate")}
-                  onClick={() => market("mk:" + m.name, "update", "", m.name)}
+                  onClick={() => market(MARKET_KEY_PREFIX + marketplace.name, "update", "", marketplace.name)}
                 >
                   <RefreshCw />
                 </Button>
                 <Button
                   size="icon-xs"
                   variant="ghost"
-                  disabled={busy === "mk:" + m.name}
+                  disabled={busy === MARKET_KEY_PREFIX + marketplace.name}
                   title={t("skills.plugins.marketRemove")}
                   aria-label={t("skills.plugins.marketRemove")}
-                  onClick={() => market("mk:" + m.name, "remove", "", m.name)}
+                  onClick={() => market(MARKET_KEY_PREFIX + marketplace.name, "remove", "", marketplace.name)}
                 >
                   <Trash2 />
                 </Button>
@@ -482,15 +488,14 @@ export function PluginsCatalog({
           </ul>
           <form
             className="flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (SOURCE_OK.test(src.trim()))
-                market("mk:add", "add", src.trim())
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (isValidSource) market(ADD_MARKET_KEY, "add", trimmedSource)
             }}
           >
             <Input
               value={src}
-              onChange={(e) => setSrc(e.target.value)}
+              onChange={(event) => setSrc(event.target.value)}
               placeholder={t("skills.plugins.marketAdd")}
               aria-label={t("skills.plugins.marketAdd")}
             />
@@ -498,9 +503,9 @@ export function PluginsCatalog({
               type="submit"
               size="sm"
               variant="outline"
-              disabled={busy === "mk:add" || !SOURCE_OK.test(src.trim())}
+              disabled={busy === ADD_MARKET_KEY || !isValidSource}
             >
-              {busy === "mk:add" ? <Fan className="animate-spin" /> : <Plus />}{" "}
+              {busy === ADD_MARKET_KEY ? <Fan className="animate-spin" /> : <Plus />}{" "}
               {t("skills.plugins.marketAddBtn")}
             </Button>
           </form>

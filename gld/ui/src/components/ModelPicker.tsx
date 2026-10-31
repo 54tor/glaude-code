@@ -7,12 +7,15 @@ import { Choose } from "./Choose"
 
 // Modèle que claude utilisera sans --model : "model" des réglages utilisateur, sinon ANTHROPIC_MODEL.
 let userModel: Promise<string> | undefined
+const USER_SETTINGS_FILE_ID = "u"
+type UserSettings = { model?: string; env?: Record<string, string> }
+
 const defaultModel = () =>
   (userModel ??= api
     .config()
-    .then((ov) => {
-      const d = ov.files.find((f) => f.id === "u")?.data as { model?: string; env?: Record<string, string> } | undefined
-      return d?.model || d?.env?.ANTHROPIC_MODEL || ""
+    .then((overview) => {
+      const userSettings = overview.files.find((file) => file.id === USER_SETTINGS_FILE_ID)?.data as UserSettings | undefined
+      return userSettings?.model || userSettings?.env?.ANTHROPIC_MODEL || ""
     })
     .catch(() => ""))
 
@@ -25,15 +28,24 @@ export function ModelPicker({
   className,
 }: {
   value: Choice
-  onChange: (c: Choice) => void
+  onChange: (choice: Choice) => void
   disabled?: boolean
   size?: "sm" | "default"
   className?: string
 }) {
   const { t } = useTranslation()
-  const [def, setDef] = useState("")
-  useEffect(() => void defaultModel().then(setDef), [])
-  const opts = models().map(([v, l]) => (v || !def ? [v, l] : [v, t("conversation.models.defaultIs", { model: models().find(([a]) => a && def.toLowerCase().includes(a))?.[1] ?? def })])) as unknown as ReturnType<typeof models>
+  const [defaultModelName, setDefaultModelName] = useState("")
+  useEffect(() => void defaultModel().then(setDefaultModelName), [])
+  const defaultModelLabel = () => {
+    const matchingModel = models().find(([modelValue]) => modelValue && defaultModelName.toLowerCase().includes(modelValue))
+    return matchingModel?.[1] ?? defaultModelName
+  }
+  const labelOption = ([modelValue, modelLabel]: ReturnType<typeof models>[number]) => {
+    const isDefaultOption = !modelValue && defaultModelName
+    if (!isDefaultOption) return [modelValue, modelLabel]
+    return [modelValue, t("conversation.models.defaultIs", { model: defaultModelLabel() })]
+  }
+  const opts = models().map(labelOption) as unknown as ReturnType<typeof models>
   return (
     <div className={cn("flex min-w-0 flex-wrap gap-2 max-md:flex-1 max-md:flex-nowrap", className)}>
       <Choose value={value.model} onChange={(model) => onChange({ ...value, model })} options={opts} label={t("conversation.modelPicker.model")} disabled={disabled} size={size} className="max-md:min-w-0 max-md:flex-1" />

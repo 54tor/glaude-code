@@ -10,10 +10,18 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { DiffView } from "./MemoryDiff"
 
 // Le serveur stocke la raison en français : on l'affiche traduite, toute autre valeur telle quelle.
-const reasonLabel = (r: string) => (r === "remplacé" ? i18n.t("memory.trash.reasonReplaced") : r === "supprimé" ? i18n.t("memory.trash.reasonDeleted") : r)
+function reasonLabel(reason: string) {
+  if (reason === "remplacé") return i18n.t("memory.trash.reasonReplaced")
+  if (reason === "supprimé") return i18n.t("memory.trash.reasonDeleted")
+  return reason
+}
+
+const TRASH_KEY_PREFIX = "corbeille/"
+
+const fileNameOf = (path: string) => path.split(/[\\/]/).pop()
 
 // Corbeille dans la colonne de gauche : les versions supprimées ou remplacées.
-export function TrashList({ trash, current, onPick, onPurgeAll }: { trash: Trashed[]; current: string; onPick: (k: string) => void; onPurgeAll: () => void }) {
+export function TrashList({ trash, current, onPick, onPurgeAll }: { trash: Trashed[]; current: string; onPick: (key: string) => void; onPurgeAll: () => void }) {
   const { t } = useTranslation()
   return (
     <section className="mt-4 border-t pt-2">
@@ -24,20 +32,20 @@ export function TrashList({ trash, current, onPick, onPurgeAll }: { trash: Trash
         </Button>
       </div>
       <ul className="ml-[15px] space-y-px border-l pl-1">
-        {trash.map((t) => (
-          <li key={t.id}>
+        {trash.map((trashedFile) => (
+          <li key={trashedFile.id}>
             <button
-              onClick={() => onPick("corbeille/" + t.id)}
-              title={t.path}
+              onClick={() => onPick(TRASH_KEY_PREFIX + trashedFile.id)}
+              title={trashedFile.path}
               className={cn(
                 "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors",
-                t.id === current ? "bg-accent font-medium" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                trashedFile.id === current ? "bg-accent font-medium" : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
               <FileText className="size-3.5 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">{t.path.split(/[\\/]/).pop()}</span>
+              <span className="min-w-0 flex-1 truncate">{fileNameOf(trashedFile.path)}</span>
               <span className="shrink-0 text-xs font-normal">
-                {reasonLabel(t.reason)} {ago(t.at)}
+                {reasonLabel(trashedFile.reason)} {ago(trashedFile.at)}
               </span>
             </button>
           </li>
@@ -69,16 +77,20 @@ export function TrashViewer({
   const key = trashed?.key
   useEffect(() => {
     if (!diff || !key) return
-    let live = true
+    let isMounted = true
     api.memoryFile(key).then(
-      (r) => live && setCurrent(r.text),
-      () => live && setCurrent("")
+      (currentFile) => isMounted && setCurrent(currentFile.text),
+      () => isMounted && setCurrent("")
     )
     return () => {
-      live = false
+      isMounted = false
     }
   }, [diff, key])
-  const shortPath = (p: string) => (homeDir && p.startsWith(homeDir) ? "~" + p.slice(homeDir.length) : p)
+  const shortPath = (path: string) => {
+    const isUnderHome = homeDir && path.startsWith(homeDir)
+    if (isUnderHome) return "~" + path.slice(homeDir.length)
+    return path
+  }
   return (
     <>
       <div className="flex items-center gap-2 border-b px-6 py-2">

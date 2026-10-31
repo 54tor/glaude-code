@@ -6,12 +6,14 @@ import { notesOf } from "./Notes"
 
 // Clés des bloc-notes non vides, partagées par toutes les lignes de la barre latérale (une seule requête par rafraîchissement).
 let filled = new Set<string>()
-const subs = new Set<(s: Set<string>) => void>()
+const subs = new Set<(keys: Set<string>) => void>()
+const hasContent = (noteValue: Parameters<typeof notesOf>[0]) => notesOf(noteValue).some((note) => note.trim())
 const load = () =>
   api.notes().then(
-    (r) => {
-      filled = new Set(Object.entries(r.notes).filter(([, v]) => notesOf(v).some((x) => x.trim())).map(([k]) => k))
-      subs.forEach((f) => f(filled))
+    (response) => {
+      const filledEntries = Object.entries(response.notes).filter(([, noteValue]) => hasContent(noteValue))
+      filled = new Set(filledEntries.map(([noteKey]) => noteKey))
+      subs.forEach((notifySubscriber) => notifySubscriber(filled))
     },
     () => {}
   )

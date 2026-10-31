@@ -14,10 +14,12 @@ export type Ask = {
   placeholder?: string
   optional?: boolean
   confirm: string
-  run: (v: string) => void | Promise<boolean>
+  run: (value: string) => void | Promise<boolean>
   auto?: { label: string; hint: string; run: () => void }
   row?: string
 }
+
+const MAX_VALUE_LENGTH = 200
 
 // Saisie d'un nom (renommer une session, créer ou renommer un groupe).
 export function Prompt({ ask, onClose }: { ask: Ask | null; onClose: () => void }) {
@@ -26,8 +28,8 @@ export function Prompt({ ask, onClose }: { ask: Ask | null; onClose: () => void 
     if (ask) last.current = ask
   }, [ask])
   return (
-    <Dialog open={!!ask} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md" onCloseAutoFocus={(e) => focusRow(last.current?.row) && e.preventDefault()}>
+    <Dialog open={!!ask} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent className="sm:max-w-md" onCloseAutoFocus={(event) => focusRow(last.current?.row) && event.preventDefault()}>
         {ask && <Form key={ask.title + ask.value} ask={ask} onClose={onClose} />}
       </DialogContent>
     </Dialog>
@@ -36,18 +38,18 @@ export function Prompt({ ask, onClose }: { ask: Ask | null; onClose: () => void 
 
 function Form({ ask, onClose }: { ask: Ask; onClose: () => void }) {
   const { t } = useTranslation()
-  const [v, setV] = useState(ask.value)
+  const [value, setValue] = useState(ask.value)
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
-  const ok = ask.optional || v.trim() !== ""
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const ok = ask.optional || value.trim() !== ""
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault()
     if (!ok || busy) return
-    const r = ask.run(v.trim())
-    if (!(r instanceof Promise)) return onClose()
+    const result = ask.run(value.trim())
+    if (!(result instanceof Promise)) return onClose()
     setBusy(true)
     setFailed(false)
-    if (await r) return onClose()
+    if (await result) return onClose()
     setBusy(false)
     setFailed(true)
   }
@@ -58,12 +60,12 @@ function Form({ ask, onClose }: { ask: Ask; onClose: () => void }) {
         <DialogDescription className="sr-only">{t("conversation.prompt.description")}</DialogDescription>
       </DialogHeader>
       <Input
-        value={v}
-        onChange={(e) => setV(e.target.value)}
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
         placeholder={ask.placeholder}
         autoFocus
-        onFocus={(e) => e.target.select()}
-        maxLength={200}
+        onFocus={(event) => event.target.select()}
+        maxLength={MAX_VALUE_LENGTH}
         aria-label={ask.title}
         aria-invalid={failed || undefined}
         aria-describedby={failed ? "prompt-error" : undefined}

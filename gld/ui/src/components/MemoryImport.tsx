@@ -12,7 +12,9 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import type { List } from "./memoryLib"
 
 type Act = "skip" | "replace" | "both"
-const selectCls = "rounded-md border bg-background px-2 py-1 text-sm"
+const SELECT_CLASS_NAME = "rounded-md border bg-background px-2 py-1 text-sm"
+const MAX_PACK_SIZE_BYTES = 32 << 20
+const DEFAULT_ACT: Act = "skip"
 
 // Import d'un paquet de mémoires : le destinataire désigne le projet cible de chaque projet du paquet,
 // coche les entrées voulues et tranche chaque conflit de nom.
@@ -25,9 +27,19 @@ export function MemoryImport({ open, list, homeDir, onClose, onDone }: { open: b
   const [acts, setActs] = useState<Record<number, Act>>({})
   const [busy, setBusy] = useState(false)
 
-  const names = (dir: string) => new Set(list.projects.find((p) => p.dir === dir)?.files.filter((f) => f.key.startsWith(`m/${dir}/`)).map((f) => f.name))
-  const clash = (e: PackEntry) => !!dest[e.project] && names(dest[e.project]).has(e.name)
-  const todo = (entries ?? []).filter((e, i) => dest[e.project] && !off.has(i) && (!clash(e) || (acts[i] ?? "skip") !== "skip"))
+  const existingMemoryNames = (dir: string) => {
+    const project = list.projects.find((candidate) => candidate.dir === dir)
+    const memoryFiles = project?.files.filter((file) => file.key.startsWith(`m/${dir}/`))
+    return new Set(memoryFiles?.map((file) => file.name))
+  }
+  const clash = (entry: PackEntry) => !!dest[entry.project] && existingMemoryNames(dest[entry.project]).has(entry.name)
+  const actFor = (entryIndex: number) => acts[entryIndex] ?? DEFAULT_ACT
+  const willImport = (entry: PackEntry, entryIndex: number) => {
+    if (!dest[entry.project]) return false
+    if (off.has(entryIndex)) return false
+    return !clash(entry) || actFor(entryIndex) !== "skip"
+  }
+  const todo = (entries ?? []).filter(willImport)
 
   const close = () => {
     setEntries(null)
@@ -37,93 +49,102 @@ export function MemoryImport({ open, list, homeDir, onClose, onDone }: { open: b
     setActs({})
     onClose()
   }
-  const load = async (f: File | undefined) => {
-    if (!f) return
+  const load = async (packFile: File | undefined) => {
+    if (!packFile) return
     try {
-      if (f.size > 32 << 20) throw new Error(t("memory.pack.tooBig"))
-      setEntries(parsePack(await f.text()))
+      if (packFile.size > MAX_PACK_SIZE_BYTES) throw new Error(t("memory.pack.tooBig"))
+      setEntries(parsePack(await packFile.text()))
       setError("")
-    } catch (e) {
+    } catch (loadError) {
       setEntries(null)
-      setError(errMsg(e))
+      setError(errMsg(loadError))
     }
   }
   const run = async () => {
     if (!entries) return
     setBusy(true)
-    const taken = new Map<string, Set<string>>()
-    let ok = 0
-    const fails: string[] = []
-    for (const [i, e] of entries.entries()) {
-      const dir = dest[e.project]
-      if (!dir || off.has(i)) continue
-      const used = taken.get(dir) ?? names(dir)
-      taken.set(dir, used)
-      let name = e.name
-      if (used.has(name)) {
-        const a = acts[i] ?? "skip"
-        if (a === "skip") continue
-        if (a === "both") name = freeName(name, used)
+    const takenNamesByDir = new Map<string, Set<string>>()
+    let importedCount = 0
+    const failures: string[] = []
+    for (const [entryIndex, entry] of entries.entries()) {
+      const dir = dest[entry.project]
+      if (!dir || off.has(entryIndex)) continue
+      const usedNames = takenNamesByDir.get(dir) ?? existingMemoryNames(dir)
+      takenNamesByDir.set(dir, usedNames)
+      let name = entry.name
+      if (usedNames.has(name)) {
+        const act = actFor(entryIndex)
+        if (act === "skip") continue
+        if (act === "both") name = freeName(name, usedNames)
       }
       try {
-        await api.memorySave(`m/${dir}/${name}`, e.text, true)
-        used.add(name)
-        ok++
-      } catch (err) {
-        fails.push(`${name} : ${errMsg(err)}`)
+        await api.memorySave(`m/${dir}/${name}`, entry.text, true)
+        usedNames.add(name)
+        importedCount++
+      } catch (saveError) {
+        failures.push(`${name} : ${errMsg(saveError)}`)
       }
     }
     setBusy(false)
-    if (fails.length) toast.error(t("memory.pack.partial", { ok, failed: fails.length, first: fails[0] }))
-    else toast.success(t("memory.pack.imported", { count: ok }))
+    if (failures.length) toast.error(t("memory.pack.partial", { ok: importedCount, failed: failures.length, first: failures[0] }))
+    else toast.success(t("memory.pack.imported", { count: importedCount }))
     onDone()
     close()
   }
 
-  const groups = [...new Set((entries ?? []).map((e) => e.project))]
+  const setEntryChecked = (entryIndex: number, checked: unknown) =>
+    setOff((uncheckedEntries) => {
+      if (checked) {
+        uncheckedEntries.delete(entryIndex)
+        return new Set(uncheckedEntries)
+      }
+      return new Set(uncheckedEntries).add(entryIndex)
+    })
+
+  const packProjects = [...new Set((entries ?? []).map((entry) => entry.project))]
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && close()}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && close()}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t("memory.pack.dialogTitle")}</DialogTitle>
           <DialogDescription>{t("memory.pack.dialogDesc")}</DialogDescription>
         </DialogHeader>
-        <input type="file" accept=".json,application/json" onChange={(e) => load(e.target.files?.[0])} aria-label={t("memory.pack.fileAria")} className="text-sm file:mr-3 file:rounded-md file:border file:bg-muted file:px-3 file:py-1" />
+        <input type="file" accept=".json,application/json" onChange={(event) => load(event.target.files?.[0])} aria-label={t("memory.pack.fileAria")} className="text-sm file:mr-3 file:rounded-md file:border file:bg-muted file:px-3 file:py-1" />
         {error && <p className="text-sm text-destructive">{error}</p>}
         {entries && (
           <ScrollArea className="max-h-[50vh]">
             <div className="space-y-4 pr-3">
-              {groups.map((g) => (
-                <section key={g}>
+              {packProjects.map((packProject) => (
+                <section key={packProject}>
                   <div className="mb-1 flex flex-wrap items-center gap-2 text-sm">
-                    <span className="font-medium">{g || t("memory.pack.noProject")}</span>
-                    <select aria-label={t("memory.pack.destAria", { name: g })} value={dest[g] ?? ""} onChange={(e) => setDest({ ...dest, [g]: e.target.value })} className={selectCls}>
+                    <span className="font-medium">{packProject || t("memory.pack.noProject")}</span>
+                    <select aria-label={t("memory.pack.destAria", { name: packProject })} value={dest[packProject] ?? ""} onChange={(event) => setDest({ ...dest, [packProject]: event.target.value })} className={SELECT_CLASS_NAME}>
                       <option value="">{t("memory.pack.ignore")}</option>
-                      {list.targets.map((x) => (
-                        <option key={x.dir} value={x.dir}>
-                          {tilde(x.project, homeDir)}
+                      {list.targets.map((target) => (
+                        <option key={target.dir} value={target.dir}>
+                          {tilde(target.project, homeDir)}
                         </option>
                       ))}
                     </select>
                   </div>
                   <ul className="space-y-1">
-                    {entries.flatMap((e, i) =>
-                      e.project !== g
-                        ? []
-                        : [
-                            <li key={i} className="flex flex-wrap items-center gap-2 text-sm">
-                              <Checkbox checked={!off.has(i)} disabled={!dest[g]} aria-label={e.name} onCheckedChange={(c) => setOff((s) => (c ? (s.delete(i), new Set(s)) : new Set(s).add(i)))} />
-                              <span className="font-mono text-xs">{e.name}</span>
-                              {clash(e) && !off.has(i) && (
-                                <select aria-label={t("memory.pack.clashAria", { name: e.name })} value={acts[i] ?? "skip"} onChange={(ev) => setActs({ ...acts, [i]: ev.target.value as Act })} className={selectCls}>
-                                  <option value="skip">{t("memory.pack.skip")}</option>
-                                  <option value="replace">{t("memory.pack.replace")}</option>
-                                  <option value="both">{t("memory.pack.both")}</option>
-                                </select>
-                              )}
-                            </li>,
-                          ]
-                    )}
+                    {entries.flatMap((entry, entryIndex) => {
+                      if (entry.project !== packProject) return []
+                      const isChecked = !off.has(entryIndex)
+                      return [
+                        <li key={entryIndex} className="flex flex-wrap items-center gap-2 text-sm">
+                          <Checkbox checked={isChecked} disabled={!dest[packProject]} aria-label={entry.name} onCheckedChange={(checked) => setEntryChecked(entryIndex, checked)} />
+                          <span className="font-mono text-xs">{entry.name}</span>
+                          {clash(entry) && isChecked && (
+                            <select aria-label={t("memory.pack.clashAria", { name: entry.name })} value={actFor(entryIndex)} onChange={(event) => setActs({ ...acts, [entryIndex]: event.target.value as Act })} className={SELECT_CLASS_NAME}>
+                              <option value="skip">{t("memory.pack.skip")}</option>
+                              <option value="replace">{t("memory.pack.replace")}</option>
+                              <option value="both">{t("memory.pack.both")}</option>
+                            </select>
+                          )}
+                        </li>,
+                      ]
+                    })}
                   </ul>
                 </section>
               ))}

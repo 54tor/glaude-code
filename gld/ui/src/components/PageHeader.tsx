@@ -13,6 +13,8 @@ import { DD, GroupItems } from "./SessionMenu"
 import { SessionTrash } from "./SessionTrash"
 import { cn } from "@/lib/utils"
 
+const SEARCHABLE_ROUTE_KINDS: Route["kind"][] = ["recent", "all", "active", "project", "group", "dir"]
+
 // En-tête de la page : titre, sous-titre, actions du dossier ou du groupe affiché, et avertissement d'un dossier disparu.
 export function PageHeader({
   onMenu,
@@ -20,8 +22,8 @@ export function PageHeader({
   sub,
   qt,
   route,
-  g,
-  vg,
+  g: group,
+  vg: viewGroup,
   firstDir,
   own,
   rowCount,
@@ -52,6 +54,8 @@ export function PageHeader({
   const can = useCan()
   const exec = can("exec") // sans ce droit sur le home, sessions et terminal sont refusés : on ne les propose pas
   // Même axe que le contenu de la vue : le titre ne reste pas collé à gauche quand la liste est centrée sur grand écran.
+  const isSearchableRoute = SEARCHABLE_ROUTE_KINDS.includes(route.kind)
+  const canActInFolder = group && !group.missing && exec
   const box = cn("flex flex-wrap items-center gap-x-3 px-3 md:px-6", !split && "mx-auto w-full max-w-page")
   return (
     <>
@@ -64,7 +68,7 @@ export function PageHeader({
             <h2 className="truncate text-xl font-semibold tracking-tight">{title}</h2>
             <p className="truncate text-sm text-muted-foreground">
               {sub}
-              {qt && (route.kind === "recent" || route.kind === "all" || route.kind === "active" || route.kind === "project" || route.kind === "group" || route.kind === "dir") && t("shell.header.search", { q: qt })}
+              {qt && isSearchableRoute && t("shell.header.search", { q: qt })}
             </p>
           </div>
           {/* Petit écran : avec le titre sur la première ligne ; grand écran : en fin de ligne. */}
@@ -73,27 +77,27 @@ export function PageHeader({
             <UserMenu />
           </div>
           {searchBox}
-          {g && !g.missing && exec && (
-            <Button size="sm" onClick={() => actions.newSession(g.project)} title={t("shell.header.newInDirHint")}>
+          {canActInFolder && (
+            <Button size="sm" onClick={() => actions.newSession(group.project)} title={t("shell.header.newInDirHint")}>
               <MessageSquarePlus /> {t("shell.header.newSession")}
             </Button>
           )}
-          {g && !g.missing && exec && (
+          {canActInFolder && (
             <Button variant="outline" size="sm" onClick={() => actions.open({ dir: firstDir! })} title={t("shell.header.resumeRecentHint")}>
               <RefreshCcwDot /> {t("shell.tree.resumeRecent")}
             </Button>
           )}
-          {vg && rowCount > 0 && exec && (
+          {viewGroup && rowCount > 0 && exec && (
             <>
-              <Button size="sm" onClick={() => groupActs.prompt(vg)} title={t("shell.header.newWithRefsHint")}>
+              <Button size="sm" onClick={() => groupActs.prompt(viewGroup)} title={t("shell.header.newWithRefsHint")}>
                 <MessageSquarePlus /> {t("shell.header.newSession")}
               </Button>
-              <Button variant="outline" size="sm" onClick={() => groupActs.open(vg)} title={t("shell.header.resumeAllHint")}>
+              <Button variant="outline" size="sm" onClick={() => groupActs.open(viewGroup)} title={t("shell.header.resumeAllHint")}>
                 <RefreshCcwDot /> {t("shell.header.resumeAll")}
               </Button>
             </>
           )}
-          {vg && exec && (
+          {viewGroup && exec && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon-sm" aria-label={t("shell.header.groupActions")}>
@@ -101,7 +105,7 @@ export function PageHeader({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64">
-                <GroupItems M={DD} vg={vg} page />
+                <GroupItems M={DD} vg={viewGroup} page />
               </DropdownMenuContent>
             </DropdownMenu>
           )}
@@ -116,12 +120,12 @@ export function PageHeader({
         </div>
       </header>
 
-      {g?.missing && (
+      {group?.missing && (
         <div className="border-b bg-warning/10 text-sm">
           <div className={cn(box, "gap-3 py-3")}>
             <TriangleAlert className="size-4 shrink-0 text-warning" />
             <p className="flex-1">{t("shell.header.missing")}</p>
-            <Button size="sm" variant="outline" onClick={() => actions.moveGroup(g, own)}>
+            <Button size="sm" variant="outline" onClick={() => actions.moveGroup(group, own)}>
               {t("shell.header.reassignShort")}
             </Button>
           </div>

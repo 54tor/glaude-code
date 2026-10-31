@@ -28,7 +28,7 @@ export function Markdown({ t, onLink, breaks }: { t: string; onLink?: (href: str
           // URL filtrée (javascript:…) : plus de href, donc du texte simple plutôt qu'un lien qui rouvrirait la page.
           a: ({ href, children }) =>
             href ? (
-              <a href={href} target="_blank" rel="noopener noreferrer" onClick={(e) => onLink?.(href) && e.preventDefault()}>
+              <a href={href} target="_blank" rel="noopener noreferrer" onClick={(event) => onLink?.(href) && event.preventDefault()}>
                 {children}
               </a>
             ) : (
@@ -47,7 +47,7 @@ const PASTED = /<pasted_content id="[^"]*">\n?([\s\S]*?)\n?<\/pasted_content(?: 
 
 // Le dossier personnel (et donc l'identifiant du compte) ne s'affiche pas : « @/home/nom/x.png » devient « @~/x.png ».
 const HOME_PREFIX = /(^|[\s@("'`])(?:\/home\/[^/\s]+|\/Users\/[^/\s]+|[A-Za-z]:[\\/]Users[\\/][^\\/\s]+)(?=[\\/])/g
-export const hideHome = (s: string) => s.replace(HOME_PREFIX, "$1~")
+export const hideHome = (text: string) => text.replace(HOME_PREFIX, "$1~")
 
 // Image déposée par l'interface (« @/…/.claude/gld-web-images/<nom> ») : affichée au lieu du chemin, relue par son seul nom (GET /v1/sessions/{id}/conversation/uploads/{up}).
 export const UPLOADED = /@[^\s@]{0,300}\/gld-web-images\/([A-Za-z0-9][\w.-]*\.(?:png|jpe?g|gif|webp))/g
@@ -55,40 +55,44 @@ export const UPLOADED = /@[^\s@]{0,300}\/gld-web-images\/([A-Za-z0-9][\w.-]*\.(?
 function UserText({ t: text, conv }: { t: string; conv?: Conv }) {
   const { t } = useTranslation()
   const parts: React.ReactNode[] = []
-  const md = (s: string, key: string) => {
-    if (!conv || conv.guest) return parts.push(<Markdown key={key} t={s} breaks />)
+  const pushMarkdownWithUploads = (markdownText: string, key: string) => {
+    if (!conv || conv.guest) {
+      parts.push(<Markdown key={key} t={markdownText} breaks />)
+      return
+    }
     let from = 0
-    for (const m of s.matchAll(UPLOADED)) {
-      const before = s.slice(from, m.index).trim()
+    for (const uploadMatch of markdownText.matchAll(UPLOADED)) {
+      const before = markdownText.slice(from, uploadMatch.index).trim()
       if (before) parts.push(<Markdown key={`${key}t${from}`} t={before} breaks />)
-      const src = v1(`/sessions/${seg(conv.id)}/conversation/uploads/${seg(m[1])}${qs({ dir: conv.dir })}`)
+      const src = v1(`/sessions/${seg(conv.id)}/conversation/uploads/${seg(uploadMatch[1])}${qs({ dir: conv.dir })}`)
       parts.push(
-        <a key={`${key}i${m.index}`} href={src} target="_blank" rel="noopener noreferrer" title={t("conversation.message.openImage")} className="my-1 block w-fit">
+        <a key={`${key}i${uploadMatch.index}`} href={src} target="_blank" rel="noopener noreferrer" title={t("conversation.message.openImage")} className="my-1 block w-fit">
           <img src={src} loading="lazy" alt={t("conversation.message.imageAlt")} className="max-h-80 max-w-full rounded-lg border bg-muted/30 object-contain" />
         </a>
       )
-      from = m.index + m[0].length
+      from = uploadMatch.index + uploadMatch[0].length
     }
-    const rest = s.slice(from).trim()
+    const rest = markdownText.slice(from).trim()
     if (rest) parts.push(<Markdown key={`${key}r`} t={rest} breaks />)
   }
   let at = 0
-  for (const m of text.matchAll(PASTED)) {
-    const before = text.slice(at, m.index).trim()
-    if (before) md(before, `t${at}`)
-    const lines = m[1].split("\n").length
+  for (const pastedMatch of text.matchAll(PASTED)) {
+    const before = text.slice(at, pastedMatch.index).trim()
+    if (before) pushMarkdownWithUploads(before, `t${at}`)
+    const pastedContent = pastedMatch[1]
+    const lines = pastedContent.split("\n").length
     parts.push(
-      <details key={m.index} className="group/paste my-1 rounded-md border bg-background/60">
+      <details key={pastedMatch.index} className="group/paste my-1 rounded-md border bg-background/60">
         <summary className="cursor-pointer list-none px-3 py-1.5 text-xs text-muted-foreground select-none hover:text-foreground">
           {t("conversation.message.pasted", { count: lines })}
         </summary>
-        <pre className="max-h-96 overflow-auto border-t px-3 py-2 text-xs whitespace-pre-wrap">{m[1]}</pre>
+        <pre className="max-h-96 overflow-auto border-t px-3 py-2 text-xs whitespace-pre-wrap">{pastedContent}</pre>
       </details>
     )
-    at = m.index + m[0].length
+    at = pastedMatch.index + pastedMatch[0].length
   }
   const rest = text.slice(at).trim()
-  if (rest) md(rest, "rest")
+  if (rest) pushMarkdownWithUploads(rest, "rest")
   return <>{parts}</>
 }
 
@@ -100,10 +104,12 @@ function SuperpowersDoc({ dir, path }: { dir: string; path: string }) {
   const [open, setOpen] = useState(false)
   const flip = () => {
     setOpen(!open)
-    if (doc === null) {
-      const fail = () => (toast.error(t("conversation.message.docFail")), setOpen(false))
-      api.fsFile(dir, path).then((r) => setDoc(r.content), fail)
+    if (doc !== null) return
+    const fail = () => {
+      toast.error(t("conversation.message.docFail"))
+      setOpen(false)
     }
+    api.fsFile(dir, path).then((file) => setDoc(file.content), fail)
   }
   return (
     <div className="mt-1">
@@ -120,6 +126,11 @@ function SuperpowersDoc({ dir, path }: { dir: string; path: string }) {
   )
 }
 
+const FRAMED_EXTENSIONS = ["html", "htm", "pdf"]
+const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp"]
+const INTERRUPTED = /^\s*\[Request interrupted by user( for tool use)?\]\s*$/
+const BYTES_PER_KILOBYTE = 1024
+
 // Fichier écrit par Claude (md, html, image, pdf) : relu à la demande par le serveur, qui ne sert que les chemins du transcript.
 function WrittenDoc({ conv, path }: { conv: Conv; path: string }) {
   const { t } = useTranslation()
@@ -127,12 +138,20 @@ function WrittenDoc({ conv, path }: { conv: Conv; path: string }) {
   const [md, setMd] = useState<string | null>(null)
   const src = v1(`/sessions/${seg(conv.id)}/conversation/document${qs({ dir: conv.dir, path })}`)
   const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase()
+  const isMarkdown = ext === "md"
+  const isFramed = FRAMED_EXTENSIONS.includes(ext)
+  const isImage = IMAGE_EXTENSIONS.includes(ext)
   const flip = () => {
     setOpen(!open)
-    if (ext === "md" && md === null) {
-      const fail = () => (toast.error(t("conversation.message.docFail")), setOpen(false))
-      authFetch(src).then((r) => (r.ok ? r.text().then(setMd) : fail()), fail)
+    if (!isMarkdown || md !== null) return
+    const fail = () => {
+      toast.error(t("conversation.message.docFail"))
+      setOpen(false)
     }
+    authFetch(src).then((response) => {
+      if (response.ok) return response.text().then(setMd)
+      return fail()
+    }, fail)
   }
   return (
     <div className="msg">
@@ -145,13 +164,13 @@ function WrittenDoc({ conv, path }: { conv: Conv; path: string }) {
           <ExternalLink className="size-3.5" aria-hidden />
         </a>
       </div>
-      {open && ext === "md" && md !== null && (
+      {open && isMarkdown && md !== null && (
         <div className="mt-2 rounded-lg border bg-card px-4 py-3 leading-relaxed text-card-foreground">
           <Markdown t={md} />
         </div>
       )}
-      {open && ["html", "htm", "pdf"].includes(ext) && <iframe src={src} sandbox="" title={path} className="mt-2 h-[32rem] w-full rounded-lg border bg-white" />}
-      {open && ["png", "jpg", "jpeg", "gif", "webp"].includes(ext) && <img src={src} alt={path} className="mt-2 max-h-96 max-w-full rounded-lg border object-contain" />}
+      {open && isFramed && <iframe src={src} sandbox="" title={path} className="mt-2 h-[32rem] w-full rounded-lg border bg-white" />}
+      {open && isImage && <img src={src} alt={path} className="mt-2 max-h-96 max-w-full rounded-lg border object-contain" />}
     </div>
   )
 }
@@ -160,98 +179,99 @@ function WrittenDoc({ conv, path }: { conv: Conv; path: string }) {
 // guest : vue invitée, sans document ni lecture de fichier (routes refusées à l'invité).
 type Conv = { dir: string; id: string; tools?: boolean; guest?: boolean }
 
-function MessageView({ m, conv }: { m: Msg; conv?: Conv }) {
+function MessageView({ m: message, conv }: { m: Msg; conv?: Conv }) {
   const { t } = useTranslation()
-  const title = m.ts ? new Date(m.ts).toLocaleString(loc()) : undefined
+  const title = message.ts ? new Date(message.ts).toLocaleString(loc()) : undefined
   // Image de la conversation : relue à la demande dans le transcript (GET /v1/sessions/{id}/conversation/images/{img}), jamais embarquée dans la liste des messages.
-  if (m.img && conv) {
+  if (message.img && conv) {
     // Un <img> n'envoie pas X-Gld-Share : l'invité nomme son partage dans l'URL.
-    const sh = conv.guest ? getAuth().share : undefined
-    const src = v1(`/sessions/${seg(conv.id)}/conversation/images/${m.o ?? 0}-${m.k ?? 0}${qs({ dir: conv.dir, share: sh })}`)
+    const share = conv.guest ? getAuth().share : undefined
+    const src = v1(`/sessions/${seg(conv.id)}/conversation/images/${message.o ?? 0}-${message.k ?? 0}${qs({ dir: conv.dir, share })}`)
     return (
-      <div title={title} className={`msg flex ${m.r === "user" ? "justify-end" : ""}`}>
+      <div title={title} className={`msg flex ${message.r === "user" ? "justify-end" : ""}`}>
         <a href={src} target="_blank" rel="noopener noreferrer" title={t("conversation.message.openImage")}>
           <img src={src} loading="lazy" alt={t("conversation.message.imageAlt")} className="max-h-80 max-w-full rounded-xl border bg-muted/30 object-contain" />
         </a>
       </div>
     )
   }
-  if (m.r === "doc") return conv && !conv.guest ? <WrittenDoc conv={conv} path={m.t} /> : null
-  if (m.r === "user" && isCompactSummary(m.t))
+  const canReadFiles = conv && !conv.guest
+  if (message.r === "doc") return canReadFiles ? <WrittenDoc conv={conv} path={message.t} /> : null
+  if (message.r === "user" && isCompactSummary(message.t))
     return (
       <div title={title} className="msg mx-auto max-w-3xl">
-        <CompactSummary t={m.t} md={(t) => <Markdown t={t} />} />
+        <CompactSummary t={message.t} md={(markdownText) => <Markdown t={markdownText} />} />
       </div>
     )
-  const stop = m.r === "user" ? /^\s*\[Request interrupted by user( for tool use)?\]\s*$/.exec(m.t) : null
+  const stop = message.r === "user" ? INTERRUPTED.exec(message.t) : null
   if (stop)
     return (
       <div title={title} role="status" className="msg mx-auto flex w-fit items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-sm font-medium text-destructive">
         <OctagonX className="size-4" aria-hidden /> {t(stop[1] ? "conversation.message.interruptedTool" : "conversation.message.interrupted")}
       </div>
     )
-  if (m.r === "user" && isTagged(m.t))
+  if (message.r === "user" && isTagged(message.t))
     return (
       <div title={title} className="msg ml-auto max-w-[85%]">
         <Tagged
-          t={m.t}
-          md={(t) => <Markdown t={t} />}
-          onReply={conv && !conv.guest ? (to, name) => setDraft(conv.id, { text: t("conversation.tagged.replyDraft", { name, to }) }) : undefined}
+          t={message.t}
+          md={(markdownText) => <Markdown t={markdownText} />}
+          onReply={canReadFiles ? (to, name) => setDraft(conv.id, { text: t("conversation.tagged.replyDraft", { name, to }) }) : undefined}
         />
       </div>
     )
-  if (m.r === "user")
+  if (message.r === "user")
     return (
       <div title={title} className="msg flex justify-end">
         <div className="max-w-[85%] rounded-lg bg-accent px-4 py-2.5 break-words text-accent-foreground">
-          <UserText t={m.t} conv={conv} />
+          <UserText t={message.t} conv={conv} />
         </div>
       </div>
     )
-  if (m.r === "tool") {
+  if (message.r === "tool") {
     // « ↳ … » : résultat d'un appel ; sinon l'appel lui-même (« Outil  argument »).
-    const result = m.t.startsWith("↳")
+    const result = message.t.startsWith("↳")
     const Icon = result ? CornerDownRight : Wrench
     return (
       <div title={title} className="msg flex gap-2 border-l-2 border-primary/30 py-0.5 pl-3 text-muted-foreground">
         <Icon className="mt-0.5 size-3.5 shrink-0" aria-label={result ? t("conversation.message.toolResult") : t("conversation.message.toolCall")} />
         <div className="min-w-0">
-          <span className="break-words whitespace-pre-wrap">{noBreak(hideHome(result ? m.t.slice(1).trimStart() : m.t))}</span>
-          {!result && conv && !conv.guest && SP_DOC.test(m.t) && <SuperpowersDoc dir={conv.dir} path={SP_DOC.exec(m.t)![0]} />}
+          <span className="break-words whitespace-pre-wrap">{noBreak(hideHome(result ? message.t.slice(1).trimStart() : message.t))}</span>
+          {!result && canReadFiles && SP_DOC.test(message.t) && <SuperpowersDoc dir={conv.dir} path={SP_DOC.exec(message.t)![0]} />}
         </div>
       </div>
     )
   }
   return (
     <div title={title} className="msg leading-relaxed break-words">
-      <Markdown t={m.t} />
+      <Markdown t={message.t} />
     </div>
   )
 }
 
 // Message démesuré (coupé par le serveur) : affiché par morceaux, chacun à la demande.
-function CutMessage({ m, conv }: { m: Msg; conv?: Conv }) {
+function CutMessage({ m: message, conv }: { m: Msg; conv?: Conv }) {
   const { t } = useTranslation()
-  const [more, setMore] = useState({ t: "", cut: m.cut ?? 0 })
+  const [more, setMore] = useState({ t: "", cut: message.cut ?? 0 })
   const [busy, setBusy] = useState(false)
   const next = async () => {
     if (!conv) return
     setBusy(true)
     try {
-      const r = await api.convText(conv, !!conv.tools, m, more.cut)
-      setMore((p) => ({ t: p.t + r.t, cut: r.cut }))
+      const chunk = await api.convText(conv, !!conv.tools, message, more.cut)
+      setMore((previous) => ({ t: previous.t + chunk.t, cut: chunk.cut }))
     } catch {
       toast.error(t("conversation.message.readFail"))
     } finally {
       setBusy(false)
     }
   }
-  const left = Math.max(1, Math.round(((m.len ?? 0) - more.cut) / 1024))
+  const left = Math.max(1, Math.round(((message.len ?? 0) - more.cut) / BYTES_PER_KILOBYTE))
   return (
     <>
-      <MessageView m={more.t ? { ...m, t: m.t + more.t } : m} conv={conv} />
+      <MessageView m={more.t ? { ...message, t: message.t + more.t } : message} conv={conv} />
       {more.cut > 0 && conv && (
-        <div className={m.r === "user" ? "flex justify-end" : ""}>
+        <div className={message.r === "user" ? "flex justify-end" : ""}>
           <Button variant="outline" size="sm" disabled={busy} onClick={next}>
             {t("conversation.message.showMore", { size: size(left) })}
           </Button>
@@ -261,8 +281,19 @@ function CutMessage({ m, conv }: { m: Msg; conv?: Conv }) {
   )
 }
 
-function MessageOrCut(p: { m: Msg; conv?: Conv }) {
-  return p.m.cut ? <CutMessage {...p} /> : <MessageView {...p} />
+type MessageProps = { m: Msg; conv?: Conv }
+
+function MessageOrCut(props: MessageProps) {
+  return props.m.cut ? <CutMessage {...props} /> : <MessageView {...props} />
 }
 
-export const Message = memo(MessageOrCut, (a, b) => a.m === b.m && a.conv?.dir === b.conv?.dir && a.conv?.id === b.conv?.id && a.conv?.tools === b.conv?.tools)
+function sameMessageProps(previous: MessageProps, next: MessageProps) {
+  return (
+    previous.m === next.m &&
+    previous.conv?.dir === next.conv?.dir &&
+    previous.conv?.id === next.conv?.id &&
+    previous.conv?.tools === next.conv?.tools
+  )
+}
+
+export const Message = memo(MessageOrCut, sameMessageProps)

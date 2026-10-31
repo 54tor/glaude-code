@@ -67,12 +67,12 @@ export const TYPES: readonly { key: string; label: string; icon: LucideIcon; col
   },
 ]
 
-export const typeOf = (t?: string) => TYPES.find((x) => x.key === t)
+export const typeOf = (typeKey?: string) => TYPES.find((memoryType) => memoryType.key === typeKey)
 
 export function TypeHelp({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useTranslation()
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{t("memory.typeHelp.title")}</DialogTitle>
@@ -81,15 +81,15 @@ export function TypeHelp({ open, onClose }: { open: boolean; onClose: () => void
           </DialogDescription>
         </DialogHeader>
         <ul className="space-y-3">
-          {TYPES.map((x) => (
-            <li key={x.key} className="flex gap-3">
-              <x.icon className={cn("mt-0.5 size-5 shrink-0", x.color)} />
+          {TYPES.map((memoryType) => (
+            <li key={memoryType.key} className="flex gap-3">
+              <memoryType.icon className={cn("mt-0.5 size-5 shrink-0", memoryType.color)} />
               <div className="min-w-0 text-sm">
                 <p className="font-medium">
-                  {x.label} <code className="text-xs font-normal text-muted-foreground">{x.key}</code>
+                  {memoryType.label} <code className="text-xs font-normal text-muted-foreground">{memoryType.key}</code>
                 </p>
-                <p>{x.what}</p>
-                <p className="text-xs text-muted-foreground">{t("memory.typeHelp.example", { text: x.example })}</p>
+                <p>{memoryType.what}</p>
+                <p className="text-xs text-muted-foreground">{t("memory.typeHelp.example", { text: memoryType.example })}</p>
               </div>
             </li>
           ))}

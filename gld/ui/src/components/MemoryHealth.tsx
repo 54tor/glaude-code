@@ -28,6 +28,16 @@ const LINT_KINDS: Record<string, string> = {
   périmé: "memory.health.kinds.lintStale",
 }
 
+const COST_DECIMALS = 4
+
+type LintResult = { scope: string; findings?: Finding[]; error?: string; cost?: number }
+
+const isFrontMatterIssue = (issue: Issue) => issue.kind === "front-matter"
+
+const isRepairableIndexIssue = (issue: Issue) => issue.dir && (issue.kind === "index-ligne" || issue.kind === "index-absent")
+
+const shortMemoryKey = (key: string) => key.replace(/^g\/rules\//, "rules/").replace(/^m\/[^/]+\//, "")
+
 export function HealthDialog({
   open,
   issues,
@@ -50,16 +60,39 @@ export function HealthDialog({
   const { t } = useTranslation()
   const [scope, setScope] = useState("global")
   const [busy, setBusy] = useState(false)
-  const [lint, setLint] = useState<{ scope: string; findings?: Finding[]; error?: string; cost?: number } | null>(null)
+  const [lint, setLint] = useState<LintResult | null>(null)
   const analyse = async () => {
     setBusy(true)
     setLint({ scope, ...(await onLint(scope)) })
     setBusy(false)
   }
-  const fixable = [...new Set(issues.filter((i) => i.kind === "front-matter").map((i) => i.key))]
-  const repairable = [...new Set(issues.filter((i) => i.dir && (i.kind === "index-ligne" || i.kind === "index-absent")).map((i) => i.dir!))]
+  const fixable = [...new Set(issues.filter(isFrontMatterIssue).map((issue) => issue.key))]
+  const repairable = [...new Set(issues.filter(isRepairableIndexIssue).map((issue) => issue.dir!))]
+  const openKeyAndClose = (key: string) => {
+    onOpenKey(key)
+    onClose()
+  }
+  const renderLintResult = (lintResult: LintResult) => {
+    if (lintResult.error) return <p className="text-destructive">{lintResult.error}</p>
+    if (lintResult.findings?.length === 0) {
+      return <p className="text-muted-foreground">{t("memory.health.noFindings", { cost: lintResult.cost?.toFixed(COST_DECIMALS) ?? "" })}</p>
+    }
+    return lintResult.findings?.map((finding, findingIndex) => (
+      <div key={findingIndex} className="rounded-md border px-2 py-1.5">
+        <p className="text-xs font-medium text-muted-foreground">{LINT_KINDS[finding.kind] ? t(LINT_KINDS[finding.kind]) : finding.kind}</p>
+        <p>{finding.why}</p>
+        <p className="mt-1 flex flex-wrap gap-1">
+          {finding.keys.map((key) => (
+            <Button key={key} size="xs" variant="outline" onClick={() => openKeyAndClose(key)}>
+              {shortMemoryKey(key)}
+            </Button>
+          ))}
+        </p>
+      </div>
+    ))
+  }
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t("memory.health.title")}</DialogTitle>
@@ -72,9 +105,9 @@ export function HealthDialog({
                 <Wrench /> {t("memory.health.fixAll", { n: fixable.length })}
               </Button>
             )}
-            {repairable.map((d) => (
-              <Button key={d} size="xs" variant="outline" onClick={() => onRepair(d)} title={t("memory.health.repairTitle")}>
-                <Wrench /> {t("memory.health.repair", { dir: d })}
+            {repairable.map((directory) => (
+              <Button key={directory} size="xs" variant="outline" onClick={() => onRepair(directory)} title={t("memory.health.repairTitle")}>
+                <Wrench /> {t("memory.health.repair", { dir: directory })}
               </Button>
             ))}
           </div>
@@ -87,44 +120,22 @@ export function HealthDialog({
             {busy ? <Fan className="animate-spin" /> : <Sparkles />} {t("memory.health.analyze")}
           </Button>
         </div>
-        {lint && (
-          <div className="space-y-1 text-sm">
-            {lint.error ? (
-              <p className="text-destructive">{lint.error}</p>
-            ) : lint.findings?.length === 0 ? (
-              <p className="text-muted-foreground">{t("memory.health.noFindings", { cost: lint.cost?.toFixed(4) ?? "" })}</p>
-            ) : (
-              lint.findings?.map((f, n) => (
-                <div key={n} className="rounded-md border px-2 py-1.5">
-                  <p className="text-xs font-medium text-muted-foreground">{LINT_KINDS[f.kind] ? t(LINT_KINDS[f.kind]) : f.kind}</p>
-                  <p>{f.why}</p>
-                  <p className="mt-1 flex flex-wrap gap-1">
-                    {f.keys.map((k) => (
-                      <Button key={k} size="xs" variant="outline" onClick={() => (onOpenKey(k), onClose())}>
-                        {k.replace(/^g\/rules\//, "rules/").replace(/^m\/[^/]+\//, "")}
-                      </Button>
-                    ))}
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
-        )}
+        {lint && <div className="space-y-1 text-sm">{renderLintResult(lint)}</div>}
         <ScrollArea className="max-h-96">
           <ul className="space-y-1 pr-3">
-            {issues.map((i, n) => (
-              <li key={n} className="flex items-start gap-1">
-                <button onClick={() => (onOpenKey(i.key), onClose())} className="flex min-w-0 flex-1 items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted">
-                  <AlertTriangle className={cn("mt-0.5 size-3.5 shrink-0", i.kind === "perime" ? "text-muted-foreground" : "text-warning")} />
+            {issues.map((issue, issueIndex) => (
+              <li key={issueIndex} className="flex items-start gap-1">
+                <button onClick={() => openKeyAndClose(issue.key)} className="flex min-w-0 flex-1 items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted">
+                  <AlertTriangle className={cn("mt-0.5 size-3.5 shrink-0", issue.kind === "perime" ? "text-muted-foreground" : "text-warning")} />
                   <span className="min-w-0">
                     <span className="block text-xs font-medium text-muted-foreground">
-                      {KINDS[i.kind] ? t(KINDS[i.kind]) : i.kind} · {i.key}
+                      {KINDS[issue.kind] ? t(KINDS[issue.kind]) : issue.kind} · {issue.key}
                     </span>
-                    <span className="break-words">{i.msg}</span>
+                    <span className="break-words">{issue.msg}</span>
                   </span>
                 </button>
-                {i.kind === "front-matter" && (
-                  <Button size="xs" variant="outline" className="mt-1 shrink-0" onClick={() => onFix([i.key])} title={t("memory.health.fixTitle")}>
+                {isFrontMatterIssue(issue) && (
+                  <Button size="xs" variant="outline" className="mt-1 shrink-0" onClick={() => onFix([issue.key])} title={t("memory.health.fixTitle")}>
                     <Wrench /> {t("memory.health.fix")}
                   </Button>
                 )}
