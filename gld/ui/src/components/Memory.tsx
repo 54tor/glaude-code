@@ -41,7 +41,7 @@ const TOKEN_COUNT_BATCH_SIZE = 4
 export function Memory({
   sel,
   home: homeDir,
-  q,
+  q: query,
   onPick,
   onAsk,
   onCompose,
@@ -124,7 +124,7 @@ export function Memory({
   const [typeFilter, setTypeFilter] = useState("")
   const [hits, setHits] = useState<{ q: string; keys: Set<string> }>({ q: "", keys: new Set() })
   useEffect(() => {
-    const trimmedQuery = q.trim()
+    const trimmedQuery = query.trim()
     if (trimmedQuery.length < MIN_SEARCH_LENGTH) return
     let isStillMounted = true
     const searchTimer = setTimeout(
@@ -139,9 +139,9 @@ export function Memory({
       isStillMounted = false
       clearTimeout(searchTimer)
     }
-  }, [q])
-  const hitKeys = hits.q === q.trim() ? hits.keys : null
-  const lowerQuery = q.toLowerCase()
+  }, [query])
+  const hitKeys = hits.q === query.trim() ? hits.keys : null
+  const lowerQuery = query.toLowerCase()
   const match = (memFile: MemFile, scope = "") => {
     const matchesType = !typeFilter || memFile.type === typeFilter
     if (!matchesType) return false
