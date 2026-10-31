@@ -52,4 +52,4 @@ check: ui check-ui
 check-ui:
 	cd gld/ui && { [ -d node_modules ] || npm ci; } && npx tsc -b && npx eslint . && npm test
 
-.PHONY: ui install windows macos test check check-ui fuzz cover
+.PHONY: ui commonpw install windows macos test check check-ui fuzz cover
