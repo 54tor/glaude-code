@@ -4,6 +4,7 @@ import { typescriptDefaults } from "monaco-editor/languages/features/typescript/
 import "./monacoSetup"
 import { FONTS } from "@/lib/fonts"
 import type { EditorHandle, EditorStatus } from "./commands"
+import { SCROLL_TOLERANCE_PX, type ScrollLink } from "./scrollLink"
 import { zoomed } from "./useViewPrefs"
 import { touchOnly } from "@/lib/utils"
 
@@ -44,6 +45,7 @@ export function clearTsLibs() {
 
 // Un éditeur et un modèle par onglet : le modèle naît avec l'onglet et disparaît avec lui. Le texte reçu sert tel quel (CRLF compris).
 // focus : compteur de demandes de focus venues de l'espace ; 0 n'en demande aucune.
+// scrollLink : défilement lié à l'aperçu Markdown ; posé seulement sur l'onglet actif.
 // editorRef : poignée de l'éditeur, posée seulement sur l'onglet actif ; onFontSize : le zoom passe par la préférence, pas par l'éditeur seul.
 type Props = {
   path: string
@@ -55,11 +57,12 @@ type Props = {
   minimap?: boolean
   fontSize?: number
   editorRef?: Ref<EditorHandle | null>
+  scrollLink?: ScrollLink
   onFontSize?(size: number): void
   onChange(value: string): void
   onSave(value: string): void
 }
-export default function CodeEditor({ path, value, readOnly, theme, focus, wordWrap, minimap, fontSize, editorRef, onFontSize, onChange, onSave }: Props) {
+export default function CodeEditor({ path, value, readOnly, theme, focus, wordWrap, minimap, fontSize, editorRef, scrollLink, onFontSize, onChange, onSave }: Props) {
   const box = useRef<HTMLDivElement>(null)
   const model = useRef<monaco.editor.ITextModel | null>(null)
   const editor = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
@@ -164,6 +167,20 @@ export default function CodeEditor({ path, value, readOnly, theme, focus, wordWr
     setRef(editorRef, editorHandle)
     return () => setRef(editorRef, null)
   }, [editorRef, path])
+  useEffect(() => {
+    const codeEditor = editor.current
+    if (!scrollLink || !codeEditor) return
+    const scrollableHeight = () => Math.max(1, codeEditor.getScrollHeight() - codeEditor.getLayoutInfo().height)
+    const detach = scrollLink.attachEditor((ratio) => {
+      const target = ratio * scrollableHeight()
+      if (Math.abs(codeEditor.getScrollTop() - target) > SCROLL_TOLERANCE_PX) codeEditor.setScrollTop(target)
+    })
+    const listener = codeEditor.onDidScrollChange(() => scrollLink.fromEditor(codeEditor.getScrollTop() / scrollableHeight()))
+    return () => {
+      detach()
+      listener.dispose()
+    }
+  }, [scrollLink, path])
   useEffect(() => {
     editor.current?.updateOptions(view(wordWrap, minimap, fontSize))
   }, [wordWrap, minimap, fontSize])

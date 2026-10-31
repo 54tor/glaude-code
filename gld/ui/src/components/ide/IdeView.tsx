@@ -26,7 +26,8 @@ import { Handle } from "./Handle"
 import { readDrafts, useDrafts, type Draft } from "./drafts"
 import { clamp, MAX_TABS, mixedEol, nameOf, parentOf, parseTabs, useResolvedTheme } from "./ideHelpers"
 import { commands, isMarkdown, type CmdCtx, type EditorHandle } from "./commands"
-import { Markdown } from "@/components/Message"
+import { MarkdownPreview } from "./MarkdownPreview"
+import { createScrollLink } from "./scrollLink"
 import { useViewPrefs } from "./useViewPrefs"
 import { MenuBar } from "./MenuBar"
 import { WorkspaceStatus } from "./StatusBar"
@@ -85,6 +86,7 @@ function Workspace({ dir }: { dir: string }) {
   const prefs = useViewPrefs()
   // Poignée de l'éditeur de l'onglet actif, en état : les commandes qui en dépendent se réactivent dès son montage.
   const [editor, setEditor] = useState<EditorHandle | null>(null)
+  const [scrollLink] = useState(createScrollLink)
   const tree = useTree(dir)
   const treeActions = useRef<TreeActions | null>(null)
   const [filter, setFilter] = useState("")
@@ -429,15 +431,14 @@ function Workspace({ dir }: { dir: string }) {
                           fontSize={prefs.fontSize}
                           onFontSize={(size) => prefs.set("fontSize", size)}
                           editorRef={tab.path === ide.active ? setEditor : undefined}
+                          scrollLink={tab.path === ide.active && prefs.showPreview && isMarkdown(tab.path) ? scrollLink : undefined}
                           focus={focusRequest.path === tab.path ? focusRequest.count : 0}
                           onChange={(value) => !tab.readOnly && dispatch({ t: "edit", path: tab.path, content: value })}
                           onSave={(value) => save(tab.path, undefined, value)}
                         />
                         </div>
                         {prefs.showPreview && isMarkdown(tab.path) && (
-                          <div className="min-w-0 flex-1 overflow-auto border-l p-4">
-                            <Markdown t={tab.content} />
-                          </div>
+                          <MarkdownPreview content={tab.content} link={tab.path === ide.active ? scrollLink : undefined} />
                         )}
                       </div>
                     </div>
