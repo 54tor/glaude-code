@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState, useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
-import { AlarmClock, LayoutDashboard, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, Coffee, Microwave, Snowflake, History, FileText, Inbox, NotebookPen, Info, Fan, Search, ShieldCheck, Tag, Users, X } from "lucide-react"
+import { AlarmClock, LayoutDashboard, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, Coffee, Microwave, Snowflake, History, FileText, Inbox, Info, Fan, Search, ShieldCheck, Tag, Users, X } from "lucide-react"
 import { tilde } from "@/lib/format"
 import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
@@ -376,9 +376,6 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
         <nav className="px-2 pb-3" aria-label={t("shell.sidebar.navigation")}>
           {show(t("shell.app.title.home")) && <NavItem icon={LayoutDashboard} label={t("shell.app.title.home")} active={currentRoute.kind === "home"} {...link({ kind: "home" })} />}
           {show(t("shell.sidebar.carousel")) && <NavItem icon={GalleryHorizontalEnd} label={t("shell.sidebar.carousel")} n={props.carousel.n} active={props.carousel.on} onClick={props.carousel.start} />}
-          {!normalizedNavQuery && (currentRoute.kind === "dir" || currentRoute.kind === "project") && (
-            <NavItem icon={NotebookPen} label={t("shell.sidebar.addNote")} active={false} onClick={() => { window.dispatchEvent(new Event("gld:note-add")); props.onClose() }} />
-          )}
           {show(t("shell.app.title.all")) && <NavItem icon={Inbox} label={t("shell.app.title.all")} n={props.counts.all} active={currentRoute.kind === "all"} {...link({ kind: "all" })} />}
           {show(t("shell.app.title.tabs")) && <NavItem icon={History} label={t("shell.app.title.tabs")} active={currentRoute.kind === "tabs"} {...link({ kind: "tabs" })} />}
           {show(t("shell.app.title.extensions")) && <NavItem icon={Puzzle} label={t("shell.app.title.extensions")} active={currentRoute.kind === "extensions" || currentRoute.kind === "skills"} {...link({ kind: "extensions" })} />}

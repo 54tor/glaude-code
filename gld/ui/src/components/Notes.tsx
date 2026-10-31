@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useActions, type Row } from "./actions"
+import { Live } from "./SessionList"
 
 const SAVE_DELAY_MS = 700
 const MAX_ITEM_LENGTH = 4000
@@ -219,9 +220,10 @@ export function Notes({ noteKey, folder: base, scope, rows }: { noteKey: string;
   }
   return (
     <div className="mb-4 rounded-lg border">
+      <div className="flex items-center">
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <button onClick={flip} aria-expanded={open} className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium">
+          <button onClick={flip} aria-expanded={open} className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-sm font-medium">
             <ChevronRight className={cn("size-4 transition-transform", open && "rotate-90")} />
             <NotebookPen className="size-4 text-muted-foreground" />
             {t("conversation.notes.title")}
@@ -240,6 +242,10 @@ export function Notes({ noteKey, folder: base, scope, rows }: { noteKey: string;
           )}
         </ContextMenuContent>
       </ContextMenu>
+      <button onClick={() => addRef.current()} aria-label={t("conversation.notes.add")} title={t("conversation.notes.add")} className="mr-2 flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground">
+        <Plus className="size-4" />
+      </button>
+      </div>
       {open && (
         <div className="space-y-2 border-t p-3">
           {filled.length > 1 && (
@@ -295,6 +301,7 @@ export function Notes({ noteKey, folder: base, scope, rows }: { noteKey: string;
                 {targets.length === 0 && closed.length === 0 && <DropdownMenuItem disabled>{t("conversation.notes.none")}</DropdownMenuItem>}
                 {targets.map((row) => (
                   <DropdownMenuItem key={row.s.id} onSelect={() => void sendTo(row)}>
+                    <Live waiting={actions.waiting.has(row.s.id)} />
                     <span className="truncate">{rowLabel(row)}</span>
                   </DropdownMenuItem>
                 ))}
