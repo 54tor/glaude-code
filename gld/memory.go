@@ -254,6 +254,17 @@ func liveProjects() []MemTarget {
 	return liveTargets
 }
 
+// pickerProjects : liveProjects sans les dossiers jetables, pour les sélecteurs de projet de l'interface.
+func pickerProjects() []MemTarget {
+	pickable := []MemTarget{}
+	for _, liveProject := range liveProjects() {
+		if !isTempPath(liveProject.Project) {
+			pickable = append(pickable, liveProject)
+		}
+	}
+	return pickable
+}
+
 func memList() ([]MemFile, []MemProject, []MemTarget) {
 	global := []MemFile{}
 	if memoryFile, isListed := memFile("g/CLAUDE.md", filepath.Join(cfgDir(), "CLAUDE.md")); isListed {

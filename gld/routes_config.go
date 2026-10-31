@@ -44,7 +44,7 @@ func routesConfig(mux *http.ServeMux) {
 			}
 		}
 		sort.Slice(plugins, func(leftIndex, rightIndex int) bool { return plugins[leftIndex].ID < plugins[rightIndex].ID })
-		projects := liveProjects()
+		projects := pickerProjects()
 		writeJSON(responseWriter, 200, map[string]any{
 			"files": nz(files), "hooks": nz(hooksFor(raw, strict)), "issues": nz(healthFor(files, raw, strict)), "backups": listBackups(),
 			"plugins": nz(plugins), "projects": nz(projects),
