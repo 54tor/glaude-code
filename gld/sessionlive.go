@@ -602,11 +602,13 @@ func teammateLives(transcriptPath, sessionID string) []SubLive {
 			teammatePath := filepath.Join(filepath.Dir(transcriptPath), teammateID+".jsonl")
 			activity, thinking, _, tokenUsage, _, _, _ := readActivity(teammatePath)
 			teammate.Activity, teammate.Context, teammate.Out = localizeActivity(activity), tokenUsage.context(), tokenUsage.Out
+			isRecent := false
 			if fileInfo, statErr := os.Stat(teammatePath); statErr == nil {
 				teammate.Mtime = float64(fileInfo.ModTime().UnixNano()) / nanosecondsPerSecond
+				isRecent = time.Since(fileInfo.ModTime()) < subagentRecentWindow
 			}
 			status, isOpen := sessionStatus(teammateID)
-			teammate.Running = isOpen && (status == "busy" || thinking)
+			teammate.Running = (isOpen && status == "busy") || (thinking && isRecent)
 		}
 		if !teammate.Running && teammate.Activity == "" {
 			teammate.Activity = localizeActivity("terminé")
