@@ -25,7 +25,7 @@ import { SessionDropdown } from "./SessionMenu"
 import { BgBadge, Live } from "./SessionList"
 import type { Row } from "./actions"
 import { Message } from "./Message"
-import { CloseSession, Composer, type Turn } from "./Composer"
+import { CloseSession, Composer, focusComposer, type Turn } from "./Composer"
 import { LiveTasks } from "./LiveTasks"
 import { LiveAgents, LiveBar, LiveStats, StatsButton, useLive } from "./LiveStatus"
 import { LoadedDialog } from "./LoadedDialog"
@@ -438,6 +438,10 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
       <DialogContent sheet={false}
         {...swipeHandlers((swipeDirection) => swipeDirection === "right" && onClose(), true)}
         className="safe-t safe-b flex h-[calc(var(--vvh,100dvh)*0.94)] max-md:[&>[data-slot=dialog-close]]:top-[calc(env(safe-area-inset-top)+0.625rem)] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0 max-md:top-[var(--vvt,0px)] max-md:left-0 max-md:h-[var(--vvh,100dvh)] max-md:w-screen max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none max-md:border-0 sm:max-w-none"
+        onOpenAutoFocus={(focusEvent) => {
+          focusEvent.preventDefault()
+          focusComposer()
+        }}
         onCloseAutoFocus={(focusEvent) => focusRow(lastId.current) && focusEvent.preventDefault()}
       >
         <DialogHeader className="gap-1 border-b px-4 pt-2.5 pr-12 pb-3 md:px-6 md:pr-12 md:pb-4">
