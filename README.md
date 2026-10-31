@@ -90,12 +90,17 @@ bouton **Envoyer à la session** écrit directement dedans, et vous voyez en dir
 
 > Chaque message envoyé ainsi recharge tout le contexte : comptez environ 1 à 2 $ par message sur une session froide.
 
+Un message part tout de suite, même pendant que Claude travaille. Le menu du bouton d'envoi propose **Envoyer en
+interrompant** (la réponse en cours s'arrête) et la case **Attendre le repos**, mémorisée par session, qui n'envoie
+qu'au moment où Claude attend. Une question en attente met toujours le message en file. Le bouton **Arrière-plan**
+envoie Ctrl+B à la session tmux pour passer la tâche en cours en arrière-plan.
+
 ### Partager une session avec un collègue
 
 - Ouvrez le menu de la session (**…**) et choisissez **Partager…**, puis **Inviter quelqu'un** (nom facultatif, « Invité
   N » sinon). Le lien se copie et se colle dans la messagerie. Une session peut avoir **jusqu'à 10 invitations**, chacune
-  avec son propre lien, son nom, son mode (écriture ou lecture seule) et sa révocation ; **Régénérer le lien** rend
-  l'ancien inutilisable sans toucher aux autres invités.
+  avec son propre lien, son nom, son mode (lecture seule à la création, écriture à donner ensuite) et sa révocation ;
+  **Régénérer le lien** rend l'ancien inutilisable sans toucher aux autres invités.
 - Chaque lien est **à usage unique** : le premier qui l'ouvre et appuie sur le bouton le réserve. Tout autre navigateur
   ou appareil est refusé.
 - Le bouton **Invitations** de l'en-tête (visible dès qu'un partage existe) ouvre l'overlay de toutes les invitations :
@@ -105,7 +110,10 @@ bouton **Envoyer à la session** écrit directement dedans, et vous voyez en dir
 - L'invité voit toute la conversation, y compris les sorties d'outils et des tâches de fond, et la suit en direct. Il
   peut écrire dans la **file d'envoi** : gld transmet ses messages quand la session est au repos et qu'aucune question
   n'est affichée à l'écran. Ils arrivent dans la session précédés de `[Invité <nom>]`. Il ne peut ni répondre aux demandes de
-  permission, ni ouvrir de documents, ni voir vos autres sessions, mais il peut citer des fichiers du projet avec `@`.
+  permission, ni ouvrir de documents, ni voir vos autres sessions, ni lire les fichiers de configuration (`.json`, `.yaml`,
+  `.toml`, `.ini`, `.xml`…). Il peut citer des fichiers du projet avec `@`. Dans ce qu'il lit, les chemins absolus de
+  votre machine, le nom de votre compte Claude et votre identité git sont masqués ; sa ligne d'activité n'indique que
+  l'outil en cours.
 - Une session lancée sans demandes de permission (acceptation automatique, bypass) exécute les messages de l'invité
   directement : ne la partagez qu'avec quelqu'un de confiance.
 - Par invité, vous pouvez **passer en lecture seule** (il ne peut plus écrire et ses messages encore en file sont
