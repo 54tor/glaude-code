@@ -26,26 +26,26 @@ func TestNpxSkillsArgs(t *testing.T) {
 		{"update", "", "x", true, []string{"--yes", skillsPkg, "update", "x", "-y", "-g"}},
 		{"remove", "", "x", false, []string{"--yes", skillsPkg, "remove", "x", "-a", "claude-code", "-y", "-p"}},
 	}
-	for _, c := range ok {
-		got, err := npxSkillsArgs(c.act, c.src, c.sk, c.global)
-		if err != nil || !slices.Equal(got, c.want) {
-			t.Errorf("%s : %v %v", c.act, got, err)
+	for _, record := range ok {
+		got, err := npxSkillsArgs(record.act, record.src, record.sk, record.global)
+		if err != nil || !slices.Equal(got, record.want) {
+			t.Errorf("%s : %v %v", record.act, got, err)
 		}
 	}
 	bad := []struct{ act, src, sk string }{
 		{"add", "x; rm -rf ~", "x"}, {"add", "../x", "x"}, {"add", "http://a/b", "x"}, {"add", "a b/c", "x"}, {"add", "-g/x", "x"},
 		{"add", "o/r", "../x"}, {"add", "o/r", "-x"}, {"exec", "o/r", "x"}, {"add", "", "x"},
 	}
-	for _, c := range bad {
-		if got, err := npxSkillsArgs(c.act, c.src, c.sk, true); err == nil {
-			t.Errorf("%+v accepté : %v", c, got)
+	for _, record := range bad {
+		if got, err := npxSkillsArgs(record.act, record.src, record.sk, true); err == nil {
+			t.Errorf("%+v accepté : %v", record, got)
 		}
 	}
 }
 
-func fakeNpx(t *testing.T, f func(ctx context.Context, dir string, args []string) (string, error)) {
+func fakeNpx(t *testing.T, callback func(ctx context.Context, dir string, args []string) (string, error)) {
 	old := runNpxSkills
-	runNpxSkills = f
+	runNpxSkills = callback
 	t.Cleanup(func() { runNpxSkills = old })
 }
 
@@ -62,15 +62,15 @@ func lockHome(t *testing.T, lock string) string {
 func TestSkillsActRefuseSkillNonVerrouille(t *testing.T) {
 	lockHome(t, `{"skills":{"a":{"source":"o/r","sourceType":"github"}}}`)
 	linkManaged(t, "a")
-	n := 0
-	fakeNpx(t, func(context.Context, string, []string) (string, error) { n++; return "", nil })
+	count := 0
+	fakeNpx(t, func(context.Context, string, []string) (string, error) { count++; return "", nil })
 	for _, act := range []string{"update", "remove"} {
 		if _, err := skillsAct(context.Background(), act, "", "maison", "user", ""); err == nil {
 			t.Errorf("%s : skill non verrouillé accepté", act)
 		}
 	}
-	if _, err := skillsAct(context.Background(), "remove", "", "a", "user", ""); err != nil || n != 1 {
-		t.Errorf("skill verrouillé : err %v, appels %d", err, n)
+	if _, err := skillsAct(context.Background(), "remove", "", "a", "user", ""); err != nil || count != 1 {
+		t.Errorf("skill verrouillé : err %v, appels %d", err, count)
 	}
 	if _, err := skillsAct(context.Background(), "add", "o/r", "x", "project", "../nope"); err == nil {
 		t.Error("projet invalide accepté")
@@ -138,31 +138,31 @@ func TestParseSkillHits(t *testing.T) {
 	if len(got) != 2 || got[0] != want || got[1].Skill != "lead-magnets" {
 		t.Errorf("%+v", got)
 	}
-	if h := parseSkillHits("No skills found for \"zzz\"\n"); len(h) != 0 {
-		t.Errorf("sans résultat : %+v", h)
+	if skillHits := parseSkillHits("No skills found for \"zzz\"\n"); len(skillHits) != 0 {
+		t.Errorf("sans résultat : %+v", skillHits)
 	}
 }
 
 func TestSkillsFindRequete(t *testing.T) {
 	lockHome(t, "")
-	n := 0
+	count := 0
 	fakeNpx(t, func(_ context.Context, _ string, args []string) (string, error) {
-		n++
+		count++
 		if !slices.Equal(args, []string{"--yes", skillsPkg, "find", "pdf"}) {
 			t.Errorf("args %v", args)
 		}
 		return "a/b@c 1K installs\n└ https://skills.sh/a/b/c\n", nil
 	})
-	if h, err := skillsFind(context.Background(), " pdf "); err != nil || len(h) != 1 {
-		t.Errorf("%v %v", h, err)
+	if skillHits, err := skillsFind(context.Background(), " pdf "); err != nil || len(skillHits) != 1 {
+		t.Errorf("%v %v", skillHits, err)
 	}
-	for _, q := range []string{"", "  ", "-g", strings.Repeat("x", 81), "a\nb"} {
-		if _, err := skillsFind(context.Background(), q); err == nil {
-			t.Errorf("requête %q acceptée", q)
+	for _, query := range []string{"", "  ", "-g", strings.Repeat("x", 81), "a\nb"} {
+		if _, err := skillsFind(context.Background(), query); err == nil {
+			t.Errorf("requête %q acceptée", query)
 		}
 	}
-	if n != 1 {
-		t.Errorf("appels : %d", n)
+	if count != 1 {
+		t.Errorf("appels : %d", count)
 	}
 }
 
@@ -185,16 +185,16 @@ func TestSkillUpdateState(t *testing.T) {
 		{"dossier absent", gh("z/SKILL.md", "h1"), trees, "unknown"},
 		{"sans hash", gh("y/SKILL.md", ""), trees, "unknown"},
 	}
-	for _, c := range cases {
-		if got := skillUpdateState(c.e, c.trees); got != c.want {
-			t.Errorf("%s : %s, attendu %s", c.name, got, c.want)
+	for _, record := range cases {
+		if got := skillUpdateState(record.e, record.trees); got != record.want {
+			t.Errorf("%s : %s, attendu %s", record.name, got, record.want)
 		}
 	}
 }
 
-func fakeTrees(t *testing.T, f func(owner, repo string) (map[string]string, error)) {
+func fakeTrees(t *testing.T, callback func(owner, repo string) (map[string]string, error)) {
 	old := remoteTrees
-	remoteTrees = func(_ context.Context, o, r string) (map[string]string, error) { return f(o, r) }
+	remoteTrees = func(_ context.Context, output, raw string) (map[string]string, error) { return callback(output, raw) }
 	updCache.Lock()
 	updCache.m = nil
 	updCache.lastForce = time.Time{}
@@ -206,28 +206,31 @@ const twoSkillsLock = `{"skills":{"a":{"source":"o/r","sourceType":"github","ski
 
 func TestCheckSkillUpdatesCache(t *testing.T) {
 	lockHome(t, twoSkillsLock)
-	n := 0
-	fakeTrees(t, func(o, r string) (map[string]string, error) { n++; return map[string]string{"a": "h1", "b": "h2"}, nil })
+	count := 0
+	fakeTrees(t, func(output, raw string) (map[string]string, error) {
+		count++
+		return map[string]string{"a": "h1", "b": "h2"}, nil
+	})
 	st := checkSkillUpdates(context.Background(), false)
-	if st["u/a"] != "current" || st["u/b"] != "update" || n != 1 {
-		t.Errorf("%v, appels %d", st, n)
+	if st["u/a"] != "current" || st["u/b"] != "update" || count != 1 {
+		t.Errorf("%v, appels %d", st, count)
 	}
 	checkSkillUpdates(context.Background(), false)
-	if n != 1 {
-		t.Errorf("cache ignoré : %d appels", n)
+	if count != 1 {
+		t.Errorf("cache ignoré : %d appels", count)
 	}
 	updCache.Lock()
 	updCache.lastForce = time.Time{}
 	updCache.Unlock()
 	checkSkillUpdates(context.Background(), true)
-	if n != 2 {
-		t.Errorf("force ignoré : %d appels", n)
+	if count != 2 {
+		t.Errorf("force ignoré : %d appels", count)
 	}
 }
 
 func TestCheckSkillUpdatesLimite(t *testing.T) {
 	lockHome(t, twoSkillsLock)
-	fakeTrees(t, func(o, r string) (map[string]string, error) { return nil, errors.New("HTTP 403") })
+	fakeTrees(t, func(output, raw string) (map[string]string, error) { return nil, errors.New("HTTP 403") })
 	st := checkSkillUpdates(context.Background(), false)
 	if st["u/a"] != "unknown" || st["u/b"] != "unknown" {
 		t.Errorf("%v", st)
@@ -248,29 +251,29 @@ func TestSkillsFindExclusion(t *testing.T) {
 func postSkillNpx(t *testing.T, body string) (int, map[string]any) {
 	mux := http.NewServeMux()
 	routesSkills(mux)
-	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, httptest.NewRequest("POST", "/v1/skills/installations", strings.NewReader(body)))
-	var m map[string]any
-	json.Unmarshal(w.Body.Bytes(), &m)
-	return w.Code, m
+	recorder := httptest.NewRecorder()
+	mux.ServeHTTP(recorder, httptest.NewRequest("POST", "/v1/skills/installations", strings.NewReader(body)))
+	var lookup map[string]any
+	json.Unmarshal(recorder.Body.Bytes(), &lookup)
+	return recorder.Code, lookup
 }
 
 func TestRouteSkillNpx(t *testing.T) {
 	lockHome(t, "")
 	var calls [][]string
-	fakeNpx(t, func(_ context.Context, _ string, a []string) (string, error) {
-		calls = append(calls, a)
+	fakeNpx(t, func(_ context.Context, _ string, values []string) (string, error) {
+		calls = append(calls, values)
 		return "fait\n", nil
 	})
 	if code, _ := postSkillNpx(t, "pas du json"); code != 400 {
 		t.Errorf("corps invalide : %d", code)
 	}
-	if _, m := postSkillNpx(t, `{"Action":"exec","Source":"o/r","Skill":"x","Scope":"user"}`); m["error"] == nil {
-		t.Errorf("action inconnue : %v", m)
+	if _, lookup := postSkillNpx(t, `{"Action":"exec","Source":"o/r","Skill":"x","Scope":"user"}`); lookup["error"] == nil {
+		t.Errorf("action inconnue : %v", lookup)
 	}
-	_, m := postSkillNpx(t, `{"Action":"add","Source":"o/r","Skill":"x","Scope":"user"}`)
-	if m["message"] != "fait" || len(calls) != 1 || !slices.Contains(calls[0], "add") {
-		t.Errorf("add : %v %v", m, calls)
+	_, localLookup := postSkillNpx(t, `{"Action":"add","Source":"o/r","Skill":"x","Scope":"user"}`)
+	if localLookup["message"] != "fait" || len(calls) != 1 || !slices.Contains(calls[0], "add") {
+		t.Errorf("add : %v %v", localLookup, calls)
 	}
 }
 
@@ -280,14 +283,14 @@ func TestSkillsActRefuseProjetAvecSkillsLocal(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	proj := t.TempDir()
 	put(t, filepath.Join(cfg, "projects", "-p", id1+".jsonl"), `{"cwd":"`+proj+`"}`+"\n", old)
-	n := 0
-	fakeNpx(t, func(context.Context, string, []string) (string, error) { n++; return "", nil })
-	if _, err := skillsAct(context.Background(), "add", "o/r", "x", "project", "-p"); err != nil || n != 1 {
-		t.Fatalf("projet sain refusé : %v, appels %d", err, n)
+	count := 0
+	fakeNpx(t, func(context.Context, string, []string) (string, error) { count++; return "", nil })
+	if _, err := skillsAct(context.Background(), "add", "o/r", "x", "project", "-p"); err != nil || count != 1 {
+		t.Fatalf("projet sain refusé : %v, appels %d", err, count)
 	}
 	put(t, filepath.Join(proj, "node_modules", "skills", "package.json"), "{}", old)
-	if _, err := skillsAct(context.Background(), "add", "o/r", "x", "project", "-p"); err == nil || n != 1 {
-		t.Errorf("projet piégé accepté : %v, appels %d", err, n)
+	if _, err := skillsAct(context.Background(), "add", "o/r", "x", "project", "-p"); err == nil || count != 1 {
+		t.Errorf("projet piégé accepté : %v, appels %d", err, count)
 	}
 	parent := t.TempDir()
 	put(t, filepath.Join(parent, "node_modules", "skills", "package.json"), "{}", old)
@@ -312,15 +315,15 @@ func linkManaged(t *testing.T, name string) {
 func TestSkillsActRefuseSkillEcritAMain(t *testing.T) {
 	lockHome(t, `{"skills":{"foo":{"source":"o/r","sourceType":"github"}}}`)
 	put(t, filepath.Join(cfgDir(), "skills", "foo", "SKILL.md"), "---\ndescription: à la main\n---\nx\n", old)
-	n := 0
-	fakeNpx(t, func(context.Context, string, []string) (string, error) { n++; return "", nil })
+	count := 0
+	fakeNpx(t, func(context.Context, string, []string) (string, error) { count++; return "", nil })
 	for _, act := range []string{"update", "remove"} {
 		if _, err := skillsAct(context.Background(), act, "", "foo", "user", ""); err == nil {
 			t.Errorf("%s : skill écrit à la main accepté", act)
 		}
 	}
-	if n != 0 {
-		t.Errorf("npx lancé %d fois", n)
+	if count != 0 {
+		t.Errorf("npx lancé %d fois", count)
 	}
 }
 
@@ -330,14 +333,14 @@ func TestNpxEnv(t *testing.T) {
 	if !has(got, "A=1") || !has(got, "npm_config_registry=https://registry.npmjs.org/") || !has(got, "NODE_OPTIONS=") {
 		t.Errorf("%v", got)
 	}
-	for _, e := range got {
-		if strings.HasPrefix(e, "GLD_WEB_") || strings.HasPrefix(e, "GLD_AUTH_KEY=") || e == "NODE_OPTIONS=--inspect" {
-			t.Errorf("fuite : %s", e)
+	for _, entry := range got {
+		if strings.HasPrefix(entry, "GLD_WEB_") || strings.HasPrefix(entry, "GLD_AUTH_KEY=") || entry == "NODE_OPTIONS=--inspect" {
+			t.Errorf("fuite : %s", entry)
 		}
 	}
 	t.Setenv("PATH", "/x/bin")
-	if g := npxEnv(nil); !has(g, "PATH=/x/bin") {
-		t.Errorf("sans base, l'environnement du processus est repris : %v", g)
+	if values := npxEnv(nil); !has(values, "PATH=/x/bin") {
+		t.Errorf("sans base, l'environnement du processus est repris : %v", values)
 	}
 }
 
@@ -348,9 +351,9 @@ func TestPersonalLockPath(t *testing.T) {
 	if got := personalLockPath(); got != filepath.Join(home, ".agents", ".skill-lock.json") {
 		t.Error(got)
 	}
-	x := t.TempDir()
-	t.Setenv("XDG_STATE_HOME", x)
-	if got := personalLockPath(); got != filepath.Join(x, "skills", ".skill-lock.json") {
+	input := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", input)
+	if got := personalLockPath(); got != filepath.Join(input, "skills", ".skill-lock.json") {
 		t.Error(got)
 	}
 }
@@ -368,18 +371,21 @@ func TestRunNpxSkillsNeTraînePas(t *testing.T) {
 	defer cancel()
 	start := time.Now()
 	runNpxSkills(ctx, t.TempDir(), []string{"x"})
-	if d := time.Since(start); d > 3*time.Second {
-		t.Errorf("rendu après %v : le petit-enfant retient le tube", d)
+	if duration := time.Since(start); duration > 3*time.Second {
+		t.Errorf("rendu après %v : le petit-enfant retient le tube", duration)
 	}
 }
 
 func TestCheckSkillUpdatesForceLimite(t *testing.T) {
 	lockHome(t, twoSkillsLock)
-	n := 0
-	fakeTrees(t, func(o, r string) (map[string]string, error) { n++; return map[string]string{"a": "h1", "b": "h2"}, nil })
+	count := 0
+	fakeTrees(t, func(output, raw string) (map[string]string, error) {
+		count++
+		return map[string]string{"a": "h1", "b": "h2"}, nil
+	})
 	checkSkillUpdates(context.Background(), true)
 	checkSkillUpdates(context.Background(), true)
-	if n != 1 {
-		t.Errorf("deux forçages de suite : %d appels", n)
+	if count != 1 {
+		t.Errorf("deux forçages de suite : %d appels", count)
 	}
 }

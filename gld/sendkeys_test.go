@@ -38,8 +38,8 @@ func TestEnvoiTmux(t *testing.T) {
 		t.Fatal(err)
 	}
 	var seq []string
-	for _, c := range (*calls)[1:] { // le premier appel est la liste des panneaux
-		seq = append(seq, c[1])
+	for _, values := range (*calls)[1:] { // le premier appel est la liste des panneaux
+		seq = append(seq, values[1])
 	}
 	if got := strings.Join(seq, " "); got != "list-panes capture-pane load-buffer paste-buffer send-keys" && got != "capture-pane load-buffer paste-buffer send-keys" {
 		t.Fatalf("séquence : %v", seq)
@@ -51,8 +51,8 @@ func TestEnvoiTmux(t *testing.T) {
 	if err := sendToSession(sid, "encore"); err != nil {
 		t.Fatal(err)
 	}
-	if b := (*calls)[len(*calls)-3][3]; b == last[0][3] { // deux envois simultanés ne doivent pas partager un tampon
-		t.Fatalf("tampon réutilisé : %s", b)
+	if body := (*calls)[len(*calls)-3][3]; body == last[0][3] { // deux envois simultanés ne doivent pas partager un tampon
+		t.Fatalf("tampon réutilisé : %s", body)
 	}
 }
 
@@ -97,8 +97,8 @@ func TestEnvoiTmuxReel(t *testing.T) {
 	t.Setenv("TMUX_TMPDIR", dir)
 	t.Setenv("TMUX", "")
 	out := filepath.Join(dir, "recu.txt")
-	if b, err := exec.Command("tmux", "new-session", "-d", "-s", "t", "-x", "200", "-y", "50", "sh -c 'cat > "+out+"'").CombinedOutput(); err != nil {
-		t.Skip("tmux inutilisable ici : ", string(b))
+	if data, err := exec.Command("tmux", "new-session", "-d", "-s", "t", "-x", "200", "-y", "50", "sh -c 'cat > "+out+"'").CombinedOutput(); err != nil {
+		t.Skip("tmux inutilisable ici : ", string(data))
 	}
 	defer exec.Command("tmux", "kill-server").Run()
 	panes, err := tmuxPanes()
@@ -106,8 +106,8 @@ func TestEnvoiTmuxReel(t *testing.T) {
 		t.Fatal(panes, err)
 	}
 	var panePid int
-	for p := range panes {
-		panePid = p
+	for port := range panes {
+		panePid = port
 	}
 	oldPid := sessionPIDs
 	defer func() { sessionPIDs = oldPid }()
@@ -116,9 +116,9 @@ func TestEnvoiTmuxReel(t *testing.T) {
 		t.Fatal(err)
 	}
 	time.Sleep(300 * time.Millisecond)
-	b, _ := os.ReadFile(out)
-	if !strings.Contains(string(b), "bonjour") || !strings.Contains(string(b), "suite avec accents é") {
-		t.Fatalf("reçu : %q", b)
+	localData, _ := os.ReadFile(out)
+	if !strings.Contains(string(localData), "bonjour") || !strings.Contains(string(localData), "suite avec accents é") {
+		t.Fatalf("reçu : %q", localData)
 	}
 }
 
@@ -158,8 +158,8 @@ func TestEcranEtTouches(t *testing.T) {
 		}
 		return oldRun(stdin, args...)
 	}
-	if s, err := sessionScreen(sid); err != nil || s != "Do you want to proceed?\n❯ 1. Yes\n  2. No" {
-		t.Fatalf("écran : %q %v", s, err)
+	if text, err := sessionScreen(sid); err != nil || text != "Do you want to proceed?\n❯ 1. Yes\n  2. No" {
+		t.Fatalf("écran : %q %v", text, err)
 	}
 	if err := sendKey(sid, "2"); err != nil {
 		t.Fatal(err)
@@ -168,9 +168,9 @@ func TestEcranEtTouches(t *testing.T) {
 	if last[1] != "send-keys" || last[len(last)-1] != "2" || last[len(last)-2] != "%3" {
 		t.Fatalf("touche : %v", last)
 	}
-	for _, k := range []string{"rm -rf", "C-d", "a", "Enter; ls", ""} {
-		if sendKey(sid, k) == nil {
-			t.Errorf("touche acceptée : %q", k)
+	for _, key := range []string{"rm -rf", "C-d", "a", "Enter; ls", ""} {
+		if sendKey(sid, key) == nil {
+			t.Errorf("touche acceptée : %q", key)
 		}
 	}
 	if sendKey("../x", "Enter") == nil {
@@ -200,8 +200,8 @@ func TestEnvoiCommandeVideLaLigne(t *testing.T) {
 		t.Fatal(err)
 	}
 	var seq []string
-	for _, c := range (*calls)[1:] {
-		seq = append(seq, strings.Join(c[1:2], "")+":"+c[len(c)-1])
+	for _, values := range (*calls)[1:] {
+		seq = append(seq, strings.Join(values[1:2], "")+":"+values[len(values)-1])
 	}
 	if got := strings.Join(seq, " "); !strings.Contains(got, "send-keys:C-u load-buffer") {
 		t.Fatalf("la ligne n'est pas vidée avant la commande : %s", got)

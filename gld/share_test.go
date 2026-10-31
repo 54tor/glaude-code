@@ -13,42 +13,42 @@ const shSess = "11111111-1111-1111-1111-111111111111"
 
 func newShares(t *testing.T) (*shareStore, string) {
 	t.Helper()
-	d := t.TempDir()
-	s, err := openShares(d)
+	dir := t.TempDir()
+	localShareStore, err := openShares(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return s, d
+	return localShareStore, dir
 }
 
 func TestShareRedeemOnce(t *testing.T) {
-	s, _ := newShares(t)
-	tok := mkShare(t, s)
-	c, sh, inv, ok := s.Redeem(tok)
-	if !ok || c == "" || sh.Session != shSess || inv.CookieHash != hashSecret(c) {
-		t.Fatalf("1er Redeem : %v %q %+v", ok, c, sh)
+	shareStore, _ := newShares(t)
+	tok := mkShare(t, shareStore)
+	content, sh, inv, ok := shareStore.Redeem(tok)
+	if !ok || content == "" || sh.Session != shSess || inv.CookieHash != hashSecret(content) {
+		t.Fatalf("1er Redeem : %v %q %+v", ok, content, sh)
 	}
-	if _, _, _, ok := s.Redeem(tok); ok {
+	if _, _, _, ok := shareStore.Redeem(tok); ok {
 		t.Fatal("2e Redeem accepté")
 	}
-	if _, _, _, ok := s.Redeem("n-importe-quoi"); ok {
+	if _, _, _, ok := shareStore.Redeem("n-importe-quoi"); ok {
 		t.Fatal("jeton inconnu accepté")
 	}
 }
 
 func TestShareCookieSurvivesReload(t *testing.T) {
-	s, d := newShares(t)
-	tok := mkShare(t, s)
-	c, _, _, _ := s.Redeem(tok)
-	if _, _, ok := s.ByCookie(c); !ok {
+	shareStore, dir := newShares(t)
+	tok := mkShare(t, shareStore)
+	content, _, _, _ := shareStore.Redeem(tok)
+	if _, _, ok := shareStore.ByCookie(content); !ok {
 		t.Fatal("cookie refusé")
 	}
-	s2, err := openShares(d)
+	s2, err := openShares(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 2; i++ {
-		if sh, _, ok := s2.ByCookie(c); !ok || sh.Session != shSess {
+	for index := 0; index < 2; index++ {
+		if sh, _, ok := s2.ByCookie(content); !ok || sh.Session != shSess {
 			t.Fatalf("après rechargement : %v %+v", ok, sh)
 		}
 	}
@@ -61,54 +61,54 @@ func TestShareCookieSurvivesReload(t *testing.T) {
 }
 
 func TestShareEndDropsGuestQueueItems(t *testing.T) {
-	s, _ := newShares(t)
+	shareStore, _ := newShares(t)
 	oldSt := queueSt
-	q, _ := openQueue(t.TempDir())
-	queueSt = q
+	queueStore, _ := openQueue(t.TempDir())
+	queueSt = queueStore
 	t.Cleanup(func() { queueSt = oldSt })
-	_, a := mkInv(t, s)
-	_, b := mkInv(t, s)
-	q.Add(shSess, "guest", a.ID, "g")
-	q.Add(shSess, "guest", b.ID, "g2")
-	q.Add(shSess, "host", "", "h")
-	if err := s.End(shSess); err != nil {
+	_, invite := mkInv(t, shareStore)
+	_, localInvite := mkInv(t, shareStore)
+	queueStore.Add(shSess, "guest", invite.ID, "g")
+	queueStore.Add(shSess, "guest", localInvite.ID, "g2")
+	queueStore.Add(shSess, "host", "", "h")
+	if err := shareStore.End(shSess); err != nil {
 		t.Fatal(err)
 	}
-	l := q.List(shSess)
-	if len(l) != 1 || l[0].Author != "host" {
-		t.Fatalf("file : %+v", l)
+	qItems := queueStore.List(shSess)
+	if len(qItems) != 1 || qItems[0].Author != "host" {
+		t.Fatalf("file : %+v", qItems)
 	}
-	if _, ok := s.Get(shSess); ok {
+	if _, ok := shareStore.Get(shSess); ok {
 		t.Fatal("partage toujours là")
 	}
-	if !errors.Is(s.End(shSess), errShareNone) {
+	if !errors.Is(shareStore.End(shSess), errShareNone) {
 		t.Fatal("2e End doit renvoyer errShareNone")
 	}
 }
 
 func TestShareFileNotLeakingToken(t *testing.T) {
-	s, d := newShares(t)
-	tok := mkShare(t, s)
-	c, _, _, _ := s.Redeem(tok)
-	b, err := os.ReadFile(filepath.Join(d, "shares.json"))
+	shareStore, dir := newShares(t)
+	tok := mkShare(t, shareStore)
+	content, _, _, _ := shareStore.Redeem(tok)
+	data, err := os.ReadFile(filepath.Join(dir, "shares.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(b), tok) || strings.Contains(string(b), c) {
-		t.Fatalf("secret en clair : %s", b)
+	if strings.Contains(string(data), tok) || strings.Contains(string(data), content) {
+		t.Fatalf("secret en clair : %s", data)
 	}
 }
 
 func TestShareSetModeAndGet(t *testing.T) {
-	s, _ := newShares(t)
-	if !errors.Is(s.SetInviteMode(shSess, "0123456789abcdef", "ro"), errInviteNone) {
+	shareStore, _ := newShares(t)
+	if !errors.Is(shareStore.SetInviteMode(shSess, "0123456789abcdef", "ro"), errInviteNone) {
 		t.Fatal("SetInviteMode sans partage")
 	}
-	_, in := mkInv(t, s)
-	if err := s.SetInviteMode(shSess, in.ID, "ro"); err != nil {
+	_, in := mkInv(t, shareStore)
+	if err := shareStore.SetInviteMode(shSess, in.ID, "ro"); err != nil {
 		t.Fatal(err)
 	}
-	if sh, _ := s.Get(shSess); sh.Invites[0].Mode != "ro" {
+	if sh, _ := shareStore.Get(shSess); sh.Invites[0].Mode != "ro" {
 		t.Fatalf("mode %q", sh.Invites[0].Mode)
 	}
 }
@@ -116,8 +116,8 @@ func TestShareSetModeAndGet(t *testing.T) {
 func shareMux(t *testing.T) *http.ServeMux {
 	t.Helper()
 	oldSt, oldDir, oldRoot := shareSt, shareDir, root
-	d := t.TempDir()
-	shareDir = func() string { return d }
+	dir := t.TempDir()
+	shareDir = func() string { return dir }
 	root = filepath.Join(t.TempDir(), "projects")
 	os.MkdirAll(filepath.Join(root, "proj"), 0o755)
 	os.WriteFile(filepath.Join(root, "proj", shSess+".jsonl"), []byte("{}\n"), 0o644)
@@ -127,15 +127,15 @@ func shareMux(t *testing.T) *http.ServeMux {
 	return mux
 }
 
-func mkShare(t *testing.T, s *shareStore) string {
+func mkShare(t *testing.T, localShareStore *shareStore) string {
 	t.Helper()
-	tok, _ := mkInv(t, s)
+	tok, _ := mkInv(t, localShareStore)
 	return tok
 }
 
-func mkInv(t *testing.T, s *shareStore) (string, Invite) {
+func mkInv(t *testing.T, localShareStore *shareStore) (string, Invite) {
 	t.Helper()
-	tok, in, err := s.CreateInvite(shSess, "dir", "", "")
+	tok, in, err := localShareStore.CreateInvite(shSess, "dir", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,130 +150,130 @@ func roDir(t *testing.T) string {
 	return t.TempDir()
 }
 
-func lock(t *testing.T, d string) {
-	os.Chmod(d, 0o500)
-	t.Cleanup(func() { os.Chmod(d, 0o700) })
+func lock(t *testing.T, dir string) {
+	os.Chmod(dir, 0o500)
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
 }
 
 func TestShareCreateRollsBackOnWriteFailure(t *testing.T) {
-	d := roDir(t)
-	s, _ := openShares(d)
-	old := mkShare(t, s)
-	lock(t, d)
-	if tok, _, err := s.CreateInvite(shSess, "dir2", "titre", ""); err == nil || tok != "" {
+	dir := roDir(t)
+	shareStore, _ := openShares(dir)
+	old := mkShare(t, shareStore)
+	lock(t, dir)
+	if tok, _, err := shareStore.CreateInvite(shSess, "dir2", "titre", ""); err == nil || tok != "" {
 		t.Fatalf("erreur attendue : %q %v", tok, err)
 	}
-	if sh, ok := s.Get(shSess); !ok || sh.Dir != "dir" || sh.Title != "" || sh.Seq != 1 || len(sh.Invites) != 1 {
+	if sh, ok := shareStore.Get(shSess); !ok || sh.Dir != "dir" || sh.Title != "" || sh.Seq != 1 || len(sh.Invites) != 1 {
 		t.Fatalf("ancien partage perdu : %+v", sh)
 	}
-	if sh, _ := s.Get(shSess); sh.Invites[0].TokenHash != hashSecret(old) {
+	if sh, _ := shareStore.Get(shSess); sh.Invites[0].TokenHash != hashSecret(old) {
 		t.Fatal("ancien jeton invalidé")
 	}
 }
 
 func TestShareCreateFailureLeavesNoShare(t *testing.T) {
-	d := roDir(t)
-	s, _ := openShares(d)
-	lock(t, d)
-	if _, _, err := s.CreateInvite(shSess, "dir", "", ""); err == nil {
+	dir := roDir(t)
+	shareStore, _ := openShares(dir)
+	lock(t, dir)
+	if _, _, err := shareStore.CreateInvite(shSess, "dir", "", ""); err == nil {
 		t.Fatal("erreur attendue")
 	}
-	if _, ok := s.Get(shSess); ok {
+	if _, ok := shareStore.Get(shSess); ok {
 		t.Fatal("partage non persisté laissé en mémoire")
 	}
 }
 
 func TestShareSetModeRollsBackOnWriteFailure(t *testing.T) {
-	d := roDir(t)
-	s, _ := openShares(d)
-	_, in := mkInv(t, s)
-	lock(t, d)
-	if err := s.SetInviteMode(shSess, in.ID, "ro"); err == nil || errors.Is(err, errInviteNone) {
+	dir := roDir(t)
+	shareStore, _ := openShares(dir)
+	_, in := mkInv(t, shareStore)
+	lock(t, dir)
+	if err := shareStore.SetInviteMode(shSess, in.ID, "ro"); err == nil || errors.Is(err, errInviteNone) {
 		t.Fatalf("erreur attendue : %v", err)
 	}
-	if sh, _ := s.Get(shSess); sh.Invites[0].Mode != "rw" {
+	if sh, _ := shareStore.Get(shSess); sh.Invites[0].Mode != "rw" {
 		t.Fatalf("mode %q", sh.Invites[0].Mode)
 	}
 }
 
 func TestShareEndRevokesInMemoryOnWriteFailure(t *testing.T) {
-	d := roDir(t)
-	s, _ := openShares(d)
-	tok := mkShare(t, s)
-	c, _, _, _ := s.Redeem(tok)
-	lock(t, d)
-	if err := s.End(shSess); err == nil || errors.Is(err, errShareNone) {
+	dir := roDir(t)
+	shareStore, _ := openShares(dir)
+	tok := mkShare(t, shareStore)
+	content, _, _, _ := shareStore.Redeem(tok)
+	lock(t, dir)
+	if err := shareStore.End(shSess); err == nil || errors.Is(err, errShareNone) {
 		t.Fatalf("erreur attendue : %v", err)
 	}
-	if _, _, ok := s.ByCookie(c); ok {
+	if _, _, ok := shareStore.ByCookie(content); ok {
 		t.Fatal("cookie encore valide en mémoire")
 	}
 }
 
 func TestShareOpenNullEntries(t *testing.T) {
-	for _, c := range []string{"null", `{"x":null}`} {
-		d := t.TempDir()
-		os.WriteFile(filepath.Join(d, "shares.json"), []byte(c), 0o600)
-		s, err := openShares(d)
+	for _, content := range []string{"null", `{"x":null}`} {
+		dir := t.TempDir()
+		os.WriteFile(filepath.Join(dir, "shares.json"), []byte(content), 0o600)
+		shareStore, err := openShares(dir)
 		if err != nil {
 			t.Fatal(err)
 		}
-		s.ByCookie("x")
-		s.SetInviteMode("x", "0123456789abcdef", "ro")
-		if _, _, err := s.CreateInvite(shSess, "dir", "", ""); err != nil {
-			t.Fatal(c, err)
+		shareStore.ByCookie("x")
+		shareStore.SetInviteMode("x", "0123456789abcdef", "ro")
+		if _, _, err := shareStore.CreateInvite(shSess, "dir", "", ""); err != nil {
+			t.Fatal(content, err)
 		}
-		if _, ok := s.Get("x"); ok {
+		if _, ok := shareStore.Get("x"); ok {
 			t.Fatal("entrée nulle conservée")
 		}
 	}
 }
 
 func TestShareCorruptedFile(t *testing.T) {
-	d := t.TempDir()
-	p := filepath.Join(d, "shares.json")
-	os.WriteFile(p, []byte("{pas du json"), 0o600)
-	if _, err := openShares(d); err == nil {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "shares.json")
+	os.WriteFile(path, []byte("{pas du json"), 0o600)
+	if _, err := openShares(dir); err == nil {
 		t.Fatal("erreur attendue")
 	}
 	oldSt, oldDir := shareSt, shareDir
-	shareDir = func() string { return d }
+	shareDir = func() string { return dir }
 	t.Cleanup(func() { shareSt, shareDir = oldSt, oldDir })
 	mux := http.NewServeMux()
 	routesShare(mux)
-	if w := send(mux, "DELETE", "/v1/shares/"+shSess, ""); w.Code != 503 {
-		t.Fatalf("code %d", w.Code)
+	if recorder := send(mux, "DELETE", "/v1/shares/"+shSess, ""); recorder.Code != 503 {
+		t.Fatalf("code %d", recorder.Code)
 	}
-	if b, _ := os.ReadFile(p); string(b) != "{pas du json" {
-		t.Fatalf("fichier modifié : %q", b)
+	if data, _ := os.ReadFile(path); string(data) != "{pas du json" {
+		t.Fatalf("fichier modifié : %q", data)
 	}
 }
 
 func TestShareEndRouteDropsGuestItems(t *testing.T) {
 	mux := shareMux(t)
 	oldSt := queueSt
-	q, _ := openQueue(t.TempDir())
-	queueSt = q
+	queueStore, _ := openQueue(t.TempDir())
+	queueSt = queueStore
 	t.Cleanup(func() { queueSt = oldSt })
 	_, in, _ := shareSt.CreateInvite(shSess, "proj", "", "")
-	q.Add(shSess, "guest", in.ID, "g")
-	q.Add(shSess, "host", "", "h")
-	if w := send(mux, "DELETE", "/v1/shares/"+shSess, ""); w.Code != 204 {
-		t.Fatalf("code %d", w.Code)
+	queueStore.Add(shSess, "guest", in.ID, "g")
+	queueStore.Add(shSess, "host", "", "h")
+	if recorder := send(mux, "DELETE", "/v1/shares/"+shSess, ""); recorder.Code != 204 {
+		t.Fatalf("code %d", recorder.Code)
 	}
-	if l := q.List(shSess); len(l) != 1 || l[0].Author != "host" {
-		t.Fatalf("file : %+v", l)
+	if qItems := queueStore.List(shSess); len(qItems) != 1 || qItems[0].Author != "host" {
+		t.Fatalf("file : %+v", qItems)
 	}
 }
 
 func TestShareCreateRouteFailsOnWrite(t *testing.T) {
 	mux := shareMux(t)
-	d := roDir(t)
-	shareDir = func() string { return d }
+	dir := roDir(t)
+	shareDir = func() string { return dir }
 	routesShare(http.NewServeMux())
-	lock(t, d)
-	if w := post(mux, "/v1/invites", `{"id":"`+shSess+`","dir":"proj"}`); w.Code != 500 || strings.Contains(w.Body.String(), "token") {
-		t.Fatalf("code %d %s", w.Code, w.Body)
+	lock(t, dir)
+	if recorder := post(mux, "/v1/invites", `{"id":"`+shSess+`","dir":"proj"}`); recorder.Code != 500 || strings.Contains(recorder.Body.String(), "token") {
+		t.Fatalf("code %d %s", recorder.Code, recorder.Body)
 	}
 }
 
@@ -281,37 +281,37 @@ func TestShareReadOnlyDropsQueuedGuestItems(t *testing.T) {
 	mux := shareMux(t)
 	oldSt := queueSt
 	qd := t.TempDir()
-	q, _ := openQueue(qd)
-	queueSt = q
+	queueStore, _ := openQueue(qd)
+	queueSt = queueStore
 	t.Cleanup(func() { queueSt = oldSt })
 	_, in, _ := shareSt.CreateInvite(shSess, "proj", "", "")
 	mode := `{"id":"` + shSess + `","mode":"ro"}`
 	modePath := "/v1/invites/" + in.ID
-	s, _ := q.Add(shSess, "guest", in.ID, "en cours")
-	q.MarkSending(shSess, s.ID)
-	q.Add(shSess, "guest", in.ID, "g")
-	q.Add(shSess, "host", "", "h")
-	if w := send(mux, "PATCH", modePath, mode); w.Code != 204 {
-		t.Fatalf("code %d", w.Code)
+	qItem, _ := queueStore.Add(shSess, "guest", in.ID, "en cours")
+	queueStore.MarkSending(shSess, qItem.ID)
+	queueStore.Add(shSess, "guest", in.ID, "g")
+	queueStore.Add(shSess, "host", "", "h")
+	if recorder := send(mux, "PATCH", modePath, mode); recorder.Code != 204 {
+		t.Fatalf("code %d", recorder.Code)
 	}
-	l := q.List(shSess)
-	if len(l) != 2 || l[0].ID != s.ID || l[1].Author != "host" {
-		t.Fatalf("file : %+v", l)
+	qItems := queueStore.List(shSess)
+	if len(qItems) != 2 || qItems[0].ID != qItem.ID || qItems[1].Author != "host" {
+		t.Fatalf("file : %+v", qItems)
 	}
-	q.Add(shSess, "host", "", "h2")
-	q.Add(shSess, "guest", in.ID, "g2") // la garde refuse l'ajout invité en lecture seule ; ici on teste l'échec d'écriture
+	queueStore.Add(shSess, "host", "", "h2")
+	queueStore.Add(shSess, "guest", in.ID, "g2") // la garde refuse l'ajout invité en lecture seule ; ici on teste l'échec d'écriture
 	if os.Geteuid() == 0 {
 		return
 	}
 	os.Chmod(qd, 0o500)
 	t.Cleanup(func() { os.Chmod(qd, 0o700) })
-	if w := send(mux, "PATCH", modePath, mode); w.Code != 500 {
-		t.Fatalf("échec d'écriture de la file : %d", w.Code)
+	if recorder := send(mux, "PATCH", modePath, mode); recorder.Code != 500 {
+		t.Fatalf("échec d'écriture de la file : %d", recorder.Code)
 	}
 	if sh, _ := shareSt.Get(shSess); sh.Invites[0].Mode != "ro" {
 		t.Fatalf("mode = %q", sh.Invites[0].Mode)
 	}
-	for _, it := range q.List(shSess) {
+	for _, it := range queueStore.List(shSess) {
 		if it.Author == "guest" && it.State == "queued" {
 			t.Fatalf("item invité encore en file : %+v", it)
 		}
