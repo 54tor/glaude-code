@@ -1,7 +1,7 @@
 import { i18n, loc } from "@/i18n"
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { CircleUser, Fan } from "lucide-react"
+import { Fan, Gauge } from "lucide-react"
 import { api, type Account } from "@/lib/api"
 import { compact } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -82,7 +82,7 @@ export function AccountButton() {
     <>
       <Tip label={t("config.account.buttonTitle")}>
         <Button variant="ghost" size="sm" onClick={() => setOpen(true)} aria-label={t("config.account.title")}>
-          <CircleUser />
+          <Gauge />
           {shown.map((l) =>
             stale(l, now) ? (
               <Fan key={l.key} className="size-3 animate-spin text-muted-foreground" aria-label={t("config.account.updating")} />
