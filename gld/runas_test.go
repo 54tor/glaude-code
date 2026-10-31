@@ -27,20 +27,20 @@ func fakeAccounts(t *testing.T, self int) (bin string) {
 	}
 	groups := map[string][]string{"alice": {"1500", "27"}, "wheel0": {"1600", "0"}, "root": {"0"}}
 	known := map[string]bool{"1500": true, "1600": true, "1700": true, "27": true, "0": true}
-	for _, p := range []any{&lookupUser, &lookupUserID, &lookupGroupID, &userGroupIDs, &gatewayUID, &gatewayEUID, &procStatus,
+	for _, value := range []any{&lookupUser, &lookupUserID, &lookupGroupID, &userGroupIDs, &gatewayUID, &gatewayEUID, &procStatus,
 		&canReadAs, &selfExe, &binaryHasCaps, &lstatOwner, &hasACL, &runAsGOOS, &access, &runAsAcct} {
-		saveVar(t, p)
+		saveVar(t, value)
 	}
-	lookupUser = func(n string) (*user.User, error) {
-		if u, ok := users[n]; ok {
-			return u, nil
+	lookupUser = func(name string) (*user.User, error) {
+		if localUser, ok := users[name]; ok {
+			return localUser, nil
 		}
-		return nil, user.UnknownUserError(n)
+		return nil, user.UnknownUserError(name)
 	}
 	lookupUserID = func(id string) (*user.User, error) {
-		for _, u := range users {
-			if u.Uid == id {
-				return u, nil
+		for _, localUser := range users {
+			if localUser.Uid == id {
+				return localUser, nil
 			}
 		}
 		return nil, errors.New("unknown uid")
@@ -51,7 +51,7 @@ func fakeAccounts(t *testing.T, self int) (bin string) {
 		}
 		return nil, errors.New("unknown gid")
 	}
-	userGroupIDs = func(u *user.User) ([]string, error) { return groups[u.Username], nil }
+	userGroupIDs = func(localUser *user.User) ([]string, error) { return groups[localUser.Username], nil }
 	gatewayUID = func() int { return self }
 	gatewayEUID = func() int { return 0 }
 	procStatus = func() ([]byte, error) { return []byte("CapInh:\t0000000000000000\nCapAmb:\t0000000000000000\n"), nil }
@@ -70,14 +70,14 @@ func fakeAccounts(t *testing.T, self int) (bin string) {
 
 // authTempDir : un dossier des comptes valide (0700).
 func authTempDir(t *testing.T) string {
-	d := t.TempDir()
-	os.Chmod(d, 0o700)
-	return d
+	dir := t.TempDir()
+	os.Chmod(dir, 0o700)
+	return dir
 }
 
 // rootOwned : le vrai Lstat, mais tout appartient à root (les tests ne tournent pas en root).
-func rootOwned(p string) (uint32, uint32, os.FileMode, error) {
-	fi, err := os.Lstat(p)
+func rootOwned(path string) (uint32, uint32, os.FileMode, error) {
+	fi, err := os.Lstat(path)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -85,11 +85,11 @@ func rootOwned(p string) (uint32, uint32, os.FileMode, error) {
 }
 
 // saveVar : remet la variable pointée (func ou *runAsAccount) à sa valeur en fin de test.
-func saveVar(t *testing.T, p any) {
-	v := reflect.ValueOf(p).Elem()
-	old := reflect.New(v.Type()).Elem()
-	old.Set(v)
-	t.Cleanup(func() { v.Set(old) })
+func saveVar(t *testing.T, value any) {
+	localValue := reflect.ValueOf(value).Elem()
+	old := reflect.New(localValue.Type()).Elem()
+	old.Set(localValue)
+	t.Cleanup(func() { localValue.Set(old) })
 }
 
 func TestParseRunAs(t *testing.T) {
@@ -112,21 +112,21 @@ func TestParseRunAs(t *testing.T) {
 		{"alice:0", L("srv.runas.root"), 0, 0},
 		{"wheel0", L("srv.runas.root"), 0, 0},
 	}
-	for _, c := range cases {
-		a, err := parseRunAs(c.spec)
+	for _, record := range cases {
+		runAsAccount, err := parseRunAs(record.spec)
 		switch {
-		case c.err != "":
-			if err == nil || err.Error() != c.err || a != nil {
-				t.Errorf("%q : %v, %v ; attendu %q", c.spec, a, err, c.err)
+		case record.err != "":
+			if err == nil || err.Error() != record.err || runAsAccount != nil {
+				t.Errorf("%q : %v, %v ; attendu %q", record.spec, runAsAccount, err, record.err)
 			}
-		case c.spec == "":
-			if a != nil || err != nil {
-				t.Errorf("vide : %v, %v", a, err)
+		case record.spec == "":
+			if runAsAccount != nil || err != nil {
+				t.Errorf("vide : %v, %v", runAsAccount, err)
 			}
 		case err != nil:
-			t.Errorf("%q : %v", c.spec, err)
-		case a.cred.Uid != c.uid || a.cred.Gid != c.gid || !slices.Equal(a.cred.Groups, []uint32{1500, 27}) || a.home != "/home/alice" || a.name != "alice":
-			t.Errorf("%q : %+v %+v", c.spec, a, a.cred)
+			t.Errorf("%q : %v", record.spec, err)
+		case runAsAccount.cred.Uid != record.uid || runAsAccount.cred.Gid != record.gid || !slices.Equal(runAsAccount.cred.Groups, []uint32{1500, 27}) || runAsAccount.home != "/home/alice" || runAsAccount.name != "alice":
+			t.Errorf("%q : %+v %+v", record.spec, runAsAccount, runAsAccount.cred)
 		}
 	}
 	gatewayUID = func() int { return 1500 }
@@ -135,8 +135,8 @@ func TestParseRunAs(t *testing.T) {
 	}
 	t.Setenv("GLD_RUN_AS", "1500")
 	gatewayUID = func() int { return 1000 }
-	if c, err := runAs(); err != nil || c.Uid != 1500 {
-		t.Errorf("runAs : %+v %v", c, err)
+	if credential, err := runAs(); err != nil || credential.Uid != 1500 {
+		t.Errorf("runAs : %+v %v", credential, err)
 	}
 }
 
@@ -145,15 +145,15 @@ func testAccount() *runAsAccount {
 }
 
 func envMap(env []string) map[string]string {
-	m := map[string]string{}
-	for _, e := range env {
-		k, v, _ := strings.Cut(e, "=")
-		if _, dup := m[k]; dup {
-			m[k+"#dup"] = v
+	lookup := map[string]string{}
+	for _, entry := range env {
+		key, value, _ := strings.Cut(entry, "=")
+		if _, dup := lookup[key]; dup {
+			lookup[key+"#dup"] = value
 		}
-		m[k] = v
+		lookup[key] = value
 	}
-	return m
+	return lookup
 }
 
 func TestApplyRunAsSetsCredential(t *testing.T) {
@@ -170,29 +170,29 @@ func TestApplyRunAsSetsCredential(t *testing.T) {
 	if cmd.SysProcAttr != attr || !attr.Setsid || !attr.Setpgid || !attr.Setctty || attr.Ctty != 3 {
 		t.Fatalf("SysProcAttr existant écrasé : %+v", cmd.SysProcAttr)
 	}
-	c := attr.Credential
-	if c == nil || c.Uid != 1500 || c.Gid != 1500 || !slices.Equal(c.Groups, []uint32{1500, 27}) || c.NoSetGroups {
-		t.Fatalf("Credential : %+v", c)
+	credential := attr.Credential
+	if credential == nil || credential.Uid != 1500 || credential.Gid != 1500 || !slices.Equal(credential.Groups, []uint32{1500, 27}) || credential.NoSetGroups {
+		t.Fatalf("Credential : %+v", credential)
 	}
-	c.Groups[0] = 9
+	credential.Groups[0] = 9
 	if runAsAcct.cred.Groups[0] != 1500 {
 		t.Error("Credential partagé avec le compte : une commande pourrait le modifier")
 	}
 	if cmd.Path != "/bin/sh" || !slices.Equal(cmd.Args, []string{"/bin/sh", "-c", runAsUmask, "/bin/true", "-p", "a b"}) {
 		t.Errorf("umask 077 non posé : %q %q", cmd.Path, cmd.Args)
 	}
-	m := envMap(cmd.Env)
-	for _, k := range []string{"GLD_AUTH_KEY", "GLD_AUTH_OTHER", "GLD_WEB_TOKEN", "GLD_WEB_PORT", childTokenEnv, "GLD_RUN_AS", "GLD_RUN_AS_EXPERIMENTAL",
+	lookup := envMap(cmd.Env)
+	for _, key := range []string{"GLD_AUTH_KEY", "GLD_AUTH_OTHER", "GLD_WEB_TOKEN", "GLD_WEB_PORT", childTokenEnv, "GLD_RUN_AS", "GLD_RUN_AS_EXPERIMENTAL",
 		"GLD_AUTH_DIR", "TMUX", "TMUX_TMPDIR", "SSH_AUTH_SOCK", "XDG_RUNTIME_DIR"} {
-		if _, ok := m[k]; ok {
-			t.Errorf("%s transmis au compte cible", k)
+		if _, ok := lookup[key]; ok {
+			t.Errorf("%s transmis au compte cible", key)
 		}
 	}
 	want := map[string]string{"HOME": "/home/alice", "USER": "alice", "LOGNAME": "alice", "SHELL": "/bin/zsh", "CLAUDE_CONFIG_DIR": "/srv/home1",
 		"CLAUDE_CODE_X": "1", "ANTHROPIC_API_KEY": "a", "FOO": "bar", "PATH": "/usr/bin"}
-	for k, v := range want {
-		if m[k] != v || m[k+"#dup"] != "" {
-			t.Errorf("%s = %q (doublon %q), attendu %q", k, m[k], m[k+"#dup"], v)
+	for key, value := range want {
+		if lookup[key] != value || lookup[key+"#dup"] != "" {
+			t.Errorf("%s = %q (doublon %q), attendu %q", key, lookup[key], lookup[key+"#dup"], value)
 		}
 	}
 
@@ -203,8 +203,8 @@ func TestApplyRunAsSetsCredential(t *testing.T) {
 	cmd = exec.Command("/bin/true", "web")
 	cmd.Env = []string{childTokenEnv + "=c", "GLD_WEB_PORT=1", "GLD_WEB_LISTEN=127.0.0.1", "GLD_WEB_TOKEN=t"}
 	applyRunAs(cmd, childTokenEnv, "GLD_WEB_PORT", "GLD_WEB_LISTEN")
-	m = envMap(cmd.Env)
-	if m[childTokenEnv] != "c" || m["GLD_WEB_PORT"] != "1" || m["GLD_WEB_LISTEN"] != "127.0.0.1" || m["GLD_WEB_TOKEN"] != "" || m["CLAUDE_CONFIG_DIR"] != "/srv/main/.claude" {
+	lookup = envMap(cmd.Env)
+	if lookup[childTokenEnv] != "c" || lookup["GLD_WEB_PORT"] != "1" || lookup["GLD_WEB_LISTEN"] != "127.0.0.1" || lookup["GLD_WEB_TOKEN"] != "" || lookup["CLAUDE_CONFIG_DIR"] != "/srv/main/.claude" {
 		t.Errorf("env enfant : %v", cmd.Env)
 	}
 	if cmd.SysProcAttr == nil || cmd.SysProcAttr.Credential == nil || cmd.SysProcAttr.Credential.Uid != 1500 {
@@ -220,7 +220,7 @@ func TestApplyRunAsSetsCredential(t *testing.T) {
 
 	// withPath : ~/.local/bin du compte cible, puis la séparation.
 	cmd = withPath(exec.Command("/bin/true"))
-	if m := envMap(cmd.Env); !strings.HasPrefix(m["PATH"], "/home/alice/.local/bin:") || m["HOME"] != "/home/alice" || cmd.SysProcAttr == nil {
+	if lookup := envMap(cmd.Env); !strings.HasPrefix(lookup["PATH"], "/home/alice/.local/bin:") || lookup["HOME"] != "/home/alice" || cmd.SysProcAttr == nil {
 		t.Errorf("withPath sous GLD_RUN_AS : %v %+v", cmd.Env, cmd.SysProcAttr)
 	}
 }
@@ -232,23 +232,23 @@ func TestRunAsUnsetIsNoop(t *testing.T) {
 		t.Fatalf("GLD_RUN_AS vide : %v %v", err, runAsAcct)
 	}
 	mk := func() *exec.Cmd {
-		c := exec.Command("/bin/true", "new-session", "-t", "$1")
-		c.Env = []string{"TERM=xterm-256color", "GLD_AUTH_KEY=k", "HOME=/root"}
-		c.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-		return c
+		cmd := exec.Command("/bin/true", "new-session", "-t", "$1")
+		cmd.Env = []string{"TERM=xterm-256color", "GLD_AUTH_KEY=k", "HOME=/root"}
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		return cmd
 	}
-	a, b := mk(), mk()
-	applyRunAs(a, childTokenEnv)
-	if !reflect.DeepEqual(a.Args, b.Args) || !reflect.DeepEqual(a.Env, b.Env) || !reflect.DeepEqual(a.SysProcAttr, b.SysProcAttr) || a.Path != b.Path {
-		t.Errorf("commande modifiée sans GLD_RUN_AS : %+v", a)
+	localCmd, anotherCmd := mk(), mk()
+	applyRunAs(localCmd, childTokenEnv)
+	if !reflect.DeepEqual(localCmd.Args, anotherCmd.Args) || !reflect.DeepEqual(localCmd.Env, anotherCmd.Env) || !reflect.DeepEqual(localCmd.SysProcAttr, anotherCmd.SysProcAttr) || localCmd.Path != anotherCmd.Path {
+		t.Errorf("commande modifiée sans GLD_RUN_AS : %+v", localCmd)
 	}
-	c := exec.Command("git", "status")
-	applyRunAs(c)
-	if c.Env != nil || c.SysProcAttr != nil {
-		t.Errorf("Env ou SysProcAttr créés sans GLD_RUN_AS : %v %+v", c.Env, c.SysProcAttr)
+	extraCmd := exec.Command("git", "status")
+	applyRunAs(extraCmd)
+	if extraCmd.Env != nil || extraCmd.SysProcAttr != nil {
+		t.Errorf("Env ou SysProcAttr créés sans GLD_RUN_AS : %v %+v", extraCmd.Env, extraCmd.SysProcAttr)
 	}
-	if l, _ := launcherCmd("tmux", "t", []string{"x"}); slices.Contains(l.Args, "-d") {
-		t.Errorf("lanceur tmux détaché sans GLD_RUN_AS : %v", l.Args)
+	if cmd, _ := launcherCmd("tmux", "t", []string{"x"}); slices.Contains(cmd.Args, "-d") {
+		t.Errorf("lanceur tmux détaché sans GLD_RUN_AS : %v", cmd.Args)
 	}
 }
 
@@ -258,9 +258,9 @@ func TestRunAsLauncherIsDetachedTmux(t *testing.T) {
 	if launcherAvailable("kitty") || launcherAvailable("terminator-tmux") || tmuxLauncher() != "" {
 		t.Error("un émulateur de bureau est proposé sous GLD_RUN_AS")
 	}
-	c, err := launcherCmd("tmux", "a#b", []string{"/usr/bin/gld", "_run", "/tmp/x.json"})
-	if err != nil || !slices.Equal(c.Args[:9], []string{"tmux", "new-session", "-d", "-x", "160", "-y", "48", "-n", "a##b"}) {
-		t.Errorf("lanceur : %v %v", c, err)
+	cmd, err := launcherCmd("tmux", "a#b", []string{"/usr/bin/gld", "_run", "/tmp/x.json"})
+	if err != nil || !slices.Equal(cmd.Args[:9], []string{"tmux", "new-session", "-d", "-x", "160", "-y", "48", "-n", "a##b"}) {
+		t.Errorf("lanceur : %v %v", cmd, err)
 	}
 	runAsAcct = nil
 	t.Setenv(runAsChildEnv, "1")
@@ -293,7 +293,7 @@ func TestRunAsRefusesNotPrivileged(t *testing.T) {
 				"\nCapAmb:\t" + strconv.FormatUint(amb, 16) + "\n"), nil
 		}
 	}
-	for _, c := range []struct {
+	for _, record := range []struct {
 		euid          int
 		eff, inh, amb uint64
 		err           string
@@ -304,16 +304,16 @@ func TestRunAsRefusesNotPrivileged(t *testing.T) {
 		{0, 0x1ffffffffff, 1 << 7, 0, L("srv.runas.inheritedCaps")},
 		{0, 0x1ffffffffff, 0, 0, ""},
 	} {
-		gatewayEUID = func() int { return c.euid }
-		procStatus = status(c.eff, c.inh, c.amb)
+		gatewayEUID = func() int { return record.euid }
+		procStatus = status(record.eff, record.inh, record.amb)
 		runAsAcct = nil
 		err := checkRunAsSeparation()
-		if c.err == "" {
+		if record.err == "" {
 			if err != nil || runAsAcct == nil {
-				t.Errorf("%+v : %v", c, err)
+				t.Errorf("%+v : %v", record, err)
 			}
-		} else if err == nil || err.Error() != c.err || runAsAcct != nil {
-			t.Errorf("%+v : %v, attendu %q", c, err, c.err)
+		} else if err == nil || err.Error() != record.err || runAsAcct != nil {
+			t.Errorf("%+v : %v, attendu %q", record, err, record.err)
 		}
 	}
 	gatewayEUID = func() int { return 0 }
@@ -329,14 +329,14 @@ func TestRunAsRefusesNotPrivileged(t *testing.T) {
 	}
 	runAsGOOS = "linux"
 	procStatus = status(0, 0, 0)
-	for _, c := range []struct {
+	for _, record := range []struct {
 		has bool
 		err error
 	}{{true, nil}, {false, errors.New("EIO")}} {
-		binaryHasCaps = func(string) (bool, error) { return c.has, c.err }
+		binaryHasCaps = func(string) (bool, error) { return record.has, record.err }
 		runAsAcct = nil
 		if err := checkRunAsSeparation(); err == nil || err.Error() != L("srv.runas.fileCaps", "A1", bin) || runAsAcct != nil {
-			t.Errorf("capacités de fichier %+v : %v", c, err)
+			t.Errorf("capacités de fichier %+v : %v", record, err)
 		}
 	}
 }
@@ -347,8 +347,8 @@ func TestRunAsRefusesReadableAuthDir(t *testing.T) {
 	t.Setenv("GLD_AUTH_DIR", dir)
 	t.Setenv("GLD_RUN_AS", "alice")
 	var asked string
-	canReadAs = func(d, bin string) (bool, bool, error) {
-		asked = d + " " + bin
+	canReadAs = func(dir, bin string) (bool, bool, error) {
+		asked = dir + " " + bin
 		if runAsAcct == nil {
 			t.Error("vérification lancée hors du compte cible")
 		}
@@ -389,12 +389,12 @@ type fakeStat struct {
 }
 
 // overStat : rootOwned, sauf pour les chemins de m.
-func overStat(m map[string]fakeStat) {
-	lstatOwner = func(p string) (uint32, uint32, os.FileMode, error) {
-		if s, ok := m[p]; ok {
-			return s.uid, s.gid, s.mode, s.err
+func overStat(lookup map[string]fakeStat) {
+	lstatOwner = func(path string) (uint32, uint32, os.FileMode, error) {
+		if fakeStat, ok := lookup[path]; ok {
+			return fakeStat.uid, fakeStat.gid, fakeStat.mode, fakeStat.err
 		}
-		return rootOwned(p)
+		return rootOwned(path)
 	}
 }
 
@@ -413,88 +413,88 @@ func TestRunAsRefusesUnsafeChain(t *testing.T) {
 		t.Fatalf("dossier des comptes non créé en 0700 : %v %v", fi, err)
 	}
 
-	d := os.ModeDir
-	anc := func(p string) string { return L("srv.runas.ancestorWritable", "A1", "alice", "A2", p) }
-	binW := func(p string) string { return L("srv.runas.binaryWritable", "A1", "alice", "A2", p) }
-	for _, c := range []struct {
+	fileMode := os.ModeDir
+	anc := func(path string) string { return L("srv.runas.ancestorWritable", "A1", "alice", "A2", path) }
+	binW := func(path string) string { return L("srv.runas.binaryWritable", "A1", "alice", "A2", path) }
+	for _, record := range []struct {
 		name string
 		m    map[string]fakeStat
 		want string
 	}{
-		{"cible propriétaire", map[string]fakeStat{auth: {1500, 1500, d | 0o700, nil}}, L("srv.runas.authDirCreate", "A1", auth, "A2", (d | 0o700).String())},
-		{"dossier des comptes sticky", map[string]fakeStat{auth: {0, 0, d | os.ModeSticky | 0o777, nil}}, L("srv.runas.authDirCreate", "A1", auth, "A2", (d | os.ModeSticky | 0o777).String())},
-		{"parent propriété de la cible", map[string]fakeStat{base: {1500, 1500, d | 0o700, nil}}, anc(base)},
-		{"groupe supplémentaire", map[string]fakeStat{base: {0, 27, d | 0o775, nil}}, anc(base)},
-		{"groupe principal", map[string]fakeStat{base: {0, 1500, d | 0o770, nil}}, anc(base)},
-		{"écriture pour tous", map[string]fakeStat{"/": {0, 0, d | 0o757, nil}}, binW("/")}, // le binaire, vérifié d'abord, partage /
-		{"parent root sticky", map[string]fakeStat{base: {0, 0, d | os.ModeSticky | 0o777, nil}}, ""},
-		{"sticky non root", map[string]fakeStat{base: {1000, 1000, d | os.ModeSticky | 0o777, nil}}, anc(base)},
-		{"groupe étranger", map[string]fakeStat{base: {0, 50, d | 0o775, nil}}, ""},
+		{"cible propriétaire", map[string]fakeStat{auth: {1500, 1500, fileMode | 0o700, nil}}, L("srv.runas.authDirCreate", "A1", auth, "A2", (fileMode | 0o700).String())},
+		{"dossier des comptes sticky", map[string]fakeStat{auth: {0, 0, fileMode | os.ModeSticky | 0o777, nil}}, L("srv.runas.authDirCreate", "A1", auth, "A2", (fileMode | os.ModeSticky | 0o777).String())},
+		{"parent propriété de la cible", map[string]fakeStat{base: {1500, 1500, fileMode | 0o700, nil}}, anc(base)},
+		{"groupe supplémentaire", map[string]fakeStat{base: {0, 27, fileMode | 0o775, nil}}, anc(base)},
+		{"groupe principal", map[string]fakeStat{base: {0, 1500, fileMode | 0o770, nil}}, anc(base)},
+		{"écriture pour tous", map[string]fakeStat{"/": {0, 0, fileMode | 0o757, nil}}, binW("/")}, // le binaire, vérifié d'abord, partage /
+		{"parent root sticky", map[string]fakeStat{base: {0, 0, fileMode | os.ModeSticky | 0o777, nil}}, ""},
+		{"sticky non root", map[string]fakeStat{base: {1000, 1000, fileMode | os.ModeSticky | 0o777, nil}}, anc(base)},
+		{"groupe étranger", map[string]fakeStat{base: {0, 50, fileMode | 0o775, nil}}, ""},
 		{"erreur de stat", map[string]fakeStat{base: {0, 0, 0, errors.New("EIO")}}, anc("EIO")},
 		{"binaire de la cible", map[string]fakeStat{bin: {1500, 1500, 0o755, nil}}, binW(bin)},
 		{"binaire 0757", map[string]fakeStat{bin: {0, 0, 0o757, nil}}, binW(bin)},
-		{"dossier du binaire", map[string]fakeStat{filepath.Dir(bin): {0, 27, d | 0o775, nil}}, binW(filepath.Dir(bin))},
+		{"dossier du binaire", map[string]fakeStat{filepath.Dir(bin): {0, 27, fileMode | 0o775, nil}}, binW(filepath.Dir(bin))},
 		{"binaire sticky (pas un parent)", map[string]fakeStat{bin: {0, 0, os.ModeSticky | 0o777, nil}}, binW(bin)},
 	} {
-		overStat(c.m)
+		overStat(record.m)
 		runAsAcct = nil
 		err := checkRunAsSeparation()
-		if c.want == "" {
+		if record.want == "" {
 			if err != nil {
-				t.Errorf("%s : %v", c.name, err)
+				t.Errorf("%s : %v", record.name, err)
 			}
-		} else if err == nil || err.Error() != c.want || runAsAcct != nil {
-			t.Errorf("%s : %v, attendu %q", c.name, err, c.want)
+		} else if err == nil || err.Error() != record.want || runAsAcct != nil {
+			t.Errorf("%s : %v, attendu %q", record.name, err, record.want)
 		}
 	}
 	lstatOwner = rootOwned
 
 	// ACL POSIX sur un élément, ou illisible : refus
-	for _, c := range []struct {
+	for _, record := range []struct {
 		acl bool
 		err error
 	}{{true, nil}, {false, errors.New("EIO")}} {
-		hasACL = func(p string) (bool, error) {
-			if p == base {
-				return c.acl, c.err
+		hasACL = func(path string) (bool, error) {
+			if path == base {
+				return record.acl, record.err
 			}
 			return false, nil
 		}
 		runAsAcct = nil
-		if err := checkRunAsSeparation(); err == nil || runAsAcct != nil || (c.err == nil && err.Error() != L("srv.runas.acl", "A1", base)) {
-			t.Errorf("ACL %+v : %v", c, err)
+		if err := checkRunAsSeparation(); err == nil || runAsAcct != nil || (record.err == nil && err.Error() != L("srv.runas.acl", "A1", base)) {
+			t.Errorf("ACL %+v : %v", record, err)
 		}
 	}
 	hasACL = func(string) (bool, error) { return false, nil }
 
 	// lien dans le chemin configuré : A/lien -> B/reel ; le chemin résolu ne passe pas par A
-	a, b := filepath.Join(base, "A"), filepath.Join(base, "B", "reel")
-	os.MkdirAll(a, 0o700)
-	os.MkdirAll(filepath.Join(b, "auth"), 0o700)
-	link := filepath.Join(a, "lien")
-	if err := os.Symlink(b, link); err != nil {
+	argument, body := filepath.Join(base, "A"), filepath.Join(base, "B", "reel")
+	os.MkdirAll(argument, 0o700)
+	os.MkdirAll(filepath.Join(body, "auth"), 0o700)
+	link := filepath.Join(argument, "lien")
+	if err := os.Symlink(body, link); err != nil {
 		t.Fatal(err)
 	}
 	viaLink := filepath.Join(link, "auth")
 	t.Setenv("GLD_AUTH_DIR", viaLink)
-	for _, c := range []struct {
+	for _, record := range []struct {
 		name string
 		m    map[string]fakeStat
 		want string
 	}{
 		{"lien de root dans un dossier sûr", nil, ""},
 		{"lien qui n'est pas à root", map[string]fakeStat{link: {1000, 1000, os.ModeSymlink | 0o777, nil}}, anc(link)},
-		{"lien dans un dossier modifiable par la cible", map[string]fakeStat{a: {0, 0, d | 0o777, nil}}, anc(a)},
+		{"lien dans un dossier modifiable par la cible", map[string]fakeStat{argument: {0, 0, fileMode | 0o777, nil}}, anc(argument)},
 	} {
-		overStat(c.m)
+		overStat(record.m)
 		runAsAcct = nil
 		err := checkRunAsSeparation()
-		if c.want == "" {
+		if record.want == "" {
 			if err != nil {
-				t.Errorf("%s : %v", c.name, err)
+				t.Errorf("%s : %v", record.name, err)
 			}
-		} else if err == nil || err.Error() != c.want {
-			t.Errorf("%s : %v, attendu %q", c.name, err, c.want)
+		} else if err == nil || err.Error() != record.want {
+			t.Errorf("%s : %v, attendu %q", record.name, err, record.want)
 		}
 	}
 }
@@ -539,20 +539,20 @@ func TestRunAsFollowsLinkChains(t *testing.T) {
 	fakeAccounts(t, 1000)
 	t.Setenv("GLD_RUN_AS", "alice")
 	base, _ := filepath.EvalSymlinks(t.TempDir())
-	a, b, c := filepath.Join(base, "A"), filepath.Join(base, "B"), filepath.Join(base, "C")
-	for _, d := range []string{a, b, filepath.Join(c, "auth")} {
-		os.MkdirAll(d, 0o700)
+	argument, body, content := filepath.Join(base, "A"), filepath.Join(base, "B"), filepath.Join(base, "C")
+	for _, dir := range []string{argument, body, filepath.Join(content, "auth")} {
+		os.MkdirAll(dir, 0o700)
 	}
 	// A/l1 -> ../B/l2 (relatif) -> C ; le chemin configuré passe par A, le chemin résolu par C : B n'est vu qu'en suivant l1
-	os.Symlink(filepath.Join("..", "B", "l2"), filepath.Join(a, "l1"))
-	os.Symlink(c, filepath.Join(b, "l2"))
-	t.Setenv("GLD_AUTH_DIR", filepath.Join(a, "l1", "auth"))
+	os.Symlink(filepath.Join("..", "B", "l2"), filepath.Join(argument, "l1"))
+	os.Symlink(content, filepath.Join(body, "l2"))
+	t.Setenv("GLD_AUTH_DIR", filepath.Join(argument, "l1", "auth"))
 	if err := checkRunAsSeparation(); err != nil {
 		t.Fatalf("chaîne de liens sûre refusée : %v", err)
 	}
-	overStat(map[string]fakeStat{b: {0, 0, os.ModeDir | 0o777, nil}})
+	overStat(map[string]fakeStat{body: {0, 0, os.ModeDir | 0o777, nil}})
 	runAsAcct = nil
-	if err := checkRunAsSeparation(); err == nil || err.Error() != L("srv.runas.ancestorWritable", "A1", "alice", "A2", b) {
+	if err := checkRunAsSeparation(); err == nil || err.Error() != L("srv.runas.ancestorWritable", "A1", "alice", "A2", body) {
 		t.Fatalf("dossier intermédiaire modifiable accepté : %v", err)
 	}
 	lstatOwner = rootOwned
@@ -560,8 +560,8 @@ func TestRunAsFollowsLinkChains(t *testing.T) {
 	// boucle de liens : refus, pas de récursion sans fin
 	os.Symlink(filepath.Join(base, "L2"), filepath.Join(base, "L1"))
 	os.Symlink(filepath.Join(base, "L1"), filepath.Join(base, "L2"))
-	if p, err := unsafeChain(filepath.Join(base, "L1", "auth"), testAccount().cred); err == nil {
-		t.Fatalf("boucle de liens acceptée : %q", p)
+	if path, err := unsafeChain(filepath.Join(base, "L1", "auth"), testAccount().cred); err == nil {
+		t.Fatalf("boucle de liens acceptée : %q", path)
 	}
 }
 
@@ -583,8 +583,8 @@ func TestCapFieldFailsClosed(t *testing.T) {
 			t.Errorf("%q : %v", st, err)
 		}
 	}
-	if n, err := capField([]byte("CapAmb:\t00000000000000a0\n"), "CapAmb:"); err != nil || n != 0xa0 {
-		t.Errorf("capField : %x %v", n, err)
+	if count, err := capField([]byte("CapAmb:\t00000000000000a0\n"), "CapAmb:"); err != nil || count != 0xa0 {
+		t.Errorf("capField : %x %v", count, err)
 	}
 }
 
@@ -592,11 +592,11 @@ func TestRunCanRead(t *testing.T) {
 	saveVar(t, &access)
 	dir, bin := "/auth", "/opt/gld/gld"
 	allow := map[string]bool{}
-	access = func(p string, mode uint32) error {
-		if allow[p+" "+strconv.Itoa(int(mode))] {
+	access = func(path string, mode uint32) error {
+		if allow[path+" "+strconv.Itoa(int(mode))] {
 			return nil
 		}
-		if p == "/eio" {
+		if path == "/eio" {
 			return syscall.EIO
 		}
 		return syscall.EACCES
@@ -604,13 +604,13 @@ func TestRunCanRead(t *testing.T) {
 	if runCanRead(dir, bin) != 0 {
 		t.Error("aucun accès signalé comme accès")
 	}
-	for k, want := range map[string]int{
+	for key, want := range map[string]int{
 		"/auth 2": 3, "/auth 1": 3, "/auth 4": 3, "/auth/auth.db 2": 3, "/auth/auth.key 4": 3, "/auth/auth.db-wal 4": 3, "/auth/auth.db-shm 4": 3, "/auth/auth.db-shm 2": 3, "/auth/auth.db-journal 4": 3, "/auth/auth.db-journal 2": 3,
 		"/opt/gld/gld 2": 4, "/opt/gld 2": 4,
 	} {
-		allow = map[string]bool{k: true}
+		allow = map[string]bool{key: true}
 		if got := runCanRead(dir, bin); got != want {
-			t.Errorf("%s : %d, attendu %d", k, got, want)
+			t.Errorf("%s : %d, attendu %d", key, got, want)
 		}
 	}
 	allow = map[string]bool{}
@@ -661,9 +661,9 @@ func TestRunAsRealSwitch(t *testing.T) {
 	cmd.Dir = "/"
 	applyRunAs(cmd)
 	out, _ := cmd.CombinedOutput()
-	s := string(out)
-	if !strings.HasPrefix(s, "1000\n0077\n") || strings.Contains(s, "\nx") || !strings.Contains(s, "HOME=/nonexistent") || strings.Count(s, "ermission") < 2 {
-		t.Fatalf("sortie sous le compte cible :\n%s", s)
+	text := string(out)
+	if !strings.HasPrefix(text, "1000\n0077\n") || strings.Contains(text, "\nx") || !strings.Contains(text, "HOME=/nonexistent") || strings.Count(text, "ermission") < 2 {
+		t.Fatalf("sortie sous le compte cible :\n%s", text)
 	}
 }
 
