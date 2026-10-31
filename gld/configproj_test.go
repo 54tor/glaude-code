@@ -39,54 +39,54 @@ func TestConfigParProjet(t *testing.T) {
 	put(t, filepath.Join(proj, ".mcp.json"), `{"mcpServers":{"mon-serveur":{"command":"x","env":{"TOKEN":"s"}}}}`, old)
 	put(t, filepath.Join(proj, "README.md"), "doc\n", old)
 
-	var p, v ProjectCfg
+	var projectCfg, localProjectCfg ProjectCfg
 	for _, pc := range projectConfigs() {
 		switch pc.Dir {
 		case "-p":
-			p = pc
+			projectCfg = pc
 		case "-v":
-			v = pc
+			localProjectCfg = pc
 		}
 	}
-	if len(p.Files) != 2 || p.Perms["allow"][0].Rule != "Bash(make:*)" || p.Perms["allow"][0].Scope != "p" || p.Perms["deny"][0].Scope != "l" {
-		t.Fatalf("réglages et règles : %+v", p)
+	if len(projectCfg.Files) != 2 || projectCfg.Perms["allow"][0].Rule != "Bash(make:*)" || projectCfg.Perms["allow"][0].Scope != "p" || projectCfg.Perms["deny"][0].Scope != "l" {
+		t.Fatalf("réglages et règles : %+v", projectCfg)
 	}
 	mcp := map[string]string{}
-	for _, m := range p.MCP {
-		mcp[m.Name] = m.Scope
+	for _, mcpServer := range projectCfg.MCP {
+		mcp[mcpServer.Name] = mcpServer.Scope
 	}
-	if len(p.Hooks) != 1 || p.Hooks[0].Event != "Stop" || len(mcp) != 2 || mcp["mon-serveur"] != "project" || mcp["local-srv"] != "local" || len(p.Skills) != 1 || p.Skills[0] != "deploy" {
-		t.Fatalf("hooks, MCP, skills : %+v", p)
+	if len(projectCfg.Hooks) != 1 || projectCfg.Hooks[0].Event != "Stop" || len(mcp) != 2 || mcp["mon-serveur"] != "project" || mcp["local-srv"] != "local" || len(projectCfg.Skills) != 1 || projectCfg.Skills[0] != "deploy" {
+		t.Fatalf("hooks, MCP, skills : %+v", projectCfg)
 	}
-	if len(p.Rules) != 2 || p.Rules[0].Name != "api.md" || len(p.Rules[0].Paths) != 1 || len(p.Rules[1].Paths) != 0 {
-		t.Fatalf("règles du projet : %+v", p.Rules)
+	if len(projectCfg.Rules) != 2 || projectCfg.Rules[0].Name != "api.md" || len(projectCfg.Rules[0].Paths) != 1 || len(projectCfg.Rules[1].Paths) != 0 {
+		t.Fatalf("règles du projet : %+v", projectCfg.Rules)
 	}
-	if !strings.Contains(strings.Join(p.Docs, " "), "README.md") || p.Specific == 0 {
-		t.Fatalf("docs : %+v", p)
+	if !strings.Contains(strings.Join(projectCfg.Docs, " "), "README.md") || projectCfg.Specific == 0 {
+		t.Fatalf("docs : %+v", projectCfg)
 	}
-	if p.Files[0].Label != "settings.json" || p.Files[1].Label != "settings.local.json" {
-		t.Fatalf("libellés : %+v", p.Files)
+	if projectCfg.Files[0].Label != "settings.json" || projectCfg.Files[1].Label != "settings.local.json" {
+		t.Fatalf("libellés : %+v", projectCfg.Files)
 	}
 	rows := 0
-	for _, f := range p.Files {
-		rows += len(f.Rows)
-		if !sort.SliceIsSorted(f.Rows, func(i, j int) bool { return f.Rows[i].Path < f.Rows[j].Path }) {
-			t.Fatalf("lignes non triées : %+v", f.Rows)
+	for _, projFile := range projectCfg.Files {
+		rows += len(projFile.Rows)
+		if !sort.SliceIsSorted(projFile.Rows, func(index, innerIndex int) bool { return projFile.Rows[index].Path < projFile.Rows[innerIndex].Path }) {
+			t.Fatalf("lignes non triées : %+v", projFile.Rows)
 		}
 	}
 	// 1 hook + 2 MCP + 1 skill + 2 règles + les lignes des deux fichiers
-	if want := 6 + rows; p.Specific != want || rows < 4 {
-		t.Fatalf("éléments spécifiques : %d au lieu de %d (%d lignes)", p.Specific, want, rows)
+	if want := 6 + rows; projectCfg.Specific != want || rows < 4 {
+		t.Fatalf("éléments spécifiques : %d au lieu de %d (%d lignes)", projectCfg.Specific, want, rows)
 	}
-	for _, f := range p.Files {
-		for _, r := range f.Rows {
-			if r.Value == "secret" {
+	for _, projFile := range projectCfg.Files {
+		for _, projRow := range projFile.Rows {
+			if projRow.Value == "secret" {
 				t.Fatal("secret non masqué dans la vue par projet")
 			}
 		}
 	}
-	if v.Specific != 0 || v.Dir != "-v" {
-		t.Fatalf("projet sans réglage propre : %+v", v)
+	if localProjectCfg.Specific != 0 || localProjectCfg.Dir != "-v" {
+		t.Fatalf("projet sans réglage propre : %+v", localProjectCfg)
 	}
 	if projectConfigs()[0].Dir != "-p" { // ceux qui ont du spécifique d'abord
 		t.Fatal("ordre")
@@ -96,22 +96,22 @@ func TestConfigParProjet(t *testing.T) {
 func TestReglesDeProjetDansLaMemoire(t *testing.T) {
 	cfg := t.TempDir()
 	use(cfg)
-	a, b := t.TempDir(), t.TempDir()
-	put(t, filepath.Join(cfg, "projects", "-a", id1+".jsonl"), `{"cwd":"`+a+`"}`+"\n", old)
-	put(t, filepath.Join(cfg, "projects", "-b", "22222222-2222-2222-2222-222222222222.jsonl"), `{"cwd":"`+b+`"}`+"\n", old)
-	put(t, filepath.Join(a, ".claude", "rules", "go.md"), "---\npaths:\n  - \"**/*.go\"\n---\nRègle Go\n", old)
+	argument, body := t.TempDir(), t.TempDir()
+	put(t, filepath.Join(cfg, "projects", "-a", id1+".jsonl"), `{"cwd":"`+argument+`"}`+"\n", old)
+	put(t, filepath.Join(cfg, "projects", "-b", "22222222-2222-2222-2222-222222222222.jsonl"), `{"cwd":"`+body+`"}`+"\n", old)
+	put(t, filepath.Join(argument, ".claude", "rules", "go.md"), "---\npaths:\n  - \"**/*.go\"\n---\nRègle Go\n", old)
 
 	_, projects, _ := memList()
-	var f MemFile
-	for _, p := range projects {
-		for _, x := range p.Files {
-			if x.Key == "r/-a/go.md" {
-				f = x
+	var memFile MemFile
+	for _, memProject := range projects {
+		for _, localMemFile := range memProject.Files {
+			if localMemFile.Key == "r/-a/go.md" {
+				memFile = localMemFile
 			}
 		}
 	}
-	if f.Name != "rules/go.md" || len(f.Paths) != 1 || f.Always {
-		t.Fatalf("règle de projet non listée ou mal annotée : %+v", f)
+	if memFile.Name != "rules/go.md" || len(memFile.Paths) != 1 || memFile.Always {
+		t.Fatalf("règle de projet non listée ou mal annotée : %+v", memFile)
 	}
 	// vers les règles globales (copie), puis déplacement vers un autre projet
 	if dst, err := memTransfer("r/-a/go.md", "global", true); err != nil || dst != "g/rules/go.md" {
@@ -123,7 +123,7 @@ func TestReglesDeProjetDansLaMemoire(t *testing.T) {
 	if dst, err := memTransfer("g/rules/go.md", "r:-b", true); err != nil || dst != "r/-b/go.md" {
 		t.Fatal(dst, err)
 	}
-	if _, err := os.Stat(filepath.Join(b, ".claude", "rules", "go.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(body, ".claude", "rules", "go.md")); err != nil {
 		t.Fatal("règle absente du projet de destination")
 	}
 	if dst, err := memTransfer("r/-a/go.md", "r:-b", false); err == nil {
@@ -139,13 +139,13 @@ func TestReglesDeProjetDansLaMemoire(t *testing.T) {
 	if err := memRemove("r/-b/go.md"); err != nil || len(trashList()) != 2 {
 		t.Fatalf("suppression : %v, corbeille %d", err, len(trashList()))
 	}
-	if _, err := os.Stat(filepath.Join(b, ".claude", "rules", "go.md")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(body, ".claude", "rules", "go.md")); !os.IsNotExist(err) {
 		t.Fatal("fichier resté")
 	}
 	// clés invalides
-	for _, k := range []string{"r/../go.md", "r/-a/../x.md", "r/-a/.cache.md", "r/inconnu/x.md"} {
-		if _, err := memRead(k); err == nil {
-			t.Errorf("clé acceptée : %s", k)
+	for _, key := range []string{"r/../go.md", "r/-a/../x.md", "r/-a/.cache.md", "r/inconnu/x.md"} {
+		if _, err := memRead(key); err == nil {
+			t.Errorf("clé acceptée : %s", key)
 		}
 	}
 }

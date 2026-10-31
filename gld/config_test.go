@@ -23,11 +23,11 @@ func TestJSONOrdonneAllerRetour(t *testing.T) {
   },
   "m": "Français"
 }`
-	v, err := parseOrdered([]byte(doc))
+	value, err := parseOrdered([]byte(doc))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := formatOrdered(v); got != doc {
+	if got := formatOrdered(value); got != doc {
 		t.Fatalf("aller-retour différent :\n%s", got)
 	}
 	if _, err := parseOrdered([]byte(`{"a":1} x`)); err == nil {
@@ -39,8 +39,8 @@ func TestJSONOrdonneAllerRetour(t *testing.T) {
 }
 
 func TestMasquage(t *testing.T) {
-	v, _ := parseOrdered([]byte(`{"env":{"API_KEY":"abc","PATH":"/bin"},"headers":{"Authorization":"Bearer x"},"n":["token"]}`))
-	out := formatOrdered(maskSecrets(v, ""))
+	value, _ := parseOrdered([]byte(`{"env":{"API_KEY":"abc","PATH":"/bin"},"headers":{"Authorization":"Bearer x"},"n":["token"]}`))
+	out := formatOrdered(maskSecrets(value, ""))
 	if strings.Contains(out, "abc") || strings.Contains(out, "Bearer") || !strings.Contains(out, "/bin") {
 		t.Fatal(out)
 	}
@@ -52,15 +52,15 @@ func TestFichierUtilisateurAllerRetour(t *testing.T) {
 		t.Skip("lit le vrai ~/.claude/settings.json : GLD_TEST_REAL_HOME=1 pour l'exercer")
 	}
 	home, _ := os.UserHomeDir()
-	b, err := os.ReadFile(home + "/.claude/settings.json")
+	data, err := os.ReadFile(home + "/.claude/settings.json")
 	if err != nil {
 		t.Skip("pas de settings.json")
 	}
-	v, err := parseOrdered(b)
+	value, err := parseOrdered(data)
 	if err != nil {
 		t.Skip("JSON invalide")
 	}
-	if got := formatOrdered(v); got != strings.TrimRight(string(b), "\n") {
+	if got := formatOrdered(value); got != strings.TrimRight(string(data), "\n") {
 		t.Fatal("le fichier serait reformaté à l'écriture")
 	}
 }
@@ -101,8 +101,8 @@ func TestSanteConfig(t *testing.T) {
 		t.Fatalf("%+v", files)
 	}
 	var kinds []string
-	for _, i := range configHealth(files, raw) {
-		kinds = append(kinds, i.Kind+":"+i.Msg)
+	for _, cfgIssue := range configHealth(files, raw) {
+		kinds = append(kinds, cfgIssue.Kind+":"+cfgIssue.Msg)
 	}
 	all := strings.Join(kinds, "\n")
 	for _, want := range []string{"en double dans allow : Bash(ls:*)", "trop large dans allow : « Bash »", "à la fois autorisée et refusée", "hook Stop", "plugin activé mais pas installé : inconnu@nulle-part"} {
@@ -113,30 +113,30 @@ func TestSanteConfig(t *testing.T) {
 	if strings.Contains(all, "desactive@") {
 		t.Error("plugin désactivé signalé")
 	}
-	if h := hooksOf(raw); len(h) != 1 || h[0].Event != "Stop" || h[0].Missing == "" {
-		t.Fatalf("%+v", h)
+	if hookInfos := hooksOf(raw); len(hookInfos) != 1 || hookInfos[0].Event != "Stop" || hookInfos[0].Missing == "" {
+		t.Fatalf("%+v", hookInfos)
 	}
 }
 
 func TestPrecedence(t *testing.T) {
-	u, _ := parseOrdered([]byte(`{"model":"opus","permissions":{"allow":["A"]},"env":{"X":"1"}}`))
-	p, _ := parseOrdered([]byte(`{"model":"sonnet","permissions":{"allow":["B"]}}`))
-	l, _ := parseOrdered([]byte(`{"model":"haiku"}`))
-	rows := effective(map[string]any{"u": u, "p/-a": p, "l/-a": l}, "-a")
+	value, _ := parseOrdered([]byte(`{"model":"opus","permissions":{"allow":["A"]},"env":{"X":"1"}}`))
+	localValue, _ := parseOrdered([]byte(`{"model":"sonnet","permissions":{"allow":["B"]}}`))
+	anotherValue, _ := parseOrdered([]byte(`{"model":"haiku"}`))
+	rows := effective(map[string]any{"u": value, "p/-a": localValue, "l/-a": anotherValue}, "-a")
 	by := map[string]EffRow{}
-	for _, r := range rows {
-		by[r.Path] = r
+	for _, effRow := range rows {
+		by[effRow.Path] = effRow
 	}
-	if m := by["model"]; m.Winner != "l" || m.Values["u"] != "opus" || m.Values["p"] != "sonnet" {
-		t.Fatalf("model : %+v", m)
+	if effRow := by["model"]; effRow.Winner != "l" || effRow.Values["u"] != "opus" || effRow.Values["p"] != "sonnet" {
+		t.Fatalf("model : %+v", effRow)
 	}
-	if a := by["permissions.allow[]"]; !a.Merged || a.Values["u"] != "A" || a.Values["p"] != "B" {
-		t.Fatalf("liste : %+v", a)
+	if effRow := by["permissions.allow[]"]; !effRow.Merged || effRow.Values["u"] != "A" || effRow.Values["p"] != "B" {
+		t.Fatalf("liste : %+v", effRow)
 	}
-	if e := by["env.X"]; e.Winner != "u" {
-		t.Fatalf("env : %+v", e)
+	if effRow := by["env.X"]; effRow.Winner != "u" {
+		t.Fatalf("env : %+v", effRow)
 	}
-	if _, ok := effective(map[string]any{"u": u}, "")[0], true; !ok {
+	if _, ok := effective(map[string]any{"u": value}, "")[0], true; !ok {
 		t.Fatal()
 	}
 }

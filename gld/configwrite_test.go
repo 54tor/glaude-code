@@ -12,13 +12,13 @@ import (
 func TestEcritureConfig(t *testing.T) {
 	cfg := t.TempDir()
 	use(cfg)
-	p := filepath.Join(cfg, "settings.json")
+	path := filepath.Join(cfg, "settings.json")
 	orig := "{\n  \"model\": \"opus\",\n  \"hooks\": {\n    \"Stop\": []\n  },\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls:*)\"\n    ]\n  },\n  \"theme\": \"dark\"\n}\n"
-	put(t, p, orig, old)
+	put(t, path, orig, old)
 
-	do := func(e CfgEdit) (string, error) {
-		e.File = "u"
-		_, after, err := configEdit(e)
+	do := func(cfgEdit CfgEdit) (string, error) {
+		cfgEdit.File = "u"
+		_, after, err := configEdit(cfgEdit)
 		return after, err
 	}
 	// aperçu : rien n'est écrit
@@ -26,7 +26,7 @@ func TestEcritureConfig(t *testing.T) {
 	if err != nil || !strings.Contains(after, `"model": "sonnet"`) {
 		t.Fatal(after, err)
 	}
-	if b, _ := os.ReadFile(p); string(b) != orig {
+	if data, _ := os.ReadFile(path); string(data) != orig {
 		t.Fatal("l'aperçu a écrit")
 	}
 	// écriture : seule la ligne concernée change, le reste (ordre, hooks) est intact
@@ -34,7 +34,7 @@ func TestEcritureConfig(t *testing.T) {
 	if err != nil || after != strings.Replace(orig, `"opus"`, `"sonnet"`, 1) {
 		t.Fatalf("%q %v", after, err)
 	}
-	if b, _ := os.ReadFile(p); string(b) != after {
+	if data, _ := os.ReadFile(path); string(data) != after {
 		t.Fatal("fichier non écrit")
 	}
 	if bs := listBackups(); len(bs) != 1 || bs[0].File != "u" {
@@ -54,8 +54,8 @@ func TestEcritureConfig(t *testing.T) {
 	// variables d'environnement et plugins : créés puis retirés, conteneur compris
 	do(CfgEdit{Op: "set", Path: []string{"env", "MA_VAR"}, Value: "1"})
 	do(CfgEdit{Op: "set", Path: []string{"enabledPlugins", "a@b"}, Value: true})
-	if b, _ := os.ReadFile(p); !strings.Contains(string(b), `"MA_VAR": "1"`) || !strings.Contains(string(b), `"a@b": true`) {
-		t.Fatal(string(b))
+	if data, _ := os.ReadFile(path); !strings.Contains(string(data), `"MA_VAR": "1"`) || !strings.Contains(string(data), `"a@b": true`) {
+		t.Fatal(string(data))
 	}
 	do(CfgEdit{Op: "delete", Path: []string{"env", "MA_VAR"}})
 	if after, _ = do(CfgEdit{Op: "delete", Path: []string{"enabledPlugins", "a@b"}}); strings.Contains(after, "env") || strings.Contains(after, "enabledPlugins") {
@@ -64,8 +64,8 @@ func TestEcritureConfig(t *testing.T) {
 	// skills et serveurs .mcp.json désactivés : valeur énumérée, liste retirée avec sa dernière entrée
 	do(CfgEdit{Op: "set", Path: []string{"skillOverrides", "deploy"}, Value: "off"})
 	do(CfgEdit{Op: "add", Path: []string{"disabledMcpjsonServers"}, Value: "memory"})
-	if b, _ := os.ReadFile(p); !strings.Contains(string(b), `"deploy": "off"`) || !strings.Contains(string(b), `"memory"`) {
-		t.Fatal(string(b))
+	if data, _ := os.ReadFile(path); !strings.Contains(string(data), `"deploy": "off"`) || !strings.Contains(string(data), `"memory"`) {
+		t.Fatal(string(data))
 	}
 	do(CfgEdit{Op: "delete", Path: []string{"skillOverrides", "deploy"}})
 	if after, _ = do(CfgEdit{Op: "remove", Path: []string{"disabledMcpjsonServers"}, Value: "memory"}); strings.Contains(after, "skillOverrides") || strings.Contains(after, "disabledMcpjsonServers") {
@@ -75,11 +75,11 @@ func TestEcritureConfig(t *testing.T) {
 	if _, err = do(CfgEdit{Op: "set", Path: []string{"cleanupPeriodDays"}, Value: float64(30)}); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := os.ReadFile(p); !strings.Contains(string(b), `"cleanupPeriodDays": 30`) {
-		t.Fatal(string(b))
+	if data, _ := os.ReadFile(path); !strings.Contains(string(data), `"cleanupPeriodDays": 30`) {
+		t.Fatal(string(data))
 	}
 	// refus : types faux, chemins hors liste, projet inconnu, nom de variable invalide
-	for _, e := range []CfgEdit{
+	for _, cfgEdit := range []CfgEdit{
 		{Op: "set", Path: []string{"autoCompactEnabled"}, Value: "oui"},
 		{Op: "set", Path: []string{"cleanupPeriodDays"}, Value: float64(-1)},
 		{Op: "set", Path: []string{"hooks", "Stop"}, Value: "x"},
@@ -92,8 +92,8 @@ func TestEcritureConfig(t *testing.T) {
 		{Op: "set", Path: []string{"skillOverrides", "deploy"}, Value: "maybe"},
 		{Op: "add", Path: []string{"disabledMcpjsonServers"}, Value: "a b"},
 	} {
-		if _, err := do(e); err == nil {
-			t.Errorf("modification acceptée : %+v", e)
+		if _, err := do(cfgEdit); err == nil {
+			t.Errorf("modification acceptée : %+v", cfgEdit)
 		}
 	}
 	if _, _, err := configEdit(CfgEdit{File: "p/-inconnu", Op: "set", Path: []string{"model"}, Value: "x"}); err == nil {
@@ -104,8 +104,8 @@ func TestEcritureConfig(t *testing.T) {
 	if err := restoreBackup(first.Name); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := os.ReadFile(p); string(b) != orig {
-		t.Fatalf("restauration : %q", b)
+	if data, _ := os.ReadFile(path); string(data) != orig {
+		t.Fatalf("restauration : %q", data)
 	}
 	for _, bad := range []string{"../x.json", "20200101-000000.000000__u.json.sh", "n'importe quoi"} {
 		if restoreBackup(bad) == nil {
@@ -144,26 +144,26 @@ func TestSuggestionsPermissions(t *testing.T) {
 	line := func(cmd string) string {
 		return `{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"` + cmd + `"}}]}}` + "\n"
 	}
-	var b strings.Builder
-	for i := 0; i < 4; i++ {
-		b.WriteString(line("git status") + line("ls -la /tmp") + line("rm -rf x") + line("go test ./...") + line("cat a | grep b"))
-		b.WriteString(line("git log --oneline") + line("sed -n 1,5p f") + line("find . -name x") + line("env A=1 ls") + line("git -c core.pager=x log") + line("go build ./..."))
+	var builder strings.Builder
+	for index := 0; index < 4; index++ {
+		builder.WriteString(line("git status") + line("ls -la /tmp") + line("rm -rf x") + line("go test ./...") + line("cat a | grep b"))
+		builder.WriteString(line("git log --oneline") + line("sed -n 1,5p f") + line("find . -name x") + line("env A=1 ls") + line("git -c core.pager=x log") + line("go build ./..."))
 	}
-	b.WriteString(line("git status") + line("make build"))
+	builder.WriteString(line("git status") + line("make build"))
 	mcp := func(tool string) string {
 		return `{"type":"assistant","message":{"content":[{"type":"tool_use","name":"` + tool + `","input":{}}]}}` + "\n"
 	}
-	for i := 0; i < 3; i++ {
-		b.WriteString(mcp("mcp__plugin_playwright_playwright__browser_click") + mcp("mcp__plugin_playwright_playwright__browser_snapshot") + mcp("mcp__deja__x"))
+	for index := 0; index < 3; index++ {
+		builder.WriteString(mcp("mcp__plugin_playwright_playwright__browser_click") + mcp("mcp__plugin_playwright_playwright__browser_snapshot") + mcp("mcp__deja__x"))
 	}
-	b.WriteString(mcp("mcp__rare__x"))
-	put(t, filepath.Join(cfg, "projects", "-p", id1+".jsonl"), b.String(), old)
+	builder.WriteString(mcp("mcp__rare__x"))
+	put(t, filepath.Join(cfg, "projects", "-p", id1+".jsonl"), builder.String(), old)
 	got := map[string]PermSuggest{}
-	for _, s := range permSuggestions([]string{"Bash(go test:*)", "mcp__deja"}) {
-		got[s.Rule] = s
+	for _, permSuggest := range permSuggestions([]string{"Bash(go test:*)", "mcp__deja"}) {
+		got[permSuggest.Rule] = permSuggest
 	}
 	// un serveur MCP appelé au moins 3 fois est proposé en entier ; un serveur déjà autorisé ou rare ne l'est pas
-	if s := got["mcp__plugin_playwright_playwright"]; s.Count != 6 || s.ReadOnly || !strings.HasPrefix(s.Example, "mcp__plugin_playwright_playwright__") {
+	if permSuggest := got["mcp__plugin_playwright_playwright"]; permSuggest.Count != 6 || permSuggest.ReadOnly || !strings.HasPrefix(permSuggest.Example, "mcp__plugin_playwright_playwright__") {
 		t.Fatalf("mcp : %+v", got)
 	}
 	for _, no := range []string{"mcp__deja", "mcp__rare"} {
@@ -171,26 +171,26 @@ func TestSuggestionsPermissions(t *testing.T) {
 			t.Errorf("règle MCP proposée à tort : %s", no)
 		}
 	}
-	if s := got["Bash(git status:*)"]; s.Count != 5 || !s.ReadOnly {
+	if permSuggest := got["Bash(git status:*)"]; permSuggest.Count != 5 || !permSuggest.ReadOnly {
 		t.Fatalf("git status : %+v", got)
 	}
-	if s := got["Bash(ls:*)"]; s.Count != 4 || !s.ReadOnly {
+	if permSuggest := got["Bash(ls:*)"]; permSuggest.Count != 4 || !permSuggest.ReadOnly {
 		t.Fatalf("ls : %+v", got)
 	}
 	// une commande composée est découpée : chaque sous-commande d'un pipe compte, comme Claude Code les évalue
-	if s := got["Bash(cat:*)"]; s.Count != 4 || !s.ReadOnly {
+	if permSuggest := got["Bash(cat:*)"]; permSuggest.Count != 4 || !permSuggest.ReadOnly {
 		t.Fatalf("cat : %+v", got)
 	}
-	if s := got["Bash(grep:*)"]; s.Count != 4 || !s.ReadOnly {
+	if permSuggest := got["Bash(grep:*)"]; permSuggest.Count != 4 || !permSuggest.ReadOnly {
 		t.Fatalf("grep : %+v", got)
 	}
 	// « git log » peut lancer un programme (--ext-diff, --textconv) : proposée, mais pas « lecture seule »
-	if s := got["Bash(git log:*)"]; s.Count != 4 || s.ReadOnly {
-		t.Fatalf("git log : %+v", s)
+	if permSuggest := got["Bash(git log:*)"]; permSuggest.Count != 4 || permSuggest.ReadOnly {
+		t.Fatalf("git log : %+v", permSuggest)
 	}
 	// « go build » exécute du code (cgo, générateurs) : proposée, mais pas « lecture seule »
-	if s := got["Bash(go build:*)"]; s.Count != 4 || s.ReadOnly {
-		t.Fatalf("go build : %+v", s)
+	if permSuggest := got["Bash(go build:*)"]; permSuggest.Count != 4 || permSuggest.ReadOnly {
+		t.Fatalf("go build : %+v", permSuggest)
 	}
 	for _, no := range []string{"Bash(rm:*)", "Bash(go test:*)", "Bash(make build:*)", "Bash(sed:*)", "Bash(find:*)", "Bash(env:*)", "Bash(git:*)"} {
 		if _, ok := got[no]; ok {
@@ -211,7 +211,7 @@ func TestEcritureRefuseLesLiens(t *testing.T) {
 	if _, _, err := configEdit(CfgEdit{File: "u", Op: "set", Path: []string{"model"}, Value: "x"}); err == nil || !strings.Contains(err.Error(), "lien symbolique") {
 		t.Fatal("écriture à travers un lien :", err)
 	}
-	if b, _ := os.ReadFile(cible); !strings.Contains(string(b), "opus") {
+	if data, _ := os.ReadFile(cible); !strings.Contains(string(data), "opus") {
 		t.Fatal("la cible du lien a été modifiée")
 	}
 	// un fichier temporaire prévisible ne peut plus détourner l'écriture
@@ -222,18 +222,18 @@ func TestEcritureRefuseLesLiens(t *testing.T) {
 	if _, _, err := configEdit(CfgEdit{File: "u", Op: "set", Path: []string{"model"}, Value: "sonnet"}); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := os.ReadFile(cible); !strings.Contains(string(b), "opus") {
+	if data, _ := os.ReadFile(cible); !strings.Contains(string(data), "opus") {
 		t.Fatal("la cible d'un faux fichier temporaire a été écrasée")
 	}
 }
 
 // Les appels à claude sans projet se font dans un dossier neuf et privé, pas dans /tmp.
 func TestDossierDeTravailPrive(t *testing.T) {
-	d := workDir()
-	if d == os.TempDir() || d == "" {
-		t.Fatal("dossier partagé :", d)
+	dir := workDir()
+	if dir == os.TempDir() || dir == "" {
+		t.Fatal("dossier partagé :", dir)
 	}
-	if st, err := os.Stat(d); err != nil || st.Mode().Perm()&0o077 != 0 {
+	if st, err := os.Stat(dir); err != nil || st.Mode().Perm()&0o077 != 0 {
 		t.Fatalf("dossier non privé : %v %v", st, err)
 	}
 }
@@ -241,9 +241,9 @@ func TestDossierDeTravailPrive(t *testing.T) {
 func TestEditionJSONBrut(t *testing.T) {
 	cfg := t.TempDir()
 	use(cfg)
-	p := filepath.Join(cfg, "settings.json")
+	path := filepath.Join(cfg, "settings.json")
 	orig := "{\n  \"model\": \"opus\",\n  \"env\": {\n    \"API_KEY\": \"secret-xyz\",\n    \"X\": \"1\"\n  }\n}\n"
-	put(t, p, orig, old)
+	put(t, path, orig, old)
 
 	text, err := configRawRead("u")
 	if err != nil || strings.Contains(text, "secret-xyz") || !strings.Contains(text, maskText) {
@@ -255,14 +255,14 @@ func TestEditionJSONBrut(t *testing.T) {
 	if err != nil || before == after || strings.Contains(after, "secret-xyz") {
 		t.Fatal(before, after, err)
 	}
-	if b, _ := os.ReadFile(p); string(b) != orig {
+	if data, _ := os.ReadFile(path); string(data) != orig {
 		t.Fatal("l'aperçu a écrit")
 	}
 	if _, _, _, err := configRawEdit("u", edited, false); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := os.ReadFile(p); !strings.Contains(string(b), `"sonnet"`) || !strings.Contains(string(b), "secret-xyz") || strings.Contains(string(b), maskText) {
-		t.Fatalf("secret perdu ou masque écrit : %s", b)
+	if data, _ := os.ReadFile(path); !strings.Contains(string(data), `"sonnet"`) || !strings.Contains(string(data), "secret-xyz") || strings.Contains(string(data), maskText) {
+		t.Fatalf("secret perdu ou masque écrit : %s", data)
 	}
 	if len(listBackups()) != 1 {
 		t.Fatal("pas de sauvegarde")
@@ -288,17 +288,17 @@ func TestEditionJSONBrut(t *testing.T) {
 	if _, _, _, err := configRawEdit("u", `{"theme":"dark"}`, false); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := os.ReadFile(filepath.Join(cfg2, "settings.json")); string(b) != "{\n  \"theme\": \"dark\"\n}\n" {
-		t.Fatalf("%q", b)
+	if data, _ := os.ReadFile(filepath.Join(cfg2, "settings.json")); string(data) != "{\n  \"theme\": \"dark\"\n}\n" {
+		t.Fatalf("%q", data)
 	}
 }
 
 func TestImportPermissions(t *testing.T) {
 	cfg := t.TempDir()
 	use(cfg)
-	p := filepath.Join(cfg, "settings.json")
+	path := filepath.Join(cfg, "settings.json")
 	orig := "{\n  \"model\": \"opus\",\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(ls:*)\"\n    ],\n    \"defaultMode\": \"auto\"\n  }\n}\n"
-	put(t, p, orig, old)
+	put(t, path, orig, old)
 	frag := `{"permissions":{"allow":["Bash(ls:*)","Bash(git status:*)"," Bash(git status:*) "],"deny":["Bash(rm:*)"],"defaultMode":"bypassPermissions"}}`
 
 	// fusion : ce qui manque est ajouté, le reste (autre clé, defaultMode) ne bouge pas, defaultMode importé est ignoré
@@ -314,7 +314,7 @@ func TestImportPermissions(t *testing.T) {
 	if strings.Contains(after, "bypassPermissions") {
 		t.Fatal("defaultMode importé")
 	}
-	if b, _ := os.ReadFile(p); string(b) != orig {
+	if data, _ := os.ReadFile(path); string(data) != orig {
 		t.Fatal("l'aperçu a écrit")
 	}
 	if _, _, _, _, err := permImport("u", frag, "merge", false); err != nil {
@@ -328,8 +328,8 @@ func TestImportPermissions(t *testing.T) {
 	if err != nil || sum != "1 règle(s) ajoutée(s), 2 retirée(s)" {
 		t.Fatal(sum, err)
 	}
-	if b, _ := os.ReadFile(p); strings.Contains(string(b), "git status") || !strings.Contains(string(b), "Bash(cat:*)") || !strings.Contains(string(b), "Bash(rm:*)") {
-		t.Fatalf("remplacement :\n%s", b)
+	if data, _ := os.ReadFile(path); strings.Contains(string(data), "git status") || !strings.Contains(string(data), "Bash(cat:*)") || !strings.Contains(string(data), "Bash(rm:*)") {
+		t.Fatalf("remplacement :\n%s", data)
 	}
 	// une liste importée vide retire la catégorie ; un avertissement de santé accompagne une règle trop large
 	_, _, warns, _, err := permImport("u", `{"allow":["Bash"],"deny":[]}`, "replace", true)
@@ -354,27 +354,27 @@ func TestDossiersSupplementaires(t *testing.T) {
 	cfg := t.TempDir()
 	use(cfg)
 	ok := t.TempDir()
-	e := CfgEdit{File: "u", Op: "add", Path: []string{"permissions", "additionalDirectories"}, Value: ok}
-	if _, after, err := configEdit(e); err != nil || !strings.Contains(after, "additionalDirectories") || !strings.Contains(after, ok) {
+	cfgEdit := CfgEdit{File: "u", Op: "add", Path: []string{"permissions", "additionalDirectories"}, Value: ok}
+	if _, after, err := configEdit(cfgEdit); err != nil || !strings.Contains(after, "additionalDirectories") || !strings.Contains(after, ok) {
 		t.Fatal(after, err)
 	}
-	e = CfgEdit{File: "u", Op: "add", Path: []string{"permissions", "additionalDirectories"}, Value: "~/inexistant-gld"}
-	if _, _, err := configEdit(e); err != nil {
+	cfgEdit = CfgEdit{File: "u", Op: "add", Path: []string{"permissions", "additionalDirectories"}, Value: "~/inexistant-gld"}
+	if _, _, err := configEdit(cfgEdit); err != nil {
 		t.Fatal(err)
 	}
 	files, raw := allConfigs()
 	var found string
-	for _, i := range configHealth(files, raw) {
-		if i.Kind == "dossier" {
-			found += i.Msg
+	for _, cfgIssue := range configHealth(files, raw) {
+		if cfgIssue.Kind == "dossier" {
+			found += cfgIssue.Msg
 		}
 	}
 	if !strings.Contains(found, "~/inexistant-gld") || strings.Contains(found, ok) {
 		t.Fatalf("santé : %q", found)
 	}
-	for _, v := range []any{"", "a\nb", 3.0} {
-		if _, _, err := configEdit(CfgEdit{File: "u", Op: "add", Path: []string{"permissions", "additionalDirectories"}, Value: v}); err == nil {
-			t.Errorf("valeur acceptée : %v", v)
+	for _, value := range []any{"", "a\nb", 3.0} {
+		if _, _, err := configEdit(CfgEdit{File: "u", Op: "add", Path: []string{"permissions", "additionalDirectories"}, Value: value}); err == nil {
+			t.Errorf("valeur acceptée : %v", value)
 		}
 	}
 	if _, after, err := configEdit(CfgEdit{File: "u", Op: "remove", Path: []string{"permissions", "additionalDirectories"}, Value: ok}); err != nil || strings.Contains(after, ok) {
@@ -386,20 +386,20 @@ func TestDossiersSupplementaires(t *testing.T) {
 func TestEcritureConfigConcurrente(t *testing.T) {
 	cfg := t.TempDir()
 	use(cfg)
-	p := filepath.Join(cfg, "settings.json")
-	put(t, p, "{\n  \"theme\": \"dark\"\n}\n", old)
+	path := filepath.Join(cfg, "settings.json")
+	put(t, path, "{\n  \"theme\": \"dark\"\n}\n", old)
 	var wg sync.WaitGroup
-	for i := 0; i < 20; i++ {
+	for index := 0; index < 20; index++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			configEdit(CfgEdit{File: "u", Op: "add", Path: []string{"permissions", "allow"}, Value: fmt.Sprintf("Bash(cmd%d:*)", i)})
+			configEdit(CfgEdit{File: "u", Op: "add", Path: []string{"permissions", "allow"}, Value: fmt.Sprintf("Bash(cmd%d:*)", index)})
 		}()
 	}
 	wg.Wait()
-	b, _ := os.ReadFile(p)
-	if n := strings.Count(string(b), "Bash(cmd"); n != 20 {
-		t.Fatalf("%d règles sur 20 : %s", n, b)
+	data, _ := os.ReadFile(path)
+	if count := strings.Count(string(data), "Bash(cmd"); count != 20 {
+		t.Fatalf("%d règles sur 20 : %s", count, data)
 	}
 }
 
@@ -428,7 +428,7 @@ func TestImportSignaleDossierIntrouvable(t *testing.T) {
 }
 
 func TestBashSegments(t *testing.T) {
-	for _, c := range []struct{ cmd, want string }{
+	for _, record := range []struct{ cmd, want string }{
 		{"ls -la", "ls -la"},
 		{"cd /x && git status && go test ./...", "git status|go test ./..."},
 		{`cat a.txt | grep "x && y" | wc -l`, `cat a.txt|grep "x && y"|wc -l`},
@@ -439,8 +439,8 @@ func TestBashSegments(t *testing.T) {
 		{"FOO=1 make build", ""},
 		{"git log $(git rev-parse HEAD)", ""},
 	} {
-		if got := strings.Join(bashSegments(c.cmd), "|"); got != c.want {
-			t.Errorf("%q : %q, attendu %q", c.cmd, got, c.want)
+		if got := strings.Join(bashSegments(record.cmd), "|"); got != record.want {
+			t.Errorf("%q : %q, attendu %q", record.cmd, got, record.want)
 		}
 	}
 }
