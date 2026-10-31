@@ -16,7 +16,7 @@ const MAX_ROWS = 8
 
 // Accueil : ce qui demande un œil maintenant. Sessions ouvertes (celles qui attendent d'abord), dernières fermées encore au
 // cache, état des serveurs MCP et mise à jour disponible.
-export function Dashboard({ open, closed, waiting, now, home, go, read }: { open: Row[]; closed: Row[]; waiting: Set<string>; now: number; home: string; go: (r: Route) => void; read: (s: { id: string }) => void }) {
+export function Dashboard({ open, closed, waiting, now, home, go, read }: { open: Row[]; closed: Row[]; waiting: Set<string>; now: number; home: string; go: (route: Route) => void; read: (record: { id: string }) => void }) {
   const { t } = useTranslation()
   const [mcp, setMcp] = useState<McpServer[] | null>(null)
   const [status, setStatus] = useState<Record<string, string> | null>(null)

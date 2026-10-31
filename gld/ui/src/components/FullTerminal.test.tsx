@@ -33,8 +33,8 @@ class FakeWS {
   constructor() {
     FakeWS.last = this
   }
-  send(d: string) {
-    this.sent.push(d)
+  send(directory: string) {
+    this.sent.push(directory)
   }
   close() {}
 }
@@ -60,7 +60,7 @@ describe("FullTerminal", () => {
     render(<FullTerminal id="s1" />)
     const ws = await opened()
     expect(ws.sent).toContain(JSON.stringify({ write: true }))
-    expect(ws.sent.some((s) => s.includes("resize"))).toBe(true)
+    expect(ws.sent.some((text) => text.includes("resize"))).toBe(true)
     expect(x.focus).toHaveBeenCalled()
   })
 
@@ -71,7 +71,7 @@ describe("FullTerminal", () => {
     expect(x.focus).not.toHaveBeenCalled()
     fireEvent.click(await screen.findByRole("button", { name: /Lecture seule/ }))
     expect(ws.sent).toContain(JSON.stringify({ write: true }))
-    expect(ws.sent.some((s) => s.includes("resize"))).toBe(true)
+    expect(ws.sent.some((text) => text.includes("resize"))).toBe(true)
     expect(x.focus).toHaveBeenCalled()
   })
 })
