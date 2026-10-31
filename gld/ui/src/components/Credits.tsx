@@ -41,7 +41,9 @@ const WEB = [
   ["class-variance-authority", "https://cva.style"],
   ["xterm.js", "https://xtermjs.org"],
   ["sonner", "https://sonner.emilkowal.ski"],
-  ["Geist, Inter, IBM Plex, JetBrains Mono, Fira Code", "https://fontsource.org"],
+  ["cmdk", "https://github.com/dip/cmdk"],
+  ["fflate", "https://github.com/101arrowz/fflate"],
+  ["Geist, Inter, IBM Plex, JetBrains Mono, Fira Code, Comic Relief", "https://fontsource.org"],
   ["RealFaviconGenerator", "https://realfavicongenerator.net"],
 ]
 
