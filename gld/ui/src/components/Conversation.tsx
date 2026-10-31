@@ -356,9 +356,14 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
       setFromTop(viewportElement.scrollTop > FROM_TOP_THRESHOLD_PX)
     }
     updateJumpButtons()
+    let previousTop = viewportElement.scrollTop
     const onScroll = () => {
       const gap = distanceToEnd(viewportElement)
-      stuck = gap < AT_END_THRESHOLD_PX
+      const isScrollingUp = viewportElement.scrollTop < previousTop
+      previousTop = viewportElement.scrollTop
+      // L'aimant ne se coupe que sur un défilement vers le haut ; la croissance du contenu n'y suffit pas. Il se ré-enclenche à la fin.
+      if (gap < AT_END_THRESHOLD_PX) stuck = true
+      else if (isScrollingUp) stuck = false
       updateJumpButtons()
       if (idRef.current && !restoring.current) scrollMem.set(idRef.current, { top: viewportElement.scrollTop, end: gap < viewportElement.clientHeight }) // à moins d'une page de la fin : la réouverture redescend à la fin
     }
