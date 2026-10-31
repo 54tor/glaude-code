@@ -58,6 +58,7 @@ const PIN_END_DURATION_MS = 3000
 const RESTORE_INTERVAL_MS = 50
 const RESTORE_DURATION_MS = 1500
 const SETTLE_DELAY_MS = 250
+const LAST_PIXEL_PX = 2
 const FROM_TOP_THRESHOLD_PX = 200
 const TURN_RELOAD_ATTEMPTS = 5
 const TURN_RELOAD_DELAY_MS = 1000
@@ -338,6 +339,9 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   const ready = !!session && msgs !== null
   useEffect(() => {
     const viewportElement = viewport()
+      // use-stick-to-bottom vise scrollHeight - 1 : on comble ce dernier pixel, sinon la fin reste à 1 px
+      const remainingPx = distanceToEnd(viewportElement)
+      if (remainingPx > 0 && remainingPx < LAST_PIXEL_PX && !restoring.current) viewportElement.scrollTop = viewportElement.scrollHeight
     if (!viewportElement) return
     const onScroll = () => {
       setFromTop(viewportElement.scrollTop > FROM_TOP_THRESHOLD_PX)
