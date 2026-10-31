@@ -2,8 +2,27 @@
 
 # Glaude Code
 
-**Une page web pour retrouver, relire et reprendre vos sessions Claude Code**, et mettre de l'ordre dans sa mémoire,
-ses règles, ses skills et ses réglages. Tout reste sur votre machine : Glaude Code lit simplement le dossier `~/.claude`.
+**Le poste de pilotage web de Claude Code** : retrouvez, relisez et reprenez vos sessions, pilotez-les depuis votre
+navigateur ou votre téléphone, partagez-les avec un collègue, et gardez la main sur votre mémoire, vos règles, vos skills
+et vos réglages. Tout reste sur votre machine : Glaude Code lit simplement le dossier `~/.claude`.
+
+## Glaude Code face à la CLI et à Claude.ai (Remote Control, web, mobile)
+
+| Besoin | CLI seule | Claude.ai (Remote Control, appli mobile, web) | Glaude Code |
+|---|---|---|---|
+| Piloter une session depuis le téléphone ou un autre poste | Non | Oui, mais compte claude.ai obligatoire (Pro, Max, Team, Enterprise ; pas de clé API, ni Bedrock ni Vertex) et transcript stocké chez Anthropic pendant la connexion | Oui, en direct vers votre machine : aucun compte claude.ai requis, application installable, rien ne transite par un tiers |
+| Plusieurs sessions pilotées | Un terminal chacune | Une session distante par process (le mode serveur en gère plusieurs) ; le terminal local doit rester ouvert | Toutes vos sessions dans une seule page, ouvertes ou non |
+| Accès aux sessions | Liste plate (`--resume`) | Liste dans la barre latérale, archivage ; pas de recherche plein texte documentée | Sessions rangées par projet, recherche dans les conversations, point vert sur celles qui tournent, cache chaud signalé |
+| Redémarrage de la machine | Sessions perdues de vue | Le process s'arrête avec la machine ; reprise par `--continue` dans les 4 heures environ | Sessions ouvertes notées toutes les 2 minutes, **Tout rouvrir** en un clic |
+| Montrer une session à quelqu'un | Copier-coller | Pas de partage en Remote Control ; lien en session cloud (privé, équipe ou public), instantané sans mise à jour en direct | **Lien d'invitation** à usage unique, suivi en direct, lecture seule ou écriture, révocable, file d'envoi, jusqu'à 10 invités par session |
+| Mémoire, règles, `CLAUDE.md` | Fichiers à la main | Pas d'édition documentée | Page Mémoire : tokens coûtés par fichier, liens cassés, doublons, contradictions, corbeille, export/import |
+| Skills, snippets, permissions, réglages | `settings.json` à la main | `/config clé=valeur` | Interface dédiée : cases à cocher, aperçu du changement, sauvegarde avant chaque écriture, skills et snippets |
+| Relire et corriger le code | Éditeur externe | Vue des changements avec commentaires par ligne (cloud) ; pas d'édition manuelle | Espace de travail : arborescence git, éditeur Monaco, enregistrement, terminal lecture seule |
+| Coûts et quotas | `/usage` | `/usage` depuis le mobile et le web | Limites d'usage, consommation sur 14 jours, coût d'un envoi sur session froide annoncé |
+| Équipe | Un utilisateur | Activation par un propriétaire d'organisation, appareils de confiance ; pas de droits par projet | Multi-utilisateur : neuf droits indépendants par compte et par home Claude (mémoire, sessions, chat, réglages, fichiers…), mot de passe et second facteur obligatoire (TOTP ou clé de sécurité) |
+| Où vivent vos données | Chez vous | Transcript sur les serveurs Anthropic pendant la connexion | Chez vous : Glaude Code lit `~/.claude` |
+
+Sources de la colonne Claude.ai : documentation officielle (code.claude.com/docs : Remote Control, Claude Code on the web, application mobile), consultée le 31 octobre 2026.
 
 ## Pour qui ?
 
@@ -12,6 +31,7 @@ Pour vous si vous utilisez Claude Code tous les jours et que :
 - vous ne retrouvez plus « la session d'hier où on avait réglé ce bug » ;
 - vous avez dix onglets de terminal ouverts et redémarrer la machine vous fait peur ;
 - votre mémoire et vos règles ont grossi sans que vous sachiez ce qui est vraiment chargé, ni combien ça coûte en contexte ;
+- vous voulez suivre ou relancer une session depuis votre téléphone, ou la montrer à quelqu'un ;
 - vous préférez cocher une case plutôt que d'éditer `settings.json` à la main.
 
 ## Installation
@@ -96,7 +116,7 @@ bouton **Envoyer à la session** écrit directement dedans, et vous voyez en dir
   l'une à l'autre.
 - L'invité voit le **titre** de la session : il est repris tel quel du titre de la session et donc divulgué à
   l'invité. Renommez la session avant de partager si besoin.
-- La file d'envoi est désormais sur le serveur, pour toutes les sessions : elle survit à la fermeture de l'onglet. Un
+- La file d'envoi vit sur le serveur, pour toutes les sessions : elle survit à la fermeture de l'onglet. Un
   message en cours d'envoi au moment d'un redémarrage de gld apparaît **incertain** et n'est jamais renvoyé
   automatiquement ; vous pouvez le relancer depuis la file. Limites : 50 messages par session, 32 Ko par message,
   10 ajouts par minute par invitation.
@@ -237,9 +257,9 @@ GLD_WEB_TOKEN=$(openssl rand -hex 24) gld
 ## Multi-utilisateur (optionnel)
 
 Par défaut, un seul jeton donne accès à tout. Pour que plusieurs personnes se connectent chacune avec leur compte, créez
-le premier administrateur : `gld user add --admin <nom>`. Dès lors, la connexion (mot de passe plus second facteur :
-TOTP, clé de sécurité ou codes de secours) remplace le jeton pour le navigateur, et chaque compte n'a accès qu'aux homes
-et aux droits que vous lui donnez (`gld user grant`, ou l'écran Utilisateurs). Sans compte, rien ne change. Le jeton ne vaut alors plus qu'en en-tête `Authorization: Bearer`, et seulement s'il est fixé par `GLD_WEB_TOKEN`.
+le premier administrateur : `gld user add --admin <nom>`. La connexion (mot de passe plus second facteur :
+TOTP, clé de sécurité ou codes de secours) remplace alors le jeton pour le navigateur, et chaque compte n'a accès qu'aux homes
+et aux droits que vous lui donnez (`gld user grant`, ou l'écran Utilisateurs). Sans compte, un seul jeton donne accès à tout. Avec des comptes, le jeton ne vaut qu'en en-tête `Authorization: Bearer`, et seulement s'il est fixé par `GLD_WEB_TOKEN`.
 
 **Attention** : les droits `exec` (chat, terminal) et `config_write` (réglages, skills) équivalent au compte système qui
 fait tourner gld, et les snippets (commandes slash) demandent `config_write`. Ne les donnez qu'à des personnes de confiance. Guide complet, variables, limites :
