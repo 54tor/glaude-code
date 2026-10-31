@@ -29,7 +29,7 @@ const GO = [
 const WEB = [
   ["React", "https://react.dev"],
   ["Vite", "https://vite.dev"],
-  ["Tailwind CSS", "https://tailwindcss.com"],
+  ["Tailwind CSS, tw-animate-css", "https://tailwindcss.com"],
   ["Radix UI / shadcn", "https://ui.shadcn.com"],
   ["lucide", "https://lucide.dev"],
   ["wouter", "https://github.com/molefrog/wouter"],
@@ -44,6 +44,7 @@ const WEB = [
   ["cmdk", "https://github.com/dip/cmdk"],
   ["fflate", "https://github.com/101arrowz/fflate"],
   ["jsdiff", "https://github.com/kpdecker/jsdiff"],
+  ["zxcvbn-ts", "https://github.com/zxcvbn-ts/zxcvbn"],
   ["Geist, Inter, IBM Plex, JetBrains Mono, Fira Code, Comic Relief", "https://fontsource.org"],
   ["RealFaviconGenerator", "https://realfavicongenerator.net"],
 ]
