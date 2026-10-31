@@ -16,8 +16,8 @@ describe("PluginsCatalog", () => {
   it("une réponse lente d'une recherche précédente n'écrase pas la dernière", async () => {
     vi.useFakeTimers()
     vi.spyOn(api, "marketplaces").mockResolvedValue({ marketplaces: [] })
-    const pending: Record<string, (v: Awaited<ReturnType<typeof api.plugins>>) => void> = {}
-    vi.spyOn(api, "plugins").mockImplementation((q = "") => new Promise((res) => void (pending[q] = res)))
+    const pending: Record<string, (record: Awaited<ReturnType<typeof api.plugins>>) => void> = {}
+    vi.spyOn(api, "plugins").mockImplementation((query = "") => new Promise((res) => void (pending[query] = res)))
     render(<PluginsCatalog projects={[]} home="" scope="user" onChange={() => {}} />)
     await act(async () => void vi.advanceTimersByTime(0))
     const box = screen.getByRole("textbox", { name: /rechercher un plugin/i })
