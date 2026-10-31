@@ -20,6 +20,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - File d'attente du compositeur : bouton « Envoyer maintenant » qui interrompt la réponse en cours pour envoyer le message.
 - Conversation : la zone de saisie prend le focus à l'ouverture d'une session ; un indicateur vert signale que la vue suit la fin du fil ; l'état du cache affiche son délai et un clic dessus active ou coupe le maintien au chaud (le bouton « Maintenir au chaud » est retiré).
 - Extensions : les marketplaces ont leur propre onglet, le formulaire d'ajout en premier.
+- Option `-locations` (ou `GLD_WEB_LOCATIONS`) : restreint le navigateur de dossiers à une liste de racines, la première étant ouverte par défaut.
 - Bloc git d'un projet : une ligne par chemin, boutons Permissions et Espace de travail réduits à des icônes.
 - README : tableau comparatif CLI, Claude.ai et Glaude Code.
 
@@ -34,6 +35,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Conversation : la question seule d'un `AskUserQuestion` s'affiche sous le rapport de Claude ; le fil reste masqué jusqu'à son placement à l'ouverture, aucune position n'est mémorisée avant ; le dernier pixel de défilement est rattrapé.
 - Sessions en équipe : les membres in-process apparaissent parmi les sous-agents, leur activité et leur conversation sont lues dans leur propre transcript, et un membre récemment actif est compté comme en cours.
 - Conversation : le bouton « Aller à la fin » réapparaît quand la vue a quitté le suivi de la fin.
+- Menu déroulant de nouvelle session : tous les dossiers sont listés.
 - Les sélecteurs de projet (Extensions, Skills) n'affichent plus les dossiers jetables (`/tmp`, `$TMPDIR`).
 - Conversation en modale : le suivi de la fin du fil ne s'enclenchait pas quand les messages étaient déjà en cache.
 - Anneau de focus d'une ligne de session tracé à l'intérieur de la ligne.
@@ -49,7 +51,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Tests : couverture des boucles de fond, de `runas`, du service de docs et de la plupart des composants UI de session, de barre latérale, d'accueil et de mémoire de projet ; seuil de couverture de l'interface relevé en CI.
 - CI : empreintes `.gitleaksignore` régénérées après la réécriture de l'historique.
 - En-tête de la modale de conversation : bouton « Fermer la session » et badge « en cours » retirés (la fermeture reste dans le menu « … »).
-- Refonte de lisibilité du code (noms explicites, constantes nommées) côté Go et interface, sans changement de comportement.
+- Refonte de lisibilité du code (noms explicites, constantes nommées, plus de variables d'une lettre) côté Go et interface, sans changement de comportement.
 
 ## [0.8.0] - 2026-10-30
 
