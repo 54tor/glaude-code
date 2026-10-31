@@ -43,6 +43,7 @@ const WEB = [
   ["sonner", "https://sonner.emilkowal.ski"],
   ["cmdk", "https://github.com/dip/cmdk"],
   ["fflate", "https://github.com/101arrowz/fflate"],
+  ["use-stick-to-bottom", "https://github.com/stackblitz-labs/use-stick-to-bottom"],
   ["jsdiff", "https://github.com/kpdecker/jsdiff"],
   ["zxcvbn-ts", "https://github.com/zxcvbn-ts/zxcvbn"],
   ["Geist, Inter, IBM Plex, JetBrains Mono, Fira Code, Comic Relief", "https://fontsource.org"],
