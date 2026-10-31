@@ -1,7 +1,7 @@
 import { i18n, loc } from "@/i18n"
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { BarChart3, Bot, Fan, Square, Wrench } from "lucide-react"
+import { BarChart3, Bot, Fan, OctagonAlert, Wrench } from "lucide-react"
 import { api, type Detail, type LiveState, type Msg, type Session, type SubLive, type Tokens } from "@/lib/api"
 import { compact, full, tilde, tokTotal } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -287,7 +287,7 @@ function SubList({ subs, onPick, session }: { subs: SubLive[]; onPick: (subagent
           </button>
           {subagent.running && (
             <Button size="icon-xs" variant="ghost" title={t("conversation.live.subStop")} aria-label={t("conversation.live.subStop")} onClick={() => void stopTask(session, subagent.id, subagent.desc || subagent.type, t("conversation.live.subStopSent"))}>
-              <Square />
+              <OctagonAlert />
             </Button>
           )}
         </li>

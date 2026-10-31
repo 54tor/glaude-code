@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { useEffect, useState } from "react"
-import { CircleAlert, CircleCheck, CircleHelp, ListChecks, Fan, Square } from "lucide-react"
+import { CircleAlert, CircleCheck, CircleHelp, ListChecks, Fan, OctagonAlert } from "lucide-react"
 import { toast } from "sonner"
 import { api, type BgTask, type Workflow } from "@/lib/api"
 import { ApiError, errMsg } from "@/lib/apiError"
@@ -149,7 +149,7 @@ export function LiveTasks({ live: { st }, dir, id }: { live: Live; dir: string; 
                 </button>
                 {task.status === "running" && (
                   <Button size="icon-xs" variant="ghost" title={t("conversation.tasks.stop")} aria-label={t("conversation.tasks.stop")} onClick={() => void stopTask(id, task.id, task.desc || task.id, t("conversation.tasks.stopSent"))}>
-                    <Square />
+                    <OctagonAlert />
                   </Button>
                 )}
               </li>
