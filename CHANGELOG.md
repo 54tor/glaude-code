@@ -10,6 +10,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Session ouverte : bouton « Arrière-plan » (touche Ctrl+B envoyée à tmux) qui passe la tâche en cours en arrière-plan pendant que Claude travaille.
 
 ### Modifié
+- Partage : une invitation naît en lecture seule (le mode écriture se donne ensuite) ; un invité ne lit plus les fichiers de configuration (`.json`, `.yaml`, `.toml`, `.ini`, `.xml`…) et le masquage couvre l'identité git, le compte Claude, le nom de la machine et tous les chemins absolus.
 - Session ouverte : un message part tout de suite, même pendant que Claude travaille ; le menu du bouton Envoyer propose « Envoyer en interrompant » et la case « Attendre le repos » (mémorisée par session) rétablit l'envoi dès que Claude attend. Une question en attente met toujours le message en file.
 
 ### Corrigé
