@@ -7,6 +7,7 @@ import { api, type QItem } from "@/lib/api"
 import { ApiError } from "@/lib/apiError"
 import { setAuth } from "@/lib/auth"
 import { draftOf, setDraft } from "@/hooks/useDraft"
+import { setWaitIdle } from "@/hooks/useWaitIdle"
 import { Composer } from "./Composer"
 
 vi.mock("./actions", () => ({ useActions: () => ({ background: new Set(), live: new Set() }) }))
@@ -24,7 +25,10 @@ function mount(items: QItem[], thinking = false) {
   return render(<Composer dir="/d" id="s1" args="" defaultChoice={{ model: "", effort: "" } as never} live liveState={{ st, open: true }} onSent={() => {}} turn={null} setTurn={() => {}} onDone={() => {}} />)
 }
 
-beforeEach(() => setDraft("s1", { text: "" }))
+beforeEach(() => {
+  setDraft("s1", { text: "" })
+  setWaitIdle("s1", false)
+})
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
@@ -59,6 +63,7 @@ describe("Composer, file serveur", () => {
   })
   it("une erreur du serveur à l'ajout affiche un toast et garde le brouillon", async () => {
     mount([], true)
+    setWaitIdle("s1", true)
     vi.spyOn(api, "queueAdd").mockRejectedValue(new ApiError(409, "conflict", "file pleine"))
     const err = vi.spyOn(toast, "error").mockImplementation(() => "")
     const field = await screen.findByPlaceholderText(/Écrire à la session|Write to the session/i)
@@ -66,6 +71,28 @@ describe("Composer, file serveur", () => {
     fireEvent.keyDown(field, { key: "Enter", ctrlKey: true })
     await waitFor(() => expect(err).toHaveBeenCalledWith("file pleine"))
     expect(draftOf("s1").text).toBe("salut")
+  })
+
+  it("pendant que Claude travaille, le message part tout de suite, sans file", async () => {
+    mount([], true)
+    const add = vi.spyOn(api, "queueAdd")
+    const send = vi.spyOn(api, "sessionSend").mockResolvedValue(undefined as never)
+    const field = await screen.findByPlaceholderText(/Écrire à la session|Write to the session/i)
+    fireEvent.change(field, { target: { value: "salut" } })
+    fireEvent.keyDown(field, { key: "Enter", ctrlKey: true })
+    await waitFor(() => expect(send).toHaveBeenCalledWith("s1", "salut", expect.anything()))
+    expect(add).not.toHaveBeenCalled()
+  })
+  it("« Envoyer en interrompant » envoie Échap avant le message", async () => {
+    mount([], true)
+    const order: string[] = []
+    vi.spyOn(api, "sessionKey").mockImplementation(async () => void order.push("escape") as never)
+    vi.spyOn(api, "sessionSend").mockImplementation(async () => void order.push("send") as never)
+    const field = await screen.findByPlaceholderText(/Écrire à la session|Write to the session/i)
+    fireEvent.change(field, { target: { value: "salut" } })
+    fireEvent.pointerDown(screen.getByRole("button", { name: i18n.t("conversation.composer.sendOptions") }), { button: 0, ctrlKey: false })
+    fireEvent.click(await screen.findByRole("menuitem", { name: i18n.t("conversation.composer.sendInterrupting") }))
+    await waitFor(() => expect(order).toEqual(["escape", "send"]))
   })
 
   it("un item en cours d'envoi n'a pas de bouton retirer, et seul lui porte « part… »", async () => {
@@ -76,6 +103,7 @@ describe("Composer, file serveur", () => {
   })
   it("deux Entrée rapprochées ne mettent le message qu'une fois en file", async () => {
     mount([], true)
+    setWaitIdle("s1", true)
     let release = () => {}
     const add = vi.spyOn(api, "queueAdd").mockImplementation(() => new Promise((callback) => (release = () => callback({ item: item({}) }))))
     const field = await screen.findByPlaceholderText(/Écrire à la session|Write to the session/i)
