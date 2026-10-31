@@ -6,7 +6,7 @@ import { cn, copyText, isSend, keyHint } from "@/lib/utils"
 import { modeOfScreen, parseBtw, parsePrompt, type Opt } from "@/lib/prompt"
 import { type Live } from "./LiveStatus"
 import { toast } from "sonner"
-import { Bug, Copy, GitFork, Minimize2, Power, Snowflake, Send, SendHorizontal, Square, SquareCheck, X } from "lucide-react"
+import { Bug, Copy, GitFork, Minimize2, Snowflake, Send, SendHorizontal, Square, SquareCheck, X } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
 import { draftOf, setDraft, useDraft } from "@/hooks/useDraft"
 import { efforts, models, withChoice, type Choice } from "@/lib/models"
@@ -690,18 +690,6 @@ function LiveModeButton({ id, disabled }: { id: string; disabled: boolean }) {
   return (
     <Button size="sm" variant="outline" disabled={disabled} onClick={next} title={t("conversation.composer.liveModeTitle")}>
       {t("conversation.composer.liveMode", { mode: t(`conversation.composer.liveModes.${mode ?? "unknown"}`) })}
-    </Button>
-  )
-}
-
-// Ferme la session ouverte (le processus claude reçoit SIGTERM), après confirmation.
-export function CloseSession({ id, onClosed }: { id: string; onClosed?: () => void }) {
-  const { t } = useTranslation()
-  const actions = useActions()
-  const close = () => actions.stop([id], onClosed) // confirme dans la fenêtre commune, puis met la liste à jour
-  return (
-    <Button size="sm" variant="ghost" onClick={close} title={t("conversation.composer.closeTitle")}>
-      <Power /> {t("conversation.composer.close")}
     </Button>
   )
 }

@@ -22,10 +22,10 @@ import { Confirm, type Ask } from "./Confirm"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useActions } from "./actions"
 import { SessionDropdown } from "./SessionMenu"
-import { BgBadge, Live } from "./SessionList"
+import { BgBadge } from "./SessionList"
 import type { Row } from "./actions"
 import { Message } from "./Message"
-import { CloseSession, Composer, focusComposer, type Turn } from "./Composer"
+import { Composer, focusComposer, type Turn } from "./Composer"
 import { LiveTasks } from "./LiveTasks"
 import { LiveAgents, LiveBar, LiveStats, StatsButton, useLive } from "./LiveStatus"
 import { LoadedDialog } from "./LoadedDialog"
@@ -76,11 +76,9 @@ function metaBitClassName(bitIndex: number, hasFolderButton: boolean) {
 function Meta({ session, onFolder, extra }: { session: Session; onFolder?: () => void; extra?: React.ReactNode }) {
   const { t } = useTranslation()
   const actions = useActions()
-  const live = actions.live.has(session.id)
   const bits = [tilde(session.cwd, actions.home), brief(session.mtime)]
   return (
     <div className="@container flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground in-data-[kb]:hidden">
-      {live && <Live waiting={actions.waiting.has(session.id)} />}
       {bits.map((bit, bitIndex) => (
         <span key={bitIndex} title={bitIndex === 1 ? full(session.mtime) : undefined} className={metaBitClassName(bitIndex, !!onFolder)}>
           {bitIndex === 0 && onFolder ? (
@@ -330,20 +328,20 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   // bouge plus ; le bouton « Aller à la fin » prend le relais.
   const opened = useRef("") // session déjà amenée à la fin une fois
   const away = !isAtBottom
+  const [fromTop, setFromTop] = useState(false)
+  const ready = !!session && msgs !== null
   // Les messages hors écran n'ont qu'une hauteur estimée (content-visibility) : en se précisant elle fait glisser la vue de quelques
   // dizaines de pixels. La zone reste donc masquée le temps que la session soit amenée à sa place.
   const [settledId, setSettledId] = useState("")
   if (!id && settledId) setSettledId("") // fermée : la prochaine ouverture masque de nouveau la zone
   const isSettling = ready && !!id && settledId !== id
-  const [fromTop, setFromTop] = useState(false)
-  const ready = !!session && msgs !== null
   useEffect(() => {
     const viewportElement = viewport()
+    if (!viewportElement) return
+    const onScroll = () => {
       // use-stick-to-bottom vise scrollHeight - 1 : on comble ce dernier pixel, sinon la fin reste à 1 px
       const remainingPx = distanceToEnd(viewportElement)
       if (remainingPx > 0 && remainingPx < LAST_PIXEL_PX && !restoring.current) viewportElement.scrollTop = viewportElement.scrollHeight
-    if (!viewportElement) return
-    const onScroll = () => {
       setFromTop(viewportElement.scrollTop > FROM_TOP_THRESHOLD_PX)
       // à moins d'une page de la fin : la réouverture redescend à la fin
       // pas avant que la session ait été amenée à sa place : le défilement à 0 d'une zone fraîchement montée serait mémorisé et rétabli à la réouverture
@@ -364,9 +362,9 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
     if (opened.current === id || !viewport()) return
     opened.current = id
     const savedPosition = scrollMem.get(id)
-    setTimeout(() => setSettledId(id), SETTLE_DELAY_MS)
     if (savedPosition && !savedPosition.end) restore(savedPosition.top)
     else pinEnd()
+    setTimeout(() => setSettledId(id), SETTLE_DELAY_MS)
   }, [msgs, pinEnd, restore, viewport, id, ready, areaMounted])
   const inTerm = termOn && view === "terminal" && !!id && actions.live.has(id)
   // Envoi d'un message : on descend pour voir la réponse arriver ; la bibliothèque garde ensuite la vue collée à la fin.
@@ -458,7 +456,6 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             {session && (
               <div className="flex shrink-0 flex-col items-end gap-1 text-xs text-muted-foreground">
                 <div className="flex min-h-7 items-center gap-2 max-md:hidden">
-                  {actions.live.has(id) && !actions.background.has(id) && <CloseSession id={id} onClosed={onClose} />}
                   <CacheState s={session} />
                   {actions.background.has(id) ? (
                     <>
@@ -585,11 +582,11 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
           </div>
         </ScrollArea>
         {away ? (
-        ) : (
-          <SquareChevronsDown role="status" aria-label={t("conversation.view.following")} className="absolute right-4 bottom-3 size-5 text-emerald-500" />
           <Button size="sm" variant="secondary" className="absolute right-4 bottom-3 rounded-full shadow-md" onClick={toEnd} aria-label={t("conversation.view.toEndAria")}>
             <ArrowDown /> {t("conversation.view.toEnd")}
           </Button>
+        ) : (
+          <SquareChevronsDown role="status" aria-label={t("conversation.view.following")} className="absolute right-4 bottom-3 size-5 text-emerald-500" />
         )}
         </div>
         {inTerm && (
