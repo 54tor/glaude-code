@@ -19,6 +19,8 @@ type McpState struct {
 	OK     bool   `json:"ok"`
 }
 
+const mcpCacheTTL = time.Minute
+
 type mcpEntry struct {
 	at  time.Time
 	out []McpState
@@ -37,62 +39,62 @@ var (
 // dossier, échec compris : chaque appel démarre les serveurs MCP du projet.
 var projectMcpStates = func(cwd string) ([]McpState, error) {
 	mcpCache.Lock()
-	c, ok := mcpCache.m[cwd]
+	cached, found := mcpCache.m[cwd]
 	mcpCache.Unlock()
-	if ok && time.Since(c.at) < time.Minute {
-		return c.out, c.err
+	if found && time.Since(cached.at) < mcpCacheTTL {
+		return cached.out, cached.err
 	}
-	v, _, _ := mcpFlight.Do(cwd, func() (any, error) {
-		out, err := mcpList(cwd)
-		e := mcpEntry{time.Now(), out, err}
+	result, _, _ := mcpFlight.Do(cwd, func() (any, error) {
+		states, listErr := mcpList(cwd)
+		fresh := mcpEntry{at: time.Now(), out: states, err: listErr}
 		mcpCache.Lock()
-		mcpCache.m[cwd] = e
+		mcpCache.m[cwd] = fresh
 		mcpCache.Unlock()
-		return e, nil
+		return fresh, nil
 	})
-	e := v.(mcpEntry)
-	return e.out, e.err
+	entry := result.(mcpEntry)
+	return entry.out, entry.err
 }
 
 func mcpList(cwd string) ([]McpState, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	commandContext, cancel := context.WithTimeout(context.Background(), mcpListTimeout)
 	defer cancel()
-	cmd := withPath(exec.CommandContext(ctx, "claude", "mcp", "list"))
+	cmd := withPath(exec.CommandContext(commandContext, "claude", "mcp", "list"))
 	cmd.Dir = cwd
-	b, err := cmd.Output()
-	if err != nil && len(b) == 0 {
+	output, err := cmd.Output()
+	if err != nil && len(output) == 0 {
 		return nil, err
 	}
-	out := []McpState{}
-	for _, l := range strings.Split(string(b), "\n") {
-		if m := mcpLine.FindStringSubmatch(strings.TrimSpace(l)); m != nil {
-			st := strings.TrimSpace(m[3])
-			out = append(out, McpState{m[1], st, strings.Contains(st, "Connected")})
+	states := []McpState{}
+	for _, outputLine := range strings.Split(string(output), "\n") {
+		if match := mcpLine.FindStringSubmatch(strings.TrimSpace(outputLine)); match != nil {
+			status := strings.TrimSpace(match[3])
+			states = append(states, McpState{match[1], status, strings.Contains(status, "Connected")})
 		}
 	}
-	return out, nil
+	return states, nil
 }
 
 // projectTrusted : Claude Code a déjà accepté la confiance de ce dossier (ou d'un parent) dans ~/.claude.json. `claude mcp list` démarre les
 // serveurs du .mcp.json du projet sans demander : on ne le lance donc jamais dans un dossier que l'utilisateur n'a pas approuvé.
 func projectTrusted(cwd string) bool {
-	b, err := readTrusted(claudeJSON())
+	content, err := readTrusted(claudeJSON())
 	if err != nil {
 		return false
 	}
-	var d struct {
+	var config struct {
 		Projects map[string]struct {
 			Trusted bool `json:"hasTrustDialogAccepted"`
 		} `json:"projects"`
 	}
-	if json.Unmarshal(b, &d) != nil {
+	if json.Unmarshal(content, &config) != nil {
 		return false
 	}
-	for p := filepath.Clean(cwd); ; p = filepath.Dir(p) {
-		if d.Projects[p].Trusted {
+	for candidateDir := filepath.Clean(cwd); ; candidateDir = filepath.Dir(candidateDir) {
+		if config.Projects[candidateDir].Trusted {
 			return true
 		}
-		if p == filepath.Dir(p) {
+		if candidateDir == filepath.Dir(candidateDir) {
 			return false
 		}
 	}
@@ -103,7 +105,7 @@ func projectMcp(dir string) ([]McpState, error) {
 	if safeDir(dir) {
 		cwd = projectCwd(dir)
 	}
-	if fi, e := os.Stat(cwd); cwd == "" || e != nil || !fi.IsDir() {
+	if fileInfo, statErr := os.Stat(cwd); cwd == "" || statErr != nil || !fileInfo.IsDir() {
 		return nil, terr("srv.memory.dossierDuProjetIntrouvable")
 	}
 	if !projectTrusted(cwd) {

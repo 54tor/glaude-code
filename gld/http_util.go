@@ -9,64 +9,64 @@ import (
 	"strings"
 )
 
-func writeJSON(w http.ResponseWriter, code int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(v)
+func writeJSON(responseWriter http.ResponseWriter, code int, payload any) {
+	responseWriter.Header().Set("Content-Type", "application/json; charset=utf-8")
+	responseWriter.WriteHeader(code)
+	json.NewEncoder(responseWriter).Encode(payload)
 }
 
 // statusCodes : code par défaut d'un statut ; les codes métier ne s'ajoutent que s'ils apportent un sens.
 var statusCodes = map[int]string{400: "bad_request", 401: "unauthorized", 403: "forbidden", 404: "not_found", 409: "conflict", 413: "too_large", 415: "unsupported", 429: "rate_limited", 500: "internal", 503: "unavailable"}
 
 func statusCode(status int) string {
-	if c, ok := statusCodes[status]; ok {
-		return c
+	if statusLabel, found := statusCodes[status]; found {
+		return statusLabel
 	}
 	return "error"
 }
 
 // notFound : 404 uniforme.
-func notFound(w http.ResponseWriter) {
-	writeErr(w, http.StatusNotFound, "not_found", L("srv.http_util.introuvable"))
+func notFound(responseWriter http.ResponseWriter) {
+	writeErr(responseWriter, http.StatusNotFound, "not_found", L("srv.http_util.introuvable"))
 }
 
 // writeErr : seul format d'erreur de l'API /v1, avec le vrai statut HTTP.
-func writeErr(w http.ResponseWriter, status int, code, msg string) {
-	writeJSON(w, status, map[string]any{"error": map[string]string{"code": code, "message": msg}})
+func writeErr(responseWriter http.ResponseWriter, status int, code, message string) {
+	writeJSON(responseWriter, status, map[string]any{"error": map[string]string{"code": code, "message": message}})
 }
 
 // writeErrExtra : l'enveloppe d'erreur plus des champs propres à un cas (rétrocompatible : code et message restent).
-func writeErrExtra(w http.ResponseWriter, status int, code, msg string, extra map[string]any) {
-	e := map[string]any{"code": code, "message": msg}
-	for k, v := range extra {
-		e[k] = v
+func writeErrExtra(responseWriter http.ResponseWriter, status int, code, message string, extra map[string]any) {
+	errorFields := map[string]any{"code": code, "message": message}
+	for fieldName, fieldValue := range extra {
+		errorFields[fieldName] = fieldValue
 	}
-	writeJSON(w, status, map[string]any{"error": e})
+	writeJSON(responseWriter, status, map[string]any{"error": errorFields})
 }
 
 // forbid refuse une requête avant routage : erreur JSON sur /v1, texte brut pour les pages.
-func forbid(w http.ResponseWriter, r *http.Request) {
-	if strings.HasPrefix(r.URL.Path, "/v1/") {
-		writeErr(w, http.StatusForbidden, "forbidden", L("srv.http_util.refuse"))
+func forbid(responseWriter http.ResponseWriter, request *http.Request) {
+	if strings.HasPrefix(request.URL.Path, "/v1/") {
+		writeErr(responseWriter, http.StatusForbidden, "forbidden", L("srv.http_util.refuse"))
 		return
 	}
-	http.Error(w, "forbidden", http.StatusForbidden)
+	http.Error(responseWriter, "forbidden", http.StatusForbidden)
 }
 
 // decodeBody lit un corps JSON borné ; false après avoir répondu 400.
-func decodeBody(w http.ResponseWriter, r *http.Request, v any, limit int64) bool {
-	if json.NewDecoder(io.LimitReader(r.Body, limit)).Decode(v) != nil {
-		writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
+func decodeBody(responseWriter http.ResponseWriter, request *http.Request, destination any, limit int64) bool {
+	if json.NewDecoder(io.LimitReader(request.Body, limit)).Decode(destination) != nil {
+		writeErr(responseWriter, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
 		return false
 	}
 	return true
 }
 
 // pathID lit un segment {name} qui doit être un identifiant de session ; false après avoir répondu 400.
-func pathID(w http.ResponseWriter, r *http.Request, name string) (string, bool) {
-	id := r.PathValue(name)
+func pathID(responseWriter http.ResponseWriter, request *http.Request, name string) (string, bool) {
+	id := request.PathValue(name)
 	if !idRe.MatchString(id) {
-		writeErr(w, http.StatusBadRequest, "bad_id", L("srv.http_util.idInvalide"))
+		writeErr(responseWriter, http.StatusBadRequest, "bad_id", L("srv.http_util.idInvalide"))
 		return "", false
 	}
 	return id, true
@@ -90,27 +90,33 @@ type bulkFailError struct {
 	Message string `json:"message"`
 }
 
-func (b *bulk) ok(id string) { b.done = append(b.done, id) }
+func (result *bulk) ok(id string) {
+	result.done = append(result.done, id)
+}
 
-func (b *bulk) fail(item string, status int, code, msg string) {
-	f := bulkFail{Item: item, Error: bulkFailError{code, msg}, status: status}
-	if len(b.failed) == 0 {
-		b.first = f
+func (result *bulk) fail(item string, status int, code, message string) {
+	failure := bulkFail{Item: item, Error: bulkFailError{code, message}, status: status}
+	if len(result.failed) == 0 {
+		result.first = failure
 	}
-	b.failed = append(b.failed, f)
+	result.failed = append(result.failed, failure)
 }
 
 // reply : 200 {done, failed[, message]} dès qu'un élément a abouti ; sinon l'erreur uniforme du premier échec.
-func (b *bulk) reply(w http.ResponseWriter, msg string) {
-	if len(b.done) == 0 && len(b.failed) > 0 {
-		writeErr(w, b.first.status, b.first.Error.Code, b.first.Error.Message)
+func (result *bulk) reply(responseWriter http.ResponseWriter, message string) {
+	nothingSucceeded := len(result.done) == 0 && len(result.failed) > 0
+	if nothingSucceeded {
+		writeErr(responseWriter, result.first.status, result.first.Error.Code, result.first.Error.Message)
 		return
 	}
-	out := map[string]any{"done": append([]string{}, b.done...), "failed": append([]bulkFail{}, b.failed...)}
-	if msg != "" {
-		out["message"] = msg
+	response := map[string]any{
+		"done":   append([]string{}, result.done...),
+		"failed": append([]bulkFail{}, result.failed...),
 	}
-	writeJSON(w, 200, out)
+	if message != "" {
+		response["message"] = message
+	}
+	writeJSON(responseWriter, http.StatusOK, response)
 }
 
 type item struct{ Dir, ID string }
@@ -118,19 +124,21 @@ type item struct{ Dir, ID string }
 // itemMax : plafond d'éléments d'une requête multiple (?item=… répété, ou items du corps) ; le client découpe en lots (100 éléments, URL sous ~6 Ko).
 const itemMax = 100
 
+const itemsBodyMax = 1 << 22
+
 // validItems n'accepte que des sessions qui existent vraiment ; false après avoir répondu.
-func validItems(w http.ResponseWriter, items []item) bool {
+func validItems(responseWriter http.ResponseWriter, items []item) bool {
 	if len(items) == 0 {
-		writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
+		writeErr(responseWriter, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
 		return false
 	}
 	if len(items) > itemMax {
-		writeErr(w, http.StatusBadRequest, "too_many_items", L("srv.http_util.tropDElements"))
+		writeErr(responseWriter, http.StatusBadRequest, "too_many_items", L("srv.http_util.tropDElements"))
 		return false
 	}
-	for _, it := range items {
-		if _, ok := transcript(it.Dir, it.ID); !ok {
-			writeErr(w, http.StatusBadRequest, "bad_id", L("srv.http_util.idInvalide"))
+	for _, requestedItem := range items {
+		if _, exists := transcript(requestedItem.Dir, requestedItem.ID); !exists {
+			writeErr(responseWriter, http.StatusBadRequest, "bad_id", L("srv.http_util.idInvalide"))
 			return false
 		}
 	}
@@ -140,16 +148,17 @@ func validItems(w http.ResponseWriter, items []item) bool {
 // withChildren ajoute aux éléments les sessions qu'ils ont lancées (Parent), récursivement : supprimer une session emporte ses sous-sessions.
 func withChildren(items []item) []item {
 	have := map[string]bool{}
-	for _, it := range items {
-		have[it.ID] = true
+	for _, requestedItem := range items {
+		have[requestedItem.ID] = true
 	}
 	for grew := true; grew; {
 		grew = false
-		for _, g := range sessions() {
-			for _, s := range g.Sessions {
-				if s.Parent != "" && have[s.Parent] && !have[s.ID] && idRe.MatchString(s.ID) {
-					have[s.ID] = true
-					items = append(items, item{s.Dir, s.ID})
+		for _, group := range sessions() {
+			for _, session := range group.Sessions {
+				isNewChild := session.Parent != "" && have[session.Parent] && !have[session.ID]
+				if isNewChild && idRe.MatchString(session.ID) {
+					have[session.ID] = true
+					items = append(items, item{session.Dir, session.ID})
 					grew = true
 				}
 			}
@@ -159,38 +168,38 @@ func withChildren(items []item) []item {
 }
 
 // itemsQuery lit ?item=<dossier>:<id> répété : l'identifiant ne contient jamais « : », le nom de dossier peut en porter.
-func itemsQuery(w http.ResponseWriter, r *http.Request) ([]item, bool) {
+func itemsQuery(responseWriter http.ResponseWriter, request *http.Request) ([]item, bool) {
 	var items []item
-	for _, v := range r.URL.Query()["item"] {
-		i := strings.LastIndex(v, ":")
-		if i < 0 {
-			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
+	for _, itemParameter := range request.URL.Query()["item"] {
+		separatorIndex := strings.LastIndex(itemParameter, ":")
+		if separatorIndex < 0 {
+			writeErr(responseWriter, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
 			return nil, false
 		}
-		items = append(items, item{v[:i], v[i+1:]})
+		items = append(items, item{itemParameter[:separatorIndex], itemParameter[separatorIndex+1:]})
 	}
-	return items, validItems(w, items)
+	return items, validItems(responseWriter, items)
 }
 
 // readItems décode {items:[{dir,id}], to} (PATCH /v1/sessions, POST /v1/trash/sessions).
-func readItems(w http.ResponseWriter, r *http.Request) ([]item, string, bool) {
-	var req struct {
+func readItems(responseWriter http.ResponseWriter, request *http.Request) ([]item, string, bool) {
+	var body struct {
 		Items []item
 		To    string
 	}
-	if !decodeBody(w, r, &req, 1<<22) || !validItems(w, req.Items) {
+	if !decodeBody(responseWriter, request, &body, itemsBodyMax) || !validItems(responseWriter, body.Items) {
 		return nil, "", false
 	}
-	return req.Items, req.To, true
+	return body.Items, body.To, true
 }
 
 // ids : les identifiants courts de sessions, pour le journal.
 func ids(items []item) []string {
-	out := make([]string, len(items))
-	for i, it := range items {
-		out[i] = short(it.ID)
+	shortIDs := make([]string, len(items))
+	for itemIndex, requestedItem := range items {
+		shortIDs[itemIndex] = short(requestedItem.ID)
 	}
-	return out
+	return shortIDs
 }
 
 func errOr(err error) string {

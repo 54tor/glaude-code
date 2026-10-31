@@ -14,6 +14,9 @@ import (
 const (
 	ideFeedMax   = 100 << 10
 	ideFeedPaths = 300
+	// ideDeadlineCheckEvery : pendant le parcours, l'échéance n'est consultée qu'une entrée sur ce nombre.
+	ideDeadlineCheckEvery = 256
+	ideFilesBodyMax       = 64 << 10
 )
 
 type ideIndexEntry struct {
@@ -27,7 +30,7 @@ type ideLimits struct {
 	Time           time.Duration
 }
 
-var ideIndexLimits = ideLimits{20000, 12, 5 * time.Second}
+var ideIndexLimits = ideLimits{Entries: 20000, Depth: 12, Time: 5 * time.Second}
 
 // ideBuildHook permet aux tests de compter les constructions.
 var ideBuildHook = func() {}
@@ -36,75 +39,78 @@ func ideIgnored(name string) bool {
 	return strings.HasPrefix(name, ".") || name == "vendor" || name == "node_modules"
 }
 
-func ideBuildIndex(root *os.Root, lim ideLimits) ([]ideIndexEntry, bool) {
-	es, _, partial := ideWalk(root, lim)
-	return es, partial
+func ideBuildIndex(root *os.Root, limits ideLimits) ([]ideIndexEntry, bool) {
+	entries, _, partial := ideWalk(root, limits)
+	return entries, partial
 }
 
 // ideWalk parcourt l'arbre sans lire le contenu des fichiers ni suivre de lien ; une borne
 // atteinte rend ce qui est déjà collecté avec partial=true. dirs sert à la veille du disque.
-func ideWalk(root *os.Root, lim ideLimits) (entries []ideIndexEntry, dirs []string, partial bool) {
+func ideWalk(root *os.Root, limits ideLimits) (entries []ideIndexEntry, dirs []string, partial bool) {
 	type item struct {
 		dir   string
 		depth int
 	}
-	deadline := time.Now().Add(lim.Time)
+	deadline := time.Now().Add(limits.Time)
 	stack := []item{{".", 0}}
 	seen := 0
 walk:
 	for len(stack) > 0 {
-		it := stack[len(stack)-1]
+		current := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 		if time.Now().After(deadline) {
 			partial = true
 			break
 		}
-		d, err := root.Open(it.dir)
+		directory, err := root.Open(current.dir)
 		if err != nil {
 			continue
 		}
-		des, err := d.ReadDir(-1)
-		d.Close()
+		dirEntries, err := directory.ReadDir(-1)
+		directory.Close()
 		if err != nil {
 			continue
 		}
-		dirs = append(dirs, it.dir)
-		for _, de := range des {
+		dirs = append(dirs, current.dir)
+		for _, dirEntry := range dirEntries {
 			// Un seul dossier énorme dépasserait sinon la borne de temps.
-			if seen++; seen%256 == 0 && time.Now().After(deadline) {
+			seen++
+			if seen%ideDeadlineCheckEvery == 0 && time.Now().After(deadline) {
 				partial = true
 				break walk
 			}
-			name := de.Name()
+			name := dirEntry.Name()
 			if ideIgnored(name) {
 				continue
 			}
 			rel := name
-			if it.dir != "." {
-				rel = it.dir + "/" + name
+			if current.dir != "." {
+				rel = current.dir + "/" + name
 			}
 			switch {
-			case de.Type()&fs.ModeSymlink != 0:
-			case de.IsDir():
-				if it.depth+1 > lim.Depth {
+			case dirEntry.Type()&fs.ModeSymlink != 0:
+			case dirEntry.IsDir():
+				if current.depth+1 > limits.Depth {
 					partial = true
 					continue
 				}
-				stack = append(stack, item{rel, it.depth + 1})
-			case de.Type().IsRegular():
-				if len(entries) >= lim.Entries {
+				stack = append(stack, item{rel, current.depth + 1})
+			case dirEntry.Type().IsRegular():
+				if len(entries) >= limits.Entries {
 					partial = true
 					break walk
 				}
-				e := ideIndexEntry{Path: rel}
-				if info, err := de.Info(); err == nil {
-					e.Size, e.Mtime = info.Size(), info.ModTime().Unix()
+				entry := ideIndexEntry{Path: rel}
+				if info, infoErr := dirEntry.Info(); infoErr == nil {
+					entry.Size, entry.Mtime = info.Size(), info.ModTime().Unix()
 				}
-				entries = append(entries, e)
+				entries = append(entries, entry)
 			}
 		}
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
+	sort.Slice(entries, func(leftIndex, rightIndex int) bool {
+		return entries[leftIndex].Path < entries[rightIndex].Path
+	})
 	return entries, dirs, partial
 }
 
@@ -116,39 +122,39 @@ type ideIdx struct {
 }
 
 func ideIndexGet(dir string) ideIdx {
-	ws, err := ideWS(dir)
+	workspace, err := ideWS(dir)
 	if err != nil {
 		return ideIdx{state: "partial"}
 	}
-	return ws.idx()
+	return workspace.idx()
 }
 
 func routesIDEIndex(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/fs/index", func(w http.ResponseWriter, r *http.Request) {
-		dir, ok := ideKnownDir(r.URL.Query().Get("dir"))
-		if !ok {
-			ideFail(w, errIdeDir)
+	mux.HandleFunc("GET /v1/fs/index", func(responseWriter http.ResponseWriter, request *http.Request) {
+		dir, known := ideKnownDir(request.URL.Query().Get("dir"))
+		if !known {
+			ideFail(responseWriter, errIdeDir)
 			return
 		}
-		ix := ideIndexGet(dir)
-		files := ix.entries
+		index := ideIndexGet(dir)
+		files := index.entries
 		if files == nil {
 			files = []ideIndexEntry{}
 		}
-		writeJSON(w, 200, map[string]any{"state": ix.state, "files": files})
+		writeJSON(responseWriter, http.StatusOK, map[string]any{"state": index.state, "files": files})
 	})
 
-	mux.HandleFunc("POST /v1/fs/files", func(w http.ResponseWriter, r *http.Request) {
-		var in struct {
+	mux.HandleFunc("POST /v1/fs/files", func(responseWriter http.ResponseWriter, request *http.Request) {
+		var body struct {
 			Paths []string `json:"paths"`
 		}
-		if !ideBody(w, r, 64<<10, &in) {
+		if !ideBody(responseWriter, request, ideFilesBodyMax, &body) {
 			return
 		}
-		dir := r.URL.Query().Get("dir")
+		dir := request.URL.Query().Get("dir")
 		root, err := ideOpenRoot(dir)
 		if err != nil {
-			ideFail(w, err)
+			ideFail(responseWriter, err)
 			return
 		}
 		defer root.Close()
@@ -156,39 +162,40 @@ func routesIDEIndex(mux *http.ServeMux) {
 			Path    string `json:"path"`
 			Content string `json:"content"`
 		}
-		out := []file{}
-		ix := ideIndexGet(dir)
-		if len(in.Paths) > ideFeedPaths {
-			in.Paths = in.Paths[:ideFeedPaths]
+		files := []file{}
+		index := ideIndexGet(dir)
+		if len(body.Paths) > ideFeedPaths {
+			body.Paths = body.Paths[:ideFeedPaths]
 		}
-		for _, p := range in.Paths {
-			if !ix.set[p] {
+		for _, path := range body.Paths {
+			if !index.set[path] {
 				continue
 			}
-			if c, ok := ideFeedRead(root, p); ok {
-				out = append(out, file{p, c})
+			if content, readable := ideFeedRead(root, path); readable {
+				files = append(files, file{path, content})
 			}
 		}
-		writeJSON(w, 200, map[string]any{"files": out})
+		writeJSON(responseWriter, http.StatusOK, map[string]any{"files": files})
 	})
 }
 
 func ideFeedRead(root *os.Root, rel string) (string, bool) {
-	fi, err := ideLstat(root, rel)
-	if err != nil || !fi.Mode().IsRegular() || fi.Size() > ideFeedMax {
+	fileInfo, err := ideLstat(root, rel)
+	if err != nil || !fileInfo.Mode().IsRegular() || fileInfo.Size() > ideFeedMax {
 		return "", false
 	}
-	f, err := root.Open(rel)
+	file, err := root.Open(rel)
 	if err != nil {
 		return "", false
 	}
-	defer f.Close()
-	if st, err := f.Stat(); err != nil || !st.Mode().IsRegular() || !os.SameFile(fi, st) {
+	defer file.Close()
+	if openedInfo, statErr := file.Stat(); statErr != nil || !openedInfo.Mode().IsRegular() || !os.SameFile(fileInfo, openedInfo) {
 		return "", false
 	}
-	b, err := io.ReadAll(io.LimitReader(f, ideFeedMax+1))
-	if err != nil || len(b) > ideFeedMax || strings.IndexByte(string(b), 0) >= 0 || !utf8.Valid(b) {
+	content, err := io.ReadAll(io.LimitReader(file, ideFeedMax+1))
+	isText := strings.IndexByte(string(content), 0) < 0 && utf8.Valid(content)
+	if err != nil || len(content) > ideFeedMax || !isText {
 		return "", false
 	}
-	return string(b), true
+	return string(content), true
 }

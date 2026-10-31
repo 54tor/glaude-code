@@ -11,11 +11,17 @@ import (
 	"unicode/utf8"
 )
 
-const ideMaxFile = 2 << 20
+const (
+	ideMaxFile = 2 << 20
+	// ideBinarySniffBytes : un octet nul dans ce début de fichier le classe binaire.
+	ideBinarySniffBytes = 8192
+)
 
 var ideMaxEntries = 5000
 
-func ideEtag(fi fs.FileInfo) string { return fmt.Sprintf("%d-%d", fi.ModTime().UnixNano(), fi.Size()) }
+func ideEtag(fileInfo fs.FileInfo) string {
+	return fmt.Sprintf("%d-%d", fileInfo.ModTime().UnixNano(), fileInfo.Size())
+}
 
 type ideEntry struct {
 	Name  string `json:"name"`
@@ -25,128 +31,134 @@ type ideEntry struct {
 }
 
 // ideResolve ouvre la racine puis valide le chemin ; l'appelant ferme root.
-func ideResolve(r *http.Request, allowRoot bool) (*os.Root, string, fs.FileInfo, error) {
-	root, err := ideOpenRoot(r.URL.Query().Get("dir"))
+func ideResolve(request *http.Request, allowRoot bool) (*os.Root, string, fs.FileInfo, error) {
+	root, err := ideOpenRoot(request.URL.Query().Get("dir"))
 	if err != nil {
 		return nil, "", nil, err
 	}
-	rel, err := ideRel(r.URL.Query().Get("path"), allowRoot)
-	if err != nil {
-		root.Close()
-		return nil, "", nil, err
-	}
-	fi, err := ideLstat(root, rel)
+	rel, err := ideRel(request.URL.Query().Get("path"), allowRoot)
 	if err != nil {
 		root.Close()
 		return nil, "", nil, err
 	}
-	return root, rel, fi, nil
+	fileInfo, err := ideLstat(root, rel)
+	if err != nil {
+		root.Close()
+		return nil, "", nil, err
+	}
+	return root, rel, fileInfo, nil
 }
 
 func routesIDE(mux *http.ServeMux) {
 	routesIDEWrite(mux)
 	routesIDEIndex(mux)
 	routesIDEWatch(mux)
-	mux.HandleFunc("GET /v1/fs/tree", func(w http.ResponseWriter, r *http.Request) {
-		root, rel, fi, err := ideResolve(r, true)
+	mux.HandleFunc("GET /v1/fs/tree", func(responseWriter http.ResponseWriter, request *http.Request) {
+		root, rel, targetInfo, err := ideResolve(request, true)
 		if err != nil {
-			ideFail(w, err)
+			ideFail(responseWriter, err)
 			return
 		}
 		defer root.Close()
-		if !fi.IsDir() {
-			ideFail(w, errIdePath)
+		if !targetInfo.IsDir() {
+			ideFail(responseWriter, errIdePath)
 			return
 		}
-		d, err := root.Open(rel)
+		directory, err := root.Open(rel)
 		if err != nil {
-			ideFail(w, err)
+			ideFail(responseWriter, err)
 			return
 		}
-		defer d.Close()
-		des, err := d.ReadDir(-1)
+		defer directory.Close()
+		dirEntries, err := directory.ReadDir(-1)
 		if err != nil {
-			ideFail(w, err)
+			ideFail(responseWriter, err)
 			return
 		}
-		entries := make([]ideEntry, 0, len(des))
-		for _, de := range des {
-			if de.Name() == ".git" {
+		entries := make([]ideEntry, 0, len(dirEntries))
+		for _, dirEntry := range dirEntries {
+			if dirEntry.Name() == ".git" {
 				continue
 			}
-			e := ideEntry{Name: de.Name(), Type: "file"}
+			entry := ideEntry{Name: dirEntry.Name(), Type: "file"}
 			switch {
-			case de.Type()&fs.ModeSymlink != 0:
-				e.Type = "symlink"
-			case de.IsDir():
-				e.Type = "dir"
+			case dirEntry.Type()&fs.ModeSymlink != 0:
+				entry.Type = "symlink"
+			case dirEntry.IsDir():
+				entry.Type = "dir"
 			}
-			if info, err := de.Info(); err == nil {
-				e.Size, e.Mtime = info.Size(), info.ModTime().Unix()
+			if info, infoErr := dirEntry.Info(); infoErr == nil {
+				entry.Size, entry.Mtime = info.Size(), info.ModTime().Unix()
 			}
-			entries = append(entries, e)
+			entries = append(entries, entry)
 		}
-		sort.Slice(entries, func(i, j int) bool {
-			a, b := entries[i], entries[j]
-			if (a.Type == "dir") != (b.Type == "dir") {
-				return a.Type == "dir"
+		sort.Slice(entries, func(leftIndex, rightIndex int) bool {
+			left, right := entries[leftIndex], entries[rightIndex]
+			if (left.Type == "dir") != (right.Type == "dir") {
+				return left.Type == "dir"
 			}
-			la, lb := strings.ToLower(a.Name), strings.ToLower(b.Name)
-			if la != lb {
-				return la < lb
+			leftLower, rightLower := strings.ToLower(left.Name), strings.ToLower(right.Name)
+			if leftLower != rightLower {
+				return leftLower < rightLower
 			}
-			return a.Name < b.Name
+			return left.Name < right.Name
 		})
 		truncated := len(entries) > ideMaxEntries
 		if truncated {
 			entries = entries[:ideMaxEntries]
 		}
-		writeJSON(w, 200, map[string]any{"entries": entries, "truncated": truncated})
+		writeJSON(responseWriter, http.StatusOK, map[string]any{"entries": entries, "truncated": truncated})
 	})
 
-	mux.HandleFunc("GET /v1/fs/entries/content", func(w http.ResponseWriter, r *http.Request) {
-		root, rel, fi, err := ideResolve(r, false)
+	mux.HandleFunc("GET /v1/fs/entries/content", func(responseWriter http.ResponseWriter, request *http.Request) {
+		root, rel, targetInfo, err := ideResolve(request, false)
 		if err != nil {
-			ideFail(w, err)
+			ideFail(responseWriter, err)
 			return
 		}
 		defer root.Close()
-		if !fi.Mode().IsRegular() {
-			ideFail(w, errIdePath)
+		if !targetInfo.Mode().IsRegular() {
+			ideFail(responseWriter, errIdePath)
 			return
 		}
-		if fi.Size() > ideMaxFile {
-			ideFail(w, errIdeTooBig)
+		if targetInfo.Size() > ideMaxFile {
+			ideFail(responseWriter, errIdeTooBig)
 			return
 		}
-		f, err := root.Open(rel)
+		file, err := root.Open(rel)
 		if err != nil {
-			ideFail(w, err)
+			ideFail(responseWriter, err)
 			return
 		}
-		defer f.Close()
+		defer file.Close()
 		// Lstat puis Open est course-able : le descripteur ouvert doit être le même fichier.
-		if st, err := f.Stat(); err != nil || !st.Mode().IsRegular() || !os.SameFile(fi, st) {
-			ideFail(w, errIdeSymlink)
+		if openedInfo, statErr := file.Stat(); statErr != nil || !openedInfo.Mode().IsRegular() || !os.SameFile(targetInfo, openedInfo) {
+			ideFail(responseWriter, errIdeSymlink)
 			return
 		}
-		b, err := io.ReadAll(io.LimitReader(f, ideMaxFile+1))
+		content, err := io.ReadAll(io.LimitReader(file, ideMaxFile+1))
 		if err != nil {
-			ideFail(w, err)
+			ideFail(responseWriter, err)
 			return
 		}
-		if len(b) > ideMaxFile {
-			ideFail(w, errIdeTooBig)
+		if len(content) > ideMaxFile {
+			ideFail(responseWriter, errIdeTooBig)
 			return
 		}
-		head := b
-		if len(head) > 8192 {
-			head = head[:8192]
+		head := content
+		if len(head) > ideBinarySniffBytes {
+			head = head[:ideBinarySniffBytes]
 		}
-		if strings.IndexByte(string(head), 0) >= 0 || !utf8.Valid(b) {
-			ideFail(w, errIdeBinary)
+		isBinary := strings.IndexByte(string(head), 0) >= 0 || !utf8.Valid(content)
+		if isBinary {
+			ideFail(responseWriter, errIdeBinary)
 			return
 		}
-		writeJSON(w, 200, map[string]any{"content": string(b), "etag": ideEtag(fi), "size": int64(len(b)), "mtime": fi.ModTime().Unix()})
+		writeJSON(responseWriter, http.StatusOK, map[string]any{
+			"content": string(content),
+			"etag":    ideEtag(targetInfo),
+			"size":    int64(len(content)),
+			"mtime":   targetInfo.ModTime().Unix(),
+		})
 	})
 }

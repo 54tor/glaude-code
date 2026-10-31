@@ -27,14 +27,19 @@ const (
 	imgLine   = 48 << 20 // ligne de transcript lue pour en extraire une image
 	imgKeep   = 14 * 24 * time.Hour
 	imgPrefix = "gld-web-images"
+	// contentSniffBytes : http.DetectContentType ne regarde pas au-delà.
+	contentSniffBytes  = 512
+	extensionMinLength = 2
+	extensionMaxLength = 9
+	imageBlockMax      = 1000
 )
 
 func imagesDir() string { return filepath.Join(cfgDir(), imgPrefix) }
 
 // imageExt : l'extension d'une image d'après son contenu (jamais d'après ce que dit le navigateur) ; vide si ce n'en est pas une.
 // Seuls les formats raster courants passent : pas de SVG, qui peut porter du script.
-func imageExt(b []byte) string {
-	switch http.DetectContentType(b[:min(len(b), 512)]) {
+func imageExt(content []byte) string {
+	switch http.DetectContentType(content[:min(len(content), contentSniffBytes)]) {
 	case "image/png":
 		return ".png"
 	case "image/jpeg":
@@ -48,115 +53,117 @@ func imageExt(b []byte) string {
 }
 
 // saveImage range une image dans le dossier privé et renvoie son chemin ; les images de plus de 14 jours sont retirées au passage.
-func saveImage(b []byte, sid string) (string, error) {
-	if len(b) == 0 || len(b) > imgMax {
+func saveImage(content []byte, sessionID string) (string, error) {
+	if len(content) == 0 || len(content) > imgMax {
 		return "", terr("srv.images.imageVideOuTrop")
 	}
-	ext := imageExt(b)
+	ext := imageExt(content)
 	if ext == "" {
 		return "", terr("srv.images.formatNonReconnuPng")
 	}
-	return saveBlob(b, ext, sid)
+	return saveBlob(content, ext, sessionID)
 }
 
 // fileExt : l'extension d'un fichier joint d'après son nom, réduite à quelques caractères alphanumériques (jamais un chemin).
 func fileExt(name string) string {
-	e := strings.ToLower(filepath.Ext(filepath.Base(name)))
-	if len(e) < 2 || len(e) > 9 {
+	extension := strings.ToLower(filepath.Ext(filepath.Base(name)))
+	if len(extension) < extensionMinLength || len(extension) > extensionMaxLength {
 		return ".bin"
 	}
-	for _, c := range e[1:] {
-		if (c < 'a' || c > 'z') && (c < '0' || c > '9') {
+	for _, character := range extension[1:] {
+		isLowercaseLetter := character >= 'a' && character <= 'z'
+		isDigit := character >= '0' && character <= '9'
+		if !isLowercaseLetter && !isDigit {
 			return ".bin"
 		}
 	}
-	return e
+	return extension
 }
 
 // saveBlob range des octets dans le dossier privé sous un nom aléatoire, préfixé par l'id de session quand il est connu (dropSessionFiles) (le nom d'origine ne sert qu'à l'extension).
-func saveBlob(b []byte, ext, sid string) (string, error) {
-	if !idRe.MatchString(sid) {
-		sid = "" // sans session (nouvelle session, ou id invalide) : le fichier n'est retiré que par la purge de 14 jours
+func saveBlob(content []byte, ext, sessionID string) (string, error) {
+	if !idRe.MatchString(sessionID) {
+		sessionID = "" // sans session (nouvelle session, ou id invalide) : le fichier n'est retiré que par la purge de 14 jours
 	} else {
-		sid += "-"
+		sessionID += "-"
 	}
 	dir := imagesDir()
-	if err := rMkdirAll(cfgDir(), dir, 0o700); err != nil {
-		return "", err
+	if mkdirErr := rMkdirAll(cfgDir(), dir, 0o700); mkdirErr != nil {
+		return "", mkdirErr
 	}
-	if ents, err := readDirTrusted(dir); err == nil {
-		for _, e := range ents {
-			if fi, err := e.Info(); err == nil && fi.Mode().IsRegular() && time.Since(fi.ModTime()) > imgKeep {
-				rRemove(cfgDir(), filepath.Join(dir, e.Name()))
+	if entries, listErr := readDirTrusted(dir); listErr == nil {
+		for _, entry := range entries {
+			if fileInfo, infoErr := entry.Info(); infoErr == nil && fileInfo.Mode().IsRegular() && time.Since(fileInfo.ModTime()) > imgKeep {
+				rRemove(cfgDir(), filepath.Join(dir, entry.Name()))
 			}
 		}
 	}
-	var r [4]byte
-	rand.Read(r[:])
-	p := filepath.Join(dir, sid+time.Now().Format("20060102-150405")+"-"+hex.EncodeToString(r[:])+ext)
-	f, err := rOpenFile(cfgDir(), p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	var randomSuffix [4]byte
+	rand.Read(randomSuffix[:])
+	filePath := filepath.Join(dir, sessionID+time.Now().Format("20060102-150405")+"-"+hex.EncodeToString(randomSuffix[:])+ext)
+	file, err := rOpenFile(cfgDir(), filePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return "", err
 	}
-	_, err = f.Write(b)
-	if cerr := f.Close(); err == nil {
-		err = cerr
+	_, err = file.Write(content)
+	if closeErr := file.Close(); err == nil {
+		err = closeErr
 	}
 	if err != nil {
-		rRemove(cfgDir(), p)
+		rRemove(cfgDir(), filePath)
 		return "", err
 	}
-	return p, nil
+	return filePath, nil
 }
 
 // dropSessionFiles retire les images et fichiers joints déposés pour ces sessions (préfixe « <id>- »).
-func dropSessionFiles(ids []string) {
+func dropSessionFiles(sessionIDs []string) {
 	dir := imagesDir()
-	ents, err := readDirTrusted(dir)
+	entries, err := readDirTrusted(dir)
 	if err != nil {
 		return
 	}
-	for _, e := range ents {
-		for _, id := range ids {
-			if idRe.MatchString(id) && strings.HasPrefix(e.Name(), id+"-") {
-				rRemove(cfgDir(), filepath.Join(dir, e.Name()))
+	for _, entry := range entries {
+		for _, sessionID := range sessionIDs {
+			if idRe.MatchString(sessionID) && strings.HasPrefix(entry.Name(), sessionID+"-") {
+				rRemove(cfgDir(), filepath.Join(dir, entry.Name()))
 				break
 			}
 		}
 	}
 }
 
-// lineAt lit la ligne de transcript qui commence à l'octet o (au plus imgLine octets).
-func lineAt(path string, o int64) ([]byte, error) {
-	f, err := openTrusted(path)
+// lineAt lit la ligne de transcript qui commence à l'octet offset (au plus imgLine octets).
+func lineAt(path string, offset int64) ([]byte, error) {
+	file, err := openTrusted(path)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
-	if o < 0 {
+	defer file.Close()
+	if offset < 0 {
 		return nil, terr("srv.images.decalageNegatif")
 	}
-	if _, err := f.Seek(o, io.SeekStart); err != nil {
-		return nil, err
+	if _, seekErr := file.Seek(offset, io.SeekStart); seekErr != nil {
+		return nil, seekErr
 	}
-	line, err := bufio.NewReaderSize(io.LimitReader(f, imgLine), 1<<20).ReadBytes('\n')
+	line, err := bufio.NewReaderSize(io.LimitReader(file, imgLine), jsonLineBufferSize).ReadBytes('\n')
 	if err != nil && !errors.Is(err, io.EOF) {
 		return nil, err
 	}
 	return line, nil
 }
 
-// convImage extrait le k-ième bloc d'une ligne de transcript (décalage o) si c'est une image encodée en base64.
-func convImage(path string, o int64, k int) ([]byte, string, error) {
-	bad := terr("srv.images.imageIntrouvable")
-	if k < 0 || k > 1000 {
-		return nil, "", bad
+// convImage extrait le bloc blockIndex d'une ligne de transcript (décalage offset) si c'est une image encodée en base64.
+func convImage(path string, offset int64, blockIndex int) ([]byte, string, error) {
+	imageNotFound := terr("srv.images.imageIntrouvable")
+	if blockIndex < 0 || blockIndex > imageBlockMax {
+		return nil, "", imageNotFound
 	}
-	line, err := lineAt(path, o)
+	line, err := lineAt(path, offset)
 	if err != nil {
-		return nil, "", bad
+		return nil, "", imageNotFound
 	}
-	var l struct {
+	var record struct {
 		Type    string `json:"type"`
 		Message struct {
 			Content []struct {
@@ -168,18 +175,22 @@ func convImage(path string, o int64, k int) ([]byte, string, error) {
 			} `json:"content"`
 		} `json:"message"`
 	}
-	if json.Unmarshal(line, &l) != nil || (l.Type != "user" && l.Type != "assistant") || k >= len(l.Message.Content) {
-		return nil, "", bad
+	if json.Unmarshal(line, &record) != nil {
+		return nil, "", imageNotFound
 	}
-	b := l.Message.Content[k]
-	if b.Type != "image" || b.Source.Type != "base64" {
-		return nil, "", bad
+	isChatMessage := record.Type == "user" || record.Type == "assistant"
+	if !isChatMessage || blockIndex >= len(record.Message.Content) {
+		return nil, "", imageNotFound
 	}
-	data, err := base64.StdEncoding.DecodeString(b.Source.Data)
+	block := record.Message.Content[blockIndex]
+	if block.Type != "image" || block.Source.Type != "base64" {
+		return nil, "", imageNotFound
+	}
+	data, err := base64.StdEncoding.DecodeString(block.Source.Data)
 	if err != nil || imageExt(data) == "" {
-		return nil, "", bad
+		return nil, "", imageNotFound
 	}
-	return data, http.DetectContentType(data[:min(len(data), 512)]), nil
+	return data, http.DetectContentType(data[:min(len(data), contentSniffBytes)]), nil
 }
 
 // uploadName : nom d'un fichier déposé (saveBlob) ; ni séparateur ni point de tête, donc jamais un chemin.
@@ -188,120 +199,120 @@ var uploadName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$`)
 // uploadImage ouvre une image déposée par son seul nom, dans le dossier privé : os.Root refuse tout lien symbolique qui en sortirait.
 // Le type vient du contenu (imageExt), pas du nom.
 func uploadImage(name string) (*os.File, string, error) {
-	bad := terr("srv.images.imageIntrouvable")
+	imageNotFound := terr("srv.images.imageIntrouvable")
 	if !uploadName.MatchString(name) {
-		return nil, "", bad
+		return nil, "", imageNotFound
 	}
-	r, err := os.OpenRoot(imagesDir())
+	imagesRoot, err := os.OpenRoot(imagesDir())
 	if err != nil {
-		return nil, "", bad
+		return nil, "", imageNotFound
 	}
-	defer r.Close()
-	f, err := r.Open(name)
+	defer imagesRoot.Close()
+	file, err := imagesRoot.Open(name)
 	if err != nil {
-		return nil, "", bad
+		return nil, "", imageNotFound
 	}
-	st, err := f.Stat()
-	head := make([]byte, 512)
-	n, _ := io.ReadFull(f, head)
-	if err != nil || !st.Mode().IsRegular() || st.Size() > imgMax || imageExt(head[:n]) == "" {
-		f.Close()
-		return nil, "", bad
+	fileInfo, err := file.Stat()
+	head := make([]byte, contentSniffBytes)
+	headLength, _ := io.ReadFull(file, head)
+	if err != nil || !fileInfo.Mode().IsRegular() || fileInfo.Size() > imgMax || imageExt(head[:headLength]) == "" {
+		file.Close()
+		return nil, "", imageNotFound
 	}
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		f.Close()
-		return nil, "", bad
+	if _, seekErr := file.Seek(0, io.SeekStart); seekErr != nil {
+		file.Close()
+		return nil, "", imageNotFound
 	}
-	return f, http.DetectContentType(head[:n]), nil
+	return file, http.DetectContentType(head[:headLength]), nil
 }
 
 func routesImages(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/sessions/{id}/conversation/uploads/{up}", func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "id")
-		if !ok {
+	mux.HandleFunc("GET /v1/sessions/{id}/conversation/uploads/{up}", func(responseWriter http.ResponseWriter, request *http.Request) {
+		sessionID, isValid := pathID(responseWriter, request, "id")
+		if !isValid {
 			return
 		}
-		if _, ok := transcript(r.URL.Query().Get("dir"), id); !ok {
-			notFound(w)
+		if _, exists := transcript(request.URL.Query().Get("dir"), sessionID); !exists {
+			notFound(responseWriter)
 			return
 		}
-		f, typ, err := uploadImage(r.PathValue("up"))
+		file, contentType, err := uploadImage(request.PathValue("up"))
 		if err != nil {
-			notFound(w)
+			notFound(responseWriter)
 			return
 		}
-		defer f.Close()
-		h := w.Header()
-		h.Set("Content-Type", typ)
-		h.Set("X-Content-Type-Options", "nosniff")
-		h.Set("Content-Security-Policy", "default-src 'none'; sandbox")
-		h.Set("Cache-Control", "private, max-age=3600")
-		io.Copy(w, f)
+		defer file.Close()
+		headers := responseWriter.Header()
+		headers.Set("Content-Type", contentType)
+		headers.Set("X-Content-Type-Options", "nosniff")
+		headers.Set("Content-Security-Policy", "default-src 'none'; sandbox")
+		headers.Set("Cache-Control", "private, max-age=3600")
+		io.Copy(responseWriter, file)
 	})
-	mux.HandleFunc("POST /v1/uploads/images", func(w http.ResponseWriter, r *http.Request) {
-		b, err := io.ReadAll(http.MaxBytesReader(w, r.Body, imgMax+1))
+	mux.HandleFunc("POST /v1/uploads/images", func(responseWriter http.ResponseWriter, request *http.Request) {
+		content, err := io.ReadAll(http.MaxBytesReader(responseWriter, request.Body, imgMax+1))
 		switch {
-		case err != nil || len(b) > imgMax:
-			writeErr(w, http.StatusRequestEntityTooLarge, "too_large", L("srv.images.imageVideOuTrop"))
+		case err != nil || len(content) > imgMax:
+			writeErr(responseWriter, http.StatusRequestEntityTooLarge, "too_large", L("srv.images.imageVideOuTrop"))
 			return
-		case len(b) == 0:
-			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.images.imageVideOuTrop"))
+		case len(content) == 0:
+			writeErr(responseWriter, http.StatusBadRequest, "bad_request", L("srv.images.imageVideOuTrop"))
 			return
-		case imageExt(b) == "":
-			writeErr(w, http.StatusUnsupportedMediaType, "unsupported", L("srv.images.formatNonReconnuPng"))
+		case imageExt(content) == "":
+			writeErr(responseWriter, http.StatusUnsupportedMediaType, "unsupported", L("srv.images.formatNonReconnuPng"))
 			return
 		}
-		p, err := saveImage(b, r.URL.Query().Get("id"))
-		journal("image-upload (%d octets) : %v", len(b), errOr(err))
+		savedPath, err := saveImage(content, request.URL.Query().Get("id"))
+		journal("image-upload (%d octets) : %v", len(content), errOr(err))
 		if err != nil {
-			writeErr(w, http.StatusInternalServerError, "internal", err.Error())
+			writeErr(responseWriter, http.StatusInternalServerError, "internal", err.Error())
 			return
 		}
-		writeJSON(w, 201, map[string]any{"path": p, "message": L("srv.images.imageAjoutee")})
+		writeJSON(responseWriter, http.StatusCreated, map[string]any{"path": savedPath, "message": L("srv.images.imageAjoutee")})
 	})
-	mux.HandleFunc("POST /v1/uploads/files", func(w http.ResponseWriter, r *http.Request) {
-		b, err := io.ReadAll(http.MaxBytesReader(w, r.Body, fileMax+1))
+	mux.HandleFunc("POST /v1/uploads/files", func(responseWriter http.ResponseWriter, request *http.Request) {
+		content, err := io.ReadAll(http.MaxBytesReader(responseWriter, request.Body, fileMax+1))
 		switch {
-		case err != nil || len(b) > fileMax:
-			writeErr(w, http.StatusRequestEntityTooLarge, "too_large", L("srv.images.imageVideOuTrop"))
+		case err != nil || len(content) > fileMax:
+			writeErr(responseWriter, http.StatusRequestEntityTooLarge, "too_large", L("srv.images.imageVideOuTrop"))
 			return
-		case len(b) == 0:
-			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.images.imageVideOuTrop"))
+		case len(content) == 0:
+			writeErr(responseWriter, http.StatusBadRequest, "bad_request", L("srv.images.imageVideOuTrop"))
 			return
 		}
-		name, _ := url.QueryUnescape(r.Header.Get("X-File-Name"))
-		p, err := saveBlob(b, fileExt(name), r.URL.Query().Get("id"))
-		journal("file-upload (%d octets) : %v", len(b), errOr(err))
+		name, _ := url.QueryUnescape(request.Header.Get("X-File-Name"))
+		savedPath, err := saveBlob(content, fileExt(name), request.URL.Query().Get("id"))
+		journal("file-upload (%d octets) : %v", len(content), errOr(err))
 		if err != nil {
-			writeErr(w, http.StatusInternalServerError, "internal", err.Error())
+			writeErr(responseWriter, http.StatusInternalServerError, "internal", err.Error())
 			return
 		}
-		writeJSON(w, 201, map[string]any{"path": p, "message": L("srv.images.imageAjoutee")})
+		writeJSON(responseWriter, http.StatusCreated, map[string]any{"path": savedPath, "message": L("srv.images.imageAjoutee")})
 	})
 	// {img} : « <décalage du message>-<rang de l'image> ».
-	mux.HandleFunc("GET /v1/sessions/{id}/conversation/images/{img}", func(w http.ResponseWriter, r *http.Request) {
-		id, ok := pathID(w, r, "id")
-		if !ok {
+	mux.HandleFunc("GET /v1/sessions/{id}/conversation/images/{img}", func(responseWriter http.ResponseWriter, request *http.Request) {
+		sessionID, isValid := pathID(responseWriter, request, "id")
+		if !isValid {
 			return
 		}
-		p, ok := transcript(r.URL.Query().Get("dir"), id)
-		oStr, kStr, cut := strings.Cut(r.PathValue("img"), "-")
-		o, e1 := strconv.ParseInt(oStr, 10, 64)
-		k, e2 := strconv.Atoi(kStr)
-		if !ok || !cut || e1 != nil || e2 != nil {
-			notFound(w)
+		transcriptPath, isValid := transcript(request.URL.Query().Get("dir"), sessionID)
+		offsetText, indexText, hasSeparator := strings.Cut(request.PathValue("img"), "-")
+		offset, offsetErr := strconv.ParseInt(offsetText, 10, 64)
+		blockIndex, indexErr := strconv.Atoi(indexText)
+		if !isValid || !hasSeparator || offsetErr != nil || indexErr != nil {
+			notFound(responseWriter)
 			return
 		}
-		data, typ, err := convImage(p, o, k)
+		data, contentType, err := convImage(transcriptPath, offset, blockIndex)
 		if err != nil {
-			notFound(w)
+			notFound(responseWriter)
 			return
 		}
-		h := w.Header()
-		h.Set("Content-Type", typ)
-		h.Set("X-Content-Type-Options", "nosniff")
-		h.Set("Content-Security-Policy", "default-src 'none'; sandbox")
-		h.Set("Cache-Control", "private, max-age=3600")
-		w.Write(data)
+		headers := responseWriter.Header()
+		headers.Set("Content-Type", contentType)
+		headers.Set("X-Content-Type-Options", "nosniff")
+		headers.Set("Content-Security-Policy", "default-src 'none'; sandbox")
+		headers.Set("Cache-Control", "private, max-age=3600")
+		responseWriter.Write(data)
 	})
 }

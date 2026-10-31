@@ -21,31 +21,31 @@ var (
 	errIdeExists   = terr("srv.ide.existeDeja")
 )
 
-// pathUnder : a est b ou un descendant de b, par segments (jamais par préfixe de chaîne).
-func pathUnder(a, b string) bool {
-	r, err := filepath.Rel(b, a)
-	return err == nil && r != ".." && !strings.HasPrefix(r, ".."+string(filepath.Separator))
+// pathUnder : candidate est ancestor ou un descendant d'ancestor, par segments (jamais par préfixe de chaîne).
+func pathUnder(candidate, ancestor string) bool {
+	relative, err := filepath.Rel(ancestor, candidate)
+	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
 }
 
 // ideForbiddenRoot écarte comme racine le home (et ses ancêtres), la config Claude de chaque home et le dossier
 // d'auth de gld : un compte fs_read y lirait auth.db, auth.key et les identifiants Claude d'un autre home.
 func ideForbiddenRoot(dir string) bool {
-	forms := func(p string) []string {
-		p = filepath.Clean(p)
-		if r, err := filepath.EvalSymlinks(p); err == nil && r != p {
-			return []string{p, r}
+	forms := func(candidate string) []string {
+		candidate = filepath.Clean(candidate)
+		if resolved, evalErr := filepath.EvalSymlinks(candidate); evalErr == nil && resolved != candidate {
+			return []string{candidate, resolved}
 		}
-		return []string{p}
+		return []string{candidate}
 	}
 	// Sans $HOME résolu, rien ne prouve qu'une racine n'en est pas un ancêtre : tout est refusé.
-	h, err := os.UserHomeDir()
-	if err != nil || h == "" {
+	userHome, homeErr := os.UserHomeDir()
+	if homeErr != nil || userHome == "" {
 		return true
 	}
-	guarded := forms(h)
-	for _, d := range forms(dir) {
-		for _, h := range guarded {
-			if pathUnder(h, d) {
+	guarded := forms(userHome)
+	for _, dirForm := range forms(dir) {
+		for _, guardedForm := range guarded {
+			if pathUnder(guardedForm, dirForm) {
 				return true
 			}
 		}
@@ -53,25 +53,25 @@ func ideForbiddenRoot(dir string) bool {
 	cfgs := []string{cfgDir()}
 	homes := readHomes()
 	// Un enfant lit son propre fichier de homes : la config principale et ses homes viennent de la passerelle.
-	if m := os.Getenv(ideMainCfgEnv); m != "" && filepath.IsAbs(m) {
-		cfgs = append(cfgs, m)
-		homes = append(homes, readHomesFile(filepath.Join(m, homesFileName))...)
+	if mainConfig := os.Getenv(ideMainCfgEnv); mainConfig != "" && filepath.IsAbs(mainConfig) {
+		cfgs = append(cfgs, mainConfig)
+		homes = append(homes, readHomesFile(filepath.Join(mainConfig, homesFileName))...)
 	}
-	for _, hm := range homes {
-		if filepath.IsAbs(hm.Dir) {
-			cfgs = append(cfgs, hm.Dir)
+	for _, home := range homes {
+		if filepath.IsAbs(home.Dir) {
+			cfgs = append(cfgs, home.Dir)
 		}
 	}
-	var prot []string
-	for _, c := range cfgs {
-		prot = append(prot, forms(c)...)
+	var protected []string
+	for _, configRoot := range cfgs {
+		protected = append(protected, forms(configRoot)...)
 	}
-	if a, err := authDir(); err == nil && a != "" {
-		prot = append(prot, forms(a)...)
+	if authDirectory, authDirErr := authDir(); authDirErr == nil && authDirectory != "" {
+		protected = append(protected, forms(authDirectory)...)
 	}
-	for _, d := range forms(dir) {
-		for _, p := range prot {
-			if pathUnder(d, p) || pathUnder(p, d) {
+	for _, dirForm := range forms(dir) {
+		for _, protectedPath := range protected {
+			if pathUnder(dirForm, protectedPath) || pathUnder(protectedPath, dirForm) {
 				return true
 			}
 		}
@@ -90,15 +90,15 @@ func ideKnownDir(dir string) (string, bool) {
 	if knownRepo(dir) {
 		return dir, true
 	}
-	st := loadStore()
-	for _, d := range st.Dirs {
-		if d == dir {
+	store := loadStore()
+	for _, storedDir := range store.Dirs {
+		if storedDir == dir {
 			return dir, true
 		}
 	}
-	for _, p := range st.Projects {
-		for _, d := range p.Dirs {
-			if d == dir {
+	for _, storedProject := range store.Projects {
+		for _, storedDir := range storedProject.Dirs {
+			if storedDir == dir {
 				return dir, true
 			}
 		}
@@ -107,34 +107,34 @@ func ideKnownDir(dir string) (string, bool) {
 }
 
 func ideOpenRoot(dir string) (*os.Root, error) {
-	d, ok := ideKnownDir(dir)
-	if !ok {
+	knownDir, known := ideKnownDir(dir)
+	if !known {
 		return nil, errIdeDir
 	}
-	r, err := os.OpenRoot(d)
+	openedRoot, err := os.OpenRoot(knownDir)
 	if err != nil {
 		return nil, errIdeDir
 	}
-	return r, nil
+	return openedRoot, nil
 }
 
-func ideRel(p string, allowRoot bool) (string, error) {
-	if p == "" || strings.ContainsAny(p, "\x00\\") || strings.HasPrefix(p, "/") {
-		if p == "" && allowRoot {
+func ideRel(requestedPath string, allowRoot bool) (string, error) {
+	if requestedPath == "" || strings.ContainsAny(requestedPath, "\x00\\") || strings.HasPrefix(requestedPath, "/") {
+		if requestedPath == "" && allowRoot {
 			return ".", nil
 		}
 		return "", errIdePath
 	}
-	for _, s := range strings.Split(p, "/") {
-		if s == ".." {
+	for _, segment := range strings.Split(requestedPath, "/") {
+		if segment == ".." {
 			return "", errIdePath
 		}
 	}
-	c := path.Clean(p)
-	if c == "." && !allowRoot {
+	cleaned := path.Clean(requestedPath)
+	if cleaned == "." && !allowRoot {
 		return "", errIdePath
 	}
-	return c, nil
+	return cleaned, nil
 }
 
 // ideLstat refuse tout lien, même interne à la racine : os.Root ne bloque que les évasions.
@@ -142,53 +142,53 @@ func ideLstat(root *os.Root, rel string) (fs.FileInfo, error) {
 	if rel == "." {
 		return root.Lstat(".")
 	}
-	var fi fs.FileInfo
+	var fileInfo fs.FileInfo
 	parts := strings.Split(rel, "/")
-	for i := range parts {
+	for partIndex := range parts {
 		var err error
-		fi, err = root.Lstat(strings.Join(parts[:i+1], "/"))
+		fileInfo, err = root.Lstat(strings.Join(parts[:partIndex+1], "/"))
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
 				return nil, errIdeNotFound
 			}
 			return nil, err
 		}
-		if fi.Mode()&fs.ModeSymlink != 0 {
+		if fileInfo.Mode()&fs.ModeSymlink != 0 {
 			return nil, errIdeSymlink
 		}
 	}
-	return fi, nil
+	return fileInfo, nil
 }
 
-func ideFail(w http.ResponseWriter, err error) {
-	code, slug, out := ideErr(err)
-	writeErr(w, code, slug, out)
+func ideFail(responseWriter http.ResponseWriter, err error) {
+	code, slug, message := ideErr(err)
+	writeErr(responseWriter, code, slug, message)
 }
 
 // ideErr : statut, code et texte d'une erreur de l'IDE.
 func ideErr(err error) (int, string, string) {
-	code, slug, e := http.StatusInternalServerError, "internal", errIdeNotFound
+	code, slug, catalogErr := http.StatusInternalServerError, "internal", errIdeNotFound
 	switch {
 	case errors.Is(err, errIdeDir):
-		code, slug, e = 404, "not_found", errIdeDir
+		code, slug, catalogErr = 404, "not_found", errIdeDir
 	case errors.Is(err, errIdePath):
-		code, slug, e = 400, "bad_request", errIdePath
+		code, slug, catalogErr = 400, "bad_request", errIdePath
 	case errors.Is(err, errIdeSymlink), strings.Contains(err.Error(), "path escapes from parent"):
-		code, slug, e = 403, "forbidden", errIdeSymlink
+		code, slug, catalogErr = 403, "forbidden", errIdeSymlink
 	case errors.Is(err, errIdeNotFound):
-		code, slug, e = 404, "not_found", errIdeNotFound
+		code, slug, catalogErr = 404, "not_found", errIdeNotFound
 	case errors.Is(err, errIdeTooBig):
-		code, slug, e = 413, "too_large", errIdeTooBig
+		code, slug, catalogErr = 413, "too_large", errIdeTooBig
 	case errors.Is(err, errIdeBinary):
-		code, slug, e = 415, "unsupported", errIdeBinary
+		code, slug, catalogErr = 415, "unsupported", errIdeBinary
 	case errors.Is(err, errIdeConflict):
-		code, slug, e = 409, "conflict", errIdeConflict
+		code, slug, catalogErr = 409, "conflict", errIdeConflict
 	case errors.Is(err, errIdeExists):
-		code, slug, e = 409, "exists", errIdeExists
+		code, slug, catalogErr = 409, "exists", errIdeExists
 	}
-	out := e.Error()
+	message := catalogErr.Error()
 	if code == 500 {
-		out = L("srv.ide.erreur")
+		message = L("srv.ide.erreur")
 	}
-	return code, slug, out
+	return code, slug, message
 }

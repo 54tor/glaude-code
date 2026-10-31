@@ -24,20 +24,20 @@ func isLoopback(host string) bool {
 	if host == "localhost" {
 		return true
 	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
+	parsedIP := net.ParseIP(host)
+	return parsedIP != nil && parsedIP.IsLoopback()
 }
 
 // newToken : 24 octets aléatoires, en hexadécimal.
 func newToken() string {
-	b := make([]byte, 24)
-	rand.Read(b)
-	return hex.EncodeToString(b)
+	randomBytes := make([]byte, 24)
+	rand.Read(randomBytes)
+	return hex.EncodeToString(randomBytes)
 }
 
 // checkToken : un jeton fourni par l'utilisateur doit être assez long pour résister à l'essai systématique.
-func checkToken(t string) error {
-	if len(t) < 16 {
+func checkToken(token string) error {
+	if len(token) < 16 {
 		return terr("srv.listen.gldWebTokenCaracteres")
 	}
 	return nil
@@ -51,8 +51,8 @@ func takeToken(local bool) (token string, generated bool, err error) {
 	os.Unsetenv("GLD_WEB_TOKEN")
 	os.Unsetenv(childTokenEnv)
 	if childToken != "" {
-		if err := hideEnviron(); err != nil {
-			journal("hideEnviron : %v", err)
+		if hideErr := hideEnviron(); hideErr != nil {
+			journal("hideEnviron : %v", hideErr)
 		}
 	}
 	if token != "" {
@@ -75,81 +75,83 @@ func tokenShown(token string, generated bool) string {
 
 // wrongTokenPresented : la requête porte un jeton (cookie, Bearer ou ?token=) que withToken vient de refuser.
 // Sans cela, seul le formulaire était limité : Bearer, cookie et ?token= se devinaient à la vitesse du réseau.
-func wrongTokenPresented(r *http.Request) bool {
-	if _, err := r.Cookie(tokenCookie); err == nil {
+func wrongTokenPresented(request *http.Request) bool {
+	if _, err := request.Cookie(tokenCookie); err == nil {
 		return true
 	}
-	if _, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
+	if _, hasBearer := strings.CutPrefix(request.Header.Get("Authorization"), "Bearer "); hasBearer {
 		return true
 	}
-	return r.URL.Query().Has("token")
+	return request.URL.Query().Has("token")
 }
 
-func sameToken(a, b string) bool { return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1 }
+func sameToken(left, right string) bool {
+	return subtle.ConstantTimeCompare([]byte(left), []byte(right)) == 1
+}
 
 // withToken : exige le jeton, en cookie (posé par ?token=…, puis la requête est redirigée sans le jeton dans l'adresse)
 // ou en en-tête « Authorization: Bearer … » (curl).
 func withToken(token string, next http.Handler) http.Handler {
 	setDevKey(token)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if c, err := r.Cookie(tokenCookie); err == nil && sameToken(c.Value, token) {
-			next.ServeHTTP(w, r)
+	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		if cookie, cookieErr := request.Cookie(tokenCookie); cookieErr == nil && sameToken(cookie.Value, token) {
+			next.ServeHTTP(responseWriter, request)
 			return
 		}
-		if c, err := r.Cookie(devCookie); err == nil && deviceOK(c.Value) {
-			next.ServeHTTP(w, r)
+		if deviceCookie, deviceCookieErr := request.Cookie(devCookie); deviceCookieErr == nil && deviceOK(deviceCookie.Value) {
+			next.ServeHTTP(responseWriter, request)
 			return
 		}
-		if (r.Method == "GET" || r.Method == "HEAD") && publicAsset(r.URL.Path) {
-			next.ServeHTTP(w, r)
+		if (request.Method == "GET" || request.Method == "HEAD") && publicAsset(request.URL.Path) {
+			next.ServeHTTP(responseWriter, request)
 			return
 		}
-		if r.Method == "POST" && r.URL.Path == "/token-login" {
-			tokenLogin(w, r, token)
+		if request.Method == "POST" && request.URL.Path == "/token-login" {
+			tokenLogin(responseWriter, request, token)
 			return
 		}
-		if r.URL.Path == "/pair" { // confirmation et échange d'un code de jumelage, avant tout jeton
-			pairEntry(w, r, nil)
+		if request.URL.Path == "/pair" { // confirmation et échange d'un code de jumelage, avant tout jeton
+			pairEntry(responseWriter, request, nil)
 			return
 		}
-		if h, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok && sameToken(h, token) {
-			next.ServeHTTP(w, r)
+		if bearerToken, hasBearer := strings.CutPrefix(request.Header.Get("Authorization"), "Bearer "); hasBearer && sameToken(bearerToken, token) {
+			next.ServeHTTP(responseWriter, request)
 			return
 		}
-		if q := r.URL.Query(); sameToken(q.Get("token"), token) && q.Has("token") {
-			http.SetCookie(w, &http.Cookie{Name: tokenCookie, Value: token, Path: "/", MaxAge: 30 * 24 * 3600, HttpOnly: true, Secure: requestHTTPS(r), SameSite: http.SameSiteStrictMode})
-			q.Del("token")
-			u := url.URL{Path: "/" + strings.TrimLeft(r.URL.Path, "/"), RawQuery: q.Encode()} // jamais « //hôte » : redirection locale seulement
-			http.Redirect(w, r, u.String(), http.StatusSeeOther)
+		if query := request.URL.Query(); sameToken(query.Get("token"), token) && query.Has("token") {
+			http.SetCookie(responseWriter, &http.Cookie{Name: tokenCookie, Value: token, Path: "/", MaxAge: 30 * 24 * 3600, HttpOnly: true, Secure: requestHTTPS(request), SameSite: http.SameSiteStrictMode})
+			query.Del("token")
+			redirectURL := url.URL{Path: "/" + strings.TrimLeft(request.URL.Path, "/"), RawQuery: query.Encode()} // jamais « //hôte » : redirection locale seulement
+			http.Redirect(responseWriter, request, redirectURL.String(), http.StatusSeeOther)
 			return
 		}
-		if _, err := r.Cookie(tokenCookie); err == nil {
+		if _, staleCookieErr := request.Cookie(tokenCookie); staleCookieErr == nil {
 			// Jeton changé depuis : sans effacement, chaque requête de l'interface rouvrirait un essai et bloquerait l'adresse,
 			// /token-login compris.
-			http.SetCookie(w, &http.Cookie{Name: tokenCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: requestHTTPS(r), SameSite: http.SameSiteStrictMode})
+			http.SetCookie(responseWriter, &http.Cookie{Name: tokenCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: requestHTTPS(request), SameSite: http.SameSiteStrictMode})
 		}
-		if wrongTokenPresented(r) && !tokenTry(clientIP(r)) { // chaque jeton faux présenté compte, comme au formulaire
-			w.Header().Set("Retry-After", "60")
-			w.Header().Set("Cache-Control", "no-store")
-			if strings.HasPrefix(r.URL.Path, "/v1/") {
-				authMsg(w, http.StatusTooManyRequests, L("srv.token.tooMany"))
+		if wrongTokenPresented(request) && !tokenTry(clientIP(request)) { // chaque jeton faux présenté compte, comme au formulaire
+			responseWriter.Header().Set("Retry-After", "60")
+			responseWriter.Header().Set("Cache-Control", "no-store")
+			if strings.HasPrefix(request.URL.Path, "/v1/") {
+				authMsg(responseWriter, http.StatusTooManyRequests, L("srv.token.tooMany"))
 				return
 			}
-			http.Error(w, L("srv.token.tooMany"), http.StatusTooManyRequests)
+			http.Error(responseWriter, L("srv.token.tooMany"), http.StatusTooManyRequests)
 			return
 		}
 		// Navigateur ou PWA sans cookie : saisir le jeton plutôt qu'un 401 en texte. La racine sert toujours la page : iOS relit
 		// ses métadonnées sans Accept text/html (feuille de partage, écran d'accueil) et, sur un 401, dessine une lettre en guise d'icône.
-		if wantsPage(r) || (r.Method == "GET" && r.URL.Path == "/" && r.URL.RawQuery == "") {
-			tokenPage(w, http.StatusOK, "")
+		if wantsPage(request) || (request.Method == "GET" && request.URL.Path == "/" && request.URL.RawQuery == "") {
+			tokenPage(responseWriter, http.StatusOK, "")
 			return
 		}
-		w.Header().Set("Cache-Control", "no-store")
-		if strings.HasPrefix(r.URL.Path, "/v1/") {
-			authMsg(w, http.StatusUnauthorized, L("srv.listen.tokenRequired"))
+		responseWriter.Header().Set("Cache-Control", "no-store")
+		if strings.HasPrefix(request.URL.Path, "/v1/") {
+			authMsg(responseWriter, http.StatusUnauthorized, L("srv.listen.tokenRequired"))
 			return
 		}
-		http.Error(w, L("srv.listen.tokenRequired"), http.StatusUnauthorized)
+		http.Error(responseWriter, L("srv.listen.tokenRequired"), http.StatusUnauthorized)
 	})
 }
 
@@ -158,24 +160,24 @@ func withToken(token string, next http.Handler) http.Handler {
 // rootIcons : icônes du manifeste et favicon PNG, à la racine comme les génère RealFaviconGenerator.
 var rootIcons = []string{"/favicon-96x96.png", "/web-app-manifest-192x192.png", "/web-app-manifest-512x512.png"}
 
-func publicAsset(p string) bool {
-	if slices.Contains(rootIcons, p) {
+func publicAsset(requestPath string) bool {
+	if slices.Contains(rootIcons, requestPath) {
 		return true
 	}
-	return path.Clean(p) == p && (p == "/site.webmanifest" || p == "/favicon.ico" || p == "/apple-touch-icon.png" || p == "/apple-touch-icon-precomposed.png" || strings.HasPrefix(p, "/icons/"))
+	return path.Clean(requestPath) == requestPath && (requestPath == "/site.webmanifest" || requestPath == "/favicon.ico" || requestPath == "/apple-touch-icon.png" || requestPath == "/apple-touch-icon-precomposed.png" || strings.HasPrefix(requestPath, "/icons/"))
 }
 
 // withTokenOpen : en mode ouvert, withToken tel quel. En mode multi-utilisateur, le login remplace le jeton pour le navigateur :
 // ni cookie gld_token ni ?token=, le jeton ne vaut plus qu'en Bearer (tokenForChildren), jugé par le garde.
 func withTokenOpen(token string, next http.Handler) http.Handler {
-	tok := withToken(token, next)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r, d := reqMode(r)
-		if d.on || d.err != nil { // erreur : pas de jeton à juger, le handler refuse le service
-			next.ServeHTTP(w, r)
+	tokenHandler := withToken(token, next)
+	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		request, decision := reqMode(request)
+		if decision.on || decision.err != nil { // erreur : pas de jeton à juger, le handler refuse le service
+			next.ServeHTTP(responseWriter, request)
 			return
 		}
-		tok.ServeHTTP(w, r)
+		tokenHandler.ServeHTTP(responseWriter, request)
 	})
 }
 
@@ -183,9 +185,9 @@ func withTokenOpen(token string, next http.Handler) http.Handler {
 // Un jeton généré (écoute hors localhost sans GLD_WEB_TOKEN) ne vaut pas non plus : imprimé au démarrage, il donnerait
 // tous les droits sans mot de passe ni second facteur. Seul un jeton fixé par l'opérateur est accepté.
 func tokenForChildren(token string, generated bool) func(*http.Request) *Principal {
-	return func(r *http.Request) *Principal {
-		h, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if token == "" || generated || !ok || !sameToken(h, token) {
+	return func(request *http.Request) *Principal {
+		bearerToken, hasBearer := strings.CutPrefix(request.Header.Get("Authorization"), "Bearer ")
+		if token == "" || generated || !hasBearer || !sameToken(bearerToken, token) {
 			return nil
 		}
 		return &Principal{Token: true}
@@ -204,22 +206,22 @@ func tlsPair(cert, key string) (bool, error) {
 // sans jeton, l'adresse nue.
 func urlsFor(scheme, host, port, token string) []string {
 	hosts := []string{host}
-	if ip := net.ParseIP(host); ip != nil && ip.IsUnspecified() {
+	if parsedIP := net.ParseIP(host); parsedIP != nil && parsedIP.IsUnspecified() {
 		hosts = nil
 		addrs, _ := net.InterfaceAddrs()
-		for _, a := range addrs {
-			if n, ok := a.(*net.IPNet); ok && !n.IP.IsLoopback() && n.IP.To4() != nil {
-				hosts = append(hosts, n.IP.String())
+		for _, address := range addrs {
+			if network, isIPNet := address.(*net.IPNet); isIPNet && !network.IP.IsLoopback() && network.IP.To4() != nil {
+				hosts = append(hosts, network.IP.String())
 			}
 		}
 	}
-	var out []string
-	for _, h := range hosts {
-		u := scheme + "://" + net.JoinHostPort(h, port) + "/"
+	var urls []string
+	for _, hostName := range hosts {
+		link := scheme + "://" + net.JoinHostPort(hostName, port) + "/"
 		if token != "" {
-			u += "?token=" + token
+			link += "?token=" + token
 		}
-		out = append(out, u)
+		urls = append(urls, link)
 	}
-	return out
+	return urls
 }

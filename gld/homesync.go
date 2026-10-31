@@ -46,169 +46,177 @@ const (
 	syncFileMax  = 256 << 10
 	syncSkillMax = 2 << 20
 	syncPreview  = 4000
+	// syncDirMaxDepth : profondeur de dossiers parcourue sous rules/ et commands/.
+	syncDirMaxDepth   = 3
+	syncSkillMaxFiles = 100
 )
 
 func homeDir(name string) (string, error) {
 	if name == "" {
 		return cfgDir(), nil
 	}
-	if h, ok := homeByName(name); ok {
-		return h.Dir, nil
+	if home, found := homeByName(name); found {
+		return home.Dir, nil
 	}
 	return "", terr("srv.homesync.dossierDeConfigurationInconnu", "A1", name)
 }
 
 func syncSettings(dir string) (*omap, []byte, error) {
 	path := filepath.Join(dir, "settings.json")
-	if err := notSymlink(path); err != nil {
-		return nil, nil, err
+	if symlinkErr := notSymlink(path); symlinkErr != nil {
+		return nil, nil, symlinkErr
 	}
-	b, err := readTrusted(path)
-	if err != nil {
+	content, readErr := readTrusted(path)
+	if readErr != nil {
 		return newOmap(), nil, nil
 	}
-	if strings.TrimSpace(string(b)) == "" {
-		return newOmap(), b, nil
+	if strings.TrimSpace(string(content)) == "" {
+		return newOmap(), content, nil
 	}
-	v, err := parseOrdered(b)
-	if err != nil {
-		return nil, nil, terr("srv.homesync.estIllisible", "A1", path, "A2", err.Error())
+	parsed, readErr := parseOrdered(content)
+	if readErr != nil {
+		return nil, nil, terr("srv.homesync.estIllisible", "A1", path, "A2", readErr.Error())
 	}
-	o := asMap(v)
-	if o == nil {
+	settings := asMap(parsed)
+	if settings == nil {
 		return nil, nil, terr("srv.homesync.unObjetJsonEst", "A1", path)
 	}
-	return o, b, nil
+	return settings, content, nil
 }
 
-func cutSync(s string) string {
-	if len(s) > syncPreview {
-		return s[:syncPreview] + "\n…"
+func cutSync(text string) string {
+	if len(text) > syncPreview {
+		return text[:syncPreview] + "\n…"
 	}
-	return s
+	return text
 }
 
 // syncPickNeedsConfig : seuls CLAUDE.md et rules/*.md sont du texte inerte ; réglages, permissions, skills et commandes
 // font exécuter du code par Claude Code. Un identifiant non reconnu est traité comme tel.
 func syncPickNeedsConfig(id string) bool {
-	rel, ok := strings.CutPrefix(id, "file:")
-	if !ok || strings.Contains(rel, "\\") || path.Clean(rel) != rel {
+	rel, isFile := strings.CutPrefix(id, "file:")
+	isCleanPath := !strings.Contains(rel, "\\") && path.Clean(rel) == rel
+	if !isFile || !isCleanPath {
 		return true
 	}
-	return rel != "CLAUDE.md" && !(strings.HasPrefix(rel, "rules/") && strings.HasSuffix(rel, ".md"))
+	isRuleFile := strings.HasPrefix(rel, "rules/") && strings.HasSuffix(rel, ".md")
+	return rel != "CLAUDE.md" && !isRuleFile
 }
 
 // syncFile : fichiers texte copiables d'un dossier de configuration, par chemin relatif (CLAUDE.md, rules/*.md, commands/**.md).
 func syncFiles(dir string) map[string]string {
-	out := map[string]string{}
+	files := map[string]string{}
 	read := func(rel string) {
-		p := filepath.Join(dir, rel)
-		fi, err := os.Lstat(p)
-		if err != nil || !fi.Mode().IsRegular() || fi.Size() > syncFileMax {
+		filePath := filepath.Join(dir, rel)
+		fileInfo, lstatErr := os.Lstat(filePath)
+		if lstatErr != nil || !fileInfo.Mode().IsRegular() || fileInfo.Size() > syncFileMax {
 			return
 		}
-		if b, err := readTrusted(p); err == nil {
-			out[rel] = string(b)
+		if content, readErr := readTrusted(filePath); readErr == nil {
+			files[rel] = string(content)
 		}
 	}
 	read("CLAUDE.md")
 	for _, sub := range []string{"rules", "commands"} {
 		base := walkRoot(filepath.Join(dir, sub))
-		filepath.WalkDir(base, func(p string, d fs.DirEntry, err error) error {
-			if err != nil {
+		filepath.WalkDir(base, func(walkedPath string, entry fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
 				return nil
 			}
-			r, _ := filepath.Rel(base, p)
-			rel := filepath.Join(sub, r)
-			if d.IsDir() {
-				if strings.Count(rel, string(filepath.Separator)) > 3 || (p != base && strings.HasPrefix(d.Name(), ".")) {
+			relativeToBase, _ := filepath.Rel(base, walkedPath)
+			rel := filepath.Join(sub, relativeToBase)
+			if entry.IsDir() {
+				isTooDeep := strings.Count(rel, string(filepath.Separator)) > syncDirMaxDepth
+				isHiddenSubdir := walkedPath != base && strings.HasPrefix(entry.Name(), ".")
+				if isTooDeep || isHiddenSubdir {
 					return filepath.SkipDir
 				}
 				return nil
 			}
-			if strings.HasSuffix(d.Name(), ".md") && !strings.HasPrefix(d.Name(), ".") && syncRelOK(rel) {
+			if strings.HasSuffix(entry.Name(), ".md") && !strings.HasPrefix(entry.Name(), ".") && syncRelOK(rel) {
 				read(rel)
 			}
 			return nil
 		})
 	}
-	return out
+	return files
 }
 
 // syncSkills : pour chaque skill (dossier de skills/), ses fichiers réguliers et leur contenu. Un skill trop gros est ignoré.
 func syncSkills(dir string) map[string]map[string]string {
-	out := map[string]map[string]string{}
-	ents, _ := readDirTrusted(filepath.Join(dir, "skills"))
-	for _, e := range ents {
-		if !e.IsDir() || !syncSegRe.MatchString(e.Name()) {
+	skills := map[string]map[string]string{}
+	entries, _ := readDirTrusted(filepath.Join(dir, "skills"))
+	for _, entry := range entries {
+		if !entry.IsDir() || !syncSegRe.MatchString(entry.Name()) {
 			continue
 		}
-		root := walkRoot(filepath.Join(dir, "skills", e.Name()))
-		files, total, ok := map[string]string{}, int64(0), true
-		filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
+		root := walkRoot(filepath.Join(dir, "skills", entry.Name()))
+		files, total, withinLimits := map[string]string{}, int64(0), true
+		filepath.WalkDir(root, func(walkedPath string, walkedEntry fs.DirEntry, walkErr error) error {
+			if walkErr != nil || walkedEntry.IsDir() {
 				return nil
 			}
-			fi, err := d.Info()
-			if err != nil || !fi.Mode().IsRegular() {
+			fileInfo, walkErr := walkedEntry.Info()
+			if walkErr != nil || !fileInfo.Mode().IsRegular() {
 				return nil
 			}
-			if total += fi.Size(); total > syncSkillMax || len(files) >= 100 {
-				ok = false
+			total += fileInfo.Size()
+			if total > syncSkillMax || len(files) >= syncSkillMaxFiles {
+				withinLimits = false
 				return fs.SkipAll
 			}
-			rel, _ := filepath.Rel(root, p)
-			if b, err := readTrusted(p); err == nil && syncRelOK(rel) {
-				files[rel] = string(b)
+			rel, _ := filepath.Rel(root, walkedPath)
+			if content, readErr := readTrusted(walkedPath); readErr == nil && syncRelOK(rel) {
+				files[rel] = string(content)
 			}
 			return nil
 		})
-		if ok && len(files) > 0 {
-			out[e.Name()] = files
+		if withinLimits && len(files) > 0 {
+			skills[entry.Name()] = files
 		}
 	}
-	return out
+	return skills
 }
 
 // syncRelOK : un chemin relatif sans « .. », sans segment caché ni caractère inattendu.
 func syncRelOK(rel string) bool {
-	for _, s := range strings.Split(filepath.ToSlash(rel), "/") {
-		if !syncSegRe.MatchString(s) || strings.Contains(s, "..") {
+	for _, segment := range strings.Split(filepath.ToSlash(rel), "/") {
+		if !syncSegRe.MatchString(segment) || strings.Contains(segment, "..") {
 			return false
 		}
 	}
 	return true
 }
 
-func listText(l []string) string { return strings.Join(l, "\n") }
+func listText(lines []string) string { return strings.Join(lines, "\n") }
 
 // sameSet : mêmes éléments des deux côtés, sans égard à l'ordre ni aux doublons.
-func sameSet(a, b []string) bool {
-	set := func(l []string) map[string]bool {
-		m := map[string]bool{}
-		for _, x := range l {
-			m[x] = true
+func sameSet(left, right []string) bool {
+	set := func(values []string) map[string]bool {
+		members := map[string]bool{}
+		for _, value := range values {
+			members[value] = true
 		}
-		return m
+		return members
 	}
-	return maps.Equal(set(a), set(b))
+	return maps.Equal(set(left), set(right))
 }
 
 func skillText(files map[string]string) string {
-	var ks []string
-	for k, v := range files {
-		ks = append(ks, fmt.Sprintf("%s (%d o)", k, len(v)))
+	var lines []string
+	for name, content := range files {
+		lines = append(lines, fmt.Sprintf("%s (%d o)", name, len(content)))
 	}
-	sort.Strings(ks)
-	return listText(ks)
+	sort.Strings(lines)
+	return listText(lines)
 }
 
-func sameFiles(a, b map[string]string) bool {
-	if len(a) != len(b) {
+func sameFiles(left, right map[string]string) bool {
+	if len(left) != len(right) {
 		return false
 	}
-	for k, v := range a {
-		if w, ok := b[k]; !ok || w != v {
+	for name, leftContent := range left {
+		if rightContent, found := right[name]; !found || rightContent != leftContent {
 			return false
 		}
 	}
@@ -217,205 +225,235 @@ func sameFiles(a, b map[string]string) bool {
 
 // syncPlan compare deux dossiers de configuration, du point de vue de la copie de from vers to.
 func syncPlan(from, to string) ([]SyncItem, error) {
-	fd, err := homeDir(from)
+	fromDir, err := homeDir(from)
 	if err != nil {
 		return nil, err
 	}
-	td, err := homeDir(to)
+	toDir, err := homeDir(to)
 	if err != nil {
 		return nil, err
 	}
-	return syncPlanDirs(fd, td, false)
+	return syncPlanDirs(fromDir, toDir, false)
 }
 
 // syncPlanDirs est syncPlan sur deux dossiers déjà résolus ; skipPlugin écarte syncPluginKeys.
-func syncPlanDirs(fd, td string, skipPlugin bool) ([]SyncItem, error) {
-	if fd == td {
+func syncPlanDirs(fromDir, toDir string, skipPlugin bool) ([]SyncItem, error) {
+	if fromDir == toDir {
 		return nil, terr("srv.homesync.laSourceEtLa")
 	}
-	fs, _, err := syncSettings(fd)
+	sourceSettings, _, err := syncSettings(fromDir)
 	if err != nil {
 		return nil, err
 	}
-	ts, _, err := syncSettings(td)
+	targetSettings, _, err := syncSettings(toDir)
 	if err != nil {
 		return nil, err
 	}
 	items := []SyncItem{}
-	for _, k := range fs.keys {
-		if syncSkip[k] || secretKey.MatchString(k) || (skipPlugin && syncPluginKeys[k]) {
+	for _, key := range sourceSettings.keys {
+		isSkipped := syncSkip[key] || secretKey.MatchString(key) || (skipPlugin && syncPluginKeys[key])
+		if isSkipped {
 			continue
 		}
-		sv, _ := fs.get(k)
-		tv, has := ts.get(k)
-		it := SyncItem{ID: "set:" + k, Kind: "setting", Label: k, Status: "new", Merge: asMap(sv) != nil, From: cutSync(formatOrdered(maskSecrets(sv, k)))}
+		sourceValue, _ := sourceSettings.get(key)
+		targetValue, has := targetSettings.get(key)
+		syncItem := SyncItem{
+			ID:     "set:" + key,
+			Kind:   "setting",
+			Label:  key,
+			Status: "new",
+			Merge:  asMap(sourceValue) != nil,
+			From:   cutSync(formatOrdered(maskSecrets(sourceValue, key))),
+		}
 		if has {
-			it.To = cutSync(formatOrdered(maskSecrets(tv, k)))
-			it.Status = "diff"
-			if formatOrdered(sv) == formatOrdered(tv) {
-				it.Status = "same"
+			syncItem.To = cutSync(formatOrdered(maskSecrets(targetValue, key)))
+			syncItem.Status = "diff"
+			if formatOrdered(sourceValue) == formatOrdered(targetValue) {
+				syncItem.Status = "same"
 			}
 		}
-		if k == "hooks" || k == "statusLine" {
-			it.Risk = "exec"
+		if key == "hooks" || key == "statusLine" {
+			syncItem.Risk = "exec"
 		}
-		items = append(items, it)
+		items = append(items, syncItem)
 	}
 	for _, kind := range syncPermKind {
-		sv, _ := lookup(fs, "permissions", kind)
-		tv, _ := lookup(ts, "permissions", kind)
-		sl, tl := strList(sv), strList(tv)
-		if len(sl) == 0 {
+		sourceValue, _ := lookup(sourceSettings, "permissions", kind)
+		targetValue, _ := lookup(targetSettings, "permissions", kind)
+		sourceRules, targetRules := strList(sourceValue), strList(targetValue)
+		if len(sourceRules) == 0 {
 			continue
 		}
-		it := SyncItem{ID: "perm:" + kind, Kind: "perm", Label: "permissions." + kind, Status: "new", Merge: true, From: cutSync(listText(sl)), To: cutSync(listText(tl))}
-		if len(tl) > 0 {
-			it.Status = "diff"
-			if sameSet(sl, tl) {
-				it.Status = "same"
+		syncItem := SyncItem{
+			ID:     "perm:" + kind,
+			Kind:   "perm",
+			Label:  "permissions." + kind,
+			Status: "new",
+			Merge:  true,
+			From:   cutSync(listText(sourceRules)),
+			To:     cutSync(listText(targetRules)),
+		}
+		if len(targetRules) > 0 {
+			syncItem.Status = "diff"
+			if sameSet(sourceRules, targetRules) {
+				syncItem.Status = "same"
 			}
 		}
-		items = append(items, it)
+		items = append(items, syncItem)
 	}
-	sf, tf := syncFiles(fd), syncFiles(td)
+	sourceFiles, targetFiles := syncFiles(fromDir), syncFiles(toDir)
 	var rels []string
-	for r := range sf {
-		rels = append(rels, r)
+	for relativePath := range sourceFiles {
+		rels = append(rels, relativePath)
 	}
 	sort.Strings(rels)
-	for _, r := range rels {
-		it := SyncItem{ID: "file:" + filepath.ToSlash(r), Kind: "file", Label: filepath.ToSlash(r), Status: "new", From: cutSync(sf[r])}
-		if t, ok := tf[r]; ok {
-			it.To, it.Status = cutSync(t), "diff"
-			if t == sf[r] {
-				it.Status = "same"
+	for _, relativePath := range rels {
+		syncItem := SyncItem{
+			ID:     "file:" + filepath.ToSlash(relativePath),
+			Kind:   "file",
+			Label:  filepath.ToSlash(relativePath),
+			Status: "new",
+			From:   cutSync(sourceFiles[relativePath]),
+		}
+		if targetContent, found := targetFiles[relativePath]; found {
+			syncItem.To, syncItem.Status = cutSync(targetContent), "diff"
+			if targetContent == sourceFiles[relativePath] {
+				syncItem.Status = "same"
 			}
 		}
-		items = append(items, it)
+		items = append(items, syncItem)
 	}
-	ss, ts2 := syncSkills(fd), syncSkills(td)
+	sourceSkills, targetSkills := syncSkills(fromDir), syncSkills(toDir)
 	var names []string
-	for n := range ss {
-		names = append(names, n)
+	for name := range sourceSkills {
+		names = append(names, name)
 	}
 	sort.Strings(names)
-	for _, n := range names {
-		it := SyncItem{ID: "skill:" + n, Kind: "skill", Label: "skills/" + n, Status: "new", From: skillText(ss[n])}
-		if t, ok := ts2[n]; ok {
-			it.To, it.Status = skillText(t), "diff"
-			if sameFiles(ss[n], t) {
-				it.Status = "same"
+	for _, name := range names {
+		syncItem := SyncItem{
+			ID:     "skill:" + name,
+			Kind:   "skill",
+			Label:  "skills/" + name,
+			Status: "new",
+			From:   skillText(sourceSkills[name]),
+		}
+		if targetSkillFiles, found := targetSkills[name]; found {
+			syncItem.To, syncItem.Status = skillText(targetSkillFiles), "diff"
+			if sameFiles(sourceSkills[name], targetSkillFiles) {
+				syncItem.Status = "same"
 			}
 		}
-		items = append(items, it)
+		items = append(items, syncItem)
 	}
 	return items, nil
 }
 
 // syncBackup copie le fichier existant dans <cible>/gld-web-sync-backups/<horodatage>/<chemin relatif> avant de le remplacer.
 func syncBackup(dir, stamp, rel string) error {
-	b, err := readTrusted(filepath.Join(dir, rel))
+	content, err := readTrusted(filepath.Join(dir, rel))
 	if err != nil {
 		return nil // rien à sauvegarder : le fichier n'existe pas
 	}
-	return writeConfig(filepath.Join(dir, "gld-web-sync-backups", stamp, rel), b)
+	return writeConfig(filepath.Join(dir, "gld-web-sync-backups", stamp, rel), content)
 }
 
 // syncApply copie les éléments choisis de from vers to. Chaque élément est revalidé côté serveur (le navigateur ne désigne que des
 // identifiants du plan). Renvoie un résumé.
 func syncApply(from, to string, picks []SyncPick) (string, error) {
-	fd, err := homeDir(from)
+	fromDir, err := homeDir(from)
 	if err != nil {
 		return "", err
 	}
-	td, err := homeDir(to)
+	toDir, err := homeDir(to)
 	if err != nil {
 		return "", err
 	}
-	return syncApplyDirs(fd, td, picks, false)
+	return syncApplyDirs(fromDir, toDir, picks, false)
 }
 
 // syncApplyDirs est syncApply sur deux dossiers déjà résolus.
-func syncApplyDirs(fd, td string, picks []SyncPick, skipPlugin bool) (string, error) {
+func syncApplyDirs(fromDir, toDir string, picks []SyncPick, skipPlugin bool) (string, error) {
 	cfgMu.Lock()
 	defer cfgMu.Unlock()
-	plan, err := syncPlanDirs(fd, td, skipPlugin)
-	if err != nil {
-		return "", err
+	plan, setupErr := syncPlanDirs(fromDir, toDir, skipPlugin)
+	if setupErr != nil {
+		return "", setupErr
 	}
 	byID := map[string]SyncItem{}
-	for _, it := range plan {
-		byID[it.ID] = it
+	for _, planItem := range plan {
+		byID[planItem.ID] = planItem
 	}
-	fs, _, _ := syncSettings(fd)
-	ts, torig, err := syncSettings(td)
-	if err != nil {
-		return "", err
+	sourceSettings, _, _ := syncSettings(fromDir)
+	targetSettings, targetOriginal, setupErr := syncSettings(toDir)
+	if setupErr != nil {
+		return "", setupErr
 	}
-	if torig != nil && strings.TrimSpace(string(torig)) != "" && formatOrdered(ts)+"\n" != string(torig) {
+	targetWasHandEdited := targetOriginal != nil && strings.TrimSpace(string(targetOriginal)) != "" && formatOrdered(targetSettings)+"\n" != string(targetOriginal)
+	if targetWasHandEdited {
 		return "", terr("srv.homesync.leSettingsJsonDe")
 	}
-	sf, ss, tsk := syncFiles(fd), syncSkills(fd), syncSkills(td)
+	sourceFiles, sourceSkills, targetSkills := syncFiles(fromDir), syncSkills(fromDir), syncSkills(toDir)
 	stamp := time.Now().Format("20060102-150405.000000") // deux synchros dans la même seconde ne partagent pas leur sauvegarde
-	settingsTouched, n := false, 0
+	settingsTouched, copiedCount := false, 0
 	type fileOut struct {
 		rel, content string
 		exec         bool
 	}
 	var writes []fileOut
 	var removes []string // fichiers d'un skill remplacé absents de la source
-	for _, p := range picks {
-		it, ok := byID[p.ID]
-		if !ok || it.Status == "same" {
+	for _, pick := range picks {
+		planItem, found := byID[pick.ID]
+		if !found || planItem.Status == "same" {
 			continue
 		}
-		mode := p.Mode
-		if mode != "merge" || !it.Merge {
+		mode := pick.Mode
+		if mode != "merge" || !planItem.Merge {
 			mode = "replace"
 		}
-		kind, name, _ := strings.Cut(p.ID, ":")
+		kind, name, _ := strings.Cut(pick.ID, ":")
 		switch kind {
 		case "set":
-			sv, _ := fs.get(name)
-			tv, has := ts.get(name)
+			sourceValue, _ := sourceSettings.get(name)
+			targetValue, has := targetSettings.get(name)
 			if mode == "merge" && has {
-				if so, to := asMap(sv), asMap(tv); so != nil && to != nil {
-					for _, k := range so.keys {
-						if _, dup := to.get(k); !dup {
-							to.set(k, so.m[k])
+				if sourceObject, targetObject := asMap(sourceValue), asMap(targetValue); sourceObject != nil && targetObject != nil {
+					for _, key := range sourceObject.keys {
+						if _, dup := targetObject.get(key); !dup {
+							targetObject.set(key, sourceObject.m[key])
 						}
 					}
 					break
 				}
 			}
-			ts.set(name, sv)
+			targetSettings.set(name, sourceValue)
 		case "perm":
-			sv, _ := lookup(fs, "permissions", name)
-			tv, _ := lookup(ts, "permissions", name)
-			next := strList(sv)
+			sourceValue, _ := lookup(sourceSettings, "permissions", name)
+			targetValue, _ := lookup(targetSettings, "permissions", name)
+			next := strList(sourceValue)
 			if mode == "merge" {
 				have := map[string]bool{}
-				next = strList(tv)
-				for _, r := range next {
-					have[r] = true
+				next = strList(targetValue)
+				for _, rule := range next {
+					have[rule] = true
 				}
-				for _, r := range strList(sv) {
-					if !have[r] {
-						next = append(next, r)
+				for _, rule := range strList(sourceValue) {
+					if !have[rule] {
+						next = append(next, rule)
 					}
 				}
 			}
-			setRules(ts, name, next)
+			setRules(targetSettings, name, next)
 		case "file":
-			writes = append(writes, fileOut{filepath.FromSlash(name), sf[filepath.FromSlash(name)], false})
+			writes = append(writes, fileOut{filepath.FromSlash(name), sourceFiles[filepath.FromSlash(name)], false})
 		case "skill":
-			for rel, c := range ss[name] {
-				p := filepath.Join("skills", name, rel)
-				fi, err := os.Lstat(filepath.Join(fd, p)) // Lstat : un lien n'apporte jamais son mode
-				writes = append(writes, fileOut{p, c, err == nil && fi.Mode().IsRegular() && fi.Mode()&0o111 != 0})
+			for rel, content := range sourceSkills[name] {
+				skillFilePath := filepath.Join("skills", name, rel)
+				fileInfo, lstatErr := os.Lstat(filepath.Join(fromDir, skillFilePath)) // Lstat : un lien n'apporte jamais son mode
+				isExecutable := lstatErr == nil && fileInfo.Mode().IsRegular() && fileInfo.Mode()&executableBits != 0
+				writes = append(writes, fileOut{skillFilePath, content, isExecutable})
 			}
-			for rel := range tsk[name] {
-				if _, keep := ss[name][rel]; !keep {
+			for rel := range targetSkills[name] {
+				if _, keep := sourceSkills[name][rel]; !keep {
 					removes = append(removes, filepath.Join("skills", name, rel))
 				}
 			}
@@ -425,7 +463,7 @@ func syncApplyDirs(fd, td string, picks []SyncPick, skipPlugin bool) (string, er
 		if kind == "set" || kind == "perm" {
 			settingsTouched = true
 		}
-		n++
+		copiedCount++
 	}
 	// Tout est validé puis sauvegardé avant la première écriture : un refus n'écrit rien, une panne en cours de route laisse une
 	// sauvegarde complète de ce qui a pu changer.
@@ -433,8 +471,8 @@ func syncApplyDirs(fd, td string, picks []SyncPick, skipPlugin bool) (string, er
 	if settingsTouched {
 		touched = append(touched, "settings.json")
 	}
-	for _, w := range writes {
-		touched = append(touched, w.rel)
+	for _, pendingWrite := range writes {
+		touched = append(touched, pendingWrite.rel)
 	}
 	touched = append(touched, removes...)
 	for _, rel := range touched {
@@ -443,24 +481,24 @@ func syncApplyDirs(fd, td string, picks []SyncPick, skipPlugin bool) (string, er
 		}
 	}
 	for _, rel := range touched {
-		if err := syncBackup(td, stamp, rel); err != nil {
-			return "", terr("srv.homesync.sauvegardeImpossible", "A1", err.Error())
+		if backupErr := syncBackup(toDir, stamp, rel); backupErr != nil {
+			return "", terr("srv.homesync.sauvegardeImpossible", "A1", backupErr.Error())
 		}
 	}
 	if settingsTouched {
-		if err := writeConfig(filepath.Join(td, "settings.json"), []byte(formatOrdered(ts)+"\n")); err != nil {
-			return "", err
+		if settingsWriteErr := writeConfig(filepath.Join(toDir, "settings.json"), []byte(formatOrdered(targetSettings)+"\n")); settingsWriteErr != nil {
+			return "", settingsWriteErr
 		}
 	}
-	for _, w := range writes {
-		if err := writeConfigExec(filepath.Join(td, w.rel), []byte(w.content), w.exec); err != nil {
-			return "", err
+	for _, pendingWrite := range writes {
+		if fileWriteErr := writeConfigExec(filepath.Join(toDir, pendingWrite.rel), []byte(pendingWrite.content), pendingWrite.exec); fileWriteErr != nil {
+			return "", fileWriteErr
 		}
 	}
 	for _, rel := range removes {
-		if err := rRemove(td, filepath.Join(td, rel)); err != nil {
-			return "", err
+		if removeErr := rRemove(toDir, filepath.Join(toDir, rel)); removeErr != nil {
+			return "", removeErr
 		}
 	}
-	return L("srv.homesync.copied", "A1", n, "A2", filepath.Join(td, "gld-web-sync-backups", stamp)), nil
+	return L("srv.homesync.copied", "A1", copiedCount, "A2", filepath.Join(toDir, "gld-web-sync-backups", stamp)), nil
 }

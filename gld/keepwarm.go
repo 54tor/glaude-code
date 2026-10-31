@@ -22,6 +22,10 @@ const (
 	warmMaxPings  = 24
 	warmDefaultMx = 6
 	pingPrompt    = "Ping automatique de maintien du cache : réponds uniquement « ok »."
+	// warmMinPingGapSeconds : écart minimal entre deux pings d'une même session.
+	warmMinPingGapSeconds = 240
+	warmErrorMaxLength    = 200
+	keepWarmBodyMax       = 1 << 10
 )
 
 type WarmState struct {
@@ -43,34 +47,35 @@ var (
 func warmFile() string { return filepath.Join(cfgDir(), "gld-web-keepwarm.json") }
 
 func warmLoad() {
-	b, err := readTrusted(warmFile())
+	content, err := readTrusted(warmFile())
 	if err != nil {
 		return
 	}
-	m := map[string]*WarmState{}
-	if json.Unmarshal(b, &m) != nil {
+	states := map[string]*WarmState{}
+	if json.Unmarshal(content, &states) != nil {
 		return
 	}
-	for id, s := range m {
-		if idRe.MatchString(id) && s != nil && s.Max > 0 && s.Max <= warmMaxPings {
-			warmState[id] = s
+	for sessionID, state := range states {
+		isValidState := idRe.MatchString(sessionID) && state != nil && state.Max > 0 && state.Max <= warmMaxPings
+		if isValidState {
+			warmState[sessionID] = state
 		}
 	}
 }
 
 func warmSave() {
-	b, _ := json.MarshalIndent(warmState, "", "  ")
-	if err := rWriteAtomic(cfgDir(), warmFile(), b, 0o600); err != nil {
+	encoded, _ := json.MarshalIndent(warmState, "", "  ")
+	if err := rWriteAtomic(cfgDir(), warmFile(), encoded, 0o600); err != nil {
 		journal("keepwarm-save : %v", err)
 	}
 }
 
 // sessionMtime : date du dernier message d'une session connue.
-func sessionMtime(id string) (float64, bool) {
-	for _, g := range sessions() {
-		for _, s := range g.Sessions {
-			if s.ID == id {
-				return s.Mtime, true
+func sessionMtime(sessionID string) (float64, bool) {
+	for _, group := range sessions() {
+		for _, session := range group.Sessions {
+			if session.ID == sessionID {
+				return session.Mtime, true
 			}
 		}
 	}
@@ -82,39 +87,39 @@ func closedNote() string { return L("srv.keepwarm.closedNote") }
 // warmTick : un passage sur les sessions maintenues. now est injecté pour les tests.
 func warmTick(now time.Time) {
 	warmMu.Lock()
-	var ids []string
-	for id, s := range warmState {
-		if s.On {
-			ids = append(ids, id)
+	var sessionIDs []string
+	for sessionID, state := range warmState {
+		if state.On {
+			sessionIDs = append(sessionIDs, sessionID)
 		}
 	}
 	warmMu.Unlock()
-	if len(ids) == 0 {
+	if len(sessionIDs) == 0 {
 		return
 	}
-	mt := map[string]float64{}
-	for _, g := range sessions() {
-		for _, s := range g.Sessions {
-			mt[s.ID] = s.Mtime
+	modifiedTimes := map[string]float64{}
+	for _, group := range sessions() {
+		for _, session := range group.Sessions {
+			modifiedTimes[session.ID] = session.Mtime
 		}
 	}
 	open := liveSessions() // nil : on ne sait pas, on ne pingue pas une session peut-être ouverte
 	idle := map[string]bool{}
-	for _, id := range waiting() {
-		idle[id] = true
+	for _, sessionID := range waiting() {
+		idle[sessionID] = true
 	}
-	for _, id := range ids {
+	for _, sessionID := range sessionIDs {
 		warmMu.Lock()
-		s := warmState[id]
-		on := s != nil && s.On // arrêtée pendant les pings précédents de ce passage
+		state := warmState[sessionID]
+		stillOn := state != nil && state.On // arrêtée pendant les pings précédents de ce passage
 		warmMu.Unlock()
-		if !on {
+		if !stillOn {
 			continue
 		}
-		m, known := mt[id]
+		modifiedTime, known := modifiedTimes[sessionID]
 		stop := func(note string) {
 			warmMu.Lock()
-			s.On, s.Note = false, note
+			state.On, state.Note = false, note
 			warmSave()
 			warmMu.Unlock()
 		}
@@ -122,37 +127,38 @@ func warmTick(now time.Time) {
 			stop(L("srv.keepwarm.notFound"))
 			continue
 		}
-		left := cacheTTL - now.Sub(time.Unix(int64(m), 0))
-		if left <= 0 {
+		remaining := cacheTTL - now.Sub(time.Unix(int64(modifiedTime), 0))
+		if remaining <= 0 {
 			stop(L("srv.keepwarm.alreadyCold"))
 			continue
 		}
-		if left >= warmBelow || now.Unix()-s.LastPing < 240 {
+		pingedRecently := now.Unix()-state.LastPing < warmMinPingGapSeconds
+		if remaining >= warmBelow || pingedRecently {
 			continue
 		}
 		if open == nil {
 			continue
 		}
-		if !open[id] {
+		if !open[sessionID] {
 			stop(closedNote())
 			continue
 		}
-		if !idle[id] {
+		if !idle[sessionID] {
 			continue // elle travaille : son activité garde le cache chaud
 		}
-		if s.Pings >= s.Max {
+		if state.Pings >= state.Max {
 			stop(L("srv.keepwarm.pingLimit"))
 			continue
 		}
-		err := warmPing(id)
-		journal("keepwarm %s : %v", id, errOr(err))
+		err := warmPing(sessionID)
+		journal("keepwarm %s : %v", sessionID, errOr(err))
 		warmMu.Lock()
-		s.LastPing = now.Unix()
+		state.LastPing = now.Unix()
 		if err != nil {
-			s.Note = L("srv.keepwarm.pingFailed", "A1", cut(err.Error(), 200))
+			state.Note = L("srv.keepwarm.pingFailed", "A1", cut(err.Error(), warmErrorMaxLength))
 		} else {
-			s.Pings++
-			s.Note = ""
+			state.Pings++
+			state.Note = ""
 		}
 		warmSave()
 		warmMu.Unlock()
@@ -160,13 +166,13 @@ func warmTick(now time.Time) {
 }
 
 func keepWarmLoop(every time.Duration) {
-	t := time.NewTicker(every)
-	defer t.Stop()
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-homeCtx.Done():
 			return
-		case <-t.C:
+		case <-ticker.C:
 			warmTick(time.Now())
 		}
 	}
@@ -178,37 +184,39 @@ func routesKeepWarm(mux *http.ServeMux) {
 		warmLoad()
 		warmMu.Unlock()
 	})
-	mux.HandleFunc("GET /v1/keepwarm", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/keepwarm", func(responseWriter http.ResponseWriter, request *http.Request) {
 		warmMu.Lock()
 		defer warmMu.Unlock()
-		writeJSON(w, 200, map[string]any{"items": warmState, "ttl": int(cacheTTL / time.Second), "below": int(warmBelow / time.Second)})
+		writeJSON(responseWriter, http.StatusOK, map[string]any{"items": warmState, "ttl": int(cacheTTL / time.Second), "below": int(warmBelow / time.Second)})
 	})
-	mux.HandleFunc("PUT /v1/keepwarm", func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
+	mux.HandleFunc("PUT /v1/keepwarm", func(responseWriter http.ResponseWriter, request *http.Request) {
+		var body struct {
 			Dir, ID string
 			On      bool
 			Max     int
 			Reheat  bool // session au cache froid : accepte d'en payer la reconstruction par un premier ping
 		}
-		if !decodeBody(w, r, &req, 1<<10) {
+		if !decodeBody(responseWriter, request, &body, keepWarmBodyMax) {
 			return
 		}
-		if _, ok := transcript(req.Dir, req.ID); !ok {
-			writeErr(w, http.StatusNotFound, "not_found", L("srv.chat.sessionInvalide"))
+		if _, exists := transcript(body.Dir, body.ID); !exists {
+			writeErr(responseWriter, http.StatusNotFound, "not_found", L("srv.chat.sessionInvalide"))
 			return
 		}
 		reheated := false
-		if req.On { // hors verrou : `claude agents` prend du temps
-			if open := liveSessions(); open != nil && !open[req.ID] {
-				writeErr(w, http.StatusConflict, "conflict", L("srv.keepwarm.sessionFermeeRouvrezLa"))
+		if body.On { // hors verrou : `claude agents` prend du temps
+			if open := liveSessions(); open != nil && !open[body.ID] {
+				writeErr(responseWriter, http.StatusConflict, "conflict", L("srv.keepwarm.sessionFermeeRouvrezLa"))
 				return
 			}
 			// Reconstruire un cache froid coûte cher : le premier ping n'est envoyé que sur demande explicite (Reheat).
-			if m, known := sessionMtime(req.ID); req.Reheat && known && time.Since(time.Unix(int64(m), 0)) >= cacheTTL {
-				err := warmPing(req.ID) // le premier tour reconstruit le cache, le maintien prend ensuite le relais
-				journal("keepwarm-reheat %s : %v", req.ID, errOr(err))
+			modifiedTime, known := sessionMtime(body.ID)
+			isCold := known && time.Since(time.Unix(int64(modifiedTime), 0)) >= cacheTTL
+			if body.Reheat && isCold {
+				err := warmPing(body.ID) // le premier tour reconstruit le cache, le maintien prend ensuite le relais
+				journal("keepwarm-reheat %s : %v", body.ID, errOr(err))
 				if err != nil {
-					writeErr(w, http.StatusBadGateway, "upstream_failed", L("srv.keepwarm.pingFailed", "A1", cut(err.Error(), 200)))
+					writeErr(responseWriter, http.StatusBadGateway, "upstream_failed", L("srv.keepwarm.pingFailed", "A1", cut(err.Error(), warmErrorMaxLength)))
 					return
 				}
 				reheated = true
@@ -216,25 +224,25 @@ func routesKeepWarm(mux *http.ServeMux) {
 		}
 		warmMu.Lock()
 		defer warmMu.Unlock()
-		s := warmState[req.ID]
-		if !req.On {
-			if s != nil {
-				s.On, s.Note = false, ""
+		state := warmState[body.ID]
+		if !body.On {
+			if state != nil {
+				state.On, state.Note = false, ""
 				warmSave()
 			}
-			writeJSON(w, 200, map[string]any{"message": L("srv.keepwarm.maintienAuChaudArrete")})
+			writeJSON(responseWriter, http.StatusOK, map[string]any{"message": L("srv.keepwarm.maintienAuChaudArrete")})
 			return
 		}
-		if req.Max <= 0 {
-			req.Max = warmDefaultMx
+		if body.Max <= 0 {
+			body.Max = warmDefaultMx
 		}
-		req.Max = min(req.Max, warmMaxPings)
-		ns := &WarmState{Dir: req.Dir, On: true, Max: req.Max}
+		body.Max = min(body.Max, warmMaxPings)
+		newState := &WarmState{Dir: body.Dir, On: true, Max: body.Max}
 		if reheated {
-			ns.Pings, ns.LastPing = 1, time.Now().Unix()
+			newState.Pings, newState.LastPing = 1, time.Now().Unix()
 		}
-		warmState[req.ID] = ns
+		warmState[body.ID] = newState
 		warmSave()
-		writeJSON(w, 200, map[string]any{"message": L("srv.keepwarm.maintienAuChaudActive")})
+		writeJSON(responseWriter, http.StatusOK, map[string]any{"message": L("srv.keepwarm.maintienAuChaudActive")})
 	})
 }

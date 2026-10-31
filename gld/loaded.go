@@ -25,16 +25,20 @@ type loadEvent struct {
 	Trigger string   `json:"trigger,omitempty"` // fichier dont l'accès a déclenché le chargement
 }
 
-const loadedMax = 4 << 20 // au-delà, on ne garde que les derniers 2 Mo
+const (
+	loadedMax          = 4 << 20 // au-delà, on ne garde que les derniers 2 Mo
+	loadedKeep         = loadedMax / 2
+	loadedHookInputMax = 1 << 16
+)
 
 // loadedReadable : le chemin réel (liens suivis) d'un fichier chargé se lit seulement dans les .md de la config Claude
 // ou sous un dossier connu de gld. Un @import de CLAUDE.md vers ~/.ssh/… figure dans le journal du hook sans en devenir lisible.
 func loadedReadable(real string) bool {
-	if cfg, err := filepath.EvalSymlinks(cfgDir()); err == nil && pathUnder(real, cfg) {
+	if resolvedConfig, err := filepath.EvalSymlinks(cfgDir()); err == nil && pathUnder(real, resolvedConfig) {
 		return strings.EqualFold(filepath.Ext(real), ".md")
 	}
-	for d := filepath.Dir(real); d != filepath.Dir(d); d = filepath.Dir(d) {
-		if _, ok := ideKnownDir(d); ok {
+	for ancestor := filepath.Dir(real); ancestor != filepath.Dir(ancestor); ancestor = filepath.Dir(ancestor) {
+		if _, known := ideKnownDir(ancestor); known {
 			return true
 		}
 	}
@@ -45,8 +49,8 @@ func loadedFile() string { return filepath.Join(cfgDir(), "gld-web-loaded.jsonl"
 
 // runLoaded lit l'entrée du hook (JSON sur stdin) et l'ajoute au journal. Jamais d'échec visible : un hook ne doit
 // pas gêner une session.
-func runLoaded(in io.Reader) int {
-	var h struct {
+func runLoaded(input io.Reader) int {
+	var hookInput struct {
 		Session string   `json:"session_id"`
 		File    string   `json:"file_path"`
 		Type    string   `json:"memory_type"`
@@ -54,34 +58,42 @@ func runLoaded(in io.Reader) int {
 		Globs   []string `json:"globs"`
 		Trigger string   `json:"trigger_file_path"`
 	}
-	if json.NewDecoder(io.LimitReader(in, 1<<16)).Decode(&h) != nil || h.File == "" {
+	if json.NewDecoder(io.LimitReader(input, loadedHookInputMax)).Decode(&hookInput) != nil || hookInput.File == "" {
 		return 0
 	}
-	line, _ := json.Marshal(loadEvent{time.Now().Unix(), h.Session, h.File, h.Type, h.Reason, h.Globs, h.Trigger})
+	line, _ := json.Marshal(loadEvent{
+		At:      time.Now().Unix(),
+		Session: hookInput.Session,
+		File:    hookInput.File,
+		Type:    hookInput.Type,
+		Reason:  hookInput.Reason,
+		Globs:   hookInput.Globs,
+		Trigger: hookInput.Trigger,
+	})
 	appendLoaded(append(line, '\n'))
 	return 0
 }
 
 func appendLoaded(line []byte) {
-	p := loadedFile()
-	if st, err := os.Stat(p); err == nil && st.Size() > loadedMax {
-		if b, err := os.ReadFile(p); err == nil && len(b) > loadedMax/2 { // le fichier a pu raccourcir depuis le Stat
-			b = b[len(b)-loadedMax/2:]
-			for i, c := range b { // on repart au début d'une ligne
-				if c == '\n' {
-					b = b[i+1:]
+	logPath := loadedFile()
+	if fileInfo, statErr := os.Stat(logPath); statErr == nil && fileInfo.Size() > loadedMax {
+		if content, readErr := os.ReadFile(logPath); readErr == nil && len(content) > loadedKeep { // le fichier a pu raccourcir depuis le Stat
+			content = content[len(content)-loadedKeep:]
+			for byteIndex, byteValue := range content { // on repart au début d'une ligne
+				if byteValue == '\n' {
+					content = content[byteIndex+1:]
 					break
 				}
 			}
-			os.WriteFile(p, b, 0o600)
+			os.WriteFile(logPath, content, 0o600)
 		}
 	}
-	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	file, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return
 	}
-	defer f.Close()
-	f.Write(line)
+	defer file.Close()
+	file.Write(line)
 }
 
 var (
@@ -97,48 +109,48 @@ var (
 func readLoaded() []loadEvent {
 	loadedMu.Lock()
 	defer loadedMu.Unlock()
-	f, err := openTrusted(loadedFile())
+	file, err := openTrusted(loadedFile())
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
-	st, err := f.Stat()
-	if err != nil || !st.Mode().IsRegular() {
+	defer file.Close()
+	fileInfo, err := file.Stat()
+	if err != nil || !fileInfo.Mode().IsRegular() {
 		return nil
 	}
-	if loadedCache.size == st.Size() && loadedCache.mtime.Equal(st.ModTime()) {
+	if loadedCache.size == fileInfo.Size() && loadedCache.mtime.Equal(fileInfo.ModTime()) {
 		return loadedCache.ev
 	}
-	b, err := io.ReadAll(io.LimitReader(f, loadedMax+1))
+	content, err := io.ReadAll(io.LimitReader(file, loadedMax+1))
 	if err != nil {
 		return nil
 	}
-	var ev []loadEvent
-	for _, l := range splitLines(b) {
-		var e loadEvent
-		if json.Unmarshal(l, &e) == nil && e.File != "" {
-			ev = append(ev, e)
+	var events []loadEvent
+	for _, rawLine := range splitLines(content) {
+		var event loadEvent
+		if json.Unmarshal(rawLine, &event) == nil && event.File != "" {
+			events = append(events, event)
 		}
 	}
-	loadedCache.size, loadedCache.mtime, loadedCache.ev = st.Size(), st.ModTime(), ev
-	return ev
+	loadedCache.size, loadedCache.mtime, loadedCache.ev = fileInfo.Size(), fileInfo.ModTime(), events
+	return events
 }
 
-func splitLines(b []byte) [][]byte {
-	var out [][]byte
+func splitLines(content []byte) [][]byte {
+	var lines [][]byte
 	start := 0
-	for i, c := range b {
-		if c == '\n' {
-			if i > start {
-				out = append(out, b[start:i])
+	for byteIndex, byteValue := range content {
+		if byteValue == '\n' {
+			if byteIndex > start {
+				lines = append(lines, content[start:byteIndex])
 			}
-			start = i + 1
+			start = byteIndex + 1
 		}
 	}
-	if start < len(b) {
-		out = append(out, b[start:])
+	if start < len(content) {
+		lines = append(lines, content[start:])
 	}
-	return out
+	return lines
 }
 
 // FileLoads : combien de sessions ont chargé ce fichier, et quand pour la dernière fois.
@@ -147,30 +159,32 @@ type FileLoads struct {
 	Last     int64 `json:"last"`
 }
 
-func loadsByFile(ev []loadEvent) map[string]FileLoads {
+func loadsByFile(events []loadEvent) map[string]FileLoads {
 	seen := map[string]map[string]bool{}
-	out := map[string]FileLoads{}
-	for _, e := range ev {
-		if seen[e.File] == nil {
-			seen[e.File] = map[string]bool{}
+	byFile := map[string]FileLoads{}
+	for _, event := range events {
+		if seen[event.File] == nil {
+			seen[event.File] = map[string]bool{}
 		}
-		seen[e.File][e.Session] = true
-		o := out[e.File]
-		o.Last = max(o.Last, e.At)
-		o.Sessions = len(seen[e.File])
-		out[e.File] = o
+		seen[event.File][event.Session] = true
+		loads := byFile[event.File]
+		loads.Last = max(loads.Last, event.At)
+		loads.Sessions = len(seen[event.File])
+		byFile[event.File] = loads
 	}
-	return out
+	return byFile
 }
 
 // loadsOfSession : les fichiers chargés par une session, du plus ancien au plus récent, avec leurs raisons.
-func loadsOfSession(ev []loadEvent, id string) []loadEvent {
-	var out []loadEvent
-	for _, e := range ev {
-		if e.Session == id {
-			out = append(out, e)
+func loadsOfSession(events []loadEvent, sessionID string) []loadEvent {
+	var loads []loadEvent
+	for _, event := range events {
+		if event.Session == sessionID {
+			loads = append(loads, event)
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].At < out[j].At })
-	return out
+	sort.SliceStable(loads, func(leftIndex, rightIndex int) bool {
+		return loads[leftIndex].At < loads[rightIndex].At
+	})
+	return loads
 }

@@ -29,9 +29,11 @@ var (
 	ideIdleTTL      = 2 * time.Minute
 	idePing         = 25 * time.Second
 	ideNewWatcher   = fsnotify.NewWatcher
-	ideWatchAdd     = func(fw *fsnotify.Watcher, p string) error { return fw.Add(p) }
-	ideSubBuf       = 256
-	ideTreeBudget   = time.Second
+	ideWatchAdd     = func(watcher *fsnotify.Watcher, dirPath string) error {
+		return watcher.Add(dirPath)
+	}
+	ideSubBuf     = 256
+	ideTreeBudget = time.Second
 )
 
 var ideResync = ideEvent{Type: "resync"}
@@ -79,283 +81,293 @@ var (
 // ideWS ne prend jamais w.mu sous ideWSMu : un lot long sur un espace bloquerait l'ouverture de tous les autres.
 func ideWS(dir string) (*ideWorkspace, error) {
 	ideWSMu.Lock()
-	if w := ideWorkspaces[dir]; w != nil {
+	if existing := ideWorkspaces[dir]; existing != nil {
 		ideWSMu.Unlock()
-		w.mu.Lock()
-		closed := w.closed
+		existing.mu.Lock()
+		closed := existing.closed
 		if !closed {
-			w.touchLocked()
+			existing.touchLocked()
 		}
-		w.mu.Unlock()
+		existing.mu.Unlock()
 		if closed { // libéré entre-temps : expire et ideCloseAll l'ont déjà retiré de la table
 			return ideWS(dir)
 		}
-		return w, nil
+		return existing, nil
 	}
 	defer ideWSMu.Unlock()
 	root, err := ideOpenRoot(dir)
 	if err != nil {
 		return nil, err
 	}
-	w := &ideWorkspace{dir: dir, root: root, done: make(chan struct{}), subs: map[*ideSub]bool{},
-		idxDirs: map[string]bool{}, declared: map[string]int{}, snaps: map[string]map[string]ideSig{}}
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.timer = time.AfterFunc(ideIdleTTL, w.expire)
-	w.touchLocked()
-	if fw, err := ideNewWatcher(); err != nil {
-		w.fallbackLocked()
-	} else {
-		w.watcher = fw
-		go w.loop(fw, ideDebounce)
+	workspace := &ideWorkspace{
+		dir:      dir,
+		root:     root,
+		done:     make(chan struct{}),
+		subs:     map[*ideSub]bool{},
+		idxDirs:  map[string]bool{},
+		declared: map[string]int{},
+		snaps:    map[string]map[string]ideSig{},
 	}
-	ideWorkspaces[dir] = w
-	return w, nil
+	workspace.mu.Lock()
+	defer workspace.mu.Unlock()
+	workspace.timer = time.AfterFunc(ideIdleTTL, workspace.expire)
+	workspace.touchLocked()
+	if watcher, watcherErr := ideNewWatcher(); watcherErr != nil {
+		workspace.fallbackLocked()
+	} else {
+		workspace.watcher = watcher
+		go workspace.loop(watcher, ideDebounce)
+	}
+	ideWorkspaces[dir] = workspace
+	return workspace, nil
 }
 
 // ideCloseAll ferme tous les espaces (arrêt du serveur, fin de test) : leurs flux /v1/fs/watch se terminent.
 func ideCloseAll() {
 	ideWSMu.Lock()
 	defer ideWSMu.Unlock()
-	for d, w := range ideWorkspaces {
-		w.mu.Lock()
-		w.closeLocked()
-		w.mu.Unlock()
-		delete(ideWorkspaces, d)
+	for dir, workspace := range ideWorkspaces {
+		workspace.mu.Lock()
+		workspace.closeLocked()
+		workspace.mu.Unlock()
+		delete(ideWorkspaces, dir)
 	}
 }
 
-func (w *ideWorkspace) touchLocked() {
-	w.last = time.Now()
-	if w.timer != nil {
-		w.timer.Reset(ideIdleTTL)
+func (workspace *ideWorkspace) touchLocked() {
+	workspace.last = time.Now()
+	if workspace.timer != nil {
+		workspace.timer.Reset(ideIdleTTL)
 	}
 }
 
-func (w *ideWorkspace) expire() {
+func (workspace *ideWorkspace) expire() {
 	ideWSMu.Lock()
 	defer ideWSMu.Unlock()
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if w.closed || len(w.subs) > 0 {
+	workspace.mu.Lock()
+	defer workspace.mu.Unlock()
+	if workspace.closed || len(workspace.subs) > 0 {
 		return
 	}
-	if d := ideIdleTTL - time.Since(w.last); d > 0 {
-		w.timer.Reset(d)
+	if remaining := ideIdleTTL - time.Since(workspace.last); remaining > 0 {
+		workspace.timer.Reset(remaining)
 		return
 	}
-	w.closeLocked()
-	if ideWorkspaces[w.dir] == w {
-		delete(ideWorkspaces, w.dir)
+	workspace.closeLocked()
+	if ideWorkspaces[workspace.dir] == workspace {
+		delete(ideWorkspaces, workspace.dir)
 	}
 }
 
-func (w *ideWorkspace) closeLocked() {
-	if w.closed {
+func (workspace *ideWorkspace) closeLocked() {
+	if workspace.closed {
 		return
 	}
-	w.closed = true
-	w.timer.Stop()
-	if w.watcher != nil {
-		w.watcher.Close()
-		w.watcher = nil
+	workspace.closed = true
+	workspace.timer.Stop()
+	if workspace.watcher != nil {
+		workspace.watcher.Close()
+		workspace.watcher = nil
 	}
-	w.root.Close()
-	close(w.done)
+	workspace.root.Close()
+	close(workspace.done)
 	// Plus rien n'écrit : flushLocked et fallbackLocked s'arrêtent sur w.closed.
-	for s := range w.subs {
-		close(s.ch)
+	for subscriber := range workspace.subs {
+		close(subscriber.ch)
 	}
-	clear(w.subs)
+	clear(workspace.subs)
 }
 
 // reopen sert l'appelant qui a obtenu l'espace juste avant sa libération.
-func (w *ideWorkspace) reopen() *ideWorkspace {
-	nw, err := ideWS(w.dir)
+func (workspace *ideWorkspace) reopen() *ideWorkspace {
+	reopened, err := ideWS(workspace.dir)
 	if err != nil {
 		return nil
 	}
-	return nw
+	return reopened
 }
 
-func (w *ideWorkspace) Index() ([]ideIndexEntry, string) {
-	ix := w.idx()
-	return ix.entries, ix.state
+func (workspace *ideWorkspace) Index() ([]ideIndexEntry, string) {
+	index := workspace.idx()
+	return index.entries, index.state
 }
 
 // idx lance la construction unique au premier appel, puis une nouvelle après un échec ; ne bloque jamais.
-func (w *ideWorkspace) idx() ideIdx {
-	w.mu.Lock()
-	if w.closed {
-		w.mu.Unlock()
-		if nw := w.reopen(); nw != nil {
-			return nw.idx()
+func (workspace *ideWorkspace) idx() ideIdx {
+	workspace.mu.Lock()
+	if workspace.closed {
+		workspace.mu.Unlock()
+		if reopened := workspace.reopen(); reopened != nil {
+			return reopened.idx()
 		}
 		return ideIdx{state: "partial"}
 	}
-	defer w.mu.Unlock()
-	w.touchLocked()
-	cur := w.ix
-	if cur != nil && !w.failed {
-		return *cur
+	defer workspace.mu.Unlock()
+	workspace.touchLocked()
+	current := workspace.ix
+	if current != nil && !workspace.failed {
+		return *current
 	}
-	if cur == nil {
-		w.ix = &ideIdx{state: "building"}
-		cur = w.ix
+	if current == nil {
+		workspace.ix = &ideIdx{state: "building"}
+		current = workspace.ix
 	}
-	w.failed = false
-	go w.build(w.gen)
-	return *cur
+	workspace.failed = false
+	go workspace.build(workspace.gen)
+	return *current
 }
 
 // build ne publie que pour sa génération : une invalidation survenue pendant le parcours l'emporte.
-func (w *ideWorkspace) build(gen int) {
+func (workspace *ideWorkspace) build(gen int) {
 	defer func() {
 		if recover() != nil {
-			w.mu.Lock()
-			if w.gen == gen {
-				w.ix, w.failed = &ideIdx{state: "partial", set: map[string]bool{}}, true
+			workspace.mu.Lock()
+			if workspace.gen == gen {
+				workspace.ix, workspace.failed = &ideIdx{state: "partial", set: map[string]bool{}}, true
 			}
-			w.mu.Unlock()
+			workspace.mu.Unlock()
 		}
 	}()
 	ideBuildHook()
-	entries, dirs, partial := ideWalk(w.root, ideIndexLimits)
+	entries, dirs, partial := ideWalk(workspace.root, ideIndexLimits)
 	set := make(map[string]bool, len(entries))
-	for _, e := range entries {
-		set[e.Path] = true
+	for _, entry := range entries {
+		set[entry.Path] = true
 	}
-	sort.SliceStable(dirs, func(i, j int) bool { return strings.Count(dirs[i], "/") < strings.Count(dirs[j], "/") })
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if w.gen != gen {
+	sort.SliceStable(dirs, func(leftIndex, rightIndex int) bool {
+		return strings.Count(dirs[leftIndex], "/") < strings.Count(dirs[rightIndex], "/")
+	})
+	workspace.mu.Lock()
+	defer workspace.mu.Unlock()
+	if workspace.gen != gen {
 		return
 	}
 	// Au sondage, l'index n'est plus tenu à jour hors des dossiers déclarés.
-	st := "ready"
-	if partial || w.poll {
-		st = "partial"
+	state := "ready"
+	if partial || workspace.poll {
+		state = "partial"
 	}
-	w.ix = &ideIdx{state: st, entries: entries, set: set}
-	for _, d := range dirs {
-		if len(w.idxDirs) >= ideWatchMax {
+	workspace.ix = &ideIdx{state: state, entries: entries, set: set}
+	for _, dir := range dirs {
+		if len(workspace.idxDirs) >= ideWatchMax {
 			break
 		}
-		if w.watchLocked(d) {
-			w.idxDirs[d] = true
+		if workspace.watchLocked(dir) {
+			workspace.idxDirs[dir] = true
 		}
 	}
 }
 
 // watchLocked n'ajoute que des dossiers qui viennent de passer ideLstat par la racine : fsnotify ouvre par
 // chemin absolu, donc un remplacement par un lien entre ce contrôle et l'ajout reste possible.
-func (w *ideWorkspace) watchLocked(rel string) bool {
-	if w.watcher == nil || w.closed {
+func (workspace *ideWorkspace) watchLocked(rel string) bool {
+	if workspace.watcher == nil || workspace.closed {
 		return false
 	}
-	if w.idxDirs[rel] || w.declared[rel] > 0 {
+	if workspace.idxDirs[rel] || workspace.declared[rel] > 0 {
 		return true
 	}
-	return w.addWatchLocked(rel)
+	return workspace.addWatchLocked(rel)
 }
 
 // addWatchLocked : Add sur un vrai dossier de l'espace (jamais un lien symbolique), sans regarder s'il est déjà surveillé.
-func (w *ideWorkspace) addWatchLocked(rel string) bool {
-	fi, err := ideLstat(w.root, rel)
-	if err != nil || !fi.IsDir() {
+func (workspace *ideWorkspace) addWatchLocked(rel string) bool {
+	fileInfo, err := ideLstat(workspace.root, rel)
+	if err != nil || !fileInfo.IsDir() {
 		return false
 	}
-	if err := ideWatchAdd(w.watcher, filepath.Join(w.dir, filepath.FromSlash(rel))); err != nil {
+	if addErr := ideWatchAdd(workspace.watcher, filepath.Join(workspace.dir, filepath.FromSlash(rel))); addErr != nil {
 		// Seules les limites d'inotify condamnent la veille ; un dossier refusé (EACCES…) est seulement sauté.
-		if errors.Is(err, syscall.ENOSPC) || errors.Is(err, syscall.EMFILE) || errors.Is(err, syscall.ENFILE) {
-			w.fallbackLocked()
+		isInotifyExhausted := errors.Is(addErr, syscall.ENOSPC) || errors.Is(addErr, syscall.EMFILE) || errors.Is(addErr, syscall.ENFILE)
+		if isInotifyExhausted {
+			workspace.fallbackLocked()
 		}
 		return false
 	}
 	return true
 }
 
-func (w *ideWorkspace) unwatchLocked(rel string) {
-	if w.watcher != nil && !w.idxDirs[rel] && w.declared[rel] == 0 {
-		w.watcher.Remove(filepath.Join(w.dir, filepath.FromSlash(rel)))
+func (workspace *ideWorkspace) unwatchLocked(rel string) {
+	if workspace.watcher != nil && !workspace.idxDirs[rel] && workspace.declared[rel] == 0 {
+		workspace.watcher.Remove(filepath.Join(workspace.dir, filepath.FromSlash(rel)))
 	}
 }
 
 // lostLocked : des changements ont pu échapper ; les abonnés relisent et le prochain /v1/fs/index reconstruit.
-func (w *ideWorkspace) lostLocked() {
-	w.ix = nil
-	w.gen++
-	for s := range w.subs {
-		s.send(ideResync)
+func (workspace *ideWorkspace) lostLocked() {
+	workspace.ix = nil
+	workspace.gen++
+	for subscriber := range workspace.subs {
+		subscriber.send(ideResync)
 	}
 }
 
 // send vide un tampon plein au profit d'un seul resync, qui rend caducs les évènements en attente ; ce resync
 // n'est jamais perdu et plusieurs débordements n'en laissent qu'un. Seul flushLocked (sous w.mu) écrit.
-func (s *ideSub) send(e ideEvent) {
+func (subscriber *ideSub) send(event ideEvent) {
 	select {
-	case s.ch <- e:
+	case subscriber.ch <- event:
 		return
 	default:
 	}
 	for {
 		select {
-		case <-s.ch:
+		case <-subscriber.ch:
 			continue
 		default:
 		}
 		break
 	}
-	s.ch <- ideResync
+	subscriber.ch <- ideResync
 }
 
 // fallbackLocked : sans inotify (épuisé, débordé, indisponible), seuls les dossiers déclarés sont sondés.
-func (w *ideWorkspace) fallbackLocked() {
-	if w.poll || w.closed {
+func (workspace *ideWorkspace) fallbackLocked() {
+	if workspace.poll || workspace.closed {
 		return
 	}
-	w.poll = true
-	if w.watcher != nil {
-		w.watcher.Close()
-		w.watcher = nil
+	workspace.poll = true
+	if workspace.watcher != nil {
+		workspace.watcher.Close()
+		workspace.watcher = nil
 	}
-	for d := range w.declared {
-		w.snaps[d] = w.scanLocked(d)
+	for declaredDir := range workspace.declared {
+		workspace.snaps[declaredDir] = workspace.scanLocked(declaredDir)
 	}
-	w.lostLocked()
-	t := time.NewTicker(idePollInterval)
+	workspace.lostLocked()
+	ticker := time.NewTicker(idePollInterval)
 	go func() {
-		defer t.Stop()
+		defer ticker.Stop()
 		for {
 			select {
-			case <-w.done:
+			case <-workspace.done:
 				return
-			case <-t.C:
-				w.pollOnce()
+			case <-ticker.C:
+				workspace.pollOnce()
 			}
 		}
 	}()
 }
 
-func (w *ideWorkspace) scanLocked(rel string) map[string]ideSig {
-	out := map[string]ideSig{}
-	if fi, err := ideLstat(w.root, rel); err != nil || !fi.IsDir() {
-		return out
+func (workspace *ideWorkspace) scanLocked(rel string) map[string]ideSig {
+	signatures := map[string]ideSig{}
+	if info, statErr := ideLstat(workspace.root, rel); statErr != nil || !info.IsDir() {
+		return signatures
 	}
-	d, err := w.root.Open(rel)
-	if err != nil {
-		return out
+	directory, openErr := workspace.root.Open(rel)
+	if openErr != nil {
+		return signatures
 	}
-	des, _ := d.ReadDir(-1)
-	d.Close()
-	for _, de := range des {
-		s := ideSig{dir: de.IsDir()}
-		if info, err := de.Info(); err == nil {
-			s.mtime, s.size = info.ModTime().UnixNano(), info.Size()
+	dirEntries, _ := directory.ReadDir(-1)
+	directory.Close()
+	for _, dirEntry := range dirEntries {
+		signature := ideSig{dir: dirEntry.IsDir()}
+		if info, infoErr := dirEntry.Info(); infoErr == nil {
+			signature.mtime, signature.size = info.ModTime().UnixNano(), info.Size()
 		}
-		out[de.Name()] = s
+		signatures[dirEntry.Name()] = signature
 	}
-	return out
+	return signatures
 }
 
 func ideJoin(dir, name string) string {
@@ -368,113 +380,116 @@ func ideJoin(dir, name string) string {
 	return dir + "/" + name
 }
 
-func (w *ideWorkspace) pollOnce() {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	var evs []ideEvent
-	for d := range w.declared {
-		prev, cur := w.snaps[d], w.scanLocked(d)
-		for n, s := range cur {
-			if p, ok := prev[n]; !ok {
-				evs = append(evs, ideEvent{ideJoin(d, n), "create"})
-			} else if p != s {
-				evs = append(evs, ideEvent{ideJoin(d, n), "write"})
+func (workspace *ideWorkspace) pollOnce() {
+	workspace.mu.Lock()
+	defer workspace.mu.Unlock()
+	var events []ideEvent
+	for declaredDir := range workspace.declared {
+		previous, current := workspace.snaps[declaredDir], workspace.scanLocked(declaredDir)
+		for name, signature := range current {
+			if previousSignature, existed := previous[name]; !existed {
+				events = append(events, ideEvent{ideJoin(declaredDir, name), "create"})
+			} else if previousSignature != signature {
+				events = append(events, ideEvent{ideJoin(declaredDir, name), "write"})
 			}
 		}
-		for n := range prev {
-			if _, ok := cur[n]; !ok {
-				evs = append(evs, ideEvent{ideJoin(d, n), "remove"})
+		for name := range previous {
+			if _, stillExists := current[name]; !stillExists {
+				events = append(events, ideEvent{ideJoin(declaredDir, name), "remove"})
 			}
 		}
-		w.snaps[d] = cur
+		workspace.snaps[declaredDir] = current
 	}
-	sort.Slice(evs, func(i, j int) bool { return evs[i].Path < evs[j].Path })
-	w.flushLocked(evs)
+	sort.Slice(events, func(leftIndex, rightIndex int) bool {
+		return events[leftIndex].Path < events[rightIndex].Path
+	})
+	workspace.flushLocked(events)
 }
 
-func (w *ideWorkspace) loop(fw *fsnotify.Watcher, debounce time.Duration) {
+func (workspace *ideWorkspace) loop(watcher *fsnotify.Watcher, debounce time.Duration) {
 	var pending []ideEvent
 	seen := map[ideEvent]bool{}
 	var tick <-chan time.Time
 	for {
 		select {
-		case <-w.done:
+		case <-workspace.done:
 			return
-		case ev, ok := <-fw.Events:
-			if !ok {
-				w.mu.Lock()
-				w.flushLocked(pending)
-				w.mu.Unlock()
+		case fsEvent, eventsOpen := <-watcher.Events:
+			if !eventsOpen {
+				workspace.mu.Lock()
+				workspace.flushLocked(pending)
+				workspace.mu.Unlock()
 				return
 			}
-			e, keep := w.convert(ev)
+			event, keep := workspace.convert(fsEvent)
 			if !keep {
 				continue
 			}
-			if !seen[e] {
-				seen[e] = true
-				pending = append(pending, e)
+			if !seen[event] {
+				seen[event] = true
+				pending = append(pending, event)
 			}
 			if tick == nil {
 				tick = time.After(debounce)
 			}
-		case err, ok := <-fw.Errors:
-			if !ok {
+		case err, errorsOpen := <-watcher.Errors:
+			if !errorsOpen {
 				return
 			}
 			if errors.Is(err, fsnotify.ErrEventOverflow) {
-				w.mu.Lock()
-				w.flushLocked(pending)
-				w.fallbackLocked()
-				w.mu.Unlock()
+				workspace.mu.Lock()
+				workspace.flushLocked(pending)
+				workspace.fallbackLocked()
+				workspace.mu.Unlock()
 				pending, tick = nil, nil
 				clear(seen)
 			}
 		case <-tick:
-			w.mu.Lock()
-			w.flushLocked(pending)
-			w.mu.Unlock()
+			workspace.mu.Lock()
+			workspace.flushLocked(pending)
+			workspace.mu.Unlock()
 			pending, tick = nil, nil
 			clear(seen)
 		}
 	}
 }
 
-func (w *ideWorkspace) convert(ev fsnotify.Event) (ideEvent, bool) {
-	rel, err := filepath.Rel(w.dir, ev.Name)
-	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+func (workspace *ideWorkspace) convert(fsEvent fsnotify.Event) (ideEvent, bool) {
+	rel, err := filepath.Rel(workspace.dir, fsEvent.Name)
+	isOutsideWorkspace := rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	if err != nil || rel == "." || isOutsideWorkspace {
 		return ideEvent{}, false
 	}
-	e := ideEvent{Path: filepath.ToSlash(rel)}
+	event := ideEvent{Path: filepath.ToSlash(rel)}
 	switch {
-	case ev.Has(fsnotify.Create):
-		e.Type = "create"
-	case ev.Has(fsnotify.Write):
-		e.Type = "write"
-	case ev.Has(fsnotify.Remove):
-		e.Type = "remove"
-	case ev.Has(fsnotify.Rename):
-		e.Type = "rename"
+	case fsEvent.Has(fsnotify.Create):
+		event.Type = "create"
+	case fsEvent.Has(fsnotify.Write):
+		event.Type = "write"
+	case fsEvent.Has(fsnotify.Remove):
+		event.Type = "remove"
+	case fsEvent.Has(fsnotify.Rename):
+		event.Type = "rename"
 	default:
 		return ideEvent{}, false
 	}
-	return e, true
+	return event, true
 }
 
-func (w *ideWorkspace) flushLocked(evs []ideEvent) {
-	if len(evs) == 0 || w.closed {
+func (workspace *ideWorkspace) flushLocked(events []ideEvent) {
+	if len(events) == 0 || workspace.closed {
 		return
 	}
-	w.applyLocked(evs)
-	for _, e := range evs {
-		if e.Type == "create" && w.declared[e.Path] > 0 && w.watcher != nil {
+	workspace.applyLocked(events)
+	for _, event := range events {
+		if event.Type == "create" && workspace.declared[event.Path] > 0 && workspace.watcher != nil {
 			// inotify a lâché le dossier quand il a été supprimé : sans nouvel Add, sa recréation (git checkout, rm puis mkdir) reste muette.
-			w.addWatchLocked(e.Path)
+			workspace.addWatchLocked(event.Path)
 		}
-		parent := path.Dir(e.Path)
-		for s := range w.subs {
-			if s.dirs[parent] {
-				s.send(e)
+		parent := path.Dir(event.Path)
+		for subscriber := range workspace.subs {
+			if subscriber.dirs[parent] {
+				subscriber.send(event)
 			}
 		}
 	}
@@ -482,8 +497,8 @@ func (w *ideWorkspace) flushLocked(evs []ideEvent) {
 
 func ideIndexable(rel string) bool {
 	parts := strings.Split(rel, "/")
-	for _, p := range parts {
-		if ideIgnored(p) {
+	for _, part := range parts {
+		if ideIgnored(part) {
 			return false
 		}
 	}
@@ -494,185 +509,199 @@ func ideIndexable(rel string) bool {
 // plein) : dans cet ordre, rien de ce qui y apparaît ensuite n'échappe.
 // Le budget (une échéance, les entrées restantes) est commun à tous les dossiers d'un lot : une rafale de
 // mkdir ne le multiplie pas. Renvoie false quand le parcours est incomplet.
-func (w *ideWorkspace) addTreeLocked(rel string, byPath map[string]ideIndexEntry, added map[string]bool, deadline time.Time) bool {
-	if len(w.idxDirs) < ideWatchMax && w.watchLocked(rel) {
-		w.idxDirs[rel] = true
+func (workspace *ideWorkspace) addTreeLocked(rel string, byPath map[string]ideIndexEntry, added map[string]bool, deadline time.Time) bool {
+	if len(workspace.idxDirs) < ideWatchMax && workspace.watchLocked(rel) {
+		workspace.idxDirs[rel] = true
 	}
-	lim := ideLimits{ideIndexLimits.Entries - len(byPath), ideIndexLimits.Depth - strings.Count(rel, "/") - 1, time.Until(deadline)}
-	if lim.Entries <= 0 || lim.Depth < 0 || lim.Time <= 0 {
+	limits := ideLimits{
+		Entries: ideIndexLimits.Entries - len(byPath),
+		Depth:   ideIndexLimits.Depth - strings.Count(rel, "/") - 1,
+		Time:    time.Until(deadline),
+	}
+	if limits.Entries <= 0 || limits.Depth < 0 || limits.Time <= 0 {
 		return false
 	}
-	sub, err := w.root.OpenRoot(rel)
+	subRoot, err := workspace.root.OpenRoot(rel)
 	if err != nil {
 		return true
 	}
-	defer sub.Close()
-	es, dirs, partial := ideWalk(sub, lim)
-	for _, e := range es {
-		e.Path = rel + "/" + e.Path
-		byPath[e.Path] = e
-		added[e.Path] = true
+	defer subRoot.Close()
+	entries, dirs, partial := ideWalk(subRoot, limits)
+	for _, entry := range entries {
+		entry.Path = rel + "/" + entry.Path
+		byPath[entry.Path] = entry
+		added[entry.Path] = true
 	}
-	for _, d := range dirs {
-		if d = ideJoin(rel, d); d != rel && len(w.idxDirs) < ideWatchMax && w.watchLocked(d) {
-			w.idxDirs[d] = true
+	for _, walkedDir := range dirs {
+		walkedDir = ideJoin(rel, walkedDir)
+		if walkedDir != rel && len(workspace.idxDirs) < ideWatchMax && workspace.watchLocked(walkedDir) {
+			workspace.idxDirs[walkedDir] = true
 		}
 	}
 	return !partial
 }
 
 // applyLocked met l'index à jour par copie, l'ancien instantané restant lisible par les appelants.
-func (w *ideWorkspace) applyLocked(evs []ideEvent) {
-	if w.ix == nil || w.ix.state == "building" {
+func (workspace *ideWorkspace) applyLocked(events []ideEvent) {
+	if workspace.ix == nil || workspace.ix.state == "building" {
 		return
 	}
-	byPath := make(map[string]ideIndexEntry, len(w.ix.entries)+len(evs))
-	for _, e := range w.ix.entries {
-		byPath[e.Path] = e
+	byPath := make(map[string]ideIndexEntry, len(workspace.ix.entries)+len(events))
+	for _, entry := range workspace.ix.entries {
+		byPath[entry.Path] = entry
 	}
-	st := w.ix.state
-	old := w.ix.entries // trié : les descendants d'un dossier y forment une plage contiguë
+	state := workspace.ix.state
+	old := workspace.ix.entries // trié : les descendants d'un dossier y forment une plage contiguë
 	added := map[string]bool{}
 	// ponytail: parcours sous verrou borné par ideTreeBudget et par lot ; un gros dossier déplacé fait attendre /v1/fs/index d'autant
 	deadline := time.Now().Add(ideTreeBudget)
-	for _, e := range evs {
-		if !ideIndexable(e.Path) {
+	for _, event := range events {
+		if !ideIndexable(event.Path) {
 			continue
 		}
-		fi, err := ideLstat(w.root, e.Path)
+		fileInfo, err := ideLstat(workspace.root, event.Path)
 		switch {
-		case err != nil || e.Type == "remove" || e.Type == "rename":
-			delete(byPath, e.Path)
-			delete(added, e.Path)
-			pre := e.Path + "/"
-			for i := sort.Search(len(old), func(i int) bool { return old[i].Path >= pre }); i < len(old) && strings.HasPrefix(old[i].Path, pre); i++ {
-				delete(byPath, old[i].Path)
+		case err != nil || event.Type == "remove" || event.Type == "rename":
+			delete(byPath, event.Path)
+			delete(added, event.Path)
+			prefix := event.Path + "/"
+			firstDescendant := sort.Search(len(old), func(searchIndex int) bool {
+				return old[searchIndex].Path >= prefix
+			})
+			for descendantIndex := firstDescendant; descendantIndex < len(old); descendantIndex++ {
+				if !strings.HasPrefix(old[descendantIndex].Path, prefix) {
+					break
+				}
+				delete(byPath, old[descendantIndex].Path)
 			}
 			// Seul un dossier surveillé a pu recevoir des entrées pendant ce lot ou avoir des sous-dossiers surveillés.
-			if w.idxDirs[e.Path] {
-				for p := range added {
-					if strings.HasPrefix(p, pre) {
-						delete(byPath, p)
-						delete(added, p)
+			if workspace.idxDirs[event.Path] {
+				for addedPath := range added {
+					if strings.HasPrefix(addedPath, prefix) {
+						delete(byPath, addedPath)
+						delete(added, addedPath)
 					}
 				}
-				for d := range w.idxDirs {
-					if d == e.Path || strings.HasPrefix(d, pre) {
-						delete(w.idxDirs, d)
+				for watchedDir := range workspace.idxDirs {
+					if watchedDir == event.Path || strings.HasPrefix(watchedDir, prefix) {
+						delete(workspace.idxDirs, watchedDir)
 					}
 				}
 			}
-		case fi.IsDir():
-			if !w.addTreeLocked(e.Path, byPath, added, deadline) {
-				st = "partial"
+		case fileInfo.IsDir():
+			if !workspace.addTreeLocked(event.Path, byPath, added, deadline) {
+				state = "partial"
 			}
-		case fi.Mode().IsRegular():
-			if _, ok := byPath[e.Path]; ok || len(byPath) < ideIndexLimits.Entries {
-				byPath[e.Path] = ideIndexEntry{e.Path, fi.Size(), fi.ModTime().Unix()}
-				added[e.Path] = true
+		case fileInfo.Mode().IsRegular():
+			if _, indexed := byPath[event.Path]; indexed || len(byPath) < ideIndexLimits.Entries {
+				byPath[event.Path] = ideIndexEntry{Path: event.Path, Size: fileInfo.Size(), Mtime: fileInfo.ModTime().Unix()}
+				added[event.Path] = true
 			}
 		}
 	}
 	entries := make([]ideIndexEntry, 0, len(byPath))
 	set := make(map[string]bool, len(byPath))
-	for p, e := range byPath {
-		entries = append(entries, e)
-		set[p] = true
+	for entryPath, entry := range byPath {
+		entries = append(entries, entry)
+		set[entryPath] = true
 	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
-	w.ix = &ideIdx{state: st, entries: entries, set: set}
+	sort.Slice(entries, func(leftIndex, rightIndex int) bool {
+		return entries[leftIndex].Path < entries[rightIndex].Path
+	})
+	workspace.ix = &ideIdx{state: state, entries: entries, set: set}
 }
 
-func (w *ideWorkspace) Subscribe(paths []string) (<-chan ideEvent, func()) {
-	w.mu.Lock()
-	if w.closed {
-		w.mu.Unlock()
-		if nw := w.reopen(); nw != nil {
-			return nw.Subscribe(paths)
+func (workspace *ideWorkspace) Subscribe(paths []string) (<-chan ideEvent, func()) {
+	workspace.mu.Lock()
+	if workspace.closed {
+		workspace.mu.Unlock()
+		if reopened := workspace.reopen(); reopened != nil {
+			return reopened.Subscribe(paths)
 		}
 		return make(chan ideEvent), func() {}
 	}
-	defer w.mu.Unlock()
-	s := &ideSub{dirs: map[string]bool{}, ch: make(chan ideEvent, ideSubBuf)}
-	for _, p := range paths {
-		if len(s.dirs) >= ideSubPaths {
+	defer workspace.mu.Unlock()
+	subscriber := &ideSub{dirs: map[string]bool{}, ch: make(chan ideEvent, ideSubBuf)}
+	for _, requestedPath := range paths {
+		if len(subscriber.dirs) >= ideSubPaths {
 			break
 		}
-		rel, err := ideRel(p, true)
-		if err != nil || s.dirs[rel] {
+		rel, err := ideRel(requestedPath, true)
+		if err != nil || subscriber.dirs[rel] {
 			continue
 		}
-		if fi, err := ideLstat(w.root, rel); err != nil || !fi.IsDir() {
+		if fileInfo, statErr := ideLstat(workspace.root, rel); statErr != nil || !fileInfo.IsDir() {
 			continue
 		}
-		if !w.poll && !w.watchLocked(rel) && !w.poll {
+		if !workspace.poll && !workspace.watchLocked(rel) && !workspace.poll {
 			continue
 		}
-		if w.poll && w.declared[rel] == 0 {
-			w.snaps[rel] = w.scanLocked(rel)
+		if workspace.poll && workspace.declared[rel] == 0 {
+			workspace.snaps[rel] = workspace.scanLocked(rel)
 		}
-		s.dirs[rel] = true
-		w.declared[rel]++
+		subscriber.dirs[rel] = true
+		workspace.declared[rel]++
 	}
-	w.subs[s] = true
+	workspace.subs[subscriber] = true
 	var once sync.Once
-	return s.ch, func() {
+	return subscriber.ch, func() {
 		once.Do(func() {
-			w.mu.Lock()
-			defer w.mu.Unlock()
-			delete(w.subs, s)
-			for d := range s.dirs {
-				if w.declared[d]--; w.declared[d] <= 0 {
-					delete(w.declared, d)
-					delete(w.snaps, d)
-					w.unwatchLocked(d)
+			workspace.mu.Lock()
+			defer workspace.mu.Unlock()
+			delete(workspace.subs, subscriber)
+			for dir := range subscriber.dirs {
+				if workspace.declared[dir]--; workspace.declared[dir] <= 0 {
+					delete(workspace.declared, dir)
+					delete(workspace.snaps, dir)
+					workspace.unwatchLocked(dir)
 				}
 			}
-			if !w.closed {
-				w.touchLocked()
+			if !workspace.closed {
+				workspace.touchLocked()
 			}
 		})
 	}
 }
 
 func routesIDEWatch(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/fs/watch", func(rw http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		dir, ok := ideKnownDir(q.Get("dir"))
-		if !ok {
-			ideFail(rw, errIdeDir)
+	mux.HandleFunc("GET /v1/fs/watch", func(responseWriter http.ResponseWriter, request *http.Request) {
+		query := request.URL.Query()
+		dir, known := ideKnownDir(query.Get("dir"))
+		if !known {
+			ideFail(responseWriter, errIdeDir)
 			return
 		}
-		ws, err := ideWS(dir)
+		workspace, err := ideWS(dir)
 		if err != nil {
-			ideFail(rw, err)
+			ideFail(responseWriter, err)
 			return
 		}
-		ch, cancel := ws.Subscribe(q["paths"])
+		events, cancel := workspace.Subscribe(query["paths"])
 		defer cancel()
-		rw.Header().Set("Content-Type", "text/event-stream")
-		rw.Header().Set("Cache-Control", "no-store")
-		rw.Header().Set("X-Accel-Buffering", "no")
-		rw.WriteHeader(http.StatusOK)
-		rc := http.NewResponseController(rw)
-		rc.Flush()
+		responseWriter.Header().Set("Content-Type", "text/event-stream")
+		responseWriter.Header().Set("Cache-Control", "no-store")
+		responseWriter.Header().Set("X-Accel-Buffering", "no")
+		responseWriter.WriteHeader(http.StatusOK)
+		responseController := http.NewResponseController(responseWriter)
+		responseController.Flush()
 		ping := time.NewTicker(idePing)
 		defer ping.Stop()
 		for {
-			var out []byte
+			var frame []byte
 			select {
-			case <-r.Context().Done():
+			case <-request.Context().Done():
 				return
-			case e, ok := <-ch:
-				if !ok {
+			case event, isOpen := <-events:
+				if !isOpen {
 					return
 				}
-				b, _ := json.Marshal(e)
-				out = append(append([]byte("data: "), b...), "\n\n"...)
+				encoded, _ := json.Marshal(event)
+				frame = append([]byte("data: "), encoded...)
+				frame = append(frame, "\n\n"...)
 			case <-ping.C:
-				out = []byte(": ping\n\n")
+				frame = []byte(": ping\n\n")
 			}
-			if _, err := rw.Write(out); err != nil || rc.Flush() != nil {
+			if _, sendErr := responseWriter.Write(frame); sendErr != nil || responseController.Flush() != nil {
 				return
 			}
 		}

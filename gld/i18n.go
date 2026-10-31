@@ -32,22 +32,25 @@ var (
 
 func loadBundle() {
 	bundle = i18n.NewBundle(language.French)
-	for _, l := range []string{"fr", "en"} {
-		if _, err := bundle.LoadMessageFileFS(localesFS, "locales/"+l+".json"); err != nil {
-			panic("catalogue " + l + " : " + err.Error())
+	for _, lang := range []string{"fr", "en"} {
+		if _, err := bundle.LoadMessageFileFS(localesFS, "locales/"+lang+".json"); err != nil {
+			panic("catalogue " + lang + " : " + err.Error())
 		}
 	}
-	localizers = map[string]*i18n.Localizer{"fr": i18n.NewLocalizer(bundle, "fr"), "en": i18n.NewLocalizer(bundle, "en")}
+	localizers = map[string]*i18n.Localizer{
+		"fr": i18n.NewLocalizer(bundle, "fr"),
+		"en": i18n.NewLocalizer(bundle, "en"),
+	}
 }
 
 // normalizeLang : fr, en, other (langue connue mais non traduite) ou vide (aucun réglage).
 func normalizeLang(raw string) string {
-	s := strings.ToLower(strings.TrimSpace(raw))
-	if s == "" {
+	normalized := strings.ToLower(strings.TrimSpace(raw))
+	if normalized == "" {
 		return ""
 	}
 	// Premier mot seulement : « fr-FR », « fr_CA.UTF-8 », « French (Canada) ».
-	first := strings.FieldsFunc(s, func(r rune) bool { return !unicode.IsLetter(r) })
+	first := strings.FieldsFunc(normalized, func(character rune) bool { return !unicode.IsLetter(character) })
 	if len(first) == 0 {
 		return "other"
 	}
@@ -71,26 +74,30 @@ var langCache struct {
 // userLanguageRaw : la valeur brute de « language » dans settings.json (vide si absente, illisible ou non textuelle).
 // Relue seulement quand le fichier change, pour qu'un changement du réglage soit vu sans redémarrer.
 func userLanguageRaw() string {
-	st, err := os.Stat(filepath.Join(cfgDir(), "settings.json"))
-	if err != nil {
+	fileInfo, statErr := os.Stat(filepath.Join(cfgDir(), "settings.json"))
+	if statErr != nil {
 		return ""
 	}
 	langCache.Lock()
 	defer langCache.Unlock()
-	if langCache.ok && langCache.mtime == st.ModTime().UnixNano() && langCache.size == st.Size() {
+	isCacheFresh := langCache.ok && langCache.mtime == fileInfo.ModTime().UnixNano() && langCache.size == fileInfo.Size()
+	if isCacheFresh {
 		return langCache.raw
 	}
-	var d struct {
+	var settings struct {
 		Language json.RawMessage `json:"language"`
 	}
 	raw := ""
-	if b, err := os.ReadFile(filepath.Join(cfgDir(), "settings.json")); err == nil && json.Unmarshal(b, &d) == nil {
-		var s string
-		if json.Unmarshal(d.Language, &s) == nil {
-			raw = strings.TrimSpace(s)
+	if content, readErr := os.ReadFile(filepath.Join(cfgDir(), "settings.json")); readErr == nil && json.Unmarshal(content, &settings) == nil {
+		var languageSetting string
+		if json.Unmarshal(settings.Language, &languageSetting) == nil {
+			raw = strings.TrimSpace(languageSetting)
 		}
 	}
-	langCache.mtime, langCache.size, langCache.raw, langCache.ok = st.ModTime().UnixNano(), st.Size(), raw, true
+	langCache.mtime = fileInfo.ModTime().UnixNano()
+	langCache.size = fileInfo.Size()
+	langCache.raw = raw
+	langCache.ok = true
 	return raw
 }
 
@@ -126,12 +133,13 @@ func cliLang() string {
 	}
 	norm := normalizeLang(userLanguageRaw())
 	if norm == "" {
-		for _, k := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
-			v := os.Getenv(k)
-			if v == "" || v == "C" || v == "POSIX" || strings.HasPrefix(v, "C.") {
+		for _, variable := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
+			value := os.Getenv(variable)
+			isNeutralLocale := value == "" || value == "C" || value == "POSIX" || strings.HasPrefix(value, "C.")
+			if isNeutralLocale {
 				continue // locale neutre : elle ne dit rien de la langue de l'utilisateur
 			}
-			norm = normalizeLang(v)
+			norm = normalizeLang(value)
 			break
 		}
 	}
@@ -159,34 +167,34 @@ func replyLang() string {
 // Un identifiant inconnu est renvoyé tel quel.
 func tr(lang, id string, data map[string]any) string {
 	bundleOnce.Do(loadBundle)
-	l := localizers[lang]
-	if l == nil {
-		l = localizers["fr"]
+	localizer := localizers[lang]
+	if localizer == nil {
+		localizer = localizers["fr"]
 	}
-	cfg := &i18n.LocalizeConfig{MessageID: id, TemplateData: data}
-	if n, ok := data["Count"].(int); ok {
-		cfg.PluralCount = n
+	localizeConfig := &i18n.LocalizeConfig{MessageID: id, TemplateData: data}
+	if count, isInt := data["Count"].(int); isInt {
+		localizeConfig.PluralCount = count
 	}
-	s, err := l.Localize(cfg)
+	text, err := localizer.Localize(localizeConfig)
 	if err != nil {
 		return id
 	}
-	return s
+	return text
 }
 
 // trKeys : tous les identifiants du catalogue de la langue (contrôle de symétrie fr/en).
 func trKeys(lang string) []string {
-	b, err := localesFS.ReadFile("locales/" + lang + ".json")
+	content, err := localesFS.ReadFile("locales/" + lang + ".json")
 	if err != nil {
 		return nil
 	}
-	var m map[string]json.RawMessage
-	if json.Unmarshal(b, &m) != nil {
+	var catalog map[string]json.RawMessage
+	if json.Unmarshal(content, &catalog) != nil {
 		return nil
 	}
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
+	keys := make([]string, 0, len(catalog))
+	for key := range catalog {
+		keys = append(keys, key)
 	}
 	sort.Strings(keys)
 	return keys
@@ -199,34 +207,41 @@ type msgErr struct {
 }
 
 // Error écrit le message dans la langue courante au moment de l'affichage, pas de la création.
-func (e *msgErr) Error() string { return tr(uiLang(), e.id, e.data) }
-func (e *msgErr) Unwrap() error { return e.wrapped }
-
-func kvMap(kv []any) map[string]any {
-	m := make(map[string]any, len(kv)/2)
-	for i := 0; i+1 < len(kv); i += 2 {
-		m[kv[i].(string)] = kv[i+1]
-	}
-	return m
+func (message *msgErr) Error() string {
+	return tr(uiLang(), message.id, message.data)
 }
 
-// L : le texte de l'identifiant dans la langue de l'interface ; kv = paires nom, valeur du modèle.
-func L(id string, kv ...any) string { return tr(uiLang(), id, kvMap(kv)) }
+func (message *msgErr) Unwrap() error {
+	return message.wrapped
+}
+
+func kvMap(pairs []any) map[string]any {
+	values := make(map[string]any, len(pairs)/2)
+	for pairIndex := 0; pairIndex+1 < len(pairs); pairIndex += 2 {
+		values[pairs[pairIndex].(string)] = pairs[pairIndex+1]
+	}
+	return values
+}
+
+// L : le texte de l'identifiant dans la langue de l'interface ; pairs = paires nom, valeur du modèle.
+func L(id string, pairs ...any) string {
+	return tr(uiLang(), id, kvMap(pairs))
+}
 
 // terr : une erreur dont le texte vient du catalogue ; la valeur d'un nom en « W… » est l'erreur enveloppée.
-func terr(id string, kv ...any) error {
-	m := kvMap(kv)
-	var w error
-	for k, v := range m {
-		if e, ok := v.(error); ok && strings.HasPrefix(k, "W") {
-			w = e
+func terr(id string, pairs ...any) error {
+	values := kvMap(pairs)
+	var wrapped error
+	for name, value := range values {
+		if valueErr, isError := value.(error); isError && strings.HasPrefix(name, "W") {
+			wrapped = valueErr
 		}
 	}
-	return &msgErr{id: id, data: m, wrapped: w}
+	return &msgErr{id: id, data: values, wrapped: wrapped}
 }
 
 // isMsg : l'erreur (ou une erreur qu'elle enveloppe) vient de ce message du catalogue.
 func isMsg(err error, id string) bool {
-	var m *msgErr
-	return errors.As(err, &m) && m.id == id
+	var message *msgErr
+	return errors.As(err, &message) && message.id == id
 }

@@ -13,7 +13,20 @@ import (
 	"time"
 )
 
-func matinHelp() string { return L("cli.matin.help") }
+const (
+	matinDefaultPauseSeconds = 0.7
+	matinDefaultAgeDays      = 7
+	matinDefaultMinBytes     = 50000
+	// matinAnyAgeDays : une session demandée par son id s'ouvre quel que soit son âge.
+	matinAnyAgeDays  = 36500
+	matinStateWidth  = 12
+	matinTitleWidth  = 45
+	matinBackupStamp = 16
+)
+
+func matinHelp() string {
+	return L("cli.matin.help")
+}
 
 type matinOpts struct {
 	dry, nommees                bool
@@ -26,83 +39,87 @@ type matinOpts struct {
 	env                         map[string]string
 }
 
-func cliMatin(ctx context.Context, args []string, out io.Writer) error {
+func cliMatin(runContext context.Context, args []string, output io.Writer) error {
 	resume, resumeName := false, ""
 	var rest []string
 	var env map[string]string
-	for i := 0; i < len(args); i++ { // --resume prend un nom facultatif
-		if args[i] == "--env" { // seul le couple de tabEnvKey est admis ; jamais par --args
-			if i+1 >= len(args) || args[i+1] != tabEnvKey+"="+tabEnvVal {
+	for argIndex := 0; argIndex < len(args); argIndex++ { // --resume prend un nom facultatif
+		if args[argIndex] == "--env" { // seul le couple de tabEnvKey est admis ; jamais par --args
+			if argIndex+1 >= len(args) || args[argIndex+1] != tabEnvKey+"="+tabEnvVal {
 				return terr("srv.matin.envRefuse")
 			}
-			i++
+			argIndex++
 			env = map[string]string{tabEnvKey: tabEnvVal}
 			continue
 		}
-		if args[i] == "--resume" {
+		if args[argIndex] == "--resume" {
 			resume = true
-			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				i++
-				resumeName = args[i]
+			if argIndex+1 < len(args) && !strings.HasPrefix(args[argIndex+1], "-") {
+				argIndex++
+				resumeName = args[argIndex]
 			}
 			continue
 		}
-		rest = append(rest, args[i])
+		rest = append(rest, args[argIndex])
 	}
-	f, err := parseFlags(rest, []string{"--dry-run", "--nommees"}, []string{"--id", "--args", "--prompt", "--term", "--age", "--min"}, map[string]string{"-n": "--dry-run"})
+	parsedFlags, err := parseFlags(rest, []string{"--dry-run", "--nommees"}, []string{"--id", "--args", "--prompt", "--term", "--age", "--min"}, map[string]string{"-n": "--dry-run"})
 	if err != nil {
 		if err == errHelp {
-			return helpText(out, matinHelp())
+			return helpText(output, matinHelp())
 		}
 		return err
 	}
-	pause := 0.7
-	if v, err := strconv.ParseFloat(envStr("", "GLD_MATIN_PAUSE", "CC_MATIN_PAUSE"), 64); err == nil && v >= 0 {
-		pause = v
+	pause := matinDefaultPauseSeconds
+	if pauseSeconds, parseErr := strconv.ParseFloat(envStr("", "GLD_MATIN_PAUSE", "CC_MATIN_PAUSE"), 64); parseErr == nil && pauseSeconds >= 0 {
+		pause = pauseSeconds
 	}
-	o := matinOpts{
-		dry: f.bools["--dry-run"], nommees: f.bools["--nommees"], id: f.vals["--id"], prompt: f.vals["--prompt"],
+	options := matinOpts{
+		dry:     parsedFlags.bools["--dry-run"],
+		nommees: parsedFlags.bools["--nommees"],
+		id:      parsedFlags.vals["--id"],
+		prompt:  parsedFlags.vals["--prompt"],
 		launch:  envStr("", "GLD_MATIN_TERM", "CC_MATIN_TERM"),
-		age:     envInt(7, "GLD_MATIN_AGE", "CC_MATIN_AGE"),
-		min:     int64(envInt(50000, "GLD_MATIN_MIN", "CC_MATIN_MIN")),
+		age:     envInt(matinDefaultAgeDays, "GLD_MATIN_AGE", "CC_MATIN_AGE"),
+		min:     int64(envInt(matinDefaultMinBytes, "GLD_MATIN_MIN", "CC_MATIN_MIN")),
 		pause:   time.Duration(pause * float64(time.Second)),
 		exclure: envStr("", "GLD_MATIN_EXCLURE", "CC_MATIN_EXCLURE"),
 		args:    strings.Fields(envStr("", "GLD_MATIN_ARGS", "CC_MATIN_ARGS")),
 		env:     env,
 	}
-	if len(f.pos) > 0 {
-		o.project = f.pos[len(f.pos)-1]
+	if len(parsedFlags.pos) > 0 {
+		options.project = parsedFlags.pos[len(parsedFlags.pos)-1]
 	}
-	if v, ok := f.vals["--term"]; ok {
-		o.launch = v
+	if term, hasTerm := parsedFlags.vals["--term"]; hasTerm {
+		options.launch = term
 	}
-	if v, ok := f.vals["--args"]; ok {
-		o.args = strings.Fields(v)
+	if extraArgs, hasArgs := parsedFlags.vals["--args"]; hasArgs {
+		options.args = strings.Fields(extraArgs)
 	}
-	o.age, o.min = f.int("--age", o.age), int64(f.int("--min", int(o.min)))
+	options.age = parsedFlags.int("--age", options.age)
+	options.min = int64(parsedFlags.int("--min", int(options.min)))
 
 	if resume {
-		return matinResume(ctx, o, resumeName, out)
+		return matinResume(runContext, options, resumeName, output)
 	}
-	return matinRun(ctx, o, out)
+	return matinRun(runContext, options, output)
 }
 
 // matinResume rouvre les sessions d'une sauvegarde de gld : chacune par un appel avec --id, donc mêmes règles
 // (sessions déjà ouvertes épargnées, -n respecté).
-func matinResume(ctx context.Context, o matinOpts, name string, out io.Writer) error {
+func matinResume(runContext context.Context, options matinOpts, name string, output io.Writer) error {
 	saves, _ := loadTabs()
 	if len(saves) == 0 {
-		if b, err := os.ReadFile(filepath.Join(cfgDir(), "cc-web-tabs.json")); err == nil { // ancien nom, avant la première migration
-			saves, _ = readTabs(b)
+		if content, readErr := os.ReadFile(filepath.Join(cfgDir(), "cc-web-tabs.json")); readErr == nil { // ancien nom, avant la première migration
+			saves, _ = readTabs(content)
 		}
 	}
 	if len(saves) == 0 {
 		return terr("srv.matin.aucuneSauvegarde", "A1", tabsFile())
 	}
 	var save *TabSave
-	for i := range saves {
-		if name == "" || saves[i].Name == name {
-			save = &saves[i]
+	for saveIndex := range saves {
+		if name == "" || saves[saveIndex].Name == name {
+			save = &saves[saveIndex]
 			break
 		}
 	}
@@ -113,145 +130,150 @@ func matinResume(ctx context.Context, o matinOpts, name string, out io.Writer) e
 	if save.Name != "" {
 		label = save.Name
 	}
-	fmt.Fprintln(out, L("cli.matin.backup", "A1", label, "A2", strings.Replace(cut(save.At, 16), "T", " ", 1), "A3", len(save.Sessions)))
-	for _, s := range save.Sessions {
-		fmt.Fprintln(out)
-		one := o
-		one.id, one.project, one.prompt = s.ID, s.Project, ""
-		if s.Busy { // coupée en plein tour : sans message, Claude affiche « Interrupted » et attend
+	fmt.Fprintln(output, L("cli.matin.backup", "A1", label, "A2", strings.Replace(cut(save.At, matinBackupStamp), "T", " ", 1), "A3", len(save.Sessions)))
+	for _, session := range save.Sessions {
+		fmt.Fprintln(output)
+		one := options
+		one.id, one.project, one.prompt = session.ID, session.Project, ""
+		if session.Busy { // coupée en plein tour : sans message, Claude affiche « Interrupted » et attend
 			one.prompt = L("cli.matin.continuePrompt")
 		}
-		if err := matinRun(ctx, one, out); err != nil {
-			fmt.Fprintln(out, "gld-matin :", err)
+		if runErr := matinRun(runContext, one, output); runErr != nil {
+			fmt.Fprintln(output, "gld-matin :", runErr)
 		}
 	}
 	return nil
 }
 
-func matinRun(ctx context.Context, o matinOpts, out io.Writer) error {
-	if o.launch == "list" {
-		fmt.Fprintln(out, L("cli.matin.launchers"))
-		for _, l := range launchers {
-			if launcherAvailable(l) {
-				fmt.Fprintln(out, "  "+l)
+func matinRun(runContext context.Context, options matinOpts, output io.Writer) error {
+	if options.launch == "list" {
+		fmt.Fprintln(output, L("cli.matin.launchers"))
+		for _, launcherName := range launchers {
+			if launcherAvailable(launcherName) {
+				fmt.Fprintln(output, "  "+launcherName)
 			}
 		}
 		return nil
 	}
-	launcher := o.launch
+	launcher := options.launch
 	if launcher == "" {
 		launcher = detectLauncher()
 	}
 
 	// Nouvelle session avec un prompt (ex. fusion de mémoires depuis gld).
-	if o.prompt != "" && o.id == "" {
-		dir, err := absDir(o.project)
-		if err != nil {
-			return err
+	if options.prompt != "" && options.id == "" {
+		dir, dirErr := absDir(options.project)
+		if dirErr != nil {
+			return dirErr
 		}
-		if o.dry {
-			fmt.Fprintln(out, L("cli.matin.wouldOpenNew", "A1", dir))
+		if options.dry {
+			fmt.Fprintln(output, L("cli.matin.wouldOpenNew", "A1", dir))
 			return nil
 		}
 		if launcher == "" {
 			return terr("srv.matin.aucunTerminalSupporteDetecte")
 		}
-		if err := openTab(launcher, "claude", tabSpec{Cwd: dir, Args: claudeTabArgs(o.args, "", o.prompt), Env: o.env}); err != nil {
-			return err
+		if openErr := openTab(launcher, "claude", tabSpec{Cwd: dir, Args: claudeTabArgs(options.args, "", options.prompt), Env: options.env}); openErr != nil {
+			return openErr
 		}
-		fmt.Fprintln(out, L("cli.matin.openedNew", "A1", dir))
+		fmt.Fprintln(output, L("cli.matin.openedNew", "A1", dir))
 		return nil
 	}
 
-	if o.id != "" {
-		o.age, o.min = 36500, 0
+	if options.id != "" {
+		options.age, options.min = matinAnyAgeDays, 0
 	}
-	p, err := resolveProject(o.project)
-	if err != nil {
-		return err
+	resolved, projectErr := resolveProject(options.project)
+	if projectErr != nil {
+		return projectErr
 	}
-	if launcher == "" && !o.dry {
+	if launcher == "" && !options.dry {
 		return terr("srv.matin.aucunTerminalSupporteDetecte2")
 	}
-	fmt.Fprintln(out, L("cli.matin.project", "A1", p.Path))
-	if !o.dry {
-		fmt.Fprintln(out, L("cli.matin.tabs", "A1", launcher))
+	fmt.Fprintln(output, L("cli.matin.project", "A1", resolved.Path))
+	if !options.dry {
+		fmt.Fprintln(output, L("cli.matin.tabs", "A1", launcher))
 	}
-	fmt.Fprintln(out)
+	fmt.Fprintln(output)
 
 	live := liveSessions() // inconnu (nil) : on ouvre quand même, comme avant
-	excl := map[string]bool{}
-	for _, e := range strings.Split(o.exclure, ":") {
-		if e != "" {
-			excl[e] = true
+	excludedTitles := map[string]bool{}
+	for _, excludedTitle := range strings.Split(options.exclure, ":") {
+		if excludedTitle != "" {
+			excludedTitles[excludedTitle] = true
 		}
 	}
-	files := listTranscripts(p.Transcripts, false, false)
+	files := listTranscripts(resolved.Transcripts, false, false)
 	recent := files[:0:0]
-	for _, t := range files {
-		if younger(t.Info, o.age) {
-			recent = append(recent, t)
+	for _, candidate := range files {
+		if younger(candidate.Info, options.age) {
+			recent = append(recent, candidate)
 		}
 	}
 	if len(recent) == 0 {
-		fmt.Fprintln(out, L("cli.matin.noRecent", "A1", o.age))
+		fmt.Fprintln(output, L("cli.matin.noRecent", "A1", options.age))
 		return nil
 	}
 
 	seen := map[string]bool{}
-	n := 0
+	openedCount := 0
 	opened := false // la session demandée est déjà ouverte dans un terminal
-	for _, t := range recent {
-		if o.id != "" && t.S.ID != o.id || t.Info.Size() < o.min || o.id == "" && (t.S.autoReview() || t.S.team != "") { // ni revues automatiques ni sessions d'équipiers : elles appartiennent à leur session parente
+	for _, candidate := range recent {
+		isOtherSession := options.id != "" && candidate.S.ID != options.id
+		isTooSmall := candidate.Info.Size() < options.min
+		// ni revues automatiques ni sessions d'équipiers : elles appartiennent à leur session parente
+		isChildSession := options.id == "" && (candidate.S.autoReview() || candidate.S.team != "")
+		if isOtherSession || isTooSmall || isChildSession {
 			continue
 		}
-		title, mark := t.label()
-		if o.id != "" && title == "" {
-			title = short(t.S.ID) // une session demandée par son id s'ouvre même sans titre
+		title, mark := candidate.label()
+		if options.id != "" && title == "" {
+			title = short(candidate.S.ID) // une session demandée par son id s'ouvre même sans titre
 		}
-		if mark == "~" && o.nommees && o.id == "" || title == "" {
+		skipsUnnamed := mark == "~" && options.nommees && options.id == ""
+		if skipsUnnamed || title == "" {
 			continue
 		}
-		if o.id == "" { // premier vu = plus récent : les homonymes plus anciens sont ignorés
+		if options.id == "" { // premier vu = plus récent : les homonymes plus anciens sont ignorés
 			if seen[title] {
 				continue
 			}
 			seen[title] = true
 		}
-		if excl[title] {
+		if excludedTitles[title] {
 			continue
 		}
-		if live[t.S.ID] {
-			fmt.Fprintf(out, "  %s %s %s %s\n", pad(L("cli.matin.stateOpen"), 12), mark, pad(cut(title, 45), 45), short(t.S.ID))
+		if live[candidate.S.ID] {
+			fmt.Fprintf(output, "  %s %s %s %s\n", pad(L("cli.matin.stateOpen"), matinStateWidth), mark, pad(cut(title, matinTitleWidth), matinTitleWidth), short(candidate.S.ID))
 			opened = true
 			continue
 		}
-		if o.dry {
-			fmt.Fprintf(out, "  %s %s %s %s  (%s)\n", pad(L("cli.matin.stateWould"), 12), mark, pad(cut(title, 45), 45), short(t.S.ID), mdate(t.Info))
+		if options.dry {
+			fmt.Fprintf(output, "  %s %s %s %s  (%s)\n", pad(L("cli.matin.stateWould"), matinStateWidth), mark, pad(cut(title, matinTitleWidth), matinTitleWidth), short(candidate.S.ID), mdate(candidate.Info))
 		} else {
-			fmt.Fprintf(out, "  %s %s %s %s\n", pad(L("cli.matin.stateOpening"), 12), mark, pad(cut(title, 45), 45), short(t.S.ID))
-			if err := openTab(launcher, title, tabSpec{Cwd: p.Path, Args: claudeTabArgs(o.args, t.S.ID, o.prompt)}); err != nil {
-				fmt.Fprintln(out, "   ", L("srv.common.failed", "A1", err.Error()))
+			fmt.Fprintf(output, "  %s %s %s %s\n", pad(L("cli.matin.stateOpening"), matinStateWidth), mark, pad(cut(title, matinTitleWidth), matinTitleWidth), short(candidate.S.ID))
+			if openErr := openTab(launcher, title, tabSpec{Cwd: resolved.Path, Args: claudeTabArgs(options.args, candidate.S.ID, options.prompt)}); openErr != nil {
+				fmt.Fprintln(output, "   ", L("srv.common.failed", "A1", openErr.Error()))
 			}
 			select {
-			case <-time.After(o.pause):
-			case <-ctx.Done():
-				return ctx.Err()
+			case <-time.After(options.pause):
+			case <-runContext.Done():
+				return runContext.Err()
 			}
 		}
-		n++
+		openedCount++
 	}
-	fmt.Fprintln(out)
-	if o.id != "" && n == 0 { // une session précise : ne rien ouvrir est un échec à dire clairement, pas « 0 onglet »
+	fmt.Fprintln(output)
+	if options.id != "" && openedCount == 0 { // une session précise : ne rien ouvrir est un échec à dire clairement, pas « 0 onglet »
 		if opened {
 			return terr("srv.matin.cetteSessionEstDeja")
 		}
-		return terr("srv.matin.sessionIntrouvableDansCe", "A1", short(o.id))
+		return terr("srv.matin.sessionIntrouvableDansCe", "A1", short(options.id))
 	}
-	if o.dry {
-		fmt.Fprintln(out, L("cli.matin.wouldReopen", "A1", n))
+	if options.dry {
+		fmt.Fprintln(output, L("cli.matin.wouldReopen", "A1", openedCount))
 	} else {
-		fmt.Fprintln(out, L("cli.matin.launched", "A1", n))
+		fmt.Fprintln(output, L("cli.matin.launched", "A1", openedCount))
 	}
 	return nil
 }
@@ -265,7 +287,7 @@ func absDir(target string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
+	if fileInfo, statErr := os.Stat(abs); statErr != nil || !fileInfo.IsDir() {
 		return "", terr("srv.matin.projetIntrouvable")
 	}
 	return abs, nil

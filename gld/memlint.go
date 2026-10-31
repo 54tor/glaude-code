@@ -18,6 +18,8 @@ type Finding struct {
 const (
 	lintMaxFile  = 6000  // caractères gardés par fichier
 	lintMaxTotal = 80000 // caractères envoyés au total
+	lintMaxKeys  = 6
+	lintMaxWhy   = 300
 )
 
 func lintSystem() string { return L("prompt.lintSystem", "A1", replyLang()) }
@@ -27,9 +29,9 @@ func memLintFiles(scope string) ([]string, error) {
 	global, projects, _ := memList()
 	var keys []string
 	if scope == "global" {
-		for _, f := range global {
-			if !f.Off {
-				keys = append(keys, f.Key)
+		for _, memoryFile := range global {
+			if !memoryFile.Off {
+				keys = append(keys, memoryFile.Key)
 			}
 		}
 		return keys, nil
@@ -37,13 +39,13 @@ func memLintFiles(scope string) ([]string, error) {
 	if !safeDir(scope) {
 		return nil, terr("srv.memmeta.projetInvalide")
 	}
-	for _, p := range projects {
-		if p.Dir != scope {
+	for _, memoryProject := range projects {
+		if memoryProject.Dir != scope {
 			continue
 		}
-		for _, f := range p.Files {
-			if !strings.HasSuffix(f.Key, "/MEMORY.md") {
-				keys = append(keys, f.Key)
+		for _, memoryFile := range memoryProject.Files {
+			if !strings.HasSuffix(memoryFile.Key, "/MEMORY.md") {
+				keys = append(keys, memoryFile.Key)
 			}
 		}
 	}
@@ -54,22 +56,22 @@ func memLintFiles(scope string) ([]string, error) {
 }
 
 func memLintPrompt(keys []string) (string, error) {
-	var b strings.Builder
-	for _, k := range keys {
-		text, err := memRead(k)
+	var promptText strings.Builder
+	for _, key := range keys {
+		text, err := memRead(key)
 		if err != nil {
 			continue
 		}
 		text = cut(text, lintMaxFile)
-		if b.Len()+len(text) > lintMaxTotal {
+		if promptText.Len()+len(text) > lintMaxTotal {
 			break
 		}
-		b.WriteString("=== " + k + " ===\n" + text + "\n\n")
+		promptText.WriteString("=== " + key + " ===\n" + text + "\n\n")
 	}
-	if b.Len() == 0 {
+	if promptText.Len() == 0 {
 		return "", terr("srv.memlint.rienAAnalyser")
 	}
-	return b.String(), nil
+	return promptText.String(), nil
 }
 
 // memLint demande l'analyse à Haiku et ne garde que les constats bien formés, portant sur des fichiers qu'on lui a donnés.
@@ -82,27 +84,29 @@ func memLint(scope string) ([]Finding, float64, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	out, cost, err := memDraft("haiku", lintSystem(), prompt)
+	answer, cost, err := memDraft("haiku", lintSystem(), prompt)
 	if err != nil {
 		return nil, cost, err
 	}
 	var raw []Finding
-	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &raw); err != nil {
+	if decodeErr := json.Unmarshal([]byte(strings.TrimSpace(answer)), &raw); decodeErr != nil {
 		return nil, cost, terr("srv.memlint.reponseDeLAnalyse")
 	}
-	res := []Finding{}
-	for _, f := range raw {
-		if !slices.Contains([]string{"doublon", "contradiction", "périmé"}, f.Kind) || len(f.Keys) == 0 || len(f.Keys) > 6 {
+	kept := []Finding{}
+	for _, finding := range raw {
+		isKnownKind := slices.Contains([]string{"doublon", "contradiction", "périmé"}, finding.Kind)
+		hasValidKeyCount := len(finding.Keys) > 0 && len(finding.Keys) <= lintMaxKeys
+		if !isKnownKind || !hasValidKeyCount {
 			continue
 		}
-		ok := true
-		for _, k := range f.Keys {
-			ok = ok && slices.Contains(keys, k)
+		allKnown := true
+		for _, key := range finding.Keys {
+			allKnown = allKnown && slices.Contains(keys, key)
 		}
-		if ok {
-			f.Why = cut(strings.TrimSpace(f.Why), 300)
-			res = append(res, f)
+		if allKnown {
+			finding.Why = cut(strings.TrimSpace(finding.Why), lintMaxWhy)
+			kept = append(kept, finding)
 		}
 	}
-	return res, cost, nil
+	return kept, cost, nil
 }

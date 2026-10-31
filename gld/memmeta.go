@@ -19,22 +19,32 @@ import (
 
 const indexLines = 200 // Claude Code ne charge que les 200 premières lignes de MEMORY.md
 
-// frontMatter : le bloc YAML en tête du texte et le reste. ok est faux s'il n'y en a pas.
+const (
+	memExcerptMax      = 120
+	globMaxLength      = 200
+	globMaxBraces      = 4
+	memMatchTimeout    = 5 * time.Second
+	memMatchMaxVisited = 50000
+	memMatchMaxFiles   = 50
+	memSearchMinQuery  = 2
+)
+
+// frontMatter : le bloc YAML en tête du texte et le reste. hasFrontMatter est faux s'il n'y en a pas.
 var blankLinesRe = regexp.MustCompile(`\n{2,}`)
 
-func frontMatter(text string) (yamlText, body string, ok bool) {
+func frontMatter(text string) (yamlText, body string, hasFrontMatter bool) {
 	if !strings.HasPrefix(text, "---\n") {
 		return "", text, false
 	}
 	rest := text[4:]
-	i := strings.Index("\n"+rest, "\n---")
-	if i < 0 {
+	separatorIndex := strings.Index("\n"+rest, "\n---")
+	if separatorIndex < 0 {
 		return "", text, false
 	}
-	yamlText = rest[:max(i-1, 0)]
-	after := rest[min(i+3, len(rest)):]
-	if j := strings.Index(after, "\n"); j >= 0 {
-		after = after[j+1:]
+	yamlText = rest[:max(separatorIndex-1, 0)]
+	after := rest[min(separatorIndex+3, len(rest)):]
+	if newlineIndex := strings.Index(after, "\n"); newlineIndex >= 0 {
+		after = after[newlineIndex+1:]
 	} else {
 		after = ""
 	}
@@ -43,86 +53,86 @@ func frontMatter(text string) (yamlText, body string, ok bool) {
 
 // parseMeta : le front matter décodé. Une erreur YAML est renvoyée telle quelle (affichée comme avertissement).
 func parseMeta(text string) (map[string]any, error) {
-	y, _, ok := frontMatter(text)
-	if !ok {
+	yamlText, _, hasFrontMatter := frontMatter(text)
+	if !hasFrontMatter {
 		if strings.HasPrefix(text, "---\n") {
 			return nil, terr("srv.memmeta.frontMatterNonFerme")
 		}
 		return nil, nil
 	}
-	var m map[string]any
-	if err := yaml.Unmarshal([]byte(y), &m); err != nil {
-		return nil, terr("srv.memmeta.frontMatterInvalide", "A1", cut(strings.ReplaceAll(err.Error(), "\n", " "), 120))
+	var meta map[string]any
+	if err := yaml.Unmarshal([]byte(yamlText), &meta); err != nil {
+		return nil, terr("srv.memmeta.frontMatterInvalide", "A1", cut(strings.ReplaceAll(err.Error(), "\n", " "), memExcerptMax))
 	}
-	return m, nil
+	return meta, nil
 }
 
 // metaString : un champ texte du front matter, sur une ligne (une valeur repliée « >- » comprise) ; "" s'il manque.
 func metaString(text, key string) string {
-	m, _ := parseMeta(text)
-	s, _ := m[key].(string)
-	return strings.Join(strings.Fields(s), " ")
+	meta, _ := parseMeta(text)
+	value, _ := meta[key].(string)
+	return strings.Join(strings.Fields(value), " ")
 }
 
 // globsOf : les motifs du champ `paths:` (liste ou chaîne, séparés par des virgules).
-func globsOf(m map[string]any) ([]string, error) {
-	var out []string
-	switch v := m["paths"].(type) {
+func globsOf(meta map[string]any) ([]string, error) {
+	var patterns []string
+	switch pathsValue := meta["paths"].(type) {
 	case nil:
 		return nil, nil
 	case string:
-		out = splitGlobs(v)
+		patterns = splitGlobs(pathsValue)
 	case []any:
-		for _, e := range v {
-			s, ok := e.(string)
-			if !ok || strings.TrimSpace(s) == "" {
+		for _, element := range pathsValue {
+			pattern, isString := element.(string)
+			if !isString || strings.TrimSpace(pattern) == "" {
 				return nil, terr("srv.memmeta.pathsDoitContenirDes")
 			}
-			out = append(out, strings.TrimSpace(s))
+			patterns = append(patterns, strings.TrimSpace(pattern))
 		}
 	default:
 		return nil, terr("srv.memmeta.pathsDoitEtreUne")
 	}
-	for _, g := range out {
-		if !globOK(g) {
-			return nil, terr("srv.memmeta.motifInvalide", "A1", g)
+	for _, pattern := range patterns {
+		if !globOK(pattern) {
+			return nil, terr("srv.memmeta.motifInvalide", "A1", pattern)
 		}
 	}
-	if len(out) == 0 {
+	if len(patterns) == 0 {
 		return nil, terr("srv.memmeta.pathsEstVideLa")
 	}
-	return out, nil
+	return patterns, nil
 }
 
 // globOK : motif valide et borné. doublestar recurse à chaque alternative d'accolade : n groupes coûtent 2^n appels.
-func globOK(g string) bool {
-	return len(g) <= 200 && strings.Count(g, "{") <= 4 && doublestar.ValidatePattern(g)
+func globOK(pattern string) bool {
+	return len(pattern) <= globMaxLength && strings.Count(pattern, "{") <= globMaxBraces && doublestar.ValidatePattern(pattern)
 }
 
 // splitGlobs sépare des motifs par des virgules, hors accolades : « a/*.{ts,tsx}, b/** » donne deux motifs.
-func splitGlobs(s string) []string {
-	var out []string
+func splitGlobs(text string) []string {
+	var patterns []string
 	depth, start := 0, 0
 	add := func(end int) {
-		if g := strings.TrimSpace(s[start:end]); g != "" {
-			out = append(out, g)
+		if pattern := strings.TrimSpace(text[start:end]); pattern != "" {
+			patterns = append(patterns, pattern)
 		}
 	}
-	for i, c := range s {
-		switch c {
+	for byteIndex, character := range text {
+		switch character {
 		case '{':
 			depth++
 		case '}':
 			depth = max(depth-1, 0)
 		case ',':
 			if depth == 0 {
-				add(i)
-				start = i + 1
+				add(byteIndex)
+				start = byteIndex + 1
 			}
 		}
 	}
-	add(len(s))
-	return out
+	add(len(text))
+	return patterns
 }
 
 // isClaudeFile : un CLAUDE.md (celui que Claude Code charge), par opposition aux autres fichiers de documentation du projet.
@@ -131,58 +141,60 @@ func isClaudeFile(key string) bool {
 }
 
 // annotate complète un MemFile : type, portée, budget de contexte, chargement à chaque session, avertissement.
-func annotate(f *MemFile) {
-	f.Off = strings.HasSuffix(f.Name, ".off")
-	text, err := memRead(f.Key)
+func annotate(memoryFile *MemFile) {
+	memoryFile.Off = strings.HasSuffix(memoryFile.Name, ".off")
+	text, err := memRead(memoryFile.Key)
 	if err != nil {
 		return
 	}
-	n := len(text)
-	if strings.HasSuffix(f.Key, "/MEMORY.md") { // seules les 200 premières lignes comptent
+	budgetLength := len(text)
+	if strings.HasSuffix(memoryFile.Key, "/MEMORY.md") { // seules les 200 premières lignes comptent
 		lines := strings.SplitAfter(text, "\n")
 		if len(lines) > indexLines {
-			n = len(strings.Join(lines[:indexLines], ""))
+			budgetLength = len(strings.Join(lines[:indexLines], ""))
 		}
 	}
-	f.Tokens = estimateTokens(n)
-	if k, ok := knownTokens(text[:n]); ok {
-		f.Tokens, f.Exact = k, true
+	memoryFile.Tokens = estimateTokens(budgetLength)
+	if exactTokens, known := knownTokens(text[:budgetLength]); known {
+		memoryFile.Tokens, memoryFile.Exact = exactTokens, true
 	}
-	m, err := parseMeta(text)
+	meta, err := parseMeta(text)
 	if err != nil {
-		f.Warn = err.Error()
+		memoryFile.Warn = err.Error()
 	}
-	if t, _ := m["type"].(string); t != "" {
-		f.Type = t
-	} else if md, _ := m["metadata"].(map[string]any); md != nil {
-		f.Type, _ = md["type"].(string)
+	if memoryType, _ := meta["type"].(string); memoryType != "" {
+		memoryFile.Type = memoryType
+	} else if metadata, _ := meta["metadata"].(map[string]any); metadata != nil {
+		memoryFile.Type, _ = metadata["type"].(string)
 	}
-	src, _ := m["source"].(string)
-	if md, _ := m["metadata"].(map[string]any); src == "" && md != nil {
-		src, _ = md["source"].(string)
+	source, _ := meta["source"].(string)
+	if metadata, _ := meta["metadata"].(map[string]any); source == "" && metadata != nil {
+		source, _ = metadata["source"].(string)
 	}
-	f.Gld = strings.HasPrefix(f.Key, "g/gldrules/") || src == "gld" && strings.HasPrefix(f.Key, "g/rules/")
-	rule := strings.HasPrefix(f.Key, "g/rules/") || strings.HasPrefix(f.Key, "r/")
-	if rule && m != nil {
-		if _, has := m["paths"]; has {
-			g, err := globsOf(m)
-			if err != nil {
-				f.Warn = err.Error()
+	isGldRulesDir := strings.HasPrefix(memoryFile.Key, "g/gldrules/")
+	isGldSourcedRule := source == "gld" && strings.HasPrefix(memoryFile.Key, "g/rules/")
+	memoryFile.Gld = isGldRulesDir || isGldSourcedRule
+	rule := strings.HasPrefix(memoryFile.Key, "g/rules/") || strings.HasPrefix(memoryFile.Key, "r/")
+	if rule && meta != nil {
+		if _, has := meta["paths"]; has {
+			patterns, globsErr := globsOf(meta)
+			if globsErr != nil {
+				memoryFile.Warn = globsErr.Error()
 			}
-			f.Paths = g
-			if g == nil {
-				f.Paths = []string{}
+			memoryFile.Paths = patterns
+			if patterns == nil {
+				memoryFile.Paths = []string{}
 			}
 		}
 	}
 	switch {
-	case f.Off:
-	case f.Key == "g/CLAUDE.md", strings.HasPrefix(f.Key, "p/") && isClaudeFile(f.Key):
-		f.Always = true
+	case memoryFile.Off:
+	case memoryFile.Key == "g/CLAUDE.md", strings.HasPrefix(memoryFile.Key, "p/") && isClaudeFile(memoryFile.Key):
+		memoryFile.Always = true
 	case rule:
-		f.Always = f.Paths == nil
-	case strings.HasSuffix(f.Key, "/MEMORY.md"):
-		f.Always = true
+		memoryFile.Always = memoryFile.Paths == nil
+	case strings.HasSuffix(memoryFile.Key, "/MEMORY.md"):
+		memoryFile.Always = true
 	}
 }
 
@@ -207,128 +219,128 @@ const staleAfter = 180 * 24 * time.Hour
 func memHealth() []Issue {
 	issues := []Issue{}
 	global, projects, _ := memList()
-	check := func(f MemFile) {
-		if f.Warn != "" {
-			issues = append(issues, Issue{Key: f.Key, Kind: "front-matter", Msg: f.Warn})
+	check := func(memoryFile MemFile) {
+		if memoryFile.Warn != "" {
+			issues = append(issues, Issue{Key: memoryFile.Key, Kind: "front-matter", Msg: memoryFile.Warn})
 		}
 	}
-	imports := func(f MemFile) {
-		text, err := memRead(f.Key)
-		if err != nil || f.Off {
+	imports := func(memoryFile MemFile) {
+		text, err := memRead(memoryFile.Key)
+		if err != nil || memoryFile.Off {
 			return
 		}
-		base, rel, err := memResolve(f.Key)
+		base, rel, err := memResolve(memoryFile.Key)
 		if err != nil {
 			return
 		}
 		dir := filepath.Dir(filepath.Join(base, rel))
 		home, _ := os.UserHomeDir()
 		inCode := false
-		for _, l := range strings.Split(text, "\n") {
-			if strings.HasPrefix(strings.TrimSpace(l), "```") {
+		for _, textLine := range strings.Split(text, "\n") {
+			if strings.HasPrefix(strings.TrimSpace(textLine), "```") {
 				inCode = !inCode
 			}
-			if inCode || strings.HasPrefix(strings.TrimSpace(l), "`") {
+			if inCode || strings.HasPrefix(strings.TrimSpace(textLine), "`") {
 				continue
 			}
-			for _, m := range importRef.FindAllStringSubmatch(l, -1) {
-				p := strings.TrimRight(m[1], ".,;:)")
+			for _, match := range importRef.FindAllStringSubmatch(textLine, -1) {
+				importPath := strings.TrimRight(match[1], ".,;:)")
 				switch {
-				case strings.HasPrefix(p, "~/"):
-					p = filepath.Join(home, p[2:])
-				case !filepath.IsAbs(p):
-					p = filepath.Join(dir, p)
+				case strings.HasPrefix(importPath, "~/"):
+					importPath = filepath.Join(home, importPath[2:])
+				case !filepath.IsAbs(importPath):
+					importPath = filepath.Join(dir, importPath)
 				}
-				if _, err := os.Stat(p); err != nil {
-					issues = append(issues, Issue{Key: f.Key, Kind: "import", Msg: L("srv.memmeta.importMissing", "A1", m[1])})
+				if _, statErr := os.Stat(importPath); statErr != nil {
+					issues = append(issues, Issue{Key: memoryFile.Key, Kind: "import", Msg: L("srv.memmeta.importMissing", "A1", match[1])})
 				}
 			}
 		}
 	}
 	// Les règles et CLAUDE.md citent des mémoires de n'importe quel projet : un lien est cassé si aucun projet n'a cette entrée.
 	allSlugs := map[string]bool{}
-	for _, p := range projects {
-		for _, f := range p.Files {
-			if strings.HasPrefix(f.Key, "m/") {
-				allSlugs[strings.TrimSuffix(f.Name, ".md")] = true
+	for _, memoryProject := range projects {
+		for _, memoryFile := range memoryProject.Files {
+			if strings.HasPrefix(memoryFile.Key, "m/") {
+				allSlugs[strings.TrimSuffix(memoryFile.Name, ".md")] = true
 			}
 		}
 	}
-	links := func(f MemFile) {
-		text, err := memRead(f.Key)
+	links := func(memoryFile MemFile) {
+		text, err := memRead(memoryFile.Key)
 		if err != nil {
 			return
 		}
-		for _, m := range wikiLink.FindAllStringSubmatch(text, -1) {
-			if !allSlugs[strings.TrimSuffix(strings.TrimSpace(m[1]), ".md")] {
-				issues = append(issues, Issue{Key: f.Key, Kind: "lien", Msg: L("srv.memmeta.brokenLink", "A1", m[1])})
+		for _, match := range wikiLink.FindAllStringSubmatch(text, -1) {
+			if !allSlugs[strings.TrimSuffix(strings.TrimSpace(match[1]), ".md")] {
+				issues = append(issues, Issue{Key: memoryFile.Key, Kind: "lien", Msg: L("srv.memmeta.brokenLink", "A1", match[1])})
 			}
 		}
 	}
-	for _, f := range global {
-		check(f)
-		links(f)
-		if f.Key == "g/CLAUDE.md" {
-			imports(f)
+	for _, memoryFile := range global {
+		check(memoryFile)
+		links(memoryFile)
+		if memoryFile.Key == "g/CLAUDE.md" {
+			imports(memoryFile)
 		}
 	}
-	for _, p := range projects {
+	for _, memoryProject := range projects {
 		names := map[string]bool{}
 		var entries []MemFile
-		for _, f := range p.Files {
-			check(f)
-			if !strings.HasPrefix(f.Key, "m/") {
-				links(f)
+		for _, memoryFile := range memoryProject.Files {
+			check(memoryFile)
+			if !strings.HasPrefix(memoryFile.Key, "m/") {
+				links(memoryFile)
 			}
-			if strings.HasPrefix(f.Key, "p/") && isClaudeFile(f.Key) { // les @mentions d'un README ne sont pas des imports
-				imports(f)
+			if strings.HasPrefix(memoryFile.Key, "p/") && isClaudeFile(memoryFile.Key) { // les @mentions d'un README ne sont pas des imports
+				imports(memoryFile)
 			}
-			if strings.HasPrefix(f.Key, "m/") {
-				names[f.Name] = true
-				if f.Name != "MEMORY.md" {
-					entries = append(entries, f)
+			if strings.HasPrefix(memoryFile.Key, "m/") {
+				names[memoryFile.Name] = true
+				if memoryFile.Name != "MEMORY.md" {
+					entries = append(entries, memoryFile)
 				}
 			}
 		}
 		if len(names) == 0 {
 			continue
 		}
-		ik := "m/" + p.Dir + "/MEMORY.md"
-		idx, err := memRead(ik)
-		if err != nil && names["MEMORY.md"] {
+		indexKey := "m/" + memoryProject.Dir + "/MEMORY.md"
+		indexText, indexErr := memRead(indexKey)
+		if indexErr != nil && names["MEMORY.md"] {
 			continue
 		}
 		listed := map[string]bool{}
-		if err == nil {
-			if n := len(strings.Split(strings.TrimRight(idx, "\n"), "\n")); n > indexLines {
-				issues = append(issues, Issue{Key: ik, Kind: "index-long", Dir: p.Dir,
-					Msg: L("srv.memmeta.indexTooLong", "A1", n, "A2", indexLines)})
+		if indexErr == nil {
+			if lineCount := len(strings.Split(strings.TrimRight(indexText, "\n"), "\n")); lineCount > indexLines {
+				issues = append(issues, Issue{Key: indexKey, Kind: "index-long", Dir: memoryProject.Dir,
+					Msg: L("srv.memmeta.indexTooLong", "A1", lineCount, "A2", indexLines)})
 			}
-			for _, m := range mdLink.FindAllStringSubmatch(idx, -1) {
-				listed[m[1]] = true
-				if !names[m[1]] {
-					issues = append(issues, Issue{Key: ik, Kind: "index-ligne", Dir: p.Dir, Msg: L("srv.memmeta.indexDangling", "A1", m[1])})
+			for _, match := range mdLink.FindAllStringSubmatch(indexText, -1) {
+				listed[match[1]] = true
+				if !names[match[1]] {
+					issues = append(issues, Issue{Key: indexKey, Kind: "index-ligne", Dir: memoryProject.Dir, Msg: L("srv.memmeta.indexDangling", "A1", match[1])})
 				}
 			}
 		}
 		slugs := map[string]bool{}
-		for _, f := range entries {
-			slugs[strings.TrimSuffix(f.Name, ".md")] = true
-			if !listed[f.Name] {
-				issues = append(issues, Issue{Key: f.Key, Kind: "index-absent", Dir: p.Dir, Msg: L("srv.memmeta.notInIndex")})
+		for _, memoryFile := range entries {
+			slugs[strings.TrimSuffix(memoryFile.Name, ".md")] = true
+			if !listed[memoryFile.Name] {
+				issues = append(issues, Issue{Key: memoryFile.Key, Kind: "index-absent", Dir: memoryProject.Dir, Msg: L("srv.memmeta.notInIndex")})
 			}
-			if time.Since(time.Unix(int64(f.Mtime), 0)) > staleAfter {
-				issues = append(issues, Issue{Key: f.Key, Kind: "perime", Msg: L("srv.memmeta.stale")})
+			if time.Since(time.Unix(int64(memoryFile.Mtime), 0)) > staleAfter {
+				issues = append(issues, Issue{Key: memoryFile.Key, Kind: "perime", Msg: L("srv.memmeta.stale")})
 			}
 		}
-		for _, f := range entries {
-			text, err := memRead(f.Key)
-			if err != nil {
+		for _, memoryFile := range entries {
+			text, readErr := memRead(memoryFile.Key)
+			if readErr != nil {
 				continue
 			}
-			for _, m := range wikiLink.FindAllStringSubmatch(text, -1) {
-				if !slugs[strings.TrimSuffix(strings.TrimSpace(m[1]), ".md")] {
-					issues = append(issues, Issue{Key: f.Key, Kind: "lien", Msg: L("srv.memmeta.brokenLink", "A1", m[1])})
+			for _, match := range wikiLink.FindAllStringSubmatch(text, -1) {
+				if !slugs[strings.TrimSuffix(strings.TrimSpace(match[1]), ".md")] {
+					issues = append(issues, Issue{Key: memoryFile.Key, Kind: "lien", Msg: L("srv.memmeta.brokenLink", "A1", match[1])})
 				}
 			}
 		}
@@ -341,97 +353,99 @@ func memRepairIndex(dir string) (removed, added int, err error) {
 	if !safeDir(dir) {
 		return 0, 0, terr("srv.routes_sessions.dossierInvalide")
 	}
-	ik := "m/" + dir + "/MEMORY.md"
-	idx, _ := memRead(ik)
+	indexKey := "m/" + dir + "/MEMORY.md"
+	indexText, _ := memRead(indexKey)
 	files, _ := filepath.Glob(filepath.Join(root, dir, "memory", "*.md"))
 	have := map[string]bool{}
-	for _, p := range files {
-		have[filepath.Base(p)] = true
+	for _, filePath := range files {
+		have[filepath.Base(filePath)] = true
 	}
 	var keep []string
 	listed := map[string]bool{}
-	for _, l := range strings.SplitAfter(idx, "\n") {
-		if m := mdLink.FindStringSubmatch(l); m != nil {
-			if !have[m[1]] {
+	for _, line := range strings.SplitAfter(indexText, "\n") {
+		if match := mdLink.FindStringSubmatch(line); match != nil {
+			if !have[match[1]] {
 				removed++
 				continue
 			}
-			listed[m[1]] = true
+			listed[match[1]] = true
 		}
-		keep = append(keep, l)
+		keep = append(keep, line)
 	}
-	out := strings.Join(keep, "")
-	if out != "" && !strings.HasSuffix(out, "\n") {
-		out += "\n"
+	rewritten := strings.Join(keep, "")
+	if rewritten != "" && !strings.HasSuffix(rewritten, "\n") {
+		rewritten += "\n"
 	}
 	sort.Strings(files)
-	for _, p := range files {
-		n := filepath.Base(p)
-		if n == "MEMORY.md" || listed[n] || !mdName.MatchString(n) {
+	for _, filePath := range files {
+		fileName := filepath.Base(filePath)
+		if fileName == "MEMORY.md" || listed[fileName] || !mdName.MatchString(fileName) {
 			continue
 		}
-		text, _ := memRead("m/" + dir + "/" + n)
-		title := strings.TrimSuffix(n, ".md")
-		if n := metaString(text, "name"); n != "" {
-			title = n
+		text, _ := memRead("m/" + dir + "/" + fileName)
+		title := strings.TrimSuffix(fileName, ".md")
+		if metaName := metaString(text, "name"); metaName != "" {
+			title = metaName
 		}
-		line := "- [" + title + "](" + n + ")"
-		if d := metaString(text, "description"); d != "" {
-			line += " — " + d
+		line := "- [" + title + "](" + fileName + ")"
+		if description := metaString(text, "description"); description != "" {
+			line += " — " + description
 		}
-		out += line + "\n"
+		rewritten += line + "\n"
 		added++
 	}
 	if removed+added == 0 {
 		return 0, 0, nil
 	}
-	return removed, added, memSave(ik, out)
+	return removed, added, memSave(indexKey, rewritten)
 }
 
 // --- portée des règles ----------------------------------------------------------------------------
 
 // memMatches : les fichiers d'un projet ciblés par les motifs `paths:` d'une règle (au plus 50 renvoyés).
 func memMatches(key, dir string) (files []string, total int, truncated bool, err error) {
-	f, ok := memFileByKey(key)
-	if !ok || len(f.Paths) == 0 {
+	memoryFile, found := memFileByKey(key)
+	if !found || len(memoryFile.Paths) == 0 {
 		return nil, 0, false, terr("srv.memmeta.cetteRegleNEst")
 	}
 	if !safeDir(dir) {
 		return nil, 0, false, terr("srv.memmeta.projetInvalide")
 	}
 	cwd := ""
-	for _, t := range liveProjects() {
-		if t.Dir == dir {
-			cwd = t.Project
+	for _, liveProject := range liveProjects() {
+		if liveProject.Dir == dir {
+			cwd = liveProject.Project
 		}
 	}
 	if cwd == "" {
 		return nil, 0, false, terr("srv.memory.dossierDuProjetIntrouvable")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	walkContext, cancel := context.WithTimeout(context.Background(), memMatchTimeout)
 	defer cancel()
 	visited := 0
 	skip := map[string]bool{".git": true, "node_modules": true, "vendor": true, "dist": true, ".venv": true, "target": true}
 	cwd = walkRoot(cwd)
-	filepath.WalkDir(cwd, func(p string, d fs.DirEntry, e error) error {
-		if e != nil {
+	filepath.WalkDir(cwd, func(walkedPath string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
 			return nil
 		}
-		if d.IsDir() && skip[d.Name()] && p != cwd {
+		if entry.IsDir() && skip[entry.Name()] && walkedPath != cwd {
 			return filepath.SkipDir
 		}
-		if d.IsDir() {
+		if entry.IsDir() {
 			return nil
 		}
-		if visited++; visited > 50000 || ctx.Err() != nil {
+		visited++
+		if visited > memMatchMaxVisited || walkContext.Err() != nil {
 			truncated = true
 			return filepath.SkipAll
 		}
-		rel, _ := filepath.Rel(cwd, p)
+		rel, _ := filepath.Rel(cwd, walkedPath)
 		rel = filepath.ToSlash(rel)
-		for _, g := range f.Paths {
-			if ok, _ := doublestar.Match(g, rel); ok {
-				if total++; total <= 50 {
+		for _, pattern := range memoryFile.Paths {
+			if matched, _ := doublestar.Match(pattern, rel); matched {
+				total++
+				if total <= memMatchMaxFiles {
 					files = append(files, rel)
 				}
 				break
@@ -454,39 +468,39 @@ var pathsBlock = regexp.MustCompile(`(?m)^paths:[^\n]*\n(?:[ \t]+[^\n]*\n|-[ \t]
 
 // setPaths remplace (ou ajoute, ou retire si paths est vide) le champ `paths:` du front matter, sans toucher au reste.
 func setPaths(text string, paths []string) (string, error) {
-	var blk strings.Builder
+	var newBlock strings.Builder
 	if len(paths) > 0 {
-		blk.WriteString("paths:\n")
-		for _, g := range paths {
-			if !globOK(g) || strings.ContainsAny(g, "\n\"") {
-				return "", terr("srv.memmeta.motifInvalide", "A1", g)
+		newBlock.WriteString("paths:\n")
+		for _, pattern := range paths {
+			if !globOK(pattern) || strings.ContainsAny(pattern, "\n\"") {
+				return "", terr("srv.memmeta.motifInvalide", "A1", pattern)
 			}
-			blk.WriteString("  - \"" + g + "\"\n")
+			newBlock.WriteString("  - \"" + pattern + "\"\n")
 		}
 	}
-	y, body, ok := frontMatter(text)
-	if !ok {
-		if blk.Len() == 0 {
+	yamlText, body, hasFrontMatter := frontMatter(text)
+	if !hasFrontMatter {
+		if newBlock.Len() == 0 {
 			return text, nil
 		}
-		return "---\n" + blk.String() + "---\n\n" + text, nil
+		return "---\n" + newBlock.String() + "---\n\n" + text, nil
 	}
-	y = strings.TrimRight(y, "\n")
-	if y != "" {
-		y += "\n"
+	yamlText = strings.TrimRight(yamlText, "\n")
+	if yamlText != "" {
+		yamlText += "\n"
 	}
-	if pathsBlock.MatchString(y) {
-		y = pathsBlock.ReplaceAllString(y, "")
+	if pathsBlock.MatchString(yamlText) {
+		yamlText = pathsBlock.ReplaceAllString(yamlText, "")
 	}
-	y += blk.String()
-	if strings.TrimSpace(y) == "" {
+	yamlText += newBlock.String()
+	if strings.TrimSpace(yamlText) == "" {
 		return strings.TrimLeft(body, "\n"), nil
 	}
-	out := "---\n" + y + "---\n" + body
-	if _, err := parseMeta(out); err != nil {
+	updated := "---\n" + yamlText + "---\n" + body
+	if _, err := parseMeta(updated); err != nil {
 		return "", err
 	}
-	return out, nil
+	return updated, nil
 }
 
 // memTypes : les types d'entrée de mémoire prévus par Claude Code.
@@ -501,88 +515,88 @@ var (
 
 // setType fixe metadata.type dans le front matter (créé au besoin), sans toucher aux autres champs ; "" retire le type.
 // metaBlock : les lignes indentées sous metadata: (vide s'il n'y en a pas), jusqu'à la prochaine clé de premier niveau.
-func metaBlock(y string) (start, end int) {
-	loc := metaLine.FindStringIndex(y)
+func metaBlock(yamlText string) (start, end int) {
+	loc := metaLine.FindStringIndex(yamlText)
 	if loc == nil {
-		return len(y), len(y)
+		return len(yamlText), len(yamlText)
 	}
 	start = loc[1]
-	if next := topKey.FindStringIndex(y[start+1:]); next != nil {
+	if next := topKey.FindStringIndex(yamlText[start+1:]); next != nil {
 		return start, start + 1 + next[0]
 	}
-	return start, len(y)
+	return start, len(yamlText)
 }
 
-func setType(text, typ string) (string, error) {
-	if typ != "" && !slices.Contains(memTypes, typ) {
-		return "", terr("srv.memmeta.typeInconnu", "A1", typ)
+func setType(text, memoryType string) (string, error) {
+	if memoryType != "" && !slices.Contains(memTypes, memoryType) {
+		return "", terr("srv.memmeta.typeInconnu", "A1", memoryType)
 	}
-	y, body, ok := frontMatter(text)
-	if !ok {
-		if typ == "" {
+	yamlText, body, hasFrontMatter := frontMatter(text)
+	if !hasFrontMatter {
+		if memoryType == "" {
 			return text, nil
 		}
-		return "---\nmetadata:\n  type: " + typ + "\n---\n\n" + text, nil
+		return "---\nmetadata:\n  type: " + memoryType + "\n---\n\n" + text, nil
 	}
 	// Un en-tête déjà invalide pour un lecteur YAML strict (description avec « : » non guillemetée, très courant) se modifie quand même :
 	// la modification est textuelle, et on ne refuse que de rendre invalide un en-tête qui ne l'était pas.
 	_, origErr := parseMeta(text)
-	y = strings.TrimRight(y, "\n") + "\n"
+	yamlText = strings.TrimRight(yamlText, "\n") + "\n"
 	// Seul le type: indenté sous metadata: est le nôtre : un « type: » sous une autre clé (hooks…) n'est jamais touché.
-	ms, me := metaBlock(y)
-	block := y[ms:me]
+	metaStart, metaEnd := metaBlock(yamlText)
+	block := yamlText[metaStart:metaEnd]
 	switch {
-	case typ == "":
-		y = y[:ms] + typeIndented.ReplaceAllString(block, "") + y[me:]
-		y = typeTop.ReplaceAllString(y, "")
+	case memoryType == "":
+		yamlText = yamlText[:metaStart] + typeIndented.ReplaceAllString(block, "") + yamlText[metaEnd:]
+		yamlText = typeTop.ReplaceAllString(yamlText, "")
 	case typeIndented.MatchString(block):
 		done := false
-		y = y[:ms] + typeIndented.ReplaceAllStringFunc(block, func(l string) string {
+		yamlText = yamlText[:metaStart] + typeIndented.ReplaceAllStringFunc(block, func(textLine string) string {
 			if done {
-				return l
+				return textLine
 			}
 			done = true
-			return typeIndented.FindStringSubmatch(l)[1] + " " + typ
-		}) + y[me:]
-	case typeTop.MatchString(y):
-		y = typeTop.ReplaceAllString(y, "type: "+typ)
-	case metaLine.MatchString(y):
-		y = metaLine.ReplaceAllString(y, "metadata:\n  type: "+typ)
+			return typeIndented.FindStringSubmatch(textLine)[1] + " " + memoryType
+		}) + yamlText[metaEnd:]
+	case typeTop.MatchString(yamlText):
+		yamlText = typeTop.ReplaceAllString(yamlText, "type: "+memoryType)
+	case metaLine.MatchString(yamlText):
+		yamlText = metaLine.ReplaceAllString(yamlText, "metadata:\n  type: "+memoryType)
 	default:
-		y += "metadata:\n  type: " + typ + "\n"
+		yamlText += "metadata:\n  type: " + memoryType + "\n"
 	}
-	y = blankLinesRe.ReplaceAllString(y, "\n")
-	out := "---\n" + y + "---\n" + body
+	yamlText = blankLinesRe.ReplaceAllString(yamlText, "\n")
+	updated := "---\n" + yamlText + "---\n" + body
 	if origErr == nil {
-		if _, err := parseMeta(out); err != nil {
+		if _, err := parseMeta(updated); err != nil {
 			return "", err
 		}
 	}
-	return out, nil
+	return updated, nil
 }
 
 // --- recherche plein texte ---------------------------------------------------------------------------
 
-// memSearch : les fichiers de mémoire dont le contenu contient q (insensible à la casse), avec la première ligne trouvée.
-func memSearch(q string) map[string]string {
+// memSearch : les fichiers de mémoire dont le contenu contient query (insensible à la casse), avec la première ligne trouvée.
+func memSearch(query string) map[string]string {
 	hits := map[string]string{}
-	q = strings.ToLower(strings.TrimSpace(q))
-	if len(q) < 2 {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if len(query) < memSearchMinQuery {
 		return hits
 	}
 	global, projects, _ := memList()
 	all := append([]MemFile{}, global...)
-	for _, p := range projects {
-		all = append(all, p.Files...)
+	for _, memoryProject := range projects {
+		all = append(all, memoryProject.Files...)
 	}
-	for _, f := range all {
-		text, err := memRead(f.Key)
+	for _, memoryFile := range all {
+		text, err := memRead(memoryFile.Key)
 		if err != nil {
 			continue
 		}
-		for _, l := range strings.Split(text, "\n") {
-			if strings.Contains(strings.ToLower(l), q) {
-				hits[f.Key] = cut(strings.TrimSpace(l), 120)
+		for _, textLine := range strings.Split(text, "\n") {
+			if strings.Contains(strings.ToLower(textLine), query) {
+				hits[memoryFile.Key] = cut(strings.TrimSpace(textLine), memExcerptMax)
 				break
 			}
 		}
@@ -599,22 +613,22 @@ func memToggle(key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	to := rel + ".off"
+	target := rel + ".off"
 	if strings.HasSuffix(rel, ".off") {
-		to = strings.TrimSuffix(rel, ".off")
+		target = strings.TrimSuffix(rel, ".off")
 	}
-	r, err := os.OpenRoot(base)
+	rulesRoot, err := os.OpenRoot(base)
 	if err != nil {
 		return "", err
 	}
-	defer r.Close()
-	if _, err := r.Stat(to); err == nil {
-		return "", terr("srv.memmeta.existeDeja", "A1", to)
+	defer rulesRoot.Close()
+	if _, statErr := rulesRoot.Stat(target); statErr == nil {
+		return "", terr("srv.memmeta.existeDeja", "A1", target)
 	}
-	if err := r.Rename(rel, to); err != nil {
-		return "", err
+	if renameErr := rulesRoot.Rename(rel, target); renameErr != nil {
+		return "", renameErr
 	}
-	return "g/rules/" + to, nil
+	return "g/rules/" + target, nil
 }
 
 var fmScalar = regexp.MustCompile(`^(\s*[A-Za-z0-9_.-]+):[ \t]+(\S.*?)\s*$`)
@@ -622,27 +636,29 @@ var fmScalar = regexp.MustCompile(`^(\s*[A-Za-z0-9_.-]+):[ \t]+(\S.*?)\s*$`)
 // fixFrontMatter met entre guillemets les valeurs en texte brut qui rendent le YAML invalide (« : » ou « # » dans une description).
 // Refuse si l'en-tête reste invalide après coup, ou s'il n'y avait rien à corriger.
 func fixFrontMatter(text string) (string, error) {
-	y, body, ok := frontMatter(text)
-	if !ok {
+	yamlText, body, hasFrontMatter := frontMatter(text)
+	if !hasFrontMatter {
 		return "", terr("srv.memmeta.pasDeFrontMatter")
 	}
-	if _, err := parseMeta(text); err == nil {
+	if _, originalErr := parseMeta(text); originalErr == nil {
 		return "", terr("srv.memmeta.leFrontMatterEst")
 	}
-	lines := strings.Split(strings.TrimRight(y, "\n"), "\n")
-	for i, l := range lines {
-		m := fmScalar.FindStringSubmatch(l)
-		if m == nil || strings.ContainsRune("\"'[{|>&*!%@`", rune(m[2][0])) {
+	lines := strings.Split(strings.TrimRight(yamlText, "\n"), "\n")
+	for lineIndex, textLine := range lines {
+		match := fmScalar.FindStringSubmatch(textLine)
+		if match == nil || strings.ContainsRune("\"'[{|>&*!%@`", rune(match[2][0])) {
 			continue
 		}
-		if strings.Contains(m[2], ": ") || strings.Contains(m[2], " #") || strings.HasSuffix(m[2], ":") {
-			q := strings.ReplaceAll(strings.ReplaceAll(m[2], `\`, `\\`), `"`, `\"`)
-			lines[i] = m[1] + `: "` + q + `"`
+		breaksYAML := strings.Contains(match[2], ": ") || strings.Contains(match[2], " #") || strings.HasSuffix(match[2], ":")
+		if breaksYAML {
+			backslashEscaped := strings.ReplaceAll(match[2], `\`, `\\`)
+			quoted := strings.ReplaceAll(backslashEscaped, `"`, `\"`)
+			lines[lineIndex] = match[1] + `: "` + quoted + `"`
 		}
 	}
-	out := "---\n" + strings.Join(lines, "\n") + "\n---\n" + body
-	if _, err := parseMeta(out); err != nil {
-		return "", terr("srv.memmeta.pasDeCorrectionAutomatique", "A1", err.Error())
+	fixed := "---\n" + strings.Join(lines, "\n") + "\n---\n" + body
+	if _, fixedErr := parseMeta(fixed); fixedErr != nil {
+		return "", terr("srv.memmeta.pasDeCorrectionAutomatique", "A1", fixedErr.Error())
 	}
-	return out, nil
+	return fixed, nil
 }

@@ -28,6 +28,16 @@ var uiFS embed.FS
 // Injectée à la compilation (-ldflags "-X main.version=v1.2.3") ; « dev » hors release.
 var version = "dev"
 
+const (
+	shutdownTimeout   = 5 * time.Second
+	tabsAutosaveEvery = 2 * time.Minute
+	waitingWatchEvery = 20 * time.Second
+	titleLoopEvery    = 30 * time.Second
+	keepWarmEvery     = 30 * time.Second
+	trashExpireEvery  = 24 * time.Hour
+	serverIdleTimeout = 2 * time.Minute
+)
+
 var (
 	root      string
 	port      = env("GLD_WEB_PORT", env("CC_WEB_PORT", "8799")) // CC_* : anciens noms, encore lus
@@ -36,17 +46,17 @@ var (
 	openHosts bool // écoute hors localhost (listen.go) : le jeton, ou en mode multi-utilisateur la session, remplace la garde sur le Host
 )
 
-func env(k, d string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
+func env(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
 	}
-	return d
+	return fallback
 }
 
 func main() {
 	home, _ := os.UserHomeDir()
 	root = filepath.Join(env("CLAUDE_CONFIG_DIR", filepath.Join(home, ".claude")), "projects")
-	if code, ok := dispatchCLI(os.Args); ok { // gld-matin, gld-trier, gld-rm, gld-nommer : ni serveur ni port
+	if code, handled := dispatchCLI(os.Args); handled { // gld-matin, gld-trier, gld-rm, gld-nommer : ni serveur ni port
 		os.Exit(code)
 	}
 	if len(os.Args) > 1 && os.Args[1] == "web" { // « gld web » : le serveur, nommé explicitement (sans argument, c'est déjà lui)
@@ -63,7 +73,9 @@ func main() {
 		fmt.Println("gld", version)
 		return
 	}
-	hosts["127.0.0.1:"+port], hosts["localhost:"+port], hosts[net.JoinHostPort(*listen, port)] = true, true, true
+	hosts["127.0.0.1:"+port] = true
+	hosts["localhost:"+port] = true
+	hosts[net.JoinHostPort(*listen, port)] = true
 
 	local := isLoopback(*listen)
 	useTLS, err := tlsPair(*tlsCert, *tlsKey)
@@ -87,57 +99,57 @@ func main() {
 		os.Exit(1)
 	}
 	// Une base illisible ou une clé qui ne la déchiffre pas arrête le serveur : repartir en mode ouvert contournerait les comptes.
-	st, on, err := authState()
+	accountStore, accountsOn, err := authState()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.authRefused", map[string]any{"A1": err.Error()}))
 		os.Exit(1)
 	}
-	if on {
+	if accountsOn {
 		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.authMode", nil))
 	}
-	if dir, derr := authDir(); st != nil && derr == nil && keyFromFile.Load() {
+	if dir, dirErr := authDir(); accountStore != nil && dirErr == nil && keyFromFile.Load() {
 		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.keyFromFile", map[string]any{"A1": filepath.Join(dir, "auth.key")}))
 	}
-	if err := checkRunAsSeparation(); err != nil {
-		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.runAsRefused", map[string]any{"A1": err.Error()}))
+	if runAsErr := checkRunAsSeparation(); runAsErr != nil {
+		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.runAsRefused", map[string]any{"A1": runAsErr.Error()}))
 		os.Exit(1)
 	}
 	if runAsOn() {
 		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.runAsOn", map[string]any{"A1": runAsHome()}))
 	}
-	if _, err := installBuiltinRules(); err != nil { // non bloquant : le serveur marche sans, seules les règles manquent
-		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.rulesFailed", map[string]any{"A1": err.Error()}))
+	if _, rulesErr := installBuiltinRules(); rulesErr != nil { // non bloquant : le serveur marche sans, seules les règles manquent
+		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.rulesFailed", map[string]any{"A1": rulesErr.Error()}))
 	}
 	tokenPrincipal = tokenForChildren(token, generated)
 	hostToken = token // obligatoire hors localhost ; en local, exigé dès que GLD_WEB_TOKEN est fixé (machine partagée)
-	h := handler()
+	rootHandler := handler()
 	if !local {
 		openHosts = true // hors localhost, le Host n'est plus limité : le jeton (mode ouvert) ou la session (comptes) protège du DNS-rebinding
 	}
-	srv := newServer(net.JoinHostPort(*listen, port), h)
-	srv.RegisterOnShutdown(ideCloseAll) // sinon un flux /v1/fs/watch ouvert fait attendre Shutdown jusqu'à son délai
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	server := newServer(net.JoinHostPort(*listen, port), rootHandler)
+	server.RegisterOnShutdown(ideCloseAll) // sinon un flux /v1/fs/watch ouvert fait attendre Shutdown jusqu'à son délai
+	shutdownContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	homeCtx = ctx
+	homeCtx = shutdownContext
 	defer stopHomes()
 	done := make(chan struct{}) // Shutdown attend les requêtes en vol : main ne doit pas sortir avant lui
 	go func() {
 		defer close(done)
-		<-ctx.Done()
+		<-shutdownContext.Done()
 		fmt.Fprintln(os.Stderr, "\n"+tr(cliLang(), "cli.main.stopped", nil))
-		c, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutdownTimeoutContext, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
-		srv.Shutdown(c)
+		server.Shutdown(shutdownTimeoutContext)
 	}()
 	migrateData()
-	go autosaveTabs(2 * time.Minute)
-	go watchWaiting(20 * time.Second)
-	go titleLoop(30 * time.Second)
-	go keepWarmLoop(30 * time.Second)
+	go autosaveTabs(tabsAutosaveEvery)
+	go watchWaiting(waitingWatchEvery)
+	go titleLoop(titleLoopEvery)
+	go keepWarmLoop(keepWarmEvery)
 	if queueSt != nil {
-		go queueLoop(ctx, queueSt)
+		go queueLoop(shutdownContext, queueSt)
 	}
-	go expireTrashLoop(24 * time.Hour)
+	go expireTrashLoop(trashExpireEvery)
 	go func() { _ = syncIndex() }() // index de recherche prêt avant la première requête
 	if local && token == "" {
 		fmt.Fprintln(os.Stderr, scheme+"://"+net.JoinHostPort(*listen, port))
@@ -149,20 +161,20 @@ func main() {
 		}
 		fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.preferTunnel", nil))
 		shown := tokenShown(token, generated)
-		if on && generated { // le jeton généré ne vaut rien en mode multi-utilisateur : la connexion par compte le remplace
+		if accountsOn && generated { // le jeton généré ne vaut rien en mode multi-utilisateur : la connexion par compte le remplace
 			shown = ""
 		}
-		for _, u := range urlsFor(scheme, *listen, port, shown) {
-			fmt.Fprintln(os.Stderr, "  "+u)
+		for _, link := range urlsFor(scheme, *listen, port, shown) {
+			fmt.Fprintln(os.Stderr, "  "+link)
 		}
 	}
 	defer removeWorkDir()
-	serve := srv.ListenAndServe
+	serve := server.ListenAndServe
 	if useTLS {
-		serve = func() error { return srv.ListenAndServeTLS(*tlsCert, *tlsKey) }
+		serve = func() error { return server.ListenAndServeTLS(*tlsCert, *tlsKey) }
 	}
-	if err := serve(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		fmt.Fprintln(os.Stderr, err)
+	if serveErr := serve(); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+		fmt.Fprintln(os.Stderr, serveErr)
 		os.Exit(1)
 	}
 	<-done
@@ -218,21 +230,21 @@ func authState() (*authStore, bool, error) {
 
 // purgeDue purge auth_events, les lignes mortes de throttle et les sessions expirées à l'ouverture de la base puis au plus
 // une fois par 24 h ; appelée sous authMu.
-func purgeDue(st *authStore, now time.Time) {
+func purgeDue(accountStore *authStore, now time.Time) {
 	if !purgeAt.IsZero() && now.Sub(purgeAt) < eventsPurgeEvery {
 		return
 	}
 	purgeAt = now
-	if _, err := st.PurgeEvents(eventsKeep); err != nil {
-		journal("auth: purge du journal d'authentification : %v", err)
+	if _, eventsErr := accountStore.PurgeEvents(eventsKeep); eventsErr != nil {
+		journal("auth: purge du journal d'authentification : %v", eventsErr)
 	}
-	th := newThrottle(st.db)
-	th.now = func() time.Time { return now }
-	if _, err := th.Purge(); err != nil {
-		journal("auth: purge des compteurs d'essais : %v", err)
+	throttler := newThrottle(accountStore.db)
+	throttler.now = func() time.Time { return now }
+	if _, throttleErr := throttler.Purge(); throttleErr != nil {
+		journal("auth: purge des compteurs d'essais : %v", throttleErr)
 	}
-	if _, err := st.PurgeSessions(); err != nil {
-		journal("auth: purge des sessions expirées : %v", err)
+	if _, sessionsErr := accountStore.PurgeSessions(); sessionsErr != nil {
+		journal("auth: purge des sessions expirées : %v", sessionsErr)
 	}
 }
 
@@ -245,7 +257,7 @@ func authCheck() (bool, error) {
 		return false, nil
 	}
 	path := filepath.Join(dir, "auth.db")
-	fi, err := os.Lstat(path)
+	fileInfo, err := os.Lstat(path)
 	if err != nil {
 		switch {
 		case !errors.Is(err, fs.ErrNotExist):
@@ -255,27 +267,27 @@ func authCheck() (bool, error) {
 		}
 		return false, nil
 	}
-	if authSt != nil && !os.SameFile(authFI, fi) {
+	if authSt != nil && !os.SameFile(authFI, fileInfo) {
 		authSt.db.Close()
 		authSt, authFI = nil, nil
 		return false, errAuthReplaced
 	}
 	if authSt == nil {
-		st, err := openAuthStore()
-		if err != nil {
-			return false, err
+		openedStore, storeErr := openAuthStore()
+		if storeErr != nil {
+			return false, storeErr
 		}
-		if authFI, err = os.Lstat(path); err != nil {
-			st.db.Close()
-			return false, err
+		if authFI, storeErr = os.Lstat(path); storeErr != nil {
+			openedStore.db.Close()
+			return false, storeErr
 		}
-		authSt, purgeAt = st, time.Time{}
+		authSt, purgeAt = openedStore, time.Time{}
 	}
-	on, err := authSt.AccountsOn()
-	if err == nil && !on {
+	accountsOn, err := authSt.AccountsOn()
+	if err == nil && !accountsOn {
 		authSeen = false
 	}
-	return on, err
+	return accountsOn, err
 }
 
 type authDecision struct {
@@ -290,27 +302,27 @@ var authStateFn = authState
 
 // reqMode : le mode est décidé une seule fois par requête, au premier garde qui la voit ; les suivants relisent cette
 // décision, sans quoi l'expiration du cache entre deux gardes pourrait sauter le jeton puis servir en mode ouvert.
-func reqMode(r *http.Request) (*http.Request, authDecision) {
-	if d, ok := r.Context().Value(modeKey{}).(authDecision); ok {
-		return r, d
+func reqMode(request *http.Request) (*http.Request, authDecision) {
+	if cached, found := request.Context().Value(modeKey{}).(authDecision); found {
+		return request, cached
 	}
-	st, on, err := authStateFn()
-	d := authDecision{st, on, err}
-	return r.WithContext(context.WithValue(r.Context(), modeKey{}, d)), d
+	accountStore, accountsOn, err := authStateFn()
+	decision := authDecision{accountStore, accountsOn, err}
+	return request.WithContext(context.WithValue(request.Context(), modeKey{}, decision)), decision
 }
 
 var xffWarned sync.Once
 
 // warnXFF : derrière un proxy non déclaré, tous les clients partagent son adresse (limitation des essais, adresses connues).
-func warnXFF(r *http.Request) {
-	if os.Getenv("GLD_TRUSTED_PROXIES") != "" || r.Header.Get("X-Forwarded-For") == "" {
+func warnXFF(request *http.Request) {
+	if os.Getenv("GLD_TRUSTED_PROXIES") != "" || request.Header.Get("X-Forwarded-For") == "" {
 		return
 	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host = r.RemoteAddr
+	host, _, splitErr := net.SplitHostPort(request.RemoteAddr)
+	if splitErr != nil {
+		host = request.RemoteAddr
 	}
-	if a, err := netip.ParseAddr(host); err == nil && (a.IsLoopback() || a.IsPrivate()) {
+	if address, parseErr := netip.ParseAddr(host); parseErr == nil && (address.IsLoopback() || address.IsPrivate()) {
 		xffWarned.Do(func() {
 			fmt.Fprintln(os.Stderr, tr(cliLang(), "cli.main.xffUntrusted", nil))
 			journal("auth: X-Forwarded-For reçu de %s sans GLD_TRUSTED_PROXIES", host)
@@ -370,64 +382,65 @@ func handler() http.Handler {
 		chainMu   sync.Mutex
 		chains    = map[*authStore]*authChain{}
 	)
-	chainFor := func(st *authStore) *authChain {
+	chainFor := func(accountStore *authStore) *authChain {
 		chainMu.Lock()
 		defer chainMu.Unlock()
-		c := chains[st]
-		if c == nil {
-			c = &authChain{api: http.NewServeMux()}
-			routesAdmin(c.api, routesAuth(c.api, st, newThrottle(st.db)))
-			c.gated = http.NewCrossOriginProtection().Handler(authGate(mux, st, withAuthWatch(withHomes(mux))))
-			chains[st] = c
+		chain := chains[accountStore]
+		if chain == nil {
+			chain = &authChain{api: http.NewServeMux()}
+			routesAdmin(chain.api, routesAuth(chain.api, accountStore, newThrottle(accountStore.db)))
+			chain.gated = http.NewCrossOriginProtection().Handler(authGate(mux, accountStore, withAuthWatch(withHomes(mux))))
+			chains[accountStore] = chain
 		}
-		return c
+		return chain
 	}
 	mountAuth := func() {
-		for pat := range routeRights {
-			if strings.Contains(pat, " /v1/auth/") || strings.Contains(pat, " /v1/admin/") {
-				mux.HandleFunc(pat, func(w http.ResponseWriter, r *http.Request) {
+		for pattern := range routeRights {
+			isAccountRoute := strings.Contains(pattern, " /v1/auth/") || strings.Contains(pattern, " /v1/admin/")
+			if isAccountRoute {
+				mux.HandleFunc(pattern, func(responseWriter http.ResponseWriter, request *http.Request) {
 					// Sans compte, /v1/auth/* n'existe pas : l'interface n'affiche pas de connexion que personne ne peut passer.
-					if _, d := reqMode(r); d.on {
-						chainFor(d.st).api.ServeHTTP(w, r)
+					if _, decision := reqMode(request); decision.on {
+						chainFor(decision.st).api.ServeHTTP(responseWriter, request)
 						return
 					}
-					http.NotFound(w, r)
+					http.NotFound(responseWriter, request)
 				})
 			}
 		}
 	}
 	guarded := http.NewCrossOriginProtection().Handler(withHomes(mux))
-	var host http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r, d := reqMode(r)
-		if d.err != nil {
-			gateDeny(w, 503, "srv.auth.baseInutilisable")
+	var host http.Handler = http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		request, decision := reqMode(request)
+		if decision.err != nil {
+			gateDeny(responseWriter, http.StatusServiceUnavailable, "srv.auth.baseInutilisable")
 			return
 		}
-		if d.st != nil {
+		if decision.st != nil {
 			mountOnce.Do(mountAuth)
 		}
-		if d.on {
-			warnXFF(r)
-			chainFor(d.st).gated.ServeHTTP(w, r)
+		if decision.on {
+			warnXFF(request)
+			chainFor(decision.st).gated.ServeHTTP(responseWriter, request)
 			return
 		}
-		guarded.ServeHTTP(w, r)
+		guarded.ServeHTTP(responseWriter, request)
 	})
 	if hostToken != "" {
 		host = withTokenOpen(hostToken, host)
 	}
 	// Le jeton hôte passe après la garde invité : un invité n'en a pas, et un cookie invité invalide retombe sur lui.
 	guest := guestGate(mux, host)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !openHosts && !hosts[r.Host] {
-			forbid(w, r)
+	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		if !openHosts && !hosts[request.Host] {
+			forbid(responseWriter, request)
 			return
 		}
-		if !childAuthorized(r) {
-			forbid(w, r)
+		if !childAuthorized(request) {
+			forbid(responseWriter, request)
 			return
 		}
-		guest.ServeHTTP(w, r)
+		guest.ServeHTTP(responseWriter, request)
 	})
 }
 
@@ -439,6 +452,11 @@ var readHeaderTimeout = 10 * time.Second
 // newServer : avec --listen, le serveur est joignable du réseau ; un client qui envoie ses en-têtes au compte-gouttes
 // (slowloris) ne garde pas une connexion ouverte au-delà de ce délai, avant même la vérification du jeton. IdleTimeout
 // ferme de même une connexion keep-alive qui ne redemande rien (sans effet sur une réponse en cours ni sur le WebSocket).
-func newServer(addr string, h http.Handler) *http.Server {
-	return &http.Server{Addr: addr, Handler: h, ReadHeaderTimeout: readHeaderTimeout, IdleTimeout: 2 * time.Minute}
+func newServer(addr string, rootHandler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           rootHandler,
+		ReadHeaderTimeout: readHeaderTimeout,
+		IdleTimeout:       serverIdleTimeout,
+	}
 }
