@@ -24,96 +24,96 @@ func testClock(t *testing.T) *time.Time {
 }
 
 func sessUser(t *testing.T) (*authStore, int64) {
-	s := testStore(t)
-	id, err := s.AddUser("alice", testPw, false)
+	localAuthStore := testStore(t)
+	id, err := localAuthStore.AddUser("alice", testPw, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return s, id
+	return localAuthStore, id
 }
 
-func fullSession(t *testing.T, s *authStore, id int64) (string, *Principal) {
-	c, err := s.NewSession(id, "203.0.113.5", "ua")
+func fullSession(t *testing.T, localAuthStore *authStore, id int64) (string, *Principal) {
+	content, err := localAuthStore.NewSession(id, "203.0.113.5", "ua")
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := s.Session(c)
+	principal, err := localAuthStore.Session(content)
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, _, err = s.PromoteMFA(p.SessionID)
+	content, _, err = localAuthStore.PromoteMFA(principal.SessionID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p, err = s.Session(c); err != nil {
+	if principal, err = localAuthStore.Session(content); err != nil {
 		t.Fatal(err)
 	}
-	return c, p
+	return content, principal
 }
 
 func TestSessionExpiry(t *testing.T) {
 	now := testClock(t)
-	s, id := sessUser(t)
-	c, _ := fullSession(t, s, id)
+	authStore, id := sessUser(t)
+	content, _ := fullSession(t, authStore, id)
 	// Activité toutes les 11 h : la session glisse jusqu'à l'échéance absolue de 30 jours.
 	start := *now
 	for now.Sub(start) < sessAbsolute-11*time.Hour {
 		*now = now.Add(11 * time.Hour)
-		p, err := s.Session(c)
-		if err != nil || !p.MFA || p.User.ID != id {
-			t.Fatalf("à %v : %+v %v", now.Sub(start), p, err)
+		principal, err := authStore.Session(content)
+		if err != nil || !principal.MFA || principal.User.ID != id {
+			t.Fatalf("à %v : %+v %v", now.Sub(start), principal, err)
 		}
 	}
 	*now = start.Add(sessAbsolute)
-	if _, err := s.Session(c); !errors.Is(err, errNoSession) {
+	if _, err := authStore.Session(content); !errors.Is(err, errNoSession) {
 		t.Fatalf("absolue : %v", err)
 	}
 
-	c, _ = fullSession(t, s, id)
+	content, _ = fullSession(t, authStore, id)
 	*now = now.Add(sessIdle)
-	if _, err := s.Session(c); !errors.Is(err, errNoSession) {
+	if _, err := authStore.Session(content); !errors.Is(err, errNoSession) {
 		t.Fatalf("inactivité : %v", err)
 	}
 }
 
 func TestSessionPartialExpiry(t *testing.T) {
 	now := testClock(t)
-	s, id := sessUser(t)
-	c, err := s.NewSession(id, "", "")
+	authStore, id := sessUser(t)
+	content, err := authStore.NewSession(id, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	*now = now.Add(thMFAWindow - time.Second)
-	if p, err := s.Session(c); err != nil || p.MFA {
-		t.Fatalf("partielle valide : %+v %v", p, err)
+	if principal, err := authStore.Session(content); err != nil || principal.MFA {
+		t.Fatalf("partielle valide : %+v %v", principal, err)
 	}
 	*now = now.Add(time.Second)
-	if _, err := s.Session(c); !errors.Is(err, errNoSession) {
+	if _, err := authStore.Session(content); !errors.Is(err, errNoSession) {
 		t.Fatalf("partielle échue : %v", err)
 	}
-	c, p := fullSession(t, s, id)
+	content, localPrincipal := fullSession(t, authStore, id)
 	*now = now.Add(time.Hour)
-	if p2, err := s.Session(c); err != nil || !p2.MFA || p2.SessionID != p.SessionID {
+	if p2, err := authStore.Session(content); err != nil || !p2.MFA || p2.SessionID != localPrincipal.SessionID {
 		t.Fatalf("après MFA : %+v %v", p2, err)
 	}
 }
 
 func TestSessionTouchThrottle(t *testing.T) {
 	now := testClock(t)
-	s, id := sessUser(t)
-	c, _ := fullSession(t, s, id)
-	seen := func() (v int64) {
-		s.db.QueryRow(`SELECT last_seen_at FROM sessions`).Scan(&v)
+	authStore, id := sessUser(t)
+	content, _ := fullSession(t, authStore, id)
+	seen := func() (number int64) {
+		authStore.db.QueryRow(`SELECT last_seen_at FROM sessions`).Scan(&number)
 		return
 	}
 	t0 := seen()
 	*now = now.Add(30 * time.Second)
-	s.Session(c)
+	authStore.Session(content)
 	if seen() != t0 {
 		t.Fatal("écriture avant une minute")
 	}
 	*now = now.Add(30 * time.Second)
-	s.Session(c)
+	authStore.Session(content)
 	if seen() != now.Unix() {
 		t.Fatal("last_seen_at non mis à jour")
 	}
@@ -121,9 +121,9 @@ func TestSessionTouchThrottle(t *testing.T) {
 
 func TestSessionHashed(t *testing.T) {
 	testClock(t)
-	s, id := sessUser(t)
-	c, _ := fullSession(t, s, id)
-	rows, err := s.db.Query(`SELECT * FROM sessions`)
+	authStore, id := sessUser(t)
+	content, _ := fullSession(t, authStore, id)
+	rows, err := authStore.db.Query(`SELECT * FROM sessions`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,94 +132,94 @@ func TestSessionHashed(t *testing.T) {
 	for rows.Next() {
 		vals := make([]any, len(cols))
 		ptrs := make([]any, len(cols))
-		for i := range vals {
-			ptrs[i] = &vals[i]
+		for index := range vals {
+			ptrs[index] = &vals[index]
 		}
 		rows.Scan(ptrs...)
-		for i, v := range vals {
-			var b []byte
-			switch x := v.(type) {
+		for index, value := range vals {
+			var data []byte
+			switch value := value.(type) {
 			case []byte:
-				b = x
+				data = value
 			case string:
-				b = []byte(x)
+				data = []byte(value)
 			}
-			if bytes.Contains(b, []byte(c)) {
-				t.Fatalf("cookie en clair dans %s", cols[i])
+			if bytes.Contains(data, []byte(content)) {
+				t.Fatalf("cookie en clair dans %s", cols[index])
 			}
 		}
 	}
-	if _, err := s.Session(c + "x"); !errors.Is(err, errNoSession) {
+	if _, err := authStore.Session(content + "x"); !errors.Is(err, errNoSession) {
 		t.Fatal("cookie altéré accepté")
 	}
 }
 
 func TestRevokeUser(t *testing.T) {
 	testClock(t)
-	s, id := sessUser(t)
-	bob, _ := s.AddUser("bob", testPw, false)
-	c1, _ := fullSession(t, s, id)
-	c2, p2 := fullSession(t, s, id)
-	cb, _ := fullSession(t, s, bob)
-	if err := s.RevokeSession(p2.SessionID); err != nil {
+	authStore, id := sessUser(t)
+	bob, _ := authStore.AddUser("bob", testPw, false)
+	c1, _ := fullSession(t, authStore, id)
+	c2, p2 := fullSession(t, authStore, id)
+	cb, _ := fullSession(t, authStore, bob)
+	if err := authStore.RevokeSession(p2.SessionID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Session(c2); !errors.Is(err, errNoSession) {
+	if _, err := authStore.Session(c2); !errors.Is(err, errNoSession) {
 		t.Fatal("session révoquée encore valide")
 	}
-	if _, err := s.Session(c1); err != nil {
+	if _, err := authStore.Session(c1); err != nil {
 		t.Fatal("autre session touchée")
 	}
-	if err := s.RevokeUser(id); err != nil {
+	if err := authStore.RevokeUser(id); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Session(c1); !errors.Is(err, errNoSession) {
+	if _, err := authStore.Session(c1); !errors.Is(err, errNoSession) {
 		t.Fatal("RevokeUser sans effet")
 	}
-	if _, err := s.Session(cb); err != nil {
+	if _, err := authStore.Session(cb); err != nil {
 		t.Fatal("session d'un autre compte révoquée")
 	}
 }
 
 func TestSessionUserTamperedOrDisabled(t *testing.T) {
 	testClock(t)
-	s, id := sessUser(t)
-	c, _ := fullSession(t, s, id)
-	if _, err := s.db.Exec(`UPDATE users SET is_admin=1 WHERE id=?`, id); err != nil {
+	authStore, id := sessUser(t)
+	content, _ := fullSession(t, authStore, id)
+	if _, err := authStore.db.Exec(`UPDATE users SET is_admin=1 WHERE id=?`, id); err != nil {
 		t.Fatal(err)
 	}
-	if p, err := s.Session(c); !errors.Is(err, errNoSession) || p != nil {
-		t.Fatalf("ligne altérée : %+v %v", p, err)
+	if principal, err := authStore.Session(content); !errors.Is(err, errNoSession) || principal != nil {
+		t.Fatalf("ligne altérée : %+v %v", principal, err)
 	}
-	if tamperEvents(t, s) != 1 {
+	if tamperEvents(t, authStore) != 1 {
 		t.Fatal("altération non journalisée")
 	}
 
-	bob, _ := s.AddUser("bob", testPw, false)
-	cb, _ := fullSession(t, s, bob)
-	u, _ := s.UserByName("bob")
-	u.Disabled = true
+	bob, _ := authStore.AddUser("bob", testPw, false)
+	cb, _ := fullSession(t, authStore, bob)
+	user, _ := authStore.UserByName("bob")
+	user.Disabled = true
 	// Désactivation valablement signée mais sans la révocation que fait SetDisabled.
-	s.db.Exec(`UPDATE users SET disabled=1, sig=? WHERE id=?`, s.userSig(u), bob)
-	if p, err := s.Session(cb); !errors.Is(err, errNoSession) || p != nil {
-		t.Fatalf("compte désactivé : %+v %v", p, err)
+	authStore.db.Exec(`UPDATE users SET disabled=1, sig=? WHERE id=?`, authStore.userSig(user), bob)
+	if principal, err := authStore.Session(cb); !errors.Is(err, errNoSession) || principal != nil {
+		t.Fatalf("compte désactivé : %+v %v", principal, err)
 	}
 }
 
 func TestCSRFRequired(t *testing.T) {
 	testClock(t)
-	s, id := sessUser(t)
-	c, p := fullSession(t, s, id)
-	_, p2 := fullSession(t, s, id)
-	if again, err := s.Session(c); err != nil || again.CSRF != p.CSRF {
+	authStore, id := sessUser(t)
+	content, principal := fullSession(t, authStore, id)
+	_, p2 := fullSession(t, authStore, id)
+	if again, err := authStore.Session(content); err != nil || again.CSRF != principal.CSRF {
 		t.Fatal("CSRF instable pour une même session")
 	}
-	if p.CSRF == p2.CSRF || len(p.CSRF) != 64 {
-		t.Fatalf("CSRF : %q %q", p.CSRF, p2.CSRF)
+	if principal.CSRF == p2.CSRF || len(principal.CSRF) != 64 {
+		t.Fatalf("CSRF : %q %q", principal.CSRF, p2.CSRF)
 	}
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !csrfOK(r, p) {
-			http.Error(w, "", http.StatusForbidden)
+	handler := http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		if !csrfOK(request, principal) {
+			http.Error(responseWriter, "", http.StatusForbidden)
 		}
 	})
 	for _, tc := range []struct {
@@ -227,17 +227,17 @@ func TestCSRFRequired(t *testing.T) {
 		want        int
 	}{
 		{"GET", "", 200}, {"HEAD", "", 200}, {"OPTIONS", "", 200},
-		{"POST", "", 403}, {"POST", p2.CSRF, 403}, {"POST", strings.ToUpper(p.CSRF), 403},
-		{"POST", p.CSRF, 200}, {"DELETE", "", 403}, {"PUT", p.CSRF, 200},
+		{"POST", "", 403}, {"POST", p2.CSRF, 403}, {"POST", strings.ToUpper(principal.CSRF), 403},
+		{"POST", principal.CSRF, 200}, {"DELETE", "", 403}, {"PUT", principal.CSRF, 200},
 	} {
-		r := httptest.NewRequest(tc.method, "/x", nil)
+		request := httptest.NewRequest(tc.method, "/x", nil)
 		if tc.tok != "" {
-			r.Header.Set(csrfHeader, tc.tok)
+			request.Header.Set(csrfHeader, tc.tok)
 		}
-		w := httptest.NewRecorder()
-		h(w, r)
-		if w.Code != tc.want {
-			t.Errorf("%s %q : %d", tc.method, tc.tok, w.Code)
+		recorder := httptest.NewRecorder()
+		handler(recorder, request)
+		if recorder.Code != tc.want {
+			t.Errorf("%s %q : %d", tc.method, tc.tok, recorder.Code)
 		}
 	}
 	if csrfOK(httptest.NewRequest("POST", "/x", nil), &Principal{}) {
@@ -247,97 +247,97 @@ func TestCSRFRequired(t *testing.T) {
 
 func TestSessionCookieFlags(t *testing.T) {
 	exp := time.Unix(1_900_000_000, 0)
-	get := func(r *http.Request) *http.Cookie {
-		w := httptest.NewRecorder()
-		setSessionCookie(w, r, "v", exp)
-		c := w.Result().Cookies()[0]
-		if c.Name != sessCookie || !c.HttpOnly || c.SameSite != http.SameSiteStrictMode || c.Path != "/" || c.Domain != "" || !c.Expires.Equal(exp) {
-			t.Fatalf("drapeaux : %+v", c)
+	get := func(request *http.Request) *http.Cookie {
+		recorder := httptest.NewRecorder()
+		setSessionCookie(recorder, request, "v", exp)
+		cookie := recorder.Result().Cookies()[0]
+		if cookie.Name != sessCookie || !cookie.HttpOnly || cookie.SameSite != http.SameSiteStrictMode || cookie.Path != "/" || cookie.Domain != "" || !cookie.Expires.Equal(exp) {
+			t.Fatalf("drapeaux : %+v", cookie)
 		}
-		return c
+		return cookie
 	}
 	t.Setenv("GLD_TRUSTED_PROXIES", "10.0.0.1")
-	r := httptest.NewRequest("GET", "/", nil)
-	if get(r).Secure {
+	localRequest := httptest.NewRequest("GET", "/", nil)
+	if get(localRequest).Secure {
 		t.Fatal("Secure en HTTP")
 	}
-	r.TLS = &tls.ConnectionState{}
-	if !get(r).Secure {
+	localRequest.TLS = &tls.ConnectionState{}
+	if !get(localRequest).Secure {
 		t.Fatal("pas Secure sous TLS")
 	}
-	r = httptest.NewRequest("GET", "/", nil)
-	r.Header.Set("X-Forwarded-Proto", "https")
-	r.RemoteAddr = "198.51.100.9:1234"
-	if get(r).Secure {
+	localRequest = httptest.NewRequest("GET", "/", nil)
+	localRequest.Header.Set("X-Forwarded-Proto", "https")
+	localRequest.RemoteAddr = "198.51.100.9:1234"
+	if get(localRequest).Secure {
 		t.Fatal("XFP d'un pair non fiable cru")
 	}
-	r.RemoteAddr = "10.0.0.1:1234"
-	if !get(r).Secure {
+	localRequest.RemoteAddr = "10.0.0.1:1234"
+	if !get(localRequest).Secure {
 		t.Fatal("XFP du proxy de confiance ignoré")
 	}
-	w := httptest.NewRecorder()
-	clearSessionCookie(w)
-	if c := w.Result().Cookies()[0]; c.Name != sessCookie || c.MaxAge >= 0 {
-		t.Fatalf("effacement : %+v", c)
+	localRecorder := httptest.NewRecorder()
+	clearSessionCookie(localRecorder)
+	if cookie := localRecorder.Result().Cookies()[0]; cookie.Name != sessCookie || cookie.MaxAge >= 0 {
+		t.Fatalf("effacement : %+v", cookie)
 	}
 }
 
 func TestEventIP(t *testing.T) {
-	s, id := sessUser(t)
-	s.eventIP(id, "login", "ok", "203.0.113.5")
+	authStore, id := sessUser(t)
+	authStore.eventIP(id, "login", "ok", "203.0.113.5")
 	var ip string
-	if err := s.db.QueryRow(`SELECT ip FROM auth_events WHERE kind='login'`).Scan(&ip); err != nil || ip != "203.0.113.5" {
+	if err := authStore.db.QueryRow(`SELECT ip FROM auth_events WHERE kind='login'`).Scan(&ip); err != nil || ip != "203.0.113.5" {
 		t.Fatalf("%q %v", ip, err)
 	}
 }
 
 func TestPromoteMFA(t *testing.T) {
 	now := testClock(t)
-	s, id := sessUser(t)
+	authStore, id := sessUser(t)
 	start := *now
-	old, err := s.NewSession(id, "203.0.113.5", "ua")
+	old, err := authStore.NewSession(id, "203.0.113.5", "ua")
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, _ := s.Session(old)
+	principal, _ := authStore.Session(old)
 	*now = now.Add(5 * time.Minute)
-	c, exp, err := s.PromoteMFA(p.SessionID)
+	content, exp, err := authStore.PromoteMFA(principal.SessionID)
 	if err != nil || !exp.Equal(start.Add(sessAbsolute)) {
 		t.Fatalf("promotion : %v %v", exp, err)
 	}
-	if _, err := s.Session(old); !errors.Is(err, errNoSession) {
+	if _, err := authStore.Session(old); !errors.Is(err, errNoSession) {
 		t.Fatal("ancien cookie encore valide")
 	}
-	np, err := s.Session(c)
-	if err != nil || !np.MFA || np.User.ID != id || !np.Expires.Equal(exp) || np.CSRF == p.CSRF || np.SessionID == p.SessionID {
+	np, err := authStore.Session(content)
+	if err != nil || !np.MFA || np.User.ID != id || !np.Expires.Equal(exp) || np.CSRF == principal.CSRF || np.SessionID == principal.SessionID {
 		t.Fatalf("nouvelle session : %+v %v", np, err)
 	}
-	if _, _, err := s.PromoteMFA(np.SessionID); !errors.Is(err, errNoSession) {
+	if _, _, err := authStore.PromoteMFA(np.SessionID); !errors.Is(err, errNoSession) {
 		t.Fatalf("double promotion : %v", err)
 	}
-	if _, _, err := s.PromoteMFA(p.SessionID); !errors.Is(err, errNoSession) {
+	if _, _, err := authStore.PromoteMFA(principal.SessionID); !errors.Is(err, errNoSession) {
 		t.Fatalf("promotion de l'ancienne : %v", err)
 	}
-	late, _ := s.NewSession(id, "", "")
-	lp, _ := s.Session(late)
+	late, _ := authStore.NewSession(id, "", "")
+	lp, _ := authStore.Session(late)
 	*now = now.Add(thMFAWindow)
-	if _, _, err := s.PromoteMFA(lp.SessionID); !errors.Is(err, errNoSession) {
+	if _, _, err := authStore.PromoteMFA(lp.SessionID); !errors.Is(err, errNoSession) {
 		t.Fatalf("partielle échue promue : %v", err)
 	}
 }
 
 func TestRevokeClosedDB(t *testing.T) {
-	s, id := sessUser(t)
-	s.db.Close()
-	if s.RevokeUser(id) == nil || s.RevokeSession("00") == nil {
+	authStore, id := sessUser(t)
+	authStore.db.Close()
+	if authStore.RevokeUser(id) == nil || authStore.RevokeSession("00") == nil {
 		t.Fatal("erreur de base ignorée")
 	}
 }
 
 func TestSessionRowSigned(t *testing.T) {
 	now := testClock(t)
-	s, id := sessUser(t)
-	bob, err := s.AddUser("bob", testPw, true)
+	authStore, id := sessUser(t)
+	bob, err := authStore.AddUser("bob", testPw, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -345,57 +345,57 @@ func TestSessionRowSigned(t *testing.T) {
 	raw := bytes.Repeat([]byte{7}, 32)
 	cookie := base64.RawURLEncoding.EncodeToString(raw)
 	plain := sha256.Sum256(raw)
-	n := now.Unix()
-	s.db.Exec(`INSERT INTO sessions(id_hash,user_id,created_at,last_seen_at,expires_at,mfa_at) VALUES(?,?,?,?,?,?)`, plain[:], bob, n, n, n+3600, n)
-	if _, err := s.Session(cookie); !errors.Is(err, errNoSession) {
+	count := now.Unix()
+	authStore.db.Exec(`INSERT INTO sessions(id_hash,user_id,created_at,last_seen_at,expires_at,mfa_at) VALUES(?,?,?,?,?,?)`, plain[:], bob, count, count, count+3600, count)
+	if _, err := authStore.Session(cookie); !errors.Is(err, errNoSession) {
 		t.Fatalf("SHA-256 brut accepté : %v", err)
 	}
-	s.db.Exec(`INSERT INTO sessions(id_hash,user_id,created_at,last_seen_at,expires_at,mfa_at) VALUES(?,?,?,?,?,?)`, s.sessHash(raw), bob, n, n, n+3600, n)
-	before := tamperEvents(t, s)
-	if _, err := s.Session(cookie); !errors.Is(err, errNoSession) {
+	authStore.db.Exec(`INSERT INTO sessions(id_hash,user_id,created_at,last_seen_at,expires_at,mfa_at) VALUES(?,?,?,?,?,?)`, authStore.sessHash(raw), bob, count, count, count+3600, count)
+	before := tamperEvents(t, authStore)
+	if _, err := authStore.Session(cookie); !errors.Is(err, errNoSession) {
 		t.Fatalf("ligne sans signature acceptée : %v", err)
 	}
-	if tamperEvents(t, s) != before+1 {
+	if tamperEvents(t, authStore) != before+1 {
 		t.Fatal("altération non journalisée")
 	}
 
-	c, p := fullSession(t, s, id)
-	h, _ := hex.DecodeString(p.SessionID)
+	content, principal := fullSession(t, authStore, id)
+	data, _ := hex.DecodeString(principal.SessionID)
 	var mfa sql.NullInt64
 	var created int64
 	var sig []byte
-	s.db.QueryRow(`SELECT created_at,mfa_at,sig FROM sessions WHERE id_hash=?`, h).Scan(&created, &mfa, &sig)
-	if !mfa.Valid || !s.sessOK(h, id, created, mfa, sig) {
+	authStore.db.QueryRow(`SELECT created_at,mfa_at,sig FROM sessions WHERE id_hash=?`, data).Scan(&created, &mfa, &sig)
+	if !mfa.Valid || !authStore.sessOK(data, id, created, mfa, sig) {
 		t.Fatal("ligne promue non signée")
 	}
 	var old int
-	s.db.QueryRow(`SELECT COUNT(*) FROM sessions WHERE user_id=? AND mfa_at IS NULL`, id).Scan(&old)
+	authStore.db.QueryRow(`SELECT COUNT(*) FROM sessions WHERE user_id=? AND mfa_at IS NULL`, id).Scan(&old)
 	if old != 0 {
 		t.Fatal("session partielle conservée après promotion")
 	}
-	if _, err := s.Session(c); err != nil {
+	if _, err := authStore.Session(content); err != nil {
 		t.Fatalf("cookie légitime refusé : %v", err)
 	}
-	s.db.Exec(`UPDATE sessions SET user_id=? WHERE id_hash=?`, bob, h)
-	if _, err := s.Session(c); !errors.Is(err, errNoSession) {
+	authStore.db.Exec(`UPDATE sessions SET user_id=? WHERE id_hash=?`, bob, data)
+	if _, err := authStore.Session(content); !errors.Is(err, errNoSession) {
 		t.Fatalf("session retournée vers un autre compte acceptée : %v", err)
 	}
 }
 
 func TestPurgeSessions(t *testing.T) {
 	now := testClock(t)
-	s, id := sessUser(t)
-	c, _ := fullSession(t, s, id)
-	s.NewSession(id, "", "")
+	authStore, id := sessUser(t)
+	content, _ := fullSession(t, authStore, id)
+	authStore.NewSession(id, "", "")
 	*now = now.Add(thMFAWindow)
-	if n, err := s.PurgeSessions(); err != nil || n != 1 {
-		t.Fatalf("partielle : %d %v", n, err)
+	if count, err := authStore.PurgeSessions(); err != nil || count != 1 {
+		t.Fatalf("partielle : %d %v", count, err)
 	}
-	if _, err := s.Session(c); err != nil {
+	if _, err := authStore.Session(content); err != nil {
 		t.Fatal("session complète purgée")
 	}
 	*now = now.Add(sessIdle)
-	if n, err := s.PurgeSessions(); err != nil || n != 1 {
-		t.Fatalf("échue : %d %v", n, err)
+	if count, err := authStore.PurgeSessions(); err != nil || count != 1 {
+		t.Fatalf("échue : %d %v", count, err)
 	}
 }

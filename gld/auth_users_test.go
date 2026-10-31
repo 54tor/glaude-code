@@ -14,162 +14,162 @@ func testStore(t *testing.T) *authStore {
 	stubKeyring(t)
 	t.Setenv("GLD_AUTH_DIR", t.TempDir())
 	t.Setenv("GLD_AUTH_KEY", strings.Repeat("cd", 32))
-	m, tt := argonMemKiB, argonTime
+	total, tt := argonMemKiB, argonTime
 	argonMemKiB, argonTime = 64, 1
-	t.Cleanup(func() { argonMemKiB, argonTime = m, tt })
-	s, err := openAuthStore()
+	t.Cleanup(func() { argonMemKiB, argonTime = total, tt })
+	localAuthStore, err := openAuthStore()
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { s.db.Close() })
-	return s
+	t.Cleanup(func() { localAuthStore.db.Close() })
+	return localAuthStore
 }
 
 const testPw = "correct horse battery"
 
-func tamperEvents(t *testing.T, s *authStore) int {
-	var n int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM auth_events WHERE kind='tamper'`).Scan(&n); err != nil {
+func tamperEvents(t *testing.T, localAuthStore *authStore) int {
+	var count int
+	if err := localAuthStore.db.QueryRow(`SELECT COUNT(*) FROM auth_events WHERE kind='tamper'`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	return n
+	return count
 }
 
 func TestAddUserNameUnique(t *testing.T) {
-	s := testStore(t)
-	if on, err := s.HasUsers(); on || err != nil {
+	authStore := testStore(t)
+	if on, err := authStore.HasUsers(); on || err != nil {
 		t.Fatal("empty store has users", err)
 	}
-	if _, err := s.AddUser("Alice", testPw, false); err != nil {
+	if _, err := authStore.AddUser("Alice", testPw, false); err != nil {
 		t.Fatal(err)
 	}
-	for _, n := range []string{"alice", " ALICE ", "Ａｌｉｃｅ"} {
-		if _, err := s.AddUser(n, testPw, false); !errors.Is(err, errNameTaken) {
-			t.Fatalf("%q: %v", n, err)
+	for _, name := range []string{"alice", " ALICE ", "Ａｌｉｃｅ"} {
+		if _, err := authStore.AddUser(name, testPw, false); !errors.Is(err, errNameTaken) {
+			t.Fatalf("%q: %v", name, err)
 		}
 	}
-	u, err := s.UserByName("ALICE")
-	if err != nil || u.Name != "alice" || !checkPassword(u.PwHash, testPw) {
-		t.Fatalf("lookup: %+v %v", u, err)
+	user, err := authStore.UserByName("ALICE")
+	if err != nil || user.Name != "alice" || !checkPassword(user.PwHash, testPw) {
+		t.Fatalf("lookup: %+v %v", user, err)
 	}
-	if on, err := s.HasUsers(); !on || err != nil {
+	if on, err := authStore.HasUsers(); !on || err != nil {
 		t.Fatal("HasUsers", on, err)
 	}
-	if _, err := s.UserByName("bob"); !errors.Is(err, errNoUser) {
+	if _, err := authStore.UserByName("bob"); !errors.Is(err, errNoUser) {
 		t.Fatalf("unknown: %v", err)
 	}
-	if _, err := s.AddUser("a b", testPw, false); !errors.Is(err, errBadName) {
+	if _, err := authStore.AddUser("a b", testPw, false); !errors.Is(err, errBadName) {
 		t.Fatalf("space: %v", err)
 	}
 }
 
 func TestUserTamper(t *testing.T) {
-	s := testStore(t)
-	id, _ := s.AddUser("alice", testPw, false)
-	if err := s.SetDisabled(id, true); err != nil {
+	authStore := testStore(t)
+	id, _ := authStore.AddUser("alice", testPw, false)
+	if err := authStore.SetDisabled(id, true); err != nil {
 		t.Fatal(err)
 	}
-	if u, err := s.UserByName("alice"); err != nil || !u.Disabled {
-		t.Fatalf("disabled: %+v %v", u, err)
+	if user, err := authStore.UserByName("alice"); err != nil || !user.Disabled {
+		t.Fatalf("disabled: %+v %v", user, err)
 	}
-	s.db.Exec(`UPDATE users SET is_admin=1 WHERE id=?`, id)
-	if _, err := s.UserByName("alice"); !errors.Is(err, errTamper) || tamperEvents(t, s) != 1 {
+	authStore.db.Exec(`UPDATE users SET is_admin=1 WHERE id=?`, id)
+	if _, err := authStore.UserByName("alice"); !errors.Is(err, errTamper) || tamperEvents(t, authStore) != 1 {
 		t.Fatalf("tamper: %v", err)
 	}
-	if err := s.SetPassword(id, testPw+"x"); !errors.Is(err, errTamper) {
+	if err := authStore.SetPassword(id, testPw+"x"); !errors.Is(err, errTamper) {
 		t.Fatalf("re-sign of tampered row: %v", err)
 	}
 }
 
 func TestGrantDefaultNone(t *testing.T) {
-	s := testStore(t)
-	id, _ := s.AddUser("alice", testPw, true)
-	r, err := s.Rights(id, "main")
-	if err != nil || len(r) != 0 {
-		t.Fatalf("default: %v %v", r, err)
+	authStore := testStore(t)
+	id, _ := authStore.AddUser("alice", testPw, true)
+	lookup, err := authStore.Rights(id, "main")
+	if err != nil || len(lookup) != 0 {
+		t.Fatalf("default: %v %v", lookup, err)
 	}
-	if err := s.Grant(id, "main", RightMemRead, RightExec); err != nil {
+	if err := authStore.Grant(id, "main", RightMemRead, RightExec); err != nil {
 		t.Fatal(err)
 	}
-	if r, _ = s.Rights(id, "main"); !r[RightMemRead] || !r[RightExec] || r[RightMemWrite] {
-		t.Fatalf("granted: %v", r)
+	if lookup, _ = authStore.Rights(id, "main"); !lookup[RightMemRead] || !lookup[RightExec] || lookup[RightMemWrite] {
+		t.Fatalf("granted: %v", lookup)
 	}
-	if r, _ = s.Rights(id, "other"); r[RightMemRead] {
+	if lookup, _ = authStore.Rights(id, "other"); lookup[RightMemRead] {
 		t.Fatal("leaked to other home")
 	}
-	s.Revoke(id, "main", RightExec)
-	if r, _ = s.Rights(id, "main"); r[RightExec] || !r[RightMemRead] {
-		t.Fatalf("revoked: %v", r)
+	authStore.Revoke(id, "main", RightExec)
+	if lookup, _ = authStore.Rights(id, "main"); lookup[RightExec] || !lookup[RightMemRead] {
+		t.Fatalf("revoked: %v", lookup)
 	}
-	if err := s.Grant(id, "main", "all"); err == nil {
+	if err := authStore.Grant(id, "main", "all"); err == nil {
 		t.Fatal("'all' accepted")
 	}
 }
 
 func TestRightsTamper(t *testing.T) {
-	s := testStore(t)
-	id, _ := s.AddUser("alice", testPw, false)
-	s.Grant(id, "main", RightMemRead)
-	s.db.Exec(`UPDATE home_acl SET exec=1 WHERE user_id=?`, id)
-	if _, err := s.Rights(id, "main"); !errors.Is(err, errTamper) || tamperEvents(t, s) != 1 {
+	authStore := testStore(t)
+	id, _ := authStore.AddUser("alice", testPw, false)
+	authStore.Grant(id, "main", RightMemRead)
+	authStore.db.Exec(`UPDATE home_acl SET exec=1 WHERE user_id=?`, id)
+	if _, err := authStore.Rights(id, "main"); !errors.Is(err, errTamper) || tamperEvents(t, authStore) != 1 {
 		t.Fatalf("modified row: %v", err)
 	}
-	s.db.Exec(`UPDATE home_acl SET exec=0, sig=NULL WHERE user_id=?`, id)
-	if _, err := s.Rights(id, "main"); !errors.Is(err, errTamper) {
+	authStore.db.Exec(`UPDATE home_acl SET exec=0, sig=NULL WHERE user_id=?`, id)
+	if _, err := authStore.Rights(id, "main"); !errors.Is(err, errTamper) {
 		t.Fatalf("unsigned row: %v", err)
 	}
 }
 
 func TestRightsRowCopy(t *testing.T) {
-	s := testStore(t)
-	a, _ := s.AddUser("alice", testPw, false)
-	b, _ := s.AddUser("bob", testPw, false)
-	s.Grant(a, "main", RightExec)
-	if _, err := s.db.Exec(`INSERT INTO home_acl(user_id,home_id,mem_read,mem_write,config_write,mem_sync,usage_read,sessions_read,exec,fs_read,fs_write,sig) SELECT ?,home_id,mem_read,mem_write,config_write,mem_sync,usage_read,sessions_read,exec,fs_read,fs_write,sig FROM home_acl WHERE user_id=?`, b, a); err != nil {
+	authStore := testStore(t)
+	number, _ := authStore.AddUser("alice", testPw, false)
+	limit, _ := authStore.AddUser("bob", testPw, false)
+	authStore.Grant(number, "main", RightExec)
+	if _, err := authStore.db.Exec(`INSERT INTO home_acl(user_id,home_id,mem_read,mem_write,config_write,mem_sync,usage_read,sessions_read,exec,fs_read,fs_write,sig) SELECT ?,home_id,mem_read,mem_write,config_write,mem_sync,usage_read,sessions_read,exec,fs_read,fs_write,sig FROM home_acl WHERE user_id=?`, limit, number); err != nil {
 		t.Fatalf("copie de ligne impossible : %v", err)
 	}
-	if _, err := s.Rights(b, "main"); !errors.Is(err, errTamper) {
+	if _, err := authStore.Rights(limit, "main"); !errors.Is(err, errTamper) {
 		t.Fatalf("copied to other user: %v", err)
 	}
-	if _, err := s.db.Exec(`INSERT INTO home_acl(user_id,home_id,mem_read,mem_write,config_write,mem_sync,usage_read,sessions_read,exec,fs_read,fs_write,sig) SELECT user_id,'perso',mem_read,mem_write,config_write,mem_sync,usage_read,sessions_read,exec,fs_read,fs_write,sig FROM home_acl WHERE user_id=? AND home_id='main'`, a); err != nil {
+	if _, err := authStore.db.Exec(`INSERT INTO home_acl(user_id,home_id,mem_read,mem_write,config_write,mem_sync,usage_read,sessions_read,exec,fs_read,fs_write,sig) SELECT user_id,'perso',mem_read,mem_write,config_write,mem_sync,usage_read,sessions_read,exec,fs_read,fs_write,sig FROM home_acl WHERE user_id=? AND home_id='main'`, number); err != nil {
 		t.Fatalf("copie de ligne impossible : %v", err)
 	}
-	if _, err := s.Rights(a, "perso"); !errors.Is(err, errTamper) {
+	if _, err := authStore.Rights(number, "perso"); !errors.Is(err, errTamper) {
 		t.Fatalf("copied to other home: %v", err)
 	}
 }
 
 func TestResetMFA(t *testing.T) {
-	s := testStore(t)
-	id, _ := s.AddUser("alice", testPw, false)
-	s.db.Exec(`INSERT INTO totp(user_id,secret_enc,nonce) VALUES(?,x'00',x'00')`, id)
-	s.db.Exec(`INSERT INTO sessions(id_hash,user_id,created_at,last_seen_at,expires_at) VALUES(x'01',?,0,0,0)`, id)
-	if err := s.ResetMFA(id); err != nil {
+	authStore := testStore(t)
+	id, _ := authStore.AddUser("alice", testPw, false)
+	authStore.db.Exec(`INSERT INTO totp(user_id,secret_enc,nonce) VALUES(?,x'00',x'00')`, id)
+	authStore.db.Exec(`INSERT INTO sessions(id_hash,user_id,created_at,last_seen_at,expires_at) VALUES(x'01',?,0,0,0)`, id)
+	if err := authStore.ResetMFA(id); err != nil {
 		t.Fatal(err)
 	}
-	var n int
-	s.db.QueryRow(`SELECT (SELECT COUNT(*) FROM totp)+(SELECT COUNT(*) FROM sessions)`).Scan(&n)
-	if n != 0 {
-		t.Fatalf("%d rows left", n)
+	var count int
+	authStore.db.QueryRow(`SELECT (SELECT COUNT(*) FROM totp)+(SELECT COUNT(*) FROM sessions)`).Scan(&count)
+	if count != 0 {
+		t.Fatalf("%d rows left", count)
 	}
 }
 
 func withStdin(t *testing.T, input string) {
 	t.Helper()
-	r, w, err := os.Pipe()
+	file, localFile, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
-	w.WriteString(input)
-	w.Close()
+	localFile.WriteString(input)
+	localFile.Close()
 	old := os.Stdin
-	os.Stdin = r
-	t.Cleanup(func() { os.Stdin = old; r.Close() })
+	os.Stdin = file
+	t.Cleanup(func() { os.Stdin = old; file.Close() })
 }
 
 func TestUserCLIGrantNeedsConfirmation(t *testing.T) {
-	s := testStore(t)
-	s.db.Close()
+	authStore := testStore(t)
+	authStore.db.Close()
 	t.Setenv("GLD_USER_PASSWORD_STDIN", "1")
 	withStdin(t, testPw+"\n")
 	if _, err := run(t, cliUser, "add", "--admin", "Alice"); err != nil {
@@ -190,9 +190,9 @@ func TestUserCLIGrantNeedsConfirmation(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s2.db.Close()
-	u, _ := s2.UserByName("alice")
-	if r, err := s2.Rights(u.ID, "main"); err != nil || !r[RightExec] || !r[RightMemRead] || !u.Admin {
-		t.Fatalf("rights: %v %v", r, err)
+	user, _ := s2.UserByName("alice")
+	if lookup, err := s2.Rights(user.ID, "main"); err != nil || !lookup[RightExec] || !lookup[RightMemRead] || !user.Admin {
+		t.Fatalf("rights: %v %v", lookup, err)
 	}
 	if out, err := run(t, cliUser, "list"); err != nil || !strings.Contains(out, "alice") || strings.Contains(out, testPw) {
 		t.Fatalf("list: %v\n%s", err, out)
@@ -200,66 +200,66 @@ func TestUserCLIGrantNeedsConfirmation(t *testing.T) {
 }
 
 func TestUserConcurrentUpdates(t *testing.T) {
-	s := testStore(t)
-	id, _ := s.AddUser("alice", testPw, false)
+	authStore := testStore(t)
+	id, _ := authStore.AddUser("alice", testPw, false)
 	var wg sync.WaitGroup
-	for g := 0; g < 2; g++ {
+	for number := 0; number < 2; number++ {
 		wg.Add(1)
-		go func(g int) {
+		go func(number int) {
 			defer wg.Done()
-			for i := 0; i < 20; i++ {
+			for index := 0; index < 20; index++ {
 				var err error
-				if g == 0 {
-					err = s.SetDisabled(id, i%2 == 0)
+				if number == 0 {
+					err = authStore.SetDisabled(id, index%2 == 0)
 				} else {
-					err = s.SetPassword(id, testPw+strconv.Itoa(i))
+					err = authStore.SetPassword(id, testPw+strconv.Itoa(index))
 				}
 				if err != nil {
 					t.Error(err)
 				}
 			}
-		}(g)
+		}(number)
 	}
 	wg.Wait()
-	if _, err := s.UserByName("alice"); err != nil || tamperEvents(t, s) != 0 {
-		t.Fatalf("after concurrent updates: %v, %d tamper events", err, tamperEvents(t, s))
+	if _, err := authStore.UserByName("alice"); err != nil || tamperEvents(t, authStore) != 0 {
+		t.Fatalf("after concurrent updates: %v, %d tamper events", err, tamperEvents(t, authStore))
 	}
 }
 
 func TestGrantConcurrent(t *testing.T) {
-	s := testStore(t)
-	id, _ := s.AddUser("alice", testPw, false)
+	authStore := testStore(t)
+	id, _ := authStore.AddUser("alice", testPw, false)
 	var wg sync.WaitGroup
-	for _, r := range allRights {
+	for _, right := range allRights {
 		wg.Add(1)
-		go func(r Right) {
+		go func(right Right) {
 			defer wg.Done()
-			if err := s.Grant(id, "main", r, RightMemRead); err != nil {
+			if err := authStore.Grant(id, "main", right, RightMemRead); err != nil {
 				t.Error(err)
 			}
-		}(r)
+		}(right)
 	}
 	wg.Wait()
-	m, err := s.Rights(id, "main")
+	lookup, err := authStore.Rights(id, "main")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, r := range allRights {
-		if !m[r] {
-			t.Errorf("lost grant %s", r)
+	for _, right := range allRights {
+		if !lookup[right] {
+			t.Errorf("lost grant %s", right)
 		}
 	}
 }
 
 func TestAddUserConcurrent(t *testing.T) {
-	s := testStore(t)
+	authStore := testStore(t)
 	var wg sync.WaitGroup
 	errs := make(chan error, 8)
-	for i := 0; i < 8; i++ {
+	for index := 0; index < 8; index++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := s.AddUser("alice", testPw, false)
+			_, err := authStore.AddUser("alice", testPw, false)
 			errs <- err
 		}()
 	}
@@ -280,120 +280,120 @@ func TestAddUserConcurrent(t *testing.T) {
 }
 
 func TestUserOutOfRangeValues(t *testing.T) {
-	s := testStore(t)
-	id, _ := s.AddUser("alice", testPw, true)
-	s.Grant(id, "main", RightExec)
-	s.db.Exec(`UPDATE users SET is_admin=2 WHERE id=?`, id)
-	if _, err := s.UserByName("alice"); !errors.Is(err, errTamper) || tamperEvents(t, s) != 1 {
+	authStore := testStore(t)
+	id, _ := authStore.AddUser("alice", testPw, true)
+	authStore.Grant(id, "main", RightExec)
+	authStore.db.Exec(`UPDATE users SET is_admin=2 WHERE id=?`, id)
+	if _, err := authStore.UserByName("alice"); !errors.Is(err, errTamper) || tamperEvents(t, authStore) != 1 {
 		t.Fatalf("is_admin=2: %v", err)
 	}
-	s.db.Exec(`UPDATE home_acl SET exec=2 WHERE user_id=?`, id)
-	if _, err := s.Rights(id, "main"); !errors.Is(err, errTamper) || tamperEvents(t, s) != 2 {
+	authStore.db.Exec(`UPDATE home_acl SET exec=2 WHERE user_id=?`, id)
+	if _, err := authStore.Rights(id, "main"); !errors.Is(err, errTamper) || tamperEvents(t, authStore) != 2 {
 		t.Fatalf("exec=2: %v", err)
 	}
-	s.db.Exec(`UPDATE home_acl SET exec='x' WHERE user_id=?`, id)
-	if _, err := s.Rights(id, "main"); !errors.Is(err, errTamper) {
+	authStore.db.Exec(`UPDATE home_acl SET exec='x' WHERE user_id=?`, id)
+	if _, err := authStore.Rights(id, "main"); !errors.Is(err, errTamper) {
 		t.Fatalf("exec='x': %v", err)
 	}
 }
 
 func TestUsersListTamperOnce(t *testing.T) {
-	s := testStore(t)
-	id, _ := s.AddUser("alice", testPw, false)
-	s.AddUser("bob", testPw, false)
-	s.db.Exec(`UPDATE users SET disabled=1 WHERE id=?`, id)
-	users, bad, err := s.Users()
-	if err != nil || len(users) != 2 || len(bad) != 1 || !bad[id] || tamperEvents(t, s) != 1 {
-		t.Fatalf("list: %d users, bad=%v, err=%v, events=%d", len(users), bad, err, tamperEvents(t, s))
+	authStore := testStore(t)
+	id, _ := authStore.AddUser("alice", testPw, false)
+	authStore.AddUser("bob", testPw, false)
+	authStore.db.Exec(`UPDATE users SET disabled=1 WHERE id=?`, id)
+	users, bad, err := authStore.Users()
+	if err != nil || len(users) != 2 || len(bad) != 1 || !bad[id] || tamperEvents(t, authStore) != 1 {
+		t.Fatalf("list: %d users, bad=%v, err=%v, events=%d", len(users), bad, err, tamperEvents(t, authStore))
 	}
 }
 
 func TestFsRightsGrantRevoke(t *testing.T) {
-	s := testStore(t)
-	u, err := s.AddUser("Alice", testPw, false)
+	authStore := testStore(t)
+	number, err := authStore.AddUser("Alice", testPw, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Grant(u, "main", RightFsRead, RightFsWrite); err != nil {
+	if err := authStore.Grant(number, "main", RightFsRead, RightFsWrite); err != nil {
 		t.Fatal(err)
 	}
-	m, err := s.Rights(u, "main")
-	if err != nil || !m[RightFsRead] || !m[RightFsWrite] {
-		t.Fatalf("après grant : %v %v", m, err)
+	lookup, err := authStore.Rights(number, "main")
+	if err != nil || !lookup[RightFsRead] || !lookup[RightFsWrite] {
+		t.Fatalf("après grant : %v %v", lookup, err)
 	}
-	if err := s.Revoke(u, "main", RightFsWrite); err != nil {
+	if err := authStore.Revoke(number, "main", RightFsWrite); err != nil {
 		t.Fatal(err)
 	}
-	if m, err = s.Rights(u, "main"); err != nil || !m[RightFsRead] || m[RightFsWrite] {
-		t.Fatalf("après revoke : %v %v", m, err)
+	if lookup, err = authStore.Rights(number, "main"); err != nil || !lookup[RightFsRead] || lookup[RightFsWrite] {
+		t.Fatalf("après revoke : %v %v", lookup, err)
 	}
 }
 
 func TestMigration8ResignsACL(t *testing.T) {
-	s := testStore(t)
-	u, err := s.AddUser("Alice", testPw, false)
+	authStore := testStore(t)
+	number, err := authStore.AddUser("Alice", testPw, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Grant(u, "main", RightMemRead); err != nil {
+	if err := authStore.Grant(number, "main", RightMemRead); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Grant(u, "other", RightExec); err != nil {
+	if err := authStore.Grant(number, "other", RightExec); err != nil {
 		t.Fatal(err)
 	}
 	old := func(home string, on ...string) []byte {
-		return rowSig(s.key, "home_acl", strconv.FormatInt(u, 10), append([]string{home}, on...)...)
+		return rowSig(authStore.key, "home_acl", strconv.FormatInt(number, 10), append([]string{home}, on...)...)
 	}
-	for _, q := range []string{`ALTER TABLE home_acl DROP COLUMN fs_read`, `ALTER TABLE home_acl DROP COLUMN fs_write`,
+	for _, query := range []string{`ALTER TABLE home_acl DROP COLUMN fs_read`, `ALTER TABLE home_acl DROP COLUMN fs_write`,
 		`DROP TRIGGER sessions_cascade`, `DROP INDEX sessions_parent_idx`, `ALTER TABLE sessions DROP COLUMN parent_hash`, `DELETE FROM schema_version WHERE version>=8`} {
-		if _, err := s.db.Exec(q); err != nil {
+		if _, err := authStore.db.Exec(query); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := s.db.Exec(`UPDATE home_acl SET sig=? WHERE home_id='main'`, old("main", "1", "0", "0", "0", "0", "0", "0")); err != nil {
+	if _, err := authStore.db.Exec(`UPDATE home_acl SET sig=? WHERE home_id='main'`, old("main", "1", "0", "0", "0", "0", "0", "0")); err != nil {
 		t.Fatal(err)
 	}
 	// La ligne « other » garde une signature invalide : elle doit rester altérée.
-	if _, err := s.db.Exec(`UPDATE home_acl SET sig=? WHERE home_id='other'`, []byte("bad")); err != nil {
+	if _, err := authStore.db.Exec(`UPDATE home_acl SET sig=? WHERE home_id='other'`, []byte("bad")); err != nil {
 		t.Fatal(err)
 	}
-	s.db.Close()
+	authStore.db.Close()
 	s2, err := openAuthStore()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer s2.db.Close()
-	m, err := s2.Rights(u, "main")
-	if err != nil || !m[RightMemRead] || m[RightFsRead] || m[RightFsWrite] {
-		t.Fatalf("droits après migration : %v %v", m, err)
+	lookup, err := s2.Rights(number, "main")
+	if err != nil || !lookup[RightMemRead] || lookup[RightFsRead] || lookup[RightFsWrite] {
+		t.Fatalf("droits après migration : %v %v", lookup, err)
 	}
-	if _, err := s2.Rights(u, "other"); err == nil {
+	if _, err := s2.Rights(number, "other"); err == nil {
 		t.Fatal("ligne altérée re-signée")
 	}
 }
 
 func TestMigration9KeepsSessions(t *testing.T) {
-	s := testStore(t)
-	u, err := s.AddUser("Alice", testPw, false)
+	authStore := testStore(t)
+	number, err := authStore.AddUser("Alice", testPw, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cookie, err := s.NewSession(u, "203.0.113.5", "ua")
+	cookie, err := authStore.NewSession(number, "203.0.113.5", "ua")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, q := range []string{`DROP TRIGGER sessions_cascade`, `DROP INDEX sessions_parent_idx`, `ALTER TABLE sessions DROP COLUMN parent_hash`, `DELETE FROM schema_version WHERE version>=9`} {
-		if _, err := s.db.Exec(q); err != nil {
+	for _, query := range []string{`DROP TRIGGER sessions_cascade`, `DROP INDEX sessions_parent_idx`, `ALTER TABLE sessions DROP COLUMN parent_hash`, `DELETE FROM schema_version WHERE version>=9`} {
+		if _, err := authStore.db.Exec(query); err != nil {
 			t.Fatal(err)
 		}
 	}
-	s.db.Close()
+	authStore.db.Close()
 	s2, err := openAuthStore()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer s2.db.Close()
-	if p, err := s2.Session(cookie); err != nil || p == nil {
-		t.Fatalf("session perdue par la migration 9 : %v %v", p, err)
+	if principal, err := s2.Session(cookie); err != nil || principal == nil {
+		t.Fatalf("session perdue par la migration 9 : %v %v", principal, err)
 	}
 }
