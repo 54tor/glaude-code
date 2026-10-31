@@ -1,3 +1,4 @@
+import { strToU8, zipSync } from "fflate"
 import { i18n } from "@/i18n"
 
 // Paquet de mémoires échangé entre deux installations : JSON, une entrée par fichier memory/*.md.
@@ -8,6 +9,12 @@ const FORMAT = "gld-memory"
 const NAME = /^[^./\\][^/\\]*\.md$/ // même règle que mdName côté serveur
 const MAX_TEXT = 1 << 20
 export const MAX_PACK = 1000
+
+// Dossier du zip : « global » ou le projet ; les règles dans un sous-dossier « rules ».
+export const packDir = (key: string, label: string) => {
+  const base = key.startsWith("g/") ? "global" : label
+  return key.startsWith("g/rules/") || key.startsWith("r/") ? `${base}/rules` : base
+}
 
 export const projectLabel = (path: string) => path.split(/[\\/]/).filter(Boolean).pop() ?? ""
 
@@ -35,9 +42,16 @@ export function freeName(name: string, taken: Set<string>): string {
 }
 
 export function downloadPack(entries: PackEntry[]) {
+  const files: Record<string, Uint8Array> = {}
+  for (const e of entries) {
+    const dir = (e.project.replace(/[\\:]/g, "_") || "projet") + "/"
+    const taken = new Set(Object.keys(files).filter((k) => k.startsWith(dir)).map((k) => k.slice(dir.length)))
+    const name = taken.has(e.name) ? freeName(e.name, taken) : e.name
+    files[dir + name] = strToU8(e.text)
+  }
   const a = document.createElement("a")
-  a.href = URL.createObjectURL(new Blob([packOf(entries)], { type: "application/json" }))
-  a.download = "gld-memoires.json"
+  a.href = URL.createObjectURL(new Blob([zipSync(files) as BlobPart], { type: "application/zip" }))
+  a.download = "gld-memoires.zip"
   a.click()
   setTimeout(() => URL.revokeObjectURL(a.href), 1000)
 }

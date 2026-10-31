@@ -15,7 +15,7 @@ import type { Ask } from "./Confirm"
 import type { ComposeAsk } from "./Compose"
 import { Markdown } from "./Message"
 import { BLANK_ENTRY, blankRule, cmpFiles, copy, DEFAULT_SORT, home, newKey, split, type Sort } from "./memoryLib"
-import { downloadPack, projectLabel } from "@/lib/memoryPack"
+import { downloadPack, packDir, projectLabel } from "@/lib/memoryPack"
 import { MemoryImport } from "./MemoryImport"
 import { Toolbar, SelectionBar } from "./MemoryBars"
 import { FileBar } from "./MemoryFileBar"
@@ -293,10 +293,10 @@ export function Memory({
     }
   }
   // Fusion par Claude : le serveur rédige le prompt ; on le copie, ou on l'ouvre dans la fenêtre de saisie (relecture, modèle) avant de lancer la session.
-  // Export : seules les entrées de mémoire de projet (hors index) ; un avertissement précède le téléchargement.
+  // Export : les fichiers cochés (mémoire, règles, CLAUDE.md), hors index, en zip ; un avertissement précède le téléchargement.
   const [importing, setImporting] = useState(false)
   const exportKeys = (keys: string[]) => {
-    const files = all.filter((x) => keys.includes(x.key) && x.key.startsWith("m/") && x.name !== "MEMORY.md")
+    const files = all.filter((x) => keys.includes(x.key) && x.name !== "MEMORY.md" && /\.md$/.test(x.name))
     if (!files.length) return void toast.info(t("memory.pack.none"))
     onAsk({
       title: t("memory.pack.exportTitle", { count: files.length }),
@@ -306,8 +306,8 @@ export function Memory({
         try {
           const entries = await Promise.all(
             files.map(async (x) => ({
-              project: projectLabel(list?.projects.find((p) => p.dir === home(x.key))?.project ?? ""),
-              name: x.name,
+              project: packDir(x.key, projectLabel(list?.projects.find((p) => p.dir === home(x.key))?.project ?? "")),
+              name: x.name.replace(/^rules\//, ""),
               text: (await api.memoryFile(x.key)).text,
             }))
           )
@@ -472,7 +472,7 @@ export function Memory({
               onType={setTypeFilter}
               onTypeHelp={() => setTypeHelp(true)}
               onCleanOrphans={() => removeMany(orphans, t("memory.main.orphansOf", { count: gone.length }))}
-              onExportAll={() => exportKeys(all.map((x) => x.key))}
+              onExportAll={() => exportKeys(all.filter((x) => x.key.startsWith("m/")).map((x) => x.key))}
               onImport={() => setImporting(true)}
             />
           )}

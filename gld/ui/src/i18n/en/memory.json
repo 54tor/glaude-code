@@ -284,7 +284,7 @@
       "export": "Export",
       "exportAll": "Export all",
       "exportAllTitle": "Export every project memory entry to a file",
-      "exportSelTitle": "Export the checked memory entries to a file",
+      "exportSelTitle": "Export the checked files to a zip",
       "import": "Import",
       "importTitle": "Import memory entries from an exported file",
       "none": "No project memory entry to export",
