@@ -335,7 +335,8 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
     const onScroll = () => {
       setFromTop(viewportElement.scrollTop > FROM_TOP_THRESHOLD_PX)
       // à moins d'une page de la fin : la réouverture redescend à la fin
-      if (idRef.current && !restoring.current) scrollMem.set(idRef.current, { top: viewportElement.scrollTop, end: distanceToEnd(viewportElement) < viewportElement.clientHeight })
+      // pas avant que la session ait été amenée à sa place : le défilement à 0 d'une zone fraîchement montée serait mémorisé et rétabli à la réouverture
+      if (idRef.current && opened.current === idRef.current && !restoring.current) scrollMem.set(idRef.current, { top: viewportElement.scrollTop, end: distanceToEnd(viewportElement) < viewportElement.clientHeight })
     }
     onScroll()
     viewportElement.addEventListener("scroll", onScroll, { passive: true })
