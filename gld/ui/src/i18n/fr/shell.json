@@ -386,8 +386,7 @@
       "emptyAll": "Vider la corbeille"
     },
     "toast": {
-      "notifications": "Notifications",
-      "close": "Fermer la notification"
+      "notifications": "Notifications"
     },
     "images": {
       "pasted": "image collée",
