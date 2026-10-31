@@ -67,6 +67,7 @@ func TestMemoryMeta(t *testing.T) {
 	put(t, filepath.Join(cfg, "RTK.md"), "ok", old)
 	put(t, filepath.Join(cfg, "rules", "ts.md"), "---\npaths:\n  - \"src/**/*.ts\"\n---\nr\n", old)
 	put(t, filepath.Join(cfg, "rules", "tous.md"), "toujours\n", old)
+	put(t, filepath.Join(cfg, "rules", "liens.md"), "voir [[b]] et [[disparue]]\n", old)
 	put(t, filepath.Join(cfg, "rules", "vide.md"), "---\npaths: []\n---\nr\n", old)
 	put(t, filepath.Join(cfg, "projects", "-p", id1+".jsonl"), `{"cwd":"`+proj+`"}`+"\n", old)
 	put(t, filepath.Join(cfg, "projects", "-p", "memory", "MEMORY.md"), "- [A](a.md) — a\n- [Mort](mort.md) — x\n", old)
@@ -97,8 +98,15 @@ func TestMemoryMeta(t *testing.T) {
 	}
 
 	kinds := map[string]int{}
+	ruleLinks := 0
 	for _, i := range memHealth() {
 		kinds[i.Kind]++
+		if i.Kind == "lien" && i.Key == "g/rules/liens.md" {
+			ruleLinks++
+		}
+	}
+	if ruleLinks != 1 {
+		t.Errorf("liens cassés d'une règle globale : %d, attendu 1", ruleLinks)
 	}
 	for _, k := range []string{"import", "index-ligne", "index-absent", "lien", "front-matter"} {
 		if kinds[k] == 0 {

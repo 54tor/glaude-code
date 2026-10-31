@@ -245,8 +245,29 @@ func memHealth() []Issue {
 			}
 		}
 	}
+	// Les règles et CLAUDE.md citent des mémoires de n'importe quel projet : un lien est cassé si aucun projet n'a cette entrée.
+	allSlugs := map[string]bool{}
+	for _, p := range projects {
+		for _, f := range p.Files {
+			if strings.HasPrefix(f.Key, "m/") {
+				allSlugs[strings.TrimSuffix(f.Name, ".md")] = true
+			}
+		}
+	}
+	links := func(f MemFile) {
+		text, err := memRead(f.Key)
+		if err != nil {
+			return
+		}
+		for _, m := range wikiLink.FindAllStringSubmatch(text, -1) {
+			if !allSlugs[strings.TrimSuffix(strings.TrimSpace(m[1]), ".md")] {
+				issues = append(issues, Issue{Key: f.Key, Kind: "lien", Msg: L("srv.memmeta.brokenLink", "A1", m[1])})
+			}
+		}
+	}
 	for _, f := range global {
 		check(f)
+		links(f)
 		if f.Key == "g/CLAUDE.md" {
 			imports(f)
 		}
@@ -256,6 +277,9 @@ func memHealth() []Issue {
 		var entries []MemFile
 		for _, f := range p.Files {
 			check(f)
+			if !strings.HasPrefix(f.Key, "m/") {
+				links(f)
+			}
 			if strings.HasPrefix(f.Key, "p/") && isClaudeFile(f.Key) { // les @mentions d'un README ne sont pas des imports
 				imports(f)
 			}
