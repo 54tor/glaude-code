@@ -40,8 +40,8 @@ describe("api /v1, fichiers", () => {
   })
   it("un 409 lève une ApiError portant le code", async () => {
     f.mockResolvedValueOnce(new Response('{"error":{"code":"deleted","message":"m"}}', { status: 409 }))
-    const e = await api.fsSave("/p", "a", "x", "e").catch((x: unknown) => x)
-    expect(e).toBeInstanceOf(ApiError)
-    expect(e).toMatchObject({ status: 409, code: "deleted" })
+    const value = await api.fsSave("/p", "a", "x", "e").catch((value: unknown) => value)
+    expect(value).toBeInstanceOf(ApiError)
+    expect(value).toMatchObject({ status: 409, code: "deleted" })
   })
 })

@@ -5,10 +5,10 @@ import { useTranslation } from "react-i18next"
 import { ago, size } from "@/lib/format"
 import { catalogFiles, i18n, resolveFront, setLang } from "./index"
 
-const flat = (o: object, p = ""): string[] =>
-  Object.entries(o).flatMap(([k, v]) => (typeof v === "object" && v ? flat(v, p + k + ".") : [p + k]))
-const leaves = (o: object): string[] => Object.values(o).flatMap((v) => (typeof v === "object" && v ? leaves(v) : [String(v)]))
-const names = (m: Record<string, unknown>) => Object.keys(m).map((p) => p.split("/").pop()).sort()
+const flat = (object: object, path = ""): string[] =>
+  Object.entries(object).flatMap(([key, value]) => (typeof value === "object" && value ? flat(value, path + key + ".") : [path + key]))
+const leaves = (object: object): string[] => Object.values(object).flatMap((value) => (typeof value === "object" && value ? leaves(value) : [String(value)]))
+const names = (lookup: Record<string, unknown>) => Object.keys(lookup).map((path) => path.split("/").pop()).sort()
 const bundle = (lang: string) => i18n.getResourceBundle(lang, "translation") as object
 
 afterEach(() => {
@@ -30,13 +30,13 @@ describe("catalogues", () => {
   it("ont les mêmes fichiers, les mêmes clés et aucune valeur vide", () => {
     expect(names(catalogFiles.en)).toEqual(names(catalogFiles.fr))
     expect(flat(bundle("en")).sort()).toEqual(flat(bundle("fr")).sort())
-    for (const v of [...leaves(bundle("fr")), ...leaves(bundle("en"))]) expect(v.trim()).not.toBe("")
+    for (const value of [...leaves(bundle("fr")), ...leaves(bundle("en"))]) expect(value.trim()).not.toBe("")
   })
   it("le premier niveau de chaque fichier porte son nom", async () => {
     for (const lang of ["fr", "en"] as const)
-      for (const [p, load] of Object.entries(catalogFiles[lang])) {
-        const m = typeof load === "function" ? await load() : load
-        expect(Object.keys(m.default)).toEqual([p.split("/").pop()!.replace(".json", "")])
+      for (const [path, load] of Object.entries(catalogFiles[lang])) {
+        const value = typeof load === "function" ? await load() : load
+        expect(Object.keys(value.default)).toEqual([path.split("/").pop()!.replace(".json", "")])
       }
   })
 })
