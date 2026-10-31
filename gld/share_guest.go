@@ -418,6 +418,7 @@ func guestRelay(mux *http.ServeMux, home, secret, handle string) http.Handler {
 }
 
 func guestServe(mux *http.ServeMux, share Share, invitation Invite, secret, handle string) http.Handler {
+	redactor := newPathRedactor(skillsHome())
 	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		pattern := guestPattern(mux, request)
 		if pattern == "" || !guestCSRFOK(request, secret) {
@@ -430,7 +431,7 @@ func guestServe(mux *http.ServeMux, share Share, invitation Invite, secret, hand
 		}
 		if pattern == "GET /v1/guest/me" {
 			responseWriter.Header().Set("Cache-Control", "no-store")
-			writeJSON(responseWriter, 200, map[string]any{"id": share.Session, "dir": share.Dir, "mode": invitation.Mode, "csrf": guestCSRF(secret), "handle": handle, "title": share.Title,
+			writeJSON(responseWriter, 200, map[string]any{"id": share.Session, "dir": redactor.applyString(share.Dir), "mode": invitation.Mode, "csrf": guestCSRF(secret), "handle": handle, "title": share.Title,
 				"invite": invitation.ID, "label": invitation.label()})
 			return
 		}
@@ -507,7 +508,7 @@ func guestServe(mux *http.ServeMux, share Share, invitation Invite, secret, hand
 				}
 			}
 		}
-		mux.ServeHTTP(&noStoreWriter{ResponseWriter: responseWriter}, forwarded)
+		mux.ServeHTTP(guestRedactedWriter(&noStoreWriter{ResponseWriter: responseWriter}, redactor), forwarded)
 	})
 }
 
