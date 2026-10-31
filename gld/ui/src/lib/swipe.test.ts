@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest"
 import { swipeEnd, swipeStart } from "./swipe"
 
-const ev = (x: number, y: number) => ({ touches: [{ clientX: x, clientY: y }], changedTouches: [{ clientX: x, clientY: y }] }) as unknown as TouchEvent
+const ev = (number: number, localNumber: number) => ({ touches: [{ clientX: number, clientY: localNumber }], changedTouches: [{ clientX: number, clientY: localNumber }] }) as unknown as TouchEvent
 
 describe("swipe", () => {
   it("reconnaît un balayage horizontal, pas un défilement ni un geste trop court", () => {
