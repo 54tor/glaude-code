@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useStickToBottom } from "use-stick-to-bottom"
+import { cn } from "cn"
 import { swipeHandlers } from "@/lib/swipe"
 import { ArrowDown, SquareChevronsDown, ArrowUpToLine, Copy, Undo2, BarChart3, Bug, ChevronLeft, ChevronRight, FolderOpen, Power, FileText, Fan, MessageSquarePlus, MoreHorizontal, MessagesSquare, GalleryHorizontalEnd, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
 import { focusRow } from "@/lib/focusRow"
@@ -56,6 +57,7 @@ const FINAL_RELOAD_DELAY_MS = 1500
 const PIN_END_DURATION_MS = 3000
 const RESTORE_INTERVAL_MS = 50
 const RESTORE_DURATION_MS = 1500
+const SETTLE_DELAY_MS = 250
 const FROM_TOP_THRESHOLD_PX = 200
 const TURN_RELOAD_ATTEMPTS = 5
 const TURN_RELOAD_DELAY_MS = 1000
@@ -327,6 +329,10 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   // bouge plus ; le bouton « Aller à la fin » prend le relais.
   const opened = useRef("") // session déjà amenée à la fin une fois
   const away = !isAtBottom
+  // Les messages hors écran n'ont qu'une hauteur estimée (content-visibility) : en se précisant elle fait glisser la vue de quelques
+  // dizaines de pixels. La zone reste donc masquée le temps que la session soit amenée à sa place.
+  const [settledId, setSettledId] = useState("")
+  const isSettling = ready && !!id && settledId !== id
   const [fromTop, setFromTop] = useState(false)
   const ready = !!session && msgs !== null
   useEffect(() => {
@@ -353,6 +359,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
     if (opened.current === id || !viewport()) return
     opened.current = id
     const savedPosition = scrollMem.get(id)
+    setTimeout(() => setSettledId(id), SETTLE_DELAY_MS)
     if (savedPosition && !savedPosition.end) restore(savedPosition.top)
     else pinEnd()
   }, [msgs, pinEnd, restore, viewport, id, ready, areaMounted])
@@ -488,7 +495,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
               <ArrowUpToLine /> {t("conversation.view.toTop")}
             </Button>
           )}
-        <ScrollArea ref={setArea} className="min-h-0 flex-1">
+        <ScrollArea ref={setArea} className={cn("min-h-0 flex-1", isSettling && "invisible")}>
           <div className="session-text mx-auto max-w-page space-y-6 px-3 py-4 md:px-8 md:py-6">
             {msgs === null && (
               <>
