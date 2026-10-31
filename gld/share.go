@@ -52,6 +52,9 @@ type Invite struct {
 	LastSeen   int64  `json:"lastSeen"`
 }
 
+// defaultInviteMode : une invitation naît en lecture seule ; le mode écriture se donne ensuite, explicitement.
+var defaultInviteMode = "ro"
+
 // label : « Invité » reste fixe (pas de L) : c'est aussi le mot de l'étiquette envoyée à Claude.
 func (invitation Invite) label() string {
 	if invitation.Name != "" {
@@ -217,7 +220,7 @@ func (store *shareStore) CreateInvite(session, dir, title, name string) (string,
 		share.Title = cleanTitle
 	}
 	share.Seq++
-	invitation := Invite{ID: hex.EncodeToString(inviteID[:]), Seq: share.Seq, Name: inviteName(name), Mode: "rw", TokenHash: hashSecret(token), CreatedAt: now}
+	invitation := Invite{ID: hex.EncodeToString(inviteID[:]), Seq: share.Seq, Name: inviteName(name), Mode: defaultInviteMode, TokenHash: hashSecret(token), CreatedAt: now}
 	share.Invites = append(share.Invites, invitation)
 	if err := store.save(); err != nil {
 		if hadShare {

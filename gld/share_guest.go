@@ -747,6 +747,9 @@ func guestChildMe(request *http.Request, home, secret, handle string) (guestItem
 	return listedShare, http.StatusOK
 }
 
+// guestConfigExtensions : les fichiers de configuration portent souvent jetons et identités ; l'invité n'en lit aucun.
+var guestConfigExtensions = []string{".json", ".yaml", ".yml", ".toml", ".ini", ".conf", ".cfg", ".properties", ".xml", ".plist", ".env"}
+
 // guestSecretPath : défense en profondeur ; la confinement au dossier du partage est faite par ideRel/os.Root (absolu, « .. » et liens refusés). Un segment .git, .env*, clé ou certificat ferme le chemin à l'invité (lecture seule du dossier du partage).
 func guestSecretPath(requestPath string) bool {
 	for _, segment := range strings.Split(requestPath, "/") {
@@ -754,7 +757,7 @@ func guestSecretPath(requestPath string) bool {
 		if lowered == ".git" || strings.HasPrefix(lowered, ".env") || strings.HasPrefix(lowered, "id_rsa") || strings.HasPrefix(lowered, "id_") ||
 			slices.Contains([]string{".ssh", ".aws", ".kube", ".docker", ".netrc", ".npmrc", ".pgpass"}, lowered) ||
 			strings.HasSuffix(lowered, ".pem") || strings.HasSuffix(lowered, ".key") || strings.HasSuffix(lowered, ".p12") || strings.HasSuffix(lowered, ".pfx") ||
-			strings.Contains(lowered, "credentials") || strings.Contains(lowered, "secret") {
+			strings.Contains(lowered, "credentials") || strings.Contains(lowered, "secret") || slices.Contains(guestConfigExtensions, path.Ext(lowered)) {
 			return true
 		}
 	}
@@ -821,7 +824,7 @@ func (tree *guestTree) flush(responseWriter http.ResponseWriter, cited map[strin
 	keep := listing.Entries[:0]
 	for _, entry := range listing.Entries {
 		entryPath := path.Join(dir, entry.Name)
-		if entry.Type == "dir" && citedDir(cited, entryPath) || entry.Type == "file" && cited[entryPath] {
+		if entry.Type == "dir" && citedDir(cited, entryPath) || entry.Type == "file" && cited[entryPath] && !guestSecretPath(entryPath) {
 			keep = append(keep, entry)
 		}
 	}
