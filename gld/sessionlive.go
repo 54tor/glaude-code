@@ -295,6 +295,15 @@ func sessionStatus(id string) (status string, isOpen bool) {
 	return "", false
 }
 
+// shownStatus : sessionStatus, mais un « busy » resté figé côté claude passe à « idle » quand l'écran reste au repos.
+func shownStatus(id string) (status string, isOpen bool) {
+	status, isOpen = sessionStatus(id)
+	if isOpen && status == "busy" && idleByScreen(id, time.Now()) {
+		return "idle", true
+	}
+	return status, isOpen
+}
+
 // rcSessions : ids des sessions ouvertes reliées à claude.ai (remote control), d'après bridgeSessionId dans ~/.claude/sessions/*.json.
 func rcSessions() []string {
 	sessionIDs := []string{}
@@ -450,7 +459,7 @@ func sessionLive(dir, sessionID string) LiveState {
 	if queueSt != nil {
 		state.Pending = queueSt.List(sessionID)
 	}
-	state.Status, state.Open = sessionStatus(sessionID)
+	state.Status, state.Open = shownStatus(sessionID)
 	transcriptPath, found := transcript(dir, sessionID)
 	if !found {
 		return state

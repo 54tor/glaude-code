@@ -67,7 +67,7 @@ func liveTabs() []TabSession {
 		if session.autoReview() || session.team != "" { // ni revue automatique ni équipier : ils appartiennent à leur session parente
 			continue
 		}
-		status, _ := sessionStatus(sessionID)
+		status, _ := shownStatus(sessionID)
 		tabs = append(tabs, TabSession{sessionID, session.Dir, session.Cwd, session.Title, status == "busy"})
 	}
 	slices.SortFunc(tabs, func(left, right TabSession) int { return strings.Compare(left.ID, right.ID) })
