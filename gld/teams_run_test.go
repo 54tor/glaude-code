@@ -37,54 +37,58 @@ type fakeIO struct {
 	overlap  bool
 }
 
-func (f *fakeIO) Panes() (map[string]string, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.order = append(f.order, "panes")
-	return f.panes, f.panesErr
+func (localFakeIO *fakeIO) Panes() (map[string]string, error) {
+	localFakeIO.mu.Lock()
+	defer localFakeIO.mu.Unlock()
+	localFakeIO.order = append(localFakeIO.order, "panes")
+	return localFakeIO.panes, localFakeIO.panesErr
 }
-func (f *fakeIO) LeadState(id string) (bool, bool) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.order = append(f.order, "lead")
-	f.leadIDs = append(f.leadIDs, id)
-	return f.live[id], !f.unknown
+func (localFakeIO *fakeIO) LeadState(id string) (bool, bool) {
+	localFakeIO.mu.Lock()
+	defer localFakeIO.mu.Unlock()
+	localFakeIO.order = append(localFakeIO.order, "lead")
+	localFakeIO.leadIDs = append(localFakeIO.leadIDs, id)
+	return localFakeIO.live[id], !localFakeIO.unknown
 }
-func (f *fakeIO) Idle() []string { f.mu.Lock(); defer f.mu.Unlock(); return f.idle }
-func (f *fakeIO) Capture(p string) (string, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.caps++
-	if q := f.script[p]; len(q) > 0 {
-		f.script[p] = q[1:]
-		return q[0], nil
+func (localFakeIO *fakeIO) Idle() []string {
+	localFakeIO.mu.Lock()
+	defer localFakeIO.mu.Unlock()
+	return localFakeIO.idle
+}
+func (localFakeIO *fakeIO) Capture(path string) (string, error) {
+	localFakeIO.mu.Lock()
+	defer localFakeIO.mu.Unlock()
+	localFakeIO.caps++
+	if values := localFakeIO.script[path]; len(values) > 0 {
+		localFakeIO.script[path] = values[1:]
+		return values[0], nil
 	}
-	if f.capErr[p] {
+	if localFakeIO.capErr[path] {
 		return "", errors.New("capture")
 	}
-	return f.screens[p], nil
+	return localFakeIO.screens[path], nil
 }
-func (f *fakeIO) Paste(p, t string) error {
-	if atomic.AddInt32(&f.busy, 1) > 1 {
-		f.overlap = true
+func (localFakeIO *fakeIO) Paste(path, title string) error {
+	if atomic.AddInt32(&localFakeIO.busy, 1) > 1 {
+		localFakeIO.overlap = true
 	}
 	time.Sleep(5 * time.Millisecond)
-	atomic.AddInt32(&f.busy, -1)
-	f.mu.Lock()
-	f.pastes = append(f.pastes, [2]string{p, t})
-	f.mu.Unlock()
+	atomic.AddInt32(&localFakeIO.busy, -1)
+	localFakeIO.mu.Lock()
+	localFakeIO.pastes = append(localFakeIO.pastes, [2]string{path, title})
+	localFakeIO.mu.Unlock()
 	return nil
 }
-func (f *fakeIO) Key(p, k string) error {
-	f.mu.Lock()
-	f.keys = append(f.keys, [2]string{p, k})
-	f.mu.Unlock()
+func (localFakeIO *fakeIO) Key(path, key string) error {
+	localFakeIO.mu.Lock()
+	localFakeIO.keys = append(localFakeIO.keys, [2]string{path, key})
+	localFakeIO.mu.Unlock()
 	return nil
 }
-func (f *fakeIO) Close(id string) error {
-	f.mu.Lock()
-	f.closed = append(f.closed, id)
-	f.mu.Unlock()
+func (localFakeIO *fakeIO) Close(id string) error {
+	localFakeIO.mu.Lock()
+	localFakeIO.closed = append(localFakeIO.closed, id)
+	localFakeIO.mu.Unlock()
 	return nil
 }
 
@@ -92,122 +96,122 @@ func (f *fakeIO) Close(id string) error {
 func setup(t *testing.T) (string, *fakeIO) {
 	t.Helper()
 	root := t.TempDir()
-	d := filepath.Join(root, "teams", trName)
-	os.MkdirAll(filepath.Join(d, "inboxes"), 0o755)
+	dir := filepath.Join(root, "teams", trName)
+	os.MkdirAll(filepath.Join(dir, "inboxes"), 0o755)
 	for src, dst := range map[string]string{"config.json": "config.json", "inbox-ada.json": "inboxes/ada.json", "inbox-team-lead.json": "inboxes/team-lead.json"} {
-		b, err := os.ReadFile(filepath.Join("testdata", "teams", src))
+		data, err := os.ReadFile(filepath.Join("testdata", "teams", src))
 		if err != nil {
 			t.Fatal(err)
 		}
-		os.WriteFile(filepath.Join(d, dst), b, 0o644)
+		os.WriteFile(filepath.Join(dir, dst), data, 0o644)
 	}
-	f := &fakeIO{panes: map[string]string{trLead: trLPane}, idle: []string{trLead}, screens: map[string]string{}, capErr: map[string]bool{}}
+	localFakeIO := &fakeIO{panes: map[string]string{trLead: trLPane}, idle: []string{trLead}, screens: map[string]string{}, capErr: map[string]bool{}}
 	old := teamPanes
-	teamPanes = f
+	teamPanes = localFakeIO
 	teamRunMu.Lock()
 	teamLog, teamQueue = map[string][]InboxMsg{}, map[string][]queuedMsg{}
 	teamRunMu.Unlock()
 	t.Cleanup(func() { teamPanes = old })
-	return root, f
+	return root, localFakeIO
 }
 
 func setActive(t *testing.T, root, mate string, active bool) {
 	t.Helper()
-	p := filepath.Join(root, "teams", trName, "config.json")
-	b, _ := os.ReadFile(p)
-	s := string(b)
-	i := strings.Index(s, `"name": "`+mate+`"`)
-	j := i + strings.Index(s[i:], `"isActive": `)
-	k := j + len(`"isActive": `)
-	e := k + strings.IndexAny(s[k:], ",\n}")
-	v := "false"
+	path := filepath.Join(root, "teams", trName, "config.json")
+	data, _ := os.ReadFile(path)
+	text := string(data)
+	index := strings.Index(text, `"name": "`+mate+`"`)
+	innerIndex := index + strings.Index(text[index:], `"isActive": `)
+	thirdIndex := innerIndex + len(`"isActive": `)
+	number := thirdIndex + strings.IndexAny(text[thirdIndex:], ",\n}")
+	value := "false"
 	if active {
-		v = "true"
+		value = "true"
 	}
-	os.WriteFile(p, []byte(s[:k]+v+s[e:]), 0o644)
+	os.WriteFile(path, []byte(text[:thirdIndex]+value+text[number:]), 0o644)
 }
 
 func TestSendToIdleMate(t *testing.T) {
-	root, f := setup(t)
-	q, err := teamSend(root, trName, "max", "ada", "salut")
-	if err != nil || q {
-		t.Fatal(q, err)
+	root, fakeIO := setup(t)
+	flag, err := teamSend(root, trName, "max", "ada", "salut")
+	if err != nil || flag {
+		t.Fatal(flag, err)
 	}
-	if len(f.pastes) != 1 || f.pastes[0] != [2]string{"%67", "salut"} {
-		t.Fatalf("collages : %v", f.pastes)
+	if len(fakeIO.pastes) != 1 || fakeIO.pastes[0] != [2]string{"%67", "salut"} {
+		t.Fatalf("collages : %v", fakeIO.pastes)
 	}
-	d, _ := journalRead(root, trName)
-	if len(d) != 1 || d[0].Author != "max" || d[0].To != "ada" {
-		t.Fatalf("journal : %v", d)
+	directMsgs, _ := journalRead(root, trName)
+	if len(directMsgs) != 1 || directMsgs[0].Author != "max" || directMsgs[0].To != "ada" {
+		t.Fatalf("journal : %v", directMsgs)
 	}
 }
 
 func TestSendToBusyMateQueues(t *testing.T) {
-	root, f := setup(t)
+	root, fakeIO := setup(t)
 	setActive(t, root, "ada", true)
-	q, err := teamSend(root, trName, "max", "ada", "salut")
-	if err != nil || !q || len(f.pastes) != 0 {
-		t.Fatal(q, err, f.pastes)
+	flag, err := teamSend(root, trName, "max", "ada", "salut")
+	if err != nil || !flag || len(fakeIO.pastes) != 0 {
+		t.Fatal(flag, err, fakeIO.pastes)
 	}
-	v, _ := teamView(root, trName)
-	if v.Queued != 1 {
-		t.Fatalf("Queued = %d", v.Queued)
+	localTeamView, _ := teamView(root, trName)
+	if localTeamView.Queued != 1 {
+		t.Fatalf("Queued = %d", localTeamView.Queued)
 	}
 }
 
 func TestQueueFlushesWhenIdle(t *testing.T) {
-	root, f := setup(t)
+	root, fakeIO := setup(t)
 	setActive(t, root, "ada", true)
 	teamSend(root, trName, "max", "ada", "un")
 	teamSend(root, trName, "max", "ada", "deux")
 	setActive(t, root, "ada", false)
-	v, _ := teamView(root, trName)
-	if len(f.pastes) != 1 || f.pastes[0][1] != "un" || v.Queued != 1 {
-		t.Fatalf("collages %v queued %d", f.pastes, v.Queued)
+	localTeamView, _ := teamView(root, trName)
+	if len(fakeIO.pastes) != 1 || fakeIO.pastes[0][1] != "un" || localTeamView.Queued != 1 {
+		t.Fatalf("collages %v queued %d", fakeIO.pastes, localTeamView.Queued)
 	}
-	if d, _ := journalRead(root, trName); len(d) != 1 || d[0].Text != "un" {
-		t.Fatalf("journal : %v", d)
+	if directMsgs, _ := journalRead(root, trName); len(directMsgs) != 1 || directMsgs[0].Text != "un" {
+		t.Fatalf("journal : %v", directMsgs)
 	}
 }
 
 func TestSendRejectsControlChars(t *testing.T) {
-	root, f := setup(t)
-	if _, err := teamSend(root, trName, "max", "ada", "a\x1bb"); err == nil || len(f.pastes) != 0 {
+	root, fakeIO := setup(t)
+	if _, err := teamSend(root, trName, "max", "ada", "a\x1bb"); err == nil || len(fakeIO.pastes) != 0 {
 		t.Fatal("caractère de contrôle accepté")
 	}
 }
 
 func TestSendNeverAnswersPermissionPrompt(t *testing.T) {
-	root, f := setup(t)
-	b, _ := os.ReadFile("testdata/teams/permission-prompt-lead-pane.txt")
-	f.screens[trLPane] = string(b)
-	q, err := teamSend(root, trName, "max", "team-lead", "oui")
-	if err != nil || !q || len(f.pastes) != 0 {
-		t.Fatal(q, err, f.pastes)
+	root, fakeIO := setup(t)
+	data, _ := os.ReadFile("testdata/teams/permission-prompt-lead-pane.txt")
+	fakeIO.screens[trLPane] = string(data)
+	flag, err := teamSend(root, trName, "max", "team-lead", "oui")
+	if err != nil || !flag || len(fakeIO.pastes) != 0 {
+		t.Fatal(flag, err, fakeIO.pastes)
 	}
 }
 
 func TestTeamKeyOnlyAllowedKeys(t *testing.T) {
-	root, f := setup(t)
-	f.screens[trLPane] = permFixture(t)
+	root, fakeIO := setup(t)
+	fakeIO.screens[trLPane] = permFixture(t)
 	if err := teamKey(root, trName, "team-lead", "rm -rf", ""); err == nil {
 		t.Fatal("touche refusée attendue")
 	}
-	if err := teamKey(root, trName, "team-lead", "Enter", ""); err != nil || len(f.keys) != 1 {
-		t.Fatal(err, f.keys)
+	if err := teamKey(root, trName, "team-lead", "Enter", ""); err != nil || len(fakeIO.keys) != 1 {
+		t.Fatal(err, fakeIO.keys)
 	}
 }
 
 func TestTeamKeyTargetsLeadPane(t *testing.T) {
-	root, f := setup(t)
-	f.screens[trLPane] = permFixture(t)
-	if err := teamKey(root, trName, "team-lead", "1", ""); err != nil || f.keys[0] != [2]string{trLPane, "1"} {
-		t.Fatal(err, f.keys)
+	root, fakeIO := setup(t)
+	fakeIO.screens[trLPane] = permFixture(t)
+	if err := teamKey(root, trName, "team-lead", "1", ""); err != nil || fakeIO.keys[0] != [2]string{trLPane, "1"} {
+		t.Fatal(err, fakeIO.keys)
 	}
 }
 
 func TestCloseDropsJournal(t *testing.T) {
-	root, f := setup(t)
+	root, fakeIO := setup(t)
 	setActive(t, root, "ada", true)
 	teamSend(root, trName, "max", "ada", "en file")
 	setActive(t, root, "hugo", false)
@@ -216,11 +220,11 @@ func TestCloseDropsJournal(t *testing.T) {
 	if err := teamClose(root, trName); err != nil {
 		t.Fatal(err)
 	}
-	if len(f.closed) != 1 || f.closed[0] != trLead {
-		t.Fatalf("closed : %v", f.closed)
+	if len(fakeIO.closed) != 1 || fakeIO.closed[0] != trLead {
+		t.Fatalf("closed : %v", fakeIO.closed)
 	}
-	if d, _ := journalRead(root, trName); len(d) != 0 {
-		t.Fatalf("journal : %v", d)
+	if directMsgs, _ := journalRead(root, trName); len(directMsgs) != 0 {
+		t.Fatalf("journal : %v", directMsgs)
 	}
 	if len(teamQueue[trName]) != 0 || len(teamLog[trName]) != 0 {
 		t.Fatal("file ou journal mémoire non vidés")
@@ -230,59 +234,59 @@ func TestCloseDropsJournal(t *testing.T) {
 func TestTeamViewUnknownFormat(t *testing.T) {
 	root, _ := setup(t)
 	os.WriteFile(filepath.Join(root, "teams", trName, "config.json"), []byte("{pas du json"), 0o644)
-	v, err := teamView(root, trName)
-	if err != nil || len(v.Unknown) == 0 {
-		t.Fatal(v.Unknown, err)
+	localTeamView, err := teamView(root, trName)
+	if err != nil || len(localTeamView.Unknown) == 0 {
+		t.Fatal(localTeamView.Unknown, err)
 	}
 }
 
 func TestTeamViewPermissionDetected(t *testing.T) {
-	root, f := setup(t)
-	b, _ := os.ReadFile("testdata/teams/permission-prompt-lead-pane.txt")
-	f.screens[trLPane] = string(b)
+	root, fakeIO := setup(t)
+	data, _ := os.ReadFile("testdata/teams/permission-prompt-lead-pane.txt")
+	fakeIO.screens[trLPane] = string(data)
 	// yan n'est pas dans la config du spike : on l'y ajoute
-	p := filepath.Join(root, "teams", trName, "config.json")
-	c, _ := os.ReadFile(p)
-	c = []byte(strings.Replace(string(c), `"members": [`, `"members": [{"agentId":"yan@x","name":"yan","tmuxPaneId":"%70","backendType":"tmux"},`, 1))
-	os.WriteFile(p, c, 0o644)
-	v, err := teamView(root, trName)
-	if err != nil || v.Permission == "" || !strings.Contains(v.Permission, "from the yan agent") {
-		t.Fatal(v.Permission, err)
+	path := filepath.Join(root, "teams", trName, "config.json")
+	localData, _ := os.ReadFile(path)
+	localData = []byte(strings.Replace(string(localData), `"members": [`, `"members": [{"agentId":"yan@x","name":"yan","tmuxPaneId":"%70","backendType":"tmux"},`, 1))
+	os.WriteFile(path, localData, 0o644)
+	localTeamView, err := teamView(root, trName)
+	if err != nil || localTeamView.Permission == "" || !strings.Contains(localTeamView.Permission, "from the yan agent") {
+		t.Fatal(localTeamView.Permission, err)
 	}
-	for _, a := range v.Agents {
-		if (a.Name == "yan" || a.Lead) && a.State != "waiting" {
-			t.Fatalf("%s : %s", a.Name, a.State)
+	for _, agentView := range localTeamView.Agents {
+		if (agentView.Name == "yan" || agentView.Lead) && agentView.State != "waiting" {
+			t.Fatalf("%s : %s", agentView.Name, agentView.State)
 		}
 	}
 }
 
 func TestTeamViewMessagesAccumulate(t *testing.T) {
 	root, _ := setup(t)
-	v, _ := teamView(root, trName)
-	if len(v.Messages) != 2 {
-		t.Fatalf("messages : %+v", v.Messages)
+	localTeamView, _ := teamView(root, trName)
+	if len(localTeamView.Messages) != 2 {
+		t.Fatalf("messages : %+v", localTeamView.Messages)
 	}
 	os.WriteFile(filepath.Join(root, "teams", trName, "inboxes", "ada.json"), []byte("[]"), 0o644)
-	v, _ = teamView(root, trName)
-	v, _ = teamView(root, trName)
-	if len(v.Messages) != 2 {
-		t.Fatalf("après vidage : %+v", v.Messages)
+	localTeamView, _ = teamView(root, trName)
+	localTeamView, _ = teamView(root, trName)
+	if len(localTeamView.Messages) != 2 {
+		t.Fatalf("après vidage : %+v", localTeamView.Messages)
 	}
 }
 
 func TestTeamListSkipsStale(t *testing.T) {
-	root, f := setup(t)
-	if l := teamList(root); len(l) != 1 || l[0].Name != trName || l[0].Members < 3 {
-		t.Fatalf("liste : %+v", l)
+	root, fakeIO := setup(t)
+	if teamBriefs := teamList(root); len(teamBriefs) != 1 || teamBriefs[0].Name != trName || teamBriefs[0].Members < 3 {
+		t.Fatalf("liste : %+v", teamBriefs)
 	}
-	f.panes = map[string]string{}
-	if l := teamList(root); len(l) != 0 {
-		t.Fatalf("équipe périmée listée : %+v", l)
+	fakeIO.panes = map[string]string{}
+	if teamBriefs := teamList(root); len(teamBriefs) != 0 {
+		t.Fatalf("équipe périmée listée : %+v", teamBriefs)
 	}
 }
 
 func TestTeamBadName(t *testing.T) {
-	root, f := setup(t)
+	root, fakeIO := setup(t)
 	bad := "../x"
 	if _, err := teamView(root, bad); err == nil {
 		t.Error("teamView")
@@ -296,7 +300,7 @@ func TestTeamBadName(t *testing.T) {
 	if _, err := teamScreen(root, bad, "a"); err == nil {
 		t.Error("teamScreen")
 	}
-	if teamClose(root, bad) == nil || len(f.closed) != 0 || len(f.pastes) != 0 || len(f.keys) != 0 {
+	if teamClose(root, bad) == nil || len(fakeIO.closed) != 0 || len(fakeIO.pastes) != 0 || len(fakeIO.keys) != 0 {
 		t.Error("teamClose")
 	}
 }
@@ -304,9 +308,9 @@ func TestTeamBadName(t *testing.T) {
 func TestSendQueueFull(t *testing.T) {
 	root, _ := setup(t)
 	setActive(t, root, "ada", true)
-	for i := 0; i < teamQueueMax; i++ {
-		if q, err := teamSend(root, trName, "max", "ada", "m"); err != nil || !q {
-			t.Fatal(i, q, err)
+	for index := 0; index < teamQueueMax; index++ {
+		if flag, err := teamSend(root, trName, "max", "ada", "m"); err != nil || !flag {
+			t.Fatal(index, flag, err)
 		}
 	}
 	_, err := teamSend(root, trName, "max", "ada", "m")
@@ -316,15 +320,15 @@ func TestSendQueueFull(t *testing.T) {
 }
 
 func TestConcurrentSendsSerialised(t *testing.T) {
-	root, f := setup(t)
+	root, fakeIO := setup(t)
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
+	for index := 0; index < 8; index++ {
 		wg.Add(1)
 		go func() { defer wg.Done(); teamSend(root, trName, "max", "hugo", "x") }()
 	}
 	wg.Wait()
-	if f.overlap || len(f.pastes) != 8 {
-		t.Fatalf("chevauchement %v, collages %d", f.overlap, len(f.pastes))
+	if fakeIO.overlap || len(fakeIO.pastes) != 8 {
+		t.Fatalf("chevauchement %v, collages %d", fakeIO.overlap, len(fakeIO.pastes))
 	}
 }
 
@@ -337,99 +341,99 @@ const leadOwnPrompt = ` Bash command
 `
 
 func TestSendNeverAnswersLeadOwnPrompt(t *testing.T) {
-	root, f := setup(t)
-	f.screens[trLPane] = leadOwnPrompt
-	q, err := teamSend(root, trName, "max", "team-lead", "oui")
-	if err != nil || !q || len(f.pastes) != 0 {
-		t.Fatal(q, err, f.pastes)
+	root, fakeIO := setup(t)
+	fakeIO.screens[trLPane] = leadOwnPrompt
+	flag, err := teamSend(root, trName, "max", "team-lead", "oui")
+	if err != nil || !flag || len(fakeIO.pastes) != 0 {
+		t.Fatal(flag, err, fakeIO.pastes)
 	}
-	v, _ := teamView(root, trName)
-	if v.Permission == "" || len(f.pastes) != 0 {
-		t.Fatalf("permission %q, collages %v", v.Permission, f.pastes)
+	localTeamView, _ := teamView(root, trName)
+	if localTeamView.Permission == "" || len(fakeIO.pastes) != 0 {
+		t.Fatalf("permission %q, collages %v", localTeamView.Permission, fakeIO.pastes)
 	}
 }
 
 func TestSendNeverAnswersLongTeammatePrompt(t *testing.T) {
-	root, f := setup(t)
-	b, _ := os.ReadFile("testdata/teams/permission-prompt-lead-pane.txt")
-	parts := strings.SplitN(string(b), "╌", 2)
-	f.screens[trLPane] = parts[0] + strings.Repeat("   | ligne de diff\n", 40) + "╌" + parts[1]
-	q, err := teamSend(root, trName, "max", "team-lead", "oui")
-	if err != nil || !q || len(f.pastes) != 0 {
-		t.Fatal(q, err, f.pastes)
+	root, fakeIO := setup(t)
+	data, _ := os.ReadFile("testdata/teams/permission-prompt-lead-pane.txt")
+	parts := strings.SplitN(string(data), "╌", 2)
+	fakeIO.screens[trLPane] = parts[0] + strings.Repeat("   | ligne de diff\n", 40) + "╌" + parts[1]
+	flag, err := teamSend(root, trName, "max", "team-lead", "oui")
+	if err != nil || !flag || len(fakeIO.pastes) != 0 {
+		t.Fatal(flag, err, fakeIO.pastes)
 	}
 }
 
 func TestPromptAppearsBetweenCheckAndPaste(t *testing.T) {
-	root, f := setup(t)
-	f.script = map[string][]string{trLPane: {"", leadOwnPrompt}}
-	q, err := teamSend(root, trName, "max", "team-lead", "oui")
-	if err != nil || !q || len(f.pastes) != 0 {
-		t.Fatal(q, err, f.pastes)
+	root, fakeIO := setup(t)
+	fakeIO.script = map[string][]string{trLPane: {"", leadOwnPrompt}}
+	flag, err := teamSend(root, trName, "max", "team-lead", "oui")
+	if err != nil || !flag || len(fakeIO.pastes) != 0 {
+		t.Fatal(flag, err, fakeIO.pastes)
 	}
-	if n := len(teamQueue[trName]); n != 1 {
-		t.Fatalf("file = %d", n)
+	if count := len(teamQueue[trName]); count != 1 {
+		t.Fatalf("file = %d", count)
 	}
 }
 
 func TestTeamKeyScreenNeedLiveTeam(t *testing.T) {
-	root, f := setup(t)
-	f.panes = map[string]string{}
-	if teamKey(root, trName, "ada", "1", "") == nil || len(f.keys) != 0 {
+	root, fakeIO := setup(t)
+	fakeIO.panes = map[string]string{}
+	if teamKey(root, trName, "ada", "1", "") == nil || len(fakeIO.keys) != 0 {
 		t.Error("teamKey sur une team périmée")
 	}
-	caps := f.caps
-	if _, err := teamScreen(root, trName, "ada"); err == nil || f.caps != caps {
+	caps := fakeIO.caps
+	if _, err := teamScreen(root, trName, "ada"); err == nil || fakeIO.caps != caps {
 		t.Error("teamScreen sur une team périmée")
 	}
 }
 
 func permFixture(t *testing.T) string {
-	b, err := os.ReadFile("testdata/teams/permission-prompt-lead-pane.txt")
+	data, err := os.ReadFile("testdata/teams/permission-prompt-lead-pane.txt")
 	if err != nil {
 		t.Fatal(err)
 	}
-	return string(b)
+	return string(data)
 }
 
 func TestTeamKeyRefusesWhenNoDialog(t *testing.T) {
-	root, f := setup(t)
-	if err := teamKey(root, trName, "team-lead", "1", ""); err == nil || len(f.keys) != 0 {
-		t.Fatal(err, f.keys)
+	root, fakeIO := setup(t)
+	if err := teamKey(root, trName, "team-lead", "1", ""); err == nil || len(fakeIO.keys) != 0 {
+		t.Fatal(err, fakeIO.keys)
 	}
 }
 
 func TestTeamKeyRefusesWhenDialogChanged(t *testing.T) {
-	root, f := setup(t)
-	f.screens[trLPane] = permFixture(t)
-	if err := teamKey(root, trName, "team-lead", "1", "autre dialogue"); err == nil || len(f.keys) != 0 {
-		t.Fatal(err, f.keys)
+	root, fakeIO := setup(t)
+	fakeIO.screens[trLPane] = permFixture(t)
+	if err := teamKey(root, trName, "team-lead", "1", "autre dialogue"); err == nil || len(fakeIO.keys) != 0 {
+		t.Fatal(err, fakeIO.keys)
 	}
 }
 
 func TestTeamKeyOKWhenExpectMatches(t *testing.T) {
-	root, f := setup(t)
-	f.screens[trLPane] = permFixture(t)
-	_, txt, _ := permText(f.screens[trLPane])
-	if err := teamKey(root, trName, "team-lead", "1", "  "+txt+"\n"); err != nil || len(f.keys) != 1 {
-		t.Fatal(err, f.keys)
+	root, fakeIO := setup(t)
+	fakeIO.screens[trLPane] = permFixture(t)
+	_, txt, _ := permText(fakeIO.screens[trLPane])
+	if err := teamKey(root, trName, "team-lead", "1", "  "+txt+"\n"); err != nil || len(fakeIO.keys) != 1 {
+		t.Fatal(err, fakeIO.keys)
 	}
 }
 
 func TestCloseFinishedTeamCleansUp(t *testing.T) {
-	root, f := setup(t)
+	root, fakeIO := setup(t)
 	setActive(t, root, "hugo", false)
 	teamSend(root, trName, "max", "hugo", "direct")
 	teamView(root, trName)
-	f.panes = map[string]string{}
+	fakeIO.panes = map[string]string{}
 	if err := teamClose(root, trName); err != nil {
 		t.Fatal(err)
 	}
-	if len(f.closed) != 0 {
-		t.Fatalf("Close appelé : %v", f.closed)
+	if len(fakeIO.closed) != 0 {
+		t.Fatalf("Close appelé : %v", fakeIO.closed)
 	}
-	if d, _ := journalRead(root, trName); len(d) != 0 {
-		t.Fatalf("journal : %v", d)
+	if directMsgs, _ := journalRead(root, trName); len(directMsgs) != 0 {
+		t.Fatalf("journal : %v", directMsgs)
 	}
 	if len(teamQueue[trName]) != 0 || len(teamLog[trName]) != 0 {
 		t.Fatal("file ou journal mémoire non vidés")
@@ -437,10 +441,10 @@ func TestCloseFinishedTeamCleansUp(t *testing.T) {
 }
 
 func TestCloseLiveTeamStillClosesFirst(t *testing.T) {
-	root, f := setup(t)
+	root, fakeIO := setup(t)
 	teamSend(root, trName, "max", "ada", "x")
-	if err := teamClose(root, trName); err != nil || len(f.closed) != 1 {
-		t.Fatalf("%v %v", err, f.closed)
+	if err := teamClose(root, trName); err != nil || len(fakeIO.closed) != 1 {
+		t.Fatalf("%v %v", err, fakeIO.closed)
 	}
 	if err := teamClose(root, "../x"); !isMsg(err, "srv.teams_run.nomInvalide") {
 		t.Fatal(err)
@@ -451,9 +455,9 @@ func TestLogKeepsIdleWithResult(t *testing.T) {
 	root, _ := setup(t)
 	teamView(root, trName)
 	var got *InboxMsg
-	for _, m := range teamLog[trName] {
-		if m.Kind == "idle" {
-			got = &m
+	for _, inboxMsg := range teamLog[trName] {
+		if inboxMsg.Kind == "idle" {
+			got = &inboxMsg
 		}
 	}
 	if got == nil || got.From != "ada" || !strings.Contains(got.Text, "/tmp/gld-spike-perm.txt") {
@@ -464,16 +468,16 @@ func TestLogKeepsIdleWithResult(t *testing.T) {
 func TestLogDropsIdleWithoutResult(t *testing.T) {
 	tf := TeamFiles{Name: "t-vide", Inbox: []InboxMsg{{ID: "a", Kind: "idle"}, {ID: "b", Kind: "idle", Text: "fait"}}}
 	logInbox(tf)
-	l := teamLog["t-vide"]
-	if len(l) != 1 || l[0].ID != "b" {
-		t.Fatalf("%+v", l)
+	inboxMsgs := teamLog["t-vide"]
+	if len(inboxMsgs) != 1 || inboxMsgs[0].ID != "b" {
+		t.Fatalf("%+v", inboxMsgs)
 	}
 }
 
 func TestTeamSendReportsTmuxError(t *testing.T) {
-	root, f := setup(t)
-	f.panesErr = errors.New("tmux gelé")
-	f.panes = nil
+	root, fakeIO := setup(t)
+	fakeIO.panesErr = errors.New("tmux gelé")
+	fakeIO.panes = nil
 	if _, err := teamSend(root, trName, "max", "ada", "x"); !isMsg(err, "srv.teams_run.tmuxInutilisable") {
 		t.Fatalf("send: %v", err)
 	}
@@ -486,8 +490,8 @@ func TestTeamSendReportsTmuxError(t *testing.T) {
 	if err := teamClose(root, trName); !isMsg(err, "srv.teams_run.tmuxInutilisable") {
 		t.Fatalf("close: %v", err)
 	}
-	if v, err := teamView(root, trName); err != nil || v.Live {
-		t.Fatalf("view: %v %v", v.Live, err)
+	if localTeamView, err := teamView(root, trName); err != nil || localTeamView.Live {
+		t.Fatalf("view: %v %v", localTeamView.Live, err)
 	}
 }
 
@@ -496,37 +500,37 @@ func TestTeamViewUsesRoster(t *testing.T) {
 	if err := rosterWrite(root, trName, map[string]string{"ada": "backend", "hugo": "testeur"}); err != nil {
 		t.Fatal(err)
 	}
-	v, err := teamView(root, trName)
+	localTeamView, err := teamView(root, trName)
 	if err != nil {
 		t.Fatal(err)
 	}
 	by := map[string]AgentView{}
-	for _, a := range v.Agents {
-		by[a.Name] = a
+	for _, agentView := range localTeamView.Agents {
+		by[agentView.Name] = agentView
 	}
-	if a := by["ada"]; a.Display != "Ada" || a.Role != "Développement backend" || a.AgentID != "backend" {
-		t.Errorf("ada : %+v", a)
+	if agentView := by["ada"]; agentView.Display != "Ada" || agentView.Role != "Développement backend" || agentView.AgentID != "backend" {
+		t.Errorf("ada : %+v", agentView)
 	}
-	if a := by["hugo"]; a.Display != "Hugo" || a.Role != "Testeur" || a.AgentID != "testeur" {
-		t.Errorf("hugo : %+v", a)
+	if agentView := by["hugo"]; agentView.Display != "Hugo" || agentView.Role != "Testeur" || agentView.AgentID != "testeur" {
+		t.Errorf("hugo : %+v", agentView)
 	}
-	if a := by["zoe"]; a.Display != "Zoe" || a.Role != "" {
-		t.Errorf("zoe : %+v", a)
+	if agentView := by["zoe"]; agentView.Display != "Zoe" || agentView.Role != "" {
+		t.Errorf("zoe : %+v", agentView)
 	}
-	if a := by["team-lead"]; a.Display != "Chef de projet" || a.Role != "" || !a.Lead {
-		t.Errorf("chef : %+v", a)
+	if agentView := by["team-lead"]; agentView.Display != "Chef de projet" || agentView.Role != "" || !agentView.Lead {
+		t.Errorf("chef : %+v", agentView)
 	}
 }
 
 func TestTeamViewWithoutRoster(t *testing.T) {
 	root, _ := setup(t)
-	v, err := teamView(root, trName)
+	localTeamView, err := teamView(root, trName)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, a := range v.Agents {
-		if !a.Lead && (a.Role != "" || a.Display != upFirst(a.Name)) {
-			t.Errorf("%+v", a)
+	for _, agentView := range localTeamView.Agents {
+		if !agentView.Lead && (agentView.Role != "" || agentView.Display != upFirst(agentView.Name)) {
+			t.Errorf("%+v", agentView)
 		}
 	}
 }
@@ -535,24 +539,24 @@ func TestTeamViewCorruptRoster(t *testing.T) {
 	root, _ := setup(t)
 	os.MkdirAll(filepath.Join(root, journalDir), 0o700)
 	os.WriteFile(filepath.Join(root, journalDir, trName+".roster.json"), []byte("{pas du json"), 0o600)
-	v, err := teamView(root, trName)
-	if err != nil || len(v.Agents) == 0 {
-		t.Fatal(v, err)
+	localTeamView, err := teamView(root, trName)
+	if err != nil || len(localTeamView.Agents) == 0 {
+		t.Fatal(localTeamView, err)
 	}
 }
 
 func TestCloseDropsRoster(t *testing.T) {
 	for _, live := range []bool{true, false} {
-		root, f := setup(t)
+		root, fakeIO := setup(t)
 		rosterWrite(root, trName, map[string]string{"ada": "backend"})
 		if !live {
-			f.panes = map[string]string{}
+			fakeIO.panes = map[string]string{}
 		}
 		if err := teamClose(root, trName); err != nil {
 			t.Fatal(live, err)
 		}
-		if m, _ := rosterRead(root, trName); len(m) != 0 {
-			t.Errorf("live=%v roster : %v", live, m)
+		if lookup, _ := rosterRead(root, trName); len(lookup) != 0 {
+			t.Errorf("live=%v roster : %v", live, lookup)
 		}
 	}
 }
@@ -565,7 +569,7 @@ func TestUpFirstEmpty(t *testing.T) {
 
 func seedClose(t *testing.T) (string, *fakeIO) {
 	t.Helper()
-	root, f := setup(t)
+	root, localFakeIO := setup(t)
 	setActive(t, root, "hugo", false)
 	teamSend(root, trName, "max", "hugo", "direct")
 	teamView(root, trName)
@@ -575,26 +579,26 @@ func seedClose(t *testing.T) (string, *fakeIO) {
 	if len(teamLog[trName]) == 0 {
 		t.Fatal("log non amorcé")
 	}
-	f.panes = map[string]string{}
-	return root, f
+	localFakeIO.panes = map[string]string{}
+	return root, localFakeIO
 }
 
-func stateIntact(t *testing.T, root string, f *fakeIO) {
+func stateIntact(t *testing.T, root string, localFakeIO *fakeIO) {
 	t.Helper()
-	if d, _ := journalRead(root, trName); len(d) == 0 {
+	if directMsgs, _ := journalRead(root, trName); len(directMsgs) == 0 {
 		t.Fatal("journal supprimé")
 	}
 	if len(teamQueue[trName]) == 0 || len(teamLog[trName]) == 0 {
 		t.Fatal("log ou file vidés")
 	}
-	if len(f.closed) != 0 {
-		t.Fatalf("Close appelé : %v", f.closed)
+	if len(localFakeIO.closed) != 0 {
+		t.Fatalf("Close appelé : %v", localFakeIO.closed)
 	}
 }
 
-func stateCleaned(t *testing.T, root string, f *fakeIO) {
+func stateCleaned(t *testing.T, root string, localFakeIO *fakeIO) {
 	t.Helper()
-	if d, _ := journalRead(root, trName); len(d) != 0 || len(f.closed) != 0 {
+	if directMsgs, _ := journalRead(root, trName); len(directMsgs) != 0 || len(localFakeIO.closed) != 0 {
 		t.Fatal("nettoyage attendu")
 	}
 	if len(teamQueue[trName]) != 0 || len(teamLog[trName]) != 0 {
@@ -605,75 +609,75 @@ func stateCleaned(t *testing.T, root string, f *fakeIO) {
 var noServer = terr("srv.sendkeys.aucuneSessionNA")
 
 func TestCloseAbortsWhenStateUnknown(t *testing.T) {
-	root, f := seedClose(t)
-	f.unknown = true
+	root, fakeIO := seedClose(t)
+	fakeIO.unknown = true
 	if err := teamClose(root, trName); !isMsg(err, "srv.teams_run.etatInconnu") {
 		t.Fatalf("err : %v", err)
 	}
-	stateIntact(t, root, f)
+	stateIntact(t, root, fakeIO)
 }
 
 func TestCloseAbortsWhenLeadAliveButNoPane(t *testing.T) {
-	root, f := seedClose(t)
-	f.live = map[string]bool{trLead: true}
+	root, fakeIO := seedClose(t)
+	fakeIO.live = map[string]bool{trLead: true}
 	if err := teamClose(root, trName); !isMsg(err, "srv.teams_run.chefOuvertSansTerminal") {
 		t.Fatalf("err : %v", err)
 	}
-	stateIntact(t, root, f)
+	stateIntact(t, root, fakeIO)
 }
 
 func TestCloseAbortsWhenLeadAliveAndTmuxUnreachable(t *testing.T) {
-	root, f := seedClose(t)
-	f.live, f.panes, f.panesErr = map[string]bool{trLead: true}, nil, noServer
+	root, fakeIO := seedClose(t)
+	fakeIO.live, fakeIO.panes, fakeIO.panesErr = map[string]bool{trLead: true}, nil, noServer
 	if err := teamClose(root, trName); !isMsg(err, "srv.teams_run.chefOuvertSansTerminal") {
 		t.Fatalf("err : %v", err)
 	}
-	stateIntact(t, root, f)
+	stateIntact(t, root, fakeIO)
 }
 
 func TestCloseCleansWhenLeadNotAlive(t *testing.T) {
 	for name, set := range map[string]func(*fakeIO){
-		"vide":     func(f *fakeIO) {},
-		"sentinel": func(f *fakeIO) { f.panes, f.panesErr = nil, noServer },
+		"vide":     func(localFakeIO *fakeIO) {},
+		"sentinel": func(localFakeIO *fakeIO) { localFakeIO.panes, localFakeIO.panesErr = nil, noServer },
 	} {
 		t.Run(name, func(t *testing.T) {
-			root, f := seedClose(t)
-			set(f)
+			root, fakeIO := seedClose(t)
+			set(fakeIO)
 			if err := teamClose(root, trName); err != nil {
 				t.Fatal(err)
 			}
-			stateCleaned(t, root, f)
+			stateCleaned(t, root, fakeIO)
 		})
 	}
 }
 
 func TestCloseStillAbortsOnRealTmuxError(t *testing.T) {
-	root, f := seedClose(t)
-	f.panes, f.panesErr = nil, errors.New("tmux gelé")
+	root, fakeIO := seedClose(t)
+	fakeIO.panes, fakeIO.panesErr = nil, errors.New("tmux gelé")
 	if err := teamClose(root, trName); !isMsg(err, "srv.teams_run.tmuxInutilisable") {
 		t.Fatalf("err : %v", err)
 	}
-	stateIntact(t, root, f)
+	stateIntact(t, root, fakeIO)
 }
 
 func TestCloseReadsLeadStateBeforePanes(t *testing.T) {
-	root, f := seedClose(t)
-	f.order = nil
+	root, fakeIO := seedClose(t)
+	fakeIO.order = nil
 	teamClose(root, trName)
-	if len(f.order) < 2 || f.order[0] != "lead" || f.order[1] != "panes" {
-		t.Fatalf("ordre : %v", f.order)
+	if len(fakeIO.order) < 2 || fakeIO.order[0] != "lead" || fakeIO.order[1] != "panes" {
+		t.Fatalf("ordre : %v", fakeIO.order)
 	}
 }
 
 func TestCloseAsksLeadStateForTheLeadSessionID(t *testing.T) {
-	root, f := seedClose(t)
+	root, fakeIO := seedClose(t)
 	tf, err := readTeam(root, trName)
 	if err != nil || tf.LeadSessionID == "" {
 		t.Fatal(err, tf.LeadSessionID)
 	}
 	teamClose(root, trName)
-	if len(f.leadIDs) != 1 || f.leadIDs[0] != tf.LeadSessionID {
-		t.Fatalf("ids : %v, attendu %q", f.leadIDs, tf.LeadSessionID)
+	if len(fakeIO.leadIDs) != 1 || fakeIO.leadIDs[0] != tf.LeadSessionID {
+		t.Fatalf("ids : %v, attendu %q", fakeIO.leadIDs, tf.LeadSessionID)
 	}
 }
 
@@ -693,16 +697,16 @@ func TestPermTextTruncated(t *testing.T) {
 }
 
 func TestTeamKeyRefusesApprovalWhenTruncated(t *testing.T) {
-	root, f := setup(t)
+	root, fakeIO := setup(t)
 	scr := permFixture(t)
-	f.screens[trLPane] = strings.Replace(scr, "Fetch · from the yan agent", strings.Repeat("a", permCut+10), 1)
-	if _, _, tr := permText(f.screens[trLPane]); !tr {
+	fakeIO.screens[trLPane] = strings.Replace(scr, "Fetch · from the yan agent", strings.Repeat("a", permCut+10), 1)
+	if _, _, tr := permText(fakeIO.screens[trLPane]); !tr {
 		t.Fatal("setup: screen should be truncated")
 	}
-	if err := teamKey(root, trName, "team-lead", "1", ""); err == nil || len(f.keys) != 0 {
-		t.Fatal(err, f.keys)
+	if err := teamKey(root, trName, "team-lead", "1", ""); err == nil || len(fakeIO.keys) != 0 {
+		t.Fatal(err, fakeIO.keys)
 	}
-	if err := teamKey(root, trName, "team-lead", "Escape", ""); err != nil || len(f.keys) != 1 {
-		t.Fatal(err, f.keys)
+	if err := teamKey(root, trName, "team-lead", "Escape", ""); err != nil || len(fakeIO.keys) != 1 {
+		t.Fatal(err, fakeIO.keys)
 	}
 }

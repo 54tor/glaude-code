@@ -21,31 +21,31 @@ func TestCountTokens(t *testing.T) {
 		}
 		return 540 + (len(text)+3)/4, "claude-haiku-test", 0.0001, nil
 	}
-	n, cost, cached, err := countTokens("abcdefgh") // 2 tokens
-	if err != nil || n != 2 || cached || cost <= 0 {
-		t.Fatal(n, cost, cached, err)
+	count, cost, cached, err := countTokens("abcdefgh") // 2 tokens
+	if err != nil || count != 2 || cached || cost <= 0 {
+		t.Fatal(count, cost, cached, err)
 	}
 	if appels != 2 { // le texte, puis la mesure du coût fixe
 		t.Fatal("appels :", appels)
 	}
 	// deuxième demande : depuis le cache, sans appel
-	if n, _, cached, err := countTokens("abcdefgh"); err != nil || n != 2 || !cached || appels != 2 {
-		t.Fatal(n, cached, err, appels)
+	if count, _, cached, err := countTokens("abcdefgh"); err != nil || count != 2 || !cached || appels != 2 {
+		t.Fatal(count, cached, err, appels)
 	}
 	// un autre texte : un seul appel, le coût fixe est connu
-	if n, _, _, err := countTokens("abcdefghijklmnop"); err != nil || n != 4 || appels != 3 {
-		t.Fatal(n, err, appels)
+	if count, _, _, err := countTokens("abcdefghijklmnop"); err != nil || count != 4 || appels != 3 {
+		t.Fatal(count, err, appels)
 	}
-	if k, ok := knownTokens("abcdefgh"); !ok || k != 2 {
-		t.Fatal(k, ok)
+	if thirdIndex, ok := knownTokens("abcdefgh"); !ok || thirdIndex != 2 {
+		t.Fatal(thirdIndex, ok)
 	}
 	if _, _, _, err := countTokens("boom"); err == nil {
 		t.Fatal("erreur d'appel avalée")
 	}
 	// un autre modèle invalide les comptes anciens
 	tokenRun = func(text string) (int, string, float64, error) { return 10 + (len(text)+3)/4, "claude-autre", 0, nil }
-	if n, _, _, err := countTokens("nouveau texte ici"); err != nil || n != 5 {
-		t.Fatal(n, err)
+	if count, _, _, err := countTokens("nouveau texte ici"); err != nil || count != 5 {
+		t.Fatal(count, err)
 	}
 	if _, ok := knownTokens("abcdefgh"); ok {
 		t.Fatal("compte d'un autre modèle conservé")
@@ -54,13 +54,13 @@ func TestCountTokens(t *testing.T) {
 	tokMu.Lock()
 	tokLoaded = &tokenStore{Counts: map[string]int{}}
 	tokMu.Unlock()
-	if e := estimateTokens(300); e != 100 {
-		t.Fatal("estimation par défaut :", e)
+	if number := estimateTokens(300); number != 100 {
+		t.Fatal("estimation par défaut :", number)
 	}
 	tokMu.Lock()
 	tokLoaded.SumBytes, tokLoaded.SumToks = 1000, 500 // 2 octets par token
 	tokMu.Unlock()
-	if e := estimateTokens(300); e != 150 {
-		t.Fatal("estimation calibrée :", e)
+	if number := estimateTokens(300); number != 150 {
+		t.Fatal("estimation calibrée :", number)
 	}
 }
