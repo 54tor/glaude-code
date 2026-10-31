@@ -418,7 +418,7 @@ func guestRelay(mux *http.ServeMux, home, secret, handle string) http.Handler {
 }
 
 func guestServe(mux *http.ServeMux, share Share, invitation Invite, secret, handle string) http.Handler {
-	redactor := newPathRedactor(skillsHome(), decodeDir(share.Dir), guestAlias(invitation.ID))
+	redactor := newPathRedactor(skillsHome(), decodeDir(share.Dir), guestAlias(invitation.ID), hostIdentityTerms()...)
 	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		pattern := guestPattern(mux, request)
 		if pattern == "" || !guestCSRFOK(request, secret) {
