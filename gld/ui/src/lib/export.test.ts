@@ -11,8 +11,8 @@ describe("wholeConv", () => {
       20: { msgs: [m("a"), m("b")], start: 0, more: false },
     }
     const conv = vi.spyOn(api, "conv").mockImplementation(async (_s, _tools, page) => pages[page?.before ?? -1])
-    expect((await wholeConv({ dir: "d", id: "i" })).map((x) => x.t)).toEqual(["a", "b", "c", "d"])
-    expect(conv.mock.calls.map((c) => c[2])).toEqual([{ before: 0 }, { before: 20 }])
+    expect((await wholeConv({ dir: "d", id: "i" })).map((msg) => msg.t)).toEqual(["a", "b", "c", "d"])
+    expect(conv.mock.calls.map((value) => value[2])).toEqual([{ before: 0 }, { before: 20 }])
     conv.mockRestore()
   })
   it("s'arrête si le serveur annonce une suite sans décalage", async () => {

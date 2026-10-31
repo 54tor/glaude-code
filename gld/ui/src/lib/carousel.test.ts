@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { stepIn } from "./carousel"
 
 describe("stepIn", () => {
-  const is = (c: string) => (x: string) => x === c
+  const is = (content: string) => (input: string) => input === content
   it("avance et recule en boucle", () => {
     expect(stepIn(["a", "b", "c"], is("c"), 1)).toBe("a")
     expect(stepIn(["a", "b", "c"], is("a"), -1)).toBe("c")

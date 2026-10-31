@@ -49,9 +49,9 @@ describe("paths", () => {
     const name = fc.stringMatching(/^[a-zA-Z0-9 ._-]{1,8}$/)
     fc.assert(
       fc.property(fc.array(name, { maxLength: 5 }), (parts) => {
-        const s = segs("/home/u/" + parts.join("/"), "/home/u")
-        expect(s[0]).toBe("~")
-        expect(s.every((x) => x !== "")).toBe(true)
+        const texts = segs("/home/u/" + parts.join("/"), "/home/u")
+        expect(texts[0]).toBe("~")
+        expect(texts.every((input) => input !== "")).toBe(true)
       }),
       { seed: 1 }
     )
@@ -82,11 +82,11 @@ describe("format", () => {
     expect(ago(t - 3570)).toBe("il y a 1 heure")
     expect(ago(t - 86399)).toBe("hier")
     fc.assert(
-      fc.property(fc.integer({ min: 60, max: 400 * 86400 }), (s) => {
-        const m = /il y a (\d+) (minute|heure|jour)/.exec(ago(t - s))
-        if (m)
-          expect(Number(m[1])).toBeLessThan(
-            { minute: 60, heure: 24, jour: 7 }[m[2]]!
+      fc.property(fc.integer({ min: 60, max: 400 * 86400 }), (size) => {
+        const regExpExecArray = /il y a (\d+) (minute|heure|jour)/.exec(ago(t - size))
+        if (regExpExecArray)
+          expect(Number(regExpExecArray[1])).toBeLessThan(
+            { minute: 60, heure: 24, jour: 7 }[regExpExecArray[2]]!
           )
       }),
       { seed: 5, numRuns: 3000 }
@@ -120,20 +120,20 @@ describe("format", () => {
 
 describe("tree", () => {
   it("regroupe sous ~, écrase les chaînes sans projet, retrouve et liste les sessions", () => {
-    const a = group("/home/u/Projets/a", sess("1", "un"))
-    const b = group("/home/u/Projets/a/sous/b", sess("2", "deux"))
-    const c = group("/srv/c", sess("3", "trois"))
+    const localGroup = group("/home/u/Projets/a", sess("1", "un"))
+    const anotherGroup = group("/home/u/Projets/a/sous/b", sess("2", "deux"))
+    const extraGroup = group("/srv/c", sess("3", "trois"))
     const nodes = buildTree(
-      [a, b, c].map((g) => ({ g, ss: g.sessions })),
+      [localGroup, anotherGroup, extraGroup].map((group) => ({ g: group, ss: group.sessions })),
       "/home/u"
     )
     // la racine « / » d'une chaîne écrasée n'est pas répétée : « srv/c », comme le fait buildTree
-    expect(nodes.map((n) => n.name)).toEqual(["~/Projets/a", "srv/c"])
+    expect(nodes.map((node) => node.name)).toEqual(["~/Projets/a", "srv/c"])
     const na = find(nodes, "~/Projets/a")!
-    expect(na.g).toBe(a)
+    expect(na.g).toBe(localGroup)
     expect([...na.kids.keys()]).toEqual(["sous"])
-    expect(find(nodes, "~/Projets/a/sous/b")!.g).toBe(b)
-    expect(under(na).map((x) => x.s.id)).toEqual(["1", "2"])
+    expect(find(nodes, "~/Projets/a/sous/b")!.g).toBe(anotherGroup)
+    expect(under(na).map((record) => record.s.id)).toEqual(["1", "2"])
     expect(find(nodes, "absent")).toBeNull()
   })
 })
@@ -141,32 +141,32 @@ describe("tree", () => {
 describe("sessionsView", () => {
   const data = (groups: Group[]) => ({ groups }) as Data
   it("masque les revues automatiques, filtre par texte et résultat de recherche, trie par date", () => {
-    const g = group(
+    const localGroup = group(
       "/p/Caddy",
       sess("1", "Déploie", 10, 2),
       sess("2", "Autre", 30),
       sess("3", AUTO[0] + " x", 20, 5),
       sess("4", "Rien", 5)
     )
-    const v = buildView(data([g]), "", null)
-    expect(v.rows.map((r) => r.s.id)).toEqual(["2", "1", "4"])
-    expect(v.autoItems).toEqual([{ dir: "-d", id: "3" }])
-    expect(v.akb).toBe(5)
-    expect(v.total).toBe(3)
+    const record = buildView(data([localGroup]), "", null)
+    expect(record.rows.map((record) => record.s.id)).toEqual(["2", "1", "4"])
+    expect(record.autoItems).toEqual([{ dir: "-d", id: "3" }])
+    expect(record.akb).toBe(5)
+    expect(record.total).toBe(3)
     expect(
-      buildView(data([g]), "déploie", null).rows.map((r) => r.s.id)
+      buildView(data([localGroup]), "déploie", null).rows.map((record) => record.s.id)
     ).toEqual(["1"])
-    expect(buildView(data([g]), "caddy", null).rows).toHaveLength(0) // le nom seul n'inclut pas le chemin du dossier
-    expect(buildView(data([g]), "caddy", null, true).rows).toHaveLength(3)
+    expect(buildView(data([localGroup]), "caddy", null).rows).toHaveLength(0) // le nom seul n'inclut pas le chemin du dossier
+    expect(buildView(data([localGroup]), "caddy", null, true).rows).toHaveLength(3)
     expect(
       buildView(
-        data([g]),
+        data([localGroup]),
         "introuvable",
         new Map([["2", {} as never]]),
         true
-      ).rows.map((r) => r.s.id)
+      ).rows.map((record) => record.s.id)
     ).toEqual(["2"])
-    expect(buildView(data([g]), "introuvable", new Map([["2", {} as never]])).rows).toEqual([])
+    expect(buildView(data([localGroup]), "introuvable", new Map([["2", {} as never]])).rows).toEqual([])
     expect(buildView(null, "", null).rows).toEqual([])
   })
   it("plural, cut", () => {
@@ -178,7 +178,7 @@ describe("sessionsView", () => {
 })
 
 describe("memoryLib", () => {
-  const f = (name: string, kb: number, mtime: number) => ({
+  const callback = (name: string, kb: number, mtime: number) => ({
     key: "m/-p/" + name,
     name,
     kb,
@@ -187,18 +187,18 @@ describe("memoryLib", () => {
     tokens: 0,
   })
   it("tri par nom (numérique), taille et date, nom en départage", () => {
-    const fs = [f("b10", 1, 3), f("b2", 1, 1), f("a", 2, 2)]
-    expect([...fs].sort(cmpFiles("name", "asc")).map((x) => x.name)).toEqual([
+    const fs = [callback("b10", 1, 3), callback("b2", 1, 1), callback("a", 2, 2)]
+    expect([...fs].sort(cmpFiles("name", "asc")).map((record) => record.name)).toEqual([
       "a",
       "b2",
       "b10",
     ])
-    expect([...fs].sort(cmpFiles("size", "desc")).map((x) => x.name)).toEqual([
+    expect([...fs].sort(cmpFiles("size", "desc")).map((record) => record.name)).toEqual([
       "a",
       "b10",
       "b2",
     ])
-    expect([...fs].sort(cmpFiles("date", "desc")).map((x) => x.name)).toEqual([
+    expect([...fs].sort(cmpFiles("date", "desc")).map((record) => record.name)).toEqual([
       "b10",
       "a",
       "b2",
@@ -228,8 +228,8 @@ describe("memoryLib", () => {
     ]).toEqual([true, false, false, true])
   })
   it("newKey : nom simplifié, sans écraser un fichier existant", () => {
-    const all = [f("revue-ete.md", 1, 1)].map((x) => ({
-      ...x,
+    const all = [callback("revue-ete.md", 1, 1)].map((record) => ({
+      ...record,
       key: "m/-p/revue-ete.md",
     }))
     expect(newKey(all, "-p", "---\nname: Revue été\n---\n")).toBe(
@@ -272,8 +272,8 @@ describe("divers", () => {
 describe("dossiers sans session", () => {
   const data = { groups: [{ project: "/a/vide", missing: false, sessions: [] }, { project: "/a/plein", missing: false, sessions: [{ id: "s", title: "t", mtime: 1, kb: 1, dir: "d", cwd: "/a/plein", named: false, tok: {} }] }] } as never
   it("un dossier enregistré reste dans l'arbre, la recherche l'écarte", () => {
-    expect(buildView(data, "", null).entries.map((e) => e.g.project)).toEqual(["/a/vide", "/a/plein"])
-    expect(buildView(data, "plein", null, true).entries.map((e) => e.g.project)).toEqual(["/a/plein"])
+    expect(buildView(data, "", null).entries.map((entry) => entry.g.project)).toEqual(["/a/vide", "/a/plein"])
+    expect(buildView(data, "plein", null, true).entries.map((entry) => entry.g.project)).toEqual(["/a/plein"])
   })
 })
 
@@ -288,8 +288,8 @@ describe("tirets insécables", () => {
       ],
     }
     rehypeNoBreak()(tree)
-    const p = tree.children[0].children as { type: string; value?: string; tagName?: string }[]
-    expect(p.map((n) => n.value ?? n.tagName)).toEqual(["voir ", "span", " et un-identifiant-vraiment-beaucoup-trop-long fin"])
+    const records = tree.children[0].children as { type: string; value?: string; tagName?: string }[]
+    expect(records.map((record) => record.value ?? record.tagName)).toEqual(["voir ", "span", " et un-identifiant-vraiment-beaucoup-trop-long fin"])
     expect(tree.children[1].children[0].type).toBe("text")
   })
 })

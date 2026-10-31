@@ -27,7 +27,7 @@ const press = (el: Element, key: string) => {
 beforeEach(() => {
   localStorage.clear()
   document.documentElement.className = ""
-  vi.stubGlobal("matchMedia", (q: string) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {} }))
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: false, media: query, addEventListener() {}, removeEventListener() {} }))
 })
 afterEach(() => {
   cleanup()
@@ -46,7 +46,7 @@ describe("frappe dans Monaco", () => {
     renderHook(() => useShortcuts({ search, picked: new Set(), clearPicked: () => {}, byId: new Map(), actions: {} as Actions }))
     const ed = monaco()
     ed.focus()
-    for (const k of ["j", "k", "ArrowDown", "ArrowUp", "/"]) expect(press(ed, k), k).toBe(false)
+    for (const key of ["j", "k", "ArrowDown", "ArrowUp", "/"]) expect(press(ed, key), key).toBe(false)
     expect(document.activeElement).toBe(ed)
     // Témoin : hors éditeur, le raccourci agit bien.
     expect(press(document.body, "/")).toBe(true)
