@@ -120,3 +120,21 @@ describe("useAppData", () => {
     setAuth({ state: "loading" })
   })
 })
+
+describe("markClosing", () => {
+  it("masque une session fermée tant que le serveur la liste encore ouverte", async () => {
+    const { markClosing } = await import("./useAppData")
+    const stillListed = { ...DATA, live: ["s1", "s2"], waiting: ["s1"] }
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) => Promise.resolve(new Response(JSON.stringify(url === "/v1/snippets" ? SNIPS : stillListed), { status: 200 })))
+    )
+    markClosing(["s1"])
+    const { result } = renderHook(() => useAppData())
+    await act(async () => {
+      await result.current.reload()
+    })
+    expect(result.current.data?.live).toEqual(["s2"])
+    expect(result.current.data?.waiting).toEqual([])
+  })
+})
