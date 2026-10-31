@@ -1,5 +1,6 @@
 # make install : construit l'interface (node requis), compile gld et le relie dans ~/.local/bin, sous son nom (gld) et sous ceux de gld-web et gld-matin (alias)
 # make ui      : reconstruit l'interface React/shadcn vers gld/ui/dist (non versionné : embarqué dans le binaire par go:embed)
+# make commonpw : régénère gld/auth_commonpw.txt depuis @zxcvbn-ts/language-common (à relancer après une mise à jour du paquet)
 # make windows : gld.exe pour Windows 64 bits (sans bash, sans jq ; l'interface est construite avant)
 # make macos   : gld-darwin-arm64 pour macOS Apple Silicon (M1 et suivants ; l'interface est construite avant, sans cgo)
 # make test    : tests Go (le dossier dist peut être vide : seul l'interface en dépend)
@@ -16,6 +17,9 @@ $(INDEX): $(shell find gld/ui/src gld/ui/public -type f 2>/dev/null) gld/ui/pack
 	cd gld/ui && { [ -d node_modules ] || npm ci; } && npm run build && touch dist/.gitkeep
 
 ui: $(INDEX)
+
+commonpw:
+	cd gld/ui && { [ -d node_modules ] || npm ci; } && node scripts/gen-commonpw.mjs
 
 install: ui
 	cd gld && go build -ldflags "$(LDFLAGS)" -o gld .
