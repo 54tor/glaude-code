@@ -216,6 +216,7 @@ export function PluginsPanel({
         installed={inst ?? undefined}
         onChange={changed}
       />
+      <Marketplaces onChange={changed} />
     </div>
   )
 }
@@ -248,16 +249,6 @@ export function PluginsCatalog({
     error?: string
   } | null>(null)
   const [busy, setBusy] = useState("")
-  const [markets, setMarkets] = useState<Marketplace[]>([])
-  const [src, setSrc] = useState("")
-  const loadMarkets = useCallback(
-    () =>
-      api.marketplaces().then(
-        (response) => setMarkets(response.marketplaces ?? []),
-        () => {}
-      ),
-    []
-  )
   const seq = useRef(0) // seule la dernière recherche s'affiche : une réponse lente pour « a » n'écrase pas celle de « ab »
   const load = useCallback((query: string) => {
     const requestNumber = ++seq.current
@@ -271,9 +262,6 @@ export function PluginsCatalog({
       }
     )
   }, [])
-  useEffect(() => {
-    loadMarkets()
-  }, [loadMarkets])
   useEffect(() => {
     const debounceDelay = searchQuery ? SEARCH_DEBOUNCE_MS : 0
     const searchTimeout = setTimeout(() => load(searchQuery), debounceDelay)
@@ -289,20 +277,6 @@ export function PluginsCatalog({
     setBusy("")
     if (!ok) return
     await load(searchQuery)
-    onChange()
-  }
-  const market = async (
-    key: string,
-    action: Parameters<typeof api.marketAct>[0],
-    source = "",
-    name = ""
-  ) => {
-    setBusy(key)
-    const ok = await reportAction(() => api.marketAct(action, source, name))
-    setBusy("")
-    if (!ok) return
-    if (action === "add") setSrc("")
-    await Promise.all([loadMarkets(), load(searchQuery)])
     onChange()
   }
   // La liste des installés vient du parent quand il l'a : elle suit ses désinstallations sans relancer la recherche.
@@ -324,8 +298,6 @@ export function PluginsCatalog({
     ...projects.map((project) => [`p/${project.dir}`, tilde(project.project, home)] as const),
   ] as const
   const count = byMarket.reduce((total, [, marketPlugins]) => total + marketPlugins.length, 0)
-  const trimmedSource = src.trim()
-  const isValidSource = SOURCE_OK.test(trimmedSource)
 
   return (
     <section className="space-y-2">
@@ -428,14 +400,50 @@ export function PluginsCatalog({
           )}
         </div>
       )}
-      <details className="group rounded-md border">
-        <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm [&::-webkit-details-marker]:hidden">
-          <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
-          <span className="font-medium">
-            {t("skills.plugins.marketplaces", { count: markets.length })}
-          </span>
-        </summary>
-        <div className="space-y-2 border-t p-3">
+    </section>
+  )
+}
+
+// Gestion des marketplaces : liste, mise à jour, retrait et ajout d'une source.
+export function Marketplaces({ onChange }: { onChange: () => void }) {
+  const { t } = useTranslation()
+  const [busy, setBusy] = useState("")
+  const [markets, setMarkets] = useState<Marketplace[]>([])
+  const [src, setSrc] = useState("")
+  const loadMarkets = useCallback(
+    () =>
+      api.marketplaces().then(
+        (response) => setMarkets(response.marketplaces ?? []),
+        () => {}
+      ),
+    []
+  )
+  useEffect(() => {
+    loadMarkets()
+  }, [loadMarkets])
+  const market = async (
+    key: string,
+    action: Parameters<typeof api.marketAct>[0],
+    source = "",
+    name = ""
+  ) => {
+    setBusy(key)
+    const ok = await reportAction(() => api.marketAct(action, source, name))
+    setBusy("")
+    if (!ok) return
+    if (action === "add") setSrc("")
+    await loadMarkets()
+    onChange()
+  }
+  const trimmedSource = src.trim()
+  const isValidSource = SOURCE_OK.test(trimmedSource)
+
+  return (
+    <section className="space-y-2">
+      <h4 className="text-sm font-medium">
+        {t("skills.plugins.marketplaces", { count: markets.length })}
+      </h4>
+      <div className="space-y-2">
           <div className="flex justify-end">
             <Button
               size="xs"
@@ -510,7 +518,6 @@ export function PluginsCatalog({
             </Button>
           </form>
         </div>
-      </details>
     </section>
   )
 }

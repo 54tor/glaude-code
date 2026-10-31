@@ -26,7 +26,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Choose } from "./Choose"
-import { PluginsCatalog, pluginKey, usePluginRun } from "./PluginsDialog"
+import { Marketplaces, PluginsCatalog, pluginKey, usePluginRun } from "./PluginsDialog"
 import { SkillsNpxPanel } from "./SkillsNpxDialog"
 import { Skills } from "./Skills"
 import type { Ask } from "./Confirm"
@@ -357,6 +357,9 @@ export function Extensions({
                     {allIds.length}
                   </span>
                 </TabsTrigger>
+                <TabsTrigger value="marketplaces">
+                  {t("extensions.tabMarketplaces")}
+                </TabsTrigger>
                 <TabsTrigger value="skills">
                   {t("extensions.skills")}{" "}
                   <span className="text-muted-foreground tabular-nums">
@@ -520,6 +523,7 @@ export function Extensions({
             </section>
           </>
         )}
+        {pane("marketplaces", <Marketplaces onChange={reload} />)}
         {pane(
           "skills",
           <>
