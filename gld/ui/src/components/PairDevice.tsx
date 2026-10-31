@@ -50,7 +50,9 @@ export function PairButton() {
     try {
       const pairing = await api.pairCode()
       const ttlSeconds = pairing.ttl ?? DEFAULT_CODE_TTL_SECONDS
-      setCode({ code: pairing.code, url: pairing.url, until: Date.now() + ttlSeconds * MILLISECONDS_PER_SECOND })
+      const issuedAt = Date.now()
+      setNow(issuedAt)
+      setCode({ code: pairing.code, url: pairing.url, until: issuedAt + ttlSeconds * MILLISECONDS_PER_SECOND })
     } catch (pairError) {
       toast.error(errMsg(pairError) || t("shell.pair.failed"))
     }

@@ -23,6 +23,7 @@ const open = async () => {
 }
 
 beforeEach(() => {
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} })
   setAuth({ state: "open" })
   vi.spyOn(api, "pairCode").mockResolvedValue(pairing())
   vi.spyOn(api, "devices").mockResolvedValue({ devices: [] })
@@ -30,6 +31,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
+  vi.unstubAllGlobals()
   vi.restoreAllMocks()
   setAuth({ state: "loading" })
 })
@@ -84,6 +86,17 @@ describe("PairButton", () => {
     fireEvent.click(screen.getByRole("button", { name: /Nouveau code/ }))
     await flush()
     expect(screen.getByLabelText("Code de connexion").textContent).toBe("8765 4321")
+  })
+
+  it("rouvert longtemps après, un nouveau code affiche son délai complet", async () => {
+    vi.useFakeTimers()
+    await open()
+    fireEvent.keyDown(screen.getByLabelText("Code de connexion"), { key: "Escape" })
+    await flush()
+    await act(async () => void vi.advanceTimersByTime(30_000))
+    fireEvent.click(screen.getByRole("button", { name: "Connecter un appareil" }))
+    await flush()
+    expect(screen.getByText("Valable encore 120 s")).toBeTruthy()
   })
 
   it("délai absent de la réponse : 120 s par défaut", async () => {
