@@ -26,7 +26,7 @@ func TestTerminalWeb(t *testing.T) {
 		t.Skip("pas de cat")
 	}
 	t.Setenv("GLD_WEB_TERMINAL", "1")
-	h, _, _ := web(t)
+	handler, _, _ := web(t)
 	frappes := filepath.Join(t.TempDir(), "frappes")
 	bin := t.TempDir()
 	os.WriteFile(filepath.Join(bin, "tmux"), []byte("#!/bin/sh\nexec "+cat+" > '"+frappes+"'\n"), 0o755)
@@ -35,8 +35,8 @@ func TestTerminalWeb(t *testing.T) {
 	t.Cleanup(func() { tmuxRun, sessionPIDs, parentOf = oldRun, oldPid, oldPar })
 	sessionPIDs = func() map[string]int { return map[string]int{sid: 300} }
 	parentOf = func(pid int) int { return map[int]int{300: 100}[pid] }
-	tmuxRun = func(_ string, a ...string) (string, error) { // appelé aussi par le serveur : aucun état partagé
-		switch a[0] {
+	tmuxRun = func(_ string, values ...string) (string, error) { // appelé aussi par le serveur : aucun état partagé
+		switch values[0] {
 		case "list-panes":
 			return "%3 100\n", nil
 		case "display-message":
@@ -44,33 +44,33 @@ func TestTerminalWeb(t *testing.T) {
 		}
 		return "", nil
 	}
-	srv := httptest.NewServer(h)
+	srv := httptest.NewServer(handler)
 	defer srv.Close()
 	host := strings.TrimPrefix(srv.URL, "http://")
 	hosts[host] = true
 
 	token := func() string {
 		t.Helper()
-		m := v1ok(t, h, "POST", "/v1/terminal", `{"id":"`+sid+`"}`, "token")
-		return m["token"].(string)
+		lookup := v1ok(t, handler, "POST", "/v1/terminal", `{"id":"`+sid+`"}`, "token")
+		return lookup["token"].(string)
 	}
 	dial := func(tok, origin string) (*websocket.Conn, int) {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		c, resp, err := websocket.Dial(ctx, "ws://"+host+"/v1/terminal/ws?t="+tok, &websocket.DialOptions{HTTPHeader: http.Header{"Origin": {origin}}})
+		conn, resp, err := websocket.Dial(ctx, "ws://"+host+"/v1/terminal/ws?t="+tok, &websocket.DialOptions{HTTPHeader: http.Header{"Origin": {origin}}})
 		if err != nil {
 			if resp == nil {
 				t.Fatal(err)
 			}
 			return nil, resp.StatusCode
 		}
-		return c, 101
+		return conn, 101
 	}
 	self := "http://" + host
 
-	status(t, h, "POST", "/v1/terminal", `{"id":"pas-un-id"}`, 400)
-	v1err(t, h, "POST", "/v1/terminal", `{"id":"99999999-2222-3333-4444-555555555555"}`, 409, "pas dans tmux")
+	status(t, handler, "POST", "/v1/terminal", `{"id":"pas-un-id"}`, 400)
+	v1err(t, handler, "POST", "/v1/terminal", `{"id":"99999999-2222-3333-4444-555555555555"}`, 409, "pas dans tmux")
 	if _, code := dial("inconnu", self); code != 403 {
 		t.Fatalf("jeton inconnu : %d", code)
 	}
@@ -83,26 +83,26 @@ func TestTerminalWeb(t *testing.T) {
 	}
 	tok = token()
 	termMu.Lock()
-	e := termToks[tok]
-	e.exp = time.Now().Add(-time.Second)
-	termToks[tok] = e
+	termTok := termToks[tok]
+	termTok.exp = time.Now().Add(-time.Second)
+	termToks[tok] = termTok
 	termMu.Unlock()
 	if _, code := dial(tok, self); code != 403 {
 		t.Fatalf("jeton expiré : %d", code)
 	}
 
-	c, code := dial(token(), self)
+	localConn, code := dial(token(), self)
 	if code != 101 {
 		t.Fatalf("ouverture : %d", code)
 	}
-	defer c.CloseNow()
+	defer localConn.CloseNow()
 	if _, code := dial(token(), self); code != 409 {
 		t.Fatalf("second client : %d", code)
 	}
 	ctx := context.Background()
-	c.Write(ctx, websocket.MessageBinary, []byte("lecture\n"))
-	c.Write(ctx, websocket.MessageText, []byte(`{"write":true}`))
-	c.Write(ctx, websocket.MessageBinary, []byte("main\n"))
+	localConn.Write(ctx, websocket.MessageBinary, []byte("lecture\n"))
+	localConn.Write(ctx, websocket.MessageText, []byte(`{"write":true}`))
+	localConn.Write(ctx, websocket.MessageBinary, []byte("main\n"))
 	deadline := time.Now().Add(3 * time.Second)
 	var got []byte
 	for time.Now().Before(deadline) {
@@ -114,7 +114,7 @@ func TestTerminalWeb(t *testing.T) {
 	if string(got) != "main\n" {
 		t.Fatalf("frappes reçues par le terminal : %q", got)
 	}
-	c.Close(websocket.StatusNormalClosure, "")
+	localConn.Close(websocket.StatusNormalClosure, "")
 	// le serveur libère la session en dernier (après ses appels à tmux) : attendre avant que t.Cleanup ne restaure tmuxRun
 	for end := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
 		termMu.Lock()

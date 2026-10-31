@@ -53,8 +53,8 @@ func TestRosterBadTeamName(t *testing.T) {
 
 func TestRosterMissingOrCorrupt(t *testing.T) {
 	root := t.TempDir()
-	if m, err := rosterRead(root, rosterTeam); err != nil || len(m) != 0 {
-		t.Fatalf("absent: %v %v", m, err)
+	if lookup, err := rosterRead(root, rosterTeam); err != nil || len(lookup) != 0 {
+		t.Fatalf("absent: %v %v", lookup, err)
 	}
 	if err := os.MkdirAll(filepath.Dir(rosterFile(root)), 0o700); err != nil {
 		t.Fatal(err)
@@ -68,24 +68,24 @@ func TestRosterMissingOrCorrupt(t *testing.T) {
 		if err := os.WriteFile(rosterFile(root), []byte(body), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if m, err := rosterRead(root, rosterTeam); err != nil || len(m) != 0 {
-			t.Fatalf("%s: %v %v", name, m, err)
+		if lookup, err := rosterRead(root, rosterTeam); err != nil || len(lookup) != 0 {
+			t.Fatalf("%s: %v %v", name, lookup, err)
 		}
 	}
 }
 
 func TestRosterRejectsInvalidEntryOnWrite(t *testing.T) {
 	root := t.TempDir()
-	for _, m := range []map[string]string{
+	for _, lookup := range []map[string]string{
 		{"Marcus": "dev"}, {"a": "dev"}, {"marcus1": "dev"}, {"marcus": "../x"}, {"marcus": ""}, {"marcus": "Dev"},
 	} {
-		if err := rosterWrite(root, rosterTeam, m); err == nil {
-			t.Fatalf("accepted %v", m)
+		if err := rosterWrite(root, rosterTeam, lookup); err == nil {
+			t.Fatalf("accepted %v", lookup)
 		}
 	}
 	big := map[string]string{}
-	for i := 0; i < 65; i++ {
-		big[string(rune('a'+i/26))+string(rune('a'+i%26))] = "dev"
+	for index := 0; index < 65; index++ {
+		big[string(rune('a'+index/26))+string(rune('a'+index%26))] = "dev"
 	}
 	if err := rosterWrite(root, rosterTeam, big); err == nil {
 		t.Fatal("65 entries accepted")
@@ -119,8 +119,8 @@ func TestRosterSymlinkRefused(t *testing.T) {
 	if err := os.Symlink(secret, rosterFile(root2)); err != nil {
 		t.Fatal(err)
 	}
-	if m, _ := rosterRead(root2, rosterTeam); len(m) != 0 {
-		t.Fatalf("read through file symlink: %v", m)
+	if lookup, _ := rosterRead(root2, rosterTeam); len(lookup) != 0 {
+		t.Fatalf("read through file symlink: %v", lookup)
 	}
 	if err := rosterWrite(root2, rosterTeam, map[string]string{"bob": "dev"}); err == nil {
 		t.Fatal("write over file symlink")
@@ -132,14 +132,14 @@ func TestRosterDropKeepsJournal(t *testing.T) {
 	if err := rosterWrite(root, rosterTeam, map[string]string{"ana": "dev"}); err != nil {
 		t.Fatal(err)
 	}
-	j := filepath.Join(root, journalDir, rosterTeam+".jsonl")
-	if err := os.WriteFile(j, []byte("x\n"), 0o600); err != nil {
+	text := filepath.Join(root, journalDir, rosterTeam+".jsonl")
+	if err := os.WriteFile(text, []byte("x\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := rosterDrop(root, rosterTeam); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(j); err != nil {
+	if _, err := os.Stat(text); err != nil {
 		t.Fatal("journal removed")
 	}
 	if _, err := os.Stat(rosterFile(root)); !os.IsNotExist(err) {
@@ -170,19 +170,19 @@ func TestRosterAndJournalShareOneLock(t *testing.T) {
 	const n = 200
 	var wg sync.WaitGroup
 	errs := make(chan error, 4*n)
-	run := func(f func(i int) error) {
+	run := func(callback func(index int) error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for i := 0; i < n; i++ {
-				if err := f(i); err != nil {
+			for index := 0; index < n; index++ {
+				if err := callback(index); err != nil {
 					errs <- err
 				}
 			}
 		}()
 	}
-	run(func(i int) error { // équipe A : journal, fermée à chaque tour
-		text := fmt.Sprint(i)
+	run(func(index int) error { // équipe A : journal, fermée à chaque tour
+		text := fmt.Sprint(index)
 		if err := journalAppend(root, a, DirectMsg{Author: "ada", To: "hugo", Text: text}); err != nil {
 			return err
 		}
@@ -213,7 +213,7 @@ func TestRosterAndJournalShareOneLock(t *testing.T) {
 
 func TestRosterWriteLeavesNoTemp(t *testing.T) {
 	root := t.TempDir()
-	for i := 0; i < 2; i++ {
+	for index := 0; index < 2; index++ {
 		if err := rosterWrite(root, rosterTeam, map[string]string{"ana": "dev"}); err != nil {
 			t.Fatal(err)
 		}

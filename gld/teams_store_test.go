@@ -10,34 +10,34 @@ import (
 
 func TestEditBuiltinMakesCopy(t *testing.T) {
 	root := t.TempDir()
-	a, err := saveAgent(root, Agent{ID: "backend", Name: "Backend bis", Role: "r", Access: "write", Prompt: "p"})
+	agent, err := saveAgent(root, Agent{ID: "backend", Name: "Backend bis", Role: "r", Access: "write", Prompt: "p"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if a.ID == "backend" || a.Builtin || a.Base != "backend" || len(a.ID) != 10 || a.ID[:2] != "x-" {
-		t.Fatalf("copie = %+v", a)
+	if agent.ID == "backend" || agent.Builtin || agent.Base != "backend" || len(agent.ID) != 10 || agent.ID[:2] != "x-" {
+		t.Fatalf("copie = %+v", agent)
 	}
-	c, _ := loadCatalog(root)
+	catalog, _ := loadCatalog(root)
 	var orig Agent
-	for _, x := range builtinCatalog().Agents {
-		if x.ID == "backend" {
-			orig = x
+	for _, agent := range builtinCatalog().Agents {
+		if agent.ID == "backend" {
+			orig = agent
 		}
 	}
 	found := false
-	for _, x := range c.Agents {
-		if x.ID == "backend" && x != orig {
+	for _, localAgent := range catalog.Agents {
+		if localAgent.ID == "backend" && localAgent != orig {
 			t.Fatal("fourni modifié")
 		}
-		found = found || x.ID == a.ID
+		found = found || localAgent.ID == agent.ID
 	}
 	if !found {
 		t.Fatal("copie absente")
 	}
-	a.Role = "autre"
-	b, err := saveAgent(root, a)
-	if err != nil || b.ID != a.ID || b.Role != "autre" {
-		t.Fatalf("maj en place: %+v %v", b, err)
+	agent.Role = "autre"
+	anotherAgent, err := saveAgent(root, agent)
+	if err != nil || anotherAgent.ID != agent.ID || anotherAgent.Role != "autre" {
+		t.Fatalf("maj en place: %+v %v", anotherAgent, err)
 	}
 }
 
@@ -53,31 +53,31 @@ func TestRemoveBuiltinRefused(t *testing.T) {
 
 func TestRemoveAgentUsedByTeam(t *testing.T) {
 	root := t.TempDir()
-	a, _ := saveAgent(root, Agent{Name: "Zed", Role: "r", Access: "read"})
-	tm, err := saveTeam(root, Team{Name: "Mon équipe", Members: []string{a.ID, "backend"}})
+	agent, _ := saveAgent(root, Agent{Name: "Zed", Role: "r", Access: "read"})
+	tm, err := saveTeam(root, Team{Name: "Mon équipe", Members: []string{agent.ID, "backend"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = removeAgent(root, a.ID)
+	err = removeAgent(root, agent.ID)
 	if !isMsg(err, "srv.teams_store.agentUtilise") {
 		t.Fatalf("err = %v", err)
 	}
 	if err := removeTeam(root, tm.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := removeAgent(root, a.ID); err != nil {
+	if err := removeAgent(root, agent.ID); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestCatalogSurvivesUpdate(t *testing.T) {
 	root := t.TempDir()
-	a, _ := saveAgent(root, Agent{Name: "Zed", Role: "r", Access: "read"})
-	c, err := loadCatalog(root)
-	if err != nil || len(c.Agents) != len(builtinCatalog().Agents)+1 || c.Agents[len(c.Agents)-1].ID != a.ID {
+	agent, _ := saveAgent(root, Agent{Name: "Zed", Role: "r", Access: "read"})
+	catalog, err := loadCatalog(root)
+	if err != nil || len(catalog.Agents) != len(builtinCatalog().Agents)+1 || catalog.Agents[len(catalog.Agents)-1].ID != agent.ID {
 		t.Fatalf("catalogue: %v", err)
 	}
-	if c.Agents[0].ID != "chef" {
+	if catalog.Agents[0].ID != "chef" {
 		t.Fatal("fournis d'abord")
 	}
 }
@@ -85,19 +85,19 @@ func TestCatalogSurvivesUpdate(t *testing.T) {
 func TestStoreConcurrent(t *testing.T) {
 	root := t.TempDir()
 	var wg sync.WaitGroup
-	for _, n := range []string{"A1", "B2", "C3", "D4", "E5", "F6"} {
+	for _, name := range []string{"A1", "B2", "C3", "D4", "E5", "F6"} {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, err := saveAgent(root, Agent{Name: n, Role: "r", Access: "read"}); err != nil {
+			if _, err := saveAgent(root, Agent{Name: name, Role: "r", Access: "read"}); err != nil {
 				t.Error(err)
 			}
 		}()
 	}
 	wg.Wait()
-	c, _ := loadCatalog(root)
-	if len(c.Agents) != len(builtinCatalog().Agents)+6 {
-		t.Fatalf("agents = %d", len(c.Agents))
+	catalog, _ := loadCatalog(root)
+	if len(catalog.Agents) != len(builtinCatalog().Agents)+6 {
+		t.Fatalf("agents = %d", len(catalog.Agents))
 	}
 }
 
@@ -127,40 +127,40 @@ func TestSaveTeamRejectsUnknownMember(t *testing.T) {
 		"srv.teams_store.membreDoublon": {Name: "T", Members: []string{"backend", "backend"}},
 		"srv.teams_store.nomVide":       {Members: []string{"backend"}},
 	}
-	for k, tt := range cases {
-		if _, err := saveTeam(root, tt); !isMsg(err, k) {
-			t.Fatalf("%s: %v", k, err)
+	for key, tt := range cases {
+		if _, err := saveTeam(root, tt); !isMsg(err, key) {
+			t.Fatalf("%s: %v", key, err)
 		}
 	}
 	if _, err := saveTeam(root, Team{Name: "T", Members: []string{"chef"}}); !isMsg(err, "srv.teams_store.membreInconnu") {
 		t.Fatal("chef accepté comme membre")
 	}
-	b, err := saveTeam(root, Team{ID: "feature", Name: "F2", Members: []string{"backend"}})
-	if err != nil || b.Builtin || b.Base != "feature" {
-		t.Fatalf("copie team: %+v %v", b, err)
+	team, err := saveTeam(root, Team{ID: "feature", Name: "F2", Members: []string{"backend"}})
+	if err != nil || team.Builtin || team.Base != "feature" {
+		t.Fatalf("copie team: %+v %v", team, err)
 	}
 }
 
 func TestStoreCorruptFileKept(t *testing.T) {
 	root := t.TempDir()
-	p := filepath.Join(root, "gld-teams.json")
-	os.WriteFile(p, []byte("{pas du json"), 0o600)
+	path := filepath.Join(root, "gld-teams.json")
+	os.WriteFile(path, []byte("{pas du json"), 0o600)
 	if _, err := loadCatalog(root); !isMsg(err, "srv.teams_store.fichierIllisible") {
 		t.Fatalf("load: %v", err)
 	}
 	if _, err := saveAgent(root, Agent{Name: "Z", Role: "r", Access: "read"}); err == nil {
 		t.Fatal("écrasement")
 	}
-	if b, _ := os.ReadFile(p); string(b) != "{pas du json" {
+	if data, _ := os.ReadFile(path); string(data) != "{pas du json" {
 		t.Fatal("fichier modifié")
 	}
 }
 
 func TestSaveAgentRejectsBadModel(t *testing.T) {
 	root := t.TempDir()
-	for _, m := range []string{"a b", "x\ny: z", strings.Repeat("a", 65), "é"} {
-		if _, err := saveAgent(root, Agent{Name: "Q", Role: "r", Access: "read", Model: m}); !isMsg(err, "srv.teams_store.modeleInvalide") {
-			t.Fatalf("%q: %v", m, err)
+	for _, message := range []string{"a b", "x\ny: z", strings.Repeat("a", 65), "é"} {
+		if _, err := saveAgent(root, Agent{Name: "Q", Role: "r", Access: "read", Model: message}); !isMsg(err, "srv.teams_store.modeleInvalide") {
+			t.Fatalf("%q: %v", message, err)
 		}
 	}
 	if _, err := saveAgent(root, Agent{Name: "Q", Role: "r", Access: "read", Model: "claude-sonnet-4.5"}); err != nil {
