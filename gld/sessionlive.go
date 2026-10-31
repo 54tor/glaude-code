@@ -52,6 +52,7 @@ type LiveState struct {
 }
 
 const (
+	teamShortIDLength       = 8
 	queuedMessageMaxLength  = 400
 	serviceMessageMaxLength = 64000
 	quickPickupThreshold    = 5 * time.Millisecond
@@ -472,7 +473,7 @@ func sessionLive(dir, sessionID string) LiveState {
 	if state.Open {
 		state.Queue = pendingQueue(transcriptPath)
 	}
-	state.Subs = subLives(filepath.Join(filepath.Dir(transcriptPath), sessionID, "subagents"))
+	state.Subs = append(subLives(filepath.Join(filepath.Dir(transcriptPath), sessionID, "subagents")), teammateLives(sessionID)...)
 	if tasks := bgTasks(transcriptPath, state.Open); tasks != nil {
 		state.Tasks = tasks
 	}
@@ -521,6 +522,35 @@ func subLives(dir string) []SubLive {
 		subagents = subagents[:subagentListMax]
 	}
 	return subagents
+}
+
+// teammateLives : les coéquipiers in-process de l'équipe « session-<8 premiers caractères> » (hors chef), sans transcript lisible.
+func teammateLives(sessionID string) []SubLive {
+	if len(sessionID) < teamShortIDLength {
+		return nil
+	}
+	configPath := filepath.Join(cfgDir(), "teams", "session-"+sessionID[:teamShortIDLength], "config.json")
+	configContent, readErr := readTrusted(configPath)
+	if readErr != nil {
+		return nil
+	}
+	var team struct {
+		Members []struct {
+			Name  string `json:"name"`
+			Model string `json:"model"`
+		} `json:"members"`
+	}
+	if json.Unmarshal(configContent, &team) != nil {
+		return nil
+	}
+	teammates := []SubLive{}
+	for _, member := range team.Members {
+		if member.Name == "" || member.Name == "team-lead" {
+			continue
+		}
+		teammates = append(teammates, SubLive{ID: "team-" + member.Name, Desc: member.Name, Type: member.Model, Activity: localizeActivity("terminé")})
+	}
+	return teammates
 }
 
 // lastSaid : le dernier paragraphe du dernier texte écrit par Claude (200 caractères au plus), "" s'il n'y en a pas.
