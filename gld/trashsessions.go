@@ -164,7 +164,7 @@ func restoreTrashed(id string) error {
 	}
 	dir := filepath.Join(root, meta.Dir)
 	transcriptPath := filepath.Join(dir, id+".jsonl")
-	if _, err := os.Lstat(transcriptPath); err == nil {
+	if _, err := os.Lstat(transcriptPath); err == nil { // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 		return terr("srv.trashsessions.unTranscriptDeCe")
 	}
 	if err := rMkdirAll(cfgDir(), dir, 0o755); err != nil {

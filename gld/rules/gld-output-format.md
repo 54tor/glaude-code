@@ -1,7 +1,6 @@
 ---
 source: gld
 ---
-<!-- Managed by gld: overwritten at every gld startup. Do not edit; add your own rules under another name. -->
 # Output format
 
 Your replies are read in a terminal and in gld's web UI (GitHub-flavored markdown).

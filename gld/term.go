@@ -92,7 +92,7 @@ func launcherCmd(name, title string, argv []string) (*exec.Cmd, error) {
 			";", "set-option", "set-titles", "on", ";", "set-option", "set-titles-string", "#T"})
 	}
 	with := func(prefix ...string) *exec.Cmd {
-		return exec.Command(prefix[0], append(prefix[1:], argv...)...)
+		return exec.Command(prefix[0], append(prefix[1:], argv...)...) // #nosec G702 -- exécutable fixe, arguments en tableau, sans shell
 	}
 	switch name {
 	case "tmux":
@@ -196,8 +196,8 @@ func specPath(name string) bool {
 // runTab : le corps de « gld _run <fichier> », exécuté dans l'onglet. Il se place dans le dossier du projet et
 // lance claude à la place de ce processus (Unix) ou comme enfant (Windows).
 func runTab(file string) int {
-	content, err := os.ReadFile(file)
-	os.Remove(file)
+	content, err := os.ReadFile(file) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
+	os.Remove(file)                   // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 	var spec tabSpec
 	if err == nil {
 		err = json.Unmarshal(content, &spec)

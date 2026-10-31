@@ -56,11 +56,11 @@ func boolean(fields map[string]any, key string) bool {
 
 // readJSONFile : lit un fichier régulier (pas un lien) borné à 1 Mio et le décode en any.
 func readJSONFile(path string) (any, bool) {
-	fileInfo, err := os.Lstat(path)
+	fileInfo, err := os.Lstat(path) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 	if err != nil || !fileInfo.Mode().IsRegular() {
 		return nil, false
 	}
-	file, err := os.Open(path)
+	file, err := os.Open(path) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 	if err != nil {
 		return nil, false
 	}
@@ -78,7 +78,7 @@ func readJSONFile(path string) (any, bool) {
 
 // jsonFiles : les *.json directement dans dir, triés, sans suivre les liens ; les liens et le surplus vont dans unknown.
 func jsonFiles(dir, rel string, maxFiles int, unknown *[]string) []string {
-	dirInfo, err := os.Lstat(dir)
+	dirInfo, err := os.Lstat(dir) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 	if err != nil {
 		return nil
 	}
@@ -113,7 +113,7 @@ func readTeam(cfgRoot, name string) (TeamFiles, error) {
 		return TeamFiles{}, terr("srv.teams_files.nomInvalide")
 	}
 	dir := filepath.Join(cfgRoot, "teams", name)
-	if dirInfo, err := os.Lstat(dir); err != nil || !dirInfo.IsDir() {
+	if dirInfo, err := os.Lstat(dir); err != nil || !dirInfo.IsDir() { // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 		return TeamFiles{}, terr("srv.teams_files.equipeIntrouvable")
 	}
 	teamFiles := TeamFiles{Name: name}

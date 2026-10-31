@@ -161,7 +161,7 @@ func withPath(cmd *exec.Cmd) *exec.Cmd {
 			name += ".exe"
 		}
 		candidate := filepath.Join(localBin, name)
-		fileInfo, err := os.Stat(candidate)
+		fileInfo, err := os.Stat(candidate) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 		isRunnable := err == nil && fileInfo.Mode().IsRegular() && (isWindows || fileInfo.Mode()&executableBits != 0)
 		if isRunnable {
 			cmd.Path, cmd.Err = candidate, nil

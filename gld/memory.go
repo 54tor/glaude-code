@@ -75,7 +75,7 @@ func cfgDirs() []string {
 
 // isCfgEntry : path est <config d'un home>/<name> (même fichier ou dossier, liens suivis).
 func isCfgEntry(path, name string) bool {
-	pathInfo, pathStatErr := os.Stat(path)
+	pathInfo, pathStatErr := os.Stat(path) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 	for _, homeConfigDir := range cfgDirs() {
 		candidatePath := filepath.Join(homeConfigDir, name)
 		if filepath.Clean(path) == candidatePath {
@@ -109,7 +109,7 @@ func projectCwd(dir string) string {
 	var newestInfo os.FileInfo
 	var newestPath string
 	for _, transcriptPath := range files {
-		transcriptInfo, err := os.Stat(transcriptPath)
+		transcriptInfo, err := os.Stat(transcriptPath) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 		if err != nil || transcriptInfo.Size() <= 0 {
 			continue
 		}
@@ -176,7 +176,7 @@ func memResolve(key string) (string, string, error) {
 // projectRulesDir : le dossier .claude/rules d'un projet ; refuse un projet absent, un lien symbolique et le dossier des règles
 // globales (un projet lancé depuis ~).
 func projectRulesDir(cwd string) (string, error) {
-	if cwdInfo, statErr := os.Stat(cwd); cwd == "" || statErr != nil || !cwdInfo.IsDir() {
+	if cwdInfo, statErr := os.Stat(cwd); cwd == "" || statErr != nil || !cwdInfo.IsDir() { // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 		return "", terr("srv.memory.dossierDuProjetIntrouvable")
 	}
 	rules := filepath.Join(cwd, ".claude", "rules")
@@ -184,7 +184,7 @@ func projectRulesDir(cwd string) (string, error) {
 		return "", terr("srv.memory.ceSontLesRegles")
 	}
 	for _, claudePath := range []string{filepath.Join(cwd, ".claude"), rules} {
-		if claudePathInfo, lstatErr := os.Lstat(claudePath); lstatErr == nil && claudePathInfo.Mode()&os.ModeSymlink != 0 {
+		if claudePathInfo, lstatErr := os.Lstat(claudePath); lstatErr == nil && claudePathInfo.Mode()&os.ModeSymlink != 0 { // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 			return "", terr("srv.memory.claudeEstUnLien")
 		}
 	}
@@ -192,7 +192,7 @@ func projectRulesDir(cwd string) (string, error) {
 }
 
 func memFile(key, path string) (MemFile, bool) {
-	fileInfo, err := os.Stat(path)
+	fileInfo, err := os.Stat(path) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 	if err != nil || !fileInfo.Mode().IsRegular() {
 		return MemFile{}, false
 	}
@@ -585,7 +585,7 @@ func memTransfer(key, destination string, keep bool) (string, error) {
 }
 
 func isDirPath(path string) bool {
-	fileInfo, err := os.Stat(path)
+	fileInfo, err := os.Stat(path) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 	return err == nil && fileInfo.IsDir()
 }
 

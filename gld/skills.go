@@ -419,7 +419,7 @@ func saveSkill(key, text string, create bool) error {
 		return terr("srv.skills.texteVideTropLong")
 	}
 	dir := filepath.Join(base, name)
-	if fileInfo, lstatErr := os.Lstat(dir); lstatErr == nil {
+	if fileInfo, lstatErr := os.Lstat(dir); lstatErr == nil { // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 		if create {
 			return terr("srv.skills.unSkillDeCe")
 		}
@@ -465,7 +465,7 @@ func removeSkill(key string) error {
 	if readonly {
 		return terr("srv.skills.skillDePluginLecture2")
 	}
-	if fileInfo, lstatErr := os.Lstat(filepath.Join(base, name)); lstatErr == nil && !fileInfo.IsDir() { // lien symbolique : le dossier cible n'est pas à nous
+	if fileInfo, lstatErr := os.Lstat(filepath.Join(base, name)); lstatErr == nil && !fileInfo.IsDir() { // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS ; lien symbolique : le dossier cible n'est pas à nous
 		return terr("srv.skills.nEstPasUn", "A1", name)
 	}
 	text, files, err := readSkill(key)

@@ -64,7 +64,7 @@ var pluginRaw = func() ([]byte, error) {
 func runPlugin(dir string, timeout time.Duration, args ...string) ([]byte, error) {
 	commandContext, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	cmd := withPath(exec.CommandContext(commandContext, "claude", append([]string{"plugin"}, args...)...))
+	cmd := withPath(exec.CommandContext(commandContext, "claude", append([]string{"plugin"}, args...)...)) // #nosec G702 -- exécutable fixe, arguments en tableau, sans shell
 	cmd.Dir = dir
 	if cmd.Dir == "" {
 		cmd.Dir = workDir()

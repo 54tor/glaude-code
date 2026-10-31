@@ -1,7 +1,6 @@
 ---
 source: gld
 ---
-<!-- Managed by gld: overwritten at every gld startup. Do not edit; add your own rules under another name. -->
 # Long output and temporary files
 
 - A report, audit, log excerpt or generated document longer than about 40 lines goes in a file, not in the chat. Reply with the path and a 3-line summary.

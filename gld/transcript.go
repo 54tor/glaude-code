@@ -712,7 +712,7 @@ func transcript(dir, id string) (string, bool) {
 		return "", false
 	}
 	transcriptPath := filepath.Join(root, dir, id+".jsonl")
-	fileInfo, err := os.Stat(transcriptPath)
+	fileInfo, err := os.Stat(transcriptPath) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 	return transcriptPath, err == nil && fileInfo.Mode().IsRegular()
 }
 

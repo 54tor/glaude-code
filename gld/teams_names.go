@@ -26,7 +26,7 @@ func drawNames(count int, taken []string, seed int64) ([]string, error) {
 	for _, takenName := range taken {
 		used[strings.ToLower(takenName)] = true
 	}
-	faker := gofakeit.New(uint64(seed))
+	faker := gofakeit.New(uint64(seed)) // #nosec G115 -- valeur bornée en amont
 	for len(names) < count {
 		found := false
 		for attempt := 0; attempt < namesTries && !found; attempt++ {

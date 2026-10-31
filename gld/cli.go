@@ -166,15 +166,15 @@ func resolveProject(target string) (project, error) {
 	}
 	resolved := project{Path: absolutePath, Transcripts: filepath.Join(root, nonAlnum.ReplaceAllString(absolutePath, "-"))}
 	if transcripts, _ := filepath.Glob(filepath.Join(resolved.Transcripts, "*.jsonl")); len(transcripts) == 0 {
-		if aliasContent, readErr := os.ReadFile(filepath.Join(resolved.Transcripts, ".session-aliases")); readErr == nil {
+		if aliasContent, readErr := os.ReadFile(filepath.Join(resolved.Transcripts, ".session-aliases")); readErr == nil { // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 			canonicalLine, _, _ := strings.Cut(string(aliasContent), "\n")
 			canonicalDir := strings.TrimSpace(canonicalLine)
-			if canonicalInfo, statErr := os.Stat(canonicalDir); statErr == nil && canonicalInfo.IsDir() {
+			if canonicalInfo, statErr := os.Stat(canonicalDir); statErr == nil && canonicalInfo.IsDir() { // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 				resolved.Transcripts, resolved.Alias = canonicalDir, canonicalDir
 			}
 		}
 	}
-	if dirInfo, statErr := os.Stat(resolved.Transcripts); statErr != nil || !dirInfo.IsDir() {
+	if dirInfo, statErr := os.Stat(resolved.Transcripts); statErr != nil || !dirInfo.IsDir() { // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 		return resolved, terr("srv.cli.aucuneSessionClaudePour", "A1", absolutePath, "A2", resolved.Transcripts)
 	}
 	return resolved, nil

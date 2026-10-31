@@ -226,7 +226,7 @@ func mergeMove(from, to string) error {
 	if err != nil {
 		return err
 	}
-	toInfo, err := os.Lstat(to)
+	toInfo, err := os.Lstat(to) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 	if os.IsNotExist(err) {
 		return rRename(cfgDir(), from, to)
 	}

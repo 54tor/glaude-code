@@ -610,7 +610,7 @@ func stopChildChat(home, chatID string) {
 	}
 	stopContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	stopRequest, _ := http.NewRequestWithContext(stopContext, "DELETE", path, nil)
+	stopRequest, _ := http.NewRequestWithContext(stopContext, "DELETE", path, nil) // #nosec G704 -- chemin construit par chatStopPath, appel interne via le proxy
 	discard := &discardWriter{h: http.Header{}}
 	proxy.ServeHTTP(discard, stopRequest)
 	journal("auth: arrêt du tour %s sur %s demandé : %d", chatID, home, discard.code)
