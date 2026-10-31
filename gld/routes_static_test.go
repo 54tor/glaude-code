@@ -17,7 +17,7 @@ func TestPageRoutesMatchUI(t *testing.T) {
 	}
 	mux := http.NewServeMux()
 	routesStatic(mux)
-	for _, m := range seen(t, regexp.MustCompile(`loc(?: === |\.startsWith\()"(/[^"]*)"`).FindAllStringSubmatch(string(src), -1)) {
+	for _, m := range seen(t, regexp.MustCompile(`(?:pathname === |pathname\.startsWith\(|isSectionOrBelow\()"(/[^"]*)"`).FindAllStringSubmatch(string(src), -1)) {
 		p := m[1]
 		if p[len(p)-1] == '/' {
 			p += "x"
