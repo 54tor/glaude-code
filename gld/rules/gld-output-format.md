@@ -1,6 +1,5 @@
 ---
-metadata:
-  source: gld
+source: gld
 ---
 <!-- Managed by gld: overwritten at every gld startup. Do not edit; add your own rules under another name. -->
 # Output format

@@ -39,3 +39,14 @@ func TestInstallBuiltinRules(t *testing.T) {
 		t.Fatal("un fichier repris par l'utilisateur ne doit pas être supprimé")
 	}
 }
+
+func TestBuiltinRulesMarkedGld(t *testing.T) {
+	ents, _ := builtinRules.ReadDir("rules")
+	for _, e := range ents {
+		b, _ := builtinRules.ReadFile("rules/" + e.Name())
+		m, err := parseMeta(string(b))
+		if err != nil || m["source"] != "gld" {
+			t.Fatalf("%s : source: gld absent du premier niveau (%v)", e.Name(), err)
+		}
+	}
+}
