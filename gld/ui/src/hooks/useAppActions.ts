@@ -17,6 +17,7 @@ import type { Ask as PromptAsk } from "@/components/Prompt"
 import { reportAction } from "@/lib/report"
 import { errMsg } from "@/lib/apiError"
 import { copyText } from "@/lib/utils"
+import { markClosing } from "./useAppData"
 
 const sessionsCount = (count: number) => i18n.t("shell.count.sessions", { count })
 const NO_CAPS: Caps = { hotCache: false, keepWarm: false, config: false, memory: false, tuiPrompts: false, resume: false }
@@ -596,6 +597,7 @@ export function useAppActions(context: {
           else toast.success(ids.length > 1 ? i18n.t("shell.act.closedMany") : i18n.t("shell.act.closedOne"))
           // Le processus met un instant à finir : on retire les sessions tout de suite, puis on relit jusqu'à confirmation.
           const closedIds = new Set(ids.filter((_, index) => results[index].status === "fulfilled"))
+          markClosing([...closedIds])
           if (!firstFailure) onDone?.()
           setData(
             (currentData) =>

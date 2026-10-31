@@ -10,6 +10,26 @@ export type Snippets = { dir: string; files: Snippet[]; scopes: SnipScope[] }
 
 const STAMP_CHECK_INTERVAL_MS = 3_000
 const SERVER_DOWN_TOAST_ID = "server-down"
+const CLOSING_MASK_MS = 15_000
+
+// Sessions dont la fermeture vient d'être demandée : le processus met un instant à finir, et une relecture du serveur les
+// annonce encore ouvertes. On les masque jusqu'à ce qu'il ne les liste plus (ou jusqu'à l'échéance).
+const closingUntil = new Map<string, number>()
+
+export function markClosing(sessionIds: string[]) {
+  const deadline = Date.now() + CLOSING_MASK_MS
+  for (const sessionId of sessionIds) closingUntil.set(sessionId, deadline)
+}
+
+function withoutClosing(freshData: Data): Data {
+  const nowMs = Date.now()
+  for (const [sessionId, deadline] of closingUntil) {
+    if (deadline <= nowMs || !freshData.live.includes(sessionId)) closingUntil.delete(sessionId)
+  }
+  if (closingUntil.size === 0) return freshData
+  const isOpen = (sessionId: string) => !closingUntil.has(sessionId)
+  return { ...freshData, live: freshData.live.filter(isOpen), waiting: freshData.waiting.filter(isOpen) }
+}
 
 // Sessions et snippets du serveur, relus toutes les 15 s tant que l'onglet est visible et au retour sur l'onglet, et dès qu'un
 // transcript change (vérifié toutes les 3 s).
@@ -24,7 +44,7 @@ export function useAppData() {
   const reload = useCallback(async () => {
     try {
       const [freshData, freshSnippets] = await Promise.all([api.data(), api.snippets()])
-      setData(freshData)
+      setData(withoutClosing(freshData))
       setSnips(freshSnippets)
       setNow(Date.now() / 1000)
       setError(null)
