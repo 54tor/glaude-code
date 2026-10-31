@@ -39,28 +39,28 @@ type gateData struct {
 	Code                                                                  bool // champ du code de jumelage
 }
 
-func gatePage(w http.ResponseWriter, code int, d gateData) {
-	h := w.Header()
-	h.Set("Content-Type", "text/html; charset=utf-8")
-	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; manifest-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
-	h.Set("Cache-Control", "no-store")
-	h.Set("Referrer-Policy", "no-referrer")
-	w.WriteHeader(code)
-	d.Lang = uiLang()
-	gateTmpl.Execute(w, d)
+func gatePage(responseWriter http.ResponseWriter, code int, pageData gateData) {
+	headers := responseWriter.Header()
+	headers.Set("Content-Type", "text/html; charset=utf-8")
+	headers.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; manifest-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+	headers.Set("Cache-Control", "no-store")
+	headers.Set("Referrer-Policy", "no-referrer")
+	responseWriter.WriteHeader(code)
+	pageData.Lang = uiLang()
+	gateTmpl.Execute(responseWriter, pageData)
 }
 
 // wantsPage : une navigation du navigateur (barre d'adresse, PWA), pas un appel de l'application.
-func wantsPage(r *http.Request) bool {
-	return r.Method == "GET" && (r.Header.Get("Sec-Fetch-Mode") == "navigate" || strings.Contains(r.Header.Get("Accept"), "text/html"))
+func wantsPage(request *http.Request) bool {
+	return request.Method == "GET" && (request.Header.Get("Sec-Fetch-Mode") == "navigate" || strings.Contains(request.Header.Get("Accept"), "text/html"))
 }
 
-func tokenPage(w http.ResponseWriter, code int, errKey string) {
-	d := gateData{Title: "Glaude Code", Text: L("srv.token.text"), Action: "/token-login", Field: L("srv.token.field"), Button: L("srv.token.button"), Link: "/pair", LinkText: L("srv.pair.title")}
+func tokenPage(responseWriter http.ResponseWriter, code int, errKey string) {
+	pageData := gateData{Title: "Glaude Code", Text: L("srv.token.text"), Action: "/token-login", Field: L("srv.token.field"), Button: L("srv.token.button"), Link: "/pair", LinkText: L("srv.pair.title")}
 	if errKey != "" {
-		d.Err = L(errKey)
+		pageData.Err = L(errKey)
 	}
-	gatePage(w, code, d)
+	gatePage(responseWriter, code, pageData)
 }
 
 // Essais du jeton par le formulaire, par minute : tokenMaxTries échecs par adresse (clientIP, derrière un proxy déclaré
@@ -76,11 +76,11 @@ type tryWin struct {
 	since time.Time
 }
 
-func (t *tryWin) at(now time.Time) *tryWin {
-	if now.Sub(t.since) > time.Minute {
-		t.n, t.since = 0, now
+func (window *tryWin) at(now time.Time) *tryWin {
+	if now.Sub(window.since) > time.Minute {
+		window.n, window.since = 0, now
 	}
-	return t
+	return window
 }
 
 var tokenTries = struct {
@@ -97,33 +97,33 @@ func resetTokenTries() {
 
 // tokenTry réserve un essai, sous le même verrou que le contrôle : des requêtes simultanées ne passent pas toutes avant
 // le premier échec. false : l'adresse ou le serveur a épuisé ses essais. Un essai réussi se rend par tokenRefund.
-func tokenTry(ip string) bool {
+func tokenTry(clientAddress string) bool {
 	now := authNow()
 	tokenTries.Lock()
 	defer tokenTries.Unlock()
-	w := tokenTries.by[ip]
-	if w == nil {
+	addressWindow := tokenTries.by[clientAddress]
+	if addressWindow == nil {
 		if len(tokenTries.by) >= 4096 { // ponytail: purge complète au plafond, les fenêtres ne durent qu'une minute
 			tokenTries.by = map[string]*tryWin{}
 		}
-		w = &tryWin{}
-		tokenTries.by[ip] = w
+		addressWindow = &tryWin{}
+		tokenTries.by[clientAddress] = addressWindow
 	}
-	w.at(now)
+	addressWindow.at(now)
 	tokenTries.all.at(now)
-	if w.n >= tokenMaxTries || tokenTries.all.n >= tokenMaxGlobal {
+	if addressWindow.n >= tokenMaxTries || tokenTries.all.n >= tokenMaxGlobal {
 		return false
 	}
-	w.n++
+	addressWindow.n++
 	tokenTries.all.n++
 	return true
 }
 
-func tokenRefund(ip string) {
+func tokenRefund(clientAddress string) {
 	tokenTries.Lock()
 	defer tokenTries.Unlock()
-	if w := tokenTries.by[ip]; w != nil && w.n > 0 {
-		w.n--
+	if addressWindow := tokenTries.by[clientAddress]; addressWindow != nil && addressWindow.n > 0 {
+		addressWindow.n--
 	}
 	if tokenTries.all.n > 0 {
 		tokenTries.all.n--
@@ -131,24 +131,24 @@ func tokenRefund(ip string) {
 }
 
 // tokenLogin : POST /token-login, formulaire de la page du jeton.
-func tokenLogin(w http.ResponseWriter, r *http.Request, token string) {
-	if pairCOP.Check(r) != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
+func tokenLogin(responseWriter http.ResponseWriter, request *http.Request, token string) {
+	if pairCOP.Check(request) != nil {
+		http.Error(responseWriter, "forbidden", http.StatusForbidden)
 		return
 	}
-	ip := clientIP(r)
-	if !tokenTry(ip) {
-		w.Header().Set("Retry-After", "60")
-		tokenPage(w, http.StatusTooManyRequests, "srv.token.tooMany")
+	clientAddress := clientIP(request)
+	if !tokenTry(clientAddress) {
+		responseWriter.Header().Set("Retry-After", "60")
+		tokenPage(responseWriter, http.StatusTooManyRequests, "srv.token.tooMany")
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<12)
-	if !sameToken(r.PostFormValue("token"), token) {
-		journal("token: jeton refusé depuis %s", ip)
-		tokenPage(w, http.StatusUnauthorized, "srv.token.bad")
+	request.Body = http.MaxBytesReader(responseWriter, request.Body, 1<<12)
+	if !sameToken(request.PostFormValue("token"), token) {
+		journal("token: jeton refusé depuis %s", clientAddress)
+		tokenPage(responseWriter, http.StatusUnauthorized, "srv.token.bad")
 		return
 	}
-	tokenRefund(ip)
-	http.SetCookie(w, &http.Cookie{Name: tokenCookie, Value: token, Path: "/", MaxAge: 30 * 24 * 3600, HttpOnly: true, Secure: requestHTTPS(r), SameSite: http.SameSiteStrictMode})
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	tokenRefund(clientAddress)
+	http.SetCookie(responseWriter, &http.Cookie{Name: tokenCookie, Value: token, Path: "/", MaxAge: 30 * 24 * 3600, HttpOnly: true, Secure: requestHTTPS(request), SameSite: http.SameSiteStrictMode})
+	http.Redirect(responseWriter, request, "/", http.StatusSeeOther)
 }

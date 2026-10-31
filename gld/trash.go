@@ -19,16 +19,16 @@ import (
 var journalMu sync.Mutex
 
 // journal ajoute une ligne horodatée ; une erreur d'écriture n'empêche jamais l'action elle-même.
-func journal(format string, a ...any) {
+func journal(format string, formatArgs ...any) {
 	journalMu.Lock()
 	defer journalMu.Unlock()
-	f, err := rOpenFile(cfgDir(), filepath.Join(cfgDir(), "gld-web.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	logFile, err := rOpenFile(cfgDir(), filepath.Join(cfgDir(), "gld-web.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return
 	}
-	defer f.Close()
-	line := strings.ReplaceAll(fmt.Sprintf(format, a...), "\n", " ")
-	fmt.Fprintf(f, "%s %s\n", time.Now().Format("2006-01-02 15:04:05"), line)
+	defer logFile.Close()
+	entryText := strings.ReplaceAll(fmt.Sprintf(format, formatArgs...), "\n", " ")
+	fmt.Fprintf(logFile, "%s %s\n", time.Now().Format("2006-01-02 15:04:05"), entryText)
 }
 
 type Trashed struct {
@@ -44,13 +44,13 @@ func trashDir() string { return filepath.Join(cfgDir(), "gld-web-trash") }
 
 // migrateData renomme les fichiers de données de l'ancien nom (cc-web) quand le nouveau n'existe pas encore.
 func migrateData() {
-	for _, n := range []string{"-groups.json", "-tabs.json", "-trash", ".log"} {
-		old, nw := filepath.Join(cfgDir(), "cc-web"+n), filepath.Join(cfgDir(), "gld-web"+n)
-		if _, err := os.Stat(nw); err == nil {
+	for _, suffix := range []string{"-groups.json", "-tabs.json", "-trash", ".log"} {
+		oldPath, newPath := filepath.Join(cfgDir(), "cc-web"+suffix), filepath.Join(cfgDir(), "gld-web"+suffix)
+		if _, err := os.Stat(newPath); err == nil {
 			continue
 		}
-		if _, err := os.Stat(old); err == nil {
-			rRename(cfgDir(), old, nw)
+		if _, err := os.Stat(oldPath); err == nil {
+			rRename(cfgDir(), oldPath, newPath)
 		}
 	}
 }
@@ -70,39 +70,39 @@ func toTrash(key, reason string) error {
 
 // saveTrash range un contenu dans la corbeille ; key dit comment le restaurer (clé de mémoire, ou « s/<chemin> » d'un snippet).
 func saveTrash(key, path, reason, text string) error {
-	b := make([]byte, 4)
-	rand.Read(b)
-	t := Trashed{time.Now().Format("20060102-150405") + "-" + hex.EncodeToString(b), key, path, reason,
+	randomSuffix := make([]byte, 4)
+	rand.Read(randomSuffix)
+	entry := Trashed{time.Now().Format("20060102-150405") + "-" + hex.EncodeToString(randomSuffix), key, path, reason,
 		float64(time.Now().UnixNano()) / 1e9, int64(len(text)) / 1024}
-	d := filepath.Join(trashDir(), t.ID)
-	if err := rMkdirAll(cfgDir(), d, 0o700); err != nil {
+	entryDir := filepath.Join(trashDir(), entry.ID)
+	if err := rMkdirAll(cfgDir(), entryDir, 0o700); err != nil {
 		return err
 	}
-	meta, _ := json.Marshal(t)
-	if err := rWriteFile(cfgDir(), filepath.Join(d, "content"), []byte(text), 0o600); err != nil {
+	meta, _ := json.Marshal(entry)
+	if err := rWriteFile(cfgDir(), filepath.Join(entryDir, "content"), []byte(text), 0o600); err != nil {
 		return err
 	}
-	return rWriteFile(cfgDir(), filepath.Join(d, "meta.json"), meta, 0o600)
+	return rWriteFile(cfgDir(), filepath.Join(entryDir, "meta.json"), meta, 0o600)
 }
 
 func trashList() []Trashed {
-	out := []Trashed{}
-	ents, _ := readDirTrusted(trashDir())
-	for _, e := range ents {
-		var t Trashed
-		if b, err := readTrusted(filepath.Join(trashDir(), e.Name(), "meta.json")); err == nil && json.Unmarshal(b, &t) == nil && t.ID == e.Name() {
-			out = append(out, t)
+	entries := []Trashed{}
+	dirEntries, _ := readDirTrusted(trashDir())
+	for _, dirEntry := range dirEntries {
+		var entry Trashed
+		if metaJSON, err := readTrusted(filepath.Join(trashDir(), dirEntry.Name(), "meta.json")); err == nil && json.Unmarshal(metaJSON, &entry) == nil && entry.ID == dirEntry.Name() {
+			entries = append(entries, entry)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].At > out[j].At })
-	return out
+	sort.Slice(entries, func(leftIndex, rightIndex int) bool { return entries[leftIndex].At > entries[rightIndex].At })
+	return entries
 }
 
 func trashItem(id string) (Trashed, string, error) {
-	for _, t := range trashList() {
-		if t.ID == id {
-			b, err := readTrusted(filepath.Join(trashDir(), id, "content"))
-			return t, string(b), err
+	for _, entry := range trashList() {
+		if entry.ID == id {
+			content, err := readTrusted(filepath.Join(trashDir(), id, "content"))
+			return entry, string(content), err
 		}
 	}
 	return Trashed{}, "", terr("srv.trash.introuvableDansLaCorbeille")
@@ -110,46 +110,46 @@ func trashItem(id string) (Trashed, string, error) {
 
 // trashRestore remet le fichier à sa place ; s'il existe déjà, sa version actuelle part à son tour à la corbeille.
 func trashRestore(id string) (Trashed, error) {
-	t, text, err := trashItem(id)
+	entry, text, err := trashItem(id)
 	if err != nil {
-		return t, err
+		return entry, err
 	}
-	if strings.HasPrefix(t.Key, "s/") { // un snippet
-		err = saveSnippet(t.Key[2:], text, false)
-	} else if strings.HasPrefix(t.Key, "k/") { // un skill
-		err = saveSkill(t.Key[2:], text, false)
+	if strings.HasPrefix(entry.Key, "s/") { // un snippet
+		err = saveSnippet(entry.Key[2:], text, false)
+	} else if strings.HasPrefix(entry.Key, "k/") { // un skill
+		err = saveSkill(entry.Key[2:], text, false)
 	} else {
-		err = memSave(t.Key, text) // memSave met la version remplacée à la corbeille
+		err = memSave(entry.Key, text) // memSave met la version remplacée à la corbeille
 	}
 	if err != nil {
-		return t, err
+		return entry, err
 	}
-	return t, rRemoveAll(cfgDir(), filepath.Join(trashDir(), id))
+	return entry, rRemoveAll(cfgDir(), filepath.Join(trashDir(), id))
 }
 
 // trashPurge vide la corbeille (ou en retire un seul élément).
 func trashPurge(id string) error {
 	if id == "" {
 		// sessions/ appartient à la corbeille de sessions (droit exec) : DELETE /v1/trash/sessions ne l'efface pas.
-		ents, err := readDirTrusted(trashDir())
-		if err != nil {
-			if os.IsNotExist(err) {
+		dirEntries, readErr := readDirTrusted(trashDir())
+		if readErr != nil {
+			if os.IsNotExist(readErr) {
 				return nil
 			}
-			return err
+			return readErr
 		}
-		for _, e := range ents {
-			if e.Name() == filepath.Base(sessionTrashDir()) {
+		for _, dirEntry := range dirEntries {
+			if dirEntry.Name() == filepath.Base(sessionTrashDir()) {
 				continue
 			}
-			if err := rRemoveAll(cfgDir(), filepath.Join(trashDir(), e.Name())); err != nil {
-				return err
+			if removeErr := rRemoveAll(cfgDir(), filepath.Join(trashDir(), dirEntry.Name())); removeErr != nil {
+				return removeErr
 			}
 		}
 		return nil
 	}
-	if _, _, err := trashItem(id); err != nil {
-		return err
+	if _, _, lookupErr := trashItem(id); lookupErr != nil {
+		return lookupErr
 	}
 	return rRemoveAll(cfgDir(), filepath.Join(trashDir(), id))
 }

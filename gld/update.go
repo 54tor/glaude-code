@@ -32,100 +32,100 @@ var (
 )
 
 // latestRelease : dernière release publique ; remplaçable en test.
-var latestRelease = func(ctx context.Context) (tag, url string, err error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+var latestRelease = func(requestContext context.Context) (tag, url string, err error) {
+	requestContext, cancel := context.WithTimeout(requestContext, 10*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "GET", releaseAPI, nil)
+	releaseRequest, err := http.NewRequestWithContext(requestContext, "GET", releaseAPI, nil)
 	if err != nil {
 		return "", "", err
 	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "gld")
-	resp, err := http.DefaultClient.Do(req)
+	releaseRequest.Header.Set("Accept", "application/vnd.github+json")
+	releaseRequest.Header.Set("User-Agent", "gld")
+	releaseResponse, err := http.DefaultClient.Do(releaseRequest)
 	if err != nil {
 		return "", "", err
 	}
-	defer resp.Body.Close()
-	var d struct {
+	defer releaseResponse.Body.Close()
+	var release struct {
 		Tag string `json:"tag_name"`
 		URL string `json:"html_url"`
 	}
-	if resp.StatusCode != 200 || json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&d) != nil {
+	if releaseResponse.StatusCode != 200 || json.NewDecoder(io.LimitReader(releaseResponse.Body, 1<<20)).Decode(&release) != nil {
 		return "", "", io.ErrUnexpectedEOF
 	}
-	return d.Tag, d.URL, nil
+	return release.Tag, release.URL, nil
 }
 
 const claudeNpmAPI = "https://registry.npmjs.org/@anthropic-ai/claude-code/latest"
 
 // claudeInstalled : la version de claude (« 2.1.314 (Claude Code) » devient « 2.1.314 ») ; remplaçable en test.
-var claudeInstalled = func(ctx context.Context) string {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+var claudeInstalled = func(commandContext context.Context) string {
+	commandContext, cancel := context.WithTimeout(commandContext, 10*time.Second)
 	defer cancel()
-	out, err := withPath(exec.CommandContext(ctx, "claude", "--version")).Output()
+	versionOutput, err := withPath(exec.CommandContext(commandContext, "claude", "--version")).Output()
 	if err != nil {
 		return ""
 	}
-	v, _, _ := strings.Cut(strings.TrimSpace(string(out)), " ")
-	return v
+	versionNumber, _, _ := strings.Cut(strings.TrimSpace(string(versionOutput)), " ")
+	return versionNumber
 }
 
 // claudeLatest : dernière version de Claude Code publiée sur npm ; remplaçable en test.
-var claudeLatest = func(ctx context.Context) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+var claudeLatest = func(requestContext context.Context) (string, error) {
+	requestContext, cancel := context.WithTimeout(requestContext, 10*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "GET", claudeNpmAPI, nil)
+	registryRequest, err := http.NewRequestWithContext(requestContext, "GET", claudeNpmAPI, nil)
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", "gld")
-	resp, err := http.DefaultClient.Do(req)
+	registryRequest.Header.Set("User-Agent", "gld")
+	registryResponse, err := http.DefaultClient.Do(registryRequest)
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
-	var d struct {
+	defer registryResponse.Body.Close()
+	var packageInfo struct {
 		Version string `json:"version"`
 	}
-	if resp.StatusCode != 200 || json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&d) != nil {
+	if registryResponse.StatusCode != 200 || json.NewDecoder(io.LimitReader(registryResponse.Body, 1<<20)).Decode(&packageInfo) != nil {
 		return "", io.ErrUnexpectedEOF
 	}
-	return d.Version, nil
+	return packageInfo.Version, nil
 }
 
-// newerVersion : vrai si latest (vX.Y.Z) dépasse cur ; « dev » ou une version illisible n'est jamais périmée.
-func newerVersion(cur, latest string) bool {
-	a, b := verParts(cur), verParts(latest)
-	if a == nil || b == nil {
+// newerVersion : vrai si latest (vX.Y.Z) dépasse current ; « dev » ou une version illisible n'est jamais périmée.
+func newerVersion(current, latest string) bool {
+	currentParts, latestParts := verParts(current), verParts(latest)
+	if currentParts == nil || latestParts == nil {
 		return false
 	}
-	for i := range a {
-		if a[i] != b[i] {
-			return b[i] > a[i]
+	for partIndex := range currentParts {
+		if currentParts[partIndex] != latestParts[partIndex] {
+			return latestParts[partIndex] > currentParts[partIndex]
 		}
 	}
 	return false
 }
 
-func verParts(v string) []int {
-	p := strings.SplitN(strings.TrimPrefix(v, "v"), ".", 3)
-	if len(p) != 3 {
+func verParts(versionText string) []int {
+	parts := strings.SplitN(strings.TrimPrefix(versionText, "v"), ".", 3)
+	if len(parts) != 3 {
 		return nil
 	}
-	out := make([]int, 3)
-	for i, s := range p {
-		s, _, _ = strings.Cut(s, "-")
-		n, err := strconv.Atoi(s)
+	numbers := make([]int, 3)
+	for partIndex, part := range parts {
+		part, _, _ = strings.Cut(part, "-")
+		number, err := strconv.Atoi(part)
 		if err != nil {
 			return nil
 		}
-		out[i] = n
+		numbers[partIndex] = number
 	}
-	return out
+	return numbers
 }
 
 // checkUpdate : l'échec réseau est mis en cache comme un succès (sans « newer ») pour ne pas marteler GitHub (60 requêtes/h sans jeton).
-func checkUpdate(ctx context.Context, force bool) updateInfo {
+func checkUpdate(requestContext context.Context, force bool) updateInfo {
 	updMu.Lock()
 	defer updMu.Unlock()
 	ttl := 6 * time.Hour
@@ -135,22 +135,22 @@ func checkUpdate(ctx context.Context, force bool) updateInfo {
 	if !updAt.IsZero() && time.Since(updAt) < ttl {
 		return updInfo
 	}
-	info := updateInfo{Current: version}
-	if tag, url, err := latestRelease(ctx); err == nil {
-		info.Latest, info.URL, info.Newer = tag, url, newerVersion(version, tag)
+	checkedInfo := updateInfo{Current: version}
+	if tag, url, err := latestRelease(requestContext); err == nil {
+		checkedInfo.Latest, checkedInfo.URL, checkedInfo.Newer = tag, url, newerVersion(version, tag)
 	}
-	if cur := claudeInstalled(ctx); cur != "" {
-		info.ClaudeCurrent = cur
-		if lat, err := claudeLatest(ctx); err == nil {
-			info.ClaudeLatest, info.ClaudeNewer = lat, newerVersion(cur, lat)
+	if installedClaude := claudeInstalled(requestContext); installedClaude != "" {
+		checkedInfo.ClaudeCurrent = installedClaude
+		if latestClaude, err := claudeLatest(requestContext); err == nil {
+			checkedInfo.ClaudeLatest, checkedInfo.ClaudeNewer = latestClaude, newerVersion(installedClaude, latestClaude)
 		}
 	}
-	updAt, updInfo = time.Now(), info
-	return info
+	updAt, updInfo = time.Now(), checkedInfo
+	return checkedInfo
 }
 
 func routesUpdate(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/update", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, checkUpdate(r.Context(), r.URL.Query().Get("force") == "1"))
+	mux.HandleFunc("GET /v1/update", func(responseWriter http.ResponseWriter, request *http.Request) {
+		writeJSON(responseWriter, 200, checkUpdate(request.Context(), request.URL.Query().Get("force") == "1"))
 	})
 }

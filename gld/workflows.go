@@ -19,6 +19,9 @@ const (
 	wfMaxAgents = 200
 	wfMaxFile   = 8 << 20
 	wfRunning   = 2 * time.Minute
+	// Plafonds de lecture d'une fiche d'agent et du journal d'un run.
+	wfMaxAgentMeta = 1 << 20
+	wfMaxJournal   = 4 << 20
 )
 
 var (
@@ -57,129 +60,132 @@ type Workflow struct {
 	Logs           []string  `json:"logs"`
 }
 
-// wfRead : un fichier ordinaire de l'utilisateur de gld, ouvert sans suivre de lien, lu jusqu'à max octets.
-func wfRead(path string, max int64) ([]byte, os.FileInfo, bool) {
-	fi, err := os.Lstat(path)
-	if err != nil || !fi.Mode().IsRegular() || !ownedByMe(fi) || fi.Size() > max {
+// wfRead : un fichier ordinaire de l'utilisateur de gld, ouvert sans suivre de lien, lu jusqu'à maxBytes octets.
+func wfRead(path string, maxBytes int64) ([]byte, os.FileInfo, bool) {
+	fileInfo, err := os.Lstat(path)
+	if err != nil || !fileInfo.Mode().IsRegular() || !ownedByMe(fileInfo) || fileInfo.Size() > maxBytes {
 		return nil, nil, false
 	}
-	f, err := os.OpenFile(path, os.O_RDONLY|oNoFollow, 0)
+	file, err := os.OpenFile(path, os.O_RDONLY|oNoFollow, 0)
 	if err != nil {
 		return nil, nil, false
 	}
-	defer f.Close()
-	b, err := io.ReadAll(io.LimitReader(f, max))
-	return b, fi, err == nil
+	defer file.Close()
+	content, err := io.ReadAll(io.LimitReader(file, maxBytes))
+	return content, fileInfo, err == nil
 }
 
 // wfDirOK : un vrai dossier (pas un lien) qui appartient à l'utilisateur de gld.
 func wfDirOK(path string) bool {
-	fi, err := os.Lstat(path)
-	return err == nil && fi.IsDir() && ownedByMe(fi)
+	dirInfo, err := os.Lstat(path)
+	return err == nil && dirInfo.IsDir() && ownedByMe(dirInfo)
 }
 
 func wfNames(dir string) []string {
 	if !wfDirOK(dir) {
 		return nil
 	}
-	es, _ := os.ReadDir(dir)
-	out := make([]string, 0, len(es))
-	for _, e := range es {
-		out = append(out, e.Name())
+	entries, _ := os.ReadDir(dir)
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		names = append(names, entry.Name())
 	}
-	return out
+	return names
 }
 
 // sessionWorkflows : les runs les plus récents d'abord, plafonnés.
-func sessionWorkflows(p string) []Workflow {
-	base := strings.TrimSuffix(p, ".jsonl")
+func sessionWorkflows(transcriptPath string) []Workflow {
+	base := strings.TrimSuffix(transcriptPath, ".jsonl")
 	if !wfDirOK(base) {
 		return []Workflow{}
 	}
-	type cand struct {
+	type runCandidate struct {
 		id string
 		at time.Time
 	}
 	seen := map[string]time.Time{}
-	for _, n := range wfNames(filepath.Join(base, "workflows")) {
-		id := strings.TrimSuffix(n, ".json")
-		if id == n || !wfRunRe.MatchString(id) {
+	for _, entryName := range wfNames(filepath.Join(base, "workflows")) {
+		id := strings.TrimSuffix(entryName, ".json")
+		if id == entryName || !wfRunRe.MatchString(id) {
 			continue
 		}
-		if fi, err := os.Lstat(filepath.Join(base, "workflows", n)); err == nil {
-			seen[id] = fi.ModTime()
+		if fileInfo, err := os.Lstat(filepath.Join(base, "workflows", entryName)); err == nil {
+			seen[id] = fileInfo.ModTime()
 		}
 	}
-	for _, n := range wfNames(filepath.Join(base, "subagents", "workflows")) {
-		if _, ok := seen[n]; ok || !wfRunRe.MatchString(n) {
+	for _, entryName := range wfNames(filepath.Join(base, "subagents", "workflows")) {
+		if _, alreadySeen := seen[entryName]; alreadySeen || !wfRunRe.MatchString(entryName) {
 			continue
 		}
-		if fi, err := os.Lstat(filepath.Join(base, "subagents", "workflows", n)); err == nil {
-			seen[n] = fi.ModTime()
+		if fileInfo, err := os.Lstat(filepath.Join(base, "subagents", "workflows", entryName)); err == nil {
+			seen[entryName] = fileInfo.ModTime()
 		}
 	}
-	cs := make([]cand, 0, len(seen))
-	for id, at := range seen {
-		cs = append(cs, cand{id, at})
+	candidates := make([]runCandidate, 0, len(seen))
+	for id, modTime := range seen {
+		candidates = append(candidates, runCandidate{id, modTime})
 	}
-	sort.Slice(cs, func(i, j int) bool { return cs[i].at.After(cs[j].at) })
-	if len(cs) > wfMaxRuns {
-		cs = cs[:wfMaxRuns]
+	sort.Slice(candidates, func(leftIndex, rightIndex int) bool { return candidates[leftIndex].at.After(candidates[rightIndex].at) })
+	if len(candidates) > wfMaxRuns {
+		candidates = candidates[:wfMaxRuns]
 	}
-	out := make([]Workflow, 0, len(cs))
-	for _, c := range cs {
-		if w, ok := loadWorkflow(base, c.id); ok {
-			out = append(out, w)
+	workflows := make([]Workflow, 0, len(candidates))
+	for _, candidate := range candidates {
+		if workflow, loaded := loadWorkflow(base, candidate.id); loaded {
+			workflows = append(workflows, workflow)
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].StartTime > out[j].StartTime })
-	return out
+	sort.SliceStable(workflows, func(leftIndex, rightIndex int) bool {
+		return workflows[leftIndex].StartTime > workflows[rightIndex].StartTime
+	})
+	return workflows
 }
 
 func loadWorkflow(base, run string) (Workflow, bool) {
 	if !wfRunRe.MatchString(run) {
 		return Workflow{}, false
 	}
-	if b, _, ok := wfRead(filepath.Join(base, "workflows", run+".json"), wfMaxFile); ok {
-		var raw struct {
-			RunID          string    `json:"runId"`
-			TaskID         string    `json:"taskId"`
-			Name           string    `json:"workflowName"`
-			Summary        string    `json:"summary"`
-			Status         string    `json:"status"`
-			StartTime      int64     `json:"startTime"`
-			DurationMs     int64     `json:"durationMs"`
-			TotalTokens    int64     `json:"totalTokens"`
-			TotalToolCalls int       `json:"totalToolCalls"`
-			Phases         []WfPhase `json:"phases"`
-			Logs           []string  `json:"logs"`
-			Progress       []struct {
-				Type       string `json:"type"`
-				Label      string `json:"label"`
-				PhaseTitle string `json:"phaseTitle"`
-				Model      string `json:"model"`
-				State      string `json:"state"`
-				LastTool   string `json:"lastToolName"`
-				Tokens     int64  `json:"tokens"`
-				ToolCalls  int    `json:"toolCalls"`
-				DurationMs int64  `json:"durationMs"`
-			} `json:"workflowProgress"`
-		}
-		if json.Unmarshal(b, &raw) != nil {
-			return Workflow{}, false
-		}
-		w := Workflow{RunID: run, TaskID: raw.TaskID, Name: raw.Name, Summary: raw.Summary, Status: raw.Status, StartTime: raw.StartTime,
-			DurationMs: raw.DurationMs, TotalTokens: raw.TotalTokens, TotalToolCalls: raw.TotalToolCalls,
-			Phases: append([]WfPhase{}, raw.Phases...), Agents: []WfAgent{}, Logs: append([]string{}, raw.Logs...)}
-		for _, a := range raw.Progress {
-			if a.Type != "workflow_agent" || len(w.Agents) >= wfMaxAgents {
-				continue
-			}
-			w.Agents = append(w.Agents, WfAgent{a.Label, a.PhaseTitle, a.State, a.Model, a.Tokens, a.ToolCalls, a.DurationMs, a.LastTool})
-		}
-		return w, true
+	content, _, found := wfRead(filepath.Join(base, "workflows", run+".json"), wfMaxFile)
+	if !found {
+		return runningWorkflow(base, run)
 	}
-	return runningWorkflow(base, run)
+	var finishedRun struct {
+		RunID          string    `json:"runId"`
+		TaskID         string    `json:"taskId"`
+		Name           string    `json:"workflowName"`
+		Summary        string    `json:"summary"`
+		Status         string    `json:"status"`
+		StartTime      int64     `json:"startTime"`
+		DurationMs     int64     `json:"durationMs"`
+		TotalTokens    int64     `json:"totalTokens"`
+		TotalToolCalls int       `json:"totalToolCalls"`
+		Phases         []WfPhase `json:"phases"`
+		Logs           []string  `json:"logs"`
+		Progress       []struct {
+			Type       string `json:"type"`
+			Label      string `json:"label"`
+			PhaseTitle string `json:"phaseTitle"`
+			Model      string `json:"model"`
+			State      string `json:"state"`
+			LastTool   string `json:"lastToolName"`
+			Tokens     int64  `json:"tokens"`
+			ToolCalls  int    `json:"toolCalls"`
+			DurationMs int64  `json:"durationMs"`
+		} `json:"workflowProgress"`
+	}
+	if json.Unmarshal(content, &finishedRun) != nil {
+		return Workflow{}, false
+	}
+	workflow := Workflow{RunID: run, TaskID: finishedRun.TaskID, Name: finishedRun.Name, Summary: finishedRun.Summary, Status: finishedRun.Status, StartTime: finishedRun.StartTime,
+		DurationMs: finishedRun.DurationMs, TotalTokens: finishedRun.TotalTokens, TotalToolCalls: finishedRun.TotalToolCalls,
+		Phases: append([]WfPhase{}, finishedRun.Phases...), Agents: []WfAgent{}, Logs: append([]string{}, finishedRun.Logs...)}
+	for _, agentProgress := range finishedRun.Progress {
+		if agentProgress.Type != "workflow_agent" || len(workflow.Agents) >= wfMaxAgents {
+			continue
+		}
+		workflow.Agents = append(workflow.Agents, WfAgent{agentProgress.Label, agentProgress.PhaseTitle, agentProgress.State, agentProgress.Model, agentProgress.Tokens, agentProgress.ToolCalls, agentProgress.DurationMs, agentProgress.LastTool})
+	}
+	return workflow, true
 }
 
 // runningWorkflow : run sans wf json, reconstitué des agents ; « en cours » tant qu'un transcript d'agent a bougé récemment.
@@ -190,77 +196,77 @@ func runningWorkflow(base, run string) (Workflow, bool) {
 		return Workflow{}, false
 	}
 	sort.Strings(names)
-	w := Workflow{RunID: run, Status: "unknown", Phases: []WfPhase{}, Agents: []WfAgent{}, Logs: []string{}}
+	workflow := Workflow{RunID: run, Status: "unknown", Phases: []WfPhase{}, Agents: []WfAgent{}, Logs: []string{}}
 	phases := map[string]bool{}
 	var first, last time.Time
 	// Le journal du run dit quels agents ont rendu leur résultat ; l'âge du transcript ne sert que sans journal.
 	finished, hasJournal := wfJournalDone(filepath.Join(dir, "journal.jsonl"))
-	for _, n := range names {
-		m := wfAgentRe.FindStringSubmatch(n)
-		if m == nil || len(w.Agents) >= wfMaxAgents {
+	for _, fileName := range names {
+		agentMatch := wfAgentRe.FindStringSubmatch(fileName)
+		if agentMatch == nil || len(workflow.Agents) >= wfMaxAgents {
 			continue
 		}
-		b, _, ok := wfRead(filepath.Join(dir, n), 1<<20)
-		if !ok {
+		metaJSON, _, readable := wfRead(filepath.Join(dir, fileName), wfMaxAgentMeta)
+		if !readable {
 			continue
 		}
 		var meta struct {
 			Description string `json:"description"`
 			Phase       string `json:"workflowPhase"`
 		}
-		if json.Unmarshal(b, &meta) != nil {
+		if json.Unmarshal(metaJSON, &meta) != nil {
 			continue
 		}
-		a := WfAgent{Label: meta.Description, Phase: meta.Phase, State: "done"}
-		if fi, err := os.Lstat(filepath.Join(dir, "agent-"+m[1]+".jsonl")); err == nil && fi.Mode().IsRegular() {
-			mt := fi.ModTime()
-			if first.IsZero() || mt.Before(first) {
-				first = mt
+		agent := WfAgent{Label: meta.Description, Phase: meta.Phase, State: "done"}
+		if transcriptInfo, err := os.Lstat(filepath.Join(dir, "agent-"+agentMatch[1]+".jsonl")); err == nil && transcriptInfo.Mode().IsRegular() {
+			modTime := transcriptInfo.ModTime()
+			if first.IsZero() || modTime.Before(first) {
+				first = modTime
 			}
-			if mt.After(last) {
-				last = mt
+			if modTime.After(last) {
+				last = modTime
 			}
 			if hasJournal {
-				if !finished[m[1]] {
-					a.State = "running"
+				if !finished[agentMatch[1]] {
+					agent.State = "running"
 				}
-			} else if time.Since(mt) < wfRunning {
-				a.State = "running"
+			} else if time.Since(modTime) < wfRunning {
+				agent.State = "running"
 			}
-			if a.State == "running" {
-				w.Status = "running"
+			if agent.State == "running" {
+				workflow.Status = "running"
 			}
 		}
 		if meta.Phase != "" && !phases[meta.Phase] {
 			phases[meta.Phase] = true
-			w.Phases = append(w.Phases, WfPhase{Title: meta.Phase})
+			workflow.Phases = append(workflow.Phases, WfPhase{Title: meta.Phase})
 		}
-		w.Agents = append(w.Agents, a)
+		workflow.Agents = append(workflow.Agents, agent)
 	}
-	if len(w.Agents) == 0 {
+	if len(workflow.Agents) == 0 {
 		return Workflow{}, false
 	}
-	w.StartTime = first.UnixMilli()
+	workflow.StartTime = first.UnixMilli()
 	if !first.IsZero() {
-		w.DurationMs = last.Sub(first).Milliseconds()
+		workflow.DurationMs = last.Sub(first).Milliseconds()
 	}
-	return w, true
+	return workflow, true
 }
 
 // wfJournalDone : ids des agents dont le journal du run porte une ligne « result ». ok faux : journal absent ou illisible.
 func wfJournalDone(path string) (map[string]bool, bool) {
-	b, _, ok := wfRead(path, 4<<20)
-	if !ok {
+	journalContent, _, readable := wfRead(path, wfMaxJournal)
+	if !readable {
 		return nil, false
 	}
 	done := map[string]bool{}
-	for _, l := range strings.Split(string(b), "\n") {
-		var e struct {
+	for _, journalLine := range strings.Split(string(journalContent), "\n") {
+		var entry struct {
 			Type    string `json:"type"`
 			AgentID string `json:"agentId"`
 		}
-		if json.Unmarshal([]byte(l), &e) == nil && e.Type == "result" && e.AgentID != "" {
-			done[e.AgentID] = true
+		if json.Unmarshal([]byte(journalLine), &entry) == nil && entry.Type == "result" && entry.AgentID != "" {
+			done[entry.AgentID] = true
 		}
 	}
 	return done, true

@@ -30,108 +30,110 @@ func sessionTrashDir() string { return filepath.Join(trashDir(), "sessions") }
 func trashSessionPath(id string) string { return filepath.Join(sessionTrashDir(), id) }
 
 // trashSessions déplace les sessions dans la corbeille. Les sessions ouvertes sont épargnées (comme pour la suppression).
-func trashSessions(items []item) (n, spared int, err error) {
+func trashSessions(items []item) (movedCount, spared int, err error) {
 	live, err := liveCheck()
 	if err != nil {
 		return 0, 0, err
 	}
-	for _, it := range items {
-		if live[it.ID] {
+	for _, sessionItem := range items {
+		if live[sessionItem.ID] {
 			spared++
 			continue
 		}
-		p, ok := transcript(it.Dir, it.ID)
-		if !ok {
+		transcriptPath, found := transcript(sessionItem.Dir, sessionItem.ID)
+		if !found {
 			continue
 		}
-		st, _ := os.Stat(p)
-		meta := TrashedSession{Dir: it.Dir, ID: it.ID, At: float64(time.Now().Unix())}
-		if st != nil {
-			s := info(p, st)
-			meta.Title, meta.Cwd, meta.KB = s.Title, s.Cwd, s.KB
+		fileInfo, _ := os.Stat(transcriptPath)
+		meta := TrashedSession{Dir: sessionItem.Dir, ID: sessionItem.ID, At: float64(time.Now().Unix())}
+		if fileInfo != nil {
+			session := info(transcriptPath, fileInfo)
+			meta.Title, meta.Cwd, meta.KB = session.Title, session.Cwd, session.KB
 		}
-		dst := trashSessionPath(it.ID)
-		if e := rMkdirAll(cfgDir(), dst, 0o700); e != nil {
-			return n, spared, e
+		trashEntryDir := trashSessionPath(sessionItem.ID)
+		if mkdirErr := rMkdirAll(cfgDir(), trashEntryDir, 0o700); mkdirErr != nil {
+			return movedCount, spared, mkdirErr
 		}
 		// Le transcript d'abord, la fiche ensuite : une fiche sans transcript serait une entrée fantôme, impossible à purger.
-		moved := filepath.Join(dst, it.ID+".jsonl")
-		if e := rRename(cfgDir(), p, moved); e != nil {
-			err = errors.Join(err, e)
+		moved := filepath.Join(trashEntryDir, sessionItem.ID+".jsonl")
+		if moveErr := rRename(cfgDir(), transcriptPath, moved); moveErr != nil {
+			err = errors.Join(err, moveErr)
 			continue
 		}
-		b, _ := json.Marshal(meta)
-		if e := rWriteFile(cfgDir(), filepath.Join(dst, "meta.json"), b, 0o600); e != nil {
-			rRename(cfgDir(), moved, p)
-			return n, spared, e
+		metaJSON, _ := json.Marshal(meta)
+		if metaWriteErr := rWriteFile(cfgDir(), filepath.Join(trashEntryDir, "meta.json"), metaJSON, 0o600); metaWriteErr != nil {
+			rRename(cfgDir(), moved, transcriptPath)
+			return movedCount, spared, metaWriteErr
 		}
-		if sub := filepath.Join(root, it.Dir, it.ID); dirExists(sub) {
-			if e := rRename(cfgDir(), sub, filepath.Join(dst, "sub")); e != nil {
-				err = errors.Join(err, e)
+		if subagentsDir := filepath.Join(root, sessionItem.Dir, sessionItem.ID); dirExists(subagentsDir) {
+			if subagentsMoveErr := rRename(cfgDir(), subagentsDir, filepath.Join(trashEntryDir, "sub")); subagentsMoveErr != nil {
+				err = errors.Join(err, subagentsMoveErr)
 			}
 		}
-		n++
+		movedCount++
 	}
-	return n, spared, err
+	return movedCount, spared, err
 }
 
-func dirExists(p string) bool {
-	fi, err := os.Stat(p)
-	return err == nil && fi.IsDir()
+func dirExists(path string) bool {
+	fileInfo, err := os.Stat(path)
+	return err == nil && fileInfo.IsDir()
 }
 
 func readTrashMeta(id string) (TrashedSession, bool) {
-	var m TrashedSession
+	var meta TrashedSession
 	if !idRe.MatchString(id) {
-		return m, false
+		return meta, false
 	}
-	b, err := readTrusted(filepath.Join(trashSessionPath(id), "meta.json"))
-	if err != nil || json.Unmarshal(b, &m) != nil || m.ID != id || !safeDir(m.Dir) {
-		return m, false
+	metaJSON, err := readTrusted(filepath.Join(trashSessionPath(id), "meta.json"))
+	if err != nil || json.Unmarshal(metaJSON, &meta) != nil || meta.ID != id || !safeDir(meta.Dir) {
+		return meta, false
 	}
-	return m, true
+	return meta, true
 }
 
 // listTrashedSessions : le contenu de la corbeille, le plus récemment supprimé d'abord. Les sessions plus vieilles que
 // trashKeep n'y figurent plus ; leur purge revient à expireTrashedSessions (une lecture ne supprime rien).
 func listTrashedSessions() []TrashedSession {
-	out := []TrashedSession{}
-	for _, m := range trashedMetas() {
-		if !expired(m) {
-			out = append(out, m)
+	trashedSessions := []TrashedSession{}
+	for _, meta := range trashedMetas() {
+		if !expired(meta) {
+			trashedSessions = append(trashedSessions, meta)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].At > out[j].At })
-	return out
+	sort.Slice(trashedSessions, func(leftIndex, rightIndex int) bool {
+		return trashedSessions[leftIndex].At > trashedSessions[rightIndex].At
+	})
+	return trashedSessions
 }
 
 func trashedMetas() []TrashedSession {
-	ents, _ := readDirTrusted(sessionTrashDir())
-	var out []TrashedSession
-	for _, e := range ents {
-		if m, ok := readTrashMeta(e.Name()); ok {
-			out = append(out, m)
+	dirEntries, _ := readDirTrusted(sessionTrashDir())
+	var metas []TrashedSession
+	for _, dirEntry := range dirEntries {
+		if meta, found := readTrashMeta(dirEntry.Name()); found {
+			metas = append(metas, meta)
 		}
 	}
-	return out
+	return metas
 }
 
-func expired(m TrashedSession) bool { return time.Since(time.Unix(int64(m.At), 0)) > trashKeep }
+func expired(meta TrashedSession) bool { return time.Since(time.Unix(int64(meta.At), 0)) > trashKeep }
 
 // expireTrashedSessions purge pour de bon les sessions restées plus de trashKeep dans la corbeille.
 func expireTrashedSessions() (int, error) {
-	var old []string
-	for _, m := range trashedMetas() {
-		if expired(m) {
-			old = append(old, m.ID)
+	var expiredIDs []string
+	for _, meta := range trashedMetas() {
+		if expired(meta) {
+			expiredIDs = append(expiredIDs, meta.ID)
 		}
 	}
-	if len(old) == 0 {
+	if len(expiredIDs) == 0 {
 		return 0, nil
 	}
-	n, err := purgeTrashed(old)
-	journal("trash-expire %d session(s) : %v", n, errOr(err))
-	return n, err
+	purgedCount, err := purgeTrashed(expiredIDs)
+	journal("trash-expire %d session(s) : %v", purgedCount, errOr(err))
+	return purgedCount, err
 }
 
 // expireTrashLoop : l'expiration au démarrage, puis à chaque période, jusqu'à l'arrêt du serveur.
@@ -142,13 +144,13 @@ func expireTrashLoop(every time.Duration) {
 		expireTrashedSessions()
 	}
 	expire()
-	t := time.NewTicker(every)
-	defer t.Stop()
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-homeCtx.Done():
 			return
-		case <-t.C:
+		case <-ticker.C:
 			expire()
 		}
 	}
@@ -156,158 +158,158 @@ func expireTrashLoop(every time.Duration) {
 
 // restoreTrashed remet une session à sa place ; refuse d'écraser un transcript du même nom.
 func restoreTrashed(id string) error {
-	m, ok := readTrashMeta(id)
-	if !ok {
+	meta, found := readTrashMeta(id)
+	if !found {
 		return terr("srv.trashsessions.sessionIntrouvableDansLa")
 	}
-	dir := filepath.Join(root, m.Dir)
-	dst := filepath.Join(dir, id+".jsonl")
-	if _, err := os.Lstat(dst); err == nil {
+	dir := filepath.Join(root, meta.Dir)
+	transcriptPath := filepath.Join(dir, id+".jsonl")
+	if _, err := os.Lstat(transcriptPath); err == nil {
 		return terr("srv.trashsessions.unTranscriptDeCe")
 	}
 	if err := rMkdirAll(cfgDir(), dir, 0o755); err != nil {
 		return err
 	}
-	src := trashSessionPath(id)
-	if err := rRename(cfgDir(), filepath.Join(src, id+".jsonl"), dst); err != nil {
+	trashEntryDir := trashSessionPath(id)
+	if err := rRename(cfgDir(), filepath.Join(trashEntryDir, id+".jsonl"), transcriptPath); err != nil {
 		return err
 	}
-	if sub := filepath.Join(src, "sub"); dirExists(sub) {
-		if err := rRename(cfgDir(), sub, filepath.Join(dir, id)); err != nil {
+	if subagentsDir := filepath.Join(trashEntryDir, "sub"); dirExists(subagentsDir) {
+		if err := rRename(cfgDir(), subagentsDir, filepath.Join(dir, id)); err != nil {
 			return err // le transcript est revenu ; les sous-agents restent dans la corbeille plutôt que d'être effacés
 		}
 	}
-	return rRemoveAll(cfgDir(), src)
+	return rRemoveAll(cfgDir(), trashEntryDir)
 }
 
 // purgeTrashed supprime pour de bon : les fichiers reviennent à leur place le temps de la purge complète (purgeSessions retire
 // aussi les fichiers associés et les lignes de history.jsonl), puis la corbeille est vidée de ces entrées.
-func purgeTrashed(ids []string) (int, error) {
+func purgeTrashed(trashIDs []string) (int, error) {
 	// Avant toute restauration : si purgeSessions renonçait ensuite, les sessions resteraient restaurées hors corbeille.
 	live, err := liveCheck()
 	if err != nil {
 		return 0, err
 	}
 	var items []item
-	for _, id := range ids {
-		m, ok := readTrashMeta(id)
-		if !ok || live[id] {
+	for _, id := range trashIDs {
+		meta, found := readTrashMeta(id)
+		if !found || live[id] {
 			continue
 		}
-		if _, err := os.Stat(filepath.Join(trashSessionPath(id), id+".jsonl")); err != nil {
+		if _, statErr := os.Stat(filepath.Join(trashSessionPath(id), id+".jsonl")); statErr != nil {
 			rRemoveAll(cfgDir(), trashSessionPath(id)) // fiche sans transcript : rien à remettre en place
 			continue
 		}
-		if err := restoreTrashed(id); err != nil {
+		if restoreErr := restoreTrashed(id); restoreErr != nil {
 			continue
 		}
-		items = append(items, item{m.Dir, id})
+		items = append(items, item{meta.Dir, id})
 	}
 	if len(items) == 0 {
 		return 0, nil
 	}
-	n, _, _, err := purgeSessions(items)
-	return n, err
+	purgedCount, _, _, err := purgeSessions(items)
+	return purgedCount, err
 }
 
 func routesTrashSessions(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/trash/sessions", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"sessions": listTrashedSessions(), "days": int(trashKeep / (24 * time.Hour))})
+	mux.HandleFunc("GET /v1/trash/sessions", func(responseWriter http.ResponseWriter, request *http.Request) {
+		writeJSON(responseWriter, 200, map[string]any{"sessions": listTrashedSessions(), "days": int(trashKeep / (24 * time.Hour))})
 	})
-	mux.HandleFunc("POST /v1/trash/sessions", func(w http.ResponseWriter, r *http.Request) {
-		items, _, ok := readItems(w, r)
-		if !ok {
+	mux.HandleFunc("POST /v1/trash/sessions", func(responseWriter http.ResponseWriter, request *http.Request) {
+		items, _, itemsValid := readItems(responseWriter, request)
+		if !itemsValid {
 			return
 		}
 		items = withChildren(items)
-		if r.URL.Query().Get("close") == "1" {
+		if request.URL.Query().Get("close") == "1" {
 			closeAndWait(items)
 		}
 		sessionsMu.Lock()
-		n, spared, err := trashSessions(items)
+		movedCount, spared, err := trashSessions(items)
 		sessionsMu.Unlock()
-		journal("trash %d session(s) : %d déplacée(s), %d épargnée(s) %v : %v", len(items), n, spared, ids(items), errOr(err))
-		out := rmSummary(n, spared)
+		journal("trash %d session(s) : %d déplacée(s), %d épargnée(s) %v : %v", len(items), movedCount, spared, ids(items), errOr(err))
+		summary := rmSummary(movedCount, spared)
 		if err != nil {
-			writeErr(w, http.StatusInternalServerError, "internal", out+"\n"+err.Error())
+			writeErr(responseWriter, http.StatusInternalServerError, "internal", summary+"\n"+err.Error())
 			return
 		}
-		if n == 0 && spared > 0 {
-			writeErr(w, http.StatusConflict, "conflict", out)
+		if movedCount == 0 && spared > 0 {
+			writeErr(responseWriter, http.StatusConflict, "conflict", summary)
 			return
 		}
-		writeJSON(w, 201, map[string]any{"moved": n, "spared": spared, "message": out})
+		writeJSON(responseWriter, 201, map[string]any{"moved": movedCount, "spared": spared, "message": summary})
 	})
 	// ?item=<id> répété : sessions à remettre en place.
-	mux.HandleFunc("PATCH /v1/trash/sessions", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Trashed *bool }
-		ids := r.URL.Query()["item"]
-		if !decodeBody(w, r, &req, 1<<10) {
+	mux.HandleFunc("PATCH /v1/trash/sessions", func(responseWriter http.ResponseWriter, request *http.Request) {
+		var restoreRequest struct{ Trashed *bool }
+		trashIDs := request.URL.Query()["item"]
+		if !decodeBody(responseWriter, request, &restoreRequest, 1<<10) {
 			return
 		}
-		if req.Trashed == nil || *req.Trashed || len(ids) == 0 || len(ids) > itemMax {
-			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
+		if restoreRequest.Trashed == nil || *restoreRequest.Trashed || len(trashIDs) == 0 || len(trashIDs) > itemMax {
+			writeErr(responseWriter, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
 			return
 		}
-		n := 0
+		restoredCount := 0
 		var err error
 		sessionsMu.Lock()
-		for _, id := range ids {
+		for _, id := range trashIDs {
 			if !idRe.MatchString(id) {
 				continue
 			}
-			if e := restoreTrashed(id); e != nil {
-				err = errors.Join(err, e)
+			if restoreErr := restoreTrashed(id); restoreErr != nil {
+				err = errors.Join(err, restoreErr)
 			} else {
-				n++
+				restoredCount++
 			}
 		}
 		sessionsMu.Unlock()
-		journal("trash-restore %d session(s) : %v", n, errOr(err))
-		out := L("srv.trashsessions.restored", "A1", n)
+		journal("trash-restore %d session(s) : %v", restoredCount, errOr(err))
+		summary := L("srv.trashsessions.restored", "A1", restoredCount)
 		if err != nil {
-			out += "\n" + err.Error()
+			summary += "\n" + err.Error()
 		}
-		if n == 0 {
-			writeErr(w, http.StatusConflict, "conflict", out)
+		if restoredCount == 0 {
+			writeErr(responseWriter, http.StatusConflict, "conflict", summary)
 			return
 		}
 		if err != nil {
-			writeErr(w, http.StatusInternalServerError, "internal", out)
+			writeErr(responseWriter, http.StatusInternalServerError, "internal", summary)
 			return
 		}
-		writeJSON(w, 200, map[string]any{"restored": n, "message": out})
+		writeJSON(responseWriter, 200, map[string]any{"restored": restoredCount, "message": summary})
 	})
 	// ?item=<id> répété : ces sessions ; ?all=1 : toute la corbeille. Ni l'un ni l'autre n'est pas une demande de tout vider.
-	mux.HandleFunc("DELETE /v1/trash/sessions", func(w http.ResponseWriter, r *http.Request) {
-		ids := r.URL.Query()["item"]
-		all := r.URL.Query().Get("all") == "1"
-		if (len(ids) == 0) == !all || len(ids) > itemMax {
-			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
+	mux.HandleFunc("DELETE /v1/trash/sessions", func(responseWriter http.ResponseWriter, request *http.Request) {
+		trashIDs := request.URL.Query()["item"]
+		purgeAll := request.URL.Query().Get("all") == "1"
+		if (len(trashIDs) == 0) == !purgeAll || len(trashIDs) > itemMax {
+			writeErr(responseWriter, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
 			return
 		}
 		sessionsMu.Lock()
 		defer sessionsMu.Unlock()
 		expireTrashedSessions()
-		if all {
-			ents, _ := readDirTrusted(sessionTrashDir())
-			for _, e := range ents {
-				ids = append(ids, e.Name())
+		if purgeAll {
+			dirEntries, _ := readDirTrusted(sessionTrashDir())
+			for _, dirEntry := range dirEntries {
+				trashIDs = append(trashIDs, dirEntry.Name())
 			}
 		}
-		clean := ids[:0]
-		for _, id := range ids {
+		validIDs := trashIDs[:0]
+		for _, id := range trashIDs {
 			if idRe.MatchString(id) {
-				clean = append(clean, id)
+				validIDs = append(validIDs, id)
 			}
 		}
-		n, err := purgeTrashed(clean)
-		journal("trash-purge %d session(s) : %v", n, errOr(err))
-		out := L("srv.trashsessions.purged", "A1", n)
+		purgedCount, err := purgeTrashed(validIDs)
+		journal("trash-purge %d session(s) : %v", purgedCount, errOr(err))
+		summary := L("srv.trashsessions.purged", "A1", purgedCount)
 		if err != nil {
-			writeErr(w, http.StatusInternalServerError, "internal", out+"\n"+err.Error())
+			writeErr(responseWriter, http.StatusInternalServerError, "internal", summary+"\n"+err.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"purged": n, "message": out})
+		writeJSON(responseWriter, 200, map[string]any{"purged": purgedCount, "message": summary})
 	})
 }

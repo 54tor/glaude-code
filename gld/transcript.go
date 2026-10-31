@@ -19,6 +19,16 @@ import (
 	"time"
 )
 
+const (
+	sessionTitleMaxRunes  = 100
+	previewMaxRunes       = 300
+	toolResultMaxRunes    = 1500
+	recentPromptCount     = 3
+	decodeCacheMax        = 5000
+	detailCacheMax        = 64
+	sessionIDPrefixLength = 8
+)
+
 type line struct {
 	Type        string `json:"type"`
 	CustomTitle string `json:"customTitle"`
@@ -50,56 +60,59 @@ type Tokens struct {
 }
 
 // promptOf : ce que l'utilisateur a tapé (hors bruit d'amorçage et résultats d'outils).
-func promptOf(l *line) string {
-	var s string
+func promptOf(transcriptLine *line) string {
+	var promptText string
 	var parts []struct{ Text string }
-	c := l.Message.Content
-	if json.Unmarshal(c, &s) != nil && json.Unmarshal(c, &parts) == nil {
-		var t []string
-		for _, p := range parts {
-			t = append(t, p.Text)
+	content := transcriptLine.Message.Content
+	if json.Unmarshal(content, &promptText) != nil && json.Unmarshal(content, &parts) == nil {
+		var textParts []string
+		for _, part := range parts {
+			textParts = append(textParts, part.Text)
 		}
-		s = strings.Join(t, " ")
+		promptText = strings.Join(textParts, " ")
 	}
 	// Texte collé dans Claude Code : remplacé par une mention, un prompt fait seulement d'un collage ne sert pas de titre.
 	pasted := L("srv.transcript.pasted")
-	s = strings.TrimSpace(pastedRe.ReplaceAllString(s, " "+pasted+" "))
-	if s == pasted || strings.HasPrefix(s, "<") || strings.HasPrefix(strings.ToLower(s), "caveat:") {
+	promptText = strings.TrimSpace(pastedRe.ReplaceAllString(promptText, " "+pasted+" "))
+	isPastedOnly := promptText == pasted
+	isMarkup := strings.HasPrefix(promptText, "<")
+	isCaveat := strings.HasPrefix(strings.ToLower(promptText), "caveat:")
+	if isPastedOnly || isMarkup || isCaveat {
 		return ""
 	}
-	return spaceRe.ReplaceAllString(s, " ")
+	return spaceRe.ReplaceAllString(promptText, " ")
 }
 
 // pastedRe : un bloc collé, fermé ou non (un titre tronqué peut le couper).
 var pastedRe = regexp.MustCompile(`(?s)<pasted_content id="[^"]*">.*?(</pasted_content(?: id="[^"]*")?>|$)`)
 
-// scan appelle fn pour chaque ligne du transcript (les lignes peuvent être énormes).
-func scan(path string, fn func([]byte)) error {
-	f, err := openTrusted(path)
-	if err != nil {
-		return err
+// scan appelle visitLine pour chaque ligne du transcript (les lignes peuvent être énormes).
+func scan(path string, visitLine func([]byte)) error {
+	file, openErr := openTrusted(path)
+	if openErr != nil {
+		return openErr
 	}
-	defer f.Close()
-	r := bufio.NewReaderSize(f, 1<<20)
+	defer file.Close()
+	reader := bufio.NewReaderSize(file, jsonLineBufferSize)
 	for {
-		b, err := r.ReadBytes('\n')
-		if len(b) > 0 {
-			fn(b)
+		lineBytes, readErr := reader.ReadBytes('\n')
+		if len(lineBytes) > 0 {
+			visitLine(lineBytes)
 		}
-		if err != nil {
-			if errors.Is(err, io.EOF) {
+		if readErr != nil {
+			if errors.Is(readErr, io.EOF) {
 				return nil
 			}
-			return err
+			return readErr
 		}
 	}
 }
 
-func cut(s string, n int) string {
-	if r := []rune(s); len(r) > n {
-		return string(r[:n])
+func cut(text string, maxRunes int) string {
+	if runes := []rune(text); len(runes) > maxRunes {
+		return string(runes[:maxRunes])
 	}
-	return s
+	return text
 }
 
 type Session struct {
@@ -147,124 +160,130 @@ func forgetInfo(path string) {
 	infoMu.Unlock()
 }
 
-func scanInfo(path string, c infoState) infoState {
-	f, err := openTrusted(path)
-	if err != nil {
-		return c
+func scanInfo(path string, state infoState) infoState {
+	file, openErr := openTrusted(path)
+	if openErr != nil {
+		return state
 	}
-	defer f.Close()
-	if _, err := f.Seek(c.off, io.SeekStart); err != nil {
-		return c
+	defer file.Close()
+	if _, seekErr := file.Seek(state.off, io.SeekStart); seekErr != nil {
+		return state
 	}
-	r := bufio.NewReaderSize(f, 1<<20)
+	reader := bufio.NewReaderSize(file, jsonLineBufferSize)
 	for {
-		b, err := r.ReadBytes('\n')
-		if len(b) > 0 {
-			c.visit(b)
-			if err == nil { // une dernière ligne sans « \n » est peut-être inachevée : on la relira
-				c.off += int64(len(b))
+		lineBytes, readErr := reader.ReadBytes('\n')
+		if len(lineBytes) > 0 {
+			state.visit(lineBytes)
+			if readErr == nil { // une dernière ligne sans « \n » est peut-être inachevée : on la relira
+				state.off += int64(len(lineBytes))
 			}
 		}
-		if err != nil {
-			return c
+		if readErr != nil {
+			return state
 		}
 	}
 }
 
-func (c *infoState) visit(b []byte) {
-	wantTitle := bytes.Contains(b, []byte(`"custom-title"`))
-	wantCwd := c.cwd == "" && bytes.Contains(b, []byte(`"cwd"`))
-	wantTeam := c.team == "" && bytes.Contains(b, []byte(`"teamName"`))
-	wantFirst := c.first == "" && bytes.Contains(b, []byte(`"type":"user"`))
-	wantUsage := bytes.Contains(b, []byte(`"usage"`)) && bytes.Contains(b, []byte(`"type":"assistant"`))
-	wantTS := bytes.Contains(b, []byte(`"timestamp"`)) && (bytes.Contains(b, []byte(`"type":"user"`)) || bytes.Contains(b, []byte(`"type":"assistant"`)))
-	if !wantTitle && !wantCwd && !wantTeam && !wantFirst && !wantUsage && !wantTS {
+func (state *infoState) visit(lineBytes []byte) {
+	wantTitle := bytes.Contains(lineBytes, []byte(`"custom-title"`))
+	wantCwd := state.cwd == "" && bytes.Contains(lineBytes, []byte(`"cwd"`))
+	wantTeam := state.team == "" && bytes.Contains(lineBytes, []byte(`"teamName"`))
+	wantFirst := state.first == "" && bytes.Contains(lineBytes, []byte(`"type":"user"`))
+	wantUsage := bytes.Contains(lineBytes, []byte(`"usage"`)) && bytes.Contains(lineBytes, []byte(`"type":"assistant"`))
+	wantTimestamp := bytes.Contains(lineBytes, []byte(`"timestamp"`)) && (bytes.Contains(lineBytes, []byte(`"type":"user"`)) || bytes.Contains(lineBytes, []byte(`"type":"assistant"`)))
+	if !wantTitle && !wantCwd && !wantTeam && !wantFirst && !wantUsage && !wantTimestamp {
 		return
 	}
-	var l line
-	if json.Unmarshal(b, &l) != nil {
+	var parsedLine line
+	if json.Unmarshal(lineBytes, &parsedLine) != nil {
 		return
 	}
-	if wantTS && (l.Type == "user" || l.Type == "assistant") {
-		if t, err := time.Parse(time.RFC3339Nano, l.Timestamp); err == nil && t.After(c.lastMsg) {
-			c.lastMsg = t
+	if wantTimestamp && (parsedLine.Type == "user" || parsedLine.Type == "assistant") {
+		if messageTime, err := time.Parse(time.RFC3339Nano, parsedLine.Timestamp); err == nil && messageTime.After(state.lastMsg) {
+			state.lastMsg = messageTime
 		}
-		if t, err := time.Parse(time.RFC3339Nano, l.Timestamp); err == nil && l.Type == "user" && !l.IsMeta && t.After(c.lastAsk) && promptOf(&l) != "" {
-			c.lastAsk = t
+		if messageTime, err := time.Parse(time.RFC3339Nano, parsedLine.Timestamp); err == nil && parsedLine.Type == "user" && !parsedLine.IsMeta && messageTime.After(state.lastAsk) && promptOf(&parsedLine) != "" {
+			state.lastAsk = messageTime
 		}
 	}
-	if wantTitle && l.CustomTitle != "" {
-		c.title = l.CustomTitle
+	if wantTitle && parsedLine.CustomTitle != "" {
+		state.title = parsedLine.CustomTitle
 	}
 	if wantCwd {
-		c.cwd = l.Cwd
+		state.cwd = parsedLine.Cwd
 	}
 	if wantTeam {
-		c.team, c.agent = l.TeamName, l.AgentName
+		state.team, state.agent = parsedLine.TeamName, parsedLine.AgentName
 	}
-	if wantFirst && l.Type == "user" && !l.IsMeta {
-		c.first = promptOf(&l)
+	if wantFirst && parsedLine.Type == "user" && !parsedLine.IsMeta {
+		state.first = promptOf(&parsedLine)
 	}
-	if u := l.Message.Usage; wantUsage && l.Type == "assistant" && u != nil {
-		if l.Message.ID != "" && l.Message.ID == c.lastID {
-			c.tok = Tokens{c.tok.In - c.last.In, c.tok.Out - c.last.Out, c.tok.CR - c.last.CR, c.tok.CW - c.last.CW}
+	if messageUsage := parsedLine.Message.Usage; wantUsage && parsedLine.Type == "assistant" && messageUsage != nil {
+		if parsedLine.Message.ID != "" && parsedLine.Message.ID == state.lastID {
+			state.tok = Tokens{state.tok.In - state.last.In, state.tok.Out - state.last.Out, state.tok.CR - state.last.CR, state.tok.CW - state.last.CW}
 		}
-		c.last = Tokens{u.In, u.Out, u.CR, u.CW}
-		c.lastID = l.Message.ID
-		c.tok = Tokens{c.tok.In + u.In, c.tok.Out + u.Out, c.tok.CR + u.CR, c.tok.CW + u.CW}
+		state.last = Tokens{messageUsage.In, messageUsage.Out, messageUsage.CR, messageUsage.CW}
+		state.lastID = parsedLine.Message.ID
+		state.tok = Tokens{state.tok.In + messageUsage.In, state.tok.Out + messageUsage.Out, state.tok.CR + messageUsage.CR, state.tok.CW + messageUsage.CW}
 	}
 }
 
-func info(path string, st os.FileInfo) Session {
+func info(path string, fileInfo os.FileInfo) Session {
 	infoMu.Lock()
-	c, ok := infoCache[path]
+	state, cached := infoCache[path]
 	infoMu.Unlock()
-	if !ok || st.Size() < c.off || (c.size == st.Size() && !c.mtime.Equal(st.ModTime())) {
-		c = infoState{} // inconnu, tronqué ou réécrit à taille égale : lecture complète
+	isTruncated := fileInfo.Size() < state.off
+	isRewrittenSameSize := state.size == fileInfo.Size() && !state.mtime.Equal(fileInfo.ModTime())
+	if !cached || isTruncated || isRewrittenSameSize {
+		state = infoState{} // inconnu, tronqué ou réécrit à taille égale : lecture complète
 	}
-	if c.size != st.Size() || !c.mtime.Equal(st.ModTime()) {
-		c = scanInfo(path, c)
-		c.size, c.mtime = st.Size(), st.ModTime()
+	hasChanged := state.size != fileInfo.Size() || !state.mtime.Equal(fileInfo.ModTime())
+	if hasChanged {
+		state = scanInfo(path, state)
+		state.size, state.mtime = fileInfo.Size(), fileInfo.ModTime()
 		infoMu.Lock()
 		if len(infoCache) > infoCacheMax { // on ne garde que les transcripts qui existent encore : une entrée pèse quelques centaines d'octets
-			for p := range infoCache {
-				if _, err := os.Stat(p); err != nil {
-					delete(infoCache, p)
+			for cachedPath := range infoCache {
+				if _, err := os.Stat(cachedPath); err != nil {
+					delete(infoCache, cachedPath)
 				}
 			}
 			if len(infoCache) > infoCacheMax {
 				clear(infoCache)
 			}
 		}
-		infoCache[path] = c
+		infoCache[path] = state
 		infoMu.Unlock()
 	}
-	title, cwd, first := c.title, c.cwd, c.first
-	mt := st.ModTime()
-	if !c.lastMsg.IsZero() && c.lastMsg.Before(mt) {
-		mt = c.lastMsg
+	title, cwd, first := state.title, state.cwd, state.first
+	modTime := fileInfo.ModTime()
+	if !state.lastMsg.IsZero() && state.lastMsg.Before(modTime) {
+		modTime = state.lastMsg
 	}
-	s := Session{Provider: claudeID, ID: strings.TrimSuffix(filepath.Base(path), ".jsonl"), Dir: filepath.Base(filepath.Dir(path)),
-		Named: title != "", Cwd: cwd, team: c.team, Mtime: float64(mt.UnixNano()) / 1e9, KB: st.Size() / 1024, Tok: c.tok}
-	if !c.lastAsk.IsZero() {
-		s.Ask = float64(c.lastAsk.UnixNano()) / 1e9
+	session := Session{Provider: claudeID, ID: strings.TrimSuffix(filepath.Base(path), ".jsonl"), Dir: filepath.Base(filepath.Dir(path)),
+		Named: title != "", Cwd: cwd, team: state.team, Mtime: float64(modTime.UnixNano()) / nanosecondsPerSecond, KB: fileInfo.Size() / bytesPerKilobyte, Tok: state.tok}
+	if !state.lastAsk.IsZero() {
+		session.Ask = float64(state.lastAsk.UnixNano()) / nanosecondsPerSecond
 	}
-	if s.Title = title; title == "" {
-		if s.Title = c.agent; s.Title == "" {
-			if s.Title = cut(first, 100); first == "" {
-				s.Title = "(sans titre)"
-			}
-		}
+	switch {
+	case title != "":
+		session.Title = title
+	case state.agent != "":
+		session.Title = state.agent
+	case first != "":
+		session.Title = cut(first, sessionTitleMaxRunes)
+	default:
+		session.Title = "(sans titre)"
 	}
-	return s
+	return session
 }
 
 // autoReviews : débuts de prompt des revues de sécurité lancées par des skills (même liste que AUTO, ui/src/lib/sessionsView.ts).
 // Ces sessions ne sont ni sauvegardées pour la restauration ni rouvertes par gld-matin.
 var autoReviews = []string{"Review this change for security vulnerabilities", "You previously flagged these candidate vulnerabilities", "Perform a read-only security review of this codebase"}
 
-func (s Session) autoReview() bool {
-	return !s.Named && slices.ContainsFunc(autoReviews, func(p string) bool { return strings.HasPrefix(s.Title, p) })
+func (session Session) autoReview() bool {
+	return !session.Named && slices.ContainsFunc(autoReviews, func(prefix string) bool { return strings.HasPrefix(session.Title, prefix) })
 }
 
 type Group struct {
@@ -289,19 +308,19 @@ type decoded struct {
 
 func decodeDir(name string) string {
 	decodeMu.Lock()
-	d, ok := decodeCache[name]
+	cachedEntry, found := decodeCache[name]
 	decodeMu.Unlock()
-	if ok && time.Since(d.at) < decodeTTL {
-		return d.path
+	if found && time.Since(cachedEntry.at) < decodeTTL {
+		return cachedEntry.path
 	}
-	p := decodeDirWalk(name)
+	decodedPath := decodeDirWalk(name)
 	decodeMu.Lock()
-	if len(decodeCache) > 5000 {
+	if len(decodeCache) > decodeCacheMax {
 		clear(decodeCache)
 	}
-	decodeCache[name] = decoded{p, time.Now()}
+	decodeCache[name] = decoded{decodedPath, time.Now()}
 	decodeMu.Unlock()
-	return p
+	return decodedPath
 }
 
 // skipRoots : racines que decodeDirWalk ne descend jamais. Pseudo-systèmes de fichiers (/proc, /sys, boucles de liens
@@ -311,37 +330,37 @@ var skipRoots = map[string]bool{"/proc": true, "/sys": true, "/dev": true, "/run
 // decodeDirWalk retrouve le chemin d'un dossier de transcripts (/ . _ espace… → « - », donc lossy)
 // en descendant l'arborescence réelle : seuls les dossiers dont le nom encodé colle sont suivis.
 func decodeDirWalk(name string) string {
-	var walk func(p, rest string) string
-	walk = func(p, rest string) string {
-		ents, err := readDirTrusted(p)
+	var walk func(dirPath, remainingName string) string
+	walk = func(dirPath, remainingName string) string {
+		entries, err := readDirTrusted(dirPath)
 		if err != nil {
 			return ""
 		}
-		for _, e := range ents {
-			if !e.IsDir() {
+		for _, entry := range entries {
+			if !entry.IsDir() {
 				continue
 			}
-			enc := nonAlnum.ReplaceAllString(e.Name(), "-")
-			next := filepath.Join(p, e.Name())
-			if skipRoots[next] {
+			encodedName := nonAlnum.ReplaceAllString(entry.Name(), "-")
+			childPath := filepath.Join(dirPath, entry.Name())
+			if skipRoots[childPath] {
 				continue
 			}
-			if rest == enc {
-				return next
+			if remainingName == encodedName {
+				return childPath
 			}
-			if strings.HasPrefix(rest, enc+"-") {
-				if r := walk(next, rest[len(enc)+1:]); r != "" {
-					return r
+			if strings.HasPrefix(remainingName, encodedName+"-") {
+				if foundPath := walk(childPath, remainingName[len(encodedName)+1:]); foundPath != "" {
+					return foundPath
 				}
 			}
 		}
 		return ""
 	}
 	if runtime.GOOS == "windows" { // « C:\Users\moi » s'encode « C--Users-moi » : lecteur, puis « : » et « \ » → « -- »
-		for c := 'A'; c <= 'Z'; c++ {
-			if prefix := string(c) + "--"; strings.HasPrefix(name, prefix) {
-				if r := walk(string(c)+`:\`, strings.TrimPrefix(name, prefix)); r != "" {
-					return r
+		for driveLetter := 'A'; driveLetter <= 'Z'; driveLetter++ {
+			if prefix := string(driveLetter) + "--"; strings.HasPrefix(name, prefix) {
+				if foundPath := walk(string(driveLetter)+`:\`, strings.TrimPrefix(name, prefix)); foundPath != "" {
+					return foundPath
 				}
 			}
 		}
@@ -353,53 +372,57 @@ func decodeDirWalk(name string) string {
 func sessions() []Group {
 	groups := map[string][]Session{}
 	files, _ := filepath.Glob(filepath.Join(root, "*", "*.jsonl"))
-	var all []Session
+	var allSessions []Session
 	dirCwd := map[string]string{} // cwd connu d'un dossier de transcripts, via l'une de ses sessions
-	for _, p := range files {
-		st, err := os.Stat(p)
-		if err != nil || st.Size() == 0 {
+	for _, transcriptPath := range files {
+		fileInfo, err := os.Stat(transcriptPath)
+		if err != nil || fileInfo.Size() == 0 {
 			continue
 		}
-		s := info(p, st)
-		if s.Cwd != "" && dirCwd[s.Dir] == "" {
-			dirCwd[s.Dir] = s.Cwd
+		session := info(transcriptPath, fileInfo)
+		if session.Cwd != "" && dirCwd[session.Dir] == "" {
+			dirCwd[session.Dir] = session.Cwd
 		}
-		all = append(all, s)
+		allSessions = append(allSessions, session)
 	}
 	byPrefix := map[string]string{} // dossier + « session-xxxxxxxx » -> ID complet
-	for _, s := range all {
-		if len(s.ID) >= 8 {
-			byPrefix[s.Dir+"/session-"+s.ID[:8]] = s.ID
+	for _, session := range allSessions {
+		if len(session.ID) >= sessionIDPrefixLength {
+			byPrefix[session.Dir+"/session-"+session.ID[:sessionIDPrefixLength]] = session.ID
 		}
 	}
-	for _, s := range all {
-		if s.team != "" {
-			if p := byPrefix[s.Dir+"/"+s.team]; p != s.ID {
-				s.Parent = p
+	for _, session := range allSessions {
+		if session.team != "" {
+			if parentID := byPrefix[session.Dir+"/"+session.team]; parentID != session.ID {
+				session.Parent = parentID
 			}
 		}
-		if s.Cwd == "" { // session sans cwd : on la range avec ses voisines, sinon par décodage du nom du dossier
-			c, seen := dirCwd[s.Dir]
+		if session.Cwd == "" { // session sans cwd : on la range avec ses voisines, sinon par décodage du nom du dossier
+			groupCwd, seen := dirCwd[session.Dir]
 			if !seen {
-				c = decodeDir(s.Dir)
-				dirCwd[s.Dir] = c
+				groupCwd = decodeDir(session.Dir)
+				dirCwd[session.Dir] = groupCwd
 			}
-			s.Cwd = c
+			session.Cwd = groupCwd
 		}
-		k := s.Cwd
-		if k == "" {
-			k = s.Dir
+		groupKey := session.Cwd
+		if groupKey == "" {
+			groupKey = session.Dir
 		}
-		groups[k] = append(groups[k], s)
+		groups[groupKey] = append(groups[groupKey], session)
 	}
-	out := []Group{}
-	for k, v := range groups {
-		sort.Slice(v, func(i, j int) bool { return askOr(v[i]) > askOr(v[j]) })
-		fi, err := os.Stat(k)
-		out = append(out, Group{k, err != nil || !fi.IsDir(), v})
+	projectGroups := []Group{}
+	for groupKey, groupSessions := range groups {
+		sort.Slice(groupSessions, func(leftIndex, rightIndex int) bool {
+			return askOr(groupSessions[leftIndex]) > askOr(groupSessions[rightIndex])
+		})
+		projectInfo, err := os.Stat(groupKey)
+		projectGroups = append(projectGroups, Group{groupKey, err != nil || !projectInfo.IsDir(), groupSessions})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Project < out[j].Project })
-	return out
+	sort.Slice(projectGroups, func(leftIndex, rightIndex int) bool {
+		return projectGroups[leftIndex].Project < projectGroups[rightIndex].Project
+	})
+	return projectGroups
 }
 
 type Detail struct {
@@ -423,28 +446,28 @@ var (
 )
 
 func detail(path string) Detail {
-	st, err := os.Stat(path)
+	fileInfo, err := os.Stat(path)
 	if err != nil {
 		return Detail{Prompts: []string{}, Models: []string{}}
 	}
 	detailMu.Lock()
-	c, ok := detailCache[path]
+	cachedEntry, found := detailCache[path]
 	detailMu.Unlock()
-	if ok && c.size == st.Size() && c.mtime.Equal(st.ModTime()) {
-		return c.d
+	if found && cachedEntry.size == fileInfo.Size() && cachedEntry.mtime.Equal(fileInfo.ModTime()) {
+		return cachedEntry.d
 	}
-	d := computeDetail(path)
+	computed := computeDetail(path)
 	detailMu.Lock()
-	if len(detailCache) > 64 {
+	if len(detailCache) > detailCacheMax {
 		clear(detailCache)
 	}
 	detailCache[path] = struct {
 		size  int64
 		mtime time.Time
 		d     Detail
-	}{st.Size(), st.ModTime(), d}
+	}{fileInfo.Size(), fileInfo.ModTime(), computed}
 	detailMu.Unlock()
-	return d
+	return computed
 }
 
 var (
@@ -455,51 +478,53 @@ var (
 )
 
 func computeDetail(path string) Detail {
-	d := Detail{Prompts: []string{}, Models: []string{}}
+	sessionDetail := Detail{Prompts: []string{}, Models: []string{}}
 	models := map[string]bool{}
-	_ = scan(path, func(b []byte) {
+	_ = scan(path, func(lineBytes []byte) {
 		// Seules les lignes d'échange comptent ; un résultat d'outil (souvent énorme) n'est pas un prompt : on ne le décode pas.
-		isU := bytes.Contains(b, userTag)
-		if !isU && !bytes.Contains(b, assistantTag) || isU && bytes.Contains(b, toolResTag) && !bytes.Contains(b, textTag) {
+		isUserLine := bytes.Contains(lineBytes, userTag)
+		isExchangeLine := isUserLine || bytes.Contains(lineBytes, assistantTag)
+		isToolResultOnly := isUserLine && bytes.Contains(lineBytes, toolResTag) && !bytes.Contains(lineBytes, textTag)
+		if !isExchangeLine || isToolResultOnly {
 			return
 		}
-		var l line
-		if json.Unmarshal(b, &l) != nil {
+		var parsedLine line
+		if json.Unmarshal(lineBytes, &parsedLine) != nil {
 			return
 		}
-		if d.T0 == "" {
-			d.T0 = l.Timestamp
+		if sessionDetail.T0 == "" {
+			sessionDetail.T0 = parsedLine.Timestamp
 		}
-		if l.Timestamp != "" {
-			d.T1 = l.Timestamp
+		if parsedLine.Timestamp != "" {
+			sessionDetail.T1 = parsedLine.Timestamp
 		}
-		if l.GitBranch != "" {
-			d.Branch = l.GitBranch
+		if parsedLine.GitBranch != "" {
+			sessionDetail.Branch = parsedLine.GitBranch
 		}
-		switch l.Type {
+		switch parsedLine.Type {
 		case "user":
-			if p := promptOf(&l); p != "" {
-				d.N++
-				d.Prompts = append(d.Prompts, cut(p, 300))
-				if len(d.Prompts) > 3 {
-					d.Prompts = d.Prompts[1:]
+			if prompt := promptOf(&parsedLine); prompt != "" {
+				sessionDetail.N++
+				sessionDetail.Prompts = append(sessionDetail.Prompts, cut(prompt, previewMaxRunes))
+				if len(sessionDetail.Prompts) > recentPromptCount {
+					sessionDetail.Prompts = sessionDetail.Prompts[1:]
 				}
 			}
 		case "assistant":
-			if m := l.Message.Model; m != "" && !models[m] {
-				models[m] = true
-				d.Models = append(d.Models, m)
+			if model := parsedLine.Message.Model; model != "" && !models[model] {
+				models[model] = true
+				sessionDetail.Models = append(sessionDetail.Models, model)
 			}
 		}
 	})
-	sort.Strings(d.Models)
-	filepath.WalkDir(strings.TrimSuffix(path, ".jsonl"), func(p string, e os.DirEntry, err error) error {
-		if err == nil && !e.IsDir() && strings.HasSuffix(p, ".jsonl") {
-			d.Subagents++
+	sort.Strings(sessionDetail.Models)
+	filepath.WalkDir(strings.TrimSuffix(path, ".jsonl"), func(walkedPath string, walkedEntry os.DirEntry, err error) error {
+		if err == nil && !walkedEntry.IsDir() && strings.HasSuffix(walkedPath, ".jsonl") {
+			sessionDetail.Subagents++
 		}
 		return nil
 	})
-	return d
+	return sessionDetail
 }
 
 // --- lecture d'une conversation ---------------------------------------------
@@ -534,115 +559,117 @@ type blk struct {
 var reminder = regexp.MustCompile(`(?s)<system-reminder>.*?</system-reminder>`)
 
 // toolArg résume l'entrée d'un appel d'outil : la clé qui parle le plus, sinon le JSON compact.
-func toolArg(in json.RawMessage) string {
-	var m map[string]any
-	if json.Unmarshal(in, &m) == nil {
-		for _, k := range []string{"command", "file_path", "pattern", "path", "url", "query", "description", "prompt"} {
-			if v, ok := m[k].(string); ok && v != "" {
-				return cut(v, 300)
+func toolArg(toolInput json.RawMessage) string {
+	var fields map[string]any
+	if json.Unmarshal(toolInput, &fields) == nil {
+		for _, key := range []string{"command", "file_path", "pattern", "path", "url", "query", "description", "prompt"} {
+			if value, isString := fields[key].(string); isString && value != "" {
+				return cut(value, previewMaxRunes)
 			}
 		}
 	}
-	return cut(string(in), 300)
+	return cut(string(toolInput), previewMaxRunes)
 }
 
 // flat aplatit le contenu d'un tool_result (texte ou liste de blocs).
-func flat(c json.RawMessage) string {
-	var s string
-	if json.Unmarshal(c, &s) == nil {
-		return s
+func flat(content json.RawMessage) string {
+	var text string
+	if json.Unmarshal(content, &text) == nil {
+		return text
 	}
-	var bs []blk
-	var t []string
-	if json.Unmarshal(c, &bs) == nil {
-		for _, b := range bs {
-			t = append(t, b.Text)
+	var blocks []blk
+	var blockTexts []string
+	if json.Unmarshal(content, &blocks) == nil {
+		for _, block := range blocks {
+			blockTexts = append(blockTexts, block.Text)
 		}
 	}
-	return strings.Join(t, "\n")
+	return strings.Join(blockTexts, "\n")
 }
 
 // lineMsgs extrait d'une ligne de transcript le texte des échanges, plus (tools) les appels d'outils et leurs résultats tronqués.
-func lineMsgs(b []byte, tools bool) []Msg { return lineMsgsMode(b, tools, false) }
+func lineMsgs(lineBytes []byte, tools bool) []Msg { return lineMsgsMode(lineBytes, tools, false) }
 
 // lineMsgsMode : avec anchors (outils masqués), chaque appel d'outil laisse un message vide de rôle « tool » : l'interface en fait
 // une ancre repliée à la place des outils. Les résultats d'outil n'en laissent pas (un appel et son résultat comptent pour un).
-func lineMsgsMode(b []byte, tools, anchors bool) []Msg {
-	if bytes.Contains(b, []byte(`"isMeta":true`)) {
+func lineMsgsMode(lineBytes []byte, tools, anchors bool) []Msg {
+	if bytes.Contains(lineBytes, []byte(`"isMeta":true`)) {
 		return nil
 	}
-	isU := bytes.Contains(b, []byte(`"type":"user"`))
-	if !isU && !bytes.Contains(b, []byte(`"type":"assistant"`)) {
+	isUserLine := bytes.Contains(lineBytes, []byte(`"type":"user"`))
+	if !isUserLine && !bytes.Contains(lineBytes, []byte(`"type":"assistant"`)) {
 		return nil
 	}
-	var l struct {
+	var parsedLine struct {
 		Type      string
 		Timestamp string
 		Message   struct{ Content json.RawMessage }
 	}
-	if json.Unmarshal(b, &l) != nil || (l.Type != "user" && l.Type != "assistant") {
+	if json.Unmarshal(lineBytes, &parsedLine) != nil || (parsedLine.Type != "user" && parsedLine.Type != "assistant") {
 		return nil
 	}
-	var bs []blk
-	var s string
-	if json.Unmarshal(l.Message.Content, &s) == nil {
-		bs = []blk{{Type: "text", Text: s}}
-	} else if json.Unmarshal(l.Message.Content, &bs) != nil {
+	var blocks []blk
+	var plainContent string
+	if json.Unmarshal(parsedLine.Message.Content, &plainContent) == nil {
+		blocks = []blk{{Type: "text", Text: plainContent}}
+	} else if json.Unmarshal(parsedLine.Message.Content, &blocks) != nil {
 		return nil
 	}
-	var out []Msg
-	for i, x := range bs {
-		switch x.Type {
+	var messages []Msg
+	for blockIndex, block := range blocks {
+		switch block.Type {
 		case "image":
-			if x.Source.MediaType != "" {
-				out = append(out, Msg{R: l.Type, Img: x.Source.MediaType, K: i, Ts: l.Timestamp})
+			if block.Source.MediaType != "" {
+				messages = append(messages, Msg{R: parsedLine.Type, Img: block.Source.MediaType, K: blockIndex, Ts: parsedLine.Timestamp})
 			}
 		case "text":
-			t := strings.TrimSpace(reminder.ReplaceAllString(x.Text, ""))
-			if t == "" || strings.HasPrefix(t, "<command-") || strings.HasPrefix(t, "<local-command") || strings.HasPrefix(strings.ToLower(t), "caveat:") {
+			trimmedText := strings.TrimSpace(reminder.ReplaceAllString(block.Text, ""))
+			isCommandEcho := strings.HasPrefix(trimmedText, "<command-") || strings.HasPrefix(trimmedText, "<local-command")
+			isCaveat := strings.HasPrefix(strings.ToLower(trimmedText), "caveat:")
+			if trimmedText == "" || isCommandEcho || isCaveat {
 				continue
 			}
-			out = append(out, Msg{R: l.Type, T: t, Ts: l.Timestamp})
-			if l.Type == "assistant" {
-				for _, p := range mentionedDocs(t) {
-					out = append(out, Msg{R: "doc", T: p, Ts: l.Timestamp})
+			messages = append(messages, Msg{R: parsedLine.Type, T: trimmedText, Ts: parsedLine.Timestamp})
+			if parsedLine.Type == "assistant" {
+				for _, docPath := range mentionedDocs(trimmedText) {
+					messages = append(messages, Msg{R: "doc", T: docPath, Ts: parsedLine.Timestamp})
 				}
 			}
 		case "tool_use":
-			if p := writtenPath(x.Name, x.Input); p != "" {
-				out = append(out, Msg{R: "doc", T: p, Ts: l.Timestamp})
+			if docPath := writtenPath(block.Name, block.Input); docPath != "" {
+				messages = append(messages, Msg{R: "doc", T: docPath, Ts: parsedLine.Timestamp})
 			}
 			if tools {
-				out = append(out, Msg{R: "tool", T: x.Name + "  " + toolArg(x.Input), Ts: l.Timestamp})
+				messages = append(messages, Msg{R: "tool", T: block.Name + "  " + toolArg(block.Input), Ts: parsedLine.Timestamp})
 			} else if anchors {
-				out = append(out, Msg{R: "tool", Ts: l.Timestamp})
+				messages = append(messages, Msg{R: "tool", Ts: parsedLine.Timestamp})
 			}
 		case "tool_result":
 			if tools {
-				out = append(out, Msg{R: "tool", T: "↳ " + cut(strings.TrimSpace(flat(x.Content)), 1500), Ts: l.Timestamp})
+				messages = append(messages, Msg{R: "tool", T: "↳ " + cut(strings.TrimSpace(flat(block.Content)), toolResultMaxRunes), Ts: parsedLine.Timestamp})
 			}
 		}
 	}
-	return out
+	return messages
 }
 
 // withOffset numérote les messages d'une ligne (voir Msg.O / Msg.N).
-func withOffset(ms []Msg, off int64) []Msg {
-	for i := range ms {
-		ms[i].O, ms[i].N = off, i
+func withOffset(messages []Msg, lineOffset int64) []Msg {
+	for messageIndex := range messages {
+		messages[messageIndex].O, messages[messageIndex].N = lineOffset, messageIndex
 	}
-	return ms
+	return messages
 }
 
 // conv : toute la conversation d'un transcript.
 func conv(path string, tools bool) []Msg {
-	out := []Msg{}
-	var off int64
-	_ = scan(path, func(b []byte) {
-		out = append(out, withOffset(lineMsgs(b, tools), off)...)
-		off += int64(len(b))
+	messages := []Msg{}
+	var lineOffset int64
+	_ = scan(path, func(lineBytes []byte) {
+		messages = append(messages, withOffset(lineMsgs(lineBytes, tools), lineOffset)...)
+		lineOffset += int64(len(lineBytes))
 	})
-	return out
+	return messages
 }
 
 // transcript valide le couple dir/id reçu du navigateur et renvoie le fichier.
@@ -650,33 +677,33 @@ func transcript(dir, id string) (string, bool) {
 	if strings.ContainsAny(dir, "/\\") || dir == "" || dir == ".." || !idRe.MatchString(id) {
 		return "", false
 	}
-	p := filepath.Join(root, dir, id+".jsonl")
-	st, err := os.Stat(p)
-	return p, err == nil && st.Mode().IsRegular()
+	transcriptPath := filepath.Join(root, dir, id+".jsonl")
+	fileInfo, err := os.Stat(transcriptPath)
+	return transcriptPath, err == nil && fileInfo.Mode().IsRegular()
 }
 
 // withEmptyDirs : les dossiers enregistrés à la main qui n'ont aucune session apparaissent comme des dossiers vides, pour qu'on puisse
 // y lancer un prompt. Un dossier qui a déjà des sessions n'est pas répété.
 func withEmptyDirs(groups []Group, dirs []string) []Group {
 	have := map[string]bool{}
-	for _, g := range groups {
-		have[g.Project] = true
+	for _, group := range groups {
+		have[group.Project] = true
 	}
-	for _, d := range dirs {
-		if have[d] {
+	for _, registeredDir := range dirs {
+		if have[registeredDir] {
 			continue
 		}
-		fi, err := os.Stat(d)
-		groups = append(groups, Group{d, err != nil || !fi.IsDir(), []Session{}})
+		dirInfo, err := os.Stat(registeredDir)
+		groups = append(groups, Group{registeredDir, err != nil || !dirInfo.IsDir(), []Session{}})
 	}
-	sort.Slice(groups, func(i, j int) bool { return groups[i].Project < groups[j].Project })
+	sort.Slice(groups, func(leftIndex, rightIndex int) bool { return groups[leftIndex].Project < groups[rightIndex].Project })
 	return groups
 }
 
 // askOr : clé de tri d'une session, son dernier message utilisateur, à défaut son mtime.
-func askOr(s Session) float64 {
-	if s.Ask > 0 {
-		return s.Ask
+func askOr(session Session) float64 {
+	if session.Ask > 0 {
+		return session.Ask
 	}
-	return s.Mtime
+	return session.Mtime
 }
