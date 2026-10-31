@@ -143,7 +143,14 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   const restoring = useRef(false) // position mémorisée en cours de rétablissement : le suivi de la fin attend
   const keepScroll = useRef(false) // le chargement de messages plus anciens ne doit pas ramener à la fin
   const [info, setInfo] = useState<{ id: string; detail: Detail } | null>(null)
-  const area = useRef<HTMLDivElement>(null)
+  const area = useRef<HTMLDivElement | null>(null)
+  // La modale monte son contenu dans un rendu ultérieur à celui qui a ouvert la session : sans cet état, les effets de défilement
+  // s'exécutent quand la zone n'existe pas encore (messages déjà en cache) et ne se relancent jamais.
+  const [areaMounted, setAreaMounted] = useState(false)
+  const setArea = useCallback((node: HTMLDivElement | null) => {
+    area.current = node
+    setAreaMounted(!!node)
+  }, [])
   const key = id ? `${dir}/${id}/${tools}` : ""
   // Même session, autre clé (outils affichés ou masqués) : l'ancien contenu reste à l'écran jusqu'à l'arrivée du nouveau.
   const isSameSessionLoaded = !!id && !!loaded?.key.startsWith(`${dir}/${id}/`)
@@ -378,7 +385,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
       viewportElement.removeEventListener("scroll", onScroll)
       resizeObserver.disconnect()
     }
-  }, [viewport, ready])
+  }, [viewport, ready, areaMounted])
   useEffect(() => {
     if (!id) opened.current = ""
     // Messages plus anciens chargés : la position reste. Mais jamais avant que la session ait été amenée à la fin (ou à sa position mémorisée) :
@@ -392,7 +399,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
     const savedPosition = scrollMem.get(id)
     if (savedPosition && !savedPosition.end) restore(savedPosition.top)
     else pinEnd()
-  }, [msgs, pinEnd, restore, viewport, id, ready])
+  }, [msgs, pinEnd, restore, viewport, id, ready, areaMounted])
   const inTerm = termOn && view === "terminal" && !!id && actions.live.has(id)
   // Envoi d'un message : on descend pour voir la réponse arriver, puis une seconde fois quand le transcript relu contient le message.
   const sentDown = useCallback(() => {
@@ -529,7 +536,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
               <ArrowUpToLine /> {t("conversation.view.toTop")}
             </Button>
           )}
-        <ScrollArea ref={area} className="min-h-0 flex-1">
+        <ScrollArea ref={setArea} className="min-h-0 flex-1">
           <div className="session-text mx-auto max-w-page space-y-6 px-3 py-4 md:px-8 md:py-6">
             {msgs === null && (
               <>
