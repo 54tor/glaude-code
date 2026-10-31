@@ -4,6 +4,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.9.1] - 2026-10-31
+
 ### Ajouté
 - Règle livrée « Host privacy » : les sessions lancées par gld évitent d'écrire le nom du compte et les chemins absolus de l'hôte dans leurs réponses ; la règle des fichiers longs demande désormais un chemin relatif au projet.
 - Sessions invité : l'hôte n'apparaît plus dans les réponses du serveur à un invité (chemins du projet rendus relatifs, autres chemins absolus réduits à `…/nom`, nom du compte remplacé par un alias propre à l'invitation, sauf dans les messages écrits par l'invité), et la ligne d'activité n'indique plus que le nom de l'outil en cours (« exécute Bash »), sans sa ligne de commande.
@@ -16,6 +18,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 ### Corrigé
 - Notification de tâche : le résultat s'affiche en Markdown (au lieu d'une ligne tronquée), les entités XML sont décodées (`&amp;&amp;` → `&&`) et l'usage devient des pastilles (jetons, appels d'outils, durée) au lieu de balises brutes.
 - Conversation : la vue reste collée à la fin quand la file d'attente du compositeur s'agrandit.
+- Mise à jour : un build de développement en avance sur son dernier tag (`v0.9.0-4-g7cbff74`) ne propose plus ce tag comme nouvelle version.
+- Session fermée : le lecteur ouvert sur elle se ferme avec elle, au lieu de rester affiché sur une session disparue.
 
 ## [0.9.0] - 2026-10-31
 
@@ -576,7 +580,8 @@ Première version : `gld`, interface web locale pour parcourir, piloter et confi
 - Terminal intégré désactivé par défaut ; lecture bornée des fichiers de commandes.
 - Refus d'agir quand les sessions ouvertes sont indéterminées.
 
-[Non publié]: https://github.com/54tor/glaude-code/compare/v0.9.0...HEAD
+[Non publié]: https://github.com/54tor/glaude-code/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/54tor/glaude-code/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/54tor/glaude-code/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/54tor/glaude-code/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/54tor/glaude-code/compare/v0.7.0...v0.7.1
