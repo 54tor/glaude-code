@@ -28,21 +28,21 @@ func cmdEnv(t *testing.T, installed, markets string) (log string) {
 }
 
 func cmdArchive(t *testing.T, files map[string]string) []byte {
-	m := map[string][]byte{}
-	for k, v := range files {
-		m[k] = []byte(v)
+	lookup := map[string][]byte{}
+	for key, value := range files {
+		lookup[key] = []byte(value)
 	}
-	z, err := writeBackupZip(m, BackupManifest{Format: backupFormat, Gld: "t", Date: "2026-01-01T00:00:00Z", Cats: backupCats})
+	data, err := writeBackupZip(lookup, BackupManifest{Format: backupFormat, Gld: "t", Date: "2026-01-01T00:00:00Z", Cats: backupCats})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return z
+	return data
 }
 
 func resOf(res []BackupResult, id string) BackupResult {
-	for _, r := range res {
-		if r.ID == id {
-			return r
+	for _, backupResult := range res {
+		if backupResult.ID == id {
+			return backupResult
 		}
 	}
 	return BackupResult{ID: id, Status: "absent"}
@@ -54,13 +54,13 @@ const plugDoc = `{"marketplaces":[{"name":"have","source":"github","repo":"o/hav
 func TestStagePluginsPlan(t *testing.T) {
 	cmdEnv(t, `[{"id":"a@m","version":"1","scope":"user","enabled":true},{"id":"c@m","version":"1","scope":"user","enabled":false}]`,
 		`[{"name":"have","source":"github","repo":"o/have"}]`)
-	p, err := stageBackup(cmdArchive(t, map[string]string{"plugins.json": plugDoc}))
+	backupPlan, err := stageBackup(cmdArchive(t, map[string]string{"plugins.json": plugDoc}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer dropStage(p.ID)
+	defer dropStage(backupPlan.ID)
 	for id, st := range map[string]string{"market:have": "same", "market:newm": "new", "plugin:user:a@m": "same", "plugin:user:c@m": "diff", "plugin:user:d@m": "new"} {
-		if it, ok := syncItem(p.Items, id); !ok || it.Status != st || it.Cat != "plugins" {
+		if it, ok := syncItem(backupPlan.Items, id); !ok || it.Status != st || it.Cat != "plugins" {
 			t.Errorf("%s : %+v", id, it)
 		}
 	}
@@ -69,36 +69,36 @@ func TestStagePluginsPlan(t *testing.T) {
 func TestStageSkipsProjectPluginWithoutDir(t *testing.T) {
 	cmdEnv(t, `[]`, `[]`)
 	doc := `{"marketplaces":[],"plugins":[{"id":"p@m","version":"1","scope":"project","enabled":true,"project":"/home/bob/absent"}]}`
-	p, err := stageBackup(cmdArchive(t, map[string]string{"plugins.json": doc}))
+	backupPlan, err := stageBackup(cmdArchive(t, map[string]string{"plugins.json": doc}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer dropStage(p.ID)
-	if _, ok := syncItem(p.Items, "plugin:project:p@m"); ok || len(p.Skipped) != 1 {
-		t.Fatalf("%+v %v", p.Items, p.Skipped)
+	defer dropStage(backupPlan.ID)
+	if _, ok := syncItem(backupPlan.Items, "plugin:project:p@m"); ok || len(backupPlan.Skipped) != 1 {
+		t.Fatalf("%+v %v", backupPlan.Items, backupPlan.Skipped)
 	}
 }
 
 func TestApplyOrder(t *testing.T) {
 	log := cmdEnv(t, `[{"id":"c@m","version":"1","scope":"user","enabled":false}]`, `[]`)
-	p, err := stageBackup(cmdArchive(t, map[string]string{"plugins.json": plugDoc}))
+	backupPlan, err := stageBackup(cmdArchive(t, map[string]string{"plugins.json": plugDoc}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	picks := []SyncPick{{"plugin:user:d@m", "replace"}, {"plugin:user:c@m", "replace"}, {"market:newm", "replace"}}
-	res, err := applyBackup(p.ID, picks, nil)
+	res, err := applyBackup(backupPlan.ID, picks, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, r := range res {
-		if r.Status != "ok" {
-			t.Errorf("%+v", r)
+	for _, backupResult := range res {
+		if backupResult.Status != "ok" {
+			t.Errorf("%+v", backupResult)
 		}
 	}
-	b, _ := os.ReadFile(log)
-	got := string(b)
-	i, j := strings.Index(got, "marketplace add"), strings.Index(got, "plugin install d@m")
-	if i < 0 || j < 0 || i > j {
+	data, _ := os.ReadFile(log)
+	got := string(data)
+	index, innerIndex := strings.Index(got, "marketplace add"), strings.Index(got, "plugin install d@m")
+	if index < 0 || innerIndex < 0 || index > innerIndex {
 		t.Fatalf("ordre : %q", got)
 	}
 	if !strings.Contains(got, "plugin enable c@m -s user") || !strings.Contains(got, "plugin disable d@m -s user") {
@@ -112,16 +112,16 @@ func TestApplyOrder(t *testing.T) {
 func TestApplyPluginFailureContinues(t *testing.T) {
 	cmdEnv(t, `[]`, `[]`)
 	doc := `{"marketplaces":[],"plugins":[{"id":"a@m","scope":"user","enabled":true},{"id":"bad@m","scope":"user","enabled":true},{"id":"c@m","scope":"user","enabled":true}]}`
-	p, err := stageBackup(cmdArchive(t, map[string]string{"plugins.json": doc}))
+	backupPlan, err := stageBackup(cmdArchive(t, map[string]string{"plugins.json": doc}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, _ := applyBackup(p.ID, []SyncPick{{"plugin:user:a@m", "replace"}, {"plugin:user:bad@m", "replace"}, {"plugin:user:c@m", "replace"}}, nil)
+	res, _ := applyBackup(backupPlan.ID, []SyncPick{{"plugin:user:a@m", "replace"}, {"plugin:user:bad@m", "replace"}, {"plugin:user:c@m", "replace"}}, nil)
 	if resOf(res, "plugin:user:a@m").Status != "ok" || resOf(res, "plugin:user:c@m").Status != "ok" {
 		t.Fatalf("%+v", res)
 	}
-	if r := resOf(res, "plugin:user:bad@m"); r.Status != "failed" || !strings.Contains(r.Message, "boom") {
-		t.Fatalf("%+v", r)
+	if backupResult := resOf(res, "plugin:user:bad@m"); backupResult.Status != "failed" || !strings.Contains(backupResult.Message, "boom") {
+		t.Fatalf("%+v", backupResult)
 	}
 }
 
@@ -130,13 +130,13 @@ const mcpDoc = `{"servers":{"gh":{"command":"gh","args":["x"]},"web":{"type":"ht
 func TestStageMcpPlan(t *testing.T) {
 	cmdEnv(t, `[]`, `[]`)
 	os.WriteFile(claudeJSON(), []byte(`{"mcpServers":{"web":{"type":"http","url":"https://example.com/mcp"}}}`), 0o600)
-	p, err := stageBackup(cmdArchive(t, map[string]string{"mcp.json": mcpDoc}))
+	backupPlan, err := stageBackup(cmdArchive(t, map[string]string{"mcp.json": mcpDoc}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer dropStage(p.ID)
-	gh, _ := syncItem(p.Items, "mcp:gh")
-	web, _ := syncItem(p.Items, "mcp:web")
+	defer dropStage(backupPlan.ID)
+	gh, _ := syncItem(backupPlan.Items, "mcp:gh")
+	web, _ := syncItem(backupPlan.Items, "mcp:web")
 	if gh.Status != "new" || gh.Risk != "exec" || !strings.Contains(gh.From, "env") || web.Status != "same" || web.Risk != "" || gh.Cat != "mcp" {
 		t.Fatalf("%+v %+v", gh, web)
 	}
@@ -148,9 +148,9 @@ func TestApplyMcpAdd(t *testing.T) {
 	t.Cleanup(func() { mcpAddJSON = old })
 	var name string
 	var doc []byte
-	mcpAddJSON = func(n string, d []byte) error { name, doc = n, d; return nil }
-	p, _ := stageBackup(cmdArchive(t, map[string]string{"mcp.json": mcpDoc}))
-	res, _ := applyBackup(p.ID, []SyncPick{{"mcp:gh", "replace"}}, nil)
+	mcpAddJSON = func(localName string, data []byte) error { name, doc = localName, data; return nil }
+	backupPlan, _ := stageBackup(cmdArchive(t, map[string]string{"mcp.json": mcpDoc}))
+	res, _ := applyBackup(backupPlan.ID, []SyncPick{{"mcp:gh", "replace"}}, nil)
 	if resOf(res, "mcp:gh").Status != "ok" || name != "gh" || strings.Contains(string(doc), "env") || !strings.Contains(string(doc), `"command"`) {
 		t.Fatalf("%+v %q %s", res, name, doc)
 	}
@@ -158,9 +158,9 @@ func TestApplyMcpAdd(t *testing.T) {
 
 func TestMcpAddNameRejected(t *testing.T) {
 	log := cmdEnv(t, `[]`, `[]`)
-	for _, n := range []string{"a b", "-x", ""} {
-		if err := mcpAddJSON(n, []byte(`{}`)); err == nil {
-			t.Errorf("accepté : %q", n)
+	for _, name := range []string{"a b", "-x", ""} {
+		if err := mcpAddJSON(name, []byte(`{}`)); err == nil {
+			t.Errorf("accepté : %q", name)
 		}
 	}
 	if _, err := os.Stat(log); err == nil {
@@ -173,17 +173,17 @@ func TestMcpAddRuns(t *testing.T) {
 	if err := mcpAddJSON("gh", []byte(`{"command":"gh"}`)); err != nil {
 		t.Fatal(err)
 	}
-	b, _ := os.ReadFile(log)
-	if !strings.Contains(string(b), `mcp add-json gh {"command":"gh"} -s user`) {
-		t.Fatalf("%q", b)
+	data, _ := os.ReadFile(log)
+	if !strings.Contains(string(data), `mcp add-json gh {"command":"gh"} -s user`) {
+		t.Fatalf("%q", data)
 	}
 }
 
 func TestApplyBackupUnownedPickSkipped(t *testing.T) {
 	cmdEnv(t, `[]`, `[]`)
-	p, _ := stageBackup(cmdArchive(t, map[string]string{"plugins.json": `{"marketplaces":[],"plugins":[]}`}))
-	res, _ := applyBackup(p.ID, []SyncPick{{"zzz:inconnu", "replace"}}, nil)
-	if r := resOf(res, "zzz:inconnu"); r.Status != "skipped" {
+	backupPlan, _ := stageBackup(cmdArchive(t, map[string]string{"plugins.json": `{"marketplaces":[],"plugins":[]}`}))
+	res, _ := applyBackup(backupPlan.ID, []SyncPick{{"zzz:inconnu", "replace"}}, nil)
+	if backupResult := resOf(res, "zzz:inconnu"); backupResult.Status != "skipped" {
 		t.Fatalf("%+v", res)
 	}
 }
@@ -191,14 +191,14 @@ func TestApplyBackupUnownedPickSkipped(t *testing.T) {
 func TestApplyDashValuesRefused(t *testing.T) {
 	log := cmdEnv(t, `[]`, `[]`)
 	doc := `{"marketplaces":[{"name":"x","source":"github","repo":"-x/y"}],"plugins":[{"id":"--help","scope":"user","enabled":true}]}`
-	p, err := stageBackup(cmdArchive(t, map[string]string{"plugins.json": doc}))
+	backupPlan, err := stageBackup(cmdArchive(t, map[string]string{"plugins.json": doc}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(p.Items) != 0 {
-		t.Fatalf("plan : %+v", p.Items)
+	if len(backupPlan.Items) != 0 {
+		t.Fatalf("plan : %+v", backupPlan.Items)
 	}
-	res, _ := applyBackup(p.ID, []SyncPick{{"market:x", "replace"}, {"plugin:user:--help", "replace"}}, nil)
+	res, _ := applyBackup(backupPlan.ID, []SyncPick{{"market:x", "replace"}, {"plugin:user:--help", "replace"}}, nil)
 	if resOf(res, "market:x").Status != "failed" || resOf(res, "plugin:user:--help").Status != "failed" {
 		t.Fatalf("%+v", res)
 	}
@@ -209,9 +209,9 @@ func TestApplyDashValuesRefused(t *testing.T) {
 
 func TestMcpAddDocNotObject(t *testing.T) {
 	log := cmdEnv(t, `[]`, `[]`)
-	for _, d := range []string{`-1`, `null`, `[]`, `"x"`, ``} {
-		if err := mcpAddJSON("gh", []byte(d)); err == nil {
-			t.Errorf("accepté : %q", d)
+	for _, dir := range []string{`-1`, `null`, `[]`, `"x"`, ``} {
+		if err := mcpAddJSON("gh", []byte(dir)); err == nil {
+			t.Errorf("accepté : %q", dir)
 		}
 	}
 	if _, err := os.Stat(log); err == nil {

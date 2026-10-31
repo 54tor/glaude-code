@@ -14,30 +14,30 @@ func countBackupTmp(t *testing.T) int {
 	if err != nil {
 		t.Fatal(err)
 	}
-	n := 0
-	for _, e := range es {
-		if strings.HasPrefix(e.Name(), backupTmpPrefix) {
-			n++
+	count := 0
+	for _, value := range es {
+		if strings.HasPrefix(value.Name(), backupTmpPrefix) {
+			count++
 		}
 	}
-	return n
+	return count
 }
 
 func rawZip(t *testing.T, entries ...*zip.FileHeader) []byte {
 	t.Helper()
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
-	for _, h := range entries {
-		w, err := zw.CreateHeader(h)
+	for _, fileHeader := range entries {
+		writer, err := zw.CreateHeader(fileHeader)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if h.Mode()&os.ModeSymlink != 0 {
-			w.Write([]byte("/etc/passwd"))
-		} else if h.Name == "manifest.json" {
-			w.Write([]byte(`{"format":1}`))
-		} else if !h.Mode().IsDir() {
-			w.Write([]byte("x"))
+		if fileHeader.Mode()&os.ModeSymlink != 0 {
+			writer.Write([]byte("/etc/passwd"))
+		} else if fileHeader.Name == "manifest.json" {
+			writer.Write([]byte(`{"format":1}`))
+		} else if !fileHeader.Mode().IsDir() {
+			writer.Write([]byte("x"))
 		}
 	}
 	zw.Close()
@@ -45,9 +45,9 @@ func rawZip(t *testing.T, entries ...*zip.FileHeader) []byte {
 }
 
 func hdr(name string, mode os.FileMode) *zip.FileHeader {
-	h := &zip.FileHeader{Name: name, Method: zip.Deflate}
-	h.SetMode(mode)
-	return h
+	fileHeader := &zip.FileHeader{Name: name, Method: zip.Deflate}
+	fileHeader.SetMode(mode)
+	return fileHeader
 }
 
 func TestExtractBackupRoundTrip(t *testing.T) {
@@ -56,17 +56,17 @@ func TestExtractBackupRoundTrip(t *testing.T) {
 		"home/skills/a/SKILL.md": []byte("# a"),
 		"projects/p/memory/m.md": []byte("mémoire"),
 	}
-	b, err := writeBackupZip(files, BackupManifest{Format: backupFormat, Gld: "1.0", Cats: []string{"skills"}})
+	data, err := writeBackupZip(files, BackupManifest{Format: backupFormat, Gld: "1.0", Cats: []string{"skills"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir, m, err := extractBackup(b)
+	dir, backupManifest, err := extractBackup(data)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	if m.Format != backupFormat || m.Gld != "1.0" || len(m.Cats) != 1 {
-		t.Fatalf("manifeste : %+v", m)
+	if backupManifest.Format != backupFormat || backupManifest.Gld != "1.0" || len(backupManifest.Cats) != 1 {
+		t.Fatalf("manifeste : %+v", backupManifest)
 	}
 	for name, want := range files {
 		got, err := os.ReadFile(dir + "/" + name)
@@ -78,9 +78,9 @@ func TestExtractBackupRoundTrip(t *testing.T) {
 
 func TestExtractBackupRejects(t *testing.T) {
 	man := func() *zip.FileHeader { return hdr("manifest.json", 0o644) }
-	manJSON := func(f int) []byte {
-		b, _ := writeBackupZip(nil, BackupManifest{Format: f})
-		return b
+	manJSON := func(flags int) []byte {
+		data, _ := writeBackupZip(nil, BackupManifest{Format: flags})
+		return data
 	}
 	cases := []struct {
 		name string
@@ -95,38 +95,38 @@ func TestExtractBackupRejects(t *testing.T) {
 		{"sansManifeste", rawZip(t, hdr("home/x", 0o644)), ""},
 		{"format2", manJSON(2), "2"},
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
+	for _, record := range cases {
+		t.Run(record.name, func(t *testing.T) {
 			before := countBackupTmp(t)
-			dir, _, err := extractBackup(c.zip)
+			dir, _, err := extractBackup(record.zip)
 			if err == nil {
 				os.RemoveAll(dir)
 				t.Fatal("refus attendu")
 			}
-			if c.want != "" && !strings.Contains(err.Error(), c.want) {
-				t.Fatalf("message %q sans %q", err, c.want)
+			if record.want != "" && !strings.Contains(err.Error(), record.want) {
+				t.Fatalf("message %q sans %q", err, record.want)
 			}
-			if n := countBackupTmp(t); n != before {
-				t.Fatalf("dossier temporaire restant : %d -> %d", before, n)
+			if count := countBackupTmp(t); count != before {
+				t.Fatalf("dossier temporaire restant : %d -> %d", before, count)
 			}
 		})
 	}
 }
 
 func TestExtractBackupSize(t *testing.T) {
-	b, err := writeBackupZip(map[string][]byte{"home/big": make([]byte, 3<<20)}, BackupManifest{Format: backupFormat})
+	data, err := writeBackupZip(map[string][]byte{"home/big": make([]byte, 3<<20)}, BackupManifest{Format: backupFormat})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if dir, _, err := extractBackup(b); err == nil {
+	if dir, _, err := extractBackup(data); err == nil {
 		os.RemoveAll(dir)
 		t.Fatal("entrée de 3 Mo acceptée")
 	}
 }
 
 func TestExtractBackupOlderFormat(t *testing.T) {
-	b, _ := writeBackupZip(map[string][]byte{"home/a": []byte("a")}, BackupManifest{Format: 0})
-	dir, _, err := extractBackup(b)
+	data, _ := writeBackupZip(map[string][]byte{"home/a": []byte("a")}, BackupManifest{Format: 0})
+	dir, _, err := extractBackup(data)
 	if err != nil {
 		t.Fatal(err)
 	}
