@@ -24,7 +24,7 @@ const GO = [
   ["zalando/go-keyring", "https://github.com/zalando/go-keyring"],
   ["go-i18n", "https://github.com/nicksnyder/go-i18n"],
   ["gofakeit", "https://github.com/brianvoe/gofakeit"],
-  ["golang.org/x (crypto, sync, sys, term, text)", "https://pkg.go.dev/golang.org/x"],
+  ["golang.org/x (crypto, mod, sync, sys, term, text)", "https://pkg.go.dev/golang.org/x"],
 ]
 const WEB = [
   ["React", "https://react.dev"],
@@ -43,6 +43,7 @@ const WEB = [
   ["sonner", "https://sonner.emilkowal.ski"],
   ["cmdk", "https://github.com/dip/cmdk"],
   ["fflate", "https://github.com/101arrowz/fflate"],
+  ["jsdiff", "https://github.com/kpdecker/jsdiff"],
   ["Geist, Inter, IBM Plex, JetBrains Mono, Fira Code, Comic Relief", "https://fontsource.org"],
   ["RealFaviconGenerator", "https://realfavicongenerator.net"],
 ]
