@@ -444,6 +444,29 @@ export function Marketplaces({ onChange }: { onChange: () => void }) {
         {t("skills.plugins.marketplaces", { count: markets.length })}
       </h4>
       <div className="space-y-2">
+        <form
+            className="flex gap-2"
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (isValidSource) market(ADD_MARKET_KEY, "add", trimmedSource)
+            }}
+          >
+            <Input
+              value={src}
+              onChange={(event) => setSrc(event.target.value)}
+              placeholder={t("skills.plugins.marketAdd")}
+              aria-label={t("skills.plugins.marketAdd")}
+            />
+            <Button
+              type="submit"
+              size="sm"
+              variant="outline"
+              disabled={busy === ADD_MARKET_KEY || !isValidSource}
+            >
+              {busy === ADD_MARKET_KEY ? <Fan className="animate-spin" /> : <Plus />}{" "}
+              {t("skills.plugins.marketAddBtn")}
+            </Button>
+          </form>
           <div className="flex justify-end">
             <Button
               size="xs"
@@ -494,30 +517,7 @@ export function Marketplaces({ onChange }: { onChange: () => void }) {
               </li>
             ))}
           </ul>
-          <form
-            className="flex gap-2"
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (isValidSource) market(ADD_MARKET_KEY, "add", trimmedSource)
-            }}
-          >
-            <Input
-              value={src}
-              onChange={(event) => setSrc(event.target.value)}
-              placeholder={t("skills.plugins.marketAdd")}
-              aria-label={t("skills.plugins.marketAdd")}
-            />
-            <Button
-              type="submit"
-              size="sm"
-              variant="outline"
-              disabled={busy === ADD_MARKET_KEY || !isValidSource}
-            >
-              {busy === ADD_MARKET_KEY ? <Fan className="animate-spin" /> : <Plus />}{" "}
-              {t("skills.plugins.marketAddBtn")}
-            </Button>
-          </form>
-        </div>
+      </div>
     </section>
   )
 }
