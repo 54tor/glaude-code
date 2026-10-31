@@ -55,9 +55,9 @@ const mockCompose = (tooMany = false) =>
     mates: ids.length ? [backend, testeur] : [],
     tooMany,
   }))
-const click = async (e: HTMLElement) => void fireEvent.click(e)
-const type = async (e: HTMLElement, v: string) =>
-  void fireEvent.change(e, { target: { value: v } })
+const click = async (element: HTMLElement) => void fireEvent.click(element)
+const type = async (element: HTMLElement, localValue: string) =>
+  void fireEvent.change(element, { target: { value: localValue } })
 const pickDir = vi.fn(async () => "/work")
 const setup = (onLaunch = vi.fn(async () => {})) => {
   render(<TeamPicker catalog={catalog} onLaunch={onLaunch} pickDir={pickDir} />)
@@ -118,15 +118,15 @@ describe("TeamPicker", () => {
   })
   it("affiche out et Conflicts en texte", async () => {
     mockCompose()
-    const e = new teams.LaunchError(409, "conflict", "<b>boom</b>")
-    e.run = {
+    const failure = new teams.LaunchError(409, "conflict", "<b>boom</b>")
+    failure.run = {
       TeamName: "t",
       SessionID: "",
       Mates: [],
       Conflicts: ["backend.md"],
       TooMany: false,
     }
-    const onLaunch = vi.fn(async () => Promise.reject(e))
+    const onLaunch = vi.fn(async () => Promise.reject(failure))
     setup(onLaunch)
     await click(screen.getByRole("checkbox", { name: /Fonctionnalité/ }))
     await type(screen.getByRole("textbox"), "x")
