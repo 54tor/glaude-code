@@ -269,16 +269,22 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   // Le suivi de la fin (aimant, recollage pendant que les hauteurs se précisent, échappement quand l'utilisateur remonte) vient de
   // use-stick-to-bottom, branché sur la zone de défilement et son contenu dès que la modale les a montés.
   const { scrollRef, contentRef, scrollToBottom, stopScroll, isAtBottom, escapedFromLock } = useStickToBottom({ initial: "instant", resize: "instant" })
+  // La file du composeur qui grandit rétrécit la zone sans changer le contenu, que use-stick-to-bottom n'observe pas : on recolle à la fin.
+  const wasAtEnd = useRef(true)
+  wasAtEnd.current = isAtBottom && !escapedFromLock
   useEffect(() => {
     const viewportElement = viewport()
     if (!viewportElement) return
     scrollRef(viewportElement)
     contentRef(viewportElement.firstElementChild as HTMLElement | null)
+    const viewportObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => wasAtEnd.current && void scrollToBottom("instant"))
+    viewportObserver?.observe(viewportElement)
     return () => {
+      viewportObserver?.disconnect()
       scrollRef(null)
       contentRef(null)
     }
-  }, [areaMounted, viewport, scrollRef, contentRef])
+  }, [areaMounted, viewport, scrollRef, contentRef, scrollToBottom])
   const toEnd = useCallback(() => void scrollToBottom("instant"), [scrollToBottom])
   // À l'ouverture : la vue reste collée à la fin pendant que la hauteur du contenu se précise (rendu paresseux, images, code), sauf si
   // l'utilisateur remonte.
