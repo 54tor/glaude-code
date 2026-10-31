@@ -4,15 +4,15 @@ import { readNdjson } from "./ndjson"
 const stream = (chunks: string[]) => {
   const enc = new TextEncoder()
   return new ReadableStream<Uint8Array>({
-    start(c) {
-      for (const ch of chunks) c.enqueue(enc.encode(ch))
-      c.close()
+    start(readableStreamDefaultController) {
+      for (const ch of chunks) readableStreamDefaultController.enqueue(enc.encode(ch))
+      readableStreamDefaultController.close()
     },
   })
 }
 const all = async (chunks: string[]) => {
   const out: unknown[] = []
-  for await (const v of readNdjson(stream(chunks))) out.push(v)
+  for await (const value of readNdjson(stream(chunks))) out.push(value)
   return out
 }
 
@@ -24,16 +24,16 @@ describe("readNdjson", () => {
     expect(await all(['{"a":1}\n{"done":true}'])).toEqual([{ a: 1 }, { done: true }])
   })
   it("recolle un caractère multioctet coupé en deux", async () => {
-    const b = new TextEncoder().encode('{"t":"é"}\n')
-    const s = new ReadableStream<Uint8Array>({
-      start(c) {
-        c.enqueue(b.slice(0, 7))
-        c.enqueue(b.slice(7))
-        c.close()
+    const uint8Array = new TextEncoder().encode('{"t":"é"}\n')
+    const readableStream = new ReadableStream<Uint8Array>({
+      start(readableStreamDefaultController) {
+        readableStreamDefaultController.enqueue(uint8Array.slice(0, 7))
+        readableStreamDefaultController.enqueue(uint8Array.slice(7))
+        readableStreamDefaultController.close()
       },
     })
     const out: unknown[] = []
-    for await (const v of readNdjson(s)) out.push(v)
+    for await (const value of readNdjson(readableStream)) out.push(value)
     expect(out).toEqual([{ t: "é" }])
   })
   it("lève sur une ligne invalide", async () => {

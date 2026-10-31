@@ -37,17 +37,17 @@ describe("api /v1, sessions", () => {
   })
   it("une grande liste part en lots de 100 au plus, URL sous 8 Ko même avec un long nom de dossier", async () => {
     const dir = "-" + "d".repeat(180)
-    const items = Array.from({ length: 250 }, (_, i) => ({ dir, id: `00000000-0000-4000-8000-${String(i).padStart(12, "0")}` }))
+    const items = Array.from({ length: 250 }, (_, index) => ({ dir, id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}` }))
     f.mockImplementation(async () => new Response('{"deleted":1,"spared":0,"message":"x"}', { status: 200 }))
-    const r = await api.rmSessions(items)
-    const urls = f.mock.calls.map((c) => c[0] as string)
+    const said = await api.rmSessions(items)
+    const urls = f.mock.calls.map((values) => values[0] as string)
     expect(urls.length).toBeGreaterThanOrEqual(3)
-    for (const u of urls) {
-      expect(u.length).toBeLessThan(8000)
-      expect(u.split("item=").length - 1).toBeLessThanOrEqual(100)
+    for (const rawUrl of urls) {
+      expect(rawUrl.length).toBeLessThan(8000)
+      expect(rawUrl.split("item=").length - 1).toBeLessThanOrEqual(100)
     }
     expect(urls.join("&").split("item=").length - 1).toBe(250)
-    expect(r.deleted).toBe(urls.length)
+    expect(said.deleted).toBe(urls.length)
   })
   it("suppression et corbeille : ?item répété, sans corps", async () => {
     await api.rmSessions([{ dir: "-p", id: "a" }, { dir: "-p", id: "b" }])
