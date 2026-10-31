@@ -31,19 +31,19 @@ func init() {
 }
 
 // rulePath : un chemin absolu au format des règles Read/Edit (« //chemin », lecteur Windows en « /c/... »).
-func rulePath(p string) string {
-	if v := filepath.VolumeName(p); len(v) == 2 && v[1] == ':' {
-		p = "/" + strings.ToLower(v[:1]) + p[2:]
+func rulePath(path string) string {
+	if volume := filepath.VolumeName(path); len(volume) == 2 && volume[1] == ':' {
+		path = "/" + strings.ToLower(volume[:1]) + path[2:]
 	}
-	return "/" + filepath.ToSlash(p)
+	return "/" + filepath.ToSlash(path)
 }
 
 func guardDeny(authDir string) []string {
-	var out []string
-	for _, p := range []string{rulePath(authDir) + "/**", rulePath(filepath.Join(authDir, "auth.db")), rulePath(filepath.Join(authDir, "auth.key"))} {
-		out = append(out, "Read("+p+")", "Edit("+p+")") // Edit couvre Write : une règle Write(chemin) n'est jamais appliquée
+	var rules []string
+	for _, rulePattern := range []string{rulePath(authDir) + "/**", rulePath(filepath.Join(authDir, "auth.db")), rulePath(filepath.Join(authDir, "auth.key"))} {
+		rules = append(rules, "Read("+rulePattern+")", "Edit("+rulePattern+")") // Edit couvre Write : une règle Write(chemin) n'est jamais appliquée
 	}
-	return append(out, "Read(//proc/*/environ)") // GLD_AUTH_KEY y reste lisible quand elle vient de l'environnement de gld
+	return append(rules, "Read(//proc/*/environ)") // GLD_AUTH_KEY y reste lisible quand elle vient de l'environnement de gld
 }
 
 func guardSelf() string {
@@ -63,14 +63,14 @@ func guardCommand(authDir string) string {
 // hookCommandLine : sous Windows, le hook passe par Git Bash : barres obliques et guillemets doubles, où $, ` et "
 // restent à échapper.
 func hookCommandLine(self, authDir string, windows bool) string {
-	q := shq
+	quote := shq
 	if windows {
-		q = func(s string) string {
-			s = strings.ReplaceAll(s, `\`, "/")
-			return `"` + strings.NewReplacer(`"`, `\"`, "$", `\$`, "`", "\\`").Replace(s) + `"`
+		quote = func(value string) string {
+			value = strings.ReplaceAll(value, `\`, "/")
+			return `"` + strings.NewReplacer(`"`, `\"`, "$", `\$`, "`", "\\`").Replace(value) + `"`
 		}
 	}
-	return q(self) + " _guard " + q(authDir)
+	return quote(self) + " _guard " + quote(authDir)
 }
 
 // guardTools : les outils de Claude qui exécutent une commande shell reçue dans tool_input.command.
@@ -95,24 +95,24 @@ var procEnvironRe = regexp.MustCompile(`/proc/[^ ;|&]*/environ`)
 var sqliteRe = regexp.MustCompile(`(^|[^a-z0-9_.-])sqlite3?($|[^a-z0-9_-])`)
 
 // guardNorm retire guillemets et barres obliques inverses : `"auth"."db"` redevient auth.db.
-func guardNorm(s string) string {
-	return strings.ToLower(strings.NewReplacer(`"`, "", `'`, "", `\`, "", "`", "").Replace(s))
+func guardNorm(text string) string {
+	return strings.ToLower(strings.NewReplacer(`"`, "", `'`, "", `\`, "", "`", "").Replace(text))
 }
 
 // guardHook : refuse une commande Bash qui cite la base, la clé ou le dossier d'authentification, ou lance sqlite.
 // ponytail: heuristique sur le texte, sans évaluer le shell ; variables, jokers, encodages ou scripts la contournent.
 func guardHook(cmd string, authDir string) (deny bool) {
 	// Deux lectures : barres obliques inverses retirées (au\th.db) ou lues comme séparateurs (C:\Users\...).
-	cs := []string{guardNorm(cmd), guardNorm(strings.ReplaceAll(cmd, `\`, "/"))}
-	if sqliteRe.MatchString(cs[0]) || strings.Contains(cs[0], "gld_auth_") || procEnvironRe.MatchString(cs[1]) {
+	normalizedCommands := []string{guardNorm(cmd), guardNorm(strings.ReplaceAll(cmd, `\`, "/"))}
+	if sqliteRe.MatchString(normalizedCommands[0]) || strings.Contains(normalizedCommands[0], "gld_auth_") || procEnvironRe.MatchString(normalizedCommands[1]) {
 		return true
 	}
 	// -wal, -shm et -journal : les fichiers annexes de SQLite contiennent aussi les données.
 	paths := []string{"auth.db", "auth.key", "auth.db-wal", "auth.db-shm", "auth.db-journal"}
 	if authDir != "" {
 		paths = append(paths, authDir)
-		if home, err := os.UserHomeDir(); err == nil && home != "" {
-			if rel, err := filepath.Rel(home, authDir); err == nil && rel != "." && !strings.HasPrefix(rel, "..") {
+		if home, homeErr := os.UserHomeDir(); homeErr == nil && home != "" {
+			if rel, relErr := filepath.Rel(home, authDir); relErr == nil && rel != "." && !strings.HasPrefix(rel, "..") {
 				rel = filepath.ToSlash(rel)
 				paths = append(paths, "~/"+rel, "$home/"+rel, "${home}/"+rel)
 				if strings.Contains(rel, "/") { // seul, un nom court comme « gld » refuserait presque tout
@@ -121,13 +121,13 @@ func guardHook(cmd string, authDir string) (deny bool) {
 			}
 		}
 	}
-	if v := os.Getenv("GLD_AUTH_DIR"); v != "" {
-		paths = append(paths, v)
+	if envAuthDir := os.Getenv("GLD_AUTH_DIR"); envAuthDir != "" {
+		paths = append(paths, envAuthDir)
 	}
-	for _, n := range paths {
-		n = strings.TrimRight(guardNorm(strings.ReplaceAll(n, `\`, "/")), "/")
-		for _, c := range cs {
-			if n != "" && containsPath(c, n) {
+	for _, candidate := range paths {
+		candidate = strings.TrimRight(guardNorm(strings.ReplaceAll(candidate, `\`, "/")), "/")
+		for _, normalizedCommand := range normalizedCommands {
+			if candidate != "" && containsPath(normalizedCommand, candidate) {
 				return true
 			}
 		}
@@ -140,59 +140,59 @@ const nameChars = "abcdefghijklmnopqrstuvwxyz0123456789_-"
 // containsPath : n apparaît dans c suivi d'une fin de chemin (/srv/gld vise /srv/gld/x, pas /srv/gld-backups).
 // Windows ignore les points finaux (auth.db. est auth.db) : un point ne sépare un autre nom que suivi d'un
 // caractère de nom (auth.db.bak). « : » (flux NTFS, auth.db::$DATA) est une fin de chemin.
-func containsPath(c, n string) bool {
-	for i := 0; ; {
-		j := strings.Index(c[i:], n)
-		if j < 0 {
+func containsPath(text, path string) bool {
+	for searchStart := 0; ; {
+		matchOffset := strings.Index(text[searchStart:], path)
+		if matchOffset < 0 {
 			return false
 		}
-		end := i + j + len(n)
+		end := searchStart + matchOffset + len(path)
 		switch {
-		case end == len(c):
+		case end == len(text):
 			return true
-		case c[end] == '.':
-			if end+1 == len(c) || !strings.ContainsRune(nameChars, rune(c[end+1])) {
+		case text[end] == '.':
+			if end+1 == len(text) || !strings.ContainsRune(nameChars, rune(text[end+1])) {
 				return true
 			}
-		case !strings.ContainsRune(nameChars, rune(c[end])):
+		case !strings.ContainsRune(nameChars, rune(text[end])):
 			return true
 		}
-		i += j + 1
+		searchStart += matchOffset + 1
 	}
 }
 
 // runGuard : le hook PreToolUse (`gld _guard <dossier>`). Code 2 = refus, raison sur stderr. Une entrée illisible
 // est refusée : sinon une commande assez longue pour dépasser la limite passerait sans contrôle.
-func runGuard(in io.Reader, errw io.Writer, authDir string) int {
-	var h struct {
+func runGuard(input io.Reader, errorOutput io.Writer, authDir string) int {
+	var payload struct {
 		Tool  string `json:"tool_name"`
 		Input struct {
 			Command string `json:"command"`
 		} `json:"tool_input"`
 	}
-	if json.NewDecoder(io.LimitReader(in, 8<<20)).Decode(&h) != nil {
-		fmt.Fprintln(errw, L("cli.guard.badInput"))
+	if json.NewDecoder(io.LimitReader(input, 8<<20)).Decode(&payload) != nil {
+		fmt.Fprintln(errorOutput, L("cli.guard.badInput"))
 		return 2
 	}
-	if !slices.Contains(guardTools, h.Tool) {
+	if !slices.Contains(guardTools, payload.Tool) {
 		return 0
 	}
 	if authDir == "" {
 		authDir, _ = absAuthDir()
 	}
-	if guardHook(h.Input.Command, authDir) {
-		fmt.Fprintln(errw, L("cli.guard.denied"))
+	if guardHook(payload.Input.Command, authDir) {
+		fmt.Fprintln(errorOutput, L("cli.guard.denied"))
 		return 2
 	}
 	return 0
 }
 
 func absAuthDir() (string, error) {
-	d, err := authDir()
+	dir, err := authDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Abs(d)
+	return filepath.Abs(dir)
 }
 
 // managedInstalled : le fichier managed existe et porte nos règles de refus et le hook bloquant (le reste est toléré).
@@ -201,11 +201,11 @@ func managedInstalled() bool {
 	if err != nil {
 		return false
 	}
-	b, err := os.ReadFile(managedPath)
+	content, err := os.ReadFile(managedPath)
 	if err != nil {
 		return false
 	}
-	var m struct {
+	var settings struct {
 		Permissions struct{ Deny []string } `json:"permissions"`
 		Hooks       struct {
 			PreToolUse []struct {
@@ -218,20 +218,20 @@ func managedInstalled() bool {
 			}
 		} `json:"hooks"`
 	}
-	if json.Unmarshal(b, &m) != nil {
+	if json.Unmarshal(content, &settings) != nil {
 		return false
 	}
-	for _, r := range guardDeny(dir) {
-		if !slices.Contains(m.Permissions.Deny, r) {
+	for _, rule := range guardDeny(dir) {
+		if !slices.Contains(settings.Permissions.Deny, rule) {
 			return false
 		}
 	}
 	line, self, args := guardCommand(dir), guardSelf(), []string{"_guard", dir}
-	for _, g := range m.Hooks.PreToolUse {
-		for _, h := range g.Hooks {
-			ok := (h.Args == nil && h.Command == line) || (h.Args != nil && h.Command == self && slices.Equal(h.Args, args))
+	for _, matcherGroup := range settings.Hooks.PreToolUse {
+		for _, hook := range matcherGroup.Hooks {
+			matchesGuard := (hook.Args == nil && hook.Command == line) || (hook.Args != nil && hook.Command == self && slices.Equal(hook.Args, args))
 			// Sans onFailure « block », un hook en échec laisse passer la commande : ce n'est pas le garde-fou.
-			if ok && h.OnFailure == "block" && slices.Contains(strings.Split(g.Matcher, "|"), "Bash") {
+			if matchesGuard && hook.OnFailure == "block" && slices.Contains(strings.Split(matcherGroup.Matcher, "|"), "Bash") {
 				return true
 			}
 		}
@@ -242,11 +242,11 @@ func managedInstalled() bool {
 var guardWarned atomic.Bool
 
 // warnGuard : un seul avertissement, au premier passage en mode multi-utilisateur, si le fichier managed manque.
-func warnGuard(on bool, w io.Writer) {
-	if !on || guardWarned.Load() || managedInstalled() || !guardWarned.CompareAndSwap(false, true) {
+func warnGuard(enabled bool, output io.Writer) {
+	if !enabled || guardWarned.Load() || managedInstalled() || !guardWarned.CompareAndSwap(false, true) {
 		return
 	}
-	fmt.Fprintln(w, tr(cliLang(), "cli.main.guardMissing", map[string]any{"A1": managedPath}))
+	fmt.Fprintln(output, tr(cliLang(), "cli.main.guardMissing", map[string]any{"A1": managedPath}))
 }
 
 // guardArgs : les mêmes réglages passés en --settings aux sessions que gld lance, dès qu'une base de comptes existe.
@@ -254,35 +254,35 @@ func warnGuard(on bool, w io.Writer) {
 // withGuard : argv de claude avec les réglages du garde-fou, placés juste avant --resume ou le prompt ; un --settings
 // fourni par l'utilisateur est retiré, sinon il pourrait remplacer celui du garde-fou.
 func withGuard(argv []string) []string {
-	g := guardArgs()
-	if g == nil {
+	guardSettingsArgs := guardArgs()
+	if guardSettingsArgs == nil {
 		return argv
 	}
-	var out []string
-	at := -1
-	for i := 0; i < len(argv); i++ {
-		a := argv[i]
+	var filtered []string
+	insertAt := -1
+	for argIndex := 0; argIndex < len(argv); argIndex++ {
+		arg := argv[argIndex]
 		switch {
-		case a == "--":
-			if at < 0 {
-				at = len(out)
+		case arg == "--":
+			if insertAt < 0 {
+				insertAt = len(filtered)
 			}
-			out = append(out, argv[i:]...)
-			i = len(argv)
-		case a == "--settings":
-			i++
-		case strings.HasPrefix(a, "--settings="):
+			filtered = append(filtered, argv[argIndex:]...)
+			argIndex = len(argv)
+		case arg == "--settings":
+			argIndex++
+		case strings.HasPrefix(arg, "--settings="):
 		default:
-			if a == "--resume" && at < 0 {
-				at = len(out)
+			if arg == "--resume" && insertAt < 0 {
+				insertAt = len(filtered)
 			}
-			out = append(out, a)
+			filtered = append(filtered, arg)
 		}
 	}
-	if at < 0 {
-		at = len(out)
+	if insertAt < 0 {
+		insertAt = len(filtered)
 	}
-	return slices.Concat(out[:at], g, out[at:])
+	return slices.Concat(filtered[:insertAt], guardSettingsArgs, filtered[insertAt:])
 }
 
 func guardArgs() []string {
@@ -290,32 +290,32 @@ func guardArgs() []string {
 	if err != nil {
 		return nil
 	}
-	if _, err := os.Stat(filepath.Join(dir, "auth.db")); err != nil {
+	if _, statErr := os.Stat(filepath.Join(dir, "auth.db")); statErr != nil {
 		return nil
 	}
-	b, _ := json.Marshal(guardSettings(dir))
-	return []string{"--settings", string(b)}
+	settingsJSON, _ := json.Marshal(guardSettings(dir))
+	return []string{"--settings", string(settingsJSON)}
 }
 
-func cliAuth(_ context.Context, args []string, out io.Writer) error {
-	f, err := parseFlags(args, nil, nil, nil)
-	if err == errHelp || (err == nil && len(f.pos) == 0) {
-		return helpText(out, L("cli.auth.help"))
+func cliAuth(_ context.Context, args []string, output io.Writer) error {
+	parsedFlags, err := parseFlags(args, nil, nil, nil)
+	if err == errHelp || (err == nil && len(parsedFlags.pos) == 0) {
+		return helpText(output, L("cli.auth.help"))
 	}
 	if err != nil {
 		return err
 	}
-	if len(f.pos) != 1 || f.pos[0] != "managed-settings" {
-		return terr("srv.auth.sousCommandeInconnue", "A1", strings.Join(f.pos, " "))
+	if len(parsedFlags.pos) != 1 || parsedFlags.pos[0] != "managed-settings" {
+		return terr("srv.auth.sousCommandeInconnue", "A1", strings.Join(parsedFlags.pos, " "))
 	}
 	dir, err := absAuthDir()
 	if err != nil {
 		return err
 	}
-	enc := json.NewEncoder(out)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(guardSettings(dir)); err != nil {
-		return err
+	encoder := json.NewEncoder(output)
+	encoder.SetIndent("", "  ")
+	if encodeErr := encoder.Encode(guardSettings(dir)); encodeErr != nil {
+		return encodeErr
 	}
 	fmt.Fprintln(os.Stderr, L("cli.auth.managedTarget", "A1", managedPath))
 	fmt.Fprintln(os.Stderr, L("cli.auth.minVersion"))

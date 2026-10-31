@@ -51,9 +51,9 @@ func newThrottle(db *authDB) *throttle { return &throttle{db: db, now: time.Now}
 
 // Les clés dérivent du nom tapé, jamais d'une recherche du compte : un nom inconnu
 // se comporte exactement comme un nom existant.
-func thKeys(user, ip string) (u, i, p, m string) {
-	n := thName(user)
-	return "user:" + n, "ip:" + ip, "pair:" + n + "|" + ip, "mfa:" + n
+func thKeys(user, ip string) (userKey, ipKey, pairKey, mfaKey string) {
+	normalizedName := thName(user)
+	return "user:" + normalizedName, "ip:" + ip, "pair:" + normalizedName + "|" + ip, "mfa:" + normalizedName
 }
 
 func streakKey(user string) string { return "streak:" + thName(user) }
@@ -76,118 +76,118 @@ func backoff(fails int64) time.Duration {
 	if fails < 3 {
 		return 0
 	}
-	e := fails - 3
-	if e > 20 {
+	exponent := fails - 3
+	if exponent > 20 {
 		return thMaxDelay
 	}
-	return min(time.Duration(math.Pow(2, float64(e)))*time.Second, thMaxDelay)
+	return min(time.Duration(math.Pow(2, float64(exponent)))*time.Second, thMaxDelay)
 }
 
-func (t *throttle) Check(user, ip string) (wait time.Duration, blocked bool) {
-	wait, blocked, known := t.pending(user, ip)
+func (throttler *throttle) Check(user, ip string) (wait time.Duration, blocked bool) {
+	wait, blocked, known := throttler.pending(user, ip)
 	if blocked || wait > 0 || known { // un couple déjà connu ne puise pas dans le plafond global : des noms inventés ne le bloquent plus
 		return wait, blocked
 	}
-	return t.globalSlot(t.now()), false
+	return throttler.globalSlot(throttler.now()), false
 }
 
 // Pending est Check sans le plafond global : il sert à annoncer le Retry-After d'un échec sans consommer de place.
-func (t *throttle) Pending(user, ip string) (wait time.Duration, blocked bool) {
-	wait, blocked, _ = t.pending(user, ip)
+func (throttler *throttle) Pending(user, ip string) (wait time.Duration, blocked bool) {
+	wait, blocked, _ = throttler.pending(user, ip)
 	return wait, blocked
 }
 
 // pending : known vaut true si ce compte s'est connecté depuis cette adresse dans les thKnownFor.
-func (t *throttle) pending(user, ip string) (wait time.Duration, blocked, known bool) {
-	now := t.now()
-	cut := now.Add(-thWindow).Unix()
-	uk, ik, pk, mk := thKeys(user, ip)
-	kk, sk := knownKey(user, ip), streakKey(user)
-	mpk := mfaPairKey(user, ip)
-	rows, err := t.db.Query(`SELECT key, fails, first_at, locked_until, last_at FROM throttle WHERE key IN (?,?,?,?,?,?,?)`, uk, ik, pk, mk, mpk, kk, sk)
+func (throttler *throttle) pending(user, ip string) (wait time.Duration, blocked, known bool) {
+	now := throttler.now()
+	windowStart := now.Add(-thWindow).Unix()
+	userKey, ipKey, pairKey, mfaKey := thKeys(user, ip)
+	knownMarkerKey, streakCounterKey := knownKey(user, ip), streakKey(user)
+	mfaPairCounterKey := mfaPairKey(user, ip)
+	rows, err := throttler.db.Query(`SELECT key, fails, first_at, locked_until, last_at FROM throttle WHERE key IN (?,?,?,?,?,?,?)`, userKey, ipKey, pairKey, mfaKey, mfaPairCounterKey, knownMarkerKey, streakCounterKey)
 	if err != nil {
 		return thMaxDelay, true, false
 	}
 	type row struct{ fails, first, locked, last int64 }
-	got := map[string]row{}
+	rowsByKey := map[string]row{}
 	for rows.Next() {
-		var k string
-		var r row
-		if err := rows.Scan(&k, &r.fails, &r.first, &r.locked, &r.last); err != nil {
+		var scannedKey string
+		var scannedRow row
+		if scanErr := rows.Scan(&scannedKey, &scannedRow.fails, &scannedRow.first, &scannedRow.locked, &scannedRow.last); scanErr != nil {
 			rows.Close()
 			return thMaxDelay, true, false
 		}
-		got[k] = r
+		rowsByKey[scannedKey] = scannedRow
 	}
 	err = rows.Err()
 	rows.Close()
 	if err != nil {
 		return thMaxDelay, true, false
 	}
-	inWin := func(k string) int64 {
-		if r, ok := got[k]; ok && r.first > cut {
-			return r.fails
+	failsInWindow := func(counterKey string) int64 {
+		if counterRow, found := rowsByKey[counterKey]; found && counterRow.first > windowStart {
+			return counterRow.fails
 		}
 		return 0
 	}
-	for _, k := range []string{mpk, mk} {
-		if lim := map[string]int64{mpk: thMFALimit, mk: thMFAGlobal}[k]; inWin(k) >= lim {
-			return min(time.Unix(got[k].first, 0).Add(thWindow).Sub(now), thMaxDelay), true, false
+	for _, mfaCounterKey := range []string{mfaPairCounterKey, mfaKey} {
+		if limit := map[string]int64{mfaPairCounterKey: thMFALimit, mfaKey: thMFAGlobal}[mfaCounterKey]; failsInWindow(mfaCounterKey) >= limit {
+			return min(time.Unix(rowsByKey[mfaCounterKey].first, 0).Add(thWindow).Sub(now), thMaxDelay), true, false
 		}
 	}
-	u := got[uk]
-	lockEnd := max(u.locked, got[sk].locked)
-	uFails := inWin(uk)
-	if k, ok := got[kk]; ok && k.first >= now.Add(-thKnownFor).Unix() {
-		lockEnd, uFails, known = 0, 0, true
+	userRow := rowsByKey[userKey]
+	lockEnd := max(userRow.locked, rowsByKey[streakCounterKey].locked)
+	userFails := failsInWindow(userKey)
+	if knownRow, found := rowsByKey[knownMarkerKey]; found && knownRow.first >= now.Add(-thKnownFor).Unix() {
+		lockEnd, userFails, known = 0, 0, true
 	}
-	lockEnd = max(lockEnd, got[ik].locked) // bannissement de l'IP : même une IP où ce compte s'est déjà connecté n'y échappe pas
+	lockEnd = max(lockEnd, rowsByKey[ipKey].locked) // bannissement de l'IP : même une IP où ce compte s'est déjà connecté n'y échappe pas
 	if lockEnd > now.Unix() {
 		return min(time.Unix(lockEnd, 0).Sub(now), thMaxDelay), true, known
 	}
 	// Le délai court depuis le dernier échec : un nouvel essai après Retry-After est réellement vérifié.
-	left := func(k string, fails int64) time.Duration {
-		return max(0, backoff(fails)-now.Sub(time.Unix(got[k].last, 0)))
+	remainingDelay := func(counterKey string, fails int64) time.Duration {
+		return max(0, backoff(fails)-now.Sub(time.Unix(rowsByKey[counterKey].last, 0)))
 	}
-	return max(left(uk, uFails), left(ik, inWin(ik)), left(pk, inWin(pk))), false, known
+	return max(remainingDelay(userKey, userFails), remainingDelay(ipKey, failsInWindow(ipKey)), remainingDelay(pairKey, failsInWindow(pairKey))), false, known
 }
 
-func (t *throttle) globalSlot(now time.Time) time.Duration {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	cut := now.Add(-thGlobalSpan)
-	i := 0
-	for i < len(t.recent) && !t.recent[i].After(cut) {
-		i++
+func (throttler *throttle) globalSlot(now time.Time) time.Duration {
+	throttler.mu.Lock()
+	defer throttler.mu.Unlock()
+	windowStart := now.Add(-thGlobalSpan)
+	expiredCount := 0
+	for expiredCount < len(throttler.recent) && !throttler.recent[expiredCount].After(windowStart) {
+		expiredCount++
 	}
-	t.recent = t.recent[i:]
-	if len(t.recent) >= thGlobalMax {
-		return t.recent[0].Add(thGlobalSpan).Sub(now)
+	throttler.recent = throttler.recent[expiredCount:]
+	if len(throttler.recent) >= thGlobalMax {
+		return throttler.recent[0].Add(thGlobalSpan).Sub(now)
 	}
-	t.recent = append(t.recent, now)
+	throttler.recent = append(throttler.recent, now)
 	return 0
 }
 
-func (t *throttle) Fail(user, ip string, stage string) error {
-	now := t.now().Unix()
-	cut := now - int64(thWindow/time.Second)
-	uk, ik, pk, mk := thKeys(user, ip)
-	keys := []string{uk, ik, pk}
+func (throttler *throttle) Fail(user, ip string, stage string) error {
+	now := throttler.now().Unix()
+	windowStart := now - int64(thWindow/time.Second)
+	userKey, ipKey, pairKey, mfaKey := thKeys(user, ip)
+	keys := []string{userKey, ipKey, pairKey}
 	if stage == "mfa" {
-		keys = append(keys, mk, mfaPairKey(user, ip))
+		keys = append(keys, mfaKey, mfaPairKey(user, ip))
 	}
-	ext := 0
+	externalFlag := 0
 	if externalIP(ip) {
-		ext = 1
+		externalFlag = 1
 	}
-	tx, err := t.db.Begin()
+	transaction, err := throttler.db.Begin()
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
-	for _, k := range keys {
+	defer transaction.Rollback()
+	for _, counterKey := range keys {
 		var fails int64
-		err := tx.QueryRow(`INSERT INTO throttle(key, fails, first_at, locked_until, last_at) VALUES (?1, 1, ?2, 0, ?2)
+		upsertErr := transaction.QueryRow(`INSERT INTO throttle(key, fails, first_at, locked_until, last_at) VALUES (?1, 1, ?2, 0, ?2)
 ON CONFLICT(key) DO UPDATE SET
   last_at = ?2,
   fails = CASE WHEN first_at <= ?3 THEN 1 ELSE fails + 1 END,
@@ -196,23 +196,23 @@ ON CONFLICT(key) DO UPDATE SET
     THEN ?2 + ?5
     WHEN ?1 LIKE 'ip:%' AND ?6 = 1 AND (CASE WHEN first_at <= ?3 THEN 1 ELSE fails + 1 END) >= ?7
     THEN ?2 + ?8 ELSE locked_until END
-RETURNING fails`, k, now, cut, thLockAfter, int64(thLockFor/time.Second), ext, thBanAfter, int64(thBanFor/time.Second)).Scan(&fails)
-		if err != nil {
-			return err
+RETURNING fails`, counterKey, now, windowStart, thLockAfter, int64(thLockFor/time.Second), externalFlag, thBanAfter, int64(thBanFor/time.Second)).Scan(&fails)
+		if upsertErr != nil {
+			return upsertErr
 		}
-		if k == ik && ext == 1 && fails == thBanAfter {
-			if err := lockEvent(tx, now, user, ip, "ban"); err != nil {
-				return err
+		if counterKey == ipKey && externalFlag == 1 && fails == thBanAfter {
+			if banEventErr := lockEvent(transaction, now, user, ip, "ban"); banEventErr != nil {
+				return banEventErr
 			}
 		}
-		if k == uk && fails == thLockAfter {
-			if err := lockEvent(tx, now, user, ip, "locked"); err != nil {
-				return err
+		if counterKey == userKey && fails == thLockAfter {
+			if lockEventErr := lockEvent(transaction, now, user, ip, "locked"); lockEventErr != nil {
+				return lockEventErr
 			}
 		}
 	}
 	var streak int64
-	err = tx.QueryRow(`INSERT INTO throttle(key, fails, first_at, locked_until, last_at) VALUES (?1, 1, ?2, 0, ?2)
+	err = transaction.QueryRow(`INSERT INTO throttle(key, fails, first_at, locked_until, last_at) VALUES (?1, 1, ?2, 0, ?2)
 ON CONFLICT(key) DO UPDATE SET last_at = ?2, fails = fails + 1,
   locked_until = CASE WHEN fails + 1 >= ?4 THEN ?2 + ?6 WHEN fails + 1 >= ?3 THEN ?2 + ?5 ELSE locked_until END
 RETURNING fails`, streakKey(user), now, thStreakLock, thStreakLong, int64(thLockFor/time.Second), int64(thStreakLongFor/time.Second)).Scan(&streak)
@@ -220,40 +220,40 @@ RETURNING fails`, streakKey(user), now, thStreakLock, thStreakLong, int64(thLock
 		return err
 	}
 	if streak == thStreakLock || streak == thStreakLong {
-		if err := lockEvent(tx, now, user, ip, "streak_"+strconv.FormatInt(streak, 10)); err != nil {
-			return err
+		if streakEventErr := lockEvent(transaction, now, user, ip, "streak_"+strconv.FormatInt(streak, 10)); streakEventErr != nil {
+			return streakEventErr
 		}
 	}
-	return tx.Commit()
+	return transaction.Commit()
 }
 
-func lockEvent(tx *sql.Tx, now int64, user, ip, outcome string) error {
+func lockEvent(transaction *sql.Tx, now int64, user, ip, outcome string) error {
 	journal("auth: compte %q verrouillé (%s) depuis %s", normName(user), outcome, ip)
-	_, err := tx.Exec(`INSERT INTO auth_events(at, name_tried, ip, kind, outcome) VALUES (?,?,?,?,?)`, now, normName(user), ip, "lock", outcome)
+	_, err := transaction.Exec(`INSERT INTO auth_events(at, name_tried, ip, kind, outcome) VALUES (?,?,?,?,?)`, now, normName(user), ip, "lock", outcome)
 	return err
 }
 
 // Les compteurs mfa: ne sont pas remis à zéro : sinon un mot de passe connu suffirait
 // à rouvrir cinq essais de second facteur à volonté.
-func (t *throttle) Success(user, ip string) error {
-	now := t.now().Unix()
-	uk, _, pk, _ := thKeys(user, ip)
+func (throttler *throttle) Success(user, ip string) error {
+	now := throttler.now().Unix()
+	userKey, _, pairKey, _ := thKeys(user, ip)
 	// Le compteur MFA de cette adresse repart de zéro, sauf s'il bloque déjà ; le compteur global du compte reste.
-	_, err := t.db.Exec(`DELETE FROM throttle WHERE key IN (?,?,?) OR (key = ? AND fails < ?) OR (key LIKE 'known:%' AND first_at < ?)`,
-		uk, pk, streakKey(user), mfaPairKey(user, ip), thMFALimit, now-int64(thKnownFor/time.Second))
+	_, err := throttler.db.Exec(`DELETE FROM throttle WHERE key IN (?,?,?) OR (key = ? AND fails < ?) OR (key LIKE 'known:%' AND first_at < ?)`,
+		userKey, pairKey, streakKey(user), mfaPairKey(user, ip), thMFALimit, now-int64(thKnownFor/time.Second))
 	if err != nil {
 		return err
 	}
-	_, err = t.db.Exec(`INSERT INTO throttle(key, fails, first_at, locked_until) VALUES (?, 0, ?, 0)
+	_, err = throttler.db.Exec(`INSERT INTO throttle(key, fails, first_at, locked_until) VALUES (?, 0, ?, 0)
 ON CONFLICT(key) DO UPDATE SET first_at = excluded.first_at`, knownKey(user, ip), now)
 	return err
 }
 
 // Purge retire les lignes qui ne pèsent plus sur aucune décision : un flot de noms inventés ne fait pas grossir la table.
 // Une suite d'échecs reste sept jours après son dernier échec.
-func (t *throttle) Purge() (int64, error) {
-	now := t.now().Unix()
-	res, err := t.db.Exec(`DELETE FROM throttle WHERE locked_until <= ?1 AND (
+func (throttler *throttle) Purge() (int64, error) {
+	now := throttler.now().Unix()
+	result, err := throttler.db.Exec(`DELETE FROM throttle WHERE locked_until <= ?1 AND (
   (key LIKE 'known:%' AND first_at < ?2) OR
   (key LIKE 'streak:%' AND last_at < ?3) OR
   (key NOT LIKE 'known:%' AND key NOT LIKE 'streak:%' AND first_at <= ?4))`,
@@ -261,65 +261,65 @@ func (t *throttle) Purge() (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return res.RowsAffected()
+	return result.RowsAffected()
 }
 
 // externalIP : l'IP (ou le préfixe /64 rendu par clientIP) ne vient ni de la machine, ni d'un réseau privé, ni du lien local :
 // seuls les accès extérieurs sont bannis, jamais le poste ni le réseau de l'utilisateur.
 func externalIP(ip string) bool {
-	h, _, _ := strings.Cut(ip, "/")
-	a, err := netip.ParseAddr(h)
+	host, _, _ := strings.Cut(ip, "/")
+	address, err := netip.ParseAddr(host)
 	if err != nil {
 		return true
 	}
-	a = a.Unmap()
-	return !(a.IsLoopback() || a.IsPrivate() || a.IsLinkLocalUnicast())
+	address = address.Unmap()
+	return !(address.IsLoopback() || address.IsPrivate() || address.IsLinkLocalUnicast())
 }
 
-func trustedProxy(a netip.Addr) bool {
-	for _, s := range strings.Split(os.Getenv("GLD_TRUSTED_PROXIES"), ",") {
-		s = strings.TrimSpace(s)
-		if s == "" {
+func trustedProxy(address netip.Addr) bool {
+	for _, entry := range strings.Split(os.Getenv("GLD_TRUSTED_PROXIES"), ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
 			continue
 		}
-		if p, err := netip.ParsePrefix(s); err == nil && p.Contains(a) {
+		if prefix, err := netip.ParsePrefix(entry); err == nil && prefix.Contains(address) {
 			return true
 		}
-		if b, err := netip.ParseAddr(s); err == nil && b.Unmap() == a {
+		if proxyAddress, err := netip.ParseAddr(entry); err == nil && proxyAddress.Unmap() == address {
 			return true
 		}
 	}
 	return false
 }
 
-func clientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
+func clientIP(request *http.Request) string {
+	host, _, err := net.SplitHostPort(request.RemoteAddr)
 	if err != nil {
-		host = r.RemoteAddr
+		host = request.RemoteAddr
 	}
-	a, err := netip.ParseAddr(host)
+	address, err := netip.ParseAddr(host)
 	if err != nil {
 		return host
 	}
-	a = a.Unmap().WithZone("")
-	if trustedProxy(a) {
+	address = address.Unmap().WithZone("")
+	if trustedProxy(address) {
 		// On remonte la chaîne depuis la droite : seules les entrées ajoutées par nos
 		// proxys sont fiables, la plus à gauche est fournie par le client.
-		parts := strings.Split(strings.Join(r.Header.Values("X-Forwarded-For"), ","), ",")
-		for i := len(parts) - 1; i >= 0; i-- {
-			b, err := netip.ParseAddr(strings.TrimSpace(parts[i]))
-			if err != nil {
+		parts := strings.Split(strings.Join(request.Header.Values("X-Forwarded-For"), ","), ",")
+		for partIndex := len(parts) - 1; partIndex >= 0; partIndex-- {
+			forwardedAddress, parseErr := netip.ParseAddr(strings.TrimSpace(parts[partIndex]))
+			if parseErr != nil {
 				break
 			}
-			a = b.Unmap().WithZone("")
-			if !trustedProxy(a) {
+			address = forwardedAddress.Unmap().WithZone("")
+			if !trustedProxy(address) {
 				break
 			}
 		}
 	}
-	if a.Is6() && !a.IsLoopback() { // ::1 réduit à ::/64 ne serait plus reconnu comme le poste, donc banni
-		p, _ := a.Prefix(64)
-		return p.String()
+	if address.Is6() && !address.IsLoopback() { // ::1 réduit à ::/64 ne serait plus reconnu comme le poste, donc banni
+		prefix, _ := address.Prefix(64)
+		return prefix.String()
 	}
-	return a.String()
+	return address.String()
 }

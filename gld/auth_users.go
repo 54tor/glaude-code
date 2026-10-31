@@ -68,9 +68,9 @@ func openAuthStore() (*authStore, error) {
 	if err == nil {
 		err = checkMasterKey(db, key)
 	}
-	s := &authStore{db: db, key: key}
+	store := &authStore{db: db, key: key}
 	if err == nil {
-		err = db.migrate(s.keyedStep)
+		err = db.migrate(store.keyedStep)
 	}
 	if err == nil {
 		err = walPerms(dir)
@@ -79,7 +79,7 @@ func openAuthStore() (*authStore, error) {
 		db.Close()
 		return nil, err
 	}
-	return s, nil
+	return store, nil
 }
 
 const accountsKey = "accounts"
@@ -92,42 +92,44 @@ func accountsValue(key, witness []byte, state string) []byte {
 	return append([]byte(state+":"), rowSig(key, "meta", accountsKey, string(witness), state)...)
 }
 
-func (s *authStore) setAccounts(tx *sql.Tx, state string) error {
-	var w []byte
-	if err := tx.QueryRow(`SELECT value FROM meta WHERE key='key_witness'`).Scan(&w); err != nil {
+func (store *authStore) setAccounts(transaction *sql.Tx, state string) error {
+	var witness []byte
+	if err := transaction.QueryRow(`SELECT value FROM meta WHERE key='key_witness'`).Scan(&witness); err != nil {
 		return err
 	}
-	_, err := tx.Exec(`INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)`, accountsKey, accountsValue(s.key, w, state))
+	_, err := transaction.Exec(`INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)`, accountsKey, accountsValue(store.key, witness, state))
 	return err
 }
 
-func (s *authStore) markAccounts(tx *sql.Tx) error { return s.setAccounts(tx, "on") }
+func (store *authStore) markAccounts(transaction *sql.Tx) error {
+	return store.setAccounts(transaction, "on")
+}
 
 // AccountsOn : le mode multi-utilisateur est actif. L'état est écrit avec le témoin de clé : absent, illisible ou
 // contredit par la table users, c'est une altération et le service est fermé ; des comptes supprimés le ferment aussi.
-func (s *authStore) AccountsOn() (bool, error) {
-	on, err := s.HasUsers()
+func (store *authStore) AccountsOn() (bool, error) {
+	hasUsers, err := store.HasUsers()
 	if err != nil {
 		return false, err
 	}
-	var v, w []byte
-	err = s.db.QueryRow(`SELECT value FROM meta WHERE key=?`, accountsKey).Scan(&v)
+	var accountsState, witness []byte
+	err = store.db.QueryRow(`SELECT value FROM meta WHERE key=?`, accountsKey).Scan(&accountsState)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, errTamper
 	}
 	if err == nil {
-		err = s.db.QueryRow(`SELECT value FROM meta WHERE key='key_witness'`).Scan(&w)
+		err = store.db.QueryRow(`SELECT value FROM meta WHERE key='key_witness'`).Scan(&witness)
 	}
 	if err != nil {
 		return false, err
 	}
 	switch {
-	case hmac.Equal(v, accountsValue(s.key, w, "on")):
-		if !on {
+	case hmac.Equal(accountsState, accountsValue(store.key, witness, "on")):
+		if !hasUsers {
 			return false, errAccountsGone
 		}
 		return true, nil
-	case hmac.Equal(v, accountsValue(s.key, w, "off")) && !on:
+	case hmac.Equal(accountsState, accountsValue(store.key, witness, "off")) && !hasUsers:
 		return false, nil
 	}
 	return false, errTamper
@@ -136,21 +138,21 @@ func (s *authStore) AccountsOn() (bool, error) {
 // keyedStep s'exécute dans la transaction de la migration v, une seule fois. Pour 7 (mfa_enrolled signé) : les lignes users
 // à l'ancienne signature valide sont re-signées, le bit déduit des facteurs vérifiés à cet instant (une ligne altérée le
 // reste) ; une base antérieure reçoit l'état des comptes qu'elle n'avait pas.
-func (s *authStore) keyedStep(tx *sql.Tx, v int) error {
-	switch v {
+func (store *authStore) keyedStep(transaction *sql.Tx, version int) error {
+	switch version {
 	case 7:
-		return s.stepMFAEnrolled(tx)
+		return store.stepMFAEnrolled(transaction)
 	case 8:
-		return s.stepFsRights(tx)
+		return store.stepFsRights(transaction)
 	}
 	return nil
 }
 
 // stepFsRights : la signature de home_acl couvre la liste ordonnée des droits, que 8 allonge de deux colonnes à 0. Une
 // ligne à l'ancienne signature valide est re-signée ; une ligne altérée le reste.
-func (s *authStore) stepFsRights(tx *sql.Tx) error {
-	const n = 7
-	rows, err := tx.Query(`SELECT user_id,home_id,` + strings.Join(strings.Split(rightCols(), ",")[:n], ",") + `,sig FROM home_acl`)
+func (store *authStore) stepFsRights(transaction *sql.Tx) error {
+	const legacyRightCount = 7
+	rows, err := transaction.Query(`SELECT user_id,home_id,` + strings.Join(strings.Split(rightCols(), ",")[:legacyRightCount], ",") + `,sig FROM home_acl`)
 	if err != nil {
 		return err
 	}
@@ -160,28 +162,28 @@ func (s *authStore) stepFsRights(tx *sql.Tx) error {
 		m    map[Right]bool
 		sig  []byte
 	}
-	var list []legacy
+	var legacyRows []legacy
 	for rows.Next() {
-		l := legacy{m: map[Right]bool{}}
-		vals := make([]any, n)
-		dst := []any{&l.uid, &l.home}
-		for i := range vals {
-			dst = append(dst, &vals[i])
+		legacyRow := legacy{m: map[Right]bool{}}
+		rawValues := make([]any, legacyRightCount)
+		destinations := []any{&legacyRow.uid, &legacyRow.home}
+		for valueIndex := range rawValues {
+			destinations = append(destinations, &rawValues[valueIndex])
 		}
-		dst = append(dst, &l.sig)
-		if err := rows.Scan(dst...); err != nil {
+		destinations = append(destinations, &legacyRow.sig)
+		if scanErr := rows.Scan(destinations...); scanErr != nil {
 			rows.Close()
-			return err
+			return scanErr
 		}
-		ok := true
-		f := []string{l.home}
-		for i, r := range allRights[:n] {
-			on, k := bit(vals[i])
-			l.m[r], ok = on, ok && k
-			f = append(f, b01(on))
+		allValid := true
+		signedFields := []string{legacyRow.home}
+		for valueIndex, right := range allRights[:legacyRightCount] {
+			granted, isValid := bit(rawValues[valueIndex])
+			legacyRow.m[right], allValid = granted, allValid && isValid
+			signedFields = append(signedFields, b01(granted))
 		}
-		if ok && rowSigOK(s.key, "home_acl", strconv.FormatInt(l.uid, 10), l.sig, f...) {
-			list = append(list, l)
+		if allValid && rowSigOK(store.key, "home_acl", strconv.FormatInt(legacyRow.uid, 10), legacyRow.sig, signedFields...) {
+			legacyRows = append(legacyRows, legacyRow)
 		}
 	}
 	err = rows.Err()
@@ -189,16 +191,16 @@ func (s *authStore) stepFsRights(tx *sql.Tx) error {
 	if err != nil {
 		return err
 	}
-	for _, l := range list {
-		if _, err := tx.Exec(`UPDATE home_acl SET sig=? WHERE user_id=? AND home_id=? AND sig=?`, s.aclSig(l.uid, l.home, l.m), l.uid, l.home, l.sig); err != nil {
-			return err
+	for _, legacyRow := range legacyRows {
+		if _, updateErr := transaction.Exec(`UPDATE home_acl SET sig=? WHERE user_id=? AND home_id=? AND sig=?`, store.aclSig(legacyRow.uid, legacyRow.home, legacyRow.m), legacyRow.uid, legacyRow.home, legacyRow.sig); updateErr != nil {
+			return updateErr
 		}
 	}
 	return nil
 }
 
-func (s *authStore) stepMFAEnrolled(tx *sql.Tx) error {
-	rows, err := tx.Query(`SELECT id,name,pw_hash,is_admin,disabled,sig FROM users`)
+func (store *authStore) stepMFAEnrolled(transaction *sql.Tx) error {
+	rows, err := transaction.Query(`SELECT id,name,pw_hash,is_admin,disabled,sig FROM users`)
 	if err != nil {
 		return err
 	}
@@ -206,19 +208,19 @@ func (s *authStore) stepMFAEnrolled(tx *sql.Tx) error {
 		u   User
 		sig []byte
 	}
-	var list []legacy
+	var legacyRows []legacy
 	for rows.Next() {
-		var l legacy
-		var adm, dis any
-		if err := rows.Scan(&l.u.ID, &l.u.Name, &l.u.PwHash, &adm, &dis, &l.sig); err != nil {
+		var legacyRow legacy
+		var rawAdmin, rawDisabled any
+		if scanErr := rows.Scan(&legacyRow.u.ID, &legacyRow.u.Name, &legacyRow.u.PwHash, &rawAdmin, &rawDisabled, &legacyRow.sig); scanErr != nil {
 			rows.Close()
-			return err
+			return scanErr
 		}
-		var ok1, ok2 bool
-		l.u.Admin, ok1 = bit(adm)
-		l.u.Disabled, ok2 = bit(dis)
-		if ok1 && ok2 && rowSigOK(s.key, "users", strconv.FormatInt(l.u.ID, 10), l.sig, l.u.Name, l.u.PwHash, b01(l.u.Admin), b01(l.u.Disabled)) {
-			list = append(list, l)
+		var adminValid, disabledValid bool
+		legacyRow.u.Admin, adminValid = bit(rawAdmin)
+		legacyRow.u.Disabled, disabledValid = bit(rawDisabled)
+		if adminValid && disabledValid && rowSigOK(store.key, "users", strconv.FormatInt(legacyRow.u.ID, 10), legacyRow.sig, legacyRow.u.Name, legacyRow.u.PwHash, b01(legacyRow.u.Admin), b01(legacyRow.u.Disabled)) {
+			legacyRows = append(legacyRows, legacyRow)
 		}
 	}
 	err = rows.Err()
@@ -226,67 +228,67 @@ func (s *authStore) stepMFAEnrolled(tx *sql.Tx) error {
 	if err != nil {
 		return err
 	}
-	for _, l := range list {
-		u := l.u
-		t, err := s.loadTOTP(tx, u.ID)
-		if err != nil && !errors.Is(err, errNoTOTP) && !errors.Is(err, errTamper) {
-			return err
+	for _, legacyRow := range legacyRows {
+		user := legacyRow.u
+		totp, factorErr := store.loadTOTP(transaction, user.ID)
+		if factorErr != nil && !errors.Is(factorErr, errNoTOTP) && !errors.Is(factorErr, errTamper) {
+			return factorErr
 		}
-		u.MFAEnrolled = err == nil && t.confirmed.Valid
-		creds, err := s.loadCreds(tx, u.ID)
-		if err != nil {
-			return err
+		user.MFAEnrolled = factorErr == nil && totp.confirmed.Valid
+		creds, factorErr := store.loadCreds(transaction, user.ID)
+		if factorErr != nil {
+			return factorErr
 		}
-		for _, c := range creds {
-			u.MFAEnrolled = u.MFAEnrolled || !c.bad
+		for _, cred := range creds {
+			user.MFAEnrolled = user.MFAEnrolled || !cred.bad
 		}
-		if _, err := tx.Exec(`UPDATE users SET mfa_enrolled=?, sig=? WHERE id=? AND sig=?`, u.MFAEnrolled, s.userSig(&u), u.ID, l.sig); err != nil {
-			return err
+		if _, updateErr := transaction.Exec(`UPDATE users SET mfa_enrolled=?, sig=? WHERE id=? AND sig=?`, user.MFAEnrolled, store.userSig(&user), user.ID, legacyRow.sig); updateErr != nil {
+			return updateErr
 		}
 	}
-	var has, n int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM meta WHERE key=?`, accountsKey).Scan(&has); err != nil {
-		return err
+	var accountsMarkerCount, userCount int
+	if countAccountsErr := transaction.QueryRow(`SELECT COUNT(*) FROM meta WHERE key=?`, accountsKey).Scan(&accountsMarkerCount); countAccountsErr != nil {
+		return countAccountsErr
 	}
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&n); err != nil {
-		return err
+	if countUsersErr := transaction.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&userCount); countUsersErr != nil {
+		return countUsersErr
 	}
-	if has > 0 {
+	if accountsMarkerCount > 0 {
 		return nil
 	}
-	if n > 0 {
-		return s.setAccounts(tx, "on")
+	if userCount > 0 {
+		return store.setAccounts(transaction, "on")
 	}
-	return s.setAccounts(tx, "off")
+	return store.setAccounts(transaction, "off")
 }
 
 // markEnrolled pose le bit dans la transaction qui écrit le premier facteur ; u vient d'être relu et vérifié dans tx.
-func (s *authStore) markEnrolled(tx *sql.Tx, u *User) error {
-	if u.MFAEnrolled {
+func (store *authStore) markEnrolled(transaction *sql.Tx, user *User) error {
+	if user.MFAEnrolled {
 		return nil
 	}
-	u.MFAEnrolled = true
-	_, err := tx.Exec(`UPDATE users SET mfa_enrolled=1, sig=? WHERE id=?`, s.userSig(u), u.ID)
+	user.MFAEnrolled = true
+	_, err := transaction.Exec(`UPDATE users SET mfa_enrolled=1, sig=? WHERE id=?`, store.userSig(user), user.ID)
 	return err
 }
 
-func b01(b bool) string {
-	if b {
+func b01(flag bool) string {
+	if flag {
 		return "1"
 	}
 	return "0"
 }
 
-func (s *authStore) userSig(u *User) []byte {
-	return rowSig(s.key, "users", strconv.FormatInt(u.ID, 10), u.Name, u.PwHash, b01(u.Admin), b01(u.Disabled), b01(u.MFAEnrolled))
+func (store *authStore) userSig(user *User) []byte {
+	return rowSig(store.key, "users", strconv.FormatInt(user.ID, 10), user.Name, user.PwHash, b01(user.Admin), b01(user.Disabled), b01(user.MFAEnrolled))
 }
 
-func (s *authStore) aclSig(userID int64, homeID string, r map[Right]bool) []byte {
-	return rowSig(s.key, "home_acl", strconv.FormatInt(userID, 10), append([]string{homeID}, rightStrings(r)...)...)
+func (store *authStore) aclSig(userID int64, homeID string, grantedRights map[Right]bool) []byte {
+	return rowSig(store.key, "home_acl", strconv.FormatInt(userID, 10), append([]string{homeID}, rightStrings(grantedRights)...)...)
 }
 
-func (s *authStore) event(userID int64, kind, outcome string) {
-	s.db.Exec(`INSERT INTO auth_events(at,user_id,kind,outcome) VALUES(?,?,?,?)`, authNow().Unix(), userID, kind, outcome)
+func (store *authStore) event(userID int64, kind, outcome string) {
+	store.db.Exec(`INSERT INTO auth_events(at,user_id,kind,outcome) VALUES(?,?,?,?)`, authNow().Unix(), userID, kind, outcome)
 }
 
 type querier interface {
@@ -300,328 +302,330 @@ type tamperErr struct {
 	table string
 }
 
-func (e *tamperErr) Error() string { return errTamper.Error() }
-func (e *tamperErr) Unwrap() error { return errTamper }
+func (tampered *tamperErr) Error() string { return errTamper.Error() }
+func (tampered *tamperErr) Unwrap() error { return errTamper }
 
-func (s *authStore) guard(err error) error {
-	var t *tamperErr
-	if errors.As(err, &t) {
-		s.event(t.uid, "tamper", t.table)
+func (store *authStore) guard(err error) error {
+	var tampered *tamperErr
+	if errors.As(err, &tampered) {
+		store.event(tampered.uid, "tamper", tampered.table)
 		return errTamper
 	}
 	return err
 }
 
-func (s *authStore) inTx(fn func(*sql.Tx) error) error {
-	tx, err := s.db.Begin()
+func (store *authStore) inTx(work func(*sql.Tx) error) error {
+	transaction, err := store.db.Begin()
 	if err != nil {
 		return err
 	}
-	if err := fn(tx); err != nil {
-		tx.Rollback()
-		return s.guard(err)
+	if workErr := work(transaction); workErr != nil {
+		transaction.Rollback()
+		return store.guard(workErr)
 	}
-	return tx.Commit()
+	return transaction.Commit()
 }
 
 // bit : une valeur stockée hors de {0, 1} (ou d'un autre type) vaut altération.
-func bit(v any) (on, ok bool) {
-	n, isInt := v.(int64)
-	return n == 1, isInt && (n == 0 || n == 1)
+func bit(value any) (isOne, valid bool) {
+	intValue, isInt := value.(int64)
+	return intValue == 1, isInt && (intValue == 0 || intValue == 1)
 }
+
+const nameMaxRunes = 64
 
 // Le nom est stocké normalisé : l'unicité de la colonne vaut alors celle de normName.
 func cleanName(name string) (string, error) {
-	n := normName(name)
-	if n == "" || utf8.RuneCountInString(n) > 64 || strings.IndexFunc(n, func(r rune) bool { return unicode.IsControl(r) || unicode.IsSpace(r) }) >= 0 {
+	normalized := normName(name)
+	if normalized == "" || utf8.RuneCountInString(normalized) > nameMaxRunes || strings.IndexFunc(normalized, func(character rune) bool { return unicode.IsControl(character) || unicode.IsSpace(character) }) >= 0 {
 		return "", errBadName
 	}
-	return n, nil
+	return normalized, nil
 }
 
-func (s *authStore) AddUser(name, pw string, admin bool) (int64, error) {
-	n, err := cleanName(name)
+func (store *authStore) AddUser(name, password string, admin bool) (int64, error) {
+	normalized, err := cleanName(name)
 	if err != nil {
 		return 0, err
 	}
-	if err := validPassword(pw); err != nil {
-		return 0, err
+	if validErr := validPassword(password); validErr != nil {
+		return 0, validErr
 	}
-	h, err := hashPassword(pw)
+	passwordHash, err := hashPassword(password)
 	if err != nil {
 		return 0, err
 	}
-	u := &User{Name: n, PwHash: h, Admin: admin}
-	err = s.inTx(func(tx *sql.Tx) error {
+	user := &User{Name: normalized, PwHash: passwordHash, Admin: admin}
+	err = store.inTx(func(transaction *sql.Tx) error {
 		now := authNow().Unix()
-		res, err := tx.Exec(`INSERT INTO users(name,pw_hash,is_admin,disabled,created_at,pw_changed_at) VALUES(?,?,?,0,?,?)`, n, h, admin, now, now)
-		var se interface{ Code() int }
-		if errors.As(err, &se) && se.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE {
+		result, txErr := transaction.Exec(`INSERT INTO users(name,pw_hash,is_admin,disabled,created_at,pw_changed_at) VALUES(?,?,?,0,?,?)`, normalized, passwordHash, admin, now, now)
+		var constraintErr interface{ Code() int }
+		if errors.As(txErr, &constraintErr) && constraintErr.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE {
 			return errNameTaken
 		}
-		if err != nil {
-			return err
+		if txErr != nil {
+			return txErr
 		}
-		if u.ID, err = res.LastInsertId(); err != nil {
-			return err
+		if user.ID, txErr = result.LastInsertId(); txErr != nil {
+			return txErr
 		}
-		if _, err = tx.Exec(`UPDATE users SET sig=? WHERE id=?`, s.userSig(u), u.ID); err != nil {
-			return err
+		if _, txErr = transaction.Exec(`UPDATE users SET sig=? WHERE id=?`, store.userSig(user), user.ID); txErr != nil {
+			return txErr
 		}
-		return s.markAccounts(tx)
+		return store.markAccounts(transaction)
 	})
 	if err != nil {
 		return 0, err
 	}
-	return u.ID, nil
+	return user.ID, nil
 }
 
 const userCols = `id,name,pw_hash,is_admin,disabled,created_at,pw_changed_at,mfa_enrolled,sig`
 
 // scanUser ne journalise pas : l'appelant passe l'erreur par guard (ou inTx).
-func (s *authStore) scanUser(row interface{ Scan(...any) error }) (*User, error) {
-	u := &User{}
-	var adm, dis, enr any
+func (store *authStore) scanUser(row interface{ Scan(...any) error }) (*User, error) {
+	user := &User{}
+	var rawAdmin, rawDisabled, rawEnrolled any
 	var sig []byte
-	if err := row.Scan(&u.ID, &u.Name, &u.PwHash, &adm, &dis, &u.CreatedAt, &u.PwChangedAt, &enr, &sig); err != nil {
+	if err := row.Scan(&user.ID, &user.Name, &user.PwHash, &rawAdmin, &rawDisabled, &user.CreatedAt, &user.PwChangedAt, &rawEnrolled, &sig); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, errNoUser
 		}
 		return nil, err
 	}
-	var ok1, ok2, ok3 bool
-	u.Admin, ok1 = bit(adm)
-	u.Disabled, ok2 = bit(dis)
-	u.MFAEnrolled, ok3 = bit(enr)
-	if !ok1 || !ok2 || !ok3 || !hmac.Equal(sig, s.userSig(u)) {
-		return u, &tamperErr{u.ID, "users"}
+	var adminValid, disabledValid, enrolledValid bool
+	user.Admin, adminValid = bit(rawAdmin)
+	user.Disabled, disabledValid = bit(rawDisabled)
+	user.MFAEnrolled, enrolledValid = bit(rawEnrolled)
+	if !adminValid || !disabledValid || !enrolledValid || !hmac.Equal(sig, store.userSig(user)) {
+		return user, &tamperErr{user.ID, "users"}
 	}
-	return u, nil
+	return user, nil
 }
 
-func (s *authStore) userByID(q querier, id int64) (*User, error) {
-	return s.scanUser(q.QueryRow(`SELECT `+userCols+` FROM users WHERE id=?`, id))
+func (store *authStore) userByID(queryRunner querier, userID int64) (*User, error) {
+	return store.scanUser(queryRunner.QueryRow(`SELECT `+userCols+` FROM users WHERE id=?`, userID))
 }
 
-func (s *authStore) UserByName(name string) (*User, error) {
-	u, err := s.scanUser(s.db.QueryRow(`SELECT `+userCols+` FROM users WHERE name=?`, normName(name)))
+func (store *authStore) UserByName(name string) (*User, error) {
+	user, err := store.scanUser(store.db.QueryRow(`SELECT `+userCols+` FROM users WHERE name=?`, normName(name)))
 	if err != nil {
-		return nil, s.guard(err)
+		return nil, store.guard(err)
 	}
-	return u, nil
+	return user, nil
 }
 
 // Users renvoie aussi les lignes altérées, marquées par bad[id], une entrée de journal par ligne.
-func (s *authStore) Users() (users []*User, bad map[int64]bool, err error) {
-	rows, err := s.db.Query(`SELECT ` + userCols + ` FROM users ORDER BY id`)
+func (store *authStore) Users() (users []*User, tamperedByID map[int64]bool, err error) {
+	rows, err := store.db.Query(`SELECT ` + userCols + ` FROM users ORDER BY id`)
 	if err != nil {
 		return nil, nil, err
 	}
 	defer rows.Close()
-	bad = map[int64]bool{}
+	tamperedByID = map[int64]bool{}
 	for rows.Next() {
-		u, err := s.scanUser(rows)
-		if err != nil && !errors.Is(err, errTamper) {
-			return nil, nil, err
+		user, scanErr := store.scanUser(rows)
+		if scanErr != nil && !errors.Is(scanErr, errTamper) {
+			return nil, nil, scanErr
 		}
-		if err != nil {
-			bad[u.ID] = true
+		if scanErr != nil {
+			tamperedByID[user.ID] = true
 		}
-		users = append(users, u)
+		users = append(users, user)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, nil, err
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return nil, nil, rowsErr
 	}
 	rows.Close()
-	for id := range bad {
-		s.event(id, "tamper", "users")
+	for userID := range tamperedByID {
+		store.event(userID, "tamper", "users")
 	}
-	return users, bad, nil
+	return users, tamperedByID, nil
 }
 
 // SetDisabled et SetPassword relisent et re-signent dans la même transaction, et révoquent les sessions du compte.
-func (s *authStore) SetDisabled(id int64, off bool) error {
-	return s.inTx(func(tx *sql.Tx) error {
-		u, err := s.userByID(tx, id)
-		if err != nil {
-			return err
+func (store *authStore) SetDisabled(userID int64, disabled bool) error {
+	return store.inTx(func(transaction *sql.Tx) error {
+		user, txErr := store.userByID(transaction, userID)
+		if txErr != nil {
+			return txErr
 		}
-		u.Disabled = off
-		if _, err := tx.Exec(`UPDATE users SET disabled=?, sig=? WHERE id=?`, off, s.userSig(u), id); err != nil {
-			return err
+		user.Disabled = disabled
+		if _, updateErr := transaction.Exec(`UPDATE users SET disabled=?, sig=? WHERE id=?`, disabled, store.userSig(user), userID); updateErr != nil {
+			return updateErr
 		}
-		_, err = tx.Exec(`DELETE FROM sessions WHERE user_id=?`, id)
-		return err
+		_, txErr = transaction.Exec(`DELETE FROM sessions WHERE user_id=?`, userID)
+		return txErr
 	})
 }
 
-func (s *authStore) SetPassword(id int64, pw string) error {
-	if err := validPassword(pw); err != nil {
+func (store *authStore) SetPassword(userID int64, password string) error {
+	if err := validPassword(password); err != nil {
 		return err
 	}
-	h, err := hashPassword(pw)
+	passwordHash, err := hashPassword(password)
 	if err != nil {
 		return err
 	}
-	return s.inTx(func(tx *sql.Tx) error {
-		u, err := s.userByID(tx, id)
-		if err != nil {
-			return err
+	return store.inTx(func(transaction *sql.Tx) error {
+		user, txErr := store.userByID(transaction, userID)
+		if txErr != nil {
+			return txErr
 		}
-		u.PwHash = h
-		if _, err := tx.Exec(`UPDATE users SET pw_hash=?, pw_changed_at=?, sig=? WHERE id=?`, h, authNow().Unix(), s.userSig(u), id); err != nil {
-			return err
+		user.PwHash = passwordHash
+		if _, updateErr := transaction.Exec(`UPDATE users SET pw_hash=?, pw_changed_at=?, sig=? WHERE id=?`, passwordHash, authNow().Unix(), store.userSig(user), userID); updateErr != nil {
+			return updateErr
 		}
-		_, err = tx.Exec(`DELETE FROM sessions WHERE user_id=?`, id)
-		return err
+		_, txErr = transaction.Exec(`DELETE FROM sessions WHERE user_id=?`, userID)
+		return txErr
 	})
 }
 
-func (s *authStore) ResetMFA(userID int64) error {
-	err := s.inTx(func(tx *sql.Tx) error {
-		u, err := s.userByID(tx, userID)
-		if err != nil {
-			return err
+func (store *authStore) ResetMFA(userID int64) error {
+	err := store.inTx(func(transaction *sql.Tx) error {
+		user, txErr := store.userByID(transaction, userID)
+		if txErr != nil {
+			return txErr
 		}
-		for _, t := range []string{"totp", "webauthn_creds", "recovery_codes", "sessions"} {
-			if _, err := tx.Exec(`DELETE FROM `+t+` WHERE user_id=?`, userID); err != nil {
-				return err
+		for _, table := range []string{"totp", "webauthn_creds", "recovery_codes", "sessions"} {
+			if _, deleteErr := transaction.Exec(`DELETE FROM `+table+` WHERE user_id=?`, userID); deleteErr != nil {
+				return deleteErr
 			}
 		}
-		u.MFAEnrolled = false
-		_, err = tx.Exec(`UPDATE users SET mfa_enrolled=0, sig=? WHERE id=?`, s.userSig(u), userID)
-		return err
+		user.MFAEnrolled = false
+		_, txErr = transaction.Exec(`UPDATE users SET mfa_enrolled=0, sig=? WHERE id=?`, store.userSig(user), userID)
+		return txErr
 	})
 	if err == nil {
-		s.event(userID, "mfa_reset", "ok")
+		store.event(userID, "mfa_reset", "ok")
 	}
 	return err
 }
 
 // HasUsers renvoie l'erreur de lecture : l'appelant ne doit jamais la confondre avec « aucun compte » (mode ouvert).
-func (s *authStore) HasUsers() (bool, error) {
-	var n int
-	err := s.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM users)`).Scan(&n)
-	return n == 1, err
+func (store *authStore) HasUsers() (bool, error) {
+	var exists int
+	err := store.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM users)`).Scan(&exists)
+	return exists == 1, err
 }
 
 func rightCols() string {
-	c := make([]string, len(allRights))
-	for i, r := range allRights {
-		c[i] = string(r)
+	columns := make([]string, len(allRights))
+	for rightIndex, right := range allRights {
+		columns[rightIndex] = string(right)
 	}
-	return strings.Join(c, ",")
+	return strings.Join(columns, ",")
 }
 
 // Rights relit et vérifie la ligne à chaque appel : aucune mise en cache.
-func (s *authStore) Rights(userID int64, homeID string) (map[Right]bool, error) {
-	m, err := s.rights(s.db, userID, homeID)
-	return m, s.guard(err)
+func (store *authStore) Rights(userID int64, homeID string) (map[Right]bool, error) {
+	grantedRights, err := store.rights(store.db, userID, homeID)
+	return grantedRights, store.guard(err)
 }
 
-func (s *authStore) rights(q querier, userID int64, homeID string) (map[Right]bool, error) {
-	vals := make([]any, len(allRights))
-	dst := make([]any, 0, len(allRights)+1)
-	for i := range vals {
-		dst = append(dst, &vals[i])
+func (store *authStore) rights(queryRunner querier, userID int64, homeID string) (map[Right]bool, error) {
+	rawValues := make([]any, len(allRights))
+	destinations := make([]any, 0, len(allRights)+1)
+	for valueIndex := range rawValues {
+		destinations = append(destinations, &rawValues[valueIndex])
 	}
 	var sig []byte
-	dst = append(dst, &sig)
-	m := map[Right]bool{}
-	err := q.QueryRow(`SELECT `+rightCols()+`,sig FROM home_acl WHERE user_id=? AND home_id=?`, userID, homeID).Scan(dst...)
+	destinations = append(destinations, &sig)
+	grantedRights := map[Right]bool{}
+	err := queryRunner.QueryRow(`SELECT `+rightCols()+`,sig FROM home_acl WHERE user_id=? AND home_id=?`, userID, homeID).Scan(destinations...)
 	if errors.Is(err, sql.ErrNoRows) {
-		return m, nil
+		return grantedRights, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	bad := false
-	for i, r := range allRights {
-		on, ok := bit(vals[i])
-		m[r], bad = on, bad || !ok
+	anyInvalid := false
+	for valueIndex, right := range allRights {
+		granted, valid := bit(rawValues[valueIndex])
+		grantedRights[right], anyInvalid = granted, anyInvalid || !valid
 	}
-	if bad || !rowSigOK(s.key, "home_acl", strconv.FormatInt(userID, 10), sig, append([]string{homeID}, rightStrings(m)...)...) {
+	if anyInvalid || !rowSigOK(store.key, "home_acl", strconv.FormatInt(userID, 10), sig, append([]string{homeID}, rightStrings(grantedRights)...)...) {
 		return nil, &tamperErr{userID, "home_acl"}
 	}
-	return m, nil
+	return grantedRights, nil
 }
 
-func rightStrings(m map[Right]bool) []string {
-	f := make([]string, len(allRights))
-	for i, r := range allRights {
-		f[i] = b01(m[r])
+func rightStrings(grantedRights map[Right]bool) []string {
+	flags := make([]string, len(allRights))
+	for rightIndex, right := range allRights {
+		flags[rightIndex] = b01(grantedRights[right])
 	}
-	return f
+	return flags
 }
 
-func (s *authStore) Grant(userID int64, homeID string, rights ...Right) error {
-	return s.SetRights(userID, homeID, rights, nil)
+func (store *authStore) Grant(userID int64, homeID string, rights ...Right) error {
+	return store.SetRights(userID, homeID, rights, nil)
 }
 
-func (s *authStore) Revoke(userID int64, homeID string, rights ...Right) error {
-	return s.SetRights(userID, homeID, nil, rights)
+func (store *authStore) Revoke(userID int64, homeID string, rights ...Right) error {
+	return store.SetRights(userID, homeID, nil, rights)
 }
 
 // SetRights accorde puis retire dans une seule transaction : une seule ligne re-signée, rien d'appliqué en cas d'échec.
-func (s *authStore) SetRights(userID int64, homeID string, grant, revoke []Right) error {
+func (store *authStore) SetRights(userID int64, homeID string, grant, revoke []Right) error {
 	if homeID == "" {
 		return terr("srv.auth.homeVide")
 	}
-	names := func(rs []Right) string {
-		n := make([]string, len(rs))
-		for i, r := range rs {
-			n[i] = string(r)
+	joinRights := func(rightList []Right) string {
+		nameList := make([]string, len(rightList))
+		for rightIndex, right := range rightList {
+			nameList[rightIndex] = string(right)
 		}
-		return strings.Join(n, ",")
+		return strings.Join(nameList, ",")
 	}
-	for _, r := range append(slices.Clone(grant), revoke...) {
-		if !validRight(r) {
-			return terr("srv.auth.droitInconnu", "A1", string(r))
+	for _, right := range append(slices.Clone(grant), revoke...) {
+		if !validRight(right) {
+			return terr("srv.auth.droitInconnu", "A1", string(right))
 		}
 	}
-	err := s.inTx(func(tx *sql.Tx) error {
-		if _, err := s.userByID(tx, userID); err != nil {
-			return err
+	err := store.inTx(func(transaction *sql.Tx) error {
+		if _, lookupErr := store.userByID(transaction, userID); lookupErr != nil {
+			return lookupErr
 		}
-		m, err := s.rights(tx, userID, homeID)
-		if err != nil {
-			return err
+		grantedRights, txErr := store.rights(transaction, userID, homeID)
+		if txErr != nil {
+			return txErr
 		}
-		for _, r := range grant {
-			m[r] = true
+		for _, right := range grant {
+			grantedRights[right] = true
 		}
-		for _, r := range revoke {
-			m[r] = false
+		for _, right := range revoke {
+			grantedRights[right] = false
 		}
 		// Écrire (mémoire ou réglages) sans lire permettrait de lire par le détour des brouillons du modèle.
-		if (m[RightMemWrite] || m[RightConfigWrite]) && !m[RightMemRead] {
+		if (grantedRights[RightMemWrite] || grantedRights[RightConfigWrite]) && !grantedRights[RightMemRead] {
 			return terr("srv.auth.ecritureSansLecture")
 		}
 		args := []any{userID, homeID}
-		for _, r := range allRights {
-			args = append(args, m[r])
+		for _, right := range allRights {
+			args = append(args, grantedRights[right])
 		}
-		args = append(args, s.aclSig(userID, homeID, m))
-		_, err = tx.Exec(`INSERT OR REPLACE INTO home_acl(user_id,home_id,`+rightCols()+`,sig) VALUES(?,?`+strings.Repeat(",?", len(allRights)+1)+`)`, args...)
-		return err
+		args = append(args, store.aclSig(userID, homeID, grantedRights))
+		_, txErr = transaction.Exec(`INSERT OR REPLACE INTO home_acl(user_id,home_id,`+rightCols()+`,sig) VALUES(?,?`+strings.Repeat(",?", len(allRights)+1)+`)`, args...)
+		return txErr
 	})
 	if err != nil {
 		return err
 	}
-	var ops []string
+	var operations []string
 	if len(grant) > 0 {
-		ops = append(ops, "grant "+homeID+" "+names(grant))
+		operations = append(operations, "grant "+homeID+" "+joinRights(grant))
 	}
 	if len(revoke) > 0 {
-		ops = append(ops, "revoke "+homeID+" "+names(revoke))
+		operations = append(operations, "revoke "+homeID+" "+joinRights(revoke))
 	}
-	s.event(userID, "acl", strings.Join(ops, "; "))
+	store.event(userID, "acl", strings.Join(operations, "; "))
 	return nil
 }
 
-func validRight(r Right) bool {
-	for _, k := range allRights {
-		if k == r {
+func validRight(right Right) bool {
+	for _, candidate := range allRights {
+		if candidate == right {
 			return true
 		}
 	}

@@ -40,50 +40,50 @@ type totpRow struct {
 }
 
 // seal n'a pas de données associées : le chiffré et le nonce entrent dans la signature pour lier la ligne à son compte.
-func (s *authStore) totpSig(r *totpRow) []byte {
-	conf := ""
-	if r.confirmed.Valid {
-		conf = strconv.FormatInt(r.confirmed.Int64, 10)
+func (store *authStore) totpSig(totpRecord *totpRow) []byte {
+	confirmedText := ""
+	if totpRecord.confirmed.Valid {
+		confirmedText = strconv.FormatInt(totpRecord.confirmed.Int64, 10)
 	}
-	return rowSig(s.key, "totp", strconv.FormatInt(r.uid, 10), string(r.nonce), string(r.enc), conf, strconv.FormatInt(r.lastStep, 10))
+	return rowSig(store.key, "totp", strconv.FormatInt(totpRecord.uid, 10), string(totpRecord.nonce), string(totpRecord.enc), confirmedText, strconv.FormatInt(totpRecord.lastStep, 10))
 }
 
 // loadTOTP ne journalise pas : l'appelant passe l'erreur par guard (ou inTx).
-func (s *authStore) loadTOTP(q querier, userID int64) (*totpRow, error) {
-	r := &totpRow{uid: userID}
-	err := q.QueryRow(`SELECT secret_enc,nonce,confirmed_at,last_step,sig FROM totp WHERE user_id=?`, userID).
-		Scan(&r.enc, &r.nonce, &r.confirmed, &r.lastStep, &r.sig)
+func (store *authStore) loadTOTP(queryRunner querier, userID int64) (*totpRow, error) {
+	totpRecord := &totpRow{uid: userID}
+	err := queryRunner.QueryRow(`SELECT secret_enc,nonce,confirmed_at,last_step,sig FROM totp WHERE user_id=?`, userID).
+		Scan(&totpRecord.enc, &totpRecord.nonce, &totpRecord.confirmed, &totpRecord.lastStep, &totpRecord.sig)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, errNoTOTP
 	}
 	if err != nil {
 		return nil, err
 	}
-	if !hmac.Equal(r.sig, s.totpSig(r)) {
+	if !hmac.Equal(totpRecord.sig, store.totpSig(totpRecord)) {
 		return nil, &tamperErr{userID, "totp"}
 	}
-	return r, nil
+	return totpRecord, nil
 }
 
 // matchStep essaie les pas −1, 0, +1 autour de at et ne retient qu'un pas postérieur à lastStep.
-func (s *authStore) matchStep(r *totpRow, code string, at time.Time) (int64, error) {
+func (store *authStore) matchStep(totpRecord *totpRow, code string, checkedAt time.Time) (int64, error) {
 	if len(code) != 6 {
 		return 0, errBadCode
 	}
-	secret, err := open(s.key, append(append([]byte{}, r.nonce...), r.enc...))
+	secret, err := open(store.key, append(append([]byte{}, totpRecord.nonce...), totpRecord.enc...))
 	if err != nil {
-		return 0, s.guard(&tamperErr{r.uid, "totp"})
+		return 0, store.guard(&tamperErr{totpRecord.uid, "totp"})
 	}
-	cur := at.Unix() / totpPeriod
-	for step := cur - 1; step <= cur+1; step++ {
-		if step <= r.lastStep {
+	currentStep := checkedAt.Unix() / totpPeriod
+	for step := currentStep - 1; step <= currentStep+1; step++ {
+		if step <= totpRecord.lastStep {
 			continue
 		}
-		want, err := totp.GenerateCodeCustom(string(secret), time.Unix(step*totpPeriod, 0), totpOpts)
-		if err != nil {
-			return 0, err
+		expectedCode, generateErr := totp.GenerateCodeCustom(string(secret), time.Unix(step*totpPeriod, 0), totpOpts)
+		if generateErr != nil {
+			return 0, generateErr
 		}
-		if subtle.ConstantTimeCompare([]byte(want), []byte(code)) == 1 {
+		if subtle.ConstantTimeCompare([]byte(expectedCode), []byte(code)) == 1 {
 			return step, nil
 		}
 	}
@@ -91,37 +91,37 @@ func (s *authStore) matchStep(r *totpRow, code string, at time.Time) (int64, err
 }
 
 // TOTPBegin remplace un secret en attente, jamais un secret confirmé : changer d'application passe par ResetMFA.
-func (s *authStore) TOTPBegin(userID int64, account string) (secret, uri string, err error) {
-	key, err := totp.Generate(totp.GenerateOpts{Issuer: "gld", AccountName: account, Period: totpPeriod, Digits: otp.DigitsSix, Algorithm: otp.AlgorithmSHA1})
+func (store *authStore) TOTPBegin(userID int64, account string) (secret, uri string, err error) {
+	generatedKey, err := totp.Generate(totp.GenerateOpts{Issuer: "gld", AccountName: account, Period: totpPeriod, Digits: otp.DigitsSix, Algorithm: otp.AlgorithmSHA1})
 	if err != nil {
 		return "", "", err
 	}
-	boxed := seal(s.key, []byte(key.Secret()))
-	n := newGCM(s.key).NonceSize()
-	r := &totpRow{uid: userID, nonce: boxed[:n], enc: boxed[n:]}
-	err = s.inTx(func(tx *sql.Tx) error {
-		if _, err := s.userByID(tx, userID); err != nil {
-			return err
+	boxed := seal(store.key, []byte(generatedKey.Secret()))
+	nonceSize := newGCM(store.key).NonceSize()
+	totpRecord := &totpRow{uid: userID, nonce: boxed[:nonceSize], enc: boxed[nonceSize:]}
+	err = store.inTx(func(transaction *sql.Tx) error {
+		if _, lookupErr := store.userByID(transaction, userID); lookupErr != nil {
+			return lookupErr
 		}
-		old, err := s.loadTOTP(tx, userID)
-		if errors.Is(err, errNoTOTP) {
-			_, err = tx.Exec(`INSERT INTO totp(user_id,secret_enc,nonce,confirmed_at,last_step,sig) VALUES(?,?,?,NULL,0,?)`, userID, r.enc, r.nonce, s.totpSig(r))
-			return err
+		existingRow, txErr := store.loadTOTP(transaction, userID)
+		if errors.Is(txErr, errNoTOTP) {
+			_, txErr = transaction.Exec(`INSERT INTO totp(user_id,secret_enc,nonce,confirmed_at,last_step,sig) VALUES(?,?,?,NULL,0,?)`, userID, totpRecord.enc, totpRecord.nonce, store.totpSig(totpRecord))
+			return txErr
 		}
-		if err != nil {
-			return err
+		if txErr != nil {
+			return txErr
 		}
-		if old.confirmed.Valid {
+		if existingRow.confirmed.Valid {
 			return errTOTPActive
 		}
-		res, err := tx.Exec(`UPDATE totp SET secret_enc=?, nonce=?, last_step=0, sig=? WHERE user_id=? AND confirmed_at IS NULL AND sig=?`,
-			r.enc, r.nonce, s.totpSig(r), userID, old.sig)
-		if err != nil {
-			return err
+		result, txErr := transaction.Exec(`UPDATE totp SET secret_enc=?, nonce=?, last_step=0, sig=? WHERE user_id=? AND confirmed_at IS NULL AND sig=?`,
+			totpRecord.enc, totpRecord.nonce, store.totpSig(totpRecord), userID, existingRow.sig)
+		if txErr != nil {
+			return txErr
 		}
-		if n, err := res.RowsAffected(); err != nil {
-			return err
-		} else if n == 0 {
+		if affected, affectedErr := result.RowsAffected(); affectedErr != nil {
+			return affectedErr
+		} else if affected == 0 {
 			return errors.New("totp row changed concurrently")
 		}
 		return nil
@@ -129,118 +129,118 @@ func (s *authStore) TOTPBegin(userID int64, account string) (secret, uri string,
 	if err != nil {
 		return "", "", err
 	}
-	return key.Secret(), key.URL(), nil
+	return generatedKey.Secret(), generatedKey.URL(), nil
 }
 
-func (s *authStore) TOTPConfirm(userID int64, code string) error {
-	r, err := s.loadTOTP(s.db, userID)
-	err = s.guard(err)
+func (store *authStore) TOTPConfirm(userID int64, code string) error {
+	totpRecord, err := store.loadTOTP(store.db, userID)
+	err = store.guard(err)
 	if errors.Is(err, errNoTOTP) {
 		return errBadCode
 	}
 	if err != nil {
 		return err
 	}
-	if r.confirmed.Valid {
+	if totpRecord.confirmed.Valid {
 		return errTOTPActive
 	}
 	now := authNow()
-	step, err := s.matchStep(r, code, now)
+	step, err := store.matchStep(totpRecord, code, now)
 	if err != nil {
 		return err
 	}
-	old := r.sig
-	r.confirmed, r.lastStep = sql.NullInt64{Int64: now.Unix(), Valid: true}, step
-	err = s.inTx(func(tx *sql.Tx) error {
-		u, err := s.userByID(tx, userID)
-		if err != nil {
-			return err
+	previousSig := totpRecord.sig
+	totpRecord.confirmed, totpRecord.lastStep = sql.NullInt64{Int64: now.Unix(), Valid: true}, step
+	err = store.inTx(func(transaction *sql.Tx) error {
+		user, txErr := store.userByID(transaction, userID)
+		if txErr != nil {
+			return txErr
 		}
-		res, err := tx.Exec(`UPDATE totp SET confirmed_at=?, last_step=?, sig=? WHERE user_id=? AND sig=? AND confirmed_at IS NULL`,
-			r.confirmed.Int64, step, s.totpSig(r), userID, old)
-		if err != nil {
-			return err
+		result, txErr := transaction.Exec(`UPDATE totp SET confirmed_at=?, last_step=?, sig=? WHERE user_id=? AND sig=? AND confirmed_at IS NULL`,
+			totpRecord.confirmed.Int64, step, store.totpSig(totpRecord), userID, previousSig)
+		if txErr != nil {
+			return txErr
 		}
-		if n, err := res.RowsAffected(); err != nil {
-			return err
-		} else if n == 0 {
+		if affected, affectedErr := result.RowsAffected(); affectedErr != nil {
+			return affectedErr
+		} else if affected == 0 {
 			return errBadCode
 		}
-		return s.markEnrolled(tx, u)
+		return store.markEnrolled(transaction, user)
 	})
 	if err != nil {
 		return err
 	}
-	s.event(userID, "totp", "enrolled")
+	store.event(userID, "totp", "enrolled")
 	return nil
 }
 
 // TOTPVerify avance last_step par un UPDATE conditionnel : de deux vérifications concurrentes du même code, une seule gagne.
-func (s *authStore) TOTPVerify(userID int64, code string, at time.Time) bool {
-	r, err := s.loadTOTP(s.db, userID)
-	err = s.guard(err)
-	if err != nil || !r.confirmed.Valid {
+func (store *authStore) TOTPVerify(userID int64, code string, checkedAt time.Time) bool {
+	totpRecord, err := store.loadTOTP(store.db, userID)
+	err = store.guard(err)
+	if err != nil || !totpRecord.confirmed.Valid {
 		if err != nil && !errors.Is(err, errNoTOTP) && !errors.Is(err, errTamper) {
 			journal("auth: totp verify: %v", err)
 		}
 		return false
 	}
-	step, err := s.matchStep(r, code, at)
+	step, err := store.matchStep(totpRecord, code, checkedAt)
 	if err != nil {
 		if !errors.Is(err, errBadCode) && !errors.Is(err, errTamper) {
 			journal("auth: totp verify: %v", err)
 		}
 		return false
 	}
-	old := r.sig
-	r.lastStep = step
-	res, err := s.db.Exec(`UPDATE totp SET last_step=?, sig=? WHERE user_id=? AND last_step<? AND sig=?`, step, s.totpSig(r), userID, step, old)
+	previousSig := totpRecord.sig
+	totpRecord.lastStep = step
+	result, err := store.db.Exec(`UPDATE totp SET last_step=?, sig=? WHERE user_id=? AND last_step<? AND sig=?`, step, store.totpSig(totpRecord), userID, step, previousSig)
 	if err != nil {
 		journal("auth: totp verify: %v", err)
 		return false
 	}
-	n, err := res.RowsAffected()
+	affected, err := result.RowsAffected()
 	if err != nil {
 		journal("auth: totp verify: %v", err)
 		return false
 	}
-	return n == 1
+	return affected == 1
 }
 
 // TOTPRemove refuse de retirer un TOTP confirmé s'il ne reste aucune clé WebAuthn utilisable ; un secret en attente part toujours.
-func (s *authStore) TOTPRemove(userID int64) error {
+func (store *authStore) TOTPRemove(userID int64) error {
 	confirmed := false
-	err := s.inTx(func(tx *sql.Tx) error {
-		if _, err := s.userByID(tx, userID); err != nil {
-			return err
+	err := store.inTx(func(transaction *sql.Tx) error {
+		if _, lookupErr := store.userByID(transaction, userID); lookupErr != nil {
+			return lookupErr
 		}
-		r, err := s.loadTOTP(tx, userID)
-		if err != nil {
-			return err
+		totpRecord, txErr := store.loadTOTP(transaction, userID)
+		if txErr != nil {
+			return txErr
 		}
-		confirmed = r.confirmed.Valid
+		confirmed = totpRecord.confirmed.Valid
 		if confirmed {
-			list, err := s.loadCreds(tx, userID)
-			if err != nil {
-				return err
+			creds, credsErr := store.loadCreds(transaction, userID)
+			if credsErr != nil {
+				return credsErr
 			}
-			left := 0
-			for _, c := range list {
-				if !c.bad {
-					left++
+			usableCount := 0
+			for _, cred := range creds {
+				if !cred.bad {
+					usableCount++
 				}
 			}
-			if left == 0 {
+			if usableCount == 0 {
 				return errLastFactor
 			}
 		}
-		res, err := tx.Exec(`DELETE FROM totp WHERE user_id=? AND sig=?`, userID, r.sig)
-		if err != nil {
-			return err
+		result, txErr := transaction.Exec(`DELETE FROM totp WHERE user_id=? AND sig=?`, userID, totpRecord.sig)
+		if txErr != nil {
+			return txErr
 		}
-		if n, err := res.RowsAffected(); err != nil {
-			return err
-		} else if n == 0 {
+		if affected, affectedErr := result.RowsAffected(); affectedErr != nil {
+			return affectedErr
+		} else if affected == 0 {
 			return errNoTOTP
 		}
 		return nil
@@ -249,35 +249,35 @@ func (s *authStore) TOTPRemove(userID int64) error {
 		return err
 	}
 	if confirmed {
-		s.event(userID, "totp", "removed")
+		store.event(userID, "totp", "removed")
 	}
 	return nil
 }
 
-func (s *authStore) recoverySig(userID int64, hash string, used sql.NullInt64) []byte {
-	u := ""
+func (store *authStore) recoverySig(userID int64, hash string, used sql.NullInt64) []byte {
+	usedText := ""
 	if used.Valid {
-		u = strconv.FormatInt(used.Int64, 10)
+		usedText = strconv.FormatInt(used.Int64, 10)
 	}
-	return rowSig(s.key, "recovery_codes", strconv.FormatInt(userID, 10), hash, u)
+	return rowSig(store.key, "recovery_codes", strconv.FormatInt(userID, 10), hash, usedText)
 }
 
-func normRecovery(c string) string {
-	return strings.Map(func(r rune) rune {
-		if r == ' ' || r == '-' {
+func normRecovery(code string) string {
+	return strings.Map(func(character rune) rune {
+		if character == ' ' || character == '-' {
 			return -1
 		}
-		return r
-	}, strings.ToUpper(strings.TrimSpace(c)))
+		return character
+	}, strings.ToUpper(strings.TrimSpace(code)))
 }
 
 // NewRecoveryCodes remplace le jeu précédent ; les codes en clair ne sont rendus qu'ici.
-func (s *authStore) NewRecoveryCodes(userID int64) ([]string, error) {
+func (store *authStore) NewRecoveryCodes(userID int64) ([]string, error) {
 	codes, hashes, err := genRecoveryCodes()
 	if err != nil {
 		return nil, err
 	}
-	return codes, s.storeRecoveryCodes(userID, hashes)
+	return codes, store.storeRecoveryCodes(userID, hashes)
 }
 
 // genRecoveryCodes fait le travail argon2 hors de toute section verrouillée ; storeRecoveryCodes écrit le jeu.
@@ -285,41 +285,41 @@ func genRecoveryCodes() (codes, hashes []string, err error) {
 	codes = make([]string, 0, recoveryCount)
 	hashes = make([]string, 0, recoveryCount)
 	seen := map[string]bool{}
-	buf := make([]byte, recoveryCodeLen)
+	randomBytes := make([]byte, recoveryCodeLen)
 	for len(codes) < recoveryCount {
-		if _, err := rand.Read(buf); err != nil {
-			return nil, nil, err
+		if _, randErr := rand.Read(randomBytes); randErr != nil {
+			return nil, nil, randErr
 		}
-		for i, b := range buf {
+		for byteIndex, randomByte := range randomBytes {
 			// 32 symboles : b&31 reste uniforme.
-			buf[i] = recoveryAlpha[b&31]
+			randomBytes[byteIndex] = recoveryAlpha[randomByte&31]
 		}
-		c := string(buf)
-		if seen[c] {
+		code := string(randomBytes)
+		if seen[code] {
 			continue
 		}
-		seen[c] = true
-		h, err := hashPassword(c)
-		if err != nil {
-			return nil, nil, err
+		seen[code] = true
+		hash, hashErr := hashPassword(code)
+		if hashErr != nil {
+			return nil, nil, hashErr
 		}
-		codes = append(codes, c[:5]+"-"+c[5:])
-		hashes = append(hashes, h)
+		codes = append(codes, code[:5]+"-"+code[5:])
+		hashes = append(hashes, hash)
 	}
 	return codes, hashes, nil
 }
 
-func (s *authStore) storeRecoveryCodes(userID int64, hashes []string) error {
-	err := s.inTx(func(tx *sql.Tx) error {
-		if _, err := s.userByID(tx, userID); err != nil {
-			return err
+func (store *authStore) storeRecoveryCodes(userID int64, hashes []string) error {
+	err := store.inTx(func(transaction *sql.Tx) error {
+		if _, lookupErr := store.userByID(transaction, userID); lookupErr != nil {
+			return lookupErr
 		}
-		if _, err := tx.Exec(`DELETE FROM recovery_codes WHERE user_id=?`, userID); err != nil {
-			return err
+		if _, deleteErr := transaction.Exec(`DELETE FROM recovery_codes WHERE user_id=?`, userID); deleteErr != nil {
+			return deleteErr
 		}
-		for _, h := range hashes {
-			if _, err := tx.Exec(`INSERT INTO recovery_codes(user_id,hash,used_at,sig) VALUES(?,?,NULL,?)`, userID, h, s.recoverySig(userID, h, sql.NullInt64{})); err != nil {
-				return err
+		for _, hash := range hashes {
+			if _, insertErr := transaction.Exec(`INSERT INTO recovery_codes(user_id,hash,used_at,sig) VALUES(?,?,NULL,?)`, userID, hash, store.recoverySig(userID, hash, sql.NullInt64{})); insertErr != nil {
+				return insertErr
 			}
 		}
 		return nil
@@ -327,35 +327,35 @@ func (s *authStore) storeRecoveryCodes(userID int64, hashes []string) error {
 	if err != nil {
 		return err
 	}
-	s.event(userID, "recovery", "generated")
+	store.event(userID, "recovery", "generated")
 	return nil
 }
 
 // UseRecoveryCode hache hors transaction (argon2 est lent et la connexion est unique),
 // puis marque le code par un UPDATE conditionnel sur used_at IS NULL.
-func (s *authStore) UseRecoveryCode(userID int64, code string) bool {
-	c := normRecovery(code)
-	if len(c) != recoveryCodeLen {
+func (store *authStore) UseRecoveryCode(userID int64, code string) bool {
+	normalizedCode := normRecovery(code)
+	if len(normalizedCode) != recoveryCodeLen {
 		return false
 	}
-	type rc struct {
+	type recoveryRow struct {
 		hash string
 		sig  []byte
 	}
-	rows, err := s.db.Query(`SELECT hash,sig FROM recovery_codes WHERE user_id=? AND used_at IS NULL`, userID)
+	rows, err := store.db.Query(`SELECT hash,sig FROM recovery_codes WHERE user_id=? AND used_at IS NULL`, userID)
 	if err != nil {
 		journal("auth: recovery: %v", err)
 		return false
 	}
-	var list []rc
+	var storedCodes []recoveryRow
 	for rows.Next() {
-		var r rc
-		if err := rows.Scan(&r.hash, &r.sig); err != nil {
+		var stored recoveryRow
+		if scanErr := rows.Scan(&stored.hash, &stored.sig); scanErr != nil {
 			rows.Close()
-			journal("auth: recovery: %v", err)
+			journal("auth: recovery: %v", scanErr)
 			return false
 		}
-		list = append(list, r)
+		storedCodes = append(storedCodes, stored)
 	}
 	err = rows.Err()
 	rows.Close()
@@ -363,32 +363,32 @@ func (s *authStore) UseRecoveryCode(userID int64, code string) bool {
 		journal("auth: recovery: %v", err)
 		return false
 	}
-	for _, r := range list {
-		if !hmac.Equal(r.sig, s.recoverySig(userID, r.hash, sql.NullInt64{})) {
-			s.guard(&tamperErr{userID, "recovery_codes"})
+	for _, stored := range storedCodes {
+		if !hmac.Equal(stored.sig, store.recoverySig(userID, stored.hash, sql.NullInt64{})) {
+			store.guard(&tamperErr{userID, "recovery_codes"})
 			return false
 		}
 	}
-	for _, r := range list {
-		if !checkPassword(r.hash, c) {
+	for _, stored := range storedCodes {
+		if !checkPassword(stored.hash, normalizedCode) {
 			continue
 		}
-		used := sql.NullInt64{Int64: authNow().Unix(), Valid: true}
-		res, err := s.db.Exec(`UPDATE recovery_codes SET used_at=?, sig=? WHERE user_id=? AND hash=? AND used_at IS NULL AND sig=?`,
-			used.Int64, s.recoverySig(userID, r.hash, used), userID, r.hash, r.sig)
-		if err != nil {
-			journal("auth: recovery: %v", err)
+		usedAt := sql.NullInt64{Int64: authNow().Unix(), Valid: true}
+		result, updateErr := store.db.Exec(`UPDATE recovery_codes SET used_at=?, sig=? WHERE user_id=? AND hash=? AND used_at IS NULL AND sig=?`,
+			usedAt.Int64, store.recoverySig(userID, stored.hash, usedAt), userID, stored.hash, stored.sig)
+		if updateErr != nil {
+			journal("auth: recovery: %v", updateErr)
 			return false
 		}
-		n, err := res.RowsAffected()
-		if err != nil {
-			journal("auth: recovery: %v", err)
+		affected, updateErr := result.RowsAffected()
+		if updateErr != nil {
+			journal("auth: recovery: %v", updateErr)
 			return false
 		}
-		if n == 1 {
-			s.event(userID, "recovery", "used")
+		if affected == 1 {
+			store.event(userID, "recovery", "used")
 		}
-		return n == 1
+		return affected == 1
 	}
 	return false
 }

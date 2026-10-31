@@ -37,26 +37,26 @@ var (
 // Un RPID ne peut pas être une adresse IP et les navigateurs n'acceptent « localhost » que depuis localhost :
 // sans variable, seul http://localhost:<port> est servi, et une IP dans GLD_PUBLIC_URL est refusée.
 func newWebAuthn() (*webauthn.WebAuthn, error) {
-	rpid, origins := "localhost", []string{"http://localhost:" + port}
-	if raw := strings.TrimSpace(os.Getenv("GLD_PUBLIC_URL")); raw != "" {
-		u, err := url.Parse(raw)
-		h := ""
+	relyingPartyID, origins := "localhost", []string{"http://localhost:" + port}
+	if publicURL := strings.TrimSpace(os.Getenv("GLD_PUBLIC_URL")); publicURL != "" {
+		parsedURL, err := url.Parse(publicURL)
+		host := ""
 		if err == nil {
-			h = strings.ToLower(u.Hostname())
+			host = strings.ToLower(parsedURL.Hostname())
 		}
-		if h == "" || net.ParseIP(h) != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		if host == "" || net.ParseIP(host) != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
 			return nil, errWebAuthnBadURL
 		}
-		if u.Scheme == "http" && h != "localhost" {
+		if parsedURL.Scheme == "http" && host != "localhost" {
 			return nil, errWebAuthnNeedsHTTPS
 		}
-		origin := u.Scheme + "://" + h
-		if p := u.Port(); p != "" && !(u.Scheme == "https" && p == "443") && !(u.Scheme == "http" && p == "80") {
-			origin += ":" + p
+		origin := parsedURL.Scheme + "://" + host
+		if explicitPort := parsedURL.Port(); explicitPort != "" && !(parsedURL.Scheme == "https" && explicitPort == "443") && !(parsedURL.Scheme == "http" && explicitPort == "80") {
+			origin += ":" + explicitPort
 		}
-		rpid, origins = h, []string{origin}
+		relyingPartyID, origins = host, []string{origin}
 	}
-	return webauthn.New(&webauthn.Config{RPDisplayName: "gld", RPID: rpid, RPOrigins: origins})
+	return webauthn.New(&webauthn.Config{RPDisplayName: "gld", RPID: relyingPartyID, RPOrigins: origins})
 }
 
 type waPending struct {
@@ -73,42 +73,42 @@ var waChallenges = struct {
 
 func waKey(purpose, sessionID string) string { return purpose + "\x00" + sessionID }
 
-func waPut(purpose, sessionID string, uid int64, d *webauthn.SessionData) {
+func waPut(purpose, sessionID string, userID int64, challenge *webauthn.SessionData) {
 	now := authNow()
 	waChallenges.Lock()
 	defer waChallenges.Unlock()
-	k := waKey(purpose, sessionID)
-	if _, ok := waChallenges.m[k]; !ok && len(waChallenges.m) >= waMaxChallenges {
-		for k, p := range waChallenges.m {
-			if now.Sub(p.at) > waChallengeTTL {
-				delete(waChallenges.m, k)
+	challengeKey := waKey(purpose, sessionID)
+	if _, exists := waChallenges.m[challengeKey]; !exists && len(waChallenges.m) >= waMaxChallenges {
+		for staleKey, pending := range waChallenges.m {
+			if now.Sub(pending.at) > waChallengeTTL {
+				delete(waChallenges.m, staleKey)
 			}
 		}
 		// ponytail: recherche linéaire du plus ancien, seulement quand le plafond est atteint.
 		for len(waChallenges.m) >= waMaxChallenges {
-			oldest, first := "", true
-			for k, p := range waChallenges.m {
-				if first || p.at.Before(waChallenges.m[oldest].at) {
-					oldest, first = k, false
+			oldest, isFirst := "", true
+			for candidateKey, pending := range waChallenges.m {
+				if isFirst || pending.at.Before(waChallenges.m[oldest].at) {
+					oldest, isFirst = candidateKey, false
 				}
 			}
 			delete(waChallenges.m, oldest)
 		}
 	}
-	waChallenges.m[k] = waPending{uid, *d, now}
+	waChallenges.m[challengeKey] = waPending{userID, *challenge, now}
 }
 
 // waTake consomme le défi même s'il est refusé : un défi ne sert qu'une fois.
-func waTake(purpose, sessionID string, uid int64) (webauthn.SessionData, error) {
+func waTake(purpose, sessionID string, userID int64) (webauthn.SessionData, error) {
 	waChallenges.Lock()
 	defer waChallenges.Unlock()
-	k := waKey(purpose, sessionID)
-	p, ok := waChallenges.m[k]
-	delete(waChallenges.m, k)
-	if !ok || sessionID == "" || p.uid != uid || authNow().Sub(p.at) > waChallengeTTL {
+	challengeKey := waKey(purpose, sessionID)
+	pending, found := waChallenges.m[challengeKey]
+	delete(waChallenges.m, challengeKey)
+	if !found || sessionID == "" || pending.uid != userID || authNow().Sub(pending.at) > waChallengeTTL {
 		return webauthn.SessionData{}, errNoChallenge
 	}
-	return p.data, nil
+	return pending.data, nil
 }
 
 type credRow struct {
@@ -126,9 +126,9 @@ type credRow struct {
 	bad        bool
 }
 
-func (s *authStore) credSig(r *credRow) []byte {
-	return rowSig(s.key, "webauthn_creds", strconv.FormatInt(r.uid, 10), string(r.credID), string(r.pub),
-		strconv.FormatInt(r.signCount, 10), r.transports, r.label, strconv.FormatInt(r.createdAt, 10), strconv.FormatInt(r.flags, 10))
+func (store *authStore) credSig(cred *credRow) []byte {
+	return rowSig(store.key, "webauthn_creds", strconv.FormatInt(cred.uid, 10), string(cred.credID), string(cred.pub),
+		strconv.FormatInt(cred.signCount, 10), cred.transports, cred.label, strconv.FormatInt(cred.createdAt, 10), strconv.FormatInt(cred.flags, 10))
 }
 
 type rowsQuerier interface {
@@ -136,52 +136,52 @@ type rowsQuerier interface {
 }
 
 // loadCreds marque les lignes altérées sans échouer : chaque appelant décide de leur sort.
-func (s *authStore) loadCreds(q rowsQuerier, userID int64) ([]*credRow, error) {
-	rows, err := q.Query(`SELECT id,cred_id,public_key,sign_count,transports,label,created_at,last_used_at,flags,sig FROM webauthn_creds WHERE user_id=? ORDER BY id`, userID)
+func (store *authStore) loadCreds(queryRunner rowsQuerier, userID int64) ([]*credRow, error) {
+	rows, err := queryRunner.Query(`SELECT id,cred_id,public_key,sign_count,transports,label,created_at,last_used_at,flags,sig FROM webauthn_creds WHERE user_id=? ORDER BY id`, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []*credRow
+	var creds []*credRow
 	for rows.Next() {
-		r := &credRow{uid: userID}
-		if err := rows.Scan(&r.id, &r.credID, &r.pub, &r.signCount, &r.transports, &r.label, &r.createdAt, &r.lastUsed, &r.flags, &r.sig); err != nil {
-			return nil, err
+		cred := &credRow{uid: userID}
+		if scanErr := rows.Scan(&cred.id, &cred.credID, &cred.pub, &cred.signCount, &cred.transports, &cred.label, &cred.createdAt, &cred.lastUsed, &cred.flags, &cred.sig); scanErr != nil {
+			return nil, scanErr
 		}
-		r.bad = r.signCount < 0 || r.signCount > 0xFFFFFFFF || r.flags < 0 || r.flags > 0xFF || !rowSigOK(s.key, "webauthn_creds", strconv.FormatInt(userID, 10), r.sig,
-			string(r.credID), string(r.pub), strconv.FormatInt(r.signCount, 10), r.transports, r.label, strconv.FormatInt(r.createdAt, 10), strconv.FormatInt(r.flags, 10))
-		out = append(out, r)
+		cred.bad = cred.signCount < 0 || cred.signCount > 0xFFFFFFFF || cred.flags < 0 || cred.flags > 0xFF || !rowSigOK(store.key, "webauthn_creds", strconv.FormatInt(userID, 10), cred.sig,
+			string(cred.credID), string(cred.pub), strconv.FormatInt(cred.signCount, 10), cred.transports, cred.label, strconv.FormatInt(cred.createdAt, 10), strconv.FormatInt(cred.flags, 10))
+		creds = append(creds, cred)
 	}
-	return out, rows.Err()
+	return creds, rows.Err()
 }
 
 // goodCreds refuse tout le jeu dès qu'une ligne est altérée : jamais de cérémonie sur une base douteuse.
-func (s *authStore) goodCreds(q rowsQuerier, userID int64) ([]*credRow, error) {
-	list, err := s.loadCreds(q, userID)
+func (store *authStore) goodCreds(queryRunner rowsQuerier, userID int64) ([]*credRow, error) {
+	creds, err := store.loadCreds(queryRunner, userID)
 	if err != nil {
 		return nil, err
 	}
-	for _, r := range list {
-		if r.bad {
+	for _, cred := range creds {
+		if cred.bad {
 			return nil, &tamperErr{userID, "webauthn_creds"}
 		}
 	}
-	return list, nil
+	return creds, nil
 }
 
-func (r *credRow) credential() webauthn.Credential {
-	var tr []protocol.AuthenticatorTransport
-	for _, t := range strings.Split(r.transports, ",") {
-		if t != "" {
-			tr = append(tr, protocol.AuthenticatorTransport(t))
+func (cred *credRow) credential() webauthn.Credential {
+	var transports []protocol.AuthenticatorTransport
+	for _, transport := range strings.Split(cred.transports, ",") {
+		if transport != "" {
+			transports = append(transports, protocol.AuthenticatorTransport(transport))
 		}
 	}
 	return webauthn.Credential{
-		ID:            r.credID,
-		PublicKey:     r.pub,
-		Transport:     tr,
-		Flags:         webauthn.NewCredentialFlags(protocol.AuthenticatorFlags(r.flags)),
-		Authenticator: webauthn.Authenticator{SignCount: uint32(r.signCount)},
+		ID:            cred.credID,
+		PublicKey:     cred.pub,
+		Transport:     transports,
+		Flags:         webauthn.NewCredentialFlags(protocol.AuthenticatorFlags(cred.flags)),
+		Authenticator: webauthn.Authenticator{SignCount: uint32(cred.signCount)},
 	}
 }
 
@@ -191,54 +191,54 @@ type waUser struct {
 	creds  []webauthn.Credential
 }
 
-func (u *waUser) WebAuthnID() []byte                         { return u.handle }
-func (u *waUser) WebAuthnName() string                       { return u.name }
-func (u *waUser) WebAuthnDisplayName() string                { return u.name }
-func (u *waUser) WebAuthnCredentials() []webauthn.Credential { return u.creds }
+func (webAuthnUser *waUser) WebAuthnID() []byte                         { return webAuthnUser.handle }
+func (webAuthnUser *waUser) WebAuthnName() string                       { return webAuthnUser.name }
+func (webAuthnUser *waUser) WebAuthnDisplayName() string                { return webAuthnUser.name }
+func (webAuthnUser *waUser) WebAuthnCredentials() []webauthn.Credential { return webAuthnUser.creds }
 
 // waUserFor dérive un identifiant opaque et stable du compte, sans colonne dédiée ni fuite de l'id interne.
-func (s *authStore) waUserFor(userID int64) (*waUser, []*credRow, error) {
-	u, err := s.userByID(s.db, userID)
+func (store *authStore) waUserFor(userID int64) (*waUser, []*credRow, error) {
+	user, err := store.userByID(store.db, userID)
 	if err != nil {
-		return nil, nil, s.guard(err)
+		return nil, nil, store.guard(err)
 	}
-	if u.Disabled {
+	if user.Disabled {
 		return nil, nil, errNoUser
 	}
-	list, err := s.goodCreds(s.db, userID)
+	creds, err := store.goodCreds(store.db, userID)
 	if err != nil {
-		return nil, nil, s.guard(err)
+		return nil, nil, store.guard(err)
 	}
-	wu := &waUser{handle: rowSig(s.key, "webauthn_user", strconv.FormatInt(userID, 10)), name: u.Name}
-	for _, r := range list {
-		wu.creds = append(wu.creds, r.credential())
+	webAuthnUser := &waUser{handle: rowSig(store.key, "webauthn_user", strconv.FormatInt(userID, 10)), name: user.Name}
+	for _, cred := range creds {
+		webAuthnUser.creds = append(webAuthnUser.creds, cred.credential())
 	}
-	return wu, list, nil
+	return webAuthnUser, creds, nil
 }
 
-func cleanLabel(l string) (string, error) {
-	l = strings.TrimSpace(l)
-	if utf8.RuneCountInString(l) > 64 || !utf8.ValidString(l) || strings.IndexFunc(l, unicode.IsControl) >= 0 {
+func cleanLabel(label string) (string, error) {
+	label = strings.TrimSpace(label)
+	if utf8.RuneCountInString(label) > 64 || !utf8.ValidString(label) || strings.IndexFunc(label, unicode.IsControl) >= 0 {
 		return "", errBadLabel
 	}
-	return l, nil
+	return label, nil
 }
 
-func (s *authStore) WebAuthnBeginRegister(userID int64, sessionID string) (any, error) {
+func (store *authStore) WebAuthnBeginRegister(userID int64, sessionID string) (any, error) {
 	if sessionID == "" {
 		return nil, errNoChallenge
 	}
-	wa, err := newWebAuthn()
+	relyingParty, err := newWebAuthn()
 	if err != nil {
 		return nil, err
 	}
-	wu, _, err := s.waUserFor(userID)
+	webAuthnUser, _, err := store.waUserFor(userID)
 	if err != nil {
 		return nil, err
 	}
 	// La vérification de l'utilisateur est exigée dès l'enrôlement : une clé incapable de la fournir serait refusée à la connexion.
-	opts, sd, err := wa.BeginRegistration(wu,
-		webauthn.WithExclusions(webauthn.Credentials(wu.creds).CredentialDescriptors()),
+	opts, sessionData, err := relyingParty.BeginRegistration(webAuthnUser,
+		webauthn.WithExclusions(webauthn.Credentials(webAuthnUser.creds).CredentialDescriptors()),
 		webauthn.WithAuthenticatorSelection(protocol.AuthenticatorSelection{
 			ResidentKey:      protocol.ResidentKeyRequirementDiscouraged,
 			UserVerification: protocol.VerificationRequired,
@@ -246,127 +246,127 @@ func (s *authStore) WebAuthnBeginRegister(userID int64, sessionID string) (any, 
 	if err != nil {
 		return nil, err
 	}
-	waPut("register", sessionID, userID, sd)
+	waPut("register", sessionID, userID, sessionData)
 	return opts, nil
 }
 
-func (s *authStore) WebAuthnFinishRegister(userID int64, sessionID, label string, r *http.Request) error {
-	sd, err := waTake("register", sessionID, userID)
+func (store *authStore) WebAuthnFinishRegister(userID int64, sessionID, label string, request *http.Request) error {
+	sessionData, err := waTake("register", sessionID, userID)
 	if err != nil {
 		return err
 	}
 	if label, err = cleanLabel(label); err != nil {
 		return err
 	}
-	wa, err := newWebAuthn()
+	relyingParty, err := newWebAuthn()
 	if err != nil {
 		return err
 	}
-	wu, _, err := s.waUserFor(userID)
+	webAuthnUser, _, err := store.waUserFor(userID)
 	if err != nil {
 		return err
 	}
-	c, err := wa.FinishRegistration(wu, sd, r)
+	credential, err := relyingParty.FinishRegistration(webAuthnUser, sessionData, request)
 	if err != nil {
 		journal("auth: webauthn register: %v", err)
 		return errWebAuthnFailed
 	}
-	tr := make([]string, 0, len(c.Transport))
-	for _, t := range c.Transport {
-		tr = append(tr, string(t))
+	transports := make([]string, 0, len(credential.Transport))
+	for _, transport := range credential.Transport {
+		transports = append(transports, string(transport))
 	}
-	row := &credRow{uid: userID, credID: c.ID, pub: c.PublicKey, signCount: int64(c.Authenticator.SignCount),
-		transports: strings.Join(tr, ","), label: label, createdAt: authNow().Unix(), flags: int64(c.Flags.ProtocolValue())}
-	err = s.inTx(func(tx *sql.Tx) error {
-		u, err := s.userByID(tx, userID)
-		if err != nil {
-			return err
+	row := &credRow{uid: userID, credID: credential.ID, pub: credential.PublicKey, signCount: int64(credential.Authenticator.SignCount),
+		transports: strings.Join(transports, ","), label: label, createdAt: authNow().Unix(), flags: int64(credential.Flags.ProtocolValue())}
+	err = store.inTx(func(transaction *sql.Tx) error {
+		user, txErr := store.userByID(transaction, userID)
+		if txErr != nil {
+			return txErr
 		}
-		_, err = tx.Exec(`INSERT INTO webauthn_creds(user_id,cred_id,public_key,sign_count,transports,label,created_at,flags,sig) VALUES(?,?,?,?,?,?,?,?,?)`,
-			userID, row.credID, row.pub, row.signCount, row.transports, row.label, row.createdAt, row.flags, s.credSig(row))
-		var se interface{ Code() int }
-		if errors.As(err, &se) && se.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE {
+		_, txErr = transaction.Exec(`INSERT INTO webauthn_creds(user_id,cred_id,public_key,sign_count,transports,label,created_at,flags,sig) VALUES(?,?,?,?,?,?,?,?,?)`,
+			userID, row.credID, row.pub, row.signCount, row.transports, row.label, row.createdAt, row.flags, store.credSig(row))
+		var constraintErr interface{ Code() int }
+		if errors.As(txErr, &constraintErr) && constraintErr.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE {
 			return errWebAuthnFailed
 		}
-		if err != nil {
-			return err
+		if txErr != nil {
+			return txErr
 		}
-		return s.markEnrolled(tx, u)
+		return store.markEnrolled(transaction, user)
 	})
 	if err != nil {
 		return err
 	}
-	s.event(userID, "webauthn", "enrolled")
+	store.event(userID, "webauthn", "enrolled")
 	return nil
 }
 
-func (s *authStore) WebAuthnBeginLogin(userID int64, sessionID string) (any, error) {
+func (store *authStore) WebAuthnBeginLogin(userID int64, sessionID string) (any, error) {
 	if sessionID == "" {
 		return nil, errNoChallenge
 	}
-	wa, err := newWebAuthn()
+	relyingParty, err := newWebAuthn()
 	if err != nil {
 		return nil, err
 	}
-	wu, _, err := s.waUserFor(userID)
+	webAuthnUser, _, err := store.waUserFor(userID)
 	if err != nil {
 		return nil, err
 	}
-	if len(wu.creds) == 0 {
+	if len(webAuthnUser.creds) == 0 {
 		return nil, errWebAuthnFailed
 	}
-	opts, sd, err := wa.BeginLogin(wu, webauthn.WithUserVerification(protocol.VerificationRequired))
+	opts, sessionData, err := relyingParty.BeginLogin(webAuthnUser, webauthn.WithUserVerification(protocol.VerificationRequired))
 	if err != nil {
 		return nil, err
 	}
-	waPut("login", sessionID, userID, sd)
+	waPut("login", sessionID, userID, sessionData)
 	return opts, nil
 }
 
 // WebAuthnFinishLogin refuse un compteur qui recule (clé clonée probable) et avance le compteur
 // par un UPDATE conditionnel sur l'ancienne signature : de deux assertions concurrentes, une seule gagne.
-func (s *authStore) WebAuthnFinishLogin(userID int64, sessionID string, r *http.Request) error {
-	sd, err := waTake("login", sessionID, userID)
+func (store *authStore) WebAuthnFinishLogin(userID int64, sessionID string, request *http.Request) error {
+	sessionData, err := waTake("login", sessionID, userID)
 	if err != nil {
 		return err
 	}
-	wa, err := newWebAuthn()
+	relyingParty, err := newWebAuthn()
 	if err != nil {
 		return err
 	}
-	wu, list, err := s.waUserFor(userID)
+	webAuthnUser, creds, err := store.waUserFor(userID)
 	if err != nil {
 		return err
 	}
-	c, err := wa.FinishLogin(wu, sd, r)
+	credential, err := relyingParty.FinishLogin(webAuthnUser, sessionData, request)
 	if err != nil {
 		journal("auth: webauthn login: %v", err)
 		return errWebAuthnFailed
 	}
-	if c.Authenticator.CloneWarning {
-		s.event(userID, "webauthn", "clone")
+	if credential.Authenticator.CloneWarning {
+		store.event(userID, "webauthn", "clone")
 		return errWebAuthnFailed
 	}
-	var old *credRow
-	for _, row := range list {
-		if string(row.credID) == string(c.ID) {
-			old = row
+	var matchedCred *credRow
+	for _, candidate := range creds {
+		if string(candidate.credID) == string(credential.ID) {
+			matchedCred = candidate
 		}
 	}
-	if old == nil {
+	if matchedCred == nil {
 		return errWebAuthnFailed
 	}
-	nr := *old
-	nr.signCount, nr.flags = int64(c.Authenticator.SignCount), int64(c.Flags.ProtocolValue())
-	err = s.inTx(func(tx *sql.Tx) error {
-		res, err := tx.Exec(`UPDATE webauthn_creds SET sign_count=?, flags=?, last_used_at=?, sig=? WHERE user_id=? AND cred_id=? AND sig=?`,
-			nr.signCount, nr.flags, authNow().Unix(), s.credSig(&nr), userID, old.credID, old.sig)
-		if err != nil {
-			return err
+	updatedCred := *matchedCred
+	updatedCred.signCount, updatedCred.flags = int64(credential.Authenticator.SignCount), int64(credential.Flags.ProtocolValue())
+	err = store.inTx(func(transaction *sql.Tx) error {
+		result, txErr := transaction.Exec(`UPDATE webauthn_creds SET sign_count=?, flags=?, last_used_at=?, sig=? WHERE user_id=? AND cred_id=? AND sig=?`,
+			updatedCred.signCount, updatedCred.flags, authNow().Unix(), store.credSig(&updatedCred), userID, matchedCred.credID, matchedCred.sig)
+		if txErr != nil {
+			return txErr
 		}
-		if n, err := res.RowsAffected(); err != nil {
-			return err
-		} else if n == 0 {
+		if affected, affectedErr := result.RowsAffected(); affectedErr != nil {
+			return affectedErr
+		} else if affected == 0 {
 			return errWebAuthnFailed
 		}
 		return nil
@@ -374,7 +374,7 @@ func (s *authStore) WebAuthnFinishLogin(userID int64, sessionID string, r *http.
 	if err != nil {
 		return err
 	}
-	s.event(userID, "webauthn", "used")
+	store.event(userID, "webauthn", "used")
 	return nil
 }
 
@@ -393,69 +393,69 @@ var waTamperSeen = struct {
 	m map[string]bool
 }{m: map[string]bool{}}
 
-func waTamperFirstSeen(r *credRow) bool {
-	k := strconv.FormatInt(r.id, 10) + "\x00" + string(r.sig)
+func waTamperFirstSeen(cred *credRow) bool {
+	seenKey := strconv.FormatInt(cred.id, 10) + "\x00" + string(cred.sig)
 	waTamperSeen.Lock()
 	defer waTamperSeen.Unlock()
-	if waTamperSeen.m[k] {
+	if waTamperSeen.m[seenKey] {
 		return false
 	}
-	waTamperSeen.m[k] = true
+	waTamperSeen.m[seenKey] = true
 	return true
 }
 
-func (s *authStore) WebAuthnList(userID int64) ([]CredInfo, error) {
-	list, err := s.loadCreds(s.db, userID)
+func (store *authStore) WebAuthnList(userID int64) ([]CredInfo, error) {
+	creds, err := store.loadCreds(store.db, userID)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]CredInfo, 0, len(list))
-	for _, r := range list {
-		out = append(out, CredInfo{ID: r.id, Label: r.label, CreatedAt: r.createdAt, LastUsedAt: r.lastUsed.Int64, Bad: r.bad})
-		if r.bad && waTamperFirstSeen(r) {
-			s.event(userID, "tamper", "webauthn_creds")
+	infos := make([]CredInfo, 0, len(creds))
+	for _, cred := range creds {
+		infos = append(infos, CredInfo{ID: cred.id, Label: cred.label, CreatedAt: cred.createdAt, LastUsedAt: cred.lastUsed.Int64, Bad: cred.bad})
+		if cred.bad && waTamperFirstSeen(cred) {
+			store.event(userID, "tamper", "webauthn_creds")
 		}
 	}
-	return out, nil
+	return infos, nil
 }
 
 // WebAuthnRemove ne compte que les facteurs utilisables : TOTP confirmé et clés à la signature valide.
-func (s *authStore) WebAuthnRemove(userID, id int64) error {
-	err := s.inTx(func(tx *sql.Tx) error {
-		if _, err := s.userByID(tx, userID); err != nil {
-			return err
+func (store *authStore) WebAuthnRemove(userID, credID int64) error {
+	err := store.inTx(func(transaction *sql.Tx) error {
+		if _, lookupErr := store.userByID(transaction, userID); lookupErr != nil {
+			return lookupErr
 		}
-		list, err := s.loadCreds(tx, userID)
-		if err != nil {
-			return err
+		creds, txErr := store.loadCreds(transaction, userID)
+		if txErr != nil {
+			return txErr
 		}
-		found, left := false, 0
-		for _, r := range list {
-			if r.id == id {
+		found, usableCount := false, 0
+		for _, cred := range creds {
+			if cred.id == credID {
 				found = true
-			} else if !r.bad {
-				left++
+			} else if !cred.bad {
+				usableCount++
 			}
 		}
 		if !found {
 			return errWebAuthnFailed
 		}
-		t, err := s.loadTOTP(tx, userID)
-		if err != nil && !errors.Is(err, errNoTOTP) {
-			return err
+		totp, txErr := store.loadTOTP(transaction, userID)
+		if txErr != nil && !errors.Is(txErr, errNoTOTP) {
+			return txErr
 		}
-		if err == nil && t.confirmed.Valid {
-			left++
+		if txErr == nil && totp.confirmed.Valid {
+			usableCount++
 		}
-		if left == 0 {
+		if usableCount == 0 {
 			return errLastFactor
 		}
-		_, err = tx.Exec(`DELETE FROM webauthn_creds WHERE id=? AND user_id=?`, id, userID)
-		return err
+		_, txErr = transaction.Exec(`DELETE FROM webauthn_creds WHERE id=? AND user_id=?`, credID, userID)
+		return txErr
 	})
 	if err != nil {
 		return err
 	}
-	s.event(userID, "webauthn", "removed")
+	store.event(userID, "webauthn", "removed")
 	return nil
 }

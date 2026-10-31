@@ -17,53 +17,53 @@ var (
 	pendingTitlesMu sync.Mutex
 )
 
-func deferTitle(id, path string) {
+func deferTitle(sessionID, path string) {
 	pendingTitlesMu.Lock()
-	pendingTitles[id] = path
+	pendingTitles[sessionID] = path
 	pendingTitlesMu.Unlock()
 }
 
 // flushTitles pose le titre des sessions en attente qui ne sont plus ouvertes ; une session sans titre à ce moment-là seulement.
 func flushTitles() {
 	pendingTitlesMu.Lock()
-	todo := make(map[string]string, len(pendingTitles))
-	for id, p := range pendingTitles {
-		todo[id] = p
+	titlesToFlush := make(map[string]string, len(pendingTitles))
+	for sessionID, transcriptPath := range pendingTitles {
+		titlesToFlush[sessionID] = transcriptPath
 	}
 	pendingTitlesMu.Unlock()
-	if len(todo) == 0 {
+	if len(titlesToFlush) == 0 {
 		return
 	}
-	live, err := liveCheck()
-	if err != nil {
+	liveSessions, liveErr := liveCheck()
+	if liveErr != nil {
 		return
 	}
-	for id, p := range todo {
-		if live[id] {
+	for sessionID, transcriptPath := range titlesToFlush {
+		if liveSessions[sessionID] {
 			continue
 		}
 		pendingTitlesMu.Lock()
-		delete(pendingTitles, id)
+		delete(pendingTitles, sessionID)
 		pendingTitlesMu.Unlock()
-		if hasTitle(p) {
+		if hasTitle(transcriptPath) {
 			continue
 		}
-		title, err := autoTitle(p)
-		if err == nil {
-			err = setTitle(p, id, title)
+		title, titleErr := autoTitle(transcriptPath)
+		if titleErr == nil {
+			titleErr = setTitle(transcriptPath, sessionID, title)
 		}
-		journal("auto-title %s « %s » : %v", id, title, errOr(err))
+		journal("auto-title %s « %s » : %v", sessionID, title, errOr(titleErr))
 	}
 }
 
 func titleLoop(every time.Duration) {
-	t := time.NewTicker(every)
-	defer t.Stop()
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-homeCtx.Done():
 			return
-		case <-t.C:
+		case <-ticker.C:
 			flushTitles()
 		}
 	}
@@ -71,52 +71,61 @@ func titleLoop(every time.Duration) {
 
 func titleSystem() string { return L("prompt.titleSystem", "A1", replyLang()) }
 
+const (
+	titleRunTimeout         = 60 * time.Second
+	titleErrorMaxLength     = 300
+	titleExcerptMaxLength   = 600
+	titleMaxMessagesSampled = 6
+	titleMaxLength          = 80
+)
+
 // titleRun demande le titre à Haiku (remplaçable dans les tests).
 var titleRun = func(text string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	commandContext, cancel := context.WithTimeout(context.Background(), titleRunTimeout)
 	defer cancel()
-	cmd := helperCmd(ctx, "haiku", titleSystem())
+	cmd := helperCmd(commandContext, "haiku", titleSystem())
 	cmd.Stdin = strings.NewReader(text)
-	out, err := helperOutput(ctx, cmd)
-	var r struct {
+	output, err := helperOutput(commandContext, cmd)
+	var reply struct {
 		IsError bool   `json:"is_error"`
 		Result  string `json:"result"`
 	}
-	if json.Unmarshal(out, &r) != nil {
+	if json.Unmarshal(output, &reply) != nil {
 		if err == nil {
 			err = terr("srv.memwrite.reponseIllisible")
 		}
 		return "", err
 	}
-	if r.IsError {
-		return "", errors.New(cut(r.Result, 300))
+	if reply.IsError {
+		return "", errors.New(cut(reply.Result, titleErrorMaxLength))
 	}
-	return r.Result, nil
+	return reply.Result, nil
 }
 
 // autoTitle propose un titre d'après les premiers échanges du transcript.
 func autoTitle(path string) (string, error) {
-	var b strings.Builder
-	n := 0
-	for _, m := range conv(path, false) {
-		if m.T == "" {
+	var excerpt strings.Builder
+	sampledMessages := 0
+	for _, message := range conv(path, false) {
+		if message.T == "" {
 			continue
 		}
-		b.WriteString(m.R + " : " + cut(m.T, 600) + "\n\n")
-		if n++; n >= 6 {
+		excerpt.WriteString(message.R + " : " + cut(message.T, titleExcerptMaxLength) + "\n\n")
+		sampledMessages++
+		if sampledMessages >= titleMaxMessagesSampled {
 			break
 		}
 	}
-	if b.Len() == 0 {
+	if excerpt.Len() == 0 {
 		return "", terr("srv.autotitle.emptyConversation")
 	}
-	t, err := titleRun(b.String())
+	title, err := titleRun(excerpt.String())
 	if err != nil {
 		return "", err
 	}
-	t = strings.Trim(spaceRe.ReplaceAllString(t, " "), " \"«».")
-	if t == "" {
+	title = strings.Trim(spaceRe.ReplaceAllString(title, " "), " \"«».")
+	if title == "" {
 		return "", terr("srv.autotitle.emptyTitle")
 	}
-	return cut(t, 80), nil
+	return cut(title, titleMaxLength), nil
 }

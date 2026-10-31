@@ -36,17 +36,33 @@ const (
 	argonSaltLen = 16
 )
 
+// Bornes acceptées pour un hachage stocké : au-delà, la ligne est rejetée avant tout calcul argon2.
+const (
+	argonMaxMemKiB  = 1 << 20
+	argonMaxTime    = 10
+	argonMaxThreads = 16
+	argonMinSaltLen = 8
+	argonMaxSaltLen = 64
+	argonMinKeyLen  = 16
+	argonMaxKeyLen  = 64
+)
+
+const (
+	passwordMaxBytes = 1024
+	passwordMinRunes = 12
+)
+
 //go:embed auth_commonpw.txt
 var commonPwRaw []byte
 
 var commonPw = sync.OnceValue(func() map[string]struct{} {
-	m := map[string]struct{}{}
-	for _, l := range bytes.Split(commonPwRaw, []byte("\n")) {
-		if s := strings.TrimSpace(string(l)); s != "" {
-			m[strings.ToLower(s)] = struct{}{}
+	commonPasswords := map[string]struct{}{}
+	for _, rawLine := range bytes.Split(commonPwRaw, []byte("\n")) {
+		if candidate := strings.TrimSpace(string(rawLine)); candidate != "" {
+			commonPasswords[strings.ToLower(candidate)] = struct{}{}
 		}
 	}
-	return m
+	return commonPasswords
 })
 
 // argonSem borne les calculs argon2 simultanés (64 Mio chacun) : une rafale de requêtes ne fait pas exploser la mémoire.
@@ -55,24 +71,24 @@ var (
 	argonIDKey = argon2.IDKey
 )
 
-func argonKey(pw, salt []byte, t, m uint32, p uint8, l uint32) []byte {
+func argonKey(password, salt []byte, iterations, memoryKiB uint32, threads uint8, keyLength uint32) []byte {
 	argonSem <- struct{}{}
 	defer func() { <-argonSem }()
-	return argonIDKey(pw, salt, t, m, p, l)
+	return argonIDKey(password, salt, iterations, memoryKiB, threads, keyLength)
 }
 
-func hashPassword(pw string) (string, error) {
+func hashPassword(password string) (string, error) {
 	salt := make([]byte, argonSaltLen)
 	if _, err := rand.Read(salt); err != nil {
 		return "", err
 	}
-	key := argonKey([]byte(pw), salt, argonTime, argonMemKiB, argonThreads, argonKeyLen)
-	b := base64.RawStdEncoding
+	key := argonKey([]byte(password), salt, argonTime, argonMemKiB, argonThreads, argonKeyLen)
+	encoding := base64.RawStdEncoding
 	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s", argon2.Version,
-		argonMemKiB, argonTime, argonThreads, b.EncodeToString(salt), b.EncodeToString(key)), nil
+		argonMemKiB, argonTime, argonThreads, encoding.EncodeToString(salt), encoding.EncodeToString(key)), nil
 }
 
-func checkPassword(hash, pw string) bool {
+func checkPassword(hash, password string) bool {
 	parts := strings.Split(hash, "$")
 	if len(parts) != 6 || parts[1] != "argon2id" {
 		return false
@@ -80,32 +96,32 @@ func checkPassword(hash, pw string) bool {
 	if parts[2] != "v=19" {
 		return false
 	}
-	kv := strings.Split(parts[3], ",")
-	if len(kv) != 3 {
+	parameters := strings.Split(parts[3], ",")
+	if len(parameters) != 3 {
 		return false
 	}
-	var v [3]uint64
-	for i, k := range []string{"m=", "t=", "p="} {
-		if !strings.HasPrefix(kv[i], k) {
+	var parsedParams [3]uint64
+	for paramIndex, prefix := range []string{"m=", "t=", "p="} {
+		if !strings.HasPrefix(parameters[paramIndex], prefix) {
 			return false
 		}
-		n, err := strconv.ParseUint(kv[i][len(k):], 10, 32)
+		parsedValue, err := strconv.ParseUint(parameters[paramIndex][len(prefix):], 10, 32)
 		if err != nil {
 			return false
 		}
-		v[i] = n
+		parsedParams[paramIndex] = parsedValue
 	}
-	m, t, p := uint32(v[0]), uint32(v[1]), v[2]
-	if m == 0 || m > 1<<20 || t == 0 || t > 10 || p == 0 || p > 16 {
+	memoryKiB, iterations, threads := uint32(parsedParams[0]), uint32(parsedParams[1]), parsedParams[2]
+	if memoryKiB == 0 || memoryKiB > argonMaxMemKiB || iterations == 0 || iterations > argonMaxTime || threads == 0 || threads > argonMaxThreads {
 		return false
 	}
-	salt, err1 := base64.RawStdEncoding.DecodeString(parts[4])
-	want, err2 := base64.RawStdEncoding.DecodeString(parts[5])
-	if err1 != nil || err2 != nil || len(salt) < 8 || len(salt) > 64 || len(want) < 16 || len(want) > 64 {
+	salt, saltErr := base64.RawStdEncoding.DecodeString(parts[4])
+	expectedKey, keyErr := base64.RawStdEncoding.DecodeString(parts[5])
+	if saltErr != nil || keyErr != nil || len(salt) < argonMinSaltLen || len(salt) > argonMaxSaltLen || len(expectedKey) < argonMinKeyLen || len(expectedKey) > argonMaxKeyLen {
 		return false
 	}
-	got := argonKey([]byte(pw), salt, t, m, uint8(p), uint32(len(want)))
-	return subtle.ConstantTimeCompare(got, want) == 1
+	computedKey := argonKey([]byte(password), salt, iterations, memoryKiB, uint8(threads), uint32(len(expectedKey)))
+	return subtle.ConstantTimeCompare(computedKey, expectedKey) == 1
 }
 
 // dummyCheck dépense le même travail qu'une vérification, pour qu'un nom inconnu ne se distingue pas par le temps.
@@ -113,21 +129,21 @@ func dummyCheck() {
 	argonKey([]byte("dummy"), make([]byte, argonSaltLen), argonTime, argonMemKiB, argonThreads, argonKeyLen)
 }
 
-func validPassword(pw string) error {
+func validPassword(password string) error {
 	switch {
-	case len(pw) > 1024:
+	case len(password) > passwordMaxBytes:
 		return errPasswordLong
-	case strings.IndexByte(pw, 0) >= 0:
+	case strings.IndexByte(password, 0) >= 0:
 		return errPasswordNUL
-	case utf8.RuneCountInString(pw) < 12:
+	case utf8.RuneCountInString(password) < passwordMinRunes:
 		return errPasswordShort
 	}
-	if _, bad := commonPw()[strings.ToLower(pw)]; bad {
+	if _, isCommon := commonPw()[strings.ToLower(password)]; isCommon {
 		return errPasswordCommon
 	}
 	return nil
 }
 
-func normName(s string) string {
-	return strings.ToLower(strings.TrimSpace(norm.NFKC.String(s)))
+func normName(name string) string {
+	return strings.ToLower(strings.TrimSpace(norm.NFKC.String(name)))
 }

@@ -57,193 +57,193 @@ type factorState struct {
 	Recovery int  `json:"recovery"`
 }
 
-func (f factorState) none() bool { return !f.TOTP && f.WebAuthn == 0 }
+func (factors factorState) none() bool { return !factors.TOTP && factors.WebAuthn == 0 }
 
 // factors échoue sur toute ligne altérée : un facteur douteux ne doit jamais rouvrir l'enrôlement sans second facteur.
-func (s *authStore) factors(uid int64) (factorState, error) {
-	var f factorState
-	u, err := s.userByID(s.db, uid)
+func (store *authStore) factors(userID int64) (factorState, error) {
+	var factors factorState
+	user, err := store.userByID(store.db, userID)
 	if err != nil {
-		return f, s.guard(err)
+		return factors, store.guard(err)
 	}
-	t, err := s.loadTOTP(s.db, uid)
-	if err = s.guard(err); err != nil && !errors.Is(err, errNoTOTP) {
-		return f, err
+	totp, err := store.loadTOTP(store.db, userID)
+	if err = store.guard(err); err != nil && !errors.Is(err, errNoTOTP) {
+		return factors, err
 	}
-	f.TOTP = err == nil && t.confirmed.Valid
-	creds, err := s.goodCreds(s.db, uid)
+	factors.TOTP = err == nil && totp.confirmed.Valid
+	creds, err := store.goodCreds(store.db, userID)
 	if err != nil {
-		return f, s.guard(err)
+		return factors, store.guard(err)
 	}
-	f.WebAuthn = len(creds)
+	factors.WebAuthn = len(creds)
 	// Compte enrôlé sans aucun facteur : lignes supprimées, jamais une raison d'enrôler avec le seul mot de passe.
-	if u.MFAEnrolled && f.none() {
-		return f, s.guard(&tamperErr{uid, "mfa_factors"})
+	if user.MFAEnrolled && factors.none() {
+		return factors, store.guard(&tamperErr{userID, "mfa_factors"})
 	}
-	err = s.db.QueryRow(`SELECT COUNT(*) FROM recovery_codes WHERE user_id=? AND used_at IS NULL`, uid).Scan(&f.Recovery)
-	return f, err
+	err = store.db.QueryRow(`SELECT COUNT(*) FROM recovery_codes WHERE user_id=? AND used_at IS NULL`, userID).Scan(&factors.Recovery)
+	return factors, err
 }
 
 // mfaFails lit le compteur mfa: global du compte sans passer par Check, qui consommerait une place du plafond global.
-func (t *throttle) mfaFails(user string) int64 {
-	_, _, _, mk := thKeys(user, "")
-	return t.mfaCount(mk)
+func (throttler *throttle) mfaFails(user string) int64 {
+	_, _, _, mfaKey := thKeys(user, "")
+	return throttler.mfaCount(mfaKey)
 }
 
 // mfaOver : le second facteur est bloqué pour ce compte depuis cette adresse, ou pour ce compte partout.
-func (t *throttle) mfaOver(user, ip string) bool {
-	return t.mfaCount(mfaPairKey(user, ip)) >= thMFALimit || t.mfaFails(user) >= thMFAGlobal
+func (throttler *throttle) mfaOver(user, ip string) bool {
+	return throttler.mfaCount(mfaPairKey(user, ip)) >= thMFALimit || throttler.mfaFails(user) >= thMFAGlobal
 }
 
-func (t *throttle) mfaCount(key string) int64 {
-	var fails, first int64
-	if t.db.QueryRow(`SELECT fails, first_at FROM throttle WHERE key=?`, key).Scan(&fails, &first) != nil {
+func (throttler *throttle) mfaCount(key string) int64 {
+	var fails, firstAt int64
+	if throttler.db.QueryRow(`SELECT fails, first_at FROM throttle WHERE key=?`, key).Scan(&fails, &firstAt) != nil {
 		return 0
 	}
-	if first <= t.now().Add(-thWindow).Unix() {
+	if firstAt <= throttler.now().Add(-thWindow).Unix() {
 		return 0
 	}
 	return fails
 }
 
-func routesAuth(mux *http.ServeMux, s *authStore, th *throttle) *authAPI {
-	a := &authAPI{s: s, th: th, reauthAt: map[string]time.Time{}, busy: map[string]bool{}}
-	mux.HandleFunc("POST /v1/auth/sessions", a.login)
-	mux.HandleFunc("POST /v1/auth/mfa/totp", a.mfaTOTP)
-	mux.HandleFunc("POST /v1/auth/mfa/recovery", a.mfaRecovery)
-	mux.HandleFunc("POST /v1/auth/mfa/webauthn/challenges", a.mfaWebAuthnBegin)
-	mux.HandleFunc("POST /v1/auth/mfa/webauthn/assertions", a.mfaWebAuthnFinish)
-	mux.HandleFunc("DELETE /v1/auth/sessions/current", a.logout)
-	mux.HandleFunc("GET /v1/auth/me", a.me)
-	mux.HandleFunc("POST /v1/auth/totp/enrollments", a.totpBegin)
-	mux.HandleFunc("PUT /v1/auth/totp/enrollments/current", a.totpConfirm)
-	mux.HandleFunc("POST /v1/auth/webauthn/registrations", a.waRegisterBegin)
-	mux.HandleFunc("PUT /v1/auth/webauthn/registrations/current", a.waRegisterFinish)
-	mux.HandleFunc("POST /v1/auth/factors/{factor}/removals", a.factorRemove)
-	mux.HandleFunc("PUT /v1/auth/recovery-codes", a.recoveryRegenerate)
-	mux.HandleFunc("PUT /v1/auth/password", a.password)
-	mux.HandleFunc("GET /v1/auth/alerts", a.alerts)
-	mux.HandleFunc("GET /v1/auth/sessions", a.sessions)
-	mux.HandleFunc("POST /v1/auth/sessions/{sid}/revocations", a.sessionRevoke)
-	mux.HandleFunc("POST /v1/auth/sessions/revocations", a.sessionRevokeOthers)
-	return a
+func routesAuth(mux *http.ServeMux, store *authStore, throttler *throttle) *authAPI {
+	authHandlers := &authAPI{s: store, th: throttler, reauthAt: map[string]time.Time{}, busy: map[string]bool{}}
+	mux.HandleFunc("POST /v1/auth/sessions", authHandlers.login)
+	mux.HandleFunc("POST /v1/auth/mfa/totp", authHandlers.mfaTOTP)
+	mux.HandleFunc("POST /v1/auth/mfa/recovery", authHandlers.mfaRecovery)
+	mux.HandleFunc("POST /v1/auth/mfa/webauthn/challenges", authHandlers.mfaWebAuthnBegin)
+	mux.HandleFunc("POST /v1/auth/mfa/webauthn/assertions", authHandlers.mfaWebAuthnFinish)
+	mux.HandleFunc("DELETE /v1/auth/sessions/current", authHandlers.logout)
+	mux.HandleFunc("GET /v1/auth/me", authHandlers.me)
+	mux.HandleFunc("POST /v1/auth/totp/enrollments", authHandlers.totpBegin)
+	mux.HandleFunc("PUT /v1/auth/totp/enrollments/current", authHandlers.totpConfirm)
+	mux.HandleFunc("POST /v1/auth/webauthn/registrations", authHandlers.waRegisterBegin)
+	mux.HandleFunc("PUT /v1/auth/webauthn/registrations/current", authHandlers.waRegisterFinish)
+	mux.HandleFunc("POST /v1/auth/factors/{factor}/removals", authHandlers.factorRemove)
+	mux.HandleFunc("PUT /v1/auth/recovery-codes", authHandlers.recoveryRegenerate)
+	mux.HandleFunc("PUT /v1/auth/password", authHandlers.password)
+	mux.HandleFunc("GET /v1/auth/alerts", authHandlers.alerts)
+	mux.HandleFunc("GET /v1/auth/sessions", authHandlers.sessions)
+	mux.HandleFunc("POST /v1/auth/sessions/{sid}/revocations", authHandlers.sessionRevoke)
+	mux.HandleFunc("POST /v1/auth/sessions/revocations", authHandlers.sessionRevokeOthers)
+	return authHandlers
 }
 
 // authFail est l'unique réponse d'échec : même statut, même corps, mêmes en-têtes quelle que soit la cause.
-func authFail(w http.ResponseWriter, wait time.Duration) {
-	w.Header().Set("Retry-After", strconv.Itoa(max(1, int(math.Ceil(wait.Seconds())))))
-	authMsg(w, 401, L("srv.auth.invalide"))
+func authFail(responseWriter http.ResponseWriter, wait time.Duration) {
+	responseWriter.Header().Set("Retry-After", strconv.Itoa(max(1, int(math.Ceil(wait.Seconds())))))
+	authMsg(responseWriter, http.StatusUnauthorized, L("srv.auth.invalide"))
 }
 
-func authInternal(w http.ResponseWriter, err error) {
+func authInternal(responseWriter http.ResponseWriter, err error) {
 	journal("auth: %v", err)
-	authMsg(w, 500, L("srv.auth.erreur"))
+	authMsg(responseWriter, http.StatusInternalServerError, L("srv.auth.erreur"))
 }
 
 // authMsg : réponse d'erreur uniforme de l'API /v1, le code découlant du statut.
-func authMsg(w http.ResponseWriter, status int, msg string) {
-	writeErr(w, status, statusCode(status), msg)
+func authMsg(responseWriter http.ResponseWriter, status int, msg string) {
+	writeErr(responseWriter, status, statusCode(status), msg)
 }
 
 // authUserErr ne montre que les erreurs du catalogue ; le reste part au journal.
-func authUserErr(w http.ResponseWriter, code int, err error) {
-	var m *msgErr
-	if errors.As(err, &m) {
-		authMsg(w, code, err.Error())
+func authUserErr(responseWriter http.ResponseWriter, code int, err error) {
+	var catalogErr *msgErr
+	if errors.As(err, &catalogErr) {
+		authMsg(responseWriter, code, err.Error())
 		return
 	}
-	authInternal(w, err)
+	authInternal(responseWriter, err)
 }
 
-func decodeAuth(w http.ResponseWriter, r *http.Request, v any) bool {
-	r.Body = http.MaxBytesReader(w, r.Body, authBodyMax)
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if dec.Decode(v) != nil || dec.Decode(&struct{}{}) != io.EOF {
-		authMsg(w, 400, L("srv.http_util.requeteInvalide"))
+func decodeAuth(responseWriter http.ResponseWriter, request *http.Request, destination any) bool {
+	request.Body = http.MaxBytesReader(responseWriter, request.Body, authBodyMax)
+	decoder := json.NewDecoder(request.Body)
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(destination) != nil || decoder.Decode(&struct{}{}) != io.EOF {
+		authMsg(responseWriter, http.StatusBadRequest, L("srv.http_util.requeteInvalide"))
 		return false
 	}
 	return true
 }
 
 // pwSane écarte avant tout calcul argon2 ce qu'aucun mot de passe valide ne peut être.
-func pwSane(pw string) bool {
-	if pw == "" || len(pw) > 1024 {
+func pwSane(password string) bool {
+	if password == "" || len(password) > passwordMaxBytes {
 		return false
 	}
-	for i := 0; i < len(pw); i++ {
-		if pw[i] == 0 {
+	for byteIndex := 0; byteIndex < len(password); byteIndex++ {
+		if password[byteIndex] == 0 {
 			return false
 		}
 	}
 	return true
 }
 
-func (a *authAPI) log(uid int64, name, ip, kind, outcome string) {
-	var u any
-	if uid != 0 {
-		u = uid
+func (authHandlers *authAPI) log(userID int64, name, ip, kind, outcome string) {
+	var nullableUserID any
+	if userID != 0 {
+		nullableUserID = userID
 	}
-	a.s.db.Exec(`INSERT INTO auth_events(at,user_id,name_tried,ip,kind,outcome) VALUES(?,?,?,?,?,?)`, authNow().Unix(), u, name, ip, kind, outcome)
+	authHandlers.s.db.Exec(`INSERT INTO auth_events(at,user_id,name_tried,ip,kind,outcome) VALUES(?,?,?,?,?,?)`, authNow().Unix(), nullableUserID, name, ip, kind, outcome)
 }
 
-func (a *authAPI) fail(w http.ResponseWriter, uid int64, name, ip, kind, outcome, stage string) {
-	if err := a.th.Fail(name, ip, stage); err != nil {
+func (authHandlers *authAPI) fail(responseWriter http.ResponseWriter, userID int64, name, ip, kind, outcome, stage string) {
+	if err := authHandlers.th.Fail(name, ip, stage); err != nil {
 		journal("auth: throttle: %v", err)
 	}
-	a.log(uid, name, ip, kind, outcome)
-	wait, _ := a.th.Pending(name, ip)
-	authFail(w, wait)
+	authHandlers.log(userID, name, ip, kind, outcome)
+	wait, _ := authHandlers.th.Pending(name, ip)
+	authFail(responseWriter, wait)
 }
 
 // throttled répond aussitôt, sans rien vérifier, quand une attente ou un verrou s'applique ;
 // onBlocked passe avant la réponse, pour pouvoir encore effacer le cookie.
-func (a *authAPI) throttled(w http.ResponseWriter, uid int64, name, ip, kind string, onBlocked func()) bool {
-	wait, blocked := a.th.Check(name, ip)
+func (authHandlers *authAPI) throttled(responseWriter http.ResponseWriter, userID int64, name, ip, kind string, onBlocked func()) bool {
+	wait, blocked := authHandlers.th.Check(name, ip)
 	if !blocked && wait <= 0 {
 		return false
 	}
-	a.rateLog(uid, name, ip, kind, "blocked")
+	authHandlers.rateLog(userID, name, ip, kind, "blocked")
 	if blocked && onBlocked != nil {
 		onBlocked()
 	}
-	authFail(w, wait)
+	authFail(responseWriter, wait)
 	return true
 }
 
-func (a *authAPI) login(w http.ResponseWriter, r *http.Request) {
+func (authHandlers *authAPI) login(responseWriter http.ResponseWriter, request *http.Request) {
 	// Exiger JSON interdit le formulaire HTML intersite, seule voie d'une connexion forcée sans pré-vol.
-	if mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mt != "application/json" {
-		authMsg(w, 415, L("srv.http_util.requeteInvalide"))
+	if mediaType, _, _ := mime.ParseMediaType(request.Header.Get("Content-Type")); mediaType != "application/json" {
+		authMsg(responseWriter, http.StatusUnsupportedMediaType, L("srv.http_util.requeteInvalide"))
 		return
 	}
-	var req struct {
+	var requestBody struct {
 		Name     string `json:"name"`
 		Password string `json:"password"`
 	}
-	if !decodeAuth(w, r, &req) {
+	if !decodeAuth(responseWriter, request, &requestBody) {
 		return
 	}
-	name, ip := normName(req.Name), clientIP(r)
+	name, ip := normName(requestBody.Name), clientIP(request)
 	// Un nom trop long pour un compte ne crée ni clé ni événement à son nom : tous partagent une seule clé.
-	if utf8.RuneCountInString(name) > 64 {
+	if utf8.RuneCountInString(name) > nameMaxRunes {
 		name = oversizeName
 	}
-	release, ok := a.claim("login:" + name)
-	if !ok {
-		a.rateLog(0, name, ip, evLogin, "busy")
-		authFail(w, 0)
+	release, claimed := authHandlers.claim("login:" + name)
+	if !claimed {
+		authHandlers.rateLog(0, name, ip, evLogin, "busy")
+		authFail(responseWriter, 0)
 		return
 	}
 	defer release()
-	if a.throttled(w, 0, name, ip, evLogin, nil) {
+	if authHandlers.throttled(responseWriter, 0, name, ip, evLogin, nil) {
 		return
 	}
-	if !pwSane(req.Password) || name == oversizeName {
-		a.fail(w, 0, name, ip, evLogin, "invalid_password", "password")
+	if !pwSane(requestBody.Password) || name == oversizeName {
+		authHandlers.fail(responseWriter, 0, name, ip, evLogin, "invalid_password", "password")
 		return
 	}
-	u, err := a.s.UserByName(name)
+	user, err := authHandlers.s.UserByName(name)
 	if err != nil {
 		dummyPassword()
 		outcome := "unknown"
@@ -252,78 +252,80 @@ func (a *authAPI) login(w http.ResponseWriter, r *http.Request) {
 		} else if !errors.Is(err, errNoUser) {
 			journal("auth: login: %v", err)
 		}
-		a.fail(w, 0, name, ip, evLogin, outcome, "password")
+		authHandlers.fail(responseWriter, 0, name, ip, evLogin, outcome, "password")
 		return
 	}
-	if !verifyPassword(u.PwHash, req.Password) {
-		a.fail(w, u.ID, name, ip, evLogin, "bad_password", "password")
+	if !verifyPassword(user.PwHash, requestBody.Password) {
+		authHandlers.fail(responseWriter, user.ID, name, ip, evLogin, "bad_password", "password")
 		return
 	}
-	if u.Disabled {
-		a.fail(w, u.ID, name, ip, evLogin, "disabled", "password")
+	if user.Disabled {
+		authHandlers.fail(responseWriter, user.ID, name, ip, evLogin, "disabled", "password")
 		return
 	}
-	f, err := a.s.factors(u.ID)
+	factors, err := authHandlers.s.factors(user.ID)
 	if err != nil {
 		journal("auth: login factors: %v", err)
-		a.fail(w, u.ID, name, ip, evLogin, "factors", "password")
+		authHandlers.fail(responseWriter, user.ID, name, ip, evLogin, "factors", "password")
 		return
 	}
-	c, err := a.s.NewSession(u.ID, ip, r.UserAgent())
-	var p *Principal
+	sessionValue, err := authHandlers.s.NewSession(user.ID, ip, request.UserAgent())
+	var principal *Principal
 	if err == nil {
-		p, err = a.s.Session(c)
+		principal, err = authHandlers.s.Session(sessionValue)
 	}
 	if err != nil {
 		journal("auth: login session: %v", err)
-		a.fail(w, u.ID, name, ip, evLogin, "session_error", "password")
+		authHandlers.fail(responseWriter, user.ID, name, ip, evLogin, "session_error", "password")
 		return
 	}
-	setSessionCookie(w, r, c, authNow().Add(thMFAWindow))
+	setSessionCookie(responseWriter, request, sessionValue, authNow().Add(thMFAWindow))
 	methods := []string{}
-	if f.TOTP {
+	if factors.TOTP {
 		methods = append(methods, "totp")
 	}
-	if f.WebAuthn > 0 {
+	if factors.WebAuthn > 0 {
 		methods = append(methods, "webauthn")
 	}
-	if f.Recovery > 0 {
+	if factors.Recovery > 0 {
 		methods = append(methods, "recovery")
 	}
-	a.log(u.ID, name, ip, evLogin, "password_ok")
-	writeJSON(w, 200, map[string]any{"mfa": methods, "enroll": f.none(), "csrf": p.CSRF})
+	authHandlers.log(user.ID, name, ip, evLogin, "password_ok")
+	writeJSON(responseWriter, http.StatusOK, map[string]any{"mfa": methods, "enroll": factors.none(), "csrf": principal.CSRF})
 }
 
 // need exige une session valide et, hors GET, le jeton CSRF ; full exige en plus le second facteur.
-func (a *authAPI) need(w http.ResponseWriter, r *http.Request, full bool) *Principal {
-	a.rlFlush()
-	c, err := r.Cookie(sessCookie)
-	var p *Principal
+func (authHandlers *authAPI) need(responseWriter http.ResponseWriter, request *http.Request, full bool) *Principal {
+	authHandlers.rlFlush()
+	cookie, err := request.Cookie(sessCookie)
+	var principal *Principal
 	if err == nil {
-		p, err = a.s.Session(c.Value)
+		principal, err = authHandlers.s.Session(cookie.Value)
 	}
 	if err != nil {
 		if !errors.Is(err, errNoSession) && !errors.Is(err, http.ErrNoCookie) {
 			journal("auth: session: %v", err)
 		}
-		a.deniedLog(0, clientIP(r), "auth")
-		authMsg(w, 401, L("srv.auth.sessionRequise"))
+		authHandlers.deniedLog(0, clientIP(request), "auth")
+		authMsg(responseWriter, http.StatusUnauthorized, L("srv.auth.sessionRequise"))
 		return nil
 	}
-	if !csrfOK(r, p) {
-		a.deniedLog(p.User.ID, clientIP(r), "csrf")
-		authMsg(w, 403, L("srv.auth.csrf"))
+	if !csrfOK(request, principal) {
+		authHandlers.deniedLog(principal.User.ID, clientIP(request), "csrf")
+		authMsg(responseWriter, http.StatusForbidden, L("srv.auth.csrf"))
 		return nil
 	}
-	if full && !p.MFA {
-		authMsg(w, 403, L("srv.auth.mfaRequis"))
+	if full && !principal.MFA {
+		authMsg(responseWriter, http.StatusForbidden, L("srv.auth.mfaRequis"))
 		return nil
 	}
-	return p
+	return principal
 }
 
 // deniedLog journalise un refus ; anonyme, il passe par la limite de rateLog.
-func (a *authAPI) deniedLog(uid int64, ip, kind string) { a.rateLog(uid, "", ip, kind, "denied") }
+func (authHandlers *authAPI) deniedLog(userID int64, ip, kind string) {
+	authHandlers.rateLog(userID, "", ip, kind, "denied")
+}
 
 // rlWindow : la minute en cours du limiteur d'événements, tenue sous a.mu ; rien n'y touche la base.
 type rlWindow struct {
@@ -341,146 +343,146 @@ type rlWindow struct {
 // compte : une fois par minute par (compte, type|issue). Le nom tapé n'entre dans aucune clé. Les comptes perdus sont tenus
 // en mémoire et écrits en un seul résumé « suppressed » par minute, après la minute, hors du verrou. Les événements
 // critiques (altération, verrou, échecs et succès du second facteur, changements de droits ou de facteurs) ne passent pas ici.
-func (a *authAPI) rateLog(uid int64, name, ip, kind, outcome string) {
-	if r := []rune(name); len(r) > 64 {
-		name = string(r[:64])
+func (authHandlers *authAPI) rateLog(userID int64, name, ip, kind, outcome string) {
+	if nameRunes := []rune(name); len(nameRunes) > nameMaxRunes {
+		name = string(nameRunes[:nameMaxRunes])
 	}
 	now := authNow()
-	write := false
-	a.mu.Lock()
-	sum := a.rlRoll(now)
-	w := &a.rl
-	if uid != 0 {
-		k := strconv.FormatInt(uid, 10) + "|" + kind + "|" + outcome
-		if !w.uids[k] {
-			w.uids[k], write = true, true
+	shouldWrite := false
+	authHandlers.mu.Lock()
+	summary := authHandlers.rlRoll(now)
+	window := &authHandlers.rl
+	if userID != 0 {
+		dedupKey := strconv.FormatInt(userID, 10) + "|" + kind + "|" + outcome
+		if !window.uids[dedupKey] {
+			window.uids[dedupKey], shouldWrite = true, true
 		} else {
-			w.uidDrop++
+			window.uidDrop++
 		}
-	} else if n, ok := w.src[ip]; !ok && len(w.src) >= rlCap {
-		w.overflow++
-	} else if n < rateBudget && w.anon < rlGlobal {
-		w.src[ip], w.anon, write = n+1, w.anon+1, true
+	} else if sentCount, addressKnown := window.src[ip]; !addressKnown && len(window.src) >= rlCap {
+		window.overflow++
+	} else if sentCount < rateBudget && window.anon < rlGlobal {
+		window.src[ip], window.anon, shouldWrite = sentCount+1, window.anon+1, true
 	} else {
-		w.src[ip] = n
-		w.anonDrop++
+		window.src[ip] = sentCount
+		window.anonDrop++
 	}
-	a.mu.Unlock()
-	a.writeSuppressed(sum)
-	if write {
-		a.log(uid, name, ip, kind, outcome)
+	authHandlers.mu.Unlock()
+	authHandlers.writeSuppressed(summary)
+	if shouldWrite {
+		authHandlers.log(userID, name, ip, kind, outcome)
 	}
 }
 
 // rlRoll ferme la minute écoulée et renvoie son résumé (vide s'il n'y a rien eu à taire) ; appelée sous a.mu.
-func (a *authAPI) rlRoll(now time.Time) string {
-	w := &a.rl
-	if w.src != nil && now.Sub(w.start) < time.Minute {
+func (authHandlers *authAPI) rlRoll(now time.Time) string {
+	window := &authHandlers.rl
+	if window.src != nil && now.Sub(window.start) < time.Minute {
 		return ""
 	}
-	sum := ""
-	if w.anonDrop+w.overflow+w.uidDrop > 0 {
-		sum = fmt.Sprintf("anon=%d overflow=%d uid=%d", w.anonDrop, w.overflow, w.uidDrop)
+	summary := ""
+	if window.anonDrop+window.overflow+window.uidDrop > 0 {
+		summary = fmt.Sprintf("anon=%d overflow=%d uid=%d", window.anonDrop, window.overflow, window.uidDrop)
 	}
-	*w = rlWindow{start: now, src: map[string]int{}, uids: map[string]bool{}}
-	return sum
+	*window = rlWindow{start: now, src: map[string]int{}, uids: map[string]bool{}}
+	return summary
 }
 
 // rlFlush ferme la minute écoulée sans événement à écrire ; appelée par chaque requête qui vérifie une session.
-func (a *authAPI) rlFlush() {
-	a.mu.Lock()
-	sum := a.rlRoll(authNow())
-	a.mu.Unlock()
-	a.writeSuppressed(sum)
+func (authHandlers *authAPI) rlFlush() {
+	authHandlers.mu.Lock()
+	summary := authHandlers.rlRoll(authNow())
+	authHandlers.mu.Unlock()
+	authHandlers.writeSuppressed(summary)
 }
 
-func (a *authAPI) writeSuppressed(sum string) {
-	if sum != "" {
-		a.s.db.Exec(`INSERT INTO auth_events(at,kind,outcome) VALUES(?,?,?)`, authNow().Unix(), "suppressed", sum)
+func (authHandlers *authAPI) writeSuppressed(summary string) {
+	if summary != "" {
+		authHandlers.s.db.Exec(`INSERT INTO auth_events(at,kind,outcome) VALUES(?,?,?)`, authNow().Unix(), "suppressed", summary)
 	}
 }
 
 // claim réserve une clé le temps d'une vérification : une requête concurrente sur la même clé
 // est refusée sans rien vérifier, pour que les compteurs voient chaque échec avant l'essai suivant.
-func (a *authAPI) claim(key string) (release func(), ok bool) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.busy[key] {
+func (authHandlers *authAPI) claim(key string) (release func(), claimed bool) {
+	authHandlers.mu.Lock()
+	defer authHandlers.mu.Unlock()
+	if authHandlers.busy[key] {
 		return nil, false
 	}
-	a.busy[key] = true
+	authHandlers.busy[key] = true
 	return func() {
-		a.mu.Lock()
-		delete(a.busy, key)
-		a.mu.Unlock()
+		authHandlers.mu.Lock()
+		delete(authHandlers.busy, key)
+		authHandlers.mu.Unlock()
 	}, true
 }
 
-func codeKey(uid int64) string { return "code:" + strconv.FormatInt(uid, 10) }
+func codeKey(userID int64) string { return "code:" + strconv.FormatInt(userID, 10) }
 
-func (a *authAPI) kill(w http.ResponseWriter, p *Principal, ip string) {
-	if err := a.s.RevokeSession(p.SessionID); err != nil {
+func (authHandlers *authAPI) kill(responseWriter http.ResponseWriter, principal *Principal, ip string) {
+	if err := authHandlers.s.RevokeSession(principal.SessionID); err != nil {
 		journal("auth: revoke partial session: %v", err)
 	}
-	clearSessionCookie(w)
-	a.log(p.User.ID, p.User.Name, ip, "mfa", "session_killed")
+	clearSessionCookie(responseWriter)
+	authHandlers.log(principal.User.ID, principal.User.Name, ip, "mfa", "session_killed")
 }
 
 // second applique le même contrôle à toute méthode de second facteur ; p.User a déjà été relu
 // et vérifié (signature, compte actif) par Session.
-func (a *authAPI) second(w http.ResponseWriter, r *http.Request, p *Principal, method string, verify func() bool) {
-	name, ip, uid := p.User.Name, clientIP(r), p.User.ID
+func (authHandlers *authAPI) second(responseWriter http.ResponseWriter, request *http.Request, principal *Principal, method string, verify func() bool) {
+	name, ip, userID := principal.User.Name, clientIP(request), principal.User.ID
 	kind := "mfa_" + method
-	release, ok := a.claim(codeKey(uid))
-	if !ok {
-		a.rateLog(uid, name, ip, kind, "busy")
-		authFail(w, 0)
+	release, succeeded := authHandlers.claim(codeKey(userID))
+	if !succeeded {
+		authHandlers.rateLog(userID, name, ip, kind, "busy")
+		authFail(responseWriter, 0)
 		return
 	}
 	defer release()
 	var onBlocked func()
-	if !p.MFA {
-		onBlocked = func() { a.kill(w, p, ip) }
+	if !principal.MFA {
+		onBlocked = func() { authHandlers.kill(responseWriter, principal, ip) }
 	}
-	if a.throttled(w, uid, name, ip, kind, onBlocked) {
+	if authHandlers.throttled(responseWriter, userID, name, ip, kind, onBlocked) {
 		return
 	}
 	if !verify() {
-		if err := a.th.Fail(name, ip, "mfa"); err != nil {
+		if err := authHandlers.th.Fail(name, ip, "mfa"); err != nil {
 			journal("auth: throttle: %v", err)
 		}
-		a.log(uid, name, ip, kind, "failure")
-		if !p.MFA && a.th.mfaOver(name, ip) {
-			a.kill(w, p, ip)
+		authHandlers.log(userID, name, ip, kind, "failure")
+		if !principal.MFA && authHandlers.th.mfaOver(name, ip) {
+			authHandlers.kill(responseWriter, principal, ip)
 		}
-		wait, _ := a.th.Pending(name, ip)
-		authFail(w, wait)
+		wait, _ := authHandlers.th.Pending(name, ip)
+		authFail(responseWriter, wait)
 		return
 	}
-	a.log(uid, name, ip, kind, evSuccess)
-	if p.MFA {
-		a.markReauth(p.SessionID)
-		writeJSON(w, 200, map[string]any{"csrf": p.CSRF})
+	authHandlers.log(userID, name, ip, kind, evSuccess)
+	if principal.MFA {
+		authHandlers.markReauth(principal.SessionID)
+		writeJSON(responseWriter, http.StatusOK, map[string]any{"csrf": principal.CSRF})
 		return
 	}
-	csrf, ok := a.promote(w, r, p, ip)
-	if !ok {
-		authFail(w, 0)
+	csrf, succeeded := authHandlers.promote(responseWriter, request, principal, ip)
+	if !succeeded {
+		authFail(responseWriter, 0)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"csrf": csrf})
+	writeJSON(responseWriter, http.StatusOK, map[string]any{"csrf": csrf})
 }
 
 // promote achève la connexion : compteurs remis à zéro, nouvelle valeur de cookie, événement login/success.
-func (a *authAPI) promote(w http.ResponseWriter, r *http.Request, p *Principal, ip string) (string, bool) {
-	if err := a.th.Success(p.User.Name, ip); err != nil {
+func (authHandlers *authAPI) promote(responseWriter http.ResponseWriter, request *http.Request, principal *Principal, ip string) (string, bool) {
+	if err := authHandlers.th.Success(principal.User.Name, ip); err != nil {
 		journal("auth: throttle success: %v", err)
 		return "", false
 	}
-	c, exp, err := a.s.PromoteMFA(p.SessionID)
-	var np *Principal
+	sessionValue, expiresAt, err := authHandlers.s.PromoteMFA(principal.SessionID)
+	var promotedPrincipal *Principal
 	if err == nil {
-		np, err = a.s.Session(c)
+		promotedPrincipal, err = authHandlers.s.Session(sessionValue)
 	}
 	if err != nil {
 		if !errors.Is(err, errNoSession) {
@@ -488,171 +490,173 @@ func (a *authAPI) promote(w http.ResponseWriter, r *http.Request, p *Principal, 
 		}
 		return "", false
 	}
-	setSessionCookie(w, r, c, exp)
+	setSessionCookie(responseWriter, request, sessionValue, expiresAt)
 	// Le compte précédent du navigateur est inconnu (session échue) : le home choisi n'est jamais légué.
-	clearHomeCookie(w)
-	a.s.eventIP(p.User.ID, evLogin, evSuccess, ip)
-	return np.CSRF, true
+	clearHomeCookie(responseWriter)
+	authHandlers.s.eventIP(principal.User.ID, evLogin, evSuccess, ip)
+	return promotedPrincipal.CSRF, true
 }
 
-func (a *authAPI) markReauth(sid string) {
+func (authHandlers *authAPI) markReauth(sessionID string) {
 	now := authNow()
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	for k, t := range a.reauthAt {
-		if now.Sub(t) > reauthFor {
-			delete(a.reauthAt, k)
+	authHandlers.mu.Lock()
+	defer authHandlers.mu.Unlock()
+	for reauthSessionID, reauthedAt := range authHandlers.reauthAt {
+		if now.Sub(reauthedAt) > reauthFor {
+			delete(authHandlers.reauthAt, reauthSessionID)
 		}
 	}
-	a.reauthAt[sid] = now
+	authHandlers.reauthAt[sessionID] = now
 }
 
-func (a *authAPI) reauthFresh(sid string) bool {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	t, ok := a.reauthAt[sid]
-	return ok && authNow().Sub(t) <= reauthFor
+func (authHandlers *authAPI) reauthFresh(sessionID string) bool {
+	authHandlers.mu.Lock()
+	defer authHandlers.mu.Unlock()
+	reauthedAt, found := authHandlers.reauthAt[sessionID]
+	return found && authNow().Sub(reauthedAt) <= reauthFor
 }
 
-func (a *authAPI) forgetReauth(sid string) {
-	a.mu.Lock()
-	delete(a.reauthAt, sid)
-	a.mu.Unlock()
+func (authHandlers *authAPI) forgetReauth(sessionID string) {
+	authHandlers.mu.Lock()
+	delete(authHandlers.reauthAt, sessionID)
+	authHandlers.mu.Unlock()
 }
 
 type codeReq struct {
 	Code string `json:"code"`
 }
 
-func (a *authAPI) mfaTOTP(w http.ResponseWriter, r *http.Request) {
-	p := a.need(w, r, false)
-	var req codeReq
-	if p == nil || !decodeAuth(w, r, &req) {
+func (authHandlers *authAPI) mfaTOTP(responseWriter http.ResponseWriter, request *http.Request) {
+	principal := authHandlers.need(responseWriter, request, false)
+	var requestBody codeReq
+	if principal == nil || !decodeAuth(responseWriter, request, &requestBody) {
 		return
 	}
-	a.second(w, r, p, "totp", func() bool { return verifyTOTP(a.s, p.User.ID, req.Code, authNow()) })
+	authHandlers.second(responseWriter, request, principal, "totp", func() bool { return verifyTOTP(authHandlers.s, principal.User.ID, requestBody.Code, authNow()) })
 }
 
-func (a *authAPI) mfaRecovery(w http.ResponseWriter, r *http.Request) {
-	p := a.need(w, r, false)
-	var req codeReq
-	if p == nil || !decodeAuth(w, r, &req) {
+func (authHandlers *authAPI) mfaRecovery(responseWriter http.ResponseWriter, request *http.Request) {
+	principal := authHandlers.need(responseWriter, request, false)
+	var requestBody codeReq
+	if principal == nil || !decodeAuth(responseWriter, request, &requestBody) {
 		return
 	}
-	a.second(w, r, p, "recovery", func() bool { return useRecovery(a.s, p.User.ID, req.Code) })
+	authHandlers.second(responseWriter, request, principal, "recovery", func() bool { return useRecovery(authHandlers.s, principal.User.ID, requestBody.Code) })
 }
 
-func (a *authAPI) mfaWebAuthnBegin(w http.ResponseWriter, r *http.Request) {
-	p := a.need(w, r, false)
-	if p == nil {
+func (authHandlers *authAPI) mfaWebAuthnBegin(responseWriter http.ResponseWriter, request *http.Request) {
+	principal := authHandlers.need(responseWriter, request, false)
+	if principal == nil {
 		return
 	}
-	opts, err := a.s.WebAuthnBeginLogin(p.User.ID, p.SessionID)
+	opts, err := authHandlers.s.WebAuthnBeginLogin(principal.User.ID, principal.SessionID)
 	if err != nil {
-		authUserErr(w, 400, err)
+		authUserErr(responseWriter, http.StatusBadRequest, err)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"options": opts})
+	writeJSON(responseWriter, http.StatusOK, map[string]any{"options": opts})
 }
 
-func (a *authAPI) mfaWebAuthnFinish(w http.ResponseWriter, r *http.Request) {
-	p := a.need(w, r, false)
-	if p == nil {
+func (authHandlers *authAPI) mfaWebAuthnFinish(responseWriter http.ResponseWriter, request *http.Request) {
+	principal := authHandlers.need(responseWriter, request, false)
+	if principal == nil {
 		return
 	}
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, waBodyMax))
+	body, err := io.ReadAll(http.MaxBytesReader(responseWriter, request.Body, waBodyMax))
 	if err != nil {
-		authMsg(w, 400, L("srv.http_util.requeteInvalide"))
+		authMsg(responseWriter, http.StatusBadRequest, L("srv.http_util.requeteInvalide"))
 		return
 	}
-	r.Body = io.NopCloser(bytes.NewReader(body))
-	a.second(w, r, p, "webauthn", func() bool { return a.s.WebAuthnFinishLogin(p.User.ID, p.SessionID, r) == nil })
+	request.Body = io.NopCloser(bytes.NewReader(body))
+	authHandlers.second(responseWriter, request, principal, "webauthn", func() bool {
+		return authHandlers.s.WebAuthnFinishLogin(principal.User.ID, principal.SessionID, request) == nil
+	})
 }
 
-func (a *authAPI) logout(w http.ResponseWriter, r *http.Request) {
-	p := a.need(w, r, false)
-	if p == nil {
+func (authHandlers *authAPI) logout(responseWriter http.ResponseWriter, request *http.Request) {
+	principal := authHandlers.need(responseWriter, request, false)
+	if principal == nil {
 		return
 	}
-	if err := a.s.RevokeSession(p.SessionID); err != nil {
-		authInternal(w, err)
+	if err := authHandlers.s.RevokeSession(principal.SessionID); err != nil {
+		authInternal(responseWriter, err)
 		return
 	}
-	a.forgetReauth(p.SessionID)
-	clearSessionCookie(w)
-	clearHomeCookie(w)
-	a.log(p.User.ID, p.User.Name, clientIP(r), "logout", "ok")
-	w.WriteHeader(http.StatusNoContent)
+	authHandlers.forgetReauth(principal.SessionID)
+	clearSessionCookie(responseWriter)
+	clearHomeCookie(responseWriter)
+	authHandlers.log(principal.User.ID, principal.User.Name, clientIP(request), "logout", "ok")
+	responseWriter.WriteHeader(http.StatusNoContent)
 }
 
-func (a *authAPI) me(w http.ResponseWriter, r *http.Request) {
-	c, err := r.Cookie(sessCookie)
-	var p *Principal
+func (authHandlers *authAPI) me(responseWriter http.ResponseWriter, request *http.Request) {
+	cookie, err := request.Cookie(sessCookie)
+	var principal *Principal
 	if err == nil {
-		p, err = a.s.Session(c.Value)
+		principal, err = authHandlers.s.Session(cookie.Value)
 	}
 	if err != nil {
-		authMsg(w, 401, L("srv.auth.sessionRequise"))
+		authMsg(responseWriter, http.StatusUnauthorized, L("srv.auth.sessionRequise"))
 		return
 	}
-	f, err := a.s.factors(p.User.ID)
+	factors, err := authHandlers.s.factors(principal.User.ID)
 	if err != nil {
-		authInternal(w, err)
+		authInternal(responseWriter, err)
 		return
 	}
-	out := map[string]any{"user": map[string]any{"name": p.User.Name, "admin": p.User.Admin}, "mfa": p.MFA, "csrf": p.CSRF, "factors": f}
-	if !p.MFA {
-		writeJSON(w, 200, out)
+	response := map[string]any{"user": map[string]any{"name": principal.User.Name, "admin": principal.User.Admin}, "mfa": principal.MFA, "csrf": principal.CSRF, "factors": factors}
+	if !principal.MFA {
+		writeJSON(responseWriter, http.StatusOK, response)
 		return
 	}
-	creds, err := a.s.WebAuthnList(p.User.ID)
+	creds, err := authHandlers.s.WebAuthnList(principal.User.ID)
 	if err != nil {
-		authInternal(w, err)
+		authInternal(responseWriter, err)
 		return
 	}
 	keys := make([]map[string]any, 0, len(creds))
-	for _, k := range creds {
-		keys = append(keys, map[string]any{"id": k.ID, "label": k.Label, "created": k.CreatedAt, "bad": k.Bad})
+	for _, credential := range creds {
+		keys = append(keys, map[string]any{"id": credential.ID, "label": credential.Label, "created": credential.CreatedAt, "bad": credential.Bad})
 	}
-	out["factors"] = map[string]any{"totp": f.TOTP, "webauthn": f.WebAuthn, "recovery": f.Recovery, "keys": keys}
-	rights, homes, err := a.myHomes(p.User.ID)
+	response["factors"] = map[string]any{"totp": factors.TOTP, "webauthn": factors.WebAuthn, "recovery": factors.Recovery, "keys": keys}
+	rights, homes, err := authHandlers.myHomes(principal.User.ID)
 	if err != nil {
-		authInternal(w, err)
+		authInternal(responseWriter, err)
 		return
 	}
-	out["rights"], out["homes"] = rights, homes
-	writeJSON(w, 200, out)
+	response["rights"], response["homes"] = rights, homes
+	writeJSON(responseWriter, http.StatusOK, response)
 }
 
 // myHomes ne liste que les homes où le compte a au moins un droit (ou une ligne altérée, montrée vide) :
 // un compte sans droit n'apprend rien des homes existants.
-func (a *authAPI) myHomes(uid int64) (map[string][]Right, []map[string]string, error) {
+func (authHandlers *authAPI) myHomes(userID int64) (map[string][]Right, []map[string]string, error) {
 	rights := map[string][]Right{}
 	homes := []map[string]string{}
 	names := homeNames()
-	ids := []string{mainHomeID}
-	for _, h := range loadHomes() {
-		ids = append(ids, h.ID)
+	homeIDs := []string{mainHomeID}
+	for _, home := range loadHomes() {
+		homeIDs = append(homeIDs, home.ID)
 	}
-	for _, id := range ids {
-		m, err := a.s.Rights(uid, id)
+	for _, homeID := range homeIDs {
+		grantedRights, err := authHandlers.s.Rights(userID, homeID)
 		held := []Right{}
 		switch {
 		case errors.Is(err, errTamper):
 		case err != nil:
 			return nil, nil, err
 		default:
-			for _, r := range allRights {
-				if m[r] {
-					held = append(held, r)
+			for _, right := range allRights {
+				if grantedRights[right] {
+					held = append(held, right)
 				}
 			}
 			if len(held) == 0 {
 				continue
 			}
 		}
-		rights[id] = held
-		homes = append(homes, map[string]string{"id": id, "name": names[id]})
+		rights[homeID] = held
+		homes = append(homes, map[string]string{"id": homeID, "name": names[homeID]})
 	}
 	return rights, homes, nil
 }
@@ -664,335 +668,335 @@ type reauthReq struct {
 	Code     string `json:"code"`
 }
 
-func (a *authAPI) reauth(w http.ResponseWriter, r *http.Request, p *Principal, q reauthReq) bool {
-	name, ip, uid := p.User.Name, clientIP(r), p.User.ID
-	release, ok := a.claim(codeKey(uid))
-	if !ok {
-		a.rateLog(uid, name, ip, "reauth", "busy")
-		authFail(w, 0)
+func (authHandlers *authAPI) reauth(responseWriter http.ResponseWriter, request *http.Request, principal *Principal, reauthBody reauthReq) bool {
+	name, ip, userID := principal.User.Name, clientIP(request), principal.User.ID
+	release, passed := authHandlers.claim(codeKey(userID))
+	if !passed {
+		authHandlers.rateLog(userID, name, ip, "reauth", "busy")
+		authFail(responseWriter, 0)
 		return false
 	}
 	defer release()
-	if a.throttled(w, uid, name, ip, "reauth", nil) {
+	if authHandlers.throttled(responseWriter, userID, name, ip, "reauth", nil) {
 		return false
 	}
-	if !pwSane(q.Password) || !verifyPassword(p.User.PwHash, q.Password) {
-		a.fail(w, uid, name, ip, "reauth", "bad_password", "password")
+	if !pwSane(reauthBody.Password) || !verifyPassword(principal.User.PwHash, reauthBody.Password) {
+		authHandlers.fail(responseWriter, userID, name, ip, "reauth", "bad_password", "password")
 		return false
 	}
-	ok = a.reauthFresh(p.SessionID)
-	if q.Code != "" {
+	passed = authHandlers.reauthFresh(principal.SessionID)
+	if reauthBody.Code != "" {
 		// Un code de secours coûte jusqu'à dix argon2id : claim garantit qu'un seul calcule à la fois.
-		ok = verifyTOTP(a.s, uid, q.Code, authNow()) || useRecovery(a.s, uid, q.Code)
+		passed = verifyTOTP(authHandlers.s, userID, reauthBody.Code, authNow()) || useRecovery(authHandlers.s, userID, reauthBody.Code)
 	}
-	if !ok {
-		a.fail(w, uid, name, ip, "reauth", "bad_factor", "mfa")
+	if !passed {
+		authHandlers.fail(responseWriter, userID, name, ip, "reauth", "bad_factor", "mfa")
 		return false
 	}
-	a.log(uid, name, ip, "reauth", evSuccess)
+	authHandlers.log(userID, name, ip, "reauth", evSuccess)
 	return true
 }
 
 // enrolSession admet une session partielle seulement pour un compte sans aucun facteur :
 // c'est l'enrôlement obligatoire de la première connexion.
-func (a *authAPI) enrolSession(w http.ResponseWriter, r *http.Request) (*Principal, factorState, bool) {
-	p := a.need(w, r, false)
-	if p == nil {
+func (authHandlers *authAPI) enrolSession(responseWriter http.ResponseWriter, request *http.Request) (*Principal, factorState, bool) {
+	principal := authHandlers.need(responseWriter, request, false)
+	if principal == nil {
 		return nil, factorState{}, false
 	}
-	f, err := a.s.factors(p.User.ID)
+	factors, err := authHandlers.s.factors(principal.User.ID)
 	if err != nil {
-		authInternal(w, err)
-		return nil, f, false
+		authInternal(responseWriter, err)
+		return nil, factors, false
 	}
-	if !p.MFA && !f.none() {
-		authMsg(w, 403, L("srv.auth.mfaRequis"))
-		return nil, f, false
+	if !principal.MFA && !factors.none() {
+		authMsg(responseWriter, http.StatusForbidden, L("srv.auth.mfaRequis"))
+		return nil, factors, false
 	}
-	return p, f, true
+	return principal, factors, true
 }
 
 // enrolBegin : la réauthentification ne s'applique qu'à une session complète ; confirm/finish
 // n'aboutissent qu'avec le secret ou le défi émis par begin sur cette même session.
-func (a *authAPI) enrolBegin(w http.ResponseWriter, r *http.Request) (*Principal, bool) {
-	p, _, ok := a.enrolSession(w, r)
-	var q reauthReq
-	if !ok || !decodeAuth(w, r, &q) {
+func (authHandlers *authAPI) enrolBegin(responseWriter http.ResponseWriter, request *http.Request) (*Principal, bool) {
+	principal, _, canProceed := authHandlers.enrolSession(responseWriter, request)
+	var reauthBody reauthReq
+	if !canProceed || !decodeAuth(responseWriter, request, &reauthBody) {
 		return nil, false
 	}
-	if p.MFA && !a.reauth(w, r, p, q) {
+	if principal.MFA && !authHandlers.reauth(responseWriter, request, principal, reauthBody) {
 		return nil, false
 	}
-	return p, true
+	return principal, true
 }
 
 // enrolCommit écrit le facteur, corps déjà lu. Sous la clé first:<uid> (qui ne sérialise que ce compte) :
 // vérification « aucun facteur », écriture qui valide le code ou l'attestation, puis seulement en cas
 // de succès les codes de secours (argon2) et la promotion. Un échec ne coûte aucun argon2.
-func (a *authAPI) enrolCommit(w http.ResponseWriter, r *http.Request, p *Principal, what string, write func() error) {
-	if !p.MFA {
-		release, ok := a.claim("first:" + strconv.FormatInt(p.User.ID, 10))
-		if !ok {
-			a.rateLog(p.User.ID, p.User.Name, clientIP(r), "enrol", what+"_busy")
-			authMsg(w, 409, L("srv.auth.enrolementEnCours"))
+func (authHandlers *authAPI) enrolCommit(responseWriter http.ResponseWriter, request *http.Request, principal *Principal, what string, write func() error) {
+	if !principal.MFA {
+		release, claimed := authHandlers.claim("first:" + strconv.FormatInt(principal.User.ID, 10))
+		if !claimed {
+			authHandlers.rateLog(principal.User.ID, principal.User.Name, clientIP(request), "enrol", what+"_busy")
+			authMsg(responseWriter, http.StatusConflict, L("srv.auth.enrolementEnCours"))
 			return
 		}
 		defer release()
 	}
-	f, err := a.s.factors(p.User.ID)
+	factors, err := authHandlers.s.factors(principal.User.ID)
 	if err != nil {
-		authInternal(w, err)
+		authInternal(responseWriter, err)
 		return
 	}
-	if !p.MFA && !f.none() {
-		authMsg(w, 403, L("srv.auth.mfaRequis"))
+	if !principal.MFA && !factors.none() {
+		authMsg(responseWriter, http.StatusForbidden, L("srv.auth.mfaRequis"))
 		return
 	}
-	if err := write(); err != nil {
-		a.log(p.User.ID, p.User.Name, clientIP(r), "enrol", what+"_refused")
-		authUserErr(w, 400, err)
+	if writeErr := write(); writeErr != nil {
+		authHandlers.log(principal.User.ID, principal.User.Name, clientIP(request), "enrol", what+"_refused")
+		authUserErr(responseWriter, http.StatusBadRequest, writeErr)
 		return
 	}
-	ip := clientIP(r)
-	a.log(p.User.ID, p.User.Name, ip, "enrol", what)
-	out := map[string]any{"csrf": p.CSRF}
-	if f.none() {
-		codes, hashes, err := genRecovery()
-		if err != nil {
-			authInternal(w, err)
+	ip := clientIP(request)
+	authHandlers.log(principal.User.ID, principal.User.Name, ip, "enrol", what)
+	response := map[string]any{"csrf": principal.CSRF}
+	if factors.none() {
+		codes, hashes, generateErr := genRecovery()
+		if generateErr != nil {
+			authInternal(responseWriter, generateErr)
 			return
 		}
-		if err := a.s.storeRecoveryCodes(p.User.ID, hashes); err != nil {
-			authInternal(w, err)
+		if storeErr := authHandlers.s.storeRecoveryCodes(principal.User.ID, hashes); storeErr != nil {
+			authInternal(responseWriter, storeErr)
 			return
 		}
-		out["recovery"] = codes
+		response["recovery"] = codes
 	}
-	if !p.MFA {
-		csrf, ok := a.promote(w, r, p, ip)
-		if !ok {
-			authFail(w, 0)
+	if !principal.MFA {
+		csrf, promoted := authHandlers.promote(responseWriter, request, principal, ip)
+		if !promoted {
+			authFail(responseWriter, 0)
 			return
 		}
-		out["csrf"] = csrf
+		response["csrf"] = csrf
 	}
-	writeJSON(w, 200, out)
+	writeJSON(responseWriter, http.StatusOK, response)
 }
 
-func (a *authAPI) totpBegin(w http.ResponseWriter, r *http.Request) {
-	p, ok := a.enrolBegin(w, r)
-	if !ok {
+func (authHandlers *authAPI) totpBegin(responseWriter http.ResponseWriter, request *http.Request) {
+	principal, canProceed := authHandlers.enrolBegin(responseWriter, request)
+	if !canProceed {
 		return
 	}
-	secret, uri, err := a.s.TOTPBegin(p.User.ID, p.User.Name)
+	secret, uri, err := authHandlers.s.TOTPBegin(principal.User.ID, principal.User.Name)
 	if err != nil {
-		a.log(p.User.ID, p.User.Name, clientIP(r), "enrol", "totp_begin_refused")
-		authUserErr(w, 409, err)
+		authHandlers.log(principal.User.ID, principal.User.Name, clientIP(request), "enrol", "totp_begin_refused")
+		authUserErr(responseWriter, http.StatusConflict, err)
 		return
 	}
-	a.log(p.User.ID, p.User.Name, clientIP(r), "enrol", "totp_begin")
-	writeJSON(w, 200, map[string]any{"secret": secret, "uri": uri})
+	authHandlers.log(principal.User.ID, principal.User.Name, clientIP(request), "enrol", "totp_begin")
+	writeJSON(responseWriter, http.StatusOK, map[string]any{"secret": secret, "uri": uri})
 }
 
-func (a *authAPI) totpConfirm(w http.ResponseWriter, r *http.Request) {
-	p, _, ok := a.enrolSession(w, r)
-	var req codeReq
-	if !ok || !decodeAuth(w, r, &req) {
+func (authHandlers *authAPI) totpConfirm(responseWriter http.ResponseWriter, request *http.Request) {
+	principal, _, canProceed := authHandlers.enrolSession(responseWriter, request)
+	var requestBody codeReq
+	if !canProceed || !decodeAuth(responseWriter, request, &requestBody) {
 		return
 	}
-	a.enrolCommit(w, r, p, "totp", func() error { return a.s.TOTPConfirm(p.User.ID, req.Code) })
+	authHandlers.enrolCommit(responseWriter, request, principal, "totp", func() error { return authHandlers.s.TOTPConfirm(principal.User.ID, requestBody.Code) })
 }
 
-func (a *authAPI) waRegisterBegin(w http.ResponseWriter, r *http.Request) {
-	p, ok := a.enrolBegin(w, r)
-	if !ok {
+func (authHandlers *authAPI) waRegisterBegin(responseWriter http.ResponseWriter, request *http.Request) {
+	principal, canProceed := authHandlers.enrolBegin(responseWriter, request)
+	if !canProceed {
 		return
 	}
-	opts, err := a.s.WebAuthnBeginRegister(p.User.ID, p.SessionID)
+	opts, err := authHandlers.s.WebAuthnBeginRegister(principal.User.ID, principal.SessionID)
 	if err != nil {
-		authUserErr(w, 400, err)
+		authUserErr(responseWriter, http.StatusBadRequest, err)
 		return
 	}
-	a.log(p.User.ID, p.User.Name, clientIP(r), "enrol", "webauthn_begin")
-	writeJSON(w, 200, map[string]any{"options": opts})
+	authHandlers.log(principal.User.ID, principal.User.Name, clientIP(request), "enrol", "webauthn_begin")
+	writeJSON(responseWriter, http.StatusOK, map[string]any{"options": opts})
 }
 
 // Le corps est la réponse brute du navigateur, lue par la bibliothèque : le libellé passe en paramètre d'URL.
-func (a *authAPI) waRegisterFinish(w http.ResponseWriter, r *http.Request) {
-	p, _, ok := a.enrolSession(w, r)
-	if !ok {
+func (authHandlers *authAPI) waRegisterFinish(responseWriter http.ResponseWriter, request *http.Request) {
+	principal, _, canProceed := authHandlers.enrolSession(responseWriter, request)
+	if !canProceed {
 		return
 	}
 	// Lu en entier avant tout verrou : un client lent ne doit rien bloquer.
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, waBodyMax))
+	body, err := io.ReadAll(http.MaxBytesReader(responseWriter, request.Body, waBodyMax))
 	if err != nil {
-		authMsg(w, 400, L("srv.http_util.requeteInvalide"))
+		authMsg(responseWriter, http.StatusBadRequest, L("srv.http_util.requeteInvalide"))
 		return
 	}
-	r.Body = io.NopCloser(bytes.NewReader(body))
-	a.enrolCommit(w, r, p, "webauthn", func() error {
-		return a.s.WebAuthnFinishRegister(p.User.ID, p.SessionID, r.URL.Query().Get("label"), r)
+	request.Body = io.NopCloser(bytes.NewReader(body))
+	authHandlers.enrolCommit(responseWriter, request, principal, "webauthn", func() error {
+		return authHandlers.s.WebAuthnFinishRegister(principal.User.ID, principal.SessionID, request.URL.Query().Get("label"), request)
 	})
 }
 
 // parseFactor lit le segment {factor} : « totp » ou « webauthn-<id> ».
-func parseFactor(s string) (kind string, id int64, ok bool) {
-	if s == "totp" {
-		return s, 0, true
+func parseFactor(segment string) (kind string, id int64, valid bool) {
+	if segment == "totp" {
+		return segment, 0, true
 	}
-	n, found := strings.CutPrefix(s, "webauthn-")
+	idText, found := strings.CutPrefix(segment, "webauthn-")
 	if !found {
 		return "", 0, false
 	}
-	id, err := strconv.ParseInt(n, 10, 64)
+	id, err := strconv.ParseInt(idText, 10, 64)
 	return "webauthn", id, err == nil
 }
 
-func (a *authAPI) factorRemove(w http.ResponseWriter, r *http.Request) {
-	p := a.need(w, r, true)
-	var req reauthReq
-	if p == nil || !decodeAuth(w, r, &req) {
+func (authHandlers *authAPI) factorRemove(responseWriter http.ResponseWriter, request *http.Request) {
+	principal := authHandlers.need(responseWriter, request, true)
+	var requestBody reauthReq
+	if principal == nil || !decodeAuth(responseWriter, request, &requestBody) {
 		return
 	}
-	kind, id, ok := parseFactor(r.PathValue("factor"))
-	if !ok {
-		authMsg(w, 400, L("srv.auth.facteurInconnu"))
+	kind, factorID, valid := parseFactor(request.PathValue("factor"))
+	if !valid {
+		authMsg(responseWriter, http.StatusBadRequest, L("srv.auth.facteurInconnu"))
 		return
 	}
-	if !a.reauth(w, r, p, req) {
+	if !authHandlers.reauth(responseWriter, request, principal, requestBody) {
 		return
 	}
 	var err error
 	if kind == "totp" {
-		err = a.s.TOTPRemove(p.User.ID)
+		err = authHandlers.s.TOTPRemove(principal.User.ID)
 	} else {
-		err = a.s.WebAuthnRemove(p.User.ID, id)
+		err = authHandlers.s.WebAuthnRemove(principal.User.ID, factorID)
 	}
-	ip := clientIP(r)
+	ip := clientIP(request)
 	switch {
 	case err == nil:
-		a.log(p.User.ID, p.User.Name, ip, "factor_remove", kind)
-		w.WriteHeader(http.StatusNoContent)
+		authHandlers.log(principal.User.ID, principal.User.Name, ip, "factor_remove", kind)
+		responseWriter.WriteHeader(http.StatusNoContent)
 	case errors.Is(err, errNoTOTP) || errors.Is(err, errWebAuthnFailed):
-		a.log(p.User.ID, p.User.Name, ip, "factor_remove", "unknown")
-		authMsg(w, 404, L("srv.auth.facteurInconnu"))
+		authHandlers.log(principal.User.ID, principal.User.Name, ip, "factor_remove", "unknown")
+		authMsg(responseWriter, http.StatusNotFound, L("srv.auth.facteurInconnu"))
 	default:
-		a.log(p.User.ID, p.User.Name, ip, "factor_remove", "refused")
-		authUserErr(w, 409, err)
+		authHandlers.log(principal.User.ID, principal.User.Name, ip, "factor_remove", "refused")
+		authUserErr(responseWriter, http.StatusConflict, err)
 	}
 }
 
 // recoveryRegenerate remplace tout le jeu : les anciens codes cessent de valoir, les nouveaux ne sont montrés qu'ici.
-func (a *authAPI) recoveryRegenerate(w http.ResponseWriter, r *http.Request) {
-	p := a.need(w, r, true)
-	var req reauthReq
-	if p == nil || !decodeAuth(w, r, &req) || !a.reauth(w, r, p, req) {
+func (authHandlers *authAPI) recoveryRegenerate(responseWriter http.ResponseWriter, request *http.Request) {
+	principal := authHandlers.need(responseWriter, request, true)
+	var requestBody reauthReq
+	if principal == nil || !decodeAuth(responseWriter, request, &requestBody) || !authHandlers.reauth(responseWriter, request, principal, requestBody) {
 		return
 	}
-	codes, err := a.s.NewRecoveryCodes(p.User.ID)
+	codes, err := authHandlers.s.NewRecoveryCodes(principal.User.ID)
 	if err != nil {
-		authInternal(w, err)
+		authInternal(responseWriter, err)
 		return
 	}
-	a.log(p.User.ID, p.User.Name, clientIP(r), "recovery", "regenerated")
-	writeJSON(w, 200, map[string]any{"recovery": codes})
+	authHandlers.log(principal.User.ID, principal.User.Name, clientIP(request), "recovery", "regenerated")
+	writeJSON(responseWriter, http.StatusOK, map[string]any{"recovery": codes})
 }
 
-func (a *authAPI) password(w http.ResponseWriter, r *http.Request) {
-	p := a.need(w, r, true)
-	var req struct {
+func (authHandlers *authAPI) password(responseWriter http.ResponseWriter, request *http.Request) {
+	principal := authHandlers.need(responseWriter, request, true)
+	var requestBody struct {
 		reauthReq
 		New string `json:"new"`
 	}
-	if p == nil || !decodeAuth(w, r, &req) {
+	if principal == nil || !decodeAuth(responseWriter, request, &requestBody) {
 		return
 	}
 	// Valider avant la réauthentification évite de consommer un code pour un mot de passe refusé.
-	if err := validPassword(req.New); err != nil {
-		authMsg(w, 400, pwError(err).Error())
+	if err := validPassword(requestBody.New); err != nil {
+		authMsg(responseWriter, http.StatusBadRequest, pwError(err).Error())
 		return
 	}
-	if !a.reauth(w, r, p, req.reauthReq) {
+	if !authHandlers.reauth(responseWriter, request, principal, requestBody.reauthReq) {
 		return
 	}
-	if err := a.s.SetPassword(p.User.ID, req.New); err != nil {
-		authInternal(w, err)
+	if err := authHandlers.s.SetPassword(principal.User.ID, requestBody.New); err != nil {
+		authInternal(responseWriter, err)
 		return
 	}
-	a.forgetReauth(p.SessionID)
-	clearSessionCookie(w)
-	a.log(p.User.ID, p.User.Name, clientIP(r), "password", "changed")
-	w.WriteHeader(http.StatusNoContent)
+	authHandlers.forgetReauth(principal.SessionID)
+	clearSessionCookie(responseWriter)
+	authHandlers.log(principal.User.ID, principal.User.Name, clientIP(request), "password", "changed")
+	responseWriter.WriteHeader(http.StatusNoContent)
 }
 
-func (a *authAPI) sessions(w http.ResponseWriter, r *http.Request) {
-	p := a.need(w, r, true)
-	if p == nil {
+func (authHandlers *authAPI) sessions(responseWriter http.ResponseWriter, request *http.Request) {
+	principal := authHandlers.need(responseWriter, request, true)
+	if principal == nil {
 		return
 	}
-	list, err := a.s.userSessions(p.User.ID)
+	sessions, err := authHandlers.s.userSessions(principal.User.ID)
 	if err != nil {
-		authInternal(w, err)
+		authInternal(responseWriter, err)
 		return
 	}
-	out := []map[string]any{}
-	for _, x := range list {
-		id := hex.EncodeToString(x.hash)
-		out = append(out, map[string]any{"id": id, "created": x.created, "seen": x.seen, "ip": x.ip, "ua": x.ua, "mfa": x.mfa, "current": id == p.SessionID})
+	sessionRows := []map[string]any{}
+	for _, session := range sessions {
+		sessionHex := hex.EncodeToString(session.hash)
+		sessionRows = append(sessionRows, map[string]any{"id": sessionHex, "created": session.created, "seen": session.seen, "ip": session.ip, "ua": session.ua, "mfa": session.mfa, "current": sessionHex == principal.SessionID})
 	}
-	writeJSON(w, 200, map[string]any{"sessions": out})
+	writeJSON(responseWriter, http.StatusOK, map[string]any{"sessions": sessionRows})
 }
 
 // sessionRevokeOthers : nettoyage à la demande des autres sessions ouvertes du compte, la courante reste.
-func (a *authAPI) sessionRevokeOthers(w http.ResponseWriter, r *http.Request) {
-	p := a.need(w, r, true)
-	var req reauthReq
-	if p == nil || !decodeAuth(w, r, &req) {
+func (authHandlers *authAPI) sessionRevokeOthers(responseWriter http.ResponseWriter, request *http.Request) {
+	principal := authHandlers.need(responseWriter, request, true)
+	var requestBody reauthReq
+	if principal == nil || !decodeAuth(responseWriter, request, &requestBody) {
 		return
 	}
-	if !a.reauth(w, r, p, req) {
+	if !authHandlers.reauth(responseWriter, request, principal, requestBody) {
 		return
 	}
-	if err := a.s.RevokeOthers(p.User.ID, p.SessionID); err != nil {
-		authInternal(w, err)
+	if err := authHandlers.s.RevokeOthers(principal.User.ID, principal.SessionID); err != nil {
+		authInternal(responseWriter, err)
 		return
 	}
-	a.log(p.User.ID, p.User.Name, clientIP(r), "session_revoke", "others")
-	w.WriteHeader(http.StatusNoContent)
+	authHandlers.log(principal.User.ID, principal.User.Name, clientIP(request), "session_revoke", "others")
+	responseWriter.WriteHeader(http.StatusNoContent)
 }
 
-func (a *authAPI) sessionRevoke(w http.ResponseWriter, r *http.Request) {
-	p := a.need(w, r, true)
-	var req reauthReq
-	sid := r.PathValue("sid")
-	if p == nil || !decodeAuth(w, r, &req) {
+func (authHandlers *authAPI) sessionRevoke(responseWriter http.ResponseWriter, request *http.Request) {
+	principal := authHandlers.need(responseWriter, request, true)
+	var requestBody reauthReq
+	sessionID := request.PathValue("sid")
+	if principal == nil || !decodeAuth(responseWriter, request, &requestBody) {
 		return
 	}
-	h, err := hex.DecodeString(sid)
-	if err != nil || len(h) != 32 {
-		authMsg(w, 400, L("srv.auth.sessionInconnue"))
+	sessionHash, err := hex.DecodeString(sessionID)
+	if err != nil || len(sessionHash) != 32 {
+		authMsg(responseWriter, http.StatusBadRequest, L("srv.auth.sessionInconnue"))
 		return
 	}
-	if !a.reauth(w, r, p, req) {
+	if !authHandlers.reauth(responseWriter, request, principal, requestBody) {
 		return
 	}
 	// user_id est signé : vérifier puis révoquer ne laisse pas de fenêtre.
-	owner, err := a.s.sessionOwner(h)
-	if errors.Is(err, errNoSession) || (err == nil && owner != p.User.ID) {
-		authMsg(w, 404, L("srv.auth.sessionInconnue"))
+	owner, err := authHandlers.s.sessionOwner(sessionHash)
+	if errors.Is(err, errNoSession) || (err == nil && owner != principal.User.ID) {
+		authMsg(responseWriter, http.StatusNotFound, L("srv.auth.sessionInconnue"))
 		return
 	}
 	if err == nil {
-		err = a.s.RevokeSession(sid)
+		err = authHandlers.s.RevokeSession(sessionID)
 	}
 	if err != nil {
-		authInternal(w, err)
+		authInternal(responseWriter, err)
 		return
 	}
-	a.forgetReauth(sid)
-	if sid == p.SessionID {
-		clearSessionCookie(w)
+	authHandlers.forgetReauth(sessionID)
+	if sessionID == principal.SessionID {
+		clearSessionCookie(responseWriter)
 	}
-	a.log(p.User.ID, p.User.Name, clientIP(r), "session_revoke", "ok")
-	w.WriteHeader(http.StatusNoContent)
+	authHandlers.log(principal.User.ID, principal.User.Name, clientIP(request), "session_revoke", "ok")
+	responseWriter.WriteHeader(http.StatusNoContent)
 }

@@ -21,27 +21,35 @@ var (
 	askCache []string
 )
 
+const (
+	askScreenTailLines   = 32
+	askDialogFootLines   = 8
+	askMinimumOptions    = 2
+	askCacheLifetime     = 3 * time.Second
+	askMaxPanesInspected = 40
+)
+
 // screenAsks : l'écran montre un dialogue qui attend une réponse (et la session n'est pas en pleine réflexion).
 func screenAsks(screen string) bool {
 	lines := strings.Split(strings.TrimRight(screen, "\n "), "\n")
-	if len(lines) > 32 {
-		lines = lines[len(lines)-32:]
+	if len(lines) > askScreenTailLines {
+		lines = lines[len(lines)-askScreenTailLines:]
 	}
 	tail := strings.Join(lines, "\n")
 	foot := tail
-	if len(lines) > 8 {
-		foot = strings.Join(lines[len(lines)-8:], "\n")
+	if len(lines) > askDialogFootLines {
+		foot = strings.Join(lines[len(lines)-askDialogFootLines:], "\n")
 	}
 	if askBusy.MatchString(foot) || !askFoot.MatchString(foot) {
 		return false
 	}
-	n := 0
-	for _, l := range lines {
-		if askOpt.MatchString(l) {
-			n++
+	optionCount := 0
+	for _, line := range lines {
+		if askOpt.MatchString(line) {
+			optionCount++
 		}
 	}
-	return n >= 2
+	return optionCount >= askMinimumOptions
 }
 
 // askingSessions : les ids des sessions ouvertes dans tmux qui attendent une réponse. Résultat gardé 3 s : la liste des sessions
@@ -49,22 +57,24 @@ func screenAsks(screen string) bool {
 func askingSessions() []string {
 	askMu.Lock()
 	defer askMu.Unlock()
-	if askCache != nil && time.Since(askAt) < 3*time.Second {
+	if askCache != nil && time.Since(askAt) < askCacheLifetime {
 		return askCache
 	}
-	out := []string{}
-	if panes, err := sendable(); err == nil {
-		n := 0
-		for id, p := range panes {
-			if n++; n > 40 {
+	askingIDs := []string{}
+	if panes, panesErr := sendable(); panesErr == nil {
+		inspectedPanes := 0
+		for sessionID, paneTarget := range panes {
+			inspectedPanes++
+			if inspectedPanes > askMaxPanesInspected {
 				break
 			}
-			if scr, err := tmuxRun("", "capture-pane", "-p", "-t", p); err == nil && screenAsks(scr) {
-				out = append(out, id)
+			screen, captureErr := tmuxRun("", "capture-pane", "-p", "-t", paneTarget)
+			if captureErr == nil && screenAsks(screen) {
+				askingIDs = append(askingIDs, sessionID)
 			}
 		}
 	}
-	sort.Strings(out)
-	askCache, askAt = out, time.Now()
-	return out
+	sort.Strings(askingIDs)
+	askCache, askAt = askingIDs, time.Now()
+	return askingIDs
 }

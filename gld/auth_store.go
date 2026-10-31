@@ -21,8 +21,8 @@ var authMigrations embed.FS
 type authDB struct{ *sql.DB }
 
 func authDir() (string, error) {
-	if d := os.Getenv("GLD_AUTH_DIR"); d != "" {
-		return d, nil
+	if envDir := os.Getenv("GLD_AUTH_DIR"); envDir != "" {
+		return envDir, nil
 	}
 	base, err := os.UserConfigDir()
 	if err != nil {
@@ -32,21 +32,21 @@ func authDir() (string, error) {
 }
 
 func checkPrivate(path string, wantDir bool) error {
-	fi, err := os.Lstat(path)
+	fileInfo, err := os.Lstat(path)
 	if err != nil {
 		return err
 	}
-	if fi.Mode()&os.ModeSymlink != 0 {
+	if fileInfo.Mode()&os.ModeSymlink != 0 {
 		return fmt.Errorf("%s: symlink refused", path)
 	}
-	if fi.IsDir() != wantDir {
+	if fileInfo.IsDir() != wantDir {
 		return fmt.Errorf("%s: unexpected file type", path)
 	}
-	if !ownedByMe(fi) {
+	if !ownedByMe(fileInfo) {
 		return fmt.Errorf("%s: not owned by current user", path)
 	}
-	if runtime.GOOS != "windows" && fi.Mode().Perm()&0o077 != 0 {
-		return fmt.Errorf("%s: mode %v too permissive", path, fi.Mode().Perm())
+	if runtime.GOOS != "windows" && fileInfo.Mode().Perm()&0o077 != 0 {
+		return fmt.Errorf("%s: mode %v too permissive", path, fileInfo.Mode().Perm())
 	}
 	return nil
 }
@@ -62,41 +62,41 @@ func openAuthDB(dir string) (*authDB, error) {
 		return nil, err
 	}
 	path := filepath.Join(dir, "auth.db")
-	if fi, err := os.Lstat(path); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+	if fileInfo, err := os.Lstat(path); err == nil && fileInfo.Mode()&os.ModeSymlink != 0 {
 		return nil, fmt.Errorf("%s: symlink refused", path)
 	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	dbFile, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, err
 	}
-	f.Close()
-	if err := os.Chmod(path, 0o600); err != nil {
-		return nil, err
+	dbFile.Close()
+	if chmodErr := os.Chmod(path, 0o600); chmodErr != nil {
+		return nil, chmodErr
 	}
-	if err := checkPrivate(path, false); err != nil {
-		return nil, err
+	if permErr := checkPrivate(path, false); permErr != nil {
+		return nil, permErr
 	}
-	u := url.URL{Scheme: "file", Path: path, RawQuery: "_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"}
-	db, err := sql.Open("sqlite", u.String())
+	dsn := url.URL{Scheme: "file", Path: path, RawQuery: "_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"}
+	db, err := sql.Open("sqlite", dsn.String())
 	if err != nil {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	a := &authDB{db}
-	if err := a.migrate(nil); err != nil {
+	authDatabase := &authDB{db}
+	if migrateErr := authDatabase.migrate(nil); migrateErr != nil {
 		db.Close()
-		return nil, err
+		return nil, migrateErr
 	}
-	if err := walPerms(dir); err != nil {
+	if walErr := walPerms(dir); walErr != nil {
 		db.Close()
-		return nil, err
+		return nil, walErr
 	}
-	return a, nil
+	return authDatabase, nil
 }
 
 func walPerms(dir string) error {
-	for _, sfx := range []string{"-wal", "-shm"} {
-		if err := os.Chmod(filepath.Join(dir, "auth.db")+sfx, 0o600); err != nil && !os.IsNotExist(err) {
+	for _, suffix := range []string{"-wal", "-shm"} {
+		if err := os.Chmod(filepath.Join(dir, "auth.db")+suffix, 0o600); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 	}
@@ -108,12 +108,12 @@ func walPerms(dir string) error {
 // une seule fois, liée au numéro de version, jamais à un drapeau qu'on pourrait effacer.
 const keyedFrom = 7
 
-func (a *authDB) migrate(keyed func(*sql.Tx, int) error) error {
-	if _, err := a.Exec(`CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)`); err != nil {
+func (authDatabase *authDB) migrate(keyed func(*sql.Tx, int) error) error {
+	if _, err := authDatabase.Exec(`CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)`); err != nil {
 		return err
 	}
-	var cur int
-	err := a.QueryRow(`SELECT COALESCE(MAX(version),0) FROM schema_version`).Scan(&cur)
+	var currentVersion int
+	err := authDatabase.QueryRow(`SELECT COALESCE(MAX(version),0) FROM schema_version`).Scan(&currentVersion)
 	if err != nil {
 		return err
 	}
@@ -122,45 +122,45 @@ func (a *authDB) migrate(keyed func(*sql.Tx, int) error) error {
 		return err
 	}
 	names := make([]string, 0, len(files))
-	for _, f := range files {
-		names = append(names, f.Name())
+	for _, entry := range files {
+		names = append(names, entry.Name())
 	}
 	sort.Strings(names)
-	for _, n := range names {
-		v, err := strconv.Atoi(strings.SplitN(n, "_", 2)[0])
-		if err != nil {
-			return fmt.Errorf("migration %s: %w", n, err)
+	for _, name := range names {
+		version, stepErr := strconv.Atoi(strings.SplitN(name, "_", 2)[0])
+		if stepErr != nil {
+			return fmt.Errorf("migration %s: %w", name, stepErr)
 		}
-		if v <= cur {
+		if version <= currentVersion {
 			continue
 		}
-		if v >= keyedFrom && keyed == nil {
+		if version >= keyedFrom && keyed == nil {
 			break
 		}
-		body, err := authMigrations.ReadFile("auth_migrations/" + n)
-		if err != nil {
-			return err
+		body, stepErr := authMigrations.ReadFile("auth_migrations/" + name)
+		if stepErr != nil {
+			return stepErr
 		}
-		tx, err := a.Begin()
-		if err != nil {
-			return err
+		transaction, stepErr := authDatabase.Begin()
+		if stepErr != nil {
+			return stepErr
 		}
-		if _, err := tx.Exec(string(body)); err != nil {
-			tx.Rollback()
-			return fmt.Errorf("migration %s: %w", n, err)
+		if _, execErr := transaction.Exec(string(body)); execErr != nil {
+			transaction.Rollback()
+			return fmt.Errorf("migration %s: %w", name, execErr)
 		}
 		if keyed != nil {
-			if err := keyed(tx, v); err != nil {
-				tx.Rollback()
-				return fmt.Errorf("migration %s: %w", n, err)
+			if keyedErr := keyed(transaction, version); keyedErr != nil {
+				transaction.Rollback()
+				return fmt.Errorf("migration %s: %w", name, keyedErr)
 			}
 		}
-		if _, err := tx.Exec(`INSERT INTO schema_version(version) VALUES (?)`, v); err != nil {
-			tx.Rollback()
-			return err
+		if _, recordErr := transaction.Exec(`INSERT INTO schema_version(version) VALUES (?)`, version); recordErr != nil {
+			transaction.Rollback()
+			return recordErr
 		}
-		if err := tx.Commit(); err != nil {
-			return err
+		if commitErr := transaction.Commit(); commitErr != nil {
+			return commitErr
 		}
 	}
 	return nil

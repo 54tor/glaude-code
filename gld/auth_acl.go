@@ -131,9 +131,9 @@ var passiveRoutes = map[string]bool{
 var tokenPrincipal = func(*http.Request) *Principal { return nil }
 
 // gateActive : le garde est monté devant le mux (mode multi-utilisateur), selon la décision prise pour cette requête.
-func gateActive(r *http.Request) bool {
-	_, d := reqMode(r)
-	return d.on || d.err != nil
+func gateActive(request *http.Request) bool {
+	_, decision := reqMode(request)
+	return decision.on || decision.err != nil
 }
 
 type gateInfo struct {
@@ -146,88 +146,88 @@ type gateInfo struct {
 
 type gateKey struct{}
 
-func gateFrom(r *http.Request) *gateInfo {
-	g, _ := r.Context().Value(gateKey{}).(*gateInfo)
-	return g
+func gateFrom(request *http.Request) *gateInfo {
+	gate, _ := request.Context().Value(gateKey{}).(*gateInfo)
+	return gate
 }
 
-func (g *gateInfo) rights(homeID string) (map[Right]bool, error) {
-	if g.p.Token {
-		m := map[Right]bool{}
-		for _, r := range allRights {
-			m[r] = true
+func (gate *gateInfo) rights(homeID string) (map[Right]bool, error) {
+	if gate.p.Token {
+		grantedRights := map[Right]bool{}
+		for _, right := range allRights {
+			grantedRights[right] = true
 		}
-		return m, nil
+		return grantedRights, nil
 	}
-	return g.s.Rights(g.p.User.ID, homeID)
+	return gate.s.Rights(gate.p.User.ID, homeID)
 }
 
 // homeAllowed : sans garde, tout home est visible ; avec, seulement ceux où l'utilisateur a au moins un droit.
-func (g *gateInfo) homeAllowed(homeID string) bool {
-	if g == nil {
+func (gate *gateInfo) homeAllowed(homeID string) bool {
+	if gate == nil {
 		return true
 	}
-	if g.p == nil || homeID == "" {
+	if gate.p == nil || homeID == "" {
 		return false
 	}
-	m, err := g.rights(homeID)
-	return err == nil && anyRight(m)
+	grantedRights, err := gate.rights(homeID)
+	return err == nil && anyRight(grantedRights)
 }
 
-func anyRight(m map[Right]bool) bool {
-	for _, v := range m {
-		if v {
+func anyRight(grantedRights map[Right]bool) bool {
+	for _, granted := range grantedRights {
+		if granted {
 			return true
 		}
 	}
 	return false
 }
 
-func gateDeny(w http.ResponseWriter, code int, key string) {
-	w.Header().Set("Cache-Control", "no-store")
-	authMsg(w, code, L(key))
+func gateDeny(responseWriter http.ResponseWriter, code int, key string) {
+	responseWriter.Header().Set("Cache-Control", "no-store")
+	authMsg(responseWriter, code, L(key))
 }
 
-func gatePrincipal(s *authStore, r *http.Request, passive bool) (p *Principal, bearer bool) {
-	if strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") {
-		if p = tokenPrincipal(r); p == nil || !p.Token {
+func gatePrincipal(store *authStore, request *http.Request, passive bool) (principal *Principal, bearer bool) {
+	if strings.HasPrefix(request.Header.Get("Authorization"), "Bearer ") {
+		if principal = tokenPrincipal(request); principal == nil || !principal.Token {
 			return nil, true
 		}
-		return p, true
+		return principal, true
 	}
-	c, err := r.Cookie(sessCookie)
+	cookie, err := request.Cookie(sessCookie)
 	if err != nil {
 		return nil, false
 	}
-	get := s.Session
+	loadSession := store.Session
 	if passive {
-		get = s.SessionPassive
+		loadSession = store.SessionPassive
 	}
-	p, err = get(c.Value)
+	principal, err = loadSession(cookie.Value)
 	if err != nil {
 		if !errors.Is(err, errNoSession) {
 			journal("auth: session: %v", err)
 		}
 		return nil, false
 	}
-	if !p.MFA {
+	if !principal.MFA {
 		return nil, false
 	}
-	return p, false
+	return principal, false
 }
 
 // pathSeg : le i-ième segment (0 = « v1 ») du chemin, décodé comme le fait le mux ; les PathValue ne sont posées qu'au
 // dispatch, après le garde.
-func pathSeg(r *http.Request, i int) string {
-	parts := strings.Split(strings.TrimPrefix(r.URL.EscapedPath(), "/"), "/")
-	if i >= len(parts) {
+func pathSeg(request *http.Request, segmentIndex int) string {
+	parts := strings.Split(strings.TrimPrefix(request.URL.EscapedPath(), "/"), "/")
+	if segmentIndex >= len(parts) {
 		return ""
 	}
-	v, err := url.PathUnescape(parts[i])
+	segment, err := url.PathUnescape(parts[segmentIndex])
 	if err != nil {
 		return ""
 	}
-	return v
+	return segment
 }
 
 const peekMax = 1 << 16 // la limite de lecture des handlers concernés
@@ -236,186 +236,194 @@ var errBodyTooBig = errors.New("body too large")
 
 // peekJSON lit le corps pour décider, puis le remet en place, entier, pour le handler. Au-delà de peekMax, errBodyTooBig :
 // décider sur un début de corps et relayer la suite serait juger une autre requête que celle servie.
-func peekJSON(r *http.Request, v any) error {
-	b, err := io.ReadAll(io.LimitReader(r.Body, peekMax+1))
-	if len(b) > peekMax {
-		r.Body = struct {
+func peekJSON(request *http.Request, destination any) error {
+	body, err := io.ReadAll(io.LimitReader(request.Body, peekMax+1))
+	if len(body) > peekMax {
+		request.Body = struct {
 			io.Reader
 			io.Closer
-		}{io.MultiReader(bytes.NewReader(b), r.Body), r.Body}
+		}{io.MultiReader(bytes.NewReader(body), request.Body), request.Body}
 		return errBodyTooBig
 	}
-	r.Body.Close()
-	r.Body = io.NopCloser(bytes.NewReader(b))
+	request.Body.Close()
+	request.Body = io.NopCloser(bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(b, v)
+	return json.Unmarshal(body, destination)
 }
 
 func peekErr(err error) (int, string) {
 	if errors.Is(err, errBodyTooBig) {
-		return 413, "srv.http_util.requeteTropGrosse"
+		return http.StatusRequestEntityTooLarge, "srv.http_util.requeteTropGrosse"
 	}
-	return 400, "srv.http_util.requeteInvalide"
+	return http.StatusBadRequest, "srv.http_util.requeteInvalide"
 }
 
 // authGate applique routeRights. Le motif vient du mux qui servira la requête : une variante de chemin
 // (double barre, encodage, barre finale) reçoit le droit de la route vers laquelle le mux la dirige.
-func authGate(mux *http.ServeMux, s *authStore, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, pat := mux.Handler(r)
-		if pat == "" { // 404 ou 405 : répondu ici, pour ne rien relayer à un home enfant
-			http.NotFound(w, r)
+func authGate(mux *http.ServeMux, store *authStore, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		_, pattern := mux.Handler(request)
+		if pattern == "" { // 404 ou 405 : répondu ici, pour ne rien relayer à un home enfant
+			http.NotFound(responseWriter, request)
 			return
 		}
-		need, ok := routeRights[pat]
-		if !ok {
-			gateDeny(w, 403, "srv.auth.droitRefuse")
+		neededRight, knownRoute := routeRights[pattern]
+		if !knownRoute {
+			gateDeny(responseWriter, http.StatusForbidden, "srv.auth.droitRefuse")
 			return
 		}
-		g := &gateInfo{s: s, local: need == rightPublic || need == rightAny || need == rightAdmin, pat: pat, need: need}
-		if need != rightPublic {
-			p, bearer := gatePrincipal(s, r, passiveRoutes[pat])
-			if p == nil && bearer && !tokenTry(clientIP(r)) { // même plafond qu'en mode ouvert : un Bearer faux se devinait sans frein
-				w.Header().Set("Retry-After", "60")
-				gateDeny(w, http.StatusTooManyRequests, "srv.token.tooMany")
+		gate := &gateInfo{s: store, local: neededRight == rightPublic || neededRight == rightAny || neededRight == rightAdmin, pat: pattern, need: neededRight}
+		if neededRight != rightPublic {
+			principal, bearer := gatePrincipal(store, request, passiveRoutes[pattern])
+			if principal == nil && bearer && !tokenTry(clientIP(request)) { // même plafond qu'en mode ouvert : un Bearer faux se devinait sans frein
+				responseWriter.Header().Set("Retry-After", "60")
+				gateDeny(responseWriter, http.StatusTooManyRequests, "srv.token.tooMany")
 				return
 			}
-			if p == nil {
-				gateDeny(w, 401, "srv.auth.sessionRequise")
+			if principal == nil {
+				gateDeny(responseWriter, http.StatusUnauthorized, "srv.auth.sessionRequise")
 				return
 			}
-			if !bearer && !csrfOK(r, p) {
-				gateDeny(w, 403, "srv.auth.csrf")
+			if !bearer && !csrfOK(request, principal) {
+				gateDeny(responseWriter, http.StatusForbidden, "srv.auth.csrf")
 				return
 			}
-			g.p = p
-			if code, key := gateCheck(g, r, pat, need); code != 0 {
-				if code == 500 {
-					journal("auth: gate %s: %s", pat, key)
+			gate.p = principal
+			if code, key := gateCheck(gate, request, pattern, neededRight); code != 0 {
+				if code == http.StatusInternalServerError {
+					journal("auth: gate %s: %s", pattern, key)
 					key = "srv.auth.erreur"
 				}
-				gateDeny(w, code, key)
+				gateDeny(responseWriter, code, key)
 				return
 			}
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), gateKey{}, g)))
+		next.ServeHTTP(responseWriter, request.WithContext(context.WithValue(request.Context(), gateKey{}, gate)))
 	})
 }
 
 // gateCheck renvoie 0 si la requête est permise, sinon le statut et la clé du message.
-func gateCheck(g *gateInfo, r *http.Request, pat string, need Right) (int, string) {
+func gateCheck(gate *gateInfo, request *http.Request, pattern string, neededRight Right) (int, string) {
 	switch {
-	case need == rightAdmin:
-		if g.p.Token || g.p.User == nil || !g.p.User.Admin {
-			return 403, "srv.auth.droitRefuse"
+	case neededRight == rightAdmin:
+		if gate.p.Token || gate.p.User == nil || !gate.p.User.Admin {
+			return http.StatusForbidden, "srv.auth.droitRefuse"
 		}
 		return 0, ""
-	case pat == "PUT /v1/homes/current":
-		var req struct{ Name string }
-		if err := peekJSON(r, &req); err != nil {
+	case pattern == "PUT /v1/homes/current":
+		var requestBody struct{ Name string }
+		if err := peekJSON(request, &requestBody); err != nil {
 			return peekErr(err)
 		}
-		id, ok := homeIDFor(req.Name)
-		if !ok {
-			return 403, "srv.auth.droitRefuse"
+		homeID, homeKnown := homeIDFor(requestBody.Name)
+		if !homeKnown {
+			return http.StatusForbidden, "srv.auth.droitRefuse"
 		}
-		return rightsErr(g, id, func(m map[Right]bool) bool { return anyRight(m) })
-	case need == rightAny:
+		return rightsErr(gate, homeID, func(grantedRights map[Right]bool) bool { return anyRight(grantedRights) })
+	case neededRight == rightAny:
 		return 0, ""
-	case pat == "POST /v1/homes/sync-plans" || pat == "POST /v1/homes/syncs":
-		var req struct {
+	case pattern == "POST /v1/homes/sync-plans" || pattern == "POST /v1/homes/syncs":
+		var requestBody struct {
 			From, To string
 			Picks    []SyncPick
 		}
-		if err := peekJSON(r, &req); err != nil {
+		if err := peekJSON(request, &requestBody); err != nil {
 			return peekErr(err)
 		}
 		// Le plan renvoie des aperçus de la destination ; appliquer un réglage, une skill ou une commande y fait exécuter du code.
 		destNeeds := []Right{RightMemSync, RightMemWrite}
-		if pat == "POST /v1/homes/sync-plans" {
+		if pattern == "POST /v1/homes/sync-plans" {
 			destNeeds = append(destNeeds, RightMemRead)
 		}
-		for _, p := range req.Picks {
-			if syncPickNeedsConfig(p.ID) {
+		for _, pick := range requestBody.Picks {
+			if syncPickNeedsConfig(pick.ID) {
 				destNeeds = append(destNeeds, RightConfigWrite)
 				break
 			}
 		}
-		from, ok1 := homeIDFor(req.From)
-		to, ok2 := homeIDFor(req.To)
-		if !ok1 || !ok2 {
-			return 403, "srv.auth.droitRefuse"
+		from, fromKnown := homeIDFor(requestBody.From)
+		to, toKnown := homeIDFor(requestBody.To)
+		if !fromKnown || !toKnown {
+			return http.StatusForbidden, "srv.auth.droitRefuse"
 		}
-		if code, key := rightsErr(g, from, func(m map[Right]bool) bool { return m[RightMemSync] && m[RightMemRead] }); code != 0 {
+		if code, key := rightsErr(gate, from, func(grantedRights map[Right]bool) bool {
+			return grantedRights[RightMemSync] && grantedRights[RightMemRead]
+		}); code != 0 {
 			return code, key
 		}
-		return rightsErr(g, to, func(m map[Right]bool) bool {
-			for _, n := range destNeeds {
-				if !m[n] {
+		return rightsErr(gate, to, func(grantedRights map[Right]bool) bool {
+			for _, destNeed := range destNeeds {
+				if !grantedRights[destNeed] {
 					return false
 				}
 			}
 			return true
 		})
 	}
-	id, ok := homeIDFor(homeFrom(r))
-	if !ok {
-		return 403, "srv.auth.droitRefuse"
+	homeID, homeKnown := homeIDFor(homeFrom(request))
+	if !homeKnown {
+		return http.StatusForbidden, "srv.auth.droitRefuse"
 	}
-	if pat == "PATCH /v1/trash/memory/{id}" {
-		if trashNeedsConfig(homeFrom(r), pathSeg(r, 3)) {
-			return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] && m[RightConfigWrite] })
+	if pattern == "PATCH /v1/trash/memory/{id}" {
+		if trashNeedsConfig(homeFrom(request), pathSeg(request, 3)) {
+			return rightsErr(gate, homeID, func(grantedRights map[Right]bool) bool {
+				return grantedRights[neededRight] && grantedRights[RightConfigWrite]
+			})
 		}
 	}
 	// Le home enfant ne voit aucune passerelle (ideCodeDenied n'y décide rien) : config_write sur les chemins exécutables se tranche ici.
-	if fsCodeWrite(r, pat) {
-		return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] && m[RightConfigWrite] })
+	if fsCodeWrite(request, pattern) {
+		return rightsErr(gate, homeID, func(grantedRights map[Right]bool) bool {
+			return grantedRights[neededRight] && grantedRights[RightConfigWrite]
+		})
 	}
-	if pat == "POST /v1/memory/merges" || pat == "POST /v1/snippets/merges" {
-		var req struct{ Launch bool }
-		if err := peekJSON(r, &req); err != nil {
+	if pattern == "POST /v1/memory/merges" || pattern == "POST /v1/snippets/merges" {
+		var requestBody struct{ Launch bool }
+		if err := peekJSON(request, &requestBody); err != nil {
 			return peekErr(err)
 		}
 		// Lancer ouvre une session claude avec les arguments de l'appelant : même droit que l'ouverture d'une session.
-		if req.Launch {
-			return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] && m[RightExec] })
+		if requestBody.Launch {
+			return rightsErr(gate, homeID, func(grantedRights map[Right]bool) bool { return grantedRights[neededRight] && grantedRights[RightExec] })
 		}
 	}
 	// Les brouillons lisent côté serveur les fichiers désignés par l'appelant et renvoient la sortie du modèle : sans mem_read,
 	// ils contourneraient le droit de lecture.
-	if pat == "POST /v1/memory/drafts" || pat == "POST /v1/skills/drafts" {
-		return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] && m[RightMemRead] })
+	if pattern == "POST /v1/memory/drafts" || pattern == "POST /v1/skills/drafts" {
+		return rightsErr(gate, homeID, func(grantedRights map[Right]bool) bool {
+			return grantedRights[neededRight] && grantedRights[RightMemRead]
+		})
 	}
-	if pat == "PUT /v1/vgroups" {
-		var st Store
-		if err := peekJSON(r, &st); err != nil {
+	if pattern == "PUT /v1/vgroups" {
+		var submittedStore Store
+		if err := peekJSON(request, &submittedStore); err != nil {
 			return peekErr(err)
 		}
-		if vgroupsAddsDirs(homeFrom(r), st) {
-			return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] && m[RightExec] })
+		if vgroupsAddsDirs(homeFrom(request), submittedStore) {
+			return rightsErr(gate, homeID, func(grantedRights map[Right]bool) bool { return grantedRights[neededRight] && grantedRights[RightExec] })
 		}
 	}
-	return rightsErr(g, id, func(m map[Right]bool) bool { return m[need] })
+	return rightsErr(gate, homeID, func(grantedRights map[Right]bool) bool { return grantedRights[neededRight] })
 }
 
 // fsCodeWrite : la requête d'écriture de l'IDE touche un chemin exécutable (ideCodePath). Corps illisible ou trop gros : oui.
-func fsCodeWrite(r *http.Request, pat string) bool {
-	q := r.URL.Query()
-	switch pat {
+func fsCodeWrite(request *http.Request, pattern string) bool {
+	query := request.URL.Query()
+	switch pattern {
 	case "PUT /v1/fs/entries/content":
-		return ideCodePath(q.Get("path"))
+		return ideCodePath(query.Get("path"))
 	case "DELETE /v1/fs/entries":
-		return ideCodePath(strings.Join(q["item"], "/"))
+		return ideCodePath(strings.Join(query["item"], "/"))
 	case "POST /v1/fs/entries":
-		var req struct{ Path string }
-		return peekJSON(r, &req) != nil || ideCodePath(req.Path)
+		var requestBody struct{ Path string }
+		return peekJSON(request, &requestBody) != nil || ideCodePath(requestBody.Path)
 	case "PATCH /v1/fs/entries":
-		var req struct{ From, To string }
-		return peekJSON(r, &req) != nil || ideCodePath(req.From) || ideCodePath(req.To)
+		var requestBody struct{ From, To string }
+		return peekJSON(request, &requestBody) != nil || ideCodePath(requestBody.From) || ideCodePath(requestBody.To)
 	case "PATCH /v1/fs/trash/{entry}":
-		return ideCodeRestore(q.Get("dir"), pathSeg(r, 3))
+		return ideCodeRestore(query.Get("dir"), pathSeg(request, 3))
 	}
 	return false
 }
@@ -423,36 +431,36 @@ func fsCodeWrite(r *http.Request, pat string) bool {
 // vgroupsAddsDirs : les dossiers enregistrés servent de racines à l'IDE, et POST /v1/directories (exec) est le seul moyen
 // d'en ajouter. PUT /v1/vgroups renvoie l'ensemble : tout dossier absent du magasin actuel est un ajout.
 // Magasin illisible ou home inconnu : ajout, donc exec.
-func vgroupsAddsDirs(home string, st Store) bool {
+func vgroupsAddsDirs(home string, submittedStore Store) bool {
 	dir := cfgDir()
 	if home != "" {
-		h, ok := homeByName(home)
-		if !ok {
+		homeEntry, homeFound := homeByName(home)
+		if !homeFound {
 			return true
 		}
-		dir = h.Dir
+		dir = homeEntry.Dir
 	}
-	var old Store
-	if b, err := readTrustedIn(dir, filepath.Join(dir, "gld-web-groups.json")); err == nil {
-		json.Unmarshal(b, &old)
+	var currentStore Store
+	if storeContent, err := readTrustedIn(dir, filepath.Join(dir, "gld-web-groups.json")); err == nil {
+		json.Unmarshal(storeContent, &currentStore)
 	}
 	known := map[string]bool{}
-	for _, d := range old.Dirs {
-		known[filepath.Clean(d)] = true
+	for _, registeredDir := range currentStore.Dirs {
+		known[filepath.Clean(registeredDir)] = true
 	}
-	for _, p := range old.Projects {
-		for _, d := range p.Dirs {
-			known[filepath.Clean(d)] = true
+	for _, project := range currentStore.Projects {
+		for _, registeredDir := range project.Dirs {
+			known[filepath.Clean(registeredDir)] = true
 		}
 	}
-	for _, d := range st.Dirs {
-		if !known[filepath.Clean(d)] {
+	for _, registeredDir := range submittedStore.Dirs {
+		if !known[filepath.Clean(registeredDir)] {
 			return true
 		}
 	}
-	for _, p := range st.Projects {
-		for _, d := range p.Dirs {
-			if !known[filepath.Clean(d)] {
+	for _, project := range submittedStore.Projects {
+		for _, registeredDir := range project.Dirs {
+			if !known[filepath.Clean(registeredDir)] {
 				return true
 			}
 		}
@@ -465,40 +473,40 @@ var memKeyPrefixes = []string{"g/CLAUDE.md", "g/rules/", "g/gldrules/", "m/", "r
 
 // trashNeedsConfig : restaurer un snippet (s/…) ou un skill (k/…) recrée une commande slash ou un skill exécutables.
 // Élément introuvable, illisible ou de forme inconnue : config_write aussi.
-func trashNeedsConfig(home, id string) bool {
+func trashNeedsConfig(home, trashID string) bool {
 	dir := cfgDir()
 	if home != "" {
-		h, ok := homeByName(home)
-		if !ok {
+		homeEntry, homeFound := homeByName(home)
+		if !homeFound {
 			return true
 		}
-		dir = h.Dir
+		dir = homeEntry.Dir
 	}
-	if id == "" || id == "." || id == ".." || strings.ContainsAny(id, `/\`) {
+	if trashID == "" || trashID == "." || trashID == ".." || strings.ContainsAny(trashID, `/\`) {
 		return true
 	}
-	b, err := readTrustedIn(dir, filepath.Join(dir, "gld-web-trash", id, "meta.json")) // la garde ne lit jamais hors du home
-	var t Trashed
-	if err != nil || json.Unmarshal(b, &t) != nil || t.ID != id {
+	metaContent, err := readTrustedIn(dir, filepath.Join(dir, "gld-web-trash", trashID, "meta.json")) // la garde ne lit jamais hors du home
+	var trashed Trashed
+	if err != nil || json.Unmarshal(metaContent, &trashed) != nil || trashed.ID != trashID {
 		return true
 	}
-	for _, p := range memKeyPrefixes {
-		if t.Key == p || (strings.HasSuffix(p, "/") && strings.HasPrefix(t.Key, p)) {
+	for _, keyPrefix := range memKeyPrefixes {
+		if trashed.Key == keyPrefix || (strings.HasSuffix(keyPrefix, "/") && strings.HasPrefix(trashed.Key, keyPrefix)) {
 			return false
 		}
 	}
 	return true
 }
 
-func rightsErr(g *gateInfo, homeID string, ok func(map[Right]bool) bool) (int, string) {
-	m, err := g.rights(homeID)
+func rightsErr(gate *gateInfo, homeID string, isAllowed func(map[Right]bool) bool) (int, string) {
+	grantedRights, err := gate.rights(homeID)
 	switch {
 	case errors.Is(err, errTamper):
-		return 403, "srv.auth.tamper"
+		return http.StatusForbidden, "srv.auth.tamper"
 	case err != nil:
-		return 500, err.Error()
-	case !ok(m):
-		return 403, "srv.auth.droitRefuse"
+		return http.StatusInternalServerError, err.Error()
+	case !isAllowed(grantedRights):
+		return http.StatusForbidden, "srv.auth.droitRefuse"
 	}
 	return 0, ""
 }
@@ -512,28 +520,28 @@ var (
 
 // authWS relit la session (expirée, révoquée, compte désactivé) et le droit sur le home de la requête. Sans garde, ou pour le
 // jeton (fixe pour la vie du processus), rien à revérifier.
-func authWS(r *http.Request, right Right) error {
-	g := gateFrom(r)
-	if g == nil || g.p == nil || g.p.Token {
+func authWS(request *http.Request, right Right) error {
+	gate := gateFrom(request)
+	if gate == nil || gate.p == nil || gate.p.Token {
 		return nil
 	}
-	c, err := r.Cookie(sessCookie)
+	cookie, err := request.Cookie(sessCookie)
 	if err != nil {
 		return errAuthRevoked
 	}
-	p, err := g.s.SessionPassive(c.Value)
-	if err != nil || !p.MFA || p.User == nil || g.p.User == nil || p.User.ID != g.p.User.ID {
+	principal, err := gate.s.SessionPassive(cookie.Value)
+	if err != nil || !principal.MFA || principal.User == nil || gate.p.User == nil || principal.User.ID != gate.p.User.ID {
 		return errAuthRevoked
 	}
 	if right == rightAny || right == rightPublic {
 		return nil
 	}
-	id, ok := homeIDFor(homeFrom(r))
-	if !ok {
+	homeID, homeKnown := homeIDFor(homeFrom(request))
+	if !homeKnown {
 		return errAuthRevoked
 	}
-	m, err := g.s.Rights(p.User.ID, id)
-	if err != nil || !m[right] {
+	grantedRights, err := gate.s.Rights(principal.User.ID, homeID)
+	if err != nil || !grantedRights[right] {
 		return errAuthRevoked
 	}
 	return nil
@@ -542,31 +550,31 @@ func authWS(r *http.Request, right Right) error {
 // withAuthWatch annule le contexte d'un flux long dès que authWS échoue : le WebSocket local se ferme (sa lecture suit ce
 // contexte), le proxy d'un home enfant coupe l'amont et le client, POST .../chat arrête le tour en cours.
 func withAuthWatch(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		g := gateFrom(r)
-		if g == nil || g.p == nil || !watchedRoutes[g.pat] {
-			next.ServeHTTP(w, r)
+	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		gate := gateFrom(request)
+		if gate == nil || gate.p == nil || !watchedRoutes[gate.pat] {
+			next.ServeHTTP(responseWriter, request)
 			return
 		}
 		// POST .../chat relayé à un enfant : la coupure ne lui parvient que comme un client parti, et un tour continue alors (onglet
 		// fermé). La passerelle lui demande donc l'arrêt explicitement, avec l'identifiant lu ici (l'enfant n'en lit pas plus).
 		var chatID, child string
-		if g.pat == "POST /v1/sessions/{id}/chat" && homeFrom(r) != "" {
-			chatID, child = pathSeg(r, 2), homeFrom(r)
+		if gate.pat == "POST /v1/sessions/{id}/chat" && homeFrom(request) != "" {
+			chatID, child = pathSeg(request, 2), homeFrom(request)
 		}
-		ctx, cancel := context.WithCancelCause(r.Context())
+		watchContext, cancel := context.WithCancelCause(request.Context())
 		defer cancel(nil)
-		r = r.WithContext(ctx)
+		request = request.WithContext(watchContext)
 		go func() {
-			t := time.NewTicker(authWatchEvery)
-			defer t.Stop()
+			ticker := time.NewTicker(authWatchEvery)
+			defer ticker.Stop()
 			for {
 				select {
-				case <-ctx.Done():
+				case <-watchContext.Done():
 					return
-				case <-t.C:
-					if authWS(r, g.need) != nil {
-						journal("auth: flux %s coupé (session ou droit retiré)", g.pat)
+				case <-ticker.C:
+					if authWS(request, gate.need) != nil {
+						journal("auth: flux %s coupé (session ou droit retiré)", gate.pat)
 						cancel(errAuthRevoked)
 						if chatID != "" {
 							stopChildChat(child, chatID)
@@ -576,36 +584,36 @@ func withAuthWatch(next http.Handler) http.Handler {
 				}
 			}
 		}()
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(responseWriter, request)
 	})
 }
 
 // chatStopPath : l'identifiant vient d'un segment décodé (%2F possible) et la requête part avec l'autorité de la passerelle.
-func chatStopPath(id string) (string, bool) {
-	if !idRe.MatchString(id) {
+func chatStopPath(chatID string) (string, bool) {
+	if !idRe.MatchString(chatID) {
 		return "", false
 	}
-	return "/v1/sessions/" + id + "/chat", true
+	return "/v1/sessions/" + chatID + "/chat", true
 }
 
 // stopChildChat envoie DELETE /v1/sessions/{id}/chat à l'enfant du home, par son proxy (en-tête X-Gld-Child compris).
-func stopChildChat(home, id string) {
-	path, ok := chatStopPath(id)
-	if !ok {
+func stopChildChat(home, chatID string) {
+	path, pathValid := chatStopPath(chatID)
+	if !pathValid {
 		journal("auth: arrêt du tour sur %s ignoré : identifiant invalide", home)
 		return
 	}
-	p, err := homeProxy(home)
+	proxy, err := homeProxy(home)
 	if err != nil {
-		journal("auth: arrêt du tour %s sur %s : %v", id, home, err)
+		journal("auth: arrêt du tour %s sur %s : %v", chatID, home, err)
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	stopContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, "DELETE", path, nil)
-	w := &discardWriter{h: http.Header{}}
-	p.ServeHTTP(w, req)
-	journal("auth: arrêt du tour %s sur %s demandé : %d", id, home, w.code)
+	stopRequest, _ := http.NewRequestWithContext(stopContext, "DELETE", path, nil)
+	discard := &discardWriter{h: http.Header{}}
+	proxy.ServeHTTP(discard, stopRequest)
+	journal("auth: arrêt du tour %s sur %s demandé : %d", chatID, home, discard.code)
 }
 
 type discardWriter struct {
@@ -613,30 +621,30 @@ type discardWriter struct {
 	code int
 }
 
-func (d *discardWriter) Header() http.Header         { return d.h }
-func (d *discardWriter) Write(b []byte) (int, error) { return len(b), nil }
-func (d *discardWriter) WriteHeader(c int)           { d.code = c }
+func (writer *discardWriter) Header() http.Header            { return writer.h }
+func (writer *discardWriter) Write(data []byte) (int, error) { return len(data), nil }
+func (writer *discardWriter) WriteHeader(statusCode int)     { writer.code = statusCode }
 
 // callerHas : l'appelant a ce droit sur le home de la requête. Sans garde ni passerelle (mode ouvert ou jeton) tout est permis ;
 // un home enfant lit les droits que sa passerelle a posés dans rightsHeader (absent : mode ouvert côté passerelle).
-func callerHas(r *http.Request, right Right) bool {
-	if g := gateFrom(r); g != nil {
-		if g.p == nil {
+func callerHas(request *http.Request, right Right) bool {
+	if gate := gateFrom(request); gate != nil {
+		if gate.p == nil {
 			return false
 		}
-		id, ok := homeIDFor(homeFrom(r))
-		if !ok {
+		homeID, homeKnown := homeIDFor(homeFrom(request))
+		if !homeKnown {
 			return false
 		}
-		m, err := g.rights(id)
-		return err == nil && m[right]
+		grantedRights, err := gate.rights(homeID)
+		return err == nil && grantedRights[right]
 	}
 	if childToken != "" {
-		if !childAuthorized(r) {
+		if !childAuthorized(request) {
 			return false
 		}
-		if v := r.Header.Values(rightsHeader); len(v) > 0 {
-			return slices.Contains(strings.Split(v[0], ","), string(right))
+		if rightsValues := request.Header.Values(rightsHeader); len(rightsValues) > 0 {
+			return slices.Contains(strings.Split(rightsValues[0], ","), string(right))
 		}
 	}
 	return true

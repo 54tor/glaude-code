@@ -61,29 +61,38 @@ type ModelStat struct {
 	CacheWrite int    `json:"cacheWrite"`
 }
 
-func limitLabel(k string) string {
-	switch k {
+func limitLabel(limitKey string) string {
+	switch limitKey {
 	case "five_hour", "seven_day", "seven_day_opus", "seven_day_sonnet":
-		return L("srv.account.limit." + k)
+		return L("srv.account.limit." + limitKey)
 	}
-	return L("srv.account.otherLimit", "A1", k)
+	return L("srv.account.otherLimit", "A1", limitKey)
 }
 
 // claudeJSON : le fichier .claude.json de la configuration utilisée (dossier de configuration personnalisé, sinon ~).
 func claudeJSON() string {
-	if p := filepath.Join(cfgDir(), ".claude.json"); fileExists(p) {
-		return p
+	if configPath := filepath.Join(cfgDir(), ".claude.json"); fileExists(configPath) {
+		return configPath
 	}
-	h, _ := os.UserHomeDir()
-	return filepath.Join(h, ".claude.json")
+	homeDir, _ := os.UserHomeDir()
+	return filepath.Join(homeDir, ".claude.json")
 }
 
-func fileExists(p string) bool { fi, err := os.Stat(p); return err == nil && fi.Mode().IsRegular() }
+func fileExists(path string) bool {
+	fileInfo, err := os.Stat(path)
+	return err == nil && fileInfo.Mode().IsRegular()
+}
+
+const (
+	millisecondsPerSecond = 1000
+	activityDaysShown     = 14
+	unknownLimitRank      = 99
+)
 
 func accountInfo() Account {
-	a := Account{Limits: []UsageLimit{}, Days: []DayStat{}, Models: []ModelStat{}}
-	if b, err := readTrusted(claudeJSON()); err == nil {
-		var d struct {
+	account := Account{Limits: []UsageLimit{}, Days: []DayStat{}, Models: []ModelStat{}}
+	if claudeConfigContent, err := readTrusted(claudeJSON()); err == nil {
+		var claudeConfig struct {
 			OAuth struct {
 				Email   string `json:"emailAddress"`
 				Name    string `json:"displayName"`
@@ -100,39 +109,54 @@ func accountInfo() Account {
 				Util map[string]json.RawMessage `json:"utilization"`
 			} `json:"cachedUsageUtilization"`
 		}
-		if json.Unmarshal(b, &d) == nil {
-			o := d.OAuth
-			a.Email, a.Name, a.Org, a.OrgType, a.Tier, a.Billing, a.ExtraUsage, a.Since = o.Email, o.Name, o.Org, o.OrgType, o.Tier, o.Billing, o.Extra, o.Since
-			a.ExtraWhy = d.ExtraWhy
-			a.LimitsAt = d.Usage.At / 1000
-			keys := make([]string, 0, len(d.Usage.Util))
-			for k := range d.Usage.Util {
-				keys = append(keys, k)
+		if json.Unmarshal(claudeConfigContent, &claudeConfig) == nil {
+			oauthAccount := claudeConfig.OAuth
+			account.Email = oauthAccount.Email
+			account.Name = oauthAccount.Name
+			account.Org = oauthAccount.Org
+			account.OrgType = oauthAccount.OrgType
+			account.Tier = oauthAccount.Tier
+			account.Billing = oauthAccount.Billing
+			account.ExtraUsage = oauthAccount.Extra
+			account.Since = oauthAccount.Since
+			account.ExtraWhy = claudeConfig.ExtraWhy
+			account.LimitsAt = claudeConfig.Usage.At / millisecondsPerSecond
+			limitKeys := make([]string, 0, len(claudeConfig.Usage.Util))
+			for limitKey := range claudeConfig.Usage.Util {
+				limitKeys = append(limitKeys, limitKey)
 			}
-			sort.Strings(keys)
-			for _, k := range keys {
-				var l struct {
+			sort.Strings(limitKeys)
+			for _, limitKey := range limitKeys {
+				var rawLimit struct {
 					Util     *float64 `json:"utilization"`
 					ResetsAt string   `json:"resets_at"`
 					Limit    *float64 `json:"limit_dollars"`
 					Used     *float64 `json:"used_dollars"`
 					Locked   *string  `json:"locked_reason"`
 				}
-				if json.Unmarshal(d.Usage.Util[k], &l) != nil || l.Util == nil {
+				if json.Unmarshal(claudeConfig.Usage.Util[limitKey], &rawLimit) != nil || rawLimit.Util == nil {
 					continue // limite absente (null) ou d'une forme inconnue
 				}
-				label := limitLabel(k)
-				u := UsageLimit{Key: k, Label: label, Percent: *l.Util, ResetsAt: l.ResetsAt, Limit: l.Limit, Used: l.Used}
-				if l.Locked != nil {
-					u.LockedWhy = *l.Locked
+				usageLimit := UsageLimit{
+					Key:      limitKey,
+					Label:    limitLabel(limitKey),
+					Percent:  *rawLimit.Util,
+					ResetsAt: rawLimit.ResetsAt,
+					Limit:    rawLimit.Limit,
+					Used:     rawLimit.Used,
 				}
-				a.Limits = append(a.Limits, u)
+				if rawLimit.Locked != nil {
+					usageLimit.LockedWhy = *rawLimit.Locked
+				}
+				account.Limits = append(account.Limits, usageLimit)
 			}
-			sort.SliceStable(a.Limits, func(i, j int) bool { return limitRank(a.Limits[i].Key) < limitRank(a.Limits[j].Key) })
+			sort.SliceStable(account.Limits, func(leftIndex, rightIndex int) bool {
+				return limitRank(account.Limits[leftIndex].Key) < limitRank(account.Limits[rightIndex].Key)
+			})
 		}
 	}
-	if b, err := readTrusted(filepath.Join(cfgDir(), "stats-cache.json")); err == nil {
-		var s struct {
+	if statsContent, err := readTrusted(filepath.Join(cfgDir(), "stats-cache.json")); err == nil {
+		var statsCache struct {
 			Last  string `json:"lastComputedDate"`
 			Daily []struct {
 				Date     string `json:"date"`
@@ -148,21 +172,27 @@ func accountInfo() Account {
 			Messages int    `json:"totalMessages"`
 			First    string `json:"firstSessionDate"`
 		}
-		if json.Unmarshal(b, &s) == nil {
-			a.TotalSess, a.TotalMsgs, a.FirstSession, a.StatsAt = s.Total, s.Messages, s.First, s.Last
-			tok := map[string]map[string]int{}
-			for _, t := range s.Tokens {
-				tok[t.Date] = t.ByMdl
+		if json.Unmarshal(statsContent, &statsCache) == nil {
+			account.TotalSess = statsCache.Total
+			account.TotalMsgs = statsCache.Messages
+			account.FirstSession = statsCache.First
+			account.StatsAt = statsCache.Last
+			tokensByDate := map[string]map[string]int{}
+			for _, dayTokens := range statsCache.Tokens {
+				tokensByDate[dayTokens.Date] = dayTokens.ByMdl
 			}
-			from := len(s.Daily) - 14
-			if from < 0 {
-				from = 0
-			}
-			for _, d := range s.Daily[from:] {
-				a.Days = append(a.Days, DayStat{d.Date, d.Messages, d.Sessions, d.Tools, tok[d.Date]})
+			firstShownDay := max(len(statsCache.Daily)-activityDaysShown, 0)
+			for _, dailyActivity := range statsCache.Daily[firstShownDay:] {
+				account.Days = append(account.Days, DayStat{
+					dailyActivity.Date,
+					dailyActivity.Messages,
+					dailyActivity.Sessions,
+					dailyActivity.Tools,
+					tokensByDate[dailyActivity.Date],
+				})
 			}
 		}
-		var m struct {
+		var modelStats struct {
 			ModelUsage map[string]struct {
 				In     int `json:"inputTokens"`
 				Out    int `json:"outputTokens"`
@@ -170,31 +200,34 @@ func accountInfo() Account {
 				CWrite int `json:"cacheCreationInputTokens"`
 			} `json:"modelUsage"`
 		}
-		if json.Unmarshal(b, &m) == nil {
-			for k, v := range m.ModelUsage {
-				a.Models = append(a.Models, ModelStat{k, v.In, v.Out, v.CRead, v.CWrite})
+		if json.Unmarshal(statsContent, &modelStats) == nil {
+			for modelName, modelUsage := range modelStats.ModelUsage {
+				account.Models = append(account.Models, ModelStat{modelName, modelUsage.In, modelUsage.Out, modelUsage.CRead, modelUsage.CWrite})
 			}
-			sort.Slice(a.Models, func(i, j int) bool { return a.Models[i].Out > a.Models[j].Out })
+			sort.Slice(account.Models, func(leftIndex, rightIndex int) bool {
+				return account.Models[leftIndex].Out > account.Models[rightIndex].Out
+			})
 		}
 	}
-	return a
+	return account
 }
 
-func limitRank(k string) int {
-	for i, x := range []string{"five_hour", "seven_day", "seven_day_opus", "seven_day_sonnet"} {
-		if x == k {
-			return i
+func limitRank(limitKey string) int {
+	for rank, knownKey := range []string{"five_hour", "seven_day", "seven_day_opus", "seven_day_sonnet"} {
+		if knownKey == limitKey {
+			return rank
 		}
 	}
-	return 99
+	return unknownLimitRank
 }
 
 // Le relevé des limites d'usage ne se met à jour que lorsqu'une session de Claude Code le demande. `claude -p "/usage"` s'exécute
 // en local (aucun tour, aucun coût, aucune session enregistrée) et rafraîchit ce relevé : on le lance de temps en temps, quand
 // le relevé a plus de usageMaxAge, au plus une fois par usageEvery, sans jamais faire attendre la réponse de /account.
 const (
-	usageMaxAge = 4 * time.Minute
-	usageEvery  = time.Minute
+	usageMaxAge         = 4 * time.Minute
+	usageEvery          = time.Minute
+	usageCommandTimeout = 40 * time.Second
 )
 
 var (
@@ -203,22 +236,23 @@ var (
 	usageBusy  bool
 	usageWG    sync.WaitGroup   // les rafraîchissements en vol : les tests attendent leur fin (le journal dépend de l'environnement)
 	usageStart = func() error { // remplaçable dans les tests
-		ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+		commandContext, cancel := context.WithTimeout(context.Background(), usageCommandTimeout)
 		defer cancel()
-		cmd := withPath(exec.CommandContext(ctx, "claude", "-p", "/usage", "--no-session-persistence", "--output-format", "json"))
+		cmd := withPath(exec.CommandContext(commandContext, "claude", "-p", "/usage", "--no-session-persistence", "--output-format", "json"))
 		cmd.Dir = workDir()
 		return cmd.Run() // stdin nul : rien à lire
 	}
 )
 
 // refreshUsage lance la mise à jour en arrière-plan si le relevé est trop vieux (ou si force) ; vrai si elle part.
-func refreshUsage(at float64, force bool) bool {
+func refreshUsage(limitsFetchedAt float64, force bool) bool {
 	usageMu.Lock()
 	defer usageMu.Unlock()
 	if usageBusy || time.Since(usageLast) < usageEvery {
 		return false
 	}
-	if !force && at > 0 && time.Since(time.Unix(int64(at), 0)) < usageMaxAge {
+	limitsAreRecent := limitsFetchedAt > 0 && time.Since(time.Unix(int64(limitsFetchedAt), 0)) < usageMaxAge
+	if !force && limitsAreRecent {
 		return false
 	}
 	usageBusy, usageLast = true, time.Now()
