@@ -161,3 +161,16 @@ func TestReglesDeProjetTaille(t *testing.T) {
 		t.Fatalf("%+v", rs)
 	}
 }
+
+// Un dossier jetable (/tmp, $TMPDIR) reste un projet configurable mais n'est pas proposé dans les sélecteurs.
+func TestSelecteurSansDossierJetable(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	put(t, filepath.Join(cfg, "projects", "-t", id1+".jsonl"), `{"cwd":"`+t.TempDir()+`"}`+"\n", old)
+	if len(liveProjects()) != 1 {
+		t.Fatal("le projet jetable doit rester un projet vivant")
+	}
+	if len(pickerProjects()) != 0 {
+		t.Fatal("dossier jetable proposé dans le sélecteur")
+	}
+}

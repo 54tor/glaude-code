@@ -11,7 +11,7 @@ const pluginListLimit = 40
 // routesSkills : les skills de Claude Code (skills.go), leurs plugins et marketplaces.
 func routesSkills(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/skills", func(responseWriter http.ResponseWriter, request *http.Request) {
-		projects := liveProjects()
+		projects := pickerProjects()
 		sort.Slice(projects, func(leftIndex, rightIndex int) bool {
 			return projects[leftIndex].Project < projects[rightIndex].Project
 		})
