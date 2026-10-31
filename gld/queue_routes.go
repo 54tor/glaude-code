@@ -76,7 +76,10 @@ func drainOnce(queue *queueStore, now time.Time) {
 		sentMu.Lock()
 		mustWait := now.Before(notBefore[sessionID])
 		sentMu.Unlock()
-		if mustWait || !openSessionIDs[sessionID] || !idleSessions[sessionID] || askingSessionIDs[sessionID] {
+		if mustWait || !openSessionIDs[sessionID] || askingSessionIDs[sessionID] {
+			continue
+		}
+		if !idleSessions[sessionID] && !idleByScreen(sessionID, now) {
 			continue
 		}
 		head, hasHead := queue.Head(sessionID)
