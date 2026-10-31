@@ -268,7 +268,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
 
   // Le suivi de la fin (aimant, recollage pendant que les hauteurs se précisent, échappement quand l'utilisateur remonte) vient de
   // use-stick-to-bottom, branché sur la zone de défilement et son contenu dès que la modale les a montés.
-  const { scrollRef, contentRef, scrollToBottom, stopScroll, isAtBottom } = useStickToBottom({ initial: "instant", resize: "instant" })
+  const { scrollRef, contentRef, scrollToBottom, stopScroll, isAtBottom, escapedFromLock } = useStickToBottom({ initial: "instant", resize: "instant" })
   useEffect(() => {
     const viewportElement = viewport()
     if (!viewportElement) return
@@ -327,7 +327,8 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   // La vue descend à l'ouverture, à l'envoi d'un message, et suit la fin tant que l'utilisateur y est. Dès qu'il remonte lire, elle ne
   // bouge plus ; le bouton « Aller à la fin » prend le relais.
   const opened = useRef("") // session déjà amenée à la fin une fois
-  const away = !isAtBottom
+  // isAtBottom vaut aussi vrai à moins de 70 px de la fin : échappé du suivi, la vue doit proposer le bouton, pas l'indicateur
+  const away = !isAtBottom || escapedFromLock
   const [fromTop, setFromTop] = useState(false)
   const ready = !!session && msgs !== null
   // Les messages hors écran n'ont qu'une hauteur estimée (content-visibility) : en se précisant elle fait glisser la vue de quelques
