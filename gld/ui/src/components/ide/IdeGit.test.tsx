@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { setLang } from "@/i18n"
-import { api, type Data } from "@/lib/api"
+import { api } from "@/lib/api"
 import { setAuth } from "@/lib/auth"
 import { IdeView } from "./IdeView"
 
@@ -12,9 +12,6 @@ vi.mock("./CodeEditor", () => ({
   default: ({ value }: { value: string }) => (
     <pre data-testid="ed">{value}</pre>
   ),
-}))
-vi.mock("../FullTerminal", () => ({
-  default: ({ id, takeHand }: { id: string; takeHand?: boolean }) => <div data-testid="term" data-take={String(takeHand)}>{id}</div>,
 }))
 
 class FakeES {
@@ -32,7 +29,6 @@ let git: ReturnType<typeof vi.spyOn>
 beforeEach(() => {
   setLang("fr")
   localStorage.clear()
-  // Les droits doivent être connus : le terminal ne sonde rien tant que l'authentification charge.
   setAuth({ state: "open" } as never)
   FakeES.all = []
   vi.stubGlobal("EventSource", FakeES)
@@ -57,17 +53,6 @@ beforeEach(() => {
     ],
     more: 3,
   })
-  vi.spyOn(api, "termInfo").mockResolvedValue({ enabled: true })
-  vi.spyOn(api, "data").mockResolvedValue({
-    live: ["s1"],
-    groups: [
-      {
-        project: "p",
-        missing: false,
-        sessions: [{ id: "s1", cwd: "/p", mtime: 1 }],
-      },
-    ],
-  } as unknown as Data)
 })
 afterEach(
   () => (
@@ -78,7 +63,7 @@ afterEach(
   )
 )
 
-describe("IdeView marqueurs git et terminal", () => {
+describe("IdeView marqueurs git", () => {
   it("lettre sur le fichier, point sur le dossier parent, « et N autres »", async () => {
     render(<IdeView dir="/p" />)
     expect(await screen.findByTitle("Modifié")).toBeTruthy()
@@ -105,35 +90,5 @@ describe("IdeView marqueurs git et terminal", () => {
     expect(git).toHaveBeenCalledTimes(1)
     await act(async () => void vi.advanceTimersByTime(200))
     expect(git).toHaveBeenCalledTimes(2)
-  })
-  it("zone basse repliée par choix : aucune session montée", async () => {
-    localStorage.setItem("gld.ide.view.showTerminal", "0")
-    localStorage.setItem("gld.ide.view.showTerminalChosen", "1")
-    render(<IdeView dir="/p" />)
-    await screen.findByTitle("Modifié")
-    await act(async () => {})
-    expect(screen.queryByTestId("term")).toBeNull()
-  })
-  it("sans choix : session vivante, zone repliée, rien d'attaché ; le bouton l'ouvre sans prendre la main", async () => {
-    render(<IdeView dir="/p" />)
-    await screen.findByText("1 session en direct — ouvrir le terminal")
-    await act(async () => {})
-    expect(screen.queryByTestId("term")).toBeNull()
-    fireEvent.click(screen.getByRole("button", { name: "Afficher le panneau du bas" }))
-    const term = await screen.findByTestId("term")
-    expect(term.textContent).toBe("s1")
-    expect(term.dataset.take).toBe("false")
-  })
-  it("le bouton ouvre, replie puis rouvre, et mémorise le choix", async () => {
-    render(<IdeView dir="/p" />)
-    await screen.findByText("1 session en direct — ouvrir le terminal")
-    fireEvent.click(screen.getByRole("button", { name: "Afficher le panneau du bas" }))
-    await screen.findByTestId("term")
-    expect(localStorage.getItem("gld.ide.view.showTerminalChosen")).toBe("1")
-    fireEvent.click(screen.getByRole("button", { name: "Masquer le panneau du bas" }))
-    expect(screen.queryByTestId("term")).toBeNull()
-    expect(localStorage.getItem("gld.ide.view.showTerminal")).toBe("0")
-    fireEvent.click(screen.getByRole("button", { name: "Afficher le panneau du bas" }))
-    expect((await screen.findByTestId("term")).textContent).toBe("s1")
   })
 })

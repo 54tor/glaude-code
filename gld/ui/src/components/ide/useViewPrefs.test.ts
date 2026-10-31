@@ -14,9 +14,8 @@ describe("useViewPrefs", () => {
       minimap: false,
       fontSize: 13,
       showTree: true,
-      showTerminal: true,
-      showTerminalChosen: false,
       showStatus: true,
+      showPreview: true,
     })
   })
 
@@ -35,14 +34,6 @@ describe("useViewPrefs", () => {
       16,
       false,
     ])
-  })
-
-  it("showTerminal : le choix de l'utilisateur est marqué", () => {
-    const { result } = renderHook(useViewPrefs)
-    act(() => result.current.set("showTerminal", false))
-    expect(result.current.showTerminal).toBe(false)
-    expect(result.current.showTerminalChosen).toBe(true)
-    expect(localStorage.getItem("gld.ide.view.showTerminalChosen")).toBe("1")
   })
 
   it("valeurs illisibles (JSON, texte, nombres hors bornes) : défauts ou bornes", () => {

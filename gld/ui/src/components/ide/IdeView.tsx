@@ -16,7 +16,6 @@ import { ConflictBar } from "./ConflictBar"
 import { ConflictDiff } from "./ConflictDiff"
 import { QuickOpen } from "./QuickOpen"
 import { GitChanges } from "../GitChanges"
-import { BottomPane, type BottomView } from "./BottomPane"
 import { useGitMarks } from "./useGitMarks"
 import { isDirty, reduce } from "./ideState"
 import { useTree } from "./useTree"
@@ -26,7 +25,8 @@ import { useTsFeed } from "./feedTs"
 import { Handle } from "./Handle"
 import { readDrafts, useDrafts, type Draft } from "./drafts"
 import { clamp, MAX_TABS, mixedEol, nameOf, parentOf, parseTabs, useResolvedTheme } from "./ideHelpers"
-import { commands, type CmdCtx, type EditorHandle } from "./commands"
+import { commands, isMarkdown, type CmdCtx, type EditorHandle } from "./commands"
+import { Markdown } from "@/components/Message"
 import { useViewPrefs } from "./useViewPrefs"
 import { MenuBar } from "./MenuBar"
 import { WorkspaceStatus } from "./StatusBar"
@@ -63,7 +63,7 @@ export function IdeView({ dir }: { dir: string }) {
   return <Workspace dir={dir} />
 }
 
-// Espace de travail d'un dossier : arborescence, zone centrale, zone terminal du bas (barre toujours visible, jamais de shell : elle s'attache à une session Claude vivante).
+// Espace de travail d'un dossier : arborescence, zone centrale.
 function Workspace({ dir }: { dir: string }) {
   const { t } = useTranslation()
   const can = useCan()
@@ -83,8 +83,6 @@ function Workspace({ dir }: { dir: string }) {
   const saving = useRef(new Map<string, boolean>()) // chemin → une nouvelle demande attend la fin de celle en cours
   const theme = useResolvedTheme()
   const prefs = useViewPrefs()
-  const [term, setTerm] = useState<BottomView>({ open: false, state: "loading" })
-  const [termFocus, setTermFocus] = useState(0)
   // Poignée de l'éditeur de l'onglet actif, en état : les commandes qui en dépendent se réactivent dès son montage.
   const [editor, setEditor] = useState<EditorHandle | null>(null)
   const tree = useTree(dir)
@@ -323,13 +321,10 @@ function Workspace({ dir }: { dir: string }) {
     tabs: ide.tabs,
     readOnly: !!active?.readOnly,
     editor,
-    // La bascule part de l'état réellement affiché, pas de la préférence brute (ouverte par défaut, repliée tant qu'aucun choix).
-    prefs: { ...prefs, showTerminal: term.open },
-    terminal: term.state,
+    prefs,
     treeShown: prefs.showTree,
     newFile: () => treeActions.current?.create("newFile"),
     newFolder: () => treeActions.current?.create("newDir"),
-    focusSession: () => setTermFocus((count) => count + 1),
     save: () => void (active && save(active.path)),
     saveAll: async () => {
       for (const tab of ide.tabs) {
@@ -373,8 +368,6 @@ function Workspace({ dir }: { dir: string }) {
     setStoredWidth(String(clampTreeWidth(size)))
     setDrag({})
   }
-  const toggleTerminal = (view: BottomView) =>
-    run("view.toggleTerminal", { ...ctx, terminal: view.state, prefs: { ...prefs, showTerminal: view.open } })
   const pickQuick = (path: string) => {
     picked.current = path
     setQuick(false)
@@ -424,7 +417,8 @@ function Workspace({ dir }: { dir: string }) {
                   ) : (
                     <div className="flex size-full flex-col">
                       {tab.notice === "mixedEol" && <p className="shrink-0 border-b px-3 py-1.5 text-sm text-muted-foreground">{t("ide.notice.mixedEol")}</p>}
-                      <div className="min-h-0 flex-1">
+                      <div className="flex min-h-0 flex-1">
+                        <div className="min-w-0 flex-1">
                         <CodeEditor
                           path={tab.path}
                           value={tab.content}
@@ -439,6 +433,12 @@ function Workspace({ dir }: { dir: string }) {
                           onChange={(value) => !tab.readOnly && dispatch({ t: "edit", path: tab.path, content: value })}
                           onSave={(value) => save(tab.path, undefined, value)}
                         />
+                        </div>
+                        {prefs.showPreview && isMarkdown(tab.path) && (
+                          <div className="min-w-0 flex-1 overflow-auto border-l p-4">
+                            <Markdown t={tab.content} />
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -447,7 +447,6 @@ function Workspace({ dir }: { dir: string }) {
             </Suspense>
             {diff && diff.path === ide.active && active && <ConflictDiff path={diff.path} original={diff.original} modified={active.content} theme={theme} onClose={() => setDiff(null)} />}
           </div>
-          <BottomPane dir={dir} prefs={prefs} focusN={termFocus} onView={setTerm} onToggle={toggleTerminal} />
         </div>
       </div>
       {prefs.showStatus && <WorkspaceStatus dir={dir} ctx={ctx} watch={watch} index={index.state} />}

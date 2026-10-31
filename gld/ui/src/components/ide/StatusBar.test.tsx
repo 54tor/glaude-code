@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, renderHook, screen } from "@testing-library/react"
+import { act, cleanup, render, renderHook, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { setLang } from "@/i18n"
 import { branchOf, StatusBar, useEditorStatus } from "./StatusBar"
@@ -7,10 +7,9 @@ import type { EditorHandle, EditorStatus } from "./commands"
 import type { GitState } from "@/lib/api"
 
 const st = (o: Partial<EditorStatus> = {}): EditorStatus => ({ line: 3, col: 7, selected: 0, eol: "LF", language: "typescript", indent: "spaces:2", readOnly: false, ...o })
-const term = (o: { open?: boolean; reason?: string } = {}) => ({ open: false, reason: "", onToggle: vi.fn(), ...o })
 const ed = (s: EditorStatus | null) => s && ({ subscribe: (l: (x: EditorStatus) => void) => (l(s), () => {}) } as unknown as EditorHandle)
 const bar = (o: Partial<Parameters<typeof StatusBar>[0]> = {}) =>
-  render(<StatusBar editor={ed(st())} watch={{ connected: true, state: "open", retryIn: 0 }} index="ready" branch="main" dirty={0} term={term()} {...o} />)
+  render(<StatusBar editor={ed(st())} watch={{ connected: true, state: "open", retryIn: 0 }} index="ready" branch="main" dirty={0} {...o} />)
 
 beforeEach(() => setLang("fr"))
 afterEach(cleanup)
@@ -42,7 +41,7 @@ describe("StatusBar", () => {
     expect(live.textContent).toContain("Surveillance active")
     expect(live.textContent).toContain("Indexation en cours")
     expect(live.textContent).not.toContain("Ligne")
-    const p = { editor: ed(st()), branch: "main", dirty: 0, term: term() }
+    const p = { editor: ed(st()), branch: "main", dirty: 0 }
     rerender(<StatusBar {...p} watch={{ connected: false, state: "waiting", retryIn: 15 }} index="partial" />)
     expect(live.textContent).toContain("reconnexion dans 15 s")
     expect(live.textContent).toContain("Index partiel")
@@ -54,24 +53,8 @@ describe("StatusBar", () => {
   it("onglets modifiés", () => {
     const { rerender } = bar({ dirty: 1 })
     expect(screen.getByText("1 onglet modifié")).toBeTruthy()
-    rerender(<StatusBar editor={ed(st())} watch={{ connected: true, state: "open", retryIn: 0 }} index="ready" dirty={3} term={term()} />)
+    rerender(<StatusBar editor={ed(st())} watch={{ connected: true, state: "open", retryIn: 0 }} index="ready" dirty={3} />)
     expect(screen.getByText("3 onglets modifiés")).toBeTruthy()
-  })
-
-  it("bouton du terminal : bascule, ou désactivé avec la raison", () => {
-    const t1 = term({ open: true })
-    const { rerender } = bar({ term: t1 })
-    const b = screen.getByRole("button", { name: "Ouvrir ou replier le terminal" })
-    expect(b.getAttribute("aria-expanded")).toBe("true")
-    fireEvent.click(b)
-    expect(t1.onToggle).toHaveBeenCalled()
-    const t2 = term({ reason: "Le terminal demande le droit « exec »" })
-    rerender(<StatusBar editor={ed(st())} watch={{ connected: true, state: "open", retryIn: 0 }} index="ready" dirty={0} term={t2} />)
-    const off = screen.getByRole("button", { name: "Ouvrir ou replier le terminal" })
-    expect(off.getAttribute("aria-disabled")).toBe("true")
-    expect(document.getElementById(off.getAttribute("aria-describedby")!)?.textContent).toMatch(/exec/)
-    fireEvent.click(off)
-    expect(t2.onToggle).not.toHaveBeenCalled()
   })
 })
 

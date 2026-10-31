@@ -19,7 +19,6 @@ const ctx = (o: Partial<CmdCtx> = {}, rights: Right[] = ["fs_read", "fs_write", 
     readOnly: false,
     editor: handle(),
     prefs: { ...DEFAULT_PREFS, set: vi.fn() },
-    terminal: "ready",
     treeShown: true,
     save: vi.fn(),
     saveAll: vi.fn(),
@@ -28,7 +27,6 @@ const ctx = (o: Partial<CmdCtx> = {}, rights: Right[] = ["fs_read", "fs_write", 
     closeTab: vi.fn(),
     closeAll: vi.fn(),
     openQuick: vi.fn(),
-    focusSession: vi.fn(),
     ...o,
   }
 }
@@ -67,10 +65,6 @@ describe("EditorToolbar", () => {
     expect(c.prefs.set).toHaveBeenCalledWith("fontSize", 12)
     fireEvent.click(btn("Fermer tous les onglets"))
     expect(c.closeAll).toHaveBeenCalled()
-    fireEvent.click(btn("Aller au terminal de session"))
-    expect(c.focusSession).toHaveBeenCalled()
-    fireEvent.click(btn("Ouvrir ou replier le terminal"))
-    expect(c.prefs.set).toHaveBeenCalledWith("showTerminal", false)
   })
 
   it("les commandes de l'éditeur lui donnent le focus avant de s'exécuter : la saisie rapide de Monaco l'exige", () => {
@@ -91,7 +85,7 @@ describe("EditorToolbar", () => {
     const c = ctx()
     render(<EditorToolbar ctx={c} />)
     fireEvent.click(btn("Tout enregistrer"))
-    fireEvent.click(btn("Ouvrir ou replier le terminal"))
+    fireEvent.click(btn("Aperçu Markdown"))
     expect(c.editor!.focus).not.toHaveBeenCalled()
   })
 

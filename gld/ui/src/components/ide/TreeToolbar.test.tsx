@@ -16,7 +16,6 @@ const ctx = (rights: Right[] = ["fs_read", "fs_write"]): CmdCtx => ({
   readOnly: false,
   editor: null,
   prefs: { ...DEFAULT_PREFS, set: vi.fn() },
-  terminal: "disabled",
   treeShown: true,
   save: vi.fn(),
   saveAll: vi.fn(),
@@ -25,7 +24,6 @@ const ctx = (rights: Right[] = ["fs_read", "fs_write"]): CmdCtx => ({
   closeTab: vi.fn(),
   closeAll: vi.fn(),
   openQuick: vi.fn(),
-  focusSession: vi.fn(),
 })
 const tree = () => ({ refreshAll: vi.fn(), collapseAll: vi.fn() })
 const btn = (name: string) => screen.getByRole("button", { name })

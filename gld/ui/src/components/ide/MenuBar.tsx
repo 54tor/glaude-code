@@ -6,13 +6,13 @@ import { isEditableTarget } from "@/lib/editable"
 import { ariaKeys, commands, showKeys, type CmdCtx, type Command } from "./commands"
 import type { ViewPrefValues } from "./useViewPrefs"
 
-const GROUPS: Command["group"][] = ["file", "edit", "find", "view", "goto", "terminal"]
+const GROUPS: Command["group"][] = ["file", "edit", "find", "view", "goto"]
 type Toggle = { [K in keyof ViewPrefValues]: ViewPrefValues[K] extends boolean ? K : never }[keyof ViewPrefValues]
 const CHECKS: Record<string, Toggle> = {
   "view.wordWrap": "wordWrap",
   "view.minimap": "minimap",
   "view.toggleTree": "showTree",
-  "view.toggleTerminal": "showTerminal",
+  "view.togglePreview": "showPreview",
   "view.toggleStatus": "showStatus",
 }
 const itemCls =

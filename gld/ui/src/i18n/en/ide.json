@@ -93,19 +93,6 @@
       "dir": "Contains uncommitted changes",
       "more": "and {{count}} more"
     },
-    "term": {
-      "label": "Session terminal",
-      "disabled": "built-in terminal disabled (GLD_WEB_TERMINAL=1)",
-      "none": "the terminal attaches to a Claude session open in this folder",
-      "pick": "Session to show",
-      "ended": "The session has ended.",
-      "title": "Terminal",
-      "help": "run `claude` in this folder",
-      "ready_one": "{{count}} live session",
-      "ready_other": "{{count}} live sessions",
-      "readyClosed_one": "{{count}} live session — open the terminal",
-      "readyClosed_other": "{{count}} live sessions — open the terminal"
-    },
     "drafts": {
       "dropped": "Draft of “{{name}}” discarded: the file changed on disk."
     },
@@ -138,12 +125,8 @@
         "fontMinus": "Decrease text size",
         "fontReset": "Default text size",
         "toggleTree": "Show file tree",
-        "toggleTerminal": "Show terminal area",
-        "toggleStatus": "Show status bar"
-      },
-      "terminal": {
-        "toggle": "Open or collapse the terminal",
-        "focusSession": "Go to session terminal"
+        "toggleStatus": "Show status bar",
+        "togglePreview": "Markdown preview"
       }
     },
     "reason": {
@@ -151,13 +134,9 @@
       "readOnly": "Read-only file",
       "noWrite": "You are not allowed to modify files in this folder",
       "noEditor": "No active editor",
-      "noExec": "The terminal requires the “exec” right",
-      "termOff": "Built-in terminal disabled (GLD_WEB_TERMINAL=1)",
       "nothingDirty": "No changes to save",
       "noTree": "Show the file tree to create at the root",
-      "termLoading": "Terminal loading",
-      "noSessionsRead": "Session list not accessible (“sessions_read” right required)",
-      "sessionsDown": "Session list unavailable"
+      "notMarkdown": "The active file is not a Markdown file"
     },
     "toolbar": {
       "editor": "Editor actions",
@@ -190,14 +169,12 @@
       "find": "Search",
       "view": "View",
       "goto": "Go",
-      "terminal": "Terminal",
       "key": {
         "file": "f",
         "edit": "e",
         "find": "s",
         "view": "v",
-        "goto": "g",
-        "terminal": "t"
+        "goto": "g"
       }
     },
     "status": {
