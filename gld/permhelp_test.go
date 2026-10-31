@@ -6,9 +6,9 @@ func TestPermHelp(t *testing.T) {
 	old := permHelpRun
 	defer func() { permHelpRun = old }()
 	calls := 0
-	permHelpRun = func(p string) (string, error) { calls++; return "  Autorise : x\n", nil }
+	permHelpRun = func(path string) (string, error) { calls++; return "  Autorise : x\n", nil }
 	clear(permHelpCache)
-	for i := 0; i < 2; i++ {
+	for index := 0; index < 2; index++ {
 		if got, err := permHelp("allow", "Bash(git status:*)"); err != nil || got != "Autorise : x" {
 			t.Fatalf("%q %v", got, err)
 		}

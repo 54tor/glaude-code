@@ -18,7 +18,7 @@ func TestSafeTitle(t *testing.T) {
 	if got := safeTitle("Réunion équipe_v2.1-final"); got != "Réunion équipe_v2.1-final" {
 		t.Errorf("un titre sain doit rester intact : %q", got)
 	}
-	if n := len([]rune(safeTitle(strings.Repeat("é", 200)))); n != 40 {
-		t.Errorf("titre limité à 40 caractères, obtenu %d", n)
+	if count := len([]rune(safeTitle(strings.Repeat("é", 200)))); count != 40 {
+		t.Errorf("titre limité à 40 caractères, obtenu %d", count)
 	}
 }

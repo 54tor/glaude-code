@@ -30,12 +30,12 @@ func TestMemResolveUnknownDirRefused(t *testing.T) {
 	other := filepath.Join(filepath.Dir(cfg), "other")
 	put(t, filepath.Join(other, "CLAUDE.md"), "x", old)
 	enc := nonAlnum.ReplaceAllString(other, "-") // dossier de transcripts absent de projects/
-	for _, k := range []string{"p/" + enc + "/CLAUDE.md", "r/" + enc + "/x.md"} {
-		if _, err := memRead(k); err == nil {
-			t.Errorf("%s résolu hors des projets connus", k)
+	for _, key := range []string{"p/" + enc + "/CLAUDE.md", "r/" + enc + "/x.md"} {
+		if _, err := memRead(key); err == nil {
+			t.Errorf("%s résolu hors des projets connus", key)
 		}
-		if memSave(k, "pwn") == nil {
-			t.Errorf("%s écrit hors des projets connus", k)
+		if memSave(key, "pwn") == nil {
+			t.Errorf("%s écrit hors des projets connus", key)
 		}
 	}
 	if _, _, _, err := skillBase("p/" + enc + "/x"); err == nil {
@@ -44,22 +44,22 @@ func TestMemResolveUnknownDirRefused(t *testing.T) {
 	if _, _, err := cmdBase("p/" + enc + "/x.md"); err == nil {
 		t.Error("cmdBase accepte un dossier inconnu")
 	}
-	if b, err := os.ReadFile(filepath.Join(other, "CLAUDE.md")); err != nil || string(b) != "x" {
+	if data, err := os.ReadFile(filepath.Join(other, "CLAUDE.md")); err != nil || string(data) != "x" {
 		t.Fatal("fichier modifié", err)
 	}
 }
 
 func TestMemResolveRefusesOtherHomeConfig(t *testing.T) {
 	_, workCfg := secRig(t)
-	for _, k := range []string{"p/-bob/.claude/CLAUDE.md", "r/-bob/r.md", "r/-bob/new.md"} {
-		if _, err := memRead(k); err == nil {
-			t.Errorf("%s lisible", k)
+	for _, key := range []string{"p/-bob/.claude/CLAUDE.md", "r/-bob/r.md", "r/-bob/new.md"} {
+		if _, err := memRead(key); err == nil {
+			t.Errorf("%s lisible", key)
 		}
-		if memSave(k, "pwn") == nil {
-			t.Errorf("%s inscriptible", k)
+		if memSave(key, "pwn") == nil {
+			t.Errorf("%s inscriptible", key)
 		}
 	}
-	if b, _ := os.ReadFile(filepath.Join(workCfg, "CLAUDE.md")); string(b) != "secret" {
+	if data, _ := os.ReadFile(filepath.Join(workCfg, "CLAUDE.md")); string(data) != "secret" {
 		t.Fatal("CLAUDE.md d'un autre home modifié")
 	}
 	if exists(filepath.Join(workCfg, "rules", "new.md")) {
@@ -75,8 +75,8 @@ func TestGlobBraceBomb(t *testing.T) {
 	if _, err := setPaths("x", []string{strings.Repeat("a", 201)}); err == nil {
 		t.Error("setPaths accepte un motif trop long")
 	}
-	m, _ := parseMeta("---\npaths:\n  - \"" + bomb + "\"\n---\n")
-	if _, err := globsOf(m); err == nil {
+	lookup, _ := parseMeta("---\npaths:\n  - \"" + bomb + "\"\n---\n")
+	if _, err := globsOf(lookup); err == nil {
 		t.Error("globsOf accepte une bombe d'accolades")
 	}
 	if !globOK("src/**/*.{ts,tsx}") {
@@ -105,32 +105,32 @@ func TestMatchesNamesNeedFsRead(t *testing.T) {
 	put(t, filepath.Join(proj, "a.ts"), "x", old)
 	put(t, filepath.Join(cfg, "rules", "ts.md"), "---\npaths:\n  - \"*.ts\"\n---\nr\n", old)
 	put(t, filepath.Join(cfg, "projects", "-p", "s.jsonl"), `{"cwd":"`+proj+`"}`+"\n", old)
-	h := http.NewServeMux()
-	routesMemory(h)
-	call := func(g *gateInfo) string {
-		r := httptest.NewRequest("GET", "/v1/memory/matches?key=g/rules/ts.md&dir=-p", nil)
-		if g != nil {
-			r = r.WithContext(context.WithValue(r.Context(), gateKey{}, g))
+	serveMux := http.NewServeMux()
+	routesMemory(serveMux)
+	call := func(localGateInfo *gateInfo) string {
+		request := httptest.NewRequest("GET", "/v1/memory/matches?key=g/rules/ts.md&dir=-p", nil)
+		if localGateInfo != nil {
+			request = request.WithContext(context.WithValue(request.Context(), gateKey{}, localGateInfo))
 		}
-		w := httptest.NewRecorder()
-		h.ServeHTTP(w, r)
-		return w.Body.String()
+		recorder := httptest.NewRecorder()
+		serveMux.ServeHTTP(recorder, request)
+		return recorder.Body.String()
 	}
-	if b := call(nil); !strings.Contains(b, "a.ts") {
-		t.Errorf("sans garde : %s", b)
+	if body := call(nil); !strings.Contains(body, "a.ts") {
+		t.Errorf("sans garde : %s", body)
 	}
-	s := testStore(t)
-	id, err := s.AddUser("alice", testPw, false)
+	authStore := testStore(t)
+	id, err := authStore.AddUser("alice", testPw, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.Grant(id, mainHomeID, RightMemRead)
-	g := &gateInfo{p: &Principal{User: &User{ID: id}}, s: s}
-	if b := call(g); strings.Contains(b, "a.ts") || !strings.Contains(b, `"total":1`) {
-		t.Errorf("sans fs_read : %s", b)
+	authStore.Grant(id, mainHomeID, RightMemRead)
+	anotherGateInfo := &gateInfo{p: &Principal{User: &User{ID: id}}, s: authStore}
+	if body := call(anotherGateInfo); strings.Contains(body, "a.ts") || !strings.Contains(body, `"total":1`) {
+		t.Errorf("sans fs_read : %s", body)
 	}
-	s.Grant(id, mainHomeID, RightFsRead)
-	if b := call(g); !strings.Contains(b, "a.ts") {
-		t.Errorf("avec fs_read : %s", b)
+	authStore.Grant(id, mainHomeID, RightFsRead)
+	if body := call(anotherGateInfo); !strings.Contains(body, "a.ts") {
+		t.Errorf("avec fs_read : %s", body)
 	}
 }
