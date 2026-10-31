@@ -5,13 +5,15 @@ import { toast } from "sonner"
 import { api, type GitRemote, type GitState } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"
 import { refreshGit } from "@/hooks/useGit"
+import { syncOf } from "./GitBadge"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
-// À pousser : des commits en avance, ou une branche sans amont (jamais un HEAD détaché).
+// À pousser : des commits en avance sur un remote, une branche absente d'un remote, ou sans amont (jamais un HEAD détaché).
 export const needsPush = (st: GitState | undefined): st is GitState => {
   if (!st || st.detached) return false
-  return !st.upstream || st.ahead > 0
+  const { ahead, missing } = syncOf(st)
+  return !st.upstream || ahead > 0 || missing.length > 0
 }
 
 // Pousse la branche courante vers un remote du dépôt. Le menu nomme la cible : choisir un remote est la confirmation.
@@ -43,7 +45,8 @@ export function GitPush({ dir, st }: { dir: string; st: GitState | undefined }) 
       () => setRemotes([])
     )
   }
-  const triggerTitle = st.upstream ? t("conversation.git.ahead", { n: st.ahead }) : t("conversation.gitPush.noUpstream")
+  const triggerTitle = st.upstream ? t("conversation.git.ahead", { n: syncOf(st).ahead }) : t("conversation.gitPush.noUpstream")
+  const syncOfRemote = (name: string) => st.remotes?.find((remoteSync) => remoteSync.name === name)
   return (
     <DropdownMenu onOpenChange={loadRemotesOnOpen}>
       <DropdownMenuTrigger asChild>
@@ -55,11 +58,16 @@ export function GitPush({ dir, st }: { dir: string; st: GitState | undefined }) 
         <DropdownMenuLabel className="whitespace-normal">{t("conversation.gitPush.label", { branch: st.branch })}</DropdownMenuLabel>
         {remotes === null && <DropdownMenuItem disabled>{t("conversation.gitPush.reading")}</DropdownMenuItem>}
         {remotes?.length === 0 && <DropdownMenuItem disabled>{t("conversation.gitPush.none")}</DropdownMenuItem>}
-        {remotes?.map((remote) => (
-          <DropdownMenuItem key={remote.name} onSelect={() => pushToRemote(remote)}>
-            <span className="font-medium">{remote.name}</span>
-          </DropdownMenuItem>
-        ))}
+        {remotes?.map((remote) => {
+          const sync = syncOfRemote(remote.name)
+          const state = !sync ? "" : sync.missing ? t("conversation.gitPush.newBranch") : sync.ahead || sync.behind ? t("conversation.gitPush.position", { ahead: sync.ahead, behind: sync.behind }) : t("conversation.git.upToDate")
+          return (
+            <DropdownMenuItem key={remote.name} onSelect={() => pushToRemote(remote)}>
+              <span className="font-medium">{remote.name}</span>
+              {state && <span className="ml-auto pl-3 text-xs text-muted-foreground">{state}</span>}
+            </DropdownMenuItem>
+          )
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   )

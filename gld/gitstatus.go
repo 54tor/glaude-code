@@ -18,13 +18,22 @@ import (
 )
 
 type GitState struct {
-	Branch   string `json:"branch"` // "" : HEAD détaché
-	Detached bool   `json:"detached,omitempty"`
-	Upstream bool   `json:"upstream"`
-	Ahead    int    `json:"ahead"`
-	Behind   int    `json:"behind"`
-	Changed  int    `json:"changed"`   // fichiers suivis modifiés, ajoutés, supprimés ou en conflit
-	Untrack  int    `json:"untracked"` // fichiers non suivis
+	Branch   string          `json:"branch"` // "" : HEAD détaché
+	Detached bool            `json:"detached,omitempty"`
+	Upstream bool            `json:"upstream"`
+	Ahead    int             `json:"ahead"`
+	Behind   int             `json:"behind"`
+	Changed  int             `json:"changed"`           // fichiers suivis modifiés, ajoutés, supprimés ou en conflit
+	Untrack  int             `json:"untracked"`         // fichiers non suivis
+	Remotes  []GitRemoteSync `json:"remotes,omitempty"` // position de la branche sur chaque remote, d'après les références locales (sans fetch)
+}
+
+// GitRemoteSync : la branche courante face à un remote. Missing : le remote n'a pas cette branche (Ahead/Behind valent alors 0).
+type GitRemoteSync struct {
+	Name    string `json:"name"`
+	Ahead   int    `json:"ahead"`
+	Behind  int    `json:"behind"`
+	Missing bool   `json:"missing,omitempty"`
 }
 
 const (
@@ -36,10 +45,11 @@ const (
 )
 
 var (
-	gitMu    sync.Mutex
-	gitCache = map[string]gitEntry{}
-	gitSem   = make(chan struct{}, 4) // au plus 4 git en même temps
-	gitRun   = runGitStatus           // remplaçable dans les tests
+	gitRemotesRun = runGitRemotes // remplaçable dans les tests
+	gitMu         sync.Mutex
+	gitCache      = map[string]gitEntry{}
+	gitSem        = make(chan struct{}, 4) // au plus 4 git en même temps
+	gitRun        = runGitStatus           // remplaçable dans les tests
 )
 
 type gitEntry struct {
@@ -129,6 +139,38 @@ func runGitStatus(dir string) (string, error) {
 	return string(output), err
 }
 
+// parseRemoteSync croise les remotes du dépôt (`git remote`) avec `git for-each-ref --format='%(refname) %(ahead-behind:HEAD)' refs/remotes` :
+// une référence refs/remotes/<remote>/<branche> par remote qui a la branche, les autres sont « Missing ».
+func parseRemoteSync(remoteNames, refsOutput, branch string) []GitRemoteSync {
+	positions := map[string][2]int{}
+	for _, refLine := range strings.Split(refsOutput, "\n") {
+		fields := strings.Fields(refLine)
+		if len(fields) != 3 {
+			continue
+		}
+		behind, behindErr := strconv.Atoi(fields[1]) // %(ahead-behind:HEAD) compte du côté de la référence : ses avances sont nos retards
+		ahead, aheadErr := strconv.Atoi(fields[2])
+		if aheadErr == nil && behindErr == nil {
+			positions[fields[0]] = [2]int{ahead, behind}
+		}
+	}
+	var remotes []GitRemoteSync
+	for _, name := range strings.Fields(remoteNames) {
+		position, found := positions["refs/remotes/"+name+"/"+branch]
+		remotes = append(remotes, GitRemoteSync{Name: name, Ahead: position[0], Behind: position[1], Missing: !found})
+	}
+	return remotes
+}
+
+func runGitRemotes(dir, branch string) []GitRemoteSync {
+	remoteNames, err := gitOut1(dir, "remote")
+	if err != nil || remoteNames == "" {
+		return nil
+	}
+	refsOutput, _ := gitOut1(dir, "for-each-ref", "--format=%(refname) %(ahead-behind:HEAD)", "refs/remotes")
+	return parseRemoteSync(remoteNames, refsOutput, branch)
+}
+
 type gitPrefixEntry struct {
 	p  string
 	at time.Time
@@ -190,6 +232,9 @@ func gitStates(dirs []string) map[string]GitState {
 			entry := gitEntry{at: time.Now()}
 			if err == nil {
 				entry.st, entry.ok, entry.out = parseGitStatus(statusOutput), true, statusOutput
+				if entry.st.Branch != "" {
+					entry.st.Remotes = gitRemotesRun(dir, entry.st.Branch)
+				}
 			}
 			gitMu.Lock()
 			if len(gitCache) > gitCacheMaxEntries {
