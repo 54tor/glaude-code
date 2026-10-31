@@ -10,10 +10,10 @@ const Child = () => {
   if (boom) throw boom
   return <p>route ok</p>
 }
-const page = (k: string) => (
+const page = (localKey: string) => (
   <div>
     <nav>barre latérale</nav>
-    <RouteErrorBoundary key={k}>
+    <RouteErrorBoundary key={localKey}>
       <Child />
     </RouteErrorBoundary>
   </div>

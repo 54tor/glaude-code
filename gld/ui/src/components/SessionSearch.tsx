@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
 // Recherche d'une vue de sessions : par nom, ou (mode avancé) aussi dans le texte des conversations.
-export function SessionSearch({ q, setQ, adv, setAdv, searching, memory }: { q: string; setQ: (v: string) => void; adv: boolean; setAdv: (v: boolean) => void; searching: boolean; memory?: boolean }) {
+export function SessionSearch({ q: query, setQ, adv, setAdv, searching, memory }: { q: string; setQ: (localValue: string) => void; adv: boolean; setAdv: (flag: boolean) => void; searching: boolean; memory?: boolean }) {
   const { t } = useTranslation()
   const clearAndBlurOnEscape = (keyboardEvent: React.KeyboardEvent<HTMLInputElement>) => {
     if (keyboardEvent.key !== "Escape") return
@@ -15,7 +15,7 @@ export function SessionSearch({ q, setQ, adv, setAdv, searching, memory }: { q: 
     <div className="relative w-full md:w-96">
       <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
       <Input
-        value={q}
+        value={query}
         onChange={(changeEvent) => setQ(changeEvent.target.value)}
         onKeyDown={clearAndBlurOnEscape}
         placeholder={memory ? t("shell.search.placeholderMemory") : adv ? t("shell.search.placeholderContent") : t("shell.search.placeholder")}
@@ -26,7 +26,7 @@ export function SessionSearch({ q, setQ, adv, setAdv, searching, memory }: { q: 
         {searching ? (
           <Fan className="size-4 animate-spin text-muted-foreground" aria-label={t("shell.sidebar.searching")} />
         ) : (
-          q && (
+          query && (
             <button className="text-muted-foreground hover:text-foreground" onClick={() => setQ("")} aria-label={t("shell.sidebar.clearSearch")}>
               <X className="size-4" />
             </button>
