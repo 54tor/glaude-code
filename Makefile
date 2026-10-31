@@ -49,7 +49,11 @@ check: ui check-ui
 	cd gld && go vet ./... && go test -race -count=1 .
 
 # La partie interface de check (la CI la lance seule : les tests Go y passent déjà sous -race dans cover).
-check-ui:
+check-ui: check-commonpw
 	cd gld/ui && { [ -d node_modules ] || npm ci; } && npx tsc -b && npx eslint . && npm test
 
-.PHONY: ui commonpw install windows macos test check check-ui fuzz cover
+# La liste versionnée doit être celle que génère le paquet installé (rien n'est modifié).
+check-commonpw:
+	cd gld/ui && { [ -d node_modules ] || npm ci; } && node scripts/gen-commonpw.mjs "$${TMPDIR:-/tmp}/commonpw.check" >/dev/null && cmp "$${TMPDIR:-/tmp}/commonpw.check" ../auth_commonpw.txt || { echo "auth_commonpw.txt périmé : make commonpw"; exit 1; }
+
+.PHONY: ui commonpw check-commonpw install windows macos test check check-ui fuzz cover
