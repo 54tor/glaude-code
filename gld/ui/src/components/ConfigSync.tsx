@@ -16,7 +16,7 @@ type Item = SyncItem
 // (fusionner ou remplacer). Le plan vient du serveur, qui revérifie chaque choix avant d'écrire et sauvegarde ce qu'il remplace.
 export function SyncTab() {
   const { t } = useTranslation()
-  const a = useActions()
+  const actions = useActions()
   const [info, setInfo] = useState<HomesInfo | null>(null)
   const [from, setFrom] = useState("")
   const [to, setTo] = useState("")
@@ -26,21 +26,25 @@ export function SyncTab() {
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    api.homes().then((r) => {
-      setInfo(r)
-      if (r.homes.length > 0) setTo(r.homes[0].name)
+    api.homes().then((homesInfo) => {
+      setInfo(homesInfo)
+      if (homesInfo.homes.length > 0) setTo(homesInfo.homes[0].name)
     }, () => {})
   }, [])
 
-  const load = useCallback(async (f: string, dest: string) => {
+  const load = useCallback(async (source: string, dest: string) => {
     setItems(null)
     setPicks({})
     setError("")
-    if (f === dest) return setError(t("config.sync.pickTwo"))
+    if (source === dest) {
+      setError(t("config.sync.pickTwo"))
+      return
+    }
     try {
-      setItems((await api.syncPlan(f, dest)).items ?? [])
-    } catch (e) {
-      setError(errMsg(e))
+      const syncPlan = await api.syncPlan(source, dest)
+      setItems(syncPlan.items ?? [])
+    } catch (error) {
+      setError(errMsg(error))
     }
   }, [t])
   useEffect(() => {
@@ -51,15 +55,28 @@ export function SyncTab() {
   if (info.homes.length === 0)
     return <p className="py-6 text-sm text-muted-foreground">{t("config.sync.addSecond")}</p>
 
-  const options: [string, string][] = [["", t("config.sync.main", { dir: tilde(info.main, a.home) })], ...info.homes.map((h): [string, string] => [h.name, t("config.sync.named", { name: h.name, dir: tilde(h.dir, a.home) })])]
-  const todo = (items ?? []).filter((i) => i.status !== "same")
+  const mainOption: [string, string] = ["", t("config.sync.main", { dir: tilde(info.main, actions.home) })]
+  const homeOptions = info.homes.map((home): [string, string] => [home.name, t("config.sync.named", { name: home.name, dir: tilde(home.dir, actions.home) })])
+  const options: [string, string][] = [mainOption, ...homeOptions]
+  const todo = (items ?? []).filter((item) => item.status !== "same")
   const chosen = Object.keys(picks)
-  const setAll = (f: (i: Item) => Mode | null) => setPicks(Object.fromEntries(todo.flatMap((i) => (f(i) ? [[i.id, f(i)!]] : []))))
+  const setAll = (modeFor: (item: Item) => Mode | null) => {
+    const chosenEntries = todo.flatMap((item) => {
+      const mode = modeFor(item)
+      return mode ? [[item.id, mode]] : []
+    })
+    setPicks(Object.fromEntries(chosenEntries))
+  }
+  const defaultModeFor = (item: Item): Mode | null => {
+    if (item.merge) return "merge"
+    if (item.status === "new") return "replace"
+    return null
+  }
   const apply = async () => {
     setBusy(true)
-    const ok = await reportAction(() => api.syncApply(from, to, chosen.map((id) => ({ id, mode: picks[id] }))))
+    const applied = await reportAction(() => api.syncApply(from, to, chosen.map((id) => ({ id, mode: picks[id] }))))
     setBusy(false)
-    if (ok) load(from, to)
+    if (applied) load(from, to)
   }
 
   return (
@@ -77,7 +94,7 @@ export function SyncTab() {
       {items && (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => setAll((i) => (i.status === "new" || i.merge ? (i.merge ? "merge" : "replace") : null))} title={t("config.sync.mergeAllTitle")}>
+            <Button size="sm" variant="outline" onClick={() => setAll(defaultModeFor)} title={t("config.sync.mergeAllTitle")}>
               {t("config.sync.mergeAll")}
             </Button>
             <Button size="sm" variant="outline" onClick={() => setAll(() => "replace")} title={t("config.sync.replaceAllTitle")}>

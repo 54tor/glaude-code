@@ -24,17 +24,17 @@ import { Button } from "@/components/ui/button"
 // Configuration de Claude Code : réglages utilisateur, de projet et locaux. Lecture (précédence, santé, hooks) et
 // modifications limitées aux réglages simples, variables d'environnement, plugins et permissions, avec aperçu et sauvegarde.
 // dir : écran d'un seul projet (permissions et réglages de ses fichiers partagé et local), avec un lien vers les permissions globales.
-export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: string; onTab: (t: string) => void; ui: UiSettings; dir?: string }) {
+export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: string; onTab: (tabName: string) => void; ui: UiSettings; dir?: string }) {
   const { t } = useTranslation()
-  const [ov, setOv] = useState<CfgOverview | null>(null)
+  const [overview, setOverview] = useState<CfgOverview | null>(null)
   const [fileId, setFileId] = useState(() => (dir ? "p/" + dir : takeConfigFile() || "u"))
   const [projTab, setProjTab] = useState("permissions") // fichier édité dans « Permissions » et « Réglages »
-  const reload = useCallback(() => api.config().then(setOv), [])
+  const reload = useCallback(() => api.config().then(setOverview), [])
   useEffect(() => {
     reload()
   }, [reload])
-  const a = useActions()
-  const sessions = a.live.size // sessions ouvertes : elles rechargent seules les réglages modifiés
+  const actions = useActions()
+  const sessions = actions.live.size // sessions ouvertes : elles rechargent seules les réglages modifiés
   const { gone, added, moveRule, propose, proposeRaw, proposePerms, dialog } = useConfigEdit(reload, sessions)
   // Direct, sans fenêtre : la règle rejoint vos réglages, puis (déplacement) quitte son fichier d'origine.
   const transfer = async (file: string, kind: string, rule: string, move: boolean) => {
@@ -46,36 +46,48 @@ export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: strin
     }
     try {
       await api.configPermImport({ file: "u", text: JSON.stringify({ permissions: { [kind]: [rule] } }), mode: "merge", dry: false })
-    } catch (e) {
-      return void toast.error(errMsg(e))
+    } catch (error) {
+      toast.error(errMsg(error))
+      return
     }
-    if (move) await propose({ file, op: "remove", path: ["permissions", kind], value: rule })
-    else {
-      toast.success(t("config.main.copiedToUser"))
-      reload()
+    if (move) {
+      await propose({ file, op: "remove", path: ["permissions", kind], value: rule })
+      return
     }
+    toast.success(t("config.main.copiedToUser"))
+    reload()
   }
-  if (!ov) return <Skeleton className="m-6 h-40" />
+  if (!overview) return <Skeleton className="m-6 h-40" />
 
-  const label = (id: string) =>
-    id === "u"
-      ? t("config.main.userFile")
-      : t(id[0] === "p" ? "config.main.projectLabel" : "config.main.localLabel", { dir: tilde(ov.projects.find((p) => p.dir === id.slice(2))?.project ?? id.slice(2), home) })
+  const label = (id: string) => {
+    if (id === "u") return t("config.main.userFile")
+    const projectDir = id.slice(2)
+    const projectPath = overview.projects.find((project) => project.dir === projectDir)?.project ?? projectDir
+    const labelKey = id[0] === "p" ? "config.main.projectLabel" : "config.main.localLabel"
+    return t(labelKey, { dir: tilde(projectPath, home) })
+  }
   const scope = fileId === "u" ? "u" : fileId[0] // u : utilisateur, p : projet, l : local
   const dirOf = fileId === "u" ? "" : fileId.slice(2)
-  const file = ov.files.find((f) => f.id === fileId)
+  const file = overview.files.find((configFile) => configFile.id === fileId)
   const doc = (file?.data ?? undefined) as Record<string, unknown> | undefined
+  const changeScope = (selectedScope: string) => {
+    if (selectedScope === "u") {
+      setFileId("u")
+      return
+    }
+    const targetDir = dirOf || dir || overview.projects[0]?.dir || ""
+    setFileId(selectedScope + "/" + targetDir)
+  }
+  const projectScopeOptions = [["p", t("config.main.optProject")], ["l", t("config.main.optLocal")]] as const
+  const hasProjects = overview.projects.length > 0
+  const scopeOptions = dir ? projectScopeOptions : [["u", t("config.main.userFile")] as const, ...(hasProjects ? projectScopeOptions : [])]
   const fileSelect = (
     <div className="mb-5 flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
       {t("config.main.location")}
       <Choose
         value={scope}
-        onChange={(v) => setFileId(v === "u" ? "u" : v + "/" + (dirOf || dir || ov.projects[0]?.dir || ""))}
-        options={
-          dir
-            ? [["p", t("config.main.optProject")], ["l", t("config.main.optLocal")]]
-            : [["u", t("config.main.userFile")], ...(ov.projects.length ? ([["p", t("config.main.optProject")], ["l", t("config.main.optLocal")]] as const) : [])]
-        }
+        onChange={changeScope}
+        options={scopeOptions}
         label={t("config.main.locationAria")}
         size="sm" className="min-w-0 max-w-xs"
       />
@@ -85,7 +97,7 @@ export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: strin
         </Button>
       )}
       {!dir && scope !== "u" && (
-        <Choose value={dirOf} onChange={(d) => setFileId(scope + "/" + d)} options={ov.projects.map((p) => [p.dir, tilde(p.project, home)] as const)} label={t("config.main.projectDirAria")} size="sm" className="min-w-0 max-w-md" />
+        <Choose value={dirOf} onChange={(projectDir) => setFileId(scope + "/" + projectDir)} options={overview.projects.map((project) => [project.dir, tilde(project.project, home)] as const)} label={t("config.main.projectDirAria")} size="sm" className="min-w-0 max-w-md" />
       )}
       {!file && <span className="text-xs text-warning">{t("config.main.toCreate")}</span>}
       <span className="text-xs text-muted-foreground">{t("config.main.applyNote")}</span>
@@ -93,9 +105,10 @@ export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: strin
   )
 
   // Trois groupes : ce qu'on édite dans Claude Code, ce qu'on lit pour comprendre, et gld lui-même.
+  const issueCountSuffix = overview.issues.length > 0 ? ` (${overview.issues.length})` : ""
   const groups: [string, [string, string][]][] = [
-    ["claude", [["reglages", t("config.main.tabs.settings")], ["permissions", t("config.main.tabs.permissions")], ["json", "JSON"], ["sauvegardes", `${t("config.main.tabs.backups")} (${ov.backups.length})`]]],
-    ["diagnostic", [["sante", t("config.main.tabs.health") + (ov.issues.length > 0 ? ` (${ov.issues.length})` : "")], ["projets", t("config.main.tabs.projects")], ["precedence", t("config.main.tabs.precedence")]]],
+    ["claude", [["reglages", t("config.main.tabs.settings")], ["permissions", t("config.main.tabs.permissions")], ["json", "JSON"], ["sauvegardes", `${t("config.main.tabs.backups")} (${overview.backups.length})`]]],
+    ["diagnostic", [["sante", t("config.main.tabs.health") + issueCountSuffix], ["projets", t("config.main.tabs.projects")], ["precedence", t("config.main.tabs.precedence")]]],
     ["gld", [["interface", t("config.main.tabs.interface")], ["export", t("shell.app.title.backup")], ["sync", t("config.main.tabs.sync")]]],
   ]
   return (
@@ -109,12 +122,12 @@ export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: strin
             </TabsList>
           ) : (
             <div className="mb-4 flex flex-wrap gap-x-6 gap-y-3">
-              {groups.map(([g, items]) => (
-                <div key={g}>
-                  <p className="mb-1 px-1 text-2xs font-medium tracking-wide text-muted-foreground uppercase">{t(`config.main.groups.${g}`)}</p>
+              {groups.map(([groupName, groupTabs]) => (
+                <div key={groupName}>
+                  <p className="mb-1 px-1 text-2xs font-medium tracking-wide text-muted-foreground uppercase">{t(`config.main.groups.${groupName}`)}</p>
                   <TabsList className="w-max">
-                    {items.map(([v, label]) => (
-                      <TabsTrigger key={v} value={v}>{label}</TabsTrigger>
+                    {groupTabs.map(([tabValue, tabLabel]) => (
+                      <TabsTrigger key={tabValue} value={tabValue}>{tabLabel}</TabsTrigger>
                     ))}
                   </TabsList>
                 </div>
@@ -122,33 +135,37 @@ export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: strin
             </div>
           )}
           <TabsContent value="sante">
-            <HealthTab issues={ov.issues} home={home} projects={ov.projects} />
+            <HealthTab issues={overview.issues} home={home} projects={overview.projects} />
           </TabsContent>
           <TabsContent value="projets">
             <ProjectsTab
-              version={ov.backups.length} // chaque écriture ajoute une sauvegarde : la vue se relit, sans perdre ce qui est déplié
+              version={overview.backups.length} // chaque écriture ajoute une sauvegarde : la vue se relit, sans perdre ce qui est déplié
               home={home}
               gone={gone}
               onAddDir={async (file, project, dir) => {
-                const p = dir ?? (await a.pickDir(t("config.main.pickDir", { dir: tilde(project, home) }), project))
-                if (p) await propose({ file, op: "add", path: ["permissions", "additionalDirectories"], value: p })
+                const pickedDir = dir ?? (await actions.pickDir(t("config.main.pickDir", { dir: tilde(project, home) }), project))
+                if (pickedDir) await propose({ file, op: "add", path: ["permissions", "additionalDirectories"], value: pickedDir })
               }}
               // Autres dossiers des projets auxquels appartient ce dossier, sans ceux déjà autorisés (~/ et chemins absolus).
               suggest={(project, taken) => {
-                const abs = (r: string) => (r.startsWith("~/") ? home + r.slice(1) : r).replace(/\/$/, "")
-                const have = new Set(taken.map(abs))
-                return [...new Set(a.projects.filter((x) => x.dirs.includes(project)).flatMap((x) => x.dirs))].filter((d) => d !== project && !have.has(d))
+                const toAbsolutePath = (rule: string) => {
+                  const expandedPath = rule.startsWith("~/") ? home + rule.slice(1) : rule
+                  return expandedPath.replace(/\/$/, "")
+                }
+                const alreadyAllowed = new Set(taken.map(toAbsolutePath))
+                const relatedDirs = actions.projects.filter((knownProject) => knownProject.dirs.includes(project)).flatMap((knownProject) => knownProject.dirs)
+                return [...new Set(relatedDirs)].filter((relatedDir) => relatedDir !== project && !alreadyAllowed.has(relatedDir))
               }}
               onRemove={(file, kind, rule) => propose({ file, op: "remove", path: ["permissions", kind], value: rule })}
               onTransfer={transfer}
-              onEdit={(file, t) => {
+              onEdit={(file, targetTab) => {
                 setFileId(file)
-                onTab(t)
+                onTab(targetTab)
               }}
             />
           </TabsContent>
           <TabsContent value="precedence">
-            <PrecedenceTab projects={ov.projects} home={home} />
+            <PrecedenceTab projects={overview.projects} home={home} />
           </TabsContent>
           <TabsContent value="permissions">
             {fileSelect}
@@ -157,21 +174,21 @@ export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: strin
           <TabsContent value="reglages">
             {!dir && (
               <div className="mb-6">
-                <Button size="sm" variant="outline" className="mb-3" onClick={() => a.newSession(ov.projects[0]?.dir ?? home, "/doctor")} title={t("config.main.doctorHint")}>
+                <Button size="sm" variant="outline" className="mb-3" onClick={() => actions.newSession(overview.projects[0]?.dir ?? home, "/doctor")} title={t("config.main.doctorHint")}>
                   <Stethoscope /> {t("config.main.doctor")}
                 </Button>
                 <ClaudeOptions args={ui.args} setArgs={ui.setArgs} choice={ui.choice} setChoice={ui.setChoice} />
               </div>
             )}
             {fileSelect}
-            <SettingsTab file={fileId} doc={doc} plugins={ov.plugins} propose={propose} />
+            <SettingsTab file={fileId} doc={doc} plugins={overview.plugins} propose={propose} />
           </TabsContent>
           <TabsContent value="interface">
             <SettingsPanel font={ui.font} setFont={ui.setFont} fontSize={ui.fontSize} setFontSize={ui.setFontSize} />
           </TabsContent>
           <TabsContent value="json">
             {fileSelect}
-            <RawTab file={fileId} version={ov.backups.length} proposeRaw={proposeRaw} />
+            <RawTab file={fileId} version={overview.backups.length} proposeRaw={proposeRaw} />
           </TabsContent>
           <TabsContent value="export">
             <Backup home={home} />
@@ -180,7 +197,7 @@ export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: strin
             <SyncTab />
           </TabsContent>
           <TabsContent value="sauvegardes">
-            <BackupsTab backups={ov.backups} onRestored={reload} label={label} />
+            <BackupsTab backups={overview.backups} onRestored={reload} label={label} />
           </TabsContent>
         </Tabs>
       </div>

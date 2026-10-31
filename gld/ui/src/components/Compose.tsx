@@ -24,6 +24,9 @@ import { Choose } from "./Choose"
 import { SnippetMenu } from "./SnippetMenu"
 import { AttachButton, ImageChips, useImages } from "@/hooks/useImages"
 
+const MAX_MESSAGE_LENGTH = 32000
+const CUSTOM_TARGET_VALUE = "custom"
+
 // Dossier où lancer une nouvelle session : celui d'une de ses sessions (le serveur en tire le dossier de travail).
 export type Target = { label: string; project: string; dir: string; id: string; cwd?: string } // cwd : dossier choisi à la main (sans session existante)
 
@@ -46,82 +49,88 @@ export type ComposeAsk = {
 // Saisie d'un message, éventuellement composé à partir de snippets et d'entrées de mémoire.
 export function Compose({ ask, onClose }: { ask: ComposeAsk | null; onClose: () => void }) {
   return (
-    <Dialog open={!!ask} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={!!ask} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="sm:max-w-2xl">{ask && <Form key={ask.id} ask={ask} onClose={onClose} />}</DialogContent>
     </Dialog>
   )
 }
 
 function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
-  const { t: tr } = useTranslation()
-  const a = useActions()
+  const { t } = useTranslation()
+  const actions = useActions()
   const [text, setText] = useState(ask.initial ?? "")
   const mention = useMention(text, setText)
   const [choice, setChoice] = useState(ask.choice)
   const [target, setTarget] = useState(0)
   const [output, setOutput] = useState(ask.outputs?.[0]?.key)
   const [custom, setCustom] = useState<Target | null>(null) // dossier choisi dans l'explorateur
-  const tgt = custom ?? ask.targets?.[target]
-  const project = tgt?.project ?? ask.project
-  const [mem, setMem] = useState<{ global: MemFile[]; projects: MemProject[] } | null>(null)
-  const area = useRef<HTMLTextAreaElement>(null)
-  const pics = useImages()
-  const ok = text.trim() !== "" || pics.images.length > 0
+  const selectedTarget = custom ?? ask.targets?.[target]
+  const project = selectedTarget?.project ?? ask.project
+  const [memory, setMemory] = useState<{ global: MemFile[]; projects: MemProject[] } | null>(null)
+  const textArea = useRef<HTMLTextAreaElement>(null)
+  const pictures = useImages()
+  const canSend = text.trim() !== "" || pictures.images.length > 0
   useEffect(() => {
-    let live = true
-    api.memory().then((m) => live && setMem(m))
+    let isMounted = true
+    api.memory().then((loadedMemory) => isMounted && setMemory(loadedMemory))
     return () => {
-      live = false
+      isMounted = false
     }
   }, [])
   // La mémoire du projet d'abord, puis la globale, puis les autres projets.
-  const own = mem?.projects.filter((p) => p.project === project) ?? []
-  const others = mem?.projects.filter((p) => p.project !== project) ?? []
+  const ownProjects = memory?.projects.filter((memoryProject) => memoryProject.project === project) ?? []
+  const otherProjects = memory?.projects.filter((memoryProject) => memoryProject.project !== project) ?? []
 
   const [busy, setBusy] = useState(false)
   // Fermée seulement si l'envoi réussit : en cas d'échec, le texte reste là pour réessayer ou le copier.
   const send = async () => {
-    if (!ok || busy) return
+    if (!canSend || busy) return
     setBusy(true)
-    const done = await ask.run([text.trim(), pics.suffix()].filter(Boolean).join("\n\n"), choice, tgt, output)
+    const message = [text.trim(), pictures.suffix()].filter(Boolean).join("\n\n")
+    const sent = await ask.run(message, choice, selectedTarget, output)
     setBusy(false)
-    if (done) onClose()
+    if (sent) onClose()
   }
   // Insère à la position du curseur (ou à la place de la sélection), puis y replace le curseur.
-  const put = (t: string) => {
-    const el = area.current
-    const i = el?.selectionStart ?? text.length
-    const j = el?.selectionEnd ?? text.length
-    setText(text.slice(0, i) + t + text.slice(j))
+  const put = (insertedText: string) => {
+    const textAreaElement = textArea.current
+    const selectionStart = textAreaElement?.selectionStart ?? text.length
+    const selectionEnd = textAreaElement?.selectionEnd ?? text.length
+    setText(text.slice(0, selectionStart) + insertedText + text.slice(selectionEnd))
     requestAnimationFrame(() => {
-      el?.focus()
-      el?.setSelectionRange(i + t.length, i + t.length)
+      const caretPosition = selectionStart + insertedText.length
+      textAreaElement?.focus()
+      textAreaElement?.setSelectionRange(caretPosition, caretPosition)
     })
   }
   // Une commande : son corps, sans en-tête ; son premier $ARGUMENTS est sélectionné pour être remplacé en tapant.
-  const insert = (t: string) => {
-    const el = area.current
-    const i = el?.selectionStart ?? text.length
-    put(t)
-    const arg = argAt(t)
-    if (arg) requestAnimationFrame(() => requestAnimationFrame(() => el?.setSelectionRange(i + arg.at, i + arg.at + arg.len)))
+  const insert = (commandBody: string) => {
+    const textAreaElement = textArea.current
+    const selectionStart = textAreaElement?.selectionStart ?? text.length
+    put(commandBody)
+    const argument = argAt(commandBody)
+    if (!argument) return
+    const argumentStart = selectionStart + argument.at
+    requestAnimationFrame(() => requestAnimationFrame(() => textAreaElement?.setSelectionRange(argumentStart, argumentStart + argument.len)))
   }
   // Une entrée de mémoire, citée telle quelle ; il reste à écrire la demande à la suite.
-  const insertMemory = async (f: MemFile, scope: string) => {
-    let r
+  const insertMemory = async (memoryFile: MemFile, scope: string) => {
+    let memoryContent
     try {
-      r = await api.memoryFile(f.key)
+      memoryContent = await api.memoryFile(memoryFile.key)
     } catch {
-      return void toast.error(tr("conversation.compose.memoryUnreadable"))
+      toast.error(t("conversation.compose.memoryUnreadable"))
+      return
     }
-    const fence = r.text.includes("```") ? "~~~~" : "```"
-    const where = f.key.startsWith("m/") ? tr("conversation.compose.memoryScope", { scope, name: f.name }) : `${scope}/${f.name}`
-    put(`${tr("conversation.compose.memoryIntro", { where })}\n\n${fence}markdown\n${r.text.trim()}\n${fence}\n\n`)
+    const fence = memoryContent.text.includes("```") ? "~~~~" : "```"
+    const isMemoryEntry = memoryFile.key.startsWith("m/")
+    const where = isMemoryEntry ? t("conversation.compose.memoryScope", { scope, name: memoryFile.name }) : `${scope}/${memoryFile.name}`
+    put(`${t("conversation.compose.memoryIntro", { where })}\n\n${fence}markdown\n${memoryContent.text.trim()}\n${fence}\n\n`)
   }
   const memItems = (files: MemFile[], scope: string) =>
-    files.map((f) => (
-      <DropdownMenuItem key={f.key} onSelect={() => insertMemory(f, scope)}>
-        <FileText /> <span className="truncate">{f.name}</span>
+    files.map((memoryFile) => (
+      <DropdownMenuItem key={memoryFile.key} onSelect={() => insertMemory(memoryFile, scope)}>
+        <FileText /> <span className="truncate">{memoryFile.name}</span>
       </DropdownMenuItem>
     ))
 
@@ -138,17 +147,17 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
       )}
       {ask.outputs && (
         <div className="flex items-center gap-2 text-sm">
-          <span className="shrink-0 text-muted-foreground">{tr("conversation.compose.output")}</span>
+          <span className="shrink-0 text-muted-foreground">{t("conversation.compose.output")}</span>
           <Choose
             value={output ?? ""}
-            onChange={async (v) => {
-              const t = await ask.reprompt?.(v)
-              if (t === undefined) return
-              setOutput(v)
-              setText(t)
+            onChange={async (selectedOutput) => {
+              const regeneratedText = await ask.reprompt?.(selectedOutput)
+              if (regeneratedText === undefined) return
+              setOutput(selectedOutput)
+              setText(regeneratedText)
             }}
-            options={ask.outputs.map((o) => [o.key, o.label] as const)}
-            label={tr("conversation.compose.outputAria")}
+            options={ask.outputs.map((outputOption) => [outputOption.key, outputOption.label] as const)}
+            label={t("conversation.compose.outputAria")}
             size="default"
             className="min-w-0 flex-1"
           />
@@ -156,12 +165,19 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
       )}
       {ask.targets && (
         <div className="flex items-center gap-2 text-sm">
-          <span className="shrink-0 text-muted-foreground">{tr("conversation.compose.folder")}</span>
+          <span className="shrink-0 text-muted-foreground">{t("conversation.compose.folder")}</span>
           <Choose
-            value={custom ? "custom" : String(target)}
-            onChange={(v) => (v === "custom" ? null : (setCustom(null), setTarget(Number(v))))}
-            options={[...ask.targets.map((t, i) => [String(i), t.label] as const), ...(custom ? [["custom", custom.label] as const] : [])]}
-            label={tr("conversation.compose.newSessionFolder")}
+            value={custom ? CUSTOM_TARGET_VALUE : String(target)}
+            onChange={(selectedValue) => {
+              if (selectedValue === CUSTOM_TARGET_VALUE) return
+              setCustom(null)
+              setTarget(Number(selectedValue))
+            }}
+            options={[
+              ...ask.targets.map((targetOption, targetIndex) => [String(targetIndex), targetOption.label] as const),
+              ...(custom ? [[CUSTOM_TARGET_VALUE, custom.label] as const] : []),
+            ]}
+            label={t("conversation.compose.newSessionFolder")}
             size="default"
             className="min-w-0 flex-1"
           />
@@ -169,80 +185,89 @@ function Form({ ask, onClose }: { ask: ComposeAsk; onClose: () => void }) {
             type="button"
             variant="outline"
             onClick={async () => {
-              const p = await a.pickDir(tr("conversation.compose.newSessionFolder"),tgt?.project ?? a.home)
-              if (p) setCustom({ label: tilde(p, a.home), project: p, dir: "", id: "", cwd: p })
+              const pickedDir = await actions.pickDir(t("conversation.compose.newSessionFolder"), selectedTarget?.project ?? actions.home)
+              if (pickedDir) setCustom({ label: tilde(pickedDir, actions.home), project: pickedDir, dir: "", id: "", cwd: pickedDir })
             }}
           >
-            <FolderSearch /> {tr("conversation.compose.otherFolder")}
+            <FolderSearch /> {t("conversation.compose.otherFolder")}
           </Button>
         </div>
       )}
       {mention.list}
       <textarea
-        ref={area}
+        ref={textArea}
         value={text}
-        onChange={(e) => (setText(e.target.value), mention.track(e.target))}
-        onKeyDown={(e) => !mention.onKey(e) && isSend(e) && (e.preventDefault(), send())}
-        onPaste={pics.onPaste}
-        onDrop={pics.onDrop}
-        placeholder={keyHint(tr("conversation.compose.placeholder"))}
+        onChange={(changeEvent) => {
+          setText(changeEvent.target.value)
+          mention.track(changeEvent.target)
+        }}
+        onKeyDown={(keyEvent) => {
+          if (mention.onKey(keyEvent)) return
+          if (!isSend(keyEvent)) return
+          keyEvent.preventDefault()
+          void send()
+        }}
+        onPaste={pictures.onPaste}
+        onDrop={pictures.onDrop}
+        placeholder={keyHint(t("conversation.compose.placeholder"))}
         autoFocus
-        onFocus={(e) => {
+        onFocus={(focusEvent) => {
           // Texte prérempli d'une commande : son $ARGUMENTS sélectionné ; sinon le curseur à la fin.
-          const arg = argAt(e.target.value)
-          if (arg) e.target.setSelectionRange(arg.at, arg.at + arg.len)
-          else e.target.setSelectionRange(e.target.value.length, e.target.value.length)
+          const field = focusEvent.target
+          const argument = argAt(field.value)
+          if (argument) field.setSelectionRange(argument.at, argument.at + argument.len)
+          else field.setSelectionRange(field.value.length, field.value.length)
         }}
         rows={8}
-        maxLength={32000}
+        maxLength={MAX_MESSAGE_LENGTH}
         className="session-text w-full resize-y rounded-lg border border-input bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/80"
-        aria-label={tr("conversation.compose.messageAria")}
+        aria-label={t("conversation.compose.messageAria")}
       />
-      <ImageChips images={pics.images} busy={pics.busy} onRemove={pics.remove} />
+      <ImageChips images={pictures.images} busy={pictures.busy} onRemove={pictures.remove} />
       <div className="flex flex-wrap items-center gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" disabled={!mem}>
-              <Brain /> {tr("conversation.compose.insertMemory")}
+            <Button variant="outline" size="sm" disabled={!memory}>
+              <Brain /> {t("conversation.compose.insertMemory")}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent onCloseAutoFocus={(e) => e.preventDefault()} align="start" className="max-h-80 w-80 overflow-y-auto">
-            {own.map((p) => (
-              <div key={p.dir}>
+          <DropdownMenuContent onCloseAutoFocus={(focusEvent) => focusEvent.preventDefault()} align="start" className="max-h-80 w-80 overflow-y-auto">
+            {ownProjects.map((memoryProject) => (
+              <div key={memoryProject.dir}>
                 <DropdownMenuLabel className="flex items-center gap-1.5">
-                  <Brain className="size-3.5" /> {tr("conversation.compose.thisProject")}
+                  <Brain className="size-3.5" /> {t("conversation.compose.thisProject")}
                 </DropdownMenuLabel>
-                {memItems(p.files, tilde(p.project, a.home))}
+                {memItems(memoryProject.files, tilde(memoryProject.project, actions.home))}
                 <DropdownMenuSeparator />
               </div>
             ))}
-            {!!mem?.global.length && (
+            {!!memory?.global.length && (
               <>
                 <DropdownMenuLabel className="flex items-center gap-1.5">
-                  <Globe className="size-3.5" /> {tr("conversation.compose.global")}
+                  <Globe className="size-3.5" /> {t("conversation.compose.global")}
                 </DropdownMenuLabel>
-                {memItems(mem.global, "~/.claude")}
+                {memItems(memory.global, "~/.claude")}
               </>
             )}
-            {others.map((p) => (
-              <div key={p.dir}>
+            {otherProjects.map((memoryProject) => (
+              <div key={memoryProject.dir}>
                 <DropdownMenuSeparator />
-                <DropdownMenuLabel className="truncate">{tilde(p.project, a.home)}</DropdownMenuLabel>
-                {memItems(p.files, tilde(p.project, a.home))}
+                <DropdownMenuLabel className="truncate">{tilde(memoryProject.project, actions.home)}</DropdownMenuLabel>
+                {memItems(memoryProject.files, tilde(memoryProject.project, actions.home))}
               </div>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
         <SnippetMenu onInsert={insert} />
-        <AttachButton onPick={pics.pick} />
+        <AttachButton onPick={pictures.pick} />
       </div>
       <DialogFooter className="items-stretch sm:items-center">
         <ModelPicker value={choice} onChange={setChoice} className="min-w-0 flex-nowrap sm:mr-auto" />
         <div className="flex items-center justify-end gap-2">
           <Button variant="outline" onClick={onClose}>
-            {tr("common.cancel")}
+            {t("common.cancel")}
           </Button>
-          <Button onClick={send} disabled={!ok || busy} title={tr("conversation.compose.sendTitle")}>
+          <Button onClick={send} disabled={!canSend || busy} title={t("conversation.compose.sendTitle")}>
             <Send /> {ask.send}
           </Button>
         </div>

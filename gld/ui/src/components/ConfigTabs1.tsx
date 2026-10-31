@@ -16,18 +16,13 @@ const fileLabel = (
   id: string,
   home: string,
   projects: { dir: string; project: string }[]
-) =>
-  id === "u"
-    ? "~/.claude/settings.json"
-    : t(
-        id[0] === "p" ? "config.health.fileProject" : "config.health.fileLocal",
-        {
-          dir: tilde(
-            projects.find((p) => p.dir === id.slice(2))?.project ?? id.slice(2),
-            home
-          ),
-        }
-      )
+) => {
+  if (id === "u") return "~/.claude/settings.json"
+  const projectDir = id.slice(2)
+  const projectPath = projects.find((project) => project.dir === projectDir)?.project ?? projectDir
+  const labelKey = id[0] === "p" ? "config.health.fileProject" : "config.health.fileLocal"
+  return t(labelKey, { dir: tilde(projectPath, home) })
+}
 
 // --- santé ---------------------------------------------------------------------------------------------------
 
@@ -49,18 +44,18 @@ export function HealthTab({
     )
   return (
     <ul className="space-y-1">
-      {issues.map((i, n) => (
+      {issues.map((issue, issueIndex) => (
         <li
-          key={n}
+          key={issueIndex}
           className="flex items-start gap-2 rounded-md border px-3 py-2 text-sm"
         >
           <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
           <span className="min-w-0">
             <span className="block text-xs font-medium text-muted-foreground">
-              {KIND.has(i.kind) ? t(`config.issueKind.${i.kind}`) : i.kind} ·{" "}
-              {fileLabel(t, i.file, home, projects)}
+              {KIND.has(issue.kind) ? t(`config.issueKind.${issue.kind}`) : issue.kind} ·{" "}
+              {fileLabel(t, issue.file, home, projects)}
             </span>
-            <span className="break-words">{i.msg}</span>
+            <span className="break-words">{issue.msg}</span>
           </span>
         </li>
       ))}
@@ -85,22 +80,21 @@ export function PrecedenceTab({
 }) {
   const { t } = useTranslation()
   const [dir, setDir] = useState("")
-  const [q, setQ] = useState("")
+  const [query, setQuery] = useState("")
   const [rows, setRows] = useState<EffRow[] | null>(null)
   useEffect(() => {
-    let live = true
-    api.configEffective(dir).then((r) => live && setRows(r.rows))
+    let isMounted = true
+    api.configEffective(dir).then((response) => isMounted && setRows(response.rows))
     return () => {
-      live = false
+      isMounted = false
     }
   }, [dir])
-  const f = q.toLowerCase()
-  const shown = (rows ?? []).filter(
-    (r) =>
-      !f ||
-      r.path.toLowerCase().includes(f) ||
-      Object.values(r.values).some((v) => v.toLowerCase().includes(f))
-  )
+  const lowerQuery = query.toLowerCase()
+  const shown = (rows ?? []).filter((effectiveRow) => {
+    if (!lowerQuery) return true
+    if (effectiveRow.path.toLowerCase().includes(lowerQuery)) return true
+    return Object.values(effectiveRow.values).some((levelValue) => levelValue.toLowerCase().includes(lowerQuery))
+  })
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -110,14 +104,14 @@ export function PrecedenceTab({
           onChange={setDir}
           options={[
             ["", t("config.precedence.userOnly")],
-            ...projects.map((p) => [p.dir, tilde(p.project, home)] as const),
+            ...projects.map((project) => [project.dir, tilde(project.project, home)] as const),
           ]}
           label={t("config.precedence.project")}
           className="max-w-80 min-w-0"
         />
         <Input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
+          value={query}
+          onChange={(changeEvent) => setQuery(changeEvent.target.value)}
           placeholder={t("config.precedence.filterPlaceholder")}
           className="h-8 w-48"
           aria-label={t("config.precedence.filterAria")}
@@ -155,48 +149,42 @@ export function PrecedenceTab({
               </tr>
             </thead>
             <tbody className="max-sm:block">
-              {shown.map((r) => (
+              {shown.map((effectiveRow) => (
                 <tr
-                  key={r.path}
+                  key={effectiveRow.path}
                   className="border-t align-top max-sm:block max-sm:py-1.5 max-sm:first:border-t-0"
                 >
                   <td className="px-3 py-1.5 max-sm:block">
                     <span className="font-mono text-xs break-all">
-                      {r.path}
+                      {effectiveRow.path}
                     </span>
-                    {describeKey(r.path) && (
+                    {describeKey(effectiveRow.path) && (
                       <span className="mt-0.5 block text-2xs leading-snug text-muted-foreground">
-                        {describeKey(r.path)}
+                        {describeKey(effectiveRow.path)}
                       </span>
                     )}
                   </td>
-                  {(["u", "p", "l"] as const).map((lv) => (
-                    <td
-                      key={lv}
-                      title={r.values[lv]}
-                      data-label={t(LEVEL[lv])}
-                      className={cn(
-                        "px-3 py-1.5 text-xs break-words max-sm:block max-sm:py-0.5 max-sm:before:text-2xs max-sm:before:text-muted-foreground max-sm:before:content-[attr(data-label)]",
-                        r.values[lv] === undefined && "max-sm:hidden",
-                        r.values[lv] !== undefined &&
-                          (r.merged || r.winner === lv)
-                          ? "font-medium"
-                          : "text-muted-foreground"
-                      )}
-                    >
-                      <span
+                  {(["u", "p", "l"] as const).map((level) => {
+                    const levelValue = effectiveRow.values[level]
+                    const isDefined = levelValue !== undefined
+                    const isEffective = isDefined && (effectiveRow.merged || effectiveRow.winner === level)
+                    return (
+                      <td
+                        key={level}
+                        title={levelValue}
+                        data-label={t(LEVEL[level])}
                         className={cn(
-                          "line-clamp-3",
-                          !(
-                            r.values[lv] !== undefined &&
-                            (r.merged || r.winner === lv)
-                          ) && "line-through decoration-muted-foreground/40"
+                          "px-3 py-1.5 text-xs break-words max-sm:block max-sm:py-0.5 max-sm:before:text-2xs max-sm:before:text-muted-foreground max-sm:before:content-[attr(data-label)]",
+                          !isDefined && "max-sm:hidden",
+                          isEffective ? "font-medium" : "text-muted-foreground"
                         )}
                       >
-                        {r.values[lv] ?? ""}
-                      </span>
-                    </td>
-                  ))}
+                        <span className={cn("line-clamp-3", !isEffective && "line-through decoration-muted-foreground/40")}>
+                          {levelValue ?? ""}
+                        </span>
+                      </td>
+                    )
+                  })}
                 </tr>
               ))}
               {shown.length === 0 && (

@@ -15,16 +15,17 @@ export function RawTab({ file, version, proposeRaw }: { file: string; version: n
   const [error, setError] = useState("")
   const key = `${file}#${version}`
   useEffect(() => {
-    let live = true
+    let isMounted = true
     api.configRaw(file).then(
-      (r) => live && setLoaded({ key, text: r.text }),
-      (e) => live && setLoaded({ key, text: "", err: errMsg(e) }),
+      (response) => isMounted && setLoaded({ key, text: response.text }),
+      (error) => isMounted && setLoaded({ key, text: "", err: errMsg(error) }),
     )
     return () => {
-      live = false
+      isMounted = false
     }
   }, [file, key])
-  useLeaveGuard(!!draft && !(draft.key === key && draft.text === loaded?.text))
+  const draftMatchesLoaded = draft?.key === key && draft.text === loaded?.text
+  useLeaveGuard(!!draft && !draftMatchesLoaded)
   if (loaded?.key !== key) return <Skeleton className="h-64 w-full" />
   const text = draft?.key === key ? draft.text : loaded.text
   const dirty = text !== loaded.text
@@ -34,8 +35,16 @@ export function RawTab({ file, version, proposeRaw }: { file: string; version: n
       {loaded.err && <p className="text-sm text-destructive">{loaded.err}</p>}
       <textarea
         value={text}
-        onChange={(e) => (setDraft({ key, text: e.target.value }), setError(""))}
-        onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "s" && (e.preventDefault(), dirty && save())}
+        onChange={(changeEvent) => {
+          setDraft({ key, text: changeEvent.target.value })
+          setError("")
+        }}
+        onKeyDown={(keyEvent) => {
+          const isSaveShortcut = (keyEvent.ctrlKey || keyEvent.metaKey) && keyEvent.key === "s"
+          if (!isSaveShortcut) return
+          keyEvent.preventDefault()
+          if (dirty) void save()
+        }}
         spellCheck={false}
         aria-label={t("config.raw.aria")}
         aria-invalid={!!error || undefined}
@@ -51,7 +60,10 @@ export function RawTab({ file, version, proposeRaw }: { file: string; version: n
         <Button size="sm" onClick={save} disabled={!dirty}>
           {t("config.raw.preview")}
         </Button>
-        <Button size="sm" variant="ghost" onClick={() => (setDraft(null), setError(""))} disabled={!dirty}>
+        <Button size="sm" variant="ghost" onClick={() => {
+            setDraft(null)
+            setError("")
+          }} disabled={!dirty}>
           {t("config.raw.discard")}
         </Button>
         <span className="text-xs text-muted-foreground">{t("config.raw.hint")}</span>

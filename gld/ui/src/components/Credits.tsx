@@ -52,11 +52,11 @@ function Libs({ title, rows }: { title: string; rows: string[][] }) {
     <div>
       <h4 className="mb-1 text-xs font-medium text-muted-foreground">{title}</h4>
       <p className="text-sm leading-6">
-        {rows.map(([n, u], i) => (
-          <span key={n}>
-            {i > 0 && ", "}
-            <a href={u} target="_blank" rel="noreferrer" className={link}>
-              {n}
+        {rows.map(([libraryName, libraryUrl], rowIndex) => (
+          <span key={libraryName}>
+            {rowIndex > 0 && ", "}
+            <a href={libraryUrl} target="_blank" rel="noreferrer" className={link}>
+              {libraryName}
             </a>
           </span>
         ))}
@@ -68,7 +68,11 @@ function Libs({ title, rows }: { title: string; rows: string[][] }) {
 function Addr({ label, name, value, scheme }: { label: string; name: string; value: string; scheme: string }) {
   const { t } = useTranslation()
   if (!value) return null
-  const copy = () => copyText(value).then(() => toast.success(t("shell.credits.copied", { name })), () => toast.error(t("shell.credits.copyFailed")))
+  const copy = () =>
+    copyText(value).then(
+      () => toast.success(t("shell.credits.copied", { name })),
+      () => toast.error(t("shell.credits.copyFailed")),
+    )
   return (
     <div className="rounded-lg border bg-muted/30 p-3">
       <div className="mb-1.5 flex items-center gap-2 text-sm font-medium">

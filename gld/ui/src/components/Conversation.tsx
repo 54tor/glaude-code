@@ -40,26 +40,54 @@ const FullTerminal = lazy(() => import("./FullTerminal")) // xterm n'est chargé
 const PAGE = 200
 const COMPACT_WINDOW = 200_000
 // Fenêtre par modèle : la famille 5 en a une de 1 M ; le transcript ne porte jamais le suffixe « [1m] » des modèles plus anciens.
-const windowOf = (model: string, ctx: number) => (/-5-\d/.test(model) || model.includes("[1m]") || ctx > COMPACT_WINDOW ? 1_000_000 : COMPACT_WINDOW)
+const windowOf = (model: string, ctx: number) => {
+  const hasLargeWindow = /-5-\d/.test(model) || model.includes("[1m]") || ctx > COMPACT_WINDOW
+  return hasLargeWindow ? LARGE_WINDOW : COMPACT_WINDOW
+}
 const COLD_HINT_MIN_TOKENS = 50_000 // en dessous, reprendre une session froide coûte trop peu pour la signaler
 const COMPACT_HINT_AT = 0.6 // part de la fenêtre à partir de laquelle on conseille de compacter
+const LARGE_WINDOW = 1_000_000
+const RELOAD_EXTRA_MESSAGES = 50
+const LIVE_RELOAD_INTERVAL_MS = 2000
+const LIVE_RELOAD_MAX_DURATION_MS = 15 * 60_000
+const LIVE_IDLE_GRACE_MS = 4000
+const FINAL_RELOAD_DELAY_MS = 1500
+const PIN_END_DURATION_MS = 3000
+const RESTORE_INTERVAL_MS = 50
+const RESTORE_DURATION_MS = 1500
+const LAST_FRAME_DELAY_MS = 120
+const AT_END_THRESHOLD_PX = 80
+const FROM_TOP_THRESHOLD_PX = 200
+const SECOND_SCROLL_DELAY_MS = 2500
+const TURN_RELOAD_ATTEMPTS = 5
+const TURN_RELOAD_DELAY_MS = 1000
+const RECENT_MESSAGES_CHECKED = 12
+const SENT_PREFIX_LENGTH = 60
+const USER_INPUT_EVENTS = ["wheel", "touchstart", "keydown", "pointerdown"]
 
-function Meta({ s, onFolder, extra }: { s: Session; onFolder?: () => void; extra?: React.ReactNode }) {
+const distanceToEnd = (viewportElement: HTMLElement) => viewportElement.scrollHeight - viewportElement.scrollTop - viewportElement.clientHeight
+
+function metaBitClassName(bitIndex: number, hasFolderButton: boolean) {
+  if (bitIndex !== 0) return "shrink-0 max-md:hidden @max-[60rem]:hidden"
+  return hasFolderButton ? "min-w-0 max-w-full" : "min-w-0 truncate"
+}
+
+function Meta({ session, onFolder, extra }: { session: Session; onFolder?: () => void; extra?: React.ReactNode }) {
   const { t } = useTranslation()
-  const a = useActions()
-  const live = a.live.has(s.id)
-  const bits = [tilde(s.cwd, a.home), brief(s.mtime)]
+  const actions = useActions()
+  const live = actions.live.has(session.id)
+  const bits = [tilde(session.cwd, actions.home), brief(session.mtime)]
   return (
     <div className="@container flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground in-data-[kb]:hidden">
-      {live && <Live waiting={a.waiting.has(s.id)} />}
-      {bits.map((b, i) => (
-        <span key={i} title={i === 1 ? full(s.mtime) : undefined} className={i === 0 ? (onFolder ? "min-w-0 max-w-full" : "min-w-0 truncate") : "shrink-0 max-md:hidden @max-[60rem]:hidden"}>
-          {i === 0 && onFolder ? (
+      {live && <Live waiting={actions.waiting.has(session.id)} />}
+      {bits.map((bit, bitIndex) => (
+        <span key={bitIndex} title={bitIndex === 1 ? full(session.mtime) : undefined} className={metaBitClassName(bitIndex, !!onFolder)}>
+          {bitIndex === 0 && onFolder ? (
             <Button variant="outline" size="xs" onClick={onFolder} title={t("shell.common.showFolder")} className="max-w-full justify-start max-md:[&>svg]:hidden">
-              <FolderOpen /> <span className="truncate">{b}</span>
+              <FolderOpen /> <span className="truncate">{bit}</span>
             </Button>
           ) : (
-            b
+            bit
           )}
         </span>
       ))}
@@ -73,20 +101,24 @@ const scrollMem = new Map<string, { top: number; end: boolean }>()
 
 export function Conversation({ row, onClose, onFolder, args, choice, carousel }: { row: Row | null; onClose: () => void; onFolder?: () => void; args: string; choice: Choice; carousel?: { n: number; next: () => void; prev: () => void; stop: () => void } }) {
   const { t } = useTranslation()
-  const a = useActions()
+  const actions = useActions()
   const session = row?.s ?? null
   // Les effets dépendent des identifiants, pas de l'objet : le rafraîchissement périodique de la liste
   // recrée les sessions sans que la conversation affichée doive être rechargée.
   const dir = session?.dir ?? ""
   const id = session?.id ?? ""
-  const live = useLive(dir, id, a.live.has(id))
+  const live = useLive(dir, id, actions.live.has(id))
   // État git du dossier de la session et de ses dépôts, si ce sont des dépôts : on peut voir les changements et pousser d'ici.
   const git = useGit()
-  const gitDirs = row ? [row.g.project].filter((d) => git.status[d]) : []
-  const gitSubs = row ? (git.repos[row.g.project] ?? []).filter((d) => git.status[d]) : []
+  const gitDirs = row ? [row.g.project].filter((repoDir) => git.status[repoDir]) : []
+  const gitSubs = row ? (git.repos[row.g.project] ?? []).filter((repoDir) => git.status[repoDir]) : []
   // Ce qui se trouvait sous le clic droit : sélection, bloc de code, lien.
   const [hit, setHit] = useState({ sel: "", code: "", link: "" })
-  const copy = (text: string) => copyText(text).then(() => toast.success(t("common.copied")), () => toast.error(t("conversation.view.copyFail")))
+  const copy = (text: string) =>
+    copyText(text).then(
+      () => toast.success(t("common.copied")),
+      () => toast.error(t("conversation.view.copyFail")),
+    )
   const lastId = useRef("") // à la fermeture, session vaut déjà null : le focus revient à la ligne de cette session
   useEffect(() => {
     if (id) lastId.current = id
@@ -95,7 +127,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   const [view, setView] = useLocal("gld.session-view", "visuel") // choix gardé dans ce navigateur
   const [termOn, setTermOn] = useState(false) // GLD_WEB_TERMINAL=1 côté serveur
   useEffect(() => {
-    api.termInfo().then((r) => setTermOn(r.enabled), () => {})
+    api.termInfo().then((terminalInfo) => setTermOn(terminalInfo.enabled), () => {})
   }, [])
   const [loadedOpen, setLoadedOpen] = useState(false) // instructions réellement chargées (hook InstructionsLoaded)
   const [statsOpen, setStatsOpen] = useState(false)
@@ -110,24 +142,29 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   }, [id])
   const restoring = useRef(false) // position mémorisée en cours de rétablissement : le suivi de la fin attend
   const keepScroll = useRef(false) // le chargement de messages plus anciens ne doit pas ramener à la fin
-  const [info, setInfo] = useState<{ id: string; d: Detail } | null>(null)
+  const [info, setInfo] = useState<{ id: string; detail: Detail } | null>(null)
   const area = useRef<HTMLDivElement>(null)
   const key = id ? `${dir}/${id}/${tools}` : ""
   // Même session, autre clé (outils affichés ou masqués) : l'ancien contenu reste à l'écran jusqu'à l'arrivée du nouveau.
-  const msgs = loaded?.key === key || (id && loaded?.key.startsWith(`${dir}/${id}/`)) ? loaded!.msgs : null
-  const detail = info && info.id === id ? info.d : null
+  const isSameSessionLoaded = !!id && !!loaded?.key.startsWith(`${dir}/${id}/`)
+  const msgs = loaded?.key === key || isSameSessionLoaded ? loaded!.msgs : null
+  const detail = info && info.id === id ? info.detail : null
   // Tour en cours (ou dernier tour) écrit depuis le navigateur, affiché à la suite de la conversation.
   const [chat, setChat] = useState<Turn | null>(null)
   const [ask, setAsk] = useState<Ask | null>(null)
-  const rewind = (o: number) =>
+  const rewind = (messageOffset: number) =>
     setAsk({
       title: t("conversation.view.rewind"),
       body: t("conversation.view.rewindBody"),
       confirm: t("conversation.view.rewind"),
       run: () =>
-        void api.convRewind(dir, id, o).then(
-          (r) => (toast.success(r.message), setChat(null), void reloadRef.current()),
-          (e) => toast.error(errMsg(e))
+        void api.convRewind(dir, id, messageOffset).then(
+          (response) => {
+            toast.success(response.message)
+            setChat(null)
+            void reloadRef.current()
+          },
+          (error) => toast.error(errMsg(error))
         ),
     })
   const turn = chat?.id === id ? chat : null
@@ -141,11 +178,13 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   // compte ; renvoie les messages lus, ou null si une demande plus récente l'a remplacée.
   const seq = useRef(0)
   const reload = () => {
-    const n = ++seq.current
-    return api.conv({ dir, id }, tools, { limit: Math.max(PAGE, (loadedNow?.msgs.length ?? 0) + 50), anchors: true }).then((r) => {
-      if (n !== seq.current) return null
-      setLoaded({ key, msgs: r.msgs, start: r.start ?? 0, more: !!r.more })
-      return r.msgs
+    seq.current += 1
+    const requestNumber = seq.current
+    const limit = Math.max(PAGE, (loadedNow?.msgs.length ?? 0) + RELOAD_EXTRA_MESSAGES)
+    return api.conv({ dir, id }, tools, { limit, anchors: true }).then((conversation) => {
+      if (requestNumber !== seq.current) return null
+      setLoaded({ key, msgs: conversation.msgs, start: conversation.start ?? 0, more: !!conversation.more })
+      return conversation.msgs
     })
   }
   const reloadRef = useRef(reload)
@@ -155,11 +194,15 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   const older = useCallback(async () => {
     if (!loadedNow || loadingOlder) return
     setLoadingOlder(true)
-    const n = ++seq.current // une relecture en vol, plus ancienne que ce chargement, ne doit pas l'écraser
-    const r = await api.conv({ dir, id }, tools, { limit: PAGE, before: loadedNow.start, anchors: true })
-    if (n !== seq.current) return void setLoadingOlder(false) // une relecture plus récente est passée : on redemandera
+    seq.current += 1 // une relecture en vol, plus ancienne que ce chargement, ne doit pas l'écraser
+    const requestNumber = seq.current
+    const olderPage = await api.conv({ dir, id }, tools, { limit: PAGE, before: loadedNow.start, anchors: true })
+    if (requestNumber !== seq.current) {
+      setLoadingOlder(false) // une relecture plus récente est passée : on redemandera
+      return
+    }
     keepScroll.current = true
-    setLoaded({ key, msgs: [...r.msgs, ...loadedNow.msgs], start: r.start ?? 0, more: !!r.more })
+    setLoaded({ key, msgs: [...olderPage.msgs, ...loadedNow.msgs], start: olderPage.start ?? 0, more: !!olderPage.more })
     setLoadingOlder(false)
     // Pas de correction manuelle du défilement : le navigateur garde tout seul l'ancrage sur le message affiché
     // (une correction à la main s'ajoutait à la sienne et faisait sauter la vue).
@@ -167,105 +210,115 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
 
   useEffect(() => {
     if (!id) return
-    let live = true
-    api.conv({ dir, id }, tools, { limit: PAGE, anchors: true }).then((r) => live && setLoaded({ key, msgs: r.msgs, start: r.start ?? 0, more: !!r.more }))
+    let isMounted = true
+    api.conv({ dir, id }, tools, { limit: PAGE, anchors: true }).then((conversation) => {
+      if (isMounted) setLoaded({ key, msgs: conversation.msgs, start: conversation.start ?? 0, more: !!conversation.more })
+    })
     return () => {
-      live = false
+      isMounted = false
     }
   }, [dir, id, tools, key])
 
   useEffect(() => {
     if (!id) return
-    let live = true
-    api.info({ dir, id }).then((d) => live && setInfo({ id, d }))
+    let isMounted = true
+    api.info({ dir, id }).then((sessionDetail) => isMounted && setInfo({ id, detail: sessionDetail }))
     return () => {
-      live = false
+      isMounted = false
     }
   }, [dir, id])
 
   useEffect(() => {
     if (!sentAt || sentAt.id !== id) return
-    let live = true
-    const t = setInterval(async () => {
-      if (Date.now() - sentAt.at > 15 * 60_000) return setSentAt(null)
-      const st = await Promise.all([reloadRef.current(), api.sessionIdle(id)]).then(([, s]) => s, () => null) // serveur coupé : on réessaie au tour suivant
-      // Le premier relevé suit de près l'envoi : la session n'a pas encore commencé, on laisse quelques secondes.
-      if (live && st?.idle && Date.now() - sentAt.at > 4000) {
+    let isMounted = true
+    const reloadTimer = setInterval(async () => {
+      const elapsedMs = Date.now() - sentAt.at
+      if (elapsedMs > LIVE_RELOAD_MAX_DURATION_MS) {
         setSentAt(null)
-        // Le relevé a pu précéder l'écriture de la dernière réponse dans le transcript : une relecture de plus, juste après.
-        setTimeout(() => void reloadRef.current(), 1500)
+        return
       }
-    }, 2000)
+      const idleState = await Promise.all([reloadRef.current(), api.sessionIdle(id)]).then(([, sessionIdle]) => sessionIdle, () => null) // serveur coupé : on réessaie au tour suivant
+      // Le premier relevé suit de près l'envoi : la session n'a pas encore commencé, on laisse quelques secondes.
+      const isIdleAfterGrace = isMounted && !!idleState?.idle && Date.now() - sentAt.at > LIVE_IDLE_GRACE_MS
+      if (!isIdleAfterGrace) return
+      setSentAt(null)
+      // Le relevé a pu précéder l'écriture de la dernière réponse dans le transcript : une relecture de plus, juste après.
+      setTimeout(() => void reloadRef.current(), FINAL_RELOAD_DELAY_MS)
+    }, LIVE_RELOAD_INTERVAL_MS)
     return () => {
-      live = false
-      clearInterval(t)
+      isMounted = false
+      clearInterval(reloadTimer)
     }
   }, [sentAt, id])
 
   // Session qui passe en attente alors qu'elle est affichée (même pilotée depuis son terminal) : sa dernière réponse vient d'être écrite.
-  const idle = !!id && a.waiting.has(id)
+  const idle = !!id && actions.waiting.has(id)
   useEffect(() => {
     if (!idle) return
     void reloadRef.current()
-    const t = setTimeout(() => void reloadRef.current(), 1500)
-    return () => clearTimeout(t)
+    const reloadTimer = setTimeout(() => void reloadRef.current(), FINAL_RELOAD_DELAY_MS)
+    return () => clearTimeout(reloadTimer)
   }, [idle, id])
 
   // content-visibility affine les hauteurs en cours de rendu : on recolle à la fin sur quelques images.
   const toEnd = useCallback(() => {
-    const vp = viewport()
-    if (!vp) return
-    const go = () => (vp.scrollTop = vp.scrollHeight)
-    go()
+    const viewportElement = viewport()
+    if (!viewportElement) return
+    const scrollToBottom = () => {
+      viewportElement.scrollTop = viewportElement.scrollHeight
+    }
+    scrollToBottom()
     requestAnimationFrame(() => {
-      go()
+      scrollToBottom()
       requestAnimationFrame(() => {
-        go()
-        setTimeout(go, 120)
+        scrollToBottom()
+        setTimeout(scrollToBottom, LAST_FRAME_DELAY_MS)
       })
     })
   }, [viewport])
   // À l'ouverture : la vue reste collée à la fin pendant que la hauteur du contenu se précise (rendu paresseux, images, code), jusqu'à ce
   // que l'utilisateur prenne la main (molette, toucher, clavier, clic) ou au bout de 3 s.
   const pinEnd = useCallback(() => {
-    const vp = viewport()
-    if (!vp) return
-    const go = () => (vp.scrollTop = vp.scrollHeight)
-    go()
-    const ro = new ResizeObserver(go)
-    if (vp.firstElementChild) ro.observe(vp.firstElementChild)
-    const evs = ["wheel", "touchstart", "keydown", "pointerdown"]
+    const viewportElement = viewport()
+    if (!viewportElement) return
+    const scrollToBottom = () => {
+      viewportElement.scrollTop = viewportElement.scrollHeight
+    }
+    scrollToBottom()
+    const resizeObserver = new ResizeObserver(scrollToBottom)
+    if (viewportElement.firstElementChild) resizeObserver.observe(viewportElement.firstElementChild)
     const stop = () => {
-      clearTimeout(t)
-      ro.disconnect()
-      evs.forEach((e) => vp.removeEventListener(e, stop))
+      clearTimeout(pinTimer)
+      resizeObserver.disconnect()
+      USER_INPUT_EVENTS.forEach((eventName) => viewportElement.removeEventListener(eventName, stop))
     }
     // Hauteurs enfin stables, l'utilisateur n'ayant pas touché à la vue : à moins d'une demi-page de la fin, on y reste collé.
-    const t = setTimeout(() => {
+    const pinTimer = setTimeout(() => {
       stop()
-      if (vp.scrollHeight - vp.scrollTop - vp.clientHeight < vp.clientHeight / 2) vp.scrollTop = vp.scrollHeight
-    }, 3000)
-    evs.forEach((e) => vp.addEventListener(e, stop, { passive: true }))
+      if (distanceToEnd(viewportElement) < viewportElement.clientHeight / 2) scrollToBottom()
+    }, PIN_END_DURATION_MS)
+    USER_INPUT_EVENTS.forEach((eventName) => viewportElement.addEventListener(eventName, stop, { passive: true }))
   }, [viewport])
   // Rétablit la position mémorisée pendant que les hauteurs se précisent (rendu paresseux), jusqu'à ce que l'utilisateur prenne la main
   // ou au bout de 1,5 s.
   const restore = useCallback(
     (top: number) => {
-      const vp = viewport()
-      if (!vp) return
+      const viewportElement = viewport()
+      if (!viewportElement) return
       restoring.current = true
-      const go = () => (vp.scrollTop = top)
-      go()
-      const iv = setInterval(go, 50)
-      const evs = ["wheel", "touchstart", "keydown", "pointerdown"]
-      const stop = () => {
-        clearInterval(iv)
-        clearTimeout(t)
-        restoring.current = false
-        evs.forEach((e) => vp.removeEventListener(e, stop))
+      const scrollToSavedTop = () => {
+        viewportElement.scrollTop = top
       }
-      const t = setTimeout(stop, 1500)
-      evs.forEach((e) => vp.addEventListener(e, stop, { passive: true }))
+      scrollToSavedTop()
+      const restoreInterval = setInterval(scrollToSavedTop, RESTORE_INTERVAL_MS)
+      const stop = () => {
+        clearInterval(restoreInterval)
+        clearTimeout(restoreTimer)
+        restoring.current = false
+        USER_INPUT_EVENTS.forEach((eventName) => viewportElement.removeEventListener(eventName, stop))
+      }
+      const restoreTimer = setTimeout(stop, RESTORE_DURATION_MS)
+      USER_INPUT_EVENTS.forEach((eventName) => viewportElement.addEventListener(eventName, stop, { passive: true }))
     },
     [viewport]
   )
@@ -273,12 +326,17 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   const top = useRef<HTMLDivElement>(null)
   const more = !!loadedNow?.more
   useEffect(() => {
-    const el = top.current
-    const vp = viewport()
-    if (!el || !vp || !more) return
-    const io = new IntersectionObserver(([e]) => e.isIntersecting && older(), { root: vp, rootMargin: "600px 0px 0px 0px" })
-    io.observe(el)
-    return () => io.disconnect()
+    const topSentinel = top.current
+    const viewportElement = viewport()
+    if (!topSentinel || !viewportElement || !more) return
+    const intersectionObserver = new IntersectionObserver(
+      ([sentinelEntry]) => {
+        if (sentinelEntry.isIntersecting) void older()
+      },
+      { root: viewportElement, rootMargin: "600px 0px 0px 0px" },
+    )
+    intersectionObserver.observe(topSentinel)
+    return () => intersectionObserver.disconnect()
   }, [more, older, viewport])
   const toTop = () => viewport()?.scrollTo({ top: 0 })
   // La vue descend à l'ouverture, à l'envoi d'un message, et suit la fin tant que l'utilisateur y est. Dès qu'il remonte lire, elle ne
@@ -288,64 +346,65 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   const [fromTop, setFromTop] = useState(false)
   const ready = !!session && msgs !== null
   useEffect(() => {
-    const vp = viewport()
-    if (!vp) return
+    const viewportElement = viewport()
+    if (!viewportElement) return
     // Collée à la fin tant que l'utilisateur y est : la bande d'état (réflexion, outil, file d'attente) change de hauteur sans que la vue décale.
-    let stuck = vp.scrollHeight - vp.scrollTop - vp.clientHeight < 80
+    let stuck = distanceToEnd(viewportElement) < AT_END_THRESHOLD_PX
     // Boutons « Aller à la fin / au début » : relus aussi à l'ouverture et quand le contenu change, pas seulement au défilement.
-    const flags = () => {
-      setAway(vp.scrollHeight - vp.scrollTop - vp.clientHeight >= 80)
-      setFromTop(vp.scrollTop > 200)
+    const updateJumpButtons = () => {
+      setAway(distanceToEnd(viewportElement) >= AT_END_THRESHOLD_PX)
+      setFromTop(viewportElement.scrollTop > FROM_TOP_THRESHOLD_PX)
     }
-    flags()
-    const on = () => {
-      const gap = vp.scrollHeight - vp.scrollTop - vp.clientHeight
-      stuck = gap < 80
-      flags()
-      if (idRef.current && !restoring.current) scrollMem.set(idRef.current, { top: vp.scrollTop, end: gap < vp.clientHeight }) // à moins d'une page de la fin : la réouverture redescend à la fin
+    updateJumpButtons()
+    const onScroll = () => {
+      const gap = distanceToEnd(viewportElement)
+      stuck = gap < AT_END_THRESHOLD_PX
+      updateJumpButtons()
+      if (idRef.current && !restoring.current) scrollMem.set(idRef.current, { top: viewportElement.scrollTop, end: gap < viewportElement.clientHeight }) // à moins d'une page de la fin : la réouverture redescend à la fin
     }
-    vp.addEventListener("scroll", on, { passive: true })
-    const ro = new ResizeObserver(() => {
-      if (stuck && !keepScroll.current && !restoring.current) vp.scrollTop = vp.scrollHeight
-      flags()
+    viewportElement.addEventListener("scroll", onScroll, { passive: true })
+    const resizeObserver = new ResizeObserver(() => {
+      if (stuck && !keepScroll.current && !restoring.current) viewportElement.scrollTop = viewportElement.scrollHeight
+      updateJumpButtons()
     })
-    if (vp.firstElementChild) ro.observe(vp.firstElementChild)
-    ro.observe(vp) // la fenêtre, la zone de saisie ou le clavier changent la hauteur visible sans toucher au contenu
+    if (viewportElement.firstElementChild) resizeObserver.observe(viewportElement.firstElementChild)
+    resizeObserver.observe(viewportElement) // la fenêtre, la zone de saisie ou le clavier changent la hauteur visible sans toucher au contenu
     return () => {
-      vp.removeEventListener("scroll", on)
-      ro.disconnect()
+      viewportElement.removeEventListener("scroll", onScroll)
+      resizeObserver.disconnect()
     }
   }, [viewport, ready])
   useEffect(() => {
     if (!id) opened.current = ""
     // Messages plus anciens chargés : la position reste. Mais jamais avant que la session ait été amenée à la fin (ou à sa position mémorisée) :
     // sinon un chargement déclenché dès l'ouverture sautait l'ancrage et laissait la vue à une demi-ligne de la fin.
-    if (keepScroll.current && opened.current === id) return void (keepScroll.current = false)
+    const keepsOlderPagePosition = keepScroll.current && opened.current === id
     keepScroll.current = false
+    if (keepsOlderPagePosition) return
     if (!msgs) return
-    if (opened.current !== id && viewport()) {
-      opened.current = id
-      const m = scrollMem.get(id)
-      if (m && !m.end) restore(m.top)
-      else pinEnd()
-    }
+    if (opened.current === id || !viewport()) return
+    opened.current = id
+    const savedPosition = scrollMem.get(id)
+    if (savedPosition && !savedPosition.end) restore(savedPosition.top)
+    else pinEnd()
   }, [msgs, pinEnd, restore, viewport, id, ready])
-  const inTerm = termOn && view === "terminal" && !!id && a.live.has(id)
+  const inTerm = termOn && view === "terminal" && !!id && actions.live.has(id)
   // Envoi d'un message : on descend pour voir la réponse arriver, puis une seconde fois quand le transcript relu contient le message.
   const sentDown = useCallback(() => {
     toEnd()
-    setTimeout(toEnd, 2500)
+    setTimeout(toEnd, SECOND_SCROLL_DELAY_MS)
   }, [toEnd])
 
   // Contexte du dernier appel : fenêtre de 1 M de tokens si le modèle l'indique ou si on l'a déjà dépassée de 200 k, sinon 200 k.
   const ctx = live.st?.context ?? 0
   const win = windowOf(live.st?.model ?? "", ctx)
-  const hint = a.live.has(id) && ctx >= win * COMPACT_HINT_AT ? t("conversation.view.compactHint", { ctx: compact(ctx), pct: Math.round((ctx / win) * 100) }) : null
+  const shouldHintCompact = actions.live.has(id) && ctx >= win * COMPACT_HINT_AT
+  const hint = shouldHintCompact ? t("conversation.view.compactHint", { ctx: compact(ctx), pct: Math.round((ctx / win) * 100) }) : null
   // Cache expiré (voir HOT) sur une session qui a déjà un gros contexte : la reprendre le réécrit entièrement au tarif plein.
-  const cold =
-    session && a.now > 0 && a.now - session.mtime >= HOT && session.tok.cr + session.tok.cw >= COLD_HINT_MIN_TOKENS
-      ? { text: t("conversation.view.coldHint", { when: ago(session.mtime) }), onNew: () => row && a.newSession(row.g.project) }
-      : null
+  const isColdWithLargeContext = !!session && actions.now > 0 && actions.now - session.mtime >= HOT && session.tok.cr + session.tok.cw >= COLD_HINT_MIN_TOKENS
+  const cold = isColdWithLargeContext
+    ? { text: t("conversation.view.coldHint", { when: ago(session.mtime) }), onNew: () => row && actions.newSession(row.g.project) }
+    : null
   const metaExtra = session && (
     <>
       {(live.st?.model || detail?.models.at(-1)) && (
@@ -355,9 +414,9 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
       )}
       <LiveAgents live={live} dir={dir} id={id} />
       <LiveTasks live={live} dir={dir} id={id} />
-      {gitDirs.map((d) => (
-        <span key={d} className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs md:shrink-0" title={d}>
-          <GitRepo dir={d} st={git.status[d]} chip />
+      {gitDirs.map((repoDir) => (
+        <span key={repoDir} className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs md:shrink-0" title={repoDir}>
+          <GitRepo dir={repoDir} st={git.status[repoDir]} chip />
         </span>
       ))}
       <GitRepos dirs={gitSubs} status={git.status} />
@@ -370,7 +429,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
       extra={
         <>
           {session && (
-            <DropdownMenuItem onSelect={() => a.open({ dir: session.dir, id: session.id })}>
+            <DropdownMenuItem onSelect={() => actions.open({ dir: session.dir, id: session.id })}>
               <RefreshCcwDot /> {t("conversation.view.resume")}
             </DropdownMenuItem>
           )}
@@ -378,15 +437,15 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             <FileText /> {t("conversation.view.instructions")}
           </DropdownMenuItem>
           <DropdownMenuGroup className="md:hidden">
-            <DropdownMenuCheckboxItem checked={tools} onCheckedChange={(c) => setTools(c === true)}>
+            <DropdownMenuCheckboxItem checked={tools} onCheckedChange={(checked) => setTools(checked === true)}>
               {t("conversation.view.showTools")}
             </DropdownMenuCheckboxItem>
             <DropdownMenuItem onSelect={() => setStatsOpen(true)}>
               <BarChart3 /> {t("conversation.live.stats")}
             </DropdownMenuItem>
             {session && <KeepWarmItem s={session} />}
-            {a.live.has(id) && !a.background.has(id) && (
-              <DropdownMenuItem onSelect={() => a.stop([id], onClose)} title={t("conversation.composer.closeTitle")}>
+            {actions.live.has(id) && !actions.background.has(id) && (
+              <DropdownMenuItem onSelect={() => actions.stop([id], onClose)} title={t("conversation.composer.closeTitle")}>
                 <Power /> {t("conversation.composer.close")}
               </DropdownMenuItem>
             )}
@@ -402,29 +461,29 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   )
 
   return (
-    <Dialog open={!!session} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={!!session} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent sheet={false}
-        {...swipeHandlers((d) => d === "right" && onClose(), true)}
+        {...swipeHandlers((swipeDirection) => swipeDirection === "right" && onClose(), true)}
         className="safe-t safe-b flex h-[calc(var(--vvh,100dvh)*0.94)] max-md:[&>[data-slot=dialog-close]]:top-[calc(env(safe-area-inset-top)+0.625rem)] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0 max-md:top-[var(--vvt,0px)] max-md:left-0 max-md:h-[var(--vvh,100dvh)] max-md:w-screen max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none max-md:border-0 sm:max-w-none"
-        onCloseAutoFocus={(e) => focusRow(lastId.current) && e.preventDefault()}
+        onCloseAutoFocus={(focusEvent) => focusRow(lastId.current) && focusEvent.preventDefault()}
       >
         <DialogHeader className="gap-1 border-b px-4 pt-2.5 pr-12 pb-3 md:px-6 md:pr-12 md:pb-4">
           <div className="flex items-start gap-4">
             <div className="min-w-0 flex-1 space-y-1">
               <DialogTitle className="truncate text-lg tracking-tight">{session?.title}</DialogTitle>
               <DialogDescription className="sr-only">{t("conversation.view.description")}</DialogDescription>
-              {session && <Meta s={session} onFolder={onFolder} extra={metaExtra} />}
+              {session && <Meta session={session} onFolder={onFolder} extra={metaExtra} />}
             </div>
             {session && (
               <div className="flex shrink-0 flex-col items-end gap-1 text-xs text-muted-foreground">
                 <div className="flex min-h-7 items-center gap-2 max-md:hidden">
-                  {a.live.has(id) && !a.background.has(id) && <CloseSession id={id} onClosed={onClose} />}
+                  {actions.live.has(id) && !actions.background.has(id) && <CloseSession id={id} onClosed={onClose} />}
                   <KeepWarmButton s={session} />
                   <CacheState s={session} />
-                  {a.background.has(id) ? (
+                  {actions.background.has(id) ? (
                     <>
                       <BgBadge id={id} />
-                      <Button variant="outline" size="xs" className="text-destructive" onClick={() => a.stop([id])} title={t("shell.list.backgroundHint")}>
+                      <Button variant="outline" size="xs" className="text-destructive" onClick={() => actions.stop([id])} title={t("shell.list.backgroundHint")}>
                         <Power /> {t("conversation.view.stopBackground")}
                       </Button>
                     </>
@@ -433,7 +492,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
                 <div className="flex items-center gap-1 md:-mr-[38px]">
                   <StatsButton live={live} s={session} onClick={() => setStatsOpen(true)} />
                   {row && !row.g.missing && (
-                    <Button variant="outline" size="xs" className="max-md:hidden" onClick={() => a.newSession(row.g.project)} title={t("conversation.view.newSessionTitle")}>
+                    <Button variant="outline" size="xs" className="max-md:hidden" onClick={() => actions.newSession(row.g.project)} title={t("conversation.view.newSessionTitle")}>
                       <MessageSquarePlus /> {t("conversation.view.newSession")}
                     </Button>
                   )}
@@ -482,20 +541,24 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
               </div>
             )}
             {msgs &&
-              groupTools(dedupeDocs(msgs)).map((x, i) =>
-                "count" in x ? (
-                  <ToolAnchor key={`a${x.from}`} dir={dir} id={id} g={x} />
+              groupTools(dedupeDocs(msgs)).map((entry, entryIndex) =>
+                "count" in entry ? (
+                  <ToolAnchor key={`a${entry.from}`} dir={dir} id={id} g={entry} />
                 ) : (
-                  x.o === undefined ? (
-                    <Message key={x.o === undefined ? i : `${x.o}.${x.n ?? 0}`} m={x} conv={{ dir, id, tools }} />
+                  entry.o === undefined ? (
+                    <Message key={entryIndex} m={entry} conv={{ dir, id, tools }} />
                   ) : (
-                    <ContextMenu key={`${x.o}.${x.n ?? 0}`}>
+                    <ContextMenu key={`${entry.o}.${entry.n ?? 0}`}>
                       <ContextMenuTrigger asChild className="select-text">
-                        <div onContextMenu={(e) => {
-                          const el = e.target as HTMLElement
-                          setHit({ sel: window.getSelection()?.toString() ?? "", code: el.closest("pre")?.textContent ?? "", link: el.closest("a")?.href ?? "" })
+                        <div onContextMenu={(contextMenuEvent) => {
+                          const clickedElement = contextMenuEvent.target as HTMLElement
+                          setHit({
+                            sel: window.getSelection()?.toString() ?? "",
+                            code: clickedElement.closest("pre")?.textContent ?? "",
+                            link: clickedElement.closest("a")?.href ?? "",
+                          })
                         }}>
-                          <Message m={x} conv={{ dir, id, tools }} />
+                          <Message m={entry} conv={{ dir, id, tools }} />
                         </div>
                       </ContextMenuTrigger>
                       <ContextMenuContent>
@@ -514,11 +577,11 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
                             <Copy /> {t("conversation.view.copyLink")}
                           </ContextMenuItem>
                         )}
-                        <ContextMenuItem onSelect={() => copy(x.t)}>
+                        <ContextMenuItem onSelect={() => copy(entry.t)}>
                           <Copy /> {t("conversation.view.copyMessage")}
                         </ContextMenuItem>
                         <ContextMenuSeparator />
-                        <ContextMenuItem variant="destructive" onSelect={() => rewind(x.o!)}>
+                        <ContextMenuItem variant="destructive" onSelect={() => rewind(entry.o!)}>
                           <Undo2 /> {t("conversation.view.rewind")}
                         </ContextMenuItem>
                       </ContextMenuContent>
@@ -528,9 +591,9 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
               )}
             {msgs?.length === 0 && !turn && <p className="text-center text-muted-foreground">{t("conversation.view.empty")}</p>}
             {turn?.msgs
-              .filter((m) => tools || m.r !== "tool")
-              .map((m, i) => (
-                <Message key={`t${i}`} m={m} />
+              .filter((turnMessage) => tools || turnMessage.r !== "tool")
+              .map((turnMessage, turnMessageIndex) => (
+                <Message key={`t${turnMessageIndex}`} m={turnMessage} />
               ))}
             {turn?.running && (
               <p role="status" className="flex items-center gap-2 text-muted-foreground">
@@ -565,20 +628,26 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             id={id}
             args={args}
             defaultChoice={choice}
-            live={a.live.has(id)}
+            live={actions.live.has(id)}
             liveState={live}
-            onSent={() => (a.touch(id), setSentAt({ id, at: Date.now() }), sentDown(), void reloadRef.current(), carousel?.next())}
+            onSent={() => {
+              actions.touch(id)
+              setSentAt({ id, at: Date.now() })
+              sentDown()
+              void reloadRef.current()
+              carousel?.next()
+            }}
             onWrite={sentDown}
             compactHint={hint}
             coldHint={cold}
             extra={
               <>
-                {termOn && a.live.has(id) && (
+                {termOn && actions.live.has(id) && (
                   <Button variant="ghost" size="xs" className="text-muted-foreground max-md:[&>svg]:hidden" onClick={() => setView("terminal")} title={t("conversation.view.modeTitle")}>
                     <SquareTerminal /> {t("conversation.view.modeTerminal")}
                   </Button>
                 )}
-                {!a.live.has(id) && (
+                {!actions.live.has(id) && (
                   <Button size="xs" variant="ghost" disabled className="text-muted-foreground max-md:[&>svg]:hidden" title={t("conversation.composer.rawScreenTitle")}>
                     <Bug /> {t("conversation.composer.rawScreen")}
                   </Button>
@@ -589,23 +658,28 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
               </>
             }
             turn={turn}
-            setTurn={(f) => setChat((c) => f(c?.id === id ? c : null))}
+            setTurn={(update) => setChat((currentChat) => update(currentChat?.id === id ? currentChat : null))}
             // Le transcript contient maintenant le tour : on le relit, et le tour affiché à part disparaît (sauf erreur).
             onDone={async () => {
               // Le tour affiché à part ne disparaît que lorsque le transcript relu le contient (Claude l'écrit parfois avec retard) :
               // sinon la réponse s'effaçait un instant, voire jusqu'à la relecture suivante.
-              const sent = turn?.msgs.find((m) => m.r === "user")?.t.trim()
-              for (let i = 0; i < 5; i++) {
-                const got = await reload()
-                if (got === null || !sent || got.slice(-12).some((m) => m.r === "user" && m.t.includes(sent.slice(0, 60)))) break
-                await new Promise((r) => setTimeout(r, 1000))
+              const sent = turn?.msgs.find((turnMessage) => turnMessage.r === "user")?.t.trim()
+              for (let attempt = 0; attempt < TURN_RELOAD_ATTEMPTS; attempt++) {
+                const reloadedMessages = await reload()
+                if (reloadedMessages === null || !sent) break
+                const sentPrefix = sent.slice(0, SENT_PREFIX_LENGTH)
+                const transcriptHasSent = reloadedMessages
+                  .slice(-RECENT_MESSAGES_CHECKED)
+                  .some((reloadedMessage) => reloadedMessage.r === "user" && reloadedMessage.t.includes(sentPrefix))
+                if (transcriptHasSent) break
+                await new Promise((resolve) => setTimeout(resolve, TURN_RELOAD_DELAY_MS))
               }
-              setChat((c) => (c?.id === id && !c.error ? { ...c, msgs: [] } : c))
+              setChat((currentChat) => (currentChat?.id === id && !currentChat.error ? { ...currentChat, msgs: [] } : currentChat))
             }}
           />
         )}
         <Confirm ask={ask} onClose={() => setAsk(null)} />
-        <LoadedDialog id={id} home={a.home} open={loadedOpen} onClose={() => setLoadedOpen(false)} />
+        <LoadedDialog id={id} home={actions.home} open={loadedOpen} onClose={() => setLoadedOpen(false)} />
       </DialogContent>
     </Dialog>
   )

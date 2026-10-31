@@ -7,6 +7,14 @@ import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescript
 
 type Ban = { at: number; ip: string }
 
+const POLL_INTERVAL_MS = 15_000
+const HTTP_NOT_FOUND = 404
+const MILLISECONDS_PER_SECOND = 1000
+
+function formatAlertTime(unixSeconds: number) {
+  return new Date(unixSeconds * MILLISECONDS_PER_SECOND).toLocaleTimeString()
+}
+
 // Alerte dans chaque session connectée quand une adresse extérieure est bannie après des échecs de connexion répétés, ou
 // qu'un appareil est jumelé sur mon compte via POST /v1/pairing/codes (une session volée pourrait en créer une : l'alerte pousse à
 // vérifier /v1/auth/sessions et à révoquer ce qui n'est pas de moi). Les événements d'avant l'ouverture de l'onglet ne sont pas
@@ -16,28 +24,30 @@ export function BanAlert() {
   const [bans, setBans] = useState<Ban[]>([])
   const [pairings, setPairings] = useState<Ban[]>([])
   useEffect(() => {
-    let live = true
-    let after = -1 // -1 : premier relevé, qui ne rend que le curseur courant (rien d'antérieur à l'ouverture)
+    let isMounted = true
+    let cursorAfter = -1 // -1 : premier relevé, qui ne rend que le curseur courant (rien d'antérieur à l'ouverture)
     const poll = async () => {
-      if (!live || document.visibilityState !== "visible") return
+      const isPageVisible = document.visibilityState === "visible"
+      if (!isMounted || !isPageVisible) return
       try {
-        const r = await api.banAlerts(after)
-        if (!live) return
-        const first = after < 0
-        after = r.cursor
-        if (first) return
-        if (r.bans.length) setBans((b) => [...b, ...r.bans])
-        if (r.pairings.length) setPairings((p) => [...p, ...r.pairings])
-      } catch (e) {
+        const alerts = await api.banAlerts(cursorAfter)
+        if (!isMounted) return
+        const isFirstPoll = cursorAfter < 0
+        cursorAfter = alerts.cursor
+        if (isFirstPoll) return
+        if (alerts.bans.length) setBans((previousBans) => [...previousBans, ...alerts.bans])
+        if (alerts.pairings.length) setPairings((previousPairings) => [...previousPairings, ...alerts.pairings])
+      } catch (error) {
         // 404 : mode sans comptes, la route n'existe pas ; sinon serveur injoignable, on réessaie au prochain passage.
-        if (e instanceof ApiError && e.status === 404) live = false
+        const isRouteMissing = error instanceof ApiError && error.status === HTTP_NOT_FOUND
+        if (isRouteMissing) isMounted = false
       }
     }
     void poll()
-    const h = setInterval(poll, 15_000)
+    const pollTimer = setInterval(poll, POLL_INTERVAL_MS)
     return () => {
-      live = false
-      clearInterval(h)
+      isMounted = false
+      clearInterval(pollTimer)
     }
   }, [])
   const open = bans.length > 0 || pairings.length > 0
@@ -46,7 +56,7 @@ export function BanAlert() {
     setPairings([])
   }
   return (
-    <AlertDialog open={open} onOpenChange={(o) => !o && dismiss()}>
+    <AlertDialog open={open} onOpenChange={(isOpen) => !isOpen && dismiss()}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
@@ -58,16 +68,16 @@ export function BanAlert() {
           </AlertDialogDescription>
         </AlertDialogHeader>
         <ul className="max-h-48 space-y-1 overflow-y-auto text-sm">
-          {bans.map((b, i) => (
-            <li key={`ban-${i}`} className="flex justify-between gap-3 rounded-md border px-3 py-1.5">
-              {b.ip ? <code>{b.ip}</code> : <span>{t("shell.ban.hidden")}</span>}
-              <span className="text-muted-foreground tabular-nums">{new Date(b.at * 1000).toLocaleTimeString()}</span>
+          {bans.map((ban, banIndex) => (
+            <li key={`ban-${banIndex}`} className="flex justify-between gap-3 rounded-md border px-3 py-1.5">
+              {ban.ip ? <code>{ban.ip}</code> : <span>{t("shell.ban.hidden")}</span>}
+              <span className="text-muted-foreground tabular-nums">{formatAlertTime(ban.at)}</span>
             </li>
           ))}
-          {pairings.map((p, i) => (
-            <li key={`pair-${i}`} className="flex justify-between gap-3 rounded-md border px-3 py-1.5">
-              <span>{t("shell.pairAlert.item", { ip: p.ip })}</span>
-              <span className="text-muted-foreground tabular-nums">{new Date(p.at * 1000).toLocaleTimeString()}</span>
+          {pairings.map((pairing, pairingIndex) => (
+            <li key={`pair-${pairingIndex}`} className="flex justify-between gap-3 rounded-md border px-3 py-1.5">
+              <span>{t("shell.pairAlert.item", { ip: pairing.ip })}</span>
+              <span className="text-muted-foreground tabular-nums">{formatAlertTime(pairing.at)}</span>
             </li>
           ))}
         </ul>

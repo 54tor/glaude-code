@@ -22,14 +22,14 @@ export function Choose({
   className?: string
 }) {
   return (
-    <Select value={value || EMPTY} onValueChange={(v) => onChange(v === EMPTY ? "" : v)} disabled={disabled}>
+    <Select value={value || EMPTY} onValueChange={(selectedValue) => onChange(selectedValue === EMPTY ? "" : selectedValue)} disabled={disabled}>
       <SelectTrigger size={size} className={className} aria-label={label}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {options.map(([v, l]) => (
-          <SelectItem key={v || EMPTY} value={v || EMPTY}>
-            {l}
+        {options.map(([optionValue, optionLabel]) => (
+          <SelectItem key={optionValue || EMPTY} value={optionValue || EMPTY}>
+            {optionLabel}
           </SelectItem>
         ))}
       </SelectContent>
