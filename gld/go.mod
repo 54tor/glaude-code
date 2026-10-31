@@ -3,7 +3,7 @@ module gld
 go 1.26.10
 
 require (
-	github.com/bmatcuk/doublestar/v4 v4.10.3
+	github.com/bmatcuk/doublestar/v4 v4.10.4
 	github.com/coder/websocket v1.8.15
 	github.com/creack/pty v1.1.24
 	github.com/fsnotify/fsnotify v1.10.1
@@ -23,7 +23,7 @@ require (
 
 require (
 	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
-	github.com/brianvoe/gofakeit/v7 v7.18.0
+	github.com/brianvoe/gofakeit/v7 v7.18.1
 	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.4 // indirect
