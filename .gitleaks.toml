@@ -1,0 +1,14 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "faux jeton des tests HTTP"
+condition = "AND"
+paths = ['''^gld/(audit_test|listen_test|listen_tls_test)\.go$''']
+regexes = ['''^0123456789abcdef0123$''']
+
+[[allowlists]]
+description = "nom de fonction argon2, pas un secret"
+condition = "AND"
+paths = ['''^gld/auth_password\.go$''']
+regexes = ['''^argon2\.IDKey$''']
