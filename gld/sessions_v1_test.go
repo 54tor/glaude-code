@@ -10,21 +10,21 @@ import (
 
 // Un fichier chargé se lit par un segment encodé (%2F) : le mux le décode après le découpage, sans redirection.
 func TestSessionLoadedFileEncodedPath(t *testing.T) {
-	h, cfg, _ := web(t)
-	f := filepath.Join(cfg, "rules-x.md")
-	os.WriteFile(f, []byte("# règle"), 0o600)
-	os.WriteFile(loadedFile(), []byte(`{"at":1,"session":"`+id1+`","file":"`+f+`"}`+"\n"), 0o600)
-	m := status(t, h, "GET", "/v1/sessions/"+id1+"/loaded/files/"+url.PathEscape(f), "", 200)
-	if m["text"] != "# règle" {
-		t.Fatalf("texte : %v", m)
+	handler, cfg, _ := web(t)
+	filePath := filepath.Join(cfg, "rules-x.md")
+	os.WriteFile(filePath, []byte("# règle"), 0o600)
+	os.WriteFile(loadedFile(), []byte(`{"at":1,"session":"`+id1+`","file":"`+filePath+`"}`+"\n"), 0o600)
+	lookup := status(t, handler, "GET", "/v1/sessions/"+id1+"/loaded/files/"+url.PathEscape(filePath), "", 200)
+	if lookup["text"] != "# règle" {
+		t.Fatalf("texte : %v", lookup)
 	}
-	v1err(t, h, "GET", "/v1/sessions/"+id1+"/loaded/files/"+url.PathEscape(filepath.Join(cfg, "autre.md")), "", 404, "")
+	v1err(t, handler, "GET", "/v1/sessions/"+id1+"/loaded/files/"+url.PathEscape(filepath.Join(cfg, "autre.md")), "", 404, "")
 }
 
 // Toute erreur d'une route de la session suit {"error":{"code","message"}} avec le vrai statut.
 func TestSessionRoutesUniformErrors(t *testing.T) {
-	h, _, _ := web(t)
-	for _, c := range []struct {
+	handler, _, _ := web(t)
+	for _, record := range []struct {
 		method, path, body string
 		status             int
 	}{
@@ -43,8 +43,8 @@ func TestSessionRoutesUniformErrors(t *testing.T) {
 		{"DELETE", "/v1/trash/sessions?all=1&item=" + id1, "", 400},
 		{"PATCH", "/v1/sessions/" + id1 + "/queue/x", `{"state":"sending"}`, 400},
 	} {
-		v1err(t, h, c.method, c.path, c.body, c.status, "")
+		v1err(t, handler, record.method, record.path, record.body, record.status, "")
 	}
 	many := strings.Repeat("&item=-p:"+id1, itemMax+1)
-	v1err(t, h, "DELETE", "/v1/sessions?"+many[1:], "", 400, "")
+	v1err(t, handler, "DELETE", "/v1/sessions?"+many[1:], "", 400, "")
 }

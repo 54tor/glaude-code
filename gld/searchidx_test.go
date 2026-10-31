@@ -16,19 +16,19 @@ func TestSearchIndex(t *testing.T) {
 		`{"type":"assistant","message":{"content":[{"type":"text","text":"caddy redémarré"},{"type":"tool_use","name":"Bash","input":{"command":"caddy reload"}}]}}`, old)
 	put(t, p2, `{"type":"user","cwd":"/p","message":{"content":"autre sujet: nginx"}}`, old)
 
-	hits := func(q string) []Hit {
-		h, err := searchIndex(q)
+	hits := func(query string) []Hit {
+		hits, err := searchIndex(query)
 		if err != nil {
 			t.Fatal(err)
 		}
-		return h
+		return hits
 	}
 	// Casse, accents et préfixe ignorés ; N = messages qui correspondent ; extrait balisé.
-	if h := hits("DEPLOIE prod"); len(h) != 1 || h[0].ID != id1 || h[0].N != 1 || h[0].Snip != "\x02Déploie\x03 Caddy en \x02production\x03" {
-		t.Fatalf("hits = %+v", h)
+	if localHits := hits("DEPLOIE prod"); len(localHits) != 1 || localHits[0].ID != id1 || localHits[0].N != 1 || localHits[0].Snip != "\x02Déploie\x03 Caddy en \x02production\x03" {
+		t.Fatalf("hits = %+v", localHits)
 	}
-	if h := hits("caddy"); len(h) != 1 || h[0].N != 2 {
-		t.Fatalf("caddy = %+v", h)
+	if localHits := hits("caddy"); len(localHits) != 1 || localHits[0].N != 2 {
+		t.Fatalf("caddy = %+v", localHits)
 	}
 	if len(hits("reload")) != 0 {
 		t.Fatal("les entrées d'outils ne doivent pas être indexées")
@@ -45,8 +45,8 @@ func TestSearchIndex(t *testing.T) {
 		t.Fatal("transcript modifié non relu")
 	}
 	os.Remove(p1)
-	if h := hits("caddy"); len(h) != 1 || h[0].ID != id2 {
-		t.Fatalf("transcript supprimé : %+v", h)
+	if localHits := hits("caddy"); len(localHits) != 1 || localHits[0].ID != id2 {
+		t.Fatalf("transcript supprimé : %+v", localHits)
 	}
 }
 
@@ -70,22 +70,22 @@ func TestSearchIndexSettle(t *testing.T) {
 	now := time.Now()
 	idxNow = func() time.Time { return now }
 	t.Cleanup(func() { idxNow = time.Now })
-	p := filepath.Join(cfg, "projects", "-p", id1+".jsonl")
-	msg := func(w string) string { return `{"type":"user","cwd":"/p","message":{"content":"` + w + `"}}` }
-	hits := func(q string) int {
-		h, err := searchIndex(q)
+	path := filepath.Join(cfg, "projects", "-p", id1+".jsonl")
+	msg := func(word string) string { return `{"type":"user","cwd":"/p","message":{"content":"` + word + `"}}` }
+	hits := func(query string) int {
+		hits, err := searchIndex(query)
 		if err != nil {
 			t.Fatal(err)
 		}
-		return len(h)
+		return len(hits)
 	}
 	// Première indexation : immédiate, même pour un transcript tout frais.
-	put(t, p, msg("alpha"), 0)
+	put(t, path, msg("alpha"), 0)
 	if hits("alpha") != 1 {
 		t.Fatal("un transcript inconnu doit être indexé tout de suite")
 	}
 	// Déjà indexé, puis modifié à l'instant : pas relu.
-	put(t, p, msg("bravo"), 0)
+	put(t, path, msg("bravo"), 0)
 	if hits("bravo") != 0 || hits("alpha") != 1 {
 		t.Fatal("un transcript modifié depuis moins de indexSettle ne doit pas être relu")
 	}
@@ -100,19 +100,19 @@ func TestSearchIndexPerHome(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	prev := idxFile
 	t.Cleanup(func() { idxFile = prev })
-	a, b := t.TempDir(), t.TempDir()
-	if idxFileFor(filepath.Join(a, "projects")) == idxFileFor(filepath.Join(b, "projects")) {
+	argument, body := t.TempDir(), t.TempDir()
+	if idxFileFor(filepath.Join(argument, "projects")) == idxFileFor(filepath.Join(body, "projects")) {
 		t.Fatal("deux homes partagent le même fichier d'index")
 	}
-	use(a)
+	use(argument)
 	idxFile = func() string { return idxFileFor(root) }
-	put(t, filepath.Join(a, "projects", "-p", id1+".jsonl"), `{"type":"user","cwd":"/p","message":{"content":"secretdehomea"}}`, old)
-	if h, err := searchIndex("secretdehomea"); err != nil || len(h) != 1 {
-		t.Fatalf("home A : %v %v", h, err)
+	put(t, filepath.Join(argument, "projects", "-p", id1+".jsonl"), `{"type":"user","cwd":"/p","message":{"content":"secretdehomea"}}`, old)
+	if hits, err := searchIndex("secretdehomea"); err != nil || len(hits) != 1 {
+		t.Fatalf("home A : %v %v", hits, err)
 	}
-	use(b)
+	use(body)
 	idxFile = func() string { return idxFileFor(root) }
-	if h, err := searchIndex("secretdehomea"); err != nil || len(h) != 0 {
-		t.Fatalf("la recherche du home B voit le home A : %v %v", h, err)
+	if hits, err := searchIndex("secretdehomea"); err != nil || len(hits) != 0 {
+		t.Fatalf("la recherche du home B voit le home A : %v %v", hits, err)
 	}
 }

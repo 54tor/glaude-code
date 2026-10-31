@@ -63,25 +63,25 @@ func TestCompte(t *testing.T) {
 	use(cfg)
 	put(t, filepath.Join(cfg, ".claude.json"), `{"oauthAccount":{"emailAddress":"a@b.c","organizationType":"claude_max","organizationRateLimitTier":"default_claude_max_20x","hasExtraUsageEnabled":true,"accountUuid":"secret-id"},"cachedUsageUtilization":{"fetchedAtMs":1792568161473,"utilization":{"five_hour":{"utilization":21,"resets_at":"2026-10-21T08:50:00+00:00"},"seven_day":{"utilization":49,"resets_at":"x"},"seven_day_opus":null,"inconnue":{"utilization":1.5,"limit_dollars":250,"used_dollars":3.2}}}}`, old)
 	put(t, filepath.Join(cfg, "stats-cache.json"), `{"lastComputedDate":"2026-10-20","totalSessions":10,"totalMessages":99,"dailyActivity":[{"date":"2026-10-19","messageCount":5,"sessionCount":2,"toolCallCount":3}],"dailyModelTokens":[{"date":"2026-10-19","tokensByModel":{"m":1000}}],"modelUsage":{"m":{"inputTokens":1,"outputTokens":2,"cacheReadInputTokens":3,"cacheCreationInputTokens":4}}}`, old)
-	a := accountInfo()
-	if a.Email != "a@b.c" || a.Tier != "default_claude_max_20x" || !a.ExtraUsage || len(a.Limits) != 3 || a.Limits[0].Key != "five_hour" || a.Limits[0].Percent != 21 || a.Limits[2].Used == nil || a.LimitsAt != 1792568161.473 {
-		t.Fatalf("compte : %+v", a)
+	account := accountInfo()
+	if account.Email != "a@b.c" || account.Tier != "default_claude_max_20x" || !account.ExtraUsage || len(account.Limits) != 3 || account.Limits[0].Key != "five_hour" || account.Limits[0].Percent != 21 || account.Limits[2].Used == nil || account.LimitsAt != 1792568161.473 {
+		t.Fatalf("compte : %+v", account)
 	}
-	if a.TotalSess != 10 || len(a.Days) != 1 || a.Days[0].Tokens["m"] != 1000 || len(a.Models) != 1 || a.Models[0].Out != 2 {
-		t.Fatalf("activité : %+v", a)
+	if account.TotalSess != 10 || len(account.Days) != 1 || account.Days[0].Tokens["m"] != 1000 || len(account.Models) != 1 || account.Models[0].Out != 2 {
+		t.Fatalf("activité : %+v", account)
 	}
-	if b, _ := jsonOf(a); strings.Contains(b, "secret-id") {
+	if body, _ := jsonOf(account); strings.Contains(body, "secret-id") {
 		t.Fatal("identifiant interne exposé")
 	}
 	// fichiers absents : réponse vide mais valide
 	use(t.TempDir())
 	t.Setenv("HOME", t.TempDir()) // sinon le repli lirait le vrai ~/.claude.json
-	if a := accountInfo(); a.Email != "" || a.Limits == nil {
-		t.Fatalf("sans fichiers : %+v", a)
+	if account := accountInfo(); account.Email != "" || account.Limits == nil {
+		t.Fatalf("sans fichiers : %+v", account)
 	}
 }
 
-func jsonOf(v any) (string, error) { b, err := json.Marshal(v); return string(b), err }
+func jsonOf(value any) (string, error) { data, err := json.Marshal(value); return string(data), err }
 
 func TestRafraichirLesLimites(t *testing.T) {
 	reset := func() {
@@ -120,7 +120,7 @@ func TestRafraichirLesLimites(t *testing.T) {
 }
 
 func TestMessagesEnAttente(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "s.jsonl")
+	path := filepath.Join(t.TempDir(), "s.jsonl")
 	ev := `{"type":"queue-operation","operation":"enqueue","timestamp":"t1","content":"premier"}
 {"type":"queue-operation","operation":"enqueue","timestamp":"t2","content":"deuxième"}
 {"type":"queue-operation","operation":"dequeue","timestamp":"t3"}
@@ -128,49 +128,49 @@ func TestMessagesEnAttente(t *testing.T) {
 {"type":"queue-operation","operation":"remove","timestamp":"t5","content":"repris"}
 {"type":"queue-operation","operation":"enqueue","timestamp":"t6","content":"<task-notification>x</task-notification>"}
 `
-	os.WriteFile(p, []byte(ev), 0o600)
-	if q := pendingQueue(p); len(q) != 1 || q[0].T != "deuxième" {
-		t.Fatalf("file d'attente : %v", q)
+	os.WriteFile(path, []byte(ev), 0o600)
+	if queueds := pendingQueue(path); len(queueds) != 1 || queueds[0].T != "deuxième" {
+		t.Fatalf("file d'attente : %v", queueds)
 	}
 }
 
 func TestMessageBaliseEnAttenteNonCoupe(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "s.jsonl")
+	path := filepath.Join(t.TempDir(), "s.jsonl")
 	body := "<agent-message from=\\\"a1\\\">" + strings.Repeat("x", 2000) + "</agent-message>"
-	os.WriteFile(p, []byte(`{"type":"queue-operation","operation":"enqueue","timestamp":"t1","content":"`+body+`"}`+"\n"), 0o600)
-	if q := pendingQueue(p); len(q) != 1 || !strings.HasSuffix(q[0].T, "</agent-message>") {
-		t.Fatalf("message balisé coupé : %d", len(q))
+	os.WriteFile(path, []byte(`{"type":"queue-operation","operation":"enqueue","timestamp":"t1","content":"`+body+`"}`+"\n"), 0o600)
+	if queueds := pendingQueue(path); len(queueds) != 1 || !strings.HasSuffix(queueds[0].T, "</agent-message>") {
+		t.Fatalf("message balisé coupé : %d", len(queueds))
 	}
 	long := "<div>" + strings.Repeat("y", 2000)
-	p = filepath.Join(t.TempDir(), "s2.jsonl")
-	os.WriteFile(p, []byte(`{"type":"queue-operation","operation":"enqueue","timestamp":"t1","content":"`+long+`"}`+"\n"), 0o600)
-	if q := pendingQueue(p); len(q) != 1 || len([]rune(q[0].T)) != 400 {
-		t.Fatalf("un prompt commençant par < doit rester coupé : %v", q)
+	path = filepath.Join(t.TempDir(), "s2.jsonl")
+	os.WriteFile(path, []byte(`{"type":"queue-operation","operation":"enqueue","timestamp":"t1","content":"`+long+`"}`+"\n"), 0o600)
+	if queueds := pendingQueue(path); len(queueds) != 1 || len([]rune(queueds[0].T)) != 400 {
+		t.Fatalf("un prompt commençant par < doit rester coupé : %v", queueds)
 	}
 }
 
 func TestFileDAttenteAuDelaDeLaFenetre(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "s.jsonl")
+	path := filepath.Join(t.TempDir(), "s.jsonl")
 	filler := strings.Repeat(`{"type":"assistant","message":"`+strings.Repeat("x", 1000)+`"}`+"\n", 600) // ~600 Ko
 	ev := `{"type":"queue-operation","operation":"enqueue","timestamp":"t1","content":"A"}` + "\n" + filler +
 		`{"type":"queue-operation","operation":"enqueue","timestamp":"t2","content":"B"}` + "\n" +
 		`{"type":"queue-operation","operation":"dequeue","timestamp":"t3"}` + "\n"
-	os.WriteFile(p, []byte(ev), 0o600)
-	if q := pendingQueue(p); len(q) != 1 || q[0].T != "B" {
-		t.Fatalf("file d'attente : %v", q)
+	os.WriteFile(path, []byte(ev), 0o600)
+	if queueds := pendingQueue(path); len(queueds) != 1 || queueds[0].T != "B" {
+		t.Fatalf("file d'attente : %v", queueds)
 	}
-	f, _ := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0)
-	f.WriteString(`{"type":"queue-operation","operation":"enqueue","timestamp":"t4","content":"C"}` + "\n" + `{"type":"queue-op`)
-	f.Close()
-	if q := pendingQueue(p); len(q) != 2 || q[1].T != "C" {
-		t.Fatalf("après ajout : %v", q)
+	file, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	file.WriteString(`{"type":"queue-operation","operation":"enqueue","timestamp":"t4","content":"C"}` + "\n" + `{"type":"queue-op`)
+	file.Close()
+	if queueds := pendingQueue(path); len(queueds) != 2 || queueds[1].T != "C" {
+		t.Fatalf("après ajout : %v", queueds)
 	}
 }
 
 // Deux notifications et un prompt en file, puis des dequeue : le prompt pris aussitôt (même milliseconde) ne doit pas rester affiché.
 func TestPendingQueueImmediateDequeue(t *testing.T) {
-	var q []Queued
-	for _, l := range []string{
+	var queueds []Queued
+	for _, line := range []string{
 		`{"type":"queue-operation","operation":"enqueue","timestamp":"2026-10-28T03:27:44.579Z","content":"N1"}`,
 		`{"type":"queue-operation","operation":"enqueue","timestamp":"2026-10-28T03:27:48.809Z","content":"N2"}`,
 		`{"type":"queue-operation","operation":"enqueue","timestamp":"2026-10-28T03:27:48.831Z","content":"U"}`,
@@ -179,24 +179,24 @@ func TestPendingQueueImmediateDequeue(t *testing.T) {
 		`{"type":"queue-operation","operation":"enqueue","timestamp":"2026-10-28T03:29:34.480Z","content":"V"}`,
 		`{"type":"queue-operation","operation":"dequeue","timestamp":"2026-10-28T03:29:34.481Z"}`,
 	} {
-		q = applyQueueOp(q, []byte(l))
+		queueds = applyQueueOp(queueds, []byte(line))
 	}
-	if len(q) != 1 || q[0].T != "N2" {
-		t.Fatalf("file = %+v, veut seulement N2 (aucun prompt résiduel)", q)
+	if len(queueds) != 1 || queueds[0].T != "N2" {
+		t.Fatalf("file = %+v, veut seulement N2 (aucun prompt résiduel)", queueds)
 	}
 }
 
 // Hand-back de sous-agent : dequeue 12 ms après l'enqueue, pris avec un résidu plus ancien en file.
 func TestPendingQueueServiceMessageDequeue(t *testing.T) {
-	var q []Queued
-	for _, l := range []string{
+	var queueds []Queued
+	for _, line := range []string{
 		`{"type":"queue-operation","operation":"enqueue","timestamp":"2026-10-30T00:50:00.000Z","content":"X"}`,
 		`{"type":"queue-operation","operation":"enqueue","timestamp":"2026-10-30T00:59:55.968Z","content":"<agent-message from=\"a2\">r</agent-message>"}`,
 		`{"type":"queue-operation","operation":"dequeue","timestamp":"2026-10-30T00:59:55.981Z"}`,
 	} {
-		q = applyQueueOp(q, []byte(l))
+		queueds = applyQueueOp(queueds, []byte(line))
 	}
-	if len(q) != 1 || q[0].T != "X" {
-		t.Fatalf("résidu : %v", q)
+	if len(queueds) != 1 || queueds[0].T != "X" {
+		t.Fatalf("résidu : %v", queueds)
 	}
 }
