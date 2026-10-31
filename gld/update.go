@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -95,8 +96,17 @@ var claudeLatest = func(requestContext context.Context) (string, error) {
 	return packageInfo.Version, nil
 }
 
-// newerVersion : vrai si latest (vX.Y.Z) dépasse current ; « dev » ou une version illisible n'est jamais périmée.
+// gitDescribeSuffix : « -4-g7cbff74 » (ou « -dirty ») que git describe ajoute à un build fait après un tag.
+var gitDescribeSuffix = regexp.MustCompile(`-\d+-g[0-9a-f]+(-dirty)?$|-dirty$`)
+
+// newerVersion : vrai si latest (vX.Y.Z) dépasse current ; « dev » ou une version illisible n'est jamais périmée. Un build de dev
+// (v0.9.0-4-g7cbff74) est en avance sur son tag : il ne se compare qu'au tag lui-même.
 func newerVersion(current, latest string) bool {
+	if gitDescribeSuffix.MatchString(current) {
+		current = gitDescribeSuffix.ReplaceAllString(current, "")
+		latestVersion, currentVersion := asSemver(latest), asSemver(current)
+		return latestVersion != "" && currentVersion != "" && semver.Compare(latestVersion, currentVersion) > 0
+	}
 	currentVersion, latestVersion := asSemver(current), asSemver(latest)
 	if currentVersion == "" || latestVersion == "" {
 		return false
