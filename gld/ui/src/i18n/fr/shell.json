@@ -64,6 +64,7 @@
     },
     "search": {
       "placeholder": "Rechercher une session",
+      "placeholderMemory": "Rechercher dans les mémoires",
       "placeholderContent": "Rechercher dans les noms et le contenu",
       "label": "Rechercher dans cette vue",
       "content": "Contenu",

@@ -595,7 +595,7 @@ function Shell() {
             reload={reload}
             searchBox={
               ROUTES_WITH_SEARCH_BOX.includes(route.kind) ? (
-                <SessionSearch q={searchQuery} setQ={setSearchQuery} adv={advancedSearch} setAdv={setAdvancedSearch} searching={isSearchingContent} />
+                <SessionSearch q={searchQuery} setQ={setSearchQuery} adv={advancedSearch} setAdv={setAdvancedSearch} searching={isSearchingContent} memory={route.kind === "memory"} />
               ) : undefined
             }
           />
