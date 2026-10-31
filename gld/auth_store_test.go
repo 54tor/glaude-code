@@ -34,13 +34,13 @@ func TestOpenAuthDB(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	var v, rows int
-	if err := db.QueryRow(`SELECT MAX(version), COUNT(*) FROM schema_version`).Scan(&v, &rows); err != nil {
+	var number, rows int
+	if err := db.QueryRow(`SELECT MAX(version), COUNT(*) FROM schema_version`).Scan(&number, &rows); err != nil {
 		t.Fatal(err)
 	}
 	// Sans la clé, openAuthDB s'arrête avant la première migration qui l'exige ; openAuthStore applique le reste.
-	if v != keyedFrom-1 || rows != keyedFrom-1 {
-		t.Fatalf("version %d rows %d, want %d", v, rows, keyedFrom-1)
+	if number != keyedFrom-1 || rows != keyedFrom-1 {
+		t.Fatalf("version %d rows %d, want %d", number, rows, keyedFrom-1)
 	}
 	for _, tb := range []string{"users", "totp", "webauthn_creds", "recovery_codes", "sessions", "home_acl", "auth_events", "throttle", "meta"} {
 		if _, err := db.Exec("SELECT 1 FROM " + tb + " LIMIT 1"); err != nil {
@@ -67,10 +67,10 @@ func TestOpenAuthDBHardening(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		return
 	}
-	for _, f := range []string{"auth.db", "auth.db-wal", "auth.db-shm"} {
-		st, err := os.Stat(filepath.Join(dir, f))
+	for _, filePath := range []string{"auth.db", "auth.db-wal", "auth.db-shm"} {
+		st, err := os.Stat(filepath.Join(dir, filePath))
 		if err != nil || st.Mode().Perm() != 0o600 {
-			t.Fatalf("%s: %v %v", f, st, err)
+			t.Fatalf("%s: %v %v", filePath, st, err)
 		}
 	}
 }
@@ -101,20 +101,20 @@ func TestAuthDirNoTempFallback(t *testing.T) {
 	t.Setenv("GLD_AUTH_DIR", "")
 	t.Setenv("HOME", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
-	if d, err := authDir(); err == nil {
-		t.Fatalf("expected error, got %q", d)
+	if dir, err := authDir(); err == nil {
+		t.Fatalf("expected error, got %q", dir)
 	}
 }
 
 func TestAuthDirEnv(t *testing.T) {
 	t.Setenv("GLD_AUTH_DIR", "/x/y")
-	if d, err := authDir(); err != nil || d != "/x/y" {
-		t.Fatal(d, err)
+	if dir, err := authDir(); err != nil || dir != "/x/y" {
+		t.Fatal(dir, err)
 	}
 	t.Setenv("GLD_AUTH_DIR", "")
 	base, _ := os.UserConfigDir()
-	if d, err := authDir(); err != nil || d != filepath.Join(base, "gld") {
-		t.Fatal(d, err)
+	if dir, err := authDir(); err != nil || dir != filepath.Join(base, "gld") {
+		t.Fatal(dir, err)
 	}
 }
 
@@ -130,8 +130,8 @@ func TestUpgradeFromSchema5(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for v := 1; v <= 5; v++ {
-		names, _ := fs.Glob(authMigrations, fmt.Sprintf("auth_migrations/%04d_*.sql", v))
+	for number := 1; number <= 5; number++ {
+		names, _ := fs.Glob(authMigrations, fmt.Sprintf("auth_migrations/%04d_*.sql", number))
 		body, _ := authMigrations.ReadFile(names[0])
 		if _, err := db.Exec(string(body)); err != nil {
 			t.Fatal(err)
@@ -142,7 +142,7 @@ func TestUpgradeFromSchema5(t *testing.T) {
 	}
 	tr := &totpRow{uid: 1, nonce: []byte("n"), enc: []byte("e"), confirmed: sql.NullInt64{Int64: 5, Valid: true}}
 	s0 := &authStore{key: key}
-	for _, q := range []struct {
+	for _, record := range []struct {
 		sql  string
 		args []any
 	}{
@@ -153,66 +153,66 @@ func TestUpgradeFromSchema5(t *testing.T) {
 		{`INSERT INTO totp(user_id,secret_enc,nonce,confirmed_at,last_step,sig) VALUES(1,?,?,5,0,?)`, []any{tr.enc, tr.nonce, s0.totpSig(tr)}},
 		{`INSERT INTO sessions(id_hash,user_id,created_at,last_seen_at,expires_at,mfa_at) VALUES(x'01',1,0,0,99999999999,0)`, nil},
 	} {
-		if _, err := db.Exec(q.sql, q.args...); err != nil {
-			t.Fatal(q.sql, err)
+		if _, err := db.Exec(record.sql, record.args...); err != nil {
+			t.Fatal(record.sql, err)
 		}
 	}
 	db.Close()
 	os.Chmod(filepath.Join(dir, "auth.db"), 0o600)
 
-	s, err := openAuthStore()
+	localAuthStore, err := openAuthStore()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.db.Close()
-	var n int
-	s.db.QueryRow(`SELECT COUNT(*) FROM sessions`).Scan(&n)
-	if n != 0 {
+	defer localAuthStore.db.Close()
+	var count int
+	localAuthStore.db.QueryRow(`SELECT COUNT(*) FROM sessions`).Scan(&count)
+	if count != 0 {
 		t.Fatal("sessions conservées")
 	}
 	for id, want := range map[int64]bool{1: true, 2: false} {
-		u, err := s.userByID(s.db, id)
-		if err != nil || u.MFAEnrolled != want {
-			t.Fatalf("compte %d : %+v %v", id, u, err)
+		user, err := localAuthStore.userByID(localAuthStore.db, id)
+		if err != nil || user.MFAEnrolled != want {
+			t.Fatalf("compte %d : %+v %v", id, user, err)
 		}
 	}
-	if _, err := s.userByID(s.db, 3); !errors.Is(err, errTamper) {
+	if _, err := localAuthStore.userByID(localAuthStore.db, 3); !errors.Is(err, errTamper) {
 		t.Fatalf("ligne altérée re-signée : %v", err)
 	}
-	if on, err := s.AccountsOn(); !on || err != nil {
+	if on, err := localAuthStore.AccountsOn(); !on || err != nil {
 		t.Fatalf("marqueur : %v %v", on, err)
 	}
-	var v int
-	s.db.QueryRow(`SELECT MAX(version) FROM schema_version`).Scan(&v)
+	var localNumber int
+	localAuthStore.db.QueryRow(`SELECT MAX(version) FROM schema_version`).Scan(&localNumber)
 	entries, _ := authMigrations.ReadDir("auth_migrations")
-	if v != len(entries) {
-		t.Fatalf("version %d, voulu %d", v, len(entries))
+	if localNumber != len(entries) {
+		t.Fatalf("version %d, voulu %d", localNumber, len(entries))
 	}
 
 	// Après la mise à niveau, rien ne la rejoue : facteurs supprimés, marqueur effacé, ancienne signature remise.
-	s.db.Exec(`DELETE FROM totp WHERE user_id=1`)
-	s.db.Exec(`DELETE FROM meta WHERE key=?`, accountsKey)
-	s.db.Exec(`UPDATE users SET sig=? WHERE id=2`, oldSig(2, "b"))
-	s.db.Close()
-	s, err = openAuthStore()
+	localAuthStore.db.Exec(`DELETE FROM totp WHERE user_id=1`)
+	localAuthStore.db.Exec(`DELETE FROM meta WHERE key=?`, accountsKey)
+	localAuthStore.db.Exec(`UPDATE users SET sig=? WHERE id=2`, oldSig(2, "b"))
+	localAuthStore.db.Close()
+	localAuthStore, err = openAuthStore()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.db.Close()
-	if u, err := s.userByID(s.db, 1); err != nil || !u.MFAEnrolled {
-		t.Fatalf("bit perdu : %+v %v", u, err)
+	defer localAuthStore.db.Close()
+	if user, err := localAuthStore.userByID(localAuthStore.db, 1); err != nil || !user.MFAEnrolled {
+		t.Fatalf("bit perdu : %+v %v", user, err)
 	}
-	if _, err := s.factors(1); !errors.Is(err, errTamper) {
+	if _, err := localAuthStore.factors(1); !errors.Is(err, errTamper) {
 		t.Fatalf("facteurs supprimés : %v", err)
 	}
-	if _, err := s.userByID(s.db, 2); !errors.Is(err, errTamper) {
+	if _, err := localAuthStore.userByID(localAuthStore.db, 2); !errors.Is(err, errTamper) {
 		t.Fatalf("ancienne signature re-signée : %v", err)
 	}
-	if _, err := s.AccountsOn(); !errors.Is(err, errTamper) {
+	if _, err := localAuthStore.AccountsOn(); !errors.Is(err, errTamper) {
 		t.Fatalf("marqueur effacé : %v", err)
 	}
-	s.db.Exec(`DELETE FROM users`)
-	if _, err := s.AccountsOn(); !errors.Is(err, errTamper) {
+	localAuthStore.db.Exec(`DELETE FROM users`)
+	if _, err := localAuthStore.AccountsOn(); !errors.Is(err, errTamper) {
 		t.Fatalf("marqueur et comptes effacés : %v", err)
 	}
 }
@@ -230,40 +230,40 @@ func TestUpgradeEmptyLegacy(t *testing.T) {
 	key := bytes.Repeat([]byte{0xcd}, 32)
 	db.Exec(`INSERT INTO meta(key,value) VALUES('key_witness',?)`, seal(key, []byte(witnessPlain)))
 	db.Close()
-	s, err := openAuthStore()
+	authStore, err := openAuthStore()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.db.Close()
-	if on, err := s.AccountsOn(); on || err != nil {
+	defer authStore.db.Close()
+	if on, err := authStore.AccountsOn(); on || err != nil {
 		t.Fatalf("base antérieure vide : %v %v", on, err)
 	}
-	if _, err := s.AddUser("alice", testPw, true); err != nil {
+	if _, err := authStore.AddUser("alice", testPw, true); err != nil {
 		t.Fatal(err)
 	}
-	if on, err := s.AccountsOn(); !on || err != nil {
+	if on, err := authStore.AccountsOn(); !on || err != nil {
 		t.Fatalf("après un compte : %v %v", on, err)
 	}
 }
 
 func TestAccountsMarker(t *testing.T) {
-	s := testStore(t)
-	if on, err := s.AccountsOn(); on || err != nil {
+	authStore := testStore(t)
+	if on, err := authStore.AccountsOn(); on || err != nil {
 		t.Fatalf("base neuve : %v %v", on, err)
 	}
-	if _, err := s.AddUser("alice", testPw, true); err != nil {
+	if _, err := authStore.AddUser("alice", testPw, true); err != nil {
 		t.Fatal(err)
 	}
-	if on, err := s.AccountsOn(); !on || err != nil {
+	if on, err := authStore.AccountsOn(); !on || err != nil {
 		t.Fatalf("après un compte : %v %v", on, err)
 	}
-	s.db.Exec(`UPDATE meta SET value=x'01' WHERE key=?`, accountsKey)
-	if _, err := s.AccountsOn(); !errors.Is(err, errTamper) {
+	authStore.db.Exec(`UPDATE meta SET value=x'01' WHERE key=?`, accountsKey)
+	if _, err := authStore.AccountsOn(); !errors.Is(err, errTamper) {
 		t.Fatalf("marqueur altéré : %v", err)
 	}
-	s.db.Exec(`DELETE FROM meta WHERE key=?`, accountsKey)
-	s.db.Exec(`DELETE FROM users`)
-	if _, err := s.AccountsOn(); !errors.Is(err, errTamper) {
+	authStore.db.Exec(`DELETE FROM meta WHERE key=?`, accountsKey)
+	authStore.db.Exec(`DELETE FROM users`)
+	if _, err := authStore.AccountsOn(); !errors.Is(err, errTamper) {
 		t.Fatalf("marqueur et comptes supprimés : %v", err)
 	}
 }

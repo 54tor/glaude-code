@@ -10,22 +10,22 @@ import (
 )
 
 func lowArgon(t *testing.T) {
-	m, tt, p := argonMemKiB, argonTime, argonThreads
+	total, tt, octet := argonMemKiB, argonTime, argonThreads
 	argonMemKiB, argonTime, argonThreads = 1024, 1, 1
-	t.Cleanup(func() { argonMemKiB, argonTime, argonThreads = m, tt, p })
+	t.Cleanup(func() { argonMemKiB, argonTime, argonThreads = total, tt, octet })
 }
 
 func TestPasswordRoundTrip(t *testing.T) {
 	lowArgon(t)
-	h, err := hashPassword("correct horse battery")
-	if err != nil || !strings.HasPrefix(h, "$argon2id$v=19$m=1024,t=1,p=1$") {
-		t.Fatalf("hash=%q err=%v", h, err)
+	header, err := hashPassword("correct horse battery")
+	if err != nil || !strings.HasPrefix(header, "$argon2id$v=19$m=1024,t=1,p=1$") {
+		t.Fatalf("hash=%q err=%v", header, err)
 	}
-	if !checkPassword(h, "correct horse battery") || checkPassword(h, "wrong horse battery") {
+	if !checkPassword(header, "correct horse battery") || checkPassword(header, "wrong horse battery") {
 		t.Fatal("round trip")
 	}
 	argonMemKiB, argonTime = 2048, 2
-	if !checkPassword(h, "correct horse battery") {
+	if !checkPassword(header, "correct horse battery") {
 		t.Fatal("params must come from the hash")
 	}
 	if checkPassword("garbage", "x") || checkPassword("$argon2id$v=19$m=0,t=1,p=1$AA$AA", "x") {
@@ -46,9 +46,9 @@ func TestPasswordRules(t *testing.T) {
 		{"éééééééééééé", nil},
 		{"twelve chars", nil},
 	}
-	for _, c := range cases {
-		if err := validPassword(c.pw); !errors.Is(err, c.err) {
-			t.Errorf("%q: got %v want %v", c.pw, err, c.err)
+	for _, record := range cases {
+		if err := validPassword(record.pw); !errors.Is(err, record.err) {
+			t.Errorf("%q: got %v want %v", record.pw, err, record.err)
 		}
 	}
 }
@@ -65,19 +65,19 @@ func TestNormName(t *testing.T) {
 func TestDummyCheckTiming(t *testing.T) {
 	lowArgon(t)
 	argonMemKiB, argonTime = 16*1024, 2
-	h, _ := hashPassword("correct horse battery")
-	best := func(f func()) time.Duration {
-		d := time.Hour
-		for i := 0; i < 3; i++ {
-			s := time.Now()
-			f()
-			if e := time.Since(s); e < d {
-				d = e
+	header, _ := hashPassword("correct horse battery")
+	best := func(callback func()) time.Duration {
+		duration := time.Hour
+		for index := 0; index < 3; index++ {
+			moment := time.Now()
+			callback()
+			if localDuration := time.Since(moment); localDuration < duration {
+				duration = localDuration
 			}
 		}
-		return d
+		return duration
 	}
-	real := best(func() { checkPassword(h, "wrong horse battery") })
+	real := best(func() { checkPassword(header, "wrong horse battery") })
 	dummy := best(dummyCheck)
 	if dummy*3 < real || real*3 < dummy {
 		t.Fatalf("real=%v dummy=%v", real, dummy)
@@ -88,7 +88,9 @@ func TestPasswordHashBounds(t *testing.T) {
 	lowArgon(t)
 	good, _ := hashPassword("correct horse battery")
 	salt, key := "AAAAAAAAAAAAAAAAAAAAAA", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-	mk := func(ver, params, s, k string) string { return "$argon2id$" + ver + "$" + params + "$" + s + "$" + k }
+	mk := func(ver, params, text, key string) string {
+		return "$argon2id$" + ver + "$" + params + "$" + text + "$" + key
+	}
 	bad := []string{
 		mk("v=19", "m=4294967295,t=1,p=1", salt, key),
 		mk("v=19", "m=1024,t=4294967295,p=1", salt, key),
@@ -110,13 +112,13 @@ func TestPasswordHashBounds(t *testing.T) {
 		mk("v=19garbage", "m=1024,t=1,p=1", salt, key),
 	}
 	start := time.Now()
-	for _, h := range bad {
-		if checkPassword(h, "x") {
-			t.Errorf("accepted %q", h)
+	for _, header := range bad {
+		if checkPassword(header, "x") {
+			t.Errorf("accepted %q", header)
 		}
 	}
-	if d := time.Since(start); d > time.Second {
-		t.Fatalf("too slow: %v", d)
+	if duration := time.Since(start); duration > time.Second {
+		t.Fatalf("too slow: %v", duration)
 	}
 	if !checkPassword(good, "correct horse battery") {
 		t.Fatal("good hash rejected")
@@ -126,31 +128,31 @@ func TestPasswordHashBounds(t *testing.T) {
 func TestArgonConcurrencyCapped(t *testing.T) {
 	var cur, peak atomic.Int64
 	old := argonIDKey
-	argonIDKey = func(pw, salt []byte, tm, m uint32, p uint8, l uint32) []byte {
-		n := cur.Add(1)
-		for p := peak.Load(); n > p && !peak.CompareAndSwap(p, n); p = peak.Load() {
+	argonIDKey = func(pw, salt []byte, tm, total uint32, octet uint8, length uint32) []byte {
+		count := cur.Add(1)
+		for port := peak.Load(); count > port && !peak.CompareAndSwap(port, count); port = peak.Load() {
 		}
 		time.Sleep(20 * time.Millisecond)
 		cur.Add(-1)
-		return make([]byte, l)
+		return make([]byte, length)
 	}
 	t.Cleanup(func() { argonIDKey = old })
-	h, _ := hashPassword("x")
+	header, _ := hashPassword("x")
 	var wg sync.WaitGroup
-	for i := range 16 {
+	for index := range 16 {
 		wg.Go(func() {
-			switch i % 3 {
+			switch index % 3 {
 			case 0:
 				hashPassword("x")
 			case 1:
-				checkPassword(h, "x")
+				checkPassword(header, "x")
 			default:
 				dummyCheck()
 			}
 		})
 	}
 	wg.Wait()
-	if p := peak.Load(); p > int64(cap(argonSem)) || p < 2 {
-		t.Fatalf("calculs simultanés : %d", p)
+	if port := peak.Load(); port > int64(cap(argonSem)) || port < 2 {
+		t.Fatalf("calculs simultanés : %d", port)
 	}
 }
