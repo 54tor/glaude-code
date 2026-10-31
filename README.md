@@ -254,6 +254,19 @@ GLD_WEB_TOKEN=$(openssl rand -hex 24) gld
 
 `gld --token=<jeton>` fait la même chose, mais l'argument est visible de tous dans `ps` : préférez la variable sur une machine partagée.
 
+## Restreindre l'explorateur de dossiers
+
+L'explorateur de dossiers (nouvelle session, « Réassigner », « Déplacer ») part de votre dossier personnel et peut parcourir tout
+le disque. `--locations` (ou `GLD_WEB_LOCATIONS`) le limite à une liste de racines séparées par des virgules, chemins absolus ou `~` :
+
+```sh
+gld --locations ~/Projets,/mnt/data
+```
+
+L'explorateur s'ouvre sur la première racine et ne remonte pas au-dessus d'elle. Les liens symboliques sont résolus avant le contrôle, et un chemin
+demandé hors racines (lien sortant compris) ramène à la première. Sans l'option, tout est permis. Cela borne l'explorateur, pas
+les droits de Claude Code ni le reste de l'interface.
+
 ## Multi-utilisateur (optionnel)
 
 Par défaut, un seul jeton donne accès à tout. Pour que plusieurs personnes se connectent chacune avec leur compte, créez
