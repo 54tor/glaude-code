@@ -508,7 +508,12 @@ func guestServe(mux *http.ServeMux, share Share, invitation Invite, secret, hand
 				}
 			}
 		}
-		mux.ServeHTTP(guestRedactedWriter(&noStoreWriter{ResponseWriter: responseWriter}, redactor), forwarded)
+		guestWriter := guestRedactedWriter(&noStoreWriter{ResponseWriter: responseWriter}, redactor)
+		if pattern == "GET /v1/sessions/{id}/live" {
+			serveGuestLive(mux, guestWriter, forwarded)
+			return
+		}
+		mux.ServeHTTP(guestWriter, forwarded)
 	})
 }
 
