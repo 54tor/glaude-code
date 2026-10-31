@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -63,7 +64,8 @@ func newPathRedactor(home, projectDir, alias string, extraTerms ...string) *path
 		}
 	}
 	if len(nameTerms) > 0 {
-		redactor.account = regexp.MustCompile("(?i)" + wordBoundaryBefore + "(?:" + strings.Join(nameTerms, "|") + ")" + wordBoundaryAfter)
+		sort.Slice(nameTerms, func(first, second int) bool { return len(nameTerms[first]) > len(nameTerms[second]) })
+		redactor.account = regexp.MustCompile("(?i)(?:" + strings.Join(nameTerms, "|") + ")")
 	}
 	return redactor
 }
@@ -94,10 +96,32 @@ func (redactor *pathRedactor) apply(content []byte) []byte {
 	content = redactor.encodedHome.ReplaceAll(content, []byte("-home-"+redactor.alias+"$1"))
 	content = hostPathRe.ReplaceAllFunc(content, hideHostPath)
 	if redactor.account != nil {
-		replacement := []byte("${1}" + redactor.alias + "${2}")
-		content = redactor.account.ReplaceAll(redactor.account.ReplaceAll(content, replacement), replacement)
+		content = redactor.replaceWords(content)
 	}
 	return content
+}
+
+func isWordByte(character byte) bool {
+	return character == '_' || character >= '0' && character <= '9' || character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z'
+}
+
+// replaceWords remplace les termes d'identité entiers : un terme collé à une lettre ou un chiffre (bobbyx) reste intact.
+func (redactor *pathRedactor) replaceWords(content []byte) []byte {
+	var masked []byte
+	copiedUntil := 0
+	for _, bounds := range redactor.account.FindAllIndex(content, -1) {
+		startsWord := bounds[0] == 0 || !isWordByte(content[bounds[0]-1])
+		endsWord := bounds[1] == len(content) || !isWordByte(content[bounds[1]])
+		if !startsWord || !endsWord {
+			continue
+		}
+		masked = append(append(masked, content[copiedUntil:bounds[0]]...), redactor.alias...)
+		copiedUntil = bounds[1]
+	}
+	if masked == nil {
+		return content
+	}
+	return append(masked, content[copiedUntil:]...)
 }
 
 func (redactor *pathRedactor) applyString(text string) string {
