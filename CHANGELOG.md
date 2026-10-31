@@ -5,6 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 ## [Non publié]
 
 ### Ajouté
+- Sessions invité : le dossier personnel du compte (`/home/nom`, `-home-nom`) est masqué dans toutes les réponses du serveur à un invité.
 - Session ouverte : bouton « Arrière-plan » (touche Ctrl+B envoyée à tmux) qui passe la tâche en cours en arrière-plan pendant que Claude travaille.
 
 ### Modifié
