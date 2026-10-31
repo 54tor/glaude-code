@@ -24,12 +24,12 @@ func cliEnv(t *testing.T) (cfg, proj, dir string) {
 }
 
 func session(t *testing.T, dir, id, title, prompt string, age time.Duration) {
-	var b strings.Builder
+	var builder strings.Builder
 	if title != "" {
-		b.WriteString(`{"type":"custom-title","customTitle":"` + title + `","sessionId":"` + id + `"}` + "\n")
+		builder.WriteString(`{"type":"custom-title","customTitle":"` + title + `","sessionId":"` + id + `"}` + "\n")
 	}
-	b.WriteString(`{"type":"user","cwd":"/p","message":{"content":"` + prompt + `"}}` + "\n")
-	put(t, filepath.Join(dir, id+".jsonl"), b.String(), age)
+	builder.WriteString(`{"type":"user","cwd":"/p","message":{"content":"` + prompt + `"}}` + "\n")
+	put(t, filepath.Join(dir, id+".jsonl"), builder.String(), age)
 }
 
 func run(t *testing.T, fn cliFunc, args ...string) (string, error) {
@@ -41,9 +41,9 @@ func run(t *testing.T, fn cliFunc, args ...string) (string, error) {
 
 func contains(t *testing.T, got string, want ...string) {
 	t.Helper()
-	for _, w := range want {
-		if !strings.Contains(got, w) {
-			t.Errorf("manque %q dans :\n%s", w, got)
+	for _, word := range want {
+		if !strings.Contains(got, word) {
+			t.Errorf("manque %q dans :\n%s", word, got)
 		}
 	}
 }
@@ -92,7 +92,10 @@ func TestMatin(t *testing.T) {
 	}
 	var tabs []tab
 	real := openTab
-	openTab = func(l, title string, s tabSpec) error { tabs = append(tabs, tab{l, title, s}); return nil }
+	openTab = func(line, title string, localTabSpec tabSpec) error {
+		tabs = append(tabs, tab{line, title, localTabSpec})
+		return nil
+	}
 	t.Cleanup(func() { openTab = real })
 
 	out, err := run(t, cliMatin, "-n", "--min", "0", proj)
@@ -154,8 +157,8 @@ func TestMatin(t *testing.T) {
 	t.Setenv("GLD_MATIN_EXCLURE", "Alpha")
 	tabs = nil
 	run(t, cliMatin, "--term", "tmux", "--min", "0", proj)
-	for _, x := range tabs {
-		if x.title == "Alpha" {
+	for _, tab := range tabs {
+		if tab.title == "Alpha" {
 			t.Error("titre exclu rouvert")
 		}
 	}
@@ -165,15 +168,18 @@ func TestMatinResume(t *testing.T) {
 	cfg, proj, dir := cliEnv(t)
 	session(t, dir, id1, "Alpha", "a", time.Hour)
 	session(t, dir, id2, "Bêta", "b", time.Hour)
-	b, _ := json.Marshal([]TabSave{
+	data, _ := json.Marshal([]TabSave{
 		{Name: "", Auto: true, At: "2026-10-21T09:00:00.123Z", Sessions: []TabSession{{ID: id1, Project: proj}}},
 		{Name: "soir", At: "2026-10-20T18:00:00Z", Sessions: []TabSession{{ID: id2, Project: proj}}},
 		{Name: "coupee", At: "2026-10-19T18:00:00Z", Sessions: []TabSession{{ID: id2, Project: proj, Busy: true}}},
 	})
-	os.WriteFile(filepath.Join(cfg, "gld-web-tabs.json"), b, 0o644)
+	os.WriteFile(filepath.Join(cfg, "gld-web-tabs.json"), data, 0o644)
 	var ids []string
 	real := openTab
-	openTab = func(l, title string, s tabSpec) error { ids = append(ids, s.Args[len(s.Args)-1]); return nil }
+	openTab = func(line, title string, localTabSpec tabSpec) error {
+		ids = append(ids, localTabSpec.Args[len(localTabSpec.Args)-1])
+		return nil
+	}
 	t.Cleanup(func() { openTab = real })
 
 	out, err := run(t, cliMatin, "--term", "tmux", "--resume")
@@ -186,7 +192,7 @@ func TestMatinResume(t *testing.T) {
 		t.Fatalf("%v %v", err, ids)
 	}
 	var args []string
-	openTab = func(l, title string, s tabSpec) error { args = s.Args; return nil }
+	openTab = func(line, title string, localTabSpec tabSpec) error { args = localTabSpec.Args; return nil }
 	if _, err = run(t, cliMatin, "--term", "tmux", "--resume", "coupee"); err != nil || !slices.Contains(args, id2) || !slices.Contains(args, "continue") {
 		t.Fatalf("session coupée en plein tour : pas de message de reprise : %v %v", err, args)
 	}
@@ -206,17 +212,17 @@ func TestLauncherCmd(t *testing.T) {
 		"terminator":     `terminator --new-tab -T T -e '/b/gld' '_run' '/tmp/x it'\''s.json'`,
 	}
 	for name, want := range cases {
-		c, err := launcherCmd(name, "T", argv)
-		if err != nil || strings.Join(c.Args, " ") != want {
-			t.Errorf("%s : %v %q", name, err, strings.Join(c.Args, " "))
+		cmd, err := launcherCmd(name, "T", argv)
+		if err != nil || strings.Join(cmd.Args, " ") != want {
+			t.Errorf("%s : %v %q", name, err, strings.Join(cmd.Args, " "))
 		}
 	}
-	if c, _ := launcherCmd("tmux", "x #(touch /tmp/pwn) #{a}", argv); c.Args[3] != "x ##(touch /tmp/pwn) ##{a}" {
-		t.Errorf("tmux : titre non neutralisé : %q", c.Args[3])
+	if cmd, _ := launcherCmd("tmux", "x #(touch /tmp/pwn) #{a}", argv); cmd.Args[3] != "x ##(touch /tmp/pwn) ##{a}" {
+		t.Errorf("tmux : titre non neutralisé : %q", cmd.Args[3])
 	}
 	t.Setenv("WSL_DISTRO_NAME", "Ubuntu")
-	c, _ := launcherCmd("wt", "a;b\"c", argv)
-	if got := strings.Join(c.Args, " "); !strings.HasPrefix(got, "wt.exe -w 0 new-tab --title a b c wsl.exe -d Ubuntu -- /b/gld _run") {
+	localCmd, _ := launcherCmd("wt", "a;b\"c", argv)
+	if got := strings.Join(localCmd.Args, " "); !strings.HasPrefix(got, "wt.exe -w 0 new-tab --title a b c wsl.exe -d Ubuntu -- /b/gld _run") {
 		t.Errorf("wt : %q", got)
 	}
 	if _, err := launcherCmd("inconnu", "T", argv); err == nil {
@@ -232,10 +238,10 @@ func TestRunTab(t *testing.T) {
 	if code := runTab(missing); code != 1 { // stdin vide : « Entrée pour fermer » rend aussitôt la main
 		t.Errorf("fichier absent : code %d", code)
 	}
-	f := filepath.Join(t.TempDir(), "s.json")
-	os.WriteFile(f, []byte(`{"cwd":"/nexiste/pas","args":[]}`), 0o600)
-	if code := runTab(f); code != 1 || exists(f) {
-		t.Errorf("dossier absent : code %d, fichier gardé=%v", code, exists(f))
+	filePath := filepath.Join(t.TempDir(), "s.json")
+	os.WriteFile(filePath, []byte(`{"cwd":"/nexiste/pas","args":[]}`), 0o600)
+	if code := runTab(filePath); code != 1 || exists(filePath) {
+		t.Errorf("dossier absent : code %d, fichier gardé=%v", code, exists(filePath))
 	}
 }
 
@@ -263,32 +269,32 @@ func TestAliasDeProjet(t *testing.T) {
 	canon := filepath.Join(cfg, "projects", "-canon")
 	session(t, canon, id1, "Alpha", "x", time.Hour)
 	put(t, filepath.Join(dir, ".session-aliases"), canon+"\n", time.Hour)
-	p, err := resolveProject(proj)
-	if err != nil || p.Transcripts != canon || p.Alias != canon {
-		t.Fatalf("%+v %v", p, err)
+	project, err := resolveProject(proj)
+	if err != nil || project.Transcripts != canon || project.Alias != canon {
+		t.Fatalf("%+v %v", project, err)
 	}
 }
 
 func TestLanceurEmulateurTmux(t *testing.T) {
-	c, err := launcherCmd("konsole+tmux", "T #(x)", []string{"/b/gld", "_run", "/tmp/a b.json"})
+	cmd, err := launcherCmd("konsole+tmux", "T #(x)", []string{"/b/gld", "_run", "/tmp/a b.json"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := `konsole --new-tab -p tabtitle=T #(x) -e tmux new-session -n T ##(x) '/b/gld' '_run' '/tmp/a b.json' ; set-option set-titles on ; set-option set-titles-string #T`
-	if got := strings.Join(c.Args, " "); got != want {
+	if got := strings.Join(cmd.Args, " "); got != want {
 		t.Errorf("\n%s\n%s", got, want)
 	}
 }
 
 func TestLanceurTerminatorTmux(t *testing.T) {
-	c, err := launcherCmd("terminator-tmux", "Mon #(x) titre", []string{"/bin/gld", "_run", "/tmp/a b.json"})
+	cmd, err := launcherCmd("terminator-tmux", "Mon #(x) titre", []string{"/bin/gld", "_run", "/tmp/a b.json"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := c.Args[len(c.Args)-1]
+	entry := cmd.Args[len(cmd.Args)-1]
 	want := `tmux new-session -n 'Mon ##(x) titre' ''\''/bin/gld'\'' '\''_run'\'' '\''/tmp/a b.json'\''' \; set-option set-titles on \; set-option set-titles-string '#T'`
-	if e != want {
-		t.Errorf("\n%s\n%s", e, want)
+	if entry != want {
+		t.Errorf("\n%s\n%s", entry, want)
 	}
 }
 
@@ -302,8 +308,8 @@ func TestSauvegardeTabsIgnoreLesEquipiers(t *testing.T) {
 	if got := liveTabs(); len(got) != 1 || got[0].ID != id1 {
 		t.Fatalf("liveTabs : %v", got)
 	}
-	d := filepath.Base(dir)
-	old := `[{"name":"","sessions":[{"id":"` + id1 + `","dir":"` + d + `","title":"Alpha"},{"id":"` + id2 + `","dir":"` + d + `","title":"impl-task-1"}]}]`
+	localDir := filepath.Base(dir)
+	old := `[{"name":"","sessions":[{"id":"` + id1 + `","dir":"` + localDir + `","title":"Alpha"},{"id":"` + id2 + `","dir":"` + localDir + `","title":"impl-task-1"}]}]`
 	got, err := readTabs([]byte(old))
 	if err != nil || len(got) != 1 || len(got[0].Sessions) != 1 || got[0].Sessions[0].ID != id1 {
 		t.Fatalf("readTabs : %v %v", got, err)

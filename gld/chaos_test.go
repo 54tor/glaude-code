@@ -18,7 +18,7 @@ func TestPanneClaudeBloque(t *testing.T) {
 	if err != nil {
 		t.Skip("pas de sleep")
 	}
-	h, cfg, _ := web(t)
+	handler, cfg, _ := web(t)
 	home, _ := os.UserHomeDir()
 	// sleep lancé en fils (pas exec) : il garde la sortie ouverte après la mort du shell, comme un petit-enfant de claude
 	os.WriteFile(filepath.Join(home, ".local", "bin", "claude"), []byte("#!/bin/sh\n"+sleep+" 30\n"), 0o755)
@@ -31,14 +31,14 @@ func TestPanneClaudeBloque(t *testing.T) {
 	t.Cleanup(func() { agentsTTL = oldTTL })
 
 	t0 := time.Now()
-	_, m, _ := call(t, h, "GET", "/v1/state", "")
-	if d := time.Since(t0); d > 4*time.Second {
-		t.Fatalf("/v1/state a attendu %v", d)
+	_, lookup, _ := call(t, handler, "GET", "/v1/state", "")
+	if duration := time.Since(t0); duration > 4*time.Second {
+		t.Fatalf("/v1/state a attendu %v", duration)
 	}
-	if len(m["live"].([]any)) != 0 || len(m["groups"].([]any)) != 1 {
-		t.Fatalf("/v1/state : %v", m)
+	if len(lookup["live"].([]any)) != 0 || len(lookup["groups"].([]any)) != 1 {
+		t.Fatalf("/v1/state : %v", lookup)
 	}
-	v1err(t, h, "DELETE", "/v1/sessions?item=-p:"+id1, "", 500, "action refusée")
+	v1err(t, handler, "DELETE", "/v1/sessions?item=-p:"+id1, "", 500, "action refusée")
 	if !exists(filepath.Join(cfg, "projects", "-p", id1+".jsonl")) {
 		t.Fatal("session supprimée sans savoir si elle était ouverte")
 	}
@@ -50,18 +50,18 @@ func TestPanneTmuxBloque(t *testing.T) {
 	if err != nil {
 		t.Skip("pas de sleep")
 	}
-	h, _, _ := web(t)
+	handler, _, _ := web(t)
 	bin := t.TempDir()
 	os.WriteFile(filepath.Join(bin, "tmux"), []byte("#!/bin/sh\n"+sleep+" 30\n"), 0o755)
 	t.Setenv("PATH", bin)
 	old := cmdTimeout
 	cmdTimeout = 300 * time.Millisecond
 	t.Cleanup(func() { cmdTimeout = old })
-	for _, p := range []string{"/v1/trust/pending", "/v1/sessions/send-info"} {
+	for _, path := range []string{"/v1/trust/pending", "/v1/sessions/send-info"} {
 		t0 := time.Now()
-		code, _, raw := call(t, h, "GET", p, "")
-		if d := time.Since(t0); code != 200 || d > 4*time.Second {
-			t.Fatalf("%s : %d en %v %s", p, code, d, raw)
+		code, _, raw := call(t, handler, "GET", path, "")
+		if duration := time.Since(t0); code != 200 || duration > 4*time.Second {
+			t.Fatalf("%s : %d en %v %s", path, code, duration, raw)
 		}
 	}
 }
@@ -72,7 +72,7 @@ func TestPanneGitBloque(t *testing.T) {
 	if err != nil {
 		t.Skip("pas de sleep")
 	}
-	h, _, proj := web(t)
+	handler, _, proj := web(t)
 	bin := t.TempDir()
 	os.WriteFile(filepath.Join(bin, "git"), []byte("#!/bin/sh\n"+sleep+" 30\n"), 0o755)
 	t.Setenv("PATH", bin)
@@ -80,9 +80,9 @@ func TestPanneGitBloque(t *testing.T) {
 	cmdTimeout = 300 * time.Millisecond
 	t.Cleanup(func() { cmdTimeout = old })
 	t0 := time.Now()
-	_, m, raw := call(t, h, "GET", "/v1/git/remotes?dir="+proj, "")
-	if d := time.Since(t0); d > 4*time.Second || len(m["remotes"].([]any)) != 0 {
-		t.Fatalf("/v1/git/remotes : %v %s", d, raw)
+	_, lookup, raw := call(t, handler, "GET", "/v1/git/remotes?dir="+proj, "")
+	if duration := time.Since(t0); duration > 4*time.Second || len(lookup["remotes"].([]any)) != 0 {
+		t.Fatalf("/v1/git/remotes : %v %s", duration, raw)
 	}
 }
 
@@ -93,17 +93,17 @@ func TestPanneEcritureReglages(t *testing.T) {
 		t.Skip("root ignore les droits")
 	}
 	_, cfg, _ := web(t)
-	p := filepath.Join(cfg, "settings.json")
+	path := filepath.Join(cfg, "settings.json")
 	orig := "{\n  \"model\": \"opus\"\n}\n"
-	os.WriteFile(p, []byte(orig), 0o600)
+	os.WriteFile(path, []byte(orig), 0o600)
 	os.Chmod(cfg, 0o500)
 	t.Cleanup(func() { os.Chmod(cfg, 0o755) })
 	if _, _, err := configEdit(CfgEdit{File: "u", Op: "set", Path: []string{"model"}, Value: "sonnet"}); err == nil {
 		t.Fatal("écriture dans un dossier en lecture seule acceptée")
 	}
 	os.Chmod(cfg, 0o755)
-	if b, _ := os.ReadFile(p); string(b) != orig {
-		t.Fatalf("original modifié : %q", b)
+	if data, _ := os.ReadFile(path); string(data) != orig {
+		t.Fatalf("original modifié : %q", data)
 	}
 	if left, _ := filepath.Glob(filepath.Join(cfg, ".gld-web-*.tmp")); len(left) != 0 {
 		t.Fatalf("temporaires restés : %v", left)
@@ -122,14 +122,14 @@ func TestEnTetesAuCompteGouttes(t *testing.T) {
 	srv := newServer("", http.NotFoundHandler())
 	go srv.Serve(ln)
 	t.Cleanup(func() { srv.Close() })
-	c, err := net.Dial("tcp", ln.Addr().String())
+	conn, err := net.Dial("tcp", ln.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer c.Close()
-	c.Write([]byte("GET / HTTP/1.1\r\nHost: x\r\n"))
-	c.SetReadDeadline(time.Now().Add(3 * time.Second))
-	if _, err := c.Read(make([]byte, 512)); err == nil || errors.Is(err, os.ErrDeadlineExceeded) {
+	defer conn.Close()
+	conn.Write([]byte("GET / HTTP/1.1\r\nHost: x\r\n"))
+	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	if _, err := conn.Read(make([]byte, 512)); err == nil || errors.Is(err, os.ErrDeadlineExceeded) {
 		t.Fatalf("connexion toujours ouverte : %v", err)
 	}
 }
