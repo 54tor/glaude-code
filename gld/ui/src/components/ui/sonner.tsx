@@ -40,7 +40,6 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }
       containerAriaLabel={t("shell.toast.notifications")}
       toastOptions={{
-        closeButtonAriaLabel: t("shell.toast.close"),
         classNames: {
           toast: "cn-toast",
         },

@@ -386,8 +386,7 @@
       "emptyAll": "Empty the trash"
     },
     "toast": {
-      "notifications": "Notifications",
-      "close": "Close the notification"
+      "notifications": "Notifications"
     },
     "images": {
       "pasted": "pasted image",

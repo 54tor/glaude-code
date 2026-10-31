@@ -59,7 +59,7 @@ createRoot(document.getElementById("root")!).render(
       <TooltipProvider>
         {isGuestPath ? <GuestApp /> : <App />}
         <TrustDialog />
-        <Toaster position="bottom-right" mobileOffset={{ bottom: "calc(16px + env(safe-area-inset-bottom))" }} richColors closeButton />
+        <Toaster position="bottom-right" mobileOffset={{ bottom: "calc(16px + env(safe-area-inset-bottom))" }} richColors />
       </TooltipProvider>
     </ThemeProvider>
   </StrictMode>
