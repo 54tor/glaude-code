@@ -132,6 +132,7 @@ func main() {
 	migrateData()
 	go autosaveTabs(2 * time.Minute)
 	go watchWaiting(20 * time.Second)
+	go titleLoop(30 * time.Second)
 	go keepWarmLoop(30 * time.Second)
 	if queueSt != nil {
 		go queueLoop(ctx, queueSt)

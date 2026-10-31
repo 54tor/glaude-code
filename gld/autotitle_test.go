@@ -37,3 +37,27 @@ func TestLastSaid(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestFlushTitlesWaitsForSessionEnd(t *testing.T) {
+	old, oldLive, oldRoot := titleRun, liveSessions, root
+	t.Cleanup(func() { titleRun, liveSessions, root = old, oldLive, oldRoot })
+	cfg := t.TempDir()
+	root = filepath.Join(cfg, "projects")
+	dir := filepath.Join(root, "-p")
+	os.MkdirAll(dir, 0o755)
+	p := filepath.Join(dir, id1+".jsonl")
+	os.WriteFile(p, []byte(`{"type":"user","message":{"content":"corrige le login"}}`+"\n"), 0o600)
+	titleRun = func(string) (string, error) { return "Bug de login", nil }
+	live := true
+	liveSessions = func() map[string]bool { return map[string]bool{id1: live} }
+	deferTitle(id1, p)
+	flushTitles()
+	if hasTitle(p) {
+		t.Fatal("titre posé sur une session ouverte")
+	}
+	live = false
+	flushTitles()
+	if !hasTitle(p) {
+		t.Fatal("titre non posé à la fin de la session")
+	}
+}

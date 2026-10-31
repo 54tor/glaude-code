@@ -7,8 +7,67 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
 	"time"
 )
+
+// pendingTitles : sessions ouvertes dont le titre automatique attend la fin du processus (id -> transcript).
+var (
+	pendingTitles   = map[string]string{}
+	pendingTitlesMu sync.Mutex
+)
+
+func deferTitle(id, path string) {
+	pendingTitlesMu.Lock()
+	pendingTitles[id] = path
+	pendingTitlesMu.Unlock()
+}
+
+// flushTitles pose le titre des sessions en attente qui ne sont plus ouvertes ; une session sans titre à ce moment-là seulement.
+func flushTitles() {
+	pendingTitlesMu.Lock()
+	todo := make(map[string]string, len(pendingTitles))
+	for id, p := range pendingTitles {
+		todo[id] = p
+	}
+	pendingTitlesMu.Unlock()
+	if len(todo) == 0 {
+		return
+	}
+	live, err := liveCheck()
+	if err != nil {
+		return
+	}
+	for id, p := range todo {
+		if live[id] {
+			continue
+		}
+		pendingTitlesMu.Lock()
+		delete(pendingTitles, id)
+		pendingTitlesMu.Unlock()
+		if hasTitle(p) {
+			continue
+		}
+		title, err := autoTitle(p)
+		if err == nil {
+			err = setTitle(p, id, title)
+		}
+		journal("auto-title %s « %s » : %v", id, title, errOr(err))
+	}
+}
+
+func titleLoop(every time.Duration) {
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-homeCtx.Done():
+			return
+		case <-t.C:
+			flushTitles()
+		}
+	}
+}
 
 func titleSystem() string { return L("prompt.titleSystem", "A1", replyLang()) }
 

@@ -470,6 +470,11 @@ func routesSessions(mux *http.ServeMux) {
 			writeErr(w, http.StatusServiceUnavailable, "unavailable", lerr.Error())
 			return
 		}
+		if live[id] && req.Auto && req.Keep {
+			deferTitle(id, p)
+			writeJSON(w, 200, map[string]any{"title": "", "message": ""})
+			return
+		}
 		if live[id] {
 			writeErr(w, http.StatusConflict, "conflict", L("srv.routes_sessions.sessionOuverteRenommeLa"))
 			return
