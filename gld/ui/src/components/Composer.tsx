@@ -273,19 +273,24 @@ export function Composer({
         {mention.list}
         {coldHint && <ColdHint {...coldHint} />}
         {extra && <div className="flex justify-end">{extra}</div>}
-        <textarea
-          ref={fieldRef}
-          value={text}
-          onChange={(e) => (setText(e.target.value), mention.track(e.target))}
-          onKeyDown={(e) => !mention.onKey(e) && isSend(e) && (e.preventDefault(), send())}
-          onPaste={pics.onPaste}
-          onDrop={pics.onDrop}
-          placeholder={keyHint(running ? t("conversation.composer.placeholderRunning") : t("conversation.composer.placeholder"))}
-          rows={2}
-          maxLength={32000}
-          className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border border-input bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/80 disabled:opacity-60"
-          aria-label={t("conversation.composer.messageAria")}
-        />
+        <div className="relative">
+          <textarea
+            ref={fieldRef}
+            value={text}
+            onChange={(e) => (setText(e.target.value), mention.track(e.target))}
+            onKeyDown={(e) => !mention.onKey(e) && isSend(e) && (e.preventDefault(), send())}
+            onPaste={pics.onPaste}
+            onDrop={pics.onDrop}
+            placeholder={keyHint(running ? t("conversation.composer.placeholderRunning") : t("conversation.composer.placeholder"))}
+            rows={2}
+            maxLength={32000}
+            className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border border-input bg-background py-2 pr-10 pl-3 outline-none focus-visible:ring-3 focus-visible:ring-ring/80 disabled:opacity-60"
+            aria-label={t("conversation.composer.messageAria")}
+          />
+          <div className="absolute right-1.5 bottom-1.5">
+            <AttachButton onPick={pics.pick} disabled={running} />
+          </div>
+        </div>
         <ImageChips images={pics.images} busy={pics.busy} onRemove={pics.remove} />
         {queue.length > 0 && (
           <ul className="space-y-1 text-xs" aria-label={t("conversation.composer.queueAria")}>
@@ -311,7 +316,6 @@ export function Composer({
           <ModelPicker value={choice} onChange={setChoice} disabled={running} size="sm" />
           {turn?.cost ? <span className="text-muted-foreground">{t("conversation.composer.cost", { cost: turn.cost.toFixed(2) })}</span> : null}
           <span className="ml-auto max-md:hidden" />
-          <AttachButton onPick={pics.pick} disabled={running} />
           {running ? (
             <Button size="sm" variant="outline" onClick={stop}>
               <Square /> {t("conversation.composer.stop")}
@@ -461,29 +465,34 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
           </ul>
         )}
         {mention.list}
-        <textarea
-          ref={fieldRef}
-          value={text}
-          onChange={(e) => (setText(e.target.value), setSel(0), mention.track(e.target))}
-          onKeyDown={(e) => {
-            if (mention.onKey(e)) return
-            if (!sugg.length) return isSend(e) ? (e.preventDefault(), void send()) : undefined
-            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-              e.preventDefault()
-              setSel((i) => (i + (e.key === "ArrowDown" ? 1 : sugg.length - 1)) % sugg.length)
-            } else if (e.key === "Tab" || e.key === "Enter") {
-              e.preventDefault()
-              setText(sugg[sel % sugg.length][0] + " ")
-            }
-          }}
-          onPaste={pics.onPaste}
-          onDrop={pics.onDrop}
-          placeholder={keyHint(t("conversation.composer.sessionPlaceholder"))}
-          rows={2}
-          maxLength={32000}
-          className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border border-input bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/80"
-          aria-label={t("conversation.composer.sessionAria")}
-        />
+        <div className="relative">
+          <textarea
+            ref={fieldRef}
+            value={text}
+            onChange={(e) => (setText(e.target.value), setSel(0), mention.track(e.target))}
+            onKeyDown={(e) => {
+              if (mention.onKey(e)) return
+              if (!sugg.length) return isSend(e) ? (e.preventDefault(), void send()) : undefined
+              if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                e.preventDefault()
+                setSel((i) => (i + (e.key === "ArrowDown" ? 1 : sugg.length - 1)) % sugg.length)
+              } else if (e.key === "Tab" || e.key === "Enter") {
+                e.preventDefault()
+                setText(sugg[sel % sugg.length][0] + " ")
+              }
+            }}
+            onPaste={pics.onPaste}
+            onDrop={pics.onDrop}
+            placeholder={keyHint(t("conversation.composer.sessionPlaceholder"))}
+            rows={2}
+            maxLength={32000}
+            className="session-text field-sizing-content max-h-48 min-h-14 w-full resize-none rounded-lg border border-input bg-background py-2 pr-10 pl-3 outline-none focus-visible:ring-3 focus-visible:ring-ring/80"
+            aria-label={t("conversation.composer.sessionAria")}
+          />
+          <div className="absolute right-1.5 bottom-1.5">
+            <AttachButton onPick={pics.pick} />
+          </div>
+        </div>
         <ImageChips images={pics.images} busy={pics.busy} onRemove={pics.remove} />
         {queue.length > 0 && (
           <ul className="space-y-1 text-xs" aria-label={t("conversation.composer.queueAria")}>
@@ -516,7 +525,6 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
           <span className="ml-auto max-md:hidden" />
           <div className="flex items-center gap-2 max-md:w-full">
             <SlashMenu id={id} text={text} onSent={onSent} />
-            <AttachButton onPick={pics.pick} />
             {liveState.st?.thinking && (
               <Button
                 size="sm"
