@@ -10,7 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Markdown, Message } from "./Message"
 import { Tagged, isServiceMsg } from "./Tagged"
 import { stopTask } from "./LiveTasks"
-import { CacheState, KeepWarmButton } from "./KeepWarm"
+import { CacheState } from "./KeepWarm"
 import { useActions } from "./actions"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
@@ -224,7 +224,6 @@ export function LiveStats({ live: { st }, s: session, project, detail, shown, on
               <h3 className="font-medium">{t("conversation.live.cacheHeading")}</h3>
               <div className="flex flex-wrap items-center gap-3">
                 <CacheState s={session} />
-                <KeepWarmButton s={session} />
               </div>
             </section>
             <section>
