@@ -7,11 +7,11 @@ import (
 	"time"
 )
 
-func wfFixture(t *testing.T) (p, base string) {
-	d := filepath.Join(t.TempDir(), "-proj")
-	base = filepath.Join(d, "11111111-2222-3333-4444-555555555555")
-	for _, s := range []string{"workflows", "subagents/workflows/wf_run-2"} {
-		if err := os.MkdirAll(filepath.Join(base, s), 0o755); err != nil {
+func wfFixture(t *testing.T) (path, base string) {
+	dir := filepath.Join(t.TempDir(), "-proj")
+	base = filepath.Join(dir, "11111111-2222-3333-4444-555555555555")
+	for _, text := range []string{"workflows", "subagents/workflows/wf_run-2"} {
+		if err := os.MkdirAll(filepath.Join(base, text), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -19,7 +19,7 @@ func wfFixture(t *testing.T) (p, base string) {
 }
 
 func TestSessionWorkflows(t *testing.T) {
-	p, base := wfFixture(t)
+	path, base := wfFixture(t)
 	done := `{"runId":"wf_abc-123","taskId":"t1","workflowName":"audit","status":"completed","startTime":2000,"durationMs":5000,"totalTokens":900,"totalToolCalls":4,
 "script":"x","result":{"a":1},"phases":[{"title":"One","detail":"d"}],"logs":["hi"],
 "workflowProgress":[{"type":"workflow_phase","index":0,"title":"One"},{"type":"workflow_agent","label":"a1","phaseTitle":"One","state":"done","tokens":500,"toolCalls":2,"durationMs":3000,"lastToolName":"Read"},{"type":"workflow_agent","label":"a2","phaseTitle":"One","state":"done","tokens":400}]}`
@@ -27,24 +27,24 @@ func TestSessionWorkflows(t *testing.T) {
 	os.WriteFile(filepath.Join(base, "workflows", "wf_bad.json"), []byte("{oups"), 0o600)
 	os.WriteFile(filepath.Join(base, "workflows", "x..json"), []byte("{}"), 0o600)
 	ad := filepath.Join(base, "subagents/workflows/wf_run-2")
-	for _, a := range []struct{ id, phase string }{{"a1", "P"}, {"b2", "P"}} {
-		os.WriteFile(filepath.Join(ad, "agent-"+a.id+".meta.json"), []byte(`{"description":"job `+a.id+`","workflowPhase":"`+a.phase+`"}`), 0o600)
-		os.WriteFile(filepath.Join(ad, "agent-"+a.id+".jsonl"), []byte("{}"), 0o600)
+	for _, record := range []struct{ id, phase string }{{"a1", "P"}, {"b2", "P"}} {
+		os.WriteFile(filepath.Join(ad, "agent-"+record.id+".meta.json"), []byte(`{"description":"job `+record.id+`","workflowPhase":"`+record.phase+`"}`), 0o600)
+		os.WriteFile(filepath.Join(ad, "agent-"+record.id+".jsonl"), []byte("{}"), 0o600)
 	}
 	old := time.Now().Add(-time.Hour)
 	os.Chtimes(filepath.Join(ad, "agent-b2.jsonl"), old, old)
 
-	got := sessionWorkflows(p)
+	got := sessionWorkflows(path)
 	if len(got) != 2 {
 		t.Fatalf("%+v", got)
 	}
-	r := got[0] // le run en cours date d'aujourd'hui, l'autre de 1970
-	if r.RunID != "wf_run-2" || r.Status != "running" || len(r.Agents) != 2 || r.Agents[0].State != "running" || r.Agents[1].State != "done" || len(r.Phases) != 1 {
-		t.Fatalf("run en cours : %+v", r)
+	workflow := got[0] // le run en cours date d'aujourd'hui, l'autre de 1970
+	if workflow.RunID != "wf_run-2" || workflow.Status != "running" || len(workflow.Agents) != 2 || workflow.Agents[0].State != "running" || workflow.Agents[1].State != "done" || len(workflow.Phases) != 1 {
+		t.Fatalf("run en cours : %+v", workflow)
 	}
-	f := got[1]
-	if f.RunID != "wf_abc-123" || f.TaskID != "t1" || f.Name != "audit" || f.TotalTokens != 900 || len(f.Agents) != 2 || f.Agents[0].LastTool != "Read" || f.Agents[0].Phase != "One" || f.Logs[0] != "hi" {
-		t.Fatalf("run terminé : %+v", f)
+	localWorkflow := got[1]
+	if localWorkflow.RunID != "wf_abc-123" || localWorkflow.TaskID != "t1" || localWorkflow.Name != "audit" || localWorkflow.TotalTokens != 900 || len(localWorkflow.Agents) != 2 || localWorkflow.Agents[0].LastTool != "Read" || localWorkflow.Agents[0].Phase != "One" || localWorkflow.Logs[0] != "hi" {
+		t.Fatalf("run terminé : %+v", localWorkflow)
 	}
 	if _, ok := loadWorkflow(base, "../etc"); ok {
 		t.Fatal("runId invalide accepté")
@@ -69,8 +69,8 @@ func TestRunningWorkflowUsesJournal(t *testing.T) {
 {"type":"result","agentId":"a1","result":{}}
 {"type":"started","agentId":"b2"}
 `), 0o600)
-	w, ok := runningWorkflow(base, "wf_run-2")
-	if !ok || w.Status != "running" || w.Agents[0].State != "done" || w.Agents[1].State != "running" {
-		t.Fatalf("%+v", w)
+	workflow, ok := runningWorkflow(base, "wf_run-2")
+	if !ok || workflow.Status != "running" || workflow.Agents[0].State != "done" || workflow.Agents[1].State != "running" {
+		t.Fatalf("%+v", workflow)
 	}
 }
