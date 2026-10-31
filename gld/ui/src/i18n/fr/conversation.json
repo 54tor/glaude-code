@@ -65,7 +65,8 @@
       "loadOlder": "Charger les messages plus anciens",
       "empty": "Aucun message dans cette session.",
       "replying": "Claude répond…",
-      "toEndAria": "Aller à la fin de la conversation"
+      "toEndAria": "Aller à la fin de la conversation",
+      "following": "Suit la fin de la conversation"
     },
     "message": {
       "pasted_one": "Texte collé · {{count}} ligne",
@@ -94,6 +95,8 @@
       "messageAria": "Message à Claude",
       "queueAria": "Messages en file d'attente",
       "dequeue": "Retirer de la file",
+      "sendNow": "Envoyer maintenant",
+      "sendNowTitle": "Interrompt la réponse en cours (Échap) puis envoie ce message",
       "importRestored": "File pleine ou message refusé : « {{text}} » est revenu dans le brouillon",
       "guest": "Invité",
       "sendUncertain": "Envoi incertain : peut-être déjà reçu",

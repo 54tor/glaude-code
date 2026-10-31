@@ -569,7 +569,9 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
             {turn?.error && <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive">{turn.error}</p>}
           </div>
         </ScrollArea>
-        {away && (
+        {away ? (
+        ) : (
+          <span role="status" title={t("conversation.view.following")} aria-label={t("conversation.view.following")} className="absolute right-4 bottom-3 size-2.5 rounded-full bg-emerald-500 shadow-sm" />
           <Button size="sm" variant="secondary" className="absolute right-4 bottom-3 rounded-full shadow-md" onClick={toEnd} aria-label={t("conversation.view.toEndAria")}>
             <ArrowDown /> {t("conversation.view.toEnd")}
           </Button>
