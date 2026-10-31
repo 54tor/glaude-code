@@ -10,7 +10,7 @@
   "cli.main.flagPublicURL": "public address of gld, e.g. https://gld.example.org: used by the “Connect a device” QR code and WebAuthn (same as GLD_PUBLIC_URL)",
   "cli.main.flagTLSCert": "TLS certificate (PEM): gld serves HTTPS; same as GLD_WEB_TLS_CERT, goes with --tls-key",
   "cli.main.flagTLSKey": "private key of the TLS certificate (PEM); same as GLD_WEB_TLS_KEY",
-  "cli.main.flagLocations": "root folders of the folder browser, comma-separated (e.g. ~/Projets,/mnt); /tmp stays accessible; same as GLD_WEB_LOCATIONS",
+  "cli.main.flagLocations": "root folders of the folder browser, comma-separated (e.g. ~/Projets,/mnt); same as GLD_WEB_LOCATIONS",
   "cli.main.flagToken": "access token (16 characters or more; same as GLD_WEB_TOKEN, but visible in ps)",
   "cli.main.flagVersion": "print the version and exit",
   "cli.main.keyFromFile": "⚠ master key read from {{.A1}}: a file protects less than the system keyring; anyone who reads it along with the database can forge accounts and rights.",

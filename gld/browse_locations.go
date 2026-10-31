@@ -15,7 +15,6 @@ func setBrowseLocations(list string) {
 	}
 	home, _ := os.UserHomeDir()
 	candidates := strings.Split(list, ",")
-	candidates = append(candidates, os.TempDir())
 	for _, candidate := range candidates {
 		candidate = strings.TrimSpace(candidate)
 		if candidate == "~" || strings.HasPrefix(candidate, "~/") {
