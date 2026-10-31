@@ -93,19 +93,6 @@
       "dir": "Contient des changements non validés",
       "more": "et {{count}} autres"
     },
-    "term": {
-      "label": "Terminal de session",
-      "disabled": "terminal intégré désactivé (GLD_WEB_TERMINAL=1)",
-      "none": "le terminal se branche sur une session Claude ouverte dans ce dossier",
-      "pick": "Session à afficher",
-      "ended": "La session est terminée.",
-      "title": "Terminal",
-      "help": "lancez `claude` dans ce dossier",
-      "ready_one": "{{count}} session en direct",
-      "ready_other": "{{count}} sessions en direct",
-      "readyClosed_one": "{{count}} session en direct — ouvrir le terminal",
-      "readyClosed_other": "{{count}} sessions en direct — ouvrir le terminal"
-    },
     "drafts": {
       "dropped": "Brouillon de « {{name}} » abandonné : le fichier a changé sur le disque."
     },
@@ -138,12 +125,8 @@
         "fontMinus": "Réduire le texte",
         "fontReset": "Taille de texte par défaut",
         "toggleTree": "Afficher l'arborescence",
-        "toggleTerminal": "Afficher la zone terminal",
-        "toggleStatus": "Afficher la barre d'état"
-      },
-      "terminal": {
-        "toggle": "Ouvrir ou replier le terminal",
-        "focusSession": "Aller au terminal de session"
+        "toggleStatus": "Afficher la barre d'état",
+        "togglePreview": "Aperçu Markdown"
       }
     },
     "reason": {
@@ -151,13 +134,9 @@
       "readOnly": "Fichier en lecture seule",
       "noWrite": "Vous n'avez pas le droit de modifier les fichiers de ce dossier",
       "noEditor": "Aucun éditeur actif",
-      "noExec": "Le terminal demande le droit « exec »",
-      "termOff": "Terminal intégré désactivé (GLD_WEB_TERMINAL=1)",
       "nothingDirty": "Aucune modification à enregistrer",
       "noTree": "Affichez l'arborescence pour créer à la racine",
-      "termLoading": "Terminal en cours de chargement",
-      "noSessionsRead": "Liste des sessions inaccessible (droit « sessions_read » requis)",
-      "sessionsDown": "Liste des sessions indisponible"
+      "notMarkdown": "Le fichier actif n'est pas un fichier Markdown"
     },
     "toolbar": {
       "editor": "Actions de l'éditeur",
@@ -190,14 +169,12 @@
       "find": "Rechercher",
       "view": "Affichage",
       "goto": "Aller à",
-      "terminal": "Terminal",
       "key": {
         "file": "f",
         "edit": "e",
         "find": "r",
         "view": "a",
-        "goto": "l",
-        "terminal": "t"
+        "goto": "l"
       }
     },
     "status": {

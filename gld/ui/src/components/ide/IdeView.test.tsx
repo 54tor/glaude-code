@@ -17,9 +17,6 @@ const handles = vi.hoisted(() => {
   }
   return { all, of }
 })
-vi.mock("../FullTerminal", () => ({
-  default: ({ id, takeHand }: { id: string; takeHand?: boolean }) => <div data-testid="term" data-take={String(takeHand)}>{id}</div>,
-}))
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn() }))
 vi.mock("sonner", async (orig) => ({ ...(await orig<typeof import("sonner")>()), toast }))
 
@@ -1088,87 +1085,19 @@ describe("IdeView : barres d'outils et commandes", () => {
   })
 })
 
-describe("IdeView : commandes du terminal", () => {
-  beforeEach(() => {
-    setAuth({ state: "open" } as never)
-    vi.spyOn(api, "termInfo").mockResolvedValue({ enabled: true })
-    vi.spyOn(api, "data").mockResolvedValue({ live: ["s1"], groups: [{ project: "p", missing: false, sessions: [{ id: "s1", cwd: "/p", mtime: 1 }] }] } as never)
-    localStorage.setItem("gld.ide.view.showTerminalChosen", "1")
-    localStorage.setItem("gld.ide.view.showTerminal", "1")
-  })
-  const tool = (name: string) => within(screen.getByRole("toolbar", { name: "Actions de l'éditeur" })).getByRole("button", { name })
-
-  it("jamais ouverte : rien ne s'attache au chargement ; la première bascule l'ouvre et le choix est mémorisé", async () => {
-    localStorage.removeItem("gld.ide.view.showTerminalChosen")
-    localStorage.removeItem("gld.ide.view.showTerminal")
+describe("IdeView : aperçu Markdown", () => {
+  it("un fichier .md s'affiche à côté de l'éditeur, le bouton le masque ; un autre fichier n'en a pas", async () => {
+    vi.spyOn(api, "fsTree").mockResolvedValue({ entries: [e("n.md", "file"), e("a.txt", "file")], truncated: false })
+    file.mockImplementation(async () => f({ content: "# Titre", etag: "e1", size: 7, mtime: 1 }))
     render(<IdeView dir="/p" />)
-    await screen.findByText("1 session en direct — ouvrir le terminal")
-    expect(screen.queryByTestId("term")).toBeNull()
-    await waitFor(() => expect(tool("Ouvrir ou replier le terminal").getAttribute("aria-disabled")).toBeNull())
-    expect(tool("Ouvrir ou replier le terminal").getAttribute("aria-pressed")).toBe("false")
-    fireEvent.click(tool("Ouvrir ou replier le terminal"))
-    expect((await screen.findByTestId("term")).dataset.take).toBe("false")
-    expect(localStorage.getItem("gld.ide.view.showTerminalChosen")).toBe("1")
-    expect(localStorage.getItem("gld.ide.view.showTerminal")).toBe("1")
-  })
-
-  it("aucune session vivante, aucun choix : le premier clic sur la bascule ouvre visiblement la zone", async () => {
-    localStorage.removeItem("gld.ide.view.showTerminalChosen")
-    localStorage.removeItem("gld.ide.view.showTerminal")
-    vi.spyOn(api, "data").mockResolvedValue({ live: [], groups: [{ project: "p", missing: false, sessions: [{ id: "s1", cwd: "/p", mtime: 1 }] }] } as never)
-    render(<IdeView dir="/p" />)
-    await screen.findByText(/lancez `claude` dans ce dossier/)
-    await waitFor(() => expect(tool("Ouvrir ou replier le terminal").getAttribute("aria-disabled")).toBeNull())
-    expect(tool("Ouvrir ou replier le terminal").getAttribute("aria-pressed")).toBe("false")
-    fireEvent.click(tool("Ouvrir ou replier le terminal"))
-    expect(await screen.findByText(/le terminal se branche sur une session Claude/)).toBeTruthy()
-    expect(tool("Ouvrir ou replier le terminal").getAttribute("aria-pressed")).toBe("true")
-  })
-
-  it("Affichage › zone terminal désactivée sans exec, avec la raison", async () => {
-    setAuth({ state: "ok", home: "h", rights: { h: ["fs_read", "fs_write"] } })
-    render(<IdeView dir="/p" />)
-    act(() => document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "a", altKey: true, bubbles: true })))
-    const el = within(await screen.findByRole("menu")).getByRole("menuitemcheckbox", { name: "Afficher la zone terminal" })
-    expect(el.getAttribute("aria-disabled")).toBe("true")
-    expect(document.getElementById(el.getAttribute("aria-describedby")!)?.textContent).toMatch(/exec/)
-    fireEvent.click(el)
-    expect(localStorage.getItem("gld.ide.view.showTerminal")).toBe("1")
-  })
-
-  it("terminal.toggle replie puis rouvre la zone ; view.toggleTerminal par le bouton de la zone", async () => {
-    render(<IdeView dir="/p" />)
-    await screen.findByTestId("term")
-    await waitFor(() => expect(tool("Ouvrir ou replier le terminal").getAttribute("aria-disabled")).toBeNull())
-    fireEvent.click(tool("Ouvrir ou replier le terminal"))
-    await waitFor(() => expect(screen.queryByTestId("term")).toBeNull())
-    fireEvent.click(tool("Ouvrir ou replier le terminal"))
-    expect(await screen.findByTestId("term")).toBeTruthy()
-    fireEvent.click(screen.getByRole("button", { name: "Masquer le panneau du bas" }))
-    await waitFor(() => expect(screen.queryByTestId("term")).toBeNull())
-    fireEvent.click(screen.getByRole("button", { name: "Afficher le panneau du bas" }))
-    expect(await screen.findByTestId("term")).toBeTruthy()
-  })
-
-  it("terminal.focusSession ouvre la zone repliée et donne le focus, sans prendre la main", async () => {
-    localStorage.setItem("gld.ide.view.showTerminalChosen", "1")
-    localStorage.setItem("gld.ide.view.showTerminal", "0")
-    render(<IdeView dir="/p" />)
-    await waitFor(() => expect(tool("Aller au terminal de session").getAttribute("aria-disabled")).toBeNull())
-    expect(screen.queryByTestId("term")).toBeNull()
-    fireEvent.click(tool("Aller au terminal de session"))
-    const term = await screen.findByTestId("term")
-    expect(term.dataset.take).toBe("false")
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("Terminal de session")))
-  })
-
-  it("sans exec : commandes du terminal désactivées avec la raison", async () => {
-    setAuth({ state: "ok", home: "h", rights: { h: ["fs_read", "fs_write"] } })
-    render(<IdeView dir="/p" />)
-    const b = await waitFor(() => tool("Aller au terminal de session"))
-    expect(b.getAttribute("aria-disabled")).toBe("true")
-    expect(document.getElementById(b.getAttribute("aria-describedby")!)?.textContent).toMatch(/exec/)
-    expect(api.termInfo).not.toHaveBeenCalled()
+    await openFile("n.md")
+    expect(await screen.findByRole("heading", { name: "Titre" })).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Aperçu Markdown" }))
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "Titre" })).toBeNull())
+    fireEvent.click(screen.getByRole("button", { name: "Aperçu Markdown" }))
+    expect(await screen.findByRole("heading", { name: "Titre" })).toBeTruthy()
+    await openFile("a.txt")
+    expect(screen.getAllByRole("heading", { hidden: true })).toHaveLength(1)
   })
 })
 
@@ -1208,26 +1137,5 @@ describe("IdeView : menu et barre d'état", () => {
     act(() => document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "a", altKey: true, bubbles: true })))
     fireEvent.click(within(await screen.findByRole("menu")).getByRole("menuitemcheckbox", { name: "Afficher la barre d'état" }))
     await waitFor(() => expect(screen.queryByRole("group", { name: "Barre d'état" })).toBeNull())
-  })
-})
-
-describe("IdeView : bouton du terminal de la barre d'état", () => {
-  beforeEach(() => {
-    setAuth({ state: "open" } as never)
-    vi.spyOn(api, "termInfo").mockResolvedValue({ enabled: true })
-    vi.spyOn(api, "data").mockResolvedValue({ live: ["s1"], groups: [{ project: "p", missing: false, sessions: [{ id: "s1", cwd: "/p", mtime: 1 }] }] } as never)
-    localStorage.setItem("gld.ide.view.showTerminalChosen", "1")
-    localStorage.setItem("gld.ide.view.showTerminal", "1")
-  })
-  it("replie puis rouvre la zone par le même chemin que terminal.toggle", async () => {
-    render(<IdeView dir="/p" />)
-    await screen.findByTestId("term")
-    const b = () => within(screen.getByRole("group", { name: "Barre d'état" })).getByRole("button", { name: "Ouvrir ou replier le terminal" })
-    await waitFor(() => expect(b().getAttribute("aria-disabled")).toBeNull())
-    fireEvent.click(b())
-    await waitFor(() => expect(screen.queryByTestId("term")).toBeNull())
-    expect(b().getAttribute("aria-expanded")).toBe("false")
-    fireEvent.click(b())
-    expect(await screen.findByTestId("term")).toBeTruthy()
   })
 })

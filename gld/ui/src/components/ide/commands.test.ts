@@ -49,7 +49,6 @@ const ctx = (
     readOnly: false,
     editor: handle(),
     prefs: { ...DEFAULT_PREFS, set: vi.fn() },
-    terminal: "ready",
     treeShown: true,
     save: vi.fn(),
     saveAll: vi.fn(),
@@ -58,7 +57,6 @@ const ctx = (
     closeTab: vi.fn(),
     closeAll: vi.fn(),
     openQuick: vi.fn(),
-    focusSession: vi.fn(),
     ...over,
   }
 }
@@ -92,10 +90,7 @@ const REQUIRED = [
   "view.fontMinus",
   "view.fontReset",
   "view.toggleTree",
-  "view.toggleTerminal",
   "view.toggleStatus",
-  "terminal.toggle",
-  "terminal.focusSession",
 ]
 // Un contexte par façon d'être désactivé : chaque commande désactivée dans l'un d'eux doit dire pourquoi.
 const blocked: CmdCtx[] = [
@@ -106,10 +101,6 @@ const blocked: CmdCtx[] = [
   }),
   ctx({}, ["fs_read"]),
   ctx({ tab: undefined, tabs: [], editor: null }),
-  ctx({ terminal: "disabled" }),
-  ctx({ terminal: "loading" }),
-  ctx({ terminal: "nosessions" }),
-  ctx({ terminal: "unavailable" }),
   ctx({ treeShown: false }),
 ]
 
@@ -145,22 +136,15 @@ describe("registre de commandes", () => {
     }
   })
 
-  it("terminal (groupe Terminal et Affichage › zone terminal) : désactivé sans exec ou terminal indisponible, raison propre à chaque cas", () => {
-    const ids = ["terminal.toggle", "terminal.focusSession", "view.toggleTerminal"]
-    for (const c of ids.map(byId)) {
-      expect(c.enabled(ctx({}, ["fs_read", "fs_write"])), c.id).toBe(false)
-      expect(c.reason!(ctx({}, ["fs_read", "fs_write"])), c.id).toBe("ide.reason.noExec")
-      expect(c.reason!(ctx({ terminal: "disabled" })), c.id).toBe("ide.reason.termOff")
-      expect(c.reason!(ctx({ terminal: "loading" })), c.id).toBe("ide.reason.termLoading")
-      expect(c.reason!(ctx({ terminal: "nosessions" })), c.id).toBe("ide.reason.noSessionsRead")
-      expect(c.reason!(ctx({ terminal: "unavailable" })), c.id).toBe("ide.reason.sessionsDown")
-      expect(c.enabled(ctx()), c.id).toBe(true)
-      expect(c.enabled(ctx({ terminal: "nosession" })), c.id).toBe(true)
-    }
+  it("aperçu Markdown : actif seulement sur un fichier .md", () => {
+    const preview = byId("view.togglePreview")
+    expect(preview.enabled(ctx({ tab: tab({ path: "/d/a.ts" }) }))).toBe(false)
+    expect(preview.reason!(ctx({ tab: tab({ path: "/d/a.ts" }) }))).toBe("ide.reason.notMarkdown")
+    expect(preview.enabled(ctx({ tab: tab({ path: "/d/README.MD" }) }))).toBe(true)
   })
 
   it("focus : une seule source ; fermer et basculer les zones ne visent pas l'éditeur", () => {
-    const keep = ["file.saveAll", "file.closeTab", "file.closeAll", "view.toggleTree", "view.toggleTerminal", "view.toggleStatus", "terminal.toggle", "terminal.focusSession"]
+    const keep = ["file.saveAll", "file.closeTab", "file.closeAll", "view.toggleTree", "view.togglePreview", "view.toggleStatus"]
     for (const c of commands) expect(c.focus, c.id).toBe(keep.includes(c.id) ? "keep" : "editor")
   })
 
@@ -181,13 +165,13 @@ describe("registre de commandes", () => {
     byId("file.save").run(k)
     byId("view.fontPlus").run(k)
     byId("view.wordWrap").run(k)
-    byId("terminal.toggle").run(k)
+    byId("view.togglePreview").run(k)
     expect(k.editor!.replace).toHaveBeenCalled()
     expect(k.editor!.palette).toHaveBeenCalled()
     expect(k.save).toHaveBeenCalled()
     expect(k.prefs.set).toHaveBeenCalledWith("fontSize", 14)
     expect(k.prefs.set).toHaveBeenCalledWith("wordWrap", true)
-    expect(k.prefs.set).toHaveBeenCalledWith("showTerminal", false)
+    expect(k.prefs.set).toHaveBeenCalledWith("showPreview", false)
   })
 
   it("raccourcis : simples chaînes d'affichage", () => {

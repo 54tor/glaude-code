@@ -1,9 +1,10 @@
 import type { Right } from "@/lib/auth"
 import { isDirty, type Tab } from "./ideState"
 import { zoomed, type ViewPrefs } from "./useViewPrefs"
-import type { TermState } from "./useTerminalAvailability"
 
 // indent : « spaces:N » ou « tabs:N », mis en forme par la barre d'état.
+export const isMarkdown = (path: string) => /\.(md|markdown)$/i.test(path)
+
 export type EditorStatus = {
   line: number
   col: number
@@ -35,8 +36,6 @@ export type CmdCtx = {
   // null tant qu'aucun éditeur n'est monté pour l'onglet actif (chargement paresseux de Monaco, notice tooBig/binary).
   editor: EditorHandle | null
   prefs: ViewPrefs
-  // État de la zone terminal (droit exec, GLD_WEB_TERMINAL=1, liste des sessions) : chaque refus a sa raison.
-  terminal: TermState
   // Arborescence affichée : la création à la racine passe par son flux, sans elle la commande ne ferait rien.
   treeShown: boolean
   save(): void
@@ -46,14 +45,13 @@ export type CmdCtx = {
   closeTab(): void
   closeAll(): void
   openQuick(): void
-  focusSession(): void
 }
 
 export type Command = {
   id: string
   label: string
   shortcut?: string
-  group: "file" | "edit" | "find" | "view" | "goto" | "terminal"
+  group: "file" | "edit" | "find" | "view" | "goto"
   // editor : menu et boutons donnent le focus à l'éditeur avant la commande (la saisie rapide de Monaco l'exige).
   // keep : le focus reste sur le déclencheur (fermeture d'onglets : l'éditeur va se démonter ; bascules de zones).
   focus: "editor" | "keep"
@@ -68,15 +66,7 @@ const write: Guard = (context) => (context.can("fs_write") ? "" : "ide.reason.no
 const hasTab: Guard = (context) => (context.tab ? "" : "ide.reason.noTab")
 const writable: Guard = (context) => (context.readOnly ? "ide.reason.readOnly" : "")
 const hasEditor: Guard = (context) => (context.editor ? "" : "ide.reason.noEditor")
-const exec: Guard = (context) => (context.can("exec") ? "" : "ide.reason.noExec")
-const TERM_REASON: Partial<Record<TermState, string>> = {
-  loading: "ide.reason.termLoading",
-  disabled: "ide.reason.termOff",
-  forbidden: "ide.reason.noExec",
-  nosessions: "ide.reason.noSessionsRead",
-  unavailable: "ide.reason.sessionsDown",
-}
-const term: Guard = (context) => TERM_REASON[context.terminal] ?? ""
+const markdownTab: Guard = (context) => (context.tab && isMarkdown(context.tab.path) ? "" : "ide.reason.notMarkdown")
 const dirty: Guard = (context) =>
   context.tabs.some((tab) => isDirty(tab) && !tab.readOnly) ? "" : "ide.reason.nothingDirty"
 const treeOn: Guard = (context) => (context.treeShown ? "" : "ide.reason.noTree")
@@ -103,7 +93,7 @@ const cmd = (
   }
 }
 const toggle =
-  (prefName: "wordWrap" | "minimap" | "showTree" | "showTerminal" | "showStatus") =>
+  (prefName: "wordWrap" | "minimap" | "showTree" | "showStatus" | "showPreview") =>
   (context: CmdCtx) =>
     context.prefs.set(prefName, !context.prefs[prefName])
 const font = (delta: 1 | -1 | 0) => (context: CmdCtx) =>
@@ -153,10 +143,8 @@ export const commands: Command[] = [
   cmd("view.fontMinus", "view", [], font(-1)),
   cmd("view.fontReset", "view", [], font(0)),
   cmd("view.toggleTree", "view", [], toggle("showTree"), undefined, "keep"),
-  cmd("view.toggleTerminal", "view", [exec, term], toggle("showTerminal"), undefined, "keep"),
+  cmd("view.togglePreview", "view", [markdownTab], toggle("showPreview"), undefined, "keep"),
   cmd("view.toggleStatus", "view", [], toggle("showStatus"), undefined, "keep"),
-  cmd("terminal.toggle", "terminal", [exec, term], toggle("showTerminal"), undefined, "keep"),
-  cmd("terminal.focusSession", "terminal", [exec, term], (context) => context.focusSession(), undefined, "keep"),
 ]
 
 // Raccourcis écrits en anglais dans le registre (noms ARIA) ; seules les touches nommées changent à l'affichage.

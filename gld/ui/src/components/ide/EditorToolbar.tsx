@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { AArrowDown, AArrowUp, Command, CopyX, ListOrdered, PanelLeft, Redo2, Replace, Save, SaveAll, Search, SquareTerminal, Terminal, Undo2, WrapText } from "lucide-react"
+import { AArrowDown, AArrowUp, Command, CopyX, ListOrdered, PanelLeft, BookOpen, Redo2, Replace, Save, SaveAll, Search, Undo2, WrapText } from "lucide-react"
 import { Toolbar } from "radix-ui"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { CmdButton } from "./ToolButton"
@@ -51,13 +51,10 @@ export function EditorToolbar({ ctx }: { ctx: CmdCtx }) {
         <CmdButton id="view.toggleTree" ctx={ctx} pressed={ctx.prefs.showTree}>
           <PanelLeft />
         </CmdButton>
+        <CmdButton id="view.togglePreview" ctx={ctx} pressed={ctx.prefs.showPreview}>
+          <BookOpen />
+        </CmdButton>
         <span className="flex-1" />
-        <CmdButton id="terminal.focusSession" ctx={ctx}>
-          <Terminal />
-        </CmdButton>
-        <CmdButton id="terminal.toggle" ctx={ctx} pressed={ctx.prefs.showTerminal}>
-          <SquareTerminal />
-        </CmdButton>
         <CmdButton id="file.closeAll" ctx={ctx}>
           <CopyX />
         </CmdButton>
