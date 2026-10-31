@@ -10,7 +10,7 @@
   "cli.main.flagPublicURL": "adresse publique de gld, ex. https://gld.exemple.org : celle du QR « Connecter un appareil » et de WebAuthn (équivaut à GLD_PUBLIC_URL)",
   "cli.main.flagTLSCert": "certificat TLS (PEM) : gld sert en HTTPS ; équivaut à GLD_WEB_TLS_CERT, va avec --tls-key",
   "cli.main.flagTLSKey": "clé privée du certificat TLS (PEM) ; équivaut à GLD_WEB_TLS_KEY",
-  "cli.main.flagLocations": "dossiers racines de l'explorateur, séparés par des virgules (ex. ~/Projets,/mnt) ; /tmp reste accessible ; équivaut à GLD_WEB_LOCATIONS",
+  "cli.main.flagLocations": "dossiers racines de l'explorateur, séparés par des virgules (ex. ~/Projets,/mnt) ; équivaut à GLD_WEB_LOCATIONS",
   "cli.main.flagToken": "jeton d'accès (16 caractères au moins ; équivaut à GLD_WEB_TOKEN, mais visible dans ps)",
   "cli.main.flagVersion": "affiche la version et quitte",
   "cli.main.keyFromFile": "⚠ clé maîtresse lue dans {{.A1}} : un fichier protège moins qu'un coffre-fort du système ; qui le lit avec la base peut forger des comptes et des droits.",

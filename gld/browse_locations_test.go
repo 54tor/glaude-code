@@ -23,9 +23,6 @@ func TestBrowseLocations(t *testing.T) {
 	if !browseAllowed(filepath.Join(allowedDir, "sub")) {
 		t.Fatal("un sous-chemin d'une racine doit être permis")
 	}
-	if !browseAllowed(os.TempDir()) {
-		t.Fatal("le dossier temporaire reste accessible")
-	}
 	if !browseIsRoot(allowedDir) {
 		t.Fatal("la racine doit être reconnue")
 	}
