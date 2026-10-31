@@ -72,6 +72,8 @@
       "pasted_other": "Pasted text · {{count}} lines",
       "openImage": "Open the image full size",
       "imageAlt": "Conversation image",
+      "interrupted": "Interrupted by the user",
+      "interruptedTool": "Interrupted by the user during a tool call",
       "toolResult": "tool result",
       "showDoc": "Show the document",
       "docFail": "Could not read the document",

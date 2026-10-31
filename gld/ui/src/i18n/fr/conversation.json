@@ -72,6 +72,8 @@
       "pasted_other": "Texte collé · {{count}} lignes",
       "openImage": "Ouvrir l'image en grand",
       "imageAlt": "Image de la conversation",
+      "interrupted": "Interrompu par l'utilisateur",
+      "interruptedTool": "Interrompu par l'utilisateur pendant un appel d'outil",
       "toolResult": "résultat d'outil",
       "showDoc": "Afficher le document",
       "docFail": "Document illisible",

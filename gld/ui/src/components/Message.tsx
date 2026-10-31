@@ -3,7 +3,7 @@ import { memo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { ChevronRight, CornerDownRight, ExternalLink, Wrench } from "lucide-react"
+import { ChevronRight, CornerDownRight, ExternalLink, OctagonX, Wrench } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { api, type Msg } from "@/lib/api"
@@ -181,6 +181,13 @@ function MessageView({ m, conv }: { m: Msg; conv?: Conv }) {
     return (
       <div title={title} className="msg mx-auto max-w-3xl">
         <CompactSummary t={m.t} md={(t) => <Markdown t={t} />} />
+      </div>
+    )
+  const stop = m.r === "user" ? /^\s*\[Request interrupted by user( for tool use)?\]\s*$/.exec(m.t) : null
+  if (stop)
+    return (
+      <div title={title} role="status" className="msg mx-auto flex w-fit items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-sm font-medium text-destructive">
+        <OctagonX className="size-4" aria-hidden /> {t(stop[1] ? "conversation.message.interruptedTool" : "conversation.message.interrupted")}
       </div>
     )
   if (m.r === "user" && isTagged(m.t))
