@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useStickToBottom } from "use-stick-to-bottom"
 import { swipeHandlers } from "@/lib/swipe"
-import { ArrowDown, ArrowUpToLine, Copy, Undo2, BarChart3, Bug, ChevronLeft, ChevronRight, FolderOpen, Power, FileText, Fan, MessageSquarePlus, MoreHorizontal, MessagesSquare, GalleryHorizontalEnd, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
+import { ArrowDown, SquareChevronsDown, ArrowUpToLine, Copy, Undo2, BarChart3, Bug, ChevronLeft, ChevronRight, FolderOpen, Power, FileText, Fan, MessageSquarePlus, MoreHorizontal, MessagesSquare, GalleryHorizontalEnd, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
 import { focusRow } from "@/lib/focusRow"
 import { type Choice } from "@/lib/models"
 import { api, type Detail, type Msg, type Session } from "@/lib/api"
@@ -571,7 +571,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
         </ScrollArea>
         {away ? (
         ) : (
-          <span role="status" title={t("conversation.view.following")} aria-label={t("conversation.view.following")} className="absolute right-4 bottom-3 size-2.5 rounded-full bg-emerald-500 shadow-sm" />
+          <SquareChevronsDown role="status" aria-label={t("conversation.view.following")} className="absolute right-4 bottom-3 size-5 text-emerald-500" />
           <Button size="sm" variant="secondary" className="absolute right-4 bottom-3 rounded-full shadow-md" onClick={toEnd} aria-label={t("conversation.view.toEndAria")}>
             <ArrowDown /> {t("conversation.view.toEnd")}
           </Button>
