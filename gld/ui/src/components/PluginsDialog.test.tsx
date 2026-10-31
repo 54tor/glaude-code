@@ -36,7 +36,7 @@ describe("PluginsCatalog", () => {
     vi.spyOn(api, "plugins").mockResolvedValue({ installed: [], available: [avail("garde"), avail("pris")] })
     const inst = [{ id: "pris@m", version: "1", scope: "user", enabled: true }]
     await act(async () => void render(<PluginsCatalog projects={[]} home="" scope="user" installed={inst} onChange={() => {}} />))
-    expect(screen.getByText("garde")).toBeTruthy()
+    expect(await screen.findByText("garde")).toBeTruthy()
     expect(screen.queryByText("pris")).toBeNull()
   })
 })
