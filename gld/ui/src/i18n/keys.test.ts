@@ -11,7 +11,7 @@ describe("clés de traduction", () => {
   const used = new Map<string, string>()
   for (const [file, src] of Object.entries(sources)) {
     if (file.includes("/i18n/") || file.includes(".test.")) continue
-    for (const re of [CALL, OTHER]) for (const m of src.matchAll(re)) used.set(m[1], file)
+    for (const re of [CALL, OTHER]) for (const regExpExecArray of src.matchAll(re)) used.set(regExpExecArray[1], file)
   }
 
   it("trouve des clés dans le code", () => {

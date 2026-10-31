@@ -26,37 +26,37 @@ afterEach(() => {
 
 describe("useShares", () => {
   it("lit au montage puis toutes les 10 s, et s'arrête au démontage", async () => {
-    const s = vi.spyOn(api, "shares").mockResolvedValue({ shares: [share("a")] })
+    const mock = vi.spyOn(api, "shares").mockResolvedValue({ shares: [share("a")] })
     const { unmount } = render(<Probe />)
     await act(async () => {})
-    expect(s).toHaveBeenCalledTimes(1)
+    expect(mock).toHaveBeenCalledTimes(1)
     expect(last().shares?.[0].id).toBe("a")
     await act(async () => void vi.advanceTimersByTime(10000))
-    expect(s).toHaveBeenCalledTimes(2)
+    expect(mock).toHaveBeenCalledTimes(2)
     unmount()
     await act(async () => void vi.advanceTimersByTime(60000))
-    expect(s).toHaveBeenCalledTimes(2)
+    expect(mock).toHaveBeenCalledTimes(2)
   })
 
   it("5 s quand l'overlay est ouvert", async () => {
-    const s = vi.spyOn(api, "shares").mockResolvedValue({ shares: [] })
+    const mock = vi.spyOn(api, "shares").mockResolvedValue({ shares: [] })
     render(<Probe fast />)
     await act(async () => {})
     await act(async () => void vi.advanceTimersByTime(10000))
-    expect(s).toHaveBeenCalledTimes(3)
+    expect(mock).toHaveBeenCalledTimes(3)
   })
 
   it("onglet masqué : pas de lecture", async () => {
-    const s = vi.spyOn(api, "shares").mockResolvedValue({ shares: [] })
+    const mock = vi.spyOn(api, "shares").mockResolvedValue({ shares: [] })
     render(<Probe />)
     await act(async () => {})
     vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden")
     await act(async () => void vi.advanceTimersByTime(30000))
-    expect(s).toHaveBeenCalledTimes(1)
+    expect(mock).toHaveBeenCalledTimes(1)
   })
 
   it("un seul sondage pour plusieurs consommateurs", async () => {
-    const s = vi.spyOn(api, "shares").mockResolvedValue({ shares: [share("a")] })
+    const mock = vi.spyOn(api, "shares").mockResolvedValue({ shares: [share("a")] })
     render(
       <>
         <Probe />
@@ -65,7 +65,7 @@ describe("useShares", () => {
     )
     await act(async () => {})
     await act(async () => void vi.advanceTimersByTime(10000))
-    expect(s).toHaveBeenCalledTimes(2)
+    expect(mock).toHaveBeenCalledTimes(2)
   })
 
   it("403 et 404 : rien partagé, sans erreur", async () => {
@@ -85,18 +85,18 @@ describe("useShares", () => {
   })
 
   it("refresh relit tout de suite", async () => {
-    const s = vi.spyOn(api, "shares").mockResolvedValue({ shares: [] })
+    const mock = vi.spyOn(api, "shares").mockResolvedValue({ shares: [] })
     render(<Probe />)
     await act(async () => {})
     await act(async () => void (await last().refresh()))
-    expect(s).toHaveBeenCalledTimes(2)
+    expect(mock).toHaveBeenCalledTimes(2)
   })
 
   it("un sondage lent et ancien n'écrase pas une lecture plus récente", async () => {
-    let slow!: (v: { shares: ShareInfo[] }) => void
+    let slow!: (record: { shares: ShareInfo[] }) => void
     vi.spyOn(api, "shares")
       .mockResolvedValueOnce({ shares: [] })
-      .mockReturnValueOnce(new Promise((r) => (slow = r)))
+      .mockReturnValueOnce(new Promise((callback) => (slow = callback)))
       .mockResolvedValueOnce({ shares: [share("new")] })
     render(<Probe />)
     await act(async () => {})
@@ -108,10 +108,10 @@ describe("useShares", () => {
   })
 
   it("relit dès que l'onglet redevient visible", async () => {
-    const s = vi.spyOn(api, "shares").mockResolvedValue({ shares: [] })
+    const mock = vi.spyOn(api, "shares").mockResolvedValue({ shares: [] })
     render(<Probe />)
     await act(async () => {})
     await act(async () => void document.dispatchEvent(new Event("visibilitychange")))
-    expect(s).toHaveBeenCalledTimes(2)
+    expect(mock).toHaveBeenCalledTimes(2)
   })
 })
