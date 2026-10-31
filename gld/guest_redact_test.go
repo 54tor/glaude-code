@@ -5,14 +5,19 @@ import (
 	"testing"
 )
 
-func TestPathRedactorMasqueLesFormesDeChemin(t *testing.T) {
-	redactor := newPathRedactor("/home/bob")
+func TestPathRedactorMasqueLHote(t *testing.T) {
+	redactor := newPathRedactor("/home/bobby", "/home/bobby/Projets/app", "guest-ab12")
 	testCases := map[string]string{
-		`{"cwd":"/home/bob/proj/a.go"}`:                  `{"cwd":"~/proj/a.go"}`,
-		`/tmp/claude-1000/-home-bob-proj/s/scratchpad/x`: `/tmp/claude-1000/-home-user-proj/s/scratchpad/x`,
-		`dir=-home-bob`: `dir=-home-user`,
-		`bob écrit à bob@example.com, /home/bobby/x`: `bob écrit à bob@example.com, /home/bobby/x`,
-		`-home-bobby-proj`: `-home-bobby-proj`,
+		`{"cwd":"/home/bobby/Projets/app/src/a.go"}`:          `{"cwd":"src/a.go"}`,
+		`cd /home/bobby/Projets/app && ls`:                    `cd . && ls`,
+		`cat /home/bobby/.claude/settings.json`:               `cat …/settings.json`,
+		`/tmp/claude-1000/-home-bobby-Projets/s/scratchpad/x`: `…/x`,
+		`ls -l /usr/bin/git:12`:                               `ls -l …/git:12`,
+		"ligne\n/etc/passwd fin":                              "ligne\n…/passwd fin",
+		`-home-bobby-Projets-app`:                             `-home-guest-ab12-Projets-app`,
+		`whoami -> bobby, bobby@example.com, bobbyx, /v1/a/b`: `whoami -> guest-ab12, guest-ab12@example.com, bobbyx, /v1/a/b`,
+		`https://example.com/tmp/page`:                        `https://example.com/tmp/page`,
+		`/home/bobbyx/Projets/app/a.go`:                       `…/a.go`,
 	}
 	for input, expected := range testCases {
 		if obtained := string(redactor.apply([]byte(input))); obtained != expected {
@@ -23,7 +28,7 @@ func TestPathRedactorMasqueLesFormesDeChemin(t *testing.T) {
 
 func TestPathRedactorSansHomeNeFaitRien(t *testing.T) {
 	for _, home := range []string{"", "/"} {
-		if newPathRedactor(home) != nil {
+		if newPathRedactor(home, "", "guest-ab12") != nil {
 			t.Errorf("home %q : un masqueur a été créé", home)
 		}
 	}
@@ -32,13 +37,13 @@ func TestPathRedactorSansHomeNeFaitRien(t *testing.T) {
 func TestRedactWriterRetireLaLongueurEtMasque(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	recorder.Header().Set("Content-Length", "99")
-	writer := guestRedactedWriter(recorder, newPathRedactor("/home/bob"))
+	writer := guestRedactedWriter(recorder, newPathRedactor("/home/bob", "/home/bob/p", "guest-ab12"))
 	writer.WriteHeader(200)
-	count, err := writer.Write([]byte(`{"p":"/home/bob/x"}`))
-	if err != nil || count != len(`{"p":"/home/bob/x"}`) {
+	count, err := writer.Write([]byte(`{"p":"/home/bob/p/x"}`))
+	if err != nil || count != len(`{"p":"/home/bob/p/x"}`) {
 		t.Fatalf("écriture : %d %v", count, err)
 	}
-	if body := recorder.Body.String(); body != `{"p":"~/x"}` {
+	if body := recorder.Body.String(); body != `{"p":"x"}` {
 		t.Errorf("corps : %q", body)
 	}
 	if recorder.Header().Get("Content-Length") != "" {
@@ -55,5 +60,14 @@ func TestGuestLiveBodyRetireLesLignesDeCommande(t *testing.T) {
 	}
 	if obtained := string(guestLiveBody([]byte("pas du json"))); obtained != "pas du json" {
 		t.Errorf("corps illisible modifié : %q", obtained)
+	}
+}
+
+func TestGuestAliasStableEtSansLeCompte(t *testing.T) {
+	if guestAlias("inv-1") != guestAlias("inv-1") || guestAlias("inv-1") == guestAlias("inv-2") {
+		t.Error("alias instable ou identique entre invitations")
+	}
+	if alias := guestAlias("inv-1"); len(alias) != len(aliasPrefix)+aliasHexLength {
+		t.Errorf("alias : %q", alias)
 	}
 }

@@ -92,3 +92,35 @@ func serveGuestLive(mux *http.ServeMux, responseWriter http.ResponseWriter, requ
 	responseWriter.WriteHeader(captured.code)
 	responseWriter.Write(guestLiveBody(captured.body.Bytes()))
 }
+
+// serveGuestQueue masque la file sauf les messages que l'invité a lui-même écrits : retrouver son texte tel quel ne confirme rien.
+func serveGuestQueue(mux *http.ServeMux, responseWriter http.ResponseWriter, request *http.Request, redactor *pathRedactor) {
+	captured := &bufferedResponse{header: http.Header{}}
+	mux.ServeHTTP(captured, request)
+	body := captured.body.Bytes()
+	var items []map[string]json.RawMessage
+	if json.Unmarshal(body, &items) == nil {
+		for _, item := range items {
+			var author string
+			if json.Unmarshal(item["author"], &author) == nil && author == "guest" {
+				continue
+			}
+			rewriteRawString(item, "text", redactor.applyString)
+		}
+		if rewritten, err := json.Marshal(items); err == nil {
+			body = rewritten
+		}
+	} else {
+		body = redactor.apply(body)
+	}
+	for headerName, headerValues := range captured.header {
+		responseWriter.Header()[headerName] = headerValues
+	}
+	responseWriter.Header().Del("Content-Length")
+	responseWriter.Header().Set("Cache-Control", "no-store")
+	if captured.code == 0 {
+		captured.code = http.StatusOK
+	}
+	responseWriter.WriteHeader(captured.code)
+	responseWriter.Write(body)
+}
