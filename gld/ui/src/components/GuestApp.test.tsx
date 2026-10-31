@@ -10,9 +10,9 @@ import { Message } from "./Message"
 const S = "/v1/sessions/{id}"
 const WHITE = new Set([`GET ${S}/conversation`, `GET ${S}/conversation/text`, `GET ${S}/conversation/tools`, `GET ${S}/conversation/images/{img}`, `GET ${S}/live`, `GET ${S}/state`, `GET ${S}/tasks/{task}/output`, `GET ${S}/queue`, `POST ${S}/queue`, `DELETE ${S}/queue/{qid}`, "GET /v1/guest/me", "GET /v1/guest/sessions", "DELETE /v1/guest/me"])
 // Les segments variables d'une route, comme dans les motifs du serveur.
-const norm = (p: string) => p.replace(/^\/v1\/sessions\/[^/]+/, S).replace(/\/images\/[^/]+$/, "/images/{img}").replace(/\/queue\/[^/]+$/, "/queue/{qid}").replace(/\/tasks\/[^/]+\/output$/, "/tasks/{task}/output")
-const key = (c: { method: string; path: string }) => `${c.method} ${c.path}`
-const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } })
+const norm = (path: string) => path.replace(/^\/v1\/sessions\/[^/]+/, S).replace(/\/images\/[^/]+$/, "/images/{img}").replace(/\/queue\/[^/]+$/, "/queue/{qid}").replace(/\/tasks\/[^/]+\/output$/, "/tasks/{task}/output")
+const key = (record: { method: string; path: string }) => `${record.method} ${record.path}`
+const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json" } })
 const live = { open: true, status: "", activity: "", thinking: false, since: 0, context: 0, out: 0, model: "", subs: [] }
 
 let mode: "rw" | "ro"
@@ -23,10 +23,10 @@ let shares: { handle: string; title: string; mode: "rw" | "ro" }[] | 403
 let title: string
 const H = "0123456789abcdef"
 const H2 = "fedcba9876543210"
-const go = (p: string) => window.history.pushState({}, "", p)
+const go = (path: string) => window.history.pushState({}, "", path)
 let all: Msg[]
 let rich: boolean
-const msg = (i: number): Msg => ({ r: "assistant", t: `m${i}` })
+const msg = (index: number): Msg => ({ r: "assistant", t: `m${index}` })
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -54,9 +54,9 @@ beforeEach(() => {
       if (path === "/v1/guest/sessions") return shares === 403 ? json({ error: { code: "forbidden", message: "x" } }, 403) : json(shares)
       if (path === "/v1/guest/me" && method === "GET") return json({ id: "s1", dir: "/d", mode, csrf: "tok", handle: H, title, invite: "inv1", label: "Léa" })
       if (path === `${S}/conversation`) {
-        const q = new URL(url, "http://x").searchParams
-        const limit = Number(q.get("limit") ?? 1000)
-        const end = q.has("before") && Number(q.get("before")) > 0 ? Number(q.get("before")) : all.length
+        const uRLSearchParams = new URL(url, "http://x").searchParams
+        const limit = Number(uRLSearchParams.get("limit") ?? 1000)
+        const end = uRLSearchParams.has("before") && Number(uRLSearchParams.get("before")) > 0 ? Number(uRLSearchParams.get("before")) : all.length
         const start = Math.max(0, end - limit)
         const base = rich ? [{ r: "assistant", t: "[lien](https://ex.org/x)" }, { r: "user", t: "", img: "1", o: 1, k: 0 }, { r: "assistant", t: "coupé", cut: 5, len: 9000, o: 2, n: 1 }, { r: "tool", t: "Bash  ls" }] : []
         return json({ msgs: [...base, ...all.slice(start, end)], start, more: start > 0 })
@@ -101,7 +101,7 @@ describe("GuestApp", () => {
     await mount()
     expect(screen.getByText("salut invité")).toBeTruthy()
     await send("coucou")
-    const add = calls.find((c) => c.path === `${S}/queue` && c.method === "POST")!
+    const add = calls.find((record) => record.path === `${S}/queue` && record.method === "POST")!
     expect(add.csrf).toBe("tok")
     expect(JSON.parse(add.body).text).toBe("coucou")
     await tick(2100)
@@ -124,9 +124,9 @@ describe("GuestApp", () => {
     ended = 403
     await tick(5100)
     expect(screen.getByText(i18n.t("conversation.guest.ended"))).toBeTruthy()
-    const n = calls.length
+    const count = calls.length
     await tick(15000)
-    expect(calls.length).toBe(n)
+    expect(calls.length).toBe(count)
   })
 
   it("réponse HTML (hôte sans cookie) : partage terminé", async () => {
@@ -141,7 +141,7 @@ describe("GuestApp", () => {
     await send("x")
     await tick(12000)
     expect(calls.length).toBeGreaterThan(3)
-    expect([...new Set(calls.map(key))].filter((p) => !WHITE.has(p))).toEqual([])
+    expect([...new Set(calls.map(key))].filter((path) => !WHITE.has(path))).toEqual([])
     expect(document.querySelector("a[href]")).toBeNull()
     expect(document.querySelector("nav, aside")).toBeNull()
     expect(screen.queryByText("a.md")).toBeNull()
@@ -159,7 +159,7 @@ describe("GuestApp", () => {
     expect(screen.getAllByRole("button", { name: i18n.t("conversation.composer.dequeue") })).toHaveLength(2)
     fireEvent.click(screen.getAllByRole("button", { name: i18n.t("conversation.composer.dequeue") })[0])
     await tick(50)
-    expect(calls.find((c) => c.method === "DELETE")!.raw.split("/").pop()).toBe("g1")
+    expect(calls.find((record) => record.method === "DELETE")!.raw.split("/").pop()).toBe("g1")
   })
 
   it("la file nomme l'auteur : libellé de l'invité, Hôte pour l'hôte", async () => {
@@ -176,11 +176,11 @@ describe("GuestApp", () => {
     await mount()
     fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.guest.leave") }))
     await tick(50)
-    expect(calls.some((c) => c.path === "/v1/guest/me" && c.method === "DELETE" && c.csrf === "tok")).toBe(true)
+    expect(calls.some((record) => record.path === "/v1/guest/me" && record.method === "DELETE" && record.csrf === "tok")).toBe(true)
     expect(screen.getByText(i18n.t("conversation.guest.bye"))).toBeTruthy()
-    const n = calls.length
+    const count = calls.length
     await tick(15000)
-    expect(calls.length).toBe(n)
+    expect(calls.length).toBe(count)
   })
 
   it("contenu riche : image, message coupé, outil, lien : requêtes autorisées et lien sûr", async () => {
@@ -194,12 +194,12 @@ describe("GuestApp", () => {
     expect(link.getAttribute("rel")).toContain("noopener")
     expect(link.getAttribute("rel")).toContain("noreferrer")
     expect(screen.getByText(/Bash/)).toBeTruthy()
-    expect(calls.some((c) => c.path === `${S}/conversation/text`)).toBe(true)
-    expect([...new Set(calls.map(key))].filter((p) => !WHITE.has(p))).toEqual([])
+    expect(calls.some((record) => record.path === `${S}/conversation/text`)).toBe(true)
+    expect([...new Set(calls.map(key))].filter((path) => !WHITE.has(path))).toEqual([])
   })
 
   it("historique : plus de 200 messages, bouton, préfixe conservé par le sondage suivant", async () => {
-    all = Array.from({ length: 450 }, (_, i) => msg(i))
+    all = Array.from({ length: 450 }, (_, index) => msg(index))
     await mount()
     expect(screen.queryByText("m249")).toBeNull()
     expect(screen.getByText("m449")).toBeTruthy()
@@ -218,10 +218,10 @@ describe("GuestApp", () => {
 
   it("bascule des outils : redemande /conv avec tools=1", async () => {
     await mount()
-    expect(calls.filter((c) => c.path === `${S}/conversation`).every((c) => !c.search.includes("tools=1"))).toBe(true)
+    expect(calls.filter((record) => record.path === `${S}/conversation`).every((record) => !record.search.includes("tools=1"))).toBe(true)
     fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.view.toolsHidden") }))
     await tick(50)
-    expect(calls.some((c) => c.path === `${S}/conversation` && c.search.includes("tools=1"))).toBe(true)
+    expect(calls.some((record) => record.path === `${S}/conversation` && record.search.includes("tools=1"))).toBe(true)
     expect(screen.getByRole("button", { name: i18n.t("conversation.view.toolsShown") }).getAttribute("aria-pressed")).toBe("true")
   })
 
@@ -232,9 +232,9 @@ describe("GuestApp", () => {
     fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.composer.send") }))
     await tick(50)
     expect(screen.getByText(i18n.t("conversation.guest.ended"))).toBeTruthy()
-    const n = calls.length
+    const count = calls.length
     await tick(15000)
-    expect(calls.length).toBe(n)
+    expect(calls.length).toBe(count)
   })
 
   it("Chrome : scrollIntoView renvoie une Promise ; un nouveau message ne fait pas disparaître la transcription", async () => {
@@ -258,17 +258,17 @@ describe("GuestApp", () => {
     fireEvent.keyDown(box(), { key: "Enter" })
     fireEvent.keyDown(box(), { key: "Enter" })
     await tick(50)
-    expect(calls.filter((c) => c.path === `${S}/queue` && c.method === "POST")).toHaveLength(1)
+    expect(calls.filter((record) => record.path === `${S}/queue` && record.method === "POST")).toHaveLength(1)
   })
 
   it("chaque requête porte X-Gld-Share (sauf /v1/guest/sessions) et rien ne part avant", async () => {
     await mount()
     await send("x")
     await tick(12000)
-    const own = calls.filter((c) => c.path !== "/v1/guest/sessions")
+    const own = calls.filter((record) => record.path !== "/v1/guest/sessions")
     expect(own.length).toBeGreaterThan(3)
-    expect(own.filter((c) => c.share !== H)).toEqual([])
-    expect(calls.filter((c) => c.path === "/v1/guest/sessions").every((c) => c.share === null)).toBe(true)
+    expect(own.filter((record) => record.share !== H)).toEqual([])
+    expect(calls.filter((record) => record.path === "/v1/guest/sessions").every((record) => record.share === null)).toBe(true)
   })
 
   it("poignée invalide dans l'URL : traitée comme /guest, aucune requête avec en-tête", async () => {
@@ -276,7 +276,7 @@ describe("GuestApp", () => {
     shares = 403
     await mount()
     expect(screen.getByText(i18n.t("conversation.guest.ended"))).toBeTruthy()
-    expect(calls.every((c) => c.share === null && c.path === "/v1/guest/sessions")).toBe(true)
+    expect(calls.every((record) => record.share === null && record.path === "/v1/guest/sessions")).toBe(true)
   })
 
   it("titre du partage dans l'en-tête", async () => {
@@ -361,14 +361,14 @@ describe("GuestApp", () => {
     go(`/guest/${H}/`)
     shares = 403
     await mount()
-    expect(calls.every((c) => c.share === null)).toBe(true)
+    expect(calls.every((record) => record.share === null)).toBe(true)
   })
 
   it("sélecteur : panne non 403 de /v1/guest/sessions : message et Réessayer", async () => {
     go("/guest")
     const base = vi.mocked(fetch).getMockImplementation()!
     let down = true
-    vi.mocked(fetch).mockImplementation(async (u, i) => (down && String(u).startsWith("/v1/guest/sessions") ? new Response("x", { status: 500 }) : base(u, i)))
+    vi.mocked(fetch).mockImplementation(async (uRL, requestInit) => (down && String(uRL).startsWith("/v1/guest/sessions") ? new Response("x", { status: 500 }) : base(uRL, requestInit)))
     await mount()
     expect(screen.getByText(i18n.t("conversation.guest.listFailed"))).toBeTruthy()
     down = false
@@ -381,21 +381,21 @@ describe("GuestApp", () => {
   it("sondage /v1/guest/sessions : ignoré onglet caché, arrêté en phase terminée", async () => {
     shares = [{ handle: H, title: "A", mode: "rw" }, { handle: H2, title: "B", mode: "rw" }]
     await mount()
-    const n = () => calls.filter((c) => c.path === "/v1/guest/sessions").length
+    const callback = () => calls.filter((record) => record.path === "/v1/guest/sessions").length
     const vis = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden")
-    const n0 = n()
+    const n0 = callback()
     await tick(31000)
-    expect(n()).toBe(n0)
+    expect(callback()).toBe(n0)
     vis.mockReturnValue("visible")
     await tick(30000)
-    expect(n()).toBeGreaterThan(n0)
+    expect(callback()).toBeGreaterThan(n0)
     ended = 403
     await tick(5100)
     expect(screen.getByText(i18n.t("conversation.guest.ended"))).toBeTruthy()
     await tick(100)
-    const n1 = n()
+    const n1 = callback()
     await tick(95000)
-    expect(n()).toBe(n1)
+    expect(callback()).toBe(n1)
     vis.mockRestore()
   })
 

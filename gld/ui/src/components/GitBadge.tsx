@@ -30,14 +30,14 @@ export function GitMini({ states, slot }: { states: (GitState | undefined)[]; sl
 }
 
 // Navigation : « <nombre de sessions> [robot] », en jaune quand une session du dossier est ouverte.
-export function SessionCount({ n, active }: { n: number; active: boolean }) {
+export function SessionCount({ n: count, active }: { n: number; active: boolean }) {
   const { t } = useTranslation()
   return (
     <span
       className={cn("flex w-9 shrink-0 items-center justify-end gap-0.5 text-xs tabular-nums", active ? "font-medium text-warning" : "text-muted-foreground")}
-      title={active ? t("conversation.git.sessionsOpen", { n }) : t("conversation.git.sessions", { n })}
+      title={active ? t("conversation.git.sessionsOpen", { n: count }) : t("conversation.git.sessions", { n: count })}
     >
-      {n}
+      {count}
       <Bot className="size-3.5" aria-label={t("conversation.git.sessionsAria")} />
     </span>
   )
