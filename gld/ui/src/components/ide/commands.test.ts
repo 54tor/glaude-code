@@ -6,15 +6,15 @@ import type { Tab } from "./ideState"
 import { ariaKeys, commands, showKeys, type CmdCtx, type EditorHandle } from "./commands"
 import { DEFAULT_PREFS } from "./useViewPrefs"
 
-const at = (o: unknown, key: string) =>
+const at = (value: unknown, key: string) =>
   key
     .split(".")
     .reduce<unknown>(
-      (x, k) =>
-        x && typeof x === "object"
-          ? (x as Record<string, unknown>)[k]
+      (value, key) =>
+        value && typeof value === "object"
+          ? (value as Record<string, unknown>)[key]
           : undefined,
-      o
+      value
     )
 const has = (key: string) =>
   typeof at(fr, key) === "string" && typeof at(en, key) === "string"
@@ -43,7 +43,7 @@ const ctx = (
 ): CmdCtx => {
   const t = tab()
   return {
-    can: (r) => rights.includes(r),
+    can: (raw) => rights.includes(raw),
     tab: t,
     tabs: [t],
     readOnly: false,
@@ -60,7 +60,7 @@ const ctx = (
     ...over,
   }
 }
-const byId = (id: string) => commands.find((c) => c.id === id)!
+const byId = (id: string) => commands.find((command) => command.id === id)!
 const WRITE = [
   "file.newFile",
   "file.newFolder",
@@ -106,15 +106,15 @@ const blocked: CmdCtx[] = [
 
 describe("registre de commandes", () => {
   it("contient les commandes attendues, chacune une seule fois", () => {
-    const ids = commands.map((c) => c.id)
+    const ids = commands.map((command) => command.id)
     expect(new Set(ids).size).toBe(ids.length)
     expect(ids).toEqual(expect.arrayContaining(REQUIRED))
   })
 
   it("libellé : clé ide.cmd.<id> présente en fr et en", () => {
-    for (const c of commands) {
-      expect(c.label).toBe(`ide.cmd.${c.id}`)
-      expect(has(c.label), c.label).toBe(true)
+    for (const command of commands) {
+      expect(command.label).toBe(`ide.cmd.${command.id}`)
+      expect(has(command.label), command.label).toBe(true)
     }
   })
 
@@ -145,33 +145,33 @@ describe("registre de commandes", () => {
 
   it("focus : une seule source ; fermer et basculer les zones ne visent pas l'éditeur", () => {
     const keep = ["file.saveAll", "file.closeTab", "file.closeAll", "view.toggleTree", "view.togglePreview", "view.toggleStatus"]
-    for (const c of commands) expect(c.focus, c.id).toBe(keep.includes(c.id) ? "keep" : "editor")
+    for (const command of commands) expect(command.focus, command.id).toBe(keep.includes(command.id) ? "keep" : "editor")
   })
 
   it("une commande désactivée donne une raison non vide, traduite en fr et en", () => {
-    for (const k of blocked)
-      for (const c of commands) {
-        if (c.enabled(k)) continue
-        const r = c.reason?.(k) ?? ""
-        expect(r, c.id).not.toBe("")
-        expect(has(r), r).toBe(true)
+    for (const cmdCtx of blocked)
+      for (const command of commands) {
+        if (command.enabled(cmdCtx)) continue
+        const raw = command.reason?.(cmdCtx) ?? ""
+        expect(raw, command.id).not.toBe("")
+        expect(has(raw), raw).toBe(true)
       }
   })
 
   it("run passe par la poignée, les préférences et les rappels de l'espace", () => {
-    const k = ctx()
-    byId("find.replace").run(k)
-    byId("goto.palette").run(k)
-    byId("file.save").run(k)
-    byId("view.fontPlus").run(k)
-    byId("view.wordWrap").run(k)
-    byId("view.togglePreview").run(k)
-    expect(k.editor!.replace).toHaveBeenCalled()
-    expect(k.editor!.palette).toHaveBeenCalled()
-    expect(k.save).toHaveBeenCalled()
-    expect(k.prefs.set).toHaveBeenCalledWith("fontSize", 14)
-    expect(k.prefs.set).toHaveBeenCalledWith("wordWrap", true)
-    expect(k.prefs.set).toHaveBeenCalledWith("showPreview", false)
+    const cmdCtx = ctx()
+    byId("find.replace").run(cmdCtx)
+    byId("goto.palette").run(cmdCtx)
+    byId("file.save").run(cmdCtx)
+    byId("view.fontPlus").run(cmdCtx)
+    byId("view.wordWrap").run(cmdCtx)
+    byId("view.togglePreview").run(cmdCtx)
+    expect(cmdCtx.editor!.replace).toHaveBeenCalled()
+    expect(cmdCtx.editor!.palette).toHaveBeenCalled()
+    expect(cmdCtx.save).toHaveBeenCalled()
+    expect(cmdCtx.prefs.set).toHaveBeenCalledWith("fontSize", 14)
+    expect(cmdCtx.prefs.set).toHaveBeenCalledWith("wordWrap", true)
+    expect(cmdCtx.prefs.set).toHaveBeenCalledWith("showPreview", false)
   })
 
   it("raccourcis : simples chaînes d'affichage", () => {
@@ -182,13 +182,13 @@ describe("registre de commandes", () => {
   })
 
   it("raccourcis : touches nommées traduites à l'affichage, noms ARIA canoniques", () => {
-    const fr = (k: string) => ({ "ide.keys.Shift": "Maj", "ide.keys.Enter": "Entrée", "ide.keys.Escape": "Échap", "ide.keys.Ctrl": "Ctrl", "ide.keys.Alt": "Alt" })[k] ?? "?"
+    const fr = (key: string) => ({ "ide.keys.Shift": "Maj", "ide.keys.Enter": "Entrée", "ide.keys.Escape": "Échap", "ide.keys.Ctrl": "Ctrl", "ide.keys.Alt": "Alt" })[key] ?? "?"
     expect(showKeys("Ctrl+Shift+Z", fr)).toBe("Ctrl+Maj+Z")
     expect(showKeys("Alt+Enter", fr)).toBe("Alt+Entrée")
     expect(showKeys("Escape", fr)).toBe("Échap")
     expect(showKeys("F1", fr)).toBe("F1")
     expect(ariaKeys("Ctrl+Shift+Z")).toBe("Control+Shift+Z")
     expect(ariaKeys(undefined)).toBeUndefined()
-    for (const k of ["Ctrl", "Shift", "Alt", "Enter", "Escape"]) expect(has(`ide.keys.${k}`), k).toBe(true)
+    for (const key of ["Ctrl", "Shift", "Alt", "Enter", "Escape"]) expect(has(`ide.keys.${key}`), key).toBe(true)
   })
 })

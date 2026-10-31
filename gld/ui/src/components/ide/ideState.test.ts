@@ -6,21 +6,21 @@ const two: IdeState = { tabs: [tab("a"), tab("b"), tab("c")], active: "b" }
 
 describe("reduce", () => {
   it("open d'un fichier déjà ouvert le focalise sans doublon", () => {
-    const s = reduce(two, { t: "open", tab: tab("a", "autre") })
-    expect(s.tabs.map((t) => t.path)).toEqual(["a", "b", "c"])
-    expect(s.tabs[0].content).toBe("x")
-    expect(s.active).toBe("a")
-    const n = reduce(two, { t: "open", tab: tab("d") })
-    expect(n.tabs.map((t) => t.path)).toEqual(["a", "b", "c", "d"])
-    expect(n.active).toBe("d")
+    const ideState = reduce(two, { t: "open", tab: tab("a", "autre") })
+    expect(ideState.tabs.map((t) => t.path)).toEqual(["a", "b", "c"])
+    expect(ideState.tabs[0].content).toBe("x")
+    expect(ideState.active).toBe("a")
+    const localIdeState = reduce(two, { t: "open", tab: tab("d") })
+    expect(localIdeState.tabs.map((t) => t.path)).toEqual(["a", "b", "c", "d"])
+    expect(localIdeState.active).toBe("d")
   })
 
   it("edit rend l'onglet sale, saved le rend propre et met à jour l'etag", () => {
-    const e = reduce(two, { t: "edit", path: "a", content: "y" })
-    expect(isDirty(e.tabs[0])).toBe(true)
-    const s = reduce(e, { t: "saved", path: "a", etag: "e2" })
-    expect(isDirty(s.tabs[0])).toBe(false)
-    expect(s.tabs[0].etag).toBe("e2")
+    const ideState = reduce(two, { t: "edit", path: "a", content: "y" })
+    expect(isDirty(ideState.tabs[0])).toBe(true)
+    const localIdeState = reduce(ideState, { t: "saved", path: "a", etag: "e2" })
+    expect(isDirty(localIdeState.tabs[0])).toBe(false)
+    expect(localIdeState.tabs[0].etag).toBe("e2")
   })
 
   it("edit n'a aucun effet sur un onglet en lecture seule", () => {
@@ -29,23 +29,23 @@ describe("reduce", () => {
   })
 
   it("reloaded avec fins de ligne mixtes passe l'onglet en lecture seule", () => {
-    const s = reduce(two, { t: "reloaded", path: "a", content: "a\r\nb\n", etag: "e9", notice: "mixedEol" })
-    expect(s.tabs[0]).toMatchObject({ content: "a\r\nb\n", readOnly: true, notice: "mixedEol" })
+    const ideState = reduce(two, { t: "reloaded", path: "a", content: "a\r\nb\n", etag: "e9", notice: "mixedEol" })
+    expect(ideState.tabs[0]).toMatchObject({ content: "a\r\nb\n", readOnly: true, notice: "mixedEol" })
   })
 
   it("saved avec le contenu envoyé garde sale une saisie faite pendant l'enregistrement", () => {
-    let s = reduce(two, { t: "edit", path: "a", content: "y" })
-    s = reduce(s, { t: "edit", path: "a", content: "yz" })
-    s = reduce(s, { t: "saved", path: "a", etag: "e2", content: "y" })
-    expect(s.tabs[0]).toMatchObject({ content: "yz", saved: "y", etag: "e2" })
-    expect(isDirty(s.tabs[0])).toBe(true)
+    let ideState = reduce(two, { t: "edit", path: "a", content: "y" })
+    ideState = reduce(ideState, { t: "edit", path: "a", content: "yz" })
+    ideState = reduce(ideState, { t: "saved", path: "a", etag: "e2", content: "y" })
+    expect(ideState.tabs[0]).toMatchObject({ content: "yz", saved: "y", etag: "e2" })
+    expect(isDirty(ideState.tabs[0])).toBe(true)
   })
 
   it("disk sur un onglet sale pose conflict et ne touche pas content", () => {
-    const e = reduce(two, { t: "edit", path: "a", content: "mien" })
-    const s = reduce(e, { t: "disk", path: "a", kind: "changed" })
-    expect(s.tabs[0]).toMatchObject({ content: "mien", saved: "x", etag: "e1", conflict: "changed" })
-    expect(reduce(e, { t: "disk", path: "a", kind: "deleted" }).tabs[0]).toMatchObject({ content: "mien", conflict: "deleted" })
+    const ideState = reduce(two, { t: "edit", path: "a", content: "mien" })
+    const localIdeState = reduce(ideState, { t: "disk", path: "a", kind: "changed" })
+    expect(localIdeState.tabs[0]).toMatchObject({ content: "mien", saved: "x", etag: "e1", conflict: "changed" })
+    expect(reduce(ideState, { t: "disk", path: "a", kind: "deleted" }).tabs[0]).toMatchObject({ content: "mien", conflict: "deleted" })
   })
 
   it("disk « changed » sur un onglet propre n'est pas un conflit (le composant recharge)", () => {
@@ -57,15 +57,15 @@ describe("reduce", () => {
   })
 
   it("reloaded demandé (force) remplace contenu et etag et lève le conflit", () => {
-    let s = reduce(two, { t: "edit", path: "a", content: "mien" })
-    s = reduce(s, { t: "disk", path: "a", kind: "changed" })
-    s = reduce(s, { t: "reloaded", path: "a", content: "disque", etag: "e9", force: true })
-    expect(s.tabs[0]).toEqual({ path: "a", content: "disque", saved: "disque", etag: "e9" })
+    let ideState = reduce(two, { t: "edit", path: "a", content: "mien" })
+    ideState = reduce(ideState, { t: "disk", path: "a", kind: "changed" })
+    ideState = reduce(ideState, { t: "reloaded", path: "a", content: "disque", etag: "e9", force: true })
+    expect(ideState.tabs[0]).toEqual({ path: "a", content: "disque", saved: "disque", etag: "e9" })
   })
 
   it("reloaded automatique sur un onglet devenu sale : contenu gardé, conflit", () => {
-    const s = reduce(reduce(two, { t: "edit", path: "a", content: "mien" }), { t: "reloaded", path: "a", content: "disque", etag: "e9" })
-    expect(s.tabs[0]).toMatchObject({ content: "mien", conflict: "changed" })
+    const ideState = reduce(reduce(two, { t: "edit", path: "a", content: "mien" }), { t: "reloaded", path: "a", content: "disque", etag: "e9" })
+    expect(ideState.tabs[0]).toMatchObject({ content: "mien", conflict: "changed" })
   })
 
   it("disk « changed » always : signale aussi un onglet propre", () => {
@@ -74,9 +74,9 @@ describe("reduce", () => {
   })
 
   it("saved lève le conflit", () => {
-    let s = reduce(two, { t: "edit", path: "a", content: "mien" })
-    s = reduce(s, { t: "disk", path: "a", kind: "changed" })
-    expect(reduce(s, { t: "saved", path: "a", etag: "e3" }).tabs[0].conflict).toBeUndefined()
+    let ideState = reduce(two, { t: "edit", path: "a", content: "mien" })
+    ideState = reduce(ideState, { t: "disk", path: "a", kind: "changed" })
+    expect(reduce(ideState, { t: "saved", path: "a", etag: "e3" }).tabs[0].conflict).toBeUndefined()
   })
 
   it("close de l'onglet actif focalise le voisin", () => {
@@ -92,9 +92,9 @@ describe("reduce", () => {
   })
 
   it("renamed change le chemin d'un onglet et des fichiers d'un dossier renommé", () => {
-    const s = reduce({ tabs: [tab("src/a.ts"), tab("src/b/c.ts"), tab("srcx")], active: "src/b/c.ts" }, { t: "renamed", from: "src", to: "lib" })
-    expect(s.tabs.map((t) => t.path)).toEqual(["lib/a.ts", "lib/b/c.ts", "srcx"])
-    expect(s.active).toBe("lib/b/c.ts")
+    const ideState = reduce({ tabs: [tab("src/a.ts"), tab("src/b/c.ts"), tab("srcx")], active: "src/b/c.ts" }, { t: "renamed", from: "src", to: "lib" })
+    expect(ideState.tabs.map((t) => t.path)).toEqual(["lib/a.ts", "lib/b/c.ts", "srcx"])
+    expect(ideState.active).toBe("lib/b/c.ts")
     expect(reduce(two, { t: "renamed", from: "a", to: "z" }).tabs[0].path).toBe("z")
   })
 })

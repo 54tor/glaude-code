@@ -7,15 +7,15 @@ import type { EditorStatus } from "./commands"
 import { IdeView } from "./IdeView"
 
 // Compteur de rendus des onglets : ils se redessinent avec l'espace, pas avec la barre d'état.
-const counts = vi.hoisted(() => ({ tabs: 0, listener: undefined as undefined | ((s: EditorStatus) => void) }))
+const counts = vi.hoisted(() => ({ tabs: 0, listener: undefined as undefined | ((editorStatus: EditorStatus) => void) }))
 vi.mock("./Tabs", async (orig) => {
   const real = await orig<typeof import("./Tabs")>()
-  return { Tabs: (p: Parameters<typeof real.Tabs>[0]) => (counts.tabs++, real.Tabs(p)) }
+  return { Tabs: (record: Parameters<typeof real.Tabs>[0]) => (counts.tabs++, real.Tabs(record)) }
 })
 vi.mock("./CodeEditor", async () => {
   const { useEffect } = await import("react")
-  const handle = { undo() {}, redo() {}, find() {}, replace() {}, gotoLine() {}, palette() {}, focus() {}, zoom() {}, subscribe: (l: (s: EditorStatus) => void) => ((counts.listener = l), () => (counts.listener = undefined)) }
-  const Editor = ({ editorRef }: { editorRef?: (h: unknown) => void }) => {
+  const handle = { undo() {}, redo() {}, find() {}, replace() {}, gotoLine() {}, palette() {}, focus() {}, zoom() {}, subscribe: (callback: (editorStatus: EditorStatus) => void) => ((counts.listener = callback), () => (counts.listener = undefined)) }
+  const Editor = ({ editorRef }: { editorRef?: (value: unknown) => void }) => {
     useEffect(() => {
       if (!editorRef) return
       editorRef(handle)
@@ -26,7 +26,7 @@ vi.mock("./CodeEditor", async () => {
   return { default: Editor, setTsLib: () => {}, clearTsLibs: () => {} }
 })
 
-const f = (b: FsFile): FsFile => b
+const f = (fsFile: FsFile): FsFile => fsFile
 const st = (line: number): EditorStatus => ({ line, col: 1, selected: 0, eol: "LF", language: "plaintext", indent: "spaces:2", readOnly: false })
 
 beforeEach(() => {
