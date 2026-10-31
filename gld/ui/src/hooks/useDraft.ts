@@ -4,41 +4,50 @@ import { useSyncExternalStore } from "react"
 // ne le perd pas. La file des messages vit sur le serveur ; les anciennes files locales sont reprises une fois (importLocalQueues).
 type Entry = { text: string }
 type Legacy = { queue: string[]; sending?: number }
-const empty: Entry = { text: "" }
-const KEY = "gld.drafts"
+type StoredEntry = { text?: unknown; queue?: unknown; sending?: unknown }
+const emptyEntry: Entry = { text: "" }
+const STORAGE_KEY = "gld.drafts"
 const MAX_SESSIONS = 50
 
 // Files locales d'avant le serveur, tenues de côté et réécrites telles quelles tant qu'elles ne sont pas importées.
 const legacy = new Map<string, Legacy>()
+
+const readStoredEntry = (sessionId: string, storedEntry: StoredEntry): [string, Entry] => {
+  const queue = Array.isArray(storedEntry.queue)
+    ? storedEntry.queue.filter((queuedText): queuedText is string => typeof queuedText === "string")
+    : []
+  if (queue.length > 0) {
+    const sending = typeof storedEntry.sending === "number" ? storedEntry.sending : undefined
+    legacy.set(sessionId, { queue, sending })
+  }
+  const text = typeof storedEntry.text === "string" ? storedEntry.text : ""
+  return [sessionId, { text }]
+}
+
 const load = (): Map<string, Entry> => {
   legacy.clear()
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) ?? "{}") as Record<string, { text?: unknown; queue?: unknown; sending?: unknown }>
-    return new Map(
-      Object.entries(raw).map(([id, e]) => {
-        const queue = Array.isArray(e.queue) ? e.queue.filter((q): q is string => typeof q === "string") : []
-        if (queue.length > 0) legacy.set(id, { queue, sending: typeof e.sending === "number" ? e.sending : undefined })
-        return [id, { text: typeof e.text === "string" ? e.text : "" }]
-      })
-    )
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Record<string, StoredEntry>
+    return new Map(Object.entries(raw).map(([sessionId, storedEntry]) => readStoredEntry(sessionId, storedEntry)))
   } catch {
     return new Map()
   }
 }
 const entries = load()
-const subs = new Set<() => void>()
+const subscribers = new Set<() => void>()
+const notifySubscribers = () => subscribers.forEach((subscriber) => subscriber())
 
 let writable = () => true
-export const guardDrafts = (f: () => boolean) => void (writable = f)
+export const guardDrafts = (isWritable: () => boolean) => void (writable = isWritable)
 
 const save = () => {
   if (!writable()) return
   try {
     // les plus récemment modifiées en dernier : au-delà de la limite, les plus anciennes partent
-    const kept = [...entries].slice(-MAX_SESSIONS)
-    const out: Record<string, Entry & Partial<Legacy>> = Object.fromEntries(kept)
-    for (const [id, l] of legacy) out[id] = { ...(out[id] ?? empty), ...l }
-    localStorage.setItem(KEY, JSON.stringify(out))
+    const keptEntries = [...entries].slice(-MAX_SESSIONS)
+    const serialized: Record<string, Entry & Partial<Legacy>> = Object.fromEntries(keptEntries)
+    for (const [sessionId, legacyQueue] of legacy) serialized[sessionId] = { ...(serialized[sessionId] ?? emptyEntry), ...legacyQueue }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(serialized))
   } catch {
     /* stockage plein ou indisponible : le magasin en mémoire continue de servir */
   }
@@ -46,33 +55,33 @@ const save = () => {
 
 // Un autre onglet a réécrit le stockage : on repart de sa copie, sinon le prochain save de cet onglet l'écraserait.
 if (typeof window !== "undefined")
-  window.addEventListener("storage", (e) => {
-    if (e.key !== KEY || !writable()) return
+  window.addEventListener("storage", (event) => {
+    if (event.key !== STORAGE_KEY || !writable()) return
     entries.clear()
-    for (const [id, v] of load()) entries.set(id, v)
-    subs.forEach((f) => f())
+    for (const [sessionId, entry] of load()) entries.set(sessionId, entry)
+    notifySubscribers()
   })
 
 // Changement de compte : seule la copie en mémoire part ; le stockage est vidé par l'appelant, ou appartient déjà à un autre compte.
 export function clearDrafts() {
   entries.clear()
   legacy.clear() // la file locale du compte précédent ne part jamais vers la file serveur du suivant
-  subs.forEach((f) => f())
+  notifySubscribers()
 }
 
-export const draftOf = (id: string): Entry => entries.get(id) ?? empty
+export const draftOf = (id: string): Entry => entries.get(id) ?? emptyEntry
 
 export function setDraft(id: string, patch: Partial<Entry>) {
-  const next = { ...draftOf(id), ...patch }
+  const nextEntry = { ...draftOf(id), ...patch }
   entries.delete(id) // ré-insérée à la fin
-  if (next.text) entries.set(id, next)
+  if (nextEntry.text) entries.set(id, nextEntry)
   save()
-  subs.forEach((f) => f())
+  notifySubscribers()
 }
 
-export const subscribe = (f: () => void) => {
-  subs.add(f)
-  return () => void subs.delete(f)
+export const subscribe = (subscriber: () => void) => {
+  subscribers.add(subscriber)
+  return () => void subscribers.delete(subscriber)
 }
 
 export const useDraft = (id: string): Entry => useSyncExternalStore(subscribe, () => draftOf(id))

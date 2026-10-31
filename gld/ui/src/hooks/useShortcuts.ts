@@ -3,6 +3,10 @@ import { i18n } from "@/i18n"
 import { isEditableTarget } from "@/lib/editable"
 import type { Actions, Row } from "@/components/actions"
 
+const OPEN_OVERLAY_SELECTOR = '[role="dialog"],[role="alertdialog"],[role="menu"]'
+const ROW_SELECTOR = "main [data-row]"
+const NAVIGATION_KEYS = ["j", "k", "ArrowDown", "ArrowUp"]
+
 // Raccourcis clavier, hors champ de saisie et hors fenêtre ou menu ouvert : / (recherche), j/k ou flèches (ligne),
 // t (terminal), m (reprendre avec un message), r (renommer), x (cocher), e (exporter), Suppr, Échap (vider la sélection).
 export function useShortcuts({
@@ -19,38 +23,42 @@ export function useShortcuts({
   actions: Actions
 }) {
   useEffect(() => {
-    const k = (e: KeyboardEvent) => {
-      if (isEditableTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey) return
-      if (document.querySelector('[role="dialog"],[role="alertdialog"],[role="menu"]')) return
-      if (e.key === "/") {
-        e.preventDefault()
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const hasModifier = event.ctrlKey || event.metaKey || event.altKey
+      if (isEditableTarget(event.target) || hasModifier) return
+      if (document.querySelector(OPEN_OVERLAY_SELECTOR)) return
+      if (event.key === "/") {
+        event.preventDefault()
         search.current?.focus()
         return
       }
-      if (e.key === "Escape" && picked.size) return clearPicked()
-      const rowsEl = [...document.querySelectorAll<HTMLElement>("main [data-row]")]
-      const i = rowsEl.indexOf(document.activeElement as HTMLElement)
-      if (e.key === "j" || e.key === "k" || e.key === "ArrowDown" || e.key === "ArrowUp") {
-        e.preventDefault()
-        const step = e.key === "j" || e.key === "ArrowDown" ? 1 : -1
-        const next = rowsEl[Math.max(0, Math.min(rowsEl.length - 1, i < 0 ? 0 : i + step))]
-        next?.focus()
-        next?.scrollIntoView({ block: "nearest" })
+      if (event.key === "Escape" && picked.size) return clearPicked()
+      const rowElements = [...document.querySelectorAll<HTMLElement>(ROW_SELECTOR)]
+      const focusedIndex = rowElements.indexOf(document.activeElement as HTMLElement)
+      if (NAVIGATION_KEYS.includes(event.key)) {
+        event.preventDefault()
+        const step = event.key === "j" || event.key === "ArrowDown" ? 1 : -1
+        const wantedIndex = focusedIndex < 0 ? 0 : focusedIndex + step
+        const clampedIndex = Math.max(0, Math.min(rowElements.length - 1, wantedIndex))
+        const nextRow = rowElements[clampedIndex]
+        nextRow?.focus()
+        nextRow?.scrollIntoView({ block: "nearest" })
         return
       }
-      const r = i >= 0 ? byId.get(rowsEl[i].dataset.id!) : undefined
-      if (!r) return
-      const one = { dir: r.s.dir, id: r.s.id }
-      if (e.key === "t") actions.open(one)
-      else if (e.key === "m") actions.resumeWith(r)
-      else if (e.key === "r") actions.rename(r.s)
-      else if (e.key === "x") actions.pick(r.s.id)
-      else if (e.key === "e") actions.exportMd(r)
-      else if (e.key === "Delete") actions.remove([one], i18n.t("shell.menu.quoted", { title: r.s.title }))
+      if (focusedIndex < 0) return
+      const row = byId.get(rowElements[focusedIndex].dataset.id!)
+      if (!row) return
+      const item = { dir: row.s.dir, id: row.s.id }
+      if (event.key === "t") actions.open(item)
+      else if (event.key === "m") actions.resumeWith(row)
+      else if (event.key === "r") actions.rename(row.s)
+      else if (event.key === "x") actions.pick(row.s.id)
+      else if (event.key === "e") actions.exportMd(row)
+      else if (event.key === "Delete") actions.remove([item], i18n.t("shell.menu.quoted", { title: row.s.title }))
       else return
-      e.preventDefault()
+      event.preventDefault()
     }
-    window.addEventListener("keydown", k)
-    return () => window.removeEventListener("keydown", k)
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
   })
 }

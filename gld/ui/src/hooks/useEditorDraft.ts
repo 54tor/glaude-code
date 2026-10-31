@@ -2,26 +2,29 @@ import { useEffect, useState } from "react"
 
 type Draft = { key: string; text: string } | null
 
+const readStoredDraft = (storageKey: string): Draft => {
+  try {
+    const storedDraft = JSON.parse(localStorage.getItem(storageKey) ?? "null")
+    const isValidDraft = storedDraft && typeof storedDraft.key === "string" && typeof storedDraft.text === "string"
+    return isValidDraft ? { key: storedDraft.key, text: storedDraft.text } : null
+  } catch {
+    return null
+  }
+}
+
 // Brouillon d'un éditeur (mémoire, skill, snippet, réglages JSON) gardé dans ce navigateur : recharger la page ou fermer
 // l'onglet ne le perd pas. Un seul brouillon par éditeur, comme à l'écran.
 export function useEditorDraft(name: string) {
-  const k = "gld.editor." + name
-  const [draft, setDraft] = useState<Draft>(() => {
-    try {
-      const d = JSON.parse(localStorage.getItem(k) ?? "null")
-      return d && typeof d.key === "string" && typeof d.text === "string" ? { key: d.key, text: d.text } : null
-    } catch {
-      return null
-    }
-  })
+  const storageKey = "gld.editor." + name
+  const [draft, setDraft] = useState<Draft>(() => readStoredDraft(storageKey))
   useEffect(() => {
     try {
-      if (draft) localStorage.setItem(k, JSON.stringify(draft))
-      else localStorage.removeItem(k)
+      if (draft) localStorage.setItem(storageKey, JSON.stringify(draft))
+      else localStorage.removeItem(storageKey)
     } catch {
       /* stockage plein ou indisponible : le brouillon reste en mémoire */
     }
-  }, [k, draft])
+  }, [storageKey, draft])
   return [draft, setDraft] as const
 }
 
@@ -29,11 +32,11 @@ export function useEditorDraft(name: string) {
 export function useLeaveGuard(dirty: boolean) {
   useEffect(() => {
     if (!dirty) return
-    const stop = (e: BeforeUnloadEvent) => {
-      e.preventDefault()
-      e.returnValue = "" // navigateurs qui ignorent encore preventDefault seul
+    const askBeforeLeaving = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = "" // navigateurs qui ignorent encore preventDefault seul
     }
-    addEventListener("beforeunload", stop)
-    return () => removeEventListener("beforeunload", stop)
+    addEventListener("beforeunload", askBeforeLeaving)
+    return () => removeEventListener("beforeunload", askBeforeLeaving)
   }, [dirty])
 }

@@ -4,64 +4,78 @@ import { ApiError } from "@/lib/apiError"
 
 // Partages de l'hôte (GET /v1/shares), lus par un seul sondage commun : 10 s onglet visible, 5 s tant qu'un overlay est ouvert.
 type State = { shares: ShareInfo[] | null; error: boolean }
+const FAST_POLL_INTERVAL_MS = 5000
+const SLOW_POLL_INTERVAL_MS = 10000
 let state: State = { shares: null, error: false }
-const subs = new Set<() => void>()
-let users = 0
-let fasts = 0
-let timer: ReturnType<typeof setInterval> | undefined
+const subscribers = new Set<() => void>()
+let activeUsers = 0
+let fastUsers = 0
+let pollTimer: ReturnType<typeof setInterval> | undefined
 
-const set = (next: State) => {
-  if (JSON.stringify(next) === JSON.stringify(state)) return
-  state = next
-  subs.forEach((f) => f())
+const setState = (nextState: State) => {
+  if (JSON.stringify(nextState) === JSON.stringify(state)) return
+  state = nextState
+  subscribers.forEach((subscriber) => subscriber())
 }
 
-// seq : seule la dernière lecture lancée compte, un sondage lent et ancien ne ressuscite pas une invitation révoquée.
-let seq = 0
+const stateAfterError = (error: unknown): State => {
+  const sharingUnavailable = error instanceof ApiError && (error.status === 403 || error.status === 404)
+  if (sharingUnavailable) return { shares: [], error: false }
+  return { shares: state.shares, error: true }
+}
+
+// latestRequest : seule la dernière lecture lancée compte, un sondage lent et ancien ne ressuscite pas une invitation révoquée.
+let latestRequest = 0
 const load = () => {
-  const n = ++seq
+  const requestNumber = ++latestRequest
   return api.shares().then(
-    (r) => void (n === seq && set({ shares: r.shares ?? [], error: false })),
-    (e) => void (n === seq && set(e instanceof ApiError && (e.status === 403 || e.status === 404) ? { shares: [], error: false } : { shares: state.shares, error: true }))
+    (response) => void (requestNumber === latestRequest && setState({ shares: response.shares ?? [], error: false })),
+    (error) => void (requestNumber === latestRequest && setState(stateAfterError(error)))
   )
 }
 const onVisible = () => document.visibilityState === "visible" && void load()
 
-const arm = () => {
-  clearInterval(timer)
-  timer = users ? setInterval(() => document.visibilityState === "visible" && void load(), fasts ? 5000 : 10000) : undefined
+const armPollTimer = () => {
+  clearInterval(pollTimer)
+  if (!activeUsers) {
+    pollTimer = undefined
+    return
+  }
+  const interval = fastUsers ? FAST_POLL_INTERVAL_MS : SLOW_POLL_INTERVAL_MS
+  pollTimer = setInterval(() => document.visibilityState === "visible" && void load(), interval)
 }
 
-const subscribe = (f: () => void) => {
-  subs.add(f)
-  return () => void subs.delete(f)
+const subscribe = (subscriber: () => void) => {
+  subscribers.add(subscriber)
+  return () => void subscribers.delete(subscriber)
 }
 
 export function resetShares() {
   state = { shares: null, error: false }
-  users = fasts = 0
-  seq = 0
+  activeUsers = 0
+  fastUsers = 0
+  latestRequest = 0
   document.removeEventListener("visibilitychange", onVisible)
-  clearInterval(timer)
-  timer = undefined
+  clearInterval(pollTimer)
+  pollTimer = undefined
 }
 
 export function useShares(fast = false) {
-  const s = useSyncExternalStore(subscribe, () => state)
+  const snapshot = useSyncExternalStore(subscribe, () => state)
   useEffect(() => {
-    users++
-    if (fast) fasts++
-    if (users === 1) {
+    activeUsers++
+    if (fast) fastUsers++
+    if (activeUsers === 1) {
       void load()
       document.addEventListener("visibilitychange", onVisible)
     }
-    arm()
+    armPollTimer()
     return () => {
-      users--
-      if (fast) fasts--
-      if (!users) document.removeEventListener("visibilitychange", onVisible)
-      arm()
+      activeUsers--
+      if (fast) fastUsers--
+      if (!activeUsers) document.removeEventListener("visibilitychange", onVisible)
+      armPollTimer()
     }
   }, [fast])
-  return { shares: s.shares, error: s.error, refresh: load }
+  return { shares: snapshot.shares, error: snapshot.error, refresh: load }
 }

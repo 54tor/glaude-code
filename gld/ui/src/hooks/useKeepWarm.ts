@@ -4,38 +4,41 @@ import { api } from "@/lib/api"
 
 // État du maintien au chaud des sessions, partagé par l'en-tête de la fenêtre et la liste « Cache chaud » : une seule relecture
 // (15 s, onglet visible) tant qu'au moins un composant l'utilise ; relue aussitôt après un changement.
+const REFRESH_INTERVAL_MS = 15_000
 let state: Record<string, WarmState> = {}
-const subs = new Set<() => void>()
-let timer: ReturnType<typeof setInterval> | undefined
+const subscribers = new Set<() => void>()
+let refreshTimer: ReturnType<typeof setInterval> | undefined
+
+const notifySubscribers = () => subscribers.forEach((subscriber) => subscriber())
 
 export const refreshWarm = () =>
   api.keepWarm().then(
-    (r) => {
-      if (JSON.stringify(r.items) === JSON.stringify(state)) return
-      state = r.items
-      subs.forEach((f) => f())
+    (response) => {
+      if (JSON.stringify(response.items) === JSON.stringify(state)) return
+      state = response.items
+      notifySubscribers()
     },
     () => {}
   )
 // Changement de compte : l'état du précédent ne s'affiche pas en attendant la relecture.
 export function resetWarm() {
   state = {}
-  subs.forEach((f) => f())
+  notifySubscribers()
 }
-const tick = () => document.visibilityState === "visible" && refreshWarm()
+const refreshIfVisible = () => document.visibilityState === "visible" && refreshWarm()
 
-function subscribe(f: () => void) {
-  subs.add(f)
-  if (subs.size === 1) {
-    tick()
-    timer = setInterval(tick, 15_000)
-    document.addEventListener("visibilitychange", tick)
+function subscribe(subscriber: () => void) {
+  subscribers.add(subscriber)
+  if (subscribers.size === 1) {
+    refreshIfVisible()
+    refreshTimer = setInterval(refreshIfVisible, REFRESH_INTERVAL_MS)
+    document.addEventListener("visibilitychange", refreshIfVisible)
   }
   return () => {
-    subs.delete(f)
-    if (subs.size === 0) {
-      clearInterval(timer)
-      document.removeEventListener("visibilitychange", tick)
+    subscribers.delete(subscriber)
+    if (subscribers.size === 0) {
+      clearInterval(refreshTimer)
+      document.removeEventListener("visibilitychange", refreshIfVisible)
     }
   }
 }
