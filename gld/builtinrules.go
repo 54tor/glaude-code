@@ -2,12 +2,16 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"encoding/json"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 )
 
 // Règles livrées avec gld : copiées dans <config Claude>/gld-rules à chaque démarrage (lecture seule dans l'onglet Mémoire) et
@@ -41,15 +45,53 @@ func setBuiltinOn(on bool) error {
 	return rWriteAtomic(cfgDir(), builtinFlagFile(), b, 0o600)
 }
 
-// builtinPromptArgs : l'option claude qui transmet les règles gld, vide si elles sont coupées ou pas encore écrites.
+// claudeHelp : l'aide de claude (remplaçable dans les tests).
+var claudeHelp = func() string {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	out, _ := withPath(exec.CommandContext(ctx, "claude", "--help")).Output()
+	return string(out)
+}
+
+var (
+	promptFlagOnce sync.Once
+	promptFlagName string
+)
+
+// promptFlag : l'option de claude qui ajoute du texte au prompt système, selon sa version ("" si elle n'en a aucune).
+func promptFlag() string {
+	promptFlagOnce.Do(func() {
+		h := claudeHelp()
+		switch {
+		case strings.Contains(h, "--append-system-prompt-file"):
+			promptFlagName = "--append-system-prompt-file"
+		case strings.Contains(h, "--append-system-prompt"):
+			promptFlagName = "--append-system-prompt"
+		}
+		if promptFlagName == "" && h != "" {
+			journal("règles gld : cette version de claude n'a pas d'option de prompt système, règles non transmises")
+		}
+	})
+	return promptFlagName
+}
+
+// builtinPromptArgs : l'option claude qui transmet les règles gld, vide si elles sont coupées, pas encore écrites ou
+// si claude ne sait pas les recevoir (un option inconnue empêcherait de lancer la session).
 func builtinPromptArgs() []string {
 	if !builtinOn() {
 		return nil
 	}
-	if _, err := os.Stat(builtinPromptFile()); err != nil {
+	b, err := os.ReadFile(builtinPromptFile())
+	if err != nil {
 		return nil
 	}
-	return []string{"--append-system-prompt-file", builtinPromptFile()}
+	switch promptFlag() {
+	case "--append-system-prompt-file":
+		return []string{"--append-system-prompt-file", builtinPromptFile()}
+	case "--append-system-prompt":
+		return []string{"--append-system-prompt", string(b)}
+	}
+	return nil
 }
 
 // ruleBody : le texte d'une règle embarquée sans son front matter ni sa marque.

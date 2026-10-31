@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -43,7 +44,10 @@ func TestInstallBuiltinRules(t *testing.T) {
 func TestBuiltinPromptArgs(t *testing.T) {
 	old := root
 	root = filepath.Join(t.TempDir(), "projects")
-	t.Cleanup(func() { root = old })
+	t.Cleanup(func() { root = old; promptFlagOnce = sync.Once{}; promptFlagName = "" })
+	oldHelp := claudeHelp
+	t.Cleanup(func() { claudeHelp = oldHelp })
+	claudeHelp = func() string { return "  --append-system-prompt-file <f>\n  --append-system-prompt <p>" }
 	if builtinPromptArgs() != nil {
 		t.Fatal("rien tant que les règles ne sont pas écrites")
 	}
@@ -58,6 +62,20 @@ func TestBuiltinPromptArgs(t *testing.T) {
 	if strings.Contains(string(b), "source: gld") || strings.Contains(string(b), builtinMark) || !strings.Contains(string(b), "# Output format") {
 		t.Fatalf("prompt mal assemblé : %.200s", b)
 	}
+	b2, _ := os.ReadFile(builtinPromptFile())
+	for _, c := range []struct{ help, flag string }{{"--append-system-prompt <p>", "--append-system-prompt"}, {"--model", ""}} {
+		promptFlagOnce, promptFlagName = sync.Once{}, ""
+		claudeHelp = func() string { return c.help }
+		got := builtinPromptArgs()
+		switch {
+		case c.flag == "" && got != nil:
+			t.Fatalf("option inconnue : rien attendu, reçu %v", got)
+		case c.flag != "" && (len(got) != 2 || got[0] != c.flag || got[1] != string(b2)):
+			t.Fatalf("repli : %v", got)
+		}
+	}
+	promptFlagOnce, promptFlagName = sync.Once{}, ""
+	claudeHelp = func() string { return "--append-system-prompt-file" }
 	if err := setBuiltinOn(false); err != nil || builtinPromptArgs() != nil || builtinOn() {
 		t.Fatal("coupées : aucune option attendue")
 	}
