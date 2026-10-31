@@ -6,22 +6,22 @@ import (
 )
 
 func TestBuiltinCatalogue(t *testing.T) {
-	c := builtinCatalog()
-	if len(c.Agents) != 21 || len(c.Teams) != 11 {
-		t.Fatalf("%d agents, %d teams", len(c.Agents), len(c.Teams))
+	catalog := builtinCatalog()
+	if len(catalog.Agents) != 21 || len(catalog.Teams) != 11 {
+		t.Fatalf("%d agents, %d teams", len(catalog.Agents), len(catalog.Teams))
 	}
 	ids := map[string]bool{}
 	leads := 0
-	for _, a := range c.Agents {
-		ids[a.ID] = true
-		if a.Access == "lead" {
+	for _, agent := range catalog.Agents {
+		ids[agent.ID] = true
+		if agent.Access == "lead" {
 			leads++
-			if a.ID != "chef" {
-				t.Errorf("lead inattendu : %s", a.ID)
+			if agent.ID != "chef" {
+				t.Errorf("lead inattendu : %s", agent.ID)
 			}
 		}
-		if !a.Builtin || a.Prompt == "" || a.Name == "" || a.Role == "" {
-			t.Errorf("agent incomplet : %s", a.ID)
+		if !agent.Builtin || agent.Prompt == "" || agent.Name == "" || agent.Role == "" {
+			t.Errorf("agent incomplet : %s", agent.ID)
 		}
 	}
 	if leads != 1 {
@@ -36,10 +36,10 @@ func TestBuiltinCatalogue(t *testing.T) {
 		{"refactoring", "Refactoring", "write"}, {"redacteur", "Rédaction", "write"}, {"ux", "UX et accessibilité", "read"},
 		{"qa", "QA navigateur", "read"}, {"donnees", "Données et migrations", "read"}, {"devops", "DevOps", "write"},
 	}
-	for i, w := range wantAgents {
-		a := c.Agents[i]
-		if a.ID != w[0] || a.Name != w[1] || a.Access != w[2] {
-			t.Errorf("agent %d : %s/%s/%s, attendu %v", i, a.ID, a.Name, a.Access, w)
+	for index, values := range wantAgents {
+		agent := catalog.Agents[index]
+		if agent.ID != values[0] || agent.Name != values[1] || agent.Access != values[2] {
+			t.Errorf("agent %d : %s/%s/%s, attendu %v", index, agent.ID, agent.Name, agent.Access, values)
 		}
 	}
 	wantTeams := map[string]string{
@@ -49,29 +49,29 @@ func TestBuiltinCatalogue(t *testing.T) {
 		"doc": "explorateur redacteur", "ux": "ux frontend qa", "migration": "donnees backend testeur",
 		"prod": "devops testeur redacteur", "decouverte": "explorateur architecte redacteur",
 	}
-	for _, tm := range c.Teams {
+	for _, tm := range catalog.Teams {
 		if strings.Join(tm.Members, " ") != wantTeams[tm.ID] {
 			t.Errorf("team %s : %v", tm.ID, tm.Members)
 		}
 	}
-	for _, tm := range c.Teams {
+	for _, tm := range catalog.Teams {
 		if !tm.Builtin || len(tm.Members) == 0 {
 			t.Errorf("team incomplète : %s", tm.ID)
 		}
-		for _, m := range tm.Members {
-			if !ids[m] || m == "chef" {
-				t.Errorf("team %s : membre %q invalide", tm.ID, m)
+		for _, message := range tm.Members {
+			if !ids[message] || message == "chef" {
+				t.Errorf("team %s : membre %q invalide", tm.ID, message)
 			}
 		}
 	}
 }
 
 func agentIDs(as []Agent) []string {
-	o := []string{}
-	for _, a := range as {
-		o = append(o, a.ID)
+	values := []string{}
+	for _, agent := range as {
+		values = append(values, agent.ID)
 	}
-	return o
+	return values
 }
 
 func TestComposeDedup(t *testing.T) {
@@ -84,8 +84,8 @@ func TestComposeDedup(t *testing.T) {
 	if len(got) != len(want) {
 		t.Fatalf("%v", got)
 	}
-	for i := range want {
-		if got[i] != want[i] {
+	for index := range want {
+		if got[index] != want[index] {
 			t.Fatalf("%v", got)
 		}
 	}
@@ -120,9 +120,9 @@ func TestComposeEmpty(t *testing.T) {
 }
 
 func TestComposeNoLead(t *testing.T) {
-	c := builtinCatalog()
-	c.Agents = c.Agents[1:] // sans le chef
-	if _, _, _, err := composeTeams(c, []string{"feature"}); !isMsg(err, "srv.teams_catalog.chefAbsent") {
+	catalog := builtinCatalog()
+	catalog.Agents = catalog.Agents[1:] // sans le chef
+	if _, _, _, err := composeTeams(catalog, []string{"feature"}); !isMsg(err, "srv.teams_catalog.chefAbsent") {
 		t.Fatalf("err = %v", err)
 	}
 }

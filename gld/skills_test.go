@@ -24,26 +24,26 @@ func TestSkills(t *testing.T) {
 	put(t, filepath.Join(cfg, "plugins", "installed_plugins.json"), `{"version":2,"plugins":{"p@m":[{"installPath":"`+plug+`"}]}}`, old)
 
 	by := map[string]Skill{}
-	for _, s := range listSkills() {
-		by[s.Key] = s
+	for _, skill := range listSkills() {
+		by[skill.Key] = skill
 	}
 	if len(by) != 5 {
 		t.Fatalf("%d skills : %v", len(by), by)
 	}
-	if s := by["u/revue"]; s.Description != "Relit un diff" || !s.Manual || s.Tools != "Read Grep" || s.ReadOnly || s.Scope != "user" {
-		t.Fatalf("revue : %+v", s)
+	if skill := by["u/revue"]; skill.Description != "Relit un diff" || !skill.Manual || skill.Tools != "Read Grep" || skill.ReadOnly || skill.Scope != "user" {
+		t.Fatalf("revue : %+v", skill)
 	}
-	if s := by["u/sans-desc"]; s.Description != "Titre du skill" || !strings.Contains(s.Warn, "description") {
-		t.Fatalf("sans description : %+v", s)
+	if skill := by["u/sans-desc"]; skill.Description != "Titre du skill" || !strings.Contains(skill.Warn, "description") {
+		t.Fatalf("sans description : %+v", skill)
 	}
-	if s := by["u/avec-fichiers"]; s.Files != 2 {
-		t.Fatalf("fichiers : %+v", s)
+	if skill := by["u/avec-fichiers"]; skill.Files != 2 {
+		t.Fatalf("fichiers : %+v", skill)
 	}
-	if s := by["p/-p/local"]; s.Scope != "project" || s.Project != proj {
-		t.Fatalf("projet : %+v", s)
+	if skill := by["p/-p/local"]; skill.Scope != "project" || skill.Project != proj {
+		t.Fatalf("projet : %+v", skill)
 	}
-	if s := by["x/p@m/du-plugin"]; !s.ReadOnly || s.Plugin != "p@m" {
-		t.Fatalf("plugin : %+v", s)
+	if skill := by["x/p@m/du-plugin"]; !skill.ReadOnly || skill.Plugin != "p@m" {
+		t.Fatalf("plugin : %+v", skill)
 	}
 
 	// lecture, écriture, corbeille
@@ -61,8 +61,8 @@ func TestSkills(t *testing.T) {
 	if _, err := trashRestore(trashList()[0].ID); err != nil {
 		t.Fatal(err)
 	}
-	if s, _, _ := readSkill("u/revue"); !strings.Contains(s, "Relit un diff") {
-		t.Fatalf("restauration : %s", s)
+	if text, _, _ := readSkill("u/revue"); !strings.Contains(text, "Relit un diff") {
+		t.Fatalf("restauration : %s", text)
 	}
 	// création : nom strict, pas d'écrasement
 	if err := saveSkill("u/Mon Skill", "---\ndescription: x\n---\nx\n", true); err == nil {
@@ -78,14 +78,14 @@ func TestSkills(t *testing.T) {
 		t.Fatal(err)
 	}
 	// refus : plugin, traversée, texte vide
-	for _, k := range []string{"x/p@m/du-plugin"} {
-		if saveSkill(k, "x\n", false) == nil || removeSkill(k) == nil {
-			t.Errorf("écriture dans un plugin acceptée : %s", k)
+	for _, key := range []string{"x/p@m/du-plugin"} {
+		if saveSkill(key, "x\n", false) == nil || removeSkill(key) == nil {
+			t.Errorf("écriture dans un plugin acceptée : %s", key)
 		}
 	}
-	for _, k := range []string{"u/..", "u/../x", "u/a/b", "p/../x/y", "x/pas-un-id/y", "z/x", ""} {
-		if _, _, err := readSkill(k); err == nil {
-			t.Errorf("clé acceptée : %q", k)
+	for _, key := range []string{"u/..", "u/../x", "u/a/b", "p/../x/y", "x/pas-un-id/y", "z/x", ""} {
+		if _, _, err := readSkill(key); err == nil {
+			t.Errorf("clé acceptée : %q", key)
 		}
 	}
 	if saveSkill("u/revue", "  \n", false) == nil {
@@ -111,8 +111,8 @@ func TestSkills(t *testing.T) {
 	if dst, err := copySkill("u/avec-fichiers", "p/-p"); err != nil || dst != "p/-p/avec-fichiers" {
 		t.Fatal(dst, err)
 	}
-	if b, err := os.ReadFile(filepath.Join(proj, ".claude", "skills", "avec-fichiers", "scripts", "go.sh")); err != nil || string(b) != "echo\n" {
-		t.Fatalf("fichier d'appui non copié : %q %v", b, err)
+	if data, err := os.ReadFile(filepath.Join(proj, ".claude", "skills", "avec-fichiers", "scripts", "go.sh")); err != nil || string(data) != "echo\n" {
+		t.Fatalf("fichier d'appui non copié : %q %v", data, err)
 	}
 	if st, err := os.Stat(filepath.Join(proj, ".claude", "skills", "avec-fichiers", "scripts", "go.sh")); err != nil || st.Mode()&0o100 == 0 {
 		t.Fatalf("script copié sans bit exécutable : %v %v", st, err)
@@ -131,8 +131,8 @@ func TestBrouillonSkill(t *testing.T) {
 	var system, prompt string
 	old := memDraft
 	defer func() { memDraft = old }()
-	memDraft = func(model, s, p string) (string, float64, error) {
-		system, prompt = s, p
+	memDraft = func(model, text, path string) (string, float64, error) {
+		system, prompt = text, path
 		return "texte condensé sans en-tête\n", 0.001, nil
 	}
 	out, _, err := skillDraft("haiku", "condense", "u/a", nil)
@@ -168,19 +168,19 @@ func TestOrigineDesSkills(t *testing.T) {
 	put(t, filepath.Join(cfg, "skills", "synced", bucket, "manifest.json"), "{}", old)
 
 	by := map[string]Skill{}
-	for _, s := range listSkills() {
-		by[s.Key] = s
+	for _, skill := range listSkills() {
+		by[skill.Key] = skill
 	}
-	for k, want := range map[string]string{"u/maison": "custom", "u/avec-page": "install", "u/npx": "install", "p/-p/verrou": "install", "s/" + bucket + "/docs": "store"} {
-		if by[k].Origin != want {
-			t.Errorf("%s : origine %q, attendu %q", k, by[k].Origin, want)
+	for key, want := range map[string]string{"u/maison": "custom", "u/avec-page": "install", "u/npx": "install", "p/-p/verrou": "install", "s/" + bucket + "/docs": "store"} {
+		if by[key].Origin != want {
+			t.Errorf("%s : origine %q, attendu %q", key, by[key].Origin, want)
 		}
 	}
 	if by["u/npx"].Source != "github : o/r" || by["u/avec-page"].Source != "https://github.com/a/b" {
 		t.Errorf("sources : %+v %+v", by["u/npx"], by["u/avec-page"])
 	}
-	if s := by["s/"+bucket+"/docs"]; !s.ReadOnly || s.Scope != "store" {
-		t.Errorf("store : %+v", s)
+	if skill := by["s/"+bucket+"/docs"]; !skill.ReadOnly || skill.Scope != "store" {
+		t.Errorf("store : %+v", skill)
 	}
 	if len(by) != 5 || saveSkill("s/"+bucket+"/docs", "x\n", false) == nil {
 		t.Errorf("le store doit être en lecture seule (%d skills)", len(by))
@@ -199,10 +199,10 @@ func TestSkillsSymlink(t *testing.T) {
 	if err := os.Symlink(filepath.Join(ext, "lie"), filepath.Join(cfg, "skills", "lie")); err != nil {
 		t.Fatal(err)
 	}
-	for _, s := range listSkills() {
-		if s.Key == "u/lie" {
-			if s.Files != 2 {
-				t.Fatalf("fichiers : %d", s.Files)
+	for _, skill := range listSkills() {
+		if skill.Key == "u/lie" {
+			if skill.Files != 2 {
+				t.Fatalf("fichiers : %d", skill.Files)
 			}
 			return
 		}
@@ -228,21 +228,21 @@ func TestSkillsSymlinkProtected(t *testing.T) {
 }
 
 func TestReadLock(t *testing.T) {
-	d := t.TempDir()
-	p := filepath.Join(d, "l.json")
-	put(t, p, `{"version":3,"skills":{"find-skills":{"source":"vercel-labs/skills","sourceType":"github","sourceUrl":"https://github.com/vercel-labs/skills.git","skillPath":"skills/find-skills/SKILL.md","skillFolderHash":"76a9","installedAt":"a","updatedAt":"b"}}}`, old)
-	e := readLock(p)["find-skills"]
+	dir := t.TempDir()
+	path := filepath.Join(dir, "l.json")
+	put(t, path, `{"version":3,"skills":{"find-skills":{"source":"vercel-labs/skills","sourceType":"github","sourceUrl":"https://github.com/vercel-labs/skills.git","skillPath":"skills/find-skills/SKILL.md","skillFolderHash":"76a9","installedAt":"a","updatedAt":"b"}}}`, old)
+	lockEntry := readLock(path)["find-skills"]
 	want := LockEntry{"vercel-labs/skills", "github", "https://github.com/vercel-labs/skills.git", "skills/find-skills/SKILL.md", "76a9", "a", "b"}
-	if e != want {
-		t.Errorf("entrée : %+v", e)
+	if lockEntry != want {
+		t.Errorf("entrée : %+v", lockEntry)
 	}
-	for _, c := range []string{"{}", "not json", ""} {
-		put(t, p, c, old)
-		if len(readLock(p)) != 0 {
-			t.Errorf("%q : attendu vide", c)
+	for _, content := range []string{"{}", "not json", ""} {
+		put(t, path, content, old)
+		if len(readLock(path)) != 0 {
+			t.Errorf("%q : attendu vide", content)
 		}
 	}
-	if readLock(filepath.Join(d, "absent.json")) != nil {
+	if readLock(filepath.Join(dir, "absent.json")) != nil {
 		t.Error("fichier absent : attendu nil")
 	}
 }
@@ -261,13 +261,13 @@ func TestSkillLockEnLien(t *testing.T) {
 	}
 	put(t, filepath.Join(home, ".agents", ".skill-lock.json"), `{"skills":{"lie":{"source":"o/r","sourceType":"github","skillFolderHash":"h"},"copie":{"source":"o/r","sourceType":"github"}}}`, old)
 	by := map[string]Skill{}
-	for _, s := range listSkills() {
-		by[s.Key] = s
+	for _, skill := range listSkills() {
+		by[skill.Key] = skill
 	}
-	if l := by["u/lie"].Lock; l == nil || !l.Link || !l.Managed || !l.Global || l.Hash != "h" || by["u/lie"].Origin != "install" {
+	if skillLock := by["u/lie"].Lock; skillLock == nil || !skillLock.Link || !skillLock.Managed || !skillLock.Global || skillLock.Hash != "h" || by["u/lie"].Origin != "install" {
 		t.Errorf("lien : %+v", by["u/lie"])
 	}
-	if l := by["u/copie"].Lock; l == nil || l.Link || l.Managed {
+	if skillLock := by["u/copie"].Lock; skillLock == nil || skillLock.Link || skillLock.Managed {
 		t.Errorf("copie : %+v", by["u/copie"])
 	}
 	if by["u/maison"].Lock != nil || by["u/maison"].Origin != "custom" {
@@ -280,13 +280,13 @@ func TestRemoveSkillDossierAvecLien(t *testing.T) {
 	old := root
 	t.Cleanup(func() { root = old })
 	use(cfg)
-	d := filepath.Join(cfg, "skills", "lie")
-	os.MkdirAll(filepath.Join(d, "vide"), 0o755)
-	os.WriteFile(filepath.Join(d, "SKILL.md"), []byte("---\nname: lie\ndescription: d\n---\n"), 0o644)
+	dir := filepath.Join(cfg, "skills", "lie")
+	os.MkdirAll(filepath.Join(dir, "vide"), 0o755)
+	os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: lie\ndescription: d\n---\n"), 0o644)
 	if err := removeSkill("u/lie"); err == nil {
 		t.Fatal("dossier avec un sous-dossier supprimé")
 	}
-	if _, err := os.Stat(filepath.Join(d, "SKILL.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "SKILL.md")); err != nil {
 		t.Fatal("SKILL.md supprimé alors que le dossier reste")
 	}
 }
