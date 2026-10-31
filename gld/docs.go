@@ -67,7 +67,11 @@ func mentionedDocs(text string) []string {
 
 // wroteDoc : le transcript montre-t-il ce chemin comme écrit ou cité ?
 func wroteDoc(transcriptPath, path string) bool {
-	needle, _ := json.Marshal(path)
+	var encoded bytes.Buffer
+	encoder := json.NewEncoder(&encoded)
+	encoder.SetEscapeHTML(false) // Claude n'échappe pas & < > dans ses transcripts
+	_ = encoder.Encode(path)
+	needle := bytes.TrimSpace(encoded.Bytes())
 	needle = needle[1 : len(needle)-1] // le chemin cité dans un texte n'est pas une chaîne JSON à lui seul
 	found := false
 	_ = scan(transcriptPath, func(rawLine []byte) {

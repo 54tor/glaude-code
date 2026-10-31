@@ -16,6 +16,18 @@ func writeToolUseLine(docPath string) string {
 	return `{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Write","input":{"file_path":"` + docPath + `"}}]}}` + "\n"
 }
 
+func TestWroteDocRecognisesPathsWithHTMLCharacters(t *testing.T) {
+	directory := t.TempDir()
+	documentPath := filepath.Join(directory, "a&b <c>.md")
+	os.WriteFile(documentPath, []byte("x"), 0o600)
+	transcriptPath := filepath.Join(directory, "transcript.jsonl")
+	os.WriteFile(transcriptPath, []byte(writeToolUseLine(documentPath)), 0o600)
+
+	if !wroteDoc(transcriptPath, documentPath) {
+		t.Fatal("un chemin contenant & < > écrit par Write n'est pas reconnu")
+	}
+}
+
 func TestWroteDoc(t *testing.T) {
 	directory := t.TempDir()
 	writtenDoc := filepath.Join(directory, "rapport.md")
