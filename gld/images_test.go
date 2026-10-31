@@ -18,12 +18,12 @@ const png1 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDw
 func TestDepotImage(t *testing.T) {
 	cfg := t.TempDir()
 	use(cfg)
-	b, _ := base64.StdEncoding.DecodeString(png1)
-	p, err := saveImage(b, "")
-	if err != nil || !strings.HasPrefix(p, imagesDir()+string(filepath.Separator)) || !strings.HasSuffix(p, ".png") {
-		t.Fatal(p, err)
+	localData, _ := base64.StdEncoding.DecodeString(png1)
+	path, err := saveImage(localData, "")
+	if err != nil || !strings.HasPrefix(path, imagesDir()+string(filepath.Separator)) || !strings.HasSuffix(path, ".png") {
+		t.Fatal(path, err)
 	}
-	if fi, err := os.Stat(p); err != nil || fi.Mode().Perm() != 0o600 {
+	if fi, err := os.Stat(path); err != nil || fi.Mode().Perm() != 0o600 {
 		t.Fatalf("droits : %v %v", fi, err)
 	}
 	if fi, _ := os.Stat(imagesDir()); fi.Mode().Perm() != 0o700 {
@@ -34,7 +34,7 @@ func TestDepotImage(t *testing.T) {
 		"texte": []byte("pas une image"),
 		"svg":   []byte(`<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`),
 		"html":  []byte("<html><script>x</script></html>"),
-		"gros":  append(slices.Clone(b), make([]byte, imgMax)...),
+		"gros":  append(slices.Clone(localData), make([]byte, imgMax)...),
 	} {
 		if _, err := saveImage(data, ""); err == nil {
 			t.Errorf("%s accepté", name)
@@ -42,9 +42,9 @@ func TestDepotImage(t *testing.T) {
 	}
 	// une image de plus de 14 jours est retirée au passage
 	old := filepath.Join(imagesDir(), "ancienne.png")
-	os.WriteFile(old, b, 0o600)
+	os.WriteFile(old, localData, 0o600)
 	os.Chtimes(old, time.Now().Add(-15*24*time.Hour), time.Now().Add(-15*24*time.Hour))
-	if _, err := saveImage(b, ""); err != nil {
+	if _, err := saveImage(localData, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(old); !os.IsNotExist(err) {
@@ -63,9 +63,9 @@ func TestImagesDesConversations(t *testing.T) {
 
 	ms := conv(tp, false)
 	var img *Msg
-	for i := range ms {
-		if ms[i].Img != "" {
-			img = &ms[i]
+	for index := range ms {
+		if ms[index].Img != "" {
+			img = &ms[index]
 			break
 		}
 	}
@@ -77,31 +77,31 @@ func TestImagesDesConversations(t *testing.T) {
 		t.Fatal(typ, len(data), err)
 	}
 	off2 := int64(len(line1) + len(line2))
-	for name, f := range map[string]func() error{
-		"texte":           func() error { _, _, e := convImage(tp, 0, 0); return e },
-		"hors liste":      func() error { _, _, e := convImage(tp, 0, 9); return e },
-		"décalage nég.":   func() error { _, _, e := convImage(tp, -1, 0); return e },
-		"milieu de ligne": func() error { _, _, e := convImage(tp, 7, 1); return e },
-		"faux contenu":    func() error { _, _, e := convImage(tp, off2, 0); return e },
+	for name, callback := range map[string]func() error{
+		"texte":           func() error { _, _, err := convImage(tp, 0, 0); return err },
+		"hors liste":      func() error { _, _, err := convImage(tp, 0, 9); return err },
+		"décalage nég.":   func() error { _, _, err := convImage(tp, -1, 0); return err },
+		"milieu de ligne": func() error { _, _, err := convImage(tp, 7, 1); return err },
+		"faux contenu":    func() error { _, _, err := convImage(tp, off2, 0); return err },
 	} {
-		if f() == nil {
+		if callback() == nil {
 			t.Errorf("%s accepté", name)
 		}
 	}
 	// route : les paramètres invalides ne passent pas, le type est fixé par le contenu
 	hosts[testHost] = true
-	h := handler()
-	w := getRaw(h, "/v1/sessions/"+id1+"/conversation/images/0-1?dir=-p")
-	if w.Code != 200 || w.Header().Get("Content-Type") != "image/png" || w.Header().Get("X-Content-Type-Options") != "nosniff" {
-		t.Fatalf("route : %d %v", w.Code, w.Header())
+	localHandler := handler()
+	recorder := getRaw(localHandler, "/v1/sessions/"+id1+"/conversation/images/0-1?dir=-p")
+	if recorder.Code != 200 || recorder.Header().Get("Content-Type") != "image/png" || recorder.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatalf("route : %d %v", recorder.Code, recorder.Header())
 	}
-	for u, want := range map[string]int{
+	for rawURL, want := range map[string]int{
 		"/v1/sessions/" + id1 + "/conversation/images/0-1?dir=..": 404,
 		"/v1/sessions/" + id1 + "/conversation/images/x-1?dir=-p": 404,
 		"/v1/sessions/%2e%2e/conversation/images/0-1?dir=-p":      400,
 	} {
-		if w := getRaw(h, u); w.Code != want {
-			t.Errorf("%s : %d", u, w.Code)
+		if recorder := getRaw(localHandler, rawURL); recorder.Code != want {
+			t.Errorf("%s : %d", rawURL, recorder.Code)
 		}
 	}
 }
@@ -109,22 +109,22 @@ func TestImagesDesConversations(t *testing.T) {
 func TestChatImageDossier(t *testing.T) {
 	use(t.TempDir())
 	img := filepath.Join(imagesDir(), "x.png")
-	a := chatArgs(nil, id1, "", "décris @"+img)
-	i := slices.Index(a, "--add-dir")
-	if i < 0 || a[i+1] != imagesDir() || slices.Index(a, "--") < i {
-		t.Fatalf("dossier non ajouté avant « -- » : %v", a)
+	values := chatArgs(nil, id1, "", "décris @"+img)
+	index := slices.Index(values, "--add-dir")
+	if index < 0 || values[index+1] != imagesDir() || slices.Index(values, "--") < index {
+		t.Fatalf("dossier non ajouté avant « -- » : %v", values)
 	}
 	if slices.Contains(chatArgs(nil, id1, "", "sans image"), "--add-dir") {
 		t.Fatal("dossier ajouté sans image")
 	}
 }
 
-func getRaw(h http.Handler, path string) *httptest.ResponseRecorder {
-	r := httptest.NewRequest("GET", path, nil)
-	r.Host = testHost
-	w := httptest.NewRecorder()
-	h.ServeHTTP(w, r)
-	return w
+func getRaw(handler http.Handler, path string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest("GET", path, nil)
+	request.Host = testHost
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	return recorder
 }
 
 func TestFileExt(t *testing.T) {
@@ -137,13 +137,13 @@ func TestFileExt(t *testing.T) {
 
 func TestImageDeposeSousSessionEstRetireeAvecElle(t *testing.T) {
 	use(t.TempDir())
-	b, _ := base64.StdEncoding.DecodeString(png1)
+	data, _ := base64.StdEncoding.DecodeString(png1)
 	other := "11111111-1111-1111-1111-111111111111"
-	p1, err := saveImage(b, sid)
+	p1, err := saveImage(data, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
-	p2, _ := saveImage(b, other)
+	p2, _ := saveImage(data, other)
 	if !strings.HasPrefix(filepath.Base(p1), sid+"-") {
 		t.Fatalf("nom sans préfixe : %s", p1)
 	}
@@ -158,25 +158,25 @@ func TestImageDeposeSousSessionEstRetireeAvecElle(t *testing.T) {
 
 func TestUploadImageConfinee(t *testing.T) {
 	use(t.TempDir())
-	b, _ := base64.StdEncoding.DecodeString(png1)
-	p, err := saveImage(b, "")
+	data, _ := base64.StdEncoding.DecodeString(png1)
+	path, err := saveImage(data, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	f, typ, err := uploadImage(filepath.Base(p))
+	file, typ, err := uploadImage(filepath.Base(path))
 	if err != nil || typ != "image/png" {
 		t.Fatal(typ, err)
 	}
-	f.Close()
+	file.Close()
 	out := t.TempDir()
-	os.WriteFile(filepath.Join(out, "secret.png"), b, 0o600)
+	os.WriteFile(filepath.Join(out, "secret.png"), data, 0o600)
 	os.WriteFile(filepath.Join(out, "texte.txt"), []byte("pas une image"), 0o600)
 	os.Symlink(filepath.Join(out, "secret.png"), filepath.Join(imagesDir(), "lien.png"))
 	os.Symlink(out, filepath.Join(imagesDir(), "dossier"))
 	os.WriteFile(filepath.Join(imagesDir(), "faux.png"), []byte("pas une image"), 0o600)
 	for _, name := range []string{"lien.png", "dossier/secret.png", "../secret.png", "/etc/passwd", ".cache", "faux.png", "absent.png", ""} {
-		if f, _, err := uploadImage(name); err == nil {
-			f.Close()
+		if file, _, err := uploadImage(name); err == nil {
+			file.Close()
 			t.Errorf("%q servi", name)
 		}
 	}

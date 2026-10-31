@@ -35,18 +35,18 @@ func wsTest(t *testing.T) {
 func next(t *testing.T, ch <-chan ideEvent) ideEvent {
 	t.Helper()
 	select {
-	case e := <-ch:
-		return e
+	case ideEvent := <-ch:
+		return ideEvent
 	case <-time.After(3 * time.Second):
 		t.Fatal("aucun évènement")
 	}
 	return ideEvent{}
 }
 
-func until(t *testing.T, what string, f func() bool) {
+func until(t *testing.T, what string, callback func() bool) {
 	t.Helper()
-	for i := 0; i < 300; i++ {
-		if f() {
+	for index := 0; index < 300; index++ {
+		if callback() {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -56,26 +56,26 @@ func until(t *testing.T, what string, f func() bool) {
 
 func expectSeq(t *testing.T, ch <-chan ideEvent, proj string) {
 	t.Helper()
-	p := filepath.Join(proj, "a.txt")
-	os.WriteFile(p, []byte("1"), 0o644)
-	f, _ := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0)
-	f.WriteString("22")
-	f.Close()
-	if e := next(t, ch); e != (ideEvent{"a.txt", "create"}) {
-		t.Fatal(e)
+	path := filepath.Join(proj, "a.txt")
+	os.WriteFile(path, []byte("1"), 0o644)
+	file, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	file.WriteString("22")
+	file.Close()
+	if localIdeEvent := next(t, ch); localIdeEvent != (ideEvent{"a.txt", "create"}) {
+		t.Fatal(localIdeEvent)
 	}
-	if e := next(t, ch); e != (ideEvent{"a.txt", "write"}) {
-		t.Fatal(e)
+	if localIdeEvent := next(t, ch); localIdeEvent != (ideEvent{"a.txt", "write"}) {
+		t.Fatal(localIdeEvent)
 	}
 	time.Sleep(3 * ideDebounce)
 	select {
-	case e := <-ch:
-		t.Fatal("en trop :", e)
+	case ideEvent := <-ch:
+		t.Fatal("en trop :", ideEvent)
 	default:
 	}
-	os.Remove(p)
-	if e := next(t, ch); e != (ideEvent{"a.txt", "remove"}) {
-		t.Fatal(e)
+	os.Remove(path)
+	if localIdeEvent := next(t, ch); localIdeEvent != (ideEvent{"a.txt", "remove"}) {
+		t.Fatal(localIdeEvent)
 	}
 }
 
@@ -103,8 +103,8 @@ func TestWatchIgnoresUndeclaredDirs(t *testing.T) {
 	mk(t, proj, "other/x.txt", "y.txt")
 	time.Sleep(3 * ideDebounce)
 	mk(t, proj, "src/z.txt")
-	if e := next(t, ch); e.Path != "src/z.txt" {
-		t.Fatal(e)
+	if ideEvent := next(t, ch); ideEvent.Path != "src/z.txt" {
+		t.Fatal(ideEvent)
 	}
 }
 
@@ -117,25 +117,25 @@ func TestWatchPollFallback(t *testing.T) {
 	ws, _ := ideWS(proj)
 	ch, cancel := ws.Subscribe([]string{""})
 	defer cancel()
-	p := filepath.Join(proj, "a.txt")
-	os.WriteFile(p, []byte("1"), 0o644)
-	if e := next(t, ch); e != (ideEvent{"a.txt", "create"}) {
-		t.Fatal(e)
+	path := filepath.Join(proj, "a.txt")
+	os.WriteFile(path, []byte("1"), 0o644)
+	if localIdeEvent := next(t, ch); localIdeEvent != (ideEvent{"a.txt", "create"}) {
+		t.Fatal(localIdeEvent)
 	}
-	os.WriteFile(p, []byte("1234"), 0o644)
-	if e := next(t, ch); e != (ideEvent{"a.txt", "write"}) {
-		t.Fatal(e)
+	os.WriteFile(path, []byte("1234"), 0o644)
+	if localIdeEvent := next(t, ch); localIdeEvent != (ideEvent{"a.txt", "write"}) {
+		t.Fatal(localIdeEvent)
 	}
-	os.Remove(p)
-	if e := next(t, ch); e != (ideEvent{"a.txt", "remove"}) {
-		t.Fatal(e)
+	os.Remove(path)
+	if localIdeEvent := next(t, ch); localIdeEvent != (ideEvent{"a.txt", "remove"}) {
+		t.Fatal(localIdeEvent)
 	}
 }
 
-func indexHas(ws *ideWorkspace, p string) bool {
+func indexHas(ws *ideWorkspace, path string) bool {
 	es, _ := ws.Index()
-	for _, e := range es {
-		if e.Path == p {
+	for _, ideIndexEntry := range es {
+		if ideIndexEntry.Path == path {
 			return true
 		}
 	}
@@ -220,11 +220,11 @@ func TestWatchUnknownDir(t *testing.T) {
 }
 
 func TestFsWatchSSE(t *testing.T) {
-	h, _, proj := web(t)
+	handler, _, proj := web(t)
 	wsTest(t)
 	ideIdleTTL = 50 * time.Millisecond
 	before := runtime.NumGoroutine()
-	srv := httptest.NewServer(h)
+	srv := httptest.NewServer(handler)
 	tr := &http.Transport{}
 	ctx, stop := context.WithCancel(context.Background())
 	req, _ := http.NewRequestWithContext(ctx, "GET", srv.URL+"/v1/fs/watch?dir="+proj+"&paths=", nil)
@@ -241,14 +241,14 @@ func TestFsWatchSSE(t *testing.T) {
 	var got ideEvent
 	ping := false
 	for sc.Scan() {
-		l := sc.Text()
-		if l == ": ping" {
+		line := sc.Text()
+		if line == ": ping" {
 			ping = true
 		}
-		if d, ok := strings.CutPrefix(l, "data: "); ok {
-			json.Unmarshal([]byte(d), &got)
-			if strings.Contains(d, "content") {
-				t.Fatal(d)
+		if dir, ok := strings.CutPrefix(line, "data: "); ok {
+			json.Unmarshal([]byte(dir), &got)
+			if strings.Contains(dir, "content") {
+				t.Fatal(dir)
 			}
 			break
 		}
@@ -269,17 +269,17 @@ func TestFsWatchSSE(t *testing.T) {
 		return len(ideWorkspaces) == 0
 	})
 	until(t, "goroutines qui fuient", func() bool { return runtime.NumGoroutine() <= before })
-	if c, _, _ := call(t, h, "GET", "/v1/fs/watch?dir=/nope", ""); c != 404 {
-		t.Fatal(c)
+	if counter, _, _ := call(t, handler, "GET", "/v1/fs/watch?dir=/nope", ""); counter != 404 {
+		t.Fatal(counter)
 	}
 }
 
 func TestFsWatchRequiresFsRead(t *testing.T) {
-	g := newGateRig(t)
-	no := g.user(t, "sans", false)
-	g.grant(t, no, "", RightMemRead)
-	if w := g.do("GET", "/v1/fs/watch", &no, "", ""); w.Code != 403 {
-		t.Fatal(w.Code)
+	gateRig := newGateRig(t)
+	no := gateRig.user(t, "sans", false)
+	gateRig.grant(t, no, "", RightMemRead)
+	if recorder := gateRig.do("GET", "/v1/fs/watch", &no, "", ""); recorder.Code != 403 {
+		t.Fatal(recorder.Code)
 	}
 }
 
@@ -287,8 +287,8 @@ func drain(ch <-chan ideEvent) []ideEvent {
 	var out []ideEvent
 	for {
 		select {
-		case e := <-ch:
-			out = append(out, e)
+		case ideEvent := <-ch:
+			out = append(out, ideEvent)
 		default:
 			return out
 		}
@@ -304,25 +304,25 @@ func TestWatchBufferOverflowResyncOnce(t *testing.T) {
 	ws, _ := ideWS(proj)
 	ch, cancel := ws.Subscribe([]string{""})
 	defer cancel()
-	for i := 0; i < 12; i++ {
-		mk(t, proj, fmt.Sprintf("f%02d", i))
-		if i == 5 {
+	for index := 0; index < 12; index++ {
+		mk(t, proj, fmt.Sprintf("f%02d", index))
+		if index == 5 {
 			time.Sleep(3 * ideDebounce)
 		}
 	}
 	time.Sleep(3 * ideDebounce)
-	n := 0
-	for _, e := range drain(ch) {
-		if e == ideResync {
-			n++
+	count := 0
+	for _, ideEvent := range drain(ch) {
+		if ideEvent == ideResync {
+			count++
 		}
 	}
-	if n != 1 {
-		t.Fatal("resync :", n)
+	if count != 1 {
+		t.Fatal("resync :", count)
 	}
 	mk(t, proj, "after")
-	if e := next(t, ch); e != (ideEvent{"after", "create"}) {
-		t.Fatal(e)
+	if localIdeEvent := next(t, ch); localIdeEvent != (ideEvent{"after", "create"}) {
+		t.Fatal(localIdeEvent)
 	}
 }
 
@@ -333,9 +333,9 @@ func TestWatchEventOverflowResync(t *testing.T) {
 	var fw *fsnotify.Watcher
 	old := ideNewWatcher
 	ideNewWatcher = func() (*fsnotify.Watcher, error) {
-		w, err := fsnotify.NewWatcher()
-		fw = w
-		return w, err
+		watcher, err := fsnotify.NewWatcher()
+		fw = watcher
+		return watcher, err
 	}
 	t.Cleanup(func() { ideNewWatcher = old })
 	mk(t, proj, "a.go")
@@ -346,12 +346,12 @@ func TestWatchEventOverflowResync(t *testing.T) {
 	os.WriteFile(filepath.Join(proj, "p.txt"), []byte("1"), 0o644)
 	time.Sleep(100 * time.Millisecond)
 	fw.Errors <- fsnotify.ErrEventOverflow
-	if e := next(t, ch); e != (ideEvent{"p.txt", "create"}) {
-		t.Fatal("pending perdu :", e)
+	if localIdeEvent := next(t, ch); localIdeEvent != (ideEvent{"p.txt", "create"}) {
+		t.Fatal("pending perdu :", localIdeEvent)
 	}
-	for e := next(t, ch); e != ideResync; e = next(t, ch) {
-		if e.Path != "p.txt" {
-			t.Fatal(e)
+	for ideEvent := next(t, ch); ideEvent != ideResync; ideEvent = next(t, ch) {
+		if ideEvent.Path != "p.txt" {
+			t.Fatal(ideEvent)
 		}
 	}
 	if _, st := ws.Index(); st != "building" {
@@ -361,7 +361,7 @@ func TestWatchEventOverflowResync(t *testing.T) {
 }
 
 func TestWatchFallbackResyncAndRebuild(t *testing.T) {
-	h, _, proj := web(t)
+	handler, _, proj := web(t)
 	wsTest(t)
 	mk(t, proj, "a.go")
 	ws, _ := ideWS(proj)
@@ -371,42 +371,42 @@ func TestWatchFallbackResyncAndRebuild(t *testing.T) {
 	ws.mu.Lock()
 	ws.fallbackLocked()
 	ws.mu.Unlock()
-	if e := next(t, ch); e != ideResync {
-		t.Fatal(e)
+	if ideEvent := next(t, ch); ideEvent != ideResync {
+		t.Fatal(ideEvent)
 	}
-	if _, m, _ := call(t, h, "GET", "/v1/fs/index?dir="+proj, ""); m["state"] != "building" {
-		t.Fatal(m)
+	if _, lookup, _ := call(t, handler, "GET", "/v1/fs/index?dir="+proj, ""); lookup["state"] != "building" {
+		t.Fatal(lookup)
 	}
 	until(t, "pas reconstruit", func() bool {
-		_, m, _ := call(t, h, "GET", "/v1/fs/index?dir="+proj, "")
-		return m["state"] == "partial" && len(m["files"].([]any)) == 1
+		_, lookup, _ := call(t, handler, "GET", "/v1/fs/index?dir="+proj, "")
+		return lookup["state"] == "partial" && len(lookup["files"].([]any)) == 1
 	})
 }
 
 func TestWatchTreeBudgetShared(t *testing.T) {
-	for _, c := range []struct {
+	for _, record := range []struct {
 		name   string
 		lim    ideLimits
 		budget time.Duration
 		max    int
 	}{{"entrées", ideLimits{5, 12, time.Minute}, time.Minute, 5}, {"échéance", ideLimits{1000, 12, time.Minute}, time.Nanosecond, 0}} {
-		t.Run(c.name, func(t *testing.T) {
+		t.Run(record.name, func(t *testing.T) {
 			_, _, proj := web(t)
 			wsTest(t)
-			setLimits(t, c.lim)
+			setLimits(t, record.lim)
 			ideDebounce = 300 * time.Millisecond
 			oldB := ideTreeBudget
-			ideTreeBudget = c.budget
+			ideTreeBudget = record.budget
 			t.Cleanup(func() { ideTreeBudget = oldB })
 			ws, _ := ideWS(proj)
 			until(t, "index", func() bool { _, st := ws.Index(); return st == "ready" })
-			for i := 0; i < 10; i++ {
-				d := filepath.Join(proj, fmt.Sprintf("d%02d", i))
-				os.MkdirAll(filepath.Join(d, "s"), 0o755)
-				os.WriteFile(filepath.Join(d, "s", "f"), []byte("x"), 0o644)
+			for index := 0; index < 10; index++ {
+				dir := filepath.Join(proj, fmt.Sprintf("d%02d", index))
+				os.MkdirAll(filepath.Join(dir, "s"), 0o755)
+				os.WriteFile(filepath.Join(dir, "s", "f"), []byte("x"), 0o644)
 			}
 			until(t, "pas partiel", func() bool { _, st := ws.Index(); return st == "partial" })
-			if es, _ := ws.Index(); len(es) > c.max {
+			if es, _ := ws.Index(); len(es) > record.max {
 				t.Fatal(len(es), es)
 			}
 		})
@@ -417,45 +417,45 @@ func TestFsWatchCutOnRevoke(t *testing.T) {
 	old := authWatchEvery
 	t.Cleanup(func() { authWatchEvery = old })
 	authWatchEvery = 100 * time.Millisecond
-	g := newGateRig(t)
-	u := g.user(t, "alice", false)
-	g.grant(t, u, "", RightFsRead)
+	gateRig := newGateRig(t)
+	gateUser := gateRig.user(t, "alice", false)
+	gateRig.grant(t, gateUser, "", RightFsRead)
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /v1/fs/watch", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Write([]byte(": ok\n\n"))
-		w.(http.Flusher).Flush()
-		<-r.Context().Done()
+	mux.HandleFunc("GET /v1/fs/watch", func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.Header().Set("Content-Type", "text/event-stream")
+		responseWriter.Write([]byte(": ok\n\n"))
+		responseWriter.(http.Flusher).Flush()
+		<-request.Context().Done()
 	})
-	srv := httptest.NewServer(authGate(mux, g.s, withAuthWatch(withHomes(mux))))
+	srv := httptest.NewServer(authGate(mux, gateRig.s, withAuthWatch(withHomes(mux))))
 	defer srv.Close()
 	ctx, stop := context.WithTimeout(context.Background(), 10*time.Second)
 	defer stop()
 	req, _ := http.NewRequestWithContext(ctx, "GET", srv.URL+"/v1/fs/watch", nil)
-	req.Header.Set("Cookie", (&http.Cookie{Name: sessCookie, Value: u.cookie}).String())
+	req.Header.Set("Cookie", (&http.Cookie{Name: sessCookie, Value: gateUser.cookie}).String())
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil || resp.StatusCode != 200 {
 		t.Fatal(err, resp)
 	}
 	defer resp.Body.Close()
 	br := bufio.NewReader(resp.Body)
-	if l, _ := br.ReadString('\n'); l != ": ok\n" {
-		t.Fatal(l)
+	if line, _ := br.ReadString('\n'); line != ": ok\n" {
+		t.Fatal(line)
 	}
 	start := time.Now()
-	g.s.Revoke(u.id, mainHomeID, RightFsRead)
+	gateRig.s.Revoke(gateUser.id, mainHomeID, RightFsRead)
 	io.Copy(io.Discard, br)
-	if d := time.Since(start); d > 6*time.Second || ctx.Err() != nil {
-		t.Fatalf("coupé en %v", d)
+	if duration := time.Since(start); duration > 6*time.Second || ctx.Err() != nil {
+		t.Fatalf("coupé en %v", duration)
 	}
 }
 
 // Paramètres paths répétés : un dossier dont le nom contient une virgule reste un seul chemin.
 func TestFsWatchRepeatedPathsKeepCommas(t *testing.T) {
-	h, _, proj := web(t)
+	handler, _, proj := web(t)
 	wsTest(t)
 	mk(t, proj, "a/.k", "b/.k", "a,b/.k")
-	srv := httptest.NewServer(h)
+	srv := httptest.NewServer(handler)
 	defer srv.Close()
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
@@ -471,9 +471,9 @@ func TestFsWatchRepeatedPathsKeepCommas(t *testing.T) {
 	mk(t, proj, "a,b/z.txt")
 	sc := bufio.NewScanner(resp.Body)
 	for sc.Scan() {
-		if d, ok := strings.CutPrefix(sc.Text(), "data: "); ok {
+		if dir, ok := strings.CutPrefix(sc.Text(), "data: "); ok {
 			var got ideEvent
-			json.Unmarshal([]byte(d), &got)
+			json.Unmarshal([]byte(dir), &got)
 			if got.Path != "a,b/z.txt" || got.Type != "create" {
 				t.Fatal("premier évènement inattendu :", got)
 			}
@@ -491,43 +491,43 @@ func TestWatchMassRemoveFast(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer root.Close()
-	w := &ideWorkspace{dir: dir, root: root, subs: map[*ideSub]bool{}, idxDirs: map[string]bool{},
+	localIdeWorkspace := &ideWorkspace{dir: dir, root: root, subs: map[*ideSub]bool{}, idxDirs: map[string]bool{},
 		declared: map[string]int{}, snaps: map[string]map[string]ideSig{}}
 	var entries []ideIndexEntry
 	set := map[string]bool{}
-	for i := 0; i < 20000; i++ {
-		p := fmt.Sprintf("d%03d/f%05d", i/100, i)
-		entries = append(entries, ideIndexEntry{Path: p})
-		set[p] = true
-		w.idxDirs[fmt.Sprintf("d%03d", i/100)] = true
-		w.idxDirs[fmt.Sprintf("d%03d/sub", i/100)] = true
+	for index := 0; index < 20000; index++ {
+		path := fmt.Sprintf("d%03d/f%05d", index/100, index)
+		entries = append(entries, ideIndexEntry{Path: path})
+		set[path] = true
+		localIdeWorkspace.idxDirs[fmt.Sprintf("d%03d", index/100)] = true
+		localIdeWorkspace.idxDirs[fmt.Sprintf("d%03d/sub", index/100)] = true
 	}
-	w.ix = &ideIdx{state: "ready", entries: entries, set: set}
+	localIdeWorkspace.ix = &ideIdx{state: "ready", entries: entries, set: set}
 	var evs []ideEvent
-	for i := 0; i < 10000; i++ {
-		evs = append(evs, ideEvent{fmt.Sprintf("d%03d/f%05d", i/100, i), "remove"})
+	for index := 0; index < 10000; index++ {
+		evs = append(evs, ideEvent{fmt.Sprintf("d%03d/f%05d", index/100, index), "remove"})
 	}
 	evs = append(evs, ideEvent{"d199", "remove"})
 	start := time.Now()
-	w.mu.Lock()
-	w.applyLocked(evs)
-	w.mu.Unlock()
-	if d := time.Since(start); d > 2*time.Second {
-		t.Fatalf("10 000 retraits en %v", d)
+	localIdeWorkspace.mu.Lock()
+	localIdeWorkspace.applyLocked(evs)
+	localIdeWorkspace.mu.Unlock()
+	if duration := time.Since(start); duration > 2*time.Second {
+		t.Fatalf("10 000 retraits en %v", duration)
 	}
-	if len(w.ix.entries) != 20000-10000-100 || w.ix.set["d199/f19950"] || !w.ix.set["d198/f19850"] {
-		t.Fatal(len(w.ix.entries))
+	if len(localIdeWorkspace.ix.entries) != 20000-10000-100 || localIdeWorkspace.ix.set["d199/f19950"] || !localIdeWorkspace.ix.set["d198/f19850"] {
+		t.Fatal(len(localIdeWorkspace.ix.entries))
 	}
-	if w.idxDirs["d199"] || w.idxDirs["d199/sub"] || !w.idxDirs["d000"] || !w.idxDirs["d198/sub"] {
+	if localIdeWorkspace.idxDirs["d199"] || localIdeWorkspace.idxDirs["d199/sub"] || !localIdeWorkspace.idxDirs["d000"] || !localIdeWorkspace.idxDirs["d198/sub"] {
 		t.Fatal("dossiers surveillés")
 	}
 }
 
 // À l'arrêt du serveur, un flux /v1/fs/watch ouvert se termine dès la fermeture des espaces, sans attendre le délai de Shutdown.
 func TestFsWatchEndsOnClose(t *testing.T) {
-	h, _, proj := web(t)
+	handler, _, proj := web(t)
 	wsTest(t)
-	srv := httptest.NewServer(h)
+	srv := httptest.NewServer(handler)
 	defer srv.Close()
 	req, _ := http.NewRequest("GET", srv.URL+"/v1/fs/watch?dir="+proj+"&paths=", nil)
 	req.Host = testHost
@@ -572,8 +572,8 @@ func TestWatchAddDeniedSkipsDir(t *testing.T) {
 		t.Fatal("passé au sondage pour un dossier illisible")
 	}
 	mk(t, proj, "n.txt")
-	if e := next(t, ch); e != (ideEvent{"n.txt", "create"}) {
-		t.Fatal(e)
+	if localIdeEvent := next(t, ch); localIdeEvent != (ideEvent{"n.txt", "create"}) {
+		t.Fatal(localIdeEvent)
 	}
 }
 
@@ -614,8 +614,8 @@ func TestWatchDirRecreatedStillWatched(t *testing.T) {
 	deadline := time.After(3 * time.Second)
 	for {
 		select {
-		case e := <-ch:
-			if e.Path == "sub/a.txt" {
+		case ideEvent := <-ch:
+			if ideEvent.Path == "sub/a.txt" {
 				return
 			}
 		case <-deadline:
@@ -631,11 +631,11 @@ func TestWatchDirRecreatedAsSymlinkNotWatched(t *testing.T) {
 	os.Mkdir(sub, 0o755)
 	var adds atomic.Int32
 	old := ideWatchAdd
-	ideWatchAdd = func(fw *fsnotify.Watcher, p string) error {
-		if p == sub {
+	ideWatchAdd = func(fw *fsnotify.Watcher, path string) error {
+		if path == sub {
 			adds.Add(1)
 		}
-		return fw.Add(p)
+		return fw.Add(path)
 	}
 	t.Cleanup(func() { ideWatchAdd = old })
 	ws, err := ideWS(proj)
@@ -648,7 +648,7 @@ func TestWatchDirRecreatedAsSymlinkNotWatched(t *testing.T) {
 	os.RemoveAll(sub)
 	time.Sleep(3 * ideDebounce)
 	os.Symlink(t.TempDir(), sub)
-	for e := next(t, ch); e.Path != "sub" || e.Type != "create"; e = next(t, ch) {
+	for ideEvent := next(t, ch); ideEvent.Path != "sub" || ideEvent.Type != "create"; ideEvent = next(t, ch) {
 	}
 	time.Sleep(2 * ideDebounce)
 	if adds.Load() != before {

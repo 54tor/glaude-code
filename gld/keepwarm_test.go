@@ -11,19 +11,19 @@ import (
 func openAndIdle(t *testing.T, ids ...string) {
 	oldLive, oldWait := liveSessions, waiting
 	t.Cleanup(func() { liveSessions, waiting = oldLive, oldWait })
-	m := map[string]bool{}
+	lookup := map[string]bool{}
 	for _, id := range ids {
-		m[id] = true
+		lookup[id] = true
 	}
-	liveSessions = func() map[string]bool { return m }
+	liveSessions = func() map[string]bool { return lookup }
 	waiting = func() []string { return ids }
 }
 
 func TestKeepWarm(t *testing.T) {
-	h, cfg, _ := web(t)
+	handler, cfg, _ := web(t)
 	openAndIdle(t, id1)
-	v1ok(t, h, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true,"max":2}`, "activé")
-	v1err(t, h, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id2+`","on":true}`, 404, "") // session inexistante
+	v1ok(t, handler, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true,"max":2}`, "activé")
+	v1err(t, handler, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id2+`","on":true}`, 404, "") // session inexistante
 	if _, err := os.Stat(filepath.Join(cfg, "gld-web-keepwarm.json")); err != nil {
 		t.Fatal("état non enregistré")
 	}
@@ -34,11 +34,11 @@ func TestKeepWarm(t *testing.T) {
 	warmPing = func(id string) error { pings++; return nil }
 	mtime := func(now time.Time, ago time.Duration) {
 		// la date d'une session est celle de son dernier message (horodatage), plafonnée au mtime du fichier
-		p := filepath.Join(cfg, "projects", "-p", id1+".jsonl")
+		path := filepath.Join(cfg, "projects", "-p", id1+".jsonl")
 		at := now.Add(-ago)
-		os.WriteFile(p, []byte(`{"type":"user","cwd":"/p","timestamp":"`+at.UTC().Format(time.RFC3339Nano)+`","message":{"content":"x"}}`+"\n"), 0o600)
-		os.Chtimes(p, at, at)
-		forgetInfo(p)
+		os.WriteFile(path, []byte(`{"type":"user","cwd":"/p","timestamp":"`+at.UTC().Format(time.RFC3339Nano)+`","message":{"content":"x"}}`+"\n"), 0o600)
+		os.Chtimes(path, at, at)
+		forgetInfo(path)
 	}
 	now := time.Now()
 
@@ -66,7 +66,7 @@ func TestKeepWarm(t *testing.T) {
 	}
 
 	// une session déjà froide arrête le maintien sans rien envoyer
-	v1ok(t, h, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true}`, "activé")
+	v1ok(t, handler, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true}`, "activé")
 	mtime(now, 2*time.Hour)
 	warmTick(now)
 	if pings != 2 || warmState[id1].On || warmState[id1].Note == "" {
@@ -76,16 +76,16 @@ func TestKeepWarm(t *testing.T) {
 
 // Les pings d'un passage se suivent (jusqu'à 5 min chacun) : une session désactivée entre-temps n'est plus pinguée.
 func TestKeepWarmStoppedDuringTick(t *testing.T) {
-	h, cfg, _ := web(t)
+	handler, cfg, _ := web(t)
 	openAndIdle(t, id1, id3)
 	now := time.Now()
 	for _, id := range []string{id1, id3} {
-		p := filepath.Join(cfg, "projects", "-p", id+".jsonl")
+		path := filepath.Join(cfg, "projects", "-p", id+".jsonl")
 		at := now.Add(-57 * time.Minute)
-		os.WriteFile(p, []byte(`{"type":"user","cwd":"/p","timestamp":"`+at.UTC().Format(time.RFC3339Nano)+`","message":{"content":"x"}}`+"\n"), 0o600)
-		os.Chtimes(p, at, at)
-		forgetInfo(p)
-		v1ok(t, h, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id+`","on":true}`, "activé")
+		os.WriteFile(path, []byte(`{"type":"user","cwd":"/p","timestamp":"`+at.UTC().Format(time.RFC3339Nano)+`","message":{"content":"x"}}`+"\n"), 0o600)
+		os.Chtimes(path, at, at)
+		forgetInfo(path)
+		v1ok(t, handler, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id+`","on":true}`, "activé")
 	}
 	var pinged []string
 	old := warmPing
@@ -93,7 +93,7 @@ func TestKeepWarmStoppedDuringTick(t *testing.T) {
 	warmPing = func(id string) error {
 		pinged = append(pinged, id)
 		other := map[string]string{id1: id3, id3: id1}[id]
-		v1ok(t, h, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+other+`","on":false}`, "arrêté")
+		v1ok(t, handler, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+other+`","on":false}`, "arrêté")
 		return nil
 	}
 	warmTick(now)
@@ -104,23 +104,23 @@ func TestKeepWarmStoppedDuringTick(t *testing.T) {
 
 // Une session fermée n'est jamais pinguée : `claude -p` ne relirait pas le cache du mode interactif.
 func TestKeepWarmSessionFermee(t *testing.T) {
-	h, cfg, _ := web(t)
+	handler, cfg, _ := web(t)
 	openAndIdle(t)
-	v1err(t, h, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true}`, 409, "session fermée")
+	v1err(t, handler, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true}`, 409, "session fermée")
 
 	openAndIdle(t, id1)
-	v1ok(t, h, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true}`, "activé")
+	v1ok(t, handler, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true}`, "activé")
 	openAndIdle(t) // fermée ensuite
 	pings := 0
 	old := warmPing
 	defer func() { warmPing = old }()
 	warmPing = func(string) error { pings++; return nil }
 	now := time.Now()
-	p := filepath.Join(cfg, "projects", "-p", id1+".jsonl")
+	path := filepath.Join(cfg, "projects", "-p", id1+".jsonl")
 	at := now.Add(-57 * time.Minute)
-	os.WriteFile(p, []byte(`{"type":"user","cwd":"/p","timestamp":"`+at.UTC().Format(time.RFC3339Nano)+`","message":{"content":"x"}}`+"\n"), 0o600)
-	os.Chtimes(p, at, at)
-	forgetInfo(p)
+	os.WriteFile(path, []byte(`{"type":"user","cwd":"/p","timestamp":"`+at.UTC().Format(time.RFC3339Nano)+`","message":{"content":"x"}}`+"\n"), 0o600)
+	os.Chtimes(path, at, at)
+	forgetInfo(path)
 	warmTick(now)
 	if pings != 0 || warmState[id1].On || warmState[id1].Note != closedNote() {
 		t.Fatalf("session fermée pinguée : %d %+v", pings, warmState[id1])
@@ -128,22 +128,22 @@ func TestKeepWarmSessionFermee(t *testing.T) {
 }
 
 func TestKeepWarmReheatFroid(t *testing.T) {
-	h, cfg, _ := web(t)
+	handler, cfg, _ := web(t)
 	openAndIdle(t, id1)
-	p := filepath.Join(cfg, "projects", "-p", id1+".jsonl")
+	path := filepath.Join(cfg, "projects", "-p", id1+".jsonl")
 	at := time.Now().Add(-2 * time.Hour)
-	os.WriteFile(p, []byte(`{"type":"user","cwd":"/p","timestamp":"`+at.UTC().Format(time.RFC3339Nano)+`","message":{"content":"x"}}`+"\n"), 0o600)
-	os.Chtimes(p, at, at)
-	forgetInfo(p)
+	os.WriteFile(path, []byte(`{"type":"user","cwd":"/p","timestamp":"`+at.UTC().Format(time.RFC3339Nano)+`","message":{"content":"x"}}`+"\n"), 0o600)
+	os.Chtimes(path, at, at)
+	forgetInfo(path)
 	var pings int
 	old := warmPing
 	defer func() { warmPing = old }()
 	warmPing = func(id string) error { pings++; return nil }
-	v1ok(t, h, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true}`, "") // froid sans demande de réchauffage : aucun ping
+	v1ok(t, handler, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true}`, "") // froid sans demande de réchauffage : aucun ping
 	if pings != 0 {
 		t.Fatal("ping sans accord")
 	}
-	v1ok(t, h, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true,"reheat":true}`, "")
+	v1ok(t, handler, "PUT", "/v1/keepwarm", `{"dir":"-p","id":"`+id1+`","on":true,"reheat":true}`, "")
 	if pings != 1 || warmState[id1].Pings != 1 {
 		t.Fatalf("réchauffage : %d ping(s), état %+v", pings, warmState[id1])
 	}
