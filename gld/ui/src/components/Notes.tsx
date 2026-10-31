@@ -27,7 +27,7 @@ const pack = (items: string[]) => (items.some((i) => i.trim()) ? JSON.stringify(
 
 // Bloc-notes d'un projet ou d'un dossier, enregistré tout seul. Le texte peut partir vers une nouvelle session (dans folder) ou vers
 // une session ouverte dans tmux parmi celles de la vue.
-export function Notes({ noteKey, folder: base, rows }: { noteKey: string; folder?: string; rows: Row[] }) {
+export function Notes({ noteKey, folder: base, scope, rows }: { noteKey: string; folder?: string; scope: string[]; rows: Row[] }) {
   const { t: tr } = useTranslation()
   const a = useActions()
   const dirKey = "gld.notes.dir/" + noteKey
@@ -126,7 +126,9 @@ export function Notes({ noteKey, folder: base, rows }: { noteKey: string; folder
   const count = items.filter((i) => i.trim()).length
   const togglePick = (i: number) => setPicked((p) => (p.has(i) ? new Set([...p].filter((x) => x !== i)) : new Set(p).add(i)))
   const dropIdx = new Set(chosen.map((x) => x.i))
-  const here = folder ? rows.filter((r) => r.s.cwd === folder) : rows
+  // Seules les sessions du dossier (ou des dossiers du projet) auquel appartient la note reçoivent son texte.
+  const dirs = custom ? [custom] : scope
+  const here = rows.filter((r) => dirs.includes(r.s.cwd))
   const targets = here.filter((r) => sendable.has(r.s.id) && a.live.has(r.s.id))
   const closed = here.filter((r) => !a.live.has(r.s.id)).slice(0, 30)
   const filled = items.map((x, i) => (x.trim() ? i : -1)).filter((i) => i >= 0)

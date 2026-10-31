@@ -120,11 +120,11 @@ export function SessionsPane({
         )}
 
         {!loading && route.kind === "dir" && project && <ProjectHead key={project} project={project} missing={dirMissing} />}
-        {!loading && route.kind === "dir" && project && <Notes key={"notes:" + project} noteKey={"d/" + project} folder={dirMissing ? undefined : project} rows={rows} />}
+        {!loading && route.kind === "dir" && project && <Notes key={"notes:" + project} noteKey={"d/" + project} folder={dirMissing ? undefined : project} scope={[project]} rows={rows} />}
         {!loading && route.kind === "project" && <ProjectHead key={"head-p:" + route.name} dirs={actions.projects.find((p) => p.name === route.name)?.dirs ?? []} />}
         {!loading && route.kind === "project" && <ProjectOverview key={"ov-p:" + route.name} dirs={actions.projects.find((p) => p.name === route.name)?.dirs ?? []} go={go} />}
         {!loading && route.kind === "project" && (
-          <Notes key={"notes-p:" + route.name} noteKey={"p/" + route.name} folder={actions.projects.find((p) => p.name === route.name)?.dirs[0]} rows={rows} />
+          <Notes key={"notes-p:" + route.name} noteKey={"p/" + route.name} folder={actions.projects.find((p) => p.name === route.name)?.dirs[0]} scope={actions.projects.find((p) => p.name === route.name)?.dirs ?? []} rows={rows} />
         )}
 
         {!loading && projectDir && (route.kind === "dir" || route.kind === "group") && <ProjectMemory key={projectDir} dir={projectDir} />}
