@@ -127,12 +127,12 @@ afterEach(() => {
 describe("lecture de l'état", () => {
   it("hotLeft : minutes de cache restantes bornées entre 1 et 60, null passé une heure", () => {
     const { result } = setup()
-    expect(result.current.actions.hotLeft({ mtime: NOW })).toBe(60)
-    expect(result.current.actions.hotLeft({ mtime: NOW - 60 })).toBe(59)
-    expect(result.current.actions.hotLeft({ mtime: NOW - 1800 })).toBe(30)
-    expect(result.current.actions.hotLeft({ mtime: NOW - 3599 })).toBe(1)
-    expect(result.current.actions.hotLeft({ mtime: NOW - 3600 })).toBeNull()
-    expect(result.current.actions.hotLeft({ mtime: NOW - 99999 })).toBeNull()
+    expect(result.current.actions.hotLeft(session("x", { mtime: NOW }))).toBe(60)
+    expect(result.current.actions.hotLeft(session("x", { mtime: NOW - 60 }))).toBe(59)
+    expect(result.current.actions.hotLeft(session("x", { mtime: NOW - 1800 }))).toBe(30)
+    expect(result.current.actions.hotLeft(session("x", { mtime: NOW - 3599 }))).toBe(1)
+    expect(result.current.actions.hotLeft(session("x", { mtime: NOW - 3600 }))).toBeNull()
+    expect(result.current.actions.hotLeft(session("x", { mtime: NOW - 99999 }))).toBeNull()
   })
 
   it("caps : celles du fournisseur de la session, « claude » par défaut, rien pour un fournisseur inconnu", () => {
@@ -265,7 +265,7 @@ describe("groupes", () => {
     act(() => void result.current.actions.group(["a1"], `${HOME}/Projets/a`, "Nouveau"))
     await act(async () => {})
     expect(api.vgroups).toHaveBeenCalledWith({ groups: [{ name: "Nouveau", project: `${HOME}/Projets/a`, ids: ["a1"] }], favs: [] })
-    const options = vi.mocked(toast.success).mock.calls[0][1] as { action: { onClick: () => void } }
+    const options = vi.mocked(toast.success).mock.calls[0][1] as unknown as { action: { onClick: () => void } }
     options.action.onClick()
     expect(go).toHaveBeenCalledWith({ kind: "group", name: "Nouveau", key: "~/Projets/a" })
   })
@@ -669,7 +669,7 @@ describe("fermeture et suppression", () => {
     expect(trashSpy).toHaveBeenCalledWith(items)
     expect([...state.picked]).toEqual(["b1"])
     expect(reload).toHaveBeenCalled()
-    const [title, options] = vi.mocked(toast.success).mock.calls[0] as [string, { action: { onClick: () => Promise<void> } }]
+    const [title, options] = vi.mocked(toast.success).mock.calls[0] as unknown as [string, { action: { onClick: () => Promise<void> } }]
     expect(title).toBe("2 sessions envoyées")
     await act(async () => void (await options.action.onClick()))
     expect(restoreSpy).toHaveBeenCalledWith(["a1", "a2"])
