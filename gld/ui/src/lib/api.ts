@@ -326,7 +326,7 @@ export const api = {
   vgroups: (b: { groups: VGroup[]; favs: string[]; projects?: Project[] }) => http.put("/vgroups", b),
   dirsAdd: (dir: string, children = false) => http.post<Said & { n: number }>("/directories", { dir, children }),
   dirsRemove: (dir: string) => http.del<Said>(`/directories${qs({ dir })}`),
-  updateInfo: (force = false) => http.get<{ current: string; latest: string; url: string; newer: boolean }>(`/update${force ? "?force=1" : ""}`),
+  updateInfo: (force = false) => http.get<{ current: string; latest: string; url: string; newer: boolean; claudeCurrent?: string; claudeLatest?: string; claudeNewer?: boolean }>(`/update${force ? "?force=1" : ""}`),
   keepWarmSet: (b: { dir: string; id: string; on: boolean; max?: number; reheat?: boolean }) => http.put<Said>("/keepwarm", b),
   trustAnswer: (dir: string, yes: boolean) => http.post<Said>("/trust/answers", { dir, yes }),
   termOpen: (id: string) => http.post<{ token: string; cols: number; rows: number }>("/terminal", { id }),

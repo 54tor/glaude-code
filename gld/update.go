@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,6 +19,10 @@ type updateInfo struct {
 	Latest  string `json:"latest"`
 	URL     string `json:"url"`
 	Newer   bool   `json:"newer"`
+	// Claude Code installé et dernier publié sur npm ; ClaudeNewer : une version plus récente existe.
+	ClaudeCurrent string `json:"claudeCurrent,omitempty"`
+	ClaudeLatest  string `json:"claudeLatest,omitempty"`
+	ClaudeNewer   bool   `json:"claudeNewer,omitempty"`
 }
 
 var (
@@ -49,6 +54,43 @@ var latestRelease = func(ctx context.Context) (tag, url string, err error) {
 		return "", "", io.ErrUnexpectedEOF
 	}
 	return d.Tag, d.URL, nil
+}
+
+const claudeNpmAPI = "https://registry.npmjs.org/@anthropic-ai/claude-code/latest"
+
+// claudeInstalled : la version de claude (« 2.1.314 (Claude Code) » devient « 2.1.314 ») ; remplaçable en test.
+var claudeInstalled = func(ctx context.Context) string {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	out, err := withPath(exec.CommandContext(ctx, "claude", "--version")).Output()
+	if err != nil {
+		return ""
+	}
+	v, _, _ := strings.Cut(strings.TrimSpace(string(out)), " ")
+	return v
+}
+
+// claudeLatest : dernière version de Claude Code publiée sur npm ; remplaçable en test.
+var claudeLatest = func(ctx context.Context) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "GET", claudeNpmAPI, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "gld")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	var d struct {
+		Version string `json:"version"`
+	}
+	if resp.StatusCode != 200 || json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&d) != nil {
+		return "", io.ErrUnexpectedEOF
+	}
+	return d.Version, nil
 }
 
 // newerVersion : vrai si latest (vX.Y.Z) dépasse cur ; « dev » ou une version illisible n'est jamais périmée.
@@ -96,6 +138,12 @@ func checkUpdate(ctx context.Context, force bool) updateInfo {
 	info := updateInfo{Current: version}
 	if tag, url, err := latestRelease(ctx); err == nil {
 		info.Latest, info.URL, info.Newer = tag, url, newerVersion(version, tag)
+	}
+	if cur := claudeInstalled(ctx); cur != "" {
+		info.ClaudeCurrent = cur
+		if lat, err := claudeLatest(ctx); err == nil {
+			info.ClaudeLatest, info.ClaudeNewer = lat, newerVersion(cur, lat)
+		}
 	}
 	updAt, updInfo = time.Now(), info
 	return info

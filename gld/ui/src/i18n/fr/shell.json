@@ -28,6 +28,7 @@
       "noneWaiting": "Aucune session n'attend de réponse",
       "updateAvailable": "Nouvelle version disponible : {{latest}} (vous avez {{current}})",
       "updateOpen": "Voir",
+      "claudeOutdated": "Claude Code {{current}} n'est pas à jour ({{latest}} disponible). Lancez « claude update » ; les règles gld et d'autres fonctions en dépendent.",
       "noMoreWaiting": "Plus aucune session en attente",
       "snippetSession": "Nouvelle session avec ce snippet",
       "title": {
