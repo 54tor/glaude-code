@@ -6,9 +6,11 @@ import { cn, copyText, isSend, keyHint } from "@/lib/utils"
 import { modeOfScreen, parseBtw, parsePrompt, type Opt } from "@/lib/prompt"
 import { type Live } from "./LiveStatus"
 import { toast } from "sonner"
-import { Bug, Copy, GitFork, Minimize2, Snowflake, Send, SendHorizontal, Square, SquareCheck, X } from "lucide-react"
+import { Bug, ChevronDown, Copy, GitFork, Minimize2, Snowflake, Send, SendHorizontal, Square, SquareCheck, X } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
 import { draftOf, setDraft, useDraft } from "@/hooks/useDraft"
+import { setWaitIdle, useWaitIdle } from "@/hooks/useWaitIdle"
+import { Checkbox } from "@/components/ui/checkbox"
 import { efforts, models, withChoice, type Choice } from "@/lib/models"
 import { ModelPicker } from "./ModelPicker"
 import { useMention } from "./Mention"
@@ -422,6 +424,7 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
       adding.current = false
     }
   }
+  const waitIdle = useWaitIdle(id)
   const [busy, setBusy] = useState(false)
   const [asking, setAsking] = useState(false) // une question attend une réponse dans le terminal : rien ne s'y écrit tant qu'elle est ouverte
   const working = !!liveState.st?.thinking
@@ -451,8 +454,8 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
     suggestions = knownCommands.filter(([command]) => command.startsWith(text) && command !== text)
   }
   const highlightedIndex = suggestions.length ? selectedIndex % suggestions.length : 0
-  // Un message écrit pendant que Claude travaille, ou qu'une question attend, est mis en file : il part dès que la session attend
-  // (jamais dans une question, où il répondrait à sa place).
+  // Un message part tout de suite, même pendant que Claude travaille (il le lit au prochain pas). Il est mis en file, et part dès que la
+  // session attend, si une question attend (il répondrait à sa place) ou si « Attendre le repos » est coché.
   const post = async (full: string) => {
     setBusy(true)
     try {
@@ -465,13 +468,13 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
       setBusy(false)
     }
   }
-  const send = async () => {
+  const send = async (interrupt = false) => {
     const full = [text.trim(), pictures.suffix()].filter(Boolean).join("\n")
     if (!full || busy) return
     keepFocus()
     // /btw se pose pendant que Claude travaille, mais jamais pendant une question.
     const isSideQuestion = /^\/btw\s/.test(full) && !asking
-    const mustQueue = (working || asking) && !isSideQuestion
+    const mustQueue = (asking || (working && waitIdle)) && !isSideQuestion
     if (mustQueue) {
       if (adding.current) return
       const queued = await enqueue(full)
@@ -479,6 +482,10 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
       if (draftOf(id).text === text) setText("")
       pictures.clear()
       return
+    }
+    if (interrupt && working) {
+      await api.sessionKey(id, "Escape").catch((error) => toast.error(errMsg(error)))
+      await wait(INTERRUPT_SETTLE_MS)
     }
     const posted = await post(full)
     if (!posted) return
@@ -658,9 +665,27 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
                 <Square className="max-md:hidden" /> {t("conversation.composer.interrupt")}
               </Button>
             )}
-            <Button size="sm" className="max-md:flex-1" onClick={send} disabled={(!text.trim() && !pictures.images.length) || busy || !exec}>
-              <Send /> {t("conversation.composer.sendToSession")}
-            </Button>
+            <label className="flex items-center gap-1.5" title={t("conversation.composer.waitIdleTitle")}>
+              <Checkbox checked={waitIdle} onCheckedChange={(checked) => setWaitIdle(id, checked === true)} />
+              {t("conversation.composer.waitIdle")}
+            </label>
+            <div className="flex max-md:flex-1">
+              <Button size="sm" className="rounded-r-none max-md:flex-1" onClick={() => void send()} disabled={(!text.trim() && !pictures.images.length) || busy || !exec}>
+                <Send /> {t("conversation.composer.sendToSession")}
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" className="rounded-l-none border-l border-primary-foreground/30 px-1.5" aria-label={t("conversation.composer.sendOptions")} disabled={(!text.trim() && !pictures.images.length) || busy || !exec}>
+                    <ChevronDown />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => void send(true)}>
+                    <Square /> {t("conversation.composer.sendInterrupting")}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </div>
       </div>

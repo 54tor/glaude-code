@@ -4,6 +4,12 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+### Modifié
+- Session ouverte : un message part tout de suite, même pendant que Claude travaille ; le menu du bouton Envoyer propose « Envoyer en interrompant » et la case « Attendre le repos » (mémorisée par session) rétablit l'envoi dès que Claude attend. Une question en attente met toujours le message en file.
+
+### Corrigé
+- Conversation : la vue reste collée à la fin quand la file d'attente du compositeur s'agrandit.
+
 ## [0.9.0] - 2026-10-31
 
 ### Ajouté
