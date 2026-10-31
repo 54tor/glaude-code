@@ -131,7 +131,7 @@ const Row = memo(function Row({
           <button
             data-row
             data-id={session.id}
-            className="min-w-0 flex-1 text-left outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-ring/80"
+            className="min-w-0 flex-1 text-left outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring/80"
             onClick={() => actions.read(session)}
           >
             <span className={cn("line-clamp-1 text-md", session.named ? "font-medium" : "text-foreground/85")}>
