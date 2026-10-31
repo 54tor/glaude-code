@@ -126,3 +126,11 @@ func TestReadLoadedIgnoresNonRegular(t *testing.T) {
 		t.Fatalf("events: %v", ev)
 	}
 }
+
+func TestAskUserQuestionLisible(t *testing.T) {
+	line := `{"type":"assistant","message":{"content":[{"type":"tool_use","name":"AskUserQuestion","input":{"questions":[{"question":"Quelle option ?","header":"Choix","options":[{"label":"A"},{"label":"B"}]}]}}]}}`
+	messages := lineMsgs([]byte(line), true)
+	if len(messages) != 1 || !strings.Contains(messages[0].T, "[Choix] Quelle option ?") || !strings.Contains(messages[0].T, "A | B") {
+		t.Fatalf("résumé illisible : %+v", messages)
+	}
+}
