@@ -11,8 +11,8 @@ describe("pickFeed", () => {
     expect(got.sort()).toEqual(["a.ts", "b.tsx", "c.js", "d.jsx", "e.json", "g.d.ts", "ok.ts"])
   })
   it("plafonne à 300 fichiers et 5 Mo cumulés", () => {
-    expect(pickFeed(Array.from({ length: 400 }, (_, i) => f(`f${i}.ts`)), "")).toHaveLength(300)
-    expect(pickFeed(Array.from({ length: 60 }, (_, i) => f(`f${i}.ts`, 100 * 1024)), "")).toHaveLength(51)
+    expect(pickFeed(Array.from({ length: 400 }, (_, index) => f(`f${index}.ts`)), "")).toHaveLength(300)
+    expect(pickFeed(Array.from({ length: 60 }, (_, index) => f(`f${index}.ts`, 100 * 1024)), "")).toHaveLength(51)
   })
   it("trie par proximité de dossier avec le fichier actif", () => {
     expect(pickFeed([f("x/y/z.ts"), f("a/b/far.ts"), f("a/b/c/deep.ts"), f("a/b/near.ts"), f("root.ts")], "a/b/cur.ts")).toEqual(["a/b/far.ts", "a/b/near.ts", "a/b/c/deep.ts", "root.ts", "x/y/z.ts"])
@@ -21,7 +21,7 @@ describe("pickFeed", () => {
 
 describe("runFeed", () => {
   it("lots de 50, enregistre chaque fichier, s'arrête quand on annule", async () => {
-    const paths = Array.from({ length: 120 }, (_, i) => `f${i}.ts`)
+    const paths = Array.from({ length: 120 }, (_, index) => `f${index}.ts`)
     const ac = new AbortController()
     const files = vi.spyOn(api, "fsFiles").mockImplementation(async (_d, ps) => {
       if (files.mock.calls.length === 2) ac.abort()
@@ -29,7 +29,7 @@ describe("runFeed", () => {
     })
     const sink = vi.fn()
     await runFeed("/p", paths, sink, ac.signal)
-    expect(files.mock.calls.map((c) => c[1].length)).toEqual([50, 50])
+    expect(files.mock.calls.map((value) => value[1].length)).toEqual([50, 50])
     expect(files.mock.calls[0][1]).toEqual(paths.slice(0, 50))
     expect(sink).toHaveBeenCalledTimes(50)
     expect(sink).toHaveBeenCalledWith("f0.ts", "x")

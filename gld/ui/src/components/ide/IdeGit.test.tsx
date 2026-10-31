@@ -33,9 +33,9 @@ beforeEach(() => {
   FakeES.all = []
   vi.stubGlobal("EventSource", FakeES)
   vi.spyOn(api, "fsIndex").mockResolvedValue(ok({ state: "ready", files: [] }))
-  vi.spyOn(api, "fsTree").mockImplementation(async (_d, p) => ({
+  vi.spyOn(api, "fsTree").mockImplementation(async (_d, path) => ({
     entries:
-      p === ""
+      path === ""
         ? [
             { name: "src", type: "dir", size: 0, mtime: 1 },
             { name: "a.txt", type: "file", size: 1, mtime: 1 },

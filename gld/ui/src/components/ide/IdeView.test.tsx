@@ -11,9 +11,9 @@ const feed = vi.hoisted(() => ({ setTsLib: vi.fn(), clearTsLibs: vi.fn() }))
 // Une poignée simulée par chemin : on vérifie que les commandes visent l'éditeur de l'onglet actif.
 const handles = vi.hoisted(() => {
   const all = new Map<string, Record<string, ReturnType<typeof vi.fn>>>()
-  const of = (p: string) => {
-    if (!all.has(p)) all.set(p, { undo: vi.fn(), redo: vi.fn(), find: vi.fn(), replace: vi.fn(), gotoLine: vi.fn(), palette: vi.fn(), focus: vi.fn(), zoom: vi.fn(), subscribe: vi.fn(() => () => {}) })
-    return all.get(p)!
+  const of = (path: string) => {
+    if (!all.has(path)) all.set(path, { undo: vi.fn(), redo: vi.fn(), find: vi.fn(), replace: vi.fn(), gotoLine: vi.fn(), palette: vi.fn(), focus: vi.fn(), zoom: vi.fn(), subscribe: vi.fn(() => () => {}) })
+    return all.get(path)!
   }
   return { all, of }
 })
@@ -24,7 +24,7 @@ vi.mock("sonner", async (orig) => ({ ...(await orig<typeof import("sonner")>()),
 // focus : demande de focus de l'espace, honorée comme le ferait Monaco.
 vi.mock("./CodeEditor", async () => {
   const { useEffect, useRef } = await import("react")
-  const Editor = ({ path, value, readOnly, focus, editorRef, onChange, onSave }: { path: string; value: string; readOnly?: boolean; focus?: number; editorRef?: (h: unknown) => void; onChange(v: string): void; onSave(): void }) => {
+  const Editor = ({ path, value, readOnly, focus, editorRef, onChange, onSave }: { path: string; value: string; readOnly?: boolean; focus?: number; editorRef?: (localValue: unknown) => void; onChange(anotherValue: string): void; onSave(): void }) => {
     const el = useRef<HTMLInputElement>(null)
     useEffect(() => {
       if (focus) el.current?.focus()
@@ -42,10 +42,10 @@ vi.mock("./CodeEditor", async () => {
         aria-label={`type:${path}`}
         readOnly={readOnly}
         value=""
-        onChange={(e) => onChange(value + e.target.value)}
-        onKeyDown={(e) => {
-          if (e.ctrlKey && e.key === "s") {
-            e.preventDefault()
+        onChange={(event) => onChange(value + event.target.value)}
+        onKeyDown={(event) => {
+          if (event.ctrlKey && event.key === "s") {
+            event.preventDefault()
             onSave()
           }
         }}
@@ -60,7 +60,7 @@ vi.mock("./ConflictDiff", () => ({
 }))
 
 const e = (name: string, type: FsEntry["type"]): FsEntry => ({ name, type, size: 1, mtime: 1 })
-const f = (b: { content: string; etag: string; size?: number; mtime?: number }): FsFile => ({ size: b.content.length, mtime: 1, ...b })
+const f = (record: { content: string; etag: string; size?: number; mtime?: number }): FsFile => ({ size: record.content.length, mtime: 1, ...record })
 const fail = (status: number, code = "error") => new ApiError(status, code, "msg")
 
 class FakeES {
@@ -85,8 +85,8 @@ class FakeES {
   }
 }
 const stream = async () => {
-  await waitFor(() => expect(FakeES.all.filter((x) => !x.closed)).toHaveLength(1))
-  return FakeES.all.find((x) => !x.closed)!
+  await waitFor(() => expect(FakeES.all.filter((fakeES) => !fakeES.closed)).toHaveLength(1))
+  return FakeES.all.find((fakeES) => !fakeES.closed)!
 }
 
 let file: MockInstance<typeof api.fsFile>
@@ -102,12 +102,12 @@ beforeEach(() => {
   toast.mockReset()
   index = vi.spyOn(api, "fsIndex").mockResolvedValue({ state: "ready", files: [] })
   vi.spyOn(api, "fsTree").mockResolvedValue({ entries: [e("a.txt", "file"), e("b.txt", "file"), e("c.txt", "file"), e("lf.txt", "file"), e("mix.txt", "file"), e("cr.txt", "file"), e("big.bin", "file"), e("img.png", "file")], truncated: false })
-  file = vi.spyOn(api, "fsFile").mockImplementation(async (_d, p) => {
-    if (p === "big.bin") throw fail(413, "too_large")
-    if (p === "img.png") throw fail(415, "unsupported")
-    if (p === "lf.txt") return f({ content: "a\nb\n", etag: "e1", size: 4, mtime: 1 })
-    if (p === "mix.txt") return f({ content: "a\r\nb\n", etag: "e1", size: 5, mtime: 1 })
-    if (p === "cr.txt") return f({ content: "a\rb", etag: "e1", size: 3, mtime: 1 })
+  file = vi.spyOn(api, "fsFile").mockImplementation(async (_d, path) => {
+    if (path === "big.bin") throw fail(413, "too_large")
+    if (path === "img.png") throw fail(415, "unsupported")
+    if (path === "lf.txt") return f({ content: "a\nb\n", etag: "e1", size: 4, mtime: 1 })
+    if (path === "mix.txt") return f({ content: "a\r\nb\n", etag: "e1", size: 5, mtime: 1 })
+    if (path === "cr.txt") return f({ content: "a\rb", etag: "e1", size: 3, mtime: 1 })
     return f({ content: "l1\r\nl2\r\n", etag: "e1", size: 8, mtime: 1 })
   })
   save = vi.spyOn(api, "fsSave").mockResolvedValue({ etag: "e2" })
@@ -130,9 +130,9 @@ const openFile = async (name: string) => {
   await screen.findByRole("tab", { name: new RegExp(name.replace(".", "\\.")) })
 }
 const deferred = <T,>() => {
-  let resolve!: (v: T) => void
-  let reject!: (e: unknown) => void
-  const promise = new Promise<T>((r, j) => ((resolve = r), (reject = j)))
+  let resolve!: (value: T) => void
+  let reject!: (localValue: unknown) => void
+  const promise = new Promise<T>((callback, localCallback) => ((resolve = callback), (reject = localCallback)))
   return { promise, resolve, reject }
 }
 
@@ -179,7 +179,7 @@ describe("IdeView", () => {
     fireEvent.change(input, { target: { value: "x" } })
     ctrlS(input)
     const bar = await screen.findByRole("alert")
-    for (const n of ["Recharger", "Écraser", "Voir les différences"]) expect(within(bar).getByRole("button", { name: n })).toBeTruthy()
+    for (const localName of ["Recharger", "Écraser", "Voir les différences"]) expect(within(bar).getByRole("button", { name: localName })).toBeTruthy()
     expect(screen.getByTestId("ed:a.txt").textContent).toBe(JSON.stringify("l1\r\nl2\r\nx"))
     fireEvent.click(within(bar).getByRole("button", { name: "Écraser" }))
     await waitFor(() => expect(save).toHaveBeenCalledTimes(2))
@@ -327,8 +327,8 @@ describe("IdeView", () => {
 
   it("onglets au clavier : flèches, Début, Fin activent l'onglet ; Suppr le ferme", async () => {
     render(<IdeView dir="/p" />)
-    for (const n of ["a.txt", "b.txt", "c.txt"]) await openFile(n)
-    const tab = (n: string) => screen.getByRole("tab", { name: new RegExp(n.replace(".", "\\.")) })
+    for (const name of ["a.txt", "b.txt", "c.txt"]) await openFile(name)
+    const tab = (localName: string) => screen.getByRole("tab", { name: new RegExp(localName.replace(".", "\\.")) })
     const selected = () => screen.getAllByRole("tab").filter((t) => t.getAttribute("aria-selected") === "true").map((t) => t.getAttribute("title"))
     expect(selected()).toEqual(["c.txt"])
     expect(screen.getAllByRole("tab").filter((t) => t.tabIndex === 0)).toHaveLength(1)
@@ -352,16 +352,16 @@ describe("IdeView", () => {
   })
 })
 
-const sleep = (ms: number) => act(() => new Promise((r) => setTimeout(r, ms)))
+const sleep = (ms: number) => act(() => new Promise((callback) => setTimeout(callback, ms)))
 const disk = (over: Record<string, FsFile | ApiError>) => {
   const base = file.getMockImplementation()!
-  file.mockImplementation(async (d, p) => {
-    const v = over[p]
-    if (v instanceof ApiError) throw v
-    return v ?? base(d, p)
+  file.mockImplementation(async (directory, path) => {
+    const failure = over[path]
+    if (failure instanceof ApiError) throw failure
+    return failure ?? base(directory, path)
   })
 }
-const ed = (p: string) => screen.getByTestId(`ed:${p}`).textContent
+const ed = (path: string) => screen.getByTestId(`ed:${path}`).textContent
 
 describe("IdeView, évènements disque", () => {
   it("write sur un onglet propre : relu et remplacé sans bandeau, toast discret", async () => {
@@ -429,14 +429,14 @@ describe("IdeView, évènements disque", () => {
     render(<IdeView dir="/p" />)
     const es = await stream()
     await waitFor(() => expect(index).toHaveBeenCalledTimes(1))
-    const n = (p: string) => tree.mock.calls.filter((c) => c[1] === p).length
-    const before = { src: n("src"), root: n(""), other: n("other") }
+    const callback = (path: string) => tree.mock.calls.filter((value) => value[1] === path).length
+    const before = { src: callback("src"), root: callback(""), other: callback("other") }
     es.emit({ path: "src/new.ts", type: "create" })
     es.emit({ path: "x.ts", type: "create" })
     es.emit({ path: "other/y.ts", type: "create" })
-    await waitFor(() => expect(n("src")).toBe(before.src + 1))
-    await waitFor(() => expect(n("")).toBe(before.root + 1))
-    expect(n("other")).toBe(before.other)
+    await waitFor(() => expect(callback("src")).toBe(before.src + 1))
+    await waitFor(() => expect(callback("")).toBe(before.root + 1))
+    expect(callback("other")).toBe(before.other)
     await waitFor(() => expect(index).toHaveBeenCalledTimes(2), { timeout: 2500 })
     await sleep(1200)
     expect(index).toHaveBeenCalledTimes(2)
@@ -461,8 +461,8 @@ describe("IdeView, évènements disque", () => {
     fireEvent.change(screen.getByLabelText("type:b.txt"), { target: { value: "x" } })
     const es = await stream()
     await waitFor(() => expect(index).toHaveBeenCalledTimes(1))
-    const n = (p: string) => tree.mock.calls.filter((c) => c[1] === p).length
-    const before = { src: n("src"), root: n("") }
+    const callback = (path: string) => tree.mock.calls.filter((value) => value[1] === path).length
+    const before = { src: callback("src"), root: callback("") }
     disk({ "a.txt": f({ content: "A", etag: "e9" }), "b.txt": f({ content: "B", etag: "e9" }), "c.txt": fail(404) })
     es.emit({ path: "", type: "resync" })
     await waitFor(() => expect(ed("a.txt")).toBe(JSON.stringify("A")))
@@ -470,8 +470,8 @@ describe("IdeView, évènements disque", () => {
     expect(ed("b.txt")).toBe(JSON.stringify("l1\r\nl2\r\nx"))
     fireEvent.click(screen.getByRole("tab", { name: /c\.txt/ }))
     expect(await screen.findByText(/supprimé du disque/)).toBeTruthy()
-    await waitFor(() => expect(n("src")).toBe(before.src + 1))
-    expect(n("")).toBe(before.root + 1)
+    await waitFor(() => expect(callback("src")).toBe(before.src + 1))
+    expect(callback("")).toBe(before.root + 1)
     await waitFor(() => expect(index).toHaveBeenCalledTimes(2), { timeout: 2500 })
   })
 
@@ -487,44 +487,44 @@ describe("IdeView, évènements disque", () => {
   })
 
   it("dossiers déclarés : racine et dépliés, plafonnés à 200 en gardant les moins profonds", async () => {
-    const deep = Array.from({ length: 150 }, (_, i) => `d/sub${i}`)
-    const shallow = Array.from({ length: 100 }, (_, i) => `top${i}`)
+    const deep = Array.from({ length: 150 }, (_, index) => `d/sub${index}`)
+    const shallow = Array.from({ length: 100 }, (_, index) => `top${index}`)
     localStorage.setItem("gld.ide./p.open", JSON.stringify([...deep, ...shallow, "a b,c"]))
     render(<IdeView dir="/p" />)
     const es = await stream()
-    const u = new URL(es.url, "http://x")
-    expect(u.pathname).toBe("/v1/fs/watch")
-    expect(u.searchParams.get("dir")).toBe("/p")
-    const paths = u.searchParams.getAll("paths")
+    const uRL = new URL(es.url, "http://x")
+    expect(uRL.pathname).toBe("/v1/fs/watch")
+    expect(uRL.searchParams.get("dir")).toBe("/p")
+    const paths = uRL.searchParams.getAll("paths")
     expect(paths).toHaveLength(200)
     expect(paths[0]).toBe("")
-    for (const s of [...shallow, "a b,c"]) expect(paths).toContain(s)
+    for (const text of [...shallow, "a b,c"]) expect(paths).toContain(text)
   })
 
   it("dossiers déclarés : la requête reste sous 6000 octets, les plus profonds sont écartés d'abord", async () => {
-    const deep = Array.from({ length: 100 }, (_, i) => `deep/${"x".repeat(60)}${i}`)
-    const shallow = Array.from({ length: 50 }, (_, i) => `s${i}`)
+    const deep = Array.from({ length: 100 }, (_, index) => `deep/${"x".repeat(60)}${index}`)
+    const shallow = Array.from({ length: 50 }, (_, index) => `s${index}`)
     localStorage.setItem("gld.ide./p.open", JSON.stringify([...deep, ...shallow]))
     render(<IdeView dir="/p" />)
     const es = await stream()
-    const u = new URL(es.url, "http://x")
-    expect(u.search.length).toBeLessThanOrEqual(6000)
-    const paths = u.searchParams.getAll("paths")
+    const uRL = new URL(es.url, "http://x")
+    expect(uRL.search.length).toBeLessThanOrEqual(6000)
+    const paths = uRL.searchParams.getAll("paths")
     expect(paths.length).toBeGreaterThan(51)
     expect(paths.length).toBeLessThan(151)
-    for (const s of ["", ...shallow]) expect(paths).toContain(s)
+    for (const text of ["", ...shallow]) expect(paths).toContain(text)
   })
 
   it("le flux est rouvert quand les dossiers dépliés changent, fermé au démontage", async () => {
-    vi.mocked(api.fsTree).mockImplementation(async (_d, p) => ({ entries: p === "" ? [e("src", "dir")] : [e("b.txt", "file")], truncated: false }))
-    const r = render(<IdeView dir="/p" />)
+    vi.mocked(api.fsTree).mockImplementation(async (_d, path) => ({ entries: path === "" ? [e("src", "dir")] : [e("b.txt", "file")], truncated: false }))
+    const element = render(<IdeView dir="/p" />)
     const first = await stream()
     expect(new URL(first.url, "http://x").searchParams.getAll("paths")).toEqual([""])
     fireEvent.click(await screen.findByLabelText("Déplier src"))
     await waitFor(() => expect(first.closed).toBe(true))
     const second = await stream()
     expect(new URL(second.url, "http://x").searchParams.getAll("paths")).toEqual(["", "src"])
-    r.unmount()
+    element.unmount()
     expect(second.closed).toBe(true)
   })
 })
@@ -547,11 +547,11 @@ describe("IdeView, ouverture rapide et alimentation TypeScript", () => {
   it("alimente le service TypeScript avec les seuls fichiers de l'index, vidé au démontage", async () => {
     index.mockResolvedValue({ state: "ready", files: [{ path: "a.ts", size: 3, mtime: 1 }, { path: "b.json", size: 2, mtime: 1 }, { path: "x.go", size: 1, mtime: 1 }] })
     const files = vi.spyOn(api, "fsFiles").mockImplementation(async (_d, ps) => ({ files: ps.map((path) => ({ path, content: "c:" + path })) }))
-    const r = render(<IdeView dir="/p" />)
+    const element = render(<IdeView dir="/p" />)
     await waitFor(() => expect(feed.setTsLib).toHaveBeenCalledTimes(2))
     expect(files.mock.calls[0][1].sort()).toEqual(["a.ts", "b.json"])
     expect(feed.setTsLib).toHaveBeenCalledWith("a.ts", "c:a.ts")
-    r.unmount()
+    element.unmount()
     await waitFor(() => expect(feed.clearTsLibs).toHaveBeenCalled())
   })
 
@@ -559,9 +559,9 @@ describe("IdeView, ouverture rapide et alimentation TypeScript", () => {
     index.mockResolvedValue({ state: "ready", files: [{ path: "a.ts", size: 3, mtime: 1 }] })
     const pending = deferred<{ files: { path: string; content: string }[] }>()
     const files = vi.spyOn(api, "fsFiles").mockReturnValue(pending.promise)
-    const r = render(<IdeView dir="/p" />)
+    const element = render(<IdeView dir="/p" />)
     await waitFor(() => expect(files).toHaveBeenCalled())
-    r.unmount()
+    element.unmount()
     pending.resolve({ files: [{ path: "a.ts", content: "x" }] })
     await sleep(50)
     expect(feed.setTsLib).not.toHaveBeenCalled()
@@ -576,7 +576,7 @@ describe("IdeView, ouverture rapide et alimentation TypeScript", () => {
     index.mockResolvedValue({ state: "ready", files: [{ path: "a.ts", size: 4, mtime: 2 }] })
     es.emit({ path: "a.ts", type: "write" })
     await waitFor(() => expect(feed.setTsLib).toHaveBeenCalledWith("b.ts", null), { timeout: 2500 })
-    expect(feed.setTsLib.mock.calls.filter((c) => c[0] === "a.ts")).toHaveLength(2)
+    expect(feed.setTsLib.mock.calls.filter((values) => values[0] === "a.ts")).toHaveLength(2)
   })
 })
 
@@ -630,10 +630,10 @@ describe("IdeView, évènement pendant une sauvegarde", () => {
     const es = await stream()
     const old = deferred<FsFile>()
     const base = file.getMockImplementation()!
-    let n = 0
-    file.mockImplementation(async (d, p) => (p !== "a.txt" ? base(d, p) : ++n === 1 ? old.promise : f({ content: "v2", etag: "e9" })))
+    let count = 0
+    file.mockImplementation(async (directory, path) => (path !== "a.txt" ? base(directory, path) : ++count === 1 ? old.promise : f({ content: "v2", etag: "e9" })))
     es.emit({ path: "a.txt", type: "write" })
-    await waitFor(() => expect(n).toBe(1))
+    await waitFor(() => expect(count).toBe(1))
     es.emit({ path: "", type: "resync" })
     await waitFor(() => expect(ed("a.txt")).toBe(JSON.stringify("v2")))
     await act(async () => old.resolve(f({ content: "v1", etag: "e8" })))
@@ -644,8 +644,8 @@ describe("IdeView, évènement pendant une sauvegarde", () => {
 
 describe("IdeView : onglets restaurés au rechargement", () => {
   const KEY = "gld.ide./p.tabs"
-  const tabs = () => screen.queryAllByRole("tab").map((x) => x.getAttribute("data-path"))
-  const activeTab = () => screen.getAllByRole("tab").find((x) => x.getAttribute("aria-selected") === "true")?.getAttribute("data-path")
+  const tabs = () => screen.queryAllByRole("tab").map((element) => element.getAttribute("data-path"))
+  const activeTab = () => screen.getAllByRole("tab").find((element) => element.getAttribute("aria-selected") === "true")?.getAttribute("data-path")
   const stored = () => JSON.parse(localStorage.getItem(KEY) ?? "null")
 
   it("rouvre les onglets mémorisés dans l'ordre, par le flux normal, et active le bon", async () => {
@@ -658,7 +658,7 @@ describe("IdeView : onglets restaurés au rechargement", () => {
   })
 
   it("un fichier disparu est sauté sans message", async () => {
-    file.mockImplementation(async (_d, p) => (p === "gone.txt" ? Promise.reject(fail(404, "not_found")) : f({ content: "x", etag: "e1", size: 1, mtime: 1 })))
+    file.mockImplementation(async (_d, path) => (path === "gone.txt" ? Promise.reject(fail(404, "not_found")) : f({ content: "x", etag: "e1", size: 1, mtime: 1 })))
     localStorage.setItem(KEY, JSON.stringify({ paths: ["gone.txt", "c.txt"], active: "gone.txt" }))
     render(<IdeView dir="/p" />)
     await waitFor(() => expect(tabs()).toEqual(["c.txt"]))
@@ -679,7 +679,7 @@ describe("IdeView : onglets restaurés au rechargement", () => {
   })
 
   it("la liste est bornée à 30 chemins", async () => {
-    const many = Array.from({ length: 50 }, (_, i) => `f${i}.txt`)
+    const many = Array.from({ length: 50 }, (_, index) => `f${index}.txt`)
     localStorage.setItem(KEY, JSON.stringify({ paths: many, active: "f45.txt" }))
     render(<IdeView dir="/p" />)
     await waitFor(() => expect(tabs()).toHaveLength(30))
@@ -759,15 +759,15 @@ describe("IdeView : Ctrl+P écouté sur le document, focus rendu à l'espace", (
 describe("IdeView : restauration silencieuse", () => {
   const KEY = "gld.ide./p.tabs"
   it("aucun message pour un échec quelconque (403, 500, réseau) ; seuls les onglets lisibles reviennent", async () => {
-    file.mockImplementation(async (_d, p) => {
-      if (p === "lien.txt") throw fail(403, "forbidden")
-      if (p === "panne.txt") throw fail(500, "internal")
-      if (p === "reseau.txt") throw new Error("réseau")
+    file.mockImplementation(async (_d, path) => {
+      if (path === "lien.txt") throw fail(403, "forbidden")
+      if (path === "panne.txt") throw fail(500, "internal")
+      if (path === "reseau.txt") throw new Error("réseau")
       return f({ content: "x", etag: "e1", size: 1, mtime: 1 })
     })
     localStorage.setItem(KEY, JSON.stringify({ paths: ["lien.txt", "panne.txt", "reseau.txt", "c.txt"], active: "lien.txt" }))
     render(<IdeView dir="/p" />)
-    await waitFor(() => expect(screen.queryAllByRole("tab").map((x) => x.getAttribute("data-path"))).toEqual(["c.txt"]))
+    await waitFor(() => expect(screen.queryAllByRole("tab").map((element) => element.getAttribute("data-path"))).toEqual(["c.txt"]))
     expect(toast.error).not.toHaveBeenCalled()
     expect(toast).not.toHaveBeenCalled()
   })
@@ -914,10 +914,10 @@ describe("IdeView : sauvegarde et relectures concurrentes", () => {
     const es = await stream()
     const old = deferred<FsFile>()
     const base = file.getMockImplementation()!
-    let n = 0
-    file.mockImplementation(async (d, p) => (p === "a.txt" && ++n === 1 ? old.promise : base(d, p)))
+    let count = 0
+    file.mockImplementation(async (directory, path) => (path === "a.txt" && ++count === 1 ? old.promise : base(directory, path)))
     es.emit({ path: "a.txt", type: "write" })
-    await waitFor(() => expect(n).toBe(1))
+    await waitFor(() => expect(count).toBe(1))
     const input = screen.getByLabelText("type:a.txt")
     fireEvent.change(input, { target: { value: "x" } })
     ctrlS(input)
@@ -972,7 +972,7 @@ describe("IdeView : flux, droits, TypeScript", () => {
   })
 
   it("réouverture du flux après un changement de dossiers dépliés : resync implicite", async () => {
-    vi.mocked(api.fsTree).mockImplementation(async (_d, p) => ({ entries: p === "" ? [e("src", "dir"), e("a.txt", "file")] : [e("b.txt", "file")], truncated: false }))
+    vi.mocked(api.fsTree).mockImplementation(async (_d, path) => ({ entries: path === "" ? [e("src", "dir"), e("a.txt", "file")] : [e("b.txt", "file")], truncated: false }))
     await openA()
     const first = await stream()
     first.open()
@@ -1030,7 +1030,7 @@ describe("IdeView : barres d'outils et commandes", () => {
     fireEvent.change(screen.getByLabelText("type:b.txt"), { target: { value: "y" } })
     fireEvent.click(tool("Tout enregistrer"))
     await waitFor(() => expect(save).toHaveBeenCalledTimes(2))
-    expect(save.mock.calls.map((c) => c[1])).toEqual(["a.txt", "b.txt"])
+    expect(save.mock.calls.map((value) => value[1])).toEqual(["a.txt", "b.txt"])
   })
 
   it("« Fermer tous les onglets » demande confirmation si un onglet est sale", async () => {
@@ -1105,13 +1105,13 @@ describe("IdeView : menu et barre d'état", () => {
   const status = (line: number) => ({ line, col: 1, selected: 0, eol: "CRLF" as const, language: "plaintext", indent: "spaces:4", readOnly: false })
   const bar = () => screen.getByRole("group", { name: "Barre d'état" })
   afterEach(() => {
-    for (const p of ["a.txt", "b.txt"]) handles.of(p).subscribe.mockImplementation(() => () => {})
+    for (const path of ["a.txt", "b.txt"]) handles.of(path).subscribe.mockImplementation(() => () => {})
   })
 
   it("menu au-dessus, barre d'état qui suit l'onglet actif et se vide sans onglet", async () => {
     const offA = vi.fn()
-    handles.of("a.txt").subscribe.mockImplementation((l: (s: unknown) => void) => (l(status(1)), offA))
-    handles.of("b.txt").subscribe.mockImplementation((l: (s: unknown) => void) => (l(status(2)), () => {}))
+    handles.of("a.txt").subscribe.mockImplementation((callback: (value: unknown) => void) => (callback(status(1)), offA))
+    handles.of("b.txt").subscribe.mockImplementation((callback: (value: unknown) => void) => (callback(status(2)), () => {}))
     render(<IdeView dir="/p" />)
     expect(screen.getByRole("menubar", { name: "Menu de l'espace de travail" })).toBeTruthy()
     expect(within(bar()).queryByText(/Ligne/)).toBeNull()

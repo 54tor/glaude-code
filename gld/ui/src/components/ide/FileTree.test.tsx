@@ -9,7 +9,7 @@ import { useTree } from "./useTree"
 const e = (name: string, type: FsEntry["type"]): FsEntry => ({ name, type, size: 1, mtime: 1 })
 const root = [e("src", "dir"), e("link", "symlink"), e("a.txt", "file")]
 const tree = (over: Record<string, { entries: FsEntry[]; truncated: boolean }> = {}) =>
-  vi.spyOn(api, "fsTree").mockImplementation(async (_d, p) => over[p] ?? { entries: p === "" ? root : [e("b.go", "file")], truncated: false })
+  vi.spyOn(api, "fsTree").mockImplementation(async (_d, path) => over[path] ?? { entries: path === "" ? root : [e("b.go", "file")], truncated: false })
 
 beforeEach(() => {
   setLang("fr")
@@ -21,10 +21,10 @@ afterEach(() => {
 })
 
 type P = Omit<Parameters<typeof FileTree>[0], "tree">
-function Host(p: P) {
-  return <FileTree {...p} tree={useTree(p.dir)} />
+function Host(value: P) {
+  return <FileTree {...value} tree={useTree(value.dir)} />
 }
-const mount = (o: Partial<P> = {}) => render(<Host dir="/p" canWrite={false} selected="" onOpen={() => {}} {...o} />)
+const mount = (value: Partial<P> = {}) => render(<Host dir="/p" canWrite={false} selected="" onOpen={() => {}} {...value} />)
 
 describe("FileTree", () => {
   it("ne charge que la racine au montage, puis un seul appel au dépliage", async () => {
@@ -81,7 +81,7 @@ describe("FileTree", () => {
     fireEvent.change(await screen.findByPlaceholderText("Nom"), { target: { value: "n.txt" } })
     fireEvent.click(screen.getByRole("button", { name: "Valider" }))
     await waitFor(() => expect(fsNew).toHaveBeenCalledWith("/p", "n.txt", "file"))
-    await waitFor(() => expect(spy.mock.calls.filter((c) => c[1] === "").length).toBe(2))
+    await waitFor(() => expect(spy.mock.calls.filter((value) => value[1] === "").length).toBe(2))
     expect(localStorage.getItem("gld.ide./p.open") ?? "[]").toBe("[]")
     act(() => actions.current!.create("newDir"))
     expect(await screen.findByText("Nouveau dossier")).toBeTruthy()
