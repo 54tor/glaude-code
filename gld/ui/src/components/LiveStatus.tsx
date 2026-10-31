@@ -179,7 +179,7 @@ export function StatsButton({ live: { st }, s: session, onClick }: { live: Live;
 
 // Fenêtre « Stats » : faits de la session, cache et maintien au chaud, consommation, dernier appel, sous-agents.
 // shown/onShown : ouverte depuis l'en-tête du lecteur ou le menu « … » (petit écran).
-export function LiveStats({ live: { st }, s: session, project, detail, shown, onShown }: { live: Live; s: Session; project: string; detail: Detail | null; shown: boolean; onShown: (v: boolean) => void }) {
+export function LiveStats({ live: { st }, s: session, project, detail, shown, onShown }: { live: Live; s: Session; project: string; detail: Detail | null; shown: boolean; onShown: (flag: boolean) => void }) {
   const { t } = useTranslation()
   const actions = useActions()
   const [sub, setSub] = useState<SubLive | null>(null)

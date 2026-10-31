@@ -7,8 +7,8 @@ import { ApiError } from "@/lib/apiError"
 import { resetShares } from "@/hooks/useShares"
 import { InvitesOverlay } from "./InvitesOverlay"
 
-const inv = (o: Partial<InviteInfo> = {}): InviteInfo => ({ id: "i1", seq: 1, name: "", label: "Léa", mode: "rw", state: "connected", lastSeen: Date.now() / 1000, redeemed: true, queue: [], ...o })
-const sh = (invites: InviteInfo[], o: Partial<ShareInfo> = {}): ShareInfo => ({ id: "s1", dir: "/d", title: "Ma session", handle: "h", open: true, invites, ...o })
+const inv = (inviteInfo: Partial<InviteInfo> = {}): InviteInfo => ({ id: "i1", seq: 1, name: "", label: "Léa", mode: "rw", state: "connected", lastSeen: Date.now() / 1000, redeemed: true, queue: [], ...inviteInfo })
+const sh = (invites: InviteInfo[], shareInfo: Partial<ShareInfo> = {}): ShareInfo => ({ id: "s1", dir: "/d", title: "Ma session", handle: "h", open: true, invites, ...shareInfo })
 let write: ReturnType<typeof vi.fn>
 let onOpen: ReturnType<typeof vi.fn<(id: string) => void>>
 
@@ -17,8 +17,8 @@ const mount = async (shares: ShareInfo[]) => {
   render(<InvitesOverlay onClose={() => {}} onOpenSession={onOpen} />)
   await act(async () => {})
 }
-const click = async (name: RegExp | string, i = 0) => {
-  fireEvent.click(screen.getAllByRole("button", { name })[i])
+const click = async (name: RegExp | string, index = 0) => {
+  fireEvent.click(screen.getAllByRole("button", { name })[index])
   await act(async () => {})
 }
 
@@ -65,39 +65,39 @@ describe("InvitesOverlay", () => {
   })
 
   it("la bascule appelle inviteMode avec l'autre mode", async () => {
-    const m = vi.spyOn(api, "inviteMode").mockResolvedValue(undefined)
+    const mock = vi.spyOn(api, "inviteMode").mockResolvedValue(undefined)
     await mount([sh([inv()])])
     fireEvent.click(screen.getByRole("switch", { name: /Écriture pour Léa/ }))
     await act(async () => {})
-    expect(m).toHaveBeenCalledWith("s1", "i1", "ro")
+    expect(mock).toHaveBeenCalledWith("s1", "i1", "ro")
   })
 
   it("régénérer : confirmation, puis lien affiché et copié", async () => {
-    const r = vi.spyOn(api, "inviteRegen").mockResolvedValue({ token: "t2" })
+    const mock = vi.spyOn(api, "inviteRegen").mockResolvedValue({ token: "t2" })
     await mount([sh([inv()])])
     await click(/Régénérer le lien/)
-    expect(r).not.toHaveBeenCalled()
+    expect(mock).not.toHaveBeenCalled()
     await click(/^Régénérer$/)
-    expect(r).toHaveBeenCalledWith("s1", "i1")
+    expect(mock).toHaveBeenCalledWith("s1", "i1")
     expect(write).toHaveBeenCalledWith(`${location.origin}/invite/main/t2`)
     expect(screen.getByDisplayValue(/invite\/main\/t2/)).toBeTruthy()
   })
 
   it("révoquer demande confirmation", async () => {
-    const r = vi.spyOn(api, "inviteRevoke").mockResolvedValue(undefined)
+    const mock = vi.spyOn(api, "inviteRevoke").mockResolvedValue(undefined)
     await mount([sh([inv()])])
     await click(/Révoquer/)
-    expect(r).not.toHaveBeenCalled()
+    expect(mock).not.toHaveBeenCalled()
     await click(/^Révoquer$/)
-    expect(r).toHaveBeenCalledWith("s1", "i1")
+    expect(mock).toHaveBeenCalledWith("s1", "i1")
   })
 
   it.each([["", undefined], ["Léa", "Léa"]])("inviter avec le nom %j", async (typed, sent) => {
-    const c = vi.spyOn(api, "inviteCreate").mockResolvedValue({ token: "tok", invite: { id: "i1", seq: 1, label: "Léa" } })
+    const mock = vi.spyOn(api, "inviteCreate").mockResolvedValue({ token: "tok", invite: { id: "i1", seq: 1, label: "Léa" } })
     await mount([sh([inv()])])
     if (typed) fireEvent.change(screen.getByLabelText(/Nom de l'invité/), { target: { value: typed } })
     await click(/Inviter quelqu'un/)
-    expect(c).toHaveBeenCalledWith("s1", "/d", "Ma session", sent)
+    expect(mock).toHaveBeenCalledWith("s1", "/d", "Ma session", sent)
     expect(write).toHaveBeenCalledWith(`${location.origin}/invite/main/tok`)
   })
 
@@ -121,13 +121,13 @@ describe("InvitesOverlay", () => {
   })
 
   it("double clic sur Inviter : un seul appel", async () => {
-    const c = vi.spyOn(api, "inviteCreate").mockImplementation(() => new Promise((r) => setTimeout(() => r({ token: "t", invite: { id: "i1", seq: 1, label: "Léa" } }), 10)))
+    const mock = vi.spyOn(api, "inviteCreate").mockImplementation(() => new Promise((callback) => setTimeout(() => callback({ token: "t", invite: { id: "i1", seq: 1, label: "Léa" } }), 10)))
     await mount([sh([inv()])])
-    const b = screen.getByRole("button", { name: /Inviter quelqu'un/ })
-    fireEvent.click(b)
-    fireEvent.click(b)
-    await act(async () => void (await new Promise((r) => setTimeout(r, 30))))
-    expect(c).toHaveBeenCalledTimes(1)
+    const element = screen.getByRole("button", { name: /Inviter quelqu'un/ })
+    fireEvent.click(element)
+    fireEvent.click(element)
+    await act(async () => void (await new Promise((callback) => setTimeout(callback, 30))))
+    expect(mock).toHaveBeenCalledTimes(1)
   })
 
   it("le lien affiché porte le libellé de son invitation : le dernier régénéré seul", async () => {
@@ -155,7 +155,7 @@ describe("InvitesOverlay", () => {
   })
 
   it("à 10 invitations : la limite est dite, plus de champ d'invitation", async () => {
-    await mount([sh(Array.from({ length: 10 }, (_, k) => inv({ id: `i${k}`, label: `N${k}` })))])
+    await mount([sh(Array.from({ length: 10 }, (_, thirdIndex) => inv({ id: `i${thirdIndex}`, label: `N${thirdIndex}` })))])
     expect(screen.getByText(/Dix invitations au plus/)).toBeTruthy()
     expect(screen.queryByRole("button", { name: /Inviter quelqu'un/ })).toBeNull()
   })
