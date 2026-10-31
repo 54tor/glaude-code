@@ -4,6 +4,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+### Corrigé
+- Fusion de mémoires ou de snippets lancée dans un dossier non approuvé : la modale « faire confiance à ce dossier » s'affiche maintenant, au lieu de laisser la session attendre dans un terminal détaché.
+
 ### Modifié
 - Règles livrées par gld : elles ne sont plus écrites dans `~/.claude/rules` (chargé par toutes les sessions) mais transmises en prompt système (`--append-system-prompt-file`) aux seules sessions lancées par gld, chat et terminal. Réglage « Règles gld » dans Configuration pour les couper ; lecture seule dans la Mémoire. Les anciennes copies marquées « Managed by gld » sont supprimées au démarrage.
 - Notification quand Claude Code installé n'est pas à jour (comparé à la dernière version npm) ; `GET /v1/update` renvoie `claudeCurrent`, `claudeLatest` et `claudeNewer`.

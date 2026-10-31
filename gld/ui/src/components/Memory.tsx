@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next"
 import { useLocal } from "@/hooks/useLocal"
 import { api, type MemFile, type Trashed } from "@/lib/api"
 import { errMsg } from "@/lib/apiError"
+import { watchTrust } from "@/lib/trust"
 import { tilde } from "@/lib/format"
 import { withChoice } from "@/lib/models"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -355,6 +356,7 @@ export function Memory({
         try {
           const m = await api.memoryMerge({ keys, out, launch: true, prompt: text, args: withChoice(args, c) })
           toast.success(m.message.trim() || t("memory.main.mergeStarted"))
+          void watchTrust(homeDir)
           setPicked(new Set())
           return true
         } catch (e) {

@@ -19,6 +19,7 @@ import type { Ask as PromptAsk } from "./Prompt"
 import { useEditorDraft, useLeaveGuard } from "@/hooks/useEditorDraft"
 import { reportAction } from "@/lib/report"
 import { errMsg, qs, readResponse, v1 } from "@/lib/apiError"
+import { watchTrust } from "@/lib/trust"
 import { authFetch } from "@/lib/auth"
 
 // Snippets = commandes Claude Code (/nom) : personnelles (~/.claude/commands) et de chaque projet (.claude/commands).
@@ -210,6 +211,7 @@ export function Snippets({
         try {
           const m = await api.snippetMerge({ keys, out, launch: true, prompt: text, args: withChoice(args, c) })
           toast.success(m.message.trim() || t("skills.snippets.mergeStarted"))
+          void watchTrust(home)
           setPicked(new Set())
           return true
         } catch (e) {
