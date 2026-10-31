@@ -45,3 +45,15 @@ func TestRedactWriterRetireLaLongueurEtMasque(t *testing.T) {
 		t.Error("Content-Length conservé")
 	}
 }
+
+func TestGuestLiveBodyRetireLesLignesDeCommande(t *testing.T) {
+	body := []byte(`{"activity":"exécute Bash : sed -n 1,5p gld/x.go","tool":"Bash : sed -n 1,5p gld/x.go","exec":true,"context":123,` +
+		`"subs":[{"id":"a","activity":"exécute Read : /home/bob/secret.txt"},{"id":"b","activity":"réfléchit"}]}`)
+	expected := `{"activity":"exécute Bash","context":123,"exec":true,"subs":[{"activity":"exécute Read","id":"a"},{"activity":"réfléchit","id":"b"}],"tool":"Bash"}`
+	if obtained := string(guestLiveBody(body)); obtained != expected {
+		t.Errorf("obtenu %s", obtained)
+	}
+	if obtained := string(guestLiveBody([]byte("pas du json"))); obtained != "pas du json" {
+		t.Errorf("corps illisible modifié : %q", obtained)
+	}
+}
