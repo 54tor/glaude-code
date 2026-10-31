@@ -48,7 +48,7 @@ const DESCRIPTION_CHAR_LIMIT = 1536
 
 // Skills de Claude Code : personnels (~/.claude/skills), de projet (.claude/skills) et de plugins (lecture seule).
 // Lecture, modification de SKILL.md, création, copie vers un autre emplacement, suppression (copie à la corbeille), rédaction par un modèle.
-export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: string; q: string; onPick: (key: string) => void; onAsk: (ask: Ask) => void }) {
+export function Skills({ sel, home, q: query, onPick, onAsk }: { sel: string; home: string; q: string; onPick: (key: string) => void; onAsk: (ask: Ask) => void }) {
   const { t } = useTranslation()
   const [data, setData] = useState<{ skills: Skill[]; projects: { dir: string; project: string }[] } | null>(null)
   const [loaded, setLoaded] = useState<{ key: string; text: string; files: SkillFile[]; error?: string } | null>(null)
@@ -89,7 +89,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
     }
   }, [sel, data])
 
-  const normalizedQuery = q.toLowerCase()
+  const normalizedQuery = query.toLowerCase()
   const skills = useMemo(
     () =>
       (data?.skills ?? []).filter((candidateSkill) => {
@@ -315,7 +315,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
               </ul>
             </section>
           ))}
-          {data && skills.length === 0 && <p className="px-2 py-6 text-center text-sm text-muted-foreground">{q ? t("skills.skills.emptySearch") : t("skills.skills.empty")}</p>}
+          {data && skills.length === 0 && <p className="px-2 py-6 text-center text-sm text-muted-foreground">{query ? t("skills.skills.emptySearch") : t("skills.skills.empty")}</p>}
         </nav>
       </ScrollArea>
 

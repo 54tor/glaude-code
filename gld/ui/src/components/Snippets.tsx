@@ -32,7 +32,7 @@ export function Snippets({
   scopes,
   dir,
   sel,
-  q,
+  q: query,
   home,
   onPick,
   onLaunch,
@@ -57,7 +57,7 @@ export function Snippets({
   args: string
 }) {
   const { t } = useTranslation()
-  const normalizedQuery = q.toLowerCase()
+  const normalizedQuery = query.toLowerCase()
   const shown = files.filter((file) => {
     if (!normalizedQuery) return true
     const searchableText = (file.path + " " + file.command + " " + file.description + " " + file.project).toLowerCase()

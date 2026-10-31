@@ -9,7 +9,7 @@ import { ShareDialog } from "./ShareDialog"
 
 const homes = (current: string) => ({ current, main: "/m", homes: [] })
 let write: ReturnType<typeof vi.fn>
-const inv = (o: Partial<InviteInfo> = {}): InviteInfo => ({ id: "i1", seq: 1, name: "", label: "Invité 1", mode: "rw", state: "pending", lastSeen: 0, redeemed: false, queue: [], ...o })
+const inv = (inviteInfo: Partial<InviteInfo> = {}): InviteInfo => ({ id: "i1", seq: 1, name: "", label: "Invité 1", mode: "rw", state: "pending", lastSeen: 0, redeemed: false, queue: [], ...inviteInfo })
 const sh = (invites: InviteInfo[]): ShareInfo => ({ id: "s1", dir: "/d", title: "T", handle: "h", open: true, invites })
 
 beforeEach(() => {
@@ -37,20 +37,20 @@ const click = async (name: RegExp) => {
 
 describe("ShareDialog", () => {
   it("inviter : titre de la session, nom, lien copié", async () => {
-    const c = vi.spyOn(api, "inviteCreate").mockResolvedValue({ token: "tok", invite: { id: "i1", seq: 1, label: "Léa" } })
+    const mock = vi.spyOn(api, "inviteCreate").mockResolvedValue({ token: "tok", invite: { id: "i1", seq: 1, label: "Léa" } })
     await open(undefined, "Ma session")
     fireEvent.change(screen.getByLabelText(/Nom de l'invité/), { target: { value: " Léa " } })
     await click(/Inviter quelqu'un/)
-    expect(c).toHaveBeenCalledWith("s1", "/d", "Ma session", "Léa")
+    expect(mock).toHaveBeenCalledWith("s1", "/d", "Ma session", "Léa")
     expect(write).toHaveBeenCalledWith(`${location.origin}/invite/main/tok`)
     expect((screen.getByDisplayValue(/invite\/main\/tok/) as HTMLInputElement).value).toBe(`${location.origin}/invite/main/tok`)
   })
 
   it.each([["x".repeat(130), "x".repeat(120)], ["(sans titre)", undefined], ["", undefined]])("titre %#", async (given, sent) => {
-    const c = vi.spyOn(api, "inviteCreate").mockResolvedValue({ token: "tok", invite: { id: "i1", seq: 1, label: "Léa" } })
+    const mock = vi.spyOn(api, "inviteCreate").mockResolvedValue({ token: "tok", invite: { id: "i1", seq: 1, label: "Léa" } })
     await open(undefined, given)
     await click(/Inviter quelqu'un/)
-    expect(c).toHaveBeenCalledWith("s1", "/d", sent, undefined)
+    expect(mock).toHaveBeenCalledWith("s1", "/d", sent, undefined)
   })
 
   it("utilise le nom du home courant, échappé", async () => {
@@ -99,11 +99,11 @@ describe("ShareDialog", () => {
   })
 
   it("avant la première réponse, aucune action ; si elle échoue : erreur et réessai, pas de « aucun invité » supposé", async () => {
-    const s = vi.spyOn(api, "shares").mockRejectedValueOnce(Object.assign(new Error("x"), { status: 500 }))
+    const mock = vi.spyOn(api, "shares").mockRejectedValueOnce(Object.assign(new Error("x"), { status: 500 }))
     render(<ShareDialog id="s1" dir="/d" onClose={() => {}} />)
     await act(async () => {})
     expect(screen.queryByRole("button", { name: /Inviter/ })).toBeNull()
-    s.mockResolvedValue({ shares: [] })
+    mock.mockResolvedValue({ shares: [] })
     await click(/Réessayer/)
     expect(screen.getByRole("button", { name: /Inviter quelqu'un/ })).toBeTruthy()
   })
@@ -117,23 +117,23 @@ describe("ShareDialog", () => {
   })
 
   it("un double clic sur Inviter n'appelle inviteCreate qu'une fois", async () => {
-    const c = vi.spyOn(api, "inviteCreate").mockImplementation(() => new Promise((r) => setTimeout(() => r({ token: "t", invite: { id: "i1", seq: 1, label: "Léa" } }), 10)))
+    const mock = vi.spyOn(api, "inviteCreate").mockImplementation(() => new Promise((callback) => setTimeout(() => callback({ token: "t", invite: { id: "i1", seq: 1, label: "Léa" } }), 10)))
     await open()
-    const b = screen.getByRole("button", { name: /Inviter quelqu'un/ })
-    fireEvent.click(b)
-    fireEvent.click(b)
-    await act(async () => void (await new Promise((r) => setTimeout(r, 30))))
-    expect(c).toHaveBeenCalledTimes(1)
+    const element = screen.getByRole("button", { name: /Inviter quelqu'un/ })
+    fireEvent.click(element)
+    fireEvent.click(element)
+    await act(async () => void (await new Promise((callback) => setTimeout(callback, 30))))
+    expect(mock).toHaveBeenCalledTimes(1)
   })
 
   it("homes en échec : toast, rien de créé", async () => {
     vi.spyOn(api, "homes").mockRejectedValue(new Error("x"))
-    const c = vi.spyOn(api, "inviteCreate").mockResolvedValue({ token: "t", invite: { id: "i1", seq: 1, label: "Léa" } })
+    const mock = vi.spyOn(api, "inviteCreate").mockResolvedValue({ token: "t", invite: { id: "i1", seq: 1, label: "Léa" } })
     const err = vi.spyOn(toast, "error")
     await open()
     await click(/Inviter quelqu'un/)
     expect(err).toHaveBeenCalled()
-    expect(c).not.toHaveBeenCalled()
+    expect(mock).not.toHaveBeenCalled()
   })
 
   it("sans navigator.clipboard : lien affiché et toast de copie échouée", async () => {

@@ -74,9 +74,9 @@ export function SessionsPane({
   live: Set<string>
   waiting: Set<string>
   actions: Actions
-  go: (r: Route) => void
+  go: (localRoute: Route) => void
   clearSearch: () => void
-  grouped: { n: number; hide: boolean; setHide: (v: boolean) => void } // sessions déjà groupées du dossier affiché
+  grouped: { n: number; hide: boolean; setHide: (flag: boolean) => void } // sessions déjà groupées du dossier affiché
 }) {
   const { t } = useTranslation()
   // Tirer vers le bas depuis le haut de la liste : au-delà de 70 px, on recharge. Suivi en pixels pour l'indicateur.

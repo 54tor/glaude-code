@@ -24,9 +24,9 @@ export function SyncItems({
 }: {
   items: SyncItem[]
   picks: Picks
-  setPicks: (f: (p: Picks) => Picks) => void
+  setPicks: (callback: (localPicks: Picks) => Picks) => void
   groupBy?: "kind" | "cat"
-  extra?: (i: SyncItem) => ReactNode
+  extra?: (syncItem: SyncItem) => ReactNode
 }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState<Set<string>>(new Set())

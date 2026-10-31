@@ -33,7 +33,7 @@ import { useActions, type Row } from "./actions"
 
 
 // Avec `to`, un vrai lien : clic du milieu ou Ctrl+clic ouvrent la vue dans un autre onglet.
-function NavItem({ icon: Icon, label, n, active, onClick, to }: { icon: typeof Inbox; label: string; n?: number; active: boolean; onClick: () => void; to?: Route }) {
+function NavItem({ icon: Icon, label, n: count, active, onClick, to }: { icon: typeof Inbox; label: string; n?: number; active: boolean; onClick: () => void; to?: Route }) {
   const itemClassName = cn(
     "flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-sm transition-colors",
     active ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground [&>svg]:text-primary" : "text-sidebar-foreground/85 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
@@ -42,7 +42,7 @@ function NavItem({ icon: Icon, label, n, active, onClick, to }: { icon: typeof I
     <>
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <span className="flex-1 truncate text-left">{label}</span>
-      {n !== undefined && <span className="text-xs text-muted-foreground tabular-nums">{n}</span>}
+      {count !== undefined && <span className="text-xs text-muted-foreground tabular-nums">{count}</span>}
     </>
   )
   if (to)
@@ -68,16 +68,16 @@ function NavItem({ icon: Icon, label, n, active, onClick, to }: { icon: typeof I
   )
 }
 
-function KidsBadge({ n, open, live, onClick }: { n: number; open: boolean; live?: boolean; onClick: () => void }) {
+function KidsBadge({ n: localCount, open, live, onClick }: { n: number; open: boolean; live?: boolean; onClick: () => void }) {
   const { t } = useTranslation()
   return (
     <button
       onClick={onClick}
       aria-expanded={open}
-      aria-label={t("shell.list.subSessions", { count: n })}
+      aria-label={t("shell.list.subSessions", { count: localCount })}
       className="flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1 text-xs tabular-nums text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
     >
-      ×{n}
+      ×{localCount}
       <ChevronRight className={cn("size-3 transition-transform", open && "rotate-90")} />
       {live && <span className="ml-0.5 size-1.5 rounded-full bg-success" aria-label={t("shell.sidebar.open")} />}
     </button>
