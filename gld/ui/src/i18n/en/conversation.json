@@ -65,7 +65,8 @@
       "loadOlder": "Load older messages",
       "empty": "No messages in this session.",
       "replying": "Claude is replying…",
-      "toEndAria": "Go to the end of the conversation"
+      "toEndAria": "Go to the end of the conversation",
+      "following": "Following the end of the conversation"
     },
     "message": {
       "pasted_one": "Pasted text · {{count}} line",
@@ -94,6 +95,8 @@
       "messageAria": "Message to Claude",
       "queueAria": "Queued messages",
       "dequeue": "Remove from the queue",
+      "sendNow": "Send now",
+      "sendNowTitle": "Interrupts the current reply (Esc), then sends this message",
       "importRestored": "Queue full or message refused: “{{text}}” is back in the draft",
       "guest": "Guest",
       "sendUncertain": "Send uncertain: may already have arrived",
