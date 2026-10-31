@@ -34,7 +34,7 @@ class FakeES {
     act(() => this.onerror?.())
   }
 }
-const live = () => FakeES.all.filter((x) => !x.closed)
+const live = () => FakeES.all.filter((fakeES) => !fakeES.closed)
 const tick = (ms: number) => act(() => vi.advanceTimersByTime(ms))
 
 beforeEach(() => {
@@ -55,11 +55,11 @@ describe("useWatch : reconnexion", () => {
     expect(live()).toHaveLength(1)
     live()[0].open()
     expect(result.current).toMatchObject({ connected: true, state: "open" })
-    for (const s of [5, 15, 30, 30]) {
+    for (const size of [5, 15, 30, 30]) {
       live()[0].die()
-      expect(result.current).toMatchObject({ connected: false, state: "waiting", retryIn: s })
+      expect(result.current).toMatchObject({ connected: false, state: "waiting", retryIn: size })
       expect(live()).toHaveLength(0)
-      tick(s * 1000 - 1)
+      tick(size * 1000 - 1)
       expect(live()).toHaveLength(0)
       tick(1)
       expect(live()).toHaveLength(1)
@@ -85,7 +85,7 @@ describe("useWatch : reconnexion", () => {
     tick(5000)
     live()[0].open()
     expect(ev).toHaveBeenCalledTimes(2)
-    expect(ev.mock.calls.every(([e]) => e.type === "resync")).toBe(true)
+    expect(ev.mock.calls.every(([value]) => value.type === "resync")).toBe(true)
   })
 
   it("erreur passagère : pas de nouveau flux, état interrompu", () => {

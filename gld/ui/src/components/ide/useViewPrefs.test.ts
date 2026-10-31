@@ -41,22 +41,22 @@ describe("useViewPrefs", () => {
     localStorage.setItem("gld.ide.view.minimap", "true")
     localStorage.setItem("gld.ide.view.showStatus", "nimporte")
     localStorage.setItem("gld.ide.view.fontSize", "999")
-    const r = renderHook(useViewPrefs).result.current
-    expect([r.wordWrap, r.minimap, r.showStatus, r.fontSize]).toEqual([
+    const viewPrefs = renderHook(useViewPrefs).result.current
+    expect([viewPrefs.wordWrap, viewPrefs.minimap, viewPrefs.showStatus, viewPrefs.fontSize]).toEqual([
       false,
       false,
       true,
       28,
     ])
-    for (const [s, n] of [
+    for (const [text, value] of [
       ["3", 10],
       ["abc", 13],
       ["12.5", 13],
       ["", 13],
       ["-4", 13],
     ] as const) {
-      localStorage.setItem("gld.ide.view.fontSize", s)
-      expect(renderHook(useViewPrefs).result.current.fontSize, s).toBe(n)
+      localStorage.setItem("gld.ide.view.fontSize", text)
+      expect(renderHook(useViewPrefs).result.current.fontSize, text).toBe(value)
     }
   })
 

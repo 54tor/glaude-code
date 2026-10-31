@@ -32,7 +32,7 @@ const CONNECTING: WatchState = { connected: false, state: "connecting", retryIn:
 // Fermé définitivement (réponse non 200, session expirée), l'EventSource ne réessaie plus : on rouvre nous-mêmes après 5 s, 15 s, puis 30 s.
 // state : « waiting » pendant notre propre attente avant de rouvrir (retryIn en secondes),
 // « browserRetry » quand le flux est coupé et que le navigateur réessaie seul.
-export function useWatch(dir: string, declaredDirs: string[], onEvent: (e: WatchEvent) => void): WatchState {
+export function useWatch(dir: string, declaredDirs: string[], onEvent: (event: WatchEvent) => void): WatchState {
   const [watchState, setWatchState] = useState<WatchState>(CONNECTING)
   const onEventRef = useRef(onEvent)
   const opened = useRef(false)
