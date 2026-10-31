@@ -34,25 +34,30 @@ export class LaunchError extends ApiError {
 
 export const teamsCatalog = () => http.get<Catalog>("/teams/catalog")
 export const teamsCompose = (teamIds: string[]) => http.post<Composition>("/teams/compositions", { teamIds })
+async function readConflictRun(response: Response): Promise<Run | undefined> {
+  if (response.ok) return undefined
+  const errorBody = (await response.clone().json().catch(() => null)) as { run?: Run } | null
+  return errorBody?.run
+}
 export async function teamsLaunch(teamIds: string[], goal: string, dir: string): Promise<Run> {
-  let r: Response
+  let response: Response
   try {
-    r = await authFetch(v1(`/teams/${seg(teamIds[0] ?? "")}/runs`), {
+    response = await authFetch(v1(`/teams/${seg(teamIds[0] ?? "")}/runs`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ teamIds, goal, dir }),
     })
-  } catch (e) {
-    throw netError(e)
+  } catch (fetchError) {
+    throw netError(fetchError)
   }
-  const run = r.ok ? undefined : ((await r.clone().json().catch(() => null)) as { run?: Run } | null)?.run
+  const conflictRun = await readConflictRun(response)
   try {
-    return await readResponse<Run>(r)
-  } catch (e) {
-    if (!(e instanceof ApiError)) throw e
-    const le = new LaunchError(e.status, e.code, e.message)
-    le.run = run
-    throw le
+    return await readResponse<Run>(response)
+  } catch (responseError) {
+    if (!(responseError instanceof ApiError)) throw responseError
+    const launchError = new LaunchError(responseError.status, responseError.code, responseError.message)
+    launchError.run = conflictRun
+    throw launchError
   }
 }
 export const teamsList = () => http.get<{ teams: TeamBrief[] }>("/teams")
@@ -61,7 +66,7 @@ export const teamSend = (name: string, to: string, text: string) => http.post<{ 
 export const teamKey = (name: string, agent: string, key: string, expect = "") => http.post(`/teams/${seg(name)}/run/keystrokes`, { agent, key, expect })
 export const teamClose = (name: string) => http.del(`/teams/${seg(name)}/run`)
 export const teamScreen = (name: string, agent: string) => http.get<{ text: string }>(`/teams/${seg(name)}/run/screen${qs({ agent })}`)
-export const teamsAgentSave = (a: Partial<Agent>) => http.put<Agent>(`/agents/${seg(a.ID || "new")}`, a)
+export const teamsAgentSave = (agent: Partial<Agent>) => http.put<Agent>(`/agents/${seg(agent.ID || "new")}`, agent)
 export const teamsAgentRm = (id: string) => http.del(`/agents/${seg(id)}`)
-export const teamsTeamSave = (t: Partial<Team>) => http.put<Team>(`/teams/${seg(t.ID || "new")}`, t)
+export const teamsTeamSave = (team: Partial<Team>) => http.put<Team>(`/teams/${seg(team.ID || "new")}`, team)
 export const teamsTeamRm = (id: string) => http.del(`/teams/${seg(id)}`)

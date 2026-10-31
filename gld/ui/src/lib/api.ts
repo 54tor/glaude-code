@@ -144,40 +144,44 @@ export type SentNote = { id: string; at: number; text: string; to: string }
 // Le serveur plafonne une requête multiple à 100 éléments ; les ?item= restent sous ~6 Ko d'URL pour les proxys.
 export const BULK_MAX = 100
 const BULK_URL = 6000
-export function batches<T>(list: T[], size: (t: T) => number = () => 0): T[][] {
-  const out: T[][] = []
-  let cur: T[] = []
-  let n = 0
-  for (const x of list) {
-    const s = size(x)
-    if (cur.length && (cur.length >= BULK_MAX || n + s > BULK_URL)) {
-      out.push(cur)
-      cur = []
-      n = 0
+export function batches<T>(list: T[], size: (element: T) => number = () => 0): T[][] {
+  const allBatches: T[][] = []
+  let currentBatch: T[] = []
+  let currentBatchSize = 0
+  for (const element of list) {
+    const elementSize = size(element)
+    const isBatchFull = currentBatch.length >= BULK_MAX || currentBatchSize + elementSize > BULK_URL
+    if (currentBatch.length > 0 && isBatchFull) {
+      allBatches.push(currentBatch)
+      currentBatch = []
+      currentBatchSize = 0
     }
-    cur.push(x)
-    n += s
+    currentBatch.push(element)
+    currentBatchSize += elementSize
   }
-  if (cur.length) out.push(cur)
-  return out
+  if (currentBatch.length > 0) allBatches.push(currentBatch)
+  return allBatches
 }
-const itemLen = (v: string) => encodeURIComponent(v).length + 6
+// Longueur d'un « &item=<valeur> » dans l'URL.
+const ITEM_PARAM_OVERHEAD = "&item=".length
+const itemLen = (value: string) => encodeURIComponent(value).length + ITEM_PARAM_OVERHEAD
 // Lots à la suite ; les compteurs et les listes des réponses s'additionnent, et un lot en échec arrête la suite.
-export async function inBatches<T, R extends { message?: string }>(list: T[], run: (b: T[]) => Promise<R>, size?: (t: T) => number): Promise<R> {
-  const bs = batches(list, size)
-  if (bs.length <= 1) return run(bs[0] ?? [])
-  const rs: R[] = []
-  for (const b of bs) rs.push(await run(b))
-  const out: Record<string, unknown> = {}
-  for (const r of rs)
-    for (const [k, v] of Object.entries(r)) {
-      if (typeof v === "number") out[k] = ((out[k] as number) ?? 0) + v
-      else if (Array.isArray(v)) out[k] = [...((out[k] as unknown[]) ?? []), ...v]
-      else if (k !== "message") out[k] = v
+export async function inBatches<T, R extends { message?: string }>(list: T[], run: (batch: T[]) => Promise<R>, size?: (element: T) => number): Promise<R> {
+  const listBatches = batches(list, size)
+  if (listBatches.length <= 1) return run(listBatches[0] ?? [])
+  const replies: R[] = []
+  for (const batch of listBatches) replies.push(await run(batch))
+  const merged: Record<string, unknown> = {}
+  for (const reply of replies) {
+    for (const [field, value] of Object.entries(reply)) {
+      if (typeof value === "number") merged[field] = ((merged[field] as number) ?? 0) + value
+      else if (Array.isArray(value)) merged[field] = [...((merged[field] as unknown[]) ?? []), ...value]
+      else if (field !== "message") merged[field] = value
     }
-  const lines = rs.map((r) => (r.message ?? "").split("\n")[0]).filter(Boolean)
-  out.message = [i18n.t("shell.act.batches", { n: rs.length }), ...lines].join("\n")
-  return out as R
+  }
+  const firstLines = replies.map((reply) => (reply.message ?? "").split("\n")[0]).filter(Boolean)
+  merged.message = [i18n.t("shell.act.batches", { n: replies.length }), ...firstLines].join("\n")
+  return merged as R
 }
 export type Bulk = { done: string[]; failed: { item: string; error: { code: string; message: string } }[] }
 export type CfgReply = { out: string; before: string; after: string; warnings?: CfgIssue[] }
@@ -224,18 +228,20 @@ export const api = {
   cleanupWarning: () => http.get<{ days: number; sessions: { dir: string; id: string; title: string; cwd: string; expires: number }[] }>("/cleanup-warning"),
   sessionsStamp: () => http.get<{ stamp: number }>("/state/stamp"),
   sessionTrash: () => http.get<{ sessions: { dir: string; id: string; title: string; cwd: string; at: number; kb: number }[]; days: number }>("/trash/sessions"),
-  info: (s: Item) => http.get<Detail>(`/info${qs({ dir: s.dir, id: s.id })}`),
+  info: (session: Item) => http.get<Detail>(`/info${qs({ dir: session.dir, id: session.id })}`),
   // Lecture par la fin, `before` = « start » rendu par la page précédente. Avec `limit` : autant de messages, textes coupés à
   // 64 Kio (le lecteur). Sans `limit` : pages de 1000 messages aux textes entiers (l'export).
-  conv: (s: Item & { sub?: string }, tools: boolean, page?: { limit?: number; before?: number; anchors?: boolean }) =>
-    http.get<{ msgs: Msg[]; start?: number; more?: boolean }>(
-      `/sessions/${seg(s.id)}/conversation${qs({ dir: s.dir, sub: s.sub, tools, limit: page?.limit || undefined, before: page ? (page.before ?? 0) : undefined, anchors: !!page?.anchors && !tools })}`
-    ),
+  conv: (session: Item & { sub?: string }, tools: boolean, page?: { limit?: number; before?: number; anchors?: boolean }) => {
+    const before = page ? (page.before ?? 0) : undefined
+    const anchors = !!page?.anchors && !tools
+    const query = qs({ dir: session.dir, sub: session.sub, tools, limit: page?.limit || undefined, before, anchors })
+    return http.get<{ msgs: Msg[]; start?: number; more?: boolean }>(`/sessions/${seg(session.id)}/conversation${query}`)
+  },
   // Messages d'outil des lignes [from, until) du transcript, pour déplier une ancre.
-  convTools: (s: Item, from: number, until: number) => http.get<{ msgs: Msg[] }>(`/sessions/${seg(s.id)}/conversation/tools${qs({ dir: s.dir, from, until })}`),
+  convTools: (session: Item, from: number, until: number) => http.get<{ msgs: Msg[] }>(`/sessions/${seg(session.id)}/conversation/tools${qs({ dir: session.dir, from, until })}`),
   // Suite d'un message coupé, à partir de l'octet from ; cut = 0 : fin du texte.
-  convText: (s: Item, tools: boolean, m: Msg, from: number) =>
-    http.get<{ t: string; cut: number }>(`/sessions/${seg(s.id)}/conversation/text${qs({ dir: s.dir, o: m.o ?? 0, n: m.n ?? 0, from, tools })}`),
+  convText: (session: Item, tools: boolean, message: Msg, from: number) =>
+    http.get<{ t: string; cut: number }>(`/sessions/${seg(session.id)}/conversation/text${qs({ dir: session.dir, o: message.o ?? 0, n: message.n ?? 0, from, tools })}`),
   ls: (path: string) => http.get<Ls>(`/directories${qs({ path })}`),
   homes: () => http.get<HomesInfo>("/homes"),
   devices: () => http.get<{ devices: Device[] | null }>("/devices"),
@@ -252,7 +258,7 @@ export const api = {
   snippet: (key: string) => http.get<{ text: string; missing?: boolean }>(`/snippets/${seg(key)}`),
   snippetSave: (key: string, text: string, create: boolean) => http.put<Said>(`/snippets/${seg(key)}`, { text, create }),
   snippetRename: (from: string, to: string) => http.patch<Said>(`/snippets/${seg(from)}`, { to }),
-  snippetRemove: (keys: string[]) => inBatches(keys, (b) => http.del<Said & Bulk>(`/snippets${qs({ item: b })}`), itemLen),
+  snippetRemove: (keys: string[]) => inBatches(keys, (batch) => http.del<Said & Bulk>(`/snippets${qs({ item: batch })}`), itemLen),
   snippetMerge: (body: { keys: string[]; out?: string; launch: boolean; prompt?: string; args?: string }) => http.post<Said & { prompt: string }>("/snippets/merges", body),
   snippetDraft: (body: { model: string; instruction: string; text: string }) => http.post<Said & { text: string; cost?: number }>("/snippets/drafts", body),
   memory: () => http.get<{ global: MemFile[]; projects: MemProject[]; targets: MemTarget[] }>("/memory/files"),
@@ -264,7 +270,7 @@ export const api = {
   memoryToggle: (key: string, enabled: boolean) => http.patch<Said & { key: string }>(`/memory/files/${seg(key)}`, { enabled }),
   memoryType: (key: string, type: string) => http.patch<Said>(`/memory/files/${seg(key)}`, { type }),
   memoryPaths: (key: string, paths: string[]) => http.patch<Said>(`/memory/files/${seg(key)}`, { paths }),
-  memoryRemove: (keys: string[]) => inBatches(keys, (b) => http.del<Said & Bulk>(`/memory/files${qs({ item: b })}`), itemLen),
+  memoryRemove: (keys: string[]) => inBatches(keys, (batch) => http.del<Said & Bulk>(`/memory/files${qs({ item: batch })}`), itemLen),
   memoryFix: (key: string) => http.post<Said>("/memory/fixes", { key }),
   memoryRepair: (dir: string) => http.post<Said>("/memory/repairs", { dir }),
   memoryDraft: (body: { model: string; instruction: string; key: string; refs: string[] }) => http.post<Said & { text: string; cost?: number }>("/memory/drafts", body),
@@ -278,29 +284,33 @@ export const api = {
   skills: () => http.get<{ skills: Skill[]; projects: { dir: string; project: string }[] }>("/skills"),
   skill: (key: string) => http.get<{ text: string; files?: SkillFile[] }>(`/skills/${seg(key)}`),
   skillSave: (key: string, text: string, create: boolean) => http.put<Said>(`/skills/${seg(key)}`, { text, create }),
-  skillRemove: (keys: string[]) => inBatches(keys, (b) => http.del<Said & Bulk>(`/skills${qs({ item: b })}`), itemLen),
+  skillRemove: (keys: string[]) => inBatches(keys, (batch) => http.del<Said & Bulk>(`/skills${qs({ item: batch })}`), itemLen),
   skillCopy: (key: string, to: string) => http.post<Said & { key: string }>("/skills/copies", { key, to }),
   skillDraft: (body: { model: string; instruction: string; key: string }) => http.post<Said & { text: string; cost?: number }>("/skills/drafts", body),
   skillNpx: (body: { Action: string; Source: string; Skill: string; Scope: string; Project: string }) => http.post<Said>("/skills/installations", body),
-  skillsFind: (q: string) => http.get<{ hits?: SkillHit[] }>(`/skills/catalog${qs({ q })}`),
+  skillsFind: (query: string) => http.get<{ hits?: SkillHit[] }>(`/skills/catalog${qs({ q: query })}`),
   skillsUpdates: (force = false) => http.get<{ states?: Record<string, string> }>(`/skills/updates${qs({ force })}`),
   marketplaces: () => http.get<{ marketplaces?: Marketplace[] }>("/marketplaces"),
-  plugins: (q = "") => http.get<{ installed?: PluginInst[]; available?: PluginAvail[] }>(`/plugins${qs({ q })}`),
+  plugins: (query = "") => http.get<{ installed?: PluginInst[]; available?: PluginAvail[] }>(`/plugins${qs({ q: query })}`),
   pluginAct: (action: "install" | "uninstall" | "enable" | "disable" | "update", id: string, scope: string, project: string) => {
-    const p = `/plugins/${seg(id)}`
+    const pluginPath = `/plugins/${seg(id)}`
     switch (action) {
       case "install":
-        return http.put<Said>(p, { scope, project })
+        return http.put<Said>(pluginPath, { scope, project })
       case "uninstall":
-        return http.del<Said>(`${p}${qs({ scope, project })}`)
+        return http.del<Said>(`${pluginPath}${qs({ scope, project })}`)
       case "update":
-        return http.post<Said>(`${p}/updates`, { scope, project })
+        return http.post<Said>(`${pluginPath}/updates`, { scope, project })
       default:
-        return http.patch<Said>(p, { enabled: action === "enable", scope, project })
+        return http.patch<Said>(pluginPath, { enabled: action === "enable", scope, project })
     }
   },
-  marketAct: (action: "add" | "remove" | "update", source: string, name: string) =>
-    action === "add" ? http.post<Said>("/marketplaces", { source }) : action === "remove" ? http.del<Said>(`/marketplaces/${seg(name)}`) : http.post<Said>(name ? `/marketplaces/${seg(name)}/updates` : "/marketplaces/updates"),
+  marketAct: (action: "add" | "remove" | "update", source: string, name: string) => {
+    if (action === "add") return http.post<Said>("/marketplaces", { source })
+    if (action === "remove") return http.del<Said>(`/marketplaces/${seg(name)}`)
+    const updatePath = name ? `/marketplaces/${seg(name)}/updates` : "/marketplaces/updates"
+    return http.post<Said>(updatePath)
+  },
   configProjects: () => http.get<{ projects: ProjectCfg[] }>("/config/projects"),
   sessionIdle: (id: string) => http.get<{ idle: boolean }>(`/sessions/${seg(id)}/state`),
   workflows: (dir: string, id: string) => http.get<{ workflows: Workflow[] }>(`/sessions/${seg(id)}/workflows${qs({ dir })}`),
@@ -309,30 +319,39 @@ export const api = {
   queueAdd: (id: string, text: string) => http.post<{ item: QItem }>(`/sessions/${seg(id)}/queue`, { text }),
   queueRm: (id: string, item: string) => http.del<{ text: string }>(`/sessions/${seg(id)}/queue/${seg(item)}`),
   queueRetry: (id: string, item: string) => http.patch(`/sessions/${seg(id)}/queue/${seg(item)}`, { state: "queued" }),
-  convRewind: (dir: string, id: string, o: number) => http.del<{ n: number; message: string }>(`/sessions/${seg(id)}/conversation${qs({ dir, after: o })}`),
+  convRewind: (dir: string, id: string, afterOffset: number) => http.del<{ n: number; message: string }>(`/sessions/${seg(id)}/conversation${qs({ dir, after: afterOffset })}`),
   sessionSend: (id: string, text: string, timeoutMs?: number) => http.post<Said>(`/sessions/${seg(id)}/messages`, { text }, timeoutMs),
   sessionKey: (id: string, key: string) => http.post<Said>(`/sessions/${seg(id)}/keystrokes`, { key }),
   sessionClose: (id: string) => http.del<Said>(`/sessions/${seg(id)}/process`),
-  open: (b: { dir: string; id?: string; args?: string; prompt?: string }) =>
-    b.id ? http.put<Said>(`/sessions/${seg(b.id)}/process${qs({ dir: b.dir })}`, { args: b.args, prompt: b.prompt }) : http.put<Said>(`/projects/${seg(b.dir)}/process`, { args: b.args, prompt: b.prompt }),
-  newSession: (b: { dir?: string; id?: string; cwd?: string; prompt: string; args?: string }) => http.post<Said>("/sessions", b),
-  rename: (s: Item, b: { title?: string; auto?: boolean; keep?: boolean }) => http.patch<Said & { title: string }>(`/sessions/${seg(s.id)}${qs({ dir: s.dir })}`, b),
-  reassign: (items: Item[], to: string) => inBatches(items, (b) => http.patch<Said & { n: number }>("/sessions", { items: b, to })),
-  rmSessions: (items: Item[]) =>
-    inBatches(items, (b) => http.del<Said & { deleted: number; spared: number }>(`/sessions${qs({ item: b.map((i) => `${i.dir}:${i.id}`) })}`), (i) => itemLen(`${i.dir}:${i.id}`)),
-  trashSessionsAdd: (items: Item[]) => inBatches(items, (b) => http.post<Said>(`/trash/sessions${qs({ close: true })}`, { items: b })),
-  trashSessionsRestore: (ids: string[]) => inBatches(ids, (b) => http.patch<Said>(`/trash/sessions${qs({ item: b })}`, { trashed: false }), itemLen),
-  trashSessionsPurge: (ids: string[]) => inBatches(ids, (b) => http.del<Said>(`/trash/sessions${qs({ item: b })}`), itemLen),
-  vgroups: (b: { groups: VGroup[]; favs: string[]; projects?: Project[] }) => http.put("/vgroups", b),
+  open: (target: { dir: string; id?: string; args?: string; prompt?: string }) => {
+    const launchBody = { args: target.args, prompt: target.prompt }
+    if (target.id) return http.put<Said>(`/sessions/${seg(target.id)}/process${qs({ dir: target.dir })}`, launchBody)
+    return http.put<Said>(`/projects/${seg(target.dir)}/process`, launchBody)
+  },
+  newSession: (body: { dir?: string; id?: string; cwd?: string; prompt: string; args?: string }) => http.post<Said>("/sessions", body),
+  rename: (session: Item, body: { title?: string; auto?: boolean; keep?: boolean }) => http.patch<Said & { title: string }>(`/sessions/${seg(session.id)}${qs({ dir: session.dir })}`, body),
+  reassign: (items: Item[], to: string) => inBatches(items, (batch) => http.patch<Said & { n: number }>("/sessions", { items: batch, to })),
+  rmSessions: (items: Item[]) => {
+    const itemRef = (item: Item) => `${item.dir}:${item.id}`
+    return inBatches(
+      items,
+      (batch) => http.del<Said & { deleted: number; spared: number }>(`/sessions${qs({ item: batch.map(itemRef) })}`),
+      (item) => itemLen(itemRef(item))
+    )
+  },
+  trashSessionsAdd: (items: Item[]) => inBatches(items, (batch) => http.post<Said>(`/trash/sessions${qs({ close: true })}`, { items: batch })),
+  trashSessionsRestore: (ids: string[]) => inBatches(ids, (batch) => http.patch<Said>(`/trash/sessions${qs({ item: batch })}`, { trashed: false }), itemLen),
+  trashSessionsPurge: (ids: string[]) => inBatches(ids, (batch) => http.del<Said>(`/trash/sessions${qs({ item: batch })}`), itemLen),
+  vgroups: (body: { groups: VGroup[]; favs: string[]; projects?: Project[] }) => http.put("/vgroups", body),
   dirsAdd: (dir: string, children = false) => http.post<Said & { n: number }>("/directories", { dir, children }),
   dirsRemove: (dir: string) => http.del<Said>(`/directories${qs({ dir })}`),
   updateInfo: (force = false) => http.get<{ current: string; latest: string; url: string; newer: boolean; claudeCurrent?: string; claudeLatest?: string; claudeNewer?: boolean }>(`/update${force ? "?force=1" : ""}`),
-  keepWarmSet: (b: { dir: string; id: string; on: boolean; max?: number; reheat?: boolean }) => http.put<Said>("/keepwarm", b),
+  keepWarmSet: (body: { dir: string; id: string; on: boolean; max?: number; reheat?: boolean }) => http.put<Said>("/keepwarm", body),
   trustAnswer: (dir: string, yes: boolean) => http.post<Said>("/trust/answers", { dir, yes }),
   termOpen: (id: string) => http.post<{ token: string; cols: number; rows: number }>("/terminal", { id }),
   chatStop: (id: string) => http.del<Said>(`/sessions/${seg(id)}/chat`),
-  notesSave: (b: { key: string; text?: string; to?: string }) => http.put<Said>("/notes", b),
-  notesSentAdd: (b: { key: string; text: string; to: string }) => http.post<{ entry: SentNote }>("/notes/sent", b),
+  notesSave: (body: { key: string; text?: string; to?: string }) => http.put<Said>("/notes", body),
+  notesSentAdd: (body: { key: string; text: string; to: string }) => http.post<{ entry: SentNote }>("/notes/sent", body),
   notesSentRemove: (key: string, id: string) => http.del<Said>(`/notes/sent${qs({ key, id })}`),
   tabsSave: (name: string) => http.put<Said & { n: number }>("/tabs", { name }),
   tabsRm: (at: string) => http.del<Said>(`/tabs/${seg(at)}`),
@@ -344,13 +363,13 @@ export const api = {
   inviteRegen: (id: string, invite: string) => http.put<{ token: string }>(`/invites/${seg(invite)}/token`, { id }),
   inviteMode: (id: string, invite: string, mode: "rw" | "ro") => http.patch(`/invites/${seg(invite)}`, { id, mode }),
   inviteRevoke: (id: string, invite: string) => http.del(`/invites/${seg(invite)}${qs({ id })}`),
-  homesSave: (b: { homes: { name: string; dir: string }[]; removed?: string[] }) => http.put("/homes", b),
+  homesSave: (body: { homes: { name: string; dir: string }[]; removed?: string[] }) => http.put("/homes", body),
   homeSelect: (name: string) => http.put("/homes/current", { name }),
   backupExportUrl: (cats: string[]) => v1(`/backup/export${qs({ cats: cats.join(",") })}`),
   backupStage: async (file: File) => {
-    const fd = new FormData()
-    fd.set("file", file)
-    return readResponse<BackupPlan>(await authFetch(v1("/backup/imports"), { method: "POST", body: fd }))
+    const formData = new FormData()
+    formData.set("file", file)
+    return readResponse<BackupPlan>(await authFetch(v1("/backup/imports"), { method: "POST", body: formData }))
   },
   backupApply: (id: string, picks: { id: string; mode: string }[], targets: Record<string, string>) => http.post<{ results: BackupResult[] }>(`/backup/imports/${seg(id)}/applications`, { picks, targets }),
   backupDrop: (id: string) => http.del(`/backup/imports/${seg(id)}`),
@@ -377,17 +396,17 @@ export const api = {
   configEffective: (dir: string) => http.get<{ rows: EffRow[] }>(`/config/effective${qs({ dir })}`),
   configMcp: () => http.get<{ servers: McpServer[] }>("/config/mcp"),
   configPermSuggest: () => http.get<{ suggestions: PermSuggest[] }>("/config/permissions/suggestions"),
-  configEdit: (e: CfgEdit) => http.post<CfgReply>("/config/edits", e),
-  configRawEdit: (b: { file: string; text: string; dry: boolean }) => http.put<CfgReply>("/config/raw", b),
-  configPermImport: (b: { file: string; text: string; mode: string; dry: boolean }) => http.post<CfgReply>("/config/permissions/imports", b),
+  configEdit: (edit: CfgEdit) => http.post<CfgReply>("/config/edits", edit),
+  configRawEdit: (body: { file: string; text: string; dry: boolean }) => http.put<CfgReply>("/config/raw", body),
+  configPermImport: (body: { file: string; text: string; mode: string; dry: boolean }) => http.post<CfgReply>("/config/permissions/imports", body),
   configPermExplain: (kind: string, rule: string) => http.post<{ out: string }>("/config/permissions/explanations", { kind, rule }),
   configRestore: (name: string) => http.post<{ out: string }>("/config/restorations", { name }),
   configMcpCheck: () => http.post<{ status: Record<string, string> }>("/config/mcp/checks"),
   memoryHealth: () => http.get<{ issues: Issue[] }>("/memory/health"),
   memoryMatches: (key: string, dir: string) => http.get<{ files?: string[]; total?: number; truncated?: boolean }>(`/memory/matches${qs({ key, dir })}`),
-  memorySearch: (q: string) => http.get<{ hits: Record<string, string> }>(`/memory/search${qs({ q })}`),
+  memorySearch: (query: string) => http.get<{ hits: Record<string, string> }>(`/memory/search${qs({ q: query })}`),
   tabs: () => http.get<{ saves: TabSave[] }>("/tabs"),
   trash: () => http.get<{ items: Trashed[] }>("/trash/memory"),
   trashFile: (id: string) => http.get<{ text?: string }>(`/trash/memory/${seg(id)}/file`),
-  search: (q: string) => http.get<{ hits: Hit[] }>(`/sessions${qs({ q })}`),
+  search: (query: string) => http.get<{ hits: Hit[] }>(`/sessions${qs({ q: query })}`),
 }

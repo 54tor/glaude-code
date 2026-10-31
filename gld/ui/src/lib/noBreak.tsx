@@ -5,45 +5,54 @@ const HYPHENATED = /(?<![\p{L}\p{N}_])[\p{L}\p{N}_]{1,24}(?:-[\p{L}\p{N}_]{1,24}
 const NOBREAK = "whitespace-nowrap"
 const MAX = 24
 
-export function noBreak(t: string): React.ReactNode[] {
-  const out: React.ReactNode[] = []
-  let at = 0
-  for (const m of t.matchAll(HYPHENATED)) {
-    if (m[0].length > MAX) continue
-    if (m.index > at) out.push(t.slice(at, m.index))
-    out.push(
-      <span key={m.index} className={NOBREAK}>
-        {m[0]}
+export function noBreak(text: string): React.ReactNode[] {
+  const fragments: React.ReactNode[] = []
+  let consumedUpTo = 0
+  for (const hyphenatedMatch of text.matchAll(HYPHENATED)) {
+    const word = hyphenatedMatch[0]
+    if (word.length > MAX) continue
+    if (hyphenatedMatch.index > consumedUpTo) fragments.push(text.slice(consumedUpTo, hyphenatedMatch.index))
+    fragments.push(
+      <span key={hyphenatedMatch.index} className={NOBREAK}>
+        {word}
       </span>
     )
-    at = m.index + m[0].length
+    consumedUpTo = hyphenatedMatch.index + word.length
   }
-  out.push(t.slice(at))
-  return out
+  fragments.push(text.slice(consumedUpTo))
+  return fragments
 }
 
 type Hast = { type: string; tagName?: string; value?: string; children?: Hast[]; properties?: Record<string, unknown> }
 
+// Découpe un nœud texte en texte et en <span> insécables ; null si aucun mot à tirets ne s'y trouve.
+function splitTextNode(text: string): Hast[] | null {
+  const fragments: Hast[] = []
+  let consumedUpTo = 0
+  for (const hyphenatedMatch of text.matchAll(HYPHENATED)) {
+    const word = hyphenatedMatch[0]
+    if (word.length > MAX) continue
+    if (hyphenatedMatch.index > consumedUpTo) fragments.push({ type: "text", value: text.slice(consumedUpTo, hyphenatedMatch.index) })
+    fragments.push({ type: "element", tagName: "span", properties: { className: [NOBREAK] }, children: [{ type: "text", value: word }] })
+    consumedUpTo = hyphenatedMatch.index + word.length
+  }
+  if (fragments.length === 0) return null
+  if (consumedUpTo < text.length) fragments.push({ type: "text", value: text.slice(consumedUpTo) })
+  return fragments
+}
+
 // Même découpage pour react-markdown (plugin rehype) ; le code, en police fixe, n'est pas touché.
 export function rehypeNoBreak() {
-  const walk = (n: Hast) => {
-    if (!n.children || n.tagName === "code" || n.tagName === "pre") return
-    n.children = n.children.flatMap((c): Hast[] => {
-      if (c.type !== "text" || !c.value) {
-        walk(c)
-        return [c]
+  const walk = (node: Hast) => {
+    const isCode = node.tagName === "code" || node.tagName === "pre"
+    if (!node.children || isCode) return
+    node.children = node.children.flatMap((child): Hast[] => {
+      const isNonEmptyText = child.type === "text" && !!child.value
+      if (!isNonEmptyText) {
+        walk(child)
+        return [child]
       }
-      const out: Hast[] = []
-      let at = 0
-      for (const m of c.value.matchAll(HYPHENATED)) {
-        if (m[0].length > MAX) continue
-        if (m.index > at) out.push({ type: "text", value: c.value.slice(at, m.index) })
-        out.push({ type: "element", tagName: "span", properties: { className: [NOBREAK] }, children: [{ type: "text", value: m[0] }] })
-        at = m.index + m[0].length
-      }
-      if (!out.length) return [c]
-      if (at < c.value.length) out.push({ type: "text", value: c.value.slice(at) })
-      return out
+      return splitTextNode(child.value!) ?? [child]
     })
   }
   return (tree: Hast) => walk(tree)

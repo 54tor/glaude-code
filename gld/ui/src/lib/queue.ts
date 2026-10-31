@@ -2,4 +2,7 @@
 // compare les deux) : l'interface le retire pour afficher le texte de l'utilisateur.
 export const FOLLOW_PREFIX = "[Message en file d'attente : d'autres messages suivent. Ne t'arrête pas pour poser une question : note tes éventuelles questions et pose-les à la fin, une fois tous les messages traités.]\n\n"
 
-export const withoutFollowUps = (prompt: string) => (prompt.startsWith(FOLLOW_PREFIX) ? prompt.slice(FOLLOW_PREFIX.length) : prompt)
+export const withoutFollowUps = (prompt: string) => {
+  if (!prompt.startsWith(FOLLOW_PREFIX)) return prompt
+  return prompt.slice(FOLLOW_PREFIX.length)
+}

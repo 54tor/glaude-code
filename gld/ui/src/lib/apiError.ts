@@ -7,54 +7,68 @@ export class ApiError extends Error {
   retry: number // Retry-After en secondes, 0 si absent
   net: boolean // pas de réponse (réseau, délai) : l'action a pu avoir lieu
   etag?: string // 409 d'une sauvegarde : etag du disque (vide si supprimé)
-  constructor(status: number, code: string, message: string, o: { retry?: number; net?: boolean; etag?: string } = {}) {
+  constructor(status: number, code: string, message: string, options: { retry?: number; net?: boolean; etag?: string } = {}) {
     super(message)
     this.status = status
     this.code = code
-    this.retry = o.retry ?? 0
-    this.net = o.net ?? false
-    this.etag = o.etag
+    this.retry = options.retry ?? 0
+    this.net = options.net ?? false
+    this.etag = options.etag
   }
 }
 
-export const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e))
+export const errMsg = (error: unknown) => {
+  if (error instanceof Error) return error.message
+  return String(error)
+}
 
 export const V1 = "/v1"
 export const v1 = (path: string) => (path.startsWith(V1 + "/") ? path : V1 + path)
 // Segment de chemin : encode aussi « / » (clés mémoire u/…, p/<dossier>/…).
-export const seg = (s: string) => encodeURIComponent(s)
+export const seg = (segment: string) => encodeURIComponent(segment)
 
 // ?a=1&item=x&item=y : tableaux répétés, undefined/""/false ignorés, true = "1".
-export function qs(o: Record<string, string | number | boolean | undefined | (string | number)[]>): string {
-  const p = new URLSearchParams()
-  for (const [k, v] of Object.entries(o)) {
-    if (v === undefined || v === "" || v === false) continue
-    for (const x of Array.isArray(v) ? v : [v]) p.append(k, v === true ? "1" : String(x))
+export function qs(params: Record<string, string | number | boolean | undefined | (string | number)[]>): string {
+  const searchParams = new URLSearchParams()
+  for (const [paramName, paramValue] of Object.entries(params)) {
+    const isOmitted = paramValue === undefined || paramValue === "" || paramValue === false
+    if (isOmitted) continue
+    if (paramValue === true) {
+      searchParams.append(paramName, "1")
+      continue
+    }
+    const values = Array.isArray(paramValue) ? paramValue : [paramValue]
+    for (const value of values) searchParams.append(paramName, String(value))
   }
-  const s = p.toString()
-  return s ? "?" + s : ""
+  const queryString = searchParams.toString()
+  if (!queryString) return ""
+  return "?" + queryString
 }
 
 // 2xx : JSON analysé, undefined pour 204 ou corps vide. Autre statut : ApiError, corps non JSON toléré.
-export async function readResponse<T>(r: Response): Promise<T> {
-  const retry = Number(r.headers.get("Retry-After")) || 0
-  const text = r.status === 204 ? "" : await r.text().catch(() => "")
-  let j: unknown
-  let bad = false
+const HTTP_NO_CONTENT = 204
+
+export async function readResponse<T>(response: Response): Promise<T> {
+  const retry = Number(response.headers.get("Retry-After")) || 0
+  const text = response.status === HTTP_NO_CONTENT ? "" : await response.text().catch(() => "")
+  let parsedBody: unknown
+  let isInvalidJson = false
   try {
-    j = text ? JSON.parse(text) : undefined
+    parsedBody = text ? JSON.parse(text) : undefined
   } catch {
-    bad = true
+    isInvalidJson = true
   }
-  if (r.ok) {
-    if (bad) throw new ApiError(r.status, "bad_response", i18n.t("shell.api.error", { msg: "JSON" })) // page HTML d'une passerelle, pas la réponse de l'API
-    return j as T
+  if (response.ok) {
+    if (isInvalidJson) throw new ApiError(response.status, "bad_response", i18n.t("shell.api.error", { msg: "JSON" })) // page HTML d'une passerelle, pas la réponse de l'API
+    return parsedBody as T
   }
-  const e = (j as { error?: { code?: string; message?: string; etag?: string } } | undefined)?.error
-  throw new ApiError(r.status, e?.code || `http_${r.status}`, e?.message || i18n.t("shell.api.error", { msg: String(r.status) }), { retry, etag: e?.etag })
+  const errorBody = (parsedBody as { error?: { code?: string; message?: string; etag?: string } } | undefined)?.error
+  const code = errorBody?.code || `http_${response.status}`
+  const message = errorBody?.message || i18n.t("shell.api.error", { msg: String(response.status) })
+  throw new ApiError(response.status, code, message, { retry, etag: errorBody?.etag })
 }
 
-export function netError(e: unknown): ApiError {
-  if (e instanceof ApiError) return e
-  return new ApiError(0, "net", i18n.t("shell.api.error", { msg: e instanceof Error ? e.message : String(e) }), { net: true })
+export function netError(error: unknown): ApiError {
+  if (error instanceof ApiError) return error
+  return new ApiError(0, "net", i18n.t("shell.api.error", { msg: errMsg(error) }), { net: true })
 }

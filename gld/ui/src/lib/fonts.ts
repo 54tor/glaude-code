@@ -13,13 +13,16 @@ export const FONTS = {
 export type FontId = keyof typeof FONTS
 export const SIZES = ["13", "14", "15", "16", "17"]
 
+const DEFAULT_SIZE = "15"
+const BROWSER_BASE_FONT_PX = 16
+
 export function applyFont(id: string, size: string) {
-  const f = FONTS[id as FontId] ?? FONTS.geist
-  const st = document.documentElement.style
-  st.setProperty("--reader-font", f.text)
-  st.setProperty("--reader-mono", f.mono)
-  const px = SIZES.includes(size) ? size : "15"
-  st.setProperty("--reader-size", `${px}px`)
+  const fontSet = FONTS[id as FontId] ?? FONTS.geist
+  const rootStyle = document.documentElement.style
+  rootStyle.setProperty("--reader-font", fontSet.text)
+  rootStyle.setProperty("--reader-mono", fontSet.mono)
+  const sizePx = SIZES.includes(size) ? size : DEFAULT_SIZE
+  rootStyle.setProperty("--reader-size", `${sizePx}px`)
   // Tailwind compte en rem : changer la base agrandit toute l'app, pas seulement les conversations.
-  st.fontSize = `${(Number(px) / 15) * 16}px`
+  rootStyle.fontSize = `${(Number(sizePx) / Number(DEFAULT_SIZE)) * BROWSER_BASE_FONT_PX}px`
 }

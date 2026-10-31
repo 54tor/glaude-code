@@ -24,5 +24,8 @@ export const efforts = () =>
 export type Choice = { model: string; effort: string }
 
 // Options de claude complétées du modèle et de l'effort choisis (validées côté serveur comme les autres).
-export const withChoice = (args: string, c: Choice) =>
-  [args, c.model && `--model=${c.model}`, c.effort && `--effort=${c.effort}`].filter(Boolean).join(" ")
+export const withChoice = (args: string, choice: Choice) => {
+  const modelOption = choice.model && `--model=${choice.model}`
+  const effortOption = choice.effort && `--effort=${choice.effort}`
+  return [args, modelOption, effortOption].filter(Boolean).join(" ")
+}

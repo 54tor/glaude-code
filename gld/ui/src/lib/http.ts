@@ -6,16 +6,17 @@ export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
 
 // Appel JSON de l'API /v1 : chemin sans préfixe (« /sessions/x/process »), corps JSON optionnel. Lève ApiError.
 export async function request<T = void>(method: Method, path: string, body?: unknown, timeoutMs?: number): Promise<T> {
+  const hasBody = body !== undefined
   try {
-    const r = await authFetch(v1(path), {
+    const response = await authFetch(v1(path), {
       method,
-      headers: body === undefined ? undefined : { "Content-Type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: hasBody ? { "Content-Type": "application/json" } : undefined,
+      body: hasBody ? JSON.stringify(body) : undefined,
       signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,
     })
-    return await readResponse<T>(r)
-  } catch (e) {
-    throw netError(e)
+    return await readResponse<T>(response)
+  } catch (requestError) {
+    throw netError(requestError)
   }
 }
 

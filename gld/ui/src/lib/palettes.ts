@@ -95,25 +95,27 @@ const STATES = {
   dark: { warning: "oklch(0.80 0.14 75)", success: "oklch(0.78 0.14 155)", info: "oklch(0.78 0.10 245)" },
 }
 
-export function paletteVars(t: Tone, mode: "light" | "dark"): Record<string, string> {
-  const states = Object.fromEntries(Object.entries(STATES[mode]).map(([k, v]) => [k, `color-mix(in oklch, ${v}, ${mode === "light" ? "black 10%" : `${t.fg} 20%`})`]))
+export function paletteVars(tone: Tone, mode: "light" | "dark"): Record<string, string> {
+  const stateMixTarget = mode === "light" ? "black 10%" : `${tone.fg} 20%`
+  const stateEntries = Object.entries(STATES[mode]).map(([stateName, stateColor]) => [stateName, `color-mix(in oklch, ${stateColor}, ${stateMixTarget})`])
+  const states = Object.fromEntries(stateEntries)
   return {
     ...states,
-    background: t.bg, foreground: t.fg, card: t.surface, "card-foreground": t.fg, popover: t.surface, "popover-foreground": t.fg,
-    primary: t.primary, "primary-foreground": t.bg, secondary: t.muted, "secondary-foreground": t.fg,
-    muted: t.muted, "muted-foreground": `color-mix(in oklab, ${t.fg} 62%, ${t.bg})`, accent: t.muted, "accent-foreground": t.fg,
-    border: t.border, input: t.border, ring: t.primary,
-    sidebar: t.side, "sidebar-foreground": t.fg, "sidebar-primary": t.primary, "sidebar-primary-foreground": t.bg,
-    "sidebar-accent": t.muted, "sidebar-accent-foreground": t.fg, "sidebar-border": t.border, "sidebar-ring": t.primary,
+    background: tone.bg, foreground: tone.fg, card: tone.surface, "card-foreground": tone.fg, popover: tone.surface, "popover-foreground": tone.fg,
+    primary: tone.primary, "primary-foreground": tone.bg, secondary: tone.muted, "secondary-foreground": tone.fg,
+    muted: tone.muted, "muted-foreground": `color-mix(in oklab, ${tone.fg} 62%, ${tone.bg})`, accent: tone.muted, "accent-foreground": tone.fg,
+    border: tone.border, input: tone.border, ring: tone.primary,
+    sidebar: tone.side, "sidebar-foreground": tone.fg, "sidebar-primary": tone.primary, "sidebar-primary-foreground": tone.bg,
+    "sidebar-accent": tone.muted, "sidebar-accent-foreground": tone.fg, "sidebar-border": tone.border, "sidebar-ring": tone.primary,
   }
 }
 
-const NAMES = Object.keys(paletteVars(PALETTES.nord.dark!, "dark"))
+const VARIABLE_NAMES = Object.keys(paletteVars(PALETTES.nord.dark!, "dark"))
 
 export function applyPalette(id: string, mode: "light" | "dark") {
   const style = document.documentElement.style
-  NAMES.forEach((v) => style.removeProperty("--" + v))
+  VARIABLE_NAMES.forEach((variableName) => style.removeProperty("--" + variableName))
   const tone = PALETTES[id]?.[mode]
   if (!tone) return
-  for (const [k, v] of Object.entries(paletteVars(tone, mode))) style.setProperty("--" + k, v)
+  for (const [variableName, value] of Object.entries(paletteVars(tone, mode))) style.setProperty("--" + variableName, value)
 }

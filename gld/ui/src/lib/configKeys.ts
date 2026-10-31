@@ -24,16 +24,26 @@ const DOTTED: Record<string, string> = {
 }
 const doc = (id: string) => i18n.t(`config.keys.${id}`)
 
+// Préfixes dont la suite est un nom libre (variable, plugin, place de marché), inséré dans l'explication.
+const NAMED_PREFIXES: [prefix: string, catalogKey: string][] = [
+  ["env.", "config.keys.envVar"],
+  ["enabledPlugins.", "config.keys.plugin"],
+  ["pluginConfigs.", "config.keys.pluginConfig"],
+  ["extraKnownMarketplaces.", "config.keys.marketplace"],
+]
+const SECTION_PREFIXES = ["modelSettings", "worktree"]
+
 // describe : l'explication d'un réglage, par son chemin (« permissions.allow[] », « env.MA_VAR », « enabledPlugins.x@y »…).
 export function describeKey(path: string): string | undefined {
   if (DOTTED[path]) return doc(DOTTED[path])
   if (PLAIN.has(path)) return doc(path)
-  if (path.startsWith("env.")) return i18n.t("config.keys.envVar", { name: path.slice(4) })
-  if (path.startsWith("enabledPlugins.")) return i18n.t("config.keys.plugin", { name: path.slice(15) })
-  if (path.startsWith("pluginConfigs.")) return i18n.t("config.keys.pluginConfig", { name: path.slice(14) })
-  if (path.startsWith("extraKnownMarketplaces.")) return i18n.t("config.keys.marketplace", { name: path.slice(23) })
-  if (path.startsWith("modelSettings.")) return doc("modelSettings")
-  if (path.startsWith("worktree.")) return doc("worktree")
-  const head = path.split(".")[0]
-  return PLAIN.has(head) ? doc(head) : undefined
+  for (const [prefix, catalogKey] of NAMED_PREFIXES) {
+    if (path.startsWith(prefix)) return i18n.t(catalogKey, { name: path.slice(prefix.length) })
+  }
+  for (const section of SECTION_PREFIXES) {
+    if (path.startsWith(section + ".")) return doc(section)
+  }
+  const firstSegment = path.split(".")[0]
+  if (PLAIN.has(firstSegment)) return doc(firstSegment)
+  return undefined
 }

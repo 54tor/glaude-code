@@ -3,33 +3,36 @@
 export const SWIPE = 60
 export const EDGE = 24
 
-type T = { x: number; y: number; edge: boolean }
-const starts = new WeakMap<EventTarget, T>()
+type TouchStart = { x: number; y: number; edge: boolean }
+const touchStarts = new WeakMap<EventTarget, TouchStart>()
 
-export function swipeStart(e: React.TouchEvent | TouchEvent, el: EventTarget) {
-  if (e.touches.length !== 1) return
-  const t = e.touches[0]
-  starts.set(el, { x: t.clientX, y: t.clientY, edge: t.clientX <= EDGE })
+export function swipeStart(event: React.TouchEvent | TouchEvent, element: EventTarget) {
+  if (event.touches.length !== 1) return
+  const touch = event.touches[0]
+  touchStarts.set(element, { x: touch.clientX, y: touch.clientY, edge: touch.clientX <= EDGE })
 }
 
 // Renvoie "left" ou "right" si le geste est un balayage, sinon undefined ; fromEdge exige un départ au bord gauche.
-export function swipeEnd(e: React.TouchEvent | TouchEvent, el: EventTarget, fromEdge = false): "left" | "right" | undefined {
-  const s = starts.get(el)
-  starts.delete(el)
-  if (!s || e.changedTouches.length !== 1 || (fromEdge && !s.edge)) return
-  const t = e.changedTouches[0]
-  const dx = t.clientX - s.x
-  const dy = t.clientY - s.y
-  if (Math.abs(dx) < SWIPE || Math.abs(dy) > Math.abs(dx)) return
-  return dx > 0 ? "right" : "left"
+export function swipeEnd(event: React.TouchEvent | TouchEvent, element: EventTarget, fromEdge = false): "left" | "right" | undefined {
+  const start = touchStarts.get(element)
+  touchStarts.delete(element)
+  if (!start || event.changedTouches.length !== 1) return
+  if (fromEdge && !start.edge) return
+  const touch = event.changedTouches[0]
+  const deltaX = touch.clientX - start.x
+  const deltaY = touch.clientY - start.y
+  const isTooShort = Math.abs(deltaX) < SWIPE
+  const isMostlyVertical = Math.abs(deltaY) > Math.abs(deltaX)
+  if (isTooShort || isMostlyVertical) return
+  return deltaX > 0 ? "right" : "left"
 }
 
-export function swipeHandlers(on: (dir: "left" | "right") => void, fromEdge = false) {
+export function swipeHandlers(onSwipe: (direction: "left" | "right") => void, fromEdge = false) {
   return {
-    onTouchStart: (e: React.TouchEvent) => swipeStart(e, e.currentTarget),
-    onTouchEnd: (e: React.TouchEvent) => {
-      const d = swipeEnd(e, e.currentTarget, fromEdge)
-      if (d) on(d)
+    onTouchStart: (event: React.TouchEvent) => swipeStart(event, event.currentTarget),
+    onTouchEnd: (event: React.TouchEvent) => {
+      const direction = swipeEnd(event, event.currentTarget, fromEdge)
+      if (direction) onSwipe(direction)
     },
   }
 }
