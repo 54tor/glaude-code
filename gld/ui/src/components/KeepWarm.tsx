@@ -116,7 +116,8 @@ export function CacheState({ s: session }: { s: Session }) {
   const isKeptWarm = !!warm?.on
   // Même priorité d'icône que la barre latérale : une seule icône d'état.
   let icon = <Coffee className="size-3.5" />
-  let stateLabel = t("conversation.keepWarm.left", { min: minutesLeft })
+  const cacheDelayLabel = t("conversation.keepWarm.left", { min: minutesLeft })
+  let stateLabel = cacheDelayLabel
   if (isAsking) {
     icon = <Info className="size-3.5 animate-pulse" />
     stateLabel = t("shell.sidebar.asking")
@@ -126,6 +127,7 @@ export function CacheState({ s: session }: { s: Session }) {
   } else if (isKeptWarm) {
     icon = <Microwave className="warm-wave size-3.5" />
     stateLabel = t("conversation.keepWarm.stateWarm", { pings: warm.pings, max: warm.max })
+    if (!isCold) stateLabel += ` · ${cacheDelayLabel}`
   } else if (isExpiring) {
     icon = <AlarmClock className="size-3.5" />
     stateLabel = t("conversation.keepWarm.expiring", { min: minutesLeft })
