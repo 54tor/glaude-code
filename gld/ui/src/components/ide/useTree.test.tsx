@@ -10,8 +10,8 @@ afterEach(() => (vi.restoreAllMocks(), localStorage.clear()))
 
 describe("useTree", () => {
   it("une réponse plus ancienne n'écrase pas un listing plus récent du même dossier", async () => {
-    let first!: (v: L) => void
-    const tree = vi.spyOn(api, "fsTree").mockReturnValueOnce(new Promise<L>((r) => (first = r))).mockResolvedValue(listing("neuf"))
+    let first!: (record: L) => void
+    const tree = vi.spyOn(api, "fsTree").mockReturnValueOnce(new Promise<L>((callback) => (first = callback))).mockResolvedValue(listing("neuf"))
     const { result } = renderHook(() => useTree("/p"))
     act(() => result.current.refresh(""))
     await waitFor(() => expect(result.current.lists[""]).toEqual(listing("neuf")))
@@ -32,8 +32,8 @@ describe("useTree", () => {
     expect(tree).toHaveBeenCalledTimes(4)
   })
   it("refreshAll garde la garde par chemin : une réponse plus ancienne est ignorée", async () => {
-    let first!: (v: L) => void
-    vi.spyOn(api, "fsTree").mockReturnValueOnce(new Promise<L>((r) => (first = r))).mockResolvedValue(listing("neuf"))
+    let first!: (record: L) => void
+    vi.spyOn(api, "fsTree").mockReturnValueOnce(new Promise<L>((callback) => (first = callback))).mockResolvedValue(listing("neuf"))
     const { result } = renderHook(() => useTree("/p"))
     act(() => result.current.refreshAll())
     await waitFor(() => expect(result.current.lists[""]).toEqual(listing("neuf")))

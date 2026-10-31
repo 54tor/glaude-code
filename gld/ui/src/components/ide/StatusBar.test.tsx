@@ -6,10 +6,10 @@ import { branchOf, StatusBar, useEditorStatus } from "./StatusBar"
 import type { EditorHandle, EditorStatus } from "./commands"
 import type { GitState } from "@/lib/api"
 
-const st = (o: Partial<EditorStatus> = {}): EditorStatus => ({ line: 3, col: 7, selected: 0, eol: "LF", language: "typescript", indent: "spaces:2", readOnly: false, ...o })
-const ed = (s: EditorStatus | null) => s && ({ subscribe: (l: (x: EditorStatus) => void) => (l(s), () => {}) } as unknown as EditorHandle)
-const bar = (o: Partial<Parameters<typeof StatusBar>[0]> = {}) =>
-  render(<StatusBar editor={ed(st())} watch={{ connected: true, state: "open", retryIn: 0 }} index="ready" branch="main" dirty={0} {...o} />)
+const st = (editorStatus: Partial<EditorStatus> = {}): EditorStatus => ({ line: 3, col: 7, selected: 0, eol: "LF", language: "typescript", indent: "spaces:2", readOnly: false, ...editorStatus })
+const ed = (editorStatus: EditorStatus | null) => editorStatus && ({ subscribe: (callback: (localEditorStatus: EditorStatus) => void) => (callback(editorStatus), () => {}) } as unknown as EditorHandle)
+const bar = (record: Partial<Parameters<typeof StatusBar>[0]> = {}) =>
+  render(<StatusBar editor={ed(st())} watch={{ connected: true, state: "open", retryIn: 0 }} index="ready" branch="main" dirty={0} {...record} />)
 
 beforeEach(() => setLang("fr"))
 afterEach(cleanup)
@@ -17,14 +17,14 @@ afterEach(cleanup)
 describe("StatusBar", () => {
   it("position, fins de ligne, langage, indentation, encodage, branche", () => {
     bar()
-    for (const s of ["Ligne 3, colonne 7", "LF", "typescript", "Espaces : 2", "UTF-8", "main"]) expect(screen.getByText(s)).toBeTruthy()
+    for (const text of ["Ligne 3, colonne 7", "LF", "typescript", "Espaces : 2", "UTF-8", "main"]) expect(screen.getByText(text)).toBeTruthy()
     expect(screen.queryByText(/sélectionné/)).toBeNull()
     expect(screen.queryByText("lecture seule")).toBeNull()
   })
 
   it("sélection, CRLF, lecture seule, tabulations", () => {
     bar({ editor: ed(st({ selected: 12, eol: "CRLF", readOnly: true, indent: "tabs:4" })) })
-    for (const s of ["12 caractères sélectionnés", "CRLF", "lecture seule", "Tabulations"]) expect(screen.getByText(s)).toBeTruthy()
+    for (const text of ["12 caractères sélectionnés", "CRLF", "lecture seule", "Tabulations"]) expect(screen.getByText(text)).toBeTruthy()
   })
 
   it("aucun onglet actif : rien sur la position ni l'éditeur ; hors dépôt : pas de branche", () => {
@@ -41,11 +41,11 @@ describe("StatusBar", () => {
     expect(live.textContent).toContain("Surveillance active")
     expect(live.textContent).toContain("Indexation en cours")
     expect(live.textContent).not.toContain("Ligne")
-    const p = { editor: ed(st()), branch: "main", dirty: 0 }
-    rerender(<StatusBar {...p} watch={{ connected: false, state: "waiting", retryIn: 15 }} index="partial" />)
+    const record = { editor: ed(st()), branch: "main", dirty: 0 }
+    rerender(<StatusBar {...record} watch={{ connected: false, state: "waiting", retryIn: 15 }} index="partial" />)
     expect(live.textContent).toContain("reconnexion dans 15 s")
     expect(live.textContent).toContain("Index partiel")
-    rerender(<StatusBar {...p} watch={{ connected: false, state: "browserRetry", retryIn: 0 }} index="ready" />)
+    rerender(<StatusBar {...record} watch={{ connected: false, state: "browserRetry", retryIn: 0 }} index="ready" />)
     expect(live.textContent).toContain("Surveillance interrompue")
     expect(live.textContent).toContain("Index prêt")
   })
@@ -60,35 +60,35 @@ describe("StatusBar", () => {
 
 describe("useEditorStatus", () => {
   const fake = () => {
-    let l: ((s: EditorStatus) => void) | undefined
+    let callback: ((editorStatus: EditorStatus) => void) | undefined
     const off = vi.fn()
-    const h = { subscribe: vi.fn((f: (s: EditorStatus) => void) => ((l = f), f(st()), off)) } as unknown as EditorHandle
-    return { h, off, push: (s: EditorStatus) => act(() => l?.(s)) }
+    const editorHandle = { subscribe: vi.fn((localCallback: (editorStatus: EditorStatus) => void) => ((callback = localCallback), localCallback(st()), off)) } as unknown as EditorHandle
+    return { h: editorHandle, off, push: (editorStatus: EditorStatus) => act(() => callback?.(editorStatus)) }
   }
   it("suit l'éditeur actif, se désabonne de l'ancien, rien sans éditeur", () => {
-    const a = fake()
-    const b = fake()
-    const { result, rerender } = renderHook(({ e }) => useEditorStatus(e), { initialProps: { e: a.h as EditorHandle | null } })
+    const record = fake()
+    const localRecord = fake()
+    const { result, rerender } = renderHook(({ e: editorHandle }) => useEditorStatus(editorHandle), { initialProps: { e: record.h as EditorHandle | null } })
     expect(result.current?.line).toBe(3)
-    a.push(st({ line: 9 }))
+    record.push(st({ line: 9 }))
     expect(result.current?.line).toBe(9)
-    rerender({ e: b.h })
-    expect(a.off).toHaveBeenCalled()
+    rerender({ e: localRecord.h })
+    expect(record.off).toHaveBeenCalled()
     expect(result.current?.line).toBe(3)
     rerender({ e: null })
-    expect(b.off).toHaveBeenCalled()
+    expect(localRecord.off).toHaveBeenCalled()
     expect(result.current).toBeNull()
   })
 })
 
 describe("branchOf", () => {
-  const g = (branch: string) => ({ branch }) as GitState
+  const callback = (branch: string) => ({ branch }) as GitState
   it("dépôt le plus proche contenant le dossier, rien hors dépôt", () => {
-    const s = { "/r": g("main"), "/r/sub": g("dev"), "/rx": g("x") }
-    expect(branchOf("/r", s)).toBe("main")
-    expect(branchOf("/r/a/b", s)).toBe("main")
-    expect(branchOf("/r/sub/c", s)).toBe("dev")
-    expect(branchOf("/other", s)).toBeUndefined()
-    expect(branchOf("/rxy", s)).toBeUndefined()
+    const record = { "/r": callback("main"), "/r/sub": callback("dev"), "/rx": callback("x") }
+    expect(branchOf("/r", record)).toBe("main")
+    expect(branchOf("/r/a/b", record)).toBe("main")
+    expect(branchOf("/r/sub/c", record)).toBe("dev")
+    expect(branchOf("/other", record)).toBeUndefined()
+    expect(branchOf("/rxy", record)).toBeUndefined()
   })
 })

@@ -10,7 +10,7 @@ describe("rank", () => {
     expect(rank(["ide/a.ts", "x/ide.ts"], "ide")).toEqual(["x/ide.ts", "ide/a.ts"])
   })
   it("plafond de 50 ; requête vide : les 50 premiers", () => {
-    const many = Array.from({ length: 80 }, (_, i) => `f${i}.ts`)
+    const many = Array.from({ length: 80 }, (_, index) => `f${index}.ts`)
     expect(rank(many, "f")).toHaveLength(50)
     expect(rank(many, "")).toEqual(many.slice(0, 50))
   })

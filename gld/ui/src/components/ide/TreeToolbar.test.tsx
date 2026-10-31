@@ -10,7 +10,7 @@ import type { CmdCtx } from "./commands"
 import { DEFAULT_PREFS } from "./useViewPrefs"
 
 const ctx = (rights: Right[] = ["fs_read", "fs_write"]): CmdCtx => ({
-  can: (r) => rights.includes(r),
+  can: (raw) => rights.includes(raw),
   tab: undefined,
   tabs: [],
   readOnly: false,
@@ -33,45 +33,45 @@ afterEach(() => (cleanup(), vi.restoreAllMocks()))
 
 describe("TreeToolbar", () => {
   it("nouveau fichier, nouveau dossier, actualiser, tout replier, ouverture rapide", () => {
-    const c = ctx()
+    const cmdCtx = ctx()
     const t = tree()
-    render(<TreeToolbar dir="/p" tree={t} ctx={c} filter="" onFilter={() => {}} onRestored={() => {}} />)
+    render(<TreeToolbar dir="/p" tree={t} ctx={cmdCtx} filter="" onFilter={() => {}} onRestored={() => {}} />)
     fireEvent.click(btn("Nouveau fichier"))
-    expect(c.newFile).toHaveBeenCalled()
+    expect(cmdCtx.newFile).toHaveBeenCalled()
     fireEvent.click(btn("Nouveau dossier"))
-    expect(c.newFolder).toHaveBeenCalled()
+    expect(cmdCtx.newFolder).toHaveBeenCalled()
     fireEvent.click(btn("Actualiser"))
     expect(t.refreshAll).toHaveBeenCalled()
     fireEvent.click(btn("Tout replier"))
     expect(t.collapseAll).toHaveBeenCalled()
     fireEvent.click(btn("Ouverture rapide"))
-    expect(c.openQuick).toHaveBeenCalled()
+    expect(cmdCtx.openQuick).toHaveBeenCalled()
   })
 
   it("sans fs_write : création désactivée (pas masquée) avec la raison", () => {
-    const c = ctx(["fs_read"])
-    render(<TreeToolbar dir="/p" tree={tree()} ctx={c} filter="" onFilter={() => {}} onRestored={() => {}} />)
-    const b = btn("Nouveau fichier")
-    expect(b.getAttribute("aria-disabled")).toBe("true")
-    fireEvent.click(b)
-    expect(c.newFile).not.toHaveBeenCalled()
-    expect(document.getElementById(b.getAttribute("aria-describedby")!)?.textContent).toMatch(/pas le droit/)
+    const cmdCtx = ctx(["fs_read"])
+    render(<TreeToolbar dir="/p" tree={tree()} ctx={cmdCtx} filter="" onFilter={() => {}} onRestored={() => {}} />)
+    const element = btn("Nouveau fichier")
+    expect(element.getAttribute("aria-disabled")).toBe("true")
+    fireEvent.click(element)
+    expect(cmdCtx.newFile).not.toHaveBeenCalled()
+    expect(document.getElementById(element.getAttribute("aria-describedby")!)?.textContent).toMatch(/pas le droit/)
   })
 
   it("le filtre remonte la saisie, vider remet tout", () => {
-    const f = vi.fn()
-    const { rerender } = render(<TreeToolbar dir="/p" tree={tree()} ctx={ctx()} filter="" onFilter={f} onRestored={() => {}} />)
+    const mock = vi.fn()
+    const { rerender } = render(<TreeToolbar dir="/p" tree={tree()} ctx={ctx()} filter="" onFilter={mock} onRestored={() => {}} />)
     fireEvent.change(screen.getByRole("searchbox", { name: "Filtrer par nom" }), { target: { value: "Src" } })
-    expect(f).toHaveBeenLastCalledWith("Src")
-    rerender(<TreeToolbar dir="/p" tree={tree()} ctx={ctx()} filter="Src" onFilter={f} onRestored={() => {}} />)
+    expect(mock).toHaveBeenLastCalledWith("Src")
+    rerender(<TreeToolbar dir="/p" tree={tree()} ctx={ctx()} filter="Src" onFilter={mock} onRestored={() => {}} />)
     fireEvent.click(btn("Effacer le filtre"))
-    expect(f).toHaveBeenLastCalledWith("")
+    expect(mock).toHaveBeenLastCalledWith("")
   })
 
   it("effacer le filtre par le bouton rend le focus au champ ; Échap vide aussi", () => {
     const Host = () => {
-      const [f, setF] = useState("Src")
-      return <TreeToolbar dir="/p" tree={tree()} ctx={ctx()} filter={f} onFilter={setF} onRestored={() => {}} />
+      const [filePath, setF] = useState("Src")
+      return <TreeToolbar dir="/p" tree={tree()} ctx={ctx()} filter={filePath} onFilter={setF} onRestored={() => {}} />
     }
     render(<Host />)
     const input = screen.getByRole("searchbox", { name: "Filtrer par nom" }) as HTMLInputElement

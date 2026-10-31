@@ -77,52 +77,52 @@ describe("TrashDialog", () => {
     const restore = vi.spyOn(api, "fsTrashRestore")
     mount(false)
     await screen.findByText("a.txt")
-    const b = screen.getByRole("button", { name: "Restaurer a.txt" }) as HTMLButtonElement
-    expect(b.disabled).toBe(true)
+    const element = screen.getByRole("button", { name: "Restaurer a.txt" }) as HTMLButtonElement
+    expect(element.disabled).toBe(true)
     expect((screen.getByRole("button", { name: "Supprimer définitivement a.txt" }) as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByText("Vous n'avez pas le droit de modifier les fichiers de ce dossier")).toBeTruthy()
-    fireEvent.click(b)
+    fireEvent.click(element)
     expect(restore).not.toHaveBeenCalled()
   })
   it("une requête à la fois : pendant une restauration, restaurer et purger sont désactivés", async () => {
     list()
-    let done!: (v: void) => void
-    const restore = vi.spyOn(api, "fsTrashRestore").mockReturnValue(new Promise<void>((r) => (done = r)))
+    let done!: (value: void) => void
+    const restore = vi.spyOn(api, "fsTrashRestore").mockReturnValue(new Promise<void>((callback) => (done = callback)))
     const purge = vi.spyOn(api, "fsTrashPurge")
     mount()
     await screen.findByText("a.txt")
     fireEvent.click(screen.getByRole("button", { name: "Restaurer a.txt" }))
     fireEvent.click(screen.getByRole("button", { name: "Restaurer a.txt" }))
     fireEvent.click(screen.getByRole("button", { name: "Restaurer src/b.ts" }))
-    const p = screen.getByRole("button", { name: "Supprimer définitivement src/b.ts" }) as HTMLButtonElement
-    expect(p.disabled).toBe(true)
-    fireEvent.click(p)
+    const element = screen.getByRole("button", { name: "Supprimer définitivement src/b.ts" }) as HTMLButtonElement
+    expect(element.disabled).toBe(true)
+    fireEvent.click(element)
     expect(restore).toHaveBeenCalledTimes(1)
     expect(purge).not.toHaveBeenCalled()
     await act(async () => done())
-    await waitFor(() => expect(p.disabled).toBe(false))
+    await waitFor(() => expect(element.disabled).toBe(false))
   })
   it("une requête à la fois : pendant une purge, restaurer et purger sont désactivés", async () => {
     list()
-    let done!: (v: { done: string[]; failed: [] }) => void
-    const purge = vi.spyOn(api, "fsTrashPurge").mockReturnValue(new Promise<{ done: string[]; failed: [] }>((r) => (done = r)))
+    let done!: (record: { done: string[]; failed: [] }) => void
+    const purge = vi.spyOn(api, "fsTrashPurge").mockReturnValue(new Promise<{ done: string[]; failed: [] }>((callback) => (done = callback)))
     const restore = vi.spyOn(api, "fsTrashRestore")
     mount()
     await screen.findByText("a.txt")
     fireEvent.click(screen.getByRole("button", { name: "Supprimer définitivement a.txt" }))
     fireEvent.click(await screen.findByRole("button", { name: "Supprimer définitivement" }))
     await waitFor(() => expect(purge).toHaveBeenCalledTimes(1))
-    const r = screen.getByRole("button", { name: "Restaurer src/b.ts" }) as HTMLButtonElement
-    await waitFor(() => expect(r.disabled).toBe(true))
-    fireEvent.click(r)
+    const element = screen.getByRole("button", { name: "Restaurer src/b.ts" }) as HTMLButtonElement
+    await waitFor(() => expect(element.disabled).toBe(true))
+    fireEvent.click(element)
     expect(restore).not.toHaveBeenCalled()
     await act(async () => done({ done: [], failed: [] }))
-    await waitFor(() => expect(r.disabled).toBe(false))
+    await waitFor(() => expect(element.disabled).toBe(false))
   })
   it("fenêtre fermée pendant une restauration : l'arbre est quand même actualisé, une seule fois", async () => {
     list()
-    let done!: (v: void) => void
-    vi.spyOn(api, "fsTrashRestore").mockReturnValue(new Promise<void>((r) => (done = r)))
+    let done!: (value: void) => void
+    vi.spyOn(api, "fsTrashRestore").mockReturnValue(new Promise<void>((callback) => (done = callback)))
     const err = vi.spyOn(console, "error")
     const onRestored = vi.fn()
     const { rerender } = mount(true, onRestored)

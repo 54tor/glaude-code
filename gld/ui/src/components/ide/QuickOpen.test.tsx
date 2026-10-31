@@ -8,10 +8,10 @@ beforeEach(() => setLang("fr"))
 afterEach(cleanup)
 
 const files = ["README.md", "src/app.ts", "src/lib/api.ts"]
-const mount = (o: Partial<Parameters<typeof QuickOpen>[0]> = {}) => {
+const mount = (record: Partial<Parameters<typeof QuickOpen>[0]> = {}) => {
   const pick = vi.fn()
   const close = vi.fn()
-  render(<QuickOpen open files={files} state="ready" onPick={pick} onClose={close} {...o} />)
+  render(<QuickOpen open files={files} state="ready" onPick={pick} onClose={close} {...record} />)
   return { pick, close }
 }
 
@@ -20,7 +20,7 @@ describe("QuickOpen", () => {
     const { pick } = mount()
     const input = screen.getByRole("combobox")
     fireEvent.change(input, { target: { value: "ts" } })
-    expect(screen.getAllByRole("option").map((o) => o.getAttribute("title"))).toEqual(["src/app.ts", "src/lib/api.ts"])
+    expect(screen.getAllByRole("option").map((element) => element.getAttribute("title"))).toEqual(["src/app.ts", "src/lib/api.ts"])
     fireEvent.keyDown(input, { key: "ArrowDown" })
     fireEvent.keyDown(input, { key: "ArrowDown" })
     fireEvent.keyDown(input, { key: "ArrowUp" })
