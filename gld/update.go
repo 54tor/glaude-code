@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/mod/semver"
 )
 
 const releaseAPI = "https://api.github.com/repos/54tor/glaude-code/releases/latest"
@@ -95,16 +97,11 @@ var claudeLatest = func(requestContext context.Context) (string, error) {
 
 // newerVersion : vrai si latest (vX.Y.Z) dépasse current ; « dev » ou une version illisible n'est jamais périmée.
 func newerVersion(current, latest string) bool {
-	currentParts, latestParts := verParts(current), verParts(latest)
-	if currentParts == nil || latestParts == nil {
+	currentVersion, latestVersion := asSemver(current), asSemver(latest)
+	if currentVersion == "" || latestVersion == "" {
 		return false
 	}
-	for partIndex := range currentParts {
-		if currentParts[partIndex] != latestParts[partIndex] {
-			return latestParts[partIndex] > currentParts[partIndex]
-		}
-	}
-	return false
+	return semver.Compare(latestVersion, currentVersion) > 0
 }
 
 const claudePatchTolerance = 3
@@ -114,28 +111,26 @@ func claudeFarBehind(current, latest string) bool {
 	if !newerVersion(current, latest) {
 		return false
 	}
-	currentParts, latestParts := verParts(current), verParts(latest)
-	if currentParts[0] != latestParts[0] || currentParts[1] != latestParts[1] {
+	currentVersion, latestVersion := asSemver(current), asSemver(latest)
+	if semver.MajorMinor(currentVersion) != semver.MajorMinor(latestVersion) {
 		return true
 	}
-	return latestParts[2]-currentParts[2] >= claudePatchTolerance
+	return patchOf(latestVersion)-patchOf(currentVersion) >= claudePatchTolerance
 }
 
-func verParts(versionText string) []int {
-	parts := strings.SplitN(strings.TrimPrefix(versionText, "v"), ".", 3)
-	if len(parts) != 3 {
-		return nil
+// asSemver : la version préfixée d'un « v » si elle est valide au sens de semver (vX.Y.Z), sinon "".
+func asSemver(versionText string) string {
+	prefixed := "v" + strings.TrimPrefix(versionText, "v")
+	if !semver.IsValid(prefixed) {
+		return ""
 	}
-	numbers := make([]int, 3)
-	for partIndex, part := range parts {
-		part, _, _ = strings.Cut(part, "-")
-		number, err := strconv.Atoi(part)
-		if err != nil {
-			return nil
-		}
-		numbers[partIndex] = number
-	}
-	return numbers
+	return prefixed
+}
+
+func patchOf(version string) int {
+	canonical := strings.TrimSuffix(semver.Canonical(version), semver.Prerelease(version))
+	patch, _ := strconv.Atoi(canonical[strings.LastIndex(canonical, ".")+1:])
+	return patch
 }
 
 // checkUpdate : l'échec réseau est mis en cache comme un succès (sans « newer ») pour ne pas marteler GitHub (60 requêtes/h sans jeton).
