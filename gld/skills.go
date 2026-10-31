@@ -54,6 +54,13 @@ const (
 	skillFile     = "SKILL.md"
 	skillListCap  = 1536 // description + when_to_use tronquées à ce nombre de caractères dans la liste des skills
 	skillMaxBytes = 256 << 10
+
+	skillTextSnippetMax   = 200  // description, source ou origine d'un skill affichées dans la liste
+	frontMatterScanLength = 400  // début du texte où un « name: » trahit un front matter mal placé
+	skillListedFilesMax   = 200  // fichiers du dossier listés par readSkill
+	skillRefTextMax       = 6000 // texte d'un skill cité en référence dans la consigne de rédaction
+	skillInstructionMax   = 8 << 10
+	skillRefsMax          = 5
 )
 
 var (
@@ -67,32 +74,32 @@ func skillLateYAML() string { return L("srv.skills.lateYAML") }
 
 // skillBase : le dossier qui contient les skills d'une clé, et si on peut y écrire.
 func skillBase(key string) (base, name string, readonly bool, err error) {
-	bad := terr("srv.skills.skillInvalide")
+	invalidErr := terr("srv.skills.skillInvalide")
 	parts := strings.Split(key, "/")
 	switch {
 	case len(parts) == 2 && parts[0] == "u":
-		return filepath.Join(cfgDir(), "skills"), parts[1], false, nilIf(skillName.MatchString(parts[1]), bad)
+		return filepath.Join(cfgDir(), "skills"), parts[1], false, nilIf(skillName.MatchString(parts[1]), invalidErr)
 	case len(parts) == 3 && parts[0] == "p" && safeDir(parts[1]):
-		cwd, ok := knownProjectCwd(parts[1])
-		if !ok {
+		projectDir, found := knownProjectCwd(parts[1])
+		if !found {
 			return "", "", false, terr("srv.memory.dossierDuProjetIntrouvable")
 		}
-		return filepath.Join(cwd, ".claude", "skills"), parts[2], false, nilIf(skillName.MatchString(parts[2]), bad)
+		return filepath.Join(projectDir, ".claude", "skills"), parts[2], false, nilIf(skillName.MatchString(parts[2]), invalidErr)
 	case len(parts) == 3 && parts[0] == "s" && bucketRe.MatchString(parts[1]):
-		return filepath.Join(cfgDir(), "skills", "synced", parts[1]), parts[2], true, nilIf(skillName.MatchString(parts[2]), bad)
+		return filepath.Join(cfgDir(), "skills", "synced", parts[1]), parts[2], true, nilIf(skillName.MatchString(parts[2]), invalidErr)
 	case len(parts) == 3 && parts[0] == "x" && pluginIDRe.MatchString(parts[1]):
-		for _, p := range pluginSkillRoots() {
-			if p.id == parts[1] {
-				return p.base, parts[2], true, nilIf(skillName.MatchString(parts[2]), bad)
+		for _, plugin := range pluginSkillRoots() {
+			if plugin.id == parts[1] {
+				return plugin.base, parts[2], true, nilIf(skillName.MatchString(parts[2]), invalidErr)
 			}
 		}
 		return "", "", true, terr("srv.skills.pluginIntrouvable")
 	}
-	return "", "", false, bad
+	return "", "", false, invalidErr
 }
 
-func nilIf(ok bool, err error) error {
-	if ok {
+func nilIf(condition bool, err error) error {
+	if condition {
 		return nil
 	}
 	return err
@@ -102,97 +109,98 @@ type pluginRoot struct{ id, base string }
 
 // pluginSkillRoots : le dossier skills/ de chaque plugin installé (une seule version par plugin : la dernière listée).
 func pluginSkillRoots() []pluginRoot {
-	b, err := readTrusted(filepath.Join(cfgDir(), "plugins", "installed_plugins.json"))
+	content, err := readTrusted(filepath.Join(cfgDir(), "plugins", "installed_plugins.json"))
 	if err != nil {
 		return nil
 	}
-	var d struct {
+	var installed struct {
 		Plugins map[string][]struct {
 			InstallPath string `json:"installPath"`
 		} `json:"plugins"`
 	}
-	if json.Unmarshal(b, &d) != nil {
+	if json.Unmarshal(content, &installed) != nil {
 		return nil
 	}
-	var out []pluginRoot
-	for id, vs := range d.Plugins {
-		if !pluginIDRe.MatchString(id) || len(vs) == 0 {
+	var roots []pluginRoot
+	for pluginID, versions := range installed.Plugins {
+		if !pluginIDRe.MatchString(pluginID) || len(versions) == 0 {
 			continue
 		}
-		p := vs[len(vs)-1].InstallPath
-		if p == "" || !filepath.IsAbs(p) {
+		installPath := versions[len(versions)-1].InstallPath
+		if installPath == "" || !filepath.IsAbs(installPath) {
 			continue
 		}
-		out = append(out, pluginRoot{id, filepath.Join(p, "skills")})
+		roots = append(roots, pluginRoot{pluginID, filepath.Join(installPath, "skills")})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].id < out[j].id })
-	return out
+	sort.Slice(roots, func(left, right int) bool { return roots[left].id < roots[right].id })
+	return roots
 }
 
-func boolField(m map[string]any, k string) (v, set bool) {
-	switch x := m[k].(type) {
+func boolField(meta map[string]any, key string) (value, set bool) {
+	switch typedValue := meta[key].(type) {
 	case bool:
-		return x, true
+		return typedValue, true
 	case string:
-		switch strings.ToLower(x) {
+		switch strings.ToLower(typedValue) {
 		case "true", "yes", "on", "1":
 			return true, true
 		case "false", "no", "off", "0":
 			return false, true
 		}
 	case int:
-		return x != 0, true
+		return typedValue != 0, true
 	}
 	return false, false
 }
 
-func textField(m map[string]any, k string) string {
-	switch x := m[k].(type) {
+func textField(meta map[string]any, key string) string {
+	switch typedValue := meta[key].(type) {
 	case string:
-		return strings.TrimSpace(x)
+		return strings.TrimSpace(typedValue)
 	case []any:
-		return strings.Join(strList(x), " ")
+		return strings.Join(strList(typedValue), " ")
 	}
 	return ""
 }
 
 // describeSkill : lit un SKILL.md et renseigne ce qui s'affiche dans la liste.
-func describeSkill(s *Skill, text string) {
-	m, err := parseMeta(text)
+func describeSkill(skill *Skill, text string) {
+	meta, err := parseMeta(text)
 	if err != nil {
-		s.Warn = err.Error() + " : le skill se charge sans aucun champ"
+		skill.Warn = err.Error() + " : le skill se charge sans aucun champ"
 	}
-	s.Name = textField(m, "name")
-	if s.Name == "" {
-		s.Name = s.Dir
+	skill.Name = textField(meta, "name")
+	if skill.Name == "" {
+		skill.Name = skill.Dir
 	}
-	s.Description = textField(m, "description")
-	if s.Description == "" { // sans description, Claude Code retient la première ligne non vide du contenu
+	skill.Description = textField(meta, "description")
+	if skill.Description == "" { // sans description, Claude Code retient la première ligne non vide du contenu
 		_, body, _ := frontMatter(text)
-		for _, l := range strings.Split(body, "\n") {
-			if l = strings.TrimSpace(strings.TrimLeft(l, "# ")); l != "" {
-				s.Description = cut(l, 200)
+		for _, bodyLine := range strings.Split(body, "\n") {
+			if bodyLine = strings.TrimSpace(strings.TrimLeft(bodyLine, "# ")); bodyLine != "" {
+				skill.Description = cut(bodyLine, skillTextSnippetMax)
 				break
 			}
 		}
-		if s.Warn == "" {
-			s.Warn = L("srv.skills.noDescription")
+		if skill.Warn == "" {
+			skill.Warn = L("srv.skills.noDescription")
 		}
 	}
-	listed := s.Description + textField(m, "when_to_use")
-	s.Chars = len([]rune(listed))
-	s.DescTokens = estimateTokens(len(cut(listed, skillListCap)))
-	s.Tokens = estimateTokens(len(text))
-	if s.Chars > skillListCap && s.Warn == "" {
-		s.Warn = L("srv.skills.descTooLong")
+	listed := skill.Description + textField(meta, "when_to_use")
+	skill.Chars = len([]rune(listed))
+	skill.DescTokens = estimateTokens(len(cut(listed, skillListCap)))
+	skill.Tokens = estimateTokens(len(text))
+	if skill.Chars > skillListCap && skill.Warn == "" {
+		skill.Warn = L("srv.skills.descTooLong")
 	}
-	s.Manual, _ = boolField(m, "disable-model-invocation")
-	if ui, set := boolField(m, "user-invocable"); set {
-		s.Hidden = !ui
+	skill.Manual, _ = boolField(meta, "disable-model-invocation")
+	if userInvocable, set := boolField(meta, "user-invocable"); set {
+		skill.Hidden = !userInvocable
 	}
-	s.Tools = textField(m, "allowed-tools")
-	if s.Warn == "" && !strings.HasPrefix(text, "---\n") && strings.Contains(text[:min(len(text), 400)], "\nname:") {
-		s.Warn = skillLateYAML()
+	skill.Tools = textField(meta, "allowed-tools")
+	hasLateFrontMatter := !strings.HasPrefix(text, "---\n") && strings.Contains(text[:min(len(text), frontMatterScanLength)], "\nname:")
+	if skill.Warn == "" && hasLateFrontMatter {
+		skill.Warn = skillLateYAML()
 	}
 }
 
@@ -212,21 +220,21 @@ type SkillLock struct {
 	Managed     bool   `json:"managed"` // lien vers le dossier canonique de `npx skills` : le seul cas où gld laisse mettre à jour ou retirer
 }
 
-func (e LockEntry) label() string {
-	src := strings.TrimSpace(e.Source)
-	if e.SourceType != "" && src != "" {
-		src = e.SourceType + " : " + src
+func (entry LockEntry) label() string {
+	source := strings.TrimSpace(entry.Source)
+	if entry.SourceType != "" && source != "" {
+		source = entry.SourceType + " : " + source
 	}
-	return cut(src, 200)
+	return cut(source, skillTextSnippetMax)
 }
 
 // readLock : le skills-lock.json d'un projet ou le ~/.agents/.skill-lock.json personnel ; nil si absent ou illisible.
 func readLock(path string) map[string]LockEntry {
-	b, err := readTrusted(path)
+	content, err := readTrusted(path)
 	if err != nil {
 		return nil
 	}
-	var d struct {
+	var lockFile struct {
 		Skills map[string]struct {
 			Source          string `json:"source"`
 			SourceType      string `json:"sourceType"`
@@ -237,37 +245,37 @@ func readLock(path string) map[string]LockEntry {
 			UpdatedAt       string `json:"updatedAt"`
 		} `json:"skills"`
 	}
-	if json.Unmarshal(b, &d) != nil {
+	if json.Unmarshal(content, &lockFile) != nil {
 		return nil
 	}
-	out := map[string]LockEntry{}
-	for n, s := range d.Skills {
-		out[n] = LockEntry{s.Source, s.SourceType, s.SourceURL, s.SkillPath, s.SkillFolderHash, s.InstalledAt, s.UpdatedAt}
+	entries := map[string]LockEntry{}
+	for name, entry := range lockFile.Skills {
+		entries[name] = LockEntry{entry.Source, entry.SourceType, entry.SourceURL, entry.SkillPath, entry.SkillFolderHash, entry.InstalledAt, entry.UpdatedAt}
 	}
-	return out
+	return entries
 }
 
 // installedFrom : la source d'un skill installé, d'après le fichier de verrouillage, sinon d'après le front matter (homepage,
 // repository ou source, ou un bloc metadata d'un outil d'installation). Vide pour un skill écrit à la main.
 func installedFrom(name string, locks map[string]LockEntry, text string) string {
-	if e, ok := locks[name]; ok {
-		return e.label()
+	if entry, found := locks[name]; found {
+		return entry.label()
 	}
-	m, _ := parseMeta(text)
-	for _, k := range []string{"homepage", "repository", "source"} {
-		if v := textField(m, k); v != "" {
-			return cut(v, 200)
+	meta, _ := parseMeta(text)
+	for _, key := range []string{"homepage", "repository", "source"} {
+		if value := textField(meta, key); value != "" {
+			return cut(value, skillTextSnippetMax)
 		}
 	}
 	return ""
 }
 
-func countSkillFiles(dir string) (n int, kb int64) {
-	filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
-		if err == nil && d.Type().IsRegular() {
-			n++
-			if i, e := d.Info(); e == nil {
-				kb += i.Size() / 1024
+func countSkillFiles(dir string) (fileCount int, kilobytes int64) {
+	filepath.WalkDir(dir, func(walkPath string, entry fs.DirEntry, err error) error {
+		if err == nil && entry.Type().IsRegular() {
+			fileCount++
+			if fileInfo, infoErr := entry.Info(); infoErr == nil {
+				kilobytes += fileInfo.Size() / bytesPerKilobyte
 			}
 		}
 		return nil
@@ -275,89 +283,89 @@ func countSkillFiles(dir string) (n int, kb int64) {
 	return
 }
 
-func scanSkills(base, scope, project, plugin string, readonly bool, locks map[string]LockEntry, keyOf func(name string) string) []Skill {
-	var out []Skill
-	ents, err := readDirTrusted(base)
+func scanSkills(base, scope, projectDir, plugin string, readonly bool, locks map[string]LockEntry, keyOf func(name string) string) []Skill {
+	var skills []Skill
+	entries, err := readDirTrusted(base)
 	if err != nil {
 		return nil
 	}
-	for _, e := range ents {
-		if !skillName.MatchString(e.Name()) {
+	for _, entry := range entries {
+		if !skillName.MatchString(entry.Name()) {
 			continue
 		}
-		if d, err := os.Stat(filepath.Join(base, e.Name())); err != nil || !d.IsDir() { // suit les liens symboliques
+		if target, statErr := os.Stat(filepath.Join(base, entry.Name())); statErr != nil || !target.IsDir() { // suit les liens symboliques
 			continue
 		}
-		p := filepath.Join(base, e.Name(), skillFile)
-		st, err := os.Stat(p)
-		if err != nil || !st.Mode().IsRegular() {
+		skillPath := filepath.Join(base, entry.Name(), skillFile)
+		fileInfo, skillStatErr := os.Stat(skillPath)
+		if skillStatErr != nil || !fileInfo.Mode().IsRegular() {
 			continue
 		}
-		s := Skill{Key: keyOf(e.Name()), Dir: e.Name(), Scope: scope, Project: project, Plugin: plugin, ReadOnly: readonly, Mtime: float64(st.ModTime().UnixNano()) / 1e9, Path: p}
+		skill := Skill{Key: keyOf(entry.Name()), Dir: entry.Name(), Scope: scope, Project: projectDir, Plugin: plugin, ReadOnly: readonly, Mtime: float64(fileInfo.ModTime().UnixNano()) / 1e9, Path: skillPath}
 		var text string
-		if st.Size() <= skillMaxBytes {
-			if b, err := readTrusted(p); err == nil {
-				text = string(b)
-				describeSkill(&s, text)
+		if fileInfo.Size() <= skillMaxBytes {
+			if content, readErr := readTrusted(skillPath); readErr == nil {
+				text = string(content)
+				describeSkill(&skill, text)
 			}
 		}
 		switch scope {
 		case "store":
-			s.Origin, s.Source = "store", L("srv.skills.synced")
+			skill.Origin, skill.Source = "store", L("srv.skills.synced")
 		case "plugin":
-			s.Origin, s.Source = "plugin", plugin
+			skill.Origin, skill.Source = "plugin", plugin
 		default:
-			if src := installedFrom(e.Name(), locks, text); src != "" {
-				s.Origin, s.Source = "install", src
-				if l, ok := locks[e.Name()]; ok {
-					lk := SkillLock{l.Source, l.SourceType, l.SkillPath, l.Hash, l.InstalledAt, l.UpdatedAt, false, scope == "user", false}
-					if fi, err := os.Lstat(filepath.Join(base, e.Name())); err == nil {
-						lk.Link = fi.Mode()&os.ModeSymlink != 0
+			if source := installedFrom(entry.Name(), locks, text); source != "" {
+				skill.Origin, skill.Source = "install", source
+				if lockEntry, found := locks[entry.Name()]; found {
+					lock := SkillLock{lockEntry.Source, lockEntry.SourceType, lockEntry.SkillPath, lockEntry.Hash, lockEntry.InstalledAt, lockEntry.UpdatedAt, false, scope == "user", false}
+					if linkInfo, lstatErr := os.Lstat(filepath.Join(base, entry.Name())); lstatErr == nil {
+						lock.Link = linkInfo.Mode()&os.ModeSymlink != 0
 					}
-					canon := filepath.Join(skillsHome(), ".agents", "skills")
+					canonDir := filepath.Join(skillsHome(), ".agents", "skills")
 					if scope == "project" {
-						canon = filepath.Join(project, ".agents", "skills")
+						canonDir = filepath.Join(projectDir, ".agents", "skills")
 					}
-					lk.Managed = managedByNpx(base, canon, e.Name())
-					s.Lock = &lk
+					lock.Managed = managedByNpx(base, canonDir, entry.Name())
+					skill.Lock = &lock
 				}
 			} else {
-				s.Origin = "custom"
+				skill.Origin = "custom"
 			}
 		}
-		if s.Name == "" {
-			s.Name = s.Dir
+		if skill.Name == "" {
+			skill.Name = skill.Dir
 		}
-		dir, _ := filepath.EvalSymlinks(filepath.Dir(p)) // WalkDir ne descend pas dans un lien
-		s.Files, s.KB = countSkillFiles(dir)
-		out = append(out, s)
+		dir, _ := filepath.EvalSymlinks(filepath.Dir(skillPath)) // WalkDir ne descend pas dans un lien
+		skill.Files, skill.KB = countSkillFiles(dir)
+		skills = append(skills, skill)
 	}
-	return out
+	return skills
 }
 
 // listSkills : tous les skills connus, personnels d'abord, puis de projet, puis de plugins.
 func listSkills() []Skill {
-	out := scanSkills(filepath.Join(cfgDir(), "skills"), "user", "", "", false, readLock(personalLockPath()), func(n string) string { return "u/" + n })
-	for _, p := range liveProjects() {
-		dir := p.Dir
-		out = append(out, scanSkills(filepath.Join(p.Project, ".claude", "skills"), "project", p.Project, "", false, readLock(filepath.Join(p.Project, "skills-lock.json")), func(n string) string { return "p/" + dir + "/" + n })...)
+	skills := scanSkills(filepath.Join(cfgDir(), "skills"), "user", "", "", false, readLock(personalLockPath()), func(name string) string { return "u/" + name })
+	for _, liveProject := range liveProjects() {
+		dir := liveProject.Dir
+		skills = append(skills, scanSkills(filepath.Join(liveProject.Project, ".claude", "skills"), "project", liveProject.Project, "", false, readLock(filepath.Join(liveProject.Project, "skills-lock.json")), func(name string) string { return "p/" + dir + "/" + name })...)
 	}
-	for _, pr := range pluginSkillRoots() {
-		id := pr.id
-		out = append(out, scanSkills(pr.base, "plugin", "", id, true, nil, func(n string) string { return "x/" + id + "/" + n })...)
+	for _, plugin := range pluginSkillRoots() {
+		scopeID := plugin.id
+		skills = append(skills, scanSkills(plugin.base, "plugin", "", scopeID, true, nil, func(name string) string { return "x/" + scopeID + "/" + name })...)
 	}
 	if buckets, err := readDirTrusted(filepath.Join(cfgDir(), "skills", "synced")); err == nil {
-		for _, b := range buckets {
-			if b.IsDir() && bucketRe.MatchString(b.Name()) {
-				id := b.Name()
-				out = append(out, scanSkills(filepath.Join(cfgDir(), "skills", "synced", id), "store", "", "", true, nil, func(n string) string { return "s/" + id + "/" + n })...)
+		for _, bucket := range buckets {
+			if bucket.IsDir() && bucketRe.MatchString(bucket.Name()) {
+				scopeID := bucket.Name()
+				skills = append(skills, scanSkills(filepath.Join(cfgDir(), "skills", "synced", scopeID), "store", "", "", true, nil, func(name string) string { return "s/" + scopeID + "/" + name })...)
 			}
 		}
 	}
-	if out == nil {
-		out = []Skill{}
+	if skills == nil {
+		skills = []Skill{}
 	}
-	return out
+	return skills
 }
 
 // readSkill : le SKILL.md et la liste des fichiers du dossier.
@@ -366,35 +374,35 @@ func readSkill(key string) (string, []SkillFile, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	root, err := os.OpenRoot(filepath.Join(base, name))
+	skillRoot, err := os.OpenRoot(filepath.Join(base, name))
 	if err != nil {
 		return "", nil, err
 	}
-	defer root.Close()
-	f, err := root.Open(skillFile)
+	defer skillRoot.Close()
+	skillMD, err := skillRoot.Open(skillFile)
 	if err != nil {
 		return "", nil, err
 	}
-	defer f.Close()
-	b, err := io.ReadAll(io.LimitReader(f, skillMaxBytes+1))
+	defer skillMD.Close()
+	content, err := io.ReadAll(io.LimitReader(skillMD, skillMaxBytes+1))
 	if err != nil {
 		return "", nil, err
 	}
-	if len(b) > skillMaxBytes {
+	if len(content) > skillMaxBytes {
 		return "", nil, terr("srv.skills.skillMdTropGros")
 	}
 	var files []SkillFile
-	fs.WalkDir(root.FS(), ".", func(p string, d fs.DirEntry, err error) error {
-		if err == nil && d.Type().IsRegular() && len(files) < 200 {
-			var kb int64
-			if i, e := d.Info(); e == nil {
-				kb = i.Size() / 1024
+	fs.WalkDir(skillRoot.FS(), ".", func(walkPath string, entry fs.DirEntry, walkErr error) error {
+		if walkErr == nil && entry.Type().IsRegular() && len(files) < skillListedFilesMax {
+			var kilobytes int64
+			if fileInfo, infoErr := entry.Info(); infoErr == nil {
+				kilobytes = fileInfo.Size() / bytesPerKilobyte
 			}
-			files = append(files, SkillFile{p, kb})
+			files = append(files, SkillFile{walkPath, kilobytes})
 		}
 		return nil
 	})
-	return string(b), files, nil
+	return string(content), files, nil
 }
 
 // saveSkill écrit SKILL.md (atomique) ; create : le skill ne doit pas exister et son nom suit la règle des nouveaux skills.
@@ -411,38 +419,38 @@ func saveSkill(key, text string, create bool) error {
 		return terr("srv.skills.texteVideTropLong")
 	}
 	dir := filepath.Join(base, name)
-	if st, err := os.Lstat(dir); err == nil {
+	if fileInfo, lstatErr := os.Lstat(dir); lstatErr == nil {
 		if create {
 			return terr("srv.skills.unSkillDeCe")
 		}
-		if !st.IsDir() {
+		if !fileInfo.IsDir() {
 			return terr("srv.skills.nEstPasUn", "A1", name)
 		}
 	} else if create && !skillNew.MatchString(name) {
 		return terr("srv.skills.nomInvalideMinusculesChiffres")
 	}
 	if !create {
-		if old, _, err := readSkill(key); err == nil && old != text {
-			if err := saveTrash("k/"+key, filepath.Join(dir, skillFile), "remplacé", old); err != nil {
-				return err
+		if previous, _, readErr := readSkill(key); readErr == nil && previous != text {
+			if trashErr := saveTrash("k/"+key, filepath.Join(dir, skillFile), "remplacé", previous); trashErr != nil {
+				return trashErr
 			}
 		}
 	}
-	if err := mkdirTrusted(dir, 0o755); err != nil {
-		return err
+	if mkdirErr := mkdirTrusted(dir, 0o755); mkdirErr != nil {
+		return mkdirErr
 	}
-	root, err := os.OpenRoot(dir)
+	skillRoot, err := os.OpenRoot(dir)
 	if err != nil {
 		return err
 	}
-	defer root.Close()
-	tmp := skillFile + ".gld-web.tmp"
-	if err := root.WriteFile(tmp, []byte(text), 0o644); err != nil {
-		return err
+	defer skillRoot.Close()
+	temporaryName := skillFile + ".gld-web.tmp"
+	if fileWriteErr := skillRoot.WriteFile(temporaryName, []byte(text), 0o644); fileWriteErr != nil {
+		return fileWriteErr
 	}
-	if err := root.Rename(tmp, skillFile); err != nil {
-		root.Remove(tmp)
-		return err
+	if renameErr := skillRoot.Rename(temporaryName, skillFile); renameErr != nil {
+		skillRoot.Remove(temporaryName)
+		return renameErr
 	}
 	return nil
 }
@@ -457,7 +465,7 @@ func removeSkill(key string) error {
 	if readonly {
 		return terr("srv.skills.skillDePluginLecture2")
 	}
-	if st, err := os.Lstat(filepath.Join(base, name)); err == nil && !st.IsDir() { // lien symbolique : le dossier cible n'est pas à nous
+	if fileInfo, lstatErr := os.Lstat(filepath.Join(base, name)); lstatErr == nil && !fileInfo.IsDir() { // lien symbolique : le dossier cible n'est pas à nous
 		return terr("srv.skills.nEstPasUn", "A1", name)
 	}
 	text, files, err := readSkill(key)
@@ -467,14 +475,14 @@ func removeSkill(key string) error {
 	dir := filepath.Join(base, name)
 	// readSkill ne compte que les fichiers réguliers : un lien ou un sous-dossier vide bloquerait la suppression du dossier
 	// après celle de SKILL.md, et le skill disparaîtrait en laissant son dossier.
-	if ents, err := readDirTrusted(dir); len(files) > 1 || err != nil || len(ents) != 1 {
+	if entries, readDirErr := readDirTrusted(dir); len(files) > 1 || readDirErr != nil || len(entries) != 1 {
 		return terr("srv.skills.ceSkillContientD")
 	}
-	if err := saveTrash("k/"+key, filepath.Join(dir, skillFile), "supprimé", text); err != nil {
-		return err
+	if trashErr := saveTrash("k/"+key, filepath.Join(dir, skillFile), "supprimé", text); trashErr != nil {
+		return trashErr
 	}
-	if err := rRemove(base, filepath.Join(dir, skillFile)); err != nil {
-		return err
+	if removeErr := rRemove(base, filepath.Join(dir, skillFile)); removeErr != nil {
+		return removeErr
 	}
 	return rRemove(base, dir)
 }
@@ -490,81 +498,81 @@ func copySkill(key, to string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var dst string
+	var destinationKey string
 	switch {
 	case to == "u":
-		dst = "u/" + name
+		destinationKey = "u/" + name
 	case strings.HasPrefix(to, "p/") && safeDir(to[2:]):
-		dst = to + "/" + name
+		destinationKey = to + "/" + name
 	default:
 		return "", terr("srv.memory.destinationInvalide")
 	}
-	dbase, dname, dro, err := skillBase(dst)
-	if err != nil || dro {
+	destinationBase, destinationName, destinationReadOnly, err := skillBase(destinationKey)
+	if err != nil || destinationReadOnly {
 		return "", terr("srv.memory.destinationInvalide")
 	}
-	if dbase == base && dname == name {
+	if destinationBase == base && destinationName == name {
 		return "", terr("srv.memory.dejaACetEndroit")
 	}
-	target := filepath.Join(dbase, dname)
-	if _, err := os.Lstat(target); err == nil {
+	target := filepath.Join(destinationBase, destinationName)
+	if _, lstatErr := os.Lstat(target); lstatErr == nil {
 		return "", terr("srv.skills.unSkillDeCe2")
 	}
-	src, err := os.OpenRoot(filepath.Join(base, name))
+	sourceRoot, err := os.OpenRoot(filepath.Join(base, name))
 	if err != nil {
 		return "", err
 	}
-	defer src.Close()
-	n, total := 0, int64(0)
-	type item struct {
+	defer sourceRoot.Close()
+	fileCount, totalBytes := 0, int64(0)
+	type copiedFile struct {
 		rel  string
 		data []byte
 		mode fs.FileMode
 	}
-	var items []item
-	err = fs.WalkDir(src.FS(), ".", func(p string, d fs.DirEntry, err error) error {
-		if err != nil || !d.Type().IsRegular() {
+	var copiedFiles []copiedFile
+	err = fs.WalkDir(sourceRoot.FS(), ".", func(walkPath string, entry fs.DirEntry, entryErr error) error {
+		if entryErr != nil || !entry.Type().IsRegular() {
 			return nil // dossiers (recréés à l'écriture), liens et fichiers spéciaux : ignorés
 		}
-		if n++; n > copyMaxFiles {
+		if fileCount++; fileCount > copyMaxFiles {
 			return terr("srv.skills.tropDeFichiersAu")
 		}
-		b, err := fs.ReadFile(src.FS(), p)
-		if err != nil {
-			return err
+		content, entryErr := fs.ReadFile(sourceRoot.FS(), walkPath)
+		if entryErr != nil {
+			return entryErr
 		}
-		if total += int64(len(b)); total > copyMaxBytes {
+		if totalBytes += int64(len(content)); totalBytes > copyMaxBytes {
 			return terr("srv.skills.dossierTropGrosMo")
 		}
 		mode := fs.FileMode(0o644)
-		if fi, err := d.Info(); err == nil {
-			mode |= fi.Mode() & 0o111 // un scripts/run.sh doit rester exécutable ; rien d'autre n'est repris de la source
+		if fileInfo, infoErr := entry.Info(); infoErr == nil {
+			mode |= fileInfo.Mode() & 0o111 // un scripts/run.sh doit rester exécutable ; rien d'autre n'est repris de la source
 		}
-		items = append(items, item{p, b, mode})
+		copiedFiles = append(copiedFiles, copiedFile{walkPath, content, mode})
 		return nil
 	})
 	if err != nil {
 		return "", err
 	}
-	if err := mkdirTrusted(target, 0o755); err != nil {
-		return "", err
+	if mkdirErr := mkdirTrusted(target, 0o755); mkdirErr != nil {
+		return "", mkdirErr
 	}
-	dst2, err := os.OpenRoot(target)
+	destinationRoot, err := os.OpenRoot(target)
 	if err != nil {
 		return "", err
 	}
-	defer dst2.Close()
-	for _, it := range items {
-		if d := filepath.Dir(it.rel); d != "." {
-			if err := dst2.MkdirAll(d, 0o755); err != nil {
-				return "", err
+	defer destinationRoot.Close()
+	for _, copied := range copiedFiles {
+		if parentDir := filepath.Dir(copied.rel); parentDir != "." {
+			if mkdirAllErr := destinationRoot.MkdirAll(parentDir, 0o755); mkdirAllErr != nil {
+				return "", mkdirAllErr
 			}
 		}
-		if err := dst2.WriteFile(it.rel, it.data, it.mode); err != nil {
-			return "", err
+		if fileWriteErr := destinationRoot.WriteFile(copied.rel, copied.data, copied.mode); fileWriteErr != nil {
+			return "", fileWriteErr
 		}
 	}
-	return dst, nil
+	return destinationKey, nil
 }
 
 // skillSystem : consigne de rédaction d'un SKILL.md.
@@ -576,38 +584,38 @@ func skillDraft(model, instruction, key string, refs []string) (string, float64,
 		return "", 0, terr("srv.memwrite.modeleInconnu")
 	}
 	instruction = strings.TrimSpace(instruction)
-	if instruction == "" || len(instruction) > 8<<10 || len(refs) > 5 {
+	if instruction == "" || len(instruction) > skillInstructionMax || len(refs) > skillRefsMax {
 		return "", 0, terr("srv.memwrite.consigneVideOuTrop")
 	}
-	var b strings.Builder
-	b.WriteString(L("prompt.instruction", "A1", instruction) + "\n")
-	var cur string
+	var prompt strings.Builder
+	prompt.WriteString(L("prompt.instruction", "A1", instruction) + "\n")
+	var currentText string
 	if key != "" {
-		text, _, err := readSkill(key)
+		text, _, readErr := readSkill(key)
 		switch {
-		case err == nil:
-			cur = text
-			b.WriteString("\n" + L("prompt.skillToRevise", "A1", key) + "\n~~~~\n" + text + "\n~~~~\n")
-		case errors.Is(err, os.ErrNotExist):
-			b.WriteString("\n" + L("prompt.skillMissing") + "\n")
+		case readErr == nil:
+			currentText = text
+			prompt.WriteString("\n" + L("prompt.skillToRevise", "A1", key) + "\n~~~~\n" + text + "\n~~~~\n")
+		case errors.Is(readErr, os.ErrNotExist):
+			prompt.WriteString("\n" + L("prompt.skillMissing") + "\n")
 		default:
-			return "", 0, err
+			return "", 0, readErr
 		}
 	}
-	for _, r := range refs {
-		if r == key {
+	for _, refKey := range refs {
+		if refKey == key {
 			continue
 		}
-		text, _, err := readSkill(r)
-		if err != nil {
-			return "", 0, err
+		refText, _, refErr := readSkill(refKey)
+		if refErr != nil {
+			return "", 0, refErr
 		}
-		b.WriteString("\n" + L("prompt.skillRef", "A1", r) + "\n~~~~\n" + cut(text, 6000) + "\n~~~~\n")
+		prompt.WriteString("\n" + L("prompt.skillRef", "A1", refKey) + "\n~~~~\n" + cut(refText, skillRefTextMax) + "\n~~~~\n")
 	}
-	out, cost, err := memDraft(model, skillSystem(), b.String())
+	draft, cost, err := memDraft(model, skillSystem(), prompt.String())
 	if err != nil {
 		return "", cost, err
 	}
 	// un modèle qui condense oublie parfois l'en-tête : on remet celui du skill d'origine
-	return keepHeader(cur, out), cost, nil
+	return keepHeader(currentText, draft), cost, nil
 }

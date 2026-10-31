@@ -12,12 +12,12 @@ import (
 const createNewConsole = 0x00000010
 
 // execClaude lance claude comme enfant, avec la console de l'onglet, et reprend son code de sortie.
-func execClaude(c *exec.Cmd) int {
-	c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
-	if err := c.Run(); err != nil {
-		var ee *exec.ExitError
-		if errors.As(err, &ee) {
-			return ee.ExitCode()
+func execClaude(command *exec.Cmd) int {
+	command.Stdin, command.Stdout, command.Stderr = os.Stdin, os.Stdout, os.Stderr
+	if err := command.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return exitErr.ExitCode()
 		}
 		os.Stderr.WriteString("gld : " + err.Error() + "\n")
 		return 1
@@ -26,4 +26,6 @@ func execClaude(c *exec.Cmd) int {
 }
 
 // consoleAttr : une nouvelle fenêtre de console, quand Windows Terminal est absent.
-func consoleAttr(c *exec.Cmd) { c.SysProcAttr = &syscall.SysProcAttr{CreationFlags: createNewConsole} }
+func consoleAttr(command *exec.Cmd) {
+	command.SysProcAttr = &syscall.SysProcAttr{CreationFlags: createNewConsole}
+}

@@ -22,46 +22,46 @@ type agentFront struct {
 }
 
 // agentFile : le .md de définition lu par Claude Code. « read » n'a que des outils de lecture locaux.
-func agentFile(a Agent) []byte {
-	f := agentFront{Name: a.ID, Description: a.Role, Model: a.Model}
-	if a.Access == "read" {
-		f.Tools = "Read, Grep, Glob"
+func agentFile(agent Agent) []byte {
+	front := agentFront{Name: agent.ID, Description: agent.Role, Model: agent.Model}
+	if agent.Access == "read" {
+		front.Tools = "Read, Grep, Glob"
 	}
-	y, _ := yaml.Marshal(f)
-	var b bytes.Buffer
-	b.WriteString("---\n")
-	b.Write(y)
-	b.WriteString("---\n" + agentMarker + "\n\n" + a.Prompt + "\n")
-	return b.Bytes()
+	frontYAML, _ := yaml.Marshal(front)
+	var document bytes.Buffer
+	document.WriteString("---\n")
+	document.Write(frontYAML)
+	document.WriteString("---\n" + agentMarker + "\n\n" + agent.Prompt + "\n")
+	return document.Bytes()
 }
 
 // writeAgents écrit <cfgRoot>/agents/<id>.md ; un fichier existant sans marqueur n'est jamais touché.
-func writeAgents(cfgRoot string, as []Agent) (written, conflicts []string, err error) {
-	for _, a := range as {
-		if !agentIDRe.MatchString(a.ID) {
-			return nil, nil, terr("srv.teams_agentfiles.idInvalide", "A1", a.ID)
+func writeAgents(cfgRoot string, agents []Agent) (written, conflicts []string, err error) {
+	for _, agent := range agents {
+		if !agentIDRe.MatchString(agent.ID) {
+			return nil, nil, terr("srv.teams_agentfiles.idInvalide", "A1", agent.ID)
 		}
 	}
 	dir := filepath.Join(cfgRoot, "agents")
 	// cfgRoot est inscriptible par le compte cible sous GLD_RUN_AS : création, lecture et écriture confinées (rootfs.go).
-	if err := rMkdirAll(cfgRoot, dir, 0o755); err != nil {
-		return nil, nil, terr("srv.teams_agentfiles.ecriture", "W1", err)
+	if mkdirErr := rMkdirAll(cfgRoot, dir, 0o755); mkdirErr != nil {
+		return nil, nil, terr("srv.teams_agentfiles.ecriture", "W1", mkdirErr)
 	}
-	for _, a := range as {
-		p := filepath.Join(dir, a.ID+".md")
-		if old, e := readTrustedIn(cfgRoot, p); e == nil {
-			_, body, _ := frontMatter(string(old))
+	for _, agent := range agents {
+		agentPath := filepath.Join(dir, agent.ID+".md")
+		if existing, readErr := readTrustedIn(cfgRoot, agentPath); readErr == nil {
+			_, body, _ := frontMatter(string(existing))
 			if !bytes.HasPrefix([]byte(body), []byte(agentMarker)) {
-				conflicts = append(conflicts, a.ID)
+				conflicts = append(conflicts, agent.ID)
 				continue
 			}
-		} else if !os.IsNotExist(e) {
-			return written, conflicts, terr("srv.teams_agentfiles.ecriture", "W1", e)
+		} else if !os.IsNotExist(readErr) {
+			return written, conflicts, terr("srv.teams_agentfiles.ecriture", "W1", readErr)
 		}
-		if e := rWriteAtomic(cfgRoot, p, agentFile(a), 0o644); e != nil {
-			return written, conflicts, terr("srv.teams_agentfiles.ecriture", "W1", e)
+		if fileWriteErr := rWriteAtomic(cfgRoot, agentPath, agentFile(agent), 0o644); fileWriteErr != nil {
+			return written, conflicts, terr("srv.teams_agentfiles.ecriture", "W1", fileWriteErr)
 		}
-		written = append(written, a.ID)
+		written = append(written, agent.ID)
 	}
 	return written, conflicts, nil
 }

@@ -38,30 +38,30 @@ func npxEnv(base []string) []string {
 	if base == nil {
 		base = environNoAuth()
 	}
-	var out []string
-	for _, e := range base {
-		k, _, _ := strings.Cut(e, "=")
-		if strings.HasPrefix(k, "GLD_WEB_") || k == "GLD_AUTH_KEY" || k == "NODE_OPTIONS" || k == "npm_config_node_options" || k == "npm_config_registry" {
+	var filtered []string
+	for _, entry := range base {
+		key, _, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(key, "GLD_WEB_") || key == "GLD_AUTH_KEY" || key == "NODE_OPTIONS" || key == "npm_config_node_options" || key == "npm_config_registry" {
 			continue
 		}
-		out = append(out, e)
+		filtered = append(filtered, entry)
 	}
-	return append(out, "npm_config_registry=https://registry.npmjs.org/", "npm_config_node_options=", "NODE_OPTIONS=")
+	return append(filtered, "npm_config_registry=https://registry.npmjs.org/", "npm_config_node_options=", "NODE_OPTIONS=")
 }
 
 // skillsHome : le home où npx pose ses fichiers (celui du compte cible sous GLD_RUN_AS).
 func skillsHome() string {
-	if h := runAsHome(); h != "" {
-		return h
+	if targetHome := runAsHome(); targetHome != "" {
+		return targetHome
 	}
-	h, _ := os.UserHomeDir()
-	return h
+	targetHome, _ := os.UserHomeDir()
+	return targetHome
 }
 
 // personalLockPath : le verrou personnel de `npx skills` ($XDG_STATE_HOME/skills/.skill-lock.json si la variable est définie).
 func personalLockPath() string {
-	if x := os.Getenv("XDG_STATE_HOME"); x != "" {
-		return filepath.Join(x, "skills", ".skill-lock.json")
+	if stateHome := os.Getenv("XDG_STATE_HOME"); stateHome != "" {
+		return filepath.Join(stateHome, "skills", ".skill-lock.json")
 	}
 	return filepath.Join(skillsHome(), ".agents", ".skill-lock.json")
 }
@@ -69,16 +69,16 @@ func personalLockPath() string {
 // managedByNpx : le skill est un lien vers le dossier canonique de `npx skills`. Le verrou personnel est partagé par tous les
 // agents et tous les homes : y figurer ne prouve pas que le dossier de ce home vient de lui.
 func managedByNpx(skillsDir, canonDir, name string) bool {
-	p := filepath.Join(skillsDir, name)
-	if fi, err := os.Lstat(p); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+	skillPath := filepath.Join(skillsDir, name)
+	if linkInfo, err := os.Lstat(skillPath); err != nil || linkInfo.Mode()&os.ModeSymlink == 0 {
 		return false
 	}
-	got, err1 := filepath.EvalSymlinks(p)
-	want, err2 := filepath.EvalSymlinks(filepath.Join(canonDir, name))
-	return err1 == nil && err2 == nil && got == want
+	resolved, linkErr := filepath.EvalSymlinks(skillPath)
+	expected, canonErr := filepath.EvalSymlinks(filepath.Join(canonDir, name))
+	return linkErr == nil && canonErr == nil && resolved == expected
 }
 
-func stripANSI(s string) string { return ansiRe.ReplaceAllString(s, "") }
+func stripANSI(text string) string { return ansiRe.ReplaceAllString(text, "") }
 
 // npxSkillsArgs : les arguments à passer à `npx`. Tout ce qui vient du client est validé ici ; rien ne passe par un shell.
 func npxSkillsArgs(action, source, skill string, global bool) ([]string, error) {
@@ -108,32 +108,32 @@ func npxSkillsArgs(action, source, skill string, global bool) ([]string, error) 
 	return nil, terr("srv.skills.npxBadAction")
 }
 
-var runNpxSkills = func(ctx context.Context, dir string, args []string) (string, error) {
-	cmd := withPath(exec.CommandContext(ctx, "npx", args...))
+var runNpxSkills = func(commandContext context.Context, dir string, args []string) (string, error) {
+	cmd := withPath(exec.CommandContext(commandContext, "npx", args...))
 	cmd.Dir = dir
 	cmd.Env = npxEnv(cmd.Env)
 	cmd.WaitDelay = npxWaitDelay
-	b, err := cmd.CombinedOutput()
-	return stripANSI(string(b)), err
+	output, err := cmd.CombinedOutput()
+	return stripANSI(string(output)), err
 }
 
 // skillsAct : add, update ou remove, pour l'utilisateur ou pour un projet. Update et remove ne touchent que ce que le fichier de
 // verrouillage de la portée déclare : un skill écrit à la main ou venu d'un plugin n'est jamais modifié par `npx skills`.
-func skillsAct(ctx context.Context, action, source, skill, scope, project string) (string, error) {
-	var dir, lock, skillsDir, canon string
+func skillsAct(requestContext context.Context, action, source, skill, scope, projectName string) (string, error) {
+	var dir, lock, skillsDir, canonDir string
 	switch scope {
 	case "user":
 		dir = skillsHome()
-		lock, skillsDir, canon = personalLockPath(), filepath.Join(cfgDir(), "skills"), filepath.Join(dir, ".agents", "skills")
+		lock, skillsDir, canonDir = personalLockPath(), filepath.Join(cfgDir(), "skills"), filepath.Join(dir, ".agents", "skills")
 	case "project":
-		if !safeDir(project) {
+		if !safeDir(projectName) {
 			return "", terr("srv.plugins.projetRequis")
 		}
-		dir = projectCwd(project)
-		if fi, e := os.Stat(dir); dir == "" || e != nil || !fi.IsDir() {
+		dir = projectCwd(projectName)
+		if dirInfo, statErr := os.Stat(dir); dir == "" || statErr != nil || !dirInfo.IsDir() {
 			return "", terr("srv.memory.dossierDuProjetIntrouvable")
 		}
-		lock, skillsDir, canon = filepath.Join(dir, "skills-lock.json"), filepath.Join(dir, ".claude", "skills"), filepath.Join(dir, ".agents", "skills")
+		lock, skillsDir, canonDir = filepath.Join(dir, "skills-lock.json"), filepath.Join(dir, ".claude", "skills"), filepath.Join(dir, ".agents", "skills")
 		if shadowsSkillsPkg(dir) {
 			return "", terr("srv.skills.npxUnsafeProject")
 		}
@@ -145,7 +145,7 @@ func skillsAct(ctx context.Context, action, source, skill, scope, project string
 		return "", err
 	}
 	if action != "add" {
-		if _, ok := readLock(lock)[skill]; !ok || !managedByNpx(skillsDir, canon, skill) {
+		if _, isLocked := readLock(lock)[skill]; !isLocked || !managedByNpx(skillsDir, canonDir, skill) {
 			return "", terr("srv.skills.npxNotLocked")
 		}
 	}
@@ -153,14 +153,14 @@ func skillsAct(ctx context.Context, action, source, skill, scope, project string
 		return "", terr("srv.skills.npxBusy")
 	}
 	defer npxMu.Unlock()
-	ctx, cancel := context.WithTimeout(ctx, npxTimeout)
+	requestContext, cancel := context.WithTimeout(requestContext, npxTimeout)
 	defer cancel()
-	out, err := runNpxSkills(ctx, dir, args)
-	out = strings.TrimSpace(out)
+	output, err := runNpxSkills(requestContext, dir, args)
+	output = strings.TrimSpace(output)
 	if errors.Is(err, exec.ErrNotFound) {
-		return out, terr("srv.skills.npxMissing")
+		return output, terr("srv.skills.npxMissing")
 	}
-	return out, err
+	return output, err
 }
 
 type SkillHit struct {
@@ -172,115 +172,115 @@ type SkillHit struct {
 }
 
 // parseSkillHits : la sortie de `npx skills find` (ANSI déjà retiré) : « propriétaire/dépôt@skill N installs », puis « └ URL ».
-func parseSkillHits(out string) []SkillHit {
+func parseSkillHits(output string) []SkillHit {
 	hits := []SkillHit{}
-	for _, l := range strings.Split(out, "\n") {
-		l = strings.TrimSpace(l)
-		if u, ok := strings.CutPrefix(l, "└"); ok && len(hits) > 0 && hits[len(hits)-1].URL == "" {
-			hits[len(hits)-1].URL = strings.TrimSpace(u)
+	for _, outputLine := range strings.Split(output, "\n") {
+		outputLine = strings.TrimSpace(outputLine)
+		if link, isURLLine := strings.CutPrefix(outputLine, "└"); isURLLine && len(hits) > 0 && hits[len(hits)-1].URL == "" {
+			hits[len(hits)-1].URL = strings.TrimSpace(link)
 			continue
 		}
-		f := strings.Fields(l)
-		if len(f) != 3 || f[2] != "installs" {
+		fields := strings.Fields(outputLine)
+		if len(fields) != 3 || fields[2] != "installs" {
 			continue
 		}
-		i := strings.LastIndex(f[0], "@")
-		if i < 1 || !skillRepoRe.MatchString(f[0][:i]) || !skillName.MatchString(f[0][i+1:]) {
+		atIndex := strings.LastIndex(fields[0], "@")
+		if atIndex < 1 || !skillRepoRe.MatchString(fields[0][:atIndex]) || !skillName.MatchString(fields[0][atIndex+1:]) {
 			continue
 		}
-		hits = append(hits, SkillHit{Ref: f[0], Source: f[0][:i], Skill: f[0][i+1:], Installs: f[1]})
+		hits = append(hits, SkillHit{Ref: fields[0], Source: fields[0][:atIndex], Skill: fields[0][atIndex+1:], Installs: fields[1]})
 	}
 	return hits
 }
 
 // skillsFind : `npx skills find <q>`. Un q qui commencerait par « - » serait lu comme une option.
-func skillsFind(ctx context.Context, q string) ([]SkillHit, error) {
-	q = strings.TrimSpace(q)
-	if q == "" || len([]rune(q)) > 80 || q[0] == '-' || strings.ContainsAny(q, "\r\n") {
+func skillsFind(requestContext context.Context, query string) ([]SkillHit, error) {
+	query = strings.TrimSpace(query)
+	if query == "" || len([]rune(query)) > 80 || query[0] == '-' || strings.ContainsAny(query, "\r\n") {
 		return nil, terr("srv.http_util.requeteInvalide")
 	}
 	if !npxMu.TryLock() { // la route n'exige que le droit de lecture : pas de lancements en parallèle
 		return nil, terr("srv.skills.npxBusy")
 	}
 	defer npxMu.Unlock()
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	requestContext, cancel := context.WithTimeout(requestContext, 30*time.Second)
 	defer cancel()
-	out, err := runNpxSkills(ctx, skillsHome(), []string{"--yes", skillsPkg, "find", q})
+	output, err := runNpxSkills(requestContext, skillsHome(), []string{"--yes", skillsPkg, "find", query})
 	if errors.Is(err, exec.ErrNotFound) {
 		return nil, terr("srv.skills.npxMissing")
 	}
 	if err != nil {
 		return nil, err
 	}
-	return parseSkillHits(out), nil
+	return parseSkillHits(output), nil
 }
 
 // remoteTrees : les arbres git d'un dépôt GitHub (chemin → SHA, "" pour la racine). `skillFolderHash` du verrou est le SHA de
 // l'arbre du dossier du skill : l'égalité avec celui du dépôt dit si le skill a changé. Sans jeton : 60 requêtes par heure.
-var remoteTrees = func(ctx context.Context, owner, repo string) (map[string]string, error) {
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+var remoteTrees = func(requestContext context.Context, owner, repo string) (map[string]string, error) {
+	requestContext, cancel := context.WithTimeout(requestContext, 15*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.github.com/repos/"+owner+"/"+repo+"/git/trees/HEAD?recursive=1", nil)
+	apiRequest, err := http.NewRequestWithContext(requestContext, "GET", "https://api.github.com/repos/"+owner+"/"+repo+"/git/trees/HEAD?recursive=1", nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "gld")
-	resp, err := http.DefaultClient.Do(req)
+	apiRequest.Header.Set("Accept", "application/vnd.github+json")
+	apiRequest.Header.Set("User-Agent", "gld")
+	response, err := http.DefaultClient.Do(apiRequest)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	defer response.Body.Close()
+	if response.StatusCode != 200 {
+		return nil, fmt.Errorf("HTTP %d", response.StatusCode)
 	}
-	var d struct {
+	var treeListing struct {
 		SHA       string `json:"sha"`
 		Truncated bool   `json:"truncated"`
 		Tree      []struct{ Path, Type, SHA string }
 	}
-	if json.NewDecoder(io.LimitReader(resp.Body, 32<<20)).Decode(&d) != nil || d.Truncated {
+	if json.NewDecoder(io.LimitReader(response.Body, 32<<20)).Decode(&treeListing) != nil || treeListing.Truncated {
 		return nil, errors.New("arbre illisible ou tronqué")
 	}
-	out := map[string]string{"": d.SHA}
-	for _, e := range d.Tree {
-		if e.Type == "tree" {
-			out[e.Path] = e.SHA
+	trees := map[string]string{"": treeListing.SHA}
+	for _, entry := range treeListing.Tree {
+		if entry.Type == "tree" {
+			trees[entry.Path] = entry.SHA
 		}
 	}
-	return out, nil
+	return trees, nil
 }
 
 var githubURLRe = regexp.MustCompile(`^https://github\.com/([\w.-]+)/([\w.-]+?)(\.git)?/?$`)
 
-func lockRepo(e LockEntry) (owner, repo string, ok bool) {
-	if e.SourceType != "github" {
+func lockRepo(entry LockEntry) (owner, repo string, isGitHub bool) {
+	if entry.SourceType != "github" {
 		return "", "", false
 	}
-	if skillRepoRe.MatchString(e.Source) {
-		o, r, _ := strings.Cut(e.Source, "/")
-		return o, r, true
+	if skillRepoRe.MatchString(entry.Source) {
+		ownerName, repoName, _ := strings.Cut(entry.Source, "/")
+		return ownerName, repoName, true
 	}
-	if m := githubURLRe.FindStringSubmatch(e.SourceURL); m != nil {
-		return m[1], m[2], true
+	if match := githubURLRe.FindStringSubmatch(entry.SourceURL); match != nil {
+		return match[1], match[2], true
 	}
 	return "", "", false
 }
 
 // skillUpdateState : update, current ou unknown. Jamais « current » sans preuve.
-func skillUpdateState(e LockEntry, trees map[string]string) string {
-	if e.SourceType != "github" || trees == nil || e.Hash == "" || e.SkillPath == "" {
+func skillUpdateState(entry LockEntry, trees map[string]string) string {
+	if entry.SourceType != "github" || trees == nil || entry.Hash == "" || entry.SkillPath == "" {
 		return "unknown"
 	}
-	dir := path.Dir(e.SkillPath)
+	dir := path.Dir(entry.SkillPath)
 	if dir == "." {
 		dir = ""
 	}
-	sha, ok := trees[dir]
+	sha, found := trees[dir]
 	switch {
-	case !ok:
+	case !found:
 		return "unknown"
-	case sha == e.Hash:
+	case sha == entry.Hash:
 		return "current"
 	}
 	return "update"
@@ -301,18 +301,18 @@ const forceMin = 30 * time.Second // /v1/skills/updates?force=1 ne demande que m
 
 // checkSkillUpdates : l'état de chaque skill du verrou personnel et des verrous de projet, clé = celle de listSkills.
 // Une requête par dépôt, gardée 6 h (5 min après un échec : limite de débit, hors ligne).
-func checkSkillUpdates(ctx context.Context, force bool) map[string]string {
-	type item struct {
-		key string
-		e   LockEntry
+func checkSkillUpdates(requestContext context.Context, force bool) map[string]string {
+	type pendingSkill struct {
+		key   string
+		entry LockEntry
 	}
-	var items []item
-	for n, e := range readLock(personalLockPath()) {
-		items = append(items, item{"u/" + n, e})
+	var pendingSkills []pendingSkill
+	for name, entry := range readLock(personalLockPath()) {
+		pendingSkills = append(pendingSkills, pendingSkill{"u/" + name, entry})
 	}
-	for _, p := range liveProjects() {
-		for n, e := range readLock(filepath.Join(p.Project, "skills-lock.json")) {
-			items = append(items, item{"p/" + p.Dir + "/" + n, e})
+	for _, liveProject := range liveProjects() {
+		for name, entry := range readLock(filepath.Join(liveProject.Project, "skills-lock.json")) {
+			pendingSkills = append(pendingSkills, pendingSkill{"p/" + liveProject.Dir + "/" + name, entry})
 		}
 	}
 	updCache.Lock()
@@ -326,41 +326,41 @@ func checkSkillUpdates(ctx context.Context, force bool) map[string]string {
 	if force {
 		updCache.lastForce = time.Now()
 	}
-	out := map[string]string{}
+	states := map[string]string{}
 	fetched := map[string]bool{}
-	for _, it := range items {
-		o, r, ok := lockRepo(it.e)
-		if !ok {
-			out[it.key] = "unknown"
+	for _, pending := range pendingSkills {
+		ownerName, repoName, isGitHub := lockRepo(pending.entry)
+		if !isGitHub {
+			states[pending.key] = "unknown"
 			continue
 		}
-		k := o + "/" + r
-		c, hit := updCache.m[k]
+		repoKey := ownerName + "/" + repoName
+		cached, isCached := updCache.m[repoKey]
 		ttl := 6 * time.Hour
-		if c.trees == nil {
+		if cached.trees == nil {
 			ttl = 5 * time.Minute
 		}
-		if (force && !fetched[k]) || !hit || time.Since(c.at) > ttl {
-			fetched[k] = true
-			t, err := remoteTrees(ctx, o, r)
+		if (force && !fetched[repoKey]) || !isCached || time.Since(cached.at) > ttl {
+			fetched[repoKey] = true
+			trees, err := remoteTrees(requestContext, ownerName, repoName)
 			if err != nil {
-				t = nil
+				trees = nil
 			}
-			c = updRepo{time.Now(), t}
-			updCache.m[k] = c
+			cached = updRepo{time.Now(), trees}
+			updCache.m[repoKey] = cached
 		}
-		out[it.key] = skillUpdateState(it.e, c.trees)
+		states[pending.key] = skillUpdateState(pending.entry, cached.trees)
 	}
-	return out
+	return states
 }
 
 // shadowsSkillsPkg : npx remonte les dossiers parents à la recherche d'un node_modules/skills et le préfère au paquet épinglé.
 func shadowsSkillsPkg(dir string) bool {
-	for d := filepath.Clean(dir); ; d = filepath.Dir(d) {
-		if _, err := os.Lstat(filepath.Join(d, "node_modules", "skills")); err == nil {
+	for currentDir := filepath.Clean(dir); ; currentDir = filepath.Dir(currentDir) {
+		if _, err := os.Lstat(filepath.Join(currentDir, "node_modules", "skills")); err == nil {
 			return true
 		}
-		if filepath.Dir(d) == d {
+		if filepath.Dir(currentDir) == currentDir {
 			return false
 		}
 	}

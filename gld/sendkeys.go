@@ -30,118 +30,118 @@ var paneRe = regexp.MustCompile(`^%[0-9]+$`)
 // tmuxRun lance tmux, avec stdin si non vide (remplaçable dans les tests). Borné comme claudeAgents : un serveur tmux figé
 // ne bloque pas les routes que l'interface interroge en boucle.
 var tmuxRun = func(stdin string, args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), cmdTimeout)
+	commandContext, cancel := context.WithTimeout(context.Background(), cmdTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "tmux", args...)
+	cmd := exec.CommandContext(commandContext, "tmux", args...)
 	cmd.WaitDelay = time.Second
 	applyRunAs(cmd)
 	if stdin != "" {
 		cmd.Stdin = strings.NewReader(stdin)
 	}
-	var out, errb bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errb
+	var standardOutput, standardError bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &standardOutput, &standardError
 	err := cmd.Run()
-	if err != nil && strings.TrimSpace(errb.String()) != "" {
-		err = errors.New(strings.TrimSpace(errb.String()))
+	if err != nil && strings.TrimSpace(standardError.String()) != "" {
+		err = errors.New(strings.TrimSpace(standardError.String()))
 	}
-	return out.String(), err
+	return standardOutput.String(), err
 }
 
 // sessionPIDs : pid des sessions interactives ouvertes, par id de session (remplaçable dans les tests).
 var sessionPIDs = func() map[string]int {
-	out, err := claudeAgents()
-	var a []struct {
+	agentsJSON, err := claudeAgents()
+	var agents []struct {
 		SessionId, Kind string
 		Pid             int
 	}
-	m := map[string]int{}
-	if err != nil || json.Unmarshal(out, &a) != nil {
-		return m
+	pidsBySession := map[string]int{}
+	if err != nil || json.Unmarshal(agentsJSON, &agents) != nil {
+		return pidsBySession
 	}
-	for _, x := range a {
-		if x.SessionId != "" && x.Pid > 0 && x.Kind == "interactive" {
-			m[x.SessionId] = x.Pid
+	for _, agent := range agents {
+		if agent.SessionId != "" && agent.Pid > 0 && agent.Kind == "interactive" {
+			pidsBySession[agent.SessionId] = agent.Pid
 		}
 	}
-	return m
+	return pidsBySession
 }
 
 // backgroundSessions : id court (celui de `claude stop`) des tâches de fond, par id de session (remplaçable dans les tests).
 var backgroundSessions = func() map[string]string {
-	out, err := claudeAgents()
-	var a []struct{ SessionId, Id, Kind string }
-	m := map[string]string{}
-	if err != nil || json.Unmarshal(out, &a) != nil {
-		return m
+	agentsJSON, err := claudeAgents()
+	var agents []struct{ SessionId, Id, Kind string }
+	shortIDsBySession := map[string]string{}
+	if err != nil || json.Unmarshal(agentsJSON, &agents) != nil {
+		return shortIDsBySession
 	}
-	for _, x := range a {
-		if x.SessionId != "" && x.Id != "" && x.Kind == "background" {
-			m[x.SessionId] = x.Id
+	for _, agent := range agents {
+		if agent.SessionId != "" && agent.Id != "" && agent.Kind == "background" {
+			shortIDsBySession[agent.SessionId] = agent.Id
 		}
 	}
-	return m
+	return shortIDsBySession
 }
 
 // stopBackground arrête une tâche de fond (`claude stop`) : sa conversation est conservée (remplaçable dans les tests).
-var stopBackground = func(short string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), cmdTimeout)
+var stopBackground = func(shortID string) error {
+	commandContext, cancel := context.WithTimeout(context.Background(), cmdTimeout)
 	defer cancel()
-	c := withPath(exec.CommandContext(ctx, "claude", "stop", short))
-	c.WaitDelay = time.Second
-	if out, err := c.CombinedOutput(); err != nil {
-		return fmt.Errorf("%w: %s", err, strings.TrimSpace(cut(string(out), 300)))
+	stopCommand := withPath(exec.CommandContext(commandContext, "claude", "stop", shortID))
+	stopCommand.WaitDelay = time.Second
+	if combinedOutput, err := stopCommand.CombinedOutput(); err != nil {
+		return fmt.Errorf("%w: %s", err, strings.TrimSpace(cut(string(combinedOutput), 300)))
 	}
 	return nil
 }
 
 // parentOf : le processus parent (lecture de /proc/<pid>/stat, ou `ps` sous macOS qui n'a pas /proc), 0 si inconnu (remplaçable dans les tests).
 var parentOf = func(pid int) int {
-	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+	statContent, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
 	if err != nil {
 		if runtime.GOOS == "darwin" {
-			out, _ := exec.Command("ps", "-o", "ppid=", "-p", strconv.Itoa(pid)).Output()
-			n, _ := strconv.Atoi(strings.TrimSpace(string(out)))
-			return n
+			psOutput, _ := exec.Command("ps", "-o", "ppid=", "-p", strconv.Itoa(pid)).Output()
+			parentPID, _ := strconv.Atoi(strings.TrimSpace(string(psOutput)))
+			return parentPID
 		}
 		return 0
 	}
-	s := string(b)
-	i := strings.LastIndex(s, ")") // le nom du processus peut contenir des espaces et des parenthèses
-	if i < 0 {
+	statText := string(statContent)
+	nameEndIndex := strings.LastIndex(statText, ")") // le nom du processus peut contenir des espaces et des parenthèses
+	if nameEndIndex < 0 {
 		return 0
 	}
-	f := strings.Fields(s[i+1:])
-	if len(f) < 2 {
+	fieldsAfterName := strings.Fields(statText[nameEndIndex+1:])
+	if len(fieldsAfterName) < 2 {
 		return 0
 	}
-	n, _ := strconv.Atoi(f[1])
-	return n
+	parentPID, _ := strconv.Atoi(fieldsAfterName[1])
+	return parentPID
 }
 
 // tmuxPanes : panneau tmux (« %12 ») par pid du processus racine du panneau.
 func tmuxPanes() (map[int]string, error) {
-	out, err := tmuxRun("", "list-panes", "-a", "-F", "#{pane_id} #{pane_pid}")
+	paneListing, err := tmuxRun("", "list-panes", "-a", "-F", "#{pane_id} #{pane_pid}")
 	if err != nil {
 		if strings.Contains(err.Error(), "error connecting") || strings.Contains(err.Error(), "no server") {
 			err = terr("srv.sendkeys.aucuneSessionNA")
 		}
 		return nil, err
 	}
-	m := map[int]string{}
-	for _, l := range strings.Split(out, "\n") {
-		id, pid, ok := strings.Cut(strings.TrimSpace(l), " ")
-		if n, e := strconv.Atoi(pid); ok && e == nil && paneRe.MatchString(id) {
-			m[n] = id
+	panesByPID := map[int]string{}
+	for _, paneLine := range strings.Split(paneListing, "\n") {
+		paneID, panePID, hasSeparator := strings.Cut(strings.TrimSpace(paneLine), " ")
+		if processID, parseErr := strconv.Atoi(panePID); hasSeparator && parseErr == nil && paneRe.MatchString(paneID) {
+			panesByPID[processID] = paneID
 		}
 	}
-	return m, nil
+	return panesByPID, nil
 }
 
 // paneOf : le panneau qui porte le processus pid (lui-même ou un de ses ancêtres).
 func paneOf(panes map[int]string, pid int) string {
-	for i := 0; i < 64 && pid > 1; i++ {
-		if p, ok := panes[pid]; ok {
-			return p
+	for depth := 0; depth < 64 && pid > 1; depth++ {
+		if pane, found := panes[pid]; found {
+			return pane
 		}
 		pid = parentOf(pid)
 	}
@@ -151,21 +151,21 @@ func paneOf(panes map[int]string, pid int) string {
 // sendable : les sessions ouvertes auxquelles on peut écrire, avec leur panneau tmux ; l'erreur dit pourquoi tmux est inutilisable
 // (absent, sans serveur).
 func sendable() (map[string]string, error) {
-	out := map[string]string{}
+	panesBySession := map[string]string{}
 	pids := sessionPIDs()
 	if len(pids) == 0 {
-		return out, nil
+		return panesBySession, nil
 	}
 	panes, err := tmuxPanes()
 	if err != nil {
-		return out, err
+		return panesBySession, err
 	}
-	for id, pid := range pids {
-		if p := paneOf(panes, pid); p != "" {
-			out[id] = p
+	for sessionID, pid := range pids {
+		if pane := paneOf(panes, pid); pane != "" {
+			panesBySession[sessionID] = pane
 		}
 	}
-	return out, nil
+	return panesBySession, nil
 }
 
 // checkSendText : du texte brut, sans caractère de contrôle : un ESC pourrait refermer le collage et faire exécuter la suite
@@ -177,8 +177,8 @@ func checkSendText(text string) error {
 	case len(text) > sendMax || !utf8.ValidString(text):
 		return terr("srv.sendkeys.messageTropLongOu")
 	}
-	for _, r := range text {
-		if r < 0x20 && r != '\n' && r != '\t' || r == 0x7f || r >= 0x80 && r < 0xa0 {
+	for _, character := range text {
+		if character < 0x20 && character != '\n' && character != '\t' || character == 0x7f || character >= 0x80 && character < 0xa0 {
 			return terr("srv.sendkeys.leMessageContientUn")
 		}
 	}
@@ -187,31 +187,31 @@ func checkSendText(text string) error {
 
 // closeSession termine le processus claude d'une session interactive ouverte (SIGTERM : il quitte proprement, le transcript est déjà
 // écrit au fil de l'eau). Le pid vient d'un relevé frais de `claude agents --json`, jamais du navigateur.
-func closeSession(id string) error {
-	if !idRe.MatchString(id) {
+func closeSession(sessionID string) error {
+	if !idRe.MatchString(sessionID) {
 		return terr("srv.chat.sessionInvalide")
 	}
-	pid, ok := sessionPIDs()[id]
-	if !ok {
-		if short, bg := backgroundSessions()[id]; bg {
-			err := stopBackground(short)
+	pid, isInteractive := sessionPIDs()[sessionID]
+	if !isInteractive {
+		if shortID, isBackground := backgroundSessions()[sessionID]; isBackground {
+			stopErr := stopBackground(shortID)
 			forgetAgents()
-			if err != nil {
-				return terr("srv.sendkeys.fermetureImpossible", "W1", err)
+			if stopErr != nil {
+				return terr("srv.sendkeys.fermetureImpossible", "W1", stopErr)
 			}
 			return nil
 		}
 		return terr("srv.sendkeys.sessionIntrouvableParmiLes")
 	}
-	if err := runAsOwns(pid); err != nil {
-		return terr("srv.sendkeys.fermetureImpossible", "W1", err)
+	if ownershipErr := runAsOwns(pid); ownershipErr != nil {
+		return terr("srv.sendkeys.fermetureImpossible", "W1", ownershipErr)
 	}
-	p, err := os.FindProcess(pid)
+	process, err := os.FindProcess(pid)
 	if err != nil {
 		return err
 	}
-	if err := p.Signal(syscall.SIGTERM); err != nil {
-		return terr("srv.sendkeys.fermetureImpossible", "W1", err)
+	if signalErr := process.Signal(syscall.SIGTERM); signalErr != nil {
+		return terr("srv.sendkeys.fermetureImpossible", "W1", signalErr)
 	}
 	return nil
 }
@@ -219,19 +219,19 @@ func closeSession(id string) error {
 // closeAndWait ferme celles de ces sessions qui sont ouvertes, puis attend (6 s au plus) que leur processus ait fini : tant
 // qu'il tourne, purgeSessions épargnerait la session.
 func closeAndWait(items []item) {
-	open := map[string]bool{}
-	for _, it := range items {
-		_, isBg := backgroundSessions()[it.ID]
-		if _, ok := sessionPIDs()[it.ID]; (ok || isBg) && closeSession(it.ID) == nil {
-			open[it.ID] = true
+	stillOpen := map[string]bool{}
+	for _, sessionItem := range items {
+		_, isBackground := backgroundSessions()[sessionItem.ID]
+		if _, isInteractive := sessionPIDs()[sessionItem.ID]; (isInteractive || isBackground) && closeSession(sessionItem.ID) == nil {
+			stillOpen[sessionItem.ID] = true
 		}
 	}
-	for i := 0; i < 30 && len(open) > 0; i++ {
+	for attempt := 0; attempt < 30 && len(stillOpen) > 0; attempt++ {
 		time.Sleep(200 * time.Millisecond)
-		live := liveSessions()
-		for id := range open {
-			if !live[id] {
-				delete(open, id)
+		liveIDs := liveSessions()
+		for sessionID := range stillOpen {
+			if !liveIDs[sessionID] {
+				delete(stillOpen, sessionID)
 			}
 		}
 	}
@@ -241,19 +241,19 @@ func closeAndWait(items []item) {
 // sendSeq : un tampon tmux par envoi, sinon deux envois simultanés (warmTick et un utilisateur) se collent mutuellement leur texte.
 var sendSeq atomic.Uint64
 
-func sendToSession(id, text string) error {
-	if !idRe.MatchString(id) {
+func sendToSession(sessionID, text string) error {
+	if !idRe.MatchString(sessionID) {
 		return terr("srv.chat.sessionInvalide")
 	}
-	if err := checkSendText(text); err != nil {
-		return err
+	if checkErr := checkSendText(text); checkErr != nil {
+		return checkErr
 	}
-	ids, err := sendable()
+	panesBySession, err := sendable()
 	if err != nil {
 		return terr("srv.sendkeys.tmuxInutilisableLanceLes", "W1", err)
 	}
-	pane, ok := ids[id]
-	if !ok {
+	pane, found := panesBySession[sessionID]
+	if !found {
 		return terr("srv.sendkeys.cetteSessionNEst")
 	}
 	return sendToPane(pane, text)
@@ -262,31 +262,31 @@ func sendToSession(id, text string) error {
 // sendToPane colle le texte dans le panneau puis valide (le texte est déjà contrôlé par l'appelant).
 func sendToPane(pane, text string) error {
 	// La surcouche de /btw intercepte les touches jusqu'à Échap : sans elle, le texte ne parviendrait pas au prompt.
-	if scr, err := capturePane(pane); err == nil && btwOpen(scr) {
+	if screen, captureErr := capturePane(pane); captureErr == nil && btwOpen(screen) {
 		tmuxRun("", "send-keys", "-t", pane, "Escape")
 		time.Sleep(150 * time.Millisecond)
 	}
 	// ponytail: fenêtre résiduelle de 200 ms entre le collage et l'Entrée, pendant laquelle un dialogue pourrait apparaître ; pas de parade côté tmux
 	// Un texte qui finit sur « @chemin » ouvre le menu de fichiers de Claude Code, qui avale Entrée : l'espace final le ferme.
-	if i := strings.LastIndexAny(text, " \n"); strings.HasPrefix(text[i+1:], "@") {
+	if lastSeparatorIndex := strings.LastIndexAny(text, " \n"); strings.HasPrefix(text[lastSeparatorIndex+1:], "@") {
 		text += " "
 	}
 	// Une commande « /… » collée derrière un texte déjà tapé dans la TUI s'y ajouterait (« abc/model opus ») et ne s'appliquerait pas : on vide la ligne d'abord (Ctrl+U).
 	if strings.HasPrefix(text, "/") {
-		if _, err := tmuxRun("", "send-keys", "-t", pane, "C-u"); err != nil {
-			return terr("srv.sendkeys.tmuxSendKeys", "W1", err)
+		if _, clearLineErr := tmuxRun("", "send-keys", "-t", pane, "C-u"); clearLineErr != nil {
+			return terr("srv.sendkeys.tmuxSendKeys", "W1", clearLineErr)
 		}
 	}
-	buf := "gld-send-" + strconv.Itoa(os.Getpid()) + "-" + strconv.FormatUint(sendSeq.Add(1), 10)
-	if _, err := tmuxRun(text, "load-buffer", "-b", buf, "-"); err != nil {
-		return terr("srv.sendkeys.tmuxLoadBuffer", "W1", err)
+	bufferName := "gld-send-" + strconv.Itoa(os.Getpid()) + "-" + strconv.FormatUint(sendSeq.Add(1), 10)
+	if _, loadErr := tmuxRun(text, "load-buffer", "-b", bufferName, "-"); loadErr != nil {
+		return terr("srv.sendkeys.tmuxLoadBuffer", "W1", loadErr)
 	}
-	if _, err := tmuxRun("", "paste-buffer", "-p", "-d", "-b", buf, "-t", pane); err != nil {
-		return terr("srv.sendkeys.tmuxPasteBuffer", "W1", err)
+	if _, pasteErr := tmuxRun("", "paste-buffer", "-p", "-d", "-b", bufferName, "-t", pane); pasteErr != nil {
+		return terr("srv.sendkeys.tmuxPasteBuffer", "W1", pasteErr)
 	}
 	time.Sleep(200 * time.Millisecond) // laisse la TUI traiter le collage avant la validation
-	if _, err := tmuxRun("", "send-keys", "-t", pane, "Enter"); err != nil {
-		return terr("srv.sendkeys.tmuxSendKeys", "W1", err)
+	if _, enterErr := tmuxRun("", "send-keys", "-t", pane, "Enter"); enterErr != nil {
+		return terr("srv.sendkeys.tmuxSendKeys", "W1", enterErr)
 	}
 	return nil
 }
@@ -300,54 +300,54 @@ var allowedKeys = map[string]string{
 	"1": "1", "2": "2", "3": "3", "4": "4", "5": "5", "6": "6", "7": "7", "8": "8", "9": "9", "y": "y", "n": "n", "f": "f",
 }
 
-func paneFor(id string) (string, error) {
-	if !idRe.MatchString(id) {
+func paneFor(sessionID string) (string, error) {
+	if !idRe.MatchString(sessionID) {
 		return "", terr("srv.chat.sessionInvalide")
 	}
-	ids, err := sendable()
+	panesBySession, err := sendable()
 	if err != nil {
 		return "", terr("srv.sendkeys.tmuxInutilisable", "W1", err)
 	}
-	p, ok := ids[id]
-	if !ok {
+	pane, found := panesBySession[sessionID]
+	if !found {
 		return "", terr("srv.sendkeys.cetteSessionNEst2")
 	}
-	return p, nil
+	return pane, nil
 }
 
 // sessionScreen : le texte du panneau de la session (écran visible et 200 lignes d'historique, sans couleurs), espaces de fin retirés.
 // L'historique sert à retrouver le message de Claude qui précède une question trop longue pour l'écran.
-func sessionScreen(id string) (string, error) {
-	p, err := paneFor(id)
+func sessionScreen(sessionID string) (string, error) {
+	pane, err := paneFor(sessionID)
 	if err != nil {
 		return "", err
 	}
-	return capturePane(p)
+	return capturePane(pane)
 }
 
-func capturePane(p string) (string, error) {
-	out, err := tmuxRun("", "capture-pane", "-p", "-S", "-200", "-t", p)
+func capturePane(pane string) (string, error) {
+	capture, err := tmuxRun("", "capture-pane", "-p", "-S", "-200", "-t", pane)
 	if err != nil {
 		return "", err
 	}
-	lines := strings.Split(out, "\n")
-	for i := range lines {
-		lines[i] = strings.TrimRight(lines[i], " ")
+	lines := strings.Split(capture, "\n")
+	for lineIndex := range lines {
+		lines[lineIndex] = strings.TrimRight(lines[lineIndex], " ")
 	}
 	return strings.TrimRight(strings.Join(lines, "\n"), "\n"), nil
 }
 
 // sendKey envoie une touche de la liste permise au panneau de la session.
-func sendKey(id, key string) error {
-	k, ok := allowedKeys[key]
-	if !ok {
+func sendKey(sessionID, key string) error {
+	tmuxKey, isAllowed := allowedKeys[key]
+	if !isAllowed {
 		return terr("srv.sendkeys.toucheNonPermise")
 	}
-	p, err := paneFor(id)
+	pane, err := paneFor(sessionID)
 	if err != nil {
 		return err
 	}
-	_, err = tmuxRun("", "send-keys", "-t", p, k)
+	_, err = tmuxRun("", "send-keys", "-t", pane, tmuxKey)
 	return err
 }
 

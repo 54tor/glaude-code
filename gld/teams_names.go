@@ -15,25 +15,25 @@ const (
 
 var firstNameRe = regexp.MustCompile(rosterNamRe)
 
-// drawNames tire n prénoms ASCII en minuscules, distincts entre eux et de taken.
-func drawNames(n int, taken []string, seed int64) ([]string, error) {
-	out := []string{}
-	if n <= 0 {
-		return out, nil
+// drawNames tire count prénoms ASCII en minuscules, distincts entre eux et de taken.
+func drawNames(count int, taken []string, seed int64) ([]string, error) {
+	names := []string{}
+	if count <= 0 {
+		return names, nil
 	}
-	n = min(n, namesMax)
+	count = min(count, namesMax)
 	used := map[string]bool{}
-	for _, t := range taken {
-		used[strings.ToLower(t)] = true
+	for _, takenName := range taken {
+		used[strings.ToLower(takenName)] = true
 	}
-	f := gofakeit.New(uint64(seed))
-	for len(out) < n {
+	faker := gofakeit.New(uint64(seed))
+	for len(names) < count {
 		found := false
-		for i := 0; i < namesTries && !found; i++ {
-			c := strings.ToLower(f.FirstName())
-			if firstNameRe.MatchString(c) && !used[c] {
-				used[c] = true
-				out = append(out, c)
+		for attempt := 0; attempt < namesTries && !found; attempt++ {
+			candidate := strings.ToLower(faker.FirstName())
+			if firstNameRe.MatchString(candidate) && !used[candidate] {
+				used[candidate] = true
+				names = append(names, candidate)
 				found = true
 			}
 		}
@@ -41,5 +41,5 @@ func drawNames(n int, taken []string, seed int64) ([]string, error) {
 			return nil, terr("srv.teams_names.tiragePossible")
 		}
 	}
-	return out, nil
+	return names, nil
 }

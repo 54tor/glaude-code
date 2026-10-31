@@ -28,10 +28,10 @@ type tabSpec struct {
 // compris, est ignorée.
 const tabEnvKey, tabEnvVal = "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", "1"
 
-// applyTabEnv ajoute à c.Env les variables autorisées de env ; à appeler après withPath, qui écrase c.Env.
-func applyTabEnv(c *exec.Cmd, env map[string]string) {
-	if env[tabEnvKey] == tabEnvVal {
-		c.Env = append(slices.DeleteFunc(c.Env, func(e string) bool { return strings.HasPrefix(e, tabEnvKey+"=") }), tabEnvKey+"="+tabEnvVal)
+// applyTabEnv ajoute à command.Env les variables autorisées de requestedEnv ; à appeler après withPath, qui écrase command.Env.
+func applyTabEnv(command *exec.Cmd, requestedEnv map[string]string) {
+	if requestedEnv[tabEnvKey] == tabEnvVal {
+		command.Env = append(slices.DeleteFunc(command.Env, func(entry string) bool { return strings.HasPrefix(entry, tabEnvKey+"=") }), tabEnvKey+"="+tabEnvVal)
 	}
 }
 
@@ -64,9 +64,9 @@ func launcherAvailable(name string) bool {
 
 // detectLauncher : le premier lanceur utilisable ici, "" s'il n'y en a aucun.
 func detectLauncher() string {
-	for _, l := range launchers {
-		if launcherAvailable(l) {
-			return l
+	for _, launcher := range launchers {
+		if launcherAvailable(launcher) {
+			return launcher
 		}
 	}
 	return ""
@@ -74,20 +74,20 @@ func detectLauncher() string {
 
 // shq : échappe pour une commande shell entre quotes simples (tmux, terminator, xfce4-terminal et tilix reçoivent
 // une chaîne et non une liste d'arguments).
-func shq(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
+func shq(text string) string { return "'" + strings.ReplaceAll(text, "'", `'\''`) + "'" }
 
 func shJoin(argv []string) string {
-	q := make([]string, len(argv))
-	for i, a := range argv {
-		q[i] = shq(a)
+	quoted := make([]string, len(argv))
+	for argIndex, argument := range argv {
+		quoted[argIndex] = shq(argument)
 	}
-	return strings.Join(q, " ")
+	return strings.Join(quoted, " ")
 }
 
 // launcherCmd : la commande qui ouvre un onglet intitulé title exécutant argv.
 func launcherCmd(name, title string, argv []string) (*exec.Cmd, error) {
 	// « <émulateur>+tmux » : la session tourne dans tmux au sein de l'onglet, donc joignable par « Envoyer à la session ».
-	if base, ok := strings.CutSuffix(name, "+tmux"); ok {
+	if base, hasTmuxSuffix := strings.CutSuffix(name, "+tmux"); hasTmuxSuffix {
 		return launcherCmd(base, title, []string{"tmux", "new-session", "-n", strings.ReplaceAll(title, "#", "##"), shJoin(argv),
 			";", "set-option", "set-titles", "on", ";", "set-option", "set-titles-string", "#T"})
 	}
@@ -106,11 +106,11 @@ func launcherCmd(name, title string, argv []string) (*exec.Cmd, error) {
 	case "wezterm":
 		return with("wezterm", "cli", "spawn", "--"), nil
 	case "wt":
-		t := safeTitle(title)
-		if d := os.Getenv("WSL_DISTRO_NAME"); d != "" && runtime.GOOS != "windows" {
-			return with("wt.exe", "-w", "0", "new-tab", "--title", t, "wsl.exe", "-d", d, "--"), nil
+		windowsTitle := safeTitle(title)
+		if distro := os.Getenv("WSL_DISTRO_NAME"); distro != "" && runtime.GOOS != "windows" {
+			return with("wt.exe", "-w", "0", "new-tab", "--title", windowsTitle, "wsl.exe", "-d", distro, "--"), nil
 		}
-		return with("wt.exe", "-w", "0", "new-tab", "--title", t), nil
+		return with("wt.exe", "-w", "0", "new-tab", "--title", windowsTitle), nil
 	case "terminator-tmux":
 		return exec.Command("terminator", "--new-tab", "-T", title, "-e", "tmux new-session -n "+shq(strings.ReplaceAll(title, "#", "##"))+" "+shq(shJoin(argv))+
 			// le titre que Claude Code émet (OSC) devient celui de l'onglet Terminator
@@ -126,9 +126,9 @@ func launcherCmd(name, title string, argv []string) (*exec.Cmd, error) {
 	case "tilix":
 		return exec.Command("tilix", "--action=app-new-session", "-e", shJoin(argv)), nil
 	case "console":
-		c := exec.Command(argv[0], argv[1:]...)
-		consoleAttr(c)
-		return c, nil
+		command := exec.Command(argv[0], argv[1:]...)
+		consoleAttr(command)
+		return command, nil
 	}
 	return nil, terr("srv.term.lanceurInconnu", "A1", name)
 }
@@ -143,75 +143,75 @@ var openTab = func(launcher, title string, spec tabSpec) error {
 		return terr("srv.term.interditDansLeChemin")
 	}
 	spec.Args = withGuard(spec.Args)
-	name, err := writeSpec(self, spec)
+	specFile, err := writeSpec(self, spec)
 	if err != nil {
 		return err
 	}
-	c, err := launcherCmd(launcher, title, []string{self, "_run", name})
+	command, err := launcherCmd(launcher, title, []string{self, "_run", specFile})
 	if err == nil {
-		applyRunAs(c)
-		err = c.Start()
+		applyRunAs(command)
+		err = command.Start()
 	}
 	if err != nil {
-		if specPath(name) {
-			os.Remove(name)
+		if specPath(specFile) {
+			os.Remove(specFile)
 		}
 		return err
 	}
-	go c.Wait() // pas de zombie dans le serveur
+	go command.Wait() // pas de zombie dans le serveur
 	return nil
 }
 
 // writeSpec : le fichier JSON que relit « gld _run » ; sous GLD_RUN_AS, créé par le compte cible qui seul doit le lire.
 func writeSpec(self string, spec tabSpec) (string, error) {
-	b, err := json.Marshal(spec)
+	content, err := json.Marshal(spec)
 	if err != nil {
 		return "", err
 	}
 	if runAsOn() {
-		return writeSpecAsTarget(self, b)
+		return writeSpecAsTarget(self, content)
 	}
-	f, err := os.CreateTemp("", "gld-*.json")
+	specFile, err := os.CreateTemp("", "gld-*.json")
 	if err != nil {
 		return "", err
 	}
-	_, err = f.Write(append(b, '\n'))
-	if cerr := f.Close(); err == nil {
-		err = cerr
+	_, err = specFile.Write(append(content, '\n'))
+	if closeErr := specFile.Close(); err == nil {
+		err = closeErr
 	}
 	if err != nil {
-		os.Remove(f.Name())
+		os.Remove(specFile.Name())
 		return "", err
 	}
-	return f.Name(), nil
+	return specFile.Name(), nil
 }
 
 // specPath : name est bien un fichier gld-*.json posé directement dans le dossier temporaire ; sous GLD_RUN_AS, il vient de la
 // sortie d'un processus du compte cible, que la passerelle ne doit pas laisser lui désigner un fichier à effacer.
 func specPath(name string) bool {
-	ok, _ := filepath.Match("gld-*.json", filepath.Base(name))
-	return ok && name == filepath.Clean(name) && filepath.Dir(name) == filepath.Clean(os.TempDir())
+	matches, _ := filepath.Match("gld-*.json", filepath.Base(name))
+	return matches && name == filepath.Clean(name) && filepath.Dir(name) == filepath.Clean(os.TempDir())
 }
 
 // runTab : le corps de « gld _run <fichier> », exécuté dans l'onglet. Il se place dans le dossier du projet et
 // lance claude à la place de ce processus (Unix) ou comme enfant (Windows).
 func runTab(file string) int {
-	b, err := os.ReadFile(file)
+	content, err := os.ReadFile(file)
 	os.Remove(file)
-	var s tabSpec
+	var spec tabSpec
 	if err == nil {
-		err = json.Unmarshal(b, &s)
+		err = json.Unmarshal(content, &spec)
 	}
 	if err == nil {
-		err = os.Chdir(s.Cwd)
+		err = os.Chdir(spec.Cwd)
 	}
 	if err == nil {
 		// withPath cherche aussi dans ~/.local/bin, absent du PATH d'un onglet ouvert depuis un lanceur de bureau ou un service.
-		if c := withPath(exec.Command("claude", s.Args...)); c.Err == nil {
-			applyTabEnv(c, s.Env)
-			return execClaude(c)
+		if command := withPath(exec.Command("claude", spec.Args...)); command.Err == nil {
+			applyTabEnv(command, spec.Env)
+			return execClaude(command)
 		} else {
-			err = c.Err
+			err = command.Err
 		}
 	}
 	// L'onglet se refermerait aussitôt : on laisse lire l'erreur.
@@ -223,12 +223,12 @@ func runTab(file string) int {
 
 // claudeTabArgs : les arguments de claude pour reprendre une session (id) ou en ouvrir une nouvelle avec un prompt.
 func claudeTabArgs(extra []string, id, prompt string) []string {
-	a := append(builtinPromptArgs(), extra...)
+	args := append(builtinPromptArgs(), extra...)
 	if id != "" {
-		a = append(a, "--resume", id)
+		args = append(args, "--resume", id)
 	}
 	if prompt != "" {
-		a = append(a, "--", prompt)
+		args = append(args, "--", prompt)
 	}
-	return a
+	return args
 }

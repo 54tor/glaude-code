@@ -25,13 +25,13 @@ var (
 
 // idxFileFor : un index par dossier de transcripts. Le gateway et chaque processus enfant (un par home) partagent le même
 // cache utilisateur ; un fichier commun laisserait la recherche d'un home lire les extraits d'un autre.
-func idxFileFor(root string) string {
-	d, err := os.UserCacheDir()
+func idxFileFor(transcriptsRoot string) string {
+	cacheDir, err := os.UserCacheDir()
 	if err != nil {
-		d = os.TempDir()
+		cacheDir = os.TempDir()
 	}
-	sum := sha256.Sum256([]byte(filepath.Clean(root)))
-	return filepath.Join(d, "gld-web", "search-"+hex.EncodeToString(sum[:6])+".db")
+	rootHash := sha256.Sum256([]byte(filepath.Clean(transcriptsRoot)))
+	return filepath.Join(cacheDir, "gld-web", "search-"+hex.EncodeToString(rootHash[:indexHashPrefixBytes])+".db")
 }
 
 // indexSettle : un transcript déjà indexé et modifié depuis moins longtemps n'est pas relu. Une session vivante écrit en
@@ -45,207 +45,212 @@ CREATE VIRTUAL TABLE IF NOT EXISTS msgs USING fts5(body, dir UNINDEXED, sid UNIN
 // rowid d'un message = fichier × 2^20 + rang : supprimer un fichier = supprimer une plage de rowid.
 const perFile = 1 << 20
 
+// indexHashPrefixBytes : octets du condensé du dossier gardés dans le nom du fichier d'index.
+const indexHashPrefixBytes = 6
+
 func idxOpen() (*sql.DB, error) {
 	if idxDB != nil {
 		return idxDB, nil
 	}
-	f := idxFile()
-	if err := os.MkdirAll(filepath.Dir(f), 0o700); err != nil {
-		return nil, err
+	indexPath := idxFile()
+	if mkdirErr := os.MkdirAll(filepath.Dir(indexPath), 0o700); mkdirErr != nil {
+		return nil, mkdirErr
 	}
-	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(f)+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)")
+	database, err := sql.Open("sqlite", "file:"+filepath.ToSlash(indexPath)+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)")
 	if err == nil {
-		_, err = db.Exec(idxSchema)
+		_, err = database.Exec(idxSchema)
 	}
 	if err != nil {
 		return nil, err
 	}
-	idxDB = db
-	return db, nil
+	idxDB = database
+	return database, nil
 }
 
 // syncIndex met l'index d'accord avec les transcripts : ajoute les nouveaux, relit les modifiés, oublie les disparus.
 func syncIndex() error {
 	idxMu.Lock()
 	defer idxMu.Unlock()
-	db, err := idxOpen()
+	database, err := idxOpen()
 	if err != nil {
 		return err
 	}
-	type rec struct {
+	type indexedFile struct {
 		id        int64
 		mod, size int64
 	}
-	known := map[string]rec{}
-	rows, err := db.Query(`SELECT id, path, mod, size FROM files`)
+	known := map[string]indexedFile{}
+	rows, err := database.Query(`SELECT id, path, mod, size FROM files`)
 	if err != nil {
 		return err
 	}
 	for rows.Next() {
-		var p string
-		var r rec
-		if err := rows.Scan(&r.id, &p, &r.mod, &r.size); err != nil {
+		var transcriptPath string
+		var knownFile indexedFile
+		if scanErr := rows.Scan(&knownFile.id, &transcriptPath, &knownFile.mod, &knownFile.size); scanErr != nil {
 			rows.Close()
-			return err
+			return scanErr
 		}
-		known[p] = r
+		known[transcriptPath] = knownFile
 	}
 	rows.Close()
 
-	files, _ := filepath.Glob(filepath.Join(root, "*", "*.jsonl"))
+	transcriptFiles, _ := filepath.Glob(filepath.Join(root, "*", "*.jsonl"))
 	seen := map[string]bool{}
-	for _, p := range files {
-		seen[p] = true
-		st, err := os.Stat(p)
-		if err != nil {
+	for _, transcriptPath := range transcriptFiles {
+		seen[transcriptPath] = true
+		fileInfo, statErr := os.Stat(transcriptPath)
+		if statErr != nil {
 			continue
 		}
-		r, ok := known[p]
-		if ok && r.mod == st.ModTime().UnixNano() && r.size == st.Size() {
+		knownFile, isKnown := known[transcriptPath]
+		isUnchanged := knownFile.mod == fileInfo.ModTime().UnixNano() && knownFile.size == fileInfo.Size()
+		if isKnown && isUnchanged {
 			continue
 		}
-		if ok && idxNow().Sub(st.ModTime()) < indexSettle {
+		if isKnown && idxNow().Sub(fileInfo.ModTime()) < indexSettle {
 			continue
 		}
-		if err := indexFile(db, p, st, r.id); err != nil {
-			return err
+		if indexErr := indexFile(database, transcriptPath, fileInfo, knownFile.id); indexErr != nil {
+			return indexErr
 		}
 	}
-	for p, r := range known {
-		if !seen[p] {
-			if err := dropFile(db, r.id); err != nil {
-				return err
-			}
+	for transcriptPath, knownFile := range known {
+		if seen[transcriptPath] {
+			continue
+		}
+		if dropErr := dropFile(database, knownFile.id); dropErr != nil {
+			return dropErr
 		}
 	}
 	return nil
 }
 
-func dropFile(db *sql.DB, id int64) error {
-	tx, err := db.Begin()
+func dropFile(database *sql.DB, fileID int64) error {
+	transaction, err := database.Begin()
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
-	if _, err := tx.Exec(`DELETE FROM msgs WHERE rowid >= ? AND rowid < ?`, id*perFile, (id+1)*perFile); err != nil {
-		return err
+	defer transaction.Rollback()
+	if _, deleteMessagesErr := transaction.Exec(`DELETE FROM msgs WHERE rowid >= ? AND rowid < ?`, fileID*perFile, (fileID+1)*perFile); deleteMessagesErr != nil {
+		return deleteMessagesErr
 	}
-	if _, err := tx.Exec(`DELETE FROM files WHERE id = ?`, id); err != nil {
-		return err
+	if _, deleteFileErr := transaction.Exec(`DELETE FROM files WHERE id = ?`, fileID); deleteFileErr != nil {
+		return deleteFileErr
 	}
-	return tx.Commit()
+	return transaction.Commit()
 }
 
-// indexFile (ré)indexe un transcript ; id = 0 pour un fichier inconnu.
-func indexFile(db *sql.DB, path string, st os.FileInfo, id int64) error {
-	tx, err := db.Begin()
+// indexFile (ré)indexe un transcript ; fileID = 0 pour un fichier inconnu.
+func indexFile(database *sql.DB, path string, fileInfo os.FileInfo, fileID int64) error {
+	transaction, err := database.Begin()
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
-	if id == 0 {
-		res, err := tx.Exec(`INSERT INTO files(path, mod, size) VALUES(?, ?, ?)`, path, st.ModTime().UnixNano(), st.Size())
-		if err != nil {
-			return err
+	defer transaction.Rollback()
+	if fileID == 0 {
+		insertResult, fileInsertErr := transaction.Exec(`INSERT INTO files(path, mod, size) VALUES(?, ?, ?)`, path, fileInfo.ModTime().UnixNano(), fileInfo.Size())
+		if fileInsertErr != nil {
+			return fileInsertErr
 		}
-		id, _ = res.LastInsertId()
+		fileID, _ = insertResult.LastInsertId()
 	} else {
-		if _, err := tx.Exec(`DELETE FROM msgs WHERE rowid >= ? AND rowid < ?`, id*perFile, (id+1)*perFile); err != nil {
-			return err
+		if _, deleteMessagesErr := transaction.Exec(`DELETE FROM msgs WHERE rowid >= ? AND rowid < ?`, fileID*perFile, (fileID+1)*perFile); deleteMessagesErr != nil {
+			return deleteMessagesErr
 		}
-		if _, err := tx.Exec(`UPDATE files SET mod = ?, size = ? WHERE id = ?`, st.ModTime().UnixNano(), st.Size(), id); err != nil {
-			return err
+		if _, updateErr := transaction.Exec(`UPDATE files SET mod = ?, size = ? WHERE id = ?`, fileInfo.ModTime().UnixNano(), fileInfo.Size(), fileID); updateErr != nil {
+			return updateErr
 		}
 	}
-	ins, err := tx.Prepare(`INSERT INTO msgs(rowid, body, dir, sid) VALUES(?, ?, ?, ?)`)
+	insertStatement, err := transaction.Prepare(`INSERT INTO msgs(rowid, body, dir, sid) VALUES(?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
-	defer ins.Close()
-	dir, sid := filepath.Base(filepath.Dir(path)), strings.TrimSuffix(filepath.Base(path), ".jsonl")
-	n := int64(0)
-	var ierr error
-	_ = scan(path, func(b []byte) {
-		for _, m := range lineMsgs(b, false) {
-			if ierr == nil && n < perFile {
-				_, ierr = ins.Exec(id*perFile+n, m.T, dir, sid)
-				n++
+	defer insertStatement.Close()
+	dir, sessionID := filepath.Base(filepath.Dir(path)), strings.TrimSuffix(filepath.Base(path), ".jsonl")
+	messageRank := int64(0)
+	var messageInsertErr error
+	_ = scan(path, func(transcriptLine []byte) {
+		for _, message := range lineMsgs(transcriptLine, false) {
+			if messageInsertErr == nil && messageRank < perFile {
+				_, messageInsertErr = insertStatement.Exec(fileID*perFile+messageRank, message.T, dir, sessionID)
+				messageRank++
 			}
 		}
 	})
-	if ierr != nil {
-		return ierr
+	if messageInsertErr != nil {
+		return messageInsertErr
 	}
-	return tx.Commit()
+	return transaction.Commit()
 }
 
 var ftsTok = regexp.MustCompile(`"([^"]+)"|(\S+)`)
 
 // ftsQuery : la saisie de l'utilisateur devient une requête FTS5 sûre (tout est entre guillemets) ;
 // les mots sont combinés par ET, un passage entre guillemets reste une phrase, le dernier mot est un préfixe.
-func ftsQuery(q string) string {
+func ftsQuery(userInput string) string {
 	var parts []string
-	last := -1
-	for _, m := range ftsTok.FindAllStringSubmatch(q, -1) {
-		if m[1] != "" {
-			parts = append(parts, `"`+m[1]+`"`)
-		} else if w := strings.ReplaceAll(m[2], `"`, ""); w != "" {
-			parts = append(parts, `"`+w+`"`)
-			last = len(parts) - 1
+	lastWordIndex := -1
+	for _, match := range ftsTok.FindAllStringSubmatch(userInput, -1) {
+		if match[1] != "" {
+			parts = append(parts, `"`+match[1]+`"`)
+		} else if word := strings.ReplaceAll(match[2], `"`, ""); word != "" {
+			parts = append(parts, `"`+word+`"`)
+			lastWordIndex = len(parts) - 1
 		}
 	}
-	if last >= 0 && last == len(parts)-1 {
-		parts[last] += "*"
+	if lastWordIndex >= 0 && lastWordIndex == len(parts)-1 {
+		parts[lastWordIndex] += "*"
 	}
 	return strings.Join(parts, " ")
 }
 
 // searchIndex : sessions classées par pertinence ; N = nombre de messages qui correspondent,
 // Snip = extrait du meilleur message, correspondances entourées de \x02…\x03.
-func searchIndex(q string) ([]Hit, error) {
-	fq := ftsQuery(q)
-	if fq == "" {
+func searchIndex(userInput string) ([]Hit, error) {
+	ftsExpression := ftsQuery(userInput)
+	if ftsExpression == "" {
 		return []Hit{}, nil
 	}
-	if err := syncIndex(); err != nil {
-		return nil, err
+	if syncErr := syncIndex(); syncErr != nil {
+		return nil, syncErr
 	}
-	db, err := idxOpen()
+	database, err := idxOpen()
 	if err != nil {
 		return nil, err
 	}
 	// snippet() ne se calcule que pour le meilleur message de chaque session (id suit min(r)) : sur tous les messages trouvés,
 	// un mot courant dans un gros transcript coûtait une minute.
-	rows, err := db.Query(`
+	rows, err := database.Query(`
 WITH m AS MATERIALIZED (
   SELECT rowid AS id, dir, sid, bm25(msgs) AS r FROM msgs WHERE msgs MATCH ?1
 ), b AS (
   SELECT dir, sid, count(*) AS n, min(r) AS r, id FROM m GROUP BY sid ORDER BY 4 LIMIT 300
 ) SELECT dir, sid, n, r, (SELECT snippet(msgs, 0, char(2), char(3), '…', 24) FROM msgs WHERE msgs MATCH ?1 AND rowid = b.id)
-FROM b ORDER BY 4`, fq)
+FROM b ORDER BY 4`, ftsExpression)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := []Hit{}
+	hits := []Hit{}
 	for rows.Next() {
-		var h Hit
-		var r float64
-		if err := rows.Scan(&h.Dir, &h.ID, &h.N, &r, &h.Snip); err != nil {
-			return nil, err
+		var hit Hit
+		var rank float64
+		if scanErr := rows.Scan(&hit.Dir, &hit.ID, &hit.N, &rank, &hit.Snip); scanErr != nil {
+			return nil, scanErr
 		}
-		h.Snip = strings.Join(strings.Fields(h.Snip), " ")
-		out = append(out, h)
+		hit.Snip = strings.Join(strings.Fields(hit.Snip), " ")
+		hits = append(hits, hit)
 	}
-	return out, rows.Err()
+	return hits, rows.Err()
 }
 
 // searchAll : l'index, ou le balayage direct des transcripts si l'index est inutilisable.
-func searchAll(q string) []Hit {
-	if h, err := searchIndex(q); err == nil {
-		return h
-	} else {
-		journal("index de recherche : %v", err)
+func searchAll(userInput string) []Hit {
+	hits, err := searchIndex(userInput)
+	if err == nil {
+		return hits
 	}
-	return search(q)
+	journal("index de recherche : %v", err)
+	return search(userInput)
 }

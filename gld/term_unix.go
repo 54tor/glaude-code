@@ -9,8 +9,8 @@ import (
 )
 
 // execClaude remplace ce processus par claude : l'onglet se ferme avec lui, sans processus intermédiaire.
-func execClaude(c *exec.Cmd) int {
-	err := syscall.Exec(c.Path, c.Args, c.Env)
+func execClaude(command *exec.Cmd) int {
+	err := syscall.Exec(command.Path, command.Args, command.Env)
 	os.Stderr.WriteString("gld : " + err.Error() + "\n")
 	return 1
 }

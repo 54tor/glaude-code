@@ -44,61 +44,68 @@ type TeamFiles struct {
 	Unknown             []string
 }
 
-func str(m map[string]any, k string) string   { s, _ := m[k].(string); return s }
-func boolean(m map[string]any, k string) bool { b, _ := m[k].(bool); return b }
+func str(fields map[string]any, key string) string {
+	value, _ := fields[key].(string)
+	return value
+}
+
+func boolean(fields map[string]any, key string) bool {
+	value, _ := fields[key].(bool)
+	return value
+}
 
 // readJSONFile : lit un fichier régulier (pas un lien) borné à 1 Mio et le décode en any.
 func readJSONFile(path string) (any, bool) {
-	fi, err := os.Lstat(path)
-	if err != nil || !fi.Mode().IsRegular() {
+	fileInfo, err := os.Lstat(path)
+	if err != nil || !fileInfo.Mode().IsRegular() {
 		return nil, false
 	}
-	f, err := os.Open(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return nil, false
 	}
-	defer f.Close()
-	b, err := io.ReadAll(io.LimitReader(f, teamFileMax+1))
-	if err != nil || len(b) > teamFileMax {
+	defer file.Close()
+	content, err := io.ReadAll(io.LimitReader(file, teamFileMax+1))
+	if err != nil || len(content) > teamFileMax {
 		return nil, false
 	}
-	var v any
-	if json.Unmarshal(b, &v) != nil {
+	var parsedJSON any
+	if json.Unmarshal(content, &parsedJSON) != nil {
 		return nil, false
 	}
-	return v, true
+	return parsedJSON, true
 }
 
 // jsonFiles : les *.json directement dans dir, triés, sans suivre les liens ; les liens et le surplus vont dans unknown.
-func jsonFiles(dir, rel string, max int, unknown *[]string) []string {
-	fi, err := os.Lstat(dir)
+func jsonFiles(dir, rel string, maxFiles int, unknown *[]string) []string {
+	dirInfo, err := os.Lstat(dir)
 	if err != nil {
 		return nil
 	}
-	if !fi.IsDir() {
+	if !dirInfo.IsDir() {
 		*unknown = append(*unknown, rel)
 		return nil
 	}
-	ents, err := os.ReadDir(dir)
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil
 	}
-	var out []string
-	for _, e := range ents {
-		if !strings.HasSuffix(e.Name(), ".json") {
+	var names []string
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry.Name(), ".json") {
 			continue
 		}
-		if !e.Type().IsRegular() {
-			*unknown = append(*unknown, rel+"/"+e.Name())
+		if !entry.Type().IsRegular() {
+			*unknown = append(*unknown, rel+"/"+entry.Name())
 			continue
 		}
-		if len(out) >= max {
-			*unknown = append(*unknown, rel+"/"+e.Name())
+		if len(names) >= maxFiles {
+			*unknown = append(*unknown, rel+"/"+entry.Name())
 			continue
 		}
-		out = append(out, e.Name())
+		names = append(names, entry.Name())
 	}
-	return out
+	return names
 }
 
 func readTeam(cfgRoot, name string) (TeamFiles, error) {
@@ -106,133 +113,133 @@ func readTeam(cfgRoot, name string) (TeamFiles, error) {
 		return TeamFiles{}, terr("srv.teams_files.nomInvalide")
 	}
 	dir := filepath.Join(cfgRoot, "teams", name)
-	if fi, err := os.Lstat(dir); err != nil || !fi.IsDir() {
+	if dirInfo, err := os.Lstat(dir); err != nil || !dirInfo.IsDir() {
 		return TeamFiles{}, terr("srv.teams_files.equipeIntrouvable")
 	}
-	tf := TeamFiles{Name: name}
+	teamFiles := TeamFiles{Name: name}
 	cfgRel := "teams/" + name + "/config.json"
-	if v, ok := readJSONFile(filepath.Join(dir, "config.json")); !ok {
-		tf.Unknown = append(tf.Unknown, cfgRel)
-	} else if c, ok := v.(map[string]any); !ok {
-		tf.Unknown = append(tf.Unknown, cfgRel)
+	if config, isReadable := readJSONFile(filepath.Join(dir, "config.json")); !isReadable {
+		teamFiles.Unknown = append(teamFiles.Unknown, cfgRel)
+	} else if configMap, isObject := config.(map[string]any); !isObject {
+		teamFiles.Unknown = append(teamFiles.Unknown, cfgRel)
 	} else {
-		tf.LeadSessionID = str(c, "leadSessionId")
-		if lp, ok := c["leadProcess"].(map[string]any); ok {
-			if p, ok := lp["pid"].(float64); ok {
-				tf.LeadPID = int(p)
+		teamFiles.LeadSessionID = str(configMap, "leadSessionId")
+		if leadProcess, hasLeadProcess := configMap["leadProcess"].(map[string]any); hasLeadProcess {
+			if pid, hasPID := leadProcess["pid"].(float64); hasPID {
+				teamFiles.LeadPID = int(pid)
 			}
 		}
-		ms, _ := c["members"].([]any)
-		for _, x := range ms {
-			m, ok := x.(map[string]any)
-			if !ok {
+		members, _ := configMap["members"].([]any)
+		for _, rawMember := range members {
+			memberFields, isObject := rawMember.(map[string]any)
+			if !isObject {
 				continue
 			}
-			pane := str(m, "tmuxPaneId")
-			mem := TeamMember{
-				Name: str(m, "name"), AgentID: str(m, "agentId"), Backend: str(m, "backendType"),
-				Lead:   str(m, "agentType") == "team-lead" || pane == "leader",
-				Active: boolean(m, "isActive"),
+			pane := str(memberFields, "tmuxPaneId")
+			member := TeamMember{
+				Name: str(memberFields, "name"), AgentID: str(memberFields, "agentId"), Backend: str(memberFields, "backendType"),
+				Lead:   str(memberFields, "agentType") == "team-lead" || pane == "leader",
+				Active: boolean(memberFields, "isActive"),
 			}
 			if teamPaneRe.MatchString(pane) {
-				mem.Pane = pane
+				member.Pane = pane
 			}
-			tf.Members = append(tf.Members, mem)
+			teamFiles.Members = append(teamFiles.Members, member)
 		}
 	}
 
 	inRel := "teams/" + name + "/inboxes"
-	for _, fn := range jsonFiles(filepath.Join(dir, "inboxes"), inRel, teamInboxMax, &tf.Unknown) {
-		v, ok := readJSONFile(filepath.Join(dir, "inboxes", fn))
-		arr, isArr := v.([]any)
-		if !ok || !isArr {
-			tf.Unknown = append(tf.Unknown, inRel+"/"+fn)
+	for _, fileName := range jsonFiles(filepath.Join(dir, "inboxes"), inRel, teamInboxMax, &teamFiles.Unknown) {
+		parsedJSON, isReadable := readJSONFile(filepath.Join(dir, "inboxes", fileName))
+		messages, isArray := parsedJSON.([]any)
+		if !isReadable || !isArray {
+			teamFiles.Unknown = append(teamFiles.Unknown, inRel+"/"+fileName)
 			continue
 		}
-		owner := strings.TrimSuffix(fn, ".json")
-		for _, x := range arr {
-			if m, ok := x.(map[string]any); ok {
-				tf.Inbox = append(tf.Inbox, inboxMsg(m, owner))
+		owner := strings.TrimSuffix(fileName, ".json")
+		for _, rawMessage := range messages {
+			if messageFields, isObject := rawMessage.(map[string]any); isObject {
+				teamFiles.Inbox = append(teamFiles.Inbox, inboxMsg(messageFields, owner))
 			}
 		}
 	}
-	sort.SliceStable(tf.Inbox, func(i, j int) bool {
-		a, b := tf.Inbox[i], tf.Inbox[j]
-		if a.At != b.At {
-			return a.At < b.At
+	sort.SliceStable(teamFiles.Inbox, func(left, right int) bool {
+		leftMessage, rightMessage := teamFiles.Inbox[left], teamFiles.Inbox[right]
+		if leftMessage.At != rightMessage.At {
+			return leftMessage.At < rightMessage.At
 		}
-		return a.ID < b.ID
+		return leftMessage.ID < rightMessage.ID
 	})
 
-	tkRel := "tasks/" + name
-	tkDir := filepath.Join(cfgRoot, "tasks", name)
-	for _, fn := range jsonFiles(tkDir, tkRel, teamTasksMax, &tf.Unknown) {
-		v, ok := readJSONFile(filepath.Join(tkDir, fn))
+	tasksRel := "tasks/" + name
+	tasksDir := filepath.Join(cfgRoot, "tasks", name)
+	for _, fileName := range jsonFiles(tasksDir, tasksRel, teamTasksMax, &teamFiles.Unknown) {
+		parsedJSON, isReadable := readJSONFile(filepath.Join(tasksDir, fileName))
 		var items []any
-		switch t := v.(type) {
+		switch typedValue := parsedJSON.(type) {
 		case []any:
-			items = t
+			items = typedValue
 		case map[string]any:
-			items = []any{t}
+			items = []any{typedValue}
 		}
 		var got []TeamTask
-		valid := ok && len(items) > 0
-		for _, x := range items {
-			t, good := taskOf(x)
-			if !good {
+		valid := isReadable && len(items) > 0
+		for _, rawTask := range items {
+			task, isValid := taskOf(rawTask)
+			if !isValid {
 				valid = false
 				break
 			}
-			got = append(got, t)
+			got = append(got, task)
 		}
 		if !valid {
-			tf.Unknown = append(tf.Unknown, tkRel+"/"+fn)
+			teamFiles.Unknown = append(teamFiles.Unknown, tasksRel+"/"+fileName)
 			continue
 		}
-		tf.Tasks = append(tf.Tasks, got...)
+		teamFiles.Tasks = append(teamFiles.Tasks, got...)
 	}
-	return tf, nil
+	return teamFiles, nil
 }
 
-func taskOf(x any) (TeamTask, bool) {
-	m, ok := x.(map[string]any)
-	if !ok {
+func taskOf(rawTask any) (TeamTask, bool) {
+	fields, isObject := rawTask.(map[string]any)
+	if !isObject {
 		return TeamTask{}, false
 	}
-	t := TeamTask{ID: str(m, "id"), Title: str(m, "subject"), Status: str(m, "status")}
-	if t.Title == "" {
-		t.Title = str(m, "title")
+	task := TeamTask{ID: str(fields, "id"), Title: str(fields, "subject"), Status: str(fields, "status")}
+	if task.Title == "" {
+		task.Title = str(fields, "title")
 	}
-	return t, t.ID != "" && t.Title != "" && t.Status != ""
+	return task, task.ID != "" && task.Title != "" && task.Status != ""
 }
 
-func inboxMsg(m map[string]any, owner string) InboxMsg {
-	msg := InboxMsg{
-		ID: str(m, "msg_id"), From: str(m, "from"), To: owner, Text: str(m, "text"),
-		Summary: str(m, "summary"), Kind: str(m, "type"), Read: boolean(m, "read"),
+func inboxMsg(fields map[string]any, owner string) InboxMsg {
+	message := InboxMsg{
+		ID: str(fields, "msg_id"), From: str(fields, "from"), To: owner, Text: str(fields, "text"),
+		Summary: str(fields, "summary"), Kind: str(fields, "type"), Read: boolean(fields, "read"),
 	}
-	if ts, err := time.Parse(time.RFC3339, str(m, "timestamp")); err == nil {
-		msg.At = ts.UnixMilli()
+	if sentAt, err := time.Parse(time.RFC3339, str(fields, "timestamp")); err == nil {
+		message.At = sentAt.UnixMilli()
 	}
-	if msg.Kind == "message" || msg.Kind == "" {
-		msg.Kind = "message"
+	if message.Kind == "message" || message.Kind == "" {
+		message.Kind = "message"
 		var inner map[string]any
-		if strings.HasPrefix(strings.TrimSpace(msg.Text), "{") && json.Unmarshal([]byte(msg.Text), &inner) == nil && str(inner, "type") == "idle_notification" {
-			msg.Kind = "idle"
-			msg.Text, _ = inner["result"].(string) // le compte rendu du coéquipier au chef
+		if strings.HasPrefix(strings.TrimSpace(message.Text), "{") && json.Unmarshal([]byte(message.Text), &inner) == nil && str(inner, "type") == "idle_notification" {
+			message.Kind = "idle"
+			message.Text, _ = inner["result"].(string) // le compte rendu du coéquipier au chef
 		}
 	}
-	return msg
+	return message
 }
 
 func listTeams(cfgRoot string) []string {
-	ents, _ := os.ReadDir(filepath.Join(cfgRoot, "teams"))
-	var out []string
-	for _, e := range ents {
-		if e.IsDir() && teamNameRe.MatchString(e.Name()) {
-			out = append(out, e.Name())
+	entries, _ := os.ReadDir(filepath.Join(cfgRoot, "teams"))
+	var names []string
+	for _, entry := range entries {
+		if entry.IsDir() && teamNameRe.MatchString(entry.Name()) {
+			names = append(names, entry.Name())
 		}
 	}
-	sort.Strings(out)
-	return out
+	sort.Strings(names)
+	return names
 }

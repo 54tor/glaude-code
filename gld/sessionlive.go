@@ -51,6 +51,21 @@ type LiveState struct {
 	Pending     []QItem   `json:"pending"` // file serveur : messages en attente que la session soit libre
 }
 
+const (
+	queuedMessageMaxLength  = 400
+	serviceMessageMaxLength = 64000
+	quickPickupThreshold    = 5 * time.Millisecond
+	servicePickupThreshold  = time.Second
+	spinnerVerbMaxLength    = 60
+	toolBriefMaxLength      = 90
+	toolFullMaxLength       = 4000
+	activityTailBytes       = 512 << 10
+	lastSaidTailBytes       = 256 << 10
+	lastSaidMaxLength       = 200
+	subagentRecentWindow    = 10 * time.Minute
+	subagentListMax         = 60
+)
+
 type Queued struct {
 	T  string `json:"t"`
 	Ts string `json:"ts"`
@@ -74,88 +89,94 @@ var (
 func pendingQueue(path string) []Queued {
 	pqMu.Lock()
 	defer pqMu.Unlock()
-	f, err := openTrusted(path)
+	transcriptHandle, err := openTrusted(path)
 	if err != nil {
 		delete(pqSeen, path)
 		return []Queued{}
 	}
-	defer f.Close()
-	st := pqSeen[path]
-	if fi, err := f.Stat(); err != nil || fi.Size() < st.off { // raccourci : relu en entier
-		st = pqState{}
+	defer transcriptHandle.Close()
+	queueState := pqSeen[path]
+	if fileInfo, statErr := transcriptHandle.Stat(); statErr != nil || fileInfo.Size() < queueState.off { // raccourci : relu en entier
+		queueState = pqState{}
 	}
-	if _, err := f.Seek(st.off, io.SeekStart); err != nil {
+	if _, seekErr := transcriptHandle.Seek(queueState.off, io.SeekStart); seekErr != nil {
 		return []Queued{}
 	}
-	r := bufio.NewReaderSize(f, 1<<20)
+	reader := bufio.NewReaderSize(transcriptHandle, jsonLineBufferSize)
 	for {
-		l, err := r.ReadBytes('\n')
-		if err != nil {
+		transcriptLine, readErr := reader.ReadBytes('\n')
+		if readErr != nil {
 			break // ligne incomplète : relue au prochain passage
 		}
-		st.off += int64(len(l))
-		if bytes.Contains(l, []byte(`"queue-operation"`)) {
-			st.q = applyQueueOp(st.q, l)
+		queueState.off += int64(len(transcriptLine))
+		if bytes.Contains(transcriptLine, []byte(`"queue-operation"`)) {
+			queueState.q = applyQueueOp(queueState.q, transcriptLine)
 		}
 	}
-	pqSeen[path] = st
-	out := []Queued{}
-	for _, m := range st.q {
-		if t := strings.TrimSpace(m.T); t != "" && !strings.HasPrefix(t, "<task-notification") { // les notifications de tâche ne sont pas des messages
-			// Un message balisé (agent, session) garde sa balise de fermeture : l'UI en fait une carte. Plafond large : relevé toutes les 2 s.
-			if serviceMsg.MatchString(t) {
-				t = cut(t, 64000)
-			} else {
-				t = cut(t, 400)
-			}
-			out = append(out, Queued{t, m.Ts})
+	pqSeen[path] = queueState
+	visible := []Queued{}
+	for _, queued := range queueState.q {
+		text := strings.TrimSpace(queued.T)
+		isTaskNotification := strings.HasPrefix(text, "<task-notification") // les notifications de tâche ne sont pas des messages
+		if text == "" || isTaskNotification {
+			continue
 		}
+		// Un message balisé (agent, session) garde sa balise de fermeture : l'UI en fait une carte. Plafond large : relevé toutes les 2 s.
+		if serviceMsg.MatchString(text) {
+			text = cut(text, serviceMessageMaxLength)
+		} else {
+			text = cut(text, queuedMessageMaxLength)
+		}
+		visible = append(visible, Queued{text, queued.Ts})
 	}
-	return out
+	return visible
 }
 
 // serviceMsg : messages de service d'agents (balises connues du transcript), à ne pas confondre avec un prompt qui commencerait par « < ».
 var serviceMsg = regexp.MustCompile(`^<(?:agent-message|cross-session-message|teammate-message)[\s>]`)
 
-func parseTs(s string) time.Time {
-	t, _ := time.Parse(time.RFC3339Nano, s)
-	return t
+func parseTs(timestamp string) time.Time {
+	parsed, _ := time.Parse(time.RFC3339Nano, timestamp)
+	return parsed
 }
 
-func applyQueueOp(q []Queued, l []byte) []Queued {
-	var o struct {
+func applyQueueOp(queue []Queued, transcriptLine []byte) []Queued {
+	var operation struct {
 		Type, Operation, Timestamp, Content string
 	}
-	if json.Unmarshal(l, &o) != nil || o.Type != "queue-operation" {
-		return q
+	if json.Unmarshal(transcriptLine, &operation) != nil || operation.Type != "queue-operation" {
+		return queue
 	}
-	switch o.Operation {
+	switch operation.Operation {
 	case "enqueue":
-		q = append(q, Queued{T: o.Content, Ts: o.Timestamp})
+		queue = append(queue, Queued{T: operation.Content, Ts: operation.Timestamp})
 	case "dequeue":
-		if n := len(q); n > 0 {
+		if queueLength := len(queue); queueLength > 0 {
 			// Un dequeue collé à son enqueue (< 5 ms) retire celui-ci : Claude Code prend le message aussitôt, sans file. Retirer le plus
 			// ancien laissait un résidu, puis chaque paire suivante retirait ce résidu et laissait le dernier prompt affiché à jamais.
 			// Un message de service (hand-back de sous-agent) est repris 12 à 14 ms après son enqueue : seuil à la seconde pour lui.
-			a, b := parseTs(q[n-1].Ts), parseTs(o.Timestamp)
-			lim := 5 * time.Millisecond
-			if serviceMsg.MatchString(strings.TrimSpace(q[n-1].T)) {
-				lim = time.Second
+			enqueuedAt, dequeuedAt := parseTs(queue[queueLength-1].Ts), parseTs(operation.Timestamp)
+			pickupThreshold := quickPickupThreshold
+			if serviceMsg.MatchString(strings.TrimSpace(queue[queueLength-1].T)) {
+				pickupThreshold = servicePickupThreshold
 			}
-			if !a.IsZero() && !b.IsZero() && b.Sub(a) >= 0 && b.Sub(a) < lim {
-				return q[:n-1]
+			bothTimestampsKnown := !enqueuedAt.IsZero() && !dequeuedAt.IsZero()
+			pickupDelay := dequeuedAt.Sub(enqueuedAt)
+			isImmediatePickup := bothTimestampsKnown && pickupDelay >= 0 && pickupDelay < pickupThreshold
+			if isImmediatePickup {
+				return queue[:queueLength-1]
 			}
-			q = q[1:]
+			queue = queue[1:]
 		}
 	case "remove":
-		for i := len(q) - 1; i >= 0; i-- {
-			if o.Content == "" || q[i].T == o.Content {
-				q = append(q[:i], q[i+1:]...)
+		for queueIndex := len(queue) - 1; queueIndex >= 0; queueIndex-- {
+			if operation.Content == "" || queue[queueIndex].T == operation.Content {
+				queue = append(queue[:queueIndex], queue[queueIndex+1:]...)
 				break
 			}
 		}
 	}
-	return q
+	return queue
 }
 
 // Les états d'activité restent en français dans le code (comparaisons, tests) ; localizeActivity les traduit à la sortie.
@@ -169,34 +190,34 @@ var activityIDs = map[string]string{
 	"terminé":                        "srv.live.done",
 }
 
-func isGenericActivity(a string) bool {
-	switch a {
+func isGenericActivity(activity string) bool {
+	switch activity {
 	case "", "réfléchit", "travaille", "réfléchit au résultat", "lit votre message et réfléchit":
 		return true
 	}
 	return false
 }
 
-func localizeActivity(a string) string {
-	if id, ok := activityIDs[a]; ok {
-		return L(id)
+func localizeActivity(activity string) string {
+	if messageID, isKnown := activityIDs[activity]; isKnown {
+		return L(messageID)
 	}
-	if s, ok := strings.CutPrefix(a, "exécute "); ok {
-		return L("srv.live.exec", "A1", s)
+	if toolText, isExecution := strings.CutPrefix(activity, "exécute "); isExecution {
+		return L("srv.live.exec", "A1", toolText)
 	}
-	return a
+	return activity
 }
 
 // spinnerVerbs : la liste par défaut, ou celle du réglage « spinnerVerbs » de Claude Code (mode « replace » : seulement la vôtre ;
 // « append » : à la suite de la liste par défaut).
 // defaultVerbs : la liste embarquée de la langue (locales/verbs.<langue>.json).
 func defaultVerbs(lang string) []string {
-	b, err := localesFS.ReadFile("locales/verbs." + lang + ".json")
-	var v []string
-	if err != nil || json.Unmarshal(b, &v) != nil {
+	verbsJSON, err := localesFS.ReadFile("locales/verbs." + lang + ".json")
+	var verbs []string
+	if err != nil || json.Unmarshal(verbsJSON, &verbs) != nil {
 		return nil
 	}
-	return v
+	return verbs
 }
 
 // verbsCache : GET /v1/sessions/{id}/live est relu toutes les 2 s par le navigateur ; la liste ne change qu'avec settings.json ou la langue.
@@ -209,8 +230,8 @@ var verbsCache struct {
 func spinnerVerbs(lang string) []string {
 	settings := filepath.Join(cfgDir(), "settings.json")
 	key := lang + "\x00" + settings
-	if st, err := os.Stat(settings); err == nil {
-		key += "\x00" + strconv.FormatInt(st.ModTime().UnixNano(), 10) + "\x00" + strconv.FormatInt(st.Size(), 10)
+	if settingsInfo, err := os.Stat(settings); err == nil {
+		key += "\x00" + strconv.FormatInt(settingsInfo.ModTime().UnixNano(), 10) + "\x00" + strconv.FormatInt(settingsInfo.Size(), 10)
 	}
 	verbsCache.Lock()
 	defer verbsCache.Unlock()
@@ -222,77 +243,78 @@ func spinnerVerbs(lang string) []string {
 
 func readSpinnerVerbs(lang, settings string) []string {
 	thinkingVerbs := defaultVerbs(lang)
-	var d struct {
+	var settingsFile struct {
 		SpinnerVerbs struct {
 			Mode  string   `json:"mode"`
 			Verbs []string `json:"verbs"`
 		} `json:"spinnerVerbs"`
 	}
-	if b, err := readTrusted(settings); err != nil || json.Unmarshal(b, &d) != nil || len(d.SpinnerVerbs.Verbs) == 0 {
+	settingsContent, err := readTrusted(settings)
+	if err != nil || json.Unmarshal(settingsContent, &settingsFile) != nil || len(settingsFile.SpinnerVerbs.Verbs) == 0 {
 		return thinkingVerbs
 	}
 	var mine []string
-	for _, v := range d.SpinnerVerbs.Verbs {
-		if v = strings.TrimSpace(v); v != "" && len(v) <= 60 {
-			mine = append(mine, v)
+	for _, verb := range settingsFile.SpinnerVerbs.Verbs {
+		if verb = strings.TrimSpace(verb); verb != "" && len(verb) <= spinnerVerbMaxLength {
+			mine = append(mine, verb)
 		}
 	}
 	if len(mine) == 0 {
 		return thinkingVerbs
 	}
-	if d.SpinnerVerbs.Mode == "replace" {
+	if settingsFile.SpinnerVerbs.Mode == "replace" {
 		return mine
 	}
 	return append(append([]string{}, thinkingVerbs...), mine...)
 }
 
 // sessionStatus : le statut d'une session ouverte d'après ~/.claude/sessions/*.json (processus encore vivant).
-func sessionStatus(id string) (status string, open bool) {
+func sessionStatus(id string) (status string, isOpen bool) {
 	files, _ := filepath.Glob(filepath.Join(cfgDir(), "sessions", "*.json"))
-	for _, f := range files {
-		b, err := readTrusted(f)
+	for _, sessionFile := range files {
+		content, err := readTrusted(sessionFile)
 		if err != nil {
 			continue
 		}
-		var s struct {
+		var sessionRecord struct {
 			Pid       int    `json:"pid"`
 			SessionId string `json:"sessionId"`
 			Status    string `json:"status"`
 		}
-		if json.Unmarshal(b, &s) != nil || s.SessionId != id || s.Pid <= 0 {
+		if json.Unmarshal(content, &sessionRecord) != nil || sessionRecord.SessionId != id || sessionRecord.Pid <= 0 {
 			continue
 		}
-		if _, err := os.Stat("/proc/" + strconv.Itoa(s.Pid)); err != nil && pidProbe {
+		if _, statErr := os.Stat("/proc/" + strconv.Itoa(sessionRecord.Pid)); statErr != nil && pidProbe {
 			continue
 		}
-		return s.Status, true
+		return sessionRecord.Status, true
 	}
 	return "", false
 }
 
 // rcSessions : ids des sessions ouvertes reliées à claude.ai (remote control), d'après bridgeSessionId dans ~/.claude/sessions/*.json.
 func rcSessions() []string {
-	out := []string{}
+	sessionIDs := []string{}
 	files, _ := filepath.Glob(filepath.Join(cfgDir(), "sessions", "*.json"))
-	for _, f := range files {
-		b, err := readTrusted(f)
+	for _, sessionFile := range files {
+		content, err := readTrusted(sessionFile)
 		if err != nil {
 			continue
 		}
-		var s struct {
+		var sessionRecord struct {
 			Pid       int    `json:"pid"`
 			SessionId string `json:"sessionId"`
 			Bridge    string `json:"bridgeSessionId"`
 		}
-		if json.Unmarshal(b, &s) != nil || s.SessionId == "" || s.Bridge == "" || s.Pid <= 0 {
+		if json.Unmarshal(content, &sessionRecord) != nil || sessionRecord.SessionId == "" || sessionRecord.Bridge == "" || sessionRecord.Pid <= 0 {
 			continue
 		}
-		if _, err := os.Stat("/proc/" + strconv.Itoa(s.Pid)); err != nil && pidProbe {
+		if _, statErr := os.Stat("/proc/" + strconv.Itoa(sessionRecord.Pid)); statErr != nil && pidProbe {
 			continue
 		}
-		out = append(out, s.SessionId)
+		sessionIDs = append(sessionIDs, sessionRecord.SessionId)
 	}
-	return out
+	return sessionIDs
 }
 
 // pidProbe : sous Linux on vérifie que le processus vit (/proc) ; ailleurs on s'en remet au fichier (remplaçable dans les tests).
@@ -302,39 +324,39 @@ type usage struct {
 	In, Out, CacheRead, CacheWrite int
 }
 
-func (u usage) context() int { return u.In + u.CacheRead + u.CacheWrite }
+func (counts usage) context() int { return counts.In + counts.CacheRead + counts.CacheWrite }
 
 // toolBrief : de quoi reconnaître un appel d'outil en quelques mots (commande, fichier, motif, description).
-func toolBrief(name string, in map[string]any) string {
-	for _, k := range []string{"description", "command", "file_path", "path", "pattern", "url", "query", "prompt", "subject"} {
-		if s, ok := in[k].(string); ok && strings.TrimSpace(s) != "" {
-			if k == "command" { // un script multiligne (heredoc) : sa première ligne dit déjà de quoi il s'agit
-				s = strings.TrimSpace(s)
-				s, _, _ = strings.Cut(s, "\n")
+func toolBrief(name string, input map[string]any) string {
+	for _, key := range []string{"description", "command", "file_path", "path", "pattern", "url", "query", "prompt", "subject"} {
+		if value, isText := input[key].(string); isText && strings.TrimSpace(value) != "" {
+			if key == "command" { // un script multiligne (heredoc) : sa première ligne dit déjà de quoi il s'agit
+				value = strings.TrimSpace(value)
+				value, _, _ = strings.Cut(value, "\n")
 			}
-			return name + " : " + cut(strings.Join(strings.Fields(s), " "), 90)
+			return name + " : " + cut(strings.Join(strings.Fields(value), " "), toolBriefMaxLength)
 		}
 	}
 	return name
 }
 
 // toolFull : l'appel d'outil en entier (commande complète, plusieurs lignes comprises), pour l'affichage du dernier outil.
-func toolFull(name string, in map[string]any) string {
-	for _, k := range []string{"command", "description", "file_path", "path", "pattern", "url", "query", "prompt", "subject"} {
-		if s, ok := in[k].(string); ok && strings.TrimSpace(s) != "" {
-			return name + " : " + cut(strings.TrimSpace(s), 4000)
+func toolFull(name string, input map[string]any) string {
+	for _, key := range []string{"command", "description", "file_path", "path", "pattern", "url", "query", "prompt", "subject"} {
+		if value, isText := input[key].(string); isText && strings.TrimSpace(value) != "" {
+			return name + " : " + cut(strings.TrimSpace(value), toolFullMaxLength)
 		}
 	}
 	return name
 }
 
 // readActivity lit la fin d'un transcript : ce que Claude fait d'après le dernier événement utile.
-func readActivity(path string) (activity string, thinking bool, since float64, u usage, model string, tool string, toolRunning bool) {
-	lines := tailLines(path, 512<<10)
+func readActivity(path string) (activity string, thinking bool, since float64, tokenUsage usage, model string, tool string, toolRunning bool) {
+	lines := tailLines(path, activityTailBytes)
 	pendingTool := map[string]string{} // tool_use_id -> résumé, tant qu'aucun résultat n'est arrivé
 	var order []string
-	for _, l := range lines {
-		var o struct {
+	for _, transcriptLine := range lines {
+		var event struct {
 			Type      string `json:"type"`
 			Timestamp string `json:"timestamp"`
 			Message   struct {
@@ -349,11 +371,11 @@ func readActivity(path string) (activity string, thinking bool, since float64, u
 				} `json:"usage"`
 			} `json:"message"`
 		}
-		if json.Unmarshal(l, &o) != nil || (o.Type != "assistant" && o.Type != "user") {
+		if json.Unmarshal(transcriptLine, &event) != nil || (event.Type != "assistant" && event.Type != "user") {
 			continue
 		}
-		if t, err := time.Parse(time.RFC3339Nano, o.Timestamp); err == nil {
-			since = float64(t.UnixNano()) / 1e9
+		if eventTime, err := time.Parse(time.RFC3339Nano, event.Timestamp); err == nil {
+			since = float64(eventTime.UnixNano()) / nanosecondsPerSecond
 		}
 		var blocks []struct {
 			Type      string         `json:"type"`
@@ -363,22 +385,22 @@ func readActivity(path string) (activity string, thinking bool, since float64, u
 			ToolUseID string         `json:"tool_use_id"`
 			Text      string         `json:"text"`
 		}
-		json.Unmarshal(o.Message.Content, &blocks) // une chaîne simple donne une liste vide : un message de l'utilisateur
-		switch o.Type {
+		json.Unmarshal(event.Message.Content, &blocks) // une chaîne simple donne une liste vide : un message de l'utilisateur
+		switch event.Type {
 		case "assistant":
-			if us := o.Message.Usage; us != nil {
-				u = usage{us.In, us.Out, us.CRead, us.CWr}
+			if eventUsage := event.Message.Usage; eventUsage != nil {
+				tokenUsage = usage{eventUsage.In, eventUsage.Out, eventUsage.CRead, eventUsage.CWr}
 			}
-			if o.Message.Model != "" && !strings.HasPrefix(o.Message.Model, "<") {
-				model = o.Message.Model
+			if event.Message.Model != "" && !strings.HasPrefix(event.Message.Model, "<") {
+				model = event.Message.Model
 			}
 			last := ""
-			for _, b := range blocks {
-				switch b.Type {
+			for _, block := range blocks {
+				switch block.Type {
 				case "tool_use":
-					pendingTool[b.ID] = toolBrief(b.Name, b.Input)
-					tool, toolRunning = toolFull(b.Name, b.Input), true
-					order = append(order, b.ID)
+					pendingTool[block.ID] = toolBrief(block.Name, block.Input)
+					tool, toolRunning = toolFull(block.Name, block.Input), true
+					order = append(order, block.ID)
 					last = "tool"
 				case "thinking":
 					last = "thinking"
@@ -389,19 +411,19 @@ func readActivity(path string) (activity string, thinking bool, since float64, u
 			switch {
 			case last == "tool":
 				thinking = true
-			case last == "text" && o.Message.StopReason == "end_turn":
+			case last == "text" && event.Message.StopReason == "end_turn":
 				activity, thinking = "a terminé sa réponse", false
 			default:
 				activity, thinking = "réfléchit", true
 			}
 		case "user":
 			isResult := false
-			for _, b := range blocks {
-				if b.Type == "tool_result" {
-					if len(order) > 0 && order[len(order)-1] == b.ToolUseID {
+			for _, block := range blocks {
+				if block.Type == "tool_result" {
+					if len(order) > 0 && order[len(order)-1] == block.ToolUseID {
 						toolRunning = false
 					}
-					delete(pendingTool, b.ToolUseID)
+					delete(pendingTool, block.ToolUseID)
 					isResult = true
 				}
 			}
@@ -412,117 +434,117 @@ func readActivity(path string) (activity string, thinking bool, since float64, u
 			}
 		}
 	}
-	for i := len(order) - 1; i >= 0; i-- { // l'appel d'outil le plus récent encore sans résultat
-		if s, ok := pendingTool[order[i]]; ok {
-			return "exécute " + s, true, since, u, model, tool, toolRunning
+	for orderIndex := len(order) - 1; orderIndex >= 0; orderIndex-- { // l'appel d'outil le plus récent encore sans résultat
+		if summary, isPending := pendingTool[order[orderIndex]]; isPending {
+			return "exécute " + summary, true, since, tokenUsage, model, tool, toolRunning
 		}
 	}
-	return activity, thinking, since, u, model, tool, toolRunning
+	return activity, thinking, since, tokenUsage, model, tool, toolRunning
 }
 
-func sessionLive(dir, id string) LiveState {
-	st := LiveState{Subs: []SubLive{}, Tasks: []BgTask{}, Verbs: spinnerVerbs(uiLang()), Queue: []Queued{}, Pending: []QItem{}}
+func sessionLive(dir, sessionID string) LiveState {
+	state := LiveState{Subs: []SubLive{}, Tasks: []BgTask{}, Verbs: spinnerVerbs(uiLang()), Queue: []Queued{}, Pending: []QItem{}}
 	if queueSt != nil {
-		st.Pending = queueSt.List(id)
+		state.Pending = queueSt.List(sessionID)
 	}
-	st.Status, st.Open = sessionStatus(id)
-	p, ok := transcript(dir, id)
-	if !ok {
-		return st
+	state.Status, state.Open = sessionStatus(sessionID)
+	transcriptPath, found := transcript(dir, sessionID)
+	if !found {
+		return state
 	}
-	var u usage
-	st.Activity, st.Thinking, st.Since, u, st.Model, st.Tool, st.ToolRunning = readActivity(p)
-	st.Context, st.Out = u.context(), u.Out
-	if st.Open && st.Status == "idle" {
-		st.Activity, st.Thinking = "attend votre message", false
-		st.Said = lastSaid(p)
-	} else if st.Open && st.Status == "busy" {
-		st.Thinking = true
-		if st.Activity == "" || st.Activity == "a terminé sa réponse" {
-			st.Activity = "travaille"
+	var tokenUsage usage
+	state.Activity, state.Thinking, state.Since, tokenUsage, state.Model, state.Tool, state.ToolRunning = readActivity(transcriptPath)
+	state.Context, state.Out = tokenUsage.context(), tokenUsage.Out
+	if state.Open && state.Status == "idle" {
+		state.Activity, state.Thinking = "attend votre message", false
+		state.Said = lastSaid(transcriptPath)
+	} else if state.Open && state.Status == "busy" {
+		state.Thinking = true
+		if state.Activity == "" || state.Activity == "a terminé sa réponse" {
+			state.Activity = "travaille"
 		}
 	}
-	if !st.Open {
-		st.Thinking = false
+	if !state.Open {
+		state.Thinking = false
 	}
-	st.Generic, st.Exec = isGenericActivity(st.Activity), strings.HasPrefix(st.Activity, "exécute ")
-	st.Activity = localizeActivity(st.Activity)
-	if st.Open {
-		st.Queue = pendingQueue(p)
+	state.Generic, state.Exec = isGenericActivity(state.Activity), strings.HasPrefix(state.Activity, "exécute ")
+	state.Activity = localizeActivity(state.Activity)
+	if state.Open {
+		state.Queue = pendingQueue(transcriptPath)
 	}
-	st.Subs = subLives(filepath.Join(filepath.Dir(p), id, "subagents"))
-	if t := bgTasks(p, st.Open); t != nil {
-		st.Tasks = t
+	state.Subs = subLives(filepath.Join(filepath.Dir(transcriptPath), sessionID, "subagents"))
+	if tasks := bgTasks(transcriptPath, state.Open); tasks != nil {
+		state.Tasks = tasks
 	}
-	return st
+	return state
 }
 
 // subLives : les sous-agents d'une session, les plus récents d'abord (60 au plus).
 func subLives(dir string) []SubLive {
-	out := []SubLive{}
+	subagents := []SubLive{}
 	metas, _ := filepath.Glob(filepath.Join(dir, "agent-*.meta.json"))
-	for _, m := range metas {
-		id := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(m), "agent-"), ".meta.json")
+	for _, metaPath := range metas {
+		agentID := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(metaPath), "agent-"), ".meta.json")
 		var meta struct {
 			AgentType   string `json:"agentType"`
 			Description string `json:"description"`
 			Finished    bool   `json:"finished"`
 		}
-		if b, err := readTrusted(m); err != nil || json.Unmarshal(b, &meta) != nil {
+		if metaContent, readErr := readTrusted(metaPath); readErr != nil || json.Unmarshal(metaContent, &meta) != nil {
 			continue
 		}
-		tp := filepath.Join(dir, "agent-"+id+".jsonl")
-		fi, err := os.Stat(tp)
+		transcriptPath := filepath.Join(dir, "agent-"+agentID+".jsonl")
+		fileInfo, err := os.Stat(transcriptPath)
 		if err != nil {
 			continue
 		}
-		act, thinking, _, u, _, _, _ := readActivity(tp)
-		s := SubLive{ID: id, Desc: meta.Description, Type: meta.AgentType, Activity: act, Context: u.context(), Out: u.Out, Mtime: float64(fi.ModTime().UnixNano()) / 1e9}
+		activity, thinking, _, tokenUsage, _, _, _ := readActivity(transcriptPath)
+		subagent := SubLive{ID: agentID, Desc: meta.Description, Type: meta.AgentType, Activity: activity, Context: tokenUsage.context(), Out: tokenUsage.Out, Mtime: float64(fileInfo.ModTime().UnixNano()) / nanosecondsPerSecond}
 		// Un sous-agent « fini » d'après son fichier meta ne travaille plus ; sans cette marque, il travaille s'il a écrit récemment.
-		s.Running = !meta.Finished && thinking && time.Since(fi.ModTime()) < 10*time.Minute
-		if !s.Running && s.Activity == "" {
-			s.Activity = "terminé"
+		subagent.Running = !meta.Finished && thinking && time.Since(fileInfo.ModTime()) < subagentRecentWindow
+		if !subagent.Running && subagent.Activity == "" {
+			subagent.Activity = "terminé"
 		}
-		if !s.Running && meta.Finished {
-			s.Activity = "terminé"
+		if !subagent.Running && meta.Finished {
+			subagent.Activity = "terminé"
 		}
-		s.Activity = localizeActivity(s.Activity)
-		out = append(out, s)
+		subagent.Activity = localizeActivity(subagent.Activity)
+		subagents = append(subagents, subagent)
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Running != out[j].Running {
-			return out[i].Running
+	sort.Slice(subagents, func(left, right int) bool {
+		if subagents[left].Running != subagents[right].Running {
+			return subagents[left].Running
 		}
-		return out[i].Mtime > out[j].Mtime
+		return subagents[left].Mtime > subagents[right].Mtime
 	})
-	if len(out) > 60 {
-		out = out[:60]
+	if len(subagents) > subagentListMax {
+		subagents = subagents[:subagentListMax]
 	}
-	return out
+	return subagents
 }
 
 // lastSaid : le dernier paragraphe du dernier texte écrit par Claude (200 caractères au plus), "" s'il n'y en a pas.
 func lastSaid(path string) string {
-	lines := tailLines(path, 256<<10)
-	for i := len(lines) - 1; i >= 0; i-- {
-		var o struct {
+	lines := tailLines(path, lastSaidTailBytes)
+	for lineIndex := len(lines) - 1; lineIndex >= 0; lineIndex-- {
+		var event struct {
 			Type    string `json:"type"`
 			IsMeta  bool   `json:"isMeta"`
 			Message struct {
 				Content json.RawMessage `json:"content"`
 			} `json:"message"`
 		}
-		if json.Unmarshal(lines[i], &o) != nil || o.Type != "assistant" {
+		if json.Unmarshal(lines[lineIndex], &event) != nil || event.Type != "assistant" {
 			continue
 		}
 		var blocks []struct{ Type, Text string }
-		if json.Unmarshal(o.Message.Content, &blocks) != nil {
+		if json.Unmarshal(event.Message.Content, &blocks) != nil {
 			continue
 		}
-		for j := len(blocks) - 1; j >= 0; j-- {
-			if t := strings.TrimSpace(blocks[j].Text); blocks[j].Type == "text" && t != "" {
-				paras := strings.Split(t, "\n\n")
-				return cut(spaceRe.ReplaceAllString(strings.TrimSpace(paras[len(paras)-1]), " "), 200)
+		for blockIndex := len(blocks) - 1; blockIndex >= 0; blockIndex-- {
+			if text := strings.TrimSpace(blocks[blockIndex].Text); blocks[blockIndex].Type == "text" && text != "" {
+				paras := strings.Split(text, "\n\n")
+				return cut(spaceRe.ReplaceAllString(strings.TrimSpace(paras[len(paras)-1]), " "), lastSaidMaxLength)
 			}
 		}
 		return "" // le dernier message de Claude n'a pas de texte (outil seul)

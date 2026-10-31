@@ -26,12 +26,12 @@ func rosterPaths(cfgRoot, team string) (dir, file string, err error) {
 	return dir, filepath.Join(dir, team+".roster.json"), nil
 }
 
-func rosterValid(m map[string]string) bool {
-	if len(m) > rosterMaxEntries {
+func rosterValid(roster map[string]string) bool {
+	if len(roster) > rosterMaxEntries {
 		return false
 	}
-	for k, v := range m {
-		if !rosterKeyRe.MatchString(k) || !rosterValRe.MatchString(v) {
+	for firstName, roleSlug := range roster {
+		if !rosterKeyRe.MatchString(firstName) || !rosterValRe.MatchString(roleSlug) {
 			return false
 		}
 	}
@@ -50,27 +50,27 @@ func rosterWrite(cfgRoot, team string, roster map[string]string) error {
 	if !rosterValid(roster) {
 		return terr("srv.teams_roster.entreeInvalide")
 	}
-	b, err := json.Marshal(roster)
+	content, err := json.Marshal(roster)
 	if err != nil {
 		return err
 	}
 	teamsJournalMu.Lock()
 	defer teamsJournalMu.Unlock()
-	st, ok, err := lstatNoLink(dir)
+	dirInfo, exists, err := lstatNoLink(dir)
 	if err != nil {
 		return err
 	}
-	if !ok {
-		if err := rMkdirAll(cfgRoot, dir, 0o700); err != nil {
-			return err
+	if !exists {
+		if mkdirErr := rMkdirAll(cfgRoot, dir, 0o700); mkdirErr != nil {
+			return mkdirErr
 		}
-	} else if !st.IsDir() {
+	} else if !dirInfo.IsDir() {
 		return terr("srv.teams_journal.lienRefuse")
 	}
-	if _, _, err := lstatNoLink(file); err != nil {
-		return err
+	if _, _, fileErr := lstatNoLink(file); fileErr != nil {
+		return fileErr
 	}
-	return rWriteAtomic(cfgRoot, file, b, 0o600)
+	return rWriteAtomic(cfgRoot, file, content, 0o600)
 }
 
 // rosterRead ne renvoie jamais d'erreur sur le contenu : la vue doit rester utilisable.
@@ -82,29 +82,29 @@ func rosterRead(cfgRoot, team string) (map[string]string, error) {
 	empty := map[string]string{}
 	teamsJournalMu.Lock()
 	defer teamsJournalMu.Unlock()
-	if _, _, err := lstatNoLink(dir); err != nil {
+	if _, _, dirErr := lstatNoLink(dir); dirErr != nil {
 		return empty, nil
 	}
-	if _, ok, err := lstatNoLink(file); err != nil || !ok {
+	if _, exists, fileErr := lstatNoLink(file); fileErr != nil || !exists {
 		return empty, nil
 	}
-	f, err := os.OpenFile(file, os.O_RDONLY|oNoFollow, 0)
+	rosterFile, err := os.OpenFile(file, os.O_RDONLY|oNoFollow, 0)
 	if err != nil {
 		return empty, nil
 	}
-	defer f.Close()
-	b, err := io.ReadAll(io.LimitReader(f, rosterMaxBytes+1))
-	if err != nil || len(b) > rosterMaxBytes {
+	defer rosterFile.Close()
+	content, err := io.ReadAll(io.LimitReader(rosterFile, rosterMaxBytes+1))
+	if err != nil || len(content) > rosterMaxBytes {
 		return empty, nil
 	}
-	var m map[string]string
-	if json.Unmarshal(b, &m) != nil || !rosterValid(m) {
+	var roster map[string]string
+	if json.Unmarshal(content, &roster) != nil || !rosterValid(roster) {
 		return empty, nil
 	}
-	if m == nil {
-		m = empty
+	if roster == nil {
+		roster = empty
 	}
-	return m, nil
+	return roster, nil
 }
 
 func rosterDrop(cfgRoot, team string) error {
@@ -114,11 +114,11 @@ func rosterDrop(cfgRoot, team string) error {
 	}
 	teamsJournalMu.Lock()
 	defer teamsJournalMu.Unlock()
-	if _, _, err := lstatNoLink(dir); err != nil {
-		return err
+	if _, _, dirErr := lstatNoLink(dir); dirErr != nil {
+		return dirErr
 	}
-	if err := rRemove(cfgRoot, file); err != nil && !os.IsNotExist(err) {
-		return err
+	if removeErr := rRemove(cfgRoot, file); removeErr != nil && !os.IsNotExist(removeErr) {
+		return removeErr
 	}
 	_ = rRemove(cfgRoot, dir) // ne réussit que si le dossier est vide
 	return nil

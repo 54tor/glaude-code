@@ -27,199 +27,199 @@ func teamsPath(cfgRoot string) string { return filepath.Join(cfgRoot, "gld-teams
 
 // persoLoad : le contenu perso ; un fichier absent ou vide est vide, un fichier illisible une erreur (jamais réécrit).
 func persoLoad(cfgRoot string) (Catalog, error) {
-	var c Catalog
-	b, err := readTrustedIn(cfgRoot, teamsPath(cfgRoot))
+	var catalog Catalog
+	content, err := readTrustedIn(cfgRoot, teamsPath(cfgRoot))
 	if errors.Is(err, fs.ErrNotExist) {
-		return c, nil
+		return catalog, nil
 	}
 	if err != nil {
-		return c, terr("srv.teams_store.fichierIllisible", "A1", err.Error())
+		return catalog, terr("srv.teams_store.fichierIllisible", "A1", err.Error())
 	}
-	if len(strings.TrimSpace(string(b))) == 0 {
-		return c, nil
+	if len(strings.TrimSpace(string(content))) == 0 {
+		return catalog, nil
 	}
-	if err := json.Unmarshal(b, &c); err != nil {
-		return Catalog{}, terr("srv.teams_store.fichierIllisible", "A1", err.Error())
+	if decodeErr := json.Unmarshal(content, &catalog); decodeErr != nil {
+		return Catalog{}, terr("srv.teams_store.fichierIllisible", "A1", decodeErr.Error())
 	}
-	return c, nil
+	return catalog, nil
 }
 
-func persoSave(cfgRoot string, c Catalog) error {
-	b, _ := json.MarshalIndent(c, "", "  ")
-	return rWriteAtomic(cfgRoot, teamsPath(cfgRoot), b, 0o600)
+func persoSave(cfgRoot string, catalog Catalog) error {
+	content, _ := json.MarshalIndent(catalog, "", "  ")
+	return rWriteAtomic(cfgRoot, teamsPath(cfgRoot), content, 0o600)
 }
 
-func mergeCatalog(p Catalog) Catalog {
-	c := builtinCatalog()
-	c.Agents = append(c.Agents, p.Agents...)
-	c.Teams = append(c.Teams, p.Teams...)
-	return c
+func mergeCatalog(personal Catalog) Catalog {
+	merged := builtinCatalog()
+	merged.Agents = append(merged.Agents, personal.Agents...)
+	merged.Teams = append(merged.Teams, personal.Teams...)
+	return merged
 }
 
 func loadCatalog(cfgRoot string) (Catalog, error) {
 	teamsMu.Lock()
 	defer teamsMu.Unlock()
-	p, err := persoLoad(cfgRoot)
+	personal, err := persoLoad(cfgRoot)
 	if err != nil {
 		return Catalog{}, err
 	}
-	return mergeCatalog(p), nil
+	return mergeCatalog(personal), nil
 }
 
 func newPersoID() string {
-	var b [4]byte
-	rand.Read(b[:])
-	return "x-" + hex.EncodeToString(b[:])
+	var randomBytes [4]byte
+	rand.Read(randomBytes[:])
+	return "x-" + hex.EncodeToString(randomBytes[:])
 }
 
 var modelRe = regexp.MustCompile(`^[A-Za-z0-9._-]{0,64}$`)
 
-func saveAgent(cfgRoot string, a Agent) (Agent, error) {
+func saveAgent(cfgRoot string, agent Agent) (Agent, error) {
 	teamsMu.Lock()
 	defer teamsMu.Unlock()
-	p, err := persoLoad(cfgRoot)
+	personal, err := persoLoad(cfgRoot)
 	if err != nil {
 		return Agent{}, err
 	}
-	all := mergeCatalog(p)
-	a.Name, a.Role = strings.TrimSpace(a.Name), strings.TrimSpace(a.Role)
+	all := mergeCatalog(personal)
+	agent.Name, agent.Role = strings.TrimSpace(agent.Name), strings.TrimSpace(agent.Role)
 	switch {
-	case a.Name == "":
+	case agent.Name == "":
 		return Agent{}, terr("srv.teams_store.nomVide")
-	case a.Role == "":
+	case agent.Role == "":
 		return Agent{}, terr("srv.teams_store.roleVide")
-	case a.Access != "read" && a.Access != "write":
-		return Agent{}, terr("srv.teams_store.accesInvalide", "A1", a.Access)
-	case !modelRe.MatchString(a.Model):
+	case agent.Access != "read" && agent.Access != "write":
+		return Agent{}, terr("srv.teams_store.accesInvalide", "A1", agent.Access)
+	case !modelRe.MatchString(agent.Model):
 		return Agent{}, terr("srv.teams_store.modeleInvalide")
-	case len(a.Prompt) > maxPromptBytes:
+	case len(agent.Prompt) > maxPromptBytes:
 		return Agent{}, terr("srv.teams_store.promptTropLong")
 	}
-	idx, base := -1, ""
-	if a.ID != "" {
-		for _, x := range all.Agents {
-			if x.ID == a.ID && x.Builtin {
-				base = x.ID
+	existingIndex, base := -1, ""
+	if agent.ID != "" {
+		for _, candidate := range all.Agents {
+			if candidate.ID == agent.ID && candidate.Builtin {
+				base = candidate.ID
 			}
 		}
 		if base == "" {
-			for i, x := range p.Agents {
-				if x.ID == a.ID {
-					idx = i
+			for agentIndex, candidate := range personal.Agents {
+				if candidate.ID == agent.ID {
+					existingIndex = agentIndex
 				}
 			}
-			if idx < 0 {
-				return Agent{}, terr("srv.teams_store.idInconnu", "A1", a.ID)
+			if existingIndex < 0 {
+				return Agent{}, terr("srv.teams_store.idInconnu", "A1", agent.ID)
 			}
-			base = p.Agents[idx].Base
+			base = personal.Agents[existingIndex].Base
 		}
 	}
-	if idx < 0 {
-		if len(p.Agents) >= maxPersoAgents {
+	if existingIndex < 0 {
+		if len(personal.Agents) >= maxPersoAgents {
 			return Agent{}, terr("srv.teams_store.tropDAgents")
 		}
-		a.ID = newPersoID()
+		agent.ID = newPersoID()
 	}
-	for _, x := range all.Agents {
-		if x.ID != a.ID && strings.EqualFold(x.Name, a.Name) {
-			return Agent{}, terr("srv.teams_store.doublon", "A1", a.Name)
+	for _, candidate := range all.Agents {
+		if candidate.ID != agent.ID && strings.EqualFold(candidate.Name, agent.Name) {
+			return Agent{}, terr("srv.teams_store.doublon", "A1", agent.Name)
 		}
 	}
-	a.Builtin, a.Base = false, base
-	if idx < 0 {
-		p.Agents = append(p.Agents, a)
+	agent.Builtin, agent.Base = false, base
+	if existingIndex < 0 {
+		personal.Agents = append(personal.Agents, agent)
 	} else {
-		p.Agents[idx] = a
+		personal.Agents[existingIndex] = agent
 	}
-	return a, persoSave(cfgRoot, p)
+	return agent, persoSave(cfgRoot, personal)
 }
 
-func saveTeam(cfgRoot string, t Team) (Team, error) {
+func saveTeam(cfgRoot string, team Team) (Team, error) {
 	teamsMu.Lock()
 	defer teamsMu.Unlock()
-	p, err := persoLoad(cfgRoot)
+	personal, err := persoLoad(cfgRoot)
 	if err != nil {
 		return Team{}, err
 	}
-	all := mergeCatalog(p)
-	t.Name = strings.TrimSpace(t.Name)
-	if t.Name == "" {
+	all := mergeCatalog(personal)
+	team.Name = strings.TrimSpace(team.Name)
+	if team.Name == "" {
 		return Team{}, terr("srv.teams_store.nomVide")
 	}
-	if len(t.Members) == 0 {
+	if len(team.Members) == 0 {
 		return Team{}, terr("srv.teams_store.membreVide")
 	}
-	ok := map[string]bool{}
-	for _, x := range all.Agents {
-		ok[x.ID] = x.Access != "lead" // le chef est implicite, jamais membre
+	isEligible := map[string]bool{}
+	for _, agent := range all.Agents {
+		isEligible[agent.ID] = agent.Access != "lead" // le chef est implicite, jamais membre
 	}
 	seen := map[string]bool{}
-	for _, m := range t.Members {
-		if !ok[m] {
-			return Team{}, terr("srv.teams_store.membreInconnu", "A1", m)
+	for _, memberID := range team.Members {
+		if !isEligible[memberID] {
+			return Team{}, terr("srv.teams_store.membreInconnu", "A1", memberID)
 		}
-		if seen[m] {
-			return Team{}, terr("srv.teams_store.membreDoublon", "A1", m)
+		if seen[memberID] {
+			return Team{}, terr("srv.teams_store.membreDoublon", "A1", memberID)
 		}
-		seen[m] = true
+		seen[memberID] = true
 	}
-	idx, base := -1, ""
-	if t.ID != "" {
-		for _, x := range all.Teams {
-			if x.ID == t.ID && x.Builtin {
-				base = x.ID
+	existingIndex, base := -1, ""
+	if team.ID != "" {
+		for _, candidate := range all.Teams {
+			if candidate.ID == team.ID && candidate.Builtin {
+				base = candidate.ID
 			}
 		}
 		if base == "" {
-			for i, x := range p.Teams {
-				if x.ID == t.ID {
-					idx = i
+			for teamIndex, candidate := range personal.Teams {
+				if candidate.ID == team.ID {
+					existingIndex = teamIndex
 				}
 			}
-			if idx < 0 {
-				return Team{}, terr("srv.teams_store.idInconnu", "A1", t.ID)
+			if existingIndex < 0 {
+				return Team{}, terr("srv.teams_store.idInconnu", "A1", team.ID)
 			}
-			base = p.Teams[idx].Base
+			base = personal.Teams[existingIndex].Base
 		}
 	}
-	if idx < 0 {
-		if len(p.Teams) >= maxPersoTeams {
+	if existingIndex < 0 {
+		if len(personal.Teams) >= maxPersoTeams {
 			return Team{}, terr("srv.teams_store.tropDeTeams")
 		}
-		t.ID = newPersoID()
+		team.ID = newPersoID()
 	}
-	t.Builtin, t.Base = false, base
-	if idx < 0 {
-		p.Teams = append(p.Teams, t)
+	team.Builtin, team.Base = false, base
+	if existingIndex < 0 {
+		personal.Teams = append(personal.Teams, team)
 	} else {
-		p.Teams[idx] = t
+		personal.Teams[existingIndex] = team
 	}
-	return t, persoSave(cfgRoot, p)
+	return team, persoSave(cfgRoot, personal)
 }
 
 func removeAgent(cfgRoot, id string) error {
 	teamsMu.Lock()
 	defer teamsMu.Unlock()
-	p, err := persoLoad(cfgRoot)
+	personal, err := persoLoad(cfgRoot)
 	if err != nil {
 		return err
 	}
-	for _, x := range builtinCatalog().Agents {
-		if x.ID == id {
+	for _, agent := range builtinCatalog().Agents {
+		if agent.ID == id {
 			return terr("srv.teams_store.builtinRefuse", "A1", id)
 		}
 	}
-	for _, t := range mergeCatalog(p).Teams {
-		for _, m := range t.Members {
-			if m == id {
-				return terr("srv.teams_store.agentUtilise", "A1", id, "A2", t.Name)
+	for _, team := range mergeCatalog(personal).Teams {
+		for _, memberID := range team.Members {
+			if memberID == id {
+				return terr("srv.teams_store.agentUtilise", "A1", id, "A2", team.Name)
 			}
 		}
 	}
-	for i, x := range p.Agents {
-		if x.ID == id {
-			p.Agents = append(p.Agents[:i], p.Agents[i+1:]...)
-			return persoSave(cfgRoot, p)
+	for agentIndex, agent := range personal.Agents {
+		if agent.ID == id {
+			personal.Agents = append(personal.Agents[:agentIndex], personal.Agents[agentIndex+1:]...)
+			return persoSave(cfgRoot, personal)
 		}
 	}
 	return terr("srv.teams_store.idInconnu", "A1", id)
@@ -228,19 +228,19 @@ func removeAgent(cfgRoot, id string) error {
 func removeTeam(cfgRoot, id string) error {
 	teamsMu.Lock()
 	defer teamsMu.Unlock()
-	p, err := persoLoad(cfgRoot)
+	personal, err := persoLoad(cfgRoot)
 	if err != nil {
 		return err
 	}
-	for _, x := range builtinCatalog().Teams {
-		if x.ID == id {
+	for _, team := range builtinCatalog().Teams {
+		if team.ID == id {
 			return terr("srv.teams_store.builtinRefuse", "A1", id)
 		}
 	}
-	for i, x := range p.Teams {
-		if x.ID == id {
-			p.Teams = append(p.Teams[:i], p.Teams[i+1:]...)
-			return persoSave(cfgRoot, p)
+	for teamIndex, team := range personal.Teams {
+		if team.ID == id {
+			personal.Teams = append(personal.Teams[:teamIndex], personal.Teams[teamIndex+1:]...)
+			return persoSave(cfgRoot, personal)
 		}
 	}
 	return terr("srv.teams_store.idInconnu", "A1", id)

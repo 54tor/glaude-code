@@ -22,6 +22,9 @@ const (
 	journalMax  = 4 << 20
 	journalLast = 500
 	journalDir  = "gld-teams-journal"
+
+	journalFieldMax = 64   // auteur et destinataire, en caractères
+	journalTextMax  = 8000 // texte d'un message, en octets
 )
 
 // Un seul verrou pour tout : le volume est celui de messages tapés à la main.
@@ -37,92 +40,92 @@ func journalPaths(cfgRoot, team string) (dir, file string, err error) {
 }
 
 // lstatNoLink : (info, existe, err) ; un lien symbolique est refusé.
-func lstatNoLink(p string) (os.FileInfo, bool, error) {
-	st, err := os.Lstat(p)
+func lstatNoLink(filePath string) (os.FileInfo, bool, error) {
+	fileInfo, err := os.Lstat(filePath)
 	if os.IsNotExist(err) {
 		return nil, false, nil
 	}
 	if err != nil {
 		return nil, false, err
 	}
-	if st.Mode()&os.ModeSymlink != 0 {
+	if fileInfo.Mode()&os.ModeSymlink != 0 {
 		return nil, false, terr("srv.teams_journal.lienRefuse")
 	}
-	return st, true, nil
+	return fileInfo, true, nil
 }
 
-func cleanField(s string) string {
-	s = strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
+func cleanField(text string) string {
+	text = strings.Map(func(character rune) rune {
+		if unicode.IsControl(character) {
 			return -1
 		}
-		return r
-	}, s)
-	s = strings.TrimSpace(s)
-	if r := []rune(s); len(r) > 64 {
-		s = string(r[:64])
+		return character
+	}, text)
+	text = strings.TrimSpace(text)
+	if runes := []rune(text); len(runes) > journalFieldMax {
+		text = string(runes[:journalFieldMax])
 	}
-	return s
+	return text
 }
 
-func journalAppend(cfgRoot, team string, m DirectMsg) error {
+func journalAppend(cfgRoot, team string, message DirectMsg) error {
 	dir, file, err := journalPaths(cfgRoot, team)
 	if err != nil {
 		return err
 	}
-	m.Author, m.To = cleanField(m.Author), cleanField(m.To)
-	if len(m.Text) > 8000 {
-		m.Text = m.Text[:8000]
-		for !utf8.ValidString(m.Text) {
-			m.Text = m.Text[:len(m.Text)-1]
+	message.Author, message.To = cleanField(message.Author), cleanField(message.To)
+	if len(message.Text) > journalTextMax {
+		message.Text = message.Text[:journalTextMax]
+		for !utf8.ValidString(message.Text) {
+			message.Text = message.Text[:len(message.Text)-1]
 		}
 	}
-	if m.Author == "" || strings.TrimSpace(m.Text) == "" {
+	if message.Author == "" || strings.TrimSpace(message.Text) == "" {
 		return terr("srv.teams_journal.messageInvalide")
 	}
-	if m.At == 0 {
-		m.At = time.Now().UnixMilli()
+	if message.At == 0 {
+		message.At = time.Now().UnixMilli()
 	}
-	line, err := json.Marshal(m)
+	journalLine, err := json.Marshal(message)
 	if err != nil {
 		return err
 	}
-	line = append(line, '\n')
+	journalLine = append(journalLine, '\n')
 
 	teamsJournalMu.Lock()
 	defer teamsJournalMu.Unlock()
-	st, ok, err := lstatNoLink(dir)
+	dirInfo, exists, err := lstatNoLink(dir)
 	if err != nil {
 		return err
 	}
-	if !ok {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			return err
+	if !exists {
+		if mkdirErr := os.MkdirAll(dir, 0o700); mkdirErr != nil {
+			return mkdirErr
 		}
-	} else if !st.IsDir() {
+	} else if !dirInfo.IsDir() {
 		return terr("srv.teams_journal.lienRefuse")
 	}
-	fst, ok, err := lstatNoLink(file)
+	fileInfo, exists, err := lstatNoLink(file)
 	if err != nil {
 		return err
 	}
-	if ok && fst.Size()+int64(len(line)) > journalMax {
+	if exists && fileInfo.Size()+int64(len(journalLine)) > journalMax {
 		return terr("srv.teams_journal.journalPlein")
 	}
-	f, err := os.OpenFile(file, os.O_RDWR|os.O_APPEND|os.O_CREATE|oNoFollow, 0o600)
+	journalFile, err := os.OpenFile(file, os.O_RDWR|os.O_APPEND|os.O_CREATE|oNoFollow, 0o600)
 	if err != nil {
 		return err
 	}
 	// un fragment sans « \n » (arrêt brutal) ne doit pas absorber la ligne suivante
-	if ok && fst.Size() > 0 {
-		var last [1]byte
-		if _, e := f.ReadAt(last[:], fst.Size()-1); e == nil && last[0] != '\n' {
-			line = append([]byte{'\n'}, line...)
+	if exists && fileInfo.Size() > 0 {
+		var lastByte [1]byte
+		if _, readErr := journalFile.ReadAt(lastByte[:], fileInfo.Size()-1); readErr == nil && lastByte[0] != '\n' {
+			journalLine = append([]byte{'\n'}, journalLine...)
 		}
 	}
-	_, err = f.Write(line)
-	if cerr := f.Close(); err == nil {
-		err = cerr
+	_, err = journalFile.Write(journalLine)
+	if closeErr := journalFile.Close(); err == nil {
+		err = closeErr
 	}
 	return err
 }
@@ -134,33 +137,33 @@ func journalRead(cfgRoot, team string) ([]DirectMsg, error) {
 	}
 	teamsJournalMu.Lock()
 	defer teamsJournalMu.Unlock()
-	if _, _, err := lstatNoLink(dir); err != nil {
-		return nil, err
+	if _, _, dirErr := lstatNoLink(dir); dirErr != nil {
+		return nil, dirErr
 	}
-	if _, ok, err := lstatNoLink(file); err != nil || !ok {
-		return nil, err
+	if _, exists, fileErr := lstatNoLink(file); fileErr != nil || !exists {
+		return nil, fileErr
 	}
-	f, err := os.OpenFile(file, os.O_RDONLY|oNoFollow, 0)
+	journalFile, err := os.OpenFile(file, os.O_RDONLY|oNoFollow, 0)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
-	b, err := io.ReadAll(io.LimitReader(f, journalMax))
+	defer journalFile.Close()
+	content, err := io.ReadAll(io.LimitReader(journalFile, journalMax))
 	if err != nil {
 		return nil, err
 	}
-	out := []DirectMsg{}
-	for _, l := range strings.Split(string(b), "\n") {
-		var m DirectMsg
+	messages := []DirectMsg{}
+	for _, journalLine := range strings.Split(string(content), "\n") {
+		var message DirectMsg
 		// une ligne coupée par un arrêt brutal est ignorée
-		if l != "" && json.Unmarshal([]byte(l), &m) == nil {
-			out = append(out, m)
+		if journalLine != "" && json.Unmarshal([]byte(journalLine), &message) == nil {
+			messages = append(messages, message)
 		}
 	}
-	if len(out) > journalLast {
-		out = out[len(out)-journalLast:]
+	if len(messages) > journalLast {
+		messages = messages[len(messages)-journalLast:]
 	}
-	return out, nil
+	return messages, nil
 }
 
 func journalDrop(cfgRoot, team string) error {
@@ -170,11 +173,11 @@ func journalDrop(cfgRoot, team string) error {
 	}
 	teamsJournalMu.Lock()
 	defer teamsJournalMu.Unlock()
-	if _, _, err := lstatNoLink(dir); err != nil {
-		return err
+	if _, _, dirErr := lstatNoLink(dir); dirErr != nil {
+		return dirErr
 	}
-	if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
-		return err
+	if removeErr := os.Remove(file); removeErr != nil && !os.IsNotExist(removeErr) {
+		return removeErr
 	}
 	_ = os.Remove(dir) // ne réussit que si le dossier est vide
 	return nil

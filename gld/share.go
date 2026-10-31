@@ -53,29 +53,29 @@ type Invite struct {
 }
 
 // label : « Invité » reste fixe (pas de L) : c'est aussi le mot de l'étiquette envoyée à Claude.
-func (i Invite) label() string {
-	if i.Name != "" {
-		return i.Name
+func (invitation Invite) label() string {
+	if invitation.Name != "" {
+		return invitation.Name
 	}
-	return "Invité " + strconv.Itoa(i.Seq)
+	return "Invité " + strconv.Itoa(invitation.Seq)
 }
 
-func (sh *Share) inv(id string) int {
-	return slices.IndexFunc(sh.Invites, func(i Invite) bool { return i.ID == id })
+func (share *Share) inv(inviteID string) int {
+	return slices.IndexFunc(share.Invites, func(candidate Invite) bool { return candidate.ID == inviteID })
 }
 
-func (sh Share) invite(id string) (Invite, bool) {
-	if i := sh.inv(id); i >= 0 {
-		return sh.Invites[i], true
+func (share Share) invite(inviteID string) (Invite, bool) {
+	if inviteIndex := share.inv(inviteID); inviteIndex >= 0 {
+		return share.Invites[inviteIndex], true
 	}
 	return Invite{}, false
 }
 
 // clone : une copie rendue hors du verrou ne doit pas partager le tableau des invitations.
-func (sh *Share) clone() Share {
-	c := *sh
-	c.Invites = slices.Clone(sh.Invites)
-	return c
+func (share *Share) clone() Share {
+	copied := *share
+	copied.Invites = slices.Clone(share.Invites)
+	return copied
 }
 
 type shareStore struct {
@@ -99,153 +99,153 @@ var (
 )
 
 func newSecret() string {
-	var b [32]byte
-	rand.Read(b[:])
-	return base64.RawURLEncoding.EncodeToString(b[:])
+	var randomBytes [32]byte
+	rand.Read(randomBytes[:])
+	return base64.RawURLEncoding.EncodeToString(randomBytes[:])
 }
 
-func hashSecret(s string) string {
-	h := sha256.Sum256([]byte(s))
-	return hex.EncodeToString(h[:])
+func hashSecret(secret string) string {
+	digest := sha256.Sum256([]byte(secret))
+	return hex.EncodeToString(digest[:])
 }
 
 // shareHandle : désigne le partage d'une session (nom du cookie invité, adresse /guest/<poignée>) ; jamais un secret.
 func shareHandle(session string) string {
-	h := sha256.Sum256([]byte("gld-share-handle\x00" + session))
-	return hex.EncodeToString(h[:])[:16]
+	digest := sha256.Sum256([]byte("gld-share-handle\x00" + session))
+	return hex.EncodeToString(digest[:])[:16]
 }
 
 // inviteName : le nom entre dans l'étiquette « [Invité <nom>] » envoyée à Claude ; ni crochet, ni saut de ligne, ni caractère
 // de format ne doit pouvoir en sortir ou maquiller l'auteur.
-func inviteName(s string) string {
-	s = strings.Map(func(r rune) rune {
+func inviteName(name string) string {
+	name = strings.Map(func(character rune) rune {
 		switch {
-		case unicode.IsSpace(r):
+		case unicode.IsSpace(character):
 			return ' '
-		case unicode.IsLetter(r), unicode.IsDigit(r), strings.ContainsRune("-_.'", r):
-			return r
+		case unicode.IsLetter(character), unicode.IsDigit(character), strings.ContainsRune("-_.'", character):
+			return character
 		}
 		return -1
-	}, s)
-	r := []rune(strings.Join(strings.Fields(s), " "))
-	if len(r) > inviteNameMax {
-		r = r[:inviteNameMax]
+	}, name)
+	runes := []rune(strings.Join(strings.Fields(name), " "))
+	if len(runes) > inviteNameMax {
+		runes = runes[:inviteNameMax]
 	}
-	return strings.TrimSpace(string(r))
+	return strings.TrimSpace(string(runes))
 }
 
 // shareTitle : affiché à l'invité ; sans contrôle ni caractère de format (surcharges bidi, largeur nulle) qui maquilleraient
 // le titre, espaces réduites à une seule.
-func shareTitle(s string) string {
-	s = strings.Map(func(r rune) rune {
+func shareTitle(title string) string {
+	title = strings.Map(func(character rune) rune {
 		switch {
-		case unicode.IsSpace(r):
+		case unicode.IsSpace(character):
 			return ' '
-		case unicode.IsControl(r), unicode.Is(unicode.Cf, r):
+		case unicode.IsControl(character), unicode.Is(unicode.Cf, character):
 			return -1
 		}
-		return r
-	}, s)
-	r := []rune(strings.Join(strings.Fields(s), " "))
-	if len(r) > shareTitleMax {
-		r = r[:shareTitleMax]
+		return character
+	}, title)
+	runes := []rune(strings.Join(strings.Fields(title), " "))
+	if len(runes) > shareTitleMax {
+		runes = runes[:shareTitleMax]
 	}
-	return strings.TrimSpace(string(r))
+	return strings.TrimSpace(string(runes))
 }
 
-func hashEq(a, b string) bool {
-	return a != "" && subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
+func hashEq(storedHash, candidateHash string) bool {
+	return storedHash != "" && subtle.ConstantTimeCompare([]byte(storedHash), []byte(candidateHash)) == 1
 }
 
 // Un fichier existant mais illisible fait échouer l'ouverture : il n'est jamais écrasé.
 func openShares(dir string) (*shareStore, error) {
-	s := &shareStore{dir: dir, m: map[string]*Share{}}
-	b, err := readTrustedIn(dir, filepath.Join(dir, "shares.json"))
+	store := &shareStore{dir: dir, m: map[string]*Share{}}
+	content, err := readTrustedIn(dir, filepath.Join(dir, "shares.json"))
 	if errors.Is(err, os.ErrNotExist) {
-		return s, nil
+		return store, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal(b, &s.m); err != nil {
-		return nil, err
+	if decodeErr := json.Unmarshal(content, &store.m); decodeErr != nil {
+		return nil, decodeErr
 	}
-	if s.m == nil {
-		s.m = map[string]*Share{}
+	if store.m == nil {
+		store.m = map[string]*Share{}
 	}
 	// Ancien format (un jeton par partage, sans invitations) : ignoré, jamais migré.
-	for k, v := range s.m {
-		if v == nil || len(v.Invites) == 0 {
-			delete(s.m, k)
+	for session, share := range store.m {
+		if share == nil || len(share.Invites) == 0 {
+			delete(store.m, session)
 		}
 	}
-	return s, nil
+	return store, nil
 }
 
-func (s *shareStore) save() error {
-	b, err := json.Marshal(s.m)
+func (store *shareStore) save() error {
+	content, err := json.Marshal(store.m)
 	if err != nil {
 		return err
 	}
-	s.lastSaved = time.Now()
-	return rWriteAtomic(s.dir, filepath.Join(s.dir, "shares.json"), b, 0o600)
+	store.lastSaved = time.Now()
+	return rWriteAtomic(store.dir, filepath.Join(store.dir, "shares.json"), content, 0o600)
 }
 
 // CreateInvite échoue fermé : si l'écriture échoue, le partage est rétabli tel quel et aucun jeton n'est rendu.
-func (s *shareStore) CreateInvite(session, dir, title, name string) (string, Invite, error) {
-	tok := newSecret()
-	var id [8]byte
-	rand.Read(id[:])
+func (store *shareStore) CreateInvite(session, dir, title, name string) (string, Invite, error) {
+	token := newSecret()
+	var inviteID [8]byte
+	rand.Read(inviteID[:])
 	now := time.Now().Unix()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	sh, had := s.m[session]
-	var prev Share
-	if had {
-		if len(sh.Invites) >= inviteMax {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	share, hadShare := store.m[session]
+	var previous Share
+	if hadShare {
+		if len(share.Invites) >= inviteMax {
 			return "", Invite{}, errInviteMax
 		}
-		prev = sh.clone()
+		previous = share.clone()
 	} else {
-		sh = &Share{Session: session, CreatedAt: now}
-		s.m[session] = sh
+		share = &Share{Session: session, CreatedAt: now}
+		store.m[session] = share
 	}
 	if dir != "" {
-		sh.Dir = dir
+		share.Dir = dir
 	}
-	if t := shareTitle(title); t != "" {
-		sh.Title = t
+	if cleanTitle := shareTitle(title); cleanTitle != "" {
+		share.Title = cleanTitle
 	}
-	sh.Seq++
-	inv := Invite{ID: hex.EncodeToString(id[:]), Seq: sh.Seq, Name: inviteName(name), Mode: "rw", TokenHash: hashSecret(tok), CreatedAt: now}
-	sh.Invites = append(sh.Invites, inv)
-	if err := s.save(); err != nil {
-		if had {
-			*sh = prev
+	share.Seq++
+	invitation := Invite{ID: hex.EncodeToString(inviteID[:]), Seq: share.Seq, Name: inviteName(name), Mode: "rw", TokenHash: hashSecret(token), CreatedAt: now}
+	share.Invites = append(share.Invites, invitation)
+	if err := store.save(); err != nil {
+		if hadShare {
+			*share = previous
 		} else {
-			delete(s.m, session)
+			delete(store.m, session)
 		}
 		return "", Invite{}, err
 	}
-	return tok, inv, nil
+	return token, invitation, nil
 }
 
-// edit applique f à l'invitation et rétablit l'ancienne si l'écriture échoue.
-func (s *shareStore) edit(session, invite string, f func(*Invite)) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	sh, ok := s.m[session]
-	if !ok {
+// edit applique change à l'invitation et rétablit l'ancienne si l'écriture échoue.
+func (store *shareStore) edit(session, invite string, change func(*Invite)) error {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	share, found := store.m[session]
+	if !found {
 		return errInviteNone
 	}
-	i := sh.inv(invite)
-	if i < 0 {
+	inviteIndex := share.inv(invite)
+	if inviteIndex < 0 {
 		return errInviteNone
 	}
-	old := sh.Invites[i]
-	f(&sh.Invites[i])
-	if err := s.save(); err != nil {
-		sh.Invites[i] = old
+	previous := share.Invites[inviteIndex]
+	change(&share.Invites[inviteIndex])
+	if err := store.save(); err != nil {
+		share.Invites[inviteIndex] = previous
 		return err
 	}
 	return nil
@@ -254,135 +254,137 @@ func (s *shareStore) edit(session, invite string, f func(*Invite)) error {
 // Regen : nouveau jeton ; l'ancien lien et le cookie de cette invitation meurent, mode et nom restent. Un lien régénéré est
 // souvent un lien fuité : ses éléments encore en file partent avec lui (pas ceux en cours d'envoi). Une purge non écrite
 // reparaîtrait au redémarrage : l'erreur est rendue (le jeton reste changé, la purge tient en mémoire) pour que l'hôte réessaie.
-func (s *shareStore) Regen(session, invite string) (string, error) {
-	tok := newSecret()
-	err := s.edit(session, invite, func(in *Invite) { in.TokenHash, in.CookieHash = hashSecret(tok), "" })
+func (store *shareStore) Regen(session, invite string) (string, error) {
+	token := newSecret()
+	err := store.edit(session, invite, func(invitation *Invite) { invitation.TokenHash, invitation.CookieHash = hashSecret(token), "" })
 	if err != nil {
 		return "", err
 	}
 	if queueSt != nil {
-		if _, err := queueSt.RemoveByGuest(session, invite, true); err != nil {
-			journal("partages : purge de la file après régénération non écrite : %v", err)
-			return tok, err
+		if _, purgeErr := queueSt.RemoveByGuest(session, invite, true); purgeErr != nil {
+			journal("partages : purge de la file après régénération non écrite : %v", purgeErr)
+			return token, purgeErr
 		}
 	}
-	return tok, nil
+	return token, nil
 }
 
-func (s *shareStore) SetInviteMode(session, invite, mode string) error {
-	return s.edit(session, invite, func(in *Invite) { in.Mode = mode })
+func (store *shareStore) SetInviteMode(session, invite, mode string) error {
+	return store.edit(session, invite, func(invitation *Invite) { invitation.Mode = mode })
 }
 
-func (s *shareStore) Redeem(token string) (string, Share, Invite, bool) {
-	h := hashSecret(token)
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, sh := range s.m {
-		for i := range sh.Invites {
-			in := &sh.Invites[i]
-			if in.CookieHash != "" || !hashEq(in.TokenHash, h) {
+func (store *shareStore) Redeem(token string) (string, Share, Invite, bool) {
+	tokenHash := hashSecret(token)
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	for _, share := range store.m {
+		for inviteIndex := range share.Invites {
+			invitation := &share.Invites[inviteIndex]
+			if invitation.CookieHash != "" || !hashEq(invitation.TokenHash, tokenHash) {
 				continue
 			}
-			c := newSecret()
-			in.CookieHash, in.LastSeen = hashSecret(c), time.Now().Unix()
-			if s.save() != nil {
-				in.CookieHash = ""
+			cookie := newSecret()
+			invitation.CookieHash, invitation.LastSeen = hashSecret(cookie), time.Now().Unix()
+			if store.save() != nil {
+				invitation.CookieHash = ""
 				return "", Share{}, Invite{}, false
 			}
-			return c, sh.clone(), *in, true
+			return cookie, share.clone(), *invitation, true
 		}
 	}
 	return "", Share{}, Invite{}, false
 }
 
 // Reopened : le jeton déjà échangé, présenté avec le cookie de son invitation (même navigateur), rend la session partagée.
-func (s *shareStore) Reopened(token, cookie string) (string, bool) {
-	th, ch := hashSecret(token), hashSecret(cookie)
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, sh := range s.m {
-		for _, in := range sh.Invites {
-			if in.CookieHash != "" && hashEq(in.TokenHash, th) && hashEq(in.CookieHash, ch) {
-				return sh.Session, true
+func (store *shareStore) Reopened(token, cookie string) (string, bool) {
+	tokenHash, cookieHash := hashSecret(token), hashSecret(cookie)
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	for _, share := range store.m {
+		for _, invitation := range share.Invites {
+			if invitation.CookieHash != "" && hashEq(invitation.TokenHash, tokenHash) && hashEq(invitation.CookieHash, cookieHash) {
+				return share.Session, true
 			}
 		}
 	}
 	return "", false
 }
 
-func (s *shareStore) ByCookie(cookie string) (Share, Invite, bool) { return s.byCookie(cookie, true) }
-
-// ByCookieQuiet : sans toucher LastSeen ; l'hôte ne doit voir « connecté » que sur une vraie requête invitée.
-func (s *shareStore) ByCookieQuiet(cookie string) (Share, Invite, bool) {
-	return s.byCookie(cookie, false)
+func (store *shareStore) ByCookie(cookie string) (Share, Invite, bool) {
+	return store.byCookie(cookie, true)
 }
 
-func (s *shareStore) byCookie(cookie string, touch bool) (Share, Invite, bool) {
-	h := hashSecret(cookie)
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, sh := range s.m {
-		for i := range sh.Invites {
-			in := &sh.Invites[i]
-			if !hashEq(in.CookieHash, h) {
+// ByCookieQuiet : sans toucher LastSeen ; l'hôte ne doit voir « connecté » que sur une vraie requête invitée.
+func (store *shareStore) ByCookieQuiet(cookie string) (Share, Invite, bool) {
+	return store.byCookie(cookie, false)
+}
+
+func (store *shareStore) byCookie(cookie string, touch bool) (Share, Invite, bool) {
+	cookieHash := hashSecret(cookie)
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	for _, share := range store.m {
+		for inviteIndex := range share.Invites {
+			invitation := &share.Invites[inviteIndex]
+			if !hashEq(invitation.CookieHash, cookieHash) {
 				continue
 			}
 			if touch {
 				now := time.Now()
-				in.LastSeen = now.Unix()
-				if now.Sub(s.lastSaved) >= shareSeenSave {
-					if err := s.save(); err != nil {
+				invitation.LastSeen = now.Unix()
+				if now.Sub(store.lastSaved) >= shareSeenSave {
+					if err := store.save(); err != nil {
 						journal("partages : écriture de LastSeen : %v", err)
 					}
 				}
 			}
-			return sh.clone(), *in, true
+			return share.clone(), *invitation, true
 		}
 	}
 	return Share{}, Invite{}, false
 }
 
-func (s *shareStore) Get(session string) (Share, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if sh, ok := s.m[session]; ok {
-		return sh.clone(), true
+func (store *shareStore) Get(session string) (Share, bool) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if share, found := store.m[session]; found {
+		return share.clone(), true
 	}
 	return Share{}, false
 }
 
 // All : les partages, du plus ancien au plus récent.
-func (s *shareStore) All() []Share {
-	s.mu.Lock()
-	out := make([]Share, 0, len(s.m))
-	for _, sh := range s.m {
-		out = append(out, sh.clone())
+func (store *shareStore) All() []Share {
+	store.mu.Lock()
+	shares := make([]Share, 0, len(store.m))
+	for _, share := range store.m {
+		shares = append(shares, share.clone())
 	}
-	s.mu.Unlock()
-	slices.SortFunc(out, func(a, b Share) int {
-		return cmp.Or(cmp.Compare(a.CreatedAt, b.CreatedAt), strings.Compare(a.Session, b.Session))
+	store.mu.Unlock()
+	slices.SortFunc(shares, func(left, right Share) int {
+		return cmp.Or(cmp.Compare(left.CreatedAt, right.CreatedAt), strings.Compare(left.Session, right.Session))
 	})
-	return out
+	return shares
 }
 
 // Revoke : comme End, la révocation en mémoire tient même si l'écriture échoue ; le dernier invité parti, le partage disparaît.
-func (s *shareStore) Revoke(session, invite string) error {
-	s.mu.Lock()
-	sh, ok := s.m[session]
-	i := -1
-	if ok {
-		i = sh.inv(invite)
+func (store *shareStore) Revoke(session, invite string) error {
+	store.mu.Lock()
+	share, found := store.m[session]
+	inviteIndex := -1
+	if found {
+		inviteIndex = share.inv(invite)
 	}
-	if i < 0 {
-		s.mu.Unlock()
+	if inviteIndex < 0 {
+		store.mu.Unlock()
 		return errInviteNone
 	}
-	sh.Invites = slices.Delete(sh.Invites, i, i+1)
-	if len(sh.Invites) == 0 {
-		delete(s.m, session)
+	share.Invites = slices.Delete(share.Invites, inviteIndex, inviteIndex+1)
+	if len(share.Invites) == 0 {
+		delete(store.m, session)
 	}
-	err := s.save()
-	s.mu.Unlock()
+	err := store.save()
+	store.mu.Unlock()
 	if queueSt != nil {
 		queueSt.RemoveByGuest(session, invite, false)
 	}
@@ -390,16 +392,16 @@ func (s *shareStore) Revoke(session, invite string) error {
 }
 
 // End : la révocation en mémoire n'est jamais annulée, même si l'écriture échoue (l'erreur est rendue à l'appelant).
-func (s *shareStore) End(session string) error {
-	s.mu.Lock()
-	_, ok := s.m[session]
-	if !ok {
-		s.mu.Unlock()
+func (store *shareStore) End(session string) error {
+	store.mu.Lock()
+	_, found := store.m[session]
+	if !found {
+		store.mu.Unlock()
 		return errShareNone
 	}
-	delete(s.m, session)
-	err := s.save()
-	s.mu.Unlock()
+	delete(store.m, session)
+	err := store.save()
+	store.mu.Unlock()
 	if queueSt != nil {
 		queueSt.RemoveByGuest(session, "", false)
 	}
@@ -437,149 +439,149 @@ type shareView struct {
 // sharesView : vue d'ensemble de l'hôte ; seuls les éléments d'invités figurent dans les files, texte tronqué.
 func sharesView() []shareView {
 	now := time.Now()
-	out := []shareView{}
-	for _, sh := range shareSt.All() {
+	views := []shareView{}
+	for _, share := range shareSt.All() {
 		var items []QItem
 		if queueSt != nil {
-			items = queueSt.List(sh.Session)
+			items = queueSt.List(share.Session)
 		}
-		v := shareView{ID: sh.Session, Dir: sh.Dir, Title: sh.Title, Handle: shareHandle(sh.Session), Open: shareOpen(sh.Session), Invites: []shareInviteView{}}
-		for _, in := range sh.Invites {
-			iv := shareInviteView{ID: in.ID, Seq: in.Seq, Name: in.Name, Label: in.label(), Mode: in.Mode, LastSeen: in.LastSeen, Redeemed: in.CookieHash != "", Queue: []shareQItem{}}
+		view := shareView{ID: share.Session, Dir: share.Dir, Title: share.Title, Handle: shareHandle(share.Session), Open: shareOpen(share.Session), Invites: []shareInviteView{}}
+		for _, invitation := range share.Invites {
+			inviteView := shareInviteView{ID: invitation.ID, Seq: invitation.Seq, Name: invitation.Name, Label: invitation.label(), Mode: invitation.Mode, LastSeen: invitation.LastSeen, Redeemed: invitation.CookieHash != "", Queue: []shareQItem{}}
 			switch {
-			case !iv.Redeemed:
-				iv.State = "pending"
-			case now.Sub(time.Unix(in.LastSeen, 0)) < shareOnline:
-				iv.State = "connected"
+			case !inviteView.Redeemed:
+				inviteView.State = "pending"
+			case now.Sub(time.Unix(invitation.LastSeen, 0)) < shareOnline:
+				inviteView.State = "connected"
 			default:
-				iv.State = "away"
+				inviteView.State = "away"
 			}
-			for _, it := range items {
-				if it.Author == "guest" && it.Guest == in.ID {
-					t := []rune(it.Text)
-					iv.Queue = append(iv.Queue, shareQItem{ID: it.ID, Text: string(t[:min(len(t), shareTextMax)]), State: it.State, At: it.At})
+			for _, queueItem := range items {
+				if queueItem.Author == "guest" && queueItem.Guest == invitation.ID {
+					textRunes := []rune(queueItem.Text)
+					inviteView.Queue = append(inviteView.Queue, shareQItem{ID: queueItem.ID, Text: string(textRunes[:min(len(textRunes), shareTextMax)]), State: queueItem.State, At: queueItem.At})
 				}
 			}
-			v.Invites = append(v.Invites, iv)
+			view.Invites = append(view.Invites, inviteView)
 		}
-		out = append(out, v)
+		views = append(views, view)
 	}
-	return out
+	return views
 }
 
 func routesShare(mux *http.ServeMux) {
-	st, err := openShares(shareDir())
+	store, err := openShares(shareDir())
 	if err != nil {
 		journal("partages : ouverture impossible : %v", err)
-		st = nil
+		store = nil
 	}
-	shareSt = st
-	fail := func(w http.ResponseWriter, status int, code, key string) {
-		writeErr(w, status, code, L(key))
+	shareSt = store
+	fail := func(responseWriter http.ResponseWriter, status int, code, key string) {
+		writeErr(responseWriter, status, code, L(key))
 	}
-	type req struct{ ID, Dir, Title, Name, Mode string }
+	type shareRequest struct{ ID, Dir, Title, Name, Mode string }
 	// body : la session vient du corps (ou de ?id= pour un DELETE) ; withInvite exige l'invitation du chemin (16 hex).
-	body := func(w http.ResponseWriter, r *http.Request, withInvite bool) (q req, invite string, ok bool) {
-		if r.Method == http.MethodDelete {
-			q.ID = r.URL.Query().Get("id")
-		} else if !decodeBody(w, r, &q, 4<<10) {
-			return q, "", false
+	body := func(responseWriter http.ResponseWriter, request *http.Request, withInvite bool) (parsed shareRequest, invite string, isValid bool) {
+		if request.Method == http.MethodDelete {
+			parsed.ID = request.URL.Query().Get("id")
+		} else if !decodeBody(responseWriter, request, &parsed, 4<<10) {
+			return parsed, "", false
 		}
-		if sh := r.PathValue("share"); sh != "" {
-			q.ID = sh
+		if shareValue := request.PathValue("share"); shareValue != "" {
+			parsed.ID = shareValue
 		}
-		invite = r.PathValue("invite")
-		if !idRe.MatchString(q.ID) || withInvite && !validHandle(invite) {
-			fail(w, 400, "bad_request", "srv.http_util.requeteInvalide")
-			return q, "", false
+		invite = request.PathValue("invite")
+		if !idRe.MatchString(parsed.ID) || withInvite && !validHandle(invite) {
+			fail(responseWriter, 400, "bad_request", "srv.http_util.requeteInvalide")
+			return parsed, "", false
 		}
 		if shareSt == nil {
-			fail(w, 503, "unavailable", "srv.share.indisponible")
-			return q, "", false
+			fail(responseWriter, 503, "unavailable", "srv.share.indisponible")
+			return parsed, "", false
 		}
-		return q, invite, true
+		return parsed, invite, true
 	}
-	storeErr := func(w http.ResponseWriter, err error) bool {
+	storeErr := func(responseWriter http.ResponseWriter, operationErr error) bool {
 		switch {
-		case err == nil:
+		case operationErr == nil:
 			return false
-		case errors.Is(err, errInviteNone):
-			fail(w, 404, "not_found", "srv.share.invitationIntrouvable")
-		case errors.Is(err, errShareNone):
-			fail(w, 404, "not_found", "srv.share.introuvable")
-		case errors.Is(err, errInviteMax):
-			fail(w, 409, "conflict", "srv.share.tropDInvitations")
+		case errors.Is(operationErr, errInviteNone):
+			fail(responseWriter, 404, "not_found", "srv.share.invitationIntrouvable")
+		case errors.Is(operationErr, errShareNone):
+			fail(responseWriter, 404, "not_found", "srv.share.introuvable")
+		case errors.Is(operationErr, errInviteMax):
+			fail(responseWriter, 409, "conflict", "srv.share.tropDInvitations")
 		default:
-			fail(w, 500, "internal", "srv.share.indisponible")
+			fail(responseWriter, 500, "internal", "srv.share.indisponible")
 		}
 		return true
 	}
-	mux.HandleFunc("POST /v1/invites", func(w http.ResponseWriter, r *http.Request) {
-		q, _, ok := body(w, r, false)
-		if !ok {
+	mux.HandleFunc("POST /v1/invites", func(responseWriter http.ResponseWriter, request *http.Request) {
+		parsed, _, isValid := body(responseWriter, request, false)
+		if !isValid {
 			return
 		}
-		if _, found := transcript(q.Dir, q.ID); !found {
-			fail(w, 404, "not_found", "srv.share.sessionIntrouvable")
+		if _, found := transcript(parsed.Dir, parsed.ID); !found {
+			fail(responseWriter, 404, "not_found", "srv.share.sessionIntrouvable")
 			return
 		}
-		tok, in, err := shareSt.CreateInvite(q.ID, q.Dir, q.Title, q.Name)
-		if storeErr(w, err) {
+		token, invitation, createErr := shareSt.CreateInvite(parsed.ID, parsed.Dir, parsed.Title, parsed.Name)
+		if storeErr(responseWriter, createErr) {
 			return
 		}
-		writeJSON(w, 201, map[string]any{"token": tok, "invite": map[string]any{"id": in.ID, "seq": in.Seq, "label": in.label()}})
+		writeJSON(responseWriter, 201, map[string]any{"token": token, "invite": map[string]any{"id": invitation.ID, "seq": invitation.Seq, "label": invitation.label()}})
 	})
-	mux.HandleFunc("PUT /v1/invites/{invite}/token", func(w http.ResponseWriter, r *http.Request) {
-		q, inv, ok := body(w, r, true)
-		if !ok {
+	mux.HandleFunc("PUT /v1/invites/{invite}/token", func(responseWriter http.ResponseWriter, request *http.Request) {
+		parsed, inviteID, isValid := body(responseWriter, request, true)
+		if !isValid {
 			return
 		}
-		tok, err := shareSt.Regen(q.ID, inv)
-		if storeErr(w, err) {
+		token, regenErr := shareSt.Regen(parsed.ID, inviteID)
+		if storeErr(responseWriter, regenErr) {
 			return
 		}
-		writeJSON(w, 200, map[string]any{"token": tok})
+		writeJSON(responseWriter, 200, map[string]any{"token": token})
 	})
-	mux.HandleFunc("PATCH /v1/invites/{invite}", func(w http.ResponseWriter, r *http.Request) {
-		q, inv, ok := body(w, r, true)
-		if !ok {
+	mux.HandleFunc("PATCH /v1/invites/{invite}", func(responseWriter http.ResponseWriter, request *http.Request) {
+		parsed, inviteID, isValid := body(responseWriter, request, true)
+		if !isValid {
 			return
 		}
-		if q.Mode != "rw" && q.Mode != "ro" {
-			fail(w, 400, "bad_request", "srv.http_util.requeteInvalide")
+		if parsed.Mode != "rw" && parsed.Mode != "ro" {
+			fail(responseWriter, 400, "bad_request", "srv.http_util.requeteInvalide")
 			return
 		}
-		if storeErr(w, shareSt.SetInviteMode(q.ID, inv, q.Mode)) {
+		if storeErr(responseWriter, shareSt.SetInviteMode(parsed.ID, inviteID, parsed.Mode)) {
 			return
 		}
-		if q.Mode == "ro" && queueSt != nil {
-			if _, err := queueSt.RemoveByGuest(q.ID, inv, true); err != nil {
-				fail(w, 500, "internal", "srv.share.indisponible")
+		if parsed.Mode == "ro" && queueSt != nil {
+			if _, purgeErr := queueSt.RemoveByGuest(parsed.ID, inviteID, true); purgeErr != nil {
+				fail(responseWriter, 500, "internal", "srv.share.indisponible")
 				return
 			}
 		}
-		w.WriteHeader(http.StatusNoContent)
+		responseWriter.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("DELETE /v1/invites/{invite}", func(w http.ResponseWriter, r *http.Request) {
-		q, inv, ok := body(w, r, true)
-		if !ok || storeErr(w, shareSt.Revoke(q.ID, inv)) {
+	mux.HandleFunc("DELETE /v1/invites/{invite}", func(responseWriter http.ResponseWriter, request *http.Request) {
+		parsed, inviteID, isValid := body(responseWriter, request, true)
+		if !isValid || storeErr(responseWriter, shareSt.Revoke(parsed.ID, inviteID)) {
 			return
 		}
-		w.WriteHeader(http.StatusNoContent)
+		responseWriter.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("DELETE /v1/shares/{share}", func(w http.ResponseWriter, r *http.Request) {
-		q, _, ok := body(w, r, false)
-		if !ok || storeErr(w, shareSt.End(q.ID)) {
+	mux.HandleFunc("DELETE /v1/shares/{share}", func(responseWriter http.ResponseWriter, request *http.Request) {
+		parsed, _, isValid := body(responseWriter, request, false)
+		if !isValid || storeErr(responseWriter, shareSt.End(parsed.ID)) {
 			return
 		}
-		w.WriteHeader(http.StatusNoContent)
+		responseWriter.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("GET /v1/shares", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-store")
+	mux.HandleFunc("GET /v1/shares", func(responseWriter http.ResponseWriter, request *http.Request) {
+		responseWriter.Header().Set("Cache-Control", "no-store")
 		if shareSt == nil {
-			fail(w, 503, "unavailable", "srv.share.indisponible")
+			fail(responseWriter, 503, "unavailable", "srv.share.indisponible")
 			return
 		}
-		writeJSON(w, 200, map[string]any{"shares": sharesView()})
+		writeJSON(responseWriter, 200, map[string]any{"shares": sharesView()})
 	})
 }

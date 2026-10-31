@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+const slashDescriptionMax = 200
+
 type slashCmd struct {
 	Cmd    string `json:"cmd"` // « /nom » ou « /plugin:nom »
 	Desc   string `json:"desc"`
@@ -16,73 +18,73 @@ type slashCmd struct {
 
 // scanCommands : les commandes d'un dossier commands/ (un .md par commande, sous-dossiers ignorés).
 func scanCommands(base, prefix, origin string) []slashCmd {
-	var out []slashCmd
-	ents, _ := readDirTrusted(base)
-	for _, e := range ents {
-		n := strings.TrimSuffix(e.Name(), ".md")
-		if e.IsDir() || n == e.Name() || !skillName.MatchString(n) {
+	var commands []slashCmd
+	entries, _ := readDirTrusted(base)
+	for _, entry := range entries {
+		name := strings.TrimSuffix(entry.Name(), ".md")
+		if entry.IsDir() || name == entry.Name() || !skillName.MatchString(name) {
 			continue
 		}
-		var s Skill
-		if b := readSmall(filepath.Join(base, e.Name())); b != nil {
-			s.Dir = n
-			describeSkill(&s, string(b))
+		var skill Skill
+		if content := readSmall(filepath.Join(base, entry.Name())); content != nil {
+			skill.Dir = name
+			describeSkill(&skill, string(content))
 		}
-		out = append(out, slashCmd{"/" + prefix + n, cut(s.Description, 200), origin})
+		commands = append(commands, slashCmd{"/" + prefix + name, cut(skill.Description, slashDescriptionMax), origin})
 	}
-	return out
+	return commands
 }
 
 // readSmall : le contenu d'un fichier régulier d'au plus skillMaxBytes (ni lien, ni tube, ni gros fichier), nil sinon.
-func readSmall(p string) []byte {
-	f, err := openTrusted(p)
+func readSmall(filePath string) []byte {
+	file, err := openTrusted(filePath)
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
-	if st, err := f.Stat(); err != nil || !st.Mode().IsRegular() || st.Size() > skillMaxBytes {
+	defer file.Close()
+	if fileInfo, statErr := file.Stat(); statErr != nil || !fileInfo.Mode().IsRegular() || fileInfo.Size() > skillMaxBytes {
 		return nil
 	}
-	b, _ := io.ReadAll(io.LimitReader(f, skillMaxBytes+1))
-	if len(b) > skillMaxBytes {
+	content, _ := io.ReadAll(io.LimitReader(file, skillMaxBytes+1))
+	if len(content) > skillMaxBytes {
 		return nil
 	}
-	return b
+	return content
 }
 
 // slashCommands : les « / » que l'utilisateur a en plus de ceux de Claude Code, personnels, de projet et de plugins.
 func slashCommands() []slashCmd {
-	out := scanCommands(filepath.Join(cfgDir(), "commands"), "", "user")
-	for _, s := range listSkills() {
-		if s.Hidden || s.Scope == "store" {
+	commands := scanCommands(filepath.Join(cfgDir(), "commands"), "", "user")
+	for _, skill := range listSkills() {
+		if skill.Hidden || skill.Scope == "store" {
 			continue
 		}
-		c := "/" + s.Dir
-		if s.Scope == "plugin" {
-			c = "/" + strings.SplitN(s.Plugin, "@", 2)[0] + ":" + s.Dir
+		command := "/" + skill.Dir
+		if skill.Scope == "plugin" {
+			command = "/" + strings.SplitN(skill.Plugin, "@", 2)[0] + ":" + skill.Dir
 		}
-		out = append(out, slashCmd{c, cut(s.Description, 200), s.Scope})
+		commands = append(commands, slashCmd{command, cut(skill.Description, slashDescriptionMax), skill.Scope})
 	}
-	for _, p := range liveProjects() {
-		out = append(out, scanCommands(filepath.Join(p.Project, ".claude", "commands"), "", "project")...)
+	for _, liveProject := range liveProjects() {
+		commands = append(commands, scanCommands(filepath.Join(liveProject.Project, ".claude", "commands"), "", "project")...)
 	}
-	for _, pr := range pluginSkillRoots() {
-		out = append(out, scanCommands(filepath.Join(filepath.Dir(pr.base), "commands"), strings.SplitN(pr.id, "@", 2)[0]+":", "plugin")...)
+	for _, plugin := range pluginSkillRoots() {
+		commands = append(commands, scanCommands(filepath.Join(filepath.Dir(plugin.base), "commands"), strings.SplitN(plugin.id, "@", 2)[0]+":", "plugin")...)
 	}
 	seen := map[string]bool{}
-	uniq := out[:0]
-	for _, c := range out {
-		if !seen[c.Cmd] {
-			seen[c.Cmd] = true
-			uniq = append(uniq, c)
+	unique := commands[:0]
+	for _, command := range commands {
+		if !seen[command.Cmd] {
+			seen[command.Cmd] = true
+			unique = append(unique, command)
 		}
 	}
-	sort.Slice(uniq, func(i, j int) bool { return uniq[i].Cmd < uniq[j].Cmd })
-	return uniq
+	sort.Slice(unique, func(left, right int) bool { return unique[left].Cmd < unique[right].Cmd })
+	return unique
 }
 
 func routesSlash(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/slash-commands", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"commands": slashCommands()})
+	mux.HandleFunc("GET /v1/slash-commands", func(responseWriter http.ResponseWriter, request *http.Request) {
+		writeJSON(responseWriter, 200, map[string]any{"commands": slashCommands()})
 	})
 }

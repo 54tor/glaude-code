@@ -24,11 +24,11 @@ const maxMates = 5
 
 const roRule = " Tu ne modifies jamais aucun fichier."
 
-func ag(id, name, role, access, prompt string) Agent {
-	if access == "read" {
+func ag(id, name, role, accessLevel, prompt string) Agent {
+	if accessLevel == "read" {
 		prompt += roRule
 	}
-	return Agent{ID: id, Name: name, Role: role, Access: access, Prompt: prompt, Builtin: true}
+	return Agent{ID: id, Name: name, Role: role, Access: accessLevel, Prompt: prompt, Builtin: true}
 }
 
 func tm(id, name string, members ...string) Team {
@@ -77,37 +77,37 @@ func builtinCatalog() Catalog {
 }
 
 // composeTeams renvoie le chef et les coéquipiers des teams choisies, sans doublon, dans l'ordre d'apparition.
-func composeTeams(c Catalog, teamIDs []string) (lead Agent, mates []Agent, tooMany bool, err error) {
+func composeTeams(catalog Catalog, teamIDs []string) (lead Agent, mates []Agent, tooMany bool, err error) {
 	if len(teamIDs) == 0 {
 		return Agent{}, nil, false, terr("srv.teams_catalog.selectionVide")
 	}
 	byID := map[string]Agent{}
-	for _, a := range c.Agents {
-		byID[a.ID] = a
-		if a.Access == "lead" {
-			lead = a
+	for _, agent := range catalog.Agents {
+		byID[agent.ID] = agent
+		if agent.Access == "lead" {
+			lead = agent
 		}
 	}
 	if lead.ID == "" {
 		return Agent{}, nil, false, terr("srv.teams_catalog.chefAbsent")
 	}
 	seen := map[string]bool{}
-	for _, id := range teamIDs {
+	for _, teamID := range teamIDs {
 		found := false
-		for _, t := range c.Teams {
-			if t.ID != id {
+		for _, team := range catalog.Teams {
+			if team.ID != teamID {
 				continue
 			}
 			found = true
-			for _, m := range t.Members {
-				if a, ok := byID[m]; ok && !seen[m] {
-					seen[m] = true
-					mates = append(mates, a)
+			for _, memberID := range team.Members {
+				if member, found := byID[memberID]; found && !seen[memberID] {
+					seen[memberID] = true
+					mates = append(mates, member)
 				}
 			}
 		}
 		if !found {
-			return Agent{}, nil, false, terr("srv.teams_catalog.teamInconnue", "A1", id)
+			return Agent{}, nil, false, terr("srv.teams_catalog.teamInconnue", "A1", teamID)
 		}
 	}
 	return lead, mates, len(mates) > maxMates, nil
