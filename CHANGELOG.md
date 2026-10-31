@@ -16,6 +16,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Corbeille des sessions triée par date de suppression, avec recherche.
 - Menus contextuels sur les sessions de l'accueil, les serveurs MCP et la carte de mise à jour ; snippets insérables dans les dialogues d'amélioration de mémoire et de skill.
 - Bouton d'envoi de fichier placé dans le champ de message.
+- Barre git : la branche est comparée à tous les remotes, pas seulement à l'amont.
+- File d'attente du compositeur : bouton « Envoyer maintenant » qui interrompt la réponse en cours pour envoyer le message.
+- Conversation : la zone de saisie prend le focus à l'ouverture d'une session ; un indicateur vert signale que la vue suit la fin du fil ; l'état du cache affiche son délai et un clic dessus active ou coupe le maintien au chaud (le bouton « Maintenir au chaud » est retiré).
 - Bloc git d'un projet : une ligne par chemin, boutons Permissions et Espace de travail réduits à des icônes.
 - README : tableau comparatif CLI, Claude.ai et Glaude Code.
 
@@ -27,6 +30,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Notes envoyées à une session qui répond encore : mises en file d'attente ; envoi limité aux sessions du dossier ou du projet de la note.
 - Titre automatique appliqué à toute conversation sans titre après un tour livré, et reporté à la fermeture du processus pour une session ouverte.
 - Mémoire : les entrées modifier et supprimer sont masquées pour les règles gld en lecture seule, les dossiers temporaires sont exclus des destinations de déplacement, la recherche parle de mémoires.
+- Conversation : la question seule d'un `AskUserQuestion` s'affiche sous le rapport de Claude ; le fil reste masqué jusqu'à son placement à l'ouverture, aucune position n'est mémorisée avant ; le dernier pixel de défilement est rattrapé.
 - Les sélecteurs de projet (Extensions, Skills) n'affichent plus les dossiers jetables (`/tmp`, `$TMPDIR`).
 - Conversation en modale : le suivi de la fin du fil ne s'enclenchait pas quand les messages étaient déjà en cache.
 - Anneau de focus d'une ligne de session tracé à l'intérieur de la ligne.
@@ -38,6 +42,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Notification quand Claude Code installé n'est pas à jour (comparé à la dernière version npm) ; `GET /v1/update` renvoie `claudeCurrent`, `claudeLatest` et `claudeNewer`.
 - Liste des mots de passe courants générée depuis `@zxcvbn-ts/language-common` (49 233 entrées) ; `make check` échoue si elle est périmée.
 - Suivi de la fin du fil par `use-stick-to-bottom`, comparaison de versions par `golang.org/x/mod/semver` et diff des mémoires par `jsdiff` à la place du code maison ; crédits complétés.
+- Mises à jour de dépendances : doublestar, gofakeit, go-i18n, cbor, modules indirects Go, eslint, typescript-eslint, i18next, react-i18next, lucide-react, cn et shadcn.
+- CI : empreintes `.gitleaksignore` régénérées après la réécriture de l'historique.
+- En-tête de la modale de conversation : bouton « Fermer la session » et badge « en cours » retirés (la fermeture reste dans le menu « … »).
 - Refonte de lisibilité du code (noms explicites, constantes nommées) côté Go et interface, sans changement de comportement.
 
 ## [0.8.0] - 2026-10-30
