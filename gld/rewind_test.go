@@ -10,7 +10,7 @@ import (
 func TestRewind(t *testing.T) {
 	cfg := t.TempDir()
 	use(cfg)
-	p := filepath.Join(cfg, "projects", "-p", id1+".jsonl")
+	path := filepath.Join(cfg, "projects", "-p", id1+".jsonl")
 	ls := []string{
 		`{"type":"user","message":{"content":"un"}}`,
 		`{"type":"assistant","message":{"id":"a1","content":[{"type":"text","text":"je lance"}]}}`,
@@ -21,18 +21,18 @@ func TestRewind(t *testing.T) {
 		`{"type":"custom-title","customTitle":"T"}`,
 		`{"type":"assistant","message":{"id":"a3","content":[{"type":"text","text":"réponse"}]}}`,
 	}
-	put(t, p, strings.Join(ls, "\n")+"\n", old)
+	put(t, path, strings.Join(ls, "\n")+"\n", old)
 
 	// Clic sur « je lance » : l'appel d'outil du même message et son résultat restent, le titre aussi.
-	n, err := rewind(p, int64(len(ls[0])+1))
-	if err != nil || n != 3 {
-		t.Fatalf("rewind = %d, %v", n, err)
+	count, err := rewind(path, int64(len(ls[0])+1))
+	if err != nil || count != 3 {
+		t.Fatalf("rewind = %d, %v", count, err)
 	}
-	b, _ := os.ReadFile(p)
-	if want := strings.Join(append(ls[:4:4], ls[6]), "\n") + "\n"; string(b) != want {
-		t.Fatalf("transcript =\n%s", b)
+	data, _ := os.ReadFile(path)
+	if want := strings.Join(append(ls[:4:4], ls[6]), "\n") + "\n"; string(data) != want {
+		t.Fatalf("transcript =\n%s", data)
 	}
-	if _, err := rewind(p, 3); err == nil {
+	if _, err := rewind(path, 3); err == nil {
 		t.Fatal("un décalage hors début de ligne doit être refusé")
 	}
 }

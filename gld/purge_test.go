@@ -15,31 +15,31 @@ const (
 	old = 48 * time.Hour
 )
 
-func put(t *testing.T, p, content string, age time.Duration) {
+func put(t *testing.T, path, content string, age time.Duration) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	ts := time.Now().Add(-age)
-	os.Chtimes(p, ts, ts)
+	os.Chtimes(path, ts, ts)
 }
 
 // fixture : une config Claude avec deux sessions à supprimer et une à garder, des restes partagés
 // (collages, instantanés de shell) et un memory/ qui doit survivre.
 func fixture(t *testing.T) string {
 	cfg := t.TempDir()
-	p := filepath.Join(cfg, "projects", "-p")
-	put(t, filepath.Join(p, id1+".jsonl"), `{"cwd":"/p","m":"snapshot-bash-111-aaa.sh"}`+"\n", old)
-	put(t, filepath.Join(p, id1, "subagents", "s.jsonl"), `{"m":"snapshot-bash-222-bbb.sh"}`+"\n", old)
-	put(t, filepath.Join(p, id2+".jsonl"), `{"m":"snapshot-bash-111-aaa.sh snapshot-bash-999-new.sh"}`+"\n", old)
-	put(t, filepath.Join(p, id3+".jsonl"), `{"m":"snapshot-bash-111-aaa.sh aaaaaaaaaaaaaaaa"}`+"\n", old)
-	put(t, filepath.Join(p, "memory", "MEMORY.md"), "garder", old)
-	for _, d := range []string{"file-history/" + id1 + "/x", "session-env/" + id1 + "/y", "uploads/" + id1 + "/z",
+	path := filepath.Join(cfg, "projects", "-p")
+	put(t, filepath.Join(path, id1+".jsonl"), `{"cwd":"/p","m":"snapshot-bash-111-aaa.sh"}`+"\n", old)
+	put(t, filepath.Join(path, id1, "subagents", "s.jsonl"), `{"m":"snapshot-bash-222-bbb.sh"}`+"\n", old)
+	put(t, filepath.Join(path, id2+".jsonl"), `{"m":"snapshot-bash-111-aaa.sh snapshot-bash-999-new.sh"}`+"\n", old)
+	put(t, filepath.Join(path, id3+".jsonl"), `{"m":"snapshot-bash-111-aaa.sh aaaaaaaaaaaaaaaa"}`+"\n", old)
+	put(t, filepath.Join(path, "memory", "MEMORY.md"), "garder", old)
+	for _, dir := range []string{"file-history/" + id1 + "/x", "session-env/" + id1 + "/y", "uploads/" + id1 + "/z",
 		"debug/" + id1 + ".txt", "tasks/session-11111111/t", "teams/session-11111111/t", "tasks/session-33333333/t"} {
-		put(t, filepath.Join(cfg, d), "x", old)
+		put(t, filepath.Join(cfg, dir), "x", old)
 	}
 	put(t, filepath.Join(cfg, "jobs", "11111111", "state.json"), `{"sessionId":"`+id1+`"}`, old)
 	put(t, filepath.Join(cfg, "jobs", "22222222", "state.json"), `{"sessionId":"autre"}`, old) // même préfixe, autre session
@@ -47,8 +47,8 @@ func fixture(t *testing.T) string {
 		`{"sessionId":"`+id1+`","pastedContents":{"1":{"contentHash":"aaaaaaaaaaaaaaaa"}}}`+"\n"+
 			`{"sessionId":"`+id2+`","pastedContents":{"1":{"contentHash":"bbbbbbbbbbbbbbbb"}}}`+"\n"+
 			`{"sessionId":"`+id3+`","pastedContents":{"1":{"contentHash":"cccccccccccccccc"}}}`+"\n", old)
-	for _, h := range []string{"aaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbb", "cccccccccccccccc"} {
-		put(t, filepath.Join(cfg, "paste-cache", h+".txt"), "collage", old)
+	for _, header := range []string{"aaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbb", "cccccccccccccccc"} {
+		put(t, filepath.Join(cfg, "paste-cache", header+".txt"), "collage", old)
 	}
 	put(t, filepath.Join(cfg, "shell-snapshots", "snapshot-bash-111-aaa.sh"), "s", old)
 	put(t, filepath.Join(cfg, "shell-snapshots", "snapshot-bash-222-bbb.sh"), "s", old)
@@ -68,14 +68,14 @@ func use(cfg string) {
 	liveSessions = func() map[string]bool { return map[string]bool{} }
 }
 
-func exists(p string) bool { _, err := os.Lstat(p); return err == nil }
+func exists(path string) bool { _, err := os.Lstat(path); return err == nil }
 
 func TestPurge(t *testing.T) {
 	cfg := fixture(t)
 	use(cfg)
-	n, spared, notes, err := purgeSessions([]item{{"-p", id1}, {"-p", id2}})
-	if err != nil || n != 2 || spared != 0 {
-		t.Fatalf("n=%d spared=%d err=%v", n, spared, err)
+	count, spared, notes, err := purgeSessions([]item{{"-p", id1}, {"-p", id2}})
+	if err != nil || count != 2 || spared != 0 {
+		t.Fatalf("n=%d spared=%d err=%v", count, spared, err)
 	}
 	// Le compte rendu dit exactement ce qui a été effacé.
 	if got := strings.Join(notes, "\n"); !strings.Contains(got, "2 ligne(s) de prompt") ||
@@ -92,19 +92,19 @@ func TestPurge(t *testing.T) {
 		"paste-cache/cccccccccccccccc.txt",         // jamais lié aux sessions supprimées
 		"shell-snapshots/snapshot-bash-111-aaa.sh", // encore cité par la session 3
 		"shell-snapshots/snapshot-bash-999-new.sh"} // trop récent pour être un reste
-	for _, p := range gone {
-		if exists(filepath.Join(cfg, p)) {
-			t.Errorf("devrait être effacé : %s", p)
+	for _, path := range gone {
+		if exists(filepath.Join(cfg, path)) {
+			t.Errorf("devrait être effacé : %s", path)
 		}
 	}
-	for _, p := range kept {
-		if !exists(filepath.Join(cfg, p)) {
-			t.Errorf("devrait rester : %s", p)
+	for _, path := range kept {
+		if !exists(filepath.Join(cfg, path)) {
+			t.Errorf("devrait rester : %s", path)
 		}
 	}
-	h, _ := os.ReadFile(filepath.Join(cfg, "history.jsonl"))
-	if strings.Count(string(h), "\n") != 1 || !strings.Contains(string(h), id3) {
-		t.Errorf("history.jsonl : il ne devrait rester que la ligne de la session 3 :\n%s", h)
+	data, _ := os.ReadFile(filepath.Join(cfg, "history.jsonl"))
+	if strings.Count(string(data), "\n") != 1 || !strings.Contains(string(data), id3) {
+		t.Errorf("history.jsonl : il ne devrait rester que la ligne de la session 3 :\n%s", data)
 	}
 }
 
@@ -113,9 +113,9 @@ func TestHexTokens(t *testing.T) {
 	got := map[string]bool{}
 	hexTokens([]byte(`x 0123456789abcdef "fedcba98765432100000000000000009" 0123456789ABCDEF 123456789abcdef 9999999999999999`), got)
 	want := []string{"0123456789abcdef", "fedcba9876543210", "0000000000000009", "9999999999999999"}
-	for _, w := range want {
-		if !got[w] {
-			t.Errorf("jeton manquant : %s", w)
+	for _, word := range want {
+		if !got[word] {
+			t.Errorf("jeton manquant : %s", word)
 		}
 	}
 	if len(got) != len(want) { // ni majuscules, ni jeton de 15 caractères
@@ -127,19 +127,19 @@ func TestSessionVivanteEpargnee(t *testing.T) {
 	cfg := fixture(t)
 	use(cfg)
 	liveSessions = func() map[string]bool { return map[string]bool{id1: true} }
-	n, spared, _, _ := purgeSessions([]item{{"-p", id1}, {"-p", id2}})
-	if n != 1 || spared != 1 || !exists(filepath.Join(cfg, "projects", "-p", id1+".jsonl")) {
-		t.Fatalf("n=%d spared=%d : la session vivante doit rester", n, spared)
+	count, spared, _, _ := purgeSessions([]item{{"-p", id1}, {"-p", id2}})
+	if count != 1 || spared != 1 || !exists(filepath.Join(cfg, "projects", "-p", id1+".jsonl")) {
+		t.Fatalf("n=%d spared=%d : la session vivante doit rester", count, spared)
 	}
 }
 
 func TestSafeRemove(t *testing.T) {
 	cfg := fixture(t)
 	use(cfg)
-	for _, p := range []string{filepath.Dir(cfg), filepath.Join(cfg, "projects", "-p", "memory"),
+	for _, path := range []string{filepath.Dir(cfg), filepath.Join(cfg, "projects", "-p", "memory"),
 		filepath.Join(cfg, "projects", "-p", "memory", "MEMORY.md"), filepath.Join(cfg, "..", "x"), cfg} {
-		if safeRemove(p) == nil {
-			t.Errorf("refus attendu pour %s", p)
+		if safeRemove(path) == nil {
+			t.Errorf("refus attendu pour %s", path)
 		}
 	}
 }
@@ -159,9 +159,9 @@ func TestSatellitesRejectsShortID(t *testing.T) {
 func TestWithChildrenSkipsBadIDs(t *testing.T) {
 	cfg := t.TempDir()
 	use(cfg)
-	p := filepath.Join(cfg, "projects", "-p")
-	put(t, filepath.Join(p, id1+".jsonl"), `{"cwd":"/p"}`+"\n", old)
-	put(t, filepath.Join(p, "a.jsonl"), `{"cwd":"/p","teamName":"session-11111111"}`+"\n", old)
+	path := filepath.Join(cfg, "projects", "-p")
+	put(t, filepath.Join(path, id1+".jsonl"), `{"cwd":"/p"}`+"\n", old)
+	put(t, filepath.Join(path, "a.jsonl"), `{"cwd":"/p","teamName":"session-11111111"}`+"\n", old)
 	out := withChildren([]item{{"-p", id1}})
 	for _, it := range out {
 		if !idRe.MatchString(it.ID) {

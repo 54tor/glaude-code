@@ -27,25 +27,25 @@ func TestLecturesConfineesSousRunAs(t *testing.T) {
 	os.Symlink(secret, filepath.Join(proj, "CLAUDE.md"))
 
 	// Hors GLD_RUN_AS : un lien vers des dotfiles reste lisible.
-	if b, err := readTrusted(filepath.Join(cfg, "CLAUDE.md")); err != nil || string(b) != "de root" {
-		t.Fatalf("lecture ordinaire d'un lien : %q %v", b, err)
+	if data, err := readTrusted(filepath.Join(cfg, "CLAUDE.md")); err != nil || string(data) != "de root" {
+		t.Fatalf("lecture ordinaire d'un lien : %q %v", data, err)
 	}
 	fakeRunAs(t)
-	for _, p := range []string{filepath.Join(cfg, "CLAUDE.md"), filepath.Join(cfg, "rules", "secret"), filepath.Join(proj, "CLAUDE.md")} {
-		if b, err := readTrusted(p); err == nil {
-			t.Errorf("%s lu à travers un lien : %q", p, b)
+	for _, path := range []string{filepath.Join(cfg, "CLAUDE.md"), filepath.Join(cfg, "rules", "secret"), filepath.Join(proj, "CLAUDE.md")} {
+		if data, err := readTrusted(path); err == nil {
+			t.Errorf("%s lu à travers un lien : %q", path, data)
 		}
-		if f, err := openTrusted(p); err == nil {
-			f.Close()
-			t.Errorf("%s ouvert à travers un lien", p)
+		if file, err := openTrusted(path); err == nil {
+			file.Close()
+			t.Errorf("%s ouvert à travers un lien", path)
 		}
 	}
 	if _, err := readDirTrusted(filepath.Join(cfg, "rules")); err == nil {
 		t.Error("dossier lié listé")
 	}
 	os.WriteFile(filepath.Join(cfg, "ok.md"), []byte("ok"), 0o600)
-	if b, err := readTrusted(filepath.Join(cfg, "ok.md")); err != nil || string(b) != "ok" {
-		t.Fatalf("fichier ordinaire : %q %v", b, err)
+	if data, err := readTrusted(filepath.Join(cfg, "ok.md")); err != nil || string(data) != "ok" {
+		t.Fatalf("fichier ordinaire : %q %v", data, err)
 	}
 	if ents, err := readDirTrusted(cfg); err != nil || len(ents) == 0 {
 		t.Fatalf("liste de la config : %v %v", ents, err)
