@@ -13,6 +13,7 @@ func TestNewerVersion(t *testing.T) {
 	}{
 		{"v0.7.1", "v0.7.2", true}, {"v0.7.1", "v0.10.0", true}, {"v0.7.1", "v0.7.1", false},
 		{"v0.8.0", "v0.7.9", false}, {"dev", "v9.9.9", false}, {"v0.7.1", "nightly", false},
+		{"2.1.314", "2.1.316", true}, {"v0.8.1-rc1", "v0.8.1", true}, {"v0.8.1", "v0.8.1-rc1", false},
 	} {
 		if got := newerVersion(c.cur, c.latest); got != c.want {
 			t.Errorf("newerVersion(%q,%q)=%v", c.cur, c.latest, got)
