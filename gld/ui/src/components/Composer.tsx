@@ -154,6 +154,7 @@ export function Composer({
   live,
   liveState,
   onSent,
+  onStart,
   turn,
   setTurn,
   onDone,
@@ -170,6 +171,7 @@ export function Composer({
   live: boolean
   liveState: Live
   onSent: () => void // message envoyé à la session ouverte
+  onStart?: () => void // tour lancé depuis le navigateur : la session passe tout de suite en « ouverte »
   turn: Turn | null
   setTurn: (update: (previousTurn: Turn | null) => Turn | null) => void
   onDone: () => void | Promise<void>
@@ -260,6 +262,7 @@ export function Composer({
   const submit = async (prompt: string): Promise<boolean> => {
     setOwn(true)
     setTurn(() => ({ id, msgs: [{ r: "user", t: prompt }], running: true }))
+    onStart?.()
     const fail = (error: string) => {
       setOwn(false)
       setTurn((previousTurn) => previousTurn && { ...previousTurn, running: false, error })

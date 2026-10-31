@@ -617,6 +617,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
               void reloadRef.current()
               carousel?.next()
             }}
+            onStart={() => actions.touch(id)}
             onWrite={sentDown}
             compactHint={hint}
             coldHint={cold}
