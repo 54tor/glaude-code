@@ -55,7 +55,7 @@ type Home struct {
 const mainHomeID = "main"
 
 // onHomesRemoved reçoit les identifiants des homes retirés par PUT /v1/homes ; branché par le mode multi-utilisateur.
-var onHomesRemoved func(r *http.Request, ids []string)
+var onHomesRemoved func(request *http.Request, ids []string)
 
 type homeProc struct {
 	dir   string

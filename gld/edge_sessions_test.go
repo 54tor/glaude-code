@@ -14,17 +14,17 @@ import (
 func TestRechercheEtCache(t *testing.T) {
 	cfg := t.TempDir()
 	use(cfg)
-	p := filepath.Join(cfg, "projects", "-p", id1+".jsonl")
-	put(t, p, `{"type":"user","message":{"content":"alpha"}}`+"\n", old)
+	path := filepath.Join(cfg, "projects", "-p", id1+".jsonl")
+	put(t, path, `{"type":"user","message":{"content":"alpha"}}`+"\n", old)
 	put(t, filepath.Join(cfg, "projects", "-p", id2+".jsonl"), `{"type":"user","message":{"content":"rien"}}`+"\n", old)
-	if h := search("alpha"); len(h) != 1 {
-		t.Fatalf("recherche : %+v", h)
+	if hits := search("alpha"); len(hits) != 1 {
+		t.Fatalf("recherche : %+v", hits)
 	}
 	// Même date, autre taille : le cache ne doit pas resservir l'ancien texte.
-	put(t, p, `{"type":"user","message":{"content":"beta, plus long"}}`+"\n", old)
-	st, _ := os.Stat(p)
-	os.Chtimes(p, st.ModTime(), st.ModTime())
-	if h := search("beta"); len(h) != 1 {
+	put(t, path, `{"type":"user","message":{"content":"beta, plus long"}}`+"\n", old)
+	st, _ := os.Stat(path)
+	os.Chtimes(path, st.ModTime(), st.ModTime())
+	if hits := search("beta"); len(hits) != 1 {
 		t.Fatal("texte périmé servi par le cache")
 	}
 	nom := strings.Repeat("é", 80)
@@ -40,8 +40,8 @@ func TestSessionsEtDetail(t *testing.T) {
 	base := t.TempDir()
 	proj, proj2 := filepath.Join(base, "un"), filepath.Join(base, "deux")
 	cache := filepath.Join(base, "mon projet.v2", "sous")
-	for _, d := range []string{proj, proj2, cache} {
-		os.MkdirAll(d, 0o755)
+	for _, dir := range []string{proj, proj2, cache} {
+		os.MkdirAll(dir, 0o755)
 	}
 	pp := filepath.Join(cfg, "projects")
 	head := `{"cwd":"` + proj + `"}` + "\n"
@@ -58,36 +58,36 @@ func TestSessionsEtDetail(t *testing.T) {
 		t.Fatalf("groupes : %+v", gs)
 	}
 	by := map[string]Group{}
-	for _, g := range gs {
-		by[g.Project] = g
+	for _, group := range gs {
+		by[group.Project] = group
 	}
-	g := by[proj]
-	if len(g.Sessions) != 2 || g.Sessions[0].ID != id2 || g.Sessions[1].ID != id1 || len(by[proj2].Sessions) != 1 || len(by[cache].Sessions) != 1 {
+	localGroup := by[proj]
+	if len(localGroup.Sessions) != 2 || localGroup.Sessions[0].ID != id2 || localGroup.Sessions[1].ID != id1 || len(by[proj2].Sessions) != 1 || len(by[cache].Sessions) != 1 {
 		t.Fatalf("regroupement : %+v", gs)
 	}
-	s := g.Sessions[1]
-	if s.KB != 2 || !near(s.Mtime, mtimeOf(t, filepath.Join(pp, "-p", id1+".jsonl"))) {
-		t.Fatalf("taille et date : %+v", s)
+	session := localGroup.Sessions[1]
+	if session.KB != 2 || !near(session.Mtime, mtimeOf(t, filepath.Join(pp, "-p", id1+".jsonl"))) {
+		t.Fatalf("taille et date : %+v", session)
 	}
 	if decodeDir("-nexiste-pas-du-tout") != "" {
 		t.Fatal("dossier inventé décodé")
 	}
 
 	// Détail : premières et dernières dates, prompts (3 derniers), modèles distincts triés, sous-agents.
-	var b strings.Builder
-	for i := 1; i <= 5; i++ {
-		fmt.Fprintf(&b, `{"type":"user","timestamp":"t%d","message":{"content":"p%d"}}`+"\n", i, i)
+	var builder strings.Builder
+	for index := 1; index <= 5; index++ {
+		fmt.Fprintf(&builder, `{"type":"user","timestamp":"t%d","message":{"content":"p%d"}}`+"\n", index, index)
 	}
-	b.WriteString(`{"type":"user","message":{"content":[{"type":"tool_result","content":"r"}]}}` + "\n")
-	b.WriteString(`{"type":"assistant","message":{"model":"b"}}` + "\n" + `{"type":"assistant","message":{"model":"a"}}` + "\n" + `{"type":"assistant","message":{"model":"a"}}` + "\n")
+	builder.WriteString(`{"type":"user","message":{"content":[{"type":"tool_result","content":"r"}]}}` + "\n")
+	builder.WriteString(`{"type":"assistant","message":{"model":"b"}}` + "\n" + `{"type":"assistant","message":{"model":"a"}}` + "\n" + `{"type":"assistant","message":{"model":"a"}}` + "\n")
 	dp := filepath.Join(pp, "-p", id1+".jsonl")
-	put(t, dp, b.String(), old)
+	put(t, dp, builder.String(), old)
 	put(t, filepath.Join(pp, "-p", id1, "subagents", "a.jsonl"), "x", old)
 	put(t, filepath.Join(pp, "-p", id1, "subagents", "b.jsonl"), "x", old)
 	put(t, filepath.Join(pp, "-p", id1, "subagents", "c.txt"), "x", old)
-	d := detail(dp)
-	if d.T0 != "t1" || d.T1 != "t5" || d.N != 5 || strings.Join(d.Prompts, ",") != "p3,p4,p5" || strings.Join(d.Models, ",") != "a,b" || d.Subagents != 2 {
-		t.Fatalf("détail : %+v", d)
+	localDetail := detail(dp)
+	if localDetail.T0 != "t1" || localDetail.T1 != "t5" || localDetail.N != 5 || strings.Join(localDetail.Prompts, ",") != "p3,p4,p5" || strings.Join(localDetail.Models, ",") != "a,b" || localDetail.Subagents != 2 {
+		t.Fatalf("détail : %+v", localDetail)
 	}
 }
 
@@ -118,14 +118,14 @@ func TestReassignation(t *testing.T) {
 	}
 	os.Remove(filepath.Join(cfg, "projects", encDst, id1+".jsonl"))
 	put(t, filepath.Join(cfg, "projects", encDst, id1, "subagents", "b.jsonl"), "{}\n", old) // reste d'un /cd interrompu
-	if n, err := reassign([]item{{encSrc, id1}}, dst); n != 1 || err != nil {
-		t.Fatal(n, err)
+	if count, err := reassign([]item{{encSrc, id1}}, dst); count != 1 || err != nil {
+		t.Fatal(count, err)
 	}
 	moved := filepath.Join(cfg, "projects", encDst, id1+".jsonl")
-	b, _ := os.ReadFile(moved)
+	data, _ := os.ReadFile(moved)
 	sub, _ := os.ReadFile(filepath.Join(cfg, "projects", encDst, id1, "subagents", "a.jsonl"))
-	if !strings.Contains(string(b), `"cwd":"`+dst+`"`) || !strings.Contains(string(sub), `"cwd":"`+dst+`"`) {
-		t.Fatalf("cwd non réécrit :\n%s\n%s", b, sub)
+	if !strings.Contains(string(data), `"cwd":"`+dst+`"`) || !strings.Contains(string(sub), `"cwd":"`+dst+`"`) {
+		t.Fatalf("cwd non réécrit :\n%s\n%s", data, sub)
 	}
 	if _, err := os.Stat(filepath.Join(cfg, "projects", encDst, id1, "subagents", "b.jsonl")); err != nil {
 		t.Fatal("dossier fusionné : b.jsonl perdu")
@@ -139,25 +139,25 @@ func TestReassignation(t *testing.T) {
 }
 
 func TestOuvertsEtRecents(t *testing.T) {
-	h, _, _ := web(t)
+	handler, _, _ := web(t)
 	t.Setenv("FAKE_AGENTS", `[{"sessionId":"a","status":"busy","state":"blocked"},{"sessionId":"b","status":"busy","state":"running"},{"sessionId":"c","status":"idle"}]`)
-	if w := waiting(); strings.Join(w, ",") != "a,c" {
-		t.Fatalf("en attente : %v", w)
+	if values := waiting(); strings.Join(values, ",") != "a,c" {
+		t.Fatalf("en attente : %v", values)
 	}
-	status(t, h, "GET", "/v1/directories?path=::drives", "", 400) // la liste des lecteurs n'existe que sous Windows
+	status(t, handler, "GET", "/v1/directories?path=::drives", "", 400) // la liste des lecteurs n'existe que sous Windows
 
 }
 
 func TestPurgeRestes(t *testing.T) {
 	t.Setenv("GLD_GRACE", "")
-	for v, want := range map[string]time.Duration{"": time.Hour, "0": 0, "5": 5 * time.Minute, "-5": time.Hour, "x": time.Hour} {
-		t.Setenv("GLD_GRACE", v)
-		if g := grace(); g != want {
-			t.Fatalf("GLD_GRACE=%q : %v", v, g)
+	for value, want := range map[string]time.Duration{"": time.Hour, "0": 0, "5": 5 * time.Minute, "-5": time.Hour, "x": time.Hour} {
+		t.Setenv("GLD_GRACE", value)
+		if duration := grace(); duration != want {
+			t.Fatalf("GLD_GRACE=%q : %v", value, duration)
 		}
 	}
-	if h := lineHashes([]byte(`{"pastedContents":[{"contentHash":"x"},{"contentHash":""}]}`)); len(h) != 1 || h[0] != "x" {
-		t.Fatal("collages en liste :", h)
+	if values := lineHashes([]byte(`{"pastedContents":[{"contentHash":"x"},{"contentHash":""}]}`)); len(values) != 1 || values[0] != "x" {
+		t.Fatal("collages en liste :", values)
 	}
 	if lineHashes([]byte(`{"pastedContents":"?"}`)) != nil {
 		t.Fatal("collages illisibles")
@@ -175,8 +175,8 @@ func TestPurgeRestes(t *testing.T) {
 	put(t, filepath.Join(pp, "77777777-7777-7777-7777-777777777777.jsonl"), `{"m":"snapshot-bash-666-f.sh snapshot-bash-999-i.sh"}`+"\n", old) // gardée
 	put(t, hist, `{"sessionId":"`+id2+`","pastedContents":{"1":{"contentHash":"dddddddddddddddd"}}}`+"\n", old)
 	os.Chmod(hist, 0o644)
-	for _, s := range []string{"444-d", "555-e", "666-f", "888-h", "999-i"} {
-		put(t, filepath.Join(ss, "snapshot-bash-"+s+".sh"), "s", old)
+	for _, text := range []string{"444-d", "555-e", "666-f", "888-h", "999-i"} {
+		put(t, filepath.Join(ss, "snapshot-bash-"+text+".sh"), "s", old)
 	}
 	put(t, filepath.Join(cfg, "paste-cache", "dddddddddddddddd.txt"), "c", old)
 
@@ -224,9 +224,9 @@ func TestDecodeDirWalkRacinesExclues(t *testing.T) {
 	if got := decodeDirWalk(enc); got != "" {
 		t.Fatalf("une racine exclue (%s) a été parcourue : %q", top, got)
 	}
-	for _, r := range []string{"/proc", "/sys", "/dev", "/run", "/mnt", "/media"} {
-		if !skipRoots[r] {
-			t.Errorf("%s doit être exclue", r)
+	for _, raw := range []string{"/proc", "/sys", "/dev", "/run", "/mnt", "/media"} {
+		if !skipRoots[raw] {
+			t.Errorf("%s doit être exclue", raw)
 		}
 	}
 }

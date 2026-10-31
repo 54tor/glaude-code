@@ -40,14 +40,14 @@ func TestGitStatesCache(t *testing.T) {
 		}
 		return "# branch.head dev\x001 .M N... 1 1 1 a b f\x00", nil
 	}
-	for i := 0; i < 2; i++ {
+	for index := 0; index < 2; index++ {
 		got := gitStates([]string{"/depot", "/pas-un-depot"})
 		if len(got) != 1 || got["/depot"].Branch != "dev" || got["/depot"].Changed != 1 {
 			t.Fatalf("%+v", got)
 		}
 	}
-	if n := calls.Load(); n != 2 {
-		t.Fatalf("relu malgré le cache : %d appels", n)
+	if char := calls.Load(); char != 2 {
+		t.Fatalf("relu malgré le cache : %d appels", char)
 	}
 }
 
@@ -65,8 +65,8 @@ func TestRunGitStatusReel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s := parseGitStatus(out); s.Branch != "main" || s.Untrack != 1 {
-		t.Fatalf("%+v\n%s", s, out)
+	if gitState := parseGitStatus(out); gitState.Branch != "main" || gitState.Untrack != 1 {
+		t.Fatalf("%+v\n%s", gitState, out)
 	}
 }
 
@@ -88,21 +88,21 @@ func TestParseGitChanges(t *testing.T) {
 	if len(got) != len(want) {
 		t.Fatalf("%+v", got)
 	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("%d : %+v au lieu de %+v", i, got[i], want[i])
+	for index := range want {
+		if got[index] != want[index] {
+			t.Errorf("%d : %+v au lieu de %+v", index, got[index], want[index])
 		}
 	}
 }
 
 // Les sous-dossiers qui contiennent un .git sont listés (pas les cachés, ni node_modules ni vendor).
 func TestSubRepos(t *testing.T) {
-	d := t.TempDir()
-	for _, n := range []string{"8.2/.git", "8.1/.git", "docs", ".cache/.git", "node_modules/.git", "vendor/.git"} {
-		put(t, d+"/"+n+"/x", "x\n", old)
+	dir := t.TempDir()
+	for _, name := range []string{"8.2/.git", "8.1/.git", "docs", ".cache/.git", "node_modules/.git", "vendor/.git"} {
+		put(t, dir+"/"+name+"/x", "x\n", old)
 	}
-	got := subRepos(d)
-	if len(got) != 2 || got[0] != d+"/8.1" || got[1] != d+"/8.2" {
+	got := subRepos(dir)
+	if len(got) != 2 || got[0] != dir+"/8.1" || got[1] != dir+"/8.2" {
 		t.Fatalf("%v", got)
 	}
 }
@@ -113,8 +113,8 @@ func TestAddDirRepos(t *testing.T) {
 	t.Cleanup(func() { root = oldRoot })
 	root = filepath.Join(t.TempDir(), "projects")
 	proj, ext := t.TempDir(), t.TempDir()
-	for _, n := range []string{ext + "/.git", ext + "/sub/.git", ext + "/deep/x/.git", proj + "/rel/.git"} {
-		put(t, n+"/x", "x\n", old)
+	for _, name := range []string{ext + "/.git", ext + "/sub/.git", ext + "/deep/x/.git", proj + "/rel/.git"} {
+		put(t, name+"/x", "x\n", old)
 	}
 	put(t, proj+"/.claude/settings.json", `{"permissions":{"additionalDirectories":["`+ext+`","rel","/absent"]}}`, old)
 	got := sessionRepos(proj)
@@ -149,13 +149,13 @@ func TestGitChangesCheminsReels(t *testing.T) {
 		{Path: `q"uote.txt`, Status: "??"}:                            true,
 	}
 	got := parseGitChanges(out)
-	for _, c := range got {
-		if !want[c] {
-			t.Errorf("inattendu : %+v", c)
+	for _, gitChange := range got {
+		if !want[gitChange] {
+			t.Errorf("inattendu : %+v", gitChange)
 		}
 	}
-	if s := parseGitStatus(out); len(got) != 3 || s.Changed != 1 || s.Untrack != 2 || s.Branch != "main" {
-		t.Fatalf("%+v %+v\n%q", got, s, out)
+	if gitState := parseGitStatus(out); len(got) != 3 || gitState.Changed != 1 || gitState.Untrack != 2 || gitState.Branch != "main" {
+		t.Fatalf("%+v %+v\n%q", got, gitState, out)
 	}
 }
 
@@ -167,19 +167,19 @@ func TestGitPrefix(t *testing.T) {
 	git(t, dir, "init", "-q", "-b", "main")
 	put(t, dir+"/sub/dir/f.txt", "x\n", old)
 	put(t, dir+"/top.txt", "x\n", old)
-	if p := gitPrefix(dir); p != "" {
-		t.Fatalf("racine : %q", p)
+	if path := gitPrefix(dir); path != "" {
+		t.Fatalf("racine : %q", path)
 	}
-	if p := gitPrefix(dir + "/sub/dir"); p != "sub/dir/" {
-		t.Fatalf("sous-dossier : %q", p)
+	if path := gitPrefix(dir + "/sub/dir"); path != "sub/dir/" {
+		t.Fatalf("sous-dossier : %q", path)
 	}
 	out, err := runGitStatus(dir + "/sub/dir")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var paths []string
-	for _, c := range parseGitChanges(out) {
-		paths = append(paths, c.Path)
+	for _, gitChange := range parseGitChanges(out) {
+		paths = append(paths, gitChange.Path)
 	}
 	if len(paths) != 2 {
 		t.Fatalf("les changements hors du sous-dossier restent renvoyés : %v", paths)
@@ -199,14 +199,14 @@ func TestGitPrefixExpires(t *testing.T) {
 	gitPrefixMu.Lock()
 	gitPrefixes[dir] = gitPrefixEntry{"vieux/", time.Now().Add(-2 * gitTTL)}
 	gitPrefixMu.Unlock()
-	if p := gitPrefix(dir); p != "" {
-		t.Fatalf("préfixe périmé servi : %q", p)
+	if path := gitPrefix(dir); path != "" {
+		t.Fatalf("préfixe périmé servi : %q", path)
 	}
 	gitPrefixMu.Lock()
 	gitPrefixes[dir] = gitPrefixEntry{"frais/", time.Now()}
 	gitPrefixMu.Unlock()
-	if p := gitPrefix(dir); p != "frais/" {
-		t.Fatalf("préfixe frais relu : %q", p)
+	if path := gitPrefix(dir); path != "frais/" {
+		t.Fatalf("préfixe frais relu : %q", path)
 	}
 }
 

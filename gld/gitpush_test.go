@@ -26,11 +26,11 @@ func TestMaskURL(t *testing.T) {
 
 func git(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	b, err := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@t"}, args...)...).CombinedOutput()
+	data, err := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@t"}, args...)...).CombinedOutput()
 	if err != nil {
-		t.Fatalf("git %v : %v\n%s", args, err, b)
+		t.Fatalf("git %v : %v\n%s", args, err, data)
 	}
-	return strings.TrimSpace(string(b))
+	return strings.TrimSpace(string(data))
 }
 
 // Pousse vers un remote choisi parmi deux ; un remote inconnu et un HEAD détaché sont refusés ; la première fois, l'amont est posé.
@@ -39,13 +39,13 @@ func TestGitPush(t *testing.T) {
 		t.Skip("git absent")
 	}
 	root := t.TempDir()
-	a, b, work := root+"/a.git", root+"/b.git", root+"/work"
-	git(t, root, "init", "-q", "--bare", a)
-	git(t, root, "init", "-q", "--bare", b)
+	argument, body, work := root+"/a.git", root+"/b.git", root+"/work"
+	git(t, root, "init", "-q", "--bare", argument)
+	git(t, root, "init", "-q", "--bare", body)
 	git(t, root, "init", "-q", "-b", "main", work)
-	git(t, work, "remote", "add", "origin", a)
+	git(t, work, "remote", "add", "origin", argument)
 	git(t, work, "remote", "add", "miroir", "https://u:pw@example.org/x.git")
-	git(t, work, "remote", "set-url", "--push", "miroir", b)
+	git(t, work, "remote", "set-url", "--push", "miroir", body)
 	git(t, work, "commit", "-q", "--allow-empty", "-m", "un")
 
 	rs := gitRemotes(work)
@@ -58,7 +58,7 @@ func TestGitPush(t *testing.T) {
 	if out, err := gitPush(work, "origin"); err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
-	if got := git(t, a, "rev-parse", "main"); got != git(t, work, "rev-parse", "HEAD") {
+	if got := git(t, argument, "rev-parse", "main"); got != git(t, work, "rev-parse", "HEAD") {
 		t.Fatalf("a.git en retard : %s", got)
 	}
 	if up := git(t, work, "rev-parse", "--abbrev-ref", "@{u}"); up != "origin/main" {
@@ -68,7 +68,7 @@ func TestGitPush(t *testing.T) {
 	if out, err := gitPush(work, "miroir"); err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
-	if got := git(t, b, "rev-parse", "main"); got != git(t, work, "rev-parse", "HEAD") {
+	if got := git(t, body, "rev-parse", "main"); got != git(t, work, "rev-parse", "HEAD") {
 		t.Fatalf("b.git en retard : %s", got)
 	}
 	git(t, work, "checkout", "-q", "--detach")
