@@ -207,6 +207,16 @@ func memFile(key, path string) (MemFile, bool) {
 	return memoryFile, true
 }
 
+// isTempPath : un dossier de travail jetable (/tmp, $TMPDIR…) n'est pas une destination de déplacement.
+func isTempPath(path string) bool {
+	for _, tempRoot := range []string{"/tmp", "/var/tmp", "/private/tmp", os.TempDir()} {
+		if path == tempRoot || strings.HasPrefix(path, strings.TrimRight(tempRoot, "/")+"/") {
+			return true
+		}
+	}
+	return false
+}
+
 // MemTarget : un projet vers la mémoire duquel une entrée peut être déplacée.
 type MemTarget struct {
 	Dir     string `json:"dir"`
@@ -308,7 +318,9 @@ func memList() ([]MemFile, []MemProject, []MemTarget) {
 		if len(memoryProject.Files) > 0 {
 			projects = append(projects, memoryProject)
 		}
-		targets = append(targets, MemTarget{dirEntry.Name(), memoryProject.Project})
+		if !isTempPath(memoryProject.Project) {
+			targets = append(targets, MemTarget{dirEntry.Name(), memoryProject.Project})
+		}
 	}
 	sort.Slice(projects, func(leftIndex, rightIndex int) bool {
 		return projects[leftIndex].Project < projects[rightIndex].Project
