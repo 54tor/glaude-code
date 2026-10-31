@@ -3,7 +3,7 @@ package main
 import "testing"
 
 func TestScreenAsks(t *testing.T) {
-	for _, c := range []struct {
+	for _, record := range []struct {
 		name, scr string
 		want      bool
 	}{
@@ -13,8 +13,8 @@ func TestScreenAsks(t *testing.T) {
 		{"en réflexion", "Do you want to proceed?\n1. a\n2. b\n✻ Réfléchit… (esc to interrupt)", false},
 		{"écran vide", "", false},
 	} {
-		if got := screenAsks(c.scr); got != c.want {
-			t.Errorf("%s : %v, attendu %v", c.name, got, c.want)
+		if got := screenAsks(record.scr); got != record.want {
+			t.Errorf("%s : %v, attendu %v", record.name, got, record.want)
 		}
 	}
 }
