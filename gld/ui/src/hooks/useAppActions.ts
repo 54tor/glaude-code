@@ -513,8 +513,10 @@ export function useAppActions(context: {
       return true
     },
     newSession: (project, initial, onSent) => {
-      const projectTargets = targets().filter((target) => target.project === project)
-      if (projectTargets.length) newSession(i18n.t("shell.header.newSession"), projectTargets[0].label, projectTargets, initial, onSent)
+      const everyTarget = targets()
+      const projectTargets = everyTarget.filter((target) => target.project === project)
+      const otherTargets = everyTarget.filter((target) => target.project !== project)
+      if (projectTargets.length) newSession(i18n.t("shell.header.newSession"), projectTargets[0].label, [...projectTargets, ...otherTargets], initial, onSent)
     },
     resumeWith: (row) => {
       if (live.has(row.s.id)) return void toast.info(i18n.t("shell.act.alreadyOpen"))
