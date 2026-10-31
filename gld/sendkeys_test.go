@@ -168,6 +168,13 @@ func TestEcranEtTouches(t *testing.T) {
 	if last[1] != "send-keys" || last[len(last)-1] != "2" || last[len(last)-2] != "%3" {
 		t.Fatalf("touche : %v", last)
 	}
+	if err := sendKey(sid, "CtrlB"); err != nil {
+		t.Fatal(err)
+	}
+	last = (*calls)[len(*calls)-1]
+	if last[len(last)-1] != "C-b" {
+		t.Fatalf("touche : %v", last)
+	}
 	for _, key := range []string{"rm -rf", "C-d", "a", "Enter; ls", ""} {
 		if sendKey(sid, key) == nil {
 			t.Errorf("touche acceptée : %q", key)
