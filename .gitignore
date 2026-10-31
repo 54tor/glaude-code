@@ -14,3 +14,4 @@ gld/ui/coverage/
 
 # Cache Vite
 .vite/
+gld/gld-web.log
