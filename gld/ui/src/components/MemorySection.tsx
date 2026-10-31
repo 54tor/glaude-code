@@ -1,4 +1,4 @@
-import { type LucideIcon, AlertTriangle, MoreHorizontal, ChevronRight, Calculator, ArrowDownWideNarrow, ArrowUpNarrowWide, CheckSquare, EyeOff, Filter, FileStack, FileText, Plus, Sparkles, Trash2 } from "lucide-react"
+import { type LucideIcon, AlertTriangle, MoreHorizontal, ChevronRight, Calculator, ArrowDownWideNarrow, ArrowUpNarrowWide, CheckSquare, EyeOff, Filter, FileStack, FileText, Plus, BotMessageSquare, Trash2 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { MemFile } from "@/lib/api"
 import { ago } from "@/lib/format"
@@ -124,7 +124,7 @@ export function Section({
           )}
           {onWrite && (
             <ContextMenuItem onSelect={onWrite}>
-              <Sparkles /> {t("memory.section.menuNewHaiku")}
+              <BotMessageSquare /> {t("memory.section.menuNewHaiku")}
             </ContextMenuItem>
           )}
           {onConsolidate && (

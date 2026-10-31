@@ -1,4 +1,4 @@
-import { Bot, Brain, Eye, EyeOff, FolderInput, Globe, Pencil, Save, ScrollText, Trash2, X } from "lucide-react"
+import { BotMessageSquare, Brain, Eye, EyeOff, FolderInput, Globe, Pencil, Save, ScrollText, Trash2, X } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { MemFile, MemTarget } from "@/lib/api"
 import { ago, size, tilde } from "@/lib/format"
@@ -126,7 +126,7 @@ export function FileBar({
           </Button>
           {file && (
             <Button variant="ghost" size="sm" onClick={onRewrite}>
-              <Bot /> {t("memory.fileBar.improve")}
+              <BotMessageSquare /> {t("memory.fileBar.improve")}
             </Button>
           )}
           <Button size="sm" onClick={onEdit} disabled={!textReady}>

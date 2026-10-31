@@ -109,7 +109,7 @@
       "reactivate": "Réactiver",
       "deactivate": "Désactiver",
       "remove": "Supprimer",
-      "improve": "Améliorer…",
+      "improve": "Améliorer",
       "edit": "Modifier"
     },
     "fileMenu": {
@@ -124,7 +124,7 @@
       "edit": "Modifier",
       "rename": "Renommer…",
       "renameTitle": "Renommer {{name}}",
-      "improve": "Améliorer avec un modèle…",
+      "improve": "Améliorer",
       "type": "Type",
       "noType": "Sans type",
       "copyContent": "Copier le contenu",
@@ -184,7 +184,7 @@
       "newEntryAria": "Nouvelle entrée · {{title}}",
       "menuNew": "Nouvelle entrée…",
       "menuNewRule": "Nouvelle règle du projet…",
-      "menuNewHaiku": "Nouvelle entrée avec Haiku…",
+      "menuNewHaiku": "Nouvelle entrée assistée",
       "menuConsolidate": "Consolider dans {{file}} (Haiku)…",
       "menuCount": "Compter les tokens (Haiku)",
       "menuSelectAll": "Tout sélectionner pour une fusion",

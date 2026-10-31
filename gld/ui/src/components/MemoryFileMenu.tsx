@@ -1,4 +1,4 @@
-import { BookOpen, Bot, Download, Zap, ZapOff, Brain, Copy, Eye, EyeOff, FolderInput, Globe, Merge, Pencil, ScrollText, Tag, TextCursorInput, Trash2, Unlink } from "lucide-react"
+import { BookOpen, BotMessageSquare, Download, Zap, ZapOff, Brain, Copy, Eye, EyeOff, FolderInput, Globe, Merge, Pencil, ScrollText, Tag, TextCursorInput, Trash2, Unlink } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { MemFile, MemTarget } from "@/lib/api"
 import { tilde } from "@/lib/format"
@@ -91,7 +91,7 @@ export function FileMenu({ x, picked, targets, homeDir, a }: { x: MemFile; picke
         </ContextMenuItem>
       )}
       <ContextMenuItem onSelect={() => a.rewrite(x)}>
-        <Bot /> {t("memory.fileMenu.improve")}
+        <BotMessageSquare /> {t("memory.fileMenu.improve")}
       </ContextMenuItem>
       {(x.key.startsWith("m/") || x.key.startsWith("g/rules/")) && !x.key.endsWith("/MEMORY.md") && (
         <ContextMenuSub>
