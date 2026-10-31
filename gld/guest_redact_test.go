@@ -2,11 +2,12 @@ package main
 
 import (
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
 func TestPathRedactorMasqueLHote(t *testing.T) {
-	redactor := newPathRedactor("/home/bobby", "/home/bobby/Projets/app", "guest-ab12")
+	redactor := newPathRedactor("/home/bobby", "/home/bobby/Projets/app", "guest-ab12", "Jean Dupont", "jean.dupont@example.com")
 	testCases := map[string]string{
 		`{"cwd":"/home/bobby/Projets/app/src/a.go"}`:          `{"cwd":"src/a.go"}`,
 		`cd /home/bobby/Projets/app && ls`:                    `cd . && ls`,
@@ -18,6 +19,8 @@ func TestPathRedactorMasqueLHote(t *testing.T) {
 		`whoami -> bobby, bobby@example.com, bobbyx, /v1/a/b`: `whoami -> guest-ab12, guest-ab12@example.com, bobbyx, /v1/a/b`,
 		`https://example.com/tmp/page`:                        `https://example.com/tmp/page`,
 		`/home/bobbyx/Projets/app/a.go`:                       `…/a.go`,
+		`/data/backups/db.sql`:                                `…/db.sql`,
+		`auteur Jean Dupont <jean.dupont@example.com>`:        `auteur guest-ab12 <guest-ab12>`,
 	}
 	for input, expected := range testCases {
 		if obtained := string(redactor.apply([]byte(input))); obtained != expected {
@@ -69,5 +72,13 @@ func TestGuestAliasStableEtSansLeCompte(t *testing.T) {
 	}
 	if alias := guestAlias("inv-1"); len(alias) != len(aliasPrefix)+aliasHexLength {
 		t.Errorf("alias : %q", alias)
+	}
+}
+
+func TestExpandIdentityTerms(t *testing.T) {
+	obtained := expandIdentityTerms([]string{"Jean Dupont", "jean.dupont@example.com", "ab"})
+	expected := []string{"jean.dupont@example.com", "Jean Dupont", "jean.dupont", "Dupont", "Jean"}
+	if strings.Join(obtained, "|") != strings.Join(expected, "|") {
+		t.Errorf("obtenu %v, attendu %v", obtained, expected)
 	}
 }

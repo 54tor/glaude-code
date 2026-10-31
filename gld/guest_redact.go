@@ -24,9 +24,10 @@ const (
 )
 
 var (
-	hostRootPathRe = regexp.MustCompile(
+	hostPathRe = regexp.MustCompile(
 		"(^|[\\s\"'(=:@,;<>`]|\\\\[nt])" +
-			`(/(?:home|Users|tmp|var|usr|etc|opt|mnt|srv|root|run|proc|sys|media|private)(?:/[A-Za-z0-9._@+%~=-]+)+)`)
+			`(/(?:[A-Za-z0-9._@+%~=-]+/)+[A-Za-z0-9._@+%~=-]+)`)
+	appPathPrefixes   = []string{"/v1/", "/assets/", "/icons/", "/guest/", "/invite/"}
 	spareAccountNames = map[string]bool{"user": true, "root": true}
 )
 
@@ -45,7 +46,7 @@ type pathRedactor struct {
 }
 
 // newPathRedactor renvoie nil quand il n'y a rien à masquer. projectDir vide : aucun chemin n'est ramené au projet.
-func newPathRedactor(home, projectDir, alias string) *pathRedactor {
+func newPathRedactor(home, projectDir, alias string, extraTerms ...string) *pathRedactor {
 	encodedHome := nonAlnum.ReplaceAllString(home, "-")
 	if home == "" || home == "/" || encodedHome == "-" {
 		return nil
@@ -55,19 +56,29 @@ func newPathRedactor(home, projectDir, alias string) *pathRedactor {
 		redactor.projectPrefix = regexp.MustCompile(regexp.QuoteMeta(projectDir) + "/")
 		redactor.projectExact = regexp.MustCompile(regexp.QuoteMeta(projectDir) + pathBoundary)
 	}
-	accountName := filepath.Base(home)
-	if len(accountName) >= minAccountLength && !spareAccountNames[accountName] {
-		redactor.account = regexp.MustCompile(wordBoundaryBefore + regexp.QuoteMeta(accountName) + wordBoundaryAfter)
+	nameTerms := []string{}
+	for _, term := range append([]string{filepath.Base(home)}, extraTerms...) {
+		if len(term) >= minAccountLength && !spareAccountNames[strings.ToLower(term)] {
+			nameTerms = append(nameTerms, regexp.QuoteMeta(term))
+		}
+	}
+	if len(nameTerms) > 0 {
+		redactor.account = regexp.MustCompile("(?i)" + wordBoundaryBefore + "(?:" + strings.Join(nameTerms, "|") + ")" + wordBoundaryAfter)
 	}
 	return redactor
 }
 
 func hideHostPath(match []byte) []byte {
-	groups := hostRootPathRe.FindSubmatch(match)
+	groups := hostPathRe.FindSubmatch(match)
 	if groups == nil {
 		return match
 	}
 	hostPath := string(groups[2])
+	for _, appPrefix := range appPathPrefixes {
+		if strings.HasPrefix(hostPath, appPrefix) {
+			return match
+		}
+	}
 	lastSeparator := strings.LastIndexByte(hostPath, '/')
 	return append(append([]byte{}, groups[1]...), []byte(hiddenPathPrefix+hostPath[lastSeparator+1:])...)
 }
@@ -81,7 +92,7 @@ func (redactor *pathRedactor) apply(content []byte) []byte {
 		content = redactor.projectExact.ReplaceAll(content, []byte(".$1"))
 	}
 	content = redactor.encodedHome.ReplaceAll(content, []byte("-home-"+redactor.alias+"$1"))
-	content = hostRootPathRe.ReplaceAllFunc(content, hideHostPath)
+	content = hostPathRe.ReplaceAllFunc(content, hideHostPath)
 	if redactor.account != nil {
 		replacement := []byte("${1}" + redactor.alias + "${2}")
 		content = redactor.account.ReplaceAll(redactor.account.ReplaceAll(content, replacement), replacement)
