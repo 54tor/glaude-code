@@ -133,6 +133,10 @@ const keepFocus = () => {
   requestAnimationFrame(() => field?.focus()) // après le rendu qui suit l'envoi
 }
 
+export const focusComposer = () => {
+  if (window.matchMedia("(pointer: coarse)").matches) return // pas de clavier virtuel qui jaillit à l'ouverture
+  keepFocus()
+}
 export type Turn = { id: string; msgs: Msg[]; running: boolean; error?: string; cost?: number }
 
 // Écrire dans la session depuis le navigateur : claude -p --resume, réponse relayée au fil de l'eau (NDJSON).
