@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState, useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
+import { CACHE_EXPIRY_WARNING_MINUTES } from "./KeepWarm"
 import { AlarmClock, LayoutDashboard, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, Coffee, Microwave, Snowflake, History, FileText, Inbox, Info, Fan, Search, ShieldCheck, Tag, Users, X } from "lucide-react"
 import { tilde } from "@/lib/format"
 import { href, type Route } from "@/lib/route"
@@ -30,7 +31,6 @@ import { api } from "@/lib/api"
 import type { Session, VGroup } from "@/lib/api"
 import { useActions, type Row } from "./actions"
 
-const CACHE_EXPIRY_WARNING_MINUTES = 10
 
 // Avec `to`, un vrai lien : clic du milieu ou Ctrl+clic ouvrent la vue dans un autre onglet.
 function NavItem({ icon: Icon, label, n, active, onClick, to }: { icon: typeof Inbox; label: string; n?: number; active: boolean; onClick: () => void; to?: Route }) {
