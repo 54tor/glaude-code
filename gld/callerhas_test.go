@@ -11,17 +11,17 @@ func TestCallerHasChildHeader(t *testing.T) {
 	childToken = "tok-enfant"
 	t.Cleanup(func() { childToken = old })
 	mk := func(tok string, rights *string) bool {
-		r := httptest.NewRequest("GET", "/v1/config/mcp", nil)
+		request := httptest.NewRequest("GET", "/v1/config/mcp", nil)
 		if tok != "" {
-			r.Header.Set(childHeader, tok)
+			request.Header.Set(childHeader, tok)
 		}
 		if rights != nil {
-			r.Header.Set(rightsHeader, *rights)
+			request.Header.Set(rightsHeader, *rights)
 		}
-		return callerHas(r, RightConfigWrite)
+		return callerHas(request, RightConfigWrite)
 	}
 	none, fs, cfg := "", "fs_read,mem_read", "mem_read,config_write"
-	for name, c := range map[string]struct {
+	for name, record := range map[string]struct {
 		tok    string
 		rights *string
 		want   bool
@@ -32,8 +32,8 @@ func TestCallerHasChildHeader(t *testing.T) {
 		"passerelle en mode ouvert (pas d'en-tête)": {"tok-enfant", nil, true},
 		"en-tête sans jeton d'enfant":               {"", &cfg, false},
 	} {
-		if got := mk(c.tok, c.rights); got != c.want {
-			t.Errorf("%s : got %v, want %v", name, got, c.want)
+		if got := mk(record.tok, record.rights); got != record.want {
+			t.Errorf("%s : got %v, want %v", name, got, record.want)
 		}
 	}
 }

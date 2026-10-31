@@ -29,8 +29,8 @@ func TestInstallBuiltinRules(t *testing.T) {
 	if _, err := os.Stat(mine); err != nil {
 		t.Fatal("un fichier repris par l'utilisateur ne doit pas être supprimé")
 	}
-	p := filepath.Join(builtinDir(), "gld-askuser.md")
-	if err := os.WriteFile(p, []byte("retouché"), 0o644); err != nil {
+	path := filepath.Join(builtinDir(), "gld-askuser.md")
+	if err := os.WriteFile(path, []byte("retouché"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if done, err = installBuiltinRules(); err != nil || len(done) != 1 || done[0] != "gld-askuser.md" {
@@ -54,23 +54,23 @@ func TestBuiltinPromptArgs(t *testing.T) {
 	if _, err := installBuiltinRules(); err != nil {
 		t.Fatal(err)
 	}
-	a := builtinPromptArgs()
-	if len(a) != 2 || a[0] != "--append-system-prompt-file" || a[1] != builtinPromptFile() {
-		t.Fatalf("args = %v", a)
+	values := builtinPromptArgs()
+	if len(values) != 2 || values[0] != "--append-system-prompt-file" || values[1] != builtinPromptFile() {
+		t.Fatalf("args = %v", values)
 	}
-	b, _ := os.ReadFile(builtinPromptFile())
-	if strings.Contains(string(b), "source: gld") || strings.Contains(string(b), builtinMark) || !strings.Contains(string(b), "# Output format") {
-		t.Fatalf("prompt mal assemblé : %.200s", b)
+	data, _ := os.ReadFile(builtinPromptFile())
+	if strings.Contains(string(data), "source: gld") || strings.Contains(string(data), builtinMark) || !strings.Contains(string(data), "# Output format") {
+		t.Fatalf("prompt mal assemblé : %.200s", data)
 	}
 	b2, _ := os.ReadFile(builtinPromptFile())
-	for _, c := range []struct{ help, flag string }{{"--append-system-prompt <p>", "--append-system-prompt"}, {"--model", ""}} {
+	for _, record := range []struct{ help, flag string }{{"--append-system-prompt <p>", "--append-system-prompt"}, {"--model", ""}} {
 		promptFlagOnce, promptFlagName = sync.Once{}, ""
-		claudeHelp = func() string { return c.help }
+		claudeHelp = func() string { return record.help }
 		got := builtinPromptArgs()
 		switch {
-		case c.flag == "" && got != nil:
+		case record.flag == "" && got != nil:
 			t.Fatalf("option inconnue : rien attendu, reçu %v", got)
-		case c.flag != "" && (len(got) != 2 || got[0] != c.flag || got[1] != string(b2)):
+		case record.flag != "" && (len(got) != 2 || got[0] != record.flag || got[1] != string(b2)):
 			t.Fatalf("repli : %v", got)
 		}
 	}
@@ -86,11 +86,11 @@ func TestBuiltinPromptArgs(t *testing.T) {
 
 func TestBuiltinRulesMarkedGld(t *testing.T) {
 	ents, _ := builtinRules.ReadDir("rules")
-	for _, e := range ents {
-		b, _ := builtinRules.ReadFile("rules/" + e.Name())
-		m, err := parseMeta(string(b))
-		if err != nil || m["source"] != "gld" {
-			t.Fatalf("%s : source: gld absent du premier niveau (%v)", e.Name(), err)
+	for _, dirEntry := range ents {
+		data, _ := builtinRules.ReadFile("rules/" + dirEntry.Name())
+		lookup, err := parseMeta(string(data))
+		if err != nil || lookup["source"] != "gld" {
+			t.Fatalf("%s : source: gld absent du premier niveau (%v)", dirEntry.Name(), err)
 		}
 	}
 }
