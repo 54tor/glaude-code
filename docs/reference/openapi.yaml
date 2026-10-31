@@ -2029,6 +2029,47 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
+  /v1/builtin-rules:
+    get:
+      tags:
+      - builtin-rules
+      operationId: getBuiltinRules
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    put:
+      tags:
+      - builtin-rules
+      operationId: putBuiltinRules
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+      x-gld-right: config_write
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
   /v1/keepwarm:
     get:
       tags:

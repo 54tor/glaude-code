@@ -339,6 +339,7 @@ func handler() http.Handler {
 	routesCleanupWarn(mux)
 	routesNotes(mux)
 	routesKeepWarm(mux)
+	routesBuiltinRules(mux)
 	routesSkills(mux)
 	routesBackup(mux)
 	routesIDE(mux)

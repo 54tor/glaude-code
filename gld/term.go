@@ -223,7 +223,7 @@ func runTab(file string) int {
 
 // claudeTabArgs : les arguments de claude pour reprendre une session (id) ou en ouvrir une nouvelle avec un prompt.
 func claudeTabArgs(extra []string, id, prompt string) []string {
-	a := append([]string{}, extra...)
+	a := append(builtinPromptArgs(), extra...)
 	if id != "" {
 		a = append(a, "--resume", id)
 	}

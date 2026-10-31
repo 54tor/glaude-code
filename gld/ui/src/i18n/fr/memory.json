@@ -98,6 +98,7 @@
       "neverLoaded": " · jamais chargée depuis l'activation du suivi",
       "cancel": "Annuler",
       "identical": "identique au fichier : rien à enregistrer",
+      "gldReadOnly": "Règle livrée par gld, en lecture seule. Elle est transmise aux sessions lancées par gld ; à couper dans Réglages.",
       "save": "Enregistrer",
       "moveTo": "Déplacer vers…",
       "globalRules": "Règles globales (rules/)",

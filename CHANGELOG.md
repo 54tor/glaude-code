@@ -4,6 +4,10 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+### Modifié
+- Règles livrées par gld : elles ne sont plus écrites dans `~/.claude/rules` (chargé par toutes les sessions) mais transmises en prompt système (`--append-system-prompt-file`) aux seules sessions lancées par gld, chat et terminal. Réglage « Règles gld » dans Configuration pour les couper ; lecture seule dans la Mémoire. Les anciennes copies marquées « Managed by gld » sont supprimées au démarrage.
+- Titre automatique d'une session ouverte : il est reporté à la fermeture du processus au lieu d'être refusé.
+
 ## [0.8.0] - 2026-10-30
 
 ### Ajouté

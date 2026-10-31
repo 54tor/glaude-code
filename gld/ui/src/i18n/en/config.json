@@ -364,6 +364,8 @@
       "argsTitle": "Options added to claude",
       "argsHint": "Used on every resume in a terminal. The viewer chat only keeps --model, --fallback-model and --effort. Empty by default.",
       "argsPlaceholder": "e.g. --dangerously-skip-permissions",
+      "gldRulesTitle": "gld rules",
+      "gldRulesHint": "Passes the rules shipped by gld (output format, questions, long files, todos) as a system prompt to the sessions gld launches only. Applies from the next session.",
       "modelTitle": "Model and effort for new prompts",
       "modelHint": "Offered by default when resuming with a message, in a new session or in chat; adjustable on each prompt.",
       "theme": "Theme",

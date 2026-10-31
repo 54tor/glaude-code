@@ -364,6 +364,8 @@
       "argsTitle": "Options ajoutées à claude",
       "argsHint": "Utilisées à chaque reprise dans un terminal. Le chat du lecteur n'en garde que --model, --fallback-model et --effort. Vide par défaut.",
       "argsPlaceholder": "ex. --dangerously-skip-permissions",
+      "gldRulesTitle": "Règles gld",
+      "gldRulesHint": "Transmet les règles livrées par gld (format de sortie, questions, fichiers longs, todos) aux seules sessions lancées par gld, en prompt système. Prend effet à la prochaine session.",
       "modelTitle": "Modèle et effort des nouveaux prompts",
       "modelHint": "Proposés par défaut pour reprendre avec un message, une nouvelle session ou le chat ; modifiables à chaque prompt.",
       "theme": "Thème",

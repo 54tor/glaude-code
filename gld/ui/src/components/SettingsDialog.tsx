@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react"
 import { Monitor, Moon, Sun } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
@@ -12,6 +13,7 @@ import { cn } from "@/lib/utils"
 import { useTheme } from "@/components/theme-provider"
 import { PALETTES } from "@/lib/palettes"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 
 const LANGS: { v: Lang; label: string; claude: string }[] = [
@@ -122,6 +124,17 @@ const section = (title: string, hint: string, body: React.ReactNode) => (
 // Options de l'interface passées à claude (arguments, modèle et effort par défaut) : en tête de l'onglet Réglages.
 export function ClaudeOptions({ args, setArgs, choice, setChoice }: Pick<UiSettings, "args" | "setArgs" | "choice" | "setChoice">) {
   const { t } = useTranslation()
+  const [rules, setRules] = useState<boolean | null>(null)
+  useEffect(() => {
+    api.builtinRules().then((r) => setRules(r.enabled), () => {})
+  }, [])
+  const pickRules = async (on: boolean) => {
+    try {
+      setRules((await api.setBuiltinRules(on)).enabled)
+    } catch (e) {
+      toast.error(errMsg(e))
+    }
+  }
   return (
     <section className="space-y-5">
       <h3 className="border-b pb-1 text-md font-semibold">
@@ -144,6 +157,11 @@ export function ClaudeOptions({ args, setArgs, choice, setChoice }: Pick<UiSetti
         t("config.dialog.modelTitle"),
         t("config.dialog.modelHint"),
         <ModelPicker value={choice} onChange={setChoice} />
+      )}
+      {section(
+        t("config.dialog.gldRulesTitle"),
+        t("config.dialog.gldRulesHint"),
+        <Switch checked={rules ?? false} disabled={rules === null} onCheckedChange={pickRules} aria-label={t("config.dialog.gldRulesTitle")} />
       )}
     </section>
   )

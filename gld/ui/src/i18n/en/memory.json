@@ -98,6 +98,7 @@
       "neverLoaded": " · never loaded since tracking was enabled",
       "cancel": "Cancel",
       "identical": "identical to the file: nothing to save",
+      "gldReadOnly": "Rule shipped by gld, read-only. It is passed to the sessions gld launches; turn it off in Settings.",
       "save": "Save",
       "moveTo": "Move to…",
       "globalRules": "Global rules (rules/)",

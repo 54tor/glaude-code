@@ -3,31 +3,82 @@ package main
 import (
 	"bytes"
 	"embed"
+	"encoding/json"
+	"net/http"
+	"os"
 	"path/filepath"
+	"strings"
 )
 
-// Règles User-wide livrées avec gld : copiées en gld-*.md dans <config Claude>/rules à chaque démarrage, pour que Claude Code
-// les charge dans toutes les sessions (format de sortie, questions en TUI que asking.go détecte, fichiers longs).
+// Règles livrées avec gld : copiées dans <config Claude>/gld-rules à chaque démarrage (lecture seule dans l'onglet Mémoire) et
+// transmises en prompt système aux seules sessions que gld lance (format de sortie, questions en TUI que asking.go détecte,
+// fichiers longs). Elles n'entrent plus dans rules/, que Claude Code charge dans toutes les sessions, gld ou non.
 //
 //go:embed rules/*.md
 var builtinRules embed.FS
 
-// builtinRetired : noms des règles livrées autrefois et retirées depuis. Quand on retire une règle de rules/, ajouter son nom ici :
-// le fichier est supprimé du home, sauf s'il ne porte plus la marque de gld (l'utilisateur l'a repris à son compte).
-var builtinRetired = []string{}
+// builtinRetired : noms des règles que gld écrivait autrefois dans rules/. Le fichier est supprimé, sauf s'il ne porte plus
+// la marque de gld (l'utilisateur l'a repris à son compte).
+var builtinRetired = []string{"gld-askuser.md", "gld-long-output.md", "gld-output-format.md", "gld-todo-notes.md"}
 
 const builtinMark = "<!-- Managed by gld:"
 
-// installBuiltinRules écrit les règles embarquées si elles manquent ou diffèrent, supprime les retirées ; renvoie les noms touchés (préfixe - : supprimée).
+func builtinDir() string        { return filepath.Join(cfgDir(), "gld-rules") }
+func builtinPromptFile() string { return filepath.Join(builtinDir(), "all.prompt") }
+func builtinFlagFile() string   { return filepath.Join(cfgDir(), "gld-web-rules.json") }
+
+// builtinOn : les règles gld sont-elles transmises aux sessions ? Oui tant que l'utilisateur ne les a pas coupées.
+func builtinOn() bool {
+	var v struct{ Off bool }
+	if b, err := readTrusted(builtinFlagFile()); err == nil && json.Unmarshal(b, &v) == nil {
+		return !v.Off
+	}
+	return true
+}
+
+func setBuiltinOn(on bool) error {
+	b, _ := json.Marshal(map[string]bool{"off": !on})
+	return rWriteAtomic(cfgDir(), builtinFlagFile(), b, 0o600)
+}
+
+// builtinPromptArgs : l'option claude qui transmet les règles gld, vide si elles sont coupées ou pas encore écrites.
+func builtinPromptArgs() []string {
+	if !builtinOn() {
+		return nil
+	}
+	if _, err := os.Stat(builtinPromptFile()); err != nil {
+		return nil
+	}
+	return []string{"--append-system-prompt-file", builtinPromptFile()}
+}
+
+// ruleBody : le texte d'une règle embarquée sans son front matter ni sa marque.
+func ruleBody(b []byte) string {
+	s := string(b)
+	if rest, ok := strings.CutPrefix(s, "---\n"); ok {
+		if _, after, found := strings.Cut(rest, "\n---\n"); found {
+			s = after
+		}
+	}
+	var out []string
+	for _, l := range strings.Split(s, "\n") {
+		if !strings.HasPrefix(l, builtinMark) {
+			out = append(out, l)
+		}
+	}
+	return strings.TrimSpace(strings.Join(out, "\n"))
+}
+
+// installBuiltinRules écrit les règles embarquées si elles manquent ou diffèrent et retire les anciennes copies de rules/ ;
+// renvoie les noms touchés (préfixe - : supprimée).
 func installBuiltinRules() ([]string, error) {
-	dir := filepath.Join(cfgDir(), "rules")
 	ents, err := builtinRules.ReadDir("rules")
 	if err != nil {
 		return nil, err
 	}
 	var done []string
 	for _, n := range builtinRetired {
-		dst := filepath.Join(dir, n)
+		dst := filepath.Join(cfgDir(), "rules", n)
 		if cur, err := readTrusted(dst); err == nil && bytes.Contains(cur, []byte(builtinMark)) {
 			if err := rRemove(cfgDir(), dst); err != nil {
 				return done, err
@@ -35,22 +86,46 @@ func installBuiltinRules() ([]string, error) {
 			done = append(done, "-"+n)
 		}
 	}
+	dir := builtinDir()
+	var prompt []string
+	write := func(dst string, want []byte) (bool, error) {
+		if cur, err := readTrusted(dst); err == nil && bytes.Equal(cur, want) {
+			return false, nil
+		}
+		if err := rMkdirAll(cfgDir(), dir, 0o755); err != nil {
+			return false, err
+		}
+		return true, rWriteAtomic(cfgDir(), dst, want, 0o644)
+	}
 	for _, e := range ents {
 		want, err := builtinRules.ReadFile("rules/" + e.Name())
 		if err != nil {
 			return done, err
 		}
-		dst := filepath.Join(dir, e.Name())
-		if cur, err := readTrusted(dst); err == nil && bytes.Equal(cur, want) {
-			continue
-		}
-		if err := rMkdirAll(cfgDir(), dir, 0o755); err != nil {
+		prompt = append(prompt, ruleBody(want))
+		if changed, err := write(filepath.Join(dir, e.Name()), want); err != nil {
 			return done, err
+		} else if changed {
+			done = append(done, e.Name())
 		}
-		if err := rWriteAtomic(cfgDir(), dst, want, 0o644); err != nil {
-			return done, err
-		}
-		done = append(done, e.Name())
 	}
-	return done, nil
+	_, err = write(builtinPromptFile(), []byte(strings.Join(prompt, "\n\n")+"\n"))
+	return done, err
+}
+
+func routesBuiltinRules(mux *http.ServeMux) {
+	mux.HandleFunc("GET /v1/builtin-rules", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"enabled": builtinOn()})
+	})
+	mux.HandleFunc("PUT /v1/builtin-rules", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Enabled bool }
+		if !decodeBody(w, r, &req, 1<<10) {
+			return
+		}
+		if err := setBuiltinOn(req.Enabled); err != nil {
+			writeErr(w, http.StatusInternalServerError, "internal", err.Error())
+			return
+		}
+		writeJSON(w, 200, map[string]any{"enabled": req.Enabled})
+	})
 }

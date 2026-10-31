@@ -123,6 +123,10 @@ func memResolve(key string) (string, string, error) {
 		if n := key[8:]; ruleName.MatchString(n) {
 			return filepath.Join(cfgDir(), "rules"), n, nil
 		}
+	case strings.HasPrefix(key, "g/gldrules/"): // règles livrées par gld : lisibles ici, jamais modifiables
+		if n := key[11:]; ruleName.MatchString(n) {
+			return builtinDir(), n, nil
+		}
 	case strings.HasPrefix(key, "m/"):
 		// Le dossier du projet doit exister : sans quoi chaque nom reçu créerait un dossier dans projects/.
 		if d, n, ok := strings.Cut(key[2:], "/"); ok && safeDir(d) && mdName.MatchString(n) && isDirPath(filepath.Join(root, d)) {
@@ -229,6 +233,13 @@ func memList() ([]MemFile, []MemProject, []MemTarget) {
 	rules, _ := filepath.Glob(filepath.Join(cfgDir(), "rules", "*.md*"))
 	for _, p := range rules {
 		if f, ok := memFile("g/rules/"+filepath.Base(p), p); ok && ruleName.MatchString(f.Name) {
+			f.Name = "rules/" + f.Name
+			global = append(global, f)
+		}
+	}
+	built, _ := filepath.Glob(filepath.Join(builtinDir(), "*.md"))
+	for _, p := range built {
+		if f, ok := memFile("g/gldrules/"+filepath.Base(p), p); ok && ruleName.MatchString(f.Name) {
 			f.Name = "rules/" + f.Name
 			global = append(global, f)
 		}

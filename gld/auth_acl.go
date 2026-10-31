@@ -73,6 +73,7 @@ var routeRights = map[string]Right{
 	"GET /v1/config/mcp": RightMemRead, "GET /v1/slash-commands": RightMemRead,
 	"GET /v1/git/status": RightMemRead, "GET /v1/git/changes": RightMemRead, "GET /v1/git/remotes": RightMemRead,
 	"GET /v1/update": RightMemRead, "GET /v1/cleanup-warning": RightMemRead, "GET /v1/tabs": RightMemRead, "GET /v1/keepwarm": RightMemRead,
+	"GET /v1/builtin-rules": RightMemRead, "PUT /v1/builtin-rules": RightConfigWrite,
 	"PUT /v1/tabs": RightMemWrite, "DELETE /v1/tabs/{tab}": RightMemWrite, "PUT /v1/vgroups": RightMemWrite,
 
 	// Réglages et skills : font exécuter du code par Claude Code.
@@ -460,7 +461,7 @@ func vgroupsAddsDirs(home string, st Store) bool {
 }
 
 // memKeyPrefixes : les clés de mémoire (memResolve), qui ne mènent jamais à commands/, skills/ ni aux réglages.
-var memKeyPrefixes = []string{"g/CLAUDE.md", "g/rules/", "m/", "r/", "p/"}
+var memKeyPrefixes = []string{"g/CLAUDE.md", "g/rules/", "g/gldrules/", "m/", "r/", "p/"}
 
 // trashNeedsConfig : restaurer un snippet (s/…) ou un skill (k/…) recrée une commande slash ou un skill exécutables.
 // Élément introuvable, illisible ou de forme inconnue : config_write aussi.

@@ -68,6 +68,8 @@ export function FileBar({
             <Save /> {t("memory.fileBar.save")}
           </Button>
         </>
+      ) : sel.startsWith("g/gldrules/") ? (
+        <span className="text-xs text-muted-foreground">{t("memory.fileBar.gldReadOnly")}</span>
       ) : (
         <>
           {movable(sel) && file && (

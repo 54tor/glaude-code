@@ -161,7 +161,7 @@ func annotate(f *MemFile) {
 	if md, _ := m["metadata"].(map[string]any); src == "" && md != nil {
 		src, _ = md["source"].(string)
 	}
-	f.Gld = src == "gld" && strings.HasPrefix(f.Key, "g/rules/")
+	f.Gld = strings.HasPrefix(f.Key, "g/gldrules/") || src == "gld" && strings.HasPrefix(f.Key, "g/rules/")
 	rule := strings.HasPrefix(f.Key, "g/rules/") || strings.HasPrefix(f.Key, "r/")
 	if rule && m != nil {
 		if _, has := m["paths"]; has {
