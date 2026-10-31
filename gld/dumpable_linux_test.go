@@ -29,11 +29,11 @@ func TestHideEnviron(t *testing.T) {
 	}
 	defer cmd.Process.Kill()
 	buf := make([]byte, 64)
-	if n, _ := out.Read(buf); !strings.Contains(string(buf[:n]), "prêt") {
-		t.Fatalf("aide non prête : %q", buf[:n])
+	if count, _ := out.Read(buf); !strings.Contains(string(buf[:count]), "prêt") {
+		t.Fatalf("aide non prête : %q", buf[:count])
 	}
-	b, err := os.ReadFile("/proc/" + strconv.Itoa(cmd.Process.Pid) + "/environ")
-	if err == nil && strings.Contains(string(b), "secret-enfant") {
+	data, err := os.ReadFile("/proc/" + strconv.Itoa(cmd.Process.Pid) + "/environ")
+	if err == nil && strings.Contains(string(data), "secret-enfant") {
 		t.Fatal("jeton lisible dans /proc/<pid>/environ")
 	}
 }

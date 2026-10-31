@@ -9,42 +9,42 @@ import (
 )
 
 func TestMaskSettingsStrict(t *testing.T) {
-	v, err := parseOrdered([]byte(`{"env":{"HTTPS_PROXY":"http://u:pw@proxy:8080","N":{"deep":["x1"]}},
+	value, err := parseOrdered([]byte(`{"env":{"HTTPS_PROXY":"http://u:pw@proxy:8080","N":{"deep":["x1"]}},
 "authToken":{"inner":{"a":["nested-secret"]}},
 "hooks":{"Stop":[{"matcher":"m1","hooks":[{"type":"command","command":"curl -u a:inlinepw"}]}]},
 "permissions":{"allow":["Bash(curl -H \"Authorization: Bearer abc123\")","Bash(make:*)"]}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	loose := formatOrdered(maskSettings(v, false))
-	for _, s := range []string{"nested-secret"} {
-		if strings.Contains(loose, s) {
+	loose := formatOrdered(maskSettings(value, false))
+	for _, text := range []string{"nested-secret"} {
+		if strings.Contains(loose, text) {
 			t.Errorf("drapeau non propagé : %s", loose)
 		}
 	}
 	if !strings.Contains(loose, "http://u:pw@proxy:8080") || !strings.Contains(loose, "inlinepw") {
 		t.Errorf("le mode normal doit garder env et hooks : %s", loose)
 	}
-	strict := formatOrdered(maskSettings(v, true))
-	for _, s := range []string{"pw@proxy", "x1", "inlinepw", "abc123"} {
-		if strings.Contains(strict, s) {
-			t.Errorf("%q visible en mode strict : %s", s, strict)
+	strict := formatOrdered(maskSettings(value, true))
+	for _, text := range []string{"pw@proxy", "x1", "inlinepw", "abc123"} {
+		if strings.Contains(strict, text) {
+			t.Errorf("%q visible en mode strict : %s", text, strict)
 		}
 	}
-	for _, s := range []string{"HTTPS_PROXY", "m1", "Bash(make:*)"} {
-		if !strings.Contains(strict, s) {
-			t.Errorf("%q devrait rester visible : %s", s, strict)
+	for _, text := range []string{"HTTPS_PROXY", "m1", "Bash(make:*)"} {
+		if !strings.Contains(strict, text) {
+			t.Errorf("%q devrait rester visible : %s", text, strict)
 		}
 	}
 }
 
 func TestMcpStrictShowsNoArgs(t *testing.T) {
-	v, _ := parseOrdered([]byte(`{"s":{"command":"npx","args":["-y","pg","postgresql://u:pw@h/db"],"url":"https://h.example/tok123/x?k=1"}}`))
-	m := mcpFrom(v, "user", "", true)[0]
-	if m.Command != "npx" || m.ArgCount != 3 || m.URL != "https://h.example" {
-		t.Errorf("vue stricte : %+v", m)
+	value, _ := parseOrdered([]byte(`{"s":{"command":"npx","args":["-y","pg","postgresql://u:pw@h/db"],"url":"https://h.example/tok123/x?k=1"}}`))
+	mcpServer := mcpFrom(value, "user", "", true)[0]
+	if mcpServer.Command != "npx" || mcpServer.ArgCount != 3 || mcpServer.URL != "https://h.example" {
+		t.Errorf("vue stricte : %+v", mcpServer)
 	}
-	if got := mcpFrom(v, "user", "", false)[0]; !strings.Contains(got.Command, "postgresql://") || got.ArgCount != 0 {
+	if got := mcpFrom(value, "user", "", false)[0]; !strings.Contains(got.Command, "postgresql://") || got.ArgCount != 0 {
 		t.Errorf("vue normale changée : %+v", got)
 	}
 }
@@ -75,14 +75,14 @@ func TestReadConfigRefusesHugeFile(t *testing.T) {
 	cfg := t.TempDir()
 	use(cfg)
 	put(t, filepath.Join(cfg, "settings.json"), "{\"a\":\""+strings.Repeat("x", maxConfigBytes)+"\"}", old)
-	f, v := readConfig("u")
-	if v != nil || f.Error == "" {
-		t.Errorf("gros fichier accepté : %+v", f)
+	configFile, value := readConfig("u")
+	if value != nil || configFile.Error == "" {
+		t.Errorf("gros fichier accepté : %+v", configFile)
 	}
 }
 
 func TestConfigRoutesHideSecretsWithoutConfigWrite(t *testing.T) {
-	s := testStore(t)
+	authStore := testStore(t)
 	cfg := t.TempDir()
 	use(cfg)
 	home := t.TempDir()
@@ -91,34 +91,34 @@ func TestConfigRoutesHideSecretsWithoutConfigWrite(t *testing.T) {
 	put(t, filepath.Join(cfg, "settings.json"), `{"env":{"HTTPS_PROXY":"http://u:pw1@p:1"},"hooks":{"Stop":[{"hooks":[{"type":"command","command":"run pw2"}]}]}}`, old)
 	mux := http.NewServeMux()
 	routesConfig(mux)
-	g := &gateRig{s: s, h: authGate(mux, s, mux), cfg: cfg}
-	ro := g.user(t, "lecteur", false)
-	g.grant(t, ro, "", RightMemRead)
-	rw := g.user(t, "reglages", false)
-	g.grant(t, rw, "", RightMemRead, RightConfigWrite)
-	get := func(u gateUser, path string) string {
-		w := httptest.NewRecorder()
-		g.h.ServeHTTP(w, g.req("GET", path, &u, "", ""))
-		if w.Code != 200 {
-			t.Fatalf("%s : %d", path, w.Code)
+	localGateRig := &gateRig{s: authStore, h: authGate(mux, authStore, mux), cfg: cfg}
+	ro := localGateRig.user(t, "lecteur", false)
+	localGateRig.grant(t, ro, "", RightMemRead)
+	rw := localGateRig.user(t, "reglages", false)
+	localGateRig.grant(t, rw, "", RightMemRead, RightConfigWrite)
+	get := func(localGateUser gateUser, path string) string {
+		recorder := httptest.NewRecorder()
+		localGateRig.h.ServeHTTP(recorder, localGateRig.req("GET", path, &localGateUser, "", ""))
+		if recorder.Code != 200 {
+			t.Fatalf("%s : %d", path, recorder.Code)
 		}
-		return w.Body.String()
+		return recorder.Body.String()
 	}
-	for _, p := range []string{"/v1/config", "/v1/config/effective", "/v1/config/mcp", "/v1/config/projects"} {
-		b := get(ro, p)
+	for _, path := range []string{"/v1/config", "/v1/config/effective", "/v1/config/mcp", "/v1/config/projects"} {
+		body := get(ro, path)
 		for _, sec := range []string{"pw0", "pw1", "pw2"} {
-			if strings.Contains(b, sec) {
-				t.Errorf("%s : %s visible sans config_write", p, sec)
+			if strings.Contains(body, sec) {
+				t.Errorf("%s : %s visible sans config_write", path, sec)
 			}
 		}
 	}
-	if b := get(rw, "/v1/config"); !strings.Contains(b, "pw1") || !strings.Contains(b, "pw2") {
-		t.Errorf("config_write doit garder la vue complète : %s", b)
+	if body := get(rw, "/v1/config"); !strings.Contains(body, "pw1") || !strings.Contains(body, "pw2") {
+		t.Errorf("config_write doit garder la vue complète : %s", body)
 	}
-	if b := get(rw, "/v1/config/mcp"); !strings.Contains(b, "postgresql://") {
-		t.Errorf("config_write doit voir les arguments : %s", b)
+	if body := get(rw, "/v1/config/mcp"); !strings.Contains(body, "postgresql://") {
+		t.Errorf("config_write doit voir les arguments : %s", body)
 	}
-	if b := get(ro, "/v1/config/mcp"); !strings.Contains(b, `"argCount":1`) {
-		t.Errorf("nombre d'arguments absent : %s", b)
+	if body := get(ro, "/v1/config/mcp"); !strings.Contains(body, `"argCount":1`) {
+		t.Errorf("nombre d'arguments absent : %s", body)
 	}
 }
