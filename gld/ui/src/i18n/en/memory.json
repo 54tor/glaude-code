@@ -45,6 +45,7 @@
       "purgeAll": "Empty the trash ({{n}})?",
       "purgeBody": "This time it is permanent.",
       "global": "Global",
+      "gldRules": "gld rules",
       "projectMissing": "{{label}} (missing)",
       "list": "List",
       "pickFile": "Pick a memory file to display. Right-click for its actions.",

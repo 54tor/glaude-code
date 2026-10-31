@@ -1,3 +1,7 @@
+---
+metadata:
+  source: gld
+---
 <!-- Managed by gld: overwritten at every gld startup. Do not edit; add your own rules under another name. -->
 # Long output and temporary files
 

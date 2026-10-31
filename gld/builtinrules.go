@@ -28,7 +28,7 @@ func installBuiltinRules() ([]string, error) {
 	var done []string
 	for _, n := range builtinRetired {
 		dst := filepath.Join(dir, n)
-		if cur, err := readTrusted(dst); err == nil && bytes.HasPrefix(cur, []byte(builtinMark)) {
+		if cur, err := readTrusted(dst); err == nil && bytes.Contains(cur, []byte(builtinMark)) {
 			if err := rRemove(cfgDir(), dst); err != nil {
 				return done, err
 			}

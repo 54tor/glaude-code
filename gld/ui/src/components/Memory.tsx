@@ -477,15 +477,16 @@ export function Memory({
             />
           )}
           {list &&
-            list.global.some((x) => match(x, t("memory.main.global"))) &&
+            list.global.some((x) => !x.gld && match(x, t("memory.main.global"))) &&
             section(
               "global",
               Globe,
               t("memory.main.global"),
-              list.global.filter((x) => match(x, t("memory.main.global"))),
+              list.global.filter((x) => !x.gld && match(x, t("memory.main.global"))),
               () => setWriter({ kind: "new", scope: "global", label: t("memory.main.globalRules") }),
               () => consolidate("global", "")
             )}
+          {list && list.global.some((x) => x.gld && match(x, t("memory.main.gldRules"))) && section("gld", Globe, t("memory.main.gldRules"), list.global.filter((x) => x.gld && match(x, t("memory.main.gldRules"))))}
           {list?.projects.map((p) => {
             const files = p.files.filter((x) => match(x, p.project))
             const label = tilde(p.project, homeDir)

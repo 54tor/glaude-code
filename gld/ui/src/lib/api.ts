@@ -29,6 +29,7 @@ export type MemFile = {
   exact?: boolean // tokens est un compte réel (Haiku)
   always?: boolean // chargé à chaque session
   off?: boolean // règle désactivée (.md.off)
+  gld?: boolean // règle livrée par gld (metadata.source: gld)
   warn?: string // front matter invalide
 }
 export type LoadEvent = { at: number; session: string; file: string; type?: string; reason?: string; globs?: string[]; trigger?: string }

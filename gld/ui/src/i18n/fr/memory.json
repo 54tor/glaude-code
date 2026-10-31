@@ -45,6 +45,7 @@
       "purgeAll": "Vider la corbeille ({{n}}) ?",
       "purgeBody": "Cette fois, c'est définitif.",
       "global": "Globale",
+      "gldRules": "Règles gld",
       "projectMissing": "{{label}} (introuvable)",
       "list": "Liste",
       "pickFile": "Choisis un fichier de mémoire à afficher. Clic droit pour ses actions.",

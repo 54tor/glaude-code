@@ -28,6 +28,7 @@ type MemFile struct {
 	Always bool     `json:"always,omitempty"` // chargé à chaque session
 	Off    bool     `json:"off,omitempty"`    // règle désactivée (fichier .md.off)
 	Warn   string   `json:"warn,omitempty"`   // front matter invalide
+	Gld    bool     `json:"gld,omitempty"`    // règle livrée par gld (metadata.source: gld)
 }
 
 type MemProject struct {
