@@ -17,6 +17,7 @@ const DIALOG_FOOTER = /(esc|escape) to (cancel|exit|go back)|enter to (select|co
 const NUMBERED_OPTION = /^\s*(?:[❯>›]\s*)?([1-9])[.)]\s+(\S.*)$/
 const CURSOR_MARK = /^\s*[❯>›]/
 const TABS_HEADER = /^\s*←.*Submit.*→\s*$/
+const SINGLE_TAB_HEADER = /^\s*(?:←\s*)?[☐☒]\s+\S/
 const TAB_OR_RULE_LINE = /[←→☐☒✔]|^[─━╌▔]/
 const TAB_OR_RULE_CHARACTER = /[←→☐☒✔─━]/
 const ENDS_LIKE_QUESTION = /[?:]$/
@@ -218,7 +219,10 @@ function parseLines(src: string[]): Prompt | null {
       return result
     }
     const permissionContext = contextOf(firstOptionLine, question)
-    const tabsContext = isTabbed ? recap(allLines, tailStart + tabsHeaderLine) : undefined
+    // Question seule (« ☐ Audit » sans Submit) : le message de Claude qui la précède reste visible dans l'écran, pas dans le transcript.
+    const singleTabLine = lines.findLastIndex((line, lineIndex) => lineIndex < firstOptionLine && SINGLE_TAB_HEADER.test(line))
+    const questionHeaderLine = isTabbed ? tabsHeaderLine : singleTabLine
+    const tabsContext = questionHeaderLine >= 0 ? recap(allLines, tailStart + questionHeaderLine) : undefined
     return {
       question,
       context: permissionContext ?? tabsContext,
