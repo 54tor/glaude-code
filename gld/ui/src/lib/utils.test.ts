@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { copyText, isSend, keyHint } from "./utils"
+import { copyText, isSend, keyHint, spliceAtCaret } from "./utils"
 
 describe("copyText", () => {
   afterEach(() => vi.unstubAllGlobals())
@@ -38,5 +38,14 @@ describe("Entrée au clavier tactile", () => {
     expect(isSend(enter())).toBe(false)
     expect(isSend(enter({ ctrlKey: true }))).toBe(true)
     expect(keyHint("Écrire à Claude… (Entrée envoie, Maj+Entrée : saut de ligne)")).toBe("Écrire à Claude…")
+  })
+})
+
+describe("spliceAtCaret", () => {
+  it("remplace la sélection, ajoute à la fin sans champ et respecte la limite", () => {
+    const el = { selectionStart: 2, selectionEnd: 4 } as HTMLTextAreaElement
+    expect(spliceAtCaret(el, "abcdef", "XY", 99)).toBe("abXYef")
+    expect(spliceAtCaret(null, "abc", "XY", 99)).toBe("abcXY")
+    expect(spliceAtCaret(null, "abc", "XYZ", 4)).toBe("abcX")
   })
 })

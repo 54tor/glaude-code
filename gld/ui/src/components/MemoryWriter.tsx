@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Fan, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Choose } from "./Choose"
+import { SnippetMenu } from "./SnippetMenu"
+import { spliceAtCaret } from "@/lib/utils"
 
 // Ce qu'on fait rédiger : réécrire un fichier existant, ou créer une entrée (dossier de transcripts, ou "global" pour rules/).
 export type WriteTarget = ({ kind: "rewrite"; key: string; name: string } | { kind: "new"; scope: string; label: string }) & {
@@ -60,6 +62,11 @@ function Form({
   const [model, setModel] = useState("haiku")
   const [on, setOn] = useState(() => new Set(target.refs ?? refs.map((r) => r.key)))
   const [busy, setBusy] = useState(false)
+  const area = useRef<HTMLTextAreaElement>(null)
+  const insertSnippet = (text: string) => {
+    setInstruction((cur) => spliceAtCaret(area.current, cur, text, 8000))
+    requestAnimationFrame(() => area.current?.focus())
+  }
 
   const run = async () => {
     if (!instruction.trim() || busy) return
@@ -84,6 +91,7 @@ function Form({
         <DialogDescription>{t("memory.writer.description")}</DialogDescription>
       </DialogHeader>
       <textarea
+        ref={area}
         value={instruction}
         onChange={(e) => setInstruction(e.target.value)}
         onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "Enter" && (e.preventDefault(), run())}
@@ -95,6 +103,9 @@ function Form({
         className="session-text w-full resize-y rounded-lg border border-input bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/80"
         aria-label={t("memory.writer.instructionAria")}
       />
+      <div className="flex">
+        <SnippetMenu onInsert={insertSnippet} />
+      </div>
       {refs.length > 0 && (
         <div className="space-y-1.5">
           <p className="text-xs font-medium text-muted-foreground">{t("memory.writer.refs")}</p>

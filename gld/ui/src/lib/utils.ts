@@ -26,3 +26,10 @@ export function copyText(text: string): Promise<void> {
   ta.remove()
   return ok ? Promise.resolve() : Promise.reject(new Error("copy"))
 }
+
+// Insère s à la place de la sélection d'un champ de texte (à la fin sans champ), dans la limite max.
+export function spliceAtCaret(el: HTMLTextAreaElement | null, cur: string, s: string, max: number): string {
+  const i = el?.selectionStart ?? cur.length
+  const j = el?.selectionEnd ?? i
+  return (cur.slice(0, i) + s + cur.slice(j)).slice(0, max)
+}

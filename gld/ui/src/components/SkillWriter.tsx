@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Fan, Sparkles } from "lucide-react"
 import { toast } from "sonner"
@@ -7,6 +7,8 @@ import { errMsg } from "@/lib/apiError"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Choose } from "./Choose"
+import { SnippetMenu } from "./SnippetMenu"
+import { spliceAtCaret } from "@/lib/utils"
 
 
 // Rédaction ou révision d'un SKILL.md par un modèle, à partir d'une consigne. Le texte revient en brouillon : rien n'est enregistré.
@@ -29,6 +31,11 @@ function Form({ skillKey, name, onClose, onDraft }: { skillKey: string; name: st
   const [instruction, setInstruction] = useState("")
   const [model, setModel] = useState("haiku")
   const [busy, setBusy] = useState(false)
+  const area = useRef<HTMLTextAreaElement>(null)
+  const insertSnippet = (text: string) => {
+    setInstruction((cur) => spliceAtCaret(area.current, cur, text, 8000))
+    requestAnimationFrame(() => area.current?.focus())
+  }
   const run = async () => {
     if (!instruction.trim() || busy) return
     setBusy(true)
@@ -46,6 +53,7 @@ function Form({ skillKey, name, onClose, onDraft }: { skillKey: string; name: st
         <DialogDescription>{t("skills.writer.description")}</DialogDescription>
       </DialogHeader>
       <textarea
+        ref={area}
         value={instruction}
         onChange={(e) => setInstruction(e.target.value)}
         onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "Enter" && (e.preventDefault(), run())}
@@ -57,6 +65,9 @@ function Form({ skillKey, name, onClose, onDraft }: { skillKey: string; name: st
         className="session-text w-full resize-y rounded-lg border border-input bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/80"
         aria-label={t("skills.writer.instruction")}
       />
+      <div className="flex">
+        <SnippetMenu onInsert={insertSnippet} />
+      </div>
       <div className="flex items-center gap-2 text-sm">
         {t("skills.writer.model")} <Choose value={model} onChange={setModel} options={models} label={t("skills.writer.model")} className="min-w-0" />
       </div>
