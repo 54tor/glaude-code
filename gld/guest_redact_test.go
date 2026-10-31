@@ -67,7 +67,10 @@ func TestGuestLiveBodyRetireLesLignesDeCommande(t *testing.T) {
 }
 
 func TestGuestAliasStableEtSansLeCompte(t *testing.T) {
-	if guestAlias("inv-1") != guestAlias("inv-1") || guestAlias("inv-1") == guestAlias("inv-2") {
+	premierAliasInvitation1 := guestAlias("inv-1")
+	secondAliasInvitation1 := guestAlias("inv-1")
+	aliasInvitation2 := guestAlias("inv-2")
+	if premierAliasInvitation1 != secondAliasInvitation1 || premierAliasInvitation1 == aliasInvitation2 {
 		t.Error("alias instable ou identique entre invitations")
 	}
 	if alias := guestAlias("inv-1"); len(alias) != len(aliasPrefix)+aliasHexLength {
