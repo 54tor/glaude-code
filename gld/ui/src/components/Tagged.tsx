@@ -28,6 +28,7 @@ export function parseJsonBody(body: string): Record<string, unknown> | null {
     return null
   }
 }
+const isMarkdownField = (fieldValue: unknown): fieldValue is string => typeof fieldValue === "string" && fieldValue.includes("\n")
 const show = (fieldValue: unknown) => (typeof fieldValue === "string" ? fieldValue : JSON.stringify(fieldValue))
 
 const KNOWN = /<(?:teammate-message|task-notification|cross-session-message|agent-message)[\s>][\s\S]*?<\/(?:teammate-message|task-notification|cross-session-message|agent-message)>/
@@ -98,7 +99,9 @@ function Card({ tag, attrs, body, md, onReply }: { tag: string; attrs: string; b
             {Object.entries(json).map(([fieldName, fieldValue]) => (
               <div key={fieldName} className="contents">
                 <dt className="text-muted-foreground">{fieldName}</dt>
-                <dd className="min-w-0 break-words whitespace-pre-wrap">{show(fieldValue)}</dd>
+                <dd className={`min-w-0 break-words ${isMarkdownField(fieldValue) ? "" : "whitespace-pre-wrap"}`}>
+                  {isMarkdownField(fieldValue) ? md(fieldValue.trim()) : show(fieldValue)}
+                </dd>
               </div>
             ))}
           </dl>
