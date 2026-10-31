@@ -20,7 +20,7 @@ func TestInstallBuiltinRules(t *testing.T) {
 	os.WriteFile(mine, []byte("à moi\n"), 0o644)
 
 	done, err := installBuiltinRules()
-	if err != nil || len(done) != 5 || done[0] != "-gld-askuser.md" {
+	if err != nil || len(done) != 6 || done[0] != "-gld-askuser.md" {
 		t.Fatalf("première installation : %v %v", done, err)
 	}
 	if _, err := os.Stat(legacy); err == nil {
