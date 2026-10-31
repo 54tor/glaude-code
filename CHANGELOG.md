@@ -21,6 +21,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Conversation : la zone de saisie prend le focus à l'ouverture d'une session ; un indicateur vert signale que la vue suit la fin du fil ; l'état du cache affiche son délai et un clic dessus active ou coupe le maintien au chaud (le bouton « Maintenir au chaud » est retiré).
 - Extensions : les marketplaces ont leur propre onglet, le formulaire d'ajout en premier.
 - Option `-locations` (ou `GLD_WEB_LOCATIONS`) : restreint le navigateur de dossiers à une liste de racines, la première étant ouverte par défaut.
+- Cartes `agent-message` : les champs multilignes sont rendus en Markdown.
 - Bloc git d'un projet : une ligne par chemin, boutons Permissions et Espace de travail réduits à des icônes.
 - README : tableau comparatif CLI, Claude.ai et Glaude Code.
 
@@ -36,6 +37,10 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Sessions en équipe : les membres in-process apparaissent parmi les sous-agents, leur activité et leur conversation sont lues dans leur propre transcript, et un membre récemment actif est compté comme en cours.
 - Conversation : le bouton « Aller à la fin » réapparaît quand la vue a quitté le suivi de la fin.
 - Menu déroulant de nouvelle session : tous les dossiers sont listés.
+- Une session tiède passe en « Ouvertes » dès qu'un tour démarre depuis le navigateur.
+- Une session que Claude Code affiche à tort comme occupée est montrée au repos quand son écran tmux ne bouge plus depuis 20 s, et sa file d'attente se vide.
+- Code d'appairage : le compte à rebours part de l'émission du code.
+- Documents écrits dont le chemin contient `&`, `<` ou `>` : reconnus.
 - Les sélecteurs de projet (Extensions, Skills) n'affichent plus les dossiers jetables (`/tmp`, `$TMPDIR`).
 - Conversation en modale : le suivi de la fin du fil ne s'enclenchait pas quand les messages étaient déjà en cache.
 - Anneau de focus d'une ligne de session tracé à l'intérieur de la ligne.
@@ -49,7 +54,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Suivi de la fin du fil par `use-stick-to-bottom`, comparaison de versions par `golang.org/x/mod/semver` et diff des mémoires par `jsdiff` à la place du code maison ; crédits complétés.
 - Mises à jour de dépendances : doublestar, gofakeit, go-i18n, cbor, modules indirects Go, eslint, typescript-eslint, i18next, react-i18next, lucide-react, cn et shadcn.
 - Tests : couverture des boucles de fond, de `runas`, du service de docs et de la plupart des composants UI de session, de barre latérale, d'accueil et de mémoire de projet ; seuil de couverture de l'interface relevé en CI.
-- CI : empreintes `.gitleaksignore` régénérées après la réécriture de l'historique.
+- CI : gosec et osv-scanner ajoutés (constats gosec triés et annotés) ; gitleaks passe de `.gitleaksignore` (empreintes liées aux hashes) à `.gitleaks.toml` (exceptions par chemin et valeur).
+- Interface : bouton de fermeture des toasts retiré, tailles des boutons et sélecteurs alignées sur leurs voisins.
 - En-tête de la modale de conversation : bouton « Fermer la session » et badge « en cours » retirés (la fermeture reste dans le menu « … »).
 - Refonte de lisibilité du code (noms explicites, constantes nommées, plus de variables d'une lettre) côté Go et interface, sans changement de comportement.
 
