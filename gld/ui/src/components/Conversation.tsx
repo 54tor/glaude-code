@@ -332,6 +332,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   // Les messages hors écran n'ont qu'une hauteur estimée (content-visibility) : en se précisant elle fait glisser la vue de quelques
   // dizaines de pixels. La zone reste donc masquée le temps que la session soit amenée à sa place.
   const [settledId, setSettledId] = useState("")
+  if (!id && settledId) setSettledId("") // fermée : la prochaine ouverture masque de nouveau la zone
   const isSettling = ready && !!id && settledId !== id
   const [fromTop, setFromTop] = useState(false)
   const ready = !!session && msgs !== null
