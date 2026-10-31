@@ -110,6 +110,7 @@ export function FileBar({
               onChange={onType}
               options={[["", t("memory.fileBar.noType")], ...TYPES.map((x) => [x.key, `${x.key} (${x.label})`] as const)]}
               label={t("memory.fileBar.typeAria")}
+              size="sm"
               className="w-44"
             />
           )}

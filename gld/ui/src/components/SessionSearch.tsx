@@ -15,7 +15,7 @@ export function SessionSearch({ q, setQ, adv, setAdv, searching }: { q: string; 
         onKeyDown={(e) => e.key === "Escape" && (setQ(""), e.currentTarget.blur())}
         placeholder={adv ? t("shell.search.placeholderContent") : t("shell.search.placeholder")}
         aria-label={t("shell.search.label")}
-        className="h-8 bg-background pr-12 pl-8 shadow-none md:pr-28"
+        className="h-7 bg-background pr-12 pl-8 shadow-none md:pr-28"
       />
       <div className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-1">
         {searching ? (
