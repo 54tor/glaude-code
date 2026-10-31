@@ -10,10 +10,10 @@ import (
 	"testing"
 )
 
-func near(a, b float64) bool { return math.Abs(a-b) < 2 }
+func near(ratio, localRatio float64) bool { return math.Abs(ratio-localRatio) < 2 }
 
-func mtimeOf(t *testing.T, p string) float64 {
-	st, err := os.Stat(p)
+func mtimeOf(t *testing.T, path string) float64 {
+	st, err := os.Stat(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,18 +25,18 @@ func TestEnvEtTexte(t *testing.T) {
 	if env("GLD_TEST_X", "d") != "v" || env("GLD_TEST_ABSENT", "d") != "d" {
 		t.Fatal("env")
 	}
-	var l line
-	l.Message.Content = []byte(`[{"type":"text","text":"bonjour"},{"type":"text","text":"toi"}]`)
-	if got := promptOf(&l); got != "bonjour toi" {
+	var localLine line
+	localLine.Message.Content = []byte(`[{"type":"text","text":"bonjour"},{"type":"text","text":"toi"}]`)
+	if got := promptOf(&localLine); got != "bonjour toi" {
 		t.Fatalf("prompt en blocs : %q", got)
 	}
-	p := filepath.Join(t.TempDir(), "x")
-	for _, c := range []string{"a\nb\n", "a\nb"} {
-		os.WriteFile(p, []byte(c), 0o644)
-		n := 0
-		scan(p, func([]byte) { n++ })
-		if n != 2 {
-			t.Fatalf("scan %q : %d lignes", c, n)
+	path := filepath.Join(t.TempDir(), "x")
+	for _, content := range []string{"a\nb\n", "a\nb"} {
+		os.WriteFile(path, []byte(content), 0o644)
+		count := 0
+		scan(path, func([]byte) { count++ })
+		if count != 2 {
+			t.Fatalf("scan %q : %d lignes", content, count)
 		}
 	}
 	if toolArg([]byte(`{"file_path":"","pattern":"x"}`)) != "x" || toolArg([]byte(`{"command":"ls"}`)) != "ls" || toolArg([]byte(`[1]`)) != "[1]" {
@@ -46,23 +46,23 @@ func TestEnvEtTexte(t *testing.T) {
 		t.Fatal("flat")
 	}
 	// Une ligne sans message lisible n'émet rien.
-	var n int
-	relay(strings.NewReader(`{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"x"}]}}`+"\n"), func(chatEvent) { n++ })
-	if n != 0 {
+	var localCount int
+	relay(strings.NewReader(`{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"x"}]}}`+"\n"), func(chatEvent) { localCount++ })
+	if localCount != 0 {
 		t.Fatal("événement vide émis")
 	}
 	// Extrait : 60 caractères avant, 100 après la longueur cherchée, marqués « … » s'ils sont coupés.
-	_, s := snippet(strings.Repeat("x", 100)+"cible"+strings.Repeat("y", 200), "cible")
-	if s != "…"+strings.Repeat("x", 60)+"cible"+strings.Repeat("y", 100)+"…" {
-		t.Fatalf("extrait : %q", s)
+	_, text := snippet(strings.Repeat("x", 100)+"cible"+strings.Repeat("y", 200), "cible")
+	if text != "…"+strings.Repeat("x", 60)+"cible"+strings.Repeat("y", 100)+"…" {
+		t.Fatalf("extrait : %q", text)
 	}
 }
 
 func TestMemeDossier(t *testing.T) {
-	d := t.TempDir()
+	dir := t.TempDir()
 	lien := filepath.Join(t.TempDir(), "lien")
-	os.Symlink(d, lien)
-	if !sameDir(d, lien) || sameDir(d, filepath.Join(d, "absent")) || sameDir(filepath.Join(d, "absent"), d) {
+	os.Symlink(dir, lien)
+	if !sameDir(dir, lien) || sameDir(dir, filepath.Join(dir, "absent")) || sameDir(filepath.Join(dir, "absent"), dir) {
 		t.Fatal("sameDir")
 	}
 	cfg := t.TempDir()
@@ -79,7 +79,7 @@ func TestMemeDossier(t *testing.T) {
 
 func TestRelayInformationalWarning(t *testing.T) {
 	var evs []chatEvent
-	relay(strings.NewReader(`{"type":"system","subtype":"informational","level":"warning","content":"safeguards flagged this session"}`+"\n"+`{"type":"system","subtype":"informational","level":"info","content":"x"}`+"\n"), func(e chatEvent) { evs = append(evs, e) })
+	relay(strings.NewReader(`{"type":"system","subtype":"informational","level":"warning","content":"safeguards flagged this session"}`+"\n"+`{"type":"system","subtype":"informational","level":"info","content":"x"}`+"\n"), func(localChatEvent chatEvent) { evs = append(evs, localChatEvent) })
 	if len(evs) != 1 || evs[0].Note != "safeguards flagged this session" {
 		t.Fatalf("evs = %+v", evs)
 	}

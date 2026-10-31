@@ -21,11 +21,11 @@ func TestLimitesSnippets(t *testing.T) {
 	pile := strings.Repeat("a", snippetMax)
 	put(t, filepath.Join(cfg, "commands", "max.md"), pile, old)
 	put(t, filepath.Join(cfg, "commands", "trop.md"), pile+"a", old)
-	l, _ := listSnippets()
-	if len(l) != 1 || l[0].Key != "u/max.md" || l[0].KB != snippetMax/1024 || !near(l[0].Mtime, mtimeOf(t, filepath.Join(cfg, "commands", "max.md"))) {
-		t.Fatalf("liste : %+v", l)
+	snippets, _ := listSnippets()
+	if len(snippets) != 1 || snippets[0].Key != "u/max.md" || snippets[0].KB != snippetMax/1024 || !near(snippets[0].Mtime, mtimeOf(t, filepath.Join(cfg, "commands", "max.md"))) {
+		t.Fatalf("liste : %+v", snippets)
 	}
-	if s, err := readSnippet("u/max.md"); err != nil || len(s) != snippetMax {
+	if text, err := readSnippet("u/max.md"); err != nil || len(text) != snippetMax {
 		t.Fatal("lecture à la limite :", err)
 	}
 	if _, err := readSnippet("u/trop.md"); err == nil {
@@ -37,8 +37,8 @@ func TestLimitesSnippets(t *testing.T) {
 	if saveSnippet("u/max.md", "v2", false) != nil {
 		t.Fatal("modification")
 	}
-	if s, _ := readSnippet("u/max.md"); s != "v2" {
-		t.Fatal("modification non écrite :", len(s))
+	if text, _ := readSnippet("u/max.md"); text != "v2" {
+		t.Fatal("modification non écrite :", len(text))
 	}
 	os.MkdirAll(filepath.Join(cfg, "commands", "dossier.md"), 0o755)
 	if saveSnippet("u/dossier.md", "x", false) == nil {
@@ -46,10 +46,10 @@ func TestLimitesSnippets(t *testing.T) {
 	}
 
 	// Deux projets : les scopes sont triés.
-	for i, d := range []string{"-b", "-a"} {
-		proj := filepath.Join(home, "proj"+d)
+	for index, dir := range []string{"-b", "-a"} {
+		proj := filepath.Join(home, "proj"+dir)
 		os.MkdirAll(proj, 0o755)
-		put(t, filepath.Join(cfg, "projects", d, fmt.Sprintf("%08d-0000-0000-0000-000000000000.jsonl", i)), `{"cwd":"`+proj+`"}`+"\n", old)
+		put(t, filepath.Join(cfg, "projects", dir, fmt.Sprintf("%08d-0000-0000-0000-000000000000.jsonl", index)), `{"cwd":"`+proj+`"}`+"\n", old)
 	}
 	if _, sc := listSnippets(); len(sc) != 2 || sc[0].Project > sc[1].Project {
 		t.Fatalf("scopes : %+v", sc)
@@ -57,20 +57,20 @@ func TestLimitesSnippets(t *testing.T) {
 
 	// Import : une entrée d'archive à la limite passe entière, au-delà elle est ignorée ; scope de projet.
 	zipOf := func(files map[string]string) []byte {
-		var b bytes.Buffer
-		zw := zip.NewWriter(&b)
-		for n, c := range files {
-			w, _ := zw.CreateHeader(&zip.FileHeader{Name: n, Method: zip.Store})
-			w.Write([]byte(c))
+		var buffer bytes.Buffer
+		zw := zip.NewWriter(&buffer)
+		for name, content := range files {
+			writer, _ := zw.CreateHeader(&zip.FileHeader{Name: name, Method: zip.Store})
+			writer.Write([]byte(content))
 		}
 		zw.Close()
-		return b.Bytes()
+		return buffer.Bytes()
 	}
 	done, _, err := importSnippets("-a", []ImportFile{{"l.zip", zipOf(map[string]string{"z.md": pile, "zz.md": pile + "a"})}}, false)
 	if err != nil || len(done) != 1 || done[0] != "z.md" {
 		t.Fatal(done, err)
 	}
-	if s, err := readSnippet("p/-a/z.md"); err != nil || len(s) != snippetMax {
+	if text, err := readSnippet("p/-a/z.md"); err != nil || len(text) != snippetMax {
 		t.Fatal("import dans le projet :", err)
 	}
 	if _, _, err := importSnippets("", []ImportFile{{"x.zip", []byte("pas une archive")}}, false); err == nil || !strings.Contains(err.Error(), "x.zip : archive illisible") {
@@ -105,11 +105,11 @@ func TestLimitesMemoire(t *testing.T) {
 	if len(ps) != 3 || ps[0].Project != pa || ps[1].Project != pb || ps[2].Project != "/zz/introuvable" || !ps[2].Missing {
 		t.Fatalf("projets : %+v", ps)
 	}
-	if f := ps[1].Files[0]; f.KB != 2 || !near(f.Mtime, mtimeOf(t, f.Path)) {
-		t.Fatalf("fichier : %+v", f)
+	if memFile := ps[1].Files[0]; memFile.KB != 2 || !near(memFile.Mtime, mtimeOf(t, memFile.Path)) {
+		t.Fatalf("fichier : %+v", memFile)
 	}
-	for i := 1; i < len(ts); i++ {
-		if ts[i-1].Project > ts[i].Project {
+	for index := 1; index < len(ts); index++ {
+		if ts[index-1].Project > ts[index].Project {
 			t.Fatalf("cibles non triées : %+v", ts)
 		}
 	}
@@ -118,7 +118,7 @@ func TestLimitesMemoire(t *testing.T) {
 	if memSave("m/-a/max.md", pile) != nil || memSave("m/-a/trop.md", pile+"a") == nil {
 		t.Fatal("écriture à la limite")
 	}
-	if s, err := memRead("m/-a/max.md"); err != nil || len(s) != memMax {
+	if text, err := memRead("m/-a/max.md"); err != nil || len(text) != memMax {
 		t.Fatal("lecture à la limite :", err)
 	}
 	put(t, filepath.Join(pp, "-a", "memory", "trop.md"), pile+"a", old)
@@ -135,10 +135,10 @@ func TestLimitesMemoire(t *testing.T) {
 
 	// Fusion : de 2 à mergeMax fichiers, tous présents ; le dossier de lancement suit une clé de projet.
 	var keys []string
-	for i := range mergeMax + 1 {
-		k := fmt.Sprintf("m/-a/f%02d.md", i)
-		put(t, filepath.Join(pp, "-a", "memory", filepath.Base(k)), "f", old)
-		keys = append(keys, k)
+	for index := range mergeMax + 1 {
+		key := fmt.Sprintf("m/-a/f%02d.md", index)
+		put(t, filepath.Join(pp, "-a", "memory", filepath.Base(key)), "f", old)
+		keys = append(keys, key)
 	}
 	if _, _, err := mergePrompt(keys[:mergeMax], ""); err != nil {
 		t.Fatal("mergeMax fichiers refusés :", err)
@@ -156,9 +156,9 @@ func TestLimitesMemoire(t *testing.T) {
 
 	// Brouillons : bornes de la consigne, du texte et des références.
 	memDraft = func(model, system, prompt string) (string, float64, error) { return "ok\n", 0, nil }
-	for _, c := range [][2]string{{"", ""}, {strings.Repeat("c", 8<<10+1), ""}, {"", strings.Repeat("t", snippetMax+1)}} {
-		if _, _, err := snippetDraft("haiku", c[0], c[1]); err == nil {
-			t.Fatalf("mise en forme acceptée : %d/%d", len(c[0]), len(c[1]))
+	for _, values := range [][2]string{{"", ""}, {strings.Repeat("c", 8<<10+1), ""}, {"", strings.Repeat("t", snippetMax+1)}} {
+		if _, _, err := snippetDraft("haiku", values[0], values[1]); err == nil {
+			t.Fatalf("mise en forme acceptée : %d/%d", len(values[0]), len(values[1]))
 		}
 	}
 	if _, _, err := snippetDraft("haiku", strings.Repeat("c", 8<<10), strings.Repeat("t", snippetMax)); err != nil {
@@ -206,17 +206,17 @@ func TestLimitesOngletsCorbeille(t *testing.T) {
 		t.Fatal("nom trop long accepté")
 	}
 	now := time.Now()
-	at := func(d time.Duration) string { return now.Add(-d).Format(time.RFC3339Nano) }
+	at := func(duration time.Duration) string { return now.Add(-duration).Format(time.RFC3339Nano) }
 	ss := []TabSession{{ID: id1}}
-	if l := pruneAuto([]TabSave{{Auto: true, At: at(0), Sessions: ss}, {Auto: true, At: at(keepAuto), Sessions: ss}}); len(l) != 2 {
+	if tabSaves := pruneAuto([]TabSave{{Auto: true, At: at(0), Sessions: ss}, {Auto: true, At: at(keepAuto), Sessions: ss}}); len(tabSaves) != 2 {
 		t.Fatal("sauvegarde à une heure pile retirée")
 	}
 
 	if err := saveTrash("g/CLAUDE.md", "/x", "supprimé", strings.Repeat("a", 3000)); err != nil {
 		t.Fatal(err)
 	}
-	if l := trashList(); len(l) != 1 || l[0].KB != 2 || !near(l[0].At, float64(time.Now().UnixNano())/1e9) {
-		t.Fatalf("corbeille : %+v", l)
+	if trasheds := trashList(); len(trasheds) != 1 || trasheds[0].KB != 2 || !near(trasheds[0].At, float64(time.Now().UnixNano())/1e9) {
+		t.Fatalf("corbeille : %+v", trasheds)
 	}
 }
 
@@ -231,9 +231,9 @@ func TestMemResolveProjetExistant(t *testing.T) {
 	if _, _, err := memResolve("m/-p/MEMORY.md"); err != nil {
 		t.Fatal("projet existant refusé :", err)
 	}
-	for _, k := range []string{"m/./x.md", "m/%2e%2e/x.md", "m/．．/x.md", "m/-absent/x.md"} {
-		if memSave(k, "x") == nil {
-			t.Errorf("%s accepté", k)
+	for _, key := range []string{"m/./x.md", "m/%2e%2e/x.md", "m/．．/x.md", "m/-absent/x.md"} {
+		if memSave(key, "x") == nil {
+			t.Errorf("%s accepté", key)
 		}
 	}
 	ents, _ := os.ReadDir(filepath.Join(cfg, "projects"))
@@ -248,13 +248,13 @@ func TestSaveSnippetGardeUnFichierIllisible(t *testing.T) {
 	t.Cleanup(func() { root = old })
 	use(cfg)
 	snipDir = ""
-	p := filepath.Join(cfg, "commands", "x.md")
-	os.MkdirAll(filepath.Dir(p), 0o755)
-	os.WriteFile(p, []byte("\xff\xfe"), 0o644)
+	path := filepath.Join(cfg, "commands", "x.md")
+	os.MkdirAll(filepath.Dir(path), 0o755)
+	os.WriteFile(path, []byte("\xff\xfe"), 0o644)
 	if err := saveSnippet("u/x.md", "nouveau", false); err == nil {
 		t.Fatal("snippet illisible écrasé")
 	}
-	if b, _ := os.ReadFile(p); string(b) != "\xff\xfe" {
-		t.Fatalf("contenu perdu : %q", b)
+	if data, _ := os.ReadFile(path); string(data) != "\xff\xfe" {
+		t.Fatalf("contenu perdu : %q", data)
 	}
 }

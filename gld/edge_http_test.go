@@ -18,33 +18,33 @@ import (
 )
 
 func TestLimitesHTTP(t *testing.T) {
-	h, cfg, _ := web(t)
+	handler, cfg, _ := web(t)
 	pile := strings.Repeat("a", snippetMax)
-	v1ok(t, h, "PUT", "/v1/snippets/u%2Fmax.md", `{"text":"`+pile+`"}`, "Snippet enregistré")
+	v1ok(t, handler, "PUT", "/v1/snippets/u%2Fmax.md", `{"text":"`+pile+`"}`, "Snippet enregistré")
 	t.Setenv("FAKE_DRAFT", "stdin") // le prompt arrive sur stdin, quelle que soit sa taille
-	if m := v1ok(t, h, "POST", "/v1/snippets/drafts", `{"model":"haiku","instruction":"x","text":"`+pile+`"}`, "Mise en forme prête"); m["text"] != "Consigne : x\n" {
-		t.Fatalf("prompt reçu : %v", m["text"])
+	if lookup := v1ok(t, handler, "POST", "/v1/snippets/drafts", `{"model":"haiku","instruction":"x","text":"`+pile+`"}`, "Mise en forme prête"); lookup["text"] != "Consigne : x\n" {
+		t.Fatalf("prompt reçu : %v", lookup["text"])
 	}
-	v1ok(t, h, "PUT", "/v1/memory/files/m%2F-p%2Fmax.md", `{"text":"`+strings.Repeat("a", memMax)+`"}`, "Enregistré")
+	v1ok(t, handler, "PUT", "/v1/memory/files/m%2F-p%2Fmax.md", `{"text":"`+strings.Repeat("a", memMax)+`"}`, "Enregistré")
 
 	// Le compte rendu de suppression est joint au message.
 	put(t, filepath.Join(cfg, "history.jsonl"), `{"sessionId":"`+id1+`"}`+"\n", old)
-	v1ok(t, h, "DELETE", "/v1/sessions?item=-p:"+id1, "", "1 session supprimée\\n  history.jsonl   : 1 ligne(s)")
+	v1ok(t, handler, "DELETE", "/v1/sessions?item=-p:"+id1, "", "1 session supprimée\\n  history.jsonl   : 1 ligne(s)")
 
 	// Réponse du chat poussée au fil de l'eau.
 	put(t, filepath.Join(cfg, "projects", "-p", id2+".jsonl"), `{"cwd":"`+filepath.Join(cfg, "..", "p")+`"}`+"\n", old)
 	t.Setenv("FAKE_CHAT", `{"type":"result","subtype":"success"}`)
-	r := httptest.NewRequest("POST", "/v1/sessions/"+id2+"/chat?dir=-p", strings.NewReader(`{"prompt":"x"}`))
-	r.Host = testHost
-	w := httptest.NewRecorder()
-	h.ServeHTTP(w, r)
-	if !w.Flushed || !strings.Contains(w.Body.String(), `"done":true`) {
-		t.Fatalf("chat non poussé : %v %s", w.Flushed, w.Body)
+	request := httptest.NewRequest("POST", "/v1/sessions/"+id2+"/chat?dir=-p", strings.NewReader(`{"prompt":"x"}`))
+	request.Host = testHost
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if !recorder.Flushed || !strings.Contains(recorder.Body.String(), `"done":true`) {
+		t.Fatalf("chat non poussé : %v %s", recorder.Flushed, recorder.Body)
 	}
 }
 
 func TestArretSansSignal(t *testing.T) {
-	h, _, _ := web(t)
+	handler, _, _ := web(t)
 	// Un processus qui ignore l'interruption n'est pas tué pour autant : « Arrêter » demande, ne force pas.
 	cmd := exec.Command("/bin/sh", "-c", `trap "" INT; /bin/sleep 30`)
 	if err := cmd.Start(); err != nil {
@@ -56,7 +56,7 @@ func TestArretSansSignal(t *testing.T) {
 	chatMu.Unlock()
 	defer func() { chatMu.Lock(); delete(chatRun, id1); chatMu.Unlock() }()
 	time.Sleep(100 * time.Millisecond) // le temps que trap soit posé
-	v1ok(t, h, "DELETE", "/v1/sessions/"+id1+"/chat", "", "Arrêt demandé")
+	v1ok(t, handler, "DELETE", "/v1/sessions/"+id1+"/chat", "", "Arrêt demandé")
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
 	select {
@@ -72,14 +72,14 @@ func TestMainServeur(t *testing.T) {
 		return
 	}
 	home := t.TempDir()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Skip(err)
 	}
-	p := strconv.Itoa(l.Addr().(*net.TCPAddr).Port)
-	l.Close()
+	path := strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)
+	listener.Close()
 	cmd := exec.Command(os.Args[0], "-test.run=^TestMainServeur$")
-	cmd.Env = append(os.Environ(), "GLD_TEST_MAIN=1", "GLD_WEB_PORT="+p, "HOME="+home, "PATH="+t.TempDir(),
+	cmd.Env = append(os.Environ(), "GLD_TEST_MAIN=1", "GLD_WEB_PORT="+path, "HOME="+home, "PATH="+t.TempDir(),
 		"CLAUDE_CONFIG_DIR="+filepath.Join(home, ".claude"))
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out
@@ -89,7 +89,7 @@ func TestMainServeur(t *testing.T) {
 	defer cmd.Process.Kill()
 	var resp *http.Response
 	for range 300 {
-		if resp, err = http.Get("http://127.0.0.1:" + p + "/v1/state"); err == nil {
+		if resp, err = http.Get("http://127.0.0.1:" + path + "/v1/state"); err == nil {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -97,14 +97,14 @@ func TestMainServeur(t *testing.T) {
 	if err != nil || resp.StatusCode != 200 {
 		t.Fatal("serveur :", err, out.String())
 	}
-	b := new(bytes.Buffer)
-	b.ReadFrom(resp.Body)
+	buffer := new(bytes.Buffer)
+	buffer.ReadFrom(resp.Body)
 	resp.Body.Close()
-	if !strings.Contains(b.String(), `"root":"`+filepath.Join(home, ".claude", "projects")+`"`) {
-		t.Fatal("root :", b)
+	if !strings.Contains(buffer.String(), `"root":"`+filepath.Join(home, ".claude", "projects")+`"`) {
+		t.Fatal("root :", buffer)
 	}
-	req, _ := http.NewRequest("GET", "http://127.0.0.1:"+p+"/v1/state", nil)
-	req.Host = "localhost:" + p
+	req, _ := http.NewRequest("GET", "http://127.0.0.1:"+path+"/v1/state", nil)
+	req.Host = "localhost:" + path
 	if resp, err := http.DefaultClient.Do(req); err != nil || resp.StatusCode != 200 {
 		t.Fatal("localhost refusé :", err)
 	}
