@@ -478,6 +478,7 @@
       "sentTitle": "Sent",
       "restore": "Put back in the note",
       "forget": "Remove from history",
+      "preamble": "Here is a list of points to go through in order, prepare the work. Do not save them to notes or todos.",
       "newTarget": "new session"
     },
     "terminal": {
