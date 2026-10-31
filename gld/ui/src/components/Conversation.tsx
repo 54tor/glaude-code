@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { useStickToBottom } from "use-stick-to-bottom"
 import { swipeHandlers } from "@/lib/swipe"
 import { ArrowDown, ArrowUpToLine, Copy, Undo2, BarChart3, Bug, ChevronLeft, ChevronRight, FolderOpen, Power, FileText, Fan, MessageSquarePlus, MoreHorizontal, MessagesSquare, GalleryHorizontalEnd, SquareTerminal, Wrench, RefreshCcwDot } from "lucide-react"
 import { focusRow } from "@/lib/focusRow"
@@ -55,10 +56,7 @@ const FINAL_RELOAD_DELAY_MS = 1500
 const PIN_END_DURATION_MS = 3000
 const RESTORE_INTERVAL_MS = 50
 const RESTORE_DURATION_MS = 1500
-const LAST_FRAME_DELAY_MS = 120
-const AT_END_THRESHOLD_PX = 80
 const FROM_TOP_THRESHOLD_PX = 200
-const SECOND_SCROLL_DELAY_MS = 2500
 const TURN_RELOAD_ATTEMPTS = 5
 const TURN_RELOAD_DELAY_MS = 1000
 const RECENT_MESSAGES_CHECKED = 12
@@ -267,45 +265,23 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
     return () => clearTimeout(reloadTimer)
   }, [idle, id])
 
-  // content-visibility affine les hauteurs en cours de rendu : on recolle à la fin sur quelques images.
-  const toEnd = useCallback(() => {
+  // Le suivi de la fin (aimant, recollage pendant que les hauteurs se précisent, échappement quand l'utilisateur remonte) vient de
+  // use-stick-to-bottom, branché sur la zone de défilement et son contenu dès que la modale les a montés.
+  const { scrollRef, contentRef, scrollToBottom, stopScroll, isAtBottom } = useStickToBottom({ initial: "instant", resize: "instant" })
+  useEffect(() => {
     const viewportElement = viewport()
     if (!viewportElement) return
-    const scrollToBottom = () => {
-      viewportElement.scrollTop = viewportElement.scrollHeight
+    scrollRef(viewportElement)
+    contentRef(viewportElement.firstElementChild as HTMLElement | null)
+    return () => {
+      scrollRef(null)
+      contentRef(null)
     }
-    scrollToBottom()
-    requestAnimationFrame(() => {
-      scrollToBottom()
-      requestAnimationFrame(() => {
-        scrollToBottom()
-        setTimeout(scrollToBottom, LAST_FRAME_DELAY_MS)
-      })
-    })
-  }, [viewport])
-  // À l'ouverture : la vue reste collée à la fin pendant que la hauteur du contenu se précise (rendu paresseux, images, code), jusqu'à ce
-  // que l'utilisateur prenne la main (molette, toucher, clavier, clic) ou au bout de 3 s.
-  const pinEnd = useCallback(() => {
-    const viewportElement = viewport()
-    if (!viewportElement) return
-    const scrollToBottom = () => {
-      viewportElement.scrollTop = viewportElement.scrollHeight
-    }
-    scrollToBottom()
-    const resizeObserver = new ResizeObserver(scrollToBottom)
-    if (viewportElement.firstElementChild) resizeObserver.observe(viewportElement.firstElementChild)
-    const stop = () => {
-      clearTimeout(pinTimer)
-      resizeObserver.disconnect()
-      USER_INPUT_EVENTS.forEach((eventName) => viewportElement.removeEventListener(eventName, stop))
-    }
-    // Hauteurs enfin stables, l'utilisateur n'ayant pas touché à la vue : à moins d'une demi-page de la fin, on y reste collé.
-    const pinTimer = setTimeout(() => {
-      stop()
-      if (distanceToEnd(viewportElement) < viewportElement.clientHeight / 2) scrollToBottom()
-    }, PIN_END_DURATION_MS)
-    USER_INPUT_EVENTS.forEach((eventName) => viewportElement.addEventListener(eventName, stop, { passive: true }))
-  }, [viewport])
+  }, [areaMounted, viewport, scrollRef, contentRef])
+  const toEnd = useCallback(() => void scrollToBottom("instant"), [scrollToBottom])
+  // À l'ouverture : la vue reste collée à la fin pendant que la hauteur du contenu se précise (rendu paresseux, images, code), sauf si
+  // l'utilisateur remonte.
+  const pinEnd = useCallback(() => void scrollToBottom({ animation: "instant", duration: PIN_END_DURATION_MS }), [scrollToBottom])
   // Rétablit la position mémorisée pendant que les hauteurs se précisent (rendu paresseux), jusqu'à ce que l'utilisateur prenne la main
   // ou au bout de 1,5 s.
   const restore = useCallback(
@@ -313,6 +289,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
       const viewportElement = viewport()
       if (!viewportElement) return
       restoring.current = true
+      void stopScroll()
       const scrollToSavedTop = () => {
         viewportElement.scrollTop = top
       }
@@ -327,7 +304,7 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
       const restoreTimer = setTimeout(stop, RESTORE_DURATION_MS)
       USER_INPUT_EVENTS.forEach((eventName) => viewportElement.addEventListener(eventName, stop, { passive: true }))
     },
-    [viewport]
+    [viewport, stopScroll]
   )
   // Chargement paresseux : les messages plus anciens arrivent d'eux-mêmes quand on remonte près du début.
   const top = useRef<HTMLDivElement>(null)
@@ -349,42 +326,20 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   // La vue descend à l'ouverture, à l'envoi d'un message, et suit la fin tant que l'utilisateur y est. Dès qu'il remonte lire, elle ne
   // bouge plus ; le bouton « Aller à la fin » prend le relais.
   const opened = useRef("") // session déjà amenée à la fin une fois
-  const [away, setAway] = useState(false)
+  const away = !isAtBottom
   const [fromTop, setFromTop] = useState(false)
   const ready = !!session && msgs !== null
   useEffect(() => {
     const viewportElement = viewport()
     if (!viewportElement) return
-    // Collée à la fin tant que l'utilisateur y est : la bande d'état (réflexion, outil, file d'attente) change de hauteur sans que la vue décale.
-    let stuck = distanceToEnd(viewportElement) < AT_END_THRESHOLD_PX
-    // Boutons « Aller à la fin / au début » : relus aussi à l'ouverture et quand le contenu change, pas seulement au défilement.
-    const updateJumpButtons = () => {
-      setAway(distanceToEnd(viewportElement) >= AT_END_THRESHOLD_PX)
-      setFromTop(viewportElement.scrollTop > FROM_TOP_THRESHOLD_PX)
-    }
-    updateJumpButtons()
-    let previousTop = viewportElement.scrollTop
     const onScroll = () => {
-      const gap = distanceToEnd(viewportElement)
-      const isScrollingUp = viewportElement.scrollTop < previousTop
-      previousTop = viewportElement.scrollTop
-      // L'aimant ne se coupe que sur un défilement vers le haut ; la croissance du contenu n'y suffit pas. Il se ré-enclenche à la fin.
-      if (gap < AT_END_THRESHOLD_PX) stuck = true
-      else if (isScrollingUp) stuck = false
-      updateJumpButtons()
-      if (idRef.current && !restoring.current) scrollMem.set(idRef.current, { top: viewportElement.scrollTop, end: gap < viewportElement.clientHeight }) // à moins d'une page de la fin : la réouverture redescend à la fin
+      setFromTop(viewportElement.scrollTop > FROM_TOP_THRESHOLD_PX)
+      // à moins d'une page de la fin : la réouverture redescend à la fin
+      if (idRef.current && !restoring.current) scrollMem.set(idRef.current, { top: viewportElement.scrollTop, end: distanceToEnd(viewportElement) < viewportElement.clientHeight })
     }
+    onScroll()
     viewportElement.addEventListener("scroll", onScroll, { passive: true })
-    const resizeObserver = new ResizeObserver(() => {
-      if (stuck && !keepScroll.current && !restoring.current) viewportElement.scrollTop = viewportElement.scrollHeight
-      updateJumpButtons()
-    })
-    if (viewportElement.firstElementChild) resizeObserver.observe(viewportElement.firstElementChild)
-    resizeObserver.observe(viewportElement) // la fenêtre, la zone de saisie ou le clavier changent la hauteur visible sans toucher au contenu
-    return () => {
-      viewportElement.removeEventListener("scroll", onScroll)
-      resizeObserver.disconnect()
-    }
+    return () => viewportElement.removeEventListener("scroll", onScroll)
   }, [viewport, ready, areaMounted])
   useEffect(() => {
     if (!id) opened.current = ""
@@ -401,11 +356,8 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
     else pinEnd()
   }, [msgs, pinEnd, restore, viewport, id, ready, areaMounted])
   const inTerm = termOn && view === "terminal" && !!id && actions.live.has(id)
-  // Envoi d'un message : on descend pour voir la réponse arriver, puis une seconde fois quand le transcript relu contient le message.
-  const sentDown = useCallback(() => {
-    toEnd()
-    setTimeout(toEnd, SECOND_SCROLL_DELAY_MS)
-  }, [toEnd])
+  // Envoi d'un message : on descend pour voir la réponse arriver ; la bibliothèque garde ensuite la vue collée à la fin.
+  const sentDown = toEnd
 
   // Contexte du dernier appel : fenêtre de 1 M de tokens si le modèle l'indique ou si on l'a déjà dépassée de 200 k, sinon 200 k.
   const ctx = live.st?.context ?? 0
