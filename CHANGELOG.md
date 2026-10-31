@@ -516,7 +516,18 @@ Première version : `gld`, interface web locale pour parcourir, piloter et confi
 - Terminal intégré désactivé par défaut ; lecture bornée des fichiers de commandes.
 - Refus d'agir quand les sessions ouvertes sont indéterminées.
 
-[Non publié]: https://github.com/54tor/glaude-code/compare/v0.4.4...HEAD
+[Non publié]: https://github.com/54tor/glaude-code/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/54tor/glaude-code/compare/v0.7.1...v0.8.0
+[0.7.1]: https://github.com/54tor/glaude-code/compare/v0.7.0...v0.7.1
+[0.7.0]: https://github.com/54tor/glaude-code/compare/v0.6.3...v0.7.0
+[0.6.3]: https://github.com/54tor/glaude-code/compare/v0.6.2...v0.6.3
+[0.6.2]: https://github.com/54tor/glaude-code/compare/v0.6.1...v0.6.2
+[0.6.1]: https://github.com/54tor/glaude-code/compare/v0.6.0...v0.6.1
+[0.6.0]: https://github.com/54tor/glaude-code/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/54tor/glaude-code/compare/v0.4.7...v0.5.0
+[0.4.7]: https://github.com/54tor/glaude-code/compare/v0.4.6...v0.4.7
+[0.4.6]: https://github.com/54tor/glaude-code/compare/v0.4.5...v0.4.6
+[0.4.5]: https://github.com/54tor/glaude-code/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/54tor/glaude-code/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/54tor/glaude-code/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/54tor/glaude-code/compare/v0.4.1...v0.4.2
