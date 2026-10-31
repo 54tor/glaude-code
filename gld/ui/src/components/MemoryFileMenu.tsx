@@ -31,6 +31,7 @@ const MEMORY_INDEX_SUFFIX = "/MEMORY.md"
 const MEMORY_PREFIX = "m/"
 const PROJECT_RULES_PREFIX = "r/"
 const GLOBAL_RULES_PREFIX = "g/rules/"
+const GLD_RULES_PREFIX = "g/gldrules/"
 const PROJECT_RULES_DESTINATION_PREFIX = "r:"
 
 // Sous-menu « Déplacer vers » / « Copier vers » : les règles globales, puis la mémoire de chaque autre projet.
@@ -85,6 +86,7 @@ export function FileMenu({ x: file, picked, targets, homeDir, a: actions }: { x:
   const canSetType = (isMemory || isGlobalRule) && !isIndex
   const canToggleLoading = (isMemory || isProjectRule) && !isIndex && !file.paths?.length
   const canExport = isMemory && !isIndex
+  const isReadOnly = file.key.startsWith(GLD_RULES_PREFIX)
   const toggleLoadingDestination = isMemory ? PROJECT_RULES_DESTINATION_PREFIX + home(file.key) : home(file.key)
   return (
     <>
@@ -99,6 +101,8 @@ export function FileMenu({ x: file, picked, targets, homeDir, a: actions }: { x:
       <ContextMenuItem onSelect={() => copy(file.path, "memory.lib.copiedPath")}>
         <Copy /> {t("memory.fileMenu.copyPath")}
       </ContextMenuItem>
+      {!isReadOnly && (
+        <>
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={() => actions.edit(file.key)}>
         <Pencil /> {t("memory.fileMenu.edit")}
@@ -155,6 +159,8 @@ export function FileMenu({ x: file, picked, targets, homeDir, a: actions }: { x:
       <ContextMenuItem variant="destructive" onSelect={() => actions.remove(file)}>
         <Trash2 /> {t("memory.fileMenu.remove")}
       </ContextMenuItem>
+        </>
+      )}
     </>
   )
 }
