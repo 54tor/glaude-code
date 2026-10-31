@@ -45,8 +45,8 @@ func TestRoutesAreV1OrPages(t *testing.T) {
 }
 
 func TestV1ErrorsAreUniformJSON(t *testing.T) {
-	h, _, _ := web(t)
-	for _, c := range []struct {
+	handler, _, _ := web(t)
+	for _, record := range []struct {
 		method, path, body string
 		status             int
 	}{
@@ -56,23 +56,23 @@ func TestV1ErrorsAreUniformJSON(t *testing.T) {
 		{"GET", "/v1/sessions/00000000-0000-0000-0000-000000000000/conversation", "", 404},
 		{"PUT", "/v1/keepwarm", `{"dir":"-p","id":"` + id1 + `","on":true}`, 409},
 	} {
-		code, m, raw := call(t, h, c.method, c.path, c.body)
-		e, _ := m["error"].(map[string]any)
-		if code != c.status || e == nil || e["code"] == "" || e["message"] == "" {
-			t.Errorf("%s %s : %d au lieu de %d, corps %s", c.method, c.path, code, c.status, cut(raw, 200))
+		code, lookup, raw := call(t, handler, record.method, record.path, record.body)
+		localLookup, _ := lookup["error"].(map[string]any)
+		if code != record.status || localLookup == nil || localLookup["code"] == "" || localLookup["message"] == "" {
+			t.Errorf("%s %s : %d au lieu de %d, corps %s", record.method, record.path, code, record.status, cut(raw, 200))
 		}
-		if _, has := m["ok"]; has {
-			t.Errorf("%s %s : enveloppe ok résiduelle", c.method, c.path)
+		if _, has := lookup["ok"]; has {
+			t.Errorf("%s %s : enveloppe ok résiduelle", record.method, record.path)
 		}
 	}
-	r := httptest.NewRequest("GET", "/v1/state", nil)
-	r.Host = "evil.example"
-	w := httptest.NewRecorder()
-	h.ServeHTTP(w, r)
-	var m map[string]any
-	json.Unmarshal(w.Body.Bytes(), &m)
-	if e, _ := m["error"].(map[string]any); w.Code != 403 || e == nil || e["code"] != "forbidden" {
-		t.Errorf("hôte refusé : %d %s", w.Code, w.Body)
+	request := httptest.NewRequest("GET", "/v1/state", nil)
+	request.Host = "evil.example"
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	var anotherLookup map[string]any
+	json.Unmarshal(recorder.Body.Bytes(), &anotherLookup)
+	if lookup, _ := anotherLookup["error"].(map[string]any); recorder.Code != 403 || lookup == nil || lookup["code"] != "forbidden" {
+		t.Errorf("hôte refusé : %d %s", recorder.Code, recorder.Body)
 	}
 }
 
@@ -83,19 +83,19 @@ func TestNoHTTPErrorInV1Handlers(t *testing.T) {
 	}
 	files, _ := filepath.Glob("*.go")
 	fset := token.NewFileSet()
-	for _, f := range files {
-		if strings.HasSuffix(f, "_test.go") || allowed[f] {
+	for _, filePath := range files {
+		if strings.HasSuffix(filePath, "_test.go") || allowed[filePath] {
 			continue
 		}
-		af, err := parser.ParseFile(fset, f, nil, 0)
+		af, err := parser.ParseFile(fset, filePath, nil, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
-		ast.Inspect(af, func(n ast.Node) bool {
-			if c, ok := n.(*ast.CallExpr); ok {
-				if s, ok := c.Fun.(*ast.SelectorExpr); ok {
-					if p, ok := s.X.(*ast.Ident); ok && p.Name == "http" && s.Sel.Name == "Error" {
-						t.Errorf("%s : http.Error interdit, utiliser writeErr", fset.Position(c.Pos()))
+		ast.Inspect(af, func(node ast.Node) bool {
+			if callExpr, ok := node.(*ast.CallExpr); ok {
+				if selectorExpr, ok := callExpr.Fun.(*ast.SelectorExpr); ok {
+					if ident, ok := selectorExpr.X.(*ast.Ident); ok && ident.Name == "http" && selectorExpr.Sel.Name == "Error" {
+						t.Errorf("%s : http.Error interdit, utiliser writeErr", fset.Position(callExpr.Pos()))
 					}
 				}
 			}
@@ -106,7 +106,7 @@ func TestNoHTTPErrorInV1Handlers(t *testing.T) {
 
 // docs/reference/openapi.yaml décrit exactement les routes /v1 enregistrées, avec leur droit.
 func TestOpenAPIMatchesRoutes(t *testing.T) {
-	b, err := os.ReadFile("../docs/reference/openapi.yaml")
+	data, err := os.ReadFile("../docs/reference/openapi.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,13 +116,13 @@ func TestOpenAPIMatchesRoutes(t *testing.T) {
 			Right       string `yaml:"x-gld-right"`
 		} `yaml:"paths"`
 	}
-	if err := yaml.Unmarshal(b, &doc); err != nil {
+	if err := yaml.Unmarshal(data, &doc); err != nil {
 		t.Fatal(err)
 	}
 	seen, ids := map[string]bool{}, map[string]bool{}
-	for p, ms := range doc.Paths {
-		for m, op := range ms {
-			pat := strings.ToUpper(m) + " " + p
+	for path, ms := range doc.Paths {
+		for message, op := range ms {
+			pat := strings.ToUpper(message) + " " + path
 			seen[pat] = true
 			if ids[op.OperationID] || op.OperationID == "" {
 				t.Errorf("%s : operationId %q vide ou en double", pat, op.OperationID)

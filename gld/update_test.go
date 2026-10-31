@@ -7,7 +7,7 @@ import (
 )
 
 func TestNewerVersion(t *testing.T) {
-	for _, c := range []struct {
+	for _, record := range []struct {
 		cur, latest string
 		want        bool
 	}{
@@ -15,8 +15,8 @@ func TestNewerVersion(t *testing.T) {
 		{"v0.8.0", "v0.7.9", false}, {"dev", "v9.9.9", false}, {"v0.7.1", "nightly", false},
 		{"2.1.314", "2.1.316", true}, {"v0.8.1-rc1", "v0.8.1", true}, {"v0.8.1", "v0.8.1-rc1", false},
 	} {
-		if got := newerVersion(c.cur, c.latest); got != c.want {
-			t.Errorf("newerVersion(%q,%q)=%v", c.cur, c.latest, got)
+		if got := newerVersion(record.cur, record.latest); got != record.want {
+			t.Errorf("newerVersion(%q,%q)=%v", record.cur, record.latest, got)
 		}
 	}
 }
@@ -31,27 +31,27 @@ func TestCheckUpdateClaude(t *testing.T) {
 	claudeInstalled = func(context.Context) string { return "2.1.313" }
 	claudeLatest = func(context.Context) (string, error) { return "2.1.316", nil }
 	updAt = time.Time{}
-	if i := checkUpdate(context.Background(), false); !i.ClaudeNewer || i.ClaudeCurrent != "2.1.313" || i.ClaudeLatest != "2.1.316" {
-		t.Fatalf("claude périmé non signalé : %+v", i)
+	if updateInfo := checkUpdate(context.Background(), false); !updateInfo.ClaudeNewer || updateInfo.ClaudeCurrent != "2.1.313" || updateInfo.ClaudeLatest != "2.1.316" {
+		t.Fatalf("claude périmé non signalé : %+v", updateInfo)
 	}
 	claudeInstalled = func(context.Context) string { return "2.1.314" }
 	updAt = time.Time{}
-	if i := checkUpdate(context.Background(), false); i.ClaudeNewer {
-		t.Fatalf("retard de 2 patchs signalé : %+v", i)
+	if updateInfo := checkUpdate(context.Background(), false); updateInfo.ClaudeNewer {
+		t.Fatalf("retard de 2 patchs signalé : %+v", updateInfo)
 	}
 	claudeInstalled = func(context.Context) string { return "2.0.999" }
 	updAt = time.Time{}
-	if i := checkUpdate(context.Background(), false); !i.ClaudeNewer {
-		t.Fatalf("retard de mineure non signalé : %+v", i)
+	if updateInfo := checkUpdate(context.Background(), false); !updateInfo.ClaudeNewer {
+		t.Fatalf("retard de mineure non signalé : %+v", updateInfo)
 	}
 	claudeInstalled = func(context.Context) string { return "2.1.316" }
 	updAt = time.Time{}
-	if i := checkUpdate(context.Background(), false); i.ClaudeNewer {
-		t.Fatalf("à jour signalé périmé : %+v", i)
+	if updateInfo := checkUpdate(context.Background(), false); updateInfo.ClaudeNewer {
+		t.Fatalf("à jour signalé périmé : %+v", updateInfo)
 	}
 	claudeInstalled = func(context.Context) string { return "" }
 	updAt = time.Time{}
-	if i := checkUpdate(context.Background(), false); i.ClaudeNewer || i.ClaudeLatest != "" {
-		t.Fatalf("claude absent : %+v", i)
+	if updateInfo := checkUpdate(context.Background(), false); updateInfo.ClaudeNewer || updateInfo.ClaudeLatest != "" {
+		t.Fatalf("claude absent : %+v", updateInfo)
 	}
 }

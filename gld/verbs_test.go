@@ -22,21 +22,21 @@ func TestVerbsQuality(t *testing.T) {
 			t.Errorf("%s : %d verbes, attendu %d", lang, len(verbs), wantVerbs[lang])
 		}
 		seen := map[string]bool{}
-		for _, v := range verbs {
-			k := strings.ToLower(v)
+		for _, value := range verbs {
+			key := strings.ToLower(value)
 			switch {
-			case v == "" || v != strings.TrimSpace(v):
-				t.Errorf("%s : verbe vide ou avec espace en bord : %q", lang, v)
-			case utf8.RuneCountInString(v) > 60:
-				t.Errorf("%s : trop long (%d) : %q", lang, utf8.RuneCountInString(v), v)
-			case strings.HasSuffix(v, "."):
-				t.Errorf("%s : point final : %q", lang, v)
-			case seen[k]:
-				t.Errorf("%s : doublon : %q", lang, v)
-			case forbiddenVerbWords.MatchString(v):
-				t.Errorf("%s : mot interdit : %q", lang, v)
+			case value == "" || value != strings.TrimSpace(value):
+				t.Errorf("%s : verbe vide ou avec espace en bord : %q", lang, value)
+			case utf8.RuneCountInString(value) > 60:
+				t.Errorf("%s : trop long (%d) : %q", lang, utf8.RuneCountInString(value), value)
+			case strings.HasSuffix(value, "."):
+				t.Errorf("%s : point final : %q", lang, value)
+			case seen[key]:
+				t.Errorf("%s : doublon : %q", lang, value)
+			case forbiddenVerbWords.MatchString(value):
+				t.Errorf("%s : mot interdit : %q", lang, value)
 			}
-			seen[k] = true
+			seen[key] = true
 		}
 	}
 	if wantVerbs["fr"] == wantVerbs["en"] && len(defaultVerbs("fr")) != len(defaultVerbs("en")) {
@@ -65,8 +65,8 @@ func TestSpinnerVerbsLang(t *testing.T) {
 		}
 	}
 	var raw []string
-	b, _ := localesFS.ReadFile("locales/verbs.en.json")
-	if json.Unmarshal(b, &raw) != nil {
+	data, _ := localesFS.ReadFile("locales/verbs.en.json")
+	if json.Unmarshal(data, &raw) != nil {
 		t.Fatal("verbs.en.json illisible")
 	}
 }
