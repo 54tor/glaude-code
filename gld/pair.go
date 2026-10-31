@@ -34,6 +34,12 @@ const (
 	devIdle   = 90 * 24 * time.Hour
 	devTouch  = time.Minute
 	devCookie = "gld_dev"
+
+	pairCodeSpace            = 1e8
+	deviceSecretBytes        = 32
+	deviceUserAgentMaxLength = 256
+	deviceCookieMaxAge       = 400 * 24 * 3600
+	pairFormMaxBytes         = 1 << 12
 )
 
 type pairCode struct {
@@ -54,50 +60,50 @@ const (
 )
 
 // newPairCode : "" quand le plafond est atteint.
-func newPairCode(uid int64, sid string) string {
+func newPairCode(userID int64, sessionID string) string {
 	now := authNow()
 	pairMu.Lock()
 	defer pairMu.Unlock()
-	mine := 0
-	for k, v := range pairCodes {
-		if now.After(v.exp) {
-			delete(pairCodes, k)
-		} else if v.uid == uid {
-			mine++
+	ownedCount := 0
+	for code, pending := range pairCodes {
+		if now.After(pending.exp) {
+			delete(pairCodes, code)
+		} else if pending.uid == userID {
+			ownedCount++
 		}
 	}
-	if mine >= pairMaxPerSession || len(pairCodes) >= pairMaxTotal {
+	if ownedCount >= pairMaxPerSession || len(pairCodes) >= pairMaxTotal {
 		return ""
 	}
 	for {
-		n, _ := rand.Int(rand.Reader, mbig.NewInt(1e8))
-		c := fmt.Sprintf("%08d", n)
-		if _, used := pairCodes[c]; !used {
-			pairCodes[c] = pairCode{now.Add(pairTTL), uid, sid}
-			return c
+		randomNumber, _ := rand.Int(rand.Reader, mbig.NewInt(pairCodeSpace))
+		candidate := fmt.Sprintf("%08d", randomNumber)
+		if _, used := pairCodes[candidate]; !used {
+			pairCodes[candidate] = pairCode{now.Add(pairTTL), userID, sessionID}
+			return candidate
 		}
 	}
 }
 
 // pairDigits : le code tel que tapé (« 1234 5678 », « 1234-5678 »), réduit à ses chiffres.
-func pairDigits(c string) string {
-	return strings.Map(func(r rune) rune {
-		if r >= '0' && r <= '9' {
-			return r
+func pairDigits(typedCode string) string {
+	return strings.Map(func(character rune) rune {
+		if character >= '0' && character <= '9' {
+			return character
 		}
 		return -1
-	}, c)
+	}, typedCode)
 }
 
 // pairLookup lit le code ; take le consomme, valide ou non : un code essayé ne sert plus.
-func pairLookup(c string, take bool) (pairCode, bool) {
+func pairLookup(code string, take bool) (pairCode, bool) {
 	pairMu.Lock()
 	defer pairMu.Unlock()
-	p, ok := pairCodes[c]
+	pending, found := pairCodes[code]
 	if take {
-		delete(pairCodes, c)
+		delete(pairCodes, code)
 	}
-	return p, ok && authNow().Before(p.exp)
+	return pending, found && authNow().Before(pending.exp)
 }
 
 // device : un appareil jumelé en mode jeton. Le cookie n'est jamais stocké, seulement son HMAC sous la clé du jeton.
@@ -116,81 +122,81 @@ var (
 )
 
 func setDevKey(token string) {
-	m := hmac.New(sha256.New, []byte(token))
-	m.Write([]byte("gld-device"))
+	mac := hmac.New(sha256.New, []byte(token))
+	mac.Write([]byte("gld-device"))
 	devMu.Lock()
-	devKey = m.Sum(nil)
+	devKey = mac.Sum(nil)
 	devMu.Unlock()
 }
 
 // devMac et devBind supposent devMu tenu.
 func devMac(cookie string) string {
-	m := hmac.New(sha256.New, devKey)
-	m.Write([]byte(cookie))
-	return hex.EncodeToString(m.Sum(nil))
+	mac := hmac.New(sha256.New, devKey)
+	mac.Write([]byte(cookie))
+	return hex.EncodeToString(mac.Sum(nil))
 }
 
 func devBind() string {
-	h := sha256.Sum256(devKey)
-	return hex.EncodeToString(h[:8])
+	keyHash := sha256.Sum256(devKey)
+	return hex.EncodeToString(keyHash[:8])
 }
 
 func devicesFile() (string, error) {
-	d, err := authDir()
-	return filepath.Join(d, "devices.json"), err
+	directory, err := authDir()
+	return filepath.Join(directory, "devices.json"), err
 }
 
 func loadDevices() ([]device, error) {
-	p, err := devicesFile()
+	path, err := devicesFile()
 	if err != nil {
 		return nil, err
 	}
-	b, err := readTrusted(p)
+	content, err := readTrusted(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	var ds []device
-	return ds, json.Unmarshal(b, &ds)
+	var devices []device
+	return devices, json.Unmarshal(content, &devices)
 }
 
-func saveDevices(ds []device) error {
-	p, err := devicesFile()
+func saveDevices(devices []device) error {
+	path, err := devicesFile()
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
-		return err
+	if mkdirErr := os.MkdirAll(filepath.Dir(path), 0o700); mkdirErr != nil {
+		return mkdirErr
 	}
-	b, _ := json.MarshalIndent(ds, "", "  ")
-	tmp := p + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return err
+	content, _ := json.MarshalIndent(devices, "", "  ")
+	tempPath := path + ".tmp"
+	if fileWriteErr := os.WriteFile(tempPath, content, 0o600); fileWriteErr != nil {
+		return fileWriteErr
 	}
-	return os.Rename(tmp, p)
+	return os.Rename(tempPath, path)
 }
 
 // liveDevices : les appareils du jeton courant vus depuis moins de devIdle (devMu tenu).
-func liveDevices(ds []device) []device {
+func liveDevices(devices []device) []device {
 	bind := devBind()
-	return slices.DeleteFunc(unexpired(ds), func(d device) bool { return d.Bind != bind })
+	return slices.DeleteFunc(unexpired(devices), func(candidate device) bool { return candidate.Bind != bind })
 }
 
 // unexpired : ce qui reste dans devices.json. Un appareil d'un autre jeton est refusé, pas effacé : un second gld lancé avec un
 // autre jeton sur le même dossier ne doit pas faire perdre ses appareils au premier. Il part seul après devIdle.
-func unexpired(ds []device) []device {
+func unexpired(devices []device) []device {
 	limit := authNow().Add(-devIdle).Unix()
-	return slices.DeleteFunc(ds, func(d device) bool { return d.Seen < limit })
+	return slices.DeleteFunc(devices, func(candidate device) bool { return candidate.Seen < limit })
 }
 
-func addDevice(ua, ip string) (string, error) {
-	b := make([]byte, 32)
-	rand.Read(b)
-	c := base64.RawURLEncoding.EncodeToString(b)
-	if len(ua) > 256 {
-		ua = ua[:256]
+func addDevice(userAgent, clientAddress string) (string, error) {
+	secret := make([]byte, deviceSecretBytes)
+	rand.Read(secret)
+	cookie := base64.RawURLEncoding.EncodeToString(secret)
+	if len(userAgent) > deviceUserAgentMaxLength {
+		userAgent = userAgent[:deviceUserAgentMaxLength]
 	}
 	now := authNow().Unix()
 	devMu.Lock()
@@ -198,11 +204,11 @@ func addDevice(ua, ip string) (string, error) {
 	if devKey == nil {
 		return "", errors.New("pas de jeton")
 	}
-	ds, err := loadDevices()
+	devices, err := loadDevices()
 	if err != nil {
 		return "", err
 	}
-	return c, saveDevices(append(unexpired(ds), device{devMac(c), devBind(), ua, ip, now, now}))
+	return cookie, saveDevices(append(unexpired(devices), device{devMac(cookie), devBind(), userAgent, clientAddress, now, now}))
 }
 
 // deviceOK admet un cookie d'appareil encore vivant et repousse son échéance (au plus une écriture par minute).
@@ -213,111 +219,122 @@ func deviceOK(cookie string) bool {
 	if devKey == nil {
 		return false
 	}
-	ds, err := loadDevices()
+	devices, err := loadDevices()
 	if err != nil {
 		journal("pair: devices.json illisible : %v", err)
 		return false
 	}
-	n, id, bind := len(ds), devMac(cookie), devBind()
-	ds = unexpired(ds)
-	i := slices.IndexFunc(ds, func(d device) bool { return d.Bind == bind && hmac.Equal([]byte(d.ID), []byte(id)) })
-	dirty := len(ds) != n
-	if i >= 0 && now-ds[i].Seen >= int64(devTouch/time.Second) {
-		ds[i].Seen, dirty = now, true
+	countBefore, cookieMac, bind := len(devices), devMac(cookie), devBind()
+	devices = unexpired(devices)
+	deviceIndex := slices.IndexFunc(devices, func(candidate device) bool {
+		return candidate.Bind == bind && hmac.Equal([]byte(candidate.ID), []byte(cookieMac))
+	})
+	isKnownDevice := deviceIndex >= 0
+	dirty := len(devices) != countBefore
+	if isKnownDevice && now-devices[deviceIndex].Seen >= int64(devTouch/time.Second) {
+		devices[deviceIndex].Seen, dirty = now, true
 	}
 	if dirty {
-		if err := saveDevices(ds); err != nil {
-			journal("pair: devices.json : %v", err)
+		if saveErr := saveDevices(devices); saveErr != nil {
+			journal("pair: devices.json : %v", saveErr)
 		}
 	}
-	return i >= 0
+	return isKnownDevice
 }
 
 var pairCOP = http.NewCrossOriginProtection()
 
-// pairEntry : GET /pair (confirmation, sans effet) et POST /pair (création de la session). st nil : mode jeton.
-func pairEntry(w http.ResponseWriter, r *http.Request, st *authStore) {
+// pairEntry : GET /pair (confirmation, sans effet) et POST /pair (création de la session). store nil : mode jeton.
+func pairEntry(responseWriter http.ResponseWriter, request *http.Request, store *authStore) {
 	devMu.Lock()
 	keyless := devKey == nil
 	devMu.Unlock()
-	if st == nil && keyless {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+	if store == nil && keyless {
+		http.Redirect(responseWriter, request, "/", http.StatusSeeOther)
 		return
 	}
 	form := func(code int, errKey string) {
-		d := gateData{Title: L("srv.pair.title"), Text: L("srv.pair.text"), Action: "/pair", Code: true, Button: L("srv.pair.button"), Link: "/", LinkText: L("srv.pair.back")}
+		page := gateData{Title: L("srv.pair.title"), Text: L("srv.pair.text"), Action: "/pair", Code: true, Button: L("srv.pair.button"), Link: "/", LinkText: L("srv.pair.back")}
 		if errKey != "" {
-			d.Err = L(errKey)
+			page.Err = L(errKey)
 		}
-		gatePage(w, code, d)
+		gatePage(responseWriter, code, page)
 	}
-	expired := func() { form(http.StatusGone, "srv.pair.expired") }
-	ip := clientIP(r)
-	if r.Method == "GET" && r.URL.Query().Get("c") == "" {
+	replyExpired := func() { form(http.StatusGone, "srv.pair.expired") }
+	clientAddress := clientIP(request)
+	if request.Method == "GET" && request.URL.Query().Get("c") == "" {
 		form(200, "")
 		return
 	}
-	if r.Method == "POST" && pairCOP.Check(r) != nil {
-		http.Error(w, "forbidden", http.StatusForbidden)
+	if request.Method == "POST" && pairCOP.Check(request) != nil {
+		http.Error(responseWriter, "forbidden", http.StatusForbidden)
 		return
 	}
-	if !tokenTry(ip) {
-		w.Header().Set("Retry-After", "60")
+	if !tokenTry(clientAddress) {
+		responseWriter.Header().Set("Retry-After", "60")
 		form(http.StatusTooManyRequests, "srv.token.tooMany")
 		return
 	}
-	if r.Method == "GET" {
-		c := pairDigits(r.URL.Query().Get("c"))
-		p, ok := pairLookup(c, false)
-		if !ok || (p.uid != 0) != (st != nil) {
-			expired()
+	if request.Method == "GET" {
+		code := pairDigits(request.URL.Query().Get("c"))
+		pending, found := pairLookup(code, false)
+		if !found || (pending.uid != 0) != (store != nil) {
+			replyExpired()
 			return
 		}
-		tokenRefund(ip)
+		tokenRefund(clientAddress)
 		text := L("srv.pair.textToken")
-		if st != nil {
-			u, err := st.userByID(st.db, p.uid)
-			if err != nil {
-				expired()
+		if store != nil {
+			user, userErr := store.userByID(store.db, pending.uid)
+			if userErr != nil {
+				replyExpired()
 				return
 			}
-			text = L("srv.pair.textAccount", "A1", u.Name)
+			text = L("srv.pair.textAccount", "A1", user.Name)
 		}
-		gatePage(w, 200, gateData{Title: L("srv.pair.title"), Text: text, Action: "/pair", Hidden: c, Button: L("srv.pair.button")})
+		gatePage(responseWriter, 200, gateData{Title: L("srv.pair.title"), Text: text, Action: "/pair", Hidden: code, Button: L("srv.pair.button")})
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<12)
-	p, ok := pairLookup(pairDigits(r.PostFormValue("c")), true)
-	if !ok || (p.uid != 0) != (st != nil) {
-		expired()
+	request.Body = http.MaxBytesReader(responseWriter, request.Body, pairFormMaxBytes)
+	pending, found := pairLookup(pairDigits(request.PostFormValue("c")), true)
+	if !found || (pending.uid != 0) != (store != nil) {
+		replyExpired()
 		return
 	}
-	tokenRefund(ip)
-	if st == nil {
-		c, err := addDevice(r.UserAgent(), ip)
-		if err != nil {
-			journal("pair: %v", err)
-			expired()
+	tokenRefund(clientAddress)
+	if store == nil {
+		cookie, addErr := addDevice(request.UserAgent(), clientAddress)
+		if addErr != nil {
+			journal("pair: %v", addErr)
+			replyExpired()
 			return
 		}
 		// MaxAge large : l'échéance réelle (90 jours sans visite) est tenue côté serveur.
-		http.SetCookie(w, &http.Cookie{Name: devCookie, Value: c, Path: "/", MaxAge: 400 * 24 * 3600, HttpOnly: true, Secure: requestHTTPS(r), SameSite: http.SameSiteStrictMode})
-		journal("pair: appareil jumelé depuis %s", ip)
-	} else if !redeemSession(w, r, st, p, ip) {
-		expired()
+		http.SetCookie(responseWriter, &http.Cookie{
+			Name:     devCookie,
+			Value:    cookie,
+			Path:     "/",
+			MaxAge:   deviceCookieMaxAge,
+			HttpOnly: true,
+			Secure:   requestHTTPS(request),
+			SameSite: http.SameSiteStrictMode,
+		})
+		journal("pair: appareil jumelé depuis %s", clientAddress)
+	} else if !redeemSession(responseWriter, request, store, pending, clientAddress) {
+		replyExpired()
 		return
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(responseWriter, request, "/", http.StatusSeeOther)
 }
 
 // redeemSession : la session naît complète (second facteur acquis), à condition que la session émettrice soit encore
 // ouverte et complète : la révoquer annule aussi ses codes en attente.
-func redeemSession(w http.ResponseWriter, r *http.Request, st *authStore, p pairCode, ip string) bool {
-	c, exp, err := st.NewPairedSession(p.uid, p.sid, ip, r.UserAgent())
+func redeemSession(responseWriter http.ResponseWriter, request *http.Request, store *authStore, pending pairCode, clientAddress string) bool {
+	cookie, expiry, err := store.NewPairedSession(pending.uid, pending.sid, clientAddress, request.UserAgent())
 	if err == nil {
-		if _, err = st.Session(c); err != nil { // refuse un compte désactivé depuis
-			if h, e := base64.RawURLEncoding.DecodeString(c); e == nil {
-				st.RevokeSession(hex.EncodeToString(st.sessHash(h)))
+		if _, err = store.Session(cookie); err != nil { // refuse un compte désactivé depuis
+			if rawCookie, decodeErr := base64.RawURLEncoding.DecodeString(cookie); decodeErr == nil {
+				store.RevokeSession(hex.EncodeToString(store.sessHash(rawCookie)))
 			}
 		}
 	}
@@ -327,91 +344,93 @@ func redeemSession(w http.ResponseWriter, r *http.Request, st *authStore, p pair
 		}
 		return false
 	}
-	setSessionCookie(w, r, c, exp)
-	clearHomeCookie(w)
-	st.eventIP(p.uid, evLogin, "pair", ip)
+	setSessionCookie(responseWriter, request, cookie, expiry)
+	clearHomeCookie(responseWriter)
+	store.eventIP(pending.uid, evLogin, "pair", clientAddress)
 	return true
 }
 
 // publicBase : l'adresse que le téléphone ouvrira. GLD_PUBLIC_URL (--public-url) d'abord : l'ordinateur qui affiche le QR
 // est souvent sur 127.0.0.1 ou l'IP locale ; sinon, l'adresse par laquelle la requête est arrivée.
-func publicBase(r *http.Request) string {
-	if u, err := url.Parse(strings.TrimSpace(os.Getenv("GLD_PUBLIC_URL"))); err == nil && u.Host != "" && (u.Scheme == "http" || u.Scheme == "https") {
-		return u.Scheme + "://" + u.Host
+func publicBase(request *http.Request) string {
+	publicURL, err := url.Parse(strings.TrimSpace(os.Getenv("GLD_PUBLIC_URL")))
+	hasWebScheme := err == nil && (publicURL.Scheme == "http" || publicURL.Scheme == "https")
+	if hasWebScheme && publicURL.Host != "" {
+		return publicURL.Scheme + "://" + publicURL.Host
 	}
-	if requestHTTPS(r) {
-		return "https://" + r.Host
+	if requestHTTPS(request) {
+		return "https://" + request.Host
 	}
-	return "http://" + r.Host
+	return "http://" + request.Host
 }
 
 func routesPair(mux *http.ServeMux) {
-	mux.HandleFunc("POST /v1/pairing/codes", func(w http.ResponseWriter, r *http.Request) {
-		r, d := reqMode(r)
-		var uid int64
-		var sid string
-		if d.on {
-			g, _ := r.Context().Value(gateKey{}).(*gateInfo)
-			if g == nil || g.p == nil || g.p.User == nil || !g.p.MFA {
-				writeErr(w, 403, "forbidden", L("srv.auth.droitRefuse"))
+	mux.HandleFunc("POST /v1/pairing/codes", func(responseWriter http.ResponseWriter, request *http.Request) {
+		request, mode := reqMode(request)
+		var userID int64
+		var sessionID string
+		if mode.on {
+			gate, _ := request.Context().Value(gateKey{}).(*gateInfo)
+			if gate == nil || gate.p == nil || gate.p.User == nil || !gate.p.MFA {
+				writeErr(responseWriter, 403, "forbidden", L("srv.auth.droitRefuse"))
 				return
 			}
-			uid, sid = g.p.User.ID, g.p.SessionID
+			userID, sessionID = gate.p.User.ID, gate.p.SessionID
 		}
-		c := newPairCode(uid, sid)
-		if c == "" {
-			w.Header().Set("Retry-After", "60")
-			writeErr(w, 429, "rate_limited", L("srv.token.tooMany"))
+		code := newPairCode(userID, sessionID)
+		if code == "" {
+			responseWriter.Header().Set("Retry-After", "60")
+			writeErr(responseWriter, 429, "rate_limited", L("srv.token.tooMany"))
 			return
 		}
-		writeJSON(w, 201, map[string]any{"code": c, "url": publicBase(r) + "/pair?c=" + c, "ttl": int(pairTTL / time.Second)})
+		writeJSON(responseWriter, 201, map[string]any{"code": code, "url": publicBase(request) + "/pair?c=" + code, "ttl": int(pairTTL / time.Second)})
 	})
 	// Mode comptes, ou sans jeton ; en mode jeton, withToken répond avant.
-	entry := func(w http.ResponseWriter, r *http.Request) {
-		r, d := reqMode(r)
-		var st *authStore
-		if d.on {
-			st = d.st
+	entry := func(responseWriter http.ResponseWriter, request *http.Request) {
+		request, mode := reqMode(request)
+		var store *authStore
+		if mode.on {
+			store = mode.st
 		}
-		pairEntry(w, r, st)
+		pairEntry(responseWriter, request, store)
 	}
 	mux.HandleFunc("GET /pair", entry)
 	mux.HandleFunc("POST /pair", entry)
 	// Mode jeton seulement : en mode comptes, les sessions du compte (/v1/auth/sessions) en tiennent lieu.
-	mux.HandleFunc("GET /v1/devices", func(w http.ResponseWriter, r *http.Request) {
-		if _, d := reqMode(r); d.on {
-			http.NotFound(w, r)
+	mux.HandleFunc("GET /v1/devices", func(responseWriter http.ResponseWriter, request *http.Request) {
+		if _, mode := reqMode(request); mode.on {
+			http.NotFound(responseWriter, request)
 			return
 		}
 		devMu.Lock()
-		ds, err := loadDevices()
+		devices, err := loadDevices()
 		if err == nil {
-			ds = liveDevices(ds)
+			devices = liveDevices(devices)
 		}
 		devMu.Unlock()
 		if err != nil {
-			writeErr(w, 500, "internal", err.Error())
+			writeErr(responseWriter, 500, "internal", err.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"devices": ds})
+		writeJSON(responseWriter, 200, map[string]any{"devices": devices})
 	})
-	mux.HandleFunc("DELETE /v1/devices/{device}", func(w http.ResponseWriter, r *http.Request) {
-		if _, d := reqMode(r); d.on {
-			http.NotFound(w, r)
+	mux.HandleFunc("DELETE /v1/devices/{device}", func(responseWriter http.ResponseWriter, request *http.Request) {
+		if _, mode := reqMode(request); mode.on {
+			http.NotFound(responseWriter, request)
 			return
 		}
-		id := r.PathValue("device")
+		deviceID := request.PathValue("device")
 		devMu.Lock()
 		defer devMu.Unlock()
-		ds, err := loadDevices()
+		devices, err := loadDevices()
 		if err == nil {
-			err = saveDevices(slices.DeleteFunc(ds, func(d device) bool { return d.ID == id }))
+			err = saveDevices(slices.DeleteFunc(devices, func(candidate device) bool { return candidate.ID == deviceID }))
 		}
 		if err != nil {
-			writeErr(w, 500, "internal", err.Error())
+			writeErr(responseWriter, 500, "internal", err.Error())
 			return
 		}
-		journal("pair: appareil %s révoqué", cut(id, 8))
-		w.WriteHeader(http.StatusNoContent)
+		journal("pair: appareil %s révoqué", cut(deviceID, 8))
+		responseWriter.WriteHeader(http.StatusNoContent)
 	})
 }

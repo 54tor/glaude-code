@@ -8,13 +8,16 @@ import (
 	"time"
 )
 
+// Un GET /v1/state servi depuis moins de trois intervalles de surveillance signale un onglet ouvert.
+const openTabSilentTicks = 3
+
 var lastAPI atomic.Int64 // dernier GET /v1/state servi (UnixNano) : un onglet ouvert le redemande toutes les 15 s
 
-// newWaiting : ids présents dans cur et absents de prev.
-func newWaiting(prev map[string]bool, cur []string) (out []string) {
-	for _, id := range cur {
-		if !prev[id] {
-			out = append(out, id)
+// newWaiting : ids présents dans currentWaiting et absents de previousWaiting.
+func newWaiting(previousWaiting map[string]bool, currentWaiting []string) (freshIDs []string) {
+	for _, sessionID := range currentWaiting {
+		if !previousWaiting[sessionID] {
+			freshIDs = append(freshIDs, sessionID)
 		}
 	}
 	return
@@ -27,36 +30,37 @@ func watchWaiting(every time.Duration) {
 	if _, err := exec.LookPath("notify-send"); err != nil {
 		return
 	}
-	prev := map[string]bool{}
-	t := time.NewTicker(every)
-	defer t.Stop()
+	previousWaiting := map[string]bool{}
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-homeCtx.Done():
 			return
-		case <-t.C:
+		case <-ticker.C:
 		}
-		cur := waiting()
-		fresh := newWaiting(prev, cur)
-		prev = map[string]bool{}
-		for _, id := range cur {
-			prev[id] = true
+		currentWaiting := waiting()
+		fresh := newWaiting(previousWaiting, currentWaiting)
+		previousWaiting = map[string]bool{}
+		for _, sessionID := range currentWaiting {
+			previousWaiting[sessionID] = true
 		}
-		if len(fresh) == 0 || time.Since(time.Unix(0, lastAPI.Load())) < 3*every {
+		isTabWatching := time.Since(time.Unix(0, lastAPI.Load())) < openTabSilentTicks*every
+		if len(fresh) == 0 || isTabWatching {
 			continue
 		}
 		titles := map[string]string{}
-		for _, g := range sessions() {
-			for _, s := range g.Sessions {
-				titles[s.ID] = s.Title
+		for _, group := range sessions() {
+			for _, session := range group.Sessions {
+				titles[session.ID] = session.Title
 			}
 		}
-		for _, id := range fresh {
-			t := titles[id]
-			if t == "" {
-				t = id
+		for _, sessionID := range fresh {
+			title := titles[sessionID]
+			if title == "" {
+				title = sessionID
 			}
-			notifySend("Claude attend", t)
+			notifySend("Claude attend", title)
 		}
 	}
 }

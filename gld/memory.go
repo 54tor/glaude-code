@@ -40,6 +40,11 @@ type MemProject struct {
 
 const memMax = 1 << 20
 
+const (
+	bytesPerKilobyte     = 1024
+	nanosecondsPerSecond = 1e9
+)
+
 var (
 	mdName   = regexp.MustCompile(`^[^./\\][^/\\]*\.md$`)
 	ruleName = regexp.MustCompile(`^[^./\\][^/\\]*\.md(\.off)?$`) // une règle désactivée garde son nom + « .off »
@@ -54,60 +59,68 @@ func globalClaude(path string) bool { return isCfgEntry(path, "CLAUDE.md") }
 
 // cfgDirs : le dossier de config de ce processus, la config principale (vue d'un home enfant) et celle de chaque home connu.
 func cfgDirs() []string {
-	out := []string{cfgDir()}
+	configDirs := []string{cfgDir()}
 	homes := readHomes()
-	if m := os.Getenv(ideMainCfgEnv); m != "" && filepath.IsAbs(m) {
-		out = append(out, m)
-		homes = append(homes, readHomesFile(filepath.Join(m, homesFileName))...)
+	if mainConfigDir := os.Getenv(ideMainCfgEnv); mainConfigDir != "" && filepath.IsAbs(mainConfigDir) {
+		configDirs = append(configDirs, mainConfigDir)
+		homes = append(homes, readHomesFile(filepath.Join(mainConfigDir, homesFileName))...)
 	}
-	for _, h := range homes {
-		if filepath.IsAbs(h.Dir) {
-			out = append(out, h.Dir)
+	for _, knownHome := range homes {
+		if filepath.IsAbs(knownHome.Dir) {
+			configDirs = append(configDirs, knownHome.Dir)
 		}
 	}
-	return out
+	return configDirs
 }
 
 // isCfgEntry : path est <config d'un home>/<name> (même fichier ou dossier, liens suivis).
 func isCfgEntry(path, name string) bool {
-	a, errA := os.Stat(path)
-	for _, c := range cfgDirs() {
-		g := filepath.Join(c, name)
-		if filepath.Clean(path) == g {
+	pathInfo, pathStatErr := os.Stat(path)
+	for _, homeConfigDir := range cfgDirs() {
+		candidatePath := filepath.Join(homeConfigDir, name)
+		if filepath.Clean(path) == candidatePath {
 			return true
 		}
-		if b, err := os.Stat(g); errA == nil && err == nil && os.SameFile(a, b) {
+		if candidateInfo, candidateStatErr := os.Stat(candidatePath); pathStatErr == nil && candidateStatErr == nil && os.SameFile(pathInfo, candidateInfo) {
 			return true
 		}
 	}
 	return false
 }
 
-func safeDir(d string) bool { return d != "" && d != "." && d != ".." && !strings.ContainsAny(d, `/\`) }
+func safeDir(dirName string) bool {
+	isSpecialName := dirName == "" || dirName == "." || dirName == ".."
+	return !isSpecialName && !strings.ContainsAny(dirName, `/\`)
+}
 
 // knownProjectCwd : le dossier de travail d'un projet dont le dossier de transcripts existe sous projects/ (un nom reçu
 // d'un client ne se décode jamais vers un dossier arbitraire du disque).
-func knownProjectCwd(d string) (string, bool) {
-	if !safeDir(d) || !isDirPath(filepath.Join(root, d)) {
+func knownProjectCwd(projectDir string) (string, bool) {
+	if !safeDir(projectDir) || !isDirPath(filepath.Join(root, projectDir)) {
 		return "", false
 	}
-	c := projectCwd(d)
-	return c, c != "" && isDirPath(c)
+	workingDir := projectCwd(projectDir)
+	return workingDir, workingDir != "" && isDirPath(workingDir)
 }
 
 // projectCwd : le dossier de travail d'un dossier de transcripts (sa session la plus récente, sinon son nom décodé).
 func projectCwd(dir string) string {
 	files, _ := filepath.Glob(filepath.Join(root, dir, "*.jsonl"))
-	var best os.FileInfo
-	var bestP string
-	for _, p := range files {
-		if st, err := os.Stat(p); err == nil && st.Size() > 0 && (best == nil || st.ModTime().After(best.ModTime())) {
-			best, bestP = st, p
+	var newestInfo os.FileInfo
+	var newestPath string
+	for _, transcriptPath := range files {
+		transcriptInfo, err := os.Stat(transcriptPath)
+		if err != nil || transcriptInfo.Size() <= 0 {
+			continue
+		}
+		isNewest := newestInfo == nil || transcriptInfo.ModTime().After(newestInfo.ModTime())
+		if isNewest {
+			newestInfo, newestPath = transcriptInfo, transcriptPath
 		}
 	}
-	if best != nil {
-		if c := info(bestP, best).Cwd; c != "" {
-			return c
+	if newestInfo != nil {
+		if sessionCwd := info(newestPath, newestInfo).Cwd; sessionCwd != "" {
+			return sessionCwd
 		}
 	}
 	return decodeDir(dir)
@@ -115,63 +128,63 @@ func projectCwd(dir string) string {
 
 // memResolve traduit une clé en (dossier de base, chemin relatif), après validation stricte.
 func memResolve(key string) (string, string, error) {
-	bad := terr("srv.memory.fichierDeMemoireInvalide")
+	invalidKeyErr := terr("srv.memory.fichierDeMemoireInvalide")
 	switch {
 	case key == "g/CLAUDE.md":
 		return cfgDir(), "CLAUDE.md", nil
 	case strings.HasPrefix(key, "g/rules/"):
-		if n := key[8:]; ruleName.MatchString(n) {
-			return filepath.Join(cfgDir(), "rules"), n, nil
+		if fileName := strings.TrimPrefix(key, "g/rules/"); ruleName.MatchString(fileName) {
+			return filepath.Join(cfgDir(), "rules"), fileName, nil
 		}
 	case strings.HasPrefix(key, "g/gldrules/"): // règles livrées par gld : lisibles ici, jamais modifiables
-		if n := key[11:]; ruleName.MatchString(n) {
-			return builtinDir(), n, nil
+		if fileName := strings.TrimPrefix(key, "g/gldrules/"); ruleName.MatchString(fileName) {
+			return builtinDir(), fileName, nil
 		}
 	case strings.HasPrefix(key, "m/"):
 		// Le dossier du projet doit exister : sans quoi chaque nom reçu créerait un dossier dans projects/.
-		if d, n, ok := strings.Cut(key[2:], "/"); ok && safeDir(d) && mdName.MatchString(n) && isDirPath(filepath.Join(root, d)) {
-			return filepath.Join(root, d, "memory"), n, nil
+		if projectDir, fileName, hasSeparator := strings.Cut(key[2:], "/"); hasSeparator && safeDir(projectDir) && mdName.MatchString(fileName) && isDirPath(filepath.Join(root, projectDir)) {
+			return filepath.Join(root, projectDir, "memory"), fileName, nil
 		}
 	case strings.HasPrefix(key, "r/"): // règle d'un projet : <dossier du projet>/.claude/rules/<nom>
-		if d, n, ok := strings.Cut(key[2:], "/"); ok && safeDir(d) && ruleName.MatchString(n) {
-			c, ok := knownProjectCwd(d)
-			if !ok {
+		if projectDir, fileName, hasSeparator := strings.Cut(key[2:], "/"); hasSeparator && safeDir(projectDir) && ruleName.MatchString(fileName) {
+			workingDir, isKnownProject := knownProjectCwd(projectDir)
+			if !isKnownProject {
 				return "", "", terr("srv.memory.dossierDuProjetIntrouvable")
 			}
-			base, err := projectRulesDir(c)
-			return base, n, err
+			base, err := projectRulesDir(workingDir)
+			return base, fileName, err
 		}
 	case strings.HasPrefix(key, "p/"):
-		if d, f, ok := strings.Cut(key[2:], "/"); ok && safeDir(d) {
-			for _, a := range projectFiles {
-				if f == a {
-					c, ok := knownProjectCwd(d)
-					if !ok {
+		if projectDir, fileName, hasSeparator := strings.Cut(key[2:], "/"); hasSeparator && safeDir(projectDir) {
+			for _, projectFile := range projectFiles {
+				if fileName == projectFile {
+					workingDir, isKnownProject := knownProjectCwd(projectDir)
+					if !isKnownProject {
 						return "", "", terr("srv.memory.dossierDuProjetIntrouvable")
 					}
-					if globalClaude(filepath.Join(c, filepath.FromSlash(f))) {
+					if globalClaude(filepath.Join(workingDir, filepath.FromSlash(fileName))) {
 						return "", "", terr("srv.memory.cEstLeClaude")
 					}
-					return c, filepath.FromSlash(f), nil
+					return workingDir, filepath.FromSlash(fileName), nil
 				}
 			}
 		}
 	}
-	return "", "", bad
+	return "", "", invalidKeyErr
 }
 
 // projectRulesDir : le dossier .claude/rules d'un projet ; refuse un projet absent, un lien symbolique et le dossier des règles
 // globales (un projet lancé depuis ~).
 func projectRulesDir(cwd string) (string, error) {
-	if fi, err := os.Stat(cwd); cwd == "" || err != nil || !fi.IsDir() {
+	if cwdInfo, statErr := os.Stat(cwd); cwd == "" || statErr != nil || !cwdInfo.IsDir() {
 		return "", terr("srv.memory.dossierDuProjetIntrouvable")
 	}
 	rules := filepath.Join(cwd, ".claude", "rules")
 	if isCfgEntry(rules, "rules") {
 		return "", terr("srv.memory.ceSontLesRegles")
 	}
-	for _, p := range []string{filepath.Join(cwd, ".claude"), rules} {
-		if fi, err := os.Lstat(p); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+	for _, claudePath := range []string{filepath.Join(cwd, ".claude"), rules} {
+		if claudePathInfo, lstatErr := os.Lstat(claudePath); lstatErr == nil && claudePathInfo.Mode()&os.ModeSymlink != 0 {
 			return "", terr("srv.memory.claudeEstUnLien")
 		}
 	}
@@ -179,13 +192,19 @@ func projectRulesDir(cwd string) (string, error) {
 }
 
 func memFile(key, path string) (MemFile, bool) {
-	fi, err := os.Stat(path)
-	if err != nil || !fi.Mode().IsRegular() {
+	fileInfo, err := os.Stat(path)
+	if err != nil || !fileInfo.Mode().IsRegular() {
 		return MemFile{}, false
 	}
-	f := MemFile{Key: key, Name: filepath.Base(path), KB: fi.Size() / 1024, Mtime: float64(fi.ModTime().UnixNano()) / 1e9, Path: path}
-	annotate(&f)
-	return f, true
+	memoryFile := MemFile{
+		Key:   key,
+		Name:  filepath.Base(path),
+		KB:    fileInfo.Size() / bytesPerKilobyte,
+		Mtime: float64(fileInfo.ModTime().UnixNano()) / nanosecondsPerSecond,
+		Path:  path,
+	}
+	annotate(&memoryFile)
+	return memoryFile, true
 }
 
 // MemTarget : un projet vers la mémoire duquel une entrée peut être déplacée.
@@ -198,12 +217,12 @@ type MemTarget struct {
 func memTargets() []MemTarget {
 	dirs, _ := readDirTrusted(root)
 	targets := []MemTarget{}
-	for _, d := range dirs {
-		if d.IsDir() {
-			targets = append(targets, MemTarget{d.Name(), projectCwd(d.Name())})
+	for _, dirEntry := range dirs {
+		if dirEntry.IsDir() {
+			targets = append(targets, MemTarget{dirEntry.Name(), projectCwd(dirEntry.Name())})
 		}
 	}
-	sort.Slice(targets, func(i, j int) bool { return targets[i].Project < targets[j].Project })
+	sort.Slice(targets, func(leftIndex, rightIndex int) bool { return targets[leftIndex].Project < targets[rightIndex].Project })
 	return targets
 }
 
@@ -213,83 +232,88 @@ func memTargets() []MemTarget {
 func liveProjects() []MemTarget {
 	home, _ := os.UserHomeDir()
 	targets := memTargets()
-	out := []MemTarget{}
-	for _, t := range targets {
-		if t.Project == "" || t.Project == cfgDir() || (home != "" && t.Project == home) {
+	liveTargets := []MemTarget{}
+	for _, target := range targets {
+		if target.Project == "" || target.Project == cfgDir() || (home != "" && target.Project == home) {
 			continue
 		}
-		if fi, err := os.Stat(t.Project); err == nil && fi.IsDir() {
-			out = append(out, t)
+		if projectInfo, err := os.Stat(target.Project); err == nil && projectInfo.IsDir() {
+			liveTargets = append(liveTargets, target)
 		}
 	}
-	return out
+	return liveTargets
 }
 
 func memList() ([]MemFile, []MemProject, []MemTarget) {
 	global := []MemFile{}
-	if f, ok := memFile("g/CLAUDE.md", filepath.Join(cfgDir(), "CLAUDE.md")); ok {
-		global = append(global, f)
+	if memoryFile, isListed := memFile("g/CLAUDE.md", filepath.Join(cfgDir(), "CLAUDE.md")); isListed {
+		global = append(global, memoryFile)
 	}
 	rules, _ := filepath.Glob(filepath.Join(cfgDir(), "rules", "*.md*"))
-	for _, p := range rules {
-		if f, ok := memFile("g/rules/"+filepath.Base(p), p); ok && ruleName.MatchString(f.Name) {
-			f.Name = "rules/" + f.Name
-			global = append(global, f)
+	for _, filePath := range rules {
+		if memoryFile, isListed := memFile("g/rules/"+filepath.Base(filePath), filePath); isListed && ruleName.MatchString(memoryFile.Name) {
+			memoryFile.Name = "rules/" + memoryFile.Name
+			global = append(global, memoryFile)
 		}
 	}
 	built, _ := filepath.Glob(filepath.Join(builtinDir(), "*.md"))
-	for _, p := range built {
-		if f, ok := memFile("g/gldrules/"+filepath.Base(p), p); ok && ruleName.MatchString(f.Name) {
-			f.Name = "rules/" + f.Name
-			global = append(global, f)
+	for _, filePath := range built {
+		if memoryFile, isListed := memFile("g/gldrules/"+filepath.Base(filePath), filePath); isListed && ruleName.MatchString(memoryFile.Name) {
+			memoryFile.Name = "rules/" + memoryFile.Name
+			global = append(global, memoryFile)
 		}
 	}
 	projects := []MemProject{}
 	targets := []MemTarget{}
 	dirs, _ := readDirTrusted(root)
-	for _, d := range dirs {
-		if !d.IsDir() {
+	for _, dirEntry := range dirs {
+		if !dirEntry.IsDir() {
 			continue
 		}
-		mp := MemProject{Dir: d.Name(), Files: []MemFile{}}
-		mems, _ := filepath.Glob(filepath.Join(root, d.Name(), "memory", "*.md"))
-		for _, p := range mems {
-			if f, ok := memFile("m/"+d.Name()+"/"+filepath.Base(p), p); ok && mdName.MatchString(f.Name) {
-				mp.Files = append(mp.Files, f)
+		memoryProject := MemProject{Dir: dirEntry.Name(), Files: []MemFile{}}
+		mems, _ := filepath.Glob(filepath.Join(root, dirEntry.Name(), "memory", "*.md"))
+		for _, filePath := range mems {
+			if memoryFile, isListed := memFile("m/"+dirEntry.Name()+"/"+filepath.Base(filePath), filePath); isListed && mdName.MatchString(memoryFile.Name) {
+				memoryProject.Files = append(memoryProject.Files, memoryFile)
 			}
 		}
-		mp.Project = projectCwd(d.Name())
-		if fi, err := os.Stat(mp.Project); mp.Project == "" || err != nil || !fi.IsDir() {
-			mp.Missing = true
-			if mp.Project == "" { // nom encodé (« / » devenus « - ») : approximation lisible
-				mp.Project = strings.ReplaceAll(d.Name(), "-", "/")
+		memoryProject.Project = projectCwd(dirEntry.Name())
+		isProjectMissing := memoryProject.Project == "" || !isDirPath(memoryProject.Project)
+		if isProjectMissing {
+			memoryProject.Missing = true
+			if memoryProject.Project == "" { // nom encodé (« / » devenus « - ») : approximation lisible
+				memoryProject.Project = strings.ReplaceAll(dirEntry.Name(), "-", "/")
 			}
 		} else {
-			for _, a := range projectFiles {
-				if path := filepath.Join(mp.Project, filepath.FromSlash(a)); globalClaude(path) {
+			for _, projectFile := range projectFiles {
+				path := filepath.Join(memoryProject.Project, filepath.FromSlash(projectFile))
+				if globalClaude(path) {
 					continue // déjà listé dans la section Globale
-				} else if f, ok := memFile("p/"+d.Name()+"/"+a, path); ok {
-					f.Name = a
-					mp.Files = append(mp.Files, f)
+				}
+				if memoryFile, isListed := memFile("p/"+dirEntry.Name()+"/"+projectFile, path); isListed {
+					memoryFile.Name = projectFile
+					memoryProject.Files = append(memoryProject.Files, memoryFile)
 				}
 			}
-			if rdir, err := projectRulesDir(mp.Project); err == nil {
-				rules, _ := filepath.Glob(filepath.Join(rdir, "*.md*"))
-				for _, p := range rules {
-					if f, ok := memFile("r/"+d.Name()+"/"+filepath.Base(p), p); ok && ruleName.MatchString(f.Name) {
-						f.Name = "rules/" + f.Name
-						mp.Files = append(mp.Files, f)
+			if rulesDir, rulesDirErr := projectRulesDir(memoryProject.Project); rulesDirErr == nil {
+				projectRuleFiles, _ := filepath.Glob(filepath.Join(rulesDir, "*.md*"))
+				for _, filePath := range projectRuleFiles {
+					if memoryFile, isListed := memFile("r/"+dirEntry.Name()+"/"+filepath.Base(filePath), filePath); isListed && ruleName.MatchString(memoryFile.Name) {
+						memoryFile.Name = "rules/" + memoryFile.Name
+						memoryProject.Files = append(memoryProject.Files, memoryFile)
 					}
 				}
 			}
 		}
-		if len(mp.Files) > 0 {
-			projects = append(projects, mp)
+		if len(memoryProject.Files) > 0 {
+			projects = append(projects, memoryProject)
 		}
-		targets = append(targets, MemTarget{d.Name(), mp.Project})
+		targets = append(targets, MemTarget{dirEntry.Name(), memoryProject.Project})
 	}
-	sort.Slice(projects, func(i, j int) bool { return projects[i].Project < projects[j].Project })
-	sort.Slice(targets, func(i, j int) bool { return targets[i].Project < targets[j].Project })
+	sort.Slice(projects, func(leftIndex, rightIndex int) bool {
+		return projects[leftIndex].Project < projects[rightIndex].Project
+	})
+	sort.Slice(targets, func(leftIndex, rightIndex int) bool { return targets[leftIndex].Project < targets[rightIndex].Project })
 	return global, projects, targets
 }
 
@@ -298,16 +322,16 @@ func memRead(key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	r, err := os.OpenRoot(base)
+	memoryRoot, err := os.OpenRoot(base)
 	if err != nil {
 		return "", err
 	}
-	defer r.Close()
-	b, err := r.ReadFile(rel)
-	if err == nil && (len(b) > memMax || !utf8.Valid(b)) {
+	defer memoryRoot.Close()
+	content, err := memoryRoot.ReadFile(rel)
+	if err == nil && (len(content) > memMax || !utf8.Valid(content)) {
 		err = terr("srv.memory.fichierTropGrosOu")
 	}
-	return string(b), err
+	return string(content), err
 }
 
 // memSave remplace le fichier (écriture atomique, droits conservés) ou le crée ; la version remplacée va à la corbeille.
@@ -326,39 +350,39 @@ func memWrite(key, text string, keep bool) error {
 	if err != nil {
 		return err
 	}
-	old, rerr := memRead(key)
-	if rerr != nil && !errors.Is(rerr, os.ErrNotExist) {
-		return rerr // trop gros ou pas en UTF-8 : le remplacer le perdrait sans passer par la corbeille
+	old, readErr := memRead(key)
+	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
+		return readErr // trop gros ou pas en UTF-8 : le remplacer le perdrait sans passer par la corbeille
 	}
-	if keep && rerr == nil && old != text {
-		if err := toTrash(key, "remplacé"); err != nil {
-			return err
+	if keep && readErr == nil && old != text {
+		if trashErr := toTrash(key, "remplacé"); trashErr != nil {
+			return trashErr
 		}
 	}
-	if err := mkdirTrusted(base, 0o755); err != nil {
-		return err
+	if mkdirErr := mkdirTrusted(base, 0o755); mkdirErr != nil {
+		return mkdirErr
 	}
-	r, err := os.OpenRoot(base)
+	memoryRoot, err := os.OpenRoot(base)
 	if err != nil {
 		return err
 	}
-	defer r.Close()
+	defer memoryRoot.Close()
 	mode := os.FileMode(0o644)
-	if fi, err := r.Stat(rel); err == nil {
-		mode = fi.Mode().Perm()
+	if fileInfo, statErr := memoryRoot.Stat(rel); statErr == nil {
+		mode = fileInfo.Mode().Perm()
 	}
-	if d := filepath.Dir(rel); d != "." {
-		if err := r.MkdirAll(d, 0o755); err != nil {
-			return err
+	if parentDir := filepath.Dir(rel); parentDir != "." {
+		if mkdirAllErr := memoryRoot.MkdirAll(parentDir, 0o755); mkdirAllErr != nil {
+			return mkdirAllErr
 		}
 	}
-	tmp := rel + ".gld-web.tmp"
-	if err := r.WriteFile(tmp, []byte(text), mode); err != nil {
-		return err
+	tempName := rel + ".gld-web.tmp"
+	if tempWriteErr := memoryRoot.WriteFile(tempName, []byte(text), mode); tempWriteErr != nil {
+		return tempWriteErr
 	}
-	if err := r.Rename(tmp, rel); err != nil {
-		r.Remove(tmp)
-		return err
+	if renameErr := memoryRoot.Rename(tempName, rel); renameErr != nil {
+		memoryRoot.Remove(tempName)
+		return renameErr
 	}
 	return nil
 }
@@ -373,33 +397,33 @@ func memDelete(key string, trash bool) error {
 		return err
 	}
 	if trash {
-		if err := toTrash(key, "supprimé"); err != nil {
-			return err
+		if trashErr := toTrash(key, "supprimé"); trashErr != nil {
+			return trashErr
 		}
 	}
-	r, err := os.OpenRoot(base)
+	memoryRoot, err := os.OpenRoot(base)
 	if err != nil {
 		return err
 	}
-	defer r.Close()
-	if err := r.Remove(rel); err != nil {
-		return err
+	defer memoryRoot.Close()
+	if removeErr := memoryRoot.Remove(rel); removeErr != nil {
+		return removeErr
 	}
 	if !strings.HasPrefix(key, "m/") || rel == "MEMORY.md" {
 		return nil
 	}
-	idx, err := r.ReadFile("MEMORY.md")
+	indexContent, err := memoryRoot.ReadFile("MEMORY.md")
 	if err != nil {
 		return nil // pas d'index : rien à nettoyer
 	}
 	var keep []string
-	for _, l := range strings.SplitAfter(string(idx), "\n") {
-		if !strings.Contains(l, "]("+rel+")") {
-			keep = append(keep, l)
+	for _, indexLine := range strings.SplitAfter(string(indexContent), "\n") {
+		if !strings.Contains(indexLine, "]("+rel+")") {
+			keep = append(keep, indexLine)
 		}
 	}
-	if out := strings.Join(keep, ""); out != string(idx) {
-		return memWrite(strings.TrimSuffix(key, rel)+"MEMORY.md", out, false)
+	if rewrittenIndex := strings.Join(keep, ""); rewrittenIndex != string(indexContent) {
+		return memWrite(strings.TrimSuffix(key, rel)+"MEMORY.md", rewrittenIndex, false)
 	}
 	return nil
 }
@@ -407,65 +431,65 @@ func memDelete(key string, trash bool) error {
 const mergeMax = 100
 
 // mergePrompt : la demande de fusion faite à Claude, et le dossier où la lancer (le projet concerné, sinon ~).
-// out : le document de sortie, l'un des fichiers choisis (vide : le premier).
-func mergePrompt(keys []string, out string) (string, string, error) {
+// outputKey : le document de sortie, l'un des fichiers choisis (vide : le premier).
+func mergePrompt(keys []string, outputKey string) (string, string, error) {
 	if len(keys) < 2 || len(keys) > mergeMax {
 		return "", "", terr("srv.memory.choisisDeAFichiers", "A1", mergeMax)
 	}
-	if out == "" {
-		out = keys[0]
+	if outputKey == "" {
+		outputKey = keys[0]
 	}
 	// Hors sélection : CLAUDE.md global ou fichier du projet (CLAUDE.md, AGENTS.md…), à créer s'il n'existe pas.
 	outPath, extra := "", ""
-	if !slices.Contains(keys, out) {
-		if out != "g/CLAUDE.md" && !strings.HasPrefix(out, "p/") {
+	if !slices.Contains(keys, outputKey) {
+		if outputKey != "g/CLAUDE.md" && !strings.HasPrefix(outputKey, "p/") {
 			return "", "", terr("srv.memory.documentDeSortieInvalide")
 		}
-		base, rel, err := memResolve(out)
-		if err != nil {
-			return "", "", err
+		outputBase, outputRel, outputResolveErr := memResolve(outputKey)
+		if outputResolveErr != nil {
+			return "", "", outputResolveErr
 		}
-		outPath, extra = filepath.Join(base, rel), L("prompt.mergeOutExtra")
+		outPath, extra = filepath.Join(outputBase, outputRel), L("prompt.mergeOutExtra")
 	}
 	home, _ := os.UserHomeDir()
 	cwd := ""
-	var b strings.Builder
-	b.WriteString(L("prompt.mergeHeader") + "\n")
-	for _, k := range keys {
-		base, rel, err := memResolve(k)
-		if err != nil {
-			return "", "", err
+	var prompt strings.Builder
+	prompt.WriteString(L("prompt.mergeHeader") + "\n")
+	for _, key := range keys {
+		base, rel, resolveErr := memResolve(key)
+		if resolveErr != nil {
+			return "", "", resolveErr
 		}
-		p := filepath.Join(base, rel)
-		if _, err := os.Stat(p); err != nil {
-			return "", "", terr("srv.memory.introuvable", "A1", p)
+		filePath := filepath.Join(base, rel)
+		if _, statErr := os.Stat(filePath); statErr != nil {
+			return "", "", terr("srv.memory.introuvable", "A1", filePath)
 		}
-		b.WriteString("- " + p + "\n")
-		if k == out {
-			outPath = p
+		prompt.WriteString("- " + filePath + "\n")
+		if key == outputKey {
+			outPath = filePath
 		}
-		if d, _, ok := strings.Cut(k[2:], "/"); cwd == "" && (k[0] == 'm' || k[0] == 'p') && ok {
-			if c := projectCwd(d); c != "" {
-				if fi, err := os.Stat(c); err == nil && fi.IsDir() {
-					cwd = c
-				}
+		projectDir, _, hasSeparator := strings.Cut(key[2:], "/")
+		isProjectKey := key[0] == 'm' || key[0] == 'p'
+		if cwd == "" && isProjectKey && hasSeparator {
+			if projectWorkingDir := projectCwd(projectDir); projectWorkingDir != "" && isDirPath(projectWorkingDir) {
+				cwd = projectWorkingDir
 			}
 		}
 	}
-	b.WriteString("\n" + L("prompt.mergeRules", "A1", outPath, "A2", extra) + "\n")
+	prompt.WriteString("\n" + L("prompt.mergeRules", "A1", outPath, "A2", extra) + "\n")
 	if cwd == "" { // règles globales : le dossier de configuration, plutôt que ~ tout entier (autre dossier à approuver)
-		if c := filepath.Join(home, ".claude"); isDirPath(c) {
-			cwd = c
+		if configDir := filepath.Join(home, ".claude"); isDirPath(configDir) {
+			cwd = configDir
 		} else {
 			cwd = home
 		}
 	}
-	return b.String(), cwd, nil
+	return prompt.String(), cwd, nil
 }
 
-// memTransfer déplace une entrée de mémoire de projet ou une règle vers la mémoire d'un autre projet (to = son dossier de
-// transcripts) ou vers les règles globales (to = "global"), ou la copie si keep. Sans écraser ; l'index suit.
-func memTransfer(key, to string, keep bool) (string, error) {
+// memTransfer déplace une entrée de mémoire de projet ou une règle vers la mémoire d'un autre projet (destination = son dossier de
+// transcripts) ou vers les règles globales (destination = "global"), ou la copie si keep. Sans écraser ; l'index suit.
+func memTransfer(key, destination string, keep bool) (string, error) {
 	if !strings.HasPrefix(key, "m/") && !strings.HasPrefix(key, "g/rules/") && !strings.HasPrefix(key, "r/") {
 		return "", terr("srv.memory.seulesLesEntreesDe")
 	}
@@ -473,73 +497,73 @@ func memTransfer(key, to string, keep bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dst := "g/rules/" + rel
+	destinationKey := "g/rules/" + rel
 	switch {
-	case to == "global":
-	case strings.HasPrefix(to, "r:"): // règles d'un projet (to = « r:<dossier> »)
-		if !safeDir(to[2:]) {
+	case destination == "global":
+	case strings.HasPrefix(destination, "r:"): // règles d'un projet (to = « r:<dossier> »)
+		if !safeDir(destination[2:]) {
 			return "", terr("srv.memory.destinationInvalide")
 		}
-		dst = "r/" + to[2:] + "/" + rel
-		if _, _, err := memResolve(dst); err != nil {
-			return "", err
+		destinationKey = "r/" + destination[2:] + "/" + rel
+		if _, _, destinationErr := memResolve(destinationKey); destinationErr != nil {
+			return "", destinationErr
 		}
-	case strings.HasPrefix(key, "r/") && to != strings.Split(key, "/")[1]: // une règle ne retourne qu'à la mémoire de son propre projet
+	case strings.HasPrefix(key, "r/") && destination != strings.Split(key, "/")[1]: // une règle ne retourne qu'à la mémoire de son propre projet
 		return "", terr("srv.memory.uneRegleDeProjet")
 	default:
-		if !safeDir(to) {
+		if !safeDir(destination) {
 			return "", terr("srv.memory.destinationInvalide")
 		}
-		if fi, err := os.Stat(filepath.Join(root, to)); err != nil || !fi.IsDir() {
+		if projectInfo, statErr := os.Stat(filepath.Join(root, destination)); statErr != nil || !projectInfo.IsDir() {
 			return "", terr("srv.memory.projetDeDestinationIntrouvable")
 		}
-		dst = "m/" + to + "/" + rel
+		destinationKey = "m/" + destination + "/" + rel
 	}
-	if dst == key {
+	if destinationKey == key {
 		return "", terr("srv.memory.dejaACetEndroit")
 	}
-	if _, err := memRead(dst); err == nil || !errors.Is(err, os.ErrNotExist) {
+	if _, existingErr := memRead(destinationKey); existingErr == nil || !errors.Is(existingErr, os.ErrNotExist) {
 		return "", terr("srv.memory.unFichierDuMeme")
 	}
 	text, err := memRead(key)
 	if err != nil {
 		return "", err
 	}
-	line := "- [" + strings.TrimSuffix(rel, ".md") + "](" + rel + ")\n"
+	newIndexLine := "- [" + strings.TrimSuffix(rel, ".md") + "](" + rel + ")\n"
 	if strings.HasPrefix(key, "m/") { // la ligne d'index d'origine, avec son accroche, part avec l'entrée
-		if idx, err := memRead(key[:strings.LastIndex(key, "/")+1] + "MEMORY.md"); err == nil {
-			for _, l := range strings.SplitAfter(idx, "\n") {
-				if strings.Contains(l, "]("+rel+")") {
-					line = strings.TrimRight(l, "\n") + "\n"
+		if sourceIndex, sourceIndexErr := memRead(key[:strings.LastIndex(key, "/")+1] + "MEMORY.md"); sourceIndexErr == nil {
+			for _, indexLine := range strings.SplitAfter(sourceIndex, "\n") {
+				if strings.Contains(indexLine, "]("+rel+")") {
+					newIndexLine = strings.TrimRight(indexLine, "\n") + "\n"
 					break
 				}
 			}
 		}
 	}
-	if err := memSave(dst, text); err != nil {
-		return "", err
+	if saveErr := memSave(destinationKey, text); saveErr != nil {
+		return "", saveErr
 	}
 	if !keep {
-		if err := memDelete(key, false); err != nil { // déplacé, pas supprimé : rien à mettre à la corbeille
-			return "", err
+		if deleteErr := memDelete(key, false); deleteErr != nil { // déplacé, pas supprimé : rien à mettre à la corbeille
+			return "", deleteErr
 		}
 	}
-	if strings.HasPrefix(dst, "m/") && rel != "MEMORY.md" {
-		ik := dst[:strings.LastIndex(dst, "/")+1] + "MEMORY.md"
-		idx, _ := memRead(ik)
-		if idx != "" && !strings.HasSuffix(idx, "\n") {
-			idx += "\n"
+	if strings.HasPrefix(destinationKey, "m/") && rel != "MEMORY.md" {
+		indexKey := destinationKey[:strings.LastIndex(destinationKey, "/")+1] + "MEMORY.md"
+		destinationIndex, _ := memRead(indexKey)
+		if destinationIndex != "" && !strings.HasSuffix(destinationIndex, "\n") {
+			destinationIndex += "\n"
 		}
-		if err := memWrite(ik, idx+line, false); err != nil {
-			return "", err
+		if indexWriteErr := memWrite(indexKey, destinationIndex+newIndexLine, false); indexWriteErr != nil {
+			return "", indexWriteErr
 		}
 	}
-	return dst, nil
+	return destinationKey, nil
 }
 
-func isDirPath(p string) bool {
-	fi, err := os.Stat(p)
-	return err == nil && fi.IsDir()
+func isDirPath(path string) bool {
+	fileInfo, err := os.Stat(path)
+	return err == nil && fileInfo.IsDir()
 }
 
 // memRename renomme un fichier dans son dossier ; la ligne d'index d'une entrée de projet suit.
@@ -551,46 +575,46 @@ func memRename(key, name string) (string, error) {
 	if rel == "MEMORY.md" || !(strings.HasPrefix(key, "m/") || strings.HasPrefix(key, "g/rules/") || strings.HasPrefix(key, "r/")) {
 		return "", terr("srv.memory.seulesLesEntreesDe")
 	}
-	dst := key[:strings.LastIndex(key, "/")+1] + name
-	if dst == key {
+	destinationKey := key[:strings.LastIndex(key, "/")+1] + name
+	if destinationKey == key {
 		return "", terr("srv.memory.dejaACetEndroit")
 	}
-	if _, _, err := memResolve(dst); err != nil || name == "MEMORY.md" {
+	if _, _, destinationErr := memResolve(destinationKey); destinationErr != nil || name == "MEMORY.md" {
 		return "", terr("srv.memory.destinationInvalide")
 	}
-	if _, err := memRead(dst); err == nil || !errors.Is(err, os.ErrNotExist) {
+	if _, existingErr := memRead(destinationKey); existingErr == nil || !errors.Is(existingErr, os.ErrNotExist) {
 		return "", terr("srv.memory.unFichierDuMeme")
 	}
 	text, err := memRead(key)
 	if err != nil {
 		return "", err
 	}
-	line := "- [" + strings.TrimSuffix(name, ".md") + "](" + name + ")\n"
-	ik := key[:strings.LastIndex(key, "/")+1] + "MEMORY.md"
+	newIndexLine := "- [" + strings.TrimSuffix(name, ".md") + "](" + name + ")\n"
+	indexKey := key[:strings.LastIndex(key, "/")+1] + "MEMORY.md"
 	if strings.HasPrefix(key, "m/") {
-		if idx, err := memRead(ik); err == nil {
-			for _, l := range strings.SplitAfter(idx, "\n") {
-				if strings.Contains(l, "]("+rel+")") {
-					line = strings.ReplaceAll(strings.TrimRight(l, "\n"), "]("+rel+")", "]("+name+")") + "\n"
+		if currentIndex, indexReadErr := memRead(indexKey); indexReadErr == nil {
+			for _, indexLine := range strings.SplitAfter(currentIndex, "\n") {
+				if strings.Contains(indexLine, "]("+rel+")") {
+					newIndexLine = strings.ReplaceAll(strings.TrimRight(indexLine, "\n"), "]("+rel+")", "]("+name+")") + "\n"
 					break
 				}
 			}
 		}
 	}
-	if err := memSave(dst, text); err != nil {
-		return "", err
+	if saveErr := memSave(destinationKey, text); saveErr != nil {
+		return "", saveErr
 	}
-	if err := memDelete(key, false); err != nil {
-		return "", err
+	if deleteErr := memDelete(key, false); deleteErr != nil {
+		return "", deleteErr
 	}
 	if strings.HasPrefix(key, "m/") {
-		idx, _ := memRead(ik)
-		if idx != "" && !strings.HasSuffix(idx, "\n") {
-			idx += "\n"
+		updatedIndex, _ := memRead(indexKey)
+		if updatedIndex != "" && !strings.HasSuffix(updatedIndex, "\n") {
+			updatedIndex += "\n"
 		}
-		if err := memWrite(ik, idx+line, false); err != nil {
-			return "", err
+		if indexWriteErr := memWrite(indexKey, updatedIndex+newIndexLine, false); indexWriteErr != nil {
+			return "", indexWriteErr
 		}
 	}
-	return dst, nil
+	return destinationKey, nil
 }

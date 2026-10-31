@@ -8,7 +8,7 @@ import (
 )
 
 // ownedByMe : le fichier appartient à l'utilisateur qui fait tourner gld.
-func ownedByMe(fi os.FileInfo) bool {
-	st, ok := fi.Sys().(*syscall.Stat_t)
-	return !ok || int(st.Uid) == os.Getuid()
+func ownedByMe(fileInfo os.FileInfo) bool {
+	stat, isUnixStat := fileInfo.Sys().(*syscall.Stat_t)
+	return !isUnixStat || int(stat.Uid) == os.Getuid()
 }

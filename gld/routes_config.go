@@ -6,27 +6,27 @@ import (
 )
 
 // canSeeConfigSecrets : sans garde (mode ouvert ou jeton) tout est visible ; avec, il faut config_write sur le home de la requête.
-func canSeeConfigSecrets(r *http.Request) bool { return callerHas(r, RightConfigWrite) }
+func canSeeConfigSecrets(request *http.Request) bool { return callerHas(request, RightConfigWrite) }
 
 // healthFor : configHealth ; sans config_write, les alertes de hook et de permission (qui citent commande ou règle) sont retirées.
 func healthFor(files []ConfigFile, raw map[string]any, strict bool) []CfgIssue {
-	is := configHealth(files, raw)
+	issues := configHealth(files, raw)
 	if !strict {
-		return is
+		return issues
 	}
-	out := is[:0]
-	for _, i := range is {
-		if i.Kind != "hook" && i.Kind != "permission" {
-			out = append(out, i)
+	visibleIssues := issues[:0]
+	for _, issue := range issues {
+		if issue.Kind != "hook" && issue.Kind != "permission" {
+			visibleIssues = append(visibleIssues, issue)
 		}
 	}
-	return out
+	return visibleIssues
 }
 
 // routesConfig : la configuration de Claude Code (config*.go) : lecture, analyses, modifications permises, sauvegardes.
 func routesConfig(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/config", func(w http.ResponseWriter, r *http.Request) {
-		strict := !canSeeConfigSecrets(r)
+	mux.HandleFunc("GET /v1/config", func(responseWriter http.ResponseWriter, request *http.Request) {
+		strict := !canSeeConfigSecrets(request)
 		files, raw := allConfigsFor(strict)
 		type plugin struct {
 			ID        string `json:"id"`
@@ -34,181 +34,181 @@ func routesConfig(mux *http.ServeMux) {
 			Installed bool   `json:"installed"`
 		}
 		var plugins []plugin
-		inst := installedPlugins()
-		if v, ok := lookup(raw["u"], "enabledPlugins"); ok {
-			if o := asMap(v); o != nil {
-				for _, k := range o.keys {
-					on, _ := o.m[k].(bool)
-					plugins = append(plugins, plugin{k, on, inst[k]})
+		installed := installedPlugins()
+		if enabledValue, isSet := lookup(raw["u"], "enabledPlugins"); isSet {
+			if enabledMap := asMap(enabledValue); enabledMap != nil {
+				for _, pluginID := range enabledMap.keys {
+					isEnabled, _ := enabledMap.m[pluginID].(bool)
+					plugins = append(plugins, plugin{pluginID, isEnabled, installed[pluginID]})
 				}
 			}
 		}
-		sort.Slice(plugins, func(i, j int) bool { return plugins[i].ID < plugins[j].ID })
-		ps := liveProjects()
-		writeJSON(w, 200, map[string]any{
+		sort.Slice(plugins, func(leftIndex, rightIndex int) bool { return plugins[leftIndex].ID < plugins[rightIndex].ID })
+		projects := liveProjects()
+		writeJSON(responseWriter, 200, map[string]any{
 			"files": nz(files), "hooks": nz(hooksFor(raw, strict)), "issues": nz(healthFor(files, raw, strict)), "backups": listBackups(),
-			"plugins": nz(plugins), "projects": nz(ps),
+			"plugins": nz(plugins), "projects": nz(projects),
 		})
 	})
-	mux.HandleFunc("GET /v1/config/projects", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"projects": projectConfigsFor(!canSeeConfigSecrets(r))})
+	mux.HandleFunc("GET /v1/config/projects", func(responseWriter http.ResponseWriter, request *http.Request) {
+		writeJSON(responseWriter, 200, map[string]any{"projects": projectConfigsFor(!canSeeConfigSecrets(request))})
 	})
-	mux.HandleFunc("GET /v1/config/effective", func(w http.ResponseWriter, r *http.Request) {
-		dir := r.URL.Query().Get("dir")
+	mux.HandleFunc("GET /v1/config/effective", func(responseWriter http.ResponseWriter, request *http.Request) {
+		dir := request.URL.Query().Get("dir")
 		if dir != "" && !safeDir(dir) {
-			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
+			writeErr(responseWriter, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
 			return
 		}
-		strict := !canSeeConfigSecrets(r)
+		strict := !canSeeConfigSecrets(request)
 		_, raw := allConfigsFor(strict)
-		writeJSON(w, 200, map[string]any{"rows": nz(effectiveFor(raw, dir, strict))})
+		writeJSON(responseWriter, 200, map[string]any{"rows": nz(effectiveFor(raw, dir, strict))})
 	})
-	mux.HandleFunc("GET /v1/config/mcp", func(w http.ResponseWriter, r *http.Request) {
-		s := mcpServersFor(!canSeeConfigSecrets(r))
-		if s == nil {
-			s = []McpServer{}
+	mux.HandleFunc("GET /v1/config/mcp", func(responseWriter http.ResponseWriter, request *http.Request) {
+		servers := mcpServersFor(!canSeeConfigSecrets(request))
+		if servers == nil {
+			servers = []McpServer{}
 		}
-		writeJSON(w, 200, map[string]any{"servers": s})
+		writeJSON(responseWriter, 200, map[string]any{"servers": servers})
 	})
-	mux.HandleFunc("POST /v1/config/mcp/checks", func(w http.ResponseWriter, r *http.Request) {
-		st, err := mcpStatus()
+	mux.HandleFunc("POST /v1/config/mcp/checks", func(responseWriter http.ResponseWriter, request *http.Request) {
+		status, err := mcpStatus()
 		if err != nil {
-			writeErr(w, http.StatusServiceUnavailable, "unavailable", L("srv.routes_config.claudeMcpList", "A1", err.Error()))
+			writeErr(responseWriter, http.StatusServiceUnavailable, "unavailable", L("srv.routes_config.claudeMcpList", "A1", err.Error()))
 			return
 		}
-		writeJSON(w, 200, map[string]any{"status": st})
+		writeJSON(responseWriter, 200, map[string]any{"status": status})
 	})
-	mux.HandleFunc("PUT /v1/config/projects/mcp", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Dir string }
-		if !decodeBody(w, r, &req, 1<<12) {
+	mux.HandleFunc("PUT /v1/config/projects/mcp", func(responseWriter http.ResponseWriter, request *http.Request) {
+		var body struct{ Dir string }
+		if !decodeBody(responseWriter, request, &body, 1<<12) {
 			return
 		}
-		st, err := projectMcp(req.Dir)
+		servers, err := projectMcp(body.Dir)
 		if err != nil {
-			writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+			writeErr(responseWriter, http.StatusBadRequest, "bad_request", err.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"servers": st})
+		writeJSON(responseWriter, 200, map[string]any{"servers": servers})
 	})
-	mux.HandleFunc("GET /v1/config/permissions/suggestions", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/config/permissions/suggestions", func(responseWriter http.ResponseWriter, request *http.Request) {
 		_, raw := allConfigs()
 		var have []string
 		for _, doc := range raw {
-			v, _ := lookup(doc, "permissions", "allow")
-			have = append(have, strList(v)...)
+			allowValue, _ := lookup(doc, "permissions", "allow")
+			have = append(have, strList(allowValue)...)
 		}
-		s := permSuggestions(have)
-		if s == nil {
-			s = []PermSuggest{}
+		suggestions := permSuggestions(have)
+		if suggestions == nil {
+			suggestions = []PermSuggest{}
 		}
-		writeJSON(w, 200, map[string]any{"suggestions": s})
+		writeJSON(responseWriter, 200, map[string]any{"suggestions": suggestions})
 	})
-	mux.HandleFunc("POST /v1/config/edits", func(w http.ResponseWriter, r *http.Request) {
-		var e CfgEdit
-		if !decodeBody(w, r, &e, 1<<14) {
+	mux.HandleFunc("POST /v1/config/edits", func(responseWriter http.ResponseWriter, request *http.Request) {
+		var edit CfgEdit
+		if !decodeBody(responseWriter, request, &edit, 1<<14) {
 			return
 		}
-		if len(e.Path) == 0 {
-			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
+		if len(edit.Path) == 0 {
+			writeErr(responseWriter, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
 			return
 		}
-		before, after, err := configEdit(e)
-		if !e.Dry {
-			journal("config-edit %s %s %v : %v", e.File, e.Op, e.Path, errOr(err)) // jamais la valeur : elle peut être un secret
+		before, after, err := configEdit(edit)
+		if !edit.Dry {
+			journal("config-edit %s %s %v : %v", edit.File, edit.Op, edit.Path, errOr(err)) // jamais la valeur : elle peut être un secret
 		}
 		if err != nil {
-			writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+			writeErr(responseWriter, http.StatusBadRequest, "bad_request", err.Error())
 			return
 		}
-		out := L("srv.config.savedBackup")
-		if e.Dry {
-			out = L("srv.config.preview")
+		message := L("srv.config.savedBackup")
+		if edit.Dry {
+			message = L("srv.config.preview")
 		} else if before == after {
-			out = L("srv.config.noChange")
+			message = L("srv.config.noChange")
 		}
-		writeJSON(w, 200, map[string]any{"out": out, "before": before, "after": after})
+		writeJSON(responseWriter, 200, map[string]any{"out": message, "before": before, "after": after})
 	})
-	mux.HandleFunc("POST /v1/config/restorations", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Name string }
-		if !decodeBody(w, r, &req, 1<<10) {
+	mux.HandleFunc("POST /v1/config/restorations", func(responseWriter http.ResponseWriter, request *http.Request) {
+		var body struct{ Name string }
+		if !decodeBody(responseWriter, request, &body, 1<<10) {
 			return
 		}
-		err := restoreBackup(req.Name)
-		journal("config-restore %s : %v", req.Name, errOr(err))
+		err := restoreBackup(body.Name)
+		journal("config-restore %s : %v", body.Name, errOr(err))
 		if err != nil {
-			writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+			writeErr(responseWriter, http.StatusBadRequest, "bad_request", err.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"out": L("srv.routes_config.sauvegardeRestauree")})
+		writeJSON(responseWriter, 200, map[string]any{"out": L("srv.routes_config.sauvegardeRestauree")})
 	})
 }
 
 // nz : une liste vide s'écrit « [] » en JSON, jamais « null » (le navigateur ne la parcourrait plus).
-func nz[T any](s []T) []T {
-	if s == nil {
-		return []T{}
+func nz[Item any](items []Item) []Item {
+	if items == nil {
+		return []Item{}
 	}
-	return s
+	return items
 }
 
 // routesConfigPerm : import des règles de permission (configperm_io.go) ; l'export se fait côté navigateur, à partir des réglages affichés.
 func routesConfigPerm(mux *http.ServeMux) {
-	mux.HandleFunc("POST /v1/config/permissions/imports", func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
+	mux.HandleFunc("POST /v1/config/permissions/imports", func(responseWriter http.ResponseWriter, request *http.Request) {
+		var body struct {
 			File, Text, Mode string
 			Dry              bool
 		}
-		if !decodeBody(w, r, &req, 2<<20) {
+		if !decodeBody(responseWriter, request, &body, 2<<20) {
 			return
 		}
-		before, after, warns, summary, err := permImport(req.File, req.Text, req.Mode, req.Dry)
-		if !req.Dry {
-			journal("config-perm-import %s %s : %s : %v", req.File, req.Mode, summary, errOr(err))
+		before, after, warns, summary, err := permImport(body.File, body.Text, body.Mode, body.Dry)
+		if !body.Dry {
+			journal("config-perm-import %s %s : %s : %v", body.File, body.Mode, summary, errOr(err))
 		}
 		if err != nil {
-			writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+			writeErr(responseWriter, http.StatusBadRequest, "bad_request", err.Error())
 			return
 		}
-		out := summary
-		if !req.Dry {
-			out = L("srv.config.importedBackup", "A1", summary)
+		message := summary
+		if !body.Dry {
+			message = L("srv.config.importedBackup", "A1", summary)
 		}
-		writeJSON(w, 200, map[string]any{"out": out, "before": before, "after": after, "warnings": nz(warns)})
+		writeJSON(responseWriter, 200, map[string]any{"out": message, "before": before, "after": after, "warnings": nz(warns)})
 	})
 }
 
 // routesConfigRaw : édition du JSON brut d'un fichier de réglages (configraw.go).
 func routesConfigRaw(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/config/raw", func(w http.ResponseWriter, r *http.Request) {
-		text, err := configRawRead(r.URL.Query().Get("file"))
+	mux.HandleFunc("GET /v1/config/raw", func(responseWriter http.ResponseWriter, request *http.Request) {
+		text, err := configRawRead(request.URL.Query().Get("file"))
 		if err != nil {
-			writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+			writeErr(responseWriter, http.StatusBadRequest, "bad_request", err.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"text": text})
+		writeJSON(responseWriter, 200, map[string]any{"text": text})
 	})
-	mux.HandleFunc("PUT /v1/config/raw", func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
+	mux.HandleFunc("PUT /v1/config/raw", func(responseWriter http.ResponseWriter, request *http.Request) {
+		var body struct {
 			File, Text string
 			Dry        bool
 		}
-		if !decodeBody(w, r, &req, 2<<20) {
+		if !decodeBody(responseWriter, request, &body, 2<<20) {
 			return
 		}
-		before, after, warns, err := configRawEdit(req.File, req.Text, req.Dry)
-		if !req.Dry {
-			journal("config-raw %s (%d octets) : %v", req.File, len(req.Text), errOr(err)) // jamais le contenu : il peut contenir des secrets
+		before, after, warns, err := configRawEdit(body.File, body.Text, body.Dry)
+		if !body.Dry {
+			journal("config-raw %s (%d octets) : %v", body.File, len(body.Text), errOr(err)) // jamais le contenu : il peut contenir des secrets
 		}
 		if err != nil {
-			writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+			writeErr(responseWriter, http.StatusBadRequest, "bad_request", err.Error())
 			return
 		}
-		out := L("srv.config.savedBackup")
-		if req.Dry {
-			out = L("srv.config.preview")
+		message := L("srv.config.savedBackup")
+		if body.Dry {
+			message = L("srv.config.preview")
 		} else if before == after {
-			out = L("srv.config.noChange")
+			message = L("srv.config.noChange")
 		}
-		writeJSON(w, 200, map[string]any{"out": out, "before": before, "after": after, "warnings": nz(warns)})
+		writeJSON(responseWriter, 200, map[string]any{"out": message, "before": before, "after": after, "warnings": nz(warns)})
 	})
 }

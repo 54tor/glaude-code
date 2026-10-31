@@ -23,12 +23,12 @@ const followPrefix = "[Message en file d'attente : d'autres messages suivent. Ne
 const guestLabelMax = len("[Invité ") + inviteNameMax*utf8.UTFMax + len("] ")
 
 // guestTag : le nom est réassaini (fichier altéré) ; il ne peut donc ni fermer le crochet ni dépasser guestLabelMax.
-func guestTag(in Invite) string {
-	n := inviteName(in.Name)
-	if n == "" {
-		n = strconv.Itoa(in.Seq)
+func guestTag(invite Invite) string {
+	label := inviteName(invite.Name)
+	if label == "" {
+		label = strconv.Itoa(invite.Seq)
 	}
-	return "[Invité " + n + "] "
+	return "[Invité " + label + "] "
 }
 
 const (
@@ -43,12 +43,12 @@ var (
 	queueDir = cfgDir // les tests pointent ailleurs : jamais le vrai dossier de l'utilisateur
 	sendFn   = sendToSession
 	openFn   = func() map[string]bool {
-		m := map[string]bool{}
-		p, _ := sendable()
-		for id := range p {
-			m[id] = true
+		openSessions := map[string]bool{}
+		sendableSessions, _ := sendable()
+		for sessionID := range sendableSessions {
+			openSessions[sessionID] = true
 		}
-		return m
+		return openSessions
 	}
 	askingFn = askingSessions
 	screenFn = sessionScreen
@@ -60,67 +60,69 @@ var (
 )
 
 // markSent : un envoi vient d'avoir lieu (file ou hôte au clavier) ; la session doit avoir le temps de démarrer un tour.
-func markSent(id string) {
+func markSent(sessionID string) {
 	sentMu.Lock()
-	notBefore[id] = time.Now().Add(queueSettle)
+	notBefore[sessionID] = time.Now().Add(queueSettle)
 	sentMu.Unlock()
 }
 
-func drainOnce(q *queueStore, now time.Time) {
-	sess := q.Sessions()
-	if len(sess) == 0 {
+func drainOnce(queue *queueStore, now time.Time) {
+	sessionIDs := queue.Sessions()
+	if len(sessionIDs) == 0 {
 		return
 	}
-	open, idle, asking := openFn(), toSet(waiting()), toSet(askingFn())
-	for _, id := range sess {
+	openSessionIDs, idleSessions, askingSessionIDs := openFn(), toSet(waiting()), toSet(askingFn())
+	for _, sessionID := range sessionIDs {
 		sentMu.Lock()
-		wait := now.Before(notBefore[id])
+		mustWait := now.Before(notBefore[sessionID])
 		sentMu.Unlock()
-		if wait || !open[id] || !idle[id] || asking[id] {
+		if mustWait || !openSessionIDs[sessionID] || !idleSessions[sessionID] || askingSessionIDs[sessionID] {
 			continue
 		}
-		head, ok := q.Head(id)
-		if !ok {
+		head, hasHead := queue.Head(sessionID)
+		if !hasHead {
 			continue
 		}
-		inv, drop := dropRevokedGuest(q, id, head)
-		if drop || q.MarkSending(id, head.ID) != nil {
+		invite, isDropped := dropRevokedGuest(queue, sessionID, head)
+		if isDropped || queue.MarkSending(sessionID, head.ID) != nil {
 			continue
 		}
 		text := head.Text
 		if head.Author == "guest" {
-			text = guestTag(inv) + text // Add borne le texte invité : étiquette et préfixe tiennent toujours dans sendMax
+			text = guestTag(invite) + text // Add borne le texte invité : étiquette et préfixe tiennent toujours dans sendMax
 		}
 		// Un texte hôte proche de sendMax ne supporte pas le préfixe : il part sans, sinon sendToSession le refuserait indéfiniment.
-		if len(q.List(id)) > 1 && !strings.HasPrefix(text, followPrefix) && len(followPrefix)+len(text) <= sendMax {
+		hasFollowers := len(queue.List(sessionID)) > 1
+		prefixFits := len(followPrefix)+len(text) <= sendMax
+		if hasFollowers && !strings.HasPrefix(text, followPrefix) && prefixFits {
 			text = followPrefix + text
 		}
 		// askingFn est gardé 3 s : un dialogue d'autorisation ouvert depuis prendrait le texte et Entrée comme réponse.
-		scr, err := screenFn(id)
-		if err == nil && screenAsks(scr) {
+		screen, err := screenFn(sessionID)
+		if err == nil && screenAsks(screen) {
 			err = errQueueBusy
 		}
 		if err == nil {
-			if _, drop := dropRevokedGuest(q, id, head); drop {
+			if _, isDropped := dropRevokedGuest(queue, sessionID, head); isDropped {
 				continue
 			}
 		}
 		if err == nil {
-			err = sendFn(id, text)
+			err = sendFn(sessionID, text)
 		}
 		if err != nil {
-			q.Requeue(id, head.ID)
+			queue.Requeue(sessionID, head.ID)
 			sentMu.Lock()
-			notBefore[id] = now.Add(queueRetry)
+			notBefore[sessionID] = now.Add(queueRetry)
 			sentMu.Unlock()
 			if err != errQueueBusy {
-				journal("queue %s : %v", id, err)
+				journal("queue %s : %v", sessionID, err)
 			}
 			continue
 		}
-		q.Done(id, head.ID)
+		queue.Done(sessionID, head.ID)
 		sentMu.Lock()
-		notBefore[id] = now.Add(queueSettle)
+		notBefore[sessionID] = now.Add(queueSettle)
 		sentMu.Unlock()
 	}
 }
@@ -128,166 +130,168 @@ func drainOnce(q *queueStore, now time.Time) {
 // dropRevokedGuest retire un message invité dont le partage ou l'invitation a disparu, ou dont l'invitation est passée en
 // lecture seule (reprise après écriture ratée, bascule entre deux contrôles) ; le mode peut changer entre MarkSending et
 // l'envoi, d'où le second appel. Rend l'invitation de l'auteur, d'où vient l'étiquette.
-func dropRevokedGuest(q *queueStore, id string, head QItem) (Invite, bool) {
+func dropRevokedGuest(queue *queueStore, sessionID string, head QItem) (Invite, bool) {
 	if head.Author != "guest" {
 		return Invite{}, false
 	}
 	if shareSt != nil {
-		if sh, ok := shareSt.Get(id); ok {
-			if in, ok := sh.invite(head.Guest); ok && head.Guest != "" && in.Mode == "rw" {
-				return in, false
+		if share, isShared := shareSt.Get(sessionID); isShared {
+			if invite, isInvited := share.invite(head.Guest); isInvited && head.Guest != "" && invite.Mode == "rw" {
+				return invite, false
 			}
 		}
 	}
-	q.Done(id, head.ID)
+	queue.Done(sessionID, head.ID)
 	journal("file: message invité retiré (partage ou invitation absent, ou en lecture seule)")
 	return Invite{}, true
 }
 
 // visibleQueue : un invité (en-têtes posés par sa garde) ne voit que les éléments de l'hôte et les siens, ni le texte, ni le
 // libellé, ni l'invitation d'un autre invité.
-func visibleQueue(r *http.Request, items []QItem) []QItem {
-	if r.Header.Get(authorHeader) != "guest" {
+func visibleQueue(request *http.Request, items []QItem) []QItem {
+	if request.Header.Get(authorHeader) != "guest" {
 		return items
 	}
-	me := r.Header.Get(inviteHeader)
-	return slices.DeleteFunc(items, func(it QItem) bool { return it.Author == "guest" && (me == "" || it.Guest != me) })
+	ownInvite := request.Header.Get(inviteHeader)
+	return slices.DeleteFunc(items, func(queuedItem QItem) bool {
+		return queuedItem.Author == "guest" && (ownInvite == "" || queuedItem.Guest != ownInvite)
+	})
 }
 
 // guestLabels : libellés des invitations de la session, calculés à la réponse (jamais stockés dans la file).
-func guestLabels(id string) map[string]string {
-	m := map[string]string{}
+func guestLabels(sessionID string) map[string]string {
+	labels := map[string]string{}
 	if shareSt != nil {
-		if sh, ok := shareSt.Get(id); ok {
-			for _, in := range sh.Invites {
-				m[in.ID] = in.label()
+		if share, isShared := shareSt.Get(sessionID); isShared {
+			for _, invite := range share.Invites {
+				labels[invite.ID] = invite.label()
 			}
 		}
 	}
-	return m
+	return labels
 }
 
-func toSet(l []string) map[string]bool {
-	m := make(map[string]bool, len(l))
-	for _, s := range l {
-		m[s] = true
+func toSet(values []string) map[string]bool {
+	set := make(map[string]bool, len(values))
+	for _, value := range values {
+		set[value] = true
 	}
-	return m
+	return set
 }
 
-func queueLoop(ctx context.Context, q *queueStore) {
-	t := time.NewTicker(queueTick)
-	defer t.Stop()
+func queueLoop(loopContext context.Context, queue *queueStore) {
+	ticker := time.NewTicker(queueTick)
+	defer ticker.Stop()
 	for {
 		select {
-		case <-ctx.Done():
+		case <-loopContext.Done():
 			return
-		case <-t.C:
-			drainOnce(q, time.Now())
+		case <-ticker.C:
+			drainOnce(queue, time.Now())
 		}
 	}
 }
 
 func routesQueue(mux *http.ServeMux) {
-	q, err := openQueue(queueDir())
-	if err != nil {
-		journal("queue : ouverture impossible : %v", err) // un fichier illisible n'est jamais écrasé : la file reste indisponible
-		q = nil
+	queue, openErr := openQueue(queueDir())
+	if openErr != nil {
+		journal("queue : ouverture impossible : %v", openErr) // un fichier illisible n'est jamais écrasé : la file reste indisponible
+		queue = nil
 	}
-	queueSt = q
-	fail := func(w http.ResponseWriter, code int, slug, key string) {
-		writeErr(w, code, slug, L(key))
+	queueSt = queue
+	fail := func(responseWriter http.ResponseWriter, code int, slug, key string) {
+		writeErr(responseWriter, code, slug, L(key))
 	}
 	// ready : l'identifiant de session du chemin, et la file ouverte.
-	ready := func(w http.ResponseWriter, r *http.Request) (string, bool) {
-		id, ok := pathID(w, r, "id")
-		if !ok {
+	ready := func(responseWriter http.ResponseWriter, request *http.Request) (string, bool) {
+		sessionID, found := pathID(responseWriter, request, "id")
+		if !found {
 			return "", false
 		}
 		if queueSt == nil {
-			fail(w, 503, "unavailable", "srv.queue.indisponible")
+			fail(responseWriter, 503, "unavailable", "srv.queue.indisponible")
 			return "", false
 		}
-		return id, true
+		return sessionID, true
 	}
-	mux.HandleFunc("GET /v1/sessions/{id}/queue", func(w http.ResponseWriter, r *http.Request) {
-		id, ok := ready(w, r)
-		if !ok {
+	mux.HandleFunc("GET /v1/sessions/{id}/queue", func(responseWriter http.ResponseWriter, request *http.Request) {
+		sessionID, found := ready(responseWriter, request)
+		if !found {
 			return
 		}
-		type item struct {
+		type labeledItem struct {
 			QItem
 			Label string `json:"label,omitempty"`
 		}
-		labels, out := guestLabels(id), []item{}
-		for _, it := range visibleQueue(r, queueSt.List(id)) {
-			v := item{QItem: it}
-			if it.Author == "guest" {
-				v.Label = cmp.Or(labels[it.Guest], "Invité")
+		labels, items := guestLabels(sessionID), []labeledItem{}
+		for _, queuedItem := range visibleQueue(request, queueSt.List(sessionID)) {
+			labeled := labeledItem{QItem: queuedItem}
+			if queuedItem.Author == "guest" {
+				labeled.Label = cmp.Or(labels[queuedItem.Guest], "Invité")
 			}
-			out = append(out, v)
+			items = append(items, labeled)
 		}
-		writeJSON(w, 200, map[string]any{"items": out})
+		writeJSON(responseWriter, 200, map[string]any{"items": items})
 	})
-	mux.HandleFunc("POST /v1/sessions/{id}/queue", func(w http.ResponseWriter, r *http.Request) {
-		id, ok := ready(w, r)
-		if !ok {
+	mux.HandleFunc("POST /v1/sessions/{id}/queue", func(responseWriter http.ResponseWriter, request *http.Request) {
+		sessionID, found := ready(responseWriter, request)
+		if !found {
 			return
 		}
-		var req struct{ Text string }
-		if !decodeBody(w, r, &req, sendMax+1<<10) {
+		var body struct{ Text string }
+		if !decodeBody(responseWriter, request, &body, sendMax+1<<10) {
 			return
 		}
 		// Auteur et invitation sont posés par la garde invité, qui retire toute valeur du client : le corps ne les choisit pas.
 		author := "host"
-		if r.Header.Get(authorHeader) == "guest" {
+		if request.Header.Get(authorHeader) == "guest" {
 			author = "guest"
 		}
-		it, err := queueSt.Add(id, author, r.Header.Get(inviteHeader), req.Text)
-		switch err {
+		addedItem, addErr := queueSt.Add(sessionID, author, request.Header.Get(inviteHeader), body.Text)
+		switch addErr {
 		case nil:
-			writeJSON(w, 201, map[string]any{"item": it})
+			writeJSON(responseWriter, 201, map[string]any{"item": addedItem})
 		case errQueueFull:
-			fail(w, 409, "conflict", "srv.queue.pleine")
+			fail(responseWriter, 409, "conflict", "srv.queue.pleine")
 		case errQueueText:
-			fail(w, 400, "bad_request", "srv.queue.texteRefuse")
+			fail(responseWriter, 400, "bad_request", "srv.queue.texteRefuse")
 		default:
-			fail(w, 500, "internal", "srv.queue.indisponible")
+			fail(responseWriter, 500, "internal", "srv.queue.indisponible")
 		}
 	})
-	mux.HandleFunc("DELETE /v1/sessions/{id}/queue/{qid}", func(w http.ResponseWriter, r *http.Request) {
-		id, ok := ready(w, r)
-		if !ok {
+	mux.HandleFunc("DELETE /v1/sessions/{id}/queue/{qid}", func(responseWriter http.ResponseWriter, request *http.Request) {
+		sessionID, found := ready(responseWriter, request)
+		if !found {
 			return
 		}
-		it, err := queueSt.Remove(id, r.PathValue("qid"))
-		if errors.Is(err, errQueueBusy) {
-			fail(w, 409, "conflict", "srv.queue.envoiEnCours")
+		removedItem, removeErr := queueSt.Remove(sessionID, request.PathValue("qid"))
+		if errors.Is(removeErr, errQueueBusy) {
+			fail(responseWriter, 409, "conflict", "srv.queue.envoiEnCours")
 			return
 		}
-		if err != nil {
-			fail(w, 404, "not_found", "srv.queue.introuvable")
+		if removeErr != nil {
+			fail(responseWriter, 404, "not_found", "srv.queue.introuvable")
 			return
 		}
-		writeJSON(w, 200, map[string]any{"text": it.Text})
+		writeJSON(responseWriter, 200, map[string]any{"text": removedItem.Text})
 	})
-	mux.HandleFunc("PATCH /v1/sessions/{id}/queue/{qid}", func(w http.ResponseWriter, r *http.Request) {
-		id, ok := ready(w, r)
-		if !ok {
+	mux.HandleFunc("PATCH /v1/sessions/{id}/queue/{qid}", func(responseWriter http.ResponseWriter, request *http.Request) {
+		sessionID, found := ready(responseWriter, request)
+		if !found {
 			return
 		}
-		var req struct{ State string }
-		if !decodeBody(w, r, &req, 1<<10) {
+		var body struct{ State string }
+		if !decodeBody(responseWriter, request, &body, 1<<10) {
 			return
 		}
-		if req.State != "queued" {
-			fail(w, 400, "bad_request", "srv.http_util.requeteInvalide")
+		if body.State != "queued" {
+			fail(responseWriter, 400, "bad_request", "srv.http_util.requeteInvalide")
 			return
 		}
-		if !queueSt.Retry(id, r.PathValue("qid")) {
-			fail(w, 404, "not_found", "srv.queue.introuvable")
+		if !queueSt.Retry(sessionID, request.PathValue("qid")) {
+			fail(responseWriter, 404, "not_found", "srv.queue.introuvable")
 			return
 		}
-		w.WriteHeader(http.StatusNoContent)
+		responseWriter.WriteHeader(http.StatusNoContent)
 	})
 }

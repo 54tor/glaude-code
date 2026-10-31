@@ -38,8 +38,8 @@ var (
 // liveCheck : les sessions vivantes, ou errLive. À utiliser avant toute action qui écrit ou supprime dans une session.
 func liveCheck() (map[string]bool, error) {
 	forgetAgents()
-	if m := liveSessions(); m != nil {
-		return m, nil
+	if liveIDs := liveSessions(); liveIDs != nil {
+		return liveIDs, nil
 	}
 	return nil, errLive
 }
@@ -49,84 +49,84 @@ func cfgDir() string { return filepath.Dir(root) }
 
 // grace : un fichier touché depuis moins de GLD_GRACE minutes (60 par défaut) n'est jamais un reste.
 func grace() time.Duration {
-	n, err := strconv.Atoi(env("GLD_GRACE", os.Getenv("CC_GRACE")))
-	if err != nil || n < 0 {
-		n = 60
+	minutes, err := strconv.Atoi(env("GLD_GRACE", os.Getenv("CC_GRACE")))
+	if err != nil || minutes < 0 {
+		minutes = 60
 	}
-	return time.Duration(n) * time.Minute
+	return time.Duration(minutes) * time.Minute
 }
 
 // safeRemove efface un chemin, avec garde-fou : rien hors de la config Claude, jamais un memory/
 // (la mémoire longue durée de Claude, qui survit aux sessions).
 // histMode : les droits de history.jsonl, lus par Lstat ; un lien ou un fichier spécial ne prête jamais les siens.
-func histMode(st os.FileInfo) os.FileMode {
-	if st.Mode().IsRegular() {
-		return st.Mode().Perm()
+func histMode(fileInfo os.FileInfo) os.FileMode {
+	if fileInfo.Mode().IsRegular() {
+		return fileInfo.Mode().Perm()
 	}
 	return 0o600
 }
 
-func safeRemove(p string) error {
-	cfg := cfgDir()
-	rel, err := filepath.Rel(cfg, p)
+func safeRemove(path string) error {
+	configDir := cfgDir()
+	rel, err := filepath.Rel(configDir, path)
 	if err != nil || rel == "." || strings.Contains(rel, "..") {
-		return terr("srv.purge.refusDEffacerHors", "A1", cfg, "A2", p)
+		return terr("srv.purge.refusDEffacerHors", "A1", configDir, "A2", path)
 	}
 	for _, part := range strings.Split(rel, string(filepath.Separator)) {
 		if part == "memory" {
-			return terr("srv.purge.cheminProtegeNonEfface", "A1", p)
+			return terr("srv.purge.cheminProtegeNonEfface", "A1", path)
 		}
 	}
-	return rRemoveAll(cfg, p)
+	return rRemoveAll(configDir, path)
 }
 
 // satellites : tout ce qu'une session possède AILLEURS que dans son transcript.
 // file-history, session-env, uploads, debug portent l'id entier ; tasks, teams, jobs les huit premiers caractères.
-func satellites(id string) []string {
-	if !idRe.MatchString(id) {
+func satellites(sessionID string) []string {
+	if !idRe.MatchString(sessionID) {
 		return nil
 	}
-	cfg, short := cfgDir(), id[:8]
-	l := []string{
-		filepath.Join(cfg, "file-history", id),
-		filepath.Join(cfg, "session-env", id),
-		filepath.Join(cfg, "uploads", id),
-		filepath.Join(cfg, "debug", id+".txt"),
-		filepath.Join(cfg, "tasks", "session-"+short),
-		filepath.Join(cfg, "teams", "session-"+short),
+	configDir, shortID := cfgDir(), sessionID[:8]
+	paths := []string{
+		filepath.Join(configDir, "file-history", sessionID),
+		filepath.Join(configDir, "session-env", sessionID),
+		filepath.Join(configDir, "uploads", sessionID),
+		filepath.Join(configDir, "debug", sessionID+".txt"),
+		filepath.Join(configDir, "tasks", "session-"+shortID),
+		filepath.Join(configDir, "teams", "session-"+shortID),
 	}
 	// jobs/ : huit caractères pourraient désigner une autre session, state.json tranche.
 	// Un job sans state.json lisible appartient à celle-ci par défaut.
-	job := filepath.Join(cfg, "jobs", short)
-	if fi, err := os.Stat(job); err == nil && fi.IsDir() {
-		var st struct {
+	job := filepath.Join(configDir, "jobs", shortID)
+	if jobInfo, statErr := os.Stat(job); statErr == nil && jobInfo.IsDir() {
+		var jobState struct {
 			SessionId string `json:"sessionId"`
 		}
-		if b, err := readTrusted(filepath.Join(job, "state.json")); err == nil {
-			json.Unmarshal(b, &st)
+		if content, readErr := readTrusted(filepath.Join(job, "state.json")); readErr == nil {
+			json.Unmarshal(content, &jobState)
 		}
-		if st.SessionId == "" || st.SessionId == id {
-			l = append(l, job)
+		if jobState.SessionId == "" || jobState.SessionId == sessionID {
+			paths = append(paths, job)
 		}
 	}
-	return l
+	return paths
 }
 
 // snapshotsCited : instantanés de shell cités par une session (transcript et sous-agents),
 // à relever AVANT de l'effacer : leur nom ne se déduit de rien d'autre.
-func snapshotsCited(dir, id string, into map[string]bool) {
-	files := []string{filepath.Join(dir, id+".jsonl")}
-	filepath.WalkDir(filepath.Join(dir, id), func(p string, e fs.DirEntry, err error) error {
-		if err == nil && !e.IsDir() {
-			files = append(files, p)
+func snapshotsCited(dir, sessionID string, into map[string]bool) {
+	files := []string{filepath.Join(dir, sessionID+".jsonl")}
+	filepath.WalkDir(filepath.Join(dir, sessionID), func(path string, entry fs.DirEntry, err error) error {
+		if err == nil && !entry.IsDir() {
+			files = append(files, path)
 		}
 		return nil
 	})
-	for _, f := range files {
-		scan(f, func(b []byte) {
-			if bytes.Contains(b, []byte("snapshot-")) {
-				for _, m := range snapRe.FindAll(b, -1) {
-					into[string(m)] = true
+	for _, file := range files {
+		scan(file, func(rawLine []byte) {
+			if bytes.Contains(rawLine, []byte("snapshot-")) {
+				for _, match := range snapRe.FindAll(rawLine, -1) {
+					into[string(match)] = true
 				}
 			}
 		})
@@ -135,67 +135,69 @@ func snapshotsCited(dir, id string, into map[string]bool) {
 
 // hexTokens : jetons de 16 caractères hexadécimaux, comme `grep -oE '[0-9a-f]{16}'` (découpage
 // aligné dans une suite plus longue). Les hachages de collage sont cités ainsi dans les transcripts.
-func hexTokens(b []byte, into map[string]bool) {
-	isHex := func(c byte) bool { return c >= '0' && c <= '9' || c >= 'a' && c <= 'f' }
-	for i := 0; i < len(b); {
-		if !isHex(b[i]) {
-			i++
+func hexTokens(content []byte, into map[string]bool) {
+	isHex := func(character byte) bool {
+		return character >= '0' && character <= '9' || character >= 'a' && character <= 'f'
+	}
+	for runStart := 0; runStart < len(content); {
+		if !isHex(content[runStart]) {
+			runStart++
 			continue
 		}
-		j := i
-		for j < len(b) && isHex(b[j]) {
-			j++
+		runEnd := runStart
+		for runEnd < len(content) && isHex(content[runEnd]) {
+			runEnd++
 		}
-		for k := i; k+16 <= j; k += 16 {
-			into[string(b[k:k+16])] = true
+		for tokenStart := runStart; tokenStart+16 <= runEnd; tokenStart += 16 {
+			into[string(content[tokenStart:tokenStart+16])] = true
 		}
-		i = j
+		runStart = runEnd
 	}
 }
 
 // lineHashes : hachages de collage (pastedContents[].contentHash) d'une ligne d'history.jsonl.
-func lineHashes(b []byte) []string {
-	var l struct {
+func lineHashes(rawLine []byte) []string {
+	var historyLine struct {
 		PastedContents json.RawMessage `json:"pastedContents"`
 	}
-	if json.Unmarshal(b, &l) != nil || len(l.PastedContents) == 0 {
+	if json.Unmarshal(rawLine, &historyLine) != nil || len(historyLine.PastedContents) == 0 {
 		return nil
 	}
-	type pc struct {
+	type pastedContent struct {
 		ContentHash string `json:"contentHash"`
 	}
-	var out []string
-	var m map[string]pc
-	var a []pc
-	if json.Unmarshal(l.PastedContents, &m) == nil {
-		for _, v := range m {
-			a = append(a, v)
+	var hashes []string
+	var byKey map[string]pastedContent
+	var contents []pastedContent
+	if json.Unmarshal(historyLine.PastedContents, &byKey) == nil {
+		for _, content := range byKey {
+			contents = append(contents, content)
 		}
-	} else if json.Unmarshal(l.PastedContents, &a) != nil {
+	} else if json.Unmarshal(historyLine.PastedContents, &contents) != nil {
 		return nil
 	}
-	for _, v := range a {
-		if v.ContentHash != "" {
-			out = append(out, v.ContentHash)
+	for _, content := range contents {
+		if content.ContentHash != "" {
+			hashes = append(hashes, content.ContentHash)
 		}
 	}
-	return out
+	return hashes
 }
 
 // purgeOne efface le transcript, les sous-agents et les satellites d'une session (sans vérifier qu'elle est
 // vivante : c'est à l'appelant), et relève dans snaps les instantanés de shell qu'elle citait. Renvoie le nombre
 // d'emplacements effacés et les échecs.
-func purgeOne(dir, id string, snaps map[string]bool) (n int, fails []string) {
-	snapshotsCited(dir, id, snaps)
-	targets := append([]string{filepath.Join(dir, id+".jsonl"), filepath.Join(dir, id)}, satellites(id)...)
-	for _, p := range targets {
-		if _, e := os.Lstat(p); e != nil {
+func purgeOne(dir, sessionID string, snaps map[string]bool) (removedCount int, fails []string) {
+	snapshotsCited(dir, sessionID, snaps)
+	targets := append([]string{filepath.Join(dir, sessionID+".jsonl"), filepath.Join(dir, sessionID)}, satellites(sessionID)...)
+	for _, path := range targets {
+		if _, lstatErr := os.Lstat(path); lstatErr != nil {
 			continue
 		}
-		if e := safeRemove(p); e != nil {
-			fails = append(fails, e.Error())
+		if removeErr := safeRemove(path); removeErr != nil {
+			fails = append(fails, removeErr.Error())
 		} else {
-			n++
+			removedCount++
 		}
 	}
 	return
@@ -203,7 +205,7 @@ func purgeOne(dir, id string, snaps map[string]bool) (n int, fails []string) {
 
 // purgeSessions supprime transcript, sous-agents et satellites des sessions, puis solde les restes
 // partagés. Les sessions vivantes sont épargnées. Renvoie les comptes et un compte rendu.
-func purgeSessions(items []item) (n, spared int, notes []string, err error) {
+func purgeSessions(items []item) (purgedCount, spared int, notes []string, err error) {
 	live, err := liveCheck()
 	if err != nil {
 		return 0, 0, nil, err
@@ -211,17 +213,17 @@ func purgeSessions(items []item) (n, spared int, notes []string, err error) {
 	var deleted []string
 	snaps := map[string]bool{}
 	var fails []string
-	for _, it := range items {
-		if live[it.ID] {
+	for _, sessionItem := range items {
+		if live[sessionItem.ID] {
 			spared++
 			continue
 		}
-		_, f := purgeOne(filepath.Join(root, it.Dir), it.ID, snaps)
-		fails = append(fails, f...)
-		deleted = append(deleted, it.ID)
-		n++
+		_, itemFails := purgeOne(filepath.Join(root, sessionItem.Dir), sessionItem.ID, snaps)
+		fails = append(fails, itemFails...)
+		deleted = append(deleted, sessionItem.ID)
+		purgedCount++
 	}
-	if n > 0 {
+	if purgedCount > 0 {
 		dropSessionFiles(deleted)
 		notes = solder(deleted, snaps)
 	}
@@ -234,39 +236,39 @@ func purgeSessions(items []item) (n, spared int, notes []string, err error) {
 // pruneHistory retire d'history.jsonl les lignes de ces sessions. Renvoie leur nombre, les hachages de collage
 // qu'elles citaient, les lignes conservées et d'éventuelles remarques.
 func pruneHistory(deleted []string) (removed int, hashes map[string]bool, kept [][]byte, notes []string) {
-	cfg := cfgDir()
-	hist := filepath.Join(cfg, "history.jsonl")
+	configDir := cfgDir()
+	historyPath := filepath.Join(configDir, "history.jsonl")
 	hashes = map[string]bool{}
 
-	pats := make([][]byte, len(deleted))
-	for i, id := range deleted {
-		pats[i] = []byte(`"sessionId":"` + id + `"`)
+	patterns := make([][]byte, len(deleted))
+	for patternIndex, sessionID := range deleted {
+		patterns[patternIndex] = []byte(`"sessionId":"` + sessionID + `"`)
 	}
-	st0, _ := os.Stat(hist) // pour détecter une session ouverte qui y ajouterait une ligne pendant la réécriture
-	if b, e := readTrusted(hist); e == nil && len(b) > 0 {
-		for _, ln := range bytes.SplitAfter(b, []byte("\n")) {
+	statBefore, _ := os.Stat(historyPath) // pour détecter une session ouverte qui y ajouterait une ligne pendant la réécriture
+	if content, readErr := readTrusted(historyPath); readErr == nil && len(content) > 0 {
+		for _, rawLine := range bytes.SplitAfter(content, []byte("\n")) {
 			drop := false
-			for _, p := range pats {
-				if bytes.Contains(ln, p) {
+			for _, pattern := range patterns {
+				if bytes.Contains(rawLine, pattern) {
 					drop = true
 					break
 				}
 			}
 			if drop {
 				removed++
-				for _, h := range lineHashes(ln) {
-					hashes[h] = true
+				for _, hash := range lineHashes(rawLine) {
+					hashes[hash] = true
 				}
-			} else if len(ln) > 0 {
-				kept = append(kept, ln)
+			} else if len(rawLine) > 0 {
+				kept = append(kept, rawLine)
 			}
 		}
 		if removed > 0 { // fichier temporaire puis renommage : jamais de troncature si on est interrompu
 			// ponytail: fenêtre résiduelle entre ce contrôle et le renommage ; Claude Code n'offre aucun verrou
-			if st1, e := os.Lstat(hist); e != nil || st0 == nil || st1.Size() != st0.Size() || !st1.ModTime().Equal(st0.ModTime()) {
+			if statNow, lstatErr := os.Lstat(historyPath); lstatErr != nil || statBefore == nil || statNow.Size() != statBefore.Size() || !statNow.ModTime().Equal(statBefore.ModTime()) {
 				removed = 0
 				notes = append(notes, L("srv.purge.historyChanged"))
-			} else if e := rWriteAtomic(cfg, hist, bytes.Join(kept, nil), histMode(st1)); e != nil {
+			} else if historyWriteErr := rWriteAtomic(configDir, historyPath, bytes.Join(kept, nil), histMode(statNow)); historyWriteErr != nil {
 				removed = 0
 			}
 		}
@@ -278,7 +280,7 @@ func pruneHistory(deleted []string) (removed int, hashes map[string]bool, kept [
 // un instantané ne part que si plus rien ne le cite (deux sessions peuvent partager le même contenu)
 // et s'il n'est pas tout frais.
 func solder(deleted []string, snaps map[string]bool) []string {
-	cfg := cfgDir()
+	configDir := cfgDir()
 	removed, hashes, kept, notes := pruneHistory(deleted)
 	if removed > 0 {
 		notes = append(notes, L("srv.purge.historyRemoved", "A1", removed))
@@ -289,52 +291,52 @@ func solder(deleted []string, snaps map[string]bool) []string {
 
 	// Tout ce que les données restantes citent encore.
 	refs := map[string]bool{}
-	filepath.WalkDir(root, func(p string, e fs.DirEntry, err error) error {
-		if err != nil || e.IsDir() {
+	filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
 			return nil
 		}
-		scan(p, func(b []byte) {
-			hexTokens(b, refs)
-			if bytes.Contains(b, []byte("snapshot-")) {
-				for _, m := range snapRe.FindAll(b, -1) {
-					refs[string(m)] = true
+		scan(path, func(rawLine []byte) {
+			hexTokens(rawLine, refs)
+			if bytes.Contains(rawLine, []byte("snapshot-")) {
+				for _, match := range snapRe.FindAll(rawLine, -1) {
+					refs[string(match)] = true
 				}
 			}
 		})
 		return nil
 	})
-	for _, ln := range kept {
-		for _, h := range lineHashes(ln) {
-			refs[h] = true
+	for _, rawLine := range kept {
+		for _, hash := range lineHashes(rawLine) {
+			refs[hash] = true
 		}
 	}
 
-	old := func(p string) bool {
-		st, e := os.Stat(p)
-		return e == nil && time.Since(st.ModTime()) > grace()
+	isOld := func(path string) bool {
+		fileInfo, statErr := os.Stat(path)
+		return statErr == nil && time.Since(fileInfo.ModTime()) > grace()
 	}
-	np, ns := 0, 0
-	for h := range hashes {
-		if refs[h] {
+	pasteCount, snapshotCount := 0, 0
+	for hash := range hashes {
+		if refs[hash] {
 			continue
 		}
-		if p := filepath.Join(cfg, "paste-cache", h+".txt"); old(p) && safeRemove(p) == nil {
-			np++
+		if pastePath := filepath.Join(configDir, "paste-cache", hash+".txt"); isOld(pastePath) && safeRemove(pastePath) == nil {
+			pasteCount++
 		}
 	}
-	for s := range snaps {
-		if refs[s] {
+	for snapshot := range snaps {
+		if refs[snapshot] {
 			continue
 		}
-		if p := filepath.Join(cfg, "shell-snapshots", s); old(p) && safeRemove(p) == nil {
-			ns++
+		if snapshotPath := filepath.Join(configDir, "shell-snapshots", snapshot); isOld(snapshotPath) && safeRemove(snapshotPath) == nil {
+			snapshotCount++
 		}
 	}
-	if np > 0 {
-		notes = append(notes, L("srv.purge.pasteCache", "A1", np))
+	if pasteCount > 0 {
+		notes = append(notes, L("srv.purge.pasteCache", "A1", pasteCount))
 	}
-	if ns > 0 {
-		notes = append(notes, L("srv.purge.shellSnapshots", "A1", ns))
+	if snapshotCount > 0 {
+		notes = append(notes, L("srv.purge.shellSnapshots", "A1", snapshotCount))
 	}
 	return notes
 }

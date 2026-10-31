@@ -64,70 +64,70 @@ func memWritePrompt(instruction, key string, refs []string) (string, error) {
 	if instruction == "" || len(instruction) > 8<<10 || len(refs) > 20 {
 		return "", terr("srv.memwrite.consigneVideOuTrop")
 	}
-	var b strings.Builder
-	b.WriteString(L("prompt.instruction", "A1", instruction) + "\n")
-	quote := func(title, k string) error {
-		base, rel, err := memResolve(k)
+	var prompt strings.Builder
+	prompt.WriteString(L("prompt.instruction", "A1", instruction) + "\n")
+	quote := func(title, quotedKey string) error {
+		base, rel, err := memResolve(quotedKey)
 		if err != nil {
 			return err
 		}
-		t, err := memRead(k)
+		quotedText, err := memRead(quotedKey)
 		if err != nil {
 			return err
 		}
-		b.WriteString("\n" + L("prompt.quote", "A1", title, "A2", base+string(os.PathSeparator)+rel) + "\n~~~~\n" + t + "\n~~~~\n")
+		prompt.WriteString("\n" + L("prompt.quote", "A1", title, "A2", base+string(os.PathSeparator)+rel) + "\n~~~~\n" + quotedText + "\n~~~~\n")
 		return nil
 	}
 	if key != "" {
 		// Un CLAUDE.md à créer n'existe pas encore : il n'y a rien à citer.
-		if _, err := memRead(key); errors.Is(err, os.ErrNotExist) {
-			if _, _, err := memResolve(key); err != nil {
-				return "", err
+		if _, readErr := memRead(key); errors.Is(readErr, os.ErrNotExist) {
+			if _, _, resolveErr := memResolve(key); resolveErr != nil {
+				return "", resolveErr
 			}
-			b.WriteString("\n" + L("prompt.fileMissing") + "\n")
-		} else if err := quote(L("prompt.fileToRewrite"), key); err != nil {
-			return "", err
+			prompt.WriteString("\n" + L("prompt.fileMissing") + "\n")
+		} else if quoteErr := quote(L("prompt.fileToRewrite"), key); quoteErr != nil {
+			return "", quoteErr
 		}
 	}
-	for _, k := range refs {
-		if k == key {
+	for _, referenceKey := range refs {
+		if referenceKey == key {
 			continue
 		}
-		if err := quote(L("prompt.reference"), k); err != nil {
-			return "", err
+		if quoteErr := quote(L("prompt.reference"), referenceKey); quoteErr != nil {
+			return "", quoteErr
 		}
 	}
-	return b.String(), nil
+	return prompt.String(), nil
 }
 
 var fenceRe = regexp.MustCompile("(?s)^```[a-z]*\n(.*)\n```$")
 
 // memWrite demande le texte au modèle ; il est renvoyé tel quel (moins un éventuel bloc de code englobant).
 var memDraft = func(model, system, prompt string) (string, float64, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	draftContext, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	cmd := helperCmd(ctx, model, system)
+	cmd := helperCmd(draftContext, model, system)
 	cmd.Stdin = strings.NewReader(prompt) // sur stdin : un argument est limité à 128 Kio (MAX_ARG_STRLEN), un brouillon peut citer 20 Mio
-	out, err := helperOutput(ctx, cmd)
-	var r struct {
+	output, err := helperOutput(draftContext, cmd)
+	var reply struct {
 		Result  string
 		IsError bool    `json:"is_error"`
 		Cost    float64 `json:"total_cost_usd"`
 	}
-	if json.Unmarshal(out, &r) != nil {
+	if json.Unmarshal(output, &reply) != nil {
 		if err == nil {
 			err = terr("srv.memwrite.reponseIllisible")
 		}
 		return "", 0, err
 	}
-	if r.IsError {
-		return "", r.Cost, errors.New(cut(r.Result, 300))
+	if reply.IsError {
+		return "", reply.Cost, errors.New(cut(reply.Result, 300))
 	}
-	t := strings.TrimSpace(r.Result)
-	if m := fenceRe.FindStringSubmatch(t); m != nil {
-		t = m[1]
+	draftText := strings.TrimSpace(reply.Result)
+	if fenceMatch := fenceRe.FindStringSubmatch(draftText); fenceMatch != nil {
+		draftText = fenceMatch[1]
 	}
-	return t + "\n", r.Cost, nil
+	return draftText + "\n", reply.Cost, nil
 }
 
 func memWriteDraft(model, instruction, key string, refs []string) (string, float64, error) {
@@ -150,8 +150,8 @@ func memWriteDraft(model, instruction, key string, refs []string) (string, float
 	}
 	text, cost, err := memDraft(model, system, prompt)
 	if err == nil && system == memSystem() {
-		if orig, rerr := memRead(key); rerr == nil {
-			text = keepHeader(orig, text)
+		if original, readErr := memRead(key); readErr == nil {
+			text = keepHeader(original, text)
 		}
 	}
 	return text, cost, err
@@ -160,15 +160,15 @@ func memWriteDraft(model, instruction, key string, refs []string) (string, float
 // keepHeader : un modèle qui « condense » une entrée de mémoire oublie parfois son en-tête YAML (name, description, type),
 // et le fichier perd alors son nom, sa description et sa ligne d'index. Si l'original en avait un et pas le brouillon,
 // on remet l'original en tête.
-func keepHeader(orig, draft string) string {
-	y, _, ok := frontMatter(orig)
-	if !ok {
+func keepHeader(original, draft string) string {
+	header, _, hasHeader := frontMatter(original)
+	if !hasHeader {
 		return draft
 	}
-	if _, _, has := frontMatter(draft); has {
+	if _, _, draftHasHeader := frontMatter(draft); draftHasHeader {
 		return draft
 	}
-	return "---\n" + y + "\n---\n\n" + strings.TrimLeft(draft, "\n")
+	return "---\n" + header + "\n---\n\n" + strings.TrimLeft(draft, "\n")
 }
 
 // memIndex ajoute à MEMORY.md la ligne d'une nouvelle entrée de mémoire de projet, si elle n'y est pas déjà.
@@ -176,25 +176,25 @@ func memIndex(key, text string) error {
 	if !strings.HasPrefix(key, "m/") {
 		return nil
 	}
-	i := strings.LastIndex(key, "/")
-	file, ik := key[i+1:], key[:i+1]+"MEMORY.md"
+	slashIndex := strings.LastIndex(key, "/")
+	file, indexKey := key[slashIndex+1:], key[:slashIndex+1]+"MEMORY.md"
 	if file == "MEMORY.md" {
 		return nil
 	}
-	idx, _ := memRead(ik)
-	if strings.Contains(idx, "]("+file+")") {
+	indexText, _ := memRead(indexKey)
+	if strings.Contains(indexText, "]("+file+")") {
 		return nil
 	}
 	title := strings.TrimSuffix(file, ".md")
-	if n := metaString(text, "name"); n != "" {
-		title = n
+	if name := metaString(text, "name"); name != "" {
+		title = name
 	}
-	line := "- [" + title + "](" + file + ")"
-	if d := metaString(text, "description"); d != "" {
-		line += " — " + d
+	indexEntry := "- [" + title + "](" + file + ")"
+	if description := metaString(text, "description"); description != "" {
+		indexEntry += " — " + description
 	}
-	if idx != "" && !strings.HasSuffix(idx, "\n") {
-		idx += "\n"
+	if indexText != "" && !strings.HasSuffix(indexText, "\n") {
+		indexText += "\n"
 	}
-	return memWrite(ik, idx+line+"\n", false)
+	return memWrite(indexKey, indexText+indexEntry+"\n", false)
 }

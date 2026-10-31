@@ -41,27 +41,29 @@ func (providerClaude) Name() string { return "Claude Code" }
 func (providerClaude) Caps() Caps {
 	return Caps{HotCache: true, KeepWarm: true, Config: true, Memory: true, TUIPrompts: true, Resume: true}
 }
-func (providerClaude) Sessions() []Group                          { return sessions() }
-func (providerClaude) Transcript(dir, id string) (string, bool)   { return transcript(dir, id) }
+func (providerClaude) Sessions() []Group { return sessions() }
+func (providerClaude) Transcript(dir, sessionID string) (string, bool) {
+	return transcript(dir, sessionID)
+}
 func (providerClaude) Conversation(path string, tools bool) []Msg { return conv(path, tools) }
-func (providerClaude) ResumeCommand(id string) string             { return "claude --resume " + id }
+func (providerClaude) ResumeCommand(sessionID string) string      { return "claude --resume " + sessionID }
 
 // providers : les fournisseurs connus, dans l'ordre d'affichage. Un nouveau fournisseur s'ajoute ici.
 var providers = []Provider{providerClaude{}}
 
-func providerByID(id string) (Provider, bool) {
-	for _, p := range providers {
-		if p.ID() == id {
-			return p, true
+func providerByID(providerID string) (Provider, bool) {
+	for _, provider := range providers {
+		if provider.ID() == providerID {
+			return provider, true
 		}
 	}
 	return nil, false
 }
 
 func providerInfos() []ProviderInfo {
-	out := make([]ProviderInfo, 0, len(providers))
-	for _, p := range providers {
-		out = append(out, ProviderInfo{p.ID(), p.Name(), p.Caps()})
+	infos := make([]ProviderInfo, 0, len(providers))
+	for _, provider := range providers {
+		infos = append(infos, ProviderInfo{provider.ID(), provider.Name(), provider.Caps()})
 	}
-	return out
+	return infos
 }

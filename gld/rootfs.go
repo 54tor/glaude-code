@@ -29,98 +29,98 @@ func confine(base, path string) (*os.Root, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	r, err := os.OpenRoot(base)
-	return r, rel, err
+	trustedRoot, err := os.OpenRoot(base)
+	return trustedRoot, rel, err
 }
 
 func rOpenFile(base, path string, flag int, perm os.FileMode) (*os.File, error) {
-	r, rel, err := confine(base, path)
+	trustedRoot, rel, err := confine(base, path)
 	if err != nil {
 		return nil, err
 	}
-	defer r.Close() // le fichier ouvert reste utilisable après la fermeture de la racine
-	return r.OpenFile(rel, flag, perm)
+	defer trustedRoot.Close() // le fichier ouvert reste utilisable après la fermeture de la racine
+	return trustedRoot.OpenFile(rel, flag, perm)
 }
 
-func rWriteFile(base, path string, b []byte, perm os.FileMode) error {
-	r, rel, err := confine(base, path)
+func rWriteFile(base, path string, content []byte, perm os.FileMode) error {
+	trustedRoot, rel, err := confine(base, path)
 	if err != nil {
 		return err
 	}
-	defer r.Close()
-	return r.WriteFile(rel, b, perm)
+	defer trustedRoot.Close()
+	return trustedRoot.WriteFile(rel, content, perm)
 }
 
 func rMkdirAll(base, path string, perm os.FileMode) error {
 	if filepath.Clean(path) == filepath.Clean(base) {
 		return nil
 	}
-	r, rel, err := confine(base, path)
+	trustedRoot, rel, err := confine(base, path)
 	if err != nil {
 		return err
 	}
-	defer r.Close()
-	return r.MkdirAll(rel, perm)
+	defer trustedRoot.Close()
+	return trustedRoot.MkdirAll(rel, perm)
 }
 
 func rRemove(base, path string) error {
-	r, rel, err := confine(base, path)
+	trustedRoot, rel, err := confine(base, path)
 	if err != nil {
 		return err
 	}
-	defer r.Close()
-	return r.Remove(rel)
+	defer trustedRoot.Close()
+	return trustedRoot.Remove(rel)
 }
 
 func rRemoveAll(base, path string) error {
-	r, rel, err := confine(base, path)
+	trustedRoot, rel, err := confine(base, path)
 	if err != nil {
 		return err
 	}
-	defer r.Close()
-	return r.RemoveAll(rel)
+	defer trustedRoot.Close()
+	return trustedRoot.RemoveAll(rel)
 }
 
 func rRename(base, from, to string) error {
-	r, a, err := confine(base, from)
+	trustedRoot, fromRel, err := confine(base, from)
 	if err != nil {
 		return err
 	}
-	defer r.Close()
-	b, err := relIn(base, to)
+	defer trustedRoot.Close()
+	toRel, err := relIn(base, to)
 	if err != nil {
 		return err
 	}
-	return r.Rename(a, b)
+	return trustedRoot.Rename(fromRel, toRel)
 }
 
 // rWriteAtomic remplace path par renommage d'un temporaire créé en exclusivité à côté de lui, fsync et mode posés sur le
 // descripteur (jamais un chmod par nom qu'un lien pourrait détourner).
-func rWriteAtomic(base, path string, b []byte, mode os.FileMode) error {
-	r, rel, err := confine(base, path)
+func rWriteAtomic(base, path string, content []byte, mode os.FileMode) error {
+	trustedRoot, rel, err := confine(base, path)
 	if err != nil {
 		return err
 	}
-	defer r.Close()
-	var f *os.File
-	var tmp string
+	defer trustedRoot.Close()
+	var tempFile *os.File
+	var tempName string
 	for {
-		tmp = filepath.Join(filepath.Dir(rel), ".gld-web-"+strconv.FormatUint(rand.Uint64(), 36)+".tmp")
-		if f, err = r.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600); !os.IsExist(err) {
+		tempName = filepath.Join(filepath.Dir(rel), ".gld-web-"+strconv.FormatUint(rand.Uint64(), 36)+".tmp")
+		if tempFile, err = trustedRoot.OpenFile(tempName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600); !os.IsExist(err) {
 			break
 		}
 	}
 	if err != nil {
 		return err
 	}
-	_, werr := f.Write(b)
-	if err := errors.Join(werr, f.Chmod(mode), f.Sync(), f.Close()); err != nil {
-		r.Remove(tmp)
-		return err
+	_, contentWriteErr := tempFile.Write(content)
+	if finishErr := errors.Join(contentWriteErr, tempFile.Chmod(mode), tempFile.Sync(), tempFile.Close()); finishErr != nil {
+		trustedRoot.Remove(tempName)
+		return finishErr
 	}
-	if err := r.Rename(tmp, rel); err != nil {
-		r.Remove(tmp)
-		return err
+	if renameErr := trustedRoot.Rename(tempName, rel); renameErr != nil {
+		trustedRoot.Remove(tempName)
+		return renameErr
 	}
 	return nil
 }
@@ -135,13 +135,13 @@ func mkdirTrusted(path string, perm os.FileMode) error {
 
 // walkRoot : la racine d'un parcours, lien résolu (un ~/.claude/commands lié à un dépôt de dotfiles), car WalkDir ne descend
 // pas dans une racine qui est un lien. Sous GLD_RUN_AS, jamais : ce lien peut avoir été posé par le compte cible.
-func walkRoot(p string) string {
+func walkRoot(path string) string {
 	if !runAsOn() {
-		if r, err := filepath.EvalSymlinks(p); err == nil {
-			return r
+		if resolved, err := filepath.EvalSymlinks(path); err == nil {
+			return resolved
 		}
 	}
-	return p
+	return path
 }
 
 // Lectures : sous GLD_RUN_AS seulement, un lien posé par le compte cible ne doit pas faire lire un fichier de root (affiché ensuite
@@ -161,12 +161,12 @@ func readTrustedIn(base, path string) ([]byte, error) {
 	if !runAsOn() {
 		return os.ReadFile(path)
 	}
-	r, rel, err := confine(base, path)
+	trustedRoot, rel, err := confine(base, path)
 	if err != nil {
 		return nil, err
 	}
-	defer r.Close()
-	return r.ReadFile(rel)
+	defer trustedRoot.Close()
+	return trustedRoot.ReadFile(rel)
 }
 
 func openTrusted(path string) (*os.File, error) {
@@ -182,20 +182,20 @@ func readDirTrusted(path string) ([]os.DirEntry, error) {
 	}
 	base, rel := trustBase(path), "."
 	if filepath.Clean(path) != filepath.Clean(base) {
-		var err error
-		if rel, err = relIn(base, path); err != nil {
-			return nil, err
+		var relErr error
+		if rel, relErr = relIn(base, path); relErr != nil {
+			return nil, relErr
 		}
 	}
-	r, err := os.OpenRoot(base)
+	trustedRoot, err := os.OpenRoot(base)
 	if err != nil {
 		return nil, err
 	}
-	defer r.Close()
-	f, err := r.Open(rel)
+	defer trustedRoot.Close()
+	directory, err := trustedRoot.Open(rel)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
-	return f.ReadDir(-1)
+	defer directory.Close()
+	return directory.ReadDir(-1)
 }

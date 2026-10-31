@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net"
 	"net/netip"
-	"os"
 	"os/exec"
 	"regexp"
 	"sort"
@@ -39,6 +38,8 @@ type PluginAvail struct {
 	Installed   bool   `json:"installed"`
 }
 
+const pluginCommandTimeout = 3 * time.Minute
+
 var plugCache struct {
 	sync.Mutex
 	at  time.Time
@@ -52,18 +53,18 @@ var pluginRaw = func() ([]byte, error) {
 	if plugCache.raw != nil && time.Since(plugCache.at) < time.Minute {
 		return plugCache.raw, nil
 	}
-	b, err := runPlugin("", 60*time.Second, "list", "--json", "--available")
+	rawList, err := runPlugin("", 60*time.Second, "list", "--json", "--available")
 	if err != nil {
 		return nil, err
 	}
-	plugCache.raw, plugCache.at = b, time.Now()
-	return b, nil
+	plugCache.raw, plugCache.at = rawList, time.Now()
+	return rawList, nil
 }
 
 func runPlugin(dir string, timeout time.Duration, args ...string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	commandContext, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	cmd := withPath(exec.CommandContext(ctx, "claude", append([]string{"plugin"}, args...)...))
+	cmd := withPath(exec.CommandContext(commandContext, "claude", append([]string{"plugin"}, args...)...))
 	cmd.Dir = dir
 	if cmd.Dir == "" {
 		cmd.Dir = workDir()
@@ -71,13 +72,13 @@ func runPlugin(dir string, timeout time.Duration, args ...string) ([]byte, error
 	return cmd.CombinedOutput()
 }
 
-// listPlugins : les plugins installés (tous portées) et les plus installés parmi ceux des marketplaces qui correspondent à q.
-func listPlugins(q string, limit int) ([]PluginInst, []PluginAvail, error) {
-	b, err := pluginRaw()
+// listPlugins : les plugins installés (tous portées) et les plus installés parmi ceux des marketplaces qui correspondent à query.
+func listPlugins(query string, limit int) ([]PluginInst, []PluginAvail, error) {
+	rawList, err := pluginRaw()
 	if err != nil {
 		return nil, nil, err
 	}
-	var d struct {
+	var listing struct {
 		Installed []struct {
 			ID          string `json:"id"`
 			Version     string `json:"version"`
@@ -93,59 +94,63 @@ func listPlugins(q string, limit int) ([]PluginInst, []PluginAvail, error) {
 			Installs    int    `json:"installCount"`
 		} `json:"available"`
 	}
-	if err := json.Unmarshal(b, &d); err != nil {
-		return nil, nil, err
+	if decodeErr := json.Unmarshal(rawList, &listing); decodeErr != nil {
+		return nil, nil, decodeErr
 	}
-	have := map[string]bool{}
-	inst := []PluginInst{}
-	for _, p := range d.Installed {
-		have[p.ID] = true
-		inst = append(inst, PluginInst{p.ID, p.Version, p.Scope, p.Enabled, p.ProjectPath})
+	installed := map[string]bool{}
+	installedList := []PluginInst{}
+	for _, plugin := range listing.Installed {
+		installed[plugin.ID] = true
+		installedList = append(installedList, PluginInst{plugin.ID, plugin.Version, plugin.Scope, plugin.Enabled, plugin.ProjectPath})
 	}
-	sort.Slice(inst, func(i, j int) bool { return inst[i].ID < inst[j].ID })
-	q = strings.ToLower(strings.TrimSpace(q))
-	var av []PluginAvail
-	for _, p := range d.Available {
-		if q != "" && !strings.Contains(strings.ToLower(p.ID+" "+p.Description), q) {
+	sort.Slice(installedList, func(leftIndex, rightIndex int) bool {
+		return installedList[leftIndex].ID < installedList[rightIndex].ID
+	})
+	query = strings.ToLower(strings.TrimSpace(query))
+	var available []PluginAvail
+	for _, plugin := range listing.Available {
+		if query != "" && !strings.Contains(strings.ToLower(plugin.ID+" "+plugin.Description), query) {
 			continue
 		}
-		av = append(av, PluginAvail{p.ID, p.Name, p.Description, p.Marketplace, p.Installs, have[p.ID]})
+		available = append(available, PluginAvail{plugin.ID, plugin.Name, plugin.Description, plugin.Marketplace, plugin.Installs, installed[plugin.ID]})
 	}
-	sort.SliceStable(av, func(i, j int) bool { return av[i].Installs > av[j].Installs })
-	if len(av) > limit {
-		av = av[:limit]
+	sort.SliceStable(available, func(leftIndex, rightIndex int) bool {
+		return available[leftIndex].Installs > available[rightIndex].Installs
+	})
+	if len(available) > limit {
+		available = available[:limit]
 	}
-	return inst, nav(av), nil
+	return installedList, nav(available), nil
 }
 
-func nav(a []PluginAvail) []PluginAvail {
-	if a == nil {
+func nav(available []PluginAvail) []PluginAvail {
+	if available == nil {
 		return []PluginAvail{}
 	}
-	return a
+	return available
 }
 
 // pluginAct : install, uninstall, enable, disable ou update d'un plugin pour une portée ; project (dossier de ~/.claude/projects)
 // donne le dossier de travail des portées project et local.
-func pluginAct(act, id, scope, project string) (string, error) {
-	if !pluginActs[act] || !pluginRefRe.MatchString(id) || !pluginScope[scope] {
+func pluginAct(action, pluginRef, scope, projectDir string) (string, error) {
+	if !pluginActs[action] || !pluginRefRe.MatchString(pluginRef) || !pluginScope[scope] {
 		return "", terr("srv.http_util.requeteInvalide")
 	}
 	dir := ""
 	if scope != "user" {
-		if !safeDir(project) {
+		if !safeDir(projectDir) {
 			return "", terr("srv.plugins.projetRequis")
 		}
-		dir = projectCwd(project)
-		if fi, e := os.Stat(dir); dir == "" || e != nil || !fi.IsDir() {
+		dir = projectCwd(projectDir)
+		if dir == "" || !isDirPath(dir) {
 			return "", terr("srv.memory.dossierDuProjetIntrouvable")
 		}
 	}
-	out, err := runPlugin(dir, 3*time.Minute, act, id, "-s", scope)
+	output, err := runPlugin(dir, pluginCommandTimeout, action, pluginRef, "-s", scope)
 	plugCache.Lock()
 	plugCache.raw = nil
 	plugCache.Unlock()
-	return strings.TrimSpace(string(out)), err
+	return strings.TrimSpace(string(output)), err
 }
 
 type Marketplace struct {
@@ -165,42 +170,42 @@ var marketRaw = func() ([]byte, error) {
 }
 
 func listMarketplaces() ([]Marketplace, error) {
-	b, err := marketRaw()
+	rawList, err := marketRaw()
 	if err != nil {
 		return nil, err
 	}
-	out := []Marketplace{}
-	return out, json.Unmarshal(b, &out)
+	marketplaces := []Marketplace{}
+	return marketplaces, json.Unmarshal(rawList, &marketplaces)
 }
 
 // marketplaceAct : add (source = dépôt « owner/repo » ou URL https), remove, update (name vide = tous).
 // marketInternal : une URL https vers la machine, un réseau privé ou le lien local (métadonnées cloud), écrite en clair.
 // ponytail: un nom DNS qui résout vers une adresse interne passe ; résoudre puis épingler l'adresse si cela devient un risque.
 func marketInternal(source string) bool {
-	host, ok := strings.CutPrefix(source, "https://")
-	if !ok {
+	host, isHTTPS := strings.CutPrefix(source, "https://")
+	if !isHTTPS {
 		return false
 	}
 	host, _, _ = strings.Cut(host, "/")
-	if h, _, err := net.SplitHostPort(host); err == nil {
-		host = h
+	if hostOnly, _, splitErr := net.SplitHostPort(host); splitErr == nil {
+		host = hostOnly
 	}
 	host = strings.ToLower(strings.TrimSuffix(host, "."))
 	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
 		return true
 	}
-	a, err := netip.ParseAddr(host)
-	return err == nil && (a.IsUnspecified() || !externalIP(a.String()))
+	address, parseErr := netip.ParseAddr(host)
+	return parseErr == nil && (address.IsUnspecified() || !externalIP(address.String()))
 }
 
-func marketplaceAct(act, source, name string) (string, error) {
+func marketplaceAct(action, source, name string) (string, error) {
 	var args []string
 	switch {
-	case act == "add" && marketSrcRe.MatchString(source) && !marketInternal(source):
+	case action == "add" && marketSrcRe.MatchString(source) && !marketInternal(source):
 		args = []string{"add", "--scope", "user", source}
-	case act == "remove" && marketNameRe.MatchString(name):
+	case action == "remove" && marketNameRe.MatchString(name):
 		args = []string{"remove", name}
-	case act == "update" && (name == "" || marketNameRe.MatchString(name)):
+	case action == "update" && (name == "" || marketNameRe.MatchString(name)):
 		args = []string{"update"}
 		if name != "" {
 			args = append(args, name)
@@ -208,9 +213,9 @@ func marketplaceAct(act, source, name string) (string, error) {
 	default:
 		return "", terr("srv.http_util.requeteInvalide")
 	}
-	out, err := runPlugin("", 3*time.Minute, append([]string{"marketplace"}, args...)...)
+	output, err := runPlugin("", pluginCommandTimeout, append([]string{"marketplace"}, args...)...)
 	plugCache.Lock()
 	plugCache.raw = nil
 	plugCache.Unlock()
-	return strings.TrimSpace(string(out)), err
+	return strings.TrimSpace(string(output)), err
 }

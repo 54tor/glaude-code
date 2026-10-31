@@ -17,17 +17,19 @@ import (
 
 var cwdRe = regexp.MustCompile(`"cwd":("(?:[^"\\]|\\.)*")`)
 
-// remapCwd : old devient nw. Ses sous-dossiers ne suivent que si sub (l'ancien dossier a disparu : projet
-// renommé ou déplacé) et s'ils ne sont pas déjà dans nw — sinon ce sont de vrais chemins, laissés tels quels.
-func remapCwd(v, old, nw string, sub bool) string {
-	sep := string(filepath.Separator)
-	if v == old {
-		return nw
+// remapCwd : oldCwd devient newCwd. Ses sous-dossiers ne suivent que si followSubdirs (l'ancien dossier a disparu : projet
+// renommé ou déplacé) et s'ils ne sont pas déjà dans newCwd — sinon ce sont de vrais chemins, laissés tels quels.
+func remapCwd(cwd, oldCwd, newCwd string, followSubdirs bool) string {
+	separator := string(filepath.Separator)
+	if cwd == oldCwd {
+		return newCwd
 	}
-	if sub && strings.HasPrefix(v, old+sep) && v != nw && !strings.HasPrefix(v, nw+sep) {
-		return nw + v[len(old):]
+	isUnderOld := strings.HasPrefix(cwd, oldCwd+separator)
+	isAlreadyUnderNew := cwd == newCwd || strings.HasPrefix(cwd, newCwd+separator)
+	if followSubdirs && isUnderOld && !isAlreadyUnderNew {
+		return newCwd + cwd[len(oldCwd):]
 	}
-	return v
+	return cwd
 }
 
 // cwdRewrite : un transcript réécrit dans path.tmp, en attente du renommage qui remplace l'original.
@@ -37,204 +39,207 @@ type cwdRewrite struct {
 }
 
 // commit remplace l'original par sa réécriture, en gardant la date de modification.
-func (c cwdRewrite) commit() error {
-	r, rel, err := confine(cfgDir(), c.path)
+func (rewrite cwdRewrite) commit() error {
+	configRoot, rel, err := confine(cfgDir(), rewrite.path)
 	if err != nil {
 		return err
 	}
-	defer r.Close()
-	if err = r.Rename(rel+".tmp", rel); err == nil {
-		forgetInfo(c.path)
-		err = r.Chtimes(rel, c.mod, c.mod)
+	defer configRoot.Close()
+	if err = configRoot.Rename(rel+".tmp", rel); err == nil {
+		forgetInfo(rewrite.path)
+		err = configRoot.Chtimes(rel, rewrite.mod, rewrite.mod)
 	}
 	return err
 }
 
-func (c cwdRewrite) abort() { rRemove(cfgDir(), c.path+".tmp") }
+func (rewrite cwdRewrite) abort() { rRemove(cfgDir(), rewrite.path+".tmp") }
 
 // prepareCwd écrit dans path.tmp le transcript au cwd remplacé (voir remapCwd) ; commit le met en place.
-func prepareCwd(path, old, nw string, sub bool) (cwdRewrite, error) {
+func prepareCwd(path, oldCwd, newCwd string, followSubdirs bool) (cwdRewrite, error) {
 	cwdKey := []byte(`"cwd":`)
-	remap := func(m []byte) []byte {
-		var v string
-		if json.Unmarshal(m[len(cwdKey):], &v) != nil {
-			return m
+	remap := func(match []byte) []byte {
+		var cwd string
+		if json.Unmarshal(match[len(cwdKey):], &cwd) != nil {
+			return match
 		}
-		nv := remapCwd(v, old, nw, sub)
-		if nv == v {
-			return m
+		remapped := remapCwd(cwd, oldCwd, newCwd, followSubdirs)
+		if remapped == cwd {
+			return match
 		}
-		q, _ := json.Marshal(nv)
-		return append(append([]byte{}, cwdKey...), q...)
+		quoted, _ := json.Marshal(remapped)
+		return append(append([]byte{}, cwdKey...), quoted...)
 	}
-	in, err := rOpenFile(cfgDir(), path, os.O_RDONLY, 0)
+	input, err := rOpenFile(cfgDir(), path, os.O_RDONLY, 0)
 	if err != nil {
 		return cwdRewrite{}, err
 	}
-	defer in.Close()
-	st, err := in.Stat()
+	defer input.Close()
+	inputInfo, err := input.Stat()
 	if err != nil {
 		return cwdRewrite{}, err
 	}
-	tmp := path + ".tmp"
-	if fi, err := os.Lstat(tmp); err == nil && !fi.IsDir() {
-		rRemove(cfgDir(), tmp) // un reste d'un essai interrompu, ou un lien posé à sa place : retiré, jamais suivi
+	tempPath := path + ".tmp"
+	if tempInfo, lstatErr := os.Lstat(tempPath); lstatErr == nil && !tempInfo.IsDir() {
+		rRemove(cfgDir(), tempPath) // un reste d'un essai interrompu, ou un lien posé à sa place : retiré, jamais suivi
 	}
-	out, err := rOpenFile(cfgDir(), tmp, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
+	output, err := rOpenFile(cfgDir(), tempPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
 	if err != nil {
 		return cwdRewrite{}, err
 	}
-	if err := out.Chmod(st.Mode().Perm()); err != nil {
-		out.Close()
-		rRemove(cfgDir(), tmp)
-		return cwdRewrite{}, err
+	if chmodErr := output.Chmod(inputInfo.Mode().Perm()); chmodErr != nil {
+		output.Close()
+		rRemove(cfgDir(), tempPath)
+		return cwdRewrite{}, chmodErr
 	}
-	w := bufio.NewWriterSize(out, 1<<20)
-	r := bufio.NewReaderSize(in, 1<<20)
+	writer := bufio.NewWriterSize(output, jsonLineBufferSize)
+	reader := bufio.NewReaderSize(input, jsonLineBufferSize)
 	for {
-		b, rerr := r.ReadBytes('\n')
-		if bytes.Contains(b, cwdKey) {
-			b = cwdRe.ReplaceAllFunc(b, remap)
+		rawLine, readErr := reader.ReadBytes('\n')
+		if bytes.Contains(rawLine, cwdKey) {
+			rawLine = cwdRe.ReplaceAllFunc(rawLine, remap)
 		}
-		w.Write(b)
-		if rerr != nil {
-			if !errors.Is(rerr, io.EOF) {
-				err = rerr
+		writer.Write(rawLine)
+		if readErr != nil {
+			if !errors.Is(readErr, io.EOF) {
+				err = readErr
 			}
 			break
 		}
 	}
 	if err == nil {
-		err = w.Flush()
+		err = writer.Flush()
 	}
 	if err == nil {
-		err = out.Sync() // le transcript réécrit remplace l'original : il doit être sur disque avant le renommage
+		err = output.Sync() // le transcript réécrit remplace l'original : il doit être sur disque avant le renommage
 	}
-	if cerr := out.Close(); err == nil {
-		err = cerr
+	if closeErr := output.Close(); err == nil {
+		err = closeErr
 	}
 	if err != nil {
-		rRemove(cfgDir(), tmp)
+		rRemove(cfgDir(), tempPath)
 		return cwdRewrite{}, err
 	}
-	return cwdRewrite{path, st.ModTime()}, nil
+	return cwdRewrite{path, inputInfo.ModTime()}, nil
 }
 
-// reassign déplace des sessions vers le dossier de transcripts de `to` (un dossier existant)
+// reassign déplace des sessions vers le dossier de transcripts de `targetDir` (un dossier existant)
 // et y réécrit leur cwd. Tout est vérifié avant le premier déplacement.
-func reassign(items []item, to string) (int, error) {
-	if !filepath.IsAbs(to) {
+func reassign(items []item, targetDir string) (int, error) {
+	if !filepath.IsAbs(targetDir) {
 		return 0, terr("srv.routes_sessions.cheminAbsoluRequis")
 	}
-	to = filepath.Clean(to)
-	if fi, err := os.Stat(to); err != nil || !fi.IsDir() {
-		return 0, terr("srv.reassign.leDossierCibleN", "A1", to)
+	targetDir = filepath.Clean(targetDir)
+	if targetInfo, statErr := os.Stat(targetDir); statErr != nil || !targetInfo.IsDir() {
+		return 0, terr("srv.reassign.leDossierCibleN", "A1", targetDir)
 	}
-	dst := filepath.Join(root, nonAlnum.ReplaceAllString(to, "-"))
-	live, err := liveCheck()
-	if err != nil {
-		return 0, err
+	destinationDir := filepath.Join(root, nonAlnum.ReplaceAllString(targetDir, "-"))
+	live, liveErr := liveCheck()
+	if liveErr != nil {
+		return 0, liveErr
 	}
-	for _, it := range items {
-		if live[it.ID] {
-			return 0, terr("srv.reassign.sessionVivanteFermeLa", "A1", it.ID[:8])
+	for _, sessionItem := range items {
+		if live[sessionItem.ID] {
+			return 0, terr("srv.reassign.sessionVivanteFermeLa", "A1", sessionItem.ID[:8])
 		}
-		if filepath.Join(root, it.Dir) == dst {
-			return 0, terr("srv.reassign.dejaDansCeDossier", "A1", it.ID[:8])
+		if filepath.Join(root, sessionItem.Dir) == destinationDir {
+			return 0, terr("srv.reassign.dejaDansCeDossier", "A1", sessionItem.ID[:8])
 		}
 		// Seul le transcript en conflit bloque : un dossier ID déjà là (reste d'un /cd interrompu) est fusionné.
-		if n := it.ID + ".jsonl"; lexists(filepath.Join(dst, n)) {
-			return 0, terr("srv.reassign.existeDejaDansLa", "A1", n)
+		if transcriptName := sessionItem.ID + ".jsonl"; lexists(filepath.Join(destinationDir, transcriptName)) {
+			return 0, terr("srv.reassign.existeDejaDansLa", "A1", transcriptName)
 		}
 	}
 	// Toutes les réécritures (transcripts et sous-agents de chaque session) sont écrites avant le premier renommage : un
 	// échec en cours de route ne laisse pas une session à moitié réécrite.
 	pending := make([][]cwdRewrite, len(items))
 	abort := func() {
-		for _, l := range pending {
-			for _, c := range l {
-				c.abort()
+		for _, rewrites := range pending {
+			for _, rewrite := range rewrites {
+				rewrite.abort()
 			}
 		}
 	}
-	for i, it := range items {
-		src := filepath.Join(root, it.Dir)
-		jl := filepath.Join(src, it.ID+".jsonl")
-		st, err := os.Stat(jl)
-		if err != nil {
+	for itemIndex, sessionItem := range items {
+		sourceDir := filepath.Join(root, sessionItem.Dir)
+		transcriptPath := filepath.Join(sourceDir, sessionItem.ID+".jsonl")
+		transcriptInfo, transcriptStatErr := os.Stat(transcriptPath)
+		if transcriptStatErr != nil {
 			continue
 		}
-		old := info(jl, st).Cwd
-		if old == "" || old == to {
+		oldCwd := info(transcriptPath, transcriptInfo).Cwd
+		if oldCwd == "" || oldCwd == targetDir {
 			continue
 		}
-		_, gone := os.Stat(old)
-		files := []string{jl}
-		filepath.WalkDir(filepath.Join(src, it.ID), func(p string, e os.DirEntry, err error) error {
-			if err == nil && !e.IsDir() && strings.HasSuffix(p, ".jsonl") {
-				files = append(files, p)
+		_, oldCwdErr := os.Stat(oldCwd)
+		files := []string{transcriptPath}
+		filepath.WalkDir(filepath.Join(sourceDir, sessionItem.ID), func(path string, entry os.DirEntry, walkErr error) error {
+			if walkErr == nil && !entry.IsDir() && strings.HasSuffix(path, ".jsonl") {
+				files = append(files, path)
 			}
 			return nil
 		})
-		for _, f := range files {
-			c, err := prepareCwd(f, old, to, gone != nil)
-			if err != nil {
+		for _, file := range files {
+			rewrite, prepareErr := prepareCwd(file, oldCwd, targetDir, oldCwdErr != nil)
+			if prepareErr != nil {
 				abort()
-				return 0, err
+				return 0, prepareErr
 			}
-			pending[i] = append(pending[i], c)
+			pending[itemIndex] = append(pending[itemIndex], rewrite)
 		}
 	}
-	if err := rMkdirAll(cfgDir(), dst, 0o755); err != nil {
+	if mkdirErr := rMkdirAll(cfgDir(), destinationDir, 0o755); mkdirErr != nil {
 		abort()
-		return 0, err
+		return 0, mkdirErr
 	}
-	for i, it := range items {
-		for _, c := range pending[i] {
-			if err := c.commit(); err != nil {
+	for itemIndex, sessionItem := range items {
+		for _, rewrite := range pending[itemIndex] {
+			if commitErr := rewrite.commit(); commitErr != nil {
 				abort()
-				return i, err
+				return itemIndex, commitErr
 			}
-			pending[i] = pending[i][1:]
+			pending[itemIndex] = pending[itemIndex][1:]
 		}
-		src := filepath.Join(root, it.Dir)
+		sourceDir := filepath.Join(root, sessionItem.Dir)
 		// Le dossier d'abord, le transcript en dernier : c'est lui qui rend la session visible, donc un échec
 		// intermédiaire ne laisse jamais une session apparente à moitié déplacée.
-		for _, n := range []string{it.ID, it.ID + ".jsonl"} {
-			if err := mergeMove(filepath.Join(src, n), filepath.Join(dst, n)); err != nil && !os.IsNotExist(err) {
+		for _, name := range []string{sessionItem.ID, sessionItem.ID + ".jsonl"} {
+			if moveErr := mergeMove(filepath.Join(sourceDir, name), filepath.Join(destinationDir, name)); moveErr != nil && !os.IsNotExist(moveErr) {
 				abort()
-				return i, err
+				return itemIndex, moveErr
 			}
 		}
-		rRemove(cfgDir(), src) // seulement s'il est devenu vide
+		rRemove(cfgDir(), sourceDir) // seulement s'il est devenu vide
 	}
 	return len(items), nil
 }
 
-func lexists(p string) bool { _, err := os.Lstat(p); return err == nil }
+func lexists(path string) bool {
+	_, err := os.Lstat(path)
+	return err == nil
+}
 
 // mergeMove déplace from vers to. Si to existe déjà, deux dossiers se fusionnent enfant par enfant ; pour un fichier en
 // conflit la version de to l'emporte et celle de from reste en place (rien n'est perdu, le dossier source n'est alors
 // pas retiré).
 func mergeMove(from, to string) error {
-	fi, err := os.Lstat(from)
+	fromInfo, err := os.Lstat(from)
 	if err != nil {
 		return err
 	}
-	ti, err := os.Lstat(to)
+	toInfo, err := os.Lstat(to)
 	if os.IsNotExist(err) {
 		return rRename(cfgDir(), from, to)
 	}
-	if err != nil || !fi.IsDir() || !ti.IsDir() {
+	if err != nil || !fromInfo.IsDir() || !toInfo.IsDir() {
 		return err
 	}
-	ents, err := os.ReadDir(from)
+	entries, err := os.ReadDir(from)
 	if err != nil {
 		return err
 	}
-	for _, e := range ents {
-		if err := mergeMove(filepath.Join(from, e.Name()), filepath.Join(to, e.Name())); err != nil {
-			return err
+	for _, entry := range entries {
+		if moveErr := mergeMove(filepath.Join(from, entry.Name()), filepath.Join(to, entry.Name())); moveErr != nil {
+			return moveErr
 		}
 	}
 	rRemove(cfgDir(), from) // seulement s'il est devenu vide

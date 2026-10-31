@@ -42,135 +42,145 @@ type queueStore struct {
 
 // Un fichier existant mais illisible ou corrompu fait échouer l'ouverture : il ne doit jamais être écrasé.
 func openQueue(dir string) (*queueStore, error) {
-	q := &queueStore{dir: dir, sess: map[string][]QItem{}}
-	b, err := readTrustedIn(dir, filepath.Join(dir, "queue.json"))
+	queue := &queueStore{dir: dir, sess: map[string][]QItem{}}
+	content, err := readTrustedIn(dir, filepath.Join(dir, "queue.json"))
 	if errors.Is(err, os.ErrNotExist) {
-		return q, nil
+		return queue, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal(b, &q.sess); err != nil {
-		return nil, err
+	if decodeErr := json.Unmarshal(content, &queue.sess); decodeErr != nil {
+		return nil, decodeErr
 	}
-	if q.sess == nil { // un fichier « null » donnerait une carte nil : le prochain Add paniquerait
-		q.sess = map[string][]QItem{}
+	if queue.sess == nil { // un fichier « null » donnerait une carte nil : le prochain Add paniquerait
+		queue.sess = map[string][]QItem{}
 	}
 	// Un envoi interrompu a pu atteindre la session : on ne le rejoue pas sans l'accord de l'hôte.
-	for _, l := range q.sess {
-		for i := range l {
-			if l[i].State == "sending" {
-				l[i].State = "uncertain"
+	for _, items := range queue.sess {
+		for itemIndex := range items {
+			if items[itemIndex].State == "sending" {
+				items[itemIndex].State = "uncertain"
 			}
 		}
 	}
-	return q, nil
+	return queue, nil
 }
 
-func (q *queueStore) save() error {
-	b, err := json.Marshal(q.sess)
+func (queue *queueStore) save() error {
+	content, err := json.Marshal(queue.sess)
 	if err != nil {
 		return err
 	}
-	return rWriteAtomic(q.dir, filepath.Join(q.dir, "queue.json"), b, 0o600)
+	return rWriteAtomic(queue.dir, filepath.Join(queue.dir, "queue.json"), content, 0o600)
 }
 
 // Add : un élément d'invité porte toujours son invitation (le vidage en tire l'étiquette) et laisse la place à la plus longue.
-func (q *queueStore) Add(session, author, guest, text string) (QItem, error) {
+func (queue *queueStore) Add(session, author, guest, text string) (QItem, error) {
 	if author != "guest" {
 		guest = ""
 	}
-	if checkSendText(text) != nil || strings.ContainsRune(text, 0) || author == "guest" && (guest == "" || len(text) > sendMax-guestLabelMax-len(followPrefix)) {
+	isGuest := author == "guest"
+	guestTextMaxLength := sendMax - guestLabelMax - len(followPrefix)
+	isGuestTextRefused := isGuest && (guest == "" || len(text) > guestTextMaxLength)
+	if checkSendText(text) != nil || strings.ContainsRune(text, 0) || isGuestTextRefused {
 		return QItem{}, errQueueText
 	}
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	if len(q.sess[session]) >= queueMax || author == "guest" && q.guests(session) >= queueGuestMax {
+	queue.mu.Lock()
+	defer queue.mu.Unlock()
+	if len(queue.sess[session]) >= queueMax || isGuest && queue.guests(session) >= queueGuestMax {
 		return QItem{}, errQueueFull
 	}
-	var r [8]byte
-	rand.Read(r[:])
-	it := QItem{ID: hex.EncodeToString(r[:]), Text: text, Author: author, Guest: guest, State: "queued", At: time.Now().Unix()}
-	q.sess[session] = append(q.sess[session], it)
-	if err := q.save(); err != nil {
-		q.sess[session] = q.sess[session][:len(q.sess[session])-1]
+	var randomID [8]byte
+	rand.Read(randomID[:])
+	newItem := QItem{
+		ID:     hex.EncodeToString(randomID[:]),
+		Text:   text,
+		Author: author,
+		Guest:  guest,
+		State:  "queued",
+		At:     time.Now().Unix(),
+	}
+	queue.sess[session] = append(queue.sess[session], newItem)
+	if err := queue.save(); err != nil {
+		queue.sess[session] = queue.sess[session][:len(queue.sess[session])-1]
 		return QItem{}, err
 	}
-	return it, nil
+	return newItem, nil
 }
 
-func (q *queueStore) guests(session string) int {
-	n := 0
-	for _, it := range q.sess[session] {
-		if it.Author == "guest" {
-			n++
+func (queue *queueStore) guests(session string) int {
+	guestCount := 0
+	for _, queuedItem := range queue.sess[session] {
+		if queuedItem.Author == "guest" {
+			guestCount++
 		}
 	}
-	return n
+	return guestCount
 }
 
-func (q *queueStore) List(session string) []QItem {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	return append([]QItem{}, q.sess[session]...)
+func (queue *queueStore) List(session string) []QItem {
+	queue.mu.Lock()
+	defer queue.mu.Unlock()
+	return append([]QItem{}, queue.sess[session]...)
 }
 
-func (q *queueStore) find(session, id string) int {
-	for i, it := range q.sess[session] {
-		if it.ID == id {
-			return i
+func (queue *queueStore) find(session, itemID string) int {
+	for itemIndex, queuedItem := range queue.sess[session] {
+		if queuedItem.ID == itemID {
+			return itemIndex
 		}
 	}
 	return -1
 }
 
 // remove retire l'item et la clé de session devenue vide ; l'échec d'écriture est toléré (au pire l'item reparaît au redémarrage), contrairement à MarkSending dont la persistance garantit le au-plus-une-fois.
-func (q *queueStore) remove(session string, i int) QItem {
-	l := q.sess[session]
-	it := l[i]
-	if len(l) == 1 {
-		delete(q.sess, session)
+func (queue *queueStore) remove(session string, itemIndex int) QItem {
+	items := queue.sess[session]
+	removedItem := items[itemIndex]
+	if len(items) == 1 {
+		delete(queue.sess, session)
 	} else {
-		q.sess[session] = append(l[:i:i], l[i+1:]...)
+		queue.sess[session] = append(items[:itemIndex:itemIndex], items[itemIndex+1:]...)
 	}
-	q.save()
-	return it
+	queue.save()
+	return removedItem
 }
 
 // Remove : retrait demandé par un utilisateur. Un item « sending » est refusé sous le verrou du magasin : il est peut-être déjà parti.
-func (q *queueStore) Remove(session, itemID string) (QItem, error) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	i := q.find(session, itemID)
-	if i < 0 {
+func (queue *queueStore) Remove(session, itemID string) (QItem, error) {
+	queue.mu.Lock()
+	defer queue.mu.Unlock()
+	itemIndex := queue.find(session, itemID)
+	if itemIndex < 0 {
 		return QItem{}, errQueueGone
 	}
-	if q.sess[session][i].State == "sending" {
+	if queue.sess[session][itemIndex].State == "sending" {
 		return QItem{}, errQueueBusy
 	}
-	return q.remove(session, i), nil
+	return queue.remove(session, itemIndex), nil
 }
 
-func (q *queueStore) Retry(session, itemID string) bool {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	i := q.find(session, itemID)
-	if i < 0 || q.sess[session][i].State != "uncertain" {
+func (queue *queueStore) Retry(session, itemID string) bool {
+	queue.mu.Lock()
+	defer queue.mu.Unlock()
+	itemIndex := queue.find(session, itemID)
+	if itemIndex < 0 || queue.sess[session][itemIndex].State != "uncertain" {
 		return false
 	}
-	q.sess[session][i].State = "queued"
-	q.sess[session][i].SentAt = 0
-	q.save()
+	queue.sess[session][itemIndex].State = "queued"
+	queue.sess[session][itemIndex].SentAt = 0
+	queue.save()
 	return true
 }
 
-func (q *queueStore) Head(session string) (QItem, bool) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	for _, it := range q.sess[session] {
-		switch it.State {
+func (queue *queueStore) Head(session string) (QItem, bool) {
+	queue.mu.Lock()
+	defer queue.mu.Unlock()
+	for _, queuedItem := range queue.sess[session] {
+		switch queuedItem.State {
 		case "queued":
-			return it, true
+			return queuedItem, true
 		case "sending", "uncertain":
 			return QItem{}, false
 		}
@@ -180,78 +190,78 @@ func (q *queueStore) Head(session string) (QItem, bool) {
 
 // MarkSending : compare-and-set queued -> sending. L'écriture précède l'envoi : si elle échoue, l'état revient à queued et
 // l'appelant ne doit pas envoyer, sinon un crash rejouerait le message.
-func (q *queueStore) MarkSending(session, itemID string) error {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	i := q.find(session, itemID)
-	if i < 0 || q.sess[session][i].State != "queued" {
+func (queue *queueStore) MarkSending(session, itemID string) error {
+	queue.mu.Lock()
+	defer queue.mu.Unlock()
+	itemIndex := queue.find(session, itemID)
+	if itemIndex < 0 || queue.sess[session][itemIndex].State != "queued" {
 		return errQueueGone
 	}
-	q.sess[session][i].State = "sending"
-	q.sess[session][i].SentAt = time.Now().Unix()
-	if err := q.save(); err != nil {
-		q.sess[session][i].State = "queued"
-		q.sess[session][i].SentAt = 0
+	queue.sess[session][itemIndex].State = "sending"
+	queue.sess[session][itemIndex].SentAt = time.Now().Unix()
+	if err := queue.save(); err != nil {
+		queue.sess[session][itemIndex].State = "queued"
+		queue.sess[session][itemIndex].SentAt = 0
 		return err
 	}
 	return nil
 }
 
 // Done : le drain retire l'item une fois l'envoi fini, quel que soit son état.
-func (q *queueStore) Done(session, itemID string) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	if i := q.find(session, itemID); i >= 0 {
-		q.remove(session, i)
+func (queue *queueStore) Done(session, itemID string) {
+	queue.mu.Lock()
+	defer queue.mu.Unlock()
+	if itemIndex := queue.find(session, itemID); itemIndex >= 0 {
+		queue.remove(session, itemIndex)
 	}
 }
 
-func (q *queueStore) Sessions() []string {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	out := make([]string, 0, len(q.sess))
-	for s := range q.sess {
-		out = append(out, s)
+func (queue *queueStore) Sessions() []string {
+	queue.mu.Lock()
+	defer queue.mu.Unlock()
+	sessionIDs := make([]string, 0, len(queue.sess))
+	for sessionID := range queue.sess {
+		sessionIDs = append(sessionIDs, sessionID)
 	}
-	return out
+	return sessionIDs
 }
 
 // Requeue : sending -> queued après un envoi refusé (rien n'est parti, contrairement à « uncertain »).
-func (q *queueStore) Requeue(session, itemID string) bool {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	i := q.find(session, itemID)
-	if i < 0 || q.sess[session][i].State != "sending" {
+func (queue *queueStore) Requeue(session, itemID string) bool {
+	queue.mu.Lock()
+	defer queue.mu.Unlock()
+	itemIndex := queue.find(session, itemID)
+	if itemIndex < 0 || queue.sess[session][itemIndex].State != "sending" {
 		return false
 	}
-	q.sess[session][i].State = "queued"
-	q.sess[session][i].SentAt = 0
-	q.save()
+	queue.sess[session][itemIndex].State = "queued"
+	queue.sess[session][itemIndex].SentAt = 0
+	queue.save()
 	return true
 }
 
 // RemoveByGuest retire les items d'invités d'une session, ceux d'une invitation ou tous (invite vide, fin du partage) : tous
 // à la révocation, seulement ceux encore « queued » au passage en lecture seule (un item « sending » est peut-être déjà parti).
 // Le retrait en mémoire tient même si l'écriture échoue.
-func (q *queueStore) RemoveByGuest(session, invite string, queuedOnly bool) (int, error) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	var keep []QItem
-	n := 0
-	for _, it := range q.sess[session] {
-		if it.Author == "guest" && (invite == "" || it.Guest == invite) && (!queuedOnly || it.State == "queued") {
-			n++
+func (queue *queueStore) RemoveByGuest(session, invite string, queuedOnly bool) (int, error) {
+	queue.mu.Lock()
+	defer queue.mu.Unlock()
+	var kept []QItem
+	removedCount := 0
+	for _, queuedItem := range queue.sess[session] {
+		if queuedItem.Author == "guest" && (invite == "" || queuedItem.Guest == invite) && (!queuedOnly || queuedItem.State == "queued") {
+			removedCount++
 		} else {
-			keep = append(keep, it)
+			kept = append(kept, queuedItem)
 		}
 	}
-	if n == 0 {
+	if removedCount == 0 {
 		return 0, nil
 	}
-	if len(keep) == 0 {
-		delete(q.sess, session)
+	if len(kept) == 0 {
+		delete(queue.sess, session)
 	} else {
-		q.sess[session] = keep
+		queue.sess[session] = kept
 	}
-	return n, q.save()
+	return removedCount, queue.save()
 }

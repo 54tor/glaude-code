@@ -16,6 +16,9 @@ import (
 const (
 	noteMax  = 64 << 10
 	notesMax = 500
+
+	noteKeyMaxLength    = 600
+	noteKeyPrefixLength = 2
 )
 
 var notesMu sync.Mutex
@@ -24,106 +27,108 @@ func notesFile() string { return filepath.Join(cfgDir(), "gld-web-notes.json") }
 
 // notesLoad : les notes ; un fichier absent est vide, un fichier illisible une erreur (on ne réécrit jamais par-dessus).
 func notesLoad() (map[string]string, error) {
-	m := map[string]string{}
-	b, err := readTrusted(notesFile())
-	if err != nil {
-		return m, nil
+	notes := map[string]string{}
+	content, readErr := readTrusted(notesFile())
+	if readErr != nil {
+		return notes, nil
 	}
-	if err := json.Unmarshal(b, &m); err != nil {
-		return nil, terr("srv.notes.fichierIllisible", "A1", err.Error())
+	if decodeErr := json.Unmarshal(content, &notes); decodeErr != nil {
+		return nil, terr("srv.notes.fichierIllisible", "A1", decodeErr.Error())
 	}
-	return m, nil
+	return notes, nil
 }
 
-func notesSave(m map[string]string) error {
-	b, _ := json.MarshalIndent(m, "", "  ")
-	return rWriteAtomic(cfgDir(), notesFile(), b, 0o600)
+func notesSave(notes map[string]string) error {
+	content, _ := json.MarshalIndent(notes, "", "  ")
+	return rWriteAtomic(cfgDir(), notesFile(), content, 0o600)
 }
 
-func noteKeyOK(k string) bool {
-	return len(k) > 2 && len(k) <= 600 && (strings.HasPrefix(k, "p/") || strings.HasPrefix(k, "d/")) && !strings.ContainsRune(k, 0)
+func noteKeyOK(key string) bool {
+	hasValidLength := len(key) > noteKeyPrefixLength && len(key) <= noteKeyMaxLength
+	hasKnownPrefix := strings.HasPrefix(key, "p/") || strings.HasPrefix(key, "d/")
+	return hasValidLength && hasKnownPrefix && !strings.ContainsRune(key, 0)
 }
 
 func routesNotes(mux *http.ServeMux) {
 	routesNotesSent(mux)
-	mux.HandleFunc("GET /v1/notes", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/notes", func(responseWriter http.ResponseWriter, request *http.Request) {
 		notesMu.Lock()
 		defer notesMu.Unlock()
-		m, err := notesLoad()
+		notes, err := notesLoad()
 		if err != nil {
-			writeErr(w, http.StatusInternalServerError, "internal", err.Error())
+			writeErr(responseWriter, http.StatusInternalServerError, "internal", err.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"notes": m})
+		writeJSON(responseWriter, 200, map[string]any{"notes": notes})
 	})
 	// {key, text} : enregistre (texte vide : supprime) ; {key, to} : déplace la note (renommage d'un projet).
-	mux.HandleFunc("PUT /v1/notes", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Key, Text, To string }
-		if !decodeBody(w, r, &req, noteMax+1<<10) {
+	mux.HandleFunc("PUT /v1/notes", func(responseWriter http.ResponseWriter, request *http.Request) {
+		var body struct{ Key, Text, To string }
+		if !decodeBody(responseWriter, request, &body, noteMax+1<<10) {
 			return
 		}
-		if !noteKeyOK(req.Key) || len(req.Text) > noteMax || (req.To != "" && !noteKeyOK(req.To)) {
-			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
+		if !noteKeyOK(body.Key) || len(body.Text) > noteMax || (body.To != "" && !noteKeyOK(body.To)) {
+			writeErr(responseWriter, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
 			return
 		}
 		notesMu.Lock()
 		defer notesMu.Unlock()
-		m, err := notesLoad()
+		notes, err := notesLoad()
 		if err != nil {
-			writeErr(w, http.StatusInternalServerError, "internal", err.Error())
+			writeErr(responseWriter, http.StatusInternalServerError, "internal", err.Error())
 			return
 		}
 		switch {
-		case req.To != "":
-			if t, ok := m[req.Key]; ok && req.To != req.Key {
-				if d, has := m[req.To]; has {
-					if t = mergeNotes(d, t); len(t) > noteMax {
-						writeErr(w, http.StatusRequestEntityTooLarge, "too_large", L("srv.notes.fusionTropLongue"))
+		case body.To != "":
+			if movedText, isPresent := notes[body.Key]; isPresent && body.To != body.Key {
+				if destinationText, hasDestination := notes[body.To]; hasDestination {
+					if movedText = mergeNotes(destinationText, movedText); len(movedText) > noteMax {
+						writeErr(responseWriter, http.StatusRequestEntityTooLarge, "too_large", L("srv.notes.fusionTropLongue"))
 						return
 					}
 				}
-				m[req.To] = t
-				delete(m, req.Key)
+				notes[body.To] = movedText
+				delete(notes, body.Key)
 			}
-		case strings.TrimSpace(req.Text) == "":
-			delete(m, req.Key)
+		case strings.TrimSpace(body.Text) == "":
+			delete(notes, body.Key)
 		default:
-			if _, has := m[req.Key]; !has && len(m) >= notesMax {
-				writeErr(w, http.StatusConflict, "conflict", L("srv.notes.tropDeNotes"))
+			if _, exists := notes[body.Key]; !exists && len(notes) >= notesMax {
+				writeErr(responseWriter, http.StatusConflict, "conflict", L("srv.notes.tropDeNotes"))
 				return
 			}
-			m[req.Key] = req.Text
+			notes[body.Key] = body.Text
 		}
-		if err := notesSave(m); err != nil {
-			writeErr(w, http.StatusInternalServerError, "internal", err.Error())
+		if saveErr := notesSave(notes); saveErr != nil {
+			writeErr(responseWriter, http.StatusInternalServerError, "internal", saveErr.Error())
 			return
 		}
-		writeJSON(w, 200, map[string]any{"message": L("srv.notes.noteEnregistree")})
+		writeJSON(responseWriter, 200, map[string]any{"message": L("srv.notes.noteEnregistree")})
 	})
 }
 
 // noteItems : les items d'une note, comme l'UI les lit (tableau JSON, sinon une ligne non vide par item).
-func noteItems(s string) []string {
-	var v []string
-	if json.Unmarshal([]byte(s), &v) == nil {
-		return v
+func noteItems(noteText string) []string {
+	var jsonItems []string
+	if json.Unmarshal([]byte(noteText), &jsonItems) == nil {
+		return jsonItems
 	}
-	var out []string
-	for _, l := range strings.Split(s, "\n") {
-		if strings.TrimSpace(l) != "" {
-			out = append(out, l)
+	var items []string
+	for _, textLine := range strings.Split(noteText, "\n") {
+		if strings.TrimSpace(textLine) != "" {
+			items = append(items, textLine)
 		}
 	}
-	return out
+	return items
 }
 
 // mergeNotes : un déplacement sur une clé déjà notée ajoute les items à la suite au lieu d'écraser la destination.
-func mergeNotes(dst, src string) string {
-	var b strings.Builder
-	e := json.NewEncoder(&b)
-	e.SetEscapeHTML(false) // sinon < > & triplent de taille à chaque fusion
-	e.Encode(append(noteItems(dst), noteItems(src)...))
-	return strings.TrimSuffix(b.String(), "\n")
+func mergeNotes(destinationText, sourceText string) string {
+	var merged strings.Builder
+	encoder := json.NewEncoder(&merged)
+	encoder.SetEscapeHTML(false) // sinon < > & triplent de taille à chaque fusion
+	encoder.Encode(append(noteItems(destinationText), noteItems(sourceText)...))
+	return strings.TrimSuffix(merged.String(), "\n")
 }
 
 const sentMax = 50
@@ -138,103 +143,103 @@ type sentEntry struct {
 func sentFile() string { return filepath.Join(cfgDir(), "gld-web-notes-history.json") }
 
 func sentLoad() (map[string][]sentEntry, error) {
-	m := map[string][]sentEntry{}
-	b, err := readTrusted(sentFile())
-	if err != nil {
-		return m, nil
+	history := map[string][]sentEntry{}
+	content, readErr := readTrusted(sentFile())
+	if readErr != nil {
+		return history, nil
 	}
-	if err := json.Unmarshal(b, &m); err != nil {
-		return nil, terr("srv.notes.fichierIllisible", "A1", err.Error())
+	if decodeErr := json.Unmarshal(content, &history); decodeErr != nil {
+		return nil, terr("srv.notes.fichierIllisible", "A1", decodeErr.Error())
 	}
-	return m, nil
+	return history, nil
 }
 
-func sentSave(m map[string][]sentEntry) error {
-	b, _ := json.MarshalIndent(m, "", "  ")
-	return rWriteAtomic(cfgDir(), sentFile(), b, 0o600)
+func sentSave(history map[string][]sentEntry) error {
+	content, _ := json.MarshalIndent(history, "", "  ")
+	return rWriteAtomic(cfgDir(), sentFile(), content, 0o600)
 }
 
 // routesNotesSent : historique des items envoyés à une session, écrit avant l'envoi pour qu'un envoi perdu ne perde pas le texte.
 func routesNotesSent(mux *http.ServeMux) {
-	fail := func(w http.ResponseWriter, err error) {
-		writeErr(w, http.StatusInternalServerError, "internal", err.Error())
+	fail := func(responseWriter http.ResponseWriter, err error) {
+		writeErr(responseWriter, http.StatusInternalServerError, "internal", err.Error())
 	}
-	mux.HandleFunc("GET /v1/notes/sent", func(w http.ResponseWriter, r *http.Request) {
-		k := r.URL.Query().Get("key")
-		if !noteKeyOK(k) {
-			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
+	mux.HandleFunc("GET /v1/notes/sent", func(responseWriter http.ResponseWriter, request *http.Request) {
+		key := request.URL.Query().Get("key")
+		if !noteKeyOK(key) {
+			writeErr(responseWriter, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
 			return
 		}
 		notesMu.Lock()
 		defer notesMu.Unlock()
-		m, err := sentLoad()
+		history, err := sentLoad()
 		if err != nil {
-			fail(w, err)
+			fail(responseWriter, err)
 			return
 		}
-		writeJSON(w, 200, map[string]any{"sent": append([]sentEntry{}, m[k]...)})
+		writeJSON(responseWriter, 200, map[string]any{"sent": append([]sentEntry{}, history[key]...)})
 	})
-	mux.HandleFunc("POST /v1/notes/sent", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Key, Text, To string }
-		if !decodeBody(w, r, &req, noteMax+2<<10) {
+	mux.HandleFunc("POST /v1/notes/sent", func(responseWriter http.ResponseWriter, request *http.Request) {
+		var body struct{ Key, Text, To string }
+		if !decodeBody(responseWriter, request, &body, noteMax+2<<10) {
 			return
 		}
-		if !noteKeyOK(req.Key) || strings.TrimSpace(req.Text) == "" || len(req.Text) > noteMax || len(req.To) > 600 {
-			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
+		if !noteKeyOK(body.Key) || strings.TrimSpace(body.Text) == "" || len(body.Text) > noteMax || len(body.To) > noteKeyMaxLength {
+			writeErr(responseWriter, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
 			return
 		}
 		notesMu.Lock()
 		defer notesMu.Unlock()
-		m, err := sentLoad()
+		history, err := sentLoad()
 		if err != nil {
-			fail(w, err)
+			fail(responseWriter, err)
 			return
 		}
-		if _, has := m[req.Key]; !has && len(m) >= notesMax {
-			writeErr(w, http.StatusConflict, "conflict", L("srv.notes.tropDeNotes"))
+		if _, exists := history[body.Key]; !exists && len(history) >= notesMax {
+			writeErr(responseWriter, http.StatusConflict, "conflict", L("srv.notes.tropDeNotes"))
 			return
 		}
 		now := time.Now()
-		e := sentEntry{ID: strconv.FormatInt(now.UnixNano(), 36), At: now.UnixMilli(), Text: req.Text, To: req.To}
-		l := append(m[req.Key], e)
-		if len(l) > sentMax {
-			l = l[len(l)-sentMax:]
+		entry := sentEntry{ID: strconv.FormatInt(now.UnixNano(), 36), At: now.UnixMilli(), Text: body.Text, To: body.To}
+		entries := append(history[body.Key], entry)
+		if len(entries) > sentMax {
+			entries = entries[len(entries)-sentMax:]
 		}
-		m[req.Key] = l
-		if err := sentSave(m); err != nil {
-			fail(w, err)
+		history[body.Key] = entries
+		if saveErr := sentSave(history); saveErr != nil {
+			fail(responseWriter, saveErr)
 			return
 		}
-		writeJSON(w, 200, map[string]any{"entry": e})
+		writeJSON(responseWriter, 200, map[string]any{"entry": entry})
 	})
-	mux.HandleFunc("DELETE /v1/notes/sent", func(w http.ResponseWriter, r *http.Request) {
-		k, id := r.URL.Query().Get("key"), r.URL.Query().Get("id")
-		if !noteKeyOK(k) || id == "" {
-			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
+	mux.HandleFunc("DELETE /v1/notes/sent", func(responseWriter http.ResponseWriter, request *http.Request) {
+		key, entryID := request.URL.Query().Get("key"), request.URL.Query().Get("id")
+		if !noteKeyOK(key) || entryID == "" {
+			writeErr(responseWriter, http.StatusBadRequest, "bad_request", L("srv.http_util.requeteInvalide"))
 			return
 		}
 		notesMu.Lock()
 		defer notesMu.Unlock()
-		m, err := sentLoad()
+		history, err := sentLoad()
 		if err != nil {
-			fail(w, err)
+			fail(responseWriter, err)
 			return
 		}
-		l := m[k][:0:0]
-		for _, e := range m[k] {
-			if e.ID != id {
-				l = append(l, e)
+		kept := history[key][:0:0]
+		for _, entry := range history[key] {
+			if entry.ID != entryID {
+				kept = append(kept, entry)
 			}
 		}
-		if len(l) == 0 {
-			delete(m, k)
+		if len(kept) == 0 {
+			delete(history, key)
 		} else {
-			m[k] = l
+			history[key] = kept
 		}
-		if err := sentSave(m); err != nil {
-			fail(w, err)
+		if saveErr := sentSave(history); saveErr != nil {
+			fail(responseWriter, saveErr)
 			return
 		}
-		writeJSON(w, 200, map[string]any{"message": L("srv.notes.noteEnregistree")})
+		writeJSON(responseWriter, 200, map[string]any{"message": L("srv.notes.noteEnregistree")})
 	})
 }
