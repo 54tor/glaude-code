@@ -111,7 +111,7 @@ func checkPassword(hash, password string) bool {
 		}
 		parsedParams[paramIndex] = parsedValue
 	}
-	memoryKiB, iterations, threads := uint32(parsedParams[0]), uint32(parsedParams[1]), parsedParams[2]
+	memoryKiB, iterations, threads := uint32(parsedParams[0]), uint32(parsedParams[1]), parsedParams[2] // #nosec G115 -- valeur bornée en amont
 	if memoryKiB == 0 || memoryKiB > argonMaxMemKiB || iterations == 0 || iterations > argonMaxTime || threads == 0 || threads > argonMaxThreads {
 		return false
 	}
@@ -120,7 +120,7 @@ func checkPassword(hash, password string) bool {
 	if saltErr != nil || keyErr != nil || len(salt) < argonMinSaltLen || len(salt) > argonMaxSaltLen || len(expectedKey) < argonMinKeyLen || len(expectedKey) > argonMaxKeyLen {
 		return false
 	}
-	computedKey := argonKey([]byte(password), salt, iterations, memoryKiB, uint8(threads), uint32(len(expectedKey)))
+	computedKey := argonKey([]byte(password), salt, iterations, memoryKiB, uint8(threads), uint32(len(expectedKey))) // #nosec G115 -- valeur bornée en amont
 	return subtle.ConstantTimeCompare(computedKey, expectedKey) == 1
 }
 

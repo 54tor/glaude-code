@@ -105,7 +105,7 @@ func rWriteAtomic(base, path string, content []byte, mode os.FileMode) error {
 	var tempFile *os.File
 	var tempName string
 	for {
-		tempName = filepath.Join(filepath.Dir(rel), ".gld-web-"+strconv.FormatUint(rand.Uint64(), 36)+".tmp")
+		tempName = filepath.Join(filepath.Dir(rel), ".gld-web-"+strconv.FormatUint(rand.Uint64(), 36)+".tmp") // #nosec G404 -- simple nom de fichier temporaire, ouvert en O_EXCL
 		if tempFile, err = trustedRoot.OpenFile(tempName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600); !os.IsExist(err) {
 			break
 		}
@@ -130,7 +130,7 @@ func mkdirTrusted(path string, perm os.FileMode) error {
 	if _, err := relIn(cfgDir(), path); err == nil {
 		return rMkdirAll(cfgDir(), path, perm)
 	}
-	return os.MkdirAll(path, perm)
+	return os.MkdirAll(path, perm) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 }
 
 // walkRoot : la racine d'un parcours, lien résolu (un ~/.claude/commands lié à un dépôt de dotfiles), car WalkDir ne descend
@@ -159,7 +159,7 @@ func readTrusted(path string) ([]byte, error) { return readTrustedIn(trustBase(p
 // readTrustedIn : readTrusted avec une racine explicite (le dossier d'un home, qui n'est pas forcément cfgDir()).
 func readTrustedIn(base, path string) ([]byte, error) {
 	if !runAsOn() {
-		return os.ReadFile(path)
+		return os.ReadFile(path) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 	}
 	trustedRoot, rel, err := confine(base, path)
 	if err != nil {
@@ -171,7 +171,7 @@ func readTrustedIn(base, path string) ([]byte, error) {
 
 func openTrusted(path string) (*os.File, error) {
 	if !runAsOn() {
-		return os.Open(path)
+		return os.Open(path) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 	}
 	return rOpenFile(trustBase(path), path, os.O_RDONLY, 0)
 }

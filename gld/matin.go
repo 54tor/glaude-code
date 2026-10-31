@@ -287,7 +287,7 @@ func absDir(target string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if fileInfo, statErr := os.Stat(abs); statErr != nil || !fileInfo.IsDir() {
+	if fileInfo, statErr := os.Stat(abs); statErr != nil || !fileInfo.IsDir() { // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 		return "", terr("srv.matin.projetIntrouvable")
 	}
 	return abs, nil

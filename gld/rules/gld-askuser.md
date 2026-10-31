@@ -1,7 +1,6 @@
 ---
 source: gld
 ---
-<!-- Managed by gld: overwritten at every gld startup. Do not edit; add your own rules under another name. -->
 # Questions to the user
 
 gld shows a pending question as an answer card in its web UI, but only when it is asked through the `AskUserQuestion` tool.

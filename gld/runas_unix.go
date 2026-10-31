@@ -348,7 +348,7 @@ func within(dir, path string) bool {
 }
 
 func lstatOwnerOS(path string) (ownerUID, ownerGID uint32, mode os.FileMode, err error) {
-	fileInfo, err := os.Lstat(path)
+	fileInfo, err := os.Lstat(path) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 	if err != nil {
 		return 0, 0, 0, err
 	}

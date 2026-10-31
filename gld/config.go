@@ -185,7 +185,7 @@ func configPath(id string) (string, error) {
 			return "", terr("srv.memmeta.projetInvalide")
 		}
 		cwd := projectCwd(dir)
-		dirInfo, err := os.Stat(cwd)
+		dirInfo, err := os.Stat(cwd) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 		projectMissing := cwd == "" || err != nil || !dirInfo.IsDir()
 		if projectMissing {
 			return "", terr("srv.memory.dossierDuProjetIntrouvable")

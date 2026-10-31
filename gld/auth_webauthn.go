@@ -180,8 +180,8 @@ func (cred *credRow) credential() webauthn.Credential {
 		ID:            cred.credID,
 		PublicKey:     cred.pub,
 		Transport:     transports,
-		Flags:         webauthn.NewCredentialFlags(protocol.AuthenticatorFlags(cred.flags)),
-		Authenticator: webauthn.Authenticator{SignCount: uint32(cred.signCount)},
+		Flags:         webauthn.NewCredentialFlags(protocol.AuthenticatorFlags(cred.flags)), // #nosec G115 -- valeur bornée en amont
+		Authenticator: webauthn.Authenticator{SignCount: uint32(cred.signCount)},            // #nosec G115 -- valeur bornée en amont
 	}
 }
 

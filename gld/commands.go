@@ -44,8 +44,8 @@ func sameDir(first, second string) bool {
 	if filepath.Clean(first) == filepath.Clean(second) {
 		return true
 	}
-	firstInfo, firstErr := os.Stat(first)
-	secondInfo, secondErr := os.Stat(second)
+	firstInfo, firstErr := os.Stat(first)    // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
+	secondInfo, secondErr := os.Stat(second) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 	return firstErr == nil && secondErr == nil && os.SameFile(firstInfo, secondInfo)
 }
 

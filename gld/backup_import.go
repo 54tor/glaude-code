@@ -220,7 +220,7 @@ func stagedProjectFiles(archiveStage *stage, key, subDir string) map[string][]by
 		if walkErr != nil || entry.IsDir() {
 			return nil
 		}
-		if content, readErr := os.ReadFile(path); readErr == nil {
+		if content, readErr := os.ReadFile(path); readErr == nil { // #nosec G122 -- archive : entrées non régulières refusées (backup_zip.go)
 			rel, _ := filepath.Rel(baseDir, path)
 			filesByPath[filepath.ToSlash(rel)] = content
 		}

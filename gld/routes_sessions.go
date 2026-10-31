@@ -285,7 +285,7 @@ func routesSessions(mux *http.ServeMux) {
 		}
 		browsedPath = filepath.Clean(browsedPath)
 		for {
-			if dirInfo, statErr := os.Stat(browsedPath); statErr == nil && dirInfo.IsDir() {
+			if dirInfo, statErr := os.Stat(browsedPath); statErr == nil && dirInfo.IsDir() { // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 				break
 			}
 			parentDir := filepath.Dir(browsedPath)
@@ -306,7 +306,7 @@ func routesSessions(mux *http.ServeMux) {
 		for _, entry := range entries {
 			isDir := entry.IsDir()
 			if !isDir && entry.Type()&os.ModeSymlink != 0 { // lien : on ne suit que ceux qui mènent à un dossier
-				targetInfo, linkStatErr := os.Stat(filepath.Join(browsedPath, entry.Name()))
+				targetInfo, linkStatErr := os.Stat(filepath.Join(browsedPath, entry.Name())) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 				isDir = linkStatErr == nil && targetInfo.IsDir()
 			}
 			if isDir {

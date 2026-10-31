@@ -132,7 +132,7 @@ func parseGitStatus(statusOutput string) GitState {
 func runGitStatus(dir string) (string, error) {
 	commandContext, cancel := context.WithTimeout(context.Background(), gitCommandTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(commandContext, "git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-C", dir, "status", "--porcelain=v2", "--branch", "-z")
+	cmd := exec.CommandContext(commandContext, "git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-C", dir, "status", "--porcelain=v2", "--branch", "-z") // #nosec G702 -- exécutable fixe, arguments en tableau, sans shell
 	cmd.Env = append(childEnv(), "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0")
 	applyRunAs(cmd)
 	output, err := cmd.Output()
@@ -195,7 +195,7 @@ func gitPrefix(dir string) string {
 	var prefix string
 	commandContext, cancel := context.WithTimeout(context.Background(), gitCommandTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(commandContext, "git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-C", dir, "rev-parse", "--show-prefix")
+	cmd := exec.CommandContext(commandContext, "git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-C", dir, "rev-parse", "--show-prefix") // #nosec G702 -- exécutable fixe, arguments en tableau, sans shell
 	cmd.Env = append(childEnv(), "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0")
 	applyRunAs(cmd)
 	if output, err := cmd.Output(); err == nil {

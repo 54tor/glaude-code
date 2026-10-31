@@ -1,7 +1,6 @@
 ---
 source: gld
 ---
-<!-- Managed by gld: overwritten at every gld startup. Do not edit; add your own rules under another name. -->
 # Todos in gld notes
 
 gld has a notepad per folder and per project, shown next to the sessions in its web UI. It is one JSON file, `${CLAUDE_CONFIG_DIR:-~/.claude}/gld-web-notes.json`: a map `key -> text`. Todos live there.

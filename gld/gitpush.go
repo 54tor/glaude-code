@@ -68,7 +68,7 @@ func gitOut(dir string, args ...string) (string, error) {
 	commandContext, cancel := context.WithTimeout(context.Background(), gitPushTimeout)
 	defer cancel()
 	gitArgs := append([]string{"--no-optional-locks", "-c", "core.fsmonitor=false", "-C", dir}, args...)
-	cmd := exec.CommandContext(commandContext, "git", gitArgs...)
+	cmd := exec.CommandContext(commandContext, "git", gitArgs...) // #nosec G702 -- exécutable fixe, arguments en tableau, sans shell
 	cmd.Env = append(childEnv(), "GIT_TERMINAL_PROMPT=0")
 	if os.Getenv("GIT_SSH_COMMAND") == "" {
 		if sshCommand, _ := gitOut1(dir, "config", "core.sshCommand"); sshCommand == "" {
@@ -83,7 +83,7 @@ func gitOut(dir string, args ...string) (string, error) {
 func gitOut1(dir string, args ...string) (string, error) {
 	commandContext, cancel := context.WithTimeout(context.Background(), cmdTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(commandContext, "git", append([]string{"-C", dir}, args...)...)
+	cmd := exec.CommandContext(commandContext, "git", append([]string{"-C", dir}, args...)...) // #nosec G702 -- exécutable fixe, arguments en tableau, sans shell
 	cmd.WaitDelay = time.Second
 	applyRunAs(cmd)
 	output, err := cmd.Output()
