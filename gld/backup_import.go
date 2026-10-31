@@ -88,11 +88,11 @@ func takeStage(stageID string) (*stage, error) {
 }
 
 // backupPlanner / backupApplier : un couple par famille d'éléments, pour que les tâches suivantes en ajoutent sans toucher au reste.
-type backupPlanner func(s *stage) ([]SyncItem, error)
+type backupPlanner func(localStage *stage) ([]SyncItem, error)
 
 type backupApplier struct {
 	owns  func(id string) bool
-	apply func(s *stage, picks []SyncPick, targets map[string]string) []BackupResult
+	apply func(localStage *stage, picks []SyncPick, targets map[string]string) []BackupResult
 }
 
 var (

@@ -7,9 +7,9 @@ import (
 )
 
 func TestBgTasks(t *testing.T) {
-	d := filepath.Join(t.TempDir(), "-proj")
-	os.MkdirAll(d, 0o755)
-	p := filepath.Join(d, "11111111-2222-3333-4444-555555555555.jsonl")
+	dir := filepath.Join(t.TempDir(), "-proj")
+	os.MkdirAll(dir, 0o755)
+	path := filepath.Join(dir, "11111111-2222-3333-4444-555555555555.jsonl")
 	lines := `{"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"sleep 9","description":"Attente","run_in_background":true}}]}}
 {"type":"user","timestamp":"T1","message":{"content":[{"tool_use_id":"tu1","type":"tool_result"}]},"toolUseResult":{"backgroundTaskId":"abc1"}}
 {"type":"user","timestamp":"T2","message":{"content":[{"tool_use_id":"tu2","type":"tool_result"}]},"toolUseResult":{"backgroundTaskId":"abc2"}}
@@ -19,18 +19,18 @@ func TestBgTasks(t *testing.T) {
 {"type":"user","timestamp":"T6","message":{"content":[{"tool_use_id":"tu3","type":"tool_result"}]},"toolUseResult":{"isAsync":true,"status":"async_launched","agentId":"ag1","description":"Relecture"}}
 {"type":"user","timestamp":"T7","message":{"content":[{"tool_use_id":"tu4","type":"tool_result"}]},"toolUseResult":{"isAsync":true,"status":"async_launched","agentId":"ag2","description":"Implémentation"}}
 `
-	os.WriteFile(p, []byte(lines), 0o600)
+	os.WriteFile(path, []byte(lines), 0o600)
 	// ag2 a fini sans notification : seul son meta.json le dit
-	meta := filepath.Join(d, "11111111-2222-3333-4444-555555555555", "subagents")
+	meta := filepath.Join(dir, "11111111-2222-3333-4444-555555555555", "subagents")
 	os.MkdirAll(meta, 0o755)
 	os.WriteFile(filepath.Join(meta, "agent-ag2.meta.json"), []byte(`{"finished":true}`), 0o600)
-	got := bgTasks(p, true)
+	got := bgTasks(path, true)
 	if len(got) != 5 || got[3].ID != "ag1" || got[3].Tool != "Agent" || got[3].Status != "running" || got[3].Desc != "Relecture" ||
 		got[4].ID != "ag2" || got[4].Status != "completed" || got[0].ID != "abc1" || got[0].Status != "completed" || got[0].Desc != "Attente" || got[0].End != "T3" ||
 		got[1].ID != "abc2" || got[1].Status != "killed" || got[1].End != "T5" || got[2].ID != "mon9" || got[2].Status != "failed" || got[2].Desc != "Monitor KO" {
 		t.Fatalf("%+v", got)
 	}
-	if _, ok := bgOutput(p, "abc1"); ok {
+	if _, ok := bgOutput(path, "abc1"); ok {
 		t.Fatal("sortie lue sans fichier au chemin attendu")
 	}
 }
@@ -43,19 +43,19 @@ func TestBgOutRe(t *testing.T) {
 }
 
 func TestBgOutputOKRefuse(t *testing.T) {
-	for _, p := range []string{"/etc/passwd", "/tmp/claude-1/x/../../etc/y/11111111-2222-3333-4444-555555555555/tasks/a.output", "/tmp/claude-1000/-p/11111111-2222-3333-4444-555555555555/tasks/a.output/", ""} {
-		if bgOutputOK(p) {
-			t.Errorf("accepté : %q", p)
+	for _, path := range []string{"/etc/passwd", "/tmp/claude-1/x/../../etc/y/11111111-2222-3333-4444-555555555555/tasks/a.output", "/tmp/claude-1000/-p/11111111-2222-3333-4444-555555555555/tasks/a.output/", ""} {
+		if bgOutputOK(path) {
+			t.Errorf("accepté : %q", path)
 		}
 	}
 }
 
 func TestBgKilled(t *testing.T) {
-	d := t.TempDir()
+	dir := t.TempDir()
 	for body, want := range map[string]bool{"ok\n\n[killed]\n": true, "[killed]": true, "fin": false, "": false} {
-		p := filepath.Join(d, "o")
-		os.WriteFile(p, []byte(body), 0o600)
-		if bgKilled(p) != want {
+		path := filepath.Join(dir, "o")
+		os.WriteFile(path, []byte(body), 0o600)
+		if bgKilled(path) != want {
 			t.Fatalf("%q", body)
 		}
 	}

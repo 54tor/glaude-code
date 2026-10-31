@@ -7,12 +7,12 @@ import (
 )
 
 func TestAutoTitle(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "s.jsonl")
-	os.WriteFile(p, []byte(`{"type":"user","message":{"content":"corrige le bug de login"}}`+"\n"), 0o600)
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	os.WriteFile(path, []byte(`{"type":"user","message":{"content":"corrige le bug de login"}}`+"\n"), 0o600)
 	old := titleRun
 	defer func() { titleRun = old }()
 	titleRun = func(string) (string, error) { return "  « Bug de login. »\n", nil }
-	got, err := autoTitle(p)
+	got, err := autoTitle(path)
 	if err != nil || got != "Bug de login" {
 		t.Fatalf("got %q, %v", got, err)
 	}
@@ -30,10 +30,10 @@ func TestLineMsgsSkipsMeta(t *testing.T) {
 }
 
 func TestLastSaid(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "s.jsonl")
-	l := `{"type":"assistant","message":{"content":[{"type":"text","text":"Intro.\n\nSi vous préférez, dites-le."}]}}` + "\n"
-	os.WriteFile(p, []byte(l), 0o600)
-	if got := lastSaid(p); got != "Si vous préférez, dites-le." {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	line := `{"type":"assistant","message":{"content":[{"type":"text","text":"Intro.\n\nSi vous préférez, dites-le."}]}}` + "\n"
+	os.WriteFile(path, []byte(line), 0o600)
+	if got := lastSaid(path); got != "Si vous préférez, dites-le." {
 		t.Fatalf("got %q", got)
 	}
 }
@@ -45,19 +45,19 @@ func TestFlushTitlesWaitsForSessionEnd(t *testing.T) {
 	root = filepath.Join(cfg, "projects")
 	dir := filepath.Join(root, "-p")
 	os.MkdirAll(dir, 0o755)
-	p := filepath.Join(dir, id1+".jsonl")
-	os.WriteFile(p, []byte(`{"type":"user","message":{"content":"corrige le login"}}`+"\n"), 0o600)
+	path := filepath.Join(dir, id1+".jsonl")
+	os.WriteFile(path, []byte(`{"type":"user","message":{"content":"corrige le login"}}`+"\n"), 0o600)
 	titleRun = func(string) (string, error) { return "Bug de login", nil }
 	live := true
 	liveSessions = func() map[string]bool { return map[string]bool{id1: live} }
-	deferTitle(id1, p)
+	deferTitle(id1, path)
 	flushTitles()
-	if hasTitle(p) {
+	if hasTitle(path) {
 		t.Fatal("titre posé sur une session ouverte")
 	}
 	live = false
 	flushTitles()
-	if !hasTitle(p) {
+	if !hasTitle(path) {
 		t.Fatal("titre non posé à la fin de la session")
 	}
 }
