@@ -17,7 +17,7 @@ export function Dashboard({ open, closed, waiting, now, home, go, read }: { open
   const [mcp, setMcp] = useState<McpServer[] | null>(null)
   const [status, setStatus] = useState<Record<string, string> | null>(null)
   const [checking, setChecking] = useState(true) // la première vérification part au montage
-  const [u, setU] = useState<{ current: string; latest: string; url: string; newer: boolean } | null>(null)
+  const [u, setU] = useState<Awaited<ReturnType<typeof api.updateInfo>> | null>(null)
   const check = () => api.configMcpCheck().then((d) => setStatus(d.status ?? {}), () => setStatus({})).finally(() => setChecking(false))
   const recheck = () => {
     setChecking(true)
@@ -111,6 +111,12 @@ export function Dashboard({ open, closed, waiting, now, home, go, read }: { open
           ) : (
             <p className="text-sm text-muted-foreground">{t("shell.dash.upToDate", { current: u.current })}</p>
           )}
+          {u?.claudeCurrent &&
+            (u.claudeNewer ? (
+              <p className="mt-2 text-sm text-warning">{t("shell.app.claudeOutdated", { current: u.claudeCurrent, latest: u.claudeLatest })}</p>
+            ) : (
+              <p className="mt-2 text-sm text-muted-foreground">{t("shell.dash.claudeUpToDate", { current: u.claudeCurrent })}</p>
+            ))}
           <p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
             <Keyboard className="size-3.5" /> {t("shell.dash.paletteHint")}
           </p>
