@@ -17,7 +17,7 @@ import { TeamsPage } from "./TeamsPage"
 const rights = vi.hoisted(() => ({ cfg: true }))
 vi.mock("@/lib/auth", async (orig) => ({
   ...(await orig<typeof import("@/lib/auth")>()),
-  useCan: () => (r: string) => (r === "config_write" ? rights.cfg : true),
+  useCan: () => (raw: string) => (raw === "config_write" ? rights.cfg : true),
 }))
 vi.mock("@/lib/teams")
 vi.mock("@/components/actions", () => ({
@@ -28,7 +28,7 @@ setLang("fr")
 const ag = (
   ID: string,
   Name: string,
-  o: Partial<teams.Agent> = {}
+  agent: Partial<teams.Agent> = {}
 ): teams.Agent => ({
   ID,
   Name,
@@ -38,7 +38,7 @@ const ag = (
   Model: "",
   Builtin: true,
   Base: "",
-  ...o,
+  ...agent,
 })
 const chef = ag("chef", "Chef de projet", { Access: "lead" })
 const backend = ag("backend", "Développement backend")
@@ -62,8 +62,8 @@ const cat: teams.Catalog = {
   teams: [bteam, pteam],
 }
 const name = () => screen.getByLabelText("Nom") as HTMLInputElement
-const type = (e: HTMLElement, v: string) =>
-  fireEvent.change(e, { target: { value: v } })
+const type = (element: HTMLElement, localValue: string) =>
+  fireEvent.change(element, { target: { value: localValue } })
 const saveBtn = () =>
   screen.getByRole("button", { name: "Enregistrer" }) as HTMLButtonElement
 
@@ -127,7 +127,7 @@ describe("AgentEditor", () => {
     render(<AgentEditor agent={null} onClose={vi.fn()} onSaved={vi.fn()} />)
     const opts = Array.from(
       (screen.getByLabelText("Accès") as HTMLSelectElement).options
-    ).map((o) => o.value)
+    ).map((element) => element.value)
     expect(opts).toEqual(["read", "write"])
   })
   it("prompt compté en octets UTF-8 : 4001 x é = 8002 octets bloque", () => {
@@ -218,10 +218,10 @@ describe("TeamsPage", () => {
     )
     expect(card.getAttribute("aria-checked")).toBe("false")
     await screen.findByText("Copie de Fonctionnalité")
-    const n = vi.mocked(teams.teamsCatalog).mock.calls.length
+    const count = vi.mocked(teams.teamsCatalog).mock.calls.length
     fireEvent.click(saveBtn())
     await waitFor(() =>
-      expect(vi.mocked(teams.teamsCatalog).mock.calls.length).toBe(n + 1)
+      expect(vi.mocked(teams.teamsCatalog).mock.calls.length).toBe(count + 1)
     )
   })
   it("liste des agents, Nouvel agent, agents chef non modifiables", async () => {

@@ -6,7 +6,7 @@ import { teamSend, type AgentView } from "@/lib/teams"
 import { errMsg } from "@/lib/apiError"
 import { isSend } from "@/lib/utils"
 
-export function MessageBox({ name, agents, to, setTo, queued, disabled }: { name: string; agents: AgentView[]; to: string; setTo: (n: string) => void; queued: number; disabled: boolean }) {
+export function MessageBox({ name, agents, to, setTo, queued, disabled }: { name: string; agents: AgentView[]; to: string; setTo: (localName: string) => void; queued: number; disabled: boolean }) {
   const { t } = useTranslation()
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)

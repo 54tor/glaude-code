@@ -33,7 +33,7 @@ describe("cross-session-message", () => {
   it("le bouton Répondre transmet l'adresse et le nom de l'expéditeur", () => {
     const onReply = vi.fn()
     const t = '<cross-session-message from="uds:/x.sock" from-name="b7" from-mode="prompting">hi</cross-session-message>'
-    render(createElement(Tagged, { t, md: (x: string) => x, onReply }))
+    render(createElement(Tagged, { t, md: (input: string) => input, onReply }))
     fireEvent.click(screen.getByRole("button"))
     expect(onReply).toHaveBeenCalledWith("uds:/x.sock", "b7")
   })
@@ -43,7 +43,7 @@ describe("agent-message", () => {
   it("est reconnu et rendu en carte avec l'expéditeur", () => {
     const t = '<agent-message from="a93586">[Subagent hand-back] rapport</agent-message>'
     expect(isTagged(`texte\n${t}`)).toBe(true)
-    render(createElement(Tagged, { t, md: (x: string) => x }))
+    render(createElement(Tagged, { t, md: (input: string) => input }))
     expect(screen.getByText(/a93586/)).toBeTruthy()
     expect(screen.getByText(/rapport/)).toBeTruthy()
   })

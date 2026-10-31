@@ -41,8 +41,8 @@ export function useAppActions(context: {
   reload: () => Promise<void>
   home: string
   q: string
-  go: (r: Route) => void
-  read: (s: { id: string }) => void
+  go: (route: Route) => void
+  read: (record: { id: string }) => void
   now: number
   live: Set<string>
   waiting: Set<string>
@@ -58,12 +58,12 @@ export function useAppActions(context: {
   args: string
   choice: Choice
   snippets: Snippet[]
-  setAsk: (a: Ask | null) => void
-  setPrompt: (a: PromptAsk | null) => void
-  setCompose: (a: ComposeAsk | null) => void
-  setInfo: (r: Row | null) => void
-  setShare: (r: Row | null) => void
-  setPicker: (p: Pick | null) => void
+  setAsk: (localAsk: Ask | null) => void
+  setPrompt: (promptAsk: PromptAsk | null) => void
+  setCompose: (composeAsk: ComposeAsk | null) => void
+  setInfo: (localRow: Row | null) => void
+  setShare: (anotherRow: Row | null) => void
+  setPicker: (localPick: Pick | null) => void
 }) {
   const {
     data,

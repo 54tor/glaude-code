@@ -8,19 +8,19 @@ import { Message } from "./Message"
 export type ToolGroup = { count: number; from: number; until: number }
 
 // Outils masqués : les appels consécutifs d'une réponse tiennent sur une ligne repliée ; un clic relit et déplie ces messages.
-export function ToolAnchor({ dir, id, g }: { dir: string; id: string; g: ToolGroup }) {
+export function ToolAnchor({ dir, id, g: toolGroup }: { dir: string; id: string; g: ToolGroup }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [got, setGot] = useState<{ key: string; msgs: Msg[] } | null>(null)
-  const key = `${g.from}/${g.until}/${g.count}`
+  const key = `${toolGroup.from}/${toolGroup.until}/${toolGroup.count}`
   useEffect(() => {
     if (!open) return
     let isMounted = true
-    api.convTools({ dir, id }, g.from, g.until).then((toolsResponse) => isMounted && setGot({ key, msgs: toolsResponse.msgs }), () => {})
+    api.convTools({ dir, id }, toolGroup.from, toolGroup.until).then((toolsResponse) => isMounted && setGot({ key, msgs: toolsResponse.msgs }), () => {})
     return () => {
       isMounted = false
     }
-  }, [open, dir, id, g.from, g.until, key])
+  }, [open, dir, id, toolGroup.from, toolGroup.until, key])
   const msgs = got?.key === key ? got.msgs : null
   return (
     <div className="msg">
@@ -31,7 +31,7 @@ export function ToolAnchor({ dir, id, g }: { dir: string; id: string; g: ToolGro
         className="flex w-full min-w-0 cursor-pointer items-center gap-2 border-l-2 border-primary/30 py-0.5 pl-3 text-left text-xs text-muted-foreground hover:text-foreground"
       >
         <Wrench className="size-3.5 shrink-0" aria-hidden />
-        {t("conversation.view.toolAnchor", { count: g.count })}
+        {t("conversation.view.toolAnchor", { count: toolGroup.count })}
         <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-90")} aria-hidden />
       </button>
       {open && (

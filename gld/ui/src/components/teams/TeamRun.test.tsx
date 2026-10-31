@@ -7,7 +7,7 @@ import * as teams from "@/lib/teams"
 import { TeamRun } from "./TeamRun"
 
 const rights = vi.hoisted(() => ({ exec: true }))
-vi.mock("@/lib/auth", async (orig) => ({ ...(await orig<typeof import("@/lib/auth")>()), useCan: () => (r: string) => (r === "exec" ? rights.exec : true) }))
+vi.mock("@/lib/auth", async (orig) => ({ ...(await orig<typeof import("@/lib/auth")>()), useCan: () => (raw: string) => (raw === "exec" ? rights.exec : true) }))
 vi.mock("@/lib/teams")
 
 setLang("fr")
@@ -24,7 +24,7 @@ class RO {
   disconnect() {}
   unobserve() {}
 }
-const view = (o: Partial<teams.TeamView> = {}): teams.TeamView => ({
+const view = (teamView: Partial<teams.TeamView> = {}): teams.TeamView => ({
   Name: NAME,
   LeadSessionID: "s1",
   Live: true,
@@ -39,9 +39,9 @@ const view = (o: Partial<teams.TeamView> = {}): teams.TeamView => ({
   Permission: "",
   PermissionTruncated: false,
   Unknown: [],
-  ...o,
+  ...teamView,
 })
-const mockGet = (v = view()) => vi.mocked(teams.teamGet).mockResolvedValue(v)
+const mockGet = (teamView = view()) => vi.mocked(teams.teamGet).mockResolvedValue(teamView)
 
 beforeEach(() => {
   rights.exec = true
@@ -63,7 +63,7 @@ describe("TeamRun", () => {
     mockGet()
     render(<TeamRun name={NAME} />)
     await screen.findByRole("heading", { name: NAME })
-    expect(screen.getAllByRole("region").map((e) => e.getAttribute("aria-label"))).toEqual(["Agents", "Messages", "Tâches"])
+    expect(screen.getAllByRole("region").map((element) => element.getAttribute("aria-label"))).toEqual(["Agents", "Messages", "Tâches"])
   })
   it("largeur 600 : liste puis détail de l'agent choisi", async () => {
     width = 600
@@ -71,7 +71,7 @@ describe("TeamRun", () => {
     render(<TeamRun name={NAME} />)
     fireEvent.click(await screen.findByRole("button", { name: /Ada/ }))
     expect(screen.queryByRole("region", { name: "Messages" })).toBeNull()
-    for (const n of ["Écrire à", "Tâches", "Tous les messages", "Écran"]) expect(screen.getByRole("button", { name: n })).toBeTruthy()
+    for (const localName of ["Écrire à", "Tâches", "Tous les messages", "Écran"]) expect(screen.getByRole("button", { name: localName })).toBeTruthy()
     expect(screen.getByText("bonjour Ada")).toBeTruthy()
   })
   it("sans ResizeObserver : disposition B", async () => {
@@ -89,7 +89,7 @@ describe("TeamRun", () => {
     const list = screen.getByRole("region", { name: "Agents" })
     expect(list.textContent).toContain("Chef de projet")
     expect(list.textContent).not.toContain("team-lead")
-    const li = (n: string) => within(list).getByText(n).closest("li")!.textContent
+    const li = (name: string) => within(list).getByText(name).closest("li")!.textContent
     expect(li("Marcus")).toContain("· Testeur")
     expect(li("Zoe")).not.toMatch(/·|Testeur/)
     expect(screen.getByRole("option", { name: "Marcus · Testeur" })).toBeTruthy()
@@ -100,7 +100,7 @@ describe("TeamRun", () => {
     mockGet(view({ Agents: [...view().Agents, marcus] }))
     render(<TeamRun name={NAME} />)
     fireEvent.click(await screen.findByRole("button", { name: /Marcus/ }))
-    expect(screen.getAllByText("Marcus · Testeur").some((e) => e.tagName === "SPAN")).toBe(true)
+    expect(screen.getAllByText("Marcus · Testeur").some((element) => element.tagName === "SPAN")).toBe(true)
   })
   it("envoi à Marcus : nom brut en argument, option valeur brute", async () => {
     mockGet(view({ Agents: [...view().Agents, marcus] }))
@@ -116,7 +116,7 @@ describe("TeamRun", () => {
     mockGet(view({ Agents: [...view().Agents, marcus], Messages: [{ ID: "m2", From: "marcus", To: "team-lead", Text: "ok", Summary: "", Kind: "", At: 3000, Read: false }], Direct: [{ Author: "Max", To: "marcus", Text: "hello", At: 1000 }] }))
     const { container } = render(<TeamRun name={NAME} />)
     await screen.findByText("hello")
-    const heads = [...container.querySelectorAll("li .text-xs")].map((e) => e.textContent)
+    const heads = [...container.querySelectorAll("li .text-xs")].map((value) => value.textContent)
     expect(heads).toContain("Max → Marcus")
     expect(heads).toContain("Marcus → Chef de projet")
     expect(container.textContent).not.toMatch(/marcus →|→ marcus|team-lead →|→ team-lead/)
@@ -156,7 +156,7 @@ describe("TeamRun", () => {
     mockGet(view({ Live: false, Permission: "x" }))
     render(<TeamRun name={NAME} />)
     await screen.findByText("bonjour Ada")
-    for (const b of screen.getAllByRole("button", { name: (n) => n !== "Fermer la team" })) expect((b as HTMLButtonElement).disabled).toBe(true)
+    for (const element of screen.getAllByRole("button", { name: (name) => name !== "Fermer la team" })) expect((element as HTMLButtonElement).disabled).toBe(true)
   })
   it("envoi : destinataire choisi, en file", async () => {
     mockGet()
@@ -207,8 +207,8 @@ describe("TeamRun", () => {
     await waitFor(() => expect(teams.teamClose).toHaveBeenCalledWith(NAME))
   })
   it("demande illisible : renvoie au terminal", async () => {
-    const a = view().Agents.map((x) => (x.Lead ? { ...x, State: "waiting" } : x))
-    mockGet(view({ Agents: a, Permission: "" }))
+    const agentViews = view().Agents.map((agentView) => (agentView.Lead ? { ...agentView, State: "waiting" } : agentView))
+    mockGet(view({ Agents: agentViews, Permission: "" }))
     render(<TeamRun name={NAME} />)
     expect(await screen.findByText("Répondre dans le terminal")).toBeTruthy()
   })
@@ -219,8 +219,8 @@ describe("TeamRun", () => {
   })
   it("polling sans chevauchement, arrêté au démontage", async () => {
     vi.useFakeTimers()
-    let release: (v: never) => void = () => {}
-    vi.mocked(teams.teamGet).mockImplementation(() => new Promise((r) => (release = r as never)))
+    let release: (value: never) => void = () => {}
+    vi.mocked(teams.teamGet).mockImplementation(() => new Promise((callback) => (release = callback as never)))
     const { unmount } = render(<TeamRun name={NAME} />)
     await act(() => vi.advanceTimersByTimeAsync(4100))
     expect(teams.teamGet).toHaveBeenCalledTimes(1)
@@ -233,8 +233,8 @@ describe("TeamRun", () => {
   })
   it("touche : expect = texte affiché, un seul envoi si double appel", async () => {
     mockGet(view({ Permission: "dlg" }))
-    let done: (v: never) => void = () => {}
-    vi.mocked(teams.teamKey).mockImplementation(() => new Promise((r) => (done = r as never)))
+    let done: (value: never) => void = () => {}
+    vi.mocked(teams.teamKey).mockImplementation(() => new Promise((callback) => (done = callback as never)))
     render(<TeamRun name={NAME} />)
     const oui = await screen.findByRole("button", { name: "Oui" })
     fireEvent.click(oui)
@@ -245,11 +245,11 @@ describe("TeamRun", () => {
   })
   it("relève partie avant la touche : Oui/Non restent désactivés", async () => {
     vi.useFakeTimers()
-    let slow: (v: never) => void = () => {}
-    let n = 0
+    let slow: (value: never) => void = () => {}
+    let count = 0
     vi.mocked(teams.teamGet).mockImplementation(() => {
-      n++
-      return n === 2 ? new Promise((r) => (slow = r as never)) : Promise.resolve(view({ Permission: "dlg" }) as never)
+      count++
+      return count === 2 ? new Promise((callback) => (slow = callback as never)) : Promise.resolve(view({ Permission: "dlg" }) as never)
     })
     render(<TeamRun name={NAME} />)
     await act(() => vi.advanceTimersByTimeAsync(0))
@@ -269,9 +269,9 @@ describe("TeamRun", () => {
     expect(await screen.findByText("<i>périmé</i>")).toBeTruthy()
   })
   it("changement de nom : réponse de l'ancienne team jetée, pas d'action avec l'ancien chef", async () => {
-    let relA: (v: never) => void = () => {}
+    let relA: (value: never) => void = () => {}
     const vB = view({ Name: "session-bbbbbbbb", Permission: "dlgB", Agents: [{ Name: "zed", Display: "Zed", AgentID: "z", Role: "R", Pane: "%9", State: "idle", Lead: true }] })
-    vi.mocked(teams.teamGet).mockImplementation((n) => (n === NAME ? new Promise((r) => (relA = r as never)) : Promise.resolve(vB as never)))
+    vi.mocked(teams.teamGet).mockImplementation((name) => (name === NAME ? new Promise((callback) => (relA = callback as never)) : Promise.resolve(vB as never)))
     const { rerender } = render(<TeamRun name={NAME} />)
     rerender(<TeamRun name="session-bbbbbbbb" />)
     await screen.findByRole("heading", { name: "session-bbbbbbbb" })

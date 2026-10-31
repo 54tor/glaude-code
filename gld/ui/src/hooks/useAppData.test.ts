@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const toastError = vi.fn()
 const toastDismiss = vi.fn()
-vi.mock("sonner", () => ({ toast: { error: (...a: unknown[]) => toastError(...a), dismiss: (...a: unknown[]) => toastDismiss(...a) } }))
+vi.mock("sonner", () => ({ toast: { error: (...values: unknown[]) => toastError(...values), dismiss: (...values: unknown[]) => toastDismiss(...values) } }))
 
 const { useAppData } = await import("./useAppData")
 const { setAuth } = await import("@/lib/auth")
