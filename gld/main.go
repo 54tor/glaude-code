@@ -68,7 +68,9 @@ func main() {
 	publicURL := flag.String("public-url", "", tr(cliLang(), "cli.main.flagPublicURL", nil))
 	tlsCert := flag.String("tls-cert", env("GLD_WEB_TLS_CERT", ""), tr(cliLang(), "cli.main.flagTLSCert", nil))
 	tlsKey := flag.String("tls-key", env("GLD_WEB_TLS_KEY", ""), tr(cliLang(), "cli.main.flagTLSKey", nil))
+	locations := flag.String("locations", env("GLD_WEB_LOCATIONS", ""), tr(cliLang(), "cli.main.flagLocations", nil))
 	flag.Parse()
+	setBrowseLocations(*locations)
 	if *showVersion {
 		fmt.Println("gld", version)
 		return
