@@ -264,6 +264,9 @@ func routesSessions(mux *http.ServeMux) {
 		browsedPath := request.URL.Query().Get("path")
 		if browsedPath == "" {
 			browsedPath = home
+			if len(browseRoots) > 0 {
+				browsedPath = browseRoots[0]
+			}
 		}
 		separator := string(filepath.Separator)
 		if browsedPath == "::drives" && runtime.GOOS == "windows" { // liste des lecteurs
