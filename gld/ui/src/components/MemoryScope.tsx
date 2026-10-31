@@ -87,7 +87,7 @@ export function ScopeBar({ file, projects, home, onSaved }: { file: MemFile; pro
           className="h-7 min-w-64 flex-1 text-xs"
           aria-label={t("memory.scope.pathsAria")}
         />
-        <Button size="xs" onClick={save} disabled={!dirty || busy}>
+        <Button size="sm" onClick={save} disabled={!dirty || busy}>
           {t("memory.scope.save")}
         </Button>
       </div>

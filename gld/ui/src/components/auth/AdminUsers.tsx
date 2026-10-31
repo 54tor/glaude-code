@@ -424,7 +424,7 @@ export function AdminEvents() {
           <Label htmlFor="gld-ev-kind">{t("auth.admin.kind")}</Label>
           <Input id="gld-ev-kind" value={kind} onChange={(event) => setKind(event.target.value)} placeholder={t("auth.admin.kindHint")} className="w-48" />
         </div>
-        <Button type="submit" size="sm" variant="outline">
+        <Button type="submit" variant="outline">
           {t("auth.admin.filter")}
         </Button>
       </form>
