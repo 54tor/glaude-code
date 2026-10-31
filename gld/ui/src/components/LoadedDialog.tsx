@@ -28,24 +28,29 @@ export function LoadedDialog({ id, home, open, onClose }: { id: string; home: st
   const [view, setView] = useState<{ file: string; text: string | null } | null>(null) // fichier ouvert dans une fenêtre au-dessus
   const openFile = (file: string) => {
     setView({ file, text: null })
-    api.sessionLoadedFile(id, file).then((r) => setView((v) => (v?.file === file ? { file, text: r.text ?? "" } : v)), () => setView((v) => (v?.file === file ? { file, text: "" } : v)))
+    const showTextIfStillOpen = (text: string) =>
+      setView((currentView) => (currentView?.file === file ? { file, text } : currentView))
+    api.sessionLoadedFile(id, file).then(
+      (fileResponse) => showTextIfStillOpen(fileResponse.text ?? ""),
+      () => showTextIfStillOpen("")
+    )
   }
   useEffect(() => {
     if (!open || !id) return
-    let live = true
-    api.sessionLoaded(id).then((r) => live && setFiles(r.files))
+    let isStillMounted = true
+    api.sessionLoaded(id).then((loadedResponse) => isStillMounted && setFiles(loadedResponse.files))
     return () => {
-      live = false
+      isStillMounted = false
     }
   }, [open, id])
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="max-h-[90vh] min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t("conversation.loaded.title")}</DialogTitle>
           <DialogDescription>{t("conversation.loaded.description")}</DialogDescription>
         </DialogHeader>
-        {files === null ? null : files.length === 0 ? (
+        {files !== null && files.length === 0 && (
           <div className="min-h-0 min-w-0 space-y-2 overflow-y-auto text-sm">
             <p>{t("conversation.loaded.empty")}</p>
             <p className="text-muted-foreground">
@@ -53,18 +58,19 @@ export function LoadedDialog({ id, home, open, onClose }: { id: string; home: st
             </p>
             <pre className="max-w-full overflow-x-auto rounded-lg border bg-muted/40 p-2 text-xs">{HOOK_SNIPPET}</pre>
           </div>
-        ) : (
+        )}
+        {files !== null && files.length > 0 && (
           <ScrollArea className="min-h-0 min-w-0">
             <ul className="space-y-1 pr-3 text-sm">
-              {files.map((f, i) => (
-                <li key={i} className="rounded-md px-2 py-1 hover:bg-muted">
-                  <button type="button" onClick={() => openFile(f.file)} title={t("conversation.loaded.openFile")} className="flex cursor-pointer items-start gap-1.5 text-left break-all text-primary underline underline-offset-2 hover:decoration-2">
-                    <FileText className="mt-0.5 size-3.5 shrink-0" /> {tilde(f.file, home)}
+              {files.map((loadEvent, eventIndex) => (
+                <li key={eventIndex} className="rounded-md px-2 py-1 hover:bg-muted">
+                  <button type="button" onClick={() => openFile(loadEvent.file)} title={t("conversation.loaded.openFile")} className="flex cursor-pointer items-start gap-1.5 text-left break-all text-primary underline underline-offset-2 hover:decoration-2">
+                    <FileText className="mt-0.5 size-3.5 shrink-0" /> {tilde(loadEvent.file, home)}
                   </button>
                   <span className="block text-xs text-muted-foreground">
-                    {REASONS[f.reason ?? ""] ? t(REASONS[f.reason ?? ""]) : f.reason}
-                    {f.globs?.length ? ` · ${f.globs.join(", ")}` : ""}
-                    {f.trigger ? ` · ${t("conversation.loaded.for", { path: tilde(f.trigger, home) })}` : ""} · {ago(f.at)}
+                    {REASONS[loadEvent.reason ?? ""] ? t(REASONS[loadEvent.reason ?? ""]) : loadEvent.reason}
+                    {loadEvent.globs?.length ? ` · ${loadEvent.globs.join(", ")}` : ""}
+                    {loadEvent.trigger ? ` · ${t("conversation.loaded.for", { path: tilde(loadEvent.trigger, home) })}` : ""} · {ago(loadEvent.at)}
                   </span>
                 </li>
               ))}
@@ -72,7 +78,7 @@ export function LoadedDialog({ id, home, open, onClose }: { id: string; home: st
           </ScrollArea>
         )}
       </DialogContent>
-      <Dialog open={!!view} onOpenChange={(o) => !o && setView(null)}>
+      <Dialog open={!!view} onOpenChange={(isOpen) => !isOpen && setView(null)}>
         <DialogContent className="flex h-[85vh] max-h-[85vh] min-w-0 flex-col overflow-hidden sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="text-sm break-all">{view && tilde(view.file, home)}</DialogTitle>

@@ -12,21 +12,27 @@ import { needsPush } from "./GitPush"
 export function GitRepos({ dirs, status }: { dirs: string[]; status: Record<string, GitState> }) {
   const { t } = useTranslation()
   if (dirs.length === 0) return null
-  const sorted = [...dirs].sort((a, b) => Number(needsPush(status[b])) - Number(needsPush(status[a])))
-  const push = dirs.filter((d) => needsPush(status[d])).length
+  const dirsToPushFirst = [...dirs].sort(
+    (firstDir, secondDir) => Number(needsPush(status[secondDir])) - Number(needsPush(status[firstDir]))
+  )
+  const reposToPushCount = dirs.filter((repoDir) => needsPush(status[repoDir])).length
+  const hasReposToPush = reposToPushCount > 0
+  const summaryLabel = hasReposToPush
+    ? t("conversation.gitRepos.toPush", { count: reposToPushCount })
+    : t("conversation.gitRepos.repos", { count: dirs.length })
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button size="xs" variant="outline" className={cn(push > 0 && "text-warning")} title={t("conversation.gitRepos.title")}>
-          <GitBranch /> {push > 0 ? t("conversation.gitRepos.toPush", { count: push }) : t("conversation.gitRepos.repos", { count: dirs.length })}
+        <Button size="xs" variant="outline" className={cn(hasReposToPush && "text-warning")} title={t("conversation.gitRepos.title")}>
+          <GitBranch /> {summaryLabel}
         </Button>
       </PopoverTrigger>
       <PopoverContent>
         <ul className="flex flex-col gap-1.5">
-          {sorted.map((d) => (
-            <li key={d} className="flex flex-wrap items-center gap-1.5 text-xs" title={d}>
-              <span className="max-w-32 truncate font-medium">{d.split("/").filter(Boolean).pop()}</span>
-              <GitRepo dir={d} st={status[d]} chip />
+          {dirsToPushFirst.map((repoDir) => (
+            <li key={repoDir} className="flex flex-wrap items-center gap-1.5 text-xs" title={repoDir}>
+              <span className="max-w-32 truncate font-medium">{repoDir.split("/").filter(Boolean).pop()}</span>
+              <GitRepo dir={repoDir} st={status[repoDir]} chip />
             </li>
           ))}
         </ul>

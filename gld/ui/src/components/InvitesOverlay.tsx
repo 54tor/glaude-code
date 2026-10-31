@@ -7,7 +7,7 @@ import { InvitesPanel } from "./InvitesPanel"
 export function InvitesOverlay({ onClose, onOpenSession }: { onClose: () => void; onOpenSession?: (id: string) => void }) {
   const { t } = useTranslation()
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
+    <Dialog open onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="max-h-[85vh] gap-4 overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

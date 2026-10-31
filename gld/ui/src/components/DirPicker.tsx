@@ -17,82 +17,89 @@ export type Pick = { title: string; start: string; children?: boolean; done: (pa
 // sous Windows « ↑ » depuis la racine d'un lecteur affiche la liste des lecteurs.
 export function DirPicker({ pick, home }: { pick: Pick | null; home: string }) {
   const { t } = useTranslation()
-  const [cur, setCur] = useState("")
+  const [currentPath, setCurrentPath] = useState("")
   const [dirs, setDirs] = useState<string[]>([])
   const [parent, setParent] = useState("")
-  const [sep, setSep] = useState("/")
+  const [separator, setSeparator] = useState("/")
   const [hidden, setHidden] = useState(false)
   const [typed, setTyped] = useState("")
   const [filter, setFilter] = useState("") // filtre des sous-dossiers du dossier affiché
-  const [focus, setFocus] = useState("") // sous-dossier mis en évidence : le dossier d'où l'on part, vu depuis son parent
+  const [focusedDir, setFocusedDir] = useState("") // sous-dossier mis en évidence : le dossier d'où l'on part, vu depuis son parent
   const filterRef = useRef<HTMLInputElement>(null)
 
-  const show = (r: Ls, focused = "") => {
-    if (r.error) {
-      toast.error(r.error)
+  const showListing = (listing: Ls, focused = "") => {
+    if (listing.error) {
+      toast.error(listing.error)
       return
     }
-    setCur(r.path)
-    setTyped(r.path)
-    setFocus(focused)
+    setCurrentPath(listing.path)
+    setTyped(listing.path)
+    setFocusedDir(focused)
     setFilter("")
     filterRef.current?.focus() // on tape aussitôt pour filtrer le nouveau dossier
-    setDirs(r.dirs)
-    setParent(r.parent)
-    setSep(r.sep)
+    setDirs(listing.dirs)
+    setParent(listing.parent)
+    setSeparator(listing.sep)
   }
-  const go = (p: string) => api.ls(p).then(show)
+  const navigateTo = (path: string) => api.ls(path).then(showListing)
   useEffect(() => {
     if (!pick) return
-    let live = true
-    api.ls(pick.start || home).then(async (r) => {
-      if (!live) return
+    let isStillMounted = true
+    api.ls(pick.start || home).then(async (startListing) => {
+      if (!isStillMounted) return
       // Le dossier de départ existe : on s'ouvre sur son parent, positionné sur lui.
-      const trim = (x: string) => (x.length > 1 ? x.replace(/[\\/]+$/, "") : x)
-      if (pick.start && !r.error && r.parent && trim(r.path) === trim(pick.start)) {
-        const p = await api.ls(r.parent)
-        if (!live) return
-        if (!p.error) return show(p, trim(r.path).split(r.sep).pop() ?? "")
+      const trimTrailingSeparators = (path: string) => (path.length > 1 ? path.replace(/[\\/]+$/, "") : path)
+      const startDirExists = pick.start && !startListing.error && startListing.parent && trimTrailingSeparators(startListing.path) === trimTrailingSeparators(pick.start)
+      if (startDirExists) {
+        const parentListing = await api.ls(startListing.parent)
+        if (!isStillMounted) return
+        if (!parentListing.error) return showListing(parentListing, trimTrailingSeparators(startListing.path).split(startListing.sep).pop() ?? "")
       }
-      show(r)
+      showListing(startListing)
     })
     return () => {
-      live = false
+      isStillMounted = false
     }
   }, [pick, home])
 
-  const f = filter.toLowerCase()
-  const shown = dirs.filter((d) => (hidden || d === focus || !d.startsWith(".") || (f && d.toLowerCase().startsWith(f))) && d.toLowerCase().includes(f))
-  const visible = dirs.filter((d) => !d.startsWith(".")) // ceux que « ajouter les sous-dossiers » enregistre
-  const isDrives = cur === ""
+  const lowerFilter = filter.toLowerCase()
+  const shown = dirs.filter((dirName) => {
+    const lowerDirName = dirName.toLowerCase()
+    const isHiddenDir = dirName.startsWith(".")
+    const filterTargetsHiddenDir = lowerFilter && lowerDirName.startsWith(lowerFilter)
+    const isListable = hidden || dirName === focusedDir || !isHiddenDir || filterTargetsHiddenDir
+    return isListable && lowerDirName.includes(lowerFilter)
+  })
+  const visible = dirs.filter((dirName) => !dirName.startsWith(".")) // ceux que « ajouter les sous-dossiers » enregistre
+  const isDrives = currentPath === ""
   const close = (path: string | null) => pick?.done(path)
-  const target = focus ? join(cur, focus, sep) : cur
+  const target = focusedDir ? join(currentPath, focusedDir, separator) : currentPath
 
   return (
-    <Dialog open={!!pick} onOpenChange={(o) => !o && close(null)}>
+    <Dialog open={!!pick} onOpenChange={(isOpen) => !isOpen && close(null)}>
       <DialogContent className="max-w-xl gap-3 sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{pick?.title}</DialogTitle>
           <DialogDescription className="sr-only">{t("shell.dirPicker.description")}</DialogDescription>
         </DialogHeader>
         <div className="flex gap-2">
-          <Button variant="outline" size="icon" onClick={() => go(parent)} disabled={parent === ""} title={t("shell.dirPicker.parent")} aria-label={t("shell.dirPicker.parent")}>
+          <Button variant="outline" size="icon" onClick={() => navigateTo(parent)} disabled={parent === ""} title={t("shell.dirPicker.parent")} aria-label={t("shell.dirPicker.parent")}>
             <ArrowUp />
           </Button>
-          <Button variant="outline" size="icon" onClick={() => go(home)} title={t("shell.dirPicker.home")} aria-label={t("shell.dirPicker.home")}>
+          <Button variant="outline" size="icon" onClick={() => navigateTo(home)} title={t("shell.dirPicker.home")} aria-label={t("shell.dirPicker.home")}>
             <Home />
           </Button>
           <Input
             value={typed}
             spellCheck={false}
             className="font-mono text-xs"
-            onChange={(e) => setTyped(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && go(typed.trim())}
+            onChange={(changeEvent) => setTyped(changeEvent.target.value)}
+            onKeyDown={(keyEvent) => keyEvent.key === "Enter" && navigateTo(typed.trim())}
             aria-label={t("shell.dirPicker.path")}
           />
         </div>
         <div className="flex items-center gap-2">
-          <Checkbox id="hid" checked={hidden} onCheckedChange={(c) => setHidden(c === true)} />
+          <Checkbox id="hid" checked={hidden} onCheckedChange={(checkedState) => setHidden(checkedState === true)} />
           <Label htmlFor="hid" className="text-xs text-muted-foreground">
             {t("shell.dirPicker.showHidden")}
           </Label>
@@ -102,11 +109,11 @@ export function DirPicker({ pick, home }: { pick: Pick | null; home: string }) {
           <Input
             ref={filterRef}
             value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && shown[0]) go(join(cur, shown[0], sep))
-              if (e.key === "Escape" && filter) {
-                e.preventDefault()
+            onChange={(changeEvent) => setFilter(changeEvent.target.value)}
+            onKeyDown={(keyEvent) => {
+              if (keyEvent.key === "Enter" && shown[0]) navigateTo(join(currentPath, shown[0], separator))
+              if (keyEvent.key === "Escape" && filter) {
+                keyEvent.preventDefault()
                 setFilter("")
               }
             }}
@@ -121,19 +128,22 @@ export function DirPicker({ pick, home }: { pick: Pick | null; home: string }) {
             {shown.length === 0 && (
               <li className="px-3 py-2 text-xs text-muted-foreground">{filter ? t("shell.dirPicker.noMatch") : t("shell.dirPicker.empty")}</li>
             )}
-            {shown.map((d) => (
-              <li key={d}>
-                <button
-                  ref={d === focus ? (el) => el?.scrollIntoView({ block: "center" }) : undefined}
-                  aria-current={d === focus ? "true" : undefined}
-                  className={`flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left hover:bg-muted ${d === focus ? "bg-accent text-accent-foreground" : ""}`}
-                  onClick={() => go(join(cur, d, sep))}
-                >
-                  <Folder className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="truncate">{d}</span>
-                </button>
-              </li>
-            ))}
+            {shown.map((dirName) => {
+              const isFocused = dirName === focusedDir
+              return (
+                <li key={dirName}>
+                  <button
+                    ref={isFocused ? (buttonElement) => buttonElement?.scrollIntoView({ block: "center" }) : undefined}
+                    aria-current={isFocused ? "true" : undefined}
+                    className={`flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left hover:bg-muted ${isFocused ? "bg-accent text-accent-foreground" : ""}`}
+                    onClick={() => navigateTo(join(currentPath, dirName, separator))}
+                  >
+                    <Folder className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{dirName}</span>
+                  </button>
+                </li>
+              )
+            })}
           </ul>
         </ScrollArea>
         <DialogFooter>
@@ -141,12 +151,12 @@ export function DirPicker({ pick, home }: { pick: Pick | null; home: string }) {
             {t("common.cancel")}
           </Button>
           {pick?.children && (
-            <Button variant="outline" onClick={() => pick.done(cur, true)} disabled={isDrives || visible.length === 0} title={t("shell.dirPicker.addChildrenHint")}>
+            <Button variant="outline" onClick={() => pick.done(currentPath, true)} disabled={isDrives || visible.length === 0} title={t("shell.dirPicker.addChildrenHint")}>
               {t("shell.dirPicker.addChildren", { count: visible.length })}
             </Button>
           )}
           <Button onClick={() => close(target)} disabled={isDrives}>
-            {focus ? t("shell.dirPicker.chooseNamed", { name: focus }) : t("shell.dirPicker.choose")}
+            {focusedDir ? t("shell.dirPicker.chooseNamed", { name: focusedDir }) : t("shell.dirPicker.choose")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -22,7 +22,7 @@ export function Toolbar({
   typeFilter: string
   orphanProjects: number
   onHealth: () => void
-  onType: (t: string) => void
+  onType: (type: string) => void
   onTypeHelp: () => void
   onCleanOrphans: () => void
   onExportAll: () => void
@@ -40,18 +40,21 @@ export function Toolbar({
         >
           <HeartPulse className={issues ? "text-warning" : ""} /> {t("memory.bars.health")}{issues > 0 && ` (${issues})`}
         </Button>
-        {TYPES.map((x) => (
-          <Button
-            key={x.key}
-            variant={typeFilter === x.key ? "secondary" : "ghost"}
-            size="xs"
-            onClick={() => onType(typeFilter === x.key ? "" : x.key)}
-            aria-pressed={typeFilter === x.key}
-            title={t("memory.bars.typeTitle", { key: x.key, label: x.label })}
-          >
-            <x.icon className={x.color} /> {all.filter((f) => f.type === x.key).length}
-          </Button>
-        ))}
+        {TYPES.map((memoryType) => {
+          const isActiveFilter = typeFilter === memoryType.key
+          return (
+            <Button
+              key={memoryType.key}
+              variant={isActiveFilter ? "secondary" : "ghost"}
+              size="xs"
+              onClick={() => onType(isActiveFilter ? "" : memoryType.key)}
+              aria-pressed={isActiveFilter}
+              title={t("memory.bars.typeTitle", { key: memoryType.key, label: memoryType.label })}
+            >
+              <memoryType.icon className={memoryType.color} /> {all.filter((file) => file.type === memoryType.key).length}
+            </Button>
+          )
+        })}
         <Button variant="ghost" size="icon-xs" onClick={onTypeHelp} title={t("memory.bars.typeHelpTitle")} aria-label={t("memory.bars.typeHelpAria")}>
           <CircleHelp />
         </Button>

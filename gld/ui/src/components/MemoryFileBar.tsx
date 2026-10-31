@@ -52,13 +52,18 @@ export function FileBar({
   loads?: { sessions: number; last: number } // chargements réels, si le suivi est installé
 }) {
   const { t } = useTranslation()
+  const isGldReadOnly = sel.startsWith("g/gldrules/")
+  const hasTypeChoice = (sel.startsWith("m/") || sel.startsWith("g/rules/")) && !sel.endsWith("/MEMORY.md")
+  const loadsLabel = loads?.sessions
+    ? t("memory.fileBar.loadedIn", { count: loads.sessions, ago: ago(loads.last) })
+    : t("memory.fileBar.neverLoaded")
   return (
     <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 border-b px-6 py-2">
       <code className="min-w-40 flex-1 truncate text-xs text-muted-foreground" title={file?.path}>
         {file ? `${file.name} · ${size(file.kb)}` : sel}
-        {file && loads && (loads.sessions ? t("memory.fileBar.loadedIn", { count: loads.sessions, ago: ago(loads.last) }) : t("memory.fileBar.neverLoaded"))}
+        {file && loads && loadsLabel}
       </code>
-      {editing ? (
+      {editing && (
         <>
           <Button variant="ghost" size="sm" onClick={onCancel}>
             <X /> {t("memory.fileBar.cancel")}
@@ -68,9 +73,9 @@ export function FileBar({
             <Save /> {t("memory.fileBar.save")}
           </Button>
         </>
-      ) : sel.startsWith("g/gldrules/") ? (
-        <span className="text-xs text-muted-foreground">{t("memory.fileBar.gldReadOnly")}</span>
-      ) : (
+      )}
+      {!editing && isGldReadOnly && <span className="text-xs text-muted-foreground">{t("memory.fileBar.gldReadOnly")}</span>}
+      {!editing && !isGldReadOnly && (
         <>
           {movable(sel) && file && (
             <DropdownMenu>
@@ -90,27 +95,27 @@ export function FileBar({
                 )}
                 {toRules(sel) && <DropdownMenuLabel>{t("memory.fileBar.projectRules")}</DropdownMenuLabel>}
                 {toRules(sel) &&
-                  targets.map((t) => (
-                    <DropdownMenuItem key={"r" + t.dir} onSelect={() => onMove("r:" + t.dir)}>
-                      <ScrollText /> <span className="truncate">{tilde(t.project, homeDir)}</span>
+                  targets.map((target) => (
+                    <DropdownMenuItem key={"r" + target.dir} onSelect={() => onMove("r:" + target.dir)}>
+                      <ScrollText /> <span className="truncate">{tilde(target.project, homeDir)}</span>
                     </DropdownMenuItem>
                   ))}
                 {toRules(sel) && toMemory(sel) && <DropdownMenuSeparator />}
                 {toMemory(sel) && <DropdownMenuLabel>{t("memory.fileBar.projectMemory")}</DropdownMenuLabel>}
                 {toMemory(sel) &&
-                  targets.map((t) => (
-                    <DropdownMenuItem key={t.dir} onSelect={() => onMove(t.dir)}>
-                      <Brain /> <span className="truncate">{tilde(t.project, homeDir)}</span>
+                  targets.map((target) => (
+                    <DropdownMenuItem key={target.dir} onSelect={() => onMove(target.dir)}>
+                      <Brain /> <span className="truncate">{tilde(target.project, homeDir)}</span>
                     </DropdownMenuItem>
                   ))}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-          {file && (sel.startsWith("m/") || sel.startsWith("g/rules/")) && !sel.endsWith("/MEMORY.md") && (
+          {file && hasTypeChoice && (
             <Choose
               value={file.type ?? ""}
               onChange={onType}
-              options={[["", t("memory.fileBar.noType")], ...TYPES.map((x) => [x.key, `${x.key} (${x.label})`] as const)]}
+              options={[["", t("memory.fileBar.noType")], ...TYPES.map((memoryType) => [memoryType.key, `${memoryType.key} (${memoryType.label})`] as const)]}
               label={t("memory.fileBar.typeAria")}
               size="sm"
               className="w-44"

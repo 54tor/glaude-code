@@ -8,11 +8,28 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { ScrollArea } from "@/components/ui/scroll-area"
 
 // Couleur de la lettre d'état : ajouté (vert), supprimé (rouge), conflit (rouge vif), non suivi (gris), modifié ou renommé (ambre).
-export const tone = (s: string) =>
-  s.includes("U") || s === "AA" || s === "DD" ? "text-destructive" : s === "??" ? "text-muted-foreground" : s.includes("D") ? "text-destructive" : s.includes("A") ? "text-success" : "text-warning"
+export const tone = (statusCode: string) => {
+  const isConflict = statusCode.includes("U") || statusCode === "AA" || statusCode === "DD"
+  if (isConflict) return "text-destructive"
+  if (statusCode === "??") return "text-muted-foreground"
+  if (statusCode.includes("D")) return "text-destructive"
+  if (statusCode.includes("A")) return "text-success"
+  return "text-warning"
+}
 
-const Row = ({ onClick, ...p }: React.ComponentProps<"div"> & { onClick?: () => void }) =>
-  onClick ? <button type="button" onClick={onClick} {...(p as React.ComponentProps<"button">)} className={cn(p.className, "rounded-sm hover:bg-accent")} /> : <div {...p} />
+const Row = ({ onClick, ...rowProps }: React.ComponentProps<"div"> & { onClick?: () => void }) => {
+  if (!onClick) return <div {...rowProps} />
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      {...(rowProps as React.ComponentProps<"button">)}
+      className={cn(rowProps.className, "rounded-sm hover:bg-accent")}
+    />
+  )
+}
+
+const stripPrefix = (path: string, prefix: string) => path.slice(prefix.length)
 
 // Les fichiers en cours de modification d'un dépôt : un bouton ouvre la liste dans une fenêtre. La liste est lue à l'ouverture, et
 // relue quand le nombre de changements annoncé par l'état git (relu toutes les 30 s) change. Le chemin du dépôt n'y est pas répété :
@@ -24,22 +41,40 @@ export function GitChanges({ dir, count, onOpen, prefix }: { dir: string; count:
   const [open, setOpen] = useState(false)
   useEffect(() => {
     if (!open || count === 0) return
-    let live = true
+    let isStillMounted = true
     api.gitChanges(dir).then(
-      (r) => {
-        if (!live) return
-        const pre = prefix ?? ""
-        setFiles(pre ? r.files.filter((f) => f.path.startsWith(pre)).map((f) => ({ ...f, path: f.path.slice(pre.length), from: f.from?.startsWith(pre) ? f.from.slice(pre.length) : f.from })) : r.files)
-        setMore(r.more ?? 0)
+      (changesResponse) => {
+        if (!isStillMounted) return
+        const pathPrefix = prefix ?? ""
+        if (pathPrefix) {
+          const filesUnderPrefix = changesResponse.files
+            .filter((change) => change.path.startsWith(pathPrefix))
+            .map((change) => {
+              const renamedFromUnderPrefix = change.from?.startsWith(pathPrefix)
+              return {
+                ...change,
+                path: stripPrefix(change.path, pathPrefix),
+                from: renamedFromUnderPrefix && change.from ? stripPrefix(change.from, pathPrefix) : change.from,
+              }
+            })
+          setFiles(filesUnderPrefix)
+        } else {
+          setFiles(changesResponse.files)
+        }
+        setMore(changesResponse.more ?? 0)
       },
       () => {}
     )
     return () => {
-      live = false
+      isStillMounted = false
     }
   }, [dir, count, open, prefix])
   if (count === 0) return null
   const name = dir.split("/").filter(Boolean).pop() ?? dir
+  const openChangedFile = (path: string) => {
+    setOpen(false)
+    onOpen?.(path)
+  }
   return (
     <>
       <Button size="xs" variant="ghost" onClick={() => setOpen(true)} className="text-muted-foreground" title={t("conversation.gitChanges.viewTitle")}>
@@ -53,15 +88,15 @@ export function GitChanges({ dir, count, onOpen, prefix }: { dir: string; count:
           </DialogHeader>
           <ScrollArea className="max-h-[60vh] rounded-md border">
             <ul className="space-y-px bg-muted/40 p-1 font-mono text-xs">
-              {files.map((f) => (
-                <li key={f.path}>
-                  <Row className="flex w-full items-baseline gap-2 px-1.5 py-0.5 text-left" onClick={onOpen && (() => (setOpen(false), onOpen(f.path)))}>
-                    <span className={cn("w-5 shrink-0 text-center font-semibold whitespace-pre", tone(f.status))} title={f.status}>
-                      {f.status.trim() || " "}
+              {files.map((change) => (
+                <li key={change.path}>
+                  <Row className="flex w-full items-baseline gap-2 px-1.5 py-0.5 text-left" onClick={onOpen && (() => openChangedFile(change.path))}>
+                    <span className={cn("w-5 shrink-0 text-center font-semibold whitespace-pre", tone(change.status))} title={change.status}>
+                      {change.status.trim() || " "}
                     </span>
-                    <span className="min-w-0 flex-1 break-all" title={f.from ? t("conversation.gitChanges.renamedFrom", { from: f.from }) : undefined}>
-                      {f.path}
-                      {f.from && <span className="text-muted-foreground"> ← {f.from}</span>}
+                    <span className="min-w-0 flex-1 break-all" title={change.from ? t("conversation.gitChanges.renamedFrom", { from: change.from }) : undefined}>
+                      {change.path}
+                      {change.from && <span className="text-muted-foreground"> ← {change.from}</span>}
                     </span>
                   </Row>
                 </li>

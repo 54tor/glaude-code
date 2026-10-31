@@ -12,14 +12,14 @@ export function InvitesButton() {
   const [open, setOpen] = useState(false)
   const [, setParams] = useSearchParams()
   if (!shares?.length) return null
-  const invites = shares.flatMap((s) => s.invites)
-  const connected = invites.filter((i) => i.state === "connected").length
-  const pending = invites.reduce((n, i) => n + i.queue.length, 0)
+  const invites = shares.flatMap((share) => share.invites)
+  const connected = invites.filter((invite) => invite.state === "connected").length
+  const pending = invites.reduce((pendingCount, invite) => pendingCount + invite.queue.length, 0)
   const badge = connected + pending
-  const read = (id: string) => {
-    setParams((p) => {
-      p.set("s", id)
-      return p
+  const openSession = (sessionId: string) => {
+    setParams((searchParams) => {
+      searchParams.set("s", sessionId)
+      return searchParams
     })
     setOpen(false)
   }
@@ -34,7 +34,7 @@ export function InvitesButton() {
         <span className="flex-1 truncate text-left">{t("shell.invites.title")}</span>
         {badge > 0 && <span className="text-xs text-muted-foreground tabular-nums">{badge}</span>}
       </button>
-      {open && <InvitesOverlay onClose={() => setOpen(false)} onOpenSession={read} />}
+      {open && <InvitesOverlay onClose={() => setOpen(false)} onOpenSession={openSession} />}
     </>
   )
 }

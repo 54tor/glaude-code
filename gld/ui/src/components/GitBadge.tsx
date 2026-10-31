@@ -3,13 +3,13 @@ import { useTranslation } from "react-i18next"
 import type { GitState } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
-const dirtyOf = (st: GitState | undefined) => (st ? st.changed + st.untracked : 0)
+const dirtyOf = (gitState: GitState | undefined) => (gitState ? gitState.changed + gitState.untracked : 0)
 
 // Navigation : « <changements en attente> [git] » ; rien pour un dossier qui n'est pas un dépôt.
 // slot : réserve la place quand rien n'est en attente, pour que les icônes s'alignent d'une ligne à l'autre.
 export function GitMini({ states, slot }: { states: (GitState | undefined)[]; slot?: boolean }) {
   const { t } = useTranslation()
-  const dirty = states.reduce((n, s) => n + dirtyOf(s), 0)
+  const dirty = states.reduce((dirtyTotal, gitState) => dirtyTotal + dirtyOf(gitState), 0)
   if (dirty === 0) return slot ? <span className="w-9 shrink-0" aria-hidden /> : null // rien en attente : ni nombre ni icône
   return (
     <span className="flex w-9 shrink-0 items-center justify-end gap-0.5 text-xs text-warning" title={t("conversation.git.pending", { n: dirty })}>
@@ -38,6 +38,7 @@ export function GitBadge({ st }: { st: GitState | undefined }) {
   const { t } = useTranslation()
   if (!st) return null
   const branch = st.detached ? t("conversation.git.detached") : st.branch
+  const isClean = dirtyOf(st) === 0 && !st.ahead && !st.behind
   const title = [
     t("conversation.git.branch", { branch }),
     st.upstream ? "" : t("conversation.git.noUpstream"),
@@ -45,7 +46,7 @@ export function GitBadge({ st }: { st: GitState | undefined }) {
     st.untracked ? t("conversation.git.untrackedTitle", { n: st.untracked }) : "",
     st.ahead ? t("conversation.git.ahead", { n: st.ahead }) : "",
     st.behind ? t("conversation.git.behind", { n: st.behind }) : "",
-    dirtyOf(st) === 0 && !st.ahead && !st.behind ? t("conversation.git.clean") : "",
+    isClean ? t("conversation.git.clean") : "",
   ]
     .filter(Boolean)
     .join(" · ")
@@ -69,7 +70,7 @@ export function GitBadge({ st }: { st: GitState | undefined }) {
           {st.behind}
         </span>
       )}
-      {dirtyOf(st) === 0 && !st.ahead && !st.behind && <span>{t("conversation.git.clean")}</span>}
+      {isClean && <span>{t("conversation.git.clean")}</span>}
     </span>
   )
 }

@@ -9,7 +9,10 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 // À pousser : des commits en avance, ou une branche sans amont (jamais un HEAD détaché).
-export const needsPush = (st: GitState | undefined): st is GitState => !!st && !st.detached && (!st.upstream || st.ahead > 0)
+export const needsPush = (st: GitState | undefined): st is GitState => {
+  if (!st || st.detached) return false
+  return !st.upstream || st.ahead > 0
+}
 
 // Pousse la branche courante vers un remote du dépôt. Le menu nomme la cible : choisir un remote est la confirmation.
 // Proposé quand il y a des commits à pousser, ou que la branche n'a pas encore d'amont.
@@ -18,25 +21,33 @@ export function GitPush({ dir, st }: { dir: string; st: GitState | undefined }) 
   const [remotes, setRemotes] = useState<GitRemote[] | null>(null)
   const [busy, setBusy] = useState(false)
   if (!needsPush(st)) return null
-  const push = async (r: GitRemote) => {
+  const pushToRemote = async (remote: GitRemote) => {
     setBusy(true)
-    const id = toast.loading(t("conversation.gitPush.pushing", { branch: st.branch, remote: r.name }))
+    const loadingToastId = toast.loading(t("conversation.gitPush.pushing", { branch: st.branch, remote: remote.name }))
     try {
-      const res = await api.gitPush(dir, r.name)
+      const pushResult = await api.gitPush(dir, remote.name)
       setBusy(false)
-      toast.dismiss(id)
-      toast.success(t("conversation.gitPush.pushed", { branch: st.branch, remote: r.name }), { description: res.message })
-    } catch (e) {
+      toast.dismiss(loadingToastId)
+      toast.success(t("conversation.gitPush.pushed", { branch: st.branch, remote: remote.name }), { description: pushResult.message })
+    } catch (error) {
       setBusy(false)
-      toast.dismiss(id)
-      toast.error(t("conversation.gitPush.failed", { remote: r.name }), { description: errMsg(e) })
+      toast.dismiss(loadingToastId)
+      toast.error(t("conversation.gitPush.failed", { remote: remote.name }), { description: errMsg(error) })
     }
     refreshGit()
   }
+  const loadRemotesOnOpen = (isOpen: boolean) => {
+    if (!isOpen) return
+    api.gitRemotes(dir).then(
+      (remotesResponse) => setRemotes(remotesResponse.remotes),
+      () => setRemotes([])
+    )
+  }
+  const triggerTitle = st.upstream ? t("conversation.git.ahead", { n: st.ahead }) : t("conversation.gitPush.noUpstream")
   return (
-    <DropdownMenu onOpenChange={(open) => open && api.gitRemotes(dir).then((r) => setRemotes(r.remotes), () => setRemotes([]))}>
+    <DropdownMenu onOpenChange={loadRemotesOnOpen}>
       <DropdownMenuTrigger asChild>
-        <Button size="xs" variant="outline" disabled={busy} title={st.upstream ? t("conversation.git.ahead", { n: st.ahead }) : t("conversation.gitPush.noUpstream")}>
+        <Button size="xs" variant="outline" disabled={busy} title={triggerTitle}>
           <ArrowUpFromLine /> {t("conversation.gitPush.button")}
         </Button>
       </DropdownMenuTrigger>
@@ -44,9 +55,9 @@ export function GitPush({ dir, st }: { dir: string; st: GitState | undefined }) 
         <DropdownMenuLabel className="whitespace-normal">{t("conversation.gitPush.label", { branch: st.branch })}</DropdownMenuLabel>
         {remotes === null && <DropdownMenuItem disabled>{t("conversation.gitPush.reading")}</DropdownMenuItem>}
         {remotes?.length === 0 && <DropdownMenuItem disabled>{t("conversation.gitPush.none")}</DropdownMenuItem>}
-        {remotes?.map((r) => (
-          <DropdownMenuItem key={r.name} onSelect={() => push(r)}>
-            <span className="font-medium">{r.name}</span>
+        {remotes?.map((remote) => (
+          <DropdownMenuItem key={remote.name} onSelect={() => pushToRemote(remote)}>
+            <span className="font-medium">{remote.name}</span>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

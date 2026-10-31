@@ -14,52 +14,62 @@ import type { Live } from "./LiveStatus"
 export const stopTask = (id: string, task: string, desc: string, ok: string) =>
   api.sessionSend(id, `Arrête avec l'outil TaskStop la tâche ${task} (${desc}), sans autre commentaire.`).then(
     () => toast.success(ok),
-    (e) => toast.error(errMsg(e))
+    (error) => toast.error(errMsg(error))
   )
 
-function Icon({ s }: { s: BgTask["status"] }) {
-  if (s === "running") return <Fan className="size-3.5 shrink-0 animate-spin text-success" />
-  if (s === "completed") return <CircleCheck className="size-3.5 shrink-0 text-success" />
-  if (s === "unknown") return <CircleHelp className="size-3.5 shrink-0 text-muted-foreground" />
+const OUTPUT_REFRESH_MS = 3000
+const SECONDS_PER_MINUTE = 60
+const SECONDS_PER_HOUR = 3600
+
+function Icon({ s: status }: { s: BgTask["status"] }) {
+  if (status === "running") return <Fan className="size-3.5 shrink-0 animate-spin text-success" />
+  if (status === "completed") return <CircleCheck className="size-3.5 shrink-0 text-success" />
+  if (status === "unknown") return <CircleHelp className="size-3.5 shrink-0 text-muted-foreground" />
   return <CircleAlert className="size-3.5 shrink-0 text-warning" />
 }
 
-const dur = (ms: number) => {
-  const s = Math.round(ms / 1000)
-  return s < 60 ? `${s} s` : s < 3600 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min`
+const formatDuration = (milliseconds: number) => {
+  const totalSeconds = Math.round(milliseconds / 1000)
+  if (totalSeconds < SECONDS_PER_MINUTE) return `${totalSeconds} s`
+  if (totalSeconds < SECONDS_PER_HOUR) return `${Math.floor(totalSeconds / SECONDS_PER_MINUTE)} min ${totalSeconds % SECONDS_PER_MINUTE} s`
+  const hours = Math.floor(totalSeconds / SECONDS_PER_HOUR)
+  const minutes = Math.floor((totalSeconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE)
+  return `${hours} h ${minutes} min`
 }
 
-function AgentIcon({ s }: { s: string }) {
-  if (s === "running") return <Fan className="size-3 shrink-0 animate-spin text-success" />
-  if (s === "done") return <CircleCheck className="size-3 shrink-0 text-success" />
-  if (s === "queued") return <CircleHelp className="size-3 shrink-0 text-muted-foreground" />
+function AgentIcon({ s: state }: { s: string }) {
+  if (state === "running") return <Fan className="size-3 shrink-0 animate-spin text-success" />
+  if (state === "done") return <CircleCheck className="size-3 shrink-0 text-success" />
+  if (state === "queued") return <CircleHelp className="size-3 shrink-0 text-muted-foreground" />
   return <CircleAlert className="size-3 shrink-0 text-warning" />
 }
 
-export function WorkflowProgress({ w }: { w: Workflow }) {
+export function WorkflowProgress({ w: workflow }: { w: Workflow }) {
   const { t } = useTranslation()
-  const titles = w.phases.map((p) => p.title)
-  for (const a of w.agents) if (!titles.includes(a.phase)) titles.push(a.phase)
+  const titles = workflow.phases.map((phase) => phase.title)
+  for (const agent of workflow.agents) {
+    if (!titles.includes(agent.phase)) titles.push(agent.phase)
+  }
   return (
     <div className="space-y-2 rounded-md border bg-muted/30 p-3 text-xs">
       <div className="flex flex-wrap gap-x-3 font-medium tabular-nums">
-        <span>{w.name || t("conversation.tasks.workflow.title")}</span>
-        <span className="text-muted-foreground">{t("conversation.tasks.workflow.agents", { n: w.agents.length })}</span>
-        <span className="text-muted-foreground">{t("conversation.tasks.workflow.tokens", { n: compact(w.totalTokens) })}</span>
-        {w.durationMs > 0 && <span className="text-muted-foreground">{dur(w.durationMs)}</span>}
+        <span>{workflow.name || t("conversation.tasks.workflow.title")}</span>
+        <span className="text-muted-foreground">{t("conversation.tasks.workflow.agents", { n: workflow.agents.length })}</span>
+        <span className="text-muted-foreground">{t("conversation.tasks.workflow.tokens", { n: compact(workflow.totalTokens) })}</span>
+        {workflow.durationMs > 0 && <span className="text-muted-foreground">{formatDuration(workflow.durationMs)}</span>}
       </div>
       {titles.map((title) => (
         <div key={title}>
           <div className="font-medium text-muted-foreground">{title || t("conversation.tasks.workflow.noPhase")}</div>
           <ul className="space-y-0.5">
-            {w.agents.filter((a) => a.phase === title).map((a, i) => (
-              <li key={i} className="flex items-center gap-2" title={a.model}>
-                <AgentIcon s={a.state} />
-                <span className="sr-only">{t(`conversation.tasks.workflow.state.${a.state}`, { defaultValue: a.state })}</span>
-                <span className="min-w-0 flex-1 truncate">{a.label}</span>
-                {a.lastTool && <span className="shrink-0 text-muted-foreground">{a.lastTool}</span>}
-                {a.tokens > 0 && <span className="shrink-0 text-muted-foreground tabular-nums">{compact(a.tokens)}</span>}
-                {a.durationMs > 0 && <span className="shrink-0 text-muted-foreground tabular-nums">{dur(a.durationMs)}</span>}
+            {workflow.agents.filter((agent) => agent.phase === title).map((agent, agentIndex) => (
+              <li key={agentIndex} className="flex items-center gap-2" title={agent.model}>
+                <AgentIcon s={agent.state} />
+                <span className="sr-only">{t(`conversation.tasks.workflow.state.${agent.state}`, { defaultValue: agent.state })}</span>
+                <span className="min-w-0 flex-1 truncate">{agent.label}</span>
+                {agent.lastTool && <span className="shrink-0 text-muted-foreground">{agent.lastTool}</span>}
+                {agent.tokens > 0 && <span className="shrink-0 text-muted-foreground tabular-nums">{compact(agent.tokens)}</span>}
+                {agent.durationMs > 0 && <span className="shrink-0 text-muted-foreground tabular-nums">{formatDuration(agent.durationMs)}</span>}
               </li>
             ))}
           </ul>
@@ -74,41 +84,52 @@ export function WorkflowProgress({ w }: { w: Workflow }) {
 export function LiveTasks({ live: { st }, dir, id }: { live: Live; dir: string; id: string }) {
   const { t } = useTranslation()
   const [shown, setShown] = useState(false)
-  const [pick, setPick] = useState<BgTask | null>(null)
+  const [pickedTask, setPickedTask] = useState<BgTask | null>(null)
   const tasks = st?.tasks ?? []
-  const running = tasks.filter((x) => x.status === "running").length
-  const cur = pick && tasks.find((x) => x.id === pick.id)
-  const [out, setOut] = useState<{ id: string; text: string; ok: boolean } | null>(null)
-  const watch = cur?.status === "running"
-  const [wf, setWf] = useState<{ id: string; w?: Workflow } | null>(null)
+  const runningCount = tasks.filter((task) => task.status === "running").length
+  const currentTask = pickedTask && tasks.find((task) => task.id === pickedTask.id)
+  const [output, setOutput] = useState<{ id: string; text: string; ok: boolean } | null>(null)
+  const watch = currentTask?.status === "running"
+  const [workflowState, setWorkflowState] = useState<{ id: string; w?: Workflow } | null>(null)
   useEffect(() => {
-    if (!pick) return
-    let live = true
+    if (!pickedTask) return
+    let isStillMounted = true
+    const findTaskWorkflow = (workflows: Workflow[]) => {
+      const ownWorkflow = workflows.find((workflow) => workflow.taskId === pickedTask.id)
+      if (ownWorkflow) return ownWorkflow
+      if (pickedTask.status !== "running") return undefined
+      return workflows.find((workflow) => !workflow.taskId && workflow.status === "running")
+    }
     const load = () => {
-      void api.taskOutput(dir, id, pick.id).then(
-        (r) => live && setOut({ id: pick.id, text: r.text ?? "", ok: true }),
-        (e) => live && e instanceof ApiError && e.status === 404 && setOut({ id: pick.id, text: "", ok: false })
+      void api.taskOutput(dir, id, pickedTask.id).then(
+        (outputResponse) => isStillMounted && setOutput({ id: pickedTask.id, text: outputResponse.text ?? "", ok: true }),
+        (error) => isStillMounted && error instanceof ApiError && error.status === 404 && setOutput({ id: pickedTask.id, text: "", ok: false })
       )
-      if (pick.tool === "Workflow")
+      if (pickedTask.tool === "Workflow")
         void api.workflows(dir, id).then(
-          (r) => live && setWf({ id: pick.id, w: r.workflows.find((x) => x.taskId === pick.id) ?? (pick.status === "running" ? r.workflows.find((x) => !x.taskId && x.status === "running") : undefined) }),
+          (workflowsResponse) => isStillMounted && setWorkflowState({ id: pickedTask.id, w: findTaskWorkflow(workflowsResponse.workflows) }),
           () => {}
         )
     }
     load()
-    if (!watch) return () => void (live = false)
-    const iv = setInterval(() => document.visibilityState === "visible" && load(), 3000)
+    if (!watch) return () => void (isStillMounted = false)
+    const refreshInterval = setInterval(() => document.visibilityState === "visible" && load(), OUTPUT_REFRESH_MS)
     return () => {
-      live = false
-      clearInterval(iv)
+      isStillMounted = false
+      clearInterval(refreshInterval)
     }
-  }, [pick, watch, dir, id])
+  }, [pickedTask, watch, dir, id])
+  const renderOutputText = () => {
+    if (output?.id !== pickedTask?.id) return "…"
+    if (!output?.ok) return t("conversation.tasks.noOutput")
+    return output.text || t("conversation.tasks.empty")
+  }
   if (tasks.length === 0) return null
   return (
     <>
       <Button size="xs" variant="ghost" onClick={() => setShown(true)} title={t("conversation.tasks.title")}>
         <ListChecks /> {t("conversation.tasks.count", { n: tasks.length })}
-        {running > 0 && <span className="text-success">{t("conversation.live.runningCount", { running })}</span>}
+        {runningCount > 0 && <span className="text-success">{t("conversation.live.runningCount", { running: runningCount })}</span>}
       </Button>
       <Dialog open={shown} onOpenChange={setShown}>
         <DialogContent className="flex h-[85vh] max-h-[85vh] min-w-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
@@ -118,16 +139,16 @@ export function LiveTasks({ live: { st }, dir, id }: { live: Live; dir: string; 
           </DialogHeader>
           <ScrollArea className="min-h-0 flex-1">
           <ul className="space-y-1 px-4 py-4 text-sm">
-            {[...tasks].reverse().map((x) => (
-              <li key={x.id} className="flex items-center gap-1">
-                <button type="button" onClick={() => setPick(x)} className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted" title={t("conversation.tasks.open")}>
-                  <Icon s={x.status} />
-                  <span className="min-w-0 flex-1 truncate font-medium">{x.desc || x.id}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">{t(`conversation.tasks.status.${x.status}`, { defaultValue: x.status })}</span>
-                  {x.start && <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{ago(Date.parse(x.start) / 1000)}</span>}
+            {[...tasks].reverse().map((task) => (
+              <li key={task.id} className="flex items-center gap-1">
+                <button type="button" onClick={() => setPickedTask(task)} className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted" title={t("conversation.tasks.open")}>
+                  <Icon s={task.status} />
+                  <span className="min-w-0 flex-1 truncate font-medium">{task.desc || task.id}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{t(`conversation.tasks.status.${task.status}`, { defaultValue: task.status })}</span>
+                  {task.start && <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{ago(Date.parse(task.start) / 1000)}</span>}
                 </button>
-                {x.status === "running" && (
-                  <Button size="icon-xs" variant="ghost" title={t("conversation.tasks.stop")} aria-label={t("conversation.tasks.stop")} onClick={() => void stopTask(id, x.id, x.desc || x.id, t("conversation.tasks.stopSent"))}>
+                {task.status === "running" && (
+                  <Button size="icon-xs" variant="ghost" title={t("conversation.tasks.stop")} aria-label={t("conversation.tasks.stop")} onClick={() => void stopTask(id, task.id, task.desc || task.id, t("conversation.tasks.stopSent"))}>
                     <Square />
                   </Button>
                 )}
@@ -137,15 +158,15 @@ export function LiveTasks({ live: { st }, dir, id }: { live: Live; dir: string; 
           </ScrollArea>
         </DialogContent>
       </Dialog>
-      <Dialog open={!!pick} onOpenChange={(o) => !o && setPick(null)}>
+      <Dialog open={!!pickedTask} onOpenChange={(isOpen) => !isOpen && setPickedTask(null)}>
         <DialogContent className="flex h-[85vh] max-h-[85vh] min-w-0 flex-col gap-2 sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle className="truncate">{cur?.desc || pick?.id}</DialogTitle>
-            <DialogDescription>{cur?.summary || t(`conversation.tasks.status.${cur?.status ?? "running"}`, { defaultValue: cur?.status })}</DialogDescription>
+            <DialogTitle className="truncate">{currentTask?.desc || pickedTask?.id}</DialogTitle>
+            <DialogDescription>{currentTask?.summary || t(`conversation.tasks.status.${currentTask?.status ?? "running"}`, { defaultValue: currentTask?.status })}</DialogDescription>
           </DialogHeader>
           <ScrollArea className="min-h-0 flex-1 rounded-md border bg-muted/30">
-            {wf?.id === pick?.id && wf?.w && <div className="p-3 pb-0"><WorkflowProgress w={wf.w} /></div>}
-            <pre className="p-3 font-mono text-xs break-all whitespace-pre-wrap">{out?.id === pick?.id ? (out?.ok ? out.text || t("conversation.tasks.empty") : t("conversation.tasks.noOutput")) : "…"}</pre>
+            {workflowState?.id === pickedTask?.id && workflowState?.w && <div className="p-3 pb-0"><WorkflowProgress w={workflowState.w} /></div>}
+            <pre className="p-3 font-mono text-xs break-all whitespace-pre-wrap">{renderOutputText()}</pre>
           </ScrollArea>
         </DialogContent>
       </Dialog>

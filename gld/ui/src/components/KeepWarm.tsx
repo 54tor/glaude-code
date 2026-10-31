@@ -9,28 +9,32 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useActions } from "./actions"
 
-const set = async (s: Session, on: boolean, max?: number, reheat?: boolean) => {
+const PING_CAP_CHOICES = [3, 6, 12, 24]
+
+const setKeepWarm = async (session: Session, on: boolean, max?: number, reheat?: boolean) => {
   try {
-    await api.keepWarmSet({ dir: s.dir, id: s.id, on, max, reheat })
-  } catch (e) {
-    toast.error(errMsg(e))
+    await api.keepWarmSet({ dir: session.dir, id: session.id, on, max, reheat })
+  } catch (error) {
+    toast.error(errMsg(error))
   }
   refreshWarm()
 }
 
 // Bouton de la barre d'outils : active ou arrête le maintien. L'activation se fait par un menu qui dit ce que ça coûte.
-export function KeepWarmButton({ s }: { s: Session }) {
+export function KeepWarmButton({ s: session }: { s: Session }) {
   const { t } = useTranslation()
-  const a = useActions()
-  const warm = useKeepWarm()[s.id]
-  if (!a.caps(s).keepWarm) return null // fonction propre à certains fournisseurs
+  const actions = useActions()
+  const warm = useKeepWarm()[session.id]
+  if (!actions.caps(session).keepWarm) return null // fonction propre à certains fournisseurs
   if (warm?.on)
     return (
-      <Button variant="outline" size="sm" className="border-warning/60 text-warning" onClick={() => set(s, false)} title={t("conversation.keepWarm.stopTitle")}>
+      <Button variant="outline" size="sm" className="border-warning/60 text-warning" onClick={() => setKeepWarm(session, false)} title={t("conversation.keepWarm.stopTitle")}>
         <Microwave className="warm-wave" /> <span className="max-md:sr-only">{t("conversation.keepWarm.active")}</span>
       </Button>
     )
-  if (!a.live.has(s.id) || a.background.has(s.id)) // un ping part dans un terminal : une tâche de fond n'en a pas
+  // un ping part dans un terminal : une tâche de fond n'en a pas
+  const cannotPing = !actions.live.has(session.id) || actions.background.has(session.id)
+  if (cannotPing)
     return (
       <Button variant="ghost" size="sm" disabled title={t("conversation.keepWarm.closedTitle")}>
         <Microwave /> <span className="max-md:sr-only">{t("conversation.keepWarm.button")}</span>
@@ -44,24 +48,25 @@ export function KeepWarmButton({ s }: { s: Session }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-80">
-        <Offers s={s} />
+        <Offers s={session} />
       </DropdownMenuContent>
     </DropdownMenu>
   )
 }
 
 // L'activation dit d'abord ce que ça coûte, puis propose un plafond de pings.
-function Offers({ s }: { s: Session }) {
+function Offers({ s: session }: { s: Session }) {
   const { t } = useTranslation()
-  const a = useActions()
-  const cold = a.caps(s).hotCache && a.hotLeft(s) === null // cache expiré : le premier ping le reconstruit en entier
+  const actions = useActions()
+  // cache expiré : le premier ping le reconstruit en entier
+  const cold = actions.caps(session).hotCache && actions.hotLeft(session) === null
   return (
     <>
       <DropdownMenuLabel className="whitespace-normal">{t(cold ? "conversation.keepWarm.coldLabel" : "conversation.keepWarm.menuLabel")}</DropdownMenuLabel>
       <DropdownMenuSeparator />
-      {[3, 6, 12, 24].map((n) => (
-        <DropdownMenuItem key={n} onSelect={() => set(s, true, n, cold)}>
-          {t(cold ? "conversation.keepWarm.reheatAtMost" : "conversation.keepWarm.atMost", { count: n })}
+      {PING_CAP_CHOICES.map((pingCap) => (
+        <DropdownMenuItem key={pingCap} onSelect={() => setKeepWarm(session, true, pingCap, cold)}>
+          {t(cold ? "conversation.keepWarm.reheatAtMost" : "conversation.keepWarm.atMost", { count: pingCap })}
         </DropdownMenuItem>
       ))}
     </>
@@ -69,18 +74,20 @@ function Offers({ s }: { s: Session }) {
 }
 
 // Même commande, en entrée du menu « … » du lecteur sur petit écran.
-export function KeepWarmItem({ s }: { s: Session }) {
+export function KeepWarmItem({ s: session }: { s: Session }) {
   const { t } = useTranslation()
-  const a = useActions()
-  const warm = useKeepWarm()[s.id]
-  if (!a.caps(s).keepWarm) return null
+  const actions = useActions()
+  const warm = useKeepWarm()[session.id]
+  if (!actions.caps(session).keepWarm) return null
   if (warm?.on)
     return (
-      <DropdownMenuItem onSelect={() => set(s, false)}>
+      <DropdownMenuItem onSelect={() => setKeepWarm(session, false)}>
         <Microwave className="warm-wave" /> {t("conversation.keepWarm.active")}
       </DropdownMenuItem>
     )
-  if (!a.live.has(s.id) || a.background.has(s.id)) // un ping part dans un terminal : une tâche de fond n'en a pas
+  // un ping part dans un terminal : une tâche de fond n'en a pas
+  const cannotPing = !actions.live.has(session.id) || actions.background.has(session.id)
+  if (cannotPing)
     return (
       <DropdownMenuItem disabled>
         <Microwave /> {t("conversation.keepWarm.button")}
@@ -92,18 +99,19 @@ export function KeepWarmItem({ s }: { s: Session }) {
         <Microwave /> {t("conversation.keepWarm.button")}
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className="w-72">
-        <Offers s={s} />
+        <Offers s={session} />
       </DropdownMenuSubContent>
     </DropdownMenuSub>
   )
 }
 
 // Bandeau toujours visible tant que le maintien est actif : c'est de l'argent dépensé sans action de l'utilisateur.
-export function KeepWarmBanner({ s }: { s: Session }) {
+export function KeepWarmBanner({ s: session }: { s: Session }) {
   const { t } = useTranslation()
-  const a = useActions()
-  const warm = useKeepWarm()[s.id]
-  if (!a.caps(s).keepWarm || (!warm?.on && !warm?.note)) return null
+  const actions = useActions()
+  const warm = useKeepWarm()[session.id]
+  const hasNothingToShow = !warm?.on && !warm?.note
+  if (!actions.caps(session).keepWarm || hasNothingToShow) return null
   return (
     <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-1.5 text-xs md:px-6", warm.on ? "border-warning/40 bg-warning/10 text-warning" : "bg-muted/40 text-muted-foreground")}>
       {warm.on ? <Microwave className="warm-wave size-4 shrink-0" /> : <Coins className="size-4 shrink-0" />}
@@ -118,7 +126,7 @@ export function KeepWarmBanner({ s }: { s: Session }) {
       )}
       {warm.note && warm.on && <span className="text-destructive">{warm.note}</span>}
       {warm.on && (
-        <Button size="xs" variant="outline" className="ml-auto" onClick={() => set(s, false)}>
+        <Button size="xs" variant="outline" className="ml-auto" onClick={() => setKeepWarm(session, false)}>
           {t("conversation.keepWarm.stop")}
         </Button>
       )}
@@ -127,16 +135,17 @@ export function KeepWarmBanner({ s }: { s: Session }) {
 }
 
 // Cache des prompts de la session : minutes restantes ou « froid », et le maintien s'il est actif.
-export function CacheState({ s }: { s: Session }) {
+export function CacheState({ s: session }: { s: Session }) {
   const { t } = useTranslation()
-  const a = useActions()
-  const warm = useKeepWarm()[s.id]
-  const left = a.hotLeft(s)
-  if (!a.caps(s).hotCache) return null
+  const actions = useActions()
+  const warm = useKeepWarm()[session.id]
+  const minutesLeft = actions.hotLeft(session)
+  const isCold = minutesLeft === null
+  if (!actions.caps(session).hotCache) return null
   return (
-    <span className={cn("flex items-center gap-1 font-medium", left === null ? "text-sky-600 dark:text-sky-300" : "text-warning")} title={t("conversation.keepWarm.hotTitle")}>
-      {left === null ? <Snowflake className="size-3.5" /> : <Coffee className="size-3.5" />}
-      {left === null ? t("conversation.keepWarm.cold") : t("conversation.keepWarm.left", { min: left })}
+    <span className={cn("flex items-center gap-1 font-medium", isCold ? "text-sky-600 dark:text-sky-300" : "text-warning")} title={t("conversation.keepWarm.hotTitle")}>
+      {isCold ? <Snowflake className="size-3.5" /> : <Coffee className="size-3.5" />}
+      {isCold ? t("conversation.keepWarm.cold") : t("conversation.keepWarm.left", { min: minutesLeft })}
       {warm?.on && <Microwave className="warm-wave size-3.5" aria-label={t("conversation.keepWarm.warmAria")} />}
     </span>
   )
