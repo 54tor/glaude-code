@@ -13,47 +13,47 @@ import (
 )
 
 func TestQueueAddListRemove(t *testing.T) {
-	q, err := openQueue(t.TempDir())
+	queueStore, err := openQueue(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if l := q.List("s"); l == nil || len(l) != 0 {
-		t.Fatalf("List vide = %#v", l)
+	if qItems := queueStore.List("s"); qItems == nil || len(qItems) != 0 {
+		t.Fatalf("List vide = %#v", qItems)
 	}
-	a, err := q.Add("s", "host", "", "un")
-	if err != nil || a.ID == "" || a.State != "queued" || a.At == 0 {
-		t.Fatalf("Add = %+v %v", a, err)
+	qItem, err := queueStore.Add("s", "host", "", "un")
+	if err != nil || qItem.ID == "" || qItem.State != "queued" || qItem.At == 0 {
+		t.Fatalf("Add = %+v %v", qItem, err)
 	}
-	b, _ := q.Add("s", "guest", gInv, "deux")
-	if l := q.List("s"); len(l) != 2 || l[0].ID != a.ID || l[1].ID != b.ID {
-		t.Fatalf("List = %+v", l)
+	localQItem, _ := queueStore.Add("s", "guest", gInv, "deux")
+	if qItems := queueStore.List("s"); len(qItems) != 2 || qItems[0].ID != qItem.ID || qItems[1].ID != localQItem.ID {
+		t.Fatalf("List = %+v", qItems)
 	}
-	if h, ok := q.Head("s"); !ok || h.ID != a.ID {
-		t.Fatalf("Head = %+v %v", h, ok)
+	if localQItem, ok := queueStore.Head("s"); !ok || localQItem.ID != qItem.ID {
+		t.Fatalf("Head = %+v %v", localQItem, ok)
 	}
-	if got, err := q.Remove("s", a.ID); err != nil || got.Text != "un" {
+	if got, err := queueStore.Remove("s", qItem.ID); err != nil || got.Text != "un" {
 		t.Fatalf("Remove = %+v %v", got, err)
 	}
-	if _, err := q.Remove("s", a.ID); err == nil {
+	if _, err := queueStore.Remove("s", qItem.ID); err == nil {
 		t.Fatal("Remove deux fois")
 	}
-	if s := q.Sessions(); len(s) != 1 || s[0] != "s" {
-		t.Fatalf("Sessions = %v", s)
+	if values := queueStore.Sessions(); len(values) != 1 || values[0] != "s" {
+		t.Fatalf("Sessions = %v", values)
 	}
-	q.Done("s", b.ID)
-	if len(q.List("s")) != 0 || len(q.Sessions()) != 0 {
+	queueStore.Done("s", localQItem.ID)
+	if len(queueStore.List("s")) != 0 || len(queueStore.Sessions()) != 0 {
 		t.Fatal("Done n'a pas vidé la file")
 	}
 }
 
 func TestQueueLimits(t *testing.T) {
-	q, _ := openQueue(t.TempDir())
-	for i := 0; i < 50; i++ {
-		if _, err := q.Add("s", "host", "", "m"); err != nil {
+	queueStore, _ := openQueue(t.TempDir())
+	for index := 0; index < 50; index++ {
+		if _, err := queueStore.Add("s", "host", "", "m"); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := q.Add("s", "host", "", "m"); !errors.Is(err, errQueueFull) {
+	if _, err := queueStore.Add("s", "host", "", "m"); !errors.Is(err, errQueueFull) {
 		t.Fatalf("51e = %v", err)
 	}
 	q2, _ := openQueue(t.TempDir())
@@ -69,24 +69,24 @@ func TestQueueLimits(t *testing.T) {
 
 func TestQueueRestartMarksUncertain(t *testing.T) {
 	dir := t.TempDir()
-	q, _ := openQueue(dir)
-	a, _ := q.Add("s", "host", "", "un")
-	q.Add("s", "host", "", "deux")
-	if err := q.MarkSending("s", a.ID); err != nil {
+	queueStore, _ := openQueue(dir)
+	qItem, _ := queueStore.Add("s", "host", "", "un")
+	queueStore.Add("s", "host", "", "deux")
+	if err := queueStore.MarkSending("s", qItem.ID); err != nil {
 		t.Fatal(err)
 	}
-	if l := q.List("s"); l[0].State != "sending" || l[0].SentAt == 0 {
-		t.Fatalf("sending = %+v", l[0])
+	if qItems := queueStore.List("s"); qItems[0].State != "sending" || qItems[0].SentAt == 0 {
+		t.Fatalf("sending = %+v", qItems[0])
 	}
-	if _, ok := q.Head("s"); ok {
+	if _, ok := queueStore.Head("s"); ok {
 		t.Fatal("Head malgré sending")
 	}
 	q2, err := openQueue(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if l := q2.List("s"); len(l) != 2 || l[0].State != "uncertain" {
-		t.Fatalf("après réouverture = %+v", l)
+	if qItems := q2.List("s"); len(qItems) != 2 || qItems[0].State != "uncertain" {
+		t.Fatalf("après réouverture = %+v", qItems)
 	}
 	if _, ok := q2.Head("s"); ok {
 		t.Fatal("Head malgré uncertain")
@@ -95,35 +95,35 @@ func TestQueueRestartMarksUncertain(t *testing.T) {
 
 func TestQueueRetry(t *testing.T) {
 	dir := t.TempDir()
-	q, _ := openQueue(dir)
-	a, _ := q.Add("s", "host", "", "un")
-	if q.Retry("s", a.ID) {
+	queueStore, _ := openQueue(dir)
+	qItem, _ := queueStore.Add("s", "host", "", "un")
+	if queueStore.Retry("s", qItem.ID) {
 		t.Fatal("Retry sur queued")
 	}
-	if err := q.MarkSending("s", a.ID); err != nil {
+	if err := queueStore.MarkSending("s", qItem.ID); err != nil {
 		t.Fatal(err)
 	}
-	q, _ = openQueue(dir)
-	if !q.Retry("s", a.ID) {
+	queueStore, _ = openQueue(dir)
+	if !queueStore.Retry("s", qItem.ID) {
 		t.Fatal("Retry refusé")
 	}
-	if h, ok := q.Head("s"); !ok || h.ID != a.ID || h.State != "queued" {
-		t.Fatalf("Head = %+v %v", h, ok)
+	if localQItem, ok := queueStore.Head("s"); !ok || localQItem.ID != qItem.ID || localQItem.State != "queued" {
+		t.Fatalf("Head = %+v %v", localQItem, ok)
 	}
 }
 
 func TestQueueMarkSendingCAS(t *testing.T) {
-	q, _ := openQueue(t.TempDir())
-	a, _ := q.Add("s", "host", "", "un")
-	b, _ := q.Add("s", "host", "", "deux")
-	if err := q.MarkSending("s", a.ID); err != nil {
+	queueStore, _ := openQueue(t.TempDir())
+	qItem, _ := queueStore.Add("s", "host", "", "un")
+	localQItem, _ := queueStore.Add("s", "host", "", "deux")
+	if err := queueStore.MarkSending("s", qItem.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := q.MarkSending("s", a.ID); !errors.Is(err, errQueueGone) {
+	if err := queueStore.MarkSending("s", qItem.ID); !errors.Is(err, errQueueGone) {
 		t.Fatalf("second = %v", err)
 	}
-	q.Remove("s", b.ID)
-	if err := q.MarkSending("s", b.ID); !errors.Is(err, errQueueGone) {
+	queueStore.Remove("s", localQItem.ID)
+	if err := queueStore.MarkSending("s", localQItem.ID); !errors.Is(err, errQueueGone) {
 		t.Fatalf("après Remove = %v", err)
 	}
 }
@@ -133,20 +133,20 @@ func TestQueueMarkSendingRollsBackOnWriteFailure(t *testing.T) {
 		t.Skip("root ignore les permissions")
 	}
 	dir := t.TempDir()
-	q, _ := openQueue(dir)
-	a, _ := q.Add("s", "host", "", "un")
+	queueStore, _ := openQueue(dir)
+	qItem, _ := queueStore.Add("s", "host", "", "un")
 	os.Chmod(dir, 0o500)
 	t.Cleanup(func() { os.Chmod(dir, 0o700) })
-	if err := q.MarkSending("s", a.ID); err == nil || errors.Is(err, errQueueGone) {
+	if err := queueStore.MarkSending("s", qItem.ID); err == nil || errors.Is(err, errQueueGone) {
 		t.Fatalf("erreur attendue, reçu %v", err)
 	}
-	if l := q.List("s"); l[0].State != "queued" || l[0].SentAt != 0 {
-		t.Fatalf("pas de rollback : %+v", l[0])
+	if qItems := queueStore.List("s"); qItems[0].State != "queued" || qItems[0].SentAt != 0 {
+		t.Fatalf("pas de rollback : %+v", qItems[0])
 	}
 	os.Chmod(dir, 0o700)
 	q2, _ := openQueue(dir)
-	if l := q2.List("s"); l[0].State != "queued" {
-		t.Fatalf("réouverture = %+v", l[0])
+	if qItems := q2.List("s"); qItems[0].State != "queued" {
+		t.Fatalf("réouverture = %+v", qItems[0])
 	}
 }
 
@@ -183,20 +183,20 @@ func fakeDrainEnv(t *testing.T, open, idle, asking []string) (*[]string, *error)
 }
 
 func TestDrainSendsHeadWhenIdle(t *testing.T) {
-	q, _ := openQueue(t.TempDir())
+	queueStore, _ := openQueue(t.TempDir())
 	sent, _ := fakeDrainEnv(t, []string{"s"}, []string{"s"}, nil)
-	q.Add("s", "host", "", "un")
-	drainOnce(q, time.Now())
-	if len(*sent) != 1 || (*sent)[0] != "s|un" || len(q.List("s")) != 0 {
-		t.Fatalf("sent=%v list=%v", *sent, q.List("s"))
+	queueStore.Add("s", "host", "", "un")
+	drainOnce(queueStore, time.Now())
+	if len(*sent) != 1 || (*sent)[0] != "s|un" || len(queueStore.List("s")) != 0 {
+		t.Fatalf("sent=%v list=%v", *sent, queueStore.List("s"))
 	}
-	q.Add("s", "host", "", "a")
-	q.Add("s", "host", "", "b")
-	drainOnce(q, time.Now()) // apaisement non écoulé
+	queueStore.Add("s", "host", "", "a")
+	queueStore.Add("s", "host", "", "b")
+	drainOnce(queueStore, time.Now()) // apaisement non écoulé
 	if len(*sent) != 1 {
 		t.Fatalf("envoi pendant l'apaisement : %v", *sent)
 	}
-	drainOnce(q, time.Now().Add(5*time.Second))
+	drainOnce(queueStore, time.Now().Add(5*time.Second))
 	if len(*sent) != 2 || (*sent)[1] != "s|"+followPrefix+"a" {
 		t.Fatalf("préfixe attendu : %v", *sent)
 	}
@@ -206,41 +206,41 @@ func TestDrainWaitsWhenBusyAsking(t *testing.T) {
 	for name, env := range map[string][3][]string{
 		"occupée": {{"s"}, {}, nil}, "question": {{"s"}, {"s"}, {"s"}}, "fermée": {{}, {"s"}, nil},
 	} {
-		q, _ := openQueue(t.TempDir())
+		queueStore, _ := openQueue(t.TempDir())
 		sent, _ := fakeDrainEnv(t, env[0], env[1], env[2])
-		q.Add("s", "host", "", "x")
-		drainOnce(q, time.Now())
-		if len(*sent) != 0 || len(q.List("s")) != 1 {
+		queueStore.Add("s", "host", "", "x")
+		drainOnce(queueStore, time.Now())
+		if len(*sent) != 0 || len(queueStore.List("s")) != 1 {
 			t.Fatalf("%s : envoi %v", name, *sent)
 		}
 	}
-	q, _ := openQueue(t.TempDir())
+	localQueueStore, _ := openQueue(t.TempDir())
 	sent, _ := fakeDrainEnv(t, []string{"s"}, []string{"s"}, nil)
-	q.Add("s", "host", "", "x")
+	localQueueStore.Add("s", "host", "", "x")
 	markSent("s")
-	drainOnce(q, time.Now())
+	drainOnce(localQueueStore, time.Now())
 	if len(*sent) != 0 {
 		t.Fatal("markSent n'a pas retardé le vidage")
 	}
 }
 
 func TestDrainFailureKeepsItem(t *testing.T) {
-	q, _ := openQueue(t.TempDir())
+	queueStore, _ := openQueue(t.TempDir())
 	_, fail := fakeDrainEnv(t, []string{"s"}, []string{"s"}, nil)
 	*fail = errors.New("tmux")
-	q.Add("s", "host", "", "x")
+	queueStore.Add("s", "host", "", "x")
 	now := time.Now()
-	drainOnce(q, now)
-	if l := q.List("s"); len(l) != 1 || l[0].State != "queued" {
-		t.Fatalf("list=%+v", l)
+	drainOnce(queueStore, now)
+	if qItems := queueStore.List("s"); len(qItems) != 1 || qItems[0].State != "queued" {
+		t.Fatalf("list=%+v", qItems)
 	}
 	*fail = nil
-	drainOnce(q, now.Add(9*time.Second))
-	if len(q.List("s")) != 1 {
+	drainOnce(queueStore, now.Add(9*time.Second))
+	if len(queueStore.List("s")) != 1 {
 		t.Fatal("nouvel essai avant 10 s")
 	}
-	drainOnce(q, now.Add(11*time.Second))
-	if len(q.List("s")) != 0 {
+	drainOnce(queueStore, now.Add(11*time.Second))
+	if len(queueStore.List("s")) != 0 {
 		t.Fatal("pas de nouvel essai après 10 s")
 	}
 }
@@ -250,40 +250,40 @@ func TestDrainSkipsWhenMarkSendingFails(t *testing.T) {
 		t.Skip("root ignore les permissions")
 	}
 	dir := t.TempDir()
-	q, _ := openQueue(dir)
+	queueStore, _ := openQueue(dir)
 	sent, _ := fakeDrainEnv(t, []string{"s"}, []string{"s"}, nil)
-	q.Add("s", "host", "", "x")
+	queueStore.Add("s", "host", "", "x")
 	os.Chmod(dir, 0o500)
 	t.Cleanup(func() { os.Chmod(dir, 0o700) })
-	drainOnce(q, time.Now())
+	drainOnce(queueStore, time.Now())
 	if len(*sent) != 0 {
 		t.Fatalf("envoi malgré MarkSending en échec : %v", *sent)
 	}
-	if l := q.List("s"); len(l) != 1 || l[0].State != "queued" {
-		t.Fatalf("list=%+v", l)
+	if qItems := queueStore.List("s"); len(qItems) != 1 || qItems[0].State != "queued" {
+		t.Fatalf("list=%+v", qItems)
 	}
 }
 
 func TestDrainOmitsPrefixWhenTooLong(t *testing.T) {
-	q, _ := openQueue(t.TempDir())
+	queueStore, _ := openQueue(t.TempDir())
 	sent, _ := fakeDrainEnv(t, []string{"s"}, []string{"s"}, nil)
 	big := strings.Repeat("x", sendMax)
-	q.Add("s", "host", "", big)
-	q.Add("s", "host", "", "suite")
-	drainOnce(q, time.Now())
-	if len(*sent) != 1 || (*sent)[0] != "s|"+big || len(q.List("s")) != 1 {
-		t.Fatalf("sent=%d list=%d", len(*sent), len(q.List("s")))
+	queueStore.Add("s", "host", "", big)
+	queueStore.Add("s", "host", "", "suite")
+	drainOnce(queueStore, time.Now())
+	if len(*sent) != 1 || (*sent)[0] != "s|"+big || len(queueStore.List("s")) != 1 {
+		t.Fatalf("sent=%d list=%d", len(*sent), len(queueStore.List("s")))
 	}
 }
 
 func TestQueueRequeue(t *testing.T) {
-	q, _ := openQueue(t.TempDir())
-	it, _ := q.Add("s", "host", "", "x")
-	if q.Requeue("s", it.ID) {
+	queueStore, _ := openQueue(t.TempDir())
+	it, _ := queueStore.Add("s", "host", "", "x")
+	if queueStore.Requeue("s", it.ID) {
 		t.Fatal("Requeue d'un item queued")
 	}
-	q.MarkSending("s", it.ID)
-	if !q.Requeue("s", it.ID) || q.List("s")[0].State != "queued" {
+	queueStore.MarkSending("s", it.ID)
+	if !queueStore.Requeue("s", it.ID) || queueStore.List("s")[0].State != "queued" {
 		t.Fatal("Requeue sending -> queued")
 	}
 }
@@ -293,8 +293,8 @@ const qid = "11111111-1111-1111-1111-111111111111"
 func queueMux(t *testing.T) *http.ServeMux {
 	t.Helper()
 	oldSt, oldDir := queueSt, queueDir
-	d := t.TempDir()
-	queueDir = func() string { return d }
+	dir := t.TempDir()
+	queueDir = func() string { return dir }
 	t.Cleanup(func() { queueSt, queueDir = oldSt, oldDir })
 	mux := http.NewServeMux()
 	routesQueue(mux)
@@ -306,31 +306,31 @@ func post(mux *http.ServeMux, path, body string, hdr ...string) *httptest.Respon
 }
 
 func send(mux *http.ServeMux, method, path, body string, hdr ...string) *httptest.ResponseRecorder {
-	r := httptest.NewRequest(method, path, strings.NewReader(body))
-	for i := 0; i+1 < len(hdr); i += 2 {
-		r.Header.Set(hdr[i], hdr[i+1])
+	request := httptest.NewRequest(method, path, strings.NewReader(body))
+	for index := 0; index+1 < len(hdr); index += 2 {
+		request.Header.Set(hdr[index], hdr[index+1])
 	}
-	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, r)
-	return w
+	recorder := httptest.NewRecorder()
+	mux.ServeHTTP(recorder, request)
+	return recorder
 }
 
 func TestQueueAddHandlerRejectsOversize(t *testing.T) {
 	mux := queueMux(t)
 	big, _ := json.Marshal(map[string]string{"text": strings.Repeat("x", sendMax+1)})
-	if w := post(mux, "/v1/sessions/"+qid+"/queue", string(big)); w.Code != 400 || len(queueSt.List(qid)) != 0 {
-		t.Fatalf("code=%d", w.Code)
+	if recorder := post(mux, "/v1/sessions/"+qid+"/queue", string(big)); recorder.Code != 400 || len(queueSt.List(qid)) != 0 {
+		t.Fatalf("code=%d", recorder.Code)
 	}
-	if w := post(mux, "/v1/sessions/"+qid+"/queue", `{"text":"ok"}`, authorHeader, "guest", inviteHeader, gInv); w.Code != 201 || queueSt.List(qid)[0].Guest != gInv {
-		t.Fatalf("code=%d", w.Code)
+	if recorder := post(mux, "/v1/sessions/"+qid+"/queue", `{"text":"ok"}`, authorHeader, "guest", inviteHeader, gInv); recorder.Code != 201 || queueSt.List(qid)[0].Guest != gInv {
+		t.Fatalf("code=%d", recorder.Code)
 	}
 	post(mux, "/v1/sessions/"+qid+"/queue", `{"text":"ok2","author":"guest"}`)
-	if l := queueSt.List(qid); l[1].Author != "host" {
-		t.Fatalf("auteur du corps pris en compte : %+v", l[1])
+	if qItems := queueSt.List(qid); qItems[1].Author != "host" {
+		t.Fatalf("auteur du corps pris en compte : %+v", qItems[1])
 	}
-	w := send(mux, "DELETE", "/v1/sessions/"+qid+"/queue/"+queueSt.List(qid)[1].ID, "")
-	if !strings.Contains(w.Body.String(), `"text":"ok2"`) {
-		t.Fatalf("rm = %s", w.Body)
+	localRecorder := send(mux, "DELETE", "/v1/sessions/"+qid+"/queue/"+queueSt.List(qid)[1].ID, "")
+	if !strings.Contains(localRecorder.Body.String(), `"text":"ok2"`) {
+		t.Fatalf("rm = %s", localRecorder.Body)
 	}
 }
 
@@ -348,32 +348,32 @@ func TestSessionLiveHasPending(t *testing.T) {
 }
 
 func TestFollowPrefixMatchesUI(t *testing.T) {
-	b, err := os.ReadFile("ui/src/lib/queue.ts")
+	data, err := os.ReadFile("ui/src/lib/queue.ts")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(b), "FOLLOW_PREFIX = "+strconv.Quote(followPrefix)) {
+	if !strings.Contains(string(data), "FOLLOW_PREFIX = "+strconv.Quote(followPrefix)) {
 		t.Fatal("followPrefix diffère de FOLLOW_PREFIX")
 	}
 }
 
 func TestQueueRemoveByGuest(t *testing.T) {
 	dir := t.TempDir()
-	q, _ := openQueue(dir)
-	q.Add("s", "guest", gInv, "a")
-	q.Add("s", "guest", "00000000000000bb", "b2")
-	q.Add("s", "host", "", "b")
-	q.Add("t", "guest", gInv, "c")
-	if n, err := q.RemoveByGuest("s", gInv, false); n != 1 || err != nil {
-		t.Fatalf("retirés : %d", n)
+	queueStore, _ := openQueue(dir)
+	queueStore.Add("s", "guest", gInv, "a")
+	queueStore.Add("s", "guest", "00000000000000bb", "b2")
+	queueStore.Add("s", "host", "", "b")
+	queueStore.Add("t", "guest", gInv, "c")
+	if count, err := queueStore.RemoveByGuest("s", gInv, false); count != 1 || err != nil {
+		t.Fatalf("retirés : %d", count)
 	}
-	if n, err := q.RemoveByGuest("s", "", false); n != 1 || err != nil {
-		t.Fatalf("retirés : %d", n)
+	if count, err := queueStore.RemoveByGuest("s", "", false); count != 1 || err != nil {
+		t.Fatalf("retirés : %d", count)
 	}
-	if l := q.List("s"); len(l) != 1 || l[0].Author != "host" {
-		t.Fatalf("s : %+v", l)
+	if qItems := queueStore.List("s"); len(qItems) != 1 || qItems[0].Author != "host" {
+		t.Fatalf("s : %+v", qItems)
 	}
-	if len(q.List("t")) != 1 {
+	if len(queueStore.List("t")) != 1 {
 		t.Fatal("autre session touchée")
 	}
 	q2, _ := openQueue(dir)
@@ -383,60 +383,60 @@ func TestQueueRemoveByGuest(t *testing.T) {
 }
 
 func TestQueueRemoveRefusesSending(t *testing.T) {
-	q, _ := openQueue(t.TempDir())
-	a, _ := q.Add("s", "host", "", "un")
-	if err := q.MarkSending("s", a.ID); err != nil {
+	queueStore, _ := openQueue(t.TempDir())
+	qItem, _ := queueStore.Add("s", "host", "", "un")
+	if err := queueStore.MarkSending("s", qItem.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := q.Remove("s", a.ID); !errors.Is(err, errQueueBusy) {
+	if _, err := queueStore.Remove("s", qItem.ID); !errors.Is(err, errQueueBusy) {
 		t.Fatalf("Remove d'un item en cours d'envoi = %v", err)
 	}
-	if len(q.List("s")) != 1 {
+	if len(queueStore.List("s")) != 1 {
 		t.Fatal("l'item en cours d'envoi a disparu")
 	}
-	q.Done("s", a.ID) // le drain, lui, le retire une fois l'envoi fini
-	if len(q.List("s")) != 0 {
+	queueStore.Done("s", qItem.ID) // le drain, lui, le retire une fois l'envoi fini
+	if len(queueStore.List("s")) != 0 {
 		t.Fatal("Done n'a pas retiré l'item")
 	}
-	if _, err := q.Remove("s", a.ID); !errors.Is(err, errQueueGone) {
+	if _, err := queueStore.Remove("s", qItem.ID); !errors.Is(err, errQueueGone) {
 		t.Fatalf("Remove absent = %v", err)
 	}
 }
 
 func TestDrainGuestLabel(t *testing.T) {
-	q, _ := openQueue(t.TempDir())
+	queueStore, _ := openQueue(t.TempDir())
 	sent, _ := fakeDrainEnv(t, []string{"s"}, []string{"s"}, nil)
-	q.Add("s", "guest", gInv, "/exit")
-	drainOnce(q, time.Now())
+	queueStore.Add("s", "guest", gInv, "/exit")
+	drainOnce(queueStore, time.Now())
 	if len(*sent) != 1 || (*sent)[0] != "s|[Invité 1] /exit" {
 		t.Fatalf("sent=%q", *sent)
 	}
-	q.Add("s", "guest", gInv, "/clear")
-	q.Add("s", "host", "", "/compact")
-	drainOnce(q, time.Now().Add(5*time.Second))
-	drainOnce(q, time.Now().Add(10*time.Second))
+	queueStore.Add("s", "guest", gInv, "/clear")
+	queueStore.Add("s", "host", "", "/compact")
+	drainOnce(queueStore, time.Now().Add(5*time.Second))
+	drainOnce(queueStore, time.Now().Add(10*time.Second))
 	if len(*sent) != 3 || (*sent)[1] != "s|"+followPrefix+"[Invité 1] /clear" || (*sent)[2] != "s|/compact" {
 		t.Fatalf("sent=%q", *sent)
 	}
 }
 
 func TestQueueGuestTextLimit(t *testing.T) {
-	q, _ := openQueue(t.TempDir())
+	queueStore, _ := openQueue(t.TempDir())
 	sent, _ := fakeDrainEnv(t, []string{"s"}, []string{"s"}, nil)
 	max := sendMax - guestLabelMax - len(followPrefix)
-	if _, err := q.Add("s", "guest", gInv, strings.Repeat("x", max+1)); err != errQueueText {
+	if _, err := queueStore.Add("s", "guest", gInv, strings.Repeat("x", max+1)); err != errQueueText {
 		t.Fatalf("un octet de trop accepté : %v", err)
 	}
 	big := strings.Repeat("x", max)
-	if _, err := q.Add("s", "guest", gInv, big); err != nil {
+	if _, err := queueStore.Add("s", "guest", gInv, big); err != nil {
 		t.Fatal(err)
 	}
-	q.Add("s", "host", "", "suite")
-	drainOnce(q, time.Now())
+	queueStore.Add("s", "host", "", "suite")
+	drainOnce(queueStore, time.Now())
 	if len(*sent) != 1 || (*sent)[0] != "s|"+followPrefix+"[Invité 1] "+big || len((*sent)[0])-2 > sendMax {
 		t.Fatalf("envoi = %d octets", len((*sent)[0]))
 	}
-	if _, err := q.Add("s", "host", "", strings.Repeat("x", sendMax)); err != nil {
+	if _, err := queueStore.Add("s", "host", "", strings.Repeat("x", sendMax)); err != nil {
 		t.Fatal("hôte limité comme un invité")
 	}
 }
@@ -447,21 +447,21 @@ func TestDrainFreshScreenCheck(t *testing.T) {
 		text string
 		err  error
 	}{"question": {dialog, nil}, "erreur": {"", errors.New("tmux")}} {
-		q, _ := openQueue(t.TempDir())
+		queueStore, _ := openQueue(t.TempDir())
 		sent, _ := fakeDrainEnv(t, []string{"s"}, []string{"s"}, nil)
 		screenFn = func(string) (string, error) { return scr.text, scr.err }
-		q.Add("s", "guest", gInv, "oui")
+		queueStore.Add("s", "guest", gInv, "oui")
 		now := time.Now()
-		drainOnce(q, now)
-		if len(*sent) != 0 || q.List("s")[0].State != "queued" {
-			t.Fatalf("%s : envoi %v list=%+v", name, *sent, q.List("s"))
+		drainOnce(queueStore, now)
+		if len(*sent) != 0 || queueStore.List("s")[0].State != "queued" {
+			t.Fatalf("%s : envoi %v list=%+v", name, *sent, queueStore.List("s"))
 		}
 		screenFn = func(string) (string, error) { return "> ", nil }
-		drainOnce(q, now.Add(9*time.Second))
+		drainOnce(queueStore, now.Add(9*time.Second))
 		if len(*sent) != 0 {
 			t.Fatalf("%s : nouvel essai avant 10 s", name)
 		}
-		drainOnce(q, now.Add(11*time.Second))
+		drainOnce(queueStore, now.Add(11*time.Second))
 		if len(*sent) != 1 {
 			t.Fatalf("%s : pas envoyé une fois l'écran libre", name)
 		}
@@ -472,11 +472,11 @@ func TestQueueOpenNullFile(t *testing.T) {
 	for _, body := range []string{"null", `{"s":null}`} {
 		dir := t.TempDir()
 		os.WriteFile(dir+"/queue.json", []byte(body), 0o600)
-		q, err := openQueue(dir)
+		queueStore, err := openQueue(dir)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := q.Add("s", "host", "", "x"); err != nil || len(q.List("s")) != 1 {
+		if _, err := queueStore.Add("s", "host", "", "x"); err != nil || len(queueStore.List("s")) != 1 {
 			t.Fatalf("%s : %v", body, err)
 		}
 	}
@@ -490,26 +490,26 @@ func drainShareEnv(t *testing.T, mode string) *shareStore {
 	if mode == "" {
 		return nil
 	}
-	s, _ := newShares(t)
-	s.m[shSess] = &Share{Session: shSess, Seq: 1, Invites: []Invite{{ID: gInv, Seq: 1, Mode: mode}}}
-	shareSt = s
-	return s
+	localShareStore, _ := newShares(t)
+	localShareStore.m[shSess] = &Share{Session: shSess, Seq: 1, Invites: []Invite{{ID: gInv, Seq: 1, Mode: mode}}}
+	shareSt = localShareStore
+	return localShareStore
 }
 
 func TestDrainDropsGuestItemWhenShareReadOnly(t *testing.T) {
-	q, _ := openQueue(t.TempDir())
+	queueStore, _ := openQueue(t.TempDir())
 	sent, _ := fakeDrainEnv(t, []string{shSess}, []string{shSess}, nil)
 	drainShareEnv(t, "ro")
-	q.Add(shSess, "guest", gInv, "x")
-	drainOnce(q, time.Now())
-	if len(*sent) != 0 || len(q.List(shSess)) != 0 {
-		t.Fatalf("sent=%v list=%v", *sent, q.List(shSess))
+	queueStore.Add(shSess, "guest", gInv, "x")
+	drainOnce(queueStore, time.Now())
+	if len(*sent) != 0 || len(queueStore.List(shSess)) != 0 {
+		t.Fatalf("sent=%v list=%v", *sent, queueStore.List(shSess))
 	}
 }
 
 func TestDrainDropsGuestItemWhenShareMissing(t *testing.T) {
 	for _, mode := range []string{"", "none"} {
-		q, _ := openQueue(t.TempDir())
+		queueStore, _ := openQueue(t.TempDir())
 		sent, _ := fakeDrainEnv(t, []string{shSess}, []string{shSess}, nil)
 		if mode == "none" {
 			drainShareEnv(t, "rw")
@@ -517,20 +517,20 @@ func TestDrainDropsGuestItemWhenShareMissing(t *testing.T) {
 		} else {
 			drainShareEnv(t, "")
 		}
-		q.Add(shSess, "guest", gInv, "x")
-		drainOnce(q, time.Now())
-		if len(*sent) != 0 || len(q.List(shSess)) != 0 {
-			t.Fatalf("%q sent=%v list=%v", mode, *sent, q.List(shSess))
+		queueStore.Add(shSess, "guest", gInv, "x")
+		drainOnce(queueStore, time.Now())
+		if len(*sent) != 0 || len(queueStore.List(shSess)) != 0 {
+			t.Fatalf("%q sent=%v list=%v", mode, *sent, queueStore.List(shSess))
 		}
 	}
 }
 
 func TestDrainGuestItemSentWhenShareRw(t *testing.T) {
-	q, _ := openQueue(t.TempDir())
+	queueStore, _ := openQueue(t.TempDir())
 	sent, _ := fakeDrainEnv(t, []string{shSess}, []string{shSess}, nil)
 	drainShareEnv(t, "rw")
-	q.Add(shSess, "guest", gInv, "x")
-	drainOnce(q, time.Now())
+	queueStore.Add(shSess, "guest", gInv, "x")
+	drainOnce(queueStore, time.Now())
 	if len(*sent) != 1 || (*sent)[0] != shSess+"|[Invité 1] x" {
 		t.Fatalf("sent=%v", *sent)
 	}
@@ -538,11 +538,11 @@ func TestDrainGuestItemSentWhenShareRw(t *testing.T) {
 
 func TestDrainHostItemUnaffectedByShareMode(t *testing.T) {
 	for _, mode := range []string{"", "ro"} {
-		q, _ := openQueue(t.TempDir())
+		queueStore, _ := openQueue(t.TempDir())
 		sent, _ := fakeDrainEnv(t, []string{shSess}, []string{shSess}, nil)
 		drainShareEnv(t, mode)
-		q.Add(shSess, "host", "", "x")
-		drainOnce(q, time.Now())
+		queueStore.Add(shSess, "host", "", "x")
+		drainOnce(queueStore, time.Now())
 		if len(*sent) != 1 || (*sent)[0] != shSess+"|x" {
 			t.Fatalf("%q sent=%v", mode, *sent)
 		}
@@ -550,13 +550,13 @@ func TestDrainHostItemUnaffectedByShareMode(t *testing.T) {
 }
 
 func TestDrainDropsGuestItemWhenModeFlipsBeforeSend(t *testing.T) {
-	q, _ := openQueue(t.TempDir())
+	queueStore, _ := openQueue(t.TempDir())
 	sent, _ := fakeDrainEnv(t, []string{shSess}, []string{shSess}, nil)
-	s := drainShareEnv(t, "rw")
-	screenFn = func(string) (string, error) { s.SetInviteMode(shSess, gInv, "ro"); return "", nil }
-	q.Add(shSess, "guest", gInv, "x")
-	drainOnce(q, time.Now())
-	if len(*sent) != 0 || len(q.List(shSess)) != 0 {
-		t.Fatalf("sent=%v list=%v", *sent, q.List(shSess))
+	shareStore := drainShareEnv(t, "rw")
+	screenFn = func(string) (string, error) { shareStore.SetInviteMode(shSess, gInv, "ro"); return "", nil }
+	queueStore.Add(shSess, "guest", gInv, "x")
+	drainOnce(queueStore, time.Now())
+	if len(*sent) != 0 || len(queueStore.List(shSess)) != 0 {
+		t.Fatalf("sent=%v list=%v", *sent, queueStore.List(shSess))
 	}
 }

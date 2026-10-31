@@ -21,8 +21,8 @@ func TestConfineRefuseLesLiensSortants(t *testing.T) {
 		"MkdirAll dossier":  rMkdirAll(base, filepath.Join(base, "dossier", "sous"), 0o700),
 		"hors de la base":   rWriteFile(base, victim, []byte("x"), 0o600),
 	}
-	if f, err := rOpenFile(base, filepath.Join(base, "lien"), os.O_WRONLY|os.O_APPEND, 0o600); err == nil {
-		f.Close()
+	if file, err := rOpenFile(base, filepath.Join(base, "lien"), os.O_WRONLY|os.O_APPEND, 0o600); err == nil {
+		file.Close()
 		t.Error("OpenFile a suivi le lien")
 	}
 	for what, err := range checks {
@@ -30,8 +30,8 @@ func TestConfineRefuseLesLiensSortants(t *testing.T) {
 			t.Errorf("%s accepté", what)
 		}
 	}
-	if b, _ := os.ReadFile(victim); string(b) != "intact" {
-		t.Fatalf("fichier hors de la base modifié : %q", b)
+	if data, _ := os.ReadFile(victim); string(data) != "intact" {
+		t.Fatalf("fichier hors de la base modifié : %q", data)
 	}
 	if _, err := os.Stat(filepath.Join(out, "sous")); err == nil {
 		t.Fatal("dossier créé hors de la base")
@@ -61,8 +61,8 @@ func TestTrashNeSuitPasLesLiens(t *testing.T) {
 	trashPurge("")
 	os.RemoveAll(filepath.Join(cfg, "gld-web-trash")) // le lien seul, jamais sa cible
 	rRemoveAll(cfg, filepath.Join(cfg, "gld-web-trash", "x"))
-	if b, _ := os.ReadFile(victim); string(b) != "intact" {
-		t.Fatalf("journal écrit à travers un lien : %q", b)
+	if data, _ := os.ReadFile(victim); string(data) != "intact" {
+		t.Fatalf("journal écrit à travers un lien : %q", data)
 	}
 	if _, err := os.Stat(filepath.Join(out, "x")); err != nil {
 		t.Fatal("corbeille vidée à travers un lien")
@@ -81,20 +81,20 @@ func TestWriteConfigNeSuitPasLesLiens(t *testing.T) {
 	if ents, _ := os.ReadDir(out); len(ents) != 0 {
 		t.Fatalf("fichiers écrits hors de la config : %v", ents)
 	}
-	p := filepath.Join(cfg, "settings.json")
-	if err := writeConfig(p, []byte("{}\n")); err != nil {
+	path := filepath.Join(cfg, "settings.json")
+	if err := writeConfig(path, []byte("{}\n")); err != nil {
 		t.Fatal(err)
 	}
-	if st, _ := os.Stat(p); st.Mode().Perm() != 0o600 {
+	if st, _ := os.Stat(path); st.Mode().Perm() != 0o600 {
 		t.Fatalf("mode %v", st.Mode())
 	}
-	os.Chmod(p, 0o644)
-	writeConfig(p, []byte("{ }\n"))
-	if st, _ := os.Stat(p); st.Mode().Perm() != 0o644 {
+	os.Chmod(path, 0o644)
+	writeConfig(path, []byte("{ }\n"))
+	if st, _ := os.Stat(path); st.Mode().Perm() != 0o644 {
 		t.Fatalf("mode non conservé : %v", st.Mode())
 	}
-	if m, _ := filepath.Glob(filepath.Join(cfg, ".gld-web-*.tmp")); len(m) != 0 {
-		t.Fatalf("temporaires restés : %v", m)
+	if values, _ := filepath.Glob(filepath.Join(cfg, ".gld-web-*.tmp")); len(values) != 0 {
+		t.Fatalf("temporaires restés : %v", values)
 	}
 }
 
@@ -105,8 +105,8 @@ func TestFichiersDeDonneesNeSuiventPasLesLiens(t *testing.T) {
 	use(cfg)
 	victim := filepath.Join(out, "victime")
 	os.WriteFile(victim, []byte("intact"), 0o600)
-	for _, f := range []string{"gld-web-notes.json.tmp", "gld-web-tabs.json.tmp", "gld-web-groups.json.tmp"} {
-		os.Symlink(victim, filepath.Join(cfg, f))
+	for _, filePath := range []string{"gld-web-notes.json.tmp", "gld-web-tabs.json.tmp", "gld-web-groups.json.tmp"} {
+		os.Symlink(victim, filepath.Join(cfg, filePath))
 	}
 	if err := notesSave(map[string]string{"p/x": "y"}); err != nil {
 		t.Fatal(err)
@@ -119,11 +119,11 @@ func TestFichiersDeDonneesNeSuiventPasLesLiens(t *testing.T) {
 	if err := setTitle(filepath.Join(cfg, "projects", "-p", id1+".jsonl"), id1, "t"); err == nil {
 		t.Error("titre écrit à travers un lien")
 	}
-	if b, _ := os.ReadFile(victim); string(b) != "intact" {
-		t.Fatalf("fichier hors de la config écrasé : %q", b)
+	if data, _ := os.ReadFile(victim); string(data) != "intact" {
+		t.Fatalf("fichier hors de la config écrasé : %q", data)
 	}
-	if b, _ := os.ReadFile(filepath.Join(out, "-p", id1+".jsonl")); string(b) != "{}\n" {
-		t.Fatalf("transcript hors de la config modifié : %q", b)
+	if data, _ := os.ReadFile(filepath.Join(out, "-p", id1+".jsonl")); string(data) != "{}\n" {
+		t.Fatalf("transcript hors de la config modifié : %q", data)
 	}
 }
 
@@ -132,25 +132,25 @@ func TestCorbeilleSessionsNeSuitPasLesLiens(t *testing.T) {
 	old := root
 	t.Cleanup(func() { root = old })
 	use(cfg)
-	p := filepath.Join(cfg, "projects", "-p", id1+".jsonl")
-	os.MkdirAll(filepath.Dir(p), 0o755)
-	os.WriteFile(p, []byte("{}\n"), 0o600)
+	path := filepath.Join(cfg, "projects", "-p", id1+".jsonl")
+	os.MkdirAll(filepath.Dir(path), 0o755)
+	os.WriteFile(path, []byte("{}\n"), 0o600)
 	os.Symlink(out, filepath.Join(cfg, "gld-web-trash")) // la corbeille pointe hors de la config
-	if n, _, _ := trashSessions([]item{{"-p", id1}}); n != 0 {
+	if count, _, _ := trashSessions([]item{{"-p", id1}}); count != 0 {
 		t.Fatal("session déplacée à travers un lien")
 	}
 	if ents, _ := os.ReadDir(out); len(ents) != 0 {
 		t.Fatalf("écrit hors de la config : %v", ents)
 	}
-	if _, err := os.Stat(p); err != nil {
+	if _, err := os.Stat(path); err != nil {
 		t.Fatal("transcript perdu")
 	}
 	victim := filepath.Join(out, "history")
 	os.WriteFile(victim, []byte("intact"), 0o600)
 	os.Symlink(victim, filepath.Join(cfg, "history.jsonl"))
 	pruneHistory([]string{id1})
-	if b, _ := os.ReadFile(victim); string(b) != "intact" {
-		t.Fatalf("history réécrit à travers un lien : %q", b)
+	if data, _ := os.ReadFile(victim); string(data) != "intact" {
+		t.Fatalf("history réécrit à travers un lien : %q", data)
 	}
 }
 
@@ -170,11 +170,11 @@ func TestReassignNeSuitPasLesLiens(t *testing.T) {
 	victim := filepath.Join(out, "victime")
 	os.WriteFile(victim, []byte("intact"), 0o600)
 	os.Symlink(victim, jl+".tmp")
-	if n, err := reassign([]item{{encSrc, id1}}, dst); n != 1 || err != nil {
-		t.Fatal(n, err)
+	if count, err := reassign([]item{{encSrc, id1}}, dst); count != 1 || err != nil {
+		t.Fatal(count, err)
 	}
-	if b, _ := os.ReadFile(victim); string(b) != "intact" {
-		t.Fatalf("réécriture du cwd à travers un lien : %q", b)
+	if data, _ := os.ReadFile(victim); string(data) != "intact" {
+		t.Fatalf("réécriture du cwd à travers un lien : %q", data)
 	}
 }
 
@@ -209,18 +209,18 @@ func TestWalkRootSuitUnLienHorsRunAs(t *testing.T) {
 
 func TestQueueNeSuitPasLesLiens(t *testing.T) {
 	dir, out := t.TempDir(), t.TempDir()
-	q, err := openQueue(dir)
+	queueStore, err := openQueue(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	victim := filepath.Join(out, "victime")
 	os.WriteFile(victim, []byte("intact"), 0o600)
 	os.Symlink(victim, filepath.Join(dir, "queue.json"))
-	if _, err := q.Add("s", "host", "", "x"); err != nil {
+	if _, err := queueStore.Add("s", "host", "", "x"); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := os.ReadFile(victim); string(b) != "intact" {
-		t.Fatalf("fichier hors de la base écrasé : %q", b)
+	if data, _ := os.ReadFile(victim); string(data) != "intact" {
+		t.Fatalf("fichier hors de la base écrasé : %q", data)
 	}
 	if fi, err := os.Lstat(filepath.Join(dir, "queue.json")); err != nil || fi.Mode()&os.ModeSymlink != 0 {
 		t.Fatalf("queue.json reste un lien : %v", err)
@@ -229,16 +229,16 @@ func TestQueueNeSuitPasLesLiens(t *testing.T) {
 
 func TestSharesNeSuitPasLesLiens(t *testing.T) {
 	dir, out := t.TempDir(), t.TempDir()
-	s, err := openShares(dir)
+	shareStore, err := openShares(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	victim := filepath.Join(out, "victime")
 	os.WriteFile(victim, []byte("intact"), 0o600)
 	os.Symlink(victim, filepath.Join(dir, "shares.json"))
-	s.CreateInvite("s", "d", "", "") // erreur attendue : lien refusé, sans écriture hors base
-	if b, _ := os.ReadFile(victim); string(b) != "intact" {
-		t.Fatalf("fichier hors de la base écrasé : %q", b)
+	shareStore.CreateInvite("s", "d", "", "") // erreur attendue : lien refusé, sans écriture hors base
+	if data, _ := os.ReadFile(victim); string(data) != "intact" {
+		t.Fatalf("fichier hors de la base écrasé : %q", data)
 	}
 	if fi, err := os.Lstat(filepath.Join(dir, "shares.json")); err != nil || fi.Mode()&os.ModeSymlink != 0 {
 		t.Fatalf("shares.json reste un lien : %v", err)
@@ -261,8 +261,8 @@ func TestAgentsNeSuiventPasLesLiens(t *testing.T) {
 	os.WriteFile(victim, []byte("intact"), 0o600)
 	os.Symlink(victim, filepath.Join(root2, "agents", "rex.md"))
 	writeAgents(root2, []Agent{{ID: "rex", Role: "r", Access: "read"}})
-	if b, _ := os.ReadFile(victim); string(b) != "intact" {
-		t.Fatalf("fichier lié modifié : %q", b)
+	if data, _ := os.ReadFile(victim); string(data) != "intact" {
+		t.Fatalf("fichier lié modifié : %q", data)
 	}
 }
 
