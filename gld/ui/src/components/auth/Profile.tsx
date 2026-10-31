@@ -13,31 +13,33 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Enrol, ReauthForm, RecoveryCodes } from "./Mfa"
 
-const AdminDialog = lazy(() => import("./AdminUsers").then((m) => ({ default: m.AdminDialog })))
+const AdminDialog = lazy(() => import("./AdminUsers").then((adminUsersModule) => ({ default: adminUsersModule.AdminDialog })))
 
-export const when = (sec: number) => new Date(sec * 1000).toLocaleString(loc(), { dateStyle: "short", timeStyle: "short" })
+const MILLISECONDS_PER_SECOND = 1000
+
+export const when = (unixSeconds: number) => new Date(unixSeconds * MILLISECONDS_PER_SECOND).toLocaleString(loc(), { dateStyle: "short", timeStyle: "short" })
 
 // Menu de l'en-tête : rien en mode ouvert.
 export function UserMenu() {
   const { t } = useTranslation()
-  const a = useAuth()
+  const auth = useAuth()
   const [open, setOpen] = useState<"" | "profile" | "admin">("")
-  if (a.state !== "ok" || !a.user) return null
+  if (auth.state !== "ok" || !auth.user) return null
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" aria-label={t("auth.menu.label", { name: a.user.name })}>
-            <CircleUserRound /> <span className="max-w-32 truncate max-md:sr-only">{a.user.name}</span>
+          <Button variant="ghost" size="sm" aria-label={t("auth.menu.label", { name: auth.user.name })}>
+            <CircleUserRound /> <span className="max-w-32 truncate max-md:sr-only">{auth.user.name}</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuLabel className="truncate">{a.user.name}</DropdownMenuLabel>
+          <DropdownMenuLabel className="truncate">{auth.user.name}</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => setOpen("profile")}>
             <ShieldCheck /> {t("auth.menu.profile")}
           </DropdownMenuItem>
-          {a.user.admin && (
+          {auth.user.admin && (
             <DropdownMenuItem onSelect={() => setOpen("admin")}>
               <Users /> {t("auth.menu.admin")}
             </DropdownMenuItem>
@@ -64,7 +66,7 @@ type Pending = { kind: "rmTotp" | "rmKey" | "regen" | "password" | "revoke" | "r
 export function ProfileDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useTranslation()
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{t("auth.profile.title")}</DialogTitle>
@@ -78,8 +80,8 @@ export function ProfileDialog({ open, onClose }: { open: boolean; onClose: () =>
 
 export function Profile() {
   const { t } = useTranslation()
-  const a = useAuth()
-  const f = a.factors ?? { totp: false, webauthn: 0, recovery: 0 }
+  const auth = useAuth()
+  const factors = auth.factors ?? { totp: false, webauthn: 0, recovery: 0 }
   const [sessions, setSessions] = useState<Sess[] | null>(null)
   const [pending, setPending] = useState<Pending | null>(null)
   const [adding, setAdding] = useState(false)
@@ -87,31 +89,61 @@ export function Profile() {
   const [pw1, setPw1] = useState("")
   const [pw2, setPw2] = useState("")
   const loadSessions = useCallback(async () => {
-    setSessions(await http.get<{ sessions: Sess[] }>("/auth/sessions").then((r) => r.sessions ?? [], () => []))
+    const loadedSessions = await http.get<{ sessions: Sess[] }>("/auth/sessions").then(
+      (sessionList) => sessionList.sessions ?? [],
+      () => []
+    )
+    setSessions(loadedSessions)
   }, [])
   useEffect(() => {
     void Promise.resolve().then(loadSessions)
   }, [loadSessions])
-  const close = () => (setPending(null), setPw1(""), setPw2(""))
+  const close = () => {
+    setPending(null)
+    setPw1("")
+    setPw2("")
+  }
 
-  const run = async (r: Reauth) => {
-    const p = pending!
-    let rec: string[] | undefined
-    if (p.kind === "rmTotp") await http.post("/auth/factors/totp/removals", r)
-    else if (p.kind === "rmKey") await http.post(`/auth/factors/webauthn-${p.key}/removals`, r)
-    else if (p.kind === "regen") rec = (await http.put<{ recovery: string[] }>("/auth/recovery-codes", r)).recovery
-    else if (p.kind === "password") await http.put("/auth/password", { ...r, new: pw1 })
-    else if (p.kind === "revokeOthers") await http.post("/auth/sessions/revocations", r)
-    else await http.post(`/auth/sessions/${seg(p.id!)}/revocations`, r)
+  const performPendingAction = async (pendingAction: Pending, reauth: Reauth) => {
+    if (pendingAction.kind === "rmTotp") {
+      await http.post("/auth/factors/totp/removals", reauth)
+      return undefined
+    }
+    if (pendingAction.kind === "rmKey") {
+      await http.post(`/auth/factors/webauthn-${pendingAction.key}/removals`, reauth)
+      return undefined
+    }
+    if (pendingAction.kind === "regen") {
+      const regenerated = await http.put<{ recovery: string[] }>("/auth/recovery-codes", reauth)
+      return regenerated.recovery
+    }
+    if (pendingAction.kind === "password") {
+      await http.put("/auth/password", { ...reauth, new: pw1 })
+      return undefined
+    }
+    if (pendingAction.kind === "revokeOthers") {
+      await http.post("/auth/sessions/revocations", reauth)
+      return undefined
+    }
+    await http.post(`/auth/sessions/${seg(pendingAction.id!)}/revocations`, reauth)
+    return undefined
+  }
+
+  const run = async (reauth: Reauth) => {
+    const pendingAction = pending!
+    const recoveryCodes = await performPendingAction(pendingAction, reauth)
     close()
-    if (rec) setCodes(rec)
-    if (p.kind === "password" || (p.kind === "revoke" && sessions?.find((s) => s.id === p.id)?.current)) {
+    if (recoveryCodes) setCodes(recoveryCodes)
+    const revokedCurrentSession =
+      pendingAction.kind === "revoke" && sessions?.find((session) => session.id === pendingAction.id)?.current
+    if (pendingAction.kind === "password" || revokedCurrentSession) {
       toast.success(t("auth.profile.reconnect"))
       return signedOut()
     }
     toast.success(t("auth.profile.done"))
     await boot()
-    if (p.kind === "revoke" || p.kind === "revokeOthers") await loadSessions()
+    const changedSessions = pendingAction.kind === "revoke" || pendingAction.kind === "revokeOthers"
+    if (changedSessions) await loadSessions()
   }
 
   const titles: Record<Pending["kind"], string> = {
@@ -129,7 +161,7 @@ export function Profile() {
     return (
       <Enrol
         reauth
-        hasTotp={f.totp}
+        hasTotp={factors.totp}
         onCancel={() => setAdding(false)}
         onDone={async () => {
           setAdding(false)
@@ -146,11 +178,11 @@ export function Profile() {
             <>
               <div className="space-y-1.5">
                 <Label htmlFor="gld-pw-new">{t("auth.profile.newPassword")}</Label>
-                <Input id="gld-pw-new" type="password" autoComplete="new-password" value={pw1} onChange={(e) => setPw1(e.target.value)} />
+                <Input id="gld-pw-new" type="password" autoComplete="new-password" value={pw1} onChange={(event) => setPw1(event.target.value)} />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="gld-pw-new2">{t("auth.profile.confirmPassword")}</Label>
-                <Input id="gld-pw-new2" type="password" autoComplete="new-password" value={pw2} aria-invalid={pwMismatch} onChange={(e) => setPw2(e.target.value)} />
+                <Input id="gld-pw-new2" type="password" autoComplete="new-password" value={pw2} aria-invalid={pwMismatch} onChange={(event) => setPw2(event.target.value)} />
               </div>
               {pwMismatch && <p className="text-xs text-destructive">{t("auth.profile.mismatch")}</p>}
             </>
@@ -163,8 +195,8 @@ export function Profile() {
         <ul className="divide-y rounded-md border">
           <li className="flex flex-wrap items-center gap-2 p-2">
             <span className="flex-1">{t("auth.profile.totp")}</span>
-            <Badge variant={f.totp ? "default" : "outline"}>{f.totp ? t("auth.profile.on") : t("auth.profile.off")}</Badge>
-            {f.totp && (
+            <Badge variant={factors.totp ? "default" : "outline"}>{factors.totp ? t("auth.profile.on") : t("auth.profile.off")}</Badge>
+            {factors.totp && (
               <Button size="xs" variant="ghost" disabled={!!pending} onClick={() => setPending({ kind: "rmTotp" })}>
                 {t("common.delete")}
               </Button>
@@ -172,22 +204,22 @@ export function Profile() {
           </li>
           <li className="flex flex-wrap items-center gap-2 p-2">
             <span className="flex-1">{t("auth.profile.keys")}</span>
-            <Badge variant="outline">{f.keys?.length ?? f.webauthn}</Badge>
+            <Badge variant="outline">{factors.keys?.length ?? factors.webauthn}</Badge>
           </li>
-          {f.keys?.map((k) => (
-            <li key={k.id} className="flex flex-wrap items-center gap-2 p-2 pl-6">
+          {factors.keys?.map((securityKey) => (
+            <li key={securityKey.id} className="flex flex-wrap items-center gap-2 p-2 pl-6">
               <KeyRound className="size-4 text-muted-foreground" aria-hidden />
-              <span className="min-w-0 flex-1 truncate">{k.label || t("auth.profile.keyNoLabel")}</span>
-              {k.bad && <Badge variant="destructive">{t("auth.admin.tampered")}</Badge>}
-              <span className="text-xs text-muted-foreground">{when(k.created)}</span>
-              <Button size="xs" variant="ghost" disabled={!!pending} aria-label={t("auth.profile.removeKeyNamed", { label: k.label })} onClick={() => setPending({ kind: "rmKey", key: k.id })}>
+              <span className="min-w-0 flex-1 truncate">{securityKey.label || t("auth.profile.keyNoLabel")}</span>
+              {securityKey.bad && <Badge variant="destructive">{t("auth.admin.tampered")}</Badge>}
+              <span className="text-xs text-muted-foreground">{when(securityKey.created)}</span>
+              <Button size="xs" variant="ghost" disabled={!!pending} aria-label={t("auth.profile.removeKeyNamed", { label: securityKey.label })} onClick={() => setPending({ kind: "rmKey", key: securityKey.id })}>
                 {t("common.delete")}
               </Button>
             </li>
           ))}
           <li className="flex flex-wrap items-center gap-2 p-2">
             <span className="flex-1">{t("auth.profile.recovery")}</span>
-            <Badge variant={f.recovery ? "outline" : "destructive"}>{f.recovery}</Badge>
+            <Badge variant={factors.recovery ? "outline" : "destructive"}>{factors.recovery}</Badge>
             <Button size="xs" variant="ghost" disabled={!!pending} onClick={() => setPending({ kind: "regen" })}>
               {t("auth.profile.regenerate")}
             </Button>
@@ -209,18 +241,18 @@ export function Profile() {
           <p className="text-muted-foreground">{t("common.loading")}</p>
         ) : (
           <ul className="divide-y rounded-md border">
-            {sessions.map((s) => (
-              <li key={s.id} className="flex flex-wrap items-center gap-2 p-2">
+            {sessions.map((session) => (
+              <li key={session.id} className="flex flex-wrap items-center gap-2 p-2">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate" title={s.ua}>
-                    {s.ua || t("auth.profile.unknownUa")}
+                  <p className="truncate" title={session.ua}>
+                    {session.ua || t("auth.profile.unknownUa")}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {s.ip} · {t("auth.profile.seen", { when: when(s.seen) })}
+                    {session.ip} · {t("auth.profile.seen", { when: when(session.seen) })}
                   </p>
                 </div>
-                {s.current && <Badge>{t("auth.profile.current")}</Badge>}
-                <Button size="xs" variant="ghost" disabled={!!pending} onClick={() => setPending({ kind: "revoke", id: s.id })}>
+                {session.current && <Badge>{t("auth.profile.current")}</Badge>}
+                <Button size="xs" variant="ghost" disabled={!!pending} onClick={() => setPending({ kind: "revoke", id: session.id })}>
                   {t("auth.profile.revoke")}
                 </Button>
               </li>

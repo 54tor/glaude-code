@@ -20,45 +20,49 @@ export function TeamEditor({
 }) {
   const { t } = useTranslation()
   const copy = !!team?.Builtin
-  const [name, setName] = useState(
-    team
-      ? copy
-        ? t("teams.edit.copyName", { name: team.Name })
-        : team.Name
-      : ""
-  )
+  const initialName = () => {
+    if (!team) return ""
+    if (copy) return t("teams.edit.copyName", { name: team.Name })
+    return team.Name
+  }
+  const [name, setName] = useState(initialName)
   const [members, setMembers] = useState<string[]>(team?.Members ?? [])
   const [err, setErr] = useState("")
   const [busy, setBusy] = useState(false)
   const [ask, setAsk] = useState(false)
-  const lead = agents.find((a) => a.Access === "lead")
+  const lead = agents.find((agent) => agent.Access === "lead")
+
+  const dialogTitle = () => {
+    if (!team) return t("teams.edit.newTeam")
+    if (copy) return t("teams.edit.copyOf", { name: team.Name })
+    return t("teams.edit.edit", { name: team.Name })
+  }
 
   const run = async (
-    p: ReturnType<typeof teamsTeamSave> | ReturnType<typeof teamsTeamRm>
+    pendingRequest: ReturnType<typeof teamsTeamSave> | ReturnType<typeof teamsTeamRm>
   ) => {
     setBusy(true)
     setErr("")
     try {
-      await p
+      await pendingRequest
       onSaved()
-    } catch (e) {
-      setErr(errMsg(e))
+    } catch (requestError) {
+      setErr(errMsg(requestError))
     } finally {
       setBusy(false)
     }
   }
-  const toggle = (id: string) =>
-    setMembers((m) => (m.includes(id) ? m.filter((x) => x !== id) : [...m, id]))
+  const toggle = (agentId: string) =>
+    setMembers((currentMembers) => {
+      if (currentMembers.includes(agentId)) {
+        return currentMembers.filter((memberId) => memberId !== agentId)
+      }
+      return [...currentMembers, agentId]
+    })
   return (
     <>
       <EditorDialog
-        title={
-          !team
-            ? t("teams.edit.newTeam")
-            : copy
-              ? t("teams.edit.copyOf", { name: team.Name })
-              : t("teams.edit.edit", { name: team.Name })
-        }
+        title={dialogTitle()}
         err={err}
         busy={busy}
         canSave={name.trim() !== "" && members.length > 0}
@@ -75,7 +79,7 @@ export function TeamEditor({
         onClose={onClose}
       >
         <Field label={t("teams.edit.name")}>
-          <Input value={name} onChange={(e) => setName(e.target.value)} />
+          <Input value={name} onChange={(event) => setName(event.target.value)} />
         </Field>
         <fieldset className="space-y-1 text-sm">
           <legend className="mb-1 font-medium">
@@ -87,16 +91,16 @@ export function TeamEditor({
             </p>
           )}
           {agents
-            .filter((a) => a.Access !== "lead")
-            .map((a) => (
-              <label key={a.ID} className="flex items-center gap-2">
+            .filter((agent) => agent.Access !== "lead")
+            .map((agent) => (
+              <label key={agent.ID} className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  checked={members.includes(a.ID)}
-                  onChange={() => toggle(a.ID)}
+                  checked={members.includes(agent.ID)}
+                  onChange={() => toggle(agent.ID)}
                 />
-                <span>{a.Name}</span>
-                <span className="text-muted-foreground">· {a.Role}</span>
+                <span>{agent.Name}</span>
+                <span className="text-muted-foreground">· {agent.Role}</span>
               </label>
             ))}
         </fieldset>

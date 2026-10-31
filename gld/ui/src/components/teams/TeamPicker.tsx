@@ -36,27 +36,38 @@ export function TeamPicker({
   const [conflicts, setConflicts] = useState<string[]>([])
   const seq = useRef(0)
 
-  const names = new Map(catalog.agents.map((a) => [a.ID, a.Name]))
-  const toggle = (id: string) =>
-    setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]))
+  const agentNamesById = new Map(catalog.agents.map((agent) => [agent.ID, agent.Name]))
+  const toggle = (teamId: string) =>
+    setSel((selectedTeamIds) => {
+      if (selectedTeamIds.includes(teamId)) {
+        return selectedTeamIds.filter((selectedTeamId) => selectedTeamId !== teamId)
+      }
+      return [...selectedTeamIds, teamId]
+    })
 
   // une team supprimée ou renommée ailleurs ne reste pas sélectionnée
   useEffect(
     () =>
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSel((s) =>
-        s.every((id) => catalog.teams.some((t) => t.ID === id))
-          ? s
-          : s.filter((id) => catalog.teams.some((t) => t.ID === id))
-      ),
+      setSel((selectedTeamIds) => {
+        const isKnownTeam = (teamId: string) =>
+          catalog.teams.some((team) => team.ID === teamId)
+        if (selectedTeamIds.every(isKnownTeam)) return selectedTeamIds
+        return selectedTeamIds.filter(isKnownTeam)
+      }),
     [catalog.teams]
   )
   useEffect(() => {
-    const n = ++seq.current // une réponse lente d'une sélection précédente est ignorée
+    const requestSequence = ++seq.current // une réponse lente d'une sélection précédente est ignorée
     if (!sel.length) return void setCompo(null) // eslint-disable-line react-hooks/set-state-in-effect
+    const isLatestRequest = () => requestSequence === seq.current
     teamsCompose(sel).then(
-      (r) => n === seq.current && setCompo(r),
-      () => n === seq.current && setCompo(null)
+      (composition) => {
+        if (isLatestRequest()) setCompo(composition)
+      },
+      () => {
+        if (isLatestRequest()) setCompo(null)
+      }
     )
   }, [sel])
 
@@ -66,9 +77,11 @@ export function TeamPicker({
     setConflicts([])
     try {
       await onLaunch(sel, goal.trim(), dir)
-    } catch (e) {
-      setErr(errMsg(e))
-      setConflicts(e instanceof LaunchError ? (e.run?.Conflicts ?? []) : [])
+    } catch (launchError) {
+      setErr(errMsg(launchError))
+      const launchConflicts =
+        launchError instanceof LaunchError ? (launchError.run?.Conflicts ?? []) : []
+      setConflicts(launchConflicts)
     } finally {
       setBusy(false)
     }
@@ -80,26 +93,26 @@ export function TeamPicker({
       <section>
         <h2 className="mb-2 text-sm font-semibold">{t("teams.title")}</h2>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {catalog.teams.map((tm) => {
-            const on = sel.includes(tm.ID)
+          {catalog.teams.map((team) => {
+            const isSelected = sel.includes(team.ID)
             return (
-              <div key={tm.ID} className="relative">
+              <div key={team.ID} className="relative">
                 <div
                   role="checkbox"
-                  aria-checked={on}
+                  aria-checked={isSelected}
                   tabIndex={0}
-                  onClick={() => toggle(tm.ID)}
-                  onKeyDown={(e) => {
-                    if (e.key === " " || e.key === "Enter") {
-                      e.preventDefault()
-                      toggle(tm.ID)
-                    }
+                  onClick={() => toggle(team.ID)}
+                  onKeyDown={(event) => {
+                    const isToggleKey = event.key === " " || event.key === "Enter"
+                    if (!isToggleKey) return
+                    event.preventDefault()
+                    toggle(team.ID)
                   }}
-                  className={`cursor-pointer rounded-lg border p-3 pr-20 outline-none focus-visible:ring-3 focus-visible:ring-ring/80 ${on ? "border-primary bg-primary/10" : "border-border hover:bg-muted"}`}
+                  className={`cursor-pointer rounded-lg border p-3 pr-20 outline-none focus-visible:ring-3 focus-visible:ring-ring/80 ${isSelected ? "border-primary bg-primary/10" : "border-border hover:bg-muted"}`}
                 >
-                  <div className="text-sm font-medium">{tm.Name}</div>
+                  <div className="text-sm font-medium">{team.Name}</div>
                   <div className="text-xs text-muted-foreground">
-                    {tm.Members.map((m) => names.get(m) ?? m).join(" · ")}
+                    {team.Members.map((memberId) => agentNamesById.get(memberId) ?? memberId).join(" · ")}
                   </div>
                 </div>
                 {onEdit && (
@@ -107,8 +120,8 @@ export function TeamPicker({
                     variant="ghost"
                     size="sm"
                     className="absolute top-2 right-2"
-                    aria-label={t("teams.edit.edit", { name: tm.Name })}
-                    onClick={() => onEdit(tm)}
+                    aria-label={t("teams.edit.edit", { name: team.Name })}
+                    onClick={() => onEdit(team)}
                   >
                     {t("teams.edit.modify")}
                   </Button>
@@ -137,11 +150,11 @@ export function TeamPicker({
                   ` · ${compo.lead.Role}`}
               </span>
             </li>
-            {compo.mates.map((a) => (
-              <li key={a.ID}>
-                <b>{a.Name}</b>{" "}
-                {!sameLabel(a.Name, a.Role) && (
-                  <span className="text-muted-foreground">· {a.Role}</span>
+            {compo.mates.map((mate) => (
+              <li key={mate.ID}>
+                <b>{mate.Name}</b>{" "}
+                {!sameLabel(mate.Name, mate.Role) && (
+                  <span className="text-muted-foreground">· {mate.Role}</span>
                 )}
               </li>
             ))}
@@ -157,7 +170,7 @@ export function TeamPicker({
       <section className="space-y-3">
         <textarea
           value={goal}
-          onChange={(e) => setGoal(e.target.value)}
+          onChange={(event) => setGoal(event.target.value)}
           placeholder={t("teams.goal")}
           aria-label={t("teams.goal")}
           rows={4}
@@ -166,9 +179,10 @@ export function TeamPicker({
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            onClick={async () =>
-              setDir((await pickDir(t("teams.pickDir"), dir || home)) ?? dir)
-            }
+            onClick={async () => {
+              const pickedDir = await pickDir(t("teams.pickDir"), dir || home)
+              setDir(pickedDir ?? dir)
+            }}
           >
             {t("teams.choose")}
           </Button>
@@ -184,8 +198,8 @@ export function TeamPicker({
           <div className="text-sm">
             <p className="font-medium">{t("teams.conflicts")}</p>
             <ul className="text-muted-foreground">
-              {conflicts.map((c) => (
-                <li key={c}>{c}</li>
+              {conflicts.map((conflictPath) => (
+                <li key={conflictPath}>{conflictPath}</li>
               ))}
             </ul>
           </div>

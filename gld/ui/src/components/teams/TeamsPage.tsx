@@ -21,9 +21,11 @@ import { TeamEditor } from "./TeamEditor"
 import { TeamPicker } from "./TeamPicker"
 import { sameLabel } from "./editorBits"
 
+const RUNNING_REFRESH_MS = 5000
+
 export function TeamsPage({ home }: { home: string }) {
   const { t } = useTranslation()
-  const a = useActions()
+  const actions = useActions()
   const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [err, setErr] = useState("")
   const [running, setRunning] = useState<TeamBrief[]>([])
@@ -36,9 +38,14 @@ export function TeamsPage({ home }: { home: string }) {
   const [editTeam, setEditTeam] = useState<Team | null | undefined>(undefined)
   const load = useCallback(
     () =>
-      void teamsCatalog().then(setCatalog, (e) => setErr(errMsg(e))),
+      void teamsCatalog().then(setCatalog, (catalogError) => setErr(errMsg(catalogError))),
     []
   )
+  const accessLabel = (agent: Agent) => {
+    if (agent.Access === "lead") return t("teams.lead")
+    const accessKey = agent.Access === "read" ? "read" : "write"
+    return t(`teams.edit.${accessKey}`)
+  }
   const saved = () => {
     setEditAgent(undefined)
     setEditTeam(undefined)
@@ -47,13 +54,13 @@ export function TeamsPage({ home }: { home: string }) {
 
   const refresh = useCallback(() => {
     if (document.visibilityState !== "visible") return
-    teamsList().then((r) => setRunning(r.teams), () => {})
+    teamsList().then((teamList) => setRunning(teamList.teams), () => {})
   }, [])
   useEffect(() => {
     load()
     refresh()
-    const iv = setInterval(refresh, 5000)
-    return () => clearInterval(iv)
+    const refreshInterval = setInterval(refresh, RUNNING_REFRESH_MS)
+    return () => clearInterval(refreshInterval)
   }, [refresh, load])
 
   if (err) return <p className="p-4 text-sm text-destructive">{err}</p>
@@ -64,7 +71,7 @@ export function TeamsPage({ home }: { home: string }) {
         catalog={catalog}
         home={home}
         onEdit={canEdit ? setEditTeam : undefined}
-        pickDir={a.pickDir}
+        pickDir={actions.pickDir}
         onLaunch={async (ids, goal, dir) => {
           try {
             await teamsLaunch(ids, goal, dir)
@@ -90,29 +97,25 @@ export function TeamsPage({ home }: { home: string }) {
               </Button>
             </div>
             <ul className="divide-y rounded-lg border text-sm">
-              {catalog.agents.map((ag) => (
-                <li key={ag.ID} className="flex items-center gap-2 px-3 py-2">
-                  <span className="font-medium">{ag.Name}</span>
+              {catalog.agents.map((agent) => (
+                <li key={agent.ID} className="flex items-center gap-2 px-3 py-2">
+                  <span className="font-medium">{agent.Name}</span>
                   <span className="text-muted-foreground">
-                    {!sameLabel(ag.Name, ag.Role) && `${ag.Role} · `}
-                    {ag.Access === "lead"
-                      ? t("teams.lead")
-                      : t(
-                          `teams.edit.${ag.Access === "read" ? "read" : "write"}`
-                        )}
+                    {!sameLabel(agent.Name, agent.Role) && `${agent.Role} · `}
+                    {accessLabel(agent)}
                   </span>
-                  {!ag.Builtin && (
+                  {!agent.Builtin && (
                     <Badge variant="secondary">
                       {t("teams.edit.personal")}
                     </Badge>
                   )}
-                  {ag.Access !== "lead" && (
+                  {agent.Access !== "lead" && (
                     <Button
                       variant="ghost"
                       size="sm"
                       className="ml-auto"
-                      aria-label={t("teams.edit.edit", { name: ag.Name })}
-                      onClick={() => setEditAgent(ag)}
+                      aria-label={t("teams.edit.edit", { name: agent.Name })}
+                      onClick={() => setEditAgent(agent)}
                     >
                       {t("teams.edit.modify")}
                     </Button>
@@ -142,22 +145,22 @@ export function TeamsPage({ home }: { home: string }) {
         <section>
           <h2 className="mb-2 text-sm font-semibold">{t("teams.running")}</h2>
           <ul className="divide-y rounded-lg border text-sm">
-            {running.map((r) => (
-              <li key={r.Name} className="flex items-center gap-2 px-3 py-2">
-                {TEAM_NAME.test(r.Name) ? (
+            {running.map((runningTeam) => (
+              <li key={runningTeam.Name} className="flex items-center gap-2 px-3 py-2">
+                {TEAM_NAME.test(runningTeam.Name) ? (
                   <Link
-                    href={href({ kind: "team", name: r.Name })}
+                    href={href({ kind: "team", name: runningTeam.Name })}
                     className="font-medium hover:underline pointer-coarse:inline-flex pointer-coarse:min-h-8 pointer-coarse:items-center"
                   >
-                    {r.Name}
+                    {runningTeam.Name}
                   </Link>
                 ) : (
-                  <span className="font-medium">{r.Name}</span>
+                  <span className="font-medium">{runningTeam.Name}</span>
                 )}
                 <span className="text-muted-foreground">
-                  {t("teams.members", { count: r.Members })}
+                  {t("teams.members", { count: runningTeam.Members })}
                 </span>
-                {r.Live && <Badge variant="secondary">{t("teams.live")}</Badge>}
+                {runningTeam.Live && <Badge variant="secondary">{t("teams.live")}</Badge>}
               </li>
             ))}
           </ul>

@@ -16,12 +16,12 @@ export function MessageBox({ name, agents, to, setTo, queued, disabled }: { name
     if (busy || disabled || !text.trim()) return
     setBusy(true)
     try {
-      const r = await teamSend(name, to, text)
+      const sendResult = await teamSend(name, to, text)
       setErr("")
-      setWasQueued(r.queued)
+      setWasQueued(sendResult.queued)
       setText("")
-    } catch (e) {
-      setErr(errMsg(e))
+    } catch (sendError) {
+      setErr(errMsg(sendError))
     } finally {
       setBusy(false)
     }
@@ -29,10 +29,10 @@ export function MessageBox({ name, agents, to, setTo, queued, disabled }: { name
   return (
     <div className="space-y-2 border-t p-3">
       <div className="flex items-center gap-2">
-        <select aria-label={t("teams.to")} value={to} onChange={(e) => setTo(e.target.value)} className="rounded-md border bg-background px-2 py-1 text-sm" disabled={disabled}>
-          {agents.map((a) => (
-            <option key={a.Name} value={a.Name}>
-              {agentLabel(a)}
+        <select aria-label={t("teams.to")} value={to} onChange={(event) => setTo(event.target.value)} className="rounded-md border bg-background px-2 py-1 text-sm" disabled={disabled}>
+          {agents.map((agent) => (
+            <option key={agent.Name} value={agent.Name}>
+              {agentLabel(agent)}
             </option>
           ))}
         </select>
@@ -41,8 +41,12 @@ export function MessageBox({ name, agents, to, setTo, queued, disabled }: { name
       <div className="flex gap-2">
         <textarea
           value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => isSend(e) && (e.preventDefault(), void send())}
+          onChange={(event) => setText(event.target.value)}
+          onKeyDown={(event) => {
+            if (!isSend(event)) return
+            event.preventDefault()
+            void send()
+          }}
           rows={2}
           disabled={disabled}
           aria-label={t("teams.message")}

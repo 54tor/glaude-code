@@ -10,21 +10,17 @@ import { Enrol, Mfa } from "./Mfa"
 
 // Écran plein, au-dessus de l'application si elle reste montée (session expirée).
 export function AuthScreen() {
-  const a = useAuth()
+  const auth = useAuth()
+  const renderAuthStep = () => {
+    if (auth.state === "unavailable") return <Unavailable />
+    if (auth.state !== "mfa") return <Login />
+    if (auth.enroll) return <Enrol onDone={() => void boot()} />
+    return <Mfa />
+  }
   return (
     <div className="safe-t safe-b fixed inset-0 z-50 overflow-y-auto bg-background">
       <main className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center px-4 py-10">
-        {a.state === "unavailable" ? (
-          <Unavailable />
-        ) : a.state === "mfa" ? (
-          a.enroll ? (
-            <Enrol onDone={() => void boot()} />
-          ) : (
-            <Mfa />
-          )
-        ) : (
-          <Login />
-        )}
+        {renderAuthStep()}
       </main>
     </div>
   )
@@ -54,39 +50,40 @@ export function ErrorLine({ msg, wait }: { msg?: string; wait?: number }) {
 
 export function Login() {
   const { t } = useTranslation()
-  const a = useAuth()
+  const auth = useAuth()
   const [name, setName] = useState("")
   const [pw, setPw] = useState("")
   const [err, setErr] = useState(false)
   const [busy, setBusy] = useState(false)
   const [left, wait] = useWait()
-  const submit = async (e: FormEvent) => {
-    e.preventDefault()
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
     if (busy || left) return
     setBusy(true)
     setErr(false)
     try {
-      const r = await http.post<{ mfa: string[]; enroll: boolean; csrf: string }>("/auth/sessions", { name, password: pw })
+      const session = await http.post<{ mfa: string[]; enroll: boolean; csrf: string }>("/auth/sessions", { name, password: pw })
       setBusy(false)
-      if (!r.csrf) return setErr(true)
+      if (!session.csrf) return setErr(true)
       setPw("")
-      setAuth({ state: "mfa", csrf: r.csrf, methods: r.mfa ?? [], enroll: !!r.enroll, user: undefined })
-    } catch (e) {
+      setAuth({ state: "mfa", csrf: session.csrf, methods: session.mfa ?? [], enroll: !!session.enroll, user: undefined })
+    } catch (loginError) {
       setBusy(false)
       setErr(true)
-      wait(e instanceof ApiError ? e.retry : 0)
+      const retryDelay = loginError instanceof ApiError ? loginError.retry : 0
+      wait(retryDelay)
     }
   }
   return (
     <form onSubmit={submit} className="space-y-4" noValidate>
-      <Heading sub={a.expired ? t("auth.login.expired") : undefined}>{t("auth.login.title")}</Heading>
+      <Heading sub={auth.expired ? t("auth.login.expired") : undefined}>{t("auth.login.title")}</Heading>
       <div className="space-y-1.5">
         <Label htmlFor="gld-login-name">{t("auth.login.name")}</Label>
-        <Input id="gld-login-name" name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} autoFocus required value={name} onChange={(e) => setName(e.target.value)} />
+        <Input id="gld-login-name" name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} autoFocus required value={name} onChange={(event) => setName(event.target.value)} />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="gld-login-pw">{t("auth.login.password")}</Label>
-        <Input id="gld-login-pw" name="password" type="password" autoComplete="current-password" required value={pw} onChange={(e) => setPw(e.target.value)} />
+        <Input id="gld-login-pw" name="password" type="password" autoComplete="current-password" required value={pw} onChange={(event) => setPw(event.target.value)} />
       </div>
       <ErrorLine msg={err ? t("auth.login.invalid") : undefined} wait={left} />
       <Button type="submit" className="w-full" disabled={busy || left > 0 || !name || !pw}>

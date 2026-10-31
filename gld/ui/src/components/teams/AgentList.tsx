@@ -5,37 +5,41 @@ import type { AgentView } from "@/lib/teams"
 // Symbole en plus du texte : l'état ne repose jamais sur la couleur seule.
 const SYM: Record<string, string> = { idle: "○", working: "●", waiting: "?", unknown: "–" }
 
-export function stateKey(s: string) {
-  return s in SYM ? s : "unknown"
+export function stateKey(agentState: string) {
+  return agentState in SYM ? agentState : "unknown"
 }
 
 // « Prénom · Rôle », prénom seul sans rôle.
-export const agentLabel = (a: AgentView) => (a.Role ? `${a.Display} · ${a.Role}` : a.Display)
+export const agentLabel = (agent: AgentView) => {
+  if (!agent.Role) return agent.Display
+  return `${agent.Display} · ${agent.Role}`
+}
 
 export function AgentList({ agents, sel, onPick }: { agents: AgentView[]; sel?: string; onPick?: (name: string) => void }) {
   const { t } = useTranslation()
   return (
     <ul className="divide-y text-sm">
-      {agents.map((a) => {
-        const k = stateKey(a.State)
-        const body = (
+      {agents.map((agent) => {
+        const agentStateKey = stateKey(agent.State)
+        const isSelected = sel === agent.Name
+        const rowContent = (
           <>
-            <span aria-hidden>{SYM[k]}</span>
-            <span className="font-medium">{a.Display}</span>
-            {a.Lead && <span className="text-xs text-muted-foreground">{t("teams.lead")}</span>}
-            {a.Role && <span className="truncate text-muted-foreground">· {a.Role}</span>}
-            <span className="ml-auto text-xs">{t(`teams.state.${k}`)}</span>
+            <span aria-hidden>{SYM[agentStateKey]}</span>
+            <span className="font-medium">{agent.Display}</span>
+            {agent.Lead && <span className="text-xs text-muted-foreground">{t("teams.lead")}</span>}
+            {agent.Role && <span className="truncate text-muted-foreground">· {agent.Role}</span>}
+            <span className="ml-auto text-xs">{t(`teams.state.${agentStateKey}`)}</span>
           </>
         )
-        const cls = "flex w-full items-center gap-2 px-3 py-2 text-left"
+        const rowClassName = "flex w-full items-center gap-2 px-3 py-2 text-left"
         return (
-          <li key={a.Name}>
+          <li key={agent.Name}>
             {onPick ? (
-              <button type="button" className={cn(cls, "hover:bg-muted", sel === a.Name && "bg-muted")} aria-pressed={sel === a.Name} onClick={() => onPick(a.Name)}>
-                {body}
+              <button type="button" className={cn(rowClassName, "hover:bg-muted", isSelected && "bg-muted")} aria-pressed={isSelected} onClick={() => onPick(agent.Name)}>
+                {rowContent}
               </button>
             ) : (
-              <div className={cls}>{body}</div>
+              <div className={rowClassName}>{rowContent}</div>
             )}
           </li>
         )

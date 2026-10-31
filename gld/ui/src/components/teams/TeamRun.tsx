@@ -14,34 +14,51 @@ const POLL_MS = 2000
 
 // Largeur du conteneur (pas de la fenêtre) ; sans ResizeObserver (jsdom), 0 : disposition B.
 function useWidth(ref: React.RefObject<HTMLElement | null>) {
-  const [w, setW] = useState(0)
+  const [containerWidth, setContainerWidth] = useState(0)
   useEffect(() => {
     if (typeof ResizeObserver === "undefined" || !ref.current) return
-    const ro = new ResizeObserver((es) => setW(es[es.length - 1].contentRect.width))
-    ro.observe(ref.current)
-    return () => ro.disconnect()
+    const resizeObserver = new ResizeObserver((entries) => {
+      const latestEntry = entries[entries.length - 1]
+      setContainerWidth(latestEntry.contentRect.width)
+    })
+    resizeObserver.observe(ref.current)
+    return () => resizeObserver.disconnect()
   }, [ref])
-  return w
+  return containerWidth
 }
 
 function Messages({ view, who }: { view: TeamView; who?: string }) {
   const { t } = useTranslation()
-  const dn = (n: string) => view.Agents.find((a) => a.Name === n)?.Display ?? n
-  const all = [
-    ...view.Messages.map((m, i) => ({ k: "m" + (m.ID || i), from: m.From, to: m.To, text: m.Text || m.Summary, at: m.At })),
-    ...view.Direct.map((m, i) => ({ k: "d" + i, from: m.Author, to: m.To, text: m.Text, at: m.At })),
-  ]
-    .filter((m) => !who || m.from === who || m.to === who)
-    .sort((a, b) => a.at - b.at)
-  if (!all.length) return <p className="p-3 text-sm text-muted-foreground">{t("teams.none")}</p>
+  const displayName = (agentName: string) =>
+    view.Agents.find((agent) => agent.Name === agentName)?.Display ?? agentName
+  const teamMessages = view.Messages.map((message, messageIndex) => ({
+    key: "m" + (message.ID || messageIndex),
+    from: message.From,
+    to: message.To,
+    text: message.Text || message.Summary,
+    at: message.At,
+  }))
+  const directMessages = view.Direct.map((message, messageIndex) => ({
+    key: "d" + messageIndex,
+    from: message.Author,
+    to: message.To,
+    text: message.Text,
+    at: message.At,
+  }))
+  const involvesFilteredAgent = (message: { from: string; to: string }) =>
+    !who || message.from === who || message.to === who
+  const visibleMessages = [...teamMessages, ...directMessages]
+    .filter(involvesFilteredAgent)
+    .sort((earlierMessage, laterMessage) => earlierMessage.at - laterMessage.at)
+  if (!visibleMessages.length) return <p className="p-3 text-sm text-muted-foreground">{t("teams.none")}</p>
   return (
     <ul className="divide-y text-sm">
-      {all.map((m) => (
-        <li key={m.k} className="space-y-0.5 px-3 py-2">
+      {visibleMessages.map((message) => (
+        <li key={message.key} className="space-y-0.5 px-3 py-2">
           <div className="text-xs text-muted-foreground">
-            <b>{dn(m.from)}</b> → {dn(m.to)}
+            <b>{displayName(message.from)}</b> → {displayName(message.to)}
           </div>
-          <div className="whitespace-pre-wrap break-words">{m.text}</div>
+          <div className="whitespace-pre-wrap break-words">{message.text}</div>
         </li>
       ))}
     </ul>
@@ -53,10 +70,10 @@ function Tasks({ view }: { view: TeamView }) {
   if (!view.Tasks.length) return <p className="p-3 text-sm text-muted-foreground">{t("teams.none")}</p>
   return (
     <ul className="divide-y text-sm">
-      {view.Tasks.map((k) => (
-        <li key={k.ID} className="flex gap-2 px-3 py-2">
-          <span className="flex-1">{k.Title}</span>
-          <span className="text-xs text-muted-foreground">{k.Status}</span>
+      {view.Tasks.map((task) => (
+        <li key={task.ID} className="flex gap-2 px-3 py-2">
+          <span className="flex-1">{task.Title}</span>
+          <span className="text-xs text-muted-foreground">{task.Status}</span>
         </li>
       ))}
     </ul>
@@ -91,7 +108,7 @@ export function TeamRun({ name }: { name: string }) {
 
   useEffect(() => {
     // jeton propre à ce nom : une réponse de l'équipe précédente est jetée, et rien de son état ne survit
-    const ctl = { alive: true, inflight: false }
+    const pollControl = { alive: true, inflight: false }
     setView(null) // eslint-disable-line react-hooks/set-state-in-effect
     setErr("")
     setActErr("")
@@ -101,63 +118,66 @@ export function TeamRun({ name }: { name: string }) {
     setScreen("")
     setStale(false)
     const poll = async () => {
-      if (ctl.inflight || document.visibilityState !== "visible") return
-      ctl.inflight = true
-      const g = gen.current
-      let v: TeamView | undefined
-      let msg = ""
+      if (pollControl.inflight || document.visibilityState !== "visible") return
+      pollControl.inflight = true
+      const generationAtStart = gen.current
+      let polledView: TeamView | undefined
+      let pollErrorMessage = ""
       try {
-        v = await teamGet(name)
-      } catch (e) {
-        msg = errMsg(e)
+        polledView = await teamGet(name)
+      } catch (pollError) {
+        pollErrorMessage = errMsg(pollError)
       }
-      ctl.inflight = false
-      if (!ctl.alive) return
-      if (v) {
-        setView(v)
-        setErr("")
-        if (g === gen.current && !keyBusy.current) {
-          setStale(false)
-        }
-      } else setErr(msg)
+      pollControl.inflight = false
+      if (!pollControl.alive) return
+      if (!polledView) {
+        setErr(pollErrorMessage)
+        return
+      }
+      setView(polledView)
+      setErr("")
+      const startedAfterLastKey = generationAtStart === gen.current && !keyBusy.current
+      if (startedAfterLastKey) setStale(false)
     }
     pollRef.current = poll
     void poll()
-    const iv = setInterval(() => void poll(), POLL_MS)
-    const vis = () => void poll()
-    document.addEventListener("visibilitychange", vis)
+    const pollInterval = setInterval(() => void poll(), POLL_MS)
+    const onVisibilityChange = () => void poll()
+    document.addEventListener("visibilitychange", onVisibilityChange)
     return () => {
-      ctl.alive = false
-      clearInterval(iv)
-      document.removeEventListener("visibilitychange", vis)
+      pollControl.alive = false
+      clearInterval(pollInterval)
+      document.removeEventListener("visibilitychange", onVisibilityChange)
     }
   }, [name])
 
-  const lead = view?.Agents.find((a) => a.Lead)?.Name ?? view?.Agents[0]?.Name ?? ""
-  const recipient = view?.Agents.some((a) => a.Name === to) ? to : lead
+  const leadAgent = view?.Agents.find((agent) => agent.Lead)
+  const lead = leadAgent?.Name ?? view?.Agents[0]?.Name ?? ""
+  const isKnownRecipient = view?.Agents.some((agent) => agent.Name === to)
+  const recipient = isKnownRecipient ? to : lead
   const exec = can("exec")
   const live = !!view?.Live
   const act = exec && live
 
-  const key = async (k: string) => {
+  const sendPermissionKey = async (keyName: string) => {
     if (keyBusy.current || !view?.Permission) return
     keyBusy.current = true
     gen.current++
     setStale(true)
     setActErr("")
-    let msg = ""
+    let keyErrorMessage = ""
     try {
-      await teamKey(name, lead, k, view.Permission)
-    } catch (e) {
-      msg = errMsg(e)
+      await teamKey(name, lead, keyName, view.Permission)
+    } catch (keyError) {
+      keyErrorMessage = errMsg(keyError)
     }
     gen.current++
     keyBusy.current = false
-    if (msg) setActErr(msg)
+    if (keyErrorMessage) setActErr(keyErrorMessage)
     void pollRef.current()
   }
-  const pick = (n: string) => {
-    setSel(n)
+  const pickAgent = (agentName: string) => {
+    setSel(agentName)
     setMode("mine")
   }
   const showScreen = async (agent: string) => {
@@ -165,42 +185,67 @@ export function TeamRun({ name }: { name: string }) {
     screenBusy.current = true
     setMode("screen")
     setScreen("")
-    let text: string
+    let screenText: string
     try {
-      text = (await teamScreen(name, agent)).text
-    } catch (e) {
-      text = errMsg(e)
+      const screenResponse = await teamScreen(name, agent)
+      screenText = screenResponse.text
+    } catch (screenError) {
+      screenText = errMsg(screenError)
     }
     screenBusy.current = false
-    setScreen(text)
+    setScreen(screenText)
   }
 
-  const perm = view?.Permission ? (
-    <div className="space-y-2 rounded-lg border border-amber-500/60 p-3">
-      <div className="text-xs font-semibold uppercase text-muted-foreground">{t("teams.permission")}</div>
-      <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-xs">{view.Permission}</pre>
-      {view.PermissionTruncated && <p className="text-xs text-destructive">{t("teams.permTruncated")}</p>}
-      {exec && (
-        <div className="flex gap-2">
-          <Button size="sm" disabled={!live || stale || view.PermissionTruncated} onClick={() => void key("1")}>
-            {t("teams.yes")}
-          </Button>
-          <Button size="sm" variant="outline" disabled={!live || stale} onClick={() => void key("Escape")}>
-            {t("teams.no")}
-          </Button>
-        </div>
-      )}
-    </div>
-  ) : live && ["waiting", "unknown"].includes(view?.Agents.find((a) => a.Lead)?.State ?? "") ? (
-    <p className="text-sm text-muted-foreground">{t("teams.permTerminal")}</p>
-  ) : null
+  const leadState = leadAgent?.State ?? ""
+  const isLeadWaitingInTerminal = live && ["waiting", "unknown"].includes(leadState)
+  const renderPermission = () => {
+    if (!view?.Permission) {
+      if (!isLeadWaitingInTerminal) return null
+      return <p className="text-sm text-muted-foreground">{t("teams.permTerminal")}</p>
+    }
+    return (
+      <div className="space-y-2 rounded-lg border border-amber-500/60 p-3">
+        <div className="text-xs font-semibold uppercase text-muted-foreground">{t("teams.permission")}</div>
+        <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-xs">{view.Permission}</pre>
+        {view.PermissionTruncated && <p className="text-xs text-destructive">{t("teams.permTruncated")}</p>}
+        {exec && (
+          <div className="flex gap-2">
+            <Button size="sm" disabled={!live || stale || view.PermissionTruncated} onClick={() => void sendPermissionKey("1")}>
+              {t("teams.yes")}
+            </Button>
+            <Button size="sm" variant="outline" disabled={!live || stale} onClick={() => void sendPermissionKey("Escape")}>
+              {t("teams.no")}
+            </Button>
+          </div>
+        )}
+      </div>
+    )
+  }
+  const perm = renderPermission()
 
   if (!view) return <div ref={root}>{err && <p className="p-4 text-sm text-destructive">{err}</p>}</div>
   const wide = width >= WIDE
-  const mate = view.Agents.find((a) => a.Name === sel)
+  const mate = view.Agents.find((agent) => agent.Name === sel)
   const box = exec && (
     <MessageBox name={name} agents={view.Agents} to={recipient} setTo={setTo} queued={view.Queued} disabled={!act} />
   )
+  const askCloseTeam = () =>
+    setAsk({
+      title: t("teams.close"),
+      body: view.Name,
+      confirm: t("teams.close"),
+      run: () =>
+        void teamClose(name).then(
+          () => void pollRef.current(),
+          (closeError) => setActErr(errMsg(closeError))
+        ),
+    })
+  const renderMateDetail = (mateName: string) => {
+    if (mode === "tasks") return <Tasks view={view} />
+    if (mode === "screen") return <pre className="max-h-64 overflow-auto whitespace-pre-wrap p-3 text-xs">{screen}</pre>
+    const messageFilter = mode === "all" ? undefined : mateName
+    return <Messages view={view} who={messageFilter} />
+  }
 
   return (
     <div ref={root} className="flex h-full flex-col gap-3 p-4">
@@ -221,7 +266,7 @@ export function TeamRun({ name }: { name: string }) {
             size="sm"
             variant="outline"
             className="ml-auto"
-            onClick={() => setAsk({ title: t("teams.close"), body: view.Name, confirm: t("teams.close"), run: () => void teamClose(name).then(() => void pollRef.current(), (e) => setActErr(errMsg(e))) })}
+            onClick={askCloseTeam}
           >
             {t("teams.close")}
           </Button>
@@ -244,7 +289,7 @@ export function TeamRun({ name }: { name: string }) {
       ) : (
         <div className="space-y-3">
           <div className="rounded-lg border">
-            <AgentList agents={view.Agents} sel={sel} onPick={pick} />
+            <AgentList agents={view.Agents} sel={sel} onPick={pickAgent} />
           </div>
           {mate && (
             <div className="rounded-lg border">
@@ -267,7 +312,7 @@ export function TeamRun({ name }: { name: string }) {
                   {t("teams.screen")}
                 </Button>
               </div>
-              {mode === "tasks" ? <Tasks view={view} /> : mode === "screen" ? <pre className="max-h-64 overflow-auto whitespace-pre-wrap p-3 text-xs">{screen}</pre> : <Messages view={view} who={mode === "all" ? undefined : mate.Name} />}
+              {renderMateDetail(mate.Name)}
             </div>
           )}
         </div>

@@ -21,13 +21,12 @@ export function AgentEditor({
 }) {
   const { t } = useTranslation()
   const copy = !!agent?.Builtin
-  const [name, setName] = useState(
-    agent
-      ? copy
-        ? t("teams.edit.copyName", { name: agent.Name })
-        : agent.Name
-      : ""
-  )
+  const initialName = () => {
+    if (!agent) return ""
+    if (copy) return t("teams.edit.copyName", { name: agent.Name })
+    return agent.Name
+  }
+  const [name, setName] = useState(initialName)
   const [role, setRole] = useState(agent?.Role ?? "")
   const [access, setAccess] = useState(
     agent?.Access === "read" ? "read" : "write"
@@ -37,18 +36,26 @@ export function AgentEditor({
   const [err, setErr] = useState("")
   const [busy, setBusy] = useState(false)
   const [ask, setAsk] = useState(false)
-  const n = bytes(prompt)
+  const promptByteCount = bytes(prompt)
+  const isPromptTooLong = promptByteCount > MAX_PROMPT
+  const canSave = name.trim() !== "" && role.trim() !== "" && !isPromptTooLong
+
+  const dialogTitle = () => {
+    if (!agent) return t("teams.edit.newAgent")
+    if (copy) return t("teams.edit.copyOf", { name: agent.Name })
+    return t("teams.edit.edit", { name: agent.Name })
+  }
 
   const run = async (
-    p: ReturnType<typeof teamsAgentSave> | ReturnType<typeof teamsAgentRm>
+    pendingRequest: ReturnType<typeof teamsAgentSave> | ReturnType<typeof teamsAgentRm>
   ) => {
     setBusy(true)
     setErr("")
     try {
-      await p
+      await pendingRequest
       onSaved()
-    } catch (e) {
-      setErr(errMsg(e))
+    } catch (requestError) {
+      setErr(errMsg(requestError))
     } finally {
       setBusy(false)
     }
@@ -56,16 +63,10 @@ export function AgentEditor({
   return (
     <>
       <EditorDialog
-        title={
-          !agent
-            ? t("teams.edit.newAgent")
-            : copy
-              ? t("teams.edit.copyOf", { name: agent.Name })
-              : t("teams.edit.edit", { name: agent.Name })
-        }
+        title={dialogTitle()}
         err={err}
         busy={busy}
-        canSave={name.trim() !== "" && role.trim() !== "" && n <= MAX_PROMPT}
+        canSave={canSave}
         onSave={() =>
           void run(
             teamsAgentSave({
@@ -82,23 +83,23 @@ export function AgentEditor({
         onClose={onClose}
       >
         <Field label={t("teams.edit.name")}>
-          <Input value={name} onChange={(e) => setName(e.target.value)} />
+          <Input value={name} onChange={(event) => setName(event.target.value)} />
         </Field>
         <Field label={t("teams.edit.role")}>
-          <Input value={role} onChange={(e) => setRole(e.target.value)} />
+          <Input value={role} onChange={(event) => setRole(event.target.value)} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label={t("teams.edit.access")}>
-            <Select value={access} onChange={(e) => setAccess(e.target.value)}>
+            <Select value={access} onChange={(event) => setAccess(event.target.value)}>
               <option value="read">{t("teams.edit.read")}</option>
               <option value="write">{t("teams.edit.write")}</option>
             </Select>
           </Field>
           <Field label={t("teams.edit.model")}>
-            <Select value={model} onChange={(e) => setModel(e.target.value)}>
-              {models().map(([v, l]) => (
-                <option key={v} value={v}>
-                  {l}
+            <Select value={model} onChange={(event) => setModel(event.target.value)}>
+              {models().map(([modelValue, modelLabel]) => (
+                <option key={modelValue} value={modelValue}>
+                  {modelLabel}
                 </option>
               ))}
             </Select>
@@ -107,15 +108,15 @@ export function AgentEditor({
         <Field label={t("teams.edit.prompt")}>
           <textarea
             value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
+            onChange={(event) => setPrompt(event.target.value)}
             rows={8}
             className={`${fieldCls} font-mono`}
           />
         </Field>
         <p
-          className={`text-right text-xs ${n > MAX_PROMPT ? "text-destructive" : "text-muted-foreground"}`}
+          className={`text-right text-xs ${isPromptTooLong ? "text-destructive" : "text-muted-foreground"}`}
         >
-          {n} / {MAX_PROMPT}
+          {promptByteCount} / {MAX_PROMPT}
         </p>
       </EditorDialog>
       <Confirm

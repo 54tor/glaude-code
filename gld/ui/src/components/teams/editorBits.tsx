@@ -9,10 +9,10 @@ import {
 import { Button } from "@/components/ui/button"
 import { useTranslation } from "react-i18next"
 
-export const sameLabel = (a: string, b: string) =>
-  a.trim().toLowerCase() === b.trim().toLowerCase()
+export const sameLabel = (firstLabel: string, secondLabel: string) =>
+  firstLabel.trim().toLowerCase() === secondLabel.trim().toLowerCase()
 
-export const bytes = (s: string) => new TextEncoder().encode(s).length
+export const bytes = (text: string) => new TextEncoder().encode(text).length
 
 export const fieldCls =
   "w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/80"
@@ -60,7 +60,7 @@ export function EditorDialog({
 }) {
   const { t } = useTranslation()
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
+    <Dialog open onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent aria-describedby={undefined} className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
