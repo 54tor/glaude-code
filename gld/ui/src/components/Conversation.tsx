@@ -271,7 +271,9 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
   const { scrollRef, contentRef, scrollToBottom, stopScroll, isAtBottom, escapedFromLock } = useStickToBottom({ initial: "instant", resize: "instant" })
   // La file du composeur qui grandit rétrécit la zone sans changer le contenu, que use-stick-to-bottom n'observe pas : on recolle à la fin.
   const wasAtEnd = useRef(true)
-  wasAtEnd.current = isAtBottom && !escapedFromLock
+  useEffect(() => {
+    wasAtEnd.current = isAtBottom && !escapedFromLock
+  }, [isAtBottom, escapedFromLock])
   useEffect(() => {
     const viewportElement = viewport()
     if (!viewportElement) return
