@@ -14,17 +14,23 @@ export const SORTS = [
 ] as const
 export type Sort = { by: string; dir: string }
 export const DEFAULT_SORT: Sort = { by: "date", dir: "desc" }
-export const byName = (a: string, b: string) => a.localeCompare(b, loc(), { numeric: true })
+export const byName = (firstName: string, secondName: string) => firstName.localeCompare(secondName, loc(), { numeric: true })
 // Comparateur de fichiers ; à égalité (la taille est en Ko arrondis), le nom départage.
-export const cmpFiles = (by: string, dir: string) => (a: MemFile, b: MemFile) => {
-  const d = (by === "name" ? byName(a.name, b.name) : by === "size" ? a.kb - b.kb : a.mtime - b.mtime) || byName(a.name, b.name)
-  return dir === "asc" ? d : -d
+export const cmpFiles = (by: string, dir: string) => (firstFile: MemFile, secondFile: MemFile) => {
+  const compareByCriterion = () => {
+    if (by === "name") return byName(firstFile.name, secondFile.name)
+    if (by === "size") return firstFile.kb - secondFile.kb
+    return firstFile.mtime - secondFile.mtime
+  }
+  const ascendingOrder = compareByCriterion() || byName(firstFile.name, secondFile.name)
+  return dir === "asc" ? ascendingOrder : -ascendingOrder
 }
 
 // En-tête YAML (--- … ---) des entrées de mémoire : affiché à part, en petit.
-export function split(t: string): [string, string] {
-  const m = /^---\n([\s\S]*?)\n---\n?/.exec(t)
-  return m ? [m[1], t.slice(m[0].length)] : ["", t]
+export function split(text: string): [string, string] {
+  const frontMatterMatch = /^---\n([\s\S]*?)\n---\n?/.exec(text)
+  if (!frontMatterMatch) return ["", text]
+  return [frontMatterMatch[1], text.slice(frontMatterMatch[0].length)]
 }
 
 // Seules les entrées de mémoire de projet et les règles (globales ou de projet) changent de place (pas les CLAUDE.md).
@@ -54,9 +60,15 @@ export function newKey(all: MemFile[], scope: string, text: string): string {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "") || "entree"
-  const base = scope === "global" ? "g/rules/" : scope.startsWith("r:") ? `r/${scope.slice(2)}/` : `m/${scope}/`
+  const keyPrefixOf = () => {
+    if (scope === "global") return "g/rules/"
+    if (scope.startsWith("r:")) return `r/${scope.slice(2)}/`
+    return `m/${scope}/`
+  }
+  const base = keyPrefixOf()
+  const isTaken = (candidateKey: string) => all.some((existingFile) => existingFile.key === candidateKey)
   let key = base + slug + ".md"
-  for (let i = 2; all.some((x) => x.key === key); i++) key = `${base}${slug}-${i}.md`
+  for (let suffixNumber = 2; isTaken(key); suffixNumber++) key = `${base}${slug}-${suffixNumber}.md`
   return key
 }
 

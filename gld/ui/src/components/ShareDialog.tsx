@@ -8,7 +8,7 @@ import { loopback, TunnelHint } from "./PairDevice"
 export function ShareDialog({ id, dir, title, onClose }: { id: string; dir: string; title?: string; onClose: () => void }) {
   const { t } = useTranslation()
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
+    <Dialog open onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="gap-4 sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

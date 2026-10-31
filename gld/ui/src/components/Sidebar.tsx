@@ -30,10 +30,11 @@ import { api } from "@/lib/api"
 import type { Session, VGroup } from "@/lib/api"
 import { useActions, type Row } from "./actions"
 
+const CACHE_EXPIRY_WARNING_MINUTES = 10
 
 // Avec `to`, un vrai lien : clic du milieu ou Ctrl+clic ouvrent la vue dans un autre onglet.
 function NavItem({ icon: Icon, label, n, active, onClick, to }: { icon: typeof Inbox; label: string; n?: number; active: boolean; onClick: () => void; to?: Route }) {
-  const cls = cn(
+  const itemClassName = cn(
     "flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-sm transition-colors",
     active ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground [&>svg]:text-primary" : "text-sidebar-foreground/85 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
   )
@@ -49,10 +50,11 @@ function NavItem({ icon: Icon, label, n, active, onClick, to }: { icon: typeof I
       <a
         href={href(to)}
         aria-current={active ? "page" : undefined}
-        className={cls}
-        onClick={(e) => {
-          if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
-          e.preventDefault()
+        className={itemClassName}
+        onClick={(clickEvent) => {
+          const opensElsewhere = clickEvent.button !== 0 || clickEvent.metaKey || clickEvent.ctrlKey || clickEvent.shiftKey || clickEvent.altKey
+          if (opensElsewhere) return
+          clickEvent.preventDefault()
           onClick()
         }}
       >
@@ -60,7 +62,7 @@ function NavItem({ icon: Icon, label, n, active, onClick, to }: { icon: typeof I
       </a>
     )
   return (
-    <button onClick={onClick} aria-current={active} className={cls}>
+    <button onClick={onClick} aria-current={active} className={itemClassName}>
       {body}
     </button>
   )
@@ -102,70 +104,66 @@ function Heading({ children, action, fold }: { children: React.ReactNode; action
 
 // Sessions actives depuis moins d'une heure : leur cache est chaud, les reprendre coûte peu.
 // En orange, celles dont le cache expire dans moins de 10 minutes.
-function Hot({ rows, now, ttl, go, title, hint, foldKey }: { rows: Row[]; now: number; ttl: number; go: (r: Route) => void; title: string; hint: string; foldKey?: string }) {
+function Hot({ rows, now, ttl, go, title, hint, foldKey }: { rows: Row[]; now: number; ttl: number; go: (route: Route) => void; title: string; hint: string; foldKey?: string }) {
   const { t } = useTranslation()
-  const a = useActions()
+  const actions = useActions()
   const [folded, setFolded] = useLocal(foldKey ?? "gld.hot.unfoldable", "")
   const fold = !!foldKey && folded === "1"
   const warm = useKeepWarm()
   // Un dossier par projet de travail, par ordre alphabétique ; dans un dossier, les sessions restent triées par date.
   const folders = new Map<string, Row[]>()
-  for (const r of rows) folders.set(r.g.project, [...(folders.get(r.g.project) ?? []), r])
-  const label = (p: string) => p.split("/").filter(Boolean).pop() ?? p
-  const ordered = [...folders].sort(([x], [y]) => label(x).localeCompare(label(y)) || x.localeCompare(y))
+  for (const row of rows) folders.set(row.g.project, [...(folders.get(row.g.project) ?? []), row])
+  const label = (projectPath: string) => projectPath.split("/").filter(Boolean).pop() ?? projectPath
+  const ordered = [...folders].sort(([firstProject], [secondProject]) => label(firstProject).localeCompare(label(secondProject)) || firstProject.localeCompare(secondProject))
   const [opened, setOpened] = useState<Set<string>>(new Set())
   const toggle = (id: string) =>
-    setOpened((o) => {
-      const n = new Set(o)
-      if (!n.delete(id)) n.add(id)
-      return n
+    setOpened((previouslyOpened) => {
+      const nextOpened = new Set(previouslyOpened)
+      if (!nextOpened.delete(id)) nextOpened.add(id)
+      return nextOpened
     })
   const item = (row: Row, kids: Row[] = []): React.ReactNode => {
-    const { s } = row
-    const open = opened.has(s.id)
-    const cold = now - s.mtime >= ttl // ouverte mais cache expiré
-    const left = Math.max(1, Math.ceil((ttl - (now - s.mtime)) / 60))
-    const warn = !cold && left <= 10
+    const { s: session } = row
+    const open = opened.has(session.id)
+    const cold = now - session.mtime >= ttl // ouverte mais cache expiré
+    const left = Math.max(1, Math.ceil((ttl - (now - session.mtime)) / 60))
+    const warn = !cold && left <= CACHE_EXPIRY_WARNING_MINUTES
+    const statusIcon = () => {
+      if (actions.asking.has(session.id)) return <Info className="size-4 shrink-0 animate-pulse text-warning" aria-label={t("shell.sidebar.asking")} />
+      if (actions.live.has(session.id) && !actions.waiting.has(session.id)) return <Fan className="size-4 shrink-0 animate-spin text-success" aria-label={t("shell.sidebar.working")} />
+      if (warn) return <AlarmClock className="size-4 shrink-0 text-warning" aria-label={t("shell.sidebar.cacheExpiring")} />
+      if (warm[session.id]?.on) return <Microwave className="warm-wave size-4 shrink-0" aria-label={t("shell.sidebar.keepWarmOn")} />
+      if (cold) return <Snowflake className="size-4 shrink-0 text-info" aria-label={t("shell.sidebar.cold")} />
+      return <Coffee className="size-4 shrink-0 text-warning" aria-hidden />
+    }
     return (
-      <Fragment key={s.id}>
+      <Fragment key={session.id}>
       <div className="flex items-center">
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <button
-            onClick={() => a.read(s)}
-            onDoubleClick={() => go({ kind: "dir", key: segs(row.g.project, a.home).join("/") })}
-            title={cold ? t("shell.sidebar.coldTitle", { title: s.title }) : t("shell.sidebar.hotTitle", { title: s.title, left })}
+            onClick={() => actions.read(session)}
+            onDoubleClick={() => go({ kind: "dir", key: segs(row.g.project, actions.home).join("/") })}
+            title={cold ? t("shell.sidebar.coldTitle", { title: session.title }) : t("shell.sidebar.hotTitle", { title: session.title, left })}
             className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-sm text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
           >
-            {a.asking.has(s.id) ? (
-              <Info className="size-4 shrink-0 animate-pulse text-warning" aria-label={t("shell.sidebar.asking")} />
-            ) : a.live.has(s.id) && !a.waiting.has(s.id) ? (
-              <Fan className="size-4 shrink-0 animate-spin text-success" aria-label={t("shell.sidebar.working")} />
-            ) : warn ? (
-              <AlarmClock className="size-4 shrink-0 text-warning" aria-label={t("shell.sidebar.cacheExpiring")} />
-            ) : warm[s.id]?.on ? (
-              <Microwave className="warm-wave size-4 shrink-0" aria-label={t("shell.sidebar.keepWarmOn")} />
-            ) : cold ? (
-              <Snowflake className="size-4 shrink-0 text-info" aria-label={t("shell.sidebar.cold")} />
-            ) : (
-              <Coffee className="size-4 shrink-0 text-warning" aria-hidden />
-            )}
-            <span className="flex-1 truncate text-left">{s.title}</span>
+            {statusIcon()}
+            <span className="flex-1 truncate text-left">{session.title}</span>
             {!cold && (
               <span className={cn("shrink-0 text-xs tabular-nums", warn ? "font-medium text-warning" : "text-muted-foreground")}>
                 {t("shell.sidebar.minutes", { left })}
               </span>
             )}
-            {a.live.has(s.id) && <span className="size-1.5 shrink-0 rounded-full bg-success" aria-label={t("shell.sidebar.open")} />}
+            {actions.live.has(session.id) && <span className="size-1.5 shrink-0 rounded-full bg-success" aria-label={t("shell.sidebar.open")} />}
           </button>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-64">
           <SessionItems M={CM} row={row} full />
         </ContextMenuContent>
       </ContextMenu>
-      {kids.length > 0 && <KidsBadge n={kids.length} open={open} live={kids.some((c) => a.live.has(c.s.id))} onClick={() => toggle(s.id)} />}
+      {kids.length > 0 && <KidsBadge n={kids.length} open={open} live={kids.some((childRow) => actions.live.has(childRow.s.id))} onClick={() => toggle(session.id)} />}
       </div>
-      {open && <div className="ml-4 border-l pl-[7px]">{kids.map((c) => item(c))}</div>}
+      {open && <div className="ml-4 border-l pl-[7px]">{kids.map((childRow) => item(childRow))}</div>}
       </Fragment>
     )
   }
@@ -181,37 +179,37 @@ function Hot({ rows, now, ttl, go, title, hint, foldKey }: { rows: Row[]; now: n
           <span title={hint}>{title}</span>
         )}
       </Heading>
-      {!fold && ordered.map(([project, rs]) => (
+      {!fold && ordered.map(([project, projectRows]) => {
+        const { tops, kids } = nest(projectRows)
+        return (
         <details key={project} open className="group/hot">
           <ContextMenu>
             <ContextMenuTrigger asChild>
               <summary
-                title={tilde(project, a.home)}
+                title={tilde(project, actions.home)}
                 className="flex h-7 cursor-pointer list-none items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted [&::-webkit-details-marker]:hidden"
               >
                 <ChevronRight className="size-3.5 shrink-0 transition-transform group-open/hot:rotate-90" aria-hidden />
                 <span className="flex-1 truncate">{label(project)}</span>
-                <span className="tabular-nums">{rs.length}</span>
+                <span className="tabular-nums">{projectRows.length}</span>
               </summary>
             </ContextMenuTrigger>
             <ProjectItems
-              g={rs[0].g}
-              ss={rs.map((r) => r.s)}
+              g={projectRows[0].g}
+              ss={projectRows.map((projectRow) => projectRow.s)}
               extra={
-                <ContextMenuItem onSelect={() => go({ kind: "dir", key: segs(project, a.home).join("/") })}>
+                <ContextMenuItem onSelect={() => go({ kind: "dir", key: segs(project, actions.home).join("/") })}>
                   <FolderOpen /> {t("shell.common.showFolder")}
                 </ContextMenuItem>
               }
             />
           </ContextMenu>
           <div className="ml-3 border-l pl-1">
-            {(() => {
-              const { tops, kids } = nest(rs)
-              return tops.map((r) => item(r, kids.get(r.s.id)))
-            })()}
+            {tops.map((topRow) => item(topRow, kids.get(topRow.s.id)))}
           </div>
         </details>
-      ))}
+        )
+      })}
     </>
   )
 }
@@ -242,23 +240,23 @@ export type SidebarProps = {
 
 // Seuil md de Tailwind : en dessous, le menu est un tiroir.
 export const MD = "(min-width: 768px)"
-const onWide = (cb: () => void) => {
-  const m = matchMedia(MD)
-  m.addEventListener("change", cb)
-  return () => m.removeEventListener("change", cb)
+const onWide = (onChange: () => void) => {
+  const wideQuery = matchMedia(MD)
+  wideQuery.addEventListener("change", onChange)
+  return () => wideQuery.removeEventListener("change", onChange)
 }
 
 // Favoris : une sous-session favorite se range sous sa parente favorite, repliée par défaut.
-function FavSessions({ rows, read }: { rows: Row[]; read: (s: Session) => void }) {
+function FavSessions({ rows, read }: { rows: Row[]; read: (session: Session) => void }) {
   const [opened, setOpened] = useState<Set<string>>(new Set())
   const { tops, kids } = nest(rows)
   const toggle = (id: string) =>
-    setOpened((o) => {
-      const n = new Set(o)
-      if (!n.delete(id)) n.add(id)
-      return n
+    setOpened((previouslyOpened) => {
+      const nextOpened = new Set(previouslyOpened)
+      if (!nextOpened.delete(id)) nextOpened.add(id)
+      return nextOpened
     })
-  const item = (row: Row, ks: Row[] = []): React.ReactNode => (
+  const item = (row: Row, childRows: Row[] = []): React.ReactNode => (
     <Fragment key={row.s.id}>
       <div className="flex items-center">
         <ContextMenu>
@@ -271,60 +269,60 @@ function FavSessions({ rows, read }: { rows: Row[]; read: (s: Session) => void }
             <SessionItems M={CM} row={row} full />
           </ContextMenuContent>
         </ContextMenu>
-        {ks.length > 0 && <KidsBadge n={ks.length} open={opened.has(row.s.id)} onClick={() => toggle(row.s.id)} />}
+        {childRows.length > 0 && <KidsBadge n={childRows.length} open={opened.has(row.s.id)} onClick={() => toggle(row.s.id)} />}
       </div>
-      {opened.has(row.s.id) && <div className="ml-4 border-l pl-[7px]">{ks.map((c) => item(c))}</div>}
+      {opened.has(row.s.id) && <div className="ml-4 border-l pl-[7px]">{childRows.map((childRow) => item(childRow))}</div>}
     </Fragment>
   )
-  return <>{tops.map((r) => item(r, kids.get(r.s.id)))}</>
+  return <>{tops.map((topRow) => item(topRow, kids.get(topRow.s.id)))}</>
 }
 
 // Garde un nœud dont le nom correspond (avec tout son sous-arbre) ou dont un descendant correspond.
-function filterTree(nodes: Node[], q: string): Node[] {
-  return nodes.flatMap((n) => {
-    if (n.name.toLowerCase().includes(q)) return [n]
-    const kids = filterTree([...n.kids.values()], q)
-    return kids.length ? [{ ...n, kids: new Map(kids.map((k) => [k.name, k])) }] : []
+function filterTree(nodes: Node[], query: string): Node[] {
+  return nodes.flatMap((node) => {
+    if (node.name.toLowerCase().includes(query)) return [node]
+    const matchingKids = filterTree([...node.kids.values()], query)
+    if (!matchingKids.length) return []
+    return [{ ...node, kids: new Map(matchingKids.map((kid) => [kid.name, kid])) }]
   })
 }
 
 // Pied de navbar : version courante (un build de travail affiche son `git describe`) et lien vers la release plus récente.
 function VersionFooter() {
   const { t } = useTranslation()
-  const [u, setU] = useState<{ current: string; latest: string; url: string; newer: boolean }>()
+  const [updateInfo, setUpdateInfo] = useState<{ current: string; latest: string; url: string; newer: boolean }>()
   useEffect(() => {
-    api.updateInfo().then(setU, () => {})
+    api.updateInfo().then(setUpdateInfo, () => {})
   }, [])
-  if (!u) return null
+  if (!updateInfo) return null
   return (
     <div className="flex items-center gap-2 border-t px-4 py-2 text-xs text-muted-foreground tabular-nums">
-      <span className="truncate" title={u.current}>{u.current}</span>
-      {u.newer && (
-        <a href={u.url} target="_blank" rel="noopener noreferrer" className="ml-auto shrink-0 font-medium text-primary hover:underline">
-          {t("shell.sidebar.updateTo", { latest: u.latest })}
+      <span className="truncate" title={updateInfo.current}>{updateInfo.current}</span>
+      {updateInfo.newer && (
+        <a href={updateInfo.url} target="_blank" rel="noopener noreferrer" className="ml-auto shrink-0 font-medium text-primary hover:underline">
+          {t("shell.sidebar.updateTo", { latest: updateInfo.latest })}
         </a>
       )}
     </div>
   )
 }
 
-export function Sidebar({ searchRef, ...p }: SidebarProps) {
+export function Sidebar({ searchRef, ...props }: SidebarProps) {
   const { t } = useTranslation()
   // Recherche propre à la navbar : indépendante de celle de la barre du haut (paramètre d'URL q).
-  const [nq, setNq] = useState("")
-  const nqt = nq.trim().toLowerCase()
-  const show = (label: string) => !nqt || label.toLowerCase().includes(nqt)
-  const tree = nqt ? filterTree(p.tree, nqt) : p.tree
-  const favGroups = p.favGroups.filter(({ vg }) => show(vg.name))
+  const [navQuery, setNavQuery] = useState("")
+  const normalizedNavQuery = navQuery.trim().toLowerCase()
+  const show = (label: string) => !normalizedNavQuery || label.toLowerCase().includes(normalizedNavQuery)
+  const tree = normalizedNavQuery ? filterTree(props.tree, normalizedNavQuery) : props.tree
+  const favGroups = props.favGroups.filter(({ vg }) => show(vg.name))
   const actions = useActions()
   const [projFold, setProjFold] = useLocal("gld.projects.folded", "")
   const [localFold, setLocalFold] = useLocal("gld.local.folded", "")
-  const openRows = p.hot.filter((r) => actions.live.has(r.s.id))
-  const warmRows = p.hot.filter((r) => !actions.live.has(r.s.id) && p.now - r.s.mtime < p.ttl)
-  const favRows = p.favRows.filter((r) => show(r.s.title))
-  const r = p.route
-  const link = (to: Route) => ({ to, onClick: () => p.go(to) })
-  const a = useActions()
+  const openRows = props.hot.filter((hotRow) => actions.live.has(hotRow.s.id))
+  const warmRows = props.hot.filter((hotRow) => !actions.live.has(hotRow.s.id) && props.now - hotRow.s.mtime < props.ttl)
+  const favRows = props.favRows.filter((favRow) => show(favRow.s.title))
+  const currentRoute = props.route
+  const link = (to: Route) => ({ to, onClick: () => props.go(to) })
   const wide = useSyncExternalStore(onWide, () => matchMedia(MD).matches)
   const body = (
     <>
@@ -333,7 +331,7 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           <img src="/icons/icon-192.png" alt="" className="size-10 shrink-0" />
           <div className="leading-tight">
             <h1 className="text-md font-semibold tracking-tight">Glaude Code</h1>
-            <p className="text-xs text-muted-foreground tabular-nums">{p.loading ? t("common.loading") : t("shell.count.sessions", { count: p.total })}</p>
+            <p className="text-xs text-muted-foreground tabular-nums">{props.loading ? t("common.loading") : t("shell.count.sessions", { count: props.total })}</p>
           </div>
           <div className="ml-auto flex items-center gap-0.5">
             <PairButton />
@@ -345,22 +343,22 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             ref={searchRef}
-            value={nq}
-            onChange={(e) => setNq(e.target.value)}
+            value={navQuery}
+            onChange={(changeEvent) => setNavQuery(changeEvent.target.value)}
             // Échap vide la recherche et rend le focus à la page : j/k/t/d reprennent leur rôle de raccourcis.
-            onKeyDown={(e) => {
-              if (e.key !== "Escape") return
-              setNq("")
-              e.currentTarget.blur()
+            onKeyDown={(keyboardEvent) => {
+              if (keyboardEvent.key !== "Escape") return
+              setNavQuery("")
+              keyboardEvent.currentTarget.blur()
             }}
             placeholder={t("shell.sidebar.searchPlaceholder")}
             className="bg-background pr-8 pl-8 shadow-none"
             aria-label={t("shell.sidebar.searchLabel")}
           />
-          {nq ? (
+          {navQuery ? (
             <button
               className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              onClick={() => setNq("")}
+              onClick={() => setNavQuery("")}
               aria-label={t("shell.sidebar.clearSearch")}
             >
               <X className="size-4" />
@@ -376,30 +374,30 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
       <ScrollArea className="min-h-0 flex-1">
         <CleanupWarning />
         <nav className="px-2 pb-3" aria-label={t("shell.sidebar.navigation")}>
-          {show(t("shell.app.title.home")) && <NavItem icon={LayoutDashboard} label={t("shell.app.title.home")} active={r.kind === "home"} {...link({ kind: "home" })} />}
-          {show(t("shell.sidebar.carousel")) && <NavItem icon={GalleryHorizontalEnd} label={t("shell.sidebar.carousel")} n={p.carousel.n} active={p.carousel.on} onClick={p.carousel.start} />}
-          {!nqt && (r.kind === "dir" || r.kind === "project") && (
-            <NavItem icon={NotebookPen} label={t("shell.sidebar.addNote")} active={false} onClick={() => { window.dispatchEvent(new Event("gld:note-add")); p.onClose() }} />
+          {show(t("shell.app.title.home")) && <NavItem icon={LayoutDashboard} label={t("shell.app.title.home")} active={currentRoute.kind === "home"} {...link({ kind: "home" })} />}
+          {show(t("shell.sidebar.carousel")) && <NavItem icon={GalleryHorizontalEnd} label={t("shell.sidebar.carousel")} n={props.carousel.n} active={props.carousel.on} onClick={props.carousel.start} />}
+          {!normalizedNavQuery && (currentRoute.kind === "dir" || currentRoute.kind === "project") && (
+            <NavItem icon={NotebookPen} label={t("shell.sidebar.addNote")} active={false} onClick={() => { window.dispatchEvent(new Event("gld:note-add")); props.onClose() }} />
           )}
-          {show(t("shell.app.title.all")) && <NavItem icon={Inbox} label={t("shell.app.title.all")} n={p.counts.all} active={r.kind === "all"} {...link({ kind: "all" })} />}
-          {show(t("shell.app.title.tabs")) && <NavItem icon={History} label={t("shell.app.title.tabs")} active={r.kind === "tabs"} {...link({ kind: "tabs" })} />}
-          {show(t("shell.app.title.extensions")) && <NavItem icon={Puzzle} label={t("shell.app.title.extensions")} active={r.kind === "extensions" || r.kind === "skills"} {...link({ kind: "extensions" })} />}
-          {show(t("teams.title")) && <NavItem icon={Users} label={t("teams.title")} active={r.kind === "teams" || r.kind === "team"} {...link({ kind: "teams" })} />}
-          {!nqt && <InvitesButton />}
-          {show(t("shell.app.title.config")) && <NavItem icon={SlidersHorizontal} label={t("shell.app.title.config")} active={r.kind === "config"} {...link({ kind: "config", tab: "" })} />}
-          {show(t("shell.app.title.memory")) && <NavItem icon={Brain} label={t("shell.app.title.memory")} active={r.kind === "memory"} {...link({ kind: "memory", key: "" })} />}
-          {p.snippets !== null && show(t("shell.app.title.snippets")) && (
+          {show(t("shell.app.title.all")) && <NavItem icon={Inbox} label={t("shell.app.title.all")} n={props.counts.all} active={currentRoute.kind === "all"} {...link({ kind: "all" })} />}
+          {show(t("shell.app.title.tabs")) && <NavItem icon={History} label={t("shell.app.title.tabs")} active={currentRoute.kind === "tabs"} {...link({ kind: "tabs" })} />}
+          {show(t("shell.app.title.extensions")) && <NavItem icon={Puzzle} label={t("shell.app.title.extensions")} active={currentRoute.kind === "extensions" || currentRoute.kind === "skills"} {...link({ kind: "extensions" })} />}
+          {show(t("teams.title")) && <NavItem icon={Users} label={t("teams.title")} active={currentRoute.kind === "teams" || currentRoute.kind === "team"} {...link({ kind: "teams" })} />}
+          {!normalizedNavQuery && <InvitesButton />}
+          {show(t("shell.app.title.config")) && <NavItem icon={SlidersHorizontal} label={t("shell.app.title.config")} active={currentRoute.kind === "config"} {...link({ kind: "config", tab: "" })} />}
+          {show(t("shell.app.title.memory")) && <NavItem icon={Brain} label={t("shell.app.title.memory")} active={currentRoute.kind === "memory"} {...link({ kind: "memory", key: "" })} />}
+          {props.snippets !== null && show(t("shell.app.title.snippets")) && (
             <NavItem
               icon={FileText}
               label={t("shell.app.title.snippets")}
-              n={p.snippets}
-              active={r.kind === "snippets"}
+              n={props.snippets}
+              active={currentRoute.kind === "snippets"}
               {...link({ kind: "snippets", path: "" })}
             />
           )}
 
-          {!nqt && openRows.length > 0 && <Hot rows={openRows} now={p.now} ttl={p.ttl} go={p.go} title={t("shell.sidebar.hot")} hint={t("shell.sidebar.hotHint")} foldKey="gld.hot.openFolded" />}
-          {!nqt && warmRows.length > 0 && <Hot rows={warmRows} now={p.now} ttl={p.ttl} go={p.go} title={t("shell.sidebar.warmClosed")} hint={t("shell.sidebar.warmClosedHint")} foldKey="gld.hot.warmFolded" />}
+          {!normalizedNavQuery && openRows.length > 0 && <Hot rows={openRows} now={props.now} ttl={props.ttl} go={props.go} title={t("shell.sidebar.hot")} hint={t("shell.sidebar.hotHint")} foldKey="gld.hot.openFolded" />}
+          {!normalizedNavQuery && warmRows.length > 0 && <Hot rows={warmRows} now={props.now} ttl={props.ttl} go={props.go} title={t("shell.sidebar.warmClosed")} hint={t("shell.sidebar.warmClosedHint")} foldKey="gld.hot.warmFolded" />}
 
           {(favRows.length > 0 || favGroups.length > 0) && (
             <>
@@ -411,8 +409,8 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
                       <NavItem
                         icon={Tag}
                         label={vg.name}
-                        n={p.groupCount(vg)}
-                        active={r.kind === "group" && r.name === vg.name && r.key === key}
+                        n={props.groupCount(vg)}
+                        active={currentRoute.kind === "group" && currentRoute.name === vg.name && currentRoute.key === key}
                         {...link({ kind: "group", name: vg.name, key })}
                       />
                     </div>
@@ -422,23 +420,23 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
                   </ContextMenuContent>
                 </ContextMenu>
               ))}
-              <FavSessions rows={favRows} read={p.read} />
+              <FavSessions rows={favRows} read={props.read} />
             </>
           )}
 
-          {a.projects.some((x) => show(x.name)) && (
+          {actions.projects.some((project) => show(project.name)) && (
             <>
               <Heading fold={{ folded: projFold === "1", toggle: () => setProjFold(projFold ? "" : "1") }}>{t("shell.sidebar.projects")}</Heading>
-              {projFold !== "1" && <ProjectList route={r} go={p.go} q={nqt} />}
+              {projFold !== "1" && <ProjectList route={currentRoute} go={props.go} q={normalizedNavQuery} />}
             </>
           )}
 
-          <DropZone onDir={a.addDirPath}>
+          <DropZone onDir={actions.addDirPath}>
           <Heading
             fold={{ folded: localFold === "1", toggle: () => setLocalFold(localFold ? "" : "1") }}
             action={
               <Tip label={t("shell.sidebar.addDirHint")}>
-                <Button variant="ghost" size="icon-xs" onClick={a.addDir} aria-label={t("shell.sidebar.addDir")}>
+                <Button variant="ghost" size="icon-xs" onClick={actions.addDir} aria-label={t("shell.sidebar.addDir")}>
                   <FolderPlus />
                 </Button>
               </Tip>
@@ -446,40 +444,41 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
           >
             {t("shell.sidebar.local")}
           </Heading>
-          {localFold === "1" ? null : p.loading ? (
+          {localFold !== "1" && props.loading && (
             <div className="space-y-2 px-2">
               <Skeleton className="h-6 w-full" />
               <Skeleton className="h-6 w-4/5" />
               <Skeleton className="h-6 w-3/5" />
             </div>
-          ) : (
+          )}
+          {localFold !== "1" && !props.loading && (
             <ProjectTree
               nodes={tree}
-              sel={r.kind === "dir" ? r.key : ""}
-              onSel={(key) => p.go({ kind: "dir", key })}
-              selGroup={r.kind === "group" ? r.key + "\0" + r.name : ""}
-              onGroup={(vg, key) => p.go({ kind: "group", name: vg.name, key })}
+              sel={currentRoute.kind === "dir" ? currentRoute.key : ""}
+              onSel={(key) => props.go({ kind: "dir", key })}
+              selGroup={currentRoute.kind === "group" ? currentRoute.key + "\0" + currentRoute.name : ""}
+              onGroup={(virtualGroup, key) => props.go({ kind: "group", name: virtualGroup.name, key })}
             />
           )}
           </DropZone>
         </nav>
       </ScrollArea>
 
-      {(p.auto.n > 0 || p.args) && (
+      {(props.auto.n > 0 || props.args) && (
       <div className="space-y-2 border-t p-3">
-        {p.auto.n > 0 && (
+        {props.auto.n > 0 && (
           <div className="flex items-center gap-1">
             <div className="min-w-0 flex-1">
-              <NavItem icon={ShieldCheck} label={t("shell.app.title.auto")} n={p.auto.n} active={p.auto.on} {...link({ kind: "auto" })} />
+              <NavItem icon={ShieldCheck} label={t("shell.app.title.auto")} n={props.auto.n} active={props.auto.on} {...link({ kind: "auto" })} />
             </div>
-            <Button variant="ghost" size="xs" className="text-destructive hover:text-destructive" onClick={p.auto.purge}>
+            <Button variant="ghost" size="xs" className="text-destructive hover:text-destructive" onClick={props.auto.purge}>
               <Shredder /> {t("shell.sidebar.clean")}
             </Button>
           </div>
         )}
-        {p.args && (
+        {props.args && (
           <code className="block truncate px-1 text-xs text-muted-foreground" title={t("shell.sidebar.argsHint")}>
-            {p.args}
+            {props.args}
           </code>
         )}
       </div>
@@ -495,17 +494,21 @@ export function Sidebar({ searchRef, ...p }: SidebarProps) {
     )
   // Petit écran : tiroir modal (focus piégé, Échap, page derrière inerte) au lieu d'une colonne translatée hors de l'écran.
   return (
-    <Dialog open={p.open} onOpenChange={(o) => !o && p.onClose()}>
+    <Dialog open={props.open} onOpenChange={(isOpen) => !isOpen && props.onClose()}>
       <DialogContent sheet={false}
         id="menu"
         aria-describedby={undefined}
         showCloseButton={false}
-        {...swipeHandlers((d) => d === "left" && p.onClose())}
+        {...swipeHandlers((swipeDirection) => swipeDirection === "left" && props.onClose())}
         // Focus sur le tiroir lui-même, pas sur son premier bouton : sinon l'infobulle de ce bouton s'ouvre sur la recherche.
-        onOpenAutoFocus={(e) => (e.preventDefault(), (e.currentTarget as HTMLElement).focus())}
+        onOpenAutoFocus={(focusEvent) => {
+          focusEvent.preventDefault()
+          const drawer = focusEvent.currentTarget as HTMLElement
+          drawer.focus()
+        }}
         // Le tiroir s'ouvre depuis le bouton de l'en-tête, hors de tout DialogTrigger : on lui rend le focus à la main.
-        onCloseAutoFocus={(e) => {
-          e.preventDefault()
+        onCloseAutoFocus={(focusEvent) => {
+          focusEvent.preventDefault()
           document.querySelector<HTMLElement>('[data-menu-trigger]')?.focus()
         }}
         className="safe-t safe-b top-0 left-0 flex h-dvh w-[85vw] max-w-sm translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-0 border-r bg-sidebar p-0 text-sidebar-foreground duration-200 sm:max-w-sm data-open:zoom-in-100 data-open:slide-in-from-left data-closed:zoom-out-100 data-closed:slide-out-to-left"

@@ -12,11 +12,11 @@ import { useActions } from "./actions"
 // Menu « Insérer un snippet » : lit la commande choisie et rend son corps (sans en-tête) à onInsert.
 export function SnippetMenu({ onInsert }: { onInsert: (text: string) => void }) {
   const { t } = useTranslation()
-  const a = useActions()
-  if (a.snippets.length === 0) return null
-  const pick = async (key: string) => {
-    const r = await api.snippet(key).catch((e) => void toast.error(errMsg(e) || t("skills.snippetMenu.unreadable")))
-    if (r) onInsert(body(r.text))
+  const actions = useActions()
+  if (actions.snippets.length === 0) return null
+  const insertSnippet = async (snippetKey: string) => {
+    const snippet = await api.snippet(snippetKey).catch((error) => void toast.error(errMsg(error) || t("skills.snippetMenu.unreadable")))
+    if (snippet) onInsert(body(snippet.text))
   }
   return (
     <DropdownMenu>
@@ -25,11 +25,11 @@ export function SnippetMenu({ onInsert }: { onInsert: (text: string) => void }) 
           <FileText /> {t("skills.snippetMenu.insert")}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent onCloseAutoFocus={(e) => e.preventDefault()} align="start" className="max-h-72 w-72 overflow-y-auto">
-        {a.snippets.map((s) => (
-          <DropdownMenuItem key={s.key} onSelect={() => pick(s.key)} title={s.description || s.path}>
-            <FileText /> <span className="truncate">{s.command}</span>
-            {s.scope && <span className="ml-auto truncate text-xs text-muted-foreground">{tilde(s.project, a.home)}</span>}
+      <DropdownMenuContent onCloseAutoFocus={(focusEvent) => focusEvent.preventDefault()} align="start" className="max-h-72 w-72 overflow-y-auto">
+        {actions.snippets.map((snippet) => (
+          <DropdownMenuItem key={snippet.key} onSelect={() => insertSnippet(snippet.key)} title={snippet.description || snippet.path}>
+            <FileText /> <span className="truncate">{snippet.command}</span>
+            {snippet.scope && <span className="ml-auto truncate text-xs text-muted-foreground">{tilde(snippet.project, actions.home)}</span>}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

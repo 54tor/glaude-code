@@ -4,16 +4,16 @@ import { isEditableTarget } from "@/lib/editable"
 
 // Stockage bloqué (navigation privée, réglages) : on continue sans mémoire plutôt que de planter au montage.
 const store = {
-  get(k: string) {
+  get(storageKey: string) {
     try {
-      return localStorage.getItem(k)
+      return localStorage.getItem(storageKey)
     } catch {
       return null
     }
   },
-  set(k: string, v: string) {
+  set(storageKey: string, storedValue: string) {
     try {
-      localStorage.setItem(k, v)
+      localStorage.setItem(storageKey, storedValue)
     } catch {
       /* sans stockage */
     }
@@ -96,8 +96,8 @@ export function ThemeProvider({
   })
 
   const [palette, setPaletteState] = React.useState(() => {
-    const p = store.get("palette")
-    return p && PALETTES[p] ? p : "defaut"
+    const storedPalette = store.get("palette")
+    return storedPalette && PALETTES[storedPalette] ? storedPalette : "defaut"
   })
   const paletteRef = React.useRef(palette)
   const setPalette = React.useCallback((id: string) => {
@@ -173,14 +173,8 @@ export function ThemeProvider({
       }
 
       setThemeState((currentTheme) => {
-        const nextTheme =
-          currentTheme === "dark"
-            ? "light"
-            : currentTheme === "light"
-              ? "dark"
-              : getSystemTheme() === "dark"
-                ? "light"
-                : "dark"
+        const displayedTheme = currentTheme === "system" ? getSystemTheme() : currentTheme
+        const nextTheme = displayedTheme === "dark" ? "light" : "dark"
 
         store.set(storageKey, nextTheme)
         return nextTheme

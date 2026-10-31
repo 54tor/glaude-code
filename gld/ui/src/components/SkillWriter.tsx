@@ -10,11 +10,12 @@ import { Choose } from "./Choose"
 import { SnippetMenu } from "./SnippetMenu"
 import { spliceAtCaret } from "@/lib/utils"
 
+const MAX_INSTRUCTION_LENGTH = 8000
 
 // Rédaction ou révision d'un SKILL.md par un modèle, à partir d'une consigne. Le texte revient en brouillon : rien n'est enregistré.
 export function SkillWriter({ open, skillKey, name, onClose, onDraft }: { open: boolean; skillKey: string; name: string; onClose: () => void; onDraft: (text: string) => void }) {
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="sm:max-w-2xl">{open && <Form skillKey={skillKey} name={name} onClose={onClose} onDraft={onDraft} />}</DialogContent>
     </Dialog>
   )
@@ -31,20 +32,27 @@ function Form({ skillKey, name, onClose, onDraft }: { skillKey: string; name: st
   const [instruction, setInstruction] = useState("")
   const [model, setModel] = useState("haiku")
   const [busy, setBusy] = useState(false)
-  const area = useRef<HTMLTextAreaElement>(null)
+  const instructionArea = useRef<HTMLTextAreaElement>(null)
   const insertSnippet = (text: string) => {
-    setInstruction((cur) => spliceAtCaret(area.current, cur, text, 8000))
-    requestAnimationFrame(() => area.current?.focus())
+    setInstruction((currentInstruction) => spliceAtCaret(instructionArea.current, currentInstruction, text, MAX_INSTRUCTION_LENGTH))
+    requestAnimationFrame(() => instructionArea.current?.focus())
   }
-  const run = async () => {
+  const writeDraft = async () => {
     if (!instruction.trim() || busy) return
     setBusy(true)
-    const r = await api.skillDraft({ model, instruction, key: skillKey }).catch((e) => void toast.error(errMsg(e)))
+    const draft = await api.skillDraft({ model, instruction, key: skillKey }).catch((error) => void toast.error(errMsg(error)))
     setBusy(false)
-    if (!r) return
-    toast.success(t("skills.writer.draftReady"), { description: r.cost ? t("skills.writer.cost", { cost: r.cost.toFixed(4) }) : undefined })
+    if (!draft) return
+    const costDescription = draft.cost ? t("skills.writer.cost", { cost: draft.cost.toFixed(4) }) : undefined
+    toast.success(t("skills.writer.draftReady"), { description: costDescription })
     onClose()
-    onDraft(r.text)
+    onDraft(draft.text)
+  }
+  const writeDraftOnCtrlEnter = (keyboardEvent: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const isSubmitShortcut = (keyboardEvent.ctrlKey || keyboardEvent.metaKey) && keyboardEvent.key === "Enter"
+    if (!isSubmitShortcut) return
+    keyboardEvent.preventDefault()
+    writeDraft()
   }
   return (
     <div className="grid min-w-0 gap-4">
@@ -53,14 +61,14 @@ function Form({ skillKey, name, onClose, onDraft }: { skillKey: string; name: st
         <DialogDescription>{t("skills.writer.description")}</DialogDescription>
       </DialogHeader>
       <textarea
-        ref={area}
+        ref={instructionArea}
         value={instruction}
-        onChange={(e) => setInstruction(e.target.value)}
-        onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "Enter" && (e.preventDefault(), run())}
+        onChange={(changeEvent) => setInstruction(changeEvent.target.value)}
+        onKeyDown={writeDraftOnCtrlEnter}
         placeholder={t("skills.writer.placeholder")}
         autoFocus
         rows={5}
-        maxLength={8000}
+        maxLength={MAX_INSTRUCTION_LENGTH}
         disabled={busy}
         className="session-text w-full resize-y rounded-lg border border-input bg-background px-3 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/80"
         aria-label={t("skills.writer.instruction")}
@@ -75,7 +83,7 @@ function Form({ skillKey, name, onClose, onDraft }: { skillKey: string; name: st
         <Button variant="ghost" onClick={onClose} disabled={busy}>
           {t("common.cancel")}
         </Button>
-        <Button onClick={run} disabled={!instruction.trim() || busy}>
+        <Button onClick={writeDraft} disabled={!instruction.trim() || busy}>
           {busy ? <Fan className="animate-spin" /> : <Sparkles />} {t("skills.writer.write")}
         </Button>
       </DialogFooter>

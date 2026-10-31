@@ -14,16 +14,20 @@ import { DiffView, lineDiff } from "./MemoryDiff"
 // session ou passent par une commande : on dit lesquelles, d'après les lignes qui ont changé.
 export function liveNotice(before: string, after: string, sessions: number): string {
   const changed = lineDiff(before, after)
-    .filter((r) => r.op !== " ")
-    .map((r) => r.t)
+    .filter((diffLine) => diffLine.op !== " ")
+    .map((diffLine) => diffLine.t)
     .join("\n")
-  const todo: string[] = []
-  if (/"model"\s*:/.test(changed)) todo.push(i18n.t("config.edit.model"))
-  if (/"(effortLevel|modelSettings)"\s*:/.test(changed)) todo.push(i18n.t("config.edit.effort"))
-  if (/"enabledPlugins"|"pluginConfigs"|"[\w.-]+@[\w.-]+"\s*:/.test(changed)) todo.push(i18n.t("config.edit.plugins"))
+  const manualSteps: string[] = []
+  if (/"model"\s*:/.test(changed)) manualSteps.push(i18n.t("config.edit.model"))
+  if (/"(effortLevel|modelSettings)"\s*:/.test(changed)) manualSteps.push(i18n.t("config.edit.effort"))
+  if (/"enabledPlugins"|"pluginConfigs"|"[\w.-]+@[\w.-]+"\s*:/.test(changed)) manualSteps.push(i18n.t("config.edit.plugins"))
   const live = sessions ? i18n.t("config.edit.live", { count: sessions }) : i18n.t("config.edit.liveNone")
-  return todo.length ? i18n.t("config.edit.manual", { live, todo: todo.join(i18n.t("config.edit.sep")) }) : live
+  if (!manualSteps.length) return live
+  return i18n.t("config.edit.manual", { live, todo: manualSteps.join(i18n.t("config.edit.sep")) })
 }
+
+const SIMPLE_EDIT_TOAST_DURATION_MS = 6000
+const CONFIRMED_EDIT_TOAST_DURATION_MS = 9000
 
 type Preview = { then?: () => void; edit?: CfgEdit; raw?: { file: string; text: string }; perm?: { file: string; text: string; mode: string }; summary?: string; before: string; after: string; warnings: CfgIssue[] }
 
@@ -31,149 +35,164 @@ type Preview = { then?: () => void; edit?: CfgEdit; raw?: { file: string; text: 
 // (le serveur fait une sauvegarde avant). Renvoie propose() et le dialogue à afficher.
 export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 0): { gone: (file: string, kind: string, rule: string) => boolean; added: (file: string, kind: string) => string[]; moveRule: (file: string, from: string, rule: string, to: string, text: string) => Promise<void>; propose: (e: CfgEdit) => Promise<void>; proposeRaw: (file: string, text: string) => Promise<string | null>; proposePerms: (file: string, text: string, mode: string, then?: () => void, now?: boolean) => Promise<string | null>; dialog: ReactNode } {
   const { t } = useTranslation()
-  const [pv, setPv] = useState<Preview | null>(null)
+  const [preview, setPreview] = useState<Preview | null>(null)
   const [busy, setBusy] = useState(false)
   // Modification simple (une règle, un réglage, une variable) : appliquée tout de suite, sans fenêtre de confirmation. Le serveur
   // fait une sauvegarde avant d'écrire (onglet Sauvegardes) ; le toast dit ce que les sessions ouvertes en voient.
   // Retrait d'une règle : la ligne disparaît tout de suite (gone) et ne revient qu'en cas d'échec.
   const [hidden, setHidden] = useState<Set<string>>(new Set())
-  const hide = (k: string, on: boolean) =>
-    setHidden((s) => {
-      const n = new Set(s)
-      if (on) n.add(k)
-      else n.delete(k)
-      return n
+  const hide = (hiddenKey: string, shouldHide: boolean) =>
+    setHidden((previouslyHidden) => {
+      const nextHidden = new Set(previouslyHidden)
+      if (shouldHide) nextHidden.add(hiddenKey)
+      else nextHidden.delete(hiddenKey)
+      return nextHidden
     })
   const ruleKey = (file: string, kind: string, rule: string) => JSON.stringify([file, kind, rule])
   const gone = (file: string, kind: string, rule: string) => hidden.has(ruleKey(file, kind, rule))
   // Règles ajoutées en attente d'écriture : affichées tout de suite.
   const [pending, setPending] = useState<string[]>([])
-  const added = (file: string, kind: string) => pending.filter((k) => (JSON.parse(k) as string[])[0] === file && (JSON.parse(k) as string[])[1] === kind).map((k) => (JSON.parse(k) as string[])[2])
+  const added = (file: string, kind: string) =>
+    pending
+      .map((pendingKey) => JSON.parse(pendingKey) as string[])
+      .filter(([pendingFile, pendingKind]) => pendingFile === file && pendingKind === kind)
+      .map(([, , pendingRule]) => pendingRule)
   // Changer une règle de catégorie ou de texte : elle passe d'un coup de l'ancienne place à la nouvelle (ajout puis retrait côté
   // serveur, une seule relecture à la fin : pas de passage par un état où elle serait aux deux endroits).
   const moveRule = async (file: string, from: string, rule: string, to: string, text: string) => {
-    const old = ruleKey(file, from, rule)
-    const neu = ruleKey(file, to, text)
-    hide(old, true)
-    setPending((p) => [...p, neu])
-    hide(neu, false) // une règle retirée plus tôt puis remise doit s'afficher
+    const oldRuleKey = ruleKey(file, from, rule)
+    const newRuleKey = ruleKey(file, to, text)
+    const withoutNewRule = (pendingKeys: string[]) => pendingKeys.filter((pendingKey) => pendingKey !== newRuleKey)
+    hide(oldRuleKey, true)
+    setPending((pendingKeys) => [...pendingKeys, newRuleKey])
+    hide(newRuleKey, false) // une règle retirée plus tôt puis remise doit s'afficher
     const undo = () => {
-      hide(old, false)
-      setPending((p) => p.filter((k) => k !== neu))
+      hide(oldRuleKey, false)
+      setPending(withoutNewRule)
     }
-    let a: CfgReply
+    let addReply: CfgReply
     try {
-      a = await api.configEdit({ file, op: "add", path: ["permissions", to], value: text })
-    } catch (e) {
-      return void (undo(), toast.error(errMsg(e)))
+      addReply = await api.configEdit({ file, op: "add", path: ["permissions", to], value: text })
+    } catch (error) {
+      undo()
+      toast.error(errMsg(error))
+      return
     }
     try {
-      const r = await api.configEdit({ file, op: "remove", path: ["permissions", from], value: rule })
-      toast.success(t("config.edit.ruleEdited"), { description: liveNotice(a.before, r.after, sessions), duration: 6000 })
-    } catch (e) {
-      hide(old, false) // l'ancienne règle existe toujours
-      toast.error(errMsg(e))
+      const removeReply = await api.configEdit({ file, op: "remove", path: ["permissions", from], value: rule })
+      toast.success(t("config.edit.ruleEdited"), { description: liveNotice(addReply.before, removeReply.after, sessions), duration: SIMPLE_EDIT_TOAST_DURATION_MS })
+    } catch (error) {
+      hide(oldRuleKey, false) // l'ancienne règle existe toujours
+      toast.error(errMsg(error))
     }
     await onDone()
     // L'ancienne place reste masquée : d'autres vues (onglet Projets) se relisent à part et la montreraient encore un instant.
-    setPending((p) => p.filter((k) => k !== neu))
+    setPending(withoutNewRule)
   }
   const propose = async (edit: CfgEdit) => {
-    const rule = edit.op === "remove" && edit.path[0] === "permissions" && typeof edit.value === "string" ? ruleKey(edit.file, edit.path[1], edit.value) : ""
-    if (rule) hide(rule, true)
-    if (edit.op === "add" && edit.path[0] === "permissions" && typeof edit.value === "string") hide(ruleKey(edit.file, edit.path[1], edit.value), false)
-    let r: CfgReply
+    const isPermissionRule = edit.path[0] === "permissions" && typeof edit.value === "string"
+    const removedRuleKey = edit.op === "remove" && isPermissionRule ? ruleKey(edit.file, edit.path[1], edit.value as string) : ""
+    if (removedRuleKey) hide(removedRuleKey, true)
+    if (edit.op === "add" && isPermissionRule) hide(ruleKey(edit.file, edit.path[1], edit.value as string), false)
+    let reply: CfgReply
     try {
-      r = await api.configEdit(edit)
-    } catch (e) {
-      if (rule) hide(rule, false)
-      return void toast.error(errMsg(e))
+      reply = await api.configEdit(edit)
+    } catch (error) {
+      if (removedRuleKey) hide(removedRuleKey, false)
+      return void toast.error(errMsg(error))
     }
-    if (r.before === r.after) {
-      if (rule) hide(rule, false)
+    if (reply.before === reply.after) {
+      if (removedRuleKey) hide(removedRuleKey, false)
       return void toast.info(t("config.shared.noChange"))
     }
-    toast.success(r.out, { description: liveNotice(r.before, r.after, sessions), duration: 6000 })
+    toast.success(reply.out, { description: liveNotice(reply.before, reply.after, sessions), duration: SIMPLE_EDIT_TOAST_DURATION_MS })
     await onDone() // la règle reste masquée : les vues qui se relisent à part la montreraient encore un instant
   }
   // JSON brut : renvoie le message d'erreur (avec ligne et colonne) ou null si l'aperçu s'ouvre.
   const proposeRaw = async (file: string, text: string) => {
-    let r: CfgReply
+    let dryRunReply: CfgReply
     try {
-      r = await api.configRawEdit({ file, text, dry: true })
-    } catch (e) {
-      return errMsg(e)
+      dryRunReply = await api.configRawEdit({ file, text, dry: true })
+    } catch (error) {
+      return errMsg(error)
     }
-    if (r.before === r.after) {
+    if (dryRunReply.before === dryRunReply.after) {
       toast.info(t("config.shared.noChange"))
       return null
     }
-    setPv({ raw: { file, text }, before: r.before, after: r.after, warnings: r.warnings ?? [] })
+    setPreview({ raw: { file, text }, before: dryRunReply.before, after: dryRunReply.after, warnings: dryRunReply.warnings ?? [] })
     return null
   }
   // Import de règles de permission : renvoie le message d'erreur, ou null si l'aperçu s'ouvre.
   // then : lancé après l'enregistrement réussi (abandonné si on annule), par exemple pour retirer la règle de son fichier d'origine.
   // now : l'aperçu a déjà été vu (éditeur texte) ; on écrit sans second dialogue.
   const proposePerms = async (file: string, text: string, mode: string, then?: () => void, now?: boolean) => {
-    let r: CfgReply
+    let dryRunReply: CfgReply
     try {
-      r = await api.configPermImport({ file, text, mode, dry: true })
-    } catch (e) {
-      return errMsg(e)
+      dryRunReply = await api.configPermImport({ file, text, mode, dry: true })
+    } catch (error) {
+      return errMsg(error)
     }
-    if (r.before === r.after) {
+    if (dryRunReply.before === dryRunReply.after) {
       toast.info(t("config.edit.alreadyThere"))
       return null
     }
     if (now) {
-      let w: CfgReply
+      let writeReply: CfgReply
       try {
-        w = await api.configPermImport({ file, text, mode, dry: false })
-      } catch (e) {
-        return errMsg(e)
+        writeReply = await api.configPermImport({ file, text, mode, dry: false })
+      } catch (error) {
+        return errMsg(error)
       }
-      toast.success(w.out, { description: liveNotice(w.before, w.after, sessions), duration: 9000 })
+      toast.success(writeReply.out, { description: liveNotice(writeReply.before, writeReply.after, sessions), duration: CONFIRMED_EDIT_TOAST_DURATION_MS })
       onDone()
       then?.()
       return null
     }
-    setPv({ then, perm: { file, text, mode }, summary: r.out, before: r.before, after: r.after, warnings: r.warnings ?? [] })
+    setPreview({ then, perm: { file, text, mode }, summary: dryRunReply.out, before: dryRunReply.before, after: dryRunReply.after, warnings: dryRunReply.warnings ?? [] })
     return null
   }
+  const writePreview = (previewToWrite: Preview) => {
+    if (previewToWrite.perm) return api.configPermImport({ ...previewToWrite.perm, dry: false })
+    if (previewToWrite.raw) return api.configRawEdit({ ...previewToWrite.raw, dry: false })
+    return api.configEdit(previewToWrite.edit!)
+  }
   const apply = async () => {
-    if (!pv) return
+    if (!preview) return
     setBusy(true)
     try {
-      const r = pv.perm ? await api.configPermImport({ ...pv.perm, dry: false }) : pv.raw ? await api.configRawEdit({ ...pv.raw, dry: false }) : await api.configEdit(pv.edit!)
-      toast.success(r.out, { description: liveNotice(r.before, r.after, sessions), duration: 9000 })
-      setPv(null)
+      const reply = await writePreview(preview)
+      toast.success(reply.out, { description: liveNotice(reply.before, reply.after, sessions), duration: CONFIRMED_EDIT_TOAST_DURATION_MS })
+      setPreview(null)
       onDone()
-      pv.then?.()
-    } catch (e) {
-      toast.error(errMsg(e))
+      preview.then?.()
+    } catch (error) {
+      toast.error(errMsg(error))
     } finally {
       setBusy(false)
     }
   }
+  const previewFile = preview?.edit?.file ?? preview?.raw?.file ?? preview?.perm?.file
+  const previewFileLabel = previewFile === "u" ? "~/.claude/settings.json" : previewFile
   const dialog = (
-    <Dialog open={!!pv} onOpenChange={(o) => !o && setPv(null)}>
+    <Dialog open={!!preview} onOpenChange={(isOpen) => !isOpen && setPreview(null)}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{t("config.edit.dialogTitle")}</DialogTitle>
           <DialogDescription>
-            {(pv?.edit?.file ?? pv?.raw?.file ?? pv?.perm?.file) === "u" ? "~/.claude/settings.json" : (pv?.edit?.file ?? pv?.raw?.file ?? pv?.perm?.file)}{pv?.summary ? ` — ${pv.summary}` : ""} {t("config.edit.backupNote")}
+            {previewFileLabel}{preview?.summary ? ` — ${preview.summary}` : ""} {t("config.edit.backupNote")}
           </DialogDescription>
         </DialogHeader>
-        {!!pv?.warnings.length && (
+        {!!preview?.warnings.length && (
           <ul className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-2 text-xs">
-            {pv.warnings.map((w, i) => (
-              <li key={i}>⚠ {w.msg}</li>
+            {preview.warnings.map((warning, warningIndex) => (
+              <li key={warningIndex}>⚠ {warning.msg}</li>
             ))}
           </ul>
         )}
-        <ScrollArea className="max-h-96 rounded-md border">{pv && <DiffView old={pv.before} cur={pv.after} compact />}</ScrollArea>
+        <ScrollArea className="max-h-96 rounded-md border">{preview && <DiffView old={preview.before} cur={preview.after} compact />}</ScrollArea>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => setPv(null)}>
+          <Button variant="ghost" onClick={() => setPreview(null)}>
             {t("common.cancel")}
           </Button>
           <Button onClick={apply} disabled={busy}>

@@ -85,7 +85,7 @@ export type Actions = {
 export const ActionsCtx = createContext<Actions | null>(null)
 
 export function useActions(): Actions {
-  const a = useContext(ActionsCtx)
-  if (!a) throw new Error("ActionsCtx manquant")
-  return a
+  const actions = useContext(ActionsCtx)
+  if (!actions) throw new Error("ActionsCtx manquant")
+  return actions
 }

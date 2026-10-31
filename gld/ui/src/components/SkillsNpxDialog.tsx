@@ -18,6 +18,8 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Choose } from "./Choose"
 
 const SKILLS_PKG = "skills@1.7.4" // la même version épinglée que le serveur (skills_npx.go)
+const SEARCH_DEBOUNCE_MS = 500
+const MIN_QUERY_LENGTH = 2
 
 // La commande que le serveur lancera, telle qu'elle s'affiche dans la confirmation.
 export function npxCommand(
@@ -26,10 +28,13 @@ export function npxCommand(
   skill: string,
   global: boolean
 ) {
-  const g = global ? " -g" : ""
-  if (action === "add")
-    return `npx --yes ${SKILLS_PKG} add ${source} -s ${skill} -a claude-code -y${g}`
-  return `npx --yes ${SKILLS_PKG} ${action} ${skill}${action === "remove" ? " -a claude-code" : ""} -y${global ? " -g" : " -p"}`
+  if (action === "add") {
+    const globalFlag = global ? " -g" : ""
+    return `npx --yes ${SKILLS_PKG} add ${source} -s ${skill} -a claude-code -y${globalFlag}`
+  }
+  const agentFlag = action === "remove" ? " -a claude-code" : ""
+  const scopeFlag = global ? " -g" : " -p"
+  return `npx --yes ${SKILLS_PKG} ${action} ${skill}${agentFlag} -y${scopeFlag}`
 }
 
 // scope : "user" ou "p/<dossier>" (la clé du projet).
@@ -69,7 +74,7 @@ export function SkillsNpxDialog({
 }) {
   const { t } = useTranslation()
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="flex h-[80vh] max-h-[80vh] flex-col sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t("skills.npx.title")}</DialogTitle>
@@ -98,51 +103,46 @@ export function SkillsNpxPanel({
   query?: string // recherche portée par le parent : lancée après une pause de frappe, sans champ ni bouton ici
 }) {
   const { t } = useTranslation()
-  const [own, setQ] = useState("")
-  const q = query ?? own
+  const [ownQuery, setOwnQuery] = useState("")
+  const effectiveQuery = query ?? ownQuery
   const [hits, setHits] = useState<SkillHit[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [pick, setPick] = useState<SkillHit | null>(null)
   const [chosen, setScope] = useState("user")
-  const [err, setErr] = useState("")
+  const [error, setError] = useState("")
   const scope = fixed ?? chosen
   const scopes = [
     ["user", t("skills.npx.scopeUser")],
     ...projects.map(
-      (p) =>
+      (project) =>
         [
-          "p/" + p.dir,
-          t("skills.npx.scopeProject", { name: tilde(p.project, home) }),
+          "p/" + project.dir,
+          t("skills.npx.scopeProject", { name: tilde(project.project, home) }),
         ] as const
     ),
   ] as const
 
-  const seq = useRef(0) // seule la dernière recherche s'affiche
+  const searchSequence = useRef(0) // seule la dernière recherche s'affiche
   const search = async () => {
-    if (!q.trim()) return
-    const n = ++seq.current
+    if (!effectiveQuery.trim()) return
+    const searchNumber = ++searchSequence.current
+    const isLatestSearch = () => searchNumber === searchSequence.current
     setBusy(true)
-    setErr("")
-    const r = await api
-      .skillsFind(q.trim())
-      .catch(
-        (e) =>
-          void (
-            n === seq.current &&
-            setErr(errMsg(e) || t("skills.npx.searchFailed"))
-          )
-      )
-    if (n !== seq.current) return
+    setError("")
+    const findResponse = await api.skillsFind(effectiveQuery.trim()).catch((findError) => {
+      if (isLatestSearch()) setError(errMsg(findError) || t("skills.npx.searchFailed"))
+    })
+    if (!isLatestSearch()) return
     setBusy(false)
-    if (r) setHits(r.hits ?? [])
+    if (findResponse) setHits(findResponse.hits ?? [])
   }
   useEffect(() => {
     if (query === undefined) return
-    const h = setTimeout(
-      () => (query.trim().length < 2 ? setHits(null) : search()),
-      500
-    )
-    return () => clearTimeout(h)
+    const debounceTimer = setTimeout(() => {
+      if (query.trim().length < MIN_QUERY_LENGTH) setHits(null)
+      else search()
+    }, SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(debounceTimer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query])
   const install = async () => {
@@ -171,7 +171,7 @@ export function SkillsNpxPanel({
           </span>
           {fixed !== undefined ? (
             <span className="text-sm font-medium">
-              {scopes.find(([k]) => k === fixed)?.[1]}
+              {scopes.find(([scopeKey]) => scopeKey === fixed)?.[1]}
             </span>
           ) : (
             <Choose
@@ -207,19 +207,19 @@ export function SkillsNpxPanel({
       {query === undefined && (
         <form
           className="flex gap-2"
-          onSubmit={(e) => {
-            e.preventDefault()
+          onSubmit={(submitEvent) => {
+            submitEvent.preventDefault()
             search()
           }}
         >
           <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
+            value={effectiveQuery}
+            onChange={(changeEvent) => setOwnQuery(changeEvent.target.value)}
             placeholder={t("skills.npx.search")}
             aria-label={t("skills.npx.search")}
             maxLength={80}
           />
-          <Button type="submit" variant="outline" disabled={busy || !q.trim()}>
+          <Button type="submit" variant="outline" disabled={busy || !effectiveQuery.trim()}>
             {busy ? <Fan className="animate-spin" /> : <Search />}{" "}
             {t("skills.npx.searchBtn")}
           </Button>
@@ -228,18 +228,18 @@ export function SkillsNpxPanel({
       {query !== undefined && busy && (
         <Fan className="size-4 animate-spin text-muted-foreground" />
       )}
-      {err && <p className="text-sm text-destructive">{err}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
       {!!hits?.length && (
         <ul className="divide-y rounded-md border">
-          {hits.map((h) => (
-            <li key={h.ref} className="flex items-center gap-2 px-3 py-1.5">
+          {hits.map((hit) => (
+            <li key={hit.ref} className="flex items-center gap-2 px-3 py-1.5">
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">{h.ref}</div>
+                <div className="truncate text-sm font-medium">{hit.ref}</div>
                 <div className="text-xs text-muted-foreground">
-                  {t("skills.npx.installs", { n: h.installs })}
+                  {t("skills.npx.installs", { n: hit.installs })}
                 </div>
               </div>
-              <Button size="xs" variant="outline" onClick={() => setPick(h)}>
+              <Button size="xs" variant="outline" onClick={() => setPick(hit)}>
                 <Download /> {t("skills.npx.install")}
               </Button>
             </li>

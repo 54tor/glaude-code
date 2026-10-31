@@ -32,22 +32,23 @@ const ORIGINS = {
   custom: "bg-muted text-muted-foreground",
 } as const
 
-function OriginBadge({ s }: { s: Skill }) {
+function OriginBadge({ skill }: { skill: Skill }) {
   const { t } = useTranslation()
-  const o = s.origin in ORIGINS ? s.origin : "custom"
-  const what = t(`skills.origin.${o}.hint`)
+  const origin = skill.origin in ORIGINS ? skill.origin : "custom"
+  const what = t(`skills.origin.${origin}.hint`)
   return (
-    <span className={cn("shrink-0 rounded-sm px-1.5 py-px text-2xs font-medium", ORIGINS[o])} title={s.source ? t("skills.origin.withSource", { what, source: s.source }) : what}>
-      {t(`skills.origin.${o}.label`)}
+    <span className={cn("shrink-0 rounded-sm px-1.5 py-px text-2xs font-medium", ORIGINS[origin])} title={skill.source ? t("skills.origin.withSource", { what, source: skill.source }) : what}>
+      {t(`skills.origin.${origin}.label`)}
     </span>
   )
 }
 
 const NAME_OK = /^[a-z0-9][a-z0-9-]{0,63}$/
+const DESCRIPTION_CHAR_LIMIT = 1536
 
 // Skills de Claude Code : personnels (~/.claude/skills), de projet (.claude/skills) et de plugins (lecture seule).
 // Lecture, modification de SKILL.md, création, copie vers un autre emplacement, suppression (copie à la corbeille), rédaction par un modèle.
-export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: string; q: string; onPick: (key: string) => void; onAsk: (a: Ask) => void }) {
+export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: string; q: string; onPick: (key: string) => void; onAsk: (ask: Ask) => void }) {
   const { t } = useTranslation()
   const [data, setData] = useState<{ skills: Skill[]; projects: { dir: string; project: string }[] } | null>(null)
   const [loaded, setLoaded] = useState<{ key: string; text: string; files: SkillFile[]; error?: string } | null>(null)
@@ -66,8 +67,8 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
     (force: boolean) =>
       api
         .skillsUpdates(force)
-        .then((r) => {
-          setUpdates(r.states ?? {})
+        .then((updatesResponse) => {
+          setUpdates(updatesResponse.states ?? {})
           if (force) toast.success(t("skills.npx.checked"))
         })
         .catch(() => {}),
@@ -78,33 +79,55 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
   }, [check])
   useEffect(() => {
     if (!sel) return
-    let live = true
+    let isMounted = true
     api.skill(sel).then(
-      (r) => live && setLoaded({ key: sel, text: r.text, files: r.files ?? [] }),
-      (e) => live && setLoaded({ key: sel, text: "", files: [], error: errMsg(e) })
+      (skillResponse) => isMounted && setLoaded({ key: sel, text: skillResponse.text, files: skillResponse.files ?? [] }),
+      (error) => isMounted && setLoaded({ key: sel, text: "", files: [], error: errMsg(error) })
     )
     return () => {
-      live = false
+      isMounted = false
     }
   }, [sel, data])
 
-  const f = q.toLowerCase()
-  const skills = useMemo(() => (data?.skills ?? []).filter((s) => (origin === "all" || s.origin === origin) && (!f || (s.name + " " + s.description + " " + s.project + " " + s.plugin).toLowerCase().includes(f))), [data, f, origin])
-  const skill = data?.skills.find((s) => s.key === sel)
+  const normalizedQuery = q.toLowerCase()
+  const skills = useMemo(
+    () =>
+      (data?.skills ?? []).filter((candidateSkill) => {
+        const matchesOrigin = origin === "all" || candidateSkill.origin === origin
+        const searchableText = (candidateSkill.name + " " + candidateSkill.description + " " + candidateSkill.project + " " + candidateSkill.plugin).toLowerCase()
+        const matchesQuery = !normalizedQuery || searchableText.includes(normalizedQuery)
+        return matchesOrigin && matchesQuery
+      }),
+    [data, normalizedQuery, origin]
+  )
+  const skill = data?.skills.find((candidateSkill) => candidateSkill.key === sel)
   const cur = loaded?.key === sel ? loaded : null
   const editing = draft?.key === sel ? draft : null
   useLeaveGuard(!!draft && !(draft.key === sel && draft.text === cur?.text))
   const groups = useMemo(() => {
-    const g = new Map<string, { title: string; items: Skill[] }>()
-    for (const s of skills) {
-      const k = s.scope === "user" ? "u" : s.scope === "project" ? "p:" + s.project : s.scope === "store" ? "s" : "x:" + s.plugin
-      const title = s.scope === "user" ? t("skills.skills.groupUser") : s.scope === "project" ? tilde(s.project ?? "", home) : s.scope === "store" ? t("skills.skills.groupStore") : t("skills.skills.groupPlugin", { name: s.plugin })
-      if (!g.has(k)) g.set(k, { title, items: [] })
-      g.get(k)!.items.push(s)
+    const groupKeyOf = (groupedSkill: Skill) => {
+      if (groupedSkill.scope === "user") return "u"
+      if (groupedSkill.scope === "project") return "p:" + groupedSkill.project
+      if (groupedSkill.scope === "store") return "s"
+      return "x:" + groupedSkill.plugin
     }
-    return [...g.values()]
+    const groupTitleOf = (groupedSkill: Skill) => {
+      if (groupedSkill.scope === "user") return t("skills.skills.groupUser")
+      if (groupedSkill.scope === "project") return tilde(groupedSkill.project ?? "", home)
+      if (groupedSkill.scope === "store") return t("skills.skills.groupStore")
+      return t("skills.skills.groupPlugin", { name: groupedSkill.plugin })
+    }
+    const groupsByKey = new Map<string, { title: string; items: Skill[] }>()
+    for (const groupedSkill of skills) {
+      const groupKey = groupKeyOf(groupedSkill)
+      if (!groupsByKey.has(groupKey)) groupsByKey.set(groupKey, { title: groupTitleOf(groupedSkill), items: [] })
+      groupsByKey.get(groupKey)!.items.push(groupedSkill)
+    }
+    return [...groupsByKey.values()]
   }, [skills, home, t])
-  const budget = (data?.skills ?? []).filter((s) => !s.manual).reduce((n, s) => n + s.descTokens, 0)
+  const budget = (data?.skills ?? [])
+    .filter((candidateSkill) => !candidateSkill.manual)
+    .reduce((tokenTotal, candidateSkill) => tokenTotal + candidateSkill.descTokens, 0)
 
   const save = async () => {
     if (!editing) return
@@ -113,56 +136,76 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
       reload()
     }
   }
-  const remove = (skill: Skill | undefined = data?.skills.find((s) => s.key === sel)) =>
-    skill &&
-    !skill.readOnly &&
+  const remove = (targetSkill: Skill | undefined = data?.skills.find((candidateSkill) => candidateSkill.key === sel)) =>
+    targetSkill &&
+    !targetSkill.readOnly &&
     onAsk({
-      title: t("skills.skills.deleteTitle", { name: skill.name }),
+      title: t("skills.skills.deleteTitle", { name: targetSkill.name }),
       body: t("skills.skills.deleteBody"),
       confirm: t("common.delete"),
       run: async () => {
-        if (await reportAction(() => api.skillRemove([skill.key]))) {
-          if (skill.key === sel) onPick("")
+        if (await reportAction(() => api.skillRemove([targetSkill.key]))) {
+          if (targetSkill.key === sel) onPick("")
           reload()
         }
       },
     })
   const copyTo = async (to: string, key = sel) => {
-    let nk = ""
+    let copiedKey = ""
     const ok = await reportAction(async () => {
-      const r = await api.skillCopy(key, to)
-      nk = r.key
-      return r
+      const copyResponse = await api.skillCopy(key, to)
+      copiedKey = copyResponse.key
+      return copyResponse
     })
     if (ok) {
       await reload()
-      onPick(nk)
+      onPick(copiedKey)
     }
   }
   // Modifier depuis le menu : ouvre le skill, charge son texte et passe en édition.
   const edit = async (key: string) => {
-    const r = await api.skill(key).catch((e) => void toast.error(errMsg(e)))
-    if (!r) return
+    const skillResponse = await api.skill(key).catch((error) => void toast.error(errMsg(error)))
+    if (!skillResponse) return
     onPick(key)
-    setDraft({ key, text: r.text })
+    setDraft({ key, text: skillResponse.text })
   }
-  const npxAsk = (action: "update" | "remove", s: Skill) => {
-    const scope = s.scope === "user" ? "user" : "p/" + s.key.split("/")[1]
+  const npxAsk = (action: "update" | "remove", targetSkill: Skill) => {
+    const scope = targetSkill.scope === "user" ? "user" : "p/" + targetSkill.key.split("/")[1]
     onAsk({
-      title: t(`skills.npx.${action}Title`, { name: s.name }),
-      body: t("skills.npx.actBody", { cmd: npxCommand(action, "", s.dir, s.scope === "user") }),
+      title: t(`skills.npx.${action}Title`, { name: targetSkill.name }),
+      body: t("skills.npx.actBody", { cmd: npxCommand(action, "", targetSkill.dir, targetSkill.scope === "user") }),
       confirm: t(`skills.npx.${action}`),
       run: async () => {
-        if (await npxAct(action, "", s.dir, scope)) {
-          if (action === "remove" && s.key === sel) onPick("")
+        if (await npxAct(action, "", targetSkill.dir, scope)) {
+          if (action === "remove" && targetSkill.key === sel) onPick("")
           reload()
           check(true)
         }
       },
     })
   }
-  const copyName = (s: Skill) => copyText("/" + s.dir).then(() => toast.success(t("skills.skills.nameCopied", { dir: s.dir })), () => toast.error(t("skills.skills.copyFailed")))
-  const [fm, body] = split(cur?.text ?? "")
+  const copyName = (targetSkill: Skill) =>
+    copyText("/" + targetSkill.dir).then(
+      () => toast.success(t("skills.skills.nameCopied", { dir: targetSkill.dir })),
+      () => toast.error(t("skills.skills.copyFailed"))
+    )
+  const [frontMatter, body] = split(cur?.text ?? "")
+  const scopeLabelOf = (shownSkill: Skill) => {
+    if (shownSkill.scope === "plugin") return t("skills.skills.scopePlugin", { name: shownSkill.plugin })
+    if (shownSkill.scope === "store") return t("skills.skills.scopeStore")
+    if (shownSkill.scope === "project") return tilde(shownSkill.project ?? "", home)
+    return t("skills.skills.scopeUser")
+  }
+  const openAndWrite = (skillKey: string) => {
+    onPick(skillKey)
+    setWriter(skillKey)
+  }
+  const saveOnCtrlS = (keyboardEvent: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const isSaveShortcut = (keyboardEvent.ctrlKey || keyboardEvent.metaKey) && keyboardEvent.key === "s"
+    if (!isSaveShortcut) return
+    keyboardEvent.preventDefault()
+    save()
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
@@ -184,7 +227,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
             <Choose
               value={origin}
               onChange={setOrigin}
-              options={[["all", t("skills.origin.all")], ...Object.keys(ORIGINS).map((k) => [k, t(`skills.origin.${k}.label`)] as const)]}
+              options={[["all", t("skills.origin.all")], ...Object.keys(ORIGINS).map((originKey) => [originKey, t(`skills.origin.${originKey}.label`)] as const)]}
               label={t("skills.origin.label")}
               size="xs"
               className="min-w-0"
@@ -196,71 +239,71 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
             )}
           </div>
           {!data && <Skeleton className="m-2 h-24" />}
-          {groups.map((g) => (
-            <section key={g.title} className="mb-3">
+          {groups.map((skillGroup) => (
+            <section key={skillGroup.title} className="mb-3">
               <h2 className="flex items-center px-2 py-1 text-xs font-semibold text-muted-foreground">
-                <span className="flex-1 truncate">{g.title}</span>
-                <span className="font-normal tabular-nums">{g.items.length}</span>
+                <span className="flex-1 truncate">{skillGroup.title}</span>
+                <span className="font-normal tabular-nums">{skillGroup.items.length}</span>
               </h2>
               <ul className="space-y-px">
-                {g.items.map((s) => (
-                  <li key={s.key}>
+                {skillGroup.items.map((listedSkill) => (
+                  <li key={listedSkill.key}>
                     <ContextMenu>
                       <ContextMenuTrigger asChild>
                           <button
-                            onClick={() => onPick(s.key)}
-                            className={cn("flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors", s.key === sel ? "bg-accent text-accent-foreground" : "hover:bg-muted")}
+                            onClick={() => onPick(listedSkill.key)}
+                            className={cn("flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors", listedSkill.key === sel ? "bg-accent text-accent-foreground" : "hover:bg-muted")}
                           >
                             <span className="flex items-center gap-1.5">
                               <Zap className="size-3.5 shrink-0 text-warning" />
-                              <span className="min-w-0 flex-1 truncate font-medium">{s.name}</span>
-                        <OriginBadge s={s} />
-                              {updates[s.key] === "update" && <span className="shrink-0 rounded-sm bg-warning/10 px-1.5 py-px text-2xs font-medium text-warning">{t("skills.npx.updateBadge")}</span>}
-                              {s.manual && <Hand className="size-3.5 shrink-0 text-muted-foreground" aria-label={t("skills.skills.manualOnly")} />}
-                              {s.hidden && <EyeOff className="size-3.5 shrink-0 text-muted-foreground" aria-label={t("skills.skills.hiddenInMenu")} />}
-                              {s.warn && <AlertTriangle className="size-3.5 shrink-0 text-warning" aria-label={t("skills.skills.toCheck")} />}
+                              <span className="min-w-0 flex-1 truncate font-medium">{listedSkill.name}</span>
+                        <OriginBadge skill={listedSkill} />
+                              {updates[listedSkill.key] === "update" && <span className="shrink-0 rounded-sm bg-warning/10 px-1.5 py-px text-2xs font-medium text-warning">{t("skills.npx.updateBadge")}</span>}
+                              {listedSkill.manual && <Hand className="size-3.5 shrink-0 text-muted-foreground" aria-label={t("skills.skills.manualOnly")} />}
+                              {listedSkill.hidden && <EyeOff className="size-3.5 shrink-0 text-muted-foreground" aria-label={t("skills.skills.hiddenInMenu")} />}
+                              {listedSkill.warn && <AlertTriangle className="size-3.5 shrink-0 text-warning" aria-label={t("skills.skills.toCheck")} />}
                             </span>
-                            <span className="line-clamp-2 text-xs text-muted-foreground">{s.description || t("skills.skills.noDescription")}</span>
+                            <span className="line-clamp-2 text-xs text-muted-foreground">{listedSkill.description || t("skills.skills.noDescription")}</span>
                           </button>
                       </ContextMenuTrigger>
                       <ContextMenuContent className="w-60">
-                        <ContextMenuLabel className="truncate">{s.name}</ContextMenuLabel>
-                        <ContextMenuItem onSelect={() => onPick(s.key)}>
+                        <ContextMenuLabel className="truncate">{listedSkill.name}</ContextMenuLabel>
+                        <ContextMenuItem onSelect={() => onPick(listedSkill.key)}>
                           <BookOpen /> {t("skills.skills.open")}
                         </ContextMenuItem>
                         <ContextMenuSeparator />
-                        <ContextMenuItem onSelect={() => copyName(s)}>
-                          <Copy /> {t("skills.skills.copyName", { dir: s.dir })}
+                        <ContextMenuItem onSelect={() => copyName(listedSkill)}>
+                          <Copy /> {t("skills.skills.copyName", { dir: listedSkill.dir })}
                         </ContextMenuItem>
                         <ContextMenuSub>
                           <ContextMenuSubTrigger>
                             <Copy /> {t("skills.skills.copyTo")}
                           </ContextMenuSubTrigger>
                           <ContextMenuSubContent className="max-h-80 w-72 overflow-y-auto">
-                            {s.scope !== "user" && (
+                            {listedSkill.scope !== "user" && (
                               <>
-                                <ContextMenuItem onSelect={() => copyTo("u", s.key)}>{t("skills.skills.personal")}</ContextMenuItem>
+                                <ContextMenuItem onSelect={() => copyTo("u", listedSkill.key)}>{t("skills.skills.personal")}</ContextMenuItem>
                                 <ContextMenuSeparator />
                               </>
                             )}
-                            {(data?.projects ?? []).map((p) => (
-                              <ContextMenuItem key={p.dir} onSelect={() => copyTo("p/" + p.dir, s.key)}>
-                                <span className="truncate">{tilde(p.project, home)}</span>
+                            {(data?.projects ?? []).map((knownProject) => (
+                              <ContextMenuItem key={knownProject.dir} onSelect={() => copyTo("p/" + knownProject.dir, listedSkill.key)}>
+                                <span className="truncate">{tilde(knownProject.project, home)}</span>
                               </ContextMenuItem>
                             ))}
                           </ContextMenuSubContent>
                         </ContextMenuSub>
-                        {!s.readOnly && (
+                        {!listedSkill.readOnly && (
                           <>
                             <ContextMenuSeparator />
-                            <ContextMenuItem onSelect={() => edit(s.key)}>
+                            <ContextMenuItem onSelect={() => edit(listedSkill.key)}>
                               <Pencil /> {t("skills.skills.edit")}
                             </ContextMenuItem>
-                            <ContextMenuItem onSelect={() => (onPick(s.key), setWriter(s.key))}>
+                            <ContextMenuItem onSelect={() => openAndWrite(listedSkill.key)}>
                               <Sparkles /> {t("skills.skills.writeWithModel")}
                             </ContextMenuItem>
                             <ContextMenuSeparator />
-                            <ContextMenuItem variant="destructive" onSelect={() => remove(s)}>
+                            <ContextMenuItem variant="destructive" onSelect={() => remove(listedSkill)}>
                               <Trash2 /> {t("common.delete")}
                             </ContextMenuItem>
                           </>
@@ -285,15 +328,13 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
           </div>
         )}
 
-        {!sel ? (
-          <p className="mx-auto max-w-md px-6 py-20 text-center text-sm text-muted-foreground">{t("skills.skills.pick")}</p>
-        ) : !skill ? (
-          <p className="px-6 py-20 text-center text-sm text-muted-foreground">{t("skills.skills.notFound")}</p>
-        ) : (
+        {!sel && <p className="mx-auto max-w-md px-6 py-20 text-center text-sm text-muted-foreground">{t("skills.skills.pick")}</p>}
+        {sel && !skill && <p className="px-6 py-20 text-center text-sm text-muted-foreground">{t("skills.skills.notFound")}</p>}
+        {sel && skill && (
           <>
             <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 border-b bg-muted/40 px-6 py-1.5">
               <code className="min-w-40 flex-1 truncate text-xs text-muted-foreground" title={skill.path}>
-                /{skill.dir} · {skill.scope === "plugin" ? t("skills.skills.scopePlugin", { name: skill.plugin }) : skill.scope === "store" ? t("skills.skills.scopeStore") : skill.scope === "project" ? tilde(skill.project ?? "", home) : t("skills.skills.scopeUser")} · {t("skills.skills.files", { count: skill.files })} · {ago(skill.mtime)}
+                /{skill.dir} · {scopeLabelOf(skill)} · {t("skills.skills.files", { count: skill.files })} · {ago(skill.mtime)}
               </code>
               {editing ? (
                 <>
@@ -316,9 +357,9 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
                       {skill.scope !== "user" && <DropdownMenuItem onSelect={() => copyTo("u")}>{t("skills.skills.personal")}</DropdownMenuItem>}
                       {skill.scope !== "user" && <DropdownMenuSeparator />}
                       <DropdownMenuLabel>{t("skills.skills.projectLabel")}</DropdownMenuLabel>
-                      {(data?.projects ?? []).map((p) => (
-                        <DropdownMenuItem key={p.dir} onSelect={() => copyTo("p/" + p.dir)}>
-                          <span className="truncate">{tilde(p.project, home)}</span>
+                      {(data?.projects ?? []).map((knownProject) => (
+                        <DropdownMenuItem key={knownProject.dir} onSelect={() => copyTo("p/" + knownProject.dir)}>
+                          <span className="truncate">{tilde(knownProject.project, home)}</span>
                         </DropdownMenuItem>
                       ))}
                     </DropdownMenuContent>
@@ -362,7 +403,7 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
               </div>
             )}
             <p className="flex items-center gap-2 border-b px-6 py-1.5 text-xs text-muted-foreground">
-              <OriginBadge s={skill} /> {skill.source || t(`skills.origin.${skill.origin in ORIGINS ? skill.origin : "custom"}.hint`)}
+              <OriginBadge skill={skill} /> {skill.source || t(`skills.origin.${skill.origin in ORIGINS ? skill.origin : "custom"}.hint`)}
               {skill.readOnly && t("skills.skills.readOnlyHint")}
             </p>
             {skill.warn && !editing && (
@@ -373,8 +414,8 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
             {editing ? (
               <textarea
                 value={editing.text}
-                onChange={(e) => setDraft({ key: sel, text: e.target.value })}
-                onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "s" && (e.preventDefault(), save())}
+                onChange={(changeEvent) => setDraft({ key: sel, text: changeEvent.target.value })}
+                onKeyDown={saveOnCtrlS}
                 spellCheck={false}
                 autoFocus
                 aria-label={t("skills.skills.editorLabel")}
@@ -383,30 +424,28 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
             ) : (
               <ScrollArea className="min-h-0 flex-1">
                 <div className="mx-auto max-w-page px-6 py-6 text-sm leading-relaxed">
-                  {!cur ? (
-                    <Skeleton className="h-32 w-full" />
-                  ) : cur.error ? (
-                    <p className="text-destructive">{cur.error}</p>
-                  ) : (
+                  {!cur && <Skeleton className="h-32 w-full" />}
+                  {cur?.error && <p className="text-destructive">{cur.error}</p>}
+                  {cur && !cur.error && (
                     <>
                       <p className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                         {skill.manual && <span>{t("skills.skills.manualDetail")}</span>}
                         {skill.hidden && <span>{t("skills.skills.hiddenDetail")}</span>}
                         {skill.tools && <span>{t("skills.skills.tools", { tools: skill.tools })}</span>}
-                        <span>{t(skill.chars > 1536 ? "skills.skills.charsTruncated" : "skills.skills.chars", { chars: skill.chars })}</span>
+                        <span>{t(skill.chars > DESCRIPTION_CHAR_LIMIT ? "skills.skills.charsTruncated" : "skills.skills.chars", { chars: skill.chars })}</span>
                         <span>{t("skills.skills.tokens", { desc: skill.descTokens, all: skill.tokens })}</span>
                       </p>
-                      {fm && <pre className="mb-4 rounded-lg border bg-muted/40 px-3 py-2 text-xs whitespace-pre-wrap text-muted-foreground">{fm}</pre>}
+                      {frontMatter && <pre className="mb-4 rounded-lg border bg-muted/40 px-3 py-2 text-xs whitespace-pre-wrap text-muted-foreground">{frontMatter}</pre>}
                       <Markdown t={body} />
                       {cur.files.length > 1 && (
                         <div className="mt-6 border-t pt-3">
                           <p className="mb-1 text-xs font-medium text-muted-foreground">{t("skills.skills.folderFiles")}</p>
                           <ul className="space-y-px text-xs">
-                            {cur.files.map((x) => (
-                              <li key={x.rel} className="flex items-center gap-1.5">
+                            {cur.files.map((skillFile) => (
+                              <li key={skillFile.rel} className="flex items-center gap-1.5">
                                 <FileText className="size-3 shrink-0 text-muted-foreground" />
-                                <code>{x.rel}</code>
-                                <span className="text-muted-foreground">{t("skills.skills.kb", { kb: x.kb })}</span>
+                                <code>{skillFile.rel}</code>
+                                <span className="text-muted-foreground">{t("skills.skills.kb", { kb: skillFile.kb })}</span>
                               </li>
                             ))}
                           </ul>
@@ -420,10 +459,13 @@ export function Skills({ sel, home, q, onPick, onAsk }: { sel: string; home: str
           </>
         )}
       </div>
-      <SkillWriter open={!!writer} skillKey={writer} name={data?.skills.find((s) => s.key === writer)?.name ?? ""} onClose={() => setWriter("")} onDraft={(text) => setDraft({ key: writer, text })} />
+      <SkillWriter open={!!writer} skillKey={writer} name={data?.skills.find((candidateSkill) => candidateSkill.key === writer)?.name ?? ""} onClose={() => setWriter("")} onDraft={(text) => setDraft({ key: writer, text })} />
       <SkillsNpxDialog open={npx} projects={data?.projects ?? []} home={home} onClose={() => setNpx(false)} onChange={reload} />
       <PluginsDialog open={plugins} projects={data?.projects ?? []} home={home} onClose={() => setPlugins(false)} onChange={reload} />
-      <NewSkill open={creating} projects={data?.projects ?? []} home={home} onClose={() => setCreating(false)} onCreated={async (key) => (await reload(), onPick(key))} />
+      <NewSkill open={creating} projects={data?.projects ?? []} home={home} onClose={() => setCreating(false)} onCreated={async (key) => {
+          await reload()
+          onPick(key)
+        }} />
     </div>
   )
 }
@@ -433,7 +475,7 @@ function NewSkill({ open, projects, home, onClose, onCreated }: { open: boolean;
   const { t } = useTranslation()
   const [name, setName] = useState("")
   const [where, setWhere] = useState("u")
-  const ok = NAME_OK.test(name)
+  const isNameValid = NAME_OK.test(name)
   const create = async () => {
     const key = where === "u" ? `u/${name}` : `p/${where}/${name}`
     const text = `---\nname: ${name}\ndescription: \n---\n\n# ${name}\n\nInstructions du skill.\n`
@@ -444,7 +486,7 @@ function NewSkill({ open, projects, home, onClose, onCreated }: { open: boolean;
     }
   }
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t("skills.newSkill.title")}</DialogTitle>
@@ -452,19 +494,19 @@ function NewSkill({ open, projects, home, onClose, onCreated }: { open: boolean;
         </DialogHeader>
         <form
           className="grid gap-3"
-          onSubmit={(e) => {
-            e.preventDefault()
-            if (ok) create()
+          onSubmit={(submitEvent) => {
+            submitEvent.preventDefault()
+            if (isNameValid) create()
           }}
         >
-          <Input value={name} onChange={(e) => setName(e.target.value.toLowerCase())} placeholder={t("skills.newSkill.placeholder")} autoFocus aria-label={t("skills.newSkill.nameLabel")} className="font-mono" />
-          {name && !ok && <p className="text-xs text-destructive">{t("skills.newSkill.invalid")}</p>}
-          <Choose value={where} onChange={setWhere} options={[["u", t("skills.skills.personal")], ...projects.map((p) => [p.dir, t("skills.newSkill.project", { path: tilde(p.project, home) })] as const)]} label={t("skills.newSkill.location")} />
+          <Input value={name} onChange={(changeEvent) => setName(changeEvent.target.value.toLowerCase())} placeholder={t("skills.newSkill.placeholder")} autoFocus aria-label={t("skills.newSkill.nameLabel")} className="font-mono" />
+          {name && !isNameValid && <p className="text-xs text-destructive">{t("skills.newSkill.invalid")}</p>}
+          <Choose value={where} onChange={setWhere} options={[["u", t("skills.skills.personal")], ...projects.map((knownProject) => [knownProject.dir, t("skills.newSkill.project", { path: tilde(knownProject.project, home) })] as const)]} label={t("skills.newSkill.location")} />
           <DialogFooter>
             <Button variant="ghost" type="button" onClick={onClose}>
               {t("common.cancel")}
             </Button>
-            <Button type="submit" disabled={!ok}>
+            <Button type="submit" disabled={!isNameValid}>
               {t("skills.newSkill.create")}
             </Button>
           </DialogFooter>

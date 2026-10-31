@@ -22,6 +22,9 @@ import { errMsg, qs, readResponse, v1 } from "@/lib/apiError"
 import { watchTrust } from "@/lib/trust"
 import { authFetch } from "@/lib/auth"
 
+const COPIED_FEEDBACK_MS = 1200
+const SNIPPET_KEY_PREFIX = /^(u\/|p\/[^/]+\/)/
+
 // Snippets = commandes Claude Code (/nom) : personnelles (~/.claude/commands) et de chaque projet (.claude/commands).
 // Lecture, copie, édition, création, suppression (vers la corbeille), import et export en zip.
 export function Snippets({
@@ -46,16 +49,20 @@ export function Snippets({
   q: string
   home: string
   onPick: (key: string) => void
-  onLaunch: (s: Snippet, text: string) => void
+  onLaunch: (snippet: Snippet, text: string) => void
   onChanged: () => void
-  onAsk: (a: Ask) => void
-  onPrompt: (a: PromptAsk) => void
-  onCompose: (a: ComposeAsk) => void
+  onAsk: (ask: Ask) => void
+  onPrompt: (ask: PromptAsk) => void
+  onCompose: (ask: ComposeAsk) => void
   args: string
 }) {
   const { t } = useTranslation()
-  const f = q.toLowerCase()
-  const shown = files.filter((s) => !f || (s.path + " " + s.command + " " + s.description + " " + s.project).toLowerCase().includes(f))
+  const normalizedQuery = q.toLowerCase()
+  const shown = files.filter((file) => {
+    if (!normalizedQuery) return true
+    const searchableText = (file.path + " " + file.command + " " + file.description + " " + file.project).toLowerCase()
+    return searchableText.includes(normalizedQuery)
+  })
   const [loaded, setLoaded] = useState<{ key: string; text: string; error?: string } | null>(null)
   const [draft, setDraft] = useEditorDraft("snippet")
   const [creating, setCreating] = useState("") // nouveau snippet pas encore enregistré
@@ -64,54 +71,60 @@ export function Snippets({
   const [haiku, setHaiku] = useState(false) // fenêtre de mise en forme ouverte
   const [before, setBefore] = useState<{ key: string; text: string } | null>(null) // texte d'avant la mise en forme
   const [picked, setPicked] = useState<Set<string>>(new Set()) // cochés pour la fusion
-  const upload = useRef<HTMLInputElement>(null)
+  const uploadInput = useRef<HTMLInputElement>(null)
   // Erreur de lecture gardée à part : affichée, jamais éditée ni lancée comme une commande.
   const failed = loaded?.key === sel ? loaded.error : undefined
   const text = loaded?.key === sel && failed === undefined ? loaded.text : null
   const editing = draft?.key === sel ? draft : null
   useLeaveGuard(!!draft && !(draft.key === sel && draft.text === text))
-  const snip = files.find((s) => s.key === sel)
+  const snip = files.find((file) => file.key === sel)
 
   useEffect(() => {
     if (!sel || sel === creating) return
-    let live = true
+    let isMounted = true
     api.snippet(sel).then(
-      (r) => live && setLoaded({ key: sel, text: r.text }),
-      (e) => live && setLoaded({ key: sel, text: "", error: errMsg(e) })
+      (snippetResponse) => isMounted && setLoaded({ key: sel, text: snippetResponse.text }),
+      (error) => isMounted && setLoaded({ key: sel, text: "", error: errMsg(error) })
     )
     return () => {
-      live = false
+      isMounted = false
     }
   }, [sel, creating])
 
-  const label = (sc: string) => (sc ? tilde(scopes.find((x) => x.dir === sc)?.project ?? sc, home) : t("skills.snippets.personal"))
-  const prefix = (sc: string) => (sc ? `p/${sc}/` : "u/")
+  const label = (scopeDir: string) => {
+    if (!scopeDir) return t("skills.snippets.personal")
+    const scopeProject = scopes.find((candidateScope) => candidateScope.dir === scopeDir)?.project ?? scopeDir
+    return tilde(scopeProject, home)
+  }
+  const prefix = (scopeDir: string) => (scopeDir ? `p/${scopeDir}/` : "u/")
+  const withMdExtension = (name: string) => (name.endsWith(".md") ? name : name + ".md")
+  const commandOf = (key: string) => files.find((file) => file.key === key)?.command ?? key
 
-  const formatted = (txt: string) => {
-    const cur = editing?.text ?? text ?? ""
-    setBefore({ key: sel, text: cur })
-    setDraft({ key: sel, text: txt })
+  const formatted = (formattedText: string) => {
+    const currentText = editing?.text ?? text ?? ""
+    setBefore({ key: sel, text: currentText })
+    setDraft({ key: sel, text: formattedText })
   }
 
-  const copyAs = (txt: string, what: "Content" | "Command" | "Path") =>
-    copyText(txt).then(
+  const copyAs = (textToCopy: string, what: "Content" | "Command" | "Path") =>
+    copyText(textToCopy).then(
       () => toast.success(t(`skills.snippets.copied${what}`)),
       () => toast.error(t("skills.snippets.copyFailed"))
     )
-  const copyContent = async (s: Snippet) => {
-    const r = await api.snippet(s.key).catch((e) => void toast.error(errMsg(e) || t("skills.snippets.unreadable")))
-    if (r) copyAs(r.text, "Content")
+  const readOf = (snippet: Snippet) => api.snippet(snippet.key).catch((error) => void toast.error(errMsg(error) || t("skills.snippets.unreadable")))
+  const copyContent = async (snippet: Snippet) => {
+    const snippetResponse = await readOf(snippet)
+    if (snippetResponse) copyAs(snippetResponse.text, "Content")
   }
-  const readOf = (s: Snippet) => api.snippet(s.key).catch((e) => void toast.error(errMsg(e) || t("skills.snippets.unreadable")))
-  const launchOf = async (s: Snippet) => {
-    const r = await readOf(s)
-    if (r) onLaunch(s, r.text)
+  const launchOf = async (snippet: Snippet) => {
+    const snippetResponse = await readOf(snippet)
+    if (snippetResponse) onLaunch(snippet, snippetResponse.text)
   }
-  const editOf = async (s: Snippet, improve = false) => {
-    const r = await readOf(s)
-    if (!r) return
-    onPick(s.key)
-    setDraft({ key: s.key, text: r.text })
+  const editOf = async (snippet: Snippet, improve = false) => {
+    const snippetResponse = await readOf(snippet)
+    if (!snippetResponse) return
+    onPick(snippet.key)
+    setDraft({ key: snippet.key, text: snippetResponse.text })
     if (improve) setHaiku(true)
   }
   const copy = () =>
@@ -119,7 +132,7 @@ export function Snippets({
     copyText(text).then(
       () => {
         setCopied(true)
-        setTimeout(() => setCopied(false), 1200)
+        setTimeout(() => setCopied(false), COPIED_FEEDBACK_MS)
       },
       () => toast.error(t("skills.snippets.copyFailed"))
     )
@@ -138,8 +151,8 @@ export function Snippets({
       placeholder: t("skills.snippets.newPlaceholder"),
       confirm: t("skills.snippets.create"),
       run: (name) => {
-        const key = prefix(scope) + (name.endsWith(".md") ? name : name + ".md")
-        if (files.some((s) => s.key === key)) return void toast.error(t("skills.snippets.exists"))
+        const key = prefix(scope) + withMdExtension(name)
+        if (files.some((file) => file.key === key)) return void toast.error(t("skills.snippets.exists"))
         setCreating(key)
         setDraft({ key, text: "---\ndescription: \n---\n\n" })
         onPick(key)
@@ -147,13 +160,13 @@ export function Snippets({
     })
   const rename = (key = sel) =>
     onPrompt({
-      title: t("skills.snippets.renameTitle", { name: files.find((x) => x.key === key)?.command ?? key }),
-      value: key.replace(/^(u\/|p\/[^/]+\/)/, "").replace(/\.md$/, ""),
+      title: t("skills.snippets.renameTitle", { name: commandOf(key) }),
+      value: key.replace(SNIPPET_KEY_PREFIX, "").replace(/\.md$/, ""),
       placeholder: t("skills.snippets.newPlaceholder"),
       confirm: t("skills.snippets.rename"),
       run: async (name) => {
-        const head = /^(u\/|p\/[^/]+\/)/.exec(key)?.[0] ?? ""
-        const to = head + (name.endsWith(".md") ? name : name + ".md")
+        const keyPrefix = SNIPPET_KEY_PREFIX.exec(key)?.[0] ?? ""
+        const to = keyPrefix + withMdExtension(name)
         if (to === key) return true
         const ok = await reportAction(() => api.snippetRename(key, to))
         if (ok) {
@@ -165,7 +178,7 @@ export function Snippets({
     })
   const remove = (key = sel) =>
     onAsk({
-      title: t("skills.snippets.deleteTitle", { name: files.find((x) => x.key === key)?.command ?? key }),
+      title: t("skills.snippets.deleteTitle", { name: commandOf(key) }),
       body: t("skills.snippets.deleteBody"),
       confirm: t("common.delete"),
       run: async () => {
@@ -176,46 +189,47 @@ export function Snippets({
       },
     })
   const toggle = (key: string) =>
-    setPicked((p) => {
-      const n = new Set(p)
-      if (!n.delete(key)) n.add(key)
-      return n
+    setPicked((previouslyPicked) => {
+      const nextPicked = new Set(previouslyPicked)
+      if (!nextPicked.delete(key)) nextPicked.add(key)
+      return nextPicked
     })
   // Fusion par Claude : le serveur rédige le prompt ; la fenêtre de saisie le fait relire avant de lancer la session.
   const merge = async () => {
-    const keys = files.filter((s) => picked.has(s.key)).map((s) => s.key)
-    const draft = (out?: string) => api.snippetMerge({ keys, out, launch: false })
-    let r
+    const keys = files.filter((file) => picked.has(file.key)).map((file) => file.key)
+    const draftMergePrompt = (out?: string) => api.snippetMerge({ keys, out, launch: false })
+    const showMergeError = (error: unknown) => toast.error(errMsg(error).trim() || t("skills.snippets.mergeFailed"))
+    let mergeDraft
     try {
-      r = await draft()
-    } catch (e) {
-      return void toast.error(errMsg(e).trim() || t("skills.snippets.mergeFailed"))
+      mergeDraft = await draftMergePrompt()
+    } catch (error) {
+      return void showMergeError(error)
     }
     onCompose({
       id: "snippet-merge:" + keys.join(","),
       title: t("skills.snippets.mergeTitle"),
       subtitle: t("skills.snippets.mergeSubtitle", { n: keys.length }),
       project: "",
-      initial: r.prompt,
+      initial: mergeDraft.prompt,
       send: t("skills.snippets.mergeSend"),
       choice: { model: "haiku", effort: "" }, // tâche mécanique
-      outputs: keys.map((k) => ({ key: k, label: files.find((x) => x.key === k)?.command ?? k })),
+      outputs: keys.map((key) => ({ key, label: commandOf(key) })),
       reprompt: async (out) => {
         try {
-          return (await draft(out)).prompt
-        } catch (e) {
-          return void toast.error(errMsg(e).trim() || t("skills.snippets.mergeFailed"))
+          return (await draftMergePrompt(out)).prompt
+        } catch (error) {
+          return void showMergeError(error)
         }
       },
-      run: async (text, c, _t, out) => {
+      run: async (text, choice, _target, out) => {
         try {
-          const m = await api.snippetMerge({ keys, out, launch: true, prompt: text, args: withChoice(args, c) })
-          toast.success(m.message.trim() || t("skills.snippets.mergeStarted"))
+          const mergeLaunch = await api.snippetMerge({ keys, out, launch: true, prompt: text, args: withChoice(args, choice) })
+          toast.success(mergeLaunch.message.trim() || t("skills.snippets.mergeStarted"))
           void watchTrust(home)
           setPicked(new Set())
           return true
-        } catch (e) {
-          toast.error(errMsg(e).trim() || t("skills.snippets.mergeFailed"))
+        } catch (error) {
+          showMergeError(error)
           return false
         }
       },
@@ -224,17 +238,39 @@ export function Snippets({
   // Import : fichiers .md ou archives .zip ; un snippet déjà présent est laissé tel quel.
   const importFiles = async (list: FileList | null) => {
     if (!list?.length) return
-    const fd = new FormData()
-    fd.set("scope", scope)
-    for (const file of list) fd.append("files", file)
-    const id = toast.loading(t("skills.snippets.importing"))
-    await reportAction(async () => readResponse<{ message: string }>(await authFetch(v1("/snippets/imports"), { method: "POST", body: fd })), { id })
-    if (upload.current) upload.current.value = ""
+    const formData = new FormData()
+    formData.set("scope", scope)
+    for (const file of list) formData.append("files", file)
+    const toastId = toast.loading(t("skills.snippets.importing"))
+    const postImport = async () => readResponse<{ message: string }>(await authFetch(v1("/snippets/imports"), { method: "POST", body: formData }))
+    await reportAction(postImport, { id: toastId })
+    if (uploadInput.current) uploadInput.current.value = ""
     onChanged()
   }
 
   // Sections : personnelles d'abord, puis chaque projet qui a des commandes.
-  const sections = [["", files.filter((s) => !s.scope)] as const, ...scopes.map((x) => [x.dir, files.filter((s) => s.scope === x.dir)] as const)]
+  const sections = [
+    ["", files.filter((file) => !file.scope)] as const,
+    ...scopes.map((projectScope) => [projectScope.dir, files.filter((file) => file.scope === projectScope.dir)] as const),
+  ]
+
+  const cancelEditing = () => {
+    setDraft(null)
+    if (sel !== creating) return
+    setCreating("")
+    onPick("")
+  }
+  const saveOnCtrlS = (keyboardEvent: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const isSaveShortcut = (keyboardEvent.ctrlKey || keyboardEvent.metaKey) && keyboardEvent.key === "s"
+    if (!isSaveShortcut) return
+    keyboardEvent.preventDefault()
+    save()
+  }
+  const renderCommandBody = () => {
+    if (failed !== undefined) return <p className="text-destructive">{failed || t("skills.snippets.unreadable")}</p>
+    if (text === null) return <Skeleton className="h-32 w-full" />
+    return <CommandView text={text} />
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
@@ -243,7 +279,7 @@ export function Snippets({
           <Choose
             value={scope}
             onChange={setScope}
-            options={[["", t("skills.snippets.personal")] as const, ...scopes.map((x) => [x.dir, tilde(x.project, home)] as const)]}
+            options={[["", t("skills.snippets.personal")] as const, ...scopes.map((projectScope) => [projectScope.dir, tilde(projectScope.project, home)] as const)]}
             label={t("skills.snippets.location")}
             className="w-full"
           />
@@ -251,7 +287,7 @@ export function Snippets({
             <Button variant="outline" size="xs" onClick={create} title={t("skills.snippets.newTitle")}>
               <Plus /> {t("skills.snippets.new")}
             </Button>
-            <Button variant="ghost" size="xs" onClick={() => upload.current?.click()} title={t("skills.snippets.importTitle")}>
+            <Button variant="ghost" size="xs" onClick={() => uploadInput.current?.click()} title={t("skills.snippets.importTitle")}>
               <Upload /> {t("skills.snippets.import")}
             </Button>
             <Button variant="ghost" size="xs" asChild title={t("skills.snippets.exportTitle")}>
@@ -259,74 +295,74 @@ export function Snippets({
                 <Download /> {t("skills.snippets.export")}
               </a>
             </Button>
-            <input ref={upload} type="file" multiple accept=".md,.zip" className="hidden" onChange={(e) => importFiles(e.target.files)} />
+            <input ref={uploadInput} type="file" multiple accept=".md,.zip" className="hidden" onChange={(changeEvent) => importFiles(changeEvent.target.files)} />
           </div>
         </div>
         <ScrollArea className="min-h-0 flex-1">
           <nav className="p-2">
-            {sections.map(([sc, list]) => {
-              const vis = list.filter((s) => shown.includes(s))
-              if (!vis.length && sc) return null
+            {sections.map(([scopeDir, sectionFiles]) => {
+              const visibleFiles = sectionFiles.filter((file) => shown.includes(file))
+              if (!visibleFiles.length && scopeDir) return null
               return (
-                <section key={sc || "u"} className="mb-3">
-                  <h2 className="truncate px-2 py-1 text-xs font-semibold text-muted-foreground" title={sc ? undefined : dir}>
-                    {label(sc)}
+                <section key={scopeDir || "u"} className="mb-3">
+                  <h2 className="truncate px-2 py-1 text-xs font-semibold text-muted-foreground" title={scopeDir ? undefined : dir}>
+                    {label(scopeDir)}
                   </h2>
-                  {vis.length === 0 && (
+                  {visibleFiles.length === 0 && (
                     <p className="px-2 py-1 text-xs text-muted-foreground">{files.length ? t("skills.snippets.noneMatch") : t("skills.snippets.none")}</p>
                   )}
                   <ul className="space-y-px">
-                    {vis.map((s) => (
-                      <li key={s.key}>
+                    {visibleFiles.map((listedSnippet) => (
+                      <li key={listedSnippet.key}>
                         <ContextMenu>
                           <ContextMenuTrigger asChild>
                         <button
-                              onClick={() => onPick(s.key)}
-                              title={s.description || s.path}
+                              onClick={() => onPick(listedSnippet.key)}
+                              title={listedSnippet.description || listedSnippet.path}
                               className={cn(
                                 "flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
-                                s.key === sel ? "bg-accent text-accent-foreground" : "hover:bg-muted",
-                                picked.has(s.key) && "ring-1 ring-primary"
+                                listedSnippet.key === sel ? "bg-accent text-accent-foreground" : "hover:bg-muted",
+                                picked.has(listedSnippet.key) && "ring-1 ring-primary"
                               )}
                             >
-                              {picked.has(s.key) ? <Check className="mt-0.5 size-4 shrink-0 text-primary" /> : <Terminal className="mt-0.5 size-4 shrink-0 text-muted-foreground" />}
+                              {picked.has(listedSnippet.key) ? <Check className="mt-0.5 size-4 shrink-0 text-primary" /> : <Terminal className="mt-0.5 size-4 shrink-0 text-muted-foreground" />}
                               <span className="min-w-0">
-                                <span className="block truncate font-mono text-sm">{s.command}</span>
+                                <span className="block truncate font-mono text-sm">{listedSnippet.command}</span>
                                 <span className="block truncate text-xs font-normal text-muted-foreground">
-                                  {s.description || `${ago(s.mtime)}, ${size(s.kb)}`}
+                                  {listedSnippet.description || `${ago(listedSnippet.mtime)}, ${size(listedSnippet.kb)}`}
                                 </span>
                               </span>
                             </button>
                           </ContextMenuTrigger>
                           <ContextMenuContent>
-                            <ContextMenuItem onSelect={() => copyContent(s)}>
+                            <ContextMenuItem onSelect={() => copyContent(listedSnippet)}>
                               <Copy /> {t("skills.snippets.copyContent")}
                             </ContextMenuItem>
-                            <ContextMenuItem onSelect={() => copyAs(s.command, "Command")}>
+                            <ContextMenuItem onSelect={() => copyAs(listedSnippet.command, "Command")}>
                               <Copy /> {t("skills.snippets.copyCommand")}
                             </ContextMenuItem>
-                            <ContextMenuItem onSelect={() => copyAs(s.path, "Path")}>
+                            <ContextMenuItem onSelect={() => copyAs(listedSnippet.path, "Path")}>
                               <Copy /> {t("skills.snippets.copyPath")}
                             </ContextMenuItem>
                             <ContextMenuSeparator />
-                            <ContextMenuItem onSelect={() => launchOf(s)}>
+                            <ContextMenuItem onSelect={() => launchOf(listedSnippet)}>
                               <MessageSquarePlus /> {t("skills.snippets.launch")}
                             </ContextMenuItem>
-                            <ContextMenuItem onSelect={() => editOf(s)}>
+                            <ContextMenuItem onSelect={() => editOf(listedSnippet)}>
                               <Pencil /> {t("skills.snippets.edit")}
                             </ContextMenuItem>
-                            <ContextMenuItem onSelect={() => editOf(s, true)}>
+                            <ContextMenuItem onSelect={() => editOf(listedSnippet, true)}>
                               <Bot /> {t("skills.snippets.improve")}
                             </ContextMenuItem>
-                            <ContextMenuItem onSelect={() => rename(s.key)}>
+                            <ContextMenuItem onSelect={() => rename(listedSnippet.key)}>
                               <Pencil /> {t("skills.snippets.rename")}
                             </ContextMenuItem>
-                            <ContextMenuItem variant="destructive" onSelect={() => remove(s.key)}>
+                            <ContextMenuItem variant="destructive" onSelect={() => remove(listedSnippet.key)}>
                               <Trash2 /> {t("common.delete")}
                             </ContextMenuItem>
                             <ContextMenuSeparator />
-                            <ContextMenuItem onSelect={() => toggle(s.key)}>
-                              {picked.has(s.key) ? <Unlink /> : <Merge />} {picked.has(s.key) ? t("skills.snippets.unmerge") : t("skills.snippets.mergePick")}
+                            <ContextMenuItem onSelect={() => toggle(listedSnippet.key)}>
+                              {picked.has(listedSnippet.key) ? <Unlink /> : <Merge />} {picked.has(listedSnippet.key) ? t("skills.snippets.unmerge") : t("skills.snippets.mergePick")}
                             </ContextMenuItem>
                           </ContextMenuContent>
                         </ContextMenu>
@@ -359,15 +395,16 @@ export function Snippets({
           </div>
         )}
 
-        {!sel ? (
+        {!sel && (
           <p className="px-6 py-20 text-center text-sm text-muted-foreground">
             {t("skills.snippets.pickA")} <code>/nom</code> {t("skills.snippets.pickB")}
           </p>
-        ) : (
+        )}
+        {sel && (
           <>
             <div className="flex flex-wrap items-center gap-2 border-b bg-muted/40 px-6 py-1.5">
               <code className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={sel}>
-                {snip ? `${snip.command} · ${snip.path}` : sel.replace(/^(u|p\/[^/]+)\//, "")}
+                {snip ? `${snip.command} · ${snip.path}` : sel.replace(SNIPPET_KEY_PREFIX, "")}
                 {sel === creating && ` ${t("skills.snippets.newMark")}`}
               </code>
               {editing ? (
@@ -375,13 +412,7 @@ export function Snippets({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
-                      setDraft(null)
-                      if (sel === creating) {
-                        setCreating("")
-                        onPick("")
-                      }
-                    }}
+                    onClick={cancelEditing}
                   >
                     <X /> {t("common.cancel")}
                   </Button>
@@ -389,7 +420,10 @@ export function Snippets({
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => (setDraft({ key: sel, text: before.text }), setBefore(null))}
+                      onClick={() => {
+                        setDraft({ key: sel, text: before.text })
+                        setBefore(null)
+                      }}
                       title={t("skills.snippets.undoTitle")}
                     >
                       <Undo2 /> {t("skills.snippets.undo")}
@@ -428,8 +462,8 @@ export function Snippets({
             {editing ? (
               <textarea
                 value={editing.text}
-                onChange={(e) => setDraft({ key: sel, text: e.target.value })}
-                onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "s" && (e.preventDefault(), save())}
+                onChange={(changeEvent) => setDraft({ key: sel, text: changeEvent.target.value })}
+                onKeyDown={saveOnCtrlS}
                 spellCheck={false}
                 autoFocus
                 className="session-text min-h-0 flex-1 resize-none bg-background px-6 py-4 outline-none"
@@ -438,7 +472,7 @@ export function Snippets({
             ) : (
               <ScrollArea className="min-h-0 flex-1">
                 <div className="mx-auto max-w-page px-6 py-6 text-sm leading-relaxed">
-                  {failed !== undefined ? <p className="text-destructive">{failed || t("skills.snippets.unreadable")}</p> : text === null ? <Skeleton className="h-32 w-full" /> : <CommandView text={text} />}
+                  {renderCommandBody()}
                 </div>
               </ScrollArea>
             )}
@@ -452,17 +486,17 @@ export function Snippets({
 
 // En-tête YAML (description, argument-hint, model…) en petit, puis le prompt rendu en Markdown.
 function CommandView({ text }: { text: string }) {
-  const m = /^---\n([\s\S]*?)\n---\n?/.exec(text)
+  const frontMatterMatch = /^---\n([\s\S]*?)\n---\n?/.exec(text)
   return (
     <>
-      {m && <pre className="mb-4 rounded-lg border bg-muted/40 px-3 py-2 text-xs whitespace-pre-wrap text-muted-foreground">{m[1]}</pre>}
-      <Markdown t={m ? text.slice(m[0].length) : text} />
+      {frontMatterMatch && <pre className="mb-4 rounded-lg border bg-muted/40 px-3 py-2 text-xs whitespace-pre-wrap text-muted-foreground">{frontMatterMatch[1]}</pre>}
+      <Markdown t={frontMatterMatch ? text.slice(frontMatterMatch[0].length) : text} />
     </>
   )
 }
 
 // Mise en forme d'une commande par un petit modèle : le résultat remplace le texte de l'éditeur, sans être enregistré.
-function HaikuFormat({ open, text, onClose, onDone }: { open: boolean; text: string; onClose: () => void; onDone: (t: string) => void }) {
+function HaikuFormat({ open, text, onClose, onDone }: { open: boolean; text: string; onClose: () => void; onDone: (formattedText: string) => void }) {
   const { t } = useTranslation()
   const models = [
     ["haiku", t("skills.format.modelHaiku")],
@@ -474,16 +508,23 @@ function HaikuFormat({ open, text, onClose, onDone }: { open: boolean; text: str
   const [busy, setBusy] = useState(false)
   const run = async () => {
     setBusy(true)
-    const r = await api.snippetDraft({ model, instruction, text }).catch((e) => void toast.error(errMsg(e)))
+    const formatDraft = await api.snippetDraft({ model, instruction, text }).catch((error) => void toast.error(errMsg(error)))
     setBusy(false)
-    if (!r) return
-    toast.success(t("skills.format.formatReady"), { description: r.cost ? t("skills.format.cost", { cost: r.cost.toFixed(4) }) : undefined })
+    if (!formatDraft) return
+    const costDescription = formatDraft.cost ? t("skills.format.cost", { cost: formatDraft.cost.toFixed(4) }) : undefined
+    toast.success(t("skills.format.formatReady"), { description: costDescription })
     setInstruction("")
     onClose()
-    onDone(r.text)
+    onDone(formatDraft.text)
+  }
+  const runOnCtrlEnter = (keyboardEvent: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const isSubmitShortcut = (keyboardEvent.ctrlKey || keyboardEvent.metaKey) && keyboardEvent.key === "Enter"
+    if (!isSubmitShortcut) return
+    keyboardEvent.preventDefault()
+    run()
   }
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && !busy && onClose()}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && !busy && onClose()}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{t("skills.format.title")}</DialogTitle>
@@ -491,8 +532,8 @@ function HaikuFormat({ open, text, onClose, onDone }: { open: boolean; text: str
         </DialogHeader>
         <textarea
           value={instruction}
-          onChange={(e) => setInstruction(e.target.value)}
-          onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === "Enter" && (e.preventDefault(), run())}
+          onChange={(changeEvent) => setInstruction(changeEvent.target.value)}
+          onKeyDown={runOnCtrlEnter}
           placeholder={text.trim() ? t("skills.format.placeholderEdit") : t("skills.format.placeholderNew")}
           autoFocus
           rows={3}

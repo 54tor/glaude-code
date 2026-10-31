@@ -6,13 +6,18 @@ import { Input } from "@/components/ui/input"
 // Recherche d'une vue de sessions : par nom, ou (mode avancé) aussi dans le texte des conversations.
 export function SessionSearch({ q, setQ, adv, setAdv, searching }: { q: string; setQ: (v: string) => void; adv: boolean; setAdv: (v: boolean) => void; searching: boolean }) {
   const { t } = useTranslation()
+  const clearAndBlurOnEscape = (keyboardEvent: React.KeyboardEvent<HTMLInputElement>) => {
+    if (keyboardEvent.key !== "Escape") return
+    setQ("")
+    keyboardEvent.currentTarget.blur()
+  }
   return (
     <div className="relative w-full md:w-96">
       <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         value={q}
-        onChange={(e) => setQ(e.target.value)}
-        onKeyDown={(e) => e.key === "Escape" && (setQ(""), e.currentTarget.blur())}
+        onChange={(changeEvent) => setQ(changeEvent.target.value)}
+        onKeyDown={clearAndBlurOnEscape}
         placeholder={adv ? t("shell.search.placeholderContent") : t("shell.search.placeholder")}
         aria-label={t("shell.search.label")}
         className="h-7 bg-background pr-12 pl-8 shadow-none md:pr-28"

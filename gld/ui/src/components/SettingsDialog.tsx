@@ -27,6 +27,8 @@ const THEMES = [
   { v: "system", label: "themeSystem", Icon: Monitor },
 ] as const
 
+const FALLBACK_SWATCH_COLORS = ["#1e2530", "#7fd6e6", "#e6e9ee"]
+
 // [touche affichée (cap.* : nom traduit), id du libellé]
 const KEYS: [string, string][] = [
   ["/", "search"],
@@ -60,7 +62,7 @@ function FontPicker({ font, setFont, fontSize, setFontSize }: Fonts) {
         role="radiogroup"
         aria-label={t("config.dialog.font")}
       >
-        {Object.entries(FONTS).map(([id, f]) => (
+        {Object.entries(FONTS).map(([id, fontOption]) => (
           <button
             key={id}
             role="radio"
@@ -74,11 +76,11 @@ function FontPicker({ font, setFont, fontSize, setFontSize }: Fonts) {
             )}
           >
             <span className="block text-xs text-muted-foreground">
-              {f.label}
+              {fontOption.label}
             </span>
             <span
               className="block truncate text-sm"
-              style={{ fontFamily: f.text }}
+              style={{ fontFamily: fontOption.text }}
             >
               Ça marche — Привет, мир ! 0O 1lI
             </span>
@@ -86,19 +88,19 @@ function FontPicker({ font, setFont, fontSize, setFontSize }: Fonts) {
         ))}
       </div>
       <div className="grid max-w-sm grid-cols-5 gap-1 rounded-lg bg-muted p-1">
-        {SIZES.map((v) => (
+        {SIZES.map((sizeOption) => (
           <button
-            key={v}
-            onClick={() => setFontSize(v)}
-            aria-pressed={fontSize === v}
+            key={sizeOption}
+            onClick={() => setFontSize(sizeOption)}
+            aria-pressed={fontSize === sizeOption}
             className={cn(
               "rounded-md py-1 text-xs tabular-nums transition-colors pointer-coarse:min-h-8",
-              fontSize === v
+              fontSize === sizeOption
                 ? "bg-background font-medium shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
             )}
           >
-            {v} px
+            {sizeOption} px
           </button>
         ))}
       </div>
@@ -126,13 +128,13 @@ export function ClaudeOptions({ args, setArgs, choice, setChoice }: Pick<UiSetti
   const { t } = useTranslation()
   const [rules, setRules] = useState<boolean | null>(null)
   useEffect(() => {
-    api.builtinRules().then((r) => setRules(r.enabled), () => {})
+    api.builtinRules().then((rulesResponse) => setRules(rulesResponse.enabled), () => {})
   }, [])
-  const pickRules = async (on: boolean) => {
+  const pickRules = async (isEnabled: boolean) => {
     try {
-      setRules((await api.setBuiltinRules(on)).enabled)
-    } catch (e) {
-      toast.error(errMsg(e))
+      setRules((await api.setBuiltinRules(isEnabled)).enabled)
+    } catch (error) {
+      toast.error(errMsg(error))
     }
   }
   return (
@@ -146,7 +148,7 @@ export function ClaudeOptions({ args, setArgs, choice, setChoice }: Pick<UiSetti
         <Input
           id="args"
           value={args}
-          onChange={(e) => setArgs(e.target.value)}
+          onChange={(changeEvent) => setArgs(changeEvent.target.value)}
           placeholder={t("config.dialog.argsPlaceholder")}
           className="font-mono text-xs"
           spellCheck={false}
@@ -176,8 +178,8 @@ export function SettingsPanel(fonts: Fonts) {
     setLang(lang)
     try {
       await api.configEdit({ file: "u", op: "set", path: ["language"], value: claude })
-    } catch (e) {
-      toast.error(errMsg(e))
+    } catch (error) {
+      toast.error(errMsg(error))
     }
   }
   return (
@@ -187,15 +189,15 @@ export function SettingsPanel(fonts: Fonts) {
           {t("config.dialog.tabKeys")}
         </h3>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-          {KEYS.map(([k, v]) => (
-            <div key={k} className="contents">
+          {KEYS.map(([displayedKey, labelId]) => (
+            <div key={displayedKey} className="contents">
               <dt>
                 <kbd className="rounded-sm border bg-muted px-1.5 py-0.5 font-mono text-xs">
-                  {k.startsWith("cap.") ? t(`config.dialog.${k}`) : k}
+                  {displayedKey.startsWith("cap.") ? t(`config.dialog.${displayedKey}`) : displayedKey}
                 </kbd>
               </dt>
               <dd className="text-muted-foreground">
-                {t(`config.dialog.key.${v}`)}
+                {t(`config.dialog.key.${labelId}`)}
               </dd>
             </div>
           ))}
@@ -210,10 +212,10 @@ export function SettingsPanel(fonts: Fonts) {
           t("config.dialog.languageHint"),
           <Choose
             value={i18n.language}
-            onChange={(v) =>
-              pickLang(v as Lang, LANGS.find((l) => l.v === v)!.claude)
+            onChange={(selectedLang) =>
+              pickLang(selectedLang as Lang, LANGS.find((language) => language.v === selectedLang)!.claude)
             }
-            options={LANGS.map((l) => [l.v, l.label] as const)}
+            options={LANGS.map((language) => [language.v, language.label] as const)}
             label={t("config.dialog.language")}
             size="default"
             className="w-full max-w-sm"
@@ -223,14 +225,14 @@ export function SettingsPanel(fonts: Fonts) {
           t("config.dialog.theme"),
           "",
           <div className="grid max-w-sm grid-cols-3 gap-1 rounded-lg bg-muted p-1">
-            {THEMES.map(({ v, label, Icon }) => (
+            {THEMES.map(({ v: themeValue, label, Icon }) => (
               <button
-                key={v}
-                onClick={() => setTheme(v)}
-                aria-pressed={theme === v}
+                key={themeValue}
+                onClick={() => setTheme(themeValue)}
+                aria-pressed={theme === themeValue}
                 className={cn(
                   "flex items-center justify-center gap-1.5 rounded-md py-1 text-xs transition-colors pointer-coarse:min-h-8",
-                  theme === v
+                  theme === themeValue
                     ? "bg-background font-medium shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 )}
@@ -248,8 +250,9 @@ export function SettingsPanel(fonts: Fonts) {
             role="radiogroup"
             aria-label={t("config.dialog.palette")}
           >
-            {Object.entries(PALETTES).map(([id, p]) => {
-              const t = p.dark
+            {Object.entries(PALETTES).map(([id, paletteOption]) => {
+              const darkColors = paletteOption.dark
+              const swatchColors = darkColors ? [darkColors.bg, darkColors.primary, darkColors.fg] : FALLBACK_SWATCH_COLORS
               return (
                 <button
                   key={id}
@@ -264,18 +267,15 @@ export function SettingsPanel(fonts: Fonts) {
                   )}
                 >
                   <span className="flex shrink-0 -space-x-1" aria-hidden>
-                    {(t
-                      ? [t.bg, t.primary, t.fg]
-                      : ["#1e2530", "#7fd6e6", "#e6e9ee"]
-                    ).map((c) => (
+                    {swatchColors.map((swatchColor) => (
                       <span
-                        key={c}
+                        key={swatchColor}
                         className="size-3.5 rounded-full border border-black/20"
-                        style={{ background: c }}
+                        style={{ background: swatchColor }}
                       />
                     ))}
                   </span>
-                  {p.name}
+                  {paletteOption.name}
                 </button>
               )
             })}

@@ -15,10 +15,10 @@ export function ToolAnchor({ dir, id, g }: { dir: string; id: string; g: ToolGro
   const key = `${g.from}/${g.until}/${g.count}`
   useEffect(() => {
     if (!open) return
-    let live = true
-    api.convTools({ dir, id }, g.from, g.until).then((r) => live && setGot({ key, msgs: r.msgs }), () => {})
+    let isMounted = true
+    api.convTools({ dir, id }, g.from, g.until).then((toolsResponse) => isMounted && setGot({ key, msgs: toolsResponse.msgs }), () => {})
     return () => {
-      live = false
+      isMounted = false
     }
   }, [open, dir, id, g.from, g.until, key])
   const msgs = got?.key === key ? got.msgs : null
@@ -36,7 +36,7 @@ export function ToolAnchor({ dir, id, g }: { dir: string; id: string; g: ToolGro
       </button>
       {open && (
         <div className="mt-1 space-y-1">
-          {msgs === null ? <p className="pl-3 text-xs text-muted-foreground">…</p> : msgs.map((m, i) => <Message key={`${m.o}.${m.n ?? 0}.${i}`} m={m} conv={{ dir, id }} />)}
+          {msgs === null ? <p className="pl-3 text-xs text-muted-foreground">…</p> : msgs.map((message, messageIndex) => <Message key={`${message.o}.${message.n ?? 0}.${messageIndex}`} m={message} conv={{ dir, id }} />)}
         </div>
       )}
     </div>
@@ -45,17 +45,18 @@ export function ToolAnchor({ dir, id, g }: { dir: string; id: string; g: ToolGro
 
 // Regroupe les ancres vides consécutives (appels d'outils masqués) ; until : décalage du message suivant, 0 en fin de conversation.
 export function groupTools(msgs: Msg[]): (Msg | ToolGroup)[] {
-  const out: (Msg | ToolGroup)[] = []
-  for (let i = 0; i < msgs.length; i++) {
-    const m = msgs[i]
-    if (m.r !== "tool" || m.t !== "") {
-      out.push(m)
+  const isHiddenToolCall = (message: Msg | undefined) => message !== undefined && message.r === "tool" && message.t === ""
+  const groupedMessages: (Msg | ToolGroup)[] = []
+  for (let messageIndex = 0; messageIndex < msgs.length; messageIndex++) {
+    const message = msgs[messageIndex]
+    if (!isHiddenToolCall(message)) {
+      groupedMessages.push(message)
       continue
     }
-    let j = i
-    while (j + 1 < msgs.length && msgs[j + 1].r === "tool" && msgs[j + 1].t === "") j++
-    out.push({ count: j - i + 1, from: m.o ?? 0, until: msgs[j + 1]?.o ?? 0 })
-    i = j
+    let lastHiddenIndex = messageIndex
+    while (isHiddenToolCall(msgs[lastHiddenIndex + 1])) lastHiddenIndex++
+    groupedMessages.push({ count: lastHiddenIndex - messageIndex + 1, from: message.o ?? 0, until: msgs[lastHiddenIndex + 1]?.o ?? 0 })
+    messageIndex = lastHiddenIndex
   }
-  return out
+  return groupedMessages
 }

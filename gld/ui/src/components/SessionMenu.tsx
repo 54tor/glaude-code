@@ -54,8 +54,8 @@ export const CM: Kit = {
 // Un groupe coché contient déjà toutes les sessions visées.
 function Groups({ M, rows }: { M: Kit; rows: Row[] }) {
   const { t } = useTranslation()
-  const a = useActions()
-  const projects = new Set(rows.map((r) => r.g.project))
+  const actions = useActions()
+  const projects = new Set(rows.map((row) => row.g.project))
   if (projects.size > 1)
     return (
       <M.Item disabled>
@@ -63,24 +63,28 @@ function Groups({ M, rows }: { M: Kit; rows: Row[] }) {
       </M.Item>
     )
   const project = rows[0].g.project
-  const ids = rows.map((r) => r.s.id)
-  const mine = a.vgroups.filter((g) => g.project === project)
+  const ids = rows.map((row) => row.s.id)
+  const projectGroups = actions.vgroups.filter((virtualGroup) => virtualGroup.project === project)
   return (
     <M.Sub>
       <M.SubTrigger>
         <Tag /> {t("shell.menu.group")}
       </M.SubTrigger>
       <M.SubContent className="w-56">
-        {mine.map((g) => {
-          const all = ids.every((id) => g.ids.includes(id))
+        {projectGroups.map((virtualGroup) => {
+          const containsAll = ids.every((id) => virtualGroup.ids.includes(id))
+          const toggleMembership = () => {
+            if (containsAll) actions.ungroup(ids, virtualGroup)
+            else actions.group(ids, project, virtualGroup.name)
+          }
           return (
-            <M.Item key={g.name} onSelect={() => (all ? a.ungroup(ids, g) : a.group(ids, project, g.name))}>
-              <Check className={all ? "" : "invisible"} /> <span className="truncate">{g.name}</span>
+            <M.Item key={virtualGroup.name} onSelect={toggleMembership}>
+              <Check className={containsAll ? "" : "invisible"} /> <span className="truncate">{virtualGroup.name}</span>
             </M.Item>
           )
         })}
-        {mine.length > 0 && <M.Sep />}
-        <M.Item onSelect={() => a.group(ids, project, null)}>
+        {projectGroups.length > 0 && <M.Sep />}
+        <M.Item onSelect={() => actions.group(ids, project, null)}>
           <Plus /> {t("shell.menu.newGroup")}
         </M.Item>
       </M.SubContent>
@@ -90,11 +94,11 @@ function Groups({ M, rows }: { M: Kit; rows: Row[] }) {
 
 function Fav({ M, ids }: { M: Kit; ids: string[] }) {
   const { t } = useTranslation()
-  const a = useActions()
-  const all = ids.every((id) => a.favs.has(id))
+  const actions = useActions()
+  const allFavorite = ids.every((id) => actions.favs.has(id))
   return (
-    <M.Item onSelect={() => a.toggleFav(ids)}>
-      {all ? <StarOff /> : <Star />} {all ? t("shell.menu.unfav") : t("shell.menu.fav")}
+    <M.Item onSelect={() => actions.toggleFav(ids)}>
+      {allFavorite ? <StarOff /> : <Star />} {allFavorite ? t("shell.menu.unfav") : t("shell.menu.fav")}
     </M.Item>
   )
 }
@@ -103,27 +107,28 @@ function Fav({ M, ids }: { M: Kit; ids: string[] }) {
 // full : entrées supplémentaires du clic droit (lire, reprendre, sélectionner), déjà visibles ailleurs sinon.
 export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?: () => void; full?: boolean }) {
   const { t } = useTranslation()
-  const a = useActions()
-  const { s, g } = row
-  const many = a.picked.has(s.id) && a.selected.length > 1
-  if (many) {
-    const rows = a.selected
-    const ids = rows.map((r) => r.s.id)
+  const actions = useActions()
+  const { s: session, g: group } = row
+  const appliesToSelection = actions.picked.has(session.id) && actions.selected.length > 1
+  if (appliesToSelection) {
+    const rows = actions.selected
+    const ids = rows.map((selectedRow) => selectedRow.s.id)
+    const liveIds = ids.filter((id) => actions.live.has(id))
     return (
       <>
         <M.Label>{t("shell.selection.count", { count: rows.length })}</M.Label>
         <Fav M={M} ids={ids} />
         <Groups M={M} rows={rows} />
-        {a.inGroup && (
-          <M.Item onSelect={() => a.ungroup(ids)}>
+        {actions.inGroup && (
+          <M.Item onSelect={() => actions.ungroup(ids)}>
             <X /> {t("shell.menu.ungroup")}
           </M.Item>
         )}
-        <M.Item onSelect={() => a.move(rows)}>
+        <M.Item onSelect={() => actions.move(rows)}>
           <FolderInput /> {t("shell.menu.move")}
         </M.Item>
-        {rows.some((r) => a.live.has(r.s.id)) && (
-          <M.Item onSelect={() => a.stop(rows.filter((r) => a.live.has(r.s.id)).map((r) => r.s.id))}>
+        {liveIds.length > 0 && (
+          <M.Item onSelect={() => actions.stop(liveIds)}>
             <Power /> {t("shell.menu.closeOpen")}
           </M.Item>
         )}
@@ -131,8 +136,8 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
         <M.Item
           variant="destructive"
           onSelect={() =>
-            a.remove(
-              rows.map((r) => ({ dir: r.s.dir, id: r.s.id })),
+            actions.remove(
+              rows.map((selectedRow) => ({ dir: selectedRow.s.dir, id: selectedRow.s.id })),
               t("shell.menu.removeSelected", { count: rows.length })
             )
           }
@@ -145,62 +150,62 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
   return (
     <>
       {full && (
-        <M.Item onSelect={() => a.read(s)}>
+        <M.Item onSelect={() => actions.read(session)}>
           <BookOpen /> {t("shell.menu.read")}
         </M.Item>
       )}
-      {full && !g.missing && (
-        <M.Item onSelect={() => a.open({ dir: s.dir, id: s.id })}>
+      {full && !group.missing && (
+        <M.Item onSelect={() => actions.open({ dir: session.dir, id: session.id })}>
           <RefreshCcwDot /> {t("shell.list.resume")}
         </M.Item>
       )}
-      {!g.missing && (
-        <M.Item onSelect={() => a.resumeWith(row)}>
+      {!group.missing && (
+        <M.Item onSelect={() => actions.resumeWith(row)}>
           <MessageSquareReply /> {t("shell.menu.resumeWith")}
         </M.Item>
       )}
-      {!g.missing && (
-        <M.Item onSelect={() => a.newSession(g.project)}>
+      {!group.missing && (
+        <M.Item onSelect={() => actions.newSession(group.project)}>
           <Plus /> {t("shell.menu.newInProject")}
         </M.Item>
       )}
-      <M.Item onSelect={() => a.info(row)}>
+      <M.Item onSelect={() => actions.info(row)}>
         <Info /> {t("shell.menu.info")}
       </M.Item>
       <M.Sep />
-      <M.Item onSelect={() => a.copy(s)}>
+      <M.Item onSelect={() => actions.copy(session)}>
         <Copy /> {t("shell.menu.copyId")}
       </M.Item>
-      <M.Item onSelect={() => a.exportMd(row)}>
+      <M.Item onSelect={() => actions.exportMd(row)}>
         <Download /> {t("shell.menu.exportMd")}
       </M.Item>
       <M.Sep />
-      <Fav M={M} ids={[s.id]} />
-      <M.Item onSelect={() => a.rename(s)}>
+      <Fav M={M} ids={[session.id]} />
+      <M.Item onSelect={() => actions.rename(session)}>
         <TextCursorInput /> {t("shell.menu.rename")}
       </M.Item>
       <ShareItem M={M} row={row} />
       <Groups M={M} rows={[row]} />
-      {a.inGroup && (
-        <M.Item onSelect={() => a.ungroup([s.id])}>
+      {actions.inGroup && (
+        <M.Item onSelect={() => actions.ungroup([session.id])}>
           <X /> {t("shell.menu.ungroup")}
         </M.Item>
       )}
       {(full || touchOnly()) && (
-        <M.Item onSelect={() => a.pick(s.id)}>
-          <CheckSquare /> {a.picked.has(s.id) ? t("shell.menu.deselect") : t("shell.menu.select")}
+        <M.Item onSelect={() => actions.pick(session.id)}>
+          <CheckSquare /> {actions.picked.has(session.id) ? t("shell.menu.deselect") : t("shell.menu.select")}
         </M.Item>
       )}
-      <M.Item onSelect={() => a.move([row])}>
+      <M.Item onSelect={() => actions.move([row])}>
         <FolderInput /> {t("shell.menu.move")}
       </M.Item>
-      {a.live.has(s.id) && (
-        <M.Item onSelect={() => a.stop([s.id])}>
+      {actions.live.has(session.id) && (
+        <M.Item onSelect={() => actions.stop([session.id])}>
           <Power /> {t("shell.menu.closeSession")}
         </M.Item>
       )}
       <M.Sep />
-      <M.Item variant="destructive" onSelect={() => a.remove([{ dir: s.dir, id: s.id }], t("shell.menu.quoted", { title: s.title }), after)}>
+      <M.Item variant="destructive" onSelect={() => actions.remove([{ dir: session.dir, id: session.id }], t("shell.menu.quoted", { title: session.title }), after)}>
         <Trash2 /> {t("common.delete")}
       </M.Item>
     </>
@@ -210,10 +215,10 @@ export function SessionItems({ M, row, after, full }: { M: Kit; row: Row; after?
 // Les entrées ne sont montées qu'à l'ouverture du menu : l'état du partage se lit alors.
 export function ShareItem({ M, row }: { M: Kit; row: Row }) {
   const { t } = useTranslation()
-  const a = useActions()
-  const shared = !!useShares().shares?.find((x) => x.id === row.s.id)?.invites.length
+  const actions = useActions()
+  const shared = !!useShares().shares?.find((share) => share.id === row.s.id)?.invites.length
   return (
-    <M.Item onSelect={() => a.share(row)}>
+    <M.Item onSelect={() => actions.share(row)}>
       <Share2 /> {shared ? t("shell.menu.shared") : t("shell.menu.share")}
     </M.Item>
   )
@@ -222,42 +227,42 @@ export function ShareItem({ M, row }: { M: Kit; row: Row }) {
 // Entrées d'un groupe virtuel (clic droit dans l'arbre, menu « ⋯ » de sa page).
 export function GroupItems({ M, vg, page }: { M: Kit; vg: VGroup; page?: boolean }) {
   const { t } = useTranslation()
-  const a = useActions()
-  const n = a.groupActs.rows(vg).length
-  const ga = a.groupActs
+  const actions = useActions()
+  const sessionCount = actions.groupActs.rows(vg).length
+  const groupActions = actions.groupActs
   return (
     <>
       <M.Label className="truncate">{vg.name}</M.Label>
       {!page && (
-        <M.Item onSelect={() => ga.show(vg)}>
+        <M.Item onSelect={() => groupActions.show(vg)}>
           <BookOpen /> {t("shell.menu.show")}
         </M.Item>
       )}
-      <M.Item onSelect={() => ga.open(vg)} disabled={!n}>
-        <RefreshCcwDot /> {t("shell.menu.resumeAll", { sessions: t("shell.count.sessions", { count: n }) })}
+      <M.Item onSelect={() => groupActions.open(vg)} disabled={!sessionCount}>
+        <RefreshCcwDot /> {t("shell.menu.resumeAll", { sessions: t("shell.count.sessions", { count: sessionCount }) })}
       </M.Item>
-      <M.Item onSelect={() => ga.prompt(vg)} disabled={!n}>
+      <M.Item onSelect={() => groupActions.prompt(vg)} disabled={!sessionCount}>
         <Plus /> {t("shell.menu.newWithRefs")}
       </M.Item>
       <M.Sep />
-      <M.Item onSelect={() => ga.refs(vg)} disabled={!n}>
+      <M.Item onSelect={() => groupActions.refs(vg)} disabled={!sessionCount}>
         <Copy /> {t("shell.menu.copyRefs")}
       </M.Item>
-      <M.Item onSelect={() => ga.export(vg)} disabled={!n}>
+      <M.Item onSelect={() => groupActions.export(vg)} disabled={!sessionCount}>
         <Download /> {t("shell.menu.exportMd")}
       </M.Item>
       <M.Sep />
-      <M.Item onSelect={() => ga.fav(vg)}>
+      <M.Item onSelect={() => groupActions.fav(vg)}>
         {vg.fav ? <StarOff /> : <Star />} {vg.fav ? t("shell.menu.unfav") : t("shell.menu.fav")}
       </M.Item>
-      <M.Item onSelect={() => ga.rename(vg)}>
+      <M.Item onSelect={() => groupActions.rename(vg)}>
         <TextCursorInput /> {t("shell.menu.rename")}
       </M.Item>
-      <M.Item onSelect={() => ga.select(vg)} disabled={!n}>
+      <M.Item onSelect={() => groupActions.select(vg)} disabled={!sessionCount}>
         <CheckSquare /> {t("shell.menu.selectSessions")}
       </M.Item>
       <M.Sep />
-      <M.Item variant="destructive" onSelect={() => ga.remove(vg)}>
+      <M.Item variant="destructive" onSelect={() => groupActions.remove(vg)}>
         <Trash2 /> {t("shell.menu.deleteGroup")}
       </M.Item>
     </>
