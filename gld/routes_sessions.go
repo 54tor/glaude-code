@@ -291,6 +291,9 @@ func routesSessions(mux *http.ServeMux) {
 			}
 			browsedPath = parentDir
 		}
+		if !browseAllowed(browsedPath) {
+			browsedPath = browseRoots[0]
+		}
 		entries, readErr := readDirTrusted(browsedPath)
 		if readErr != nil {
 			writeErr(responseWriter, http.StatusForbidden, "forbidden", readErr.Error())
@@ -309,7 +312,9 @@ func routesSessions(mux *http.ServeMux) {
 		}
 		sort.Strings(dirs)
 		parent := filepath.Dir(browsedPath)
-		if parent == browsedPath { // racine : sous Windows on remonte à la liste des lecteurs
+		if browseIsRoot(browsedPath) {
+			parent = ""
+		} else if parent == browsedPath { // racine : sous Windows on remonte à la liste des lecteurs
 			parent = ""
 			if runtime.GOOS == "windows" {
 				parent = "::drives"
