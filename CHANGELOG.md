@@ -4,7 +4,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
-## [0.8.1] - 2026-10-31
+## [0.9.0] - 2026-10-31
 
 ### Ajouté
 - IDE : aperçu Markdown à côté de l'éditeur, avec défilement synchronisé ; le terminal intégré est retiré.
@@ -16,6 +16,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Corbeille des sessions triée par date de suppression, avec recherche.
 - Menus contextuels sur les sessions de l'accueil, les serveurs MCP et la carte de mise à jour ; snippets insérables dans les dialogues d'amélioration de mémoire et de skill.
 - Bouton d'envoi de fichier placé dans le champ de message.
+- Bloc git d'un projet : une ligne par chemin, boutons Permissions et Espace de travail réduits à des icônes.
+- README : tableau comparatif CLI, Claude.ai et Glaude Code.
 
 ### Corrigé
 - Fusion de mémoires ou de snippets lancée dans un dossier non approuvé : la modale « faire confiance à ce dossier » s'affiche au lieu de laisser la session attendre dans un terminal détaché.
@@ -25,6 +27,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Notes envoyées à une session qui répond encore : mises en file d'attente ; envoi limité aux sessions du dossier ou du projet de la note.
 - Titre automatique appliqué à toute conversation sans titre après un tour livré, et reporté à la fermeture du processus pour une session ouverte.
 - Mémoire : les entrées modifier et supprimer sont masquées pour les règles gld en lecture seule, les dossiers temporaires sont exclus des destinations de déplacement, la recherche parle de mémoires.
+- Les sélecteurs de projet (Extensions, Skills) n'affichent plus les dossiers jetables (`/tmp`, `$TMPDIR`).
+- Conversation en modale : le suivi de la fin du fil ne s'enclenchait pas quand les messages étaient déjà en cache.
+- Anneau de focus d'une ligne de session tracé à l'intérieur de la ligne.
 - Icône d'alerte pour les agents et tâches en cours d'arrêt ; favicon à fond transparent.
 - Le journal des instructions chargées est écrit via `rootfs` (sans suivre les liens symboliques).
 
@@ -32,6 +37,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Règles livrées par gld : elles ne sont plus écrites dans `~/.claude/rules` (chargé par toutes les sessions) mais transmises en prompt système (`--append-system-prompt-file`) aux seules sessions lancées par gld, chat et terminal. Réglage « Règles gld » dans Configuration pour les couper ; lecture seule dans la Mémoire. Les anciennes copies marquées « Managed by gld » sont supprimées au démarrage.
 - Notification quand Claude Code installé n'est pas à jour (comparé à la dernière version npm) ; `GET /v1/update` renvoie `claudeCurrent`, `claudeLatest` et `claudeNewer`.
 - Liste des mots de passe courants générée depuis `@zxcvbn-ts/language-common` (49 233 entrées) ; `make check` échoue si elle est périmée.
+- Suivi de la fin du fil par `use-stick-to-bottom`, comparaison de versions par `golang.org/x/mod/semver` et diff des mémoires par `jsdiff` à la place du code maison ; crédits complétés.
 - Refonte de lisibilité du code (noms explicites, constantes nommées) côté Go et interface, sans changement de comportement.
 
 ## [0.8.0] - 2026-10-30
@@ -538,8 +544,8 @@ Première version : `gld`, interface web locale pour parcourir, piloter et confi
 - Terminal intégré désactivé par défaut ; lecture bornée des fichiers de commandes.
 - Refus d'agir quand les sessions ouvertes sont indéterminées.
 
-[Non publié]: https://github.com/54tor/glaude-code/compare/v0.8.1...HEAD
-[0.8.1]: https://github.com/54tor/glaude-code/compare/v0.8.0...v0.8.1
+[Non publié]: https://github.com/54tor/glaude-code/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/54tor/glaude-code/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/54tor/glaude-code/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/54tor/glaude-code/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/54tor/glaude-code/compare/v0.6.3...v0.7.0
