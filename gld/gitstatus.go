@@ -27,7 +27,13 @@ type GitState struct {
 	Untrack  int    `json:"untracked"` // fichiers non suivis
 }
 
-const gitTTL = 20 * time.Second
+const (
+	gitTTL             = 20 * time.Second
+	gitCommandTimeout  = 5 * time.Second
+	gitStatesWait      = 2 * time.Second
+	gitCacheMaxEntries = 2000
+	maxReposListed     = 40
+)
 
 var (
 	gitMu    sync.Mutex
@@ -53,74 +59,74 @@ type GitChange struct {
 
 // parseGitChanges lit les entrées de fichiers de `git status --porcelain=v2 -z` : séparées par NUL, chemins jamais échappés
 // (accents, espaces, guillemets tels quels) ; un renommage est suivi de l'ancien nom dans l'entrée suivante.
-func parseGitChanges(out string) []GitChange {
-	var cs []GitChange
-	recs := strings.Split(out, "\x00")
-	for i := 0; i < len(recs); i++ {
-		l := recs[i]
+func parseGitChanges(statusOutput string) []GitChange {
+	var changes []GitChange
+	records := strings.Split(statusOutput, "\x00")
+	for recordIndex := 0; recordIndex < len(records); recordIndex++ {
+		record := records[recordIndex]
 		switch {
-		case strings.HasPrefix(l, "1 "):
-			if f := strings.SplitN(l, " ", 9); len(f) == 9 {
-				cs = append(cs, GitChange{Path: f[8], Status: strings.ReplaceAll(f[1], ".", " ")})
+		case strings.HasPrefix(record, "1 "):
+			if fields := strings.SplitN(record, " ", 9); len(fields) == 9 {
+				changes = append(changes, GitChange{Path: fields[8], Status: strings.ReplaceAll(fields[1], ".", " ")})
 			}
-		case strings.HasPrefix(l, "2 "):
-			if f := strings.SplitN(l, " ", 10); len(f) == 10 && i+1 < len(recs) {
-				i++
-				cs = append(cs, GitChange{Path: f[9], From: recs[i], Status: strings.ReplaceAll(f[1], ".", " ")})
+		case strings.HasPrefix(record, "2 "):
+			if fields := strings.SplitN(record, " ", 10); len(fields) == 10 && recordIndex+1 < len(records) {
+				recordIndex++
+				changes = append(changes, GitChange{Path: fields[9], From: records[recordIndex], Status: strings.ReplaceAll(fields[1], ".", " ")})
 			}
-		case strings.HasPrefix(l, "u "):
-			if f := strings.SplitN(l, " ", 11); len(f) == 11 {
-				cs = append(cs, GitChange{Path: f[10], Status: f[1]})
+		case strings.HasPrefix(record, "u "):
+			if fields := strings.SplitN(record, " ", 11); len(fields) == 11 {
+				changes = append(changes, GitChange{Path: fields[10], Status: fields[1]})
 			}
-		case strings.HasPrefix(l, "? "):
-			cs = append(cs, GitChange{Path: strings.TrimPrefix(l, "? "), Status: "??"})
+		case strings.HasPrefix(record, "? "):
+			changes = append(changes, GitChange{Path: strings.TrimPrefix(record, "? "), Status: "??"})
 		}
 	}
-	return cs
+	return changes
 }
 
 // parseGitStatus lit la sortie de `git status --porcelain=v2 --branch -z`.
-func parseGitStatus(out string) GitState {
-	var s GitState
-	recs := strings.Split(out, "\x00")
-	for i := 0; i < len(recs); i++ {
-		l := recs[i]
+func parseGitStatus(statusOutput string) GitState {
+	var state GitState
+	records := strings.Split(statusOutput, "\x00")
+	for recordIndex := 0; recordIndex < len(records); recordIndex++ {
+		record := records[recordIndex]
 		switch {
-		case strings.HasPrefix(l, "# branch.head "):
-			if h := strings.TrimPrefix(l, "# branch.head "); h == "(detached)" {
-				s.Detached = true
+		case strings.HasPrefix(record, "# branch.head "):
+			if head := strings.TrimPrefix(record, "# branch.head "); head == "(detached)" {
+				state.Detached = true
 			} else {
-				s.Branch = h
+				state.Branch = head
 			}
-		case strings.HasPrefix(l, "# branch.upstream "):
-			s.Upstream = true
-		case strings.HasPrefix(l, "# branch.ab "):
-			f := strings.Fields(strings.TrimPrefix(l, "# branch.ab "))
-			if len(f) == 2 {
-				s.Ahead, _ = strconv.Atoi(strings.TrimPrefix(f[0], "+"))
-				s.Behind, _ = strconv.Atoi(strings.TrimPrefix(f[1], "-"))
+		case strings.HasPrefix(record, "# branch.upstream "):
+			state.Upstream = true
+		case strings.HasPrefix(record, "# branch.ab "):
+			aheadBehind := strings.Fields(strings.TrimPrefix(record, "# branch.ab "))
+			if len(aheadBehind) == 2 {
+				state.Ahead, _ = strconv.Atoi(strings.TrimPrefix(aheadBehind[0], "+"))
+				state.Behind, _ = strconv.Atoi(strings.TrimPrefix(aheadBehind[1], "-"))
 			}
-		case strings.HasPrefix(l, "2 "):
-			s.Changed++
-			i++ // l'ancien nom
-		case strings.HasPrefix(l, "1 "), strings.HasPrefix(l, "u "):
-			s.Changed++
-		case strings.HasPrefix(l, "? "):
-			s.Untrack++
+		case strings.HasPrefix(record, "2 "):
+			state.Changed++
+			recordIndex++ // l'ancien nom
+		case strings.HasPrefix(record, "1 "), strings.HasPrefix(record, "u "):
+			state.Changed++
+		case strings.HasPrefix(record, "? "):
+			state.Untrack++
 		}
 	}
-	return s
+	return state
 }
 
 // runGitStatus : core.fsmonitor est neutralisé, car un dépôt qui ne nous appartient pas pourrait y mettre une commande à exécuter.
 func runGitStatus(dir string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	commandContext, cancel := context.WithTimeout(context.Background(), gitCommandTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-C", dir, "status", "--porcelain=v2", "--branch", "-z")
+	cmd := exec.CommandContext(commandContext, "git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-C", dir, "status", "--porcelain=v2", "--branch", "-z")
 	cmd.Env = append(childEnv(), "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0")
 	applyRunAs(cmd)
-	b, err := cmd.Output()
-	return string(b), err
+	output, err := cmd.Output()
+	return string(output), err
 }
 
 type gitPrefixEntry struct {
@@ -138,24 +144,25 @@ var (
 // ultérieur change la racine), un échec vaut « ».
 func gitPrefix(dir string) string {
 	gitPrefixMu.Lock()
-	e, ok := gitPrefixes[dir]
+	cached, found := gitPrefixes[dir]
 	gitPrefixMu.Unlock()
-	if ok && time.Since(e.at) <= gitTTL {
-		return e.p
+	isFresh := found && time.Since(cached.at) <= gitTTL
+	if isFresh {
+		return cached.p
 	}
-	var p string
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	var prefix string
+	commandContext, cancel := context.WithTimeout(context.Background(), gitCommandTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-C", dir, "rev-parse", "--show-prefix")
+	cmd := exec.CommandContext(commandContext, "git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-C", dir, "rev-parse", "--show-prefix")
 	cmd.Env = append(childEnv(), "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0")
 	applyRunAs(cmd)
-	if b, err := cmd.Output(); err == nil {
-		p = strings.TrimSpace(string(b))
+	if output, err := cmd.Output(); err == nil {
+		prefix = strings.TrimSpace(string(output))
 		gitPrefixMu.Lock()
-		gitPrefixes[dir] = gitPrefixEntry{p, time.Now()}
+		gitPrefixes[dir] = gitPrefixEntry{prefix, time.Now()}
 		gitPrefixMu.Unlock()
 	}
-	return p
+	return prefix
 }
 
 // gitStates : l'état de chaque dossier. Ce qui est périmé est relu en parallèle, dans la limite de 2 s ; le reste de la liste
@@ -164,47 +171,52 @@ func gitStates(dirs []string) map[string]GitState {
 	now := time.Now()
 	var stale []string
 	gitMu.Lock()
-	for _, d := range dirs {
-		if e, ok := gitCache[d]; !ok || now.Sub(e.at) > gitTTL {
-			stale = append(stale, d)
+	for _, dir := range dirs {
+		cached, found := gitCache[dir]
+		isStale := !found || now.Sub(cached.at) > gitTTL
+		if isStale {
+			stale = append(stale, dir)
 		}
 	}
 	gitMu.Unlock()
-	var wg sync.WaitGroup
-	for _, d := range stale {
-		wg.Add(1)
+	var waitGroup sync.WaitGroup
+	for _, dir := range stale {
+		waitGroup.Add(1)
 		go func() {
-			defer wg.Done()
+			defer waitGroup.Done()
 			gitSem <- struct{}{}
 			defer func() { <-gitSem }()
-			out, err := gitRun(d)
-			e := gitEntry{at: time.Now()}
+			statusOutput, err := gitRun(dir)
+			entry := gitEntry{at: time.Now()}
 			if err == nil {
-				e.st, e.ok, e.out = parseGitStatus(out), true, out
+				entry.st, entry.ok, entry.out = parseGitStatus(statusOutput), true, statusOutput
 			}
 			gitMu.Lock()
-			if len(gitCache) > 2000 {
+			if len(gitCache) > gitCacheMaxEntries {
 				clear(gitCache)
 			}
-			gitCache[d] = e
+			gitCache[dir] = entry
 			gitMu.Unlock()
 		}()
 	}
 	done := make(chan struct{})
-	go func() { wg.Wait(); close(done) }()
+	go func() {
+		waitGroup.Wait()
+		close(done)
+	}()
 	select {
 	case <-done:
-	case <-time.After(2 * time.Second):
+	case <-time.After(gitStatesWait):
 	}
-	out := map[string]GitState{}
+	states := map[string]GitState{}
 	gitMu.Lock()
 	defer gitMu.Unlock()
-	for _, d := range dirs {
-		if e := gitCache[d]; e.ok {
-			out[d] = e.st
+	for _, dir := range dirs {
+		if entry := gitCache[dir]; entry.ok {
+			states[dir] = entry.st
 		}
 	}
-	return out
+	return states
 }
 
 // subRepos : les sous-dossiers directs de dir qui sont des dépôts git (un « .git » dedans). Cas courant : les sessions vivent
@@ -219,113 +231,121 @@ type reposEntry struct {
 	at   time.Time
 }
 
-func isRepoDir(d string) bool {
-	fi, err := os.Lstat(filepath.Join(d, ".git"))
-	return err == nil && fi.IsDir() && ownedByMe(fi)
+func isRepoDir(dir string) bool {
+	gitInfo, err := os.Lstat(filepath.Join(dir, ".git"))
+	return err == nil && gitInfo.IsDir() && ownedByMe(gitInfo)
 }
 
 // addDirRepos : les dépôts des additionalDirectories de la session (réglages utilisateur, projet et local), au niveau 0 (le
 // dossier lui-même) et au niveau 1 (ses sous-dossiers directs). Les chemins relatifs se lisent depuis le dossier du projet.
 func addDirRepos(project string) []string {
 	home, _ := os.UserHomeDir()
-	var out []string
+	var repos []string
 	seen := map[string]bool{}
-	add := func(d string) {
-		if !seen[d] {
-			seen[d] = true
-			out = append(out, d)
+	addRepo := func(repoDir string) {
+		if !seen[repoDir] {
+			seen[repoDir] = true
+			repos = append(repos, repoDir)
 		}
 	}
-	for _, f := range []string{filepath.Join(cfgDir(), "settings.json"), filepath.Join(project, ".claude", "settings.json"), filepath.Join(project, ".claude", "settings.local.json")} {
-		b, err := readConfigFile(f)
+	settingsPaths := []string{
+		filepath.Join(cfgDir(), "settings.json"),
+		filepath.Join(project, ".claude", "settings.json"),
+		filepath.Join(project, ".claude", "settings.local.json"),
+	}
+	for _, settingsPath := range settingsPaths {
+		content, err := readConfigFile(settingsPath)
 		if err != nil {
 			continue
 		}
-		doc, err := parseOrdered(b)
+		doc, err := parseOrdered(content)
 		if err != nil {
 			continue
 		}
-		v, _ := lookup(doc, "permissions", "additionalDirectories")
-		for _, d := range strList(v) {
+		directories, _ := lookup(doc, "permissions", "additionalDirectories")
+		for _, dir := range strList(directories) {
 			switch {
-			case d == "~" || strings.HasPrefix(d, "~/"):
-				d = filepath.Join(home, d[1:])
-			case !filepath.IsAbs(d):
-				d = filepath.Join(project, d)
+			case dir == "~" || strings.HasPrefix(dir, "~/"):
+				dir = filepath.Join(home, dir[1:])
+			case !filepath.IsAbs(dir):
+				dir = filepath.Join(project, dir)
 			}
-			d = filepath.Clean(d)
-			if isRepoDir(d) {
-				add(d)
+			dir = filepath.Clean(dir)
+			if isRepoDir(dir) {
+				addRepo(dir)
 			}
-			for _, s := range subRepos(d) {
-				add(s)
+			for _, subRepo := range subRepos(dir) {
+				addRepo(subRepo)
 			}
-			if len(out) >= 40 {
-				return out
+			if len(repos) >= maxReposListed {
+				return repos
 			}
 		}
 	}
-	return out
+	return repos
 }
 
 // sessionRepos : les dépôts connus sous le dossier d'une session, hors le dossier lui-même : sous-dossiers directs et add-dir.
 func sessionRepos(project string) []string {
 	seen := map[string]bool{project: true}
-	var out []string
-	for _, d := range append(subRepos(project), addDirRepos(project)...) {
-		if !seen[d] {
-			seen[d] = true
-			out = append(out, d)
+	var repos []string
+	for _, repo := range append(subRepos(project), addDirRepos(project)...) {
+		if !seen[repo] {
+			seen[repo] = true
+			repos = append(repos, repo)
 		}
 	}
-	return out
+	return repos
 }
 
 func subRepos(dir string) []string {
 	reposMu.Lock()
-	e, ok := reposCache[dir]
+	cached, found := reposCache[dir]
 	reposMu.Unlock()
-	if ok && time.Since(e.at) < time.Minute {
-		return e.dirs
+	isFresh := found && time.Since(cached.at) < time.Minute
+	if isFresh {
+		return cached.dirs
 	}
-	var out []string
-	ents, _ := readDirTrusted(dir)
-	for _, d := range ents {
-		n := d.Name()
-		if !d.IsDir() || strings.HasPrefix(n, ".") || n == "node_modules" || n == "vendor" {
+	var repos []string
+	entries, _ := readDirTrusted(dir)
+	for _, entry := range entries {
+		name := entry.Name()
+		isIgnoredDir := strings.HasPrefix(name, ".") || name == "node_modules" || name == "vendor"
+		if !entry.IsDir() || isIgnoredDir {
 			continue
 		}
 		// Un vrai dépôt : « .git » est un dossier (pas un fichier qui renverrait ailleurs) et appartient à l'utilisateur de gld ;
 		// un dépôt découvert au hasard d'un dossier n'est pas interrogé s'il vient de quelqu'un d'autre.
-		if isRepoDir(filepath.Join(dir, n)) {
-			out = append(out, filepath.Join(dir, n))
+		repoPath := filepath.Join(dir, name)
+		if isRepoDir(repoPath) {
+			repos = append(repos, repoPath)
 		}
-		if len(out) >= 40 {
+		if len(repos) >= maxReposListed {
 			break
 		}
 	}
-	sort.Strings(out)
+	sort.Strings(repos)
 	reposMu.Lock()
-	if len(reposCache) > 2000 {
+	if len(reposCache) > gitCacheMaxEntries {
 		clear(reposCache)
 	}
-	reposCache[dir] = reposEntry{out, time.Now()}
+	reposCache[dir] = reposEntry{repos, time.Now()}
 	reposMu.Unlock()
-	return out
+	return repos
 }
 
 // knownRepo : dir est un dossier de sessions ou un dépôt découvert dessous. On n'interroge jamais un chemin venu du navigateur
 // qui ne soit pas l'un d'eux.
 func knownRepo(dir string) bool {
-	for _, g := range sessions() {
-		if g.Missing || g.Project == "" {
+	for _, group := range sessions() {
+		if group.Missing || group.Project == "" {
 			continue
 		}
-		if g.Project == dir {
+		if group.Project == dir {
 			return true
 		}
-		for _, s := range sessionRepos(g.Project) {
-			if s == dir {
+		for _, repo := range sessionRepos(group.Project) {
+			if repo == dir {
 				return true
 			}
 		}
@@ -336,40 +356,42 @@ func knownRepo(dir string) bool {
 const maxChanges = 300
 
 func routesGit(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/git/changes", func(w http.ResponseWriter, r *http.Request) {
-		dir := r.URL.Query().Get("dir")
+	mux.HandleFunc("GET /v1/git/changes", func(responseWriter http.ResponseWriter, request *http.Request) {
+		dir := request.URL.Query().Get("dir")
 		if !knownRepo(dir) {
-			writeJSON(w, 200, map[string]any{"files": []GitChange{}, "prefix": ""})
+			writeJSON(responseWriter, http.StatusOK, map[string]any{"files": []GitChange{}, "prefix": ""})
 			return
 		}
 		gitStates([]string{dir}) // relu si le résultat gardé est périmé
 		gitMu.Lock()
-		out := gitCache[dir].out
+		statusOutput := gitCache[dir].out
 		gitMu.Unlock()
-		cs := parseGitChanges(out)
-		more := len(cs) - maxChanges
+		changes := parseGitChanges(statusOutput)
+		more := len(changes) - maxChanges
 		if more > 0 {
-			cs = cs[:maxChanges]
+			changes = changes[:maxChanges]
 		}
-		sort.SliceStable(cs, func(i, j int) bool { return cs[i].Path < cs[j].Path })
-		if cs == nil {
-			cs = []GitChange{}
+		sort.SliceStable(changes, func(left, right int) bool {
+			return changes[left].Path < changes[right].Path
+		})
+		if changes == nil {
+			changes = []GitChange{}
 		}
-		writeJSON(w, 200, map[string]any{"files": cs, "more": max(more, 0), "prefix": gitPrefix(dir)})
+		writeJSON(responseWriter, http.StatusOK, map[string]any{"files": changes, "more": max(more, 0), "prefix": gitPrefix(dir)})
 	})
-	mux.HandleFunc("GET /v1/git/status", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/git/status", func(responseWriter http.ResponseWriter, request *http.Request) {
 		var dirs []string
 		repos := map[string][]string{}
-		for _, g := range sessions() {
-			if g.Missing || g.Project == "" {
+		for _, group := range sessions() {
+			if group.Missing || group.Project == "" {
 				continue
 			}
-			dirs = append(dirs, g.Project)
-			if sub := sessionRepos(g.Project); len(sub) > 0 {
-				repos[g.Project] = sub
-				dirs = append(dirs, sub...)
+			dirs = append(dirs, group.Project)
+			if nestedRepos := sessionRepos(group.Project); len(nestedRepos) > 0 {
+				repos[group.Project] = nestedRepos
+				dirs = append(dirs, nestedRepos...)
 			}
 		}
-		writeJSON(w, 200, map[string]any{"status": gitStates(dirs), "repos": repos})
+		writeJSON(responseWriter, http.StatusOK, map[string]any{"status": gitStates(dirs), "repos": repos})
 	})
 }

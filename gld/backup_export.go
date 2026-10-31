@@ -17,124 +17,130 @@ type pluginsDoc struct {
 }
 
 // exportBackup : archive des catégories choisies de la configuration utilisée ; n = nombre de fichiers (hors manifeste).
-func exportBackup(cats []string) ([]byte, int, error) {
-	if len(cats) == 0 {
+func exportBackup(categories []string) ([]byte, int, error) {
+	if len(categories) == 0 {
 		return nil, 0, terr("srv.backup_export.catsVides")
 	}
-	for _, c := range cats {
-		if !slices.Contains(backupCats, c) {
-			return nil, 0, terr("srv.backup_export.catInconnue", "A1", c)
+	for _, category := range categories {
+		if !slices.Contains(backupCats, category) {
+			return nil, 0, terr("srv.backup_export.catInconnue", "A1", category)
 		}
 	}
-	has := func(c string) bool { return slices.Contains(cats, c) }
-	files, exec := map[string][]byte{}, map[string]bool{}
-	dir := cfgDir()
+	hasCategory := func(category string) bool { return slices.Contains(categories, category) }
+	files, executable := map[string][]byte{}, map[string]bool{}
+	configDir := cfgDir()
 
-	if has("settings") {
-		o, _, err := syncSettings(dir)
+	if hasCategory("settings") {
+		settings, _, err := syncSettings(configDir)
 		if err != nil {
 			return nil, 0, err
 		}
-		for _, k := range slices.Clone(o.keys) {
-			if (syncSkip[k] && k != "permissions") || syncPluginKeys[k] || secretKey.MatchString(k) {
-				o.del(k)
+		for _, key := range slices.Clone(settings.keys) {
+			skippedBySync := syncSkip[key] && key != "permissions"
+			if skippedBySync || syncPluginKeys[key] || secretKey.MatchString(key) {
+				settings.del(key)
 			}
 		}
-		dropSecrets(o)
-		if len(o.keys) > 0 {
-			files["home/settings.json"] = []byte(formatOrdered(o))
+		dropSecrets(settings)
+		if len(settings.keys) > 0 {
+			files["home/settings.json"] = []byte(formatOrdered(settings))
 		}
 	}
-	if has("skills") || has("memory") {
-		for rel, c := range syncFiles(dir) {
+	if hasCategory("skills") || hasCategory("memory") {
+		for rel, content := range syncFiles(configDir) {
 			rel = filepath.ToSlash(rel)
-			if isCmd := strings.HasPrefix(rel, "commands/"); (isCmd && has("skills")) || (!isCmd && has("memory")) {
-				files["home/"+rel] = []byte(c)
+			isCommandFile := strings.HasPrefix(rel, "commands/")
+			wantedCommand := isCommandFile && hasCategory("skills")
+			wantedMemory := !isCommandFile && hasCategory("memory")
+			if wantedCommand || wantedMemory {
+				files["home/"+rel] = []byte(content)
 			}
 		}
 	}
-	if has("skills") {
-		for n, fs := range syncSkills(dir) {
-			for rel, c := range fs {
-				name := "home/skills/" + n + "/" + filepath.ToSlash(rel)
-				files[name] = []byte(c)
-				if fi, err := os.Lstat(filepath.Join(dir, "skills", n, rel)); err == nil && fi.Mode().IsRegular() && fi.Mode()&0o111 != 0 {
-					exec[name] = true
+	if hasCategory("skills") {
+		for skillName, skillFiles := range syncSkills(configDir) {
+			for rel, content := range skillFiles {
+				name := "home/skills/" + skillName + "/" + filepath.ToSlash(rel)
+				files[name] = []byte(content)
+				fileInfo, err := os.Lstat(filepath.Join(configDir, "skills", skillName, rel))
+				isExecutable := err == nil && fileInfo.Mode().IsRegular() && fileInfo.Mode()&executableBits != 0
+				if isExecutable {
+					executable[name] = true
 				}
 			}
 		}
-		snips, _ := listSnippets()
-		for _, s := range snips {
-			if s.Scope == "" {
+		snippets, _ := listSnippets()
+		for _, projectSnippet := range snippets {
+			if projectSnippet.Scope == "" {
 				continue
 			}
-			if c, err := readSnippet(s.Key); err == nil {
-				files["projects/"+s.Scope+"/commands/"+s.Path] = []byte(c)
+			if content, err := readSnippet(projectSnippet.Key); err == nil {
+				files["projects/"+projectSnippet.Scope+"/commands/"+projectSnippet.Path] = []byte(content)
 			}
 		}
 	}
-	if has("memory") {
+	if hasCategory("memory") {
 		_, projects, _ := memList()
-		for _, p := range projects {
-			for _, f := range p.Files {
+		for _, memProject := range projects {
+			for _, memoryFile := range memProject.Files {
 				// m/ : mémoire de Claude ; p/ et r/ vivent dans le dépôt du projet
-				if !strings.HasPrefix(f.Key, "m/") {
+				if !strings.HasPrefix(memoryFile.Key, "m/") {
 					continue
 				}
-				if c, err := memRead(f.Key); err == nil {
-					files["projects/"+p.Dir+"/memory/"+f.Name] = []byte(c)
+				if content, err := memRead(memoryFile.Key); err == nil {
+					files["projects/"+memProject.Dir+"/memory/"+memoryFile.Name] = []byte(content)
 				}
 			}
 		}
 	}
-	if has("plugins") {
-		inst, _, err := listPlugins("", 1<<30)
+	if hasCategory("plugins") {
+		installedPlugins, _, err := listPlugins("", 1<<30)
 		if err != nil {
 			return nil, 0, err
 		}
-		ms, err := listMarketplaces()
+		marketplaces, err := listMarketplaces()
 		if err != nil {
 			return nil, 0, err
 		}
-		b, _ := json.Marshal(pluginsDoc{Marketplaces: ms, Plugins: inst})
-		files["plugins.json"] = b
+		pluginsJSON, _ := json.Marshal(pluginsDoc{Marketplaces: marketplaces, Plugins: installedPlugins})
+		files["plugins.json"] = pluginsJSON
 	}
-	if has("mcp") {
-		b, err := exportMcp()
+	if hasCategory("mcp") {
+		mcpJSON, err := exportMcp()
 		if err != nil {
 			return nil, 0, err
 		}
-		files["mcp.json"] = b
+		files["mcp.json"] = mcpJSON
 	}
-	z, err := writeBackupZipExec(files, exec, BackupManifest{Format: backupFormat, Gld: version, Date: time.Now().UTC().Format(time.RFC3339), Cats: cats})
-	return z, len(files), err
+	archive, err := writeBackupZipExec(files, executable, BackupManifest{Format: backupFormat, Gld: version, Date: time.Now().UTC().Format(time.RFC3339), Cats: categories})
+	return archive, len(files), err
 }
 
 // exportMcp : serveurs de portée utilisateur sans env, headers ni clé qui ressemble à un secret ; ce qui a été retiré est listé.
 func exportMcp() ([]byte, error) {
 	servers, stripped := newOmap(), map[string][]string{}
-	if b, err := readTrusted(claudeJSON()); err == nil {
-		if v, err := parseOrdered(b); err == nil {
-			if s, ok := lookup(v, "mcpServers"); ok && asMap(s) != nil {
-				for _, name := range asMap(s).keys {
-					o := asMap(asMap(s).m[name])
-					if o == nil {
+	if claudeJSONContent, readErr := readTrusted(claudeJSON()); readErr == nil {
+		if parsed, parseErr := parseOrdered(claudeJSONContent); parseErr == nil {
+			if serversValue, found := lookup(parsed, "mcpServers"); found && asMap(serversValue) != nil {
+				for _, name := range asMap(serversValue).keys {
+					server := asMap(asMap(serversValue).m[name])
+					if server == nil {
 						continue
 					}
-					for _, k := range slices.Clone(o.keys) {
-						if k == "env" || k == "headers" || secretKey.MatchString(k) {
-							o.del(k)
-							stripped[name] = append(stripped[name], k)
+					for _, key := range slices.Clone(server.keys) {
+						if key == "env" || key == "headers" || secretKey.MatchString(key) {
+							server.del(key)
+							stripped[name] = append(stripped[name], key)
 						}
 					}
-					dropSecrets(o)
-					for _, k := range []string{"args", "url"} {
-						if hasSecretString(o.m[k]) {
-							o.del(k)
-							stripped[name] = append(stripped[name], k)
+					dropSecrets(server)
+					for _, key := range []string{"args", "url"} {
+						if hasSecretString(server.m[key]) {
+							server.del(key)
+							stripped[name] = append(stripped[name], key)
 						}
 					}
-					servers.set(name, o)
+					servers.set(name, server)
 				}
 			}
 		}
@@ -146,30 +152,30 @@ func exportMcp() ([]byte, error) {
 }
 
 // dropSecrets retire à toute profondeur les clés dont le nom ressemble à un secret.
-func dropSecrets(v any) {
-	switch x := v.(type) {
+func dropSecrets(value any) {
+	switch typedValue := value.(type) {
 	case *omap:
-		for _, k := range slices.Clone(x.keys) {
-			if secretKey.MatchString(k) {
-				x.del(k)
+		for _, key := range slices.Clone(typedValue.keys) {
+			if secretKey.MatchString(key) {
+				typedValue.del(key)
 			} else {
-				dropSecrets(x.m[k])
+				dropSecrets(typedValue.m[key])
 			}
 		}
 	case []any:
-		for _, e := range x {
-			dropSecrets(e)
+		for _, element := range typedValue {
+			dropSecrets(element)
 		}
 	}
 }
 
 // hasSecretString : une chaîne (ou un élément de liste) qui ressemble à un secret, p. ex. « --api-key » ou « ?token=… ».
-func hasSecretString(v any) bool {
-	switch x := v.(type) {
+func hasSecretString(value any) bool {
+	switch typedValue := value.(type) {
 	case string:
-		return secretKey.MatchString(x)
+		return secretKey.MatchString(typedValue)
 	case []any:
-		return slices.ContainsFunc(x, hasSecretString)
+		return slices.ContainsFunc(typedValue, hasSecretString)
 	}
 	return false
 }

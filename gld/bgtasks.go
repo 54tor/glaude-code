@@ -17,6 +17,14 @@ import (
 	"sync"
 )
 
+const (
+	jsonLineBufferSize = 1 << 20
+	bgDescMaxLen       = 200
+	bgSummaryMaxLen    = 300
+	bgKilledTailBytes  = 32
+	bgOutputTailBytes  = 64 << 10
+)
+
 type BgTask struct {
 	ID      string `json:"id"`
 	Tool    string `json:"tool,omitempty"`
@@ -39,60 +47,66 @@ var (
 	}{}
 )
 
-func bgTag(s string) map[string]string {
-	m := map[string]string{}
-	for _, x := range bgTagRe.FindAllStringSubmatch(s, -1) {
-		m[x[1]] = x[2]
+func bgTag(text string) map[string]string {
+	tags := map[string]string{}
+	for _, match := range bgTagRe.FindAllStringSubmatch(text, -1) {
+		tags[match[1]] = match[2]
 	}
-	return m
+	return tags
 }
 
-// bgTasks : les tâches de fond du transcript p, dans l'ordre de démarrage ; open dit si la session tourne encore.
-func bgTasks(p string, open bool) []BgTask {
-	fi, err := os.Stat(p)
+// bgTasks : les tâches de fond du transcript transcriptPath, dans l'ordre de démarrage ; open dit si la session tourne encore.
+func bgTasks(transcriptPath string, open bool) []BgTask {
+	fileInfo, err := os.Stat(transcriptPath)
 	if err != nil {
 		return nil
 	}
 	bgCache.Lock()
-	c, ok := bgCached[p]
+	cached, found := bgCached[transcriptPath]
 	bgCache.Unlock()
-	if !ok || c.size != fi.Size() || c.mtime != fi.ModTime().UnixNano() {
-		c.size, c.mtime, c.tasks = fi.Size(), fi.ModTime().UnixNano(), scanBgTasks(p)
+	isStale := !found || cached.size != fileInfo.Size() || cached.mtime != fileInfo.ModTime().UnixNano()
+	if isStale {
+		cached.size, cached.mtime, cached.tasks = fileInfo.Size(), fileInfo.ModTime().UnixNano(), scanBgTasks(transcriptPath)
 		bgCache.Lock()
-		bgCached[p] = c
+		bgCached[transcriptPath] = cached
 		bgCache.Unlock()
 	}
-	out := make([]BgTask, len(c.tasks))
-	copy(out, c.tasks)
-	for i := range out {
-		if out[i].Status == "running" && out[i].HasOut && bgKilled(out[i].Output) {
-			out[i].Status = "killed"
-		} else if out[i].Status == "running" && out[i].Tool == "Agent" && agentFinished(p, out[i].ID) {
-			out[i].Status = "completed"
-		} else if out[i].Status == "running" && !open {
-			out[i].Status = "unknown"
+	tasks := make([]BgTask, len(cached.tasks))
+	copy(tasks, cached.tasks)
+	for taskIndex := range tasks {
+		task := &tasks[taskIndex]
+		if task.Status != "running" {
+			continue
+		}
+		switch {
+		case task.HasOut && bgKilled(task.Output):
+			task.Status = "killed"
+		case task.Tool == "Agent" && agentFinished(transcriptPath, task.ID):
+			task.Status = "completed"
+		case !open:
+			task.Status = "unknown"
 		}
 	}
-	return out
+	return tasks
 }
 
-func scanBgTasks(p string) []BgTask {
-	f, err := openTrusted(p)
-	if err != nil {
+func scanBgTasks(transcriptPath string) []BgTask {
+	transcriptFile, openErr := openTrusted(transcriptPath)
+	if openErr != nil {
 		return nil
 	}
-	defer f.Close()
-	type use struct{ tool, desc string }
-	uses := map[string]use{} // tool_use_id → l'appel qui a lancé la tâche
-	byID := map[string]*BgTask{}
+	defer transcriptFile.Close()
+	type toolUse struct{ tool, desc string }
+	toolUses := map[string]toolUse{} // tool_use_id → l'appel qui a lancé la tâche
+	tasksByID := map[string]*BgTask{}
 	var order []string
-	r := bufio.NewReaderSize(f, 1<<20)
+	reader := bufio.NewReaderSize(transcriptFile, jsonLineBufferSize)
 	for {
-		l, err := r.ReadBytes('\n')
-		if len(l) > 0 {
+		transcriptLine, readErr := reader.ReadBytes('\n')
+		if len(transcriptLine) > 0 {
 			switch {
-			case bytes.Contains(l, []byte(`"run_in_background"`)) && bytes.Contains(l, []byte(`"tool_use"`)):
-				var o struct {
+			case bytes.Contains(transcriptLine, []byte(`"run_in_background"`)) && bytes.Contains(transcriptLine, []byte(`"tool_use"`)):
+				var toolUseLine struct {
 					Message struct {
 						Content []struct {
 							Type, ID, Name string
@@ -102,30 +116,35 @@ func scanBgTasks(p string) []BgTask {
 						}
 					}
 				}
-				if json.Unmarshal(l, &o) == nil {
-					for _, b := range o.Message.Content {
-						if b.Type == "tool_use" {
-							d := b.Input.Description
-							if d == "" {
-								d = cut(b.Input.Command, 200)
+				if json.Unmarshal(transcriptLine, &toolUseLine) == nil {
+					for _, contentBlock := range toolUseLine.Message.Content {
+						if contentBlock.Type == "tool_use" {
+							description := contentBlock.Input.Description
+							if description == "" {
+								description = cut(contentBlock.Input.Command, bgDescMaxLen)
 							}
-							uses[b.ID] = use{b.Name, d}
+							toolUses[contentBlock.ID] = toolUse{contentBlock.Name, description}
 						}
 					}
 				}
-			case bytes.Contains(l, []byte(`"async_launched"`)) && bytes.Contains(l, []byte(`"agentId"`)):
+			case bytes.Contains(transcriptLine, []byte(`"async_launched"`)) && bytes.Contains(transcriptLine, []byte(`"agentId"`)):
 				// Agent lancé en fond : son identifiant est la task-id de la notification de fin
-				var o struct {
+				var agentLaunchLine struct {
 					Timestamp string
 					Result    struct{ Status, AgentId, Description string } `json:"toolUseResult"`
 				}
-				if json.Unmarshal(l, &o) == nil && o.Result.Status == "async_launched" && bgSafeID.MatchString(o.Result.AgentId) && byID[o.Result.AgentId] == nil {
-					t := &BgTask{ID: o.Result.AgentId, Tool: "Agent", Desc: cut(o.Result.Description, 200), Status: "running", Start: o.Timestamp}
-					byID[t.ID] = t
-					order = append(order, t.ID)
+				if json.Unmarshal(transcriptLine, &agentLaunchLine) != nil {
+					break
 				}
-			case bytes.Contains(l, []byte(`"backgroundTaskId"`)):
-				var o struct {
+				agentID := agentLaunchLine.Result.AgentId
+				isNewAgentLaunch := agentLaunchLine.Result.Status == "async_launched" && bgSafeID.MatchString(agentID) && tasksByID[agentID] == nil
+				if isNewAgentLaunch {
+					task := &BgTask{ID: agentID, Tool: "Agent", Desc: cut(agentLaunchLine.Result.Description, bgDescMaxLen), Status: "running", Start: agentLaunchLine.Timestamp}
+					tasksByID[task.ID] = task
+					order = append(order, task.ID)
+				}
+			case bytes.Contains(transcriptLine, []byte(`"backgroundTaskId"`)):
+				var taskStartLine struct {
 					Timestamp string
 					Message   struct {
 						Content []struct {
@@ -134,65 +153,70 @@ func scanBgTasks(p string) []BgTask {
 					}
 					Result struct{ BackgroundTaskId string } `json:"toolUseResult"`
 				}
-				if json.Unmarshal(l, &o) == nil && o.Result.BackgroundTaskId != "" && byID[o.Result.BackgroundTaskId] == nil {
-					t := &BgTask{ID: o.Result.BackgroundTaskId, Status: "running", Start: o.Timestamp}
-					if len(o.Message.Content) > 0 {
-						u := uses[o.Message.Content[0].ToolUseID]
-						t.Tool, t.Desc = u.tool, u.desc
-					}
-					byID[t.ID] = t
-					order = append(order, t.ID)
-				}
-			case bytes.Contains(l, []byte(`Successfully stopped task: `)) && bytes.Contains(l, []byte(`"tool_result"`)):
-				// TaskStop ne met aucune <task-notification> en file : son résultat est la seule trace de la fin
-				var o struct{ Timestamp string }
-				if json.Unmarshal(l, &o) != nil {
+				if json.Unmarshal(transcriptLine, &taskStartLine) != nil {
 					break
 				}
-				if m := bgStoppedRe.FindSubmatch(l); m != nil {
-					if t := byID[string(m[1])]; t != nil && t.Status == "running" {
-						t.Status, t.End = "killed", o.Timestamp
+				backgroundTaskID := taskStartLine.Result.BackgroundTaskId
+				isNewTask := backgroundTaskID != "" && tasksByID[backgroundTaskID] == nil
+				if isNewTask {
+					task := &BgTask{ID: backgroundTaskID, Status: "running", Start: taskStartLine.Timestamp}
+					if len(taskStartLine.Message.Content) > 0 {
+						launchingUse := toolUses[taskStartLine.Message.Content[0].ToolUseID]
+						task.Tool, task.Desc = launchingUse.tool, launchingUse.desc
+					}
+					tasksByID[task.ID] = task
+					order = append(order, task.ID)
+				}
+			case bytes.Contains(transcriptLine, []byte(`Successfully stopped task: `)) && bytes.Contains(transcriptLine, []byte(`"tool_result"`)):
+				// TaskStop ne met aucune <task-notification> en file : son résultat est la seule trace de la fin
+				var stopLine struct{ Timestamp string }
+				if json.Unmarshal(transcriptLine, &stopLine) != nil {
+					break
+				}
+				if stoppedMatch := bgStoppedRe.FindSubmatch(transcriptLine); stoppedMatch != nil {
+					if task := tasksByID[string(stoppedMatch[1])]; task != nil && task.Status == "running" {
+						task.Status, task.End = "killed", stopLine.Timestamp
 					}
 				}
-			case bytes.Contains(l, []byte(`"queue-operation"`)) && bytes.Contains(l, []byte(`<task-id>`)):
-				var o struct {
+			case bytes.Contains(transcriptLine, []byte(`"queue-operation"`)) && bytes.Contains(transcriptLine, []byte(`<task-id>`)):
+				var queueLine struct {
 					Operation, Timestamp, Content string
 				}
-				if json.Unmarshal(l, &o) != nil || o.Operation != "enqueue" {
+				if json.Unmarshal(transcriptLine, &queueLine) != nil || queueLine.Operation != "enqueue" {
 					break
 				}
-				m := bgTag(o.Content)
-				id := m["task-id"]
-				if id == "" || !bgSafeID.MatchString(id) {
+				tags := bgTag(queueLine.Content)
+				taskID := tags["task-id"]
+				if taskID == "" || !bgSafeID.MatchString(taskID) {
 					break
 				}
-				t := byID[id]
-				if t == nil { // lancée autrement (Monitor, workflow…) : on ne connaît que sa fin
-					t = &BgTask{ID: id, Desc: m["summary"]}
-					byID[id] = t
-					order = append(order, id)
+				task := tasksByID[taskID]
+				if task == nil { // lancée autrement (Monitor, workflow…) : on ne connaît que sa fin
+					task = &BgTask{ID: taskID, Desc: tags["summary"]}
+					tasksByID[taskID] = task
+					order = append(order, taskID)
 				}
-				t.Status, t.Summary, t.End = m["status"], cut(m["summary"], 300), o.Timestamp
-				if t.Desc == "" {
-					t.Desc = t.Summary
+				task.Status, task.Summary, task.End = tags["status"], cut(tags["summary"], bgSummaryMaxLen), queueLine.Timestamp
+				if task.Desc == "" {
+					task.Desc = task.Summary
 				}
 			}
 		}
-		if err != nil {
-			if err != io.EOF {
+		if readErr != nil {
+			if readErr != io.EOF {
 				return nil
 			}
 			break
 		}
 	}
-	out := make([]BgTask, 0, len(order))
-	for _, id := range order {
-		t := byID[id]
-		t.Output = bgOutputPath(p, id) // jamais le chemin écrit dans le transcript : il n'est pas de confiance
-		t.HasOut = bgOutputOK(t.Output)
-		out = append(out, *t)
+	tasks := make([]BgTask, 0, len(order))
+	for _, taskID := range order {
+		task := tasksByID[taskID]
+		task.Output = bgOutputPath(transcriptPath, taskID) // jamais le chemin écrit dans le transcript : il n'est pas de confiance
+		task.HasOut = bgOutputOK(task.Output)
+		tasks = append(tasks, *task)
 	}
-	return out
+	return tasks
 }
 
 var bgStoppedRe = regexp.MustCompile(`Successfully stopped task: ([A-Za-z0-9]{1,40})\b`)
@@ -201,9 +225,9 @@ var bgSafeID = regexp.MustCompile(`^[A-Za-z0-9]{1,40}$`)
 
 // bgOutputPath : l'emplacement habituel de la sortie d'une tâche, d'après le transcript (<tmp>/claude-<uid>/<dossier>/<session>/tasks).
 func bgOutputPath(transcript, id string) string {
-	sess := strings.TrimSuffix(filepath.Base(transcript), ".jsonl")
-	dir := filepath.Base(filepath.Dir(transcript))
-	return filepath.Join(os.TempDir(), "claude-"+strconv.Itoa(os.Getuid()), dir, sess, "tasks", id+".output")
+	sessionID := strings.TrimSuffix(filepath.Base(transcript), ".jsonl")
+	projectDir := filepath.Base(filepath.Dir(transcript))
+	return filepath.Join(os.TempDir(), "claude-"+strconv.Itoa(os.Getuid()), projectDir, sessionID, "tasks", id+".output")
 }
 
 // bgOutputOK : un fichier ordinaire (ni lien symbolique, ni répertoire) qui appartient à l'utilisateur de gld, au chemin que Claude Code lui donne.
@@ -211,61 +235,61 @@ func bgOutputOK(path string) bool {
 	if filepath.Clean(path) != path || !bgOutRe.MatchString(path) {
 		return false
 	}
-	fi, err := os.Lstat(path)
-	if err != nil || !fi.Mode().IsRegular() {
+	fileInfo, err := os.Lstat(path)
+	if err != nil || !fileInfo.Mode().IsRegular() {
 		return false
 	}
-	return ownedByMe(fi)
+	return ownedByMe(fileInfo)
 }
 
 // bgKilled : Claude Code termine par « [killed] » la sortie d'une commande de fond tuée, même sans <task-notification> (kill du processus).
 // Les agents n'ont pas ce marqueur : leur sortie est leur transcript.
 func bgKilled(path string) bool {
-	f, err := os.OpenFile(path, os.O_RDONLY|oNoFollow, 0)
+	outputFile, err := os.OpenFile(path, os.O_RDONLY|oNoFollow, 0)
 	if err != nil {
 		return false
 	}
-	defer f.Close()
-	fi, err := f.Stat()
-	if err != nil || !fi.Mode().IsRegular() {
+	defer outputFile.Close()
+	fileInfo, err := outputFile.Stat()
+	if err != nil || !fileInfo.Mode().IsRegular() {
 		return false
 	}
-	b := make([]byte, min(fi.Size(), 32))
-	n, _ := f.ReadAt(b, fi.Size()-int64(len(b)))
-	return bytes.HasSuffix(bytes.TrimSpace(b[:n]), []byte("[killed]"))
+	tail := make([]byte, min(fileInfo.Size(), bgKilledTailBytes))
+	readCount, _ := outputFile.ReadAt(tail, fileInfo.Size()-int64(len(tail)))
+	return bytes.HasSuffix(bytes.TrimSpace(tail[:readCount]), []byte("[killed]"))
 }
 
 // agentFinished : Claude Code pose <session>/subagents/agent-<id>.meta.json avec finished à vrai quand un sous-agent se termine,
 // même si la <task-notification> n'a jamais été mise en file (session fermée entre-temps).
 func agentFinished(transcript, id string) bool {
-	b, err := readTrusted(filepath.Join(strings.TrimSuffix(transcript, ".jsonl"), "subagents", "agent-"+id+".meta.json"))
+	metaContent, err := readTrusted(filepath.Join(strings.TrimSuffix(transcript, ".jsonl"), "subagents", "agent-"+id+".meta.json"))
 	if err != nil {
 		return false
 	}
-	var m struct{ Finished bool }
-	return json.Unmarshal(b, &m) == nil && m.Finished
+	var meta struct{ Finished bool }
+	return json.Unmarshal(metaContent, &meta) == nil && meta.Finished
 }
 
 // bgOutput : les 64 derniers Kio de la sortie d'une tâche de ce transcript. L'identifiant doit être une tâche relevée dans le transcript
 // et le chemin respecter la forme que Claude Code lui donne.
-func bgOutput(p, id string) (string, bool) {
-	for _, t := range scanBgTasks(p) {
-		if t.ID != id || !bgOutputOK(t.Output) {
+func bgOutput(transcriptPath, id string) (string, bool) {
+	for _, task := range scanBgTasks(transcriptPath) {
+		if task.ID != id || !bgOutputOK(task.Output) {
 			continue
 		}
-		f, err := os.OpenFile(t.Output, os.O_RDONLY|oNoFollow, 0) // un lien posé entre la vérification et l'ouverture est refusé
+		outputFile, err := os.OpenFile(task.Output, os.O_RDONLY|oNoFollow, 0) // un lien posé entre la vérification et l'ouverture est refusé
 		if err != nil {
 			return "", false
 		}
-		defer f.Close()
-		fi, err := f.Stat()
-		if err != nil || !fi.Mode().IsRegular() {
+		defer outputFile.Close()
+		fileInfo, err := outputFile.Stat()
+		if err != nil || !fileInfo.Mode().IsRegular() {
 			return "", false
 		}
-		off := max(0, fi.Size()-64<<10)
-		b := make([]byte, fi.Size()-off)
-		n, _ := f.ReadAt(b, off)
-		return string(b[:n]), true
+		offset := max(0, fileInfo.Size()-bgOutputTailBytes)
+		content := make([]byte, fileInfo.Size()-offset)
+		readCount, _ := outputFile.ReadAt(content, offset)
+		return string(content[:readCount]), true
 	}
 	return "", false
 }

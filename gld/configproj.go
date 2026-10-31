@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+const projectRuleMaxBytes = 1 << 20
+
 type ProjRow struct {
 	Path  string `json:"path"`
 	Value string `json:"value"`
@@ -46,27 +48,29 @@ type ProjectCfg struct {
 
 // projectRules : les règles Markdown de .claude/rules d'un projet (lecture seule), avec leur portée.
 func projectRules(cwd string) []ProjDocRule {
-	var out []ProjDocRule
-	ents, _ := readDirTrusted(filepath.Join(cwd, ".claude", "rules"))
-	for _, e := range ents {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+	var rules []ProjDocRule
+	entries, _ := readDirTrusted(filepath.Join(cwd, ".claude", "rules"))
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
 			continue
 		}
-		r := ProjDocRule{Name: e.Name()}
-		if b, err := readTrusted(filepath.Join(cwd, ".claude", "rules", e.Name())); err == nil && len(b) < 1<<20 {
-			if m, err := parseMeta(string(b)); err != nil {
-				r.Warn = err.Error()
-			} else if _, has := m["paths"]; has {
-				g, err := globsOf(m)
-				if err != nil {
-					r.Warn = err.Error()
+		rule := ProjDocRule{Name: entry.Name()}
+		content, readErr := readTrusted(filepath.Join(cwd, ".claude", "rules", entry.Name()))
+		isReadable := readErr == nil && len(content) < projectRuleMaxBytes
+		if isReadable {
+			if meta, parseErr := parseMeta(string(content)); parseErr != nil {
+				rule.Warn = parseErr.Error()
+			} else if _, hasPaths := meta["paths"]; hasPaths {
+				globs, globErr := globsOf(meta)
+				if globErr != nil {
+					rule.Warn = globErr.Error()
 				}
-				r.Paths = g
+				rule.Paths = globs
 			}
 		}
-		out = append(out, r)
+		rules = append(rules, rule)
 	}
-	return out
+	return rules
 }
 
 func projectConfigs() []ProjectCfg { return projectConfigsFor(false) }
@@ -75,24 +79,24 @@ func projectConfigs() []ProjectCfg { return projectConfigsFor(false) }
 func projectConfigsFor(strict bool) []ProjectCfg {
 	_, raw := allConfigsFor(strict)
 	hooks := hooksFor(raw, strict)
-	mcp := mcpServersFor(strict)
+	servers := mcpServersFor(strict)
 	skills := listSkills()
-	_, mem, _ := memList()
+	_, memProjects, _ := memList()
 	docs := map[string][]string{}
-	for _, p := range mem {
-		for _, f := range p.Files {
-			if strings.HasPrefix(f.Key, "p/") {
-				docs[p.Dir] = append(docs[p.Dir], f.Name)
+	for _, memProject := range memProjects {
+		for _, memFile := range memProject.Files {
+			if strings.HasPrefix(memFile.Key, "p/") {
+				docs[memProject.Dir] = append(docs[memProject.Dir], memFile.Name)
 			}
 		}
 	}
-	out := []ProjectCfg{}
-	for _, lp := range liveProjects() {
-		pc := ProjectCfg{Dir: lp.Dir, Project: lp.Project, Perms: map[string][]ProjRule{}, Files: []ProjFile{}, Hooks: []HookInfo{}, MCP: []McpServer{}, Skills: []string{}, Docs: docs[lp.Dir]}
+	configs := []ProjectCfg{}
+	for _, liveProject := range liveProjects() {
+		projectConfig := ProjectCfg{Dir: liveProject.Dir, Project: liveProject.Project, Perms: map[string][]ProjRule{}, Files: []ProjFile{}, Hooks: []HookInfo{}, MCP: []McpServer{}, Skills: []string{}, Docs: docs[liveProject.Dir]}
 		for _, scope := range []string{"p", "l"} {
-			id := scope + "/" + lp.Dir
-			doc, ok := raw[id]
-			if !ok {
+			fileID := scope + "/" + liveProject.Dir
+			doc, found := raw[fileID]
+			if !found {
 				continue
 			}
 			label := "settings.json"
@@ -101,53 +105,59 @@ func projectConfigsFor(strict bool) []ProjectCfg {
 			}
 			flat := map[string][]string{}
 			flatten("", maskSettings(doc, strict), 0, flat)
-			pf := ProjFile{ID: id, Label: label, Rows: []ProjRow{}}
-			for path, vals := range flat {
-				pf.Rows = append(pf.Rows, ProjRow{path, strings.Join(vals, " · ")})
+			projectFile := ProjFile{ID: fileID, Label: label, Rows: []ProjRow{}}
+			for path, values := range flat {
+				projectFile.Rows = append(projectFile.Rows, ProjRow{path, strings.Join(values, " · ")})
 			}
-			sort.Slice(pf.Rows, func(i, j int) bool { return pf.Rows[i].Path < pf.Rows[j].Path })
-			pc.Files = append(pc.Files, pf)
+			sort.Slice(projectFile.Rows, func(left, right int) bool {
+				return projectFile.Rows[left].Path < projectFile.Rows[right].Path
+			})
+			projectConfig.Files = append(projectConfig.Files, projectFile)
 			for _, kind := range append(append([]string{}, permKinds...), "additionalDirectories") {
-				v, _ := lookup(doc, "permissions", kind)
-				for _, r := range strList(v) {
-					pc.Perms[kind] = append(pc.Perms[kind], ProjRule{r, scope})
+				ruleValues, _ := lookup(doc, "permissions", kind)
+				for _, rule := range strList(ruleValues) {
+					projectConfig.Perms[kind] = append(projectConfig.Perms[kind], ProjRule{rule, scope})
 				}
 			}
 		}
-		for _, h := range hooks {
-			if h.File == "p/"+lp.Dir || h.File == "l/"+lp.Dir {
-				pc.Hooks = append(pc.Hooks, h)
+		for _, hook := range hooks {
+			belongsToProject := hook.File == "p/"+liveProject.Dir || hook.File == "l/"+liveProject.Dir
+			if belongsToProject {
+				projectConfig.Hooks = append(projectConfig.Hooks, hook)
 			}
 		}
-		for _, m := range mcp {
-			if m.Project == lp.Project && (m.Scope == "project" || m.Scope == "local") {
-				pc.MCP = append(pc.MCP, m)
+		for _, server := range servers {
+			isProjectScope := server.Scope == "project" || server.Scope == "local"
+			if server.Project == liveProject.Project && isProjectScope {
+				projectConfig.MCP = append(projectConfig.MCP, server)
 			}
 		}
-		for _, s := range skills {
-			if s.Scope == "project" && s.Project == lp.Project {
-				pc.Skills = append(pc.Skills, s.Name)
+		for _, skill := range skills {
+			if skill.Scope == "project" && skill.Project == liveProject.Project {
+				projectConfig.Skills = append(projectConfig.Skills, skill.Name)
 			}
 		}
-		pc.Rules = projectRules(lp.Project)
-		if pc.Rules == nil {
-			pc.Rules = []ProjDocRule{}
+		projectConfig.Rules = projectRules(liveProject.Project)
+		if projectConfig.Rules == nil {
+			projectConfig.Rules = []ProjDocRule{}
 		}
-		if pc.Docs == nil {
-			pc.Docs = []string{}
+		if projectConfig.Docs == nil {
+			projectConfig.Docs = []string{}
 		}
-		n := len(pc.Hooks) + len(pc.MCP) + len(pc.Skills) + len(pc.Rules)
-		for _, f := range pc.Files {
-			n += len(f.Rows)
+		specificCount := len(projectConfig.Hooks) + len(projectConfig.MCP) + len(projectConfig.Skills) + len(projectConfig.Rules)
+		for _, projectFile := range projectConfig.Files {
+			specificCount += len(projectFile.Rows)
 		}
-		pc.Specific = n
-		out = append(out, pc)
+		projectConfig.Specific = specificCount
+		configs = append(configs, projectConfig)
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if (out[i].Specific > 0) != (out[j].Specific > 0) {
-			return out[i].Specific > 0
+	sort.Slice(configs, func(left, right int) bool {
+		leftHasSpecific := configs[left].Specific > 0
+		rightHasSpecific := configs[right].Specific > 0
+		if leftHasSpecific != rightHasSpecific {
+			return leftHasSpecific
 		}
-		return out[i].Project < out[j].Project
+		return configs[left].Project < configs[right].Project
 	})
-	return out
+	return configs
 }

@@ -17,6 +17,15 @@ import (
 // mcpPrefix : clé interne des serveurs MCP dans le décompte (l'octet nul ne peut pas figurer dans une commande Bash).
 const mcpPrefix = "\x00mcp:"
 
+const (
+	cmdUsageTTL           = 60 * time.Second
+	recentSessionsScanned = 40
+	transcriptTailBytes   = 3 << 20
+	usageExampleMaxLen    = 100
+	minSuggestCount       = 3
+	maxSuggestions        = 25
+)
+
 type PermSuggest struct {
 	Rule     string `json:"rule"`
 	Count    int    `json:"count"`
@@ -38,24 +47,24 @@ var (
 )
 
 // bashPrefix : le préfixe sur lequel bâtir une règle pour une commande simple ; "" si elle est composée (&&, |, redirection…).
-func bashPrefix(cmd string) string {
-	cmd = strings.TrimSpace(cmd)
-	if cmd == "" || strings.ContainsAny(cmd, "|&;<>`\n") || strings.Contains(cmd, "$(") {
+func bashPrefix(command string) string {
+	command = strings.TrimSpace(command)
+	if command == "" || strings.ContainsAny(command, "|&;<>`\n") || strings.Contains(command, "$(") {
 		return ""
 	}
-	f := strings.Fields(cmd)
-	if len(f) == 0 || strings.Contains(f[0], "=") {
+	fields := strings.Fields(command)
+	if len(fields) == 0 || strings.Contains(fields[0], "=") {
 		return ""
 	}
-	if strings.HasPrefix(f[0], ".") || strings.ContainsAny(f[0], "/$(){}*?~\"'") { // script, variable, sous-shell : pas de règle sur un nom de commande
+	if strings.HasPrefix(fields[0], ".") || strings.ContainsAny(fields[0], "/$(){}*?~\"'") { // script, variable, sous-shell : pas de règle sur un nom de commande
 		return ""
 	}
-	first := filepath.Base(f[0])
+	first := filepath.Base(fields[0])
 	if twoWords[first] {
-		if len(f) < 2 || strings.HasPrefix(f[1], "-") { // « git -c x=y … » : une règle sur « git » seul autoriserait tout git
+		if len(fields) < 2 || strings.HasPrefix(fields[1], "-") { // « git -c x=y … » : une règle sur « git » seul autoriserait tout git
 			return ""
 		}
-		return first + " " + f[1]
+		return first + " " + fields[1]
 	}
 	return first
 }
@@ -63,103 +72,106 @@ func bashPrefix(cmd string) string {
 var shellKeyword = map[string]bool{"for": true, "while": true, "until": true, "if": true, "then": true, "else": true, "elif": true, "fi": true, "do": true, "done": true, "case": true, "esac": true, "function": true, "{": true, "}": true, "(": true, ")": true, "!": true, "cd": true, "export": true, "set": true, "unset": true, "echo": true, "printf": true, "true": true, "false": true, "test": true, "[": true, "[[": true}
 
 // unquoted : le texte sans ce qui est entre guillemets.
-func unquoted(s string) string {
-	var b strings.Builder
-	var q rune
-	for _, c := range s {
+func unquoted(text string) string {
+	var result strings.Builder
+	var openQuote rune
+	for _, character := range text {
 		switch {
-		case q != 0:
-			if c == q {
-				q = 0
+		case openQuote != 0:
+			if character == openQuote {
+				openQuote = 0
 			}
-		case c == '\'' || c == '"':
-			q = c
+		case character == '\'' || character == '"':
+			openQuote = character
 		default:
-			b.WriteRune(c)
+			result.WriteRune(character)
 		}
 	}
-	return b.String()
+	return result.String()
 }
 
 // bashSegments : les commandes simples d'une commande composée (&&, ||, ;, |, sauts de ligne hors guillemets), comme Claude Code les
 // évalue une à une. Une commande avec here-document, substitution ou redirection vers un fichier n'est pas découpée : elle donne nil.
 // Les mots-clés du shell (for, if…), cd, echo et autres commandes sans effet à autoriser sont écartés.
-func bashSegments(cmd string) []string {
-	if strings.Contains(cmd, "<<") || strings.Contains(cmd, "$(") || strings.Contains(cmd, "`") {
+func bashSegments(command string) []string {
+	hasUnsplittablePart := strings.Contains(command, "<<") || strings.Contains(command, "$(") || strings.Contains(command, "`")
+	if hasUnsplittablePart {
 		return nil
 	}
-	var segs []string
-	var cur strings.Builder
+	var segments []string
+	var current strings.Builder
 	var quote rune
-	flush := func() {
-		if t := strings.TrimSpace(cur.String()); t != "" {
-			segs = append(segs, t)
+	flushSegment := func() {
+		if trimmed := strings.TrimSpace(current.String()); trimmed != "" {
+			segments = append(segments, trimmed)
 		}
-		cur.Reset()
+		current.Reset()
 	}
-	rs := []rune(cmd)
-	for i := 0; i < len(rs); i++ {
-		c := rs[i]
+	runes := []rune(command)
+	for runeIndex := 0; runeIndex < len(runes); runeIndex++ {
+		character := runes[runeIndex]
+		hasNext := runeIndex+1 < len(runes)
+		isDoubledOperator := hasNext && (character == '&' || character == '|') && runes[runeIndex+1] == character
 		switch {
 		case quote != 0:
-			if c == quote {
+			if character == quote {
 				quote = 0
 			}
-			cur.WriteRune(c)
-		case c == '\'' || c == '"':
-			quote = c
-			cur.WriteRune(c)
-		case c == '\\' && i+1 < len(rs):
-			cur.WriteRune(c)
-			i++
-			cur.WriteRune(rs[i])
-		case c == '&' && i+1 < len(rs) && rs[i+1] == '&', c == '|' && i+1 < len(rs) && rs[i+1] == '|':
-			i++
-			flush()
-		case c == ';' || c == '|' || c == '\n':
-			flush()
+			current.WriteRune(character)
+		case character == '\'' || character == '"':
+			quote = character
+			current.WriteRune(character)
+		case character == '\\' && hasNext:
+			current.WriteRune(character)
+			runeIndex++
+			current.WriteRune(runes[runeIndex])
+		case isDoubledOperator:
+			runeIndex++
+			flushSegment()
+		case character == ';' || character == '|' || character == '\n':
+			flushSegment()
 		default:
-			cur.WriteRune(c)
+			current.WriteRune(character)
 		}
 	}
-	flush()
-	var out []string
-	for _, sg := range segs {
+	flushSegment()
+	var commands []string
+	for _, segment := range segments {
 		// « 2>&1 », « 2>/dev/null » et « >/dev/null » ne comptent pas comme des écritures de fichier.
-		clean := strings.NewReplacer("2>&1", "", "2>/dev/null", "", ">/dev/null", "", "&>/dev/null", "").Replace(sg)
-		if strings.ContainsAny(unquoted(clean), "<>&") {
+		cleaned := strings.NewReplacer("2>&1", "", "2>/dev/null", "", ">/dev/null", "", "&>/dev/null", "").Replace(segment)
+		if strings.ContainsAny(unquoted(cleaned), "<>&") {
 			continue // redirection vers un fichier, arrière-plan : une règle sur la commande seule ne le couvre pas
 		}
-		f := strings.Fields(clean)
-		for len(f) > 0 && (f[0] == "do" || f[0] == "then" || f[0] == "else") { // « do ls » : la commande suit le mot-clé
-			f = f[1:]
+		fields := strings.Fields(cleaned)
+		for len(fields) > 0 && (fields[0] == "do" || fields[0] == "then" || fields[0] == "else") { // « do ls » : la commande suit le mot-clé
+			fields = fields[1:]
 		}
-		if len(f) == 0 || shellKeyword[f[0]] || strings.Contains(f[0], "=") {
+		if len(fields) == 0 || shellKeyword[fields[0]] || strings.Contains(fields[0], "=") {
 			continue
 		}
-		out = append(out, strings.Join(f, " "))
+		commands = append(commands, strings.Join(fields, " "))
 	}
-	return out
+	return commands
 }
 
-// tailLines : les lignes complètes des derniers n octets d'un fichier.
-func tailLines(path string, n int64) [][]byte {
-	f, err := openTrusted(path)
+// tailLines : les lignes complètes des derniers maxBytes octets d'un fichier.
+func tailLines(path string, maxBytes int64) [][]byte {
+	file, err := openTrusted(path)
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
-	st, err := f.Stat()
+	defer file.Close()
+	fileInfo, err := file.Stat()
 	if err != nil {
 		return nil
 	}
-	off := max(st.Size()-n, 0)
-	if _, err := f.Seek(off, io.SeekStart); err != nil {
+	offset := max(fileInfo.Size()-maxBytes, 0)
+	if _, seekErr := file.Seek(offset, io.SeekStart); seekErr != nil {
 		return nil
 	}
-	b, _ := io.ReadAll(f)
-	lines := splitLines(b)
-	if off > 0 && len(lines) > 0 {
+	content, _ := io.ReadAll(file)
+	lines := splitLines(content)
+	if offset > 0 && len(lines) > 0 {
 		lines = lines[1:] // la première est coupée
 	}
 	return lines
@@ -178,35 +190,39 @@ var (
 func usageCounts() (map[string]int, map[string]string) {
 	cmdUsageMu.Lock()
 	defer cmdUsageMu.Unlock()
-	if cmdUsageCount != nil && cmdUsageRoot == root && time.Since(cmdUsageAt) < 60*time.Second {
+	cacheIsFresh := cmdUsageCount != nil && cmdUsageRoot == root && time.Since(cmdUsageAt) < cmdUsageTTL
+	if cacheIsFresh {
 		return cmdUsageCount, cmdUsageEx
 	}
-	type fileT struct {
-		p string
-		t int64
+	type recentFile struct {
+		path    string
+		modTime int64
 	}
-	var files []fileT
+	var files []recentFile
 	dirs, _ := readDirTrusted(root)
-	for _, d := range dirs {
-		ms, _ := filepath.Glob(filepath.Join(root, d.Name(), "*.jsonl"))
-		for _, p := range ms {
-			if st, err := os.Stat(p); err == nil {
-				files = append(files, fileT{p, st.ModTime().UnixNano()})
+	for _, dirEntry := range dirs {
+		transcriptPaths, _ := filepath.Glob(filepath.Join(root, dirEntry.Name(), "*.jsonl"))
+		for _, transcriptPath := range transcriptPaths {
+			if fileInfo, err := os.Stat(transcriptPath); err == nil {
+				files = append(files, recentFile{transcriptPath, fileInfo.ModTime().UnixNano()})
 			}
 		}
 	}
-	sort.Slice(files, func(i, j int) bool { return files[i].t > files[j].t })
-	if len(files) > 40 {
-		files = files[:40]
+	sort.Slice(files, func(left, right int) bool {
+		return files[left].modTime > files[right].modTime
+	})
+	if len(files) > recentSessionsScanned {
+		files = files[:recentSessionsScanned]
 	}
 	counts := map[string]int{}
 	example := map[string]string{}
-	for _, f := range files {
-		for _, l := range tailLines(f.p, 3<<20) {
-			if !strings.Contains(string(l), `"name":"Bash"`) && !strings.Contains(string(l), `"name":"mcp__`) {
+	for _, recent := range files {
+		for _, transcriptLine := range tailLines(recent.path, transcriptTailBytes) {
+			mentionsTool := strings.Contains(string(transcriptLine), `"name":"Bash"`) || strings.Contains(string(transcriptLine), `"name":"mcp__`)
+			if !mentionsTool {
 				continue
 			}
-			var m struct {
+			var lineEntry struct {
 				Message struct {
 					Content []struct {
 						Type, Name string
@@ -214,30 +230,33 @@ func usageCounts() (map[string]int, map[string]string) {
 					}
 				}
 			}
-			if json.Unmarshal(l, &m) != nil {
+			if json.Unmarshal(transcriptLine, &lineEntry) != nil {
 				continue
 			}
-			for _, c := range m.Message.Content {
+			for _, contentBlock := range lineEntry.Message.Content {
 				// outil MCP (mcp__serveur__outil) : la règle porte sur le serveur entier, sans quoi chaque outil redemande
-				if srv, _, ok := strings.Cut(strings.TrimPrefix(c.Name, "mcp__"), "__"); c.Type == "tool_use" && strings.HasPrefix(c.Name, "mcp__") && ok && srv != "" {
-					counts[mcpPrefix+srv]++
-					if example[mcpPrefix+srv] == "" {
-						example[mcpPrefix+srv] = c.Name
+				serverName, _, hasToolSuffix := strings.Cut(strings.TrimPrefix(contentBlock.Name, "mcp__"), "__")
+				isToolUse := contentBlock.Type == "tool_use"
+				isMcpTool := isToolUse && strings.HasPrefix(contentBlock.Name, "mcp__") && hasToolSuffix && serverName != ""
+				if isMcpTool {
+					counts[mcpPrefix+serverName]++
+					if example[mcpPrefix+serverName] == "" {
+						example[mcpPrefix+serverName] = contentBlock.Name
 					}
 					continue
 				}
-				if c.Type == "tool_use" && c.Name == "Bash" {
-					cmds := bashSegments(c.Input.Command)
-					if len(cmds) == 0 {
-						cmds = []string{c.Input.Command} // commande simple, ou que bashPrefix saura refuser
+				if isToolUse && contentBlock.Name == "Bash" {
+					segments := bashSegments(contentBlock.Input.Command)
+					if len(segments) == 0 {
+						segments = []string{contentBlock.Input.Command} // commande simple, ou que bashPrefix saura refuser
 					}
 					seen := map[string]bool{} // une commande qui répète le même préfixe ne compte qu'une fois
-					for _, seg := range cmds {
-						if p := bashPrefix(seg); p != "" && !seen[p] {
-							seen[p] = true
-							counts[p]++
-							if example[p] == "" {
-								example[p] = cut(c.Input.Command, 100)
+					for _, segment := range segments {
+						if prefix := bashPrefix(segment); prefix != "" && !seen[prefix] {
+							seen[prefix] = true
+							counts[prefix]++
+							if example[prefix] == "" {
+								example[prefix] = cut(contentBlock.Input.Command, usageExampleMaxLen)
 							}
 						}
 					}
@@ -252,33 +271,36 @@ func usageCounts() (map[string]int, map[string]string) {
 // permSuggestions regarde les commandes Bash des 40 sessions les plus récentes (les 3 derniers Mo de chacune).
 func permSuggestions(existing []string) []PermSuggest {
 	counts, example := usageCounts()
-	have := map[string]bool{}
-	for _, r := range existing {
-		have[r] = true
+	existingRules := map[string]bool{}
+	for _, rule := range existing {
+		existingRules[rule] = true
 	}
-	var out []PermSuggest
-	for p, n := range counts {
-		if srv, ok := strings.CutPrefix(p, mcpPrefix); ok {
-			if rule := "mcp__" + srv; n >= 3 && !have[rule] && !have[rule+"__*"] && !have["mcp__*"] {
-				out = append(out, PermSuggest{Rule: rule, Count: n, Example: example[p]})
+	var suggestions []PermSuggest
+	for prefix, count := range counts {
+		if serverName, isMcp := strings.CutPrefix(prefix, mcpPrefix); isMcp {
+			mcpRule := "mcp__" + serverName
+			alreadyAllowed := existingRules[mcpRule] || existingRules[mcpRule+"__*"] || existingRules["mcp__*"]
+			if count >= minSuggestCount && !alreadyAllowed {
+				suggestions = append(suggestions, PermSuggest{Rule: mcpRule, Count: count, Example: example[prefix]})
 			}
 			continue
 		}
-		first := strings.Fields(p)[0]
-		rule := "Bash(" + p + ":*)"
-		if n < 3 || neverSuggest[first] || have[rule] || have["Bash("+first+":*)"] || have["Bash"] {
+		first := strings.Fields(prefix)[0]
+		bashRule := "Bash(" + prefix + ":*)"
+		alreadyAllowed := existingRules[bashRule] || existingRules["Bash("+first+":*)"] || existingRules["Bash"]
+		if count < minSuggestCount || neverSuggest[first] || alreadyAllowed {
 			continue
 		}
-		out = append(out, PermSuggest{Rule: rule, Count: n, ReadOnly: readOnlyCmds[p], Example: example[p]})
+		suggestions = append(suggestions, PermSuggest{Rule: bashRule, Count: count, ReadOnly: readOnlyCmds[prefix], Example: example[prefix]})
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Count != out[j].Count {
-			return out[i].Count > out[j].Count
+	sort.Slice(suggestions, func(left, right int) bool {
+		if suggestions[left].Count != suggestions[right].Count {
+			return suggestions[left].Count > suggestions[right].Count
 		}
-		return out[i].Rule < out[j].Rule
+		return suggestions[left].Rule < suggestions[right].Rule
 	})
-	if len(out) > 25 {
-		out = out[:25]
+	if len(suggestions) > maxSuggestions {
+		suggestions = suggestions[:maxSuggestions]
 	}
-	return out
+	return suggestions
 }

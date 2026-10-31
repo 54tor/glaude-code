@@ -11,66 +11,69 @@ import (
 	"strings"
 )
 
-const maskText = "••••••••"
+const (
+	maskText        = "••••••••"
+	rawEditMaxBytes = 1 << 20
+)
 
 // syntaxError ajoute la ligne et la colonne à une erreur de syntaxe JSON.
 func syntaxError(text string, err error) error {
-	var se *json.SyntaxError
-	if errors.As(err, &se) {
-		line, col := 1, 1
-		for i, c := range text {
-			if int64(i) >= se.Offset {
+	var syntaxErr *json.SyntaxError
+	if errors.As(err, &syntaxErr) {
+		line, column := 1, 1
+		for byteIndex, character := range text {
+			if int64(byteIndex) >= syntaxErr.Offset {
 				break
 			}
-			if c == '\n' {
-				line, col = line+1, 1
+			if character == '\n' {
+				line, column = line+1, 1
 			} else {
-				col++
+				column++
 			}
 		}
-		return terr("srv.configraw.jsonInvalideLigneColonne", "A1", line, "A2", col, "A3", se)
+		return terr("srv.configraw.jsonInvalideLigneColonne", "A1", line, "A2", column, "A3", syntaxErr)
 	}
 	return terr("srv.configraw.jsonInvalide", "A1", err.Error())
 }
 
-// restoreMasked remplace, dans n, chaque masque resté à sa place par la valeur de o au même chemin.
-func restoreMasked(n, o any, path string) (any, error) {
-	switch x := n.(type) {
+// restoreMasked remplace, dans edited, chaque masque resté à sa place par la valeur de original au même chemin.
+func restoreMasked(edited, original any, path string) (any, error) {
+	switch typedValue := edited.(type) {
 	case *omap:
-		oo := asMap(o)
-		for _, k := range x.keys {
-			var ov any
-			if oo != nil {
-				ov = oo.m[k]
+		originalMap := asMap(original)
+		for _, key := range typedValue.keys {
+			var originalValue any
+			if originalMap != nil {
+				originalValue = originalMap.m[key]
 			}
-			v, err := restoreMasked(x.m[k], ov, path+"."+k)
+			restored, err := restoreMasked(typedValue.m[key], originalValue, path+"."+key)
 			if err != nil {
 				return nil, err
 			}
-			x.m[k] = v
+			typedValue.m[key] = restored
 		}
 	case []any:
-		oa, _ := o.([]any)
-		for i := range x {
-			var ov any
-			if i < len(oa) {
-				ov = oa[i]
+		originalList, _ := original.([]any)
+		for elementIndex := range typedValue {
+			var originalValue any
+			if elementIndex < len(originalList) {
+				originalValue = originalList[elementIndex]
 			}
-			v, err := restoreMasked(x[i], ov, fmt.Sprintf("%s[%d]", path, i))
+			restored, err := restoreMasked(typedValue[elementIndex], originalValue, fmt.Sprintf("%s[%d]", path, elementIndex))
 			if err != nil {
 				return nil, err
 			}
-			x[i] = v
+			typedValue[elementIndex] = restored
 		}
 	case string:
-		if x == maskText {
-			if s, ok := o.(string); ok {
-				return s, nil
+		if typedValue == maskText {
+			if originalText, isString := original.(string); isString {
+				return originalText, nil
 			}
 			return nil, terr("srv.configraw.valeurMasqueeSansOriginal", "A1", strings.TrimPrefix(path, "."))
 		}
 	}
-	return n, nil
+	return edited, nil
 }
 
 // configRawRead : le fichier en JSON indenté, secrets masqués (un fichier absent donne « {} »).
@@ -79,34 +82,34 @@ func configRawRead(id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	b, err := readConfigFile(path)
+	content, err := readConfigFile(path)
 	if errors.Is(err, errConfigTooBig) {
 		return "", err
 	}
-	if err != nil || strings.TrimSpace(string(b)) == "" {
+	if err != nil || strings.TrimSpace(string(content)) == "" {
 		return "{}\n", nil
 	}
-	v, err := parseOrdered(b)
+	document, err := parseOrdered(content)
 	if err != nil {
-		return "", syntaxError(string(b), err)
+		return "", syntaxError(string(content), err)
 	}
-	return formatOrdered(maskSecrets(v, "")) + "\n", nil
+	return formatOrdered(maskSecrets(document, "")) + "\n", nil
 }
 
 // loadDoc lit le fichier de réglages actuel (absent : document vide) après avoir refusé un lien symbolique.
-func loadDoc(id string) (path string, orig []byte, exists bool, doc any, err error) {
+func loadDoc(id string) (path string, original []byte, exists bool, doc any, err error) {
 	if path, err = configPath(id); err != nil {
 		return
 	}
 	if err = notSymlink(path); err != nil {
 		return
 	}
-	var rerr error
-	orig, rerr = readTrusted(path)
-	exists = rerr == nil
+	var readErr error
+	original, readErr = readTrusted(path)
+	exists = readErr == nil
 	doc = newOmap()
-	if exists && strings.TrimSpace(string(orig)) != "" {
-		if doc, err = parseOrdered(orig); err != nil {
+	if exists && strings.TrimSpace(string(original)) != "" {
+		if doc, err = parseOrdered(original); err != nil {
 			err = terr("srv.configraw.leFichierActuelEst", "A1", err.Error())
 		}
 	}
@@ -114,20 +117,20 @@ func loadDoc(id string) (path string, orig []byte, exists bool, doc any, err err
 }
 
 // commitDoc compare le document actuel et le nouveau, renvoie leurs textes (secrets masqués, pour l'aperçu) et les
-// avertissements de santé du nouveau ; sauf si dry, sauvegarde l'ancien fichier puis écrit le nouveau.
-func commitDoc(id, path string, orig []byte, exists bool, origDoc, nv any, dry bool) (before, after string, warns []CfgIssue, err error) {
-	before = formatOrdered(maskSecrets(origDoc, "")) + "\n"
-	after = formatOrdered(maskSecrets(nv, "")) + "\n"
-	warns = configHealth(nil, map[string]any{id: nv})
-	if dry {
+// avertissements de santé du nouveau ; sauf si dryRun, sauvegarde l'ancien fichier puis écrit le nouveau.
+func commitDoc(id, path string, original []byte, exists bool, originalDoc, edited any, dryRun bool) (before, after string, warns []CfgIssue, err error) {
+	before = formatOrdered(maskSecrets(originalDoc, "")) + "\n"
+	after = formatOrdered(maskSecrets(edited, "")) + "\n"
+	warns = configHealth(nil, map[string]any{id: edited})
+	if dryRun {
 		return
 	}
-	content := formatOrdered(nv) + "\n"
-	if exists && string(orig) == content {
+	content := formatOrdered(edited) + "\n"
+	if exists && string(original) == content {
 		return
 	}
 	if exists {
-		if err = saveBackup(id, orig); err != nil {
+		if err = saveBackup(id, original); err != nil {
 			err = terr("srv.homesync.sauvegardeImpossible", "A1", err.Error())
 			return
 		}
@@ -137,29 +140,29 @@ func commitDoc(id, path string, orig []byte, exists bool, origDoc, nv any, dry b
 }
 
 // configRawEdit valide et enregistre un fichier de réglages saisi en JSON brut. Renvoie les textes avant et après (secrets
-// masqués, pour l'aperçu) et les avertissements de santé du nouveau contenu ; n'écrit rien si dry.
-func configRawEdit(id, text string, dry bool) (before, after string, warns []CfgIssue, err error) {
+// masqués, pour l'aperçu) et les avertissements de santé du nouveau contenu ; n'écrit rien si dryRun.
+func configRawEdit(id, text string, dryRun bool) (before, after string, warns []CfgIssue, err error) {
 	cfgMu.Lock()
 	defer cfgMu.Unlock()
-	path, orig, exists, origDoc, err := loadDoc(id)
+	path, original, exists, originalDoc, err := loadDoc(id)
 	if err != nil {
 		return
 	}
-	if len(text) > 1<<20 {
+	if len(text) > rawEditMaxBytes {
 		err = terr("srv.configperm_io.fichierTropGros")
 		return
 	}
-	nv, perr := parseOrdered([]byte(text))
-	if perr != nil {
-		err = syntaxError(text, perr)
+	edited, parseErr := parseOrdered([]byte(text))
+	if parseErr != nil {
+		err = syntaxError(text, parseErr)
 		return
 	}
-	if asMap(nv) == nil {
+	if asMap(edited) == nil {
 		err = terr("srv.configraw.leFichierDoitContenir")
 		return
 	}
-	if nv, err = restoreMasked(nv, origDoc, ""); err != nil {
+	if edited, err = restoreMasked(edited, originalDoc, ""); err != nil {
 		return
 	}
-	return commitDoc(id, path, orig, exists, origDoc, nv, dry)
+	return commitDoc(id, path, original, exists, originalDoc, edited, dryRun)
 }

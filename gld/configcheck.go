@@ -26,6 +26,13 @@ type EffRow struct {
 	Merged bool              `json:"merged,omitempty"`
 }
 
+const (
+	summaryMaxLen         = 120
+	hookCommandPreviewLen = 70
+	mcpArgsPreviewLen     = 80
+	mcpListTimeout        = 90 * time.Second
+)
+
 var levelRank = map[string]int{"u": 0, "p": 1, "l": 2}
 
 // shellWordRe : les mots d'une ligne de commande de hook, guillemets simples ou doubles respectés.
@@ -34,40 +41,40 @@ var shellWordRe = regexp.MustCompile(`"([^"]*)"|'([^']*)'|(\S+)`)
 func level(id string) string { return id[:1] }
 
 // flatten met un document à plat : « permissions.allow[] » pour les éléments d'une liste, un chemin par feuille.
-func flatten(prefix string, v any, depth int, out map[string][]string) {
-	switch x := v.(type) {
+func flatten(prefix string, value any, depth int, paths map[string][]string) {
+	switch typedValue := value.(type) {
 	case *omap:
 		if depth >= 2 || prefix == "hooks" {
-			out[prefix] = append(out[prefix], summarize(v))
+			paths[prefix] = append(paths[prefix], summarize(value))
 			return
 		}
-		for _, k := range x.keys {
-			p := k
+		for _, key := range typedValue.keys {
+			childPath := key
 			if prefix != "" {
-				p = prefix + "." + k
+				childPath = prefix + "." + key
 			}
-			flatten(p, x.m[k], depth+1, out)
+			flatten(childPath, typedValue.m[key], depth+1, paths)
 		}
 	case []any:
-		for _, e := range x {
-			out[prefix+"[]"] = append(out[prefix+"[]"], summarize(e))
+		for _, element := range typedValue {
+			paths[prefix+"[]"] = append(paths[prefix+"[]"], summarize(element))
 		}
 	default:
-		out[prefix] = append(out[prefix], summarize(v))
+		paths[prefix] = append(paths[prefix], summarize(value))
 	}
 }
 
-func summarize(v any) string {
-	switch x := v.(type) {
+func summarize(value any) string {
+	switch typedValue := value.(type) {
 	case string:
-		return cut(x, 120)
+		return cut(typedValue, summaryMaxLen)
 	case *omap:
-		return "{" + L("srv.configcheck.keys", "A1", len(x.keys)) + "}"
+		return "{" + L("srv.configcheck.keys", "A1", len(typedValue.keys)) + "}"
 	case []any:
-		return fmt.Sprintf("[%d]", len(x))
+		return fmt.Sprintf("[%d]", len(typedValue))
 	}
-	b, _ := json.Marshal(v)
-	return string(b)
+	encoded, _ := json.Marshal(value)
+	return string(encoded)
 }
 
 // effective : les réglages vus d'un projet (dir vide : utilisateur seul). Une liste s'additionne d'un niveau à l'autre ;
@@ -76,39 +83,41 @@ func effective(raw map[string]any, dir string) []EffRow { return effectiveFor(ra
 
 // effectiveFor : effective, avec le masquage strict pour un appelant sans config_write.
 func effectiveFor(raw map[string]any, dir string, strict bool) []EffRow {
-	ids := []string{"u"}
+	fileIDs := []string{"u"}
 	if dir != "" {
-		ids = append(ids, "p/"+dir, "l/"+dir)
+		fileIDs = append(fileIDs, "p/"+dir, "l/"+dir)
 	}
 	type cell struct{ vals map[string][]string }
 	cells := map[string]*cell{}
-	for _, id := range ids {
-		doc, ok := raw[id]
-		if !ok {
+	for _, fileID := range fileIDs {
+		doc, found := raw[fileID]
+		if !found {
 			continue
 		}
 		flat := map[string][]string{}
 		flatten("", maskSettings(doc, strict), 0, flat)
-		for path, vals := range flat {
+		for path, levelValues := range flat {
 			if cells[path] == nil {
 				cells[path] = &cell{map[string][]string{}}
 			}
-			cells[path].vals[level(id)] = vals
+			cells[path].vals[level(fileID)] = levelValues
 		}
 	}
 	var rows []EffRow
-	for path, c := range cells {
-		r := EffRow{Path: path, Values: map[string]string{}, Merged: strings.HasSuffix(path, "[]")}
-		best := -1
-		for lv, vals := range c.vals {
-			r.Values[lv] = strings.Join(vals, " · ")
-			if levelRank[lv] > best {
-				best, r.Winner = levelRank[lv], lv
+	for path, pathCell := range cells {
+		row := EffRow{Path: path, Values: map[string]string{}, Merged: strings.HasSuffix(path, "[]")}
+		bestRank := -1
+		for fileLevel, levelValues := range pathCell.vals {
+			row.Values[fileLevel] = strings.Join(levelValues, " · ")
+			if levelRank[fileLevel] > bestRank {
+				bestRank, row.Winner = levelRank[fileLevel], fileLevel
 			}
 		}
-		rows = append(rows, r)
+		rows = append(rows, row)
 	}
-	sort.Slice(rows, func(i, j int) bool { return rows[i].Path < rows[j].Path })
+	sort.Slice(rows, func(left, right int) bool {
+		return rows[left].Path < rows[right].Path
+	})
 	return rows
 }
 
@@ -116,15 +125,15 @@ func effectiveFor(raw map[string]any, dir string, strict bool) []EffRow {
 
 // hooksFor : hooksOf, commandes masquées pour un appelant sans config_write.
 func hooksFor(raw map[string]any, strict bool) []HookInfo {
-	hs := hooksOf(raw)
+	hooks := hooksOf(raw)
 	if strict {
-		for i := range hs {
-			if hs[i].Command != "" {
-				hs[i].Command = maskText
+		for hookIndex := range hooks {
+			if hooks[hookIndex].Command != "" {
+				hooks[hookIndex].Command = maskText
 			}
 		}
 	}
-	return hs
+	return hooks
 }
 
 type HookInfo struct {
@@ -141,88 +150,94 @@ var shellBuiltins = map[string]bool{"[": true, "test": true, "echo": true, "exit
 
 // missingPart : la première chose que la commande d'un hook référence et qui n'existe pas (un fichier, ou un programme
 // en position de commande). Les variables autres que $HOME ne sont pas résolues : on ne devine pas.
-func missingPart(cmd string) string {
+func missingPart(command string) string {
 	home, _ := os.UserHomeDir()
-	exp := func(s string) string {
-		s = strings.NewReplacer("${HOME}", home, "$HOME", home).Replace(s)
-		if strings.HasPrefix(s, "~/") {
-			s = filepath.Join(home, s[2:])
+	expandHome := func(word string) string {
+		word = strings.NewReplacer("${HOME}", home, "$HOME", home).Replace(word)
+		if strings.HasPrefix(word, "~/") {
+			word = filepath.Join(home, word[2:])
 		}
-		return s
+		return word
 	}
-	tokens := shellWordRe.FindAllStringSubmatch(cmd, -1)
+	tokens := shellWordRe.FindAllStringSubmatch(command, -1)
 	atCommand := true // le mot suivant est un nom de programme (début, ou après && || ; |)
-	for _, m := range tokens {
-		w := m[1] + m[2] + m[3]
-		quoted := m[3] == ""
-		op := !quoted && (w == "&&" || w == "||" || w == ";" || w == "|")
-		w = strings.TrimRight(w, ";")
-		if op {
+	for _, tokenMatch := range tokens {
+		word := tokenMatch[1] + tokenMatch[2] + tokenMatch[3]
+		quoted := tokenMatch[3] == ""
+		isOperator := !quoted && (word == "&&" || word == "||" || word == ";" || word == "|")
+		word = strings.TrimRight(word, ";")
+		if isOperator {
 			atCommand = true
 			continue
 		}
-		endsCmd := !quoted && strings.HasSuffix(m[3], ";")
-		skip := w == "" || strings.HasPrefix(w, "-") || strings.Contains(w, "://") || strings.ContainsAny(w, "=<>*?`") || w == "]" || w == "["
-		w = exp(w)
-		if !skip && !strings.Contains(w, "$") {
+		endsCommand := !quoted && strings.HasSuffix(tokenMatch[3], ";")
+		isOption := strings.HasPrefix(word, "-")
+		hasSpecialCharacter := strings.Contains(word, "://") || strings.ContainsAny(word, "=<>*?`")
+		isTestBracket := word == "]" || word == "["
+		isSkipped := word == "" || isOption || hasSpecialCharacter || isTestBracket
+		word = expandHome(word)
+		isCheckable := !isSkipped && !strings.Contains(word, "$")
+		if isCheckable {
 			switch {
-			case strings.HasPrefix(w, "/"): // un chemin relatif dépend du dossier où le hook se lance, inconnu ici
-				if _, err := os.Stat(w); err != nil {
-					return w
+			case strings.HasPrefix(word, "/"): // un chemin relatif dépend du dossier où le hook se lance, inconnu ici
+				if _, err := os.Stat(word); err != nil {
+					return word
 				}
-			case atCommand && !shellBuiltins[w] && !strings.Contains(w, "/"):
-				if _, err := exec.LookPath(w); err != nil {
-					return w
+			case atCommand && !shellBuiltins[word] && !strings.Contains(word, "/"):
+				if _, err := exec.LookPath(word); err != nil {
+					return word
 				}
 			}
 		}
-		atCommand = endsCmd
+		atCommand = endsCommand
 	}
 	return ""
 }
 
 func hooksOf(raw map[string]any) []HookInfo {
-	var out []HookInfo
-	ids := make([]string, 0, len(raw))
-	for id := range raw {
-		ids = append(ids, id)
+	var hooks []HookInfo
+	fileIDs := make([]string, 0, len(raw))
+	for fileID := range raw {
+		fileIDs = append(fileIDs, fileID)
 	}
-	sort.Slice(ids, func(i, j int) bool {
-		if li, lj := levelRank[level(ids[i])], levelRank[level(ids[j])]; li != lj {
-			return li < lj
+	sort.Slice(fileIDs, func(left, right int) bool {
+		if leftRank, rightRank := levelRank[level(fileIDs[left])], levelRank[level(fileIDs[right])]; leftRank != rightRank {
+			return leftRank < rightRank
 		}
-		return ids[i] < ids[j]
+		return fileIDs[left] < fileIDs[right]
 	})
-	for _, id := range ids {
-		hv, ok := lookup(raw[id], "hooks")
-		ho := asMap(hv)
-		if !ok || ho == nil {
+	for _, fileID := range fileIDs {
+		hooksValue, found := lookup(raw[fileID], "hooks")
+		hooksByEvent := asMap(hooksValue)
+		if !found || hooksByEvent == nil {
 			continue
 		}
-		for _, ev := range ho.keys {
-			entries, _ := ho.m[ev].([]any)
-			for _, e := range entries {
-				eo := asMap(e)
-				if eo == nil {
+		for _, event := range hooksByEvent.keys {
+			entries, _ := hooksByEvent.m[event].([]any)
+			for _, entry := range entries {
+				entryObject := asMap(entry)
+				if entryObject == nil {
 					continue
 				}
-				matcher, _ := eo.m["matcher"].(string)
-				list, _ := eo.m["hooks"].([]any)
-				for _, h := range list {
-					if o := asMap(h); o != nil {
-						typ, _ := o.m["type"].(string)
-						cmd, _ := o.m["command"].(string)
-						hi := HookInfo{Scope: level(id), File: id, Event: ev, Matcher: matcher, Type: typ, Command: cmd}
-						if typ == "command" {
-							hi.Missing = missingPart(cmd)
-						}
-						out = append(out, hi)
+				matcher, _ := entryObject.m["matcher"].(string)
+				hookList, _ := entryObject.m["hooks"].([]any)
+				for _, hook := range hookList {
+					hookObject := asMap(hook)
+					if hookObject == nil {
+						continue
 					}
+					hookType, _ := hookObject.m["type"].(string)
+					command, _ := hookObject.m["command"].(string)
+					hookInfo := HookInfo{Scope: level(fileID), File: fileID, Event: event, Matcher: matcher, Type: hookType, Command: command}
+					if hookType == "command" {
+						hookInfo.Missing = missingPart(command)
+					}
+					hooks = append(hooks, hookInfo)
 				}
 			}
 		}
 	}
-	return out
+	return hooks
 }
 
 // --- santé -------------------------------------------------------------------------------------------
@@ -236,91 +251,91 @@ type CfgIssue struct {
 var broadRule = regexp.MustCompile(`^(\*|Bash|Bash\(\*\)|Bash\(:\*\)|Edit|Write|Read|WebFetch)$`)
 
 func installedPlugins() map[string]bool {
-	out := map[string]bool{}
-	b, err := readTrusted(filepath.Join(cfgDir(), "plugins", "installed_plugins.json"))
+	installed := map[string]bool{}
+	content, err := readTrusted(filepath.Join(cfgDir(), "plugins", "installed_plugins.json"))
 	if err != nil {
 		return nil
 	}
-	var d struct {
+	var installedFile struct {
 		Plugins map[string]json.RawMessage `json:"plugins"`
 	}
-	if json.Unmarshal(b, &d) != nil {
+	if json.Unmarshal(content, &installedFile) != nil {
 		return nil
 	}
-	for k := range d.Plugins {
-		out[k] = true
+	for pluginID := range installedFile.Plugins {
+		installed[pluginID] = true
 	}
-	return out
+	return installed
 }
 
 func configHealth(files []ConfigFile, raw map[string]any) []CfgIssue {
 	var issues []CfgIssue
-	for _, f := range files {
-		if f.Error != "" {
-			issues = append(issues, CfgIssue{f.ID, "json", f.Label + " : " + f.Error})
+	for _, configFile := range files {
+		if configFile.Error != "" {
+			issues = append(issues, CfgIssue{configFile.ID, "json", configFile.Label + " : " + configFile.Error})
 		}
 	}
-	for _, h := range hooksOf(raw) {
-		if h.Missing != "" {
-			issues = append(issues, CfgIssue{h.File, "hook", L("srv.configcheck.hookMissing", "A1", h.Event, "A2", h.Missing, "A3", cut(h.Command, 70))})
+	for _, hook := range hooksOf(raw) {
+		if hook.Missing != "" {
+			issues = append(issues, CfgIssue{hook.File, "hook", L("srv.configcheck.hookMissing", "A1", hook.Event, "A2", hook.Missing, "A3", cut(hook.Command, hookCommandPreviewLen))})
 		}
 	}
 	plugins := installedPlugins()
-	ids := make([]string, 0, len(raw))
-	for id := range raw {
-		ids = append(ids, id)
+	fileIDs := make([]string, 0, len(raw))
+	for fileID := range raw {
+		fileIDs = append(fileIDs, fileID)
 	}
-	sort.Strings(ids)
-	for _, id := range ids {
-		doc := raw[id]
+	sort.Strings(fileIDs)
+	for _, fileID := range fileIDs {
+		doc := raw[fileID]
 		for _, kind := range []string{"allow", "deny", "ask"} {
-			v, _ := lookup(doc, "permissions", kind)
+			rules, _ := lookup(doc, "permissions", kind)
 			seen := map[string]bool{}
-			for _, r := range strList(v) {
-				if seen[r] {
-					issues = append(issues, CfgIssue{id, "permission", L("srv.configcheck.dupRule", "A1", kind, "A2", r)})
+			for _, rule := range strList(rules) {
+				if seen[rule] {
+					issues = append(issues, CfgIssue{fileID, "permission", L("srv.configcheck.dupRule", "A1", kind, "A2", rule)})
 				}
-				seen[r] = true
-				if kind == "allow" && broadRule.MatchString(r) {
-					issues = append(issues, CfgIssue{id, "permission", L("srv.configcheck.broadRule", "A1", r)})
+				seen[rule] = true
+				if kind == "allow" && broadRule.MatchString(rule) {
+					issues = append(issues, CfgIssue{fileID, "permission", L("srv.configcheck.broadRule", "A1", rule)})
 				}
 			}
 		}
-		if v, ok := lookup(doc, "permissions", "additionalDirectories"); ok {
-			for _, dir := range strList(v) {
-				if p := expandDir(dir, id); p != "" {
-					if fi, err := os.Stat(p); err != nil || !fi.IsDir() {
-						issues = append(issues, CfgIssue{id, "dossier", L("srv.configcheck.dirMissing", "A1", dir)})
+		if directories, found := lookup(doc, "permissions", "additionalDirectories"); found {
+			for _, dir := range strList(directories) {
+				if expanded := expandDir(dir, fileID); expanded != "" {
+					if dirInfo, err := os.Stat(expanded); err != nil || !dirInfo.IsDir() {
+						issues = append(issues, CfgIssue{fileID, "dossier", L("srv.configcheck.dirMissing", "A1", dir)})
 					}
 				}
 			}
 		}
-		a, _ := lookup(doc, "permissions", "allow")
-		d, _ := lookup(doc, "permissions", "deny")
-		deny := map[string]bool{}
-		for _, r := range strList(d) {
-			deny[r] = true
+		allowRules, _ := lookup(doc, "permissions", "allow")
+		denyRules, _ := lookup(doc, "permissions", "deny")
+		denied := map[string]bool{}
+		for _, rule := range strList(denyRules) {
+			denied[rule] = true
 		}
-		for _, r := range strList(a) {
-			if deny[r] {
-				issues = append(issues, CfgIssue{id, "permission", L("srv.configcheck.allowAndDeny", "A1", r)})
+		for _, rule := range strList(allowRules) {
+			if denied[rule] {
+				issues = append(issues, CfgIssue{fileID, "permission", L("srv.configcheck.allowAndDeny", "A1", rule)})
 			}
 		}
-		if ep, ok := lookup(doc, "enabledPlugins"); ok && plugins != nil {
-			if o := asMap(ep); o != nil {
-				for _, k := range o.keys {
-					if on, _ := o.m[k].(bool); on && !plugins[k] {
-						issues = append(issues, CfgIssue{id, "plugin", L("srv.configcheck.pluginMissing", "A1", k)})
+		if enabledPlugins, found := lookup(doc, "enabledPlugins"); found && plugins != nil {
+			if enabledMap := asMap(enabledPlugins); enabledMap != nil {
+				for _, pluginID := range enabledMap.keys {
+					if enabled, _ := enabledMap.m[pluginID].(bool); enabled && !plugins[pluginID] {
+						issues = append(issues, CfgIssue{fileID, "plugin", L("srv.configcheck.pluginMissing", "A1", pluginID)})
 					}
 				}
 			}
 		}
-		if id[0] == 'p' { // versionné avec le projet : pas de secret ici
-			if e, ok := lookup(doc, "env"); ok {
-				if o := asMap(e); o != nil {
-					for _, k := range o.keys {
-						if s, _ := o.m[k].(string); secretKey.MatchString(k) && s != "" {
-							issues = append(issues, CfgIssue{id, "secret", L("srv.configcheck.secretVar", "A1", k)})
+		if fileID[0] == 'p' { // versionné avec le projet : pas de secret ici
+			if envValue, found := lookup(doc, "env"); found {
+				if envMap := asMap(envValue); envMap != nil {
+					for _, variableName := range envMap.keys {
+						if variableValue, _ := envMap.m[variableName].(string); secretKey.MatchString(variableName) && variableValue != "" {
+							issues = append(issues, CfgIssue{fileID, "secret", L("srv.configcheck.secretVar", "A1", variableName)})
 						}
 					}
 				}
@@ -345,44 +360,44 @@ type McpServer struct {
 
 // mcpFrom : strict (appelant sans config_write) ne montre que l'exécutable, le nombre d'arguments et l'hôte.
 func mcpFrom(servers any, scope, project string, strict bool) []McpServer {
-	o := asMap(servers)
-	if o == nil {
+	serverMap := asMap(servers)
+	if serverMap == nil {
 		return nil
 	}
-	var out []McpServer
-	for _, name := range o.keys {
-		s := asMap(o.m[name])
-		if s == nil {
+	var parsedServers []McpServer
+	for _, name := range serverMap.keys {
+		serverObject := asMap(serverMap.m[name])
+		if serverObject == nil {
 			continue
 		}
-		m := McpServer{Name: name, Scope: scope, Project: project}
-		m.Type, _ = s.m["type"].(string)
-		m.Command, _ = s.m["command"].(string)
-		if args := strList(s.m["args"]); len(args) > 0 {
+		server := McpServer{Name: name, Scope: scope, Project: project}
+		server.Type, _ = serverObject.m["type"].(string)
+		server.Command, _ = serverObject.m["command"].(string)
+		if args := strList(serverObject.m["args"]); len(args) > 0 {
 			if strict {
-				m.ArgCount = len(args)
+				server.ArgCount = len(args)
 			} else {
-				m.Command = strings.TrimSpace(m.Command + " " + cut(mcpMaskArgs(args), 80))
+				server.Command = strings.TrimSpace(server.Command + " " + cut(mcpMaskArgs(args), mcpArgsPreviewLen))
 			}
 		}
-		m.URL, _ = s.m["url"].(string)
-		m.URL = mcpMaskURL(m.URL, strict)
-		if m.Type == "" {
-			if m.URL != "" {
-				m.Type = "http"
+		server.URL, _ = serverObject.m["url"].(string)
+		server.URL = mcpMaskURL(server.URL, strict)
+		if server.Type == "" {
+			if server.URL != "" {
+				server.Type = "http"
 			} else {
-				m.Type = "stdio"
+				server.Type = "stdio"
 			}
 		}
-		if e := asMap(s.m["env"]); e != nil {
-			m.EnvKeys = append(m.EnvKeys, e.keys...)
+		if envMap := asMap(serverObject.m["env"]); envMap != nil {
+			server.EnvKeys = append(server.EnvKeys, envMap.keys...)
 		}
-		if h := asMap(s.m["headers"]); h != nil {
-			m.EnvKeys = append(m.EnvKeys, h.keys...)
+		if headersMap := asMap(serverObject.m["headers"]); headersMap != nil {
+			server.EnvKeys = append(server.EnvKeys, headersMap.keys...)
 		}
-		out = append(out, m)
+		parsedServers = append(parsedServers, server)
 	}
-	return out
+	return parsedServers
 }
 
 // mcpServers : les serveurs déclarés dans ~/.claude.json (utilisateur, puis par projet) et dans les .mcp.json des projets.
@@ -390,54 +405,54 @@ func mcpFrom(servers any, scope, project string, strict bool) []McpServer {
 func mcpServers() []McpServer { return mcpServersFor(false) }
 
 func mcpServersFor(strict bool) []McpServer {
-	var out []McpServer
-	if b, err := readConfigFile(claudeJSON()); err == nil {
-		if v, err := parseOrdered(b); err == nil {
-			if s, ok := lookup(v, "mcpServers"); ok {
-				out = append(out, mcpFrom(s, "user", "", strict)...)
+	var servers []McpServer
+	if claudeJSONContent, readErr := readConfigFile(claudeJSON()); readErr == nil {
+		if parsed, parseErr := parseOrdered(claudeJSONContent); parseErr == nil {
+			if userServers, found := lookup(parsed, "mcpServers"); found {
+				servers = append(servers, mcpFrom(userServers, "user", "", strict)...)
 			}
-			if p, ok := lookup(v, "projects"); ok {
-				if po := asMap(p); po != nil {
-					for _, path := range po.keys {
-						if s, ok := lookup(po.m[path], "mcpServers"); ok {
-							out = append(out, mcpFrom(s, "local", path, strict)...)
+			if projectsValue, found := lookup(parsed, "projects"); found {
+				if projectsMap := asMap(projectsValue); projectsMap != nil {
+					for _, projectPath := range projectsMap.keys {
+						if projectServers, found := lookup(projectsMap.m[projectPath], "mcpServers"); found {
+							servers = append(servers, mcpFrom(projectServers, "local", projectPath, strict)...)
 						}
 					}
 				}
 			}
 		}
 	}
-	for _, p := range liveProjects() {
-		if b, err := readConfigFile(filepath.Join(p.Project, ".mcp.json")); err == nil {
-			if v, err := parseOrdered(b); err == nil {
-				if s, ok := lookup(v, "mcpServers"); ok {
-					out = append(out, mcpFrom(s, "project", p.Project, strict)...)
+	for _, liveProject := range liveProjects() {
+		if mcpContent, readErr := readConfigFile(filepath.Join(liveProject.Project, ".mcp.json")); readErr == nil {
+			if parsed, parseErr := parseOrdered(mcpContent); parseErr == nil {
+				if projectServers, found := lookup(parsed, "mcpServers"); found {
+					servers = append(servers, mcpFrom(projectServers, "project", liveProject.Project, strict)...)
 				}
 			}
 		}
 	}
-	return out
+	return servers
 }
 
 var mcpLine = regexp.MustCompile(`^(.+?): (.*) - (.+)$`)
 
 // mcpStatus lance `claude mcp list` (il contrôle chaque serveur : quelques secondes) et renvoie l'état par nom.
 var mcpStatus = func() (map[string]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	commandContext, cancel := context.WithTimeout(context.Background(), mcpListTimeout)
 	defer cancel()
-	cmd := withPath(exec.CommandContext(ctx, "claude", "mcp", "list"))
+	cmd := withPath(exec.CommandContext(commandContext, "claude", "mcp", "list"))
 	cmd.Dir = workDir()
-	out, err := cmd.Output()
-	if err != nil && len(out) == 0 {
+	listOutput, err := cmd.Output()
+	if err != nil && len(listOutput) == 0 {
 		return nil, err
 	}
-	res := map[string]string{}
-	for _, l := range strings.Split(string(out), "\n") {
-		if m := mcpLine.FindStringSubmatch(strings.TrimSpace(l)); m != nil {
-			res[m[1]] = strings.TrimSpace(m[3])
+	statusByName := map[string]string{}
+	for _, listLine := range strings.Split(string(listOutput), "\n") {
+		if lineMatch := mcpLine.FindStringSubmatch(strings.TrimSpace(listLine)); lineMatch != nil {
+			statusByName[lineMatch[1]] = strings.TrimSpace(lineMatch[3])
 		}
 	}
-	return res, nil
+	return statusByName, nil
 }
 
 // expandDir : le chemin réel d'un dossier supplémentaire (« ~/ » = dossier personnel ; un chemin relatif se lit depuis le projet du
@@ -445,13 +460,13 @@ var mcpStatus = func() (map[string]string, error) {
 func expandDir(dir, fileID string) string {
 	switch {
 	case dir == "~" || strings.HasPrefix(dir, "~/"):
-		h, _ := os.UserHomeDir()
-		return filepath.Join(h, strings.TrimPrefix(dir, "~"))
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, strings.TrimPrefix(dir, "~"))
 	case filepath.IsAbs(dir):
 		return dir
 	case strings.HasPrefix(fileID, "p/") || strings.HasPrefix(fileID, "l/"):
-		if c := projectCwd(fileID[2:]); c != "" {
-			return filepath.Join(c, dir)
+		if projectDir := projectCwd(fileID[2:]); projectDir != "" {
+			return filepath.Join(projectDir, dir)
 		}
 	}
 	return ""
@@ -460,37 +475,37 @@ func expandDir(dir, fileID string) string {
 // mcpMaskURL : identifiants et paramètres d'adresse masqués (un jeton passe souvent en ?key=…).
 // Illisible ou sans hôte : l'adresse est supprimée. strict : seuls schéma et hôte restent (un jeton peut loger dans le chemin).
 func mcpMaskURL(raw string, strict bool) string {
-	u, err := url.Parse(raw)
-	if err != nil || u.Host == "" {
+	parsedURL, err := url.Parse(raw)
+	if err != nil || parsedURL.Host == "" {
 		return ""
 	}
-	u.User = nil
+	parsedURL.User = nil
 	if strict {
-		return u.Scheme + "://" + u.Host
+		return parsedURL.Scheme + "://" + parsedURL.Host
 	}
-	if u.RawQuery != "" {
-		u.RawQuery = "…"
+	if parsedURL.RawQuery != "" {
+		parsedURL.RawQuery = "…"
 	}
-	return u.String()
+	return parsedURL.String()
 }
 
 // mcpMaskArgs : la valeur qui suit un drapeau de type clé ou jeton, ou qui le suit après « = », est remplacée.
 func mcpMaskArgs(args []string) string {
-	out := make([]string, len(args))
-	hide := false
-	for i, a := range args {
+	masked := make([]string, len(args))
+	hideNext := false
+	for argIndex, arg := range args {
 		switch {
-		case hide:
-			out[i], hide = "…", false
-		case strings.HasPrefix(a, "-") && secretKey.MatchString(a):
-			if k, _, ok := strings.Cut(a, "="); ok {
-				out[i] = k + "=…"
+		case hideNext:
+			masked[argIndex], hideNext = "…", false
+		case strings.HasPrefix(arg, "-") && secretKey.MatchString(arg):
+			if flagName, _, hasValue := strings.Cut(arg, "="); hasValue {
+				masked[argIndex] = flagName + "=…"
 			} else {
-				out[i], hide = a, true
+				masked[argIndex], hideNext = arg, true
 			}
 		default:
-			out[i] = a
+			masked[argIndex] = arg
 		}
 	}
-	return strings.Join(out, " ")
+	return strings.Join(masked, " ")
 }

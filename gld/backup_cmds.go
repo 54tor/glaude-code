@@ -18,213 +18,218 @@ import (
 var mcpNameRe = regexp.MustCompile(`^[\w.-]{1,100}$`)
 
 // mcpAddJSON : variable pour que les tests remplacent l'appel à claude.
+const mcpAddTimeout = 30 * time.Second
+
 var mcpAddJSON = func(name string, doc []byte) error {
 	// un nom en « - » serait lu comme une option
 	if !mcpNameRe.MatchString(name) || name[0] == '-' {
 		return terr("srv.backup_cmds.nomMcpRefuse", "A1", name)
 	}
-	var obj map[string]json.RawMessage
-	if json.Unmarshal(doc, &obj) != nil || obj == nil {
+	var serverFields map[string]json.RawMessage
+	if json.Unmarshal(doc, &serverFields) != nil || serverFields == nil {
 		return terr("srv.backup_cmds.mcpPasUnObjet", "A1", name)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	commandContext, cancel := context.WithTimeout(context.Background(), mcpAddTimeout)
 	defer cancel()
-	cmd := withPath(exec.CommandContext(ctx, "claude", "mcp", "add-json", name, string(doc), "-s", "user"))
+	cmd := withPath(exec.CommandContext(commandContext, "claude", "mcp", "add-json", name, string(doc), "-s", "user"))
 	cmd.Dir = workDir()
-	out, err := cmd.CombinedOutput()
+	combinedOutput, err := cmd.CombinedOutput()
 	if err != nil {
-		return cmdErr(string(out), err)
+		return cmdErr(string(combinedOutput), err)
 	}
 	return nil
 }
 
-func cmdErr(out string, err error) error {
-	if out = strings.TrimSpace(out); out != "" {
-		return fmt.Errorf("%s", out)
+func cmdErr(commandOutput string, err error) error {
+	if commandOutput = strings.TrimSpace(commandOutput); commandOutput != "" {
+		return fmt.Errorf("%s", commandOutput)
 	}
 	return err
 }
 
 // dashArg : une valeur de l'archive qui commencerait par « - » serait lue comme une option de claude.
-func dashArg(v string) bool { return strings.HasPrefix(v, "-") }
+func dashArg(value string) bool { return strings.HasPrefix(value, "-") }
 
-func readStaged(s *stage, name string, v any) bool {
-	b, err := os.ReadFile(filepath.Join(s.dir, name))
-	return err == nil && json.Unmarshal(b, v) == nil
+func readStaged(archiveStage *stage, name string, destination any) bool {
+	content, err := os.ReadFile(filepath.Join(archiveStage.dir, name))
+	return err == nil && json.Unmarshal(content, destination) == nil
 }
 
-func marketSource(m Marketplace) string {
-	if m.Repo != "" {
-		return m.Repo
+func marketSource(marketplace Marketplace) string {
+	if marketplace.Repo != "" {
+		return marketplace.Repo
 	}
-	return m.URL
+	return marketplace.URL
 }
 
 // --- marketplaces ---
 
-func planMarkets(s *stage) ([]SyncItem, error) {
-	var d pluginsDoc
-	if !readStaged(s, "plugins.json", &d) {
+func planMarkets(archiveStage *stage) ([]SyncItem, error) {
+	var archivedPlugins pluginsDoc
+	if !readStaged(archiveStage, "plugins.json", &archivedPlugins) {
 		return nil, nil
 	}
-	have := map[string]bool{}
-	if ms, err := listMarketplaces(); err == nil {
-		for _, m := range ms {
-			have[m.Name] = true
+	installedNames := map[string]bool{}
+	if installedMarketplaces, err := listMarketplaces(); err == nil {
+		for _, installedMarketplace := range installedMarketplaces {
+			installedNames[installedMarketplace.Name] = true
 		}
 	}
 	var items []SyncItem
-	for _, m := range d.Marketplaces {
-		if dashArg(marketSource(m)) {
+	for _, archivedMarketplace := range archivedPlugins.Marketplaces {
+		if dashArg(marketSource(archivedMarketplace)) {
 			continue
 		}
-		st := "new"
-		if have[m.Name] {
-			st = "same"
+		status := "new"
+		if installedNames[archivedMarketplace.Name] {
+			status = "same"
 		}
-		items = append(items, SyncItem{ID: "market:" + m.Name, Kind: "market", Label: m.Name, Status: st, Cat: "plugins", From: marketSource(m)})
+		items = append(items, SyncItem{ID: "market:" + archivedMarketplace.Name, Kind: "market", Label: archivedMarketplace.Name, Status: status, Cat: "plugins", From: marketSource(archivedMarketplace)})
 	}
 	return items, nil
 }
 
-func applyMarkets(s *stage, picks []SyncPick, _ map[string]string) []BackupResult {
-	var d pluginsDoc
-	readStaged(s, "plugins.json", &d)
-	res := make([]BackupResult, 0, len(picks))
-	for _, p := range picks {
-		name := strings.TrimPrefix(p.ID, "market:")
-		r := BackupResult{ID: p.ID, Status: "skipped"}
-		for _, m := range d.Marketplaces {
-			if m.Name != name {
+func applyMarkets(archiveStage *stage, picks []SyncPick, _ map[string]string) []BackupResult {
+	var archivedPlugins pluginsDoc
+	readStaged(archiveStage, "plugins.json", &archivedPlugins)
+	results := make([]BackupResult, 0, len(picks))
+	for _, pick := range picks {
+		name := strings.TrimPrefix(pick.ID, "market:")
+		result := BackupResult{ID: pick.ID, Status: "skipped"}
+		for _, marketplace := range archivedPlugins.Marketplaces {
+			if marketplace.Name != name {
 				continue
 			}
-			if dashArg(marketSource(m)) {
-				r = BackupResult{ID: p.ID, Status: "failed", Message: L("srv.backup_cmds.valeurRefusee", "A1", marketSource(m))}
+			if dashArg(marketSource(marketplace)) {
+				result = BackupResult{ID: pick.ID, Status: "failed", Message: L("srv.backup_cmds.valeurRefusee", "A1", marketSource(marketplace))}
 				break
 			}
-			out, err := marketplaceAct("add", marketSource(m), "")
-			r = BackupResult{ID: p.ID, Status: "ok"}
+			commandOutput, err := marketplaceAct("add", marketSource(marketplace), "")
+			result = BackupResult{ID: pick.ID, Status: "ok"}
 			if err != nil {
-				r = BackupResult{ID: p.ID, Status: "failed", Message: cmdErr(out, err).Error()}
+				result = BackupResult{ID: pick.ID, Status: "failed", Message: cmdErr(commandOutput, err).Error()}
 			}
 			break
 		}
-		res = append(res, r)
+		results = append(results, result)
 	}
-	return res
+	return results
 }
 
 // --- plugins ---
 
-func pluginItemID(p PluginInst) string { return "plugin:" + p.Scope + ":" + p.ID }
+func pluginItemID(plugin PluginInst) string { return "plugin:" + plugin.Scope + ":" + plugin.ID }
 
 // projectKeyFor : le dossier de transcripts de ~/.claude/projects dont le projet est ce chemin.
 func projectKeyFor(path string) string {
-	for _, t := range memTargets() {
-		if t.Project == path {
-			return t.Dir
+	for _, memTarget := range memTargets() {
+		if memTarget.Project == path {
+			return memTarget.Dir
 		}
 	}
 	return ""
 }
 
-func planPlugins(s *stage) ([]SyncItem, error) {
-	var d pluginsDoc
-	if !readStaged(s, "plugins.json", &d) {
+func planPlugins(archiveStage *stage) ([]SyncItem, error) {
+	var archivedPlugins pluginsDoc
+	if !readStaged(archiveStage, "plugins.json", &archivedPlugins) {
 		return nil, nil
 	}
-	cur := map[string]PluginInst{}
-	if inst, _, err := listPlugins("", 0); err == nil {
-		for _, p := range inst {
-			cur[p.Scope+":"+p.ID+":"+p.Project] = p
+	installedByKey := map[string]PluginInst{}
+	if installed, _, err := listPlugins("", 0); err == nil {
+		for _, installedPlugin := range installed {
+			installedByKey[installedPlugin.Scope+":"+installedPlugin.ID+":"+installedPlugin.Project] = installedPlugin
 		}
 	}
 	var items []SyncItem
-	for _, p := range d.Plugins {
-		if dashArg(p.ID) || (p.Scope != "user" && !isDirPath(p.Project)) {
+	for _, archivedPlugin := range archivedPlugins.Plugins {
+		projectMissing := archivedPlugin.Scope != "user" && !isDirPath(archivedPlugin.Project)
+		if dashArg(archivedPlugin.ID) || projectMissing {
 			continue
 		}
-		st := "new"
-		if c, ok := cur[p.Scope+":"+p.ID+":"+p.Project]; ok {
-			st = "same"
-			if c.Enabled != p.Enabled {
-				st = "diff"
+		status := "new"
+		if installedPlugin, isInstalled := installedByKey[archivedPlugin.Scope+":"+archivedPlugin.ID+":"+archivedPlugin.Project]; isInstalled {
+			status = "same"
+			if installedPlugin.Enabled != archivedPlugin.Enabled {
+				status = "diff"
 			}
 		}
-		it := SyncItem{ID: pluginItemID(p), Kind: "plugin", Label: p.ID, Status: st, Cat: "plugins", From: p.Scope, To: p.Project}
-		items = append(items, it)
+		syncItem := SyncItem{ID: pluginItemID(archivedPlugin), Kind: "plugin", Label: archivedPlugin.ID, Status: status, Cat: "plugins", From: archivedPlugin.Scope, To: archivedPlugin.Project}
+		items = append(items, syncItem)
 	}
 	return items, nil
 }
 
 // skippedPlugins : plugins de portée project/local dont le dossier de projet n'existe pas ici.
-func skippedPlugins(s *stage) []string {
-	var d pluginsDoc
-	var out []string
-	if readStaged(s, "plugins.json", &d) {
-		for _, p := range d.Plugins {
-			if p.Scope != "user" && !isDirPath(p.Project) {
-				out = append(out, pluginItemID(p))
+func skippedPlugins(archiveStage *stage) []string {
+	var archivedPlugins pluginsDoc
+	var skipped []string
+	if readStaged(archiveStage, "plugins.json", &archivedPlugins) {
+		for _, plugin := range archivedPlugins.Plugins {
+			if plugin.Scope != "user" && !isDirPath(plugin.Project) {
+				skipped = append(skipped, pluginItemID(plugin))
 			}
 		}
 	}
-	return out
+	return skipped
 }
 
-func applyPlugins(s *stage, picks []SyncPick, _ map[string]string) []BackupResult {
-	var d pluginsDoc
-	readStaged(s, "plugins.json", &d)
-	cur := map[string]PluginInst{}
-	if inst, _, err := listPlugins("", 0); err == nil {
-		for _, p := range inst {
-			cur[p.Scope+":"+p.ID+":"+p.Project] = p
+func applyPlugins(archiveStage *stage, picks []SyncPick, _ map[string]string) []BackupResult {
+	var archivedPlugins pluginsDoc
+	readStaged(archiveStage, "plugins.json", &archivedPlugins)
+	installedByKey := map[string]PluginInst{}
+	if installed, _, err := listPlugins("", 0); err == nil {
+		for _, installedPlugin := range installed {
+			installedByKey[installedPlugin.Scope+":"+installedPlugin.ID+":"+installedPlugin.Project] = installedPlugin
 		}
 	}
-	res := make([]BackupResult, 0, len(picks))
-	for _, pk := range picks {
-		var p *PluginInst
-		for i := range d.Plugins {
-			if pluginItemID(d.Plugins[i]) == pk.ID {
-				p = &d.Plugins[i]
+	results := make([]BackupResult, 0, len(picks))
+	for _, pick := range picks {
+		var archivedPlugin *PluginInst
+		for pluginIndex := range archivedPlugins.Plugins {
+			if pluginItemID(archivedPlugins.Plugins[pluginIndex]) == pick.ID {
+				archivedPlugin = &archivedPlugins.Plugins[pluginIndex]
 				break
 			}
 		}
-		if p == nil {
-			res = append(res, BackupResult{ID: pk.ID, Status: "skipped"})
+		if archivedPlugin == nil {
+			results = append(results, BackupResult{ID: pick.ID, Status: "skipped"})
 			continue
 		}
-		if dashArg(p.ID) {
-			res = append(res, BackupResult{ID: pk.ID, Status: "failed", Message: L("srv.backup_cmds.valeurRefusee", "A1", p.ID)})
+		if dashArg(archivedPlugin.ID) {
+			results = append(results, BackupResult{ID: pick.ID, Status: "failed", Message: L("srv.backup_cmds.valeurRefusee", "A1", archivedPlugin.ID)})
 			continue
 		}
-		proj := ""
-		if p.Scope != "user" {
-			if proj = projectKeyFor(p.Project); proj == "" {
-				res = append(res, BackupResult{ID: pk.ID, Status: "skipped"})
+		projectKey := ""
+		if archivedPlugin.Scope != "user" {
+			if projectKey = projectKeyFor(archivedPlugin.Project); projectKey == "" {
+				results = append(results, BackupResult{ID: pick.ID, Status: "skipped"})
 				continue
 			}
 		}
-		c, installed := cur[p.Scope+":"+p.ID+":"+p.Project]
+		installedPlugin, installed := installedByKey[archivedPlugin.Scope+":"+archivedPlugin.ID+":"+archivedPlugin.Project]
 		var err error
-		var out string
+		var commandOutput string
 		if !installed {
-			out, err = pluginAct("install", p.ID, p.Scope, proj)
+			commandOutput, err = pluginAct("install", archivedPlugin.ID, archivedPlugin.Scope, projectKey)
 		}
 		// une installation active le plugin : seul l'état « désactivé » demande un appel de plus
-		if err == nil && ((installed && c.Enabled != p.Enabled) || (!installed && !p.Enabled)) {
-			act := "enable"
-			if !p.Enabled {
-				act = "disable"
+		enabledStateDiffers := installed && installedPlugin.Enabled != archivedPlugin.Enabled
+		installedAsDisabled := !installed && !archivedPlugin.Enabled
+		if err == nil && (enabledStateDiffers || installedAsDisabled) {
+			action := "enable"
+			if !archivedPlugin.Enabled {
+				action = "disable"
 			}
-			out, err = pluginAct(act, p.ID, p.Scope, proj)
+			commandOutput, err = pluginAct(action, archivedPlugin.ID, archivedPlugin.Scope, projectKey)
 		}
-		r := BackupResult{ID: pk.ID, Status: "ok"}
+		result := BackupResult{ID: pick.ID, Status: "ok"}
 		if err != nil {
-			r = BackupResult{ID: pk.ID, Status: "failed", Message: cmdErr(out, err).Error()}
+			result = BackupResult{ID: pick.ID, Status: "failed", Message: cmdErr(commandOutput, err).Error()}
 		}
-		res = append(res, r)
+		results = append(results, result)
 	}
-	return res
+	return results
 }
 
 // --- serveurs MCP ---
@@ -234,57 +239,57 @@ type mcpArchive struct {
 	Stripped map[string][]string        `json:"stripped"`
 }
 
-func planMcp(s *stage) ([]SyncItem, error) {
-	var d mcpArchive
-	if !readStaged(s, "mcp.json", &d) {
+func planMcp(archiveStage *stage) ([]SyncItem, error) {
+	var archivedMcp mcpArchive
+	if !readStaged(archiveStage, "mcp.json", &archivedMcp) {
 		return nil, nil
 	}
-	have := map[string]bool{}
-	for _, m := range mcpServers() {
-		if m.Scope == "user" {
-			have[m.Name] = true
+	installedNames := map[string]bool{}
+	for _, server := range mcpServers() {
+		if server.Scope == "user" {
+			installedNames[server.Name] = true
 		}
 	}
-	names := make([]string, 0, len(d.Servers))
-	for n := range d.Servers {
-		names = append(names, n)
+	names := make([]string, 0, len(archivedMcp.Servers))
+	for serverName := range archivedMcp.Servers {
+		names = append(names, serverName)
 	}
 	sort.Strings(names)
 	var items []SyncItem
-	for _, n := range names {
-		var f map[string]json.RawMessage
-		json.Unmarshal(d.Servers[n], &f)
-		it := SyncItem{ID: "mcp:" + n, Kind: "mcp", Label: n, Status: "new", Cat: "mcp"}
-		if have[n] {
-			it.Status = "same"
+	for _, serverName := range names {
+		var serverFields map[string]json.RawMessage
+		json.Unmarshal(archivedMcp.Servers[serverName], &serverFields)
+		syncItem := SyncItem{ID: "mcp:" + serverName, Kind: "mcp", Label: serverName, Status: "new", Cat: "mcp"}
+		if installedNames[serverName] {
+			syncItem.Status = "same"
 		}
-		if _, ok := f["command"]; ok {
-			it.Risk = "exec"
+		if _, hasCommand := serverFields["command"]; hasCommand {
+			syncItem.Risk = "exec"
 		}
-		if st := d.Stripped[n]; len(st) > 0 {
-			it.From = L("srv.backup_cmds.aSaisir", "A1", strings.Join(st, ", "))
+		if strippedKeys := archivedMcp.Stripped[serverName]; len(strippedKeys) > 0 {
+			syncItem.From = L("srv.backup_cmds.aSaisir", "A1", strings.Join(strippedKeys, ", "))
 		}
-		items = append(items, it)
+		items = append(items, syncItem)
 	}
 	return items, nil
 }
 
-func applyMcp(s *stage, picks []SyncPick, _ map[string]string) []BackupResult {
-	var d mcpArchive
-	readStaged(s, "mcp.json", &d)
-	res := make([]BackupResult, 0, len(picks))
-	for _, pk := range picks {
-		name := strings.TrimPrefix(pk.ID, "mcp:")
-		doc, ok := d.Servers[name]
-		if !ok {
-			res = append(res, BackupResult{ID: pk.ID, Status: "skipped"})
+func applyMcp(archiveStage *stage, picks []SyncPick, _ map[string]string) []BackupResult {
+	var archivedMcp mcpArchive
+	readStaged(archiveStage, "mcp.json", &archivedMcp)
+	results := make([]BackupResult, 0, len(picks))
+	for _, pick := range picks {
+		name := strings.TrimPrefix(pick.ID, "mcp:")
+		serverDoc, found := archivedMcp.Servers[name]
+		if !found {
+			results = append(results, BackupResult{ID: pick.ID, Status: "skipped"})
 			continue
 		}
-		r := BackupResult{ID: pk.ID, Status: "ok"}
-		if err := mcpAddJSON(name, doc); err != nil {
-			r = BackupResult{ID: pk.ID, Status: "failed", Message: err.Error()}
+		result := BackupResult{ID: pick.ID, Status: "ok"}
+		if err := mcpAddJSON(name, serverDoc); err != nil {
+			result = BackupResult{ID: pick.ID, Status: "failed", Message: err.Error()}
 		}
-		res = append(res, r)
+		results = append(results, result)
 	}
-	return res
+	return results
 }

@@ -16,6 +16,13 @@ import (
 	"unicode/utf8"
 )
 
+const (
+	snippetContextBefore = 60
+	snippetContextAfter  = 100
+	maxStoreNameRunes    = 80
+	maxStoredDirs        = 200
+)
+
 type Hit struct {
 	Dir  string `json:"dir"`
 	ID   string `json:"id"`
@@ -23,28 +30,29 @@ type Hit struct {
 	Snip string `json:"snip"` // extrait autour de la première
 }
 
-// snippet : la première occurrence de q (en minuscules) dans t, avec un peu de contexte. -1 si absente.
-func snippet(t, q string) (int, string) {
-	rs := []rune(t)
-	low := make([]rune, len(rs)) // unicode.ToLower rune à rune : mêmes positions que t
-	for i, r := range rs {
-		low[i] = unicode.ToLower(r)
+// snippet : la première occurrence de query (en minuscules) dans text, avec un peu de contexte. -1 si absente.
+func snippet(text, query string) (int, string) {
+	runes := []rune(text)
+	lowered := make([]rune, len(runes)) // unicode.ToLower rune à rune : mêmes positions que text
+	for runeIndex, character := range runes {
+		lowered[runeIndex] = unicode.ToLower(character)
 	}
-	ls := string(low)
-	i := strings.Index(ls, q)
-	if i < 0 {
+	loweredText := string(lowered)
+	byteIndex := strings.Index(loweredText, query)
+	if byteIndex < 0 {
 		return 0, ""
 	}
-	at := utf8.RuneCountInString(ls[:i])
-	a, b := max(0, at-60), min(len(rs), at+utf8.RuneCountInString(q)+100)
-	s := strings.TrimSpace(spaceRe.ReplaceAllString(string(rs[a:b]), " "))
-	if a > 0 {
-		s = "…" + s
+	matchRune := utf8.RuneCountInString(loweredText[:byteIndex])
+	windowStart := max(0, matchRune-snippetContextBefore)
+	windowEnd := min(len(runes), matchRune+utf8.RuneCountInString(query)+snippetContextAfter)
+	excerpt := strings.TrimSpace(spaceRe.ReplaceAllString(string(runes[windowStart:windowEnd]), " "))
+	if windowStart > 0 {
+		excerpt = "…" + excerpt
 	}
-	if b < len(rs) {
-		s += "…"
+	if windowEnd < len(runes) {
+		excerpt += "…"
 	}
-	return strings.Count(ls, q), s
+	return strings.Count(loweredText, query), excerpt
 }
 
 // Cache du texte des messages par transcript, valable tant que sa date et sa taille ne changent pas :
@@ -63,118 +71,127 @@ const textCacheMax = 256 << 20
 
 var textBytes atomic.Int64
 
-func textsSize(t []string) (n int64) {
-	for _, s := range t {
-		n += int64(len(s))
+func textsSize(messages []string) (total int64) {
+	for _, message := range messages {
+		total += int64(len(message))
 	}
-	return n
+	return total
 }
 
 func messageTexts(path string) []string {
-	st, err := os.Stat(path)
+	fileInfo, err := os.Stat(path)
 	if err != nil {
 		return nil
 	}
-	if c, ok := textCache.Load(path); ok {
-		if c := c.(texts); c.mod.Equal(st.ModTime()) && c.size == st.Size() {
-			return c.t
+	if cachedValue, found := textCache.Load(path); found {
+		cached := cachedValue.(texts)
+		isCurrent := cached.mod.Equal(fileInfo.ModTime()) && cached.size == fileInfo.Size()
+		if isCurrent {
+			return cached.t
 		}
 	}
-	var t []string
-	_ = scan(path, func(b []byte) {
-		for _, m := range lineMsgs(b, false) {
-			t = append(t, m.T)
+	var collected []string
+	_ = scan(path, func(rawLine []byte) {
+		for _, message := range lineMsgs(rawLine, false) {
+			collected = append(collected, message.T)
 		}
 	})
-	if n := textsSize(t); textBytes.Add(n) > textCacheMax {
+	addedBytes := textsSize(collected)
+	if textBytes.Add(addedBytes) > textCacheMax {
 		textCache.Clear()
-		textBytes.Store(n)
+		textBytes.Store(addedBytes)
 	}
-	textCache.Store(path, texts{st.ModTime(), st.Size(), t})
-	return t
+	textCache.Store(path, texts{fileInfo.ModTime(), fileInfo.Size(), collected})
+	return collected
 }
 
 // searchFile cherche q (en minuscules) dans les messages échangés (pas dans les sorties d'outils).
-func searchFile(path, q string) (n int, snip string) {
-	for _, t := range messageTexts(path) {
-		if !strings.Contains(strings.ToLower(t), q) {
+func searchFile(path, query string) (count int, snip string) {
+	for _, text := range messageTexts(path) {
+		if !strings.Contains(strings.ToLower(text), query) {
 			continue
 		}
-		c, s := snippet(t, q)
-		n += c
+		occurrences, excerpt := snippet(text, query)
+		count += occurrences
 		if snip == "" {
-			snip = s
+			snip = excerpt
 		}
 	}
 	return
 }
 
-func search(q string) []Hit {
-	q = strings.ToLower(strings.TrimSpace(q))
+func search(query string) []Hit {
+	query = strings.ToLower(strings.TrimSpace(query))
 	files, _ := filepath.Glob(filepath.Join(root, "*", "*.jsonl"))
 	known := map[string]bool{}
-	for _, p := range files {
-		known[p] = true
+	for _, transcriptPath := range files {
+		known[transcriptPath] = true
 	}
-	textCache.Range(func(k, _ any) bool { // transcripts supprimés ou déplacés
-		if !known[k.(string)] {
-			textCache.Delete(k)
+	textCache.Range(func(cacheKey, _ any) bool { // transcripts supprimés ou déplacés
+		if !known[cacheKey.(string)] {
+			textCache.Delete(cacheKey)
 		}
 		return true
 	})
 	hits := make([]Hit, len(files))
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, runtime.NumCPU())
-	for i, p := range files {
-		wg.Add(1)
-		sem <- struct{}{}
+	var waitGroup sync.WaitGroup
+	slots := make(chan struct{}, runtime.NumCPU())
+	for fileIndex, transcriptPath := range files {
+		waitGroup.Add(1)
+		slots <- struct{}{}
 		go func() {
-			defer func() { <-sem; wg.Done() }()
-			if n, s := searchFile(p, q); n > 0 {
-				hits[i] = Hit{filepath.Base(filepath.Dir(p)), strings.TrimSuffix(filepath.Base(p), ".jsonl"), n, s}
+			defer func() {
+				<-slots
+				waitGroup.Done()
+			}()
+			count, excerpt := searchFile(transcriptPath, query)
+			if count > 0 {
+				sessionDir := filepath.Base(filepath.Dir(transcriptPath))
+				sessionID := strings.TrimSuffix(filepath.Base(transcriptPath), ".jsonl")
+				hits[fileIndex] = Hit{sessionDir, sessionID, count, excerpt}
 			}
 		}()
 	}
-	wg.Wait()
-	out := []Hit{}
-	for _, h := range hits {
-		if h.N > 0 {
-			out = append(out, h)
+	waitGroup.Wait()
+	matches := []Hit{}
+	for _, hit := range hits {
+		if hit.N > 0 {
+			matches = append(matches, hit)
 		}
 	}
-	return out
+	return matches
 }
 
 // hasTitle dit si le transcript porte déjà un titre posé (custom-title).
 func hasTitle(path string) bool {
-	r, rel, err := confine(cfgDir(), path)
+	configRoot, rel, err := confine(cfgDir(), path)
 	if err != nil {
 		return false
 	}
-	defer r.Close()
-	f, err := r.Open(rel)
+	defer configRoot.Close()
+	transcriptFile, err := configRoot.Open(rel)
 	if err != nil {
 		return false
 	}
-	defer f.Close()
-	b, _ := io.ReadAll(f)
-	return bytes.Contains(b, []byte(`"custom-title"`))
+	defer transcriptFile.Close()
+	content, _ := io.ReadAll(transcriptFile)
+	return bytes.Contains(content, []byte(`"custom-title"`))
 }
 
 // setTitle ajoute une ligne custom-title au transcript (la dernière fait foi), sans changer sa date.
 func setTitle(path, id, title string) error {
-	r, rel, err := confine(cfgDir(), path)
+	configRoot, rel, err := confine(cfgDir(), path)
 	if err != nil {
 		return err
 	}
-	defer r.Close()
-	f, err := r.OpenFile(rel, os.O_RDWR, 0)
+	defer configRoot.Close()
+	transcriptFile, err := configRoot.OpenFile(rel, os.O_RDWR, 0)
 	if err != nil {
 		return err
 	}
-	st, err := f.Stat()
+	fileInfo, err := transcriptFile.Stat()
 	if err != nil {
-		f.Close()
+		transcriptFile.Close()
 		return err
 	}
 	line, _ := json.Marshal(struct {
@@ -184,17 +201,17 @@ func setTitle(path, id, title string) error {
 	}{"custom-title", title, id})
 	line = append(line, '\n')
 	last := make([]byte, 1)
-	if st.Size() > 0 { // fichier sans saut de ligne final : on n'accole pas deux objets JSON
-		if _, err := f.ReadAt(last, st.Size()-1); err == nil && last[0] != '\n' {
+	if fileInfo.Size() > 0 { // fichier sans saut de ligne final : on n'accole pas deux objets JSON
+		if _, readErr := transcriptFile.ReadAt(last, fileInfo.Size()-1); readErr == nil && last[0] != '\n' {
 			line = append([]byte{'\n'}, line...)
 		}
 	}
-	_, err = f.WriteAt(line, st.Size())
-	if cerr := f.Close(); err == nil {
-		err = cerr
+	_, err = transcriptFile.WriteAt(line, fileInfo.Size())
+	if closeErr := transcriptFile.Close(); err == nil {
+		err = closeErr
 	}
 	if err == nil {
-		err = r.Chtimes(rel, st.ModTime(), st.ModTime())
+		err = configRoot.Chtimes(rel, fileInfo.ModTime(), fileInfo.ModTime())
 	}
 	return err
 }
@@ -230,110 +247,112 @@ var groupsMu sync.Mutex
 func groupsFile() string { return filepath.Join(cfgDir(), "gld-web-groups.json") }
 
 func loadStore() Store {
-	st := Store{Groups: []VGroup{}, Favs: []string{}, Projects: []Project{}, Dirs: []string{}}
-	b, err := readTrusted(groupsFile())
+	store := Store{Groups: []VGroup{}, Favs: []string{}, Projects: []Project{}, Dirs: []string{}}
+	content, err := readTrusted(groupsFile())
 	if err != nil {
-		return st
+		return store
 	}
-	if json.Unmarshal(b, &st) == nil {
-		if st.Groups == nil {
-			st.Groups = []VGroup{}
+	if json.Unmarshal(content, &store) == nil {
+		if store.Groups == nil {
+			store.Groups = []VGroup{}
 		}
-		if st.Favs == nil {
-			st.Favs = []string{}
+		if store.Favs == nil {
+			store.Favs = []string{}
 		}
-		if st.Projects == nil {
-			st.Projects = []Project{}
+		if store.Projects == nil {
+			store.Projects = []Project{}
 		}
-		if st.Dirs == nil {
-			st.Dirs = []string{}
+		if store.Dirs == nil {
+			store.Dirs = []string{}
 		}
-		return st
+		return store
 	}
 	// Ancien format : une liste de groupes sans projet. Chaque groupe est réparti par dossier de travail.
-	var old []VGroup
-	if json.Unmarshal(b, &old) != nil {
-		return st
+	var legacyGroups []VGroup
+	if json.Unmarshal(content, &legacyGroups) != nil {
+		return store
 	}
-	project := map[string]string{}
-	for _, g := range sessions() {
-		for _, s := range g.Sessions {
-			project[s.ID] = g.Project
+	projectByID := map[string]string{}
+	for _, group := range sessions() {
+		for _, session := range group.Sessions {
+			projectByID[session.ID] = group.Project
 		}
 	}
-	for _, g := range old {
-		by := map[string][]string{}
+	for _, legacyGroup := range legacyGroups {
+		idsByProject := map[string][]string{}
 		var order []string
-		for _, id := range g.IDs {
-			p := project[id]
-			if p == "" {
+		for _, id := range legacyGroup.IDs {
+			projectDir := projectByID[id]
+			if projectDir == "" {
 				continue // session disparue
 			}
-			if by[p] == nil {
-				order = append(order, p)
+			if idsByProject[projectDir] == nil {
+				order = append(order, projectDir)
 			}
-			by[p] = append(by[p], id)
+			idsByProject[projectDir] = append(idsByProject[projectDir], id)
 		}
-		for _, p := range order {
-			st.Groups = append(st.Groups, VGroup{Name: g.Name, Project: p, IDs: by[p]})
+		for _, projectDir := range order {
+			store.Groups = append(store.Groups, VGroup{Name: legacyGroup.Name, Project: projectDir, IDs: idsByProject[projectDir]})
 		}
 	}
-	saveStore(st)
-	return st
+	saveStore(store)
+	return store
 }
 
 // saveStore valide puis remplace le fichier en entier (écriture atomique).
-func saveStore(st Store) error {
+func saveStore(store Store) error {
 	seen := map[[2]string]bool{}
-	for i := range st.Groups {
-		g := &st.Groups[i]
-		g.Name = strings.TrimSpace(spaceRe.ReplaceAllString(g.Name, " "))
-		k := [2]string{g.Project, g.Name}
-		if g.Name == "" || utf8.RuneCountInString(g.Name) > 80 || g.Project == "" || seen[k] {
+	for groupIndex := range store.Groups {
+		group := &store.Groups[groupIndex]
+		group.Name = strings.TrimSpace(spaceRe.ReplaceAllString(group.Name, " "))
+		groupKey := [2]string{group.Project, group.Name}
+		hasValidName := group.Name != "" && utf8.RuneCountInString(group.Name) <= maxStoreNameRunes
+		if !hasValidName || group.Project == "" || seen[groupKey] {
 			return terr("srv.extra.groupeSansNomNi")
 		}
-		seen[k] = true
-		for _, id := range g.IDs {
+		seen[groupKey] = true
+		for _, id := range group.IDs {
 			if !idRe.MatchString(id) {
 				return terr("srv.chat.sessionInvalide")
 			}
 		}
 	}
-	seenP := map[string]bool{}
-	for i := range st.Projects {
-		p := &st.Projects[i]
-		p.Name = strings.TrimSpace(spaceRe.ReplaceAllString(p.Name, " "))
-		if p.Name == "" || utf8.RuneCountInString(p.Name) > 80 || seenP[p.Name] || len(p.Dirs) > 200 {
+	seenProjects := map[string]bool{}
+	for projectIndex := range store.Projects {
+		storedProject := &store.Projects[projectIndex]
+		storedProject.Name = strings.TrimSpace(spaceRe.ReplaceAllString(storedProject.Name, " "))
+		hasValidName := storedProject.Name != "" && utf8.RuneCountInString(storedProject.Name) <= maxStoreNameRunes
+		if !hasValidName || seenProjects[storedProject.Name] || len(storedProject.Dirs) > maxStoredDirs {
 			return terr("srv.extra.projetSansNomNom")
 		}
-		seenP[p.Name] = true
-		seenD := map[string]bool{}
-		for j, d := range p.Dirs {
-			d = filepath.Clean(d)
-			if !filepath.IsAbs(d) || seenD[d] {
+		seenProjects[storedProject.Name] = true
+		seenDirs := map[string]bool{}
+		for dirIndex, dir := range storedProject.Dirs {
+			dir = filepath.Clean(dir)
+			if !filepath.IsAbs(dir) || seenDirs[dir] {
 				return terr("srv.extra.dossierDeProjetInvalide")
 			}
-			seenD[d] = true
-			p.Dirs[j] = d
+			seenDirs[dir] = true
+			storedProject.Dirs[dirIndex] = dir
 		}
 	}
-	seenDir := map[string]bool{}
-	if len(st.Dirs) > 200 {
+	seenSavedDirs := map[string]bool{}
+	if len(store.Dirs) > maxStoredDirs {
 		return terr("srv.extra.tropDeDossiersEnregistres")
 	}
-	for i, d := range st.Dirs {
-		d = filepath.Clean(d)
-		if !filepath.IsAbs(d) || strings.ContainsRune(d, 0) || seenDir[d] {
+	for dirIndex, dir := range store.Dirs {
+		dir = filepath.Clean(dir)
+		if !filepath.IsAbs(dir) || strings.ContainsRune(dir, 0) || seenSavedDirs[dir] {
 			return terr("srv.extra.dossierEnregistreInvalideOu")
 		}
-		seenDir[d] = true
-		st.Dirs[i] = d
+		seenSavedDirs[dir] = true
+		store.Dirs[dirIndex] = dir
 	}
-	for _, id := range st.Favs {
+	for _, id := range store.Favs {
 		if !idRe.MatchString(id) {
 			return terr("srv.extra.favoriInvalide")
 		}
 	}
-	b, _ := json.MarshalIndent(st, "", "  ")
-	return rWriteAtomic(cfgDir(), groupsFile(), b, 0o600)
+	content, _ := json.MarshalIndent(store, "", "  ")
+	return rWriteAtomic(cfgDir(), groupsFile(), content, 0o600)
 }

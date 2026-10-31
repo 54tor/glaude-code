@@ -40,13 +40,13 @@ func userCmdDir() string {
 	return filepath.Join(cfgDir(), "commands")
 }
 
-func sameDir(a, b string) bool {
-	if filepath.Clean(a) == filepath.Clean(b) {
+func sameDir(first, second string) bool {
+	if filepath.Clean(first) == filepath.Clean(second) {
 		return true
 	}
-	x, err1 := os.Stat(a)
-	y, err2 := os.Stat(b)
-	return err1 == nil && err2 == nil && os.SameFile(x, y)
+	firstInfo, firstErr := os.Stat(first)
+	secondInfo, secondErr := os.Stat(second)
+	return firstErr == nil && secondErr == nil && os.SameFile(firstInfo, secondInfo)
 }
 
 // snippetRel valide un chemin : relatif, sans « .. », sans dossier ni fichier caché, et en .md (une commande).
@@ -55,8 +55,8 @@ func snippetRel(rel string) (string, error) {
 	if !filepath.IsLocal(rel) || !strings.HasSuffix(rel, ".md") {
 		return "", terr("srv.commands.cheminDeSnippetInvalide")
 	}
-	for _, seg := range strings.Split(rel, string(filepath.Separator)) {
-		if strings.HasPrefix(seg, ".") {
+	for _, segment := range strings.Split(rel, string(filepath.Separator)) {
+		if strings.HasPrefix(segment, ".") {
 			return "", terr("srv.commands.cheminDeSnippetInvalide2")
 		}
 	}
@@ -70,15 +70,15 @@ func cmdBase(key string) (string, string, error) {
 	case strings.HasPrefix(key, "u/"):
 		base, rel = userCmdDir(), key[2:]
 	case strings.HasPrefix(key, "p/"):
-		d, r, ok := strings.Cut(key[2:], "/")
-		if !ok || !safeDir(d) {
+		transcriptDir, relPath, found := strings.Cut(key[2:], "/")
+		if !found || !safeDir(transcriptDir) {
 			return "", "", terr("srv.memmeta.projetInvalide")
 		}
-		c, ok := knownProjectCwd(d)
-		if !ok {
+		projectDir, found := knownProjectCwd(transcriptDir)
+		if !found {
 			return "", "", terr("srv.memory.dossierDuProjetIntrouvable")
 		}
-		base, rel = filepath.Join(c, ".claude", "commands"), r
+		base, rel = filepath.Join(projectDir, ".claude", "commands"), relPath
 		if sameDir(base, userCmdDir()) {
 			return "", "", terr("srv.commands.ceSontLesCommandes")
 		}
@@ -92,96 +92,108 @@ func cmdBase(key string) (string, string, error) {
 // describe : la description de l'en-tête YAML, s'il y en a un.
 func describe(text string) string { return metaString(text, "description") }
 
-func walkCommands(base, scope, project string, out []Snippet) []Snippet {
+func walkCommands(base, scope, project string, snippets []Snippet) []Snippet {
 	prefix := "u/"
 	if scope != "" {
 		prefix = "p/" + scope + "/"
 	}
 	base = walkRoot(base)
-	filepath.WalkDir(base, func(p string, e os.DirEntry, err error) error {
-		if err != nil {
+	filepath.WalkDir(base, func(filePath string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
 			return nil
 		}
-		if strings.HasPrefix(e.Name(), ".") && p != base {
-			if e.IsDir() {
+		isHidden := strings.HasPrefix(entry.Name(), ".") && filePath != base
+		if isHidden {
+			if entry.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		fi, err := e.Info()
-		if err != nil || !fi.Mode().IsRegular() || fi.Size() > snippetMax || !strings.HasSuffix(p, ".md") {
+		fileInfo, infoErr := entry.Info()
+		if infoErr != nil {
 			return nil
 		}
-		rel, _ := filepath.Rel(base, p)
-		rel = filepath.ToSlash(rel)
-		desc := ""
-		if b, err := readTrusted(p); err == nil {
-			desc = describe(string(b))
+		isSnippetFile := fileInfo.Mode().IsRegular() && fileInfo.Size() <= snippetMax && strings.HasSuffix(filePath, ".md")
+		if !isSnippetFile {
+			return nil
 		}
-		out = append(out, Snippet{prefix + rel, scope, project, rel, "/" + strings.ReplaceAll(strings.TrimSuffix(rel, ".md"), "/", ":"),
-			desc, fi.Size() / 1024, float64(fi.ModTime().UnixNano()) / 1e9})
+		rel, _ := filepath.Rel(base, filePath)
+		rel = filepath.ToSlash(rel)
+		description := ""
+		if content, readErr := readTrusted(filePath); readErr == nil {
+			description = describe(string(content))
+		}
+		command := "/" + strings.ReplaceAll(strings.TrimSuffix(rel, ".md"), "/", ":")
+		snippets = append(snippets, Snippet{prefix + rel, scope, project, rel, command,
+			description, fileInfo.Size() / 1024, float64(fileInfo.ModTime().UnixNano()) / 1e9})
 		return nil
 	})
-	return out
+	return snippets
 }
 
 // listSnippets : les commandes personnelles, puis celles de chaque projet qui en a ; scopes : les projets possibles.
-func listSnippets() (snips []Snippet, scopes []MemTarget) {
-	snips = walkCommands(userCmdDir(), "", "", []Snippet{})
+func listSnippets() (snippets []Snippet, scopes []MemTarget) {
+	snippets = walkCommands(userCmdDir(), "", "", []Snippet{})
 	scopes = []MemTarget{}
 	dirs, _ := readDirTrusted(root)
-	for _, d := range dirs {
-		c := projectCwd(d.Name())
-		if fi, err := os.Stat(c); !d.IsDir() || c == "" || err != nil || !fi.IsDir() {
+	for _, dirEntry := range dirs {
+		projectDir := projectCwd(dirEntry.Name())
+		dirInfo, err := os.Stat(projectDir)
+		isProjectDir := dirEntry.IsDir() && projectDir != "" && err == nil && dirInfo.IsDir()
+		if !isProjectDir {
 			continue
 		}
-		base := filepath.Join(c, ".claude", "commands")
+		base := filepath.Join(projectDir, ".claude", "commands")
 		if sameDir(base, userCmdDir()) {
 			continue // projet « ~ » : ses commandes sont les commandes personnelles
 		}
-		scopes = append(scopes, MemTarget{d.Name(), c})
-		snips = walkCommands(base, d.Name(), c, snips)
+		scopes = append(scopes, MemTarget{dirEntry.Name(), projectDir})
+		snippets = walkCommands(base, dirEntry.Name(), projectDir, snippets)
 	}
-	sort.Slice(scopes, func(i, j int) bool { return scopes[i].Project < scopes[j].Project })
-	return snips, scopes
+	sort.Slice(scopes, func(left, right int) bool {
+		return scopes[left].Project < scopes[right].Project
+	})
+	return snippets, scopes
 }
 
 // snippetMergePrompt : la demande de fusion de snippets faite à Claude, et le dossier où la lancer (le projet d'une clé p/, sinon ~/.claude).
-func snippetMergePrompt(keys []string, out string) (string, string, error) {
+func snippetMergePrompt(keys []string, outputKey string) (string, string, error) {
 	if len(keys) < 2 || len(keys) > mergeMax {
 		return "", "", terr("srv.memory.choisisDeAFichiers", "A1", mergeMax)
 	}
-	if out == "" {
-		out = keys[0]
+	if outputKey == "" {
+		outputKey = keys[0]
 	}
-	if !slices.Contains(keys, out) {
+	if !slices.Contains(keys, outputKey) {
 		return "", "", terr("srv.memory.documentDeSortieInvalide")
 	}
 	cwd, outPath := "", ""
-	var b strings.Builder
-	b.WriteString(L("prompt.snippetMergeHeader") + "\n")
-	for _, k := range keys {
-		base, rel, err := cmdBase(k)
+	var prompt strings.Builder
+	prompt.WriteString(L("prompt.snippetMergeHeader") + "\n")
+	for _, key := range keys {
+		base, rel, err := cmdBase(key)
 		if err != nil {
 			return "", "", err
 		}
-		p := filepath.Join(base, rel)
-		if _, err := os.Stat(p); err != nil {
-			return "", "", terr("srv.memory.introuvable", "A1", p)
+		snippetPath := filepath.Join(base, rel)
+		if _, statErr := os.Stat(snippetPath); statErr != nil {
+			return "", "", terr("srv.memory.introuvable", "A1", snippetPath)
 		}
-		b.WriteString("- " + p + "\n")
-		if k == out {
-			outPath = p
+		prompt.WriteString("- " + snippetPath + "\n")
+		if key == outputKey {
+			outPath = snippetPath
 		}
-		if d, _, ok := strings.Cut(k[2:], "/"); cwd == "" && k[0] == 'p' && ok {
-			cwd = projectCwd(d)
+		transcriptDir, _, hasSeparator := strings.Cut(key[2:], "/")
+		isFirstProjectKey := cwd == "" && key[0] == 'p' && hasSeparator
+		if isFirstProjectKey {
+			cwd = projectCwd(transcriptDir)
 		}
 	}
-	b.WriteString("\n" + L("prompt.snippetMergeRules", "A1", outPath) + "\n")
+	prompt.WriteString("\n" + L("prompt.snippetMergeRules", "A1", outPath) + "\n")
 	if cwd == "" {
 		cwd = cfgDir()
 	}
-	return b.String(), cwd, nil
+	return prompt.String(), cwd, nil
 }
 
 func readSnippet(key string) (string, error) {
@@ -189,16 +201,17 @@ func readSnippet(key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	r, err := os.OpenRoot(base)
+	snippetRoot, err := os.OpenRoot(base)
 	if err != nil {
 		return "", err
 	}
-	defer r.Close()
-	b, err := r.ReadFile(rel)
-	if err == nil && (len(b) > snippetMax || !utf8.Valid(b)) {
+	defer snippetRoot.Close()
+	content, err := snippetRoot.ReadFile(rel)
+	isUnusable := len(content) > snippetMax || !utf8.Valid(content)
+	if err == nil && isUnusable {
 		err = terr("srv.memory.fichierTropGrosOu")
 	}
-	return string(b), err
+	return string(content), err
 }
 
 // saveSnippet écrit un snippet (création refusée s'il existe déjà) ; la version remplacée va à la corbeille.
@@ -210,7 +223,7 @@ func saveSnippet(key, text string, create bool) error {
 	if err != nil {
 		return err
 	}
-	old, err := readSnippet(key)
+	previous, err := readSnippet(key)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err // trop gros ou pas en UTF-8 : le remplacer le perdrait sans passer par la corbeille
 	}
@@ -218,32 +231,32 @@ func saveSnippet(key, text string, create bool) error {
 		if create {
 			return terr("srv.commands.ceSnippetExisteDeja", "A1", filepath.ToSlash(rel))
 		}
-		if old != text {
-			if err := saveTrash("s/"+key, filepath.Join(base, rel), "remplacé", old); err != nil {
-				return err
+		if previous != text {
+			if trashErr := saveTrash("s/"+key, filepath.Join(base, rel), "remplacé", previous); trashErr != nil {
+				return trashErr
 			}
 		}
 	}
-	if err := mkdirTrusted(base, 0o755); err != nil {
-		return err
+	if mkdirErr := mkdirTrusted(base, 0o755); mkdirErr != nil {
+		return mkdirErr
 	}
-	r, err := os.OpenRoot(base)
+	snippetRoot, err := os.OpenRoot(base)
 	if err != nil {
 		return err
 	}
-	defer r.Close()
-	if d := filepath.Dir(rel); d != "." {
-		if err := r.MkdirAll(d, 0o755); err != nil {
-			return err
+	defer snippetRoot.Close()
+	if subDir := filepath.Dir(rel); subDir != "." {
+		if mkdirErr := snippetRoot.MkdirAll(subDir, 0o755); mkdirErr != nil {
+			return mkdirErr
 		}
 	}
-	tmp := rel + ".gld-web.tmp"
-	if err := r.WriteFile(tmp, []byte(text), 0o644); err != nil {
-		return err
+	tempName := rel + ".gld-web.tmp"
+	if writeErr := snippetRoot.WriteFile(tempName, []byte(text), 0o644); writeErr != nil {
+		return writeErr
 	}
-	if err := r.Rename(tmp, rel); err != nil {
-		r.Remove(tmp)
-		return err
+	if renameErr := snippetRoot.Rename(tempName, rel); renameErr != nil {
+		snippetRoot.Remove(tempName)
+		return renameErr
 	}
 	return nil
 }
@@ -258,74 +271,74 @@ func removeSnippet(key string) error {
 	if err != nil {
 		return err
 	}
-	if err := saveTrash("s/"+key, filepath.Join(base, rel), "supprimé", text); err != nil {
-		return err
+	if trashErr := saveTrash("s/"+key, filepath.Join(base, rel), "supprimé", text); trashErr != nil {
+		return trashErr
 	}
-	r, err := os.OpenRoot(base)
+	snippetRoot, err := os.OpenRoot(base)
 	if err != nil {
 		return err
 	}
-	defer r.Close()
-	return r.Remove(rel)
+	defer snippetRoot.Close()
+	return snippetRoot.Remove(rel)
 }
 
 // renameSnippet renomme un snippet dans son emplacement (personnel ou projet) ; refusé si la cible existe.
-func renameSnippet(from, to string) error {
-	base, rel, err := cmdBase(from)
+func renameSnippet(fromKey, toKey string) error {
+	sourceBase, sourceRel, err := cmdBase(fromKey)
 	if err != nil {
 		return err
 	}
-	base2, rel2, err := cmdBase(to)
+	targetBase, targetRel, err := cmdBase(toKey)
 	if err != nil {
 		return err
 	}
-	if !sameDir(base, base2) {
+	if !sameDir(sourceBase, targetBase) {
 		return terr("srv.commands.snippetInvalide")
 	}
-	r, err := os.OpenRoot(base)
+	snippetRoot, err := os.OpenRoot(sourceBase)
 	if err != nil {
 		return err
 	}
-	defer r.Close()
-	if _, err := r.Lstat(rel); err != nil {
-		return err
+	defer snippetRoot.Close()
+	if _, sourceErr := snippetRoot.Lstat(sourceRel); sourceErr != nil {
+		return sourceErr
 	}
-	if _, err := r.Lstat(rel2); err == nil {
-		return terr("srv.commands.ceSnippetExisteDeja", "A1", filepath.ToSlash(rel2))
+	if _, targetErr := snippetRoot.Lstat(targetRel); targetErr == nil {
+		return terr("srv.commands.ceSnippetExisteDeja", "A1", filepath.ToSlash(targetRel))
 	}
-	if d := filepath.Dir(rel2); d != "." {
-		if err := r.MkdirAll(d, 0o755); err != nil {
-			return err
+	if targetDir := filepath.Dir(targetRel); targetDir != "." {
+		if mkdirErr := snippetRoot.MkdirAll(targetDir, 0o755); mkdirErr != nil {
+			return mkdirErr
 		}
 	}
-	return r.Rename(rel, rel2)
+	return snippetRoot.Rename(sourceRel, targetRel)
 }
 
 // exportSnippets : les snippets d'un scope ("" : personnels) dans une archive zip, chemins relatifs conservés.
 func exportSnippets(scope string) ([]byte, int, error) {
-	all, _ := listSnippets()
-	var buf bytes.Buffer
-	z := zip.NewWriter(&buf)
-	n := 0
-	for _, s := range all {
-		if s.Scope != scope {
+	snippets, _ := listSnippets()
+	var archiveBuffer bytes.Buffer
+	zipWriter := zip.NewWriter(&archiveBuffer)
+	count := 0
+	for _, listedSnippet := range snippets {
+		if listedSnippet.Scope != scope {
 			continue
 		}
-		t, err := readSnippet(s.Key)
+		text, err := readSnippet(listedSnippet.Key)
 		if err != nil {
 			return nil, 0, err
 		}
-		w, err := z.Create(s.Path)
+		entryWriter, err := zipWriter.Create(listedSnippet.Path)
 		if err != nil {
 			return nil, 0, err
 		}
-		w.Write([]byte(t))
-		n++
+		entryWriter.Write([]byte(text))
+		count++
 	}
-	if err := z.Close(); err != nil { // écrit l'index de l'archive : avant de lire le tampon
+	if err := zipWriter.Close(); err != nil { // écrit l'index de l'archive : avant de lire le tampon
 		return nil, 0, err
 	}
-	return buf.Bytes(), n, nil
+	return archiveBuffer.Bytes(), count, nil
 }
 
 // ImportFile : un fichier reçu (un .md, ou une archive .zip de .md).
@@ -340,45 +353,47 @@ func importSnippets(scope string, files []ImportFile, overwrite bool) (done, ski
 	if scope != "" {
 		prefix = "p/" + scope + "/"
 	}
-	put := func(name string, data []byte) error {
+	saveImported := func(name string, data []byte) error {
 		name = strings.TrimPrefix(path.Clean("/"+filepath.ToSlash(name)), "/")
-		e := saveSnippet(prefix+name, string(data), !overwrite)
-		if e != nil && isMsg(e, "srv.commands.ceSnippetExisteDeja") {
+		saveErr := saveSnippet(prefix+name, string(data), !overwrite)
+		if saveErr != nil && isMsg(saveErr, "srv.commands.ceSnippetExisteDeja") {
 			skipped = append(skipped, name)
 			return nil
 		}
-		if e == nil {
+		if saveErr == nil {
 			done = append(done, name)
 		}
-		return e
+		return saveErr
 	}
-	for _, f := range files {
-		if strings.HasSuffix(strings.ToLower(f.Name), ".zip") {
-			z, e := zip.NewReader(bytes.NewReader(f.Data), int64(len(f.Data)))
-			if e != nil {
-				return done, skipped, terr("srv.commands.archiveIllisible", "A1", f.Name)
+	for _, file := range files {
+		isArchive := strings.HasSuffix(strings.ToLower(file.Name), ".zip")
+		if isArchive {
+			zipReader, openErr := zip.NewReader(bytes.NewReader(file.Data), int64(len(file.Data)))
+			if openErr != nil {
+				return done, skipped, terr("srv.commands.archiveIllisible", "A1", file.Name)
 			}
-			for _, zf := range z.File {
-				if zf.FileInfo().IsDir() || !strings.HasSuffix(zf.Name, ".md") || zf.UncompressedSize64 > snippetMax {
+			for _, zipEntry := range zipReader.File {
+				isSnippetEntry := !zipEntry.FileInfo().IsDir() && strings.HasSuffix(zipEntry.Name, ".md") && zipEntry.UncompressedSize64 <= snippetMax
+				if !isSnippetEntry {
 					continue
 				}
-				rc, e := zf.Open()
-				if e != nil {
-					return done, skipped, e
+				entryReader, entryErr := zipEntry.Open()
+				if entryErr != nil {
+					return done, skipped, entryErr
 				}
-				b, e := io.ReadAll(io.LimitReader(rc, snippetMax+1))
-				rc.Close()
-				if e == nil {
-					e = put(zf.Name, b)
+				content, entryErr := io.ReadAll(io.LimitReader(entryReader, snippetMax+1))
+				entryReader.Close()
+				if entryErr == nil {
+					entryErr = saveImported(zipEntry.Name, content)
 				}
-				if e != nil {
-					return done, skipped, errors.New(zf.Name + " : " + e.Error())
+				if entryErr != nil {
+					return done, skipped, errors.New(zipEntry.Name + " : " + entryErr.Error())
 				}
 			}
 			continue
 		}
-		if e := put(filepath.Base(f.Name), f.Data); e != nil {
-			return done, skipped, errors.New(f.Name + " : " + e.Error())
+		if importErr := saveImported(filepath.Base(file.Name), file.Data); importErr != nil {
+			return done, skipped, errors.New(file.Name + " : " + importErr.Error())
 		}
 	}
 	return done, skipped, nil

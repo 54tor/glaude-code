@@ -16,6 +16,7 @@ const (
 	maxCleanupDays     = 100000 // au-delà, le calcul en durée déborderait ; 100 000 jours valent « jamais »
 	defaultCleanupDays = 30
 	cleanupWarn        = 24 * time.Hour
+	maxExpiringListed  = 200
 )
 
 type Expiring struct {
@@ -29,47 +30,54 @@ type Expiring struct {
 // cleanupDays : la durée de conservation de Claude Code, en jours.
 func cleanupDays() int {
 	_, doc := readConfig("u") // le réglage est utilisateur seul : inutile de lire les projets et leur mémoire
-	if v, ok := lookup(doc, "cleanupPeriodDays"); ok {
-		if n, ok := v.(json.Number); ok {
-			if f, err := n.Float64(); err == nil && f >= 1 {
-				return int(min(f, maxCleanupDays))
-			}
-		}
+	value, found := lookup(doc, "cleanupPeriodDays")
+	if !found {
+		return defaultCleanupDays
 	}
-	return defaultCleanupDays
+	number, isNumber := value.(json.Number)
+	if !isNumber {
+		return defaultCleanupDays
+	}
+	configuredDays, err := number.Float64()
+	if err != nil || configuredDays < 1 {
+		return defaultCleanupDays
+	}
+	return int(min(configuredDays, maxCleanupDays))
 }
 
 // expiringSessions : les sessions qui seront supprimées dans moins de cleanupWarn (ou qui sont déjà au-delà de la limite),
 // la plus proche d'abord.
 func expiringSessions(now time.Time, days int) []Expiring {
-	keep := time.Duration(days) * 24 * time.Hour
-	var out []Expiring
-	for _, g := range sessions() {
-		for _, s := range g.Sessions {
-			st, err := os.Stat(filepath.Join(root, s.Dir, s.ID+".jsonl")) // Claude Code se fie à la date du fichier
+	retention := time.Duration(days) * dayDuration
+	var expiring []Expiring
+	for _, group := range sessions() {
+		for _, session := range group.Sessions {
+			fileInfo, err := os.Stat(filepath.Join(root, session.Dir, session.ID+".jsonl")) // Claude Code se fie à la date du fichier
 			if err != nil {
 				continue
 			}
-			exp := st.ModTime().Add(keep)
-			if exp.Sub(now) <= cleanupWarn {
-				out = append(out, Expiring{s.Dir, s.ID, s.Title, s.Cwd, float64(exp.Unix())})
+			expiresAt := fileInfo.ModTime().Add(retention)
+			if expiresAt.Sub(now) <= cleanupWarn {
+				expiring = append(expiring, Expiring{session.Dir, session.ID, session.Title, session.Cwd, float64(expiresAt.Unix())})
 			}
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Expires < out[j].Expires })
-	return out
+	sort.Slice(expiring, func(left, right int) bool {
+		return expiring[left].Expires < expiring[right].Expires
+	})
+	return expiring
 }
 
 func routesCleanupWarn(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/cleanup-warning", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v1/cleanup-warning", func(responseWriter http.ResponseWriter, request *http.Request) {
 		days := cleanupDays()
 		list := expiringSessions(time.Now(), days)
-		if len(list) > 200 {
-			list = list[:200]
+		if len(list) > maxExpiringListed {
+			list = list[:maxExpiringListed]
 		}
 		if list == nil {
 			list = []Expiring{}
 		}
-		writeJSON(w, 200, map[string]any{"days": days, "sessions": list})
+		writeJSON(responseWriter, http.StatusOK, map[string]any{"days": days, "sessions": list})
 	})
 }

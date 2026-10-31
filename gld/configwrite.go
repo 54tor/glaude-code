@@ -45,148 +45,148 @@ var (
 )
 
 // validate vérifie que la modification fait partie de celles permises, et normalise sa valeur.
-func (e *CfgEdit) validate() error {
-	p := e.Path
+func (edit *CfgEdit) validate() error {
+	path := edit.Path
 	switch {
-	case len(p) == 1 && simpleKeys[p[0]] != "":
-		if e.Op == "delete" {
+	case len(path) == 1 && simpleKeys[path[0]] != "":
+		if edit.Op == "delete" {
 			return nil
 		}
-		if e.Op != "set" {
+		if edit.Op != "set" {
 			return terr("srv.configwrite.operationRefusee")
 		}
-		switch simpleKeys[p[0]] {
+		switch simpleKeys[path[0]] {
 		case "bool":
-			if _, ok := e.Value.(bool); !ok {
-				return terr("srv.configwrite.unBooleenEstAttendu", "A1", p[0])
+			if _, isBool := edit.Value.(bool); !isBool {
+				return terr("srv.configwrite.unBooleenEstAttendu", "A1", path[0])
 			}
 		case "number":
-			f, ok := e.Value.(float64)
-			if !ok || f < 0 || f > 1e9 || f != float64(int64(f)) {
-				return terr("srv.configwrite.unEntierPositifEst", "A1", p[0])
+			number, isNumber := edit.Value.(float64)
+			if !isNumber || number < 0 || number > 1e9 || number != float64(int64(number)) {
+				return terr("srv.configwrite.unEntierPositifEst", "A1", path[0])
 			}
-			e.Value = json.Number(fmt.Sprint(int64(f)))
+			edit.Value = json.Number(fmt.Sprint(int64(number)))
 		default:
-			s, ok := e.Value.(string)
-			if !ok || s == "" || len(s) > 100 || strings.ContainsAny(s, "\n\r") {
-				return terr("srv.configwrite.unTexteCourtEst", "A1", p[0])
+			text, isString := edit.Value.(string)
+			if !isString || text == "" || len(text) > 100 || strings.ContainsAny(text, "\n\r") {
+				return terr("srv.configwrite.unTexteCourtEst", "A1", path[0])
 			}
 		}
-	case len(p) == 2 && p[0] == "env" && envName.MatchString(p[1]):
-		if e.Op == "delete" {
+	case len(path) == 2 && path[0] == "env" && envName.MatchString(path[1]):
+		if edit.Op == "delete" {
 			return nil
 		}
-		s, ok := e.Value.(string)
-		if e.Op != "set" || !ok || len(s) > 2000 || strings.ContainsAny(s, "\n\r") {
+		value, isString := edit.Value.(string)
+		if edit.Op != "set" || !isString || len(value) > 2000 || strings.ContainsAny(value, "\n\r") {
 			return terr("srv.configwrite.variableDEnvironnementUn")
 		}
-	case len(p) == 2 && p[0] == "enabledPlugins" && pluginIDRe.MatchString(p[1]):
-		if e.Op == "delete" {
+	case len(path) == 2 && path[0] == "enabledPlugins" && pluginIDRe.MatchString(path[1]):
+		if edit.Op == "delete" {
 			return nil
 		}
-		if _, ok := e.Value.(bool); !ok || e.Op != "set" {
+		if _, isBool := edit.Value.(bool); !isBool || edit.Op != "set" {
 			return terr("srv.configwrite.pluginUnBooleenEst")
 		}
-	case len(p) == 2 && p[0] == "permissions" && (p[1] == "allow" || p[1] == "deny" || p[1] == "ask"):
-		s, ok := e.Value.(string)
-		if (e.Op != "add" && e.Op != "remove") || !ok || strings.TrimSpace(s) == "" || len(s) > 300 || strings.ContainsAny(s, "\n\r") {
+	case len(path) == 2 && path[0] == "permissions" && (path[1] == "allow" || path[1] == "deny" || path[1] == "ask"):
+		rule, isString := edit.Value.(string)
+		if (edit.Op != "add" && edit.Op != "remove") || !isString || strings.TrimSpace(rule) == "" || len(rule) > 300 || strings.ContainsAny(rule, "\n\r") {
 			return terr("srv.configwrite.regleDePermissionUn")
 		}
-		e.Value = strings.TrimSpace(s)
-	case len(p) == 2 && p[0] == "permissions" && p[1] == "additionalDirectories":
+		edit.Value = strings.TrimSpace(rule)
+	case len(path) == 2 && path[0] == "permissions" && path[1] == "additionalDirectories":
 		// dossiers accessibles en plus du dossier de travail : un chemin sur une ligne (absolu, « ~/… » ou relatif au projet)
-		s, ok := e.Value.(string)
-		s = strings.TrimSpace(s)
-		if (e.Op != "add" && e.Op != "remove") || !ok || s == "" || len(s) > 500 || strings.ContainsAny(s, "\n\r\x00") {
+		directory, isString := edit.Value.(string)
+		directory = strings.TrimSpace(directory)
+		if (edit.Op != "add" && edit.Op != "remove") || !isString || directory == "" || len(directory) > 500 || strings.ContainsAny(directory, "\n\r\x00") {
 			return terr("srv.configwrite.dossierSupplementaireUnChemin")
 		}
-		e.Value = s
-	case len(p) == 2 && p[0] == "skillOverrides" && skillNameRe.MatchString(p[1]):
-		if e.Op == "delete" {
+		edit.Value = directory
+	case len(path) == 2 && path[0] == "skillOverrides" && skillNameRe.MatchString(path[1]):
+		if edit.Op == "delete" {
 			return nil
 		}
-		if s, ok := e.Value.(string); e.Op != "set" || !ok || !skillModes[s] {
-			return terr("srv.configwrite.cetteModificationNEst", "A1", strings.Join(p, "."))
+		if mode, isString := edit.Value.(string); edit.Op != "set" || !isString || !skillModes[mode] {
+			return terr("srv.configwrite.cetteModificationNEst", "A1", strings.Join(path, "."))
 		}
-	case len(p) == 1 && p[0] == "disabledMcpjsonServers":
-		if s, ok := e.Value.(string); (e.Op != "add" && e.Op != "remove") || !ok || !skillNameRe.MatchString(s) {
-			return terr("srv.configwrite.cetteModificationNEst", "A1", p[0])
+	case len(path) == 1 && path[0] == "disabledMcpjsonServers":
+		if serverName, isString := edit.Value.(string); (edit.Op != "add" && edit.Op != "remove") || !isString || !skillNameRe.MatchString(serverName) {
+			return terr("srv.configwrite.cetteModificationNEst", "A1", path[0])
 		}
-	case len(p) == 2 && p[0] == "permissions" && p[1] == "defaultMode":
-		if e.Op == "delete" {
+	case len(path) == 2 && path[0] == "permissions" && path[1] == "defaultMode":
+		if edit.Op == "delete" {
 			return nil
 		}
-		if s, ok := e.Value.(string); e.Op != "set" || !ok || !wordRe.MatchString(s) {
+		if mode, isString := edit.Value.(string); edit.Op != "set" || !isString || !wordRe.MatchString(mode) {
 			return terr("srv.configwrite.modeParDefautUn")
 		}
 	default:
-		return terr("srv.configwrite.cetteModificationNEst", "A1", strings.Join(p, "."))
+		return terr("srv.configwrite.cetteModificationNEst", "A1", strings.Join(path, "."))
 	}
 	return nil
 }
 
 // parent descend jusqu'à l'objet qui contient la dernière clé (en le créant au besoin).
-func (o *omap) parent(path []string, create bool) *omap {
-	cur := o
-	for _, k := range path[:len(path)-1] {
-		next, ok := cur.get(k)
-		n := asMap(next)
-		if !ok || n == nil {
+func (orderedMap *omap) parent(path []string, create bool) *omap {
+	current := orderedMap
+	for _, key := range path[:len(path)-1] {
+		next, found := current.get(key)
+		child := asMap(next)
+		if !found || child == nil {
 			if !create {
 				return nil
 			}
-			n = newOmap()
-			cur.set(k, n)
+			child = newOmap()
+			current.set(key, child)
 		}
-		cur = n
+		current = child
 	}
-	return cur
+	return current
 }
 
-func (e *CfgEdit) apply(doc *omap) error {
-	last := e.Path[len(e.Path)-1]
-	par := doc.parent(e.Path, e.Op != "delete" && e.Op != "remove")
-	switch e.Op {
+func (edit *CfgEdit) apply(doc *omap) error {
+	lastKey := edit.Path[len(edit.Path)-1]
+	parentMap := doc.parent(edit.Path, edit.Op != "delete" && edit.Op != "remove")
+	switch edit.Op {
 	case "set":
-		par.set(last, e.Value)
+		parentMap.set(lastKey, edit.Value)
 	case "delete":
-		if par == nil {
+		if parentMap == nil {
 			return nil
 		}
-		par.del(last)
-		if len(e.Path) == 2 { // un conteneur devenu vide disparaît
-			if c := asMap(doc.m[e.Path[0]]); c != nil && len(c.keys) == 0 {
-				doc.del(e.Path[0])
+		parentMap.del(lastKey)
+		if len(edit.Path) == 2 { // un conteneur devenu vide disparaît
+			if container := asMap(doc.m[edit.Path[0]]); container != nil && len(container.keys) == 0 {
+				doc.del(edit.Path[0])
 			}
 		}
 	case "add", "remove":
 		var list []any
-		if par != nil {
-			list, _ = par.m[last].([]any)
+		if parentMap != nil {
+			list, _ = parentMap.m[lastKey].([]any)
 		}
-		idx := -1
-		for i, x := range list {
-			if s, _ := x.(string); s == e.Value {
-				idx = i
+		matchIndex := -1
+		for itemIndex, listItem := range list {
+			if text, _ := listItem.(string); text == edit.Value {
+				matchIndex = itemIndex
 			}
 		}
-		if e.Op == "add" {
-			if idx >= 0 {
+		if edit.Op == "add" {
+			if matchIndex >= 0 {
 				return terr("srv.configwrite.cetteRegleExisteDeja")
 			}
-			par.set(last, append(list, e.Value))
+			parentMap.set(lastKey, append(list, edit.Value))
 		} else {
-			if idx < 0 {
+			if matchIndex < 0 {
 				return terr("srv.configwrite.cetteRegleNExiste")
 			}
-			list = append(list[:idx], list[idx+1:]...)
+			list = append(list[:matchIndex], list[matchIndex+1:]...)
 			if len(list) == 0 {
-				par.del(last)
-				if c := asMap(doc.m[e.Path[0]]); c != nil && len(c.keys) == 0 {
-					doc.del(e.Path[0])
+				parentMap.del(lastKey)
+				if container := asMap(doc.m[edit.Path[0]]); container != nil && len(container.keys) == 0 {
+					doc.del(edit.Path[0])
 				}
 			} else {
-				par.set(last, list)
+				parentMap.set(lastKey, list)
 			}
 		}
 	}
@@ -199,6 +199,8 @@ func backupName(id string) string {
 	return time.Now().Format("20060102-150405.000000") + "__" + strings.ReplaceAll(id, "/", "~") + ".json"
 }
 
+const maxConfigBackups = 100
+
 var backupRe = regexp.MustCompile(`^(\d{8}-\d{6}\.\d{6})__([\w~.-]+)\.json$`)
 
 func saveBackup(id string, content []byte) error {
@@ -206,30 +208,32 @@ func saveBackup(id string, content []byte) error {
 		return err
 	}
 	for {
-		f, err := rOpenFile(cfgDir(), filepath.Join(backupsDir(), backupName(id)), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		backupFile, err := rOpenFile(cfgDir(), filepath.Join(backupsDir(), backupName(id)), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 		if os.IsExist(err) { // même microseconde : on recommence, jamais d'écrasement d'une sauvegarde
 			continue
 		}
 		if err != nil {
 			return err
 		}
-		_, werr := f.Write(content)
-		if cerr := f.Close(); werr != nil || cerr != nil {
-			return errors.Join(werr, cerr)
+		_, writeErr := backupFile.Write(content)
+		if closeErr := backupFile.Close(); writeErr != nil || closeErr != nil {
+			return errors.Join(writeErr, closeErr)
 		}
 		break
 	}
-	all, _ := readDirTrusted(backupsDir()) // les 100 dernières seulement ; un fichier étranger au dossier n'est jamais touché
-	var ents []os.DirEntry
-	for _, e := range all {
-		if backupRe.MatchString(e.Name()) {
-			ents = append(ents, e)
+	dirEntries, _ := readDirTrusted(backupsDir()) // les maxConfigBackups dernières seulement ; un fichier étranger au dossier n'est jamais touché
+	var backups []os.DirEntry
+	for _, dirEntry := range dirEntries {
+		if backupRe.MatchString(dirEntry.Name()) {
+			backups = append(backups, dirEntry)
 		}
 	}
-	if len(ents) > 100 {
-		sort.Slice(ents, func(i, j int) bool { return ents[i].Name() < ents[j].Name() })
-		for _, e := range ents[:len(ents)-100] {
-			rRemove(cfgDir(), filepath.Join(backupsDir(), e.Name()))
+	if len(backups) > maxConfigBackups {
+		sort.Slice(backups, func(left, right int) bool {
+			return backups[left].Name() < backups[right].Name()
+		})
+		for _, oldBackup := range backups[:len(backups)-maxConfigBackups] {
+			rRemove(cfgDir(), filepath.Join(backupsDir(), oldBackup.Name()))
 		}
 	}
 	return nil
@@ -238,9 +242,9 @@ func saveBackup(id string, content []byte) error {
 // notSymlink refuse un fichier de réglages (ou son dossier) qui est un lien symbolique : l'écriture le remplacerait,
 // ou suivrait le lien vers un fichier qu'on n'a pas voulu toucher.
 func notSymlink(path string) error {
-	for _, p := range []string{filepath.Dir(path), path} {
-		if st, err := os.Lstat(p); err == nil && st.Mode()&os.ModeSymlink != 0 {
-			return terr("srv.configwrite.estUnLienSymbolique", "A1", p)
+	for _, candidate := range []string{filepath.Dir(path), path} {
+		if fileInfo, err := os.Lstat(candidate); err == nil && fileInfo.Mode()&os.ModeSymlink != 0 {
+			return terr("srv.configwrite.estUnLienSymbolique", "A1", candidate)
 		}
 	}
 	return nil
@@ -250,18 +254,18 @@ func notSymlink(path string) error {
 // aléatoire et est créé en exclusivité : un lien déposé à sa place ne peut pas détourner l'écriture.
 func writeConfig(path string, content []byte) error { return writeConfigExec(path, content, false) }
 
-// writeConfigExec : exec ajoute le bit exécutable du propriétaire, posé sur le fichier temporaire avant le renommage, jamais par nom
+// writeConfigExec : executable ajoute le bit exécutable du propriétaire, posé sur le fichier temporaire avant le renommage, jamais par nom
 // sur la cible.
-func writeConfigExec(path string, content []byte, exec bool) error {
+func writeConfigExec(path string, content []byte, executable bool) error {
 	if err := notSymlink(path); err != nil {
 		return err
 	}
 	// Sous cfgDir(), tout le chemin est confiné ; ailleurs (réglages d'un projet), le dossier du fichier sert de racine.
 	base := cfgDir()
-	if _, err := relIn(base, path); err != nil {
+	if _, relErr := relIn(base, path); relErr != nil {
 		base = filepath.Dir(path)
-		if err := os.MkdirAll(base, 0o755); err != nil {
-			return err
+		if mkdirErr := os.MkdirAll(base, 0o755); mkdirErr != nil {
+			return mkdirErr
 		}
 		base = filepath.Dir(base) // .claude/ lui-même reste vérifié par la racine
 	}
@@ -269,46 +273,46 @@ func writeConfigExec(path string, content []byte, exec bool) error {
 		return err
 	}
 	mode := os.FileMode(0o600)
-	if r, rel, err := confine(base, path); err == nil {
-		if st, err := r.Lstat(rel); err == nil && st.Mode().IsRegular() {
-			mode = st.Mode().Perm() & 0o777
+	if configRoot, rel, confineErr := confine(base, path); confineErr == nil {
+		if fileInfo, statErr := configRoot.Lstat(rel); statErr == nil && fileInfo.Mode().IsRegular() {
+			mode = fileInfo.Mode().Perm() & 0o777
 		}
-		r.Close()
+		configRoot.Close()
 	}
-	if exec {
+	if executable {
 		mode |= 0o100
 	}
 	return rWriteAtomic(base, path, content, mode)
 }
 
-// configEdit applique une modification : renvoie le texte avant et après ; n'écrit que si e.Dry est faux.
+// configEdit applique une modification : renvoie le texte avant et après ; n'écrit que si edit.Dry est faux.
 // cfgMu sérialise les lecture-modification-écriture des réglages : deux requêtes simultanées perdraient une modification.
 var cfgMu sync.Mutex
 
-func configEdit(e CfgEdit) (before, after string, err error) {
+func configEdit(edit CfgEdit) (before, after string, err error) {
 	cfgMu.Lock()
 	defer cfgMu.Unlock()
-	if err = e.validate(); err != nil {
+	if err = edit.validate(); err != nil {
 		return
 	}
-	path, err := configPath(e.File)
+	path, err := configPath(edit.File)
 	if err != nil {
 		return
 	}
 	if err = notSymlink(path); err != nil {
 		return
 	}
-	orig, rerr := readTrusted(path)
-	exists := rerr == nil
-	text := string(orig)
+	original, readErr := readTrusted(path)
+	exists := readErr == nil
+	text := string(original)
 	if !exists || strings.TrimSpace(text) == "" {
 		text = "{}\n"
 	}
-	v, err := parseOrdered([]byte(text))
+	parsed, err := parseOrdered([]byte(text))
 	if err != nil {
 		return "", "", terr("srv.configwrite.fichierIllisible", "A1", err.Error())
 	}
-	doc := asMap(v)
+	doc := asMap(parsed)
 	if doc == nil {
 		return "", "", terr("srv.configwrite.leFichierDoitContenir")
 	}
@@ -316,15 +320,15 @@ func configEdit(e CfgEdit) (before, after string, err error) {
 		return "", "", terr("srv.configwrite.miseEnFormeParticuliere")
 	}
 	before = text
-	if err = e.apply(doc); err != nil {
+	if err = edit.apply(doc); err != nil {
 		return "", "", err
 	}
 	after = formatOrdered(doc) + "\n"
-	if e.Dry || after == before {
+	if edit.Dry || after == before {
 		return before, after, nil
 	}
 	if exists {
-		if err = saveBackup(e.File, orig); err != nil {
+		if err = saveBackup(edit.File, original); err != nil {
 			return "", "", terr("srv.homesync.sauvegardeImpossible", "A1", err.Error())
 		}
 	}
@@ -339,46 +343,48 @@ type BackupInfo struct {
 }
 
 func listBackups() []BackupInfo {
-	out := []BackupInfo{}
-	ents, _ := readDirTrusted(backupsDir())
-	for _, e := range ents {
-		if m := backupRe.FindStringSubmatch(e.Name()); m != nil {
-			st, _ := e.Info()
-			var kb int64
-			if st != nil {
-				kb = st.Size() / 1024
+	backups := []BackupInfo{}
+	entries, _ := readDirTrusted(backupsDir())
+	for _, entry := range entries {
+		if nameMatch := backupRe.FindStringSubmatch(entry.Name()); nameMatch != nil {
+			fileInfo, _ := entry.Info()
+			var sizeKB int64
+			if fileInfo != nil {
+				sizeKB = fileInfo.Size() / 1024
 			}
-			out = append(out, BackupInfo{e.Name(), m[1], strings.ReplaceAll(m[2], "~", "/"), kb})
+			backups = append(backups, BackupInfo{entry.Name(), nameMatch[1], strings.ReplaceAll(nameMatch[2], "~", "/"), sizeKB})
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name > out[j].Name })
-	return out
+	sort.Slice(backups, func(left, right int) bool {
+		return backups[left].Name > backups[right].Name
+	})
+	return backups
 }
 
 // restoreBackup remet une sauvegarde en place (l'état actuel est sauvegardé à son tour).
 func restoreBackup(name string) error {
 	cfgMu.Lock()
 	defer cfgMu.Unlock()
-	m := backupRe.FindStringSubmatch(name)
-	if m == nil {
+	nameMatch := backupRe.FindStringSubmatch(name)
+	if nameMatch == nil {
 		return terr("srv.configwrite.sauvegardeInvalide")
 	}
-	id := strings.ReplaceAll(m[2], "~", "/")
+	id := strings.ReplaceAll(nameMatch[2], "~", "/")
 	path, err := configPath(id)
 	if err != nil {
 		return err
 	}
-	b, err := readTrusted(filepath.Join(backupsDir(), name))
+	content, err := readTrusted(filepath.Join(backupsDir(), name))
 	if err != nil {
 		return err
 	}
-	if _, err := parseOrdered(b); err != nil {
+	if _, parseErr := parseOrdered(content); parseErr != nil {
 		return terr("srv.configwrite.laSauvegardeNEst")
 	}
-	if cur, err := readTrusted(path); err == nil {
-		if err := saveBackup(id, cur); err != nil {
-			return err
+	if current, readErr := readTrusted(path); readErr == nil {
+		if saveErr := saveBackup(id, current); saveErr != nil {
+			return saveErr
 		}
 	}
-	return writeConfig(path, b)
+	return writeConfig(path, content)
 }

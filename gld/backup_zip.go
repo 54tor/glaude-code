@@ -18,6 +18,8 @@ const (
 	backupMaxEntry     = 2 << 20
 	backupTmpPrefix    = "gld-backup-"
 	backupManifestName = "manifest.json"
+	executableBits     = 0o111
+	executableFileMode = 0o755
 )
 
 var backupRoots = map[string]bool{backupManifestName: true, "home": true, "plugins.json": true, "mcp.json": true, "projects": true}
@@ -30,81 +32,84 @@ type BackupManifest struct {
 }
 
 // writeBackupZip : files = chemin en « / » → contenu ; le manifeste est ajouté.
-func writeBackupZip(files map[string][]byte, m BackupManifest) ([]byte, error) {
-	return writeBackupZipExec(files, nil, m)
+func writeBackupZip(files map[string][]byte, manifest BackupManifest) ([]byte, error) {
+	return writeBackupZipExec(files, nil, manifest)
 }
 
-// writeBackupZipExec : les entrées de exec sont écrites en 0755 pour que le bit exécutable (scripts de skills) survive.
-func writeBackupZipExec(files map[string][]byte, exec map[string]bool, m BackupManifest) ([]byte, error) {
-	mj, err := json.Marshal(m)
-	if err != nil {
-		return nil, err
+// writeBackupZipExec : les entrées de executable sont écrites en 0755 pour que le bit exécutable (scripts de skills) survive.
+func writeBackupZipExec(files map[string][]byte, executable map[string]bool, manifest BackupManifest) ([]byte, error) {
+	manifestJSON, marshalErr := json.Marshal(manifest)
+	if marshalErr != nil {
+		return nil, marshalErr
 	}
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
-	add := func(name string, b []byte) error {
-		h := &zip.FileHeader{Name: name, Method: zip.Deflate}
-		if exec[name] {
-			h.SetMode(0o755)
+	var archiveBuffer bytes.Buffer
+	zipWriter := zip.NewWriter(&archiveBuffer)
+	addEntry := func(name string, content []byte) error {
+		header := &zip.FileHeader{Name: name, Method: zip.Deflate}
+		if executable[name] {
+			header.SetMode(executableFileMode)
 		}
-		w, err := zw.CreateHeader(h)
+		entryWriter, err := zipWriter.CreateHeader(header)
 		if err != nil {
 			return err
 		}
-		_, err = w.Write(b)
+		_, err = entryWriter.Write(content)
 		return err
 	}
-	if err := add(backupManifestName, mj); err != nil {
+	if err := addEntry(backupManifestName, manifestJSON); err != nil {
 		return nil, err
 	}
-	for name, b := range files {
-		if err := add(name, b); err != nil {
+	for name, content := range files {
+		if err := addEntry(name, content); err != nil {
 			return nil, err
 		}
 	}
-	if err := zw.Close(); err != nil {
+	if err := zipWriter.Close(); err != nil {
 		return nil, err
 	}
-	return buf.Bytes(), nil
+	return archiveBuffer.Bytes(), nil
 }
 
 // extractBackup : l'archive vient d'un tiers, donc chaque entrée est validée avant toute écriture.
 // Le dossier retourné est à supprimer par l'appelant ; en cas d'erreur il l'est déjà.
-func extractBackup(b []byte) (dir string, m BackupManifest, err error) {
-	if len(b) > backupMaxArchive {
-		return "", m, terr("srv.backup_zip.tropGrosse")
+func extractBackup(archive []byte) (dir string, manifest BackupManifest, err error) {
+	if len(archive) > backupMaxArchive {
+		return "", manifest, terr("srv.backup_zip.tropGrosse")
 	}
-	zr, err := zip.NewReader(bytes.NewReader(b), int64(len(b)))
+	zipReader, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
 	if err != nil {
-		return "", m, terr("srv.backup_zip.illisible", "A1", err)
+		return "", manifest, terr("srv.backup_zip.illisible", "A1", err)
 	}
-	if len(zr.File) > backupMaxEntries {
-		return "", m, terr("srv.backup_zip.tropDEntrees")
+	if len(zipReader.File) > backupMaxEntries {
+		return "", manifest, terr("srv.backup_zip.tropDEntrees")
 	}
-	for _, f := range zr.File {
-		if f.FileInfo().IsDir() {
+	for _, entry := range zipReader.File {
+		if entry.FileInfo().IsDir() {
 			continue
 		}
-		n := f.Name
-		root, _, _ := strings.Cut(n, "/")
-		if strings.HasPrefix(n, "/") || strings.Contains(n, `\`) || strings.Contains(n, "\x00") {
-			return "", m, terr("srv.backup_zip.nomRefuse", "A1", n)
+		name := entry.Name
+		root, _, _ := strings.Cut(name, "/")
+		hasForbiddenCharacter := strings.HasPrefix(name, "/") || strings.Contains(name, `\`) || strings.Contains(name, "\x00")
+		if hasForbiddenCharacter {
+			return "", manifest, terr("srv.backup_zip.nomRefuse", "A1", name)
 		}
-		for _, seg := range strings.Split(n, "/") {
-			if seg == ".." || seg == "" {
-				return "", m, terr("srv.backup_zip.nomRefuse", "A1", n)
+		for _, segment := range strings.Split(name, "/") {
+			if segment == ".." || segment == "" {
+				return "", manifest, terr("srv.backup_zip.nomRefuse", "A1", name)
 			}
 		}
-		if !f.Mode().IsRegular() {
-			return "", m, terr("srv.backup_zip.entreeNonRegulier", "A1", n)
+		if !entry.Mode().IsRegular() {
+			return "", manifest, terr("srv.backup_zip.entreeNonRegulier", "A1", name)
 		}
-		if !backupRoots[root] || (root != "home" && root != "projects" && strings.Contains(n, "/")) {
-			return "", m, terr("srv.backup_zip.nomRefuse", "A1", n)
+		isTreeRoot := root == "home" || root == "projects"
+		nestedOutsideTree := !isTreeRoot && strings.Contains(name, "/")
+		if !backupRoots[root] || nestedOutsideTree {
+			return "", manifest, terr("srv.backup_zip.nomRefuse", "A1", name)
 		}
 	}
 	dir, err = os.MkdirTemp("", backupTmpPrefix)
 	if err != nil {
-		return "", m, err
+		return "", manifest, err
 	}
 	defer func() {
 		if err != nil {
@@ -112,42 +117,43 @@ func extractBackup(b []byte) (dir string, m BackupManifest, err error) {
 			dir = ""
 		}
 	}()
-	var total int64
-	seen := false
-	for _, f := range zr.File {
-		if f.FileInfo().IsDir() {
+	var totalSize int64
+	manifestSeen := false
+	for _, entry := range zipReader.File {
+		if entry.FileInfo().IsDir() {
 			continue
 		}
-		rc, e := f.Open()
-		if e != nil {
-			return dir, m, terr("srv.backup_zip.illisible", "A1", e)
+		entryReader, readErr := entry.Open()
+		if readErr != nil {
+			return dir, manifest, terr("srv.backup_zip.illisible", "A1", readErr)
 		}
-		data, e := io.ReadAll(io.LimitReader(rc, backupMaxEntry+1))
-		rc.Close()
-		if e != nil {
-			return dir, m, terr("srv.backup_zip.illisible", "A1", e)
+		data, readErr := io.ReadAll(io.LimitReader(entryReader, backupMaxEntry+1))
+		entryReader.Close()
+		if readErr != nil {
+			return dir, manifest, terr("srv.backup_zip.illisible", "A1", readErr)
 		}
 		if len(data) > backupMaxEntry {
-			return dir, m, terr("srv.backup_zip.entreeTropGrosse", "A1", f.Name)
+			return dir, manifest, terr("srv.backup_zip.entreeTropGrosse", "A1", entry.Name)
 		}
-		if total += int64(len(data)); total > backupMaxTotal {
-			return dir, m, terr("srv.backup_zip.tropVolumineuse")
+		totalSize += int64(len(data))
+		if totalSize > backupMaxTotal {
+			return dir, manifest, terr("srv.backup_zip.tropVolumineuse")
 		}
-		if f.Name == backupManifestName {
-			if e := json.Unmarshal(data, &m); e != nil {
-				return dir, m, terr("srv.backup_zip.manifesteInvalide", "A1", e)
+		if entry.Name == backupManifestName {
+			if decodeErr := json.Unmarshal(data, &manifest); decodeErr != nil {
+				return dir, manifest, terr("srv.backup_zip.manifesteInvalide", "A1", decodeErr)
 			}
-			if m.Format > backupFormat {
-				return dir, m, terr("srv.backup_zip.formatTropRecent", "A1", m.Format, "A2", backupFormat)
+			if manifest.Format > backupFormat {
+				return dir, manifest, terr("srv.backup_zip.formatTropRecent", "A1", manifest.Format, "A2", backupFormat)
 			}
-			seen = true
+			manifestSeen = true
 		}
-		if e := writeConfigExec(filepath.Join(dir, filepath.FromSlash(f.Name)), data, f.Mode()&0o111 != 0); e != nil {
-			return dir, m, e
+		if writeErr := writeConfigExec(filepath.Join(dir, filepath.FromSlash(entry.Name)), data, entry.Mode()&executableBits != 0); writeErr != nil {
+			return dir, manifest, writeErr
 		}
 	}
-	if !seen {
-		return dir, m, terr("srv.backup_zip.sansManifeste")
+	if !manifestSeen {
+		return dir, manifest, terr("srv.backup_zip.sansManifeste")
 	}
-	return dir, m, nil
+	return dir, manifest, nil
 }

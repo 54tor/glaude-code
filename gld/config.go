@@ -25,40 +25,43 @@ type omap struct {
 
 func newOmap() *omap { return &omap{m: map[string]any{}} }
 
-func (o *omap) get(k string) (any, bool) { v, ok := o.m[k]; return v, ok }
-
-func (o *omap) set(k string, v any) {
-	if _, ok := o.m[k]; !ok {
-		o.keys = append(o.keys, k)
-	}
-	o.m[k] = v
+func (orderedMap *omap) get(key string) (any, bool) {
+	value, found := orderedMap.m[key]
+	return value, found
 }
 
-func (o *omap) del(k string) {
-	if _, ok := o.m[k]; !ok {
+func (orderedMap *omap) set(key string, value any) {
+	if _, exists := orderedMap.m[key]; !exists {
+		orderedMap.keys = append(orderedMap.keys, key)
+	}
+	orderedMap.m[key] = value
+}
+
+func (orderedMap *omap) del(key string) {
+	if _, exists := orderedMap.m[key]; !exists {
 		return
 	}
-	delete(o.m, k)
-	for i, x := range o.keys {
-		if x == k {
-			o.keys = append(o.keys[:i], o.keys[i+1:]...)
+	delete(orderedMap.m, key)
+	for keyIndex, existingKey := range orderedMap.keys {
+		if existingKey == key {
+			orderedMap.keys = append(orderedMap.keys[:keyIndex], orderedMap.keys[keyIndex+1:]...)
 			break
 		}
 	}
 }
 
 // parseOrdered décode un document JSON en conservant l'ordre des clés (nombres gardés tels quels : json.Number).
-func parseOrdered(b []byte) (any, error) {
-	dec := json.NewDecoder(bytes.NewReader(b))
-	dec.UseNumber()
-	v, err := decodeValue(dec, 0)
+func parseOrdered(content []byte) (any, error) {
+	decoder := json.NewDecoder(bytes.NewReader(content))
+	decoder.UseNumber()
+	value, err := decodeValue(decoder, 0)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := dec.Token(); err != io.EOF {
+	if _, trailingErr := decoder.Token(); trailingErr != io.EOF {
 		return nil, terr("srv.config.texteApresLaFin")
 	}
-	return v, nil
+	return value, nil
 }
 
 // maxJSONDepth borne la récursion : un fichier de réglages hostile ne doit pas épuiser la pile (erreur fatale, non rattrapable).
@@ -70,91 +73,91 @@ const maxConfigBytes = 4 << 20
 var errConfigTooBig = terr("srv.config.fichierTropGros")
 
 // readConfigFile lit un fichier de réglages en refusant ceux qui dépassent maxConfigBytes.
-func readConfigFile(p string) ([]byte, error) {
-	b, err := readTrusted(p)
-	if err == nil && len(b) > maxConfigBytes {
+func readConfigFile(path string) ([]byte, error) {
+	content, err := readTrusted(path)
+	if err == nil && len(content) > maxConfigBytes {
 		return nil, errConfigTooBig
 	}
-	return b, err
+	return content, err
 }
 
-func decodeValue(dec *json.Decoder, depth int) (any, error) {
-	t, err := dec.Token()
+func decodeValue(decoder *json.Decoder, depth int) (any, error) {
+	token, err := decoder.Token()
 	if err != nil {
 		return nil, err
 	}
-	d, ok := t.(json.Delim)
-	if !ok {
-		return t, nil
+	delimiter, isDelimiter := token.(json.Delim)
+	if !isDelimiter {
+		return token, nil
 	}
 	if depth >= maxJSONDepth {
 		return nil, terr("srv.config.imbricationTropProfonde")
 	}
-	if d == '{' {
-		o := newOmap()
-		for dec.More() {
-			kt, err := dec.Token()
-			if err != nil {
-				return nil, err
+	if delimiter == '{' {
+		object := newOmap()
+		for decoder.More() {
+			keyToken, memberErr := decoder.Token()
+			if memberErr != nil {
+				return nil, memberErr
 			}
-			v, err := decodeValue(dec, depth+1)
-			if err != nil {
-				return nil, err
+			memberValue, memberErr := decodeValue(decoder, depth+1)
+			if memberErr != nil {
+				return nil, memberErr
 			}
-			o.set(kt.(string), v)
+			object.set(keyToken.(string), memberValue)
 		}
-		_, err := dec.Token()
-		return o, err
+		_, closeErr := decoder.Token()
+		return object, closeErr
 	}
-	arr := []any{}
-	for dec.More() {
-		v, err := decodeValue(dec, depth+1)
-		if err != nil {
-			return nil, err
+	array := []any{}
+	for decoder.More() {
+		element, elementErr := decodeValue(decoder, depth+1)
+		if elementErr != nil {
+			return nil, elementErr
 		}
-		arr = append(arr, v)
+		array = append(array, element)
 	}
-	_, err = dec.Token()
-	return arr, err
+	_, err = decoder.Token()
+	return array, err
 }
 
-func encodeCompact(v any, w *bytes.Buffer) {
-	switch x := v.(type) {
+func encodeCompact(value any, output *bytes.Buffer) {
+	switch typedValue := value.(type) {
 	case *omap:
-		w.WriteByte('{')
-		for i, k := range x.keys {
-			if i > 0 {
-				w.WriteByte(',')
+		output.WriteByte('{')
+		for keyIndex, key := range typedValue.keys {
+			if keyIndex > 0 {
+				output.WriteByte(',')
 			}
-			encodeCompact(k, w)
-			w.WriteByte(':')
-			encodeCompact(x.m[k], w)
+			encodeCompact(key, output)
+			output.WriteByte(':')
+			encodeCompact(typedValue.m[key], output)
 		}
-		w.WriteByte('}')
+		output.WriteByte('}')
 	case []any:
-		w.WriteByte('[')
-		for i, e := range x {
-			if i > 0 {
-				w.WriteByte(',')
+		output.WriteByte('[')
+		for elementIndex, element := range typedValue {
+			if elementIndex > 0 {
+				output.WriteByte(',')
 			}
-			encodeCompact(e, w)
+			encodeCompact(element, output)
 		}
-		w.WriteByte(']')
+		output.WriteByte(']')
 	default:
-		enc := json.NewEncoder(w)
-		enc.SetEscapeHTML(false)
-		enc.Encode(x)
-		w.Truncate(w.Len() - 1) // le « \n » de Encode
+		encoder := json.NewEncoder(output)
+		encoder.SetEscapeHTML(false)
+		encoder.Encode(typedValue)
+		output.Truncate(output.Len() - 1) // le « \n » de Encode
 	}
 }
 
 // formatOrdered : le document en JSON indenté de deux espaces, comme Claude Code l'écrit ; sans « \n » final.
-func formatOrdered(v any) string {
-	var c bytes.Buffer
-	encodeCompact(v, &c)
-	var out bytes.Buffer
-	json.Indent(&out, c.Bytes(), "", "  ")
-	return out.String()
+func formatOrdered(document any) string {
+	var compact bytes.Buffer
+	encodeCompact(document, &compact)
+	var indented bytes.Buffer
+	json.Indent(&indented, compact.Bytes(), "", "  ")
+	return indented.String()
 }
 
 // --- fichiers de réglages -----------------------------------------------------------------------------
@@ -182,7 +185,9 @@ func configPath(id string) (string, error) {
 			return "", terr("srv.memmeta.projetInvalide")
 		}
 		cwd := projectCwd(dir)
-		if fi, err := os.Stat(cwd); cwd == "" || err != nil || !fi.IsDir() {
+		dirInfo, err := os.Stat(cwd)
+		projectMissing := cwd == "" || err != nil || !dirInfo.IsDir()
+		if projectMissing {
 			return "", terr("srv.memory.dossierDuProjetIntrouvable")
 		}
 		name := "settings.json"
@@ -201,75 +206,82 @@ var credInRule = regexp.MustCompile(`(?i)(authorization|bearer|passw|secret|toke
 
 // maskSecrets remplace par des points la valeur texte de toute clé qui ressemble à un secret ; le drapeau se propage
 // aux objets et tableaux imbriqués sous cette clé.
-func maskSecrets(v any, key string) any {
-	return maskWalk(v, key, secretKey.MatchString(key), false, false, false)
+func maskSecrets(value any, key string) any {
+	return maskWalk(value, key, secretKey.MatchString(key), false, false, false)
 }
 
 // maskSettings : maskSecrets, et si strict (appelant sans config_write) env, commandes de hooks et règles de
 // permission contenant des identifiants sont masqués aussi.
-func maskSettings(v any, strict bool) any { return maskWalk(v, "", false, strict, false, false) }
+func maskSettings(value any, strict bool) any {
+	return maskWalk(value, "", false, strict, false, false)
+}
 
-func maskWalk(v any, key string, sec, strict, hooks, perms bool) any {
-	switch x := v.(type) {
+func maskWalk(value any, key string, isSecret, strict, inHooks, inPermissions bool) any {
+	switch typedValue := value.(type) {
 	case *omap:
-		out := newOmap()
-		for _, k := range x.keys {
-			s := sec || secretKey.MatchString(k) || (strict && k == "env") || (strict && hooks && k == "command")
-			out.set(k, maskWalk(x.m[k], k, s, strict, hooks || k == "hooks", perms || k == "permissions"))
+		maskedObject := newOmap()
+		for _, childKey := range typedValue.keys {
+			isEnv := childKey == "env"
+			isHookCommand := inHooks && childKey == "command"
+			childIsSecret := isSecret || secretKey.MatchString(childKey) || (strict && (isEnv || isHookCommand))
+			childInHooks := inHooks || childKey == "hooks"
+			childInPermissions := inPermissions || childKey == "permissions"
+			maskedObject.set(childKey, maskWalk(typedValue.m[childKey], childKey, childIsSecret, strict, childInHooks, childInPermissions))
 		}
-		return out
+		return maskedObject
 	case []any:
-		out := make([]any, len(x))
-		for i, e := range x {
-			out[i] = maskWalk(e, key, sec, strict, hooks, perms)
+		maskedArray := make([]any, len(typedValue))
+		for elementIndex, element := range typedValue {
+			maskedArray[elementIndex] = maskWalk(element, key, isSecret, strict, inHooks, inPermissions)
 		}
-		return out
+		return maskedArray
 	case string:
-		if x != "" && (sec || (strict && perms && credInRule.MatchString(x))) {
+		isCredentialRule := strict && inPermissions && credInRule.MatchString(typedValue)
+		if typedValue != "" && (isSecret || isCredentialRule) {
 			return maskText
 		}
 	}
-	return v
+	return value
 }
 
 // readConfig lit un fichier de réglages ; un fichier absent est vide, pas une erreur.
 func readConfig(id string) (ConfigFile, any) {
-	f := ConfigFile{ID: id}
+	configFile := ConfigFile{ID: id}
 	switch id[0] {
 	case 'u':
-		f.Scope, f.Label = "user", "~/.claude/settings.json"
+		configFile.Scope, configFile.Label = "user", "~/.claude/settings.json"
 	case 'p':
-		f.Scope, f.Dir = "project", id[2:]
+		configFile.Scope, configFile.Dir = "project", id[2:]
 	default:
-		f.Scope, f.Dir = "local", id[2:]
+		configFile.Scope, configFile.Dir = "local", id[2:]
 	}
-	p, err := configPath(id)
+	path, err := configPath(id)
 	if err != nil {
-		f.Error = err.Error()
-		return f, nil
+		configFile.Error = err.Error()
+		return configFile, nil
 	}
-	f.Path = p
-	if f.Dir != "" {
-		f.Label = ".claude/" + filepath.Base(p)
+	configFile.Path = path
+	if configFile.Dir != "" {
+		configFile.Label = ".claude/" + filepath.Base(path)
 	}
-	b, err := readConfigFile(p)
+	content, err := readConfigFile(path)
 	if err != nil {
 		if errors.Is(err, errConfigTooBig) {
-			f.Exists, f.Error = true, err.Error()
+			configFile.Exists, configFile.Error = true, err.Error()
 		}
-		return f, nil
+		return configFile, nil
 	}
-	f.Exists = true
-	v, err := parseOrdered(b)
+	configFile.Exists = true
+	document, err := parseOrdered(content)
 	if err != nil {
-		f.Error = L("srv.configraw.jsonInvalide", "A1", err.Error())
-		return f, nil
+		configFile.Error = L("srv.configraw.jsonInvalide", "A1", err.Error())
+		return configFile, nil
 	}
-	if _, ok := v.(*omap); !ok {
-		f.Error = "le fichier doit contenir un objet JSON"
-		return f, nil
+	if _, isObject := document.(*omap); !isObject {
+		configFile.Error = "le fichier doit contenir un objet JSON"
+		return configFile, nil
 	}
-	return f, v
+	return configFile, document
 }
 
 // allConfigs : le fichier utilisateur, puis, pour chaque projet dont le dossier existe, ses fichiers de projet et local
@@ -279,61 +291,66 @@ func allConfigs() (files []ConfigFile, raw map[string]any) { return allConfigsFo
 // allConfigsFor : allConfigs, avec le masquage strict pour un appelant sans config_write.
 func allConfigsFor(strict bool) (files []ConfigFile, raw map[string]any) {
 	raw = map[string]any{}
-	add := func(id string, onlyExisting bool) {
-		f, v := readConfig(id)
-		if onlyExisting && !f.Exists {
+	addConfig := func(id string, onlyExisting bool) {
+		configFile, document := readConfig(id)
+		if onlyExisting && !configFile.Exists {
 			return
 		}
-		if v != nil {
-			raw[id] = v
-			f.Data = maskSettings(v, strict)
+		if document != nil {
+			raw[id] = document
+			configFile.Data = maskSettings(document, strict)
 		}
-		files = append(files, f)
+		files = append(files, configFile)
 	}
-	add("u", false)
-	for _, p := range liveProjects() {
-		add("p/"+p.Dir, true)
-		add("l/"+p.Dir, true)
+	addConfig("u", false)
+	for _, liveProject := range liveProjects() {
+		addConfig("p/"+liveProject.Dir, true)
+		addConfig("l/"+liveProject.Dir, true)
 	}
 	return files, raw
 }
 
 // --- accès aux valeurs --------------------------------------------------------------------------------
 
-func asMap(v any) *omap { o, _ := v.(*omap); return o }
+func asMap(value any) *omap {
+	object, _ := value.(*omap)
+	return object
+}
 
 // lookup : la valeur à un chemin de clés (objets seulement).
 func lookup(doc any, path ...string) (any, bool) {
-	cur := doc
-	for _, k := range path {
-		o := asMap(cur)
-		if o == nil {
+	current := doc
+	for _, key := range path {
+		object := asMap(current)
+		if object == nil {
 			return nil, false
 		}
-		v, ok := o.get(k)
-		if !ok {
+		value, found := object.get(key)
+		if !found {
 			return nil, false
 		}
-		cur = v
+		current = value
 	}
-	return cur, true
+	return current, true
 }
 
-func strList(v any) []string {
-	var out []string
-	if a, ok := v.([]any); ok {
-		for _, e := range a {
-			if s, ok := e.(string); ok {
-				out = append(out, s)
-			}
+func strList(value any) []string {
+	list, isList := value.([]any)
+	if !isList {
+		return nil
+	}
+	var texts []string
+	for _, element := range list {
+		if text, isString := element.(string); isString {
+			texts = append(texts, text)
 		}
 	}
-	return out
+	return texts
 }
 
 // MarshalJSON : l'ordre des clés est conservé dans les réponses de l'API.
-func (o *omap) MarshalJSON() ([]byte, error) {
-	var b bytes.Buffer
-	encodeCompact(o, &b)
-	return b.Bytes(), nil
+func (orderedMap *omap) MarshalJSON() ([]byte, error) {
+	var encoded bytes.Buffer
+	encodeCompact(orderedMap, &encoded)
+	return encoded.Bytes(), nil
 }

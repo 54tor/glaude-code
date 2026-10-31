@@ -18,14 +18,20 @@ import (
 	"unicode/utf8"
 )
 
+const (
+	resumePromptMaxBytes = 32 << 10
+	helperErrorLineMax   = 300
+)
+
 // checkPrompt : un message vise une seule session, fermée (sinon deux processus écriraient le même transcript).
 func checkPrompt(id, prompt string) error {
+	isUnacceptable := len(prompt) > resumePromptMaxBytes || !utf8.ValidString(prompt) || strings.ContainsRune(prompt, 0)
 	switch {
 	case prompt == "":
 		return nil
 	case id == "":
 		return terr("srv.claude.unMessageNeS")
-	case len(prompt) > 32<<10 || !utf8.ValidString(prompt) || strings.ContainsRune(prompt, 0):
+	case isUnacceptable:
 		return terr("srv.sendkeys.messageTropLongOu")
 	}
 	live, err := liveCheck()
@@ -56,16 +62,16 @@ func viaCmdExe(path string) bool {
 // claudeArgs valide les options de claude (seulement des drapeaux simples : --x, -x, --x=valeur, jamais du shell)
 // et les traduit en arguments de gld-matin.
 func claudeArgs(raw string) ([]string, error) {
-	fs := strings.Fields(raw)
-	for _, f := range fs {
-		if !flagRe.MatchString(f) {
-			return nil, terr("srv.chat.optionRefusee", "A1", f)
+	flagList := strings.Fields(raw)
+	for _, flag := range flagList {
+		if !flagRe.MatchString(flag) {
+			return nil, terr("srv.chat.optionRefusee", "A1", flag)
 		}
 	}
-	if len(fs) == 0 {
+	if len(flagList) == 0 {
 		return nil, nil
 	}
-	return []string{"--args", strings.Join(fs, " ")}, nil
+	return []string{"--args", strings.Join(flagList, " ")}, nil
 }
 
 var flagRe = regexp.MustCompile(`^--?[a-zA-Z][a-zA-Z0-9-]*(=[A-Za-z0-9._:/-]+)?$`)
@@ -82,11 +88,11 @@ var (
 // .mcp.json ou un .claude/settings.json que claude lirait et exécuterait avec vos droits.
 func workDir() string {
 	workOnce.Do(func() {
-		d, err := os.MkdirTemp("", "gld-web-")
+		dir, err := os.MkdirTemp("", "gld-web-")
 		if err != nil {
-			d = cfgDir() // à défaut, le dossier de configuration de l'utilisateur (privé lui aussi)
+			dir = cfgDir() // à défaut, le dossier de configuration de l'utilisateur (privé lui aussi)
 		}
-		workPath = d
+		workPath = dir
 	})
 	return workPath
 }
@@ -101,8 +107,8 @@ func removeWorkDir() {
 // helperCmd : un appel d'aide de gld à claude (brouillon, comptage de tokens, analyse) : sans outils, sans réglages ni MCP,
 // dans le dossier privé de workDir, et surtout SANS session enregistrée (--no-session-persistence) : ces appels ne doivent
 // jamais apparaître dans la liste de vos sessions. La demande se passe sur stdin.
-func helperCmd(ctx context.Context, model, system string) *exec.Cmd {
-	cmd := withPath(exec.CommandContext(ctx, "claude", "-p", "--model", model, "--tools", "", "--disable-slash-commands",
+func helperCmd(callContext context.Context, model, system string) *exec.Cmd {
+	cmd := withPath(exec.CommandContext(callContext, "claude", "-p", "--model", model, "--tools", "", "--disable-slash-commands",
 		"--strict-mcp-config", "--setting-sources", "", "--no-session-persistence", "--system-prompt", system, "--output-format", "json"))
 	cmd.Dir = workDir()
 	return cmd
@@ -112,66 +118,72 @@ func helperCmd(ctx context.Context, model, system string) *exec.Cmd {
 // Node et d'appels facturés que de requêtes. Les suivants attendent leur tour, dans la limite de leur délai.
 var helperSem = make(chan struct{}, 2)
 
-func helperOutput(ctx context.Context, cmd *exec.Cmd) ([]byte, error) {
+func helperOutput(callContext context.Context, cmd *exec.Cmd) ([]byte, error) {
 	select {
 	case helperSem <- struct{}{}:
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	case <-callContext.Done():
+		return nil, callContext.Err()
 	}
 	defer func() { <-helperSem }()
-	out, err := cmd.Output()
+	output, err := cmd.Output()
 	// « exit status 1 » seul ne dit rien : on joint la dernière ligne que claude a écrite sur sa sortie d'erreur.
-	var ee *exec.ExitError
-	if errors.As(err, &ee) {
-		if l := lastLine(ee.Stderr); l != "" {
-			err = fmt.Errorf("%w : %s", err, cut(l, 300))
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		if lastStderrLine := lastLine(exitErr.Stderr); lastStderrLine != "" {
+			err = fmt.Errorf("%w : %s", err, cut(lastStderrLine, helperErrorLineMax))
 		}
 	}
-	return out, err
+	return output, err
 }
 
-func lastLine(b []byte) string {
-	t := strings.TrimSpace(string(b))
-	if i := strings.LastIndexByte(t, '\n'); i >= 0 {
-		t = strings.TrimSpace(t[i+1:])
+func lastLine(output []byte) string {
+	trimmed := strings.TrimSpace(string(output))
+	if newlineIndex := strings.LastIndexByte(trimmed, '\n'); newlineIndex >= 0 {
+		trimmed = strings.TrimSpace(trimmed[newlineIndex+1:])
 	}
-	return t
+	return trimmed
 }
 
-func withPath(c *exec.Cmd) *exec.Cmd {
+func withPath(cmd *exec.Cmd) *exec.Cmd {
 	home := runAsHome()
 	if home == "" {
 		home, _ = os.UserHomeDir()
 	}
-	local := filepath.Join(home, ".local", "bin") // aussi celui de l'installateur natif de claude sous Windows
-	c.Env = append(environNoAuth(), "PATH="+local+string(os.PathListSeparator)+os.Getenv("PATH"))
+	localBin := filepath.Join(home, ".local", "bin") // aussi celui de l'installateur natif de claude sous Windows
+	cmd.Env = append(environNoAuth(), "PATH="+localBin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	// exec.Command a déjà cherché le programme dans le PATH du serveur, où ~/.local/bin peut manquer
 	// (service, lanceur de bureau) : on le reprend ici, avec la même priorité que le PATH ci-dessus.
-	if name := c.Args[0]; !strings.ContainsAny(name, `/\`) {
-		if runtime.GOOS == "windows" && filepath.Ext(name) == "" {
+	name := cmd.Args[0]
+	isBareName := !strings.ContainsAny(name, `/\`)
+	if isBareName {
+		isWindows := runtime.GOOS == "windows"
+		if isWindows && filepath.Ext(name) == "" {
 			name += ".exe"
 		}
-		if fi, err := os.Stat(filepath.Join(local, name)); err == nil && fi.Mode().IsRegular() && (runtime.GOOS == "windows" || fi.Mode()&0o111 != 0) {
-			c.Path, c.Err = filepath.Join(local, name), nil
+		candidate := filepath.Join(localBin, name)
+		fileInfo, err := os.Stat(candidate)
+		isRunnable := err == nil && fileInfo.Mode().IsRegular() && (isWindows || fileInfo.Mode()&executableBits != 0)
+		if isRunnable {
+			cmd.Path, cmd.Err = candidate, nil
 		}
 	}
-	applyRunAs(c)
-	return c
+	applyRunAs(cmd)
+	return cmd
 }
 
 // matin exécute gld-matin (cli) en direct et renvoie sa sortie ; l'erreur s'y ajoute, pour qu'un échec dise pourquoi
 // (remplaçable dans les tests). Appelé depuis le web : la session s'ouvre dans un terminal de la machine, avec tmux
 // dedans (le tmux courant de gld, invisible pour l'utilisateur, ne convient pas).
-var matin = func(ctx context.Context, args ...string) (string, error) {
-	var buf strings.Builder
-	if l := tmuxLauncher(); l != "" {
-		args = append([]string{"--term", l}, args...)
+var matin = func(callContext context.Context, args ...string) (string, error) {
+	var output strings.Builder
+	if launcher := tmuxLauncher(); launcher != "" {
+		args = append([]string{"--term", launcher}, args...)
 	}
-	err := cliMatin(ctx, args, &buf)
+	err := cliMatin(callContext, args, &output)
 	if err != nil {
-		buf.WriteString("gld-matin : " + err.Error() + "\n")
+		output.WriteString("gld-matin : " + err.Error() + "\n")
 	}
-	return buf.String(), err
+	return output.String(), err
 }
 
 // tmuxLauncher : l'onglet d'émulateur où lancer une session avec tmux dedans, "" si tmux ou tout émulateur manque.
@@ -182,9 +194,9 @@ func tmuxLauncher() string {
 	if !onPath("tmux") {
 		return ""
 	}
-	for _, l := range []string{"kitty", "wezterm", "gnome-terminal", "konsole", "xfce4-terminal", "tilix"} {
-		if launcherAvailable(l) {
-			return l + "+tmux"
+	for _, launcher := range []string{"kitty", "wezterm", "gnome-terminal", "konsole", "xfce4-terminal", "tilix"} {
+		if launcherAvailable(launcher) {
+			return launcher + "+tmux"
 		}
 	}
 	return ""
@@ -223,40 +235,40 @@ func forgetAgents() {
 }
 
 func runClaudeAgents() ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), cmdTimeout)
+	commandContext, cancel := context.WithTimeout(context.Background(), cmdTimeout)
 	defer cancel()
-	c := withPath(exec.CommandContext(ctx, "claude", "agents", "--json"))
-	c.WaitDelay = time.Second // un petit-enfant qui garde la sortie ouverte ne bloque pas non plus
-	return c.Output()
+	cmd := withPath(exec.CommandContext(commandContext, "claude", "agents", "--json"))
+	cmd.WaitDelay = time.Second // un petit-enfant qui garde la sortie ouverte ne bloque pas non plus
+	return cmd.Output()
 }
 
 // alive : ids des sessions ouvertes, ou nil si `claude agents --json` a échoué (on ne sait pas).
 func alive() map[string]bool {
-	out, err := claudeAgents()
-	var a []struct{ SessionId string }
-	if err != nil || json.Unmarshal(out, &a) != nil {
+	agentsJSON, err := claudeAgents()
+	var agents []struct{ SessionId string }
+	if err != nil || json.Unmarshal(agentsJSON, &agents) != nil {
 		return nil // inconnu : liveCheck fait refuser les actions qui en dépendent
 	}
-	m := map[string]bool{}
-	for _, x := range a {
-		m[x.SessionId] = true
+	openIDs := map[string]bool{}
+	for _, agent := range agents {
+		openIDs[agent.SessionId] = true
 	}
-	return m
+	return openIDs
 }
 
 // waiting : ids des sessions ouvertes qui attendent (interactive « idle », en arrière-plan « blocked »).
 // Une demande d'autorisation en cours n'est pas distinguée d'un tour terminé.
 var waiting = func() []string {
-	out, err := claudeAgents()
-	var a []struct{ SessionId, Status, State string }
-	ids := []string{}
-	if err != nil || json.Unmarshal(out, &a) != nil {
-		return ids
+	agentsJSON, err := claudeAgents()
+	var agents []struct{ SessionId, Status, State string }
+	waitingIDs := []string{}
+	if err != nil || json.Unmarshal(agentsJSON, &agents) != nil {
+		return waitingIDs
 	}
-	for _, x := range a {
-		if x.Status == "idle" || x.State == "blocked" {
-			ids = append(ids, x.SessionId)
+	for _, agent := range agents {
+		if agent.Status == "idle" || agent.State == "blocked" {
+			waitingIDs = append(waitingIDs, agent.SessionId)
 		}
 	}
-	return ids
+	return waitingIDs
 }

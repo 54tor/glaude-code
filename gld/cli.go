@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -21,13 +22,19 @@ import (
 
 type cliFunc func(ctx context.Context, args []string, out io.Writer) error
 
+const (
+	dayDuration   = 24 * time.Hour
+	shortIDLength = 8
+)
+
 var cliCommands = map[string]cliFunc{"matin": cliMatin, "user": cliUser, "auth": cliAuth}
 
-// dispatchCLI exécute une commande si argv la désigne. ok=false : c'est le serveur qu'on lance.
-func dispatchCLI(argv []string) (code int, ok bool) {
-	base := strings.TrimSuffix(filepath.Base(argv[0]), ".exe")
-	name, args := strings.TrimPrefix(base, "gld-"), argv[1:]
-	if base == name || cliCommands[name] == nil { // pas appelé gld-<commande> : sous-commande explicite
+// dispatchCLI exécute une commande si argv la désigne. handled=false : c'est le serveur qu'on lance.
+func dispatchCLI(argv []string) (exitCode int, handled bool) {
+	binaryName := strings.TrimSuffix(filepath.Base(argv[0]), ".exe")
+	name, args := strings.TrimPrefix(binaryName, "gld-"), argv[1:]
+	isExplicitSubcommand := binaryName == name || cliCommands[name] == nil // pas appelé gld-<commande>
+	if isExplicitSubcommand {
 		if len(args) == 0 {
 			return 0, false
 		}
@@ -56,12 +63,12 @@ func dispatchCLI(argv []string) (code int, ok bool) {
 			return 2, true
 		}
 	}
-	fn := cliCommands[name]
-	if fn == nil {
+	command := cliCommands[name]
+	if command == nil {
 		return 0, false
 	}
 	cliMode = true
-	err := fn(context.Background(), args, os.Stdout)
+	err := command(context.Background(), args, os.Stdout)
 	switch {
 	case err == nil, errors.Is(err, errHelp):
 		return 0, true
@@ -81,68 +88,63 @@ type flags struct {
 	pos   []string
 }
 
-// parseFlags : bool liste les options sans valeur, val celles qui en prennent une. Un alias se déclare avec « -n=--dry-run ».
-func parseFlags(args []string, bool_, val []string, alias map[string]string) (*flags, error) {
-	f := &flags{bools: map[string]bool{}, vals: map[string]string{}}
-	has := func(l []string, s string) bool {
-		for _, x := range l {
-			if x == s {
-				return true
-			}
-		}
-		return false
-	}
-	for i := 0; i < len(args); i++ {
-		a := args[i]
-		if r, ok := alias[a]; ok {
-			a = r
+// parseFlags : booleanFlags liste les options sans valeur, valueFlags celles qui en prennent une. Un alias se déclare avec « -n=--dry-run ».
+func parseFlags(args []string, booleanFlags, valueFlags []string, alias map[string]string) (*flags, error) {
+	parsed := &flags{bools: map[string]bool{}, vals: map[string]string{}}
+	for argIndex := 0; argIndex < len(args); argIndex++ {
+		arg := args[argIndex]
+		if canonical, isAlias := alias[arg]; isAlias {
+			arg = canonical
 		}
 		switch {
-		case has(bool_, a):
-			f.bools[a] = true
-		case has(val, a):
-			if i+1 < len(args) {
-				i++
-				f.vals[a] = args[i]
+		case slices.Contains(booleanFlags, arg):
+			parsed.bools[arg] = true
+		case slices.Contains(valueFlags, arg):
+			if argIndex+1 < len(args) {
+				argIndex++
+				parsed.vals[arg] = args[argIndex]
 			} else {
-				f.vals[a] = ""
+				parsed.vals[arg] = ""
 			}
-		case a == "-h" || a == "--help":
+		case arg == "-h" || arg == "--help":
 			return nil, errHelp
-		case strings.HasPrefix(a, "-") && a != "-":
-			return nil, terr("srv.cli.optionInconnue", "A1", args[i])
+		case strings.HasPrefix(arg, "-") && arg != "-":
+			return nil, terr("srv.cli.optionInconnue", "A1", args[argIndex])
 		default:
-			f.pos = append(f.pos, a)
+			parsed.pos = append(parsed.pos, arg)
 		}
 	}
-	return f, nil
+	return parsed, nil
 }
 
-func (f *flags) int(name string, def int) int {
-	if v, ok := f.vals[name]; ok {
-		if n, err := strconv.Atoi(v); err == nil {
-			return n
-		}
+func (parsedFlags *flags) int(name string, fallback int) int {
+	value, found := parsedFlags.vals[name]
+	if !found {
+		return fallback
 	}
-	return def
+	number, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+	return number
 }
 
-func envInt(def int, keys ...string) int {
-	for _, k := range keys {
-		if n, err := strconv.Atoi(os.Getenv(k)); err == nil {
-			return n
+func envInt(fallback int, keys ...string) int {
+	for _, key := range keys {
+		if number, err := strconv.Atoi(os.Getenv(key)); err == nil {
+			return number
 		}
 	}
-	return def
+	return fallback
 }
 
-func envStr(def string, keys ...string) string {
-	for _, k := range keys {
-		if v := os.Getenv(k); v != "" {
-			return v
+func envStr(fallback string, keys ...string) string {
+	for _, key := range keys {
+		if value := os.Getenv(key); value != "" {
+			return value
 		}
 	}
-	return def
+	return fallback
 }
 
 // project : un dossier de projet et le dossier de ses transcripts.
@@ -155,26 +157,27 @@ func resolveProject(target string) (project, error) {
 	if target == "" {
 		target, _ = os.Getwd()
 	}
-	abs, err := filepath.Abs(target)
+	absolutePath, err := filepath.Abs(target)
 	if err != nil {
 		return project{}, err
 	}
-	if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
+	if dirInfo, statErr := os.Stat(absolutePath); statErr != nil || !dirInfo.IsDir() {
 		return project{}, terr("srv.cli.projetIntrouvable", "A1", target)
 	}
-	p := project{Path: abs, Transcripts: filepath.Join(root, nonAlnum.ReplaceAllString(abs, "-"))}
-	if ls, _ := filepath.Glob(filepath.Join(p.Transcripts, "*.jsonl")); len(ls) == 0 {
-		if b, err := os.ReadFile(filepath.Join(p.Transcripts, ".session-aliases")); err == nil {
-			canon, _, _ := strings.Cut(string(b), "\n")
-			if fi, err := os.Stat(strings.TrimSpace(canon)); err == nil && fi.IsDir() {
-				p.Transcripts, p.Alias = strings.TrimSpace(canon), strings.TrimSpace(canon)
+	resolved := project{Path: absolutePath, Transcripts: filepath.Join(root, nonAlnum.ReplaceAllString(absolutePath, "-"))}
+	if transcripts, _ := filepath.Glob(filepath.Join(resolved.Transcripts, "*.jsonl")); len(transcripts) == 0 {
+		if aliasContent, readErr := os.ReadFile(filepath.Join(resolved.Transcripts, ".session-aliases")); readErr == nil {
+			canonicalLine, _, _ := strings.Cut(string(aliasContent), "\n")
+			canonicalDir := strings.TrimSpace(canonicalLine)
+			if canonicalInfo, statErr := os.Stat(canonicalDir); statErr == nil && canonicalInfo.IsDir() {
+				resolved.Transcripts, resolved.Alias = canonicalDir, canonicalDir
 			}
 		}
 	}
-	if fi, err := os.Stat(p.Transcripts); err != nil || !fi.IsDir() {
-		return p, terr("srv.cli.aucuneSessionClaudePour", "A1", abs, "A2", p.Transcripts)
+	if dirInfo, statErr := os.Stat(resolved.Transcripts); statErr != nil || !dirInfo.IsDir() {
+		return resolved, terr("srv.cli.aucuneSessionClaudePour", "A1", absolutePath, "A2", resolved.Transcripts)
 	}
-	return p, nil
+	return resolved, nil
 }
 
 // transcriptFile : un transcript d'un dossier, avec ce qu'on en sait.
@@ -187,51 +190,55 @@ type transcriptFile struct {
 // listTranscripts : les *.jsonl (non vides, sauf withEmpty) d'un dossier de transcripts, du plus récent au plus ancien (ou l'inverse).
 func listTranscripts(dir string, oldestFirst, withEmpty bool) []transcriptFile {
 	paths, _ := filepath.Glob(filepath.Join(dir, "*.jsonl"))
-	var out []transcriptFile
-	for _, p := range paths {
-		st, err := os.Stat(p)
-		if err != nil || !st.Mode().IsRegular() || (st.Size() == 0 && !withEmpty) {
+	var transcripts []transcriptFile
+	for _, path := range paths {
+		fileInfo, err := os.Stat(path)
+		if err != nil {
 			continue
 		}
-		out = append(out, transcriptFile{Path: p, Info: st, S: info(p, st)})
-	}
-	sort.SliceStable(out, func(i, j int) bool {
-		if oldestFirst {
-			return out[i].Info.ModTime().Before(out[j].Info.ModTime())
+		isSkippedEmpty := fileInfo.Size() == 0 && !withEmpty
+		if !fileInfo.Mode().IsRegular() || isSkippedEmpty {
+			continue
 		}
-		return out[i].Info.ModTime().After(out[j].Info.ModTime())
+		transcripts = append(transcripts, transcriptFile{Path: path, Info: fileInfo, S: info(path, fileInfo)})
+	}
+	sort.SliceStable(transcripts, func(left, right int) bool {
+		if oldestFirst {
+			return transcripts[left].Info.ModTime().Before(transcripts[right].Info.ModTime())
+		}
+		return transcripts[left].Info.ModTime().After(transcripts[right].Info.ModTime())
 	})
-	return out
+	return transcripts
 }
 
 // label : le titre d'une session et sa marque (« ~ » quand il est déduit du premier prompt), "" si elle n'en a aucun.
-func (t transcriptFile) label() (title, mark string) {
-	if t.S.Named {
-		return t.S.Title, " "
+func (file transcriptFile) label() (title, mark string) {
+	if file.S.Named {
+		return file.S.Title, " "
 	}
-	if t.S.Title == "(sans titre)" {
+	if file.S.Title == "(sans titre)" {
 		return "", "~"
 	}
-	return t.S.Title, "~"
+	return file.S.Title, "~"
 }
 
-func younger(fi os.FileInfo, days int) bool {
-	return time.Since(fi.ModTime()) < time.Duration(days)*24*time.Hour
+func younger(fileInfo os.FileInfo, days int) bool {
+	return time.Since(fileInfo.ModTime()) < time.Duration(days)*dayDuration
 }
 
-// pad : complète à droite jusqu'à n caractères, comme printf %-ns.
-func pad(s string, n int) string {
-	if k := len([]rune(s)); k < n {
-		return s + strings.Repeat(" ", n-k)
+// pad : complète à droite jusqu'à width caractères, comme printf %-ns.
+func pad(text string, width int) string {
+	if length := len([]rune(text)); length < width {
+		return text + strings.Repeat(" ", width-length)
 	}
-	return s
+	return text
 }
 
-func mdate(fi os.FileInfo) string { return fi.ModTime().Format("01-02_15:04") }
+func mdate(fileInfo os.FileInfo) string { return fileInfo.ModTime().Format("01-02_15:04") }
 
-func short(id string) string { return cut(id, 8) }
+func short(id string) string { return cut(id, shortIDLength) }
 
-func helpText(out io.Writer, text string) error {
-	fmt.Fprintln(out, strings.TrimSpace(text))
+func helpText(output io.Writer, text string) error {
+	fmt.Fprintln(output, strings.TrimSpace(text))
 	return errHelp
 }

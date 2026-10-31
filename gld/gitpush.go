@@ -10,9 +10,16 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"sync"
 	"time"
+)
+
+const (
+	schemeSeparator = "://"
+	gitPushTimeout  = 60 * time.Second
+	gitPushBodyMax  = 1 << 10
 )
 
 type GitRemote struct {
@@ -23,127 +30,129 @@ type GitRemote struct {
 // maskURL retire les identifiants d'une URL avant de l'afficher. En http(s), tout le userinfo part : un jeton s'y écrit aussi
 // bien à la place du nom (https://<jeton>@github.com/…) qu'à celle du mot de passe. En ssh, seul le mot de passe part.
 func maskURL(raw string) string {
-	u, err := url.Parse(raw)
+	parsedURL, err := url.Parse(raw)
 	if err != nil {
 		return stripUserinfo(raw)
 	}
-	if u.User == nil {
+	if parsedURL.User == nil {
 		return raw
 	}
-	if u.Scheme == "http" || u.Scheme == "https" {
-		u.User = nil
-	} else if _, has := u.User.Password(); has {
-		u.User = url.User(u.User.Username())
+	if parsedURL.Scheme == "http" || parsedURL.Scheme == "https" {
+		parsedURL.User = nil
+	} else if _, hasPassword := parsedURL.User.Password(); hasPassword {
+		parsedURL.User = url.User(parsedURL.User.Username())
 	}
-	return u.String()
+	return parsedURL.String()
 }
 
 // stripUserinfo : repli quand net/url refuse l'adresse (git accepte des mots de passe que Go rejette) : tout ce qui
 // précède le dernier « @ » de l'autorité est retiré.
 func stripUserinfo(raw string) string {
-	i := strings.Index(raw, "://")
-	if i < 0 {
+	schemeIndex := strings.Index(raw, schemeSeparator)
+	if schemeIndex < 0 {
 		return raw // forme scp (git@hote:chemin) : pas de mot de passe possible
 	}
-	rest := raw[i+3:]
-	auth := rest
-	if j := strings.IndexByte(rest, '/'); j >= 0 {
-		auth = rest[:j]
+	authorityStart := schemeIndex + len(schemeSeparator)
+	rest := raw[authorityStart:]
+	authority := rest
+	if slashIndex := strings.IndexByte(rest, '/'); slashIndex >= 0 {
+		authority = rest[:slashIndex]
 	}
-	if k := strings.LastIndexByte(auth, '@'); k >= 0 {
-		return raw[:i+3] + rest[k+1:]
+	if atIndex := strings.LastIndexByte(authority, '@'); atIndex >= 0 {
+		return raw[:authorityStart] + rest[atIndex+1:]
 	}
 	return raw
 }
 
 func gitOut(dir string, args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	commandContext, cancel := context.WithTimeout(context.Background(), gitPushTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", append([]string{"--no-optional-locks", "-c", "core.fsmonitor=false", "-C", dir}, args...)...)
+	gitArgs := append([]string{"--no-optional-locks", "-c", "core.fsmonitor=false", "-C", dir}, args...)
+	cmd := exec.CommandContext(commandContext, "git", gitArgs...)
 	cmd.Env = append(childEnv(), "GIT_TERMINAL_PROMPT=0")
 	if os.Getenv("GIT_SSH_COMMAND") == "" {
-		if c, _ := gitOut1(dir, "config", "core.sshCommand"); c == "" {
+		if sshCommand, _ := gitOut1(dir, "config", "core.sshCommand"); sshCommand == "" {
 			cmd.Env = append(cmd.Env, "GIT_SSH_COMMAND=ssh -o BatchMode=yes") // pas de demande de phrase de passe sur le terminal de gld
 		}
 	}
 	applyRunAs(cmd)
-	b, err := cmd.CombinedOutput()
-	return strings.TrimSpace(string(b)), err
+	combinedOutput, err := cmd.CombinedOutput()
+	return strings.TrimSpace(string(combinedOutput)), err
 }
 
 func gitOut1(dir string, args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), cmdTimeout)
+	commandContext, cancel := context.WithTimeout(context.Background(), cmdTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
+	cmd := exec.CommandContext(commandContext, "git", append([]string{"-C", dir}, args...)...)
 	cmd.WaitDelay = time.Second
 	applyRunAs(cmd)
-	b, err := cmd.Output()
-	return strings.TrimSpace(string(b)), err
+	output, err := cmd.Output()
+	return strings.TrimSpace(string(output)), err
 }
 
 // gitRemotes : les remotes du dépôt, avec l'adresse de poussée (`git remote -v`, lignes « (push) »).
 func gitRemotes(dir string) []GitRemote {
-	out, _ := gitOut1(dir, "remote", "-v")
-	var rs []GitRemote
-	for _, l := range strings.Split(out, "\n") {
-		f := strings.Fields(l)
-		if len(f) == 3 && f[2] == "(push)" {
-			rs = append(rs, GitRemote{f[0], maskURL(f[1])})
+	remoteOutput, _ := gitOut1(dir, "remote", "-v")
+	var remotes []GitRemote
+	for _, remoteLine := range strings.Split(remoteOutput, "\n") {
+		fields := strings.Fields(remoteLine)
+		isPushLine := len(fields) == 3 && fields[2] == "(push)"
+		if isPushLine {
+			remotes = append(remotes, GitRemote{fields[0], maskURL(fields[1])})
 		}
 	}
-	return rs
+	return remotes
 }
 
 var pushMu sync.Mutex // un push à la fois : deux pushes du même dépôt se marcheraient dessus
 
 // gitPush pousse la branche courante vers remote (qui doit exister dans le dépôt). Sans amont, la branche est liée au remote (-u).
 func gitPush(dir, remote string) (string, error) {
-	known := false
-	for _, r := range gitRemotes(dir) {
-		known = known || r.Name == remote
-	}
-	if !known {
+	isKnownRemote := slices.ContainsFunc(gitRemotes(dir), func(listedRemote GitRemote) bool {
+		return listedRemote.Name == remote
+	})
+	if !isKnownRemote {
 		return L("srv.gitpush.unknownRemote", "A1", remote), os.ErrInvalid
 	}
-	if b, _ := gitOut1(dir, "symbolic-ref", "--short", "-q", "HEAD"); b == "" {
+	if branch, _ := gitOut1(dir, "symbolic-ref", "--short", "-q", "HEAD"); branch == "" {
 		return L("srv.gitpush.detached"), os.ErrInvalid
 	}
 	args := []string{"push"}
-	if up, _ := gitOut1(dir, "rev-parse", "--abbrev-ref", "@{u}"); up == "" {
+	if upstream, _ := gitOut1(dir, "rev-parse", "--abbrev-ref", "@{u}"); upstream == "" {
 		args = append(args, "-u")
 	}
 	pushMu.Lock()
 	defer pushMu.Unlock()
-	out, err := gitOut(dir, append(args, "--", remote, "HEAD")...)
+	pushOutput, err := gitOut(dir, append(args, "--", remote, "HEAD")...)
 	gitMu.Lock()
 	delete(gitCache, dir) // l'avance sur l'amont a changé : relu au prochain passage
 	gitMu.Unlock()
-	return out, err
+	return pushOutput, err
 }
 
 func routesGitPush(mux *http.ServeMux) {
-	mux.HandleFunc("GET /v1/git/remotes", func(w http.ResponseWriter, r *http.Request) {
-		dir := r.URL.Query().Get("dir")
-		rs := []GitRemote{}
+	mux.HandleFunc("GET /v1/git/remotes", func(responseWriter http.ResponseWriter, request *http.Request) {
+		dir := request.URL.Query().Get("dir")
+		remotes := []GitRemote{}
 		if knownRepo(dir) {
-			rs = append(rs, gitRemotes(dir)...)
+			remotes = append(remotes, gitRemotes(dir)...)
 		}
-		writeJSON(w, 200, map[string]any{"remotes": rs})
+		writeJSON(responseWriter, http.StatusOK, map[string]any{"remotes": remotes})
 	})
-	mux.HandleFunc("POST /v1/git/pushes", func(w http.ResponseWriter, r *http.Request) {
-		var req struct{ Dir, Remote string }
-		if !decodeBody(w, r, &req, 1<<10) {
+	mux.HandleFunc("POST /v1/git/pushes", func(responseWriter http.ResponseWriter, request *http.Request) {
+		var payload struct{ Dir, Remote string }
+		if !decodeBody(responseWriter, request, &payload, gitPushBodyMax) {
 			return
 		}
-		if !knownRepo(req.Dir) {
-			writeErr(w, http.StatusBadRequest, "bad_request", L("srv.routes_sessions.dossierInvalide"))
+		if !knownRepo(payload.Dir) {
+			writeErr(responseWriter, http.StatusBadRequest, "bad_request", L("srv.routes_sessions.dossierInvalide"))
 			return
 		}
-		out, err := gitPush(req.Dir, req.Remote)
+		pushOutput, err := gitPush(payload.Dir, payload.Remote)
 		if err != nil {
-			writeErr(w, http.StatusBadGateway, "push_failed", cmp.Or(out, err.Error()))
+			writeErr(responseWriter, http.StatusBadGateway, "push_failed", cmp.Or(pushOutput, err.Error()))
 			return
 		}
-		writeJSON(w, 201, map[string]any{"message": cmp.Or(out, L("srv.gitpush.pushed"))})
+		writeJSON(responseWriter, http.StatusCreated, map[string]any{"message": cmp.Or(pushOutput, L("srv.gitpush.pushed"))})
 	})
 }

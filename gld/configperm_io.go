@@ -4,6 +4,7 @@ package main
 // peut garder, partager ou coller dans un autre fichier de réglages.
 
 import (
+	"slices"
 	"strings"
 )
 
@@ -12,164 +13,167 @@ var permKinds = []string{"allow", "ask", "deny"}
 // importKinds : les listes qu'un fragment peut porter. Les dossiers supplémentaires sont des chemins, pas des règles.
 var importKinds = append(append([]string{}, permKinds...), "additionalDirectories")
 
-const permMax = 2000 // règles acceptées par import
+const (
+	permMax            = 2000 // règles acceptées par import
+	permImportMaxBytes = 1 << 20
+	permRuleMaxLen     = 300
+	permDirMaxLen      = 500
+)
 
 // parsePermImport lit un fragment exporté : soit {"permissions": {allow, ask, deny}}, soit directement {allow, ask, deny}.
 // Le mode par défaut (defaultMode) n'est jamais importé : c'est un réglage de confiance, pas une règle.
 func parsePermImport(text string) (map[string][]string, error) {
-	if len(text) > 1<<20 {
+	if len(text) > permImportMaxBytes {
 		return nil, terr("srv.configperm_io.fichierTropGros")
 	}
-	v, err := parseOrdered([]byte(text))
+	parsed, err := parseOrdered([]byte(text))
 	if err != nil {
 		return nil, syntaxError(text, err)
 	}
-	root := asMap(v)
-	if root == nil {
+	fragment := asMap(parsed)
+	if fragment == nil {
 		return nil, terr("srv.configperm_io.unObjetJsonEst")
 	}
-	if p, ok := root.get("permissions"); ok {
-		if root = asMap(p); root == nil {
+	if permissionsValue, found := fragment.get("permissions"); found {
+		if fragment = asMap(permissionsValue); fragment == nil {
 			return nil, terr("srv.configperm_io.permissionsDoitEtreUn")
 		}
 	}
-	out := map[string][]string{}
-	total := 0
-	for _, k := range root.keys {
-		known := false
-		for _, pk := range importKinds {
-			known = known || pk == k
-		}
-		if !known {
+	listsByKind := map[string][]string{}
+	totalRules := 0
+	for _, kind := range fragment.keys {
+		if !slices.Contains(importKinds, kind) {
 			continue // defaultMode… : ignoré
 		}
-		list, ok := root.m[k].([]any)
-		if !ok {
-			return nil, terr("srv.configperm_io.doitEtreUneListe", "A1", k)
+		list, isList := fragment.m[kind].([]any)
+		if !isList {
+			return nil, terr("srv.configperm_io.doitEtreUneListe", "A1", kind)
 		}
 		seen := map[string]bool{}
 		rules := []string{}
-		for i, e := range list {
-			s, ok := e.(string)
-			s = strings.TrimSpace(s)
-			max := 300
-			if k == "additionalDirectories" {
-				max = 500
+		for entryIndex, entry := range list {
+			rule, isString := entry.(string)
+			rule = strings.TrimSpace(rule)
+			maxLength := permRuleMaxLen
+			if kind == "additionalDirectories" {
+				maxLength = permDirMaxLen
 			}
-			if !ok || s == "" || len(s) > max || strings.ContainsAny(s, "\n\r\x00") {
-				return nil, terr("srv.configperm_io.lEntreeNN", "A1", k, "A2", i+1)
+			isInvalid := !isString || rule == "" || len(rule) > maxLength || strings.ContainsAny(rule, "\n\r\x00")
+			if isInvalid {
+				return nil, terr("srv.configperm_io.lEntreeNN", "A1", kind, "A2", entryIndex+1)
 			}
-			if !seen[s] {
-				seen[s] = true
-				rules = append(rules, s)
+			if !seen[rule] {
+				seen[rule] = true
+				rules = append(rules, rule)
 			}
 		}
-		total += len(rules)
-		out[k] = rules
+		totalRules += len(rules)
+		listsByKind[kind] = rules
 	}
-	if len(out) == 0 {
+	if len(listsByKind) == 0 {
 		return nil, terr("srv.configperm_io.aucuneListeAllowAsk")
 	}
-	if total > permMax {
-		return nil, terr("srv.configperm_io.tropDeReglesAu", "A1", total, "A2", permMax)
+	if totalRules > permMax {
+		return nil, terr("srv.configperm_io.tropDeReglesAu", "A1", totalRules, "A2", permMax)
 	}
-	return out, nil
+	return listsByKind, nil
 }
 
 // permImport applique un fragment aux permissions d'un fichier de réglages. mode « merge » : ajoute les règles qui manquent ;
 // « replace » : remplace les listes présentes dans le fragment (les autres listes ne bougent pas).
-func permImport(id, text, mode string, dry bool) (before, after string, warns []CfgIssue, summary string, err error) {
+func permImport(id, text, mode string, dryRun bool) (before, after string, warns []CfgIssue, summary string, err error) {
 	cfgMu.Lock()
 	defer cfgMu.Unlock()
 	if mode != "merge" && mode != "replace" {
 		err = terr("srv.configperm_io.modeDImportInconnu")
 		return
 	}
-	imp, err := parsePermImport(text)
+	imported, err := parsePermImport(text)
 	if err != nil {
 		return
 	}
-	path, orig, exists, origDoc, err := loadDoc(id)
+	path, original, exists, originalDoc, err := loadDoc(id)
 	if err != nil {
 		return
 	}
 	// on travaille sur une copie : le document d'origine sert à l'aperçu
-	cur, perr := parseOrdered([]byte(formatOrdered(origDoc)))
-	if perr != nil {
-		err = perr
+	copied, parseErr := parseOrdered([]byte(formatOrdered(originalDoc)))
+	if parseErr != nil {
+		err = parseErr
 		return
 	}
-	doc := asMap(cur)
+	doc := asMap(copied)
 	added, removed := 0, 0
 	for _, kind := range importKinds {
-		rules, has := imp[kind]
-		if !has {
+		rules, hasKind := imported[kind]
+		if !hasKind {
 			continue
 		}
 		var existing []string
-		if v, ok := lookup(doc, "permissions", kind); ok {
-			existing = strList(v)
+		if existingValue, found := lookup(doc, "permissions", kind); found {
+			existing = strList(existingValue)
 		}
-		var next []string
+		var nextRules []string
 		switch mode {
 		case "merge":
-			have := map[string]bool{}
-			for _, r := range existing {
-				have[r] = true
+			existingSet := map[string]bool{}
+			for _, rule := range existing {
+				existingSet[rule] = true
 			}
-			next = existing
-			for _, r := range rules {
-				if !have[r] {
-					next = append(next, r)
+			nextRules = existing
+			for _, rule := range rules {
+				if !existingSet[rule] {
+					nextRules = append(nextRules, rule)
 					added++
 				}
 			}
 		default:
-			next = rules
-			have := map[string]bool{}
-			for _, r := range rules {
-				have[r] = true
+			nextRules = rules
+			importedSet := map[string]bool{}
+			for _, rule := range rules {
+				importedSet[rule] = true
 			}
-			old := map[string]bool{}
-			for _, r := range existing {
-				old[r] = true
-				if !have[r] {
+			previousSet := map[string]bool{}
+			for _, rule := range existing {
+				previousSet[rule] = true
+				if !importedSet[rule] {
 					removed++
 				}
 			}
-			for _, r := range rules {
-				if !old[r] {
+			for _, rule := range rules {
+				if !previousSet[rule] {
 					added++
 				}
 			}
 		}
-		setRules(doc, kind, next)
+		setRules(doc, kind, nextRules)
 	}
 	summary = L("srv.configperm_io.summary", "A1", added, "A2", removed)
-	before, after, warns, err = commitDoc(id, path, orig, exists, origDoc, doc, dry)
+	before, after, warns, err = commitDoc(id, path, original, exists, originalDoc, doc, dryRun)
 	return
 }
 
 // setRules écrit la liste d'une catégorie ; une liste vide retire la clé (et « permissions » si elle devient vide).
 func setRules(doc *omap, kind string, rules []string) {
-	perms := asMap(func() any { v, _ := doc.get("permissions"); return v }())
-	if perms == nil {
+	permissionsValue, _ := doc.get("permissions")
+	permissions := asMap(permissionsValue)
+	if permissions == nil {
 		if len(rules) == 0 {
 			return
 		}
-		perms = newOmap()
-		doc.set("permissions", perms)
+		permissions = newOmap()
+		doc.set("permissions", permissions)
 	}
 	if len(rules) == 0 {
-		perms.del(kind)
-		if len(perms.keys) == 0 {
+		permissions.del(kind)
+		if len(permissions.keys) == 0 {
 			doc.del("permissions")
 		}
 		return
 	}
 	list := make([]any, len(rules))
-	for i, r := range rules {
-		list[i] = r
+	for ruleIndex, rule := range rules {
+		list[ruleIndex] = rule
 	}
-	perms.set(kind, list)
+	permissions.set(kind, list)
 }
