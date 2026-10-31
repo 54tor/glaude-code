@@ -107,6 +107,20 @@ func newerVersion(current, latest string) bool {
 	return false
 }
 
+const claudePatchTolerance = 3
+
+// claudeFarBehind : l'installeur natif de Claude Code suit npm avec du retard, donc seul un écart de mineure ou d'au moins claudePatchTolerance patchs est signalé.
+func claudeFarBehind(current, latest string) bool {
+	if !newerVersion(current, latest) {
+		return false
+	}
+	currentParts, latestParts := verParts(current), verParts(latest)
+	if currentParts[0] != latestParts[0] || currentParts[1] != latestParts[1] {
+		return true
+	}
+	return latestParts[2]-currentParts[2] >= claudePatchTolerance
+}
+
 func verParts(versionText string) []int {
 	parts := strings.SplitN(strings.TrimPrefix(versionText, "v"), ".", 3)
 	if len(parts) != 3 {
@@ -142,7 +156,7 @@ func checkUpdate(requestContext context.Context, force bool) updateInfo {
 	if installedClaude := claudeInstalled(requestContext); installedClaude != "" {
 		checkedInfo.ClaudeCurrent = installedClaude
 		if latestClaude, err := claudeLatest(requestContext); err == nil {
-			checkedInfo.ClaudeLatest, checkedInfo.ClaudeNewer = latestClaude, newerVersion(installedClaude, latestClaude)
+			checkedInfo.ClaudeLatest, checkedInfo.ClaudeNewer = latestClaude, claudeFarBehind(installedClaude, latestClaude)
 		}
 	}
 	updAt, updInfo = time.Now(), checkedInfo

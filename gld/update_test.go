@@ -27,11 +27,21 @@ func TestCheckUpdateClaude(t *testing.T) {
 		updInfo = updateInfo{}
 	})
 	latestRelease = func(context.Context) (string, string, error) { return "", "", context.Canceled }
-	claudeInstalled = func(context.Context) string { return "2.1.314" }
+	claudeInstalled = func(context.Context) string { return "2.1.313" }
 	claudeLatest = func(context.Context) (string, error) { return "2.1.316", nil }
 	updAt = time.Time{}
-	if i := checkUpdate(context.Background(), false); !i.ClaudeNewer || i.ClaudeCurrent != "2.1.314" || i.ClaudeLatest != "2.1.316" {
+	if i := checkUpdate(context.Background(), false); !i.ClaudeNewer || i.ClaudeCurrent != "2.1.313" || i.ClaudeLatest != "2.1.316" {
 		t.Fatalf("claude périmé non signalé : %+v", i)
+	}
+	claudeInstalled = func(context.Context) string { return "2.1.314" }
+	updAt = time.Time{}
+	if i := checkUpdate(context.Background(), false); i.ClaudeNewer {
+		t.Fatalf("retard de 2 patchs signalé : %+v", i)
+	}
+	claudeInstalled = func(context.Context) string { return "2.0.999" }
+	updAt = time.Time{}
+	if i := checkUpdate(context.Background(), false); !i.ClaudeNewer {
+		t.Fatalf("retard de mineure non signalé : %+v", i)
 	}
 	claudeInstalled = func(context.Context) string { return "2.1.316" }
 	updAt = time.Time{}
