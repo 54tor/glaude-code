@@ -265,3 +265,17 @@ func TestAgentsNeSuiventPasLesLiens(t *testing.T) {
 		t.Fatalf("fichier lié modifié : %q", b)
 	}
 }
+
+func TestJournalChargementsNeSuitPasLesLiens(t *testing.T) {
+	cfg, out := t.TempDir(), t.TempDir()
+	old := root
+	t.Cleanup(func() { root = old })
+	use(cfg)
+	victim := filepath.Join(out, "victime")
+	os.WriteFile(victim, []byte("intact"), 0o600)
+	os.Symlink(victim, loadedFile())
+	appendLoaded([]byte(`{"at":1,"session":"s","file":"/f"}` + "\n"))
+	if content, _ := os.ReadFile(victim); string(content) != "intact" {
+		t.Fatalf("fichier hors de la config modifié : %q", content)
+	}
+}
