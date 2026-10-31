@@ -514,7 +514,8 @@
       "hotTitle": "The prompt cache lasts one hour after the last message",
       "cold": "cache cold",
       "left": "cache {{min}} min",
-      "warmAria": "keep-warm on"
+      "stateWarm": "keep-warm on · {{pings}}/{{max}}",
+      "expiring": "cache expires in {{min}} min"
     },
     "loaded": {
       "reasons": {

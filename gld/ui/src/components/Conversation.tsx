@@ -28,7 +28,7 @@ import { CloseSession, Composer, type Turn } from "./Composer"
 import { LiveTasks } from "./LiveTasks"
 import { LiveAgents, LiveBar, LiveStats, StatsButton, useLive } from "./LiveStatus"
 import { LoadedDialog } from "./LoadedDialog"
-import { CacheState, KeepWarmBanner, KeepWarmButton, KeepWarmItem } from "./KeepWarm"
+import { CacheState, KeepWarmBanner, KeepWarmItem } from "./KeepWarm"
 import { useLocal } from "@/hooks/useLocal"
 import { useGit } from "@/hooks/useGit"
 import { groupTools, ToolAnchor } from "./ToolAnchor"
@@ -443,7 +443,6 @@ export function Conversation({ row, onClose, onFolder, args, choice, carousel }:
               <div className="flex shrink-0 flex-col items-end gap-1 text-xs text-muted-foreground">
                 <div className="flex min-h-7 items-center gap-2 max-md:hidden">
                   {actions.live.has(id) && !actions.background.has(id) && <CloseSession id={id} onClosed={onClose} />}
-                  <KeepWarmButton s={session} />
                   <CacheState s={session} />
                   {actions.background.has(id) ? (
                     <>
