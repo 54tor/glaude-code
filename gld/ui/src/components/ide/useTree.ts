@@ -4,10 +4,11 @@ import { useLocal } from "@/hooks/useLocal"
 
 export type Listing = { entries: FsEntry[]; truncated: boolean } | "loading" | "failed"
 
-const parseOpen = (s: string): string[] => {
+const parseOpen = (serialized: string): string[] => {
   try {
-    const v: unknown = JSON.parse(s)
-    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []
+    const parsed: unknown = JSON.parse(serialized)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((path): path is string => typeof path === "string")
   } catch {
     return []
   }
@@ -19,15 +20,19 @@ export function useTree(dir: string) {
   const open = new Set(parseOpen(raw))
   const [lists, setLists] = useState<Record<string, Listing>>({})
   const started = useRef(new Set<string>())
-  const seq = useRef(new Map<string, number>()) // chemin → dernière lecture lancée : une réponse plus ancienne est ignorée
+  const latestRequestByPath = useRef(new Map<string, number>()) // chemin → dernière lecture lancée : une réponse plus ancienne est ignorée
 
   const load = useCallback(
     (path: string) => {
-      const n = (seq.current.get(path) ?? 0) + 1
-      seq.current.set(path, n)
-      const set = (v: Listing) => seq.current.get(path) === n && setLists((l) => ({ ...l, [path]: v }))
-      setLists((l) => (l[path] && typeof l[path] === "object" ? l : { ...l, [path]: "loading" }))
-      api.fsTree(dir, path).then(set, () => set("failed"))
+      const requestNumber = (latestRequestByPath.current.get(path) ?? 0) + 1
+      latestRequestByPath.current.set(path, requestNumber)
+      const storeListing = (listing: Listing) =>
+        latestRequestByPath.current.get(path) === requestNumber && setLists((previous) => ({ ...previous, [path]: listing }))
+      setLists((previous) => {
+        const alreadyLoaded = previous[path] && typeof previous[path] === "object"
+        return alreadyLoaded ? previous : { ...previous, [path]: "loading" }
+      })
+      api.fsTree(dir, path).then(storeListing, () => storeListing("failed"))
     },
     [dir]
   )
@@ -44,16 +49,16 @@ export function useTree(dir: string) {
   // Au montage : la racine et les dossiers dépliés d'une visite précédente.
   useEffect(() => {
     ensure("")
-    for (const p of parseOpen(raw)) ensure(p)
+    for (const openPath of parseOpen(raw)) ensure(openPath)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dir])
 
-  const setOpen = (path: string, on: boolean) => {
+  const setOpen = (path: string, expanded: boolean) => {
     const next = new Set(open)
-    if (on) next.add(path)
+    if (expanded) next.add(path)
     else next.delete(path)
     setRaw(JSON.stringify([...next]))
-    if (on) {
+    if (expanded) {
       started.current.add(path)
       load(path)
     }
@@ -62,7 +67,7 @@ export function useTree(dir: string) {
   // Dossiers repliés : leur listing peut rester périmé, il sera relu au prochain dépliage.
   const refreshAll = () => {
     load("")
-    for (const p of open) load(p)
+    for (const openPath of open) load(openPath)
   }
   const collapseAll = () => setRaw("[]")
 

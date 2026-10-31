@@ -15,8 +15,24 @@ type TreeAction = "newFile" | "newDir" | "rename" | "delete"
 type TreeTarget = { path: string; name: string; type: FsEntry["type"] }
 type Row = TreeTarget & { parent: string; depth: number }
 
-const join = (p: string, n: string) => (p ? p + "/" : "") + n
+const join = (parentPath: string, name: string) => (parentPath ? parentPath + "/" : "") + name
 const rootTarget: TreeTarget = { path: "", name: "", type: "dir" }
+const NAVIGATION_KEYS = ["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Enter"]
+const BASE_INDENT_PX = 4
+const INDENT_PER_LEVEL_PX = 14
+
+// Lettre d'une seule colonne → code « XY » attendu par tone().
+const toneCode = (mark: string) => {
+  if (mark === "?") return "??"
+  if (mark === "U") return "UU"
+  return mark
+}
+
+const entryIcon = (type: FsEntry["type"]) => {
+  if (type === "dir") return <Folder className="size-4 shrink-0 text-info" />
+  if (type === "symlink") return <Link2 className="size-4 shrink-0" />
+  return <File className="size-4 shrink-0 text-muted-foreground" />
+}
 
 // actionsRef : création à la racine pilotée de l'extérieur (barre de l'arbre), par le même flux que le menu contextuel.
 export type TreeActions = { create(kind: "newFile" | "newDir"): void }
@@ -27,7 +43,7 @@ export function FileTree({ dir, tree, canWrite, selected, marks, dirs, filter = 
   const { t } = useTranslation()
   const [focus, setFocus] = useState("")
   const box = useRef<HTMLUListElement>(null)
-  const kbd = useRef(false) // le focus n'est déplacé par code que si le changement vient du clavier
+  const fromKeyboard = useRef(false) // le focus n'est déplacé par code que si le changement vient du clavier
 
   const [prompt, setPrompt] = useState<PromptAsk | null>(null)
   const [confirm, setConfirm] = useState<Ask | null>(null)
@@ -37,48 +53,50 @@ export function FileTree({ dir, tree, canWrite, selected, marks, dirs, filter = 
     try {
       await call
       return true
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : t("shell.act.failed"))
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : t("shell.act.failed"))
       return false
     }
   }
-  const onAction = (a: TreeAction, r: TreeTarget) => {
-    const parent = r.path.includes("/") ? r.path.slice(0, r.path.lastIndexOf("/")) : ""
-    if (a === "newFile" || a === "newDir") {
-      const kind = a === "newFile" ? "file" : "dir"
+  const onAction = (action: TreeAction, target: TreeTarget) => {
+    const parent = target.path.includes("/") ? target.path.slice(0, target.path.lastIndexOf("/")) : ""
+    if (action === "newFile" || action === "newDir") {
+      const kind = action === "newFile" ? "file" : "dir"
       return setPrompt({
-        title: t(a === "newFile" ? "ide.ask.newFile" : "ide.ask.newDir"),
+        title: t(action === "newFile" ? "ide.ask.newFile" : "ide.ask.newDir"),
         value: "",
         placeholder: t("ide.ask.name"),
         confirm: t("ide.ask.confirm"),
         run: async (name) => {
-          if (!(await done(api.fsNew(dir, join(r.path, name.trim()), kind)))) return false
+          const created = await done(api.fsNew(dir, join(target.path, name.trim()), kind))
+          if (!created) return false
           // La racine ("") est toujours affichée : on la relit sans l'ajouter aux dossiers dépliés.
-          if (r.path === "" || tree.open.has(r.path)) tree.refresh(r.path)
-          else tree.setOpen(r.path, true)
+          if (target.path === "" || tree.open.has(target.path)) tree.refresh(target.path)
+          else tree.setOpen(target.path, true)
           return true
         },
       })
     }
-    if (a === "rename")
+    if (action === "rename")
       return setPrompt({
-        title: t("ide.ask.rename", { name: r.name }),
-        value: r.name,
+        title: t("ide.ask.rename", { name: target.name }),
+        value: target.name,
         confirm: t("ide.ask.confirm"),
         run: async (name) => {
           const to = join(parent, name.trim())
-          if (!(await done(api.fsRename(dir, r.path, to)))) return false
+          const renamed = await done(api.fsRename(dir, target.path, to))
+          if (!renamed) return false
           tree.refresh(parent)
-          onRenamed?.(r.path, to)
+          onRenamed?.(target.path, to)
           return true
         },
       })
     setConfirm({
-      title: t("ide.ask.deleteTitle", { name: r.name }),
+      title: t("ide.ask.deleteTitle", { name: target.name }),
       body: t("ide.ask.deleteBody"),
       confirm: t("ide.ask.deleteConfirm"),
       run: async () => {
-        if (await done(api.fsRm(dir, r.path))) tree.refresh(parent)
+        if (await done(api.fsRm(dir, target.path))) tree.refresh(parent)
       },
     })
   }
@@ -91,57 +109,60 @@ export function FileTree({ dir, tree, canWrite, selected, marks, dirs, filter = 
     }
   })
 
-  const q = filter.trim().toLowerCase()
-  const expanded = (path: string) => (q ? typeof tree.lists[path] === "object" : tree.open.has(path))
+  const query = filter.trim().toLowerCase()
+  const expanded = (path: string) => (query ? typeof tree.lists[path] === "object" : tree.open.has(path))
   const rows: Row[] = []
   // Renvoie vrai si une entrée de ce dossier (ou de ses sous-dossiers chargés) correspond au filtre.
   const walk = (parent: string, depth: number): boolean => {
-    const l = tree.lists[parent]
-    if (typeof l !== "object") return false
-    let any = false
-    for (const e of l.entries) {
-      const path = join(parent, e.name)
-      const at = rows.length
-      rows.push({ path, parent, name: e.name, type: e.type, depth })
-      const self = !q || e.name.toLowerCase().includes(q)
-      const sub = e.type === "dir" && expanded(path) && walk(path, depth + 1)
-      if (!self && !sub) rows.length = at
-      any ||= self || sub
+    const listing = tree.lists[parent]
+    if (typeof listing !== "object") return false
+    let anyMatch = false
+    for (const entry of listing.entries) {
+      const path = join(parent, entry.name)
+      const rowCountBefore = rows.length
+      rows.push({ path, parent, name: entry.name, type: entry.type, depth })
+      const selfMatches = !query || entry.name.toLowerCase().includes(query)
+      const descendantMatches = entry.type === "dir" && expanded(path) && walk(path, depth + 1)
+      if (!selfMatches && !descendantMatches) rows.length = rowCountBefore
+      anyMatch ||= selfMatches || descendantMatches
     }
-    return any
+    return anyMatch
   }
   walk("", 0)
   const rootList = tree.lists[""]
-  const truncated = Object.values(tree.lists).some((l) => typeof l === "object" && l.truncated)
+  const truncated = Object.values(tree.lists).some((listing) => typeof listing === "object" && listing.truncated)
 
   useEffect(() => {
-    if (kbd.current) box.current?.querySelector<HTMLElement>(`[data-path="${CSS.escape(focus)}"]`)?.focus()
+    if (fromKeyboard.current) box.current?.querySelector<HTMLElement>(`[data-path="${CSS.escape(focus)}"]`)?.focus()
   }, [focus])
 
   // Filtre actif : l'affichage montre tout listing chargé déplié ; plier ou déplier n'aurait aucun effet visible
   // et réécrirait en douce les dossiers dépliés mémorisés, donc rien ne bascule tant qu'il filtre.
-  const toggle = (path: string, on: boolean) => !q && tree.setOpen(path, on)
-  const activate = (r: Row) => {
-    if (r.type === "dir") toggle(r.path, !expanded(r.path))
-    else if (r.type === "file") onOpen(r.path)
+  const toggle = (path: string, expand: boolean) => !query && tree.setOpen(path, expand)
+  const activate = (row: Row) => {
+    if (row.type === "dir") toggle(row.path, !expanded(row.path))
+    else if (row.type === "file") onOpen(row.path)
   }
-  const key = (e: KeyboardEvent) => {
-    if (!["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Enter"].includes(e.key)) return
-    e.preventDefault()
-    kbd.current = true
-    const i = rows.findIndex((r) => r.path === focus)
-    const cur = rows[i]
-    const go = (j: number) => rows[j] && setFocus(rows[j].path)
-    if (e.key === "ArrowDown") go(i + 1)
-    else if (e.key === "ArrowUp") go(Math.max(0, i - 1))
-    else if (!cur) return
-    else if (e.key === "Enter") activate(cur)
-    else if (e.key === "ArrowRight") {
-      if (cur.type !== "dir") return
-      if (!expanded(cur.path)) toggle(cur.path, true)
-      else if (rows[i + 1]?.parent === cur.path) go(i + 1)
-    } else if (cur.type === "dir" && expanded(cur.path) && !q) toggle(cur.path, false)
-    else if (cur.parent) setFocus(cur.parent)
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (!NAVIGATION_KEYS.includes(event.key)) return
+    event.preventDefault()
+    fromKeyboard.current = true
+    const focusedIndex = rows.findIndex((row) => row.path === focus)
+    const current = rows[focusedIndex]
+    const goTo = (targetIndex: number) => rows[targetIndex] && setFocus(rows[targetIndex].path)
+    if (event.key === "ArrowDown") return goTo(focusedIndex + 1)
+    if (event.key === "ArrowUp") return goTo(Math.max(0, focusedIndex - 1))
+    if (!current) return
+    if (event.key === "Enter") return activate(current)
+    if (event.key === "ArrowRight") {
+      if (current.type !== "dir") return
+      if (!expanded(current.path)) toggle(current.path, true)
+      else if (rows[focusedIndex + 1]?.parent === current.path) goTo(focusedIndex + 1)
+      return
+    }
+    const canCollapse = current.type === "dir" && expanded(current.path) && !query
+    if (canCollapse) return toggle(current.path, false)
+    if (current.parent) setFocus(current.parent)
   }
 
   return (
@@ -150,67 +171,73 @@ export function FileTree({ dir, tree, canWrite, selected, marks, dirs, filter = 
       {rootList === "loading" && <p className="px-3 py-1 text-xs text-muted-foreground">{t("ide.tree.loading")}</p>}
       {rootList === "failed" && <p className="px-3 py-1 text-xs text-destructive">{t("ide.tree.failed")}</p>}
       {typeof rootList === "object" && rootList.entries.length === 0 && <p className="px-3 py-1 text-xs text-muted-foreground">{t("ide.tree.empty")}</p>}
-      {q && typeof rootList === "object" && rootList.entries.length > 0 && rows.length === 0 && <p className="px-3 py-1 text-xs text-muted-foreground">{t("ide.tree.noMatch")}</p>}
-      <ul ref={box} role="tree" aria-label={t("ide.tree.label")} onKeyDown={key} onPointerDown={() => (kbd.current = false)}>
-        {rows.map((r, i) => {
-          const isDir = r.type === "dir"
-          const isOpen = isDir && expanded(r.path)
-          const mark = isDir ? undefined : marks?.get(r.path)
+      {query && typeof rootList === "object" && rootList.entries.length > 0 && rows.length === 0 && <p className="px-3 py-1 text-xs text-muted-foreground">{t("ide.tree.noMatch")}</p>}
+      <ul ref={box} role="tree" aria-label={t("ide.tree.label")} onKeyDown={onKeyDown} onPointerDown={() => (fromKeyboard.current = false)}>
+        {rows.map((row, rowIndex) => {
+          const isDir = row.type === "dir"
+          const isOpen = isDir && expanded(row.path)
+          const mark = isDir ? undefined : marks?.get(row.path)
+          const isTabStop = row.path === focus || (!focus && rowIndex === 0)
+          const hasGitChanges = isDir && dirs?.has(row.path)
+          const activateRow = (event: { stopPropagation(): void }) => {
+            event.stopPropagation()
+            activate(row)
+          }
           const item = (
             <li
               role="treeitem"
-              aria-level={r.depth + 1}
+              aria-level={row.depth + 1}
               aria-expanded={isDir ? isOpen : undefined}
-              aria-selected={r.path === selected}
-              data-path={r.path}
-              tabIndex={r.path === focus || (!focus && i === 0) ? 0 : -1}
-              onFocus={() => setFocus(r.path)}
-              onClick={(e) => (e.stopPropagation(), activate(r))}
+              aria-selected={row.path === selected}
+              data-path={row.path}
+              tabIndex={isTabStop ? 0 : -1}
+              onFocus={() => setFocus(row.path)}
+              onClick={activateRow}
               className={cn(
                 "flex h-7 cursor-default items-center gap-1 rounded-md pr-2 outline-none focus-visible:ring-2 focus-visible:ring-ring/80",
-                r.path === selected ? "bg-accent text-accent-foreground" : "hover:bg-muted",
-                r.type === "symlink" && "text-muted-foreground"
+                row.path === selected ? "bg-accent text-accent-foreground" : "hover:bg-muted",
+                row.type === "symlink" && "text-muted-foreground"
               )}
-              style={{ paddingLeft: 4 + r.depth * 14 }}
+              style={{ paddingLeft: BASE_INDENT_PX + row.depth * INDENT_PER_LEVEL_PX }}
             >
               {isDir ? (
-                <button tabIndex={-1} className="grid size-5 shrink-0 place-items-center text-muted-foreground" aria-label={t(isOpen ? "ide.tree.collapse" : "ide.tree.expand", { name: r.name })} onClick={(e) => (e.stopPropagation(), activate(r))}>
+                <button tabIndex={-1} className="grid size-5 shrink-0 place-items-center text-muted-foreground" aria-label={t(isOpen ? "ide.tree.collapse" : "ide.tree.expand", { name: row.name })} onClick={activateRow}>
                   <ChevronRight className={cn("size-3.5 transition-transform", isOpen && "rotate-90")} />
                 </button>
               ) : (
                 <span className="size-5 shrink-0" />
               )}
-              {isDir ? <Folder className="size-4 shrink-0 text-info" /> : r.type === "symlink" ? <Link2 className="size-4 shrink-0" /> : <File className="size-4 shrink-0 text-muted-foreground" />}
-              <span className={cn("truncate", isDir && dirs?.has(r.path) && "text-warning/80")}>{r.name}</span>
-              {isDir && dirs?.has(r.path) && <span aria-hidden title={t("ide.git.dir")} className="ml-auto size-1.5 shrink-0 rounded-full bg-warning/60" />}
+              {entryIcon(row.type)}
+              <span className={cn("truncate", hasGitChanges && "text-warning/80")}>{row.name}</span>
+              {hasGitChanges && <span aria-hidden title={t("ide.git.dir")} className="ml-auto size-1.5 shrink-0 rounded-full bg-warning/60" />}
               {mark && (
-                <span className={cn("ml-auto w-4 shrink-0 text-center text-xs font-semibold", tone(mark === "?" ? "??" : mark === "U" ? "UU" : mark))} title={t(`ide.git.${mark}`)}>
+                <span className={cn("ml-auto w-4 shrink-0 text-center text-xs font-semibold", tone(toneCode(mark)))} title={t(`ide.git.${mark}`)}>
                   {mark}
                 </span>
               )}
             </li>
           )
-          if (!canWrite) return cloneElement(item, { key: r.path })
+          if (!canWrite) return cloneElement(item, { key: row.path })
           return (
-            <ContextMenu key={r.path}>
+            <ContextMenu key={row.path}>
               <ContextMenuTrigger asChild>{item}</ContextMenuTrigger>
               <ContextMenuContent className="w-48">
                 {isDir && (
                   <>
-                    <ContextMenuItem onSelect={() => onAction("newFile", r)}>
+                    <ContextMenuItem onSelect={() => onAction("newFile", row)}>
                       <FilePlus /> {t("ide.menu.newFile")}
                     </ContextMenuItem>
-                    <ContextMenuItem onSelect={() => onAction("newDir", r)}>
+                    <ContextMenuItem onSelect={() => onAction("newDir", row)}>
                       <FolderPlus /> {t("ide.menu.newDir")}
                     </ContextMenuItem>
                     <ContextMenuSeparator />
                   </>
                 )}
-                <ContextMenuItem onSelect={() => onAction("rename", r)}>
+                <ContextMenuItem onSelect={() => onAction("rename", row)}>
                   <TextCursorInput /> {t("ide.menu.rename")}
                 </ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem variant="destructive" onSelect={() => onAction("delete", r)}>
+                <ContextMenuItem variant="destructive" onSelect={() => onAction("delete", row)}>
                   <Trash2 /> {t("ide.menu.delete")}
                 </ContextMenuItem>
               </ContextMenuContent>

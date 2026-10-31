@@ -1,19 +1,24 @@
-const subseq = (s: string, q: string) => {
-  let i = 0
-  for (const c of s) if (c === q[i]) i++
-  return i === q.length
+const MAX_RESULTS = 50
+
+const isSubsequence = (text: string, query: string) => {
+  let matchedCount = 0
+  for (const character of text) {
+    if (character === query[matchedCount]) matchedCount++
+  }
+  return matchedCount === query.length
 }
 
 // Sous-séquence insensible à la casse ; une correspondance dans le nom de fichier passe avant une correspondance dans le chemin.
 export function rank(files: string[], query: string): string[] {
-  const q = query.toLowerCase()
-  if (!q) return files.slice(0, 50)
-  const name: string[] = []
-  const path: string[] = []
-  for (const f of files) {
-    const l = f.toLowerCase()
-    if (subseq(l.slice(l.lastIndexOf("/") + 1), q)) name.push(f)
-    else if (subseq(l, q)) path.push(f)
+  const lowerQuery = query.toLowerCase()
+  if (!lowerQuery) return files.slice(0, MAX_RESULTS)
+  const nameMatches: string[] = []
+  const pathMatches: string[] = []
+  for (const filePath of files) {
+    const lowerPath = filePath.toLowerCase()
+    const lowerName = lowerPath.slice(lowerPath.lastIndexOf("/") + 1)
+    if (isSubsequence(lowerName, lowerQuery)) nameMatches.push(filePath)
+    else if (isSubsequence(lowerPath, lowerQuery)) pathMatches.push(filePath)
   }
-  return name.concat(path).slice(0, 50)
+  return nameMatches.concat(pathMatches).slice(0, MAX_RESULTS)
 }

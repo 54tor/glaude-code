@@ -11,12 +11,12 @@ type Props = { open: boolean; files: string[]; state: IndexState; onPick: (path:
 
 export function QuickOpen({ open, onClose, onCloseFocus, ...rest }: Props) {
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <DialogContent
         className="top-[20%] translate-y-0 sm:max-w-xl"
-        onCloseAutoFocus={(e) => {
+        onCloseAutoFocus={(event) => {
           if (!onCloseFocus) return
-          e.preventDefault()
+          event.preventDefault()
           onCloseFocus()
         }}
       >{open && <Body {...rest} />}</DialogContent>
@@ -26,22 +26,25 @@ export function QuickOpen({ open, onClose, onCloseFocus, ...rest }: Props) {
 
 function Body({ files, state, onPick }: Omit<Props, "open" | "onClose">) {
   const { t } = useTranslation()
-  const [q, setQ] = useState("")
-  const [sel, setSel] = useState(0)
-  const list = useMemo(() => rank(files, q), [files, q])
+  const [query, setQuery] = useState("")
+  const [selected, setSelected] = useState(0)
+  const list = useMemo(() => rank(files, query), [files, query])
   const box = useRef<HTMLUListElement>(null)
   // Corps en bloc : dans Chrome, scrollIntoView renvoie une Promise que React prendrait pour un nettoyage.
   useEffect(() => {
-    box.current?.children[sel]?.scrollIntoView?.({ block: "nearest" })
-  }, [sel])
+    box.current?.children[selected]?.scrollIntoView?.({ block: "nearest" })
+  }, [selected])
 
-  const key = (e: KeyboardEvent) => {
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      e.preventDefault()
-      setSel((s) => Math.max(0, Math.min(list.length - 1, s + (e.key === "ArrowDown" ? 1 : -1))))
-    } else if (e.key === "Enter" && list[sel]) {
-      e.preventDefault()
-      onPick(list[sel])
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault()
+      const step = event.key === "ArrowDown" ? 1 : -1
+      setSelected((current) => Math.max(0, Math.min(list.length - 1, current + step)))
+      return
+    }
+    if (event.key === "Enter" && list[selected]) {
+      event.preventDefault()
+      onPick(list[selected])
     }
   }
   return (
@@ -56,29 +59,32 @@ function Body({ files, state, onPick }: Omit<Props, "open" | "onClose">) {
         role="combobox"
         aria-expanded
         aria-controls="ide-quick-list"
-        aria-activedescendant={list[sel] ? `ide-quick-${sel}` : undefined}
+        aria-activedescendant={list[selected] ? `ide-quick-${selected}` : undefined}
         aria-label={t("ide.quick.title")}
         placeholder={t("ide.quick.placeholder")}
-        value={q}
-        onChange={(e) => (setQ(e.target.value), setSel(0))}
-        onKeyDown={key}
+        value={query}
+        onChange={(event) => {
+          setQuery(event.target.value)
+          setSelected(0)
+        }}
+        onKeyDown={onKeyDown}
       />
       <ul ref={box} id="ide-quick-list" role="listbox" aria-label={t("ide.quick.title")} className="max-h-80 overflow-auto">
-        {list.map((p, i) => {
-          const cut = p.lastIndexOf("/") + 1
+        {list.map((path, position) => {
+          const nameStart = path.lastIndexOf("/") + 1
           return (
             <li
-              key={p}
-              id={`ide-quick-${i}`}
+              key={path}
+              id={`ide-quick-${position}`}
               role="option"
-              aria-selected={i === sel}
-              title={p}
-              onMouseMove={() => setSel(i)}
-              onClick={() => onPick(p)}
-              className={cn("flex cursor-default items-baseline gap-2 truncate rounded-md px-2 py-1", i === sel && "bg-accent text-accent-foreground")}
+              aria-selected={position === selected}
+              title={path}
+              onMouseMove={() => setSelected(position)}
+              onClick={() => onPick(path)}
+              className={cn("flex cursor-default items-baseline gap-2 truncate rounded-md px-2 py-1", position === selected && "bg-accent text-accent-foreground")}
             >
-              <span>{p.slice(cut)}</span>
-              <span className="truncate text-xs text-muted-foreground">{p.slice(0, cut)}</span>
+              <span>{path.slice(nameStart)}</span>
+              <span className="truncate text-xs text-muted-foreground">{path.slice(0, nameStart)}</span>
             </li>
           )
         })}

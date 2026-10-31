@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useRef, useState, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { FilePlus, FileSearch, FolderPlus, ListCollapse, RefreshCw, Trash2, X } from "lucide-react"
 import { Toolbar } from "radix-ui"
@@ -13,7 +13,7 @@ type Props = {
   tree: Pick<ReturnType<typeof useTree>, "refreshAll" | "collapseAll">
   ctx: CmdCtx
   filter: string
-  onFilter: (v: string) => void
+  onFilter: (value: string) => void
   onRestored: () => void
 }
 
@@ -22,6 +22,15 @@ export function TreeToolbar({ dir, tree, ctx, filter, onFilter, onRestored }: Pr
   const [trash, setTrash] = useState(false)
   // Effacer par le bouton le démonte : le focus revient au champ, sinon il tomberait sur la page.
   const input = useRef<HTMLInputElement>(null)
+  const clearOnEscape = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Escape" || !filter) return
+    event.preventDefault()
+    onFilter("")
+  }
+  const clearFilter = () => {
+    onFilter("")
+    input.current?.focus()
+  }
   return (
     <TooltipProvider>
       <div className="flex shrink-0 flex-col gap-1 border-b px-1 py-1">
@@ -52,12 +61,12 @@ export function TreeToolbar({ dir, tree, ctx, filter, onFilter, onRestored }: Pr
             value={filter}
             aria-label={t("ide.toolbar.filter")}
             placeholder={t("ide.toolbar.filterPlaceholder")}
-            onChange={(e) => onFilter(e.target.value)}
-            onKeyDown={(e) => e.key === "Escape" && filter && (e.preventDefault(), onFilter(""))}
+            onChange={(event) => onFilter(event.target.value)}
+            onKeyDown={clearOnEscape}
             className="h-7 w-full rounded-md border border-input bg-background px-2 pr-7 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/80 [&::-webkit-search-cancel-button]:hidden"
           />
           {filter && (
-            <button type="button" aria-label={t("ide.toolbar.clearFilter")} onClick={() => (onFilter(""), input.current?.focus())} className="absolute right-1 grid size-5 place-items-center rounded-sm text-muted-foreground hover:bg-muted">
+            <button type="button" aria-label={t("ide.toolbar.clearFilter")} onClick={clearFilter} className="absolute right-1 grid size-5 place-items-center rounded-sm text-muted-foreground hover:bg-muted">
               <X className="size-3.5" />
             </button>
           )}

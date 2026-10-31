@@ -7,7 +7,9 @@ export type Session = Data["groups"][number]["sessions"][number]
 // nosessions : liste des sessions refusée (droit sessions_read) ; unavailable : liste injoignable et rien de lu encore.
 export type TermState = "loading" | "disabled" | "forbidden" | "nosessions" | "unavailable" | "nosession" | "ready"
 
-const bare = (p: string) => p.replace(/[/\\]+$/, "")
+const POLL_INTERVAL_MS = 10000
+const FORBIDDEN = 403
+const bare = (path: string) => path.replace(/[/\\]+$/, "")
 
 // Sans le droit exec, ni /v1/terminal ni sondage : l'état est « forbidden » sans aucun appel.
 // GET /v1/state demande sessions_read : sans lui, aucune lecture ; après un 403, le sondage s'arrête (relu au retour sur l'onglet).
@@ -19,41 +21,44 @@ export function useTerminalAvailability(dir: string): { state: TermState; sessio
   const can = allowed("exec")
   const exec = known && can
   const list = allowed("sessions_read")
-  const [on, setOn] = useState<boolean | null>(null)
+  const [enabled, setEnabled] = useState<boolean | null>(null)
   const [data, setData] = useState<Data | null>(null)
-  const [fail, setFail] = useState(0)
+  const [failedStatus, setFailedStatus] = useState(0)
   useEffect(() => {
     if (!exec) return
     let alive = true
     api.termInfo().then(
-      (r) => alive && setOn(r.enabled),
-      () => alive && setOn(false)
+      (info) => alive && setEnabled(info.enabled),
+      () => alive && setEnabled(false)
     )
     return () => {
       alive = false
     }
   }, [exec])
   useEffect(() => {
-    if (!exec || !on || !list) return
+    if (!exec || !enabled || !list) return
     let alive = true
     let timer: ReturnType<typeof setInterval> | undefined
-    const start = () => void (timer ??= setInterval(load, 10000))
-    const stop = () => (clearInterval(timer), (timer = undefined))
+    const start = () => void (timer ??= setInterval(load, POLL_INTERVAL_MS))
+    const stop = () => {
+      clearInterval(timer)
+      timer = undefined
+    }
     // Onglet en arrière-plan : aucun sondage, une relecture dès qu'il redevient visible.
     function load() {
       if (document.hidden) return
       api.data().then(
-        (d) => {
+        (received) => {
           if (!alive) return
-          setData(d)
-          setFail(0)
+          setData(received)
+          setFailedStatus(0)
           start()
         },
-        (e) => {
+        (error) => {
           if (!alive) return
-          const st = e instanceof ApiError ? e.status : -1
-          setFail(st)
-          if (st === 403) stop()
+          const status = error instanceof ApiError ? error.status : -1
+          setFailedStatus(status)
+          if (status === FORBIDDEN) stop()
         }
       )
     }
@@ -65,28 +70,21 @@ export function useTerminalAvailability(dir: string): { state: TermState; sessio
       stop()
       document.removeEventListener("visibilitychange", load)
     }
-  }, [exec, on, list])
+  }, [exec, enabled, list])
   const live = new Set(data?.live ?? [])
   const sessions = (data?.groups ?? [])
-    .flatMap((g) => g.sessions)
-    .filter((s) => bare(s.cwd) === bare(dir) && live.has(s.id))
-    .sort((a, b) => b.mtime - a.mtime)
-  const state: TermState = !known
-    ? "loading"
-    : !can
-      ? "forbidden"
-      : on === null
-        ? "loading"
-        : !on
-          ? "disabled"
-          : !list || fail === 403
-            ? "nosessions"
-            : !data
-              ? fail
-                ? "unavailable"
-                : "loading"
-              : sessions.length
-                ? "ready"
-                : "nosession"
-  return { state, sessions }
+    .flatMap((group) => group.sessions)
+    .filter((session) => bare(session.cwd) === bare(dir) && live.has(session.id))
+    .sort((left, right) => right.mtime - left.mtime)
+  const resolveState = (): TermState => {
+    if (!known) return "loading"
+    if (!can) return "forbidden"
+    if (enabled === null) return "loading"
+    if (!enabled) return "disabled"
+    if (!list || failedStatus === FORBIDDEN) return "nosessions"
+    if (!data) return failedStatus ? "unavailable" : "loading"
+    if (sessions.length) return "ready"
+    return "nosession"
+  }
+  return { state: resolveState(), sessions }
 }

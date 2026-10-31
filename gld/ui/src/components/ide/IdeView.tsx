@@ -36,6 +36,25 @@ type Read = { file: FsFile; err?: undefined } | { file?: undefined; err: unknown
 
 const CodeEditor = retryLazy(() => import("./CodeEditor"))
 
+const DEFAULT_TREE_WIDTH = 260
+const MIN_TREE_WIDTH = 140
+const MAX_TREE_WIDTH = 700
+const clampTreeWidth = (width: number) => clamp(width, MIN_TREE_WIDTH, MAX_TREE_WIDTH)
+const NOT_FOUND = 404
+const CONFLICT = 409
+const PAYLOAD_TOO_LARGE = 413
+const UNSUPPORTED_MEDIA_TYPE = 415
+const GIT_REFRESH_DELAY_MS = 1000
+const INDEX_REFETCH_DELAY_MS = 1000
+const WATCH_DEBOUNCE_MS = 150
+const RECHECK_DELAY_MS = 300
+
+const isPlainShortcut = (event: { ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean; defaultPrevented: boolean; key: string }, letter: string) => {
+  const hasCtrlOrMeta = event.ctrlKey || event.metaKey
+  const hasOtherModifier = event.altKey || event.shiftKey
+  return hasCtrlOrMeta && !hasOtherModifier && !event.defaultPrevented && event.key.toLowerCase() === letter
+}
+
 // Sans droit de lecture, aucun hook de l'espace ne tourne : ni flux, ni sondage d'index, ni Ctrl+P pris.
 export function IdeView({ dir }: { dir: string }) {
   const { t } = useTranslation()
@@ -48,10 +67,10 @@ export function IdeView({ dir }: { dir: string }) {
 function Workspace({ dir }: { dir: string }) {
   const { t } = useTranslation()
   const can = useCan()
-  const [wStr, setW] = useLocal(`gld.ide.${dir}.w`, "260")
+  const [storedWidth, setStoredWidth] = useLocal(`gld.ide.${dir}.w`, String(DEFAULT_TREE_WIDTH))
   const [savedTabs, setSavedTabs] = useLocal(`gld.ide.${dir}.tabs`, "")
   const [restored, setRestored] = useState(false)
-  const [drag, setDrag] = useState<{ w?: number }>({})
+  const [drag, setDrag] = useState<{ width?: number }>({})
   const [ide, dispatch] = useReducer(reduce, { tabs: [], active: "" })
   const [diff, setDiff] = useState<{ path: string; original: string } | null>(null)
   const [confirm, setConfirm] = useState<Ask | null>(null)
@@ -75,19 +94,24 @@ function Workspace({ dir }: { dir: string }) {
   const [quick, setQuick] = useState(false)
   const rootEl = useRef<HTMLDivElement>(null)
   const picked = useRef("")
-  const [focusReq, setFocusReq] = useState({ path: "", n: 0 })
+  const [focusRequest, setFocusRequest] = useState({ path: "", count: 0 })
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
-  const later = (k: string, ms: number, f: () => void) => {
-    clearTimeout(timers.current.get(k))
-    timers.current.set(k, setTimeout(() => (timers.current.delete(k), f()), ms))
+  const later = (timerKey: string, delayMs: number, callback: () => void) => {
+    clearTimeout(timers.current.get(timerKey))
+    const timer = setTimeout(() => {
+      timers.current.delete(timerKey)
+      callback()
+    }, delayMs)
+    timers.current.set(timerKey, timer)
   }
   const reloaded = useRef(new Set<string>())
-  const seq = useRef(new Map<string, number>()) // chemin → numéro de la dernière lecture lancée
-  const w = drag.w ?? clamp(Number(wStr) || 260, 140, 700)
+  const latestReadByPath = useRef(new Map<string, number>()) // chemin → numéro de la dernière lecture lancée
+  const width = drag.width ?? clampTreeWidth(Number(storedWidth) || DEFAULT_TREE_WIDTH)
 
-  const tabOf = (p: string) => ide.tabs.find((x) => x.path === p)
+  const tabOf = (path: string) => ide.tabs.find((tab) => tab.path === path)
+  const liveTabOf = (path: string) => live.current.tabs.find((tab) => tab.path === path)
   const active = tabOf(ide.active)
-  const fail = (e: unknown) => toast.error(e instanceof ApiError ? e.message : t("shell.act.failed"))
+  const fail = (error: unknown) => toast.error(error instanceof ApiError ? error.message : t("shell.act.failed"))
   const read = (path: string): Promise<Read> => api.fsFile(dir, path).then((file) => ({ file }), (err) => ({ err }))
 
   const open = async (path: string) => {
@@ -97,56 +121,73 @@ function Workspace({ dir }: { dir: string }) {
   const dropped = (path: string) => toast(t("ide.drafts.dropped", { name: nameOf(path) }), { id: "ide-draft:" + path })
   // quiet : restauration au chargement, tout fichier devenu illisible (supprimé, refusé, panne) est sauté sans message.
   // draft : brouillon de la session, repris seulement si le disque n'a pas bougé depuis (même etag).
-  const show = (path: string, r: Read, quiet?: boolean, draft?: Draft) => {
-    const c = r.file?.content
-    const status = r.err instanceof ApiError ? r.err.status : 0
-    const mixed = c !== undefined && mixedEol(c)
+  const show = (path: string, result: Read, quiet?: boolean, draft?: Draft) => {
+    const content = result.file?.content
+    const status = result.err instanceof ApiError ? result.err.status : 0
+    const mixed = content !== undefined && mixedEol(content)
     const readOnly = mixed || !can("fs_write")
-    const keep = !!draft && c !== undefined && !readOnly && draft.baseEtag === (r.file?.etag ?? "")
-    if (draft && !keep) dropped(path)
-    if (status === 413 || status === 415)
-      return dispatch({ t: "open", tab: { path, content: "", saved: "", etag: "", readOnly: true, notice: status === 413 ? "tooBig" : "binary" } })
-    if (c === undefined) return quiet ? undefined : fail(r.err)
-    dispatch({ t: "open", tab: { path, content: keep ? draft.content : c, saved: c, etag: r.file?.etag ?? "", readOnly, ...(mixed && { notice: "mixedEol" as const }) } })
+    const keepDraft = !!draft && content !== undefined && !readOnly && draft.baseEtag === (result.file?.etag ?? "")
+    if (draft && !keepDraft) dropped(path)
+    if (status === PAYLOAD_TOO_LARGE || status === UNSUPPORTED_MEDIA_TYPE) {
+      const notice = status === PAYLOAD_TOO_LARGE ? "tooBig" : "binary"
+      return dispatch({ t: "open", tab: { path, content: "", saved: "", etag: "", readOnly: true, notice } })
+    }
+    if (content === undefined) return quiet ? undefined : fail(result.err)
+    dispatch({
+      t: "open",
+      tab: {
+        path,
+        content: keepDraft ? draft.content : content,
+        saved: content,
+        etag: result.file?.etag ?? "",
+        readOnly,
+        ...(mixed && { notice: "mixedEol" as const }),
+      },
+    })
   }
   // Lectures en parallèle, onglets posés dans l'ordre mémorisé ; aucun focus pris, le premier rendu n'attend pas.
   useEffect(() => {
     const { paths, active } = parseTabs(savedTabs)
     const drafts = readDrafts(dir)
-    let gone = false
-    Promise.all(paths.map(read)).then((rs) => {
-      if (gone) return
-      rs.forEach((r, i) => show(paths[i], r, true, drafts[paths[i]]))
+    let cancelled = false
+    Promise.all(paths.map(read)).then((results) => {
+      if (cancelled) return
+      results.forEach((result, position) => show(paths[position], result, true, drafts[paths[position]]))
       if (active) dispatch({ t: "focus", path: active })
       setRestored(true)
     })
     return () => {
-      gone = true
+      cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  const tabsSnap = JSON.stringify({ paths: ide.tabs.slice(0, MAX_TABS).map((x) => x.path), active: ide.active })
+  const tabsSnap = JSON.stringify({ paths: ide.tabs.slice(0, MAX_TABS).map((tab) => tab.path), active: ide.active })
   useEffect(() => {
     if (restored && tabsSnap !== savedTabs) setSavedTabs(tabsSnap)
   }, [restored, tabsSnap, savedTabs, setSavedTabs])
   useDrafts(dir, ide.tabs, restored)
   // force : « Recharger » de l'utilisateur, qui écarte exprès ses modifications.
+  const closeDiffOf = (path: string) => setDiff((current) => (current?.path === path ? null : current))
   const reload = async (path: string, pre?: Read, force?: boolean) => {
-    setDiff((d) => (d?.path === path ? null : d))
-    const r = pre ?? (await read(path))
-    if (r.file) dispatch({ t: "reloaded", path, content: r.file.content, etag: r.file.etag, force, ...(mixedEol(r.file.content) && { notice: "mixedEol" as const }) })
-    else fail(r.err)
+    closeDiffOf(path)
+    const result = pre ?? (await read(path))
+    if (!result.file) {
+      fail(result.err)
+      return
+    }
+    const { content, etag } = result.file
+    dispatch({ t: "reloaded", path, content, etag, force, ...(mixedEol(content) && { notice: "mixedEol" as const }) })
   }
   // force : écraser la version du disque ; create : recréer un fichier supprimé (etag vide).
   // Une sauvegarde à la fois par fichier : la suivante partirait avec l'ancien etag et lèverait un faux conflit contre la nôtre.
   // value : texte du modèle de l'éditeur au moment du Ctrl+S (la dernière frappe n'est peut-être pas encore dans l'état).
   const save = async (path: string, how?: "force" | "create", value?: string) => {
-    const tab = live.current.tabs.find((x) => x.path === path)
+    const tab = liveTabOf(path)
     if (!tab || tab.readOnly) return
     if (saving.current.has(path)) return void saving.current.set(path, true)
     saving.current.set(path, false)
     // Une relecture partie avant la sauvegarde ne doit pas appliquer ensuite la version d'avant.
-    seq.current.set(path, (seq.current.get(path) ?? 0) + 1)
+    latestReadByPath.current.set(path, (latestReadByPath.current.get(path) ?? 0) + 1)
     if (how) setDiff(null)
     let content = value ?? tab.content
     let etag = how === "create" ? "" : tab.etag
@@ -154,37 +195,42 @@ function Workspace({ dir }: { dir: string }) {
     let touched = false
     try {
       for (;;) {
-        let r: { etag: string } | undefined
+        let saved: { etag: string } | undefined
         let diskEtag: string | undefined
         try {
-          r = await api.fsSave(dir, path, content, etag, force)
-        } catch (e) {
-          if (!(e instanceof ApiError) || e.status !== 409) return fail(e)
-          if (e.code === "deleted") return dispatch({ t: "disk", path, kind: "deleted" })
-          diskEtag = e.etag
+          saved = await api.fsSave(dir, path, content, etag, force)
+        } catch (error) {
+          const isConflict = error instanceof ApiError && error.status === CONFLICT
+          if (!isConflict) return fail(error)
+          if (error.code === "deleted") return dispatch({ t: "disk", path, kind: "deleted" })
+          diskEtag = error.etag
         }
-        if (!r) {
+        if (!saved) {
           // Décision sur l'onglet tel qu'il est maintenant : une frappe pendant l'aller-retour le rend sale.
-          const d = await read(path)
-          const now = live.current.tabs.find((x) => x.path === path)
-          if (!now) return
-          const disk = d.file?.content
+          const diskRead = await read(path)
+          const currentTab = liveTabOf(path)
+          if (!currentTab) return
+          const diskContent = diskRead.file?.content
+          const readEtag = diskRead.file?.etag
           // Simple touch ou réécriture identique : on adopte le nouvel etag et on réessaie une fois.
-          if (!touched && disk === now.saved && d.file?.etag && d.file.etag === (diskEtag ?? d.file.etag)) {
+          const sameAsSaved = diskContent === currentTab.saved
+          const etagConsistent = readEtag === (diskEtag ?? readEtag)
+          if (!touched && sameAsSaved && readEtag && etagConsistent) {
             touched = true
-            etag = d.file.etag
+            etag = readEtag
             continue
           }
-          if (!isDirty(now) && disk !== undefined) return reload(path, d)
+          if (!isDirty(currentTab) && diskContent !== undefined) return reload(path, diskRead)
           return dispatch({ t: "disk", path, kind: "changed", always: true })
         }
-        dispatch({ t: "saved", path, etag: r.etag, content })
-        later("git", 1000, git.refresh)
-        const next = live.current.tabs.find((x) => x.path === path)
-        if (!saving.current.get(path) || !next || next.content === content) return
+        dispatch({ t: "saved", path, etag: saved.etag, content })
+        later("git", GIT_REFRESH_DELAY_MS, git.refresh)
+        const latestTab = liveTabOf(path)
+        const resaveRequested = saving.current.get(path)
+        if (!resaveRequested || !latestTab || latestTab.content === content) return
         saving.current.set(path, false)
-        content = next.content
-        etag = r.etag
+        content = latestTab.content
+        etag = saved.etag
         force = undefined
       }
     } finally {
@@ -194,67 +240,81 @@ function Workspace({ dir }: { dir: string }) {
   // Relit le disque pour un onglet ouvert après un évènement : l'etag dit si quelque chose a changé (notre propre écho n'en change pas).
   // Pendant une sauvegarde on repousse : l'etag final dira si c'était notre écho ou un vrai changement extérieur.
   const check = async (path: string): Promise<void> => {
-    if (saving.current.has(path)) return later("f:" + path, 300, () => check(path))
-    const n = (seq.current.get(path) ?? 0) + 1
-    seq.current.set(path, n)
-    const r = await read(path)
-    if (seq.current.get(path) !== n) return
-    if (saving.current.has(path)) return later("f:" + path, 300, () => check(path))
-    const tab = live.current.tabs.find((x) => x.path === path)
+    const recheckLater = () => later("f:" + path, RECHECK_DELAY_MS, () => check(path))
+    if (saving.current.has(path)) return recheckLater()
+    const requestNumber = (latestReadByPath.current.get(path) ?? 0) + 1
+    latestReadByPath.current.set(path, requestNumber)
+    const result = await read(path)
+    if (latestReadByPath.current.get(path) !== requestNumber) return
+    if (saving.current.has(path)) return recheckLater()
+    const tab = liveTabOf(path)
     if (!tab) return
-    const status = r.err instanceof ApiError ? r.err.status : 0
-    if (status === 404) return dispatch({ t: "disk", path, kind: "deleted" })
-    if ((r.err && (!(r.err instanceof ApiError) || r.err.net)) || tab.notice === "tooBig" || tab.notice === "binary") return
+    const status = result.err instanceof ApiError ? result.err.status : 0
+    if (status === NOT_FOUND) return dispatch({ t: "disk", path, kind: "deleted" })
+    const isNetworkOrUnknownError = !!result.err && (!(result.err instanceof ApiError) || result.err.net)
+    const hasNoContent = tab.notice === "tooBig" || tab.notice === "binary"
+    if (isNetworkOrUnknownError || hasNoContent) return
     // Relecture refusée (fichier devenu trop gros, panne) : l'onglet ne reflète plus le disque, on le dit au lieu de se taire.
-    if (!r.file) return dispatch({ t: "disk", path, kind: "changed", always: true })
-    if (r.file.etag === tab.etag) return
-    if (r.file.content === tab.content) return dispatch({ t: "saved", path, etag: r.file.etag, content: tab.content })
+    if (!result.file) return dispatch({ t: "disk", path, kind: "changed", always: true })
+    if (result.file.etag === tab.etag) return
+    if (result.file.content === tab.content) return dispatch({ t: "saved", path, etag: result.file.etag, content: tab.content })
     if (isDirty(tab)) return dispatch({ t: "disk", path, kind: "changed" })
-    await reload(path, r)
+    await reload(path, result)
     reloaded.current.add(path)
-    later("toast", 300, () => {
+    later("toast", RECHECK_DELAY_MS, () => {
       const names = [...reloaded.current]
       reloaded.current.clear()
       const name = nameOf(names[0])
-      toast(names.length === 1 ? t("ide.watch.reloaded", { name }) : t("ide.watch.reloadedMany", { count: names.length }), { id: "ide-reloaded" })
+      const message = names.length === 1 ? t("ide.watch.reloaded", { name }) : t("ide.watch.reloadedMany", { count: names.length })
+      toast(message, { id: "ide-reloaded" })
     })
   }
-  const onDisk = (e: WatchEvent) => {
-    later("index", 1000, index.refetch)
-    later("git", 1000, git.refresh)
-    if (e.type === "resync") {
+  const checkLater = (path: string) => later("f:" + path, WATCH_DEBOUNCE_MS, () => check(path))
+  const onDisk = (event: WatchEvent) => {
+    later("index", INDEX_REFETCH_DELAY_MS, index.refetch)
+    later("git", GIT_REFRESH_DELAY_MS, git.refresh)
+    if (event.type === "resync") {
       tree.refreshAll()
-      for (const x of live.current.tabs) later("f:" + x.path, 150, () => check(x.path))
+      for (const tab of live.current.tabs) checkLater(tab.path)
       return
     }
-    const parent = parentOf(e.path)
-    if (parent === "" || tree.open.has(parent)) later("d:" + parent, 150, () => tree.refresh(parent))
-    for (const x of live.current.tabs) if (x.path === e.path || x.path.startsWith(e.path + "/")) later("f:" + x.path, 150, () => check(x.path))
+    const parent = parentOf(event.path)
+    if (parent === "" || tree.open.has(parent)) later("d:" + parent, WATCH_DEBOUNCE_MS, () => tree.refresh(parent))
+    for (const tab of live.current.tabs) {
+      const isAffected = tab.path === event.path || tab.path.startsWith(event.path + "/")
+      if (isAffected) checkLater(tab.path)
+    }
   }
   const watch = useWatch(dir, ["", ...tree.open], onDisk)
   useEffect(() => {
-    const all = timers.current
-    return () => all.forEach(clearTimeout)
+    const pendingTimers = timers.current
+    return () => pendingTimers.forEach(clearTimeout)
   }, [])
 
   useTsFeed(dir, index.files, index.state, live)
 
   const showDiff = async (path: string) => {
-    const r = await read(path)
-    if (r.file) setDiff({ path, original: r.file.content })
-    else fail(r.err)
+    const result = await read(path)
+    if (result.file) setDiff({ path, original: result.file.content })
+    else fail(result.err)
   }
   const close = (path: string) => {
     const tab = tabOf(path)
-    const go = () => (dispatch({ t: "close", path }), setDiff((d) => (d?.path === path ? null : d)))
-    if (!tab || !isDirty(tab)) return go()
-    setConfirm({ title: t("ide.tabs.closeTitle", { name: nameOf(path) }), body: t("ide.tabs.closeBody"), confirm: t("ide.tabs.closeConfirm"), run: go })
+    const closeNow = () => {
+      dispatch({ t: "close", path })
+      closeDiffOf(path)
+    }
+    if (!tab || !isDirty(tab)) return closeNow()
+    setConfirm({ title: t("ide.tabs.closeTitle", { name: nameOf(path) }), body: t("ide.tabs.closeBody"), confirm: t("ide.tabs.closeConfirm"), run: closeNow })
   }
   // Une seule confirmation pour tous les onglets modifiés : plusieurs boîtes s'écraseraient l'une l'autre.
   const closeAll = () => {
-    const go = () => (ide.tabs.forEach((x) => dispatch({ t: "close", path: x.path })), setDiff(null))
-    if (!ide.tabs.some(isDirty)) return go()
-    setConfirm({ title: t("ide.tabs.closeAllTitle"), body: t("ide.tabs.closeBody"), confirm: t("ide.tabs.closeConfirm"), run: go })
+    const closeNow = () => {
+      ide.tabs.forEach((tab) => dispatch({ t: "close", path: tab.path }))
+      setDiff(null)
+    }
+    if (!ide.tabs.some(isDirty)) return closeNow()
+    setConfirm({ title: t("ide.tabs.closeAllTitle"), body: t("ide.tabs.closeBody"), confirm: t("ide.tabs.closeConfirm"), run: closeNow })
   }
   const ctx: CmdCtx = {
     can,
@@ -268,52 +328,65 @@ function Workspace({ dir }: { dir: string }) {
     treeShown: prefs.showTree,
     newFile: () => treeActions.current?.create("newFile"),
     newFolder: () => treeActions.current?.create("newDir"),
-    focusSession: () => setTermFocus((n) => n + 1),
+    focusSession: () => setTermFocus((count) => count + 1),
     save: () => void (active && save(active.path)),
     saveAll: async () => {
-      for (const x of ide.tabs) if (isDirty(x) && !x.readOnly) await save(x.path)
+      for (const tab of ide.tabs) {
+        if (isDirty(tab) && !tab.readOnly) await save(tab.path)
+      }
     },
     closeTab: () => active && close(active.path),
     closeAll,
     openQuick: () => setQuick(true),
   }
-  const run = (id: string, k: CmdCtx = ctx) => {
-    const c = commands.find((x) => x.id === id)
-    if (c?.enabled(k)) c.run(k)
+  const run = (id: string, context: CmdCtx = ctx) => {
+    const command = commands.find((candidate) => candidate.id === id)
+    if (command?.enabled(context)) command.run(context)
   }
   // Ctrl+S hors de Monaco (arbre, onglets) : jamais la boîte « Enregistrer la page » du navigateur.
-  const key = (e: KeyboardEvent) => {
-    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.defaultPrevented || e.key.toLowerCase() !== "s") return
-    e.preventDefault()
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (!isPlainShortcut(event, "s")) return
+    event.preventDefault()
     run("file.save")
   }
   // Ctrl+P sur tout le document : l'espace est la page, et sans focus dedans le navigateur ouvrirait l'impression.
   // Ailleurs dans gld (espace démonté), l'impression reste disponible.
   useEffect(() => {
-    const k = (e: globalThis.KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.defaultPrevented || e.key.toLowerCase() !== "p") return
-      e.preventDefault()
+    const onDocumentKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (!isPlainShortcut(event, "p")) return
+      event.preventDefault()
       setQuick(true)
       document.querySelector<HTMLElement>('[aria-controls="ide-quick-list"]')?.focus()
     }
-    document.addEventListener("keydown", k)
-    return () => document.removeEventListener("keydown", k)
+    document.addEventListener("keydown", onDocumentKeyDown)
+    return () => document.removeEventListener("keydown", onDocumentKeyDown)
   }, [])
   // Fermeture de l'ouverture rapide : focus dans l'espace tout de suite, puis dans l'éditeur visé dès qu'il existe.
   const refocus = () => {
     const path = picked.current || live.current.active
     picked.current = ""
     rootEl.current?.focus()
-    if (path) setFocusReq((f) => ({ path, n: f.n + 1 }))
+    if (path) setFocusRequest((previous) => ({ path, count: previous.count + 1 }))
+  }
+  const endTreeResize = (size: number) => {
+    setStoredWidth(String(clampTreeWidth(size)))
+    setDrag({})
+  }
+  const toggleTerminal = (view: BottomView) =>
+    run("view.toggleTerminal", { ...ctx, terminal: view.state, prefs: { ...prefs, showTerminal: view.open } })
+  const pickQuick = (path: string) => {
+    picked.current = path
+    setQuick(false)
+    open(path)
   }
 
   return (
-    <div ref={rootEl} tabIndex={-1} className="flex min-h-0 flex-1 flex-col outline-none" onKeyDown={key}>
+    <div ref={rootEl} tabIndex={-1} className="flex min-h-0 flex-1 flex-col outline-none" onKeyDown={onKeyDown}>
       <MenuBar ctx={ctx} />
       <div className="flex min-h-0 flex-1">
         {prefs.showTree && (
           <>
-            <aside className="flex min-h-0 shrink-0 flex-col" style={{ width: w }}>
+            <aside className="flex min-h-0 shrink-0 flex-col" style={{ width }}>
               <TreeToolbar dir={dir} tree={tree} ctx={ctx} filter={filter} onFilter={setFilter} onRestored={tree.refreshAll} />
               {git.marks.size > 0 && (
                 <div className="flex shrink-0 flex-col items-start px-1 pt-1">
@@ -323,7 +396,7 @@ function Workspace({ dir }: { dir: string }) {
               )}
               <FileTree dir={dir} tree={tree} marks={git.marks} dirs={git.dirs} canWrite={can("fs_write")} selected={ide.active} filter={filter} actionsRef={treeActions} onOpen={open} onRenamed={(from, to) => dispatch({ t: "renamed", from, to })} />
             </aside>
-            <Handle label={t("ide.resize.tree")} start={() => w} onMove={(v) => setDrag({ w: clamp(v, 140, 700) })} onEnd={(v) => (setW(String(clamp(v, 140, 700))), setDrag({}))} />
+            <Handle label={t("ide.resize.tree")} start={() => width} onMove={(size) => setDrag({ width: clampTreeWidth(size) })} onEnd={endTreeResize} />
           </>
         )}
         <div className="flex min-w-0 flex-1 flex-col">
@@ -359,11 +432,11 @@ function Workspace({ dir }: { dir: string }) {
                           wordWrap={prefs.wordWrap}
                           minimap={prefs.minimap}
                           fontSize={prefs.fontSize}
-                          onFontSize={(n) => prefs.set("fontSize", n)}
+                          onFontSize={(size) => prefs.set("fontSize", size)}
                           editorRef={tab.path === ide.active ? setEditor : undefined}
-                          focus={focusReq.path === tab.path ? focusReq.n : 0}
-                          onChange={(v) => !tab.readOnly && dispatch({ t: "edit", path: tab.path, content: v })}
-                          onSave={(v) => save(tab.path, undefined, v)}
+                          focus={focusRequest.path === tab.path ? focusRequest.count : 0}
+                          onChange={(value) => !tab.readOnly && dispatch({ t: "edit", path: tab.path, content: value })}
+                          onSave={(value) => save(tab.path, undefined, value)}
                         />
                       </div>
                     </div>
@@ -373,12 +446,12 @@ function Workspace({ dir }: { dir: string }) {
             </Suspense>
             {diff && diff.path === ide.active && active && <ConflictDiff path={diff.path} original={diff.original} modified={active.content} theme={theme} onClose={() => setDiff(null)} />}
           </div>
-          <BottomPane dir={dir} prefs={prefs} focusN={termFocus} onView={setTerm} onToggle={(v) => run("view.toggleTerminal", { ...ctx, terminal: v.state, prefs: { ...prefs, showTerminal: v.open } })} />
+          <BottomPane dir={dir} prefs={prefs} focusN={termFocus} onView={setTerm} onToggle={toggleTerminal} />
         </div>
       </div>
       {prefs.showStatus && <WorkspaceStatus dir={dir} ctx={ctx} watch={watch} index={index.state} />}
       <Confirm ask={confirm} onClose={() => setConfirm(null)} />
-      <QuickOpen open={quick} files={index.files.map((f) => f.path)} state={index.state} onClose={() => setQuick(false)} onCloseFocus={refocus} onPick={(p) => ((picked.current = p), setQuick(false), open(p))} />
+      <QuickOpen open={quick} files={index.files.map((file) => file.path)} state={index.state} onClose={() => setQuick(false)} onCloseFocus={refocus} onPick={pickQuick} />
     </div>
   )
 }

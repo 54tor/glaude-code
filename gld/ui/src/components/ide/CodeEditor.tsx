@@ -8,13 +8,26 @@ import { zoomed } from "./useViewPrefs"
 import { touchOnly } from "@/lib/utils"
 
 type Theme = "light" | "dark"
-const themeOf = (t: Theme) => (t === "dark" ? "vs-dark" : "vs")
-const view = (wordWrap?: boolean, minimap?: boolean, fontSize?: number) => ({ wordWrap: wordWrap ? ("on" as const) : ("off" as const), minimap: { enabled: !!minimap }, fontSize: fontSize ?? 13 })
-const setRef = <T,>(r: Ref<T> | undefined, v: T | null) => {
-  if (typeof r === "function") r(v)
-  else if (r) r.current = v
+const DEFAULT_FONT_SIZE = 13
+const MAX_PENDING_VALUES = 64
+const themeOf = (theme: Theme) => (theme === "dark" ? "vs-dark" : "vs")
+const view = (wordWrap?: boolean, minimap?: boolean, fontSize?: number) => ({
+  wordWrap: wordWrap ? ("on" as const) : ("off" as const),
+  minimap: { enabled: !!minimap },
+  fontSize: fontSize ?? DEFAULT_FONT_SIZE,
+})
+const setRef = <T,>(ref: Ref<T> | undefined, value: T | null) => {
+  if (typeof ref === "function") ref(value)
+  else if (ref) ref.current = value
 }
-const base = (theme: Theme) => ({ theme: themeOf(theme), fontFamily: FONTS.jetbrains.mono, fontSize: 13, automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false })
+const base = (theme: Theme) => ({
+  theme: themeOf(theme),
+  fontFamily: FONTS.jetbrains.mono,
+  fontSize: DEFAULT_FONT_SIZE,
+  automaticLayout: true,
+  minimap: { enabled: false },
+  scrollBeyondLastLine: false,
+})
 
 // Sources du projet données au service TypeScript ; null retire l'entrée. Seul ce module touche Monaco.
 // Clé identique à l'URI du modèle d'un onglet ouvert (encodée) : sinon TypeScript voit deux racines au même texte.
@@ -25,7 +38,7 @@ export function setTsLib(path: string, content: string | null) {
   if (content !== null) libs.set(path, typescriptDefaults.addExtraLib(content, monaco.Uri.file(path).toString()))
 }
 export function clearTsLibs() {
-  for (const d of libs.values()) d.dispose()
+  for (const lib of libs.values()) lib.dispose()
   libs.clear()
 }
 
@@ -42,115 +55,131 @@ type Props = {
   minimap?: boolean
   fontSize?: number
   editorRef?: Ref<EditorHandle | null>
-  onFontSize?(n: number): void
-  onChange(v: string): void
-  onSave(v: string): void
+  onFontSize?(size: number): void
+  onChange(value: string): void
+  onSave(value: string): void
 }
 export default function CodeEditor({ path, value, readOnly, theme, focus, wordWrap, minimap, fontSize, editorRef, onFontSize, onChange, onSave }: Props) {
   const box = useRef<HTMLDivElement>(null)
   const model = useRef<monaco.editor.ITextModel | null>(null)
-  const ed = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
-  const cb = useRef({ onChange, onSave, onFontSize, fontSize })
-  const handle = useRef<{ h: EditorHandle; notify(): void } | null>(null)
+  const editor = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
+  const callbacks = useRef({ onChange, onSave, onFontSize, fontSize })
+  const handle = useRef<{ editorHandle: EditorHandle; notify(): void } | null>(null)
   // Valeurs émises que le parent n'a pas encore renvoyées : une frappe entre un rendu et son effet ferait sinon revenir le texte d'avant.
-  const mine = useRef<string[]>([])
+  const pendingValues = useRef<string[]>([])
   useEffect(() => {
-    cb.current = { onChange, onSave, onFontSize, fontSize }
+    callbacks.current = { onChange, onSave, onFontSize, fontSize }
   })
 
   useEffect(() => {
     const uri = monaco.Uri.file(path)
     monaco.editor.getModel(uri)?.dispose()
-    const m = monaco.editor.createModel(value, undefined, uri)
-    const e = monaco.editor.create(box.current!, { ...base(theme), ...view(wordWrap, minimap, fontSize), model: m, readOnly: readOnly || touchOnly() })
-    // Pas addCommand : ce raccourci est global à Monaco, le dernier éditeur créé l'emporterait et Ctrl+S enregistrerait un autre onglet.
-    const keys = e.onKeyDown((k) => {
-      if (!(k.ctrlKey || k.metaKey) || k.altKey || k.shiftKey || k.keyCode !== monaco.KeyCode.KeyS) return
-      k.preventDefault()
-      cb.current.onSave(m.getValue())
+    const textModel = monaco.editor.createModel(value, undefined, uri)
+    const codeEditor = monaco.editor.create(box.current!, {
+      ...base(theme),
+      ...view(wordWrap, minimap, fontSize),
+      model: textModel,
+      readOnly: readOnly || touchOnly(),
     })
-    const sub = m.onDidChangeContent(() => {
-      const v = m.getValue()
-      if (mine.current.push(v) > 64) mine.current.shift()
-      cb.current.onChange(v)
+    // Pas addCommand : ce raccourci est global à Monaco, le dernier éditeur créé l'emporterait et Ctrl+S enregistrerait un autre onglet.
+    const keyListener = codeEditor.onKeyDown((keyEvent) => {
+      const hasCtrlOrMeta = keyEvent.ctrlKey || keyEvent.metaKey
+      const hasOtherModifier = keyEvent.altKey || keyEvent.shiftKey
+      const isSaveShortcut = hasCtrlOrMeta && !hasOtherModifier && keyEvent.keyCode === monaco.KeyCode.KeyS
+      if (!isSaveShortcut) return
+      keyEvent.preventDefault()
+      callbacks.current.onSave(textModel.getValue())
+    })
+    const contentListener = textModel.onDidChangeContent(() => {
+      const currentValue = textModel.getValue()
+      if (pendingValues.current.push(currentValue) > MAX_PENDING_VALUES) pendingValues.current.shift()
+      callbacks.current.onChange(currentValue)
     })
     // alive : une poignée gardée après le démontage ne touche plus un éditeur libéré.
     let alive = true
-    const ls = new Set<(s: EditorStatus) => void>()
+    const listeners = new Set<(status: EditorStatus) => void>()
     const status = (): EditorStatus => {
-      const o = m.getOptions()
-      const p = e.getPosition()
+      const options = textModel.getOptions()
+      const position = codeEditor.getPosition()
+      const selections = codeEditor.getSelections() ?? []
       return {
-        line: p?.lineNumber ?? 1,
-        col: p?.column ?? 1,
-        selected: (e.getSelections() ?? []).reduce((n, r) => n + m.getValueLengthInRange(r), 0),
-        eol: m.getEOL() === "\r\n" ? "CRLF" : "LF",
-        language: m.getLanguageId(),
-        indent: `${o.insertSpaces ? "spaces" : "tabs"}:${o.tabSize}`,
-        readOnly: e.getOption(monaco.editor.EditorOption.readOnly),
+        line: position?.lineNumber ?? 1,
+        col: position?.column ?? 1,
+        selected: selections.reduce((total, range) => total + textModel.getValueLengthInRange(range), 0),
+        eol: textModel.getEOL() === "\r\n" ? "CRLF" : "LF",
+        language: textModel.getLanguageId(),
+        indent: `${options.insertSpaces ? "spaces" : "tabs"}:${options.tabSize}`,
+        readOnly: codeEditor.getOption(monaco.editor.EditorOption.readOnly),
       }
     }
     const notify = () => {
-      if (!alive || !ls.size) return
-      const s = status()
-      for (const l of ls) l(s)
+      if (!alive || !listeners.size) return
+      const currentStatus = status()
+      for (const listener of listeners) listener(currentStatus)
     }
-    const evs = [e.onDidChangeCursorPosition(notify), e.onDidChangeCursorSelection(notify), e.onDidChangeModel(notify), e.onDidChangeModelContent(notify), e.onDidChangeModelOptions(notify)]
-    const action = (id: string) => () => void (alive && e.getAction(id)?.run())
-    const h: EditorHandle = {
-      undo: () => void (alive && e.trigger("keyboard", "undo", null)),
-      redo: () => void (alive && e.trigger("keyboard", "redo", null)),
+    const editorListeners = [
+      codeEditor.onDidChangeCursorPosition(notify),
+      codeEditor.onDidChangeCursorSelection(notify),
+      codeEditor.onDidChangeModel(notify),
+      codeEditor.onDidChangeModelContent(notify),
+      codeEditor.onDidChangeModelOptions(notify),
+    ]
+    const action = (id: string) => () => void (alive && codeEditor.getAction(id)?.run())
+    const editorHandle: EditorHandle = {
+      undo: () => void (alive && codeEditor.trigger("keyboard", "undo", null)),
+      redo: () => void (alive && codeEditor.trigger("keyboard", "redo", null)),
       find: action("actions.find"),
       replace: action("editor.action.startFindReplaceAction"),
       gotoLine: action("editor.action.gotoLine"),
       palette: action("editor.action.quickCommand"),
-      focus: () => void (alive && e.focus()),
-      zoom: (d) => void (alive && cb.current.onFontSize?.(zoomed(cb.current.fontSize ?? 13, d))),
-      subscribe(l) {
+      focus: () => void (alive && codeEditor.focus()),
+      zoom: (delta) =>
+        void (alive && callbacks.current.onFontSize?.(zoomed(callbacks.current.fontSize ?? DEFAULT_FONT_SIZE, delta))),
+      subscribe(listener) {
         if (!alive) return () => {}
-        ls.add(l)
-        l(status())
-        return () => void ls.delete(l)
+        listeners.add(listener)
+        listener(status())
+        return () => void listeners.delete(listener)
       },
     }
-    handle.current = { h, notify }
-    model.current = m
-    ed.current = e
+    handle.current = { editorHandle, notify }
+    model.current = textModel
+    editor.current = codeEditor
     return () => {
       alive = false
-      ls.clear()
+      listeners.clear()
       handle.current = null
-      for (const d of evs) d.dispose()
-      keys.dispose()
-      sub.dispose()
-      e.dispose()
-      m.dispose()
+      for (const disposable of editorListeners) disposable.dispose()
+      keyListener.dispose()
+      contentListener.dispose()
+      codeEditor.dispose()
+      textModel.dispose()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path])
 
   useEffect(() => {
-    const h = handle.current?.h
-    if (!editorRef || !h) return
-    setRef(editorRef, h)
+    const editorHandle = handle.current?.editorHandle
+    if (!editorRef || !editorHandle) return
+    setRef(editorRef, editorHandle)
     return () => setRef(editorRef, null)
   }, [editorRef, path])
   useEffect(() => {
-    ed.current?.updateOptions(view(wordWrap, minimap, fontSize))
+    editor.current?.updateOptions(view(wordWrap, minimap, fontSize))
   }, [wordWrap, minimap, fontSize])
 
   // Rechargement depuis le disque : seule une valeur que nous n'avons pas émise vient de l'extérieur.
   useEffect(() => {
-    const i = mine.current.indexOf(value)
-    if (i >= 0) return void mine.current.splice(0, i + 1)
-    mine.current = []
+    const pendingIndex = pendingValues.current.indexOf(value)
+    if (pendingIndex >= 0) return void pendingValues.current.splice(0, pendingIndex + 1)
+    pendingValues.current = []
     if (model.current && model.current.getValue() !== value) model.current.setValue(value)
   }, [value])
   useEffect(() => {
-    if (focus) ed.current?.focus()
+    if (focus) editor.current?.focus()
   }, [focus])
   useEffect(() => {
-    ed.current?.updateOptions({ readOnly: readOnly || touchOnly() })
+    editor.current?.updateOptions({ readOnly: readOnly || touchOnly() })
     handle.current?.notify()
   }, [readOnly])
   useEffect(() => {
@@ -164,18 +193,18 @@ export default function CodeEditor({ path, value, readOnly, theme, focus, wordWr
 export function DiffView({ path, original, modified, theme }: { path: string; original: string; modified: string; theme: Theme }) {
   const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    const own = monaco.editor.getModel(monaco.Uri.file(path))
-    const mod = own ?? monaco.editor.createModel(modified)
-    const orig = monaco.editor.createModel(original, mod.getLanguageId())
-    const d = monaco.editor.createDiffEditor(box.current!, { ...base(theme), originalEditable: false })
-    // Modèle de vue gardé : d.dispose() ne l'arrête pas, et un calcul en vol sur un modèle disposé lève « no diff result available ».
-    const vm = d.createViewModel({ original: orig, modified: mod })
-    d.setModel(vm)
+    const tabModel = monaco.editor.getModel(monaco.Uri.file(path))
+    const modifiedModel = tabModel ?? monaco.editor.createModel(modified)
+    const originalModel = monaco.editor.createModel(original, modifiedModel.getLanguageId())
+    const diffEditor = monaco.editor.createDiffEditor(box.current!, { ...base(theme), originalEditable: false })
+    // Modèle de vue gardé : diffEditor.dispose() ne l'arrête pas, et un calcul en vol sur un modèle disposé lève « no diff result available ».
+    const viewModel = diffEditor.createViewModel({ original: originalModel, modified: modifiedModel })
+    diffEditor.setModel(viewModel)
     return () => {
-      d.dispose()
-      vm.dispose()
-      orig.dispose()
-      if (!own) mod.dispose()
+      diffEditor.dispose()
+      viewModel.dispose()
+      originalModel.dispose()
+      if (!tabModel) modifiedModel.dispose()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, original])

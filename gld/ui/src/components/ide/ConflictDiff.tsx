@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-const DiffView = lazy(() => import("./CodeEditor").then((m) => ({ default: m.DiffView })))
+const DiffView = lazy(() => import("./CodeEditor").then((editorModule) => ({ default: editorModule.DiffView })))
 
 export function ConflictDiff({ path, original, modified, theme, onClose }: { path: string; original: string; modified: string; theme: "light" | "dark"; onClose(): void }) {
   const { t } = useTranslation()

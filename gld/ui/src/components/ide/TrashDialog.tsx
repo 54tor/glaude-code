@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/dialog"
 import { Confirm, type Ask } from "@/components/Confirm"
 
+const CONFLICT = 409
+
 type Props = {
   dir: string
   open: boolean
@@ -24,7 +26,7 @@ type Props = {
 
 export function TrashDialog({ open, onClose, ...rest }: Props) {
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <DialogContent className="sm:max-w-xl">
         {open && <Body {...rest} />}
       </DialogContent>
@@ -56,7 +58,7 @@ function Body({ dir, canWrite, onRestored }: Omit<Props, "open" | "onClose">) {
       api
         .fsTrash(dir)
         .then(
-          (r) => alive.current && setItems(r.items),
+          (response) => alive.current && setItems(response.items),
           () => alive.current && setItems("failed")
         ),
     [dir]
@@ -64,49 +66,46 @@ function Body({ dir, canWrite, onRestored }: Omit<Props, "open" | "onClose">) {
   useEffect(() => {
     load()
   }, [load])
-  const exclusive = async (id: string, f: () => Promise<void>) => {
+  const exclusive = async (id: string, task: () => Promise<void>) => {
     if (pending.current) return
     pending.current = true
     setBusy(id)
     setError("")
     try {
-      await f()
+      await task()
     } finally {
       pending.current = false
       if (alive.current) setBusy("")
     }
   }
 
-  const failMsg = (e: unknown) => (e instanceof ApiError ? e.message : t("shell.act.failed"))
-  const restore = (x: FsTrashItem) =>
-    exclusive(x.id, async () => {
+  const failMsg = (error: unknown) => (error instanceof ApiError ? error.message : t("shell.act.failed"))
+  const restore = (item: FsTrashItem) =>
+    exclusive(item.id, async () => {
       try {
-        await api.fsTrashRestore(dir, x.id)
-      } catch (e) {
+        await api.fsTrashRestore(dir, item.id)
+      } catch (restoreError) {
         if (!alive.current) return
-        return setError(
-          e instanceof ApiError && e.status === 409
-            ? t("ide.trash.exists", { path: x.path })
-            : failMsg(e)
-        )
+        const alreadyExists = restoreError instanceof ApiError && restoreError.status === CONFLICT
+        return setError(alreadyExists ? t("ide.trash.exists", { path: item.path }) : failMsg(restoreError))
       }
       // Le fichier est revenu sur le disque même si la fenêtre a été fermée entre-temps : l'arbre doit le montrer.
       onRestored()
       if (!alive.current) return
-      toast(t("ide.trash.restored", { path: x.path }))
+      toast(t("ide.trash.restored", { path: item.path }))
       void load()
     })
-  const purge = (x: FsTrashItem) =>
+  const purge = (item: FsTrashItem) =>
     setConfirm({
-      title: t("ide.trash.purgeTitle", { path: x.path }),
+      title: t("ide.trash.purgeTitle", { path: item.path }),
       body: t("ide.trash.purgeBody"),
       confirm: t("ide.trash.purgeConfirm"),
       run: () =>
-        void exclusive(x.id, async () => {
+        void exclusive(item.id, async () => {
           try {
-            await api.fsTrashPurge(dir, x.id)
-          } catch (e) {
-            if (alive.current) setError(failMsg(e))
+            await api.fsTrashPurge(dir, item.id)
+          } catch (purgeError) {
+            if (alive.current) setError(failMsg(purgeError))
             return
           }
           if (!alive.current) return
@@ -149,26 +148,26 @@ function Body({ dir, canWrite, onRestored }: Omit<Props, "open" | "onClose">) {
       )}
       {Array.isArray(items) && items.length > 0 && (
         <ul className="max-h-80 divide-y overflow-auto text-sm">
-          {items.map((x) => (
-            <li key={x.id} className="flex items-center gap-2 py-1.5">
+          {items.map((item) => (
+            <li key={item.id} className="flex items-center gap-2 py-1.5">
               <span
                 className="min-w-0 flex-1 truncate font-mono text-xs"
-                title={x.path}
+                title={item.path}
               >
-                {x.path}
+                {item.path}
               </span>
               <time
                 className="shrink-0 text-xs text-muted-foreground"
-                dateTime={new Date(x.mtime * 1000).toISOString()}
+                dateTime={new Date(item.mtime * 1000).toISOString()}
               >
-                {date.format(x.mtime * 1000)}
+                {date.format(item.mtime * 1000)}
               </time>
               <Button
                 variant="ghost"
                 size="icon-sm"
                 disabled={!canWrite || !!busy}
-                aria-label={t("ide.trash.restore", { path: x.path })}
-                onClick={() => restore(x)}
+                aria-label={t("ide.trash.restore", { path: item.path })}
+                onClick={() => restore(item)}
               >
                 <RotateCcw />
               </Button>
@@ -176,8 +175,8 @@ function Body({ dir, canWrite, onRestored }: Omit<Props, "open" | "onClose">) {
                 variant="ghost"
                 size="icon-sm"
                 disabled={!canWrite || !!busy}
-                aria-label={t("ide.trash.purge", { path: x.path })}
-                onClick={() => purge(x)}
+                aria-label={t("ide.trash.purge", { path: item.path })}
+                onClick={() => purge(item)}
               >
                 <Trash2 />
               </Button>
