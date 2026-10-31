@@ -23,8 +23,8 @@ describe("copyText", () => {
 
 describe("Entrée au clavier tactile", () => {
   afterEach(() => vi.unstubAllGlobals())
-  const enter = (o: { shiftKey?: boolean; ctrlKey?: boolean } = {}) => ({ key: "Enter", shiftKey: false, nativeEvent: {}, ...o })
-  const touch = (on: boolean) => vi.stubGlobal("matchMedia", (q: string) => ({ matches: on && q.includes("coarse"), media: q }))
+  const enter = (record: { shiftKey?: boolean; ctrlKey?: boolean } = {}) => ({ key: "Enter", shiftKey: false, nativeEvent: {}, ...record })
+  const touch = (on: boolean) => vi.stubGlobal("matchMedia", (query: string) => ({ matches: on && query.includes("coarse"), media: query }))
 
   it("avec un clavier, Entrée envoie et Maj+Entrée va à la ligne", () => {
     touch(false)

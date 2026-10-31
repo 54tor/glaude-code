@@ -2,10 +2,10 @@ import fc from "fast-check"
 import { describe, expect, it } from "vitest"
 import { href, parse, type Route } from "./route"
 
-const seg = fc.string({ minLength: 1 }).filter((s) => s !== "." && s !== "..")
+const seg = fc.string({ minLength: 1 }).filter((text) => text !== "." && text !== "..")
 const key = fc
   .array(seg, { minLength: 1, maxLength: 4 })
-  .map((a) => a.join("/"))
+  .map((texts) => texts.join("/"))
 const route: fc.Arbitrary<Route> = fc.oneof(
   fc.constant({ kind: "recent" as const }),
   fc.constant({ kind: "all" as const }),
@@ -39,8 +39,8 @@ const route: fc.Arbitrary<Route> = fc.oneof(
 describe("route", () => {
   it("parse(href(r)) redonne r, quels que soient les caractères (/, %, espaces, accents)", () => {
     fc.assert(
-      fc.property(route, (r) => {
-        expect(parse(href(r))).toEqual(r)
+      fc.property(route, (route) => {
+        expect(parse(href(route))).toEqual(route)
       }),
       { seed: 42, numRuns: 2000 }
     )
@@ -64,9 +64,9 @@ describe("route", () => {
   })
   it("ne lève jamais d'exception", () => {
     fc.assert(
-      fc.property(fc.string(), (s) => {
-        parse(s)
-        parse("/" + s)
+      fc.property(fc.string(), (text) => {
+        parse(text)
+        parse("/" + text)
       }),
       { seed: 7, numRuns: 2000 }
     )

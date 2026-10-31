@@ -177,29 +177,29 @@ Voilà.
 
 describe("parsePrompt : captures réelles", () => {
   it("permission d'une commande risquée", () => {
-    const p = parsePrompt(real.permission)!
-    expect(p.question).toBe("Do you want to proceed?")
-    expect(p.options.map((o) => o.keys)).toEqual([["1"], ["2"]])
-    expect(p.submit).toBeUndefined()
+    const prompt = parsePrompt(real.permission)!
+    expect(prompt.question).toBe("Do you want to proceed?")
+    expect(prompt.options.map((opt) => opt.keys)).toEqual([["1"], ["2"]])
+    expect(prompt.submit).toBeUndefined()
   })
   it("choix multiples : cases, accès au champ libre, validation", () => {
-    const p = parsePrompt(real.multi)!
-    expect(p.question).toBe("Quelles couleurs veux-tu sélectionner ?")
-    expect(p.options.filter((o) => o.checked !== undefined).map((o) => [o.label, o.checked, o.keys[0]])).toEqual([
+    const prompt = parsePrompt(real.multi)!
+    expect(prompt.question).toBe("Quelles couleurs veux-tu sélectionner ?")
+    expect(prompt.options.filter((opt) => opt.checked !== undefined).map((opt) => [opt.label, opt.checked, opt.keys[0]])).toEqual([
       ["Rouge", false, "1"],
       ["Bleu", false, "2"],
       ["Vert", false, "3"],
       ["Type something", false, "4"],
     ])
-    const free = p.options.find((o) => o.text && o.checked !== undefined)!
+    const free = prompt.options.find((opt) => opt.text && opt.checked !== undefined)!
     expect(free.reach).toEqual(["Down", "Down", "Down"])
-    expect(p.submit).toEqual(["Down", "Down", "Down", "Down", "Enter"])
-    expect(p.options.at(-1)).toMatchObject({ chat: true, keys: ["5", "Enter"] })
+    expect(prompt.submit).toEqual(["Down", "Down", "Down", "Down", "Enter"])
+    expect(prompt.options.at(-1)).toMatchObject({ chat: true, keys: ["5", "Enter"] })
   })
   it("choix multiples : du texte avant l'en-tête ne remplace pas la question", () => {
-    const p = parsePrompt("Récapitulatif de Claude :\n- UI-04 : focus ;\n" + real.multi)!
-    expect(p.question).toBe("Quelles couleurs veux-tu sélectionner ?")
-    expect(p.context).toBe("Récapitulatif de Claude :\n- UI-04 : focus ;")
+    const prompt = parsePrompt("Récapitulatif de Claude :\n- UI-04 : focus ;\n" + real.multi)!
+    expect(prompt.question).toBe("Quelles couleurs veux-tu sélectionner ?")
+    expect(prompt.context).toBe("Récapitulatif de Claude :\n- UI-04 : focus ;")
   })
   it("capture réelle à onglets : récapitulatif, question, descriptions, Submit", () => {
     const screen = [
@@ -225,12 +225,12 @@ describe("parsePrompt : captures réelles", () => {
       "",
       "Enter to select · Tab/Arrow keys to navigate · Esc to cancel",
     ].join("\n")
-    const p = parsePrompt(screen)!
-    expect(p.question).toBe("Quel périmètre pour le premier lot ?")
-    expect(p.context).toBe("● Voici les défauts :\n  UI-02, barre d'outils du lecteur\n  - A : autoriser le retour à la ligne.\n  Limites de l'audit\n  - Pas de test au lecteur d'écran.")
-    expect(p.options.map((o) => o.detail)).toEqual(["Les défauts confirmés.", "Accessibilité.", undefined, undefined])
-    expect(p.submit).toEqual(["Down", "Down", "Down", "Enter"])
-    expect(p.tabs).toEqual([{ label: "UI-01", done: true }, { label: "UI-02", done: true }, { label: "Périmètre", done: false }])
+    const prompt = parsePrompt(screen)!
+    expect(prompt.question).toBe("Quel périmètre pour le premier lot ?")
+    expect(prompt.context).toBe("● Voici les défauts :\n  UI-02, barre d'outils du lecteur\n  - A : autoriser le retour à la ligne.\n  Limites de l'audit\n  - Pas de test au lecteur d'écran.")
+    expect(prompt.options.map((opt) => opt.detail)).toEqual(["Les défauts confirmés.", "Accessibilité.", undefined, undefined])
+    expect(prompt.submit).toEqual(["Down", "Down", "Down", "Enter"])
+    expect(prompt.tabs).toEqual([{ label: "UI-01", done: true }, { label: "UI-02", done: true }, { label: "Périmètre", done: false }])
   })
   it("question à onglets à choix unique : récapitulatif et onglets", () => {
     const screen = [
@@ -249,54 +249,54 @@ describe("parsePrompt : captures réelles", () => {
       "",
       "Enter to select · Tab/Arrow keys to navigate · Esc to cancel",
     ].join("\n")
-    const p = parsePrompt(screen)!
-    expect(p.question).toBe("Quel périmètre pour le portage ?")
-    expect(p.context).toBe("● Deux décisions vous reviennent.")
-    expect(p.tabs).toEqual([{ label: "Périmètre", done: false }, { label: "Langage", done: false }])
-    expect(p.options[0].keys).toEqual(["1"])
+    const prompt = parsePrompt(screen)!
+    expect(prompt.question).toBe("Quel périmètre pour le portage ?")
+    expect(prompt.context).toBe("● Deux décisions vous reviennent.")
+    expect(prompt.tabs).toEqual([{ label: "Périmètre", done: false }, { label: "Langage", done: false }])
+    expect(prompt.options[0].keys).toEqual(["1"])
   })
   it("choix multiples : la description de chaque case est conservée", () => {
-    const o = parsePrompt(real.multi)!.options
-    expect(o[0].detail).toBe("Couleur chaude, forte visibilité.")
-    expect(o[3].detail).toBeUndefined()
+    const opts = parsePrompt(real.multi)!.options
+    expect(opts[0].detail).toBe("Couleur chaude, forte visibilité.")
+    expect(opts[3].detail).toBeUndefined()
   })
   it("choix multiples : curseur au milieu, cases cochées", () => {
-    const p = parsePrompt(real.multiMid)!
-    expect(p.options.slice(0, 2).map((o) => o.checked)).toEqual([true, true])
-    expect(p.submit).toEqual(["Down", "Down", "Down", "Enter"])
-    expect(p.options[3].reach).toEqual(["Down", "Down"])
-    expect(p.options[0].reach).toEqual(["Up"])
+    const prompt = parsePrompt(real.multiMid)!
+    expect(prompt.options.slice(0, 2).map((opt) => opt.checked)).toEqual([true, true])
+    expect(prompt.submit).toEqual(["Down", "Down", "Down", "Enter"])
+    expect(prompt.options[3].reach).toEqual(["Down", "Down"])
+    expect(prompt.options[0].reach).toEqual(["Up"])
   })
   it("choix unique avec champ libre et discussion", () => {
-    const p = parsePrompt(real.single)!
-    expect(p.question).toBe("Quelle couleur préfères-tu ?")
-    expect(p.options.map((o) => [o.keys, !!o.text, !!o.chat])).toEqual([[["1"], false, false], [["2"], false, false], [["3"], false, false], [["4"], true, false], [["5", "Enter"], true, true]])
-    expect(p.submit).toBeUndefined()
+    const prompt = parsePrompt(real.single)!
+    expect(prompt.question).toBe("Quelle couleur préfères-tu ?")
+    expect(prompt.options.map((opt) => [opt.keys, !!opt.text, !!opt.chat])).toEqual([[["1"], false, false], [["2"], false, false], [["3"], false, false], [["4"], true, false], [["5", "Enter"], true, true]])
+    expect(prompt.submit).toBeUndefined()
   })
   it("relecture des réponses", () => {
-    const p = parsePrompt(real.review)!
-    expect(p.options.map((o) => o.keys[0])).toEqual(["1", "2"])
+    const prompt = parsePrompt(real.review)!
+    expect(prompt.options.map((opt) => opt.keys[0])).toEqual(["1", "2"])
   })
 })
 
 describe("parsePrompt : autres dialogues réels", () => {
   it("approbation d'un plan : la 3e option est une réponse libre", () => {
-    const p = parsePrompt(real.plan)!
-    expect(p.question).toMatch(/Would you like to proceed/)
-    expect(p.options.map((o) => [o.keys[0], !!o.text])).toEqual([["1", false], ["2", false], ["3", true]])
+    const prompt = parsePrompt(real.plan)!
+    expect(prompt.question).toMatch(/Would you like to proceed/)
+    expect(prompt.options.map((opt) => [opt.keys[0], !!opt.text])).toEqual([["1", false], ["2", false], ["3", true]])
   })
   it("édition d'un fichier : l'option 2 tient sur deux lignes", () => {
-    const p = parsePrompt(real.edit)!
-    expect(p.question).toBe("Do you want to make this edit to probe.txt?")
-    expect(p.options).toHaveLength(3)
-    expect(p.options[1].label).toMatch(/always allow access/)
-    expect(p.options[1].detail).toMatch(/scratchpad for this session/)
+    const prompt = parsePrompt(real.edit)!
+    expect(prompt.question).toBe("Do you want to make this edit to probe.txt?")
+    expect(prompt.options).toHaveLength(3)
+    expect(prompt.options[1].label).toMatch(/always allow access/)
+    expect(prompt.options[1].detail).toMatch(/scratchpad for this session/)
   })
   it("plusieurs questions : un onglet à la fois, la touche chiffre répond et passe à la suivante", () => {
-    const p = parsePrompt(real.tabs)!
-    expect(p.question).toBe("Quelle couleur préférez-vous ?")
-    expect(p.submit).toBeUndefined()
-    expect(p.options.map((o) => o.keys[0])).toEqual(["1", "2", "3", "4"])
+    const prompt = parsePrompt(real.tabs)!
+    expect(prompt.question).toBe("Quelle couleur préférez-vous ?")
+    expect(prompt.submit).toBeUndefined()
+    expect(prompt.options.map((opt) => opt.keys[0])).toEqual(["1", "2", "3", "4"])
   })
 })
 
@@ -307,21 +307,21 @@ describe("parsePrompt : faux dialogues", () => {
 2. [ ] b
    Submit
 ${real.permission}`
-    const p = parsePrompt(fake)
-    expect(p?.submit).toBeUndefined()
+    const prompt = parsePrompt(fake)
+    expect(prompt?.submit).toBeUndefined()
   })
   it("des cases sans l'en-tête de la vraie question sont ignorées", () => {
-    const noHead = real.multi.split("\n").filter((l) => !l.includes("←")).join("\n")
+    const noHead = real.multi.split("\n").filter((line) => !line.includes("←")).join("\n")
     expect(parsePrompt(noHead)?.submit).toBeUndefined()
   })
 })
 
 describe("parsePrompt", () => {
   it("permission : question et trois options numérotées, la dernière à réponse libre", () => {
-    const p = parsePrompt(screens.permission)!
-    expect(p.question).toBe("Do you want to proceed?")
-    expect(p.options.map((o) => o.keys)).toEqual([["1"], ["2"], ["3"]])
-    expect(p.options[2].text).toBe(true)
+    const prompt = parsePrompt(screens.permission)!
+    expect(prompt.question).toBe("Do you want to proceed?")
+    expect(prompt.options.map((opt) => opt.keys)).toEqual([["1"], ["2"], ["3"]])
+    expect(prompt.options[2].text).toBe(true)
   })
   it("question d'un onglet : tout le paragraphe, même s'il ne finit pas par un point d'interrogation", () => {
     const screen = [
@@ -341,9 +341,9 @@ describe("parsePrompt", () => {
       "",
       "Enter to select · Tab/Arrow keys to navigate",
     ].join("\n")
-    const p = parsePrompt(screen)!
-    expect(p.question).toMatch(/^Code mort confirmé/)
-    expect(p.question).toMatch(/todo\.local\.md\.$/)
+    const prompt = parsePrompt(screen)!
+    expect(prompt.question).toMatch(/^Code mort confirmé/)
+    expect(prompt.question).toMatch(/todo\.local\.md\.$/)
   })
   it("une question longue repliée sur plusieurs lignes est lue en entier", () => {
     const screen = [
@@ -358,10 +358,10 @@ describe("parsePrompt", () => {
       "",
       "Enter to select · ↑/↓ to navigate · Esc to cancel",
     ].join("\n")
-    const p = parsePrompt(screen)!
-    expect(p.question).toContain("CODE-A4-1")
-    expect(p.question).toContain("rotate). Tout lien")
-    expect(p.question).toMatch(/Quelle correction \?$/)
+    const prompt = parsePrompt(screen)!
+    expect(prompt.question).toContain("CODE-A4-1")
+    expect(prompt.question).toContain("rotate). Tout lien")
+    expect(prompt.question).toMatch(/Quelle correction \?$/)
   })
   it("autorisation : la commande et son titre accompagnent la question", () => {
     const sep = "╌".repeat(60)
@@ -380,27 +380,27 @@ describe("parsePrompt", () => {
       "",
       " Esc to cancel · Tab to amend",
     ].join("\n")
-    const p = parsePrompt(screen)!
-    expect(p.question).toBe("Do you want to proceed?")
-    expect(p.context).toContain("rm /tmp/x/upload-full.php")
-    expect(p.context).toContain("Clean temp file and verify commits")
-    expect(p.context).toContain("Bash command")
-    expect(p.context).toContain("Ask rule Bash(rm *)")
+    const prompt = parsePrompt(screen)!
+    expect(prompt.question).toBe("Do you want to proceed?")
+    expect(prompt.context).toContain("rm /tmp/x/upload-full.php")
+    expect(prompt.context).toContain("Clean temp file and verify commits")
+    expect(prompt.context).toContain("Bash command")
+    expect(prompt.context).toContain("Ask rule Bash(rm *)")
   })
   it("dialogue encadré", () => {
-    const p = parsePrompt(screens.boxed)!
-    expect(p.options).toHaveLength(2)
-    expect(p.options[0].label).toBe("1. Yes")
+    const prompt = parsePrompt(screens.boxed)!
+    expect(prompt.options).toHaveLength(2)
+    expect(prompt.options[0].label).toBe("1. Yes")
   })
   it("question à choix : « Type something » et « Chat about this » sont des réponses libres", () => {
-    const p = parsePrompt(screens.ask)!
-    expect(p.question).toMatch(/HTTPS/)
-    expect(p.options.filter((o) => o.text).map((o) => o.keys[0])).toEqual(["3", "4"])
+    const prompt = parsePrompt(screens.ask)!
+    expect(prompt.question).toMatch(/HTTPS/)
+    expect(prompt.options.filter((opt) => opt.text).map((opt) => opt.keys[0])).toEqual(["3", "4"])
   })
   it("écran de relecture des réponses", () => {
-    const p = parsePrompt(screens.review)!
-    expect(p.question).toBe("Ready to submit your answers?")
-    expect(p.options.map((o) => o.keys[0])).toEqual(["1", "2"])
+    const prompt = parsePrompt(screens.review)!
+    expect(prompt.question).toBe("Ready to submit your answers?")
+    expect(prompt.options.map((opt) => opt.keys[0])).toEqual(["1", "2"])
   })
   it("aperçu côte à côte : le cadre ne se mêle pas aux options", () => {
     const screen = [
@@ -415,13 +415,13 @@ describe("parsePrompt", () => {
       "",
       "Enter to select · ↑/↓ to navigate · Esc to cancel",
     ].join("\n")
-    const p = parsePrompt(screen)!
-    expect(p.options.map((o) => o.label)).toEqual(["1. Invalide = fermé", "2. Refuser le snapshot", "3. Laisser en l'état"])
-    expect(p.preview).toBe("Chaîne confirmée :\n  pool.rs:105  Invalid(None)")
+    const prompt = parsePrompt(screen)!
+    expect(prompt.options.map((opt) => opt.label)).toEqual(["1. Invalide = fermé", "2. Refuser le snapshot", "3. Laisser en l'état"])
+    expect(prompt.preview).toBe("Chaîne confirmée :\n  pool.rs:105  Invalid(None)")
   })
   it("liste à sélection : flèches puis Entrée", () => {
-    const p = parsePrompt(screens.select)!
-    expect(p.options.map((o) => o.keys)).toEqual([["Enter"], ["Down", "Enter"], ["Down", "Down", "Enter"]])
+    const prompt = parsePrompt(screens.select)!
+    expect(prompt.options.map((opt) => opt.keys)).toEqual([["Enter"], ["Down", "Enter"], ["Down", "Down", "Enter"]])
   })
   it("rien en pleine réflexion ni sur du texte ordinaire", () => {
     expect(parsePrompt(screens.busy)).toBeNull()
@@ -456,8 +456,8 @@ describe("modeOfScreen", () => {
         "Enter to select · Tab/Arrow keys to navigate · Esc to cancel",
       ].join("\n")
     it("la réponse libre donnée est éditable : le curseur la rejoint sans valider", () => {
-      const o = parsePrompt(body(1))!.options[2]
-      expect(o).toMatchObject({ label: "3. abc ✔", text: true, edit: "abc", reach: ["Down", "Down"] })
+      const opt = parsePrompt(body(1))!.options[2]
+      expect(opt).toMatchObject({ label: "3. abc ✔", text: true, edit: "abc", reach: ["Down", "Down"] })
     })
     it("le libellé ne change pas quand le curseur arrive sur la ligne", () => {
       expect(parsePrompt(body(3))!.options[2]).toMatchObject({ label: "3. abc ✔", edit: "abc", reach: [] })
@@ -486,8 +486,8 @@ describe("question seule précédée d'un rapport de Claude", () => {
     "Enter to select · ↑/↓ to navigate · Esc to cancel",
   ].join("\n")
   it("le rapport au-dessus de la question devient le contexte", () => {
-    const p = parsePrompt(screen)!
-    expect(p.context).toBe("● Audit en lecture seule.\n  Plan d'exécution proposé\n  1. Go patchs directs.")
-    expect(p.question).toBe("Valides-tu ce plan ?")
+    const prompt = parsePrompt(screen)!
+    expect(prompt.context).toBe("● Audit en lecture seule.\n  Plan d'exécution proposé\n  1. Go patchs directs.")
+    expect(prompt.question).toBe("Valides-tu ce plan ?")
   })
 })

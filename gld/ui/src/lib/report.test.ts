@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const success = vi.fn()
 const error = vi.fn()
-vi.mock("sonner", () => ({ toast: { success: (...a: unknown[]) => success(...a), error: (...a: unknown[]) => error(...a) } }))
+vi.mock("sonner", () => ({ toast: { success: (...values: unknown[]) => success(...values), error: (...values: unknown[]) => error(...values) } }))
 
 const { reportAction } = await import("./report")
 const { ApiError } = await import("./apiError")
