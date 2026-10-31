@@ -8,48 +8,48 @@ import (
 )
 
 func TestLoopback(t *testing.T) {
-	for h, want := range map[string]bool{"127.0.0.1": true, "::1": true, "localhost": true, "127.1.2.3": true, "0.0.0.0": false, "192.168.1.5": false, "::": false, "exemple.org": false} {
-		if isLoopback(h) != want {
-			t.Errorf("isLoopback(%q) = %v", h, !want)
+	for header, want := range map[string]bool{"127.0.0.1": true, "::1": true, "localhost": true, "127.1.2.3": true, "0.0.0.0": false, "192.168.1.5": false, "::": false, "exemple.org": false} {
+		if isLoopback(header) != want {
+			t.Errorf("isLoopback(%q) = %v", header, !want)
 		}
 	}
 }
 
 func TestWithToken(t *testing.T) {
 	const tok = "0123456789abcdef0123"
-	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
-	h := withToken(tok, ok)
-	do := func(r *http.Request) *httptest.ResponseRecorder {
-		w := httptest.NewRecorder()
-		h.ServeHTTP(w, r)
-		return w
+	ok := http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) { responseWriter.Write([]byte("ok")) })
+	handler := withToken(tok, ok)
+	do := func(request *http.Request) *httptest.ResponseRecorder {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		return recorder
 	}
-	if w := do(httptest.NewRequest("GET", "/v1/state", nil)); w.Code != 401 {
-		t.Fatal("sans jeton :", w.Code)
+	if recorder := do(httptest.NewRequest("GET", "/v1/state", nil)); recorder.Code != 401 {
+		t.Fatal("sans jeton :", recorder.Code)
 	}
-	if w := do(httptest.NewRequest("GET", "/?token=faux", nil)); w.Code != 401 {
-		t.Fatal("mauvais jeton :", w.Code)
+	if recorder := do(httptest.NewRequest("GET", "/?token=faux", nil)); recorder.Code != 401 {
+		t.Fatal("mauvais jeton :", recorder.Code)
 	}
-	if w := do(httptest.NewRequest("GET", "/?token=", nil)); w.Code != 401 {
-		t.Fatal("jeton vide :", w.Code)
+	if recorder := do(httptest.NewRequest("GET", "/?token=", nil)); recorder.Code != 401 {
+		t.Fatal("jeton vide :", recorder.Code)
 	}
-	w := do(httptest.NewRequest("GET", "/memoire?token="+tok+"&x=1", nil))
-	if w.Code != 303 || w.Header().Get("Location") != "/memoire?x=1" {
-		t.Fatal("amorçage :", w.Code, w.Header().Get("Location"))
+	localRecorder := do(httptest.NewRequest("GET", "/memoire?token="+tok+"&x=1", nil))
+	if localRecorder.Code != 303 || localRecorder.Header().Get("Location") != "/memoire?x=1" {
+		t.Fatal("amorçage :", localRecorder.Code, localRecorder.Header().Get("Location"))
 	}
-	c := w.Result().Cookies()
-	if len(c) != 1 || !c[0].HttpOnly || c[0].SameSite != http.SameSiteStrictMode {
-		t.Fatalf("cookie : %+v", c)
+	cookies := localRecorder.Result().Cookies()
+	if len(cookies) != 1 || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteStrictMode {
+		t.Fatalf("cookie : %+v", cookies)
 	}
-	r := httptest.NewRequest("GET", "/v1/state", nil)
-	r.AddCookie(c[0])
-	if w := do(r); w.Code != 200 {
-		t.Fatal("avec cookie :", w.Code)
+	localRequest := httptest.NewRequest("GET", "/v1/state", nil)
+	localRequest.AddCookie(cookies[0])
+	if recorder := do(localRequest); recorder.Code != 200 {
+		t.Fatal("avec cookie :", recorder.Code)
 	}
-	r = httptest.NewRequest("GET", "/v1/state", nil)
-	r.Header.Set("Authorization", "Bearer "+tok)
-	if w := do(r); w.Code != 200 {
-		t.Fatal("avec Bearer :", w.Code)
+	localRequest = httptest.NewRequest("GET", "/v1/state", nil)
+	localRequest.Header.Set("Authorization", "Bearer "+tok)
+	if recorder := do(localRequest); recorder.Code != 200 {
+		t.Fatal("avec Bearer :", recorder.Code)
 	}
 	if checkToken("court") == nil || checkToken(tok) != nil {
 		t.Fatal("longueur du jeton")
@@ -62,9 +62,9 @@ func TestTakeToken(t *testing.T) {
 	if tok, gen, err := takeToken(true); err != nil || tok != "0123456789abcdef0123" || gen {
 		t.Fatal("jeton fixé, en local :", tok, err)
 	}
-	for _, k := range []string{"GLD_WEB_TOKEN", childTokenEnv} {
-		if _, ok := os.LookupEnv(k); ok {
-			t.Fatal(k, "reste dans l'environnement : les processus lancés en hériteraient")
+	for _, key := range []string{"GLD_WEB_TOKEN", childTokenEnv} {
+		if _, ok := os.LookupEnv(key); ok {
+			t.Fatal(key, "reste dans l'environnement : les processus lancés en hériteraient")
 		}
 	}
 	if tok, _, _ := takeToken(true); tok != "" {
@@ -84,28 +84,28 @@ func TestWithTokenThrottlesWrongTokens(t *testing.T) {
 	resetTokenTries()
 	t.Cleanup(resetTokenTries)
 	tok := "0123456789abcdef0123"
-	h := withToken(tok, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
+	handler := withToken(tok, http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) { responseWriter.WriteHeader(200) }))
 	do := func(set func(*http.Request)) int {
-		r := httptest.NewRequest("GET", "/v1/x", nil)
-		r.RemoteAddr = "192.0.2.7:1234"
-		set(r)
-		w := httptest.NewRecorder()
-		h.ServeHTTP(w, r)
-		return w.Code
+		request := httptest.NewRequest("GET", "/v1/x", nil)
+		request.RemoteAddr = "192.0.2.7:1234"
+		set(request)
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		return recorder.Code
 	}
-	for i := 0; i < tokenMaxTries+5; i++ {
-		if c := do(func(r *http.Request) { r.Header.Set("Authorization", "Bearer bad") }); i < tokenMaxTries && c != 401 || i >= tokenMaxTries && c != 429 {
-			t.Fatalf("essai %d : %d", i, c)
+	for index := 0; index < tokenMaxTries+5; index++ {
+		if counter := do(func(request *http.Request) { request.Header.Set("Authorization", "Bearer bad") }); index < tokenMaxTries && counter != 401 || index >= tokenMaxTries && counter != 429 {
+			t.Fatalf("essai %d : %d", index, counter)
 		}
 	}
-	if c := do(func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+tok) }); c != 200 {
-		t.Errorf("bon jeton après l'épuisement : %d", c)
+	if counter := do(func(request *http.Request) { request.Header.Set("Authorization", "Bearer "+tok) }); counter != 200 {
+		t.Errorf("bon jeton après l'épuisement : %d", counter)
 	}
-	if c := do(func(r *http.Request) { r.AddCookie(&http.Cookie{Name: tokenCookie, Value: "faux"}) }); c != 429 {
-		t.Errorf("cookie faux : %d", c)
+	if counter := do(func(request *http.Request) { request.AddCookie(&http.Cookie{Name: tokenCookie, Value: "faux"}) }); counter != 429 {
+		t.Errorf("cookie faux : %d", counter)
 	}
-	if c := do(func(r *http.Request) {}); c != 401 {
-		t.Errorf("sans jeton : %d", c)
+	if counter := do(func(request *http.Request) {}); counter != 401 {
+		t.Errorf("sans jeton : %d", counter)
 	}
 }
 
@@ -114,17 +114,17 @@ func TestWithTokenThrottlesWrongTokens(t *testing.T) {
 func TestCookiePerimeEfface(t *testing.T) {
 	resetTokenTries()
 	t.Cleanup(resetTokenTries)
-	h := withToken("0123456789abcdef0123", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
-	r := httptest.NewRequest("GET", "/v1/x", nil)
-	r.RemoteAddr = "192.0.2.8:1234"
-	r.AddCookie(&http.Cookie{Name: tokenCookie, Value: "ancien-jeton"})
-	w := httptest.NewRecorder()
-	h.ServeHTTP(w, r)
+	handler := withToken("0123456789abcdef0123", http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) { responseWriter.WriteHeader(200) }))
+	localRequest := httptest.NewRequest("GET", "/v1/x", nil)
+	localRequest.RemoteAddr = "192.0.2.8:1234"
+	localRequest.AddCookie(&http.Cookie{Name: tokenCookie, Value: "ancien-jeton"})
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, localRequest)
 	cleared := false
-	for _, c := range w.Result().Cookies() {
-		cleared = cleared || c.Name == tokenCookie && c.MaxAge < 0
+	for _, cookie := range recorder.Result().Cookies() {
+		cleared = cleared || cookie.Name == tokenCookie && cookie.MaxAge < 0
 	}
 	if !cleared {
-		t.Fatalf("cookie périmé non effacé : %v", w.Result().Cookies())
+		t.Fatalf("cookie périmé non effacé : %v", recorder.Result().Cookies())
 	}
 }
