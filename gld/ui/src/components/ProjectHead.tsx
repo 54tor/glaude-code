@@ -29,7 +29,6 @@ export function ProjectHead({ project: fixed, missing: fixedMissing, dirs }: { p
   }
   const git = useGit()
   const repos = git.repos[project] ?? []
-  const own = git.status[project]
   return (
     <div className="mb-4 space-y-3">
       {dirs && (
@@ -38,37 +37,27 @@ export function ProjectHead({ project: fixed, missing: fixedMissing, dirs }: { p
           <Choose value={project} onChange={setDir} options={dirs.map(directoryOption)} label={t("shell.head.newSessionDir")} className="min-w-0 max-w-xl" />
         </div>
       )}
-      {(own || repos.length > 0) && (
-        <ul className="space-y-1 rounded-lg border px-3 py-2 text-sm" aria-label={t("shell.head.gitState")}>
-          {own && (
-            <li className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="min-w-0 flex-1 truncate" title={project}>
-                {tilde(project, actions.home)}
-              </span>
-              <GitRepo dir={project} st={own} />
-            </li>
-          )}
-          {repos.map((repoDir) => (
-            <li key={repoDir} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="min-w-0 flex-1 truncate" title={repoDir}>
-                {tilde(repoDir, actions.home)}
-              </span>
-              <GitRepo dir={repoDir} st={git.status[repoDir]} />
-            </li>
-          ))}
-        </ul>
-      )}
-      {!missing && (
+      <ul className="space-y-1 rounded-lg border px-3 py-2 text-sm" aria-label={t("shell.head.gitState")}>
+        {[project, ...repos].map((pathDir) => (
+          <li key={pathDir} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="min-w-0 flex-1 truncate" title={pathDir}>
+              {tilde(pathDir, actions.home)}
+            </span>
+            {git.status[pathDir] && <GitRepo dir={pathDir} st={git.status[pathDir]} />}
+            {!missing && (
+              <Button size="icon-sm" variant="ghost" onClick={() => actions.openPerms(pathDir)} title={t("shell.head.permsHint")} aria-label={t("shell.head.perms")}>
+                <ShieldCheck />
+              </Button>
+            )}
+            {!missing && <WorkspaceButton dir={pathDir} />}
+          </li>
+        ))}
+      </ul>
+      {!missing && dirs && (
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          {dirs && (
-            <Button size="sm" onClick={() => actions.newSession(project)} title={t("shell.header.newInDirHint")}>
-              <MessageSquarePlus /> {t("shell.header.newSession")}
-            </Button>
-          )}
-          <Button size="sm" variant="outline" onClick={() => actions.openPerms(project)} title={t("shell.head.permsHint")}>
-            <ShieldCheck /> {t("shell.head.perms")}
+          <Button size="sm" onClick={() => actions.newSession(project)} title={t("shell.header.newInDirHint")}>
+            <MessageSquarePlus /> {t("shell.header.newSession")}
           </Button>
-          <WorkspaceButton dir={project} />
         </div>
       )}
     </div>
