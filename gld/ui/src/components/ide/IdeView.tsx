@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useReducer, useRef, useState, type KeyboardEvent } from "react"
+import { Suspense, useEffect, useLayoutEffect, useReducer, useRef, useState, type KeyboardEvent } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { cn } from "cn"
@@ -76,7 +76,8 @@ function Workspace({ dir }: { dir: string }) {
   const [confirm, setConfirm] = useState<Ask | null>(null)
   // État vu par les sauvegardes en attente : une sauvegarde mise en file repart du contenu courant, pas de celui de son clic.
   const live = useRef(ide)
-  useEffect(() => {
+  // Avant tout évènement : un Ctrl+S juste après l'ouverture doit déjà voir l'onglet.
+  useLayoutEffect(() => {
     live.current = ide
   })
   const saving = useRef(new Map<string, boolean>()) // chemin → une nouvelle demande attend la fin de celle en cours
