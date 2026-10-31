@@ -10,9 +10,9 @@ export function WorkspaceButton({ dir }: { dir: string }) {
   const can = useCan()
   if (!dir || !can("fs_read")) return null
   return (
-    <Button size="sm" variant="outline" asChild>
-      <Link href={href({ kind: "workspace", dir })} title={t("ide.openHint")}>
-        <FolderTree /> {t("ide.open")}
+    <Button size="icon-sm" variant="ghost" asChild>
+      <Link href={href({ kind: "workspace", dir })} title={t("ide.openHint")} aria-label={t("ide.open")}>
+        <FolderTree />
       </Link>
     </Button>
   )
