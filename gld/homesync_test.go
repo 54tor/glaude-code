@@ -78,25 +78,25 @@ func TestSyncApply(t *testing.T) {
 	if err != nil {
 		t.Fatal(err, out)
 	}
-	b, _ := os.ReadFile(filepath.Join(dst, "settings.json"))
-	s := string(b)
+	data, _ := os.ReadFile(filepath.Join(dst, "settings.json"))
+	text := string(data)
 	for _, want := range []string{`"model": "opus"`, `"theme": "light"`, `"Bash(cat:*)"`, `"Bash(ls:*)"`, `"Bash(git status:*)"`} {
-		if !strings.Contains(s, want) {
-			t.Errorf("manque %s dans :\n%s", want, s)
+		if !strings.Contains(text, want) {
+			t.Errorf("manque %s dans :\n%s", want, text)
 		}
 	}
-	if c, _ := os.ReadFile(filepath.Join(dst, "rules", "a.md")); string(c) != "nouvelle\n" {
-		t.Errorf("règle non remplacée : %q", c)
+	if data, _ := os.ReadFile(filepath.Join(dst, "rules", "a.md")); string(data) != "nouvelle\n" {
+		t.Errorf("règle non remplacée : %q", data)
 	}
-	if c, _ := os.ReadFile(filepath.Join(dst, "skills", "deploy", "SKILL.md")); string(c) != "skill\n" {
-		t.Errorf("skill non copié : %q", c)
+	if data, _ := os.ReadFile(filepath.Join(dst, "skills", "deploy", "SKILL.md")); string(data) != "skill\n" {
+		t.Errorf("skill non copié : %q", data)
 	}
 	// le fichier remplacé est sauvegardé, et l'ancien contenu y est
 	var found bool
-	filepath.WalkDir(filepath.Join(dst, "gld-web-sync-backups"), func(p string, d os.DirEntry, err error) error {
-		if err == nil && !d.IsDir() && filepath.Base(p) == "a.md" {
-			c, _ := os.ReadFile(p)
-			found = string(c) == "ancienne\n"
+	filepath.WalkDir(filepath.Join(dst, "gld-web-sync-backups"), func(path string, value os.DirEntry, err error) error {
+		if err == nil && !value.IsDir() && filepath.Base(path) == "a.md" {
+			data, _ := os.ReadFile(path)
+			found = string(data) == "ancienne\n"
 		}
 		return nil
 	})
@@ -120,9 +120,9 @@ func TestSyncMergeObjet(t *testing.T) {
 	if _, err := syncApply("Pro", "Perso", []SyncPick{{"set:enabledPlugins", "merge"}}); err != nil {
 		t.Fatal(err)
 	}
-	b, _ := os.ReadFile(filepath.Join(dst, "settings.json"))
-	if s := string(b); !strings.Contains(s, `"a@m": false`) || !strings.Contains(s, `"b@m": true`) {
-		t.Fatalf("%s", s)
+	data, _ := os.ReadFile(filepath.Join(dst, "settings.json"))
+	if text := string(data); !strings.Contains(text, `"a@m": false`) || !strings.Contains(text, `"b@m": true`) {
+		t.Fatalf("%s", text)
 	}
 }
 
@@ -159,7 +159,7 @@ func TestSyncSkillRemplace(t *testing.T) {
 
 // Égalité d'ensembles : l'ordre et les doublons ne comptent pas, mais un élément d'un côté absent de l'autre, si.
 func TestSameSet(t *testing.T) {
-	for _, c := range []struct {
+	for _, record := range []struct {
 		a, b []string
 		want bool
 	}{
@@ -170,8 +170,8 @@ func TestSameSet(t *testing.T) {
 		{nil, []string{}, true},
 		{[]string{"x"}, nil, false},
 	} {
-		if got := sameSet(c.a, c.b); got != c.want {
-			t.Errorf("sameSet(%q, %q) = %v", c.a, c.b, got)
+		if got := sameSet(record.a, record.b); got != record.want {
+			t.Errorf("sameSet(%q, %q) = %v", record.a, record.b, got)
 		}
 	}
 }
@@ -196,7 +196,7 @@ func TestSyncDeuxFoisLaMemeSeconde(t *testing.T) {
 	src, dst := syncEnv(t)
 	put(t, filepath.Join(src, "skills", "d", "SKILL.md"), "v1\n", old)
 	put(t, filepath.Join(dst, "skills", "d", "SKILL.md"), "original\n", old)
-	for i := 0; i < 2; i++ {
+	for index := 0; index < 2; index++ {
 		if _, err := syncApply("Pro", "Perso", []SyncPick{{"skill:d", "replace"}}); err != nil {
 			t.Fatal(err)
 		}
@@ -204,9 +204,9 @@ func TestSyncDeuxFoisLaMemeSeconde(t *testing.T) {
 	}
 	saved, _ := filepath.Glob(filepath.Join(dst, "gld-web-sync-backups", "*", "skills", "d", "SKILL.md"))
 	found := false
-	for _, p := range saved {
-		b, _ := os.ReadFile(p)
-		found = found || string(b) == "original\n"
+	for _, path := range saved {
+		data, _ := os.ReadFile(path)
+		found = found || string(data) == "original\n"
 	}
 	if len(saved) != 2 || !found {
 		t.Fatalf("sauvegardes : %v, original gardé : %v", saved, found)
@@ -245,7 +245,7 @@ func TestSyncApplyDirsRefusesSkippedKey(t *testing.T) {
 	if _, err := syncApplyDirs(src, dst, []SyncPick{{"set:enabledPlugins", "replace"}}, true); err != nil {
 		t.Fatal(err)
 	}
-	if b, err := os.ReadFile(filepath.Join(dst, "settings.json")); err == nil && strings.Contains(string(b), "enabledPlugins") {
-		t.Errorf("clé écrite malgré skipPlugin: %s", b)
+	if data, err := os.ReadFile(filepath.Join(dst, "settings.json")); err == nil && strings.Contains(string(data), "enabledPlugins") {
+		t.Errorf("clé écrite malgré skipPlugin: %s", data)
 	}
 }

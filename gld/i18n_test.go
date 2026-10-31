@@ -47,15 +47,15 @@ func TestNormalizeLang(t *testing.T) {
 
 func TestUserLanguageRaw(t *testing.T) {
 	noOverride(t)
-	for name, c := range map[string]struct{ content, want string }{
+	for name, record := range map[string]struct{ content, want string }{
 		"absent":        {"", ""},
 		"json invalide": {"{pas du json", ""},
 		"non texte":     {`{"language":3}`, ""},
 		"anglais":       {`{"language":"English"}`, "English"},
 	} {
-		withSettings(t, c.content)
-		if got := userLanguageRaw(); got != c.want {
-			t.Errorf("%s : %q, attendu %q", name, got, c.want)
+		withSettings(t, record.content)
+		if got := userLanguageRaw(); got != record.want {
+			t.Errorf("%s : %q, attendu %q", name, got, record.want)
 		}
 	}
 	cfg := withSettings(t, `{"language":"French"}`)
@@ -155,7 +155,7 @@ func TestHelperPromptsFollowLanguage(t *testing.T) {
 }
 
 func TestTrPlural(t *testing.T) {
-	for _, c := range []struct {
+	for _, record := range []struct {
 		lang string
 		n    int
 		want string
@@ -163,8 +163,8 @@ func TestTrPlural(t *testing.T) {
 		{"fr", 0, "0 élément"}, {"fr", 1, "1 élément"}, {"fr", 2, "2 éléments"},
 		{"en", 0, "0 items"}, {"en", 1, "1 item"}, {"en", 2, "2 items"},
 	} {
-		if got := tr(c.lang, "test.items", map[string]any{"Count": c.n}); got != c.want {
-			t.Errorf("%s %d : %q, attendu %q", c.lang, c.n, got, c.want)
+		if got := tr(record.lang, "test.items", map[string]any{"Count": record.n}); got != record.want {
+			t.Errorf("%s %d : %q, attendu %q", record.lang, record.n, got, record.want)
 		}
 	}
 	if got := tr("en", "inconnu.id", nil); got != "inconnu.id" {
@@ -177,10 +177,10 @@ func TestCatalogSymmetry(t *testing.T) {
 	if len(fr) == 0 || !reflect.DeepEqual(fr, en) {
 		t.Fatalf("clés différentes\nfr : %v\nen : %v", fr, en)
 	}
-	for _, l := range []string{"fr", "en"} {
-		for _, k := range trKeys(l) {
-			if tr(l, k, map[string]any{"Count": 2}) == "" {
-				t.Errorf("%s : %s vide", l, k)
+	for _, line := range []string{"fr", "en"} {
+		for _, key := range trKeys(line) {
+			if tr(line, key, map[string]any{"Count": 2}) == "" {
+				t.Errorf("%s : %s vide", line, key)
 			}
 		}
 	}
@@ -188,17 +188,17 @@ func TestCatalogSymmetry(t *testing.T) {
 
 func TestApiLang(t *testing.T) {
 	noOverride(t)
-	h, _, _ := web(t)
+	handler, _, _ := web(t)
 	withSettings(t, `{"language":"Spanish"}`)
-	if got := status(t, h, "GET", "/v1/state", "", 200)["lang"]; got != "other" {
+	if got := status(t, handler, "GET", "/v1/state", "", 200)["lang"]; got != "other" {
 		t.Fatalf("lang = %v", got)
 	}
 }
 
-func setLangT(t *testing.T, l string) {
+func setLangT(t *testing.T, line string) {
 	t.Helper()
 	old := langOverride
-	langOverride = l
+	langOverride = line
 	t.Cleanup(func() { langOverride = old })
 }
 
@@ -217,7 +217,7 @@ func TestErrOrLang(t *testing.T) {
 }
 
 func TestRmSummaryLang(t *testing.T) {
-	for _, c := range []struct {
+	for _, record := range []struct {
 		lang      string
 		n, spared int
 		want      string
@@ -231,25 +231,25 @@ func TestRmSummaryLang(t *testing.T) {
 		{"en", 2, 1, "2 sessions deleted; 1 open session spared"},
 		{"en", 1, 2, "1 session deleted; 2 open sessions spared"},
 	} {
-		setLangT(t, c.lang)
-		if got := rmSummary(c.n, c.spared); got != c.want {
-			t.Errorf("%s %d/%d : %q, attendu %q", c.lang, c.n, c.spared, got, c.want)
+		setLangT(t, record.lang)
+		if got := rmSummary(record.n, record.spared); got != record.want {
+			t.Errorf("%s %d/%d : %q, attendu %q", record.lang, record.n, record.spared, got, record.want)
 		}
 	}
 }
 
 func TestTerrFollowsLangAndWraps(t *testing.T) {
 	base := errors.New("boom")
-	e := terr("srv.sendkeys.fermetureImpossible", "W1", base)
+	err := terr("srv.sendkeys.fermetureImpossible", "W1", base)
 	setLangT(t, "fr")
-	if e.Error() != "fermeture impossible : boom" {
-		t.Fatalf("fr : %q", e.Error())
+	if err.Error() != "fermeture impossible : boom" {
+		t.Fatalf("fr : %q", err.Error())
 	}
 	setLangT(t, "en")
-	if e.Error() != "cannot close: boom" {
-		t.Fatalf("en : %q", e.Error())
+	if err.Error() != "cannot close: boom" {
+		t.Fatalf("en : %q", err.Error())
 	}
-	if !errors.Is(e, base) {
+	if !errors.Is(err, base) {
 		t.Fatal("l'erreur enveloppée doit rester trouvable")
 	}
 }
@@ -344,10 +344,10 @@ func TestMatinOutputLang(t *testing.T) {
 }
 
 func TestInvalidRequestLang(t *testing.T) {
-	h, _, _ := web(t)
+	handler, _, _ := web(t)
 	for lang, want := range map[string]string{"fr": "requête invalide", "en": "invalid request"} {
 		setLangT(t, lang)
-		if got := v1err(t, h, "POST", "/v1/trust/answers", "pas du json", 400, "")["message"]; got != want {
+		if got := v1err(t, handler, "POST", "/v1/trust/answers", "pas du json", 400, "")["message"]; got != want {
 			t.Errorf("%s : %v", lang, got)
 		}
 	}

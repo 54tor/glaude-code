@@ -13,23 +13,23 @@ func TestEveryCatalogKeyUsedExists(t *testing.T) {
 	files, _ := filepath.Glob("*.go")
 	re := regexp.MustCompile(`\b(?:L|terr)\("([A-Za-z0-9_.]+)"[,)]|\btr\([^,()]+,\s*"([A-Za-z0-9_.]+)"|\bisMsg\([^,()]+,\s*"([A-Za-z0-9_.]+)"`)
 	have := map[string]bool{}
-	for _, l := range []string{"fr", "en"} {
-		for _, k := range trKeys(l) {
-			have[l+" "+k] = true
+	for _, line := range []string{"fr", "en"} {
+		for _, key := range trKeys(line) {
+			have[line+" "+key] = true
 		}
 	}
 	used := 0
-	for _, f := range files {
-		if strings.HasSuffix(f, "_test.go") {
+	for _, filePath := range files {
+		if strings.HasSuffix(filePath, "_test.go") {
 			continue
 		}
-		b, _ := os.ReadFile(f)
-		for _, m := range re.FindAllStringSubmatch(string(b), -1) {
-			id := m[1] + m[2] + m[3]
+		data, _ := os.ReadFile(filePath)
+		for _, values := range re.FindAllStringSubmatch(string(data), -1) {
+			id := values[1] + values[2] + values[3]
 			used++
-			for _, l := range []string{"fr", "en"} {
-				if !have[l+" "+id] {
-					t.Errorf("%s : %q absent du catalogue %s", f, id, l)
+			for _, line := range []string{"fr", "en"} {
+				if !have[line+" "+id] {
+					t.Errorf("%s : %q absent du catalogue %s", filePath, id, line)
 				}
 			}
 		}
