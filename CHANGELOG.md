@@ -4,13 +4,35 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.8.1] - 2026-10-31
+
+### Ajouté
+- IDE : aperçu Markdown à côté de l'éditeur, avec défilement synchronisé ; le terminal intégré est retiré.
+- Mémoire : export des fichiers cochés en zip (règles et `CLAUDE.md` inclus) ; les règles livrées par gld sont regroupées à part des règles globales ; signalement des liens wiki cassés dans la santé de la mémoire.
+- Barre git de la session : résumé des dépôts des dossiers additionnels (`additionalDirectories`) et de leurs pushs dans une pastille.
+- Accueil : version de Claude Code et alerte quand l'installé a au moins 3 correctifs ou une mineure de retard sur npm.
+- Notes : le bouton « ajouter une note » est dans le bloc, l'état de la session s'affiche à l'envoi, et les éléments envoyés sont précédés d'une phrase d'introduction en liste.
+- Conversation : les questions et options d'`AskUserQuestion` s'affichent lisiblement ; bannière visible quand l'utilisateur interrompt un tour ; question de confiance du dossier dans une modale plein écran.
+- Corbeille des sessions triée par date de suppression, avec recherche.
+- Menus contextuels sur les sessions de l'accueil, les serveurs MCP et la carte de mise à jour ; snippets insérables dans les dialogues d'amélioration de mémoire et de skill.
+- Bouton d'envoi de fichier placé dans le champ de message.
+
 ### Corrigé
-- Fusion de mémoires ou de snippets lancée dans un dossier non approuvé : la modale « faire confiance à ce dossier » s'affiche maintenant, au lieu de laisser la session attendre dans un terminal détaché.
+- Fusion de mémoires ou de snippets lancée dans un dossier non approuvé : la modale « faire confiance à ce dossier » s'affiche au lieu de laisser la session attendre dans un terminal détaché.
+- Une session fermée ne réapparaît plus dans la liste des ouvertes avant que le serveur ait cessé de la lister.
+- IDE : un Ctrl+S pressé très tôt n'est plus perdu.
+- Conversation : défilement automatique détaché seulement en remontant, fin de conversation conservée quand la hauteur visible change, réouverture en bas quand on l'avait quittée à moins d'une page de la fin.
+- Notes envoyées à une session qui répond encore : mises en file d'attente ; envoi limité aux sessions du dossier ou du projet de la note.
+- Titre automatique appliqué à toute conversation sans titre après un tour livré, et reporté à la fermeture du processus pour une session ouverte.
+- Mémoire : les entrées modifier et supprimer sont masquées pour les règles gld en lecture seule, les dossiers temporaires sont exclus des destinations de déplacement, la recherche parle de mémoires.
+- Icône d'alerte pour les agents et tâches en cours d'arrêt ; favicon à fond transparent.
+- Le journal des instructions chargées est écrit via `rootfs` (sans suivre les liens symboliques).
 
 ### Modifié
 - Règles livrées par gld : elles ne sont plus écrites dans `~/.claude/rules` (chargé par toutes les sessions) mais transmises en prompt système (`--append-system-prompt-file`) aux seules sessions lancées par gld, chat et terminal. Réglage « Règles gld » dans Configuration pour les couper ; lecture seule dans la Mémoire. Les anciennes copies marquées « Managed by gld » sont supprimées au démarrage.
 - Notification quand Claude Code installé n'est pas à jour (comparé à la dernière version npm) ; `GET /v1/update` renvoie `claudeCurrent`, `claudeLatest` et `claudeNewer`.
-- Titre automatique d'une session ouverte : il est reporté à la fermeture du processus au lieu d'être refusé.
+- Liste des mots de passe courants générée depuis `@zxcvbn-ts/language-common` (49 233 entrées) ; `make check` échoue si elle est périmée.
+- Refonte de lisibilité du code (noms explicites, constantes nommées) côté Go et interface, sans changement de comportement.
 
 ## [0.8.0] - 2026-10-30
 
@@ -516,7 +538,8 @@ Première version : `gld`, interface web locale pour parcourir, piloter et confi
 - Terminal intégré désactivé par défaut ; lecture bornée des fichiers de commandes.
 - Refus d'agir quand les sessions ouvertes sont indéterminées.
 
-[Non publié]: https://github.com/54tor/glaude-code/compare/v0.8.0...HEAD
+[Non publié]: https://github.com/54tor/glaude-code/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/54tor/glaude-code/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/54tor/glaude-code/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/54tor/glaude-code/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/54tor/glaude-code/compare/v0.6.3...v0.7.0
