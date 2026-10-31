@@ -115,7 +115,7 @@ export function HealthDialog({
         <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 p-2 text-xs">
           <Sparkles className="size-3.5 text-muted-foreground" />
           <span className="font-medium">{t("memory.health.lintHeading")}</span>
-          <Choose value={scope} onChange={setScope} options={scopes} label={t("memory.health.scopeAria")} className="min-w-0 max-w-64" />
+          <Choose value={scope} onChange={setScope} options={scopes} label={t("memory.health.scopeAria")} size="xs" className="min-w-0 max-w-64" />
           <Button size="xs" onClick={analyse} disabled={busy} title={t("memory.health.analyzeTitle")}>
             {busy ? <Fan className="animate-spin" /> : <Sparkles />} {t("memory.health.analyze")}
           </Button>

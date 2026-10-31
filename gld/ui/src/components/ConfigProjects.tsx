@@ -70,7 +70,7 @@ export function ProjectsTab({ home, version, gone, onAddDir, suggest, onEdit, on
       <div className="flex flex-wrap items-center gap-2">
         <Input value={query} onChange={(changeEvent) => setQuery(changeEvent.target.value)} placeholder={t("config.projects.filterPlaceholder")} className="h-8 w-64" aria-label={t("config.projects.filterAria")} />
         {hidden > 0 && (
-          <Button size="sm" variant={all ? "secondary" : "ghost"} onClick={() => setAll(!all)} aria-pressed={all}>
+          <Button variant={all ? "secondary" : "ghost"} onClick={() => setAll(!all)} aria-pressed={all}>
             {t(all ? "config.projects.hideHidden" : "config.projects.showHidden", { count: hidden })}
           </Button>
         )}

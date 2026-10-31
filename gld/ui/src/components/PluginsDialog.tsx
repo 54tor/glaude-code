@@ -459,7 +459,6 @@ export function Marketplaces({ onChange }: { onChange: () => void }) {
             />
             <Button
               type="submit"
-              size="sm"
               variant="outline"
               disabled={busy === ADD_MARKET_KEY || !isValidSource}
             >

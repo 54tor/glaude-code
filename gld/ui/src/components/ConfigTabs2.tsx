@@ -369,7 +369,7 @@ function Row({ field, value, file, propose }: { field: Field; value: unknown; fi
         </>
       )}
       {value !== undefined && field.kind !== "enum" && (
-        <Button size="icon-xs" variant="ghost" title={t("config.settings.reset")} aria-label={t("config.shared.remove", { name: field.label })} onClick={() => propose({ file, op: "delete", path })}>
+        <Button size="icon-sm" variant="ghost" title={t("config.settings.reset")} aria-label={t("config.shared.remove", { name: field.label })} onClick={() => propose({ file, op: "delete", path })}>
           <RotateCcw />
         </Button>
       )}
