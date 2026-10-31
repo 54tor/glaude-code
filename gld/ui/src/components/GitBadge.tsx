@@ -3,6 +3,16 @@ import { useTranslation } from "react-i18next"
 import type { GitState } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
+// Avance et retard sur le pire des remotes (l'amont compris) : un remote en retard ou sans la branche compte, même si l'amont est à jour.
+export const syncOf = (gitState: GitState) => {
+  const remotes = gitState.remotes ?? []
+  return {
+    ahead: Math.max(gitState.ahead, ...remotes.map((remote) => remote.ahead)),
+    behind: Math.max(gitState.behind, ...remotes.map((remote) => remote.behind)),
+    missing: remotes.filter((remote) => remote.missing),
+  }
+}
+
 const dirtyOf = (gitState: GitState | undefined) => (gitState ? gitState.changed + gitState.untracked : 0)
 
 // Navigation : « <changements en attente> [git] » ; rien pour un dossier qui n'est pas un dépôt.
@@ -38,14 +48,17 @@ export function GitBadge({ st }: { st: GitState | undefined }) {
   const { t } = useTranslation()
   if (!st) return null
   const branch = st.detached ? t("conversation.git.detached") : st.branch
-  const isClean = dirtyOf(st) === 0 && !st.ahead && !st.behind
+  const { ahead, behind, missing } = syncOf(st)
+  const remotes = st.remotes ?? []
+  const isClean = dirtyOf(st) === 0 && !ahead && !behind && missing.length === 0
   const title = [
     t("conversation.git.branch", { branch }),
     st.upstream ? "" : t("conversation.git.noUpstream"),
     st.changed ? t("conversation.git.changedTitle", { n: st.changed }) : "",
     st.untracked ? t("conversation.git.untrackedTitle", { n: st.untracked }) : "",
-    st.ahead ? t("conversation.git.ahead", { n: st.ahead }) : "",
-    st.behind ? t("conversation.git.behind", { n: st.behind }) : "",
+    remotes.length === 0 && st.ahead ? t("conversation.git.ahead", { n: st.ahead }) : "",
+    remotes.length === 0 && st.behind ? t("conversation.git.behind", { n: st.behind }) : "",
+    ...remotes.map((remote) => t("conversation.git.remoteLine", { name: remote.name, context: remote.missing ? "missing" : "", ahead: remote.ahead, behind: remote.behind })),
     isClean ? t("conversation.git.clean") : "",
   ]
     .filter(Boolean)
@@ -58,18 +71,19 @@ export function GitBadge({ st }: { st: GitState | undefined }) {
       </span>
       {st.changed > 0 && <span className="font-medium text-warning tabular-nums">{t("conversation.git.modified", { count: st.changed })}</span>}
       {st.untracked > 0 && <span className="tabular-nums">{t("conversation.git.untracked", { count: st.untracked })}</span>}
-      {st.ahead > 0 && (
+      {ahead > 0 && (
         <span className="flex items-center tabular-nums">
           <ArrowUp className="size-3.5" aria-hidden />
-          {st.ahead}
+          {ahead}
         </span>
       )}
-      {st.behind > 0 && (
+      {behind > 0 && (
         <span className="flex items-center tabular-nums">
           <ArrowDown className="size-3.5" aria-hidden />
-          {st.behind}
+          {behind}
         </span>
       )}
+      {missing.length > 0 && <span className="text-warning">{t("conversation.git.missingOn", { names: missing.map((remote) => remote.name).join(", ") })}</span>}
       {isClean && <span>{t("conversation.git.clean")}</span>}
     </span>
   )

@@ -186,7 +186,8 @@ export async function inBatches<T, R extends { message?: string }>(list: T[], ru
 export type Bulk = { done: string[]; failed: { item: string; error: { code: string; message: string } }[] }
 export type CfgReply = { out: string; before: string; after: string; warnings?: CfgIssue[] }
 // État git d'un dossier (gitstatus.go)
-export type GitState = { branch: string; detached?: boolean; upstream: boolean; ahead: number; behind: number; changed: number; untracked: number }
+export type GitRemoteSync = { name: string; ahead: number; behind: number; missing?: boolean }
+export type GitState = { branch: string; detached?: boolean; upstream: boolean; ahead: number; behind: number; changed: number; untracked: number; remotes?: GitRemoteSync[] }
 // Maintien au chaud d'une session (keepwarm.go) : pings automatiques, comptés et plafonnés.
 export type WarmState = { dir: string; on: boolean; pings: number; max: number; lastPing: number; note?: string }
 export type GitRemote = { name: string; url: string }
