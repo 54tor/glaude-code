@@ -25,7 +25,7 @@ const HTTP_CLIENT_ERROR_MIN = 400
 const copy = (text: string, successMessage: string) =>
   void copyText(text).then(() => toast.success(successMessage), () => {})
 
-export function CodeInput({ id, label, value, onChange, totp }: { id: string; label: string; value: string; onChange: (v: string) => void; totp?: boolean }) {
+export function CodeInput({ id, label, value, onChange, totp }: { id: string; label: string; value: string; onChange: (localValue: string) => void; totp?: boolean }) {
   const normalizeInput = (rawValue: string) => {
     if (!totp) return rawValue
     return rawValue.replace(/\D/g, "").slice(0, TOTP_CODE_LENGTH)
@@ -184,7 +184,7 @@ export function ReauthForm({
   extraOk?: boolean
   focusPassword?: boolean // faux quand un champ propre à l'action vient en premier
   danger?: boolean
-  onSubmit: (r: Reauth) => Promise<unknown> // lève ApiError
+  onSubmit: (localReauth: Reauth) => Promise<unknown> // lève ApiError
   onCancel: () => void
 }) {
   const { t } = useTranslation()

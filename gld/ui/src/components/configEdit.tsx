@@ -33,7 +33,7 @@ type Preview = { then?: () => void; edit?: CfgEdit; raw?: { file: string; text: 
 
 // Toute modification d'un fichier de réglages passe par ici : aperçu des différences, confirmation, puis écriture
 // (le serveur fait une sauvegarde avant). Renvoie propose() et le dialogue à afficher.
-export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 0): { gone: (file: string, kind: string, rule: string) => boolean; added: (file: string, kind: string) => string[]; moveRule: (file: string, from: string, rule: string, to: string, text: string) => Promise<void>; propose: (e: CfgEdit) => Promise<void>; proposeRaw: (file: string, text: string) => Promise<string | null>; proposePerms: (file: string, text: string, mode: string, then?: () => void, now?: boolean) => Promise<string | null>; dialog: ReactNode } {
+export function useConfigEdit(onDone: () => void | Promise<unknown>, sessions = 0): { gone: (file: string, kind: string, rule: string) => boolean; added: (file: string, kind: string) => string[]; moveRule: (file: string, from: string, rule: string, to: string, text: string) => Promise<void>; propose: (cfgEdit: CfgEdit) => Promise<void>; proposeRaw: (file: string, text: string) => Promise<string | null>; proposePerms: (file: string, text: string, mode: string, then?: () => void, now?: boolean) => Promise<string | null>; dialog: ReactNode } {
   const { t } = useTranslation()
   const [preview, setPreview] = useState<Preview | null>(null)
   const [busy, setBusy] = useState(false)

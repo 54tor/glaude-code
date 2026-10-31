@@ -33,7 +33,7 @@ describe("Backup", () => {
     window.history.replaceState(null, "", "/?cats=plugins")
     render(<Backup home="" />)
     const boxes = screen.getAllByRole("checkbox")
-    expect(boxes.filter((b) => b.getAttribute("aria-checked") === "true")).toHaveLength(1)
+    expect(boxes.filter((element) => element.getAttribute("aria-checked") === "true")).toHaveLength(1)
     expect(screen.getByRole("checkbox", { name: /plugins/i }).getAttribute("aria-checked")).toBe("true")
   })
 

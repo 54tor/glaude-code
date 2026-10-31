@@ -12,7 +12,7 @@ import { Composer } from "./Composer"
 vi.mock("./actions", () => ({ useActions: () => ({ background: new Set(), live: new Set() }) }))
 vi.mock("@/lib/auth", async (orig) => ({ ...(await orig<typeof import("@/lib/auth")>()), useCan: () => () => true }))
 
-const item = (o: Partial<QItem>): QItem => ({ id: "i1", text: "bonjour", author: "host", state: "queued", at: 1, ...o })
+const item = (qItem: Partial<QItem>): QItem => ({ id: "i1", text: "bonjour", author: "host", state: "queued", at: 1, ...qItem })
 const rmOk = (text: string) => ({ text }) as Awaited<ReturnType<typeof api.queueRm>>
 
 function mount(items: QItem[], thinking = false) {
@@ -77,7 +77,7 @@ describe("Composer, file serveur", () => {
   it("deux Entrée rapprochées ne mettent le message qu'une fois en file", async () => {
     mount([], true)
     let release = () => {}
-    const add = vi.spyOn(api, "queueAdd").mockImplementation(() => new Promise((r) => (release = () => r({ item: item({}) }))))
+    const add = vi.spyOn(api, "queueAdd").mockImplementation(() => new Promise((callback) => (release = () => callback({ item: item({}) }))))
     const field = await screen.findByPlaceholderText(/Écrire à la session|Write to the session/i)
     fireEvent.change(field, { target: { value: "salut" } })
     fireEvent.keyDown(field, { key: "Enter", ctrlKey: true })
@@ -98,31 +98,31 @@ describe("Composer claude -p, file serveur", () => {
   beforeEach(() => setAuth({ state: "open", csrf: "" }))
   afterEach(() => vi.unstubAllGlobals())
   it("ne part pas tout seul après un tour : la file reste suspendue", async () => {
-    const f = vi.fn(async () => chatOk())
-    vi.stubGlobal("fetch", f)
+    const localMock = vi.fn(async () => chatOk())
+    vi.stubGlobal("fetch", localMock)
     const rm = vi.spyOn(api, "queueRm")
     mountPlain([item({})])
     const field = await screen.findByPlaceholderText(/Écrire à Claude|Write to Claude/i)
     fireEvent.change(field, { target: { value: "salut" } })
     fireEvent.keyDown(field, { key: "Enter", ctrlKey: true })
-    const chats = () => f.mock.calls.filter((c) => String((c as unknown[])[0]).includes("/chat")).length
+    const chats = () => localMock.mock.calls.filter((values) => String((values as unknown[])[0]).includes("/chat")).length
     await waitFor(() => expect(chats()).toBe(1))
-    await new Promise((r) => setTimeout(r, 50))
+    await new Promise((callback) => setTimeout(callback, 50))
     expect(rm).not.toHaveBeenCalled()
     expect(chats()).toBe(1)
   })
   it("« envoyer le suivant » : texte au brouillon d'abord, retiré, envoyé, brouillon rendu", async () => {
-    const f = vi.fn(async () => chatOk())
-    vi.stubGlobal("fetch", f)
+    const localMock = vi.fn(async () => chatOk())
+    vi.stubGlobal("fetch", localMock)
     setDraft("s1", { text: "avant" })
     mountPlain([item({})])
     await screen.findByText("bonjour")
     let seen = ""
     vi.spyOn(api, "queueRm").mockImplementation(async () => ((seen = draftOf("s1").text), rmOk("bonjour")))
     fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.composer.sendNext") }))
-    await waitFor(() => expect(f).toHaveBeenCalled())
+    await waitFor(() => expect(localMock).toHaveBeenCalled())
     expect(seen).toBe("avant\nbonjour")
-    expect(JSON.parse(String((f.mock.calls[0] as unknown as [string, RequestInit])[1].body)).prompt).toBe("bonjour")
+    expect(JSON.parse(String((localMock.mock.calls[0] as unknown as [string, RequestInit])[1].body)).prompt).toBe("bonjour")
     await waitFor(() => expect(draftOf("s1").text).toBe("avant"))
   })
   it("un envoi qui échoue laisse le texte dans le brouillon, sans le remettre en file", async () => {
@@ -133,7 +133,7 @@ describe("Composer claude -p, file serveur", () => {
     const add = vi.spyOn(api, "queueAdd")
     fireEvent.click(screen.getByRole("button", { name: i18n.t("conversation.composer.sendNext") }))
     await waitFor(() => expect(draftOf("s1").text).toBe("bonjour"))
-    await new Promise((r) => setTimeout(r, 50))
+    await new Promise((callback) => setTimeout(callback, 50))
     expect(add).not.toHaveBeenCalled()
   })
   it("une tête incertaine n'est pas reprise : renvoyer ou retirer seulement", async () => {
