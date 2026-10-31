@@ -17,40 +17,40 @@ func TestPageRoutesMatchUI(t *testing.T) {
 	}
 	mux := http.NewServeMux()
 	routesStatic(mux)
-	for _, m := range seen(t, regexp.MustCompile(`(?:pathname === |pathname\.startsWith\(|isSectionOrBelow\()"(/[^"]*)"`).FindAllStringSubmatch(string(src), -1)) {
-		p := m[1]
-		if p[len(p)-1] == '/' {
-			p += "x"
+	for _, values := range seen(t, regexp.MustCompile(`(?:pathname === |pathname\.startsWith\(|isSectionOrBelow\()"(/[^"]*)"`).FindAllStringSubmatch(string(src), -1)) {
+		path := values[1]
+		if path[len(path)-1] == '/' {
+			path += "x"
 		}
-		_, pat := mux.Handler(httptest.NewRequest("GET", p, nil))
+		_, pat := mux.Handler(httptest.NewRequest("GET", path, nil))
 		if pat == "" || pat == "GET /{$}" {
-			t.Errorf("%s : pas servi par l'interface", p)
+			t.Errorf("%s : pas servi par l'interface", path)
 		}
 	}
 }
 
-func seen(t *testing.T, m [][]string) [][]string {
-	if len(m) < 10 {
-		t.Fatalf("route.ts : %d chemins reconnus, l'expression ne suit plus le fichier", len(m))
+func seen(t *testing.T, valuesList [][]string) [][]string {
+	if len(valuesList) < 10 {
+		t.Fatalf("route.ts : %d chemins reconnus, l'expression ne suit plus le fichier", len(valuesList))
 	}
-	return m
+	return valuesList
 }
 
 // Un dossier de ressources ne se liste pas ; ses fichiers restent servis.
 func TestStaticNoDirListing(t *testing.T) {
 	mux := http.NewServeMux()
 	routesStatic(mux)
-	get := func(p string) int {
-		w := httptest.NewRecorder()
-		mux.ServeHTTP(w, httptest.NewRequest("GET", p, nil))
-		return w.Code
+	get := func(path string) int {
+		recorder := httptest.NewRecorder()
+		mux.ServeHTTP(recorder, httptest.NewRequest("GET", path, nil))
+		return recorder.Code
 	}
-	for _, p := range []string{"/assets/", "/icons/"} {
-		if c := get(p); c != http.StatusNotFound {
-			t.Errorf("%s : %d", p, c)
+	for _, path := range []string{"/assets/", "/icons/"} {
+		if counter := get(path); counter != http.StatusNotFound {
+			t.Errorf("%s : %d", path, counter)
 		}
 	}
-	if c := get("/icons/icon-192.png"); c != http.StatusOK {
-		t.Errorf("fichier d'icône : %d", c)
+	if counter := get("/icons/icon-192.png"); counter != http.StatusOK {
+		t.Errorf("fichier d'icône : %d", counter)
 	}
 }
