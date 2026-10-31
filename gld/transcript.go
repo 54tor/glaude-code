@@ -571,6 +571,36 @@ func toolArg(toolInput json.RawMessage) string {
 	return cut(string(toolInput), previewMaxRunes)
 }
 
+// askSummary : les questions d'un AskUserQuestion, une par ligne, options à la suite, au lieu du JSON brut tronqué.
+func askSummary(toolInput json.RawMessage) string {
+	var ask struct {
+		Questions []struct {
+			Question string
+			Header   string
+			Options  []struct{ Label string }
+		}
+	}
+	if json.Unmarshal(toolInput, &ask) != nil || len(ask.Questions) == 0 {
+		return toolArg(toolInput)
+	}
+	var lines []string
+	for _, question := range ask.Questions {
+		line := "• " + question.Question
+		if question.Header != "" {
+			line = "• [" + question.Header + "] " + question.Question
+		}
+		var labels []string
+		for _, option := range question.Options {
+			labels = append(labels, option.Label)
+		}
+		if len(labels) > 0 {
+			line += "\n   → " + strings.Join(labels, " | ")
+		}
+		lines = append(lines, line)
+	}
+	return cut(strings.Join(lines, "\n"), toolResultMaxRunes)
+}
+
 // flat aplatit le contenu d'un tool_result (texte ou liste de blocs).
 func flat(content json.RawMessage) string {
 	var text string
@@ -640,7 +670,11 @@ func lineMsgsMode(lineBytes []byte, tools, anchors bool) []Msg {
 				messages = append(messages, Msg{R: "doc", T: docPath, Ts: parsedLine.Timestamp})
 			}
 			if tools {
-				messages = append(messages, Msg{R: "tool", T: block.Name + "  " + toolArg(block.Input), Ts: parsedLine.Timestamp})
+				callText := toolArg(block.Input)
+				if block.Name == "AskUserQuestion" {
+					callText = "\n" + askSummary(block.Input)
+				}
+				messages = append(messages, Msg{R: "tool", T: block.Name + "  " + callText, Ts: parsedLine.Timestamp})
 			} else if anchors {
 				messages = append(messages, Msg{R: "tool", Ts: parsedLine.Timestamp})
 			}
