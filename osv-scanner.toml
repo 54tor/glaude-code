@@ -1,0 +1,9 @@
+[[IgnoredVulns]]
+id = "GHSA-gcqx-w48m-w2h4"
+ignoreUntil = 2026-12-31
+reason = "deepmerge 4.3.1 est une dépendance de dev (shadcn) sans correctif publié ; absente du binaire et de l'interface livrée"
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+ignoreUntil = 2026-12-31
+reason = "minimatch 10.2.6 est une dépendance de dev (eslint, typescript-eslint, shadcn), absente du binaire ; la correction 11.0.1 est à reprendre avec la mise à jour de ces outils"
