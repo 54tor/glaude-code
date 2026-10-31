@@ -333,7 +333,11 @@ func routesSessions(mux *http.ServeMux) {
 				notFound(responseWriter)
 				return
 			}
-			transcriptPath = filepath.Join(strings.TrimSuffix(transcriptPath, ".jsonl"), "subagents", "agent-"+sub+".jsonl")
+			if idRe.MatchString(sub) && isTeamTranscript(transcriptPath, sessionID, sub) { // coéquipier : une session voisine
+				transcriptPath = filepath.Join(filepath.Dir(transcriptPath), sub+".jsonl")
+			} else {
+				transcriptPath = filepath.Join(strings.TrimSuffix(transcriptPath, ".jsonl"), "subagents", "agent-"+sub+".jsonl")
+			}
 			if subagentInfo, subagentStatErr := os.Stat(transcriptPath); subagentStatErr != nil || !subagentInfo.Mode().IsRegular() {
 				notFound(responseWriter)
 				return

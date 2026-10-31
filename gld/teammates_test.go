@@ -19,11 +19,25 @@ func TestTeammateLivesSkipsLeader(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(teamDir, "config.json"), []byte(config), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got := teammateLives("abcdef12-0000-0000-0000-000000000000")
-	if len(got) != 1 || got[0].Desc != "tests-ui" || got[0].Type != "sonnet" {
+	leadID := "abcdef12-0000-0000-0000-000000000000"
+	mateID := "11111111-2222-3333-4444-555555555555"
+	projectDir := filepath.Join(root, "p")
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	leadPath := filepath.Join(projectDir, leadID+".jsonl")
+	header := `{"type":"mode"}` + "\n" + `{"teamName":"session-abcdef12","agentName":"tests-ui"}` + "\n"
+	if err := os.WriteFile(filepath.Join(projectDir, mateID+".jsonl"), []byte(header), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := teammateLives(leadPath, leadID)
+	if len(got) != 1 || got[0].Desc != "tests-ui" || got[0].Type != "sonnet" || got[0].ID != mateID {
 		t.Fatalf("got %+v", got)
 	}
-	if teammateLives("short") != nil {
+	if !isTeamTranscript(leadPath, leadID, mateID) || isTeamTranscript(leadPath, leadID, leadID) {
+		t.Fatal("teammate membership wrong")
+	}
+	if teammateLives(leadPath, "short") != nil {
 		t.Fatal("short id must yield nothing")
 	}
 }

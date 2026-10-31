@@ -53,6 +53,8 @@ type LiveState struct {
 
 const (
 	teamShortIDLength       = 8
+	teamHeadLines           = 8
+	teamHeadLineMaxBytes    = 4 << 20
 	queuedMessageMaxLength  = 400
 	serviceMessageMaxLength = 64000
 	quickPickupThreshold    = 5 * time.Millisecond
@@ -473,7 +475,7 @@ func sessionLive(dir, sessionID string) LiveState {
 	if state.Open {
 		state.Queue = pendingQueue(transcriptPath)
 	}
-	state.Subs = append(subLives(filepath.Join(filepath.Dir(transcriptPath), sessionID, "subagents")), teammateLives(sessionID)...)
+	state.Subs = append(subLives(filepath.Join(filepath.Dir(transcriptPath), sessionID, "subagents")), teammateLives(transcriptPath, sessionID)...)
 	if tasks := bgTasks(transcriptPath, state.Open); tasks != nil {
 		state.Tasks = tasks
 	}
@@ -524,31 +526,92 @@ func subLives(dir string) []SubLive {
 	return subagents
 }
 
-// teammateLives : les coéquipiers in-process de l'équipe « session-<8 premiers caractères> » (hors chef), sans transcript lisible.
-func teammateLives(sessionID string) []SubLive {
+// teammateTranscripts : transcripts des coéquipiers de l'équipe de la session (nom -> id de session). Chaque coéquipier est une
+// session Claude Code ordinaire du même dossier, dont les premières lignes portent teamName et agentName.
+func teammateTranscripts(transcriptPath, sessionID string, joinedAfter time.Time) map[string]string {
+	teamName := "session-" + sessionID[:teamShortIDLength]
+	found := map[string]string{}
+	candidates, _ := filepath.Glob(filepath.Join(filepath.Dir(transcriptPath), "*.jsonl"))
+	for _, candidate := range candidates {
+		candidateID := strings.TrimSuffix(filepath.Base(candidate), ".jsonl")
+		fileInfo, statErr := os.Stat(candidate)
+		if candidateID == sessionID || !idRe.MatchString(candidateID) || statErr != nil || fileInfo.ModTime().Before(joinedAfter) {
+			continue
+		}
+		if agentName := teamAgentName(candidate, teamName); agentName != "" {
+			found[agentName] = candidateID
+		}
+	}
+	return found
+}
+
+func teamAgentName(path, teamName string) string {
+	file, openErr := openTrusted(path)
+	if openErr != nil {
+		return ""
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 0, 64*1024), teamHeadLineMaxBytes)
+	for lineIndex := 0; lineIndex < teamHeadLines && scanner.Scan(); lineIndex++ {
+		var header struct {
+			TeamName  string `json:"teamName"`
+			AgentName string `json:"agentName"`
+		}
+		if json.Unmarshal(scanner.Bytes(), &header) == nil && header.TeamName == teamName {
+			return header.AgentName
+		}
+	}
+	return ""
+}
+
+// teammateLives : les coéquipiers de l'équipe « session-<8 premiers caractères> » (hors chef), lus dans leur propre transcript.
+func teammateLives(transcriptPath, sessionID string) []SubLive {
 	if len(sessionID) < teamShortIDLength {
 		return nil
 	}
-	configPath := filepath.Join(cfgDir(), "teams", "session-"+sessionID[:teamShortIDLength], "config.json")
-	configContent, readErr := readTrusted(configPath)
+	configContent, readErr := readTrusted(filepath.Join(cfgDir(), "teams", "session-"+sessionID[:teamShortIDLength], "config.json"))
 	if readErr != nil {
 		return nil
 	}
 	var team struct {
 		Members []struct {
-			Name  string `json:"name"`
-			Model string `json:"model"`
+			Name     string `json:"name"`
+			Model    string `json:"model"`
+			JoinedAt int64  `json:"joinedAt"`
 		} `json:"members"`
 	}
 	if json.Unmarshal(configContent, &team) != nil {
 		return nil
 	}
+	var joinedAfter time.Time
+	for _, member := range team.Members {
+		if joined := time.UnixMilli(member.JoinedAt); member.JoinedAt > 0 && (joinedAfter.IsZero() || joined.Before(joinedAfter)) {
+			joinedAfter = joined
+		}
+	}
+	transcripts := teammateTranscripts(transcriptPath, sessionID, joinedAfter)
 	teammates := []SubLive{}
 	for _, member := range team.Members {
 		if member.Name == "" || member.Name == "team-lead" {
 			continue
 		}
-		teammates = append(teammates, SubLive{ID: "team-" + member.Name, Desc: member.Name, Type: member.Model, Activity: localizeActivity("terminé")})
+		teammate := SubLive{ID: member.Name, Desc: member.Name, Type: member.Model}
+		if teammateID, ok := transcripts[member.Name]; ok {
+			teammate.ID = teammateID
+			teammatePath := filepath.Join(filepath.Dir(transcriptPath), teammateID+".jsonl")
+			activity, thinking, _, tokenUsage, _, _, _ := readActivity(teammatePath)
+			teammate.Activity, teammate.Context, teammate.Out = localizeActivity(activity), tokenUsage.context(), tokenUsage.Out
+			if fileInfo, statErr := os.Stat(teammatePath); statErr == nil {
+				teammate.Mtime = float64(fileInfo.ModTime().UnixNano()) / nanosecondsPerSecond
+			}
+			status, isOpen := sessionStatus(teammateID)
+			teammate.Running = isOpen && (status == "busy" || thinking)
+		}
+		if !teammate.Running && teammate.Activity == "" {
+			teammate.Activity = localizeActivity("terminé")
+		}
+		teammates = append(teammates, teammate)
 	}
 	return teammates
 }
@@ -580,4 +643,13 @@ func lastSaid(path string) string {
 		return "" // le dernier message de Claude n'a pas de texte (outil seul)
 	}
 	return ""
+}
+
+func isTeamTranscript(transcriptPath, sessionID, candidateID string) bool {
+	for _, teammate := range teammateLives(transcriptPath, sessionID) {
+		if teammate.ID == candidateID {
+			return true
+		}
+	}
+	return false
 }
