@@ -467,3 +467,27 @@ describe("modeOfScreen", () => {
     })
   })
 })
+
+describe("question seule précédée d'un rapport de Claude", () => {
+  const sep = "─".repeat(60)
+  const screen = [
+    "❯ Audit des dépendances",
+    "● Audit en lecture seule.",
+    "  Plan d'exécution proposé",
+    "  1. Go patchs directs.",
+    sep,
+    " ☐ Audit",
+    "Valides-tu ce plan ?",
+    "❯ 1. Valider",
+    "     Go patchs directs.",
+    "  2. Modifier le plan",
+    sep,
+    "  3. Chat about this",
+    "Enter to select · ↑/↓ to navigate · Esc to cancel",
+  ].join("\n")
+  it("le rapport au-dessus de la question devient le contexte", () => {
+    const p = parsePrompt(screen)!
+    expect(p.context).toBe("● Audit en lecture seule.\n  Plan d'exécution proposé\n  1. Go patchs directs.")
+    expect(p.question).toBe("Valides-tu ce plan ?")
+  })
+})
