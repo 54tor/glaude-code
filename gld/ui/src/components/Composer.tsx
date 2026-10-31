@@ -6,7 +6,7 @@ import { cn, copyText, isSend, keyHint } from "@/lib/utils"
 import { modeOfScreen, parseBtw, parsePrompt, type Opt } from "@/lib/prompt"
 import { type Live } from "./LiveStatus"
 import { toast } from "sonner"
-import { Bug, ChevronDown, Copy, GitFork, Minimize2, Snowflake, Send, SendHorizontal, Square, SquareCheck, X } from "lucide-react"
+import { ArrowDownToLine, Bug, ChevronDown, Copy, GitFork, Minimize2, Snowflake, Send, SendHorizontal, Square, SquareCheck, X } from "lucide-react"
 import { useLocal } from "@/hooks/useLocal"
 import { draftOf, setDraft, useDraft } from "@/hooks/useDraft"
 import { setWaitIdle, useWaitIdle } from "@/hooks/useWaitIdle"
@@ -663,6 +663,18 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
                 }}
               >
                 <Square className="max-md:hidden" /> {t("conversation.composer.interrupt")}
+              </Button>
+            )}
+            {liveState.st?.thinking && (
+              <Button
+                size="sm"
+                variant="outline"
+                title={t("conversation.composer.backgroundTitle")}
+                onClick={async () => {
+                  await api.sessionKey(id, "CtrlB").catch((error) => toast.error(errMsg(error)))
+                }}
+              >
+                <ArrowDownToLine className="max-md:hidden" /> {t("conversation.composer.background")}
               </Button>
             )}
             <label className="flex items-center gap-1.5" title={t("conversation.composer.waitIdleTitle")}>
