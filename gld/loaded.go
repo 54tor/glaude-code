@@ -77,7 +77,7 @@ func runLoaded(input io.Reader) int {
 func appendLoaded(line []byte) {
 	logPath := loadedFile()
 	if fileInfo, statErr := os.Stat(logPath); statErr == nil && fileInfo.Size() > loadedMax {
-		if content, readErr := os.ReadFile(logPath); readErr == nil && len(content) > loadedKeep { // le fichier a pu raccourcir depuis le Stat
+		if content, readErr := readTrusted(logPath); readErr == nil && len(content) > loadedKeep { // le fichier a pu raccourcir depuis le Stat
 			content = content[len(content)-loadedKeep:]
 			for byteIndex, byteValue := range content { // on repart au début d'une ligne
 				if byteValue == '\n' {
@@ -85,10 +85,10 @@ func appendLoaded(line []byte) {
 					break
 				}
 			}
-			os.WriteFile(logPath, content, 0o600)
+			rWriteAtomic(cfgDir(), logPath, content, 0o600)
 		}
 	}
-	file, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	file, err := rOpenFile(cfgDir(), logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return
 	}
