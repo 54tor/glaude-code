@@ -19,11 +19,11 @@ func TestMemLint(t *testing.T) {
 	put(t, filepath.Join(cfg, "projects", "-p", "memory", "MEMORY.md"), "- [x](x.md)\n", old)
 	put(t, filepath.Join(cfg, "projects", "-p", "memory", "x.md"), "entrée x", old)
 
-	if k, err := memLintFiles("global"); err != nil || !slices.Equal(k, []string{"g/CLAUDE.md", "g/rules/a.md", "g/rules/b.md"}) {
-		t.Fatal("portée globale :", k, err) // la règle désactivée n'est pas analysée
+	if values, err := memLintFiles("global"); err != nil || !slices.Equal(values, []string{"g/CLAUDE.md", "g/rules/a.md", "g/rules/b.md"}) {
+		t.Fatal("portée globale :", values, err) // la règle désactivée n'est pas analysée
 	}
-	if k, err := memLintFiles("-p"); err != nil || !slices.Equal(k, []string{"m/-p/x.md"}) {
-		t.Fatal("portée projet :", k, err) // l'index n'est pas analysé
+	if values, err := memLintFiles("-p"); err != nil || !slices.Equal(values, []string{"m/-p/x.md"}) {
+		t.Fatal("portée projet :", values, err) // l'index n'est pas analysé
 	}
 	if _, err := memLintFiles("../x"); err == nil {
 		t.Fatal("projet invalide accepté")
@@ -32,8 +32,8 @@ func TestMemLint(t *testing.T) {
 	var prompt string
 	old := memDraft
 	defer func() { memDraft = old }()
-	memDraft = func(model, system, p string) (string, float64, error) {
-		prompt = p
+	memDraft = func(model, system, path string) (string, float64, error) {
+		prompt = path
 		return `[{"kind":"doublon","keys":["g/rules/a.md","g/rules/b.md"],"why":"même consigne"},
 			{"kind":"doublon","keys":["g/rules/a.md","m/-p/x.md"],"why":"clé hors portée : écartée"},
 			{"kind":"autre","keys":["g/rules/a.md"],"why":"genre inconnu : écarté"},

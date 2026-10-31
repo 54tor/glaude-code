@@ -101,15 +101,15 @@ func TestLoadedReadable(t *testing.T) {
 	real, _ := filepath.EvalSymlinks(cfg)
 	md, key := filepath.Join(real, "CLAUDE.md"), filepath.Join(real, ".credentials.json")
 	secret := filepath.Join(t.TempDir(), "id_rsa")
-	for _, f := range []string{md, key, secret} {
-		os.WriteFile(f, []byte("x"), 0o600)
+	for _, filePath := range []string{md, key, secret} {
+		os.WriteFile(filePath, []byte("x"), 0o600)
 	}
 	if !loadedReadable(md) {
 		t.Error("CLAUDE.md de la config refusé")
 	}
-	for _, f := range []string{key, secret, "/etc/passwd"} {
-		if loadedReadable(f) {
-			t.Errorf("%s lisible", f)
+	for _, filePath := range []string{key, secret, "/etc/passwd"} {
+		if loadedReadable(filePath) {
+			t.Errorf("%s lisible", filePath)
 		}
 	}
 }

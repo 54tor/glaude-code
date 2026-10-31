@@ -14,9 +14,9 @@ func TestSetPaths(t *testing.T) {
 	if err != nil || out != "---\npaths:\n  - \"src/**/*.{ts,tsx}\"\n---\n\n# R\n" {
 		t.Fatalf("création : %q %v", out, err)
 	}
-	m, err := parseMeta(out)
-	if g, e := globsOf(m); err != nil || e != nil || !slices.Equal(g, []string{"src/**/*.{ts,tsx}"}) {
-		t.Fatal(g, e, err)
+	lookup, err := parseMeta(out)
+	if values, localErr := globsOf(lookup); err != nil || localErr != nil || !slices.Equal(values, []string{"src/**/*.{ts,tsx}"}) {
+		t.Fatal(values, localErr, err)
 	}
 	out, err = setPaths("---\ndescription: d\npaths:\n  - a\n  - b\n---\ncorps\n", []string{"c/**"})
 	if err != nil || out != "---\ndescription: d\npaths:\n  - \"c/**\"\n---\ncorps\n" {
@@ -34,7 +34,7 @@ func TestSetPaths(t *testing.T) {
 }
 
 func TestSetType(t *testing.T) {
-	for _, c := range []struct{ in, typ, want string }{
+	for _, record := range []struct{ in, typ, want string }{
 		{"corps\n", "feedback", "---\nmetadata:\n  type: feedback\n---\n\ncorps\n"},
 		{"---\nname: a\nmetadata:\n  node_type: memory\n  type: project\n---\nx\n", "user", "---\nname: a\nmetadata:\n  node_type: memory\n  type: user\n---\nx\n"},
 		{"---\nname: a\ntype: project\n---\nx\n", "reference", "---\nname: a\ntype: reference\n---\nx\n"},
@@ -42,8 +42,8 @@ func TestSetType(t *testing.T) {
 		{"---\nname: a\n---\nx\n", "user", "---\nname: a\nmetadata:\n  type: user\n---\nx\n"},
 		{"---\nname: a\nmetadata:\n  type: user\n---\nx\n", "", "---\nname: a\nmetadata:\n---\nx\n"},
 	} {
-		if got, err := setType(c.in, c.typ); err != nil || got != c.want {
-			t.Errorf("setType(%q, %q) = %q, %v ; attendu %q", c.in, c.typ, got, err, c.want)
+		if got, err := setType(record.in, record.typ); err != nil || got != record.want {
+			t.Errorf("setType(%q, %q) = %q, %v ; attendu %q", record.in, record.typ, got, err, record.want)
 		}
 	}
 	if _, err := setType("x", "autre"); err == nil {
@@ -52,8 +52,8 @@ func TestSetType(t *testing.T) {
 }
 
 func TestSplitGlobs(t *testing.T) {
-	if g := splitGlobs("a/*.{ts,tsx}, b/**,,c"); !slices.Equal(g, []string{"a/*.{ts,tsx}", "b/**", "c"}) {
-		t.Fatal(g)
+	if values := splitGlobs("a/*.{ts,tsx}, b/**,,c"); !slices.Equal(values, []string{"a/*.{ts,tsx}", "b/**", "c"}) {
+		t.Fatal(values)
 	}
 }
 
@@ -74,22 +74,22 @@ func TestMemoryMeta(t *testing.T) {
 	put(t, filepath.Join(cfg, "projects", "-p", "memory", "a.md"), "---\nname: a\nmetadata:\n  type: feedback\n---\nvoir [[b]] et [[nulle part]]\n", old)
 	put(t, filepath.Join(cfg, "projects", "-p", "memory", "b.md"), "b", old)
 
-	g, ps, _ := memList()
+	memFiles, ps, _ := memList()
 	by := map[string]MemFile{}
-	for _, f := range append(g, ps[0].Files...) {
-		by[f.Key] = f
+	for _, memFile := range append(memFiles, ps[0].Files...) {
+		by[memFile.Key] = memFile
 	}
-	if f := by["g/rules/ts.md"]; !slices.Equal(f.Paths, []string{"src/**/*.ts"}) || f.Always {
-		t.Fatalf("règle scopée : %+v", f)
+	if memFile := by["g/rules/ts.md"]; !slices.Equal(memFile.Paths, []string{"src/**/*.ts"}) || memFile.Always {
+		t.Fatalf("règle scopée : %+v", memFile)
 	}
-	if f := by["g/rules/tous.md"]; f.Paths != nil || !f.Always || f.Tokens == 0 {
-		t.Fatalf("règle générale : %+v", f)
+	if memFile := by["g/rules/tous.md"]; memFile.Paths != nil || !memFile.Always || memFile.Tokens == 0 {
+		t.Fatalf("règle générale : %+v", memFile)
 	}
-	if f := by["g/rules/vide.md"]; f.Warn == "" {
-		t.Fatalf("paths vide non signalé : %+v", f)
+	if memFile := by["g/rules/vide.md"]; memFile.Warn == "" {
+		t.Fatalf("paths vide non signalé : %+v", memFile)
 	}
-	if f := by["m/-p/a.md"]; f.Type != "feedback" {
-		t.Fatalf("type : %+v", f)
+	if memFile := by["m/-p/a.md"]; memFile.Type != "feedback" {
+		t.Fatalf("type : %+v", memFile)
 	}
 
 	files, total, _, err := memMatches("g/rules/ts.md", "-p")
@@ -99,29 +99,29 @@ func TestMemoryMeta(t *testing.T) {
 
 	kinds := map[string]int{}
 	ruleLinks := 0
-	for _, i := range memHealth() {
-		kinds[i.Kind]++
-		if i.Kind == "lien" && i.Key == "g/rules/liens.md" {
+	for _, issue := range memHealth() {
+		kinds[issue.Kind]++
+		if issue.Kind == "lien" && issue.Key == "g/rules/liens.md" {
 			ruleLinks++
 		}
 	}
 	if ruleLinks != 1 {
 		t.Errorf("liens cassés d'une règle globale : %d, attendu 1", ruleLinks)
 	}
-	for _, k := range []string{"import", "index-ligne", "index-absent", "lien", "front-matter"} {
-		if kinds[k] == 0 {
-			t.Errorf("problème %q non détecté : %v", k, kinds)
+	for _, key := range []string{"import", "index-ligne", "index-absent", "lien", "front-matter"} {
+		if kinds[key] == 0 {
+			t.Errorf("problème %q non détecté : %v", key, kinds)
 		}
 	}
 	if rm, add, err := memRepairIndex("-p"); err != nil || rm != 1 || add != 1 {
 		t.Fatal(rm, add, err)
 	}
-	if s, _ := memRead("m/-p/MEMORY.md"); strings.Contains(s, "mort.md") || !strings.Contains(s, "](b.md)") {
-		t.Fatalf("index réparé : %q", s)
+	if text, _ := memRead("m/-p/MEMORY.md"); strings.Contains(text, "mort.md") || !strings.Contains(text, "](b.md)") {
+		t.Fatalf("index réparé : %q", text)
 	}
 
-	if h := memSearch("TOUJOURS"); len(h) != 1 || h["g/rules/tous.md"] == "" {
-		t.Fatal(h)
+	if lookup := memSearch("TOUJOURS"); len(lookup) != 1 || lookup["g/rules/tous.md"] == "" {
+		t.Fatal(lookup)
 	}
 
 	// désactivation puis réactivation d'une règle
@@ -132,11 +132,11 @@ func TestMemoryMeta(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(cfg, "rules", "tous.md.off")); err != nil {
 		t.Fatal(err)
 	}
-	g, _, _ = memList()
+	memFiles, _, _ = memList()
 	var off MemFile
-	for _, f := range g {
-		if f.Key == dst {
-			off = f
+	for _, memFile := range memFiles {
+		if memFile.Key == dst {
+			off = memFile
 		}
 	}
 	if !off.Off || off.Always {
@@ -166,29 +166,29 @@ func TestDocumentationDuProjet(t *testing.T) {
 	proj := t.TempDir()
 	put(t, filepath.Join(cfg, "projects", "-p", id1+".jsonl"), `{"cwd":"`+proj+`"}`+"\n", old)
 	put(t, filepath.Join(proj, "CLAUDE.md"), "règles\n", old)
-	for _, n := range []string{"CONVENTIONS.md", "PLAN.md", "TOOLING.md", "README.md", "AGENTS.md"} {
-		put(t, filepath.Join(proj, n), "voir @quelquun et @inexistant.md\n", old)
+	for _, name := range []string{"CONVENTIONS.md", "PLAN.md", "TOOLING.md", "README.md", "AGENTS.md"} {
+		put(t, filepath.Join(proj, name), "voir @quelquun et @inexistant.md\n", old)
 	}
 	_, ps, _ := memList()
 	got := map[string]MemFile{}
-	for _, f := range ps[0].Files {
-		got[f.Name] = f
+	for _, memFile := range ps[0].Files {
+		got[memFile.Name] = memFile
 	}
-	for _, n := range []string{"CONVENTIONS.md", "PLAN.md", "TOOLING.md", "README.md", "AGENTS.md"} {
-		f, ok := got[n]
-		if !ok || f.Always {
-			t.Errorf("%s : listé=%v chargé=%v", n, ok, f.Always)
+	for _, name := range []string{"CONVENTIONS.md", "PLAN.md", "TOOLING.md", "README.md", "AGENTS.md"} {
+		memFile, ok := got[name]
+		if !ok || memFile.Always {
+			t.Errorf("%s : listé=%v chargé=%v", name, ok, memFile.Always)
 		}
-		if s, err := memRead("p/-p/" + n); err != nil || s == "" {
-			t.Errorf("%s illisible : %v", n, err)
+		if text, err := memRead("p/-p/" + name); err != nil || text == "" {
+			t.Errorf("%s illisible : %v", name, err)
 		}
 	}
 	if !got["CLAUDE.md"].Always {
 		t.Error("CLAUDE.md doit rester chargé")
 	}
-	for _, i := range memHealth() {
-		if i.Kind == "import" && !strings.HasSuffix(i.Key, "CLAUDE.md") {
-			t.Errorf("faux import signalé : %+v", i)
+	for _, issue := range memHealth() {
+		if issue.Kind == "import" && !strings.HasSuffix(issue.Key, "CLAUDE.md") {
+			t.Errorf("faux import signalé : %+v", issue)
 		}
 	}
 }
@@ -243,11 +243,11 @@ func TestMetaString(t *testing.T) {
 }
 
 func TestMdLinkIgnoreLesURL(t *testing.T) {
-	if m := mdLink.FindStringSubmatch("- [Doc](https://x.y/readme.md)"); m != nil {
-		t.Fatalf("URL prise pour un fichier de mémoire : %v", m)
+	if values := mdLink.FindStringSubmatch("- [Doc](https://x.y/readme.md)"); values != nil {
+		t.Fatalf("URL prise pour un fichier de mémoire : %v", values)
 	}
-	if m := mdLink.FindStringSubmatch("- [Note](note.md)"); m == nil || m[1] != "note.md" {
-		t.Fatalf("lien local manqué : %v", m)
+	if values := mdLink.FindStringSubmatch("- [Note](note.md)"); values == nil || values[1] != "note.md" {
+		t.Fatalf("lien local manqué : %v", values)
 	}
 }
 
@@ -256,13 +256,13 @@ func TestMemWriteGardeUnFichierIllisible(t *testing.T) {
 	old := root
 	t.Cleanup(func() { root = old })
 	use(cfg)
-	p := filepath.Join(cfg, "CLAUDE.md")
-	os.WriteFile(p, []byte("\xff\xfe pas de l'UTF-8"), 0o644)
+	path := filepath.Join(cfg, "CLAUDE.md")
+	os.WriteFile(path, []byte("\xff\xfe pas de l'UTF-8"), 0o644)
 	if err := memSave("g/CLAUDE.md", "nouveau"); err == nil {
 		t.Fatal("fichier illisible écrasé")
 	}
-	if b, _ := os.ReadFile(p); string(b) != "\xff\xfe pas de l'UTF-8" {
-		t.Fatalf("contenu perdu : %q", b)
+	if data, _ := os.ReadFile(path); string(data) != "\xff\xfe pas de l'UTF-8" {
+		t.Fatalf("contenu perdu : %q", data)
 	}
 }
 
