@@ -418,7 +418,7 @@ func guestRelay(mux *http.ServeMux, home, secret, handle string) http.Handler {
 }
 
 func guestServe(mux *http.ServeMux, share Share, invitation Invite, secret, handle string) http.Handler {
-	redactor := newPathRedactor(skillsHome())
+	redactor := newPathRedactor(skillsHome(), decodeDir(share.Dir), guestAlias(invitation.ID))
 	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
 		pattern := guestPattern(mux, request)
 		if pattern == "" || !guestCSRFOK(request, secret) {
@@ -511,6 +511,10 @@ func guestServe(mux *http.ServeMux, share Share, invitation Invite, secret, hand
 		guestWriter := guestRedactedWriter(&noStoreWriter{ResponseWriter: responseWriter}, redactor)
 		if pattern == "GET /v1/sessions/{id}/live" {
 			serveGuestLive(mux, guestWriter, forwarded)
+			return
+		}
+		if pattern == "GET /v1/sessions/{id}/queue" {
+			serveGuestQueue(mux, responseWriter, forwarded, redactor)
 			return
 		}
 		mux.ServeHTTP(guestWriter, forwarded)
