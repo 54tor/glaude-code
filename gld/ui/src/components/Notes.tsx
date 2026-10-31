@@ -137,6 +137,8 @@ export function Notes({ noteKey, folder: base, scope, rows }: { noteKey: string;
   const isItemChosen = (item: { text: string; index: number }) => item.text && (picked.size === 0 || picked.has(item.index))
   const chosen = items.map((item, itemIndex) => ({ text: item.trim(), index: itemIndex })).filter(isItemChosen)
   const body = chosen.map((item) => "- " + item.text).join("\n")
+  // Cadrage devant le texte envoyé : sans lui, une session qui applique la règle des todos de gld rangerait la liste dans le bloc-notes.
+  const message = t("conversation.notes.preamble") + "\n\n" + body
   const count = items.filter((item) => item.trim()).length
   const togglePick = (itemIndex: number) =>
     setPicked((pickedIndexes) => {
@@ -186,9 +188,9 @@ export function Notes({ noteKey, folder: base, scope, rows }: { noteKey: string;
     let delivered = false
     try {
       // Session en cours de réponse : le texte entre dans la file serveur (envoyé à la fin du tour) au lieu d'être tapé dans son terminal.
-      if (isLive && !actions.waiting.has(row.s.id)) await api.queueAdd(row.s.id, body)
-      else if (isLive) await api.sessionSend(row.s.id, body, SEND_TIMEOUT_MS)
-      delivered = isLive || (await actions.resumeSend(row, body))
+      if (isLive && !actions.waiting.has(row.s.id)) await api.queueAdd(row.s.id, message)
+      else if (isLive) await api.sessionSend(row.s.id, message, SEND_TIMEOUT_MS)
+      delivered = isLive || (await actions.resumeSend(row, message))
     } catch (sendError) {
       toast.error(errMsg(sendError))
     }
@@ -199,7 +201,7 @@ export function Notes({ noteKey, folder: base, scope, rows }: { noteKey: string;
   const sendToNewSession = async () => {
     if (!folder) return
     if (!(await record(t("conversation.notes.newTarget") + " · " + folder))) return
-    actions.newSession(folder, body)
+    actions.newSession(folder, message)
     dropSentItems()
   }
   const pickFolder = () => void actions.pickDir(t("conversation.notes.folderTitle"), folder ?? "").then((directory) => directory && setFolder(directory))

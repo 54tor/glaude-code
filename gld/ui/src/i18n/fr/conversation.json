@@ -478,6 +478,7 @@
       "sentTitle": "Envoyées",
       "restore": "Remettre dans la note",
       "forget": "Supprimer de l'historique",
+      "preamble": "Voici une liste de points à aborder dans l'ordre, prépare le travail. Ne les enregistre pas dans les notes ou les todos.",
       "newTarget": "nouvelle session"
     },
     "terminal": {
