@@ -48,3 +48,17 @@ describe("agent-message", () => {
     expect(screen.getByText(/rapport/)).toBeTruthy()
   })
 })
+
+describe("task-notification", () => {
+  const notification =
+    "<task-notification><task-id>a1</task-id><status>completed</status><summary>Agent fini</summary>" +
+    "<result>Lancer :\n\n- `a &amp;&amp; b`</result>" +
+    "<usage><subagent_tokens>581258</subagent_tokens><tool_uses>1</tool_uses><duration_ms>14651</duration_ms></usage></task-notification>"
+  it("décode les entités, met le résultat en forme et résume l'usage", () => {
+    render(createElement(Tagged, { t: notification, md: (text: string) => createElement("div", { "data-testid": "md" }, text) }))
+    expect(screen.getAllByTestId("md").some((element) => element.textContent?.includes("a && b"))).toBe(true)
+    expect(screen.queryByText(/<subagent_tokens>/)).toBeNull()
+    expect(screen.getByText(/581258/)).toBeTruthy()
+    expect(screen.getByText(/15 s/)).toBeTruthy()
+  })
+})

@@ -3,6 +3,7 @@ import { Bell, Minimize2, Reply, Send, Users } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { Badge } from "@/components/ui/badge"
 import { ActionsCtx } from "./actions"
+import { decodeEntities, formatDuration, parseUsage } from "./taggedFields"
 
 // Blocs balisés que Claude Code glisse dans les messages (<task-notification>…) : affichés en carte lisible.
 const BLOCK = /<([a-z][a-z-]*)((?:\s[^<>]*)?)>([\s\S]*?)<\/\1>/g
@@ -15,6 +16,13 @@ const FIELDS: Record<string, string> = {
   "task-type": "conversation.tagged.fields.type",
   note: "conversation.tagged.fields.note",
 }
+const USAGE_LABELS: Record<string, string> = {
+  subagent_tokens: "conversation.tagged.usage.tokens",
+  total_tokens: "conversation.tagged.usage.tokens",
+  tool_uses: "conversation.tagged.usage.toolUses",
+  duration_ms: "conversation.tagged.usage.duration",
+}
+const TEXT_FIELDS = new Set(["summary", "result", "status", "usage"])
 
 // Corps d'un message d'équipier qui est un objet JSON (ex. idle_notification) : décodé pour être listé champ par champ.
 export function parseJsonBody(body: string): Record<string, unknown> | null {
@@ -69,9 +77,10 @@ export type OnReply = (to: string, name: string) => void
 
 function Card({ tag, attrs, body, md, onReply }: { tag: string; attrs: string; body: string; md: Md; onReply?: OnReply }) {
   const { t } = useTranslation()
-  const fields = [...body.matchAll(BLOCK)].map(([, fieldName, , fieldValue]) => [fieldName, fieldValue.trim()] as const)
+  const fields = [...body.matchAll(BLOCK)].map(([, fieldName, , fieldValue]) => [fieldName, fieldName === "usage" ? fieldValue.trim() : decodeEntities(fieldValue.trim())] as const)
   const fieldValueOf = (fieldName: string) => fields.find(([candidateName]) => candidateName === fieldName)?.[1]
   const status = fieldValueOf("status")
+  const usage = parseUsage(fieldValueOf("usage") ?? "")
   const acts = useContext(ActionsCtx) // absent côté invité
   const isMessageCard = tag === "teammate-message" || tag === "cross-session-message" || tag === "agent-message"
   if (isMessageCard) {
@@ -147,10 +156,11 @@ function Card({ tag, attrs, body, md, onReply }: { tag: string; attrs: string; b
         <div className="mt-1.5 break-words">{md(body.trim())}</div>
       ) : (
         <>
-          {fieldValueOf("summary") && <div className="mt-1.5 break-words">{md(fieldValueOf("summary")!)}</div>}
+          {fieldValueOf("summary") && <div className="mt-1.5 break-words font-medium">{md(fieldValueOf("summary")!)}</div>}
+          {fieldValueOf("result") && <Clamp>{md(fieldValueOf("result")!)}</Clamp>}
           <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
             {fields
-              .filter(([fieldName]) => fieldName !== "summary" && fieldName !== "status")
+              .filter(([fieldName]) => !TEXT_FIELDS.has(fieldName))
               .map(([fieldName, fieldValue]) => (
                 <div key={fieldName} className="contents">
                   <dt className="text-muted-foreground">{FIELDS[fieldName] ? t(FIELDS[fieldName]) : fieldName}</dt>
@@ -160,6 +170,15 @@ function Card({ tag, attrs, body, md, onReply }: { tag: string; attrs: string; b
                 </div>
               ))}
           </dl>
+          {usage.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {usage.map(([usageName, usageValue]) => (
+                <Badge key={usageName} variant="outline" className="font-normal">
+                  {USAGE_LABELS[usageName] ? t(USAGE_LABELS[usageName]) : usageName} · {usageName === "duration_ms" ? formatDuration(Number(usageValue)) : usageValue}
+                </Badge>
+              ))}
+            </div>
+          )}
         </>
       )}
     </div>

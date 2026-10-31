@@ -460,6 +460,11 @@
         "type": "type",
         "note": "note"
       },
+      "usage": {
+        "tokens": "tokens",
+        "toolUses": "tool calls",
+        "duration": "duration"
+      },
       "compacted": "Conversation compacted",
       "toolsBefore": "Tools used before the summary · {{n}}",
       "summary": "Summary"

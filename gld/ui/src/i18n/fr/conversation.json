@@ -460,6 +460,11 @@
         "type": "type",
         "note": "note"
       },
+      "usage": {
+        "tokens": "jetons",
+        "toolUses": "appels d'outils",
+        "duration": "durée"
+      },
       "compacted": "Conversation compactée",
       "toolsBefore": "Outils utilisés avant le résumé · {{n}}",
       "summary": "Résumé"
