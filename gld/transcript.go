@@ -125,7 +125,8 @@ type Session struct {
 	Mtime    float64 `json:"mtime"`
 	Ask      float64 `json:"ask,omitempty"` // dernier message de l'utilisateur : clé de tri des listes (le mtime bouge aussi à chaque réponse)
 	KB       int64   `json:"kb"`
-	Tok      Tokens  `json:"tok"`
+	Tok      Tokens  `json:"tok"`              // session + sous-agents
+	Sub      Tokens  `json:"sub"`              // part des sous-agents, déjà comprise dans Tok
 	Parent   string  `json:"parent,omitempty"` // session qui a lancé celle-ci (sous-agent d'un plan) ; vide si inconnue ou disparue
 	team     string  // « session-<8 premiers caractères de l'ID parent> », résolu en Parent par sessions()
 }
@@ -262,6 +263,10 @@ func info(path string, fileInfo os.FileInfo) Session {
 	}
 	session := Session{Provider: claudeID, ID: strings.TrimSuffix(filepath.Base(path), ".jsonl"), Dir: filepath.Base(filepath.Dir(path)),
 		Named: title != "", Cwd: cwd, team: state.team, Mtime: float64(modTime.UnixNano()) / nanosecondsPerSecond, KB: fileInfo.Size() / bytesPerKilobyte, Tok: state.tok}
+	if strings.HasSuffix(path, ".jsonl") && !strings.Contains(path, string(filepath.Separator)+"subagents"+string(filepath.Separator)) {
+		session.Sub = subagentTokens(path)
+		session.Tok = Tokens{state.tok.In + session.Sub.In, state.tok.Out + session.Sub.Out, state.tok.CR + session.Sub.CR, state.tok.CW + session.Sub.CW}
+	}
 	if !state.lastAsk.IsZero() {
 		session.Ask = float64(state.lastAsk.UnixNano()) / nanosecondsPerSecond
 	}
