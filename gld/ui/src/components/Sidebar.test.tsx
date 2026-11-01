@@ -279,6 +279,13 @@ describe("Sidebar — sessions ouvertes et tièdes", () => {
     expect(screen.getByText("Sessions tièdes")).toBeTruthy()
   })
 
+  it("n'affiche pas dans les tièdes une session lancée par une autre (sous-agent)", async () => {
+    const hot = [row("warm1", { title: "Tiède" }), row("child1", { title: "Enfant", parent: "warm1" })]
+    await mount({ hot }, { live: new Set() })
+    expect(screen.getByText("Tiède")).toBeTruthy()
+    expect(screen.queryByText("Enfant")).toBeNull()
+  })
+
   it("une ligne affiche les minutes de cache restantes et alerte sous 10 min", async () => {
     await mount({ hot: [row("a", { title: "Loin", mtime: NOW - 600 }), row("b", { title: "Proche", mtime: NOW - TTL + 300 })] }, { live: new Set(["a", "b"]), waiting: new Set(["a", "b"]) })
     expect(screen.getByText("50 min").className).not.toContain("text-warning")

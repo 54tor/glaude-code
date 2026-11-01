@@ -319,7 +319,7 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
   const [projFold, setProjFold] = useLocal("gld.projects.folded", "")
   const [localFold, setLocalFold] = useLocal("gld.local.folded", "")
   const openRows = props.hot.filter((hotRow) => actions.live.has(hotRow.s.id))
-  const warmRows = props.hot.filter((hotRow) => !actions.live.has(hotRow.s.id) && props.now - hotRow.s.mtime < props.ttl)
+  const warmRows = props.hot.filter((hotRow) => !hotRow.s.parent && !actions.live.has(hotRow.s.id) && props.now - hotRow.s.mtime < props.ttl)
   const favRows = props.favRows.filter((favRow) => show(favRow.s.title))
   const currentRoute = props.route
   const link = (to: Route) => ({ to, onClick: () => props.go(to) })
