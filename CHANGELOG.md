@@ -12,6 +12,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ### Modifié
 - Déplacer une session ouverte la ferme, la déplace puis la rouvre dans un onglet au nouveau dossier (rouverte à son ancien dossier si le déplacement échoue), au lieu d'être refusé.
+- Connexion : sur téléphone ou application installée (PWA), le bouton « Connecter cet appareil avec un code » (code à 8 chiffres) passe en tête et en bouton principal, au-dessus du mot de passe.
 
 ### Corrigé
 - Le texte tapé par l'utilisateur s'affiche tel quel au lieu d'être interprété comme du Markdown (mise en forme parasite, images distantes chargées depuis un message).
