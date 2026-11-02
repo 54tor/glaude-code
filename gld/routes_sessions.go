@@ -459,14 +459,31 @@ func routesSessions(mux *http.ServeMux) {
 			writeErr(responseWriter, http.StatusBadRequest, "bad_request", L("srv.routes_sessions.cheminAbsoluRequis"))
 			return
 		}
+		var reopenFrom map[string]string
+		if request.URL.Query().Get("reopen") == "1" { // déplacement voulu d'une session ouverte : fermée, déplacée, puis rouverte
+			for _, sessionItem := range items {
+				if _, isInteractive := sessionPIDs()[sessionItem.ID]; isInteractive {
+					if reopenFrom == nil {
+						reopenFrom = map[string]string{}
+					}
+					reopenFrom[sessionItem.ID] = sessionCwd(sessionItem)
+				}
+			}
+			closeAndWait(items)
+		}
 		movedCount, err := func() (int, error) {
 			sessionsMu.Lock()
 			defer sessionsMu.Unlock()
 			return reassign(items, targetDir)
 		}()
 		journal("reassign %v vers %s : %v", ids(items), targetDir, errOr(err))
+		reopenFailed := reopenSessions(request.Context(), reopenFrom, targetDir, err == nil)
 		if err != nil {
 			writeErr(responseWriter, http.StatusConflict, "conflict", err.Error())
+			return
+		}
+		if reopenFailed > 0 {
+			writeErr(responseWriter, http.StatusInternalServerError, "launch_failed", L("srv.routes_sessions.reouvertureEchouee", "A1", reopenFailed))
 			return
 		}
 		writeJSON(responseWriter, 200, map[string]any{"n": movedCount, "message": L("srv.routes_sessions.sessionSReassigneeS", "A1", movedCount, "A2", targetDir)})

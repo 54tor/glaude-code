@@ -331,7 +331,7 @@ export const api = {
   },
   newSession: (body: { dir?: string; id?: string; cwd?: string; prompt: string; args?: string }) => http.post<Said>("/sessions", body),
   rename: (session: Item, body: { title?: string; auto?: boolean; keep?: boolean }) => http.patch<Said & { title: string }>(`/sessions/${seg(session.id)}${qs({ dir: session.dir })}`, body),
-  reassign: (items: Item[], to: string) => inBatches(items, (batch) => http.patch<Said & { n: number }>("/sessions", { items: batch, to })),
+  reassign: (items: Item[], to: string) => inBatches(items, (batch) => http.patch<Said & { n: number }>(`/sessions${qs({ reopen: true })}`, { items: batch, to })),
   rmSessions: (items: Item[]) => {
     const itemRef = (item: Item) => `${item.dir}:${item.id}`
     return inBatches(
