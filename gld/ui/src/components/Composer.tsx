@@ -839,7 +839,7 @@ function TerminalPanel({ id, onAsk, onSent, extra }: { id: string; onAsk?: (aski
   return (
     <div className="space-y-2">
       {prompt && (
-        <div className="rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-sm">
+        <div className="max-h-[min(65dvh,36rem)] overflow-y-auto overscroll-contain rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-sm">
           {prompt.tabs && prompt.tabs.length > 1 && (
             <p className="mb-1.5 flex flex-wrap items-center gap-1 text-xs" aria-label={t("conversation.composer.tabsAria")}>
               <Button size="xs" variant="ghost" disabled={pressing} onClick={() => press("Left")} aria-label={t("conversation.composer.prevTab")} title={t("conversation.composer.prevTab")}>
