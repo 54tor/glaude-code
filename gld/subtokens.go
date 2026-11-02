@@ -10,10 +10,13 @@ import (
 func subagentTokens(transcriptPath string) Tokens {
 	var total Tokens
 	sessionDir := strings.TrimSuffix(transcriptPath, ".jsonl")
-	if dirInfo, err := os.Stat(filepath.Join(sessionDir, "subagents")); err != nil || !dirInfo.IsDir() {
+	subagentsDir := filepath.Join(sessionDir, "subagents")
+	// #nosec G703 -- transcript trouvé par gld sous la racine des projets Claude
+	if dirInfo, err := os.Stat(subagentsDir); err != nil || !dirInfo.IsDir() {
 		return total
 	}
-	filepath.WalkDir(filepath.Join(sessionDir, "subagents"), func(walkedPath string, walkedEntry fs.DirEntry, err error) error {
+	// #nosec G703 -- idem
+	filepath.WalkDir(subagentsDir, func(walkedPath string, walkedEntry fs.DirEntry, err error) error {
 		if err != nil || walkedEntry.IsDir() || !strings.HasSuffix(walkedPath, ".jsonl") {
 			return nil
 		}
