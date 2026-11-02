@@ -3085,6 +3085,13 @@ paths:
       tags:
       - sessions
       operationId: patchSessions
+      parameters:
+      - name: reopen
+        in: query
+        required: false
+        description: With 1, interactive sessions that are open are closed, moved, then reopened in a terminal tab at the new folder.
+        schema:
+          type: boolean
       requestBody:
         content:
           application/json:

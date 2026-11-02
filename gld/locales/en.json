@@ -377,6 +377,7 @@
   "srv.routes_sessions.groupesEnregistres": "Groups saved",
   "srv.routes_sessions.messageEnvoyeALa": "Message sent to the session",
   "srv.routes_sessions.renommee": "Renamed: {{.A1}}",
+  "srv.routes_sessions.reouvertureEchouee": "{{.A1}} session(s) moved but not reopened",
   "srv.routes_sessions.sessionFermee": "Session closed",
   "srv.routes_sessions.sessionOuverteRenommeLa": "session is open: rename it with /rename in Claude, or close it first",
   "srv.routes_sessions.sessionSReassigneeS": "{{.A1}} session(s) reassigned to {{.A2}}",
