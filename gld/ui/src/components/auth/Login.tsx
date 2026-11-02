@@ -6,6 +6,7 @@ import { ApiError, http } from "@/lib/http"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { touchOnly } from "@/lib/utils"
 import { Enrol, Mfa } from "./Mfa"
 
 // Écran plein, au-dessus de l'application si elle reste montée (session expirée).
@@ -48,6 +49,8 @@ export function ErrorLine({ msg, wait }: { msg?: string; wait?: number }) {
   )
 }
 
+const isInstalledApp = () => typeof matchMedia === "function" && matchMedia("(display-mode: standalone)").matches
+
 export function Login() {
   const { t } = useTranslation()
   const auth = useAuth()
@@ -56,6 +59,12 @@ export function Login() {
   const [err, setErr] = useState(false)
   const [busy, setBusy] = useState(false)
   const [left, wait] = useWait()
+  const pairFirst = touchOnly() || isInstalledApp()
+  const pairButton = (
+    <Button asChild variant={pairFirst ? "default" : "link"} className="w-full">
+      <a href="/pair">{t("auth.login.pair")}</a>
+    </Button>
+  )
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (busy || left) return
@@ -77,6 +86,7 @@ export function Login() {
   return (
     <form onSubmit={submit} className="space-y-4" noValidate>
       <Heading sub={auth.expired ? t("auth.login.expired") : undefined}>{t("auth.login.title")}</Heading>
+      {pairFirst && pairButton}
       <div className="space-y-1.5">
         <Label htmlFor="gld-login-name">{t("auth.login.name")}</Label>
         <Input id="gld-login-name" name="username" autoComplete="username" autoCapitalize="none" spellCheck={false} autoFocus required value={name} onChange={(event) => setName(event.target.value)} />
@@ -89,9 +99,7 @@ export function Login() {
       <Button type="submit" className="w-full" disabled={busy || left > 0 || !name || !pw}>
         {t("auth.login.submit")}
       </Button>
-      <Button asChild variant="link" className="w-full">
-        <a href="/pair">{t("auth.login.pair")}</a>
-      </Button>
+      {!pairFirst && pairButton}
     </form>
   )
 }
