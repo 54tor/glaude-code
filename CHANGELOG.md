@@ -4,6 +4,20 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.9.2] - 2026-11-02
+
+### Ajouté
+- IDE : télécharger un fichier depuis l'arbre (menu contextuel) et en envoyer dans un dossier (menu « Envoyer un fichier ici » ou glisser-déposer, jusqu'à 64 Mio, sans jamais écraser une entrée existante) ; routes `GET /v1/fs/entries/raw` et `POST /v1/fs/entries/upload`.
+- Sessions : le total d'une session inclut les jetons de ses sous-agents.
+
+### Modifié
+- Déplacer une session ouverte la ferme, la déplace puis la rouvre dans un onglet au nouveau dossier (rouverte à son ancien dossier si le déplacement échoue), au lieu d'être refusé.
+
+### Corrigé
+- Le texte tapé par l'utilisateur s'affiche tel quel au lieu d'être interprété comme du Markdown (mise en forme parasite, images distantes chargées depuis un message).
+- Barre latérale : les sessions enfants n'apparaissent plus dans la section des sessions au chaud.
+- Question en attente : la carte des choix défile quand elle dépasse la hauteur de l'écran (petits portables).
+
 ## [0.9.1] - 2026-10-31
 
 ### Ajouté
