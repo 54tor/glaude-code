@@ -16,11 +16,10 @@ import { setDraft } from "@/hooks/useDraft"
 
 // Messages de Claude : Markdown (tableaux GFM compris). react-markdown n'interprète jamais de HTML brut
 // et filtre les URL dangereuses (javascript:) : rien de ce qui est affiché ne peut s'exécuter.
-// breaks : un retour à la ligne simple reste visible (texte tapé par l'utilisateur).
 // onLink : intercepte un lien relatif (ex. une autre entrée de mémoire) ; renvoie false pour le laisser faire.
-export function Markdown({ t, onLink, breaks }: { t: string; onLink?: (href: string) => boolean; breaks?: boolean }) {
+export function Markdown({ t, onLink }: { t: string; onLink?: (href: string) => boolean }) {
   return (
-    <div className={breaks ? "md md-breaks" : "md"}>
+    <div className="md">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeNoBreak]}
@@ -52,18 +51,23 @@ export const hideHome = (text: string) => text.replace(HOME_PREFIX, "$1~")
 // Image déposée par l'interface (« @/…/.claude/gld-web-images/<nom> ») : affichée au lieu du chemin, relue par son seul nom (GET /v1/sessions/{id}/conversation/uploads/{up}).
 export const UPLOADED = /@[^\s@]{0,300}\/gld-web-images\/([A-Za-z0-9][\w.-]*\.(?:png|jpe?g|gif|webp))/g
 
+// Texte tapé par l'utilisateur : affiché tel quel, jamais interprété comme du Markdown (images distantes, liens, mise en forme).
+function PlainText({ t: text }: { t: string }) {
+  return <p className="break-words whitespace-pre-wrap">{noBreak(hideHome(text))}</p>
+}
+
 function UserText({ t: text, conv }: { t: string; conv?: Conv }) {
   const { t } = useTranslation()
   const parts: React.ReactNode[] = []
   const pushMarkdownWithUploads = (markdownText: string, key: string) => {
     if (!conv || conv.guest) {
-      parts.push(<Markdown key={key} t={markdownText} breaks />)
+      parts.push(<PlainText key={key} t={markdownText} />)
       return
     }
     let from = 0
     for (const uploadMatch of markdownText.matchAll(UPLOADED)) {
       const before = markdownText.slice(from, uploadMatch.index).trim()
-      if (before) parts.push(<Markdown key={`${key}t${from}`} t={before} breaks />)
+      if (before) parts.push(<PlainText key={`${key}t${from}`} t={before} />)
       const src = v1(`/sessions/${seg(conv.id)}/conversation/uploads/${seg(uploadMatch[1])}${qs({ dir: conv.dir })}`)
       parts.push(
         <a key={`${key}i${uploadMatch.index}`} href={src} target="_blank" rel="noopener noreferrer" title={t("conversation.message.openImage")} className="my-1 block w-fit">
@@ -73,7 +77,7 @@ function UserText({ t: text, conv }: { t: string; conv?: Conv }) {
       from = uploadMatch.index + uploadMatch[0].length
     }
     const rest = markdownText.slice(from).trim()
-    if (rest) parts.push(<Markdown key={`${key}r`} t={rest} breaks />)
+    if (rest) parts.push(<PlainText key={`${key}r`} t={rest} />)
   }
   let at = 0
   for (const pastedMatch of text.matchAll(PASTED)) {
