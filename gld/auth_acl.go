@@ -101,9 +101,9 @@ var routeRights = map[string]Right{
 
 	// Exécution.
 	"POST /v1/sessions/{id}/chat": RightExec, "DELETE /v1/sessions/{id}/chat": RightExec, "POST /v1/sessions": RightExec,
-	"GET /v1/fs/tree": RightFsRead, "GET /v1/fs/entries/content": RightFsRead, "GET /v1/fs/trash": RightFsRead,
+	"GET /v1/fs/tree": RightFsRead, "GET /v1/fs/entries/content": RightFsRead, "GET /v1/fs/entries/raw": RightFsRead, "GET /v1/fs/trash": RightFsRead,
 	"GET /v1/fs/index": RightFsRead, "POST /v1/fs/files": RightFsRead, "GET /v1/fs/watch": RightFsRead,
-	"PUT /v1/fs/entries/content": RightFsWrite, "POST /v1/fs/entries": RightFsWrite, "PATCH /v1/fs/entries": RightFsWrite, "DELETE /v1/fs/entries": RightFsWrite,
+	"PUT /v1/fs/entries/content": RightFsWrite, "POST /v1/fs/entries": RightFsWrite, "POST /v1/fs/entries/upload": RightFsWrite, "PATCH /v1/fs/entries": RightFsWrite, "DELETE /v1/fs/entries": RightFsWrite,
 	"PATCH /v1/fs/trash/{entry}": RightFsWrite, "DELETE /v1/fs/trash": RightFsWrite,
 	"GET /v1/terminal": RightExec, "POST /v1/terminal": RightExec, "GET /v1/terminal/ws": RightExec,
 	"POST /v1/sessions/{id}/messages": RightExec, "POST /v1/sessions/{id}/queue": RightExec, "DELETE /v1/sessions/{id}/queue/{qid}": RightExec, "PATCH /v1/sessions/{id}/queue/{qid}": RightExec, "POST /v1/invites": RightExec, "PUT /v1/invites/{invite}/token": RightExec, "PATCH /v1/invites/{invite}": RightExec, "DELETE /v1/invites/{invite}": RightExec, "DELETE /v1/shares/{share}": RightExec, "GET /v1/shares": RightExec, "POST /v1/sessions/{id}/keystrokes": RightExec, "DELETE /v1/sessions/{id}/process": RightExec,
@@ -412,7 +412,7 @@ func gateCheck(gate *gateInfo, request *http.Request, pattern string, neededRigh
 func fsCodeWrite(request *http.Request, pattern string) bool {
 	query := request.URL.Query()
 	switch pattern {
-	case "PUT /v1/fs/entries/content":
+	case "PUT /v1/fs/entries/content", "POST /v1/fs/entries/upload":
 		return ideCodePath(query.Get("path"))
 	case "DELETE /v1/fs/entries":
 		return ideCodePath(strings.Join(query["item"], "/"))

@@ -51,6 +51,7 @@ func ideResolve(request *http.Request, allowRoot bool) (*os.Root, string, fs.Fil
 
 func routesIDE(mux *http.ServeMux) {
 	routesIDEWrite(mux)
+	routesIDETransfer(mux)
 	routesIDEIndex(mux)
 	routesIDEWatch(mux)
 	mux.HandleFunc("GET /v1/fs/tree", func(responseWriter http.ResponseWriter, request *http.Request) {

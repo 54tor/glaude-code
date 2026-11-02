@@ -1,6 +1,6 @@
-import { cloneElement, useEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react"
+import { cloneElement, useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type RefObject } from "react"
 import { useTranslation } from "react-i18next"
-import { ChevronRight, File, FilePlus, Folder, FolderPlus, Link2, TextCursorInput, Trash2 } from "lucide-react"
+import { ChevronRight, Download, File, FilePlus, Folder, FolderPlus, Link2, TextCursorInput, Trash2, Upload } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "cn"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
@@ -9,6 +9,7 @@ import { ApiError } from "@/lib/apiError"
 import { Confirm, type Ask } from "@/components/Confirm"
 import { Prompt, type Ask as PromptAsk } from "@/components/Prompt"
 import { tone } from "../GitChanges"
+import { downloadFile, MAX_UPLOAD_BYTES, uploadFile } from "./transfer"
 import type { useTree } from "./useTree"
 
 type TreeAction = "newFile" | "newDir" | "rename" | "delete"
@@ -57,6 +58,31 @@ export function FileTree({ dir, tree, canWrite, selected, marks, dirs, filter = 
       toast.error(error instanceof ApiError ? error.message : t("shell.act.failed"))
       return false
     }
+  }
+  const uploadInput = useRef<HTMLInputElement>(null)
+  const uploadTarget = useRef("")
+  const uploadInto = async (parentPath: string, files: File[]) => {
+    let uploadedCount = 0
+    for (const file of files) {
+      if (file.size > MAX_UPLOAD_BYTES) {
+        toast.error(t("ide.menu.uploadTooBig", { name: file.name }))
+        continue
+      }
+      if (await done(uploadFile(dir, join(parentPath, file.name), file))) uploadedCount++
+    }
+    if (uploadedCount === 0) return
+    toast.success(t("ide.menu.uploaded", { count: uploadedCount }))
+    if (parentPath === "" || tree.open.has(parentPath)) tree.refresh(parentPath)
+    else tree.setOpen(parentPath, true)
+  }
+  const dropInto = (parentPath: string) => (event: DragEvent<HTMLElement>) => {
+    if (!canWrite || !event.dataTransfer.types.includes("Files")) return
+    event.preventDefault()
+    event.stopPropagation()
+    void uploadInto(parentPath, Array.from(event.dataTransfer.files))
+  }
+  const allowDrop = (event: DragEvent<HTMLElement>) => {
+    if (canWrite && event.dataTransfer.types.includes("Files")) event.preventDefault()
   }
   const onAction = (action: TreeAction, target: TreeTarget) => {
     const parent = target.path.includes("/") ? target.path.slice(0, target.path.lastIndexOf("/")) : ""
@@ -166,7 +192,19 @@ export function FileTree({ dir, tree, canWrite, selected, marks, dirs, filter = 
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto py-1 text-sm">
+    <div className="min-h-0 flex-1 overflow-auto py-1 text-sm" onDragOver={allowDrop} onDrop={dropInto("")}>
+      <input
+        ref={uploadInput}
+        type="file"
+        multiple
+        hidden
+        tabIndex={-1}
+        onChange={(event) => {
+          const chosen = Array.from(event.target.files ?? [])
+          event.target.value = ""
+          void uploadInto(uploadTarget.current, chosen)
+        }}
+      />
       {truncated && <p className="mx-2 mb-1 rounded-md border px-2 py-1 text-xs text-muted-foreground">{t("ide.tree.truncated")}</p>}
       {rootList === "loading" && <p className="px-3 py-1 text-xs text-muted-foreground">{t("ide.tree.loading")}</p>}
       {rootList === "failed" && <p className="px-3 py-1 text-xs text-destructive">{t("ide.tree.failed")}</p>}
@@ -193,6 +231,8 @@ export function FileTree({ dir, tree, canWrite, selected, marks, dirs, filter = 
               tabIndex={isTabStop ? 0 : -1}
               onFocus={() => setFocus(row.path)}
               onClick={activateRow}
+              onDragOver={allowDrop}
+              onDrop={dropInto(isDir ? row.path : row.parent)}
               className={cn(
                 "flex h-7 cursor-default items-center gap-1 rounded-md pr-2 outline-none focus-visible:ring-2 focus-visible:ring-ring/80",
                 row.path === selected ? "bg-accent text-accent-foreground" : "hover:bg-muted",
@@ -217,13 +257,26 @@ export function FileTree({ dir, tree, canWrite, selected, marks, dirs, filter = 
               )}
             </li>
           )
-          if (!canWrite) return cloneElement(item, { key: row.path })
+          if (!canWrite && isDir) return cloneElement(item, { key: row.path })
           return (
             <ContextMenu key={row.path}>
               <ContextMenuTrigger asChild>{item}</ContextMenuTrigger>
               <ContextMenuContent className="w-48">
-                {isDir && (
+                {!isDir && (
+                  <ContextMenuItem onSelect={() => void done(downloadFile(dir, row.path, row.name))}>
+                    <Download /> {t("ide.menu.download")}
+                  </ContextMenuItem>
+                )}
+                {canWrite && isDir && (
                   <>
+                    <ContextMenuItem
+                      onSelect={() => {
+                        uploadTarget.current = row.path
+                        uploadInput.current?.click()
+                      }}
+                    >
+                      <Upload /> {t("ide.menu.upload")}
+                    </ContextMenuItem>
                     <ContextMenuItem onSelect={() => onAction("newFile", row)}>
                       <FilePlus /> {t("ide.menu.newFile")}
                     </ContextMenuItem>
@@ -233,13 +286,17 @@ export function FileTree({ dir, tree, canWrite, selected, marks, dirs, filter = 
                     <ContextMenuSeparator />
                   </>
                 )}
-                <ContextMenuItem onSelect={() => onAction("rename", row)}>
-                  <TextCursorInput /> {t("ide.menu.rename")}
-                </ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem variant="destructive" onSelect={() => onAction("delete", row)}>
-                  <Trash2 /> {t("ide.menu.delete")}
-                </ContextMenuItem>
+                {canWrite && (
+                  <>
+                    <ContextMenuItem onSelect={() => onAction("rename", row)}>
+                      <TextCursorInput /> {t("ide.menu.rename")}
+                    </ContextMenuItem>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem variant="destructive" onSelect={() => onAction("delete", row)}>
+                      <Trash2 /> {t("ide.menu.delete")}
+                    </ContextMenuItem>
+                  </>
+                )}
               </ContextMenuContent>
             </ContextMenu>
           )
