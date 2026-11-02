@@ -1423,6 +1423,79 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /v1/fs/entries/raw:
+    get:
+      tags:
+      - fs
+      operationId: getFsEntriesRaw
+      x-gld-right: fs_read
+      parameters:
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: path
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The file as an attachment, any size and any content.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /v1/fs/entries/upload:
+    post:
+      tags:
+      - fs
+      operationId: postFsEntriesUpload
+      x-gld-right: fs_write
+      parameters:
+      - name: dir
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: path
+        in: query
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '201':
+          description: Created; 64 MiB at most, never overwrites an existing entry.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
   /v1/fs/files:
     post:
       tags:

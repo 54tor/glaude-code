@@ -17,6 +17,10 @@
       "newFile": "New file",
       "newDir": "New folder",
       "rename": "Rename",
+      "download": "Download",
+      "upload": "Upload a file here",
+      "uploadTooBig": "“{{name}}” exceeds 64 MiB",
+      "uploaded": "{{count}} file(s) uploaded",
       "delete": "Delete"
     },
     "ask": {

@@ -17,6 +17,10 @@
       "newFile": "Nouveau fichier",
       "newDir": "Nouveau dossier",
       "rename": "Renommer",
+      "download": "Télécharger",
+      "upload": "Envoyer un fichier ici",
+      "uploadTooBig": "« {{name}} » dépasse 64 Mio",
+      "uploaded": "{{count}} fichier(s) envoyé(s)",
       "delete": "Supprimer"
     },
     "ask": {
