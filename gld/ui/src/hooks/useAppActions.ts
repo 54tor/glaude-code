@@ -184,6 +184,13 @@ export function useAppActions(context: {
         else addDirToProject(trimmedName)
       })
     },
+    addToProjects: (dir, names) => {
+      const updatedProjects = projects.map((project) => {
+        const shouldAddDir = names.includes(project.name) && !project.dirs.includes(dir)
+        return shouldAddDir ? { ...project, dirs: [...project.dirs, dir] } : project
+      })
+      saveProjects(updatedProjects)
+    },
     remove: (dir, name) =>
       saveProjects(projects.map((project) => (project.name === name ? { ...project, dirs: project.dirs.filter((projectDir) => projectDir !== dir) } : project))),
     promptAll: (project) => {

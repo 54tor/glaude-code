@@ -1,6 +1,9 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
-import { MessageSquarePlus, ShieldCheck } from "lucide-react"
+import { FolderPlus, MessageSquarePlus, ShieldCheck } from "lucide-react"
+import { toast } from "sonner"
+import { api } from "@/lib/api"
+import { errMsg } from "@/lib/apiError"
 import { tilde } from "@/lib/format"
 import { useGit } from "@/hooks/useGit"
 import { Button } from "@/components/ui/button"
@@ -10,8 +13,9 @@ import { GitRepo } from "./GitRepo"
 import { Choose } from "./Choose"
 
 // En tête d'un dossier : l'état git (branche, changements en attente, avance et retard) du dossier et de ses dépôts, puis ses raccourcis.
+// projectName : nom du projet affiché, active l'ajout d'un dossier.
 // dirs : vue d'un projet (ensemble de dossiers) : la nouvelle session (en modale) part dans le dossier choisi dans la liste.
-export function ProjectHead({ project: fixed, missing: fixedMissing, dirs }: { project?: string; missing?: boolean; dirs?: string[] }) {
+export function ProjectHead({ project: fixed, missing: fixedMissing, dirs, projectName }: { project?: string; missing?: boolean; dirs?: string[]; projectName?: string }) {
   const { t } = useTranslation()
   const actions = useActions()
   const [dir, setDir] = useState("")
@@ -29,6 +33,21 @@ export function ProjectHead({ project: fixed, missing: fixedMissing, dirs }: { p
   }
   const git = useGit()
   const repos = git.repos[project] ?? []
+  const parentProjects = projectName ? actions.projects.filter((knownProject) => knownProject.name === projectName) : actions.projects.filter((knownProject) => knownProject.dirs.includes(project))
+  const addFolder = async () => {
+    const pickedDir = await actions.pickDir(t("shell.head.addFolderTitle", { name: tilde(project, actions.home) }), project || actions.home)
+    if (!pickedDir) return
+    const concernedDirs = [...new Set([project, ...parentProjects.flatMap((parentProject) => parentProject.dirs)])]
+    const dirsToAllow = concernedDirs.filter((concernedDir) => concernedDir !== pickedDir && !isMissingFolder(concernedDir))
+    if (parentProjects.length) actions.projectActs.addToProjects(pickedDir, parentProjects.map((parentProject) => parentProject.name))
+    for (const dirToAllow of dirsToAllow) {
+      try {
+        await api.configEdit({ file: "l/" + dirToAllow, op: "add", path: ["permissions", "additionalDirectories"], value: pickedDir })
+      } catch (error) {
+        toast.error(errMsg(error))
+      }
+    }
+  }
   return (
     <div className="mb-4 space-y-3">
       {dirs && (
@@ -53,13 +72,18 @@ export function ProjectHead({ project: fixed, missing: fixedMissing, dirs }: { p
           </li>
         ))}
       </ul>
-      {!missing && dirs && (
-        <div className="flex flex-wrap items-center gap-2 text-xs">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        {dirs && !missing && (
           <Button size="sm" onClick={() => actions.newSession(project)} title={t("shell.header.newInDirHint")}>
             <MessageSquarePlus /> {t("shell.header.newSession")}
           </Button>
-        </div>
-      )}
+        )}
+        {!missing && (
+          <Button size="sm" variant="outline" onClick={addFolder} title={t("shell.head.addFolderHint")}>
+            <FolderPlus /> {t("shell.head.addFolder")}
+          </Button>
+        )}
+      </div>
     </div>
   )
 }
