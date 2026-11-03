@@ -15,6 +15,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 - Messages : les fichiers `.md` écrits par Claude se téléchargent depuis leur lien.
 - Vues dossier et projet : bouton « Ajouter un dossier » (add-dir des réglages locaux et ajout aux projets concernés).
 - Partage : le bouton des invitations indique le nombre de sessions partagées ouvertes.
+- Session ouverte : après le premier message, gld envoie `/rename` au repos pour donner un titre automatique à la session.
 
 ### Modifié
 - Plugins : la liste des disponibles n'est plus plafonnée à 40, tous les plugins des marketplaces s'affichent.
