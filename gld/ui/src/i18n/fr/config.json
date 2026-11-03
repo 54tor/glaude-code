@@ -241,6 +241,8 @@
       "addDir": "Ajouter un dossier…",
       "chooseDir": "Choisir un dossier…",
       "globalReadOnly": "Règle globale (~/.claude/settings.json), non modifiable ici",
+      "overriddenBy": "neutralisée : même règle dans « {{kind}} »",
+      "addedBy": "Ajouté comme dossier supplémentaire par :",
       "noPerms": "Aucune : ce projet suit vos règles personnelles.",
       "toGlobal": "Vers le global",
       "copyToUser": "Copier dans vos réglages",

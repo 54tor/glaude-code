@@ -241,6 +241,8 @@
       "addDir": "Add a folder…",
       "chooseDir": "Choose a folder…",
       "globalReadOnly": "Global rule (~/.claude/settings.json), not editable here",
+      "overriddenBy": "overridden: same rule under \"{{kind}}\"",
+      "addedBy": "Added as an additional directory by:",
       "noPerms": "None: this project follows your personal rules.",
       "toGlobal": "To global",
       "copyToUser": "Copy to your settings",
