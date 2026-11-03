@@ -69,6 +69,49 @@ func titleLoop(every time.Duration) {
 	}
 }
 
+const liveRenameGiveUp = 10 * time.Minute
+
+var (
+	liveRenamed   = map[string]bool{}
+	liveRenamedMu sync.Mutex
+)
+
+// renameLive envoie « /rename » (titre auto de Claude Code) dans une session ouverte, une fois par session, dès qu'elle est au repos.
+func renameLive(sessionID, transcriptPath string) {
+	liveRenamedMu.Lock()
+	alreadyScheduled := liveRenamed[sessionID]
+	liveRenamed[sessionID] = true
+	liveRenamedMu.Unlock()
+	if alreadyScheduled || hasTitle(transcriptPath) {
+		return
+	}
+	go func() {
+		deadline := time.Now().Add(liveRenameGiveUp)
+		ticker := time.NewTicker(queueTick)
+		defer ticker.Stop()
+		for now := range ticker.C {
+			if now.After(deadline) || homeCtx.Err() != nil {
+				return
+			}
+			sentMu.Lock()
+			mustWait := now.Before(notBefore[sessionID])
+			sentMu.Unlock()
+			isOpen := openFn()[sessionID]
+			isAsking := toSet(askingFn())[sessionID]
+			isIdle := toSet(waiting())[sessionID] || idleByScreen(sessionID, now)
+			if mustWait || !isOpen || isAsking || !isIdle {
+				continue
+			}
+			sendErr := sendFn(sessionID, "/rename")
+			journal("auto-rename live %s : %v", sessionID, errOr(sendErr))
+			if sendErr == nil {
+				markSent(sessionID)
+			}
+			return
+		}
+	}()
+}
+
 func titleSystem() string { return L("prompt.titleSystem", "A1", replyLang()) }
 
 const (

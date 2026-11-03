@@ -527,6 +527,7 @@ func routesSessions(mux *http.ServeMux) {
 		}
 		if liveIDs[sessionID] && body.Auto && body.Keep {
 			deferTitle(sessionID, transcriptPath)
+			renameLive(sessionID, transcriptPath)
 			writeJSON(responseWriter, 200, map[string]any{"title": "", "message": ""})
 			return
 		}
