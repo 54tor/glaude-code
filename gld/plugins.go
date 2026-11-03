@@ -72,8 +72,8 @@ func runPlugin(dir string, timeout time.Duration, args ...string) ([]byte, error
 	return cmd.CombinedOutput()
 }
 
-// listPlugins : les plugins installés (tous portées) et les plus installés parmi ceux des marketplaces qui correspondent à query.
-func listPlugins(query string, limit int) ([]PluginInst, []PluginAvail, error) {
+// listPlugins : les plugins installés (tous portées) et ceux des marketplaces qui correspondent à query.
+func listPlugins(query string) ([]PluginInst, []PluginAvail, error) {
 	rawList, err := pluginRaw()
 	if err != nil {
 		return nil, nil, err
@@ -117,9 +117,6 @@ func listPlugins(query string, limit int) ([]PluginInst, []PluginAvail, error) {
 	sort.SliceStable(available, func(leftIndex, rightIndex int) bool {
 		return available[leftIndex].Installs > available[rightIndex].Installs
 	})
-	if len(available) > limit {
-		available = available[:limit]
-	}
 	return installedList, nav(available), nil
 }
 

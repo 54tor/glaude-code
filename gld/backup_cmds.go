@@ -136,7 +136,7 @@ func planPlugins(archiveStage *stage) ([]SyncItem, error) {
 		return nil, nil
 	}
 	installedByKey := map[string]PluginInst{}
-	if installed, _, err := listPlugins("", 0); err == nil {
+	if installed, _, err := listPlugins(""); err == nil {
 		for _, installedPlugin := range installed {
 			installedByKey[installedPlugin.Scope+":"+installedPlugin.ID+":"+installedPlugin.Project] = installedPlugin
 		}
@@ -178,7 +178,7 @@ func applyPlugins(archiveStage *stage, picks []SyncPick, _ map[string]string) []
 	var archivedPlugins pluginsDoc
 	readStaged(archiveStage, "plugins.json", &archivedPlugins)
 	installedByKey := map[string]PluginInst{}
-	if installed, _, err := listPlugins("", 0); err == nil {
+	if installed, _, err := listPlugins(""); err == nil {
 		for _, installedPlugin := range installed {
 			installedByKey[installedPlugin.Scope+":"+installedPlugin.ID+":"+installedPlugin.Project] = installedPlugin
 		}

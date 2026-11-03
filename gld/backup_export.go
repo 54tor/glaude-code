@@ -94,7 +94,7 @@ func exportBackup(categories []string) ([]byte, int, error) {
 		}
 	}
 	if hasCategory("plugins") {
-		installedPlugins, _, err := listPlugins("", 1<<30)
+		installedPlugins, _, err := listPlugins("")
 		if err != nil {
 			return nil, 0, err
 		}

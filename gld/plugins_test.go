@@ -15,15 +15,12 @@ func TestListPlugins(t *testing.T) {
 		return []byte(`{"installed":[{"id":"a@m","version":"1","scope":"user","enabled":true}],
 "available":[{"pluginId":"a@m","name":"a","marketplaceName":"m","installCount":5},{"pluginId":"b@m","name":"b","description":"Outil Go","marketplaceName":"m","installCount":9}]}`), nil
 	}
-	inst, av, err := listPlugins("", 10)
+	inst, av, err := listPlugins("")
 	if err != nil || len(inst) != 1 || len(av) != 2 || av[0].ID != "b@m" || !av[1].Installed {
 		t.Fatalf("%v %+v %+v", err, inst, av)
 	}
-	if _, av, _ = listPlugins("go", 10); len(av) != 1 || av[0].ID != "b@m" {
+	if _, av, _ = listPlugins("go"); len(av) != 1 || av[0].ID != "b@m" {
 		t.Fatalf("filtre : %+v", av)
-	}
-	if _, av, _ = listPlugins("", 1); len(av) != 1 {
-		t.Fatalf("limite : %+v", av)
 	}
 }
 

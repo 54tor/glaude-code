@@ -6,8 +6,6 @@ import (
 	"strings"
 )
 
-const pluginListLimit = 40
-
 // routesSkills : les skills de Claude Code (skills.go), leurs plugins et marketplaces.
 func routesSkills(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/skills", func(responseWriter http.ResponseWriter, request *http.Request) {
@@ -119,7 +117,7 @@ func routesSkills(mux *http.ServeMux) {
 		writeJSON(responseWriter, 200, map[string]any{"message": output})
 	})
 	mux.HandleFunc("GET /v1/plugins", func(responseWriter http.ResponseWriter, request *http.Request) {
-		installed, available, err := listPlugins(request.URL.Query().Get("q"), pluginListLimit)
+		installed, available, err := listPlugins(request.URL.Query().Get("q"))
 		if err != nil {
 			writeErr(responseWriter, http.StatusBadGateway, "unavailable", err.Error())
 			return

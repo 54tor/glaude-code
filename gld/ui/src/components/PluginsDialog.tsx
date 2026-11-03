@@ -27,6 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Choose } from "./Choose"
@@ -268,17 +269,34 @@ export function PluginsCatalog({
     return () => clearTimeout(searchTimeout)
   }, [searchQuery, load])
 
-  const install = async (id: string) => {
-    setBusy(id)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const installIds = async (pluginIds: string[]) => {
+    setBusy(pluginIds.join(","))
     const [targetScope, targetProject] = scope === "user" ? ["user", ""] : ["project", scope.slice(PROJECT_SCOPE_PREFIX_LENGTH)]
-    const ok = await reportAction(() =>
-      api.pluginAct("install", id, targetScope, targetProject)
-    )
+    const failed: { item: string; error: { message: string } }[] = []
+    for (const pluginId of pluginIds) {
+      try {
+        await api.pluginAct("install", pluginId, targetScope, targetProject)
+      } catch (installError) {
+        failed.push({ item: pluginId, error: { message: errMsg(installError) } })
+      }
+    }
+    const installedCount = pluginIds.length - failed.length
+    await reportAction(async () => ({
+      message: installedCount > 0 ? t("skills.plugins.installedCount", { count: installedCount }) : undefined,
+      failed,
+    }))
     setBusy("")
-    if (!ok) return
+    setSelectedIds((previous) => new Set([...previous].filter((pluginId) => failed.some((failure) => failure.item === pluginId))))
     await load(searchQuery)
     onChange()
   }
+  const toggleSelected = (pluginId: string) =>
+    setSelectedIds((previous) => {
+      const next = new Set(previous)
+      if (!next.delete(pluginId)) next.add(pluginId)
+      return next
+    })
   // La liste des installés vient du parent quand il l'a : elle suit ses désinstallations sans relancer la recherche.
   const ids = useMemo(
     () => (installed ? new Set(installed.map((plugin) => plugin.id)) : null),
@@ -338,6 +356,20 @@ export function PluginsCatalog({
           </span>
         )}
       </div>
+      {selectedIds.size > 0 && (
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-md border bg-background px-3 py-1.5 text-sm">
+          <span>{t("skills.plugins.selected", { count: selectedIds.size })}</span>
+          <div className="flex gap-2">
+            <Button size="xs" variant="ghost" disabled={busy !== ""} onClick={() => setSelectedIds(new Set())}>
+              {t("skills.plugins.clearSelection")}
+            </Button>
+            <Button size="xs" disabled={busy !== ""} onClick={() => installIds([...selectedIds])}>
+              {busy !== "" ? <Fan className="animate-spin" /> : <Download />}{" "}
+              {t("skills.plugins.installSelection", { count: selectedIds.size })}
+            </Button>
+          </div>
+        </div>
+      )}
       {!data && (
         <Fan className="m-3 size-4 animate-spin text-muted-foreground" />
       )}
@@ -363,6 +395,11 @@ export function PluginsCatalog({
                     key={plugin.id}
                     className="flex items-center gap-2 px-3 py-1.5 text-sm"
                   >
+                    <Checkbox
+                      checked={selectedIds.has(plugin.id)}
+                      onCheckedChange={() => toggleSelected(plugin.id)}
+                      aria-label={t("skills.plugins.select", { name: plugin.name })}
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-medium">{plugin.name}</div>
                       <div className="line-clamp-2 text-xs text-muted-foreground">
@@ -378,8 +415,8 @@ export function PluginsCatalog({
                     <Button
                       size="xs"
                       variant="outline"
-                      disabled={busy === plugin.id}
-                      onClick={() => install(plugin.id)}
+                      disabled={busy !== ""}
+                      onClick={() => installIds([plugin.id])}
                     >
                       {busy === plugin.id ? (
                         <Fan className="animate-spin" />
