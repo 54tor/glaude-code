@@ -585,6 +585,7 @@
       "revokeFailed": "Révocation impossible : {{msg}}",
       "regenFailed": "Régénération impossible : {{msg}}",
       "limit": "Dix invitations au plus par session.",
+      "openShares": "{{count}} ouverte(s)",
       "button": "Session partagée",
       "buttonAria": "Session partagée : {{connected}} connecté(s), {{pending}} message(s) en attente",
       "none": "Aucune session partagée.",

@@ -34,7 +34,12 @@ describe("InvitesButton", () => {
 
   it("aucune pastille quand le compte est nul", async () => {
     await mount([sh("a", [inv({ state: "pending" })])])
-    expect(screen.getByRole("button", { name: /0 connecté/ }).textContent).not.toMatch(/\d/)
+    expect(screen.getByRole("button", { name: /0 connecté/ }).textContent).not.toContain("0")
+  })
+
+  it("affiche le nombre de sessions partagées ouvertes", async () => {
+    await mount([sh("a", [inv()]), { ...sh("b", [inv({ id: "i2" })]), open: false }, sh("c", [inv({ id: "i3" })])])
+    expect(screen.getByText("2 ouverte(s)")).toBeTruthy()
   })
 
   it("ouvre l'overlay", async () => {
