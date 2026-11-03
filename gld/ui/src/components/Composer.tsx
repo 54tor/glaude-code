@@ -315,7 +315,7 @@ export function Composer({
     void api.chatStop(id).catch(() => {})
   }
 
-  if (live && !running && !own) return <LiveSend id={id} onSent={onSent} liveState={liveState} onAsk={onAsk} bar={extra} compactHint={compactHint} coldHint={coldHint} />
+  if (live && !running && !own) return <LiveSend id={id} dir={dir} onSent={onSent} liveState={liveState} onAsk={onAsk} bar={extra} compactHint={compactHint} coldHint={coldHint} />
   return (
     <div className="border-t bg-muted/20 px-4 py-3">
       <div className="mx-auto max-w-page space-y-2">
@@ -406,7 +406,7 @@ function ColdHint({ text, onNew }: ColdHintProps) {
 
 // Session ouverte dans un terminal : deux processus ne peuvent pas écrire le même transcript, donc pas de claude -p ici. Si la session
 // tourne dans tmux, le message y est collé puis validé ; sinon on l'explique.
-function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: { id: string; onSent: () => void; liveState: Live; onAsk?: (asking: boolean) => void; bar?: ReactNode; compactHint?: string | null; coldHint?: ColdHintProps | null }) {
+function LiveSend({ id, dir, onSent, liveState, onAsk, bar, compactHint, coldHint }: { id: string; dir: string; onSent: () => void; liveState: Live; onAsk?: (asking: boolean) => void; bar?: ReactNode; compactHint?: string | null; coldHint?: ColdHintProps | null }) {
   const { t } = useTranslation()
   const actions = useActions()
   const exec = useCan()("exec")
@@ -460,6 +460,7 @@ function LiveSend({ id, onSent, liveState, onAsk, bar, compactHint, coldHint }: 
     setBusy(true)
     try {
       await api.sessionSend(id, full, LIVE_SEND_TIMEOUT_MS)
+      if (!full.startsWith("/")) api.rename({ dir, id }, { auto: true, keep: true }).catch(() => {}) // le serveur envoie /rename au repos, une fois
       return true
     } catch (error) {
       toast.error(errMsg(error)) // le succès se voit dans la session : pas de notification
