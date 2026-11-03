@@ -4,6 +4,11 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.10.2] - 2026-11-03
+
+### Corrigé
+- Publication : un test d'interface des onglets de l'IDE échouait par intermittence en CI et bloquait la release de la 0.10.1.
+
 ## [0.10.1] - 2026-11-03
 
 ### Corrigé
