@@ -4,9 +4,25 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.10.0] - 2026-11-03
+
+### Ajouté
+- Barre latérale : le bouton « Rechercher dans le contenu » du champ de recherche cherche dans les sessions, la mémoire et les snippets ; route `GET /v1/snippets/search`.
+- Extensions : les onglets ont une adresse (`/extensions/skills`, `/extensions/editor`…) et la recherche de skills npx s'affiche dans une carte dédiée dès 2 caractères.
+- Plugins : cases à cocher pour installer plusieurs plugins d'un coup.
+- Skills : bouton « Tout mettre à jour » (`npx skills update`) et pastille « npx » sur les skills installés par npx.
+- Snippets : « Dupliquer » dans le menu contextuel ; Ctrl+clic démarre une sélection multiple.
+- Messages : les fichiers `.md` écrits par Claude se téléchargent depuis leur lien.
+- Vues dossier et projet : bouton « Ajouter un dossier » (add-dir des réglages locaux et ajout aux projets concernés).
+- Partage : le bouton des invitations indique le nombre de sessions partagées ouvertes.
+
 ### Modifié
+- Plugins : la liste des disponibles n'est plus plafonnée à 40, tous les plugins des marketplaces s'affichent.
 - Configuration > Projets : les règles de permission globales (`~/.claude/settings.json`) s'affichent, en lecture seule et étiquetées « global », avec celles du projet et du local.
 - Configuration > Projets : une règle autorisée est marquée « neutralisée » quand la même règle est refusée ou à confirmer, et un dossier indique les projets qui l'ajoutent comme dossier supplémentaire.
+
+### Corrigé
+- Tableau de bord : les sessions n'affichent plus une date de 1970, et leur icône d'état est la même que dans la barre latérale.
 
 ## [0.9.2] - 2026-11-02
 
