@@ -1,6 +1,7 @@
 {
   "config": {
     "scope": {
+      "global": "global",
       "user": "user",
       "project": "project",
       "local": "local"
@@ -239,6 +240,7 @@
       "addDirTitle": "Adds a folder Claude can access in this project (local settings, not versioned)",
       "addDir": "Add a folder…",
       "chooseDir": "Choose a folder…",
+      "globalReadOnly": "Global rule (~/.claude/settings.json), not editable here",
       "noPerms": "None: this project follows your personal rules.",
       "toGlobal": "To global",
       "copyToUser": "Copy to your settings",

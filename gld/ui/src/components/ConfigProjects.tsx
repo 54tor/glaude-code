@@ -16,6 +16,9 @@ import { byRule } from "./ConfigTabs2"
 
 const KINDS = ["allow", "ask", "deny", "additionalDirectories"] as const
 const SCROLL_TO_TARGET_DELAY_MS = 50
+const GLOBAL_SCOPE = "u"
+
+const scopeLabelKey = (scope: string) => (scope === GLOBAL_SCOPE ? "config.scope.global" : scope === "p" ? "config.scope.project" : "config.scope.local")
 
 // Les permissions et les hooks ont leur propre section.
 const isPlainSetting = (settingRow: { path: string }) => !settingRow.path.startsWith("permissions.") && settingRow.path !== "hooks"
@@ -85,7 +88,8 @@ export function ProjectsTab({ home, version, gone, onAddDir, suggest, onEdit, on
               return [kind, remainingRules.sort((leftRule, rightRule) => byRule(leftRule.rule, rightRule.rule))]
             }),
           )
-          const nRules = Object.values(perms).reduce((total, kindRules) => total + kindRules.length, 0)
+          const nRules = Object.values(perms).reduce((total, kindRules) => total + kindRules.filter((permRule) => permRule.scope !== GLOBAL_SCOPE).length, 0)
+          const nGlobalRules = Object.values(perms).reduce((total, kindRules) => total + kindRules.filter((permRule) => permRule.scope === GLOBAL_SCOPE).length, 0)
           const nSettings = projectConfig.files.reduce((total, settingsFile) => total + settingsFile.rows.filter(isPlainSetting).length, 0)
           return (
             <li key={projectConfig.dir} id={"cfg-" + projectConfig.dir} className="scroll-mt-4 rounded-lg border">
@@ -126,19 +130,25 @@ export function ProjectsTab({ home, version, gone, onAddDir, suggest, onEdit, on
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
-                    {nRules === 0 ? (
+                    {nRules === 0 && nGlobalRules === 0 ? (
                       <p className="text-xs text-muted-foreground">{t("config.projects.noPerms")}</p>
                     ) : (
                       KINDS.filter((kind) => perms[kind]?.length).map((kind) => (
                         <div key={kind} className="mb-2">
                           <p className="text-xs text-muted-foreground">{t(`config.perms.kind.${kind}`)}</p>
                           <ul className="space-y-px">
-                            {perms[kind].map((permRule, ruleIndex) => (
+                            {perms[kind].map((permRule, ruleIndex) =>
+                              permRule.scope === GLOBAL_SCOPE ? (
+                                <li key={kind + ruleIndex} className="flex items-center gap-2 text-muted-foreground">
+                                  <code className="min-w-0 flex-1 text-xs break-all">{permRule.rule}</code>
+                                  <span className="shrink-0 text-2xs" title={t("config.projects.globalReadOnly")}>{t(scopeLabelKey(permRule.scope))}</span>
+                                </li>
+                              ) : (
                               <ContextMenu key={kind + ruleIndex}>
                               <ContextMenuTrigger asChild>
                               <li className="flex items-center gap-2">
                                 <code className="min-w-0 flex-1 text-xs break-all">{permRule.rule}</code>
-                                <span className="shrink-0 text-2xs text-muted-foreground">{permRule.scope === "p" ? t("config.scope.project") : t("config.scope.local")}</span>
+                                <span className="shrink-0 text-2xs text-muted-foreground">{t(scopeLabelKey(permRule.scope))}</span>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
                                     <Button size="xs" variant="ghost">
@@ -171,7 +181,8 @@ export function ProjectsTab({ home, version, gone, onAddDir, suggest, onEdit, on
                                 </ContextMenuItem>
                               </ContextMenuContent>
                               </ContextMenu>
-                            ))}
+                              ),
+                            )}
                           </ul>
                         </div>
                       ))

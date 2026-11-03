@@ -1,6 +1,7 @@
 {
   "config": {
     "scope": {
+      "global": "global",
       "user": "utilisateur",
       "project": "projet",
       "local": "local"
@@ -239,6 +240,7 @@
       "addDirTitle": "Ajoute un dossier accessible à Claude dans ce projet (réglages locaux, non versionnés)",
       "addDir": "Ajouter un dossier…",
       "chooseDir": "Choisir un dossier…",
+      "globalReadOnly": "Règle globale (~/.claude/settings.json), non modifiable ici",
       "noPerms": "Aucune : ce projet suit vos règles personnelles.",
       "toGlobal": "Vers le global",
       "copyToUser": "Copier dans vos réglages",

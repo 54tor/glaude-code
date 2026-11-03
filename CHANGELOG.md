@@ -4,6 +4,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+### Modifié
+- Configuration > Projets : les règles de permission globales (`~/.claude/settings.json`) s'affichent, en lecture seule et étiquetées « global », avec celles du projet et du local.
+
 ## [0.9.2] - 2026-11-02
 
 ### Ajouté
