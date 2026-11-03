@@ -174,3 +174,49 @@ func TestSelecteurSansDossierJetable(t *testing.T) {
 		t.Fatal("dossier jetable proposé dans le sélecteur")
 	}
 }
+
+func TestConfigParProjetAjouteLesReglesGlobalesEnLectureSeule(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	projetSansReglage := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	put(t, filepath.Join(cfg, "settings.json"), `{"permissions":{"allow":["Bash(ls:*)"],"deny":["Read(.env)"]}}`, old)
+	put(t, filepath.Join(cfg, "projects", "-g", "33333333-3333-3333-3333-333333333333.jsonl"), `{"cwd":"`+projetSansReglage+`"}`+"\n", old)
+	put(t, filepath.Join(projetSansReglage, ".claude", "settings.json"), `{"permissions":{"allow":["Bash(make:*)"]}}`, old)
+
+	var configurationProjet ProjectCfg
+	for _, configurationCourante := range projectConfigs() {
+		if configurationCourante.Dir == "-g" {
+			configurationProjet = configurationCourante
+		}
+	}
+
+	reglesAllow := configurationProjet.Perms["allow"]
+	if len(reglesAllow) != 2 || reglesAllow[0] != (ProjRule{"Bash(ls:*)", "u"}) || reglesAllow[1] != (ProjRule{"Bash(make:*)", "p"}) {
+		t.Fatalf("allow : le global doit précéder le projet, obtenu %+v", reglesAllow)
+	}
+	reglesDeny := configurationProjet.Perms["deny"]
+	if len(reglesDeny) != 1 || reglesDeny[0].Scope != "u" {
+		t.Fatalf("deny global manquant : %+v", reglesDeny)
+	}
+	for _, fichierReglages := range configurationProjet.Files {
+		if fichierReglages.ID[0] == 'u' {
+			t.Fatalf("le global ne doit pas devenir un fichier du projet : %+v", fichierReglages)
+		}
+	}
+}
+
+func TestConfigParProjetSansReglageProprePasseApresLeGlobal(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	projetVide := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	put(t, filepath.Join(cfg, "settings.json"), `{"permissions":{"allow":["Bash(ls:*)"]}}`, old)
+	put(t, filepath.Join(cfg, "projects", "-e", "44444444-4444-4444-4444-444444444444.jsonl"), `{"cwd":"`+projetVide+`"}`+"\n", old)
+
+	for _, configurationCourante := range projectConfigs() {
+		if configurationCourante.Dir == "-e" && configurationCourante.Specific != 0 {
+			t.Fatalf("les règles globales ne comptent pas comme spécifiques : %+v", configurationCourante)
+		}
+	}
+}

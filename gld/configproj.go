@@ -24,7 +24,7 @@ type ProjFile struct {
 
 type ProjRule struct {
 	Rule  string `json:"rule"`
-	Scope string `json:"scope"` // p : réglages du projet ; l : réglages locaux
+	Scope string `json:"scope"` // u : réglages globaux (lecture seule) ; p : réglages du projet ; l : réglages locaux
 }
 
 type ProjDocRule struct {
@@ -93,6 +93,14 @@ func projectConfigsFor(strict bool) []ProjectCfg {
 	configs := []ProjectCfg{}
 	for _, liveProject := range liveProjects() {
 		projectConfig := ProjectCfg{Dir: liveProject.Dir, Project: liveProject.Project, Perms: map[string][]ProjRule{}, Files: []ProjFile{}, Hooks: []HookInfo{}, MCP: []McpServer{}, Skills: []string{}, Docs: docs[liveProject.Dir]}
+		if globalDoc, hasGlobal := raw["u"]; hasGlobal {
+			for _, kind := range permKinds {
+				ruleValues, _ := lookup(globalDoc, "permissions", kind)
+				for _, rule := range strList(ruleValues) {
+					projectConfig.Perms[kind] = append(projectConfig.Perms[kind], ProjRule{rule, "u"})
+				}
+			}
+		}
 		for _, scope := range []string{"p", "l"} {
 			fileID := scope + "/" + liveProject.Dir
 			doc, found := raw[fileID]
