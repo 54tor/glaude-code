@@ -25,10 +25,10 @@ type Props = { open?: Row[]; closed?: Row[]; waiting?: string[] }
 const mount = async (props: Props = {}) => {
   const go = vi.fn<(route: Route) => void>()
   const read = vi.fn()
-  const actions = { home: HOME, favs: new Set(), picked: new Set(), selected: [], live: new Set(), vgroups: [], inGroup: null, caps: () => ({}) } as unknown as Actions
+  const actions = { home: HOME, favs: new Set(), picked: new Set(), selected: [], live: new Set(), asking: new Set(), waiting: new Set(), vgroups: [], inGroup: null, caps: () => ({}) } as unknown as Actions
   render(
     <ActionsCtx.Provider value={actions}>
-      <Dashboard open={props.open ?? []} closed={props.closed ?? []} waiting={new Set(props.waiting ?? [])} now={NOW} home={HOME} go={go} read={read} />
+      <Dashboard open={props.open ?? []} closed={props.closed ?? []} waiting={new Set(props.waiting ?? [])} now={NOW} ttl={3600} home={HOME} go={go} read={read} />
     </ActionsCtx.Provider>
   )
   await flush()

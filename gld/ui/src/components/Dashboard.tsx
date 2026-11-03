@@ -11,12 +11,13 @@ import { copyText } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import type { Row } from "./actions"
 import { CM, SessionItems } from "./SessionMenu"
+import { SessionStatusIcon } from "./SessionStatusIcon"
 
 const MAX_ROWS = 8
 
 // Accueil : ce qui demande un œil maintenant. Sessions ouvertes (celles qui attendent d'abord), dernières fermées encore au
 // cache, état des serveurs MCP et mise à jour disponible.
-export function Dashboard({ open, closed, waiting, now, home, go, read }: { open: Row[]; closed: Row[]; waiting: Set<string>; now: number; home: string; go: (route: Route) => void; read: (record: { id: string }) => void }) {
+export function Dashboard({ open, closed, waiting, now, ttl, home, go, read }: { open: Row[]; closed: Row[]; waiting: Set<string>; now: number; ttl: number; home: string; go: (route: Route) => void; read: (record: { id: string }) => void }) {
   const { t } = useTranslation()
   const [mcp, setMcp] = useState<McpServer[] | null>(null)
   const [status, setStatus] = useState<Record<string, string> | null>(null)
@@ -60,10 +61,11 @@ export function Dashboard({ open, closed, waiting, now, home, go, read }: { open
             <ContextMenuTrigger asChild>
               <li>
                 <button type="button" onClick={() => read(row.s)} className="flex w-full items-center gap-2 py-1.5 text-left text-sm hover:bg-muted/50">
+                  <SessionStatusIcon session={row.s} now={now} ttl={ttl} />
                   <span className="min-w-0 flex-1 truncate">{row.s.title}</span>
                   {waiting.has(row.s.id) && <span className="shrink-0 rounded bg-warning/15 px-1 text-2xs text-warning uppercase">{t("shell.dash.waiting")}</span>}
                   <span className="shrink-0 text-xs text-muted-foreground">{tilde(row.g.project, home)}</span>
-                  <span className="w-14 shrink-0 text-right text-xs text-muted-foreground tabular-nums">{ago(now - row.s.mtime)}</span>
+                  <span className="w-14 shrink-0 text-right text-xs text-muted-foreground tabular-nums">{ago(row.s.mtime)}</span>
                 </button>
               </li>
             </ContextMenuTrigger>
