@@ -4415,6 +4415,29 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
+  /v1/snippets/search:
+    get:
+      tags:
+      - snippets
+      operationId: getSnippetsSearch
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+      x-gld-right: mem_read
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
   /v1/snippets/{key}:
     get:
       tags:
