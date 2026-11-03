@@ -461,6 +461,7 @@ function Shell() {
             closed={activeRows.filter((row) => !liveIds.has(row.s.id))}
             waiting={waitingIds}
             now={now}
+            ttl={HOT}
             home={home}
             go={goToRoute}
             read={openSession}

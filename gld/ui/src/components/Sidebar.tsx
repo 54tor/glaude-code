@@ -15,7 +15,6 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } 
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useKeepWarm } from "@/hooks/useKeepWarm"
 import { useLocal } from "@/hooks/useLocal"
 import { CreditsButton } from "./Credits"
 import { PairButton } from "./PairDevice"
@@ -23,6 +22,7 @@ import { InvitesButton } from "./InvitesButton"
 import { HomeSwitcher } from "./HomeSwitcher"
 import { DropZone } from "./DropZone"
 import { ProjectList } from "./ProjectList"
+import { SessionStatusIcon } from "./SessionStatusIcon"
 import { ProjectItems, ProjectTree } from "./ProjectTree"
 import { segs } from "@/lib/paths"
 import { CM, GroupItems, SessionItems } from "./SessionMenu"
@@ -109,7 +109,6 @@ function Hot({ rows, now, ttl, go, title, hint, foldKey }: { rows: Row[]; now: n
   const actions = useActions()
   const [folded, setFolded] = useLocal(foldKey ?? "gld.hot.unfoldable", "")
   const fold = !!foldKey && folded === "1"
-  const warm = useKeepWarm()
   // Un dossier par projet de travail, par ordre alphabétique ; dans un dossier, les sessions restent triées par date.
   const folders = new Map<string, Row[]>()
   for (const row of rows) folders.set(row.g.project, [...(folders.get(row.g.project) ?? []), row])
@@ -128,14 +127,6 @@ function Hot({ rows, now, ttl, go, title, hint, foldKey }: { rows: Row[]; now: n
     const cold = now - session.mtime >= ttl // ouverte mais cache expiré
     const left = Math.max(1, Math.ceil((ttl - (now - session.mtime)) / 60))
     const warn = !cold && left <= CACHE_EXPIRY_WARNING_MINUTES
-    const statusIcon = () => {
-      if (actions.asking.has(session.id)) return <Info className="size-4 shrink-0 animate-pulse text-warning" aria-label={t("shell.sidebar.asking")} />
-      if (actions.live.has(session.id) && !actions.waiting.has(session.id)) return <Fan className="size-4 shrink-0 animate-spin text-success" aria-label={t("shell.sidebar.working")} />
-      if (warn) return <AlarmClock className="size-4 shrink-0 text-warning" aria-label={t("shell.sidebar.cacheExpiring")} />
-      if (warm[session.id]?.on) return <Microwave className="warm-wave size-4 shrink-0" aria-label={t("shell.sidebar.keepWarmOn")} />
-      if (cold) return <Snowflake className="size-4 shrink-0 text-info" aria-label={t("shell.sidebar.cold")} />
-      return <Coffee className="size-4 shrink-0 text-warning" aria-hidden />
-    }
     return (
       <Fragment key={session.id}>
       <div className="flex items-center">
@@ -147,7 +138,7 @@ function Hot({ rows, now, ttl, go, title, hint, foldKey }: { rows: Row[]; now: n
             title={cold ? t("shell.sidebar.coldTitle", { title: session.title }) : t("shell.sidebar.hotTitle", { title: session.title, left })}
             className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-sm text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
           >
-            {statusIcon()}
+            <SessionStatusIcon session={session} now={now} ttl={ttl} />
             <span className="flex-1 truncate text-left">{session.title}</span>
             {!cold && (
               <span className={cn("shrink-0 text-xs tabular-nums", warn ? "font-medium text-warning" : "text-muted-foreground")}>
