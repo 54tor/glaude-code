@@ -222,7 +222,7 @@ func lexists(path string) bool {
 // conflit la version de to l'emporte et celle de from reste en place (rien n'est perdu, le dossier source n'est alors
 // pas retiré).
 func mergeMove(from, to string) error {
-	fromInfo, err := os.Lstat(from)
+	fromInfo, err := os.Lstat(from) // #nosec G703 -- chemin géré par gld par conception, confiné par rootfs.go sous GLD_RUN_AS
 	if err != nil {
 		return err
 	}
