@@ -184,6 +184,18 @@ export function Skills({ sel, home, q: query, onPick, onAsk }: { sel: string; ho
       },
     })
   }
+  const npxUpdateAll = () =>
+    onAsk({
+      title: t("skills.npx.updateAllTitle"),
+      body: t("skills.npx.actBody", { cmd: npxCommand("update-all", "", "", true) }),
+      confirm: t("skills.npx.updateAll"),
+      run: async () => {
+        if (await npxAct("update-all", "", "", "user")) {
+          reload()
+          check(true)
+        }
+      },
+    })
   const copyName = (targetSkill: Skill) =>
     copyText("/" + targetSkill.dir).then(
       () => toast.success(t("skills.skills.nameCopied", { dir: targetSkill.dir })),
@@ -220,6 +232,9 @@ export function Skills({ sel, home, q: query, onPick, onAsk }: { sel: string; ho
             </Button>
             <Button size="xs" variant="outline" onClick={() => setNpx(true)}>
               <Package /> {t("skills.npx.button")}
+            </Button>
+            <Button size="xs" variant="outline" onClick={npxUpdateAll}>
+              <RefreshCw /> {t("skills.npx.updateAll")}
             </Button>
             <Button size="xs" variant="ghost" onClick={() => check(true)} title={t("skills.npx.check")} aria-label={t("skills.npx.check")}>
               <RefreshCw />
@@ -258,6 +273,7 @@ export function Skills({ sel, home, q: query, onPick, onAsk }: { sel: string; ho
                               <Zap className="size-3.5 shrink-0 text-warning" />
                               <span className="min-w-0 flex-1 truncate font-medium">{listedSkill.name}</span>
                         <OriginBadge skill={listedSkill} />
+                              {listedSkill.lock && <span className="shrink-0 rounded-sm bg-muted px-1.5 py-px text-2xs font-medium text-muted-foreground">npx</span>}
                               {updates[listedSkill.key] === "update" && <span className="shrink-0 rounded-sm bg-warning/10 px-1.5 py-px text-2xs font-medium text-warning">{t("skills.npx.updateBadge")}</span>}
                               {listedSkill.manual && <Hand className="size-3.5 shrink-0 text-muted-foreground" aria-label={t("skills.skills.manualOnly")} />}
                               {listedSkill.hidden && <EyeOff className="size-3.5 shrink-0 text-muted-foreground" aria-label={t("skills.skills.hiddenInMenu")} />}
