@@ -18,6 +18,9 @@ func routesSnippets(mux *http.ServeMux) {
 		snippets, scopes := listSnippets()
 		writeJSON(responseWriter, 200, map[string]any{"dir": userCmdDir(), "files": snippets, "scopes": scopes})
 	})
+	mux.HandleFunc("GET /v1/snippets/search", func(responseWriter http.ResponseWriter, request *http.Request) {
+		writeJSON(responseWriter, 200, map[string]any{"hits": searchSnippets(request.URL.Query().Get("q"))})
+	})
 	mux.HandleFunc("GET /v1/snippets/{key}", func(responseWriter http.ResponseWriter, request *http.Request) {
 		text, err := readSnippet(request.PathValue("key"))
 		if errors.Is(err, os.ErrNotExist) { // nouveau snippet pas encore enregistré

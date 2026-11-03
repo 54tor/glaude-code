@@ -1,8 +1,9 @@
 import { Fragment, useEffect, useState, useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
+import { NavContentSearch } from "./NavContentSearch"
 import { CACHE_EXPIRY_WARNING_MINUTES } from "./KeepWarm"
-import { AlarmClock, LayoutDashboard, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, Coffee, Microwave, Snowflake, History, FileText, Inbox, Info, Fan, Search, ShieldCheck, Tag, Users, X } from "lucide-react"
+import { LayoutDashboard, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, History, FileText, Inbox, Search, ScanText, ShieldCheck, Tag, Users, X } from "lucide-react"
 import { tilde } from "@/lib/format"
 import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
@@ -21,8 +22,8 @@ import { PairButton } from "./PairDevice"
 import { InvitesButton } from "./InvitesButton"
 import { HomeSwitcher } from "./HomeSwitcher"
 import { DropZone } from "./DropZone"
-import { ProjectList } from "./ProjectList"
 import { SessionStatusIcon } from "./SessionStatusIcon"
+import { ProjectList } from "./ProjectList"
 import { ProjectItems, ProjectTree } from "./ProjectTree"
 import { segs } from "@/lib/paths"
 import { CM, GroupItems, SessionItems } from "./SessionMenu"
@@ -220,6 +221,7 @@ export type SidebarProps = {
   favGroups: { vg: VGroup; key: string }[] // groupes favoris, avec la clé de leur dossier
   groupCount: (vg: VGroup) => number
   read: (s: Session) => void
+  findSession: (sessionId: string) => Session | undefined
   tree: Node[]
   hot: Row[] // sessions dont le cache des prompts est encore chaud
   now: number
@@ -302,6 +304,11 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
   const { t } = useTranslation()
   // Recherche propre à la navbar : indépendante de celle de la barre du haut (paramètre d'URL q).
   const [navQuery, setNavQuery] = useState("")
+  const [isContentSearch, setIsContentSearch] = useState(false)
+  const clearNavQuery = () => {
+    setNavQuery("")
+    setIsContentSearch(false)
+  }
   const normalizedNavQuery = navQuery.trim().toLowerCase()
   const show = (label: string) => !normalizedNavQuery || label.toLowerCase().includes(normalizedNavQuery)
   const tree = normalizedNavQuery ? filterTree(props.tree, normalizedNavQuery) : props.tree
@@ -338,18 +345,29 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
             onChange={(changeEvent) => setNavQuery(changeEvent.target.value)}
             // Échap vide la recherche et rend le focus à la page : j/k/t/d reprennent leur rôle de raccourcis.
             onKeyDown={(keyboardEvent) => {
+              if (keyboardEvent.key === "Enter" && navQuery.trim()) setIsContentSearch(true)
               if (keyboardEvent.key !== "Escape") return
-              setNavQuery("")
+              clearNavQuery()
               keyboardEvent.currentTarget.blur()
             }}
             placeholder={t("shell.sidebar.searchPlaceholder")}
-            className="bg-background pr-8 pl-8 shadow-none"
+            className="bg-background pr-16 pl-8 shadow-none"
             aria-label={t("shell.sidebar.searchLabel")}
           />
+          <Tip label={isContentSearch ? t("shell.sidebar.contentClose") : t("shell.sidebar.contentSearch")}>
+            <button
+              className={cn("absolute top-1/2 right-8 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:text-foreground", isContentSearch && "bg-accent text-foreground")}
+              onClick={() => setIsContentSearch(!isContentSearch)}
+              aria-pressed={isContentSearch}
+              aria-label={t("shell.sidebar.contentSearch")}
+            >
+              <ScanText className="size-4" />
+            </button>
+          </Tip>
           {navQuery ? (
             <button
               className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              onClick={() => setNavQuery("")}
+              onClick={clearNavQuery}
               aria-label={t("shell.sidebar.clearSearch")}
             >
               <X className="size-4" />
@@ -362,6 +380,11 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
         </div>
       </div>
 
+      {isContentSearch ? (
+        <ScrollArea className="min-h-0 flex-1">
+          <NavContentSearch query={navQuery.trim()} findSession={props.findSession} read={props.read} go={props.go} />
+        </ScrollArea>
+      ) : (
       <ScrollArea className="min-h-0 flex-1">
         <CleanupWarning />
         <nav className="px-2 pb-3" aria-label={t("shell.sidebar.navigation")}>
@@ -451,6 +474,7 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
           </DropZone>
         </nav>
       </ScrollArea>
+      )}
 
       {(props.auto.n > 0 || props.args) && (
       <div className="space-y-2 border-t p-3">

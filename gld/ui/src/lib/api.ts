@@ -257,6 +257,7 @@ export const api = {
   gitStatus: () => http.get<{ status: Record<string, GitState>; repos: Record<string, string[]> }>("/git/status"),
   snippets: () => http.get<{ dir: string; files: Snippet[]; scopes: SnipScope[] }>("/snippets"),
   snippet: (key: string) => http.get<{ text: string; missing?: boolean }>(`/snippets/${seg(key)}`),
+  snippetSearch: (query: string) => http.get<{ hits: Record<string, string> }>(`/snippets/search${qs({ q: query })}`),
   snippetSave: (key: string, text: string, create: boolean) => http.put<Said>(`/snippets/${seg(key)}`, { text, create }),
   snippetRename: (from: string, to: string) => http.patch<Said>(`/snippets/${seg(from)}`, { to }),
   snippetRemove: (keys: string[]) => inBatches(keys, (batch) => http.del<Said & Bulk>(`/snippets${qs({ item: batch })}`), itemLen),

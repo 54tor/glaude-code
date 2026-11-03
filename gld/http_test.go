@@ -392,6 +392,12 @@ func TestHTTPSnippets(t *testing.T) {
 		t.Fatalf("snippet absent : %v", lookup)
 	}
 	status(t, handler, "GET", "/v1/snippets/u%2F..%2Fx.md", "", 404)
+	if lookup := status(t, handler, "GET", "/v1/snippets/search?q=fais+une+revue", "", 200); lookup["hits"].(map[string]any)["u/revue.md"] == nil {
+		t.Errorf("la recherche de snippets doit trouver u/revue.md : %v", lookup)
+	}
+	if lookup := status(t, handler, "GET", "/v1/snippets/search?q=x", "", 200); len(lookup["hits"].(map[string]any)) != 0 {
+		t.Errorf("une requête trop courte ne renvoie rien : %v", lookup)
+	}
 	if lookup := status(t, handler, "GET", "/v1/snippets/u%2Frevue.md", "", 200); !strings.Contains(lookup["text"].(string), "Fais une revue") {
 		t.Fatalf("snippet : %v", lookup)
 	}

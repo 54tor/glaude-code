@@ -70,6 +70,7 @@ const baseProps = (overrides: Partial<SidebarProps> = {}): SidebarProps => ({
   favGroups: [],
   groupCount: () => 4,
   read: vi.fn(),
+  findSession: () => undefined,
   tree: [],
   hot: [],
   now: NOW,
@@ -429,6 +430,15 @@ describe("Sidebar — petit écran", () => {
     const drawer = screen.getByRole("dialog")
     expect(within(drawer).getByRole("link", { name: /Toutes les sessions/ })).toBeTruthy()
     expect(document.querySelector("aside")).toBeNull()
+  })
+
+  it("le bouton du champ de recherche bascule vers la recherche dans le contenu", async () => {
+    await mount()
+    const champRecherche = screen.getByLabelText(/Rechercher dans les titres/)
+    fireEvent.change(champRecherche, { target: { value: "a" } })
+    fireEvent.click(screen.getByRole("button", { name: "Rechercher dans le contenu" }))
+    expect(screen.getByText("Au moins 2 caractères")).toBeTruthy()
+    expect(screen.queryByRole("navigation")).toBeNull()
   })
 
   it("tiroir fermé : rien n'est monté", async () => {
