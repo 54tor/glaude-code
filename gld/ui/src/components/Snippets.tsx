@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { ArrowLeft, Bot, Check, Copy, Download, Fan, Merge, MessageSquarePlus, Pencil, Plus, Save, Sparkles, Terminal, Trash2, Undo2, Unlink, Upload, X } from "lucide-react"
+import { ArrowLeft, Bot, Check, Circle, Copy, Download, Fan, Merge, MessageSquarePlus, Pencil, Plus, Save, Sparkles, Terminal, Trash2, Undo2, Unlink, Upload, X } from "lucide-react"
 import { toast } from "sonner"
 import { api, type SnipScope, type Snippet } from "@/lib/api"
 import { ago, size, tilde } from "@/lib/format"
@@ -176,6 +176,29 @@ export function Snippets({
         return ok
       },
     })
+  const duplicate = (key: string) =>
+    onPrompt({
+      title: t("skills.snippets.duplicateTitle", { name: commandOf(key) }),
+      value: key.replace(SNIPPET_KEY_PREFIX, "").replace(/\.md$/, "") + "-copy",
+      placeholder: t("skills.snippets.newPlaceholder"),
+      confirm: t("skills.snippets.duplicate"),
+      run: async (name) => {
+        const keyPrefix = SNIPPET_KEY_PREFIX.exec(key)?.[0] ?? ""
+        const duplicateKey = keyPrefix + withMdExtension(name)
+        if (files.some((file) => file.key === duplicateKey)) {
+          toast.error(t("skills.snippets.exists"))
+          return false
+        }
+        const original = await api.snippet(key).catch((error) => void toast.error(errMsg(error) || t("skills.snippets.unreadable")))
+        if (!original) return false
+        const saved = await reportAction(() => api.snippetSave(duplicateKey, original.text, true))
+        if (saved) {
+          onPick(duplicateKey)
+          onChanged()
+        }
+        return saved
+      },
+    })
   const remove = (key = sel) =>
     onAsk({
       title: t("skills.snippets.deleteTitle", { name: commandOf(key) }),
@@ -194,6 +217,13 @@ export function Snippets({
       if (!nextPicked.delete(key)) nextPicked.add(key)
       return nextPicked
     })
+  const clickSnippet = (key: string, isCtrlClick: boolean) => {
+    const isSelectionActive = picked.size > 0
+    if (!isSelectionActive && !isCtrlClick) return onPick(key)
+    const isOpenSnippetListed = files.some((file) => file.key === sel)
+    if (!isSelectionActive && isOpenSnippetListed && sel !== key) setPicked(new Set([sel, key]))
+    else toggle(key)
+  }
   // Fusion par Claude : le serveur rédige le prompt ; la fenêtre de saisie le fait relire avant de lancer la session.
   const merge = async () => {
     const keys = files.filter((file) => picked.has(file.key)).map((file) => file.key)
@@ -317,7 +347,7 @@ export function Snippets({
                         <ContextMenu>
                           <ContextMenuTrigger asChild>
                         <button
-                              onClick={() => onPick(listedSnippet.key)}
+                              onClick={(clickEvent) => clickSnippet(listedSnippet.key, clickEvent.ctrlKey || clickEvent.metaKey)}
                               title={listedSnippet.description || listedSnippet.path}
                               className={cn(
                                 "flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
@@ -325,7 +355,13 @@ export function Snippets({
                                 picked.has(listedSnippet.key) && "ring-1 ring-primary"
                               )}
                             >
-                              {picked.has(listedSnippet.key) ? <Check className="mt-0.5 size-4 shrink-0 text-primary" /> : <Terminal className="mt-0.5 size-4 shrink-0 text-muted-foreground" />}
+                              {picked.has(listedSnippet.key) ? (
+                                <Check className="mt-0.5 size-4 shrink-0 text-primary" />
+                              ) : picked.size > 0 ? (
+                                <Circle className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                              ) : (
+                                <Terminal className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                              )}
                               <span className="min-w-0">
                                 <span className="block truncate font-mono text-sm">{listedSnippet.command}</span>
                                 <span className="block truncate text-xs font-normal text-muted-foreground">
@@ -356,6 +392,9 @@ export function Snippets({
                             </ContextMenuItem>
                             <ContextMenuItem onSelect={() => rename(listedSnippet.key)}>
                               <Pencil /> {t("skills.snippets.rename")}
+                            </ContextMenuItem>
+                            <ContextMenuItem onSelect={() => duplicate(listedSnippet.key)}>
+                              <Copy /> {t("skills.snippets.duplicate")}
                             </ContextMenuItem>
                             <ContextMenuItem variant="destructive" onSelect={() => remove(listedSnippet.key)}>
                               <Trash2 /> {t("common.delete")}
