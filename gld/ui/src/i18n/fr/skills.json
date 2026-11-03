@@ -195,6 +195,8 @@
       "updateBadge": "mise à jour",
       "update": "Mettre à jour",
       "remove": "Retirer",
+      "updateAll": "Tout mettre à jour",
+      "updateAllTitle": "Mettre à jour tous les skills npx globaux ?",
       "check": "Vérifier les mises à jour",
       "checked": "Vérification terminée",
       "lockLine": "Posé par npx skills · {{source}} · {{mode}} · installé le {{date}}",

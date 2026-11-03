@@ -82,13 +82,16 @@ func stripANSI(text string) string { return ansiRe.ReplaceAllString(text, "") }
 
 // npxSkillsArgs : les arguments à passer à `npx`. Tout ce qui vient du client est validé ici ; rien ne passe par un shell.
 func npxSkillsArgs(action, source, skill string, global bool) ([]string, error) {
-	if !skillName.MatchString(skill) {
-		return nil, terr("srv.skills.npxBadName")
-	}
 	base := []string{"--yes", skillsPkg}
 	scope := "-p"
 	if global {
 		scope = "-g"
+	}
+	if action == "update-all" {
+		return append(base, "update", "-y", scope), nil
+	}
+	if !skillName.MatchString(skill) {
+		return nil, terr("srv.skills.npxBadName")
 	}
 	switch action {
 	case "add":
@@ -144,7 +147,7 @@ func skillsAct(requestContext context.Context, action, source, skill, scope, pro
 	if err != nil {
 		return "", err
 	}
-	if action != "add" {
+	if action != "add" && action != "update-all" {
 		if _, isLocked := readLock(lock)[skill]; !isLocked || !managedByNpx(skillsDir, canonDir, skill) {
 			return "", terr("srv.skills.npxNotLocked")
 		}

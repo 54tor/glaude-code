@@ -24,6 +24,7 @@ func TestNpxSkillsArgs(t *testing.T) {
 		{"add", "o/r", "x", true, []string{"--yes", skillsPkg, "add", "o/r", "-s", "x", "-a", "claude-code", "-y", "-g"}},
 		{"add", "https://github.com/o/r", "x", false, []string{"--yes", skillsPkg, "add", "https://github.com/o/r", "-s", "x", "-a", "claude-code", "-y"}},
 		{"update", "", "x", true, []string{"--yes", skillsPkg, "update", "x", "-y", "-g"}},
+		{"update-all", "", "", true, []string{"--yes", skillsPkg, "update", "-y", "-g"}},
 		{"remove", "", "x", false, []string{"--yes", skillsPkg, "remove", "x", "-a", "claude-code", "-y", "-p"}},
 	}
 	for _, record := range ok {

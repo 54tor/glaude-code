@@ -23,7 +23,7 @@ export const MIN_QUERY_LENGTH = 2
 
 // La commande que le serveur lancera, telle qu'elle s'affiche dans la confirmation.
 export function npxCommand(
-  action: "add" | "update" | "remove",
+  action: "add" | "update" | "update-all" | "remove",
   source: string,
   skill: string,
   global: boolean
@@ -32,6 +32,7 @@ export function npxCommand(
     const globalFlag = global ? " -g" : ""
     return `npx --yes ${SKILLS_PKG} add ${source} -s ${skill} -a claude-code -y${globalFlag}`
   }
+  if (action === "update-all") return `npx --yes ${SKILLS_PKG} update -y${global ? " -g" : " -p"}`
   const agentFlag = action === "remove" ? " -a claude-code" : ""
   const scopeFlag = global ? " -g" : " -p"
   return `npx --yes ${SKILLS_PKG} ${action} ${skill}${agentFlag} -y${scopeFlag}`
@@ -39,7 +40,7 @@ export function npxCommand(
 
 // scope : "user" ou "p/<dossier>" (la clé du projet).
 export async function npxAct(
-  action: "add" | "update" | "remove",
+  action: "add" | "update" | "update-all" | "remove",
   source: string,
   skill: string,
   scope: string
