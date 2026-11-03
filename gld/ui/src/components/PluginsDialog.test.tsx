@@ -39,4 +39,15 @@ describe("PluginsCatalog", () => {
     expect(await screen.findByText("garde")).toBeTruthy()
     expect(screen.queryByText("pris")).toBeNull()
   })
+
+  it("installe en une fois tous les plugins cochés", async () => {
+    vi.spyOn(api, "marketplaces").mockResolvedValue({ marketplaces: [] })
+    vi.spyOn(api, "plugins").mockResolvedValue({ installed: [], available: [avail("un"), avail("deux"), avail("trois")] })
+    const pluginAct = vi.spyOn(api, "pluginAct").mockResolvedValue({ message: "" })
+    await act(async () => void render(<PluginsCatalog projects={[]} home="" scope="user" onChange={() => {}} />))
+    fireEvent.click(await screen.findByRole("checkbox", { name: /un/i }))
+    fireEvent.click(screen.getByRole("checkbox", { name: /trois/i }))
+    await act(async () => void fireEvent.click(screen.getByRole("button", { name: /installer la sélection \(2\)/i })))
+    expect(pluginAct.mock.calls.map((call) => call[1])).toEqual(["un@m", "trois@m"])
+  })
 })
