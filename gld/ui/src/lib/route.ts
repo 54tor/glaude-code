@@ -16,7 +16,7 @@ export type Route =
   | { kind: "skills"; key: string } // clé de skills.go, ex. « u/revue » ou « p/-home-moi-Projets-x/deploy »
   | { kind: "teams" } // équipes d'agents : composition et lancement
   | { kind: "team"; name: string } // équipe en cours, nom « session-xxxxxxxx »
-  | { kind: "extensions" } // plugins, skills, hooks et MCP actifs par portée
+  | { kind: "extensions"; tab?: string } // plugins, skills, hooks et MCP actifs par portée ; tab absent : plugins
   | { kind: "config"; tab: string } // onglet affiché ("" : Santé) ; configuration de Claude Code (réglages, hooks, permissions, MCP)
   | { kind: "memory"; key: string } // clé de memory.go, ex. « m/-home-moi-Projets-x/MEMORY.md »
 
@@ -50,7 +50,10 @@ export function parse(pathname: string): Route {
       const teamName = afterSection("/equipes")
       if (TEAM_NAME.test(teamName)) return { kind: "team", name: teamName }
     }
-    if (pathname === "/extensions") return { kind: "extensions" }
+    if (isSectionOrBelow("/extensions")) {
+      const extensionsTab = decodeURIComponent(afterSection("/extensions"))
+      return extensionsTab ? { kind: "extensions", tab: extensionsTab } : { kind: "extensions" }
+    }
     if (pathname === "/plugins") return { kind: "extensions" } // ancienne page, fusionnée dans Extensions
     if (pathname === "/sauvegarde") return { kind: "config", tab: "export" }
     if (isSectionOrBelow("/skills")) return { kind: "skills", key: decodePath(afterSection("/skills")) }
@@ -89,7 +92,7 @@ export function href(route: Route): string {
     case "team":
       return "/equipes/" + route.name
     case "extensions":
-      return "/extensions"
+      return "/extensions" + (route.tab && route.tab !== "plugins" ? "/" + encodeURIComponent(route.tab) : "")
     case "config":
       return "/configuration" + (route.tab ? "/" + encodeURIComponent(route.tab) : "")
     case "skills":

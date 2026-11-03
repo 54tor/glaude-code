@@ -27,7 +27,7 @@ var routeRights = map[string]Right{
 	"GET /{$}": rightPublic, "GET /accueil": rightPublic, "GET /toutes": rightPublic, "GET /en-cours": rightPublic, "GET /dossier/": rightPublic,
 	"GET /groupe/": rightPublic, "GET /projet/": rightPublic, "GET /snippets": rightPublic, "GET /snippets/": rightPublic,
 	"GET /memoire": rightPublic, "GET /memoire/": rightPublic, "GET /onglets": rightPublic, "GET /configuration": rightPublic,
-	"GET /configuration/": rightPublic, "GET /skills": rightPublic, "GET /skills/": rightPublic, "GET /extensions": rightPublic, "GET /plugins": rightPublic, "GET /sauvegarde": rightPublic, "GET /equipes": rightPublic, "GET /equipes/": rightPublic, "GET /revues": rightPublic, "GET /espace/": rightPublic, "GET /reglages/": rightPublic, "GET /assets/": rightPublic,
+	"GET /configuration/": rightPublic, "GET /skills": rightPublic, "GET /skills/": rightPublic, "GET /extensions": rightPublic, "GET /extensions/": rightPublic, "GET /plugins": rightPublic, "GET /sauvegarde": rightPublic, "GET /equipes": rightPublic, "GET /equipes/": rightPublic, "GET /revues": rightPublic, "GET /espace/": rightPublic, "GET /reglages/": rightPublic, "GET /assets/": rightPublic,
 	"GET /icons/": rightPublic, "GET /favicon.ico": rightPublic, "GET /site.webmanifest": rightPublic, "GET /sw.js": rightPublic,
 	"GET /apple-touch-icon.png": rightPublic, "GET /apple-touch-icon-precomposed.png": rightPublic,
 	"GET /favicon-96x96.png": rightPublic, "GET /web-app-manifest-192x192.png": rightPublic, "GET /web-app-manifest-512x512.png": rightPublic,

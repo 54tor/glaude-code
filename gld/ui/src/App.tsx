@@ -479,7 +479,7 @@ function Shell() {
       case "team":
         return <TeamRun key={route.name} name={route.name} />
       case "extensions":
-        return <Extensions home={home} onAsk={setAsk} />
+        return <Extensions home={home} tab={route.tab} onTab={(tab) => goToRoute({ kind: "extensions", tab })} onAsk={setAsk} />
       case "config":
         return <Config home={home} tab={route.tab} onTab={(tab) => goToRoute({ kind: "config", tab })} ui={uiSettings} />
       case "memory":

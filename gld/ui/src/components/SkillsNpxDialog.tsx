@@ -19,7 +19,7 @@ import { Choose } from "./Choose"
 
 const SKILLS_PKG = "skills@1.7.4" // la même version épinglée que le serveur (skills_npx.go)
 const SEARCH_DEBOUNCE_MS = 500
-const MIN_QUERY_LENGTH = 2
+export const MIN_QUERY_LENGTH = 2
 
 // La commande que le serveur lancera, telle qu'elle s'affiche dans la confirmation.
 export function npxCommand(
