@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -119,6 +120,9 @@ func routesDocs(mux *http.ServeMux) {
 		header.Set("X-Content-Type-Options", "nosniff")
 		header.Set("Content-Security-Policy", "default-src 'none'; sandbox; img-src data:; style-src 'unsafe-inline'; font-src data:")
 		header.Set("Cache-Control", "private, no-cache")
+		if query.Get("download") == "1" {
+			header.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filepath.Base(path)}))
+		}
 		io.Copy(responseWriter, documentFile)
 	})
 }

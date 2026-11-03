@@ -72,6 +72,8 @@
       "pasted_one": "Texte collé · {{count}} ligne",
       "pasted_other": "Texte collé · {{count}} lignes",
       "openImage": "Ouvrir l'image en grand",
+      "downloadDoc": "Télécharger le fichier",
+      "docDescription": "Aperçu du document Markdown",
       "imageAlt": "Image de la conversation",
       "interrupted": "Interrompu par l'utilisateur",
       "interruptedTool": "Interrompu par l'utilisateur pendant un appel d'outil",
