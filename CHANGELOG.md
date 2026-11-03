@@ -4,6 +4,11 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 
 ## [Non publié]
 
+## [0.10.1] - 2026-11-03
+
+### Corrigé
+- Publication : l'analyse de sécurité gosec (G703) de la CI échouait sur `mergeMove` et bloquait la release de la 0.10.0.
+
 ## [0.10.0] - 2026-11-03
 
 ### Ajouté
