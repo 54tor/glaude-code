@@ -216,6 +216,9 @@
       "placeholderThis": "Nouvelle session dans ce dossier… (Entrée lance, Maj+Entrée : saut de ligne)",
       "promptLabel": "Prompt d'une nouvelle session",
       "permsHint": "Règles d'autorisation de ce dossier (réglages du projet)",
+      "addFolder": "Ajouter un dossier",
+      "addFolderHint": "Ajoute un dossier en add-dir (réglages locaux) et dans les projets de ce dossier",
+      "addFolderTitle": "Dossier à ajouter à {{name}}",
       "perms": "Permissions",
       "start": "Lancer la session"
     },

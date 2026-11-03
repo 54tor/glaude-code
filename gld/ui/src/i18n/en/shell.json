@@ -216,6 +216,9 @@
       "placeholderThis": "New session in this folder… (Enter starts, Shift+Enter: new line)",
       "promptLabel": "Prompt of a new session",
       "permsHint": "Permission rules of this folder (project settings)",
+      "addFolder": "Add a folder",
+      "addFolderHint": "Add a folder as add-dir (local settings) and to the projects of this folder",
+      "addFolderTitle": "Folder to add to {{name}}",
       "perms": "Permissions",
       "start": "Start the session"
     },
