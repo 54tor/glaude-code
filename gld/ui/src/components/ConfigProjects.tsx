@@ -13,6 +13,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { byRule } from "./ConfigTabs2"
+import { overridingKind, projectsAddingDirectory } from "@/lib/permDependencies"
 
 const KINDS = ["allow", "ask", "deny", "additionalDirectories"] as const
 const SCROLL_TO_TARGET_DELAY_MS = 50
@@ -22,6 +23,12 @@ const scopeLabelKey = (scope: string) => (scope === GLOBAL_SCOPE ? "config.scope
 
 // Les permissions et les hooks ont leur propre section.
 const isPlainSetting = (settingRow: { path: string }) => !settingRow.path.startsWith("permissions.") && settingRow.path !== "hooks"
+
+function OverrideNote({ kind }: { kind?: string }) {
+  const { t } = useTranslation()
+  if (!kind) return null
+  return <span className="shrink-0 text-2xs text-amber-600 dark:text-amber-400">{t("config.projects.overriddenBy", { kind: t(`config.perms.kind.${kind}`).toLowerCase() })}</span>
+}
 
 const Badge = ({ count, label }: { count: number; label: string }) =>
   count > 0 ? (
@@ -130,6 +137,11 @@ export function ProjectsTab({ home, version, gone, onAddDir, suggest, onEdit, on
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
+                    {projectsAddingDirectory(list, projectConfig, home).length > 0 && (
+                      <p className="mb-2 text-xs text-muted-foreground">
+                        {t("config.projects.addedBy")} {projectsAddingDirectory(list, projectConfig, home).map((addingProject) => tilde(addingProject.project, home)).join(", ")}
+                      </p>
+                    )}
                     {nRules === 0 && nGlobalRules === 0 ? (
                       <p className="text-xs text-muted-foreground">{t("config.projects.noPerms")}</p>
                     ) : (
@@ -141,6 +153,7 @@ export function ProjectsTab({ home, version, gone, onAddDir, suggest, onEdit, on
                               permRule.scope === GLOBAL_SCOPE ? (
                                 <li key={kind + ruleIndex} className="flex items-center gap-2 text-muted-foreground">
                                   <code className="min-w-0 flex-1 text-xs break-all">{permRule.rule}</code>
+                                  <OverrideNote kind={overridingKind(perms, kind, permRule.rule)} />
                                   <span className="shrink-0 text-2xs" title={t("config.projects.globalReadOnly")}>{t(scopeLabelKey(permRule.scope))}</span>
                                 </li>
                               ) : (
@@ -148,6 +161,7 @@ export function ProjectsTab({ home, version, gone, onAddDir, suggest, onEdit, on
                               <ContextMenuTrigger asChild>
                               <li className="flex items-center gap-2">
                                 <code className="min-w-0 flex-1 text-xs break-all">{permRule.rule}</code>
+                                <OverrideNote kind={overridingKind(perms, kind, permRule.rule)} />
                                 <span className="shrink-0 text-2xs text-muted-foreground">{t(scopeLabelKey(permRule.scope))}</span>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
