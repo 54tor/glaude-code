@@ -3,9 +3,10 @@ import { memo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
-import { ChevronRight, CornerDownRight, ExternalLink, OctagonX, Wrench } from "lucide-react"
+import { ChevronRight, CornerDownRight, Download, ExternalLink, OctagonX, Wrench } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { api, type Msg } from "@/lib/api"
 import { authFetch, getAuth } from "@/lib/auth"
 import { qs, seg, v1 } from "@/lib/apiError"
@@ -145,6 +146,8 @@ function WrittenDoc({ conv, path }: { conv: Conv; path: string }) {
   const isMarkdown = ext === "md"
   const isFramed = FRAMED_EXTENSIONS.includes(ext)
   const isImage = IMAGE_EXTENSIONS.includes(ext)
+  const downloadSrc = isMarkdown ? v1(`/sessions/${seg(conv.id)}/conversation/document${qs({ dir: conv.dir, path, download: true })}`) : src
+  const fileName = path.slice(path.lastIndexOf("/") + 1)
   const flip = () => {
     setOpen(!open)
     if (!isMarkdown || md !== null) return
@@ -161,17 +164,29 @@ function WrittenDoc({ conv, path }: { conv: Conv; path: string }) {
     <div className="msg">
       <div className="flex items-center gap-2 text-xs">
         <button type="button" onClick={flip} aria-expanded={open} className="flex min-w-0 cursor-pointer items-center gap-1 text-primary hover:underline">
-          <ChevronRight className={`size-3.5 shrink-0 transition-transform ${open ? "rotate-90" : ""}`} aria-hidden />
-          <span className="truncate" title={path}>{path.slice(path.lastIndexOf("/") + 1)}</span>
+          <ChevronRight className={`size-3.5 shrink-0 transition-transform ${open && !isMarkdown ? "rotate-90" : ""}`} aria-hidden />
+          <span className="truncate" title={path}>{fileName}</span>
         </button>
-        <a href={src} target="_blank" rel="noopener noreferrer" title={t("conversation.message.openImage")} className="text-muted-foreground hover:text-foreground">
-          <ExternalLink className="size-3.5" aria-hidden />
-        </a>
+        {isMarkdown ? (
+          <a href={downloadSrc} download={fileName} title={t("conversation.message.downloadDoc")} className="text-muted-foreground hover:text-foreground">
+            <Download className="size-3.5" aria-hidden />
+          </a>
+        ) : (
+          <a href={src} target="_blank" rel="noopener noreferrer" title={t("conversation.message.openImage")} className="text-muted-foreground hover:text-foreground">
+            <ExternalLink className="size-3.5" aria-hidden />
+          </a>
+        )}
       </div>
-      {open && isMarkdown && md !== null && (
-        <div className="mt-2 rounded-lg border bg-card px-4 py-3 leading-relaxed text-card-foreground">
-          <Markdown t={md} />
-        </div>
+      {isMarkdown && (
+        <Dialog open={open && md !== null} onOpenChange={setOpen}>
+          <DialogContent className="flex h-[85vh] max-h-[85vh] min-w-0 flex-col overflow-hidden sm:max-w-3xl">
+            <DialogHeader>
+              <DialogTitle className="text-sm break-all">{fileName}</DialogTitle>
+              <DialogDescription className="sr-only">{t("conversation.message.docDescription")}</DialogDescription>
+            </DialogHeader>
+            <div className="min-h-0 flex-1 overflow-y-auto leading-relaxed">{md !== null && <Markdown t={md} />}</div>
+          </DialogContent>
+        </Dialog>
       )}
       {open && isFramed && <iframe src={src} sandbox="" title={path} className="mt-2 h-[32rem] w-full rounded-lg border bg-white" />}
       {open && isImage && <img src={src} alt={path} className="mt-2 max-h-96 max-w-full rounded-lg border object-contain" />}
