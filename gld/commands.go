@@ -398,3 +398,25 @@ func importSnippets(scope string, files []ImportFile, overwrite bool) (done, ski
 	}
 	return done, skipped, nil
 }
+
+func searchSnippets(query string) map[string]string {
+	hits := map[string]string{}
+	query = strings.ToLower(strings.TrimSpace(query))
+	if len(query) < memSearchMinQuery {
+		return hits
+	}
+	snippets, _ := listSnippets()
+	for _, snippetEntry := range snippets {
+		text, err := readSnippet(snippetEntry.Key)
+		if err != nil {
+			continue
+		}
+		for _, textLine := range strings.Split(text, "\n") {
+			if strings.Contains(strings.ToLower(textLine), query) {
+				hits[snippetEntry.Key] = cut(strings.TrimSpace(textLine), memExcerptMax)
+				break
+			}
+		}
+	}
+	return hits
+}

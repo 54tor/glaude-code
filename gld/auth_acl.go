@@ -59,7 +59,7 @@ var routeRights = map[string]Right{
 	"PUT /v1/memory/files/{key}": RightMemWrite, "PATCH /v1/memory/files/{key}": RightMemWrite, "DELETE /v1/memory/files": RightMemWrite,
 	"POST /v1/memory/drafts": RightMemWrite, "POST /v1/memory/repairs": RightMemWrite, "POST /v1/memory/fixes": RightMemWrite,
 	"POST /v1/memory/token-counts": RightMemWrite, "POST /v1/memory/lints": RightMemWrite, "POST /v1/memory/merges": RightMemWrite,
-	"GET /v1/snippets": RightMemRead, "GET /v1/snippets/{key}": RightMemRead, "GET /v1/snippets/export": RightMemRead,
+	"GET /v1/snippets": RightMemRead, "GET /v1/snippets/{key}": RightMemRead, "GET /v1/snippets/export": RightMemRead, "GET /v1/snippets/search": RightMemRead,
 	// POST /v1/snippets/drafts ne fait qu'un brouillon (même appel de modèle que POST /v1/memory/drafts) ; écrire un snippet, c'est écrire
 	// une commande slash de Claude Code (commands/*.md), donc config_write.
 	"POST /v1/snippets/drafts": RightMemWrite, "POST /v1/snippets/merges": RightMemWrite,
