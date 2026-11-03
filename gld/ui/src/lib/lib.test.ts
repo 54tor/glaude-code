@@ -298,6 +298,9 @@ describe("routes plugins et sauvegarde", () => {
   it("parse et href sont inverses", () => {
     expect(parse("/plugins")).toEqual({ kind: "extensions" })
     expect(href({ kind: "extensions" })).toBe("/extensions")
+    expect(parse("/extensions/skills")).toEqual({ kind: "extensions", tab: "skills" })
+    expect(href({ kind: "extensions", tab: "skills" })).toBe("/extensions/skills")
+    expect(href({ kind: "extensions", tab: "plugins" })).toBe("/extensions")
     expect(parse("/sauvegarde")).toEqual({ kind: "config", tab: "export" })
   })
 })

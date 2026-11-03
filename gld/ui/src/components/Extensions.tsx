@@ -27,7 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Choose } from "./Choose"
 import { Marketplaces, PluginsCatalog, pluginKey, usePluginRun } from "./PluginsDialog"
-import { SkillsNpxPanel } from "./SkillsNpxDialog"
+import { MIN_QUERY_LENGTH, SkillsNpxPanel } from "./SkillsNpxDialog"
 import { Skills } from "./Skills"
 import type { Ask } from "./Confirm"
 import { useActions } from "./actions"
@@ -44,9 +44,13 @@ const SHORT_HASH_LENGTH = 7
 // seul ou pour le contexte d'un projet (utilisateur, puis projet, puis local). Les écritures passent par /config/edits.
 export function Extensions({
   home,
+  tab: routeTab,
+  onTab,
   onAsk,
 }: {
   home: string
+  tab?: string
+  onTab: (tabName: string) => void
   onAsk: (ask: Ask) => void
 }) {
   const { t } = useTranslation()
@@ -56,14 +60,14 @@ export function Extensions({
   const [installedPlugins, setInstalledPlugins] = useState<PluginInst[]>([])
   const [err, setErr] = useState("")
   const [dir, setDir] = useState("") // "" : utilisateur seul
-  const [tab, setTab] = useState("plugins")
+  const tab = routeTab || "plugins"
   const [pluginQuery, setPluginQuery] = useState("") // recherche plugins : installés et catalogue
   const [skillQuery, setSkillQuery] = useState("") // recherche skills : installés et npx
   const [where, setWhere] = useState<ScopeCode>("u") // portée où un interrupteur écrit
   const [skillKey, setSkillKey] = useState("") // skill ouvert dans l'éditeur
   const openSkill = (key: string) => {
     setSkillKey(key)
-    setTab("editor")
+    onTab("editor")
   }
   const [status, setStatus] = useState<Record<string, string> | null>(null) // `claude mcp list` : tous les serveurs vus par Claude Code, lent (quelques secondes)
   const actions = useActions()
@@ -344,7 +348,7 @@ export function Extensions({
       </div>
       <Tabs
         value={tab}
-        onValueChange={setTab}
+        onValueChange={onTab}
         className="flex min-h-0 flex-1 flex-col gap-0"
       >
         <div className="mx-auto w-full max-w-page px-3 pt-3 md:px-6">
@@ -528,6 +532,18 @@ export function Extensions({
           "skills",
           <>
             {search(skillQuery, setSkillQuery, t("extensions.searchSkills"))}
+            {skillQuery.trim().length >= MIN_QUERY_LENGTH && (
+              <section className="rounded-xl border bg-card p-4 shadow-xs md:p-5">
+                <h3 className={sect}>{t("extensions.skillsAvailable")}</h3>
+                <SkillsNpxPanel
+                  projects={overview.projects}
+                  home={home}
+                  onChange={reload}
+                  fixed={here}
+                  query={skillQuery}
+                />
+              </section>
+            )}
             <section className="rounded-xl border bg-card p-4 shadow-xs md:p-5">
               <h3 className={sect}>
                 {t("extensions.skills")}{" "}
@@ -575,16 +591,6 @@ export function Extensions({
                   {normalizedSkillQuery ? t("extensions.noMatch") : t("extensions.noSkills")}
                 </p>
               )}
-              <h4 className="mt-5 mb-2 text-sm font-medium">
-                {t("extensions.skillsAvailable")}
-              </h4>
-              <SkillsNpxPanel
-                projects={overview.projects}
-                home={home}
-                onChange={reload}
-                fixed={here}
-                query={skillQuery}
-              />
             </section>
           </>
         )}

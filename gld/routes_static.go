@@ -48,7 +48,7 @@ func routesStatic(mux *http.ServeMux) {
 	pagePatterns := []string{
 		"GET /{$}", "GET /accueil", "GET /toutes", "GET /en-cours", "GET /dossier/", "GET /groupe/", "GET /projet/",
 		"GET /snippets", "GET /snippets/", "GET /memoire", "GET /memoire/", "GET /onglets",
-		"GET /configuration", "GET /configuration/", "GET /skills", "GET /skills/", "GET /extensions", "GET /plugins",
+		"GET /configuration", "GET /configuration/", "GET /skills", "GET /skills/", "GET /extensions", "GET /extensions/", "GET /plugins",
 		"GET /sauvegarde", "GET /equipes", "GET /equipes/", "GET /revues", "GET /espace/", "GET /reglages/",
 		"GET /guest", "GET /guest/{handle}",
 	}
