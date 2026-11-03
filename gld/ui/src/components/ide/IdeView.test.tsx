@@ -335,7 +335,7 @@ describe("IdeView", () => {
     tab("c.txt").focus()
     fireEvent.keyDown(tab("c.txt"), { key: "ArrowLeft" })
     expect(selected()).toEqual(["b.txt"])
-    expect(document.activeElement).toBe(tab("b.txt"))
+    await waitFor(() => expect(document.activeElement).toBe(tab("b.txt")))
     expect(tab("b.txt").tabIndex).toBe(0)
     fireEvent.keyDown(tab("b.txt"), { key: "Home" })
     expect(selected()).toEqual(["a.txt"])
