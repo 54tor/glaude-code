@@ -1,6 +1,34 @@
 import { describe, expect, it } from "vitest"
 import type { ProjectCfg } from "@/lib/api"
-import { overridingKind, projectsAddingDirectory } from "./permDependencies"
+import { hooksCoveringRule, overridingKind, projectsAddingDirectory, skillsUsingRule } from "./permDependencies"
+
+const hookWithMatcher = (matcher: string | undefined, command: string) => ({ scope: "p", file: "p/-p", event: "PreToolUse", matcher, type: "command", command })
+
+describe("hooksCoveringRule", () => {
+  const hooks = [hookWithMatcher("Bash", "garde-bash"), hookWithMatcher("Edit|Write", "garde-ecriture"), hookWithMatcher(undefined, "tous"), hookWithMatcher("*", "etoile"), hookWithMatcher("(", "regex-cassee")]
+
+  it("relie une règle aux hooks dont le matcher couvre exactement son outil", () => {
+    expect(hooksCoveringRule(hooks, "Bash(git status:*)").map((hookObtenu) => hookObtenu.command)).toEqual(["garde-bash"])
+    expect(hooksCoveringRule(hooks, "Write(src/**)").map((hookObtenu) => hookObtenu.command)).toEqual(["garde-ecriture"])
+  })
+
+  it("ignore les hooks sans matcher précis et les matchers invalides", () => {
+    expect(hooksCoveringRule(hooks, "Read(.env)")).toEqual([])
+  })
+})
+
+describe("skillsUsingRule", () => {
+  const skillTools = { revue: "Read Grep", deploy: "Bash(make:*), Bash(ls:*)" }
+
+  it("relie une règle aux skills qui déclarent son outil dans allowed-tools", () => {
+    expect(skillsUsingRule(skillTools, "Bash(rm:*)")).toEqual(["deploy"])
+    expect(skillsUsingRule(skillTools, "Grep")).toEqual(["revue"])
+  })
+
+  it("ne relie rien quand aucun skill n'utilise l'outil", () => {
+    expect(skillsUsingRule(skillTools, "WebFetch(domain:x)")).toEqual([])
+  })
+})
 
 const projectWith = (dir: string, project: string, additionalDirectories: string[]): ProjectCfg => ({
   dir,

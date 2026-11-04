@@ -76,6 +76,7 @@ export type ProjectCfg = {
   mcp: McpServer[]
   rules: { name: string; paths?: string[]; warn?: string }[]
   skills: string[]
+  skillTools?: Record<string, string>
   docs: string[]
   specific: number
 }
