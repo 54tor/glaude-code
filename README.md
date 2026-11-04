@@ -195,6 +195,15 @@ limites et sécurité : [docs/ide.md](docs/ide.md).
 
 La page s'adapte aux petits écrans : le menu passe dans le bouton ☰.
 
+**Notifications push** : le bouton 🔔 de la barre latérale active, pour cet appareil, une notification quand une session pose une
+question ou une demande d'autorisation, et quand elle attend votre message. Les deux types se règlent séparément. Elles arrivent
+application fermée : il faut une page servie en HTTPS avec un certificat auquel l'appareil fait confiance (voir plus bas), et sur
+iPhone l'application ajoutée à l'écran d'accueil. En mode multi-utilisateur, chaque abonné ne reçoit que les sessions des dossiers
+où il a le droit de lecture des sessions, vérifié à chaque envoi. Les clés et les abonnements sont dans `gld-web-push.json`
+(permissions 0600) du dossier de configuration de la passerelle ; seuls les services push des navigateurs (Apple, Google, Mozilla,
+Microsoft) sont acceptés comme destination. Limites : un dossier de configuration secondaire n'envoie qu'une fois son
+processus lancé, et un onglet ouvert ne coupe pas les notifications.
+
 ## Raccourcis clavier
 
 | Touche | Action |
@@ -239,7 +248,7 @@ téléphone passe par un nom de domaine (proxy, tunnel), donnez cette adresse pu
 gld --listen 0.0.0.0 --public-url https://gld.exemple.org   # ou GLD_PUBLIC_URL=https://gld.exemple.org
 ```
 
-Sur iPhone et iPad, l'application installée (« Sur l'écran d'accueil ») n'a ni notifications, ni copie native, ni clé
+Sur iPhone et iPad, l'application installée (« Sur l'écran d'accueil ») n'a ni notifications (y compris push), ni copie native, ni clé
 de sécurité tant qu'elle est servie en HTTP. gld peut servir lui-même en HTTPS avec un certificat auquel l'appareil fait
 confiance, par exemple créé avec [mkcert](https://github.com/FiloSottile/mkcert) (installez son autorité racine sur
 l'iPhone, puis activez-la dans Réglages › Général › Informations › Réglages de confiance des certificats) :
