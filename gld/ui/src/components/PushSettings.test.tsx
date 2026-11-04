@@ -2,9 +2,8 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { setAuth } from "@/lib/auth"
-import { TooltipProvider } from "@/components/ui/tooltip"
 import * as push from "@/lib/push"
-import { PushButton } from "./PushSettings"
+import { PushSection } from "./PushSettings"
 
 vi.mock("@/lib/push", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/push")>()),
@@ -17,12 +16,7 @@ vi.mock("@/lib/push", async (importOriginal) => ({
 const flush = () => act(async () => {})
 
 const ouvrir = async () => {
-  render(
-    <TooltipProvider>
-      <PushButton />
-    </TooltipProvider>
-  )
-  fireEvent.click(screen.getByRole("button", { name: "Notifications" }))
+  render(<PushSection />)
   await flush()
 }
 
@@ -41,7 +35,7 @@ afterEach(() => {
   setAuth({ state: "loading" })
 })
 
-describe("PushButton", () => {
+describe("PushSection", () => {
   it("explique l'installation quand le Web Push n'est pas disponible", async () => {
     vi.mocked(push.pushSupported).mockReturnValue(false)
 

@@ -195,7 +195,7 @@ limites et sécurité : [docs/ide.md](docs/ide.md).
 
 La page s'adapte aux petits écrans : le menu passe dans le bouton ☰.
 
-**Notifications push** : le bouton 🔔 de la barre latérale active, pour cet appareil, une notification quand une session pose une
+**Notifications push** : la section « Notifications » de Configuration › Interface active, pour cet appareil, une notification quand une session pose une
 question ou une demande d'autorisation, et quand elle attend votre message. Les deux types se règlent séparément. Elles arrivent
 application fermée : il faut une page servie en HTTPS avec un certificat auquel l'appareil fait confiance (voir plus bas), et sur
 iPhone l'application ajoutée à l'écran d'accueil. En mode multi-utilisateur, chaque abonné ne reçoit que les sessions des dossiers
