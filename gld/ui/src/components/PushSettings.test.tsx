@@ -3,7 +3,8 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { setAuth } from "@/lib/auth"
 import * as push from "@/lib/push"
-import { PushSection } from "./PushSettings"
+import { PushButton, PushSection } from "./PushSettings"
+import { TooltipProvider } from "@/components/ui/tooltip"
 
 vi.mock("@/lib/push", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/push")>()),
@@ -81,5 +82,20 @@ describe("PushSection", () => {
 
     expect((interrupteurs[1] as HTMLButtonElement).disabled).toBe(true)
     expect((interrupteurs[2] as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+describe("PushButton", () => {
+  it("ouvre les réglages de notifications depuis le pied de la barre latérale", async () => {
+    render(
+      <TooltipProvider>
+        <PushButton />
+      </TooltipProvider>
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Notifications" }))
+    await flush()
+
+    expect(screen.getAllByRole("switch")).toHaveLength(3)
   })
 })

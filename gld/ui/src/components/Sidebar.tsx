@@ -19,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useLocal } from "@/hooks/useLocal"
 import { CreditsButton } from "./Credits"
 import { PairButton } from "./PairDevice"
+import { PushButton } from "./PushSettings"
 import { InvitesButton } from "./InvitesButton"
 import { HomeSwitcher } from "./HomeSwitcher"
 import { DropZone } from "./DropZone"
@@ -287,15 +288,17 @@ function VersionFooter() {
   useEffect(() => {
     api.updateInfo().then(setUpdateInfo, () => {})
   }, [])
-  if (!updateInfo) return null
   return (
     <div className="flex items-center gap-2 border-t px-4 py-2 text-xs text-muted-foreground tabular-nums">
-      <span className="truncate" title={updateInfo.current}>{updateInfo.current}</span>
-      {updateInfo.newer && (
-        <a href={updateInfo.url} target="_blank" rel="noopener noreferrer" className="ml-auto shrink-0 font-medium text-primary hover:underline">
-          {t("shell.sidebar.updateTo", { latest: updateInfo.latest })}
-        </a>
-      )}
+      {updateInfo && <span className="truncate" title={updateInfo.current}>{updateInfo.current}</span>}
+      <div className="ml-auto flex shrink-0 items-center gap-2">
+        {updateInfo?.newer && (
+          <a href={updateInfo.url} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">
+            {t("shell.sidebar.updateTo", { latest: updateInfo.latest })}
+          </a>
+        )}
+        <PushButton />
+      </div>
     </div>
   )
 }
