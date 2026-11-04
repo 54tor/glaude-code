@@ -110,6 +110,9 @@ export type Detail = { prompts: string[]; n: number; branch: string; models: str
 export type SubLive = { id: string; desc: string; type: string; running: boolean; activity: string; context: number; out: number; mtime: number }
 export type WfAgent = { label: string; phase: string; state: string; model: string; tokens: number; toolCalls: number; durationMs: number; lastTool: string }
 export type Workflow = { runId: string; taskId: string; name: string; summary: string; status: string; startTime: number; durationMs: number; totalTokens: number; totalToolCalls: number; phases: { title: string; detail: string }[]; agents: WfAgent[]; logs: string[] }
+export type PushPreferences = { asking: boolean; waiting: boolean }
+export type PushState = PushPreferences & { subscribed: boolean }
+export type PushSubscriptionBody = PushPreferences & { endpoint: string; keys: { p256dh: string; auth: string }; lang: string }
 export type BgTask = { id: string; tool?: string; desc: string; status: string; summary?: string; start?: string; end?: string; hasOutput: boolean }
 export type LiveState = { said?: string; open: boolean; status: string; activity: string; thinking: boolean; generic?: boolean; exec?: boolean; since: number; context: number; out: number; model: string; tool?: string; toolRunning?: boolean; subs: SubLive[]; tasks?: BgTask[]; verbs?: string[]; queue?: { t: string; ts: string }[]; pending?: QItem[] }
 // File de messages côté serveur (queue.go) : auteur, et état d'envoi (uncertain : parti sans réponse, à trancher).
@@ -379,6 +382,10 @@ export const api = {
   syncApply: (from: string, to: string, picks: { id: string; mode: string }[]) => http.post<Said>("/homes/syncs", { from, to, picks }),
   pairCode: () => http.post<{ code: string; url: string; ttl: number }>("/pairing/codes", {}),
   deviceRevoke: (id: string) => http.del(`/devices/${seg(id)}`),
+  pushKey: () => http.get<{ key: string }>("/push/key"),
+  pushGet: (endpoint: string) => http.get<PushState>(`/push/subscriptions${qs({ endpoint })}`),
+  pushPut: (body: PushSubscriptionBody) => http.put(`/push/subscriptions`, body),
+  pushDel: (endpoint: string) => http.del(`/push/subscriptions${qs({ endpoint })}`),
   shares: () => http.get<{ shares: ShareInfo[] }>("/shares"),
   guestMe: () => http.get<{ id: string; dir: string; mode: "rw" | "ro"; csrf: string; handle: string; title: string; invite: string; label: string }>("/guest/me"),
   // Sans X-Gld-Share : la liste concerne le navigateur entier, pas un partage.

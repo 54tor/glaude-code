@@ -411,6 +411,16 @@
       "asking": "Claude needs your answer"
     },
     "routeError": {
+    "push": {
+      "title": "Notifications",
+      "intro": "Get a notification on this device when a session asks a question or is waiting for you, even with the app closed.",
+      "enable": "Enable notifications",
+      "asking": "Questions and permissions",
+      "waiting": "Session waiting",
+      "unsupported": "Push notifications need a compatible browser over HTTPS. On iPhone, add Glaude Code to the home screen first and open it from the icon.",
+      "denied": "Notifications denied: allow them in the device settings.",
+      "failed": "Could not change notifications"
+    },
       "title": "This page could not be loaded",
       "hint": "A new version of the application is probably installed.",
       "reload": "Reload the page",
