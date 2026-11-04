@@ -452,7 +452,7 @@ func withHomes(next http.Handler) http.Handler {
 			next.ServeHTTP(responseWriter, request)
 			return
 		}
-		if name := homeFrom(request); name != "" && !strings.HasPrefix(request.URL.Path, "/v1/homes") {
+		if name := homeFrom(request); name != "" && !strings.HasPrefix(request.URL.Path, "/v1/homes") && !strings.HasPrefix(request.URL.Path, "/v1/push/") {
 			proxy, err := homeProxy(name)
 			if err != nil {
 				journal("homes %s : %v", name, err)
