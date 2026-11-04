@@ -4,6 +4,8 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"path/filepath"
 	"sync"
 
@@ -40,8 +42,11 @@ func pushFile() string { return filepath.Join(cfgDir(), "gld-web-push.json") }
 func pushLoad() (pushFileContent, error) {
 	var content pushFileContent
 	rawContent, readErr := readTrusted(pushFile())
-	if readErr != nil {
+	if errors.Is(readErr, fs.ErrNotExist) {
 		return content, nil
+	}
+	if readErr != nil {
+		return pushFileContent{}, terr("srv.push.fichierIllisible", "A1", readErr.Error())
 	}
 	if decodeErr := json.Unmarshal(rawContent, &content); decodeErr != nil {
 		return pushFileContent{}, terr("srv.push.fichierIllisible", "A1", decodeErr.Error())

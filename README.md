@@ -202,7 +202,8 @@ iPhone l'application ajoutée à l'écran d'accueil. En mode multi-utilisateur, 
 où il a le droit de lecture des sessions, vérifié à chaque envoi. Les clés et les abonnements sont dans `gld-web-push.json`
 (permissions 0600) du dossier de configuration de la passerelle ; seuls les services push des navigateurs (Apple, Google, Mozilla,
 Microsoft) sont acceptés comme destination. Limites : un dossier de configuration secondaire n'envoie qu'une fois son
-processus lancé, et un onglet ouvert ne coupe pas les notifications.
+processus lancé, un onglet ouvert ne coupe pas les notifications, et le clic ouvre la session dans le dossier de configuration
+choisi dans le navigateur (pour une session d'un autre dossier, changez d'abord de dossier).
 
 ## Raccourcis clavier
 
