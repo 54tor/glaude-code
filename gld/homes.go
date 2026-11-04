@@ -61,6 +61,7 @@ type homeProc struct {
 	dir   string
 	cmd   *exec.Cmd
 	port  string
+	token string
 	proxy *httputil.ReverseProxy
 	done  chan struct{} // fermé quand le processus a fini
 }
@@ -311,7 +312,7 @@ func startHomeProc(home Home) (*homeProc, error) {
 		return nil, startErr
 	}
 	target := &url.URL{Scheme: "http", Host: "127.0.0.1:" + port}
-	process := &homeProc{dir: home.Dir, cmd: cmd, port: port, done: make(chan struct{})}
+	process := &homeProc{dir: home.Dir, cmd: cmd, port: port, token: token, done: make(chan struct{})}
 	go func() { cmd.Wait(); close(process.done) }()
 	process.proxy = childProxy(target, token)
 	for attempt := 0; attempt < 100; attempt++ {
