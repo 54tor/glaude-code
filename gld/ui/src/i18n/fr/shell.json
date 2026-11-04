@@ -411,6 +411,16 @@
       "asking": "Claude attend votre réponse"
     },
     "routeError": {
+    "push": {
+      "title": "Notifications",
+      "intro": "Recevez une notification sur cet appareil quand une session pose une question ou vous attend, même application fermée.",
+      "enable": "Activer les notifications",
+      "asking": "Questions et autorisations",
+      "waiting": "Session en attente",
+      "unsupported": "Les notifications push exigent un navigateur compatible, en HTTPS. Sur iPhone, ajoutez d'abord Glaude Code à l'écran d'accueil et ouvrez-le depuis l'icône.",
+      "denied": "Notifications refusées : autorisez-les dans les réglages de l'appareil.",
+      "failed": "Impossible de modifier les notifications"
+    },
       "title": "Cette page n'a pas pu se charger",
       "hint": "Une nouvelle version de l'application est probablement installée.",
       "reload": "Recharger la page",
