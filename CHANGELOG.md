@@ -7,6 +7,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 ### Ajouté
 - Notifications push : le bouton 🔔 en bas de la barre latérale envoie à l'appareil une notification, application fermée (iPhone compris en HTTPS), quand une session pose une question ou attend votre message, réglable par type ; en mode multi-utilisateur, seules les sessions que l'abonné a le droit de lire sont notifiées.
 
+### Corrigé
+- Connexion par jeton généré (hors localhost, sans `GLD_WEB_TOKEN`) : le jeton est conservé dans le dossier d'authentification, donc la PWA et les appareils jumelés ne demandent plus de se reconnecter après chaque mise à jour.
+
 ## [0.10.2] - 2026-11-03
 
 ### Corrigé

@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 )
@@ -59,9 +60,33 @@ func takeToken(local bool) (token string, generated bool, err error) {
 		return token, false, checkToken(token)
 	}
 	if !local {
-		return newToken(), true, nil
+		return persistedToken(), true, nil
 	}
 	return "", false, nil
+}
+
+const generatedTokenFile = "web.token"
+
+// persistedToken : le jeton généré survit au redémarrage (cookies gld_token et gld_dev restent valides après chaque mise à jour).
+// Dossier ou fichier illisible : jeton neuf, comme avant.
+func persistedToken() string {
+	directory, dirErr := authDir()
+	if dirErr != nil {
+		return newToken()
+	}
+	tokenPath := filepath.Join(directory, generatedTokenFile)
+	if checkPrivate(tokenPath, false) == nil {
+		if stored, readErr := os.ReadFile(tokenPath); readErr == nil && checkToken(strings.TrimSpace(string(stored))) == nil {
+			return strings.TrimSpace(string(stored))
+		}
+	}
+	token := newToken()
+	if os.MkdirAll(directory, 0o700) == nil {
+		if writeErr := rWriteAtomic(directory, tokenPath, []byte(token+"\n"), 0o600); writeErr != nil {
+			journal("jeton : écriture impossible : %v", writeErr)
+		}
+	}
+	return token
 }
 
 // tokenShown : le jeton tel qu'imprimé dans l'adresse à ouvrir. Celui que fournit l'utilisateur n'est jamais écrit : stderr
