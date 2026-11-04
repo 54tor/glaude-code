@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { api, type ProjectCfg } from "@/lib/api"
+import { api, type PluginInst, type ProjectCfg } from "@/lib/api"
 import { ProjectsTab } from "./ConfigProjects"
 
 afterEach(() => {
+  surAjoutRegle.mockClear()
   cleanup()
   vi.restoreAllMocks()
 })
@@ -27,9 +28,12 @@ const projetAvecRegleGlobaleEtPartagee: ProjectCfg = {
   specific: 1,
 }
 
-async function afficherProjetOuvert(projets: ProjectCfg[] = [projetAvecRegleGlobaleEtPartagee]) {
+const surAjoutRegle = vi.fn()
+
+async function afficherProjetOuvert(projets: ProjectCfg[] = [projetAvecRegleGlobaleEtPartagee], pluginsInstalles: PluginInst[] = []) {
+  vi.spyOn(api, "plugins").mockResolvedValue({ installed: pluginsInstalles })
   vi.spyOn(api, "configProjects").mockResolvedValue({ projects: projets } as Awaited<ReturnType<typeof api.configProjects>>)
-  render(<ProjectsTab home="/home/bob" version={0} gone={() => false} onAddDir={vi.fn()} suggest={() => []} onEdit={vi.fn()} onTransfer={vi.fn()} onRemove={vi.fn()} />)
+  render(<ProjectsTab home="/home/bob" version={0} gone={() => false} onAddDir={vi.fn()} onAddRule={surAjoutRegle} suggest={() => []} onEdit={vi.fn()} onTransfer={vi.fn()} onRemove={vi.fn()} />)
   fireEvent.click(await screen.findByRole("button", { name: /home\/bob\/p|~?\/p/ }))
 }
 
@@ -64,5 +68,31 @@ describe("ProjectsTab : règles globales", () => {
     await afficherProjetOuvert([projetAvecRegleGlobaleEtPartagee, projetAjoutant])
 
     expect(screen.getByText(/Ajouté comme dossier supplémentaire par/).textContent).toContain("app")
+  })
+
+  it("ajoute une règle dans le fichier perso par défaut", async () => {
+    await afficherProjetOuvert()
+
+    fireEvent.change(screen.getByLabelText("Nouvelle règle de permission"), { target: { value: " Bash(git status:*) " } })
+    fireEvent.click(screen.getByRole("button", { name: /Ajouter$/ }))
+
+    expect(surAjoutRegle).toHaveBeenCalledWith("l/-p", "allow", "Bash(git status:*)")
+  })
+
+  it("n'ajoute rien quand la règle est vide", async () => {
+    await afficherProjetOuvert()
+
+    expect(screen.getByRole("button", { name: /Ajouter$/ }).hasAttribute("disabled")).toBe(true)
+  })
+
+  it("liste les plugins installés pour ce projet seulement", async () => {
+    const pluginsInstalles: PluginInst[] = [
+      { id: "superpowers", version: "7.0.0", scope: "project", enabled: true, project: "/home/bob/p" },
+      { id: "autre", version: "1.0.0", scope: "project", enabled: true, project: "/home/bob/q" },
+    ]
+    await afficherProjetOuvert([projetAvecRegleGlobaleEtPartagee], pluginsInstalles)
+
+    expect(await screen.findByText("superpowers")).toBeTruthy()
+    expect(screen.queryByText("autre")).toBeNull()
   })
 })

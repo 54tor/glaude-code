@@ -5,6 +5,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions : [S
 ## [Non publié]
 
 ### Ajouté
+- Configuration > Projets : ajouter une règle de permission directement dans un dossier (type de règle, fichier partagé ou perso) et voir les plugins installés pour ce dossier.
 - Notifications push : le bouton 🔔 en bas de la barre latérale envoie à l'appareil une notification, application fermée (iPhone compris en HTTPS), quand une session pose une question ou attend votre message, réglable par type ; en mode multi-utilisateur, seules les sessions que l'abonné a le droit de lire sont notifiées.
 
 ### Corrigé
