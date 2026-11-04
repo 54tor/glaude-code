@@ -21,6 +21,8 @@ require (
 	modernc.org/sqlite v1.61.0
 )
 
+require github.com/SherClockHolmes/webpush-go v1.4.0
+
 require (
 	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 	github.com/brianvoe/gofakeit/v7 v7.18.1
