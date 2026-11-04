@@ -276,7 +276,14 @@
       "skillsLine": "Skills: {{list}}.",
       "docsLine": "Documentation: {{list}}.",
       "noMatch": "No project matches.",
-      "noOwn": "No project has its own settings."
+      "noOwn": "No project has its own settings.",
+      "layer": {
+        "u": "Global · ~/.claude/settings.json (read-only)",
+        "p": "Shared · .claude/settings.json",
+        "l": "Personal · .claude/settings.local.json"
+      },
+      "linkedHooks": "{{count}} linked hook(s)",
+      "linkedSkills": "skill: {{list}}"
     },
     "permIO": {
       "fileUser": "user",

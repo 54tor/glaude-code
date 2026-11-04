@@ -34,16 +34,17 @@ type ProjDocRule struct {
 }
 
 type ProjectCfg struct {
-	Dir      string                `json:"dir"`
-	Project  string                `json:"project"`
-	Files    []ProjFile            `json:"files"`
-	Perms    map[string][]ProjRule `json:"perms"`
-	Hooks    []HookInfo            `json:"hooks"`
-	MCP      []McpServer           `json:"mcp"`
-	Rules    []ProjDocRule         `json:"rules"`
-	Skills   []string              `json:"skills"`
-	Docs     []string              `json:"docs"`
-	Specific int                   `json:"specific"` // nombre d'éléments propres au projet : 0 = rien de spécifique
+	Dir        string                `json:"dir"`
+	Project    string                `json:"project"`
+	Files      []ProjFile            `json:"files"`
+	Perms      map[string][]ProjRule `json:"perms"`
+	Hooks      []HookInfo            `json:"hooks"`
+	MCP        []McpServer           `json:"mcp"`
+	Rules      []ProjDocRule         `json:"rules"`
+	Skills     []string              `json:"skills"`
+	SkillTools map[string]string     `json:"skillTools"` // nom du skill -> allowed-tools, pour relier un skill aux règles qu'il touche
+	Docs       []string              `json:"docs"`
+	Specific   int                   `json:"specific"` // nombre d'éléments propres au projet : 0 = rien de spécifique
 }
 
 // projectRules : les règles Markdown de .claude/rules d'un projet (lecture seule), avec leur portée.
@@ -92,9 +93,9 @@ func projectConfigsFor(strict bool) []ProjectCfg {
 	}
 	configs := []ProjectCfg{}
 	for _, liveProject := range liveProjects() {
-		projectConfig := ProjectCfg{Dir: liveProject.Dir, Project: liveProject.Project, Perms: map[string][]ProjRule{}, Files: []ProjFile{}, Hooks: []HookInfo{}, MCP: []McpServer{}, Skills: []string{}, Docs: docs[liveProject.Dir]}
+		projectConfig := ProjectCfg{Dir: liveProject.Dir, Project: liveProject.Project, Perms: map[string][]ProjRule{}, Files: []ProjFile{}, Hooks: []HookInfo{}, MCP: []McpServer{}, Skills: []string{}, SkillTools: map[string]string{}, Docs: docs[liveProject.Dir]}
 		if globalDoc, hasGlobal := raw["u"]; hasGlobal {
-			for _, kind := range permKinds {
+			for _, kind := range append(append([]string{}, permKinds...), "additionalDirectories") {
 				ruleValues, _ := lookup(globalDoc, "permissions", kind)
 				for _, rule := range strList(ruleValues) {
 					projectConfig.Perms[kind] = append(projectConfig.Perms[kind], ProjRule{rule, "u"})
@@ -143,6 +144,9 @@ func projectConfigsFor(strict bool) []ProjectCfg {
 		for _, skill := range skills {
 			if skill.Scope == "project" && skill.Project == liveProject.Project {
 				projectConfig.Skills = append(projectConfig.Skills, skill.Name)
+				if skill.Tools != "" {
+					projectConfig.SkillTools[skill.Name] = skill.Tools
+				}
 			}
 		}
 		projectConfig.Rules = projectRules(liveProject.Project)

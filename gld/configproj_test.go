@@ -220,3 +220,28 @@ func TestConfigParProjetSansReglageProprePasseApresLeGlobal(t *testing.T) {
 		}
 	}
 }
+
+func TestConfigParProjetRelieLesSkillsAuxOutilsEtExposeLesDossiersGlobaux(t *testing.T) {
+	cfg := t.TempDir()
+	use(cfg)
+	projetAvecSkill := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	put(t, filepath.Join(cfg, "settings.json"), `{"permissions":{"additionalDirectories":["/srv/partage"]}}`, old)
+	put(t, filepath.Join(cfg, "projects", "-s", "55555555-5555-5555-5555-555555555555.jsonl"), `{"cwd":"`+projetAvecSkill+`"}`+"\n", old)
+	put(t, filepath.Join(projetAvecSkill, ".claude", "skills", "revue", "SKILL.md"), "---\ndescription: d\nallowed-tools: Read Grep\n---\nx\n", old)
+
+	var configurationProjet ProjectCfg
+	for _, configurationCourante := range projectConfigs() {
+		if configurationCourante.Dir == "-s" {
+			configurationProjet = configurationCourante
+		}
+	}
+
+	if configurationProjet.SkillTools["revue"] != "Read Grep" {
+		t.Fatalf("allowed-tools du skill : %+v", configurationProjet.SkillTools)
+	}
+	dossiers := configurationProjet.Perms["additionalDirectories"]
+	if len(dossiers) != 1 || dossiers[0] != (ProjRule{"/srv/partage", "u"}) {
+		t.Fatalf("dossier supplémentaire global : %+v", dossiers)
+	}
+}

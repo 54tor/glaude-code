@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { ChevronRight, Copy, FolderPlus, Globe, Trash2, X } from "lucide-react"
+import { ChevronRight, FolderPlus } from "lucide-react"
 import { Link, useSearchParams } from "wouter"
 import { api, type PluginInst, type ProjectCfg } from "@/lib/api"
 import { describeKey } from "@/lib/configKeys"
@@ -9,27 +9,18 @@ import { cn, copyText } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { useTranslation } from "react-i18next"
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { byRule } from "./ConfigTabs2"
+import { ProjectPermList, GLOBAL_SCOPE } from "./ConfigProjectPermList"
 import { ProjectAddRule } from "./ConfigProjectAddRule"
-import { overridingKind, projectsAddingDirectory } from "@/lib/permDependencies"
+import { projectsAddingDirectory } from "@/lib/permDependencies"
 
-const KINDS = ["allow", "ask", "deny", "additionalDirectories"] as const
 const SCROLL_TO_TARGET_DELAY_MS = 50
-const GLOBAL_SCOPE = "u"
 
-const scopeLabelKey = (scope: string) => (scope === GLOBAL_SCOPE ? "config.scope.global" : scope === "p" ? "config.scope.project" : "config.scope.local")
 
 // Les permissions et les hooks ont leur propre section.
 const isPlainSetting = (settingRow: { path: string }) => !settingRow.path.startsWith("permissions.") && settingRow.path !== "hooks"
-
-function OverrideNote({ kind }: { kind?: string }) {
-  const { t } = useTranslation()
-  if (!kind) return null
-  return <span className="shrink-0 text-2xs text-amber-600 dark:text-amber-400">{t("config.projects.overriddenBy", { kind: t(`config.perms.kind.${kind}`).toLowerCase() })}</span>
-}
 
 const Badge = ({ count, label }: { count: number; label: string }) =>
   count > 0 ? (
@@ -151,61 +142,7 @@ export function ProjectsTab({ home, version, gone, onAddDir, onAddRule, suggest,
                     {nRules === 0 && nGlobalRules === 0 ? (
                       <p className="text-xs text-muted-foreground">{t("config.projects.noPerms")}</p>
                     ) : (
-                      KINDS.filter((kind) => perms[kind]?.length).map((kind) => (
-                        <div key={kind} className="mb-2">
-                          <p className="text-xs text-muted-foreground">{t(`config.perms.kind.${kind}`)}</p>
-                          <ul className="space-y-px">
-                            {perms[kind].map((permRule, ruleIndex) =>
-                              permRule.scope === GLOBAL_SCOPE ? (
-                                <li key={kind + ruleIndex} className="flex items-center gap-2 text-muted-foreground">
-                                  <code className="min-w-0 flex-1 text-xs break-all">{permRule.rule}</code>
-                                  <OverrideNote kind={overridingKind(perms, kind, permRule.rule)} />
-                                  <span className="shrink-0 text-2xs" title={t("config.projects.globalReadOnly")}>{t(scopeLabelKey(permRule.scope))}</span>
-                                </li>
-                              ) : (
-                              <ContextMenu key={kind + ruleIndex}>
-                              <ContextMenuTrigger asChild>
-                              <li className="flex items-center gap-2">
-                                <code className="min-w-0 flex-1 text-xs break-all">{permRule.rule}</code>
-                                <OverrideNote kind={overridingKind(perms, kind, permRule.rule)} />
-                                <span className="shrink-0 text-2xs text-muted-foreground">{t(scopeLabelKey(permRule.scope))}</span>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button size="xs" variant="ghost">
-                                      <Globe /> {t("config.projects.toGlobal")}
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onSelect={() => onTransfer(`${permRule.scope}/${projectConfig.dir}`, kind, permRule.rule, false)}>{t("config.projects.copyToUser")}</DropdownMenuItem>
-                                    <DropdownMenuItem onSelect={() => onTransfer(`${permRule.scope}/${projectConfig.dir}`, kind, permRule.rule, true)}>{t("config.projects.moveFromProject")}</DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                                <Button size="icon-xs" variant="ghost" aria-label={t("config.projects.deleteRule", { rule: permRule.rule })} title={t("config.projects.deleteRuleTitle")} onClick={() => onRemove(`${permRule.scope}/${projectConfig.dir}`, kind, permRule.rule)}>
-                                  <X />
-                                </Button>
-                              </li>
-                              </ContextMenuTrigger>
-                              <ContextMenuContent className="w-60">
-                                <ContextMenuItem onSelect={() => copyRule(permRule.rule)}>
-                                  <Copy /> {t("config.perms.copyRule")}
-                                </ContextMenuItem>
-                                <ContextMenuItem onSelect={() => onTransfer(`${permRule.scope}/${projectConfig.dir}`, kind, permRule.rule, false)}>
-                                  <Globe /> {t("config.perms.copyGlobal")}
-                                </ContextMenuItem>
-                                <ContextMenuItem onSelect={() => onTransfer(`${permRule.scope}/${projectConfig.dir}`, kind, permRule.rule, true)}>
-                                  <Globe /> {t("config.perms.moveGlobal")}
-                                </ContextMenuItem>
-                                <ContextMenuSeparator />
-                                <ContextMenuItem variant="destructive" onSelect={() => onRemove(`${permRule.scope}/${projectConfig.dir}`, kind, permRule.rule)}>
-                                  <Trash2 /> {t("common.delete")}
-                                </ContextMenuItem>
-                              </ContextMenuContent>
-                              </ContextMenu>
-                              ),
-                            )}
-                          </ul>
-                        </div>
-                      ))
+                      <ProjectPermList projectConfig={projectConfig} perms={perms} onCopyRule={copyRule} onTransfer={onTransfer} onRemove={onRemove} />
                     )}
                   </section>
                   {projectConfig.files.map((settingsFile) => {

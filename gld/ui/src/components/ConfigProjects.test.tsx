@@ -33,8 +33,9 @@ const surAjoutRegle = vi.fn()
 async function afficherProjetOuvert(projets: ProjectCfg[] = [projetAvecRegleGlobaleEtPartagee], pluginsInstalles: PluginInst[] = []) {
   vi.spyOn(api, "plugins").mockResolvedValue({ installed: pluginsInstalles })
   vi.spyOn(api, "configProjects").mockResolvedValue({ projects: projets } as Awaited<ReturnType<typeof api.configProjects>>)
-  render(<ProjectsTab home="/home/bob" version={0} gone={() => false} onAddDir={vi.fn()} onAddRule={surAjoutRegle} suggest={() => []} onEdit={vi.fn()} onTransfer={vi.fn()} onRemove={vi.fn()} />)
+  const { container } = render(<ProjectsTab home="/home/bob" version={0} gone={() => false} onAddDir={vi.fn()} onAddRule={surAjoutRegle} suggest={() => []} onEdit={vi.fn()} onTransfer={vi.fn()} onRemove={vi.fn()} />)
   fireEvent.click(await screen.findByRole("button", { name: /home\/bob\/p|~?\/p/ }))
+  return { container }
 }
 
 describe("ProjectsTab : règles globales", () => {
@@ -94,5 +95,30 @@ describe("ProjectsTab : règles globales", () => {
 
     expect(await screen.findByText("superpowers")).toBeTruthy()
     expect(screen.queryByText("autre")).toBeNull()
+  })
+
+  it("regroupe les règles par fichier, du global au perso", async () => {
+    const projetTroisCouches: ProjectCfg = {
+      ...projetAvecRegleGlobaleEtPartagee,
+      perms: { allow: [{ rule: "Read", scope: "l" }, { rule: "Grep", scope: "u" }, { rule: "Glob", scope: "p" }] },
+    }
+    const { container } = await afficherProjetOuvert([projetTroisCouches])
+
+    const couchesObtenues = Array.from(container.querySelectorAll("[data-layer]")).map((couche) => couche.getAttribute("data-layer"))
+    expect(couchesObtenues).toEqual(["u", "p", "l"])
+  })
+
+  it("relie une règle aux hooks et aux skills du projet qui touchent son outil", async () => {
+    const projetAvecLiens: ProjectCfg = {
+      ...projetAvecRegleGlobaleEtPartagee,
+      perms: { allow: [{ rule: "Bash(make:*)", scope: "p" }] },
+      hooks: [{ scope: "p", file: "p/-p", event: "PreToolUse", matcher: "Bash", type: "command", command: "garde" }],
+      skills: ["deploy"],
+      skillTools: { deploy: "Bash(make:*)" },
+    }
+    await afficherProjetOuvert([projetAvecLiens])
+
+    expect(screen.getByText(/1 hook\(s\) lié\(s\)/)).toBeTruthy()
+    expect(screen.getByText(/skill : \/deploy/)).toBeTruthy()
   })
 })
