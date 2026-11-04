@@ -1,30 +1,25 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Bell } from "lucide-react"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth"
 import { errMsg } from "@/lib/apiError"
 import { currentPushState, PushPermissionError, pushSupported, subscribePush, unsubscribePush } from "@/lib/push"
 import type { PushPreferences, PushState } from "@/lib/api"
-import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
-import { Tip } from "@/components/ui/tooltip"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
 const DEFAULT_PREFERENCES: PushPreferences = { asking: true, waiting: true }
 
-export function PushButton() {
+export function PushSection() {
   const { t } = useTranslation()
   const auth = useAuth()
-  const [open, setOpen] = useState(false)
   const [state, setState] = useState<PushState | null>(null)
   const [busy, setBusy] = useState(false)
   const supported = pushSupported()
 
   useEffect(() => {
-    if (!open || !supported) return
+    if (!supported) return
     currentPushState().then(setState, () => setState({ subscribed: false, ...DEFAULT_PREFERENCES }))
-  }, [open, supported])
+  }, [supported])
 
   const apply = async (action: () => Promise<void>, next: PushState) => {
     setBusy(true)
@@ -46,40 +41,27 @@ export function PushButton() {
 
   if (auth.state !== "open" && auth.state !== "ok") return null
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <Tip label={t("shell.push.title")}>
-        <DialogTrigger asChild>
-          <Button variant="ghost" size="icon" className="size-9 text-muted-foreground" aria-label={t("shell.push.title")}>
-            <Bell className="size-6" />
-          </Button>
-        </DialogTrigger>
-      </Tip>
-      <DialogContent className="max-h-[90vh] gap-5 overflow-y-auto sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-xl">
-            <Bell className="size-5 text-primary" aria-hidden /> {t("shell.push.title")}
-          </DialogTitle>
-          <DialogDescription>{t("shell.push.intro")}</DialogDescription>
-        </DialogHeader>
-        {!supported ? (
-          <p className="text-sm text-muted-foreground">{t("shell.push.unsupported")}</p>
-        ) : (
-          <div className="space-y-3">
-            <label className="flex items-center justify-between gap-3 text-sm font-medium">
-              {t("shell.push.enable")}
-              <Switch checked={state?.subscribed ?? false} disabled={busy || state === null} onCheckedChange={(checked) => void toggleSubscription(checked)} />
-            </label>
-            <label className="flex items-center justify-between gap-3 text-sm">
-              {t("shell.push.asking")}
-              <Switch checked={state?.asking ?? false} disabled={busy || !state?.subscribed} onCheckedChange={(checked) => void togglePreference("asking", checked)} />
-            </label>
-            <label className="flex items-center justify-between gap-3 text-sm">
-              {t("shell.push.waiting")}
-              <Switch checked={state?.waiting ?? false} disabled={busy || !state?.subscribed} onCheckedChange={(checked) => void togglePreference("waiting", checked)} />
-            </label>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
+    <section className="space-y-3">
+      <h3 className="border-b pb-1 text-md font-semibold">{t("shell.push.title")}</h3>
+      <p className="text-sm text-muted-foreground">{t("shell.push.intro")}</p>
+      {!supported ? (
+        <p className="text-sm text-muted-foreground">{t("shell.push.unsupported")}</p>
+      ) : (
+        <div className="max-w-sm space-y-3">
+          <label className="flex items-center justify-between gap-3 text-sm font-medium">
+            {t("shell.push.enable")}
+            <Switch checked={state?.subscribed ?? false} disabled={busy || state === null} onCheckedChange={(checked) => void toggleSubscription(checked)} />
+          </label>
+          <label className="flex items-center justify-between gap-3 text-sm">
+            {t("shell.push.asking")}
+            <Switch checked={state?.asking ?? false} disabled={busy || !state?.subscribed} onCheckedChange={(checked) => void togglePreference("asking", checked)} />
+          </label>
+          <label className="flex items-center justify-between gap-3 text-sm">
+            {t("shell.push.waiting")}
+            <Switch checked={state?.waiting ?? false} disabled={busy || !state?.subscribed} onCheckedChange={(checked) => void togglePreference("waiting", checked)} />
+          </label>
+        </div>
+      )}
+    </section>
   )
 }

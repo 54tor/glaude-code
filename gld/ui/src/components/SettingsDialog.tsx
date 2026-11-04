@@ -15,6 +15,7 @@ import { PALETTES } from "@/lib/palettes"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
+import { PushSection } from "./PushSettings"
 
 const LANGS: { v: Lang; label: string; claude: string }[] = [
   { v: "fr", label: "Français", claude: "French" },
@@ -203,6 +204,7 @@ export function SettingsPanel(fonts: Fonts) {
           ))}
         </dl>
       </section>
+      <PushSection />
       <section className="space-y-5">
         <h3 className="border-b pb-1 text-md font-semibold">
           {t("config.dialog.tabLook")}

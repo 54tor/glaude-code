@@ -19,7 +19,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useLocal } from "@/hooks/useLocal"
 import { CreditsButton } from "./Credits"
 import { PairButton } from "./PairDevice"
-import { PushButton } from "./PushSettings"
 import { InvitesButton } from "./InvitesButton"
 import { HomeSwitcher } from "./HomeSwitcher"
 import { DropZone } from "./DropZone"
@@ -334,7 +333,6 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
           </div>
           <div className="ml-auto flex items-center gap-0.5">
             <PairButton />
-            <PushButton />
             <CreditsButton />
             <HomeSwitcher />
           </div>
