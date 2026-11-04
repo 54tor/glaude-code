@@ -4550,6 +4550,80 @@ paths:
           $ref: '#/components/responses/Error'
         '500':
           $ref: '#/components/responses/Error'
+  /v1/push/key:
+    get:
+      tags:
+      - push
+      operationId: getPushKey
+      x-gld-right: any
+      description: Public VAPID key used to create a Web Push subscription.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+  /v1/push/subscriptions:
+    get:
+      tags:
+      - push
+      operationId: getPushSubscription
+      x-gld-right: any
+      description: Whether this device is subscribed for the caller, with its per-type preferences.
+      parameters:
+      - name: endpoint
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+    put:
+      tags:
+      - push
+      operationId: putPushSubscription
+      x-gld-right: any
+      description: Creates or replaces this device's Web Push subscription (endpoint, keys, asking and waiting preferences, lang).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '204':
+          description: No Content
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+    delete:
+      tags:
+      - push
+      operationId: deletePushSubscription
+      x-gld-right: any
+      description: Removes this device's subscription when it belongs to the caller.
+      parameters:
+      - name: endpoint
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: No Content
+        '401':
+          $ref: '#/components/responses/Error'
   /v1/push-state:
     get:
       tags:
