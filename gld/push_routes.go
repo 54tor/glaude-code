@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -26,9 +27,33 @@ type pushSubscribeBody struct {
 	Lang     string
 }
 
+var pushServiceHostSuffixes = []string{
+	"fcm.googleapis.com",
+	"push.services.mozilla.com",
+	"notify.windows.com",
+	"web.push.apple.com",
+}
+
+// pushEndpointAllowed : le serveur postera sur cet endpoint ; seuls les services push des navigateurs sont acceptés (SSRF).
+func pushEndpointAllowed(endpoint string) bool {
+	if len(endpoint) > pushEndpointMaxLength {
+		return false
+	}
+	parsed, parseErr := url.Parse(endpoint)
+	if parseErr != nil || parsed.Scheme != "https" || parsed.User != nil || parsed.Port() != "" {
+		return false
+	}
+	hostname := strings.TrimSuffix(strings.ToLower(parsed.Hostname()), ".")
+	for _, allowedSuffix := range pushServiceHostSuffixes {
+		if hostname == allowedSuffix || strings.HasSuffix(hostname, "."+allowedSuffix) {
+			return true
+		}
+	}
+	return false
+}
+
 func (body pushSubscribeBody) isValid() bool {
-	return strings.HasPrefix(body.Endpoint, "https://") && len(body.Endpoint) <= pushEndpointMaxLength &&
-		body.Keys.P256dh != "" && body.Keys.Auth != ""
+	return pushEndpointAllowed(body.Endpoint) && body.Keys.P256dh != "" && body.Keys.Auth != ""
 }
 
 func routesPush(mux *http.ServeMux) {

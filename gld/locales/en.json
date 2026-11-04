@@ -302,8 +302,8 @@
   "srv.notes.fusionTropLongue": "the merged notes exceed the maximum size",
   "srv.push.fichierIllisible": "unreadable push subscriptions ({{.A1}}): nothing is rewritten",
   "srv.push.trop": "too many push subscriptions",
-  "srv.push.asking": "Claude is asking a question",
-  "srv.push.waiting": "Claude is waiting for your message",
+  "srv.push.asking": "Claude needs your answer",
+  "srv.push.waiting": "Claude has finished",
   "srv.pair.back": "Back",
 
   "srv.pair.button": "Connect",

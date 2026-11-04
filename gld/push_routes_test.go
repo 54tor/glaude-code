@@ -27,7 +27,7 @@ func appelerRoutesPush(t *testing.T, utilisateur int64, methode, chemin, corps s
 	return reponse
 }
 
-const corpsAbonnementValide = `{"endpoint":"https://push.example.com/a","keys":{"p256dh":"cle","auth":"secret"},"asking":true,"waiting":false,"lang":"en"}`
+const corpsAbonnementValide = `{"endpoint":"https://web.push.apple.com/a","keys":{"p256dh":"cle","auth":"secret"},"asking":true,"waiting":false,"lang":"en"}`
 
 func TestPushRoutesCleVapidEstServie(t *testing.T) {
 	isolerDossierDeConfigurationPush(t)
@@ -44,7 +44,7 @@ func TestPushRoutesAbonneEtLitLesPreferences(t *testing.T) {
 	isolerDossierDeConfigurationPush(t)
 
 	reponseAbonnement := appelerRoutesPush(t, 7, "PUT", "/v1/push/subscriptions", corpsAbonnementValide)
-	reponseLecture := appelerRoutesPush(t, 7, "GET", "/v1/push/subscriptions?endpoint=https://push.example.com/a", "")
+	reponseLecture := appelerRoutesPush(t, 7, "GET", "/v1/push/subscriptions?endpoint=https://web.push.apple.com/a", "")
 
 	if reponseAbonnement.Code != 204 {
 		t.Fatalf("abonnement : %d %s", reponseAbonnement.Code, reponseAbonnement.Body.String())
@@ -53,7 +53,7 @@ func TestPushRoutesAbonneEtLitLesPreferences(t *testing.T) {
 	if !strings.Contains(reponseLecture.Body.String(), corpsAttendu) || !strings.Contains(reponseLecture.Body.String(), `"asking":true`) || !strings.Contains(reponseLecture.Body.String(), `"waiting":false`) {
 		t.Fatal(reponseLecture.Body.String())
 	}
-	abonnement, _, _ := pushSubscriptionFind("https://push.example.com/a")
+	abonnement, _, _ := pushSubscriptionFind("https://web.push.apple.com/a")
 	if abonnement.UserID != 7 || abonnement.Lang != "en" {
 		t.Fatalf("abonnement stocké : %+v", abonnement)
 	}
@@ -63,8 +63,8 @@ func TestPushRoutesRefuseUnEndpointNonHttpsOuSansCles(t *testing.T) {
 	isolerDossierDeConfigurationPush(t)
 	corpsInvalides := []string{
 		`{"endpoint":"http://push.example.com/a","keys":{"p256dh":"cle","auth":"secret"}}`,
-		`{"endpoint":"https://push.example.com/a","keys":{"p256dh":"","auth":"secret"}}`,
-		`{"endpoint":"https://push.example.com/a"}`,
+		`{"endpoint":"https://web.push.apple.com/a","keys":{"p256dh":"","auth":"secret"}}`,
+		`{"endpoint":"https://web.push.apple.com/a"}`,
 		`{"endpoint":"https://` + strings.Repeat("a", 2100) + `","keys":{"p256dh":"cle","auth":"secret"}}`,
 	}
 	for _, corpsInvalide := range corpsInvalides {
@@ -79,13 +79,13 @@ func TestPushRoutesUnUtilisateurNeVoitNiNeSupprimePasLAbonnementDUnAutre(t *test
 	isolerDossierDeConfigurationPush(t)
 	appelerRoutesPush(t, 7, "PUT", "/v1/push/subscriptions", corpsAbonnementValide)
 
-	lectureParUnAutre := appelerRoutesPush(t, 8, "GET", "/v1/push/subscriptions?endpoint=https://push.example.com/a", "")
-	appelerRoutesPush(t, 8, "DELETE", "/v1/push/subscriptions?endpoint=https://push.example.com/a", "")
+	lectureParUnAutre := appelerRoutesPush(t, 8, "GET", "/v1/push/subscriptions?endpoint=https://web.push.apple.com/a", "")
+	appelerRoutesPush(t, 8, "DELETE", "/v1/push/subscriptions?endpoint=https://web.push.apple.com/a", "")
 
 	if !strings.Contains(lectureParUnAutre.Body.String(), `"subscribed":false`) {
 		t.Fatal(lectureParUnAutre.Body.String())
 	}
-	if _, encoreLa, _ := pushSubscriptionFind("https://push.example.com/a"); !encoreLa {
+	if _, encoreLa, _ := pushSubscriptionFind("https://web.push.apple.com/a"); !encoreLa {
 		t.Fatal("l'abonnement d'un autre utilisateur a été supprimé")
 	}
 }
@@ -94,9 +94,9 @@ func TestPushRoutesDesabonneRetireLAbonnement(t *testing.T) {
 	isolerDossierDeConfigurationPush(t)
 	appelerRoutesPush(t, 7, "PUT", "/v1/push/subscriptions", corpsAbonnementValide)
 
-	reponse := appelerRoutesPush(t, 7, "DELETE", "/v1/push/subscriptions?endpoint=https://push.example.com/a", "")
+	reponse := appelerRoutesPush(t, 7, "DELETE", "/v1/push/subscriptions?endpoint=https://web.push.apple.com/a", "")
 
-	if _, encoreLa, _ := pushSubscriptionFind("https://push.example.com/a"); reponse.Code != 204 || encoreLa {
+	if _, encoreLa, _ := pushSubscriptionFind("https://web.push.apple.com/a"); reponse.Code != 204 || encoreLa {
 		t.Fatalf("%d, encore présent=%v", reponse.Code, encoreLa)
 	}
 }
@@ -122,5 +122,38 @@ func TestPushRoutesNeSontJamaisRelayeesAUnHomeEnfant(t *testing.T) {
 
 	if demarrages != 0 || !prochainHandlerAppele {
 		t.Fatalf("démarrages=%d, servie par la passerelle=%v", demarrages, prochainHandlerAppele)
+	}
+}
+
+func TestPushEndpointAllowedAccepteLesServicesPushDesNavigateurs(t *testing.T) {
+	for _, endpointAccepte := range []string{
+		"https://fcm.googleapis.com/fcm/send/abc",
+		"https://updates.push.services.mozilla.com/wpush/v2/abc",
+		"https://wns2-par02p.notify.windows.com/w/?token=abc",
+		"https://web.push.apple.com/abc",
+		"https://FCM.googleapis.com./fcm/send/abc",
+	} {
+		if !pushEndpointAllowed(endpointAccepte) {
+			t.Errorf("endpoint légitime refusé : %s", endpointAccepte)
+		}
+	}
+}
+
+func TestPushEndpointAllowedRefuseLesCiblesInternesEtLesImitations(t *testing.T) {
+	for _, endpointRefuse := range []string{
+		"http://fcm.googleapis.com/fcm/send/abc",
+		"https://127.0.0.1/abc",
+		"https://localhost/abc",
+		"https://169.254.169.254/latest/meta-data",
+		"https://fcm.googleapis.com.evil.example/abc",
+		"https://evilfcm.googleapis.com/abc",
+		"https://evil.example/fcm.googleapis.com",
+		"https://user:secret@fcm.googleapis.com/abc",
+		"https://fcm.googleapis.com:8443/abc",
+		"https://web.push.apple.com/" + strings.Repeat("a", pushEndpointMaxLength),
+	} {
+		if pushEndpointAllowed(endpointRefuse) {
+			t.Errorf("endpoint dangereux accepté : %.80s", endpointRefuse)
+		}
 	}
 }

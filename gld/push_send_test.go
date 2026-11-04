@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -134,5 +136,26 @@ func TestPushSendUserMayReadRefuseSiLaBaseDesComptesEstEnErreur(t *testing.T) {
 
 	if pushUserMayRead(1, mainHomeID) {
 		t.Fatal("une base inutilisable ne doit jamais ouvrir l'envoi")
+	}
+}
+
+func TestPushSendNeSuitJamaisUneRedirection(t *testing.T) {
+	cibleInterne := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Error("la redirection a été suivie")
+	}))
+	defer cibleInterne.Close()
+	redirecteur := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		http.Redirect(responseWriter, request, cibleInterne.URL, http.StatusFound)
+	}))
+	defer redirecteur.Close()
+
+	reponse, erreur := pushHTTPClient.Get(redirecteur.URL)
+
+	if erreur != nil {
+		t.Fatal(erreur)
+	}
+	reponse.Body.Close()
+	if reponse.StatusCode != http.StatusFound {
+		t.Fatalf("statut %d au lieu de 302", reponse.StatusCode)
 	}
 }
