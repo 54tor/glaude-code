@@ -302,8 +302,8 @@
   "srv.notes.fusionTropLongue": "les deux notes réunies dépassent la taille maximale",
   "srv.push.fichierIllisible": "abonnements push illisibles ({{.A1}}) : rien n'est réécrit",
   "srv.push.trop": "trop d'abonnements push",
-  "srv.push.asking": "Claude pose une question",
-  "srv.push.waiting": "Claude attend votre message",
+  "srv.push.asking": "Claude attend votre réponse",
+  "srv.push.waiting": "Claude a terminé",
   "srv.pair.back": "Retour",
 
   "srv.pair.button": "Connecter",

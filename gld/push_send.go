@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/url"
+	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
 )
@@ -10,7 +12,14 @@ import (
 const (
 	pushSubscriber = "https://github.com/54tor/glaude-code"
 	pushTTLSeconds = 3600
+
+	pushSendTimeout = 15 * time.Second
 )
+
+var pushHTTPClient = &http.Client{
+	Timeout:       pushSendTimeout,
+	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+}
 
 type pushEvent struct {
 	HomeID    string
@@ -45,6 +54,7 @@ func webpushSend(subscription pushSubscription, payload []byte) (int, error) {
 		VAPIDPrivateKey: privateKey,
 		TTL:             pushTTLSeconds,
 		Urgency:         webpush.UrgencyHigh,
+		HTTPClient:      pushHTTPClient,
 	})
 	if sendErr != nil {
 		return 0, sendErr
