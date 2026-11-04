@@ -146,6 +146,7 @@ func main() {
 	migrateData()
 	go autosaveTabs(tabsAutosaveEvery)
 	go watchWaiting(waitingWatchEvery)
+	go watchPush(waitingWatchEvery)
 	go titleLoop(titleLoopEvery)
 	go keepWarmLoop(keepWarmEvery)
 	if queueSt != nil {
@@ -352,6 +353,7 @@ func handler() http.Handler {
 	routesTrashSessions(mux)
 	routesCleanupWarn(mux)
 	routesNotes(mux)
+	routesPushState(mux)
 	routesKeepWarm(mux)
 	routesBuiltinRules(mux)
 	routesSkills(mux)

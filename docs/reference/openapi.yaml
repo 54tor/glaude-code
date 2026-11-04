@@ -4550,6 +4550,24 @@ paths:
           $ref: '#/components/responses/Error'
         '500':
           $ref: '#/components/responses/Error'
+  /v1/push-state:
+    get:
+      tags:
+      - state
+      operationId: getPushState
+      x-gld-right: sessions_read
+      description: Sessions of this home that are waiting or asking, with their titles. Read by the gateway to decide Web Push sends.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
   /v1/state/stamp:
     get:
       tags:
