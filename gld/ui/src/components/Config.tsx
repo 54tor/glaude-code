@@ -146,6 +146,7 @@ export function Config({ home, tab, onTab, ui, dir }: { home: string; tab: strin
                 const pickedDir = dir ?? (await actions.pickDir(t("config.main.pickDir", { dir: tilde(project, home) }), project))
                 if (pickedDir) await propose({ file, op: "add", path: ["permissions", "additionalDirectories"], value: pickedDir })
               }}
+              onAddRule={(file, kind, rule) => propose({ file, op: "add", path: ["permissions", kind], value: rule })}
               // Autres dossiers des projets auxquels appartient ce dossier, sans ceux déjà autorisés (~/ et chemins absolus).
               suggest={(project, taken) => {
                 const toAbsolutePath = (rule: string) => {

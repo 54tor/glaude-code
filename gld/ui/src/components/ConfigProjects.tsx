@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { ChevronRight, Copy, FolderPlus, Globe, Trash2, X } from "lucide-react"
 import { Link, useSearchParams } from "wouter"
-import { api, type ProjectCfg } from "@/lib/api"
+import { api, type PluginInst, type ProjectCfg } from "@/lib/api"
 import { describeKey } from "@/lib/configKeys"
 import { href } from "@/lib/route"
 import { tilde } from "@/lib/format"
@@ -13,6 +13,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { byRule } from "./ConfigTabs2"
+import { ProjectAddRule } from "./ConfigProjectAddRule"
 import { overridingKind, projectsAddingDirectory } from "@/lib/permDependencies"
 
 const KINDS = ["allow", "ask", "deny", "additionalDirectories"] as const
@@ -39,7 +40,7 @@ const Badge = ({ count, label }: { count: number; label: string }) =>
 
 // Ce que chaque projet configure en propre, en plus des réglages de l'utilisateur : réglages (projet et local), règles de
 // permission, hooks, serveurs MCP, règles .claude/rules, skills et documentation. onEdit ouvre l'onglet qui permet de les modifier.
-export function ProjectsTab({ home, version, gone, onAddDir, suggest, onEdit, onTransfer, onRemove }: { home: string; version: number; onAddDir: (file: string, project: string, dir?: string) => void; suggest: (project: string, taken: string[]) => string[]; gone: (file: string, kind: string, rule: string) => boolean; onEdit: (file: string, tab: string) => void; onRemove: (file: string, kind: string, rule: string) => void; onTransfer: (file: string, kind: string, rule: string, move: boolean) => void }) {
+export function ProjectsTab({ home, version, gone, onAddDir, onAddRule, suggest, onEdit, onTransfer, onRemove }: { home: string; version: number; onAddDir: (file: string, project: string, dir?: string) => void; onAddRule: (file: string, kind: string, rule: string) => void; suggest: (project: string, taken: string[]) => string[]; gone: (file: string, kind: string, rule: string) => boolean; onEdit: (file: string, tab: string) => void; onRemove: (file: string, kind: string, rule: string) => void; onTransfer: (file: string, kind: string, rule: string, move: boolean) => void }) {
   const { t } = useTranslation()
   const [list, setList] = useState<ProjectCfg[] | null>(null)
   const [all, setAll] = useState(false)
@@ -49,6 +50,10 @@ export function ProjectsTab({ home, version, gone, onAddDir, suggest, onEdit, on
   const focus = params.get("projet") // arrivée depuis la page d'un dossier : ce projet s'ouvre et s'affiche même sans réglage propre
   useEffect(() => {
     api.configProjects().then((response) => setList(response.projects))
+  }, [version])
+  const [plugins, setPlugins] = useState<PluginInst[]>([])
+  useEffect(() => {
+    api.plugins().then((response) => setPlugins(response.installed ?? []), () => setPlugins([]))
   }, [version])
   const target = list?.find((projectConfig) => projectConfig.project === focus)?.dir
   useEffect(() => {
@@ -137,6 +142,7 @@ export function ProjectsTab({ home, version, gone, onAddDir, suggest, onEdit, on
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
+                    <ProjectAddRule projectDir={projectConfig.dir} onAddRule={onAddRule} />
                     {projectsAddingDirectory(list, projectConfig, home).length > 0 && (
                       <p className="mb-2 text-xs text-muted-foreground">
                         {t("config.projects.addedBy")} {projectsAddingDirectory(list, projectConfig, home).map((addingProject) => tilde(addingProject.project, home)).join(", ")}
@@ -236,6 +242,20 @@ export function ProjectsTab({ home, version, gone, onAddDir, suggest, onEdit, on
                         {t("config.projects.createLocal")}
                       </button>
                     </p>
+                  )}
+                  {plugins.some((installedPlugin) => installedPlugin.project === projectConfig.project) && (
+                    <section>
+                      <h3 className="mb-1 text-xs font-medium text-muted-foreground">{t("config.projects.pluginsTitle")}</h3>
+                      <ul className="space-y-1">
+                        {plugins
+                          .filter((installedPlugin) => installedPlugin.project === projectConfig.project)
+                          .map((installedPlugin) => (
+                            <li key={installedPlugin.id} className="text-xs">
+                              <span className="font-medium">{installedPlugin.id}</span> <span className="text-muted-foreground">{installedPlugin.version} · {installedPlugin.enabled ? t("config.projects.pluginOn") : t("config.projects.pluginOff")}</span>
+                            </li>
+                          ))}
+                      </ul>
+                    </section>
                   )}
                   {projectConfig.hooks.length > 0 && (
                     <section>

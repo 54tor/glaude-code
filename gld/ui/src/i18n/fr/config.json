@@ -243,6 +243,18 @@
       "globalReadOnly": "Règle globale (~/.claude/settings.json), non modifiable ici",
       "overriddenBy": "neutralisée : même règle dans « {{kind}} »",
       "addedBy": "Ajouté comme dossier supplémentaire par :",
+      "addRule": {
+        "placeholder": "Ajouter une règle, ex. Bash(git status:*)",
+        "aria": "Nouvelle règle de permission",
+        "kindAria": "Type de règle",
+        "layerAria": "Fichier de la règle",
+        "submit": "Ajouter",
+        "layerPersonal": "Perso (settings.local.json)",
+        "layerShared": "Partagé (settings.json)"
+      },
+      "pluginsTitle": "Plugins du projet",
+      "pluginOn": "activé",
+      "pluginOff": "désactivé",
       "noPerms": "Aucune : ce projet suit vos règles personnelles.",
       "toGlobal": "Vers le global",
       "copyToUser": "Copier dans vos réglages",
