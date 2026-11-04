@@ -89,7 +89,7 @@ func pushPayloadFor(subscription pushSubscription, event pushEvent) []byte {
 		body = event.SessionID
 	}
 	encoded, _ := json.Marshal(pushPayload{
-		Title: tr(subscription.Lang, "srv.push."+event.Kind, nil),
+		Title: tr(resolveLang(subscription.Lang, "en"), "srv.push."+event.Kind, nil),
 		Body:  body,
 		Tag:   event.SessionID,
 		URL:   "/?s=" + url.PathEscape(event.SessionID),
@@ -101,6 +101,12 @@ const (
 	statusGone     = 410
 	statusNotFound = 404
 )
+
+func pushStatusFailed(statusCode int) bool {
+	isSuccess := statusCode >= 200 && statusCode < 300
+	isExpired := statusCode == statusGone || statusCode == statusNotFound
+	return !isSuccess && !isExpired
+}
 
 func pushDispatch(event pushEvent) {
 	subscriptions, loadErr := pushSubscriptionsLoad()
@@ -118,7 +124,13 @@ func pushDispatch(event pushEvent) {
 			continue
 		}
 		if statusCode == statusGone || statusCode == statusNotFound {
-			_ = pushSubscriptionDelete(subscription.Endpoint)
+			if deleteErr := pushSubscriptionDelete(subscription.Endpoint); deleteErr != nil {
+				journal("push: suppression d'un abonnement expiré impossible : %v", deleteErr)
+			}
+			continue
+		}
+		if pushStatusFailed(statusCode) {
+			journal("push: le service push a répondu %d", statusCode)
 		}
 	}
 }

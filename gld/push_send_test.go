@@ -159,3 +159,25 @@ func TestPushSendNeSuitJamaisUneRedirection(t *testing.T) {
 		t.Fatalf("statut %d au lieu de 302", reponse.StatusCode)
 	}
 }
+
+func TestPushSendStatusFailedIgnoreLesSuccesEtLesAbonnementsExpires(t *testing.T) {
+	casDeTest := map[int]bool{201: false, 200: false, 404: false, 410: false, 400: true, 401: true, 403: true, 413: true, 429: true, 302: true, 500: true}
+	for statut, attendu := range casDeTest {
+		if pushStatusFailed(statut) != attendu {
+			t.Errorf("statut %d : obtenu %v, attendu %v", statut, !attendu, attendu)
+		}
+	}
+}
+
+func TestPushSendTitreLocaliseEnAnglaisPourUneLangueAutre(t *testing.T) {
+	envois := installerTransportPushDeTest(t, nil)
+	_ = pushSubscriptionUpsert(pushSubscription{Endpoint: "https://push.example.com/a", Lang: "other", Asking: true})
+
+	pushDispatch(pushEvent{HomeID: mainHomeID, SessionID: "s1", Kind: "asking"})
+
+	var corpsDecode struct{ Title string }
+	_ = json.Unmarshal((*envois)[0].corps, &corpsDecode)
+	if corpsDecode.Title != tr("en", "srv.push.asking", nil) {
+		t.Fatalf("titre = %q", corpsDecode.Title)
+	}
+}

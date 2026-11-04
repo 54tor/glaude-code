@@ -106,3 +106,20 @@ func TestPushStoreRefuseAuDelaDuPlafond(t *testing.T) {
 		t.Fatal("le plafond n'est pas appliqué")
 	}
 }
+
+func TestPushStoreNeRegenerePasLesClesQuandLeFichierEstIllisible(t *testing.T) {
+	isolerDossierDeConfigurationPush(t)
+	if erreur := os.MkdirAll(pushFile(), 0o700); erreur != nil {
+		t.Fatal(erreur)
+	}
+
+	_, _, erreurCles := pushVapidKeys()
+
+	if erreurCles == nil {
+		t.Fatal("un fichier présent mais illisible ne doit pas être traité comme absent")
+	}
+	informations, erreurStat := os.Stat(pushFile())
+	if erreurStat != nil || !informations.IsDir() {
+		t.Fatal("le chemin illisible a été remplacé")
+	}
+}
