@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { Bell } from "lucide-react"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth"
 import { errMsg } from "@/lib/apiError"
 import { currentPushState, PushPermissionError, pushSupported, subscribePush, unsubscribePush } from "@/lib/push"
 import type { PushPreferences, PushState } from "@/lib/api"
+import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
+import { Tip } from "@/components/ui/tooltip"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
 const DEFAULT_PREFERENCES: PushPreferences = { asking: true, waiting: true }
 
@@ -63,5 +67,29 @@ export function PushSection() {
         </div>
       )}
     </section>
+  )
+}
+
+export function PushButton() {
+  const { t } = useTranslation()
+  const auth = useAuth()
+  if (auth.state !== "open" && auth.state !== "ok") return null
+  return (
+    <Dialog>
+      <Tip label={t("shell.push.title")}>
+        <DialogTrigger asChild>
+          <Button variant="ghost" size="icon" className="size-6 shrink-0 text-muted-foreground" aria-label={t("shell.push.title")}>
+            <Bell className="size-4" />
+          </Button>
+        </DialogTrigger>
+      </Tip>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="sr-only">{t("shell.push.title")}</DialogTitle>
+          <DialogDescription className="sr-only">{t("shell.push.intro")}</DialogDescription>
+        </DialogHeader>
+        <PushSection />
+      </DialogContent>
+    </Dialog>
   )
 }
