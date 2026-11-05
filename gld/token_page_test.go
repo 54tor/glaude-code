@@ -61,7 +61,7 @@ func TestTokenPage(t *testing.T) {
 	}
 	recorder = tokenForm(srv, modeTok, same)
 	cookie := cookieOf(recorder, tokenCookie)
-	if recorder.Code != http.StatusSeeOther || cookie == nil || cookie.SameSite != http.SameSiteStrictMode || !cookie.HttpOnly {
+	if recorder.Code != http.StatusSeeOther || cookie == nil || cookie.SameSite != http.SameSiteLaxMode || !cookie.HttpOnly {
 		t.Fatalf("bon jeton : %d %v", recorder.Code, recorder.Result().Cookies())
 	}
 

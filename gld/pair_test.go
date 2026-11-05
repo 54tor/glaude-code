@@ -90,7 +90,7 @@ func TestPairTokenMode(t *testing.T) {
 	}
 	localRecorder := confirm(t, srv, code)
 	dev := cookieOf(localRecorder, devCookie)
-	if localRecorder.Code != http.StatusSeeOther || localRecorder.Header().Get("Location") != "/" || dev == nil || !dev.HttpOnly || dev.SameSite != http.SameSiteStrictMode || cookieOf(localRecorder, tokenCookie) != nil {
+	if localRecorder.Code != http.StatusSeeOther || localRecorder.Header().Get("Location") != "/" || dev == nil || !dev.HttpOnly || dev.SameSite != http.SameSiteLaxMode || cookieOf(localRecorder, tokenCookie) != nil {
 		t.Fatalf("échange du code : %d %q %v", localRecorder.Code, localRecorder.Header().Get("Location"), localRecorder.Result().Cookies())
 	}
 	if recorder := pairReq(srv, "GET", "/pair?c="+code, "", nil); recorder.Code != http.StatusGone {

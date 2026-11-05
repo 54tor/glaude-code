@@ -149,6 +149,6 @@ func tokenLogin(responseWriter http.ResponseWriter, request *http.Request, token
 		return
 	}
 	tokenRefund(clientAddress)
-	http.SetCookie(responseWriter, &http.Cookie{Name: tokenCookie, Value: token, Path: "/", MaxAge: 30 * 24 * 3600, HttpOnly: true, Secure: requestHTTPS(request), SameSite: http.SameSiteStrictMode})
+	http.SetCookie(responseWriter, &http.Cookie{Name: tokenCookie, Value: token, Path: "/", MaxAge: 30 * 24 * 3600, HttpOnly: true, Secure: requestHTTPS(request), SameSite: http.SameSiteLaxMode})
 	http.Redirect(responseWriter, request, "/", http.StatusSeeOther)
 }

@@ -309,7 +309,7 @@ func pairEntry(responseWriter http.ResponseWriter, request *http.Request, store 
 			replyExpired()
 			return
 		}
-		// MaxAge large : l'échéance réelle (90 jours sans visite) est tenue côté serveur.
+		// MaxAge large : l'échéance réelle (90 jours sans visite) est tenue côté serveur. Lax : WebKit n'envoie pas un cookie Strict au lancement d'une PWA.
 		http.SetCookie(responseWriter, &http.Cookie{
 			Name:     devCookie,
 			Value:    cookie,
@@ -317,7 +317,7 @@ func pairEntry(responseWriter http.ResponseWriter, request *http.Request, store 
 			MaxAge:   deviceCookieMaxAge,
 			HttpOnly: true,
 			Secure:   requestHTTPS(request),
-			SameSite: http.SameSiteStrictMode,
+			SameSite: http.SameSiteLaxMode,
 		})
 		journal("pair: appareil jumelé depuis %s", clientAddress)
 	} else if !redeemSession(responseWriter, request, store, pending, clientAddress) {
