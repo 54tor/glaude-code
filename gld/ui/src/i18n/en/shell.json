@@ -105,6 +105,8 @@
       "addDirHint": "Add a folder without sessions: you can start a prompt there without Claude memory",
       "addDir": "Add a folder",
       "local": "Local sessions",
+      "more": "More",
+      "less": "Less",
       "clean": "Clean up",
       "argsHint": "options added to claude"
     },
