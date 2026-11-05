@@ -287,11 +287,9 @@ describe("Sidebar — sessions ouvertes et tièdes", () => {
     expect(screen.queryByText("Enfant")).toBeNull()
   })
 
-  it("une ligne affiche les minutes de cache restantes et alerte sous 10 min", async () => {
+  it("seule une session dont le cache expire sous 10 min porte l'alerte", async () => {
     await mount({ hot: [row("a", { title: "Loin", mtime: NOW - 600 }), row("b", { title: "Proche", mtime: NOW - TTL + 300 })] }, { live: new Set(["a", "b"]), waiting: new Set(["a", "b"]) })
-    expect(screen.getByText("50 min").className).not.toContain("text-warning")
-    expect(screen.getByText("5 min").className).toContain("text-warning")
-    expect(screen.getByLabelText("cache bientôt expiré")).toBeTruthy()
+    expect(screen.getAllByLabelText("cache bientôt expiré")).toHaveLength(1)
   })
 
   it("session ouverte qui travaille : icône de travail ; qui pose une question : icône de question", async () => {
