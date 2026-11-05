@@ -631,6 +631,9 @@ func lineMsgsMode(lineBytes []byte, tools, anchors bool) []Msg {
 	if bytes.Contains(lineBytes, []byte(`"isMeta":true`)) {
 		return nil
 	}
+	if bytes.Contains(lineBytes, []byte(`"type":"queued_command"`)) {
+		return queuedHumanMsgs(lineBytes)
+	}
 	isUserLine := bytes.Contains(lineBytes, []byte(`"type":"user"`))
 	if !isUserLine && !bytes.Contains(lineBytes, []byte(`"type":"assistant"`)) {
 		return nil
@@ -690,6 +693,36 @@ func lineMsgsMode(lineBytes []byte, tools, anchors bool) []Msg {
 		}
 	}
 	return messages
+}
+
+// queuedHumanMsgs : un message tapé pendant que Claude travaille n'est pas une ligne « user » mais une pièce jointe
+// « queued_command » (origine humaine) ; les notifications de tâches de fond, d'origine autre, restent masquées.
+func queuedHumanMsgs(lineBytes []byte) []Msg {
+	var queuedLine struct {
+		Timestamp  string
+		Attachment struct {
+			Type      string
+			Prompt    string
+			Timestamp string
+			Origin    struct{ Kind string }
+		}
+	}
+	if json.Unmarshal(lineBytes, &queuedLine) != nil {
+		return nil
+	}
+	attachment := queuedLine.Attachment
+	if attachment.Type != "queued_command" || attachment.Origin.Kind != "human" {
+		return nil
+	}
+	promptText := strings.TrimSpace(reminder.ReplaceAllString(attachment.Prompt, ""))
+	if promptText == "" {
+		return nil
+	}
+	messageTime := queuedLine.Timestamp
+	if messageTime == "" {
+		messageTime = attachment.Timestamp
+	}
+	return []Msg{{R: "user", T: promptText, Ts: messageTime}}
 }
 
 // withOffset numérote les messages d'une ligne (voir Msg.O / Msg.N).
