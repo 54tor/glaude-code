@@ -16,6 +16,7 @@ const KEYBOARD_OPEN_SCREEN_RATIO = 0.6
 const MOBILE_MEDIA_QUERY = "(max-width: 767px)"
 const TOUCH_CONTROLS_SELECTOR = "button,a,input,textarea,select,label,[role=button]"
 
+// PWA iPhone : dvh y reste parfois plus court que l'écran (bande morte en bas) ; --app-h prend alors la hauteur de l'écran.
 // Hauteur réellement visible (clavier virtuel ouvert ou non) : les fenêtres plein écran s'y calent, et on replie l'en-tête quand
 // le clavier mange la moitié de l'écran.
 const visualViewport = window.visualViewport
@@ -25,6 +26,9 @@ if (visualViewport) {
     rootElement.style.setProperty("--vvh", `${visualViewport.height}px`)
     rootElement.style.setProperty("--vvt", `${visualViewport.offsetTop}px`)
     const isKeyboardCoveringScreen = visualViewport.height < window.screen.height * KEYBOARD_OPEN_SCREEN_RATIO
+    const isInstalledPortrait = window.matchMedia("(display-mode: standalone) and (orientation: portrait)").matches
+    const appHeight = isInstalledPortrait && !isKeyboardCoveringScreen ? Math.max(visualViewport.height, window.screen.height) : visualViewport.height
+    rootElement.style.setProperty("--app-h", `${appHeight}px`)
     const isMobileWidth = window.matchMedia(MOBILE_MEDIA_QUERY).matches
     rootElement.toggleAttribute("data-kb", isKeyboardCoveringScreen && isMobileWidth)
   }
@@ -48,6 +52,13 @@ document.addEventListener(
   },
   { passive: false }
 )
+
+// PWA iPhone : si le geste de retour passe quand même (touchstart sur un contrôle, bord plus large), on reste sur la page :
+// une entrée d'historique factice absorbe le retour et est aussitôt remise.
+if (window.matchMedia("(display-mode: standalone)").matches) {
+  history.pushState(null, "", location.href)
+  window.addEventListener("popstate", () => history.pushState(null, "", location.href))
+}
 
 // Service worker : cache des ressources statiques et clic sur les notifications (contexte sécurisé : HTTPS ou localhost).
 if (import.meta.env.PROD && "serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {})
