@@ -108,3 +108,22 @@ func TestTokenTryConcurrent(t *testing.T) {
 		t.Fatal("un essai rendu n'est pas réutilisable")
 	}
 }
+
+func TestPageDeJumelageEnvoieLeCodeAuHuitiemeChiffreSansOuvrirLaCSP(testing *testing.T) {
+	pageJumelage := httptest.NewRecorder()
+	gatePage(pageJumelage, 200, gateData{Title: "Pair", Action: "/pair", Code: true, Button: "Go"})
+
+	politiqueObtenue := pageJumelage.Header().Get("Content-Security-Policy")
+	if !strings.Contains(politiqueObtenue, "script-src "+gateCodeScriptHash()+";") || strings.Contains(politiqueObtenue, "script-src 'unsafe-inline'") {
+		testing.Fatalf("la CSP doit autoriser le script par son empreinte seulement : %q", politiqueObtenue)
+	}
+	if !strings.Contains(pageJumelage.Body.String(), "<script>"+gateCodeScript+"</script>") {
+		testing.Fatalf("le script d'envoi automatique manque dans la page de jumelage")
+	}
+
+	pageJeton := httptest.NewRecorder()
+	gatePage(pageJeton, 200, gateData{Title: "Token", Action: "/token-login", Field: "Token", Button: "Go"})
+	if strings.Contains(pageJeton.Header().Get("Content-Security-Policy"), "script-src") || strings.Contains(pageJeton.Body.String(), "<script>") {
+		testing.Fatalf("la page du jeton ne doit porter aucun script")
+	}
+}

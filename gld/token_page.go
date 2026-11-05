@@ -5,6 +5,8 @@ package main
 // qui a perdu son cookie peut se reconnecter sans repasser par Safari.
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"html/template"
 	"net/http"
 	"strings"
@@ -31,8 +33,15 @@ button{font:inherit;font-weight:600;min-height:44px;padding:.75rem 1.75rem;borde
 {{if .Action}}<form method="post" action="{{.Action}}">{{if .Hidden}}<input type="hidden" name="c" value="{{.Hidden}}">{{end}}
 {{if .Field}}<input type="password" name="token" autocomplete="current-password" aria-label="{{.Field}}" placeholder="{{.Field}}" required autofocus>{{end}}
 {{if .Code}}<input class="code" name="c" inputmode="numeric" autocomplete="one-time-code" maxlength="12" aria-label="{{.Title}}" placeholder="0000 0000" required autofocus>{{end}}
-<button>{{.Button}}</button></form>{{end}}{{if .Link}}<p><a href="{{.Link}}">{{.LinkText}}</a></p>{{end}}</main></body></html>
+<button>{{.Button}}</button></form>{{end}}{{if .Link}}<p><a href="{{.Link}}">{{.LinkText}}</a></p>{{end}}</main>{{if .Code}}<script>` + gateCodeScript + `</script>{{end}}</body></html>
 `))
+
+const gateCodeScript = `const field=document.querySelector("input.code");field.addEventListener("input",()=>{if(field.value.replace(/\D/g,"").length===8)field.form.requestSubmit()})`
+
+func gateCodeScriptHash() string {
+	digest := sha256.Sum256([]byte(gateCodeScript))
+	return "'sha256-" + base64.StdEncoding.EncodeToString(digest[:]) + "'"
+}
 
 type gateData struct {
 	Lang, Title, Text, Err, Action, Hidden, Field, Button, Link, LinkText string
@@ -42,7 +51,11 @@ type gateData struct {
 func gatePage(responseWriter http.ResponseWriter, code int, pageData gateData) {
 	headers := responseWriter.Header()
 	headers.Set("Content-Type", "text/html; charset=utf-8")
-	headers.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; manifest-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+	scriptSource := ""
+	if pageData.Code {
+		scriptSource = "script-src " + gateCodeScriptHash() + "; "
+	}
+	headers.Set("Content-Security-Policy", "default-src 'none'; "+scriptSource+"style-src 'unsafe-inline'; img-src 'self'; manifest-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
 	headers.Set("Cache-Control", "no-store")
 	headers.Set("Referrer-Policy", "no-referrer")
 	responseWriter.WriteHeader(code)
