@@ -614,16 +614,13 @@ describe("sessions", () => {
 })
 
 describe("fermeture et suppression", () => {
-  it("stop : confirmation puis fermeture de chaque session, retrait immédiat de la liste des ouvertes, relectures", async () => {
+  it("stop : fermeture directe de chaque session sans confirmation, retrait immédiat de la liste des ouvertes, relectures", async () => {
     vi.useFakeTimers()
     const closeSpy = vi.spyOn(api, "sessionClose").mockResolvedValue({ message: "ok" })
     const onDone = vi.fn()
     const { result, setAsk, state, reload } = setup({ live: ["a1", "a2"], data: { live: ["a1", "a2"], waiting: ["a1"] } as never })
-    result.current.actions.stop(["a1", "a2"], onDone)
-    const ask = lastCall(setAsk) as Ask
-    expect(ask.rows).toEqual(["a1", "a2"])
-    expect(closeSpy).not.toHaveBeenCalled()
-    await act(async () => void ask.run())
+    await act(async () => void result.current.actions.stop(["a1", "a2"], onDone))
+    expect(setAsk).not.toHaveBeenCalled()
     await act(async () => void (await vi.advanceTimersByTimeAsync(5000)))
     expect(closeSpy).toHaveBeenCalledTimes(2)
     expect(state.data.live).toEqual([])
@@ -637,9 +634,8 @@ describe("fermeture et suppression", () => {
     vi.useFakeTimers()
     vi.spyOn(api, "sessionClose").mockResolvedValueOnce({ message: "ok" }).mockRejectedValueOnce(new ApiError(500, "boom", "processus rebelle"))
     const onDone = vi.fn()
-    const { result, setAsk, state } = setup({ live: ["a1", "a2"], data: { live: ["a1", "a2"] } as never })
-    result.current.actions.stop(["a1", "a2"], onDone)
-    await act(async () => void (lastCall(setAsk) as Ask).run())
+    const { result, state } = setup({ live: ["a1", "a2"], data: { live: ["a1", "a2"] } as never })
+    await act(async () => void result.current.actions.stop(["a1", "a2"], onDone))
     await act(async () => void (await vi.advanceTimersByTimeAsync(5000)))
     expect(state.data.live).toEqual(["a2"])
     expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("processus rebelle"))
