@@ -6,6 +6,7 @@ import "./i18n"
 import App from "./App.tsx"
 import { GuestApp } from "@/components/GuestApp.tsx"
 import { ThemeProvider } from "@/components/theme-provider.tsx"
+import { StaleBuildSplash } from "@/components/StaleBuildSplash"
 import { TrustDialog } from "@/components/TrustDialog"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -64,3 +65,4 @@ createRoot(document.getElementById("root")!).render(
     </ThemeProvider>
   </StrictMode>
 )
+        <StaleBuildSplash />
