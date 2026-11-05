@@ -413,7 +413,6 @@
       "waiting": "Claude has finished",
       "asking": "Claude needs your answer"
     },
-    "routeError": {
     "push": {
       "title": "Notifications",
       "intro": "Get a notification on this device when a session asks a question or is waiting for you, even with the app closed.",
@@ -424,6 +423,7 @@
       "denied": "Notifications denied: allow them in the device settings.",
       "failed": "Could not change notifications"
     },
+    "routeError": {
       "title": "This page could not be loaded",
       "hint": "A new version of the application is probably installed.",
       "reload": "Reload the page",

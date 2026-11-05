@@ -413,7 +413,6 @@
       "waiting": "Claude a terminé",
       "asking": "Claude attend votre réponse"
     },
-    "routeError": {
     "push": {
       "title": "Notifications",
       "intro": "Recevez une notification sur cet appareil quand une session pose une question ou vous attend, même application fermée.",
@@ -424,6 +423,7 @@
       "denied": "Notifications refusées : autorisez-les dans les réglages de l'appareil.",
       "failed": "Impossible de modifier les notifications"
     },
+    "routeError": {
       "title": "Cette page n'a pas pu se charger",
       "hint": "Une nouvelle version de l'application est probablement installée.",
       "reload": "Recharger la page",
