@@ -5,8 +5,17 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 )
+
+var verrouEnvoisPush sync.Mutex
+
+func nombreEnvoisPush(envois *[]envoiPushEnregistre) int {
+	verrouEnvoisPush.Lock()
+	defer verrouEnvoisPush.Unlock()
+	return len(*envois)
+}
 
 type envoiPushEnregistre struct {
 	endpoint string
@@ -20,7 +29,9 @@ func installerTransportPushDeTest(t *testing.T, statutParEndpoint map[string]int
 	transportInitial, droitsInitiaux := pushTransport, pushMayRead
 	t.Cleanup(func() { pushTransport, pushMayRead = transportInitial, droitsInitiaux })
 	pushTransport = func(abonnement pushSubscription, corps []byte) (int, error) {
+		verrouEnvoisPush.Lock()
 		*envois = append(*envois, envoiPushEnregistre{abonnement.Endpoint, corps})
+		verrouEnvoisPush.Unlock()
 		if statut, defini := statutParEndpoint[abonnement.Endpoint]; defini {
 			return statut, nil
 		}
@@ -77,7 +88,9 @@ func TestPushSendUneErreurDEnvoiNArretePasLesAutres(t *testing.T) {
 		if appelsAvantErreur == 1 {
 			return 0, errors.New("réseau coupé")
 		}
+		verrouEnvoisPush.Lock()
 		*envois = append(*envois, envoiPushEnregistre{abonnement.Endpoint, corps})
+		verrouEnvoisPush.Unlock()
 		return 201, nil
 	}
 	_ = pushSubscriptionUpsert(pushSubscription{Endpoint: "https://push.example.com/a", Asking: true})

@@ -98,13 +98,13 @@ func TestPushWatchNotifieSeulementLesNouveautesApresLePremierPassage(t *testing.
 	annuler := withHomeCtx(t)
 	termine := runLoop(func() { watchPush(5 * time.Millisecond) })
 	delaiMaximal := time.Now().Add(loopWait)
-	for len(*envois) == 0 && time.Now().Before(delaiMaximal) {
+	for nombreEnvoisPush(envois) == 0 && time.Now().Before(delaiMaximal) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	annuler()
 	expectReturn(t, termine, "watchPush")
 
-	if len(*envois) != 1 {
-		t.Fatalf("%d envois au lieu de 1 (s1 vu au premier passage, seul s2 est nouveau)", len(*envois))
+	if nombreEnvoisPush(envois) != 1 {
+		t.Fatalf("%d envois au lieu de 1 (s1 vu au premier passage, seul s2 est nouveau)", nombreEnvoisPush(envois))
 	}
 }
