@@ -2,8 +2,7 @@ import { Fragment, useEffect, useState, useSyncExternalStore } from "react"
 import { useTranslation } from "react-i18next"
 import { CleanupWarning } from "./CleanupWarning"
 import { NavContentSearch } from "./NavContentSearch"
-import { CACHE_EXPIRY_WARNING_MINUTES } from "./KeepWarm"
-import { LayoutDashboard, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, History, FileText, Inbox, Search, ScanText, ShieldCheck, Tag, Users, X } from "lucide-react"
+import { LayoutDashboard, ChevronRight, FolderPlus, GalleryHorizontalEnd, FolderOpen, Star, Brain, Puzzle, SlidersHorizontal, Shredder, History, FileText, Inbox, Search, ScanText, ShieldCheck, Tag, Users, X, Ellipsis, Globe } from "lucide-react"
 import { tilde } from "@/lib/format"
 import { href, type Route } from "@/lib/route"
 import type { Node } from "@/lib/tree"
@@ -128,7 +127,6 @@ function Hot({ rows, now, ttl, go, title, hint, foldKey }: { rows: Row[]; now: n
     const open = opened.has(session.id)
     const cold = now - session.mtime >= ttl // ouverte mais cache expiré
     const left = Math.max(1, Math.ceil((ttl - (now - session.mtime)) / 60))
-    const warn = !cold && left <= CACHE_EXPIRY_WARNING_MINUTES
     return (
       <Fragment key={session.id}>
       <div className="flex items-center">
@@ -142,12 +140,14 @@ function Hot({ rows, now, ttl, go, title, hint, foldKey }: { rows: Row[]; now: n
           >
             <SessionStatusIcon session={session} now={now} ttl={ttl} />
             <span className="flex-1 truncate text-left">{session.title}</span>
-            {!cold && (
-              <span className={cn("shrink-0 text-xs tabular-nums", warn ? "font-medium text-warning" : "text-muted-foreground")}>
-                {t("shell.sidebar.minutes", { left })}
-              </span>
-            )}
-            {actions.live.has(session.id) && <span className="size-1.5 shrink-0 rounded-full bg-success" aria-label={t("shell.sidebar.open")} />}
+            <span className="flex size-4 shrink-0 items-center justify-center">
+              {actions.live.has(session.id) &&
+                (actions.rc.has(session.id) ? (
+                  <Globe className="size-3.5 text-success" aria-label={t("shell.list.remoteControl")} />
+                ) : (
+                  <span className="size-1.5 rounded-full bg-success" aria-label={t("shell.sidebar.open")} />
+                ))}
+            </span>
           </button>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-64">
@@ -325,6 +325,8 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
   const currentRoute = props.route
   const link = (to: Route) => ({ to, onClick: () => props.go(to) })
   const wide = useSyncExternalStore(onWide, () => matchMedia(MD).matches)
+  const [isMoreOpen, setIsMoreOpen] = useState(false)
+  const isSecondaryHidden = !wide && !normalizedNavQuery && !isMoreOpen
   const body = (
     <>
       <div className="space-y-3 p-3">
@@ -336,7 +338,9 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
           </div>
           <div className="ml-auto flex items-center gap-0.5">
             <PairButton />
-            <CreditsButton />
+            <div className="max-md:hidden">
+              <CreditsButton />
+            </div>
             <HomeSwitcher />
           </div>
         </div>
@@ -394,6 +398,11 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
           {show(t("shell.app.title.home")) && <NavItem icon={LayoutDashboard} label={t("shell.app.title.home")} active={currentRoute.kind === "home"} {...link({ kind: "home" })} />}
           {show(t("shell.sidebar.carousel")) && <NavItem icon={GalleryHorizontalEnd} label={t("shell.sidebar.carousel")} n={props.carousel.n} active={props.carousel.on} onClick={props.carousel.start} />}
           {show(t("shell.app.title.all")) && <NavItem icon={Inbox} label={t("shell.app.title.all")} n={props.counts.all} active={currentRoute.kind === "all"} {...link({ kind: "all" })} />}
+          {!wide && !normalizedNavQuery && (
+            <NavItem icon={Ellipsis} label={isMoreOpen ? t("shell.sidebar.less") : t("shell.sidebar.more")} active={false} onClick={() => setIsMoreOpen(!isMoreOpen)} />
+          )}
+          {!isSecondaryHidden && (
+            <>
           {show(t("shell.app.title.tabs")) && <NavItem icon={History} label={t("shell.app.title.tabs")} active={currentRoute.kind === "tabs"} {...link({ kind: "tabs" })} />}
           {show(t("shell.app.title.extensions")) && <NavItem icon={Puzzle} label={t("shell.app.title.extensions")} active={currentRoute.kind === "extensions" || currentRoute.kind === "skills"} {...link({ kind: "extensions" })} />}
           {show(t("teams.title")) && <NavItem icon={Users} label={t("teams.title")} active={currentRoute.kind === "teams" || currentRoute.kind === "team"} {...link({ kind: "teams" })} />}
@@ -408,6 +417,8 @@ export function Sidebar({ searchRef, ...props }: SidebarProps) {
               active={currentRoute.kind === "snippets"}
               {...link({ kind: "snippets", path: "" })}
             />
+          )}
+            </>
           )}
 
           {!normalizedNavQuery && openRows.length > 0 && <Hot rows={openRows} now={props.now} ttl={props.ttl} go={props.go} title={t("shell.sidebar.hot")} hint={t("shell.sidebar.hotHint")} foldKey="gld.hot.openFolded" />}

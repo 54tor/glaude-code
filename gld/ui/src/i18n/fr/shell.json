@@ -105,6 +105,8 @@
       "addDirHint": "Ajouter un dossier sans session : on y lance un prompt sans mémoire Claude",
       "addDir": "Ajouter un dossier",
       "local": "Sessions locales",
+      "more": "Plus",
+      "less": "Moins",
       "clean": "Nettoyer",
       "argsHint": "options ajoutées à claude"
     },
